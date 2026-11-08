@@ -79,18 +79,20 @@ fn parse_args(excmd: &mut ExArg) -> Array {
     args.into()
 }
 
-/// The name of the command `excmd` names: a user command's own spelling
-/// (`user`), the built-in table's, or the empty string where the line named
-/// no command.
-fn command_name(excmd: &ExArg, user: Option<&CStr>) -> ApiString {
-    if excmd.cmdidx == CmdIdx::SIZE {
-        return ApiString::from_cstr(c"");
+impl ExArg<'_> {
+    /// The name of the command `excmd` names: a user command's own spelling
+    /// (`user`), the built-in table's, or the empty string where the line named
+    /// no command.
+    fn command_name(&self, user: Option<&CStr>) -> ApiString {
+        if self.cmdidx == CmdIdx::SIZE {
+            return ApiString::from_cstr(c"");
+        }
+        if let Some(name) = user {
+            return ApiString::from_cstr(name);
+        }
+        // `cmdidx` is a built-in index, checked against `CmdIdx::SIZE` above.
+        ApiString::from_cstr(builtin_command_cstr(self.cmdidx))
     }
-    if let Some(name) = user {
-        return ApiString::from_cstr(name);
-    }
-    // `cmdidx` is a built-in index, checked against `CmdIdx::SIZE` above.
-    ApiString::from_cstr(builtin_command_cstr(excmd.cmdidx))
 }
 
 /// How the command's range is counted, as the `addr` field's string.
@@ -215,7 +217,7 @@ pub fn nvim_parse_cmd(str: ApiString, _opts: &mut KeyDict_empty) -> Result<KeyDi
     };
     // A user command carries its own default count.
     let default_count = user.as_ref().map(|(_, def)| *def);
-    result.cmd = Some(command_name(&excmd, user.as_ref().map(|(name, _)| &**name)));
+    result.cmd = Some(excmd.command_name(user.as_ref().map(|(name, _)| &**name)));
 
     if excmd.argt.has(ExArgt::RANGE) && excmd.addr_count > 0 {
         // Two addresses give both bounds, one gives only `line2`.

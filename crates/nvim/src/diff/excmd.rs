@@ -123,7 +123,7 @@ fn patch_into(excmd: &mut ExArg, tmp_orig: &CStr, tmp_new: &CStr) {
     }
     excmd.cmdidx = CmdIdx::split;
     excmd.set_arg_text(tmp_new.to_bytes());
-    do_exedit(excmd, Some(old_curwin.id()));
+    excmd.exedit(Some(old_curwin.id()));
     if !old_curwin.is_current() && win_valid(old_curwin.id()) {
         diff_win_options(Win::current(), true);
         diff_win_options(old_curwin, true);
@@ -186,7 +186,7 @@ pub fn ex_diffsplit(excmd: &mut ExArg) {
     }
     excmd.cmdidx = CmdIdx::split;
     Win::current().w_onebuf_opt.wo_diff = 1;
-    do_exedit(excmd, Some(old_curwin.id()));
+    excmd.exedit(Some(old_curwin.id()));
     if old_curwin.is_current() {
         return;
     }

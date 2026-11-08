@@ -40,7 +40,6 @@ use crate::strings::has_char;
 use crate::syntax::set_context_in_echohl_cmd;
 use crate::types::LineNr;
 use crate::types::{CmdIdx, CmdLine, ExArg};
-use crate::usercmd::find_ucmd;
 use crate::winlayer::Cc;
 use core::ffi::{CStr, c_int};
 
@@ -240,7 +239,7 @@ pub(crate) fn set_cmd_index(
             // an offset into that copy, which is the same text.
             let typed = p - cmd;
             excmd.line = CmdLine::from_bytes(&t[cmd..]);
-            match find_ucmd(excmd, typed, None, Some(expand), Some(complp)) {
+            match excmd.find_user_command(typed, None, Some(expand), Some(complp)) {
                 Some(at) => p = cmd + at,
                 None => excmd.cmdidx = CmdIdx::SIZE, // Ambiguous user command.
             }

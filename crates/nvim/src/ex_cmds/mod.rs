@@ -46,8 +46,8 @@ use crate::cstr;
 use crate::env::expand_env;
 use crate::eval::typval::{NumBuf, list_find_str, list_iter, list_len};
 use crate::eval::vars::get_vim_var_list_handle;
+use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::state::cmdmod;
-use crate::ex_docmd::{cmdmod_has, do_exedit};
 use crate::extmark::BCount;
 use crate::getchar::state::got_int;
 use crate::guard::{sandbox, secure};
@@ -331,7 +331,7 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
     excmd.set_arg_text(&expanded);
     excmd.cmdidx = CmdIdx::edit;
     cmdmod.with_mut(|m| m.cmod_flags.clear(CmdModFlags::BROWSE));
-    do_exedit(excmd, None);
+    excmd.exedit(None);
 }
 
 /// Number and print every entry of `list`, stopping on an interrupt.

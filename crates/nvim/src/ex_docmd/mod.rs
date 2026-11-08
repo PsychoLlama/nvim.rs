@@ -175,16 +175,18 @@ crate::flag_set! {
     const KEEPLINE = 32;
 }
 
-/// The next line `excmd`'s source answers -- upstream's
-/// `eap->ea_getline(c, eap->cookie, indent, do_concat)` -- or `None` at the
-/// end of the input, or when the command was given no source.
-pub(crate) fn exarg_getline(
-    excmd: &mut ExArg,
-    c: Option<u8>,
-    indent: c_int,
-    do_concat: bool,
-) -> Option<XString> {
-    excmd.source.as_mut()?.next_line(c, indent, do_concat)
+impl ExArg<'_> {
+    /// The next line `excmd`'s source answers -- upstream's
+    /// `eap->ea_getline(c, eap->cookie, indent, do_concat)` -- or `None` at the
+    /// end of the input, or when the command was given no source.
+    pub(crate) fn next_source_line(
+        &mut self,
+        c: Option<u8>,
+        indent: c_int,
+        do_concat: bool,
+    ) -> Option<XString> {
+        self.source.as_mut()?.next_line(c, indent, do_concat)
+    }
 }
 
 /// The line number the message and breakpoint machinery reports.

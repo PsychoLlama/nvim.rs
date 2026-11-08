@@ -17,7 +17,6 @@ use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::cstr::byte_at;
 use crate::eval::typval::{ListRef, TV_INITIAL_VALUE, tv_list_alloc};
 use crate::eval::{Cursor, eval_to_string, eval1};
-use crate::ex_docmd::exarg_getline;
 use crate::message_fmt::msg_bytes;
 use crate::os::cshim::is_lower_in_locale;
 use crate::semsg;
@@ -232,7 +231,7 @@ pub(crate) fn heredoc_get(
                 line_arg = Some(after);
                 excmd.line.rest_of(next).to_vec()
             }
-            None => match exarg_getline(excmd, Some(0), 0, false) {
+            None => match excmd.next_source_line(Some(0), 0, false) {
                 Some(line) => line.to_vec(),
                 None => {
                     if !script_get {

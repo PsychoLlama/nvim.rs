@@ -143,7 +143,7 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
 
     // Uninitialised in the C; `parse_command_modifiers` only writes it.
     let mut dummy_cmdmod = CmdMod::default();
-    let _ = parse_command_modifiers(&mut ea, &mut dummy, &mut dummy_cmdmod, true);
+    let _ = ea.parse_modifiers(&mut dummy, &mut dummy_cmdmod, true);
 
     // Skip over the range to find the command.
     let cmd = ea.line.cmd + skip_range(ea.line.tail(ea.line.cmd), None);

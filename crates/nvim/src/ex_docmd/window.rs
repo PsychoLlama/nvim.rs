@@ -43,7 +43,7 @@ use crate::ex_cmds::prepare_tagpreview;
 use crate::ex_docmd::argopt::get_tabpage_arg;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::display::ex_redraw;
-use crate::ex_docmd::file::{do_exbuffer, do_exedit};
+use crate::ex_docmd::file::do_exbuffer;
 use crate::ex_docmd::onecmd::fresh_exarg;
 use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::source::ex_errmsg;
@@ -103,10 +103,12 @@ fn err(msg: &'static CStr) {
     emsg(gettext(msg));
 }
 
-/// `do_exedit()`: run the `:edit` half of a command that opened a window.
-fn edit(excmd: &mut ExArg, old_curwin: Option<Win>) {
-    // SAFETY: a live window or null.
-    do_exedit(excmd, old_curwin.map(Win::id));
+impl ExArg<'_> {
+    /// `do_exedit()`: run the `:edit` half of a command that opened a window.
+    fn exedit_from(&mut self, old_curwin: Option<Win>) {
+        // SAFETY: a live window or null.
+        self.exedit(old_curwin.map(Win::id));
+    }
 }
 
 /// `get_tabpage_arg()`: the tab page number the command names, setting
@@ -205,7 +207,7 @@ fn splitview(excmd: &mut ExArg) {
         } else {
             do_check_scrollbind(false);
         }
-        edit(excmd, Some(old_curwin));
+        excmd.exedit_from(Some(old_curwin));
     }
 }
 
@@ -244,7 +246,7 @@ fn open_tabpage(excmd: &mut ExArg, old_curwin: Win) {
     if new_tabpage(after, Some(excmd.line.cstr_from(excmd.line.arg)), true).is_err() {
         return;
     }
-    edit(excmd, Some(old_curwin));
+    excmd.exedit_from(Some(old_curwin));
     let (ev, buf) = (AutoEvent::TabNewEntered, Buf::current_or_none());
     fire_autocmds(ev, false, buf);
 
@@ -578,7 +580,7 @@ pub(crate) fn ex_psearch(excmd: &mut ExArg) {
 pub(crate) fn ex_pedit(excmd: &mut ExArg) {
     let curwin_save = Win::current().id();
     prepare_preview_window();
-    edit(excmd, None);
+    excmd.exedit_from(None);
     back_to_current_window(curwin_save);
 }
 

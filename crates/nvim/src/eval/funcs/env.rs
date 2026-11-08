@@ -21,7 +21,7 @@ use crate::env::{get_appname, getenv_resolved, xdg_home, xdg_var};
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, dict_get_bool, dict_has_key, tv_list_alloc_ret};
 use crate::ex_cmds::check_secure;
-use crate::ex_docmd::{Expansion, eval_vars, expand_filename};
+use crate::ex_docmd::{Expansion, eval_vars};
 use crate::guard::Suppress;
 use crate::memline::{list_swap_files, swapfile_dict};
 use crate::memory::ThinCString;
@@ -163,7 +163,7 @@ pub fn f_expandcmd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     };
     let mut errormsg = None;
     let _no_emsg = quiet.then(Suppress::emsg);
-    if expand_filename(&mut eap, &mut errormsg).is_err()
+    if eap.expand_filename(&mut errormsg).is_err()
         && !quiet
         && let Some(msg) = &errormsg
         && !msg.is_empty()

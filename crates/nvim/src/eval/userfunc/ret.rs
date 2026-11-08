@@ -59,7 +59,7 @@ pub fn ex_return(excmd: &mut ExArg) {
         && eval0_in_cmd(excmd, at, &mut rettv, evaluate).is_ok()
     {
         if !excmd.skip {
-            returning = do_return(excmd, false, Some(rettv.take()));
+            returning = excmd.return_from_function(false, Some(rettv.take()));
         } else {
             tv_clear(&mut rettv);
         }
@@ -70,7 +70,7 @@ pub fn ex_return(excmd: &mut ExArg) {
         // Return unless the expression evaluation was cancelled by an
         // aborting error, an interrupt or an exception.
         if !aborting() {
-            returning = do_return(excmd, false, None);
+            returning = excmd.return_from_function(false, None);
         }
     }
 
@@ -85,64 +85,115 @@ pub fn ex_return(excmd: &mut ExArg) {
     drop(skipping);
 }
 
-/// Make the call `:call` asks for, once per line of its range, with its
-/// arguments at `startarg` in the command line. Answers whether it failed
-/// and where in the line the last walk stopped.
-fn ex_call_inner(
-    excmd: &mut ExArg,
-    callee: &CStr,
-    startarg: usize,
-    partial: Option<&PartialRef>,
-    selfdict: Option<&DictRef>,
-    found_var: bool,
-) -> (bool, usize) {
-    let mut doesrange = false;
-    let mut failed = false;
-    let mut stop = startarg;
-    let (line1, line2, ranged) = (excmd.line1, excmd.line2, excmd.addr_count > 0);
-    // The command line is this command's own: no code a call runs can reach
-    // it, so the walk borrows it across the calls.
-    let text = excmd.line.rest_of(startarg);
+impl ExArg<'_> {
+    /// Make the call `:call` asks for, once per line of its range, with its
+    /// arguments at `startarg` in the command line. Answers whether it failed
+    /// and where in the line the last walk stopped.
+    fn call_function(
+        &mut self,
+        callee: &CStr,
+        startarg: usize,
+        partial: Option<&PartialRef>,
+        selfdict: Option<&DictRef>,
+        found_var: bool,
+    ) -> (bool, usize) {
+        let mut doesrange = false;
+        let mut failed = false;
+        let mut stop = startarg;
+        let (line1, line2, ranged) = (self.line1, self.line2, self.addr_count > 0);
+        // The command line is this command's own: no code a call runs can reach
+        // it, so the walk borrows it across the calls.
+        let text = self.line.rest_of(startarg);
 
-    let mut lnum = line1;
-    while lnum <= line2 {
-        if ranged {
-            // Default is the line number, not the range.
-            if lnum > Buf::current().b_ml.ml_line_count {
-                emsg(gettext(e_invrange));
+        let mut lnum = line1;
+        while lnum <= line2 {
+            if ranged {
+                // Default is the line number, not the range.
+                if lnum > Buf::current().b_ml.ml_line_count {
+                    emsg(gettext(e_invrange));
+                    break;
+                }
+                Win::current().w_cursor.lnum = lnum;
+                Win::current().w_cursor.col = ColNr::ZERO;
+                Win::current().w_cursor.coladd = 0;
+            }
+
+            let with = CallWith {
+                firstline: line1,
+                lastline: line2,
+                partial,
+                selfdict,
+                doesrange: Some(&mut doesrange),
+                found_var,
+                ..CallWith::new(true)
+            };
+            let mut rettv = TV_INITIAL_VALUE;
+            // The call, then any trailing subscript: `:call f()[1]()`.
+            let mut cursor = Cursor::new(text);
+            let called = get_func_tv(callee, None, &mut rettv, &mut cursor, with)
+                .and_then(|()| handle_subscript(&mut cursor, &mut rettv, true, true));
+            stop = startarg + cursor.offset();
+            if called.is_err() {
+                failed = true;
                 break;
             }
-            Win::current().w_cursor.lnum = lnum;
-            Win::current().w_cursor.col = ColNr::ZERO;
-            Win::current().w_cursor.coladd = 0;
+            tv_clear(&mut rettv);
+            if doesrange || aborting() {
+                break;
+            }
+            lnum += 1;
+        }
+        (failed, stop)
+    }
+
+    /// Return from a function, answering whether the return happened now rather
+    /// than being made pending by a `:finally`.
+    ///
+    /// `value` is what is returned: the `:return` command's value, or the one a
+    /// pending `:return` carried to its `:endtry`. `reanimate` is a `:return`
+    /// a nested command line made pending in this one, whose value is the
+    /// funccall's already.
+    pub fn return_from_function(&mut self, reanimate: bool, value: Option<TypVal>) -> bool {
+        let cond = cond_stack_of(self);
+        let frame = current_fc().expect(":return inside a function");
+
+        if reanimate {
+            // Undo the return.
+            frame.returned.set(false);
         }
 
-        let with = CallWith {
-            firstline: line1,
-            lastline: line2,
-            partial,
-            selfdict,
-            doesrange: Some(&mut doesrange),
-            found_var,
-            ..CallWith::new(true)
-        };
-        let mut rettv = TV_INITIAL_VALUE;
-        // The call, then any trailing subscript: `:call f()[1]()`.
-        let mut cursor = Cursor::new(text);
-        let called = get_func_tv(callee, None, &mut rettv, &mut cursor, with)
-            .and_then(|()| handle_subscript(&mut cursor, &mut rettv, true, true));
-        stop = startarg + cursor.offset();
-        if called.is_err() {
-            failed = true;
-            break;
+        // Cleanup (and inactivate) conditionals, but stop when a `:finally`
+        // is reached: the return still has to be pending until that has run.
+        let pending_at = cleanup_conditionals(cond, CsFlags::NONE, true);
+        if let Some(at) = pending_at {
+            // A `:finally` is going to run first; remember the return value.
+            let value = if reanimate {
+                // The value is the funccall's; it is not available to the
+                // function any more until the `:finally` is done.
+                Some(frame.rettv.replace(TypVal::Number(0)))
+            } else {
+                value
+            };
+            // Reported before it is parked: the stack is not borrowed across a
+            // message, and nothing reads this level meanwhile.
+            report_pending(
+                PendingAction::Made,
+                CSTP_RETURN,
+                PendingValue::Return(value.as_ref()),
+            );
+            cond.with(|cs| {
+                cs.pending[at] = CSTP_RETURN;
+                cs.set_pending_return(at, value);
+            });
+        } else {
+            frame.returned.set(true);
+            if !reanimate && let Some(value) = value {
+                drop(frame.rettv.replace(value));
+            }
         }
-        tv_clear(&mut rettv);
-        if doesrange || aborting() {
-            break;
-        }
-        lnum += 1;
+
+        pending_at.is_none()
     }
-    (failed, stop)
 }
 
 /// `:defer Func(args)`: check the call now and record it for the way out.
@@ -327,14 +378,7 @@ pub fn ex_call(excmd: &mut ExArg) {
         (r.is_err(), startarg + used)
     } else {
         let callee = name.as_cstr();
-        ex_call_inner(
-            excmd,
-            callee,
-            startarg,
-            partial.as_ref(),
-            selfdict,
-            found_var,
-        )
+        excmd.call_function(callee, startarg, partial.as_ref(), selfdict, found_var)
     };
 
     // When inside a `:try` the trailing text is still checked, so that an
@@ -351,55 +395,6 @@ pub fn ex_call(excmd: &mut ExArg) {
             excmd.line.next = excmd.line.check_next(stop);
         }
     }
-}
-
-/// Return from a function, answering whether the return happened now rather
-/// than being made pending by a `:finally`.
-///
-/// `value` is what is returned: the `:return` command's value, or the one a
-/// pending `:return` carried to its `:endtry`. `reanimate` is a `:return`
-/// a nested command line made pending in this one, whose value is the
-/// funccall's already.
-pub fn do_return(excmd: &mut ExArg, reanimate: bool, value: Option<TypVal>) -> bool {
-    let cond = cond_stack_of(excmd);
-    let frame = current_fc().expect(":return inside a function");
-
-    if reanimate {
-        // Undo the return.
-        frame.returned.set(false);
-    }
-
-    // Cleanup (and inactivate) conditionals, but stop when a `:finally`
-    // is reached: the return still has to be pending until that has run.
-    let pending_at = cleanup_conditionals(cond, CsFlags::NONE, true);
-    if let Some(at) = pending_at {
-        // A `:finally` is going to run first; remember the return value.
-        let value = if reanimate {
-            // The value is the funccall's; it is not available to the
-            // function any more until the `:finally` is done.
-            Some(frame.rettv.replace(TypVal::Number(0)))
-        } else {
-            value
-        };
-        // Reported before it is parked: the stack is not borrowed across a
-        // message, and nothing reads this level meanwhile.
-        report_pending(
-            PendingAction::Made,
-            CSTP_RETURN,
-            PendingValue::Return(value.as_ref()),
-        );
-        cond.with(|cs| {
-            cs.pending[at] = CSTP_RETURN;
-            cs.set_pending_return(at, value);
-        });
-    } else {
-        frame.returned.set(true);
-        if !reanimate && let Some(value) = value {
-            drop(frame.rettv.replace(value));
-        }
-    }
-
-    pending_at.is_none()
 }
 
 /// Render `:return <expr>` for the debugger.

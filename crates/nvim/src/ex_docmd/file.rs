@@ -231,7 +231,7 @@ pub(crate) fn ex_find(excmd: &mut ExArg) {
         return;
     };
     excmd.set_arg_text(fname.as_bytes());
-    do_exedit(excmd, None);
+    excmd.exedit(None);
 }
 
 /// `:edit`, `:enew`, `:view`, `:badd`, `:balt`.
@@ -253,143 +253,145 @@ pub(crate) fn ex_edit(excmd: &mut ExArg) {
         emsg(c"cannot :edit a prompt buffer");
         return;
     }
-    do_exedit(excmd, None);
+    excmd.exedit(None);
 }
 
-/// The shared body of every command that opens a file into a window.
-///
-/// `old_curwin` is the window a *split* came from, and is `None` for a plain
-/// `:edit`. It is what tells the failure path that there is a new window
-/// to close again, and what makes the alternate file be set on the window
-/// left behind.
-pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
-    // `:visual` and `:view` with no argument leave Ex mode.
-    if exmode_active.get() && (excmd.cmdidx == CmdIdx::visual || excmd.cmdidx == CmdIdx::view) {
-        exmode_active.set(false);
-        ex_pressedreturn.set(false);
-        if ui_has(kUICmdline) {
-            ui_ext_cmdline_block_leave();
-        }
-        if excmd.line.byte_at(excmd.line.arg) == 0 {
-            // Inside `:global`, normal mode is entered for the rest of
-            // the line and Ex mode resumes afterwards.
-            if global_busy.get() != 0 {
-                if let Some(next) = excmd.line.next {
-                    stuff_readbuf(excmd.line.cstr_from(next).to_bytes());
-                    excmd.line.next = None;
-                }
-                let _redraw = Allow::redraw();
-                let _prompt = Allow::wait_return();
-                need_wait_return.set(false);
-                let save_ms = msg_scroll.get();
-                msg_scroll.set(0);
-                redraw_all_later(UPD_NOT_VALID);
-                pending_exmode_active.set(true);
-                normal_enter(false, true);
-                pending_exmode_active.set(false);
-                msg_scroll.set(save_ms);
+impl ExArg<'_> {
+    /// The shared body of every command that opens a file into a window.
+    ///
+    /// `old_curwin` is the window a *split* came from, and is `None` for a plain
+    /// `:edit`. It is what tells the failure path that there is a new window
+    /// to close again, and what makes the alternate file be set on the window
+    /// left behind.
+    pub(crate) fn exedit(&mut self, old_curwin: Option<WinId>) {
+        // `:visual` and `:view` with no argument leave Ex mode.
+        if exmode_active.get() && (self.cmdidx == CmdIdx::visual || self.cmdidx == CmdIdx::view) {
+            exmode_active.set(false);
+            ex_pressedreturn.set(false);
+            if ui_has(kUICmdline) {
+                ui_ext_cmdline_block_leave();
             }
-            return;
+            if self.line.byte_at(self.line.arg) == 0 {
+                // Inside `:global`, normal mode is entered for the rest of
+                // the line and Ex mode resumes afterwards.
+                if global_busy.get() != 0 {
+                    if let Some(next) = self.line.next {
+                        stuff_readbuf(self.line.cstr_from(next).to_bytes());
+                        self.line.next = None;
+                    }
+                    let _redraw = Allow::redraw();
+                    let _prompt = Allow::wait_return();
+                    need_wait_return.set(false);
+                    let save_ms = msg_scroll.get();
+                    msg_scroll.set(0);
+                    redraw_all_later(UPD_NOT_VALID);
+                    pending_exmode_active.set(true);
+                    normal_enter(false, true);
+                    pending_exmode_active.set(false);
+                    msg_scroll.set(save_ms);
+                }
+                return;
+            }
         }
-    }
 
-    let idx = excmd.cmdidx;
-    if (idx == CmdIdx::new
-        || idx == CmdIdx::tabnew
-        || idx == CmdIdx::tabedit
-        || idx == CmdIdx::vnew)
-        && excmd.line.byte_at(excmd.line.arg) == 0
-    {
-        // A new, empty buffer.
-        setpcmark();
-        let flags = EcmdFlags::HIDE | EcmdFlags::FORCEIT.when(excmd.forceit);
-        let _ = do_ecmd(
-            None,
-            None,
-            None,
-            Some(&mut *excmd),
-            newlnum::ONE as LineNr,
-            flags,
-            old_curwin.is_none().then(|| Win::current().id()),
-        );
-    } else if idx != CmdIdx::split && idx != CmdIdx::vsplit
-        || excmd.line.byte_at(excmd.line.arg) != 0
-    {
-        if excmd.line.byte_at(excmd.line.arg) != 0 && text_or_buf_locked() {
-            return;
-        }
-        let saved_readonly = readonlymode.get();
-        if idx == CmdIdx::view || idx == CmdIdx::sview {
-            readonlymode.set(true);
-        } else if idx == CmdIdx::enew {
-            readonlymode.set(false);
-        }
-        if idx != CmdIdx::balt && idx != CmdIdx::badd {
+        let idx = self.cmdidx;
+        if (idx == CmdIdx::new
+            || idx == CmdIdx::tabnew
+            || idx == CmdIdx::tabedit
+            || idx == CmdIdx::vnew)
+            && self.line.byte_at(self.line.arg) == 0
+        {
+            // A new, empty buffer.
             setpcmark();
-        }
-
-        // A copy: `do_ecmd` is handed the command as well as its argument,
-        // and the two cannot be borrowed out of the same `ExArg` at once.
-        // Upstream lends it a pointer into a line `do_ecmd`'s own
-        // autocommands may reallocate, which is the same hazard written
-        // down.
-        let name = (idx != CmdIdx::enew).then(|| excmd.line.cstr_from(excmd.line.arg).to_owned());
-        let flags = EcmdFlags::HIDE.when(buf_hide(Buf::current()))
-            | EcmdFlags::FORCEIT.when(excmd.forceit)
-            | EcmdFlags::OLDBUF.when(old_curwin.is_some())
-            | EcmdFlags::ADDBUF.when(idx == CmdIdx::badd)
-            | EcmdFlags::ALTBUF.when(idx == CmdIdx::balt);
-        let lnum = excmd.do_ecmd_lnum;
-        let opened = do_ecmd(
-            None,
-            name.as_deref(),
-            None,
-            Some(&mut *excmd),
-            lnum,
-            flags,
-            old_curwin.is_none().then(|| Win::current().id()),
-        );
-
-        if opened.is_err() {
-            // The split has already happened; close it again. The
-            // cleanup pair keeps an exception from the failed edit from
-            // being lost while the window is closed.
-            if old_curwin.is_some() {
-                let need_hide = curbuf_is_changed() && Buf::current().b_nwindows <= 1;
-                if !need_hide || buf_hide(Buf::current()) {
-                    let mut cs = Cleanup {
-                        pending: 0,
-                        exception: None,
-                    };
-                    enter_cleanup(&mut cs);
-                    let free = !need_hide && !buf_hide(Buf::current());
-                    let _ = win_close(Win::current(), free, false);
-                    leave_cleanup(&mut cs);
-                }
+            let flags = EcmdFlags::HIDE | EcmdFlags::FORCEIT.when(self.forceit);
+            let _ = do_ecmd(
+                None,
+                None,
+                None,
+                Some(&mut *self),
+                newlnum::ONE as LineNr,
+                flags,
+                old_curwin.is_none().then(|| Win::current().id()),
+            );
+        } else if idx != CmdIdx::split && idx != CmdIdx::vsplit
+            || self.line.byte_at(self.line.arg) != 0
+        {
+            if self.line.byte_at(self.line.arg) != 0 && text_or_buf_locked() {
+                return;
             }
-        } else if readonlymode.get() && Buf::current().b_nwindows == 1 {
-            Buf::current().b_p_ro = 1;
-        }
-        readonlymode.set(saved_readonly);
-    } else {
-        // A `:split` with no file name: the window is already there.
-        run_ecmd_cmd(excmd);
-        let was_invalid = Win::current().w_arg_idx_invalid;
-        check_arg_idx(Win::current());
-        if was_invalid != Win::current().w_arg_idx_invalid {
-            maketitle();
-        }
-    }
+            let saved_readonly = readonlymode.get();
+            if idx == CmdIdx::view || idx == CmdIdx::sview {
+                readonlymode.set(true);
+            } else if idx == CmdIdx::enew {
+                readonlymode.set(false);
+            }
+            if idx != CmdIdx::balt && idx != CmdIdx::badd {
+                setpcmark();
+            }
 
-    if let Some(mut old) = old_curwin.and_then(valid_win)
-        && excmd.line.byte_at(excmd.line.arg) != 0
-        && !old.is_current()
-        && !old.w_buffer.is_current()
-        && !cmdmod_has(CmdModFlags::KEEPALT)
-    {
-        old.w_alt_fnum = Some(Buf::current().handle);
+            // A copy: `do_ecmd` is handed the command as well as its argument,
+            // and the two cannot be borrowed out of the same `ExArg` at once.
+            // Upstream lends it a pointer into a line `do_ecmd`'s own
+            // autocommands may reallocate, which is the same hazard written
+            // down.
+            let name = (idx != CmdIdx::enew).then(|| self.line.cstr_from(self.line.arg).to_owned());
+            let flags = EcmdFlags::HIDE.when(buf_hide(Buf::current()))
+                | EcmdFlags::FORCEIT.when(self.forceit)
+                | EcmdFlags::OLDBUF.when(old_curwin.is_some())
+                | EcmdFlags::ADDBUF.when(idx == CmdIdx::badd)
+                | EcmdFlags::ALTBUF.when(idx == CmdIdx::balt);
+            let lnum = self.do_ecmd_lnum;
+            let opened = do_ecmd(
+                None,
+                name.as_deref(),
+                None,
+                Some(&mut *self),
+                lnum,
+                flags,
+                old_curwin.is_none().then(|| Win::current().id()),
+            );
+
+            if opened.is_err() {
+                // The split has already happened; close it again. The
+                // cleanup pair keeps an exception from the failed edit from
+                // being lost while the window is closed.
+                if old_curwin.is_some() {
+                    let need_hide = curbuf_is_changed() && Buf::current().b_nwindows <= 1;
+                    if !need_hide || buf_hide(Buf::current()) {
+                        let mut cs = Cleanup {
+                            pending: 0,
+                            exception: None,
+                        };
+                        enter_cleanup(&mut cs);
+                        let free = !need_hide && !buf_hide(Buf::current());
+                        let _ = win_close(Win::current(), free, false);
+                        leave_cleanup(&mut cs);
+                    }
+                }
+            } else if readonlymode.get() && Buf::current().b_nwindows == 1 {
+                Buf::current().b_p_ro = 1;
+            }
+            readonlymode.set(saved_readonly);
+        } else {
+            // A `:split` with no file name: the window is already there.
+            run_ecmd_cmd(self);
+            let was_invalid = Win::current().w_arg_idx_invalid;
+            check_arg_idx(Win::current());
+            if was_invalid != Win::current().w_arg_idx_invalid {
+                maketitle();
+            }
+        }
+
+        if let Some(mut old) = old_curwin.and_then(valid_win)
+            && self.line.byte_at(self.line.arg) != 0
+            && !old.is_current()
+            && !old.w_buffer.is_current()
+            && !cmdmod_has(CmdModFlags::KEEPALT)
+        {
+            old.w_alt_fnum = Some(Buf::current().handle);
+        }
+        ex_no_reprint.set(true);
     }
-    ex_no_reprint.set(true);
 }
 
 /// `:swapname`.

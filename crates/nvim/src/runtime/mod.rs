@@ -53,7 +53,7 @@ use crate::eval::userfunc::{CallStackAside, all_funcs};
 use crate::eval::vars::new_script_vars;
 use crate::eval::{eval_to_number, get_copy_id};
 use crate::ex_docmd::state::{cmdmod, ex_nesting_level, global_busy, listcmd_busy};
-use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, do_exedit};
+use crate::ex_docmd::{do_cmdline, do_cmdline_cmd};
 use crate::ex_eval::{
     PendingAction, PendingValue, aborting, cleanup_conditionals, cond_stack_of, report_pending,
 };

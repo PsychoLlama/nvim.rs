@@ -108,145 +108,147 @@ pub fn replace_makeprg(excmd: &mut ExArg) -> bool {
     true
 }
 
-/// Expand every `%`, `#`, `` `cmd` `` and `<…>` in a command's file
-/// argument, then expand wildcards if the command takes exactly one name.
-///
-/// Every cursor into the line is re-read from the `CmdLine` after each
-/// replacement: an expansion *grows the buffer*, so an offset held across
-/// one is stale.
-pub(crate) fn expand_filename(
-    excmd: &mut ExArg,
-    errormsgp: &mut Option<CString>,
-) -> Result<(), Failed> {
-    // A `:vimgrep` pattern is not a file name, so the scan starts after
-    // it.
-    let mut at = skip_grep_pat(excmd);
-    let mut has_wildcards = has_wildcard(excmd.line.rest_of(at));
+impl ExArg<'_> {
+    /// Expand every `%`, `#`, `` `cmd` `` and `<…>` in a command's file
+    /// argument, then expand wildcards if the command takes exactly one name.
+    ///
+    /// Every cursor into the line is re-read from the `CmdLine` after each
+    /// replacement: an expansion *grows the buffer*, so an offset held across
+    /// one is stale.
+    pub(crate) fn expand_filename(
+        &mut self,
+        errormsgp: &mut Option<CString>,
+    ) -> Result<(), Failed> {
+        // A `:vimgrep` pattern is not a file name, so the scan starts after
+        // it.
+        let mut at = skip_grep_pat(self);
+        let mut has_wildcards = has_wildcard(self.line.rest_of(at));
 
-    while excmd.line.byte_at(at) != 0 {
-        if excmd.line.byte_at(at) == b'`' && excmd.line.byte_at(at + 1) == b'=' {
-            // `` `=expr` `` is evaluated much later, by the shell
-            // expansion; step over it without touching it.
-            at += 2 + skip_expr(excmd.line.rest_of(at + 2));
-            if excmd.line.byte_at(at) == b'`' {
+        while self.line.byte_at(at) != 0 {
+            if self.line.byte_at(at) == b'`' && self.line.byte_at(at + 1) == b'=' {
+                // `` `=expr` `` is evaluated much later, by the shell
+                // expansion; step over it without touching it.
+                at += 2 + skip_expr(self.line.rest_of(at + 2));
+                if self.line.byte_at(at) == b'`' {
+                    at += 1;
+                }
+                continue;
+            }
+            if !b"%#<".contains(&self.line.byte_at(at)) {
                 at += 1;
+                continue;
             }
-            continue;
-        }
-        if !b"%#<".contains(&excmd.line.byte_at(at)) {
-            at += 1;
-            continue;
+
+            // The items are read relative to the argument: a backslash before
+            // one quotes it, but only from inside the argument.
+            let base = self.line.arg;
+            let found = eval_vars(
+                self.line.cstr_from(base),
+                at - base,
+                Some(&mut self.do_ecmd_lnum),
+                true,
+            );
+            let (mut repl, srclen, escaped) = match found {
+                Expansion::Refused(msg) => {
+                    *errormsgp = Some(msg.to_owned());
+                    return Err(Failed);
+                }
+                Expansion::Skip(len) => {
+                    at += len;
+                    continue;
+                }
+                Expansion::Quoted => {
+                    // Take the backslash out; the item stays, and the scan
+                    // resumes on the byte after its first.
+                    self.line.drop_byte(at - 1);
+                    continue;
+                }
+                Expansion::Text {
+                    text,
+                    used,
+                    escaped,
+                } => (text, used, escaped),
+            };
+
+            if repl.contains(&b'$') || repl.contains(&b'~') {
+                repl = expand_env(&cstr::owned(&repl), false).to_vec();
+            }
+
+            // A name that will be handed to a *file* argument gets the
+            // shell-special characters escaped — but not for the commands
+            // that hand the whole argument to a shell themselves, and not
+            // for a name that came back already escaped (`##`).
+            let idx = self.cmdidx;
+            let escape_chars = ESCAPE_CHARS.to_bytes();
+            if !self.usefilter
+                && !escaped
+                && idx != CmdIdx::bang
+                && idx != CmdIdx::grep
+                && idx != CmdIdx::grepadd
+                && idx != CmdIdx::lgrep
+                && idx != CmdIdx::lgrepadd
+                && idx != CmdIdx::lmake
+                && idx != CmdIdx::make
+                && idx != CmdIdx::terminal
+                && !self.argt.has(ExArgt::NOSPC)
+                && repl.iter().any(|byte| escape_chars.contains(byte))
+            {
+                repl = escaped_bytes(&repl, escape_chars).to_vec();
+            }
+            // A `!` in the replacement would be read as "the previous
+            // command" by the shell-command line parser.
+            if (self.usefilter || idx == CmdIdx::bang || idx == CmdIdx::terminal)
+                && repl.contains(&b'!')
+            {
+                repl = escaped_bytes(&repl, b"!").to_vec();
+            }
+
+            at = repl_cmdline(self, at, srclen, &repl);
         }
 
-        // The items are read relative to the argument: a backslash before
-        // one quotes it, but only from inside the argument.
-        let base = excmd.line.arg;
-        let found = eval_vars(
-            excmd.line.cstr_from(base),
-            at - base,
-            Some(&mut excmd.do_ecmd_lnum),
-            true,
-        );
-        let (mut repl, srclen, escaped) = match found {
-            Expansion::Refused(msg) => {
-                *errormsgp = Some(msg.to_owned());
-                return Err(Failed);
+        // `ExArgt::NOSPC` means the argument is one file name, so wildcards in
+        // it can be expanded to exactly one match.
+        if !self.argt.has(ExArgt::NOSPC) || self.usefilter {
+            return Ok(());
+        }
+
+        let (start, len) = (self.line.arg, self.line.rest_of(self.line.arg).len());
+        if has_wildcards {
+            // Environment variables first: they may hold the wildcards, or
+            // may be all that looked like one.
+            let arg = self.line.rest_of(start);
+            if arg.contains(&b'$') || arg.contains(&b'~') {
+                let out = expand_env_escaped(self.line.cstr_from(start), true, true, None);
+                has_wildcards = has_wildcard(&out);
+                repl_cmdline(self, start, len, &out);
             }
-            Expansion::Skip(len) => {
-                at += len;
-                continue;
-            }
-            Expansion::Quoted => {
-                // Take the backslash out; the item stays, and the scan
-                // resumes on the byte after its first.
-                excmd.line.drop_byte(at - 1);
-                continue;
-            }
-            Expansion::Text {
-                text,
-                used,
-                escaped,
-            } => (text, used, escaped),
+        }
+        if !has_wildcards {
+            // The backslashes go, in place: the argument only gets shorter.
+            let halved = backslash_halved(self.line.rest_of(self.line.arg));
+            let at = self.line.arg;
+            let text = self.line.buffer_mut();
+            text[at..at + halved.len()].copy_from_slice(&halved);
+            text[at + halved.len()] = 0;
+            return Ok(());
+        }
+
+        let mut xpc = Expand::new();
+        xpc.context = ExpandContext::Files;
+        let mut options = WildOpts::LIST_NOTFOUND | WildOpts::NOERROR | WildOpts::ADD_SLASH;
+        if p_wic() {
+            options |= WildOpts::ICASE;
+        }
+        let arg = CString::new(self.line.rest_of(self.line.arg)).unwrap_or_default();
+        let Some(expanded) = expand_one(&mut xpc, Some(&arg), None, options, WildMode::ExpandFree)
+        else {
+            return Err(Failed);
         };
-
-        if repl.contains(&b'$') || repl.contains(&b'~') {
-            repl = expand_env(&cstr::owned(&repl), false).to_vec();
-        }
-
-        // A name that will be handed to a *file* argument gets the
-        // shell-special characters escaped — but not for the commands
-        // that hand the whole argument to a shell themselves, and not
-        // for a name that came back already escaped (`##`).
-        let idx = excmd.cmdidx;
-        let escape_chars = ESCAPE_CHARS.to_bytes();
-        if !excmd.usefilter
-            && !escaped
-            && idx != CmdIdx::bang
-            && idx != CmdIdx::grep
-            && idx != CmdIdx::grepadd
-            && idx != CmdIdx::lgrep
-            && idx != CmdIdx::lgrepadd
-            && idx != CmdIdx::lmake
-            && idx != CmdIdx::make
-            && idx != CmdIdx::terminal
-            && !excmd.argt.has(ExArgt::NOSPC)
-            && repl.iter().any(|byte| escape_chars.contains(byte))
-        {
-            repl = escaped_bytes(&repl, escape_chars).to_vec();
-        }
-        // A `!` in the replacement would be read as "the previous
-        // command" by the shell-command line parser.
-        if (excmd.usefilter || idx == CmdIdx::bang || idx == CmdIdx::terminal)
-            && repl.contains(&b'!')
-        {
-            repl = escaped_bytes(&repl, b"!").to_vec();
-        }
-
-        at = repl_cmdline(excmd, at, srclen, &repl);
+        let text = expanded.as_cstr().to_bytes().to_vec();
+        let (start, len) = (self.line.arg, self.line.rest_of(self.line.arg).len());
+        repl_cmdline(self, start, len, &text);
+        Ok(())
     }
-
-    // `ExArgt::NOSPC` means the argument is one file name, so wildcards in
-    // it can be expanded to exactly one match.
-    if !excmd.argt.has(ExArgt::NOSPC) || excmd.usefilter {
-        return Ok(());
-    }
-
-    let (start, len) = (excmd.line.arg, excmd.line.rest_of(excmd.line.arg).len());
-    if has_wildcards {
-        // Environment variables first: they may hold the wildcards, or
-        // may be all that looked like one.
-        let arg = excmd.line.rest_of(start);
-        if arg.contains(&b'$') || arg.contains(&b'~') {
-            let out = expand_env_escaped(excmd.line.cstr_from(start), true, true, None);
-            has_wildcards = has_wildcard(&out);
-            repl_cmdline(excmd, start, len, &out);
-        }
-    }
-    if !has_wildcards {
-        // The backslashes go, in place: the argument only gets shorter.
-        let halved = backslash_halved(excmd.line.rest_of(excmd.line.arg));
-        let at = excmd.line.arg;
-        let text = excmd.line.buffer_mut();
-        text[at..at + halved.len()].copy_from_slice(&halved);
-        text[at + halved.len()] = 0;
-        return Ok(());
-    }
-
-    let mut xpc = Expand::new();
-    xpc.context = ExpandContext::Files;
-    let mut options = WildOpts::LIST_NOTFOUND | WildOpts::NOERROR | WildOpts::ADD_SLASH;
-    if p_wic() {
-        options |= WildOpts::ICASE;
-    }
-    let arg = CString::new(excmd.line.rest_of(excmd.line.arg)).unwrap_or_default();
-    let Some(expanded) = expand_one(&mut xpc, Some(&arg), None, options, WildMode::ExpandFree)
-    else {
-        return Err(Failed);
-    };
-    let text = expanded.as_cstr().to_bytes().to_vec();
-    let (start, len) = (excmd.line.arg, excmd.line.rest_of(excmd.line.arg).len());
-    repl_cmdline(excmd, start, len, &text);
-    Ok(())
 }
 
 /// Replace the `srclen` bytes at `at` with `repl`, in place.

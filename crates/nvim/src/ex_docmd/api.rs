@@ -29,18 +29,15 @@ use crate::ascii::ascii_iswhite;
 
 use crate::eval::skip_expr;
 use crate::ex_docmd::address::{correct_range, find_excmd_after_range, parse_cmd_address};
-use crate::ex_docmd::addrtype::{set_cmd_addr_type, set_cmd_dflall_range};
+use crate::ex_docmd::addrtype::set_cmd_dflall_range;
 use crate::ex_docmd::scan::skip_colons;
 
-use crate::ex_docmd::filename::expand_filename;
 use crate::ex_docmd::lookup::is_user_cmd;
-use crate::ex_docmd::modifier::{
-    CmdModScope, cmd_has_expr_args, parse_command_modifiers, undo_cmdmod,
-};
+use crate::ex_docmd::modifier::{CmdModScope, cmd_has_expr_args, undo_cmdmod};
 use crate::ex_docmd::onecmd::{
     append_command, ex_range_without_command, fresh_exarg, shift_cmd_args,
 };
-use crate::ex_docmd::scan::{parse_bang, parse_count, parse_register, separate_nextcmd};
+use crate::ex_docmd::scan::{parse_bang, parse_register, separate_nextcmd};
 
 use crate::ex_docmd::source::{do_cmdline_end, do_cmdline_start};
 use crate::ex_docmd::state::{cmdmod, global_busy};
@@ -96,7 +93,7 @@ pub fn parse_cmdline(
         // A modifier that failed to parse is still a modifier: keep
         // going, so that the error is reported against the command
         // rather than against the line.
-        let result = parse_command_modifiers(excmd, errormsg, &mut cmdinfo.cmdmod, false);
+        let result = excmd.parse_modifiers(errormsg, &mut cmdinfo.cmdmod, false);
         let after_modifier = excmd.line.cmd;
         if result.is_err() && after_modifier == orig_cmd {
             break 'end;
@@ -108,7 +105,7 @@ pub fn parse_cmdline(
             break 'end;
         };
 
-        set_cmd_addr_type(excmd, Some(excmd.line.byte_at(excmd.line.skip_white(p))));
+        excmd.set_addr_type(Some(excmd.line.byte_at(excmd.line.skip_white(p))));
         if let Err(refused) = parse_cmd_address(excmd, true) {
             refused.into_errormsg(errormsg);
             break 'end;
@@ -194,7 +191,7 @@ pub fn parse_cmdline(
         }
 
         parse_register(excmd);
-        if parse_count(excmd, errormsg, false).is_err() {
+        if excmd.parse_count(errormsg, false).is_err() {
             break 'end;
         }
 
@@ -234,7 +231,7 @@ pub(crate) fn execute_cmd0(
     preview: bool,
 ) -> Result<(), Failed> {
     if excmd.argt.has(ExArgt::XFILE) {
-        expand_filename(excmd, errormsg)?;
+        excmd.expand_filename(errormsg)?;
     }
 
     // A buffer name may stand in for a buffer number, but not alongside
@@ -383,7 +380,7 @@ pub fn execute_cmd(excmd: &mut ExArg, cmdinfo: &CmdParseInfo, preview: bool) -> 
             has_folding(Win::current(), excmd.line2, None, Some(&mut excmd.line2));
         }
 
-        if parse_count(excmd, &mut errormsg, true).is_err() {
+        if excmd.parse_count(&mut errormsg, true).is_err() {
             break 'end;
         }
 

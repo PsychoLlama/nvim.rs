@@ -60,8 +60,8 @@ use crate::ex_docmd::state::{
     cmdmod, ex_normal_busy, exec_from_reg, global_busy, new_last_cmdline,
 };
 use crate::ex_docmd::{
-    execute_cmd, expr_map_locked, parse_cmd_address, parse_cmdline, parse_command_modifiers,
-    set_no_hlsearch, skip_range, undo_cmdmod,
+    execute_cmd, expr_map_locked, parse_cmd_address, parse_cmdline, set_no_hlsearch, skip_range,
+    undo_cmdmod,
 };
 use crate::ex_eval::aborting;
 use crate::ex_getln::state::{CmdBuff, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColoredCmdline};

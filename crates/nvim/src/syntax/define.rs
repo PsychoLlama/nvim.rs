@@ -82,7 +82,7 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
         || path_is_absolute(args.line.cstr_from(args.line.arg));
     if source {
         let mut errormsg = None;
-        if expand_filename(args, &mut errormsg).is_err() {
+        if args.expand_filename(&mut errormsg).is_err() {
             if let Some(msg) = &errormsg {
                 emsg(msg);
             }
@@ -249,100 +249,103 @@ fn region_item(key: &[u8]) -> Option<c_int> {
     .map(|(_, item)| item)
 }
 
-/// Read the options, patterns and `matchgroup=`s of a `:syntax region`.
-///
-/// `line` is the whole rest of the command line and `at` the offset of the
-/// first argument after the group name.
-fn parse_region_args(args: &mut ExArg, line: &[u8], at: Option<usize>) -> RegionArgs {
-    let mut out = RegionArgs {
-        pats: [Vec::new(), Vec::new(), Vec::new()],
-        opt: item_opt(false),
-        conceal_char: NUL,
-        end: at,
-        not_enough: false,
-    };
-    let mut matchgroup_id = 0;
-    let mut illegal = false;
-    let byte = |at: usize| c_int::from(cstr::byte_at(line, at));
-
-    let mut cursor = at;
-    while let Some(mut at) = cursor.filter(|&at| ends_excmd(byte(at)) == 0) {
-        // Options may appear anywhere between the patterns. A refusal is
-        // said here, before the E475 `syn_cmd_region` follows it with.
-        cursor = read_item_options(line, at, &mut out.opt, &mut out.conceal_char, args.skip)
-            .map_err(|why| why.report())
-            .ok();
-        match cursor {
-            Some(next) if ends_excmd(byte(next)) == 0 => at = next,
-            _ => break,
-        }
-
-        // Must be a pattern keyword or `matchgroup` then.
-        let mut key_end = at;
-        while !matches!(cstr::byte_at(line, key_end), 0 | b'=') && !ascii_iswhite(byte(key_end)) {
-            key_end += 1;
-        }
-        let Some(item) = region_item(&line[at..key_end]) else {
-            break;
+impl ExArg<'_> {
+    /// Read the options, patterns and `matchgroup=`s of a `:syntax region`.
+    ///
+    /// `line` is the whole rest of the command line and `at` the offset of the
+    /// first argument after the group name.
+    fn parse_region_args(&mut self, line: &[u8], at: Option<usize>) -> RegionArgs {
+        let mut out = RegionArgs {
+            pats: [Vec::new(), Vec::new(), Vec::new()],
+            opt: item_opt(false),
+            conceal_char: NUL,
+            end: at,
+            not_enough: false,
         };
-        if item == ITEM_SKIP && !out.pats[ITEM_SKIP as usize].is_empty() {
-            illegal = true; // Only one skip pattern is allowed.
-            break;
-        }
+        let mut matchgroup_id = 0;
+        let mut illegal = false;
+        let byte = |at: usize| c_int::from(cstr::byte_at(line, at));
 
-        at = key_end + skip::white(&line[key_end..]);
-        if byte(at) != c_int::from(b'=') {
-            cursor = None;
-            let shown = msg_bytes(line);
-            semsg!("E398: Missing '=': {shown}");
-            break;
-        }
-        at += 1;
-        at += skip::white(&line[at..]);
-        if byte(at) == NUL {
-            out.not_enough = true;
-            break;
-        }
-
-        if item == ITEM_MATCHGROUP {
-            let name_end = at + skip::to_white(&line[at..]);
-            if &line[at..name_end] == b"NONE" || args.skip {
-                matchgroup_id = 0;
-            } else {
-                matchgroup_id = syn_check_group(&line[at..name_end]);
-                if matchgroup_id == 0 {
-                    illegal = true;
-                    break;
-                }
+        let mut cursor = at;
+        while let Some(mut at) = cursor.filter(|&at| ends_excmd(byte(at)) == 0) {
+            // Options may appear anywhere between the patterns. A refusal is
+            // said here, before the E475 `syn_cmd_region` follows it with.
+            cursor = read_item_options(line, at, &mut out.opt, &mut out.conceal_char, self.skip)
+                .map_err(|why| why.report())
+                .ok();
+            match cursor {
+                Some(next) if ends_excmd(byte(next)) == 0 => at = next,
+                _ => break,
             }
-            cursor = Some(name_end + skip::white(&line[name_end..]));
-            continue;
+
+            // Must be a pattern keyword or `matchgroup` then.
+            let mut key_end = at;
+            while !matches!(cstr::byte_at(line, key_end), 0 | b'=') && !ascii_iswhite(byte(key_end))
+            {
+                key_end += 1;
+            }
+            let Some(item) = region_item(&line[at..key_end]) else {
+                break;
+            };
+            if item == ITEM_SKIP && !out.pats[ITEM_SKIP as usize].is_empty() {
+                illegal = true; // Only one skip pattern is allowed.
+                break;
+            }
+
+            at = key_end + skip::white(&line[key_end..]);
+            if byte(at) != c_int::from(b'=') {
+                cursor = None;
+                let shown = msg_bytes(line);
+                semsg!("E398: Missing '=': {shown}");
+                break;
+            }
+            at += 1;
+            at += skip::white(&line[at..]);
+            if byte(at) == NUL {
+                out.not_enough = true;
+                break;
+            }
+
+            if item == ITEM_MATCHGROUP {
+                let name_end = at + skip::to_white(&line[at..]);
+                if &line[at..name_end] == b"NONE" || self.skip {
+                    matchgroup_id = 0;
+                } else {
+                    matchgroup_id = syn_check_group(&line[at..name_end]);
+                    if matchgroup_id == 0 {
+                        illegal = true;
+                        break;
+                    }
+                }
+                cursor = Some(name_end + skip::white(&line[name_end..]));
+                continue;
+            }
+
+            // Enable the appropriate `\z` specials: a start pattern defines the
+            // external matches, skip and end patterns use them.
+            let extmatch = if item == ITEM_START { REX_SET } else { REX_USE };
+            let mut pat = EMPTY_SYNPAT;
+            cursor = read_pattern(line, at, &mut pat, extmatch)
+                .map_err(|why| why.report())
+                .ok();
+            if item == ITEM_END
+                && pat.sp_prog.as_ref().is_some_and(OwnedProg::had_eol)
+                && !out.opt.flags.has(SynFlags::EXCLUDENL)
+            {
+                pat.sp_flags |= SynFlags::HAS_EOL;
+            }
+            out.pats[as_index(item)].insert(0, RegionPat { pat, matchgroup_id });
         }
 
-        // Enable the appropriate `\z` specials: a start pattern defines the
-        // external matches, skip and end patterns use them.
-        let extmatch = if item == ITEM_START { REX_SET } else { REX_USE };
-        let mut pat = EMPTY_SYNPAT;
-        cursor = read_pattern(line, at, &mut pat, extmatch)
-            .map_err(|why| why.report())
-            .ok();
-        if item == ITEM_END
-            && pat.sp_prog.as_ref().is_some_and(OwnedProg::had_eol)
-            && !out.opt.flags.has(SynFlags::EXCLUDENL)
-        {
-            pat.sp_flags |= SynFlags::HAS_EOL;
-        }
-        out.pats[as_index(item)].insert(0, RegionPat { pat, matchgroup_id });
+        // An `illegal` stop is reported as E390, which is what upstream's
+        // "rest = NULL" here and its `illegal || rest == NULL` test below say.
+        out.end = if illegal || out.not_enough {
+            None
+        } else {
+            cursor
+        };
+        out
     }
-
-    // An `illegal` stop is reported as E390, which is what upstream's
-    // "rest = NULL" here and its `illegal || rest == NULL` test below say.
-    out.end = if illegal || out.not_enough {
-        None
-    } else {
-        cursor
-    };
-    out
 }
 
 /// `:syntax region {group} [matchgroup={group}] start={pat} .. [skip={pat}]
@@ -353,7 +356,7 @@ pub(crate) fn syn_cmd_region(args: &mut ExArg, syncing: c_int) {
     // Isolate the group name, check for validity.
     let name = split_group_name(&line);
 
-    let mut parsed = parse_region_args(args, &line, name.as_ref().map(|name| name.rest));
+    let mut parsed = args.parse_region_args(&line, name.as_ref().map(|name| name.rest));
     let mut end = parsed.end;
 
     // Must have a "start" and an "end" pattern.

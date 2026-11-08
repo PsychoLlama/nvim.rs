@@ -591,17 +591,19 @@ pub fn not_exiting(save_exiting: bool) {
     set_vim_var_string(Vv::Exitreason, None);
 }
 
-/// The next line of the body a running command reads, from wherever the
-/// command reads its own lines: the command line itself when it has no
-/// source. `None` at the end of input.
-pub(crate) fn read_next_line(
-    excmd: &mut ExArg,
-    c: Option<u8>,
-    indent: c_int,
-    do_concat: bool,
-) -> Option<XString> {
-    match excmd.source.as_mut() {
-        None => cmdline_input(c, indent, do_concat),
-        Some(source) => source.next_line(c, indent, do_concat),
+impl ExArg<'_> {
+    /// The next line of the body a running command reads, from wherever the
+    /// command reads its own lines: the command line itself when it has no
+    /// source. `None` at the end of input.
+    pub(crate) fn next_body_line(
+        &mut self,
+        c: Option<u8>,
+        indent: c_int,
+        do_concat: bool,
+    ) -> Option<XString> {
+        match self.source.as_mut() {
+            None => cmdline_input(c, indent, do_concat),
+            Some(source) => source.next_line(c, indent, do_concat),
+        }
     }
 }

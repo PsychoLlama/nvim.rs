@@ -153,7 +153,7 @@ fn prepare_cmd(
             let at = crate::charset::skip::white(arg);
             arg.get(at).copied().unwrap_or(0)
         });
-        set_cmd_addr_type(excmd, first);
+        excmd.set_addr_type(first);
     }
 
     apply_range(cmd, excmd)?;
@@ -200,7 +200,7 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
     // The name as the messages below spell it: up to a NUL, as upstream's
     // `char *` reads it. A copy, since the lookups take the line.
     let cmdname = excmd.line.rest_of(0).to_vec();
-    let mut found = find_ex_command(excmd, None);
+    let mut found = excmd.find_command(None);
 
     // An unknown capitalised name plus a CmdUndefined autocommand is a lazily
     // defined user command: fire the event, then look again.
@@ -218,7 +218,7 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
             None,
         );
         found = if c_int::from(ret) != 0 && !aborting() {
-            find_ex_command(excmd, None)
+            excmd.find_command(None)
         } else {
             Some(excmd.line.cmd)
         };

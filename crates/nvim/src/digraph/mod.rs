@@ -28,7 +28,7 @@ use crate::eval::typval::{
     NumBuf, list_items, list_iter, list_len, tv_check_for_opt_bool_arg, tv_get_bool, tv_list_alloc,
     tv_list_alloc_ret,
 };
-use crate::ex_docmd::{do_cmdline_cmd, exarg_getline, reads_sourced_lines};
+use crate::ex_docmd::{do_cmdline_cmd, reads_sourced_lines};
 use crate::ex_getln::putcmdline;
 use crate::ex_getln::state::cmdline_star;
 use crate::getchar::plain_vgetc;
@@ -695,7 +695,7 @@ pub fn ex_loadkeymap(excmd: &mut ExArg) {
 /// skipped; an over-long or half-empty entry is dropped, and an empty `to`
 /// reports E791.
 fn read_keymap_entries(excmd: &mut ExArg, mut buffer: Buf) {
-    while let Some(line) = exarg_getline(excmd, Some(0), 0, true) {
+    while let Some(line) = excmd.next_source_line(Some(0), 0, true) {
         let s = skip_white(&line);
         if !s.is_empty() && s[0] != b'"' {
             let (from, rest) = split_at_white(s);

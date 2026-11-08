@@ -43,7 +43,6 @@ use crate::charset::{getdigits_at, getdigits_int_at, skip};
 
 use crate::cursor::{check_cursor, check_cursor_col};
 
-use crate::ex_docmd::lookup::find_ex_command;
 use crate::ex_docmd::window::{current_tab_nr, current_win_nr};
 use crate::ex_docmd::{
     INT32_MAX, e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors, e_norange,
@@ -121,7 +120,7 @@ pub(crate) fn find_excmd_after_range(excmd: &mut ExArg) -> Option<usize> {
     // SAFETY: `cmd` walks the command's own NUL-terminated line.
     // SAFETY: a null context is "not completing".
     excmd.line.cmd = cmd + skip_range(excmd.line.tail(cmd), None);
-    let end = find_ex_command(excmd, None);
+    let end = excmd.find_command(None);
     excmd.line.cmd = cmd;
     end
 }

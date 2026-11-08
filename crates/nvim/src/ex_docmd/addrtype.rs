@@ -62,30 +62,33 @@ pub(crate) fn get_wincmd_addr_type(c: u8, excmd: &mut ExArg) {
     };
 }
 
-/// Take the address kind from the command table, with the three exceptions
-/// the table cannot express.
-///
-/// `first` is the first byte of the command's argument, white space
-/// skipped, which only `:wincmd` consults; `None` is "there is no
-/// argument", upstream's null `p`.
-pub fn set_cmd_addr_type(excmd: &mut ExArg, first: Option<u8>) {
-    if is_user_cmd(excmd.cmdidx) {
-        return;
-    }
-    excmd.addr_type = if excmd.cmdidx != CmdIdx::SIZE {
-        cmdnames[excmd.cmdidx.index()].cmd_addr_type
-    } else {
-        CmdAddr::Lines
-    };
-    if excmd.cmdidx == CmdIdx::wincmd
-        && let Some(first) = first
-    {
-        get_wincmd_addr_type(first, excmd);
-    }
-    // `:cc`/`:ll` in a quickfix window address the window's entries.
-    if (excmd.cmdidx == CmdIdx::cc || excmd.cmdidx == CmdIdx::ll) && buf_is_quickfix(current_buf())
-    {
-        excmd.addr_type = CmdAddr::Other;
+impl ExArg<'_> {
+    /// Take the address kind from the command table, with the three exceptions
+    /// the table cannot express.
+    ///
+    /// `first` is the first byte of the command's argument, white space
+    /// skipped, which only `:wincmd` consults; `None` is "there is no
+    /// argument", upstream's null `p`.
+    pub fn set_addr_type(&mut self, first: Option<u8>) {
+        if is_user_cmd(self.cmdidx) {
+            return;
+        }
+        self.addr_type = if self.cmdidx != CmdIdx::SIZE {
+            cmdnames[self.cmdidx.index()].cmd_addr_type
+        } else {
+            CmdAddr::Lines
+        };
+        if self.cmdidx == CmdIdx::wincmd
+            && let Some(first) = first
+        {
+            get_wincmd_addr_type(first, self);
+        }
+        // `:cc`/`:ll` in a quickfix window address the window's entries.
+        if (self.cmdidx == CmdIdx::cc || self.cmdidx == CmdIdx::ll)
+            && buf_is_quickfix(current_buf())
+        {
+            self.addr_type = CmdAddr::Other;
+        }
     }
 }
 

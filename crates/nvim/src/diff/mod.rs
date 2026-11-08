@@ -54,7 +54,7 @@ use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, redraw_later};
 use crate::eval::typval::{tv_get_lnum, tv_get_number};
 use crate::eval::vars::{eval_diff, eval_patch};
 use crate::ex_cmds::{append_redir, ex_file};
-use crate::ex_docmd::{do_cmdline_cmd, do_exedit, get_address};
+use crate::ex_docmd::{do_cmdline_cmd, get_address};
 use crate::extmark::extmark_adjust;
 use crate::fileio::{buf_check_timestamp, shorten_fnames, temp_name, vim_gettempdir};
 use crate::fold::{

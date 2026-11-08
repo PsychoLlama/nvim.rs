@@ -108,306 +108,310 @@ pub fn cmd_has_expr_args(cmdidx: CmdIdx) -> bool {
     )
 }
 
-/// Read the run of modifiers at the head of the command line into `cmod`,
-/// advancing `args.cmd` past them.
-///
-/// Answers `Err` when there is no command at all — a comment, a bare
-/// newline, or an empty line — and `Ok` otherwise, including when the line
-/// carried no modifier.
-///
-/// `skip_only` is `nvim_parse_cmd`'s mode: recognise everything, allocate
-/// and evaluate nothing.
-pub(crate) fn parse_command_modifiers(
-    excmd: &mut ExArg,
-    errormsg: &mut Option<CString>,
-    cm: &mut CmdMod,
-    skip_only: bool,
-) -> Result<(), Failed> {
-    let orig_cmd = excmd.line.cmd;
-    let mut cmd_start = 0;
-    let mut use_plus_cmd = false;
-    let mut has_visual_range = false;
-    *cm = CmdMod::default();
+impl ExArg<'_> {
+    /// Read the run of modifiers at the head of the command line into `cmod`,
+    /// advancing `args.cmd` past them.
+    ///
+    /// Answers `Err` when there is no command at all — a comment, a bare
+    /// newline, or an empty line — and `Ok` otherwise, including when the line
+    /// carried no modifier.
+    ///
+    /// `skip_only` is `nvim_parse_cmd`'s mode: recognise everything, allocate
+    /// and evaluate nothing.
+    pub(crate) fn parse_modifiers(
+        &mut self,
+        errormsg: &mut Option<CString>,
+        cm: &mut CmdMod,
+        skip_only: bool,
+    ) -> Result<(), Failed> {
+        let orig_cmd = self.line.cmd;
+        let mut cmd_start = 0;
+        let mut use_plus_cmd = false;
+        let mut has_visual_range = false;
+        *cm = CmdMod::default();
 
-    // A `'<,'>` typed by the user (which is what a Visual-mode `:` puts
-    // there) is stepped over so a modifier after it is still seen, and
-    // put back below — the range has to reach the command, not the
-    // modifier scan.
-    if excmd.line.starts_with(excmd.line.cmd, b"'<,'>") {
-        let after = excmd.line.skip_white(excmd.line.cmd + 5);
-        if excmd.line.byte_at(after) != 0 && excmd.line.byte_at(after) != b'|' {
-            excmd.line.cmd += 5;
-            cmd_start = excmd.line.cmd;
-            has_visual_range = true;
-        }
-    }
-
-    loop {
-        // The cursor walks in a local and is stored once: the line has to
-        // be measured for every `byte_at`, and doing that through the
-        // field made this the hottest line in the command parse.
-        let mut cmd = excmd.line.cmd;
-        while matches!(excmd.line.byte_at(cmd), b' ' | b'\t' | b':') {
-            cmd += 1;
-        }
-        excmd.line.cmd = cmd;
-        let first = excmd.line.byte_at(cmd);
-
-        // In Ex mode an empty line means "print the next one", which is
-        // spelled by substituting a `+` command.
-        if first == 0
-            && exmode_active.get()
-            && excmd.source_kind() == SourceKind::Typed
-            && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
-        {
-            // An Ex-mode empty line *becomes* a `+` command: the line the
-            // user did not type is retired and this one takes its place.
-            excmd.line.take_over(b"+\0".to_vec());
-            excmd.line.cmd = 0;
-            excmd.line.substituted = true;
-            use_plus_cmd = true;
-            if !skip_only {
-                ex_pressedreturn.set(true);
+        // A `'<,'>` typed by the user (which is what a Visual-mode `:` puts
+        // there) is stepped over so a modifier after it is still seen, and
+        // put back below — the range has to reach the command, not the
+        // modifier scan.
+        if self.line.starts_with(self.line.cmd, b"'<,'>") {
+            let after = self.line.skip_white(self.line.cmd + 5);
+            if self.line.byte_at(after) != 0 && self.line.byte_at(after) != b'|' {
+                self.line.cmd += 5;
+                cmd_start = self.line.cmd;
+                has_visual_range = true;
             }
-            break;
-        }
-        if first == b'"' {
-            // The comment runs to the newline; whatever follows it is the
-            // next command.
-            excmd.line.next = excmd.line.rest_of(cmd).iter().position(|b| *b == b'\n');
-            excmd.line.next = excmd.line.next.map(|at| cmd + at + 1);
-            return Err(Failed);
-        }
-        if first == b'\n' {
-            excmd.line.next = Some(cmd + 1);
-            return Err(Failed);
-        }
-        if first == 0 {
-            if !skip_only {
-                ex_pressedreturn.set(true);
-            }
-            return Err(Failed);
         }
 
-        // A modifier may follow a range (`:1,2 silent print`), so the
-        // name is looked for past one — but `args.cmd` only moves for
-        // the modifiers that accept that.
-        // SAFETY: a null context is "not completing".
-        let mut at = cmd + skip_range(excmd.line.tail(cmd), None);
-        match excmd.line.byte_at(at) {
-            b'a' => {
-                if !takes(excmd, b"aboveleft", 3) {
-                    break;
-                }
-                cm.cmod_split |= WSP_ABOVE;
+        loop {
+            // The cursor walks in a local and is stored once: the line has to
+            // be measured for every `byte_at`, and doing that through the
+            // field made this the hottest line in the command parse.
+            let mut cmd = self.line.cmd;
+            while matches!(self.line.byte_at(cmd), b' ' | b'\t' | b':') {
+                cmd += 1;
             }
-            b'b' => {
-                if takes(excmd, b"belowright", 3) {
-                    cm.cmod_split |= WSP_BELOW;
-                } else if takes(excmd, b"browse", 3) {
-                    cm.cmod_flags |= CmdModFlags::BROWSE;
-                } else if takes(excmd, b"botright", 2) {
-                    cm.cmod_split |= WSP_BOT;
-                } else {
-                    break;
-                }
-            }
-            b'c' => {
-                if !takes(excmd, b"confirm", 4) {
-                    break;
-                }
-                cm.cmod_flags |= CmdModFlags::CONFIRM;
-            }
-            b'k' => {
-                if takes(excmd, b"keepmarks", 3) {
-                    cm.cmod_flags |= CmdModFlags::KEEPMARKS;
-                } else if takes(excmd, b"keepalt", 5) {
-                    cm.cmod_flags |= CmdModFlags::KEEPALT;
-                } else if takes(excmd, b"keeppatterns", 5) {
-                    cm.cmod_flags |= CmdModFlags::KEEPPATTERNS;
-                } else if takes(excmd, b"keepjumps", 5) {
-                    cm.cmod_flags |= CmdModFlags::KEEPJUMPS;
-                } else {
-                    break;
-                }
-            }
-            b'f' => {
-                // `:filter` insists on a pattern *and* something after
-                // it: the whole point is the command it wraps.
-                let Some(after) = check_for_word(&excmd.line, at, b"filter", 4) else {
-                    break;
-                };
-                at = after;
-                if excmd.line.byte_at(at) == 0
-                    || ends_excmd(c_int::from(excmd.line.byte_at(at))) != 0
-                {
-                    break;
-                }
-                if excmd.line.byte_at(at) == b'!' {
-                    cm.cmod_filter_force = true;
-                    at = excmd.line.skip_white(at + 1);
-                    if excmd.line.byte_at(at) == 0
-                        || ends_excmd(c_int::from(excmd.line.byte_at(at))) != 0
-                    {
-                        break;
-                    }
-                }
-                let Some((pattern, past)) = filter_pattern(&mut excmd.line, at, !skip_only) else {
-                    break;
-                };
-                at = past;
-                if excmd.line.byte_at(at) == 0 {
-                    break;
-                }
+            self.line.cmd = cmd;
+            let first = self.line.byte_at(cmd);
+
+            // In Ex mode an empty line means "print the next one", which is
+            // spelled by substituting a `+` command.
+            if first == 0
+                && exmode_active.get()
+                && self.source_kind() == SourceKind::Typed
+                && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
+            {
+                // An Ex-mode empty line *becomes* a `+` command: the line the
+                // user did not type is retired and this one takes its place.
+                self.line.take_over(b"+\0".to_vec());
+                self.line.cmd = 0;
+                self.line.substituted = true;
+                use_plus_cmd = true;
                 if !skip_only {
-                    let pat = CString::new(excmd.line.slice_at(pattern.0, pattern.1 - pattern.0))
-                        .expect("a pattern ends at its first NUL");
-                    let filter = Rc::new(CmdFilter::new(pat, RE_MAGIC));
-                    let compiled = filter.compiled();
-                    cm.cmod_filter = Some(filter);
-                    if !compiled {
+                    ex_pressedreturn.set(true);
+                }
+                break;
+            }
+            if first == b'"' {
+                // The comment runs to the newline; whatever follows it is the
+                // next command.
+                self.line.next = self.line.rest_of(cmd).iter().position(|b| *b == b'\n');
+                self.line.next = self.line.next.map(|at| cmd + at + 1);
+                return Err(Failed);
+            }
+            if first == b'\n' {
+                self.line.next = Some(cmd + 1);
+                return Err(Failed);
+            }
+            if first == 0 {
+                if !skip_only {
+                    ex_pressedreturn.set(true);
+                }
+                return Err(Failed);
+            }
+
+            // A modifier may follow a range (`:1,2 silent print`), so the
+            // name is looked for past one — but `args.cmd` only moves for
+            // the modifiers that accept that.
+            // SAFETY: a null context is "not completing".
+            let mut at = cmd + skip_range(self.line.tail(cmd), None);
+            match self.line.byte_at(at) {
+                b'a' => {
+                    if !takes(self, b"aboveleft", 3) {
+                        break;
+                    }
+                    cm.cmod_split |= WSP_ABOVE;
+                }
+                b'b' => {
+                    if takes(self, b"belowright", 3) {
+                        cm.cmod_split |= WSP_BELOW;
+                    } else if takes(self, b"browse", 3) {
+                        cm.cmod_flags |= CmdModFlags::BROWSE;
+                    } else if takes(self, b"botright", 2) {
+                        cm.cmod_split |= WSP_BOT;
+                    } else {
                         break;
                     }
                 }
-                excmd.line.cmd = at;
-            }
-            b'h' => {
-                if takes(excmd, b"horizontal", 3) {
-                    cm.cmod_split |= WSP_HOR;
-                } else if at == excmd.line.cmd
-                    && let Some(after) = check_for_word(&excmd.line, at, b"hide", 3)
-                    && excmd.line.byte_at(after) != 0
-                    && ends_excmd(c_int::from(excmd.line.byte_at(after))) == 0
-                {
-                    // `:hide` is a command in its own right, so it is
-                    // only a modifier when a command follows it and no
-                    // range precedes it.
-                    excmd.line.cmd = after;
-                    cm.cmod_flags |= CmdModFlags::HIDE;
-                } else {
-                    break;
-                }
-            }
-            b'l' => {
-                if takes(excmd, b"lockmarks", 3) {
-                    cm.cmod_flags |= CmdModFlags::LOCKMARKS;
-                } else if takes(excmd, b"leftabove", 5) {
-                    cm.cmod_split |= WSP_ABOVE;
-                } else {
-                    break;
-                }
-            }
-            b'n' => {
-                if takes(excmd, b"noautocmd", 3) {
-                    cm.cmod_flags |= CmdModFlags::NOAUTOCMD;
-                } else if takes(excmd, b"noswapfile", 3) {
-                    cm.cmod_flags |= CmdModFlags::NOSWAPFILE;
-                } else {
-                    break;
-                }
-            }
-            b'r' => {
-                if !takes(excmd, b"rightbelow", 6) {
-                    break;
-                }
-                cm.cmod_split |= WSP_BELOW;
-            }
-            b's' => {
-                if takes(excmd, b"sandbox", 3) {
-                    cm.cmod_flags |= CmdModFlags::SANDBOX;
-                } else if takes(excmd, b"silent", 3) {
-                    cm.cmod_flags |= CmdModFlags::SILENT;
-                    // `:silent!` only means "and silence errors" when
-                    // the `!` is stuck to the word: `:silent !cmd` runs
-                    // a shell command quietly.
-                    let cmd = excmd.line.cmd;
-                    if excmd.line.byte_at(cmd) == b'!'
-                        && cmd > 0
-                        && !ascii_iswhite(c_int::from(excmd.line.byte_at(cmd - 1)))
-                    {
-                        excmd.line.cmd = excmd.line.skip_white(cmd + 1);
-                        cm.cmod_flags |= CmdModFlags::ERRSILENT;
+                b'c' => {
+                    if !takes(self, b"confirm", 4) {
+                        break;
                     }
-                } else {
-                    break;
+                    cm.cmod_flags |= CmdModFlags::CONFIRM;
                 }
-            }
-            b't' => {
-                if let Some(after) = check_for_word(&excmd.line, at, b"tab", 3) {
+                b'k' => {
+                    if takes(self, b"keepmarks", 3) {
+                        cm.cmod_flags |= CmdModFlags::KEEPMARKS;
+                    } else if takes(self, b"keepalt", 5) {
+                        cm.cmod_flags |= CmdModFlags::KEEPALT;
+                    } else if takes(self, b"keeppatterns", 5) {
+                        cm.cmod_flags |= CmdModFlags::KEEPPATTERNS;
+                    } else if takes(self, b"keepjumps", 5) {
+                        cm.cmod_flags |= CmdModFlags::KEEPJUMPS;
+                    } else {
+                        break;
+                    }
+                }
+                b'f' => {
+                    // `:filter` insists on a pattern *and* something after
+                    // it: the whole point is the command it wraps.
+                    let Some(after) = check_for_word(&self.line, at, b"filter", 4) else {
+                        break;
+                    };
                     at = after;
-                    if !skip_only {
-                        // The scan walks a cursor of its own; see
-                        // `parse_cmd_address`.
-                        let (cmdidx, skip) = (excmd.cmdidx, excmd.skip);
-                        let mut cursor = excmd.line.cmd;
-                        let read = get_address(
-                            Some(cmdidx),
-                            excmd.line.buffer_mut(),
-                            &mut cursor,
-                            CmdAddr::Tabs,
-                            skip,
-                            skip_only,
-                            false,
-                            1,
-                        );
-                        let tabnr = match read {
-                            Ok(tabnr) => tabnr.get(),
-                            Err(refused) => {
-                                refused.into_errormsg(errormsg);
-                                return Err(Failed);
-                            }
-                        };
-                        excmd.line.cmd = cursor;
-                        if tabnr == MAXLNUM.get() {
-                            cm.cmod_tab = tab_index(TabPage::current()) + 1;
-                        } else {
-                            if tabnr < 0 || tabnr > current_tab_nr(None) {
-                                *errormsg = Some(ex_msg(e_invrange));
-                                return Err(Failed);
-                            }
-                            cm.cmod_tab = tabnr + 1;
+                    if self.line.byte_at(at) == 0
+                        || ends_excmd(c_int::from(self.line.byte_at(at))) != 0
+                    {
+                        break;
+                    }
+                    if self.line.byte_at(at) == b'!' {
+                        cm.cmod_filter_force = true;
+                        at = self.line.skip_white(at + 1);
+                        if self.line.byte_at(at) == 0
+                            || ends_excmd(c_int::from(self.line.byte_at(at))) != 0
+                        {
+                            break;
                         }
                     }
-                    excmd.line.cmd = at;
-                } else if takes(excmd, b"topleft", 2) {
-                    cm.cmod_split |= WSP_TOP;
-                } else {
-                    break;
+                    let Some((pattern, past)) = filter_pattern(&mut self.line, at, !skip_only)
+                    else {
+                        break;
+                    };
+                    at = past;
+                    if self.line.byte_at(at) == 0 {
+                        break;
+                    }
+                    if !skip_only {
+                        let pat =
+                            CString::new(self.line.slice_at(pattern.0, pattern.1 - pattern.0))
+                                .expect("a pattern ends at its first NUL");
+                        let filter = Rc::new(CmdFilter::new(pat, RE_MAGIC));
+                        let compiled = filter.compiled();
+                        cm.cmod_filter = Some(filter);
+                        if !compiled {
+                            break;
+                        }
+                    }
+                    self.line.cmd = at;
                 }
-            }
-            b'u' => {
-                if !takes(excmd, b"unsilent", 3) {
-                    break;
+                b'h' => {
+                    if takes(self, b"horizontal", 3) {
+                        cm.cmod_split |= WSP_HOR;
+                    } else if at == self.line.cmd
+                        && let Some(after) = check_for_word(&self.line, at, b"hide", 3)
+                        && self.line.byte_at(after) != 0
+                        && ends_excmd(c_int::from(self.line.byte_at(after))) == 0
+                    {
+                        // `:hide` is a command in its own right, so it is
+                        // only a modifier when a command follows it and no
+                        // range precedes it.
+                        self.line.cmd = after;
+                        cm.cmod_flags |= CmdModFlags::HIDE;
+                    } else {
+                        break;
+                    }
                 }
-                cm.cmod_flags |= CmdModFlags::UNSILENT;
-            }
-            b'v' => {
-                if takes(excmd, b"vertical", 4) {
-                    cm.cmod_split |= WSP_VERT;
-                } else if let Some(after) = check_for_word(&excmd.line, at, b"verbose", 4) {
-                    at = after;
-                    // The count is read from `args.cmd`, which
-                    // `checkforcmd` left *before* the word: `:5verbose`.
-                    // Saturating: the count is whatever the user typed,
-                    // so `:2147483647verbose set` would otherwise add one
-                    // to `INT_MAX` and end the process.  C wraps here.
-                    cm.cmod_verbose =
-                        if ascii_isdigit(c_int::from(excmd.line.byte_at(excmd.line.cmd))) {
-                            atoi(excmd.line.cmd()).saturating_add(1)
-                        } else {
-                            2
-                        };
-                    excmd.line.cmd = at;
-                } else {
-                    break;
+                b'l' => {
+                    if takes(self, b"lockmarks", 3) {
+                        cm.cmod_flags |= CmdModFlags::LOCKMARKS;
+                    } else if takes(self, b"leftabove", 5) {
+                        cm.cmod_split |= WSP_ABOVE;
+                    } else {
+                        break;
+                    }
                 }
+                b'n' => {
+                    if takes(self, b"noautocmd", 3) {
+                        cm.cmod_flags |= CmdModFlags::NOAUTOCMD;
+                    } else if takes(self, b"noswapfile", 3) {
+                        cm.cmod_flags |= CmdModFlags::NOSWAPFILE;
+                    } else {
+                        break;
+                    }
+                }
+                b'r' => {
+                    if !takes(self, b"rightbelow", 6) {
+                        break;
+                    }
+                    cm.cmod_split |= WSP_BELOW;
+                }
+                b's' => {
+                    if takes(self, b"sandbox", 3) {
+                        cm.cmod_flags |= CmdModFlags::SANDBOX;
+                    } else if takes(self, b"silent", 3) {
+                        cm.cmod_flags |= CmdModFlags::SILENT;
+                        // `:silent!` only means "and silence errors" when
+                        // the `!` is stuck to the word: `:silent !cmd` runs
+                        // a shell command quietly.
+                        let cmd = self.line.cmd;
+                        if self.line.byte_at(cmd) == b'!'
+                            && cmd > 0
+                            && !ascii_iswhite(c_int::from(self.line.byte_at(cmd - 1)))
+                        {
+                            self.line.cmd = self.line.skip_white(cmd + 1);
+                            cm.cmod_flags |= CmdModFlags::ERRSILENT;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                b't' => {
+                    if let Some(after) = check_for_word(&self.line, at, b"tab", 3) {
+                        at = after;
+                        if !skip_only {
+                            // The scan walks a cursor of its own; see
+                            // `parse_cmd_address`.
+                            let (cmdidx, skip) = (self.cmdidx, self.skip);
+                            let mut cursor = self.line.cmd;
+                            let read = get_address(
+                                Some(cmdidx),
+                                self.line.buffer_mut(),
+                                &mut cursor,
+                                CmdAddr::Tabs,
+                                skip,
+                                skip_only,
+                                false,
+                                1,
+                            );
+                            let tabnr = match read {
+                                Ok(tabnr) => tabnr.get(),
+                                Err(refused) => {
+                                    refused.into_errormsg(errormsg);
+                                    return Err(Failed);
+                                }
+                            };
+                            self.line.cmd = cursor;
+                            if tabnr == MAXLNUM.get() {
+                                cm.cmod_tab = tab_index(TabPage::current()) + 1;
+                            } else {
+                                if tabnr < 0 || tabnr > current_tab_nr(None) {
+                                    *errormsg = Some(ex_msg(e_invrange));
+                                    return Err(Failed);
+                                }
+                                cm.cmod_tab = tabnr + 1;
+                            }
+                        }
+                        self.line.cmd = at;
+                    } else if takes(self, b"topleft", 2) {
+                        cm.cmod_split |= WSP_TOP;
+                    } else {
+                        break;
+                    }
+                }
+                b'u' => {
+                    if !takes(self, b"unsilent", 3) {
+                        break;
+                    }
+                    cm.cmod_flags |= CmdModFlags::UNSILENT;
+                }
+                b'v' => {
+                    if takes(self, b"vertical", 4) {
+                        cm.cmod_split |= WSP_VERT;
+                    } else if let Some(after) = check_for_word(&self.line, at, b"verbose", 4) {
+                        at = after;
+                        // The count is read from `args.cmd`, which
+                        // `checkforcmd` left *before* the word: `:5verbose`.
+                        // Saturating: the count is whatever the user typed,
+                        // so `:2147483647verbose set` would otherwise add one
+                        // to `INT_MAX` and end the process.  C wraps here.
+                        cm.cmod_verbose =
+                            if ascii_isdigit(c_int::from(self.line.byte_at(self.line.cmd))) {
+                                atoi(self.line.cmd()).saturating_add(1)
+                            } else {
+                                2
+                            };
+                        self.line.cmd = at;
+                    } else {
+                        break;
+                    }
+                }
+                _ => break,
             }
-            _ => break,
         }
-    }
 
-    restore_visual_range(excmd, orig_cmd, cmd_start, has_visual_range, use_plus_cmd);
-    Ok(())
+        restore_visual_range(self, orig_cmd, cmd_start, has_visual_range, use_plus_cmd);
+        Ok(())
+    }
 }
 
 /// Put the `'<,'>` this scan stepped over back in front of the command.
@@ -702,7 +706,7 @@ impl CmdModScope {
     ) -> Result<(), Failed> {
         let mut parsed = CmdMod::default();
         // SAFETY: the caller's contract.
-        let read = parse_command_modifiers(excmd, errormsg, &mut parsed, false);
+        let read = excmd.parse_modifiers(errormsg, &mut parsed, false);
         cmdmod.set(parsed);
         read
     }

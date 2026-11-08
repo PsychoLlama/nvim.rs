@@ -273,8 +273,7 @@ impl Definition<'_, '_> {
 
         // Do not define the function when reading the body fails, and not
         // when skipping.
-        let read = get_function_body(
-            self.excmd,
+        let read = self.excmd.read_function_body(
             &mut self.newlines,
             self.line_arg,
             &mut self.line_to_free,

@@ -29,7 +29,7 @@ use crate::startup::getout;
 use crate::cmdexpand::defs::{Candidate, Expand};
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::types::{CmdAddr, CmdLine, ExArg, ExArgt, TypVal};
-use crate::usercmd::{find_ucmd, get_user_commands, user_command_name};
+use crate::usercmd::{get_user_commands, user_command_name};
 
 /// Is this index a *user* command rather than a row of `cmdnames`?
 ///
@@ -102,104 +102,106 @@ pub(crate) fn one_letter_cmd(at: impl Fn(usize) -> u8) -> Option<CmdIdx> {
     None
 }
 
-/// Resolve `args.cmd` to a command index, and answer where the name ends.
-///
-/// `args.cmdidx` comes back as `CmdIdx::SIZE` for a name nothing matched, and
-/// as a *negative* index for a user command. `full`, when given, is set
-/// when the name was spelled out in full rather than abbreviated. `None` is
-/// upstream's null answer: a user command the typed abbreviation cannot
-/// choose between.
-pub fn find_ex_command(excmd: &mut ExArg, mut full: Option<&mut bool>) -> Option<usize> {
-    let cmd = excmd.line.cmd;
-    if let Some(idx) = one_letter_cmd(|n| excmd.line.byte_at(cmd + n)) {
-        excmd.cmdidx = idx;
-        if let Some(full) = full.as_deref_mut() {
-            *full = true;
+impl ExArg<'_> {
+    /// Resolve `args.cmd` to a command index, and answer where the name ends.
+    ///
+    /// `args.cmdidx` comes back as `CmdIdx::SIZE` for a name nothing matched, and
+    /// as a *negative* index for a user command. `full`, when given, is set
+    /// when the name was spelled out in full rather than abbreviated. `None` is
+    /// upstream's null answer: a user command the typed abbreviation cannot
+    /// choose between.
+    pub fn find_command(&mut self, mut full: Option<&mut bool>) -> Option<usize> {
+        let cmd = self.line.cmd;
+        if let Some(idx) = one_letter_cmd(|n| self.line.byte_at(cmd + n)) {
+            self.cmdidx = idx;
+            if let Some(full) = full.as_deref_mut() {
+                *full = true;
+            }
+            return Some(cmd + 1);
         }
-        return Some(cmd + 1);
-    }
 
-    let mut at = cmd;
-    while excmd.line.byte_at(at).is_ascii_alphabetic() {
-        at += 1;
-    }
-    // `:py3`, `:python3` and `:py3file` are the only commands with a
-    // digit in the name.
-    if excmd.line.byte_at(cmd) == b'p' && excmd.line.byte_at(cmd + 1) == b'y' {
-        while excmd.line.byte_at(at).is_ascii_alphanumeric() {
+        let mut at = cmd;
+        while self.line.byte_at(at).is_ascii_alphabetic() {
             at += 1;
         }
-    }
-    // A command that is punctuation rather than a word.
-    if at == cmd && b"@!=><&~#".contains(&excmd.line.byte_at(at)) {
-        at += 1;
-    }
-
-    let mut len = at - cmd;
-    // `:dl` and `:dp` are `:delete` with a trailing `l`/`p` flag stuck
-    // to it, and only when the rest really is an abbreviation of
-    // "delete" — `:dj` is `:djump`.
-    let last = excmd.line.byte_at(at.wrapping_sub(1));
-    if excmd.line.byte_at(cmd) == b'd' && (last == b'l' || last == b'p') {
-        // `with_nul`, not `to_bytes`: the walk is over the *typed*
-        // word, which may be longer than "delete", and it is the
-        // terminator that stops it — `:ddddddddl` would otherwise
-        // index past the end.
-        let delete = c"delete".to_bytes_with_nul();
-        let mut i = 0;
-        while i < len && excmd.line.byte_at(cmd + i) == delete[i] {
-            i += 1;
-        }
-        if i + 1 == len {
-            len -= 1;
-            if last == b'l' {
-                excmd.flags |= EXFLAG_LIST;
-            } else {
-                excmd.flags |= EXFLAG_PRINT;
+        // `:py3`, `:python3` and `:py3file` are the only commands with a
+        // digit in the name.
+        if self.line.byte_at(cmd) == b'p' && self.line.byte_at(cmd + 1) == b'y' {
+            while self.line.byte_at(at).is_ascii_alphanumeric() {
+                at += 1;
             }
         }
-    }
+        // A command that is punctuation rather than a word.
+        if at == cmd && b"@!=><&~#".contains(&self.line.byte_at(at)) {
+            at += 1;
+        }
 
-    excmd.cmdidx = CmdIdx::SIZE;
-    // `:def` is Vim9 script's, which this editor does not have; it must
-    // not resolve to `:defer`.
-    if !(len == 3 && excmd.line.starts_with(cmd, b"def")) {
-        // The word, read once: the scan below asks about it per row, and
-        // measuring the line each time is what made this the parse's
-        // hottest function when the cursors became offsets.
-        let word = excmd.line.slice_at(cmd, len);
-        // The scan walks rows rather than `CmdIdx`es and names what it
-        // stopped at once: stepping an enum would be a conversion per row.
-        let mut row = start_index(word);
-        while row < ROWS {
-            let name = cmdnames[row].cmd_name;
-            if name_matches(name, word) {
-                if let Some(full) = full.as_deref_mut()
-                    && name.count_bytes() == len
-                {
-                    *full = true;
+        let mut len = at - cmd;
+        // `:dl` and `:dp` are `:delete` with a trailing `l`/`p` flag stuck
+        // to it, and only when the rest really is an abbreviation of
+        // "delete" — `:dj` is `:djump`.
+        let last = self.line.byte_at(at.wrapping_sub(1));
+        if self.line.byte_at(cmd) == b'd' && (last == b'l' || last == b'p') {
+            // `with_nul`, not `to_bytes`: the walk is over the *typed*
+            // word, which may be longer than "delete", and it is the
+            // terminator that stops it — `:ddddddddl` would otherwise
+            // index past the end.
+            let delete = c"delete".to_bytes_with_nul();
+            let mut i = 0;
+            while i < len && self.line.byte_at(cmd + i) == delete[i] {
+                i += 1;
+            }
+            if i + 1 == len {
+                len -= 1;
+                if last == b'l' {
+                    self.flags |= EXFLAG_LIST;
+                } else {
+                    self.flags |= EXFLAG_PRINT;
                 }
-                excmd.cmdidx = CmdIdx::at_row(row);
-                break;
             }
-            row += 1;
         }
-    }
 
-    // Nothing in the table, and it starts with an upper-case letter:
-    // it may be a user command, whose name may hold digits too.
-    let mut end = Some(at);
-    if excmd.cmdidx == CmdIdx::SIZE && excmd.line.byte_at(cmd).is_ascii_uppercase() {
-        let mut at = at;
-        while excmd.line.byte_at(at).is_ascii_alphanumeric() {
-            at += 1;
+        self.cmdidx = CmdIdx::SIZE;
+        // `:def` is Vim9 script's, which this editor does not have; it must
+        // not resolve to `:defer`.
+        if !(len == 3 && self.line.starts_with(cmd, b"def")) {
+            // The word, read once: the scan below asks about it per row, and
+            // measuring the line each time is what made this the parse's
+            // hottest function when the cursors became offsets.
+            let word = self.line.slice_at(cmd, len);
+            // The scan walks rows rather than `CmdIdx`es and names what it
+            // stopped at once: stepping an enum would be a conversion per row.
+            let mut row = start_index(word);
+            while row < ROWS {
+                let name = cmdnames[row].cmd_name;
+                if name_matches(name, word) {
+                    if let Some(full) = full.as_deref_mut()
+                        && name.count_bytes() == len
+                    {
+                        *full = true;
+                    }
+                    self.cmdidx = CmdIdx::at_row(row);
+                    break;
+                }
+                row += 1;
+            }
         }
-        end = find_ucmd(excmd, at, full, None, None);
+
+        // Nothing in the table, and it starts with an upper-case letter:
+        // it may be a user command, whose name may hold digits too.
+        let mut end = Some(at);
+        if self.cmdidx == CmdIdx::SIZE && self.line.byte_at(cmd).is_ascii_uppercase() {
+            let mut at = at;
+            while self.line.byte_at(at).is_ascii_alphanumeric() {
+                at += 1;
+            }
+            end = self.find_user_command(at, full, None, None);
+        }
+        if end == Some(cmd) {
+            self.cmdidx = CmdIdx::SIZE;
+        }
+        end
     }
-    if end == Some(cmd) {
-        excmd.cmdidx = CmdIdx::SIZE;
-    }
-    end
 }
 
 /// Do the first `word.len()` bytes of `name` spell `word`?
@@ -261,7 +263,7 @@ pub fn cmd_exists(name: &CStr) -> c_int {
     // `:2match`/`:3match` carry their count in the name.
     ea.line.cmd = usize::from(matches!(bytes.first(), Some(b'2' | b'3')));
     let mut full = false;
-    let Some(at) = find_ex_command(&mut ea, Some(&mut full)) else {
+    let Some(at) = ea.find_command(Some(&mut full)) else {
         return 3;
     };
     // A leading digit is a range for every command but `:match`.
@@ -296,7 +298,7 @@ pub fn f_fullcommand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     ea.line = CmdLine::from_bytes(name);
     // `:2match`/`:3match` carry their count in the name.
     ea.line.cmd = usize::from(matches!(name.first(), Some(b'2' | b'3')));
-    if find_ex_command(&mut ea, None).is_none() || ea.cmdidx == CmdIdx::SIZE {
+    if ea.find_command(None).is_none() || ea.cmdidx == CmdIdx::SIZE {
         return;
     }
     let full = if is_user_cmd(ea.cmdidx) {

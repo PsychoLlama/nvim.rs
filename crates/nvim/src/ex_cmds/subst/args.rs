@@ -24,10 +24,7 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{
-    SUB_FLAGS, check_regexp_delim, skip_substitute, sub_joining_lines, sub_parse_flags,
-    sub_set_replacement,
-};
+use super::{SUB_FLAGS, check_regexp_delim, skip_substitute, sub_parse_flags, sub_set_replacement};
 use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int_at;
@@ -279,8 +276,7 @@ pub(super) fn parse_sub(
     } = read_pattern(args, cmdpreview_ns, keeppatterns)?;
 
     if let Some(sub) = sub.as_ref() {
-        let joined = sub_joining_lines(
-            args,
+        let joined = args.sub_joining_lines(
             pat.as_deref().map(CStr::to_bytes),
             sub,
             flags_at,

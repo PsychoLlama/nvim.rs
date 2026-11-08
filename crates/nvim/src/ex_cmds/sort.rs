@@ -184,37 +184,153 @@ impl SortError {
     }
 }
 
-/// The `/pat/` argument both commands accept in place of a flag letter,
-/// its opening delimiter at `delim_at` in the command line.
-///
-/// Returns where the closing delimiter is, which upstream overwrites with a
-/// NUL so the pattern is its own string -- the scan resumes one byte past
-/// it.
-fn compile_sort_pattern(
-    args: &mut ExArg,
-    delim_at: usize,
-    regmatch: &mut Option<RegMatch>,
-) -> Result<usize, SortError> {
-    // The delimiter is handed on as a `char`, sign-extended -- and the skip
-    // compares the pattern's bytes the same way, so a high byte still ends it.
-    let delim = char_delim(args.line.byte_at(delim_at));
-    let start = delim_at + 1;
-    let end = start + skip_regexp_at(args.line.tail(start), delim, 1);
-    if char_delim(args.line.byte_at(end)) != delim {
-        return Err(SortError::MissingDelimiter(args.line.rest_of(start).into()));
-    }
-    args.line.terminate_at(end);
+impl ExArg<'_> {
+    /// The `/pat/` argument both commands accept in place of a flag letter,
+    /// its opening delimiter at `delim_at` in the command line.
+    ///
+    /// Returns where the closing delimiter is, which upstream overwrites with a
+    /// NUL so the pattern is its own string -- the scan resumes one byte past
+    /// it.
+    fn compile_sort_pattern(
+        &mut self,
+        delim_at: usize,
+        regmatch: &mut Option<RegMatch>,
+    ) -> Result<usize, SortError> {
+        // The delimiter is handed on as a `char`, sign-extended -- and the skip
+        // compares the pattern's bytes the same way, so a high byte still ends it.
+        let delim = char_delim(self.line.byte_at(delim_at));
+        let start = delim_at + 1;
+        let end = start + skip_regexp_at(self.line.tail(start), delim, 1);
+        if char_delim(self.line.byte_at(end)) != delim {
+            return Err(SortError::MissingDelimiter(self.line.rest_of(start).into()));
+        }
+        self.line.terminate_at(end);
 
-    // Use the last search pattern if the sort pattern is empty.
-    let compiled = if end == start {
-        let last = last_search_pat().ok_or(SortError::NoPreviousPattern)?;
-        RegMatch::compile(last.as_cstr(), RE_MAGIC, p_ic())
-    } else {
-        RegMatch::compile(args.line.cstr_from(start), RE_MAGIC, p_ic())
-    };
-    // The regexp engine reports its own refusal.
-    *regmatch = Some(compiled.ok_or(Failed)?);
-    Ok(end)
+        // Use the last search pattern if the sort pattern is empty.
+        let compiled = if end == start {
+            let last = last_search_pat().ok_or(SortError::NoPreviousPattern)?;
+            RegMatch::compile(last.as_cstr(), RE_MAGIC, p_ic())
+        } else {
+            RegMatch::compile(self.line.cstr_from(start), RE_MAGIC, p_ic())
+        };
+        // The regexp engine reports its own refusal.
+        *regmatch = Some(compiled.ok_or(Failed)?);
+        Ok(end)
+    }
+
+    /// What a byte that is not a flag letter means: the start of a `/pat/`, a
+    /// following command, or an error already reported (`None`).  `:uniq` keeps
+    /// the *first* following command it sees where `:sort` overwrites -- the one
+    /// thing the two scans do not share.
+    ///
+    /// `at` indexes a byte of the command's argument.
+    fn sort_flag_fallback(
+        &mut self,
+        at: usize,
+        byte: u8,
+        regmatch: &mut Option<RegMatch>,
+        keep_nextcmd: bool,
+    ) -> Result<Fallback, SortError> {
+        let base = self.line.arg;
+        if let Some(next) = self.line.check_next(base + at)
+            && !(keep_nextcmd && self.line.next.is_some())
+        {
+            self.line.next = Some(next);
+            return Ok(Fallback::NextCmd);
+        }
+        if is_alpha(byte) || regmatch.is_some() {
+            let arg0 = self.line.cstr_from(base + at);
+            return Err(SortError::InvalidArgument(arg0.into()));
+        }
+        self.compile_sort_pattern(base + at, regmatch)
+            .map(|end| Fallback::Pattern(end - base))
+    }
+
+    /// Read `:sort`'s flags and its optional pattern.
+    fn parse_sort_flags(
+        &mut self,
+        spec: &mut SortSpec,
+        regmatch: &mut Option<RegMatch>,
+    ) -> Result<StringOrder, SortError> {
+        let mut order = StringOrder::BYTES;
+        // Only one of 'n', 'b', 'o', 'f' and 'x' is allowed.
+        let mut formats = 0;
+        let mut at = 0;
+
+        loop {
+            // The pattern arm rewrites the argument as it goes, so each byte is
+            // read from the buffer rather than from a slice taken up front.
+            let byte = self.line.byte_at(self.line.arg + at);
+            let mut radix = |base| {
+                spec.radix = base;
+                formats += 1;
+            };
+            match byte {
+                b'n' => {
+                    spec.numeric = true;
+                    formats += 1;
+                }
+                b'f' => {
+                    spec.float = true;
+                    formats += 1;
+                }
+                b'b' => radix(Str2NrBases::BIN | Str2NrBases::FORCE),
+                b'o' => radix(Str2NrBases::OCT | Str2NrBases::FORCE),
+                b'x' => radix(Str2NrBases::HEX | Str2NrBases::FORCE),
+                b'u' => spec.unique = true,
+                _ => match shared_flag(byte, &mut order, &mut spec.use_match) {
+                    Flag::Shared => {}
+                    Flag::End => break,
+                    Flag::Other => match self.sort_flag_fallback(at, byte, regmatch, false)? {
+                        Fallback::NextCmd => break,
+                        Fallback::Pattern(end) => at = end,
+                    },
+                },
+            }
+            at += 1;
+        }
+
+        if formats > 1 {
+            return Err(SortError::TwoFormats);
+        }
+        // From here on "numeric" covers every integer format.
+        spec.numeric |= !spec.radix.is_empty();
+        Ok(order)
+    }
+
+    /// Read `:uniq`'s flags and its optional pattern.
+    fn parse_uniq_flags(
+        &mut self,
+        mode: &mut UniqMode,
+        use_match: &mut bool,
+        regmatch: &mut Option<RegMatch>,
+    ) -> Result<StringOrder, SortError> {
+        let mut order = StringOrder::BYTES;
+        let mut at = 0;
+
+        loop {
+            let byte = self.line.byte_at(self.line.arg + at);
+            match byte {
+                // 'u' is only valid when '!' is not given.
+                b'u' => {
+                    if *mode != UniqMode::OnlyRepeated {
+                        *mode = UniqMode::OnlyUnique;
+                    }
+                }
+                _ => match shared_flag(byte, &mut order, use_match) {
+                    Flag::Shared => {}
+                    Flag::End => break,
+                    Flag::Other => match self.sort_flag_fallback(at, byte, regmatch, true)? {
+                        Fallback::NextCmd => break,
+                        Fallback::Pattern(end) => at = end,
+                    },
+                },
+            }
+            at += 1;
+        }
+
+        Ok(order)
+    }
 }
 
 /// True for the letters that can only ever be flags, so that anything else is
@@ -265,7 +381,7 @@ enum Flag {
     Other,
 }
 
-/// What [`flag_fallback`] made of a byte that was no flag letter.
+/// What [`ExArg::sort_flag_fallback`] made of a byte that was no flag letter.
 enum Fallback {
     /// A following command, which ends the argument.
     NextCmd,
@@ -292,119 +408,6 @@ fn shared_flag(byte: u8, order: &mut StringOrder, use_match: &mut bool) -> Flag 
         _ if ascii_iswhite(c_int::from(byte)) => Flag::Shared,
         _ => Flag::Other,
     }
-}
-
-/// What a byte that is not a flag letter means: the start of a `/pat/`, a
-/// following command, or an error already reported (`None`).  `:uniq` keeps
-/// the *first* following command it sees where `:sort` overwrites -- the one
-/// thing the two scans do not share.
-///
-/// `at` indexes a byte of the command's argument.
-fn flag_fallback(
-    args: &mut ExArg,
-    at: usize,
-    byte: u8,
-    regmatch: &mut Option<RegMatch>,
-    keep_nextcmd: bool,
-) -> Result<Fallback, SortError> {
-    let base = args.line.arg;
-    if let Some(next) = args.line.check_next(base + at)
-        && !(keep_nextcmd && args.line.next.is_some())
-    {
-        args.line.next = Some(next);
-        return Ok(Fallback::NextCmd);
-    }
-    if is_alpha(byte) || regmatch.is_some() {
-        let arg0 = args.line.cstr_from(base + at);
-        return Err(SortError::InvalidArgument(arg0.into()));
-    }
-    compile_sort_pattern(args, base + at, regmatch).map(|end| Fallback::Pattern(end - base))
-}
-
-/// Read `:sort`'s flags and its optional pattern.
-fn parse_sort_flags(
-    args: &mut ExArg,
-    spec: &mut SortSpec,
-    regmatch: &mut Option<RegMatch>,
-) -> Result<StringOrder, SortError> {
-    let mut order = StringOrder::BYTES;
-    // Only one of 'n', 'b', 'o', 'f' and 'x' is allowed.
-    let mut formats = 0;
-    let mut at = 0;
-
-    loop {
-        // The pattern arm rewrites the argument as it goes, so each byte is
-        // read from the buffer rather than from a slice taken up front.
-        let byte = args.line.byte_at(args.line.arg + at);
-        let mut radix = |base| {
-            spec.radix = base;
-            formats += 1;
-        };
-        match byte {
-            b'n' => {
-                spec.numeric = true;
-                formats += 1;
-            }
-            b'f' => {
-                spec.float = true;
-                formats += 1;
-            }
-            b'b' => radix(Str2NrBases::BIN | Str2NrBases::FORCE),
-            b'o' => radix(Str2NrBases::OCT | Str2NrBases::FORCE),
-            b'x' => radix(Str2NrBases::HEX | Str2NrBases::FORCE),
-            b'u' => spec.unique = true,
-            _ => match shared_flag(byte, &mut order, &mut spec.use_match) {
-                Flag::Shared => {}
-                Flag::End => break,
-                Flag::Other => match flag_fallback(args, at, byte, regmatch, false)? {
-                    Fallback::NextCmd => break,
-                    Fallback::Pattern(end) => at = end,
-                },
-            },
-        }
-        at += 1;
-    }
-
-    if formats > 1 {
-        return Err(SortError::TwoFormats);
-    }
-    // From here on "numeric" covers every integer format.
-    spec.numeric |= !spec.radix.is_empty();
-    Ok(order)
-}
-
-/// Read `:uniq`'s flags and its optional pattern.
-fn parse_uniq_flags(
-    args: &mut ExArg,
-    mode: &mut UniqMode,
-    use_match: &mut bool,
-    regmatch: &mut Option<RegMatch>,
-) -> Result<StringOrder, SortError> {
-    let mut order = StringOrder::BYTES;
-    let mut at = 0;
-
-    loop {
-        let byte = args.line.byte_at(args.line.arg + at);
-        match byte {
-            // 'u' is only valid when '!' is not given.
-            b'u' => {
-                if *mode != UniqMode::OnlyRepeated {
-                    *mode = UniqMode::OnlyUnique;
-                }
-            }
-            _ => match shared_flag(byte, &mut order, use_match) {
-                Flag::Shared => {}
-                Flag::End => break,
-                Flag::Other => match flag_fallback(args, at, byte, regmatch, true)? {
-                    Fallback::NextCmd => break,
-                    Fallback::Pattern(end) => at = end,
-                },
-            },
-        }
-        at += 1;
-    }
-
-    Ok(order)
 }
 
 /// The part of `line` the comparison should look at: the whole line when
@@ -608,7 +611,7 @@ fn sort_range(args: &mut ExArg) {
     let mut count = usize::try_from(line2 - line1).expect("a range of two lines or more") + 1;
 
     'sortend: {
-        let order = match parse_sort_flags(args, &mut spec, &mut regmatch) {
+        let order = match args.parse_sort_flags(&mut spec, &mut regmatch) {
             Ok(order) => order,
             Err(refused) => {
                 refused.report();
@@ -802,7 +805,7 @@ fn uniq_range(args: &mut ExArg) {
     let mut deleted = 0;
 
     'uniqend: {
-        let order = match parse_uniq_flags(args, &mut mode, &mut use_match, &mut regmatch) {
+        let order = match args.parse_uniq_flags(&mut mode, &mut use_match, &mut regmatch) {
             Ok(order) => order,
             Err(refused) => {
                 refused.report();

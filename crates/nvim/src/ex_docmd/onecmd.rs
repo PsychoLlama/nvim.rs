@@ -33,19 +33,17 @@ use crate::autocmd::{fire_autocmds_for, has_event};
 
 use crate::debugger::dbg_check_breakpoint;
 use crate::edit::{BeginlineOpts, beginline};
-use crate::eval::userfunc::{current_func_returned, do_return};
+use crate::eval::userfunc::current_func_returned;
 use crate::ex_docmd::address::{correct_range, find_excmd_after_range, parse_cmd_address};
-use crate::ex_docmd::addrtype::{set_cmd_addr_type, set_cmd_dflall_range};
+use crate::ex_docmd::addrtype::set_cmd_dflall_range;
 
 use crate::ex_docmd::api::execute_cmd0;
 use crate::ex_docmd::argopt::{getargcmd, getargopt};
 use crate::ex_docmd::edit::ex_print;
 use crate::ex_docmd::filename::replace_makeprg;
-use crate::ex_docmd::lookup::{find_ex_command, is_user_cmd};
+use crate::ex_docmd::lookup::is_user_cmd;
 use crate::ex_docmd::modifier::CmdModScope;
-use crate::ex_docmd::scan::{
-    get_flags, parse_bang, parse_count, parse_register, separate_nextcmd, skip_colons,
-};
+use crate::ex_docmd::scan::{get_flags, parse_bang, parse_register, separate_nextcmd, skip_colons};
 use crate::ex_docmd::source::{ReadLines, SourceKind, ex_errmsg};
 
 use crate::ex_docmd::verify::verify_command;
@@ -174,325 +172,325 @@ pub(crate) fn skip_cmd(excmd: &mut ExArg) -> bool {
 /// are. C spelled all of these `goto doend`.
 struct Refused;
 
-/// Read the modifiers and the range, and find the command word.
-///
-/// Answers where the argument starts, which is what the rest of the parse
-/// walks. The command name has to be found *before* the range can be read,
-/// because it is what says whether an address counts lines, windows,
-/// buffers or tab pages -- so the two are one stage.
-///
-/// The position is left in `excmd.arg`, which nothing has read yet.
-fn locate_command(
-    excmd: &mut ExArg,
-    in_inactive: bool,
-    mods: &CmdModScope,
-    flags: DoCmdOpts,
-    errormsg: &mut Option<CString>,
-) -> Result<(), Refused> {
-    // "#!anything" is a comment, so that a script can carry a shebang line.
-    if excmd.line.byte_at(0) == b'#' && excmd.line.byte_at(1) == b'!' {
-        return Err(Refused);
-    }
-
-    mods.parse(excmd, errormsg).map_err(|_| Refused)?;
-    mods.apply();
-    let after_modifier = excmd.line.cmd;
-
-    let cond = cond_stack_of(excmd);
-    excmd.skip = did_emsg.get() != 0 || got_int.get() || did_throw.get() || in_inactive;
-
-    let mut p = find_excmd_after_range(excmd);
-    profile_cmd(excmd, cond);
-
-    if !exiting.get() {
-        // May go to debug mode. If the `>quit` debug command is used there,
-        // an interrupt exception is thrown and this command is skipped.
-        dbg_check_breakpoint(excmd);
-    }
-    if !excmd.skip && got_int.get() {
-        excmd.skip = true;
-        do_intthrow(cond);
-    }
-
-    set_cmd_addr_type(
-        excmd,
-        p.map(|at| excmd.line.byte_at(excmd.line.skip_white(at))),
-    );
-    if let Err(refused) = parse_cmd_address(excmd, false) {
-        refused.into_errormsg(errormsg);
-        return Err(Refused);
-    }
-
-    excmd.line.cmd = skip_colons(&excmd.line, excmd.line.cmd, true);
-
-    // A range with no command after it. Vi's behaviour, preserved: `:3`
-    // jumps to line 3, `:3|…` *prints* line 3, and `:|` prints the current
-    // line.
-    if excmd.line.byte_at(excmd.line.cmd) == 0 || excmd.line.byte_at(excmd.line.cmd) == b'"' || {
-        excmd.line.next = excmd.line.check_next(excmd.line.cmd);
-        excmd.line.next.is_some()
-    } {
-        if !excmd.skip {
-            debug_assert!(errormsg.is_none());
-            *errormsg = ex_range_without_command(excmd);
+impl ExArg<'_> {
+    /// Read the modifiers and the range, and find the command word.
+    ///
+    /// Answers where the argument starts, which is what the rest of the parse
+    /// walks. The command name has to be found *before* the range can be read,
+    /// because it is what says whether an address counts lines, windows,
+    /// buffers or tab pages -- so the two are one stage.
+    ///
+    /// The position is left in `excmd.arg`, which nothing has read yet.
+    fn locate_command(
+        &mut self,
+        in_inactive: bool,
+        mods: &CmdModScope,
+        flags: DoCmdOpts,
+        errormsg: &mut Option<CString>,
+    ) -> Result<(), Refused> {
+        // "#!anything" is a comment, so that a script can carry a shebang line.
+        if self.line.byte_at(0) == b'#' && self.line.byte_at(1) == b'!' {
+            return Err(Refused);
         }
-        return Err(Refused);
-    }
 
-    // An unknown command spelled like a user command, with a CmdUndefined
-    // autocommand waiting to define it.
-    if p.is_some()
-        && excmd.cmdidx == CmdIdx::SIZE
-        && !excmd.skip
-        && excmd.line.byte_at(excmd.line.cmd).is_ascii_uppercase()
-        && has_event(AutoEvent::CmdUndefined)
-    {
-        let mut end = excmd.line.cmd;
-        while excmd.line.byte_at(end).is_ascii_alphanumeric() {
-            end += 1;
+        mods.parse(self, errormsg).map_err(|_| Refused)?;
+        mods.apply();
+        let after_modifier = self.line.cmd;
+
+        let cond = cond_stack_of(self);
+        self.skip = did_emsg.get() != 0 || got_int.get() || did_throw.get() || in_inactive;
+
+        let mut p = find_excmd_after_range(self);
+        profile_cmd(self, cond);
+
+        if !exiting.get() {
+            // May go to debug mode. If the `>quit` debug command is used there,
+            // an interrupt exception is thrown and this command is skipped.
+            dbg_check_breakpoint(self);
         }
-        let name = excmd.line.slice_at(excmd.line.cmd, end - excmd.line.cmd);
-        let cmdname = XString::from_bytes(name);
-        let event = AutoEvent::CmdUndefined;
-        let ret = fire_autocmds_for(
-            event,
-            Some(cmdname.clone()),
-            Some(cmdname),
-            true,
-            None,
-            None,
-        );
-        // Look again only if the autocommands did something and did not
-        // fail.
-        p = if ret && !aborting() {
-            find_ex_command(excmd, None)
-        } else {
-            Some(excmd.line.cmd)
-        };
-    }
-
-    let Some(p) = p else {
-        if !excmd.skip {
-            *errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command));
+        if !self.skip && got_int.get() {
+            self.skip = true;
+            do_intthrow(cond);
         }
-        return Err(Refused);
-    };
 
-    if excmd.cmdidx == CmdIdx::SIZE {
-        if !excmd.skip {
-            // The modifiers parsed, so the error is in what follows them.
-            let msg = ex_msg(e_not_an_editor_command);
-            *errormsg = Some(if flags.has(DoCmdOpts::VERBOSE) {
-                // The whole line is appended by `do_one_cmd` instead.
-                msg
+        self.set_addr_type(p.map(|at| self.line.byte_at(self.line.skip_white(at))));
+        if let Err(refused) = parse_cmd_address(self, false) {
+            refused.into_errormsg(errormsg);
+            return Err(Refused);
+        }
+
+        self.line.cmd = skip_colons(&self.line, self.line.cmd, true);
+
+        // A range with no command after it. Vi's behaviour, preserved: `:3`
+        // jumps to line 3, `:3|…` *prints* line 3, and `:|` prints the current
+        // line.
+        if self.line.byte_at(self.line.cmd) == 0 || self.line.byte_at(self.line.cmd) == b'"' || {
+            self.line.next = self.line.check_next(self.line.cmd);
+            self.line.next.is_some()
+        } {
+            if !self.skip {
+                debug_assert!(errormsg.is_none());
+                *errormsg = ex_range_without_command(self);
+            }
+            return Err(Refused);
+        }
+
+        // An unknown command spelled like a user command, with a CmdUndefined
+        // autocommand waiting to define it.
+        if p.is_some()
+            && self.cmdidx == CmdIdx::SIZE
+            && !self.skip
+            && self.line.byte_at(self.line.cmd).is_ascii_uppercase()
+            && has_event(AutoEvent::CmdUndefined)
+        {
+            let mut end = self.line.cmd;
+            while self.line.byte_at(end).is_ascii_alphanumeric() {
+                end += 1;
+            }
+            let name = self.line.slice_at(self.line.cmd, end - self.line.cmd);
+            let cmdname = XString::from_bytes(name);
+            let event = AutoEvent::CmdUndefined;
+            let ret = fire_autocmds_for(
+                event,
+                Some(cmdname.clone()),
+                Some(cmdname),
+                true,
+                None,
+                None,
+            );
+            // Look again only if the autocommands did something and did not
+            // fail.
+            p = if ret && !aborting() {
+                self.find_command(None)
             } else {
-                append_command(&msg, excmd.line.rest_of(after_modifier))
-            });
-            did_emsg_syntax.set(true);
-            verify_command(excmd.line.rest_of(after_modifier));
+                Some(self.line.cmd)
+            };
         }
-        return Err(Refused);
-    }
-    excmd.line.arg = p;
-    Ok(())
-}
 
-/// Everything about *where* the command may run: the buffer it would edit,
-/// the range it was given and the `!` it was not allowed.
-///
-/// `ni` is set for a command this build does not implement, which relaxes
-/// every check here: there is nothing to check them against.
-fn check_may_run(
-    excmd: &mut ExArg,
-    ni: bool,
-    flags: DoCmdOpts,
-    errormsg: &mut Option<CString>,
-) -> Result<(), Refused> {
-    if !excmd.skip {
-        if let Some(msg) = refuses_here(excmd) {
-            *errormsg = Some(msg);
-            return Err(Refused);
-        }
-        // `curbuf->b_ro_locked` forbids editing another buffer.
-        // `:checktime` is postponed rather than refused, and `:edit` and
-        // `:file` are checked again once their argument is known.
-        if !excmd.argt.has(ExArgt::CMDWIN)
-            && excmd.cmdidx != CmdIdx::checktime
-            && excmd.cmdidx != CmdIdx::edit
-            && excmd.cmdidx != CmdIdx::file
-            && !is_user_cmd(excmd.cmdidx)
-            && curbuf_locked()
-        {
-            return Err(Refused);
-        }
-        if !ni && !excmd.argt.has(ExArgt::RANGE) && excmd.addr_count > 0 {
-            *errormsg = Some(ex_msg(e_norange));
-            return Err(Refused);
-        }
-    }
-
-    if !ni && !excmd.argt.has(ExArgt::BANG) && excmd.forceit {
-        *errormsg = Some(ex_msg(e_nobang));
-        return Err(Refused);
-    }
-
-    // A range that is not used is not complained about, which can happen
-    // when a line count is accidentally zero.
-    if !excmd.skip && !ni && excmd.argt.has(ExArgt::RANGE) {
-        // A backwards range is offered for swapping. `:global` is busy
-        // running a command per line and would fail below anyway, so it is
-        // not asked.
-        if global_busy.get() == 0 && excmd.line1 > excmd.line2 {
-            if msg_silent.get() == 0 {
-                if flags.has(DoCmdOpts::VERBOSE) || exmode_active.get() {
-                    *errormsg = Some(ex_msg(c"E493: Backwards range given"));
-                    return Err(Refused);
-                }
-                if ask_yesno(gettext(c"Backwards range given, OK to swap")) != c_int::from(b'y') {
-                    return Err(Refused);
-                }
+        let Some(p) = p else {
+            if !self.skip {
+                *errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command));
             }
-            core::mem::swap(&mut excmd.line1, &mut excmd.line2);
-        }
-        *errormsg = invalid_range(excmd);
-        if errormsg.is_some() {
+            return Err(Refused);
+        };
+
+        if self.cmdidx == CmdIdx::SIZE {
+            if !self.skip {
+                // The modifiers parsed, so the error is in what follows them.
+                let msg = ex_msg(e_not_an_editor_command);
+                *errormsg = Some(if flags.has(DoCmdOpts::VERBOSE) {
+                    // The whole line is appended by `do_one_cmd` instead.
+                    msg
+                } else {
+                    append_command(&msg, self.line.rest_of(after_modifier))
+                });
+                did_emsg_syntax.set(true);
+                verify_command(self.line.rest_of(after_modifier));
+            }
             return Err(Refused);
         }
+        self.line.arg = p;
+        Ok(())
     }
 
-    // `CmdAddr::Other` counts from 1 rather than from the cursor.
-    if excmd.addr_type == CmdAddr::Other && excmd.addr_count == 0 {
-        excmd.line2 = LineNr::ONE;
-    }
-    correct_range(excmd);
-
-    // Put the first line at the start of a closed fold and the last line at
-    // its end.
-    if (excmd.argt.has(ExArgt::WHOLEFOLD) || excmd.addr_count >= 2)
-        && global_busy.get() == 0
-        && excmd.addr_type == CmdAddr::Lines
-    {
-        has_folding(Win::current(), excmd.line1, Some(&mut excmd.line1), None);
-        has_folding(Win::current(), excmd.line2, None, Some(&mut excmd.line2));
-    }
-    Ok(())
-}
-
-/// Everything after the command word: the `++opt`s, the `+cmd`, the
-/// redirections `:write` and `:read` spell with `>`/`!`, the register and
-/// the count, and where the *next* command starts.
-///
-/// On entry `excmd.arg` is where the command word ended, which is what
-/// [`locate_command`] left there.
-fn read_command_args(
-    excmd: &mut ExArg,
-    ni: bool,
-    errormsg: &mut Option<CString>,
-) -> Result<(), Refused> {
-    // `:make` and `:grep` splice 'makeprg'/'grepprg' into the line here, so
-    // that `%` and friends expand inside it.
-    replace_makeprg(excmd);
-
-    // `:!` keeps the space: `:!! -l` needs it.
-    if excmd.cmdidx != CmdIdx::bang {
-        excmd.line.arg = excmd.line.skip_white(excmd.line.arg);
-    }
-
-    if excmd.cmdidx == CmdIdx::file && excmd.line.byte_at(excmd.line.arg) != 0 && curbuf_locked() {
-        return Err(Refused);
-    }
-
-    // `++opt=val` first, so that `:w ++enc=utf8 !cmd` works.
-    if excmd.argt.has(ExArgt::ARGOPT) {
-        while excmd.line.byte_at(excmd.line.arg) == b'+'
-            && excmd.line.byte_at(excmd.line.arg + 1) == b'+'
-        {
-            if getargopt(excmd).is_err() && !ni {
-                *errormsg = Some(ex_msg(e_invarg));
+    /// Everything about *where* the command may run: the buffer it would edit,
+    /// the range it was given and the `!` it was not allowed.
+    ///
+    /// `ni` is set for a command this build does not implement, which relaxes
+    /// every check here: there is nothing to check them against.
+    fn check_may_run(
+        &mut self,
+        ni: bool,
+        flags: DoCmdOpts,
+        errormsg: &mut Option<CString>,
+    ) -> Result<(), Refused> {
+        if !self.skip {
+            if let Some(msg) = refuses_here(self) {
+                *errormsg = Some(msg);
+                return Err(Refused);
+            }
+            // `curbuf->b_ro_locked` forbids editing another buffer.
+            // `:checktime` is postponed rather than refused, and `:edit` and
+            // `:file` are checked again once their argument is known.
+            if !self.argt.has(ExArgt::CMDWIN)
+                && self.cmdidx != CmdIdx::checktime
+                && self.cmdidx != CmdIdx::edit
+                && self.cmdidx != CmdIdx::file
+                && !is_user_cmd(self.cmdidx)
+                && curbuf_locked()
+            {
+                return Err(Refused);
+            }
+            if !ni && !self.argt.has(ExArgt::RANGE) && self.addr_count > 0 {
+                *errormsg = Some(ex_msg(e_norange));
                 return Err(Refused);
             }
         }
-    }
 
-    if excmd.cmdidx == CmdIdx::write || excmd.cmdidx == CmdIdx::update {
-        if excmd.line.byte_at(excmd.line.arg) == b'>' {
-            excmd.line.arg += 1;
-            if excmd.line.byte_at(excmd.line.arg) != b'>' {
-                *errormsg = Some(ex_msg(c"E494: Use w or w>>"));
+        if !ni && !self.argt.has(ExArgt::BANG) && self.forceit {
+            *errormsg = Some(ex_msg(e_nobang));
+            return Err(Refused);
+        }
+
+        // A range that is not used is not complained about, which can happen
+        // when a line count is accidentally zero.
+        if !self.skip && !ni && self.argt.has(ExArgt::RANGE) {
+            // A backwards range is offered for swapping. `:global` is busy
+            // running a command per line and would fail below anyway, so it is
+            // not asked.
+            if global_busy.get() == 0 && self.line1 > self.line2 {
+                if msg_silent.get() == 0 {
+                    if flags.has(DoCmdOpts::VERBOSE) || exmode_active.get() {
+                        *errormsg = Some(ex_msg(c"E493: Backwards range given"));
+                        return Err(Refused);
+                    }
+                    if ask_yesno(gettext(c"Backwards range given, OK to swap")) != c_int::from(b'y')
+                    {
+                        return Err(Refused);
+                    }
+                }
+                core::mem::swap(&mut self.line1, &mut self.line2);
+            }
+            *errormsg = invalid_range(self);
+            if errormsg.is_some() {
                 return Err(Refused);
             }
-            excmd.line.arg = excmd.line.skip_white(excmd.line.arg + 1);
-            excmd.append = true;
-        } else if excmd.line.byte_at(excmd.line.arg) == b'!' && excmd.cmdidx == CmdIdx::write {
-            // `:w !filter`
-            excmd.line.arg += 1;
-            excmd.usefilter = true;
         }
-    } else if excmd.cmdidx == CmdIdx::read {
-        if excmd.forceit {
-            // `:r!filter`
-            excmd.usefilter = true;
-            excmd.forceit = false;
-        } else if excmd.line.byte_at(excmd.line.arg) == b'!' {
-            // `:r !filter`
-            excmd.line.arg += 1;
-            excmd.usefilter = true;
+
+        // `CmdAddr::Other` counts from 1 rather than from the cursor.
+        if self.addr_type == CmdAddr::Other && self.addr_count == 0 {
+            self.line2 = LineNr::ONE;
         }
-    } else if excmd.cmdidx == CmdIdx::lshift || excmd.cmdidx == CmdIdx::rshift {
-        // How far to shift is how many `<` or `>` were typed.
-        excmd.amount = 1;
-        while excmd.line.byte_at(excmd.line.arg) == excmd.line.byte_at(excmd.line.cmd) {
-            excmd.line.arg += 1;
-            excmd.amount += 1;
+        correct_range(self);
+
+        // Put the first line at the start of a closed fold and the last line at
+        // its end.
+        if (self.argt.has(ExArgt::WHOLEFOLD) || self.addr_count >= 2)
+            && global_busy.get() == 0
+            && self.addr_type == CmdAddr::Lines
+        {
+            has_folding(Win::current(), self.line1, Some(&mut self.line1), None);
+            has_folding(Win::current(), self.line2, None, Some(&mut self.line2));
         }
-        excmd.line.arg = excmd.line.skip_white(excmd.line.arg);
+        Ok(())
     }
 
-    // `+command`, before the next command is looked for. Not for
-    // `:read !cmd` and `:write !cmd`.
-    if excmd.argt.has(ExArgt::CMDARG) && !excmd.usefilter {
-        // SAFETY: `arg` is the command's own cursor into its line.
-        excmd.do_ecmd_cmd = getargcmd(excmd);
-    }
+    /// Everything after the command word: the `++opt`s, the `+cmd`, the
+    /// redirections `:write` and `:read` spell with `>`/`!`, the register and
+    /// the count, and where the *next* command starts.
+    ///
+    /// On entry `excmd.arg` is where the command word ended, which is what
+    /// [`ExArg::locate_command`] left there.
+    fn read_command_args(
+        &mut self,
+        ni: bool,
+        errormsg: &mut Option<CString>,
+    ) -> Result<(), Refused> {
+        // `:make` and `:grep` splice 'makeprg'/'grepprg' into the line here, so
+        // that `%` and friends expand inside it.
+        replace_makeprg(self);
 
-    if excmd.argt.has(ExArgt::TRLBAR) && !excmd.usefilter {
-        separate_nextcmd(excmd);
-    } else if excmd.cmdidx == CmdIdx::bang
-        || excmd.cmdidx == CmdIdx::terminal
-        || excmd.cmdidx == CmdIdx::global
-        || excmd.cmdidx == CmdIdx::vglobal
-        || excmd.usefilter
-    {
-        separate_at_newline(excmd);
-    }
+        // `:!` keeps the space: `:!! -l` needs it.
+        if self.cmdidx != CmdIdx::bang {
+            self.line.arg = self.line.skip_white(self.line.arg);
+        }
 
-    if excmd.argt.has(ExArgt::DFLALL) && excmd.addr_count == 0 {
-        set_cmd_dflall_range(excmd);
-    }
+        if self.cmdidx == CmdIdx::file && self.line.byte_at(self.line.arg) != 0 && curbuf_locked() {
+            return Err(Refused);
+        }
 
-    parse_register(excmd);
-    parse_count(excmd, errormsg, true).map_err(|_| Refused)?;
+        // `++opt=val` first, so that `:w ++enc=utf8 !cmd` works.
+        if self.argt.has(ExArgt::ARGOPT) {
+            while self.line.byte_at(self.line.arg) == b'+'
+                && self.line.byte_at(self.line.arg + 1) == b'+'
+            {
+                if getargopt(self).is_err() && !ni {
+                    *errormsg = Some(ex_msg(e_invarg));
+                    return Err(Refused);
+                }
+            }
+        }
 
-    if excmd.argt.has(ExArgt::FLAGS) {
-        get_flags(excmd);
+        if self.cmdidx == CmdIdx::write || self.cmdidx == CmdIdx::update {
+            if self.line.byte_at(self.line.arg) == b'>' {
+                self.line.arg += 1;
+                if self.line.byte_at(self.line.arg) != b'>' {
+                    *errormsg = Some(ex_msg(c"E494: Use w or w>>"));
+                    return Err(Refused);
+                }
+                self.line.arg = self.line.skip_white(self.line.arg + 1);
+                self.append = true;
+            } else if self.line.byte_at(self.line.arg) == b'!' && self.cmdidx == CmdIdx::write {
+                // `:w !filter`
+                self.line.arg += 1;
+                self.usefilter = true;
+            }
+        } else if self.cmdidx == CmdIdx::read {
+            if self.forceit {
+                // `:r!filter`
+                self.usefilter = true;
+                self.forceit = false;
+            } else if self.line.byte_at(self.line.arg) == b'!' {
+                // `:r !filter`
+                self.line.arg += 1;
+                self.usefilter = true;
+            }
+        } else if self.cmdidx == CmdIdx::lshift || self.cmdidx == CmdIdx::rshift {
+            // How far to shift is how many `<` or `>` were typed.
+            self.amount = 1;
+            while self.line.byte_at(self.line.arg) == self.line.byte_at(self.line.cmd) {
+                self.line.arg += 1;
+                self.amount += 1;
+            }
+            self.line.arg = self.line.skip_white(self.line.arg);
+        }
+
+        // `+command`, before the next command is looked for. Not for
+        // `:read !cmd` and `:write !cmd`.
+        if self.argt.has(ExArgt::CMDARG) && !self.usefilter {
+            // SAFETY: `arg` is the command's own cursor into its line.
+            self.do_ecmd_cmd = getargcmd(self);
+        }
+
+        if self.argt.has(ExArgt::TRLBAR) && !self.usefilter {
+            separate_nextcmd(self);
+        } else if self.cmdidx == CmdIdx::bang
+            || self.cmdidx == CmdIdx::terminal
+            || self.cmdidx == CmdIdx::global
+            || self.cmdidx == CmdIdx::vglobal
+            || self.usefilter
+        {
+            separate_at_newline(self);
+        }
+
+        if self.argt.has(ExArgt::DFLALL) && self.addr_count == 0 {
+            set_cmd_dflall_range(self);
+        }
+
+        parse_register(self);
+        self.parse_count(errormsg, true).map_err(|_| Refused)?;
+
+        if self.argt.has(ExArgt::FLAGS) {
+            get_flags(self);
+        }
+        if !ni
+            && !self.argt.has(ExArgt::EXTRA)
+            && self.line.byte_at(self.line.arg) != 0
+            && self.line.byte_at(self.line.arg) != b'"'
+            && (self.line.byte_at(self.line.arg) != b'|' || !self.argt.has(ExArgt::TRLBAR))
+        {
+            *errormsg = Some(ex_errmsg(
+                e_trailing_arg,
+                self.line.cstr_from(self.line.arg),
+            ));
+            return Err(Refused);
+        }
+        if !ni && self.argt.has(ExArgt::NEEDARG) && self.line.byte_at(self.line.arg) == 0 {
+            *errormsg = Some(ex_msg(e_argreq));
+            return Err(Refused);
+        }
+        Ok(())
     }
-    if !ni
-        && !excmd.argt.has(ExArgt::EXTRA)
-        && excmd.line.byte_at(excmd.line.arg) != 0
-        && excmd.line.byte_at(excmd.line.arg) != b'"'
-        && (excmd.line.byte_at(excmd.line.arg) != b'|' || !excmd.argt.has(ExArgt::TRLBAR))
-    {
-        *errormsg = Some(ex_errmsg(
-            e_trailing_arg,
-            excmd.line.cstr_from(excmd.line.arg),
-        ));
-        return Err(Refused);
-    }
-    if !ni && excmd.argt.has(ExArgt::NEEDARG) && excmd.line.byte_at(excmd.line.arg) == 0 {
-        *errormsg = Some(ex_msg(e_argreq));
-        return Err(Refused);
-    }
-    Ok(())
 }
 
 /// A shell command ends at a newline rather than at a `|`, and one
@@ -528,7 +526,7 @@ fn rethrow_from_nested(excmd: &mut ExArg) {
         if finished {
             do_finish(excmd, true);
         } else if excmd.source_kind() == SourceKind::Function && current_func_returned() != 0 {
-            do_return(excmd, true, None);
+            excmd.return_from_function(true, None);
         }
     }
     check_cstack.set(false);
@@ -584,7 +582,7 @@ pub(crate) fn do_one_cmd(
     // Each stage refuses by answering `Err`, having left whatever it has to
     // say in `errormsg`; the reporting below is shared by all of them.
     let ran = (|| {
-        locate_command(&mut excmd, in_inactive, &mods, flags, &mut errormsg)?;
+        excmd.locate_command(in_inactive, &mods, flags, &mut errormsg)?;
 
         // Not implemented in this build: the argument checks are relaxed,
         // because there is nothing to check them against.
@@ -599,8 +597,8 @@ pub(crate) fn do_one_cmd(
             excmd.argt = cmdnames[excmd.cmdidx.index()].cmd_argt;
         }
 
-        check_may_run(&mut excmd, ni, flags, &mut errormsg)?;
-        read_command_args(&mut excmd, ni, &mut errormsg)?;
+        excmd.check_may_run(ni, flags, &mut errormsg)?;
+        excmd.read_command_args(ni, &mut errormsg)?;
 
         if skip_cmd(&mut excmd) {
             return Err(Refused);

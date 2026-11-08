@@ -5,7 +5,7 @@
 //! be almost any character -- [`check_regexp_delim`] rejects the ones that
 //! would be ambiguous), [`sub_parse_flags`] turns the trailing letters into
 //! `SubFlags`, and the previous replacement is the `~` text carried from
-//! the last `:s` (and through ShaDa). [`sub_joining_lines`] is the
+//! the last `:s` (and through ShaDa). [`ExArg::sub_joining_lines`] is the
 //! `\n`-in-the-pattern case, which joins rather than substitutes.
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
@@ -132,65 +132,67 @@ pub(crate) fn sub_restore_replacement(
     drop(displaced);
 }
 
-/// Recognise `:%s/\n//` and turn it into a join command, which is much more
-/// efficient.
-///
-/// The pattern must be exactly `\n`, the replacement empty, and the flags
-/// (everything from `flags_at` on) either absent or one of `g`, `l`, `p`,
-/// `#` -- anything else is a real substitution.  `save` says whether to
-/// remember the pattern (a preview must not).
-///
-/// Returns true when `:substitute` was handled as a join, including under
-/// `eap->skip`, where nothing is done at all.
-pub(crate) fn sub_joining_lines(
-    args: &mut ExArg,
-    pat: Option<&[u8]>,
-    sub: &[u8],
-    flags_at: usize,
-    save: bool,
-    keeppatterns: bool,
-) -> bool {
-    // The flags are only looked at once the rest has the shape: measuring
-    // them is a scan of the rest of the line, for every `:s`.
-    let flags =
-        (pat == Some(b"\\n".as_slice()) && sub.is_empty()).then(|| args.line.rest_of(flags_at));
-    let joins = matches!(flags, Some([] | [b'g' | b'l' | b'p' | b'#']));
-    let flags = flags.unwrap_or_default();
-    let Some(pat) = pat.filter(|_| joins) else {
-        return false;
-    };
-    if args.skip {
-        return true;
-    }
-
-    Win::current().w_cursor.lnum = args.line1;
-    args.flags = match flags.first() {
-        Some(b'l') => EXFLAG_LIST,
-        Some(b'#') => EXFLAG_NR,
-        Some(b'p') => EXFLAG_PRINT,
-        _ => args.flags,
-    };
-    // The number of lines joined is the number of lines in the range, plus
-    // one more if this is not the end of the file.
-    let joined_lines_count =
-        args.line2 - args.line1 + 1 + i32::from(args.line2 < Buf::current().b_ml.ml_line_count);
-    if joined_lines_count > 1 {
-        let joined = usize::try_from(joined_lines_count).expect("more than one line");
-        let _ = do_join(joined, false, true, false, true);
-        SUB_NSUBS.set(joined_lines_count - 1);
-        SUB_NLINES.set(1);
-        do_sub_msg(false);
-        ex_may_print(args);
-    }
-
-    if save {
-        if !keeppatterns {
-            save_re_pat(RE_SUBST as c_int, pat, magic_isset());
+impl ExArg<'_> {
+    /// Recognise `:%s/\n//` and turn it into a join command, which is much more
+    /// efficient.
+    ///
+    /// The pattern must be exactly `\n`, the replacement empty, and the flags
+    /// (everything from `flags_at` on) either absent or one of `g`, `l`, `p`,
+    /// `#` -- anything else is a real substitution.  `save` says whether to
+    /// remember the pattern (a preview must not).
+    ///
+    /// Returns true when `:substitute` was handled as a join, including under
+    /// `eap->skip`, where nothing is done at all.
+    pub(crate) fn sub_joining_lines(
+        &mut self,
+        pat: Option<&[u8]>,
+        sub: &[u8],
+        flags_at: usize,
+        save: bool,
+        keeppatterns: bool,
+    ) -> bool {
+        // The flags are only looked at once the rest has the shape: measuring
+        // them is a scan of the rest of the line, for every `:s`.
+        let flags =
+            (pat == Some(b"\\n".as_slice()) && sub.is_empty()).then(|| self.line.rest_of(flags_at));
+        let joins = matches!(flags, Some([] | [b'g' | b'l' | b'p' | b'#']));
+        let flags = flags.unwrap_or_default();
+        let Some(pat) = pat.filter(|_| joins) else {
+            return false;
+        };
+        if self.skip {
+            return true;
         }
-        // Put the pattern in the search history.
-        add_to_history(HIST_SEARCH, pat, true, 0);
+
+        Win::current().w_cursor.lnum = self.line1;
+        self.flags = match flags.first() {
+            Some(b'l') => EXFLAG_LIST,
+            Some(b'#') => EXFLAG_NR,
+            Some(b'p') => EXFLAG_PRINT,
+            _ => self.flags,
+        };
+        // The number of lines joined is the number of lines in the range, plus
+        // one more if this is not the end of the file.
+        let joined_lines_count =
+            self.line2 - self.line1 + 1 + i32::from(self.line2 < Buf::current().b_ml.ml_line_count);
+        if joined_lines_count > 1 {
+            let joined = usize::try_from(joined_lines_count).expect("more than one line");
+            let _ = do_join(joined, false, true, false, true);
+            SUB_NSUBS.set(joined_lines_count - 1);
+            SUB_NLINES.set(1);
+            do_sub_msg(false);
+            ex_may_print(self);
+        }
+
+        if save {
+            if !keeppatterns {
+                save_re_pat(RE_SUBST as c_int, pat, magic_isset());
+            }
+            // Put the pattern in the search history.
+            add_to_history(HIST_SEARCH, pat, true, 0);
+        }
+        true
     }
-    true
 }
 
 /// Read `:substitute`'s trailing `{flags}` from `text` into `flags`,

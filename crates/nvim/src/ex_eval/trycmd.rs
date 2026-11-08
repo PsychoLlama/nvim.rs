@@ -58,7 +58,6 @@ use super::{
 use crate::cstr;
 use crate::debugger::dbg_check_skipped;
 use crate::eval::eval_cmd_string;
-use crate::eval::userfunc::do_return;
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::defs::{Cleanup, CondId, Pend};
 use crate::ex_eval::state::{current_exception, did_throw, force_abort, need_rethrow};
@@ -575,7 +574,7 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
             CSTP_CONTINUE => ex_continue(excmd),
             CSTP_BREAK => ex_break(excmd),
             CSTP_RETURN => {
-                do_return(excmd, false, returned.take());
+                excmd.return_from_function(false, returned.take());
             }
             CSTP_FINISH => do_finish(excmd, false),
             // The finally clause was entered because of an error,

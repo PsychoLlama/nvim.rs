@@ -115,49 +115,51 @@ pub fn set_cmd_count(excmd: &mut ExArg, count: i32, validate: bool) {
     }
 }
 
-/// Take the count a command such as `:delete 3` may carry, and fold it into
-/// the range.
-pub(crate) fn parse_count(
-    excmd: &mut ExArg,
-    errormsg: &mut Option<CString>,
-    validate: bool,
-) -> Result<(), Failed> {
-    if !excmd.argt.has(ExArgt::COUNT)
-        || !ascii_isdigit(c_int::from(excmd.line.byte_at(excmd.line.arg)))
-    {
-        return Ok(());
-    }
-    // A command that also takes a buffer name (`:buffer 2x`) only reads
-    // the digits as a count when they are the whole word.
-    if excmd.argt.has(ExArgt::BUFNAME) {
-        let past = excmd.line.skip_digits(excmd.line.arg + 1);
-        let after = c_int::from(excmd.line.byte_at(past));
-        if after != NUL && !ascii_iswhite(after) {
+impl ExArg<'_> {
+    /// Take the count a command such as `:delete 3` may carry, and fold it into
+    /// the range.
+    pub(crate) fn parse_count(
+        &mut self,
+        errormsg: &mut Option<CString>,
+        validate: bool,
+    ) -> Result<(), Failed> {
+        if !self.argt.has(ExArgt::COUNT)
+            || !ascii_isdigit(c_int::from(self.line.byte_at(self.line.arg)))
+        {
             return Ok(());
         }
-    }
-
-    let arg = excmd.line.arg;
-    let (n, past) = getdigits_int_at(excmd.line.buffer_mut(), arg, false, INT32_MAX);
-    let n = LineNr::new(n);
-    excmd.line.arg = excmd.line.skip_white(past);
-    if let Some(&(first, first_len)) = excmd.line.args.first() {
-        // `nvim_cmd` supplies the arguments already split, so the count
-        // that was just consumed has to come off the first of them.
-        let arg = excmd.line.arg;
-        debug_assert!(arg >= first);
-        if arg < first + first_len {
-            excmd.line.args[0] = (arg, first_len - (arg - first));
-        } else {
-            shift_cmd_args(excmd);
+        // A command that also takes a buffer name (`:buffer 2x`) only reads
+        // the digits as a count when they are the whole word.
+        if self.argt.has(ExArgt::BUFNAME) {
+            let past = self.line.skip_digits(self.line.arg + 1);
+            let after = c_int::from(self.line.byte_at(past));
+            if after != NUL && !ascii_iswhite(after) {
+                return Ok(());
+            }
         }
+
+        let arg = self.line.arg;
+        let (n, past) = getdigits_int_at(self.line.buffer_mut(), arg, false, INT32_MAX);
+        let n = LineNr::new(n);
+        self.line.arg = self.line.skip_white(past);
+        if let Some(&(first, first_len)) = self.line.args.first() {
+            // `nvim_cmd` supplies the arguments already split, so the count
+            // that was just consumed has to come off the first of them.
+            let arg = self.line.arg;
+            debug_assert!(arg >= first);
+            if arg < first + first_len {
+                self.line.args[0] = (arg, first_len - (arg - first));
+            } else {
+                shift_cmd_args(self);
+            }
+        }
+        if n <= LineNr::ZERO && !self.argt.has(ExArgt::ZEROR) {
+            *errormsg = Some(ex_msg(e_zerocount));
+            return Err(Failed);
+        }
+        set_cmd_count(self, n.get(), validate);
+        Ok(())
     }
-    if n <= LineNr::ZERO && !excmd.argt.has(ExArgt::ZEROR) {
-        *errormsg = Some(ex_msg(e_zerocount));
-        return Err(Failed);
-    }
-    set_cmd_count(excmd, n.get(), validate);
-    Ok(())
 }
 
 /// Take the `!` a command may carry, moving `at` past it. `:substitute`

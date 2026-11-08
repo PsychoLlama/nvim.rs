@@ -191,7 +191,7 @@ fn edit_script(excmd: &mut ExArg, by_number: bool) {
         let expanded = expand_env(excmd.line.cstr_from(excmd.line.arg), false);
         excmd.set_arg_text(&expanded);
     }
-    do_exedit(excmd, None);
+    excmd.exedit(None);
 }
 
 /// A script's name, for `":verbose set"` -- the text appended to "Last set

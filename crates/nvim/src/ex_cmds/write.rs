@@ -3,7 +3,7 @@
 //!
 //! [`do_write`] is the entry point every `:w` form funnels into; the risk it
 //! manages is not the writing (that is `bufwrite.rs`) but *which file* and
-//! *whether we may*: [`check_overwrite`] refuses an existing other file without
+//! *whether we may*: [`check_overwrite`](ExArg::check_overwrite) refuses an existing other file without
 //! `!`, `check_readonly` handles 'readonly' and a read-only file mode, and
 //! `check_writable`/`not_writing` cover 'write' and `:noautocmd`.  [`ex_file`]
 //! is `:file`, which renames the buffer, and [`getfile`] is the shared "switch
@@ -196,13 +196,84 @@ fn check_writable(fname: &CStr) -> Result<(), Failed> {
     Ok(())
 }
 
-/// `:write ++p` -- create the missing leading directories.
-fn handle_mkdir_p_arg(args: &ExArg, fname: Option<&CStr>) -> Result<(), Failed> {
-    if args.mkdir_p {
-        // Said, E739 or E32, whatever the code.
-        file_mkdir(fname.unwrap_or_default(), 0o755 as int32_t).map_err(|_| Failed)?;
+impl ExArg<'_> {
+    /// `:write ++p` -- create the missing leading directories.
+    fn make_parent_dirs(&self, fname: Option<&CStr>) -> Result<(), Failed> {
+        if self.mkdir_p {
+            // Said, E739 or E32, whatever the code.
+            file_mkdir(fname.unwrap_or_default(), 0o755 as int32_t).map_err(|_| Failed)?;
+        }
+        Ok(())
     }
-    Ok(())
+
+    /// Check if it is allowed to overwrite a file.  If `b_flags` has `BufFlags::NOTEDITED`,
+    /// `BufFlags::NEW` or `BufFlags::READERR`, check for overwriting the current file.
+    ///
+    /// May set `args.forceit` if a dialog says it is fine to overwrite.  `fname` is
+    /// the file name to be used (which can differ from `buffer`'s), `ffname` its full
+    /// path version, and `other` says the write goes under another name.
+    ///
+    /// Answers `Err` when the write must not go ahead.
+    ///
+    pub fn check_overwrite(
+        &mut self,
+        buffer: Buf,
+        fname: Option<&CStr>,
+        ffname: Option<&CStr>,
+        other: bool,
+    ) -> Result<(), Failed> {
+        // Write to another file or b_flags set or not writing the whole file.
+        let contested = other
+            || (!buf_is_nofilename(Some(buffer))
+                && (buffer.b_flags.has(BufFlags::NOTEDITED)
+                    || buffer.b_flags.has(BufFlags::NEW) && !cpo_has(CpoFlag::OVERNEW)
+                    || buffer.b_flags.has(BufFlags::READERR)));
+        let ffname = ffname.unwrap_or_default();
+        if !contested || p_wa() || !path_exists(ffname) {
+            return Ok(());
+        }
+
+        if !self.forceit && !self.append {
+            if dir_exists(ffname) {
+                let ffname = msg_cstr(ffname);
+                semsg!("E17: \"{ffname}\" is a directory");
+                return Err(Failed);
+            }
+            if !confirming() {
+                emsg(gettext(e_exists));
+                return Err(Failed);
+            }
+            if !dialog_yesno_about(gettext(c"Overwrite existing file \"%s\"?"), fname) {
+                return Err(Failed);
+            }
+            self.forceit = true;
+        }
+
+        if !other || emsg_silent.get() != 0 {
+            return Ok(());
+        }
+
+        // A swap file of the target's own would be silently orphaned by the
+        // write, so it is worth a question of its own.
+        let dir = swap_dir();
+        let Some(swapname) = swap_name_for(fname.unwrap_or_default(), ffname, &dir) else {
+            return Ok(());
+        };
+        if !path_exists(swapname.as_cstr()) {
+            return Ok(());
+        }
+        if !confirming() {
+            let arg0 = msg_cstr(swapname.as_cstr());
+            semsg!("E768: Swap file exists: {arg0} (:silent! overrides)");
+            return Err(Failed);
+        }
+        let name = Some(swapname.as_cstr());
+        if !dialog_yesno_about(gettext(c"Swap file \"%s\" exists, overwrite anyway?"), name) {
+            return Err(Failed);
+        }
+        self.forceit = true;
+        Ok(())
+    }
 }
 
 /// One of the current buffer's names, copied: a callee that can run user
@@ -274,13 +345,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
         let name = &Buf::current().name;
         (own_name(name.full()), own_name(name.shown()))
     };
-    check_overwrite(
-        args,
-        Buf::current(),
-        fname.as_deref(),
-        ffname.as_deref(),
-        other,
-    )?;
+    args.check_overwrite(Buf::current(), fname.as_deref(), ffname.as_deref(), other)?;
 
     let mut short = if other {
         typed.as_deref().map(WriteName::Other)
@@ -299,7 +364,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
         mkdir_name = own_name(Buf::current().name.short());
     }
 
-    handle_mkdir_p_arg(args, mkdir_name.as_deref())?;
+    args.make_parent_dirs(mkdir_name.as_deref())?;
 
     let name_was_missing = Buf::current().name.full().is_none();
     let request = WriteRequest {
@@ -426,80 +491,11 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> bool {
     true
 }
 
-/// Check if it is allowed to overwrite a file.  If `b_flags` has `BufFlags::NOTEDITED`,
-/// `BufFlags::NEW` or `BufFlags::READERR`, check for overwriting the current file.
-///
-/// May set `args.forceit` if a dialog says it is fine to overwrite.  `fname` is
-/// the file name to be used (which can differ from `buffer`'s), `ffname` its full
-/// path version, and `other` says the write goes under another name.
-///
-/// Answers `Err` when the write must not go ahead.
-///
-pub fn check_overwrite(
-    args: &mut ExArg,
-    buffer: Buf,
-    fname: Option<&CStr>,
-    ffname: Option<&CStr>,
-    other: bool,
-) -> Result<(), Failed> {
-    // Write to another file or b_flags set or not writing the whole file.
-    let contested = other
-        || (!buf_is_nofilename(Some(buffer))
-            && (buffer.b_flags.has(BufFlags::NOTEDITED)
-                || buffer.b_flags.has(BufFlags::NEW) && !cpo_has(CpoFlag::OVERNEW)
-                || buffer.b_flags.has(BufFlags::READERR)));
-    let ffname = ffname.unwrap_or_default();
-    if !contested || p_wa() || !path_exists(ffname) {
-        return Ok(());
-    }
-
-    if !args.forceit && !args.append {
-        if dir_exists(ffname) {
-            let ffname = msg_cstr(ffname);
-            semsg!("E17: \"{ffname}\" is a directory");
-            return Err(Failed);
-        }
-        if !confirming() {
-            emsg(gettext(e_exists));
-            return Err(Failed);
-        }
-        if !dialog_yesno_about(gettext(c"Overwrite existing file \"%s\"?"), fname) {
-            return Err(Failed);
-        }
-        args.forceit = true;
-    }
-
-    if !other || emsg_silent.get() != 0 {
-        return Ok(());
-    }
-
-    // A swap file of the target's own would be silently orphaned by the
-    // write, so it is worth a question of its own.
-    let dir = swap_dir();
-    let Some(swapname) = swap_name_for(fname.unwrap_or_default(), ffname, &dir) else {
-        return Ok(());
-    };
-    if !path_exists(swapname.as_cstr()) {
-        return Ok(());
-    }
-    if !confirming() {
-        let arg0 = msg_cstr(swapname.as_cstr());
-        semsg!("E768: Swap file exists: {arg0} (:silent! overrides)");
-        return Err(Failed);
-    }
-    let name = Some(swapname.as_cstr());
-    if !dialog_yesno_about(gettext(c"Swap file \"%s\" exists, overwrite anyway?"), name) {
-        return Err(Failed);
-    }
-    args.forceit = true;
-    Ok(())
-}
-
-/// [`check_overwrite`] of `buffer` under its own names, copied for the
+/// [`check_overwrite`](ExArg::check_overwrite) of `buffer` under its own names, copied for the
 /// dialogs, which can rename it.
 pub(crate) fn check_overwrite_own(args: &mut ExArg, buffer: Buf) -> Result<(), Failed> {
     let (shown, full) = (own_name(buffer.name.shown()), own_name(buffer.name.full()));
-    check_overwrite(args, buffer, shown.as_deref(), full.as_deref(), false)
+    args.check_overwrite(buffer, shown.as_deref(), full.as_deref(), false)
 }
 
 /// The first entry of 'directory', or `"."` when the option is empty -- where
@@ -620,7 +616,9 @@ fn write_one_buffer(
         *error += 1;
     } else {
         let bufref = BufRef::of(buffer);
-        if handle_mkdir_p_arg(args, own_name(buffer.name.shown()).as_deref()).is_err()
+        if args
+            .make_parent_dirs(own_name(buffer.name.shown()).as_deref())
+            .is_err()
             || buf_write_all(buffer, args.forceit).is_err()
         {
             *error += 1;

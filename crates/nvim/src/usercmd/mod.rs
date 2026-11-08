@@ -179,113 +179,115 @@ pub(crate) fn ucmd_name(cmd: &UserCmd) -> &[u8] {
     cmd.name.to_bytes()
 }
 
-/// Search both tables for a command matching `args.cmd`.
-///
-/// Sets `args.cmdidx`, `args.argt`, `args.useridx` and `args.addr_type`,
-/// and answers where the command name ends -- which may be *before* `end`,
-/// because the match may be followed immediately by a count that `end` has
-/// already skipped. Answers `None` when nothing matched.
-///
-/// `full` is set when the match was exact, `expand` filled in for completion
-/// and `complp` given the command's completion type.
-pub(crate) fn find_ucmd(
-    excmd: &mut ExArg,
-    end: usize,
-    full: Option<&mut bool>,
-    mut expand: Option<&mut Expand>,
-    mut complp: Option<&mut ExpandContext>,
-) -> Option<usize> {
-    let cmd = excmd.line.cmd;
-    let typed = excmd.line.slice_at(cmd, end - cmd);
+impl ExArg<'_> {
+    /// Search both tables for a command matching `args.cmd`.
+    ///
+    /// Sets `args.cmdidx`, `args.argt`, `args.useridx` and `args.addr_type`,
+    /// and answers where the command name ends -- which may be *before* `end`,
+    /// because the match may be followed immediately by a count that `end` has
+    /// already skipped. Answers `None` when nothing matched.
+    ///
+    /// `full` is set when the match was exact, `expand` filled in for completion
+    /// and `complp` given the command's completion type.
+    pub(crate) fn find_user_command(
+        &mut self,
+        end: usize,
+        full: Option<&mut bool>,
+        mut expand: Option<&mut Expand>,
+        mut complp: Option<&mut ExpandContext>,
+    ) -> Option<usize> {
+        let cmd = self.line.cmd;
+        let typed = self.line.slice_at(cmd, end - cmd);
 
-    let typed_len = typed.len();
-    let mut exact_match = false;
-    let mut matchlen = 0;
-    let mut found = false;
-    let mut possible = false;
-    // A buffer-local command matched ambiguously; only a full global match
-    // is accepted then.
-    let mut amb_local = false;
+        let typed_len = typed.len();
+        let mut exact_match = false;
+        let mut matchlen = 0;
+        let mut found = false;
+        let mut possible = false;
+        // A buffer-local command matched ambiguously; only a full global match
+        // is accepted then.
+        let mut amb_local = false;
 
-    for scope in Scope::BOTH {
-        // Nothing in the walk can add or remove a command: it only copies
-        // facts out.
-        let walked = scope.with(|cmds| {
-            for (j, uc) in cmds.iter().enumerate() {
-                let name = ucmd_name(uc);
-                let (k, at_nul) = match_prefix(typed, name);
-                // A match up to a digit means there may be another command
-                // *including* the digit that should be preferred.
-                if !(k == typed.len() || (at_nul && ascii_isdigit(c_int::from(typed[k])))) {
-                    continue;
-                }
-                if k == typed.len() && found && !at_nul {
-                    if scope == Scope::Global {
-                        return None;
+        for scope in Scope::BOTH {
+            // Nothing in the walk can add or remove a command: it only copies
+            // facts out.
+            let walked = scope.with(|cmds| {
+                for (j, uc) in cmds.iter().enumerate() {
+                    let name = ucmd_name(uc);
+                    let (k, at_nul) = match_prefix(typed, name);
+                    // A match up to a digit means there may be another command
+                    // *including* the digit that should be preferred.
+                    if !(k == typed.len() || (at_nul && ascii_isdigit(c_int::from(typed[k])))) {
+                        continue;
                     }
-                    amb_local = true;
+                    if k == typed.len() && found && !at_nul {
+                        if scope == Scope::Global {
+                            return None;
+                        }
+                        amb_local = true;
+                    }
+                    if found && !(k == typed.len() && at_nul) {
+                        continue;
+                    }
+                    if k == typed.len() {
+                        found = true;
+                    } else {
+                        possible = true;
+                    }
+                    self.cmdidx = if scope == Scope::Global {
+                        CmdIdx::USER
+                    } else {
+                        CmdIdx::USER_BUF
+                    };
+                    self.argt = uc.argt;
+                    self.useridx = c_int::try_from(j).expect("a table index fits");
+                    self.addr_type = uc.addr_type;
+                    if let Some(complp) = complp.as_deref_mut() {
+                        *complp = uc.complete;
+                    }
+                    if let Some(expand) = expand.as_deref_mut() {
+                        expand.luaref = uc.complete_luaref;
+                        expand.arg = uc.complete_arg.as_deref().map(XString::from_cstr);
+                        expand.script_ctx = uc.script_ctx;
+                        expand.script_ctx.sc_lnum += sourcing_lnum().get();
+                    }
+                    // Do not look for further abbreviations of an exact match.
+                    matchlen = k;
+                    if k == typed.len() && at_nul {
+                        exact_match = true;
+                        amb_local = false;
+                        return Some(true);
+                    }
                 }
-                if found && !(k == typed.len() && at_nul) {
-                    continue;
-                }
-                if k == typed.len() {
-                    found = true;
-                } else {
-                    possible = true;
-                }
-                excmd.cmdidx = if scope == Scope::Global {
-                    CmdIdx::USER
-                } else {
-                    CmdIdx::USER_BUF
-                };
-                excmd.argt = uc.argt;
-                excmd.useridx = c_int::try_from(j).expect("a table index fits");
-                excmd.addr_type = uc.addr_type;
-                if let Some(complp) = complp.as_deref_mut() {
-                    *complp = uc.complete;
-                }
-                if let Some(expand) = expand.as_deref_mut() {
-                    expand.luaref = uc.complete_luaref;
-                    expand.arg = uc.complete_arg.as_deref().map(XString::from_cstr);
-                    expand.script_ctx = uc.script_ctx;
-                    expand.script_ctx.sc_lnum += sourcing_lnum().get();
-                }
-                // Do not look for further abbreviations of an exact match.
-                matchlen = k;
-                if k == typed.len() && at_nul {
-                    exact_match = true;
-                    amb_local = false;
-                    return Some(true);
-                }
+                Some(false)
+            });
+            match walked {
+                // An ambiguous global match.
+                None => return None,
+                // Stop on a full match; otherwise fall through to the global table.
+                Some(true) => break,
+                Some(false) => {}
             }
-            Some(false)
-        });
-        match walked {
-            // An ambiguous global match.
-            None => return None,
-            // Stop on a full match; otherwise fall through to the global table.
-            Some(true) => break,
-            Some(false) => {}
         }
-    }
 
-    if let Some(full) = full
-        && exact_match
-    {
-        *full = true;
-    }
-    if amb_local {
-        if let Some(expand) = expand {
-            expand.context = ExpandContext::Unsuccessful;
+        if let Some(full) = full
+            && exact_match
+        {
+            *full = true;
         }
-        return None;
+        if amb_local {
+            if let Some(expand) = expand {
+                expand.context = ExpandContext::Unsuccessful;
+            }
+            return None;
+        }
+        if found || possible {
+            // The match may be followed immediately by a number: move back onto
+            // it. `matchlen <= typed.len()`, so this stays inside the line.
+            return Some(end + matchlen - typed_len);
+        }
+        Some(end)
     }
-    if found || possible {
-        // The match may be followed immediately by a number: move back onto
-        // it. `matchlen <= typed.len()`, so this stays inside the line.
-        return Some(end + matchlen - typed_len);
-    }
-    Some(end)
 }
 
 /// How far `typed` and `name` agree, and whether upstream's cursor into the
