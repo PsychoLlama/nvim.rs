@@ -40,6 +40,7 @@ use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
+use std::rc::Rc;
 
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::fire_autocmds_for;
@@ -62,7 +63,7 @@ use crate::state::{
     MODE_TERMINAL,
 };
 use crate::tr;
-use crate::types::{MenuId, VimMenu, kListLenMayKnow};
+use crate::types::kListLenMayKnow;
 
 // The carve of the transpiled module; see each child's docs.
 mod complete;
@@ -408,4 +409,43 @@ pub(crate) fn show_popupmenu() {
     if let Some(menu) = found {
         pum_show_popupmenu(menu);
     }
+}
+
+/// A menu node's identity, which no other node ever takes, even after it is
+/// deleted: what `:popup` and `:emenu` hold across the user code they run,
+/// re-found afterwards.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) struct MenuId(pub(crate) u64);
+
+/// One node of the menu tree: a submenu when it has children, a menu item
+/// otherwise.
+///
+/// The node owns its names, its right-hand sides and its children, which
+/// are kept in display order (by priority, then by when they were added).
+#[derive(Clone)]
+pub(crate) struct VimMenu {
+    pub(crate) id: MenuId,
+    /// The modes the node is available in, `MENU_*_MODE` bits.
+    pub modes: c_int,
+    /// The modes it is enabled in.
+    pub enabled: c_int,
+    /// The name as `:menu` spelled it, mnemonic and accelerator included.
+    pub name: CString,
+    /// The displayed name: no `&` mnemonic marker, no accelerator.
+    pub dname: CString,
+    /// The pre-translation name and displayed name, for a node
+    /// `:menutranslate` renamed; set together.
+    pub en_name: Option<CString>,
+    pub en_dname: Option<CString>,
+    /// The mnemonic character, or 0.
+    pub mnemonic: c_int,
+    /// The accelerator text, i.e. whatever followed the name's `<Tab>`.
+    pub actext: Option<CString>,
+    pub priority: c_int,
+    /// The right-hand side per mode index. Several modes commonly share one
+    /// string, which is why it is counted.
+    pub strings: [Option<Rc<CStr>>; 8],
+    pub noremap: [crate::getchar::Remap; 8],
+    pub silent: [bool; 8],
+    pub children: Vec<VimMenu>,
 }

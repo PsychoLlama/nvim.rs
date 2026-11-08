@@ -44,6 +44,7 @@ use crate::insexpand::{
 };
 use crate::mbyte::{c_cells_at, c_cluster_len, c_string_cells, strnicmp_in};
 use crate::memory::XString;
+use crate::menu::VimMenu;
 use crate::menu::{execute_menu, get_menu_mode_flag, menu_find};
 use crate::message::e_menu_only_exists_in_another_mode;
 use crate::message::emsg;
@@ -68,8 +69,7 @@ use crate::tag::state::g_do_tagpreview;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
     ApiString, Array, BufferHandle, Dict, Float, Handle, Hlf, Integer, LineNr, Object, OptInt,
-    OptVal, PumItem, ScreenAttr, ScreenChar, VarNumber, VimMenu, WinConfig, kBoolVarFalse,
-    kBoolVarTrue,
+    OptVal, PumItem, ScreenAttr, ScreenChar, VarNumber, WinConfig, kBoolVarFalse, kBoolVarTrue,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

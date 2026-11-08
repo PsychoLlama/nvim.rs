@@ -630,6 +630,8 @@ const TYPE_HOMES: &[&str] = &[
     "src/event/queue.rs",
     "src/event/uv.rs",
     "src/ex_getln/state.rs::CmdRedraw",
+    "src/getchar/state.rs::FlushBuffers",
+    "src/keycodes/mod.rs::KeyExtra",
     "src/lua/abi.rs",
     "src/memfile/mod.rs::BlockNr",
     "src/memline/state.rs",

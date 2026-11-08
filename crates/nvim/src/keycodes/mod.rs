@@ -41,7 +41,7 @@ use crate::message::emsg;
 use crate::message::{e_invarg, e_usingsid};
 use crate::os::cshim::gettext;
 use crate::runtime::state::current_sctx;
-use crate::types::{CpoFlag, KeyExtra, MB_MAXBYTES, ScriptId};
+use crate::types::{CpoFlag, MB_MAXBYTES, ScriptId};
 
 mod codes;
 pub use self::codes::*;
@@ -753,3 +753,5 @@ pub(crate) fn unescape_ks(text: &[u8]) -> Vec<u8> {
     out.truncate(len);
     out
 }
+
+pub type KeyExtra = u8;

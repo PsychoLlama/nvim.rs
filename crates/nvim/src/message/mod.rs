@@ -85,6 +85,7 @@ use crate::ex_eval::cause_errthrow;
 use crate::ex_getln::state::{cmdline_was_last_drawn, redrawing_cmdline};
 use crate::fileio::check_timestamps;
 use crate::fileio::state::need_check_timestamps;
+use crate::getchar::state::FlushBuffers;
 use crate::getchar::state::{
     KeyTyped, got_int, reg_recording, scriptout, vgetc_busy, vgetc_char, vgetc_mod_mask,
 };
@@ -160,8 +161,8 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
-    ApiString, Array, EStackArg, ExArg, FlushBuffers, GridView, HlMessage, HlMessageChunk, IOSIZE,
-    MessageData, Object, OptInt, ScreenAttr, ScreenChar, ShmFlag, TypVal, Vv,
+    ApiString, Array, EStackArg, ExArg, GridView, HlMessage, HlMessageChunk, IOSIZE, MessageData,
+    Object, OptInt, ScreenAttr, ScreenChar, ShmFlag, TypVal, Vv,
 };
 use crate::ui::state::{Columns, Rows, resize_events};
 use crate::ui::{

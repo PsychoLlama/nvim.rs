@@ -21,7 +21,8 @@
 
 use core::ffi::c_int;
 
-use crate::types::{Key, KeyExtra};
+use crate::keycodes::KeyExtra;
+use crate::types::Key;
 
 use super::{extra, termcap};
 

@@ -19,12 +19,13 @@ use crate::eval::typval::NumBuf;
 use crate::eval::userfunc::FuncFlags;
 use crate::getchar::Remap;
 use crate::lua::executor::release_luaref;
+use crate::mapping::MapTwin;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::narrow::{number_as_int, number_as_lnum};
 use crate::option::vars::P_CPO;
 use crate::semsg;
 use crate::types::Handle;
-use crate::types::{MapTwin, VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
+use crate::types::{VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
 use crate::winlayer::Buf;
 use core::ffi::CStr;
 

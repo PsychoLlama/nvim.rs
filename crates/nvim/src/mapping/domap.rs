@@ -20,9 +20,9 @@ use crate::ex_docmd::sourcing_lnum;
 use crate::getchar::Remap;
 use crate::keycodes::Ctrl_C;
 use crate::lua::executor::nlua_set_sctx;
+use crate::mapping::{MapTables, MapTwin};
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::tr_c;
-use crate::types::{MapTables, MapTwin};
 use crate::winlayer::Buf;
 use core::ffi::c_int;
 

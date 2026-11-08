@@ -36,6 +36,7 @@ use crate::ex_eval::{
     exception_state_restore, exception_state_save, report_pending, update_force_abort,
 };
 use crate::ex_getln::{ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
+use crate::getchar::state::SaveRedo;
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
@@ -72,8 +73,8 @@ use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::types::ui::kUICmdline;
 use crate::types::{
     Callback, Dict, DictItem, ExArg, Expand, FuncBody, FuncCall, LineNr, ListItem, LuaRef, OptInt,
-    Partial, SaveRedo, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_FUNC, VAR_NUMBER, VAR_SCOPE,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
+    Partial, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_FUNC, VAR_NUMBER, VAR_SCOPE, VAR_STRING,
+    VAR_UNKNOWN, VarLock, VarNumber,
 };
 use crate::ui::state::Rows;
 use crate::ui::ui_has;

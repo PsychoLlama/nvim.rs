@@ -18,10 +18,10 @@
 use super::*;
 use crate::keycodes::ModMask;
 use crate::keycodes::{KE_IGNORE, KE_PLUG, KE_SNR, key_escape};
+use crate::mapping::MapStr;
 use crate::mbyte::{char_len, encode_char, unescape_at};
 use crate::normal::{set_visual_select, visual_active, visual_select};
 use crate::option::vars::P_LANGMAP;
-use crate::types::MapStr;
 use crate::types::{Failed, Key, MB_MAXBYTES};
 use core::ffi::c_int;
 

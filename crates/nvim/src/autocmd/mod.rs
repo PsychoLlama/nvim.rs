@@ -35,6 +35,7 @@ use crate::eval::{callback_call, get_v_event, last_set_msg, restore_v_event};
 use crate::ex_docmd::{do_cmdline, ends_excmd, expand_sfile, get_pressedreturn, set_pressedreturn};
 use crate::ex_eval::{aborting, should_abort};
 use crate::fileio::{check_timestamps, file_pat_to_reg_pat, match_file_pat};
+use crate::getchar::state::SaveRedo;
 use crate::getchar::state::{KeyTyped, got_int, reg_recording};
 use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
@@ -69,8 +70,8 @@ use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     AcoSave, ApiString, AutoCmd, AutoPat, AutoPatCmd, BufferHandle, Callback, EStackType, Error,
-    EventCmds, ExArg, Expand, Integer, LuaRef, LuaRetMode, Object, OptVal, ProfTime, SaveRedo,
-    SaveVEvent, ScriptCtx, Timestamp, VarNumber, Vv,
+    EventCmds, ExArg, Expand, Integer, LuaRef, LuaRetMode, Object, OptVal, ProfTime, SaveVEvent,
+    ScriptCtx, Timestamp, VarNumber, Vv,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;

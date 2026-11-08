@@ -33,6 +33,7 @@ use crate::event_queue::{self, ChildQueue, QueueId, queue_in};
 use crate::getchar::state::{ctrl_c_interrupts, got_int, mapped_ctrl_c, typebuf_was_filled};
 use crate::getchar::{before_blocking, typebuf_changed};
 use crate::global_cell::GlobalCell;
+use crate::keycodes::KeyExtra;
 use crate::keycodes::{
     Ctrl_C, FSK_KEYCODE, K_SPECIAL, KE_EVENT, KE_FILLER, KE_LEFTMOUSE, KE_MIDDLEMOUSE,
     KE_MOUSEDOWN, KE_MOUSEMOVE, KE_MOUSERIGHT, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1MOUSE,
@@ -52,8 +53,8 @@ use crate::profile::{prof_input_end, prof_input_start};
 use crate::startup::{getout, main_loop, preserve_exit, silent_mode, used_stdin};
 use crate::state::mode::State;
 use crate::state::{MODE_INSERT, get_real_state};
+use crate::types::ApiString;
 use crate::types::AutoEvent;
-use crate::types::{ApiString, KeyExtra};
 use crate::ui::state::{Columns, Rows, current_ui};
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint, c_void};

@@ -23,10 +23,11 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::getchar::state::TypeaheadSave;
 use crate::global_cell::{GlobalCell, state_record};
 use crate::memory::XString;
+use crate::types::Key;
 use crate::types::{CmdMod, CmdModFlags};
-use crate::types::{Key, TypeaheadSave};
 use core::ffi::{CStr, c_int};
 
 pub(crate) static cmdmod: GlobalCell<CmdMod> = GlobalCell::new(CmdMod {

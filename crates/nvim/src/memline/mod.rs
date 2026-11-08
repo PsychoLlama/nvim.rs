@@ -37,6 +37,7 @@ use crate::fileio::{
     buf_store_file_info, modname, readfile_named, rename_file, temp_name, vim_deltempdir,
 };
 use crate::getchar::flush_buffers;
+use crate::getchar::state::FlushBuffers;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::guard::{Allow, Suppress};
@@ -76,8 +77,8 @@ use crate::spell::spell_delete_wordlist;
 use crate::startup::{getout, recoverymode};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Buffer, CmdModFlags, ColNr, Dict, Failed, FileComparison, FileOffset, FlushBuffers, LineNr,
-    List, OptVal, Pos, Timestamp, VarNumber,
+    Buffer, CmdModFlags, ColNr, Dict, Failed, FileComparison, FileOffset, LineNr, List, OptVal,
+    Pos, Timestamp, VarNumber,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;

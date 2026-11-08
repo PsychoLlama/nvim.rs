@@ -32,9 +32,9 @@ use std::ffi::CString;
 
 use super::*;
 use crate::grid::default_grid_ref;
+use crate::menu::MenuId;
 use crate::menu::{is_separator, with_menu};
 use crate::mouse::{MousePos, find_win_outer};
-use crate::types::MenuId;
 use crate::winlayer::Win;
 
 /// The width `:popup` asks for even when the entries are narrower.

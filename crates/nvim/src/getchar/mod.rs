@@ -28,6 +28,7 @@ use crate::ex_docmd::update_topline_cursor;
 use crate::ex_getln::state::cmdline_star;
 use crate::ex_getln::{cmdline_in_use, putcmdline, redrawcmd, redrawcmdline, unputcmdline};
 use crate::fileio::buffered::FileOpenFlags;
+use crate::getchar::state::{FlushBuffers, SaveRedo, TypeaheadSave};
 use crate::getchar::state::{
     KeyNoremap, KeyStuffed, KeyTyped, UngotKey, allow_keys, block_redo, ctrl_c_interrupts,
     curscript, got_int, gotchars_pending, ignore_script, langmap_mapchar, last_recorded_len,
@@ -74,8 +75,8 @@ use crate::state::{
     state_no_longer_safe,
 };
 use crate::types::{
-    ApiString, Array, ColNr, Error, EvalFuncData, FlushBuffers, Integer, LuaRef, LuaRetMode,
-    MotionType, OpArg, OptInt, SaveRedo, TypVal, TypeaheadSave, VarNumber, Vv,
+    ApiString, Array, ColNr, Error, EvalFuncData, Integer, LuaRef, LuaRetMode, MotionType, OpArg,
+    OptInt, TypVal, VarNumber, Vv,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;

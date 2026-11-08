@@ -40,6 +40,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::GotcharsState;
+use crate::getchar::{KeyBuffer, TypeAhead};
 use crate::global_cell::{GlobalCell, state_record};
 use crate::keycodes::ModMask;
 use crate::os::fs::CFile;
@@ -168,4 +169,27 @@ state_record! {
     pub(super) typed_since_sync: c_int = 0;
     /// The `-w`/`-W` file every typed character is copied to.
     pub(crate) scriptout: Option<CFile> = None;
+}
+
+pub type FlushBuffers = ::core::ffi::c_uint;
+/// The redo pair a user function or autocommand set aside. Not `Copy`: each
+/// field owns a block chain, and `save_redobuff` *moves* them here.
+/// [`Default`] is the "nothing saved yet" state its callers declare it in --
+/// `mem::zeroed` is not usable on a struct holding an enum with a niche.
+#[derive(Default)]
+pub struct SaveRedo {
+    pub(crate) sr_redobuff: KeyBuffer,
+    pub(crate) sr_old_redobuff: KeyBuffer,
+}
+/// All three kinds of typeahead, set aside so that a prompt has to be
+/// answered by the user. Not `Copy`, and `Default` rather than zeroed, for
+/// the same reasons as [`SaveRedo`].
+#[derive(Default)]
+pub struct TypeaheadSave {
+    pub(crate) save_typebuf: TypeAhead,
+    pub(crate) typebuf_valid: bool,
+    /// The key `vungetc` had put back, which the prompt must not answer.
+    pub(crate) ungot: Option<UngotKey>,
+    pub(crate) save_readbuf1: KeyBuffer,
+    pub(crate) save_readbuf2: KeyBuffer,
 }
