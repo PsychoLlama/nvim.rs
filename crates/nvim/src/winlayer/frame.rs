@@ -165,4 +165,11 @@ impl FrameRef {
     pub fn children(self) -> impl Iterator<Item = Self> {
         frames(self.child())
     }
+
+    /// The frames above this one, its parent first and the top frame last:
+    /// the C's `for (frp = frp->fr_parent; frp != NULL; frp = frp->fr_parent)`.
+    #[inline]
+    pub fn ancestors(self) -> impl Iterator<Item = Self> {
+        core::iter::successors(self.parent(), |fr| fr.parent())
+    }
 }

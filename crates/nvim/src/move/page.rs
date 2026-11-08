@@ -45,7 +45,7 @@ use crate::state::mode::restart_edit;
 use crate::types::{ColNr, Direction, LineNr, OptInt, Pos};
 use crate::ui::state::Rows;
 use crate::winlayer::graph::{firstwin, lastwin};
-use crate::winlayer::{Buf, Win, first_window};
+use crate::winlayer::{Buf, Win, windows};
 
 /// What `pagescroll` measured before it scrolled: the buffer's length, and
 /// the cursor position a half-page scroll puts back before moving it itself.
@@ -221,8 +221,7 @@ pub fn do_check_cursorbind() {
     // Upstream asks the tab page for its window list, but the *current* tab
     // page's windows always hang off `firstwin` -- `tp_firstwin` is only
     // filled in when a tab page is left.
-    let mut next = first_window();
-    while let Some(mut win) = next {
+    for mut win in windows() {
         win.make_current();
         win.buffer().make_current();
         // Skip the original window, and the ones with 'nocursorbind'.
@@ -259,7 +258,6 @@ pub fn do_check_cursorbind() {
             }
             win.w_redr_status = true;
         }
-        next = win.next();
     }
 
     set_visual_select(old_visual_select);

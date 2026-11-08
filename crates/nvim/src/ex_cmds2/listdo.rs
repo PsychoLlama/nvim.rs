@@ -279,15 +279,9 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
             ListDo::Buffers => {
                 // Remember the number of the next listed buffer, in case
                 // ":bwipe" is used or autocommands do something strange.
-                next_fnum = -1;
-                let mut bp = Buf::current().next();
-                while let Some(b) = bp {
-                    if b.b_p_bl != 0 {
-                        next_fnum = b.handle.get();
-                        break;
-                    }
-                    bp = b.next();
-                }
+                next_fnum = core::iter::successors(Buf::current().next(), |b| b.next())
+                    .find(|b| b.b_p_bl != 0)
+                    .map_or(-1, |b| b.handle.get());
             }
             ListDo::Quickfix { .. } => {}
         }

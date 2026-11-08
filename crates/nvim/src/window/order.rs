@@ -102,16 +102,11 @@ pub(crate) fn exchange(prenum: c_int) {
     let frame = cur.frame();
     let parent = frame.parent().expect("not the only window");
     let frp = if prenum != 0 {
-        let mut prenum = prenum;
-        let mut frp = parent.child();
-        while let Some(cur) = frp {
-            prenum -= 1;
-            if prenum <= 0 {
-                break;
-            }
-            frp = cur.next();
-        }
-        frp
+        // The `prenum`th child, counting from one; a count below one is the
+        // first.
+        parent
+            .children()
+            .nth(usize::try_from(prenum - 1).unwrap_or(0))
     } else {
         frame.next().or_else(|| frame.prev())
     };

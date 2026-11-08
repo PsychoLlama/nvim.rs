@@ -31,7 +31,7 @@ use crate::smsg;
 use crate::types::Failed;
 use crate::types::TypVal;
 use crate::winlayer::Win;
-use crate::winlayer::{Buf, first_buffer};
+use crate::winlayer::{Buf, buffers};
 
 /// `:doautocmd [group] {event} [fname]`, for each of the comma-separated
 /// events named.
@@ -120,11 +120,10 @@ pub fn ex_doautoall(excmd: &mut ExArg) {
     let mut did_aucmd = false;
 
     let mut retval = Ok(());
-    let mut next = first_buffer();
-    while let Some(buf) = next {
-        // Loaded buffers only, and the current one is done last. The step
-        // is at the bottom, on a buffer `bufref` has just proved this pass
-        // did not delete -- which is why this is not `buffers()`.
+    // `buffers()` steps on from a buffer only once the body is done with
+    // it, and the body stops the walk when that buffer was deleted.
+    for buf in buffers() {
+        // Loaded buffers only, and the current one is done last.
         if buf.b_ml.ml_mfp.is_some() && buf.raw() != Buf::current_raw() {
             aucmd_prepbuf(&mut aco, buf);
             let bufref = BufRef::of(buf);
@@ -148,8 +147,6 @@ pub fn ex_doautoall(excmd: &mut ExArg) {
                 break;
             }
         }
-        // `buf` survived this pass, as the `break` above ensures.
-        next = buf.next();
     }
 
     if retval.is_ok() {

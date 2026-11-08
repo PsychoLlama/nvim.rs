@@ -53,7 +53,7 @@ use crate::types::{VAR_NUMBER, VarNumber, Vv};
 use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
 
-use crate::winlayer::{Buf, WinId, buffers, first_buffer, first_tab, first_window};
+use crate::winlayer::{Buf, WinId, buffers, first_tab, first_window};
 /// Shut the process down. Every exit path ends here, including the ones that
 /// skipped the autocommands.
 ///
@@ -169,8 +169,7 @@ pub fn getout(mut exitval: c_int) -> ! {
         }
 
         // `BufUnload` for every loaded buffer.
-        let mut cur = first_buffer();
-        while let Some(buf) = cur {
+        for buf in buffers() {
             if buf.b_ml.ml_mfp.is_some() {
                 let bufref = BufRef::of(buf);
                 let name = buf.name.shown().map(XString::from_cstr);
@@ -182,7 +181,6 @@ pub fn getout(mut exitval: c_int) -> ! {
                     break;
                 }
             }
-            cur = buf.next();
         }
 
         with_autocmds_unblocked(AutoEvent::VimLeavePre);

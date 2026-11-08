@@ -107,15 +107,9 @@ fn count_list(l: ListArg, needle: &TypVal, idx: int64_t, ic: bool) -> Result<Var
         return Err(Failed);
     };
 
-    let mut n = 0;
-    let mut cur = Some(first);
-    while let Some(li) = cur {
-        if li.equals(needle, ic) {
-            n += 1;
-        }
-        cur = li.next();
-    }
-    Ok(n)
+    Ok(core::iter::successors(Some(first), |li| li.next())
+        .filter(|li| li.equals(needle, ic))
+        .fold(0, |n, _| n + 1))
 }
 
 /// How many values of `d` equal `needle`.

@@ -238,8 +238,7 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> Written {
 
     // Nothing here runs Vimscript, so the lists cannot change under the
     // walk.
-    let mut next = first_tab();
-    while let Some(mut tab) = next {
+    for mut tab in tabs() {
         let mut need_tabnext = false;
         let (tab_firstwin, tab_topframe) = if with_tabs {
             need_tabnext = Some(tab) != first_tab();
@@ -367,7 +366,6 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> Written {
         if !with_tabs {
             break;
         }
-        next = tab.next();
     }
     Ok(())
 }
@@ -419,10 +417,12 @@ fn ses_win_rec(out: &mut SessionFile, fr: FrameRef) -> Written {
     // Find the first frame that is not skipped, then create a window for
     // each one after it -- the first window is already there.
     let mut count = 0;
-    let mut frc = ses_skipframe(fr.child());
-    while let Some(current) = frc {
-        frc = ses_skipframe(current.next());
-        if frc.is_none() {
+    let mut saved = fr
+        .children()
+        .filter(|frame| frame.has_session_window())
+        .peekable();
+    while saved.next().is_some() {
+        if saved.peek().is_none() {
             break;
         }
         // Make the window as big as possible, for room to split.
@@ -441,28 +441,21 @@ fn ses_win_rec(out: &mut SessionFile, fr: FrameRef) -> Written {
     // Then recurse into each window of this column or row. A nested
     // frame's write error goes unanswered, as upstream: the next write
     // here meets it again.
-    frc = ses_skipframe(fr.child());
-    while let Some(current) = frc {
+    let mut saved = fr
+        .children()
+        .filter(|frame| frame.has_session_window())
+        .peekable();
+    while let Some(current) = saved.next() {
         let _ = ses_win_rec(out, current);
-        frc = ses_skipframe(current.next());
-        if frc.is_some() {
+        if saved.peek().is_some() {
             out.line(c"wincmd w")?;
         }
     }
     Ok(())
 }
 
-/// The first frame at or after `fr` holding a window worth saving.
-fn ses_skipframe(fr: Option<FrameRef>) -> Option<FrameRef> {
-    let mut frc = fr;
-    while let Some(current) = frc.filter(|frc| !(*frc).has_session_window()) {
-        frc = current.next();
-    }
-    frc
-}
-
 impl FrameRef {
-    /// Whether frame `fr` holds a window worth saving anywhere below it.
+    /// Whether this frame holds a window worth saving anywhere below it.
     fn has_session_window(self) -> bool {
         match self.win() {
             Some(win) => ses_do_win(win),

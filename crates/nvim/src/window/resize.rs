@@ -507,10 +507,8 @@ impl FrameRef {
     /// `frame_add_height()`. Negative `n` takes them away.
     fn add_height(self, n: c_int) {
         new_height(self, self.fr_height + n, false, false, false);
-        let mut up = self.parent();
-        while let Some(mut fr) = up {
+        for mut fr in self.ancestors() {
             fr.fr_height += n;
-            up = fr.parent();
         }
     }
 

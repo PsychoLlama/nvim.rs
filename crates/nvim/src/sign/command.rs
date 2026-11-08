@@ -66,11 +66,11 @@ pub(crate) fn sign_list_placed(rbuf: Option<Buf>, group: Option<&[u8]>) {
     let ns = group_get_ns(group);
     msg_title(gettext(c"\n--- Signs ---"));
 
-    let mut cur = match rbuf {
-        Some(buf) => Some(buf),
-        None => first_buffer(),
-    };
-    while let Some(cbuf) = cur {
+    // `rbuf` alone, or every buffer from the first.
+    let walk = core::iter::successors(rbuf.or_else(first_buffer), |buf| {
+        rbuf.is_none().then(|| buf.next()).flatten()
+    });
+    for cbuf in walk {
         if got_int.get() {
             break;
         }
@@ -89,11 +89,6 @@ pub(crate) fn sign_list_placed(rbuf: Option<Buf>, group: Option<&[u8]>) {
                 report_signs(&signs);
             }
         }
-
-        if rbuf.is_some() {
-            return;
-        }
-        cur = cbuf.next();
     }
 }
 

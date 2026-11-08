@@ -597,9 +597,8 @@ pub fn buflist_findname(ffname: &CStr) -> Option<Buf> {
 /// [`buflist_findname`] with the file id already looked up (`None` when the
 /// file does not exist). Dummy buffers do not count.
 pub(crate) fn buflist_findname_file_id(ffname: &CStr, file_id: Option<&FileID>) -> Option<Buf> {
-    buffers_back().find(|buf| {
-        !buf.b_flags.has(BufFlags::DUMMY) && !(*buf).is_other_file(ffname, Some(file_id))
-    })
+    buffers_back()
+        .find(|buf| !buf.b_flags.has(BufFlags::DUMMY) && !buf.is_other_file(ffname, Some(file_id)))
 }
 
 // ---------------------------------------------------------------------------

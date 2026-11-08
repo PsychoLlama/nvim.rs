@@ -435,15 +435,13 @@ impl FrameRef {
     fn siblings_min_width(self) -> c_int {
         let mut total = 0;
         let mut prev = self;
-        let mut up = self.parent();
-        while let Some(frp) = up {
+        for frp in self.ancestors() {
             if c_int::from(frp.fr_layout) == FR_ROW {
                 for frp2 in frp.children().filter(|frp2| *frp2 != prev) {
                     total += frp2.min_width(NextCurwin::NoWin);
                 }
             }
             prev = frp;
-            up = frp.parent();
         }
         total
     }
@@ -452,15 +450,13 @@ impl FrameRef {
     fn siblings_min_height(self) -> c_int {
         let mut total = 0;
         let mut prev = self;
-        let mut up = self.parent();
-        while let Some(frp) = up {
+        for frp in self.ancestors() {
             if c_int::from(frp.fr_layout) == FR_COL {
                 for frp2 in frp.children().filter(|frp2| *frp2 != prev) {
                     total += frp2.min_height(NextCurwin::NoWin);
                 }
             }
             prev = frp;
-            up = frp.parent();
         }
         total
     }

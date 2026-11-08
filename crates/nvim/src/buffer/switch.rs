@@ -594,14 +594,8 @@ fn locate_arm(start: c_int, dir: c_int, count: c_int, flags: c_int, unload: bool
 
     if start == DOBUF_FIRST && count != 0 {
         // find specified buffer number
-        let mut buf = from;
-        while let Some(b) = buf {
-            if b.handle == Handle::new(count) {
-                break;
-            }
-            buf = b.next();
-        }
-        return Ok(buf);
+        let wanted = Handle::new(count);
+        return Ok(core::iter::successors(from, |b| b.next()).find(|b| b.handle == wanted));
     }
 
     match from {
