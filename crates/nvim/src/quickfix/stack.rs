@@ -36,6 +36,7 @@
 )]
 
 use super::*;
+use crate::deref::deref_to_field;
 use crate::id_table::IdTable;
 use crate::memory::XString;
 use crate::quickfix::model::QfId;
@@ -90,19 +91,7 @@ pub(crate) struct Qi {
     live: Live<QfStack>,
 }
 
-impl Deref for Qi {
-    type Target = QfStack;
-
-    fn deref(&self) -> &QfStack {
-        &self.live
-    }
-}
-
-impl DerefMut for Qi {
-    fn deref_mut(&mut self) -> &mut QfStack {
-        &mut self.live
-    }
-}
+deref_to_field!(Qi => mut QfStack, live);
 
 impl QfId {
     /// The stack this id names.

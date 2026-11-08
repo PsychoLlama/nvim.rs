@@ -26,6 +26,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::deref::deref_to_field;
 use crate::ex_eval::defs::ExcId;
 use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
@@ -392,13 +393,7 @@ impl From<Vec<ApiString>> for StringArray {
     }
 }
 
-impl ::core::ops::Deref for StringArray {
-    type Target = [ApiString];
-
-    fn deref(&self) -> &[ApiString] {
-        &self.0
-    }
-}
+deref_to_field!(StringArray => [ApiString], 0);
 
 impl<'a> IntoIterator for &'a StringArray {
     type Item = &'a ApiString;

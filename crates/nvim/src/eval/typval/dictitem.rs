@@ -38,6 +38,7 @@
 )]
 
 use super::*;
+use crate::deref::deref_to_field;
 use crate::eval::vars::var_wrong_func_name_named;
 use crate::hashtab::HashTab;
 use crate::mbyte::cluster_len;
@@ -578,19 +579,7 @@ impl ScopeDictItem {
     }
 }
 
-impl ::core::ops::Deref for ScopeDictItem {
-    type Target = DictItem;
-
-    fn deref(&self) -> &DictItem {
-        &self.0
-    }
-}
-
-impl ::core::ops::DerefMut for ScopeDictItem {
-    fn deref_mut(&mut self) -> &mut DictItem {
-        &mut self.0
-    }
-}
+deref_to_field!(ScopeDictItem => mut DictItem, 0);
 
 /// A dictionary item's key: its own bytes, NUL-terminated.
 ///

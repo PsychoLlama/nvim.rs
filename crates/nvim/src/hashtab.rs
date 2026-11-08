@@ -32,6 +32,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::deref::deref_to_field;
 use crate::os::libc::size_t;
 
 /// The number of slots a table starts with, and the size it shrinks back to.
@@ -113,13 +114,7 @@ impl<E: SlotEntry> Slot<E> {
     }
 }
 
-impl<E: SlotEntry> ::core::ops::Deref for Slot<E> {
-    type Target = HashItem<E>;
-
-    fn deref(&self) -> &HashItem<E> {
-        &self.1
-    }
-}
+deref_to_field!(impl[E: SlotEntry] Slot<E> => HashItem<E>, 1);
 
 impl<E: SlotEntry> HashTab<E> {
     /// An empty table with its first slot array.

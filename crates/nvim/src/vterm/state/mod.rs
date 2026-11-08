@@ -30,10 +30,10 @@
 
 pub mod entry;
 
+use crate::deref::deref_to_field;
 use crate::narrow::as_index;
 use crate::narrow::count_as_int;
 use core::ffi::{c_int, c_long, c_uint};
-use core::ops::{Deref, DerefMut};
 
 use crate::grid::schar_from_buf;
 use crate::mbyte::GraphemeState;
@@ -375,19 +375,7 @@ pub(crate) struct StateCx<'a> {
     screen: Option<&'a mut VTermScreen>,
 }
 
-impl Deref for StateCx<'_> {
-    type Target = VTermState;
-
-    fn deref(&self) -> &VTermState {
-        self.state
-    }
-}
-
-impl DerefMut for StateCx<'_> {
-    fn deref_mut(&mut self) -> &mut VTermState {
-        self.state
-    }
-}
+deref_to_field!(StateCx<'_> => mut VTermState, state);
 
 impl<'a> StateCx<'a> {
     pub(crate) fn new(

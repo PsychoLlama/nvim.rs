@@ -16,6 +16,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::deref::deref_to_field;
 use crate::option::vars::P_TSRFU;
 use crate::optionstr::{OptString, local_or_global};
 
@@ -44,13 +45,7 @@ impl HeldCallback {
     }
 }
 
-impl ::core::ops::Deref for HeldCallback {
-    type Target = Callback;
-
-    fn deref(&self) -> &Callback {
-        &self.0
-    }
-}
+deref_to_field!(HeldCallback => Callback, 0);
 
 impl Drop for HeldCallback {
     fn drop(&mut self) {

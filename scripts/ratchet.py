@@ -2374,6 +2374,11 @@ PLACE_WRITE = re.compile(
 DEREF_MUT = re.compile(
     r"\bimpl(?:<[^>]*>)?\s+(?:::)?(?:[A-Za-z0-9_]+::)*DerefMut\s+for\s+([A-Za-z_][A-Za-z0-9_]*)"
 )
+# The same impl written by `deref::deref_to_field!(Ty => mut Target, field)`
+# (generics, if any, in a leading `impl[..]`).
+DEREF_MUT_MACRO = re.compile(
+    r"\bderef_to_field!\s*\(\s*(?:impl\[[^\]]*\]\s*)?([A-Za-z_][A-Za-z0-9_]*)[^=]*=>\s*mut\b"
+)
 # `type Op = Live<OpArg>;` — a family's name for a shared generic wrapper.
 # The scan is keyed on names, so an alias of a `DerefMut` type is one too.
 TYPE_ALIAS = re.compile(
@@ -2623,6 +2628,7 @@ def place_writes(tree):
     aliases = {}
     for masked in tree.values():
         deref_mut.update(DEREF_MUT.findall(masked))
+        deref_mut.update(DEREF_MUT_MACRO.findall(masked))
         aliases.update(TYPE_ALIAS.findall(masked))
         fn_returns(masked, returns)
     # Chase aliases to a fixed point: `Op` is a place because `Live<T>` is.
@@ -4554,6 +4560,15 @@ SELF_TEST_PLACE_WRITE = [
     ("fn a() -> *mut E {\n}\nfn f() {\n    a().x = 1;\n}\n", 0),
     # A handle newtype: `.x` reaches through to what it points at.
     ("impl DerefMut for H {}\nfn a() -> H {\n}\nfn f() {\n    a().x = 1;\n}\n", 0),
+    (
+        "deref_to_field!(H => mut E, 0);\nfn a() -> H {\n}\nfn f() {\n    a().x = 1;\n}\n",
+        0,
+    ),
+    (
+        "deref_to_field!(impl[T] H<T> => mut T, 0);\nfn a() -> H {}\nfn f() {\n    a().x = 1;\n}\n",
+        0,
+    ),
+    ("deref_to_field!(H => E, 0);\nfn a() -> H {}\nfn f() {\n    a().x = 1;\n}\n", 1),
     (
         "impl core::ops::DerefMut for H {}\nfn a() -> H {}\nfn f() {\n    a().x = 1;\n}\n",
         0,

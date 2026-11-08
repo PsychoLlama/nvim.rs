@@ -33,6 +33,7 @@ pub(crate) mod cursor_shape;
 pub mod debugger;
 pub mod decoration;
 pub(crate) mod decoration_provider;
+pub(crate) mod deref;
 pub mod diff;
 pub mod digraph;
 pub mod drawline;

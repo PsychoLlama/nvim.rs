@@ -19,6 +19,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::deref::deref_to_field;
 use crate::narrow::as_index;
 use crate::narrow::const_len_as_int;
 use crate::vterm::host::{Csi, Fragment, ParserHandler};
@@ -26,7 +27,6 @@ use crate::vterm::internal::VTermParserState;
 use crate::vterm::types::{VTerm_parser, VTermTerminator};
 use crate::vterm::vterm::{VTERM_TERMINATOR_BEL, VTERM_TERMINATOR_ST};
 use core::ffi::{CStr, c_int, c_long};
-use core::ops::{Deref, DerefMut};
 
 /// Intermediate bytes held for an escape or control sequence.
 const INTERMED_MAX: usize = 16;
@@ -125,19 +125,7 @@ struct Parser<'a, H: ParserHandler + ?Sized> {
     utf8: bool,
 }
 
-impl<H: ParserHandler + ?Sized> Deref for Parser<'_, H> {
-    type Target = VTerm_parser;
-
-    fn deref(&self) -> &VTerm_parser {
-        self.block
-    }
-}
-
-impl<H: ParserHandler + ?Sized> DerefMut for Parser<'_, H> {
-    fn deref_mut(&mut self) -> &mut VTerm_parser {
-        self.block
-    }
-}
+deref_to_field!(impl[H: ParserHandler + ?Sized] Parser<'_, H> => mut VTerm_parser, block);
 
 impl<H: ParserHandler + ?Sized> Parser<'_, H> {
     /// Whether an 8-bit C1 control byte is recognised as one.

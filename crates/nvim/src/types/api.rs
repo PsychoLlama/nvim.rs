@@ -12,6 +12,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::deref::deref_to_field;
 use crate::eval::typval::DictKey;
 use crate::message::HlMessageChunk;
 use crate::os::libc::{int64_t, size_t};
@@ -119,19 +120,7 @@ impl<'a> IntoIterator for &'a Array {
     }
 }
 
-impl ::core::ops::Deref for Array {
-    type Target = [Object];
-
-    fn deref(&self) -> &[Object] {
-        &self.0
-    }
-}
-
-impl ::core::ops::DerefMut for Array {
-    fn deref_mut(&mut self) -> &mut [Object] {
-        &mut self.0
-    }
-}
+deref_to_field!(Array => mut [Object], 0);
 
 impl ::core::fmt::Debug for Array {
     fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
@@ -213,19 +202,7 @@ impl<'a> IntoIterator for &'a ApiDict {
     }
 }
 
-impl ::core::ops::Deref for ApiDict {
-    type Target = [KeyValuePair];
-
-    fn deref(&self) -> &[KeyValuePair] {
-        &self.0
-    }
-}
-
-impl ::core::ops::DerefMut for ApiDict {
-    fn deref_mut(&mut self) -> &mut [KeyValuePair] {
-        &mut self.0
-    }
-}
+deref_to_field!(ApiDict => mut [KeyValuePair], 0);
 
 impl ::core::fmt::Debug for ApiDict {
     fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
@@ -280,19 +257,7 @@ impl DictBuilder {
     }
 }
 
-impl ::core::ops::Deref for DictBuilder {
-    type Target = Vec<KeyValuePair>;
-
-    fn deref(&self) -> &Vec<KeyValuePair> {
-        &self.0
-    }
-}
-
-impl ::core::ops::DerefMut for DictBuilder {
-    fn deref_mut(&mut self) -> &mut Vec<KeyValuePair> {
-        &mut self.0
-    }
-}
+deref_to_field!(DictBuilder => mut Vec<KeyValuePair>, 0);
 pub type ErrorType = ::core::ffi::c_int;
 /// What an [`Error`] carries, and the one value that means it carries
 /// nothing. Every module that reports an API error needs these.

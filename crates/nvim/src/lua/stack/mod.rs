@@ -99,6 +99,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::deref::deref_to_field;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::marker::PhantomData;
 use core::ptr::{self, NonNull};
@@ -938,18 +939,7 @@ impl<'a> Above<'a> {
     }
 }
 
-impl core::ops::Deref for Above<'_> {
-    type Target = Stack;
-    fn deref(&self) -> &Stack {
-        &self.stack
-    }
-}
-
-impl core::ops::DerefMut for Above<'_> {
-    fn deref_mut(&mut self) -> &mut Stack {
-        &mut self.stack
-    }
-}
+deref_to_field!(Above<'_> => mut Stack, stack);
 
 /// A view tried to drop or move a slot at or below its base: one an outer
 /// view owns, and may have lent out. Nothing safe can follow.

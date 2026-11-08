@@ -49,6 +49,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::deref::deref_to_field;
 use core::cell::UnsafeCell;
 #[cfg(debug_assertions)]
 use std::sync::atomic::AtomicUsize;
@@ -652,14 +653,7 @@ impl<T> ConstTable<T> {
     }
 }
 
-impl<T> core::ops::Deref for ConstTable<T> {
-    type Target = T;
-
-    #[inline(always)]
-    fn deref(&self) -> &T {
-        &self.0
-    }
-}
+deref_to_field!(impl[T] ConstTable<T> => T, 0);
 
 /// Armed once [`init_main_thread`] runs; false in processes that never call
 /// it (unit tests FFI-loading the symbols, `.init_array` constructors,

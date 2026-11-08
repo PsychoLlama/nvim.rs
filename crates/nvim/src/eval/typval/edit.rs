@@ -14,6 +14,7 @@
 )]
 
 #[cfg(debug_assertions)]
+use crate::deref::deref_to_field;
 use ::core::ptr::NonNull;
 
 /// A writable borrow of a value object, taken through a shared handle: what
@@ -72,21 +73,7 @@ impl<'a, T> Edit<'a, T> {
     }
 }
 
-impl<T> ::core::ops::Deref for Edit<'_, T> {
-    type Target = T;
-
-    #[inline(always)]
-    fn deref(&self) -> &T {
-        self.target
-    }
-}
-
-impl<T> ::core::ops::DerefMut for Edit<'_, T> {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut T {
-        self.target
-    }
-}
+deref_to_field!(impl[T] Edit<'_, T> => mut T, target);
 
 /// An [`Edit`]'s record in the debug builds' loan table: the object's
 /// address, given back when the edit goes.
