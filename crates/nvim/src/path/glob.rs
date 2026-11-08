@@ -30,8 +30,8 @@ use crate::guard::{Depth, Suppress};
 use crate::mbyte::{char_at, cluster_len};
 use crate::os::fs::{link_exists, path_exists};
 use crate::path::MAXPATHL;
+use crate::regexp::RegMatch;
 use crate::regexp::{RE_MAGIC, RE_NOBREAK};
-use crate::types::RegMatch;
 
 /// How deep a `**` may recurse. Upstream's limit, and the reason a pattern
 /// over a symlink loop terminates.

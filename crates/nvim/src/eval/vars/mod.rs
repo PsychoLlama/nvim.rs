@@ -68,6 +68,7 @@ use crate::options::{kOptCharconvert, kOptDiffexpr, kOptInvalid, kOptPatchexpr, 
 use crate::os::cshim::gettext;
 use crate::os::libc::{int64_t, ptrdiff_t, size_t, uint32_t};
 use crate::pos::MAXCOL;
+use crate::register::defs::GRegFlags;
 use crate::runtime::state::current_sctx;
 use crate::runtime::{
     new_script_item, script_autoload_named, script_count, script_id_valid, with_script_item,
@@ -75,13 +76,12 @@ use crate::runtime::{
 use crate::search::set_search_direction;
 use crate::search::state::no_hlsearch;
 use crate::types::{
-    BoolVarValue, Dict, DictItem, EvalFuncData, ExArg, Expand, GRegFlags, List, Partial,
-    ScopeDictItem, ScopeType, ScriptId, ScriptVar, SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL,
-    VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE,
-    VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT,
-    VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, VarType, VimVarFlags, Vv, kBoolVarFalse, kBoolVarTrue, kListLenUnknown,
-    kSpecialVarNull,
+    BoolVarValue, Dict, DictItem, EvalFuncData, ExArg, Expand, List, Partial, ScopeDictItem,
+    ScopeType, ScriptId, ScriptVar, SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE,
+    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL,
+    VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC,
+    VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType,
+    VimVarFlags, Vv, kBoolVarFalse, kBoolVarTrue, kListLenUnknown, kSpecialVarNull,
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};

@@ -32,8 +32,8 @@ use crate::message_fmt::{msg_bytes, report_msg};
 use crate::narrow::len_as_integer;
 use crate::ops::{block_def_of, charwise_block_def};
 use crate::option::vars::P_SEL;
+use crate::register::defs::RegLines;
 use crate::tr_plural;
-use crate::types::RegLines;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_ulong};
 

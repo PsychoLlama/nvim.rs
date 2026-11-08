@@ -32,16 +32,18 @@ use crate::getchar::{
 use crate::help::open_help;
 use crate::message::state::did_emsg;
 use crate::message::{msg, msg_ext_set_trigger};
+use crate::normal::defs::{CmdArg, Outcome};
 use crate::normal::{
     check_clear_op, check_clear_op_quit, clear_op, clear_op_beep, end_visual_mode, kMTCharWise,
     nv_left, nv_operator, nv_pcmark, set_visual_select, v_visop, visual_active, visual_select,
 };
+use crate::ops::OpType;
 use crate::options::kOptBoFlagEsc;
 use crate::os::cshim::gettext;
 use crate::state::mode::{finish_op, restart_VIsual_select, restart_edit};
 use crate::state::{may_trigger_modechanged, state_handle_k_event};
 use crate::syntax::{cur_syn_block, syn_stack_free_all};
-use crate::types::{CmdArg, LineNr, NUL, OpType, Outcome};
+use crate::types::{LineNr, NUL};
 use crate::ui::vim_beep;
 use crate::undo::any_buf_is_changed;
 use crate::window::do_window;

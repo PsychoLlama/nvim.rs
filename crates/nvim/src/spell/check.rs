@@ -49,10 +49,11 @@ use crate::message::e_no_spell;
 use crate::message::emsg;
 use crate::options::kOptSpoFlagCamel;
 use crate::os::cshim::gettext;
+use crate::regexp::RegMatch;
 use crate::regexp::vim_regexec;
 use crate::spell::LangId;
 use crate::spellsuggest::spell_suggest_list;
-use crate::types::{ColNr, LineNr, RegMatch};
+use crate::types::{ColNr, LineNr};
 
 use super::chartab::{casefold_len, spell_iswordp, spell_iswordp_nmw, step, tail};
 use super::lookup::{find_prefix, find_word};

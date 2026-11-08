@@ -16,8 +16,8 @@
 use crate::mbyte::cluster_len;
 use crate::option::SavedCpo;
 use crate::option::vars::p_ic;
+use crate::regexp::RegMatch;
 use crate::regexp::{RE_MAGIC, RE_STRING, regsub_to_vec, vim_regexec_nl};
-use crate::types::RegMatch;
 use crate::types::TypVal;
 use core::ffi::CStr;
 

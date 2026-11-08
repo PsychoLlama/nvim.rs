@@ -52,8 +52,8 @@ use crate::os::libc::uint64_t;
 use crate::path::full_name_save;
 use crate::pos::MAXLNUM;
 use crate::regexp::RE_MAGIC;
+use crate::regexp::RegMatch;
 use crate::semsg;
-use crate::types::RegMatch;
 use crate::types::{
     Buffer, Callback, ColNr, Failed, Handle, LineNr, OptInt, Pos, Timestamp, VAR_SCOPE, WinInfo,
 };

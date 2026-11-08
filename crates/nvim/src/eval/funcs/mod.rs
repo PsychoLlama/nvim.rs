@@ -18,8 +18,9 @@ use crate::channel::defs::ChannelPart;
 use crate::env::XDGVarType;
 use crate::event::objects::ProcType;
 use crate::lua::executor::LuaRetMode;
+use crate::normal::defs::MotionType;
 use crate::os::libc::uint64_t;
-use crate::types::{GRegFlags, MotionType};
+use crate::register::defs::GRegFlags;
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash
 /// lookup over their names. Regenerate with `just apigen`.

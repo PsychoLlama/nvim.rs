@@ -84,6 +84,7 @@ use crate::path::{
     path_shorten_fname, path_tail, path_with_url, vim_full_name,
 };
 use crate::pos::MAXLNUM;
+use crate::regexp::RegMatch;
 use crate::regexp::vim_regexec;
 use crate::sha256::Sha256;
 use crate::shada::check_marks_read;
@@ -92,7 +93,7 @@ use crate::state::mode::{State, exmode_active, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{FmtArg, formatted};
 use crate::types::AutoEvent;
-use crate::types::{AcoSave, ExArg, Failed, IOSIZE, LineNr, RegMatch, ScriptId};
+use crate::types::{AcoSave, ExArg, Failed, IOSIZE, LineNr, ScriptId};
 use crate::ui::state::kUIMessages;
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{

@@ -41,6 +41,7 @@ use crate::indent_c::{cindent_on, get_c_indent};
 use crate::mark::mark_col_adjust;
 use crate::memline::Lines;
 use crate::message::msgmore;
+use crate::normal::defs::OpArg;
 use crate::ops::do_join;
 use crate::option::defs::OptionSetFlags;
 use crate::option::vars::{P_SMD, p_smd};
@@ -52,7 +53,7 @@ use crate::os::libc::size_t;
 use crate::search::check_linecomment;
 use crate::state::mode::{State, saved_cursor};
 use crate::state::{MODE_INSERT, MODE_NORMAL};
-use crate::types::{CmdModFlags, ColNr, LineNr, NUL, OpArg, VarNumber, Vv};
+use crate::types::{CmdModFlags, ColNr, LineNr, NUL, VarNumber, Vv};
 use crate::ui::ui_cursor_shape;
 use crate::undo::{u_save, u_save_cursor};
 

@@ -57,8 +57,8 @@ use crate::path::{
     ExpandFlags, expand_wildcards, fix_fname, full_name_save, gen_expand_wildcards, path_fnamecmp,
     path_full_compare,
 };
+use crate::regexp::RegMatch;
 use crate::regexp::{RE_MAGIC, vim_regexec};
-use crate::types::RegMatch;
 use crate::types::{Failed, *};
 use crate::ui::state::Columns;
 use crate::undo::buf_is_changed;

@@ -40,7 +40,8 @@ use std::time::{Duration, Instant};
 use neovim::eval::eval_to_string;
 use neovim::ex_docmd::do_cmdline_cmd;
 use neovim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regexec_multi};
-use neovim::types::{LineNr, RegMMatch, RegMatch};
+use neovim::regexp::{RegMMatch, RegMatch};
+use neovim::types::LineNr;
 use neovim::winlayer::Buf;
 
 use crate::support::{Sandbox, cstr};

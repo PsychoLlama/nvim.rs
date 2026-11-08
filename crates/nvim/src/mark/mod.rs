@@ -37,6 +37,7 @@ use crate::mbyte::{char_at, head_off};
 use crate::memory::XString;
 use crate::message::{e_markinval, e_marknotset, e_umark};
 use crate::r#move::set_topline;
+use crate::normal::defs::MotionType;
 use crate::options::kOptJopFlagStack;
 use crate::os::fs::dirname_within;
 use crate::path::MAXPATHL;

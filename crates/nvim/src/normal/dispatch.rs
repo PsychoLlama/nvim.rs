@@ -45,6 +45,7 @@ use crate::mark::checkpcmark;
 use crate::mbyte::GraphemeState;
 use crate::mbyte::{encode_char, iscomposing, utf8len_tab};
 use crate::message::state::{msg_col, msg_didout, msg_nowait};
+use crate::normal::defs::{CmdArg, Outcome};
 use crate::normal::{
     B_IMODE_LMAP, GRAPHEME_STATE_INIT, NV_CMDS, NV_CMDS_SIZE, NormalState, NvFlags, add_to_showcmd,
     check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd, do_check_scrollbind,
@@ -52,6 +53,7 @@ use crate::normal::{
     normal_need_redraw_mode_message, normal_redraw_mode_message, nv_cmds, set_vcount_ca,
     set_visual_select, start_selection, visual_active, visual_select,
 };
+use crate::ops::OpType;
 use crate::ops::{Op, do_pending_operator, get_op_type};
 use crate::option::defs::CpoFlag;
 use crate::option::vars::{P_LANGMAP, fdo_flags, p_lrm, p_tm, p_ttm};
@@ -67,7 +69,7 @@ use crate::state::{
     get_real_state, may_trigger_modechanged,
 };
 use crate::types::Key;
-use crate::types::{CmdArg, OpType, OptInt, Outcome};
+use crate::types::OptInt;
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};

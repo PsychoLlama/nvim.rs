@@ -36,9 +36,9 @@ use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::c_cluster_len;
 use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_int;
+use crate::register::defs::RegLines;
 use crate::semsg;
 use crate::types::Key;
-use crate::types::RegLines;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};
 

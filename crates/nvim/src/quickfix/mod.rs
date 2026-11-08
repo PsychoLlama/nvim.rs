@@ -100,6 +100,7 @@ use crate::pos::MAXLNUM;
 use crate::quickfix::model::{
     DirStack, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, QfEntry, QfList, QfListType, QfStack,
 };
+use crate::regexp::{RegMMatch, RegMatch};
 use crate::search::{BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE};
 use crate::state::mode::restart_edit;
 use crate::tr;
@@ -108,7 +109,7 @@ use crate::types::Failed;
 use crate::types::TAB;
 use crate::types::{
     Callback, ColNr, Dict, Direction, EvalFuncData, ExArg, LineNr, List, ListRef, OptInt, Pos,
-    RegMMatch, RegMatch, ScriptId, TypVal, VarNumber, VarType,
+    ScriptId, TypVal, VarNumber, VarType,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_flush;

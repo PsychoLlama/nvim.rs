@@ -29,6 +29,7 @@ use crate::narrow::as_index;
 use crate::narrow::len_as_int;
 use crate::narrow::number_as_int;
 use crate::option::defs::FoFlag;
+use crate::regexp::RegMatch;
 use crate::semsg;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int, c_uint};

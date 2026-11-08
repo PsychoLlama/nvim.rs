@@ -16,6 +16,7 @@ use crate::eval::typval::{NumBuf, dict_get_number, dict_len, list_iter, tv_list_
 use crate::eval::vars::with_vim_var_str;
 use crate::getchar::state::{reg_executing, reg_recorded, reg_recording};
 use crate::memory::ThinCString;
+use crate::normal::defs::MotionType;
 use crate::register::{
     RegName, format_reg_type, get_reg_contents_list, get_reg_contents_owned, get_reg_type,
     get_register_name, get_unname_register, op_reg_set_previous, point_unnamed_at,
@@ -23,8 +24,8 @@ use crate::register::{
 };
 use crate::semsg;
 use crate::types::{
-    BoolVarValue, Dict, EvalFuncData, Failed, Key, MotionType, TypVal, VAR_DICT, VAR_LIST, Vv,
-    kBoolVarFalse, kBoolVarTrue,
+    BoolVarValue, Dict, EvalFuncData, Failed, Key, TypVal, VAR_DICT, VAR_LIST, Vv, kBoolVarFalse,
+    kBoolVarTrue,
 };
 use core::ffi::{CStr, c_int};
 

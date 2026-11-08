@@ -73,6 +73,7 @@ use crate::message::{
     msg_str, msg_str_hl, msg_title, msgmore,
 };
 use crate::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
+use crate::normal::defs::{MotionType, OpArg};
 use crate::ops::{adjust_cursor_eol, get_op_char};
 use crate::option::get_ve_flags;
 use crate::option::vars::{p_ch, p_report};
@@ -85,6 +86,10 @@ use crate::plines::CharsizeArg;
 use crate::plines::{getvcol, win_charsize};
 use crate::pos::MAXLNUM;
 use crate::regexp::RE_SEARCH;
+use crate::register::defs::{
+    BlockDef, GRegFlags, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE,
+    PUT_LINE_FORWARD, PUT_LINE_SPLIT, PutFlags, YankReg,
+};
 use crate::search::{BACKWARD, FORWARD, last_search_pat, set_last_search_pat};
 use crate::state::REPLACE_FLAG;
 use crate::state::mode::{State, restart_edit};
@@ -96,10 +101,8 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    ApiString, BlockDef, CmdModFlags, ColNr, Direction, ExArg, GRegFlags, HashTab, LineNr,
-    MotionType, OpArg, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE,
-    PUT_LINE_FORWARD, PUT_LINE_SPLIT, Pos, PutFlags, SaveVEvent, VarLock, YankReg, kBoolVarFalse,
-    kBoolVarTrue,
+    ApiString, CmdModFlags, ColNr, Direction, ExArg, HashTab, LineNr, Pos, SaveVEvent, VarLock,
+    kBoolVarFalse, kBoolVarTrue,
 };
 use crate::ui::state::Columns;
 use crate::ui::state::kUIMessages;
@@ -108,6 +111,7 @@ use crate::undo::{u_save, u_save_cursor};
 
 // The carve of the transpiled module; see each child's docs.
 mod contents;
+pub mod defs;
 mod display;
 mod exec;
 mod put;

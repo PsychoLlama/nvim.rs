@@ -38,9 +38,11 @@ use crate::types::NL;
 use crate::lua::executor::LuaRetMode;
 use crate::mark::defs::MarkGet;
 pub(crate) use crate::message::e_invalblob;
+use crate::normal::defs::MotionType;
 use crate::os::libc::uint64_t;
+use crate::register::defs::GRegFlags;
 use crate::registry::SlotTable;
-use crate::types::{ExprType, Failed, GRegFlags, MotionType, Timer};
+use crate::types::{ExprType, Failed, Timer};
 use core::ffi::{CStr, c_int, c_long, c_uint, c_ulong};
 
 mod entry;

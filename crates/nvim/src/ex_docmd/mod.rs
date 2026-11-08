@@ -65,6 +65,7 @@ use crate::message::ex_messages;
 use crate::message::{
     e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors, e_norange, e_zerocount,
 };
+use crate::normal::defs::MotionType;
 use crate::option::ex_set;
 use crate::os::lang::ex_language;
 use crate::os::libc::{uint8_t, uint16_t};
@@ -73,6 +74,7 @@ use crate::quickfix::{
     ex_cbelow, ex_cbottom, ex_cbuffer, ex_cc, ex_cclose, ex_cexpr, ex_cfile, ex_cnext, ex_copen,
     ex_cwindow, ex_helpgrep, ex_make, ex_vimgrep, qf_age, qf_history, qf_list,
 };
+use crate::regexp::OptMagic;
 use crate::register::ex_display;
 use crate::runtime::{
     ex_finish, ex_options, ex_packadd, ex_packloadall, ex_runtime, ex_scriptencoding,
@@ -87,7 +89,7 @@ use crate::tag::do_tags;
 use crate::types::ExcId;
 use crate::types::{
     Callback, CdCause, CmdAddr, Direction, DoBufStart, EStackArg, EStackType, ExArg, ExArgt,
-    Handle, LineNr, MotionType, OptMagic,
+    Handle, LineNr,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};

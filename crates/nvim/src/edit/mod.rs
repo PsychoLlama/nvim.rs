@@ -157,6 +157,7 @@ use crate::plines::{
 use crate::popupmenu::state::pum_want;
 use crate::popupmenu::{pum_check_clear, pum_ext_want_done, pum_visible};
 use crate::pos::{MAXCOL, equalpos};
+use crate::register::defs::{PUT_CURSEND, PUT_FIXINDENT};
 use crate::register::{
     do_put, get_expr_register, get_yank_register, insert_reg, is_literal_register, register_key,
     register_name, valid_yank_reg,
@@ -182,10 +183,7 @@ use crate::textformat::{
 use crate::textobject::{bck_word, fwd_word};
 use crate::types::AutoEvent;
 use crate::types::Key;
-use crate::types::{
-    AcoSave, ApiString, CmdModFlags, ColNr, LineNr, OptInt, PUT_CURSEND, PUT_FIXINDENT, Pos,
-    ScreenChar, Vv,
-};
+use crate::types::{AcoSave, ApiString, CmdModFlags, ColNr, LineNr, OptInt, Pos, ScreenChar, Vv};
 use crate::ui::state::kUIMessages;
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::u_sync_once;

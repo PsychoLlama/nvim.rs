@@ -34,10 +34,12 @@ use crate::mbyte::cluster_len;
 use crate::message::state::msg_silent;
 use crate::mouse::setmouse;
 use crate::mouse::state::mouse_dragging;
+use crate::normal::defs::{CmdArg, Outcome};
 use crate::normal::{
     TAB, VIsual_mode_orig, clear_op_beep, may_clear_cmdline, nv_down, nv_g_cmd, nv_operator,
     nv_right,
 };
+use crate::ops::OpType;
 use crate::ops::adjust_cursor_eol;
 use crate::option::get_ve_flags;
 use crate::option::vars::{P_SEL, p_slm, p_smd};
@@ -52,7 +54,7 @@ use crate::state::{may_trigger_modechanged, virtual_active};
 use crate::textobject::{
     current_block, current_par, current_quote, current_sent, current_tagblock, current_word,
 };
-use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType, Outcome, Pos};
+use crate::types::{ColNr, LineNr, NUL, Pos};
 use core::ffi::c_int;
 
 use crate::keycodes::Ctrl_V;

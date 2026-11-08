@@ -88,6 +88,7 @@ use crate::r#move::{changed_window_setting, update_topline, validate_cursor};
 use crate::mpack::typedefs::mpack_token_type_t;
 use crate::msgpack_rpc::channel::rpc_set_client_info;
 use crate::msgpack_rpc::unpacker::unpack;
+use crate::normal::defs::MotionType;
 use crate::normal::reset_visual_and_resel;
 use crate::option::defs::OptVal;
 use crate::option::vars::{P_LZ, p_cpo, p_lz};
@@ -98,6 +99,7 @@ use crate::os::input::{input_blocking, input_enqueue, input_enqueue_mouse, input
 use crate::os::libc::{int64_t, size_t, uint16_t, uint64_t};
 use crate::os::proc::os_proc_children;
 use crate::popupmenu::{pum_ext_select_item, pum_set_info};
+use crate::register::defs::YankReg;
 use crate::register::{do_put, finish_yankreg_from_object, prepare_yankreg_from_object};
 use crate::runtime::{
     RuntimeOpts, do_in_runtimepath_visit, do_source, get_lib_dir, runtime_get_named,
@@ -116,9 +118,8 @@ use crate::terminal::{
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, Context, Error, Float, Handle, Integer,
-    LineNr, LuaRef, MessageType, MotionType, Object, ScreenChar, ScriptId, TabpageHandle,
-    VarNumber, Vv, WindowHandle, YankReg, kCdScopeGlobal, kErrorTypeException,
-    kErrorTypeValidation, kObjectTypeString,
+    LineNr, LuaRef, MessageType, Object, ScreenChar, ScriptId, TabpageHandle, VarNumber, Vv,
+    WindowHandle, kCdScopeGlobal, kErrorTypeException, kErrorTypeValidation, kObjectTypeString,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};

@@ -29,10 +29,12 @@ use crate::guard::Suppress;
 use crate::mark::setpcmark;
 use crate::memory::XString;
 use crate::message::emsg;
+use crate::normal::defs::CmdArg;
 use crate::normal::{
     FIND_IDENT, INT_MAX, SPELL_ADD_BAD, SPELL_ADD_GOOD, check_clear_op, clear_op_beep,
     get_visual_text, ident_under_cursor, nv_operator, nv_put, read_command_char, visual_active,
 };
+use crate::ops::OpType;
 use crate::option::get_sidescrolloff_value;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
@@ -41,7 +43,7 @@ use crate::spell::{SMT_ALL, spell_move_to};
 use crate::spellfile::spell_add_word;
 use crate::spellsuggest::spell_suggest;
 use crate::state::mode::finish_op;
-use crate::types::{CmdArg, ColNr, Failed, LineNr, OpType, OptInt};
+use crate::types::{ColNr, Failed, LineNr, OptInt};
 use crate::window::{set_fraction, win_setheight};
 use core::ffi::c_int;
 

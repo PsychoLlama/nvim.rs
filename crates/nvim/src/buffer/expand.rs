@@ -30,8 +30,8 @@ use crate::cmdexpand::cmdline_fuzzy_complete;
 use crate::diff::diff_mode_buf;
 use crate::fuzzy::fuzzy_match_str;
 use crate::option::vars::{p_fic, p_wic};
+use crate::regexp::RegMatch;
 use crate::regexp::{RE_MAGIC, vim_regexec};
-use crate::types::RegMatch;
 use crate::winlayer::{self, Buf, Win, buffers};
 
 fn current_win() -> Win {

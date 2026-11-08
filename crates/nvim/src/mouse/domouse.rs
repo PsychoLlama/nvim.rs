@@ -59,6 +59,7 @@ use crate::normal::{
 use crate::ops::Op;
 use crate::option::vars::p_smd;
 use crate::pos::{equalpos, lt};
+use crate::register::defs::{PUT_CURSEND, PUT_FIXINDENT};
 use crate::register::{RegName, do_put, insert_reg, register_key, yank_register_mline};
 use crate::search::{FORWARD, findmatch};
 use crate::state::mode::{State, VIsual_reselect, restart_edit, where_paste_started};
@@ -67,7 +68,7 @@ use crate::statusline::{
     kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch,
 };
 use crate::types::Key;
-use crate::types::{Direction, NUL, PUT_CURSEND, PUT_FIXINDENT};
+use crate::types::{Direction, NUL};
 use crate::ui::MOUSE_VISUAL;
 use crate::ui::state::Columns;
 use crate::ui::ui_mouse_has;

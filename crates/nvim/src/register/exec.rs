@@ -27,8 +27,8 @@
 use crate::cstr::{self, until_nul};
 use crate::getchar::Remap;
 use crate::mbyte::char_count;
+use crate::register::defs::RegLines;
 use crate::types::Key;
-use crate::types::RegLines;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::c_int;

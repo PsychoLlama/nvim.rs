@@ -27,8 +27,8 @@ use super::*;
 use crate::fileio::file_pat_to_regpat;
 use crate::mbyte::{cluster_len, head_off};
 use crate::os::fs::{current_dir, dirname_text};
+use crate::regexp::RegMatch;
 use crate::regexp::{RE_MAGIC, RE_STRING};
-use crate::types::RegMatch;
 
 /// Shorten the directory part of a name in place, keeping `trim_len`
 /// characters of each component: `"~/foo/../.bar/fname"` with a `trim_len`

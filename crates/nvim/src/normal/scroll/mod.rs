@@ -24,6 +24,7 @@ use crate::drawscreen::{UPD_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::getchar::state::mod_mask;
 use crate::global_cell::GlobalCell;
+use crate::normal::defs::CmdArg;
 use crate::normal::{
     check_clear_op, check_clear_op_quit, clear_op_beep, set_visual_active, set_visual_select,
     visual_active, visual_select,
@@ -31,7 +32,7 @@ use crate::normal::{
 use crate::option::vars::p_sbo;
 use crate::plines::plines_m_win_fill;
 use crate::state::mode::did_syncbind;
-use crate::types::{CmdArg, ColNr, Direction, LineNr};
+use crate::types::{ColNr, Direction, LineNr};
 use crate::window::goto_tabpage;
 use core::ffi::c_int;
 

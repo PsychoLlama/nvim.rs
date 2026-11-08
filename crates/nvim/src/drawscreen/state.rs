@@ -27,7 +27,8 @@ use crate::drawline::WinExtmark;
 use crate::global_cell::GlobalCell;
 /// Exported by name for the FFI spec, so the cell lives in the harness.
 pub use crate::harness::display_tick;
-use crate::types::{ColNr, LPos, LineNr, MatchState, RegMMatch};
+use crate::regexp::RegMMatch;
+use crate::types::{ColNr, LPos, LineNr, MatchState};
 use core::ffi::c_int;
 
 /// The `ui_watched` extmarks the redraw in progress has passed positions for.

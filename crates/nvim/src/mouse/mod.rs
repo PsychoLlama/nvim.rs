@@ -50,6 +50,7 @@ use crate::grid::grid_adjust;
 use crate::mbyte::{c_cluster_len, char_at, class_of, cluster_len, utf8len_tab};
 use crate::mouse::state::{mouse_col, mouse_row};
 use crate::narrow::len_as_int;
+use crate::normal::defs::{CmdArg, MotionType};
 use crate::normal::sel_exclusive;
 use crate::optionstr::OptString;
 use crate::plines::{getvcols, win_chartabsize};
@@ -58,7 +59,7 @@ use crate::state::virtual_active;
 use crate::statusline::defs::{ClickLine, StlClickDefinition};
 use crate::statusline::state::tab_page_click_defs;
 use crate::statusline::stl_connected;
-use crate::types::{CmdArg, ColNr, EvalFuncData, LineNr, MotionType, NUL, Pos, TypVal, VarNumber};
+use crate::types::{ColNr, EvalFuncData, LineNr, NUL, Pos, TypVal, VarNumber};
 use crate::ui::{ui_check_mouse, ui_cursor_shape};
 use crate::window::{
     self, find_tabpage, tabpage_move, win_drag_status_line, win_drag_vsep_line, win_enter,

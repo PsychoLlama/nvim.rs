@@ -37,6 +37,7 @@ use crate::mbyte::{cluster_len, head_off};
 use crate::memline::Lines;
 use crate::message::e_noident;
 use crate::message::emsg;
+use crate::normal::defs::CmdArg;
 use crate::normal::{
     FIND_IDENT, FIND_STRING, HIST_SEARCH, VSE_NONE, check_clear_op_quit,
     check_text_or_curbuf_locked, clear_op, get_visual_text, normal_search, visual_active,
@@ -51,7 +52,7 @@ use crate::state::mode::restart_edit;
 use crate::strings::shellescape;
 use crate::tag::state::g_tag_at_cursor;
 use crate::tag::{TagCmd, do_tag};
-use crate::types::{CmdArg, ColNr, Failed, LineNr};
+use crate::types::{ColNr, Failed, LineNr};
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
 use core::ffi::{CStr, c_int};

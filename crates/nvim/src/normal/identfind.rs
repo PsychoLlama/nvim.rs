@@ -34,6 +34,7 @@ use crate::message::e_noident;
 use crate::message::state::msg_silent;
 use crate::message::{emsg, messaging};
 use crate::normal::{FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD, clear_op_beep};
+use crate::ops::OpType;
 use crate::option::defs::ShmFlag;
 use crate::option::shortmess;
 use crate::option::vars::{P_SCS, P_WS, fdo_flags, p_scs, p_ws};
@@ -44,7 +45,7 @@ use crate::pos::clearpos;
 use crate::regexp::RE_LAST;
 use crate::search::{BACKWARD, FORWARD, SEARCH_START, findmatchlimit, reset_search_dir, searchit};
 use crate::textobject::findpar;
-use crate::types::{ColNr, LineNr, OpType, Pos};
+use crate::types::{ColNr, LineNr, Pos};
 use core::ffi::{CStr, c_int, c_uint};
 
 /// Whether the character at `col` of `line` continues a `FIND_EVAL`

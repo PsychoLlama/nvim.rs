@@ -59,6 +59,7 @@ use crate::message::{
 };
 use crate::mouse::setmouse;
 use crate::r#move::validate_cursor;
+use crate::normal::defs::{CmdArg, MotionType, OpArg};
 use crate::normal::may_start_select;
 use crate::option::vars::{
     P_WS, fdo_flags, p_hls, p_ic, p_js, p_mat, p_msc, p_ri, p_scs, p_verbose, p_ws,
@@ -77,6 +78,7 @@ use crate::regexp::{
     Refused, skip_regexp_copy, skip_regexp_in_place, skip_regexp_magic, vim_regcomp,
     vim_regcomp_ext, vim_regexec, vim_regexec_multi,
 };
+use crate::regexp::{RegMMatch, RegMatch};
 use crate::search::state::{SearchItArg, SearchOffset};
 use crate::search::state::{
     no_hlsearch, no_smartcase, search_match_endcol, search_match_lines, searchcmdlen,
@@ -88,8 +90,7 @@ use crate::tag::state::g_do_tagpreview;
 use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::{
-    CmdArg, ColNr, Dict, Direction, EvalFuncData, LPos, LineNr, MotionType, OpArg, Pos, ProfTime,
-    RegMMatch, RegMatch, TypVal, VarNumber,
+    ColNr, Dict, Direction, EvalFuncData, LPos, LineNr, Pos, ProfTime, TypVal, VarNumber,
 };
 use crate::ui::state::kUIMessages;
 use crate::ui::state::{Columns, Rows};

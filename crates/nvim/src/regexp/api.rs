@@ -43,7 +43,8 @@ use crate::message::{emsg, msg_str, verbose_enter, verbose_leave};
 use crate::option::vars::{P_RE, p_re, p_verbose};
 use crate::os::cshim::gettext;
 use crate::regexp::{CompileError, Engine, RE_AUTO, REX_SET, Refused};
-use crate::types::{ColNr, LPos, LineNr, OptInt, ProfTime, RE_GROUPS, RegMMatch, RegMatch};
+use crate::regexp::{RE_GROUPS, RegMMatch, RegMatch};
+use crate::types::{ColNr, LPos, LineNr, OptInt, ProfTime};
 
 /// The first line of the last buffer match, which upstream's `rex` kept
 /// after the match was over: a string match never set it, so `\%'m` in one

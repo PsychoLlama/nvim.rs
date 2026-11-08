@@ -34,7 +34,8 @@ use core::ffi::c_int;
 use super::{RegSubMatch, can_f_submatch, rsm};
 use crate::eval::typval::{ListRef, SL_SIZE, tv_list_alloc};
 use crate::memline::Lines;
-use crate::types::{ColNr, LPos, LineNr, ListItem, RegMMatch, RegMatch, TypVal, UserFunc, VarLock};
+use crate::regexp::{RegMMatch, RegMatch};
+use crate::types::{ColNr, LPos, LineNr, ListItem, TypVal, UserFunc, VarLock};
 use crate::winlayer::Buf;
 
 impl RegSubMatch {

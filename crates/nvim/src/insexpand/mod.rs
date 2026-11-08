@@ -87,6 +87,7 @@ use crate::popupmenu::{
     pum_clear, pum_display, pum_get_height, pum_set_event_info, pum_undisplay, pum_visible,
 };
 use crate::pos::{MAXCOL, MAXLNUM, equalpos};
+use crate::regexp::RegMatch;
 use crate::regexp::{RE_LAST, RE_MAGIC, vim_regcomp, vim_regexec};
 use crate::register::{NUM_REGISTERS, copy_register, get_register_name, valid_yank_reg};
 use crate::search::{
@@ -107,7 +108,7 @@ use crate::tag::state::g_tag_at_cursor;
 use crate::textformat::auto_format;
 use crate::types::{
     ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand, HashTab,
-    LineNr, List, OptInt, Pos, RegMatch, SaveVEvent, TypVal, VarNumber, Vv,
+    LineNr, List, OptInt, Pos, SaveVEvent, TypVal, VarNumber, Vv,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;

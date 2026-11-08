@@ -67,13 +67,14 @@ use crate::message::{e_autocmd_close, e_cmdwin, e_noalt, e_noroom, emsg, msg};
 use crate::message::{
     e_not_allowed_to_change_window_layout_in_this_autocmd, e_winfixbuf_cannot_go_to_buffer,
 };
+use crate::normal::defs::MotionType;
 use crate::option::vars::swb_flags;
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::os::cshim::gettext;
 use crate::terminal::buf_terminal_check_size;
 use crate::types::Failed;
 use crate::types::{
-    CdCause, Direction, DoBufStart, Error, Handle, MotionType, OptInt, Window, kErrorTypeException,
+    CdCause, Direction, DoBufStart, Error, Handle, OptInt, Window, kErrorTypeException,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};

@@ -47,10 +47,10 @@ use crate::narrow::number_as_int;
 use crate::option::vars::p_hi;
 use crate::os::cshim::gettext;
 use crate::os::time::os_time;
+use crate::regexp::RegMatch;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regexec};
 use crate::shada::ShadaExtra;
 use crate::tr;
-use crate::types::RegMatch;
 use crate::types::{
     CmdModFlags, EvalFuncData, ExArg, Expand, IOSIZE, Timestamp, TypVal, VAR_NUMBER, VarNumber,
 };

@@ -58,6 +58,7 @@ use crate::message::{emsg, iemsg};
 use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
 use crate::mouse::{MousePos, comp_pos, find_win_inner, is_mouse_key};
 use crate::r#move::validate_cursor;
+use crate::normal::defs::{MotionType, OpArg};
 use crate::normal::{add_to_showcmd, normal_cmd, pop_showcmd, push_showcmd};
 use crate::option::vars::{
     p_fs, p_lrm, p_lz, p_mmd, p_paste, p_sc, p_smd, p_timeout, p_tm, p_ttimeout, p_ttm, p_uc,
@@ -76,8 +77,7 @@ use crate::state::{
     state_no_longer_safe,
 };
 use crate::types::{
-    ApiString, Array, ColNr, Error, EvalFuncData, Integer, LuaRef, MotionType, OpArg, OptInt,
-    TypVal, VarNumber, Vv,
+    ApiString, Array, ColNr, Error, EvalFuncData, Integer, LuaRef, OptInt, TypVal, VarNumber, Vv,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;

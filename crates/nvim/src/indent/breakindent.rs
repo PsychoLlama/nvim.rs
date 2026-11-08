@@ -11,6 +11,7 @@
 )]
 
 use crate::cstr;
+use crate::regexp::RegMatch;
 use core::ffi::CStr;
 
 use super::*;

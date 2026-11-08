@@ -75,6 +75,7 @@ use crate::option::defs::OptSet;
 use crate::option::vars::{p_cpo, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::libc::{ptrdiff_t, size_t, uint64_t};
+use crate::regexp::RegMatch;
 use crate::regexp::vim_regexec;
 use crate::runtime::state::current_sctx;
 use crate::state::mode::{State, no_abbr};
@@ -84,7 +85,7 @@ use crate::state::{
 };
 use crate::types::{
     ApiDict, ApiString, Array, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand, Integer,
-    LineNr, LuaRef, Object, RegMatch, ScriptId, TypVal, VarNumber,
+    LineNr, LuaRef, Object, ScriptId, TypVal, VarNumber,
 };
 use std::rc::Rc;
 

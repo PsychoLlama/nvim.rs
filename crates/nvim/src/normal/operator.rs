@@ -26,10 +26,12 @@ use crate::getchar::{plain_vgetc, start_redo, stuff_readbuf_char};
 use crate::guard::Keys;
 use crate::keycodes::SpecialKey;
 use crate::message::{emsg, emsg_invreg};
+use crate::normal::defs::CmdArg;
 use crate::normal::{
     check_clear_op, check_clear_op_quit, clear_op_beep, e_cmdline_window_already_open, kMTLineWise,
     langmap_adjust, visual_active, visual_select,
 };
+use crate::ops::OpType;
 use crate::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
@@ -37,7 +39,7 @@ use crate::register::{
     RegName, do_execreg, do_record, get_expr_register, register_name, valid_yank_reg,
 };
 use crate::state::mode::{VIsual_select_reg, arrow_used, restart_edit};
-use crate::types::{CmdArg, OpType, Vv};
+use crate::types::Vv;
 use crate::undo::{u_redo, u_undo, u_undoline};
 use crate::winlayer::graph::cmdwin_type;
 

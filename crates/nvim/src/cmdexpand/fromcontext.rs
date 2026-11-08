@@ -27,13 +27,14 @@ use crate::option::{
     magic_isset,
 };
 use crate::path::ExpandFlags;
+use crate::regexp::RegMatch;
 use crate::regexp::{RE_MAGIC, vim_regexec};
 use crate::runtime::{RuntimeOpts, packadd_dir_matches, runtime_cmd_matches, runtime_dir_matches};
 use crate::search::ignorecase;
 use crate::strings::escaped_bytes;
 use crate::syntax::reset_expand_highlight;
 use crate::tag::tag_matches;
-use crate::types::{CompleteListItemGetter, ExpandContext, RegMatch};
+use crate::types::{CompleteListItemGetter, ExpandContext};
 use core::ffi::CStr;
 use std::ffi::CString;
 

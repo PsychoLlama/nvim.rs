@@ -6,12 +6,10 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
+use crate::ops::OpType;
+use crate::types::{ColNr, Key, LineNr, Pos};
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-use super::*;
-
-pub type MotionType = ::core::ffi::c_int;
+pub(crate) type MotionType = ::core::ffi::c_int;
 
 crate::flag_set! {
     /// What a handler tells the dispatcher about what it did, in the

@@ -98,6 +98,7 @@ use crate::r#move::{
     changed_cline_bef_curs, changed_line_abv_curs, invalidate_botline_win, update_topline,
     validate_cursor,
 };
+use crate::normal::defs::MotionType;
 use crate::normal::{clear_showcmd, normal_enter};
 use crate::option::defs::{OptSet, OptVal};
 use crate::option::vars::{
@@ -121,6 +122,7 @@ use crate::popupmenu::state::pum_want;
 use crate::popupmenu::{pum_check_clear, pum_ext_want_done, pum_undisplay};
 use crate::pos::{MAXCOL, MAXLNUM, clearpos, equalpos, lt};
 use crate::profile::profile_setlimit;
+use crate::regexp::{Magic, OptMagic};
 use crate::regexp::{RE_SEARCH, skip_regexp_magic};
 use crate::register::{
     REG_CTRL_A, REG_CTRL_F, REG_CTRL_L, REG_CTRL_P, REG_CTRL_W, RegName, cmdline_paste_reg,
@@ -155,8 +157,8 @@ use crate::types::NL;
 use crate::types::{
     AcoSave, ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdLine, CmdMod, CmdParseInfo,
     CmdParseMagic, ColNr, Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt, Expand,
-    ExpandContext, Handle, HashTab, Integer, LineNr, Magic, MotionType, Object, OptInt, OptMagic,
-    Pos, ProfTime, SaveVEvent, TypVal, VarNumber,
+    ExpandContext, Handle, HashTab, Integer, LineNr, Object, OptInt, Pos, ProfTime, SaveVEvent,
+    TypVal, VarNumber,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::state::{kUICmdline, kUIMessages};

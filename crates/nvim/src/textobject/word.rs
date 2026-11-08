@@ -31,6 +31,7 @@ use crate::global_cell::GlobalCell;
 use crate::mbyte::utf_class;
 use crate::memline::{Lines, Moved, decl, incl};
 use crate::r#move::adjust_skipcol;
+use crate::normal::defs::OpArg;
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, unadjust_for_sel, visual_active, visual_anchor,
     visual_mode,
@@ -38,7 +39,7 @@ use crate::normal::{
 use crate::pos::{clearpos, equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::mode::VIsual_select_exclu_adj;
-use crate::types::{NUL, OpArg, Pos};
+use crate::types::{NUL, Pos};
 
 /// Whether [`cls`] should answer a WORD's classes rather than a word's.
 ///

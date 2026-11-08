@@ -27,9 +27,10 @@ use crate::cstr;
 use crate::mbyte::{c_partial_cells_in, c_string_cells, promised_char_len};
 use crate::memory::ThinCString;
 use crate::memory::XString;
+use crate::register::defs::RegLines;
 use crate::semsg;
 use crate::types::Handle;
-use crate::types::{Failed, ListRef, RegLines, TypVal};
+use crate::types::{Failed, ListRef, TypVal};
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 

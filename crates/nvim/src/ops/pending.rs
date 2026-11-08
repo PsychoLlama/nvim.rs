@@ -44,6 +44,7 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::r#move::WinValid;
+use crate::normal::defs::Outcome;
 use crate::normal::{
     VisualMode, set_visual_active, set_visual_anchor, set_visual_mode, set_visual_select,
     visual_active, visual_anchor, visual_mode, visual_select,
@@ -51,7 +52,7 @@ use crate::normal::{
 use crate::option::cpo_has;
 use crate::option::defs::{CpoFlag, FoFlag};
 use crate::optionstr::OptString;
-use crate::types::{NUL, Outcome};
+use crate::types::NUL;
 
 /// The Visual area a `.` replays: its mode and size, not its position.
 ///

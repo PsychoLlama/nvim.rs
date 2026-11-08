@@ -31,13 +31,14 @@ use crate::drawscreen::state::redraw_cmdline;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::mbyte::{c_cluster_len, head_off};
 use crate::memline::{Moved, dec};
+use crate::normal::defs::OpArg;
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
     with_visual_anchor,
 };
 use crate::optionstr::OptString;
 use crate::pos::{equalpos, lt};
-use crate::types::{ColNr, NUL, OpArg};
+use crate::types::{ColNr, NUL};
 
 /// The byte at column `col` of `line`; NUL past its end and before its
 /// start, which every walk below stops at.

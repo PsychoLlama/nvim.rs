@@ -30,10 +30,10 @@ use crate::options::{
 use crate::optionstr::OptString;
 use crate::pos::MAXCOL;
 use crate::regexp::RE_MAGIC;
+use crate::regexp::RegMatch;
 use crate::search::ignorecase_opt;
 use crate::semsg;
 use crate::smsg;
-use crate::types::RegMatch;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 use core::hash::{Hash, Hasher};

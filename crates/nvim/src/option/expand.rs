@@ -41,9 +41,10 @@ use crate::options::{
 };
 use crate::os::libc::uint32_t;
 use crate::path::MAXPATHL;
+use crate::regexp::RegMatch;
 use crate::regexp::vim_regexec;
 use crate::strings::escaped_bytes;
-use crate::types::{BackslashEscape, Expand, ExpandContext, RegMatch, XpPrefix};
+use crate::types::{BackslashEscape, Expand, ExpandContext, XpPrefix};
 
 use super::{
     FUZZY_SCORE_NONE, find_option_len, get_option, get_varp_scope_from, is_option_hidden,

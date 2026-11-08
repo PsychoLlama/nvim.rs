@@ -30,12 +30,13 @@ use crate::indent::inindent;
 use crate::mark::setpcmark;
 use crate::mbyte::{c_cluster_len, head_off};
 use crate::memline::{Lines, Moved, decl, inc, incl};
+use crate::normal::defs::OpArg;
 use crate::option::defs::CpoFlag;
 use crate::option::vars::{P_SEL, P_WS, p_ws};
 use crate::option::{SavedCpo, cpo_has};
 use crate::pos::{equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FM_FORWARD, FORWARD, findmatch, findmatchlimit};
-use crate::types::{ColNr, NUL, OpArg, Pos};
+use crate::types::{ColNr, NUL, Pos};
 
 /// The `do_searchpair` pattern that matches any HTML start tag, used to find
 /// the one enclosing the cursor before its name is known.

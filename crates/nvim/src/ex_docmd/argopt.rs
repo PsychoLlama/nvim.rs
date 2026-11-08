@@ -50,7 +50,7 @@ use crate::os::cshim::ngettext;
 use crate::os::fs::{CFile, dir_exists, os_mkdir, os_strerror, path_exists};
 
 use crate::os::libc::{int32_t, intmax_t};
-use crate::types::regexp::RegMatch;
+use crate::regexp::RegMatch;
 use crate::types::{CmdLine, CmdModFlags, CompleteListItemGetter, EcmdCmd, ExArg, Expand, Failed};
 use crate::window::{only_one_window, tabpage_index};
 

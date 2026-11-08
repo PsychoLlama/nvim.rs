@@ -20,7 +20,7 @@ use crate::getchar::PastePhase;
 use crate::guard::Suppress;
 use crate::memory::XString;
 use crate::normal::{set_visual_active, visual_active};
-use crate::types::{PUT_CURSEND, RegLines};
+use crate::register::defs::{PUT_CURSEND, RegLines};
 use crate::winlayer::Buf;
 
 /// Hand `data` to the `vim.paste()` Lua handler as one chunk of a paste.

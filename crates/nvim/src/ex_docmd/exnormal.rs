@@ -46,8 +46,9 @@ use crate::normal::{normal_cmd, set_cursor_for_append_to_line, visual_active, wi
 use crate::ops::Op;
 
 use crate::ex_docmd::state::SaveState;
+use crate::normal::defs::OpArg;
 use crate::state::{MODE_INSERT, MODE_TERMINAL};
-use crate::types::{ColNr, ExArg, NUL, OpArg};
+use crate::types::{ColNr, ExArg, NUL};
 
 use crate::winlayer::{Buf, Win};
 

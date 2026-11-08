@@ -12,7 +12,8 @@
 use crate::memory::XString;
 use crate::os::libc::uint8_t;
 use crate::os::libc::{ssize_t, uint32_t};
-use crate::types::{Expand, IOSIZE, OptInt, RegMatch};
+use crate::regexp::RegMatch;
+use crate::types::{Expand, IOSIZE, OptInt};
 
 use crate::global_cell::GlobalCell;
 use crate::option::OptSlot;

@@ -23,17 +23,19 @@ use crate::mbyte::{cluster_len, head_off};
 use crate::memline::{Lines, ml_get_buf_len};
 use crate::memory::ThinCString;
 use crate::message_fmt::{emsg_text, msg_cstr};
+use crate::normal::defs::{MotionType, OpArg};
 use crate::normal::unadjust_for_sel_inner;
+use crate::ops::OpType;
 use crate::ops::{block_def, charwise_block_def, reset_lbr, restore_lbr};
 use crate::option::vars::P_SEL;
 use crate::pos::{equalpos, lt};
+use crate::register::defs::BlockDef;
 use crate::state::mode::virtual_op;
 use crate::state::virtual_active;
 use crate::tr;
 use crate::types::Handle;
 use crate::types::{
-    BlockDef, ColNr, EvalFuncData, Key, LineNr, MotionType, OpArg, OpType, Pos, TypVal, VAR_DICT,
-    VarNumber, kListLenMayKnow,
+    ColNr, EvalFuncData, Key, LineNr, Pos, TypVal, VAR_DICT, VarNumber, kListLenMayKnow,
 };
 use core::ffi::{CStr, c_int};
 

@@ -29,12 +29,14 @@ use crate::memline::Lines;
 use crate::memline::goto_byte;
 use crate::message::show_sb_text;
 use crate::mouse::do_mouse;
+use crate::normal::defs::CmdArg;
 use crate::normal::{
     adjust_for_sel, check_clear_op, check_clear_op_quit, check_text_locked, clear_op_beep,
     invoke_edit, kMTCharWise, kMTLineWise, nv_addsub, nv_edit, nv_gd, nv_gomark, nv_goto,
     nv_gotofile, nv_gv_cmd, nv_ident, nv_join, nv_operator, nv_pcmark, nv_put, nv_replace_mode,
     nv_screengo, nv_visual, nv_vreplace, visual_active,
 };
+use crate::ops::OpType;
 use crate::ops::cursor_pos_info;
 use crate::os::libc::int64_t;
 use crate::plines::linetabsize;
@@ -42,7 +44,7 @@ use crate::search::{BACKWARD, FORWARD, current_search};
 use crate::state::mode::VIsual_reselect;
 use crate::state::virtual_active;
 use crate::textobject::bckend_word;
-use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType};
+use crate::types::{ColNr, LineNr, NUL};
 use crate::undo::undo_time;
 use crate::window::{goto_tabpage, goto_tabpage_lastused};
 use core::ffi::c_int;

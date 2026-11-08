@@ -80,11 +80,11 @@ use crate::regexp::{
     ExtMatch, ExtMatchIo, ExtMatchRef, OwnedProg, vim_regcomp, vim_regcomp_ext, vim_regexec,
     vim_regexec_syntax,
 };
+use crate::regexp::{RegMMatch, RegMatch};
 use crate::runtime::{do_source, source_runtime};
 use crate::types::AutoEvent;
 use crate::types::{
-    ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, RegMMatch, RegMatch, SynBlock,
-    SynTime,
+    ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, SynBlock, SynTime,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::winlayer::Buf;

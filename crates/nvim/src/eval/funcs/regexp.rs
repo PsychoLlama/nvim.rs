@@ -36,11 +36,12 @@ use crate::narrow::number_as_int;
 use crate::option::SavedCpo;
 use crate::option::vars::p_ic;
 use crate::os::cshim::gettext;
+use crate::regexp::RegMatch;
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING};
 use crate::semsg;
 use crate::types::{
-    Callback, EvalFuncData, Failed, LineNr, List, RegMatch, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST,
-    VAR_NUMBER, VAR_STRING, VarNumber, kListLenMayKnow, kListLenUnknown,
+    Callback, EvalFuncData, Failed, LineNr, List, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER,
+    VAR_STRING, VarNumber, kListLenMayKnow, kListLenUnknown,
 };
 use core::ffi::{CStr, c_int};
 

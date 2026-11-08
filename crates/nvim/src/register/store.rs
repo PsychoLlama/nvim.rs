@@ -35,8 +35,10 @@
 )]
 
 use crate::mbyte::c_string_cells_len;
+use crate::normal::defs::MotionType;
+use crate::register::defs::RegLines;
 use crate::shada::ShadaExtra;
-use crate::types::{Key, MotionType, RegLines, Timestamp};
+use crate::types::{Key, Timestamp};
 use core::ffi::{c_char, c_int};
 
 use super::*;

@@ -24,7 +24,8 @@
 )]
 
 use crate::message::internal_error;
-use crate::types::{Key, OpType};
+use crate::ops::OpType;
+use crate::types::Key;
 
 /// CTRL-A and CTRL-X as the single bytes the table stores them as (the
 /// [`Key`] constants of the same name are the keys).

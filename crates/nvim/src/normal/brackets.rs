@@ -32,18 +32,21 @@ use crate::fold::fold_move_to;
 use crate::mark::defs::MarkMove;
 use crate::mark::{getnextmark, pos_to_mark, setpcmark};
 use crate::mouse::do_mouse;
+use crate::normal::defs::CmdArg;
 use crate::normal::{
     FIND_IDENT, FM_BACKWARD, FM_FORWARD, SMT_BAD, SMT_RARE, clear_op, clear_op_beep,
     ident_under_cursor, kDirectionNotSet, kMTCharWise, may_fold_open, nv_gotofile, nv_mark_move_to,
     nv_put_opt,
 };
+use crate::ops::OpType;
 use crate::options::{kOptFdoFlagBlock, kOptFdoFlagSearch};
 use crate::pos::MAXLNUM;
+use crate::register::defs::PUT_FIXINDENT;
 use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
 use crate::spell::SpellMoveType;
 use crate::spell::{SMT_ALL, spell_move_to};
 use crate::textobject::findpar;
-use crate::types::{CmdArg, OpType, PUT_FIXINDENT, Pos};
+use crate::types::Pos;
 use core::ffi::{CStr, c_int, c_uint};
 
 /// Which way a `[` or `]` command searches.

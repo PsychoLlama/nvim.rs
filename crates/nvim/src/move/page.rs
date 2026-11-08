@@ -32,6 +32,7 @@ use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::mb_adjust_cursor;
 use crate::narrow::number_as_int;
+use crate::normal::defs::CmdArg;
 use crate::normal::{
     nv_g_home_m_cmd, nv_screengo, set_visual_active, set_visual_select, visual_active,
     visual_select, with_scratch_cmd,
@@ -41,7 +42,7 @@ use crate::option::vars::{p_sol, p_window};
 use crate::pos::equalpos;
 use crate::search::FORWARD;
 use crate::state::mode::restart_edit;
-use crate::types::{CmdArg, ColNr, Direction, LineNr, OptInt, Pos};
+use crate::types::{ColNr, Direction, LineNr, OptInt, Pos};
 use crate::ui::state::Rows;
 use crate::winlayer::graph::{firstwin, lastwin};
 use crate::winlayer::{Buf, Win, first_window};

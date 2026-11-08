@@ -34,12 +34,13 @@ use crate::os::lang::{get_lang_arg, get_locales};
 use crate::os::users::get_users;
 use crate::path::{ExpandFlags, expand_wildcards_eval};
 use crate::profile::get_profile_name;
+use crate::regexp::RegMatch;
 use crate::runtime::{script_display_name, script_id_valid};
 use crate::sign::get_sign_name;
 use crate::syntax::{EXPAND_BUF_LEN, get_syntax_name, get_syntime_arg};
 use crate::types::{
     ApiString, Array, ArrayBuf, BackslashEscape, Candidate, CompleteListItemGetter, ExpandContext,
-    Object, RegMatch,
+    Object,
 };
 use crate::usercmd::{
     get_user_cmd_addr_type, get_user_cmd_complete, get_user_cmd_flags, get_user_cmd_nargs,

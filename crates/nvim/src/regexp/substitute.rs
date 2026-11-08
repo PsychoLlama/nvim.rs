@@ -49,8 +49,9 @@ use crate::message::{e_null, e_re_corr, e_re_damg, e_resulting_text_too_long};
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
+use crate::regexp::{RegMMatch, RegMatch};
 use crate::strings::escaped_bytes;
-use crate::types::{ColNr, LineNr, NUL, RegMMatch, RegMatch, TypVal};
+use crate::types::{ColNr, LineNr, NUL, TypVal};
 
 /// How deep a `\=` expression may nest substitutions before it is more
 /// likely to be a mistake than an intention.

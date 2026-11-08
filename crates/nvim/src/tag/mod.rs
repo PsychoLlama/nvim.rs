@@ -60,6 +60,7 @@ use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::path::{full_name_save, has_wildcard, path_full_compare, vim_is_abs_name};
 use crate::pos::MAXLNUM;
 use crate::quickfix::set_errorlist;
+use crate::regexp::OptMagic;
 use crate::regexp::vim_regexec;
 use crate::search::state::{magic_overruled, no_hlsearch};
 use crate::state::MODE_INSERT;
@@ -71,8 +72,8 @@ use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::Handle;
 use crate::types::{
-    Callback, ColNr, Dict, ExArg, Expand, GetFileRet, LineNr, List, OptMagic, Pos, Taggy,
-    Timestamp, VarNumber,
+    Callback, ColNr, Dict, ExArg, Expand, GetFileRet, LineNr, List, Pos, Taggy, Timestamp,
+    VarNumber,
 };
 use crate::ui::state::Columns;
 use crate::ui::state::kUIMessages;

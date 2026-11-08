@@ -27,11 +27,12 @@ use crate::message::{emsg, msg, redirecting};
 use crate::option::vars::cb_flags;
 use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus};
 use crate::os::libc::ptrdiff_t;
+use crate::register::defs::{RegLines, YankReg};
 use crate::register::{
     PLUS_REGISTER, Reg, RegName, STAR_REGISTER, get_y_previous, get_y_register, kMTBlockWise,
     kMTCharWise, kMTLineWise, kMTUnknown,
 };
-use crate::types::{RegLines, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, YankReg};
+use crate::types::{TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING};
 use core::ffi::c_int;
 
 /// The message shown once when a clipboard register is used and no provider

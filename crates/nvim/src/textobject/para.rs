@@ -23,13 +23,14 @@ use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, showmode};
 use crate::mark::setpcmark;
 use crate::mbyte::head_off;
 use crate::memline::Lines;
+use crate::normal::defs::OpArg;
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
 };
 use crate::option::vars::{p_para, p_sections};
 use crate::search::{BACKWARD, FORWARD, linewhite};
 use crate::types::ColNr;
-use crate::types::{LineNr, OpArg};
+use crate::types::LineNr;
 
 /// `{` / `}` / `[[` / `]]`: move to the `count`th paragraph or section
 /// boundary in `dir`, answering whether one was found.

@@ -23,11 +23,12 @@
 
 use crate::api::keysets::KeyDict__shada_search_pat;
 use crate::memory::XString;
+use crate::normal::defs::MotionType;
 use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::types::Buffer;
 use crate::types::ColNr;
 use crate::types::LineNr;
-use crate::types::{ApiDict, ApiString, MotionType, Pos, Timestamp, TypVal};
+use crate::types::{ApiDict, ApiString, Pos, Timestamp, TypVal};
 use core::ffi::{CStr, c_char};
 use std::collections::VecDeque;
 use std::rc::Rc;

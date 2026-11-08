@@ -52,11 +52,12 @@ use crate::option::vars::p_rdt;
 use crate::os::cshim::gettext;
 use crate::os::libc::ptrdiff_t;
 use crate::profile::{profile_passed_limit, profile_setlimit};
+use crate::regexp::RegMMatch;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec_multi};
 use crate::search::state::{search_first_line, search_last_line};
 use crate::types::{
-    ColNr, EvalFuncData, ExArg, Failed, LLPos, LineNr, List, MatchItem, MatchState, RegMMatch,
-    TypVal, VAR_LIST, VAR_NUMBER, VarNumber, Window,
+    ColNr, EvalFuncData, ExArg, Failed, LLPos, LineNr, List, MatchItem, MatchState, TypVal,
+    VAR_LIST, VAR_NUMBER, VarNumber, Window,
 };
 use crate::winlayer::Win;
 

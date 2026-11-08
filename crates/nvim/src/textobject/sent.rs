@@ -28,12 +28,13 @@ use crate::drawscreen::state::redraw_cmdline;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::mark::setpcmark;
 use crate::memline::{Lines, Moved, decl, gchar_pos, inc, incl};
+use crate::normal::defs::OpArg;
 use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor};
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
 use crate::pos::{equalpos, lt};
 use crate::search::{BACKWARD, FORWARD};
-use crate::types::{Direction, NUL, OpArg, Pos};
+use crate::types::{Direction, NUL, Pos};
 
 /// One step of a position walk: [`incl`] going forward, [`decl`] going back.
 type StepFn = fn(&mut Pos) -> Moved;

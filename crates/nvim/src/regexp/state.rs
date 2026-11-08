@@ -9,7 +9,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::types::OptMagic;
+use crate::regexp::OptMagic;
 
 pub(crate) const OPTION_MAGIC_OFF: OptMagic = 2;
 pub(crate) const OPTION_MAGIC_ON: OptMagic = 1;
