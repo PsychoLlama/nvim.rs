@@ -12,6 +12,7 @@ use super::wrappers::arg_copy;
 use super::{e_missing_function_argument, e_string_list_or_blob_required};
 use crate::eval::VARNUMBER_MAX;
 use crate::eval::VARNUMBER_MIN;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::{
     NumBuf, blob_bytes, dict_len, list_items, list_iter, list_len, tv_check_for_number_arg,
@@ -25,8 +26,8 @@ use crate::message::state::called_emsg;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
-    EvalFuncData, TypVal, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber,
+    TypVal, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
+    VarNumber,
 };
 use core::ffi::c_int;
 use core::mem::ManuallyDrop;

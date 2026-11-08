@@ -29,9 +29,10 @@
 //!   highlight-group name the converter resolves to an id.
 //! - A field whose name on the wire differs from its name here says so in a
 //!   doc comment of the form ``Wire key: `name`.``
+use crate::api::private::helpers::StringArray;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, Float, HLGroupID, Integer, LuaRef, Object,
-    StringArray, WindowHandle,
+    WindowHandle,
 };
 
 #[derive(Default)]

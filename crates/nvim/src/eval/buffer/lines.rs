@@ -11,6 +11,7 @@
 )]
 
 use super::*;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::list_len;
 use crate::memline::{Lines, ml_append_text, ml_get_len, ml_replace_buf_text};
 use crate::memory::{ThinCString, XString};

@@ -11,6 +11,7 @@
 
 use super::wrappers::{arg_bool, arg_lnum, arg_number, arg_number_chk};
 use crate::cursor::check_cursor;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     NumBuf, tv_check_for_dict_arg, tv_check_for_opt_number_arg, tv_check_for_string_or_list_arg,
     tv_dict_alloc_ret, tv_get_number, tv_list_alloc_ret,
@@ -37,7 +38,7 @@ use crate::semsg;
 use crate::types::Handle;
 use crate::types::LineNr;
 use crate::types::{
-    ColNr, Direction, EvalFuncData, List, Pos, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber,
+    ColNr, Direction, List, Pos, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber,
 };
 use crate::window::state::skip_update_topline;
 use crate::winlayer::Buf;

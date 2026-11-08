@@ -9,6 +9,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::os::fs::meta::VimAcl;
 use crate::os::libc::uintmax_t;
 use std::fs::{File, OpenOptions, Permissions};
 use std::io::Read;

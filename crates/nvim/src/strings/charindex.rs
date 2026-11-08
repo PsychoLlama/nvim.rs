@@ -29,6 +29,7 @@ use crate::narrow::number_as_int;
 use core::ffi::c_int;
 
 use super::strict_bool_arg;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     NumBuf, tv_check_for_number_arg, tv_check_for_opt_bool_arg, tv_check_for_opt_number_arg,
     tv_check_for_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk,
@@ -36,7 +37,7 @@ use crate::eval::typval::{
 use crate::mbyte::{char_at, char_len, cluster_len};
 use crate::memory::ThinCString;
 use crate::os::libc::size_t;
-use crate::types::{EvalFuncData, TypVal, VarNumber};
+use crate::types::{TypVal, VarNumber};
 
 /// The character-length rule a `countcc`/`comp` flag selects: composing
 /// characters counted separately, or folded into their base.

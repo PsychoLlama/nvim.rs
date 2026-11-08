@@ -32,7 +32,7 @@
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
 
-use crate::types::Terminal;
+use crate::terminal::state::Terminal;
 
 use super::Buf;
 

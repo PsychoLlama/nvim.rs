@@ -3,7 +3,7 @@
 //! OSC, DCS and APC strings arrive as fragments — vterm hands over whatever
 //! part of the sequence it has parsed so far, flagged `initial` and/or
 //! `final`. This module reassembles them into
-//! [`Terminal::termrequest_buffer`](crate::types::Terminal) and
+//! [`Terminal::termrequest_buffer`](crate::terminal::state::Terminal) and
 //! reports the finished sequence to `TermRequest` autocommands.
 //!
 //! Reporting is deferred. The fragments arrive while vterm is parsing the

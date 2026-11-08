@@ -22,6 +22,7 @@ use crate::narrow::len_as_integer;
 use crate::semsg;
 use core::ffi::{CStr, c_int};
 
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     DictRef, NumBuf, blob_slice_or_index, list_slice_or_index, tv_check_str, tv_clear, tv_copy,
     tv_get_number,
@@ -38,8 +39,8 @@ use crate::message::e_using_float_as_string;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
-    EvalFuncData, Failed, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber,
+    Failed, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber,
 };
 
 /// A freshly declared typval.

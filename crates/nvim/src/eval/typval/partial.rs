@@ -137,10 +137,10 @@ pub(super) fn partial_free(partial: Partial) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::eval::funcs::builtin::EvalFuncData;
     use crate::eval::funcs::f_function;
     use crate::eval::list::string_tv;
     use crate::global_cell::editor_state_lock;
-    use crate::types::EvalFuncData;
 
     /// `function(name, args, dict)`, as the builtin answers it.  `len` is a
     /// builtin, so the name resolves without defining anything, and is not

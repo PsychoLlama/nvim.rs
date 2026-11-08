@@ -15,6 +15,7 @@ use crate::ascii::ascii_isdigit;
 use crate::autocmd::{au_exists, autocmd_supported};
 use crate::env::expand_env;
 use crate::eval::AUTOLOAD_CHAR;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::gc::{garbage_collect_at_exit, want_garbage_collect};
 use crate::eval::typval::{
     ListRef, NumBuf, PartialRef, list_iter, list_len, tv_check_for_dict_arg, tv_check_for_list_arg,
@@ -46,8 +47,8 @@ use crate::os::env::env_exists;
 use crate::semsg;
 use crate::strings::has_char;
 use crate::types::{
-    EvalFuncData, List, Partial, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_STRING, VarNumber, VarType,
+    List, Partial, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
+    VarNumber, VarType,
 };
 use core::ffi::{CStr, c_int};
 

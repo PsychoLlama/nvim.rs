@@ -20,6 +20,7 @@
 use super::*;
 use crate::buffer::{bare_buffer, free_bare_buffer};
 use crate::cmdexpand::defs::ExpandContext;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::list::{string_bytes, string_tv};
 use crate::eval::typval::{list_items, tv_clear};
 use crate::getchar::state::got_int;
@@ -27,7 +28,7 @@ use crate::global_cell::{editor_state::Held, editor_state_lock};
 use crate::memory::XString;
 use crate::option::vars::{P_CPO, P_PP, P_RTP, P_SU, P_WIC, P_WIG, p_wic, wop_flags};
 use crate::options::kOptWopFlagFuzzy;
-use crate::types::{EvalFuncData, TypVal};
+use crate::types::TypVal;
 use crate::window::{bare_window, free_bare_window};
 use crate::winlayer::graph::{leave_curbuf, leave_curwin};
 use crate::winlayer::{Buf, Win};

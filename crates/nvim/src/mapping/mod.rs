@@ -45,6 +45,7 @@ use crate::ascii::{ascii_isspace, ascii_iswhite};
 use crate::charset::transchar;
 use crate::cmdexpand::cmdline_fuzzy_complete;
 use crate::cmdexpand::defs::Expand;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     dict_find, dict_get_bool, dict_get_number, dict_get_string_buf, tv_check_for_dict_arg,
     tv_dict_alloc_ret, tv_get_bool, tv_get_number, tv_list_alloc_ret,
@@ -85,8 +86,8 @@ use crate::state::{
     MODE_TERMINAL, MODE_VISUAL,
 };
 use crate::types::{
-    ApiDict, ApiString, Array, BufferHandle, Dict, Error, EvalFuncData, ExArg, Integer, LineNr,
-    LuaRef, Object, ScriptId, TypVal, VarNumber,
+    ApiDict, ApiString, Array, BufferHandle, Dict, Error, ExArg, Integer, LineNr, LuaRef, Object,
+    ScriptId, TypVal, VarNumber,
 };
 use std::rc::Rc;
 

@@ -23,6 +23,7 @@ use core::ffi::c_int;
 use crate::api::private::helpers::{
     dict_check_writable, find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
 };
+use crate::eval::typval::{DictItem, ScopeDictItem};
 use crate::eval::typval::{
     DictRef, TV_INITIAL_VALUE, dict_find, dict_is_watched, dict_watcher_notify, tv_clear, tv_copy,
     tv_dict_item_remove,
@@ -34,7 +35,7 @@ use crate::lua::executor::until_nul;
 use crate::lua::stack::{At, Raise, Stack};
 use crate::narrow::number_as_int;
 use crate::runtime::script_autoload_named;
-use crate::types::{ApiString, DictItem, Error, Handle, ScopeDictItem};
+use crate::types::{ApiString, Error, Handle};
 
 /// The dictionary a scope entry holds, if it holds one yet.
 fn scope_dict(entry: &ScopeDictItem) -> Option<DictRef> {

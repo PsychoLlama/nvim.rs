@@ -33,6 +33,7 @@
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::skip;
 use crate::charset::{getwhitecols_curline, vim_is_ident_char, vim_iswordc};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::tv_get_lnum;
 use crate::indent::{fixthisline, get_indent, get_indent_lnum, get_sw_value};
 use crate::keycodes::special_key_code;
@@ -44,7 +45,7 @@ use crate::pos::{MAXCOL, MAXLNUM, lt};
 use crate::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
-use crate::types::{ColNr, EvalFuncData, LPos, LineNr, Pos, TypVal, VarNumber};
+use crate::types::{ColNr, LPos, LineNr, Pos, TypVal, VarNumber};
 
 // The carve of the transpiled module; see each child's docs.
 mod cino;

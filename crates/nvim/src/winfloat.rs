@@ -44,6 +44,7 @@ use core::ffi::{CStr, c_int};
 use crate::api::private::helpers::{find_buffer_by_handle, find_window_by_handle};
 use crate::api::vim::nvim_create_buf;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
+use crate::decoration::defs::VirtText;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, set_must_redraw};
 use crate::grid::grid_adjust;
 use crate::memory::XString;
@@ -58,9 +59,8 @@ use crate::options::kOptBufhidden;
 use crate::optionstr::OptStringRef;
 use crate::types::{
     AlignTextPos, BufferHandle, Error, FloatAnchor, LPos, LineNr, OptInt, Pos, ScreenChar,
-    VirtText, WinConfig, WinSplit, WinStyle, WindowHandle, kErrorTypeException,
-    kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
-    kFloatRelativeWindow,
+    WinConfig, WinSplit, WinStyle, WindowHandle, kErrorTypeException, kFloatRelativeCursor,
+    kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeWindow,
 };
 use crate::ui::state::kUIMultigrid;
 use crate::ui::state::{Columns, Rows};

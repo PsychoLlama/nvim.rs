@@ -24,11 +24,11 @@
 
 use core::ffi::CStr;
 
+use crate::api::private::helpers::StringArray;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, Float, Handle, Integer, LuaRef, Object, ObjectType,
-    StringArray, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
-    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
-    kObjectTypeWindow,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
+    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeWindow,
 };
 
 /// What a keyset field holds, and so what a value for it has to arrive as.

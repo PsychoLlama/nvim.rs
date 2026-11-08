@@ -15,6 +15,7 @@ use super::{
 };
 use crate::eval::callback_call;
 use crate::eval::encode::encode_tv2echo;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     ListRef, NumBuf, callback_free, dict_find, dict_get_callback, index_of, list_items,
     list_items_mut, list_uidx, tv_check_for_buffer_arg, tv_check_for_list_arg,
@@ -40,8 +41,8 @@ use crate::regexp::RegMatch;
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING};
 use crate::semsg;
 use crate::types::{
-    Callback, EvalFuncData, Failed, LineNr, List, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER,
-    VAR_STRING, VarNumber, kListLenMayKnow, kListLenUnknown,
+    Callback, Failed, LineNr, List, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VarNumber, kListLenMayKnow, kListLenUnknown,
 };
 use core::ffi::{CStr, c_int};
 

@@ -10,6 +10,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::eval::encode::{BOOL_VAR_NAMES, SPECIAL_VAR_NAMES};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::gc::{RootId, root_dict, root_list, unroot_dict, unroot_list};
 use crate::eval::userfunc::{is_funccal_local_dict, set_selfdict};
 use crate::eval::vars::is_globvar_dict;
@@ -30,10 +31,10 @@ use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::os::libc::{int64_t, ptrdiff_t};
 use crate::types::{
-    Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData, Float, LineNr, List,
-    ListItem, ListWatch, LuaRef, Partial, SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT,
-    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
+    Blob, BoolVarValue, Callback, Dict, DictWatcher, Float, LineNr, List, ListItem, ListWatch,
+    LuaRef, Partial, SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
+    VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
+    VarNumber, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
 };
 
 // The carve of the transpiled module; see each child's docs.

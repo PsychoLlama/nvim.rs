@@ -20,6 +20,7 @@ use crate::charset::skip;
 use crate::cstr;
 use crate::cstr::byte_at;
 use crate::decoration::virt_text_into_string;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::tv_get_lnum;
 use crate::eval::vars::{get_vim_var_nr, vim_var_string};
 use crate::global_cell::GlobalCell;

@@ -16,6 +16,7 @@ use crate::debugger::state::debug_did_msg;
 use crate::drawscreen::state::{cmdline_row, mode_displayed, must_redraw, redraw_cmdline};
 use crate::drawscreen::{setcursor, showmode, unshowmode, update_screen};
 use crate::edit::{edit_putchar, edit_unputchar};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::garbage_collect;
 use crate::eval::gc::{may_garbage_collect, want_garbage_collect};
 use crate::eval::typval::{
@@ -77,7 +78,7 @@ use crate::state::{
     state_no_longer_safe,
 };
 use crate::types::{
-    ApiString, Array, ColNr, Error, EvalFuncData, Integer, LuaRef, OptInt, TypVal, VarNumber, Vv,
+    ApiString, Array, ColNr, Error, Integer, LuaRef, OptInt, TypVal, VarNumber, Vv,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;

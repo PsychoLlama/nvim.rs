@@ -44,6 +44,7 @@ use crate::debugger::state::{debug_break_level, debug_tick};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, profiling_forced};
 use crate::env::XDGVarType;
 use crate::env::{get_appname, install_prefix};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     dict_copy, dict_find, dict_get_string_alloc, tv_check_for_opt_dict_arg, tv_dict_alloc,
     tv_dict_alloc_lock, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
@@ -94,8 +95,8 @@ use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::runtime::defs::{EStack, EStackArg, EStackType, EstackInfo, FrameName, ScriptItem};
 use crate::runtime::state::{current_sctx, did_source_packages};
 use crate::types::{
-    ApiDict, ApiString, Array, EvalFuncData, ExArg, Integer, LineNr, Object, ProfTime, ScriptCtx,
-    ScriptId, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber, kBoolVarFalse,
+    ApiDict, ApiString, Array, ExArg, Integer, LineNr, Object, ProfTime, ScriptCtx, ScriptId,
+    TypVal, UserFunc, VAR_DICT, VarLock, VarNumber, kBoolVarFalse,
 };
 use core::cell::Cell;
 use std::rc::Rc;

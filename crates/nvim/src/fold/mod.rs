@@ -40,6 +40,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::decoration::defs::VirtText;
 use crate::diff::state::need_diff_redraw;
 use crate::drawscreen::{UPD_NOT_VALID, find_wl_entry};
 use crate::getchar::state::got_int;

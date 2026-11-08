@@ -44,6 +44,7 @@ use crate::drawscreen::{
     status_redraw_curbuf, update_screen,
 };
 use crate::edit::get_literal;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     callback_free, dict_get_callback, dict_get_number, dict_get_string_buf_chk, list_len,
     tv_check_for_opt_number_arg, tv_check_for_string_arg, tv_clear, tv_copy, tv_get_number,
@@ -159,8 +160,8 @@ use crate::types::Key;
 use crate::types::NL;
 use crate::types::{
     ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdLine, CmdMod, CmdParseInfo,
-    CmdParseMagic, ColNr, Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt, Handle, Integer,
-    LineNr, Object, OptInt, Pos, ProfTime, SaveVEvent, TypVal, VarNumber,
+    CmdParseMagic, ColNr, Direction, DispTick, Error, ExArg, ExArgt, Handle, Integer, LineNr,
+    Object, OptInt, Pos, ProfTime, SaveVEvent, TypVal, VarNumber,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::state::{kUICmdline, kUIMessages};

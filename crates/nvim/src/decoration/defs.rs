@@ -10,8 +10,9 @@
 #![allow(non_camel_case_types)]
 
 use crate::marktree::MarkTreeIter;
-use crate::os::libc::{uint8_t, uint16_t, uint32_t};
-use crate::types::{LuaRef, NS, ScreenChar, VirtLines, VirtText};
+use crate::os::libc::uint8_t;
+use crate::os::libc::{uint16_t, uint32_t};
+use crate::types::{LuaRef, NS, ScreenChar};
 use crate::winlayer::WinId;
 
 /// The two chains an `ext` decoration names: indices of the first
@@ -280,3 +281,16 @@ pub struct VirtTextChunk {
     pub hl_id: ::core::ffi::c_int,
 }
 pub type VirtTextPos = ::core::ffi::c_uint;
+
+/// A block of virtual lines, each one a [`VirtText`] of its own.
+pub type VirtLines = Vec<VirtLine>;
+
+/// A virtual text: chunks of text, each with its highlight.
+pub type VirtText = Vec<VirtTextChunk>;
+
+/// One line of a virtual-lines block, and its `kVL*` flags.
+#[derive(Clone, Default)]
+pub struct VirtLine {
+    pub line: VirtText,
+    pub flags: ::core::ffi::c_int,
+}

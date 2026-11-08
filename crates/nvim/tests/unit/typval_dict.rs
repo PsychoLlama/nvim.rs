@@ -11,6 +11,7 @@ use std::ffi::{CStr, c_char};
 use std::mem::ManuallyDrop;
 use std::ptr;
 
+use neovim::eval::typval::DictItem;
 use neovim::eval::typval::{
     CallbackRefused, DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX, DictRef, ListRef, NumBuf,
     callback_free, dict_clear, dict_copy, dict_equal, dict_extend, dict_find, dict_get_callback,
@@ -21,7 +22,7 @@ use neovim::guard::{Suppress, sandbox};
 use neovim::mbyte::CONV_NONE_INIT;
 use neovim::mbyte::VimConv;
 use neovim::memory::{ThinCString, xfree, xmalloc, xstrdup};
-use neovim::types::{Callback, Dict, DictItem, Failed, TypVal, VarLock};
+use neovim::types::{Callback, Dict, Failed, TypVal, VarLock};
 use std::ffi::c_int;
 
 use crate::support::alloc::{self, AllocLog};

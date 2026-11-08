@@ -12,6 +12,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::os::libc::ptrdiff_t;
 use crate::undo::node::{UndoHeader, UndoLink};
 use std::ffi::CString;

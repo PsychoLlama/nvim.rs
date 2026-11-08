@@ -13,6 +13,7 @@ use super::wrappers::{arg_number_chk, tv_get_float_chk};
 use crate::charset::skip;
 use crate::charset::string2float_in;
 use crate::eval::VARNUMBER_MAX;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{ListRef, NumBuf, tv_list_alloc_ret};
 use crate::global_cell::GlobalCell;
 use crate::message_fmt::msg_cstr;
@@ -22,7 +23,7 @@ use crate::narrow::number_as_u32;
 use crate::os::env::{os_random, process_id};
 use crate::os::time::os_hrtime;
 use crate::semsg;
-use crate::types::{EvalFuncData, Float, TypVal, VAR_FLOAT, VarNumber};
+use crate::types::{Float, TypVal, VAR_FLOAT, VarNumber};
 use core::ffi::c_double;
 
 /// `abs({expr})` — magnitude, as a Float for a Float and as a Number

@@ -40,17 +40,17 @@ use crate::types::DictBuilder;
 use core::ffi::{CStr, c_int};
 
 use crate::eval::decode::decode_string;
+use crate::eval::typval::{DictItem, DictKey};
 use crate::eval::typval::{tv_dict_alloc, tv_list_alloc};
 use crate::eval::typval_encode::{Container, ConvPath, ConvType, Flow, TypvalSink, encode_typval};
 use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::{find_func, register_luafunc};
 use crate::lua::executor::api_new_luaref;
 use crate::types::{
-    ApiDict, ApiString, Array, BoolVarValue, DictItem, DictKey, Error, Float, Integer,
-    KeyValuePair, ListItem, Object, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
-    kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
-    kSpecialVarNull,
+    ApiDict, ApiString, Array, BoolVarValue, Error, Float, Integer, KeyValuePair, ListItem, Object,
+    TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer,
+    kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil,
+    kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kSpecialVarNull,
 };
 
 /// A container the walk has opened and not yet closed: the open form of

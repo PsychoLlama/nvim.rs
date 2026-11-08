@@ -33,6 +33,7 @@ use crate::types::Handle;
 use core::ffi::{CStr, c_int};
 
 use super::*;
+use crate::eval::typval::DictItem;
 use crate::eval::typval::{dict_find, dict_is_watched, dict_watcher_notify};
 use crate::ex_docmd::cmdmod_has;
 use crate::message::emsg;
@@ -41,7 +42,7 @@ use crate::optionstr::{OptString, OptStringRef};
 use crate::os::cshim::gettext;
 use crate::quickfix::qf_stack_get_bufnr;
 use crate::quickfix::{msg_loclist, msg_qflist};
-use crate::types::{CmdModFlags, DictItem, LineNr, TypVal, VAR_NUMBER, VarLock, VarNumber};
+use crate::types::{CmdModFlags, LineNr, TypVal, VAR_NUMBER, VarLock, VarNumber};
 use crate::winlayer::Buf;
 use crate::winlayer::graph::cmdwin_buf;
 

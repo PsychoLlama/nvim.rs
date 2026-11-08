@@ -17,3 +17,13 @@ use crate::types::{Array, Error, Object};
 /// answer, or answers `Err` with the [`Error`] the client is told about.
 /// The arguments are the wrapper's own.
 pub type ApiDispatchFn = fn(uint64_t, Array) -> Result<Object, Error>;
+
+/// One row of the API dispatch table.
+///
+/// `Copy`: a static name and a function pointer.
+#[derive(Copy, Clone)]
+pub struct MsgpackRpcRequestHandler {
+    pub name: Option<&'static ::core::ffi::CStr>,
+    pub fn_0: Option<ApiDispatchFn>,
+    pub fast: bool,
+}

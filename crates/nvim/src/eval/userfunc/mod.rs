@@ -22,6 +22,7 @@ use crate::drawscreen::state::cmdline_row;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::funcs::{check_builtin_argcount, find_builtin};
 use crate::eval::gc::want_garbage_collect;
+use crate::eval::typval::DictItem;
 use crate::eval::typval::{TV_INITIAL_VALUE, list_iter, tv_clear, tv_copy, tv_get_number_chk};
 use crate::eval::vars::{skip_var_list, testing_enabled};
 use crate::eval::{
@@ -72,9 +73,9 @@ use crate::runtime::state::current_sctx;
 use crate::runtime::{estack_pop, estack_push_ufunc, script_id_valid};
 use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::types::{
-    Callback, Dict, DictItem, ExArg, FuncBody, FuncCall, LineNr, ListItem, LuaRef, OptInt, Partial,
-    TypVal, UserFunc, VAR_DEF_SCOPE, VAR_FUNC, VAR_NUMBER, VAR_SCOPE, VAR_STRING, VAR_UNKNOWN,
-    VarLock, VarNumber,
+    Callback, Dict, ExArg, FuncBody, FuncCall, LineNr, ListItem, LuaRef, OptInt, Partial, TypVal,
+    UserFunc, VAR_DEF_SCOPE, VAR_FUNC, VAR_NUMBER, VAR_SCOPE, VAR_STRING, VAR_UNKNOWN, VarLock,
+    VarNumber,
 };
 use crate::ui::state::Rows;
 use crate::ui::state::kUICmdline;

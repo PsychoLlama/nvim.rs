@@ -22,12 +22,13 @@ use super::{
     Container, DictArg, ListArg, char_len, check_lock, copy_tv, cstr_of_chk, err,
     err_not_countable, number_of, starts_with_ic, string_bytes,
 };
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::NumBuf;
 use crate::message::{e_invarg, e_listblobreq};
 use crate::narrow::number_as_int;
 use crate::os::libc::int64_t;
 use crate::semsg;
-use crate::types::{EvalFuncData, Failed, TypVal, VarNumber};
+use crate::types::{Failed, TypVal, VarNumber};
 
 /// `add(container, item)`: append one item to a List or one byte to a Blob.
 pub fn f_add(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {

@@ -27,6 +27,7 @@
 )]
 
 use super::{from, kFileAppend, kFileCreate, kFileMkDir, kFileTruncate, str_arg_chk};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, blob_bytes, list_items, tv_check_str_or_nr};
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::ex_cmds::check_secure;
@@ -41,7 +42,7 @@ use crate::path::full_name_save;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
 use crate::types::Failed;
-use crate::types::{Blob, EvalFuncData, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber};
+use crate::types::{Blob, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber};
 use crate::{semsg, tr};
 use core::ffi::{CStr, c_int};
 

@@ -19,6 +19,7 @@
 )]
 
 use super::*;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::NumBuf;
 use crate::normal::visual_active;
 use crate::os::libc::ptrdiff_t;

@@ -46,6 +46,8 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::strings::reversed_text;
 use core::ffi::{CStr, c_int};
 
+use crate::eval::funcs::builtin::EvalFuncData;
+use crate::eval::typval::DictItem;
 use crate::eval::typval::{
     BlobRef, DictCursor, DictRef, ListRef, LockName, NumBuf, blob_copy, blob_remove, dict_copy,
     dict_extend, index_of, list_copy, list_extend, list_index, list_remove,
@@ -67,8 +69,8 @@ use crate::os::cshim::gettext;
 use crate::os::libc::{ptrdiff_t, uint8_t};
 use crate::semsg;
 use crate::types::{
-    Blob, Dict, DictItem, EvalFuncData, List, ListItem, TypVal, VAR_BLOB, VAR_DICT, VAR_LIST,
-    VAR_STRING, VarLock, VarNumber, VarType, Vv,
+    Blob, Dict, List, ListItem, TypVal, VAR_BLOB, VAR_DICT, VAR_LIST, VAR_STRING, VarLock,
+    VarNumber, VarType, Vv,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -421,7 +423,7 @@ impl<'a> DictArg<'a> {
     #[inline(always)]
     pub(crate) fn remove_item(self, item: DictItemRef<'_>) {
         // The key is copied out of the item the removal frees.
-        let key = crate::types::DictKey::new(item.key());
+        let key = crate::eval::typval::DictKey::new(item.key());
         tv_dict_item_remove(self.0.expect("a live dict"), key.bytes());
     }
 

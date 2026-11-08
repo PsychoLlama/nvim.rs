@@ -6,7 +6,8 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-use crate::types::{LineNr, ProfTime, ScopeDictItem, ScriptCtx, UserFunc};
+use crate::eval::typval::ScopeDictItem;
+use crate::types::{LineNr, ProfTime, ScriptCtx, UserFunc};
 
 /// One frame of the execution stack -- see `runtime::estack`.
 #[derive(Clone)]

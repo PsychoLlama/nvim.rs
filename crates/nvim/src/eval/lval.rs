@@ -36,6 +36,7 @@ use core::ops::ControlFlow;
 
 use crate::ascii::ascii_iswhite;
 use crate::cstr::byte_at;
+use crate::eval::typval::DictItem;
 use crate::eval::typval::{
     BlobRef, DictRef, ListRef, NumBuf, blob_check_index, blob_check_range, blob_len, index_of,
     list_check_range_index_one, list_check_range_index_two, list_items_mut, tv_blob_alloc_ret,
@@ -55,7 +56,7 @@ use crate::ex_eval::aborting;
 use crate::memory::XString;
 use crate::message::state::emsg_severe;
 use crate::types::{
-    DictItem, Failed, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VarLock, kListLenUnknown,
+    Failed, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VarLock, kListLenUnknown,
 };
 
 /// A freshly declared typval.

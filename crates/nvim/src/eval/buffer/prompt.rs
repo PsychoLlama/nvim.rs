@@ -13,6 +13,7 @@
 use super::lines::set_buffer_lines;
 use super::*;
 use crate::edit::{buf_prompt_text_owned, set_buf_prompt_text};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, list_items, list_len, tv_copy};
 use crate::extmark::kExtmarkNoUndo;
 use crate::memline::{Lines, ml_replace_buf_text};

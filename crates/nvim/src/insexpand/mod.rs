@@ -35,6 +35,7 @@ use crate::edit::{
     InsertEnd, backspace_until_column, get_can_cindent, ins_apply_autocmds, ins_eol,
     ins_need_undo_get, ins_redraw, insertchar, start_arrow, stop_arrow,
 };
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     callback_free, dict_find, dict_get_number, dict_get_tv, tv_clear, tv_dict_alloc,
     tv_dict_alloc_lock, tv_dict_alloc_ret, tv_get_number_chk, tv_list_alloc,
@@ -109,8 +110,8 @@ use crate::tag::find_tag_names;
 use crate::tag::state::g_tag_at_cursor;
 use crate::textformat::auto_format;
 use crate::types::{
-    ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, LineNr, List, OptInt,
-    Pos, SaveVEvent, TypVal, VarNumber, Vv,
+    ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, LineNr, List, OptInt, Pos,
+    SaveVEvent, TypVal, VarNumber, Vv,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;

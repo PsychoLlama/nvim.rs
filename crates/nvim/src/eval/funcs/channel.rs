@@ -16,6 +16,7 @@ use super::{
 use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
 use crate::channel::defs::{CallbackReader, ChannelPart};
 use crate::channel::{channel_close, channel_connect, channel_from_stdio, channel_send};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::provider::{provider_call_nesting, provider_caller_scope};
 use crate::eval::save_tv_as_string;
 use crate::eval::typval::{
@@ -42,8 +43,8 @@ use crate::runtime::state::current_sctx;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    ApiString, Array, EvalFuncData, Object, ScriptCtx, TypVal, VAR_BLOB, VAR_DICT, VAR_NUMBER,
-    VAR_STRING, VarNumber,
+    ApiString, Array, Object, ScriptCtx, TypVal, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING,
+    VarNumber,
 };
 use core::ffi::{CStr, c_int};
 

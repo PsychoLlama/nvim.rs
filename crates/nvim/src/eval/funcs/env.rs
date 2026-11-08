@@ -18,6 +18,7 @@ use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one};
 use crate::env::XDGVarType;
 use crate::env::{get_appname, getenv_resolved, xdg_home, xdg_var};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, dict_get_bool, dict_has_key, tv_list_alloc_ret};
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{Expansion, eval_vars, expand_filename};
@@ -35,8 +36,8 @@ use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::CmdLine;
 use crate::types::{
-    CmdAddr, EvalFuncData, ExArg, ExArgt, OptInt, TypVal, VAR_DICT, VAR_LIST, VAR_STRING,
-    VarNumber, kBoolVarFalse, kListLenShouldKnow, kListLenUnknown, kSpecialVarNull,
+    CmdAddr, ExArg, ExArgt, OptInt, TypVal, VAR_DICT, VAR_LIST, VAR_STRING, VarNumber,
+    kBoolVarFalse, kListLenShouldKnow, kListLenUnknown, kSpecialVarNull,
 };
 use core::ffi::c_int;
 

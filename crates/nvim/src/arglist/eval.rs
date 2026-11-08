@@ -13,6 +13,7 @@
 )]
 
 use super::*;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::memory::ThinCString;
 use crate::narrow::number_as_int;
 use crate::os::libc::ptrdiff_t;

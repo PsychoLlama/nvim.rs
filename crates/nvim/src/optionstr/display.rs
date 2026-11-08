@@ -28,6 +28,7 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int_at, init_chartab, ptr2cells_at};
 use crate::cursor::coladvance;
 use crate::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
+use crate::decoration::defs::VirtText;
 use crate::drawscreen::{
     UPD_INVERTED, UPD_NOT_VALID, comp_col, redraw_all_later, redraw_curbuf_later, redraw_win_line,
 };
@@ -50,7 +51,7 @@ use crate::options::{kOptAmbiwidth, opt_ve_values};
 use crate::optionstr::BreakAt;
 use crate::state::mode::{km_startsel, km_stopsel};
 use crate::types::{
-    ColNr, FloatAnchor, LPos, LineNr, OptInt, VirtText, WinConfig, WinOpt, kFloatRelativeEditor,
+    ColNr, FloatAnchor, LPos, LineNr, OptInt, WinConfig, WinOpt, kFloatRelativeEditor,
 };
 use crate::window::check_colorcolumn;
 

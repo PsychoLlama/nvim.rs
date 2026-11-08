@@ -26,8 +26,8 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::eval::typval::DictItem;
 use crate::semsg;
-use crate::types::DictItem;
 use core::ffi::CStr;
 
 use super::pop::TURN_SLOTS;

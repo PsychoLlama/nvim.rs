@@ -23,6 +23,7 @@ use crate::charset::char2cells;
 use crate::cstr;
 use crate::drawscreen::status_redraw_curbuf;
 use crate::eval::eval_to_string;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     NumBuf, list_items, list_iter, list_len, tv_check_for_opt_bool_arg, tv_get_bool, tv_list_alloc,
     tv_list_alloc_ret,
@@ -54,9 +55,7 @@ use crate::runtime::{RuntimeOpts, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::tr;
 use crate::types::Key;
-use crate::types::{
-    BoolVarValue, EvalFuncData, ExArg, Failed, KeymapEntry, List, OptInt, TypVal, VAR_LIST,
-};
+use crate::types::{BoolVarValue, ExArg, Failed, KeymapEntry, List, OptInt, TypVal, VAR_LIST};
 use crate::ui::state::Columns;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;

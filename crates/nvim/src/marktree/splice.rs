@@ -33,6 +33,7 @@
 
 use crate::narrow::as_index;
 use crate::narrow::count_as_int;
+use crate::os::libc::{int32_t, uint64_t};
 use core::ffi::c_int;
 
 use crate::map::DenseMap;
@@ -48,8 +49,7 @@ use crate::marktree::meta::{meta_apply_delta, meta_describe_key};
 use crate::marktree::node::NodeId;
 use crate::marktree::pair::{marktree_intersect_pair, marktree_restore_pair};
 use crate::marktree::{MTKey, MTPos, MarkTree, MarkTreeIter};
-use crate::os::libc::{int32_t, uint64_t};
-use crate::types::{ColNr, MTDamage, MTDamagePair};
+use crate::types::ColNr;
 
 use super::{marktree_del_itr, marktree_lookup, marktree_put_key};
 
@@ -485,4 +485,19 @@ pub fn marktree_move_region(
             marktree_restore_pair(tree, item);
         }
     }
+}
+
+/// Where one half of a pair was, and where a splice moved it to.
+#[derive(Copy, Clone)]
+pub struct MTDamage {
+    pub old: Option<NodeId>,
+    pub new: Option<NodeId>,
+    pub old_i: ::core::ffi::c_int,
+    pub new_i: ::core::ffi::c_int,
+}
+
+#[derive(Copy, Clone)]
+pub struct MTDamagePair {
+    pub start: MTDamage,
+    pub end: MTDamage,
 }

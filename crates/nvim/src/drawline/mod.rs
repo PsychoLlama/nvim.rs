@@ -15,6 +15,7 @@ use crate::charset::{
 };
 use crate::cursor::get_cursor_rel_lnum;
 use crate::cursor_shape::cursor_is_block_during_visual;
+use crate::decoration::defs::VirtText;
 use crate::decoration::defs::{DecorRange, HlMode, VirtTextPos};
 use crate::decoration::{
     DECOR_ID_INVALID, VirtChunks, VirtLineRef, decor_conceal, decor_has_more_decorations,
@@ -84,9 +85,7 @@ use crate::syntax::{SynFlags, get_syntax_attr, syn_get_sub_char, syntax_present}
 use crate::terminal::terminal_get_line_attributes;
 use crate::types::NS;
 use crate::types::TAB;
-use crate::types::{
-    ColNr, DiffLine, LineNr, NUL, Pos, ScreenAttr, ScreenChar, VarNumber, VirtText,
-};
+use crate::types::{ColNr, DiffLine, LineNr, NUL, Pos, ScreenAttr, ScreenChar, VarNumber};
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;
 use crate::winlayer::graph::{cmdwin_type, cmdwin_win};

@@ -57,7 +57,7 @@ use super::edit::{Loan, assert_not_lent};
 use super::*;
 use crate::hashtab::{HashValue, SlotEntry};
 use crate::hashtab::{hash_bytes, hash_bytes_len};
-use crate::types::{DictKey, Failed, Refcount};
+use crate::types::{Failed, Refcount};
 
 /// An owning reference to a heap-allocated [`List`].
 ///

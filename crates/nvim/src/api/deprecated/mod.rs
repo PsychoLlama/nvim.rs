@@ -14,6 +14,7 @@ use crate::api::extmark::{nvim_buf_clear_namespace, nvim_create_namespace, parse
 use crate::api::keysets::{KeyDict_empty, KeyDict_exec_opts};
 use crate::api::private::dispatch::msgpack_rpc_get_handler_for;
 use crate::api::private::helpers::{api_set_sctx, api_typename, dict_set_var};
+use crate::decoration::defs::VirtText;
 use crate::decoration::defs::{
     DecorExt, DecorInline, DecorPriority, DecorVirtText, DecorVirtText_data,
 };
@@ -31,6 +32,7 @@ use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_exec;
 use crate::message::msg_end;
 use crate::message::state::{msg_didout, msg_silent};
+use crate::msgpack_rpc::handler::MsgpackRpcRequestHandler;
 use crate::option::defs::{OptIndex, OptVal};
 use crate::option::{
     find_option, get_option_value_for, get_vimoption, object_as_optval, option_has_scope,
@@ -40,9 +42,8 @@ use crate::options::kOptInvalid;
 use crate::os::libc::{int64_t, size_t, uint8_t, uint32_t, uint64_t};
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, BufferHandle, ColNr, Error, Integer,
-    MsgpackRpcRequestHandler, Object, TabpageHandle, VirtText, WindowHandle, kObjectTypeArray,
-    kObjectTypeString,
+    ApiDict, ApiString, Array, Boolean, BufferHandle, ColNr, Error, Integer, Object, TabpageHandle,
+    WindowHandle, kObjectTypeArray, kObjectTypeString,
 };
 
 // The carve of the transpiled module; see each child's docs.

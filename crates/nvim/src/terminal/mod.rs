@@ -74,11 +74,12 @@ use crate::os::libc::int16_t;
 use crate::startup::exiting;
 use crate::state::mode::State;
 use crate::terminal::state::SELECTIONBUF_SIZE;
+use crate::terminal::state::Terminal;
 use crate::terminal::state::TerminalOptions;
 use crate::types::ApiString;
 use crate::types::builders::DictBuf;
 use crate::types::{
-    BufferHandle, ColNr, Handle, LineNr, Object, Pos, RefcountSize, SaveVEvent, Terminal, VarNumber,
+    BufferHandle, ColNr, Handle, LineNr, Object, Pos, RefcountSize, SaveVEvent, VarNumber,
 };
 use crate::vterm::host::Value;
 use crate::vterm::screen::ZERO_SCREEN_CELL;

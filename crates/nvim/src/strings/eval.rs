@@ -26,6 +26,7 @@ use crate::charset::display::transstr_owned;
 use crate::charset::{Str2NrBases, skip, str2nr_scan};
 use crate::cstr::byte_at;
 use crate::eval::encode::encode_tv2string;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     NumBuf, tv_check_for_opt_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk,
     tv_list_alloc_ret,
@@ -40,7 +41,7 @@ use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
 use crate::os::libc::ptrdiff_t;
 use crate::plines::linetabsize_text;
-use crate::types::{EvalFuncData, TypVal, VarNumber, kListLenUnknown};
+use crate::types::{TypVal, VarNumber, kListLenUnknown};
 
 /// "str2list()" function: the string as a list of code points.
 pub fn f_str2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {

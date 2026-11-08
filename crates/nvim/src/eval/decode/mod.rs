@@ -25,10 +25,11 @@
 
 use crate::memory::ThinCString;
 
+use crate::eval::typval::DictItem;
 use crate::eval::typval::{ListRef, tv_blob_alloc, tv_dict_alloc, tv_list_alloc};
 use crate::eval::vars::msgpack_type_list_ref;
 use crate::os::libc::ptrdiff_t;
-use crate::types::{DictItem, MessagePackType, TypVal, VarLock};
+use crate::types::{MessagePackType, TypVal, VarLock};
 
 mod json;
 mod msgpack;

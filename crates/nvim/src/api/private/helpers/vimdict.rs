@@ -14,7 +14,9 @@
 )]
 
 use crate::api_error;
+use crate::eval::typval::DictItem;
 use crate::eval::typval::DictRef;
+use crate::eval::typval::ScopeDictItem;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO};
 use crate::eval::typval::{
@@ -22,8 +24,8 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::{VvarStore, before_set_vvar, vimvar_dict};
 use crate::os::libc::size_t;
-use crate::types::{ApiString, DictItem, Error, Object, kErrorTypeException, kErrorTypeValidation};
-use crate::types::{ScopeDictItem, TypVal};
+use crate::types::TypVal;
+use crate::types::{ApiString, Error, Object, kErrorTypeException, kErrorTypeValidation};
 use core::ffi::c_int;
 
 // -- Vimscript dictionaries ------------------------------------------------

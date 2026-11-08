@@ -29,6 +29,7 @@ use core::ffi::{CStr, c_int};
 use crate::ascii::ascii_iswhite;
 use crate::drawscreen::state::search_hl_has_cursor_lnum;
 use crate::drawscreen::{UPD_SOME_VALID, UPD_VALID, redraw_later, redraw_win_range_later};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::funcs::get_optional_window;
 use crate::eval::typval::{
     dict_find, dict_get_number, index_of, list_items, list_iter, list_len, tv_dict_alloc,
@@ -56,8 +57,8 @@ use crate::regexp::RegMMatch;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec_multi};
 use crate::search::state::{search_first_line, search_last_line};
 use crate::types::{
-    ColNr, EvalFuncData, ExArg, Failed, LLPos, LineNr, List, MatchItem, MatchState, TypVal,
-    VAR_LIST, VAR_NUMBER, VarNumber, Window,
+    ColNr, ExArg, Failed, LLPos, LineNr, List, MatchItem, MatchState, TypVal, VAR_LIST, VAR_NUMBER,
+    VarNumber, Window,
 };
 use crate::winlayer::Win;
 

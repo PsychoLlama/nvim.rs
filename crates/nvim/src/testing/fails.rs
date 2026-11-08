@@ -18,6 +18,7 @@
 use crate::strings::has_bytes;
 use core::ffi::{CStr, c_int};
 
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::pattern_match;
 use crate::eval::typval::{
     NumBuf, tv_check_for_opt_number_arg, tv_check_for_opt_string_arg,
@@ -35,9 +36,7 @@ use crate::message::state::{
 };
 use crate::message::{emsg, msg_reset_scroll};
 use crate::os::cshim::gettext;
-use crate::types::{
-    EvalFuncData, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, Vv,
-};
+use crate::types::{TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, Vv};
 use crate::ui::state::Rows;
 
 use super::report::{

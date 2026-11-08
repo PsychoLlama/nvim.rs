@@ -11,6 +11,7 @@
 )]
 
 use super::*;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::memory::ThinCString;
 use crate::os::libc::ptrdiff_t;
 use crate::types::{VAR_STRING, kListLenMayKnow, kListLenUnknown};

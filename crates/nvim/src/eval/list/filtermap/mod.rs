@@ -35,9 +35,10 @@ use super::{
     Container, clear_tv, clear_vim_var, copy_tv, err_not_container, eval_expr, number_of,
     push_vim_var, restore_vim_var, run_cmd, save_vim_var, string_bytes,
 };
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::CallFrame;
 use crate::message::state::did_emsg;
-use crate::types::{EvalFuncData, TypVal, VAR_UNKNOWN, Vv};
+use crate::types::{TypVal, VAR_UNKNOWN, Vv};
 
 // The carve of the transpiled module; see each child's docs.
 mod containers;

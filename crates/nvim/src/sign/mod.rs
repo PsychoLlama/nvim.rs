@@ -45,6 +45,7 @@ use crate::decoration::{
 };
 use crate::drawscreen::{UPD_NOT_VALID, redraw_buf_later};
 use crate::edit::{BeginlineOpts, beginline};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::funcs::get_buf_arg;
 use crate::eval::typval::Unconvertible;
 use crate::eval::typval::{
@@ -68,8 +69,7 @@ use crate::os::cshim::gettext;
 use crate::os::libc::{int32_t, int64_t, ptrdiff_t};
 use crate::tr;
 use crate::types::{
-    ApiString, Dict, EvalFuncData, ExArg, Failed, Integer, LineNr, List, ScreenChar, TypVal,
-    VarNumber,
+    ApiString, Dict, ExArg, Failed, Integer, LineNr, List, ScreenChar, TypVal, VarNumber,
 };
 use crate::window::buf_jump_open_win;
 use crate::winlayer::{Buf, Win, buffers, first_buffer, windows};

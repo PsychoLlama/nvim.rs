@@ -22,8 +22,8 @@
 )]
 
 use super::error::DecodeError;
+use crate::eval::typval::DictItem;
 use crate::memory::ThinCString;
-use crate::types::DictItem;
 
 use crate::eval::typval::{DictRef, ListRef, dict_find, tv_clear, tv_list_alloc};
 use crate::types::{TypVal, VAR_STRING};

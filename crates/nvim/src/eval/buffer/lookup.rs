@@ -12,6 +12,7 @@
 
 use super::*;
 use crate::buffer::{buflist_add_name, find_buffer_by_name};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::NumBuf;
 use crate::guard::Suppress;
 use crate::memory::ThinCString;

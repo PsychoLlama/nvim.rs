@@ -6,8 +6,9 @@
 //! plus the boundaries where this implementation deliberately differs from
 //! it, and the object walker is checked end to end through a string buffer.
 
+use neovim::eval::typval::DictKey;
 use neovim::msgpack_rpc::packer::{format, mpack_object, pack_to_bytes};
-use neovim::types::{ApiDict, ApiString, Array, DictKey, KeyValuePair, Object};
+use neovim::types::{ApiDict, ApiString, Array, KeyValuePair, Object};
 
 #[test]
 fn booleans_are_one_byte() {

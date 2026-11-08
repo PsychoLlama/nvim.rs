@@ -15,6 +15,8 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 use crate::buffer::BufFlags;
+use crate::decoration::defs::VirtText;
+use crate::eval::typval::{DictItem, ScopeDictItem};
 use crate::mapping::MapTables;
 use crate::mark::defs::FileMark;
 use crate::marktree::MarkTree;
@@ -26,6 +28,7 @@ use crate::regexp::RegMMatch;
 use crate::registry::IdMap;
 use crate::spell::LangP;
 use crate::syntax::{SynCluster, SynPat};
+use crate::terminal::state::Terminal;
 use crate::undo::node::{UndoLink, VisualInfo};
 use crate::usercmd::UserCmd;
 use core::ffi::{CStr, c_char};

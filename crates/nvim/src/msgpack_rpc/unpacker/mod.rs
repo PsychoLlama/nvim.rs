@@ -26,18 +26,17 @@
 use core::ffi::c_int;
 
 use crate::api::private::dispatch::{NO_HANDLER, msgpack_rpc_get_handler_for};
+use crate::eval::typval::DictKey;
 use crate::grid::defs::GridLineEvent;
 use crate::memory::XString;
 use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK, Next, TokBuf, read_token};
 use crate::mpack::object::{MPACK_NOMEM, Node, Parser};
 use crate::mpack::token::{self, Kind, Tok};
 use crate::msgpack_rpc::handler::ApiDispatchFn;
+use crate::msgpack_rpc::handler::MsgpackRpcRequestHandler;
 use crate::msgpack_rpc::packer::{EXT_BUFFER, EXT_TABPAGE, EXT_WINDOW};
 use crate::narrow::msgpack_uint_as_u32;
-use crate::types::{
-    ApiDict, ApiString, DictKey, Error, Integer, KeyValuePair, MessageType,
-    MsgpackRpcRequestHandler, Object,
-};
+use crate::types::{ApiDict, ApiString, Error, Integer, KeyValuePair, MessageType, Object};
 use crate::ui::state::UIClientHandler;
 use crate::ui_client::handle_ui_client_redraw;
 

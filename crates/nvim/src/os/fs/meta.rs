@@ -13,7 +13,9 @@
 // Unsafe perimeter: the `os/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 
-use core::ffi::{CStr, c_double, c_int, c_void};
+use crate::os::libc::{int32_t, uint64_t};
+use core::ffi::c_int;
+use core::ffi::{CStr, c_double, c_void};
 use core::ptr;
 
 use std::fs::File;
@@ -29,9 +31,8 @@ use crate::log::g_stats;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::fs::{FileID, FileInfo};
-use crate::os::libc::{int32_t, size_t, ssize_t, uint64_t};
+use crate::os::libc::{size_t, ssize_t};
 use crate::os::uv_error::uv_code;
-use crate::types::VimAcl;
 use ::libc::{E2BIG, getxattr, listxattr, setxattr};
 
 /// The `errno` values [`copy_xattr`] treats as "this filesystem simply
@@ -278,6 +279,8 @@ pub fn link_info(path: &CStr) -> Option<FileInfo> {
 pub(crate) fn file_id(path: &CStr) -> Option<FileID> {
     file_info(path).map(|info| info.id())
 }
+
+pub type VimAcl = *mut ::core::ffi::c_void;
 
 #[cfg(test)]
 mod tests {

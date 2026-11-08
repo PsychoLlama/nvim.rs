@@ -26,13 +26,14 @@ use std::ffi::{c_char, c_void};
 use std::mem::ManuallyDrop;
 use std::ptr;
 
+use neovim::eval::typval::DictItem;
 use neovim::eval::typval::{
     BlobRef, DictRef, ListRef, PartialRef, list_find, list_len, tv_blob_alloc, tv_clear, tv_copy,
     tv_dict_alloc, tv_list_alloc,
 };
 use neovim::memory::ThinCString;
 use neovim::types::{
-    Blob, Callback, Dict, DictItem, List, ListItem, Object, Partial, Refcount, TypVal, VarNumber,
+    Blob, Callback, Dict, List, ListItem, Object, Partial, Refcount, TypVal, VarNumber,
     kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
 };
 

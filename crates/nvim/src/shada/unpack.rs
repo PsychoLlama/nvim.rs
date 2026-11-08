@@ -19,11 +19,12 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::api::private::helpers::StringArray;
 use crate::api::private::keyset::{KeySet, Slot};
 use crate::eval::decode::unpack_typval;
 use crate::fileio::buffered::ReadFile;
 use crate::mpack::token::{self, Kind, Read, Tok};
-use crate::types::{ApiString, Integer, StringArray, TypVal};
+use crate::types::{ApiString, Integer, TypVal};
 use core::ffi::c_int;
 use std::borrow::Cow;
 use std::ffi::CString;

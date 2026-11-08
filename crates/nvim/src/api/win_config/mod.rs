@@ -18,6 +18,7 @@ use crate::api::private::helpers::{
 };
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{block_autocmds, is_aucmd_win, unblock_autocmds};
+use crate::decoration::defs::VirtText;
 use crate::decoration::defs::VirtTextChunk;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later, set_must_redraw};
 use crate::eval::window::{restore_win, restore_win_noblock, switch_win, switch_win_noblock};
@@ -31,8 +32,8 @@ use crate::option::didset_window_options;
 use crate::option::vars::{p_sb, p_spr, p_winborder};
 use crate::types::{
     AlignTextPos, ApiString, Array, Boolean, BorderTextType, BufferHandle, Error, FloatAnchor,
-    FloatRelative, Integer, LPos, Object, SwitchWin, VirtText, WinConfig, WinSplit, WinStyle,
-    WindowHandle, kErrorTypeException, kErrorTypeValidation, kFloatAnchorEast, kFloatAnchorSouth,
+    FloatRelative, Integer, LPos, Object, SwitchWin, WinConfig, WinSplit, WinStyle, WindowHandle,
+    kErrorTypeException, kErrorTypeValidation, kFloatAnchorEast, kFloatAnchorSouth,
     kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
     kFloatRelativeTabline, kFloatRelativeWindow,
 };

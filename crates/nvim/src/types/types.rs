@@ -10,54 +10,13 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
-use crate::msgpack_rpc::handler::ApiDispatchFn;
 use crate::os::libc::{int32_t, int64_t, uint32_t, uint64_t};
-use crate::terminal::state::terminal;
 use core::ffi::c_int;
 use core::fmt;
 use core::num::TryFromIntError;
 
-/// A one-argument float operation, as `float_op_wrapper` calls it. The
-/// implementations are `eval::funcs::math`'s, wrapping `f64`'s methods.
-pub type FloatFunc = Option<fn(Float) -> Float>;
-/// The payload one row of the builtin-function table carries.
-///
-/// There is no tag beside it: which arm a row holds follows from the row's
-/// `func`, because only the two shared wrappers read one at all.
-#[derive(Copy, Clone)]
-pub enum EvalFuncData {
-    /// The builtin has a body of its own and carries nothing.
-    None,
-    /// A libm operation, for `float_op_wrapper`.
-    Float(FloatFunc),
-    /// The index of a row of the RPC handler table, for `api_wrapper`.
-    Api(usize),
-}
-/// Where one half of a pair was, and where a splice moved it to.
-#[derive(Copy, Clone)]
-pub struct MTDamage {
-    pub old: Option<crate::marktree::node::NodeId>,
-    pub new: Option<crate::marktree::node::NodeId>,
-    pub old_i: ::core::ffi::c_int,
-    pub new_i: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-pub struct MTDamagePair {
-    pub start: MTDamage,
-    pub end: MTDamage,
-}
-/// One row of the API dispatch table.
-///
-/// `Copy`: a static name and a function pointer.
-#[derive(Copy, Clone)]
-pub struct MsgpackRpcRequestHandler {
-    pub name: Option<&'static ::core::ffi::CStr>,
-    pub fn_0: Option<ApiDispatchFn>,
-    pub fast: bool,
-}
 pub type NS = Handle;
 pub type OptInt = int64_t;
-pub type Terminal = terminal;
 pub type Float = ::core::ffi::c_double;
 /// `handle_T`: the id a buffer, window, tab page, grid or namespace is known
 /// by, on the wire and in the editor's own tables.
@@ -167,4 +126,3 @@ impl fmt::Display for Handle {
 pub type ProfTime = uint64_t;
 pub type ScreenAttr = int32_t;
 pub type ScreenChar = uint32_t;
-pub type VimAcl = *mut ::core::ffi::c_void;

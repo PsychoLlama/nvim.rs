@@ -26,6 +26,7 @@ use core::ffi::c_int;
 use super::*;
 use crate::drawscreen::state::dollar_vcol;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, win_scroll_lines};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     tv_check_for_number_arg, tv_dict_alloc_ret, tv_get_number, tv_get_number_chk,
 };
@@ -36,7 +37,7 @@ use crate::option::vars::p_ss;
 use crate::os::libc::int64_t;
 use crate::plines::getvcol;
 use crate::semsg;
-use crate::types::{ColNr, EvalFuncData, LineNr, Pos, TypVal, VarNumber};
+use crate::types::{ColNr, LineNr, Pos, TypVal, VarNumber};
 use crate::winlayer::Win;
 
 impl Win {

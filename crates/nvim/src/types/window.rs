@@ -11,6 +11,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 use crate::arglist::ArgListId;
+use crate::eval::typval::ScopeDictItem;
 use crate::grid::defs::{GridView, ScreenGrid};
 use crate::mark::defs::{FileMark, FileMarkView, XFileMark};
 use crate::memory::XString;

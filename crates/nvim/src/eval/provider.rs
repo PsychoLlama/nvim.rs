@@ -13,9 +13,11 @@
 #![allow(non_upper_case_globals)]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::userfunc::FcId;
 use crate::guard::Depth;
 use crate::memory::ThinCString;
 use crate::message_fmt::{msg_bytes, msg_cstr};
+use crate::runtime::defs::EStack;
 use crate::semsg;
 use crate::types::ColNr;
 use crate::types::Failed;
@@ -44,11 +46,11 @@ use crate::memline::{Lines, ml_append_bytes};
 use crate::message::{e_invarg, e_invchan, e_invchanjob};
 use crate::option::vars::p_lpl;
 use crate::os::libc::{ptrdiff_t, uint64_t};
-use crate::runtime::defs::{EStack, EstackInfo};
+use crate::runtime::defs::EstackInfo;
 use crate::runtime::script_autoload_named;
 use crate::runtime::sourcing_name_copy;
 use crate::runtime::state::{ETYPE_TOP, current_sctx};
-use crate::types::{Callback, CallerScope, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber};
+use crate::types::{Callback, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber};
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Win};
 
@@ -363,4 +365,16 @@ pub fn invoke_prompt_interrupt() -> bool {
     let called = callback_call(&callback, &[], &mut rettv) == Ok(true);
     clear_local(&mut rettv);
     called
+}
+
+/// What a provider call reaches back into: the context of the script that
+/// started it.
+pub(crate) struct CallerScope {
+    pub(crate) script_ctx: ScriptCtx,
+    pub(crate) es_entry: EStack,
+    pub(crate) autocmd_fname: Option<crate::memory::XString>,
+    pub(crate) autocmd_match: Option<crate::memory::XString>,
+    pub(crate) autocmd_fname_full: bool,
+    pub(crate) autocmd_bufnr: ::core::ffi::c_int,
+    pub(crate) funccalp: Option<FcId>,
 }

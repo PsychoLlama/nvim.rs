@@ -29,6 +29,7 @@
 )]
 
 use super::{__S_IFMT, str_arg};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{tv_blob_alloc_ret, tv_get_number, tv_list_alloc_ret};
 use crate::fileio::FileOffset;
@@ -40,7 +41,7 @@ use crate::os::fs::dir_exists;
 use crate::os::libc::{int64_t, ptrdiff_t, uint64_t};
 use crate::pos::MAXLNUM;
 use crate::semsg;
-use crate::types::{EvalFuncData, List, TypVal, kListLenUnknown};
+use crate::types::{List, TypVal, kListLenUnknown};
 use core::ffi::{CStr, c_int};
 use std::ffi::OsStr;
 use std::io::{ErrorKind, Read, Seek, SeekFrom};

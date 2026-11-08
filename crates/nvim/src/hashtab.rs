@@ -43,7 +43,7 @@ const PERTURB_SHIFT: u32 = 5;
 ///
 /// The table probes on a key's *hash* and stores whatever the caller wants
 /// to find again: a dictionary's slots name a
-/// [`DictItem`](crate::types::DictItem) and read the key out of it, and the
+/// [`DictItem`](crate::eval::typval::DictItem) and read the key out of it, and the
 /// tables whose entries are indexes into storage beside them (the syntax
 /// keyword tables, the spell-file sections) look the key up there. Either way
 /// the probe sequence sees only the hash and the caller's equality test, so

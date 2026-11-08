@@ -486,9 +486,9 @@ pub fn f_uniq(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::eval::funcs::builtin::EvalFuncData;
     use crate::eval::list::string_tv;
     use crate::global_cell::editor_state_lock;
-    use crate::types::EvalFuncData;
 
     use V::{F, N, Str};
 

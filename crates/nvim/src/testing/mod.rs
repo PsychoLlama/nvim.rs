@@ -31,6 +31,7 @@ use std::io::{BufReader, Bytes, Read};
 use std::os::unix::ffi::OsStrExt;
 
 use crate::eval::encode::{encode_tv2echo, push_float_g};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     NumBuf, tv_check_for_float_or_nr_arg, tv_check_for_opt_string_arg, tv_equal, tv_get_float,
     tv_get_number_chk,
@@ -45,8 +46,7 @@ use crate::message::state::{emsg_on_display, emsg_silent};
 use crate::os::cshim::gettext;
 use crate::runtime::defs::EStackArg;
 use crate::types::{
-    BoolVarValue, EvalFuncData, TypVal, VAR_FLOAT, VAR_NUMBER, VarNumber, Vv, kBoolVarFalse,
-    kBoolVarTrue,
+    BoolVarValue, TypVal, VAR_FLOAT, VAR_NUMBER, VarNumber, Vv, kBoolVarFalse, kBoolVarTrue,
 };
 use crate::ui::state::called_vim_beep;
 

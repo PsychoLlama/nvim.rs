@@ -15,6 +15,7 @@ use crate::narrow::number_as_int;
 use crate::types::LineNr;
 use crate::winlayer::{Buf, Win};
 
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, tv_list_alloc_ret};
 use crate::grid::{GridRef, grid_getchar, schar_bytes, schar_from_char};
 use crate::highlight::HlAttrFlags;
@@ -27,7 +28,7 @@ use crate::memline::ml_get_len;
 use crate::memory::ThinCString;
 use crate::message::msg_scroll_flush;
 use crate::syntax::{SynFlags, get_syntax_info, syn_get_stack_item, syn_get_sub_char};
-use crate::types::{ColNr, EvalFuncData, NUL, ScreenChar, TypVal, VarNumber, kListLenMayKnow};
+use crate::types::{ColNr, NUL, ScreenChar, TypVal, VarNumber, kListLenMayKnow};
 use crate::ui::{ui_current_col, ui_current_row, ui_rgb_attached};
 use crate::ui_compositor::ui_comp_get_grid_at_coord;
 use core::ffi::c_int;

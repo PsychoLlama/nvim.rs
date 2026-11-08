@@ -29,11 +29,12 @@ use super::{
     create_special_dict, decode_create_map_special_dict, decode_owned_string, kMPExt, kMPInteger,
 };
 use crate::eval::encode::encode_list_write;
+use crate::eval::typval::DictItem;
 use crate::eval::typval::{ListRef, tv_dict_alloc, tv_list_alloc};
 use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK, Step, TokBuf, read_step};
 use crate::mpack::token::{Kind, Tok, unpack_boolean, unpack_float, unpack_sint, unpack_uint};
 use crate::types::{
-    DictItem, TypVal, VarNumber, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
+    TypVal, VarNumber, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
 };
 
 /// How deep a value may nest, counting each string's bytes as one more

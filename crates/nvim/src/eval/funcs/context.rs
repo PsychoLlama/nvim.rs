@@ -18,14 +18,13 @@ use crate::context::kCtxSFuncs;
 use crate::context::{
     CTX_ALL, ctx_from_dict, ctx_restore, ctx_save, ctx_size, ctx_to_dict, with_ctx,
 };
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::list_iter;
 use crate::message::state::did_emsg;
 use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_integer;
 use crate::semsg;
-use crate::types::{
-    Error, EvalFuncData, Failed, Object, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN,
-};
+use crate::types::{Error, Failed, Object, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN};
 use core::ffi::c_int;
 
 /// A cleared API error, the shape every `api_*` out-parameter starts in.

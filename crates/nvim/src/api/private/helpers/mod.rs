@@ -366,3 +366,45 @@ impl Default for TryState {
         Self::INIT
     }
 }
+
+/// A vector of owned API strings: ShaDa's register contents, the one keyset
+/// field whose value is a list of binaries rather than an [`Object`] tree.
+#[derive(Clone, Default)]
+pub struct StringArray(Vec<ApiString>);
+
+impl StringArray {
+    /// No strings and nothing allocated.
+    pub const EMPTY: Self = Self(Vec::new());
+
+    pub fn push(&mut self, str: ApiString) {
+        self.0.push(str);
+    }
+
+    /// The strings, as the vector they are kept in.
+    pub fn into_vec(self) -> Vec<ApiString> {
+        self.0
+    }
+}
+
+impl From<Vec<ApiString>> for StringArray {
+    fn from(items: Vec<ApiString>) -> Self {
+        Self(items)
+    }
+}
+
+impl ::core::ops::Deref for StringArray {
+    type Target = [ApiString];
+
+    fn deref(&self) -> &[ApiString] {
+        &self.0
+    }
+}
+
+impl<'a> IntoIterator for &'a StringArray {
+    type Item = &'a ApiString;
+    type IntoIter = ::core::slice::Iter<'a, ApiString>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}

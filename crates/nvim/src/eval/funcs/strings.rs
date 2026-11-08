@@ -12,6 +12,7 @@
 use super::wrappers::{arg_bool_chk, arg_number, arg_number_chk, blob_alloc_ret, non_zero_arg};
 use super::{NSUBEXP, VSE_NONE};
 use crate::eval::do_string_sub;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     NumBuf, blob_bytes, list_extend, list_len, tv_check_for_nonempty_string_arg,
     tv_check_for_string_arg, tv_check_num, tv_list_alloc_ret,
@@ -45,9 +46,7 @@ use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{escaped_bytes, format_typvals, shellescape};
 use crate::types::ColNr;
-use crate::types::{
-    EvalFuncData, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, kListLenMayKnow,
-};
+use crate::types::{List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, kListLenMayKnow};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 

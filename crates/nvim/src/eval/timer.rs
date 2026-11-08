@@ -21,6 +21,7 @@
 use crate::narrow::number_as_int;
 use core::ffi::c_int;
 
+use crate::eval::typval::DictItem;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{ListRef, callback_copy, callback_free, callback_put, tv_dict_alloc};
 use crate::eval::vars::clear_local;
@@ -32,7 +33,7 @@ use crate::ex_eval::state::did_throw;
 use crate::message::state::{called_emsg, did_emsg};
 use crate::os::libc::{int64_t, uint64_t};
 use crate::registry::SlotTable;
-use crate::types::{Callback, DictItem, Timer, TypVal, VarNumber};
+use crate::types::{Callback, Timer, TypVal, VarNumber};
 
 /// How many consecutive errors a timer's callback may raise before the
 /// timer is stopped for good.

@@ -38,6 +38,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     NumBuf, tv_check_for_nonempty_string_arg, tv_check_for_string_arg, tv_get_number_chk,
 };
@@ -53,7 +54,7 @@ use crate::os::fs::{
 };
 use crate::os::libc::uint64_t;
 use crate::path::{tail_index, vim_ispathsep};
-use crate::types::{Direction, EvalFuncData, TypVal, VAR_STRING, VarNumber};
+use crate::types::{Direction, TypVal, VAR_STRING, VarNumber};
 use core::ffi::{CStr, c_int};
 
 // The carve of the transpiled module; see each child's docs.

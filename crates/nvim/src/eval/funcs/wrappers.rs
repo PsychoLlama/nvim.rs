@@ -22,6 +22,7 @@ use crate::buffer::{buflist_findpat_prefix, find_buf};
 use crate::cmdexpand::defs::Candidate;
 use crate::cmdexpand::defs::Expand;
 use crate::eval::buffer::find_buffer;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::funcs::builtin::{EvalFuncDef, WrongArity};
 use crate::eval::typval::{
     CallFrame, NumBuf, Unconvertible, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy,
@@ -45,8 +46,8 @@ use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::Handle;
 use crate::types::{
-    Array, Blob, EvalFuncData, Failed, Float, LineNr, Object, TypVal, VAR_BOOL, VAR_FLOAT,
-    VAR_NUMBER, VAR_STRING, VarNumber, kBoolVarTrue,
+    Array, Blob, Failed, Float, LineNr, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER,
+    VAR_STRING, VarNumber, kBoolVarTrue,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{CStr, c_int};

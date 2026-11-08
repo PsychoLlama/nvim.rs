@@ -22,6 +22,7 @@ use crate::channel::{
 };
 use crate::cstr;
 use crate::env::home_to_tilde;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     DictRef, NumBuf, dict_extend, dict_find, dict_get_number, list_iter, tv_dict_alloc,
@@ -54,8 +55,8 @@ use crate::terminal::{Term, buf_terminal_running, terminal_buf, terminal_open};
 use crate::types::Failed;
 use crate::types::Handle;
 use crate::types::{
-    ApiString, Callback, Dict, EvalFuncData, IOSIZE, Integer, Object, TypVal, VAR_BOOL, VAR_DICT,
-    VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, Vv,
+    ApiString, Callback, Dict, IOSIZE, Integer, Object, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST,
+    VAR_NUMBER, VAR_STRING, VarNumber, Vv,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;

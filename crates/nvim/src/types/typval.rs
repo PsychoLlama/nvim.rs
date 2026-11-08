@@ -441,7 +441,7 @@ pub struct FuncCall {
 /// An item's short keys -- every fixed `a:` name -- fit inline.
 #[cfg(not(randomized_layout))]
 const _: () = {
-    use crate::types::{DictItem, DictKey};
+    use crate::eval::typval::{DictItem, DictKey};
     assert!(
         DictKey::INLINE_MAX >= 20,
         "a funccall's short names fit inline"
@@ -610,7 +610,7 @@ impl Default for ScriptCtx {
 /// eleven arms.  [`v_type`](Self::v_type) is that number.
 ///
 /// **The lock is not here.** `:lockvar l[0]` locks the place, not the value in
-/// it, so the lock lives on the [`ListItem`]/[`DictItem`](crate::types::DictItem)
+/// it, so the lock lives on the [`ListItem`]/[`DictItem`](crate::eval::typval::DictItem)
 /// -- which is also what keeps this type at sixteen bytes, since an enum has
 /// nowhere to put a second field.
 ///

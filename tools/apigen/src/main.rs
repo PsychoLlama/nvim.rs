@@ -2158,9 +2158,12 @@ fn generate_tables(
     for path in &externs {
         writeln!(out, "use {path};").unwrap();
     }
-    writeln!(out, "use crate::msgpack_rpc::handler::ApiDispatchFn;").unwrap();
-    let types = ["Error", "MsgpackRpcRequestHandler"];
-    writeln!(out, "use crate::types::{{{}}};", types.join(", ")).unwrap();
+    writeln!(
+        out,
+        "use crate::msgpack_rpc::handler::{{ApiDispatchFn, MsgpackRpcRequestHandler}};"
+    )
+    .unwrap();
+    writeln!(out, "use crate::types::Error;").unwrap();
     let mut keydicts: Vec<String> = keysets
         .iter()
         .map(|k| format!("KeyDict_{}", k.name))

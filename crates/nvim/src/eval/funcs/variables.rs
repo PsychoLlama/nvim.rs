@@ -11,6 +11,7 @@
 use crate::eval::FNE_CHECK_START;
 use crate::eval::GLV_NO_AUTOLOAD;
 use crate::eval::GLV_READ_ONLY;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::DI_FLAGS_LOCK;
 use crate::eval::typval::{NumBuf, callback_free, tv_islocked};
 use crate::eval::vars::with_var;
@@ -19,9 +20,7 @@ use crate::ex_cmds::check_secure;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::strings::format_typvals;
-use crate::types::{
-    Callback, EvalFuncData, TypVal, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING, VarNumber,
-};
+use crate::types::{Callback, TypVal, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING, VarNumber};
 
 /// An unset callback, the shape `callback_from_typval` fills in.
 const NO_CALLBACK: Callback = Callback::None;

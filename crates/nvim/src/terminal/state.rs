@@ -292,3 +292,5 @@ pub(crate) type terminal_read_pause_cb = Option<fn(bool, u64)>;
 pub(crate) type terminal_resize_cb = Option<fn(uint16_t, uint16_t, u64)>;
 pub(crate) type terminal_resume_cb = Option<fn(u64)>;
 pub(crate) type terminal_write_cb = Option<fn(&[u8], u64)>;
+
+pub(crate) type Terminal = terminal;

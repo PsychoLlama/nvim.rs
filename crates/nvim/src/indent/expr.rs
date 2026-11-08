@@ -10,6 +10,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::mbyte::CharInfo;
 use crate::option::defs::OptionSetFlags;
 use crate::options::kBufOptIndentexpr;

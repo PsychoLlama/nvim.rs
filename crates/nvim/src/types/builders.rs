@@ -22,9 +22,10 @@
 )]
 
 use super::{
-    ApiDict, ApiString, Array, BufferHandle, DictKey, Float, Integer, KeyValuePair, LuaRef, Object,
+    ApiDict, ApiString, Array, BufferHandle, Float, Integer, KeyValuePair, LuaRef, Object,
     TabpageHandle, WindowHandle,
 };
+use crate::eval::typval::DictKey;
 use core::ffi::CStr;
 use core::mem::ManuallyDrop;
 

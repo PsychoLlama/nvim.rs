@@ -370,8 +370,7 @@ fn imports(out: &mut String, rows: &[Builtin], symbols: &Symbols) -> Result<(), 
         .unwrap();
     }
     out.push_str(
-        "use crate::eval::funcs::builtin::{Arity, BaseArg, EvalFuncDef, VimLFunc};\n\
-         use crate::types::{EvalFuncData, FloatFunc};\n",
+        "use crate::eval::funcs::builtin::{Arity, BaseArg, EvalFuncData, EvalFuncDef, FloatFunc, VimLFunc};\n",
     );
     Ok(())
 }

@@ -16,6 +16,7 @@ use crate::ascii::ascii_iswhite;
 use crate::autocmd::state::autocmd_busy;
 use crate::cmdexpand::cmdline_pum_active;
 use crate::cmdexpand::state::wild_menu_showing;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, tv_dict_alloc_ret, tv_list_alloc_ret};
 use crate::eval::vars::{get_vim_var_nr, set_vim_var_nr};
 use crate::eval::{get_callback_depth, has_provider_from_vimscript};
@@ -44,8 +45,7 @@ use crate::strings::has_char;
 use crate::syntax::syntax_present;
 use crate::types::LineNr;
 use crate::types::{
-    Array, ColNr, Error, EvalFuncData, NUL, Object, TypVal, VAR_STRING, VarNumber, Vv,
-    kListLenMayKnow,
+    Array, ColNr, Error, NUL, Object, TypVal, VAR_STRING, VarNumber, Vv, kListLenMayKnow,
 };
 use crate::ui::ui_gui_attached;
 use crate::version::{has_nvim_version, has_vim_patch};

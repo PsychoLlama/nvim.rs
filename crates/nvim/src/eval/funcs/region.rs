@@ -13,6 +13,7 @@ use super::{kMTBlockWise, kMTCharWise, kMTLineWise};
 use crate::buffer::find_buf;
 use crate::charset::getdigits_int_at;
 use crate::cstr;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::list2fpos;
 use crate::eval::typval::{
     NumBuf, dict_get_bool, tv_check_for_list_arg, tv_check_for_opt_dict_arg, tv_list_alloc,
@@ -34,9 +35,7 @@ use crate::state::mode::virtual_op;
 use crate::state::virtual_active;
 use crate::tr;
 use crate::types::Handle;
-use crate::types::{
-    ColNr, EvalFuncData, Key, LineNr, Pos, TypVal, VAR_DICT, VarNumber, kListLenMayKnow,
-};
+use crate::types::{ColNr, Key, LineNr, Pos, TypVal, VAR_DICT, VarNumber, kListLenMayKnow};
 use core::ffi::{CStr, c_int};
 
 use crate::winlayer::{Buf, Win};

@@ -46,6 +46,7 @@ use crate::drawscreen::{
     UPD_NOT_VALID, UPD_VALID, redraw_buf_later, redraw_curbuf_later, update_screen,
 };
 use crate::edit::beginline;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::mark_root;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
@@ -108,8 +109,8 @@ use crate::tr;
 use crate::types::Failed;
 use crate::types::TAB;
 use crate::types::{
-    Callback, ColNr, Dict, Direction, EvalFuncData, ExArg, LineNr, List, ListRef, OptInt, Pos,
-    ScriptId, TypVal, VarNumber, VarType,
+    Callback, ColNr, Dict, Direction, ExArg, LineNr, List, ListRef, OptInt, Pos, ScriptId, TypVal,
+    VarNumber, VarType,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_flush;

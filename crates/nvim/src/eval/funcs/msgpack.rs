@@ -15,6 +15,7 @@ use crate::eval::encode::{
     ListRead, ListReader, encode_list_write, encode_tv2json, encode_vim_list_to_buf,
     encode_vim_to_msgpack,
 };
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, blob_bytes, tv_list_alloc};
 use crate::message_fmt::msg_bytes;
 use crate::mpack::mpack_core::MPACK_EOF;
@@ -23,7 +24,7 @@ use crate::mpack::mpack_core::MPACK_OK;
 use crate::msgpack_rpc::packer::pack_to_bytes;
 use crate::semsg;
 use crate::types::{
-    Blob, EvalFuncData, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
+    Blob, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
 };
 use core::ffi::{CStr, c_int};
 use core::fmt::Write as _;

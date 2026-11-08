@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::buffer::buf_get_changedtick;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::os::libc::ptrdiff_t;
 use crate::types::{VAR_DICT, kListLenMayKnow};
 

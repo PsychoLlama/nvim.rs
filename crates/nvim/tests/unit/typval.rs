@@ -24,13 +24,14 @@
 use std::ffi::{CStr, c_char};
 use std::mem::ManuallyDrop;
 
+use neovim::eval::typval::DictItem;
 use neovim::eval::typval::{
     DictRef, ListRef, dict_is_watched, list_find, list_first, list_last, list_len, tv_dict_alloc,
     tv_dict_item_remove, tv_list_alloc,
 };
 use neovim::memory::xstrdup;
 use neovim::os::libc::ptrdiff_t;
-use neovim::types::{Callback, DictItem, VAR_UNKNOWN, kListLenUnknown};
+use neovim::types::{Callback, VAR_UNKNOWN, kListLenUnknown};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Payload};

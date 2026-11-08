@@ -57,11 +57,12 @@ use crate::os::env::{
     ENV_LOGFILE, ENV_LOGFILE_WANT, ENV_NVIM, env_get_bounded, env_set, process_id,
 };
 use crate::os::fs::{MkdirFailure, dir_exists, mkdir_recurse};
-use crate::os::libc::{int16_t, int32_t, int64_t};
+use crate::os::libc::int32_t;
+use crate::os::libc::{int16_t, int64_t};
 use crate::os::time::{os_localtime, tm_zeroed};
 use crate::path::tail_index;
 use crate::startup::ui_client_channel_id;
-use crate::types::{Vv, nvim_stats_s};
+use crate::types::Vv;
 /// `#[macro_export]` publishes at the crate root; this re-export lets callers
 /// name the macro where the rest of the logging API lives, and brings it into
 /// scope here ahead of its own textual definition.
@@ -96,7 +97,7 @@ pub(crate) const fn compiled_in(log_level: c_int) -> bool {
 /// The lowest level written. Lowered at run time only by `vim._with`.
 pub static g_min_log_level: GlobalCell<c_int> =
     GlobalCell::new(if LOG_DEBUG { 0 } else { LOGLVL_WRN });
-pub(crate) static g_stats: GlobalCell<nvim_stats_s> = GlobalCell::new(nvim_stats_s {
+pub(crate) static g_stats: GlobalCell<NvimStats> = GlobalCell::new(NvimStats {
     fsync: 0 as int64_t,
     redraw: 0 as int64_t,
     log_skip: 0 as int16_t,
@@ -598,4 +599,11 @@ fn line_prefix(
         let _ = write!(prefix, ":{line_num}: ");
     }
     Some(prefix)
+}
+
+#[derive(Copy, Clone)]
+pub struct NvimStats {
+    pub fsync: int64_t,
+    pub redraw: int64_t,
+    pub log_skip: int16_t,
 }

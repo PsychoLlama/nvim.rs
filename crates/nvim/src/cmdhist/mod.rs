@@ -33,6 +33,7 @@ use std::rc::Rc;
 
 use crate::charset::strsize;
 use crate::cmdexpand::defs::Expand;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, tv_get_number, tv_get_number_chk};
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::cmdmod_has;
@@ -52,9 +53,7 @@ use crate::regexp::RegMatch;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regexec};
 use crate::shada::ShadaExtra;
 use crate::tr;
-use crate::types::{
-    CmdModFlags, EvalFuncData, ExArg, IOSIZE, Timestamp, TypVal, VAR_NUMBER, VarNumber,
-};
+use crate::types::{CmdModFlags, ExArg, IOSIZE, Timestamp, TypVal, VAR_NUMBER, VarNumber};
 use crate::ui::state::Columns;
 use core::ffi::{CStr, c_int};
 

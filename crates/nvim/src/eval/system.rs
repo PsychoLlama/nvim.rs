@@ -18,6 +18,7 @@
 
 use crate::buffer::find_buf;
 use crate::eval::encode::encode_list_write;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     ListRef, NumBuf, list_iter, list_len, tv_get_number, tv_list_alloc, tv_list_alloc_ret,
 };
@@ -42,8 +43,8 @@ use crate::smsg;
 use crate::types::Handle;
 use crate::types::LineNr;
 use crate::types::{
-    EvalFuncData, Failed, IOSIZE, List, OptInt, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarNumber, Vv, kListLenMayKnow,
+    Failed, IOSIZE, List, OptInt, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber,
+    Vv, kListLenMayKnow,
 };
 use core::ffi::c_int;
 

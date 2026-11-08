@@ -11,6 +11,7 @@
 )]
 
 use super::*;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::memory::XString;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
 use crate::os::fs::current_dir;

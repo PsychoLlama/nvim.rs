@@ -60,8 +60,8 @@ use crate::api::private::keyset::{FieldKind, KeyField, KeySet, Slot};
 use crate::api_error;
 use crate::global_cell::ConstTable;
 use crate::message_fmt::msg_bytes;
-use crate::msgpack_rpc::handler::ApiDispatchFn;
-use crate::types::{Error, MsgpackRpcRequestHandler};
+use crate::msgpack_rpc::handler::{ApiDispatchFn, MsgpackRpcRequestHandler};
+use crate::types::Error;
 use crate::ui_client::handle_ui_client_redraw;
 
 /// Values that belong to other modules; nested so they stay out of the flat

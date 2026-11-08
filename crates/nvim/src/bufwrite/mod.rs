@@ -62,6 +62,7 @@ use crate::options::{
 };
 use crate::os::cshim::gettext;
 use crate::os::fs::FileInfo;
+use crate::os::fs::meta::VimAcl;
 use crate::os::fs::os_strerror;
 use crate::os::fs::{
     os_chown, os_copy, os_file_is_writable, os_file_settime, os_free_acl, os_get_acl, os_nodetype,
@@ -74,7 +75,7 @@ use crate::path::{after_pathsep, path_fnamecmp, tail_index};
 use crate::sha256::Sha256;
 use crate::startup::exiting;
 use crate::strings::{FmtArg, format_into};
-use crate::types::{CmdModFlags, ExArg, Failed, IOSIZE, LineNr, Pos, VimAcl};
+use crate::types::{CmdModFlags, ExArg, Failed, IOSIZE, LineNr, Pos};
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};
 use crate::winlayer::Buf;

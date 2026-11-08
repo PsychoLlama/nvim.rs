@@ -9,6 +9,7 @@
 )]
 
 use super::wrappers::arg_number;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     dict_find, list_find_nr, list_len, tv_check_for_nonnull_dict_arg, tv_check_for_number_arg,
@@ -32,8 +33,7 @@ use crate::os::time::os_time;
 use crate::profile::{profile_end, profile_msg_str, profile_signed, profile_start, profile_sub};
 use crate::semsg;
 use crate::types::{
-    Callback, EvalFuncData, Float, ProfTime, TypVal, VAR_LIST, VAR_NUMBER, VarNumber,
-    kListLenUnknown,
+    Callback, Float, ProfTime, TypVal, VAR_LIST, VAR_NUMBER, VarNumber, kListLenUnknown,
 };
 use crate::ui::ui_flush;
 use core::ffi::c_int;

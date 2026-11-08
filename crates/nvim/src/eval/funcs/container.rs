@@ -10,6 +10,7 @@
 )]
 
 use super::wrappers::{arg_copy, arg_number_chk};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
@@ -34,10 +35,10 @@ use crate::narrow::number_as_int;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
-    Blob, BoolVarValue, EvalFuncData, List, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT,
-    VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB,
-    VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER,
-    VAR_TYPE_SPECIAL, VAR_TYPE_STRING, VAR_UNKNOWN, VarNumber, Vv, kBoolVarTrue, kSpecialVarNull,
+    Blob, BoolVarValue, List, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT,
+    VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL,
+    VAR_TYPE_STRING, VAR_UNKNOWN, VarNumber, Vv, kBoolVarTrue, kSpecialVarNull,
 };
 use core::ffi::{CStr, c_int};
 

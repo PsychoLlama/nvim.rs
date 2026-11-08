@@ -12,6 +12,7 @@
 use super::wrappers::{arg_number_chk, dict_alloc_ret};
 use super::{kGRegExprSrc, kGRegList, kMTBlockWise, kMTCharWise, kMTLineWise, kMTUnknown};
 use crate::cstr;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, dict_get_number, dict_len, list_iter, tv_list_alloc};
 use crate::eval::vars::with_vim_var_str;
 use crate::getchar::state::{reg_executing, reg_recorded, reg_recording};
@@ -24,8 +25,7 @@ use crate::register::{
 };
 use crate::semsg;
 use crate::types::{
-    BoolVarValue, Dict, EvalFuncData, Failed, Key, TypVal, VAR_DICT, VAR_LIST, Vv, kBoolVarFalse,
-    kBoolVarTrue,
+    BoolVarValue, Dict, Failed, Key, TypVal, VAR_DICT, VAR_LIST, Vv, kBoolVarFalse, kBoolVarTrue,
 };
 use core::ffi::{CStr, c_int};
 

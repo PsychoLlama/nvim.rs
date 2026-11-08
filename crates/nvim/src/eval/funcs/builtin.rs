@@ -10,7 +10,8 @@
 //! A builtin function's row in the table: its arity, which argument a method
 //! call supplies, and the function that does the work.
 
-use crate::types::{EvalFuncData, TypVal};
+use crate::types::Float;
+use crate::types::TypVal;
 
 /// One row of the builtin-function table: what `abs()` *is* to the
 /// evaluator.
@@ -101,4 +102,22 @@ impl BaseArg {
             BaseArg::At(n) => Some(n as usize - 1),
         }
     }
+}
+
+/// A one-argument float operation, as `float_op_wrapper` calls it. The
+/// implementations are `eval::funcs::math`'s, wrapping `f64`'s methods.
+pub type FloatFunc = Option<fn(Float) -> Float>;
+
+/// The payload one row of the builtin-function table carries.
+///
+/// There is no tag beside it: which arm a row holds follows from the row's
+/// `func`, because only the two shared wrappers read one at all.
+#[derive(Copy, Clone)]
+pub enum EvalFuncData {
+    /// The builtin has a body of its own and carries nothing.
+    None,
+    /// A libm operation, for `float_op_wrapper`.
+    Float(FloatFunc),
+    /// The index of a row of the RPC handler table, for `api_wrapper`.
+    Api(usize),
 }

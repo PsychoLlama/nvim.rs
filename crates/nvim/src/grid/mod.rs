@@ -52,6 +52,7 @@ use crate::highlight::{hl_apply_winblend, hl_combine_attr};
 use crate::log::LOGLVL_DBG;
 use crate::mbyte::{cluster_len, utf_char2len};
 
+use crate::decoration::defs::VirtText;
 use crate::grid::defs::{GridCells, GridView, ScreenGrid};
 use crate::option::vars::{p_arshape, p_tbidi, rdb_flags};
 use crate::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
@@ -59,7 +60,7 @@ use crate::optionstr::check_chars_options;
 use crate::os::libc::{size_t, uint32_t};
 use crate::startup::full_screen;
 use crate::state::mode::exmode_active;
-use crate::types::{AlignTextPos, ColNr, Handle, Integer, ScreenChar, VirtText, WLine, WinConfig};
+use crate::types::{AlignTextPos, ColNr, Handle, Integer, ScreenChar, WLine, WinConfig};
 use crate::ui::state::kUIMultigrid;
 use crate::ui::{
     ui_call_grid_resize, ui_call_grid_scroll, ui_check_cursor_grid, ui_grid_cursor_goto, ui_has,

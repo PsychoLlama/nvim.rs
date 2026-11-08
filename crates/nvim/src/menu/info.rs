@@ -25,6 +25,7 @@ use core::ffi::c_int;
 use std::ffi::CString;
 
 use super::*;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, tv_dict_alloc_ret};
 use crate::eval::vars::del_menutrans_vars;
 use crate::ex_docmd::ends_excmd;
@@ -32,7 +33,7 @@ use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
 use crate::mbyte::cluster_len;
 use crate::message::e_invarg;
-use crate::types::{Dict, EvalFuncData, ExArg, TypVal, VarNumber};
+use crate::types::{Dict, ExArg, TypVal, VarNumber};
 
 /// One `:menutranslate from to` entry.
 struct Translation {

@@ -28,6 +28,7 @@ use crate::drawscreen::{
     UPD_INVERTED, UPD_SOME_VALID, UPD_VALID, redraw_all_later, redraw_curbuf_later, redraw_later,
     setcursor, show_cursor_info_later, showmode, update_screen,
 };
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     dict_find, tv_check_for_nonnull_dict_arg, tv_dict_alloc_ret, tv_get_number_chk,
 };
@@ -89,9 +90,7 @@ use crate::state::mode::State;
 use crate::strings::reversed_text;
 use crate::tag::state::g_do_tagpreview;
 use crate::types::TAB;
-use crate::types::{
-    ColNr, Dict, Direction, EvalFuncData, LPos, LineNr, Pos, ProfTime, TypVal, VarNumber,
-};
+use crate::types::{ColNr, Dict, Direction, LPos, LineNr, Pos, ProfTime, TypVal, VarNumber};
 use crate::ui::state::kUIMessages;
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};

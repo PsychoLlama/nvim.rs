@@ -21,6 +21,7 @@ use crate::decoration::defs::{
     DecorExt, DecorHighlightInline, DecorInline, DecorPriority, DecorSignHighlight, DecorVirtText,
     DecorVirtText_data, VirtTextChunk,
 };
+use crate::decoration::defs::{VirtLine, VirtText};
 use crate::decoration::{
     HlSource, decor_put_sh, decor_put_vt, decor_range_add_sh, decor_range_add_virt,
     decor_sh_from_inline, decor_to_dict_legacy, hl_group_name, kHlModeBlend, kHlModeCombine,
@@ -45,7 +46,7 @@ use crate::pos::{MAXCOL, MAXLNUM};
 use crate::sign::init_sign_text;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, ColNr, Error, Integer, LineNr, LuaRef, NS,
-    Object, VirtLine, VirtText, Window, kObjectTypeArray,
+    Object, Window, kObjectTypeArray,
 };
 
 // The carve of the transpiled module; see each child's docs.

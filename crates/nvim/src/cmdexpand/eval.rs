@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::cmdexpand::defs::ExpandContext;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::list::{cstr_of, string_tv};
 use crate::eval::typval::{
     NumBuf, tv_check_for_string_arg, tv_dict_alloc_ret, tv_get_number_chk, tv_list_alloc,
@@ -33,7 +34,7 @@ use crate::popupmenu::pum_visible;
 use crate::runtime::set_context_in_runtime_cmd;
 use crate::semsg;
 use crate::sign::set_context_in_sign_cmd;
-use crate::types::{EvalFuncData, TypVal, VAR_STRING, VarNumber};
+use crate::types::{TypVal, VAR_STRING, VarNumber};
 use crate::usercmd::{cmdcomplete_str_to_type, cmdcomplete_type_to_str};
 use crate::winlayer::Cc;
 

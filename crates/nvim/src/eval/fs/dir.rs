@@ -31,6 +31,7 @@
 )]
 
 use super::{str_arg, str_arg_chk, tail_with_sep};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{tv_check_for_string_arg, tv_get_number_chk};
 use crate::eval::userfunc::{add_defer, can_add_defer};
@@ -51,8 +52,8 @@ use crate::path::MAXPATHL;
 use crate::path::{full_name_save, tail_index};
 use crate::semsg;
 use crate::types::{
-    CdScope, EvalFuncData, Failed, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, kCdScopeGlobal,
-    kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow,
+    CdScope, Failed, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, kCdScopeGlobal, kCdScopeInvalid,
+    kCdScopeTabpage, kCdScopeWindow,
 };
 use crate::window::find_tabpage;
 use crate::window::{DirOwner, own_dir};

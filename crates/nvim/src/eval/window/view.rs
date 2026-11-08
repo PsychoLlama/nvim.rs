@@ -11,6 +11,7 @@
 )]
 
 use super::*;
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_VERT};

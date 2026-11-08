@@ -30,6 +30,7 @@
 )]
 
 use super::{after_sep, at, err, is_sep, next_component, str_arg, str_arg_chk, tail_with_sep};
+use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::tv_get_number;
 use crate::fileio::file_pat_to_regpat;
@@ -37,7 +38,7 @@ use crate::memory::ThinCString;
 use crate::narrow::number_as_int;
 use crate::path::MAXPATHL;
 use crate::path::{path_is_absolute, shorten_dir_name, simplify_filename, tail_index};
-use crate::types::{EvalFuncData, Failed, TypVal, VAR_STRING, VarNumber};
+use crate::types::{Failed, TypVal, VAR_STRING, VarNumber};
 use core::ffi::CStr;
 use std::ffi::OsStr;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
