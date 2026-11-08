@@ -18,6 +18,7 @@ use crate::types::ColNr;
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::change::{COM_END, COM_FIRST, COM_MIDDLE, COM_START, ComFlags, get_leader_len};
 use crate::charset::skip;
@@ -25,7 +26,7 @@ use crate::cstr::byte_at;
 use crate::indent::get_number_indent;
 use crate::memline::Lines;
 use crate::textobject::starts_para;
-use crate::types::{LineNr, NUL};
+use crate::types::LineNr;
 
 /// A line's comment leader: how many bytes of it there are, and where the
 /// 'comments' item that matched begins.

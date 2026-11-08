@@ -24,9 +24,9 @@ use super::list::{BLANK_SUBS, NfaPim, ThreadList, addstate_here};
 use super::program::{NfaRegProg, NfaState, StateId, States};
 use super::run::{check_char_class, match_backref, match_zref, recursive_regmatch};
 use super::sub::{copy_sub, copy_sub_off, copy_ze_off, has_zsubexpr};
+use crate::ascii::NUL;
 use crate::mbyte::{class_in, utf_fold, utf_iscomposing_legacy};
 use crate::regexp::{NFA_TOO_EXPENSIVE, PimResult, RegSubs, Rex, reg_prev_class};
-use crate::types::NUL;
 
 /// Where a thread's state leaves it.
 pub(crate) enum Step<'p> {

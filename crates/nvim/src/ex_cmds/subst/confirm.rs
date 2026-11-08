@@ -20,6 +20,7 @@
 
 use super::SUB_FLAGS;
 use super::exec::Sub;
+use crate::ascii::NUL;
 use crate::cmdexpand::defs::ExpandContext;
 use crate::drawscreen::{
     UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
@@ -34,6 +35,7 @@ use crate::input::prompt_for_input;
 use crate::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::memline::{Lines, ml_replace_buf_text};
 use crate::memory::XString;
+use crate::message::IOSIZE;
 use crate::message::state::{msg_didout, need_wait_return};
 use crate::mouse::setmouse;
 use crate::r#move::{
@@ -47,7 +49,7 @@ use crate::os::cshim::gettext;
 use crate::plines::getvcol;
 use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
 use crate::state::mode::{State, exmode_active};
-use crate::types::{Callback, ColNr, IOSIZE, NUL};
+use crate::types::{Callback, ColNr};
 use crate::ui::state::kUIMessages;
 use crate::ui::ui_has;
 use crate::winlayer::{Buf, Win};

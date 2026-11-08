@@ -32,6 +32,10 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::ascii::CAR;
+use crate::ascii::ESC;
+use crate::ascii::NL;
+use crate::ascii::TAB;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{apply_autocmds, has_event};
@@ -97,10 +101,6 @@ use crate::state::REPLACE_FLAG;
 use crate::state::mode::{State, restart_edit};
 use crate::strings::escaped_with;
 use crate::terminal::terminal_paste;
-use crate::types::CAR;
-use crate::types::ESC;
-use crate::types::NL;
-use crate::types::TAB;
 use crate::types::{
     ApiString, CmdModFlags, ColNr, Direction, ExArg, LineNr, Pos, SaveVEvent, VarLock,
     kBoolVarFalse, kBoolVarTrue,

@@ -24,6 +24,7 @@ use core::ffi::c_int;
 use super::equi_class::reg_equi_class;
 use super::op::BtOp;
 use super::piece::coll_get_char;
+use crate::ascii::NUL;
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::mbyte::{mb_islower, mb_isupper, utf_char2len};
@@ -32,7 +33,6 @@ use crate::regexp::{
     REGEXP_INRANGE, SIMPLE, Spelled, backslash_abbr, pat_byte, pat_char, pat_charlen, pat_seek,
     skip_anyof, skipchr, take_bracketed, take_char_class,
 };
-use crate::types::NUL;
 
 /// What a `[` at the cursor turned out to be.
 pub(crate) enum Collection {

@@ -24,6 +24,8 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::ascii::NUL;
+use crate::ascii::TAB;
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{aucmd_defer, has_event};
 use crate::buffer::{buf_is_prompt, buflist_new, find_buf};
@@ -36,6 +38,7 @@ use crate::mark::defs::{FileMark, FileMarkView, XFileMark};
 use crate::mark::defs::{MarkAdjustMode, MarkGet, MarkMove, MarkMoveRes};
 use crate::mbyte::{char_at, head_off};
 use crate::memory::XString;
+use crate::message::IOSIZE;
 use crate::message::{e_markinval, e_marknotset, e_umark};
 use crate::r#move::set_topline;
 use crate::normal::defs::MotionType;
@@ -46,7 +49,6 @@ use crate::path::{path_fnamecmp, path_shorten_fname, vim_ispathsep_nocolon};
 use crate::plines::linetabsize_eol;
 use crate::tag::tagstack_clear_entry;
 use crate::types::Failed;
-use crate::types::TAB;
 use crate::types::*;
 use crate::types::{LineNr, Pos};
 use crate::winlayer::{Buf, Win, windows};

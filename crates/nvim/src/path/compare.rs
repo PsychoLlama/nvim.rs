@@ -24,9 +24,9 @@ use core::ffi::c_int;
 use std::ffi::CStr;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::os::fs::{file_id, link_info};
 use crate::path::MAXPATHL;
-use crate::types::NUL;
 
 /// Compare two file names, by identity where the file system can say and by
 /// name where it cannot.

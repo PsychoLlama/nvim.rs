@@ -19,9 +19,9 @@
 //! puts the tag in the high byte instead, and the transpile dropped it.
 
 use super::*;
+use crate::ascii::NUL;
 use crate::map_glyph_cache::GlyphCache;
 use crate::mbyte::{c_cells_at, char_at, char_len, cp_bounds, encode_char};
-use crate::types::NUL;
 use core::ffi::CStr;
 
 /// Largest glyph in bytes, including the terminating NUL.

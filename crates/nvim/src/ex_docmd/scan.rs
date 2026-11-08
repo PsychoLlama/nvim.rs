@@ -27,6 +27,7 @@ use crate::ex_docmd::onecmd::shift_cmd_args;
 use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, e_zerocount, ex_msg};
 use crate::keycodes::Ctrl_V;
 
+use crate::ascii::NUL;
 use crate::memory::XString;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
@@ -35,7 +36,7 @@ use crate::register::{set_expr_line, valid_yank_reg};
 use crate::strings::trailing_spaces_start;
 use crate::types::ex_cmds::ExArg;
 use crate::types::pos::LineNr;
-use crate::types::{CmdAddr, CmdLine, ExArgt, Failed, NUL};
+use crate::types::{CmdAddr, CmdLine, ExArgt, Failed};
 use crate::winlayer::Buf;
 
 /// Step over a run of `:` at `at`, which is how a mapping's `:cmd<CR>` and a

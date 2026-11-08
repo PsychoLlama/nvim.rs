@@ -41,8 +41,8 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};
 
 use super::*;
+use crate::ascii::NUL;
 use crate::cursor::getvpos;
-use crate::types::NUL;
 
 /// The first line, measured just before Insert mode runs.
 ///

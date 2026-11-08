@@ -20,13 +20,13 @@ use core::ffi::c_int;
 use super::Parsed;
 use super::atom::nfa_regatom;
 use super::parse::nfa_reg;
+use crate::ascii::NUL;
 use crate::ascii::ascii_isdigit;
 use crate::mbyte::MB_MAXBYTES;
 use crate::regexp::{
     CompileError, INT32_MAX, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, getchr, getdecchrs,
     gethexchrs, getoctchrs, pat_byte, peekchr, re_mult_next, spelled, unmagic,
 };
-use crate::types::NUL;
 
 use crate::winlayer::Win;
 /// `\z`: the highlighter's own captures, plus `\zs`/`\ze`.

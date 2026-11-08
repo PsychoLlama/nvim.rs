@@ -21,13 +21,13 @@
 )]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::event_queue::process_events_in;
 use crate::guard::Keys;
 use crate::keycodes::{Ctrl_B, Ctrl_C, Ctrl_F, NotAKey, SpecialKey};
 use crate::log::logmsg;
 use crate::strings::has_char;
 use crate::types::Key;
-use crate::types::NUL;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 

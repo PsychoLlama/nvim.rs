@@ -28,6 +28,7 @@ use super::{
     SUB_FLAGS, check_regexp_delim, skip_substitute, sub_joining_lines, sub_parse_flags,
     sub_set_replacement,
 };
+use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int_at;
 use crate::ex_cmds::{INT_MAX, kSubIgnoreCase, kSubMatchCase};
@@ -40,8 +41,8 @@ use crate::search::{SEARCH_HIS, search_regcomp_owned};
 use crate::tr;
 use crate::types::CmdIdx;
 use crate::types::ColNr;
+use crate::types::ExArg;
 use crate::types::Failed;
-use crate::types::{ExArg, NUL};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};

@@ -45,10 +45,11 @@
 )]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::cstr;
 use crate::fileio::ReadFlags;
 use crate::memory::XString;
-use crate::types::{Failed, NUL};
+use crate::types::Failed;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 

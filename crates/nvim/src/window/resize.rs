@@ -26,6 +26,7 @@ use core::ffi::c_int;
 
 use super::arith::NextCurwin;
 use super::*;
+use crate::ascii::NUL;
 use crate::buffer::{buf_is_help, current_buf};
 use crate::decoration::decor_conceal_line;
 use crate::drawscreen::state::{cmdline_row, redraw_cmdline};
@@ -48,7 +49,7 @@ use crate::startup::{exiting, full_screen};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state};
 use crate::statusline::defs::ClickLine;
 use crate::terminal::buf_terminal_check_size;
-use crate::types::{ColNr, Integer, LineNr, NUL, OptInt, ScriptId, WindowHandle};
+use crate::types::{ColNr, Integer, LineNr, OptInt, ScriptId, WindowHandle};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::state::{kUIMessages, kUIMultigrid, kUITabline};
 use crate::ui::{ui_call_win_viewport_margins, ui_has};

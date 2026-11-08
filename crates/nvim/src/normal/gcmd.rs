@@ -14,6 +14,7 @@ use crate::keycodes::SpecialKey;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
+use crate::ascii::NUL;
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::cstr;
 use crate::cursor::{
@@ -44,7 +45,7 @@ use crate::search::{BACKWARD, FORWARD, current_search};
 use crate::state::mode::VIsual_reselect;
 use crate::state::virtual_active;
 use crate::textobject::bckend_word;
-use crate::types::{ColNr, LineNr, NUL};
+use crate::types::{ColNr, LineNr};
 use crate::undo::undo_time;
 use crate::window::{goto_tabpage, goto_tabpage_lastused};
 use core::ffi::c_int;

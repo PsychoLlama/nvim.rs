@@ -33,10 +33,11 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::normal::visual_active;
 use crate::option::cpo_has;
 use crate::option::defs::{CpoFlag, FoFlag};
-use crate::types::{Failed, NUL};
+use crate::types::Failed;
 
 /// Where an insert ended, as [`stop_insert`] reads it.
 ///

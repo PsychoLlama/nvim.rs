@@ -40,9 +40,10 @@ use ::libc::{EINVAL, ENOENT};
 use core::ffi::{CStr, c_int, c_uint};
 
 use super::*;
+use crate::message::IOSIZE;
 use crate::option::defs::ShmFlag;
 use crate::path::MAXPATHL;
-use crate::types::{CmdModFlags, Failed, IOSIZE, Vv};
+use crate::types::{CmdModFlags, Failed, Vv};
 
 /// One entry of `'directory'` after another: the entry, and whether it is
 /// the last.

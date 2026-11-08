@@ -22,12 +22,13 @@ use crate::event::socket::address::is_bare_server_name;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::memory::XString;
+use crate::message::IOSIZE;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::os::env::{ENV_TEST_LOG, env_exists, env_unset, getenv_owned, process_id};
 use crate::os::fs::os_strerror;
 use crate::os::libc::uint32_t;
 use crate::path::fix_fname;
-use crate::types::{IOSIZE, Vv};
+use crate::types::Vv;
 use std::ffi::CString;
 
 use crate::event::socket::address::SOCKET_ADDR_LEN;

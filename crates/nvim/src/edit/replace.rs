@@ -35,7 +35,7 @@ use crate::winlayer::Win;
 use core::ffi::c_int;
 
 use super::*;
-use crate::types::NUL;
+use crate::ascii::NUL;
 
 /// Abandon the stack, releasing what it holds.
 ///

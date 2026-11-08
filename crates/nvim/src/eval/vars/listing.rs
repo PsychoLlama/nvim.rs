@@ -24,7 +24,7 @@ use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::eval::typval::DictRef;
-use crate::types::IOSIZE;
+use crate::message::IOSIZE;
 
 /// The variables in `dict`, one per line, each name prefixed with `prefix`.
 ///

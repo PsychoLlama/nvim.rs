@@ -31,11 +31,12 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::cursor::getvpos;
 use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{c_cluster_len, encode_char};
-use crate::types::{Failed, NUL};
+use crate::types::Failed;
 
 /// Overwrite the single byte at `pos` with `c`.
 ///

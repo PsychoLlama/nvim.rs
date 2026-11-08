@@ -44,13 +44,13 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+use crate::ascii::CAR;
+use crate::ascii::TAB;
 use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
 use crate::memory::XString;
 use crate::narrow::count_as_int;
-use crate::types::CAR;
 use crate::types::CmdIdx;
-use crate::types::TAB;
 use crate::winlayer::WinId;
 use crate::winlayer::prev_window;
 use core::ffi::c_int;

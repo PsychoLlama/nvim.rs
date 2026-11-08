@@ -1537,11 +1537,7 @@ pub fn generate(
     let symbols = Symbols::collect(
         root,
         out_dir,
-        &[
-            "crate::option",
-            "crate::option::defs",
-            "crate::types::ascii",
-        ],
+        &["crate::option", "crate::option::defs", "crate::ascii"],
     )?;
 
     // Each section is formatted as one batch so the chunker counts the lines

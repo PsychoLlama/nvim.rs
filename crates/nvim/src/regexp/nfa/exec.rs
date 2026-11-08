@@ -29,6 +29,7 @@ use super::matcher::nfa_regmatch;
 use super::parse::re2post;
 use super::run::{find_match_text, skip_to_start};
 use super::sub::{clear_sub, slots};
+use crate::ascii::NUL;
 use crate::message::e_null;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
@@ -36,7 +37,7 @@ use crate::regexp::{
     MatchPos, NFA_TOO_EXPENSIVE, NfaRegProg, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE, RegSubs,
     Rex, TimeBudget, cleanup_subexpr, cleanup_zsubexpr, reg_getline,
 };
-use crate::types::{ColNr, LPos, NUL};
+use crate::types::{ColNr, LPos};
 
 /// Try to match at column `col` of the current line.
 ///

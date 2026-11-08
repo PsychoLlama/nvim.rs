@@ -20,9 +20,9 @@ use crate::charset::ptr2cells_at;
 use crate::cstr;
 use crate::formatted;
 use crate::highlight_group::{HLF_CM, HLF_D, HLF_T};
+use crate::message::IOSIZE;
 use crate::path::MAXPATHL;
 use crate::pos::MAXCOL;
-use crate::types::IOSIZE;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 

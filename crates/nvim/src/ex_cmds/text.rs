@@ -20,6 +20,7 @@
 
 use super::say;
 use super::{CAR, EOL_MAC, NL};
+use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
 use crate::charset::{transchar, transchar_nonprint_form, vim_isprintc};
@@ -30,6 +31,7 @@ use crate::indent::{get_indent, set_indent};
 use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, utf_iscomposing_first};
 use crate::memline::Lines;
+use crate::message::IOSIZE;
 use crate::message::{msg, msg_multiline, msg_sb_eol};
 use crate::narrow::number_as_int;
 use crate::option::get_fileformat;
@@ -37,8 +39,8 @@ use crate::os::cshim::gettext;
 use crate::plines::linetabsize_text;
 use crate::types::CmdIdx;
 use crate::types::ColNr;
+use crate::types::ExArg;
 use crate::types::Key;
-use crate::types::{ExArg, IOSIZE, NUL};
 use crate::undo::u_save;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;

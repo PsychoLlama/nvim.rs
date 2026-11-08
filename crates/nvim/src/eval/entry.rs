@@ -32,6 +32,7 @@ use crate::semsg;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
+use crate::ascii::NUL;
 use crate::charset::skip;
 use crate::eval::encode::tv2string_bytes;
 use crate::eval::typval::{
@@ -52,8 +53,8 @@ use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::optionstr::OptString;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    ApiString, ExArg, Failed, NUL, Object, ScriptCtx, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv,
+    ApiString, ExArg, Failed, Object, ScriptCtx, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv,
 };
 
 /// A freshly declared typval.

@@ -11,10 +11,11 @@
 
 use crate::cmdexpand::defs::Expand;
 use crate::memory::XString;
+use crate::message::IOSIZE;
 use crate::os::libc::uint8_t;
 use crate::os::libc::{ssize_t, uint32_t};
 use crate::regexp::RegMatch;
-use crate::types::{IOSIZE, OptInt};
+use crate::types::OptInt;
 
 use crate::global_cell::GlobalCell;
 use crate::option::OptSlot;

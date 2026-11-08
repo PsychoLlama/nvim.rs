@@ -21,6 +21,7 @@ use super::atom::{denied_in_optional_sequence, regatom};
 use super::compile::use_multibytecode;
 use super::op::BtOp;
 use super::piece::reg;
+use crate::ascii::NUL;
 use crate::ascii::ascii_isdigit;
 use crate::os::libc::uint32_t;
 use crate::regexp::{
@@ -28,7 +29,6 @@ use crate::regexp::{
     SIMPLE, SPSTART, getchr, getdecchrs, gethexchrs, getoctchrs, pat_byte, re_mult_next, spelled,
     ungetchr, unmagic,
 };
-use crate::types::NUL;
 
 use crate::winlayer::Win;
 /// `\z(`, `\z1`..`\z9`, `\zs` and `\ze`.

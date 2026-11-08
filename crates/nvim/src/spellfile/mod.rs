@@ -15,6 +15,7 @@ use crate::cstr;
 use crate::getchar::state::got_int;
 use core::cell::RefCell;
 
+use crate::ascii::TAB;
 use crate::env::XDGVarType;
 use crate::mbyte::{CONV_NONE, VimConv};
 use crate::memory::ThinCString;
@@ -36,7 +37,6 @@ use crate::strings::has_bytes;
 use crate::strings::has_char;
 use crate::tr;
 use crate::types::CmdIdx;
-use crate::types::TAB;
 use crate::types::{ExArg, Failed, OptInt};
 use crate::ui::ui_flush;
 use crate::winlayer::Buf;

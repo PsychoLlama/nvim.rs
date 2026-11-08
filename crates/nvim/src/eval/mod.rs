@@ -31,8 +31,8 @@ pub(crate) mod typval_encode;
 pub mod userfunc;
 pub mod vars;
 pub mod window;
+use crate::ascii::NL;
 use crate::global_cell::GlobalCell;
-use crate::types::NL;
 // Named here so the expression tree and `list.rs` can reach it by one
 // path; it belongs to `message`.
 use crate::lua::executor::LuaRetMode;

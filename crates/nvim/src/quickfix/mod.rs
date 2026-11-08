@@ -28,6 +28,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::ascii::TAB;
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{
@@ -107,7 +108,6 @@ use crate::search::{BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE};
 use crate::state::mode::restart_edit;
 use crate::tr;
 use crate::types::Failed;
-use crate::types::TAB;
 use crate::types::{
     Callback, ColNr, Dict, Direction, ExArg, LineNr, List, ListRef, OptInt, Pos, ScriptId, TypVal,
     VarNumber, VarType,

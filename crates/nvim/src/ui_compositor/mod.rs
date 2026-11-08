@@ -41,6 +41,7 @@ use crate::narrow::number_as_int;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_uint};
 
+use crate::ascii::NUL;
 use crate::global_cell::GlobalCell;
 use crate::grid::{GridRef, default_grid_ref, schar_from_ascii, schar_from_buf};
 use crate::highlight::hl_blend_attrs;
@@ -51,7 +52,7 @@ use crate::message::msg_grid_ref;
 use crate::option::vars::{p_wd, rdb_flags};
 use crate::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
 use crate::os::time::os_sleep;
-use crate::types::{ApiString, Boolean, Handle, Integer, NUL, ScreenAttr, ScreenChar};
+use crate::types::{ApiString, Boolean, Handle, Integer, ScreenAttr, ScreenChar};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::state::{LineFlags, RemoteUI};
 use crate::ui::state::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};

@@ -25,11 +25,11 @@ use super::escape::{percent_atom, z_atom};
 use super::literal::{class_shorthand, is_class_shorthand, literal_run, previous_substitute};
 use super::op::BtOp;
 use super::piece::reg;
+use crate::ascii::NUL;
 use crate::regexp::{
     CompileError, Compiled, HASLOOKBH, HASNL, HASWIDTH, MAGIC_ALL, MAGIC_ON, NL, REG_PAREN, SIMPLE,
     SPSTART, Spelled, WORST, getchr, magic, spelled, unmagic,
 };
-use crate::types::NUL;
 
 const M_AMP: c_int = magic(b'&');
 const M_AT: c_int = magic(b'@');

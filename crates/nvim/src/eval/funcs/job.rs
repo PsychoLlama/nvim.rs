@@ -37,6 +37,7 @@ use crate::ex_cmds::check_secure;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::memline::ml_open;
 use crate::memory::XString;
+use crate::message::IOSIZE;
 use crate::message::emsg;
 use crate::message::{e_channotpty, e_invarg};
 use crate::message_fmt::msg_cstr;
@@ -55,8 +56,8 @@ use crate::terminal::{Term, buf_terminal_running, terminal_buf, terminal_open};
 use crate::types::Failed;
 use crate::types::Handle;
 use crate::types::{
-    ApiString, Callback, Dict, IOSIZE, Integer, Object, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST,
-    VAR_NUMBER, VAR_STRING, VarNumber, Vv,
+    ApiString, Callback, Dict, Integer, Object, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER,
+    VAR_STRING, VarNumber, Vv,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;

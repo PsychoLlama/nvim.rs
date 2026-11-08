@@ -26,6 +26,7 @@ use super::{
     buf_autocmd, do_bang,
 };
 use crate::arglist::do_argfile;
+use crate::ascii::NUL;
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{augroup_exists_of, do_doautocmd};
 use crate::buffer::{
@@ -67,7 +68,7 @@ use crate::semsg;
 use crate::startup::{exiting, getout};
 use crate::types::CmdIdx;
 use crate::types::Handle;
-use crate::types::{CmdModFlags, ExArg, Failed, LineNr, NUL};
+use crate::types::{CmdModFlags, ExArg, Failed, LineNr};
 use crate::undo::{buf_is_changed, curbuf_is_changed};
 use crate::window::check_can_set_curbuf_forceit;
 use crate::winlayer::Win;

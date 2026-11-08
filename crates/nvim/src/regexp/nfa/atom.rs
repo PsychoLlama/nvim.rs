@@ -25,8 +25,8 @@ use super::literal::{
 };
 use super::parse::nfa_reg;
 use super::{Parsed, cursor};
+use crate::ascii::NUL;
 use crate::regexp::{CompileError, NL, REG_PAREN, RF_HASNL, getchr, magic, unmagic};
-use crate::types::NUL;
 
 const M_AMP: c_int = magic(b'&');
 const M_AT: c_int = magic(b'@');

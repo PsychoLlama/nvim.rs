@@ -39,6 +39,7 @@ use crate::winlayer::Win;
 use core::ffi::c_int;
 use std::io::Write;
 
+use crate::ascii::NL;
 use crate::ascii::ascii_iswhite;
 use crate::charset::{transchar, vim_strsize_cstr};
 use crate::getchar::state::got_int;
@@ -60,7 +61,7 @@ use crate::os::input::os_breakcheck;
 use crate::os::libc::uint32_t;
 use crate::path::MAXPATHL;
 use crate::startup::silent_mode;
-use crate::types::{ApiString, Failed, NL, OptInt, WinOpt};
+use crate::types::{ApiString, Failed, OptInt, WinOpt};
 use crate::ui::state::Columns;
 use crate::ui::ui_call_option_set;
 use crate::undo::curbuf_is_changed;

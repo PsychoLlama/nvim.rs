@@ -36,6 +36,9 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::ascii::CAR;
+use crate::ascii::ESC;
+use crate::ascii::NL;
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::fire_autocmds;
 use crate::charset::{skip, vim_is_ident_char};
@@ -63,10 +66,7 @@ use crate::os::input::os_breakcheck;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp_at};
 use crate::tag::state::g_do_tagpreview;
-use crate::types::CAR;
 use crate::types::CmdIdx;
-use crate::types::ESC;
-use crate::types::NL;
 use crate::types::{CmdModFlags, ExArg, GetFileRet, LPos, LineNr, List, Vv};
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};

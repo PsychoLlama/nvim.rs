@@ -33,6 +33,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::ex_docmd::cmdmod_has;
 use crate::getchar::typeahead;
 use crate::guard::{Keys, Suppress};
@@ -40,7 +41,6 @@ use crate::r#move::WinValid;
 use crate::normal::visual_active;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
-use crate::types::NUL;
 
 /// The three CTRL-G commands that are spelled with a letter.
 const CTRL_G_UP: Key = Key::ascii(b'k');

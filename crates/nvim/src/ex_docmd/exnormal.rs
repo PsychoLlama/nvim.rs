@@ -45,10 +45,11 @@ use crate::r#move::check_cursor_moved;
 use crate::normal::{normal_cmd, set_cursor_for_append_to_line, visual_active, with_frame_op};
 use crate::ops::Op;
 
+use crate::ascii::NUL;
 use crate::ex_docmd::state::SaveState;
 use crate::normal::defs::OpArg;
 use crate::state::{MODE_INSERT, MODE_TERMINAL};
-use crate::types::{ColNr, ExArg, NUL};
+use crate::types::{ColNr, ExArg};
 
 use crate::winlayer::{Buf, Win};
 

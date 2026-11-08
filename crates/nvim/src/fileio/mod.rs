@@ -51,6 +51,7 @@ use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::mbyte::{canon_props, canonize, utf_byte2len};
 use crate::memline::{check_need_swap, ml_append_terminated, ml_delete, ml_open};
 use crate::memory::{XString, try_grow_zeroed};
+use crate::message::IOSIZE;
 use crate::message::e_interr;
 use crate::message::state::{
     emsg_silent, in_assert_fails, keep_msg, msg_col, msg_listdo_overwrite, msg_scroll,
@@ -94,7 +95,7 @@ use crate::startup::{exiting, readonlymode, recoverymode, stdin_fd, vim_ignored}
 use crate::state::mode::{State, exmode_active, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{FmtArg, formatted};
-use crate::types::{ExArg, Failed, IOSIZE, LineNr, ScriptId};
+use crate::types::{ExArg, Failed, LineNr, ScriptId};
 use crate::ui::state::kUIMessages;
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{

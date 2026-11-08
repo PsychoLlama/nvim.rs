@@ -35,6 +35,7 @@ use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::ffi::CString;
 
+use crate::ascii::NUL;
 use crate::buffer::{buf_is_quickfix, buf_spname_owned};
 use crate::drawscreen::state::must_redraw;
 use crate::drawscreen::{UPD_CLEAR, UPD_VALID, screen_resize};
@@ -52,6 +53,7 @@ use crate::file_search::FileNameOpts;
 use crate::getchar::state::got_int;
 use crate::highlight_group::HLF_T;
 use crate::keycodes::Ctrl_G;
+use crate::message::IOSIZE;
 use crate::message::state::{msg_col, msg_scroll};
 use crate::message::{e_invarg, e_invarg2, e_invcmd, e_invrange, e_screenmode};
 use crate::message::{emsg, msg_display, msg_ext_set_kind, msg_putchar, msg_start};
@@ -62,7 +64,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
 use crate::popupmenu::pum_make_popup;
 use crate::tag::state::{g_do_tagpreview, postponed_split_flags, postponed_split_tab};
-use crate::types::{CmdLine, CmdModFlags, ExArg, IOSIZE, NUL};
+use crate::types::{CmdLine, CmdModFlags, ExArg};
 use crate::ui::state::{Columns, Rows};
 use crate::undo::buf_is_changed;
 use crate::window::{

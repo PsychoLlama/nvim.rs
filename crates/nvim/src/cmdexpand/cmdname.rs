@@ -16,6 +16,7 @@
 )]
 
 use super::*;
+use crate::ascii::TAB;
 use crate::ascii::ascii_isspace;
 use crate::autocmd::set_context_in_autocmd;
 use crate::cmdexpand::defs::ExpandContext;
@@ -36,7 +37,7 @@ use crate::profile::set_context_in_profile_cmd;
 use crate::runtime::set_context_in_runtime_cmd;
 use crate::sign::set_context_in_sign_cmd;
 use crate::syntax::{set_context_in_echohl_cmd, set_context_in_syntax_cmd};
-use crate::types::{CmdAddr, CmdIdx, ExArg, ExArgt, TAB};
+use crate::types::{CmdAddr, CmdIdx, ExArg, ExArgt};
 use crate::usercmd::{set_context_in_user_cmd, set_context_in_user_cmdarg};
 use crate::winlayer::Cc;
 use core::ffi::{CStr, c_int, c_uint};

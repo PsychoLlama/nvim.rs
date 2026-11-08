@@ -28,10 +28,10 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
 use super::*;
+use crate::ascii::NUL;
 use crate::ex_docmd::cmdmod_has;
 use crate::option::defs::OptError;
 use crate::optionstr::{OptString, OptStringRef};
-use crate::types::NUL;
 
 /// `:` for a Visual region, and the `!` filter `=` and `gq` fall back to.
 ///

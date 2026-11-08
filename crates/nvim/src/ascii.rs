@@ -15,7 +15,6 @@
 //! terminal codes above 0x80. The C had them as `static inline`s in a header,
 //! so the transpiler left a copy in every module that called one.
 
-use crate::types::NUL;
 use core::ffi::{c_int, c_uint};
 
 /// A decimal digit.
@@ -76,6 +75,28 @@ pub(crate) fn ascii_iswhite_nl_or_nul(c: c_int) -> bool {
 pub(crate) fn ascii_isspace(c: c_int) -> bool {
     (9..=13).contains(&c) || c == c_int::from(b' ')
 }
+
+/// The string terminator, as the `int` a widened byte compares against.
+/// `ascii_defs.h`'s `NUL`, one copy for the tree.
+pub(crate) const NUL: ::core::ffi::c_int = 0;
+
+/// The path separator as a string, for the code that appends one.
+pub(crate) const PATHSEPSTR: &::core::ffi::CStr = c"/";
+
+/// A horizontal tab, as the `int` a widened byte compares against.
+pub(crate) const TAB: ::core::ffi::c_int = 9;
+
+/// A line feed, as the `int` a widened byte compares against.
+pub(crate) const NL: ::core::ffi::c_int = 10;
+
+/// A carriage return, as the `int` a widened byte compares against.
+pub(crate) const CAR: ::core::ffi::c_int = 13;
+
+/// The escape byte, as the `int` a widened byte compares against.
+pub(crate) const ESC: ::core::ffi::c_int = 27;
+
+/// A backspace, as the `int` a widened byte compares against.
+pub(crate) const BS: ::core::ffi::c_int = 8;
 
 #[cfg(test)]
 mod tests {

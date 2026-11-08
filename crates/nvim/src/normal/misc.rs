@@ -17,6 +17,7 @@ use crate::types::Handle;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win, windows};
 
+use crate::ascii::NUL;
 use crate::buffer::{buflist_getfile, fileinfo};
 use crate::cursor::check_cursor_col;
 use crate::drawscreen::state::{clear_cmdline, mode_displayed, redraw_mode};
@@ -43,7 +44,7 @@ use crate::os::cshim::gettext;
 use crate::state::mode::{finish_op, restart_VIsual_select, restart_edit};
 use crate::state::{may_trigger_modechanged, state_handle_k_event};
 use crate::syntax::{cur_syn_block, syn_stack_free_all};
-use crate::types::{LineNr, NUL};
+use crate::types::LineNr;
 use crate::ui::vim_beep;
 use crate::undo::any_buf_is_changed;
 use crate::window::do_window;

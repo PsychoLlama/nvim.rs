@@ -27,6 +27,7 @@ use crate::eval::{NL, PROF_YES};
 use crate::ex_cmds::check_secure;
 use crate::memline::Lines;
 use crate::memory::ThinCString;
+use crate::message::IOSIZE;
 use crate::message::e_invarg;
 use crate::message::{msg_str, verbose_enter_scroll, verbose_leave_scroll};
 use crate::message_fmt::{msg_bytes, msg_cstr};
@@ -43,8 +44,8 @@ use crate::smsg;
 use crate::types::Handle;
 use crate::types::LineNr;
 use crate::types::{
-    Failed, IOSIZE, List, OptInt, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber,
-    Vv, kListLenMayKnow,
+    Failed, List, OptInt, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, Vv,
+    kListLenMayKnow,
 };
 use core::ffi::c_int;
 

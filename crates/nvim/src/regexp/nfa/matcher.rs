@@ -30,13 +30,13 @@ use super::program::{NfaRegProg, NfaState, StateId};
 use super::run::nfa_did_time_out;
 use super::step::{Run, Step, lookaround_held, step};
 use super::sub::{copy_sub, copy_sub_off, has_zsubexpr, match_follows_from};
+use crate::ascii::NUL;
 use crate::getchar::state::got_int;
 use crate::mbyte::utf_fold;
 use crate::regexp::{
     NFA_MAX_STATES, NFA_TOO_EXPENSIVE, PimResult, RegSubs, Rex, recursive_regmatch, reg_breakcheck,
     reg_nextline, skip_to_start,
 };
-use crate::types::NUL;
 
 /// How many characters may pass between two checks of the caller's time
 /// limit.

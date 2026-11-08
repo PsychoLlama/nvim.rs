@@ -20,13 +20,13 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::grid::with_linebuf;
 use crate::narrow::as_index;
 use crate::narrow::count_as_int;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::optionstr::OptStringRef;
 use crate::strings::has_char;
-use crate::types::NUL;
 
 impl Cells {
     /// Show the `'listchars'` "precedes" character in column zero of a row

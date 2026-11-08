@@ -47,6 +47,7 @@
 mod session;
 mod view;
 
+use crate::ascii::PATHSEPSTR;
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::fire_autocmds;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
@@ -79,7 +80,6 @@ use crate::runtime::do_source;
 use crate::search::state::no_hlsearch;
 use crate::tr;
 use crate::types::CmdIdx;
-use crate::types::PATHSEPSTR;
 use crate::types::{CdCause, ExArg, Vv};
 use crate::window::{DirOwner, own_dir};
 use crate::winlayer::Win;

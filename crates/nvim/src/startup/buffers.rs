@@ -45,6 +45,7 @@ use crate::fileio::{ReadFlags, readfile_named};
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::memline::ml_recover;
+use crate::message::IOSIZE;
 use crate::message::msg_putchar;
 use crate::message::state::{did_emsg, msg_didany, msg_scroll, no_wait_return};
 use crate::option::defs::{OptVal, OptionSetFlags};
@@ -61,7 +62,7 @@ use crate::startup::exit::getout;
 use crate::startup::{
     EDIT_QF, MainParams, WIN_HOR, WIN_TABS, WIN_VER, kOptErrorfile, kOptShortmess, recoverymode,
 };
-use crate::types::{Handle, IOSIZE, Integer, LineNr, OptInt, VarLock, Vv, kListLenMayKnow};
+use crate::types::{Handle, Integer, LineNr, OptInt, VarLock, Vv, kListLenMayKnow};
 use crate::ui::ui_call_error_exit;
 use crate::window::{
     goto_tabpage, make_tabpages, make_windows, only_one_window, win_close, win_count, win_enter,

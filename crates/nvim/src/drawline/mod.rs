@@ -7,6 +7,8 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::ascii::NUL;
+use crate::ascii::TAB;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::buffer::{buf_is_quickfix, buf_meta_total};
 use crate::charset::{
@@ -84,8 +86,7 @@ use crate::statusline::{SIGN_SHOW_MAX, build_statuscol_str};
 use crate::syntax::{SynFlags, get_syntax_attr, syn_get_sub_char, syntax_present};
 use crate::terminal::terminal_get_line_attributes;
 use crate::types::NS;
-use crate::types::TAB;
-use crate::types::{ColNr, DiffLine, LineNr, NUL, Pos, ScreenAttr, ScreenChar, VarNumber};
+use crate::types::{ColNr, DiffLine, LineNr, Pos, ScreenAttr, ScreenChar, VarNumber};
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;
 use crate::winlayer::graph::{cmdwin_type, cmdwin_win};

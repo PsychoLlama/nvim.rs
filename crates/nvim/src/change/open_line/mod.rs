@@ -52,12 +52,13 @@ use core::ffi::c_int;
 use self::comment::{LeaderContext, build_leader, indent_after_comment_end, plan_leader};
 use self::smart::smart_indent;
 use super::*;
+use crate::ascii::NUL;
 use crate::edit::buf_prompt_text_owned;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
 use crate::mbyte::char_at;
 use crate::option::defs::FoFlag;
 use crate::optionstr::OptString;
-use crate::types::{Failed, NUL};
+use crate::types::Failed;
 
 mod comment;
 mod smart;

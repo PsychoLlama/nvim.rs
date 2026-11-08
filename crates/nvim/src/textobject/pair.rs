@@ -21,6 +21,7 @@ use crate::winlayer::Win;
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::cstr::byte_at;
 use crate::cursor::{dec_cursor, gchar_cursor, inc_cursor};
@@ -36,7 +37,7 @@ use crate::option::vars::{P_SEL, P_WS, p_ws};
 use crate::option::{SavedCpo, cpo_has};
 use crate::pos::{equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FM_FORWARD, FORWARD, findmatch, findmatchlimit};
-use crate::types::{ColNr, NUL, Pos};
+use crate::types::{ColNr, Pos};
 
 /// The `do_searchpair` pattern that matches any HTML start tag, used to find
 /// the one enclosing the cursor before its name is known.

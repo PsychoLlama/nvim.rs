@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::NUL;
 use crate::ascii::{ascii_isdigit, ascii_isupper};
 use crate::buffer::GETF_SETMARK;
 use crate::buffer::{buf_is_prompt, buflist_getfile};

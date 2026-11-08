@@ -21,12 +21,13 @@ use super::*;
 use crate::cstr;
 use crate::highlight_group::{HLF_D, HLF_N, HLF_QFL};
 use crate::memory::XString;
+use crate::message::IOSIZE;
 use crate::message::cut_middle;
 use crate::message_fmt::msg_bytes;
 use crate::path::tail_index;
 use crate::semsg;
 use crate::tr;
-use crate::types::{CmdIdx, IOSIZE};
+use crate::types::CmdIdx;
 use core::ffi::c_int;
 use std::ffi::CString;
 

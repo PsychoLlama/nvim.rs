@@ -28,7 +28,8 @@ use core::ffi::c_int;
 use super::*;
 use crate::eval::typval::{DictRef, PartialRef};
 use crate::ex_eval::{PendingValue, cond_stack_of};
-use crate::types::{Failed, IOSIZE};
+use crate::message::IOSIZE;
+use crate::types::Failed;
 
 /// One call recorded by `:defer`, to be made when the function returns.
 pub struct Defer {

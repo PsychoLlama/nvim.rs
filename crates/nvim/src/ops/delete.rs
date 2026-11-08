@@ -34,13 +34,14 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_has;
 use crate::normal::visual_select;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
 use crate::register::is_append_register;
-use crate::types::{Failed, NUL};
+use crate::types::Failed;
 use crate::undo::UndoFailed;
 
 /// The region was not deleted, and the buffer is as it was.

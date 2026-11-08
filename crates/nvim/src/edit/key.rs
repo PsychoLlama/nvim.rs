@@ -37,9 +37,9 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::optionstr::OptString;
-use crate::types::NUL;
 
 /// `CTRL-X s`, the second spelling of `CTRL-X CTRL-S`.
 const SPELL_S: Key = Key::ascii(b's');

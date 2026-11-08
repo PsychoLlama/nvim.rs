@@ -149,7 +149,7 @@ fn types_reexports_no_duplicate_names() {
     let mod_rs = std::fs::read_to_string(dir.join("mod.rs")).expect("types/mod.rs");
     let modules = reexported_modules(&mod_rs);
     assert!(
-        modules.len() > 15,
+        modules.len() > 10,
         "parsed only {} re-exported modules from types/mod.rs -- the parser is \
          out of step with the file, not the file with the parser",
         modules.len()

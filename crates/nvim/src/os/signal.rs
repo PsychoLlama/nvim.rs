@@ -202,7 +202,7 @@ fn signal_name(signum: c_int) -> &'static CStr {
 fn deadly_signal(signum: c_int) -> ! {
     let name = signal_name(signum);
     let dying = crate::formatted!(
-        crate::types::IOSIZE as usize,
+        crate::message::IOSIZE as usize,
         b"Nvim: Caught deadly signal '%s'\n",
         name
     );

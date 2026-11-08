@@ -28,6 +28,7 @@ use super::op::BtOp;
 use super::resume::resume;
 use super::single::match_one;
 use super::state::{BackPos, Braces, BtState, RegStack, capture_slot};
+use crate::ascii::NUL;
 use crate::getchar::state::got_int;
 use crate::mbyte::{mb_isupper, mb_tolower, mb_toupper};
 use crate::message::e_re_corr;
@@ -42,7 +43,6 @@ use crate::regexp::{
     RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, RegStar, RegState, Rex, cleanup_subexpr,
     cleanup_zsubexpr, reg_breakcheck, reg_nextline, reg_save, save_capture, save_subexpr,
 };
-use crate::types::NUL;
 
 /// The first code of each run a group number is measured from. These are
 /// `const` items because `BtOp::Mopen.code()` is a *call* in a runtime

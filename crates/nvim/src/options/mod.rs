@@ -47,6 +47,7 @@ pub use self::vars::*;
 
 use core::ffi::{CStr, c_int, c_uint};
 
+use crate::ascii::TAB;
 use crate::ex_docmd::did_set_findfunc;
 use crate::ex_getln::did_set_cedit;
 use crate::global_cell::ConstTable;
@@ -108,7 +109,6 @@ use crate::quickfix::did_set_quickfixtextfunc;
 use crate::runtime::did_set_runtimepackpath;
 use crate::tag::did_set_tagfunc;
 use crate::types::OptInt;
-use crate::types::ascii::TAB;
 use crate::window::{did_set_winminheight, did_set_winminwidth};
 
 /// `scope_flags` bits.

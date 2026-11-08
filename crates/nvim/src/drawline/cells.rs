@@ -43,9 +43,9 @@
 )]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::r#move::WinValid;
 use crate::pos::MAXCOL;
-use crate::types::NUL;
 use crate::winlayer::Buf;
 
 /// The filler that stands in for the half of a double-width character that

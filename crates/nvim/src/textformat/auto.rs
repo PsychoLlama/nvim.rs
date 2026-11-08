@@ -23,6 +23,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::change::{del_char, get_leader_len};
 use crate::cstr::byte_at;
 use crate::cursor::{
@@ -34,7 +35,6 @@ use crate::memline::{Lines, ml_replace_owned};
 use crate::memory::XString;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, saved_cursor};
-use crate::types::NUL;
 use crate::undo::u_save_cursor;
 
 /// `auto_format` added an extra space under the cursor, and it has to come

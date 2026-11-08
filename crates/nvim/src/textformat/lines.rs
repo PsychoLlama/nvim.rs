@@ -21,6 +21,7 @@ use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{c_int, c_long};
 
 use super::*;
+use crate::ascii::NUL;
 use crate::ascii::ascii_isspace;
 use crate::change::del_bytes;
 use crate::charset::getwhitecols_curline;
@@ -53,7 +54,7 @@ use crate::os::libc::size_t;
 use crate::search::check_linecomment;
 use crate::state::mode::{State, saved_cursor};
 use crate::state::{MODE_INSERT, MODE_NORMAL};
-use crate::types::{CmdModFlags, ColNr, LineNr, NUL, VarNumber, Vv};
+use crate::types::{CmdModFlags, ColNr, LineNr, VarNumber, Vv};
 use crate::ui::ui_cursor_shape;
 use crate::undo::{u_save, u_save_cursor};
 

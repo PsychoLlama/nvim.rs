@@ -12,6 +12,7 @@
 use super::wrappers::{arg_lnum, arg_number, arg_number_chk, non_zero_arg};
 use super::{MENU_ALL_MODES, kRetNilBool};
 use crate::api::private::helpers::api_metadata;
+use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::state::autocmd_busy;
 use crate::cmdexpand::cmdline_pum_active;
@@ -45,7 +46,7 @@ use crate::strings::has_char;
 use crate::syntax::syntax_present;
 use crate::types::LineNr;
 use crate::types::{
-    Array, ColNr, Error, NUL, Object, TypVal, VAR_STRING, VarNumber, Vv, kListLenMayKnow,
+    Array, ColNr, Error, Object, TypVal, VAR_STRING, VarNumber, Vv, kListLenMayKnow,
 };
 use crate::ui::ui_gui_attached;
 use crate::version::{has_nvim_version, has_vim_patch};

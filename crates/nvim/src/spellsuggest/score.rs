@@ -42,6 +42,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::cstr::until_nul;
 use crate::mbyte::{char_at, char_len, mb_isupper, utf_fold};
@@ -55,7 +56,6 @@ use crate::spellsuggest::{
     SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, SugInfo,
     copy_terminated,
 };
-use crate::types::NUL;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 

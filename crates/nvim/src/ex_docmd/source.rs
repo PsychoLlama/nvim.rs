@@ -71,7 +71,8 @@ use crate::message_fmt::msg_bytes;
 use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 
-use crate::types::{CmdLine, ExArg, Failed, IOSIZE, LineNr, OptInt, Vv};
+use crate::message::IOSIZE;
+use crate::types::{CmdLine, ExArg, Failed, LineNr, OptInt, Vv};
 
 use crate::winlayer::{Buf, Win};
 

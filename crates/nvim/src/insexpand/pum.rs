@@ -21,11 +21,11 @@ use crate::formatted;
 use crate::guard::{Allow, Lock};
 use crate::memline::Lines;
 use crate::memory::XString;
+use crate::message::IOSIZE;
 use crate::message::msg;
 use crate::narrow::len_as_int;
 use crate::option::defs::ShmFlag;
 use crate::tr;
-use crate::types::IOSIZE;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 

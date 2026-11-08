@@ -29,8 +29,8 @@
 )]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::grid::with_linebuf;
-use crate::types::NUL;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use crate::winlayer::WinId;

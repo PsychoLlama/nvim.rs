@@ -101,6 +101,7 @@ use core::num::NonZeroU32;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
+use crate::ascii::NUL;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::valid_utf8;
@@ -110,7 +111,7 @@ use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::os::input::veryfast_breakcheck;
 use crate::spell::{captype, casefold_len};
-use crate::types::{Failed, NUL};
+use crate::types::Failed;
 use crate::ui::ui_flush;
 
 use super::{MAXWLEN, SpellInfo, spell_message_fmt};

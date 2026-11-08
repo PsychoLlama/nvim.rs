@@ -19,6 +19,7 @@ use core::ffi::c_int;
 use super::compile::BtProg;
 use super::exec::re_num_cmp;
 use super::op::BtOp;
+use crate::ascii::NUL;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::mark::mark_get;
@@ -31,7 +32,7 @@ use crate::regexp::{
     match_with_backref, nul_terminated_len, reg_getline, reg_getline_len, reg_match_visual,
     reg_nextline, reg_prev_class,
 };
-use crate::types::{LineNr, NUL, Pos};
+use crate::types::{LineNr, Pos};
 
 use crate::winlayer::Win;
 

@@ -37,6 +37,7 @@ use super::{
     CAR, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC,
     RegSubMatch, TAB, can_f_submatch, reg_prev_sub, rsm,
 };
+use crate::ascii::NUL;
 use crate::eval::eval_to_string;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::{Ctrl_H, K_SPECIAL};
@@ -51,7 +52,7 @@ use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::regexp::{RegMMatch, RegMatch};
 use crate::strings::escaped_bytes;
-use crate::types::{ColNr, LineNr, NUL, TypVal};
+use crate::types::{ColNr, LineNr, TypVal};
 
 /// How deep a `\=` expression may nest substitutions before it is more
 /// likely to be a mistake than an intention.

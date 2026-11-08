@@ -43,6 +43,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::r#move::WinValid;
 use crate::normal::defs::Outcome;
 use crate::normal::{
@@ -52,7 +53,6 @@ use crate::normal::{
 use crate::option::cpo_has;
 use crate::option::defs::{CpoFlag, FoFlag};
 use crate::optionstr::OptString;
-use crate::types::NUL;
 
 /// The Visual area a `.` replays: its mode and size, not its position.
 ///

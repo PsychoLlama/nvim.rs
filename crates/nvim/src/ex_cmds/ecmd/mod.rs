@@ -48,6 +48,7 @@ use crate::winlayer::WinId;
 use core::ffi::CStr;
 use std::ffi::CString;
 
+use crate::ascii::NUL;
 use crate::autocmd::fire_autocmds_retval;
 use crate::buffer::current_buf;
 use crate::buffer::state::swap_exists_action;
@@ -88,7 +89,7 @@ use crate::startup::exiting;
 use crate::state::mode::exmode_active;
 use crate::tag::state::keep_help_flag;
 use crate::terminal::buf_terminal_check_size;
-use crate::types::{ExArg, Failed, LineNr, NUL, Vv};
+use crate::types::{ExArg, Failed, LineNr, Vv};
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
 use crate::winlayer::Buf;

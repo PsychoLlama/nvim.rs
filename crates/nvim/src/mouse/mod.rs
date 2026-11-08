@@ -41,6 +41,7 @@ use crate::winlayer::{TabPage, WinId};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
+use crate::ascii::NUL;
 use crate::charset::vim_iswordc;
 use crate::cursor::set_leftcol;
 use crate::eval::funcs::builtin::EvalFuncData;
@@ -60,7 +61,7 @@ use crate::state::virtual_active;
 use crate::statusline::defs::{ClickLine, StlClickDefinition};
 use crate::statusline::state::tab_page_click_defs;
 use crate::statusline::stl_connected;
-use crate::types::{ColNr, LineNr, NUL, Pos, TypVal, VarNumber};
+use crate::types::{ColNr, LineNr, Pos, TypVal, VarNumber};
 use crate::ui::{ui_check_mouse, ui_cursor_shape};
 use crate::window::{
     self, find_tabpage, tabpage_move, win_drag_status_line, win_drag_vsep_line, win_enter,

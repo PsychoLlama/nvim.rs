@@ -42,12 +42,12 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+use crate::ascii::CAR;
+use crate::ascii::NL;
 use crate::narrow::as_index;
 use crate::narrow::len_as_int;
 use crate::statusline::state::tab_page_click_defs;
-use crate::types::CAR;
 use crate::types::DictBuilder;
-use crate::types::NL;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 

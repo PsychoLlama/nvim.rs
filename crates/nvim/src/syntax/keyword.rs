@@ -24,7 +24,7 @@ use crate::semsg;
 use core::ffi::c_int;
 
 use super::*;
-use crate::types::NUL;
+use crate::ascii::NUL;
 
 /// One `:syntax keyword` definition of one keyword text.
 ///

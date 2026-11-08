@@ -33,6 +33,7 @@ pub mod arith;
 use self::arith::{
     ColAdd, carried_coladd, checked_col, folded_line_span, gap_coladd, step_back, wrap_target_col,
 };
+use crate::ascii::NUL;
 use crate::change::inserted_bytes;
 use crate::cstr;
 use crate::drawscreen::UPD_NOT_VALID;
@@ -49,7 +50,7 @@ use crate::plines::CharsizeArg;
 use crate::plines::{getvcol, linetabsize, linetabsize_eol, win_charsize};
 use crate::state::mode::{State, restart_edit};
 use crate::state::{MODE_INSERT, MODE_TERMINAL, virtual_active};
-use crate::types::{ColNr, LineNr, NUL, Pos};
+use crate::types::{ColNr, LineNr, Pos};
 use crate::winlayer::{Buf, PosRef, Win};
 
 const TAB: c_int = 9;

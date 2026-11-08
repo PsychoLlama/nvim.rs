@@ -40,6 +40,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::ascii::TAB;
 use crate::decoration::defs::VirtText;
 use crate::diff::state::need_diff_redraw;
 use crate::drawscreen::{UPD_NOT_VALID, find_wl_entry};
@@ -47,7 +48,6 @@ use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::plines::plines_win_nofold;
 use crate::state::mode::State;
-use crate::types::TAB;
 use crate::types::*;
 use crate::winlayer::Win;
 use core::ffi::{c_int, c_uint};

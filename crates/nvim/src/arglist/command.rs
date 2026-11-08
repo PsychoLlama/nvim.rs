@@ -17,6 +17,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::cmdexpand::defs::{Candidate, Expand};
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;

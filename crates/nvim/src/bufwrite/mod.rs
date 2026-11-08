@@ -17,6 +17,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::NL;
 use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::canonize;
 use crate::memline::MlFlags;
@@ -24,7 +25,6 @@ use crate::narrow::len_as_int;
 use crate::semsg;
 use crate::tr_plural;
 use crate::types::ColNr;
-use crate::types::NL;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
@@ -50,6 +50,7 @@ use crate::highlight_group::HLF_E;
 use crate::input::ask_yesno;
 use crate::memline::{ml_preserve, ml_timestamp};
 use crate::memory::XString;
+use crate::message::IOSIZE;
 use crate::message::state::{msg_scroll, msg_silent, no_wait_return};
 use crate::message::{e_empty_buffer, e_fsync, e_interr, e_longname};
 use crate::message::{emsg, msg_progress, msg_str_hl, set_keep_msg};
@@ -75,7 +76,7 @@ use crate::path::{after_pathsep, path_fnamecmp, tail_index};
 use crate::sha256::Sha256;
 use crate::startup::exiting;
 use crate::strings::{FmtArg, format_into};
-use crate::types::{CmdModFlags, ExArg, Failed, IOSIZE, LineNr, Pos};
+use crate::types::{CmdModFlags, ExArg, Failed, LineNr, Pos};
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};
 use crate::winlayer::Buf;

@@ -25,13 +25,13 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+use crate::ascii::CAR;
+use crate::ascii::ESC;
+use crate::ascii::NL;
+use crate::ascii::TAB;
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
 use crate::os::libc::{int64_t, uint8_t};
-use crate::types::CAR;
-use crate::types::ESC;
-use crate::types::NL;
-use crate::types::TAB;
 use crate::types::{ColNr, LPos, LineNr};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int, c_uint};

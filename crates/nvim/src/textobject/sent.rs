@@ -22,6 +22,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::cursor::gchar_cursor;
 use crate::drawscreen::state::redraw_cmdline;
@@ -34,7 +35,7 @@ use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
 use crate::pos::{equalpos, lt};
 use crate::search::{BACKWARD, FORWARD};
-use crate::types::{Direction, NUL, Pos};
+use crate::types::{Direction, Pos};
 
 /// One step of a position walk: [`incl`] going forward, [`decl`] going back.
 type StepFn = fn(&mut Pos) -> Moved;

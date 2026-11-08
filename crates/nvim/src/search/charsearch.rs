@@ -14,6 +14,7 @@
 )]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::cstr;
 use crate::mbyte::MAX_SCHAR_SIZE;
 use crate::mbyte::{c_cluster_len, char_len, encode_char};
@@ -21,7 +22,6 @@ use crate::narrow::len_as_int;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
 use crate::regexp::low_byte;
-use crate::types::NUL;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 

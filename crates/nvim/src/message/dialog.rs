@@ -14,12 +14,12 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::guard::{Allow, Suppress};
 use crate::keycodes::Ctrl_C;
 use crate::keycodes::ModMask;
 use crate::mbyte::{char_at, cluster_len};
 use crate::types::Key;
-use crate::types::NUL;
 use core::ffi::{CStr, c_int};
 
 /// How many buttons can carry a hotkey. Buttons past this share the default.

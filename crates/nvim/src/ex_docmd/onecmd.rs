@@ -77,11 +77,12 @@ use crate::state::mode::exmode_active;
 use crate::winlayer::graph::cmdwin_type;
 
 use crate::ex_eval::defs::CondId;
+use crate::message::IOSIZE;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::profile::{func_line_exec, script_line_exec};
 use crate::runtime::do_finish;
-use crate::types::{CmdAddr, CmdLine, ExArg, ExArgt, IOSIZE};
+use crate::types::{CmdAddr, CmdLine, ExArg, ExArgt};
 use crate::winlayer::{Buf, Win};
 
 /// A zeroed `ExArg` with the empty range the parsers start from.

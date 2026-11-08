@@ -40,6 +40,7 @@ use core::ffi::c_int;
 
 use super::program::{NfaState, StateId, States};
 use super::sub::{copy_pim, copy_sub, has_backref, has_zsubexpr, pim_equal, slots, sub_equal};
+use crate::ascii::NUL;
 use crate::message::emsg;
 use crate::option::vars::p_mmp;
 use crate::os::cshim::gettext;
@@ -47,7 +48,6 @@ use crate::regexp::{
     ADDSTATE_HERE_OFFSET, Capture, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos,
     NSUBEXP, PimResult, PosKind, RegSub, RegSubs, Rex,
 };
-use crate::types::NUL;
 
 /// How deep `addstate` may follow itself before giving up. A machine with a
 /// cycle of states that consume no input would otherwise not terminate.

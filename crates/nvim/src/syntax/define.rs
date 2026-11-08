@@ -26,9 +26,10 @@ use crate::types::Failed;
 use core::ffi::{CStr, c_int};
 
 use super::*;
+use crate::ascii::NUL;
 use crate::regexp::{RE_MAGIC, char_delim, skip_regexp_at};
 use crate::runtime::RuntimeOpts;
-use crate::types::{ExArgt, NUL};
+use crate::types::ExArgt;
 
 /// Adjust an item's flags when it is declared in a `:syntax include`d file.
 ///

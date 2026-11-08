@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::memory::XString;
+use crate::message::IOSIZE;
 use crate::message_fmt::msg_bytes;
 use crate::option::SavedCpo;
 use crate::option::next_option_part;
@@ -25,7 +26,6 @@ use crate::path::{ExpandFlags, gen_expand_wildcards, vim_ispathsep};
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING};
 use crate::semsg;
 use crate::types::CmdIdx;
-use crate::types::IOSIZE;
 use core::ffi::{CStr, c_int};
 use std::fs::File;
 use std::os::unix::ffi::OsStrExt;

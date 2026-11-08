@@ -23,8 +23,8 @@ use core::ffi::{CStr, c_int};
 use crate::bufwrite::translate;
 
 use super::*;
+use crate::message::IOSIZE;
 use crate::option::defs::ShmFlag;
-use crate::types::IOSIZE;
 
 /// A message assembled the way upstream assembles one in `IObuff`: never
 /// more than `IOSIZE - 1` bytes, each piece cut to what still fits.

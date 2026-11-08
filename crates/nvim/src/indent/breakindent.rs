@@ -10,6 +10,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::NUL;
 use crate::cstr;
 use crate::regexp::RegMatch;
 use core::ffi::CStr;

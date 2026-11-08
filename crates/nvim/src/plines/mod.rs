@@ -23,6 +23,7 @@
 //! This runs per character on every redraw. Prefer plain loops and keep the
 //! small helpers inlined.
 
+use crate::ascii::NUL;
 use crate::buffer::buf_meta_total;
 use crate::charset::{byte2cells, vim_isbreak, vim_isprintc};
 use crate::cstr::byte_at;
@@ -45,7 +46,7 @@ use crate::os::libc::{int32_t, int64_t, uint32_t};
 use crate::pos::{MAXCOL, lt, ltoreq};
 use crate::state::mode::State;
 use crate::state::{MODE_NORMAL, virtual_active};
-use crate::types::{ColNr, LineNr, NUL, Pos};
+use crate::types::{ColNr, LineNr, Pos};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 

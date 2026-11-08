@@ -28,6 +28,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::change::{get_leader_len, ins_bytes, ins_str, open_line};
 use crate::charset::char2cells;
 use crate::cursor::{
@@ -47,7 +48,7 @@ use crate::state::VREPLACE_FLAG;
 use crate::state::mode::{
     Insstart, State, can_si, can_si_back, did_ai, did_si, old_indent, replace_offset,
 };
-use crate::types::{ColNr, NUL};
+use crate::types::ColNr;
 
 /// What one step of the backwards search for a break column decided.
 ///

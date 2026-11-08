@@ -29,6 +29,7 @@ use crate::tr;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
+use crate::ascii::NUL;
 use crate::ascii::ascii_isdigit;
 use crate::charset::transchar;
 use crate::global_cell::{Field, field};
@@ -46,7 +47,7 @@ use crate::options::{
 use crate::os::cshim::gettext;
 use crate::os::libc::uint32_t;
 use crate::statusline::defs::StlOpt;
-use crate::types::{Buffer, Failed, NUL};
+use crate::types::{Buffer, Failed};
 
 use super::OptStringRef;
 

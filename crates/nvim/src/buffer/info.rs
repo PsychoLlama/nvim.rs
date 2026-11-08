@@ -40,6 +40,7 @@ use crate::drawscreen::state::need_maketitle;
 use crate::getchar::state::got_int;
 use crate::mbyte::cp_bounds;
 use crate::memory::XString;
+use crate::message::IOSIZE;
 use crate::message::state::{msg_col, msg_scroll, msg_scrolled, need_wait_return, no_lines_msg};
 use crate::message::{
     message_filtered, msg, msg_display, msg_ext_set_kind, msg_fit_head, msg_putchar, msg_start,
@@ -60,7 +61,7 @@ use crate::statusline::state::stl_syntax;
 use crate::statusline::{FmtSource, build_stl_text};
 use crate::terminal::buf_terminal_running;
 use crate::types::ApiString;
-use crate::types::{ExArg, IOSIZE, LineNr, OptInt};
+use crate::types::{ExArg, LineNr, OptInt};
 use crate::ui::state::Columns;
 use crate::ui::state::kUIMessages;
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};

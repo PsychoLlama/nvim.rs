@@ -36,6 +36,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::NUL;
 use crate::change::inserted_bytes;
 use crate::cursor::get_cursor_line_len;
 use crate::drawscreen::state::cmdline_row;
@@ -47,6 +48,7 @@ use crate::input::prompt_for_input;
 use crate::mbyte::{c_cluster_len, head_off};
 use crate::memline::{Lines, ml_replace_owned};
 use crate::memory::XString;
+use crate::message::IOSIZE;
 use crate::message::e_no_spell;
 use crate::message::state::{cmdmsg_rl, lines_left, msg_col, msg_row, msg_scroll};
 use crate::message::{
@@ -73,7 +75,7 @@ use crate::spellsuggest::{
     sps_flags, sps_limit,
 };
 use crate::types::Key;
-use crate::types::{ColNr, IOSIZE, NUL, Pos};
+use crate::types::{ColNr, Pos};
 use crate::ui::state::Rows;
 use crate::ui::state::kUIMessages;
 use crate::ui::{ui_has, vim_beep};

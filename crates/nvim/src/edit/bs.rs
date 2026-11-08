@@ -39,10 +39,11 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::memline::Moved;
 use crate::option::cpo_has;
 use crate::option::defs::{BsFlag, CpoFlag, FoFlag};
-use crate::types::{Failed, NUL};
+use crate::types::Failed;
 
 /// Which backwards-delete key is running.
 ///

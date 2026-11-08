@@ -43,8 +43,8 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};
 
 use super::*;
+use crate::ascii::NUL;
 use crate::normal::{set_visual_active, visual_active, visual_mode};
-use crate::types::NUL;
 
 mod block;
 mod lines;

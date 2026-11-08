@@ -29,11 +29,11 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::message::MSG_IOBUFF_LEN;
 use crate::message_fmt::to_message;
 use crate::normal::{VisualMode, VisualSelection, sel_exclusive, visual_selection};
 use crate::tr;
-use crate::types::NUL;
 
 /// Bytes, words and characters in one line, up to `limit` bytes.
 ///

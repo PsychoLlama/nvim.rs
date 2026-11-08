@@ -26,8 +26,8 @@ use crate::types::Failed;
 use core::ffi::{CStr, c_int};
 
 use super::*;
+use crate::ascii::NUL;
 use crate::regexp::RE_MAGIC;
-use crate::types::NUL;
 use crate::winlayer::Win;
 
 /// Where a `:syntax` command's group name ends and its next argument begins.

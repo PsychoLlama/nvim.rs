@@ -25,6 +25,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::cursor::{dec_cursor, inc_cursor};
 use crate::drawscreen::state::redraw_cmdline;
@@ -38,7 +39,7 @@ use crate::normal::{
 };
 use crate::optionstr::OptString;
 use crate::pos::{equalpos, lt};
-use crate::types::{ColNr, NUL};
+use crate::types::ColNr;
 
 /// The byte at column `col` of `line`; NUL past its end and before its
 /// start, which every walk below stops at.

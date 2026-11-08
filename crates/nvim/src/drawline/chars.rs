@@ -29,7 +29,7 @@
 )]
 
 use super::*;
-use crate::types::NUL;
+use crate::ascii::NUL;
 
 impl Cells {
     /// Put the next character in [`Cells::cell_char`].

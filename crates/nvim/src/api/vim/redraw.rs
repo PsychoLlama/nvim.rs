@@ -15,10 +15,10 @@
 )]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::grid::grid_of_view;
 use crate::guard::Allow;
 use crate::optionstr::OptString;
-use crate::types::NUL;
 use crate::winlayer::Buf;
 use crate::winlayer::{Win, first_window, windows};
 use core::ffi::CStr;

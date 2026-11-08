@@ -25,6 +25,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::decoration::{
     DECOR_ID_INVALID, DRAW_COL_LATER, DRAW_COL_NEVER, VirtChunks, decor_inline_virt_from,
     decor_lists, decor_range, kDecorKindUIWatched, kDecorKindVirtText, kHlModeBlend,
@@ -36,7 +37,6 @@ use crate::narrow::as_index;
 use crate::narrow::count_as_int;
 use crate::narrow::len_as_int;
 use crate::types::Handle;
-use crate::types::NUL;
 use crate::winlayer::Buf;
 
 /// Put the character at the start of `text` into `dest`, and answer how many

@@ -18,6 +18,7 @@
 )]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::mbyte::{c_cluster_len, char_at};
@@ -25,7 +26,6 @@ use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
 use crate::optionstr::OptStringRef;
 use crate::strings::has_char;
-use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 

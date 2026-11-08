@@ -30,11 +30,12 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::char_at;
 use crate::option::cpo_has;
 use crate::option::defs::{CpoFlag, FoFlag};
-use crate::types::{Failed, NUL};
+use crate::types::Failed;
 
 /// Where the text of `line` starts once its comment leader is skipped, and
 /// whether the line ends *inside* an unclosed comment.

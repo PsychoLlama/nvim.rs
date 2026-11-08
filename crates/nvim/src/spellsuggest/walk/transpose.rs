@@ -41,12 +41,12 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::NUL;
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, utf_char2len};
 use crate::narrow::as_index;
 use crate::spell::spell_iswordp;
 use crate::spellsuggest::walk::{State, Walk, frame_pos};
 use crate::spellsuggest::{SCORE_SWAP, SCORE_SWAP3};
-use crate::types::NUL;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 

@@ -25,8 +25,8 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::Put;
+use crate::ascii::NUL;
 use crate::register::*;
-use crate::types::NUL;
 
 /// Where in one buffer line the block goes, measured by [`Put::blockwise`].
 struct Landing {

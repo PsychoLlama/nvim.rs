@@ -43,6 +43,7 @@ use crate::option::kListchars;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_uint};
 
+use crate::ascii::NUL;
 use crate::charset::{char2cells, hexhex_at};
 use crate::cmdexpand::defs::Expand;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
@@ -57,7 +58,7 @@ use crate::options::kOptListchars as kOptListcharsIdx;
 use crate::optionstr::CharsOption;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
-use crate::types::{FcsChars, LcsChars, NUL, ScreenChar, WinOpt};
+use crate::types::{FcsChars, LcsChars, ScreenChar, WinOpt};
 use crate::winlayer;
 
 use super::frame::new_bytes;

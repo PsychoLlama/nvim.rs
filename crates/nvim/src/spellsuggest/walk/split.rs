@@ -33,6 +33,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::NUL;
 use crate::cstr::until_nul;
 use crate::mbyte::{c_cluster_len, char_count};
 use crate::narrow::as_index;
@@ -46,7 +47,6 @@ use crate::spellsuggest::walk::{
     FLAG_DID_SPLIT, PFD_NOPREFIX, PFD_PREFIXTREE, State, Walk, frame_pos, saved_flags,
 };
 use crate::spellsuggest::{SCORE_SPLIT, SCORE_SPLIT_NO, SCORE_SUBST};
-use crate::types::NUL;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 

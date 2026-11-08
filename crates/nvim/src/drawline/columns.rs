@@ -25,6 +25,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::decoration::{SCL_NUM, SIGN_WIDTH};
 use crate::grid::with_linebuf;
 use crate::r#move::WinValid;
@@ -35,7 +36,7 @@ use crate::option::defs::CpoFlag;
 use crate::optionstr::OptString;
 use crate::path::MAXPATHL;
 use crate::statusline::defs::StlOpt;
-use crate::types::{NUL, Vv};
+use crate::types::Vv;
 use crate::winlayer::Win;
 use std::io::Write as _;
 

@@ -20,6 +20,7 @@ use crate::cstr;
 use crate::ex_getln::tilde_replace_matches;
 use crate::formatted;
 use crate::memory::XString;
+use crate::message::IOSIZE;
 use crate::narrow::len_as_int;
 use crate::option::defs::ShmFlag;
 use crate::option::next_option_part;
@@ -31,7 +32,6 @@ use crate::search::ACTION_EXPAND;
 use crate::search::FIND_ANY;
 use crate::search::FIND_DEFINE;
 use crate::strings::has_char;
-use crate::types::IOSIZE;
 use crate::winlayer::BufId;
 use crate::winlayer::{Buf, buffers};
 

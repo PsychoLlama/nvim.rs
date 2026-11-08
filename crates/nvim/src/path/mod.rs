@@ -28,6 +28,7 @@ use crate::memory::XString;
 use core::ffi::c_int;
 use std::ffi::CStr;
 
+use crate::ascii::PATHSEPSTR;
 use crate::cmdexpand::globpath;
 use crate::eval::eval_to_string;
 use crate::ex_docmd::eval_vars;
@@ -45,7 +46,7 @@ use crate::os::fs::{
 use crate::os::input::os_breakcheck;
 use crate::regexp::vim_regexec;
 use crate::shell::{get_cmd_output, shell_expand_wildcards};
-use crate::types::{Failed, PATHSEPSTR};
+use crate::types::Failed;
 
 // The carve of the transpiled module; see each child's docs.
 mod names;

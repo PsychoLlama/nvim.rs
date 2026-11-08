@@ -26,11 +26,12 @@ use crate::ex_getln::{get_user_input, ui_ext_cmdline_block_append, ui_ext_cmdlin
 use crate::lua::stack::{At, CFunction, Function, Raise, Stack};
 use crate::lua_functions;
 use crate::message::HlMessageChunk;
+use crate::message::IOSIZE;
 use crate::message::{msg_multihl, msg_putchar};
 use crate::os::cshim::gettext;
 use crate::profile::startup_timing;
 use crate::profile::{time_msg, time_pop, time_push};
-use crate::types::{ApiString, IOSIZE, Object, TypVal};
+use crate::types::{ApiString, Object, TypVal};
 use crate::ui::state::kUICmdline;
 use crate::ui::ui_has;
 

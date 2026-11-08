@@ -18,6 +18,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::ascii::TAB;
 use crate::autocmd::defs::AutoEvent;
 use crate::buffer::buf_get_changedtick;
 use crate::charset::{skip, vim_isfilec, vim_iswordc};
@@ -89,7 +90,6 @@ use crate::state::MODE_SHOWMATCH;
 use crate::state::mode::State;
 use crate::strings::reversed_text;
 use crate::tag::state::g_do_tagpreview;
-use crate::types::TAB;
 use crate::types::{ColNr, Dict, Direction, LPos, LineNr, Pos, ProfTime, TypVal, VarNumber};
 use crate::ui::state::kUIMessages;
 use crate::ui::state::{Columns, Rows};

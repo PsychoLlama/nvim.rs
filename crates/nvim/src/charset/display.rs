@@ -21,6 +21,7 @@ use crate::cstr;
 use core::ffi::CStr;
 use core::ffi::c_int;
 
+use crate::ascii::NUL;
 use crate::mbyte::{
     c_cluster_len, char_at, char_len, cluster_len, encode_char, mb_tolower, utf_char2cells,
     utf8_len,
@@ -29,7 +30,6 @@ use crate::memory::XString;
 use crate::option::get_fileformat;
 use crate::option::vars::dy_flags;
 use crate::os::libc::uint8_t;
-use crate::types::NUL;
 use crate::winlayer::Buf;
 
 use super::{

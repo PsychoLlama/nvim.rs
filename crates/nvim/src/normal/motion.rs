@@ -17,6 +17,7 @@ use crate::ops::Op;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
+use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::buffer::{buf_is_prompt, buf_is_quickfix, current_buf};
 use crate::charset::vim_isprintc;
@@ -51,7 +52,7 @@ use crate::search::{BACKWARD, FORWARD, findmatch, searchc};
 use crate::state::mode::{VIsual_select_exclu_adj, ins_at_eol, restart_edit};
 use crate::state::virtual_active;
 use crate::textobject::{bck_word, end_word, findpar, findsent, fwd_word};
-use crate::types::{ColNr, Direction, LineNr, NUL};
+use crate::types::{ColNr, Direction, LineNr};
 use crate::winlayer::graph::{cmdwin_result, cmdwin_type};
 use core::ffi::{c_int, c_uint};
 

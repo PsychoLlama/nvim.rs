@@ -28,6 +28,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::buffer::buf_is_quickfix;
 use crate::charset::vim_iswordc;
@@ -67,8 +68,8 @@ use crate::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG};
 use crate::statusline::{
     kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch,
 };
+use crate::types::Direction;
 use crate::types::Key;
-use crate::types::{Direction, NUL};
 use crate::ui::MOUSE_VISUAL;
 use crate::ui::state::Columns;
 use crate::ui::ui_mouse_has;

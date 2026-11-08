@@ -16,8 +16,8 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::cstr;
-use crate::types::NUL;
 use crate::winlayer::cmdline_window;
 
 /// The screen width of the command-line byte at `idx`.

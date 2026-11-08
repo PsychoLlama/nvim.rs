@@ -31,6 +31,7 @@ use crate::optionstr::OptString;
 use crate::winlayer::Win;
 use core::ffi::CStr;
 
+use crate::ascii::PATHSEPSTR;
 use crate::buffer::buf_is_empty;
 use crate::change::save_file_ff;
 use crate::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
@@ -59,7 +60,7 @@ use crate::path::{invocation_path_tail, path_fnamecmp, vim_ispathlistsep};
 use crate::runtime::runtimepath_default;
 use crate::runtime::state::current_sctx;
 use crate::spell::init_spell_chartab;
-use crate::types::{OptInt, PATHSEPSTR};
+use crate::types::OptInt;
 use crate::ui::state::Rows;
 use crate::window::{last_status, win_comp_scroll};
 use crate::winlayer::{self, Buf};

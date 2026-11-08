@@ -41,6 +41,7 @@ use crate::ex_getln::{get_cmdline_firstc, get_list_range};
 use crate::getchar::state::{got_int, maptick};
 use crate::global_cell::GlobalCell;
 use crate::memory::ThinCString;
+use crate::message::IOSIZE;
 use crate::message::{
     cut_middle, message_filtered, msg, msg_display_bytes, msg_ext_set_kind, msg_putchar, msg_title,
 };
@@ -53,7 +54,7 @@ use crate::regexp::RegMatch;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regexec};
 use crate::shada::ShadaExtra;
 use crate::tr;
-use crate::types::{CmdModFlags, ExArg, IOSIZE, Timestamp, TypVal, VAR_NUMBER, VarNumber};
+use crate::types::{CmdModFlags, ExArg, Timestamp, TypVal, VAR_NUMBER, VarNumber};
 use crate::ui::state::Columns;
 use core::ffi::{CStr, c_int};
 

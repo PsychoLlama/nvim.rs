@@ -17,6 +17,7 @@ use crate::narrow::len_as_int;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
+use crate::ascii::NUL;
 use crate::buffer::{buf_get_changedtick, buf_is_prompt, current_buf};
 use crate::change::OPENLINE_DO_COM;
 use crate::change::{changed_lines, del_chars, deleted_lines, ins_char, ins_char_bytes, open_line};
@@ -67,7 +68,7 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::state::mode::{State, restart_edit};
 use crate::state::{MODE_INSERT, MODE_REPLACE, virtual_active};
 use crate::textformat::{auto_format, has_format_option};
-use crate::types::{ColNr, LineNr, NUL};
+use crate::types::{ColNr, LineNr};
 use crate::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
 use core::ffi::{CStr, c_int, c_uint};
 

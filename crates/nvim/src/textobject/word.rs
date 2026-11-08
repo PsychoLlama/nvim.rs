@@ -23,6 +23,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::cursor::{coladvance, dec_cursor, gchar_cursor, get_cursor_line_len, inc_cursor};
 use crate::drawscreen::state::redraw_cmdline;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
@@ -39,7 +40,7 @@ use crate::normal::{
 use crate::pos::{clearpos, equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::mode::VIsual_select_exclu_adj;
-use crate::types::{NUL, Pos};
+use crate::types::Pos;
 
 /// Whether [`cls`] should answer a WORD's classes rather than a word's.
 ///

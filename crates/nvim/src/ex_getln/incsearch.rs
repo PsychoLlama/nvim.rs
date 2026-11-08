@@ -21,10 +21,11 @@ use crate::cstr;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 
+use crate::ascii::NUL;
 use crate::guard::Suppress;
 use crate::mbyte::cluster_len;
 use crate::narrow::len_as_int;
-use crate::types::{Failed, NUL};
+use crate::types::Failed;
 use core::ffi::CStr;
 
 /// Fire a `Cmdline*` / `Cmdwin*` autocommand whose `<afile>` and `<amatch>`

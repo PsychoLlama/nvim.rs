@@ -36,11 +36,12 @@ use crate::eval::typval_encode::{ConvPath, Flow, Frame, PartialStage};
 use crate::eval::vars::msgpack_type_list_is;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{char_at, char_len, utf_char2len, utf_printable};
+use crate::message::IOSIZE;
 use crate::message::emsg;
 use crate::message_fmt::{emsg_text, msg_bytes, to_message};
 use crate::os::cshim::gettext;
 use crate::types::{
-    Failed, IOSIZE, List, MessagePackType, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING,
+    Failed, List, MessagePackType, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING,
 };
 
 mod error;

@@ -40,6 +40,7 @@ use std::ffi::CString;
 
 use super::*;
 
+use crate::ascii::NUL;
 use crate::buffer::{buflist_getfile, find_buf, set_pcmark};
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
@@ -65,7 +66,7 @@ use crate::quickfix::qf_view_result;
 use crate::search::find_pattern_in_path;
 use crate::tag::state::{g_do_tagpreview, postponed_split};
 use crate::tr_c;
-use crate::types::{Failed, LineNr, NUL, WinConfig};
+use crate::types::{Failed, LineNr, WinConfig};
 use crate::ui::state::kUIMultigrid;
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;

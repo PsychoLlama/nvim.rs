@@ -19,6 +19,7 @@
 )]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::autocmd::fire_autocmds;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
@@ -39,7 +40,7 @@ use crate::search::{
     SEARCH_OPT, SEARCH_PEEK, SEARCH_REV, SEARCH_START, SEARCH_STAT_BUF_LEN,
     SEARCH_STAT_DEF_TIMEOUT,
 };
-use crate::types::{CmdModFlags, NUL};
+use crate::types::CmdModFlags;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};

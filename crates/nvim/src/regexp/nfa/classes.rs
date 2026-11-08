@@ -16,10 +16,10 @@
 use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
+use crate::ascii::NUL;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::regexp::{ByteClass, RI_FLAGS, Rex};
-use crate::types::NUL;
 
 /// Is `c` in the Latin-1 class `flag` names? The table only covers the
 /// first 256 code points, so anything above them is out by construction.

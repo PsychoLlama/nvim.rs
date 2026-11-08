@@ -20,6 +20,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::ascii::TAB;
 use crate::ascii::{
     ascii_isalpha, ascii_isbdigit, ascii_isdigit, ascii_isspace, ascii_iswhite, ascii_isxdigit,
 };
@@ -101,7 +102,6 @@ use crate::state::mode::{
 };
 use crate::state::{MODE_INSERT, MODE_REPLACE, VREPLACE_FLAG, virtual_active};
 use crate::textformat::{auto_format, has_format_option, op_format, op_formatexpr};
-use crate::types::TAB;
 use crate::types::{
     Callback, CmdModFlags, ColNr, Dict, LineNr, OptInt, Pos, TypVal, UVarNumber, VarNumber,
 };

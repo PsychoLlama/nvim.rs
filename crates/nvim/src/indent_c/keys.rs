@@ -18,13 +18,13 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::charset::is_word_at;
 use crate::indent::Indenter;
 use crate::mbyte::{head_off, strnicmp_in};
 use crate::option::skip_option_separator;
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::byte_tolower;
-use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 

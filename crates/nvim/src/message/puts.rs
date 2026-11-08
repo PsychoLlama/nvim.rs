@@ -16,12 +16,13 @@
 )]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::ex_docmd::cmdmod_filters_out;
 use crate::grid::default_grid_ref;
 use crate::mbyte::{cells_at, char_at, char_len, cluster_len, string_cells};
 use crate::os::cshim::{write_c_stderr, write_c_stdout};
-use crate::types::{Callback, NUL};
+use crate::types::Callback;
 use core::ffi::{c_int, c_uint};
 use std::borrow::Cow;
 

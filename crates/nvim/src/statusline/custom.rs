@@ -34,6 +34,7 @@ use crate::optionstr::{OptString, local_or_global};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::is_aucmd_win;
 use crate::buffer::{col_text, get_rel_pos};
@@ -60,7 +61,7 @@ use crate::state::MODE_INSERT;
 use crate::state::mode::{State, edit_submode};
 use crate::statusline::defs::{StlHlRun, StlOpt};
 use crate::strings::{FmtArg, formatted};
-use crate::types::{ApiString, Array, ColNr, Integer, NUL, Object, OptInt, ScreenChar};
+use crate::types::{ApiString, Array, ColNr, Integer, Object, OptInt, ScreenChar};
 use crate::ui::state::kUIMessages;
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_msg_ruler, ui_has};

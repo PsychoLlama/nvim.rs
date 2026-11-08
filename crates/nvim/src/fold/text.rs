@@ -14,6 +14,7 @@
 )]
 #![forbid(unsafe_code)]
 use crate::api::extmark::parse_virt_text;
+use crate::ascii::NUL;
 use crate::decoration::defs::VirtText;
 use crate::winlayer::WinId;
 

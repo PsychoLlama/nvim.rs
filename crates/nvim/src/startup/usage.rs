@@ -13,6 +13,7 @@
 use core::ffi::{CStr, c_int};
 
 use crate::lua::executor::nlua_init;
+use crate::message::IOSIZE;
 use crate::message::msg_putchar;
 use crate::message::state::{info_message, msg_didout};
 use crate::os::cshim::{gettext, gettext_owned, write_c_stderr, write_c_stdout};
@@ -20,7 +21,6 @@ use crate::os::signal::signal_stop;
 use crate::path::path_tail;
 use crate::startup::argv0;
 use crate::startup::exit::os_exit;
-use crate::types::IOSIZE;
 use crate::version::list_version;
 
 /// The `--help` text, one line per entry.

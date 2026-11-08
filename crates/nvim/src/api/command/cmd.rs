@@ -42,6 +42,7 @@
 use super::*;
 use crate::api::private::validate::{err_bad_value, err_expected, err_required};
 use crate::api_error;
+use crate::ascii::NUL;
 use crate::ex_docmd::is_user_cmd;
 use crate::guard::Suppress;
 use crate::memory::XString;
@@ -51,7 +52,7 @@ use crate::narrow::{len_as_int, number_as_int};
 use crate::types::CmdIdx;
 use crate::types::LineNr;
 use crate::types::Object;
-use crate::types::{CmdFilter, CmdLine, ExArgt, NUL};
+use crate::types::{CmdFilter, CmdLine, ExArgt};
 use crate::usercmd::user_command_name;
 use core::ffi::{CStr, c_char, c_int};
 

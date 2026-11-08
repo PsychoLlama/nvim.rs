@@ -63,6 +63,11 @@
 pub mod state;
 use crate::api::keysets::KeyDict_echo_opts;
 use crate::api::vim::nvim_echo;
+use crate::ascii::BS;
+use crate::ascii::CAR;
+use crate::ascii::ESC;
+use crate::ascii::NL;
+use crate::ascii::TAB;
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::has_event;
@@ -157,14 +162,9 @@ use crate::startup::{
 use crate::state::mode::{State, exmode_active};
 use crate::state::{MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE};
 use crate::statusline::hl_attr;
-use crate::types::BS;
-use crate::types::CAR;
-use crate::types::ESC;
-use crate::types::NL;
-use crate::types::TAB;
 use crate::types::{ApiDict, Integer};
 use crate::types::{
-    ApiString, Array, ExArg, HlMessage, IOSIZE, Object, OptInt, ScreenAttr, ScreenChar, TypVal, Vv,
+    ApiString, Array, ExArg, HlMessage, Object, OptInt, ScreenAttr, ScreenChar, TypVal, Vv,
 };
 use crate::ui::state::{Columns, Rows, resize_events};
 use crate::ui::state::{kUIMessages, kUIMultigrid};
@@ -745,3 +745,8 @@ pub struct MessageData {
     pub status: ApiString,
     pub data: ApiDict,
 }
+
+/// The size of `IObuff`, the shared scratch every message and every file line
+/// is formatted through. One copy for the tree; the places that index with it
+/// say `IOSIZE as usize`.
+pub const IOSIZE: ::core::ffi::c_int = 1024 + 1;

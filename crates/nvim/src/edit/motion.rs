@@ -33,7 +33,7 @@ use crate::winlayer::{Buf, Win, first_tab};
 use core::ffi::c_int;
 
 use super::*;
-use crate::types::NUL;
+use crate::ascii::NUL;
 
 /// If 'keymodel' contains `startsel`, turn `c` into the start of a
 /// Select-mode selection and stuff it back for Normal mode to handle.

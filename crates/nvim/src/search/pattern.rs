@@ -21,6 +21,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
@@ -31,7 +32,7 @@ use crate::regexp::low_byte;
 use crate::regexp::{MAGIC_ALL, MAGIC_ON, RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
 use crate::shada::ShadaExtra;
-use crate::types::{ApiString, CmdModFlags, NUL, Timestamp, Vv};
+use crate::types::{ApiString, CmdModFlags, Timestamp, Vv};
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 use core::ffi::{c_char, c_int};

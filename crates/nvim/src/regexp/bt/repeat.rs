@@ -20,6 +20,7 @@ use core::ffi::c_int;
 
 use super::compile::BtProg;
 use super::op::BtOp;
+use crate::ascii::NUL;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::getchar::state::got_int;
@@ -31,7 +32,6 @@ use crate::os::libc::int64_t;
 use crate::regexp::{
     ByteClass, RI_FLAGS, Rex, char_at_nul, cluster_len_at, cstrchr, reg_nextline, word_char_at,
 };
-use crate::types::NUL;
 
 /// What stepping onto the next line produced.
 enum Line {

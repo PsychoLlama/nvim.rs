@@ -86,9 +86,9 @@ use crate::keycodes::KS_SPECIAL;
 use crate::os::libc::{int8_t, int32_t};
 use core::fmt::Write as _;
 
+use crate::ascii::NL;
+use crate::ascii::TAB;
 use crate::cstr;
-use crate::types::NL;
-use crate::types::TAB;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -102,6 +102,7 @@ use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::grid::schar_from_buf;
 use crate::keycodes::{K_SPECIAL, KE_FILLER};
+use crate::message::IOSIZE;
 use crate::message::e_listreq;
 use crate::message::{emsg, msg};
 use crate::r#move::changed_window_setting_all;
@@ -111,7 +112,7 @@ use crate::optionstr::OptStringRef;
 use crate::optionstr::check_chars_options;
 use crate::os::cshim::gettext;
 use crate::os::libc::uint64_t;
-use crate::types::{ColNr, IOSIZE, List, ScreenChar, TypVal, VarNumber};
+use crate::types::{ColNr, List, ScreenChar, TypVal, VarNumber};
 use crate::utf8proc::utf8proc_int32_t;
 use crate::utf8proc::{
     UTF8PROC_CASEFOLD, UTF8PROC_CATEGORY_ME, UTF8PROC_CATEGORY_MN, utf8proc_decompose_char,

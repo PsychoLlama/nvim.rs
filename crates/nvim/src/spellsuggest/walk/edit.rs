@@ -34,6 +34,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::NUL;
 use crate::getchar::state::got_int;
 use crate::mbyte::{c_cluster_len, char_at, utf_iscomposing_legacy, utf8len_tab};
 use crate::narrow::as_index;
@@ -47,7 +48,6 @@ use crate::spellsuggest::{
     SCORE_DEL, SCORE_DELCOMP, SCORE_DELDUP, SCORE_INS, SCORE_INSCOMP, SCORE_INSDUP, SCORE_SIMILAR,
     SCORE_SUBCOMP, SCORE_SUBST,
 };
-use crate::types::NUL;
 use core::ffi::c_int;
 
 /// The sound-fold marker for a word starting with a vowel. Adding or

@@ -39,12 +39,14 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
 use super::{OptSlot, SetOp, boolean_optval, option_last_set, ui_refresh_options};
+use crate::ascii::NUL;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::drawscreen::{UPD_CLEAR, redraw_all_later};
 use crate::eval::last_set_msg;
 use crate::ex_getln::gotocmdline;
 use crate::guard::Suppress;
 use crate::guard::sandbox;
+use crate::message::IOSIZE;
 use crate::message::state::info_message;
 use crate::message::{e_invarg, e_sandbox, e_trailing};
 use crate::message::{emsg, msg_ext_set_kind, msg_putchar};
@@ -53,7 +55,7 @@ use crate::option::vars::{p_mle, p_verbose};
 use crate::options::{kOptFoldmethod, kOptInvalid, kOptWildchar, kOptWildcharm, kOptWrap};
 use crate::os::libc::uint32_t;
 use crate::startup::silent_mode;
-use crate::types::{ExArg, Failed, IOSIZE, NUL, OptInt, ScriptId};
+use crate::types::{ExArg, Failed, OptInt, ScriptId};
 
 use super::{
     FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING,

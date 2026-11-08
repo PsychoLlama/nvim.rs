@@ -25,6 +25,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::TAB;
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::state::{autocmd_busy, last_cursormoved, last_cursormoved_win};
@@ -92,7 +93,6 @@ use crate::state::mode::{
 use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG, virtual_active};
 use crate::strings::concat;
 use crate::textformat::{comp_textwidth, has_format_option};
-use crate::types::TAB;
 use crate::types::{CmdModFlags, ColNr, LineNr, Pos, Vv};
 use crate::ui::state::Rows;
 use crate::ui::state::kUIMessages;

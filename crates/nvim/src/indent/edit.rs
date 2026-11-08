@@ -12,6 +12,7 @@
 
 use crate::extmark::kExtmarkUndo;
 use crate::memory::XString;
+use crate::message::IOSIZE;
 use crate::narrow::as_index;
 use crate::narrow::len_as_int;
 use crate::narrow::number_as_col;

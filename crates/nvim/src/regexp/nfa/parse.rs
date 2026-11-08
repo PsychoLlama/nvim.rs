@@ -23,13 +23,13 @@ use core::ffi::c_int;
 
 use super::Parsed;
 use super::atom::nfa_regatom as regatom;
+use crate::ascii::NUL;
 use crate::regexp::{
     CompileError, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, NOT_MULTI, NSUBEXP,
     ParseState, RE_AUTO, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, RF_ICASE, RF_ICOMBINE,
     RF_NOICASE, getchr, getdecchrs, magic, peekchr, re_multi_type, read_limits,
     restore_parse_state, save_parse_state, skipchr, skipchr_keepstart, spelled, unmagic,
 };
-use crate::types::NUL;
 
 const M_AMP: c_int = magic(b'&');
 const M_AT: c_int = magic(b'@');

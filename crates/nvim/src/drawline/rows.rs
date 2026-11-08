@@ -18,13 +18,13 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::decoration::{kHlModeCombine, kHlModeReplace, kVLLeftcol, kVLScroll};
 use crate::grid::{SLF_INC_VCOL, SLF_WRAP, grid_of_view, with_linebuf};
 use crate::r#move::WinValid;
 use crate::narrow::as_index;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
-use crate::types::NUL;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 

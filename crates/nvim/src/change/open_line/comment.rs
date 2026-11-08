@@ -31,11 +31,11 @@ use crate::mbyte::{c_cluster_len, c_display_width, head_off};
 use crate::narrow::len_as_int;
 use core::ffi::c_int;
 
+use crate::ascii::NUL;
 use crate::change::*;
 use crate::charset::getdigits_int_at;
 use crate::option::split_option_part;
 use crate::optionstr::OptStringRef;
-use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 
 /// The byte at `at` of `text` as the C's `int`, NUL past its end.

@@ -21,6 +21,7 @@ use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 
+use crate::ascii::NUL;
 use crate::cursor::{adjust_cursor_col, check_cursor, coladvance, gchar_cursor, inc_cursor};
 use crate::drawscreen::state::redraw_cmdline;
 use crate::drawscreen::{
@@ -54,7 +55,7 @@ use crate::state::{may_trigger_modechanged, virtual_active};
 use crate::textobject::{
     current_block, current_par, current_quote, current_sent, current_tagblock, current_word,
 };
-use crate::types::{ColNr, LineNr, NUL, Pos};
+use crate::types::{ColNr, LineNr, Pos};
 use core::ffi::c_int;
 
 use crate::keycodes::Ctrl_V;

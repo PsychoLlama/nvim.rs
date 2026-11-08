@@ -38,6 +38,7 @@ use crate::eval::typval::link_buf_changedtick;
 use crate::memory::XString;
 use crate::os::time::os_time_raw;
 
+use crate::ascii::NUL;
 use crate::channel::channel_job_running;
 use crate::diff::diff_buf_add;
 use crate::digraph::keymap_init;
@@ -64,7 +65,7 @@ use crate::startup::starting;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, VIsual_reselect};
 use crate::terminal::check_buf_terminal_size;
-use crate::types::{CmdModFlags, ColNr, LineNr, NUL, OptInt, TypVal, VarLock};
+use crate::types::{CmdModFlags, ColNr, LineNr, OptInt, TypVal, VarLock};
 use crate::undo::u_sync;
 use crate::window::get_last_winid;
 use crate::winlayer::window_at;

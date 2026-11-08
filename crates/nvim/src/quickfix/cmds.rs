@@ -21,6 +21,7 @@
 )]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::eval::eval_cmd_arg;
 use crate::memory::XString;
 use crate::option::defs::OptionSetFlags;
@@ -30,7 +31,7 @@ use crate::option::vars::P_MENC;
 use crate::optionstr::{OptString, local_or_global};
 use crate::types::CmdIdx;
 use crate::types::Handle;
-use crate::types::{Failed, NUL, VAR_LIST};
+use crate::types::{Failed, VAR_LIST};
 use core::ffi::{CStr, c_int};
 
 /// The autocommand name of a `:cfile`-family command.

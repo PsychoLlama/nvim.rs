@@ -33,10 +33,11 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_ulong};
 
 use super::*;
+use crate::ascii::NUL;
 use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::{c_char_info, c_cluster_len, c_next_cluster};
-use crate::types::{IOSIZE, NUL};
+use crate::message::IOSIZE;
 
 /// `<` and `>` over the operator's region.
 ///

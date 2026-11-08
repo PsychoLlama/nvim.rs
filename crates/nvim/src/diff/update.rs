@@ -20,10 +20,11 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
 use crate::mbyte::{c_cluster_len, char_at, encode_char};
 use crate::memline::MlFlags;
-use crate::types::{Failed, NUL};
+use crate::types::Failed;
 use crate::winlayer::{Buf, TabPage, Win};
 use core::ffi::CStr;
 use core::ffi::c_int;

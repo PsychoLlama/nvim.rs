@@ -16,6 +16,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::ascii::NUL;
 use crate::buffer::buflist_findpat_prefix;
 use crate::charset::skip;
 use crate::extmark::kExtmarkNOOP;
@@ -29,7 +30,7 @@ use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::EcmdCmd;
 use crate::types::Handle;
-use crate::types::{CmdLine, ExArgt, NUL};
+use crate::types::{CmdLine, ExArgt};
 use crate::winlayer::{Buf, TabPage, Win, windows};
 use core::ffi::{CStr, c_int};
 

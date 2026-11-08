@@ -20,9 +20,10 @@
 
 use super::{PROFILE_FNAME, profile_cmp, profile_msg_str, profiled_functions};
 use crate::keycodes::K_SPECIAL;
+use crate::message::IOSIZE;
 use crate::runtime::defs::SnPrl;
 use crate::runtime::{get_scriptname, script_count, with_script_item};
-use crate::types::{IOSIZE, ProfTime, ScriptCtx, UserFunc};
+use crate::types::{ProfTime, ScriptCtx, UserFunc};
 use core::ffi::c_int;
 use std::ffi::OsStr;
 use std::fs::File;

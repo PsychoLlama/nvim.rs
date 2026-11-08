@@ -31,6 +31,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::ascii::NUL;
 use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::diff::diff_infold;

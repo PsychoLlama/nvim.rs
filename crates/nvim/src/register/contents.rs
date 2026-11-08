@@ -35,7 +35,7 @@ use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::types::NUL;
+use crate::ascii::NUL;
 
 /// The motion type of register `regname`, and its width if blockwise (0
 /// otherwise).

@@ -62,6 +62,7 @@ use crate::ex_eval::state::{
 use crate::getchar::state::got_int;
 use crate::guard::{Allow, Suppress};
 use crate::memory::XString;
+use crate::message::IOSIZE;
 use crate::message::e_interr;
 use crate::message::state::{did_emsg, emsg_silent, msg_row, msg_scroll};
 use crate::message::{emsg, internal_error, msg_str, verbose_enter, verbose_leave};
@@ -72,7 +73,7 @@ use crate::os::cshim::gettext;
 use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::tr;
 use crate::types::LineNr;
-use crate::types::{Failed, IOSIZE, TypVal, Vv};
+use crate::types::{Failed, TypVal, Vv};
 use core::ffi::{CStr, c_int};
 
 /// Turn an error message into a pending error exception if one is wanted

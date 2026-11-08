@@ -19,11 +19,12 @@ use crate::cstr;
 use crate::formatted;
 use crate::highlight_group::HLF_D;
 use crate::memory::ThinCString;
+use crate::message::IOSIZE;
 use crate::narrow::number_as_int;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::types::Handle;
-use crate::types::{Failed, IOSIZE, ListRef, VAR_LIST};
+use crate::types::{Failed, ListRef, VAR_LIST};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 

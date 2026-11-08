@@ -44,9 +44,9 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::ascii::NUL;
 use crate::normal::{visual_active, visual_mode};
 use crate::optionstr::OptString;
-use crate::types::NUL;
 
 /// Case of the hex digits last seen, so that `0xAB` increments to `0xAC` and
 /// `0xab` to `0xac`.
