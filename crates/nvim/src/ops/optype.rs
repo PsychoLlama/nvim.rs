@@ -49,7 +49,7 @@ struct OpChar {
 
 /// One row per operator, **indexed by its [`OpType`]**: the row order is the
 /// numbering, so inserting a row here without adding a variant in
-/// `types/ops.rs` renames every operator after it.
+/// `ops/mod.rs` renames every operator after it.
 static OPCHARS: [OpChar; 30] = {
     /// Row for an operator whose first character is enough, e.g. `d`.
     const fn one(first: u8, flags: u8) -> OpChar {
