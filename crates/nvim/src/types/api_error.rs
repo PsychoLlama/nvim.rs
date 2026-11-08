@@ -10,8 +10,9 @@
 //! `Error`, no unit spec constructs or reads one, and the RPC codec
 //! serialises the *message text*, never the struct. Nothing crosses a
 //! language boundary carrying one: the msgpack-RPC wrapper
-//! ([`ApiDispatchFn`](super::ApiDispatchFn)) answers a `Result`, which is
-//! why `tools/ffigen` leaves that whole signature opaque. So there is no
+//! ([`ApiDispatchFn`](crate::msgpack_rpc::handler::ApiDispatchFn)) answers
+//! a `Result`, which is why `tools/ffigen` leaves that whole signature
+//! opaque. So there is no
 //! `#[repr(C)]` here either.
 //!
 //! # The message's bytes
