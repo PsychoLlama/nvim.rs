@@ -15,7 +15,8 @@
 
 use core::ffi::c_int;
 
-use crate::types::{MessageType, mpack_token_type_t};
+use crate::mpack::typedefs::mpack_token_type_t;
+use crate::types::MessageType;
 
 /// Parse stages. The unpacker resumes mid-message whenever the stream runs
 /// out, so its position is one of these plus the byte offset it stopped at.
@@ -57,7 +58,7 @@ mod stage {
 pub use stage::*;
 
 mod token {
-    use crate::types::mpack_token_type_t;
+    use crate::mpack::typedefs::mpack_token_type_t;
 
     pub const NIL: mpack_token_type_t = 1;
     pub const BOOLEAN: mpack_token_type_t = 2;

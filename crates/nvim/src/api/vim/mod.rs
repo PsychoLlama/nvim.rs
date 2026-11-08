@@ -81,6 +81,7 @@ use crate::message::{
 };
 use crate::message::{e_cmdwin, e_invchan};
 use crate::r#move::{changed_window_setting, update_topline, validate_cursor};
+use crate::mpack::typedefs::mpack_token_type_t;
 use crate::msgpack_rpc::channel::rpc_set_client_info;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::normal::reset_visual_and_resel;
@@ -110,7 +111,7 @@ use crate::types::{
     HlAttrs, Integer, LineNr, LuaRef, LuaRetMode, MessageData, MessageType, MotionType, Object,
     OptVal, ScreenChar, ScriptId, SignTextAttrs, StatusCol, TabpageHandle, TerminalOptions,
     VarNumber, Vv, WindowHandle, YankReg, kCdScopeGlobal, kErrorTypeException,
-    kErrorTypeValidation, kObjectTypeString, mpack_token_type_t,
+    kErrorTypeValidation, kObjectTypeString,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};

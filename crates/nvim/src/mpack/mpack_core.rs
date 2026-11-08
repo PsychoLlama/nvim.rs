@@ -36,7 +36,7 @@
 use core::ffi::c_int;
 
 use super::token::{self, Kind, MAX_TOKEN_LEN, Read, Tok};
-use crate::types::mpack_token_type_t;
+use crate::mpack::typedefs::mpack_token_type_t;
 
 /// `mpack_read`/`mpack_write` status codes, which the parser and the RPC
 /// session above this module still speak.

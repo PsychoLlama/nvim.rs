@@ -26,7 +26,7 @@
 use core::ffi::{c_double, c_int, c_uint};
 
 use super::token::{self, Kind, Tok};
-use crate::types::{mpack_sintmax_t, mpack_uint32_t, mpack_uintmax_t};
+use crate::mpack::typedefs::{mpack_sintmax_t, mpack_uint32_t, mpack_uintmax_t};
 
 /// A token with no payload: `nil`, or a container/blob whose only datum is
 /// its length.

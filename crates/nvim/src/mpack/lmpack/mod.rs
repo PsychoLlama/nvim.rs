@@ -52,7 +52,7 @@ use crate::lua_functions;
 use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR};
 use crate::mpack::object::{MPACK_EXCEPTION, MPACK_MAX_OBJECT_DEPTH, MPACK_NOMEM, Parser};
 use crate::mpack::rpc::MPACK_RPC_MAX_REQUESTS;
-use crate::types::mpack_uint32_t;
+use crate::mpack::typedefs::mpack_uint32_t;
 
 /// The walk every instance drives: a node holds the references of the value
 /// it stands for, in the instance's private table.

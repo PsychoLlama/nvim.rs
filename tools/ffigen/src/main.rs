@@ -626,6 +626,7 @@ const TYPE_HOMES: &[&str] = &[
     "src/event/queue.rs",
     "src/event/uv.rs",
     "src/lua/abi.rs",
+    "src/mpack/typedefs.rs",
     "src/os/libc.rs",
     "src/os/pty_proc_unix/mod.rs",
     "src/tui/state.rs",

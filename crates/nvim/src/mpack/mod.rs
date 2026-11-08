@@ -15,3 +15,4 @@ pub mod mpack_core;
 pub mod object;
 pub mod rpc;
 pub mod token;
+pub mod typedefs;

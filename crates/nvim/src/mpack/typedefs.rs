@@ -6,10 +6,13 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// libmpack's token typedefs, named as the codec names them.
+// libmpack's typedefs, named as the codec names them.
 #![allow(non_camel_case_types)]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
+//! libmpack's integer typedefs: the widest integers a token carries and the
+//! token's type tag.
+
+pub type mpack_sintmax_t = ::core::ffi::c_longlong;
+pub type mpack_uintmax_t = ::core::ffi::c_ulonglong;
 pub type mpack_token_type_t = ::core::ffi::c_uint;
 pub type mpack_uint32_t = ::core::ffi::c_uint;
