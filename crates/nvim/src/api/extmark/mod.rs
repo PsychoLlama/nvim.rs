@@ -17,6 +17,10 @@ use crate::api::private::helpers::{
     api_typename, find_buffer_by_handle, find_window_by_handle, object_to_hl_id,
 };
 use crate::charset::vim_isprintc;
+use crate::decoration::defs::{
+    DecorExt, DecorHighlightInline, DecorInline, DecorPriority, DecorSignHighlight, DecorVirtText,
+    DecorVirtText_data, VirtTextChunk,
+};
 use crate::decoration::{
     HlSource, decor_put_sh, decor_put_vt, decor_range_add_sh, decor_range_add_virt,
     decor_sh_from_inline, decor_to_dict_legacy, hl_group_name, kHlModeBlend, kHlModeCombine,
@@ -26,22 +30,22 @@ use crate::decoration::{
 };
 use crate::decoration_provider::{decor_provider_clear, kDecorProviderActive, with_decor_provider};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
+use crate::extmark::ExtmarkType;
 use crate::extmark::{extmark_clear, extmark_del_id, extmark_from_id, extmark_get, extmark_set};
 use crate::grid::schar_high;
 use crate::marktree::key::{
     MtFlags, mt_decor, mt_invalid, mt_invalidate, mt_no_undo, mt_paired, mt_right,
 };
 use crate::marktree::mt_inspect;
+use crate::marktree::{MTKey, MTPair};
 use crate::mbyte::c_cluster_schar;
 use crate::r#move::changed_window_setting;
 use crate::os::libc::{int32_t, size_t, uint8_t, uint32_t};
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::sign::init_sign_text;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, BufferHandle, ColNr, DecorExt, DecorHighlightInline,
-    DecorInline, DecorPriority, DecorSignHighlight, DecorVirtText, DecorVirtText_data, Error,
-    ExtmarkType, Integer, LineNr, LuaRef, MTKey, MTPair, NS, Object, VirtLine, VirtText,
-    VirtTextChunk, Window, kObjectTypeArray,
+    ApiDict, ApiString, Array, Boolean, BufferHandle, ColNr, Error, Integer, LineNr, LuaRef, NS,
+    Object, VirtLine, VirtText, Window, kObjectTypeArray,
 };
 
 // The carve of the transpiled module; see each child's docs.

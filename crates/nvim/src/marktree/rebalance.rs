@@ -50,8 +50,8 @@ use crate::marktree::key::{
 use crate::marktree::meta::{MetaCount, meta_add, meta_describe_key, meta_sub};
 use crate::marktree::node::{MAX_CHILDREN, MAX_KEYS, NodeId, find_key};
 use crate::marktree::pair::{intersect_node, pseudo_index_for_id, unintersect_node};
+use crate::marktree::{MTKey, MTPos, MarkTree};
 use crate::os::libc::uint64_t;
-use crate::types::{MTKey, MTPos, MarkTree};
 
 /// Nested to keep the name out of the flat cdef namespace `ffigen` builds,
 /// the same reason node.rs nests its own sizes.

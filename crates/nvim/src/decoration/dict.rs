@@ -26,6 +26,7 @@ use super::{
     kSHSpellOff, kSHSpellOn, kSHUIWatched, sh_chain, virt_chain, with_decor_item, with_decor_virt,
 };
 use crate::api::extmark::virt_text_to_array;
+use crate::decoration::defs::{DecorInline, DecorSignHighlight, DecorVirtText};
 use crate::decoration::{
     kVLLeftcol, kVLScroll, kVPosWinCol, kVTHide, kVTIsLines, kVTLinesAbove, kVTRepeatLinebreak,
 };
@@ -35,7 +36,7 @@ use crate::highlight_group::syn_id2name;
 use crate::os::libc::uint16_t;
 use crate::sign::sign_text_bytes;
 use crate::types::DictBuilder;
-use crate::types::{ApiString, DecorInline, DecorSignHighlight, DecorVirtText, Object};
+use crate::types::{ApiString, Object};
 use core::ffi::{CStr, c_int};
 
 /// `kExtmark*`: which kinds of decoration a mark carries, as the bit mask the

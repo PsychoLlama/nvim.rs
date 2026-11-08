@@ -38,11 +38,12 @@
 use super::{Buf, BufId, FrameId, TabId, TabPage, Win, WinId};
 use crate::allocator::Owned;
 use crate::global_cell::GlobalCell;
+use crate::marktree::MarkTree;
 use crate::memline::state::MemLine;
 use crate::memory::XString;
 use crate::optionstr::BUF_STRING_OPTIONS;
 use crate::registry::id_map;
-use crate::types::{BufName, Buffer, Handle, Key, MarkTree, Tabpage, Window};
+use crate::types::{BufName, Buffer, Handle, Key, Tabpage, Window};
 use core::ffi::c_int;
 use core::mem::MaybeUninit;
 

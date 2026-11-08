@@ -36,6 +36,7 @@ use crate::indent::get_breakindent_win;
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{kMTFilterSelect, mt_invalid, mt_right};
 use crate::marktree::meta::MetaCount;
+use crate::marktree::{MarkTreeIter, MetaIndex};
 use crate::mbyte::{CharInfo, MB_MAXCHAR};
 use crate::mbyte::{c_cells_in, c_char_info, c_cluster_len, c_next_cluster, char_at};
 use crate::r#move::win_col_off2;
@@ -44,7 +45,7 @@ use crate::os::libc::{int32_t, int64_t, uint32_t};
 use crate::pos::{MAXCOL, lt, ltoreq};
 use crate::state::mode::State;
 use crate::state::{MODE_NORMAL, virtual_active};
-use crate::types::{ColNr, LineNr, MarkTreeIter, MetaIndex, NUL, Pos};
+use crate::types::{ColNr, LineNr, NUL, Pos};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 

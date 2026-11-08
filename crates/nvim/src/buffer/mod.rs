@@ -72,6 +72,7 @@ use crate::ex_eval::aborting;
 use crate::fold::{clear_folding, fold_update_all};
 use crate::global_cell::GlobalCell;
 use crate::mark::setpcmark;
+use crate::marktree::MetaIndex;
 use crate::memline::ml_delete;
 use crate::memory::XString;
 use crate::message::emsg;
@@ -82,7 +83,7 @@ use crate::os::libc::uint32_t;
 use crate::syntax::reset_synblock;
 use crate::types::{
     BfaFlags, BlnFlags, Buffer, BufferRef, CdCause, DoBufAction, DoBufStart, EStackType, ExArg,
-    Failed, GetFileFlags, LineNr, MetaIndex, VarNumber,
+    Failed, GetFileFlags, LineNr, VarNumber,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};

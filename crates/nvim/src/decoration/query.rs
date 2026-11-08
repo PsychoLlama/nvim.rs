@@ -21,18 +21,20 @@
 )]
 
 use super::{kVTIsLines, kVTLinesAbove, mark_virt_chain, ns_in_win, with_decor_virt};
+use crate::decoration::defs::VirtTextChunk;
 use crate::decoration::{kMTMetaConcealLines, kMTMetaLines};
 use crate::decoration_provider::decor_providers_invoke_conceal_line;
 use crate::drawscreen::conceal_cursor_line;
 use crate::highlight::hl_combine_attr;
 use crate::highlight_group::syn_id2attr;
+use crate::marktree::MarkTreeIter;
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{kMTFilterSelect, mt_conceal_lines, mt_invalid};
 use crate::marktree::meta::MetaCount;
 use crate::memory::XString;
 use crate::narrow::len_as_int;
 use crate::os::libc::{size_t, uint32_t, uint64_t};
-use crate::types::{LineNr, MarkTreeIter, OptInt, VirtTextChunk};
+use crate::types::{LineNr, OptInt};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 

@@ -32,6 +32,7 @@
 
 use crate::api::extmark::describe_ns;
 use crate::api::private::helpers::api_object_to_bool;
+use crate::decoration::defs::{DecorProvider, DecorProvider_state};
 use crate::decoration::{decor_check_to_be_deleted, decor_lists};
 use crate::drawscreen::state::display_tick;
 use crate::global_cell::GlobalCell;
@@ -47,9 +48,7 @@ use crate::msg_schedule_semsg_multiline;
 use crate::narrow::number_as_int;
 use crate::types::Handle;
 use crate::types::builders::ArrayBuf;
-use crate::types::{
-    Array, DecorProvider, DecorProvider_state, Error, Integer, LineNr, LuaRef, NS, Object,
-};
+use crate::types::{Array, Error, Integer, LineNr, LuaRef, NS, Object};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 

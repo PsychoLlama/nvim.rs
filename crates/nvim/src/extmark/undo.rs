@@ -28,11 +28,13 @@ use super::{
     Buf, Extent, current_buf, decor_remove, itr_current, itr_get, itr_next, itr_rawkey,
     kExtmarkNoUndo, kExtmarkUndo, tree_get_altpos, tree_revise_meta,
 };
+use crate::extmark::{ExtmarkOp, ExtmarkSavePos, ExtmarkUndoObject};
 use crate::marktree::key::{
     MtFlags, mt_decor, mt_end, mt_invalid, mt_invalidate, mt_lookup_key, mt_no_undo, mt_paired,
     mt_right,
 };
-use crate::types::{ColNr, ExtmarkOp, ExtmarkSavePos, ExtmarkUndoObject, MTPos, MarkTreeIter};
+use crate::marktree::{MTPos, MarkTreeIter};
+use crate::types::ColNr;
 
 /// Invalidate the marks inside a range being deleted, and copy the ones the
 /// change cannot simply be reversed for into `saved`.

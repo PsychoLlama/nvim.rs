@@ -34,8 +34,8 @@ use crate::narrow::count_as_u8;
 use core::ffi::c_int;
 use core::ops::{Index, IndexMut, Range};
 
+use crate::marktree::{MTKey, MTPos, MarkTree, MarkTreeIter};
 use crate::os::libc::uint64_t;
-use crate::types::{MTKey, MTPos, MarkTree, MarkTreeIter};
 
 use super::intersect::IdSet;
 use super::key::{MT_BRANCH_FACTOR, MT_LOG2_BRANCH, MtFlags, key_cmp, mt_lookup_key};
@@ -503,8 +503,9 @@ pub fn find_key(keys: &[MTKey], k: MTKey) -> (c_int, bool) {
 mod tests {
     use super::*;
     use crate::decoration::DECOR_HIGHLIGHT_INLINE_INIT;
+    use crate::decoration::defs::DecorInline;
+    use crate::marktree::MTPos;
     use crate::marktree::key::MtFlags;
-    use crate::types::{DecorInline, MTPos};
 
     fn key(row: i32, col: i32, flags: MtFlags) -> MTKey {
         MTKey {

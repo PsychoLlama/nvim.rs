@@ -36,10 +36,11 @@ use crate::types::NL;
 // Named here so the expression tree and `list.rs` can reach it by one
 // path; it belongs to `message`.
 use crate::lua::executor::LuaRetMode;
+use crate::mark::defs::MarkGet;
 pub(crate) use crate::message::e_invalblob;
 use crate::os::libc::uint64_t;
 use crate::registry::SlotTable;
-use crate::types::{ExprType, Failed, GRegFlags, MarkGet, MotionType, Timer};
+use crate::types::{ExprType, Failed, GRegFlags, MotionType, Timer};
 use core::ffi::{CStr, c_int, c_long, c_uint, c_ulong};
 
 mod entry;

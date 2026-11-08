@@ -17,6 +17,7 @@ use core::ffi::c_int;
 use crate::buffer::{buf_meta_total, maketitle};
 use crate::charset::{vim_isprintc, vim_strsize_cstr};
 use crate::cmdexpand::cmdline_pum_display;
+use crate::decoration::defs::{DecorVirtText, DecorVirtText_data, VirtTextChunk};
 use crate::decoration::{
     SCL_NUM, buf_signcols_count_range, decor_conceal_line, decor_range_add_virt, decor_virt_lines,
     kMTMetaSignText, win_lines_concealed,
@@ -111,8 +112,8 @@ use crate::syntax::{
 };
 use crate::terminal::{buf_terminal_check_size, buf_terminal_suspended};
 use crate::types::{
-    ColNr, DecorVirtText, DecorVirtText_data, Failed, Handle, Integer, LineNr, OptInt, Pos,
-    ProfTime, ScreenChar, VarNumber, VirtTextChunk, WindowHandle,
+    ColNr, Failed, Handle, Integer, LineNr, OptInt, Pos, ProfTime, ScreenChar, VarNumber,
+    WindowHandle,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::state::{kUICmdline, kUIMessages, kUIMultigrid};

@@ -6,10 +6,7 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-use super::*;
+use crate::types::{ColNr, Handle, LineNr, Pos, Timestamp};
 
 pub type MarkAdjustMode = ::core::ffi::c_uint;
 pub type MarkGet = ::core::ffi::c_uint;

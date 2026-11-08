@@ -15,6 +15,7 @@ use crate::charset::{
 };
 use crate::cursor::get_cursor_rel_lnum;
 use crate::cursor_shape::cursor_is_block_during_visual;
+use crate::decoration::defs::{DecorRange, HlMode, VirtTextPos};
 use crate::decoration::{
     DECOR_ID_INVALID, VirtChunks, VirtLineRef, decor_conceal, decor_has_more_decorations,
     decor_init_draw_col, decor_recheck_draw_col, decor_redraw_col, decor_redraw_eol,
@@ -84,8 +85,7 @@ use crate::terminal::terminal_get_line_attributes;
 use crate::types::NS;
 use crate::types::TAB;
 use crate::types::{
-    ColNr, DecorRange, DiffLine, HlMode, LineNr, NUL, Pos, ScreenAttr, ScreenChar, VarNumber,
-    VirtText, VirtTextPos,
+    ColNr, DiffLine, LineNr, NUL, Pos, ScreenAttr, ScreenChar, VarNumber, VirtText,
 };
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;

@@ -28,16 +28,15 @@ use crate::narrow::as_index;
 use crate::narrow::count_as_int;
 use core::ffi::c_int;
 
+use crate::decoration::defs::{DecorHighlightInline, DecorInline};
 use crate::marktree::key::{
     MARKTREE_END_FLAG, MT_INVALID_KEY, MtFlags, compose, mt_end, mt_lookup_id, mt_start,
     mtpair_from, pos_leq, pos_less, relative, unrelative,
 };
 use crate::marktree::meta::{MetaCount, filtered_key_flags, meta_has};
 use crate::marktree::node::{NodeId, find_key};
+use crate::marktree::{MTKey, MTPair, MTPos, MarkTree, MarkTreeIter};
 use crate::os::libc::int32_t;
-use crate::types::{
-    DecorHighlightInline, DecorInline, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter,
-};
 
 use super::marktree_lookup;
 
@@ -73,7 +72,7 @@ fn search_key(pos: MTPos, flags: MtFlags) -> MTKey {
 
 /// The iterator's path entry at its own depth.
 #[inline(always)]
-fn here(iter: &mut MarkTreeIter) -> &mut crate::types::PathStep {
+fn here(iter: &mut MarkTreeIter) -> &mut crate::marktree::PathStep {
     &mut iter.path[as_index(iter.depth)]
 }
 

@@ -20,10 +20,11 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mark::defs::{FileMark, FileMarkView, XFileMark};
 use crate::memory::{ThinCString, XString};
 use crate::os::time::os_time;
 use crate::shada::{ShadaExtra, marklist_insert};
-use crate::types::{FileMark, FileMarkView, Pos, Timestamp, XFileMark};
+use crate::types::{Pos, Timestamp};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 

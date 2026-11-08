@@ -21,6 +21,7 @@ use crate::buffer::{buf_is_prompt, buflist_getfile};
 use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::state::listcmd_busy;
+use crate::mark::defs::{MarkGet, MarkMove, MarkMoveRes};
 use crate::message::emsg;
 use crate::pos::lt;
 use crate::textobject::{findpar, findsent};

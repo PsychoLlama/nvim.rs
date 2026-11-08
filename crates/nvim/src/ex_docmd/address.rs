@@ -56,12 +56,10 @@ use crate::option::magic_isset;
 use crate::pos::MAXLNUM;
 use crate::quickfix::{qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_size, qf_get_valid_size};
 
+use crate::mark::defs::{FileMark, MarkGet, MarkMove};
 use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp_at};
 use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG};
-use crate::types::{
-    CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FileMark, LineNr, MarkGet, MarkMove,
-    Pos,
-};
+use crate::types::{CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, LineNr, Pos};
 use crate::winlayer::{Buf, Win, first_buffer, last_buffer};
 
 /// Where a `+N`/`-N` offset lands when the addresses count buffers.

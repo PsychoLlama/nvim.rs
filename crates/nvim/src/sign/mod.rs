@@ -37,6 +37,7 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::buffer::find_buf;
 use crate::charset::vim_isprintc;
 use crate::cursor::check_cursor_lnum;
+use crate::decoration::defs::{DecorExt, DecorInline, DecorPriority, DecorSignHighlight};
 use crate::decoration::{
     DECOR_ID_INVALID, DECOR_SIGN_HIGHLIGHT_INIT, decor_put_sh, for_each_decor_item, kMTMetaSignHL,
     kMTMetaSignText, kSHIsSign, sign_item, sign_item_cmp, with_decor_item,
@@ -58,6 +59,7 @@ use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_D, get_highlight_name_ext, syn_check_group};
 use crate::marktree::cursor::{Cursor, lookup_ns};
 use crate::marktree::key::{MtFlags, mt_decor, mt_decor_sign, mt_end};
+use crate::marktree::{MTKey, MarkTreeIter};
 use crate::memory::ThinCString;
 use crate::message::{msg_putchar, msg_str, msg_title};
 use crate::message_fmt::{emsg_text, msg_bytes};
@@ -65,8 +67,8 @@ use crate::os::cshim::gettext;
 use crate::os::libc::{int32_t, int64_t, ptrdiff_t};
 use crate::tr;
 use crate::types::{
-    ApiString, DecorExt, DecorInline, DecorPriority, DecorSignHighlight, Dict, EvalFuncData, ExArg,
-    Expand, Failed, Integer, LineNr, List, MTKey, MarkTreeIter, ScreenChar, TypVal, VarNumber,
+    ApiString, Dict, EvalFuncData, ExArg, Expand, Failed, Integer, LineNr, List, ScreenChar,
+    TypVal, VarNumber,
 };
 use crate::window::buf_jump_open_win;
 use crate::winlayer::{Buf, Win, buffers, first_buffer, windows};

@@ -32,6 +32,7 @@ use crate::fold::{
 use crate::guard::secure;
 use crate::indent::{TabStopArray, replace_tabstop_array, tabstop_set};
 use crate::indent_c::parse_cino;
+use crate::mark::defs::FileMarkView;
 use crate::mark::fresh_mark;
 use crate::mbyte::canonize;
 use crate::mbyte::{c_cluster_len, char_at};
@@ -48,7 +49,7 @@ use crate::options::{
     kOptFileencoding, kOptIskeyword, opt_bh_values, opt_bkc_values, opt_bt_values,
 };
 use crate::spell::spell_reload;
-use crate::types::{Buffer, FileMarkView, OptError, OptInt, OptSet, OptVal, OptionSetFlags, Pos};
+use crate::types::{Buffer, OptError, OptInt, OptSet, OptVal, OptionSetFlags, Pos};
 use crate::window::global_stl_height;
 
 use super::OptStringRef;

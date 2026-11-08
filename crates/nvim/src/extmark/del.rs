@@ -27,8 +27,9 @@ use super::{
     ns_destroy, ns_has, tree_del_itr, tree_lookup, tree_lookup_ns,
 };
 use crate::marktree::key::{mt_decor, mt_decor_any, mt_end, mt_invalid};
+use crate::marktree::{MTKey, MarkTreeIter};
 use crate::os::libc::uint32_t;
-use crate::types::{ColNr, MTKey, MarkTreeIter};
+use crate::types::ColNr;
 
 /// Remove the extmark `id` of namespace `ns_id`.
 ///

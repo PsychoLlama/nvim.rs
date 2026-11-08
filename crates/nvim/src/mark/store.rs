@@ -43,8 +43,9 @@ use crate::types::Handle;
 use crate::types::LineNr;
 use core::ffi::{c_char, c_int};
 
+use crate::mark::defs::{FileMark, FileMarkView, XFileMark};
 use crate::os::time::os_time;
-use crate::types::{FileMark, FileMarkView, Pos, XFileMark};
+use crate::types::Pos;
 use crate::winlayer::Buf;
 
 /// The position a mark that has never been set reports, and what

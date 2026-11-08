@@ -48,6 +48,7 @@ use crate::eval::{eval_to_string, get_v_event, restore_v_event};
 use crate::ex_cmds2::check_fname;
 use crate::ex_docmd::state::{last_cmdline, new_last_cmdline};
 use crate::ex_getln::cmdline_paste_str;
+use crate::extmark::BCount;
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::file_search::file_name_at_cursor;
 use crate::getchar::state::{
@@ -95,7 +96,7 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    ApiString, BCount, BlockDef, CmdModFlags, ColNr, Direction, ExArg, GRegFlags, HashTab, LineNr,
+    ApiString, BlockDef, CmdModFlags, ColNr, Direction, ExArg, GRegFlags, HashTab, LineNr,
     MotionType, OpArg, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE,
     PUT_LINE_FORWARD, PUT_LINE_SPLIT, Pos, PutFlags, SaveVEvent, VarLock, YankReg, kBoolVarFalse,
     kBoolVarTrue,

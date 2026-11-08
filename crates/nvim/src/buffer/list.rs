@@ -36,6 +36,7 @@ use crate::ex_getln::text_or_buf_locked;
 use crate::fileio::file_pat_to_reg_pat;
 use crate::guard::Suppress;
 use crate::insexpand::clear_buffer_cpt_callbacks;
+use crate::mark::defs::{FileMark, FileMarkView};
 use crate::mark::{clrallmarks, fmarks_check_names, mark_view_restore};
 use crate::message::e_noalt;
 use crate::message::state::{emsg_silent, in_assert_fails};
@@ -54,8 +55,7 @@ use crate::regexp::RE_MAGIC;
 use crate::semsg;
 use crate::types::RegMatch;
 use crate::types::{
-    Buffer, Callback, ColNr, Failed, FileMark, FileMarkView, Handle, LineNr, OptInt, Pos,
-    Timestamp, VAR_SCOPE, WinInfo,
+    Buffer, Callback, ColNr, Failed, Handle, LineNr, OptInt, Pos, Timestamp, VAR_SCOPE, WinInfo,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};

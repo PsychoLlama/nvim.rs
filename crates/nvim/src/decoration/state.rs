@@ -56,6 +56,10 @@ use super::{
     kSHSpellOff, kSHSpellOn, kSHUIWatched, kSHUIWatchedOverlay, kVTHide, kVTIsLines, ns_in_win,
     sh_chain, virt_chain, with_decor_item, with_decor_virt,
 };
+use crate::decoration::defs::{
+    DecorHighlightInline, DecorInline, DecorPriority, DecorPriorityInternal, DecorRange,
+    DecorRange_data, DecorRange_data_ui, DecorRangeSlot, DecorState, RangeHighlight, VirtTextPos,
+};
 use crate::decoration::{
     kDecorKindHighlight, kDecorKindUIWatched, kDecorKindVirtLines, kDecorKindVirtText,
     kVPosEndOfLine, kVPosInline, kVPosOverlay,
@@ -65,13 +69,10 @@ use crate::highlight::{hl_add_url, hl_combine_attr};
 use crate::highlight_group::syn_id2attr;
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{mt_decor, mt_decor_any, mt_end, mt_invalid};
+use crate::marktree::{MTKey, MTPos, MarkTreeIter};
 use crate::os::libc::{uint16_t, uint32_t};
 use crate::pos::MAXCOL;
-use crate::types::{
-    DecorHighlightInline, DecorInline, DecorPriority, DecorPriorityInternal, DecorRange,
-    DecorRange_data, DecorRange_data_ui, DecorRangeSlot, DecorState, MTKey, MTPos, MarkTreeIter,
-    RangeHighlight, ScreenChar, VirtTextPos,
-};
+use crate::types::ScreenChar;
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;

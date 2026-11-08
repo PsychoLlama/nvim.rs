@@ -196,7 +196,7 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
         }
     }
     // A plain copy: the mark was made just above and carries no extra data.
-    let last = crate::types::SavedMark::of(&buffer.b_last_change).to_mark();
+    let last = crate::mark::defs::SavedMark::of(&buffer.b_last_change).to_mark();
     let at = usize::try_from(buffer.b_changelistlen - 1)
         .expect("the changelist has at least the entry just added");
     buffer.b_changelist[at] = last;

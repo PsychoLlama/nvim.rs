@@ -35,6 +35,7 @@ use crate::fold::fold_open_cursor;
 use crate::getchar::state::{KeyTyped, mod_mask};
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::{HLF_L, HLF_LC};
+use crate::mark::defs::{FileMark, MarkMove, MarkMoveRes};
 use crate::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark};
 use crate::message::emsg;
 use crate::normal::{
@@ -49,7 +50,7 @@ use crate::search::state::SearchItArg;
 use crate::search::state::no_hlsearch;
 use crate::search::{Hit, SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search};
 use crate::state::virtual_active;
-use crate::types::{CmdArg, FileMark, MarkMove, MarkMoveRes, OpType};
+use crate::types::{CmdArg, OpType};
 use crate::window::goto_tabpage_lastused;
 use core::ffi::c_int;
 

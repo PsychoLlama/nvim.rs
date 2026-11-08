@@ -25,11 +25,13 @@ use super::{
     itr_step_overlap, kExtmarkNone, ns_destroy, tree_clear, tree_get_alt, tree_lookup_ns,
     type_flags,
 };
+use crate::extmark::ExtmarkType;
 use crate::marktree::key::{
     MT_INVALID_KEY, mt_decor, mt_decor_any, mt_end, mt_paired, mtpair_from,
 };
+use crate::marktree::{MTPair, MTPos, MarkTreeIter};
 use crate::os::libc::{int64_t, uint32_t};
-use crate::types::{ColNr, ExtmarkType, MTPair, MTPos, MarkTreeIter};
+use crate::types::ColNr;
 
 /// Every mark between two positions, the ones at either end included.
 ///

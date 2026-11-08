@@ -20,6 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::extmark::{ExtmarkUndoObject, UndoObjectType};
 use crate::os::libc::{size_t, uintmax_t};
 use crate::path::MAXPATHL;
 use crate::undo::node::{UndoEntry, UndoHeader, UndoLink, VisualInfo};
@@ -504,8 +505,8 @@ mod tests {
 
     use super::*;
     use crate::buffer::{bare_buffer, free_bare_buffer};
+    use crate::extmark::{ExtmarkMove, ExtmarkSavePos, ExtmarkSplice};
     use crate::global_cell::editor_state_lock;
-    use crate::types::{ExtmarkMove, ExtmarkSavePos, ExtmarkSplice};
 
     /// A scratch file of this case's own, removed on drop.
     struct Scratch(std::path::PathBuf);

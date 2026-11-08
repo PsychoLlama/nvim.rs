@@ -40,14 +40,17 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::os::libc::{ptrdiff_t, uint64_t};
 use core::ffi::c_int;
 
 use crate::buffer_updates::buf_updates_send_splice;
+use crate::decoration::defs::DecorInline;
 use crate::decoration::{
     SignCountHalf, buf_decor_remove, buf_put_decor, buf_signcols_count_range, decor_free,
     decor_redraw, decor_type_flags,
 };
 use crate::global_cell::GlobalCell;
+use crate::marktree::{MTKey, MTPair, MTPos, MarkTree, MarkTreeIter};
 use crate::marktree::{
     marktree_clear, marktree_del_itr, marktree_get_alt, marktree_get_altpos, marktree_itr_current,
     marktree_itr_get, marktree_itr_get_ext, marktree_itr_get_overlap, marktree_itr_next,
@@ -55,12 +58,9 @@ use crate::marktree::{
     marktree_move_region, marktree_put, marktree_revise_meta, marktree_splice,
 };
 use crate::memline::ml_find_line_or_offset;
-use crate::os::libc::{int32_t, uint16_t, uint32_t, uint64_t};
+use crate::os::libc::{int32_t, uint16_t, uint32_t};
 use crate::types::buffer::ExtmarkNs;
-use crate::types::{
-    BCount, ColNr, DecorInline, ExtmarkOp, ExtmarkSplice, ExtmarkType, ExtmarkUndoObject, LineNr,
-    MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, UndoObjectType,
-};
+use crate::types::{ColNr, LineNr};
 use crate::undo::node::UndoLink;
 use crate::undo::u_force_get_undo_header;
 use crate::winlayer::Buf;
@@ -454,4 +454,72 @@ pub fn extmark_move_region(
         byte: new_byte,
     };
     splice::move_region(buffer, start, extent, new, undo);
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct ExtmarkMove {
+    pub start_row: ::core::ffi::c_int,
+    pub start_col: ::core::ffi::c_int,
+    pub extent_row: ::core::ffi::c_int,
+    pub extent_col: ::core::ffi::c_int,
+    pub new_row: ::core::ffi::c_int,
+    pub new_col: ::core::ffi::c_int,
+    pub start_byte: BCount,
+    pub extent_byte: BCount,
+    pub new_byte: BCount,
+}
+pub type ExtmarkOp = ::core::ffi::c_uint;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct ExtmarkSavePos {
+    pub mark: uint64_t,
+    pub old_row: ::core::ffi::c_int,
+    pub old_col: ColNr,
+    pub invalidated: bool,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct ExtmarkSplice {
+    pub start_row: ::core::ffi::c_int,
+    pub start_col: ColNr,
+    pub old_row: ::core::ffi::c_int,
+    pub old_col: ColNr,
+    pub new_row: ::core::ffi::c_int,
+    pub new_col: ColNr,
+    pub start_byte: BCount,
+    pub old_byte: BCount,
+    pub new_byte: BCount,
+}
+pub type ExtmarkType = ::core::ffi::c_uint;
+pub type UndoObjectType = ::core::ffi::c_uint;
+pub type BCount = ptrdiff_t;
+/// One recorded extmark operation, as a buffer's undo list holds it.
+///
+/// Upstream is a `type` tag beside an untagged union. The tag's numbers are
+/// what the undo *file* writes, so they stay reachable as
+/// [`ExtmarkUndoObject::wire_type`]; nothing else needs them.
+#[derive(Copy, Clone)]
+pub enum ExtmarkUndoObject {
+    /// A text change: every operation that moves marks except `:move`.
+    Splice(ExtmarkSplice),
+    /// A `:move`.
+    Move(ExtmarkMove),
+    /// Where one mark was before the change deleted it outright. Not
+    /// written to an undo file: it names marks of a live buffer.
+    SavePos(ExtmarkSavePos),
+}
+
+impl ExtmarkUndoObject {
+    /// The number the undo file writes for this kind of record --
+    /// upstream's `kExtmarkSplice`, `kExtmarkMove` and `kExtmarkSavePos`.
+    /// These are a file format, so they are literals here rather than a
+    /// name that could be renumbered.
+    pub fn wire_type(&self) -> UndoObjectType {
+        match self {
+            ExtmarkUndoObject::Splice(_) => 0,
+            ExtmarkUndoObject::Move(_) => 1,
+            ExtmarkUndoObject::SavePos(_) => 3,
+        }
+    }
 }

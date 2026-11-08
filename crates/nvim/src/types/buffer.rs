@@ -16,6 +16,8 @@
 use super::*;
 use crate::buffer::BufFlags;
 use crate::mapping::MapTables;
+use crate::mark::defs::FileMark;
+use crate::marktree::MarkTree;
 use crate::memline::state::MemLine;
 use crate::memory::{ThinCString, XString};
 use crate::os::fs::FileID;

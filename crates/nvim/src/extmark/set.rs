@@ -27,11 +27,13 @@ use super::{
     tree_lookup_ns, tree_move, tree_put, tree_revise_meta,
 };
 use crate::decoration::SignCountHalf;
+use crate::decoration::defs::DecorInline;
 use crate::marktree::key::{
     MtFlags, mt_decor, mt_decor_any, mt_end, mt_flags, mt_invalid, mt_paired,
 };
+use crate::marktree::{MTKey, MTPos, MarkTreeIter};
 use crate::os::libc::{uint32_t, uint64_t};
-use crate::types::{ColNr, DecorInline, MTKey, MTPos, MarkTreeIter};
+use crate::types::ColNr;
 
 /// Create or update an extmark.
 ///

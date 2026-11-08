@@ -31,9 +31,11 @@
 use crate::buffer::buf_is_prompt;
 use crate::diff::diff_mark_adjust;
 use crate::ex_docmd::cmdmod_has;
+use crate::extmark::ExtmarkOp;
 use crate::extmark::extmark_adjust;
 use crate::extmark::kExtmarkNOOP;
 use crate::fold::fold_mark_adjust;
+use crate::mark::defs::MarkAdjustMode;
 use crate::pos::{MAXLNUM, equalpos};
 use crate::state::mode::saved_cursor;
 use crate::winlayer::{Buf, Win, tab_windows, windows};

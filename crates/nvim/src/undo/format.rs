@@ -17,7 +17,7 @@ use crate::types::ColNr;
 use core::ffi::c_int;
 use core::mem::{offset_of, size_of};
 
-use crate::types::{BCount, ExtmarkMove, ExtmarkSplice};
+use crate::extmark::{BCount, ExtmarkMove, ExtmarkSplice};
 
 /// The nine bytes every undo file starts with.
 pub const UF_START_MAGIC: [u8; 9] = *b"Vim\x9fUnDo\xe5";

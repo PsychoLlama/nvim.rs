@@ -46,6 +46,7 @@ use crate::eval::typval::{callback_free, tv_dict_item_copy, unlink_buf_changedti
 use crate::eval::vars::{release_var_scope, vars_clear};
 use crate::extmark::extmark_free_all;
 use crate::mapping::map_clear_mode;
+use crate::mark::defs::{FileMark, FileMarkView};
 use crate::mark::{NMARKS, mark_adjust_buf, mark_forget_file, set_last_cursor};
 use crate::memline::ml_close;
 use crate::message::e_auabort;
@@ -57,7 +58,7 @@ use crate::startup::exiting;
 use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::close_buf_terminal;
-use crate::types::{Callback, ColNr, FileMark, FileMarkView, Handle, LineNr, Pos, Timestamp};
+use crate::types::{Callback, ColNr, Handle, LineNr, Pos, Timestamp};
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
 use crate::window::{free_wininfo, goto_tabpage_win, one_window};

@@ -37,6 +37,7 @@ use super::{
 };
 use crate::api::keysets::KeyDict_highlight;
 use crate::api::private::helpers::api_dict_to_keydict;
+use crate::decoration::defs::DecorProvider;
 use crate::decoration_provider::with_decor_provider;
 use crate::global_cell::GlobalCell;
 use crate::guard::Depth;
@@ -58,7 +59,7 @@ use crate::popupmenu::pum_drawn;
 use crate::popupmenu::state::must_redraw_pum;
 use crate::types::Handle;
 use crate::types::builders::ArrayBuf;
-use crate::types::{ApiString, DecorProvider, NS, Object};
+use crate::types::{ApiString, NS, Object};
 use crate::winlayer::Win;
 use core::ffi::c_int;
 use core::hash::BuildHasherDefault;

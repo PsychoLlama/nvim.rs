@@ -43,6 +43,7 @@ use crate::eval::vars::set_vim_var_dict;
 use crate::eval::{callback_call, get_v_event, restore_v_event, set_ref_in_callback};
 use crate::ex_docmd::state::{ex_normal_busy, global_busy};
 use crate::ex_eval::aborting;
+use crate::extmark::ExtmarkUndoObject;
 use crate::extmark::{extmark_apply_undo, extmark_splice_delete};
 use crate::fuzzy::fuzzy_match_str;
 use crate::getchar::state::{KeyTyped, got_int, test_disable_char_avail};
@@ -104,9 +105,8 @@ use crate::tag::find_tag_names;
 use crate::tag::state::g_tag_at_cursor;
 use crate::textformat::auto_format;
 use crate::types::{
-    ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand,
-    ExtmarkUndoObject, HashTab, LineNr, List, OptInt, OptSet, Pos, RegMatch, SaveVEvent, TypVal,
-    VarNumber, Vv,
+    ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand, HashTab,
+    LineNr, List, OptInt, OptSet, Pos, RegMatch, SaveVEvent, TypVal, VarNumber, Vv,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;

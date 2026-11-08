@@ -10,9 +10,11 @@
 //! A node of the undo tree: the header for one undoable change, its entries
 //! (the lines it replaced) and the links between headers.
 
+use crate::extmark::ExtmarkUndoObject;
+use crate::mark::defs::SavedMark;
 use crate::memory::XString;
 use crate::os::libc::time_t;
-use crate::types::{ColNr, ExtmarkUndoObject, LineNr, Pos, SavedMark};
+use crate::types::{ColNr, LineNr, Pos};
 
 /// One undo entry: the lines a change replaced, and where they went.
 ///

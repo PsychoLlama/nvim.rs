@@ -28,13 +28,14 @@ use crate::eval::list::cstr_of_chk;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{CallFrame, list_items};
+use crate::extmark::BCount;
 use crate::guard::Lock;
 use crate::memline::{MlFlags, ml_append_bytes};
 use crate::memory::XString;
 use crate::os::fs::current_dir;
 use crate::path::tail_index;
 use crate::types::Handle;
-use crate::types::{BCount, ListRef, OptionSetFlags, VarLock};
+use crate::types::{ListRef, OptionSetFlags, VarLock};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 

@@ -462,9 +462,9 @@ pub(crate) fn store_release(mut buffer: Buf) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::extmark::{ExtmarkSplice, ExtmarkUndoObject};
     use crate::memory::XString;
     use crate::types::{ColNr, LineNr};
-    use crate::types::{ExtmarkSplice, ExtmarkUndoObject};
     use crate::undo::node::UndoEntry;
 
     /// A header carrying `seq`, and `walk` as a tag to tell two apart by.

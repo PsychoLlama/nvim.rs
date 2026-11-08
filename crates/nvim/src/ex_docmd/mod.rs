@@ -55,6 +55,7 @@ use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::{ex_lua, ex_luado, ex_luafile};
 use crate::lua::secure::ex_trust;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
+use crate::mark::defs::MarkGet;
 use crate::mark::{ex_changes, ex_clearjumps, ex_delmarks, ex_jumps, ex_marks};
 use crate::r#match::ex_match;
 use crate::memory::ThinCString;
@@ -86,7 +87,7 @@ use crate::tag::do_tags;
 use crate::types::ExcId;
 use crate::types::{
     Callback, CdCause, CmdAddr, Direction, DoBufStart, EStackArg, EStackType, ExArg, ExArgt,
-    Handle, LineNr, MarkGet, MotionType, OptMagic,
+    Handle, LineNr, MotionType, OptMagic,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};

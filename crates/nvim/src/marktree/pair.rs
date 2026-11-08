@@ -31,8 +31,8 @@ use crate::marktree::key::{
     MARKTREE_END_FLAG, MtFlags, mt_end, mt_lookup_key, mt_lookup_key_side, mt_paired,
 };
 use crate::marktree::node::NodeId;
+use crate::marktree::{MTKey, MTPos, MarkTree, MarkTreeIter};
 use crate::os::libc::uint64_t;
-use crate::types::{MTKey, MTPos, MarkTree, MarkTreeIter};
 
 use super::{marktree_lookup, marktree_lookup_ns};
 

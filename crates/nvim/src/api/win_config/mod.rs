@@ -17,6 +17,7 @@ use crate::api::private::helpers::{
     try_leave,
 };
 use crate::autocmd::{block_autocmds, is_aucmd_win, unblock_autocmds};
+use crate::decoration::defs::VirtTextChunk;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later, set_must_redraw};
 use crate::eval::window::{restore_win, restore_win_noblock, switch_win, switch_win_noblock};
 use crate::ex_docmd::expr_map_locked;
@@ -30,10 +31,10 @@ use crate::option::vars::{p_sb, p_spr, p_winborder};
 use crate::types::AutoEvent;
 use crate::types::{
     AlignTextPos, ApiString, Array, Boolean, BorderTextType, BufferHandle, Error, FloatAnchor,
-    FloatRelative, Integer, LPos, Object, SwitchWin, VirtText, VirtTextChunk, WinConfig, WinSplit,
-    WinStyle, WindowHandle, kErrorTypeException, kErrorTypeValidation, kFloatAnchorEast,
-    kFloatAnchorSouth, kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus,
-    kFloatRelativeMouse, kFloatRelativeTabline, kFloatRelativeWindow,
+    FloatRelative, Integer, LPos, Object, SwitchWin, VirtText, WinConfig, WinSplit, WinStyle,
+    WindowHandle, kErrorTypeException, kErrorTypeValidation, kFloatAnchorEast, kFloatAnchorSouth,
+    kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
+    kFloatRelativeTabline, kFloatRelativeWindow,
 };
 use crate::ui::state::kUIMultigrid;
 use crate::ui::ui_has;

@@ -44,6 +44,7 @@ use crate::drawscreen::{
 };
 use crate::edit::{replace_push, replace_push_nul, truncate_spaces};
 use crate::eval::vars::set_vim_var_string;
+use crate::extmark::BCount;
 use crate::extmark::curbuf_splice_pending;
 use crate::extmark::{extmark_adjust, extmark_splice, extmark_splice_cols};
 use crate::fold::{fold_update, has_folding_win};
@@ -54,6 +55,7 @@ use crate::indent::{
 };
 use crate::indent_c::{do_c_expr_indent, in_cinkeys, starts_with_cinword};
 use crate::insexpand::ins_compl_active;
+use crate::mark::defs::FileMarkView;
 use crate::mark::{fresh_mark, mark_adjust, mark_col_adjust, mark_view_make};
 use crate::mbyte::GraphemeState;
 use crate::mbyte::{mb_adjust_cursor, utf_iscomposing_first};
@@ -91,7 +93,7 @@ use crate::strings::concat;
 use crate::textformat::{comp_textwidth, has_format_option};
 use crate::types::AutoEvent;
 use crate::types::TAB;
-use crate::types::{BCount, CmdModFlags, ColNr, FileMarkView, LineNr, Pos, Vv};
+use crate::types::{CmdModFlags, ColNr, LineNr, Pos, Vv};
 use crate::ui::state::Rows;
 use crate::ui::state::kUIMessages;
 use crate::ui::{ui_active, ui_has};

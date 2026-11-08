@@ -33,10 +33,10 @@ use super::{
     splice_pending, tree_move_region, tree_splice, undo_header, with_undo_marks,
 };
 use crate::decoration::SignCountHalf;
+use crate::extmark::{BCount, ExtmarkMove, ExtmarkOp, ExtmarkSplice, ExtmarkUndoObject};
+use crate::marktree::MTPos;
 use crate::pos::MAXLNUM;
-use crate::types::{
-    BCount, ColNr, ExtmarkMove, ExtmarkOp, ExtmarkSplice, ExtmarkUndoObject, LineNr, MTPos,
-};
+use crate::types::{ColNr, LineNr};
 
 /// [`extmark_adjust`](super::extmark_adjust) for the callers that already
 /// hold a [`Buf`].
@@ -322,7 +322,7 @@ pub(crate) fn move_region(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::ExtmarkSavePos;
+    use crate::extmark::ExtmarkSavePos;
 
     fn bytes(n: i32) -> BCount {
         BCount::try_from(n).expect("a small count")

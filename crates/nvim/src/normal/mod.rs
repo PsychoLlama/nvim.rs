@@ -23,10 +23,11 @@
 use crate::edit::BeginlineOpts;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::SpecialKey;
+use crate::mark::defs::{MarkGet, MarkMove};
 use crate::mouse::{MSCR_DOWN, MSCR_LEFT, MSCR_RIGHT, MSCR_UP, nv_mouse, nv_mousescroll};
 use crate::os::libc::uint16_t;
 use crate::spell::{SpellAddType, SpellMoveType};
-use crate::types::{CmdArg, Direction, Key, MarkGet, MarkMove, MotionType, Pos};
+use crate::types::{CmdArg, Direction, Key, MotionType, Pos};
 use core::ffi::{CStr, c_int, c_uint};
 
 mod state;

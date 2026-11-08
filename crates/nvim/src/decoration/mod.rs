@@ -43,21 +43,24 @@
 use crate::api::extmark::ns_is_local;
 use crate::buffer::buf_meta_total;
 use crate::change::changed_lines_invalidate_buf;
+use crate::decoration::defs::{
+    DecorHighlightInline, DecorInline, DecorPriority, DecorRangeKind, DecorSignHighlight,
+    DecorVirtText, HlMode, VirtTextPos,
+};
 use crate::decoration_provider::decor_provider_running;
 use crate::drawscreen::{redraw_buf_line_later, redraw_buf_range_later};
 use crate::extmark::extmark_set;
 use crate::global_cell::GlobalCell;
 use crate::grid::{schar_from_char, schar_get_first_codepoint, schar_high};
 use crate::marktree::key::MtFlags;
+use crate::marktree::{MTKey, MetaIndex};
 use crate::r#move::changed_window_setting;
 use crate::os::libc::{uint8_t, uint16_t, uint32_t};
-use crate::types::{
-    ColNr, DecorHighlightInline, DecorInline, DecorPriority, DecorRangeKind, DecorSignHighlight,
-    DecorVirtText, HlMode, LPos, LineNr, MTKey, MetaIndex, VirtTextPos,
-};
+use crate::types::{ColNr, LPos, LineNr};
 use crate::winlayer::{self, Buf, Win};
 use core::ffi::c_int;
 
+pub mod defs;
 mod dict;
 mod query;
 mod signs;

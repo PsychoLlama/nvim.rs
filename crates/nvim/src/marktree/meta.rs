@@ -19,8 +19,8 @@
 //! The counts describe *start* keys only. An end key adds nothing (the pair's
 //! decoration hangs off the start), and neither does an invalidated key.
 
+use crate::marktree::MTKey;
 use crate::os::libc::uint32_t;
-use crate::types::MTKey;
 
 use super::key::{MtFlags, mt_end, mt_invalid};
 
@@ -113,11 +113,12 @@ pub fn filtered_key_flags(filter: &MetaCount) -> MtFlags {
 mod tests {
     use super::*;
     use crate::decoration::DECOR_HIGHLIGHT_INLINE_INIT;
+    use crate::decoration::defs::DecorInline;
     use crate::decoration::{
         kMTMetaConcealLines, kMTMetaInline, kMTMetaLines, kMTMetaSignHL, kMTMetaSignText,
     };
+    use crate::marktree::MTPos;
     use crate::marktree::key::kMTFilterSelect;
-    use crate::types::{DecorInline, MTPos};
 
     fn key(flags: MtFlags) -> MTKey {
         MTKey {

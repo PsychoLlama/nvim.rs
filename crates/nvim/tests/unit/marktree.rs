@@ -29,8 +29,8 @@ use neovim::marktree::key::MT_INVALID_KEY;
 use neovim::marktree::key::mt_end;
 use neovim::marktree::meta::META_COUNT;
 use neovim::marktree::splice::marktree_splice;
+use neovim::marktree::{MTKey, MTPair, MTPos, MarkTree, MarkTreeIter};
 use neovim::marktree::{marktree_clear, marktree_del_itr, marktree_lookup_ns, marktree_move};
-use neovim::types::{MTKey, MTPair, MTPos, MarkTree, MarkTreeIter};
 
 /// The namespace every mark in this file lives in.
 const NS: u32 = 10;

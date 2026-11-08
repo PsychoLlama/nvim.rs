@@ -23,8 +23,8 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::decoration::defs::{DecorSignHighlight, DecorVirtText, DecorVirtText_data};
 use crate::os::libc::uint32_t;
-use crate::types::{DecorSignHighlight, DecorVirtText, DecorVirtText_data};
 
 /// The index that ends a chain, and names no entry.
 pub(crate) const NO_ENTRY: uint32_t = uint32_t::MAX;

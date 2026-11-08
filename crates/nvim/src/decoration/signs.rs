@@ -25,18 +25,18 @@
 use core::cmp::{Ordering, Reverse};
 
 use super::{kSHIsSign, ns_in_win, sh_chain, with_decor_item, with_decor_item_mut};
+use crate::decoration::defs::{DecorInline, DecorPriority, DecorSignHighlight};
 use crate::decoration::{SCL_NUM, SIGN_WIDTH, kMTMetaSignText};
 use crate::global_cell::GlobalCell;
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{MtFlags, kMTFilterSelect, mt_decor, mt_decor_sign, mt_end, mt_invalid};
 use crate::marktree::meta::MetaCount;
+use crate::marktree::{MTKey, MTPos, MarkTreeIter};
 use crate::os::libc::uint32_t;
 use crate::sign::buf_has_signs;
 use crate::sign::{SignItem, SignTextAttrs};
 use crate::statusline::SIGN_SHOW_MAX;
-use crate::types::{
-    DecorInline, DecorPriority, DecorSignHighlight, LineNr, MTKey, MTPos, MarkTreeIter,
-};
+use crate::types::LineNr;
 use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::{CStr, c_int};
 

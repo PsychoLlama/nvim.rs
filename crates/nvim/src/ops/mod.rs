@@ -39,6 +39,7 @@ use crate::edit::{beginline, display_dollar, edit};
 use crate::eval::typval::tv_clear;
 use crate::eval::{callback_call, set_ref_in_callback};
 use crate::ex_docmd::state::repeat_cmdline;
+use crate::extmark::BCount;
 use crate::extmark::curbuf_splice_pending;
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::fold::{delete_fold, fold_create, fold_open_cursor, op_fold_range};
@@ -99,8 +100,8 @@ use crate::state::{MODE_INSERT, MODE_REPLACE, VREPLACE_FLAG, virtual_active};
 use crate::textformat::{auto_format, has_format_option, op_format, op_formatexpr};
 use crate::types::TAB;
 use crate::types::{
-    BCount, BlockDef, Callback, CmdArg, CmdModFlags, ColNr, Dict, LineNr, MotionType, OpArg,
-    OpType, OptInt, OptSet, Pos, TypVal, UVarNumber, VarNumber,
+    BlockDef, Callback, CmdArg, CmdModFlags, ColNr, Dict, LineNr, MotionType, OpArg, OpType,
+    OptInt, OptSet, Pos, TypVal, UVarNumber, VarNumber,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};

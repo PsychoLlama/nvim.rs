@@ -29,6 +29,7 @@ use crate::cursor::{dec_cursor, gchar_cursor, inc_cursor};
 use crate::diff::diff_move_to;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::fold::fold_move_to;
+use crate::mark::defs::MarkMove;
 use crate::mark::{getnextmark, pos_to_mark, setpcmark};
 use crate::mouse::do_mouse;
 use crate::normal::{
@@ -42,7 +43,7 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
 use crate::spell::SpellMoveType;
 use crate::spell::{SMT_ALL, spell_move_to};
 use crate::textobject::findpar;
-use crate::types::{CmdArg, MarkMove, OpType, PUT_FIXINDENT, Pos};
+use crate::types::{CmdArg, OpType, PUT_FIXINDENT, Pos};
 use core::ffi::{CStr, c_int, c_uint};
 
 /// Which way a `[` or `]` command searches.

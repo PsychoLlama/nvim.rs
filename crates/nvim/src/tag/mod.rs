@@ -32,6 +32,7 @@ use crate::guard::secure;
 use crate::help::help_heuristic;
 use crate::input::prompt_for_input;
 use crate::insexpand::{ins_compl_check_keys, ins_compl_interrupted};
+use crate::mark::defs::{FileMark, FileMarkView};
 use crate::mark::{fm_getname, mark_view_make, mark_view_restore, setpcmark};
 use crate::mbyte::VimConv;
 use crate::memory::{ThinCString, XString};
@@ -69,8 +70,8 @@ use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::Handle;
 use crate::types::{
-    Callback, ColNr, Dict, ExArg, Expand, FileMark, FileMarkView, GetFileRet, LineNr, List,
-    OptMagic, OptSet, Pos, Taggy, Timestamp, VarNumber,
+    Callback, ColNr, Dict, ExArg, Expand, GetFileRet, LineNr, List, OptMagic, OptSet, Pos, Taggy,
+    Timestamp, VarNumber,
 };
 use crate::ui::state::Columns;
 use crate::ui::state::kUIMessages;

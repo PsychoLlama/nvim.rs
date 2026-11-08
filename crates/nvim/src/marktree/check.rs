@@ -29,6 +29,7 @@
 use core::mem;
 
 use crate::decoration::DECOR_HIGHLIGHT_INLINE_INIT;
+use crate::decoration::defs::DecorInline;
 use crate::marktree::iter::{marktree_itr_current, marktree_itr_first, marktree_itr_next};
 use crate::marktree::key::{
     MT_BRANCH_FACTOR, MtFlags, mt_flags, mt_lookup_id, mt_lookup_key, mt_right, mt_start, pos_leq,
@@ -37,9 +38,9 @@ use crate::marktree::key::{
 use crate::marktree::meta::MetaCount;
 use crate::marktree::node::{MAX_KEYS, NodeId};
 use crate::marktree::pair::marktree_intersect_pair;
+use crate::marktree::{MTKey, MTPos, MarkTree, MarkTreeIter};
 use crate::os::libc::{size_t, uint32_t, uint64_t};
 use crate::registry::{IdMap, id_map};
-use crate::types::{DecorInline, MTKey, MTPos, MarkTree, MarkTreeIter};
 
 use super::{marktree_del_itr, marktree_lookup, marktree_lookup_ns, marktree_put};
 
