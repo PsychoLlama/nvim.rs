@@ -31,6 +31,7 @@ use crate::narrow::number_as_lnum;
 use core::ffi::{c_int, c_uint};
 
 use super::*;
+use crate::api::private::helpers::TryState;
 use crate::api::private::helpers::{find_window_by_handle, try_enter, try_leave};
 use crate::buffer::do_buffer;
 use crate::drawscreen::UPD_NOT_VALID;
@@ -48,8 +49,8 @@ use crate::pos::MAXCOL;
 use crate::search::FORWARD;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    ApiString, Boolean, Error, Failed, Float, Integer, LineNr, Pos, SwitchWin, TryState, WinConfig,
-    WinStyle, WindowHandle, kErrorTypeException, kFloatAnchorEast, kFloatAnchorSouth,
+    ApiString, Boolean, Error, Failed, Float, Integer, LineNr, Pos, SwitchWin, WinConfig, WinStyle,
+    WindowHandle, kErrorTypeException, kFloatAnchorEast, kFloatAnchorSouth,
     kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
 };
 use crate::ui::state::{Columns, Rows};

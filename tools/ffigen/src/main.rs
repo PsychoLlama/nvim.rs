@@ -620,6 +620,7 @@ fn is_marker(ty: &syn::Type) -> bool {
 /// exists is an error, so the list cannot outlive a move.
 const TYPE_HOMES: &[&str] = &[
     "src/api/keysets.rs",
+    "src/channel/defs.rs",
     "src/cmdhist/mod.rs::HistoryType",
     "src/cursor_shape.rs::CursorShape",
     "src/edit/mod.rs::InscharFlags",
@@ -636,6 +637,7 @@ const TYPE_HOMES: &[&str] = &[
     "src/getchar/state.rs::FlushBuffers",
     "src/keycodes/mod.rs::KeyExtra",
     "src/lua/abi.rs",
+    "src/lua/executor/mod.rs::LuaRetMode",
     "src/memfile/mod.rs::BlockNr",
     "src/memline/state.rs",
     "src/mpack/typedefs.rs",

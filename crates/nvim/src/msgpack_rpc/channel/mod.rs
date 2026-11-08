@@ -33,6 +33,7 @@ use core::ffi::{CStr, c_int};
 
 use crate::api::ui::remote_ui_disconnect;
 use crate::channel::channels;
+use crate::channel::defs::{Channel, ChannelCallFrame, ChannelPart, ClientType};
 use crate::channel::{
     channel_close, channel_decref, channel_free_later, channel_incref, channel_info_changed,
     with_channel,
@@ -48,8 +49,8 @@ use crate::msgpack_rpc::unpacker::Unpacker;
 use crate::os::libc::uint64_t;
 use crate::startup::{ui_client_channel_id, ui_client_error_exit};
 use crate::types::{
-    ApiDict, ApiString, Array, Channel, ChannelCallFrame, ChannelPart, ClientType, Error, Integer,
-    MessageType, Object, kErrorTypeException, kErrorTypeValidation,
+    ApiDict, ApiString, Array, Error, Integer, MessageType, Object, kErrorTypeException,
+    kErrorTypeValidation,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
 
@@ -83,7 +84,7 @@ mod known {
     pub(super) const CLOSE_MSG_MAX: usize = 256;
 }
 
-use crate::types::channel::{kChannelStreamInternal, kChannelStreamProc, kChannelStreamStdio};
+use crate::channel::defs::{kChannelStreamInternal, kChannelStreamProc, kChannelStreamStdio};
 use known::*;
 
 use crate::api_error;

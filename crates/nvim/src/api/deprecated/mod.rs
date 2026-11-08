@@ -24,6 +24,7 @@ use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::highlight::hl_get_attr_by_id;
 use crate::highlight_group::{syn_check_group, syn_get_final_id, syn_id2attr, syn_name2id};
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_exec;
 use crate::message::msg_end;
 use crate::message::state::{msg_didout, msg_silent};
@@ -36,9 +37,8 @@ use crate::os::libc::{int64_t, size_t, uint8_t, uint32_t, uint64_t};
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, ColNr, DecorExt, DecorInline, DecorPriority,
-    DecorVirtText, DecorVirtText_data, Error, Integer, LuaRetMode, MsgpackRpcRequestHandler,
-    Object, OptIndex, OptVal, TabpageHandle, VirtText, WindowHandle, kObjectTypeArray,
-    kObjectTypeString,
+    DecorVirtText, DecorVirtText_data, Error, Integer, MsgpackRpcRequestHandler, Object, OptIndex,
+    OptVal, TabpageHandle, VirtText, WindowHandle, kObjectTypeArray, kObjectTypeString,
 };
 
 // The carve of the transpiled module; see each child's docs.

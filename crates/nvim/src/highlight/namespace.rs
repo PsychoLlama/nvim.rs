@@ -49,6 +49,7 @@ use crate::highlight_group::{
     HLF_BORDER, HLF_COUNT, HLF_INACTIVE, HLF_NFLOAT, HLF_NONE, HLF_PNI, HLF_PST, hlf_names,
     set_hl_group, syn_check_group, syn_id2name, syn_ns_id2attr,
 };
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_call_ref_reporting;
 use crate::option::check_blending;
 use crate::option::vars::p_pb;
@@ -56,9 +57,7 @@ use crate::popupmenu::pum_drawn;
 use crate::popupmenu::state::must_redraw_pum;
 use crate::types::Handle;
 use crate::types::builders::ArrayBuf;
-use crate::types::{
-    ApiString, ColorItem, ColorKey, DecorProvider, HlAttrs, HlEntry, LuaRetMode, NS, Object,
-};
+use crate::types::{ApiString, ColorItem, ColorKey, DecorProvider, HlAttrs, HlEntry, NS, Object};
 use crate::winlayer::Win;
 use core::ffi::c_int;
 use core::hash::BuildHasherDefault;

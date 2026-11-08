@@ -11,6 +11,7 @@
 
 pub(crate) mod state;
 use crate::api::extmark::nvim_create_namespace;
+use crate::api::private::helpers::TryState;
 use crate::api::private::helpers::{try_enter, try_leave};
 use crate::api::vim::nvim_create_buf;
 use crate::ascii::{ascii_isspace, ascii_iswhite};
@@ -155,7 +156,7 @@ use crate::types::{
     AcoSave, ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdLine, CmdMod, CmdParseInfo,
     CmdParseMagic, ColNr, Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt, Expand,
     ExpandContext, Handle, HashTab, Integer, LineNr, Magic, MotionType, Object, OptInt, OptMagic,
-    OptSet, OptVal, Pos, ProfTime, SaveVEvent, TryState, TypVal, VarNumber,
+    OptSet, OptVal, Pos, ProfTime, SaveVEvent, TypVal, VarNumber,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

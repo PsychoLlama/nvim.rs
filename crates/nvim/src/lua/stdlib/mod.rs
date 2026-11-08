@@ -17,7 +17,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::types::TryState;
+use crate::api::private::helpers::TryState;
 
 mod regex;
 mod register;

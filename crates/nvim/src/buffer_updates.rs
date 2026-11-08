@@ -34,14 +34,13 @@ use crate::buffer::buf_get_changedtick;
 use crate::ex_getln::state::cmdpreview;
 use crate::guard::Lock;
 use crate::log::{LOGLVL_ERR, logmsg};
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::{nlua_call_ref_quiet, release_luaref};
 use crate::memline::ml_flush_deleted_bytes;
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::os::libc::{int64_t, size_t, uint64_t};
 use crate::types::builders::ArrayBuf;
-use crate::types::{
-    Array, BCount, BufUpdateCallbacks, ColNr, Integer, LineNr, LuaRef, LuaRetMode, Object,
-};
+use crate::types::{Array, BCount, BufUpdateCallbacks, ColNr, Integer, LineNr, LuaRef, Object};
 use crate::winlayer::{Buf, Win};
 
 pub const kRetObject: LuaRetMode = 0;

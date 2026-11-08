@@ -14,7 +14,7 @@
 
 use core::ffi::CStr;
 
-use crate::types::ClientType;
+use crate::channel::defs::ClientType;
 
 /// The `ClientType` values, nested so they stay out of the flat namespace the
 /// unit-test header generator collects top-level constants into.

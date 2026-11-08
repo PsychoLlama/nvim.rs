@@ -20,6 +20,10 @@
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
+use crate::channel::defs::kChannelStdinPipe;
+use crate::channel::defs::{
+    CallbackReader, ChannelStdinMode, ChannelStream, InternalState, JobProc,
+};
 use crate::eval::typval::DictRef;
 use crate::event::channel::{
     JobSpawn, Reads, accept_socket, attach_socket, connect_socket, init_job_streams, open_stdio,
@@ -44,11 +48,7 @@ use crate::semsg;
 use crate::shell::Argv;
 use crate::startup::{embedded_mode, exiting, headless_mode, ui_client_channel_id};
 use crate::terminal::{terminal_close, terminal_set_state};
-use crate::types::channel::kChannelStdinPipe;
-use crate::types::{
-    Callback, CallbackReader, ChannelStdinMode, ChannelStream, InternalState, JobProc, LuaRef,
-    VarNumber,
-};
+use crate::types::{Callback, LuaRef, VarNumber};
 use crate::ui_client::ui_client_attach_to_restarted_server;
 
 use super::known::*;

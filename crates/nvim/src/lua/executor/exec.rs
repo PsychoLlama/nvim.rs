@@ -24,13 +24,14 @@ use super::{
 };
 use crate::ex_cmds::check_secure;
 use crate::lua::converter::{pop_object, pop_typval, push_object, push_typval};
+use crate::lua::executor::LuaRetMode;
 use crate::lua::ffi::LUA_MULTRET;
 use crate::lua::stack::{At, Kind, Stack};
 use crate::message_fmt::msg_bytes_opt;
 use crate::narrow::len_as_int;
 use crate::types::{
-    Array, Error, ErrorType, LuaRef, LuaRetMode, Object, TypVal, VAR_UNKNOWN, VarNumber,
-    kErrorTypeException, kErrorTypeValidation,
+    Array, Error, ErrorType, LuaRef, Object, TypVal, VAR_UNKNOWN, VarNumber, kErrorTypeException,
+    kErrorTypeValidation,
 };
 
 /// `luaeval("expr")` becomes this chunk with the expression appended and a

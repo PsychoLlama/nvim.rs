@@ -20,11 +20,12 @@ use core::ffi::{CStr, c_int};
 
 use crate::eval::encode::{Dump, conv_error};
 use crate::eval::typval_encode::{Container, ConvPath, ConvType, Flow, TypvalSink, encode_typval};
+use crate::msgpack_rpc::packer::PackerBuffer;
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_bin, mpack_bool, mpack_check_buffer, mpack_ext, mpack_float8, mpack_integer,
     mpack_map, mpack_nil, mpack_str, mpack_uint64,
 };
-use crate::types::{Float, PackerBuffer, TypVal};
+use crate::types::{Float, TypVal};
 
 struct MsgpackSink<'a> {
     packer: &'a mut PackerBuffer,

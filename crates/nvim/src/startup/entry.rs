@@ -29,6 +29,7 @@ use crate::api::ui::remote_ui_wait_for_attach;
 use crate::arglist::alist_count;
 use crate::autocmd::{autocmd_init, fire_autocmds};
 use crate::buffer::do_autochdir;
+use crate::channel::defs::CallbackReader;
 use crate::channel::{channel_from_stdio, channel_init, channel_teardown};
 use crate::debugger::state::debug_break_level;
 use crate::diff::diff_win_options;
@@ -96,7 +97,7 @@ use crate::startup::{
 use crate::state::mode::{exmode_active, restart_edit};
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
-use crate::types::{CallbackReader, OptInt, VarNumber, Vv};
+use crate::types::{OptInt, VarNumber, Vv};
 use crate::ui::state::{Rows, resize_events};
 use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};

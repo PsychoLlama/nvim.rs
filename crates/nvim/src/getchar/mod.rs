@@ -42,6 +42,7 @@ use crate::global_cell::GlobalCell;
 use crate::input::get_keystroke;
 use crate::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
 use crate::keycodes::{K_SPECIAL, KS_EXTRA, KS_MODIFIER, KS_SPECIAL, special_key_bytes};
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_execute_on_key;
 use crate::mapping::{MapAt, MapExpr, eval_map_expr, with_maphash_lists};
 use crate::mbyte::utf8len_tab;
@@ -75,8 +76,8 @@ use crate::state::{
     state_no_longer_safe,
 };
 use crate::types::{
-    ApiString, Array, ColNr, Error, EvalFuncData, Integer, LuaRef, LuaRetMode, MotionType, OpArg,
-    OptInt, TypVal, VarNumber, Vv,
+    ApiString, Array, ColNr, Error, EvalFuncData, Integer, LuaRef, MotionType, OpArg, OptInt,
+    TypVal, VarNumber, Vv,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;

@@ -32,6 +32,7 @@ use crate::types::Handle;
 use core::ffi::CStr;
 
 use crate::channel::channel_job_running;
+use crate::channel::defs::ChannelPart;
 use crate::channel::{channel_close_or_report, rpc_job_start};
 use crate::eval::funcs::{f_jobstart, f_jobstop};
 use crate::eval::typval::{CallFrame, list_iter, tv_dict_alloc};
@@ -40,8 +41,7 @@ use crate::ex_cmds::check_secure;
 use crate::message::{e_api_spawn_failed, e_invarg};
 use crate::semsg;
 use crate::types::{
-    ChannelPart, EvalFuncData, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber,
-    kBoolVarTrue,
+    EvalFuncData, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, kBoolVarTrue,
 };
 use crate::winlayer::buffers;
 

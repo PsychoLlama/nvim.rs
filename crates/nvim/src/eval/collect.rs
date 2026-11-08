@@ -62,6 +62,7 @@ use crate::ex_docmd::set_ref_in_findfunc;
 use crate::global_cell::GlobalCell;
 use crate::insexpand::{mark_cpt_callbacks, set_ref_in_insexpand_funcs};
 
+use crate::channel::defs::CallbackReader;
 use crate::message::{internal_error, verb_msg};
 use crate::ops::set_ref_in_opfunc;
 use crate::option::vars::p_verbose;
@@ -70,9 +71,9 @@ use crate::quickfix::set_ref_in_quickfix;
 use crate::runtime::EXESTACK;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
-    CONV_NONE, Callback, CallbackReader, Failed, List, OptInt, PartialRef, TypVal, VAR_BLOB,
-    VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
-    VAR_STRING, VAR_UNKNOWN, VimConv,
+    CONV_NONE, Callback, Failed, List, OptInt, PartialRef, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT,
+    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
+    VimConv,
 };
 use crate::winlayer::{buffers, tab_windows, tabs};
 

@@ -13,6 +13,7 @@ use crate::api::keysets::{
     KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd, KeyDict_exec_autocmds,
     KeyDict_get_autocmds,
 };
+use crate::api::private::helpers::TryState;
 use crate::api::private::helpers::{
     api_set_sctx, api_typename, find_buffer_by_handle, try_enter, try_leave,
 };
@@ -31,7 +32,7 @@ use crate::os::libc::{int64_t, size_t, uint64_t};
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, ApiString, Array, AutoCmd, AutoHandler, AutoPat, BufferHandle, Callback, Error,
-    Integer, Object, TryState, kErrorTypeValidation, kObjectTypeString,
+    Integer, Object, kErrorTypeValidation, kObjectTypeString,
 };
 
 // The carve of the transpiled module; see each child's docs.

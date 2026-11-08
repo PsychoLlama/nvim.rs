@@ -39,6 +39,7 @@ use crate::guard::Lock;
 use crate::highlight::hl_check_ns;
 use crate::highlight::state::ns_hl_active;
 use crate::log::{LOGLVL_ERR, logmsg};
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::{nlua_call_ref_reporting, release_luaref};
 use crate::message_fmt::msg_bytes;
 use crate::r#move::validate_botline_win;
@@ -47,8 +48,7 @@ use crate::narrow::number_as_int;
 use crate::types::Handle;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    Array, DecorProvider, DecorProvider_state, Error, Integer, LineNr, LuaRef, LuaRetMode, NS,
-    Object,
+    Array, DecorProvider, DecorProvider_state, Error, Integer, LineNr, LuaRef, NS, Object,
 };
 use crate::winlayer::Buf;
 use crate::winlayer::Win;

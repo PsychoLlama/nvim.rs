@@ -41,6 +41,11 @@
 
 use core::ffi::{CStr, c_int};
 
+use crate::channel::defs::{Channel, ChannelPart, ChannelStream, StderrState};
+use crate::channel::defs::{
+    kChannelStreamInternal, kChannelStreamProc, kChannelStreamSocket, kChannelStreamStderr,
+    kChannelStreamStdio,
+};
 use crate::eval::typval::callback_free;
 use crate::event::channel::TransportMut;
 use crate::event::channel::{process_channel_events, wait_job};
@@ -56,11 +61,7 @@ use crate::os::proc::os_stderr_to_null;
 use crate::registry::SlotTable;
 use crate::startup::exiting;
 use crate::terminal::{terminal_close, terminal_receive};
-use crate::types::channel::{
-    kChannelStreamInternal, kChannelStreamProc, kChannelStreamSocket, kChannelStreamStderr,
-    kChannelStreamStdio,
-};
-use crate::types::{Channel, ChannelPart, ChannelStream, Failed, LuaRef, StderrState};
+use crate::types::{Failed, LuaRef};
 use std::os::fd::AsFd as _;
 
 /// Values these belong to other modules; nested so they stay out of the flat
@@ -85,6 +86,7 @@ mod known {
 
 use known::*;
 
+pub mod defs;
 pub mod info;
 pub mod open;
 pub mod reader;

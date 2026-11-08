@@ -34,6 +34,7 @@
 
 use crate::api::keysets::KeyDict_highlight;
 use crate::api::private::helpers::{api_dict_to_keydict, api_metadata};
+use crate::channel::defs::CallbackReader;
 use crate::channel::open::JobOptions;
 use crate::channel::{channel_connect, channel_job_start};
 use crate::event::r#loop::{Drain, wait_on_main_loop};
@@ -44,6 +45,7 @@ use crate::highlight::{HLATTRS_INIT, dict2hlattrs};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::channel::rpc_send_event;
+use crate::msgpack_rpc::unpacker::Unpacker;
 use crate::narrow::number_as_int;
 use crate::os::env::{ENV_TEST_LOG, env_exists, process_id};
 use crate::os::libc::{STDERR_FILENO, STDOUT_FILENO};
@@ -70,9 +72,9 @@ use crate::tui::tui::tui_suspend;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
-    ApiDict, ApiString, Array, CallbackReader, Error, GridLineEvent, HlAttrs, Integer, Object,
-    ObjectType, UIClientHandler, Unpacker, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
-    kObjectTypeInteger, kObjectTypeString,
+    ApiDict, ApiString, Array, Error, GridLineEvent, HlAttrs, Integer, Object, ObjectType,
+    UIClientHandler, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
+    kObjectTypeString,
 };
 use crate::ui::state::t_colors;
 use core::ffi::{CStr, c_int};

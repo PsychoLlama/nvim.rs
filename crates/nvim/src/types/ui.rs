@@ -12,6 +12,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::msgpack_rpc::packer::PackerBuffer;
 use crate::os::libc::{size_t, uint32_t, uint64_t};
 
 pub type LineFlags = ::core::ffi::c_int;

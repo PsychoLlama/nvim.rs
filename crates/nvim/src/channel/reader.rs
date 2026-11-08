@@ -17,6 +17,7 @@
 use core::ffi::CStr;
 use core::mem;
 
+use crate::channel::defs::{CallbackReader, Channel};
 use crate::eval::callback_call;
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::TV_INITIAL_VALUE;
@@ -28,7 +29,7 @@ use crate::memory::ThinCString;
 use crate::os::libc::uint64_t;
 use crate::semsg;
 use crate::terminal::terminal_receive;
-use crate::types::{Callback, CallbackReader, Channel, VarNumber, kListLenMayKnow};
+use crate::types::{Callback, VarNumber, kListLenMayKnow};
 
 use super::{channel_decref, with_channel};
 

@@ -30,13 +30,14 @@ use crate::api::ui::remote_ui_event;
 use crate::global_cell::GlobalCell;
 use crate::guard::Allow;
 use crate::log::{LOGLVL_ERR, logmsg};
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::{nlua_call_ref_ctx, release_luaref};
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::msg_schedule_semsg;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::Handle;
 use crate::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
-use crate::types::{Array, LuaRef, LuaRetMode};
+use crate::types::{Array, LuaRef};
 use crate::ui::state::ui_event_ns_id;
 use core::ffi::CStr;
 

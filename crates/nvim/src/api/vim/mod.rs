@@ -66,6 +66,7 @@ use crate::insexpand::get_cot_flags;
 use crate::keycodes::{name_to_mod_mask, replace_termcodes};
 use crate::log::LOGLVL_DBG;
 use crate::log::g_stats;
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::{nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe};
 use crate::lua::state::tslua_query_parse_count;
 use crate::mapping::{keymap_array, modify_keymap};
@@ -110,9 +111,9 @@ use crate::terminal::{
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, Context, Error, Float, FoldInfo, Handle,
-    HlAttrs, Integer, LineNr, LuaRef, LuaRetMode, MessageType, MotionType, Object, OptVal,
-    ScreenChar, ScriptId, SignTextAttrs, StatusCol, TabpageHandle, VarNumber, Vv, WindowHandle,
-    YankReg, kCdScopeGlobal, kErrorTypeException, kErrorTypeValidation, kObjectTypeString,
+    HlAttrs, Integer, LineNr, LuaRef, MessageType, MotionType, Object, OptVal, ScreenChar,
+    ScriptId, SignTextAttrs, StatusCol, TabpageHandle, VarNumber, Vv, WindowHandle, YankReg,
+    kCdScopeGlobal, kErrorTypeException, kErrorTypeValidation, kObjectTypeString,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};

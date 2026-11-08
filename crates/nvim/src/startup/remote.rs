@@ -19,6 +19,7 @@ use crate::narrow::number_as_int;
 use core::ffi::{CStr, c_int};
 
 use crate::channel::channel_connect;
+use crate::channel::defs::CallbackReader;
 use crate::cstr;
 use crate::event::socket::socket_address_is_tcp;
 use crate::lua::executor::nlua_exec_cstr;
@@ -28,7 +29,7 @@ use crate::os::env::{ENV_NVIM, env_get_bounded};
 use crate::os::libc::{size_t, uint64_t};
 use crate::startup::exit::os_exit;
 use crate::startup::{MainParams, WIN_TABS, ui_client_channel_id};
-use crate::types::{ApiDict, ApiString, Array, CallbackReader, Integer, Object};
+use crate::types::{ApiDict, ApiString, Array, Integer, Object};
 
 /// How long to wait for the server to answer the connection, in ms.
 const CONNECT_TIMEOUT_MS: c_int = 500;

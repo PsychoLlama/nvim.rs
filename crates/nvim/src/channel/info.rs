@@ -19,6 +19,7 @@ use std::ffi::CString;
 
 use crate::autocmd::{fire_autocmds, has_event};
 use crate::channel::channels;
+use crate::channel::defs::{ChannelStream, ChannelStreamType};
 use crate::eval::encode::encode_tv2json;
 use crate::eval::{eval_source_name_line, get_v_event, restore_v_event};
 use crate::event::proc::proc_is_stopped;
@@ -29,8 +30,7 @@ use crate::os::libc::uint64_t;
 use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
 use crate::types::{
-    ApiDict, ApiString, Array, AutoEvent, ChannelStream, ChannelStreamType, Integer, Object,
-    SaveVEvent, TypVal, VAR_DICT,
+    ApiDict, ApiString, Array, AutoEvent, Integer, Object, SaveVEvent, TypVal, VAR_DICT,
 };
 use crate::winlayer::Buf;
 
@@ -141,7 +141,7 @@ pub fn channel_info(id: uint64_t) -> ApiDict {
 
 /// [`channel_info`] of a channel borrowed from the table. Nothing here runs
 /// user code.
-fn channel_info_of(channel: &mut crate::types::Channel) -> ApiDict {
+fn channel_info_of(channel: &mut crate::channel::defs::Channel) -> ApiDict {
     // id, stream, mode, and up to six more from the branches below.
     let mut info = DictBuilder::with_capacity(9);
     let mut push = |key: &CStr, value: Object| info.insert(key, value);

@@ -12,6 +12,8 @@ use super::{f_environ, kChannelPartRpc};
 use crate::api::private::helpers::{dict_set_var, scope_vars};
 use crate::autocmd::apply_autocmds;
 use crate::buffer::{buf_close_terminal, setfname};
+use crate::channel::defs::{CallbackReader, ChannelStdinMode, JobProc};
+use crate::channel::defs::{kChannelStdinNull, kChannelStdinPipe};
 use crate::channel::open::JobOptions;
 use crate::channel::{
     ChannelRef, channel_close, channel_create_event, channel_decref, channel_exists,
@@ -51,10 +53,9 @@ use crate::terminal::{Term, buf_terminal_running, terminal_buf, terminal_open};
 use crate::types::AutoEvent;
 use crate::types::Failed;
 use crate::types::Handle;
-use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
-    ApiString, Callback, CallbackReader, ChannelStdinMode, Dict, EvalFuncData, IOSIZE, Integer,
-    JobProc, Object, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, Vv,
+    ApiString, Callback, Dict, EvalFuncData, IOSIZE, Integer, Object, TypVal, VAR_BOOL, VAR_DICT,
+    VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, Vv,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;

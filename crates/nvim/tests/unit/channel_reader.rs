@@ -35,10 +35,11 @@
 
 #![cfg(not(miri))]
 
+use neovim::channel::defs::CallbackReader;
 use neovim::channel::reader::{callback_reader_free, callback_reader_start, reader_lines};
 use neovim::eval::gc::rooted_lists;
 use neovim::eval::typval::tv_list_alloc;
-use neovim::types::{CallbackReader, kListLenUnknown};
+use neovim::types::kListLenUnknown;
 
 use crate::support::Sandbox;
 use crate::support::tv::{self, Tv};

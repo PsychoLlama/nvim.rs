@@ -24,6 +24,7 @@ use crate::arglist::{
 };
 use crate::autocmd::ex_doautoall;
 use crate::buffer::{buflist_list, ex_buffer_all};
+use crate::channel::defs::ChannelPart;
 use crate::cmdhist::ex_history;
 use crate::debugger::{ex_breakadd, ex_breakdel, ex_breaklist, ex_debug, ex_debuggreedy};
 use crate::diff::{
@@ -50,6 +51,7 @@ use crate::global_cell::GlobalCell;
 use crate::help::{ex_exusage, ex_help, ex_helpclose, ex_helptags, ex_viusage};
 use crate::indent::ex_retab;
 use crate::keycodes::KS_SPECIAL;
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::{ex_lua, ex_luado, ex_luafile};
 use crate::lua::secure::ex_trust;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
@@ -83,8 +85,8 @@ use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
 use crate::types::ExcId;
 use crate::types::{
-    Callback, CdCause, ChannelPart, CmdAddr, Direction, DoBufStart, EStackArg, EStackType, ExArg,
-    ExArgt, Handle, LineNr, LuaRetMode, MarkGet, MotionType, OptMagic,
+    Callback, CdCause, CmdAddr, Direction, DoBufStart, EStackArg, EStackType, ExArg, ExArgt,
+    Handle, LineNr, MarkGet, MotionType, OptMagic,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};

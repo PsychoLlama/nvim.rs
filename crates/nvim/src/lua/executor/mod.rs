@@ -33,7 +33,7 @@ use core::ffi::c_int;
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::lua::ffi::LUA_REFNIL;
 use crate::os::libc::uint64_t;
-use crate::types::{LuaRef, LuaRetMode};
+use crate::types::LuaRef;
 
 mod call;
 mod callable;
@@ -97,3 +97,10 @@ static in_script: SharedCell<bool> = SharedCell::new(false);
 
 /// The stock `require`, kept so `--startuptime`'s wrapper can delegate to it.
 static require_ref: GlobalCell<LuaRef> = GlobalCell::new(LUA_REFNIL);
+
+pub type LuaRetMode = ::core::ffi::c_uint;
+pub struct NluaRefState {
+    pub nil_ref: LuaRef,
+    pub empty_dict_ref: LuaRef,
+    pub ref_count: ::core::ffi::c_int,
+}

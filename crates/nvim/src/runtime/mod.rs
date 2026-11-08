@@ -58,6 +58,7 @@ use crate::getchar::openscript;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::{nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
 use crate::mbyte::cluster_len;
 use crate::memory::XString;
@@ -90,9 +91,8 @@ use crate::runtime::state::{current_sctx, did_source_packages};
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, ApiString, Array, CONV_NONE, EStack, EStackArg, EStackType, EstackInfo, EvalFuncData,
-    ExArg, Expand, FrameName, Integer, LineNr, LuaRetMode, Object, OptSet, OptVal, ProfTime,
-    ScriptCtx, ScriptId, ScriptItem, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber, VimConv,
-    kBoolVarFalse,
+    ExArg, Expand, FrameName, Integer, LineNr, Object, OptSet, OptVal, ProfTime, ScriptCtx,
+    ScriptId, ScriptItem, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber, VimConv, kBoolVarFalse,
 };
 use core::cell::Cell;
 use std::rc::Rc;

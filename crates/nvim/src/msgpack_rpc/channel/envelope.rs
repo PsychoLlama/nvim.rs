@@ -18,13 +18,13 @@ use crate::api::private::dispatch_wrappers::handle_nvim_paste;
 use crate::event::wstream::SharedBuffer;
 use crate::memory::{block_vec, recycle_block};
 use crate::msgpack_rpc::handler::ApiDispatchFn;
+use crate::msgpack_rpc::packer::PackerBuffer;
 use crate::msgpack_rpc::packer::{
     Addressees, mpack_array, mpack_integer, mpack_object, mpack_object_array, mpack_str, mpack_uint,
 };
 use crate::os::libc::{uint32_t, uint64_t};
 use crate::types::{
-    ApiString, Array, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object, PackerBuffer,
-    kErrorTypeNone,
+    ApiString, Array, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object, kErrorTypeNone,
 };
 
 use super::known::*;

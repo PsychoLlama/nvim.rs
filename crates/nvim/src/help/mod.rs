@@ -44,6 +44,7 @@ use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{cmdmod_has, do_cmdline_cmd};
 use crate::getchar::state::KeyTyped;
 use crate::highlight_group::HLF_E;
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_exec_cstr;
 use crate::memory::XString;
 use crate::message::e_noident;
@@ -67,8 +68,7 @@ use crate::types::ApiString;
 use crate::types::Handle;
 use crate::types::Key;
 use crate::types::{
-    Array, ArrayBuf, CmdModFlags, ExArg, Failed, IOSIZE, LuaRetMode, Object, OptInt, OptVal,
-    OptionSetFlags,
+    Array, ArrayBuf, CmdModFlags, ExArg, Failed, IOSIZE, Object, OptInt, OptVal, OptionSetFlags,
 };
 use crate::ui::state::Columns;
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};

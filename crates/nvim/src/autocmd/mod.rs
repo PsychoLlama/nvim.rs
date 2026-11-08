@@ -42,6 +42,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::secure;
 use crate::highlight_group::{HLF_8, HLF_E, HLF_T};
 use crate::insexpand::ins_compl_active;
+use crate::lua::executor::LuaRetMode;
 use crate::message::state::{did_emsg, msg_col};
 use crate::message::{e_argreq, e_cannot_define_autocommands_for_all_events};
 use crate::message::{
@@ -70,8 +71,8 @@ use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     AcoSave, ApiString, AutoCmd, AutoPat, AutoPatCmd, BufferHandle, Callback, EStackType, Error,
-    EventCmds, ExArg, Expand, Integer, LuaRef, LuaRetMode, Object, OptVal, ProfTime, SaveVEvent,
-    ScriptCtx, Timestamp, VarNumber, Vv,
+    EventCmds, ExArg, Expand, Integer, LuaRef, Object, OptVal, ProfTime, SaveVEvent, ScriptCtx,
+    Timestamp, VarNumber, Vv,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;

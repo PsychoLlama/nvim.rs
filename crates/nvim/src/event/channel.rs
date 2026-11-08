@@ -35,6 +35,9 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::pin::Pin;
 use core::ptr;
 
+use crate::channel::defs::{
+    Channel, ChannelStream, InternalState, JobProc, StderrState, StdioPair,
+};
 use crate::channel::with_channel;
 use crate::eval::typval::DictRef;
 use crate::event::libuv_proc::argv_into_raw;
@@ -55,7 +58,6 @@ use crate::os::pty_proc_unix::{
     pty_proc_close_master, pty_proc_resize, pty_proc_resume, pty_proc_tty_name,
 };
 use crate::shell::Argv;
-use crate::types::{Channel, ChannelStream, InternalState, JobProc, StderrState, StdioPair};
 
 /// The `data` word a channel's handles carry: its id, not its address.
 pub(crate) fn owner_data(id: u64) -> *mut c_void {

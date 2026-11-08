@@ -22,7 +22,8 @@
 
 use std::ffi::c_int;
 
-use neovim::types::{GridLineEvent, Unpacker};
+use neovim::msgpack_rpc::unpacker::Unpacker;
+use neovim::types::GridLineEvent;
 
 /// An unpacker and the bytes it is being fed, of which only a prefix has
 /// "arrived".

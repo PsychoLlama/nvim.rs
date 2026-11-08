@@ -25,6 +25,7 @@ use crate::api::keysets::{
     KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts,
     KeyDict_empty, KeyDict_get_commands, KeyDict_user_command,
 };
+use crate::api::private::helpers::TryState;
 use crate::lua::executor::{api_new_luaref, release_luaref};
 use crate::mbyte::mb_islower;
 use crate::message::state::{msg_col, redir_off};
@@ -34,7 +35,7 @@ use crate::regexp::RE_MAGIC;
 use crate::register::valid_yank_reg;
 use crate::types::{
     ApiDict, ApiString, Array, BufferHandle, CmdAddr, CmdMod, CmdModFlags, CmdParseInfo, Direction,
-    Error, ExArg, Integer, LuaRef, Object, TryState, kErrorTypeException, kErrorTypeValidation,
+    Error, ExArg, Integer, LuaRef, Object, kErrorTypeException, kErrorTypeValidation,
     kObjectTypeLuaRef, kObjectTypeString,
 };
 use crate::usercmd::{

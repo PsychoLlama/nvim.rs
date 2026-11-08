@@ -29,6 +29,7 @@
 use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
 use crate::types::ColNr;
+use crate::types::ExcId;
 use crate::types::LineNr;
 use core::ffi::{CStr, c_int};
 
@@ -48,7 +49,7 @@ use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    ApiString, BufferHandle, Error, Integer, Pos, ScriptId, TabpageHandle, TryState, WindowHandle,
+    ApiString, BufferHandle, Error, Integer, Pos, ScriptId, TabpageHandle, WindowHandle,
     kErrorTypeException,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
@@ -337,4 +338,31 @@ pub(crate) fn api_set_sctx(channel_id: uint64_t) -> SavedSctx {
         sctx.sc_chan = channel_id;
     }
     Script::context(sctx)
+}
+
+#[derive(Copy, Clone)]
+pub struct TryState {
+    pub(crate) current_exception: Option<ExcId>,
+    pub got_int: ::core::ffi::c_int,
+    pub did_throw: bool,
+    pub need_rethrow: ::core::ffi::c_int,
+    pub did_emsg: ::core::ffi::c_int,
+}
+
+impl TryState {
+    /// The zeroed state a caller declares before handing it to `try_enter`,
+    /// which overwrites every field. Nothing reads one of these before that.
+    pub(crate) const INIT: TryState = TryState {
+        current_exception: None,
+        got_int: 0,
+        did_throw: false,
+        need_rethrow: 0,
+        did_emsg: 0,
+    };
+}
+
+impl Default for TryState {
+    fn default() -> Self {
+        Self::INIT
+    }
 }

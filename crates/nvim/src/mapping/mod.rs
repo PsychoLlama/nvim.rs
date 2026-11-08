@@ -62,6 +62,7 @@ use crate::keycodes::{
     K_SPECIAL, escape_ks_bytes, get_special_key_name, push_char_escaped, replace_termcodes,
     unescape_ks, unescape_ks_in,
 };
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::api_new_luaref;
 use crate::mbyte::cluster_len;
 use crate::message::state::{msg_col, msg_row, msg_silent};
@@ -82,7 +83,7 @@ use crate::state::{
 };
 use crate::types::{
     ApiDict, ApiString, Array, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand, Integer,
-    LineNr, LuaRef, LuaRetMode, Object, OptSet, RegMatch, ScriptId, TypVal, VarNumber,
+    LineNr, LuaRef, Object, OptSet, RegMatch, ScriptId, TypVal, VarNumber,
 };
 use std::rc::Rc;
 

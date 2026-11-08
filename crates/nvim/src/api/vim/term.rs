@@ -17,10 +17,10 @@
 
 use super::*;
 use crate::api_error;
+use crate::channel::defs::{ChannelStream, InternalState};
 use crate::guard::Lock;
 use crate::lua::executor::nlua_call_ref_quiet;
 use crate::lua::executor::release_luaref;
-use crate::types::{ChannelStream, InternalState};
 use crate::winlayer::Win;
 
 pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result<Integer, Error> {

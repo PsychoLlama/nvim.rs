@@ -26,6 +26,8 @@ use std::ffi::CString;
 use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
 use crate::buffer::buf_is_prompt;
 use crate::change::appended_lines_mark;
+use crate::channel::defs::CallbackReader;
+use crate::channel::defs::kChannelStreamProc;
 use crate::channel::{callback_reader_free, channel_job_running, channel_stream_type};
 use crate::eval::callback_call;
 use crate::eval::typval::{
@@ -45,10 +47,8 @@ use crate::os::libc::{ptrdiff_t, uint64_t};
 use crate::runtime::script_autoload_named;
 use crate::runtime::sourcing_name_copy;
 use crate::runtime::state::{ETYPE_TOP, current_sctx};
-use crate::types::channel::kChannelStreamProc;
 use crate::types::{
-    Callback, CallbackReader, CallerScope, EStack, EstackInfo, ScriptCtx, TypVal, VAR_NUMBER,
-    VAR_STRING, VarNumber,
+    Callback, CallerScope, EStack, EstackInfo, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Win};
