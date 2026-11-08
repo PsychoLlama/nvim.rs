@@ -96,6 +96,9 @@ use crate::os::input::{line_breakcheck, os_breakcheck};
 use crate::os::libc::{ptrdiff_t, size_t};
 use crate::path::{PATHSEP, path_fnamecmp, path_is_absolute, vim_is_abs_name};
 use crate::pos::MAXLNUM;
+use crate::quickfix::model::{
+    DirStack, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, QfEntry, QfList, QfListType, QfStack,
+};
 use crate::search::{BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE};
 use crate::state::mode::restart_edit;
 use crate::tr;
@@ -103,9 +106,8 @@ use crate::types::AutoEvent;
 use crate::types::Failed;
 use crate::types::TAB;
 use crate::types::{
-    Callback, ColNr, Dict, DirStack, Direction, EvalFuncData, ExArg, LineNr, List, ListRef, OptInt,
-    OptSet, OptVal, Pos, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, QfEntry, QfList, QfListType,
-    QfStack, RegMMatch, RegMatch, ScriptId, TypVal, VarNumber, VarType,
+    Callback, ColNr, Dict, Direction, EvalFuncData, ExArg, LineNr, List, ListRef, OptInt, OptSet,
+    OptVal, Pos, RegMMatch, RegMatch, ScriptId, TypVal, VarNumber, VarType,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_flush;
@@ -160,6 +162,7 @@ mod setprops;
 pub(crate) use self::setprops::*;
 mod eval;
 pub use self::eval::*;
+pub mod model;
 #[cfg(test)]
 mod tests;
 

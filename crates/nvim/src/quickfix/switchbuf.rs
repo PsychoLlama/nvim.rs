@@ -20,9 +20,10 @@
 
 use super::*;
 use crate::ex_docmd::{cmdmod_split, cmdmod_tab};
+use crate::quickfix::model::QfId;
+use crate::types::Failed;
 use crate::types::Handle;
 use crate::types::Key;
-use crate::types::{Failed, QfId};
 use crate::window::{WSP_ABOVE, WSP_HELP, WSP_NEWLOC, WSP_TOP};
 use crate::winlayer::{Win, last_window, tabs, windows, windows_in_tab};
 use core::ffi::{c_int, c_uint};

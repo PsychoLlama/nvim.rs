@@ -38,8 +38,9 @@
 use super::*;
 use crate::id_table::IdTable;
 use crate::memory::XString;
+use crate::quickfix::model::QfId;
 use crate::types::Handle;
-use crate::types::{CmdIdx, Failed, QfId, Refcount};
+use crate::types::{CmdIdx, Failed, Refcount};
 use crate::winlayer::{Buf, Live, Win, windows};
 use core::ffi::{CStr, c_int, c_uint};
 use core::ops::{Deref, DerefMut};

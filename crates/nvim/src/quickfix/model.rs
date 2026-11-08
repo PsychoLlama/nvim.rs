@@ -7,11 +7,13 @@
     clippy::ptr_as_ptr
 )]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-use super::*;
+//! The quickfix data model: a stack of lists (one for the editor, one per
+//! window with a location list), a list of entries, and the directory stack
+//! the error-format parser keeps while it reads a list.
+
 use crate::file_search::Name;
 use crate::memory::XString;
+use crate::types::{Callback, Handle, LineNr, Refcount, TypVal};
 
 /// A stack's place in the quickfix stack table: what a window holds for its
 /// location list, and what the quickfix code re-finds a stack by after

@@ -20,8 +20,9 @@
 use super::*;
 use crate::eval::list::string_tv;
 use crate::option::vars::P_EFM;
+use crate::quickfix::model::QfId;
 use crate::types::Handle;
-use crate::types::{QfId, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow};
+use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow};
 use core::ffi::{c_int, c_uint};
 
 /// Add a number under `key`.
