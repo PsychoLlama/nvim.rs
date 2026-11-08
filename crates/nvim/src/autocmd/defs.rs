@@ -7,11 +7,9 @@
     clippy::ptr_as_ptr
 )]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-use super::*;
 use crate::memory::XString;
 use crate::os::libc::int64_t;
+use crate::types::{BufferRef, Callback, Handle, Key, ScriptCtx};
 use crate::winlayer::Win;
 
 /// A pattern's slot in its event's [`EventCmds::pats`] slab.

@@ -22,11 +22,11 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{fire_autocmds, fire_autocmds_for};
 use crate::drawscreen::NO_SCREEN;
 use crate::keycodes::{Ctrl_C, SpecialKey};
 use crate::narrow::number_as_int;
-use crate::types::AutoEvent;
 use crate::types::Key;
 use crate::winlayer::TabPage;
 use core::ffi::{CStr, c_int};

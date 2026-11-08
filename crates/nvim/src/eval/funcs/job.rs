@@ -11,6 +11,7 @@
 use super::{f_environ, kChannelPartRpc};
 use crate::api::private::helpers::{dict_set_var, scope_vars};
 use crate::autocmd::apply_autocmds;
+use crate::autocmd::defs::AutoEvent;
 use crate::buffer::{buf_close_terminal, setfname};
 use crate::channel::defs::{CallbackReader, ChannelStdinMode, JobProc};
 use crate::channel::defs::{kChannelStdinNull, kChannelStdinPipe};
@@ -50,7 +51,6 @@ use crate::path::MAXPATHL;
 use crate::path::vim_full_name;
 use crate::semsg;
 use crate::terminal::{Term, buf_terminal_running, terminal_buf, terminal_open};
-use crate::types::AutoEvent;
 use crate::types::Failed;
 use crate::types::Handle;
 use crate::types::{

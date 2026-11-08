@@ -33,6 +33,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::buffer::{buf_is_empty, buflist_findpat, buflist_name_nr, find_buf};
 use crate::buffer_updates::buf_updates_send_changes;
@@ -96,7 +97,6 @@ use crate::state::REPLACE_FLAG;
 use crate::state::mode::{State, restart_edit};
 use crate::strings::escaped_with;
 use crate::terminal::terminal_paste;
-use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::ESC;
 use crate::types::NL;

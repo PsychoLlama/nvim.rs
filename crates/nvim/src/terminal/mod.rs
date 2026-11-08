@@ -46,6 +46,8 @@ pub(crate) mod state;
 pub(crate) mod termrequest;
 
 use crate::api::private::helpers::{dict_get_value, scope_vars};
+use crate::autocmd::defs::AcoSave;
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{
     apply_autocmds, apply_autocmds_group, aucmd_prepbuf, aucmd_restbuf, block_autocmds,
     is_aucmd_win, is_autocmd_blocked, unblock_autocmds,
@@ -74,11 +76,9 @@ use crate::state::mode::State;
 use crate::terminal::state::SELECTIONBUF_SIZE;
 use crate::terminal::state::TerminalOptions;
 use crate::types::ApiString;
-use crate::types::AutoEvent;
 use crate::types::builders::DictBuf;
 use crate::types::{
-    AcoSave, BufferHandle, ColNr, Handle, LineNr, Object, Pos, RefcountSize, SaveVEvent, Terminal,
-    VarNumber,
+    BufferHandle, ColNr, Handle, LineNr, Object, Pos, RefcountSize, SaveVEvent, Terminal, VarNumber,
 };
 use crate::vterm::host::Value;
 use crate::vterm::screen::ZERO_SCREEN_CELL;

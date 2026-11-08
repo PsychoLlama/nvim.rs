@@ -29,6 +29,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::ascii::ascii_iswhite;
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{
     au_event_disable, au_event_restore, block_autocmds, fire_autocmds_for, unblock_autocmds,
 };
@@ -104,7 +105,6 @@ use crate::regexp::{RegMMatch, RegMatch};
 use crate::search::{BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE};
 use crate::state::mode::restart_edit;
 use crate::tr;
-use crate::types::AutoEvent;
 use crate::types::Failed;
 use crate::types::TAB;
 use crate::types::{

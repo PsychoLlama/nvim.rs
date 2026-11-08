@@ -19,11 +19,11 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::buffer::{BufFlags, buf_is_nofilename, current_buf};
 use crate::ex_docmd::cmdmod_has;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use crate::types::AutoEvent;
 
 use crate::option::defs::CpoFlag;
 use crate::types::{CmdModFlags, Failed};

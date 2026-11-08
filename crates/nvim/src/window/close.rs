@@ -20,7 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::types::AutoEvent;
+use crate::autocmd::defs::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::ColNr;
 use crate::types::Key;

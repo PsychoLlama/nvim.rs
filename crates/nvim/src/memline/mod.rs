@@ -20,8 +20,8 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
-use crate::types::AutoEvent;
 
 use crate::autocmd::has_autocmd;
 use crate::buffer::state::swap_exists_action;

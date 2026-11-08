@@ -25,15 +25,16 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::memline::MlFlags;
 use crate::narrow::number_as_int;
-use crate::types::AutoEvent;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use super::*;
+use crate::autocmd::defs::AcoSave;
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::change::{changed, save_file_ff};
 use crate::charset::buf_init_chartab;
@@ -51,7 +52,7 @@ use crate::os::fs::getperm;
 use crate::os::libc::int64_t;
 use crate::pos::MAXLNUM;
 use crate::startup::{getout, readonlymode, v_dying};
-use crate::types::{AcoSave, ColNr, ExArg, Failed, Handle, LineNr, OptInt, VarNumber};
+use crate::types::{ColNr, ExArg, Failed, Handle, LineNr, OptInt, VarNumber};
 use crate::winlayer::buffers;
 
 // ---------------------------------------------------------------------------

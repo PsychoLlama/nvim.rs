@@ -15,6 +15,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::fire_autocmds;
 use crate::charset::{getdigits_at, getdigits_int_at};
 use crate::env::home_to_tilde;
@@ -26,7 +27,6 @@ use crate::message_fmt::msg_bytes;
 use crate::narrow::len_as_int;
 use crate::narrow::number_as_int;
 use crate::semsg;
-use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::LineNr;
 use crate::winlayer::WinId;

@@ -18,6 +18,8 @@ use crate::api::private::helpers::{
     api_set_sctx, api_typename, find_buffer_by_handle, try_enter, try_leave,
 };
 use crate::api::private::validate::check_string_array;
+use crate::autocmd::defs::AutoEvent;
+use crate::autocmd::defs::{AutoCmd, AutoHandler, AutoPat};
 use crate::autocmd::{
     apply_autocmds_group, aucmd_del_for_event_and_group, aucmd_span_pattern, augroup_add,
     augroup_del, augroup_exists, augroup_find, augroup_name, aupat_get_buflocal_nr,
@@ -29,10 +31,9 @@ use crate::eval::typval::{callback_free, callback_to_string};
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::{api_new_luaref, nlua_ref_is_function};
 use crate::os::libc::{int64_t, size_t, uint64_t};
-use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, ApiString, Array, AutoCmd, AutoHandler, AutoPat, BufferHandle, Callback, Error,
-    Integer, Object, kErrorTypeValidation, kObjectTypeString,
+    ApiDict, ApiString, Array, BufferHandle, Callback, Error, Integer, Object,
+    kErrorTypeValidation, kObjectTypeString,
 };
 
 // The carve of the transpiled module; see each child's docs.

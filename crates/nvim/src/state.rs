@@ -19,10 +19,10 @@
 //! key) look like input to all of them.
 
 pub(crate) mod mode;
+use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
 use crate::keycodes::{Ctrl_V, SpecialKey, get_special_key_name};
 use crate::memory::XString;
-use crate::types::AutoEvent;
 use crate::types::Key;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};

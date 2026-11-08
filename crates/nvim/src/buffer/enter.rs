@@ -25,11 +25,11 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::eval::typval::DI_FLAGS_FIX;
 use crate::eval::typval::DI_FLAGS_RO;
 use crate::fileio::ReadFlags;
 use crate::semsg;
-use crate::types::AutoEvent;
 use core::ffi::c_int;
 
 use super::*;

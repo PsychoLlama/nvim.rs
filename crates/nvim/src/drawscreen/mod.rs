@@ -10,8 +10,8 @@
 #![allow(non_upper_case_globals)]
 
 pub mod state;
+use crate::autocmd::defs::AutoEvent;
 use crate::narrow::number_as_int;
-use crate::types::AutoEvent;
 use core::ffi::c_int;
 
 use crate::buffer::{buf_meta_total, maketitle};

@@ -54,9 +54,9 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::fire_autocmds;
 use crate::ex_cmds::EcmdFlags;
-use crate::types::AutoEvent;
 use crate::types::Handle;
 use crate::winlayer::BufId;
 use core::ffi::{CStr, c_int};

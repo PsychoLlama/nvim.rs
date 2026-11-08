@@ -16,10 +16,11 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::autocmd::defs::AcoSave;
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::option::defs::{OptIndex, OptScope, OptVal, OptionSetFlags};
-use crate::types::{AcoSave, Error, ScriptId, SwitchWin};
+use crate::types::{Error, ScriptId, SwitchWin};
 use crate::window::win_find_tabpage;
 use crate::winlayer::graph::{switch_buffer, switch_to};
 use crate::winlayer::{Buf, Win};

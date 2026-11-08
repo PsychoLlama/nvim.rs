@@ -22,9 +22,9 @@
 
 use super::say;
 use super::{buf_autocmd, check_secure};
+use crate::autocmd::defs::AutoEvent;
 use crate::extmark::kExtmarkNOOP;
 use crate::memline::Lines;
-use crate::types::AutoEvent;
 use crate::types::ColNr;
 use crate::winlayer::{Buf, Win};
 

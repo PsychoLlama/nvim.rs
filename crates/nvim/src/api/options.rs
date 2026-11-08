@@ -18,6 +18,7 @@
 use crate::api::private::helpers::{
     api_set_sctx, api_try, api_typename, find_buffer_by_handle, find_window_by_handle,
 };
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{
     aucmd_prepbuf, aucmd_restbuf, block_autocmds, do_filetype_autocmd, has_event, unblock_autocmds,
 };
@@ -27,13 +28,13 @@ use crate::option::kOptScopeBuf;
 use crate::option::kOptScopeGlobal;
 use crate::option::kOptScopeWin;
 use crate::options::{kOptBufhidden, kOptBuftype, kOptInvalid};
-use crate::types::AutoEvent;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
 use crate::api::keysets::KeyDict_option;
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::api_error;
+use crate::autocmd::defs::AcoSave;
 use crate::memline::ml_open;
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
@@ -43,7 +44,7 @@ use crate::option::{
     object_as_optval, option_has_scope, optval_as_object, set_option_direct, set_option_value_for,
 };
 use crate::os::libc::uint64_t;
-use crate::types::{AcoSave, ApiDict, ApiString, Error, LineNr, Object, kErrorTypeValidation};
+use crate::types::{ApiDict, ApiString, Error, LineNr, Object, kErrorTypeValidation};
 use crate::window::close_windows;
 use crate::winlayer::Buf;
 

@@ -18,11 +18,11 @@
 )]
 
 use super::*;
+use crate::autocmd::defs::{AutoPat, EventCmds};
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
 use crate::smsg;
 use crate::types::Handle;
-use crate::types::{AutoPat, EventCmds};
 use crate::winlayer::Buf;
 
 /// The autocommands defined for each event, indexed by event number.
@@ -30,7 +30,7 @@ use crate::winlayer::Buf;
 /// Reached only through [`with_event_cmds`] and [`with_event_cmds_mut`],
 /// one closure at a time: a handler run by a walk can define and delete
 /// autocommands, so nothing holds a borrow of the table across user code --
-/// a walk holds row indices and a [`PatId`](crate::types::PatId) instead.
+/// a walk holds row indices and a [`PatId`](crate::autocmd::defs::PatId) instead.
 static autocmds: GlobalCell<[EventCmds; AutoEvent::COUNT]> =
     GlobalCell::new([EventCmds::EMPTY; AutoEvent::COUNT]);
 

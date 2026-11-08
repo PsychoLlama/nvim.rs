@@ -14,9 +14,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::memory::XString;
 use crate::option::vars::P_BG;
-use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::CStr;
 

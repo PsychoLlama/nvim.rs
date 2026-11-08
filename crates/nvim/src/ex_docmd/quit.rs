@@ -17,6 +17,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::fire_autocmds;
 use crate::buffer::DOBUF_DEL;
 use crate::buffer::DOBUF_UNLOAD;
@@ -26,7 +27,6 @@ use crate::ex_cmds2::CCGD_EXCMD;
 use crate::ex_cmds2::CCGD_FORCEIT;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::winlayer::TabPage;
 use core::ffi::CStr;

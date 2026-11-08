@@ -44,6 +44,8 @@
 #![allow(non_upper_case_globals)]
 
 use crate::ascii::{ascii_isspace, ascii_iswhite, ascii_iswhite_nl_or_nul, ascii_isxdigit};
+use crate::autocmd::defs::AcoSave;
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::state::{did_cursorhold, last_cursormoved, last_cursormoved_win};
 use crate::autocmd::{apply_autocmds, aucmd_prepbuf, aucmd_restbuf, has_event};
 use crate::buffer::{
@@ -181,9 +183,8 @@ use crate::textformat::{
     auto_format, check_auto_format, comp_textwidth, fex_format, has_format_option, internal_format,
 };
 use crate::textobject::{bck_word, fwd_word};
-use crate::types::AutoEvent;
 use crate::types::Key;
-use crate::types::{AcoSave, ApiString, CmdModFlags, ColNr, LineNr, OptInt, Pos, ScreenChar, Vv};
+use crate::types::{ApiString, CmdModFlags, ColNr, LineNr, OptInt, Pos, ScreenChar, Vv};
 use crate::ui::state::kUIMessages;
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::u_sync_once;

@@ -21,8 +21,8 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::memory::XString;
-use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
 use std::ffi::CString;

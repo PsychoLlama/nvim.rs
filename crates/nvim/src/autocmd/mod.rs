@@ -10,13 +10,14 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+use crate::autocmd::defs::AutoEvent;
 use crate::event_queue::ChildQueue;
-use crate::types::AutoEvent;
 use core::cmp::Ordering;
 use core::ffi::CStr;
 
 use crate::api::private::helpers::find_buffer_by_handle;
 use crate::ascii::ascii_iswhite;
+use crate::autocmd::defs::{AcoSave, AutoCmd, AutoPat, AutoPatCmd, EventCmds};
 use crate::autocmd::state::{
     active_walk_bufnrs, au_need_clean, autocmd_blocked, autocmd_bufnr, autocmd_busy, autocmd_fname,
     autocmd_fname_full, autocmd_include_groups, autocmd_match, autocmd_nested, autocmd_nesting,
@@ -73,8 +74,8 @@ use crate::state::mode::last_mode;
 use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    AcoSave, ApiString, AutoCmd, AutoPat, AutoPatCmd, BufferHandle, Callback, Error, EventCmds,
-    ExArg, Integer, LuaRef, Object, ProfTime, SaveVEvent, ScriptCtx, Timestamp, VarNumber, Vv,
+    ApiString, BufferHandle, Callback, Error, ExArg, Integer, LuaRef, Object, ProfTime, SaveVEvent,
+    ScriptCtx, Timestamp, VarNumber, Vv,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;
@@ -93,6 +94,7 @@ mod aucmdwin;
 mod block;
 mod cleanup;
 mod define;
+pub mod defs;
 mod events;
 mod fire;
 mod groups;

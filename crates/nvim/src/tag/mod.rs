@@ -9,6 +9,7 @@
 
 pub(crate) mod state;
 use crate::ascii::{ascii_isspace, ascii_iswhite};
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::has_autocmd;
 use crate::buffer::{buf_is_help, buflist_getfile, find_buf};
 use crate::charset::is_blank_line;
@@ -70,7 +71,6 @@ use crate::tag::state::{
     g_do_tagpreview, g_tag_at_cursor, keep_help_flag, postponed_split, postponed_split_flags,
 };
 use crate::tr;
-use crate::types::AutoEvent;
 use crate::types::Handle;
 use crate::types::{
     Callback, ColNr, Dict, ExArg, GetFileRet, LineNr, List, Pos, Taggy, Timestamp, VarNumber,

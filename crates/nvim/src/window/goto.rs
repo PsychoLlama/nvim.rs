@@ -20,11 +20,11 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::buffer::BCO_ENTER;
 use crate::buffer::BCO_NOHELP;
 use crate::memory::XString;
 use crate::narrow::number_as_int;
-use crate::types::AutoEvent;
 use crate::winlayer::WinId;
 use crate::winlayer::prev_window;
 use core::ffi::c_int;

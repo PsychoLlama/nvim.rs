@@ -24,6 +24,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{aucmd_defer, has_event};
 use crate::buffer::{buf_is_prompt, buflist_new, find_buf};
 use crate::charset::{ptr2cells_at, vim_isprintc};
@@ -47,7 +48,7 @@ use crate::tag::tagstack_clear_entry;
 use crate::types::Failed;
 use crate::types::TAB;
 use crate::types::*;
-use crate::types::{AutoEvent, LineNr, Pos};
+use crate::types::{LineNr, Pos};
 use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;

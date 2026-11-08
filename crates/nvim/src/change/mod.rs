@@ -26,6 +26,7 @@
 )]
 
 use crate::ascii::ascii_iswhite;
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::state::{autocmd_busy, last_cursormoved, last_cursormoved_win};
 use crate::buffer::{
     buf_inc_changedtick, buf_is_dontwrite, buf_is_prompt, buf_meta_total, current_buf,
@@ -91,7 +92,6 @@ use crate::state::mode::{
 use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG, virtual_active};
 use crate::strings::concat;
 use crate::textformat::{comp_textwidth, has_format_option};
-use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::{CmdModFlags, ColNr, LineNr, Pos, Vv};
 use crate::ui::state::Rows;

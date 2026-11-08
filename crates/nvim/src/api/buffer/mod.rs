@@ -31,6 +31,7 @@ use crate::memline::{
 
 use crate::api::keysets::{KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap};
 use crate::api::private::helpers::TryState;
+use crate::autocmd::defs::AcoSave;
 use crate::extmark::BCount;
 use crate::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
 use crate::ops::get_region_bytecount;
@@ -41,8 +42,8 @@ use crate::search::FORWARD;
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
 use crate::types::{
-    AcoSave, ApiDict, ApiString, Array, Boolean, BufUpdateCallbacks, BufferHandle, ColNr, Error,
-    Integer, LineNr, LuaRef, Object, Pos,
+    ApiDict, ApiString, Array, Boolean, BufUpdateCallbacks, BufferHandle, ColNr, Error, Integer,
+    LineNr, LuaRef, Object, Pos,
 };
 use crate::undo::u_save_buf;
 

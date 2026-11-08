@@ -17,6 +17,8 @@
 
 pub mod buffered;
 pub(crate) mod state;
+use crate::autocmd::defs::AcoSave;
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::state::autocmd_busy;
 use crate::autocmd::{
     apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf, augroup_exists_of, do_doautocmd,
@@ -92,8 +94,7 @@ use crate::startup::{exiting, readonlymode, recoverymode, stdin_fd, vim_ignored}
 use crate::state::mode::{State, exmode_active, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{FmtArg, formatted};
-use crate::types::AutoEvent;
-use crate::types::{AcoSave, ExArg, Failed, IOSIZE, LineNr, ScriptId};
+use crate::types::{ExArg, Failed, IOSIZE, LineNr, ScriptId};
 use crate::ui::state::kUIMessages;
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{

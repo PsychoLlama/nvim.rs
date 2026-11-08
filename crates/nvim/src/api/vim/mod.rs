@@ -20,6 +20,7 @@ use crate::api::private::helpers::{
     api_metadata, api_set_sctx, api_typename, dict_get_value, dict_set_var, find_buffer_by_handle,
     find_window_by_handle, get_default_stl_hl, parse_hl_msg, set_mark, string_to_array,
 };
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{
     apply_autocmds, block_autocmds, may_trigger_vim_suspend_resume, unblock_autocmds,
 };
@@ -116,7 +117,6 @@ use crate::terminal::{
     buf_terminal_running, buf_terminal_set_streamed_paste, terminal_alloc, terminal_buf,
     terminal_check_size, terminal_destroy, terminal_open,
 };
-use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, Error, Float, Handle, Integer, LineNr,
     LuaRef, MessageType, Object, ScreenChar, ScriptId, TabpageHandle, VarNumber, Vv, WindowHandle,

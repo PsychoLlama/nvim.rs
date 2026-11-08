@@ -17,6 +17,7 @@
 )]
 
 use crate::autocmd::apply_autocmds;
+use crate::autocmd::defs::AutoEvent;
 use crate::eval::vars::set_vim_var_nr;
 use crate::event::objects::SignalWatcher;
 use crate::event::signal::{
@@ -33,7 +34,6 @@ use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_awa;
 use crate::startup::{main_loop, preserve_exit, v_dying};
-use crate::types::AutoEvent;
 use crate::types::Vv;
 use crate::winlayer::Buf;
 use ::libc::{pthread_sigmask, sigemptyset, sigset_t};

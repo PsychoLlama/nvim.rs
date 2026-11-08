@@ -24,13 +24,13 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::eval::typval::DO_NOT_FREE_CNT;
 use crate::extmark::kExtmarkNoUndo;
 use crate::mark::kMarkAdjustNormal;
 use crate::memline::MlFlags;
 use crate::message_fmt::msg_cstr_opt;
 use crate::narrow::as_index;
-use crate::types::AutoEvent;
 use crate::winlayer::WinId;
 use core::ffi::c_int;
 

@@ -26,6 +26,7 @@ use super::{
     buf_autocmd, do_bang,
 };
 use crate::arglist::do_argfile;
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{augroup_exists_of, do_doautocmd};
 use crate::buffer::{
     BufFlags, BufRef, buf_dontwrite_msg, buf_hide, buf_is_dontwrite, buf_is_nofilename,
@@ -64,7 +65,6 @@ use crate::path::MAXPATHL;
 use crate::path::fix_fname;
 use crate::semsg;
 use crate::startup::{exiting, getout};
-use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::Handle;
 use crate::types::{CmdModFlags, ExArg, Failed, LineNr, NUL};

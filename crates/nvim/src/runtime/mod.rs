@@ -36,6 +36,7 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::has_autocmd;
 use crate::cmdexpand::defs::Expand;
 use crate::cmdexpand::globpath;
@@ -92,7 +93,6 @@ use crate::regexp::{RE_MAGIC, RE_STRING};
 use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::runtime::defs::{EStack, EStackArg, EStackType, EstackInfo, FrameName, ScriptItem};
 use crate::runtime::state::{current_sctx, did_source_packages};
-use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, ApiString, Array, EvalFuncData, ExArg, Integer, LineNr, Object, ProfTime, ScriptCtx,
     ScriptId, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber, kBoolVarFalse,

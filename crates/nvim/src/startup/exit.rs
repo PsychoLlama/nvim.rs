@@ -17,9 +17,10 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{fire_autocmds, fire_autocmds_for};
 use crate::memory::XString;
-use crate::types::{ApiString, AutoEvent};
+use crate::types::ApiString;
 use core::ffi::CStr;
 use core::ffi::c_int;
 

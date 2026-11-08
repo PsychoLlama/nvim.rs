@@ -17,10 +17,11 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::autocmd::defs::{AutoHandler, PatId};
 use crate::cmdexpand::defs::ExpandContext;
 use crate::memory::XString;
 use crate::types::Handle;
-use crate::types::{AutoHandler, PatId, ScriptCtx};
+use crate::types::ScriptCtx;
 use crate::winlayer::Buf;
 
 /// `:autocmd` with no event: list every event's autocommands.

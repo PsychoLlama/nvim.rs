@@ -23,11 +23,11 @@
 use crate::types::ColNr;
 use std::fs::File;
 
+use crate::autocmd::defs::AutoEvent;
 use crate::buffer::BufFlags;
 use crate::fileio::Loaded;
 use crate::os::fs::{getperm, take_stdin_for_read};
 use crate::os::uv_error::{UV_EFBIG, UV_ENOENT};
-use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 

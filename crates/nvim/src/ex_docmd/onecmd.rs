@@ -19,9 +19,9 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::ex_docmd::ex_msg;
 use crate::memory::XString;
-use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::ColNr;
 use crate::types::LineNr;

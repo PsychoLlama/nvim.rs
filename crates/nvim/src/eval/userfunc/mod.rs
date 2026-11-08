@@ -9,8 +9,8 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::keycodes::KS_EXTRA;
-use crate::types::AutoEvent;
 use core::ffi::{CStr, c_int};
 
 use crate::ascii::{ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul};

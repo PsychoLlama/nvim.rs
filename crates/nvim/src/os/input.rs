@@ -21,6 +21,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::fire_autocmds;
 use crate::autocmd::state::did_cursorhold;
 use crate::autocmd::trigger_cursorhold;
@@ -54,7 +55,6 @@ use crate::startup::{getout, main_loop, preserve_exit, silent_mode, used_stdin};
 use crate::state::mode::State;
 use crate::state::{MODE_INSERT, get_real_state};
 use crate::types::ApiString;
-use crate::types::AutoEvent;
 use crate::ui::state::{Columns, Rows, current_ui};
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint, c_void};

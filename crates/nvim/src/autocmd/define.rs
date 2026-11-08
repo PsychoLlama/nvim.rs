@@ -18,6 +18,7 @@
 )]
 
 use super::*;
+use crate::autocmd::defs::AutoHandler;
 use crate::charset::skip;
 use crate::cstr;
 use crate::env::expand_env;
@@ -25,8 +26,8 @@ use crate::lua::executor::nlua_set_sctx;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
+use crate::types::Failed;
 use crate::types::Handle;
-use crate::types::{AutoHandler, Failed};
 use crate::winlayer::TabPage;
 use crate::winlayer::{Win, tabs};
 

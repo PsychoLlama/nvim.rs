@@ -44,10 +44,10 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
 use crate::memory::XString;
 use crate::narrow::count_as_int;
-use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::CmdIdx;
 use crate::types::TAB;

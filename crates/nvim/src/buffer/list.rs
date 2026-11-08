@@ -19,8 +19,8 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
-use crate::types::AutoEvent;
 use core::ffi::{CStr, c_int};
 
 use super::*;

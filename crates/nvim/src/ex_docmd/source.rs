@@ -24,6 +24,7 @@ use core::cell::Cell;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
+use crate::autocmd::defs::AutoPatCmd;
 use crate::autocmd::getnextac;
 use crate::clipboard::{end_batch_changes, start_batch_changes};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later, update_screen};
@@ -33,7 +34,7 @@ use crate::eval::vars::set_vim_var_string;
 use crate::getchar::read_cmd_key_line;
 use crate::memory::{ThinCString, XString};
 use crate::runtime::SourceCookie;
-use crate::types::{AutoPatCmd, FuncCall, Object};
+use crate::types::{FuncCall, Object};
 
 use crate::ex_cmds::print_line_no_prefix;
 use crate::ex_docmd::cmdline::do_cmdline;

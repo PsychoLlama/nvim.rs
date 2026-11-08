@@ -18,6 +18,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::buffer::GETF_ALT;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
@@ -32,7 +33,6 @@ use crate::normal::FIND_IDENT;
 use crate::search::ACTION_SPLIT;
 use crate::search::FIND_ANY;
 use crate::search::FIND_DEFINE;
-use crate::types::AutoEvent;
 use crate::types::Key;
 use crate::winlayer::prev_window;
 use core::ffi::{CStr, c_int};

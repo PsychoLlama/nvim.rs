@@ -22,6 +22,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{fire_autocmds_for, has_event};
 use crate::charset::vim_isfilec;
 use crate::cstr;
@@ -48,7 +49,6 @@ use crate::path::{
     path_has_drive_letter, path_with_url, pathcmp, shorten_index, simplify_filename, tail_index,
     tail_with_sep_index, vim_is_abs_name, vim_ispathsep,
 };
-use crate::types::AutoEvent;
 use crate::types::{BoolVarValue, CdCause, CdScope, LineNr, SaveVEvent};
 use crate::winlayer::Buf;
 use core::ffi::c_int;

@@ -25,11 +25,11 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
+use crate::autocmd::defs::AucmdWin;
 use crate::buffer::BufRef;
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
-use crate::types::AucmdWin;
 use crate::types::Handle;
 use crate::winlayer::TabPage;
 use crate::winlayer::WinId;

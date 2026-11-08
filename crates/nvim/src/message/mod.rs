@@ -64,6 +64,7 @@ pub mod state;
 use crate::api::keysets::KeyDict_echo_opts;
 use crate::api::vim::nvim_echo;
 use crate::ascii::ascii_iswhite;
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::has_event;
 use crate::charset::{
     byte2cells, char2cells, ptr2cells_at, strsize, transchar_buf, transchar_byte_buf, vim_isprintc,
@@ -156,7 +157,6 @@ use crate::startup::{
 use crate::state::mode::{State, exmode_active};
 use crate::state::{MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE};
 use crate::statusline::hl_attr;
-use crate::types::AutoEvent;
 use crate::types::BS;
 use crate::types::CAR;
 use crate::types::ESC;

@@ -31,6 +31,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::buffer::DOBUF_FIRST;
 use crate::buffer::DOBUF_WIPE;
@@ -56,7 +57,6 @@ use crate::state::mode::{State, restart_edit, stop_insert_mode};
 use crate::state::{
     MODE_TERMINAL, ModeState, may_trigger_modechanged, state_enter, state_handle_k_event,
 };
-use crate::types::AutoEvent;
 use crate::types::Handle;
 use crate::types::Key;
 use crate::types::{ColNr, LineNr, OptInt, Pos, WinOpt};

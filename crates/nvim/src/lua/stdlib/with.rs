@@ -22,6 +22,7 @@ use core::ffi::{CStr, c_int};
 
 use super::TRY_STATE_INIT;
 use crate::api::private::helpers::{try_enter, try_leave};
+use crate::autocmd::defs::AcoSave;
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{win_execute_after, win_execute_before};
 use crate::ex_docmd::CmdModScope;
@@ -29,7 +30,7 @@ use crate::log::g_min_log_level;
 use crate::lua::ffi::LUA_MULTRET;
 use crate::lua::stack::{At, Kind, Raise, Stack};
 use crate::narrow::number_as_int;
-use crate::types::{AcoSave, CmdMod, CmdModFlags, Error, Pos, SwitchWin, WinExecute};
+use crate::types::{CmdMod, CmdModFlags, Error, Pos, SwitchWin, WinExecute};
 use crate::window::win_find_tabpage;
 use crate::winlayer::{self, Buf, Win};
 

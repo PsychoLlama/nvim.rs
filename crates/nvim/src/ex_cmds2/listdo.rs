@@ -31,6 +31,7 @@
 use super::flag::{CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, DOBUF_FIRST};
 use super::{buffers, check_changed};
 use crate::arglist::{do_argfile, editing_arg_idx, wargcount};
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{AucmdBuf, au_event_disable, au_event_restore, fire_autocmds_for};
 use crate::buffer::{BufFlags, buf_hide, goto_buffer};
 use crate::ex_docmd::state::listcmd_busy;
@@ -49,7 +50,6 @@ use crate::os::libc::size_t;
 use crate::pos::MAXLNUM;
 use crate::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
 use crate::search::FORWARD;
-use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::Handle;
 use crate::types::{ExArg, Failed, LineNr};

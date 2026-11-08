@@ -16,10 +16,10 @@
 )]
 
 use crate::arglist::ArgListId;
+use crate::autocmd::defs::AutoEvent;
 use crate::env::appname_is_valid;
 use crate::event_queue::ChildQueue;
 use crate::memory::ThinCString;
-use crate::types::AutoEvent;
 use crate::types::Key;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};

@@ -15,6 +15,8 @@ use crate::api::private::helpers::TryState;
 use crate::api::private::helpers::{try_enter, try_leave};
 use crate::api::vim::nvim_create_buf;
 use crate::ascii::{ascii_isspace, ascii_iswhite};
+use crate::autocmd::defs::AcoSave;
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{
     apply_autocmds, aucmd_prepbuf, aucmd_restbuf, block_autocmds, has_event, unblock_autocmds,
 };
@@ -149,7 +151,6 @@ use crate::state::{
     may_trigger_safestate, state_enter, state_handle_k_event,
 };
 use crate::strings::escaped_bytes;
-use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::CmdIdx;
 use crate::types::ESC;
@@ -157,7 +158,7 @@ use crate::types::EcmdCmd;
 use crate::types::Key;
 use crate::types::NL;
 use crate::types::{
-    AcoSave, ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdLine, CmdMod, CmdParseInfo,
+    ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdLine, CmdMod, CmdParseInfo,
     CmdParseMagic, ColNr, Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt, Handle, Integer,
     LineNr, Object, OptInt, Pos, ProfTime, SaveVEvent, TypVal, VarNumber,
 };

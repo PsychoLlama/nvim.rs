@@ -36,12 +36,12 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::narrow::len_as_int;
 use crate::smsg;
-use crate::types::AutoEvent;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 

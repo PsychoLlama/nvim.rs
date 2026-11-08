@@ -19,9 +19,9 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::narrow::as_index;
 use crate::narrow::number_as_int;
-use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::winlayer::TabId;
 use crate::winlayer::last_used_tab;

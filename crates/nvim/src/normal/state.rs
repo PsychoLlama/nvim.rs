@@ -20,12 +20,12 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::global_cell::GlobalCell;
 use crate::id_table::{IdTable, TableId};
 use crate::keycodes::ModMask;
 use crate::ops::Op;
 use crate::state::Step;
-use crate::types::AutoEvent;
 use crate::types::ColNr;
 use crate::types::Key;
 use crate::types::LineNr;

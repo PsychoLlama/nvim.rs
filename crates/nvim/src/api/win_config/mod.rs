@@ -16,6 +16,7 @@ use crate::api::private::helpers::{
     api_typename, find_buffer_by_handle, find_window_by_handle, object_to_hl_id, try_enter,
     try_leave,
 };
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{block_autocmds, is_aucmd_win, unblock_autocmds};
 use crate::decoration::defs::VirtTextChunk;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later, set_must_redraw};
@@ -28,7 +29,6 @@ use crate::message::{e_cmdwin, e_textlock};
 use crate::r#move::changed_window_setting;
 use crate::option::didset_window_options;
 use crate::option::vars::{p_sb, p_spr, p_winborder};
-use crate::types::AutoEvent;
 use crate::types::{
     AlignTextPos, ApiString, Array, Boolean, BorderTextType, BufferHandle, Error, FloatAnchor,
     FloatRelative, Integer, LPos, Object, SwitchWin, VirtText, WinConfig, WinSplit, WinStyle,

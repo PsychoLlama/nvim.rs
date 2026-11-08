@@ -12,6 +12,7 @@
 use crate::api::private::helpers::{
     api_dict_to_keydict, api_set_sctx, api_typename, find_buffer_by_handle, try_enter, try_leave,
 };
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::ex_docmd::{
     builtin_command_cstr, excmd_get_argt, execute_cmd, find_ex_command, get_cmd_default_range,
@@ -19,7 +20,6 @@ use crate::ex_docmd::{
     set_cmd_addr_type, set_cmd_count, set_cmd_dflall_range, undo_cmdmod,
 };
 use crate::ex_eval::aborting;
-use crate::types::AutoEvent;
 
 use crate::api::keysets::{
     KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts,

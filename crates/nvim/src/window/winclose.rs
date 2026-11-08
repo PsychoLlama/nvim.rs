@@ -18,8 +18,8 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::buffer::DOBUF_UNLOAD;
-use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use core::ffi::c_int;
 use std::ffi::CString;

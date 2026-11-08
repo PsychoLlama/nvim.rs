@@ -621,6 +621,7 @@ fn is_marker(ty: &syn::Type) -> bool {
 const TYPE_HOMES: &[&str] = &[
     "src/api/keysets.rs",
     "src/arglist/mod.rs::ArgListId",
+    "src/autocmd/defs.rs",
     "src/channel/defs.rs",
     "src/cmdexpand/defs.rs",
     "src/cmdhist/mod.rs::HistoryType",

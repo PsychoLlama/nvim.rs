@@ -20,6 +20,7 @@
 )]
 
 use super::{Ecmd, EcmdArgs};
+use crate::autocmd::defs::AutoEvent;
 use crate::buffer::BCO_ENTER;
 use crate::buffer::BLN_CURBUF;
 use crate::buffer::BLN_LISTED;
@@ -29,7 +30,6 @@ use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::message_fmt::msg_cstr;
 use crate::narrow::number_as_int;
-use crate::types::AutoEvent;
 use crate::window::valid_win;
 use crate::winlayer::WinId;
 use core::ffi::CStr;

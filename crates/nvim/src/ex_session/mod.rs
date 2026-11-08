@@ -47,6 +47,7 @@
 mod session;
 mod view;
 
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::fire_autocmds;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
 use crate::env::home_to_tilde;
@@ -77,7 +78,6 @@ use crate::path::{after_pathsep, vim_full_name, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::search::state::no_hlsearch;
 use crate::tr;
-use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::PATHSEPSTR;
 use crate::types::{CdCause, ExArg, Vv};

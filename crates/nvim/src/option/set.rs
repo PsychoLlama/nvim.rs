@@ -26,11 +26,11 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::autocmd::defs::AutoEvent;
 use crate::message_fmt::emsg_text;
 use crate::narrow::as_index;
 use crate::option::defs::kOptValTypeString;
 use crate::tr;
-use crate::types::AutoEvent;
 use crate::types::ColNr;
 use crate::types::LineNr;
 use crate::winlayer::Win;

@@ -17,6 +17,7 @@ use crate::types::DictBuilder;
 use core::ffi::CStr;
 use std::ffi::CString;
 
+use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{fire_autocmds, has_event};
 use crate::channel::channels;
 use crate::channel::defs::{ChannelStream, ChannelStreamType};
@@ -29,9 +30,7 @@ use crate::message_fmt::msg_cstr;
 use crate::os::libc::uint64_t;
 use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
-use crate::types::{
-    ApiDict, ApiString, Array, AutoEvent, Integer, Object, SaveVEvent, TypVal, VAR_DICT,
-};
+use crate::types::{ApiDict, ApiString, Array, Integer, Object, SaveVEvent, TypVal, VAR_DICT};
 use crate::winlayer::Buf;
 
 use super::{ChannelRef, channel_decref, with_channel};
