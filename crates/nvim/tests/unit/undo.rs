@@ -71,7 +71,7 @@ fn an_oversized_value_truncates_from_the_top() {
 /// whole of the on-disk link format.
 #[test]
 fn a_link_round_trips_through_its_four_byte_field() {
-    use neovim::types::UndoLink;
+    use neovim::undo::node::UndoLink;
 
     for seq in [1, 2, 0x7f, 0x80, 0xffff, 0x0100_0000, i32::MAX] {
         let link = UndoLink::to_seq(seq);

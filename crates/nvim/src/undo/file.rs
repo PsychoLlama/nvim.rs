@@ -21,6 +21,7 @@
 )]
 
 use crate::os::libc::{size_t, uintmax_t};
+use crate::undo::node::{UndoEntry, UndoHeader, UndoLink, VisualInfo};
 use core::ffi::CStr;
 
 use super::format::*;

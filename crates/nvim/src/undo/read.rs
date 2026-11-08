@@ -21,6 +21,7 @@ use crate::os::fs::file_info;
 use crate::os::libc::{time_t, uint64_t};
 use crate::os::users::os_getuid;
 use crate::smsg;
+use crate::undo::node::{UndoHeader, UndoLink};
 use crate::winlayer::Buf;
 use core::ffi::CStr;
 use std::collections::HashSet;

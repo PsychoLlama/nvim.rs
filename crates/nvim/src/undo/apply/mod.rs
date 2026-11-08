@@ -37,6 +37,7 @@ use crate::normal::{visual_active, with_visual_anchor};
 use crate::option::cpo_has;
 use crate::os::libc::int64_t;
 use crate::smsg_keep;
+use crate::undo::node::UndoLink;
 use crate::winlayer::{Buf, windows};
 use core::ffi::CStr;
 

@@ -21,6 +21,7 @@ use super::*;
 use crate::memline::ml_replace_buf_owned;
 use crate::memory::XString;
 use crate::narrow::len_as_int;
+use crate::undo::node::UndoLink;
 use crate::winlayer::{Buf, Win};
 
 /// Marks `start` and everything reachable from it backwards as changed.

@@ -22,7 +22,7 @@ use std::io::{BufReader, BufWriter, Read, Write};
 
 use super::format::encode_be;
 use crate::os::libc::time_t;
-use crate::types::UndoLink;
+use crate::undo::node::UndoLink;
 use crate::winlayer::Buf;
 
 /// Which way the undo file is open.

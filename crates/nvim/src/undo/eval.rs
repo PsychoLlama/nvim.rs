@@ -13,6 +13,7 @@
 )]
 
 use crate::os::libc::ptrdiff_t;
+use crate::undo::node::{UndoHeader, UndoLink};
 use std::ffi::CString;
 
 use super::file::u_get_undo_file_name;

@@ -154,7 +154,7 @@ use crate::types::{
     CmdParseInfo, CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
     Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext, Handle,
     HashTab, Integer, LineNr, Magic, MotionType, Object, OptInt, OptMagic, OptSet, OptVal,
-    ParserState, Pos, ProfTime, SaveVEvent, SearchItArg, TryState, TypVal, UndoLink, VarNumber,
+    ParserState, Pos, ProfTime, SaveVEvent, SearchItArg, TryState, TypVal, VarNumber,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -162,6 +162,7 @@ use crate::ui::{
     ui_call_cmdline_block_show, ui_call_cmdline_hide, ui_call_cmdline_pos, ui_call_cmdline_show,
     ui_call_cmdline_special_char, ui_cursor_shape, ui_flush, ui_has, vim_beep,
 };
+use crate::undo::node::UndoLink;
 use crate::undo::store::header_chain;
 use crate::undo::{u_blockfree, u_clearall, u_sync, u_undo_and_forget};
 use crate::usercmd::{cmdcomplete_type_to_str, parse_compl_arg};

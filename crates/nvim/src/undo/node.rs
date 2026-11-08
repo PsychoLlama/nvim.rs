@@ -7,11 +7,12 @@
     clippy::ptr_as_ptr
 )]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-use super::*;
+//! A node of the undo tree: the header for one undoable change, its entries
+//! (the lines it replaced) and the links between headers.
+
 use crate::memory::XString;
 use crate::os::libc::time_t;
+use crate::types::{ColNr, ExtmarkUndoObject, LineNr, Pos, SavedMark};
 
 /// One undo entry: the lines a change replaced, and where they went.
 ///

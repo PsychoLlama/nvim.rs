@@ -24,6 +24,7 @@ use super::{u_undo_end, u_undoredo};
 use crate::memline::MlFlags;
 use crate::os::libc::time_t;
 use crate::os::time::os_time_raw;
+use crate::undo::node::{UndoHeader, UndoLink};
 use crate::winlayer::Buf;
 
 // ---------------------------------------------------------------------------

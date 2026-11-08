@@ -42,7 +42,7 @@
 use core::ffi::c_int;
 
 use crate::registry::{IdMap, id_map};
-use crate::types::{UndoHeader, UndoLink};
+use crate::undo::node::{UndoHeader, UndoLink};
 use crate::winlayer::Buf;
 
 use super::lastmark;
@@ -464,7 +464,8 @@ mod tests {
     use super::*;
     use crate::memory::XString;
     use crate::types::{ColNr, LineNr};
-    use crate::types::{ExtmarkSplice, ExtmarkUndoObject, UndoEntry};
+    use crate::types::{ExtmarkSplice, ExtmarkUndoObject};
+    use crate::undo::node::UndoEntry;
 
     /// A header carrying `seq`, and `walk` as a tag to tell two apart by.
     fn header(seq: c_int, walk: c_int) -> Box<UndoHeader> {

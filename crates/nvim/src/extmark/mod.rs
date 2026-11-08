@@ -59,8 +59,9 @@ use crate::os::libc::{int32_t, uint16_t, uint32_t, uint64_t};
 use crate::types::buffer::ExtmarkNs;
 use crate::types::{
     BCount, ColNr, DecorInline, ExtmarkOp, ExtmarkSplice, ExtmarkType, ExtmarkUndoObject, LineNr,
-    MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, UndoLink, UndoObjectType,
+    MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, UndoObjectType,
 };
+use crate::undo::node::UndoLink;
 use crate::undo::u_force_get_undo_header;
 use crate::winlayer::Buf;
 
