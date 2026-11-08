@@ -27,6 +27,7 @@ use crate::charset::getwhitecols_curline;
 use crate::cursor::{check_cursor, coladvance, dec_cursor, gchar_cursor, get_cursor_line_len};
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::edit::{BeginlineOpts, beginline, insertchar};
+use crate::edit::{INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX};
 use crate::eval::eval_to_number;
 use crate::eval::vars::{set_vim_var_char, set_vim_var_nr, set_vim_var_string};
 use crate::ex_docmd::cmdmod_has;
@@ -50,10 +51,7 @@ use crate::os::libc::size_t;
 use crate::search::check_linecomment;
 use crate::state::mode::{State, saved_cursor};
 use crate::state::{MODE_INSERT, MODE_NORMAL};
-use crate::types::{
-    CmdModFlags, ColNr, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, LineNr,
-    NUL, OpArg, OptionSetFlags, VarNumber, Vv,
-};
+use crate::types::{CmdModFlags, ColNr, LineNr, NUL, OpArg, OptionSetFlags, VarNumber, Vv};
 use crate::ui::ui_cursor_shape;
 use crate::undo::{u_save, u_save_cursor};
 

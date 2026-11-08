@@ -60,6 +60,7 @@ use crate::options::{
 use crate::os::cshim::gettext;
 use crate::os::libc::uint32_t;
 use crate::plines::{plines_m_win, win_linetabsize};
+use crate::popupmenu::state::PumItem;
 use crate::popupmenu::state::{PumWant, must_redraw_pum, pum_grid, pum_want};
 use crate::state::MODE_CMDLINE;
 use crate::state::mode::State;
@@ -69,7 +70,7 @@ use crate::tag::state::g_do_tagpreview;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
     ApiString, Array, BufferHandle, Dict, Float, Handle, Hlf, Integer, LineNr, Object, OptInt,
-    OptVal, PumItem, ScreenAttr, ScreenChar, VarNumber, WinConfig, kBoolVarFalse, kBoolVarTrue,
+    OptVal, ScreenAttr, ScreenChar, VarNumber, WinConfig, kBoolVarFalse, kBoolVarTrue,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

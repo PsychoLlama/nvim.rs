@@ -28,6 +28,7 @@ use crate::decoration_provider::{
 use crate::diff::diff_redraw;
 use crate::diff::state::need_diff_redraw;
 use crate::digraph::keymap_str;
+use crate::drawline::SpellVars;
 use crate::drawline::win_line;
 use crate::drawscreen::state::{
     RedrawingDisabled, clear_cmdline, cmdline_row, display_tick, do_redraw, dollar_vcol,
@@ -110,7 +111,7 @@ use crate::terminal::{buf_terminal_check_size, buf_terminal_suspended};
 use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
     ColNr, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Handle, Hlf, Integer, LineNr,
-    OptInt, Pos, ProfTime, ScreenChar, SpellVars, VarNumber, VirtTextChunk, WindowHandle,
+    OptInt, Pos, ProfTime, ScreenChar, VarNumber, VirtTextChunk, WindowHandle,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

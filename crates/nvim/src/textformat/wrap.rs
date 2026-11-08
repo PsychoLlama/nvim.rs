@@ -34,6 +34,7 @@ use crate::cursor::{
     dec_cursor_gchar, gchar_cursor, get_cursor_line_len, inc_cursor, inc_cursor_gchar, pchar_cursor,
 };
 use crate::drawscreen::{UPD_VALID, redraw_curbuf_later};
+use crate::edit::{INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT};
 use crate::edit::{backspace_until_column, get_nolist_virtcol, set_can_cindent, undisplay_dollar};
 use crate::getchar::state::got_int;
 use crate::indent::{change_indent, get_number_indent, set_indent};
@@ -46,7 +47,7 @@ use crate::state::VREPLACE_FLAG;
 use crate::state::mode::{
     Insstart, State, can_si, can_si_back, did_ai, did_si, old_indent, replace_offset,
 };
-use crate::types::{ColNr, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, NUL};
+use crate::types::{ColNr, NUL};
 
 /// What one step of the backwards search for a break column decided.
 ///

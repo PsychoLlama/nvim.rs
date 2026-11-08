@@ -32,8 +32,9 @@ pub use crate::options::vars::*;
 
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
+use crate::optionstr::BreakAt;
 use crate::os::libc::uint8_t;
-use crate::types::{BreakAt, OptInt};
+use crate::types::OptInt;
 use core::ffi::c_uint;
 
 /// The encoding a file with no 'fileencodings' match is read as; set once

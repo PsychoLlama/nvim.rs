@@ -46,9 +46,10 @@ use crate::option::vars::{
 };
 use crate::option::{fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
+use crate::optionstr::BreakAt;
 use crate::state::mode::{km_startsel, km_stopsel};
 use crate::types::{
-    BreakAt, ColNr, FloatAnchor, LPos, LineNr, OptError, OptInt, OptSet, OptionSetFlags, VirtText,
+    ColNr, FloatAnchor, LPos, LineNr, OptError, OptInt, OptSet, OptionSetFlags, VirtText,
     WinConfig, WinOpt, kFloatRelativeEditor,
 };
 use crate::window::check_colorcolumn;

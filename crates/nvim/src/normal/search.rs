@@ -45,10 +45,11 @@ use crate::option::vars::{fdo_flags, jop_flags, p_hls};
 use crate::options::{kOptFdoFlagMark, kOptFdoFlagSearch, kOptJopFlagView};
 use crate::os::cshim::gettext;
 use crate::pos::equalpos;
+use crate::search::state::SearchItArg;
 use crate::search::state::no_hlsearch;
 use crate::search::{Hit, SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search};
 use crate::state::virtual_active;
-use crate::types::{CmdArg, FileMark, MarkMove, MarkMoveRes, OpType, SearchItArg};
+use crate::types::{CmdArg, FileMark, MarkMove, MarkMoveRes, OpType};
 use crate::window::goto_tabpage_lastused;
 use core::ffi::c_int;
 

@@ -25,13 +25,13 @@ use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_E, highlight_num_groups, syn_check_group};
 use crate::lua::executor::{api_new_luaref, release_luaref};
+use crate::message::HlMessageChunk;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::narrow::number_as_int;
 use crate::types::{
-    ApiDict, ApiString, Array, Error, HlMessage, HlMessageChunk, LuaRef, Object, ObjectType,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
-    kObjectTypeWindow,
+    ApiDict, ApiString, Array, Error, HlMessage, LuaRef, Object, ObjectType, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
+    kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
 };
 use core::ffi::{CStr, c_int};
 use core::mem::ManuallyDrop;

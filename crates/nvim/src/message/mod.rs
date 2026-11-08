@@ -160,9 +160,10 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
+use crate::types::{ApiDict, Integer};
 use crate::types::{
-    ApiString, Array, EStackArg, ExArg, GridView, HlMessage, HlMessageChunk, IOSIZE, MessageData,
-    Object, OptInt, ScreenAttr, ScreenChar, ShmFlag, TypVal, Vv,
+    ApiString, Array, EStackArg, ExArg, GridView, HlMessage, IOSIZE, Object, OptInt, ScreenAttr,
+    ScreenChar, ShmFlag, TypVal, Vv,
 };
 use crate::ui::state::{Columns, Rows, resize_events};
 use crate::ui::{
@@ -727,4 +728,18 @@ pub fn msgmore(n: c_int) {
         set_keep_msg(Some(text.as_cstr()), 0);
         keep_msg_more.set(true);
     }
+}
+
+/// Not `Copy`: `text` is an owned string.
+#[derive(Clone)]
+pub struct HlMessageChunk {
+    pub text: ApiString,
+    pub hl_id: ::core::ffi::c_int,
+}
+pub struct MessageData {
+    pub source: ApiString,
+    pub percent: Integer,
+    pub title: ApiString,
+    pub status: ApiString,
+    pub data: ApiDict,
 }

@@ -76,6 +76,7 @@ use crate::regexp::{
     Refused, skip_regexp_copy, skip_regexp_in_place, skip_regexp_magic, vim_regcomp,
     vim_regcomp_ext, vim_regexec, vim_regexec_multi,
 };
+use crate::search::state::{SearchItArg, SearchOffset};
 use crate::search::state::{
     no_hlsearch, no_smartcase, search_match_endcol, search_match_lines, searchcmdlen,
 };
@@ -88,7 +89,7 @@ use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CmdArg, ColNr, Dict, Direction, EvalFuncData, FileComparison, LPos, LineNr, MotionType, OpArg,
-    Pos, ProfTime, RegMMatch, RegMatch, SearchItArg, SearchOffset, TypVal, VarNumber,
+    Pos, ProfTime, RegMMatch, RegMatch, TypVal, VarNumber,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};

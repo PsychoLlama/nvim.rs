@@ -127,6 +127,7 @@ use crate::register::{
 };
 use crate::registry::{IdSet, id_set};
 use crate::runtime::state::current_sctx;
+use crate::search::state::SearchItArg;
 use crate::search::state::{
     highlight_match, magic_overruled, no_hlsearch, search_first_line, search_last_line,
     search_match_endcol, search_match_lines,
@@ -154,8 +155,7 @@ use crate::types::{
     AcoSave, ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdLine, CmdMod, CmdParseInfo,
     CmdParseMagic, ColNr, Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt, Expand,
     ExpandContext, Handle, HashTab, Integer, LineNr, Magic, MotionType, Object, OptInt, OptMagic,
-    OptSet, OptVal, ParserState, Pos, ProfTime, SaveVEvent, SearchItArg, TryState, TypVal,
-    VarNumber,
+    OptSet, OptVal, ParserState, Pos, ProfTime, SaveVEvent, TryState, TypVal, VarNumber,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

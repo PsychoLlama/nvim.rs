@@ -75,11 +75,12 @@ use crate::state::{MODE_INSERT, virtual_active};
 use crate::statusline::{SIGN_SHOW_MAX, build_statuscol_str};
 use crate::syntax::{SynFlags, get_syntax_attr, syn_get_sub_char, syntax_present};
 use crate::terminal::terminal_get_line_attributes;
+use crate::types::NS;
 use crate::types::TAB;
 use crate::types::{
     CharSize, CharsizeArg, ColNr, DecorRange, DiffLine, FoldInfo, GridView, HlMode, Hlf, LineNr,
-    NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, SpellVars, StatusCol, VarNumber,
-    VirtText, VirtTextPos, WinExtmark,
+    NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, StatusCol, VarNumber, VirtText,
+    VirtTextPos,
 };
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;
@@ -390,4 +391,20 @@ fn invoke_range_next(
         validate_virtcol(window);
         ::core::ffi::c_int::MAX
     }
+}
+
+pub struct WinExtmark {
+    pub ns_id: NS,
+    pub mark_id: uint64_t,
+    pub win_row: ::core::ffi::c_int,
+    pub win_col: ::core::ffi::c_int,
+}
+#[derive(Default)]
+pub struct SpellVars {
+    pub spv_has_spell: bool,
+    pub spv_unchanged: bool,
+    pub spv_checked_col: ::core::ffi::c_int,
+    pub spv_checked_lnum: LineNr,
+    pub spv_cap_col: ColNr,
+    pub spv_capcol_lnum: LineNr,
 }

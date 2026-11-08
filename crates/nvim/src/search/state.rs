@@ -18,7 +18,9 @@
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
+use crate::os::libc::int64_t;
 use crate::regexp::state::OPTION_MAGIC_NOT_SET;
+use crate::types::ProfTime;
 use crate::types::{ColNr, LineNr, OptMagic};
 use core::ffi::c_int;
 
@@ -33,3 +35,25 @@ pub(crate) static no_smartcase: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static searchcmdlen: GlobalCell<c_int> = GlobalCell::new(0);
 pub(crate) static no_hlsearch: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static magic_overruled: GlobalCell<OptMagic> = GlobalCell::new(OPTION_MAGIC_NOT_SET);
+
+#[derive(Copy, Clone)]
+pub(crate) struct SearchOffset {
+    pub dir: ::core::ffi::c_char,
+    pub line: bool,
+    pub end: bool,
+    pub off: int64_t,
+}
+/// What a caller of `searchit` may add: a line to stop after, a deadline,
+/// and the two answers -- whether the deadline was passed, and whether the
+/// search wrapped around the end of the buffer.
+#[derive(Default)]
+pub(crate) struct SearchItArg<'a> {
+    /// Stop after this line, when it is not zero.
+    pub sa_stop_lnum: LineNr,
+    /// Give up at this time.
+    pub sa_tm: Option<&'a ProfTime>,
+    /// Set when `sa_tm` was passed.
+    pub sa_timed_out: bool,
+    /// Set when the search wrapped around.
+    pub sa_wrapped: bool,
+}

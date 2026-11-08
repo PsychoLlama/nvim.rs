@@ -182,8 +182,8 @@ use crate::types::AutoEvent;
 use crate::types::Key;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AcoSave, ApiString, CharsizeArg, CmdModFlags, ColNr, INSCHAR_CTRLV, INSCHAR_FORMAT,
-    INSCHAR_NO_FEX, LineNr, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, Pos, ScreenChar, Vv,
+    AcoSave, ApiString, CharsizeArg, CmdModFlags, ColNr, LineNr, MB_MAXBYTES, OptInt, PUT_CURSEND,
+    PUT_FIXINDENT, Pos, ScreenChar, Vv,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::u_sync_once;
@@ -317,3 +317,19 @@ state_record! {
     disabled_redraw: bool = false;
 }
 pub(crate) const INPUT_BUFLEN: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
+
+/// `insertchar()` flags — upstream's anonymous enum in `edit.h`.
+///
+/// A C `int`: `insertchar` and `internal_format` take the set as one.
+pub(crate) type InscharFlags = ::core::ffi::c_int;
+
+/// force formatting
+pub(crate) const INSCHAR_FORMAT: InscharFlags = 1;
+/// format comments
+pub(crate) const INSCHAR_DO_COM: InscharFlags = 2;
+/// the character was typed just after CTRL-V
+pub(crate) const INSCHAR_CTRLV: InscharFlags = 4;
+/// do not use `'formatexpr'`
+pub(crate) const INSCHAR_NO_FEX: InscharFlags = 8;
+/// format comments with a list or second-line indent
+pub(crate) const INSCHAR_COM_LIST: InscharFlags = 16;

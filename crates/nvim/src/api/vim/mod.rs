@@ -73,6 +73,7 @@ use crate::mark::mark_get_global;
 use crate::mbyte::{c_cluster_len, c_cluster_schar, c_string_cells};
 use crate::memline::ml_open;
 use crate::memory::arena_alloc_count;
+use crate::message::MessageData;
 use crate::message::state::{
     did_emsg, lines_left, msg_didany, msg_no_more, msg_scroll, need_wait_return,
 };
@@ -109,10 +110,9 @@ use crate::terminal::{
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, Context, Error, Float, FoldInfo, Handle,
-    HlAttrs, Integer, LineNr, LuaRef, LuaRetMode, MessageData, MessageType, MotionType, Object,
-    OptVal, ScreenChar, ScriptId, SignTextAttrs, StatusCol, TabpageHandle, VarNumber, Vv,
-    WindowHandle, YankReg, kCdScopeGlobal, kErrorTypeException, kErrorTypeValidation,
-    kObjectTypeString,
+    HlAttrs, Integer, LineNr, LuaRef, LuaRetMode, MessageType, MotionType, Object, OptVal,
+    ScreenChar, ScriptId, SignTextAttrs, StatusCol, TabpageHandle, VarNumber, Vv, WindowHandle,
+    YankReg, kCdScopeGlobal, kErrorTypeException, kErrorTypeValidation, kObjectTypeString,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};

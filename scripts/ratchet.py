@@ -2263,7 +2263,7 @@ COPY_KEEPERS = {
     "crates/nvim/src/types/pos.rs::LPos": "value",
     "crates/nvim/src/types/pos.rs::Pos": "value",
     "crates/nvim/src/types/runtime.rs::SnPrl": "value",
-    "crates/nvim/src/types/search.rs::SearchOffset": "value",
+    "crates/nvim/src/search/state.rs::SearchOffset": "value",
     "crates/nvim/src/types/sign.rs::SignItem": "value",
     "crates/nvim/src/types/sign.rs::SignTextAttrs": "value",
     "crates/nvim/src/spell/mod.rs::LangP": "value",

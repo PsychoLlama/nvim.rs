@@ -36,11 +36,12 @@ use crate::option::vars::p_hi;
 use crate::path::{path_fnamecmp, path_try_shorten_fname};
 use crate::register::{ShadaYank, shada_register_timestamp, shada_set_register};
 use crate::registry::{IdMap, IdSet, id_map, id_set};
+use crate::search::state::SearchOffset;
 use crate::search::{
     ShadaPattern, set_last_used_pattern, shada_pattern_timestamp, shada_set_pattern,
 };
 use crate::types::LineNr;
-use crate::types::{ApiString, ListRef, SearchOffset, TypVal, Vv, kListLenUnknown};
+use crate::types::{ApiString, ListRef, TypVal, Vv, kListLenUnknown};
 use crate::winlayer::{Buf, BufId, Win, buffers, tab_windows};
 use core::ffi::{c_char, c_int};
 
