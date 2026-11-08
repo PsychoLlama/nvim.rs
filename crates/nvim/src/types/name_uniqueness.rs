@@ -179,9 +179,10 @@ fn types_reexports_no_duplicate_names() {
     );
     // A floor, not a target: it is here to catch the parser silently
     // recognising nothing. 1,000 → 900 for `CmdIdx`, → 850 when the khash
-    // and garray types were deleted (889 then).
+    // and garray types were deleted (889 then), → 500 when the foreign-ABI
+    // families moved to their own modules (564 then).
     assert!(
-        owners.len() > 850,
+        owners.len() > 500,
         "only {} exported names found across {} modules -- the parser stopped \
          recognising declarations",
         owners.len(),
