@@ -13,8 +13,8 @@
     clippy::ptr_as_ptr
 )]
 
-#[cfg(debug_assertions)]
 use crate::deref::deref_to_field;
+#[cfg(debug_assertions)]
 use ::core::ptr::NonNull;
 
 /// A writable borrow of a value object, taken through a shared handle: what
