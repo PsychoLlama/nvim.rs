@@ -292,11 +292,11 @@ fn get_match(window: &Window, id: c_int) -> Option<&MatchItem> {
 pub(crate) fn ex_match(excmd: &mut ExArg) {
     // SAFETY: the caller's command.
     // The command's count is the match id: `:match`, `:2match`, `:3match`.
-    if excmd.line2 > LineNr::new(3) {
+    if excmd.number2 > 3 {
         emsg(e_invcmd);
         return;
     }
-    let id = excmd.line2.get();
+    let id = excmd.number2;
     let skip = excmd.skip;
 
     // Whatever happens next, the old pattern for this id goes -- if there

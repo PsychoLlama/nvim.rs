@@ -649,8 +649,23 @@ pub struct ExArg<'s> {
     pub skip: bool,
     pub forceit: bool,
     pub addr_count: ::core::ffi::c_int,
+    /// The range, when `addr_type` counts buffer lines ([`CmdAddr::Lines`]).
+    /// Zero for every other kind, whose range is in `number1`/`number2`.
     pub line1: LineNr,
     pub line2: LineNr,
+    /// The range, when `addr_type` counts anything but buffer lines: the
+    /// numbers of windows, tab pages, buffers, argument-list or quickfix
+    /// entries, or the plain number a [`CmdAddr::Other`]/[`CmdAddr::Unsigned`]
+    /// command reads itself. Zero for the line kind.
+    ///
+    /// Two pairs rather than one: every handler reads exactly one of them —
+    /// no builtin command serves both a line kind and another — so a window
+    /// command never sees a window number typed as a line, and a line
+    /// command never converts one back.
+    pub number1: ::core::ffi::c_int,
+    pub number2: ::core::ffi::c_int,
+    /// What the range counts. Written through [`ExArg::set_addr_kind`],
+    /// which keeps the range in the pair the kind selects.
     pub addr_type: CmdAddr,
     pub flags: ::core::ffi::c_int,
     pub do_ecmd_cmd: EcmdCmd,
@@ -707,6 +722,55 @@ impl ExArg<'_> {
     pub fn set_cmd_text(&mut self, text: &[u8]) {
         self.line = CmdLine::from_bytes(text);
     }
+
+    /// Does the range count buffer lines, so that it is in `line1`/`line2`
+    /// rather than `number1`/`number2`?
+    #[inline]
+    pub fn counts_lines(&self) -> bool {
+        self.addr_type == CmdAddr::Lines
+    }
+
+    /// The range's two ends as plain numbers, whichever pair holds them.
+    ///
+    /// What the kind-blind readers see: the address parser, which walks
+    /// `,` and `;` the same way for every kind, and the places that hand
+    /// the range on as numbers (`<line1>`/`<line2>`, a Lua command's
+    /// `line1`/`line2`, a ranged function's `a:firstline`).
+    pub fn range_numbers(&self) -> (::core::ffi::c_int, ::core::ffi::c_int) {
+        if self.counts_lines() {
+            (self.line1.get(), self.line2.get())
+        } else {
+            (self.number1, self.number2)
+        }
+    }
+
+    /// Set the range from plain numbers, into the pair the kind selects.
+    pub fn set_range_numbers(&mut self, first: ::core::ffi::c_int, last: ::core::ffi::c_int) {
+        if self.counts_lines() {
+            self.line1 = LineNr::new(first);
+            self.line2 = LineNr::new(last);
+        } else {
+            self.number1 = first;
+            self.number2 = last;
+        }
+    }
+
+    /// Change what the range counts, moving a range already read into the
+    /// pair the new kind selects. A user command found by a `CmdUndefined`
+    /// autocommand after its range was read is the case that needs it.
+    pub fn set_addr_kind(&mut self, kind: CmdAddr) {
+        if (kind == CmdAddr::Lines) != self.counts_lines() {
+            let (first, last) = self.range_numbers();
+            self.line1 = LineNr::ZERO;
+            self.line2 = LineNr::ZERO;
+            self.number1 = 0;
+            self.number2 = 0;
+            self.addr_type = kind;
+            self.set_range_numbers(first, last);
+        } else {
+            self.addr_type = kind;
+        }
+    }
 }
 
 impl Default for ExArg<'_> {
@@ -721,6 +785,8 @@ impl Default for ExArg<'_> {
             addr_count: 0,
             line1: LineNr::ZERO,
             line2: LineNr::ZERO,
+            number1: 0,
+            number2: 0,
             addr_type: CmdAddr::Lines,
             flags: 0,
             do_ecmd_cmd: EcmdCmd::None,

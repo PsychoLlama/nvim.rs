@@ -219,19 +219,20 @@ pub fn nvim_parse_cmd(str: ApiString, _opts: &mut KeyDict_empty) -> Result<KeyDi
     let default_count = user.as_ref().map(|(_, def)| *def);
     result.cmd = Some(excmd.command_name(user.as_ref().map(|(name, _)| &**name)));
 
+    let (first, last) = excmd.range_numbers();
     if excmd.argt.has(ExArgt::RANGE) && excmd.addr_count > 0 {
-        // Two addresses give both bounds, one gives only `line2`.
+        // Two addresses give both bounds, one gives only the last.
         let mut range = Vec::with_capacity(2);
         if excmd.addr_count > 1 {
-            range.push(Object::integer(Integer::from(excmd.line1)));
+            range.push(Object::integer(Integer::from(first)));
         }
-        range.push(Object::integer(Integer::from(excmd.line2)));
+        range.push(Object::integer(Integer::from(last)));
         result.range = Some(range.into());
     }
 
     if excmd.argt.has(ExArgt::COUNT) {
         let count: Integer = if excmd.addr_count > 0 {
-            Integer::from(excmd.line2)
+            Integer::from(last)
         } else {
             default_count.unwrap_or(0) as Integer
         };

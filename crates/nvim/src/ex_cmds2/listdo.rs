@@ -47,12 +47,11 @@ use crate::narrow::len_as_int;
 use crate::normal::do_check_scrollbind;
 use crate::optionstr::OptString;
 use crate::os::libc::size_t;
-use crate::pos::MAXLNUM;
 use crate::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
 use crate::search::FORWARD;
 use crate::types::CmdIdx;
 use crate::types::Handle;
-use crate::types::{ExArg, Failed, LineNr};
+use crate::types::{ExArg, Failed};
 use crate::window::{goto_tab, valid_tab, valid_win, win_goto, win_split, win_valid};
 use crate::winlayer::prev_window;
 use crate::winlayer::{Buf, TabId, TabPage, Win, WinId, first_buffer, first_tab, first_window};
@@ -166,7 +165,7 @@ fn leave_winfixbuf(list: ListDo, forceit: bool) -> Result<(), Failed> {
     Ok(())
 }
 
-/// Position the walk at `args.line1`, then run `args.arg` once per item
+/// Position the walk at `args.number1`, then run `args.arg` once per item
 /// until the list runs out, the range does, or something goes wrong.
 fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
     let mut i: c_int = 0;
@@ -178,24 +177,18 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
     let mut tp = first_tab().map(TabPage::id);
     match list {
         ListDo::Windows => {
-            while let Some(cur) = wp
-                .and_then(WinId::get)
-                .filter(|_| (LineNr::new(i) + 1) < excmd.line1)
-            {
+            while let Some(cur) = wp.and_then(WinId::get).filter(|_| i + 1 < excmd.number1) {
                 i += 1;
                 wp = cur.next().map(Win::id);
             }
         }
         ListDo::Tabs => {
-            while let Some(cur) = tp
-                .and_then(TabId::get)
-                .filter(|_| (LineNr::new(i) + 1) < excmd.line1)
-            {
+            while let Some(cur) = tp.and_then(TabId::get).filter(|_| i + 1 < excmd.number1) {
                 i += 1;
                 tp = cur.next().map(TabPage::id);
             }
         }
-        ListDo::Args => i = excmd.line1.get() - 1,
+        ListDo::Args => i = excmd.number1 - 1,
         _ => {}
     }
 
@@ -207,9 +200,9 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
         ListDo::Buffers => {
             // Advance to the first listed buffer after "eap->line1".
             let mut cur = first_buffer();
-            let unlisted = |b: &Buf| b.handle.get() < excmd.line1.get() || b.b_p_bl == 0;
+            let unlisted = |b: &Buf| b.handle.get() < excmd.number1 || b.b_p_bl == 0;
             while let Some(b) = cur.filter(unlisted) {
-                if b.handle.get() > excmd.line2.get() {
+                if b.handle.get() > excmd.number2 {
                     cur = None;
                     break;
                 }
@@ -222,17 +215,16 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
         }
         ListDo::Quickfix { .. } => {
             qf_size = qf_get_valid_size(excmd.cmdidx);
-            debug_assert!(excmd.line1 >= LineNr::ZERO, "eap->line1 >= 0");
-            if qf_size == 0 || usize::try_from(excmd.line1).unwrap_or(0) > qf_size {
+            debug_assert!(excmd.number1 >= 0, "eap->line1 >= 0");
+            if qf_size == 0 || usize::try_from(excmd.number1).unwrap_or(0) > qf_size {
                 buf = None;
             } else {
                 ex_cc(excmd);
                 buf = Some(Buf::current());
-                i = excmd.line1.get() - 1;
+                i = excmd.number1 - 1;
                 if excmd.addr_count <= 0 {
                     // Default to every quickfix/location list entry.
-                    debug_assert!(LineNr::try_from(qf_size).is_ok_and(|n| n < MAXLNUM));
-                    excmd.line2 = LineNr::new(len_as_int(qf_size));
+                    excmd.number2 = len_as_int(qf_size);
                 }
             }
         }
@@ -310,7 +302,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
         match list {
             ListDo::Buffers => {
                 // Done?
-                if next_fnum < 0 || LineNr::new(next_fnum) > excmd.line2 {
+                if next_fnum < 0 || next_fnum > excmd.number2 {
                     break;
                 }
                 // Does the buffer still exist?
@@ -325,7 +317,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
             }
             ListDo::Quickfix { .. } => {
                 debug_assert!(i >= 0, "i >= 0");
-                if as_index(i) >= qf_size || LineNr::new(i) >= excmd.line2 {
+                if as_index(i) >= qf_size || i >= excmd.number2 {
                     break;
                 }
                 let qf_idx = qf_get_cur_idx(excmd.cmdidx);
@@ -344,17 +336,17 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
                         do_check_scrollbind(true);
                     }
                 }
-                if LineNr::new(i) + 1 > excmd.line2 {
+                if i + 1 > excmd.number2 {
                     break;
                 }
             }
             ListDo::Tabs => {
-                if LineNr::new(i) + 1 > excmd.line2 {
+                if i + 1 > excmd.number2 {
                     break;
                 }
             }
             ListDo::Args => {
-                if LineNr::new(i) >= excmd.line2 {
+                if i >= excmd.number2 {
                     break;
                 }
             }

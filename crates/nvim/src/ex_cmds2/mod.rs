@@ -636,7 +636,7 @@ pub(crate) fn ex_checktime(excmd: &mut ExArg) {
         // The default is all buffers.
         check_timestamps(false);
     } else {
-        if let Some(buf) = find_buf(Handle::from_number(excmd.line2.get())) {
+        if let Some(buf) = find_buf(Handle::from_number(excmd.number2)) {
             // Cannot happen?
             buf_check_timestamp(buf);
         }

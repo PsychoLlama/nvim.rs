@@ -137,7 +137,7 @@ pub fn ex_file(excmd: &mut ExArg) {
 
     // ":0file" removes the file name.  Check for illegal uses ":3file",
     // "0file name", etc.
-    if excmd.addr_count > 0 && (!no_arg || excmd.line2 > LineNr::ZERO || excmd.addr_count > 1) {
+    if excmd.addr_count > 0 && (!no_arg || excmd.number2 > 0 || excmd.addr_count > 1) {
         emsg(gettext(e_invarg));
         return;
     }
@@ -513,7 +513,7 @@ fn swap_dir() -> CString {
 /// `:wnext`, `:wNext` and `:wprevious` -- write, then step through the
 /// argument list.
 pub fn ex_wnext(excmd: &mut ExArg) {
-    let step = excmd.line2.get();
+    let step = excmd.number2;
     let forwards = c_int::from(excmd.line.byte_at(excmd.line.cmd + 1)) == 'n' as c_int;
     let i = if forwards {
         Win::current().w_arg_idx + step

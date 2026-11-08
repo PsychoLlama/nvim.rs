@@ -80,8 +80,8 @@ pub(crate) fn ex_bunload(excmd: &mut ExArg) {
         action,
         excmd.line.cstr_from(excmd.line.arg),
         excmd.addr_count,
-        excmd.line1.get(),
-        excmd.line2.get(),
+        excmd.number1,
+        excmd.number2,
         c_int::from(excmd.forceit),
     );
 }
@@ -146,7 +146,7 @@ pub(crate) fn ex_quit(excmd: &mut ExArg) {
         return;
     }
     let wp = if excmd.addr_count > 0 {
-        window_at(excmd.line2.get())
+        window_at(excmd.number2)
     } else {
         Win::current_or_none()
     };
@@ -213,7 +213,7 @@ fn first_win() -> Win {
 /// pointer type and a `-> !` fn item does not coerce to it.
 pub(crate) fn ex_cquit(excmd: &mut ExArg) {
     let status = if excmd.addr_count > 0 {
-        excmd.line2.get()
+        excmd.number2
     } else {
         EXIT_FAILURE
     };
@@ -268,7 +268,7 @@ pub(crate) fn ex_close(excmd: &mut ExArg) {
     let win = if excmd.addr_count == 0 {
         Win::current()
     } else {
-        numbered_window(excmd.line2.get())
+        numbered_window(excmd.number2)
     };
     ex_win_close(c_int::from(excmd.forceit), win, None);
 }
@@ -487,7 +487,7 @@ pub(crate) fn ex_only(excmd: &mut ExArg) {
         return;
     }
     if excmd.addr_count > 0 {
-        let wp = window_at_stepwise(excmd.line2.get());
+        let wp = window_at_stepwise(excmd.number2);
         if wp != Win::current_or_none() {
             win_goto(wp.expect("a live handle"));
         }
@@ -520,7 +520,7 @@ pub(crate) fn ex_hide(excmd: &mut ExArg) {
     let win = if excmd.addr_count == 0 {
         Win::current()
     } else {
-        numbered_window(excmd.line2.get())
+        numbered_window(excmd.number2)
     };
     if !win.w_floating && window_layout_locked(CmdIdx::hide) {
         return;

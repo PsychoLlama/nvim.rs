@@ -22,7 +22,6 @@
 use crate::getchar::Remap;
 use crate::message_fmt::msg_bytes;
 use crate::tr;
-use crate::types::LineNr;
 use core::ffi::c_int;
 use std::ffi::CString;
 use std::rc::Rc;
@@ -72,8 +71,7 @@ struct MenuArg {
 pub(crate) fn ex_menu(excmd: &mut ExArg) {
     let forceit = excmd.forceit;
     let (modes, noremap, unmenu) = cmd_modes(excmd.line.cmd(), forceit);
-    let ranged =
-        (excmd.addr_count != 0 && excmd.line2 != LineNr::ZERO).then_some(excmd.line2.get());
+    let ranged = (excmd.addr_count != 0 && excmd.number2 != 0).then_some(excmd.number2);
     // A copy: the listing can stop at a `--More--` prompt.
     let text = excmd.line.arg().to_vec();
     do_menu(&text, modes, noremap, unmenu, ranged);

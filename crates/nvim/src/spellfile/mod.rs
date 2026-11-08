@@ -797,7 +797,7 @@ pub(super) fn spell_message_fmt(spin: &SpellInfo, args: core::fmt::Arguments<'_>
 
 /// `:spellgood`, `:spellwrong`, `:spellrare` and their `:spell*undo` forms.
 pub fn ex_spell(excmd: &mut ExArg) {
-    let (cmdidx, forceit, line2) = (excmd.cmdidx, excmd.forceit, excmd.line2);
+    let (cmdidx, forceit, number) = (excmd.cmdidx, excmd.forceit, excmd.number2);
     // A copy of the word: adding it writes files and may run autocommands.
     let word = excmd.line.arg().to_vec();
 
@@ -810,7 +810,7 @@ pub fn ex_spell(excmd: &mut ExArg) {
     };
     // `:N spellgood` files the word in the Nth 'spellfile'; `!` means the
     // internal word list instead.
-    let which = if forceit { 0 } else { line2.get() };
+    let which = if forceit { 0 } else { number };
 
     let undo = cmdidx == CmdIdx::spellundo;
     spell_add_word(&word, kind as SpellAddType, which, undo);

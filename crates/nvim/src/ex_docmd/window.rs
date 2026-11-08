@@ -28,7 +28,6 @@ use crate::narrow::len_as_int;
 use crate::narrow::number_as_int;
 use crate::semsg;
 use crate::types::CmdIdx;
-use crate::types::LineNr;
 use crate::winlayer::WinId;
 use crate::winlayer::last_used_tab;
 use core::ffi::{CStr, c_int};
@@ -84,7 +83,7 @@ fn is(excmd: &ExArg, cmd: CmdIdx) -> bool {
 /// The count a range in front of the command asked for, or `def`.
 fn count(excmd: &ExArg, def: c_int) -> c_int {
     if excmd.addr_count > 0 {
-        excmd.line2.get()
+        excmd.number2
     } else {
         def
     }
@@ -241,7 +240,7 @@ fn open_tabpage(excmd: &mut ExArg, old_curwin: Win) {
     } else if excmd.addr_count == 0 {
         0
     } else {
-        excmd.line2.get() + 1
+        excmd.number2 + 1
     };
     if new_tabpage(after, Some(excmd.line.cstr_from(excmd.line.arg)), true).is_err() {
         return;
@@ -263,8 +262,6 @@ fn open_tabpage(excmd: &mut ExArg, old_curwin: Win) {
 /// Open a new tab page, as `:tabnew` would.
 pub fn tabpage_new() {
     let mut excmd = fresh_exarg();
-    excmd.line1 = LineNr::ZERO;
-    excmd.line2 = LineNr::ZERO;
     // `ex_splitview` reads the first byte of `cmd` to tell a vertical split
     // from a horizontal one; the argument is what follows it, which is
     // nothing.
@@ -323,7 +320,7 @@ fn tabnext(excmd: &mut ExArg) {
     } else if excmd.addr_count == 0 {
         tab_number = 1;
     } else {
-        tab_number = excmd.line2.get();
+        tab_number = excmd.number2;
         if tab_number < 1 {
             excmd.errmsg = err_msg(e_invrange);
             return;
@@ -449,7 +446,7 @@ fn resize(excmd: &mut ExArg) {
     let mut wp = Win::current();
     if excmd.addr_count > 0 {
         // The count is a window number, clamped to the last window.
-        let mut n = excmd.line2.get();
+        let mut n = excmd.number2;
         let mut walk = windows();
         wp = walk.next().expect("firstwin");
         for next in walk {

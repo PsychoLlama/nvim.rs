@@ -459,6 +459,8 @@ pub(crate) const EXARG_T_INIT: ExArg<'static> = ExArg {
     addr_count: 0,
     line1: LineNr::ZERO,
     line2: LineNr::ZERO,
+    number1: 0,
+    number2: 0,
     addr_type: CmdAddr::Lines,
     flags: 0,
     do_ecmd_cmd: EcmdCmd::None,

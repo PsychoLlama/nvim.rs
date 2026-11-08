@@ -247,9 +247,9 @@ pub fn ex_copen(excmd: &mut ExArg) {
     };
     let busy = QuickfixBusy::hold();
 
-    let (addr_count, line2) = (excmd.addr_count, excmd.line2);
+    let (addr_count, number) = (excmd.addr_count, excmd.number2);
     let height = if addr_count != 0 {
-        line2.get()
+        number
     } else {
         QF_WINHEIGHT.cast_signed()
     };

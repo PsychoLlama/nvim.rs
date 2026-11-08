@@ -88,7 +88,7 @@ fn copy_global_arglist() {
 
 /// `:previous`, `:sprevious`, `:Next` and `:sNext`.
 pub fn ex_previous(excmd: &mut ExArg) {
-    let back = cur_arg_idx() - excmd.line2.get();
+    let back = cur_arg_idx() - excmd.number2;
     // If already past the last one, go to the last one.
     let argn = if back >= argcount() {
         argcount() - 1
@@ -111,7 +111,7 @@ pub fn ex_last(excmd: &mut ExArg) {
 /// `:argument` and `:sargument`.
 pub fn ex_argument(excmd: &mut ExArg) {
     let argn = if excmd.addr_count > 0 {
-        excmd.line2.get() - 1
+        excmd.number2 - 1
     } else {
         cur_arg_idx()
     };
@@ -230,7 +230,7 @@ pub fn ex_next(excmd: &mut ExArg) {
         }
         0
     } else {
-        cur_arg_idx() + excmd.line2.get()
+        cur_arg_idx() + excmd.number2
     };
     do_argfile(excmd, argn);
 }
@@ -275,7 +275,7 @@ pub fn ex_argdedupe(_excmd: &mut ExArg) {
 /// `:argedit` — add the file to the list and edit it.
 pub fn ex_argedit(excmd: &mut ExArg) {
     let mut argn = if excmd.addr_count != 0 {
-        excmd.line2.get()
+        excmd.number2
     } else {
         cur_arg_idx() + 1
     };
@@ -300,7 +300,7 @@ pub fn ex_argedit(excmd: &mut ExArg) {
 /// `:argadd` — add the files to the list without editing them.
 pub fn ex_argadd(excmd: &mut ExArg) {
     let after = if excmd.addr_count > 0 {
-        excmd.line2.get()
+        excmd.number2
     } else {
         cur_arg_idx() + 1
     };
@@ -335,14 +335,14 @@ fn delete_arg_range(excmd: &mut ExArg) {
             crate::semsg!("E610: No argument to delete");
             return;
         }
-        excmd.line2 = LineNr::new(cur_arg_idx() + 1);
-        excmd.line1 = excmd.line2;
+        excmd.number2 = cur_arg_idx() + 1;
+        excmd.number1 = excmd.number2;
     // ":1,4argdel": delete all the arguments in the range.
-    } else if excmd.line2 > LineNr::new(argcount()) {
-        excmd.line2 = LineNr::new(argcount());
+    } else if excmd.number2 > argcount() {
+        excmd.number2 = argcount();
     }
-    let (line1, line2) = (excmd.line1, excmd.line2);
-    let count = line2 - line1 + 1;
+    let (first, last) = (excmd.number1, excmd.number2);
+    let count = last - first + 1;
     if has_arg {
         // Can't have both a range and an argument.
         crate::semsg!("E474: Invalid argument");
@@ -350,18 +350,18 @@ fn delete_arg_range(excmd: &mut ExArg) {
     }
     if count <= 0 {
         // Don't complain about ":%argdel" on an empty list.
-        if line1 != LineNr::ONE || line2 != LineNr::ZERO {
+        if first != 1 || last != 0 {
             crate::semsg!("E16: Invalid range");
         }
         return;
     }
-    let range = as_count((line1 - 1).get())..as_count(line2.get());
+    let range = as_count(first - 1)..as_count(last);
     with_list(cur_alist(), |al| al.entries.drain(range).for_each(drop));
     let idx = cur_arg_idx();
-    if idx >= line2.get() {
+    if idx >= last {
         set_cur_arg_idx(idx - count);
-    } else if idx > line1.get() {
-        set_cur_arg_idx(line1.get());
+    } else if idx > first {
+        set_cur_arg_idx(first);
     }
     if argcount() == 0 {
         set_cur_arg_idx(0);

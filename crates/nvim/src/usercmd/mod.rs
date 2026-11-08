@@ -208,6 +208,9 @@ impl ExArg<'_> {
         // is accepted then.
         let mut amb_local = false;
 
+        // The kind is applied after the walk: moving a range between
+        // `ExArg`'s two pairs needs the whole command.
+        let mut kind = None;
         for scope in Scope::BOTH {
             // Nothing in the walk can add or remove a command: it only copies
             // facts out.
@@ -241,7 +244,7 @@ impl ExArg<'_> {
                     };
                     self.argt = uc.argt;
                     self.useridx = c_int::try_from(j).expect("a table index fits");
-                    self.addr_type = uc.addr_type;
+                    kind = Some(uc.addr_type);
                     if let Some(complp) = complp.as_deref_mut() {
                         *complp = uc.complete;
                     }
@@ -263,11 +266,19 @@ impl ExArg<'_> {
             });
             match walked {
                 // An ambiguous global match.
-                None => return None,
+                None => {
+                    if let Some(kind) = kind {
+                        self.set_addr_kind(kind);
+                    }
+                    return None;
+                }
                 // Stop on a full match; otherwise fall through to the global table.
                 Some(true) => break,
                 Some(false) => {}
             }
+        }
+        if let Some(kind) = kind {
+            self.set_addr_kind(kind);
         }
 
         if let Some(full) = full

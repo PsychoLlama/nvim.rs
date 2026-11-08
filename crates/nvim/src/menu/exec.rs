@@ -44,7 +44,9 @@ pub(crate) type Range = Option<(LineNr, LineNr)>;
 
 /// The range `excmd` gave, if any.
 pub(crate) fn range_of(excmd: &ExArg) -> Range {
-    (excmd.addr_count != 0).then_some((excmd.line1, excmd.line2))
+    // `:emenu`'s range counts "other": its numbers are the lines a Visual
+    // selection is made over.
+    (excmd.addr_count != 0).then_some((LineNr::new(excmd.number1), LineNr::new(excmd.number2)))
 }
 
 /// Run the right-hand side of the menu item `menu`. Used by `:emenu` and

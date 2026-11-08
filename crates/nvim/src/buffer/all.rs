@@ -190,7 +190,7 @@ pub fn ex_buffer_all(excmd: &mut ExArg) {
     let count: i32 = if excmd.addr_count == 0 {
         9999
     } else {
-        excmd.line2.get()
+        excmd.number2
     };
 
     // Whether to load inactive buffers too.

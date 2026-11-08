@@ -132,7 +132,7 @@ pub(crate) fn do_exbuffer(excmd: &mut ExArg) {
     if excmd.addr_count == 0 {
         goto_buffer(excmd, DOBUF_CURRENT, FORWARD as c_int, 0);
     } else {
-        goto_buffer(excmd, DOBUF_FIRST, FORWARD as c_int, excmd.line2.get());
+        goto_buffer(excmd, DOBUF_FIRST, FORWARD as c_int, excmd.number2);
     }
     run_ecmd_cmd(excmd);
 }
@@ -146,19 +146,19 @@ fn run_ecmd_cmd(excmd: &mut ExArg) {
 
 /// `:bmodified`.
 pub(crate) fn ex_bmodified(excmd: &mut ExArg) {
-    goto_buffer(excmd, DOBUF_MOD, FORWARD as c_int, excmd.line2.get());
+    goto_buffer(excmd, DOBUF_MOD, FORWARD as c_int, excmd.number2);
     run_ecmd_cmd(excmd);
 }
 
 /// `:bnext`.
 pub(crate) fn ex_bnext(excmd: &mut ExArg) {
-    goto_buffer(excmd, DOBUF_CURRENT, FORWARD as c_int, excmd.line2.get());
+    goto_buffer(excmd, DOBUF_CURRENT, FORWARD as c_int, excmd.number2);
     run_ecmd_cmd(excmd);
 }
 
 /// `:bprevious` and `:bNext`.
 pub(crate) fn ex_bprevious(excmd: &mut ExArg) {
-    goto_buffer(excmd, DOBUF_CURRENT, BACKWARD as c_int, excmd.line2.get());
+    goto_buffer(excmd, DOBUF_CURRENT, BACKWARD as c_int, excmd.number2);
     run_ecmd_cmd(excmd);
 }
 
@@ -212,20 +212,14 @@ pub(crate) fn ex_find(excmd: &mut ExArg) {
         return;
     }
     let count = if excmd.addr_count > 0 {
-        excmd.line2.get()
+        excmd.number2
     } else {
         1
     };
     let fname = if !get_findfunc().is_empty() {
         findfunc_find_file(excmd.line.arg(), count)
     } else {
-        let nth = if excmd.addr_count > 0 {
-            excmd.line2
-        } else {
-            LineNr::ONE
-        };
-        find_nth_file_in_path(excmd.line.arg(), FileNameOpts::MESS, nth.get())
-            .map(ThinCString::from)
+        find_nth_file_in_path(excmd.line.arg(), FileNameOpts::MESS, count).map(ThinCString::from)
     };
     let Some(fname) = fname else {
         return;
@@ -543,7 +537,7 @@ pub(crate) fn ex_shada(excmd: &mut ExArg) {
 
 /// `:fclose` — close a floating window by its handle.
 pub(crate) fn ex_fclose(excmd: &mut ExArg) {
-    win_float_remove(excmd.forceit, excmd.line1.get());
+    win_float_remove(excmd.forceit, excmd.number1);
 }
 
 /// `buf_hide()` as checked code.

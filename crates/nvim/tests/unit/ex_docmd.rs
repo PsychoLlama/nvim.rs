@@ -187,6 +187,44 @@ fn a_range_fills_both_endpoints_and_counts_them() {
     assert_eq!(none.addr_count, 0);
 }
 
+/// The two range pairs a line parses to: `(line1, line2)` and
+/// `(number1, number2)`.
+fn range_pairs(_editor: &Editor, line: &str) -> ((i32, i32), (i32, i32)) {
+    let mut args = ExArg::default();
+    let mut info = CmdParseInfo::default();
+    let mut errormsg: Option<CString> = None;
+    assert!(
+        parse_cmdline(
+            CmdLine::from_bytes(line.as_bytes()),
+            &mut args,
+            &mut info,
+            &mut errormsg,
+        ),
+        "{line}: {errormsg:?}"
+    );
+    (
+        (args.line1.get(), args.line2.get()),
+        (args.number1, args.number2),
+    )
+}
+
+#[test]
+fn a_range_lands_in_the_pair_its_address_kind_selects() {
+    let editor = editor_lock();
+    let _restore = Restore::new(&editor);
+    run(&editor, LINES);
+    run(&editor, "args a b c d");
+    // Lines are lines ...
+    assert_eq!(range_pairs(&editor, "2,4delete"), ((2, 4), (0, 0)));
+    // ... and argument-list entries, windows and plain counts are numbers.
+    assert_eq!(range_pairs(&editor, "2,3argdelete"), ((0, 0), (2, 3)));
+    assert_eq!(range_pairs(&editor, "%argdelete"), ((0, 0), (1, 4)));
+    assert_eq!(range_pairs(&editor, "1close"), ((0, 0), (1, 1)));
+    // An "other" command's address is its number, however it was spelled.
+    assert_eq!(range_pairs(&editor, "3sleep"), ((0, 0), (3, 3)));
+    run(&editor, "%argdelete");
+}
+
 #[test]
 fn an_offset_and_a_search_are_addresses_too() {
     let editor = editor_lock();

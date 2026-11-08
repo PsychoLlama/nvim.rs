@@ -31,7 +31,7 @@ pub fn ex_cc(excmd: &mut ExArg) {
     };
 
     let mut errornr = if excmd.addr_count > 0 {
-        excmd.line2.get()
+        excmd.number2
     } else {
         match excmd.cmdidx {
             // The current entry.
@@ -50,7 +50,7 @@ pub fn ex_cc(excmd: &mut ExArg) {
     );
     if is_do {
         let n = if excmd.addr_count > 0 {
-            size_t::try_from(excmd.line1).expect("an ex range line is never negative")
+            size_t::try_from(excmd.number1).expect("an ex range number is never negative")
         } else {
             1
         };
@@ -76,7 +76,7 @@ pub fn ex_cnext(excmd: &mut ExArg) {
         CmdIdx::cdo | CmdIdx::ldo | CmdIdx::cfdo | CmdIdx::lfdo
     );
     let errornr = if excmd.addr_count > 0 && !is_do {
-        excmd.line2.get()
+        excmd.number2
     } else {
         1
     };
@@ -289,7 +289,7 @@ impl Adjacent<'_> {
 /// `:cabove`/`:cbelow` work in whole lines, `:cbefore`/`:cafter` in
 /// line-and-column positions.
 pub fn ex_cbelow(excmd: &mut ExArg) {
-    if excmd.addr_count > 0 && excmd.line2 <= LineNr::ZERO {
+    if excmd.addr_count > 0 && excmd.number2 <= 0 {
         qf_emsg(e_invrange);
         return;
     }
@@ -334,9 +334,9 @@ pub fn ex_cbelow(excmd: &mut ExArg) {
     // An entry's column is 1 based where the cursor's is 0 based.
     pos.col += 1;
     let n = if excmd.addr_count > 0 {
-        excmd.line2
+        excmd.number2
     } else {
-        LineNr::ZERO
+        0
     };
     let errornr = Adjacent {
         entries: &qi.current_list().entries,
@@ -344,7 +344,7 @@ pub fn ex_cbelow(excmd: &mut ExArg) {
         pos,
         linewise,
     }
-    .nth(n.get(), dir);
+    .nth(n, dir);
 
     if errornr > 0 {
         qf_jump(qi, 0, errornr, false);

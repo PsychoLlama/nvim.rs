@@ -82,7 +82,7 @@ impl Search {
     fn parse(excmd: &mut ExArg) -> Option<(Search, Vec<XString>)> {
         let title = qf_cmdtitle(excmd.line.line());
         let tomatch = if excmd.addr_count > 0 {
-            excmd.line2.get()
+            excmd.number2
         } else {
             MAXLNUM.get()
         };

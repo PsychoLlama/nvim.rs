@@ -55,7 +55,7 @@ use crate::winlayer::graph::cmdwin_type;
 
 use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
-use crate::types::{CmdAddr, CmdLine, CmdParseInfo, ExArg, ExArgt, Failed, LineNr, Pos};
+use crate::types::{CmdAddr, CmdLine, CmdParseInfo, ExArg, ExArgt, Failed, Pos};
 use crate::usercmd::do_ucmd;
 use crate::winlayer::{Buf, Win};
 
@@ -128,7 +128,7 @@ pub fn parse_cmdline(
                 excmd.argt = ExArgt::RANGE;
             } else {
                 excmd.argt = ExArgt::NONE;
-                excmd.addr_type = CmdAddr::NoRange;
+                excmd.set_addr_kind(CmdAddr::NoRange);
             }
             retval = true;
             break 'end;
@@ -262,7 +262,7 @@ pub(crate) fn execute_cmd0(
             };
             let name = excmd.line.cstr_from(arg);
             let found = buflist_findpat_prefix(name, end - arg, unlisted, false, false)?;
-            excmd.line2 = LineNr::new(Handle::number_of(found));
+            excmd.number2 = Handle::number_of(found);
             excmd.addr_count = 1;
             excmd.line.arg = excmd.line.skip_white(end);
         } else {
@@ -271,7 +271,7 @@ pub(crate) fn execute_cmd0(
             let (at, len) = excmd.line.args[0];
             let name = excmd.line.cstr_from(at);
             let found = buflist_findpat_prefix(name, len, unlisted, false, false)?;
-            excmd.line2 = LineNr::new(Handle::number_of(found));
+            excmd.number2 = Handle::number_of(found);
             excmd.addr_count = 1;
             shift_cmd_args(excmd);
         }

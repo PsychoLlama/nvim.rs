@@ -181,7 +181,7 @@ pub fn ex_scriptnames(excmd: &mut ExArg) {
 /// `":script {id}"` / `":script {file}"`: open the named script in a window.
 fn edit_script(excmd: &mut ExArg, by_number: bool) {
     if by_number {
-        let sid: ScriptId = excmd.line2.get();
+        let sid: ScriptId = excmd.number2;
         let Some(name) = script_name(sid) else {
             emsg(gettext(e_invarg));
             return;

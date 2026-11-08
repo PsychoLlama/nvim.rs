@@ -423,6 +423,5 @@ pub fn ex_debug(excmd: &mut ExArg) {
 
 /// `:debuggreedy`, whose `0` argument turns it back off.
 pub(crate) fn ex_debuggreedy(excmd: &mut ExArg) {
-    let (addr_count, line2) = (excmd.addr_count, excmd.line2);
-    debug_greedy.set(addr_count == 0 || line2 != LineNr::ZERO);
+    debug_greedy.set(excmd.addr_count == 0 || excmd.number2 != 0);
 }

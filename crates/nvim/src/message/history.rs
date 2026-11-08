@@ -305,7 +305,7 @@ fn entry_to_event(entry: &Shown) -> Object {
 pub fn ex_messages(excmd: &mut ExArg) {
     if excmd.line.arg() == b"clear" {
         let keep = if excmd.addr_count != 0 {
-            excmd.line2.get()
+            excmd.number2
         } else {
             0
         };
@@ -325,7 +325,7 @@ pub fn ex_messages(excmd: &mut ExArg) {
         Some(0)
     };
     let mut skip = if excmd.addr_count != 0 {
-        HISTORY.with(|history| history.len) - excmd.line2.get()
+        HISTORY.with(|history| history.len) - excmd.number2
     } else {
         0
     };

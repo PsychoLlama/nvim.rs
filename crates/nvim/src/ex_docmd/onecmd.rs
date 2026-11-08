@@ -338,7 +338,8 @@ impl ExArg<'_> {
             // A backwards range is offered for swapping. `:global` is busy
             // running a command per line and would fail below anyway, so it is
             // not asked.
-            if global_busy.get() == 0 && self.line1 > self.line2 {
+            let (first, last) = self.range_numbers();
+            if global_busy.get() == 0 && first > last {
                 if msg_silent.get() == 0 {
                     if flags.has(DoCmdOpts::VERBOSE) || exmode_active.get() {
                         *errormsg = Some(ex_msg(c"E493: Backwards range given"));
@@ -349,7 +350,7 @@ impl ExArg<'_> {
                         return Err(Refused);
                     }
                 }
-                core::mem::swap(&mut self.line1, &mut self.line2);
+                self.set_range_numbers(last, first);
             }
             *errormsg = invalid_range(self);
             if errormsg.is_some() {
@@ -359,7 +360,7 @@ impl ExArg<'_> {
 
         // `CmdAddr::Other` counts from 1 rather than from the cursor.
         if self.addr_type == CmdAddr::Other && self.addr_count == 0 {
-            self.line2 = LineNr::ONE;
+            self.number2 = 1;
         }
         correct_range(self);
 

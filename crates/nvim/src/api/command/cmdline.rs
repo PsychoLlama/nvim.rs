@@ -103,12 +103,11 @@ pub(crate) fn build_cmdline_str(excmd: &mut ExArg, cmdinfo: &CmdParseInfo, args:
     concat_cmdmods(&mut cmdline, &cmdinfo.cmdmod);
 
     if excmd.argt.has(ExArgt::RANGE) {
+        let (first, last) = excmd.range_numbers();
         if excmd.addr_count == 1 {
-            let line2 = excmd.line2;
-            cmdline.extend_from_slice(format!("{line2}").as_bytes());
+            cmdline.extend_from_slice(format!("{last}").as_bytes());
         } else if excmd.addr_count > 1 {
-            let (line1, line2) = (excmd.line1, excmd.line2);
-            cmdline.extend_from_slice(format!("{line1},{line2}").as_bytes());
+            cmdline.extend_from_slice(format!("{first},{last}").as_bytes());
             // Only two of them made it into the string.
             excmd.addr_count = 2;
         }

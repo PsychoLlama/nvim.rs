@@ -105,7 +105,7 @@ pub(crate) fn ex_print(excmd: &mut ExArg) {
 
 /// `:goto` — the range is a byte offset, not a line number.
 pub(crate) fn ex_goto(excmd: &mut ExArg) {
-    goto_byte(excmd.line2.get());
+    goto_byte(excmd.number2);
 }
 
 /// `:syncbind` — line up every 'scrollbind' window at the same relative
@@ -173,7 +173,7 @@ pub(crate) fn ex_sleep(excmd: &mut ExArg) {
     if cursor_valid(Win::current()) != 0 {
         setcursor_mayforce(Win::current(), true);
     }
-    let mut len = i64::from(excmd.line2);
+    let mut len = i64::from(excmd.number2);
     match excmd.line.byte_at(excmd.line.arg) {
         b'm' => {}
         0 => len *= 1000,
@@ -437,13 +437,13 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
         }
         return;
     }
-    let step = excmd.line2;
+    let step = excmd.number2;
     if !excmd.forceit {
-        undo_time(step.get(), false, false, true);
+        undo_time(step, false, false, true);
         return;
     }
 
-    if step >= LineNr::new(Buf::current().b_u_seq_cur) {
+    if step >= Buf::current().b_u_seq_cur {
         emsg(gettext(e_undobang_cannot_redo_or_move_branch));
         return;
     }
@@ -456,8 +456,8 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
     let mut count = 0;
     let mut reached = None;
     for link in header_chain(Buf::current(), start, |uh| uh.next) {
-        if LineNr::new(link.seq()) <= step {
-            reached = Some(LineNr::new(link.seq()));
+        if link.seq() <= step {
+            reached = Some(link.seq());
             break;
         }
         count += 1;
@@ -465,7 +465,7 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
     // Running past it, or off the end, means `step` is on another
     // branch. Sequence 0 is the state before any change and is always
     // reachable.
-    if step != LineNr::ZERO && reached.is_none_or(|seq| seq < step) {
+    if step != 0 && reached.is_none_or(|seq| seq < step) {
         emsg(gettext(e_undobang_cannot_redo_or_move_branch));
         return;
     }

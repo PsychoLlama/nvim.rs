@@ -159,7 +159,7 @@ fn ex_tag_cmd(excmd: &mut ExArg, name: &[u8]) {
     }
     let tag = excmd.line.cstr_from(excmd.line.arg);
     let count = if excmd.addr_count > 0 {
-        excmd.line2.get()
+        excmd.number2
     } else {
         1
     };

@@ -48,7 +48,7 @@ const WINCMD_NONE: &[u8] = b"zPtbp=\x1a\x14\x02\x10\x0d";
 
 /// `c` is the first byte of the window command, white space skipped.
 pub(crate) fn get_wincmd_addr_type(c: u8, excmd: &mut ExArg) {
-    excmd.addr_type = if WINCMD_OTHER.contains(&c) {
+    let kind = if WINCMD_OTHER.contains(&c) {
         CmdAddr::Other
     } else if WINCMD_BUFFERS.contains(&c) {
         CmdAddr::Buffers
@@ -60,6 +60,7 @@ pub(crate) fn get_wincmd_addr_type(c: u8, excmd: &mut ExArg) {
         // Anything else keeps whatever the command table said.
         return;
     };
+    excmd.set_addr_kind(kind);
 }
 
 impl ExArg<'_> {
@@ -73,11 +74,11 @@ impl ExArg<'_> {
         if is_user_cmd(self.cmdidx) {
             return;
         }
-        self.addr_type = if self.cmdidx != CmdIdx::SIZE {
+        self.set_addr_kind(if self.cmdidx != CmdIdx::SIZE {
             cmdnames[self.cmdidx.index()].cmd_addr_type
         } else {
             CmdAddr::Lines
-        };
+        });
         if self.cmdidx == CmdIdx::wincmd
             && let Some(first) = first
         {
@@ -87,14 +88,14 @@ impl ExArg<'_> {
         if (self.cmdidx == CmdIdx::cc || self.cmdidx == CmdIdx::ll)
             && buf_is_quickfix(current_buf())
         {
-            self.addr_type = CmdAddr::Other;
+            self.set_addr_kind(CmdAddr::Other);
         }
     }
 }
 
 /// The address `.` stands for, which is also what a bare `+N`/`-N` counts
-/// from.
-pub fn get_cmd_default_range(excmd: &mut ExArg) -> LineNr {
+/// from, as the plain number [`ExArg::set_range_numbers`] takes.
+pub fn get_cmd_default_range(excmd: &mut ExArg) -> c_int {
     match excmd.addr_type {
         CmdAddr::Lines | CmdAddr::Other => {
             // Not the cursor line but the *last* line when the cursor is
@@ -103,62 +104,62 @@ pub fn get_cmd_default_range(excmd: &mut ExArg) -> LineNr {
                 .w_cursor
                 .lnum
                 .min(Buf::current().b_ml.ml_line_count)
+                .get()
         }
-        CmdAddr::Windows => LineNr::new(current_win_nr(Win::current_or_none())),
+        CmdAddr::Windows => current_win_nr(Win::current_or_none()),
         CmdAddr::Arguments => {
             let len = arglist_len();
             if Win::current().w_arg_idx + 1 < len {
-                LineNr::new(Win::current().w_arg_idx) + 1
+                Win::current().w_arg_idx + 1
             } else {
-                LineNr::new(len)
+                len
             }
         }
-        CmdAddr::LoadedBuffers | CmdAddr::Buffers => LineNr::new(Buf::current().handle.get()),
-        CmdAddr::Tabs => LineNr::new(current_tab_nr(TabPage::current_or_none())),
-        CmdAddr::TabsRelative | CmdAddr::Unsigned => LineNr::ONE,
-        CmdAddr::Quickfix => LineNr::new(len_as_int(qf_get_cur_idx(excmd.cmdidx))),
-        CmdAddr::QuickfixValid => LineNr::new(qf_get_cur_valid_idx(excmd.cmdidx)),
-        _ => LineNr::ZERO,
+        CmdAddr::LoadedBuffers | CmdAddr::Buffers => Buf::current().handle.get(),
+        CmdAddr::Tabs => current_tab_nr(TabPage::current_or_none()),
+        CmdAddr::TabsRelative | CmdAddr::Unsigned => 1,
+        CmdAddr::Quickfix => len_as_int(qf_get_cur_idx(excmd.cmdidx)),
+        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(excmd.cmdidx),
+        _ => 0,
     }
 }
 
 /// The range an `ExArgt::DFLALL` command means by "no range": everything.
 pub fn set_cmd_dflall_range(excmd: &mut ExArg) {
-    excmd.line1 = LineNr::ONE;
+    if excmd.counts_lines() {
+        excmd.line1 = LineNr::ONE;
+    } else {
+        excmd.number1 = 1;
+    }
     match excmd.addr_type {
-        CmdAddr::Lines | CmdAddr::Other => {
+        CmdAddr::Lines => {
             excmd.line2 = Buf::current().b_ml.ml_line_count;
         }
+        // An "other" kind's whole range is still every line.
+        CmdAddr::Other => {
+            excmd.number2 = Buf::current().b_ml.ml_line_count.get();
+        }
         CmdAddr::LoadedBuffers => {
-            let (first, last) = loaded_buffer_range();
-            excmd.line1 = first;
-            excmd.line2 = last;
+            (excmd.number1, excmd.number2) = loaded_buffer_range();
         }
         CmdAddr::Buffers => {
-            excmd.line1 = LineNr::new(head().handle.get());
-            excmd.line2 = LineNr::new(tail().handle.get());
+            excmd.number1 = head().handle.get();
+            excmd.number2 = tail().handle.get();
         }
         CmdAddr::Windows => {
-            excmd.line2 = LineNr::new(current_win_nr(None));
+            excmd.number2 = current_win_nr(None);
         }
         CmdAddr::Tabs => {
-            excmd.line2 = LineNr::new(current_tab_nr(None));
+            excmd.number2 = current_tab_nr(None);
         }
-        CmdAddr::TabsRelative => excmd.line2 = LineNr::ONE,
+        CmdAddr::TabsRelative => excmd.number2 = 1,
         CmdAddr::Arguments => {
             let len = arglist_len();
-            if len == 0 {
-                excmd.line2 = LineNr::ZERO;
-                excmd.line1 = LineNr::ZERO;
-            } else {
-                excmd.line2 = LineNr::new(len);
-            }
+            excmd.number1 = c_int::from(len != 0);
+            excmd.number2 = len;
         }
         CmdAddr::QuickfixValid => {
-            excmd.line2 = LineNr::new(len_as_int(qf_get_valid_size(excmd.cmdidx)));
-            if excmd.line2 == LineNr::ZERO {
-                excmd.line2 = LineNr::ONE;
-            }
+            excmd.number2 = len_as_int(qf_get_valid_size(excmd.cmdidx)).max(1);
         }
         t if t == CmdAddr::NoRange || t == CmdAddr::Unsigned || t == CmdAddr::Quickfix => {
             iemsg(gettext(c"INTERNAL: Cannot use ExArgt::DFLALL with CmdAddr::NoRange, CmdAddr::Unsigned or CmdAddr::Quickfix"));
@@ -172,18 +173,18 @@ pub(super) fn arglist_len() -> c_int {
     crate::arglist::argcount()
 }
 
-/// The handles of the first and last *loaded* buffers.
-pub(super) fn loaded_buffer_range() -> (LineNr, LineNr) {
+/// The numbers of the first and last *loaded* buffers.
+pub(super) fn loaded_buffer_range() -> (c_int, c_int) {
     let mut buf = head();
     while buf.b_ml.ml_mfp.is_none() {
         let Some(next) = buf.next() else { break };
         buf = next;
     }
-    let first = LineNr::new(buf.handle.get());
+    let first = buf.handle.get();
     let mut buf = tail();
     while buf.b_ml.ml_mfp.is_none() {
         let Some(prev) = buf.prev() else { break };
         buf = prev;
     }
-    (first, LineNr::new(buf.handle.get()))
+    (first, buf.handle.get())
 }

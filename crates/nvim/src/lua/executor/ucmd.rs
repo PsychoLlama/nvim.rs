@@ -115,9 +115,10 @@ pub(crate) fn nlua_do_ucmd(
         set(stack, c"name");
         stack.push_boolean(excmd.forceit);
         set(stack, c"bang");
-        stack.push_integer(excmd.line1.get() as isize);
+        let (first, last) = excmd.range_numbers();
+        stack.push_integer(first as isize);
         set(stack, c"line1");
-        stack.push_integer(excmd.line2.get() as isize);
+        stack.push_integer(last as isize);
         set(stack, c"line2");
 
         // `excmd` is the raw argument text; `fargs` the split one. The raw
@@ -165,7 +166,7 @@ pub(crate) fn nlua_do_ucmd(
         stack.push_integer(excmd.addr_count as lua_Integer);
         set(stack, c"range");
         if excmd.addr_count > 0 {
-            stack.push_integer(excmd.line2.get() as isize);
+            stack.push_integer(last as isize);
         } else {
             stack
                 .push_integer(lua_Integer::try_from(cmd.default_count).unwrap_or(lua_Integer::MAX));

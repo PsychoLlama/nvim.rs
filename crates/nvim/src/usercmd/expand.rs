@@ -389,12 +389,13 @@ fn uc_check_code(
             put_quoted(out, quotes(b'"'), body);
         }
         code @ (Code::Line1 | Code::Line2 | Code::Range | Code::Count) => {
+            let (first, last) = args.range_numbers();
             let num: int64_t = match code {
-                Code::Line1 => int64_t::from(args.line1),
-                Code::Line2 => int64_t::from(args.line2),
+                Code::Line1 => int64_t::from(first),
+                Code::Line2 => int64_t::from(last),
                 Code::Range => int64_t::from(args.addr_count),
                 // `<count>` is the range's end, or the command's default.
-                _ if args.addr_count > 0 => int64_t::from(args.line2),
+                _ if args.addr_count > 0 => int64_t::from(last),
                 _ => cmd.default_count,
             };
             put_quoted(out, quotes(b'"'), num.to_string().as_bytes());

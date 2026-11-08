@@ -351,7 +351,7 @@ pub fn qf_age(excmd: &mut ExArg) {
         return;
     };
     let count = if excmd.addr_count != 0 {
-        excmd.line2.get()
+        excmd.number2
     } else {
         1
     };
@@ -382,10 +382,8 @@ pub fn qf_history(excmd: &mut ExArg) {
     if excmd.addr_count > 0 {
         match stack {
             None => qf_emsg(e_loclist),
-            Some(mut qi)
-                if excmd.line2 > LineNr::ZERO && excmd.line2 <= LineNr::new(qi.list_count) =>
-            {
-                qi.current = (excmd.line2 - 1).get();
+            Some(mut qi) if excmd.number2 > 0 && excmd.number2 <= qi.list_count => {
+                qi.current = excmd.number2 - 1;
                 qf_msg(qi, qi.current, "");
                 qf_update_buffer(qi, None);
             }

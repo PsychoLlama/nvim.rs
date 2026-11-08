@@ -197,8 +197,11 @@ fn read_range(
     let mut address_count = 1;
     let mut lnum: LineNr;
     loop {
-        excmd.line1 = excmd.line2;
-        excmd.line2 = get_cmd_default_range(excmd);
+        // Kind-blind: each address shifts the last one into the first
+        // place, in whichever pair the kind keeps its range.
+        let (_, last) = excmd.range_numbers();
+        let here = get_cmd_default_range(excmd);
+        excmd.set_range_numbers(last, here);
         excmd.line.cmd = excmd.line.skip_white(excmd.line.cmd);
         // The scan walks a cursor of its own, and the buffer it walks is
         // the command's, so everything it needs of the command is read
@@ -219,7 +222,10 @@ fn read_range(
         excmd.line.cmd = at;
         address_count += 1;
         if lnum != MAXLNUM {
-            excmd.line2 = lnum;
+            let (first, _) = excmd.range_numbers();
+            // The parser counts every kind in line arithmetic; this is
+            // where a non-line kind's address becomes its number.
+            excmd.set_range_numbers(first, lnum.get());
         } else if excmd.line.byte_at(excmd.line.cmd) == b'%' {
             // `%` is not an address, it is a whole range, so it is
             // only recognised where an address was expected and
@@ -247,10 +253,13 @@ fn read_range(
         excmd.addr_count += 1;
         if excmd.line.byte_at(excmd.line.cmd) == b';' {
             if !excmd.skip {
-                Win::current().w_cursor.lnum = excmd.line2;
+                // Upstream moves the cursor to the first address whatever
+                // the kind counts, so `:2;3close` leaves it on line 2.
+                let (_, last) = excmd.range_numbers();
+                Win::current().w_cursor.lnum = LineNr::new(last);
                 // A zero line number is not a position, so only the
                 // column is worth correcting there.
-                if excmd.line2 > LineNr::ZERO {
+                if last > 0 {
                     check_cursor(Win::current());
                 } else {
                     check_cursor_col(Win::current());
@@ -263,7 +272,8 @@ fn read_range(
         excmd.line.cmd += 1;
     }
     if excmd.addr_count == 1 {
-        excmd.line1 = excmd.line2;
+        let (_, last) = excmd.range_numbers();
+        excmd.set_range_numbers(last, last);
         // One address that resolved to nothing is no address.
         if lnum == MAXLNUM {
             excmd.addr_count = 0;
@@ -276,18 +286,21 @@ fn read_range(
 /// no "all".
 fn whole_range(excmd: &mut ExArg) -> Result<(), AddressError> {
     match excmd.addr_type {
-        CmdAddr::Lines | CmdAddr::Other => {
+        CmdAddr::Lines => {
             excmd.line1 = LineNr::ONE;
             excmd.line2 = Buf::current().b_ml.ml_line_count;
         }
+        // `%` over an "other" kind still means every line of the buffer.
+        CmdAddr::Other => {
+            excmd.number1 = 1;
+            excmd.number2 = Buf::current().b_ml.ml_line_count.get();
+        }
         CmdAddr::LoadedBuffers => {
-            let (first, last) = loaded_buffer_range();
-            excmd.line1 = first;
-            excmd.line2 = last;
+            (excmd.number1, excmd.number2) = loaded_buffer_range();
         }
         CmdAddr::Buffers => {
-            excmd.line1 = LineNr::new(head().handle.get());
-            excmd.line2 = LineNr::new(tail().handle.get());
+            excmd.number1 = head().handle.get();
+            excmd.number2 = tail().handle.get();
         }
         CmdAddr::Windows | CmdAddr::Tabs => {
             // Only a *user* command may say `%` over windows or tab
@@ -295,11 +308,11 @@ fn whole_range(excmd: &mut ExArg) -> Result<(), AddressError> {
             if !is_user_cmd(excmd.cmdidx) {
                 return Err(AddressError::Refused(ex_msg(e_invrange)));
             }
-            excmd.line1 = LineNr::ONE;
-            excmd.line2 = if excmd.addr_type == CmdAddr::Windows {
-                LineNr::new(current_win_nr(None))
+            excmd.number1 = 1;
+            excmd.number2 = if excmd.addr_type == CmdAddr::Windows {
+                current_win_nr(None)
             } else {
-                LineNr::new(current_tab_nr(None))
+                current_tab_nr(None)
             };
         }
         CmdAddr::TabsRelative | CmdAddr::Unsigned | CmdAddr::Quickfix => {
@@ -307,22 +320,12 @@ fn whole_range(excmd: &mut ExArg) -> Result<(), AddressError> {
         }
         CmdAddr::Arguments => {
             let len = arglist_len();
-            if len == 0 {
-                excmd.line2 = LineNr::ZERO;
-                excmd.line1 = LineNr::ZERO;
-            } else {
-                excmd.line1 = LineNr::ONE;
-                excmd.line2 = LineNr::new(len);
-            }
+            excmd.number1 = c_int::from(len != 0);
+            excmd.number2 = len;
         }
         CmdAddr::QuickfixValid => {
-            // SAFETY: the caller's promise -- a live command.
-            let valid = LineNr::new(len_as_int(qf_get_valid_size(excmd.cmdidx)));
-            excmd.line1 = LineNr::ONE;
-            excmd.line2 = valid;
-            if excmd.line2 == LineNr::ZERO {
-                excmd.line2 = LineNr::ONE;
-            }
+            excmd.number1 = 1;
+            excmd.number2 = len_as_int(qf_get_valid_size(excmd.cmdidx)).max(1);
         }
         // `NoRange` reaches here for a user command and is accepted
         // without setting anything, as upstream does.
@@ -680,7 +683,7 @@ fn last_lnum(cmdidx: Option<CmdIdx>, addr_type: CmdAddr) -> Addr {
         CmdAddr::Lines | CmdAddr::Other => Buf::current().b_ml.ml_line_count,
         CmdAddr::Windows => LineNr::new(current_win_nr(None)),
         CmdAddr::Arguments => LineNr::new(arglist_len()),
-        CmdAddr::LoadedBuffers => loaded_buffer_range().1,
+        CmdAddr::LoadedBuffers => LineNr::new(loaded_buffer_range().1),
         CmdAddr::Buffers => LineNr::new(tail().handle.get()),
         CmdAddr::Tabs => LineNr::new(current_tab_nr(None)),
         // An empty quickfix list still has a last entry, numbered 1.
@@ -709,7 +712,8 @@ fn offset_base(cmdidx: Option<CmdIdx>, addr_type: CmdAddr) -> Addr {
 /// to report, or null.
 pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
     let invrange = || Some(ex_msg(e_invrange));
-    if excmd.line1 < LineNr::ZERO || excmd.line2 < LineNr::ZERO || excmd.line1 > excmd.line2 {
+    let (first, last) = excmd.range_numbers();
+    if first < 0 || last < 0 || first > last {
         return invrange();
     }
     if !excmd.argt.has(ExArgt::RANGE) {
@@ -729,12 +733,12 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
             // An empty argument list still accepts line 1, which is
             // what makes `:argdelete` on it report a better message.
             let len = arglist_len();
-            if excmd.line2 > LineNr::new(len) + c_int::from(len == 0) {
+            if excmd.number2 > len + c_int::from(len == 0) {
                 return invrange();
             }
         }
         CmdAddr::Buffers => {
-            if excmd.line1 < LineNr::ONE || excmd.line2 > LineNr::new(get_highest_fnum()) {
+            if excmd.number1 < 1 || excmd.number2 > get_highest_fnum() {
                 return invrange();
             }
         }
@@ -746,7 +750,7 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
                 };
                 buf = next;
             }
-            if excmd.line1 < LineNr::new(buf.handle.get()) {
+            if excmd.number1 < buf.handle.get() {
                 return invrange();
             }
             let mut buf = tail();
@@ -756,23 +760,23 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
                 };
                 buf = prev;
             }
-            if excmd.line2 > LineNr::new(buf.handle.get()) {
+            if excmd.number2 > buf.handle.get() {
                 return invrange();
             }
         }
         CmdAddr::Windows => {
-            if excmd.line2 > LineNr::new(current_win_nr(None)) {
+            if excmd.number2 > current_win_nr(None) {
                 return invrange();
             }
         }
         CmdAddr::Tabs => {
-            if excmd.line2 > LineNr::new(current_tab_nr(None)) {
+            if excmd.number2 > current_tab_nr(None) {
                 return invrange();
             }
         }
         CmdAddr::Quickfix => {
-            debug_assert!(excmd.line2 >= LineNr::ZERO);
-            if excmd.line2 <= LineNr::ZERO {
+            debug_assert!(excmd.number2 >= 0);
+            if excmd.number2 <= 0 {
                 // "no errors" reads better than "invalid range" when
                 // the user did not ask for a particular entry.
                 if excmd.addr_count == 0 {
@@ -782,10 +786,10 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
             }
         }
         CmdAddr::QuickfixValid => {
-            let line2 = excmd.line2;
-            if (line2 != LineNr::ONE
-                && usize::try_from(line2).map_or(true, |l| l > qf_get_valid_size(excmd.cmdidx)))
-                || line2 < LineNr::ZERO
+            let last = excmd.number2;
+            if (last != 1
+                && usize::try_from(last).map_or(true, |l| l > qf_get_valid_size(excmd.cmdidx)))
+                || last < 0
             {
                 return invrange();
             }
@@ -801,10 +805,7 @@ pub(crate) fn correct_range(excmd: &mut ExArg) {
     if excmd.argt.has(ExArgt::ZEROR) {
         return;
     }
-    if excmd.line1 == LineNr::ZERO {
-        excmd.line1 = LineNr::ONE;
-    }
-    if excmd.line2 == LineNr::ZERO {
-        excmd.line2 = LineNr::ONE;
-    }
+    let (first, last) = excmd.range_numbers();
+    let one_for_zero = |n: c_int| if n == 0 { 1 } else { n };
+    excmd.set_range_numbers(one_for_zero(first), one_for_zero(last));
 }
