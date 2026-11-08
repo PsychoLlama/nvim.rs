@@ -1179,11 +1179,10 @@ PERIMETER = {
 # library's interface and not transpiler residue. A type this tree defines
 # and only this tree reads does *not* qualify however C-shaped it looks --
 # `api/keysets.rs` is written through byte offsets by our own generated
-# keydict codec, `types/mpack*.rs` and `types/rpc.rs` describe a codec that
-# was vendored and ported rather than linked (docs/perimeter.md keeps
-# `mpack/`'s codec outside for the same reason), and `types/terminal_defs.rs`
-# is `repr(C)` only because the FFI-safety lint follows a pointer out of
-# `Buffer`. All of those stay in `repr_c_editor_state`, where a rewrite is
+# keydict codec, `mpack/typedefs.rs` names a codec that was vendored and
+# ported rather than linked (docs/perimeter.md keeps `mpack/`'s codec outside
+# for the same reason), and `terminal/state.rs` is `repr(C)` only because the
+# FFI-safety lint follows a pointer out of `Buffer`. All of those stay in `repr_c_editor_state`, where a rewrite is
 # still expected to retire them.
 FOREIGN_ABI_TYPES = {
     "crates/nvim/src/event/uv.rs": "libuv's own structs: the loop, handles, "

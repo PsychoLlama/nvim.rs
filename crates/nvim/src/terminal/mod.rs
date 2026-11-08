@@ -42,6 +42,7 @@ pub(crate) mod input;
 pub(crate) mod mode;
 pub(crate) mod refresh;
 pub(crate) mod scrollback;
+pub(crate) mod state;
 pub(crate) mod termrequest;
 
 use crate::api::private::helpers::{dict_get_value, scope_vars};
@@ -68,13 +69,14 @@ use crate::options::kOptBuftype;
 use crate::os::libc::int16_t;
 use crate::startup::exiting;
 use crate::state::mode::State;
+use crate::terminal::state::SELECTIONBUF_SIZE;
+use crate::terminal::state::TerminalOptions;
 use crate::types::ApiString;
 use crate::types::AutoEvent;
 use crate::types::builders::DictBuf;
-use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
     AcoSave, BufferHandle, ColNr, Handle, HlAttrs, LineNr, Object, OptVal, OptionSetFlags, Pos,
-    RefcountSize, RgbValue, SaveVEvent, Terminal, TerminalOptions, VarNumber,
+    RefcountSize, RgbValue, SaveVEvent, Terminal, VarNumber,
 };
 use crate::vterm::host::Value;
 use crate::vterm::screen::ZERO_SCREEN_CELL;
@@ -493,7 +495,7 @@ pub(crate) fn terminal_destroy(mut term: Term) -> bool {
 /// Write `data` to the child, or hold it if a `TermRequest` handler is
 /// running.
 ///
-/// See [`TerminalPending::send`](crate::types::TerminalPending).
+/// See [`TerminalPending::send`](crate::terminal::state::TerminalPending).
 fn terminal_send(term: Term, data: &[u8]) {
     if term.closed {
         return;

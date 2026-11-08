@@ -323,8 +323,8 @@ one metric in two:
 The two partition what `repr_c_outside_perimeter` used to total. A type this
 tree defines and only this tree reads is not on the list however C-shaped it
 looks: `api/keysets.rs` is written through byte offsets by our own generated
-keydict codec, `types/mpack*.rs` and `types/rpc.rs` describe a codec that was
-vendored and ported rather than linked — the same reason `mpack/`'s codec is
-outside the perimeter — and `types/terminal_defs.rs` is `#[repr(C)]` only
-because the FFI-safety lint follows a pointer out of `Buffer`. All of those
+keydict codec, `mpack/typedefs.rs` names a codec that was vendored and ported
+rather than linked — the same reason `mpack/`'s codec is outside the
+perimeter — and `terminal/state.rs` is `#[repr(C)]` only because the
+FFI-safety lint follows a pointer out of `Buffer`. All of those
 are still expected to leave the residue column the ordinary way.

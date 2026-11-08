@@ -101,6 +101,7 @@ use crate::runtime::{
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::get_mode;
 use crate::statusline::{draw_tabline, win_redr_status, win_redr_winbar};
+use crate::terminal::state::TerminalOptions;
 use crate::terminal::{
     buf_terminal_running, buf_terminal_set_streamed_paste, terminal_alloc, terminal_buf,
     terminal_check_size, terminal_destroy, terminal_open,
@@ -109,9 +110,9 @@ use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, Context, Error, Float, FoldInfo, Handle,
     HlAttrs, Integer, LineNr, LuaRef, LuaRetMode, MessageData, MessageType, MotionType, Object,
-    OptVal, ScreenChar, ScriptId, SignTextAttrs, StatusCol, TabpageHandle, TerminalOptions,
-    VarNumber, Vv, WindowHandle, YankReg, kCdScopeGlobal, kErrorTypeException,
-    kErrorTypeValidation, kObjectTypeString,
+    OptVal, ScreenChar, ScriptId, SignTextAttrs, StatusCol, TabpageHandle, VarNumber, Vv,
+    WindowHandle, YankReg, kCdScopeGlobal, kErrorTypeException, kErrorTypeValidation,
+    kObjectTypeString,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};

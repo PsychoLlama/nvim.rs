@@ -293,7 +293,7 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
 mod tests {
     use super::*;
     use crate::grid::schar_from_ascii;
-    use crate::types::Scrollback;
+    use crate::terminal::state::Scrollback;
 
     fn cell(c: u8) -> VTermScreenCell {
         VTermScreenCell {

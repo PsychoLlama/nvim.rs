@@ -635,6 +635,7 @@ const TYPE_HOMES: &[&str] = &[
     "src/msgpack_rpc/handler.rs",
     "src/os/libc.rs",
     "src/os/pty_proc_unix/mod.rs",
+    "src/terminal/state.rs",
     "src/tui/state.rs",
     "src/tui/terminfo/entry.rs",
     "src/tui/termkey/keyinfo.rs",

@@ -9,17 +9,17 @@
     clippy::ptr_as_ptr
 )]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
+//! One terminal's state: the emulator and its pending output, the scrollback
+//! ring, the cursor, and the options a channel opens it with.
+
 use crate::os::libc::uint16_t;
+use crate::types::{Handle, RefcountSize};
 use crate::vterm::types::{VTerm, VTermScreenCell, VTermTerminator};
 use std::collections::VecDeque;
 
-use super::*;
-
 /// How much of a selection sequence vterm decodes before it hands a chunk
 /// over.
-pub const SELECTIONBUF_SIZE: usize = 0x400;
+pub(crate) const SELECTIONBUF_SIZE: usize = 0x400;
 
 /// One `:terminal` buffer's emulator state.
 ///
@@ -287,8 +287,8 @@ pub struct TerminalOptions {
     pub close_cb: terminal_close_cb,
     pub force_crlf: bool,
 }
-pub type terminal_close_cb = Option<fn(u64)>;
-pub type terminal_read_pause_cb = Option<fn(bool, u64)>;
-pub type terminal_resize_cb = Option<fn(uint16_t, uint16_t, u64)>;
-pub type terminal_resume_cb = Option<fn(u64)>;
-pub type terminal_write_cb = Option<fn(&[u8], u64)>;
+pub(crate) type terminal_close_cb = Option<fn(u64)>;
+pub(crate) type terminal_read_pause_cb = Option<fn(bool, u64)>;
+pub(crate) type terminal_resize_cb = Option<fn(uint16_t, uint16_t, u64)>;
+pub(crate) type terminal_resume_cb = Option<fn(u64)>;
+pub(crate) type terminal_write_cb = Option<fn(&[u8], u64)>;

@@ -12,6 +12,7 @@
 use super::*;
 use crate::msgpack_rpc::handler::ApiDispatchFn;
 use crate::os::libc::{int32_t, int64_t, uint32_t, uint64_t};
+use crate::terminal::state::terminal;
 use core::ffi::c_int;
 use core::fmt;
 use core::num::TryFromIntError;

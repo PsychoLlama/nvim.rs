@@ -90,7 +90,7 @@ pub(crate) struct TermRequest {
     sb_deleted: usize,
     terminator: VTermTerminator,
     /// Writes to the child made while the handler runs. See
-    /// [`TerminalPending::send`](crate::types::TerminalPending).
+    /// [`TerminalPending::send`](crate::terminal::state::TerminalPending).
     pending_send: Rc<RefCell<Vec<u8>>>,
 }
 
