@@ -649,14 +649,16 @@ pub struct ExArg<'s> {
     pub skip: bool,
     pub forceit: bool,
     pub addr_count: ::core::ffi::c_int,
-    /// The range, when `addr_type` counts buffer lines ([`CmdAddr::Lines`]).
-    /// Zero for every other kind, whose range is in `number1`/`number2`.
+    /// The range, when `addr_type` counts buffer lines ([`CmdAddr::Lines`];
+    /// also [`CmdAddr::NoRange`], whose unused ends stay where a fresh
+    /// command starts them). For every other kind the range is in
+    /// `number1`/`number2` and these are unspecified.
     pub line1: LineNr,
     pub line2: LineNr,
     /// The range, when `addr_type` counts anything but buffer lines: the
     /// numbers of windows, tab pages, buffers, argument-list or quickfix
     /// entries, or the plain number a [`CmdAddr::Other`]/[`CmdAddr::Unsigned`]
-    /// command reads itself. Zero for the line kind.
+    /// command reads itself. Unspecified for the line kinds.
     ///
     /// Two pairs rather than one: every handler reads exactly one of them —
     /// no builtin command serves both a line kind and another — so a window
@@ -723,11 +725,13 @@ impl ExArg<'_> {
         self.line = CmdLine::from_bytes(text);
     }
 
-    /// Does the range count buffer lines, so that it is in `line1`/`line2`
-    /// rather than `number1`/`number2`?
+    /// Is the range in `line1`/`line2` rather than `number1`/`number2`?
+    /// True for the line kind, and for `NoRange`: a command that takes no
+    /// range keeps the line pair a fresh command starts with, so the
+    /// common `:let`/`:call` path never moves a range between the pairs.
     #[inline]
     pub fn counts_lines(&self) -> bool {
-        self.addr_type == CmdAddr::Lines
+        matches!(self.addr_type, CmdAddr::Lines | CmdAddr::NoRange)
     }
 
     /// The range's two ends as plain numbers, whichever pair holds them.
@@ -744,32 +748,29 @@ impl ExArg<'_> {
         }
     }
 
-    /// Set the range from plain numbers, into the pair the kind selects.
+    /// Set the range from plain numbers.
+    ///
+    /// Both pairs are written: the one the kind selects is the range, the
+    /// other is unspecified anyway, and writing it too keeps this a few
+    /// stores with no branch on the command path.
+    #[inline]
     pub fn set_range_numbers(&mut self, first: ::core::ffi::c_int, last: ::core::ffi::c_int) {
-        if self.counts_lines() {
-            self.line1 = LineNr::new(first);
-            self.line2 = LineNr::new(last);
-        } else {
-            self.number1 = first;
-            self.number2 = last;
-        }
+        self.line1 = LineNr::new(first);
+        self.line2 = LineNr::new(last);
+        self.number1 = first;
+        self.number2 = last;
     }
 
     /// Change what the range counts, moving a range already read into the
     /// pair the new kind selects. A user command found by a `CmdUndefined`
     /// autocommand after its range was read is the case that needs it.
+    #[inline]
     pub fn set_addr_kind(&mut self, kind: CmdAddr) {
-        if (kind == CmdAddr::Lines) != self.counts_lines() {
+        if matches!(kind, CmdAddr::Lines | CmdAddr::NoRange) != self.counts_lines() {
             let (first, last) = self.range_numbers();
-            self.line1 = LineNr::ZERO;
-            self.line2 = LineNr::ZERO;
-            self.number1 = 0;
-            self.number2 = 0;
-            self.addr_type = kind;
             self.set_range_numbers(first, last);
-        } else {
-            self.addr_type = kind;
         }
+        self.addr_type = kind;
     }
 }
 

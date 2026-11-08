@@ -36,7 +36,7 @@ use crate::register::{set_expr_line, valid_yank_reg};
 use crate::strings::trailing_spaces_start;
 use crate::types::ex_cmds::ExArg;
 use crate::types::pos::LineNr;
-use crate::types::{CmdLine, ExArgt, Failed};
+use crate::types::{CmdAddr, CmdLine, ExArgt, Failed};
 use crate::winlayer::Buf;
 
 /// Step over a run of `:` at `at`, which is how a mapping's `:cmd<CR>` and a
@@ -91,8 +91,11 @@ pub(crate) fn parse_register(excmd: &mut ExArg) {
 /// Turn a count into a range, which is what a count means for every command
 /// that takes one: "this many lines, starting where the range ended".
 pub fn set_cmd_count(excmd: &mut ExArg, count: i32, validate: bool) {
-    if !excmd.counts_lines() {
-        excmd.number2 = count;
+    if excmd.addr_type != CmdAddr::Lines {
+        // Every other kind, `NoRange` included, takes the count as the
+        // number itself.
+        let (first, _) = excmd.range_numbers();
+        excmd.set_range_numbers(first, count);
         if excmd.addr_count == 0 {
             excmd.addr_count = 1;
         }
