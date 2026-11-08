@@ -58,7 +58,7 @@ use crate::indent::{
 use crate::indent_c::{do_c_expr_indent, in_cinkeys, starts_with_cinword};
 use crate::insexpand::ins_compl_active;
 use crate::mark::defs::FileMarkView;
-use crate::mark::{fresh_mark, mark_adjust, mark_col_adjust, mark_view_make};
+use crate::mark::{mark_adjust, mark_col_adjust, mark_view_make};
 use crate::mbyte::GraphemeState;
 use crate::mbyte::{mb_adjust_cursor, utf_iscomposing_first};
 use crate::memline::{

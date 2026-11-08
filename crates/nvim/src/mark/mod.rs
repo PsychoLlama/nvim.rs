@@ -84,7 +84,6 @@ pub(crate) use shada::{
 };
 pub use show::{ex_delmarks, ex_marks, fm_getname};
 
-pub(crate) use store::fresh_mark;
 use store::{NO_VIEW, mark_name, slot};
 
 pub const AUGROUP_ALL: c_int = -3;
@@ -223,12 +222,12 @@ fn setmark_pos(
             buf.b_visual.vi_mode = c_int::from(b'v');
         }
     } else if c == b'"' {
-        buf.b_last_cursor = fresh_mark(at, Some(handle), view);
+        buf.b_last_cursor = FileMark::fresh(at, Some(handle), view);
     } else if c == b':' {
         if !buf_is_prompt(Some(buf)) {
             return Err(Failed);
         }
-        buf.b_prompt_start = fresh_mark(at, Some(handle), view);
+        buf.b_prompt_start = FileMark::fresh(at, Some(handle), view);
         // The prompt mark is the one store that does NOT announce itself:
         // it moves on every prompt redraw, and a MarkSet per keystroke is
         // not what the event is for.
@@ -236,13 +235,13 @@ fn setmark_pos(
     } else if c.is_ascii_lowercase() {
         // A buffer-local mark keeps the *caller's* `fnum` rather than the
         // buffer's own handle. The two agree everywhere but `nvim_buf_set_mark`.
-        buf.b_namedm[usize::from(c - b'a')] = fresh_mark(at, fnum, view);
+        buf.b_namedm[usize::from(c - b'a')] = FileMark::fresh(at, fnum, view);
     } else if c.is_ascii_uppercase() || c.is_ascii_digit() {
         let idx = slot(lookup::mark_global_index(mark_name(c)));
         store::set_global_mark(
             idx,
             XFileMark {
-                fmark: fresh_mark(at, fnum, view),
+                fmark: FileMark::fresh(at, fnum, view),
                 fname: None,
             },
         );
@@ -501,7 +500,7 @@ pub fn set_last_cursor(win: Win) {
     };
     // `fnum` 0, not the buffer's handle: this mark is written when the buffer
     // is left, and the shada writer is what fills the file name in.
-    buf.b_last_cursor = fresh_mark(win.w_cursor, None, NO_VIEW);
+    buf.b_last_cursor = FileMark::fresh(win.w_cursor, None, NO_VIEW);
 }
 
 /// Adjust position to point to the first byte of a multi-byte character

@@ -120,7 +120,7 @@ use crate::insexpand::{
 use crate::keycodes::KS_MODIFIER;
 use crate::keycodes::{K_SPECIAL, get_special_key_name, push_char_escaped};
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
-use crate::mark::{fresh_mark, mark_view_make};
+use crate::mark::mark_view_make;
 use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{mb_adjust_cursor, utf8len_tab};
 use crate::memline::{Lines, gchar_pos, ml_append_text, ml_get_len, ml_replace_buf_text};

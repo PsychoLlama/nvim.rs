@@ -32,8 +32,7 @@ use crate::fold::{
 use crate::guard::secure;
 use crate::indent::{TabStopArray, replace_tabstop_array, tabstop_set};
 use crate::indent_c::parse_cino;
-use crate::mark::defs::FileMarkView;
-use crate::mark::fresh_mark;
+use crate::mark::defs::{FileMark, FileMarkView};
 use crate::mbyte::canonize;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::memline::ml_setflags;
@@ -163,7 +162,7 @@ pub fn did_set_buftype(args: &mut OptSet) -> Result<(), OptError> {
             col: buf.b_prompt_start.mark.col,
             coladd: 0,
         };
-        buf.b_prompt_start = fresh_mark(next_prompt, None, FileMarkView::NONE);
+        buf.b_prompt_start = FileMark::fresh(next_prompt, None, FileMarkView::NONE);
     }
 
     if wp.w_status_height != 0 || global_stl_height() != 0 {

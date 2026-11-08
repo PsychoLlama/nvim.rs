@@ -86,21 +86,23 @@ pub(super) fn slot(i: c_int) -> usize {
     usize::try_from(i).expect("mark store index in range")
 }
 
-/// A mark at `pos` in buffer `fnum`, stamped now, carrying nothing else:
-/// what upstream's `SET_FMARK`/`RESET_FMARK` write. The timestamp is taken
-/// here rather than passed in, because it is what the ShaDa merge compares.
-///
-/// Assigning it over a store's record is `RESET_FMARK`: the old record's
-/// extra data goes with it. Upstream's `SET_FMARK` -- the same write without
-/// the release -- only differs where the record was a shallow duplicate,
-/// which an owned record never is.
-pub(crate) fn fresh_mark(pos: Pos, fnum: Option<Handle>, view: FileMarkView) -> FileMark {
-    FileMark {
-        mark: pos,
-        in_buffer: fnum.unwrap_or(Handle::NONE),
-        timestamp: os_time(),
-        view,
-        extra: None,
+impl FileMark {
+    /// A mark at `pos` in buffer `fnum`, stamped now, carrying nothing else:
+    /// what upstream's `SET_FMARK`/`RESET_FMARK` write. The timestamp is taken
+    /// here rather than passed in, because it is what the ShaDa merge compares.
+    ///
+    /// Assigning it over a store's record is `RESET_FMARK`: the old record's
+    /// extra data goes with it. Upstream's `SET_FMARK` -- the same write without
+    /// the release -- only differs where the record was a shallow duplicate,
+    /// which an owned record never is.
+    pub(crate) fn fresh(pos: Pos, fnum: Option<Handle>, view: FileMarkView) -> FileMark {
+        FileMark {
+            mark: pos,
+            in_buffer: fnum.unwrap_or(Handle::NONE),
+            timestamp: os_time(),
+            view,
+            extra: None,
+        }
     }
 }
 

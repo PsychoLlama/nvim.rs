@@ -33,6 +33,7 @@
 use crate::extmark::kExtmarkNOOP;
 use crate::extmark::kExtmarkUndo;
 use crate::mark::JUMPLISTSIZE;
+use crate::mark::defs::FileMark;
 use core::ffi::c_int;
 
 use super::*;
@@ -147,7 +148,7 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
         col,
         coladd: 0,
     };
-    buffer.b_last_change = fresh_mark(at, Some(handle), view);
+    buffer.b_last_change = FileMark::fresh(at, Some(handle), view);
 
     if buffer.b_new_change || buffer.b_changelistlen == 0 {
         let add = if buffer.b_changelistlen == 0 {

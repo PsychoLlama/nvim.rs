@@ -78,7 +78,7 @@ pub fn setpcmark() {
     let view = mark_view_make_at(win, win.w_pcmark);
     let newest = slot(win.w_jumplistlen - 1);
     win.w_jumplist[newest] = XFileMark {
-        fmark: fresh_mark(win.w_pcmark, Some(buf.handle), view),
+        fmark: FileMark::fresh(win.w_pcmark, Some(buf.handle), view),
         fname: None,
     };
 }
