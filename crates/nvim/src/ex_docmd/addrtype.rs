@@ -60,7 +60,7 @@ pub(crate) fn get_wincmd_addr_type(c: u8, excmd: &mut ExArg) {
         // Anything else keeps whatever the command table said.
         return;
     };
-    excmd.set_addr_kind(kind);
+    excmd.set_kind_unread(kind);
 }
 
 impl ExArg<'_> {
@@ -74,7 +74,7 @@ impl ExArg<'_> {
         if is_user_cmd(self.cmdidx) {
             return;
         }
-        self.set_addr_kind(if self.cmdidx != CmdIdx::SIZE {
+        self.set_kind_unread(if self.cmdidx != CmdIdx::SIZE {
             cmdnames[self.cmdidx.index()].cmd_addr_type
         } else {
             CmdAddr::Lines
@@ -88,7 +88,7 @@ impl ExArg<'_> {
         if (self.cmdidx == CmdIdx::cc || self.cmdidx == CmdIdx::ll)
             && buf_is_quickfix(current_buf())
         {
-            self.set_addr_kind(CmdAddr::Other);
+            self.set_kind_unread(CmdAddr::Other);
         }
     }
 }

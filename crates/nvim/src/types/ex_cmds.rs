@@ -761,6 +761,19 @@ impl ExArg<'_> {
         self.number2 = last;
     }
 
+    /// Set what the range counts before any range is read, when both pairs
+    /// still hold the same fresh ends and nothing has to move: the
+    /// per-command path, which [`set_addr_kind`](ExArg::set_addr_kind)'s
+    /// check would otherwise tax on every `:let`.
+    #[inline]
+    pub fn set_kind_unread(&mut self, kind: CmdAddr) {
+        debug_assert!(
+            self.line1.get() == self.number1 && self.line2.get() == self.number2,
+            "the address kind is chosen before a range is read"
+        );
+        self.addr_type = kind;
+    }
+
     /// Change what the range counts, moving a range already read into the
     /// pair the new kind selects. A user command found by a `CmdUndefined`
     /// autocommand after its range was read is the case that needs it.

@@ -803,7 +803,19 @@ pub(crate) fn correct_range(excmd: &mut ExArg) {
     if excmd.argt.has(ExArgt::ZEROR) {
         return;
     }
-    let (first, last) = excmd.range_numbers();
-    let one_for_zero = |n: c_int| if n == 0 { 1 } else { n };
-    excmd.set_range_numbers(one_for_zero(first), one_for_zero(last));
+    if excmd.counts_lines() {
+        if excmd.line1 == LineNr::ZERO {
+            excmd.line1 = LineNr::ONE;
+        }
+        if excmd.line2 == LineNr::ZERO {
+            excmd.line2 = LineNr::ONE;
+        }
+    } else {
+        if excmd.number1 == 0 {
+            excmd.number1 = 1;
+        }
+        if excmd.number2 == 0 {
+            excmd.number2 = 1;
+        }
+    }
 }

@@ -88,9 +88,13 @@ use crate::winlayer::{Buf, Win};
 /// `(ExArg){ .line1 = 1, .line2 = 1 }` sets to anything else are the two
 /// line numbers.
 pub(crate) fn fresh_exarg<'s>() -> ExArg<'s> {
+    // Both pairs: until a range is read they agree, so choosing the
+    // address kind moves nothing (`ExArg::set_kind_unread`).
     ExArg {
         line1: LineNr::ONE,
         line2: LineNr::ONE,
+        number1: 1,
+        number2: 1,
         ..ExArg::default()
     }
 }

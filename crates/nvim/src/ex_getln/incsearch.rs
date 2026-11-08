@@ -136,6 +136,8 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
     let mut ea = ExArg {
         line1: LineNr::ONE,
         line2: LineNr::ONE,
+        number1: 1,
+        number2: 1,
         line,
         addr_type: CmdAddr::Lines,
         ..EXARG_T_INIT
