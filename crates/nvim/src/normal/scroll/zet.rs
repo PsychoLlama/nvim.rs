@@ -23,7 +23,7 @@ use crate::edit::{BeginlineOpts, beginline};
 use crate::fold::{
     clear_folding, close_fold, close_fold_recurse, deepest_fold_nesting, delete_fold,
     fold_manual_allowed, fold_move_to, fold_open_cursor, foldmethod_is_diff, foldmethod_is_manual,
-    foldmethod_is_marker, has_folding, new_fold_level, open_fold, open_fold_recurse,
+    foldmethod_is_marker, new_fold_level, open_fold, open_fold_recurse,
 };
 use crate::guard::Suppress;
 use crate::mark::setpcmark;
@@ -38,8 +38,8 @@ use crate::ops::OpType;
 use crate::option::get_sidescrolloff_value;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
+use crate::spell::SMT_ALL;
 use crate::spell::SpellAddType;
-use crate::spell::{SMT_ALL, spell_move_to};
 use crate::spellfile::spell_add_word;
 use crate::spellsuggest::spell_suggest;
 use crate::state::mode::finish_op;
@@ -145,7 +145,7 @@ pub(crate) fn nv_zg_zw(cmd_arg: &mut CmdArg, mut nchar: Key) -> Result<(), Faile
         // The search is only being used to find where the bad word
         // starts; its "no more misspellings" message is not wanted.
         let no_emsg = Suppress::emsg();
-        let bad_len = spell_move_to(Win::current(), FORWARD as c_int, SMT_ALL, true, None);
+        let bad_len = Win::current().spell_move_to(FORWARD as c_int, SMT_ALL, true, None);
         drop(no_emsg);
         // Only if it found one at or before the cursor, i.e. the one the
         // cursor is inside rather than the next one.
@@ -576,5 +576,5 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
 
 /// Whether `lnum` is inside a closed fold of the current window.
 fn folded(lnum: LineNr) -> bool {
-    has_folding(Win::current(), lnum, None, None)
+    Win::current().has_folding(lnum, None, None)
 }

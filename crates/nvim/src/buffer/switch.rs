@@ -46,7 +46,6 @@ use crate::ex_docmd::{cmdmod_has, ex_errmsg, ex_msg};
 use crate::ex_eval::defs::Cleanup;
 use crate::ex_eval::{enter_cleanup, leave_cleanup};
 use crate::getchar::state::got_int;
-use crate::mark::mark_jumplist_forget_file;
 use crate::memline::ml_recover;
 use crate::message::msg_str;
 use crate::message::state::{msg_row, msg_scroll, need_fileinfo};
@@ -117,7 +116,7 @@ fn window_showing(buffer: Buf) -> bool {
     !swbuf_goto_win_with_buf(Some(buffer)).is_none()
 }
 fn forget_jumps(win: Win, fnum: c_int) {
-    mark_jumplist_forget_file(win, Handle::from_number(fnum));
+    win.forget_file_in_jumplist(Handle::from_number(fnum));
 }
 fn may_abandon(buffer: Buf, forceit: bool) -> bool {
     can_abandon(buffer, forceit)

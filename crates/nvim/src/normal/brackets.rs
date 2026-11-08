@@ -43,8 +43,8 @@ use crate::options::{kOptFdoFlagBlock, kOptFdoFlagSearch};
 use crate::pos::MAXLNUM;
 use crate::register::defs::PUT_FIXINDENT;
 use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
+use crate::spell::SMT_ALL;
 use crate::spell::SpellMoveType;
-use crate::spell::{SMT_ALL, spell_move_to};
 use crate::textobject::findpar;
 use crate::types::Pos;
 use core::ffi::{CStr, c_int, c_uint};
@@ -277,7 +277,7 @@ fn nv_bracket_spell(cmd_arg: &mut CmdArg) {
         _ => SMT_BAD as SpellMoveType,
     };
     for _ in 0..cmd_arg.count1 {
-        if spell_move_to(Win::current(), direction(cmd_arg), what, false, None) == 0 {
+        if Win::current().spell_move_to(direction(cmd_arg), what, false, None) == 0 {
             clear_op_beep(cmd_arg.op());
             break;
         }

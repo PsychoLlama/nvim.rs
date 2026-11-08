@@ -18,7 +18,7 @@
 //! [`redraw_custom_statusline`] -- the drawing layer calls in; and the
 //! pieces the three children share:
 //!
-//! * [`StlJob`] gathers everything one call into [`build_stl_str_hl`] is
+//! * [`StlJob`] gathers everything one call into [`Win::build_stl_str_hl`] is
 //!   parameterised by, so the callers each spell one `run()`, which answers
 //!   the text and the records the caller asked for, owned.
 //! * The click-definition functions keep a window's (or the tab line's)
@@ -144,8 +144,7 @@ impl StlJob<'_> {
             stc: self.stc,
         };
         let from = FmtSource { opt_idx, opt_scope };
-        build_stl_str_hl(
-            self.win,
+        self.win.build_stl_str_hl(
             self.room,
             self.fmt,
             from,

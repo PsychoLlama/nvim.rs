@@ -58,7 +58,6 @@ use crate::ex_getln::{get_text_locked_msg, script_get, text_locked};
 
 use crate::ex_docmd::state::{did_emsg_syntax, ex_nesting_level, global_busy};
 use crate::ex_eval::state::{check_cstack, did_throw, need_rethrow};
-use crate::fold::has_folding;
 use crate::getchar::state::{got_int, pending_end_reg_executing, reg_executing};
 use crate::guard::Depth;
 use crate::guard::sandbox;
@@ -370,8 +369,8 @@ impl ExArg<'_> {
             && global_busy.get() == 0
             && self.addr_type == CmdAddr::Lines
         {
-            has_folding(Win::current(), self.line1, Some(&mut self.line1), None);
-            has_folding(Win::current(), self.line2, None, Some(&mut self.line2));
+            Win::current().has_folding(self.line1, Some(&mut self.line1), None);
+            Win::current().has_folding(self.line2, None, Some(&mut self.line2));
         }
         Ok(())
     }

@@ -388,8 +388,7 @@ fn process_files(
                 duplicate_name,
             );
             if using_dummy {
-                keep_or_drop_dummy(
-                    buf,
+                buf.keep_or_drop_dummy(
                     found_match,
                     duplicate_name,
                     search,
@@ -406,74 +405,77 @@ fn process_files(
     true
 }
 
-/// Decide what becomes of the dummy buffer a file was loaded into: wipe it,
-/// unload it, or keep it because it holds the first match and the jump will
-/// land there.
-fn keep_or_drop_dummy(
-    mut buffer: Buf,
-    found_match: bool,
-    duplicate_name: bool,
-    search: &Search,
-    dirname_start: &CStr,
-    dirname_now: Option<&XString>,
-    out: &mut Outcome,
-) {
-    if found_match && out.first_match_buf.is_none() {
-        out.first_match_buf = Some(buffer);
-    }
+impl Buf {
+    /// Decide what becomes of the dummy buffer a file was loaded into: wipe it,
+    /// unload it, or keep it because it holds the first match and the jump will
+    /// land there.
+    fn keep_or_drop_dummy(
+        mut self,
+        found_match: bool,
+        duplicate_name: bool,
+        search: &Search,
+        dirname_start: &CStr,
+        dirname_now: Option<&XString>,
+        out: &mut Outcome,
+    ) {
+        if found_match && out.first_match_buf.is_none() {
+            out.first_match_buf = Some(self);
+        }
 
-    // Never keep a dummy buffer when another buffer has the same name.
-    if duplicate_name {
-        wipe_dummy_buffer(buffer, Some(dirname_start));
-        return;
-    }
-
-    // `:hide` keeps the buffer loaded — unless 'bufhidden' says the
-    // buffer goes away as soon as it is hidden, which wins.
-    let bufhidden = buffer.b_p_bh.first_byte();
-    let hidden_stays = cmdmod_has(CmdModFlags::HIDE) && !matches!(bufhidden, b'u' | b'w' | b'd');
-    if !hidden_stays {
-        if !found_match {
-            // Do not keep a buffer that was not loaded before.
-            wipe_dummy_buffer(buffer, Some(dirname_start));
+        // Never keep a dummy buffer when another buffer has the same name.
+        if duplicate_name {
+            self.wipe_dummy(Some(dirname_start));
             return;
         }
-        if out.first_match_buf != Some(buffer)
-            || search.flags & VGR_NOJUMP != 0
-            || existing_swapfile(buffer)
+
+        // `:hide` keeps the buffer loaded — unless 'bufhidden' says the
+        // buffer goes away as soon as it is hidden, which wins.
+        let bufhidden = self.b_p_bh.first_byte();
+        let hidden_stays =
+            cmdmod_has(CmdModFlags::HIDE) && !matches!(bufhidden, b'u' | b'w' | b'd');
+        if !hidden_stays {
+            if !found_match {
+                // Do not keep a buffer that was not loaded before.
+                self.wipe_dummy(Some(dirname_start));
+                return;
+            }
+            if out.first_match_buf != Some(self)
+                || search.flags & VGR_NOJUMP != 0
+                || existing_swapfile(self)
+            {
+                unload_dummy_buffer(self, dirname_start);
+                // Keeping the buffer, remove the dummy flag.
+                self.b_flags.clear(BufFlags::DUMMY);
+                return;
+            }
+        }
+
+        // Keeping the buffer, remove the dummy flag.
+        self.b_flags.clear(BufFlags::DUMMY);
+
+        // The buffer is still loaded, so the jump below has to go to the
+        // directory the search left it in.
+        if out.first_match_buf == Some(self)
+            && out.target_dir.is_none()
+            && let Some(now) = dirname_now.filter(|now| now.as_cstr() != dirname_start)
         {
-            unload_dummy_buffer(buffer, dirname_start);
-            // Keeping the buffer, remove the dummy flag.
-            buffer.b_flags.clear(BufFlags::DUMMY);
-            return;
+            out.target_dir = Some(now.clone());
         }
+
+        // The Filetype autocommands and the modelines need to run now, in
+        // that buffer — but not the window-local options.
+        let aco = AucmdBuf::enter(self);
+        fire_autocmds_for(
+            AutoEvent::FileType,
+            Some(self.b_p_ft.get()),
+            self.name.shown().map(XString::from_cstr),
+            true,
+            Some(self),
+            None,
+        );
+        do_modelines(OptionSetFlags::NOWIN);
+        drop(aco);
     }
-
-    // Keeping the buffer, remove the dummy flag.
-    buffer.b_flags.clear(BufFlags::DUMMY);
-
-    // The buffer is still loaded, so the jump below has to go to the
-    // directory the search left it in.
-    if out.first_match_buf == Some(buffer)
-        && out.target_dir.is_none()
-        && let Some(now) = dirname_now.filter(|now| now.as_cstr() != dirname_start)
-    {
-        out.target_dir = Some(now.clone());
-    }
-
-    // The Filetype autocommands and the modelines need to run now, in
-    // that buffer — but not the window-local options.
-    let aco = AucmdBuf::enter(buffer);
-    fire_autocmds_for(
-        AutoEvent::FileType,
-        Some(buffer.b_p_ft.get()),
-        buffer.name.shown().map(XString::from_cstr),
-        true,
-        Some(buffer),
-        None,
-    );
-    do_modelines(OptionSetFlags::NOWIN);
-    drop(aco);
 }
 
 /// Jump to the first match, and change to the directory the first match's

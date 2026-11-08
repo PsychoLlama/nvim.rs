@@ -18,7 +18,7 @@
     clippy::ptr_as_ptr
 )]
 
-use super::super::store::{Marks, header_chain};
+use super::super::store::Marks;
 use super::super::*;
 use super::{u_undo_end, u_undoredo};
 use crate::memline::MlFlags;
@@ -491,14 +491,15 @@ fn redo_down_to(dest: &UndoDest) -> bool {
 fn take_marked_branch(mut buffer: Buf, fork: UndoLink, mark: c_int) -> UndoLink {
     // The search marks a run of consecutive alternates; the far end of that
     // run along `alt_next` is the branch it wants.
-    let head = furthest_marked(buffer, fork, mark, |uh| uh.alt_prev);
-    let last = furthest_marked(buffer, head, mark, |uh| uh.alt_next);
+    let head = buffer.furthest_marked(fork, mark, |uh| uh.alt_prev);
+    let last = buffer.furthest_marked(head, mark, |uh| uh.alt_next);
     if last == head {
         return head;
     }
     // The whole list of alternates may start further back than the marked
     // run does, and that head is where the branch has to end up.
-    let first = header_chain(buffer, head, |uh| uh.alt_prev)
+    let first = buffer
+        .header_chain(head, |uh| uh.alt_prev)
         .last()
         .unwrap_or(head);
     let Some((after, before, next)) = buffer
@@ -533,20 +534,22 @@ fn take_marked_branch(mut buffer: Buf, fork: UndoLink, mark: c_int) -> UndoLink 
     last
 }
 
-/// Follows `step` from `start` for as long as the next header carries
-/// `mark`, and answers the last header of that run.
-fn furthest_marked(
-    buffer: Buf,
-    start: UndoLink,
-    mark: c_int,
-    step: fn(&UndoHeader) -> UndoLink,
-) -> UndoLink {
-    // The chain always yields its start; every further hop has to be marked.
-    header_chain(buffer, start, step)
-        .skip(1)
-        .take_while(|&link| buffer.header(link).is_some_and(|uh| uh.walk == mark))
-        .last()
-        .unwrap_or(start)
+impl Buf {
+    /// Follows `step` from `start` for as long as the next header carries
+    /// `mark`, and answers the last header of that run.
+    fn furthest_marked(
+        self,
+        start: UndoLink,
+        mark: c_int,
+        step: fn(&UndoHeader) -> UndoLink,
+    ) -> UndoLink {
+        // The chain always yields its start; every further hop has to be marked.
+        self.header_chain(start, step)
+            .skip(1)
+            .take_while(|&link| self.header(link).is_some_and(|uh| uh.walk == mark))
+            .last()
+            .unwrap_or(start)
+    }
 }
 
 #[cfg(test)]

@@ -78,9 +78,7 @@ use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{do_cmdline_cmd, expr_map_locked};
 use crate::fileio::check_timestamps;
 use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
-use crate::fold::{
-    fold_check_close, fold_open_cursor, fold_update_after_insert, has_folding, has_folding_win,
-};
+use crate::fold::{fold_check_close, fold_open_cursor, fold_update_after_insert};
 use crate::getchar::state::{
     KeyStuffed, KeyTyped, got_int, langmap_mapchar, mod_mask, reg_recording,
     test_disable_char_avail, vgetc_busy,

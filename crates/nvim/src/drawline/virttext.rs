@@ -9,7 +9,7 @@
 //! — including dropping, or partially skipping, a chunk that starts left of
 //! the first visible column.
 //!
-//! [`draw_virt_text_item`] paints one text through the `hl_mode` blend, and
+//! [`Buf::draw_virt_text_item`] paints one text through the `hl_mode` blend, and
 //! [`line_putchar`] is the single-character primitive under both of them (and
 //! under the column drawing in `columns.rs`).
 
@@ -217,8 +217,7 @@ pub(crate) fn draw_virt_text(
         }
 
         if let Some(vt) = vt {
-            let col = draw_virt_text_item(
-                buffer,
+            let col = buffer.draw_virt_text_item(
                 item.draw_col,
                 VirtChunks::Text(vt.link),
                 HlMode::from(vt.hl_mode),
@@ -255,115 +254,117 @@ struct VirtShape {
     flags: uint8_t,
 }
 
-/// Paint one virtual text into the line buffer starting at `col`, and answer
-/// the column after it.
-///
-/// `skip_cells` drops that many cells off the front — how a virtual line
-/// follows `'leftcol'`. It can go *negative*, which means the opposite: a
-/// double-width character or Tab was cut in half by the skip, and that many
-/// spaces are owed before the text resumes.
-///
-/// Each chunk's text is copied out of its store before it is drawn: reading
-/// the next chunk resolves its highlight, which can run a provider's Lua.
-/// Out of line, for the copy's allocation: the callers are `win_line`.
-#[inline(never)]
-pub(crate) fn draw_virt_text_item(
-    buffer: Buf,
-    mut col: ::core::ffi::c_int,
-    vt: VirtChunks<'_>,
-    hl_mode: HlMode,
-    max_col: ::core::ffi::c_int,
-    mut vcol: ::core::ffi::c_int,
-    mut skip_cells: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    // The chunk being drawn, and how far into it the drawing has got.
-    let mut chunk: Vec<u8> = Vec::new();
-    let mut at = 0;
-    let mut virt_attr = 0;
-    let mut virt_pos: size_t = 0;
+impl Buf {
+    /// Paint one virtual text into the line buffer starting at `col`, and answer
+    /// the column after it.
+    ///
+    /// `skip_cells` drops that many cells off the front — how a virtual line
+    /// follows `'leftcol'`. It can go *negative*, which means the opposite: a
+    /// double-width character or Tab was cut in half by the skip, and that many
+    /// spaces are owed before the text resumes.
+    ///
+    /// Each chunk's text is copied out of its store before it is drawn: reading
+    /// the next chunk resolves its highlight, which can run a provider's Lua.
+    /// Out of line, for the copy's allocation: the callers are `win_line`.
+    #[inline(never)]
+    pub(crate) fn draw_virt_text_item(
+        self,
+        mut col: ::core::ffi::c_int,
+        vt: VirtChunks<'_>,
+        hl_mode: HlMode,
+        max_col: ::core::ffi::c_int,
+        mut vcol: ::core::ffi::c_int,
+        mut skip_cells: ::core::ffi::c_int,
+    ) -> ::core::ffi::c_int {
+        // The chunk being drawn, and how far into it the drawing has got.
+        let mut chunk: Vec<u8> = Vec::new();
+        let mut at = 0;
+        let mut virt_attr = 0;
+        let mut virt_pos: size_t = 0;
 
-    // The line buffer for the whole walk: nothing below draws.
-    with_linebuf(|line| {
-        while col < max_col {
-            if skip_cells >= 0 && at >= chunk.len() {
-                if virt_pos >= vt.len() {
-                    break;
+        // The line buffer for the whole walk: nothing below draws.
+        with_linebuf(|line| {
+            while col < max_col {
+                if skip_cells >= 0 && at >= chunk.len() {
+                    if virt_pos >= vt.len() {
+                        break;
+                    }
+                    virt_attr = 0;
+                    let copied = vt.next(&mut virt_pos, &mut virt_attr, |text| {
+                        chunk.clear();
+                        chunk.extend_from_slice(text.to_bytes());
+                    });
+                    if copied.is_none() {
+                        break;
+                    }
+                    at = 0;
                 }
-                virt_attr = 0;
-                let copied = vt.next(&mut virt_pos, &mut virt_attr, |text| {
-                    chunk.clear();
-                    chunk.extend_from_slice(text.to_bytes());
-                });
-                if copied.is_none() {
-                    break;
-                }
-                at = 0;
-            }
 
-            // Skip cells at the front of this chunk.
-            while skip_cells > 0 && at < chunk.len() {
-                let rest = &chunk[at..];
-                let cells = if rest[0] == b'\t' {
-                    buffer.tab_padding(ColNr::new(vcol))
-                } else {
-                    c_cells_at(rest)
+                // Skip cells at the front of this chunk.
+                while skip_cells > 0 && at < chunk.len() {
+                    let rest = &chunk[at..];
+                    let cells = if rest[0] == b'\t' {
+                        self.tab_padding(ColNr::new(vcol))
+                    } else {
+                        c_cells_at(rest)
+                    };
+                    skip_cells -= cells;
+                    vcol += cells;
+                    at += c_cluster_len(rest);
+                }
+
+                // A wide character the skip cut in half is paid back as spaces.
+                let draw_text: &[u8] = if skip_cells < 0 { b" " } else { &chunk[at..] };
+                let Some(&first) = draw_text.first() else {
+                    continue;
                 };
-                skip_cells -= cells;
-                vcol += cells;
-                at += c_cluster_len(rest);
-            }
+                debug_assert!(skip_cells <= 0);
 
-            // A wide character the skip cut in half is paid back as spaces.
-            let draw_text: &[u8] = if skip_cells < 0 { b" " } else { &chunk[at..] };
-            let Some(&first) = draw_text.first() else {
-                continue;
-            };
-            debug_assert!(skip_cells <= 0);
+                let mut through = false;
+                let under = line.attrs_mut()[as_index(col)];
+                let attr = match hl_mode {
+                    kHlModeCombine => hl_combine_attr(under, virt_attr),
+                    kHlModeBlend => {
+                        // A space blends the cell underneath through, rather than
+                        // painting over it.
+                        through = first == b' ';
+                        hl_blend_attrs(under, virt_attr, &mut through)
+                    }
+                    _ => virt_attr,
+                };
 
-            let mut through = false;
-            let under = line.attrs_mut()[as_index(col)];
-            let attr = match hl_mode {
-                kHlModeCombine => hl_combine_attr(under, virt_attr),
-                kHlModeBlend => {
-                    // A space blends the cell underneath through, rather than
-                    // painting over it.
-                    through = first == b' ';
-                    hl_blend_attrs(under, virt_attr, &mut through)
+                // Landing on the right half of a double-width character: clear
+                // its left half too, and the right half itself so `line_putchar`
+                // has a non-zero cell to start from.
+                if !through && line.chars()[as_index(col)] == 0 {
+                    debug_assert!(col > 0);
+                    line.chars_mut()[as_index(col) - 1] = schar_from_ascii(b' ');
+                    line.chars_mut()[as_index(col)] = schar_from_ascii(b' ');
                 }
-                _ => virt_attr,
-            };
 
-            // Landing on the right half of a double-width character: clear
-            // its left half too, and the right half itself so `line_putchar`
-            // has a non-zero cell to start from.
-            if !through && line.chars()[as_index(col)] == 0 {
-                debug_assert!(col > 0);
-                line.chars_mut()[as_index(col) - 1] = schar_from_ascii(b' ');
-                line.chars_mut()[as_index(col)] = schar_from_ascii(b' ');
-            }
+                let mut dummy: [ScreenChar; 2] = [schar_from_ascii(b' '); 2];
+                let dest: &mut [ScreenChar] = if through {
+                    &mut dummy
+                } else {
+                    &mut line.chars_mut()[as_index(col)..]
+                };
+                let (cells, taken) = line_putchar(self, draw_text, dest, max_col - col, vcol);
+                let attrs = line.attrs_mut();
+                for _ in 0..cells {
+                    attrs[as_index(col)] = attr as ScreenAttr;
+                    col += 1;
+                }
 
-            let mut dummy: [ScreenChar; 2] = [schar_from_ascii(b' '); 2];
-            let dest: &mut [ScreenChar] = if through {
-                &mut dummy
-            } else {
-                &mut line.chars_mut()[as_index(col)..]
-            };
-            let (cells, taken) = line_putchar(buffer, draw_text, dest, max_col - col, vcol);
-            let attrs = line.attrs_mut();
-            for _ in 0..cells {
-                attrs[as_index(col)] = attr as ScreenAttr;
-                col += 1;
+                if skip_cells < 0 {
+                    skip_cells += 1;
+                } else {
+                    vcol += cells;
+                    at += taken;
+                }
             }
-
-            if skip_cells < 0 {
-                skip_cells += 1;
-            } else {
-                vcol += cells;
-                at += taken;
-            }
-        }
-    });
-    col
+        });
+        col
+    }
 }
 
 // ---------------------------------------------------------------------------

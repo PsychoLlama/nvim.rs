@@ -703,7 +703,7 @@ pub fn ins_complete(c: Key, enable_pum: bool) -> Result<(), Failed> {
 pub(crate) fn spell_back_to_badword() {
     let tpos = Win::current().w_cursor;
     let win = Win::current();
-    spell_bad_len.set(spell_move_to(win, BACKWARD, SMT_ALL, true, None));
+    spell_bad_len.set(win.spell_move_to(BACKWARD, SMT_ALL, true, None));
     if Win::current().w_cursor.col != tpos.col {
         start_arrow(Some(InsertEnd::At(tpos)));
     }

@@ -171,7 +171,6 @@ use crate::ui::{
     ui_call_cmdline_special_char, ui_cursor_shape, ui_flush, ui_has, vim_beep,
 };
 use crate::undo::node::UndoLink;
-use crate::undo::store::header_chain;
 use crate::undo::{u_blockfree, u_clearall, u_sync, u_undo_and_forget};
 use crate::usercmd::{cmdcomplete_type_to_str, parse_compl_arg};
 use crate::viml::parser::expressions::viml_pexpr_parse;

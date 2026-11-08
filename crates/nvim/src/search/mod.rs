@@ -38,7 +38,7 @@ use crate::ex_cmds::{getfile, prepare_tagpreview};
 use crate::ex_docmd::set_no_hlsearch;
 use crate::ex_getln::gotocmdline;
 use crate::file_search::{file_name_in_line, find_file_name_in_path};
-use crate::fold::{fold_open_cursor, has_folding};
+use crate::fold::fold_open_cursor;
 use crate::getchar::char_avail;
 use crate::getchar::state::{KeyStuffed, KeyTyped, got_int};
 use crate::global_cell::{GlobalCell, state_record};

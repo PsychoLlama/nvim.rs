@@ -34,7 +34,7 @@ use crate::r#move::{update_topline, validate_cursor};
 use crate::narrow::number_as_int;
 use crate::os::cshim::gettext;
 use crate::os::libc::{int64_t, size_t};
-use crate::plines::{win_get_fill, win_text_height};
+use crate::plines::win_get_fill;
 use crate::pos::MAXCOL;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, Error, Integer, LineNr, LuaRef, Object,
@@ -360,8 +360,7 @@ pub fn nvim_win_text_height(
     }
 
     let mut fill: int64_t = 0;
-    let mut all: int64_t = win_text_height(
-        w,
+    let mut all: int64_t = w.text_height(
         start_lnum,
         start_vcol,
         &mut end_lnum,

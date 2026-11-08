@@ -44,7 +44,6 @@ use crate::r#move::textpos2screenpos;
 use crate::option::vars::{P_ACD, p_acd, p_ch};
 use crate::os::cshim::gettext_owned;
 use crate::os::libc::{int64_t, size_t};
-use crate::plines::win_text_height;
 use crate::pos::MAXCOL;
 use crate::search::FORWARD;
 use crate::types::{
@@ -418,8 +417,7 @@ fn text_height(
     end_lnum: &mut LineNr,
     end_vcol: &mut int64_t,
 ) -> int64_t {
-    win_text_height(
-        window,
+    window.text_height(
         start_lnum,
         start_vcol,
         end_lnum,

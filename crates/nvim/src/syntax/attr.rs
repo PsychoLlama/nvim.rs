@@ -1,6 +1,6 @@
 //! The per-cell attribute lookup — [`SynState::current_attr`].
 //!
-//! [`get_syntax_attr`] moves the state machine to a column and answers the
+//! [`Buf::syntax_attr`] moves the state machine to a column and answers the
 //! highlight attribute for it; [`SynState::current_attr`] is the step that
 //! does the work. It repeatedly looks for a keyword and then for a pattern
 //! that can match at the current column and is admitted by the containment
@@ -27,48 +27,50 @@ use super::*;
 use crate::charset::{is_word_at, vim_iswordc_buf};
 use crate::mbyte::head_off;
 
-/// Highlight attributes for the character at `col`.
-///
-/// [`Win::syntax_start`] must have been called for the line first. `col` is
-/// normally 0 for the first use in a line and increments by one each time;
-/// skipping characters and stopping before the end of the line are both
-/// allowed, but `col` may never go backwards.
-///
-/// `can_spell`, when given, is set to whether spell checking applies there.
-/// `keep_state` keeps the state stack as it stands at `col` rather than
-/// closing the items that end there, which is what `synstack()` needs.
-///
-/// `buffer` is the buffer of the window `syntax_start` was given: the caller
-/// has it in hand, and passing it spares a registry lookup per column.
-///
-/// Answers [`get_syntax_info`]'s two as well, which the draw path wants for
-/// the same cell: asking for them separately would cost a second trip to the
-/// parser per column.
-// Out of line: inlined, the parser's take and put-back cost the draw loop
-// its register allocation (scrbench +0.04 % in `win_line` alone).
-#[inline(never)]
-pub(crate) fn get_syntax_attr(
-    buffer: Buf,
-    col: ColNr,
-    can_spell: Option<&mut bool>,
-    keep_state: bool,
-) -> SyntaxCell {
-    with_parser(|parser| {
-        debug_assert!(
-            parser.buf == buffer.try_id(),
-            "`buffer` is the buffer being parsed"
-        );
-        parser.buffer = buffer;
-        let attr = parser.attr_at(col, can_spell, keep_state);
-        SyntaxCell {
-            attr,
-            flags: parser.current.flags,
-            seqnr: parser.current.seqnr,
-        }
-    })
+impl Buf {
+    /// Highlight attributes for the character at `col`.
+    ///
+    /// [`Win::syntax_start`] must have been called for the line first. `col` is
+    /// normally 0 for the first use in a line and increments by one each time;
+    /// skipping characters and stopping before the end of the line are both
+    /// allowed, but `col` may never go backwards.
+    ///
+    /// `can_spell`, when given, is set to whether spell checking applies there.
+    /// `keep_state` keeps the state stack as it stands at `col` rather than
+    /// closing the items that end there, which is what `synstack()` needs.
+    ///
+    /// `buffer` is the buffer of the window `syntax_start` was given: the caller
+    /// has it in hand, and passing it spares a registry lookup per column.
+    ///
+    /// Answers [`get_syntax_info`]'s two as well, which the draw path wants for
+    /// the same cell: asking for them separately would cost a second trip to the
+    /// parser per column.
+    // Out of line: inlined, the parser's take and put-back cost the draw loop
+    // its register allocation (scrbench +0.04 % in `win_line` alone).
+    #[inline(never)]
+    pub(crate) fn syntax_attr(
+        self,
+        col: ColNr,
+        can_spell: Option<&mut bool>,
+        keep_state: bool,
+    ) -> SyntaxCell {
+        with_parser(|parser| {
+            debug_assert!(
+                parser.buf == self.try_id(),
+                "`buffer` is the buffer being parsed"
+            );
+            parser.buffer = self;
+            let attr = parser.attr_at(col, can_spell, keep_state);
+            SyntaxCell {
+                attr,
+                flags: parser.current.flags,
+                seqnr: parser.current.seqnr,
+            }
+        })
+    }
 }
 
-/// What [`get_syntax_attr`] answers for one cell.
+/// What [`Buf::syntax_attr`] answers for one cell.
 pub(crate) struct SyntaxCell {
     /// The highlight attribute.
     pub(crate) attr: c_int,
@@ -80,7 +82,7 @@ pub(crate) struct SyntaxCell {
 }
 
 impl SynState {
-    /// [`get_syntax_attr`]'s body. Inlined into it, so the per-column call
+    /// [`Buf::syntax_attr`]'s body. Inlined into it, so the per-column call
     /// pays one prologue rather than two.
     #[inline(always)]
     pub(crate) fn attr_at(

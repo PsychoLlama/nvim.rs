@@ -33,7 +33,6 @@ use crate::charset::{ptr2cells_at, vim_isprintc};
 use crate::cstr;
 use crate::env::expand_env_escaped;
 use crate::ex_docmd::ex_msg;
-use crate::fold::has_folding;
 use crate::mark::defs::{FileMark, FileMarkView, XFileMark};
 use crate::mark::defs::{MarkAdjustMode, MarkGet, MarkMove, MarkMoveRes};
 use crate::mbyte::{char_at, head_off};
@@ -71,7 +70,7 @@ pub use adjust::{mark_adjust, mark_adjust_buf, mark_adjust_nofold, mark_col_adju
 pub use builtins::{get_buf_local_marks, get_global_marks};
 pub use jumplist::{
     checkpcmark, cleanup_jumplist, copy_jumplist, ex_changes, ex_clearjumps, ex_jumps,
-    free_jumplist, get_changelist, get_jumplist, mark_jumplist_forget_file, setpcmark,
+    free_jumplist, get_changelist, get_jumplist, setpcmark,
 };
 pub use lookup::{
     getnextmark, mark_get, mark_get_global, mark_get_local, mark_get_motion, mark_get_visual,
@@ -261,26 +260,28 @@ pub(crate) fn setmark_at(c: u8, pos: Pos, fnum: Option<Handle>) -> Result<(), Fa
     setmark_pos(c, pos, false, fnum, NO_VIEW)
 }
 
-/// Delete every entry referring to file "fnum" from both the jumplist and the
-/// tag stack.
-pub fn mark_forget_file(mut window: Win, fnum: Option<Handle>) {
-    mark_jumplist_forget_file(window, fnum);
-    // Backwards, so removing an entry cannot skip the one after it.
-    for i in (0..window.w_tagstacklen).rev() {
-        let at = slot(i);
-        if window.w_tagstack[at].fmark.fnum() != fnum {
-            continue;
+impl Win {
+    /// Delete every entry referring to file "fnum" from both the jumplist and the
+    /// tag stack.
+    pub fn forget_file_marks(mut self, fnum: Option<Handle>) {
+        self.forget_file_in_jumplist(fnum);
+        // Backwards, so removing an entry cannot skip the one after it.
+        for i in (0..self.w_tagstacklen).rev() {
+            let at = slot(i);
+            if self.w_tagstack[at].fmark.fnum() != fnum {
+                continue;
+            }
+            let len = slot(self.w_tagstacklen);
+            if self.w_tagstackidx > i {
+                self.w_tagstackidx -= 1;
+            }
+            self.w_tagstacklen -= 1;
+            // Close the gap: the entries above move down one, and the cleared
+            // one goes to the top, past the end of what is in use.
+            let stack = &mut self.w_tagstack[at..len];
+            tagstack_clear_entry(&mut stack[0]);
+            stack.rotate_left(1);
         }
-        let len = slot(window.w_tagstacklen);
-        if window.w_tagstackidx > i {
-            window.w_tagstackidx -= 1;
-        }
-        window.w_tagstacklen -= 1;
-        // Close the gap: the entries above move down one, and the cleared
-        // one goes to the top, past the end of what is in use.
-        let stack = &mut window.w_tagstack[at..len];
-        tagstack_clear_entry(&mut stack[0]);
-        stack.rotate_left(1);
     }
 }
 
@@ -326,7 +327,7 @@ pub fn mark_view_restore(fm: Option<&FileMark>) {
     // two fields in.
     let skipcol = fm.view.skipcol;
     let keep = skipcol > ColNr::ZERO
-        && !has_folding(win, topline, None, None)
+        && !win.has_folding(topline, None, None)
         && skipcol < ColNr::new(linetabsize_eol(win, topline));
     win.w_skipcol = if keep { skipcol } else { ColNr::ZERO };
 }

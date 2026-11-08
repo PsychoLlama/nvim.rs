@@ -56,8 +56,8 @@ fn set_decor(
     flags: MtFlags,
 ) {
     // The mark is new, so it is given no id slot.
-    extmark_set(
-        buffer, ns, None, line, col, end_line, end_col, decor, flags, true, false, false, false,
+    buffer.set_extmark(
+        ns, None, line, col, end_line, end_col, decor, flags, true, false, false, false,
     );
 }
 

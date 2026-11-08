@@ -38,7 +38,7 @@ use crate::ex_docmd::source::LineSource;
 use crate::ex_docmd::{
     DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, kMTLineWise,
 };
-use crate::fold::{fold_create, fold_manual_allowed, has_folding, op_fold_range};
+use crate::fold::{fold_create, fold_manual_allowed, op_fold_range};
 use crate::getchar::{beep_flush, stuff_empty, typeahead, vpeekc};
 
 use crate::ex_docmd::state::{ex_no_reprint, exec_from_reg};
@@ -74,7 +74,6 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::types::{ColNr, ExArg, Handle, LineNr, Pos};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 
-use crate::undo::store::header_chain;
 use crate::undo::{u_clearline, u_redo, u_undo};
 
 use crate::winlayer::{Buf, Win, windows};
@@ -455,7 +454,7 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
     };
     let mut count = 0;
     let mut reached = None;
-    for link in header_chain(Buf::current(), start, |uh| uh.next) {
+    for link in Buf::current().header_chain(start, |uh| uh.next) {
         if link.seq() <= step {
             reached = Some(link.seq());
             break;
@@ -617,7 +616,7 @@ pub(crate) fn ex_folddo(excmd: &mut ExArg) {
     let want_closed = c_int::from(excmd.cmdidx == CmdIdx::folddoclosed);
     let mut lnum = excmd.line1;
     while lnum <= excmd.line2 {
-        if c_int::from(has_folding(Win::current(), lnum, None, None)) == want_closed {
+        if c_int::from(Win::current().has_folding(lnum, None, None)) == want_closed {
             ml_setmarked(lnum);
         }
         lnum += 1;

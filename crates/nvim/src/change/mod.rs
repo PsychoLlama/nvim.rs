@@ -49,7 +49,7 @@ use crate::eval::vars::set_vim_var_string;
 use crate::extmark::BCount;
 use crate::extmark::curbuf_splice_pending;
 use crate::extmark::{extmark_adjust, extmark_splice, extmark_splice_cols};
-use crate::fold::{fold_update, has_folding_win};
+use crate::fold::fold_update;
 use crate::highlight_group::HLF_W;
 use crate::indent::{
     copy_indent, fixthisline, get_indent, get_sw_value, may_do_si, set_indent,

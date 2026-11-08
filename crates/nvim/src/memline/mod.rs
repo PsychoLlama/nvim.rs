@@ -25,7 +25,7 @@ use crate::cstr;
 
 use crate::autocmd::has_autocmd;
 use crate::buffer::state::swap_exists_action;
-use crate::buffer::{BufFlags, buf_inc_changedtick, buf_spname, open_buffer, setfname};
+use crate::buffer::{BufFlags, buf_inc_changedtick, buf_spname, open_buffer};
 use crate::change::{changed_internal, unchanged};
 use crate::cursor::{check_cursor, coladvance};
 use crate::drawscreen::state::cmdline_row;
@@ -370,13 +370,8 @@ pub fn ml_open_file(mut buffer: Buf) {
         // Between choosing the name and creating the file another Nvim
         // may have created it; then the create fails and the next
         // directory is tried.
-        let found = findswapname(
-            buffer,
-            &dir_name,
-            rest.is_empty(),
-            None,
-            &mut found_existing_dir,
-        );
+        let found =
+            buffer.find_swap_name(&dir_name, rest.is_empty(), None, &mut found_existing_dir);
         let Some(fname) = found else {
             continue;
         };

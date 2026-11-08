@@ -138,18 +138,20 @@ pub(super) fn marker_spans(fold: &Fold, recursive: bool, lnum_off: i32) -> Vec<(
     spans
 }
 
-/// Delete the markers at each `(first, last)` of `spans`, causing those
-/// folds to be deleted.
-pub(super) fn delete_fold_markers(window: Win, spans: &[(LineNr, LineNr)]) {
-    for &(first, last) in spans {
-        // Re-read per fold, as upstream reads 'foldmarker' per call; copied
-        // because the deletion may run autocommands.
-        let (open, close) = {
-            let (open, close) = markers(window.w_onebuf_opt.wo_fmr.bytes());
-            (open.to_vec(), close.to_vec())
-        };
-        fold_del_marker(window.buffer(), first, &open);
-        fold_del_marker(window.buffer(), last, &close);
+impl Win {
+    /// Delete the markers at each `(first, last)` of `spans`, causing those
+    /// folds to be deleted.
+    pub(super) fn delete_fold_markers(self, spans: &[(LineNr, LineNr)]) {
+        for &(first, last) in spans {
+            // Re-read per fold, as upstream reads 'foldmarker' per call; copied
+            // because the deletion may run autocommands.
+            let (open, close) = {
+                let (open, close) = markers(self.w_onebuf_opt.wo_fmr.bytes());
+                (open.to_vec(), close.to_vec())
+            };
+            fold_del_marker(self.buffer(), first, &open);
+            fold_del_marker(self.buffer(), last, &close);
+        }
     }
 }
 

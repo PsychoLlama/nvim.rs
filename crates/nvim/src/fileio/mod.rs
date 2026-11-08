@@ -27,7 +27,7 @@ use crate::autocmd::{
 use crate::buffer::state::swap_exists_action;
 use crate::buffer::{
     BufFlags, buf_contents_changed, buf_is_dontwrite, buf_is_empty, buf_is_nofilename,
-    buf_is_normal, buflist_new, current_buf, do_modelines, setfname, wipe_buffer,
+    buf_is_normal, buflist_new, current_buf, do_modelines, wipe_buffer,
 };
 use crate::buffer_updates::buf_updates_unload;
 use crate::change::{appended_lines_mark, save_file_ff, unchanged};
@@ -67,8 +67,8 @@ use crate::narrow::len_as_int;
 use crate::option::defs::{OptVal, OptionSetFlags, ShmFlag};
 use crate::option::vars::{P_FFS, p_ar, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose};
 use crate::option::{
-    default_fileformat, get_fileformat, get_fileformat_force, set_fileformat, set_option_direct,
-    set_options_bin, shortmess,
+    default_fileformat, get_fileformat, set_fileformat, set_option_direct, set_options_bin,
+    shortmess,
 };
 use crate::options::kOptFileencoding;
 use crate::optionstr::OptString;
@@ -193,50 +193,52 @@ static E_AUCHANGEDBUF: &CStr = c"E812: Autocommands changed buffer or buffer nam
 /// The top bit of every byte of a word: a word ANDed with it is zero when
 /// all eight bytes are ASCII.
 const NONASCII_MASK: u64 = u64::MAX / 0xff * 0x80;
-/// Report which file is being read or written.
-///
-/// `note` is appended; an empty one means the message is progress on a
-/// write that is still running.
-pub fn filemess(buffer: Buf, name: Option<&CStr>, note: &CStr) {
-    // The report. Upstream builds it in `IObuff` and then calls
-    // `msg_progress`/`msg_display`, which write it again.
-    let prev_msg_col = msg_col.get();
-    if msg_silent.get() != 0 {
-        return;
-    }
-    let mut report = Report::quoted_fname(buffer, name, IOSIZE as usize - 100);
-    // Avoid an over-long translation causing trouble.
-    report.push(note.to_bytes());
+impl Buf {
+    /// Report which file is being read or written.
+    ///
+    /// `note` is appended; an empty one means the message is progress on a
+    /// write that is still running.
+    pub fn file_message(self, name: Option<&CStr>, note: &CStr) {
+        // The report. Upstream builds it in `IObuff` and then calls
+        // `msg_progress`/`msg_display`, which write it again.
+        let prev_msg_col = msg_col.get();
+        if msg_silent.get() != 0 {
+            return;
+        }
+        let mut report = Report::quoted_fname(self, name, IOSIZE as usize - 100);
+        // Avoid an over-long translation causing trouble.
+        report.push(note.to_bytes());
 
-    // For the first message we may have to start a new line. Further ones
-    // overwrite the previous one; reset `msg_scroll` before calling this.
-    let msg_scroll_save = msg_scroll.get();
-    if shortmess(ShmFlag::OVERALL)
-        && msg_listdo_overwrite.get() == 0
-        && !exiting.get()
-        && p_verbose() == 0
-    {
-        msg_scroll.set(c_int::from(false));
+        // For the first message we may have to start a new line. Further ones
+        // overwrite the previous one; reset `msg_scroll` before calling this.
+        let msg_scroll_save = msg_scroll.get();
+        if shortmess(ShmFlag::OVERALL)
+            && msg_listdo_overwrite.get() == 0
+            && !exiting.get()
+            && p_verbose() == 0
+        {
+            msg_scroll.set(c_int::from(false));
+        }
+        if msg_scroll.get() == 0 {
+            // Wait a bit when overwriting an error message.
+            msg_check_for_delay(false);
+        }
+        msg_start();
+        if prev_msg_col != 0 && msg_col.get() == 0 {
+            msg_putchar(c_int::from(b'\r')); // overwrite any previous message
+        }
+        msg_scroll.set(msg_scroll_save);
+        msg_scrolled_ign.set(true);
+        let text = report.as_cstr();
+        if note.is_empty() {
+            msg_progress(text, c"bufwrite", c"running", 0, false, true);
+        } else {
+            // May truncate the message to avoid a hit-return prompt.
+            msg_display_bytes(&fit_head(text.to_bytes(), false), 0, false);
+        }
+        msg_clr_eos();
+        msg_scrolled_ign.set(false);
     }
-    if msg_scroll.get() == 0 {
-        // Wait a bit when overwriting an error message.
-        msg_check_for_delay(false);
-    }
-    msg_start();
-    if prev_msg_col != 0 && msg_col.get() == 0 {
-        msg_putchar(c_int::from(b'\r')); // overwrite any previous message
-    }
-    msg_scroll.set(msg_scroll_save);
-    msg_scrolled_ign.set(true);
-    let text = report.as_cstr();
-    if note.is_empty() {
-        msg_progress(text, c"bufwrite", c"running", 0, false, true);
-    } else {
-        // May truncate the message to avoid a hit-return prompt.
-        msg_display_bytes(&fit_head(text.to_bytes(), false), 0, false);
-    }
-    msg_clr_eos();
-    msg_scrolled_ign.set(false);
 }
 
 /// From the buffer's line count before this read and the bytes read since,
@@ -270,7 +272,7 @@ pub fn set_rw_fname(fname: Option<&CStr>, sfname: Option<&CStr>) -> Result<(), F
         return Err(Failed);
     }
 
-    if setfname(Buf::current(), fname, sfname, false).is_ok() {
+    if Buf::current().set_name(fname, sfname, false).is_ok() {
         Buf::current().b_flags |= BufFlags::NOTEDITED;
     }
 
@@ -318,7 +320,7 @@ pub fn set_file_options(set_options: bool, excmd: Option<&mut ExArg>) {
     if set_options {
         if forced.is_some_and(|command| command.force_ff.is_some()) {
             set_fileformat(
-                get_fileformat_force(Buf::current(), forced),
+                Buf::current().fileformat_forced(forced),
                 OptionSetFlags::LOCAL,
             );
         } else if P_FFS.first_byte() != 0 {

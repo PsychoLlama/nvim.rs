@@ -100,12 +100,7 @@ pub(crate) fn run_linematch_algorithm(blocks: &mut Vec<DiffBlock>, at: usize, sl
         }
         let (lnum, count) = (dp.df_lnum[i], dp.df_count[i]);
         if count > 0 {
-            diff_write_buffer(
-                used_slot(slots, i),
-                &mut images[ndiffs],
-                lnum,
-                lnum + count - 1,
-            );
+            used_slot(slots, i).write_for_diff(&mut images[ndiffs], lnum, lnum + count - 1);
         }
         lengths[ndiffs] = count;
         ndiffs += 1;

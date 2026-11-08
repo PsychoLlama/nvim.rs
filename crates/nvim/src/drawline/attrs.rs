@@ -189,8 +189,7 @@ impl Cells {
         let at = self.byte_col();
         let here = self.line.from(self.pos);
         let char_len_here = || c_cluster_len(here);
-        let attr = update_search_hl(
-            window,
+        let attr = window.update_search_hl(
             wlv.lnum,
             ColNr::new(at),
             char_len_here,

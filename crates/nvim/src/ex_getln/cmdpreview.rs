@@ -272,7 +272,7 @@ pub(crate) fn cmdpreview_restore_state(cpinfo: &mut CpInfo) {
             } else {
                 buf.b_u_newhead
             };
-            let chain = header_chain(buf, start, |uh| uh.next);
+            let chain = buf.header_chain(start, |uh| uh.next);
             let count =
                 ::core::ffi::c_int::try_from(chain.count()).unwrap_or(::core::ffi::c_int::MAX);
 

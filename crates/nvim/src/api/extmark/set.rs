@@ -408,8 +408,7 @@ impl Decoration {
             decor_flags |= MtFlags::DECOR_HL;
         }
         // The mark takes over the decoration this call owned.
-        extmark_set(
-            buffer,
+        buffer.set_extmark(
             number_as_u32(ns_id),
             Some(id),
             number_as_int(at.line),

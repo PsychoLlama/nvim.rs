@@ -3,7 +3,7 @@
 //! [`open_buffer`] is what turns an empty `Buffer` into one with text: read the
 //! file (or stdin), set `'filetype'` and run the `BufRead`/`BufNewFile`
 //! autocommands, initialise undo and the swap file, and mark the buffer
-//! loaded.  [`buf_open_scratch`] and [`read_buffer_into`] are the two forms
+//! loaded.  [`buf_open_scratch`] and [`Buf::read_into`] are the two forms
 //! that skip the file entirely, and [`buf_contents_changed`] re-reads a file
 //! into a hidden dummy buffer so it can be compared with what is in
 //! memory.
@@ -11,7 +11,7 @@
 //! `readfile()` fires autocommands and so may change the current buffer under
 //! us -- which is why [`open_buffer`] takes a [`BufRef`] before it reads and
 //! re-`get`s it afterwards, and why every stage below re-reads `curbuf`
-//! rather than holding one across a call.  [`in_buffer`] is the
+//! rather than holding one across a call.  [`Buf::run_in`] is the
 //! `aucmd_prepbuf`/`aucmd_restbuf` pair, which must always be matched.
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
@@ -157,18 +157,47 @@ fn lines_differ(buffer: Buf, lnum: LineNr) -> bool {
     theirs.line(lnum) != ours.line(lnum)
 }
 
-/// Run `f` with `buffer` current and in a window, then restore what was current.
-///
-/// The `aucmd_prepbuf`/`aucmd_restbuf` pair must always be matched, which is
-/// what makes this a scope rather than two calls: only a panic can skip the
-/// restore, and a panic already abandons the editor state upstream's `longjmp`
-/// would have unwound.
-fn in_buffer<R>(buffer: Buf, f: impl FnOnce() -> R) -> R {
-    let mut aco = AcoSave::default();
-    aucmd_prepbuf(&mut aco, buffer);
-    let answer = f();
-    aucmd_restbuf(&mut aco);
-    answer
+impl Buf {
+    /// Run `f` with `buffer` current and in a window, then restore what was current.
+    ///
+    /// The `aucmd_prepbuf`/`aucmd_restbuf` pair must always be matched, which is
+    /// what makes this a scope rather than two calls: only a panic can skip the
+    /// restore, and a panic already abandons the editor state upstream's `longjmp`
+    /// would have unwound.
+    fn run_in<R>(self, f: impl FnOnce() -> R) -> R {
+        let mut aco = AcoSave::default();
+        aucmd_prepbuf(&mut aco, self);
+        let answer = f();
+        aucmd_restbuf(&mut aco);
+        answer
+    }
+
+    /// Append lines `start` to `end` of `buffer` to `out`, NL-separated, with the
+    /// buffer's embedded NULs translated back from newlines. Line `start` is
+    /// read even when it is past `end`.
+    pub fn read_into(self, start: LineNr, end: LineNr, out: &mut Vec<u8>) {
+        if self.b_ml.ml_flags.has(MlFlags::EMPTY) {
+            return;
+        }
+        let mut lines = self.lines();
+        let mut lnum = start;
+        loop {
+            // NL -> NUL translation.
+            let line = lines.line(lnum);
+            out.extend(line.iter().map(|&b| if b == b'\n' { b'\0' } else { b }));
+            // Finished a line, add a NL, unless this line should not have one.
+            if lnum != end
+                || self.b_p_bin == 0 && self.b_p_fixeol != 0
+                || lnum != self.b_no_eol_lnum && (lnum != self.line_count() || self.b_p_eol != 0)
+            {
+                out.push(b'\n');
+            }
+            lnum += 1;
+            if lnum > end {
+                break;
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -260,7 +289,7 @@ pub fn buf_ensure_loaded(buffer: Buf) -> bool {
         return true;
     }
     // Make sure the buffer is in a window. Reading nothing is no failure.
-    let status = in_buffer(buffer, || open_buffer_inner(false, None, ReadFlags::NONE));
+    let status = buffer.run_in(|| open_buffer_inner(false, None, ReadFlags::NONE));
     status.is_ok()
 }
 
@@ -443,7 +472,7 @@ fn open_buffer_inner(
         return retval;
     };
     // Go to the buffer that was opened, make sure it is in a window.
-    in_buffer(old, || {
+    old.run_in(|| {
         do_modelines(OptionSetFlags::NONE);
         Buf::current()
             .b_flags
@@ -502,7 +531,7 @@ pub fn buf_contents_changed(buffer: Buf) -> bool {
 
     let mut ea = ExArg::default();
     prepare_exarg(&mut ea, buffer);
-    in_buffer(newbuf, || {
+    newbuf.run_in(|| {
         block_autocmds_now();
         let read = ReadFlags::NEW | ReadFlags::DUMMY;
         let ((ffname, fname), last) = (names_of(buffer), MAXLNUM);
@@ -544,7 +573,7 @@ pub fn buf_open_scratch(bufnr: Handle, bufname: Option<&CStr>) -> Result<(), Fai
     edit_file(bufnr.get(), None, one, hide, Win::current())?;
     if let Some(bufname) = bufname {
         fire(AutoEvent::BufFilePre, Buf::current());
-        let _ = setfname(Buf::current(), Some(bufname), None, true);
+        let _ = Buf::current().set_name(Some(bufname), None, true);
         fire(AutoEvent::BufFilePost, Buf::current());
     }
     set_option_string(kOptBufhidden, c"hide");
@@ -554,31 +583,4 @@ pub fn buf_open_scratch(bufnr: Handle, bufname: Option<&CStr>) -> Result<(), Fai
     win.w_onebuf_opt.wo_scb = 0; // reset 'scrollbind'
     win.w_onebuf_opt.wo_crb = 0; // reset 'cursorbind'
     Ok(())
-}
-
-/// Append lines `start` to `end` of `buffer` to `out`, NL-separated, with the
-/// buffer's embedded NULs translated back from newlines. Line `start` is
-/// read even when it is past `end`.
-pub fn read_buffer_into(buffer: Buf, start: LineNr, end: LineNr, out: &mut Vec<u8>) {
-    if buffer.b_ml.ml_flags.has(MlFlags::EMPTY) {
-        return;
-    }
-    let mut lines = buffer.lines();
-    let mut lnum = start;
-    loop {
-        // NL -> NUL translation.
-        let line = lines.line(lnum);
-        out.extend(line.iter().map(|&b| if b == b'\n' { b'\0' } else { b }));
-        // Finished a line, add a NL, unless this line should not have one.
-        if lnum != end
-            || buffer.b_p_bin == 0 && buffer.b_p_fixeol != 0
-            || lnum != buffer.b_no_eol_lnum && (lnum != buffer.line_count() || buffer.b_p_eol != 0)
-        {
-            out.push(b'\n');
-        }
-        lnum += 1;
-        if lnum > end {
-            break;
-        }
-    }
 }

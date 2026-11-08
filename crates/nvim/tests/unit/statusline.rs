@@ -1,7 +1,7 @@
 //! `'statusline'` rendering, end to end.
 //!
 //! A port of `test/unit/statusline_spec.lua`. Everything here goes through
-//! [`build_stl_str_hl`], the one entry point that turns a format string into
+//! [`Win::build_stl_str_hl`], the one entry point that turns a format string into
 //! the bytes a status line is drawn from, because that is where the parts
 //! that have no other home meet: the `%=` separators dividing what is left
 //! over, the truncation marks (`<`, `>`, and the `%<` the format may place
@@ -22,9 +22,8 @@
 use neovim::winlayer::Win;
 use std::ffi::c_int;
 
-use neovim::buffer::setfname;
 use neovim::grid::schar_from_str;
-use neovim::statusline::{FmtSource, StlWants, build_stl_str_hl};
+use neovim::statusline::{FmtSource, StlWants};
 use neovim::types::ScreenChar;
 use neovim::winlayer::Buf;
 
@@ -97,7 +96,7 @@ impl Statusline {
     fn name(&self, file: &str) {
         let name = cstr(file);
         let name = (!file.is_empty()).then_some(name.as_c_str());
-        let _ = setfname(Buf::current(), name, None, true);
+        let _ = Buf::current().set_name(name, None, true);
     }
 
     /// Render one row and check both halves of the answer: the bytes
@@ -117,8 +116,7 @@ impl Statusline {
         } else {
             schar_from_str(&fill_str)
         };
-        let out = build_stl_str_hl(
-            Win::current(),
+        let out = Win::current().build_stl_str_hl(
             BUF_BYTES,
             fmt.to_bytes().to_vec(),
             FmtSource::NONE,

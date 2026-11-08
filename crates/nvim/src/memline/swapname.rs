@@ -86,13 +86,7 @@ pub fn ml_setname(mut buffer: Buf) {
         // A copy of the name the swap file has now: finding a new one can
         // run autocommands.
         let old = buffer.b_ml.memfile().fname().map(CStr::to_owned);
-        let found = findswapname(
-            buffer,
-            &dir_name,
-            last,
-            old.as_deref(),
-            &mut found_existing_dir,
-        );
+        let found = buffer.find_swap_name(&dir_name, last, old.as_deref(), &mut found_existing_dir);
         let Some(fname) = found else {
             continue; // no name found for this directory
         };
@@ -491,109 +485,111 @@ fn ask_about_swapfile(buffer: Buf, fname: &CStr) -> SwapExistsChoice {
     choice
 }
 
-/// Find a name for `buffer`'s swap file under the `'directory'` entry
-/// `dir_name`.
-///
-/// Names are tried in turn until one is free: `".swp"`, then `".swo"`,
-/// `".swn"` and so on down to `".saa"`. The last directory in the option
-/// (`last_dir`) is created if it does not exist.
-///
-/// May trigger the `SwapExists` autocommand, so whatever the caller holds
-/// about the buffer may change.
-///
-/// `old_fname`, when given, is a name this buffer already owns and may keep.
-/// `found_existing_dir` starts out false and is only ever set — once any
-/// directory in the list exists, no new one is created.
-pub(crate) fn findswapname(
-    buffer: Buf,
-    dir_name: &[u8],
-    last_dir: bool,
-    old_fname: Option<&CStr>,
-    found_existing_dir: &mut bool,
-) -> Option<XString> {
-    // A copy: the autocommands below may rename the buffer.
-    let buf_fname = buffer.name.shown().map(CStr::to_owned);
+impl Buf {
+    /// Find a name for `buffer`'s swap file under the `'directory'` entry
+    /// `dir_name`.
+    ///
+    /// Names are tried in turn until one is free: `".swp"`, then `".swo"`,
+    /// `".swn"` and so on down to `".saa"`. The last directory in the option
+    /// (`last_dir`) is created if it does not exist.
+    ///
+    /// May trigger the `SwapExists` autocommand, so whatever the caller holds
+    /// about the buffer may change.
+    ///
+    /// `old_fname`, when given, is a name this buffer already owns and may keep.
+    /// `found_existing_dir` starts out false and is only ever set — once any
+    /// directory in the list exists, no new one is created.
+    pub(crate) fn find_swap_name(
+        self,
+        dir_name: &[u8],
+        last_dir: bool,
+        old_fname: Option<&CStr>,
+        found_existing_dir: &mut bool,
+    ) -> Option<XString> {
+        // A copy: the autocommands below may rename the buffer.
+        let buf_fname = self.name.shown().map(CStr::to_owned);
 
-    let mut fname = makeswapname(buf_fname.as_deref(), dir_name);
-    while let Some(name) = fname.as_mut() {
-        if name.is_empty() {
-            // Safety check.
-            fname = None;
-            break;
-        }
-
-        // Is the name taken? A swap file that is a symbolic link is most
-        // likely a symlink attack, so the link itself counts as taken.
-        if !link_exists(name.as_cstr()) {
-            break;
-        }
-        // A name this buffer already owns is free for it to keep.
-        if old_fname.is_some_and(|old| path_fnamecmp(name, old.to_bytes()) == 0) {
-            break;
-        }
-
-        // The last two bytes of the name are the extension being permuted
-        // below. Every name `makeswapname` answers ends in ".swp", so there
-        // are always two.
-        let n = name.len();
-        let Some(ext) = name.get(n.saturating_sub(2)..).filter(|ext| ext.len() == 2) else {
-            break;
-        };
-        let ext = [ext[0], ext[1]];
-
-        // The name is taken. On the first try — the plain ".swp" — that
-        // means a real swap file, and it is worth telling the user about
-        // unless we are recovering, have no file name, are in a help file
-        // or in a dummy buffer.
-        if &ext == b"wp"
-            && !recoverymode.get()
-            && let Some(buf_fname) = buf_fname.as_deref()
-            && !buffer.b_help
-            && !buffer.b_flags.has(BufFlags::DUMMY)
-        {
-            let swap = name.as_cstr().to_owned();
-            if resolve_swapfile_clash(buffer, &swap, buf_fname) {
-                break;
-            }
-        }
-
-        // Permute the extension to find a name nothing is using: first
-        // count the last character down (".swo", ".swn", …), and when
-        // that runs out the one before it (".svz", ".suz", …). Both can
-        // happen with many Nvims editing one file, including "No Name"
-        // buffers.
-        let [mut first, mut second] = ext;
-        if second == b'a' {
-            if first == b'a' {
-                // ".saa": tried enough, give up.
-                complain(c"E326: Too many swap files found");
+        let mut fname = makeswapname(buf_fname.as_deref(), dir_name);
+        while let Some(name) = fname.as_mut() {
+            if name.is_empty() {
+                // Safety check.
                 fname = None;
                 break;
             }
-            first -= 1;
-            second = b'z' + 1;
-        }
-        second -= 1;
-        name.truncate(n - 2);
-        name.push_bytes(&[first, second]);
-    }
 
-    let dir = cstr::owned(dir_name);
-    if dir_exists(&dir) {
-        *found_existing_dir = true;
-    } else if !*found_existing_dir && last_dir {
-        // The last entry in 'directory' is created on demand.
-        if let Err(failure) = mkdir_recurse(&dir, 0o755) {
-            let shown = failure.dir.as_deref().unwrap_or(c"");
-            semsg!(
-                "E303: Unable to create directory \"{}\" for swap file, recovery impossible: {}",
-                msg_cstr(shown),
-                msg_cstr(failure.why)
-            );
-        }
-    }
+            // Is the name taken? A swap file that is a symbolic link is most
+            // likely a symlink attack, so the link itself counts as taken.
+            if !link_exists(name.as_cstr()) {
+                break;
+            }
+            // A name this buffer already owns is free for it to keep.
+            if old_fname.is_some_and(|old| path_fnamecmp(name, old.to_bytes()) == 0) {
+                break;
+            }
 
-    fname
+            // The last two bytes of the name are the extension being permuted
+            // below. Every name `makeswapname` answers ends in ".swp", so there
+            // are always two.
+            let n = name.len();
+            let Some(ext) = name.get(n.saturating_sub(2)..).filter(|ext| ext.len() == 2) else {
+                break;
+            };
+            let ext = [ext[0], ext[1]];
+
+            // The name is taken. On the first try — the plain ".swp" — that
+            // means a real swap file, and it is worth telling the user about
+            // unless we are recovering, have no file name, are in a help file
+            // or in a dummy buffer.
+            if &ext == b"wp"
+                && !recoverymode.get()
+                && let Some(buf_fname) = buf_fname.as_deref()
+                && !self.b_help
+                && !self.b_flags.has(BufFlags::DUMMY)
+            {
+                let swap = name.as_cstr().to_owned();
+                if resolve_swapfile_clash(self, &swap, buf_fname) {
+                    break;
+                }
+            }
+
+            // Permute the extension to find a name nothing is using: first
+            // count the last character down (".swo", ".swn", …), and when
+            // that runs out the one before it (".svz", ".suz", …). Both can
+            // happen with many Nvims editing one file, including "No Name"
+            // buffers.
+            let [mut first, mut second] = ext;
+            if second == b'a' {
+                if first == b'a' {
+                    // ".saa": tried enough, give up.
+                    complain(c"E326: Too many swap files found");
+                    fname = None;
+                    break;
+                }
+                first -= 1;
+                second = b'z' + 1;
+            }
+            second -= 1;
+            name.truncate(n - 2);
+            name.push_bytes(&[first, second]);
+        }
+
+        let dir = cstr::owned(dir_name);
+        if dir_exists(&dir) {
+            *found_existing_dir = true;
+        } else if !*found_existing_dir && last_dir {
+            // The last entry in 'directory' is created on demand.
+            if let Err(failure) = mkdir_recurse(&dir, 0o755) {
+                let shown = failure.dir.as_deref().unwrap_or(c"");
+                semsg!(
+                    "E303: Unable to create directory \"{}\" for swap file, recovery impossible: {}",
+                    msg_cstr(shown),
+                    msg_cstr(failure.why)
+                );
+            }
+        }
+
+        fname
+    }
 }
 
 /// Every file matching one of `patterns`.

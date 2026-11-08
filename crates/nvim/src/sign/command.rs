@@ -83,7 +83,7 @@ pub(crate) fn sign_list_placed(rbuf: Option<Buf>, group: Option<&[u8]>) {
         // A group that names no namespace matches nothing, but still prints
         // the per-buffer header above.
         if ns >= 0 {
-            let mut signs = placed_signs(cbuf, 0, ns, |_| Keep::Yes);
+            let mut signs = cbuf.placed_signs(0, ns, |_| Keep::Yes);
             if !signs.is_empty() {
                 sort_signs(&mut signs);
                 report_signs(&signs);

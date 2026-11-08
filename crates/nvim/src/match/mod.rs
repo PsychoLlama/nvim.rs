@@ -37,7 +37,6 @@ use crate::eval::typval::{
 };
 use crate::eval::window::find_win_by_nr_or_id;
 use crate::ex_docmd::{ends_excmd, ex_errmsg, set_no_hlsearch};
-use crate::fold::has_folding;
 use crate::getchar::state::got_int;
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::{
@@ -72,99 +71,101 @@ pub(crate) use self::vimscript::*;
 /// `matchadd()`'s and `:match`'s default priority.
 const DEFAULT_PRIORITY: c_int = 10;
 
-/// Adds a match to `window`'s match list, and answers its id.
-///
-/// Exactly one of `pat` and `pos_list` describes what to highlight: a
-/// pattern, or a list of `[lnum]` / `[lnum, col]` / `[lnum, col, len]`
-/// positions. `id` of `-1` allocates the next free one.
-fn match_add(
-    mut window: Win,
-    grp: &CStr,
-    pat: Option<&CStr>,
-    prio: c_int,
-    id: c_int,
-    pos_list: Option<&List>,
-    conceal_char: Option<&CStr>,
-) -> Result<c_int, MatchError> {
-    let mut id = id;
-    let mut rtype = UPD_SOME_VALID;
+impl Win {
+    /// Adds a match to `window`'s match list, and answers its id.
+    ///
+    /// Exactly one of `pat` and `pos_list` describes what to highlight: a
+    /// pattern, or a list of `[lnum]` / `[lnum, col]` / `[lnum, col, len]`
+    /// positions. `id` of `-1` allocates the next free one.
+    fn add_match(
+        mut self,
+        grp: &CStr,
+        pat: Option<&CStr>,
+        prio: c_int,
+        id: c_int,
+        pos_list: Option<&List>,
+        conceal_char: Option<&CStr>,
+    ) -> Result<c_int, MatchError> {
+        let mut id = id;
+        let mut rtype = UPD_SOME_VALID;
 
-    if grp.is_empty() || pat.is_some_and(CStr::is_empty) {
-        return Err(MatchError::Empty);
-    }
-    if id < -1 || id == 0 {
-        return Err(MatchError::InvalidId(id));
-    }
-    if id == -1 {
-        id = window.w_next_match_id;
-        window.w_next_match_id += 1;
-    } else {
-        if window.w_matches.iter().any(|item| item.mit_id == id) {
-            return Err(MatchError::IdTaken(id));
+        if grp.is_empty() || pat.is_some_and(CStr::is_empty) {
+            return Err(MatchError::Empty);
         }
-        // Keep the auto-allocated ids above every hand-picked one, with
-        // room for a few more to be picked soon.
-        if window.w_next_match_id < id + 100 {
-            window.w_next_match_id = id + 100;
+        if id < -1 || id == 0 {
+            return Err(MatchError::InvalidId(id));
         }
-    }
-
-    let hlg_id = syn_check_group(grp.to_bytes());
-    if hlg_id == 0 {
-        // The group's name was refused, which `syn_check_group` said.
-        return Err(MatchError::Reported(Failed));
-    }
-    let mut regprog = None;
-    if let Some(pat) = pat {
-        regprog = vim_regcomp(pat, RE_MAGIC);
-        if regprog.is_none() {
-            return Err(MatchError::Pattern(ThinCString::from_cstr(pat)));
+        if id == -1 {
+            id = self.w_next_match_id;
+            self.w_next_match_id += 1;
+        } else {
+            if self.w_matches.iter().any(|item| item.mit_id == id) {
+                return Err(MatchError::IdTaken(id));
+            }
+            // Keep the auto-allocated ids above every hand-picked one, with
+            // room for a few more to be picked soon.
+            if self.w_next_match_id < id + 100 {
+                self.w_next_match_id = id + 100;
+            }
         }
-    }
 
-    let mut item = MatchItem {
-        mit_id: id,
-        mit_priority: prio,
-        mit_pattern: pat.map(XString::from_cstr),
-        mit_match: RegMMatch {
-            regprog,
-            ..RegMMatch::default()
-        },
-        mit_pos_array: Vec::new(),
-        mit_pos_cur: 0,
-        mit_toplnum: LineNr::ZERO,
-        mit_botlnum: LineNr::ZERO,
-        mit_hl: MatchState {
-            conceals: hlg_id == syn_name2id(c"Conceal"),
-            ..MatchState::default()
-        },
-        mit_hlg_id: hlg_id,
-        mit_conceal_char: conceal_char.map_or(0, |c| char_at(c.to_bytes())),
-        mit_suspended: false,
-    };
-
-    if let Some(pos_list) = pos_list {
-        item.mit_pos_array = vec![LLPos::default(); list_items(Some(pos_list)).len()];
-        let (toplnum, botlnum) = fill_pos_array(&mut item.mit_pos_array, pos_list)?;
-        if toplnum != LineNr::ZERO {
-            redraw_win_range_later(window, toplnum, botlnum);
-            item.mit_toplnum = toplnum;
-            item.mit_botlnum = botlnum;
-            rtype = UPD_VALID;
+        let hlg_id = syn_check_group(grp.to_bytes());
+        if hlg_id == 0 {
+            // The group's name was refused, which `syn_check_group` said.
+            return Err(MatchError::Reported(Failed));
         }
+        let mut regprog = None;
+        if let Some(pat) = pat {
+            regprog = vim_regcomp(pat, RE_MAGIC);
+            if regprog.is_none() {
+                return Err(MatchError::Pattern(ThinCString::from_cstr(pat)));
+            }
+        }
+
+        let mut item = MatchItem {
+            mit_id: id,
+            mit_priority: prio,
+            mit_pattern: pat.map(XString::from_cstr),
+            mit_match: RegMMatch {
+                regprog,
+                ..RegMMatch::default()
+            },
+            mit_pos_array: Vec::new(),
+            mit_pos_cur: 0,
+            mit_toplnum: LineNr::ZERO,
+            mit_botlnum: LineNr::ZERO,
+            mit_hl: MatchState {
+                conceals: hlg_id == syn_name2id(c"Conceal"),
+                ..MatchState::default()
+            },
+            mit_hlg_id: hlg_id,
+            mit_conceal_char: conceal_char.map_or(0, |c| char_at(c.to_bytes())),
+            mit_suspended: false,
+        };
+
+        if let Some(pos_list) = pos_list {
+            item.mit_pos_array = vec![LLPos::default(); list_items(Some(pos_list)).len()];
+            let (toplnum, botlnum) = fill_pos_array(&mut item.mit_pos_array, pos_list)?;
+            if toplnum != LineNr::ZERO {
+                redraw_win_range_later(self, toplnum, botlnum);
+                item.mit_toplnum = toplnum;
+                item.mit_botlnum = botlnum;
+                rtype = UPD_VALID;
+            }
+        }
+
+        // Insert into the list, which is in ascending priority order — so a
+        // new match goes *after* every existing one of equal priority.
+        let at = self
+            .w_matches
+            .iter()
+            .position(|item| prio < item.mit_priority)
+            .unwrap_or(self.w_matches.len());
+        self.w_matches.insert(at, item);
+
+        redraw_later(self, rtype);
+        Ok(id)
     }
-
-    // Insert into the list, which is in ascending priority order — so a
-    // new match goes *after* every existing one of equal priority.
-    let at = window
-        .w_matches
-        .iter()
-        .position(|item| prio < item.mit_priority)
-        .unwrap_or(window.w_matches.len());
-    window.w_matches.insert(at, item);
-
-    redraw_later(window, rtype);
-    Ok(id)
 }
 
 /// Fills a match's position array from a `matchaddpos()` list.
@@ -345,7 +346,7 @@ pub(crate) fn ex_match(excmd: &mut ExArg) {
             }
             let pat = cstr::owned(line.slice_at(p + 1, end - (p + 1)));
             let win = Win::current();
-            if let Err(err) = match_add(win, &group, Some(&pat), DEFAULT_PRIORITY, id, None, None) {
+            if let Err(err) = win.add_match(&group, Some(&pat), DEFAULT_PRIORITY, id, None, None) {
                 err.report();
             }
         }

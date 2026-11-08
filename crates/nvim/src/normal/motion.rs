@@ -28,7 +28,6 @@ use crate::edit::{
     oneright,
 };
 use crate::eval::prompt_invoke_callback;
-use crate::fold::has_folding;
 use crate::getchar::beep_flush;
 use crate::getchar::state::mod_mask;
 use crate::mark::setpcmark;
@@ -219,7 +218,7 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
             let mut n = count1 - 1;
             while n > 0 && win.w_cursor.lnum > win.w_topline {
                 let lnum = win.w_cursor.lnum;
-                has_folding(win, lnum, Some(&mut win.w_cursor.lnum), None);
+                win.has_folding(lnum, Some(&mut win.w_cursor.lnum), None);
                 n += c_int::from(decor_conceal_line(wp, win.w_cursor.lnum.get(), true));
                 if win.w_cursor.lnum > win.w_topline {
                     win.w_cursor.lnum -= 1;
@@ -249,7 +248,7 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
                 }
                 let mut last: LineNr = LineNr::ZERO;
                 let at = win.w_topline + n;
-                if has_folding(wp, at, None, Some(&mut last)) {
+                if wp.has_folding(at, None, Some(&mut last)) {
                     // The whole fold is one screen row.
                     n = (last - win.w_topline) as c_int;
                 }
@@ -270,7 +269,7 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
                     before > 0
                 }) && lnum < win.w_botline - 1
                 {
-                    has_folding(wp, lnum, None, Some(&mut lnum));
+                    wp.has_folding(lnum, None, Some(&mut lnum));
                     lnum += 1;
                 }
                 n = (lnum - win.w_topline) as c_int;
@@ -758,5 +757,5 @@ pub(crate) fn nv_goto(cmd_arg: &mut CmdArg) {
 /// Whether `lnum` is inside a closed fold of `window`.
 fn folded(window: Win, lnum: LineNr) -> bool {
     // Both fold ends are unwanted.
-    has_folding(window, lnum, None, None)
+    window.has_folding(lnum, None, None)
 }

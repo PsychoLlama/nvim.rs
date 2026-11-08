@@ -66,7 +66,7 @@ pub fn nvim_buf_get_lines(
     let size = line_span(start, end);
     let nl = channel_id != VIML_INTERNAL_CALL;
     let mut lines = LineSink::new(stack, &mut rv, size);
-    buf_collect_lines(b, size, start, 0, nl, &mut lines);
+    b.collect_lines(size, start, 0, nl, &mut lines);
     Ok(rv.into())
 }
 
@@ -267,7 +267,7 @@ pub fn nvim_buf_get_text(
     let line = buf_get_text(b, first, start_col, Integer::from(MAXCOL - 1))?;
     lines.push(line.as_bytes(), 0, replace_nl);
     if size > 2 {
-        buf_collect_lines(b, size - 2, first + 1, 1, replace_nl, &mut lines);
+        b.collect_lines(size - 2, first + 1, 1, replace_nl, &mut lines);
     }
     let line = buf_get_text(b, last, 0, end_col)?;
     lines.push(line.as_bytes(), len_as_int(size - 1), replace_nl);
@@ -288,7 +288,7 @@ pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer,
         return Err(Error::validation(c"Index out of bounds"));
     };
     // -1 is the API's answer for "no offset".
-    let offset = ml_find_line_or_offset(b, lnum + 1, None, true).unwrap_or(-1);
+    let offset = b.find_line_or_offset(lnum + 1, None, true).unwrap_or(-1);
     Ok(Integer::from(offset))
 }
 
@@ -353,19 +353,21 @@ impl<'a> LineSink<'a> {
     }
 }
 
-/// Collect `n` lines of `buffer` from `start` into `lines`, as items
-/// `start_idx..`.
-pub(crate) fn buf_collect_lines(
-    buffer: Buf,
-    n: size_t,
-    start: LineNr,
-    start_idx: ::core::ffi::c_int,
-    replace_nl: bool,
-    lines: &mut LineSink<'_>,
-) {
-    let mut text = buffer.lines();
-    for i in 0..n {
-        let offset = len_as_int(i);
-        lines.push(text.line(start + offset), start_idx + offset, replace_nl);
+impl Buf {
+    /// Collect `n` lines of `buffer` from `start` into `lines`, as items
+    /// `start_idx..`.
+    pub(crate) fn collect_lines(
+        self,
+        n: size_t,
+        start: LineNr,
+        start_idx: ::core::ffi::c_int,
+        replace_nl: bool,
+        lines: &mut LineSink<'_>,
+    ) {
+        let mut text = self.lines();
+        for i in 0..n {
+            let offset = len_as_int(i);
+            lines.push(text.line(start + offset), start_idx + offset, replace_nl);
+        }
     }
 }

@@ -1,6 +1,6 @@
 //! Deciding whether one word is spelled correctly.
 //!
-//! [`spell_check`] is the entry point everything else funnels through: the
+//! [`Win::spell_check`] is the entry point everything else funnels through: the
 //! screen drawing code calls it for every word on every redrawn line, `]s`
 //! calls it walking the buffer, and `spellbadword()` calls it once. It
 //! takes a pointer at what might be the start of a word, works out where
@@ -76,255 +76,256 @@ fn is_upper(c: c_int) -> bool {
     }
 }
 
-/// Check the word `text` starts with in window `window`.
-///
-/// `text` runs from the word to the end of its string; its end, or a NUL
-/// in it, is the end of the text.
-///
-/// Answers the length of the word in bytes, good or bad, so the caller can
-/// skip over it, and the highlight for a badly spelled word -- `HLF_COUNT`
-/// for one spelled right. `capcol`, when given, is the column at which to
-/// check for a capital after a sentence end; it is set to the next such
-/// column, or -1 when no sentence end was found. `docount` asks for the
-/// word to be counted towards the `COMMON` statistics.
-///
-/// Must only be called with a non-empty `'spelllang'`.
-pub fn spell_check(
-    window: Win,
-    text: &[u8],
-    mut capcol: Option<&mut ColNr>,
-    docount: bool,
-) -> (usize, Hlf) {
-    // A word never starts at a space or a control character.
-    if byte_at(text, 0) <= b' ' {
-        return (1, HLF_COUNT);
-    }
-    // Loading the language files failed.
-    if window.syn_block().b_langp.is_empty() {
-        return (1, HLF_COUNT);
-    }
+impl Win {
+    /// Check the word `text` starts with in window `window`.
+    ///
+    /// `text` runs from the word to the end of its string; its end, or a NUL
+    /// in it, is the end of the text.
+    ///
+    /// Answers the length of the word in bytes, good or bad, so the caller can
+    /// skip over it, and the highlight for a badly spelled word -- `HLF_COUNT`
+    /// for one spelled right. `capcol`, when given, is the column at which to
+    /// check for a capital after a sentence end; it is set to the next such
+    /// column, or -1 when no sentence end was found. `docount` asks for the
+    /// word to be counted towards the `COMMON` statistics.
+    ///
+    /// Must only be called with a non-empty `'spelllang'`.
+    pub fn spell_check(
+        self,
+        text: &[u8],
+        mut capcol: Option<&mut ColNr>,
+        docount: bool,
+    ) -> (usize, Hlf) {
+        // A word never starts at a space or a control character.
+        if byte_at(text, 0) <= b' ' {
+            return (1, HLF_COUNT);
+        }
+        // Loading the language files failed.
+        if self.syn_block().b_langp.is_empty() {
+            return (1, HLF_COUNT);
+        }
 
-    // The languages are resolved once for the whole lookup.
-    let mut counted = None;
-    let checked = loaded_langs.with(|langs| {
-        langs.with_word_ends(|ends| {
-            look_up(
-                window,
-                text,
-                langs,
-                ends,
-                capcol.as_deref_mut(),
-                docount,
-                &mut counted,
-            )
-        })
-    });
-    if let Some((id, len)) = counted {
-        // Counted once the lookup is over, which only reads the language.
-        loaded_langs.with_mut(|langs| {
-            if let Some(slang) = langs.get_mut(id) {
-                count_common_word(slang, &text[..len.min(text.len())], 1);
-            }
+        // The languages are resolved once for the whole lookup.
+        let mut counted = None;
+        let checked = loaded_langs.with(|langs| {
+            langs.with_word_ends(|ends| {
+                self.look_up_word(
+                    text,
+                    langs,
+                    ends,
+                    capcol.as_deref_mut(),
+                    docount,
+                    &mut counted,
+                )
+            })
         });
-    }
-    if let Some(checked) = checked {
-        return checked;
-    }
+        if let Some((id, len)) = counted {
+            // Counted once the lookup is over, which only reads the language.
+            loaded_langs.with_mut(|langs| {
+                if let Some(slang) = langs.get_mut(id) {
+                    count_common_word(slang, &text[..len.min(text.len())], 1);
+                }
+            });
+        }
+        if let Some(checked) = checked {
+            return checked;
+        }
 
-    // Sitting on a non-word character is not an error; step over it and
-    // look for a word after it.
-    if let Some(capcol) = capcol
-        && window.syn_block().b_cap_prog.is_some()
-    {
-        // Did a sentence end here?
-        let mut block = window;
-        let mut regmatch = RegMatch::new(block.syn_block_mut().b_cap_prog.take(), false);
-        let r = vim_regexec(&mut regmatch, &c_text(text), 0);
-        block.syn_block_mut().b_cap_prog = regmatch.regprog.take();
-        if let Some(end) = regmatch.ends[0]
-            && r
+        // Sitting on a non-word character is not an error; step over it and
+        // look for a word after it.
+        if let Some(capcol) = capcol
+            && self.syn_block().b_cap_prog.is_some()
         {
-            *capcol = ColNr::from_index(end);
-        }
-    }
-    (c_cluster_len(text), HLF_COUNT)
-}
-
-/// The lookup half of [`spell_check`], over the language table `langs`:
-/// the word's length and highlight, or `None` when `text` starts with a
-/// character that is not part of a word. A word to count towards
-/// `COMMON` is left in `counted`, as the language and the word's length.
-fn look_up(
-    window: Win,
-    text: &[u8],
-    langs: &LoadedLangs,
-    ends: &mut Vec<WordEnd>,
-    capcol: Option<&mut ColNr>,
-    docount: bool,
-    counted: &mut Option<(LangId, usize)>,
-) -> Option<(usize, Hlf)> {
-    let syn = window.syn_block();
-    let langp = &syn.b_langp[..];
-    let mut nrlen = 0usize; // a number came first
-    let mut wrongcaplen = 0usize;
-    let mut count_word = docount;
-    let use_camel_case = syn.b_p_spo_flags & kOptSpoFlagCamel != 0;
-    let mut is_camel_case = false;
-
-    // Nearly everything lives in "mi" so that it can be handed to the
-    // lookup functions in one go.
-    let mut mi = MatchInf::new(text, window, langs, langp, ends);
-
-    // A number is always fine, including hex and binary literals. The
-    // word is still checked, so that "3GPP" and "11 julifeest" are
-    // caught.
-    let first = text[0];
-    if first.is_ascii_digit() {
-        let second = byte_at(text, 1);
-        mi.end = if first == b'0' && matches!(second, b'b' | b'B') {
-            2 + skip::bin(tail(text, 2))
-        } else if first == b'0' && matches!(second, b'x' | b'X') {
-            2 + skip::hex(tail(text, 2))
-        } else {
-            skip::digits(text)
-        };
-        nrlen = mi.end;
-    }
-
-    // Find the end of the word: the next non-word character.
-    if spell_iswordp(tail(text, mi.fend), window) {
-        if use_camel_case {
-            mi.fend = advance_camelcase_word(text, window, &mut is_camel_case);
-        } else {
-            loop {
-                mi.fend += step(text, mi.fend);
-                if byte_at(text, mi.fend) == 0 || !spell_iswordp(tail(text, mi.fend), window) {
-                    break;
-                }
+            // Did a sentence end here?
+            let mut block = self;
+            let mut regmatch = RegMatch::new(block.syn_block_mut().b_cap_prog.take(), false);
+            let r = vim_regexec(&mut regmatch, &c_text(text), 0);
+            block.syn_block_mut().b_cap_prog = regmatch.regprog.take();
+            if let Some(end) = regmatch.ends[0]
+                && r
+            {
+                *capcol = ColNr::from_index(end);
             }
         }
-
-        if capcol.as_deref() == Some(&ColNr::ZERO) && syn.b_cap_prog.is_some() {
-            // This word should have started with a capital.
-            if !is_upper(char_at(text)) {
-                wrongcaplen = mi.fend;
-            }
-        }
-    }
-    if let Some(capcol) = capcol {
-        *capcol = ColNr::NONE;
+        (c_cluster_len(text), HLF_COUNT)
     }
 
-    // Characters up to the next non-word character are consumed even
-    // for a bad word.
-    mi.end = mi.fend;
+    /// The lookup half of [`Win::spell_check`], over the language table `langs`:
+    /// the word's length and highlight, or `None` when `text` starts with a
+    /// character that is not part of a word. A word to count towards
+    /// `COMMON` is left in `counted`, as the language and the word's length.
+    fn look_up_word(
+        self,
+        text: &[u8],
+        langs: &LoadedLangs,
+        ends: &mut Vec<WordEnd>,
+        capcol: Option<&mut ColNr>,
+        docount: bool,
+        counted: &mut Option<(LangId, usize)>,
+    ) -> Option<(usize, Hlf)> {
+        let syn = self.syn_block();
+        let langp = &syn.b_langp[..];
+        let mut nrlen = 0usize; // a number came first
+        let mut wrongcaplen = 0usize;
+        let mut count_word = docount;
+        let use_camel_case = syn.b_p_spo_flags & kOptSpoFlagCamel != 0;
+        let mut is_camel_case = false;
 
-    // The caps type is worked out later, on demand.
-    mi.capflags = WordFlags::NONE;
-    mi.cend = None;
+        // Nearly everything lives in "mi" so that it can be handed to the
+        // lookup functions in one go.
+        let mut mi = MatchInf::new(text, self, langs, langp, ends);
 
-    // Fold one character past the word, so the lookup can see where the
-    // word ends.
-    if byte_at(text, mi.fend) != 0 {
-        mi.fend += step(text, mi.fend);
-    }
-    let folded = casefold_len(window, text, mi.fend, &mut mi.fword[..MAXWLEN + 1]);
-    mi.fwordlen = folded.unwrap_or_else(|written| written);
-
-    if is_camel_case && mi.fwordlen > 0 {
-        // Put a fake word end into the folded word.
-        mi.fword[mi.fwordlen - 1] = b' ';
-    }
-
-    // Bad until recognised.
-    mi.result = SP_BAD;
-    mi.result2 = SP_BAD;
-
-    // Every language is tried, because a later one may match longer.
-    for lp in langp {
-        mi.lp = *lp;
-        mi.slang = langs.get(lp.slang);
-
-        // A language whose reload failed stays in the list with
-        // everything cleared out.
-        let Some(slang) = mi.slang.filter(|slang| !slang.sl_fold_tree.is_empty()) else {
-            continue;
-        };
-
-        find_word(&mut mi, FIND_FOLDWORD);
-        find_word(&mut mi, FIND_KEEPWORD);
-        find_prefix(&mut mi, FIND_FOLDWORD);
-
-        // A NOBREAK language may fall back on a word with nothing valid
-        // after it.
-        if slang.sl_nobreak && mi.result == SP_BAD && mi.result2 != SP_BAD {
-            mi.result = mi.result2;
-            mi.end = mi.end2;
+        // A number is always fine, including hex and binary literals. The
+        // word is still checked, so that "3GPP" and "11 julifeest" are
+        // caught.
+        let first = text[0];
+        if first.is_ascii_digit() {
+            let second = byte_at(text, 1);
+            mi.end = if first == b'0' && matches!(second, b'b' | b'B') {
+                2 + skip::bin(tail(text, 2))
+            } else if first == b'0' && matches!(second, b'x' | b'X') {
+                2 + skip::hex(tail(text, 2))
+            } else {
+                skip::digits(text)
+            };
+            nrlen = mi.end;
         }
 
-        // Count the word in the first language that accepts it.
-        if count_word && mi.result == SP_OK {
-            *counted = Some((lp.slang, mi.end));
-            count_word = false;
-        }
-    }
-
-    let mut attr = HLF_COUNT;
-    if mi.result != SP_OK {
-        let first_lang = langs.get(langp[0].slang);
-        if nrlen > 0 {
-            // Skip over a leading number, so that "42nd" works. Rare and
-            // local words are still flagged, for "3GPP".
-            if mi.result == SP_BAD || mi.result == SP_BANNED {
-                return Some((nrlen, HLF_COUNT));
-            }
-        } else if !spell_iswordp_nmw(text, window) {
-            return None;
-        } else if mi.end == 0 {
-            // Always consume at least one character, in case 'midword'
-            // left the word empty.
-            mi.end = c_cluster_len(text);
-        } else if mi.result == SP_BAD && first_lang.is_some_and(|slang| slang.sl_nobreak) {
-            // The first language is NOBREAK: find the first position at
-            // which any word would be valid.
-            let save_result = mi.result;
-            mi.lp = langp[0];
-            mi.slang = first_lang;
-            if first_lang.is_some_and(|slang| !slang.sl_fold_tree.is_empty()) {
-                let mut p = 0;
-                let mut fp = 0;
+        // Find the end of the word: the next non-word character.
+        if spell_iswordp(tail(text, mi.fend), self) {
+            if use_camel_case {
+                mi.fend = advance_camelcase_word(text, self, &mut is_camel_case);
+            } else {
                 loop {
-                    p += c_cluster_len(tail(text, p));
-                    fp += c_cluster_len(tail(&mi.fword, fp));
-                    if p >= mi.end {
-                        break;
-                    }
-                    mi.compoff = fp;
-                    find_word(&mut mi, FIND_COMPOUND);
-                    if mi.result != SP_BAD {
-                        mi.end = p;
+                    mi.fend += step(text, mi.fend);
+                    if byte_at(text, mi.fend) == 0 || !spell_iswordp(tail(text, mi.fend), self) {
                         break;
                     }
                 }
-                mi.result = save_result;
+            }
+
+            if capcol.as_deref() == Some(&ColNr::ZERO) && syn.b_cap_prog.is_some() {
+                // This word should have started with a capital.
+                if !is_upper(char_at(text)) {
+                    wrongcaplen = mi.fend;
+                }
+            }
+        }
+        if let Some(capcol) = capcol {
+            *capcol = ColNr::NONE;
+        }
+
+        // Characters up to the next non-word character are consumed even
+        // for a bad word.
+        mi.end = mi.fend;
+
+        // The caps type is worked out later, on demand.
+        mi.capflags = WordFlags::NONE;
+        mi.cend = None;
+
+        // Fold one character past the word, so the lookup can see where the
+        // word ends.
+        if byte_at(text, mi.fend) != 0 {
+            mi.fend += step(text, mi.fend);
+        }
+        let folded = casefold_len(self, text, mi.fend, &mut mi.fword[..MAXWLEN + 1]);
+        mi.fwordlen = folded.unwrap_or_else(|written| written);
+
+        if is_camel_case && mi.fwordlen > 0 {
+            // Put a fake word end into the folded word.
+            mi.fword[mi.fwordlen - 1] = b' ';
+        }
+
+        // Bad until recognised.
+        mi.result = SP_BAD;
+        mi.result2 = SP_BAD;
+
+        // Every language is tried, because a later one may match longer.
+        for lp in langp {
+            mi.lp = *lp;
+            mi.slang = langs.get(lp.slang);
+
+            // A language whose reload failed stays in the list with
+            // everything cleared out.
+            let Some(slang) = mi.slang.filter(|slang| !slang.sl_fold_tree.is_empty()) else {
+                continue;
+            };
+
+            find_word(&mut mi, FIND_FOLDWORD);
+            find_word(&mut mi, FIND_KEEPWORD);
+            find_prefix(&mut mi, FIND_FOLDWORD);
+
+            // A NOBREAK language may fall back on a word with nothing valid
+            // after it.
+            if slang.sl_nobreak && mi.result == SP_BAD && mi.result2 != SP_BAD {
+                mi.result = mi.result2;
+                mi.end = mi.end2;
+            }
+
+            // Count the word in the first language that accepts it.
+            if count_word && mi.result == SP_OK {
+                *counted = Some((lp.slang, mi.end));
+                count_word = false;
             }
         }
 
-        attr = if mi.result == SP_BAD || mi.result == SP_BANNED {
-            HLF_SPB
-        } else if mi.result == SP_RARE {
-            HLF_SPR
-        } else {
-            HLF_SPL
-        };
-    }
+        let mut attr = HLF_COUNT;
+        if mi.result != SP_OK {
+            let first_lang = langs.get(langp[0].slang);
+            if nrlen > 0 {
+                // Skip over a leading number, so that "42nd" works. Rare and
+                // local words are still flagged, for "3GPP".
+                if mi.result == SP_BAD || mi.result == SP_BANNED {
+                    return Some((nrlen, HLF_COUNT));
+                }
+            } else if !spell_iswordp_nmw(text, self) {
+                return None;
+            } else if mi.end == 0 {
+                // Always consume at least one character, in case 'midword'
+                // left the word empty.
+                mi.end = c_cluster_len(text);
+            } else if mi.result == SP_BAD && first_lang.is_some_and(|slang| slang.sl_nobreak) {
+                // The first language is NOBREAK: find the first position at
+                // which any word would be valid.
+                let save_result = mi.result;
+                mi.lp = langp[0];
+                mi.slang = first_lang;
+                if first_lang.is_some_and(|slang| !slang.sl_fold_tree.is_empty()) {
+                    let mut p = 0;
+                    let mut fp = 0;
+                    loop {
+                        p += c_cluster_len(tail(text, p));
+                        fp += c_cluster_len(tail(&mi.fword, fp));
+                        if p >= mi.end {
+                            break;
+                        }
+                        mi.compoff = fp;
+                        find_word(&mut mi, FIND_COMPOUND);
+                        if mi.result != SP_BAD {
+                            mi.end = p;
+                            break;
+                        }
+                    }
+                    mi.result = save_result;
+                }
+            }
 
-    if wrongcaplen > 0 && (mi.result == SP_OK || mi.result == SP_RARE) {
-        // SpellCap is only reported when the word itself is fine.
-        return Some((wrongcaplen, HLF_SPC));
-    }
+            attr = if mi.result == SP_BAD || mi.result == SP_BANNED {
+                HLF_SPB
+            } else if mi.result == SP_RARE {
+                HLF_SPR
+            } else {
+                HLF_SPL
+            };
+        }
 
-    Some((mi.end, attr))
+        if wrongcaplen > 0 && (mi.result == SP_OK || mi.result == SP_RARE) {
+            // SpellCap is only reported when the word itself is fine.
+            return Some((wrongcaplen, HLF_SPC));
+        }
+
+        Some((mi.end, attr))
+    }
 }
 
 /// Classify `c` for the camel-case split.

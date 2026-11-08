@@ -20,7 +20,7 @@ use crate::lua_functions;
 use crate::message::{e_no_spell, emsg};
 use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
-use crate::spell::{parse_spelllang, spell_check};
+use crate::spell::parse_spelllang;
 use crate::winlayer::Win;
 
 lua_functions! {
@@ -77,7 +77,7 @@ fn spell_check_text(stack: &mut Stack) -> Result<c_int, Raise> {
         // inside the text.
         while text[pos] != 0 {
             let word = &text[pos..];
-            let (len, attr): (usize, Hlf) = spell_check(win, word, Some(&mut capcol), false);
+            let (len, attr): (usize, Hlf) = win.spell_check(word, Some(&mut capcol), false);
             if attr != HLF_COUNT {
                 let kind: &CStr = match attr {
                     HLF_SPB => c"bad",

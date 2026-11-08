@@ -195,11 +195,11 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         let added = match &held {
             None => {
                 let pattern = numbuf2.dict_string(d, b"pattern");
-                match_add(win, group, pattern, priority, id, None, conceal)
+                win.add_match(group, pattern, priority, id, None, conceal)
             }
             Some(positions) => {
                 let positions = Some(&*positions.edit());
-                match_add(win, group, None, priority, id, positions, conceal)
+                win.add_match(group, None, priority, id, positions, conceal)
             }
         };
         match added {
@@ -276,7 +276,7 @@ pub(crate) fn f_matchadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     }
 
     let conceal = conceal_char.as_deref();
-    let added = match_add(win, grp, Some(pat), prio, id, None, conceal);
+    let added = win.add_match(grp, Some(pat), prio, id, None, conceal);
     result.write_number(VarNumber::from(answer_or_report(added)));
 }
 
@@ -316,7 +316,7 @@ pub(crate) fn f_matchaddpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
     }
 
     let conceal = conceal_char.as_deref();
-    let added = match_add(win, group, None, prio, id, l, conceal);
+    let added = win.add_match(group, None, prio, id, l, conceal);
     result.write_number(VarNumber::from(answer_or_report(added)));
 }
 

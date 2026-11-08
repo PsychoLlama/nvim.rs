@@ -17,8 +17,8 @@
 //! * [`soundfold`] — turning a word into how it sounds. Shared with both
 //!   sibling directories.
 //! * [`lookup`] — walking a language's word tree, the innermost loop.
-//! * [`check`] — [`spell_check`], the per-word entry point.
-//! * [`navigate`] — [`spell_move_to`], scanning the buffer for the next
+//! * [`check`] — [`Win::spell_check`], the per-word entry point.
+//! * [`navigate`] — [`Win::spell_move_to`], scanning the buffer for the next
 //!   bad word.
 //! * [`slang`] — the lifetime of one loaded language.
 //! * [`lang`] — turning `'spelllang'` into a list of loaded languages.
@@ -80,8 +80,8 @@ pub use chartab::{
 };
 pub(crate) use chartab::{casefold_len, spelltab_fold, spelltab_isu, spelltab_isw, spelltab_upper};
 pub use check::{
-    check_need_cap, expand_spelling, no_spell_checking, spell_check, spell_check_window,
-    spell_expand_check_cap, spell_to_word_end, spell_valid_case, spell_word_start,
+    check_need_cap, expand_spelling, no_spell_checking, spell_check_window, spell_expand_check_cap,
+    spell_to_word_end, spell_valid_case, spell_word_start,
 };
 pub use dump::{ex_spelldump, ex_spellinfo, spell_dump_compl};
 pub use lang::{
@@ -90,7 +90,7 @@ pub use lang::{
 };
 pub(crate) use lookup::compound_flag;
 pub use lookup::{can_compound, match_checkcompoundpattern, match_compoundrule, valid_word_prefix};
-pub use navigate::{spell_cat_line, spell_move_to};
+pub use navigate::spell_cat_line;
 use slang::count_syllables;
 pub(crate) use slang::{LoadedLangs, init_syl_tab, languages, loaded_langs, put_lang, with_lang};
 pub use slang::{

@@ -71,7 +71,6 @@ use crate::getchar::state::KeyTyped;
 use crate::grid::{SCHAR_BUF_SIZE, SCharBuf, schar_copy, schar_get_adv};
 use crate::highlight_group::{HLF_CLF, HLF_FC, syn_name2id_bytes};
 use crate::mbyte::{c_cluster_len, char_at};
-use crate::memline::ml_find_line_or_offset;
 use crate::message::state::did_emsg;
 use crate::option::defs::OptIndex;
 use crate::option::vars::{p_sc, p_sloc};
@@ -167,7 +166,7 @@ impl Env<'_> {
     ///
     /// No arena borrow may be live across this: it re-enters the evaluator,
     /// which can reach `nvim_eval_statusline()` and land back in
-    /// [`build_stl_str_hl`].
+    /// [`Win::build_stl_str_hl`].
     pub(super) fn eval(&self, expr: &CStr) -> Option<Vec<u8>> {
         // Upstream publishes the *real* current buffer and window under
         // `g:actual_curbuf`/`g:actual_curwin`, because the two below are
@@ -229,7 +228,8 @@ impl Env<'_> {
 
     /// The byte offset of the cursor line, for `%o`/`%O`.
     pub(super) fn line_offset(&self) -> Option<c_int> {
-        ml_find_line_or_offset(self.buf, self.win.w_cursor.lnum, None, false)
+        self.buf
+            .find_line_or_offset(self.win.w_cursor.lnum, None, false)
     }
 
     /// `%p`: how far through the buffer the cursor is, as a percentage.
@@ -570,7 +570,7 @@ impl FmtSource {
     };
 }
 
-/// What [`build_stl_str_hl`] is asked to record on the way, beyond the text
+/// What [`Win::build_stl_str_hl`] is asked to record on the way, beyond the text
 /// itself.
 pub struct StlWants<'a> {
     /// The highlight runs, one per group change.
@@ -610,148 +610,151 @@ pub struct StlOutput {
     pub fold_vcol: Option<[ColNr; 9]>,
 }
 
-/// [`build_stl_str_hl`] for a caller that wants the text and nothing else it
-/// can report -- no fill character, no highlight or click records -- from a
-/// format it holds: `'titlestring'` and `'iconstring'`.
-pub(crate) fn build_stl_text(
-    window: Win,
-    room: usize,
-    fmt: Vec<u8>,
-    from: FmtSource,
-    maxwidth: c_int,
-) -> Vec<u8> {
-    build_stl_str_hl(window, room, fmt, from, 0, maxwidth, StlWants::NONE).text
-}
-
-/// Build a string from the status line items in `fmt`, the expansion working
-/// in a `room`-byte buffer (whose size decides where the text is cut and
-/// whether the separators spread).
-///
-/// Normally works for window `window`, except when working for `'tabline'`,
-/// when it is `curwin`. `fmt` is the caller's own copy: expanding it can run
-/// a function that `:set`s the option it came from. This re-enters the
-/// editor, so nothing may be held across it.
-pub fn build_stl_str_hl(
-    window: Win,
-    room: usize,
-    fmt: Vec<u8>,
-    from: FmtSource,
-    fillchar: ScreenChar,
-    maxwidth: c_int,
-    wants: StlWants<'_>,
-) -> StlOutput {
-    let StlWants { hl, clicks, stc } = wants;
-    let FmtSource { opt_idx, opt_scope } = from;
-    let mut out = vec![0u8; room];
-    let win = window;
-    let save_redraw_not_allowed = redraw_not_allowed.get();
-    let save_key_typed = KeyTyped.get();
-    let did_emsg_before = did_emsg.get();
-
-    // Inside update_screen() we do not want redrawing a statusline, ruler or
-    // title to trigger another redraw; it may loop forever.
-    if updating_screen.get() {
-        redraw_not_allowed.set(true);
+impl Win {
+    /// [`Win::build_stl_str_hl`] for a caller that wants the text and nothing else it
+    /// can report -- no fill character, no highlight or click records -- from a
+    /// format it holds: `'titlestring'` and `'iconstring'`.
+    pub(crate) fn build_stl_text(
+        self,
+        room: usize,
+        fmt: Vec<u8>,
+        from: FmtSource,
+        maxwidth: c_int,
+    ) -> Vec<u8> {
+        self.build_stl_str_hl(room, fmt, from, 0, maxwidth, StlWants::NONE)
+            .text
     }
 
-    // A format set insecurely is evaluated in the sandbox. `opt_idx` is
-    // `kOptInvalid` when the caller is nvim_eval_statusline(), which is
-    // therefore never sandboxed.
-    let sandbox = opt_idx as c_int != kOptInvalid as c_int && {
-        was_set_insecurely(window, opt_idx, opt_scope)
-    };
+    /// Build a string from the status line items in `fmt`, the expansion working
+    /// in a `room`-byte buffer (whose size decides where the text is cut and
+    /// whether the separators spread).
+    ///
+    /// Normally works for window `window`, except when working for `'tabline'`,
+    /// when it is `curwin`. `fmt` is the caller's own copy: expanding it can run
+    /// a function that `:set`s the option it came from. This re-enters the
+    /// editor, so nothing may be held across it.
+    pub fn build_stl_str_hl(
+        self,
+        room: usize,
+        fmt: Vec<u8>,
+        from: FmtSource,
+        fillchar: ScreenChar,
+        maxwidth: c_int,
+        wants: StlWants<'_>,
+    ) -> StlOutput {
+        let StlWants { hl, clicks, stc } = wants;
+        let FmtSource { opt_idx, opt_scope } = from;
+        let mut out = vec![0u8; room];
+        let win = self;
+        let save_redraw_not_allowed = redraw_not_allowed.get();
+        let save_key_typed = KeyTyped.get();
+        let did_emsg_before = did_emsg.get();
 
-    // The format is read as the C string it stands for: to its first NUL.
-    let mut fmt_bytes = fmt;
-    fmt_bytes.truncate(crate::cstr::until_nul(&fmt_bytes).len());
-    // A format starting with "%!" is itself an expression, whose result is
-    // the format actually used. Evaluating it can fail, in which case the
-    // literal text is what gets rendered.
-    let usefmt = if fmt_bytes.starts_with(b"%!") {
-        let mut winid = TypVal::Number(VarNumber::from(win.handle.get()));
-        let name = c"g:statusline_winid";
-        set_var(name.to_bytes(), &mut winid, false);
-        let expanded = eval_to_string_safe(&fmt_bytes[2..], sandbox, false);
-        unlet(name);
-        expanded.map_or(fmt_bytes, |text| text.to_vec())
-    } else {
-        fmt_bytes
-    };
-
-    let fill = Fill::of(fillchar);
-
-    // The cursor in windows other than the current one is not always
-    // up to date, because of autocommands and timers.
-    let mut win = win;
-    let buf = win.buffer();
-    let lnum = win.w_cursor.lnum.min(buf.b_ml.ml_line_count);
-    win.w_cursor.lnum = lnum;
-
-    // Read the byte under the cursor now, in case an item needs it.
-    let mut lines = buf.lines();
-    let line = lines.line(lnum);
-    let empty_line = line.is_empty();
-    let len = ColNr::from_index(line.len());
-    let byteval = if win.w_cursor.col > len {
-        // The line may have changed since the cursor column was checked, or
-        // the line number was adjusted above.
-        win.w_cursor.col = len;
-        win.w_cursor.coladd = 0;
-        0
-    } else {
-        char_at(&line[win.w_cursor.col.as_usize()..])
-    };
-
-    let env = Env {
-        win,
-        buf,
-        stc,
-        opt_idx,
-        sandbox,
-        empty_line,
-        byteval,
-    };
-    let built = expand(&env, &mut out, usefmt, &fill, maxwidth, !clicks);
-
-    // Hand back the highlight runs and the click records, which name their
-    // places in the expander's buffer.
-    let (hl, clicks) = with_scratch(|s| {
-        let runs = if hl {
-            collect_highlights(s, room, &built)
-        } else {
-            Vec::new()
-        };
-        let recs = if clicks {
-            collect_clicks(s, room, &built)
-        } else {
-            Vec::new()
-        };
-        if built.evalstart == 0 {
-            // The outermost expansion: no item refers to a name any more.
-            s.clear_cmds();
+        // Inside update_screen() we do not want redrawing a statusline, ruler or
+        // title to trigger another redraw; it may loop forever.
+        if updating_screen.get() {
+            redraw_not_allowed.set(true);
         }
-        (runs, recs)
-    });
 
-    redraw_not_allowed.set(save_redraw_not_allowed);
+        // A format set insecurely is evaluated in the sandbox. `opt_idx` is
+        // `kOptInvalid` when the caller is nvim_eval_statusline(), which is
+        // therefore never sandboxed.
+        let sandbox = opt_idx as c_int != kOptInvalid as c_int && {
+            was_set_insecurely(self, opt_idx, opt_scope)
+        };
 
-    // An error here would mess up the display and might loop redrawing;
-    // avoid that by setting the option back to its default.
-    if opt_idx as c_int != kOptInvalid as c_int && did_emsg.get() > did_emsg_before {
-        let default = get_option_default(opt_idx, opt_scope);
-        set_option_direct(opt_idx, default, opt_scope, SID_ERROR);
-    }
+        // The format is read as the C string it stands for: to its first NUL.
+        let mut fmt_bytes = fmt;
+        fmt_bytes.truncate(crate::cstr::until_nul(&fmt_bytes).len());
+        // A format starting with "%!" is itself an expression, whose result is
+        // the format actually used. Evaluating it can fail, in which case the
+        // literal text is what gets rendered.
+        let usefmt = if fmt_bytes.starts_with(b"%!") {
+            let mut winid = TypVal::Number(VarNumber::from(win.handle.get()));
+            let name = c"g:statusline_winid";
+            set_var(name.to_bytes(), &mut winid, false);
+            let expanded = eval_to_string_safe(&fmt_bytes[2..], sandbox, false);
+            unlet(name);
+            expanded.map_or(fmt_bytes, |text| text.to_vec())
+        } else {
+            fmt_bytes
+        };
 
-    // A user function may reset KeyTyped; restore it.
-    KeyTyped.set(save_key_typed);
-    out.truncate(crate::cstr::until_nul(&out).len());
-    StlOutput {
-        text: out,
-        width: built.width,
-        hl,
-        item_count: built.itemcnt,
-        clicks,
-        fold_vcol: env.stc.map(|stc| stc.fold_vcol.get()),
+        let fill = Fill::of(fillchar);
+
+        // The cursor in windows other than the current one is not always
+        // up to date, because of autocommands and timers.
+        let mut win = win;
+        let buf = win.buffer();
+        let lnum = win.w_cursor.lnum.min(buf.b_ml.ml_line_count);
+        win.w_cursor.lnum = lnum;
+
+        // Read the byte under the cursor now, in case an item needs it.
+        let mut lines = buf.lines();
+        let line = lines.line(lnum);
+        let empty_line = line.is_empty();
+        let len = ColNr::from_index(line.len());
+        let byteval = if win.w_cursor.col > len {
+            // The line may have changed since the cursor column was checked, or
+            // the line number was adjusted above.
+            win.w_cursor.col = len;
+            win.w_cursor.coladd = 0;
+            0
+        } else {
+            char_at(&line[win.w_cursor.col.as_usize()..])
+        };
+
+        let env = Env {
+            win,
+            buf,
+            stc,
+            opt_idx,
+            sandbox,
+            empty_line,
+            byteval,
+        };
+        let built = expand(&env, &mut out, usefmt, &fill, maxwidth, !clicks);
+
+        // Hand back the highlight runs and the click records, which name their
+        // places in the expander's buffer.
+        let (hl, clicks) = with_scratch(|s| {
+            let runs = if hl {
+                collect_highlights(s, room, &built)
+            } else {
+                Vec::new()
+            };
+            let recs = if clicks {
+                collect_clicks(s, room, &built)
+            } else {
+                Vec::new()
+            };
+            if built.evalstart == 0 {
+                // The outermost expansion: no item refers to a name any more.
+                s.clear_cmds();
+            }
+            (runs, recs)
+        });
+
+        redraw_not_allowed.set(save_redraw_not_allowed);
+
+        // An error here would mess up the display and might loop redrawing;
+        // avoid that by setting the option back to its default.
+        if opt_idx as c_int != kOptInvalid as c_int && did_emsg.get() > did_emsg_before {
+            let default = get_option_default(opt_idx, opt_scope);
+            set_option_direct(opt_idx, default, opt_scope, SID_ERROR);
+        }
+
+        // A user function may reset KeyTyped; restore it.
+        KeyTyped.set(save_key_typed);
+        out.truncate(crate::cstr::until_nul(&out).len());
+        StlOutput {
+            text: out,
+            width: built.width,
+            hl,
+            item_count: built.itemcnt,
+            clicks,
+            fold_vcol: env.stc.map(|stc| stc.fold_vcol.get()),
+        }
     }
 }
 

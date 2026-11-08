@@ -244,12 +244,12 @@ fn redraw_win_for_change(mut window: Win, mut lnum: LineNr, col: ColNr, lnume: L
     // w_cline_folded here is the cheap way to keep it right when inserting
     // just above a closed fold.
     // Only `firstp` is asked for, and it is a local.
-    let mut folded = has_folding_win(window, lnum, Some(&mut lnum), None, false, None);
+    let mut folded = window.has_folding_with(lnum, Some(&mut lnum), None, false, None);
     if window.w_cursor.lnum == lnum {
         window.w_cline_folded = folded;
     }
     // As above, for `lastp`.
-    folded = has_folding_win(window, last, None, Some(&mut last), false, None);
+    folded = window.has_folding_with(last, None, Some(&mut last), false, None);
     if window.w_cursor.lnum == last {
         window.w_cline_folded = folded;
     }

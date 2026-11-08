@@ -142,7 +142,7 @@ pub(crate) fn sign_get_placed_info_dict(mark: MTKey) -> DictRef {
 
 /// Every sign placed in `buffer`, in marktree order — `getbufinfo()`'s `signs`.
 pub(crate) fn get_buffer_signs(buffer: Buf) -> ListRef {
-    let signs = placed_signs(buffer, 0, ALL_GROUPS, |_| Keep::Yes);
+    let signs = buffer.placed_signs(0, ALL_GROUPS, |_| Keep::Yes);
     let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     for mark in signs {
         l.edit().push_dict(Some(sign_get_placed_info_dict(mark)));
@@ -150,52 +150,54 @@ pub(crate) fn get_buffer_signs(buffer: Buf) -> ListRef {
     l
 }
 
-/// Appends `buffer`'s `{ bufnr, signs }` entry to `retlist`, filtered by `lnum`,
-/// `sign_id` and `group`.
-///
-/// A zero `lnum` or `sign_id` means "any"; the two combine, so naming both
-/// asks for one specific sign on one specific line.
-fn sign_get_placed_in_buf(
-    buffer: Buf,
-    lnum: LineNr,
-    sign_id: c_int,
-    group: Option<&[u8]>,
-    retlist: &mut List,
-) {
-    let d = tv_dict_alloc();
-    let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-    retlist.push_dict(Some(d.clone()));
-    put_nr(&mut d.edit(), "bufnr", VarNumber::from(buffer.handle));
-    let _ = d.edit().add_list(b"signs", Some(l.clone()));
+impl Buf {
+    /// Appends `buffer`'s `{ bufnr, signs }` entry to `retlist`, filtered by `lnum`,
+    /// `sign_id` and `group`.
+    ///
+    /// A zero `lnum` or `sign_id` means "any"; the two combine, so naming both
+    /// asks for one specific sign on one specific line.
+    fn placed_signs_list(
+        self,
+        lnum: LineNr,
+        sign_id: c_int,
+        group: Option<&[u8]>,
+        retlist: &mut List,
+    ) {
+        let d = tv_dict_alloc();
+        let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+        retlist.push_dict(Some(d.clone()));
+        put_nr(&mut d.edit(), "bufnr", VarNumber::from(self.handle));
+        let _ = d.edit().add_list(b"signs", Some(l.clone()));
 
-    let ns = group_get_ns(group);
-    if !buf_has_signs(buffer) || ns < 0 {
-        return;
-    }
-
-    let first_row = if lnum != LineNr::ZERO {
-        lnum - 1
-    } else {
-        LineNr::ZERO
-    };
-    let mut signs = placed_signs(buffer, first_row.get(), ns, |mark| {
-        if lnum != LineNr::ZERO && mark.pos.row >= lnum.get() {
-            // The tree is in row order, so nothing past this row can match.
-            return Keep::Stop;
+        let ns = group_get_ns(group);
+        if !buf_has_signs(self) || ns < 0 {
+            return;
         }
-        // A zero `lnum` or `sign_id` means "any"; the two combine.
-        let on_line = lnum == LineNr::ZERO || lnum == LineNr::new(mark.pos.row + 1);
-        let is_id = sign_id == 0 || sign_id == mark.id.cast_signed();
-        if on_line && is_id {
-            Keep::Yes
+
+        let first_row = if lnum != LineNr::ZERO {
+            lnum - 1
         } else {
-            Keep::No
-        }
-    });
+            LineNr::ZERO
+        };
+        let mut signs = self.placed_signs(first_row.get(), ns, |mark| {
+            if lnum != LineNr::ZERO && mark.pos.row >= lnum.get() {
+                // The tree is in row order, so nothing past this row can match.
+                return Keep::Stop;
+            }
+            // A zero `lnum` or `sign_id` means "any"; the two combine.
+            let on_line = lnum == LineNr::ZERO || lnum == LineNr::new(mark.pos.row + 1);
+            let is_id = sign_id == 0 || sign_id == mark.id.cast_signed();
+            if on_line && is_id {
+                Keep::Yes
+            } else {
+                Keep::No
+            }
+        });
 
-    sort_signs(&mut signs);
-    for mark in signs {
-        l.edit().push_dict(Some(sign_get_placed_info_dict(mark)));
+        sort_signs(&mut signs);
+        for mark in signs {
+            l.edit().push_dict(Some(sign_get_placed_info_dict(mark)));
+        }
     }
 }
 
@@ -209,14 +211,14 @@ fn sign_get_placed(
     retlist: &mut List,
 ) {
     if let Some(buffer) = buffer {
-        sign_get_placed_in_buf(buffer, lnum, id, group, retlist);
+        buffer.placed_signs_list(lnum, id, group, retlist);
         return;
     }
     for cbuf in buffers() {
         if buf_has_signs(cbuf) {
             // `lnum` is deliberately dropped: an all-buffers query
             // reports every line whatever line was asked for.
-            sign_get_placed_in_buf(cbuf, LineNr::ZERO, id, group, retlist);
+            cbuf.placed_signs_list(LineNr::ZERO, id, group, retlist);
         }
     }
 }

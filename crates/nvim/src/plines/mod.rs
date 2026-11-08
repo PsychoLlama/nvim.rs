@@ -28,11 +28,10 @@ use crate::buffer::buf_meta_total;
 use crate::charset::{byte2cells, vim_isbreak, vim_isprintc};
 use crate::cstr::byte_at;
 use crate::decoration::{
-    decor_conceal_line, decor_virt_lines, kMTMetaInline, mark_virt_chain, ns_in_win,
-    with_decor_virt,
+    decor_conceal_line, kMTMetaInline, mark_virt_chain, ns_in_win, with_decor_virt,
 };
 use crate::diff::{diff_check_fill, diffopt_filler};
-use crate::fold::{has_folding, has_folding_win, line_folded};
+use crate::fold::line_folded;
 use crate::indent::get_breakindent_win;
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{kMTFilterSelect, mt_invalid, mt_right};
@@ -746,8 +745,8 @@ pub(crate) mod lines;
 pub(crate) mod vcol;
 
 pub(crate) use lines::{
-    plines_m_win, plines_m_win_fill, plines_win, plines_win_col, plines_win_full,
-    plines_win_nofill, plines_win_nofold, win_get_fill, win_may_fill, win_text_height,
+    plines_m_win, plines_m_win_fill, plines_win, plines_win_col, plines_win_nofill,
+    plines_win_nofold, win_get_fill, win_may_fill,
 };
 pub(crate) use vcol::{getvcol, getvcol_nolist, getvcols, getvvcol};
 

@@ -106,7 +106,6 @@ pub(crate) use self::stack::*;
 mod sync;
 pub(crate) use self::sync::*;
 mod attr;
-pub(crate) use self::attr::*;
 mod endpos;
 mod items;
 pub(crate) use self::endpos::*;

@@ -42,7 +42,7 @@ use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING, reg_submatch, reg_submatch_l
 use crate::search::FORWARD;
 use crate::semsg;
 use crate::sha256::hex_digest;
-use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_move_to};
+use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang};
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{escaped_bytes, format_typvals, shellescape};
 use crate::types::ColNr;
@@ -264,7 +264,7 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     with_spell(|| {
         reported = true;
         if args.is_empty() {
-            let len = spell_move_to(Win::current(), FORWARD, SMT_ALL, true, Some(&mut attr));
+            let len = Win::current().spell_move_to(FORWARD, SMT_ALL, true, Some(&mut attr));
             if len != 0 {
                 let cursor = Win::current().w_cursor;
                 let col = usize::try_from(cursor.col).unwrap_or(0);
@@ -282,7 +282,7 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
                 while offset < end {
                     let rest = &text[offset..];
                     let len;
-                    (len, attr) = spell_check(Win::current(), rest, Some(&mut capcol), false);
+                    (len, attr) = Win::current().spell_check(rest, Some(&mut capcol), false);
                     if attr != HLF_COUNT {
                         word = rest[..len.min(end - offset)].to_vec();
                         break;

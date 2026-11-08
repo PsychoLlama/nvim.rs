@@ -73,8 +73,7 @@ use crate::options::{OptCuloptFlags, kOptCuloptFlagScreenline};
 use crate::optionstr::OptString;
 use crate::os::libc::int64_t;
 use crate::plines::{
-    linetabsize_eol, plines_m_win, plines_win, plines_win_full, plines_win_nofill, win_get_fill,
-    win_may_fill,
+    linetabsize_eol, plines_m_win, plines_win, plines_win_nofill, win_get_fill, win_may_fill,
 };
 use crate::types::{ColNr, LineNr, WLine};
 use crate::window::win_fdccol_count;
@@ -222,8 +221,7 @@ impl Win {
     ) -> (c_int, LineNr, bool) {
         let mut next = lnum;
         let mut folded = false;
-        let height = plines_win_full(
-            self,
+        let height = self.screen_lines_full(
             lnum,
             Some(&mut next),
             Some(&mut folded),

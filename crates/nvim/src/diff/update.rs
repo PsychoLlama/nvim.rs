@@ -2,7 +2,7 @@
 //!
 //! [`ex_diffupdate`] is `:diffupdate`; [`diff_try_update`] is the body it and
 //! every implicit recompute share -- write each buffer out
-//! ([`diff_write_buffer`] for the internal engine, [`diff_write`] through a
+//! ([`Buf::write_for_diff`] for the internal engine, [`diff_write`] through a
 //! temp file for the external one), run the diff, read the hunks back.
 //!
 //! `'diffanchors'` is implemented here rather than in the engine: the
@@ -51,45 +51,47 @@ fn clear_diffout(dout: &mut DiffOut) {
     }
 }
 
-/// Write lines `start`..`end` of `buffer` into `out` as one memory image for
-/// the internal engine.
-///
-/// The image is one NL-terminated line after another.  A NL *inside* a line
-/// stands for a NUL byte in the file -- `ml_get_buf` answers the two swapped
-/// -- and is written back as one, so the terminators are unambiguous.
-/// `icase` is applied here, by folding each character, because xdiff has no
-/// flag for it.
-pub(crate) fn diff_write_buffer(buffer: Buf, out: &mut Vec<u8>, start: LineNr, mut end: LineNr) {
-    out.clear();
-    if end < LineNr::ZERO {
-        end = buffer.b_ml.ml_line_count;
-    }
-    if buffer.b_ml.ml_flags.has(MlFlags::EMPTY) || end < start {
-        return;
-    }
-
-    let mut lines = buffer.lines();
-    let len = start
-        .through(end)
-        .map(|lnum| lines.line(lnum).len() + 1)
-        .sum::<usize>();
-    out.resize(len, 0);
-
-    let mut at = 0;
-    for lnum in start.through(end) {
-        let line = lines.line(lnum);
-        if diff_flags.get() & DIFF_ICASE == 0 {
-            let copy = &mut out[at..at + line.len()];
-            copy.copy_from_slice(line);
-            for byte in copy.iter_mut().filter(|byte| **byte == b'\n') {
-                *byte = 0;
-            }
-            at += line.len();
-        } else {
-            at += fold_line(line, &mut out[at..]);
+impl Buf {
+    /// Write lines `start`..`end` of `buffer` into `out` as one memory image for
+    /// the internal engine.
+    ///
+    /// The image is one NL-terminated line after another.  A NL *inside* a line
+    /// stands for a NUL byte in the file -- `ml_get_buf` answers the two swapped
+    /// -- and is written back as one, so the terminators are unambiguous.
+    /// `icase` is applied here, by folding each character, because xdiff has no
+    /// flag for it.
+    pub(crate) fn write_for_diff(self, out: &mut Vec<u8>, start: LineNr, mut end: LineNr) {
+        out.clear();
+        if end < LineNr::ZERO {
+            end = self.b_ml.ml_line_count;
         }
-        out[at] = b'\n';
-        at += 1;
+        if self.b_ml.ml_flags.has(MlFlags::EMPTY) || end < start {
+            return;
+        }
+
+        let mut lines = self.lines();
+        let len = start
+            .through(end)
+            .map(|lnum| lines.line(lnum).len() + 1)
+            .sum::<usize>();
+        out.resize(len, 0);
+
+        let mut at = 0;
+        for lnum in start.through(end) {
+            let line = lines.line(lnum);
+            if diff_flags.get() & DIFF_ICASE == 0 {
+                let copy = &mut out[at..at + line.len()];
+                copy.copy_from_slice(line);
+                for byte in copy.iter_mut().filter(|byte| **byte == b'\n') {
+                    *byte = 0;
+                }
+                at += line.len();
+            } else {
+                at += fold_line(line, &mut out[at..]);
+            }
+            out[at] = b'\n';
+            at += 1;
+        }
     }
 }
 
@@ -140,7 +142,7 @@ fn diff_write(
     mut end: LineNr,
 ) -> Result<(), Failed> {
     let Some(name) = &din.fname else {
-        diff_write_buffer(buffer, &mut din.text, start, end);
+        buffer.write_for_diff(&mut din.text, start, end);
         return Ok(());
     };
     // Writing a buffer runs `aucmd_prepbuf`/`aucmd_restbuf`, which can
@@ -171,8 +173,7 @@ fn diff_write(
     }
     let req = WriteRequest::filter();
     // No short name and no `ExArg` are wanted.
-    let r = buf_write(
-        buffer,
+    let r = buffer.write_file(
         WriteName::Other(name.as_cstr()),
         None,
         start,

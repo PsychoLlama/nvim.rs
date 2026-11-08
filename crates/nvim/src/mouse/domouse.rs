@@ -769,7 +769,7 @@ fn dispatch_action(a: Action, win: Win) {
         && State.get() & (MODE_NORMAL | MODE_INSERT) != 0
         && mouse_can_visual
     {
-        multi_click(win, op, is_click, is_drag, mods);
+        win.multi_click(op, is_click, is_drag, mods);
         return;
     }
 
@@ -782,100 +782,109 @@ fn dispatch_action(a: Action, win: Win) {
     }
 }
 
-/// A double, triple or quadruple click starts or widens a Visual selection: a
-/// word, a line, or -- for a double click on a bracket -- the block it opens.
-fn multi_click(mut win: Win, op: Option<Op>, is_click: bool, is_drag: bool, mods: ModMask) {
-    if is_click || !visual_active() {
-        if visual_active() {
-            orig_cursor.set(visual_anchor());
-        } else {
-            set_visual_anchor(win.w_cursor);
-            orig_cursor.set(visual_anchor());
-            set_visual_active(true);
-            VIsual_reselect.set(1);
-            // Start Select mode if 'selectmode' contains "mouse".
-            may_start_select(Key::ascii(b'o'));
-            setmouse();
+impl Win {
+    /// A double, triple or quadruple click starts or widens a Visual selection: a
+    /// word, a line, or -- for a double click on a bracket -- the block it opens.
+    fn multi_click(mut self, op: Option<Op>, is_click: bool, is_drag: bool, mods: ModMask) {
+        if is_click || !visual_active() {
+            if visual_active() {
+                orig_cursor.set(visual_anchor());
+            } else {
+                set_visual_anchor(self.w_cursor);
+                orig_cursor.set(visual_anchor());
+                set_visual_active(true);
+                VIsual_reselect.set(1);
+                // Start Select mode if 'selectmode' contains "mouse".
+                may_start_select(Key::ascii(b'o'));
+                setmouse();
+            }
+            set_visual_mode(match mods.masked(ModMask::MULTI_CLICK) {
+                // Double click with ALT pressed makes it blockwise.
+                ModMask::TWO_CLICK if mods.has(ModMask::ALT) => VisualMode::BLOCK,
+                ModMask::TWO_CLICK => VisualMode::CHAR,
+                ModMask::THREE_CLICK => VisualMode::LINE,
+                ModMask::FOUR_CLICK => VisualMode::BLOCK,
+                _ => visual_mode(),
+            });
         }
-        set_visual_mode(match mods.masked(ModMask::MULTI_CLICK) {
-            // Double click with ALT pressed makes it blockwise.
-            ModMask::TWO_CLICK if mods.has(ModMask::ALT) => VisualMode::BLOCK,
-            ModMask::TWO_CLICK => VisualMode::CHAR,
-            ModMask::THREE_CLICK => VisualMode::LINE,
-            ModMask::FOUR_CLICK => VisualMode::BLOCK,
-            _ => visual_mode(),
-        });
+
+        // A double click selects a word or a block.
+        if mods.masked(ModMask::MULTI_CLICK) == ModMask::TWO_CLICK {
+            let matched = is_click && self.select_matching_block(op);
+            if !matched && (is_click || is_drag) {
+                // When not found a match or when dragging: extend to include a
+                // word.
+                if lt(self.w_cursor, orig_cursor.get()) {
+                    self.with_cursor_copy(find_start_of_word);
+                    with_visual(find_end_of_word);
+                } else {
+                    with_visual(find_start_of_word);
+                    // Bytes of the character under the cursor, `None` at the end
+                    // of the line.
+                    let under = with_cursor_rest(|rest| {
+                        (!rest.is_empty())
+                            .then(|| c_int::try_from(cluster_len(rest)).unwrap_or(c_int::MAX))
+                    });
+                    if let Some(bytes) = under.filter(|_| sel_exclusive()) {
+                        self.w_cursor.col += bytes;
+                    }
+                    self.with_cursor_copy(find_end_of_word);
+                }
+            }
+            self.w_set_curswant = true;
+        }
+
+        if is_click {
+            redraw_curbuf_later(UPD_INVERTED); // update the inversion
+        }
     }
 
-    // A double click selects a word or a block.
-    if mods.masked(ModMask::MULTI_CLICK) == ModMask::TWO_CLICK {
-        let matched = is_click && select_matching_block(win, op);
-        if !matched && (is_click || is_drag) {
-            // When not found a match or when dragging: extend to include a
-            // word.
-            if lt(win.w_cursor, orig_cursor.get()) {
-                with_cursor(win, find_start_of_word);
-                with_visual(find_end_of_word);
+    /// If the character under the cursor (skipping white space) is not a word
+    /// character, try finding a match and select a (), {}, [], #if/#endif, etc.
+    /// block.  Answers whether one was found.
+    fn select_matching_block(mut self, op: Option<Op>) -> bool {
+        let mut probe = self.w_cursor;
+        while ascii_iswhite(gchar_pos(&probe)) {
+            inc(&mut probe);
+        }
+
+        let Some(mut op) = op else {
+            return false;
+        };
+        op.motion_type = kMTCharWise;
+
+        if !visual_mode().is_char() {
+            return false;
+        }
+        if vim_iswordc(gchar_pos(&probe)) {
+            return false;
+        }
+        if !equalpos(self.w_cursor, visual_anchor()) {
+            return false;
+        }
+        let Some(pos) = findmatch(Some(&mut op), NUL) else {
+            return false;
+        };
+
+        self.w_cursor = pos;
+        if op.motion_type == kMTLineWise {
+            set_visual_mode(VisualMode::LINE);
+        } else if sel_exclusive() {
+            if lt(self.w_cursor, visual_anchor()) {
+                with_visual_anchor(|visual| visual.col += 1);
             } else {
-                with_visual(find_start_of_word);
-                // Bytes of the character under the cursor, `None` at the end
-                // of the line.
-                let under = with_cursor_rest(|rest| {
-                    (!rest.is_empty())
-                        .then(|| c_int::try_from(cluster_len(rest)).unwrap_or(c_int::MAX))
-                });
-                if let Some(bytes) = under.filter(|_| sel_exclusive()) {
-                    win.w_cursor.col += bytes;
-                }
-                with_cursor(win, find_end_of_word);
+                self.w_cursor.col += 1;
             }
         }
-        win.w_set_curswant = true;
+        true
     }
 
-    if is_click {
-        redraw_curbuf_later(UPD_INVERTED); // update the inversion
+    /// Run `f` over `win`'s cursor through a copy, put back afterwards.
+    fn with_cursor_copy(mut self, f: fn(&mut Pos)) {
+        let mut cursor = self.w_cursor;
+        f(&mut cursor);
+        self.w_cursor = cursor;
     }
-}
-
-/// If the character under the cursor (skipping white space) is not a word
-/// character, try finding a match and select a (), {}, [], #if/#endif, etc.
-/// block.  Answers whether one was found.
-fn select_matching_block(mut win: Win, op: Option<Op>) -> bool {
-    let mut probe = win.w_cursor;
-    while ascii_iswhite(gchar_pos(&probe)) {
-        inc(&mut probe);
-    }
-
-    let Some(mut op) = op else {
-        return false;
-    };
-    op.motion_type = kMTCharWise;
-
-    if !visual_mode().is_char() {
-        return false;
-    }
-    if vim_iswordc(gchar_pos(&probe)) {
-        return false;
-    }
-    if !equalpos(win.w_cursor, visual_anchor()) {
-        return false;
-    }
-    let Some(pos) = findmatch(Some(&mut op), NUL) else {
-        return false;
-    };
-
-    win.w_cursor = pos;
-    if op.motion_type == kMTLineWise {
-        set_visual_mode(VisualMode::LINE);
-    } else if sel_exclusive() {
-        if lt(win.w_cursor, visual_anchor()) {
-            with_visual_anchor(|visual| visual.col += 1);
-        } else {
-            win.w_cursor.col += 1;
-        }
-    }
-    true
 }
 
 // ---------------------------------------------------------------------------
@@ -898,11 +907,4 @@ fn with_visual(f: fn(&mut Pos)) {
     let mut visual = visual_anchor();
     f(&mut visual);
     set_visual_anchor(visual);
-}
-
-/// Run `f` over `win`'s cursor through a copy, put back afterwards.
-fn with_cursor(mut win: Win, f: fn(&mut Pos)) {
-    let mut cursor = win.w_cursor;
-    f(&mut cursor);
-    win.w_cursor = cursor;
 }

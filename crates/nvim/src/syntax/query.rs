@@ -203,7 +203,7 @@ impl Win {
 }
 
 /// Extra information about the current syntax item: answers its flags and
-/// its sequence number. Must be called right after [`get_syntax_attr`].
+/// its sequence number. Must be called right after [`Buf::syntax_attr`].
 pub(crate) fn get_syntax_info() -> (SynFlags, c_int) {
     with_parser(|parser| (parser.current.flags, parser.current.seqnr))
 }

@@ -12,7 +12,7 @@ use super::{f_environ, kChannelPartRpc};
 use crate::api::private::helpers::{dict_set_var, scope_vars};
 use crate::autocmd::apply_autocmds;
 use crate::autocmd::defs::AutoEvent;
-use crate::buffer::{buf_close_terminal, setfname};
+use crate::buffer::buf_close_terminal;
 use crate::channel::defs::{CallbackReader, ChannelStdinMode, JobProc};
 use crate::channel::defs::{kChannelStdinNull, kChannelStdinPipe};
 use crate::channel::open::JobOptions;
@@ -605,7 +605,7 @@ fn attach_terminal(id: uint64_t, cwd: &CStr, cmd: &CStr) {
         // `snprintf` into a `MAXPATHL` buffer.
         name.truncate(MAXPATHL as usize - 1);
         let name = XString::from_bytes(&name);
-        let _ = setfname(buf, Some(name.as_cstr()), None, true);
+        let _ = buf.set_name(Some(name.as_cstr()), None, true);
         apply_autocmds(AutoEvent::BufFilePost, None, None, false, Some(buf));
 
         if terminal_live(id) {

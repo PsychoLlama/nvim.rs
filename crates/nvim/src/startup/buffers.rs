@@ -35,7 +35,7 @@ use crate::buffer::state::{
 };
 use crate::buffer::{
     buf_is_empty, buflist_add_name, do_modelines, handle_swap_exists, open_buffer, set_buflisted,
-    set_curbuf, setfname,
+    set_curbuf,
 };
 use crate::eval::typval::{list_set_lock, tv_list_alloc};
 use crate::eval::vars::set_vim_var_list;
@@ -297,7 +297,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
                 // The window cannot be closed here without disturbing
                 // what comes next: clear the name and mark the argument
                 // index so it is deleted later.
-                let _ = setfname(Buf::current(), None, None, false);
+                let _ = Buf::current().set_name(None, None, false);
                 Win::current().w_arg_idx = -1;
                 swap_exists_action.set(SEA_NONE);
             } else {

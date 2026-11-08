@@ -413,16 +413,18 @@ fn begin_replace(buffer: Buf, lnum: LineNr) -> Result<(), Failed> {
     Ok(())
 }
 
-/// Replace line `lnum` of `buffer` with `line` (its NUL the last byte),
-/// which the memline takes over, with buffering: the text is parked in the
-/// line cache and only written back by [`ml_flush_line`].
-///
-/// The caller should probably also call `changed_lines`, unless it uses
-/// `update_screen(UPD_NOT_VALID)`.
-fn replace_line(mut buffer: Buf, lnum: LineNr, line: Vec<u8>) -> Result<(), Failed> {
-    begin_replace(buffer, lnum)?;
-    buffer.b_ml.cache_replacement(line, lnum);
-    Ok(())
+impl Buf {
+    /// Replace line `lnum` of `buffer` with `line` (its NUL the last byte),
+    /// which the memline takes over, with buffering: the text is parked in the
+    /// line cache and only written back by [`ml_flush_line`].
+    ///
+    /// The caller should probably also call `changed_lines`, unless it uses
+    /// `update_screen(UPD_NOT_VALID)`.
+    fn replace_line(mut self, lnum: LineNr, line: Vec<u8>) -> Result<(), Failed> {
+        begin_replace(self, lnum)?;
+        self.b_ml.cache_replacement(line, lnum);
+        Ok(())
+    }
 }
 
 /// Replace line `lnum` of `buffer` with `line`, which the memline copies.
@@ -430,12 +432,12 @@ pub(crate) fn ml_replace_buf_text(buffer: Buf, lnum: LineNr, line: &[u8]) -> Res
     let mut copy = Vec::with_capacity(line.len() + 1);
     copy.extend_from_slice(line);
     copy.push(0);
-    replace_line(buffer, lnum, copy)
+    buffer.replace_line(lnum, copy)
 }
 
 /// Replace line `lnum` of `buffer` with `line`, which the memline takes over.
 pub(crate) fn ml_replace_buf_owned(buffer: Buf, lnum: LineNr, line: XString) -> Result<(), Failed> {
-    replace_line(buffer, lnum, line.into_vec())
+    buffer.replace_line(lnum, line.into_vec())
 }
 
 /// [`ml_replace_buf_owned`] for the current buffer.

@@ -202,7 +202,7 @@ pub fn buflist_new(
     } else {
         // `fresh` is `Some` exactly when the buffer is not the reused
         // current one, which is the branch this is.
-        buf = append_to_list(buf, fresh.take().expect("a fresh buffer was allocated"));
+        buf = buf.append_to_list(fresh.take().expect("a fresh buffer was allocated"));
         // Always copy the options from the current buffer.
         copy_options_into(buf, BCO_ALWAYS);
     }
@@ -275,7 +275,7 @@ fn reuse_entry(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Option<Buf> {
 
 /// A zeroed `Buffer` with its `b:` dictionary and `b:changedtick` in place.
 ///
-/// The allocation is the caller's until [`append_to_list`] hands it to the
+/// The allocation is the caller's until [`Buf::append_to_list`] hands it to the
 /// registry, which owns every buffer that has a number.
 fn new_buffer() -> Owned<Buffer> {
     // A zeroed `Buffer` is what upstream starts one from; `append_to_list`
@@ -310,45 +310,47 @@ pub(crate) fn free_bare_buffer(buffer: Buf) {
     drop(crate::winlayer::forget_buffer(buffer.handle));
 }
 
-/// Put a new buffer at the end of the buffer list, give it its number and
-/// hand its allocation to the registry, which owns it from here on.
-///
-/// Answers the buffer **with its number in it**: a [`Buf`] carries a copy of
-/// the number it was built with, and the caller's was built before there was
-/// one, so it must take this one back or its `id()` names nothing.
-#[must_use = "the caller's Buf predates the number; use the one this answers"]
-fn append_to_list(mut buffer: Buf, owned: Owned<Buffer>) -> Buf {
-    // The number and the registry entry come first, ahead of upstream's
-    // order: from here on `buffer.id()` names the buffer, and the list links
-    // are made of exactly that. Nothing between the two reads either.
-    buffer.set_handle(Handle::new(top_file_num.get()));
-    top_file_num.set(top_file_num.get() + 1);
-    register_buffer(buffer.handle(), owned);
+impl Buf {
+    /// Put a new buffer at the end of the buffer list, give it its number and
+    /// hand its allocation to the registry, which owns it from here on.
+    ///
+    /// Answers the buffer **with its number in it**: a [`Buf`] carries a copy of
+    /// the number it was built with, and the caller's was built before there was
+    /// one, so it must take this one back or its `id()` names nothing.
+    #[must_use = "the caller's Buf predates the number; use the one this answers"]
+    fn append_to_list(mut self, owned: Owned<Buffer>) -> Buf {
+        // The number and the registry entry come first, ahead of upstream's
+        // order: from here on `buffer.id()` names the buffer, and the list links
+        // are made of exactly that. Nothing between the two reads either.
+        self.set_handle(Handle::new(top_file_num.get()));
+        top_file_num.set(top_file_num.get() + 1);
+        register_buffer(self.handle(), owned);
 
-    buffer.b_next = None;
-    match current_last() {
-        // The buffer list is empty.
-        None => {
-            buffer.b_prev = None;
-            firstbuf.set(Some(buffer.id()));
+        self.b_next = None;
+        match current_last() {
+            // The buffer list is empty.
+            None => {
+                self.b_prev = None;
+                firstbuf.set(Some(self.id()));
+            }
+            // Append the new buffer at the end of the list.
+            Some(mut last) => {
+                last.b_next = Some(self.id());
+                self.b_prev = Some(last.id());
+            }
         }
-        // Append the new buffer at the end of the list.
-        Some(mut last) => {
-            last.b_next = Some(buffer.id());
-            buffer.b_prev = Some(last.id());
+        lastbuf.set(Some(self.id()));
+        if top_file_num.get() < 0 {
+            // Wrap around; this may cause duplicates.
+            emsg(gettext(c"W14: Warning: List of file names overflow"));
+            if emsg_silent.get() == 0 && !in_assert_fails.get() {
+                // Make sure it is noticed.
+                msg_delay(3001 as uint64_t, true);
+            }
+            top_file_num.set(1);
         }
+        self
     }
-    lastbuf.set(Some(buffer.id()));
-    if top_file_num.get() < 0 {
-        // Wrap around; this may cause duplicates.
-        emsg(gettext(c"W14: Warning: List of file names overflow"));
-        if emsg_silent.get() == 0 && !in_assert_fails.get() {
-            // Make sure it is noticed.
-            msg_delay(3001 as uint64_t, true);
-        }
-        top_file_num.set(1);
-    }
-    buffer
 }
 
 /// `kv_destroy` + `kv_init` of the two buffer-update subscriber arrays: a
@@ -596,7 +598,7 @@ pub fn buflist_findname(ffname: &CStr) -> Option<Buf> {
 /// file does not exist). Dummy buffers do not count.
 pub(crate) fn buflist_findname_file_id(ffname: &CStr, file_id: Option<&FileID>) -> Option<Buf> {
     buffers_back().find(|buf| {
-        !buf.b_flags.has(BufFlags::DUMMY) && !otherfile_buf(*buf, ffname, Some(file_id))
+        !buf.b_flags.has(BufFlags::DUMMY) && !(*buf).is_other_file(ffname, Some(file_id))
     })
 }
 

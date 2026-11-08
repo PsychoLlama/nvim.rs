@@ -68,11 +68,11 @@ pub fn op_fold_range(
         };
         let mut lnum_next = lnum;
         if opening != 0 && recurse == 0 {
-            has_folding(Win::current(), lnum, None, Some(&mut lnum_next));
+            Win::current().has_folding(lnum, None, Some(&mut lnum_next));
         }
         set_manual_fold(at, opening != 0, recurse != 0, Some(&mut done));
         if opening == 0 && recurse == 0 {
-            has_folding(Win::current(), lnum, None, Some(&mut lnum_next));
+            Win::current().has_folding(lnum, None, Some(&mut lnum_next));
         }
         lnum = lnum_next + 1;
     }
@@ -391,7 +391,7 @@ pub fn delete_fold(window: Win, start: LineNr, end: LineNr, recursive: c_int, ha
             if !did_one {
                 parse_marker(win);
             }
-            delete_fold_markers(win, &spans);
+            win.delete_fold_markers(&spans);
         }
         did_one = true;
         changed_window_setting(win);
@@ -449,11 +449,11 @@ pub(super) fn set_manual_fold(
             }
             let dlnum = diff_lnum_win(Win::current().w_cursor.lnum, win);
             if dlnum != LineNr::ZERO {
-                set_manual_fold_win(win, dlnum, opening, recurse, None);
+                win.set_manual_fold(dlnum, opening, recurse, None);
             }
         }
     }
-    set_manual_fold_win(Win::current(), pos.lnum, opening, recurse, donep)
+    Win::current().set_manual_fold(pos.lnum, opening, recurse, donep)
 }
 
 /// What [`set_folds_on_line`] found and did.
@@ -463,7 +463,7 @@ struct ManualFold {
     next: LineNr,
 }
 
-/// The tree half of [`set_manual_fold_win`]: open or close the fold over
+/// The tree half of [`Win::set_manual_fold`]: open or close the fold over
 /// `lnum` in `root`, and say where the next closable line is.
 fn set_folds_on_line(
     root: &mut Vec<Fold>,
@@ -548,45 +548,47 @@ fn set_folds_on_line(
     }
 }
 
-/// Open or close the fold in window "wp" which contains "lnum".
-/// "donep", when not NULL, points to flag that is set to DONE_FOLD when some
-/// fold was found and to DONE_ACTION when some fold was opened or closed.
-/// When "donep" is NULL give an error message when no fold was found for
-/// "lnum", but only if "wp" is "curwin".
-///
-/// `opening` — true when opening, false when closing
-/// `recurse` — true when closing/opening recursive
-///
-/// Returns the line number of the next line that could be closed.
-///                 It's only valid when "opening" is true!
-///
-pub(super) fn set_manual_fold_win(
-    mut win: Win,
-    lnum: LineNr,
-    opening: bool,
-    recurse: bool,
-    donep: Option<&mut c_int>,
-) -> LineNr {
-    checkupdate(win);
-    let foldlevel = win.w_onebuf_opt.wo_fdl;
-    let ManualFold {
-        found_fold,
-        mut done,
-        next,
-    } = win.with_folds(|root| set_folds_on_line(root, lnum, opening, recurse, foldlevel));
-    if found_fold {
-        win.w_fold_manual = true;
-        if done & DONE_ACTION != 0 {
-            changed_window_setting(win);
+impl Win {
+    /// Open or close the fold in window "wp" which contains "lnum".
+    /// "donep", when not NULL, points to flag that is set to DONE_FOLD when some
+    /// fold was found and to DONE_ACTION when some fold was opened or closed.
+    /// When "donep" is NULL give an error message when no fold was found for
+    /// "lnum", but only if "wp" is "curwin".
+    ///
+    /// `opening` — true when opening, false when closing
+    /// `recurse` — true when closing/opening recursive
+    ///
+    /// Returns the line number of the next line that could be closed.
+    ///                 It's only valid when "opening" is true!
+    ///
+    pub(super) fn set_manual_fold(
+        mut self,
+        lnum: LineNr,
+        opening: bool,
+        recurse: bool,
+        donep: Option<&mut c_int>,
+    ) -> LineNr {
+        checkupdate(self);
+        let foldlevel = self.w_onebuf_opt.wo_fdl;
+        let ManualFold {
+            found_fold,
+            mut done,
+            next,
+        } = self.with_folds(|root| set_folds_on_line(root, lnum, opening, recurse, foldlevel));
+        if found_fold {
+            self.w_fold_manual = true;
+            if done & DONE_ACTION != 0 {
+                changed_window_setting(self);
+            }
+            done |= DONE_FOLD;
+        } else if donep.is_none() && self.is_current() {
+            emsg_nofold();
         }
-        done |= DONE_FOLD;
-    } else if donep.is_none() && win.is_current() {
-        emsg_nofold();
+        if let Some(out) = donep {
+            *out |= done;
+        }
+        next
     }
-    if let Some(out) = donep {
-        *out |= done;
-    }
-    next
 }
 
 /// Open all folds nested inside `fold`, recursively.

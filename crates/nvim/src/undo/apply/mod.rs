@@ -116,7 +116,7 @@ pub fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool {
         buf.b_u_seq_last -= 1;
     }
     // No link still names it.
-    u_freebranch(buf, forgotten, None);
+    buf.free_undo_branch(forgotten, None);
     true
 }
 

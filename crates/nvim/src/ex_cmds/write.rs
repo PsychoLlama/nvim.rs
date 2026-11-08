@@ -32,9 +32,9 @@ use crate::autocmd::{augroup_exists_of, do_doautocmd};
 use crate::buffer::{
     BufFlags, BufRef, buf_dontwrite_msg, buf_hide, buf_is_dontwrite, buf_is_nofilename,
     buf_name_changed, buflist_findname, current_buf, do_autochdir, do_modelines, fileinfo,
-    no_write_message, no_write_message_buf, otherfile, setaltfname, setfname,
+    no_write_message, no_write_message_buf, otherfile, setaltfname,
 };
-use crate::bufwrite::{WriteName, WriteRequest, buf_write};
+use crate::bufwrite::{WriteName, WriteRequest};
 use crate::channel::channel_job_running;
 use crate::cursor::check_cursor_lnum;
 use crate::drawscreen::state::redraw_tabline;
@@ -111,7 +111,10 @@ pub fn rename_buffer(new_fname: &CStr) -> Result<(), Failed> {
     // `setfname` would release what it found, and the entry made below
     // wants the name the buffer had. `saved` owns it until this returns.
     let saved = core::mem::take(&mut Buf::current().name);
-    if setfname(Buf::current(), Some(new_fname), None, true).is_err() {
+    if Buf::current()
+        .set_name(Some(new_fname), None, true)
+        .is_err()
+    {
         Buf::current().name = saved;
         return Err(Failed);
     }
@@ -380,15 +383,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
     } else {
         WriteName::Full
     };
-    let retval = buf_write(
-        Buf::current(),
-        target,
-        short,
-        line1,
-        line2,
-        Some(args),
-        request,
-    );
+    let retval = Buf::current().write_file(target, short, line1, line2, Some(args), request);
 
     // After ":saveas fname" reset 'readonly'.
     if args.cmdidx == CmdIdx::saveas && retval.is_ok() {

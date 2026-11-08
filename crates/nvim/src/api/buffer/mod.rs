@@ -24,10 +24,7 @@ use crate::decoration::kMTMetaLines;
 use crate::lua::executor::{kRetLuaref, nlua_call_ref_reporting};
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::{mark_adjust_buf, mark_get};
-use crate::memline::{
-    ml_append_buf_terminated, ml_delete_buf, ml_find_line_or_offset, ml_get_buf_len,
-    ml_replace_buf_now,
-};
+use crate::memline::{ml_append_buf_terminated, ml_delete_buf, ml_get_buf_len, ml_replace_buf_now};
 
 use crate::api::keysets::{KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap};
 use crate::api::private::helpers::TryState;

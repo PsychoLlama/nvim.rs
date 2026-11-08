@@ -19,8 +19,8 @@ use crate::charset::{vim_isprintc, vim_strsize_cstr};
 use crate::cmdexpand::cmdline_pum_display;
 use crate::decoration::defs::{DecorVirtText, DecorVirtText_data, VirtTextChunk};
 use crate::decoration::{
-    SCL_NUM, buf_signcols_count_range, decor_conceal_line, decor_range_add_virt, decor_virt_lines,
-    kMTMetaSignText, win_lines_concealed,
+    SCL_NUM, buf_signcols_count_range, decor_conceal_line, decor_range_add_virt, kMTMetaSignText,
+    win_lines_concealed,
 };
 use crate::decoration_provider::{
     decor_providers_invoke_buf, decor_providers_invoke_end, decor_providers_invoke_win,
@@ -42,7 +42,7 @@ use crate::ex_docmd::state::global_busy;
 use crate::ex_getln::state::cmdline_was_last_drawn;
 use crate::ex_getln::{cmdline_screen_cleared, compute_cmdrow, redrawcmdline};
 use crate::fold::FoldInfo;
-use crate::fold::{fold_info, foldmethod_is_syntax, has_any_folding, has_folding};
+use crate::fold::{fold_info, foldmethod_is_syntax, has_any_folding};
 use crate::getchar::char_avail;
 use crate::getchar::state::{KeyTyped, got_int, reg_recording};
 use crate::global_cell::GlobalCell;

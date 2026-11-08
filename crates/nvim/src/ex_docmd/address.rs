@@ -49,8 +49,6 @@ use crate::ex_docmd::{
     kMarkAll, searchcmdlen,
 };
 
-use crate::fold::has_folding;
-
 use crate::option::magic_isset;
 use crate::pos::MAXLNUM;
 use crate::quickfix::{qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_size, qf_get_valid_size};
@@ -615,7 +613,7 @@ pub(crate) fn get_address(
                 // the whole fold and the line after it.
                 if addr_type == CmdAddr::Lines && matches!(sign, b'-' | b'+') && address_count >= 2
                 {
-                    has_folding(Win::current(), lnum, None, Some(&mut lnum));
+                    Win::current().has_folding(lnum, None, Some(&mut lnum));
                 }
                 if sign == b'-' {
                     lnum -= n;

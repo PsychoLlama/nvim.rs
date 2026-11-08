@@ -47,7 +47,6 @@ use crate::ex_docmd::{
 use crate::ex_getln::{
     cmdpreview_get_bufnr, cmdpreview_get_ns, curbuf_locked, get_text_locked_msg, text_locked,
 };
-use crate::fold::has_folding;
 use crate::guard::Suppress;
 use crate::message::state::emsg_silent;
 use crate::message::{e_cmdwin, e_command_too_recursive, e_modifiable, e_nobang, e_norange};
@@ -376,8 +375,8 @@ pub fn execute_cmd(excmd: &mut ExArg, cmdinfo: &CmdParseInfo, preview: bool) -> 
             && global_busy.get() == 0
             && excmd.addr_type == CmdAddr::Lines
         {
-            has_folding(Win::current(), excmd.line1, Some(&mut excmd.line1), None);
-            has_folding(Win::current(), excmd.line2, None, Some(&mut excmd.line2));
+            Win::current().has_folding(excmd.line1, Some(&mut excmd.line1), None);
+            Win::current().has_folding(excmd.line2, None, Some(&mut excmd.line2));
         }
 
         if excmd.parse_count(&mut errormsg, true).is_err() {

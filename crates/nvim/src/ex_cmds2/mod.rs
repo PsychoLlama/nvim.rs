@@ -51,7 +51,7 @@ use crate::buffer::{
     BufRef, buf_hide, buf_is_dontwrite, buf_set_name, buf_spname_owned, find_buf, no_write_message,
     no_write_message_nobang, set_curbuf,
 };
-use crate::bufwrite::{WriteName, WriteRequest, buf_write};
+use crate::bufwrite::{WriteName, WriteRequest};
 use crate::change::unchanged;
 use crate::channel::channel_job_running;
 use crate::drawscreen::state::cmdline_row;
@@ -541,8 +541,7 @@ pub(crate) fn check_fname() -> Result<(), Failed> {
 pub(crate) fn buf_write_all(buffer: Buf, forceit: bool) -> Result<(), Failed> {
     let old_curbuf = Buf::current_raw();
     let retval = {
-        buf_write(
-            buffer,
+        buffer.write_file(
             WriteName::Full,
             Some(WriteName::Shown),
             LineNr::ONE,

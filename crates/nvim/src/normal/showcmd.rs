@@ -27,7 +27,6 @@ use crate::cstr;
 use crate::drawscreen::setcursor;
 use crate::drawscreen::state::{redraw_tabline, sc_col};
 use crate::ex_docmd::state::ex_normal_busy;
-use crate::fold::has_folding;
 use crate::getchar::char_avail;
 use crate::global_cell::GlobalCell;
 use crate::grid::{grid_line_flush, grid_line_puts, grid_line_start};
@@ -177,8 +176,8 @@ fn visual_line_range(sel: VisualSelection, cursor_bot: bool) -> (LineNr, LineNr)
     } else {
         (Win::current().w_cursor.lnum, sel.anchor.lnum)
     };
-    has_folding(Win::current(), top, Some(&mut top), None);
-    has_folding(Win::current(), bot, None, Some(&mut bot));
+    Win::current().has_folding(top, Some(&mut top), None);
+    Win::current().has_folding(bot, None, Some(&mut bot));
     (top, bot)
 }
 

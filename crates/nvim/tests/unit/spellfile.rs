@@ -52,7 +52,7 @@ use neovim::winlayer::Win;
 use std::ffi::CString;
 
 use neovim::spell::{LangP, SpellLang};
-use neovim::spell::{REGION_ALL, init_spell_chartab, register_lang, spell_check, take_lang};
+use neovim::spell::{REGION_ALL, init_spell_chartab, register_lang, take_lang};
 use neovim::spellfile::{mkspell, spell_check_msm, spell_load_file};
 use neovim::winlayer::graph::curwin;
 
@@ -361,7 +361,7 @@ fn the_golden_answers_spell_check() {
     let win = unsafe { Win::new(wp) };
     let verdict = |word: &str| {
         let text = cstr(word);
-        spell_check(win, text.as_bytes_with_nul(), None, false)
+        win.spell_check(text.as_bytes_with_nul(), None, false)
     };
 
     let (len, good) = verdict(WORD);

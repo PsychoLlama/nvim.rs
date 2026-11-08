@@ -346,88 +346,180 @@ fn is_word_at(text: &[u8]) -> bool {
     vim_iswordc(char_at(text))
 }
 
-/// The next word or line from `ins_buf` at `pos`, copied into `out` from its
-/// start to the end of the string it was found in (which
-/// [`ins_compl_add_infercase`] wants), with its length and whether the next
-/// `CTRL-X <>` sets the initial position; `None` when there is nothing to
-/// add.
-pub(crate) fn next_word_or_line(
-    ins_buf: Buf,
-    pos: Pos,
-    out: &mut Vec<u8>,
-) -> Option<(usize, bool)> {
-    let mut lines = Lines::in_buffer(ins_buf);
-    let (lnum, col) = (pos.lnum, usize::try_from(pos.col).unwrap_or(usize::MAX));
-    let line_count = ins_buf.b_ml.ml_line_count;
-    let typed_len = usize::try_from(compl_length.get()).unwrap_or(usize::MAX);
-    out.clear();
+impl Buf {
+    /// The next word or line from `ins_buf` at `pos`, copied into `out` from its
+    /// start to the end of the string it was found in (which
+    /// [`ins_compl_add_infercase`] wants), with its length and whether the next
+    /// `CTRL-X <>` sets the initial position; `None` when there is nothing to
+    /// add.
+    pub(crate) fn next_word_or_line(self, pos: Pos, out: &mut Vec<u8>) -> Option<(usize, bool)> {
+        let mut lines = Lines::in_buffer(self);
+        let (lnum, col) = (pos.lnum, usize::try_from(pos.col).unwrap_or(usize::MAX));
+        let line_count = self.b_ml.ml_line_count;
+        let typed_len = usize::try_from(compl_length.get()).unwrap_or(usize::MAX);
+        out.clear();
 
-    if ctrl_x_mode_line_or_eval() {
-        if compl_status_adding() {
-            if lnum >= line_count {
+        if ctrl_x_mode_line_or_eval() {
+            if compl_status_adding() {
+                if lnum >= line_count {
+                    return None;
+                }
+                let next = lines.line(lnum + 1);
+                let skip = if p_paste() { 0 } else { skip::white(next) };
+                out.extend_from_slice(&next[skip..]);
+            } else {
+                let line = lines.line(lnum);
+                out.extend_from_slice(&line[col.min(line.len())..]);
+            }
+            return Some((out.len(), false));
+        }
+
+        let line = lines.line(lnum);
+        let col = col.min(line.len());
+        out.extend_from_slice(&line[col..]);
+        let mut at = col;
+        if compl_status_adding() && typed_len <= line.len() - col {
+            at += typed_len;
+            // Skip if already inside a word.
+            if is_word_at(&line[at..]) {
                 return None;
             }
-            let next = lines.line(lnum + 1);
-            let skip = if p_paste() { 0 } else { skip::white(next) };
-            out.extend_from_slice(&next[skip..]);
-        } else {
-            let line = lines.line(lnum);
-            out.extend_from_slice(&line[col.min(line.len())..]);
+            // Find the start of the next word.
+            at = word_start(line, at);
         }
-        return Some((out.len(), false));
-    }
+        // Find the end of this word.
+        let mut len = word_end(line, at) - col;
+        let mut cont_s_ipos = false;
 
-    let line = lines.line(lnum);
-    let col = col.min(line.len());
-    out.extend_from_slice(&line[col..]);
-    let mut at = col;
-    if compl_status_adding() && typed_len <= line.len() - col {
-        at += typed_len;
-        // Skip if already inside a word.
-        if is_word_at(&line[at..]) {
-            return None;
-        }
-        // Find the start of the next word.
-        at = word_start(line, at);
-    }
-    // Find the end of this word.
-    let mut len = word_end(line, at) - col;
-    let mut cont_s_ipos = false;
-
-    if compl_status_adding() && len == typed_len {
-        if lnum < line_count {
-            // Try the next line, if any: the new word will be "joined" as
-            // if the normal command "J" was used.  IOSIZE is always greater
-            // than typed_len, so the copy always fits -- Acevedo
-            out.truncate(len);
-            let next = lines.line(lnum + 1);
-            let start = skip::white(next);
-            // Find the start and then the end of the next word.
-            let end = word_end(next, word_start(next, start));
-            if end > start {
-                if next[start] != b')' && c_int::from(out[len - 1]) != TAB {
-                    if out[len - 1] != b' ' {
-                        out.push(b' ');
-                        len += 1;
+        if compl_status_adding() && len == typed_len {
+            if lnum < line_count {
+                // Try the next line, if any: the new word will be "joined" as
+                // if the normal command "J" was used.  IOSIZE is always greater
+                // than typed_len, so the copy always fits -- Acevedo
+                out.truncate(len);
+                let next = lines.line(lnum + 1);
+                let start = skip::white(next);
+                // Find the start and then the end of the next word.
+                let end = word_end(next, word_start(next, start));
+                if end > start {
+                    if next[start] != b')' && c_int::from(out[len - 1]) != TAB {
+                        if out[len - 1] != b' ' {
+                            out.push(b' ');
+                            len += 1;
+                        }
+                        // The joined line =~ "\k.* ", thus len >= 2.
+                        if p_js() && matches!(out[len - 2], b'.' | b'?' | b'!') {
+                            out.push(b' ');
+                            len += 1;
+                        }
                     }
-                    // The joined line =~ "\k.* ", thus len >= 2.
-                    if p_js() && matches!(out[len - 2], b'.' | b'?' | b'!') {
-                        out.push(b' ');
-                        len += 1;
-                    }
+                    // Copy as much as possible of the new word.
+                    let room = IOSIZE as usize - len - 1;
+                    out.extend_from_slice(&next[start..end.min(start + room)]);
+                    len = out.len();
+                    cont_s_ipos = true;
                 }
-                // Copy as much as possible of the new word.
-                let room = IOSIZE as usize - len - 1;
-                out.extend_from_slice(&next[start..end.min(start + room)]);
-                len = out.len();
-                cont_s_ipos = true;
+            }
+            if len == typed_len {
+                return None;
             }
         }
-        if len == typed_len {
-            return None;
+        Some((len, cont_s_ipos))
+    }
+
+    /// Search `buffer` for the next fuzzy match of `pattern`, starting at `pos` and
+    /// going in `dir`, wrapping around to `start_pos` if `'wrapscan'` is set.
+    /// `pos` is left on the match, and `out` holds the match on to the end of its
+    /// line. In whole-line mode (`CTRL-X CTRL-L`) whole lines are matched rather
+    /// than words.
+    pub(super) fn search_for_fuzzy_match(
+        self,
+        pos: &mut Pos,
+        pattern: &CStr,
+        dir: c_int,
+        start_pos: Pos,
+        out: &mut Vec<u8>,
+    ) -> Option<LineMatch> {
+        let whole_line = ctrl_x_mode_whole_line();
+        let mut current_pos = *pos;
+        let mut lines = Lines::in_buffer(self);
+
+        // Where the search has come full circle. Another buffer is walked
+        // from wherever it is to its end rather than back to the start.
+        let circly_end = if self == Buf::current() {
+            start_pos
+        } else {
+            Pos {
+                lnum: self.b_ml.ml_line_count,
+                col: ColNr::ZERO,
+                coladd: 0,
+            }
+        };
+        if whole_line && start_pos.lnum != pos.lnum {
+            current_pos.lnum += dir;
+        }
+        let mut looped_around = false;
+        loop {
+            if looped_around
+                && (if whole_line {
+                    current_pos.lnum == circly_end.lnum
+                } else {
+                    equalpos(current_pos, circly_end)
+                })
+            {
+                return None;
+            }
+            if current_pos.lnum >= LineNr::ONE && current_pos.lnum <= self.b_ml.ml_line_count {
+                let at = if whole_line {
+                    0
+                } else {
+                    usize::try_from(current_pos.col).unwrap_or(usize::MAX)
+                };
+                let line = lines.line(current_pos.lnum);
+                if at < line.len() {
+                    if whole_line {
+                        let text = lines.line_cstr(current_pos.lnum, 0);
+                        if fuzzy_match_str(text, pattern) != FUZZY_SCORE_NONE {
+                            *pos = current_pos;
+                            out.clear();
+                            out.extend_from_slice(text.to_bytes());
+                            let len = out.len();
+                            return Some(LineMatch { len, score: None });
+                        }
+                    } else {
+                        if let Some(found) = fuzzy_match_in_line(line, at, pattern) {
+                            current_pos.col =
+                                ColNr::try_from(found.start + found.len).unwrap_or(ColNr::MAX);
+                            *pos = current_pos;
+                            out.clear();
+                            out.extend_from_slice(&line[found.start..]);
+                            let score = Some(found.score);
+                            return Some(LineMatch {
+                                len: found.len,
+                                score,
+                            });
+                        }
+                        if looped_around && current_pos.lnum == circly_end.lnum {
+                            return None;
+                        }
+                    }
+                }
+            }
+
+            // On to the next line, or round to the far end of the buffer
+            // if `'wrapscan'` allows it.
+            let last = self.b_ml.ml_line_count;
+            current_pos.lnum += if dir == FORWARD { 1 } else { -1 };
+            if !(LineNr::ONE..=last).contains(&current_pos.lnum) {
+                if !p_ws() {
+                    return None;
+                }
+                current_pos.lnum = if dir == FORWARD { LineNr::ONE } else { last };
+                looped_around = true;
+            }
+            current_pos.col = ColNr::ZERO;
         }
     }
-    Some((len, cont_s_ipos))
 }
 
 /// The next set of words matching `compl_pattern` for default completion —
@@ -487,8 +579,7 @@ pub(crate) fn get_next_default_completion(st: &mut InsComplNextState, start_pos:
         let dir = compl_direction.get();
         if in_fuzzy_collect {
             let pattern = leader.as_cstr();
-            let hit =
-                search_for_fuzzy_match(ins_buf, &mut pos, pattern, dir, start_pos, &mut found);
+            let hit = ins_buf.search_for_fuzzy_match(&mut pos, pattern, dir, start_pos, &mut found);
             found_new_match = false;
             if let Some(hit) = hit {
                 len = hit.len;
@@ -557,7 +648,7 @@ pub(crate) fn get_next_default_completion(st: &mut InsComplNextState, start_pos:
         }
 
         if !in_fuzzy_collect {
-            let Some(next) = next_word_or_line(ins_buf, pos, &mut found) else {
+            let Some(next) = ins_buf.next_word_or_line(pos, &mut found) else {
                 continue;
             };
             (len, cont_s_ipos) = next;
@@ -759,98 +850,4 @@ pub(super) fn fuzzy_match_in_line(line: &[u8], at: usize, pat: &CStr) -> Option<
 pub(super) struct LineMatch {
     pub len: usize,
     pub score: Option<c_int>,
-}
-
-/// Search `buffer` for the next fuzzy match of `pattern`, starting at `pos` and
-/// going in `dir`, wrapping around to `start_pos` if `'wrapscan'` is set.
-/// `pos` is left on the match, and `out` holds the match on to the end of its
-/// line. In whole-line mode (`CTRL-X CTRL-L`) whole lines are matched rather
-/// than words.
-pub(super) fn search_for_fuzzy_match(
-    buffer: Buf,
-    pos: &mut Pos,
-    pattern: &CStr,
-    dir: c_int,
-    start_pos: Pos,
-    out: &mut Vec<u8>,
-) -> Option<LineMatch> {
-    let whole_line = ctrl_x_mode_whole_line();
-    let mut current_pos = *pos;
-    let mut lines = Lines::in_buffer(buffer);
-
-    // Where the search has come full circle. Another buffer is walked
-    // from wherever it is to its end rather than back to the start.
-    let circly_end = if buffer == Buf::current() {
-        start_pos
-    } else {
-        Pos {
-            lnum: buffer.b_ml.ml_line_count,
-            col: ColNr::ZERO,
-            coladd: 0,
-        }
-    };
-    if whole_line && start_pos.lnum != pos.lnum {
-        current_pos.lnum += dir;
-    }
-    let mut looped_around = false;
-    loop {
-        if looped_around
-            && (if whole_line {
-                current_pos.lnum == circly_end.lnum
-            } else {
-                equalpos(current_pos, circly_end)
-            })
-        {
-            return None;
-        }
-        if current_pos.lnum >= LineNr::ONE && current_pos.lnum <= buffer.b_ml.ml_line_count {
-            let at = if whole_line {
-                0
-            } else {
-                usize::try_from(current_pos.col).unwrap_or(usize::MAX)
-            };
-            let line = lines.line(current_pos.lnum);
-            if at < line.len() {
-                if whole_line {
-                    let text = lines.line_cstr(current_pos.lnum, 0);
-                    if fuzzy_match_str(text, pattern) != FUZZY_SCORE_NONE {
-                        *pos = current_pos;
-                        out.clear();
-                        out.extend_from_slice(text.to_bytes());
-                        let len = out.len();
-                        return Some(LineMatch { len, score: None });
-                    }
-                } else {
-                    if let Some(found) = fuzzy_match_in_line(line, at, pattern) {
-                        current_pos.col =
-                            ColNr::try_from(found.start + found.len).unwrap_or(ColNr::MAX);
-                        *pos = current_pos;
-                        out.clear();
-                        out.extend_from_slice(&line[found.start..]);
-                        let score = Some(found.score);
-                        return Some(LineMatch {
-                            len: found.len,
-                            score,
-                        });
-                    }
-                    if looped_around && current_pos.lnum == circly_end.lnum {
-                        return None;
-                    }
-                }
-            }
-        }
-
-        // On to the next line, or round to the far end of the buffer
-        // if `'wrapscan'` allows it.
-        let last = buffer.b_ml.ml_line_count;
-        current_pos.lnum += if dir == FORWARD { 1 } else { -1 };
-        if !(LineNr::ONE..=last).contains(&current_pos.lnum) {
-            if !p_ws() {
-                return None;
-            }
-            current_pos.lnum = if dir == FORWARD { LineNr::ONE } else { last };
-            looped_around = true;
-        }
-        current_pos.col = ColNr::ZERO;
-    }
 }

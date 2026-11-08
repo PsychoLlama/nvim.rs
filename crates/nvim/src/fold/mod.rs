@@ -206,7 +206,7 @@ pub fn copy_folding_state(wp_from: Win, mut wp_to: Win) {
 ///
 /// They live here rather than in `winlayer` for the reason that module's docs
 /// give: a family hangs its own projections off `impl Win`, so the shared
-/// module stays the minimum. Each is one call to [`has_folding`] with the
+/// module stays the minimum. Each is one call to [`Win::has_folding`] with the
 /// out-parameters read back.
 impl Win {
     /// First line of the fold containing `lnum`, if there is one.
@@ -215,7 +215,7 @@ impl Win {
         let mut first = lnum;
         // `firstp` is written only when the answer is true, so the seed
         // survives a line that is in no fold.
-        let folded = has_folding(self, lnum, Some(&mut first), None);
+        let folded = self.has_folding(lnum, Some(&mut first), None);
         folded.then_some(first)
     }
 
@@ -224,7 +224,7 @@ impl Win {
     pub fn fold_last(self, lnum: LineNr) -> LineNr {
         let mut last = lnum;
         // `lastp` is written only when folded.
-        has_folding(self, lnum, None, Some(&mut last));
+        self.has_folding(lnum, None, Some(&mut last));
         last
     }
 
@@ -242,7 +242,7 @@ impl Win {
     pub fn fold_span(self, lnum: LineNr) -> (bool, LineNr, LineNr) {
         let (mut first, mut last) = (lnum, lnum);
         // Both out-params are written only when folded.
-        let folded = has_folding(self, lnum, Some(&mut first), Some(&mut last));
+        let folded = self.has_folding(lnum, Some(&mut first), Some(&mut last));
         (folded, first, last)
     }
 
@@ -276,20 +276,124 @@ pub fn has_any_folding(win: Win) -> c_int {
     )
 }
 
-/// When returning true, `firstp` and `lastp` are set to the first and last
-/// lnum of the sequence of folded lines (each skipped when `None`).
-///
-/// Returns true if line "lnum" in window "win" is part of a closed fold.
-pub fn has_folding(
-    win: Win,
-    lnum: LineNr,
-    firstp: Option<&mut LineNr>,
-    lastp: Option<&mut LineNr>,
-) -> bool {
-    has_folding_win(win, lnum, firstp, lastp, true, None)
+impl Win {
+    /// When returning true, `firstp` and `lastp` are set to the first and last
+    /// lnum of the sequence of folded lines (each skipped when `None`).
+    ///
+    /// Returns true if line "lnum" in window "win" is part of a closed fold.
+    pub fn has_folding(
+        self,
+        lnum: LineNr,
+        firstp: Option<&mut LineNr>,
+        lastp: Option<&mut LineNr>,
+    ) -> bool {
+        self.has_folding_with(lnum, firstp, lastp, true, None)
+    }
+
+    /// Search folds starting at lnum
+    /// `lnum` — first line to search
+    /// `firstp` — first line of fold containing lnum
+    /// `lastp` — last line with a fold
+    /// `cache` — when true: use cached values of window
+    /// `infop` — where to store fold info
+    ///
+    /// Returns true if range contains folds
+    ///
+    pub fn has_folding_with(
+        self,
+        lnum: LineNr,
+        firstp: Option<&mut LineNr>,
+        lastp: Option<&mut LineNr>,
+        cache: bool,
+        mut infop: Option<&mut FoldInfo>,
+    ) -> bool {
+        checkupdate(self);
+        if has_any_folding(self) == 0 {
+            if let Some(info) = infop.as_mut() {
+                info.fi_level = 0;
+            }
+            return false;
+        }
+        let mut had_folded = false;
+        let mut first: LineNr = LineNr::ZERO;
+        let mut last: LineNr = LineNr::ZERO;
+        if cache && let Some(entry) = find_wl_entry(self, lnum) {
+            first = entry.wl_lnum;
+            last = entry.wl_foldend;
+            had_folded = entry.wl_folded;
+        }
+        let mut walk = ClosedWalk {
+            lnum_rel: lnum,
+            level: 0,
+            low_level: 0,
+            use_level: false,
+            maybe_small: false,
+            first,
+            last,
+        };
+        if first == LineNr::ZERO {
+            let (foldlevel, foldminlines) = (self.w_onebuf_opt.wo_fdl, self.w_onebuf_opt.wo_fml);
+            loop {
+                let end = self.with_folds(|root| walk.descend(root, lnum, foldlevel, foldminlines));
+                match end {
+                    WalkEnd::Done { closed } => {
+                        had_folded = closed;
+                        break;
+                    }
+                    WalkEnd::CountRows { top, len } => {
+                        let lnum_off = lnum - walk.lnum_rel;
+                        let small = fits_in_rows(self, top + lnum_off, len, foldminlines);
+                        let level = usize::try_from(walk.level).unwrap_or(0);
+                        self.with_folds(|root| {
+                            if let Some(fold) = fold_on_line(root, lnum, level) {
+                                fold.small = Some(small);
+                            }
+                        });
+                        if !small {
+                            walk.last += len - 1;
+                            had_folded = true;
+                            break;
+                        }
+                        // 'foldminlines' vetoes it: look further down.
+                        walk.lnum_rel -= top.get();
+                        walk.level += 1;
+                    }
+                }
+            }
+            first = walk.first;
+            last = walk.last;
+        }
+        let ClosedWalk {
+            lnum_rel,
+            level,
+            low_level,
+            ..
+        } = walk;
+        if !had_folded {
+            if let Some(info) = infop.as_mut() {
+                info.fi_level = level;
+                info.fi_lnum = LineNr::new(lnum - lnum_rel);
+                info.fi_low_level = if low_level == 0 { level } else { low_level };
+            }
+            return false;
+        }
+        last = last.min(self.buffer().b_ml.ml_line_count);
+        if let Some(lastp) = lastp {
+            *lastp = last;
+        }
+        if let Some(firstp) = firstp {
+            *firstp = first;
+        }
+        if let Some(info) = infop.as_mut() {
+            info.fi_level = level + 1;
+            info.fi_lnum = first;
+            info.fi_low_level = if low_level == 0 { level + 1 } else { low_level };
+        }
+        true
+    }
 }
 
-/// Where [`has_folding_win`]'s walk down the tree has got to.
+/// Where [`Win::has_folding_with`]'s walk down the tree has got to.
 struct ClosedWalk {
     /// `lnum` relative to the list the walk is in.
     lnum_rel: LineNr,
@@ -375,108 +479,6 @@ impl ClosedWalk {
     }
 }
 
-/// Search folds starting at lnum
-/// `lnum` — first line to search
-/// `firstp` — first line of fold containing lnum
-/// `lastp` — last line with a fold
-/// `cache` — when true: use cached values of window
-/// `infop` — where to store fold info
-///
-/// Returns true if range contains folds
-///
-pub fn has_folding_win(
-    win: Win,
-    lnum: LineNr,
-    firstp: Option<&mut LineNr>,
-    lastp: Option<&mut LineNr>,
-    cache: bool,
-    mut infop: Option<&mut FoldInfo>,
-) -> bool {
-    checkupdate(win);
-    if has_any_folding(win) == 0 {
-        if let Some(info) = infop.as_mut() {
-            info.fi_level = 0;
-        }
-        return false;
-    }
-    let mut had_folded = false;
-    let mut first: LineNr = LineNr::ZERO;
-    let mut last: LineNr = LineNr::ZERO;
-    if cache && let Some(entry) = find_wl_entry(win, lnum) {
-        first = entry.wl_lnum;
-        last = entry.wl_foldend;
-        had_folded = entry.wl_folded;
-    }
-    let mut walk = ClosedWalk {
-        lnum_rel: lnum,
-        level: 0,
-        low_level: 0,
-        use_level: false,
-        maybe_small: false,
-        first,
-        last,
-    };
-    if first == LineNr::ZERO {
-        let (foldlevel, foldminlines) = (win.w_onebuf_opt.wo_fdl, win.w_onebuf_opt.wo_fml);
-        loop {
-            let end = win.with_folds(|root| walk.descend(root, lnum, foldlevel, foldminlines));
-            match end {
-                WalkEnd::Done { closed } => {
-                    had_folded = closed;
-                    break;
-                }
-                WalkEnd::CountRows { top, len } => {
-                    let lnum_off = lnum - walk.lnum_rel;
-                    let small = fits_in_rows(win, top + lnum_off, len, foldminlines);
-                    let level = usize::try_from(walk.level).unwrap_or(0);
-                    win.with_folds(|root| {
-                        if let Some(fold) = fold_on_line(root, lnum, level) {
-                            fold.small = Some(small);
-                        }
-                    });
-                    if !small {
-                        walk.last += len - 1;
-                        had_folded = true;
-                        break;
-                    }
-                    // 'foldminlines' vetoes it: look further down.
-                    walk.lnum_rel -= top.get();
-                    walk.level += 1;
-                }
-            }
-        }
-        first = walk.first;
-        last = walk.last;
-    }
-    let ClosedWalk {
-        lnum_rel,
-        level,
-        low_level,
-        ..
-    } = walk;
-    if !had_folded {
-        if let Some(info) = infop.as_mut() {
-            info.fi_level = level;
-            info.fi_lnum = LineNr::new(lnum - lnum_rel);
-            info.fi_low_level = if low_level == 0 { level } else { low_level };
-        }
-        return false;
-    }
-    last = last.min(win.buffer().b_ml.ml_line_count);
-    if let Some(lastp) = lastp {
-        *lastp = last;
-    }
-    if let Some(firstp) = firstp {
-        *firstp = first;
-    }
-    if let Some(info) = infop.as_mut() {
-        info.fi_level = level + 1;
-        info.fi_lnum = first;
-        info.fi_low_level = if low_level == 0 { level + 1 } else { low_level };
-    }
-    true
-}
-
 /// Returns fold level at line number "lnum" in the current window.
 fn fold_level(lnum: LineNr) -> c_int {
     let win = Win::current();
@@ -519,7 +521,7 @@ pub fn fold_info(win: Win, lnum: LineNr) -> FoldInfo {
         fi_lines: 0,
     };
     let mut last: LineNr = LineNr::ZERO;
-    let folded = has_folding_win(win, lnum, None, Some(&mut last), false, Some(&mut info));
+    let folded = win.has_folding_with(lnum, None, Some(&mut last), false, Some(&mut info));
     info.fi_lines = if folded { last - lnum + 1 } else { 0 };
     info
 }

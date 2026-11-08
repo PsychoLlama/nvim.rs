@@ -399,8 +399,7 @@ impl LineSetup {
 
     /// Count the filler lines above this one — diff filler plus virtual lines.
     fn filler_lines(&mut self, wlv: &mut WinLineVars, window: Win) {
-        wlv.n_virt_lines = decor_virt_lines(
-            window,
+        wlv.n_virt_lines = window.virt_lines(
             (wlv.lnum - 1).get(),
             wlv.lnum.get(),
             Some(&mut wlv.n_virt_below),
@@ -635,7 +634,7 @@ impl LineSetup {
             }
             (at, ci) = c_next_cluster(line, at, ci);
             if window.w_onebuf_opt.wo_list != 0 {
-                multispace = track_multispace(window, line, self.leadcol, multispace, prev_at, at);
+                multispace = window.track_multispace(line, self.leadcol, multispace, prev_at, at);
             }
         }
         drop(csarg);
@@ -692,7 +691,7 @@ impl LineSetup {
         window.w_cursor.lnum = lnum;
         window.w_cursor.col = linecol;
         // Reads lines of its own, which moves the memline's but not the copy.
-        let len = spell_move_to(window, FORWARD, SMT_ALL, true, Some(&mut spell_hlf));
+        let len = window.spell_move_to(FORWARD, SMT_ALL, true, Some(&mut spell_hlf));
 
         if len == 0 || window.w_cursor.col > linecol {
             // No bad word at the line start: do not check again until the
@@ -729,39 +728,41 @@ impl LineSetup {
     }
 }
 
-/// Track where in a run of consecutive spaces the skipped-over text has got
-/// to, so that `'listchars'` "multispace" resumes at the right glyph.
-///
-/// `state` is (inside a run, how far into the pattern), `prev` the byte the
-/// character just skipped starts at and `next` the next one's, both in
-/// `line`, whose NUL is included.
-fn track_multispace(
-    window: Win,
-    line: &[u8],
-    leadcol: ColNr,
-    state: (bool, ::core::ffi::c_int),
-    prev: usize,
-    next: usize,
-) -> (bool, ::core::ffi::c_int) {
-    let byte = |at: usize| line.get(at).copied().unwrap_or(0);
-    let in_multispace =
-        byte(prev) == b' ' && (byte(next) == b' ' || (prev > 0 && byte(prev - 1) == b' '));
-    if !in_multispace {
-        return (false, 0);
+impl Win {
+    /// Track where in a run of consecutive spaces the skipped-over text has got
+    /// to, so that `'listchars'` "multispace" resumes at the right glyph.
+    ///
+    /// `state` is (inside a run, how far into the pattern), `prev` the byte the
+    /// character just skipped starts at and `next` the next one's, both in
+    /// `line`, whose NUL is included.
+    fn track_multispace(
+        self,
+        line: &[u8],
+        leadcol: ColNr,
+        state: (bool, ::core::ffi::c_int),
+        prev: usize,
+        next: usize,
+    ) -> (bool, ::core::ffi::c_int) {
+        let byte = |at: usize| line.get(at).copied().unwrap_or(0);
+        let in_multispace =
+            byte(prev) == b' ' && (byte(next) == b' ' || (prev > 0 && byte(prev - 1) == b' '));
+        if !in_multispace {
+            return (false, 0);
+        }
+        let lcs = &self.w_p_lcs_chars;
+        let pattern = if next >= usize::try_from(leadcol).unwrap_or(0) {
+            lcs.multispace.as_deref()
+        } else {
+            lcs.leadmultispace.as_deref()
+        };
+        let Some(pattern) = pattern else {
+            return (true, state.1);
+        };
+        let mut pos = state.1 + 1;
+        // Past the run's end is where upstream's terminator stops it.
+        if usize::try_from(pos).is_ok_and(|pos| pos >= pattern.len()) {
+            pos = 0;
+        }
+        (true, pos)
     }
-    let lcs = &window.w_p_lcs_chars;
-    let pattern = if next >= usize::try_from(leadcol).unwrap_or(0) {
-        lcs.multispace.as_deref()
-    } else {
-        lcs.leadmultispace.as_deref()
-    };
-    let Some(pattern) = pattern else {
-        return (true, state.1);
-    };
-    let mut pos = state.1 + 1;
-    // Past the run's end is where upstream's terminator stops it.
-    if usize::try_from(pos).is_ok_and(|pos| pos >= pattern.len()) {
-        pos = 0;
-    }
-    (true, pos)
 }

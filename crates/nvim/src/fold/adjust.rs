@@ -150,7 +150,7 @@ pub fn fold_adjust_visual() {
 
         // The earlier end stretches back to the first line of its fold.
         let mut start = if anchor_first { *anchor } else { *cursor };
-        if has_folding(win, start.lnum, Some(&mut start.lnum), None) {
+        if win.has_folding(start.lnum, Some(&mut start.lnum), None) {
             start.col = ColNr::ZERO;
         }
         if anchor_first {
@@ -161,7 +161,7 @@ pub fn fold_adjust_visual() {
 
         // The later end stretches forward to the last line of its own.
         let mut end = if anchor_first { *cursor } else { *anchor };
-        if !has_folding(win, end.lnum, None, Some(&mut end.lnum)) {
+        if !win.has_folding(end.lnum, None, Some(&mut end.lnum)) {
             return false;
         }
         end.col = win.buffer().lines().line_len(end.lnum);

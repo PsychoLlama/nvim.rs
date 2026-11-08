@@ -32,7 +32,7 @@ use crate::decoration::{
 use crate::decoration_provider::{decor_provider_clear, kDecorProviderActive, with_decor_provider};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::extmark::ExtmarkType;
-use crate::extmark::{extmark_clear, extmark_del_id, extmark_from_id, extmark_get, extmark_set};
+use crate::extmark::{extmark_clear, extmark_del_id, extmark_from_id, extmark_get};
 use crate::grid::schar_high;
 use crate::marktree::key::{
     MtFlags, mt_decor, mt_invalid, mt_invalidate, mt_no_undo, mt_paired, mt_right,

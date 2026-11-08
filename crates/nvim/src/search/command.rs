@@ -469,10 +469,10 @@ pub(crate) fn do_search(
     // If the cursor is in a closed fold, don't find another match in
     // the same fold.
     if dirc == '/' as c_int {
-        if has_folding(Win::current(), pos.lnum, None, Some(&mut pos.lnum)) {
+        if Win::current().has_folding(pos.lnum, None, Some(&mut pos.lnum)) {
             pos.col = ColNr::new(MAXCOL - 2); // avoid overflow when adding 1
         }
-    } else if has_folding(Win::current(), pos.lnum, Some(&mut pos.lnum), None) {
+    } else if Win::current().has_folding(pos.lnum, Some(&mut pos.lnum), None) {
         pos.col = ColNr::ZERO;
     }
 
@@ -615,7 +615,7 @@ pub(crate) fn do_search(
                     || has_offset
                     || (fdo_flags.get() & kOptFdoFlagSearch == 0 && {
                         let (w, lnum) = (Win::current(), Win::current().w_cursor.lnum);
-                        has_folding(w, lnum, None, None)
+                        w.has_folding(lnum, None, None)
                     });
                 let cursor = Win::current().w_cursor;
                 let (top_bot, maxcount) = (show_top_bot_msg, number_as_int(p_msc()));

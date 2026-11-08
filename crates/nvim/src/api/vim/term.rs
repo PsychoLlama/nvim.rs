@@ -66,12 +66,7 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
     };
     let mut contents: Vec<u8> = Vec::new();
     if may_read_buffer {
-        read_buffer_into(
-            buffer,
-            LineNr::ONE,
-            buffer.b_ml.ml_line_count,
-            &mut contents,
-        );
+        buffer.read_into(LineNr::ONE, buffer.b_ml.ml_line_count, &mut contents);
     }
     // Held across `TermOpen`, which may close the terminal.
     let held = ChannelRef::new(id);

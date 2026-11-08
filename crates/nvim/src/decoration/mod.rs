@@ -49,7 +49,6 @@ use crate::decoration::defs::{
 };
 use crate::decoration_provider::decor_provider_running;
 use crate::drawscreen::{redraw_buf_line_later, redraw_buf_range_later};
-use crate::extmark::extmark_set;
 use crate::global_cell::GlobalCell;
 use crate::grid::{schar_from_char, schar_get_first_codepoint, schar_high};
 use crate::marktree::key::MtFlags;
@@ -450,9 +449,8 @@ pub fn bufhl_add_hl_pos_offset(
         let ns = u32::try_from(src_id).expect("a namespace id fits its own handle type");
         let (row, end_row) = (lnum.get() - 1, lnum.get() - 1 + end_off);
         let flags = MtFlags::DECOR_HL;
-        extmark_set(
-            buffer, ns, None, row, hl_start, end_row, hl_end, decor, flags, true, false, true,
-            false,
+        buffer.set_extmark(
+            ns, None, row, hl_start, end_row, hl_end, decor, flags, true, false, true, false,
         );
     }
 }

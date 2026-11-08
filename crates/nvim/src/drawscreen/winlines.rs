@@ -372,14 +372,8 @@ fn draw_one_line(
         // unless a virtual line is attached below it, which has to be drawn
         // and so ends the run. A virtual line below a *second* adjacent
         // concealed line is concealed with it.
-        let mut virt_below = decor_virt_lines(
-            window,
-            lastlnum.get(),
-            (lastlnum + 1).get(),
-            None,
-            None,
-            true,
-        ) > 0;
+        let mut virt_below =
+            window.virt_lines(lastlnum.get(), (lastlnum + 1).get(), None, None, true) > 0;
         let mut last = lastlnum;
         while !virt_below
             && last < LineNr::new(buffer.b_ml.ml_line_count.get())
@@ -387,7 +381,7 @@ fn draw_one_line(
         {
             virt_below = false;
             last += 1;
-            has_folding(window, LineNr::new(last.get()), None, Some(&mut last));
+            window.has_folding(LineNr::new(last.get()), None, Some(&mut last));
         }
         window.w_lines[idx].wl_lastlnum = LineNr::new(last.get());
     }

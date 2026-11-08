@@ -31,7 +31,7 @@ use crate::edit::{
     BeginlineOpts, beginline, edit, get_literal, ins_copychar, prompt_curpos_editable,
     set_last_insert,
 };
-use crate::fold::{fold_update_after_insert, has_folding};
+use crate::fold::fold_update_after_insert;
 use crate::getchar::state::got_int;
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_char, stuff_empty, stuff_readbuf, stuff_readbuf_char,
@@ -427,9 +427,9 @@ pub(crate) fn n_opencmd(cmd_arg: &mut CmdArg) {
     let lnum = win.w_cursor.lnum;
     let mut edge = lnum;
     if opening_above {
-        has_folding(win, lnum, Some(&mut edge), None);
+        win.has_folding(lnum, Some(&mut edge), None);
     } else {
-        has_folding(win, lnum, None, Some(&mut edge));
+        win.has_folding(lnum, None, Some(&mut edge));
     }
     win.w_cursor.lnum = edge;
     Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());

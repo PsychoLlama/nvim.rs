@@ -1,8 +1,8 @@
 //! Walking the buffer to the next misspelled word.
 //!
 //! This is what `]s`, `[s`, `]S` and `[S` do, and what `spellbadword()`
-//! uses to find the bad word on the current line. [`spell_move_to`] scans
-//! line by line calling [`spell_check`] on every word, in whichever
+//! uses to find the bad word on the current line. [`Win::spell_move_to`] scans
+//! line by line calling [`Win::spell_check`] on every word, in whichever
 //! direction was asked for, wrapping at the ends of the buffer when
 //! `'wrapscan'` allows.
 //!
@@ -64,7 +64,7 @@ use crate::syntax::syntax_present;
 use crate::types::{ColNr, LineNr, Pos};
 
 use super::chartab::tail;
-use super::check::{check_need_cap, no_spell_checking, spell_check};
+use super::check::{check_need_cap, no_spell_checking};
 use super::{MAXWLEN, SMT_BAD, SMT_RARE};
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPR};
 use crate::spell::SMT_ALL;
@@ -95,238 +95,241 @@ fn can_syn_spell(window: Win, lnum: LineNr, col: c_int) -> bool {
     can_spell
 }
 
-/// Move the cursor to the next spelling error.
-///
-/// `dir` is `FORWARD` or `BACKWARD`; `behaviour` selects which kinds of bad
-/// word count (`SMT_ALL`, `SMT_BAD` for `]S`, `SMT_RARE`); `curline` limits
-/// the search to the cursor line, which is what `spellbadword()` and
-/// Insert-mode completion want. `found_attr`, when given and searching forward,
-/// receives the highlight of the word found.
-///
-/// Returns the length of the bad word, or 0 if none was found.
-pub fn spell_move_to(
-    mut window: Win,
-    dir: c_int,
-    behaviour: SpellMoveType,
-    curline: bool,
-    mut found_attr: Option<&mut Hlf>,
-) -> size_t {
-    if no_spell_checking(window) {
-        return 0;
-    }
-
-    let mut found_pos = Pos {
-        lnum: LineNr::ZERO,
-        col: ColNr::ZERO,
-        coladd: 0,
-    };
-    let mut found_len: size_t = 0;
-    let mut attr: Hlf = HLF_COUNT;
-    let has_syntax = syntax_present(window);
-    // The line, the start of the next one after it, and a terminator; kept
-    // between lines while it is long enough.
-    let mut buf: Vec<u8> = Vec::new();
-    let mut skip = 0;
-    let mut capcol: ColNr = ColNr::NONE;
-    let mut found_one = false;
-    let mut wrapped = false;
-    let mut ret: size_t = 0;
-    let mut done = false;
-
-    let mut lnum = window.w_cursor.lnum;
-    clearpos(&mut found_pos);
-
-    // Ephemeral extmarks live in the one decoration state, so it has to be
-    // put aside and rebuilt per line here, then restored. The scan's own
-    // state occupies the same cell -- a provider's ephemeral mark reaches
-    // it from the API side, exactly as during a redraw.
-    let saved_decor_start = decor_state_set_aside();
-    let mut decor_lnum: LineNr = LineNr::new(-1);
-
-    let mut lines = window.buffer().lines();
-    while !got_int.get() {
-        let line_len = lines.line_len(lnum).as_usize();
-        if buf.len() < line_len + MAXWLEN + 2 {
-            buf = vec![0; line_len + MAXWLEN + 2];
+impl Win {
+    /// Move the cursor to the next spelling error.
+    ///
+    /// `dir` is `FORWARD` or `BACKWARD`; `behaviour` selects which kinds of bad
+    /// word count (`SMT_ALL`, `SMT_BAD` for `]S`, `SMT_RARE`); `curline` limits
+    /// the search to the cursor line, which is what `spellbadword()` and
+    /// Insert-mode completion want. `found_attr`, when given and searching forward,
+    /// receives the highlight of the word found.
+    ///
+    /// Returns the length of the bad word, or 0 if none was found.
+    pub fn spell_move_to(
+        mut self,
+        dir: c_int,
+        behaviour: SpellMoveType,
+        curline: bool,
+        mut found_attr: Option<&mut Hlf>,
+    ) -> size_t {
+        if no_spell_checking(self) {
+            return 0;
         }
 
-        // The first word of the first line is always capital-checked.
-        if lnum == LineNr::ONE {
-            capcol = ColNr::ZERO;
-        }
-
-        if capcol == ColNr::ZERO {
-            capcol = ColNr::from_index(skip::white(lines.line(lnum)));
-        } else if curline && window == Win::current() {
-            // For spellbadword(): does the first word need a capital?
-            // The borrow ends before the call, which reads the line above.
-            let col = ColNr::from_index(skip::white(lines.line(lnum)));
-            if check_need_cap(Win::current(), lnum, col) {
-                capcol = col;
-            }
-        }
-
-        // Copy the line and append the start of the next one.
-        let empty_line = {
-            let line = lines.line(lnum);
-            buf[..line_len].copy_from_slice(line);
-            buf[line_len] = 0;
-            skip::white(line) == line.len()
+        let mut found_pos = Pos {
+            lnum: LineNr::ZERO,
+            col: ColNr::ZERO,
+            coladd: 0,
         };
-        if lnum < window.w_buffer.b_ml.ml_line_count {
-            let next = lines.line(lnum + 1);
-            spell_cat_line(&mut buf[line_len..], next, MAXWLEN);
-        }
+        let mut found_len: size_t = 0;
+        let mut attr: Hlf = HLF_COUNT;
+        let has_syntax = syntax_present(self);
+        // The line, the start of the next one after it, and a terminator; kept
+        // between lines while it is long enough.
+        let mut buf: Vec<u8> = Vec::new();
+        let mut skip = 0;
+        let mut capcol: ColNr = ColNr::NONE;
+        let mut found_one = false;
+        let mut wrapped = false;
+        let mut ret: size_t = 0;
+        let mut done = false;
 
-        let mut p = skip;
-        let endp = line_len;
-        while p < endp {
-            // Searching backwards, stop at the cursor — unless the search
-            // already wrapped past the end of the buffer.
-            if dir == BACKWARD
-                && lnum == window.w_cursor.lnum
-                && !wrapped
-                && ColNr::from_index(p) >= window.w_cursor.col
-            {
-                break;
+        let mut lnum = self.w_cursor.lnum;
+        clearpos(&mut found_pos);
+
+        // Ephemeral extmarks live in the one decoration state, so it has to be
+        // put aside and rebuilt per line here, then restored. The scan's own
+        // state occupies the same cell -- a provider's ephemeral mark reaches
+        // it from the API side, exactly as during a redraw.
+        let saved_decor_start = decor_state_set_aside();
+        let mut decor_lnum: LineNr = LineNr::new(-1);
+
+        let mut lines = self.buffer().lines();
+        while !got_int.get() {
+            let line_len = lines.line_len(lnum).as_usize();
+            if buf.len() < line_len + MAXWLEN + 2 {
+                buf = vec![0; line_len + MAXWLEN + 2];
             }
 
-            let len;
-            (len, attr) = spell_check(window, &buf[p..], Some(&mut capcol), false);
-
-            if attr != HLF_COUNT
-                && (behaviour == SMT_ALL
-                    || (behaviour == SMT_BAD && attr == HLF_SPB)
-                    || (behaviour == SMT_RARE && attr == HLF_SPR))
-            {
-                // Searching forward, only a bad word after the cursor
-                // counts.
-                let col = ColNr::from_index(p);
-                let past_cursor = dir == BACKWARD
-                    || lnum != window.w_cursor.lnum
-                    || wrapped
-                    || col + if curline { len_as_int(len) } else { 0 } > window.w_cursor.col;
-
-                if past_cursor {
-                    let no_plain_buffer =
-                        window.syn_block().b_p_spo_flags & kOptSpoFlagNoplainbuffer != 0;
-                    let mut can_spell = !no_plain_buffer;
-                    let decor_says = decor_spell_nav_col(window, lnum, &mut decor_lnum, col.get());
-                    if decor_says == Some(true) {
-                        can_spell = true;
-                    } else if decor_says == Some(false) {
-                        can_spell = false;
-                    } else if has_syntax {
-                        can_spell = can_syn_spell(window, lnum, col.get());
-                    }
-
-                    if !can_spell {
-                        attr = HLF_COUNT;
-                    } else {
-                        found_one = true;
-                        found_pos = Pos {
-                            lnum,
-                            col,
-                            coladd: 0,
-                        };
-                        if dir == FORWARD {
-                            // Nothing further to look for.
-                            window.w_cursor = found_pos;
-                            if let Some(found_attr) = found_attr.as_deref_mut() {
-                                *found_attr = attr;
-                            }
-                            ret = len;
-                            done = true;
-                            break;
-                        } else if curline {
-                            // Insert-mode completion wants the cursor
-                            // after the bad word.
-                            found_pos.col += len_as_int(len);
-                        }
-                        found_len = len;
-                    }
-                } else {
-                    found_one = true;
-                }
-            }
-
-            // On to the character after the word.
-            p += len;
-            capcol -= len_as_int(len);
-        }
-
-        if done {
-            break; // found it, going forward
-        }
-
-        if dir == BACKWARD && found_pos.lnum != LineNr::ZERO {
-            // Take the last match in the line, before the cursor.
-            window.w_cursor = found_pos;
-            ret = found_len;
-            break;
-        }
-
-        if curline {
-            break; // only the cursor line was wanted
-        }
-
-        // Back at the starting line having searched it twice: give up.
-        if lnum == window.w_cursor.lnum && wrapped {
-            break;
-        }
-
-        if dir == BACKWARD {
-            if lnum > LineNr::ONE {
-                lnum -= 1;
-            } else if !p_ws() {
-                break; // at the first line and 'nowrapscan'
-            } else {
-                // Wrap to the end. The starting line may be searched
-                // again, to accept its last match.
-                lnum = window.w_buffer.b_ml.ml_line_count;
-                wrapped = true;
-                if !shortmess(ShmFlag::SEARCH) {
-                    give_warning(gettext(top_bot_msg), true, false);
-                }
-            }
-            capcol = ColNr::NONE;
-        } else {
-            if lnum < window.w_buffer.b_ml.ml_line_count {
-                lnum += 1;
-            } else if !p_ws() {
-                break; // at the last line and 'nowrapscan'
-            } else {
-                // Wrap to the start. The starting line may be searched
-                // again, to accept its first match.
-                lnum = LineNr::ONE;
-                wrapped = true;
-                if !shortmess(ShmFlag::SEARCH) {
-                    give_warning(gettext(bot_top_msg), true, false);
-                }
-            }
-
-            // Back at the starting line with nothing found: give up.
-            if lnum == window.w_cursor.lnum && !found_one {
-                break;
-            }
-
-            // Skip whatever of the next line a match already covered.
-            skip = if attr == HLF_COUNT { p - endp } else { 0 };
-
-            // One column for the space standing in for the line break.
-            capcol -= 1;
-
-            // After an empty line, check the next line's first word.
-            if empty_line {
+            // The first word of the first line is always capital-checked.
+            if lnum == LineNr::ONE {
                 capcol = ColNr::ZERO;
             }
+
+            if capcol == ColNr::ZERO {
+                capcol = ColNr::from_index(skip::white(lines.line(lnum)));
+            } else if curline && self == Win::current() {
+                // For spellbadword(): does the first word need a capital?
+                // The borrow ends before the call, which reads the line above.
+                let col = ColNr::from_index(skip::white(lines.line(lnum)));
+                if check_need_cap(Win::current(), lnum, col) {
+                    capcol = col;
+                }
+            }
+
+            // Copy the line and append the start of the next one.
+            let empty_line = {
+                let line = lines.line(lnum);
+                buf[..line_len].copy_from_slice(line);
+                buf[line_len] = 0;
+                skip::white(line) == line.len()
+            };
+            if lnum < self.w_buffer.b_ml.ml_line_count {
+                let next = lines.line(lnum + 1);
+                spell_cat_line(&mut buf[line_len..], next, MAXWLEN);
+            }
+
+            let mut p = skip;
+            let endp = line_len;
+            while p < endp {
+                // Searching backwards, stop at the cursor — unless the search
+                // already wrapped past the end of the buffer.
+                if dir == BACKWARD
+                    && lnum == self.w_cursor.lnum
+                    && !wrapped
+                    && ColNr::from_index(p) >= self.w_cursor.col
+                {
+                    break;
+                }
+
+                let len;
+                (len, attr) = self.spell_check(&buf[p..], Some(&mut capcol), false);
+
+                if attr != HLF_COUNT
+                    && (behaviour == SMT_ALL
+                        || (behaviour == SMT_BAD && attr == HLF_SPB)
+                        || (behaviour == SMT_RARE && attr == HLF_SPR))
+                {
+                    // Searching forward, only a bad word after the cursor
+                    // counts.
+                    let col = ColNr::from_index(p);
+                    let past_cursor = dir == BACKWARD
+                        || lnum != self.w_cursor.lnum
+                        || wrapped
+                        || col + if curline { len_as_int(len) } else { 0 } > self.w_cursor.col;
+
+                    if past_cursor {
+                        let no_plain_buffer =
+                            self.syn_block().b_p_spo_flags & kOptSpoFlagNoplainbuffer != 0;
+                        let mut can_spell = !no_plain_buffer;
+                        let decor_says =
+                            decor_spell_nav_col(self, lnum, &mut decor_lnum, col.get());
+                        if decor_says == Some(true) {
+                            can_spell = true;
+                        } else if decor_says == Some(false) {
+                            can_spell = false;
+                        } else if has_syntax {
+                            can_spell = can_syn_spell(self, lnum, col.get());
+                        }
+
+                        if !can_spell {
+                            attr = HLF_COUNT;
+                        } else {
+                            found_one = true;
+                            found_pos = Pos {
+                                lnum,
+                                col,
+                                coladd: 0,
+                            };
+                            if dir == FORWARD {
+                                // Nothing further to look for.
+                                self.w_cursor = found_pos;
+                                if let Some(found_attr) = found_attr.as_deref_mut() {
+                                    *found_attr = attr;
+                                }
+                                ret = len;
+                                done = true;
+                                break;
+                            } else if curline {
+                                // Insert-mode completion wants the cursor
+                                // after the bad word.
+                                found_pos.col += len_as_int(len);
+                            }
+                            found_len = len;
+                        }
+                    } else {
+                        found_one = true;
+                    }
+                }
+
+                // On to the character after the word.
+                p += len;
+                capcol -= len_as_int(len);
+            }
+
+            if done {
+                break; // found it, going forward
+            }
+
+            if dir == BACKWARD && found_pos.lnum != LineNr::ZERO {
+                // Take the last match in the line, before the cursor.
+                self.w_cursor = found_pos;
+                ret = found_len;
+                break;
+            }
+
+            if curline {
+                break; // only the cursor line was wanted
+            }
+
+            // Back at the starting line having searched it twice: give up.
+            if lnum == self.w_cursor.lnum && wrapped {
+                break;
+            }
+
+            if dir == BACKWARD {
+                if lnum > LineNr::ONE {
+                    lnum -= 1;
+                } else if !p_ws() {
+                    break; // at the first line and 'nowrapscan'
+                } else {
+                    // Wrap to the end. The starting line may be searched
+                    // again, to accept its last match.
+                    lnum = self.w_buffer.b_ml.ml_line_count;
+                    wrapped = true;
+                    if !shortmess(ShmFlag::SEARCH) {
+                        give_warning(gettext(top_bot_msg), true, false);
+                    }
+                }
+                capcol = ColNr::NONE;
+            } else {
+                if lnum < self.w_buffer.b_ml.ml_line_count {
+                    lnum += 1;
+                } else if !p_ws() {
+                    break; // at the last line and 'nowrapscan'
+                } else {
+                    // Wrap to the start. The starting line may be searched
+                    // again, to accept its first match.
+                    lnum = LineNr::ONE;
+                    wrapped = true;
+                    if !shortmess(ShmFlag::SEARCH) {
+                        give_warning(gettext(bot_top_msg), true, false);
+                    }
+                }
+
+                // Back at the starting line with nothing found: give up.
+                if lnum == self.w_cursor.lnum && !found_one {
+                    break;
+                }
+
+                // Skip whatever of the next line a match already covered.
+                skip = if attr == HLF_COUNT { p - endp } else { 0 };
+
+                // One column for the space standing in for the line break.
+                capcol -= 1;
+
+                // After an empty line, check the next line's first word.
+                if empty_line {
+                    capcol = ColNr::ZERO;
+                }
+            }
+
+            line_breakcheck();
         }
 
-        line_breakcheck();
+        decor_state_restore(saved_decor_start);
+        ret
     }
-
-    decor_state_restore(saved_decor_start);
-    ret
 }
 
 /// Append the start of `line` to `buf`, blanking out the leading white

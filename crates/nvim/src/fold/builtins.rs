@@ -2,7 +2,7 @@
 //!
 //! `foldclosed()`, `foldclosedend()` and `foldlevel()` all read the tree
 //! *without* the display cache — they pass `cache = false` to
-//! [`has_folding_win`] — which is what makes them a usable oracle for the
+//! [`Win::has_folding_with`] — which is what makes them a usable oracle for the
 //! fold tree in a headless editor.
 
 #![deny(
@@ -44,7 +44,7 @@ pub(super) fn foldclosed_both(args: &[TypVal], result: &mut TypVal, end: bool) {
         let mut first: LineNr = LineNr::ZERO;
         let mut last: LineNr = LineNr::ZERO;
         let win = Win::current();
-        let closed = has_folding_win(win, lnum, Some(&mut first), Some(&mut last), false, None);
+        let closed = win.has_folding_with(lnum, Some(&mut first), Some(&mut last), false, None);
         if closed {
             rv.write_number(VarNumber::from(if end { last } else { first }));
             return;

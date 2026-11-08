@@ -4,7 +4,7 @@
 //! `ExtmarkUndoObject`, and [`extmark_apply_undo`] plays that back in either
 //! direction: a splice is inverted, a region move is moved back, and a
 //! `kExtmarkSavePos` entry restores a mark that the change deleted outright.
-//! [`extmark_splice_delete`] is the recording side -- it walks the marks
+//! [`Buf::splice_delete_extmarks`] is the recording side -- it walks the marks
 //! inside a range being deleted and decides, per mark, whether it is
 //! invalidated, moved to the edge or saved for restoration.
 //!
@@ -36,112 +36,115 @@ use crate::marktree::key::{
 use crate::marktree::{MTPos, MarkTreeIter};
 use crate::types::ColNr;
 
-/// Invalidate the marks inside a range being deleted, and copy the ones the
-/// change cannot simply be reversed for into `saved`.
-///
-/// Copying does nothing on redo; it enforces the right position on undo.
-pub fn extmark_splice_delete(
-    buffer: Buf,
-    l_row: c_int,
-    l_col: ColNr,
-    u_row: c_int,
-    u_col: ColNr,
-    saved: Option<&mut Vec<ExtmarkUndoObject>>,
-    only_copy: bool,
-    op: ExtmarkOp,
-) {
-    let lo = MTPos {
-        row: l_row,
-        col: l_col.get(),
-    };
-    let hi = MTPos {
-        row: u_row,
-        col: u_col.get(),
-    };
-    splice_delete(buffer, lo, hi, saved, only_copy, op);
-}
+impl Buf {
+    /// Invalidate the marks inside a range being deleted, and copy the ones the
+    /// change cannot simply be reversed for into `saved`.
+    ///
+    /// Copying does nothing on redo; it enforces the right position on undo.
+    pub fn splice_delete_extmarks(
+        self,
+        l_row: c_int,
+        l_col: ColNr,
+        u_row: c_int,
+        u_col: ColNr,
+        saved: Option<&mut Vec<ExtmarkUndoObject>>,
+        only_copy: bool,
+        op: ExtmarkOp,
+    ) {
+        let lo = MTPos {
+            row: l_row,
+            col: l_col.get(),
+        };
+        let hi = MTPos {
+            row: u_row,
+            col: u_col.get(),
+        };
+        self.splice_delete(lo, hi, saved, only_copy, op);
+    }
 
-/// [`extmark_splice_delete`] for the callers that already hold a [`Buf`].
-pub(crate) fn splice_delete(
-    mut buffer: Buf,
-    lo: MTPos,
-    hi: MTPos,
-    mut saved: Option<&mut Vec<ExtmarkUndoObject>>,
-    only_copy: bool,
-    op: ExtmarkOp,
-) {
-    let mut iter = MarkTreeIter::default();
+    /// [`Buf::splice_delete_extmarks`] for the callers that already hold a [`Buf`].
+    pub(crate) fn splice_delete(
+        mut self,
+        lo: MTPos,
+        hi: MTPos,
+        mut saved: Option<&mut Vec<ExtmarkUndoObject>>,
+        only_copy: bool,
+        op: ExtmarkOp,
+    ) {
+        let mut iter = MarkTreeIter::default();
 
-    itr_get(buffer.marktree(), lo.row, lo.col, &mut iter);
-    loop {
-        let mark = itr_current(buffer.marktree(), &iter);
-        if mark.pos.row < 0 || mark.pos.row > hi.row {
-            break;
-        }
-
-        // Left gravity marks at the start of the range and right gravity
-        // marks at its end need no copy, unless they are invalidated.
-        let mut copy = true;
-        if mark.pos.row == lo.row && mark.pos.col - c_int::from(!mt_right(mark)) < lo.col {
-            copy = false;
-        } else if mark.pos.row == hi.row {
-            if mark.pos.col > hi.col + 1 {
+        itr_get(self.marktree(), lo.row, lo.col, &mut iter);
+        loop {
+            let mark = itr_current(self.marktree(), &iter);
+            if mark.pos.row < 0 || mark.pos.row > hi.row {
                 break;
             }
-            if mark.pos.col + c_int::from(mt_right(mark)) > hi.col {
+
+            // Left gravity marks at the start of the range and right gravity
+            // marks at its end need no copy, unless they are invalidated.
+            let mut copy = true;
+            if mark.pos.row == lo.row && mark.pos.col - c_int::from(!mt_right(mark)) < lo.col {
                 copy = false;
-            }
-        }
-
-        let mut invalidated = false;
-        if !only_copy && !mt_invalid(mark) && mt_invalidate(mark) && !mt_end(mark) {
-            let mut end_iter = iter;
-            let endpos = tree_get_altpos(buffer.marktree(), mark, Some(&mut end_iter));
-            // Invalidate unpaired marks in deleted lines, and paired marks
-            // whose entire range has been deleted.
-            let unpaired_gone = !mt_paired(mark) && mark.pos.row < hi.row;
-            let pair_gone = mt_paired(mark)
-                && (mark.pos.row > lo.row || (mark.pos.row == lo.row && mark.pos.col >= lo.col))
-                && (endpos.row < hi.row || (endpos.row == hi.row && endpos.col <= hi.col));
-            if unpaired_gone || pair_gone {
-                if mt_no_undo(mark) {
-                    del(buffer, &mut iter, mark, true);
-                    continue;
+            } else if mark.pos.row == hi.row {
+                if mark.pos.col > hi.col + 1 {
+                    break;
                 }
-                copy = true;
-                invalidated = true;
-                itr_rawkey(buffer.marktree(), &iter).flags |= MtFlags::INVALID;
-                itr_rawkey(buffer.marktree(), &end_iter).flags |= MtFlags::INVALID;
-                tree_revise_meta(buffer.marktree(), &mut iter, mark);
-                decor_remove(
-                    buffer,
-                    mark.pos.row,
-                    endpos.row,
-                    mark.pos.col,
-                    mt_decor(mark),
-                    false,
-                );
+                if mark.pos.col + c_int::from(mt_right(mark)) > hi.col {
+                    copy = false;
+                }
             }
-        }
 
-        // Push the mark to the undo list. Upstream dereferences the list for
-        // the `only_copy` half without testing it -- the one caller that
-        // passes `only_copy` (`save_orig_extmarks`) always passes its own
-        // list, so the missing case is unreachable rather than guarded.
-        if copy
-            && (only_copy || (op == kExtmarkUndo && !mt_no_undo(mark)))
-            && let Some(saved) = saved.as_deref_mut()
-        {
-            let pos = ExtmarkSavePos {
-                mark: mt_lookup_key(mark),
-                old_row: mark.pos.row,
-                old_col: ColNr::new(mark.pos.col),
-                invalidated,
-            };
-            saved.push(ExtmarkUndoObject::SavePos(pos));
-        }
+            let mut invalidated = false;
+            if !only_copy && !mt_invalid(mark) && mt_invalidate(mark) && !mt_end(mark) {
+                let mut end_iter = iter;
+                let endpos = tree_get_altpos(self.marktree(), mark, Some(&mut end_iter));
+                // Invalidate unpaired marks in deleted lines, and paired marks
+                // whose entire range has been deleted.
+                let unpaired_gone = !mt_paired(mark) && mark.pos.row < hi.row;
+                let pair_gone = mt_paired(mark)
+                    && (mark.pos.row > lo.row
+                        || (mark.pos.row == lo.row && mark.pos.col >= lo.col))
+                    && (endpos.row < hi.row || (endpos.row == hi.row && endpos.col <= hi.col));
+                if unpaired_gone || pair_gone {
+                    if mt_no_undo(mark) {
+                        del(self, &mut iter, mark, true);
+                        continue;
+                    }
+                    copy = true;
+                    invalidated = true;
+                    itr_rawkey(self.marktree(), &iter).flags |= MtFlags::INVALID;
+                    itr_rawkey(self.marktree(), &end_iter).flags |= MtFlags::INVALID;
+                    tree_revise_meta(self.marktree(), &mut iter, mark);
+                    decor_remove(
+                        self,
+                        mark.pos.row,
+                        endpos.row,
+                        mark.pos.col,
+                        mt_decor(mark),
+                        false,
+                    );
+                }
+            }
 
-        itr_next(buffer.marktree(), &mut iter);
+            // Push the mark to the undo list. Upstream dereferences the list for
+            // the `only_copy` half without testing it -- the one caller that
+            // passes `only_copy` (`save_orig_extmarks`) always passes its own
+            // list, so the missing case is unreachable rather than guarded.
+            if copy
+                && (only_copy || (op == kExtmarkUndo && !mt_no_undo(mark)))
+                && let Some(saved) = saved.as_deref_mut()
+            {
+                let pos = ExtmarkSavePos {
+                    mark: mt_lookup_key(mark),
+                    old_row: mark.pos.row,
+                    old_col: ColNr::new(mark.pos.col),
+                    invalidated,
+                };
+                saved.push(ExtmarkUndoObject::SavePos(pos));
+            }
+
+            itr_next(self.marktree(), &mut iter);
+        }
     }
 }
 

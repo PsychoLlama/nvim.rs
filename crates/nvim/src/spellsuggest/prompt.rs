@@ -67,8 +67,7 @@ use crate::os::libc::int64_t;
 use crate::search::FORWARD;
 use crate::spell::MAXWLEN_INT;
 use crate::spell::{
-    SMT_ALL, SpellReplacement, check_need_cap, last_replacement, parse_spelllang,
-    spell_iswordp_nmw, spell_move_to,
+    SMT_ALL, SpellReplacement, check_need_cap, last_replacement, parse_spelllang, spell_iswordp_nmw,
 };
 use crate::spellsuggest::{
     MAXWLEN, SPS_BEST, SPS_DOUBLE, SugInfo, Suggest, spell_find_suggest, spell_suggest_timeout,
@@ -188,7 +187,7 @@ fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
     }
 
     let win = Win::current();
-    let moved = spell_move_to(win, FORWARD as c_int, SMT_ALL, true, None);
+    let moved = win.spell_move_to(FORWARD as c_int, SMT_ALL, true, None);
     if moved != 0 && Win::current().w_cursor.col <= prev_cursor.col {
         return Some(0);
     }

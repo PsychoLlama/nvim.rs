@@ -79,9 +79,7 @@ use crate::option::vars::P_SPS;
 use crate::os::input::os_breakcheck;
 use crate::path::MAXPATHL;
 use crate::spell::{LangId, LangP};
-use crate::spell::{
-    captype, loaded_langs, make_case_word, spell_casefold, spell_check, spell_soundfold,
-};
+use crate::spell::{captype, loaded_langs, make_case_word, spell_casefold, spell_soundfold};
 use crate::spellfile::suggest_load_files;
 use crate::spellsuggest::collect::{
     List, add_banned, add_suggestion, check_suggestions, clean_count, cleanup_suggestions,
@@ -425,7 +423,7 @@ fn spell_find_suggest(
         badlen
     } else {
         let len;
-        (len, attr) = spell_check(Win::current(), bad, None, false);
+        (len, attr) = Win::current().spell_check(bad, None, false);
         len_as_int(len)
     };
     su.su_maxcount = maxcount;

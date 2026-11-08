@@ -419,12 +419,12 @@ fn widen_over_folds(win: Win, rg: &mut Regions) {
         }
     }
 
-    has_folding(win, rg.mod_top, Some(&mut rg.mod_top), None);
+    win.has_folding(rg.mod_top, Some(&mut rg.mod_top), None);
     rg.mod_top = rg.mod_top.min(lnumt);
 
     // The same for the bottom, on the line one above `mod_bot`.
     rg.mod_bot -= 1;
-    has_folding(win, rg.mod_bot, None, Some(&mut rg.mod_bot));
+    win.has_folding(rg.mod_bot, None, Some(&mut rg.mod_bot));
     rg.mod_bot += 1;
     rg.mod_bot = rg.mod_bot.max(lnumb);
 }
@@ -452,7 +452,7 @@ fn plan_scroll(win: Win, buffer: Buf, rg: &mut Regions) {
         && decor_conceal_line(win, (topline_conceal - 1).get(), false)
     {
         topline_conceal += 1;
-        has_folding(win, topline_conceal, None, Some(&mut topline_conceal));
+        win.has_folding(topline_conceal, None, Some(&mut topline_conceal));
     }
 
     let scrollable = matches!(
@@ -502,7 +502,7 @@ fn scroll_down(mut win: Win, rg: &mut Regions) {
             if count >= win.w_view_height - 2 {
                 break;
             }
-            has_folding(win, ln, None, Some(&mut ln));
+            win.has_folding(ln, None, Some(&mut ln));
             ln += 1;
         }
         count

@@ -43,7 +43,7 @@ use crate::winlayer::WinId;
 use core::ffi::{CStr, c_int};
 
 use crate::arglist::check_arg_idx;
-use crate::buffer::{buf_is_prompt, current_buf, maketitle, otherfile, setaltfname, setfname};
+use crate::buffer::{buf_is_prompt, current_buf, maketitle, otherfile, setaltfname};
 
 use crate::change::deleted_lines_mark;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_all_later, redraw_curbuf_later};
@@ -193,13 +193,9 @@ pub(crate) fn ex_recover(excmd: &mut ExArg) {
     );
     if !unsaved
         && (excmd.line.byte_at(excmd.line.arg) == 0
-            || setfname(
-                Buf::current(),
-                Some(excmd.line.cstr_from(excmd.line.arg)),
-                None,
-                true,
-            )
-            .is_ok())
+            || Buf::current()
+                .set_name(Some(excmd.line.cstr_from(excmd.line.arg)), None, true)
+                .is_ok())
     {
         ml_recover(true);
     }

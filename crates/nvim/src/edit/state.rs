@@ -420,8 +420,7 @@ fn may_scroll_for_wrap(s: &mut InsertState) {
     {
         if Win::current().w_topfill > 0 {
             Win::current().w_topfill -= 1;
-        } else if has_folding(
-            Win::current(),
+        } else if Win::current().has_folding(
             Win::current().w_topline,
             None,
             Some(&mut s.old_topline),

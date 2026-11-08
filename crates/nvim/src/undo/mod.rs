@@ -108,7 +108,6 @@ mod write;
 pub(crate) use error::{Corruption, UndoError, UndoFileError};
 
 use crate::winlayer::{Buf, buffers};
-use store::{header_adopt, header_chain};
 use tree::*;
 
 pub use apply::{u_redo, u_undo, u_undo_and_forget, undo_time};
@@ -332,7 +331,7 @@ fn start_new_header(mut b: Buf) -> bool {
             seq: b.b_u_seq_last,
             ..Default::default()
         });
-        Some(header_adopt(b, header)).filter(|link| link.is_some())
+        Some(b.adopt_header(header)).filter(|link| link.is_some())
     } else {
         None
     };
@@ -351,15 +350,16 @@ fn start_new_header(mut b: Buf) -> bool {
             break;
         };
         if oldest == old_curhead {
-            u_freebranch(b, oldest, Some(&mut old_curhead));
+            b.free_undo_branch(oldest, Some(&mut old_curhead));
         } else if alt_next.is_none() {
-            u_freeheader(b, oldest, Some(&mut old_curhead));
+            b.free_undo_header(oldest, Some(&mut old_curhead));
         } else {
             // The far end of the oldest header's alternate chain.
-            let far = header_chain(b, oldest, |uh| uh.alt_next)
+            let far = b
+                .header_chain(oldest, |uh| uh.alt_next)
                 .last()
                 .unwrap_or(oldest);
-            u_freebranch(b, far, Some(&mut old_curhead));
+            b.free_undo_branch(far, Some(&mut old_curhead));
         }
     }
 
@@ -367,7 +367,7 @@ fn start_new_header(mut b: Buf) -> bool {
         // Undo is off for this buffer, so the branch we forked from has
         // nothing left to lead back to.
         if b.has_header(old_curhead) {
-            u_freebranch(b, old_curhead, None);
+            b.free_undo_branch(old_curhead, None);
         }
         b.b_u_synced = false;
         return false;

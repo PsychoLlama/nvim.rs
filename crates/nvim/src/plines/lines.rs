@@ -25,7 +25,7 @@ pub(crate) fn win_may_fill(window: Win) -> bool {
 /// Filler lines above `lnum`: virtual lines plus, in a diff, the lines the
 /// other buffer has here and this one does not.
 pub(crate) fn win_get_fill(window: Win, lnum: LineNr) -> c_int {
-    let virt_lines = decor_virt_lines(window, (lnum - 1).get(), lnum.get(), None, None, true);
+    let virt_lines = window.virt_lines((lnum - 1).get(), lnum.get(), None, None, true);
 
     // Be quick when there are no filler lines.
     if diffopt_filler() {
@@ -158,37 +158,129 @@ pub(crate) fn plines_win_col(window: Win, lnum: LineNr, mut column: c_long) -> c
     lines
 }
 
-/// Screen lines buffer line `lnum` takes, folds and topfill included.
-///
-/// Because of topfill this only makes sense for `lnum >= wp->w_topline`.
-pub(crate) fn plines_win_full(
-    window: Win,
-    mut lnum: LineNr,
-    nextp: Option<&mut LineNr>,
-    foldedp: Option<&mut bool>,
-    cache: bool,
-    limit_winheight: bool,
-) -> c_int {
-    let folded = has_folding_win(window, lnum, Some(&mut lnum), nextp, cache, None);
-    if let Some(foldedp) = foldedp {
-        *foldedp = folded;
-    }
-    let filler_lines = if lnum == window.w_topline {
-        window.w_topfill
-    } else {
-        win_get_fill(window, lnum)
-    };
+impl Win {
+    /// Screen lines buffer line `lnum` takes, folds and topfill included.
+    ///
+    /// Because of topfill this only makes sense for `lnum >= wp->w_topline`.
+    pub(crate) fn screen_lines_full(
+        self,
+        mut lnum: LineNr,
+        nextp: Option<&mut LineNr>,
+        foldedp: Option<&mut bool>,
+        cache: bool,
+        limit_winheight: bool,
+    ) -> c_int {
+        let folded = self.has_folding_with(lnum, Some(&mut lnum), nextp, cache, None);
+        if let Some(foldedp) = foldedp {
+            *foldedp = folded;
+        }
+        let filler_lines = if lnum == self.w_topline {
+            self.w_topfill
+        } else {
+            win_get_fill(self, lnum)
+        };
 
-    if decor_conceal_line(window, (lnum - 1).get(), false) {
-        return filler_lines;
+        if decor_conceal_line(self, (lnum - 1).get(), false) {
+            return filler_lines;
+        }
+
+        let text_lines = if folded {
+            1
+        } else {
+            plines_win_nofill(self, lnum, limit_winheight)
+        };
+        text_lines + filler_lines
     }
 
-    let text_lines = if folded {
-        1
-    } else {
-        plines_win_nofill(window, lnum, limit_winheight)
-    };
-    text_lines + filler_lines
+    /// Screen lines a range of text takes in `window`.
+    ///
+    /// `start_vcol` below zero counts all of `start_lnum` including the filler
+    /// lines above it; at or above zero it starts at that virtual column, rounded
+    /// down to a whole screen line. `end_vcol` is the mirror of that, rounded up,
+    /// and is overwritten with the column actually reached. `end_lnum` is
+    /// likewise overwritten with the last line measured, which is earlier than
+    /// the one passed in when `max` is reached first. `fill`, when given, gets
+    /// the filler lines counted.
+    pub(crate) fn text_height(
+        self,
+        start_lnum: LineNr,
+        start_vcol: int64_t,
+        end_lnum: &mut LineNr,
+        end_vcol: &mut int64_t,
+        fill: Option<&mut int64_t>,
+        max: int64_t,
+    ) -> int64_t {
+        let first_width = self.w_view_width - self.col_off();
+        let width1 = first_width.max(0);
+        let width2 = (first_width + win_col_off2(self)).max(0);
+
+        let mut height_sum_fill: int64_t = 0;
+        let mut height_cur_nofill: int64_t = 0;
+        let mut height_sum_nofill: int64_t = 0;
+        let mut lnum = start_lnum;
+        let mut cur_lnum = lnum;
+        let mut cur_folded = false;
+
+        if start_vcol >= 0 {
+            let mut lnum_next = lnum;
+            cur_folded = self.has_folding(lnum, Some(&mut lnum), Some(&mut lnum_next));
+            height_cur_nofill = int64_t::from(plines_win_nofill(self, lnum, false));
+            height_sum_nofill += height_cur_nofill;
+            let row_off = if start_vcol < int64_t::from(width1) || width2 <= 0 {
+                0
+            } else {
+                1 + (start_vcol - int64_t::from(width1)) / int64_t::from(width2)
+            };
+            height_sum_nofill -= row_off.min(height_cur_nofill);
+            lnum = lnum_next + 1;
+        }
+
+        while lnum <= *end_lnum && height_sum_nofill + height_sum_fill < max {
+            let mut lnum_next = lnum;
+            cur_folded = self.has_folding(lnum, Some(&mut lnum), Some(&mut lnum_next));
+            height_sum_fill += int64_t::from(win_get_fill(self, lnum));
+            height_cur_nofill = int64_t::from(plines_win_nofill(self, lnum, false));
+            height_sum_nofill += height_cur_nofill;
+            cur_lnum = lnum;
+            lnum = lnum_next + 1;
+        }
+
+        let mut vcol_end = *end_vcol;
+        let use_vcol = vcol_end >= 0 && lnum > *end_lnum;
+        if use_vcol {
+            height_sum_nofill -= height_cur_nofill;
+            let row_off = if vcol_end == 0 {
+                0
+            } else if vcol_end <= int64_t::from(width1) || width2 <= 0 {
+                1
+            } else {
+                1 + (vcol_end - int64_t::from(width1) + int64_t::from(width2) - 1)
+                    / int64_t::from(width2)
+            };
+            height_sum_nofill += row_off.min(height_cur_nofill);
+        }
+
+        if cur_folded {
+            vcol_end = 0;
+        } else {
+            let linesize = int64_t::from(linetabsize_eol(self, cur_lnum));
+            let asked = if use_vcol { vcol_end } else { int64_t::MAX };
+            vcol_end = asked.min(linesize);
+        }
+
+        let overflow = height_sum_nofill + height_sum_fill - max;
+        if overflow > 0 && width2 > 0 && vcol_end > int64_t::from(width2) {
+            vcol_end -= (vcol_end - int64_t::from(width1)) % int64_t::from(width2)
+                + (overflow - 1) * int64_t::from(width2);
+        }
+
+        *end_lnum = cur_lnum;
+        *end_vcol = vcol_end;
+        if let Some(fill) = fill {
+            *fill = height_sum_fill;
+        }
+        height_sum_fill + height_sum_nofill
+    }
 }
 
 /// Window lines the range `first..=last` occupies, capped at `max`. Takes
@@ -200,7 +292,7 @@ pub(crate) fn plines_m_win(window: Win, mut first: LineNr, last: LineNr, max: c_
     let mut count = 0;
     while first <= last && count < max {
         let mut next = first;
-        count += plines_win_full(window, first, Some(&mut next), None, false, false);
+        count += window.screen_lines_full(first, Some(&mut next), None, false, false);
         first = next + 1;
     }
     if first == window.w_buffer.b_ml.ml_line_count + 1 {
@@ -213,9 +305,8 @@ pub(crate) fn plines_m_win(window: Win, mut first: LineNr, last: LineNr, max: c_
 /// [`plines_m_win`], a fold is not one line and a wrapped line is not
 /// several. Mainly used for scrolling offsets.
 pub(crate) fn plines_m_win_fill(window: Win, first: LineNr, last: LineNr) -> c_int {
-    let mut count = last - first
-        + 1
-        + decor_virt_lines(window, (first - 1).get(), last.get(), None, None, false);
+    let mut count =
+        last - first + 1 + window.virt_lines((first - 1).get(), last.get(), None, None, false);
 
     if diffopt_filler() {
         let mut lnum = first;
@@ -227,94 +318,4 @@ pub(crate) fn plines_m_win_fill(window: Win, first: LineNr, last: LineNr) -> c_i
     }
 
     count.max(0)
-}
-
-/// Screen lines a range of text takes in `window`.
-///
-/// `start_vcol` below zero counts all of `start_lnum` including the filler
-/// lines above it; at or above zero it starts at that virtual column, rounded
-/// down to a whole screen line. `end_vcol` is the mirror of that, rounded up,
-/// and is overwritten with the column actually reached. `end_lnum` is
-/// likewise overwritten with the last line measured, which is earlier than
-/// the one passed in when `max` is reached first. `fill`, when given, gets
-/// the filler lines counted.
-pub(crate) fn win_text_height(
-    window: Win,
-    start_lnum: LineNr,
-    start_vcol: int64_t,
-    end_lnum: &mut LineNr,
-    end_vcol: &mut int64_t,
-    fill: Option<&mut int64_t>,
-    max: int64_t,
-) -> int64_t {
-    let first_width = window.w_view_width - window.col_off();
-    let width1 = first_width.max(0);
-    let width2 = (first_width + win_col_off2(window)).max(0);
-
-    let mut height_sum_fill: int64_t = 0;
-    let mut height_cur_nofill: int64_t = 0;
-    let mut height_sum_nofill: int64_t = 0;
-    let mut lnum = start_lnum;
-    let mut cur_lnum = lnum;
-    let mut cur_folded = false;
-
-    if start_vcol >= 0 {
-        let mut lnum_next = lnum;
-        cur_folded = has_folding(window, lnum, Some(&mut lnum), Some(&mut lnum_next));
-        height_cur_nofill = int64_t::from(plines_win_nofill(window, lnum, false));
-        height_sum_nofill += height_cur_nofill;
-        let row_off = if start_vcol < int64_t::from(width1) || width2 <= 0 {
-            0
-        } else {
-            1 + (start_vcol - int64_t::from(width1)) / int64_t::from(width2)
-        };
-        height_sum_nofill -= row_off.min(height_cur_nofill);
-        lnum = lnum_next + 1;
-    }
-
-    while lnum <= *end_lnum && height_sum_nofill + height_sum_fill < max {
-        let mut lnum_next = lnum;
-        cur_folded = has_folding(window, lnum, Some(&mut lnum), Some(&mut lnum_next));
-        height_sum_fill += int64_t::from(win_get_fill(window, lnum));
-        height_cur_nofill = int64_t::from(plines_win_nofill(window, lnum, false));
-        height_sum_nofill += height_cur_nofill;
-        cur_lnum = lnum;
-        lnum = lnum_next + 1;
-    }
-
-    let mut vcol_end = *end_vcol;
-    let use_vcol = vcol_end >= 0 && lnum > *end_lnum;
-    if use_vcol {
-        height_sum_nofill -= height_cur_nofill;
-        let row_off = if vcol_end == 0 {
-            0
-        } else if vcol_end <= int64_t::from(width1) || width2 <= 0 {
-            1
-        } else {
-            1 + (vcol_end - int64_t::from(width1) + int64_t::from(width2) - 1)
-                / int64_t::from(width2)
-        };
-        height_sum_nofill += row_off.min(height_cur_nofill);
-    }
-
-    if cur_folded {
-        vcol_end = 0;
-    } else {
-        let linesize = int64_t::from(linetabsize_eol(window, cur_lnum));
-        let asked = if use_vcol { vcol_end } else { int64_t::MAX };
-        vcol_end = asked.min(linesize);
-    }
-
-    let overflow = height_sum_nofill + height_sum_fill - max;
-    if overflow > 0 && width2 > 0 && vcol_end > int64_t::from(width2) {
-        vcol_end -= (vcol_end - int64_t::from(width1)) % int64_t::from(width2)
-            + (overflow - 1) * int64_t::from(width2);
-    }
-
-    *end_lnum = cur_lnum;
-    *end_vcol = vcol_end;
-    if let Some(fill) = fill {
-        *fill = height_sum_fill;
-    }
-    height_sum_fill + height_sum_nofill
 }

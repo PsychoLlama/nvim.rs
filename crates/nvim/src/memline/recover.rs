@@ -146,7 +146,7 @@ pub fn ml_recover(checkext: bool) {
         if directly {
             let name = cstr::owned(&recorded.fname);
             let path = expand_env_within(&name, MAXPATHL as usize);
-            if let Err(err) = setfname(Buf::current(), Some(&cstr::owned(&path)), None, true) {
+            if let Err(err) = Buf::current().set_name(Some(&cstr::owned(&path)), None, true) {
                 break 'theend Err(err.into());
             }
         }

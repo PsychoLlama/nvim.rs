@@ -327,58 +327,60 @@ fn field_value_err(fmt: &'static CStr, field: &CStr) -> OptError {
     OptError::Owned(ThinCString::from_vec(message))
 }
 
-/// [`set_chars_option`] over the window's own 'fillchars' or 'listchars',
+/// [`Win::set_chars_option`] over the window's own 'fillchars' or 'listchars',
 /// read where it is used.
 pub(crate) fn set_window_chars_option(
     window: Win,
     what: CharsOption,
     apply: bool,
 ) -> Result<(), OptError> {
-    set_chars_option(window, None, what, apply)
+    window.set_chars_option(None, what, apply)
 }
 
-/// Set 'fillchars' or 'listchars' for one window.
-///
-/// `value` is the global or the window-local value, or `None` for the
-/// window's own; an empty window-local value means "use the global one".
-/// With `apply` false only the check runs, which is how
-/// `check_chars_options` asks whether a value would be accepted without
-/// disturbing anything.
-///
-/// Returns an error message when the value is not good.
-pub fn set_chars_option(
-    mut window: Win,
-    value: Option<&[u8]>,
-    what: CharsOption,
-    apply: bool,
-) -> Result<(), OptError> {
-    let listchars = is_listchars(what);
-    // The value is read -- the window's own copy borrowed, the global one
-    // copied, since this runs at `:set` rate -- and parsed before anything
-    // writes the window.
-    let parsed = {
-        let local = if listchars {
-            window.w_onebuf_opt.wo_lcs.bytes()
-        } else {
-            window.w_onebuf_opt.wo_fcs.bytes()
-        };
-        if local.is_empty() {
-            // An empty local value defers to the global one.
-            let global = if listchars { P_LCS.get() } else { P_FCS.get() };
-            parse_chars(&global, listchars, apply)
-        } else {
-            parse_chars(value.unwrap_or(local), listchars, apply)
+impl Win {
+    /// Set 'fillchars' or 'listchars' for one window.
+    ///
+    /// `value` is the global or the window-local value, or `None` for the
+    /// window's own; an empty window-local value means "use the global one".
+    /// With `apply` false only the check runs, which is how
+    /// `check_chars_options` asks whether a value would be accepted without
+    /// disturbing anything.
+    ///
+    /// Returns an error message when the value is not good.
+    pub fn set_chars_option(
+        mut self,
+        value: Option<&[u8]>,
+        what: CharsOption,
+        apply: bool,
+    ) -> Result<(), OptError> {
+        let listchars = is_listchars(what);
+        // The value is read -- the window's own copy borrowed, the global one
+        // copied, since this runs at `:set` rate -- and parsed before anything
+        // writes the window.
+        let parsed = {
+            let local = if listchars {
+                self.w_onebuf_opt.wo_lcs.bytes()
+            } else {
+                self.w_onebuf_opt.wo_fcs.bytes()
+            };
+            if local.is_empty() {
+                // An empty local value defers to the global one.
+                let global = if listchars { P_LCS.get() } else { P_FCS.get() };
+                parse_chars(&global, listchars, apply)
+            } else {
+                parse_chars(value.unwrap_or(local), listchars, apply)
+            }
+        }?;
+        if let Some(chars) = parsed {
+            // The runs the window held go with the struct they were in.
+            if listchars {
+                self.w_p_lcs_chars = chars.list;
+            } else {
+                self.w_p_fcs_chars = chars.fill;
+            }
         }
-    }?;
-    if let Some(chars) = parsed {
-        // The runs the window held go with the struct they were in.
-        if listchars {
-            window.w_p_lcs_chars = chars.list;
-        } else {
-            window.w_p_fcs_chars = chars.fill;
-        }
+        Ok(())
     }
-    Ok(())
 }
 
 /// Walk a 'fillchars' (or 'listchars') value: once to validate and, when
@@ -623,7 +625,7 @@ fn did_set_global_chars_option(
     };
     let for_this_window = local_is_empty(win) || !opt_flags.has(OptionSetFlags::GLOBAL);
 
-    set_chars_option(win, Some(val), what, for_this_window)?;
+    win.set_chars_option(Some(val), what, for_this_window)?;
 
     if !opt_flags.has(OptionSetFlags::GLOBAL) {
         let local = if listchars {
@@ -636,7 +638,7 @@ fn did_set_global_chars_option(
 
     for_each_window(|wp| {
         if local_is_empty(wp) {
-            let _ = set_chars_option(wp, None, what, true);
+            let _ = wp.set_chars_option(None, what, true);
         }
         None
     });
@@ -667,7 +669,7 @@ pub fn did_set_chars_option(args: &mut OptSet) -> Result<(), OptError> {
     } else if varp == StrVar::of_window(win, field!(WinOpt, wo_lcs))
         || varp == StrVar::of_window(win, field!(WinOpt, wo_fcs))
     {
-        set_chars_option(win, Some(new_bytes(args)), which, true)
+        win.set_chars_option(Some(new_bytes(args)), which, true)
     } else {
         Ok(())
     }
@@ -695,8 +697,8 @@ fn field_name(tab: &'static [Field], idx: usize) -> Option<Candidate> {
 /// render — a new 'encoding', say — and reports which of the two options
 /// the new state conflicts with.
 pub fn check_chars_options() -> Result<(), OptError> {
-    let check = |wp, value: Option<&[u8]>, what, apply| {
-        if set_chars_option(wp, value, what, apply).is_ok() {
+    let check = |wp: Win, value: Option<&[u8]>, what, apply| {
+        if wp.set_chars_option(value, what, apply).is_ok() {
             None
         } else if is_listchars(what) {
             Some(e_conflicts_with_value_of_listchars)

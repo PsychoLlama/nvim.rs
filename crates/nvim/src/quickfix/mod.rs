@@ -37,7 +37,7 @@ use crate::autocmd::{
 use crate::buffer::{
     BCO_ENTER, BCO_NOHELP, BLN_DUMMY, BLN_NOOPT, DOBUF_UNLOAD, DOBUF_WIPE, GETF_SETMARK,
     GETF_SWITCH, buf_is_help, buf_is_normal, buf_is_quickfix, buflist_getfile, close_buffer,
-    current_buf, do_modelines, find_buf, no_write_message, setfname, wipe_buffer,
+    current_buf, do_modelines, find_buf, no_write_message, wipe_buffer,
 };
 use crate::change::changed_lines;
 use crate::charset::{getdigits_int_at, vim_isprintc};

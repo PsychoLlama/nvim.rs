@@ -14,7 +14,6 @@
 {"path":"neovim::buffer::buflist_findpat","kind":"fn","file":"crates/nvim/src/buffer/list.rs","tests":["crates/nvim/tests/unit/buffer.rs"]}
 {"path":"neovim::buffer::buflist_new","kind":"fn","file":"crates/nvim/src/buffer/list.rs","tests":["crates/nvim/tests/unit/buffer.rs","crates/nvim/tests/unit/memline.rs"]}
 {"path":"neovim::buffer::close_buffer","kind":"fn","file":"crates/nvim/src/buffer/close.rs","tests":["crates/nvim/tests/unit/buffer.rs","crates/nvim/tests/unit/memline.rs"]}
-{"path":"neovim::buffer::setfname","kind":"fn","file":"crates/nvim/src/buffer/name.rs","tests":["crates/nvim/tests/unit/statusline.rs"]}
 {"path":"neovim::change::get_last_leader_offset","kind":"fn","file":"crates/nvim/src/change/leader.rs","tests":["crates/nvim/tests/unit/change.rs"]}
 {"path":"neovim::change::get_leader_len","kind":"fn","file":"crates/nvim/src/change/leader.rs","tests":["crates/nvim/tests/unit/change.rs"]}
 {"path":"neovim::change::ins_char_bytes","kind":"fn","file":"crates/nvim/src/change/text.rs","tests":["crates/nvim/tests/unit/change.rs"]}
@@ -468,7 +467,6 @@
 {"path":"neovim::spell::SpellLang","kind":"struct","file":"crates/nvim/src/spell/mod.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
 {"path":"neovim::spell::init_spell_chartab","kind":"fn","file":"crates/nvim/src/spell/chartab.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
 {"path":"neovim::spell::register_lang","kind":"fn","file":"crates/nvim/src/spell/slang.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
-{"path":"neovim::spell::spell_check","kind":"fn","file":"crates/nvim/src/spell/check.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
 {"path":"neovim::spell::take_lang","kind":"fn","file":"crates/nvim/src/spell/slang.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
 {"path":"neovim::spellfile::mkspell","kind":"fn","file":"crates/nvim/src/spellfile/mod.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
 {"path":"neovim::spellfile::spell_check_msm","kind":"fn","file":"crates/nvim/src/spellfile/mod.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
@@ -477,7 +475,6 @@
 {"path":"neovim::startup::event_init","kind":"fn","file":"crates/nvim/src/startup/entry.rs","tests":["crates/nvim/tests/unit/support.rs"]}
 {"path":"neovim::statusline::FmtSource","kind":"struct","file":"crates/nvim/src/statusline/stl/mod.rs","tests":["crates/nvim/tests/unit/statusline.rs"]}
 {"path":"neovim::statusline::StlWants","kind":"struct","file":"crates/nvim/src/statusline/stl/mod.rs","tests":["crates/nvim/tests/unit/statusline.rs"]}
-{"path":"neovim::statusline::build_stl_str_hl","kind":"fn","file":"crates/nvim/src/statusline/stl/mod.rs","tests":["crates/nvim/tests/unit/statusline.rs"]}
 {"path":"neovim::strings::FmtArg","kind":"enum","file":"crates/nvim/src/strings/printf/mod.rs","tests":["crates/nvim/tests/unit/printf_oracle.rs"]}
 {"path":"neovim::strings::concat","kind":"fn","file":"crates/nvim/src/strings/mod.rs","tests":["crates/nvim/tests/unit/strings_oracle.rs"]}
 {"path":"neovim::strings::escaped_bytes","kind":"fn","file":"crates/nvim/src/strings/escape.rs","tests":["crates/nvim/tests/unit/strings.rs"]}

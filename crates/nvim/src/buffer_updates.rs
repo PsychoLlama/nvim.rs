@@ -29,7 +29,7 @@
 use crate::narrow::len_as_integer;
 use core::ffi::{CStr, c_int};
 
-use crate::api::buffer::{LineSink, buf_collect_lines};
+use crate::api::buffer::LineSink;
 use crate::buffer::buf_get_changedtick;
 use crate::ex_getln::state::cmdpreview;
 use crate::extmark::BCount;
@@ -265,7 +265,7 @@ fn flush_deleted_bytes(buffer: Buf) -> Deleted {
 fn collect_lines(buffer: Buf, n: size_t, first: LineNr) -> Array {
     let mut linedata = Vec::new();
     let mut lines = LineSink::new(None, &mut linedata, n);
-    buf_collect_lines(buffer, n, first, 0, true, &mut lines);
+    buffer.collect_lines(n, first, 0, true, &mut lines);
     linedata.into()
 }
 

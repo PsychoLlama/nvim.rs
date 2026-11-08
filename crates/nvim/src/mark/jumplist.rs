@@ -181,26 +181,28 @@ pub fn get_changelist(mut buffer: Buf, win: Win, count: c_int) -> Option<FileMar
     Some(change.clone())
 }
 
-/// Remove every jump list entry referring to a given buffer.
-/// This function will also adjust the current jump list index.
-pub fn mark_jumplist_forget_file(mut window: Win, fnum: Option<Handle>) {
-    // Backwards, so removing an entry cannot skip the one after it.
-    for i in (0..window.w_jumplistlen).rev() {
-        let at = slot(i);
-        if window.w_jumplist[at].fmark.fnum() != fnum {
-            continue;
-        }
-        if window.w_jumplistidx > i {
-            window.w_jumplistidx -= 1;
-        }
-        let len = slot(window.w_jumplistlen);
-        window.w_jumplistlen -= 1;
-        // Close the gap: the entries above move down one, and the removed
-        // one goes to the slot past the end, released there.
-        let list = &mut window.w_jumplist[at..len];
-        list.rotate_left(1);
-        if let Some(gone) = list.last_mut() {
-            *gone = XFileMark::UNSET;
+impl Win {
+    /// Remove every jump list entry referring to a given buffer.
+    /// This function will also adjust the current jump list index.
+    pub fn forget_file_in_jumplist(mut self, fnum: Option<Handle>) {
+        // Backwards, so removing an entry cannot skip the one after it.
+        for i in (0..self.w_jumplistlen).rev() {
+            let at = slot(i);
+            if self.w_jumplist[at].fmark.fnum() != fnum {
+                continue;
+            }
+            if self.w_jumplistidx > i {
+                self.w_jumplistidx -= 1;
+            }
+            let len = slot(self.w_jumplistlen);
+            self.w_jumplistlen -= 1;
+            // Close the gap: the entries above move down one, and the removed
+            // one goes to the slot past the end, released there.
+            let list = &mut self.w_jumplist[at..len];
+            list.rotate_left(1);
+            if let Some(gone) = list.last_mut() {
+                *gone = XFileMark::UNSET;
+            }
         }
     }
 }

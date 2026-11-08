@@ -1,6 +1,6 @@
 //! Placing a mark -- `extmark_set()`.
 //!
-//! [`extmark_set`] is the `nvim_buf_set_extmark()` half: it decides whether
+//! [`Buf::set_extmark`] is the `nvim_buf_set_extmark()` half: it decides whether
 //! the id names an existing mark (and therefore a move rather than an insert),
 //! whether the mark is paired and needs an end key, and which decoration to
 //! attach, then puts the key or keys into the buffer's marktree and updates
@@ -35,106 +35,108 @@ use crate::marktree::{MTKey, MTPos, MarkTreeIter};
 use crate::os::libc::{uint32_t, uint64_t};
 use crate::types::ColNr;
 
-/// Create or update an extmark.
-///
-/// `idp` names the mark: `None`, or an id of zero, asks for a fresh one, and
-/// the id the mark gets is written back through it. Must not be used during
-/// iteration -- as with every other edit of the tree, a walk over it starts
-/// again after one.
-pub fn extmark_set(
-    mut buffer: Buf,
-    ns_id: uint32_t,
-    idp: Option<&mut uint32_t>,
-    row: c_int,
-    col: ColNr,
-    end_row: c_int,
-    end_col: ColNr,
-    decor: DecorInline,
-    decor_flags: MtFlags,
-    right_gravity: bool,
-    end_right_gravity: bool,
-    no_undo: bool,
-    invalidate: bool,
-) {
-    // Registers the namespace at 0 if it had none, which `extmark_clear`
-    // reads as "this buffer has marks in it".
-    ns_counter(buffer.extmark_ns(), ns_id);
-    let mut id = idp.as_deref().copied().unwrap_or(0);
+impl Buf {
+    /// Create or update an extmark.
+    ///
+    /// `idp` names the mark: `None`, or an id of zero, asks for a fresh one, and
+    /// the id the mark gets is written back through it. Must not be used during
+    /// iteration -- as with every other edit of the tree, a walk over it starts
+    /// again after one.
+    pub fn set_extmark(
+        mut self,
+        ns_id: uint32_t,
+        idp: Option<&mut uint32_t>,
+        row: c_int,
+        col: ColNr,
+        end_row: c_int,
+        end_col: ColNr,
+        decor: DecorInline,
+        decor_flags: MtFlags,
+        right_gravity: bool,
+        end_right_gravity: bool,
+        no_undo: bool,
+        invalidate: bool,
+    ) {
+        // Registers the namespace at 0 if it had none, which `extmark_clear`
+        // reads as "this buffer has marks in it".
+        ns_counter(self.extmark_ns(), ns_id);
+        let mut id = idp.as_deref().copied().unwrap_or(0);
 
-    let flags = mt_flags(right_gravity, no_undo, invalidate, decor.is_ext()) | decor_flags;
-    let mut revised = false;
-    if id == 0 {
-        id = ns_counter(buffer.extmark_ns(), ns_id) + 1;
-        ns_set_counter(buffer.extmark_ns(), ns_id, id);
-    } else {
-        let mut iter = MarkTreeIter::default();
-        let old_mark = tree_lookup_ns(buffer.marktree(), ns_id, id, false, Some(&mut iter));
-        if old_mark.id != 0 {
-            if mt_paired(old_mark) || end_row > -1 {
-                del_id(buffer, ns_id, id);
-            } else {
-                debug_assert!(iter.is_positioned(), "marktree_itr_valid(iter)");
-                if old_mark.pos.row == row && old_mark.pos.col == col.get() {
-                    // Not paired: the key can be revised where it lies.
-                    if !mt_invalid(old_mark) && mt_decor_any(old_mark) {
-                        itr_rawkey(buffer.marktree(), &iter)
-                            .flags
-                            .clear(MtFlags::EXTERNAL_MASK);
-                        decor_remove(buffer, row, row, col.get(), mt_decor(old_mark), true);
-                    }
-                    itr_rawkey(buffer.marktree(), &iter).flags |= flags;
-                    itr_rawkey(buffer.marktree(), &iter).decor_data = decor;
-                    tree_revise_meta(buffer.marktree(), &mut iter, old_mark);
-                    revised = true;
+        let flags = mt_flags(right_gravity, no_undo, invalidate, decor.is_ext()) | decor_flags;
+        let mut revised = false;
+        if id == 0 {
+            id = ns_counter(self.extmark_ns(), ns_id) + 1;
+            ns_set_counter(self.extmark_ns(), ns_id, id);
+        } else {
+            let mut iter = MarkTreeIter::default();
+            let old_mark = tree_lookup_ns(self.marktree(), ns_id, id, false, Some(&mut iter));
+            if old_mark.id != 0 {
+                if mt_paired(old_mark) || end_row > -1 {
+                    del_id(self, ns_id, id);
                 } else {
-                    tree_del_itr(buffer.marktree(), &mut iter, false);
-                    if !mt_invalid(old_mark) {
-                        decor_remove(
-                            buffer,
-                            old_mark.pos.row,
-                            old_mark.pos.row,
-                            old_mark.pos.col,
-                            mt_decor(old_mark),
-                            true,
-                        );
+                    debug_assert!(iter.is_positioned(), "marktree_itr_valid(iter)");
+                    if old_mark.pos.row == row && old_mark.pos.col == col.get() {
+                        // Not paired: the key can be revised where it lies.
+                        if !mt_invalid(old_mark) && mt_decor_any(old_mark) {
+                            itr_rawkey(self.marktree(), &iter)
+                                .flags
+                                .clear(MtFlags::EXTERNAL_MASK);
+                            decor_remove(self, row, row, col.get(), mt_decor(old_mark), true);
+                        }
+                        itr_rawkey(self.marktree(), &iter).flags |= flags;
+                        itr_rawkey(self.marktree(), &iter).decor_data = decor;
+                        tree_revise_meta(self.marktree(), &mut iter, old_mark);
+                        revised = true;
+                    } else {
+                        tree_del_itr(self.marktree(), &mut iter, false);
+                        if !mt_invalid(old_mark) {
+                            decor_remove(
+                                self,
+                                old_mark.pos.row,
+                                old_mark.pos.row,
+                                old_mark.pos.col,
+                                mt_decor(old_mark),
+                                true,
+                            );
+                        }
                     }
                 }
+            } else {
+                let highest = ns_counter(self.extmark_ns(), ns_id).max(id);
+                ns_set_counter(self.extmark_ns(), ns_id, highest);
             }
-        } else {
-            let highest = ns_counter(buffer.extmark_ns(), ns_id).max(id);
-            ns_set_counter(buffer.extmark_ns(), ns_id, highest);
         }
-    }
 
-    if !revised {
-        let mark = MTKey {
-            pos: MTPos {
-                row,
-                col: col.get(),
-            },
-            ns: ns_id,
-            id,
-            flags,
-            decor_data: decor,
-        };
-        tree_put(
-            buffer.marktree(),
-            mark,
-            end_row,
-            end_col.get(),
-            end_right_gravity,
-        );
-        invalidate_decor_state(buffer);
-    }
+        if !revised {
+            let mark = MTKey {
+                pos: MTPos {
+                    row,
+                    col: col.get(),
+                },
+                ns: ns_id,
+                id,
+                flags,
+                decor_data: decor,
+            };
+            tree_put(
+                self.marktree(),
+                mark,
+                end_row,
+                end_col.get(),
+                end_right_gravity,
+            );
+            invalidate_decor_state(self);
+        }
 
-    if !decor_flags.is_empty() || decor.is_ext() {
-        let last_row = if end_row > -1 { end_row } else { row };
-        put_decor(buffer, decor, row, last_row);
-        redraw_decor(buffer, row, last_row, col.get(), decor);
-    }
+        if !decor_flags.is_empty() || decor.is_ext() {
+            let last_row = if end_row > -1 { end_row } else { row };
+            put_decor(self, decor, row, last_row);
+            redraw_decor(self, row, last_row, col.get(), decor);
+        }
 
-    if let Some(idp) = idp {
-        *idp = id;
+        if let Some(idp) = idp {
+            *idp = id;
+        }
     }
 }
 

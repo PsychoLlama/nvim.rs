@@ -1,9 +1,9 @@
 //! A buffer's name -- setting it, comparing it, and the alternate file.
 //!
-//! [`setfname`] gives a buffer its file name, which means resolving it to a
+//! [`Buf::set_name`] gives a buffer its file name, which means resolving it to a
 //! full path, computing the file id used to recognise the same file under
 //! another name, and telling the alternate-file and argument lists about it.
-//! [`otherfile`] and [`otherfile_buf`] are the comparison, [`setaltfname`]
+//! [`otherfile`] and [`Buf::is_other_file`] are the comparison, [`setaltfname`]
 //! and [`buflist_add`] maintain the `#` entry, and [`buflist_name_nr`] is the
 //! `:buffers`-style lookup by number.
 //!
@@ -58,63 +58,98 @@ pub fn buflist_name_nr(fnum: Option<Handle>) -> Option<(Buf, LineNr)> {
 // ---------------------------------------------------------------------------
 // Setting one
 
-/// Give `buffer` the file name `ffname_arg` (short form `sfname_arg`).
-///
-/// Fails, with `message`, when another *loaded* buffer already has the name;
-/// an unloaded one is wiped to make room.
-///
-/// `None` for either name is upstream's NULL: no name at all, which is not
-/// the same as the empty one.
-pub fn setfname(
-    buffer: Buf,
-    ffname_arg: Option<&CStr>,
-    sfname_arg: Option<&CStr>,
-    message: bool,
-) -> Result<(), Failed> {
-    let mut b = buffer;
-    let mut file_id = None;
+impl Buf {
+    /// Give `buffer` the file name `ffname_arg` (short form `sfname_arg`).
+    ///
+    /// Fails, with `message`, when another *loaded* buffer already has the name;
+    /// an unloaded one is wiped to make room.
+    ///
+    /// `None` for either name is upstream's NULL: no name at all, which is not
+    /// the same as the empty one.
+    pub fn set_name(
+        self,
+        ffname_arg: Option<&CStr>,
+        sfname_arg: Option<&CStr>,
+        message: bool,
+    ) -> Result<(), Failed> {
+        let mut b = self;
+        let mut file_id = None;
 
-    match fname_expand(ffname_arg.filter(|name| !name.is_empty()), sfname_arg) {
-        None => {
-            // Removing the name. Upstream's three lines here are the
-            // `b_sfname != b_ffname` dance; the name owns its blocks now.
-            b.name.clear();
-        }
-        Some((ffname, sfname)) => {
-            // If the file name is already used in another buffer:
-            // - if the buffer is loaded, fail
-            // - if the buffer is not loaded, delete it from the list
-            file_id = crate::os::fs::file_id(ffname.as_cstr());
-            let obuf = if b.b_flags.has(BufFlags::DUMMY) {
-                None
-            } else {
-                buflist_findname_file_id(ffname.as_cstr(), file_id.as_ref())
-            };
-            if let Some(o) = obuf.filter(|&o| o != buffer) {
-                // During startup a window may use a buffer that is not
-                // loaded yet.
-                let in_use = tab_windows().any(|win| win.w_buffer == o);
-                if o.b_ml.ml_mfp.is_some() || in_use {
-                    // It is loaded or used in a window: fail.
-                    if message {
-                        emsg(gettext(c"E95: Buffer with this name already exists"));
-                    }
-                    return Err(Failed);
-                }
-                // Delete it from the list: a live, unloaded buffer shown in
-                // no window.
-                close_buffer(None, o, DOBUF_WIPE, false, false);
+        match fname_expand(ffname_arg.filter(|name| !name.is_empty()), sfname_arg) {
+            None => {
+                // Removing the name. Upstream's three lines here are the
+                // `b_sfname != b_ffname` dance; the name owns its blocks now.
+                b.name.clear();
             }
-            b.name.set(ffname, Some(sfname));
+            Some((ffname, sfname)) => {
+                // If the file name is already used in another buffer:
+                // - if the buffer is loaded, fail
+                // - if the buffer is not loaded, delete it from the list
+                file_id = crate::os::fs::file_id(ffname.as_cstr());
+                let obuf = if b.b_flags.has(BufFlags::DUMMY) {
+                    None
+                } else {
+                    buflist_findname_file_id(ffname.as_cstr(), file_id.as_ref())
+                };
+                if let Some(o) = obuf.filter(|&o| o != self) {
+                    // During startup a window may use a buffer that is not
+                    // loaded yet.
+                    let in_use = tab_windows().any(|win| win.w_buffer == o);
+                    if o.b_ml.ml_mfp.is_some() || in_use {
+                        // It is loaded or used in a window: fail.
+                        if message {
+                            emsg(gettext(c"E95: Buffer with this name already exists"));
+                        }
+                        return Err(Failed);
+                    }
+                    // Delete it from the list: a live, unloaded buffer shown in
+                    // no window.
+                    close_buffer(None, o, DOBUF_WIPE, false, false);
+                }
+                b.name.set(ffname, Some(sfname));
+            }
         }
-    }
-    b.file_id_valid = file_id.is_some();
-    if let Some(file_id) = file_id {
-        b.file_id = file_id;
+        b.file_id_valid = file_id.is_some();
+        if let Some(file_id) = file_id {
+            b.file_id = file_id;
+        }
+
+        buf_name_changed(self);
+        Ok(())
     }
 
-    buf_name_changed(buffer);
-    Ok(())
+    /// Whether `ffname` (a full path) names a different file from `buffer`'s.
+    ///
+    /// `file_id` is the caller's already-computed file id for `ffname` (itself
+    /// `None` when the file does not exist), or `None` to have it looked up here.
+    pub(crate) fn is_other_file(self, ffname: &CStr, file_id: Option<Option<&FileID>>) -> bool {
+        let Some(full) = self.name.full().filter(|_| !ffname.is_empty()) else {
+            return true;
+        };
+        if path_fnamecmp(ffname.to_bytes(), full.to_bytes()) == 0 {
+            return false;
+        }
+
+        let own;
+        let file_id = match file_id {
+            Some(known) => known,
+            None => {
+                own = crate::os::fs::file_id(ffname);
+                own.as_ref()
+            }
+        };
+        let Some(file_id) = file_id else {
+            return true;
+        };
+
+        if self.file_id_valid && self.file_id == *file_id {
+            buf_set_file_id(self);
+            if self.file_id_valid && self.file_id == *file_id {
+                return false;
+            }
+        }
+        true
+    }
 }
 
 /// A crude way of changing a buffer's name; use with care. The name is
@@ -191,40 +226,7 @@ pub fn buflist_altfpos(win: Win) {
 /// Whether `ffname` (a full path) names a different file from the current
 /// buffer's. The name is only read.
 pub fn otherfile(ffname: &CStr) -> bool {
-    otherfile_buf(Buf::current(), ffname, None)
-}
-
-/// Whether `ffname` (a full path) names a different file from `buffer`'s.
-///
-/// `file_id` is the caller's already-computed file id for `ffname` (itself
-/// `None` when the file does not exist), or `None` to have it looked up here.
-pub(crate) fn otherfile_buf(b: Buf, ffname: &CStr, file_id: Option<Option<&FileID>>) -> bool {
-    let Some(full) = b.name.full().filter(|_| !ffname.is_empty()) else {
-        return true;
-    };
-    if path_fnamecmp(ffname.to_bytes(), full.to_bytes()) == 0 {
-        return false;
-    }
-
-    let own;
-    let file_id = match file_id {
-        Some(known) => known,
-        None => {
-            own = crate::os::fs::file_id(ffname);
-            own.as_ref()
-        }
-    };
-    let Some(file_id) = file_id else {
-        return true;
-    };
-
-    if b.file_id_valid && b.file_id == *file_id {
-        buf_set_file_id(b);
-        if b.file_id_valid && b.file_id == *file_id {
-            return false;
-        }
-    }
-    true
+    Buf::current().is_other_file(ffname, None)
 }
 
 /// Record the file id of `buffer`'s file, for recognising it under another name.

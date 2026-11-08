@@ -22,8 +22,8 @@ use crate::decoration::defs::{DecorRange, HlMode, VirtTextPos};
 use crate::decoration::{
     DECOR_ID_INVALID, VirtChunks, VirtLineRef, decor_conceal, decor_has_more_decorations,
     decor_init_draw_col, decor_recheck_draw_col, decor_redraw_col, decor_redraw_eol,
-    decor_redraw_line, decor_redraw_signs, decor_spell, decor_virt_lines, decor_virt_pos,
-    decor_virt_pos_kind, kHlModeUnknown, with_decor_virt,
+    decor_redraw_line, decor_redraw_signs, decor_spell, decor_virt_pos, decor_virt_pos_kind,
+    kHlModeUnknown, with_decor_virt,
 };
 use crate::decoration_provider::{decor_providers_invoke_line, decor_providers_invoke_range};
 use crate::diff::{diff_check_with_linestatus, diff_find_change};
@@ -53,9 +53,7 @@ use crate::highlight_group::{
 };
 use crate::indent::get_breakindent_win;
 use crate::insexpand::{ins_compl_col_range_attr, ins_compl_lnum_in_range, ins_compl_win_active};
-use crate::r#match::{
-    get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
-};
+use crate::r#match::{get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line};
 use crate::mbyte::{
     c_cells_at, c_char_info, c_cluster_cell, c_cluster_len, c_next_cluster, c_string_cells,
     char_count, head_off,
@@ -78,12 +76,12 @@ use crate::search::FORWARD;
 use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
 use crate::sign::SignTextAttrs;
 use crate::spell::spell_redraw_lnum;
-use crate::spell::{check_need_cap, spell_cat_line, spell_check, spell_move_to, spell_to_word_end};
+use crate::spell::{check_need_cap, spell_cat_line, spell_to_word_end};
 use crate::state::mode::State;
 use crate::state::{MODE_INSERT, virtual_active};
 use crate::statusline::defs::StatusCol;
 use crate::statusline::{SIGN_SHOW_MAX, build_statuscol_str};
-use crate::syntax::{SynFlags, get_syntax_attr, syn_get_sub_char, syntax_present};
+use crate::syntax::{SynFlags, syn_get_sub_char, syntax_present};
 use crate::terminal::terminal_get_line_attributes;
 use crate::types::NS;
 use crate::types::{ColNr, DiffLine, LineNr, Pos, ScreenAttr, ScreenChar, VarNumber};

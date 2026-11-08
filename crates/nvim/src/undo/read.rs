@@ -29,7 +29,6 @@ use std::collections::HashSet;
 
 use super::file::*;
 use super::format::*;
-use super::store::header_adopt;
 use super::*;
 
 /// Reads an undo file into the current buffer's tree.
@@ -265,7 +264,7 @@ fn graft(mut headers: Vec<UndoHeader>, header: FileHeader) -> Result<(), UndoFil
     // The links already name these headers; the store is what turns a
     // name back into one.
     for uh in headers {
-        header_adopt(buf, Box::new(uh));
+        buf.adopt_header(Box::new(uh));
     }
     // `unserialize_uhp` refuses a header whose sequence number is not
     // positive, so a number the set holds is always a usable link.

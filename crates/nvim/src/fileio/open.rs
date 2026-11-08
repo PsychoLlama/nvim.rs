@@ -40,7 +40,7 @@ use crate::types::Failed;
 
 /// `filemess` about the current buffer, with a translated note.
 fn filemess_note(fname: Option<&CStr>, note: &'static CStr) {
-    filemess(Buf::current(), fname, translate(note));
+    Buf::current().file_message(fname, translate(note));
 }
 
 /// One of the `*ReadPre`/`*ReadCmd` autocommands, which all take the same
@@ -320,7 +320,7 @@ pub(crate) fn open_source<'a>(
                 } else {
                     c"[New DIRECTORY]"
                 };
-                filemess(Buf::current(), sfname, translate(note));
+                Buf::current().file_message(sfname, translate(note));
             }
             // Even though this is a new file, it might have been
             // edited before and deleted. Get the old marks.
@@ -355,7 +355,7 @@ pub(crate) fn open_source<'a>(
         } else {
             c"[Permission Denied]"
         };
-        filemess(Buf::current(), sfname, translate(note));
+        Buf::current().file_message(sfname, translate(note));
         Buf::current().b_p_ro = c_int::from(true); // must use "w!" now
         return Err(retval);
     }

@@ -23,7 +23,6 @@ use crate::decoration::{
     with_decor_virt_mut,
 };
 use crate::eval::vars::globvar_dict;
-use crate::extmark::extmark_set;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::highlight::hl_get_attr_by_id;

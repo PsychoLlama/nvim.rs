@@ -26,7 +26,6 @@ use crate::autocmd::{
 };
 use crate::buffer::{
     buf_close_terminal, buf_get_changedtick, buflist_new, buflist_nr2name, do_buffer,
-    read_buffer_into,
 };
 use crate::channel::{
     ChannelRef, alloc_channel, channel_all_info, channel_decref, channel_info, channel_send,

@@ -330,12 +330,10 @@ impl Cells {
         did_emsg.set(0);
 
         let has_spell = f.spv.spv_has_spell;
-        let cell = get_syntax_attr(
-            window.buffer(),
-            ColNr::new(at - 1),
-            has_spell.then_some(can_spell),
-            false,
-        );
+        let cell =
+            window
+                .buffer()
+                .syntax_attr(ColNr::new(at - 1), has_spell.then_some(can_spell), false);
         self.decor_attr = cell.attr;
 
         if did_emsg.get() != 0 {
@@ -406,7 +404,7 @@ impl Cells {
         let spv = &mut *f.spv;
         let tmplen;
         (tmplen, spell_hlf) =
-            spell_check(window, text, Some(&mut spv.spv_cap_col), spv.spv_unchanged);
+            window.spell_check(text, Some(&mut spv.spv_cap_col), spv.spv_unchanged);
         let len = ::core::ffi::c_int::try_from(tmplen).unwrap_or(::core::ffi::c_int::MAX);
         self.word_end = at + len;
 

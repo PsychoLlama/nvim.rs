@@ -39,7 +39,7 @@ use crate::winlayer::Win;
 use crate::highlight_group::HLF_COUNT;
 use crate::mbyte::{char_at, head_off};
 use crate::spell::{LangId, SpellLang};
-use crate::spell::{loaded_langs, spell_check, spell_soundfold};
+use crate::spell::{loaded_langs, spell_soundfold};
 use crate::spellsuggest::score::{EMPTY_SOUND, spell_edit_score, stp_sal_score};
 use crate::spellsuggest::{MAXWLEN, SCORE_INS, SCORE_MAXMAX, SugInfo, Suggest, window_langs};
 use core::cmp::Ordering;
@@ -245,7 +245,7 @@ pub(super) fn check_suggestions(su: &mut SugInfo, list: List) {
         longword.extend_from_slice(word);
         longword.extend_from_slice(&rest[..rest.len().min(MAXWLEN - word.len())]);
 
-        let (_, attr) = spell_check(Win::current(), &longword, None, false);
+        let (_, attr) = Win::current().spell_check(&longword, None, false);
         if attr != HLF_COUNT {
             su.list_mut(list).remove(i);
         }

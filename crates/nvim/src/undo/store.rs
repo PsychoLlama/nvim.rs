@@ -25,7 +25,7 @@
 //! borrowed.
 //!
 //! The tree itself is walked in exactly two shapes, and both live here:
-//! [`header_chain`] follows one link field until it names nothing, and
+//! [`Buf::header_chain`] follows one link field until it names nothing, and
 //! [`TreeWalk`] is the depth-first pass over the *whole* tree that
 //! `:undolist`, `:earlier`/`:later` and the undo-file writer each used to
 //! spell out for themselves. Both answer links.
@@ -369,23 +369,44 @@ impl Iterator for TreeWalk {
     }
 }
 
-/// Hands `header` to `buffer`'s store and returns the link that now names it.
-///
-/// The header's `seq` must already be set: it is the key. A header whose
-/// number is not one a buffer hands out is dropped, since nothing could name
-/// it.
-pub(crate) fn header_adopt(mut buffer: Buf, header: Box<UndoHeader>) -> UndoLink {
-    let seq = header.seq;
-    debug_assert!(seq > 0, "an undo header's sequence number is positive");
-    if seq <= 0 {
-        return UndoLink::NONE;
+impl Buf {
+    /// Hands `header` to `buffer`'s store and returns the link that now names it.
+    ///
+    /// The header's `seq` must already be set: it is the key. A header whose
+    /// number is not one a buffer hands out is dropped, since nothing could name
+    /// it.
+    pub(crate) fn adopt_header(mut self, header: Box<UndoHeader>) -> UndoLink {
+        let seq = header.seq;
+        debug_assert!(seq > 0, "an undo header's sequence number is positive");
+        if seq <= 0 {
+            return UndoLink::NONE;
+        }
+        let displaced = self.store_for().insert(header);
+        debug_assert!(
+            displaced.is_none(),
+            "two live undo headers claimed sequence number {seq}"
+        );
+        UndoLink::to_seq(seq)
     }
-    let displaced = buffer.store_for().insert(header);
-    debug_assert!(
-        displaced.is_none(),
-        "two live undo headers claimed sequence number {seq}"
-    );
-    UndoLink::to_seq(seq)
+
+    /// Yields the links along one chain: `start`, then whatever `step` names from
+    /// each header in turn, until a link names nothing.
+    ///
+    /// `step` is read only when the *next* link is asked for, so a body that
+    /// relinks the header it was handed still steers the walk — which is what
+    /// the `while` loops this replaced did. A body that frees the header it was
+    /// handed ends the chain there.
+    pub(crate) fn header_chain(
+        self,
+        start: UndoLink,
+        step: fn(&UndoHeader) -> UndoLink,
+    ) -> HeaderChain {
+        HeaderChain {
+            buf: self,
+            state: ChainState::Start(start),
+            step,
+        }
+    }
 }
 
 /// Drops the header `link` names from `buffer`'s store, and with it every
@@ -396,26 +417,7 @@ pub(crate) fn header_free(mut buffer: Buf, link: UndoLink) {
     }
 }
 
-/// Yields the links along one chain: `start`, then whatever `step` names from
-/// each header in turn, until a link names nothing.
-///
-/// `step` is read only when the *next* link is asked for, so a body that
-/// relinks the header it was handed still steers the walk — which is what
-/// the `while` loops this replaced did. A body that frees the header it was
-/// handed ends the chain there.
-pub(crate) fn header_chain(
-    buffer: Buf,
-    start: UndoLink,
-    step: fn(&UndoHeader) -> UndoLink,
-) -> HeaderChain {
-    HeaderChain {
-        buf: buffer,
-        state: ChainState::Start(start),
-        step,
-    }
-}
-
-/// The iterator [`header_chain`] returns.
+/// The iterator [`Buf::header_chain`] returns.
 pub(crate) struct HeaderChain {
     buf: Buf,
     state: ChainState,

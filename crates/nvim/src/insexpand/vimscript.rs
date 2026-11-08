@@ -198,7 +198,7 @@ impl ComplOrigExtmarks {
         let buf = Buf::current();
         let (start, end) = (compl_col.get(), compl_col.get() + compl_length.get());
         COMPL_ORIG_EXTMARKS.update(|saved| {
-            extmark_splice_delete(buf, lnum, start, lnum, end, Some(saved), true, kExtmarkUndo);
+            buf.splice_delete_extmarks(lnum, start, lnum, end, Some(saved), true, kExtmarkUndo);
         });
     }
 

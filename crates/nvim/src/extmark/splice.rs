@@ -27,10 +27,9 @@
 
 use core::ffi::c_int;
 
-use super::undo::splice_delete;
 use super::{
     Buf, Extent, kExtmarkUndo, last_splice, line_offset, send_splice, signcols_count_range,
-    splice_pending, tree_move_region, tree_splice, undo_header, with_undo_marks,
+    splice_pending, tree_move_region, tree_splice, undo_header,
 };
 use crate::decoration::SignCountHalf;
 use crate::extmark::{BCount, ExtmarkMove, ExtmarkOp, ExtmarkSplice, ExtmarkUndoObject};
@@ -148,11 +147,11 @@ pub(crate) fn splice_impl(
         // The marks it saves are gathered here and appended after: the walk
         // runs with no undo header borrowed.
         let mut saved = Vec::new();
-        splice_delete(buffer, lo, hi, header.map(|_| &mut saved), false, undo);
+        buffer.splice_delete(lo, hi, header.map(|_| &mut saved), false, undo);
         if let Some(link) = header
             && !saved.is_empty()
         {
-            with_undo_marks(buffer, link, |list| list.append(&mut saved));
+            buffer.with_undo_marks(link, |list| list.append(&mut saved));
         }
     }
 
@@ -196,7 +195,7 @@ pub(crate) fn splice_impl(
         let Some(link) = undo_header(buffer) else {
             return;
         };
-        with_undo_marks(buffer, link, |list| {
+        buffer.with_undo_marks(link, |list| {
             // TODO(bfredl): this is quite rudimentary. Small (within line)
             // inserts merge with each other and small deletes with each
             // other; add a full merge algorithm later.
@@ -307,9 +306,7 @@ pub(crate) fn move_region(
             extent_byte: extent.byte,
             new_byte: new.byte,
         };
-        with_undo_marks(buffer, link, |list| {
-            list.push(ExtmarkUndoObject::Move(move_0))
-        });
+        buffer.with_undo_marks(link, |list| list.push(ExtmarkUndoObject::Move(move_0)));
     }
 }
 

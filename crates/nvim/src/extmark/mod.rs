@@ -57,7 +57,6 @@ use crate::marktree::{
     marktree_itr_step_overlap, marktree_lookup, marktree_lookup_ns, marktree_move,
     marktree_move_region, marktree_put, marktree_revise_meta, marktree_splice,
 };
-use crate::memline::ml_find_line_or_offset;
 use crate::os::libc::{int32_t, uint16_t, uint32_t};
 use crate::types::buffer::ExtmarkNs;
 use crate::types::{ColNr, LineNr};
@@ -74,7 +73,6 @@ mod undo;
 
 pub use self::del::*;
 pub use self::get::*;
-pub use self::set::*;
 pub use self::undo::*;
 
 pub(crate) static curbuf_splice_pending: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
@@ -299,7 +297,7 @@ fn ns_destroy(map: &mut ExtmarkNs) {
 /// for an offset it cannot answer goes into the splice arithmetic as it did
 /// there.
 fn line_offset(buffer: Buf, lnum: LineNr) -> c_int {
-    ml_find_line_or_offset(buffer, lnum, None, true).unwrap_or(-1)
+    buffer.find_line_or_offset(lnum, None, true).unwrap_or(-1)
 }
 
 /// The undo header a change to `buffer` is recorded against, made if need
@@ -308,15 +306,17 @@ fn undo_header(buffer: Buf) -> Option<UndoLink> {
     u_force_get_undo_header(buffer)
 }
 
-/// The extmark list of the header `link` names in `buffer`, handed to `f`.
-/// The borrow is the closure's: the list is looked up through the buffer
-/// each time.
-fn with_undo_marks<R>(
-    mut buffer: Buf,
-    link: UndoLink,
-    f: impl FnOnce(&mut Vec<ExtmarkUndoObject>) -> R,
-) -> Option<R> {
-    buffer.header_mut(link).map(|uh| f(&mut uh.extmarks))
+impl Buf {
+    /// The extmark list of the header `link` names in `buffer`, handed to `f`.
+    /// The borrow is the closure's: the list is looked up through the buffer
+    /// each time.
+    fn with_undo_marks<R>(
+        mut self,
+        link: UndoLink,
+        f: impl FnOnce(&mut Vec<ExtmarkUndoObject>) -> R,
+    ) -> Option<R> {
+        self.header_mut(link).map(|uh| f(&mut uh.extmarks))
+    }
 }
 
 /// `curbuf_splice_pending`: a `:global` or similar is batching its own

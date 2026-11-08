@@ -134,47 +134,50 @@ fn get_option_prefix(arg: &[u8], p: &mut usize) -> Prefix {
     Prefix::None
 }
 
-/// Whether this option may be set at all, here and now: some are refused in
-/// a modeline or in the sandbox, and `:setlocal`/`:setglobal` on a modeline
-/// only reach the scopes the caller asked for.
-fn validate_opt_idx(
-    win: Win,
-    opt_idx: OptIndex,
-    opt_flags: OptionSetFlags,
-    flags: uint32_t,
-    prefix: Prefix,
-    errmsg: &mut Option<OptError>,
-) -> Result<(), Failed> {
-    if prefix != Prefix::None && !option_has_type(opt_idx, kOptValTypeBoolean) {
-        *errmsg = Some(e_invarg.into());
-        return Err(Failed);
-    }
-    // A `:set` sweeping over windows or buffers only wants its own kind.
-    if opt_flags.has(OptionSetFlags::WINONLY) && !option_is_window_local(opt_idx) {
-        return Err(Failed);
-    }
-    if opt_flags.has(OptionSetFlags::NOWIN) && option_is_window_local(opt_idx) {
-        return Err(Failed);
-    }
-    if opt_flags.has(OptionSetFlags::MODELINE) {
-        if flags & kOptFlagSecure as uint32_t != 0 {
-            *errmsg = Some(E_NOT_ALLOWED_IN_MODELINE.into());
+impl Win {
+    /// Whether this option may be set at all, here and now: some are refused in
+    /// a modeline or in the sandbox, and `:setlocal`/`:setglobal` on a modeline
+    /// only reach the scopes the caller asked for.
+    fn validate_option(
+        self,
+        opt_idx: OptIndex,
+        opt_flags: OptionSetFlags,
+        flags: uint32_t,
+        prefix: Prefix,
+        errmsg: &mut Option<OptError>,
+    ) -> Result<(), Failed> {
+        if prefix != Prefix::None && !option_has_type(opt_idx, kOptValTypeBoolean) {
+            *errmsg = Some(e_invarg.into());
             return Err(Failed);
         }
-        if flags & kOptFlagMLE as uint32_t != 0 && !p_mle() {
-            *errmsg = Some(E_MODELINE_NEEDS_MODELINEEXPR.into());
+        // A `:set` sweeping over windows or buffers only wants its own kind.
+        if opt_flags.has(OptionSetFlags::WINONLY) && !option_is_window_local(opt_idx) {
             return Err(Failed);
         }
-        // A modeline must not undo what `:diffthis` set up.
-        if win.w_onebuf_opt.wo_diff != 0 && (opt_idx == kOptFoldmethod || opt_idx == kOptWrap) {
+        if opt_flags.has(OptionSetFlags::NOWIN) && option_is_window_local(opt_idx) {
             return Err(Failed);
         }
+        if opt_flags.has(OptionSetFlags::MODELINE) {
+            if flags & kOptFlagSecure as uint32_t != 0 {
+                *errmsg = Some(E_NOT_ALLOWED_IN_MODELINE.into());
+                return Err(Failed);
+            }
+            if flags & kOptFlagMLE as uint32_t != 0 && !p_mle() {
+                *errmsg = Some(E_MODELINE_NEEDS_MODELINEEXPR.into());
+                return Err(Failed);
+            }
+            // A modeline must not undo what `:diffthis` set up.
+            if self.w_onebuf_opt.wo_diff != 0 && (opt_idx == kOptFoldmethod || opt_idx == kOptWrap)
+            {
+                return Err(Failed);
+            }
+        }
+        if sandbox.get() != 0 && flags & kOptFlagSecure as uint32_t != 0 {
+            *errmsg = Some(e_sandbox.into());
+            return Err(Failed);
+        }
+        Ok(())
     }
-    if sandbox.get() != 0 && flags & kOptFlagSecure as uint32_t != 0 {
-        *errmsg = Some(e_sandbox.into());
-        return Err(Failed);
-    }
-    Ok(())
 }
 
 /// How long the terminal option's name at the start of `text` is, or `None`
@@ -377,7 +380,10 @@ fn do_one_set_option(
     let varp = get_varp_scope(opt_idx, opt_flags);
 
     let win = Win::current();
-    if validate_opt_idx(win, opt_idx, opt_flags, flags, prefix, errmsg).is_err() {
+    if win
+        .validate_option(opt_idx, opt_flags, flags, prefix, errmsg)
+        .is_err()
+    {
         return;
     }
 

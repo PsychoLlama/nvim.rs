@@ -20,7 +20,7 @@ use crate::eval::window::{find_win_by_nr_or_id, win_and_tab_by_id};
 use crate::eval::{buf_byteidx_to_charidx, buf_charidx_to_byteidx, list2fpos, var2fpos};
 use crate::mark::setmark_at;
 use crate::mbyte::{char_at, cluster_len, mb_adjust_cursor};
-use crate::memline::{ml_find_line_or_offset, ml_get_buf_len};
+use crate::memline::ml_get_buf_len;
 use crate::message::e_invarg;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
@@ -62,7 +62,8 @@ pub fn f_byte2line(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(if boff < 0 {
         -1
     } else {
-        ml_find_line_or_offset(Buf::current(), LineNr::ZERO, Some(&mut boff), false)
+        Buf::current()
+            .find_line_or_offset(LineNr::ZERO, Some(&mut boff), false)
             .map_or(-1, VarNumber::from)
     });
 }
@@ -74,7 +75,9 @@ pub fn f_line2byte(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let offset = if lnum < LineNr::ONE || lnum > Buf::current().b_ml.ml_line_count + 1 {
         -1
     } else {
-        ml_find_line_or_offset(Buf::current(), lnum, None, false).map_or(-1, VarNumber::from)
+        Buf::current()
+            .find_line_or_offset(lnum, None, false)
+            .map_or(-1, VarNumber::from)
     };
     result.write_number(offset);
     // The offset is zero-based inside memline and one-based here; -1

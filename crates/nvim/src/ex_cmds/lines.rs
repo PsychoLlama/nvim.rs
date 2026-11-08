@@ -31,7 +31,7 @@ use crate::extmark::kExtmarkUndo;
 use crate::fold::fold_move_range;
 use crate::guard::Suppress;
 use crate::mark::mark_adjust_nofold;
-use crate::memline::{ml_append_cstr, ml_delete_flags, ml_find_line_or_offset};
+use crate::memline::{ml_append_cstr, ml_delete_flags};
 use crate::message::emsg;
 use crate::message_fmt::report_msg;
 use crate::normal::{visual_active, with_visual_anchor};
@@ -66,7 +66,9 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     // Upstream's -1 for an offset it cannot answer goes into the
     // extmark arithmetic as it did there.
     let offset = |lnum| {
-        ml_find_line_or_offset(Buf::current(), lnum, None, true).map_or(-1, |at| at as BCount)
+        Buf::current()
+            .find_line_or_offset(lnum, None, true)
+            .map_or(-1, |at| at as BCount)
     };
     let (start_byte, end_byte, dest_byte) = (offset(line1), offset(line2 + 1), offset(dest + 1));
     let extent_byte = end_byte - start_byte;

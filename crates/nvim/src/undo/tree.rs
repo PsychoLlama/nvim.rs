@@ -16,7 +16,7 @@
     clippy::ptr_as_ptr
 )]
 
-use super::store::{header_chain, header_free, store_release};
+use super::store::{header_free, store_release};
 use super::*;
 use crate::memline::ml_replace_buf_owned;
 use crate::memory::XString;
@@ -27,7 +27,7 @@ use crate::winlayer::{Buf, Win};
 
 /// Marks `start` and everything reachable from it backwards as changed.
 pub(crate) fn u_unch_branch(mut buffer: Buf, start: UndoLink) {
-    for link in header_chain(buffer, start, |uh| uh.prev) {
+    for link in buffer.header_chain(start, |uh| uh.prev) {
         let Some(uh) = buffer.header_mut(link) else {
             break;
         };
@@ -83,82 +83,84 @@ fn forget(held: Option<&mut UndoLink>, link: UndoLink) {
     }
 }
 
-/// Unlinks one header from the tree and frees it, along with the alternate
-/// branch hanging off it.
-///
-/// `held`, when it is given, is a link the caller is still holding: it is
-/// cleared if it named a header that went away.
-pub(crate) fn u_freeheader(mut buffer: Buf, link: UndoLink, mut held: Option<&mut UndoLink>) {
-    let alt_next = buffer.header_link(link, |uh| uh.alt_next);
-    if buffer.has_header(alt_next) {
-        u_freebranch(buffer, alt_next, held.as_deref_mut());
-    }
-    // Freeing the alternate branch can take the oldest header, and with it
-    // this one; then there is nothing left to unlink.
-    let Some(uh) = buffer.header(link) else {
-        return;
-    };
-    let (alt_prev, next, prev) = (uh.alt_prev, uh.next, uh.prev);
-    if let Some(before) = buffer.header_mut(alt_prev) {
-        before.alt_next = UndoLink::NONE;
-    }
-    match buffer.header_mut(next) {
-        Some(above) => above.prev = prev,
-        None => buffer.b_u_oldhead = prev,
-    }
-    if prev.is_none() {
-        buffer.b_u_newhead = next;
-    } else {
-        // The alternate headers at `prev` all claim this header's successor.
-        for alt in header_chain(buffer, prev, |uh| uh.alt_next) {
-            if let Some(uh) = buffer.header_mut(alt) {
-                uh.next = next;
+impl Buf {
+    /// Unlinks one header from the tree and frees it, along with the alternate
+    /// branch hanging off it.
+    ///
+    /// `held`, when it is given, is a link the caller is still holding: it is
+    /// cleared if it named a header that went away.
+    pub(crate) fn free_undo_header(mut self, link: UndoLink, mut held: Option<&mut UndoLink>) {
+        let alt_next = self.header_link(link, |uh| uh.alt_next);
+        if self.has_header(alt_next) {
+            self.free_undo_branch(alt_next, held.as_deref_mut());
+        }
+        // Freeing the alternate branch can take the oldest header, and with it
+        // this one; then there is nothing left to unlink.
+        let Some(uh) = self.header(link) else {
+            return;
+        };
+        let (alt_prev, next, prev) = (uh.alt_prev, uh.next, uh.prev);
+        if let Some(before) = self.header_mut(alt_prev) {
+            before.alt_next = UndoLink::NONE;
+        }
+        match self.header_mut(next) {
+            Some(above) => above.prev = prev,
+            None => self.b_u_oldhead = prev,
+        }
+        if prev.is_none() {
+            self.b_u_newhead = next;
+        } else {
+            // The alternate headers at `prev` all claim this header's successor.
+            for alt in self.header_chain(prev, |uh| uh.alt_next) {
+                if let Some(uh) = self.header_mut(alt) {
+                    uh.next = next;
+                }
             }
         }
+        self.free_undo_entries(link, held);
     }
-    u_freeentries(buffer, link, held);
-}
 
-/// Frees a whole alternate branch, oldest header first.
-pub(crate) fn u_freebranch(mut buffer: Buf, link: UndoLink, mut held: Option<&mut UndoLink>) {
-    // Freeing the oldest header takes the whole tree with it, so let
-    // `u_freeheader` do the unlinking rather than walking here.
-    if link == buffer.b_u_oldhead {
-        while buffer.has_header(buffer.b_u_oldhead) {
-            u_freeheader(buffer, buffer.b_u_oldhead, held.as_deref_mut());
+    /// Frees a whole alternate branch, oldest header first.
+    pub(crate) fn free_undo_branch(mut self, link: UndoLink, mut held: Option<&mut UndoLink>) {
+        // Freeing the oldest header takes the whole tree with it, so let
+        // `u_freeheader` do the unlinking rather than walking here.
+        if link == self.b_u_oldhead {
+            while self.has_header(self.b_u_oldhead) {
+                self.free_undo_header(self.b_u_oldhead, held.as_deref_mut());
+            }
+            return;
         }
-        return;
-    }
-    let alt_prev = buffer.header_link(link, |uh| uh.alt_prev);
-    if let Some(before) = buffer.header_mut(alt_prev) {
-        before.alt_next = UndoLink::NONE;
-    }
-    // Not `header_chain`: the step would have to read a header this loop
-    // has already freed.
-    let mut next = link;
-    while buffer.has_header(next) {
-        let tofree = next;
-        let alt = buffer.header_link(tofree, |uh| uh.alt_next);
-        if buffer.has_header(alt) {
-            u_freebranch(buffer, alt, held.as_deref_mut());
+        let alt_prev = self.header_link(link, |uh| uh.alt_prev);
+        if let Some(before) = self.header_mut(alt_prev) {
+            before.alt_next = UndoLink::NONE;
         }
-        next = buffer.header_link(tofree, |uh| uh.prev);
-        u_freeentries(buffer, tofree, held.as_deref_mut());
+        // Not `header_chain`: the step would have to read a header this loop
+        // has already freed.
+        let mut next = link;
+        while self.has_header(next) {
+            let tofree = next;
+            let alt = self.header_link(tofree, |uh| uh.alt_next);
+            if self.has_header(alt) {
+                self.free_undo_branch(alt, held.as_deref_mut());
+            }
+            next = self.header_link(tofree, |uh| uh.prev);
+            self.free_undo_entries(tofree, held.as_deref_mut());
+        }
     }
-}
 
-/// Frees one header, its entries and its extmark list, clearing every link
-/// the buffer (or the caller, through `held`) holds to it.
-pub(crate) fn u_freeentries(mut buffer: Buf, link: UndoLink, held: Option<&mut UndoLink>) {
-    if buffer.b_u_curhead == link {
-        buffer.b_u_curhead = UndoLink::NONE;
+    /// Frees one header, its entries and its extmark list, clearing every link
+    /// the buffer (or the caller, through `held`) holds to it.
+    pub(crate) fn free_undo_entries(mut self, link: UndoLink, held: Option<&mut UndoLink>) {
+        if self.b_u_curhead == link {
+            self.b_u_curhead = UndoLink::NONE;
+        }
+        if self.b_u_newhead == link {
+            self.b_u_newhead = UndoLink::NONE;
+        }
+        forget(held, link);
+        header_free(self, link);
+        self.b_u_numhead -= 1;
     }
-    if buffer.b_u_newhead == link {
-        buffer.b_u_newhead = UndoLink::NONE;
-    }
-    forget(held, link);
-    header_free(buffer, link);
-    buffer.b_u_numhead -= 1;
 }
 
 /// Detaches the buffer's undo tree without freeing it.
@@ -181,7 +183,7 @@ pub fn u_blockfree(mut buffer: Buf) {
         let previous_oldhead = buffer.b_u_oldhead;
         // Each pass frees the oldest header, and the assert is the
         // transpiled loop's own guard against not making progress.
-        u_freeheader(buffer, previous_oldhead, None);
+        buffer.free_undo_header(previous_oldhead, None);
         debug_assert!(
             buffer.b_u_oldhead != previous_oldhead,
             "buf->b_u_oldhead != previous_oldhead"
@@ -270,7 +272,7 @@ pub(crate) fn line_copy(buffer: Buf, lnum: LineNr) -> XString {
 
 #[cfg(test)]
 mod tests {
-    use super::super::store::{Marks, header_adopt, header_chain};
+    use super::super::store::Marks;
     use super::*;
     use crate::buffer::{bare_buffer, free_bare_buffer};
     use crate::global_cell::editor_state_lock;
@@ -314,7 +316,7 @@ mod tests {
             header(3, 2, 0, 4, 0),
             header(4, 2, 0, 0, 3),
         ] {
-            header_adopt(buffer, uh);
+            buffer.adopt_header(uh);
         }
         buffer.b_u_oldhead = UndoLink::to_seq(1);
         buffer.b_u_newhead = UndoLink::to_seq(3);
@@ -340,16 +342,16 @@ mod tests {
         seen.sort_unstable();
         assert_eq!(seen, vec![1, 2, 3, 4]);
         assert_eq!(
-            seqs(header_chain(buffer, UndoLink::to_seq(1), |uh| uh.prev)),
+            seqs(buffer.header_chain(UndoLink::to_seq(1), |uh| uh.prev)),
             vec![1, 2, 3]
         );
         assert_eq!(
-            seqs(header_chain(buffer, UndoLink::to_seq(3), |uh| uh.alt_next)),
+            seqs(buffer.header_chain(UndoLink::to_seq(3), |uh| uh.alt_next)),
             vec![3, 4]
         );
         // A chain into a header nobody holds stops before it.
         assert_eq!(
-            seqs(header_chain(buffer, UndoLink::to_seq(9), |uh| uh.prev)),
+            seqs(buffer.header_chain(UndoLink::to_seq(9), |uh| uh.prev)),
             Vec::<c_int>::new()
         );
 
@@ -364,7 +366,7 @@ mod tests {
         small_tree(buffer);
         let mut held = UndoLink::to_seq(4);
 
-        u_freebranch(buffer, UndoLink::to_seq(4), Some(&mut held));
+        buffer.free_undo_branch(UndoLink::to_seq(4), Some(&mut held));
         assert!(
             held.is_none(),
             "the caller's link to the freed header is cleared"
@@ -378,7 +380,7 @@ mod tests {
         assert_eq!(buffer.b_u_numhead, 3);
 
         // Freeing the oldest header unlinks it from the one above.
-        u_freeheader(buffer, UndoLink::to_seq(1), None);
+        buffer.free_undo_header(UndoLink::to_seq(1), None);
         assert_eq!(buffer.b_u_oldhead, UndoLink::to_seq(2));
         assert!(
             buffer

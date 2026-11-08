@@ -29,7 +29,6 @@ mod expand;
 pub mod system;
 pub(crate) mod throttle;
 
-use crate::buffer::read_buffer_into;
 use crate::eval::vars::set_vim_var_nr;
 use crate::ex_cmds::{check_secure, make_filter_cmd};
 use crate::fileio::temp_name;
@@ -410,7 +409,7 @@ fn word_length(bytes: &[u8]) -> usize {
 /// still being written from.
 fn read_input(buf: &mut Vec<u8>) {
     let (start, end) = (Buf::current().b_op_start.lnum, Buf::current().b_op_end.lnum);
-    read_buffer_into(Buf::current(), start, end, buf);
+    Buf::current().read_into(start, end, buf);
 }
 
 /// Append the child's output to the current buffer, one line per newline

@@ -3,7 +3,7 @@
 //! The questions the layout code needs answered before it knows how tall a
 //! line is: does it have virtual text ([`decor_find_virttext`]), is it
 //! concealed ([`decor_conceal_line`]), and how many virtual lines does it
-//! carry ([`decor_virt_lines`]) — plus [`next_virt_text_chunk`], which every
+//! carry ([`Win::virt_lines`]) — plus [`next_virt_text_chunk`], which every
 //! drawer of virtual text walks its chunks with.
 //!
 //! `plines.rs` and `move.rs` call into here on paths that run per line of a
@@ -179,81 +179,84 @@ pub fn win_lines_concealed(window: Win) -> bool {
     window.has_any_folding() || window.w_onebuf_opt.wo_cole >= 2 as OptInt
 }
 
-/// How many virtual lines fall in the window rows `start_row..end_row`.
-///
-/// A virtual-lines block is drawn above or below the line its mark sits on,
-/// so a mark one row before `start_row` can still contribute. `lines`, when
-/// given, receives where each virtual line is ([`VirtLineRef`]); `num_below` counts
-/// only the ones drawn *below* their mark; `apply_folds` drops the blocks
-/// whose own line is folded away or concealed.
-pub(crate) fn decor_virt_lines(
-    window: Win,
-    start_row: c_int,
-    end_row: c_int,
-    mut num_below: Option<&mut c_int>,
-    mut lines: Option<&mut Vec<VirtLineRef>>,
-    apply_folds: bool,
-) -> c_int {
-    let wp = window;
-    let buf = wp.buffer();
-    // Only pay for what you use: in a buffer with no virt_lines the layout
-    // code does not reach the marktree at all.
-    if buf.meta_total(kMTMetaLines) == 0 {
-        return 0;
-    }
+impl Win {
+    /// How many virtual lines fall in the window rows `start_row..end_row`.
+    ///
+    /// A virtual-lines block is drawn above or below the line its mark sits on,
+    /// so a mark one row before `start_row` can still contribute. `lines`, when
+    /// given, receives where each virtual line is ([`VirtLineRef`]); `num_below` counts
+    /// only the ones drawn *below* their mark; `apply_folds` drops the blocks
+    /// whose own line is folded away or concealed.
+    pub(crate) fn virt_lines(
+        self,
+        start_row: c_int,
+        end_row: c_int,
+        mut num_below: Option<&mut c_int>,
+        mut lines: Option<&mut Vec<VirtLineRef>>,
+        apply_folds: bool,
+    ) -> c_int {
+        let wp = self;
+        let buf = wp.buffer();
+        // Only pay for what you use: in a buffer with no virt_lines the layout
+        // code does not reach the marktree at all.
+        if buf.meta_total(kMTMetaLines) == 0 {
+            return 0;
+        }
 
-    let mut itr = MarkTreeIter::default();
-    let mut walk = Cursor::in_buffer(buf, &mut itr);
-    if !walk.seek_filter((start_row - 1).max(0), 0, end_row, 0, &LINES_FILTER) {
-        return 0;
-    }
-    debug_assert!(start_row >= 0);
+        let mut itr = MarkTreeIter::default();
+        let mut walk = Cursor::in_buffer(buf, &mut itr);
+        if !walk.seek_filter((start_row - 1).max(0), 0, end_row, 0, &LINES_FILTER) {
+            return 0;
+        }
+        debug_assert!(start_row >= 0);
 
-    let mut virt_lines = 0;
-    loop {
-        let mark = walk.current();
-        if !mt_invalid(mark) && ns_in_win(mark.ns, wp) {
-            for vt in mark_virt_chain(mark) {
-                let (flags, count) = with_decor_virt(vt, |link| {
-                    let count = if link.flags & kVTIsLines != 0 {
-                        link.data.lines().len()
-                    } else {
-                        0
-                    };
-                    (link.flags, count)
-                });
-                if flags & kVTIsLines == 0 {
-                    continue;
-                }
-                let above = flags & kVTLinesAbove != 0;
-                let mrow = mark.pos.row;
-                let draw_row = mrow + c_int::from(!above);
-                // The fold and conceal tests stay inside the `&&` chain:
-                // `decor_conceal_line` runs the providers' Lua, so asking it
-                // for a row that is out of range would be a new side effect,
-                // not just extra work.
-                if draw_row >= start_row
-                    && draw_row < end_row
-                    && (!apply_folds
-                        || !(wp.fold_span(LineNr::new(mrow) + 1).0 || wp.conceal_line(mrow, false)))
-                {
-                    virt_lines += len_as_int(count);
-                    if let Some(lines) = lines.as_deref_mut() {
-                        let link = vt;
-                        lines.extend((0..count).map(|line| VirtLineRef {
-                            link,
-                            line: uint32_t::try_from(line).expect("a block's lines fit a u32"),
-                        }));
+        let mut virt_lines = 0;
+        loop {
+            let mark = walk.current();
+            if !mt_invalid(mark) && ns_in_win(mark.ns, wp) {
+                for vt in mark_virt_chain(mark) {
+                    let (flags, count) = with_decor_virt(vt, |link| {
+                        let count = if link.flags & kVTIsLines != 0 {
+                            link.data.lines().len()
+                        } else {
+                            0
+                        };
+                        (link.flags, count)
+                    });
+                    if flags & kVTIsLines == 0 {
+                        continue;
                     }
-                    if let (false, Some(num_below)) = (above, num_below.as_deref_mut()) {
-                        *num_below += len_as_int(count);
+                    let above = flags & kVTLinesAbove != 0;
+                    let mrow = mark.pos.row;
+                    let draw_row = mrow + c_int::from(!above);
+                    // The fold and conceal tests stay inside the `&&` chain:
+                    // `decor_conceal_line` runs the providers' Lua, so asking it
+                    // for a row that is out of range would be a new side effect,
+                    // not just extra work.
+                    if draw_row >= start_row
+                        && draw_row < end_row
+                        && (!apply_folds
+                            || !(wp.fold_span(LineNr::new(mrow) + 1).0
+                                || wp.conceal_line(mrow, false)))
+                    {
+                        virt_lines += len_as_int(count);
+                        if let Some(lines) = lines.as_deref_mut() {
+                            let link = vt;
+                            lines.extend((0..count).map(|line| VirtLineRef {
+                                link,
+                                line: uint32_t::try_from(line).expect("a block's lines fit a u32"),
+                            }));
+                        }
+                        if let (false, Some(num_below)) = (above, num_below.as_deref_mut()) {
+                            *num_below += len_as_int(count);
+                        }
                     }
                 }
             }
-        }
 
-        if !walk.step_filter(end_row, 0, &LINES_FILTER) {
-            return virt_lines;
+            if !walk.step_filter(end_row, 0, &LINES_FILTER) {
+                return virt_lines;
+            }
         }
     }
 }
@@ -265,7 +268,7 @@ impl Win {
     }
 }
 
-/// Where one virtual line [`decor_virt_lines`] collected lives: line `line`
+/// Where one virtual line [`Win::virt_lines`] collected lives: line `line`
 /// of virtual-text link `link`, which the mark it came from owns for the rest
 /// of the redraw (a provider deleting it defers the free).
 #[derive(Copy, Clone)]

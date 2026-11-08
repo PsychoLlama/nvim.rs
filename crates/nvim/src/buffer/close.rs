@@ -47,7 +47,7 @@ use crate::eval::vars::{release_var_scope, vars_clear};
 use crate::extmark::extmark_free_all;
 use crate::mapping::map_clear_mode;
 use crate::mark::defs::{FileMark, FileMarkView};
-use crate::mark::{NMARKS, mark_adjust_buf, mark_forget_file, set_last_cursor};
+use crate::mark::{NMARKS, mark_adjust_buf, set_last_cursor};
 use crate::memline::ml_close;
 use crate::message::e_auabort;
 use crate::normal::visual_active;
@@ -113,9 +113,11 @@ fn remember_last_cursor(win: Win) {
     set_last_cursor(win);
 }
 
-/// Forget every mark and jump-list entry naming buffer `fnum` in `win`.
-fn forget_file(win: Win, fnum: Option<Handle>) {
-    mark_forget_file(win, fnum);
+impl Win {
+    /// Forget every mark and jump-list entry naming buffer `fnum` in `win`.
+    fn forget_file(self, fnum: Option<Handle>) {
+        self.forget_file_marks(fnum);
+    }
 }
 
 fn detach_updates(buffer: Buf) {
@@ -562,7 +564,7 @@ fn unlink_and_free(mut buffer: Buf, clear_w_buf: Option<Win>) {
     }
     let fnum = Some(buffer.handle);
     for wp in tab_windows() {
-        forget_file(wp, fnum);
+        wp.forget_file(fnum);
     }
     buffer.name.clear();
     match buffer.prev() {

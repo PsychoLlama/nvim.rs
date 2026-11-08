@@ -27,7 +27,7 @@ impl Win {
     ///
     /// Normally called from the screen update, once per displayed line. The
     /// window and buffer are remembered in the parser, because
-    /// [`get_syntax_attr`] is not given the window -- and careful: `curwin`
+    /// [`Buf::syntax_attr`] is not given the window -- and careful: `curwin`
     /// and `curbuf` are likely to point somewhere else entirely.
     pub(crate) fn syntax_start(self, lnum: LineNr) {
         with_parser(|parser| parser.start(self, lnum));
@@ -387,7 +387,7 @@ pub(crate) fn invalidate_current_state() {
 
 /// Has the syntax at the start of `lnum` changed since last time?
 ///
-/// Only called just after [`get_syntax_attr`] for the previous line, to
+/// Only called just after [`Buf::syntax_attr`] for the previous line, to
 /// decide whether the next line has to be redrawn too.
 pub(crate) fn syntax_check_changed(lnum: LineNr) -> bool {
     with_parser(|parser| {

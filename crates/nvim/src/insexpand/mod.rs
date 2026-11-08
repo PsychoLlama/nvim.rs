@@ -46,7 +46,7 @@ use crate::eval::{callback_call, get_v_event, restore_v_event, set_ref_in_callba
 use crate::ex_docmd::state::{ex_normal_busy, global_busy};
 use crate::ex_eval::aborting;
 use crate::extmark::ExtmarkUndoObject;
-use crate::extmark::{extmark_apply_undo, extmark_splice_delete};
+use crate::extmark::extmark_apply_undo;
 use crate::fuzzy::fuzzy_match_str;
 use crate::getchar::state::{KeyTyped, got_int, test_disable_char_avail};
 use crate::getchar::{
@@ -98,8 +98,7 @@ use crate::search::{
     search_for_exact_line, searchit,
 };
 use crate::spell::{
-    SMT_ALL, expand_spelling, spell_dump_compl, spell_expand_check_cap, spell_move_to,
-    spell_word_start,
+    SMT_ALL, expand_spelling, spell_dump_compl, spell_expand_check_cap, spell_word_start,
 };
 use crate::state::mode::{
     State, arrow_used, can_si, can_si_back, did_ai, did_si, edit_submode, edit_submode_extra,

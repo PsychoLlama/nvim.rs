@@ -29,7 +29,7 @@ use crate::types::ColNr;
 use crate::winlayer::{Buf, Win};
 
 use crate::autocmd::state::autocmd_busy;
-use crate::bufwrite::{WriteName, WriteRequest, buf_write};
+use crate::bufwrite::{WriteName, WriteRequest};
 use crate::change::{appended_lines_mark, del_lines};
 use crate::cstr;
 use crate::drawscreen::{UPD_VALID, number_width, redraw_curbuf_later};
@@ -329,16 +329,16 @@ fn do_filter(
         // Vi also doesn't do this and the messages are not very informative.
         no_prompt = Some(Suppress::wait_return()); // don't wait_return() while busy
         if let Some(itmp_name) = TempFile::name(&itmp)
-            && buf_write(
-                Buf::current(),
-                WriteName::Other(itmp_name),
-                None,
-                line1,
-                line2,
-                Some(args),
-                WriteRequest::filter(),
-            )
-            .is_err()
+            && Buf::current()
+                .write_file(
+                    WriteName::Other(itmp_name),
+                    None,
+                    line1,
+                    line2,
+                    Some(args),
+                    WriteRequest::filter(),
+                )
+                .is_err()
         {
             if !ui_has(kUIMessages) {
                 say::putchar('\n' as c_int);

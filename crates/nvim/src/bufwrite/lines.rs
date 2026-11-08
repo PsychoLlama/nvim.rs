@@ -1,7 +1,7 @@
 //! Feeding the buffer's lines into the byte writer, and reporting what came
 //! out.
 //!
-//! [`write_lines`] is the loop that runs once per character of the file, so
+//! [`Buf::write_lines`] is the loop that runs once per character of the file, so
 //! it is the only part of a write that scales with the file's size. All it
 //! does is translate line endings and hand bytes to the [`ByteWriter`];
 //! conversion, buffering and the actual `write()` happen there.
@@ -71,117 +71,119 @@ fn flush_full(writer: &mut ByteWriter, nchars: &mut c_int) -> bool {
     true
 }
 
-/// Write lines `start` through `end` of `buffer`.
-///
-/// `sha` hashes the text as it goes, for the undo file. When `writer.fd` is
-/// -1 nothing reaches a file: that pass only exists to find out whether the
-/// conversion works.
-pub(crate) fn write_lines(
-    buffer: Buf,
-    range: (LineNr, LineNr),
-    writer: &mut ByteWriter,
-    fileformat: c_int,
-    write_bin: bool,
-    mut sha: Option<&mut Sha256>,
-) -> Written {
-    let (start, end) = range;
-    // Zero means "the write failed"; it is also how a caller says the
-    // write was doomed before it began.
-    let mut end = end;
-    let mut nchars = 0;
-    let mut no_eol = false;
-    writer.start_lnum = start;
+impl Buf {
+    /// Write lines `start` through `end` of `buffer`.
+    ///
+    /// `sha` hashes the text as it goes, for the undo file. When `writer.fd` is
+    /// -1 nothing reaches a file: that pass only exists to find out whether the
+    /// conversion works.
+    pub(crate) fn write_lines(
+        self,
+        range: (LineNr, LineNr),
+        writer: &mut ByteWriter,
+        fileformat: c_int,
+        write_bin: bool,
+        mut sha: Option<&mut Sha256>,
+    ) -> Written {
+        let (start, end) = range;
+        // Zero means "the write failed"; it is also how a caller says the
+        // write was doomed before it began.
+        let mut end = end;
+        let mut nchars = 0;
+        let mut no_eol = false;
+        writer.start_lnum = start;
 
-    let mac = fileformat == EOL_MAC;
-    let mut lines = Lines::in_buffer(buffer);
-    let mut lnum = start;
-    while lnum <= end {
-        let text = lines.line(lnum);
-        if let Some(sha) = sha.as_deref_mut() {
-            // The terminating NUL goes in as the line separator.
-            sha.update(text);
-            sha.update(b"\0");
-        }
-        // Stage the line a run at a time, flushing whenever the staging
-        // buffer fills. This is the loop that runs over every byte of the
-        // file. Keep it fast!
-        let mut rest = text;
-        while !rest.is_empty() {
-            let taken = writer.push_text(rest, mac);
-            rest = &rest[taken..];
-            if writer.is_full() {
+        let mac = fileformat == EOL_MAC;
+        let mut lines = Lines::in_buffer(self);
+        let mut lnum = start;
+        while lnum <= end {
+            let text = lines.line(lnum);
+            if let Some(sha) = sha.as_deref_mut() {
+                // The terminating NUL goes in as the line separator.
+                sha.update(text);
+                sha.update(b"\0");
+            }
+            // Stage the line a run at a time, flushing whenever the staging
+            // buffer fills. This is the loop that runs over every byte of the
+            // file. Keep it fast!
+            let mut rest = text;
+            while !rest.is_empty() {
+                let taken = writer.push_text(rest, mac);
+                rest = &rest[taken..];
+                if writer.is_full() {
+                    if !flush_full(writer, &mut nchars) {
+                        end = LineNr::ZERO; // write error: break the loop
+                        break;
+                    }
+                    writer.start_lnum = lnum;
+                }
+            }
+
+            // Write failed, or the last line has no end-of-line: stop here.
+            if end == LineNr::ZERO
+                || (lnum == end
+                    && (write_bin || self.b_p_fixeol == 0)
+                    && ((write_bin && lnum == self.b_no_eol_lnum)
+                        || (lnum == self.b_ml.ml_line_count && self.b_p_eol == 0)))
+            {
+                lnum += 1; // written the line, count it
+                no_eol = true;
+                break;
+            }
+
+            // EOL_MAC and EOL_DOS write a CR; EOL_DOS follows it with an NL.
+            let full = if fileformat == EOL_UNIX {
+                writer.push(b'\n')
+            } else {
+                let full = writer.push(b'\r');
+                if fileformat != EOL_DOS {
+                    full
+                } else {
+                    if full && !flush_full(writer, &mut nchars) {
+                        end = LineNr::ZERO; // write error: break the loop
+                        break;
+                    }
+                    writer.push(b'\n')
+                }
+            };
+            if full {
                 if !flush_full(writer, &mut nchars) {
                     end = LineNr::ZERO; // write error: break the loop
                     break;
                 }
-                writer.start_lnum = lnum;
-            }
-        }
-
-        // Write failed, or the last line has no end-of-line: stop here.
-        if end == LineNr::ZERO
-            || (lnum == end
-                && (write_bin || buffer.b_p_fixeol == 0)
-                && ((write_bin && lnum == buffer.b_no_eol_lnum)
-                    || (lnum == buffer.b_ml.ml_line_count && buffer.b_p_eol == 0)))
-        {
-            lnum += 1; // written the line, count it
-            no_eol = true;
-            break;
-        }
-
-        // EOL_MAC and EOL_DOS write a CR; EOL_DOS follows it with an NL.
-        let full = if fileformat == EOL_UNIX {
-            writer.push(b'\n')
-        } else {
-            let full = writer.push(b'\r');
-            if fileformat != EOL_DOS {
-                full
-            } else {
-                if full && !flush_full(writer, &mut nchars) {
-                    end = LineNr::ZERO; // write error: break the loop
+                os_breakcheck();
+                if got_int.get() {
+                    end = LineNr::ZERO; // interrupted: break the loop
                     break;
                 }
-                writer.push(b'\n')
             }
-        };
-        if full {
-            if !flush_full(writer, &mut nchars) {
-                end = LineNr::ZERO; // write error: break the loop
-                break;
-            }
-            os_breakcheck();
-            if got_int.get() {
-                end = LineNr::ZERO; // interrupted: break the loop
-                break;
-            }
+            lnum += 1;
         }
-        lnum += 1;
-    }
 
-    if writer.staged() > 0 && end > LineNr::ZERO {
-        let remaining = writer.staged();
-        if !writer.flush() {
-            end = LineNr::ZERO; // write error
+        if writer.staged() > 0 && end > LineNr::ZERO {
+            let remaining = writer.staged();
+            if !writer.flush() {
+                end = LineNr::ZERO; // write error
+            }
+            nchars = nchars.wrapping_add(len_as_int(remaining - writer.staged()));
         }
-        nchars = nchars.wrapping_add(len_as_int(remaining - writer.staged()));
-    }
-    // Did everything convert and get written?
-    if end != LineNr::ZERO && writer.staged() > 0 {
-        writer.conv_error = true;
-        writer.conv_error_lnum = end;
-        end = LineNr::ZERO;
-    }
-    if buffer.b_p_fixeol == 0 && buffer.b_p_eof != 0 {
-        // Write the trailing CTRL-Z that 'endoffile' asks for.
-        writer.write_raw(b"\x1a");
-    }
+        // Did everything convert and get written?
+        if end != LineNr::ZERO && writer.staged() > 0 {
+            writer.conv_error = true;
+            writer.conv_error_lnum = end;
+            end = LineNr::ZERO;
+        }
+        if self.b_p_fixeol == 0 && self.b_p_eof != 0 {
+            // Write the trailing CTRL-Z that 'endoffile' asks for.
+            writer.write_raw(b"\x1a");
+        }
 
-    Written {
-        lnum,
-        nchars,
-        no_eol,
-        failed: end == LineNr::ZERO,
+        Written {
+            lnum,
+            nchars,
+            no_eol,
+            failed: end == LineNr::ZERO,
+        }
     }
 }
 

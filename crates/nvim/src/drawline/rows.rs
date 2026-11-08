@@ -235,8 +235,7 @@ impl Cells {
         }
 
         if let Some(line) = self.virt_line_index {
-            draw_virt_text_item(
-                buffer,
+            buffer.draw_virt_text_item(
                 if self.virt_line_flags & kVLLeftcol as ::core::ffi::c_int != 0 {
                     0
                 } else {
@@ -377,8 +376,7 @@ impl Cells {
         }
 
         if !self.fold_vt.is_empty() {
-            draw_virt_text_item(
-                buffer,
+            buffer.draw_virt_text_item(
                 self.text_start_col,
                 VirtChunks::Owned(&self.fold_vt),
                 kHlModeCombine,

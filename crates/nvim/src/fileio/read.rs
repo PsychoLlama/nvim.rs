@@ -210,7 +210,7 @@ pub(crate) fn readfile_named(
             && !how.stdin
             && !how.buffer
         {
-            filemess(Buf::current(), sfname, c"");
+            Buf::current().file_message(sfname, c"");
         }
 
         msg_scroll.set(c_int::from(false)); // overwrite the file message
@@ -299,7 +299,7 @@ pub(crate) fn readfile_named(
                 if let Some(command) = excmd.as_deref()
                     && command.force_ff.is_some()
                 {
-                    fileformat = get_fileformat_force(Buf::current(), Some(command));
+                    fileformat = Buf::current().fileformat_forced(Some(command));
                     guess.try_unix = 0;
                     guess.try_dos = false;
                     guess.try_mac = 0;
@@ -774,7 +774,7 @@ pub(crate) fn readfile_named(
 
             if got_int.get() {
                 if !how.dummy {
-                    filemess(Buf::current(), sfname, gettext(e_interr));
+                    Buf::current().file_message(sfname, gettext(e_interr));
                     if how.newfile {
                         Buf::current().b_p_ro = c_int::from(true); // must use "w!" now
                     }

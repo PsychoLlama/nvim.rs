@@ -2,7 +2,7 @@
 //!
 //! A file that is not already open is read into a buffer that exists only
 //! for the search ([`load_dummy_buffer`]) and is then thrown away again
-//! ([`wipe_dummy_buffer`]) — unless it turned out to hold the first match,
+//! ([`Buf::wipe_dummy`]) — unless it turned out to hold the first match,
 //! in which case it stays so that the jump lands in a real buffer.
 //!
 //! Everything here fires autocommands: listing a buffer runs `BufNew`,
@@ -79,7 +79,7 @@ pub(crate) fn load_dummy_buffer(
         let aco = AucmdBuf::enter(newbuf);
 
         // Need to set the filename for autocommands.
-        let _ = setfname(Buf::current(), Some(fname), None, false);
+        let _ = Buf::current().set_name(Some(fname), None, false);
 
         // Create swap file now to avoid the ATTENTION message.
         check_need_swap(true);
@@ -106,7 +106,7 @@ pub(crate) fn load_dummy_buffer(
 
         if let Some(to_wipe) = newbuf_to_wipe.get() {
             block_autocmds();
-            wipe_dummy_buffer(to_wipe, None);
+            to_wipe.wipe_dummy(None);
             unblock_autocmds();
         }
 
@@ -124,50 +124,52 @@ pub(crate) fn load_dummy_buffer(
         return None;
     }
     if failed {
-        wipe_dummy_buffer(newbuf, Some(dirname_start));
+        newbuf.wipe_dummy(Some(dirname_start));
         return None;
     }
     Some(newbuf)
 }
 
-/// Wipe out the dummy buffer, closing every window that shows it first.
-/// When a window will not close, the buffer merely stops being a dummy and
-/// stays around as an ordinary one.
-pub(crate) fn wipe_dummy_buffer(mut buffer: Buf, dirname_start: Option<&CStr>) {
-    // Note: `win_close` drops `b_nwindows` behind the handle.
-    #[allow(clippy::while_immutable_condition)]
-    while buffer.b_nwindows > 0 {
-        // Only close the window if it is not the last one, and only when
-        // closing it actually worked — otherwise this would spin.
-        let mut did_one = false;
-        if windows().nth(1).is_some()
-            && let Some(wp) = windows().find(|wp| wp.w_buffer == buffer)
-        {
-            did_one = win_close(wp, false, false).is_ok();
+impl Buf {
+    /// Wipe out the dummy buffer, closing every window that shows it first.
+    /// When a window will not close, the buffer merely stops being a dummy and
+    /// stays around as an ordinary one.
+    pub(crate) fn wipe_dummy(mut self, dirname_start: Option<&CStr>) {
+        // Note: `win_close` drops `b_nwindows` behind the handle.
+        #[allow(clippy::while_immutable_condition)]
+        while self.b_nwindows > 0 {
+            // Only close the window if it is not the last one, and only when
+            // closing it actually worked — otherwise this would spin.
+            let mut did_one = false;
+            if windows().nth(1).is_some()
+                && let Some(wp) = windows().find(|wp| wp.w_buffer == self)
+            {
+                did_one = win_close(wp, false, false).is_ok();
+            }
+            if !did_one {
+                // The buffer keeps a window; it can only stop being a dummy.
+                self.b_flags.clear(BufFlags::DUMMY);
+                return;
+            }
         }
-        if !did_one {
-            // The buffer keeps a window; it can only stop being a dummy.
-            buffer.b_flags.clear(BufFlags::DUMMY);
+
+        if Buf::current_or_none() != Some(self) && self.b_nwindows == 0 {
+            // Delete the buffer and its swap file. `wipe_buffer` calls
+            // `close_buffer`, which may run autocommands, so a pending
+            // exception or `:return` has to be parked over the call.
+            let cleanup = CleanupGuard::enter();
+            wipe_buffer(self, true);
+            drop(cleanup);
+
+            // When autocommands/'autochdir' option changed directory: go back.
+            if let Some(dirname_start) = dirname_start {
+                restore_start_dir(dirname_start);
+            }
             return;
         }
+
+        self.b_flags.clear(BufFlags::DUMMY);
     }
-
-    if Buf::current_or_none() != Some(buffer) && buffer.b_nwindows == 0 {
-        // Delete the buffer and its swap file. `wipe_buffer` calls
-        // `close_buffer`, which may run autocommands, so a pending
-        // exception or `:return` has to be parked over the call.
-        let cleanup = CleanupGuard::enter();
-        wipe_buffer(buffer, true);
-        drop(cleanup);
-
-        // When autocommands/'autochdir' option changed directory: go back.
-        if let Some(dirname_start) = dirname_start {
-            restore_start_dir(dirname_start);
-        }
-        return;
-    }
-
-    buffer.b_flags.clear(BufFlags::DUMMY);
 }
 
 /// Unload the dummy buffer that `load_dummy_buffer` created, keeping it in

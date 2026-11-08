@@ -57,8 +57,8 @@ use crate::path::MAXPATHL;
 use crate::path::path_tail;
 use crate::plines::win_get_fill;
 use crate::state::mode::restart_edit;
+use crate::statusline::FmtSource;
 use crate::statusline::state::stl_syntax;
-use crate::statusline::{FmtSource, build_stl_text};
 use crate::terminal::buf_terminal_running;
 use crate::types::ApiString;
 use crate::types::{ExArg, LineNr, OptInt};
@@ -478,7 +478,7 @@ fn build_stl(fmt: &[u8], opt: OptIndex, maxlen: c_int) -> Vec<u8> {
         opt_idx: opt,
         opt_scope: OptionSetFlags::NONE,
     };
-    build_stl_text(current_win(), IOSIZE as usize, fmt.to_vec(), from, maxlen)
+    current_win().build_stl_text(IOSIZE as usize, fmt.to_vec(), from, maxlen)
 }
 
 /// The default icon text: the buffer's name, its last 100 bytes cut at a

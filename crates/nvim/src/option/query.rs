@@ -273,24 +273,26 @@ pub(crate) fn get_fileformat(buffer: Buf) -> c_int {
     }
 }
 
-/// [`get_fileformat`] with a command's `++ff`/`++bin` overriding the buffer.
-///
-pub(crate) fn get_fileformat_force(buffer: Buf, excmd: Option<&ExArg>) -> c_int {
-    let (force_ff, force_bin) = excmd.map_or((None, None), |command| {
-        (command.force_ff, command.force_bin)
-    });
-    let c = if let Some(forced) = force_ff {
-        forced
-    } else {
-        if force_bin.unwrap_or(buffer.b_p_bin != 0) {
-            return EOL_UNIX;
+impl Buf {
+    /// [`get_fileformat`] with a command's `++ff`/`++bin` overriding the buffer.
+    ///
+    pub(crate) fn fileformat_forced(self, excmd: Option<&ExArg>) -> c_int {
+        let (force_ff, force_bin) = excmd.map_or((None, None), |command| {
+            (command.force_ff, command.force_bin)
+        });
+        let c = if let Some(forced) = force_ff {
+            forced
+        } else {
+            if force_bin.unwrap_or(self.b_p_bin != 0) {
+                return EOL_UNIX;
+            }
+            self.b_p_ff.bytes().first().copied().unwrap_or(0)
+        };
+        match c {
+            b'u' => EOL_UNIX,
+            b'm' => EOL_MAC,
+            _ => EOL_DOS,
         }
-        buffer.b_p_ff.bytes().first().copied().unwrap_or(0)
-    };
-    match c {
-        b'u' => EOL_UNIX,
-        b'm' => EOL_MAC,
-        _ => EOL_DOS,
     }
 }
 

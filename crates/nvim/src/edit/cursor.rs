@@ -343,11 +343,11 @@ fn line_concealed(win: Win, lnum: LineNr) -> bool {
 /// fold's first line when it is.
 #[inline(always)]
 fn fold_start(win: Win, lnum: LineNr, first: &mut LineNr) -> bool {
-    has_folding(win, lnum, Some(first), None)
+    win.has_folding(lnum, Some(first), None)
 }
 
 /// [`fold_start`], leaving the fold's *last* line in `last` instead.
 #[inline(always)]
 fn fold_end(win: Win, lnum: LineNr, last: &mut LineNr) -> bool {
-    has_folding_win(win, lnum, None, Some(last), true, None)
+    win.has_folding_with(lnum, None, Some(last), true, None)
 }

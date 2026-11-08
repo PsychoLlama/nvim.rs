@@ -217,7 +217,7 @@ pub fn ex_buffer_all(excmd: &mut ExArg) {
         if LineNr::new(open_wins) >= LineNr::new(count) {
             break;
         }
-        if !open_window_for(b, all, had_tab, &mut split_ret, &mut open_wins) {
+        if !b.open_window_for(all, had_tab, &mut split_ret, &mut open_wins) {
             break;
         }
     }
@@ -295,82 +295,84 @@ fn should_close(win: Win, had_tab: c_int) -> bool {
         && !is_aucmd(win)
 }
 
-/// One buffer of the second stage. Answers false when the walk must stop.
-fn open_window_for(
-    buffer: Buf,
-    all: bool,
-    had_tab: c_int,
-    split_ret: &mut Result<(), Failed>,
-    open_wins: &mut c_int,
-) -> bool {
-    // Check whether this buffer needs a window.
-    if !all && buffer.b_ml.ml_mfp.is_none() || buffer.b_p_bl == 0 {
-        return true;
-    }
-
-    let wp = if had_tab != 0 {
-        // With the ":tab" modifier don't move the window.
-        (buffer.b_nwindows > 0).then(last_win)
-    } else {
-        // Check whether this buffer already has a window.
-        let wp = windows().find(|win| !win.w_floating && win.w_buffer == buffer);
-        // If the buffer already has a window, move it.
-        if let Some(win) = wp {
-            move_win_after(win, current_win());
-        }
-        wp
-    };
-
-    if wp.is_none() && split_ret.is_ok() {
-        let bufref = BufRef::of(buffer);
-        // Split the window and put the buffer in it.
-        let p_ea_save = p_ea();
-        // Use space from all windows.
-        P_EA.set(true);
-        *split_ret = split_below_room();
-        *open_wins += 1;
-        P_EA.set(p_ea_save);
-        if split_ret.is_err() {
+impl Buf {
+    /// One buffer of the second stage. Answers false when the walk must stop.
+    fn open_window_for(
+        self,
+        all: bool,
+        had_tab: c_int,
+        split_ret: &mut Result<(), Failed>,
+        open_wins: &mut c_int,
+    ) -> bool {
+        // Check whether this buffer needs a window.
+        if !all && self.b_ml.ml_mfp.is_none() || self.b_p_bl == 0 {
             return true;
         }
 
-        // Open the buffer in this window.
-        swap_exists_action.set(SEA_DIALOG);
-        goto_buf(buffer);
-        if !bufref.valid() {
-            // Autocommands deleted the buffer.
-            swap_exists_action.set(SEA_NONE);
+        let wp = if had_tab != 0 {
+            // With the ":tab" modifier don't move the window.
+            (self.b_nwindows > 0).then(last_win)
+        } else {
+            // Check whether this buffer already has a window.
+            let wp = windows().find(|win| !win.w_floating && win.w_buffer == self);
+            // If the buffer already has a window, move it.
+            if let Some(win) = wp {
+                move_win_after(win, current_win());
+            }
+            wp
+        };
+
+        if wp.is_none() && split_ret.is_ok() {
+            let bufref = BufRef::of(self);
+            // Split the window and put the buffer in it.
+            let p_ea_save = p_ea();
+            // Use space from all windows.
+            P_EA.set(true);
+            *split_ret = split_below_room();
+            *open_wins += 1;
+            P_EA.set(p_ea_save);
+            if split_ret.is_err() {
+                return true;
+            }
+
+            // Open the buffer in this window.
+            swap_exists_action.set(SEA_DIALOG);
+            goto_buf(self);
+            if !bufref.valid() {
+                // Autocommands deleted the buffer.
+                swap_exists_action.set(SEA_NONE);
+                return false;
+            }
+            if swap_exists_action.get() == SEA_QUIT {
+                // The user selected Quit at the ATTENTION prompt; close this
+                // window.
+                with_clean_error_state(|| {
+                    let _ = close_win(current_win(), true);
+                    *open_wins -= 1;
+                    swap_exists_action.set(SEA_NONE);
+                    swap_exists_did_quit.set(true);
+                });
+            } else {
+                handled_swap_exists();
+            }
+        }
+
+        os_breakcheck();
+        if got_int.get() {
+            // Only break the file loading, not the rest.
+            get_key();
             return false;
         }
-        if swap_exists_action.get() == SEA_QUIT {
-            // The user selected Quit at the ATTENTION prompt; close this
-            // window.
-            with_clean_error_state(|| {
-                let _ = close_win(current_win(), true);
-                *open_wins -= 1;
-                swap_exists_action.set(SEA_NONE);
-                swap_exists_did_quit.set(true);
-            });
-        } else {
-            handled_swap_exists();
+        // Autocommands deleted the buffer or aborted script processing.
+        if aborting() {
+            return false;
         }
+        // When ":tab" was used open a new tab for a new window repeatedly.
+        if had_tab > 0 && OptInt::from(tab_index()) <= p_tpm() {
+            cmdmod.with_mut(|m| m.cmod_tab = 9999);
+        }
+        true
     }
-
-    os_breakcheck();
-    if got_int.get() {
-        // Only break the file loading, not the rest.
-        get_key();
-        return false;
-    }
-    // Autocommands deleted the buffer or aborted script processing.
-    if aborting() {
-        return false;
-    }
-    // When ":tab" was used open a new tab for a new window repeatedly.
-    if had_tab > 0 && OptInt::from(tab_index()) <= p_tpm() {
-        cmdmod.with_mut(|m| m.cmod_tab = 9999);
-    }
-    true
 }
 
 /// The last stage: close the windows over the count asked for.
