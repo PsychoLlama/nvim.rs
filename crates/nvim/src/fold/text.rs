@@ -16,6 +16,7 @@
 use crate::api::extmark::parse_virt_text;
 use crate::ascii::NUL;
 use crate::decoration::defs::VirtText;
+use crate::types::{LineNr, Object, VarNumber, kObjectTypeArray, kObjectTypeString};
 use crate::winlayer::WinId;
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};

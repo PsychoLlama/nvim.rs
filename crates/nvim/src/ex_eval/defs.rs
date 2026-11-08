@@ -6,7 +6,8 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-use crate::types::{LineNr, ListRef, TypVal};
+use crate::eval::typval::ListRef;
+use crate::types::{LineNr, TypVal};
 
 /// What [`enter_cleanup`](crate::ex_eval::enter_cleanup) parked for
 /// [`leave_cleanup`](crate::ex_eval::leave_cleanup) to restore.

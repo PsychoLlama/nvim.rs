@@ -18,6 +18,7 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::getdigits_int_at;
 use crate::cstr::{self, byte_at};
 use crate::eval::lval::{LValue, Slot, Span, Target};
+use crate::eval::typval::ListRef;
 use crate::eval::typval::{
     dict_is_watched, dict_watcher_notify, list_locked, tv_copy, tv_item_lock_slot,
     tv_list_item_lock, value_check_lock_named,
@@ -28,7 +29,7 @@ use crate::message::state::emsg_severe;
 use crate::message_fmt::msg_bytes;
 use crate::os::env::vim_unsetenv_named;
 use crate::semsg;
-use crate::types::{CmdIdx, ExArg, Failed, ListRef, VAR_DICT, VAR_LIST};
+use crate::types::{CmdIdx, ExArg, Failed, VAR_DICT, VAR_LIST};
 use core::ffi::c_int;
 
 use super::{GLV_QUIET, clear_local, do_unlet, with_var};

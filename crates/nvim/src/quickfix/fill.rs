@@ -25,6 +25,7 @@
 use super::*;
 use crate::autocmd::AucmdBuf;
 use crate::eval::list::cstr_of_chk;
+use crate::eval::typval::ListRef;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{CallFrame, list_items};
@@ -36,7 +37,7 @@ use crate::option::defs::OptionSetFlags;
 use crate::os::fs::current_dir;
 use crate::path::tail_index;
 use crate::types::Handle;
-use crate::types::{ListRef, VarLock};
+use crate::types::VarLock;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 

@@ -33,6 +33,7 @@ use crate::option::vars::jop_flags;
 use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
 use crate::pos::equalpos;
+use crate::types::{ExArg, Handle, Window};
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 

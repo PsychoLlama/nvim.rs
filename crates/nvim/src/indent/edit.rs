@@ -22,6 +22,7 @@ use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::options::kOptVartabstop;
 use crate::os::libc::int64_t;
 use crate::plines::CharsizeArg;
+use crate::types::{ColNr, ExArg, Failed, LineNr, OptInt, Pos};
 use core::ffi::CStr;
 
 use super::*;

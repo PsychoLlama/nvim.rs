@@ -23,6 +23,7 @@
 use crate::extmark::{ExtmarkUndoObject, UndoObjectType};
 use crate::os::libc::{size_t, uintmax_t};
 use crate::path::MAXPATHL;
+use crate::types::{ColNr, Handle, LineNr, Pos, Timestamp};
 use crate::undo::node::{UndoEntry, UndoHeader, UndoLink, VisualInfo};
 use core::ffi::CStr;
 

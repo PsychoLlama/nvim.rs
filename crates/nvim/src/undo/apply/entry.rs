@@ -22,6 +22,7 @@ use crate::mark::defs::SavedMark;
 use crate::memline::{MlFlags, ml_append_flags, ml_replace_buf_owned};
 use crate::memory::XString;
 use crate::pos::MAXLNUM;
+use crate::types::{Buffer, ColNr, LineNr, Pos};
 use crate::undo::node::{UndoEntry, UndoLink, VisualInfo};
 use crate::winlayer::{Buf, Win};
 

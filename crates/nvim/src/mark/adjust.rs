@@ -38,6 +38,7 @@ use crate::fold::fold_mark_adjust;
 use crate::mark::defs::MarkAdjustMode;
 use crate::pos::{MAXLNUM, equalpos};
 use crate::state::mode::saved_cursor;
+use crate::types::{Buffer, ColNr, Handle};
 use crate::winlayer::{Buf, Win, tab_windows, windows};
 use core::ffi::{c_int, c_uint};
 

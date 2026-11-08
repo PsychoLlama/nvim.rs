@@ -32,6 +32,7 @@ use crate::os::cshim::gettext;
 use crate::os::time::os_time;
 use crate::pos::lt;
 use crate::semsg;
+use crate::types::{ExArg, Timestamp};
 use crate::ui::state::Columns;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};

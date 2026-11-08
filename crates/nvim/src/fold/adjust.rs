@@ -20,6 +20,7 @@ use crate::mbyte::mb_adjust_cursor;
 use crate::option::vars::P_SEL;
 use crate::pos::{MAXLNUM, ltoreq};
 use crate::state::mode::State;
+use crate::types::{ColNr, LineNr};
 use crate::winlayer::Win;
 use core::ffi::c_int;
 

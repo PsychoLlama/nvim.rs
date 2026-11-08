@@ -24,6 +24,7 @@ use crate::eval::typval::NumBuf;
 use crate::normal::visual_active;
 use crate::os::libc::ptrdiff_t;
 use crate::types::kListLenMayKnow;
+use crate::types::{Failed, Handle, TypVal, VarNumber};
 use crate::window::LOWEST_WIN_ID;
 use crate::window::tab_index;
 use crate::winlayer::last_used_tab;

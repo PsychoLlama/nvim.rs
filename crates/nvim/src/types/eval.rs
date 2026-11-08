@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::eval::typval::DictTab;
 use crate::os::libc::int64_t;
 
 pub type MessagePackType = ::core::ffi::c_uint;

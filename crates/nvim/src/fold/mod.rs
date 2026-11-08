@@ -48,7 +48,7 @@ use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::plines::plines_win_nofold;
 use crate::state::mode::State;
-use crate::types::*;
+use crate::types::{LineNr, OptInt};
 use crate::winlayer::Win;
 use core::ffi::{c_int, c_uint};
 

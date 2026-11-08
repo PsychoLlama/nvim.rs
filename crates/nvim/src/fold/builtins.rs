@@ -29,6 +29,7 @@ use crate::memory::{ThinCString, XString};
 use crate::os::cshim::ngettext;
 use crate::search::linewhite;
 use crate::strings::{FmtArg, formatted};
+use crate::types::{LineNr, TypVal, VarNumber};
 use crate::winlayer::Buf;
 use core::ffi::c_ulong;
 

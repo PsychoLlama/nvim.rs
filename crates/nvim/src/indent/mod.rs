@@ -31,6 +31,7 @@ use crate::narrow::number_as_int;
 use crate::option::defs::FoFlag;
 use crate::regexp::RegMatch;
 use crate::semsg;
+use crate::types::{ColNr, Failed, LineNr, OptInt, Pos};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int, c_uint};
 
@@ -52,7 +53,6 @@ use crate::os::cshim::gettext;
 use crate::plines::getvcol;
 use crate::state::mode::{State, saved_cursor};
 use crate::textformat::has_format_option;
-use crate::types::*;
 
 // `regexp.rs` keeps its own copy of `RegProg`, so these stay declarations
 // rather than imports. `breakindent.rs` reaches them through `use super::*`.

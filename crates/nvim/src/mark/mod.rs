@@ -49,7 +49,10 @@ use crate::path::{path_fnamecmp, path_shorten_fname, vim_ispathsep_nocolon};
 use crate::plines::linetabsize_eol;
 use crate::tag::tagstack_clear_entry;
 use crate::types::Failed;
-use crate::types::*;
+use crate::types::{
+    ApiDict, ApiString, Buffer, ColNr, Handle, Integer, KeyValuePair, Object, Timestamp,
+    key_value_pair,
+};
 use crate::types::{LineNr, Pos};
 use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{CStr, c_char, c_int};

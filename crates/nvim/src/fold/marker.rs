@@ -29,6 +29,7 @@ use crate::message::emsg;
 use crate::ops::skip_comment;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
+use crate::types::{ColNr, LineNr, Pos};
 use crate::undo::u_save;
 use core::ffi::c_int;
 

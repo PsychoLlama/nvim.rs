@@ -19,11 +19,12 @@
 use super::*;
 use crate::buffer::{bare_buffer, free_bare_buffer};
 use crate::eval::list::{string_bytes, string_tv};
+use crate::eval::typval::{DictRef, ListRef};
 use crate::eval::typval::{dict_find, list_items};
 use crate::global_cell::{editor_state::Held, editor_state_lock};
 use crate::memory::XString;
 use crate::option::vars::{P_CPO, P_EFM};
-use crate::types::{DictRef, ListRef, kListLenMayKnow};
+use crate::types::kListLenMayKnow;
 use crate::window::{bare_window, free_bare_window};
 use crate::winlayer::graph::{leave_curbuf, leave_curwin};
 use core::ffi::c_int;

@@ -23,6 +23,7 @@
 
 use super::*;
 use crate::eval::list::{cstr_of, string_bytes};
+use crate::eval::typval::ListRef;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{NumBuf, dict_has_key, list_items};
 use crate::memory::XString;
@@ -30,7 +31,7 @@ use crate::message_fmt::msg_bytes;
 use crate::option::vars::P_EFM;
 use crate::semsg;
 use crate::types::Handle;
-use crate::types::{ListRef, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING};
+use crate::types::{VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 /// A reference of the caller's own to the list `tv` holds, if it holds one.

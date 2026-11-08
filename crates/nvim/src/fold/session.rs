@@ -15,6 +15,7 @@
 
 use crate::os::libc::int64_t;
 use crate::types::Failed;
+use crate::types::OptInt;
 use std::io::Write;
 
 use super::*;

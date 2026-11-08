@@ -26,6 +26,7 @@ use crate::mark::defs::{MarkGet, MarkMove, MarkMoveRes};
 use crate::message::emsg;
 use crate::pos::lt;
 use crate::textobject::{findpar, findsent};
+use crate::types::{ColNr, Direction};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint};
 

@@ -11,6 +11,7 @@
 use super::tv_get_buf;
 use super::wrappers::{arg_number, dict_alloc_ret};
 use crate::eval::funcs::builtin::EvalFuncData;
+use crate::eval::typval::DictRef;
 use crate::eval::typval::{
     NumBuf, tv_check_for_dict_arg, tv_check_for_string_arg, tv_dict_alloc, tv_list_alloc,
     tv_list_alloc_ret,
@@ -26,7 +27,7 @@ use crate::startup::vim_ignored;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::types::Handle;
 use crate::types::LineNr;
-use crate::types::{DictRef, Pos, TypVal, VarNumber, kListLenMayKnow, kListLenUnknown};
+use crate::types::{Pos, TypVal, VarNumber, kListLenMayKnow, kListLenUnknown};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::c_int;

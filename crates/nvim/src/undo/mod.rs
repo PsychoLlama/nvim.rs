@@ -70,7 +70,7 @@ use crate::sha256::Sha256;
 use crate::spell::spell_check_window;
 use crate::state::virtual_active;
 use crate::types::Failed;
-use crate::types::*;
+use crate::types::{ColNr, ExArg, LineNr, OptInt};
 use crate::undo::node::{UndoEntry, UndoHeader, UndoLink};
 use crate::winlayer::Win;
 use core::ffi::{c_int, c_uint, c_ulong};

@@ -55,6 +55,7 @@ use crate::eval::{callback_from_typval, typval_tostring};
 use crate::ex_cmds::check_secure;
 use crate::extmark::extmark_splice_cols;
 use crate::narrow::number_as_int;
+use crate::types::{LineNr, TypVal};
 use core::ffi::{CStr, c_int};
 
 use crate::buffer::state::swap_exists_action;
@@ -65,7 +66,6 @@ use crate::r#move::update_topline;
 use crate::normal::{set_visual_active, visual_active};
 use crate::path::path_with_url;
 use crate::sign::{buf_has_signs, get_buffer_signs};
-use crate::types::*;
 use crate::undo::u_sync_once;
 use crate::undo::{buf_is_changed, u_clearallandblockfree, u_save, u_savesub, u_sync};
 use crate::winlayer::graph::cmdwin_buf;

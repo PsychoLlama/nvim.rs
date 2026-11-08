@@ -17,6 +17,7 @@ use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
 use crate::os::fs::current_dir;
 use crate::pos::equalpos;
 use crate::types::Failed;
+use crate::types::{SwitchWin, TypVal, WinExecute};
 use crate::window::valid_tab;
 use crate::window::valid_win;
 

@@ -13,6 +13,7 @@
 use crate::ascii::NUL;
 use crate::cstr;
 use crate::regexp::RegMatch;
+use crate::types::{ColNr, OptInt, ScreenChar, VarNumber};
 use core::ffi::CStr;
 
 use super::*;

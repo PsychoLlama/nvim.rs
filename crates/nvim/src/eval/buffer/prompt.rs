@@ -19,6 +19,7 @@ use crate::extmark::kExtmarkNoUndo;
 use crate::memline::{Lines, ml_replace_buf_text};
 use crate::memory::ThinCString;
 use crate::narrow::len_as_int;
+use crate::types::{Callback, ColNr, LineNr, TypVal};
 use crate::types::{VAR_LIST, VAR_STRING};
 
 /// Whether `s` ends in a newline — which asks the *next* `prompt_appendbuf()`

@@ -18,6 +18,7 @@ use crate::options::kOptIndentexpr;
 use crate::os::libc::int32_t;
 use crate::plines::{CharsizeArg, CharsizeKind};
 use crate::strings::has_char;
+use crate::types::{ColNr, LineNr, Pos, TypVal, VarNumber, Vv};
 use crate::winlayer::Buf;
 
 use super::*;

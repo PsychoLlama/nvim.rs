@@ -13,7 +13,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 use crate::eval::gc::RootId;
-pub use crate::eval::typval::{BlobRef, DictRef, DictTab, ItemSlot, ListRef, PartialRef};
+use crate::eval::typval::{BlobRef, DictRef, DictTab, ListRef, PartialRef};
 use crate::eval::userfunc::FcId;
 use crate::memory::ThinCString;
 use crate::os::libc::{int64_t, size_t, uint64_t};

@@ -45,6 +45,7 @@ use crate::r#move::changed_window_setting;
 use crate::os::input::line_breakcheck;
 use crate::strings::has_char;
 use crate::syntax::syn_get_foldlevel;
+use crate::types::{LineNr, VarNumber, Vv};
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;

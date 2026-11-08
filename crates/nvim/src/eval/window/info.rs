@@ -12,8 +12,10 @@
 
 use super::*;
 use crate::eval::funcs::builtin::EvalFuncData;
+use crate::eval::typval::DictRef;
 use crate::memory::ThinCString;
 use crate::os::libc::ptrdiff_t;
+use crate::types::{List, TypVal, VarNumber};
 use crate::types::{VAR_STRING, kListLenMayKnow, kListLenUnknown};
 use crate::window::FR_LEAF;
 use crate::window::FR_ROW;

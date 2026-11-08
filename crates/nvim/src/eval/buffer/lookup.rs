@@ -16,6 +16,7 @@ use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::NumBuf;
 use crate::guard::Suppress;
 use crate::memory::ThinCString;
+use crate::types::{Handle, LineNr, TypVal, VarNumber};
 use crate::types::{VAR_NUMBER, VAR_STRING};
 
 /// The buffer `avar` names, by number or by exact name.

@@ -25,6 +25,7 @@ use super::*;
 use crate::cstr;
 use crate::env::{expand_env, home_to_tilde};
 use crate::eval::AUTOLOAD_CHAR;
+use crate::eval::typval::ListRef;
 use crate::eval::typval::NumBuf;
 use crate::ex_docmd::SourceKind;
 use crate::ex_eval::CsFlags;
@@ -36,7 +37,6 @@ use crate::message_fmt::msg_cstr;
 use crate::path::MAXPATHL;
 use crate::regexp::OwnedProg;
 use crate::semsg;
-use crate::types::ListRef;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 

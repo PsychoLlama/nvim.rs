@@ -26,12 +26,13 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::eval::typval::DictKey;
+use crate::eval::typval::PartialRef;
 use crate::eval::typval::{DictRef, ListRef};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::Failed;
 use crate::types::MessagePackType;
-use crate::types::{PartialRef, Refcount};
+use crate::types::Refcount;
 
 /// Build the `g:` and `v:` scopes and give the `v:` variables their first
 /// values.  Called once, at startup.

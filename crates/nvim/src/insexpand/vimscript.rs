@@ -21,6 +21,7 @@
 )]
 
 use super::*;
+use crate::eval::typval::ListRef;
 use crate::eval::typval::{DictRef, NumBuf, dict_get_string_buf, list_iter};
 use crate::extmark::kExtmarkUndo;
 use crate::guard::Allow;
@@ -28,7 +29,6 @@ use crate::keycodes::SpecialKey;
 use crate::memline::Lines;
 use crate::narrow::number_as_col;
 use crate::types::Key;
-use crate::types::ListRef;
 use crate::types::{VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenMayKnow};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;

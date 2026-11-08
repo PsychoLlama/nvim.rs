@@ -24,6 +24,7 @@
 )]
 
 use super::*;
+use crate::eval::typval::ListRef;
 use crate::eval::typval::list_items;
 use crate::fileio::Fgets;
 use crate::mbyte::Converter;
@@ -31,7 +32,7 @@ use crate::memory::XString;
 use crate::message::IOSIZE;
 use crate::optionstr::OptString;
 use crate::os::fs::stdin_file;
-use crate::types::{ListRef, VAR_LIST, VAR_STRING};
+use crate::types::{VAR_LIST, VAR_STRING};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 use std::fs::File;

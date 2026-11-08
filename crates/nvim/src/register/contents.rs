@@ -24,13 +24,14 @@
 use crate::charset::getdigits_int_at;
 use crate::charset::str2nr::atoi;
 use crate::cstr;
+use crate::eval::typval::ListRef;
 use crate::mbyte::{c_partial_cells_in, c_string_cells, promised_char_len};
 use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::register::defs::RegLines;
 use crate::semsg;
 use crate::types::Handle;
-use crate::types::{Failed, ListRef, TypVal};
+use crate::types::{Failed, TypVal};
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 

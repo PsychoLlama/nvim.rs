@@ -21,6 +21,7 @@
 use super::low_byte;
 use crate::buffer::BLN_LISTED;
 use crate::buffer::{buflist_new, buflist_setfpos};
+use crate::eval::typval::ListRef;
 use crate::eval::typval::tv_list_alloc;
 use crate::eval::var_set_global;
 use crate::eval::vars::{get_vim_var_list_handle, set_vim_var_list};
@@ -41,7 +42,7 @@ use crate::search::{
     ShadaPattern, set_last_used_pattern, shada_pattern_timestamp, shada_set_pattern,
 };
 use crate::types::LineNr;
-use crate::types::{ApiString, ListRef, TypVal, Vv, kListLenUnknown};
+use crate::types::{ApiString, TypVal, Vv, kListLenUnknown};
 use crate::winlayer::{Buf, BufId, Win, buffers, tab_windows};
 use core::ffi::{c_char, c_int};
 

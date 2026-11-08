@@ -68,7 +68,6 @@ use crate::narrow::number_as_int;
 use crate::normal::end_visual_mode;
 use crate::option::vars::p_acd;
 use crate::os::fs::os_chdir;
-use crate::types::*;
 use crate::window::{
     check_split_disallowed, find_tabpage, goto_tabpage_tp, goto_tabpage_win, splitmove,
     tabpage_index, unuse_tabpage, use_tabpage, win_drag_status_line, win_drag_vsep_line,

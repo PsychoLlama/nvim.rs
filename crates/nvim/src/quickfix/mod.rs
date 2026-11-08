@@ -49,6 +49,7 @@ use crate::drawscreen::{
 use crate::edit::beginline;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::mark_root;
+use crate::eval::typval::ListRef;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     KeyTaken, dict_get_bool, dict_get_number, dict_get_tv, list_len, tv_copy, tv_dict_alloc,
@@ -109,7 +110,7 @@ use crate::state::mode::restart_edit;
 use crate::tr;
 use crate::types::Failed;
 use crate::types::{
-    Callback, ColNr, Dict, Direction, ExArg, LineNr, List, ListRef, OptInt, Pos, ScriptId, TypVal,
+    Callback, ColNr, Dict, Direction, ExArg, LineNr, List, OptInt, Pos, ScriptId, TypVal,
     VarNumber, VarType,
 };
 use crate::ui::state::Columns;

@@ -13,7 +13,9 @@
 )]
 
 use crate::eval::funcs::builtin::EvalFuncData;
+use crate::eval::typval::ListRef;
 use crate::os::libc::ptrdiff_t;
+use crate::types::{ExArg, LineNr, TypVal, VarNumber};
 use crate::undo::node::{UndoHeader, UndoLink};
 use std::ffi::CString;
 
