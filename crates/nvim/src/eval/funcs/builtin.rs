@@ -7,9 +7,10 @@
     clippy::ptr_as_ptr
 )]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-use super::*;
+//! A builtin function's row in the table: its arity, which argument a method
+//! call supplies, and the function that does the work.
+
+use crate::types::{EvalFuncData, TypVal};
 
 /// One row of the builtin-function table: what `abs()` *is* to the
 /// evaluator.

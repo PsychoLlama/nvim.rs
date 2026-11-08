@@ -621,6 +621,9 @@ fn is_marker(ty: &syn::Type) -> bool {
 const TYPE_HOMES: &[&str] = &[
     "src/api/keysets.rs",
     "src/cursor_shape.rs::CursorShape",
+    "src/eval/funcs/builtin.rs",
+    "src/eval/userfunc/mod.rs::ArgvFunc",
+    "src/eval/userfunc/mod.rs::FcId",
     "src/event/libuv_proc.rs",
     "src/event/objects.rs",
     "src/event/queue.rs",

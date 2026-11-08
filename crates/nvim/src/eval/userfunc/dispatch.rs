@@ -25,9 +25,10 @@ use crate::autocmd::fire_autocmds_for;
 use crate::eval::funcs::{call_internal_func_named, call_internal_method_named};
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::{DictRef, PartialRef, index_of};
+use crate::eval::userfunc::ArgvFunc;
 use crate::lua::executor::typval_call_lua;
 use crate::runtime::script_autoload_named;
-use crate::types::{ArgvFunc, Failed};
+use crate::types::Failed;
 use std::borrow::Cow;
 
 /// What a call is made with besides its name and its arguments, as borrows

@@ -28,9 +28,10 @@
 
 use std::rc::Rc;
 
+use crate::eval::userfunc::FcId;
 use crate::global_cell::GlobalCell;
 use crate::id_table::RcTable;
-use crate::types::{FcId, FuncCall};
+use crate::types::FuncCall;
 
 /// The funccalls, each beside its caller, and the three ids upstream kept as
 /// raw globals.

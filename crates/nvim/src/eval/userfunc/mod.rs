@@ -71,8 +71,8 @@ use crate::runtime::{estack_pop, estack_push_ufunc, script_id_valid};
 use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Callback, Dict, DictItem, ExArg, Expand, FcId, FuncBody, FuncCall, LineNr, ListItem, LuaRef,
-    OptInt, Partial, SaveRedo, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_FUNC, VAR_NUMBER, VAR_SCOPE,
+    Callback, Dict, DictItem, ExArg, Expand, FuncBody, FuncCall, LineNr, ListItem, LuaRef, OptInt,
+    Partial, SaveRedo, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_FUNC, VAR_NUMBER, VAR_SCOPE,
     VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
 };
 use crate::ui::state::Rows;
@@ -196,3 +196,10 @@ crate::flag_set! {
 pub(crate) fn sourcing_lnum() -> LineNr {
     crate::runtime::sourcing_lnum()
 }
+
+/// Fills in a call's arguments once its user function is known: the
+/// argument slice, how many leading slots to leave, and the function.
+/// Answers how many arguments the call now has.
+pub type ArgvFunc = fn(&[TypVal], usize, &UserFunc) -> usize;
+/// A funccall's place in the funccall table.
+pub(crate) type FcId = crate::id_table::TableId<FuncCall>;

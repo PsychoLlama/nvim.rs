@@ -51,6 +51,7 @@ use crate::eval::fs::{
     f_isdirectory, f_mkdir, f_pathshorten, f_readblob, f_readdir, f_readfile, f_rename, f_resolve,
     f_simplify, f_tempname, f_writefile,
 };
+use crate::eval::funcs::builtin::{Arity, BaseArg, EvalFuncDef, VimLFunc};
 use crate::eval::funcs::{
     acos, api_wrapper, asin, atan, ceil, cos, cosh, exp, f_abs, f_and, f_api_info, f_atan2,
     f_byte2line, f_call, f_chanclose, f_changenr, f_chansend, f_char2nr, f_charcol, f_col,
@@ -143,7 +144,7 @@ use crate::testing::{
     f_assert_notmatch, f_assert_report, f_assert_true, f_test_garbagecollect_now,
     f_test_write_list_log,
 };
-use crate::types::{Arity, BaseArg, EvalFuncData, EvalFuncDef, FloatFunc, VimLFunc};
+use crate::types::{EvalFuncData, FloatFunc};
 use crate::undo::{f_undofile, f_undotree};
 
 /// A row with every field at rest: nameless, argumentless, not a method, not

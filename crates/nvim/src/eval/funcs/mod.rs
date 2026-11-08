@@ -31,6 +31,7 @@ mod wrappers;
 // One module per family of builtins. Each is rewritten and states its own
 // imports; what is left in this file is the shared vocabulary they name.
 
+pub mod builtin;
 mod call;
 mod channel;
 mod container;

@@ -20,6 +20,7 @@ use super::{
 use crate::api::private::converter::call_handler_for_vimscript;
 use crate::buffer::{buflist_findpat_prefix, find_buf};
 use crate::eval::buffer::find_buffer;
+use crate::eval::funcs::builtin::{EvalFuncDef, WrongArity};
 use crate::eval::typval::{
     CallFrame, NumBuf, Unconvertible, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy,
     tv_dict_alloc_ret, tv_get_bool, tv_get_bool_chk, tv_get_lnum, tv_get_number, tv_get_number_chk,
@@ -43,8 +44,8 @@ use crate::semsg_multiline;
 use crate::types::Candidate;
 use crate::types::Handle;
 use crate::types::{
-    Array, Blob, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr, Object, TypVal,
-    VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarNumber, WrongArity, kBoolVarTrue,
+    Array, Blob, EvalFuncData, Expand, Failed, Float, LineNr, Object, TypVal, VAR_BOOL, VAR_FLOAT,
+    VAR_NUMBER, VAR_STRING, VarNumber, kBoolVarTrue,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{CStr, c_int};
