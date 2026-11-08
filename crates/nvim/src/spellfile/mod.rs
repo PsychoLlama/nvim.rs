@@ -15,6 +15,7 @@ use crate::cstr;
 use crate::getchar::state::got_int;
 use core::cell::RefCell;
 
+use crate::env::XDGVarType;
 use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::message::{e_exists, e_invarg};
@@ -24,6 +25,7 @@ use crate::option::vars::{p_msm, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::fs::{dir_exists, path_exists};
 use crate::os::libc::time_t;
+use crate::path::{FileComparison, MAXPATHL};
 use crate::path::{path_tail, tail_index};
 use crate::spell::SpellBuf;
 use crate::spell::{RepItem, SpellAddType, SpellTab};
@@ -33,9 +35,7 @@ use crate::strings::has_char;
 use crate::tr;
 use crate::types::CmdIdx;
 use crate::types::TAB;
-use crate::types::{
-    CONV_NONE, EStackType, ExArg, Failed, FileComparison, MAXPATHL, OptInt, VimConv, XDGVarType,
-};
+use crate::types::{CONV_NONE, EStackType, ExArg, Failed, OptInt, VimConv};
 use crate::ui::ui_flush;
 use crate::winlayer::Buf;
 use core::ffi::CStr;

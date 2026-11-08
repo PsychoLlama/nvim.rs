@@ -79,6 +79,7 @@ use std::io::{ErrorKind, Read as _, Seek as _, SeekFrom, Write as _};
 use std::os::unix::fs::MetadataExt as _;
 
 use crate::event::r#loop::main_loop_is_recursing;
+use crate::fileio::FileOffset;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::memline::ml_open_file;
@@ -87,7 +88,6 @@ use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
 use crate::os::fs::{close_file, fsync_file, open_file, os_remove};
 use crate::os::input::{os_breakcheck, os_char_avail};
-use crate::types::FileOffset;
 use crate::winlayer::buffers;
 
 pub(crate) static did_swapwrite_msg: GlobalCell<bool> = GlobalCell::new(false);

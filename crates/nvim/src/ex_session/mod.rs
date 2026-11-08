@@ -71,6 +71,7 @@ use crate::options::{
 };
 use crate::os::cshim::gettext;
 use crate::os::fs::{dir_exists, dirname_within, os_chdir};
+use crate::path::MAXPATHL;
 use crate::path::{after_pathsep, vim_full_name, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::search::state::no_hlsearch;
@@ -78,7 +79,7 @@ use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::PATHSEPSTR;
-use crate::types::{CdCause, ExArg, MAXPATHL, OptionSetFlags, Vv};
+use crate::types::{CdCause, ExArg, OptionSetFlags, Vv};
 use crate::window::{DirOwner, own_dir};
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, TabPage};

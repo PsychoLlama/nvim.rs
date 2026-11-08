@@ -47,6 +47,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::env::XDGVarType;
 use crate::env::{expand_env_within, state_subpath, xdg_home};
 use crate::eval::vars::vim_var_bytes;
 use crate::global_cell::GlobalCell;
@@ -60,7 +61,7 @@ use crate::os::libc::{int16_t, int32_t, int64_t};
 use crate::os::time::{os_localtime, tm_zeroed};
 use crate::path::tail_index;
 use crate::startup::ui_client_channel_id;
-use crate::types::{Vv, XDGVarType, nvim_stats_s};
+use crate::types::{Vv, nvim_stats_s};
 /// `#[macro_export]` publishes at the crate root; this re-export lets callers
 /// name the macro where the rest of the logging API lives, and brings it into
 /// scope here ahead of its own textual definition.

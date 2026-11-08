@@ -23,7 +23,7 @@ use neovim::os::env::{
     env_exists, env_get_bounded, env_get_within, env_name_at, getenv_owned, hostname_into,
     process_id, setenv_append_path, shell_is_cmdexe,
 };
-use neovim::types::MAXPATHL;
+use neovim::path::MAXPATHL;
 
 use crate::support::{Sandbox, cstr};
 

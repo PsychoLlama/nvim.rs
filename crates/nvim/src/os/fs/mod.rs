@@ -28,6 +28,8 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::event::uv::{uv_dirent_t, uv_fs_t, uv_gid_t, uv_stat_t, uv_uid_t};
+use crate::os::libc::uint64_t;
 use crate::os::uv_error::{UV_EAGAIN, UV_EINTR, UV_ENOBUFS, UV_UNKNOWN, uv_code};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -43,8 +45,7 @@ use crate::event::libuv::{
     uv_err_name, uv_fs_access, uv_fs_copyfile, uv_fs_lstat, uv_fs_req_cleanup, uv_strerror,
 };
 use crate::event::uv::{
-    uv__queue, uv__work, uv_buf_t, uv_fs_t, uv_fs_type, uv_loop_s, uv_loop_t, uv_req_type,
-    uv_stat_t, uv_timespec_t,
+    uv__queue, uv__work, uv_buf_t, uv_fs_type, uv_loop_s, uv_loop_t, uv_req_type, uv_timespec_t,
 };
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message::{verbose_enter, verbose_leave};
@@ -286,7 +287,7 @@ pub fn dirname_within(room: usize) -> Result<Vec<u8>, Vec<u8>> {
 /// The name of the current directory, or `None` when the system will not
 /// say.
 pub(crate) fn current_dir() -> Option<crate::memory::XString> {
-    dirname_within(crate::types::MAXPATHL as usize)
+    dirname_within(crate::path::MAXPATHL as usize)
         .ok()
         .map(crate::memory::XString::from_vec)
 }
@@ -295,7 +296,7 @@ pub(crate) fn current_dir() -> Option<crate::memory::XString> {
 /// current directory or, when the system will not say, the error message.
 /// The reader that ignores the failure and goes on with the buffer.
 pub(crate) fn dirname_text() -> crate::memory::XString {
-    let text = dirname_within(crate::types::MAXPATHL as usize).unwrap_or_else(|message| message);
+    let text = dirname_within(crate::path::MAXPATHL as usize).unwrap_or_else(|message| message);
     crate::memory::XString::from_vec(text)
 }
 
@@ -362,7 +363,7 @@ pub fn os_nodetype(name: &CStr) -> c_int {
 /// `readlink("/proc/self/exe")`.
 pub(crate) fn os_exepath() -> Option<Vec<u8>> {
     let mut path = std::env::current_exe().ok()?.into_os_string().into_vec();
-    path.truncate(crate::types::MAXPATHL as usize - 1);
+    path.truncate(crate::path::MAXPATHL as usize - 1);
     Some(path)
 }
 
@@ -716,6 +717,56 @@ pub(crate) fn mark_stdin_cloexec() {
 pub(crate) fn set_umask(mask: ::libc::mode_t) -> ::libc::mode_t {
     // SAFETY: `umask` only swaps a per-process value; it cannot fail.
     unsafe { ::libc::umask(mask) }
+}
+
+#[derive(Default)]
+pub struct Directory {
+    pub request: uv_fs_t,
+    pub ent: uv_dirent_t,
+}
+#[derive(Default, PartialEq, Eq, Debug)]
+pub struct FileID {
+    pub inode: uint64_t,
+    pub device_id: uint64_t,
+}
+/// A `stat` answer.
+///
+/// `Copy`: a value.
+#[derive(Default)]
+pub struct FileInfo {
+    pub stat: uv_stat_t,
+}
+
+impl FileInfo {
+    /// The (device, inode) pair: which file this is, whatever its name.
+    pub fn id(&self) -> FileID {
+        FileID {
+            inode: self.stat.st_ino,
+            device_id: self.stat.st_dev,
+        }
+    }
+
+    /// Whether `other` is the same file -- the (device, inode) pair, not
+    /// the path.
+    pub fn same_file_as(&self, other: &FileInfo) -> bool {
+        self.id() == other.id()
+    }
+
+    /// The mode, as the `int` upstream keeps it: the type and permission
+    /// bits are all in the low sixteen, which is all a mode holds.
+    pub fn mode(&self) -> ::core::ffi::c_int {
+        ::core::ffi::c_int::from(u16::try_from(self.stat.st_mode & 0xffff).unwrap_or_default())
+    }
+
+    /// The owner, as the system's id type holds it.
+    pub fn uid(&self) -> Option<uv_uid_t> {
+        uv_uid_t::try_from(self.stat.st_uid).ok()
+    }
+
+    /// The group, as the system's id type holds it.
+    pub fn gid(&self) -> Option<uv_gid_t> {
+        uv_gid_t::try_from(self.stat.st_gid).ok()
+    }
 }
 
 #[cfg(test)]

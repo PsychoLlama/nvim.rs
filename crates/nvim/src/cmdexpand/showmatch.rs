@@ -30,10 +30,11 @@ use crate::message::{
 };
 use crate::os::cshim::gettext;
 use crate::os::fs::dir_exists;
+use crate::path::MAXPATHL;
 use crate::path::{tail_index, vim_ispathsep};
 use crate::popupmenu::pum_clear;
+use crate::types::ExpandContext;
 use crate::types::ui::kUIMessages;
-use crate::types::{ExpandContext, MAXPATHL};
 use crate::ui::state::Columns;
 use crate::ui::{ui_flush, ui_has};
 use crate::winlayer::Cc;

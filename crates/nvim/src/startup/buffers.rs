@@ -51,6 +51,7 @@ use crate::option::vars::{P_EF, P_EFM, P_MENC, p_ef, p_fdls, p_shm};
 use crate::option::{set_option_direct, set_option_value_give_err};
 use crate::os::input::os_breakcheck;
 use crate::os::libc::ptrdiff_t;
+use crate::path::MAXPATHL;
 use crate::path::vim_full_name;
 use crate::profile::time_msg_at;
 use crate::quickfix::qf_init;
@@ -60,8 +61,7 @@ use crate::startup::{
     EDIT_QF, MainParams, WIN_HOR, WIN_TABS, WIN_VER, kOptErrorfile, kOptShortmess, recoverymode,
 };
 use crate::types::{
-    Handle, IOSIZE, Integer, LineNr, MAXPATHL, OptInt, OptVal, OptionSetFlags, VarLock, Vv,
-    kListLenMayKnow,
+    Handle, IOSIZE, Integer, LineNr, OptInt, OptVal, OptionSetFlags, VarLock, Vv, kListLenMayKnow,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{

@@ -39,15 +39,17 @@ use crate::option::{option_parts, was_set_insecurely};
 use crate::options::kOptIncludeexpr;
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
+use crate::os::fs::FileID;
 use crate::os::fs::{dir_exists, dirname_within, os_chdir, path_exists};
 use crate::os::input::os_breakcheck;
+use crate::path::MAXPATHL;
 use crate::path::{
     ExpandFlags, after_pathsep, expand_wildcards, full_name_save, path_fnamecmp, path_fnamencmp,
     path_has_drive_letter, path_with_url, pathcmp, shorten_index, simplify_filename, tail_index,
     tail_with_sep_index, vim_is_abs_name, vim_ispathsep,
 };
 use crate::types::AutoEvent;
-use crate::types::{BoolVarValue, CdCause, CdScope, FileID, LineNr, MAXPATHL, SaveVEvent};
+use crate::types::{BoolVarValue, CdCause, CdScope, LineNr, SaveVEvent};
 use crate::winlayer::Buf;
 use core::ffi::c_int;
 use std::ffi::CStr;

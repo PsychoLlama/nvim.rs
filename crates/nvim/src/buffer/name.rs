@@ -32,9 +32,10 @@ use crate::memory::XString;
 use crate::message::e_noalt;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
+use crate::os::fs::FileID;
 use crate::os::fs::file_id;
 use crate::path::{fix_fname, path_fnamecmp};
-use crate::types::{CmdModFlags, Failed, FileID, LineNr};
+use crate::types::{CmdModFlags, Failed, LineNr};
 use crate::winlayer::{Buf, Win, tab_windows};
 
 fn current_win() -> Win {

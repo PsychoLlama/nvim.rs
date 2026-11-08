@@ -149,7 +149,7 @@ fn types_reexports_no_duplicate_names() {
     let mod_rs = std::fs::read_to_string(dir.join("mod.rs")).expect("types/mod.rs");
     let modules = reexported_modules(&mod_rs);
     assert!(
-        modules.len() > 50,
+        modules.len() > 15,
         "parsed only {} re-exported modules from types/mod.rs -- the parser is \
          out of step with the file, not the file with the parser",
         modules.len()
@@ -181,9 +181,10 @@ fn types_reexports_no_duplicate_names() {
     // recognising nothing. 1,000 → 900 for `CmdIdx`, → 850 when the khash
     // and garray types were deleted (889 then), → 500 when the foreign-ABI
     // families moved to their own modules (564 then), → 400 when the
-    // single-owner editor files did (493 then).
+    // single-owner editor files did (493 then), → 150 while the mid-fan-out
+    // owners' files leave (the guard goes with the glob it guards).
     assert!(
-        owners.len() > 400,
+        owners.len() > 150,
         "only {} exported names found across {} modules -- the parser stopped \
          recognising declarations",
         owners.len(),

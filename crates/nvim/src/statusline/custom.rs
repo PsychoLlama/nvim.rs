@@ -53,12 +53,13 @@ use crate::options::{kOptRulerformat, kOptStatusline, kOptTabline, kOptWinbar};
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
+use crate::path::MAXPATHL;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, edit_submode};
 use crate::strings::{FmtArg, formatted};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    ApiString, Array, ColNr, Hlf, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags,
+    ApiString, Array, ColNr, Hlf, Integer, NUL, Object, OptIndex, OptInt, OptionSetFlags,
     ScreenChar, StlHlRun, StlOpt,
 };
 use crate::ui::state::{Columns, Rows};

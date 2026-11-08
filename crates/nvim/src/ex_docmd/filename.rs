@@ -48,12 +48,13 @@ use crate::message::{e_usingsid, emsg, msg_make};
 use crate::normal::ident_under_cursor;
 use crate::option::vars::{P_GP, P_MP, p_wic};
 use crate::os::cshim::gettext;
+use crate::path::MAXPATHL;
 use crate::path::{full_name_save, has_wildcard, path_try_shorten_fname, tail_index};
 use crate::quickfix::grep_internal;
 use crate::runtime::estack_sfile;
 use crate::runtime::state::current_sctx;
 use crate::strings::{escaped_bytes, replaced_all};
-use crate::types::{CmdLine, ExArg, ExArgt, Expand, ExpandContext, Failed, LineNr, MAXPATHL, Vv};
+use crate::types::{CmdLine, ExArg, ExArgt, Expand, ExpandContext, Failed, LineNr, Vv};
 use crate::winlayer::Buf;
 
 /// `:make` and `:grep` are 'makeprg'/'grepprg' with `$*` replaced by the

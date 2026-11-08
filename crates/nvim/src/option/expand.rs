@@ -39,11 +39,11 @@ use crate::options::{
     kOptViewdir,
 };
 use crate::os::libc::uint32_t;
+use crate::path::MAXPATHL;
 use crate::regexp::vim_regexec;
 use crate::strings::escaped_bytes;
 use crate::types::{
-    BackslashEscape, Expand, ExpandContext, MAXPATHL, OptExpand, OptIndex, OptionSetFlags,
-    RegMatch, XpPrefix,
+    BackslashEscape, Expand, ExpandContext, OptExpand, OptIndex, OptionSetFlags, RegMatch, XpPrefix,
 };
 
 use super::{

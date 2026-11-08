@@ -56,13 +56,14 @@ use crate::message::e_invarg;
 use crate::option::vars::{P_ENC, p_enc};
 use crate::option::{split_option_part, valid_name};
 use crate::os::fs::os_remove;
+use crate::path::MAXPATHL;
 use crate::path::{path_fnamecmp, path_full_compare, tail_index};
 use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::spell::{LangId, LangP, SpellLang};
 use crate::spellfile::spell_load_file;
 use crate::startup::starting;
 use crate::strings::concat;
-use crate::types::{MAXPATHL, OptError, SynBlock};
+use crate::types::{OptError, SynBlock};
 use crate::window::win_valid_any_tab;
 
 use super::chartab::init_spell_chartab;

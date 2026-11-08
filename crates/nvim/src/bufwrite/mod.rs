@@ -38,6 +38,7 @@ use crate::event::uv::{uv_gid_t, uv_uid_t};
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::state::ex_no_reprint;
 use crate::ex_eval::{aborting, should_abort_err};
+use crate::fileio::FileOffset;
 use crate::fileio::{
     FioFlags, Report, buf_store_file_info, filemess, get_fio_flags, match_file_list, modname,
     msg_add_fileformat, msg_add_lines, need_conversion, rename_file, set_rw_fname, temp_name,
@@ -58,6 +59,7 @@ use crate::options::{
     kOptBkcFlagAuto, kOptBkcFlagBreakhardlink, kOptBkcFlagBreaksymlink, kOptBkcFlagYes,
 };
 use crate::os::cshim::gettext;
+use crate::os::fs::FileInfo;
 use crate::os::fs::os_strerror;
 use crate::os::fs::{
     os_chown, os_copy, os_file_is_writable, os_file_settime, os_free_acl, os_get_acl, os_nodetype,
@@ -65,13 +67,13 @@ use crate::os::fs::{
 };
 use crate::os::input::os_breakcheck;
 use crate::os::libc::uint64_t;
+use crate::path::MAXPATHL;
 use crate::path::{after_pathsep, path_fnamecmp, tail_index};
 use crate::sha256::Sha256;
 use crate::startup::exiting;
 use crate::strings::{FmtArg, format_into};
 use crate::types::{
-    AcoSave, CmdModFlags, CpoFlag, ExArg, Failed, FileInfo, FileOffset, IOSIZE, LineNr, MAXPATHL,
-    Pos, ShmFlag, VimAcl,
+    AcoSave, CmdModFlags, CpoFlag, ExArg, Failed, IOSIZE, LineNr, Pos, ShmFlag, VimAcl,
 };
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};

@@ -29,8 +29,8 @@ use crate::fileio::file_pat_to_regpat;
 use crate::guard::{Depth, Suppress};
 use crate::mbyte::{char_at, cluster_len};
 use crate::os::fs::{link_exists, path_exists};
+use crate::path::MAXPATHL;
 use crate::regexp::{RE_MAGIC, RE_NOBREAK};
-use crate::types::MAXPATHL;
 use crate::types::RegMatch;
 
 /// How deep a `**` may recurse. Upstream's limit, and the reason a pattern

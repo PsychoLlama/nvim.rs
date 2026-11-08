@@ -64,9 +64,10 @@ use crate::highlight::{hl_combine_attr, win_hl_attr};
 use crate::highlight_group::{HLF_S, HLF_SNC};
 use crate::options::kOptStatuscolumn;
 use crate::optionstr::OptStringRef;
+use crate::path::MAXPATHL;
 use crate::types::{
-    ClickLine, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex, OptionSetFlags, ScreenChar,
-    SignTextAttrs, StatusCol, StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, Vv,
+    ClickLine, GridView, Hlf, LineNr, Object, OptIndex, OptionSetFlags, ScreenChar, SignTextAttrs,
+    StatusCol, StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, Vv,
 };
 use crate::window::global_stl_height;
 use crate::winlayer::Win;

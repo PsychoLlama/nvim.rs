@@ -32,7 +32,7 @@ use crate::global_cell::GlobalCell;
 use crate::grid::default_gridview;
 use crate::highlight_group::HLF_C;
 use crate::optionstr::OptStringRef;
-use crate::types::MAXPATHL;
+use crate::path::MAXPATHL;
 use crate::types::ui::kUIWildmenu;
 use crate::ui::ui_has;
 

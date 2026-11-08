@@ -24,6 +24,7 @@ use crate::eval::{callback_call, list2fpos, set_ref_in_callback};
 use crate::ex_cmds::{getfile, prepare_tagpreview};
 use crate::ex_docmd::{do_cmdline_cmd, set_no_hlsearch};
 use crate::file_search::{FindContext, split_stop_directories};
+use crate::fileio::FileOffset;
 use crate::fold::fold_open_cursor;
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::global_cell::GlobalCell;
@@ -68,8 +69,8 @@ use crate::types::AutoEvent;
 use crate::types::Handle;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Callback, ColNr, Dict, ExArg, Expand, FileMark, FileMarkView, FileOffset, GetFileRet, LineNr,
-    List, OptMagic, OptSet, Pos, Taggy, Timestamp, VarNumber, VimConv,
+    Callback, ColNr, Dict, ExArg, Expand, FileMark, FileMarkView, GetFileRet, LineNr, List,
+    OptMagic, OptSet, Pos, Taggy, Timestamp, VarNumber, VimConv,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_has;

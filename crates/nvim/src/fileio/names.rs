@@ -30,8 +30,8 @@ use crate::os::fs::{dirname_within, file_info, link_info, path_exists};
 use crate::path::tail_index;
 
 use super::*;
+use crate::path::MAXPATHL;
 use crate::regexp::{OwnedProg, RE_MAGIC};
-use crate::types::MAXPATHL;
 use crate::winlayer::buffers;
 
 /// `S_IFLNK`: the file type bits of a symbolic link.

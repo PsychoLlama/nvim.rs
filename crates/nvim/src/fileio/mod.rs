@@ -69,6 +69,7 @@ use crate::option::{
 use crate::options::kOptFileencoding;
 use crate::optionstr::OptString;
 use crate::os::cshim::{gettext, ngettext};
+use crate::os::fs::{Directory, FileInfo};
 use crate::os::fs::{
     dir_exists, mark_stdin_cloexec, os_closedir, os_copy, os_file_is_writable, os_file_owned,
     os_free_acl, os_get_acl, os_isrealdir, os_mkdir, os_remove, os_rename, os_rmdir, os_scandir,
@@ -76,6 +77,7 @@ use crate::os::fs::{
 };
 use crate::os::input::os_breakcheck;
 use crate::os::libc::int64_t;
+use crate::os::libc::off_t;
 use crate::path::{
     add_pathsep, after_pathsep, dir_of_file_exists, path_fnamecmp, path_is_absolute,
     path_shorten_fname, path_tail, path_with_url, vim_full_name,
@@ -91,8 +93,7 @@ use crate::strings::{FmtArg, formatted};
 use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AcoSave, Directory, ExArg, Failed, FileInfo, FileOffset, IOSIZE, LineNr, OptVal,
-    OptionSetFlags, RegMatch, ScriptId, ShmFlag,
+    AcoSave, ExArg, Failed, IOSIZE, LineNr, OptVal, OptionSetFlags, RegMatch, ScriptId, ShmFlag,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{
@@ -352,3 +353,5 @@ pub fn set_forced_fenc(excmd: &mut ExArg) {
         0 as ScriptId,
     );
 }
+
+pub type FileOffset = off_t;

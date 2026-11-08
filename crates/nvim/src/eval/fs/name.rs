@@ -44,10 +44,11 @@ use crate::eval::typval::NumBuf;
 use crate::mbyte::{cluster_len, head_off};
 use crate::memory::XString;
 use crate::os::fs::{dir_exists, dirname_text};
+use crate::path::MAXPATHL;
 use crate::path::{full_name_save, path_fnamencmp, tail_index, vim_is_abs_name};
 use crate::strings::find_char;
 use crate::strings::shellescape;
-use crate::types::{EvalFuncData, MAXPATHL, TypVal};
+use crate::types::{EvalFuncData, TypVal};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 

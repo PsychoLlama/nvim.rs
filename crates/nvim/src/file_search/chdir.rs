@@ -18,7 +18,8 @@ use super::*;
 use crate::cstr;
 use crate::fileio::IoFailed;
 use crate::memory::XString;
-use crate::types::{MAXPATHL, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow};
+use crate::path::MAXPATHL;
+use crate::types::{kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow};
 use crate::winlayer::Buf;
 use std::ffi::CStr;
 

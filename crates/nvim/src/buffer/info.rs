@@ -51,6 +51,7 @@ use crate::option::vars::{P_ICONSTRING, P_TITLESTRING, p_icon, p_ru, p_title, p_
 use crate::options::{kOptIconstring, kOptTitlestring};
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::line_breakcheck;
+use crate::path::MAXPATHL;
 use crate::path::path_tail;
 use crate::plines::win_get_fill;
 use crate::state::mode::restart_edit;
@@ -59,9 +60,7 @@ use crate::statusline::{FmtSource, build_stl_text};
 use crate::terminal::buf_terminal_running;
 use crate::types::ApiString;
 use crate::types::ui::kUIMessages;
-use crate::types::{
-    ExArg, IOSIZE, LineNr, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax,
-};
+use crate::types::{ExArg, IOSIZE, LineNr, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax};
 use crate::ui::state::Columns;
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{buf_is_changed, curbuf_is_changed, undo_time_text};

@@ -25,7 +25,8 @@ use std::ffi::CStr;
 
 use super::*;
 use crate::os::fs::{file_id, link_info};
-use crate::types::{MAXPATHL, NUL};
+use crate::path::MAXPATHL;
+use crate::types::NUL;
 
 /// Compare two file names, by identity where the file system can say and by
 /// name where it cannot.
@@ -196,3 +197,5 @@ pub fn pathcmp(p: &[u8], q: &[u8], maxlen: Option<usize>) -> c_int {
     }
     if side == Side::Right { -1 } else { 1 }
 }
+
+pub type FileComparison = ::core::ffi::c_uint;

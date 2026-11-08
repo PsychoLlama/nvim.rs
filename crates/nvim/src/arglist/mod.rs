@@ -52,6 +52,7 @@ use crate::normal::reset_visual_and_resel;
 use crate::option::magic_isset;
 use crate::option::vars::{P_EA, p_ea, p_fic, p_tpm};
 use crate::os::input::os_breakcheck;
+use crate::path::FileComparison;
 use crate::path::{
     ExpandFlags, expand_wildcards, fix_fname, full_name_save, gen_expand_wildcards, path_fnamecmp,
     path_full_compare,

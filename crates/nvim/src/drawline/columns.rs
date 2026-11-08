@@ -32,7 +32,8 @@ use crate::narrow::as_index;
 use crate::narrow::count_as_int;
 use crate::option::cpo_has;
 use crate::optionstr::OptString;
-use crate::types::{CpoFlag, MAXPATHL, NUL, StlOpt, Vv};
+use crate::path::MAXPATHL;
+use crate::types::{CpoFlag, NUL, StlOpt, Vv};
 use crate::winlayer::Win;
 use std::io::Write as _;
 

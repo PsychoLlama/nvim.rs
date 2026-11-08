@@ -35,7 +35,7 @@ use crate::os::env::hostname_into;
 use crate::os::fs::file_info;
 use crate::os::time::{ctime_text, uptime};
 use crate::os::users::{uname_within, username_named_within};
-use crate::types::MAXPATHL;
+use crate::path::MAXPATHL;
 
 /// Why a swap file yielded no block zero.
 pub(crate) enum NoBlock {

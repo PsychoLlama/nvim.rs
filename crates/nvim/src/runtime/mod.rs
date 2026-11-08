@@ -40,6 +40,7 @@ use crate::autocmd::has_autocmd;
 use crate::cmdexpand::globpath;
 use crate::debugger::state::{debug_break_level, debug_tick};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, profiling_forced};
+use crate::env::XDGVarType;
 use crate::env::{get_appname, install_prefix};
 use crate::eval::typval::{
     dict_copy, dict_find, dict_get_string_alloc, tv_check_for_opt_dict_arg, tv_dict_alloc,
@@ -91,7 +92,7 @@ use crate::types::{
     ApiDict, ApiString, Array, CONV_NONE, EStack, EStackArg, EStackType, EstackInfo, EvalFuncData,
     ExArg, Expand, FrameName, Integer, LineNr, LuaRetMode, Object, OptSet, OptVal, ProfTime,
     ScriptCtx, ScriptId, ScriptItem, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber, VimConv,
-    XDGVarType, kBoolVarFalse,
+    kBoolVarFalse,
 };
 use core::cell::Cell;
 use std::rc::Rc;
@@ -119,7 +120,7 @@ pub use self::search::*;
 pub use self::source::*;
 
 /// The room upstream's `MAXPATHL` buffers had, terminator included.
-const PATH_ROOM: usize = crate::types::MAXPATHL as usize;
+const PATH_ROOM: usize = crate::path::MAXPATHL as usize;
 /// `:finish` as a pending control-flow reason, for `report_pending`.
 pub const CSTP_FINISH: ::core::ffi::c_int = 32;
 /// `globpath` flags.

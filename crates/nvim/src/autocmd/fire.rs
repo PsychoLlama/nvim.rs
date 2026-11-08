@@ -31,8 +31,9 @@ use crate::getchar::KeyBuffer;
 use crate::guard::{Depth, Script, Suppress};
 use crate::memory::XString;
 use crate::optionstr::{OptString, OptStringRef};
+use crate::path::MAXPATHL;
+use crate::types::Failed;
 use crate::types::LineNr;
-use crate::types::{Failed, MAXPATHL};
 use crate::winlayer::{Buf, Win, tab_windows};
 
 /// An empty `SaveRedo`; `save_redobuff` fills it in.

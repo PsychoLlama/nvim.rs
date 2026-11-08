@@ -68,6 +68,7 @@ use crate::message::state::{
     cmd_silent, did_emsg, emsg_silent, lines_left, msg_row, msg_scroll, need_wait_return, redir_off,
 };
 use crate::message_fmt::msg_bytes;
+use crate::path::MAXPATHL;
 use crate::path::fix_fname;
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING};
 use crate::runtime::{estack_sfile, sourcing_lnum};
@@ -76,7 +77,7 @@ use crate::smsg;
 use crate::state::MODE_NORMAL;
 use crate::state::mode::State;
 use crate::types::CmdIdx;
-use crate::types::{EStackArg, ExArg, Failed, LineNr, MAXPATHL, TypVal};
+use crate::types::{EStackArg, ExArg, Failed, LineNr, TypVal};
 use crate::ui::state::Rows;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};

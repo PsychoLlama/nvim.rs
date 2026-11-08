@@ -78,6 +78,7 @@ use crate::option::{
 };
 use crate::options::kOptInvalid;
 use crate::os::cshim::{byte_toupper, gettext};
+use crate::path::MAXPATHL;
 use crate::path::tail_index;
 use crate::quickfix::{msg_loclist, msg_qflist};
 use crate::sign::push_sign_text;
@@ -85,8 +86,8 @@ use crate::state::MODE_INSERT;
 use crate::state::mode::State;
 use crate::strings::{FmtArg, format_into};
 use crate::types::{
-    ColNr, FoldInfo, LineNr, MAXPATHL, OptIndex, ScreenChar, SignTextAttrs, StlClickRecord,
-    StlHlRun, TypVal, VarNumber, Vv,
+    ColNr, FoldInfo, LineNr, OptIndex, ScreenChar, SignTextAttrs, StlClickRecord, StlHlRun, TypVal,
+    VarNumber, Vv,
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::graph::{switch_buffer, switch_window};

@@ -36,7 +36,8 @@ use std::os::unix::ffi::OsStrExt;
 
 use super::*;
 use crate::os::fs::TEMP_FILE_PATH_MAXLEN;
-use crate::types::{Failed, MAXPATHL};
+use crate::path::MAXPATHL;
+use crate::types::Failed;
 
 /// Candidate homes for our private directory, tried in order.
 const TEMP_DIR_NAMES: [&CStr; 4] = [c"$TMPDIR", c"/tmp", c".", c"~"];

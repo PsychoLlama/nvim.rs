@@ -24,9 +24,9 @@ use crate::option::vars::P_CDPATH;
 use crate::option::{option_parts, split_option_part};
 use crate::optionstr::OptString;
 use crate::os::fs::path_exists;
+use crate::path::MAXPATHL;
 use crate::path::buffer_path;
 use crate::tr;
-use crate::types::MAXPATHL;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
 

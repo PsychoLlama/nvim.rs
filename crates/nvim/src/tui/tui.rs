@@ -700,7 +700,7 @@ fn tui_guess_size(tui: &mut TUIData) {
 /// `%d` reads -- leading whitespace, a sign, at least one digit -- or `None`.
 /// A number past `c_int`'s range is `None` too, where `sscanf` was undefined.
 fn env_size(name: &CStr) -> Option<c_int> {
-    let value = env_get_within(name, crate::types::MAXPATHL as usize)?;
+    let value = env_get_within(name, crate::path::MAXPATHL as usize)?;
     let text = value.to_vec();
     let text = text.trim_ascii_start();
     let sign = usize::from(matches!(text.first(), Some(b'+' | b'-')));

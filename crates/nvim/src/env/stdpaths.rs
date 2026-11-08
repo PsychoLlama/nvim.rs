@@ -15,12 +15,13 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::env::XDGVarType;
 use crate::env::expand_env;
 use crate::fileio::vim_gettempdir;
 use crate::memory::{ThinCString, XString};
 use crate::os::env::{env_exists, env_get_bounded, getenv_owned};
 use crate::path::{concat_fnames, path_fnamecmp, path_is_absolute};
-use crate::types::{IOSIZE, XDGVarType};
+use crate::types::IOSIZE;
 use core::ffi::CStr;
 use std::ffi::CString;
 

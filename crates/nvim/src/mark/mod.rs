@@ -37,6 +37,7 @@ use crate::message::{e_markinval, e_marknotset, e_umark};
 use crate::r#move::set_topline;
 use crate::options::kOptJopFlagStack;
 use crate::os::fs::dirname_within;
+use crate::path::MAXPATHL;
 use crate::path::{path_fnamecmp, path_shorten_fname, vim_ispathsep_nocolon};
 use crate::plines::linetabsize_eol;
 use crate::tag::tagstack_clear_entry;

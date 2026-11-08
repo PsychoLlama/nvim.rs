@@ -16,8 +16,9 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::env::XDGVarType;
 use crate::global_cell::GlobalCell;
-use crate::types::{FileComparison, XDGVarType};
+use crate::path::FileComparison;
 use core::ffi::c_char;
 
 pub(crate) const kXDGConfigDirs: XDGVarType = 5;

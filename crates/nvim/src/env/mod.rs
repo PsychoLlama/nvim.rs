@@ -28,3 +28,5 @@ pub(crate) use runtime::{DEFAULT_VIM_DIR, DEFAULT_VIMRUNTIME_DIR};
 pub(crate) use runtime::{getenv_resolved, install_prefix};
 pub(crate) use stdpaths::{appname_is_valid, get_appname, xdg_home};
 pub(crate) use stdpaths::{state_subpath, user_config_path, xdg_var};
+
+pub type XDGVarType = ::core::ffi::c_int;

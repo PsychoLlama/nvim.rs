@@ -21,13 +21,14 @@ use std::os::fd::AsRawFd as _;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
+use neovim::os::fs::FileInfo;
 use neovim::os::fs::{
     NODE_NORMAL, NODE_WRITABLE, dir_exists, dirname_within, file_info, link_info, mkdir_recurse,
     open_file, os_can_exe, os_chdir, os_file_is_readable, os_file_is_writable, os_mkdir,
     os_nodetype, os_remove, os_rename, os_rmdir, os_setperm, path_exists,
 };
 use neovim::os::uv_error::{UV_EEXIST, UV_ENOENT};
-use neovim::types::{Failed, FileInfo};
+use neovim::types::Failed;
 
 use crate::support::Sandbox;
 

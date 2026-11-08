@@ -45,6 +45,7 @@ use crate::option::vars::{jop_flags, p_sol, swb_flags};
 use crate::option::{buf_copy_options, magic_isset};
 use crate::options::{kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit};
 use crate::os::cshim::gettext;
+use crate::os::fs::FileID;
 use crate::os::fs::file_id;
 use crate::os::libc::uint64_t;
 use crate::path::full_name_save;
@@ -53,7 +54,7 @@ use crate::regexp::RE_MAGIC;
 use crate::semsg;
 use crate::types::RegMatch;
 use crate::types::{
-    Buffer, Callback, ColNr, Failed, FileID, FileMark, FileMarkView, Handle, LineNr, OptInt, Pos,
+    Buffer, Callback, ColNr, Failed, FileMark, FileMarkView, Handle, LineNr, OptInt, Pos,
     Timestamp, VAR_SCOPE, WinInfo,
 };
 use crate::undo::curbuf_is_changed;

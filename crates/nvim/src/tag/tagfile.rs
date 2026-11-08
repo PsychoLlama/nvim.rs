@@ -22,9 +22,10 @@ use crate::file_search::{FIND_LEVEL, Name};
 use crate::option::split_option_part;
 use crate::option::vars::{P_HF, P_TAGS};
 use crate::optionstr::{OptString, local_or_global};
+use crate::path::MAXPATHL;
 use crate::path::tail_index;
 use crate::runtime::{RuntimeOpts, do_in_runtimepath_visit};
-use crate::types::{ExpandContext, MAXPATHL};
+use crate::types::ExpandContext;
 use crate::winlayer::Buf;
 use core::ffi::CStr;
 

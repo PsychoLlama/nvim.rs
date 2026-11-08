@@ -21,8 +21,9 @@ use super::*;
 use crate::charset::skip;
 use crate::cstr;
 use crate::option::cpo_has;
+use crate::path::MAXPATHL;
 use crate::semsg;
-use crate::types::{CpoFlag, MAXPATHL};
+use crate::types::CpoFlag;
 use core::ffi::c_int;
 
 /// `full_name_save`'s answer, owned.

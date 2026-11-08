@@ -34,8 +34,9 @@ use std::ffi::CStr;
 
 use super::*;
 use crate::guard::Suppress;
+use crate::path::MAXPATHL;
 use crate::shell::ShellOpts;
-use crate::types::{Failed, MAXPATHL};
+use crate::types::Failed;
 
 /// Whether a `gen_expand_wildcards` is already running. The pieces it calls
 /// can come back round to it — a `=expr` item evaluates an expression that

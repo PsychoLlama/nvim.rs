@@ -69,6 +69,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::os::libc::{int64_t, size_t};
 use crate::os::time::{os_delay, os_time};
+use crate::path::FileComparison;
 use crate::path::path_full_compare;
 use crate::pos::{clearpos, equalpos, lt, ltoreq};
 use crate::profile::{profile_passed_limit, profile_setlimit};
@@ -88,8 +89,8 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CmdArg, ColNr, Dict, Direction, EvalFuncData, FileComparison, LPos, LineNr, MotionType, OpArg,
-    Pos, ProfTime, RegMMatch, RegMatch, TypVal, VarNumber,
+    CmdArg, ColNr, Dict, Direction, EvalFuncData, LPos, LineNr, MotionType, OpArg, Pos, ProfTime,
+    RegMMatch, RegMatch, TypVal, VarNumber,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};

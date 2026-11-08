@@ -21,9 +21,9 @@ use crate::eval::skip_expr;
 use crate::memory::XString;
 use crate::os::env::with_home_dir;
 use crate::os::users::user_home_dir;
+use crate::path::MAXPATHL;
 use crate::path::{after_pathsep, vim_ispathsep};
 use crate::strings::escaped_bytes;
-use crate::types::MAXPATHL;
 use core::ffi::{CStr, c_int};
 
 /// `$VAR` and `~` expanded in `src`, into a `MAXPATHL` result (cut where

@@ -32,6 +32,7 @@ use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::eval::vars::{set_vim_var_string, with_vim_var_str};
 use crate::ex_docmd::cmdmod_has;
+use crate::fileio::FileOffset;
 use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
 use crate::fileio::{
     buf_store_file_info, modname, readfile_named, rename_file, temp_name, vim_deltempdir,
@@ -66,6 +67,7 @@ use crate::os::input::{line_breakcheck, os_char_avail};
 use crate::os::libc::{int64_t, size_t, time_t, uint64_t};
 use crate::os::proc::os_proc_running;
 use crate::os::time::{ctime_text, os_time};
+use crate::path::FileComparison;
 use crate::path::{
     after_pathsep, concat_fnames, expand_wildcards, fix_fname, path_fnamecmp, path_full_compare,
     path_is_absolute, path_tail, same_directory, shorten_dir, tail_index, vim_full_name,
@@ -77,8 +79,7 @@ use crate::spell::spell_delete_wordlist;
 use crate::startup::{getout, recoverymode};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Buffer, CmdModFlags, ColNr, Dict, Failed, FileComparison, FileOffset, LineNr, List, OptVal,
-    Pos, Timestamp, VarNumber,
+    Buffer, CmdModFlags, ColNr, Dict, Failed, LineNr, List, OptVal, Pos, Timestamp, VarNumber,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;

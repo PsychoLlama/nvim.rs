@@ -29,7 +29,7 @@ use crate::memory::ThinCString;
 use crate::os::env::DEFAULT_LIB_DIR;
 use crate::os::fs::dir_exists;
 
-use crate::types::MAXPATHL;
+use crate::path::MAXPATHL;
 
 /// The suffix under a data directory that holds installed-by-hand runtime
 /// files, as opposed to the user's own.

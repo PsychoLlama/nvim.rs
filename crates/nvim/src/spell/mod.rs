@@ -59,8 +59,9 @@ use crate::memline::ml_replace_owned;
 use crate::message::emsg;
 use crate::option::vars::{P_WS, p_ws};
 use crate::os::cshim::gettext;
+use crate::path::FileComparison;
 use crate::search::{SEARCH_KEEP, do_search};
-use crate::types::{ExArg, FileComparison, LineNr, Pos};
+use crate::types::{ExArg, LineNr, Pos};
 use crate::undo::u_save_cursor;
 
 mod chartab;

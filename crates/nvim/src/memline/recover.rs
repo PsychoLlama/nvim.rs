@@ -37,7 +37,8 @@ use std::ffi::CString;
 
 use super::*;
 use crate::memory::ThinCString;
-use crate::types::{Failed, MAXPATHL, OptionSetFlags};
+use crate::path::MAXPATHL;
+use crate::types::{Failed, OptionSetFlags};
 use crate::winlayer::{Buf, Win};
 
 /// Read the original file into `curbuf`, starting after line `from`.

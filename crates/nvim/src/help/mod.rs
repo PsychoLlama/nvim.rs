@@ -57,6 +57,7 @@ use crate::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
 use crate::optionstr::OptStringRef;
 use crate::optionstr::check_buf_options;
 use crate::os::cshim::gettext;
+use crate::path::FileComparison;
 use crate::pos::MAXCOL;
 use crate::semsg;
 use crate::smsg;
@@ -66,8 +67,8 @@ use crate::types::ApiString;
 use crate::types::Handle;
 use crate::types::Key;
 use crate::types::{
-    Array, ArrayBuf, CmdModFlags, ExArg, Failed, FileComparison, IOSIZE, LuaRetMode, Object,
-    OptInt, OptVal, OptionSetFlags,
+    Array, ArrayBuf, CmdModFlags, ExArg, Failed, IOSIZE, LuaRetMode, Object, OptInt, OptVal,
+    OptionSetFlags,
 };
 use crate::ui::state::Columns;
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};

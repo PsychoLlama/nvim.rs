@@ -20,10 +20,11 @@ use crate::option::vars::{P_HF, p_hf};
 use crate::os::env::{env_set, getenv_owned};
 use crate::os::fs::dir_exists;
 use crate::os::state::{didset_vim, didset_vimruntime};
+use crate::path::MAXPATHL;
 use crate::path::{
     after_pathsep, append_path, concat_fnames, path_fnamencmp, tail_index, tail_with_sep_index,
 };
-use crate::types::{MAXPATHL, Vv};
+use crate::types::Vv;
 use core::ffi::CStr;
 
 /// Where `$VIM` falls back to.

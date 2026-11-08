@@ -37,6 +37,7 @@ use crate::global_cell::GlobalCell;
 use crate::mbyte::{char_at, cluster_len, head_off, mb_isalpha, mb_toupper};
 use crate::option::vars::{p_fic, p_wig};
 use crate::os::env::getenv_owned;
+use crate::os::fs::Directory;
 use crate::os::fs::{
     can_execute, dir_exists, dirname_within, file_info, link_info, os_closedir,
     os_file_is_readable, os_scandir, os_scandir_next, realpath,
@@ -44,7 +45,7 @@ use crate::os::fs::{
 use crate::os::input::os_breakcheck;
 use crate::regexp::vim_regexec;
 use crate::shell::{get_cmd_output, shell_expand_wildcards};
-use crate::types::{Directory, Failed, FileComparison, MAXPATHL, PATHSEPSTR};
+use crate::types::{Failed, PATHSEPSTR};
 
 // The carve of the transpiled module; see each child's docs.
 mod names;
@@ -275,7 +276,7 @@ impl Simplify<'_> {
 }
 
 /// [`file_info`], as [`Simplify::terminated_at`] asks it.
-fn file_info_of(name: &CStr) -> Option<crate::types::FileInfo> {
+fn file_info_of(name: &CStr) -> Option<crate::os::fs::FileInfo> {
     file_info(name)
 }
 
@@ -519,3 +520,13 @@ pub fn path_guess_exepath(argv0: &CStr, bufsize: usize) -> Vec<u8> {
     // Not found in $PATH; fall back on argv0.
     truncated(name, bufsize).to_vec()
 }
+
+/// `os_defs.h`'s floor for [`MAXPATHL`]. Upstream raises `MAXPATHL` to
+/// `PATH_MAX` where that is larger; this port does not, so the two are equal
+/// and both names are kept because the transpiled code uses both.
+pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096;
+
+/// The longest path the editor will build, and the size of every scratch
+/// buffer it builds one in (`NameBuff` among them). One copy for the tree;
+/// the places that index with it say `MAXPATHL as usize`.
+pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;

@@ -43,6 +43,7 @@ use crate::os::env::getenv_owned;
 use crate::os::fs::{dir_exists, os_exepath, os_strerror, write_bytes};
 use crate::os::input::os_isatty;
 use crate::os::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
+use crate::path::MAXPATHL;
 use crate::path::{concat_fnames, path_guess_exepath, path_tail};
 use crate::profile::time_msg_at;
 use crate::profile::{time_init, time_start};
@@ -58,9 +59,7 @@ use crate::startup::{
     stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty,
 };
 use crate::state::mode::exmode_active;
-use crate::types::{
-    Failed, LineNr, MAXPATHL, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, Vv,
-};
+use crate::types::{Failed, LineNr, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, Vv};
 use std::os::fd::AsFd as _;
 
 /// A bare `-V` is "a little bit verbose".

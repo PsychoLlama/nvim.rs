@@ -14,9 +14,10 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::env::XDGVarType;
 use crate::event::objects::ProcType;
 use crate::os::libc::uint64_t;
-use crate::types::{ChannelPart, GRegFlags, LuaRetMode, MotionType, XDGVarType};
+use crate::types::{ChannelPart, GRegFlags, LuaRetMode, MotionType};
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash
 /// lookup over their names. Regenerate with `just apigen`.
