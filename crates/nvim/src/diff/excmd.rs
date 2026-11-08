@@ -25,7 +25,6 @@ use super::*;
 use crate::buffer::BufRef;
 use crate::ex_docmd::cmdmod_set_tab;
 use crate::memory::XString;
-use crate::option::boolean_optval;
 use crate::option::defs::OptionSetFlags;
 use crate::option::vars::P_PEX;
 use crate::os::fs::{current_dir, file_info};
@@ -217,7 +216,7 @@ fn set_diff_option(window: Win, value: bool) {
     Buf::current().b_ro_locked += 1;
     // `curwin`/`curbuf` name `window` and its buffer, which is what the option
     // code reads; the buffer is locked against a `:set` side effect.
-    let val = boolean_optval(Some(value));
+    let val = OptVal::Boolean(Some(value));
     set_option_value_give_err(kOptDiff, val, OptionSetFlags::LOCAL);
     Buf::current().b_ro_locked -= 1;
     saved.restore();

@@ -38,8 +38,7 @@ use crate::window::{min_rows_for_all_tabpages, win_default_scroll};
 
 use super::{
     INT_MAX, INT_MIN, MAX_NUMBERWIDTH, MIN_COLUMNS, SB_MAX, TABSTOP_MAX, get_option,
-    get_option_unset_value, option_has_type, option_is_global_local, optval_to_text,
-    optval_type_name,
+    get_option_unset_value, option_has_type, option_is_global_local, optval_type_name,
 };
 
 /// The two messages the quickfix-stack bounds report.
@@ -245,7 +244,7 @@ pub(crate) fn validate_option_value(
         *newval = get_option_unset_value(opt_idx);
         Ok(())
     } else if !option_has_type(opt_idx, newval.kind()) {
-        let rep = optval_to_text(newval);
+        let rep = newval.to_text();
         let name = msg_cstr(opt.fullname);
         let want = msg_cstr(optval_type_name(opt.type_0));
         let got = msg_cstr(optval_type_name(newval.kind()));

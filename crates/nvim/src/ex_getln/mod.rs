@@ -442,13 +442,6 @@ pub(crate) const INCSEARCH_STATE_INIT: IncsearchState = IncsearchState {
 /// (uninitialised in the C; `try_enter` fills every field).
 pub(crate) const TRY_STATE_INIT: TryState = TryState::INIT;
 
-/// An all-zero [`SaveVEvent`], the out-parameter of `get_v_event`.
-/// C's `STATIC_CSTR_AS_OPTVAL`: a string option value borrowing a literal.
-/// Nothing frees it.
-pub(crate) const fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
-    OptVal::static_string(value)
-}
-
 /// An all-zero [`ExArg`]; `parse_cmdline` fills it.
 pub(crate) const EXARG_T_INIT: ExArg<'static> = ExArg {
     line: CmdLine::EMPTY,

@@ -52,7 +52,7 @@ use crate::message::IOSIZE;
 use crate::message::{msg_end, msg_ext_set_kind, msg_putchar, msg_start, msg_str};
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::vars::p_ic;
-use crate::option::{boolean_optval, get_option_value, set_option_value_give_err};
+use crate::option::{get_option_value, set_option_value_give_err};
 use crate::options::{kOptSpell, kOptSpelllang};
 use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
@@ -141,7 +141,11 @@ pub fn ex_spelldump(excmd: &mut ExArg) {
 
     // Spell checking has to be on in the new window for the dump to
     // mean anything.
-    set_option_value_give_err(kOptSpell, boolean_optval(Some(true)), OptionSetFlags::LOCAL);
+    set_option_value_give_err(
+        kOptSpell,
+        OptVal::Boolean(Some(true)),
+        OptionSetFlags::LOCAL,
+    );
     set_option_value_give_err(kOptSpelllang, spl, OptionSetFlags::LOCAL);
 
     if !buf_is_empty(Buf::current()) {

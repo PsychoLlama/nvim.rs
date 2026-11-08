@@ -38,7 +38,7 @@ use crate::types::CmdIdx;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
-use super::{OptSlot, SetOp, boolean_optval, option_last_set, ui_refresh_options};
+use super::{OptSlot, SetOp, option_last_set, ui_refresh_options};
 use crate::ascii::NUL;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::drawscreen::{UPD_CLEAR, redraw_all_later};
@@ -277,7 +277,7 @@ fn get_option_newval(
         } else {
             Some(prefix != Prefix::No)
         };
-        boolean_optval(boolean)
+        OptVal::Boolean(boolean)
     } else if option_has_type(opt_idx, kOptValTypeNumber) {
         let oldval_num = from.number_var().get();
         let Some(newval_num) = take_number(opt_idx, &arg[(*p + 1).min(arg.len())..], errmsg) else {

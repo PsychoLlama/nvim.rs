@@ -24,7 +24,6 @@ use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::guard::{Allow, Suppress};
 use crate::message::emsg;
-use crate::option::boolean_optval;
 use crate::option::defs::OptionSetFlags;
 use crate::optionstr::OptString;
 use crate::types::ColNr;
@@ -33,11 +32,6 @@ use crate::winlayer::{Buf, TabId, TabPage, WinId};
 
 /// How tall a preview split starts out.
 const PUM_PREVIEW_HEIGHT: c_int = 3;
-
-/// `STATIC_CSTR_AS_OPTVAL`: an option value borrowed from a string literal.
-fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
-    OptVal::static_string(value)
-}
 
 /// The selected item's `info` text, if it has one.
 ///
@@ -288,11 +282,11 @@ fn pum_show_info(info: &[u8], repeat: c_int, use_float: bool, prev_selected: c_i
             if res.is_ok() {
                 // A new, empty, throwaway buffer.
                 for (option, value) in [
-                    (kOptSwapfile, boolean_optval(Some(false))),
-                    (kOptBuflisted, boolean_optval(Some(false))),
-                    (kOptBuftype, static_optval(c"nofile")),
-                    (kOptBufhidden, static_optval(c"wipe")),
-                    (kOptDiff, boolean_optval(Some(false))),
+                    (kOptSwapfile, OptVal::Boolean(Some(false))),
+                    (kOptBuflisted, OptVal::Boolean(Some(false))),
+                    (kOptBuftype, OptVal::static_string(c"nofile")),
+                    (kOptBufhidden, OptVal::static_string(c"wipe")),
+                    (kOptDiff, OptVal::Boolean(Some(false))),
                 ] {
                     set_option_value_give_err(option, value, OptionSetFlags::LOCAL);
                 }

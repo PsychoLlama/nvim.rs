@@ -42,12 +42,6 @@ use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_ulong};
 use std::ffi::CString;
 
-/// An option value that borrows a static C string, for the two options this
-/// module sets and puts back.
-pub(crate) const fn static_cstr_optval(s: &'static CStr) -> OptVal {
-    OptVal::static_string(s)
-}
-
 /// The singular and plural forms of the report, for one line and for several.
 ///
 /// Both are themselves `ngettext` choices over the number of substitutions,
@@ -253,7 +247,7 @@ pub(crate) fn show_sub(
     // Disable the file info message.
     set_option_direct(
         kOptShortmess,
-        static_cstr_optval(c"F"),
+        OptVal::static_string(c"F"),
         OptionSetFlags::NONE,
         SID_NONE,
     );

@@ -34,7 +34,6 @@ use crate::memory::XString;
 use crate::message::{emsg, iemsg};
 use crate::message_fmt::msg_bytes;
 use crate::option::defs::OptVal;
-use crate::option::optval_as_tv;
 use crate::option::{get_option_value, get_tty_option, is_option_hidden, is_tty_option};
 use crate::options::kOptInvalid;
 use crate::os::cshim::gettext;
@@ -89,7 +88,7 @@ pub(crate) fn eval_option(
         };
         debug_assert!(!value.is_nil());
         // The slot has never held a value, so the old bytes are not released.
-        result.overwrite(optval_as_tv(value, true));
+        result.overwrite(value.into_tv(true));
         Ok(())
     } else if working && !is_tty_opt && is_option_hidden(option.index) {
         Err(Failed)

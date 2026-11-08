@@ -38,7 +38,7 @@ use crate::lua::state::nlua_disable_preload;
 use crate::message_fmt::msg_cstr;
 use crate::option::defs::{OptIndex, OptVal, OptionSetFlags};
 use crate::option::vars::{P_LPL, P_UC, P_VERBOSE, P_WRITE, p_shadafile};
-use crate::option::{boolean_optval, reset_modifiable, set_option_value_give_err, set_options_bin};
+use crate::option::{reset_modifiable, set_option_value_give_err, set_options_bin};
 use crate::os::cshim::{gettext, write_c_stderr};
 use crate::os::env::getenv_owned;
 use crate::os::fs::{dir_exists, os_exepath, os_strerror, write_bytes};
@@ -77,11 +77,6 @@ const DEBUG_BREAK_ALL: c_int = 9999;
 /// `-R` slows the undo-file writes right down: the buffer is read-only, so
 /// there is nothing worth saving often.
 const READONLY_UPDATECOUNT: OptInt = 10000;
-
-/// A number option value.
-fn number_opt(value: OptInt) -> OptVal {
-    OptVal::Number(value)
-}
 
 /// Set an option from a command-line switch. A switch names no scope, so it
 /// sets the local and global halves together -- upstream's bare `0`.
@@ -322,7 +317,7 @@ impl<'a> Scan<'a> {
                 }
                 return want;
             }
-            b'A' => set_opt(kOptArabic, boolean_optval(Some(true))),
+            b'A' => set_opt(kOptArabic, OptVal::Boolean(Some(true))),
             b'b' => {
                 // Before the file names are expanded: on Windows this is
                 // what decides whether a shortcut is edited or followed.
@@ -345,7 +340,7 @@ impl<'a> Scan<'a> {
             }
             b'H' => {
                 set_opt(kOptKeymap, OptVal::from_cstr(c"hebrew"));
-                set_opt(kOptRightleft, boolean_optval(Some(true)));
+                set_opt(kOptRightleft, OptVal::Boolean(Some(true)));
             }
             b'M' | b'm' => {
                 // `-M` is `-m` plus 'nomodifiable'.
@@ -431,7 +426,7 @@ impl<'a> Scan<'a> {
                     .is_some_and(u8::is_ascii_digit)
                 {
                     let n = self.number_arg(DEFAULT_WINDOW);
-                    set_opt(kOptWindow, number_opt(OptInt::from(n)));
+                    set_opt(kOptWindow, OptVal::Number(OptInt::from(n)));
                 } else {
                     return true;
                 }
@@ -539,7 +534,7 @@ impl<'a> Scan<'a> {
                 let word = self.arg().to_bytes();
                 if c == b'w' && word.first().is_some_and(u8::is_ascii_digit) {
                     let n = get_number_arg(word, &mut 0, DEFAULT_WINDOW);
-                    set_opt(kOptWindow, number_opt(OptInt::from(n)));
+                    set_opt(kOptWindow, OptVal::Number(OptInt::from(n)));
                     return;
                 }
                 if self.parm.scriptout.is_some() {

@@ -300,7 +300,11 @@ fn finish_qf_buffer() {
     // resembles reading a file into a buffer, which is more logical
     // when using autocommands.
     Buf::current().b_ro_locked += 1;
-    set_option_value_give_err(kOptFiletype, string_optval(c"qf"), OptionSetFlags::LOCAL);
+    set_option_value_give_err(
+        kOptFiletype,
+        OptVal::static_string(c"qf"),
+        OptionSetFlags::LOCAL,
+    );
     Buf::current().b_p_ma = c_int::from(false);
 
     Buf::current().b_keep_filetype = true; // don't detect 'filetype'

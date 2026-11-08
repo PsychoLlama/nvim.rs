@@ -26,15 +26,9 @@ use crate::buffer::BLN_NOOPT;
 use crate::buffer::DOBUF_FIRST;
 use crate::buffer::DOBUF_GOTO;
 use crate::option::defs::OptionSetFlags;
-use core::ffi::CStr;
 
 use crate::buffer::BufRef;
 use crate::winlayer::{Buf, TabPage, Win, buffers, tab_windows, tabs};
-
-/// One `String` option's value, borrowing the literal's bytes.
-fn string_optval(value: &'static CStr) -> OptVal {
-    OptVal::static_string(value)
-}
 
 /// Every listed and unlisted buffer's handle.
 pub fn nvim_list_bufs() -> Array {
@@ -128,9 +122,9 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     buf_copy_options(buf.expect("a live handle"), BCO_ENTER | BCO_NOHELP);
     if scratch {
         let local = OptionSetFlags::LOCAL;
-        let hide = string_optval(c"hide");
+        let hide = OptVal::static_string(c"hide");
         set_option_direct_for(kOptBufhidden, hide, local, 0, OptionTarget::Buf(b));
-        let nofile = string_optval(c"nofile");
+        let nofile = OptVal::static_string(c"nofile");
         set_option_direct_for(kOptBuftype, nofile, local, 0, OptionTarget::Buf(b));
         debug_assert!(b.swap_file_closed(), "buf->b_ml.ml_mfp->mf_fd < 0");
         b.b_p_swf = 0;

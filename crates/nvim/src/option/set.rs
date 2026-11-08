@@ -48,7 +48,6 @@ use crate::lua::executor::nlua_set_sctx;
 use crate::memory::XString;
 use crate::message::{e_invarg, e_sandbox, e_secure, e_unsupportedoption};
 use crate::mouse::setmouse;
-use crate::option::optval_as_tv;
 use crate::runtime::state::current_sctx;
 use crate::startup::starting;
 use crate::ui::state::t_colors;
@@ -66,13 +65,12 @@ use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
 
 use super::{
-    NO_LOCAL_UNDOLEVEL, OptSlot, Replaced, SID_NONE, boolean_optval, check_redraw,
-    do_spelllang_source, do_syntax_autocmd, get_varp, get_varp_scope, insecure_flag,
-    is_option_hidden, kOptFlagCurswant, kOptFlagHLOnly, kOptFlagRedrAll, kOptFlagSecure,
-    kOptFlagUIOption, kOptScopeBuf, kOptScopeWin, mark_option_was_set, option_has_scope,
-    option_has_type, option_is_global_local, option_is_global_only, option_scope_idx, option_var,
-    replace_slot, restore_slot, set_option_last_set, slot_holds, slot_value, tty_option_end,
-    validate_option_value, write_slot,
+    NO_LOCAL_UNDOLEVEL, OptSlot, Replaced, SID_NONE, check_redraw, do_spelllang_source,
+    do_syntax_autocmd, get_varp, get_varp_scope, insecure_flag, is_option_hidden, kOptFlagCurswant,
+    kOptFlagHLOnly, kOptFlagRedrAll, kOptFlagSecure, kOptFlagUIOption, kOptScopeBuf, kOptScopeWin,
+    mark_option_was_set, option_has_scope, option_has_type, option_is_global_local,
+    option_is_global_only, option_scope_idx, option_var, replace_slot, restore_slot,
+    set_option_last_set, slot_holds, slot_value, tty_option_end, validate_option_value, write_slot,
 };
 use crate::winlayer::Buf;
 
@@ -130,10 +128,10 @@ fn apply_optionset_autocmd(
 
     // Each typval takes its value's string over, and `set_vim_var_tv`
     // copies again.
-    let mut oldval_tv = optval_as_tv(oldval, false);
-    let mut oldval_g_tv = optval_as_tv(oldval_g, false);
-    let mut oldval_l_tv = optval_as_tv(oldval_l, false);
-    let mut newval_tv = optval_as_tv(newval, false);
+    let mut oldval_tv = oldval.into_tv(false);
+    let mut oldval_g_tv = oldval_g.into_tv(false);
+    let mut oldval_l_tv = oldval_l.into_tv(false);
+    let mut newval_tv = newval.into_tv(false);
 
     set_vim_var_tv(Vv::OptionOld, &mut oldval_tv);
     set_vim_var_tv(Vv::OptionNew, &mut newval_tv);
@@ -273,7 +271,7 @@ pub(crate) fn get_option_unset_value(opt_idx: OptIndex) -> OptVal {
         return OptVal::static_string(c"");
     }
     match opt_idx {
-        kOptAutocomplete | kOptAutoread | kOptFsync => boolean_optval(None),
+        kOptAutocomplete | kOptAutoread | kOptFsync => OptVal::Boolean(None),
         kOptScrolloff | kOptSidescrolloff => OptVal::Number(-1),
         kOptUndolevels => OptVal::Number(NO_LOCAL_UNDOLEVEL.into()),
         _ => unreachable!("global-local option {opt_idx} has no unset value"),
@@ -577,10 +575,7 @@ pub(crate) fn set_option(
             );
         }
         if let Some(new_value) = for_ui {
-            ui_call_option_set(
-                ApiString::from_cstr(opt.fullname),
-                super::optval_as_object(new_value),
-            );
+            ui_call_option_set(ApiString::from_cstr(opt.fullname), new_value.into_object());
         }
     }
 

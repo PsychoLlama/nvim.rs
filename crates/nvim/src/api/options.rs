@@ -41,7 +41,7 @@ use crate::message_fmt::msg_cstr;
 use crate::option::defs::{OptIndex, OptScope, OptVal, OptionSetFlags};
 use crate::option::{
     OptionTarget, find_option, get_all_vimoptions, get_option_value_for, get_vimoption,
-    object_as_optval, option_has_scope, optval_as_object, set_option_direct, set_option_value_for,
+    object_as_optval, option_has_scope, set_option_direct, set_option_value_for,
 };
 use crate::os::libc::uint64_t;
 use crate::types::{ApiDict, ApiString, Error, LineNr, Object, kErrorTypeValidation};
@@ -292,7 +292,7 @@ pub fn nvim_get_option_value(name: ApiString, opts: &mut KeyDict_option) -> Resu
     }
     let value = read?;
     if !value.is_nil() {
-        return Ok(optval_as_object(value));
+        return Ok(value.into_object());
     }
     Err(err_bad_value(c"option", name.as_cstr()))
 }

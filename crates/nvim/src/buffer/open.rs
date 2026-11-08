@@ -46,7 +46,7 @@ use crate::memfile::MfDirty;
 use crate::memline::ml_open;
 use crate::r#move::WinValid;
 use crate::option::defs::{CpoFlag, OptVal, OptionSetFlags, ShmFlag};
-use crate::option::{boolean_optval, cpo_has, set_option_value_give_err};
+use crate::option::{cpo_has, set_option_value_give_err};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
 use crate::os::fs::getperm;
 use crate::os::libc::int64_t;
@@ -148,7 +148,7 @@ fn set_option_string(id: c_int, value: &'static CStr) {
 }
 
 fn set_option_false(id: c_int) {
-    set_option_value_give_err(id, boolean_optval(Some(false)), OptionSetFlags::LOCAL);
+    set_option_value_give_err(id, OptVal::Boolean(Some(false)), OptionSetFlags::LOCAL);
 }
 
 /// Whether line `lnum` of `buffer` differs from the current buffer's.

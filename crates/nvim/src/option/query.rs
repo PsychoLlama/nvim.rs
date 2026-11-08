@@ -46,7 +46,7 @@ use crate::types::{Callback, ExArg, Failed, OptInt, ScriptId, TypVal};
 
 use super::{
     EOL_DOS, EOL_MAC, EOL_UNIX, get_option, get_varp, kOptScopeBuf, kOptScopeWin, option_has_scope,
-    optval_as_tv, set_option_direct, slot_value,
+    set_option_direct, slot_value,
 };
 
 use crate::state::MODE_TERMINAL;
@@ -499,7 +499,7 @@ pub(crate) fn get_winbuf_options(buffer: bool) -> DictRef {
             continue;
         }
         // A copy of the option's value; the dictionary takes its own.
-        let tv = optval_as_tv(slot_value(opt_idx, varp), true);
+        let tv = slot_value(opt_idx, varp).into_tv(true);
         let name = get_option(opt_idx).fullname;
         let _ = dict.edit().add_tv(name.to_bytes(), &tv);
     }

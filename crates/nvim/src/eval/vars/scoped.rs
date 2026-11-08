@@ -3,7 +3,7 @@
 //! [`get_var_from`] and [`setwinvar`] switch to the requested buffer, window
 //! or tabpage, do the lookup there and switch back; the `f_*` entries below
 //! them are the Vimscript builtins that call them.  The `&option` spelling
-//! of a name lands in [`tv_to_optval`]/[`optval_as_tv`] instead.
+//! of a name lands in [`tv_to_optval`]/[`OptVal::into_tv`](crate::option::defs::OptVal::into_tv) instead.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -27,7 +27,6 @@ use crate::types::ApiString;
 
 use super::*;
 use crate::eval::typval::NumBuf;
-use crate::option::boolean_optval;
 use crate::option::defs::OptionSetFlags;
 use crate::window::valid_tab;
 use crate::winlayer::graph::switch_buffer;
@@ -181,7 +180,7 @@ pub(crate) fn tv_to_optval(tv: &TypVal, opt_idx: OptIndex, name: &[u8]) -> (OptV
             if option_has_num {
                 OptVal::Number(n)
             } else {
-                boolean_optval(tristate_from_int(n))
+                OptVal::Boolean(tristate_from_int(n))
             }
         } else if option_has_str {
             // Never set a string option to `v:true` or `v:null`.

@@ -27,7 +27,7 @@ use crate::api::private::validate::err_bad_value;
 use super::{
     find_option_len, get_option, kOptFlagComma, kOptFlagFlagList, kOptFlagNoDup, kOptScopeBuf,
     kOptScopeWin, option_default, option_get_type, option_has_scope, option_is_global_local,
-    option_last_set, option_was_set, optval_as_object, optval_type_name,
+    option_last_set, option_was_set, optval_type_name,
 };
 
 /// Append `key: value` to the dictionary.
@@ -152,7 +152,7 @@ pub(crate) fn vimoption2dict(
             int_value(script_ctx.sc_chan.cast_signed()),
         ),
         (c"type", name_value(Some(type_name))),
-        (c"default", optval_as_object(option_default(opt_idx))),
+        (c"default", option_default(opt_idx).into_object()),
         (
             c"allows_duplicates",
             bool_value(opt.flags & kOptFlagNoDup == 0),

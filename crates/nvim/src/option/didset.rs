@@ -161,7 +161,7 @@ impl Frame {
 
 /// 'arabic': a bundle of other settings, plus the Arabic keymap.
 pub(crate) fn did_set_arabic(args: &mut OptSet) -> Result<(), OptError> {
-    let (keymap, local) = (cstr_optval(c"arabic"), OptionSetFlags::LOCAL);
+    let (keymap, local) = (OptVal::static_string(c"arabic"), OptionSetFlags::LOCAL);
     let mut win = Frame::read(args).win;
     if win.w_onebuf_opt.wo_arab == 0 {
         if !p_tbidi() && win.w_onebuf_opt.wo_rl != 0 {
@@ -195,11 +195,6 @@ pub(crate) fn did_set_arabic(args: &mut OptSet) -> Result<(), OptError> {
     }
     P_DECO.set(true);
     set_option_value(kOptKeymap, keymap, local)
-}
-
-/// A borrowed string option value. The callee copies it if it keeps it.
-const fn cstr_optval(value: &'static CStr) -> OptVal {
-    OptVal::static_string(value)
 }
 
 /// 'autochdir': follow the current file's directory from now on.

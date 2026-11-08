@@ -66,11 +66,11 @@ use crate::window::{last_status, win_comp_scroll};
 use crate::winlayer::{self, Buf};
 
 use super::{
-    NO_LOCAL_UNDOLEVEL, PROJECT_NAME, ROOT_UID, SID_NONE, boolean_optval, default_fileformat,
-    didset_options, didset_options2, find_dup_item, get_option, get_option_unset_value,
-    insecure_flag, kOptFlagGettext, kOptFlagNoDefExp, kOptFlagNoDefault, option_default,
-    option_expand, option_is_global_local, option_var, option_was_set, replace_option_default,
-    set_fileformat, set_option_direct, set_option_value_give_err, write_slot,
+    NO_LOCAL_UNDOLEVEL, PROJECT_NAME, ROOT_UID, SID_NONE, default_fileformat, didset_options,
+    didset_options2, find_dup_item, get_option, get_option_unset_value, insecure_flag,
+    kOptFlagGettext, kOptFlagNoDefExp, kOptFlagNoDefault, option_default, option_expand,
+    option_is_global_local, option_var, option_was_set, replace_option_default, set_fileformat,
+    set_option_direct, set_option_value_give_err, write_slot,
 };
 
 /// Every option, in table order.
@@ -78,14 +78,9 @@ fn all_options() -> impl Iterator<Item = OptIndex> {
     kOptAleph..kOptCount as OptIndex
 }
 
-/// A borrowed string default. Only for a literal.
-const fn borrowed(value: &'static CStr) -> OptVal {
-    OptVal::static_string(value)
-}
-
 /// The two boolean option values this module installs.
-const OFF: OptVal = boolean_optval(Some(false));
-const ON: OptVal = boolean_optval(Some(true));
+const OFF: OptVal = OptVal::Boolean(Some(false));
+const ON: OptVal = OptVal::Boolean(Some(true));
 
 /// A new tab page starts with the global 'cmdheight', not with whatever the
 /// tab page it was opened from had.
@@ -407,18 +402,23 @@ pub(crate) fn set_init_3() {
     if is_csh || named(&POSIX_LIKE) {
         if do_sp {
             let sp = if is_csh { c"|& tee" } else { c"2>&1| tee" };
-            set_option_direct(kOptShellpipe, borrowed(sp), OptionSetFlags::NONE, SID_NONE);
-            change_option_default(kOptShellpipe, borrowed(sp));
+            set_option_direct(
+                kOptShellpipe,
+                OptVal::static_string(sp),
+                OptionSetFlags::NONE,
+                SID_NONE,
+            );
+            change_option_default(kOptShellpipe, OptVal::static_string(sp));
         }
         if do_srr {
             let srr = if is_csh { c">&" } else { c">%s 2>&1" };
             set_option_direct(
                 kOptShellredir,
-                borrowed(srr),
+                OptVal::static_string(srr),
                 OptionSetFlags::NONE,
                 SID_NONE,
             );
-            change_option_default(kOptShellredir, borrowed(srr));
+            change_option_default(kOptShellredir, OptVal::static_string(srr));
         }
     }
 

@@ -43,7 +43,7 @@ use crate::option::vars::{
 
 use super::check::bin_save;
 use super::paste::{paste_save, paste_saved_vsts};
-use crate::option::defs::CpoFlag;
+use crate::option::defs::{CpoFlag, OptVal};
 use crate::options::{
     BufOptIndex, buf_opt_idx, kBufOptAutoindent, kBufOptBinary, kBufOptBomb, kBufOptCindent,
     kBufOptCinkeys, kBufOptCinoptions, kBufOptCinscopedecls, kBufOptCinwords, kBufOptComments,
@@ -68,8 +68,8 @@ use crate::window::{check_window_colorcolumn, set_winbar_win};
 use crate::winlayer::{Buf, Win};
 
 use super::{
-    NO_LOCAL_UNDOLEVEL, boolean_optval, change_option_default, check_blending, fill_culopt_flags,
-    kFillchars, kListchars, option_last_set, parse_winhl_opt,
+    NO_LOCAL_UNDOLEVEL, change_option_default, check_blending, fill_culopt_flags, kFillchars,
+    kListchars, option_last_set, parse_winhl_opt,
 };
 use crate::option::cpo_has;
 
@@ -553,7 +553,7 @@ fn vts_array(buffer: Buf) -> TabStopArray {
 pub(crate) fn reset_modifiable() {
     Buf::current().b_p_ma = 0;
     P_MA.set(false);
-    change_option_default(kOptModifiable, boolean_optval(Some(false)));
+    change_option_default(kOptModifiable, OptVal::Boolean(Some(false)));
 }
 
 /// Carry a buffer's 'iminsert' back to the global value, so that the next

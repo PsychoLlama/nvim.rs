@@ -70,8 +70,7 @@ use super::{
     Local, OptSlot, WinOptSet, get_option, get_option_unset_value, get_varp, get_varp_scope,
     kOptFlagComma, kOptFlagExpand, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc,
     kOptFlagUIOption, option_has_type, option_is_global_local, option_is_global_only,
-    option_is_window_local, option_parts, option_var, optval_as_object, optval_is_default,
-    slot_holds, slot_value,
+    option_is_window_local, option_parts, option_var, optval_is_default, slot_holds, slot_value,
 };
 
 /// The column width one option gets in the multi-column listing, and the
@@ -182,7 +181,7 @@ pub(crate) fn ui_refresh_options() {
             continue;
         }
         let name = ApiString::from_cstr(opt.fullname);
-        let value = optval_as_object(slot_value(opt_idx, option_var(opt_idx)));
+        let value = (slot_value(opt_idx, option_var(opt_idx))).into_object();
         ui_call_option_set(name, value);
     }
     // 'mouse' is not a UI option, but the UI has to be told about it

@@ -109,7 +109,7 @@ fn get_option_from(from: Option<OptionTarget>, name: ApiString) -> Result<Object
     if value.is_nil() {
         return Err(err_bad_value(c"option name", name.as_cstr()));
     }
-    Ok(optval_as_object(value))
+    Ok(value.into_object())
 }
 
 /// Set `name` to `value` on `to`; `None` is the global scope.

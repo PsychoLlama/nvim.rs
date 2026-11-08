@@ -216,7 +216,11 @@ pub(crate) fn open_cmdwin() -> Key {
 
     // The command-line buffer has bufhidden=wipe, unlike a true
     // "scratch" buffer.
-    set_option_value_give_err(kOptBufhidden, static_optval(c"wipe"), OptionSetFlags::LOCAL);
+    set_option_value_give_err(
+        kOptBufhidden,
+        OptVal::static_string(c"wipe"),
+        OptionSetFlags::LOCAL,
+    );
     Buf::current().b_p_ma = 1;
     Win::current().w_onebuf_opt.wo_fen = 0;
     Win::current().w_onebuf_opt.wo_rl = ::core::ffi::c_int::from(cmdmsg_rl.get());
@@ -234,7 +238,11 @@ pub(crate) fn open_cmdwin() -> Key {
             add_map(b"<Tab>", b"<C-X><C-V>", MODE_INSERT, true);
             add_map(b"<Tab>", b"a<C-X><C-V>", MODE_NORMAL, true);
         }
-        set_option_value_give_err(kOptFiletype, static_optval(c"vim"), OptionSetFlags::LOCAL);
+        set_option_value_give_err(
+            kOptFiletype,
+            OptVal::static_string(c"vim"),
+            OptionSetFlags::LOCAL,
+        );
     }
     Buf::current().b_ro_locked -= 1;
 

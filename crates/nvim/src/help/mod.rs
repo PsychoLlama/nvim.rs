@@ -116,11 +116,6 @@ fn keepalt_is_off() -> bool {
     !cmdmod_has(CmdModFlags::KEEPALT)
 }
 
-/// A borrowed string option value; `set_option_direct` copies what it keeps.
-const fn cstr_optval(value: &'static CStr) -> OptVal {
-    OptVal::static_string(value)
-}
-
 // -- `:help` ---------------------------------------------------------------
 
 /// `:help`, and `:help!` — which resolves the best tag under the cursor
@@ -504,14 +499,24 @@ pub(crate) fn help_tag_matches(arg: &CStr) -> Option<Vec<XString>> {
 /// time.
 pub(crate) fn prepare_help_buffer() {
     Buf::current().b_help = true;
-    set_option_direct(kOptBuftype, cstr_optval(c"help"), OptionSetFlags::LOCAL, 0);
+    set_option_direct(
+        kOptBuftype,
+        OptVal::static_string(c"help"),
+        OptionSetFlags::LOCAL,
+        0,
+    );
 
     // Accept every ASCII character as a keyword character except ' ',
     // '*', '"' and '|', plus the latin1 word characters translated help
     // files use. Only set it when needed: `buf_init_chartab` is work.
     let isk = c"!-~,^*,^|,^\",192-255";
     if Buf::current().b_p_isk.bytes() != isk.to_bytes() {
-        set_option_direct(kOptIskeyword, cstr_optval(isk), OptionSetFlags::LOCAL, 0);
+        set_option_direct(
+            kOptIskeyword,
+            OptVal::static_string(isk),
+            OptionSetFlags::LOCAL,
+            0,
+        );
         check_buf_options(Buf::current());
         buf_init_chartab(Buf::current(), false);
     }
@@ -519,7 +524,7 @@ pub(crate) fn prepare_help_buffer() {
     // Don't use the global foldmethod.
     set_option_direct(
         kOptFoldmethod,
-        cstr_optval(c"manual"),
+        OptVal::static_string(c"manual"),
         OptionSetFlags::LOCAL,
         0,
     );

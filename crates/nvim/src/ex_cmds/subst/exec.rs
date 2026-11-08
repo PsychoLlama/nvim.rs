@@ -30,7 +30,7 @@
 use super::args::{SubSetup, parse_sub};
 use super::confirm::{Confirm, ask_confirm};
 use super::replace::{SubLine, build_replacement, commit_line};
-use super::{GLOBAL_NEED_BEGINLINE, SUB_FLAGS, do_sub_msg, show_sub, static_cstr_optval};
+use super::{GLOBAL_NEED_BEGINLINE, SUB_FLAGS, do_sub_msg, show_sub};
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::changed_lines;
 use crate::cursor::coladvance;
@@ -53,7 +53,7 @@ use crate::message_fmt::msg_bytes;
 use crate::r#move::changed_window_setting;
 use crate::narrow::len_as_int;
 use crate::narrow::number_as_int;
-use crate::option::defs::OptionSetFlags;
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_direct;
 use crate::option::vars::{p_ch, p_cwh, p_icm};
 use crate::options::kOptInccommand;
@@ -629,7 +629,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         // Too slow: disable.
         set_option_direct(
             kOptInccommand,
-            static_cstr_optval(c""),
+            OptVal::static_string(c""),
             OptionSetFlags::NONE,
             SID_NONE,
         );

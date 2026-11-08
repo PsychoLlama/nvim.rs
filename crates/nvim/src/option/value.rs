@@ -48,15 +48,6 @@ pub(crate) const fn tristate(word: c_int) -> Option<bool> {
     }
 }
 
-/// The `OptVal` for a boolean option's value.
-///
-/// `None` is upstream's `kNone`: a global-local option with no value of its
-/// own in this scope.  It is not "false", and `optval_as_object` reports it
-/// as nil rather than as `false`.
-pub(crate) const fn boolean_optval(value: Option<bool>) -> OptVal {
-    OptVal::Boolean(value)
-}
-
 /// What `:set` and `nvim_get_option_info` call each value type.
 pub(crate) fn optval_type_name(type_0: OptValType) -> &'static CStr {
     match type_0 {
@@ -73,18 +64,82 @@ impl OptVal {
     pub(crate) fn string(string: ApiString) -> Self {
         OptVal::from_bytes(string.as_bytes())
     }
-}
 
-/// `cur` and `new` joined, when both are strings: the `.=` of a string
-/// option. `None` leaves `new` as it is.
-pub(crate) fn optval_concat(cur: &OptVal, new: &OptVal) -> Option<OptVal> {
-    let (OptVal::String(cur), OptVal::String(new)) = (cur, new) else {
-        return None;
-    };
-    let mut joined = Vec::with_capacity(cur.len() + new.len());
-    joined.extend_from_slice(cur.as_bytes());
-    joined.extend_from_slice(new.as_bytes());
-    Some(OptVal::from_xstring(XString::from_vec(joined)))
+    /// `self` and `new` joined, when both are strings: the `.=` of a string
+    /// option. `None` leaves `new` as it is.
+    pub(crate) fn concat(&self, new: &OptVal) -> Option<OptVal> {
+        let (OptVal::String(cur), OptVal::String(new)) = (self, new) else {
+            return None;
+        };
+        let mut joined = Vec::with_capacity(cur.len() + new.len());
+        joined.extend_from_slice(cur.as_bytes());
+        joined.extend_from_slice(new.as_bytes());
+        Some(OptVal::from_xstring(XString::from_vec(joined)))
+    }
+
+    /// The value as the text `:set` reports it with in a message: a string is
+    /// quoted, a boolean spelled out.
+    pub(crate) fn to_text(&self) -> XString {
+        match self {
+            OptVal::Nil => XString::new(),
+            OptVal::Boolean(boolean) => XString::from_cstr(if *boolean == Some(true) {
+                c"true"
+            } else {
+                c"false"
+            }),
+            OptVal::Number(n) => XString::from_vec(n.to_string().into_bytes()),
+            OptVal::String(text) => {
+                let mut quoted = Vec::with_capacity(text.len() + 2);
+                quoted.push(b'"');
+                quoted.extend_from_slice(text.as_bytes());
+                quoted.push(b'"');
+                XString::from_vec(quoted)
+            }
+        }
+    }
+
+    /// An option's value as a typval.  `numbool` renders a Boolean option as a
+    /// Number, which is what the old spelling of the accessors answered. A
+    /// string moves into the answer.
+    pub(crate) fn into_tv(self, numbool: bool) -> TypVal {
+        let mut rettv = TypVal::Special(kSpecialVarNull);
+        match self {
+            OptVal::Boolean(boolean) => {
+                if numbool {
+                    let word = self.tristate().expect("the arm is Boolean");
+                    rettv.write_number(VarNumber::from(word));
+                } else if let Some(boolean) = boolean {
+                    // An unset global-local boolean has no Vimscript
+                    // spelling and stays the `v:null` this started as.
+                    rettv.write_boolean(BoolVarValue::from(boolean));
+                }
+            }
+            OptVal::Number(number) => {
+                rettv.write_number(number as VarNumber);
+            }
+            OptVal::String(text) => {
+                rettv.write_string(Some(ThinCString::from(text.into_xstring())));
+            }
+            OptVal::Nil => {}
+        }
+        rettv
+    }
+
+    /// The value as the API reports it. A tri-state boolean that is neither true
+    /// nor false comes back as nil; a string moves into the answer.
+    pub(crate) fn into_object(self) -> Object {
+        match self {
+            OptVal::Nil => Object::Nil,
+            // A global-local option with no local value has no API spelling but
+            // nil, which is what `as_boolean` answers `None` for.
+            OptVal::Boolean(boolean) => match boolean {
+                Some(boolean) => Object::Boolean(boolean),
+                None => Object::Nil,
+            },
+            OptVal::Number(n) => Object::Integer(n),
+            OptVal::String(text) => Object::string(ApiString::from_xstring(text.into_xstring())),
+        }
+    }
 }
 
 /// The type the table declares for an option.
@@ -98,13 +153,13 @@ pub(crate) fn slot_value(opt_idx: OptIndex, slot: OptSlot) -> OptVal {
     // 'modified' has no variable of its own worth reading: `b_changed` alone
     // misses a buffer whose undo state says it is unchanged after all.
     if slot.is_current_modified() {
-        return boolean_optval(Some(curbuf_is_changed()));
+        return OptVal::Boolean(Some(curbuf_is_changed()));
     }
     let value = match slot {
         OptSlot::None => OptVal::Nil,
         // The variable's word is the option's own tri-state, so anything
         // above 1 reads as true and a negative one is "not set here".
-        OptSlot::Boolean(var) => boolean_optval(tristate(var.get())),
+        OptSlot::Boolean(var) => OptVal::Boolean(tristate(var.get())),
         OptSlot::Number(var) => OptVal::Number(var.get()),
         // A variable's bytes hold no NUL, so they are copied whole: no
         // scan for one.
@@ -192,76 +247,12 @@ pub(crate) fn write_slot(opt_idx: OptIndex, slot: OptSlot, value: OptVal) {
     }
 }
 
-/// The value as the text `:set` reports it with in a message: a string is
-/// quoted, a boolean spelled out.
-pub(crate) fn optval_to_text(value: &OptVal) -> XString {
-    match value {
-        OptVal::Nil => XString::new(),
-        OptVal::Boolean(boolean) => XString::from_cstr(if *boolean == Some(true) {
-            c"true"
-        } else {
-            c"false"
-        }),
-        OptVal::Number(n) => XString::from_vec(n.to_string().into_bytes()),
-        OptVal::String(text) => {
-            let mut quoted = Vec::with_capacity(text.len() + 2);
-            quoted.push(b'"');
-            quoted.extend_from_slice(text.as_bytes());
-            quoted.push(b'"');
-            XString::from_vec(quoted)
-        }
-    }
-}
-
-/// An option's value as a typval.  `numbool` renders a Boolean option as a
-/// Number, which is what the old spelling of the accessors answered. A
-/// string moves into the answer.
-pub(crate) fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
-    let mut rettv = TypVal::Special(kSpecialVarNull);
-    match value {
-        OptVal::Boolean(boolean) => {
-            if numbool {
-                let word = value.tristate().expect("the arm is Boolean");
-                rettv.write_number(VarNumber::from(word));
-            } else if let Some(boolean) = boolean {
-                // An unset global-local boolean has no Vimscript
-                // spelling and stays the `v:null` this started as.
-                rettv.write_boolean(BoolVarValue::from(boolean));
-            }
-        }
-        OptVal::Number(number) => {
-            rettv.write_number(number as VarNumber);
-        }
-        OptVal::String(text) => {
-            rettv.write_string(Some(ThinCString::from(text.into_xstring())));
-        }
-        OptVal::Nil => {}
-    }
-    rettv
-}
-
-/// The value as the API reports it. A tri-state boolean that is neither true
-/// nor false comes back as nil; a string moves into the answer.
-pub(crate) fn optval_as_object(value: OptVal) -> Object {
-    match value {
-        OptVal::Nil => Object::Nil,
-        // A global-local option with no local value has no API spelling but
-        // nil, which is what `as_boolean` answers `None` for.
-        OptVal::Boolean(boolean) => match boolean {
-            Some(boolean) => Object::Boolean(boolean),
-            None => Object::Nil,
-        },
-        OptVal::Number(n) => Object::Integer(n),
-        OptVal::String(text) => Object::string(ApiString::from_xstring(text.into_xstring())),
-    }
-}
-
 /// The API value as an option value, or `None` for an `Object` no option can
 /// hold.
 pub(crate) fn object_as_optval(o: Object) -> Option<OptVal> {
     Some(match o.kind() {
         kObjectTypeNil => OptVal::Nil,
-        kObjectTypeBoolean => boolean_optval(o.as_boolean()),
+        kObjectTypeBoolean => OptVal::Boolean(o.as_boolean()),
         kObjectTypeInteger => OptVal::Number(o.as_integer().expect("the tag says Integer")),
         kObjectTypeString => OptVal::string(o.into_string().expect("the tag says String")),
         _ => return None,

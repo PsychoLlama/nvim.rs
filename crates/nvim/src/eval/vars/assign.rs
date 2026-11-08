@@ -44,8 +44,7 @@ use crate::ex_docmd::ends_excmd;
 use crate::message::{e_invarg, e_listreq, internal_error};
 use crate::option::defs::OptVal;
 use crate::option::{
-    boolean_optval, get_option_value, get_tty_option, is_option_hidden, is_tty_option,
-    optval_concat, set_option_value_handle_tty,
+    get_option_value, get_tty_option, is_option_hidden, is_tty_option, set_option_value_handle_tty,
 };
 use crate::os::env::vim_setenv_named;
 use crate::register::{get_reg_contents_owned, write_reg_contents};
@@ -481,9 +480,9 @@ fn ex_let_option(
                 newval = if matches!(curval, OptVal::Number(_)) {
                     OptVal::Number(new_n)
                 } else {
-                    boolean_optval(tristate_from_int(new_n))
+                    OptVal::Boolean(tristate_from_int(new_n))
                 };
-            } else if let Some(joined) = optval_concat(&curval, &newval) {
+            } else if let Some(joined) = curval.concat(&newval) {
                 newval = joined;
             }
         }
