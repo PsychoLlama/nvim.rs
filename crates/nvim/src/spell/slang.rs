@@ -28,8 +28,9 @@
 
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
+use crate::spell::LangId;
 use crate::strings::find_char;
-use crate::types::{Buffer, LangId};
+use crate::types::Buffer;
 use crate::winlayer::Buf;
 use core::cell::{Cell, RefCell};
 use core::ffi::c_int;
@@ -41,7 +42,7 @@ use crate::log::{LOGLVL_ERR, logmsg};
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::memline::{ml_close, ml_open, ml_open_file};
 use crate::os::libc::{uint8_t, uint16_t};
-use crate::types::SpellLang;
+use crate::spell::SpellLang;
 
 use super::{MAXWLEN, MAXWLEN_INT, MAXWORDCOUNT, SY_MAXLEN, SylItem, WordEnd, WordTree};
 

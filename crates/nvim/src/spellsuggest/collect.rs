@@ -38,10 +38,10 @@ use crate::winlayer::Win;
 
 use crate::highlight_group::HLF_COUNT;
 use crate::mbyte::{char_at, head_off};
+use crate::spell::{LangId, SpellLang};
 use crate::spell::{loaded_langs, spell_check, spell_soundfold};
 use crate::spellsuggest::score::{EMPTY_SOUND, spell_edit_score, stp_sal_score};
 use crate::spellsuggest::{MAXWLEN, SCORE_INS, SCORE_MAXMAX, SugInfo, Suggest, window_langs};
-use crate::types::{LangId, SpellLang};
 use core::cmp::Ordering;
 use core::ffi::c_int;
 use core::mem;

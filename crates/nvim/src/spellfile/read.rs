@@ -62,11 +62,12 @@ use crate::os::input::fast_breakcheck;
 use crate::os::libc::{time_t, uint8_t};
 use crate::path::{path_fnamecmp, path_full_compare, path_tail};
 use crate::runtime::{estack_pop, estack_push};
+use crate::spell::{LangId, SpellIdx, SpellLang};
 use crate::spell::{
     e_format, init_syl_tab, languages, open_spellbuf, parse_spelllang, put_lang, slang_clear,
     slang_clear_sug, take_lang, with_lang,
 };
-use crate::types::{LangId, LineNr, OptInt, SpellIdx, SpellLang};
+use crate::types::{LineNr, OptInt};
 
 use super::sections::{
     read_charflags_section, read_compound, read_prefcond_section, read_region_section,

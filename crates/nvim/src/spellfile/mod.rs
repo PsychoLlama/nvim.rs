@@ -26,6 +26,7 @@ use crate::os::fs::{dir_exists, path_exists};
 use crate::os::libc::time_t;
 use crate::path::{path_tail, tail_index};
 use crate::spell::SpellBuf;
+use crate::spell::{RepItem, SpellAddType, SpellTab};
 use crate::spell::{did_set_spelltab, spell_enc, spelltab};
 use crate::strings::has_bytes;
 use crate::strings::has_char;
@@ -33,8 +34,7 @@ use crate::tr;
 use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
-    CONV_NONE, EStackType, ExArg, Failed, FileComparison, MAXPATHL, OptInt, RepItem, SpellAddType,
-    SpellTab, VimConv, XDGVarType,
+    CONV_NONE, EStackType, ExArg, Failed, FileComparison, MAXPATHL, OptInt, VimConv, XDGVarType,
 };
 use crate::ui::ui_flush;
 use crate::winlayer::Buf;

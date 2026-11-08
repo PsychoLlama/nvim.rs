@@ -57,8 +57,9 @@ use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::path::path_full_compare;
+use crate::spell::{SpellIdx, SpellLang};
 use crate::spell::{languages, open_spellbuf, put_lang, spell_soundfold, take_lang, with_lang};
-use crate::types::{Failed, LineNr, SpellIdx, SpellLang};
+use crate::types::{Failed, LineNr};
 
 use super::wordtree::{NodeId, tree_add_word, wordtree_alloc, wordtree_compress};
 use super::write::{SplWriter, clear_node, put_node};

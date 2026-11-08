@@ -51,9 +51,9 @@
 use neovim::winlayer::Win;
 use std::ffi::CString;
 
+use neovim::spell::{LangP, SpellLang};
 use neovim::spell::{REGION_ALL, init_spell_chartab, register_lang, spell_check, take_lang};
 use neovim::spellfile::{mkspell, spell_check_msm, spell_load_file};
-use neovim::types::{LangP, SpellLang};
 use neovim::winlayer::graph::curwin;
 
 use crate::support::{Sandbox, cstr};

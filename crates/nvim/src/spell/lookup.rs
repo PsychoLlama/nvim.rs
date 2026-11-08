@@ -57,7 +57,7 @@ use core::ffi::c_int;
 use crate::mbyte::{c_cluster_len, char_count, encode_char, head_off};
 use crate::message::emsg;
 use crate::regexp::vim_regexec_prog;
-use crate::types::SpellLang;
+use crate::spell::SpellLang;
 
 use super::Tree;
 use super::chartab::{

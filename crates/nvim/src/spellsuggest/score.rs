@@ -48,13 +48,14 @@ use crate::mbyte::{char_at, char_len, mb_isupper, utf_fold};
 use crate::narrow::as_index;
 use crate::narrow::len_as_int;
 use crate::spell::MAXWLEN_INT;
+use crate::spell::SpellLang;
 use crate::spell::{spell_casefold, spell_soundfold, spelltab_fold, spelltab_isu};
 use crate::spellsuggest::{
     MAXWLEN, SCORE_COMMON1, SCORE_COMMON2, SCORE_COMMON3, SCORE_DEL, SCORE_ICASE, SCORE_INS,
     SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, SugInfo,
     copy_terminated,
 };
-use crate::types::{NUL, SpellLang};
+use crate::types::NUL;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 

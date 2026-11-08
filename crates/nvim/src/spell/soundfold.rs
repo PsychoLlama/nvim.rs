@@ -35,7 +35,8 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::mbyte::{char_at, char_len, encode_char, utf_class};
 use crate::memory::XString;
 use crate::regexp::low_byte;
-use crate::types::{MB_MAXBYTES, NUL, SpellLang};
+use crate::spell::SpellLang;
+use crate::types::{MB_MAXBYTES, NUL};
 
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
 use super::{MAXWLEN, loaded_langs};

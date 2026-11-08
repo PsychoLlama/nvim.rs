@@ -19,6 +19,7 @@ use crate::memline::state::MemLine;
 use crate::memory::{ThinCString, XString};
 use crate::os::libc::{int16_t, int64_t, size_t, time_t, uint8_t, uint32_t, uint64_t};
 use crate::registry::IdMap;
+use crate::spell::LangP;
 use crate::syntax::{SynCluster, SynPat};
 use crate::undo::node::{UndoLink, VisualInfo};
 use core::ffi::{CStr, c_char};

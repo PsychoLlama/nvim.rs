@@ -63,8 +63,9 @@ use crate::options::kOptSpellfile;
 use crate::os::cshim::gettext;
 use crate::os::fs::{mkdir_recurse, os_mkdir};
 use crate::path::{dir_of_file_exists, path_tail, tail_with_sep_index, vim_ispathsep};
+use crate::spell::SpellAddType;
 use crate::spell::{int_wordlist, spell_enc, with_lang};
-use crate::types::{MAXPATHL, OptVal, OptionSetFlags, SpellAddType};
+use crate::types::{MAXPATHL, OptVal, OptionSetFlags};
 use crate::undo::buf_is_changed;
 
 use super::wordtree::valid_spell_word;

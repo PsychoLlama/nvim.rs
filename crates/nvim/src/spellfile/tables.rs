@@ -28,8 +28,8 @@ use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use crate::mbyte::{char_at, char_len, cluster_len};
+use crate::spell::RepItem;
 use crate::spell::spell_casefold;
-use crate::types::RepItem;
 
 use super::aff::{AffState, first_byte};
 use super::{MAXWLEN, SpellInfo};

@@ -76,6 +76,7 @@ use crate::mbyte::{c_cluster_len, char_at};
 use crate::option::split_option_part;
 use crate::option::vars::P_SPS;
 use crate::os::input::os_breakcheck;
+use crate::spell::{LangId, LangP};
 use crate::spell::{
     captype, loaded_langs, make_case_word, spell_casefold, spell_check, spell_soundfold,
 };
@@ -87,7 +88,7 @@ use crate::spellsuggest::collect::{
 use crate::spellsuggest::score::spell_isupper;
 use crate::spellsuggest::soundalike::{SoundDone, suggest_try_soundalike};
 use crate::spellsuggest::walk::suggest_trie_walk;
-use crate::types::{Hlf, LangId, LangP, MAXPATHL};
+use crate::types::{Hlf, MAXPATHL};
 use core::ffi::{CStr, c_int};
 use core::hash::BuildHasherDefault;
 use std::collections::HashSet;

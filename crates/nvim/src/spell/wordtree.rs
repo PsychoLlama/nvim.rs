@@ -37,7 +37,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::types::SpellIdx;
+use crate::spell::SpellIdx;
 
 /// One language tree: the child bytes and the indices beside them.
 ///

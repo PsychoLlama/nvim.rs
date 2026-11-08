@@ -39,7 +39,8 @@ use crate::mbyte::{
     utf_fold,
 };
 use crate::os::libc::uint8_t;
-use crate::types::{Failed, MB_MAXBYTES, SpellTab};
+use crate::spell::SpellTab;
+use crate::types::{Failed, MB_MAXBYTES};
 
 use super::{MAXWLEN, did_set_spelltab, spelltab};
 

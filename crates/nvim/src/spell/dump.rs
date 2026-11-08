@@ -54,7 +54,8 @@ use crate::option::{boolean_optval, get_option_value, set_option_value_give_err}
 use crate::options::{kOptSpell, kOptSpelllang};
 use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
-use crate::types::{Direction, ExArg, IOSIZE, LineNr, OptVal, OptionSetFlags, SpellLang};
+use crate::spell::SpellLang;
+use crate::types::{Direction, ExArg, IOSIZE, LineNr, OptVal, OptionSetFlags};
 
 use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
 use super::check::no_spell_checking;

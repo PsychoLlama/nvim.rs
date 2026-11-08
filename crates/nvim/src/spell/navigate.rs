@@ -57,8 +57,9 @@ use crate::os::input::line_breakcheck;
 use crate::os::libc::size_t;
 use crate::pos::{MAXCOL, clearpos};
 use crate::search::{BACKWARD, FORWARD};
+use crate::spell::SpellMoveType;
 use crate::syntax::syntax_present;
-use crate::types::{ColNr, Hlf, LineNr, Pos, ShmFlag, SpellMoveType};
+use crate::types::{ColNr, Hlf, LineNr, Pos, ShmFlag};
 
 use super::chartab::tail;
 use super::check::{check_need_cap, no_spell_checking, spell_check};

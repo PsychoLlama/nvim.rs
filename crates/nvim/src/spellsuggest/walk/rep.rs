@@ -27,9 +27,9 @@
 
 use crate::narrow::as_index;
 use crate::narrow::len_as_int;
+use crate::spell::RepItem;
 use crate::spellsuggest::SCORE_REP;
 use crate::spellsuggest::walk::{State, Walk, frame_pos};
-use crate::types::RepItem;
 
 impl<'a> Walk<'a> {
     /// Decide whether trying `REP` items here is worth it at all, and if

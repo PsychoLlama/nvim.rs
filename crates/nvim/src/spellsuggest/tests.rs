@@ -22,7 +22,7 @@ use super::{MAXWLEN, SCORE_DEL, SCORE_MAXMAX, SCORE_SUBST, SCORE_SWAP, SugInfo, 
 use crate::cstr::until_nul;
 use crate::memory::XString;
 use crate::spell::WordTree;
-use crate::types::{SpellIdx, SpellLang};
+use crate::spell::{SpellIdx, SpellLang};
 
 /// A tree of the words "ab", "ac" and "b", with every node's own entry the
 /// number of words below it, as the `.sug` reader leaves a case-folded tree.

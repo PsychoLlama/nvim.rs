@@ -39,9 +39,10 @@ use crate::normal::{
 use crate::options::{kOptFdoFlagBlock, kOptFdoFlagSearch};
 use crate::pos::MAXLNUM;
 use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
+use crate::spell::SpellMoveType;
 use crate::spell::{SMT_ALL, spell_move_to};
 use crate::textobject::findpar;
-use crate::types::{CmdArg, MarkMove, OpType, PUT_FIXINDENT, Pos, SpellMoveType};
+use crate::types::{CmdArg, MarkMove, OpType, PUT_FIXINDENT, Pos};
 use core::ffi::{CStr, c_int, c_uint};
 
 /// Which way a `[` or `]` command searches.
