@@ -7,12 +7,15 @@
     clippy::ptr_as_ptr
 )]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-use super::*;
+//! A buffer's memline: the block tree's handle (`MemLine`), the chunk index
+//! that lets an offset lookup skip whole runs of lines, the locked data block
+//! and the cached line.
+
 use crate::memfile::BlockId;
+use crate::memfile::{BlockNr, MemFile};
 use crate::memline::MlFlags;
 use crate::os::libc::size_t;
+use crate::types::{ColNr, LineNr};
 
 #[derive(Copy, Clone)]
 pub struct ChunkSize {

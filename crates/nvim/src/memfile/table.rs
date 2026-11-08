@@ -19,7 +19,7 @@
 )]
 
 use super::BlockMap;
-use crate::types::BlockNr;
+use crate::memfile::BlockNr;
 use core::ffi::c_uint;
 
 /// A handle on a block in memory.

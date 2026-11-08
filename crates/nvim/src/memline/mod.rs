@@ -43,7 +43,9 @@ use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;
 use crate::mark::setpcmark;
 use crate::mbyte::{char_at, cluster_len, head_off, mb_adjust_cursor, utf_lengths};
+use crate::memfile::BlockNr;
 use crate::memfile::{MFS_ALL, MFS_FLUSH, MFS_STOP, MFS_ZERO, MemFile, MfDirty, mf_close_file};
+use crate::memline::state::InfoPtr;
 use crate::memory::XString;
 use crate::message::state::{
     msg_ext_skip_flush, msg_row, msg_silent, need_wait_return, no_lines_msg,
@@ -74,8 +76,8 @@ use crate::spell::spell_delete_wordlist;
 use crate::startup::{getout, recoverymode};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    BlockNr, Buffer, CmdModFlags, ColNr, Dict, Failed, FileComparison, FileOffset, FlushBuffers,
-    InfoPtr, LineNr, List, OptVal, Pos, Timestamp, VarNumber,
+    Buffer, CmdModFlags, ColNr, Dict, Failed, FileComparison, FileOffset, FlushBuffers, LineNr,
+    List, OptVal, Pos, Timestamp, VarNumber,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;
@@ -102,6 +104,7 @@ pub(crate) use self::edit::*;
 mod offsets;
 pub use self::offsets::*;
 mod lines;
+pub mod state;
 pub use self::lines::*;
 
 pub(crate) static inhibit_delete_count: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
@@ -150,7 +153,7 @@ pub const ML_CHNK_DELLINE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const ML_CHNK_UPDLINE: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 crate::flag_set! {
     /// What a buffer's memline is holding right now -- upstream's `ML_*`,
-    /// the bits [`crate::types::MemLine::ml_flags`] carries.
+    /// the bits [`crate::memline::state::MemLine::ml_flags`] carries.
     ///
     /// c2rust emitted these as a bare `int` and re-emitted the `#define`s
     /// once per translation unit: seventeen copies of `ML_EMPTY` alone, in

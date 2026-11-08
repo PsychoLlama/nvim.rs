@@ -24,7 +24,7 @@ use core::ffi::{c_int, c_long, c_uint};
 
 use super::*;
 use crate::memfile::BlockId;
-use crate::types::MemLine;
+use crate::memline::state::MemLine;
 
 /// How a data block split came out, in the terms the pointer block above it
 /// has to be told: two blocks side by side, each with a block number, a line

@@ -31,7 +31,8 @@
 use core::ffi::{c_int, c_long, c_uint};
 use core::mem::{offset_of, size_of};
 
-use crate::types::{BlockNr, LineNr};
+use crate::memfile::BlockNr;
+use crate::types::LineNr;
 
 /// The data block layout: a header and the index that follows it.
 #[repr(C)]

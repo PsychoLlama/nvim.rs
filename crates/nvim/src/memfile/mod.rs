@@ -61,6 +61,7 @@
 
 mod swapfile;
 mod table;
+use crate::os::libc::int64_t;
 use crate::types::LineNr;
 use swapfile::perror_msg;
 pub(crate) use swapfile::*;
@@ -86,7 +87,7 @@ use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
 use crate::os::fs::{close_file, fsync_file, open_file, os_remove};
 use crate::os::input::{os_breakcheck, os_char_avail};
-use crate::types::{BlockNr, FileOffset};
+use crate::types::FileOffset;
 use crate::winlayer::buffers;
 
 pub(crate) static did_swapwrite_msg: GlobalCell<bool> = GlobalCell::new(false);
@@ -845,6 +846,10 @@ pub(crate) fn mf_release_all() -> bool {
     }
     released
 }
+
+/// A block number. Non-negative ones are page numbers in the swap file;
+/// negative ones name a block that has never been written.
+pub(crate) type BlockNr = int64_t;
 
 #[cfg(test)]
 mod tests {

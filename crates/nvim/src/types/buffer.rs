@@ -15,6 +15,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 use crate::buffer::BufFlags;
+use crate::memline::state::MemLine;
 use crate::memory::{ThinCString, XString};
 use crate::os::libc::{int16_t, int64_t, size_t, time_t, uint8_t, uint32_t, uint64_t};
 use crate::registry::IdMap;

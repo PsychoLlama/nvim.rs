@@ -24,11 +24,11 @@
 
 use crate::cstr;
 use crate::memfile::BlockId;
+use crate::memline::state::MemLine;
 use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_int;
 use crate::siemsg;
 use crate::statusline::trans_bufname;
-use crate::types::MemLine;
 use core::ffi::{c_int, c_uint};
 
 use super::*;
@@ -284,7 +284,7 @@ pub(crate) fn ml_new_ptr(memfile: &mut MemFile) -> BlockId {
 /// been updated yet — except that while a block is locked, the lines it owes
 /// its parents ([`LockedBlock::lineadd`]) still have to be added to it.
 ///
-/// [`LockedBlock::lineadd`]: crate::types::memline::LockedBlock::lineadd
+/// [`LockedBlock::lineadd`]: crate::memline::state::LockedBlock::lineadd
 pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Option<BlockId> {
     // If a block is locked, see whether the wanted line is in it. Not
     // for ML_FLUSH (the point of which is to release it), and not for
