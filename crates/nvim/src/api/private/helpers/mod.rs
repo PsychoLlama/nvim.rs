@@ -368,7 +368,7 @@ impl Default for TryState {
 }
 
 /// A vector of owned API strings: ShaDa's register contents, the one keyset
-/// field whose value is a list of binaries rather than an [`Object`] tree.
+/// field whose value is a list of binaries rather than an [`Object`](crate::types::Object) tree.
 #[derive(Clone, Default)]
 pub struct StringArray(Vec<ApiString>);
 
