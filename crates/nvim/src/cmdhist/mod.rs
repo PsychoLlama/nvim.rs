@@ -52,8 +52,7 @@ use crate::shada::ShadaExtra;
 use crate::tr;
 use crate::types::RegMatch;
 use crate::types::{
-    CmdModFlags, EvalFuncData, ExArg, Expand, HistoryType, IOSIZE, Timestamp, TypVal, VAR_NUMBER,
-    VarNumber,
+    CmdModFlags, EvalFuncData, ExArg, Expand, IOSIZE, Timestamp, TypVal, VAR_NUMBER, VarNumber,
 };
 use crate::ui::state::Columns;
 use core::ffi::{CStr, c_int};
@@ -619,3 +618,5 @@ pub(crate) fn hist_shada_replace(histype: HistoryType, entries: Vec<HistRestored
         ring.idx = kept.checked_sub(1);
     });
 }
+
+pub type HistoryType = ::core::ffi::c_int;

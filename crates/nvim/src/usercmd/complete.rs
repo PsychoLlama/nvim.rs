@@ -36,7 +36,8 @@ use crate::mbyte::cluster_len;
 use crate::memory::{ThinCString, XString};
 use crate::menu::set_context_in_menu_cmd;
 use crate::types::CmdIdx;
-use crate::types::{Candidate, ExArgt, Expand, ExpandContext, UserCmd};
+use crate::types::{Candidate, ExArgt, Expand, ExpandContext};
+use crate::usercmd::UserCmd;
 use core::ffi::{CStr, c_int};
 
 /// The `-complete=` name of each completion context, indexed by the

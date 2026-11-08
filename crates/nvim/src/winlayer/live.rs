@@ -80,8 +80,8 @@
 
 use core::ops::{Deref, DerefMut};
 
+use crate::ex_getln::state::CmdlineInfo;
 use crate::id_table::{IdTable, TableId};
-use crate::types::CmdlineInfo;
 
 /// A `*mut T` the caller has promised is live, with checked field access.
 ///

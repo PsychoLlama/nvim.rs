@@ -28,6 +28,7 @@ use std::rc::Rc;
 
 use super::*;
 use crate::cursor::{check_cursor, gchar_cursor};
+use crate::ex_docmd::state::SaveState;
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{exec_normal_cmd, restore_current_state, save_current_state};
 use crate::getchar::ins_typebuf;
@@ -35,7 +36,7 @@ use crate::normal::{VisualMode, set_visual_active, set_visual_anchor, set_visual
 use crate::runtime::state::current_sctx;
 use crate::state::mode::{State, VIsual_reselect, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_TERMINAL, MODE_VISUAL, get_real_state};
-use crate::types::{Buffer, ColNr, ExArg, Failed, LineNr, Pos, SaveState};
+use crate::types::{Buffer, ColNr, ExArg, Failed, LineNr, Pos};
 use crate::winlayer::Win;
 
 /// The `:emenu` range, when there was one: `addr_count` and the two lines.

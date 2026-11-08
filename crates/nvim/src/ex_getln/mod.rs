@@ -56,6 +56,7 @@ use crate::ex_docmd::{
     set_no_hlsearch, skip_range, undo_cmdmod,
 };
 use crate::ex_eval::aborting;
+use crate::ex_getln::state::{CmdBuff, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColoredCmdline};
 use crate::ex_getln::state::{cmdline_star, cmdline_was_last_drawn, cmdpreview, redrawing_cmdline};
 use crate::extmark::extmark_clear;
 use crate::getchar::state::{KeyStuffed, KeyTyped, got_int, mod_mask};
@@ -150,11 +151,11 @@ use crate::types::Key;
 use crate::types::NL;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
-    AcoSave, ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdLine, CmdMod,
-    CmdParseInfo, CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
-    Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext, Handle,
-    HashTab, Integer, LineNr, Magic, MotionType, Object, OptInt, OptMagic, OptSet, OptVal,
-    ParserState, Pos, ProfTime, SaveVEvent, SearchItArg, TryState, TypVal, VarNumber,
+    AcoSave, ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdLine, CmdMod, CmdParseInfo,
+    CmdParseMagic, ColNr, Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt, Expand,
+    ExpandContext, Handle, HashTab, Integer, LineNr, Magic, MotionType, Object, OptInt, OptMagic,
+    OptSet, OptVal, ParserState, Pos, ProfTime, SaveVEvent, SearchItArg, TryState, TypVal,
+    VarNumber,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

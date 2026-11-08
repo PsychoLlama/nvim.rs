@@ -2225,7 +2225,7 @@ COPY_KEEPERS = {
     "crates/nvim/src/types/decoration.rs::RangeHighlight": "value",
     "crates/nvim/src/types/decoration.rs::DecorRange_data_ui": "value",
     "crates/nvim/src/types/ex_cmds.rs::CmdParseMagic": "value",
-    "crates/nvim/src/types/ex_getln.rs::CmdlineColorChunk": "value",
+    "crates/nvim/src/ex_getln/state.rs::CmdlineColorChunk": "value",
     "crates/nvim/src/types/expressions.rs::ExprASTError": "value",
     "crates/nvim/src/types/expressions.rs::ExprNodeAssignment": "value",
     "crates/nvim/src/types/expressions.rs::ExprNodeComparison": "value",

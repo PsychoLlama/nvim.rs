@@ -26,6 +26,7 @@
 use crate::global_cell::{GlobalCell, state_record};
 use crate::memory::XString;
 use crate::types::{CmdMod, CmdModFlags};
+use crate::types::{Key, TypeaheadSave};
 use core::ffi::{CStr, c_int};
 
 pub(crate) static cmdmod: GlobalCell<CmdMod> = GlobalCell::new(CmdMod {
@@ -74,3 +75,18 @@ state_record! {
 
 /// The characters a file name inserted into a command line is escaped for.
 pub(crate) const ESCAPE_CHARS: &CStr = c" \t\\\"|";
+
+/// What `:normal` sets aside. Not `Copy`: `tabuf` owns the typeahead it
+/// saved. `Default` is the state its callers declare it in.
+#[derive(Default)]
+pub struct SaveState {
+    pub save_msg_scroll: ::core::ffi::c_int,
+    pub save_restart_edit: Key,
+    pub save_msg_didout: bool,
+    pub save_state: ::core::ffi::c_int,
+    pub save_finish_op: bool,
+    pub save_opcount: ::core::ffi::c_int,
+    pub save_reg_executing: u8,
+    pub save_pending_end_reg_executing: bool,
+    pub tabuf: TypeaheadSave,
+}

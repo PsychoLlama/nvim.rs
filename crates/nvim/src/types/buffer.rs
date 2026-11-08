@@ -22,6 +22,7 @@ use crate::registry::IdMap;
 use crate::spell::LangP;
 use crate::syntax::{SynCluster, SynPat};
 use crate::undo::node::{UndoLink, VisualInfo};
+use crate::usercmd::UserCmd;
 use core::ffi::{CStr, c_char};
 use core::ptr;
 
