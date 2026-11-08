@@ -31,12 +31,13 @@
 use super::attr::ADDR_TYPES;
 use super::{Scope, ucmd_name};
 use crate::charset::skip;
+use crate::cmdexpand::defs::{Candidate, Expand, ExpandContext};
 use crate::mapping::set_context_in_map_cmd;
 use crate::mbyte::cluster_len;
 use crate::memory::{ThinCString, XString};
 use crate::menu::set_context_in_menu_cmd;
 use crate::types::CmdIdx;
-use crate::types::{Candidate, ExArgt, Expand, ExpandContext};
+use crate::types::ExArgt;
 use crate::usercmd::UserCmd;
 use core::ffi::{CStr, c_int};
 

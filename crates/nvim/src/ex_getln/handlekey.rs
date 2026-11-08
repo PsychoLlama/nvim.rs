@@ -15,6 +15,7 @@
 )]
 
 use super::*;
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cmdexpand::{Expanded, WildMode, WildOpts};
 use crate::cstr;
 use crate::getchar::typeahead;
@@ -24,7 +25,6 @@ use crate::keycodes::SpecialKey;
 use crate::mbyte::MB_MAXCHAR;
 use crate::narrow::len_as_int;
 use crate::state::Step;
-use crate::types::ExpandContext;
 use crate::winlayer::Buf;
 
 /// Where the character before byte `at` of `line` starts: C's

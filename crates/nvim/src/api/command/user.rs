@@ -21,10 +21,11 @@ use crate::api::private::validate::{
     Bad, err_bad_number, err_bad_value, err_expected, err_invalid,
 };
 use crate::api_error;
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::message_fmt::msg_cstr;
+use crate::types::ExArgt;
 use crate::types::Handle;
-use crate::types::{ExArgt, ExpandContext};
 use crate::usercmd::AttrError;
 use crate::winlayer::graph::switch_buffer;
 

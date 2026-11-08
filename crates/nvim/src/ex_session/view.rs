@@ -30,6 +30,7 @@ use super::{
     SessionFile, SessionOpts, Written, did_lcd, ses_arglist, ses_escape_fname, ses_fname,
     ses_get_fname, ses_put_fname,
 };
+use crate::arglist::ArgListId;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_normal, buf_is_terminal, find_buf};
 use crate::fileio::IoFailed;
 use crate::fold::put_folds;
@@ -42,7 +43,6 @@ use crate::options::{
     kOptSsopFlagOptions, kOptSsopFlagTerminal,
 };
 use crate::os::libc::int64_t;
-use crate::types::ArgListId;
 use crate::types::ColNr;
 use crate::types::Failed;
 use crate::window::{DirOwner, has_own_dir, own_dir};

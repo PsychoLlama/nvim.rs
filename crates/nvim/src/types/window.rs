@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::arglist::ArgListId;
 use crate::grid::defs::{GridView, ScreenGrid};
 use crate::mark::defs::{FileMark, FileMarkView, XFileMark};
 use crate::memory::XString;

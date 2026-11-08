@@ -624,3 +624,32 @@ pub fn check_arg_idx(mut win: Win) {
         ARG_HAD_LAST.set(true);
     }
 }
+
+/// One argument: the name it was given, owned, and the buffer it was listed
+/// as, if any.
+#[derive(Clone)]
+pub struct ArgEntry {
+    pub name: XString,
+    pub fnum: Option<Handle>,
+}
+
+/// Which argument list a window uses: the key the registry in
+/// `arglist::state` finds the list by, and what `arglistid()` answers. Zero is
+/// the global list, so a window allocated zeroed starts out on it.
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
+#[repr(transparent)]
+pub struct ArgListId(pub ::core::ffi::c_int);
+
+impl ArgListId {
+    /// The global argument list, the one nvim starts with.
+    pub const GLOBAL: ArgListId = ArgListId(0);
+}
+
+/// An argument list: the global one, or a window-local one shared by
+/// reference count between the windows that use it.
+pub struct ArgList {
+    pub entries: Vec<ArgEntry>,
+    /// The windows (and `:all` walks) holding the list. The global list's
+    /// count is kept but never consulted: it is never freed.
+    pub refcount: Refcount,
+}

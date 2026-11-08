@@ -15,6 +15,7 @@
 
 use super::*;
 use crate::cmdexpand::Scored;
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cmdexpand::fuzzy_sorted;
 use crate::cstr;
 use crate::getchar::Remap;
@@ -25,7 +26,7 @@ use crate::memory::XString;
 use crate::option::defs::CpoFlag;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
-use crate::types::{ExpandContext, Key};
+use crate::types::Key;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 

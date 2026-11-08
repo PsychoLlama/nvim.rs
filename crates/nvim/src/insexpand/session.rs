@@ -18,6 +18,7 @@ use super::*;
 use crate::charset::display::foldcase;
 use crate::charset::is_word_at;
 use crate::charset::skip;
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr::{self, byte_at};
 use crate::guard::Lock;
 use crate::mbyte::{char_at, class_in, head_off};
@@ -27,7 +28,7 @@ use crate::narrow::{len_as_int, number_as_col};
 use crate::option::defs::ShmFlag;
 use crate::semsg;
 use crate::types::Key;
-use crate::types::{ExpandContext, Failed, IOSIZE};
+use crate::types::{Failed, IOSIZE};
 use crate::winlayer::{Buf, Win};
 
 /// C's `compl_startpos.lnum = curwin->w_cursor.lnum; compl_startpos.col = col;`

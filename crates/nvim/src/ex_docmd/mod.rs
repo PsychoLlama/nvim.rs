@@ -42,6 +42,7 @@ use crate::ex_cmds2::{
     ex_checktime, ex_compiler, ex_drop, ex_listdo, ex_perl, ex_perldo, ex_perlfile, ex_py3file,
     ex_pydo3, ex_python3, ex_ruby, ex_rubydo, ex_rubyfile,
 };
+use crate::ex_eval::defs::ExcId;
 use crate::ex_eval::{
     ex_break, ex_catch, ex_continue, ex_else, ex_endfunction, ex_endif, ex_endtry, ex_endwhile,
     ex_eval, ex_finally, ex_if, ex_throw, ex_try, ex_while,
@@ -76,6 +77,7 @@ use crate::quickfix::{
 };
 use crate::regexp::OptMagic;
 use crate::register::ex_display;
+use crate::runtime::defs::{EStackArg, EStackType};
 use crate::runtime::{
     ex_finish, ex_options, ex_packadd, ex_packloadall, ex_runtime, ex_scriptencoding,
     ex_scriptnames, ex_source,
@@ -86,10 +88,8 @@ use crate::spell::{ex_spelldump, ex_spellinfo, ex_spellrepall};
 use crate::spellfile::{ex_mkspell, ex_spell};
 use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
-use crate::types::ExcId;
 use crate::types::{
-    Callback, CdCause, CmdAddr, Direction, DoBufStart, EStackArg, EStackType, ExArg, ExArgt,
-    Handle, LineNr,
+    Callback, CdCause, CmdAddr, Direction, DoBufStart, ExArg, ExArgt, Handle, LineNr,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};

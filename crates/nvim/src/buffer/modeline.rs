@@ -78,7 +78,7 @@ fn set_options(text: &mut [u8], off: usize, flags: OptionSetFlags) -> Result<(),
 fn push_estack(lnum: LineNr) {
     estack_push(
         ETYPE_MODELINE,
-        crate::types::FrameName::Static(c"modelines"),
+        crate::runtime::defs::FrameName::Static(c"modelines"),
         lnum,
     );
 }

@@ -40,7 +40,8 @@ use core::mem;
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::tv_dict_free_contents;
-use crate::types::{HashTab, Key, SaveVEvent};
+use crate::hashtab::HashTab;
+use crate::types::{Key, SaveVEvent};
 
 /// The `v:` dictionary, built on first use.
 pub(crate) fn vimvar_dict() -> DictRef {

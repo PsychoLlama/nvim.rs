@@ -59,6 +59,7 @@ use crate::getchar::{
     stuff_readbuf_char, stuffescaped,
 };
 use crate::global_cell::GlobalCell;
+use crate::hashtab::HashTab;
 use crate::highlight_group::HLF_8;
 use crate::indent::{get_indent, preprocs_left, set_indent};
 use crate::insexpand::{ins_compl_delete, ins_compl_preinsert_effect};
@@ -101,7 +102,7 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    ApiString, CmdModFlags, ColNr, Direction, ExArg, HashTab, LineNr, Pos, SaveVEvent, VarLock,
+    ApiString, CmdModFlags, ColNr, Direction, ExArg, LineNr, Pos, SaveVEvent, VarLock,
     kBoolVarFalse, kBoolVarTrue,
 };
 use crate::ui::state::Columns;

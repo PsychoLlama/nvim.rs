@@ -17,11 +17,11 @@
 )]
 
 use super::*;
+use crate::cmdexpand::defs::Candidate;
 use crate::cstr;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use crate::types::Candidate;
 
 /// The table key for `name`: its bytes and a NUL, because the listing
 /// prints a key as a C string.

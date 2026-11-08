@@ -18,7 +18,8 @@
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
-use crate::types::{EStackType, ScriptCtx};
+use crate::runtime::defs::EStackType;
+use crate::types::ScriptCtx;
 use core::ffi::c_int;
 
 pub(crate) const ETYPE_ENV: EStackType = 7;

@@ -33,6 +33,7 @@
 )]
 
 use super::{FINDFILE_DIR, nr_arg, str_arg, str_arg_chk};
+use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one, globpath};
 use crate::eval::eval_expr_typval;
 use crate::eval::typval::NumBuf;
@@ -45,10 +46,7 @@ use crate::narrow::number_as_int;
 use crate::option::vars::{P_PATH, p_wic};
 use crate::optionstr::{OptString, local_or_global};
 use crate::os::libc::ptrdiff_t;
-use crate::types::{
-    EvalFuncData, Expand, ExpandContext, TypVal, VAR_LIST, VAR_STRING, VarNumber, Vv,
-    kListLenUnknown,
-};
+use crate::types::{EvalFuncData, TypVal, VAR_LIST, VAR_STRING, VarNumber, Vv, kListLenUnknown};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 

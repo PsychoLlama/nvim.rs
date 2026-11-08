@@ -22,12 +22,13 @@
 #![allow(non_upper_case_globals)]
 pub(crate) mod state;
 
+use crate::cmdexpand::defs::Expand;
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
 use crate::popupmenu::state::PumItem;
 use crate::types::ColNr;
 use crate::types::LineNr;
-use crate::types::{Expand, Pos};
+use crate::types::Pos;
 use core::ffi::c_int;
 
 // The carve of the transpiled module; see each child's docs.
@@ -55,6 +56,7 @@ mod eval;
 pub use self::eval::*;
 mod bufpat;
 pub(crate) use self::bufpat::*;
+pub mod defs;
 #[cfg(test)]
 mod tests;
 

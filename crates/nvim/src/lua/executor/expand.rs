@@ -15,11 +15,11 @@
 )]
 
 use super::{nlua_error, nlua_pcall, with_main_stack};
+use crate::cmdexpand::defs::Expand;
 use crate::global_cell::GlobalCell;
 use crate::lua::converter::{pop_array, pop_integer};
 use crate::lua::stack::At;
 use crate::memory::XString;
-use crate::types::Expand;
 
 /// The matches [`nlua_expand_pat`] produced, waiting for
 /// [`nlua_expand_matches`] to take them.

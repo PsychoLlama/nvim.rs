@@ -27,11 +27,12 @@
 use super::complete::{COMMAND_COMPLETE, command_complete_name};
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int_at;
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::memory::ThinCString;
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::tr;
-use crate::types::{CmdAddr, ExArgt, ExpandContext};
+use crate::types::{CmdAddr, ExArgt};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 

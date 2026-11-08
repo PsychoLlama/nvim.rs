@@ -18,6 +18,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
+use crate::cmdexpand::defs::{BackslashEscape, ExpandContext};
 use crate::cmdexpand::{Expanded, WildMode, WildOpts};
 use crate::cstr;
 use crate::eval::typval::DictRef;
@@ -30,7 +31,7 @@ use crate::option::defs::OptionSetFlags;
 use crate::option::vars::{P_STL, P_TAL, P_WBR};
 use crate::optionstr::OptString;
 use crate::state::Step;
-use crate::types::{BackslashEscape, ExpandContext, kBoolVarFalse, kBoolVarTrue};
+use crate::types::{kBoolVarFalse, kBoolVarTrue};
 use crate::winlayer::windows as windows_in_curtab;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;

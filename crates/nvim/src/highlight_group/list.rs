@@ -15,13 +15,14 @@
 )]
 
 use crate::charset::skip;
+use crate::cmdexpand::defs::Candidate;
 use crate::cstr;
 use crate::narrow::as_index;
 use crate::narrow::len_as_int;
-use crate::types::Candidate;
 use core::ffi::{CStr, c_int};
 
 use crate::charset::vim_strsize_cstr;
+use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::eval::last_set_msg;
 use crate::getchar::state::got_int;
 use crate::highlight::HlAttrFlags;
@@ -32,7 +33,6 @@ use crate::message::{
 };
 use crate::option::vars::p_verbose;
 use crate::os::time::os_delay;
-use crate::types::{Expand, ExpandContext};
 use crate::ui::state::Columns;
 use crate::ui::state::kUIMessages;
 use crate::ui::{ui_flush, ui_has};

@@ -23,6 +23,7 @@ use crate::buffer::{
     do_buffer, find_buf,
 };
 use crate::charset::{ptr2cells_at, vim_is_ident_char, vim_isprintc, vim_iswordc};
+use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::cmdexpand::state::wild_menu_showing;
 use crate::cmdexpand::{
     clear_cmdline_orig, cmdline_pum_active, cmdline_pum_cleanup, cmdline_pum_remove,
@@ -67,6 +68,7 @@ use crate::getchar::{
 };
 use crate::global_cell::GlobalCell;
 use crate::guard::{allbuf_lock, textlock};
+use crate::hashtab::HashTab;
 use crate::highlight_group::{HLF_E, syn_id2attr, syn_name2id};
 use crate::keycodes::KS_EXTRA;
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
@@ -156,9 +158,8 @@ use crate::types::Key;
 use crate::types::NL;
 use crate::types::{
     AcoSave, ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdLine, CmdMod, CmdParseInfo,
-    CmdParseMagic, ColNr, Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt, Expand,
-    ExpandContext, Handle, HashTab, Integer, LineNr, Object, OptInt, Pos, ProfTime, SaveVEvent,
-    TypVal, VarNumber,
+    CmdParseMagic, ColNr, Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt, Handle, Integer,
+    LineNr, Object, OptInt, Pos, ProfTime, SaveVEvent, TypVal, VarNumber,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::state::{kUICmdline, kUIMessages};

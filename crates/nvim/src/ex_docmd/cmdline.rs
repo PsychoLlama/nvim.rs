@@ -66,8 +66,9 @@ use crate::os::input::line_breakcheck;
 use crate::profile::{script_line_end, script_line_start};
 use crate::runtime::set_sourcing_lnum;
 
+use crate::ex_eval::defs::{CondId, CondSummary};
 use crate::memory::XString;
-use crate::types::{CmdLine, CondId, CondSummary, Failed, LineNr, OptInt};
+use crate::types::{CmdLine, Failed, LineNr, OptInt};
 use crate::ui::state::kUICmdline;
 use crate::ui::ui_has;
 

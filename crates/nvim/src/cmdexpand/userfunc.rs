@@ -20,6 +20,7 @@
 )]
 
 use super::*;
+use crate::cmdexpand::defs::ExpandContext;
 use crate::env::getenv_resolved;
 use crate::eval::list::string_tv;
 use crate::eval::typval::list_iter;
@@ -32,7 +33,7 @@ use crate::path::{ExpandFlags, expand_wildcards, path_is_absolute, vim_ispathsep
 use crate::regexp::RegMatch;
 use crate::regexp::vim_regexec;
 use crate::runtime::state::current_sctx;
-use crate::types::{ExpandContext, TypVal, VarNumber};
+use crate::types::{TypVal, VarNumber};
 use core::ffi::CStr;
 use std::collections::HashSet;
 use std::ffi::CString;

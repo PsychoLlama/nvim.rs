@@ -26,6 +26,7 @@ use crate::autocmd::state::{
     pending_vimresume, termresponse_changed, uienter_busy,
 };
 use crate::buffer::{buf_is_prompt, current_buf, do_modelines, find_buf};
+use crate::cmdexpand::defs::Expand;
 use crate::cursor::{check_cursor, check_pos};
 use crate::drawscreen::state::need_maketitle;
 use crate::eval::typval::{TV_INITIAL_VALUE, callback_to_string, tv_clear};
@@ -63,6 +64,7 @@ use crate::path::{full_name_save, path_fnamecmp, path_tail};
 use crate::profile::do_profiling;
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::regexp::{RE_MAGIC, vim_regcomp};
+use crate::runtime::defs::EStackType;
 use crate::runtime::state::current_sctx;
 use crate::runtime::{estack_pop, estack_push};
 use crate::search::{restore_search_patterns, save_search_patterns};
@@ -71,9 +73,8 @@ use crate::state::mode::last_mode;
 use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    AcoSave, ApiString, AutoCmd, AutoPat, AutoPatCmd, BufferHandle, Callback, EStackType, Error,
-    EventCmds, ExArg, Expand, Integer, LuaRef, Object, ProfTime, SaveVEvent, ScriptCtx, Timestamp,
-    VarNumber, Vv,
+    AcoSave, ApiString, AutoCmd, AutoPat, AutoPatCmd, BufferHandle, Callback, Error, EventCmds,
+    ExArg, Integer, LuaRef, Object, ProfTime, SaveVEvent, ScriptCtx, Timestamp, VarNumber, Vv,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;

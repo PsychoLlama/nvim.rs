@@ -52,7 +52,7 @@ pub(crate) fn exe_pre_commands(parm: &MainParams) {
     Win::current().w_cursor.lnum = LineNr::ZERO;
     estack_push(
         ETYPE_ARGS,
-        crate::types::FrameName::Static(gettext(c"pre-vimrc command line")),
+        crate::runtime::defs::FrameName::Static(gettext(c"pre-vimrc command line")),
         LineNr::ZERO,
     );
     current_sctx.set(current_sctx.get().with_sid(SID_CMDARG as ScriptId));
@@ -77,7 +77,7 @@ pub(crate) fn exe_commands(parm: &MainParams) {
     // NB: not translated, unlike the pre-vimrc one above.
     estack_push(
         ETYPE_ARGS,
-        crate::types::FrameName::Static(c"command line"),
+        crate::runtime::defs::FrameName::Static(c"command line"),
         LineNr::ZERO,
     );
     current_sctx.set(

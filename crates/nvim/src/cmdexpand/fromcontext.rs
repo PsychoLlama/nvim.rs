@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::buffer::buf_name_matches;
+use crate::cmdexpand::defs::{CompleteListItemGetter, ExpandContext};
 use crate::ex_docmd::expand_argopt;
 use crate::fuzzy::{FUZZY_SCORE_NONE, fuzzy_match_str};
 use crate::help::help_tag_matches;
@@ -34,7 +35,6 @@ use crate::search::ignorecase;
 use crate::strings::escaped_bytes;
 use crate::syntax::reset_expand_highlight;
 use crate::tag::tag_matches;
-use crate::types::{CompleteListItemGetter, ExpandContext};
 use core::ffi::CStr;
 use std::ffi::CString;
 

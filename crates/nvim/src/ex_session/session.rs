@@ -37,6 +37,7 @@ use super::{
     SessionFile, SessionOpts, Written, did_lcd, ses_arglist, ses_do_win, ses_escape_fname,
     ses_fname, ses_put_fname,
 };
+use crate::arglist::ArgListId;
 use crate::buffer::first_wininfo_lnum;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
 use crate::env::home_to_tilde;
@@ -52,7 +53,6 @@ use crate::options::{
 };
 use crate::os::libc::int64_t;
 use crate::strings::escaped_bytes;
-use crate::types::ArgListId;
 use crate::types::{
     TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, Window,
 };

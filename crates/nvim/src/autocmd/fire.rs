@@ -384,7 +384,11 @@ pub fn apply_autocmds_group(
         let redraw_off = Suppress::redraw();
 
         // `es_name` and `es_lnum` are filled in by `aucmd_next`.
-        estack_push(ETYPE_AUCMD, crate::types::FrameName::None, LineNr::ZERO);
+        estack_push(
+            ETYPE_AUCMD,
+            crate::runtime::defs::FrameName::None,
+            LineNr::ZERO,
+        );
 
         // Restored below, in the run of teardown before the call stack is;
         // the handlers this fires each point it at themselves.

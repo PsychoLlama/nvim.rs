@@ -23,10 +23,10 @@ use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::ascii::ascii_isdigit;
+use crate::cmdexpand::defs::{Candidate, Expand, ExpandContext};
 use crate::cstr;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
-use crate::types::{Candidate, Expand, ExpandContext};
 use std::ffi::CString;
 
 /// How much of a submenu name the generator can answer with, separator

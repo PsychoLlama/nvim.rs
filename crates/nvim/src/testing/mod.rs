@@ -43,9 +43,10 @@ use crate::message::e_cant_read_file_str;
 use crate::message::emsg;
 use crate::message::state::{emsg_on_display, emsg_silent};
 use crate::os::cshim::gettext;
+use crate::runtime::defs::EStackArg;
 use crate::types::{
-    BoolVarValue, EStackArg, EvalFuncData, TypVal, VAR_FLOAT, VAR_NUMBER, VarNumber, Vv,
-    kBoolVarFalse, kBoolVarTrue,
+    BoolVarValue, EvalFuncData, TypVal, VAR_FLOAT, VAR_NUMBER, VarNumber, Vv, kBoolVarFalse,
+    kBoolVarTrue,
 };
 use crate::ui::state::called_vim_beep;
 

@@ -13,9 +13,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cmdexpand::defs::Candidate;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use crate::types::Candidate;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 

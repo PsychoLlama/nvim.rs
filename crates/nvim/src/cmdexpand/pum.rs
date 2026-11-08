@@ -19,6 +19,7 @@
 
 use super::*;
 use crate::charset::{ptr2cells_at, transchar, transchar_byte};
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cmdexpand::state::{saved_status_opts, wild_menu_showing};
 use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
@@ -38,7 +39,6 @@ use crate::option::vars::{P_LS, P_WMH, p_ls, p_wmh, wop_flags};
 use crate::options::kOptWopFlagPum;
 use crate::popupmenu::{pum_display, pum_undisplay, pum_visible};
 use crate::statusline::{fillchar_status_of, hl_attr};
-use crate::types::ExpandContext;
 use crate::ui::state::{Columns, Rows};
 use crate::ui::state::{kUICmdline, kUIPopupmenu, kUIWildmenu};
 use crate::ui::ui_has;

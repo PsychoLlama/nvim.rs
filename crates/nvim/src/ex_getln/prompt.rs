@@ -15,10 +15,11 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::memory::ThinCString;
-use crate::types::{ExArgt, ExpandContext, VAR_DICT};
+use crate::types::{ExArgt, VAR_DICT};
 
 /// Read the script body of a command that takes either `:command script` or a
 /// heredoc:

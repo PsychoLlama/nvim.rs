@@ -31,6 +31,7 @@ use crate::channel::{
     ChannelRef, alloc_channel, channel_all_info, channel_decref, channel_info, channel_send,
     with_channel,
 };
+use crate::context::Context;
 use crate::context::{CTX_ALL, ctx_free, ctx_from_dict, ctx_restore, ctx_save, ctx_to_dict};
 use crate::cursor::get_cursor_rel_lnum;
 use crate::decoration::decor_redraw_signs;
@@ -117,9 +118,9 @@ use crate::terminal::{
 };
 use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, BufferHandle, Context, Error, Float, Handle, Integer,
-    LineNr, LuaRef, MessageType, Object, ScreenChar, ScriptId, TabpageHandle, VarNumber, Vv,
-    WindowHandle, kCdScopeGlobal, kErrorTypeException, kErrorTypeValidation, kObjectTypeString,
+    ApiDict, ApiString, Array, Boolean, BufferHandle, Error, Float, Handle, Integer, LineNr,
+    LuaRef, MessageType, Object, ScreenChar, ScriptId, TabpageHandle, VarNumber, Vv, WindowHandle,
+    kCdScopeGlobal, kErrorTypeException, kErrorTypeValidation, kObjectTypeString,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};

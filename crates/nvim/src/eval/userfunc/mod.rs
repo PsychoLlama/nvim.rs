@@ -15,6 +15,7 @@ use core::ffi::{CStr, c_int};
 
 use crate::ascii::{ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul};
 use crate::charset::skip;
+use crate::cmdexpand::defs::Expand;
 use crate::debugger::state::{debug_backtrace_level, debug_tick};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, has_profiling_named};
 use crate::drawscreen::state::cmdline_row;
@@ -71,9 +72,9 @@ use crate::runtime::state::current_sctx;
 use crate::runtime::{estack_pop, estack_push_ufunc, script_id_valid};
 use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::types::{
-    Callback, Dict, DictItem, ExArg, Expand, FuncBody, FuncCall, LineNr, ListItem, LuaRef, OptInt,
-    Partial, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_FUNC, VAR_NUMBER, VAR_SCOPE, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber,
+    Callback, Dict, DictItem, ExArg, FuncBody, FuncCall, LineNr, ListItem, LuaRef, OptInt, Partial,
+    TypVal, UserFunc, VAR_DEF_SCOPE, VAR_FUNC, VAR_NUMBER, VAR_SCOPE, VAR_STRING, VAR_UNKNOWN,
+    VarLock, VarNumber,
 };
 use crate::ui::state::Rows;
 use crate::ui::state::kUICmdline;

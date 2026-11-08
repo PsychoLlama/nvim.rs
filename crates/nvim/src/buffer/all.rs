@@ -24,6 +24,7 @@ use crate::autocmd::is_aucmd_win;
 use crate::buffer::state::{swap_exists_action, swap_exists_did_quit};
 use crate::ex_cmds2::autowrite;
 use crate::ex_docmd::state::cmdmod;
+use crate::ex_eval::defs::Cleanup;
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
@@ -33,7 +34,7 @@ use crate::normal::reset_visual_and_resel;
 use crate::option::vars::{P_EA, jop_flags, p_ch, p_ea, p_tpm};
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
-use crate::types::{Cleanup, ExArg, Failed, LineNr, OptInt};
+use crate::types::{ExArg, Failed, LineNr, OptInt};
 use crate::ui::state::{Columns, Rows};
 use crate::undo::buf_is_changed;
 use crate::window::{

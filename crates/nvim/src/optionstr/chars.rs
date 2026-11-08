@@ -34,16 +34,17 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cmdexpand::defs::Candidate;
 use crate::formatted;
 use crate::global_cell::field;
 use crate::memory::ThinCString;
 use crate::option::kFillchars;
 use crate::option::kListchars;
-use crate::types::Candidate;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_uint};
 
 use crate::charset::{char2cells, hexhex_at};
+use crate::cmdexpand::defs::Expand;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::grid::schar_from_char;
 use crate::mbyte::{c_cluster_len, c_cluster_schar};
@@ -56,7 +57,7 @@ use crate::options::kOptListchars as kOptListcharsIdx;
 use crate::optionstr::CharsOption;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
-use crate::types::{Expand, FcsChars, LcsChars, NUL, ScreenChar, WinOpt};
+use crate::types::{FcsChars, LcsChars, NUL, ScreenChar, WinOpt};
 use crate::winlayer;
 
 use super::frame::new_bytes;

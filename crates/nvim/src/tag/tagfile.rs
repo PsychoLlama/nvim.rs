@@ -16,6 +16,7 @@
 )]
 
 use super::*;
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::cstr;
 use crate::file_search::{FIND_LEVEL, Name};
@@ -25,7 +26,6 @@ use crate::optionstr::{OptString, local_or_global};
 use crate::path::MAXPATHL;
 use crate::path::tail_index;
 use crate::runtime::{RuntimeOpts, do_in_runtimepath_visit};
-use crate::types::ExpandContext;
 use crate::winlayer::Buf;
 use core::ffi::CStr;
 

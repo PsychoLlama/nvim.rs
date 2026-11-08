@@ -36,6 +36,7 @@ use crate::api::extmark::{describe_ns, nvim_create_namespace};
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::buffer::find_buf;
 use crate::charset::vim_isprintc;
+use crate::cmdexpand::defs::Expand;
 use crate::cursor::check_cursor_lnum;
 use crate::decoration::defs::{DecorExt, DecorInline, DecorPriority, DecorSignHighlight};
 use crate::decoration::{
@@ -67,8 +68,8 @@ use crate::os::cshim::gettext;
 use crate::os::libc::{int32_t, int64_t, ptrdiff_t};
 use crate::tr;
 use crate::types::{
-    ApiString, Dict, EvalFuncData, ExArg, Expand, Failed, Integer, LineNr, List, ScreenChar,
-    TypVal, VarNumber,
+    ApiString, Dict, EvalFuncData, ExArg, Failed, Integer, LineNr, List, ScreenChar, TypVal,
+    VarNumber,
 };
 use crate::window::buf_jump_open_win;
 use crate::winlayer::{Buf, Win, buffers, first_buffer, windows};

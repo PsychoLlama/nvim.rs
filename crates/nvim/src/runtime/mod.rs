@@ -37,6 +37,7 @@
 
 pub(crate) mod state;
 use crate::autocmd::has_autocmd;
+use crate::cmdexpand::defs::Expand;
 use crate::cmdexpand::globpath;
 use crate::debugger::state::{debug_break_level, debug_tick};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, profiling_forced};
@@ -89,12 +90,12 @@ use crate::profile::{
 };
 use crate::regexp::{RE_MAGIC, RE_STRING};
 use crate::registry::{IdMap, IdSet, id_map, id_set};
+use crate::runtime::defs::{EStack, EStackArg, EStackType, EstackInfo, FrameName, ScriptItem};
 use crate::runtime::state::{current_sctx, did_source_packages};
 use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, ApiString, Array, EStack, EStackArg, EStackType, EstackInfo, EvalFuncData, ExArg,
-    Expand, FrameName, Integer, LineNr, Object, ProfTime, ScriptCtx, ScriptId, ScriptItem, TypVal,
-    UserFunc, VAR_DICT, VarLock, VarNumber, kBoolVarFalse,
+    ApiDict, ApiString, Array, EvalFuncData, ExArg, Integer, LineNr, Object, ProfTime, ScriptCtx,
+    ScriptId, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber, kBoolVarFalse,
 };
 use core::cell::Cell;
 use std::rc::Rc;
@@ -102,6 +103,7 @@ use std::sync::Mutex;
 
 // The carve of the transpiled module; see each child's docs.
 mod cache;
+pub mod defs;
 mod estack;
 mod expand;
 mod pack;

@@ -6,14 +6,11 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-use super::*;
+use crate::types::{LineNr, ListRef, TypVal};
 
 /// What [`enter_cleanup`](crate::ex_eval::enter_cleanup) parked for
 /// [`leave_cleanup`](crate::ex_eval::leave_cleanup) to restore.
-pub struct Cleanup {
+pub(crate) struct Cleanup {
     pub pending: ::core::ffi::c_int,
     pub(crate) exception: Option<ExcId>,
 }
@@ -190,8 +187,8 @@ impl CondSummary {
 /// A condition stack's place in the condition-stack table.
 pub(crate) type CondId = crate::id_table::TableId<CondStack>;
 
-pub type ExceptType = ::core::ffi::c_uint;
-pub struct ExceptionState {
+pub(crate) type ExceptType = ::core::ffi::c_uint;
+pub(crate) struct ExceptionState {
     pub(crate) estate_current_exception: Option<ExcId>,
     pub estate_did_throw: bool,
     pub estate_need_rethrow: bool,
@@ -227,7 +224,7 @@ impl ErrorMsgs {
     }
 }
 
-pub struct Exception {
+pub(crate) struct Exception {
     pub type_0: ExceptType,
     /// What a `:catch` pattern is matched against: `v:exception`.
     pub(crate) value: crate::memory::XString,

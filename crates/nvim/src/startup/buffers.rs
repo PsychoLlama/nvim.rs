@@ -17,6 +17,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::arglist::ArgListId;
 use crate::buffer::BLN_LISTED;
 use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
@@ -24,7 +25,6 @@ use crate::ex_cmds::newlnum;
 use crate::guard::Suppress;
 use crate::memory::XString;
 use crate::semsg;
-use crate::types::ArgListId;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 

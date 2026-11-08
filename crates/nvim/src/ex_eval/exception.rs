@@ -52,6 +52,9 @@ use crate::drawscreen::state::cmdline_row;
 use crate::eval::userfunc::get_return_cmd;
 use crate::eval::vars::{set_vim_var_list, set_vim_var_string};
 use crate::ex_docmd::handle_did_throw;
+use crate::ex_eval::defs::{
+    CondId, ErrorMsg, ErrorMsgs, ExcId, ExceptType, Exception, ExceptionState,
+};
 use crate::ex_eval::state::{
     EXCEPTIONS, MsgLists, caught_stack, current_exception, did_throw, force_abort, msg_lists,
     need_rethrow, suppress_errthrow, trylevel,
@@ -69,10 +72,7 @@ use crate::os::cshim::gettext;
 use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::tr;
 use crate::types::LineNr;
-use crate::types::{
-    CondId, ErrorMsg, ErrorMsgs, ExcId, ExceptType, Exception, ExceptionState, Failed, IOSIZE,
-    TypVal, Vv,
-};
+use crate::types::{Failed, IOSIZE, TypVal, Vv};
 use core::ffi::{CStr, c_int};
 
 /// Turn an error message into a pending error exception if one is wanted

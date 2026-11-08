@@ -16,11 +16,11 @@
 )]
 
 use super::*;
+use crate::cmdexpand::defs::{BackslashEscape, ExpandContext};
 use crate::ex_getln::{VSE_BUFFER, VSE_NONE, VSE_SHELL, fnameescape, tilde_replace_matches};
 use crate::option::vars::wop_flags;
 use crate::options::kOptWopFlagFuzzy;
 use crate::strings::escaped_bytes;
-use crate::types::{BackslashEscape, ExpandContext};
 
 /// Is fuzzy completion supported in this cmdline completion context?
 ///

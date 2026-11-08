@@ -256,7 +256,7 @@ fn load_spl(
 
     estack_push(
         ETYPE_SPELL,
-        crate::types::FrameName::owned(fname),
+        crate::runtime::defs::FrameName::owned(fname),
         LineNr::ZERO,
     );
     *did_estack_push = true;

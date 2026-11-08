@@ -16,9 +16,10 @@
 
 use super::*;
 use crate::charset::{Str2NrBases, skip, str2nr_scan};
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::keycodes::SpecialKey;
-use crate::types::{ExpandContext, Failed};
+use crate::types::Failed;
 
 /// Step `s->hiscnt` one entry back (or forward, with `next_match`) through
 /// the history, skipping entries that do not start with what was typed.

@@ -7,10 +7,8 @@
     clippy::ptr_as_ptr
 )]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-use super::*;
 use crate::memory::XString;
+use crate::types::{Direction, LuaRef, Pos, ScriptCtx};
 
 crate::flag_set! {
     /// How the completion machinery must escape a backslash in what it

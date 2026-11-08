@@ -44,6 +44,7 @@ use crate::getchar::{
     vpeekc,
 };
 use crate::global_cell::GlobalCell;
+use crate::hashtab::HashTab;
 use crate::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
 use crate::log::{LOG_DEBUG, LOGLVL_DBG, logmsg};
 use crate::message::state::need_wait_return;
@@ -61,7 +62,7 @@ use crate::state::mode::{
     virtual_op,
 };
 use crate::terminal::{TerminalState, terminal_check, terminal_execute};
-use crate::types::{Direction, HashTab, SaveVEvent};
+use crate::types::{Direction, SaveVEvent};
 use crate::ui::ui_flush;
 use crate::winlayer::{Cc, Win};
 

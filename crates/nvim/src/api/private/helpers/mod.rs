@@ -26,10 +26,10 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ex_eval::defs::ExcId;
 use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
 use crate::types::ColNr;
-use crate::types::ExcId;
 use crate::types::LineNr;
 use core::ffi::{CStr, c_int};
 

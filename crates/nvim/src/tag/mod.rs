@@ -12,6 +12,7 @@ use crate::ascii::{ascii_isspace, ascii_iswhite};
 use crate::autocmd::has_autocmd;
 use crate::buffer::{buf_is_help, buflist_getfile, find_buf};
 use crate::charset::is_blank_line;
+use crate::cmdexpand::defs::Expand;
 use crate::cmdexpand::expand_one;
 use crate::cursor::check_cursor;
 use crate::drawscreen::{UPD_VALID, redraw_later};
@@ -72,8 +73,7 @@ use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::Handle;
 use crate::types::{
-    Callback, ColNr, Dict, ExArg, Expand, GetFileRet, LineNr, List, Pos, Taggy, Timestamp,
-    VarNumber,
+    Callback, ColNr, Dict, ExArg, GetFileRet, LineNr, List, Pos, Taggy, Timestamp, VarNumber,
 };
 use crate::ui::state::Columns;
 use crate::ui::state::kUIMessages;

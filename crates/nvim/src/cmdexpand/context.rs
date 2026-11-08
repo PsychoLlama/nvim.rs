@@ -22,6 +22,7 @@
 use super::*;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{vim_is_ident_char, vim_isfilec_or_wc};
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::ex_cmds::skip_vimgrep_pat_at;
 use crate::ex_docmd::{ends_excmd, excmd_get_cmdidx_bytes};
@@ -38,7 +39,7 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::strings::has_char;
 use crate::syntax::set_context_in_echohl_cmd;
 use crate::types::LineNr;
-use crate::types::{CmdIdx, CmdLine, ExArg, ExpandContext};
+use crate::types::{CmdIdx, CmdLine, ExArg};
 use crate::usercmd::find_ucmd;
 use crate::winlayer::Cc;
 use core::ffi::{CStr, c_int};

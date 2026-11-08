@@ -67,6 +67,8 @@ use crate::narrow::count_as_int;
 use crate::winlayer::BufId;
 use crate::winlayer::WinId;
 
+use crate::cmdexpand::defs::Expand;
+use crate::hashtab::HashTab;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::os::libc::{int16_t, uint8_t, uint64_t};
@@ -83,9 +85,7 @@ use crate::regexp::{
 use crate::regexp::{RegMMatch, RegMatch};
 use crate::runtime::{do_source, source_runtime};
 use crate::types::AutoEvent;
-use crate::types::{
-    ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, SynBlock, SynTime,
-};
+use crate::types::{ColNr, ExArg, LPos, LineNr, OptInt, ProfTime, SynBlock, SynTime};
 use crate::ui::state::{Columns, Rows};
 use crate::winlayer::Buf;
 use crate::winlayer::{Live, Win};

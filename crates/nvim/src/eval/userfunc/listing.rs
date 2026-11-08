@@ -24,7 +24,8 @@ use crate::semsg;
 use core::ffi::c_int;
 
 use super::*;
-use crate::types::{Candidate, ExpandContext, IOSIZE};
+use crate::cmdexpand::defs::{Candidate, ExpandContext};
+use crate::types::IOSIZE;
 use std::ffi::CString;
 
 /// Print the head of every function, or of the ones `pattern` matches.

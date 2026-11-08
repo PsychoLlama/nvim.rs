@@ -14,6 +14,7 @@ use super::{
     kXDGCacheHome, kXDGConfigDirs, kXDGConfigHome, kXDGDataDirs, kXDGDataHome, kXDGRuntimeDir,
     kXDGStateHome, tv_get_buf,
 };
+use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one};
 use crate::env::XDGVarType;
 use crate::env::{get_appname, getenv_resolved, xdg_home, xdg_var};
@@ -34,9 +35,8 @@ use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::CmdLine;
 use crate::types::{
-    CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext, OptInt, TypVal, VAR_DICT,
-    VAR_LIST, VAR_STRING, VarNumber, kBoolVarFalse, kListLenShouldKnow, kListLenUnknown,
-    kSpecialVarNull,
+    CmdAddr, EvalFuncData, ExArg, ExArgt, OptInt, TypVal, VAR_DICT, VAR_LIST, VAR_STRING,
+    VarNumber, kBoolVarFalse, kListLenShouldKnow, kListLenUnknown, kSpecialVarNull,
 };
 use core::ffi::c_int;
 

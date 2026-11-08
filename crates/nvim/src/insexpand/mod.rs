@@ -24,6 +24,7 @@ use crate::change::{deleted_lines_mark, ins_bytes, ins_char, ins_char_bytes, ins
 use crate::charset::{
     ptr2cells_at, strsize, vim_is_ident_char, vim_isfilec, vim_isprintc, vim_iswordc,
 };
+use crate::cmdexpand::defs::Expand;
 use crate::cmdexpand::{addstar, expand_cmdline, set_cmd_context};
 use crate::cursor::{check_cursor, dec_cursor, get_cursor_line_len, inc_cursor};
 use crate::drawscreen::state::{dollar_vcol, redraw_cmdline, redraw_mode, sc_col};
@@ -52,6 +53,7 @@ use crate::getchar::{
     vgetc, vpeekc, vpeekc_any, vungetc,
 };
 use crate::global_cell::{GlobalCell, state_record};
+use crate::hashtab::HashTab;
 use crate::highlight_group::{HLF_COUNT, HLF_E, HLF_R, HLF_W, syn_name2attr};
 use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
@@ -107,8 +109,8 @@ use crate::tag::find_tag_names;
 use crate::tag::state::g_tag_at_cursor;
 use crate::textformat::auto_format;
 use crate::types::{
-    ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand, HashTab,
-    LineNr, List, OptInt, Pos, SaveVEvent, TypVal, VarNumber, Vv,
+    ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, LineNr, List, OptInt,
+    Pos, SaveVEvent, TypVal, VarNumber, Vv,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;

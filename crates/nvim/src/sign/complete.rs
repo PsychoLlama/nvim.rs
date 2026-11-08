@@ -19,9 +19,9 @@
 
 use super::*;
 use crate::charset::skip;
+use crate::cmdexpand::defs::{Candidate, ExpandContext};
 use crate::narrow::number_as_int;
 use crate::types::Handle;
-use crate::types::{Candidate, ExpandContext};
 
 /// What [`get_sign_name`] should enumerate.
 #[derive(Copy, Clone, PartialEq, Eq)]

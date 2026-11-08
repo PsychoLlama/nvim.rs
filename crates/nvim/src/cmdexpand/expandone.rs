@@ -16,6 +16,7 @@
 )]
 
 use super::*;
+use crate::cmdexpand::defs::{ExpandContext, XpPrefix};
 use crate::ex_getln::{cursorcmd, redrawcmd};
 use crate::getchar::beep_flush;
 use crate::getchar::state::got_int;
@@ -32,7 +33,6 @@ use crate::path::match_suffix;
 use crate::popupmenu::state::pum_want;
 use crate::popupmenu::{pum_clear, pum_get_height};
 use crate::semsg;
-use crate::types::{ExpandContext, XpPrefix};
 use crate::ui::state::{kUICmdline, kUIWildmenu};
 use crate::ui::{ui_flush, ui_has, vim_beep};
 use crate::winlayer::Cc;

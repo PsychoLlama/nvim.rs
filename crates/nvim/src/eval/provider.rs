@@ -44,12 +44,11 @@ use crate::memline::{Lines, ml_append_bytes};
 use crate::message::{e_invarg, e_invchan, e_invchanjob};
 use crate::option::vars::p_lpl;
 use crate::os::libc::{ptrdiff_t, uint64_t};
+use crate::runtime::defs::{EStack, EstackInfo};
 use crate::runtime::script_autoload_named;
 use crate::runtime::sourcing_name_copy;
 use crate::runtime::state::{ETYPE_TOP, current_sctx};
-use crate::types::{
-    Callback, CallerScope, EStack, EstackInfo, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber,
-};
+use crate::types::{Callback, CallerScope, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber};
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Win};
 
@@ -57,7 +56,7 @@ pub(crate) static provider_caller_scope: GlobalCell<CallerScope> = GlobalCell::n
     script_ctx: ScriptCtx::NONE,
     es_entry: EStack {
         es_lnum: LineNr::ZERO,
-        es_name: crate::types::FrameName::None,
+        es_name: crate::runtime::defs::FrameName::None,
         es_type: ETYPE_TOP,
         es_info: EstackInfo::None,
     },

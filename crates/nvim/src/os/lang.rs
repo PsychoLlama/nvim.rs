@@ -30,6 +30,8 @@ use crate::eval::vars::{set_vim_var_string, vim_var_string};
 use crate::global_cell::GlobalCell;
 use crate::memory::ThinCString;
 
+use crate::cmdexpand::defs::Candidate;
+use crate::cmdexpand::defs::Expand;
 use crate::message_fmt::msg_cstr;
 use crate::option::{PROJECT_NAME, set_helplang_default};
 use crate::os::cshim::{bindtextdomain, bump_catalogue_epoch, textdomain};
@@ -40,8 +42,7 @@ use crate::profile::time_msg_at;
 use crate::semsg;
 use crate::shell::{ShellOpts, get_cmd_output};
 use crate::smsg;
-use crate::types::Candidate;
-use crate::types::{ExArg, Expand, Vv};
+use crate::types::{ExArg, Vv};
 use ::libc::setlocale;
 use core::ffi::{CStr, c_int};
 use core::ptr;

@@ -19,8 +19,8 @@ use crate::narrow::len_as_int;
 use core::ffi::{CStr, c_int};
 
 use super::*;
+use crate::cmdexpand::defs::{Candidate, ExpandContext};
 use crate::narrow::number_as_int;
-use crate::types::{Candidate, ExpandContext};
 use std::ffi::CString;
 
 /// Does this window's block define any syntax at all?

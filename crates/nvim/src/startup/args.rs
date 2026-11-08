@@ -20,9 +20,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::arglist::ArgListId;
 use crate::memory::XString;
 use crate::semsg;
-use crate::types::ArgListId;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -723,7 +723,7 @@ pub(crate) fn execute_env(env: &'static CStr) -> Result<(), Failed> {
 
     estack_push(
         ETYPE_ENV,
-        crate::types::FrameName::Static(env),
+        crate::runtime::defs::FrameName::Static(env),
         LineNr::ZERO,
     );
     let sctx = env_script();

@@ -9,11 +9,12 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::cmdexpand::defs::Expand;
 use crate::memory::XString;
 use crate::os::libc::uint8_t;
 use crate::os::libc::{ssize_t, uint32_t};
 use crate::regexp::RegMatch;
-use crate::types::{Expand, IOSIZE, OptInt};
+use crate::types::{IOSIZE, OptInt};
 
 use crate::global_cell::GlobalCell;
 use crate::option::OptSlot;

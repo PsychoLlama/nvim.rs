@@ -16,8 +16,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::arglist::{ArgList, ArgListId};
 use crate::global_cell::GlobalCell;
-use crate::types::{ArgList, ArgListId, Refcount};
+use crate::types::Refcount;
 use core::ffi::c_int;
 use std::collections::BTreeMap;
 

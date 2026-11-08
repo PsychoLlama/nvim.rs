@@ -30,6 +30,7 @@
 #![forbid(unsafe_code)]
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::cmdexpand::{WildMode, WildOpts, expand_one};
 use crate::getchar::state::got_int;
 use crate::memory::XString;
@@ -44,7 +45,7 @@ use crate::path::MAXPATHL;
 use crate::path::{ExpandFlags, gen_expand_wildcards, path_full_compare};
 use crate::runtime::{RuntimeOpts, do_in_path_visit};
 use crate::semsg;
-use crate::types::{ExArg, Expand, ExpandContext, IOSIZE};
+use crate::types::{ExArg, IOSIZE};
 use core::ffi::c_int;
 use std::ffi::OsStr;
 use std::fs::File;

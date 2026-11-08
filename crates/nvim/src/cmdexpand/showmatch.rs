@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::charset::vim_strsize_cstr;
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
 use crate::env::{expand_env, home_to_tilde};
@@ -33,7 +34,6 @@ use crate::os::fs::dir_exists;
 use crate::path::MAXPATHL;
 use crate::path::{tail_index, vim_ispathsep};
 use crate::popupmenu::pum_clear;
-use crate::types::ExpandContext;
 use crate::ui::state::Columns;
 use crate::ui::state::kUIMessages;
 use crate::ui::{ui_flush, ui_has};

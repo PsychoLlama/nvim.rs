@@ -46,7 +46,7 @@ use crate::semsg;
 use crate::smsg;
 use crate::types::DictBuilder;
 
-use crate::types::ExpandContext;
+use crate::cmdexpand::defs::ExpandContext;
 use core::ffi::CStr;
 use std::sync::PoisonError;
 

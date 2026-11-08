@@ -8,13 +8,13 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
+use crate::cmdexpand::defs::Candidate;
 use crate::cmdexpand::expand_generic;
 use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::source::ex_errmsg;
 use crate::memory::XString;
 use crate::message::VIM_QUESTION;
 use crate::message::VIM_YES;
-use crate::types::Candidate;
 use crate::types::CmdIdx;
 use crate::types::LineNr;
 use crate::window::tab_index;
@@ -49,9 +49,10 @@ use crate::os::cshim::ngettext;
 
 use crate::os::fs::{CFile, dir_exists, os_mkdir, os_strerror, path_exists};
 
+use crate::cmdexpand::defs::{CompleteListItemGetter, Expand};
 use crate::os::libc::{int32_t, intmax_t};
 use crate::regexp::RegMatch;
-use crate::types::{CmdLine, CmdModFlags, CompleteListItemGetter, EcmdCmd, ExArg, Expand, Failed};
+use crate::types::{CmdLine, CmdModFlags, EcmdCmd, ExArg, Failed};
 use crate::window::{only_one_window, tabpage_index};
 
 /// Take a `+cmd` argument, and answer the command it names.

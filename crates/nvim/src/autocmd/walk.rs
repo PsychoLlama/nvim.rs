@@ -27,9 +27,10 @@
 use super::*;
 use crate::lua::executor::nlua_call_ref_quiet;
 use crate::memory::XString;
+use crate::runtime::defs::{EstackInfo, FrameName};
 use crate::smsg;
 use crate::types::Handle;
-use crate::types::{AutoHandler, EstackInfo, FrameName, PatId};
+use crate::types::{AutoHandler, PatId};
 
 /// The buffer number `apc`'s `<buffer=N>` patterns match: its own until
 /// the walk is running, then the running walks' slot, which

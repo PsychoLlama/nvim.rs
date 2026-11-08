@@ -32,8 +32,9 @@ use super::*;
 use crate::eval::gc::{RootId, unroot_dict, unroot_list};
 use crate::eval::typval::{CallFrame, DictRef, ListRef, RemovedItem, tv_dict_alloc, tv_list_alloc};
 use crate::eval::vars::list_dict_vars;
+use crate::hashtab::HashItem;
 use crate::hashtab::{HT_INIT_SIZE, hash_reset};
-use crate::types::{DictKey, HashItem, Refcount, ScopeDictItem, ScopeType};
+use crate::types::{DictKey, Refcount, ScopeDictItem, ScopeType};
 
 /// A funccall's three scopes: `l:`, `a:` and `a:000`, with the entries that
 /// name `l:` and `a:` themselves (what `l:` alone evaluates to).

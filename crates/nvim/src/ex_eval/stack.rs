@@ -17,9 +17,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ex_eval::defs::{CondId, CondStack};
 use crate::global_cell::GlobalCell;
 use crate::id_table::{Boxed, IdTable};
-use crate::types::{CondId, CondStack};
 use core::cell::UnsafeCell;
 use core::mem::ManuallyDrop;
 

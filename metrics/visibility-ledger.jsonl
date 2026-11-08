@@ -180,6 +180,7 @@
 {"path":"neovim::harness::utf_ptr2char_info_impl","kind":"fn","file":"crates/nvim/src/harness.rs","tests":["crates/nvim/tests/unit/mbyte.rs"]}
 {"path":"neovim::harness::utf_ptr2len","kind":"fn","file":"crates/nvim/src/harness.rs","tests":["crates/nvim/tests/unit/mbyte.rs","crates/nvim/tests/unit/mbyte_oracle.rs"]}
 {"path":"neovim::hashtab::HT_INIT_SIZE","kind":"const","file":"crates/nvim/src/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
+{"path":"neovim::hashtab::HashTab","kind":"struct","file":"crates/nvim/src/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
 {"path":"neovim::hashtab::Slot","kind":"struct","file":"crates/nvim/src/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
 {"path":"neovim::hashtab::SlotEntry","kind":"trait","file":"crates/nvim/src/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
 {"path":"neovim::hashtab::hash_bytes","kind":"fn","file":"crates/nvim/src/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
@@ -562,7 +563,6 @@
 {"path":"neovim::types::ExArgt","kind":"struct","file":"crates/nvim/src/types/ex_cmds.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
 {"path":"neovim::types::Failed","kind":"struct","file":"crates/nvim/src/types/vim.rs","tests":["crates/nvim/tests/unit/eval_decode.rs","crates/nvim/tests/unit/fs.rs","crates/nvim/tests/unit/path.rs","crates/nvim/tests/unit/typval_dict.rs","crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::types::Handle","kind":"struct","file":"crates/nvim/src/types/multiqueue_list.rs","tests":["crates/nvim/tests/unit/buffer.rs","crates/nvim/tests/unit/namespace.rs","crates/nvim/tests/unit/options.rs"]}
-{"path":"neovim::types::HashTab","kind":"struct","file":"crates/nvim/src/types/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
 {"path":"neovim::types::Key","kind":"struct","file":"crates/nvim/src/types/key.rs","tests":["crates/nvim/tests/unit/key_oracle.rs","crates/nvim/tests/unit/keycodes.rs","crates/nvim/tests/unit/keycodes_oracle.rs"]}
 {"path":"neovim::types::KeyValuePair","kind":"type","file":"crates/nvim/src/types/api.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
 {"path":"neovim::types::LineNr","kind":"struct","file":"crates/nvim/src/types/pos.rs","tests":["crates/nvim/tests/unit/buffer.rs","crates/nvim/tests/unit/cursor.rs","crates/nvim/tests/unit/ex_docmd.rs","crates/nvim/tests/unit/fold.rs","crates/nvim/tests/unit/memline.rs","crates/nvim/tests/unit/regexp.rs","crates/nvim/tests/unit/typval_value.rs"]}

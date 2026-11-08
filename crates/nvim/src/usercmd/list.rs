@@ -27,6 +27,7 @@
 use super::attr::named_addr_type;
 use super::complete::command_complete_name;
 use super::{LUA_NOREF, Scope, Table};
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::eval::last_set_msg;
 use crate::getchar::state::got_int;
@@ -44,7 +45,7 @@ use crate::os::input::line_breakcheck;
 use crate::os::libc::int64_t;
 use crate::types::ApiString;
 use crate::types::DictBuilder;
-use crate::types::{ApiDict, CmdAddr, ExArgt, ExpandContext, LuaRef, Object, ScriptCtx};
+use crate::types::{ApiDict, CmdAddr, ExArgt, LuaRef, Object, ScriptCtx};
 use crate::ui::state::Columns;
 use crate::usercmd::UserCmd;
 use crate::winlayer::Buf;

@@ -11,9 +11,10 @@
 
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::charset::skip;
+use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::ex_docmd::cmd_has_expr_args;
 use crate::mbyte::head_off;
-use crate::types::{CmdIdx, Expand, ExpandContext};
+use crate::types::CmdIdx;
 use core::ffi::c_int;
 
 /// The characters that end the plain-name part of an expression: whatever

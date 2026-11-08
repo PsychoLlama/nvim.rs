@@ -26,9 +26,10 @@ use core::ffi::CStr;
 use std::ffi::CString;
 
 use super::*;
+use crate::cmdexpand::defs::Candidate;
 use crate::eval::typval::DictRef;
 use crate::eval::typval::NumBuf;
-use crate::types::{Candidate, Failed};
+use crate::types::Failed;
 
 /// `"<prefix>:<name>"`, as a completion candidate.
 pub(crate) fn cat_prefix_varname(prefix: u8, name: &CStr) -> Candidate {

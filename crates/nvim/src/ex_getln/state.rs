@@ -19,8 +19,9 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::global_cell::GlobalCell;
-use crate::types::{Callback, Expand, ExpandContext};
+use crate::types::Callback;
 use core::ffi::c_int;
 
 pub(crate) static cmdline_star: GlobalCell<c_int> = GlobalCell::new(0 as c_int);

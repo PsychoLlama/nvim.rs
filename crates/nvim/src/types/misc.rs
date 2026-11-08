@@ -14,6 +14,7 @@
 use crate::decoration::defs::VirtTextChunk;
 use crate::eval::userfunc::FcId;
 use crate::os::libc::{int16_t, int64_t, uint8_t};
+use crate::runtime::defs::EStack;
 use core::mem::ManuallyDrop;
 
 use super::*;

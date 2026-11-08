@@ -7,8 +7,8 @@
 //! Vim shows the result, so placement is observable behaviour and not an
 //! implementation detail.
 
+use neovim::hashtab::HashTab;
 use neovim::hashtab::{HT_INIT_SIZE, SlotEntry, hash_bytes};
-use neovim::types::HashTab;
 
 /// A table entry: a 1-based index into [`Table::keys`], with `0` empty and
 /// `u32::MAX` the tombstone -- the shape the syntax keyword tables use.

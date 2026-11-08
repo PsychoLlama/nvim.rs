@@ -26,6 +26,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::cmdexpand::defs::{Candidate, Expand};
 use crate::cstr;
 use crate::event::libuv::{uv_os_homedir, uv_os_setenv, uv_os_unsetenv};
 use crate::global_cell::GlobalCell;
@@ -40,7 +41,7 @@ use crate::os::state::{didset_vim, didset_vimruntime};
 use crate::path::MAXPATHL;
 use crate::path::{path_is_absolute, tail_with_sep_index};
 use crate::startup::nvim_testing;
-use crate::types::{Candidate, Expand, Failed, IOSIZE};
+use crate::types::{Failed, IOSIZE};
 use ::libc::{uname, utsname};
 use core::ffi::{CStr, c_int};
 use std::ffi::{CString, OsStr};

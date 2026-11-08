@@ -15,6 +15,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::cmdexpand::defs::ExpandContext;
 use crate::drawscreen::state::cmdline_row;
 use crate::event_queue::ChildQueue;
 use crate::ex_getln::getcmdline_prompt;
@@ -35,7 +36,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::{InputEvents, input_get};
 use crate::state::mode::State;
 use crate::types::Key;
-use crate::types::{Callback, ExpandContext, IOSIZE};
+use crate::types::{Callback, IOSIZE};
 use crate::ui::state::kUIMessages;
 use crate::ui::{ui_flush, ui_has};
 use crate::{cstr, formatted};

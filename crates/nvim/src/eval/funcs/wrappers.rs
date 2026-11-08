@@ -19,6 +19,8 @@ use super::{
 };
 use crate::api::private::converter::call_handler_for_vimscript;
 use crate::buffer::{buflist_findpat_prefix, find_buf};
+use crate::cmdexpand::defs::Candidate;
+use crate::cmdexpand::defs::Expand;
 use crate::eval::buffer::find_buffer;
 use crate::eval::funcs::builtin::{EvalFuncDef, WrongArity};
 use crate::eval::typval::{
@@ -41,10 +43,9 @@ use crate::option::vars::{P_MAGIC, p_magic};
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::semsg_multiline;
-use crate::types::Candidate;
 use crate::types::Handle;
 use crate::types::{
-    Array, Blob, EvalFuncData, Expand, Failed, Float, LineNr, Object, TypVal, VAR_BOOL, VAR_FLOAT,
+    Array, Blob, EvalFuncData, Failed, Float, LineNr, Object, TypVal, VAR_BOOL, VAR_FLOAT,
     VAR_NUMBER, VAR_STRING, VarNumber, kBoolVarTrue,
 };
 use crate::winlayer::{Buf, Win, last_buffer};

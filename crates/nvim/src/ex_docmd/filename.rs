@@ -29,6 +29,7 @@ use crate::arglist::arg_all_bytes;
 use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
 use crate::buffer::find_buf;
 use crate::charset::{backslash_halved, getdigits_int_at};
+use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::eval::fs::modify_fname;
 use crate::eval::skip_expr;
 use crate::eval::typval::{NumBuf, list_find_str};
@@ -54,7 +55,7 @@ use crate::quickfix::grep_internal;
 use crate::runtime::estack_sfile;
 use crate::runtime::state::current_sctx;
 use crate::strings::{escaped_bytes, replaced_all};
-use crate::types::{CmdLine, ExArg, ExArgt, Expand, ExpandContext, Failed, LineNr, Vv};
+use crate::types::{CmdLine, ExArg, ExArgt, Failed, LineNr, Vv};
 use crate::winlayer::Buf;
 
 /// `:make` and `:grep` are 'makeprg'/'grepprg' with `$*` replaced by the

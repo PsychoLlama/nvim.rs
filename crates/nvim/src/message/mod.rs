@@ -149,6 +149,7 @@ use crate::os::libc::{int64_t, size_t, uint64_t};
 use crate::os::time::os_delay;
 use crate::pos::MAXCOL;
 use crate::register::write_reg_contents;
+use crate::runtime::defs::EStackArg;
 use crate::startup::{
     embedded_mode, ex_exitval, exiting, full_screen, headless_mode, nvim_testing, silent_mode,
 };
@@ -163,8 +164,7 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{ApiDict, Integer};
 use crate::types::{
-    ApiString, Array, EStackArg, ExArg, HlMessage, IOSIZE, Object, OptInt, ScreenAttr, ScreenChar,
-    TypVal, Vv,
+    ApiString, Array, ExArg, HlMessage, IOSIZE, Object, OptInt, ScreenAttr, ScreenChar, TypVal, Vv,
 };
 use crate::ui::state::{Columns, Rows, resize_events};
 use crate::ui::state::{kUIMessages, kUIMultigrid};

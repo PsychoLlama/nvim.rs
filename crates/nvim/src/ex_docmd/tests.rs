@@ -384,7 +384,7 @@ fn the_loop_store_reads_through_stores_and_replays_at_depth() {
     let _fx = Fixture::new();
     // A frame of the case's own: reading and replaying move the innermost
     // frame's line number, which the next case would otherwise inherit.
-    let name = crate::types::FrameName::Static(c"edstore");
+    let name = crate::runtime::defs::FrameName::Static(c"edstore");
     crate::runtime::estack_push(crate::runtime::ETYPE_SCRIPT, name, LineNr::ZERO);
     let mut cookie = SourceCookie::from_lines(
         ["one", "two", "three"]

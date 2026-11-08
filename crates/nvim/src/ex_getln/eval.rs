@@ -17,6 +17,7 @@
 )]
 
 use super::*;
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::eval::list::string_tv;
 use crate::eval::typval::NumBuf;
@@ -24,7 +25,6 @@ use crate::getchar::Remap;
 use crate::keycodes::KE_WILD;
 use crate::memory::{ThinCString, XString};
 use crate::narrow::number_as_int;
-use crate::types::ExpandContext;
 
 /// Whether a command line is being edited at all: C's
 /// `get_cmdline_info()->cmdbuff != NULL`, which nothing outside `ex_getln/`

@@ -20,6 +20,7 @@
 
 use super::SUB_FLAGS;
 use super::exec::Sub;
+use crate::cmdexpand::defs::ExpandContext;
 use crate::drawscreen::{
     UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
 };
@@ -46,7 +47,7 @@ use crate::os::cshim::gettext;
 use crate::plines::getvcol;
 use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
 use crate::state::mode::{State, exmode_active};
-use crate::types::{Callback, ColNr, ExpandContext, IOSIZE, NUL};
+use crate::types::{Callback, ColNr, IOSIZE, NUL};
 use crate::ui::state::kUIMessages;
 use crate::ui::ui_has;
 use crate::winlayer::{Buf, Win};

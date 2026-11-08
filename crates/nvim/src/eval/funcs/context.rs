@@ -8,6 +8,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::context::Context;
 use crate::context::kCtxBufs;
 use crate::context::kCtxFuncs;
 use crate::context::kCtxGVars;
@@ -23,8 +24,7 @@ use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_integer;
 use crate::semsg;
 use crate::types::{
-    Context, Error, EvalFuncData, Failed, Object, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER,
-    VAR_UNKNOWN,
+    Error, EvalFuncData, Failed, Object, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN,
 };
 use core::ffi::c_int;
 

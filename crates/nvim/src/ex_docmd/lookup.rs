@@ -26,7 +26,8 @@ use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::startup::getout;
 
-use crate::types::{Candidate, CmdAddr, CmdLine, EvalFuncData, ExArg, ExArgt, Expand, TypVal};
+use crate::cmdexpand::defs::{Candidate, Expand};
+use crate::types::{CmdAddr, CmdLine, EvalFuncData, ExArg, ExArgt, TypVal};
 use crate::usercmd::{find_ucmd, get_user_commands, user_command_name};
 
 /// Is this index a *user* command rather than a row of `cmdnames`?

@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::cstr;
 use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
@@ -24,7 +25,6 @@ use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
 use crate::option::vars::P_ICM;
 use crate::state::Step;
-use crate::types::ExpandContext;
 use crate::winlayer::Win;
 
 /// What `CTRL-\` did with the key typed after it.

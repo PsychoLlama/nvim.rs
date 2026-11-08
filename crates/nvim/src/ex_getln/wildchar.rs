@@ -15,12 +15,13 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::cstr;
 use crate::keycodes::SpecialKey;
 use crate::option::vars::P_WIM;
 use crate::options::OptWimFlags;
-use crate::types::{ExpandContext, Failed};
+use crate::types::Failed;
 
 /// Whether stage `idx` of `'wildmode'` carries `flag` (a `kOptWimFlag*`).
 ///

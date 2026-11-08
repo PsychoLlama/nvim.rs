@@ -276,7 +276,7 @@ pub fn handle_did_throw() {
     // caught. The frame takes the name.
     estack_push(
         ETYPE_EXCEPT,
-        crate::types::FrameName::Owned(throw_name),
+        crate::runtime::defs::FrameName::Owned(throw_name),
         throw_lnum,
     );
     discard_current_exception();

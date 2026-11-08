@@ -15,6 +15,7 @@
 )]
 
 use super::*;
+use crate::cmdexpand::defs::ExpandContext;
 use crate::cmdexpand::state::{saved_status_opts, wild_menu_showing};
 use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{redraw_statuslines, update_screen, win_redraw_last_status};
@@ -27,7 +28,7 @@ use crate::mbyte::head_off;
 use crate::option::vars::{P_LS, P_WMH, p_wmnu};
 use crate::option::wildchar;
 use crate::path::{PATHSEP_BYTE, vim_ispathsep};
-use crate::types::{ExpandContext, Key};
+use crate::types::Key;
 use crate::window::last_status;
 use crate::winlayer::{Cc, current_topframe};
 use core::ffi::c_int;

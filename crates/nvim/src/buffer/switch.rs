@@ -43,6 +43,7 @@ use crate::charset::{getdigits_int_at, skip};
 use crate::drawscreen::state::cmdline_row;
 use crate::ex_cmds2::{can_abandon, dialog_changed, dialog_close_terminal};
 use crate::ex_docmd::{cmdmod_has, ex_errmsg, ex_msg};
+use crate::ex_eval::defs::Cleanup;
 use crate::ex_eval::{enter_cleanup, leave_cleanup};
 use crate::getchar::state::got_int;
 use crate::mark::mark_jumplist_forget_file;
@@ -59,7 +60,7 @@ use crate::os::input::os_breakcheck;
 use crate::os::libc::int64_t;
 use crate::search::FORWARD;
 use crate::terminal::buf_terminal_running;
-use crate::types::{Cleanup, CmdModFlags, ExArg, Failed, LineNr, OptInt};
+use crate::types::{CmdModFlags, ExArg, Failed, LineNr, OptInt};
 use crate::window::{
     NotClosed, check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close,
     win_locked, win_split,

@@ -18,8 +18,8 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::hashtab::HashTab;
 use crate::hashtab::{SlotEntry, hash_bytes};
-use crate::types::HashTab;
 
 /// What a slot holds: the index of its entry.
 #[derive(Copy, Clone, PartialEq, Eq)]

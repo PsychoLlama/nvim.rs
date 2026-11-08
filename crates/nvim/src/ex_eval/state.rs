@@ -21,9 +21,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ex_eval::defs::{ErrorMsgs, ExcId, Exception};
 use crate::global_cell::state_record;
 use crate::id_table::IdTable;
-use crate::types::{ErrorMsgs, ExcId, Exception};
 use core::ffi::c_int;
 
 state_record! {

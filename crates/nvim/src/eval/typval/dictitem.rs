@@ -39,11 +39,12 @@
 
 use super::*;
 use crate::eval::vars::var_wrong_func_name_named;
+use crate::hashtab::HashTab;
 use crate::mbyte::cluster_len;
 use crate::memory::ThinCString;
 use crate::memory::handoff::owned_cstr;
 use crate::semsg;
-use crate::types::{DictKey, Failed, HashTab};
+use crate::types::{DictKey, Failed};
 use core::ffi::CStr;
 
 /// A dictionary's hash table.

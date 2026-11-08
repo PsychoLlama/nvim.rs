@@ -34,6 +34,8 @@ pub use startuptime::{time_finish, time_init, time_msg, time_push, time_start};
 pub(crate) use startuptime::{time_msg_at, time_pop};
 
 use crate::charset::skip;
+use crate::cmdexpand::defs::Candidate;
+use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::debugger::ex_breakadd;
 use crate::env::expand_env;
 use crate::eval::userfunc::{all_funcs, current_fc};
@@ -44,13 +46,10 @@ use crate::os::cshim::gettext;
 use crate::os::fs::CFile;
 use crate::os::libc::int64_t;
 use crate::os::time::os_hrtime;
+use crate::runtime::defs::{ScriptItem, SnPrl};
 use crate::runtime::state::current_sctx;
 use crate::runtime::{script_count, script_id_valid, with_script_item};
-use crate::types::Candidate;
-use crate::types::{
-    ExArg, Expand, ExpandContext, FuncCall, LineNr, ProfTime, ScriptItem, SnPrl, UserFunc,
-    VarNumber, Vv,
-};
+use crate::types::{ExArg, FuncCall, LineNr, ProfTime, UserFunc, VarNumber, Vv};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 use std::rc::Rc;

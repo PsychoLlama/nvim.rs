@@ -8,7 +8,7 @@
 //! What is kept exactly is the slot every name lands in, because the slot
 //! order is what Vim shows: `:function` lists the table in slot order, and so
 //! do name completion and the profile report. The table is the same
-//! open-addressed table as [`crate::types::HashTab`] -- the same hash, the
+//! open-addressed table as [`crate::hashtab::HashTab`] -- the same hash, the
 //! same probe sequence, the same resize thresholds, the same rehash order --
 //! over slots that hold an owned [`UserFunc`] rather than a borrowed key.
 //!
@@ -29,8 +29,9 @@ use core::ffi::c_int;
 use std::rc::Rc;
 
 use crate::global_cell::GlobalCell;
+use crate::hashtab::HashValue;
 use crate::hashtab::{HT_INIT_SIZE, Probe, hash_bytes_len, resize_decision};
-use crate::types::{HashValue, UserFunc};
+use crate::types::UserFunc;
 
 /// One slot.
 enum Slot {

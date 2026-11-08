@@ -20,6 +20,7 @@
 use super::*;
 use crate::arglist::get_arglist_name;
 use crate::autocmd::{expand_get_augroup_name, expand_get_event_name};
+use crate::cmdexpand::defs::{BackslashEscape, Candidate, CompleteListItemGetter, ExpandContext};
 use crate::cmdhist::get_history_arg;
 use crate::eval::funcs::{get_expr_name, get_function_name};
 use crate::eval::userfunc::get_user_func_name;
@@ -38,10 +39,7 @@ use crate::regexp::RegMatch;
 use crate::runtime::{script_display_name, script_id_valid};
 use crate::sign::get_sign_name;
 use crate::syntax::{EXPAND_BUF_LEN, get_syntax_name, get_syntime_arg};
-use crate::types::{
-    ApiString, Array, ArrayBuf, BackslashEscape, Candidate, CompleteListItemGetter, ExpandContext,
-    Object,
-};
+use crate::types::{ApiString, Array, ArrayBuf, Object};
 use crate::usercmd::{
     get_user_cmd_addr_type, get_user_cmd_complete, get_user_cmd_flags, get_user_cmd_nargs,
     get_user_commands,

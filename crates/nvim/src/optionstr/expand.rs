@@ -29,6 +29,7 @@ use core::ffi::CStr;
 use std::ffi::CString;
 
 use crate::autocmd::get_event_name_no_group;
+use crate::cmdexpand::defs::{Candidate, CompleteListItemGetter, Expand};
 use crate::cmdexpand::expand_generic;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::get_highlight_name;
@@ -38,7 +39,6 @@ use crate::option::defs::OptExpand;
 use crate::options::{
     kOptEventignore, kOptListchars, opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values,
 };
-use crate::types::{Candidate, CompleteListItemGetter, Expand};
 
 use super::{
     COCU_ALL, CPO_VI, FO_ALL, MOUSE_ALL, SHM_ALL, WW_ALL, get_fillchars_name, get_listchars_name,

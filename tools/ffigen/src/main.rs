@@ -620,7 +620,9 @@ fn is_marker(ty: &syn::Type) -> bool {
 /// exists is an error, so the list cannot outlive a move.
 const TYPE_HOMES: &[&str] = &[
     "src/api/keysets.rs",
+    "src/arglist/mod.rs::ArgListId",
     "src/channel/defs.rs",
+    "src/cmdexpand/defs.rs",
     "src/cmdhist/mod.rs::HistoryType",
     "src/cursor_shape.rs::CursorShape",
     "src/decoration/defs.rs",
@@ -633,6 +635,7 @@ const TYPE_HOMES: &[&str] = &[
     "src/event/objects.rs",
     "src/event/queue.rs",
     "src/event/uv.rs",
+    "src/ex_eval/defs.rs",
     "src/ex_getln/state.rs::CmdRedraw",
     "src/extmark/mod.rs::BCount",
     "src/extmark/mod.rs::ExtmarkMove",
@@ -643,6 +646,7 @@ const TYPE_HOMES: &[&str] = &[
     "src/extmark/mod.rs::UndoObjectType",
     "src/fileio/mod.rs::FileOffset",
     "src/getchar/state.rs::FlushBuffers",
+    "src/hashtab.rs::HashValue",
     "src/highlight/mod.rs::HlKind",
     "src/highlight/mod.rs::Hlf",
     "src/highlight/mod.rs::RgbValue",
@@ -673,6 +677,7 @@ const TYPE_HOMES: &[&str] = &[
     "src/regexp/mod.rs::Magic",
     "src/regexp/mod.rs::OptMagic",
     "src/register/defs.rs",
+    "src/runtime/defs.rs",
     "src/spell/mod.rs::SalFirst",
     "src/spell/mod.rs::SpellAddType",
     "src/spell/mod.rs::SpellIdx",

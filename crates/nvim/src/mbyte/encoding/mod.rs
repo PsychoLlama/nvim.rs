@@ -30,12 +30,12 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
+use crate::cmdexpand::defs::Candidate;
 use crate::memory::XString;
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::ctype_bits;
 use crate::os::env::getenv_owned;
 use crate::os::lang::{ctype_locale, locale_codeset};
-use crate::types::Candidate;
 use crate::winlayer::Buf;
 use core::ffi::{c_int, c_uint};
 

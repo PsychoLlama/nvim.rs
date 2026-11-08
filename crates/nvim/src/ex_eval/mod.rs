@@ -51,6 +51,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+pub(crate) mod defs;
 mod exception;
 mod stack;
 pub(crate) mod state;
@@ -63,6 +64,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::tv_clear;
 use crate::eval::{eval_cmd_bool, eval_for_line, eval0_in_cmd, next_for_item};
 use crate::ex_docmd::{ends_excmd, modifier_len};
+use crate::ex_eval::defs::{CondId, CondStack, Pend};
 use crate::ex_eval::state::{did_endif, did_throw, force_abort, trylevel};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
@@ -71,7 +73,7 @@ use crate::message::{e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_while};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::CmdIdx;
-use crate::types::{CondId, CondStack, ExArg, Failed, Pend};
+use crate::types::{ExArg, Failed};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
@@ -132,7 +134,8 @@ pub(crate) use trycmd::{
 /// Constants the transpiler copied in from the headers this module includes.
 pub(crate) mod flag {
     use super::c_int;
-    use crate::types::{EStackArg, ExceptType};
+    use crate::ex_eval::defs::ExceptType;
+    use crate::runtime::defs::EStackArg;
 
     /// `CondStack::pending`: what a finally clause postponed. The last
     /// three are alternatives, not bits -- `CSTP_RETURN` deliberately

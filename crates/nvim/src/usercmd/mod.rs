@@ -59,6 +59,7 @@ pub(crate) use expand::{
 pub(crate) use list::commands_array;
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::cstr;
 use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
@@ -74,7 +75,7 @@ use crate::semsg;
 use crate::tr;
 use crate::types::CmdIdx;
 use crate::types::ScriptCtx;
-use crate::types::{CmdAddr, ExArg, ExArgt, Expand, ExpandContext, LuaRef};
+use crate::types::{CmdAddr, ExArg, ExArgt, LuaRef};
 use crate::window::prevwin_curwin;
 use crate::winlayer::Buf;
 use core::cmp::Ordering;

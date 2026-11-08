@@ -94,6 +94,7 @@ use core::ffi::c_int;
 
 use crate::ascii::ascii_iswhite;
 use crate::charset::{ptr2cells_at, vim_isprintc, vim_iswordc_tab};
+use crate::cmdexpand::defs::Expand;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::eval::typval::{tv_check_for_string_arg, tv_list_alloc, tv_list_alloc_ret};
 use crate::getchar::beep_flush;
@@ -109,7 +110,7 @@ use crate::optionstr::OptStringRef;
 use crate::optionstr::check_chars_options;
 use crate::os::cshim::gettext;
 use crate::os::libc::uint64_t;
-use crate::types::{ColNr, EvalFuncData, Expand, IOSIZE, List, ScreenChar, TypVal, VarNumber};
+use crate::types::{ColNr, EvalFuncData, IOSIZE, List, ScreenChar, TypVal, VarNumber};
 use crate::utf8proc::utf8proc_int32_t;
 use crate::utf8proc::{
     UTF8PROC_CASEFOLD, UTF8PROC_CATEGORY_ME, UTF8PROC_CATEGORY_MN, utf8proc_decompose_char,

@@ -42,7 +42,7 @@ use crate::shada::{
 };
 use crate::types::DictBuilder;
 use crate::types::TypVal;
-use crate::types::{ApiDict, ApiString, Array, Context, Error, KeyValuePair, Object, VAR_LIST};
+use crate::types::{ApiDict, ApiString, Array, Error, KeyValuePair, Object, VAR_LIST};
 use core::ffi::{CStr, c_int};
 
 /// The `ContextTypeFlags` a `Context` can carry, one bit per section.
@@ -290,6 +290,15 @@ pub fn ctx_from_dict(dict: ApiDict, ctx: &mut Context) -> Result<c_int, Error> {
         }
     }
     Ok(types)
+}
+
+#[derive(Default)]
+pub struct Context {
+    pub regs: ApiString,
+    pub jumps: ApiString,
+    pub bufs: ApiString,
+    pub gvars: ApiString,
+    pub funcs: Array,
 }
 
 #[cfg(test)]

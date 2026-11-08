@@ -27,6 +27,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 use std::ffi::CString;
 
+use crate::cmdexpand::defs::{BackslashEscape, Expand, ExpandContext, XpPrefix};
 use crate::cmdexpand::{Scored, cmdline_fuzzy_complete, fuzzy_sorted};
 use crate::ex_docmd::state::ESCAPE_CHARS;
 use crate::fuzzy::fuzzy_match_str;
@@ -44,7 +45,6 @@ use crate::path::MAXPATHL;
 use crate::regexp::RegMatch;
 use crate::regexp::vim_regexec;
 use crate::strings::escaped_bytes;
-use crate::types::{BackslashEscape, Expand, ExpandContext, XpPrefix};
 
 use super::{
     FUZZY_SCORE_NONE, find_option_len, get_option, get_varp_scope_from, is_option_hidden,

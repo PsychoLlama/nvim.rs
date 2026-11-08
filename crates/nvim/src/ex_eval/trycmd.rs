@@ -60,6 +60,7 @@ use crate::debugger::dbg_check_skipped;
 use crate::eval::eval_cmd_string;
 use crate::eval::userfunc::do_return;
 use crate::ex_docmd::ends_excmd;
+use crate::ex_eval::defs::{Cleanup, CondId, Pend};
 use crate::ex_eval::state::{current_exception, did_throw, force_abort, need_rethrow};
 use crate::getchar::state::got_int;
 use crate::guard::Suppress;
@@ -71,7 +72,7 @@ use crate::option::SavedCpo;
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING, char_delim, skip_regexp_err_at};
 use crate::runtime::do_finish;
 use crate::semsg;
-use crate::types::{Cleanup, CondId, ExArg, Failed, Pend, TypVal};
+use crate::types::{ExArg, Failed, TypVal};
 use core::ffi::c_int;
 
 /// `:throw {expr}`
