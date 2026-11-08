@@ -7,10 +7,10 @@
     clippy::ptr_as_ptr
 )]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-use super::*;
+//! The shape of a request handler: what a msgpack-RPC method name resolves to.
+
 use crate::os::libc::uint64_t;
+use crate::types::{Array, Error, Object};
 
 /// One generated msgpack-RPC dispatch wrapper: it decodes an argument array
 /// against a method's signature, calls the `nvim_*` function and encodes the

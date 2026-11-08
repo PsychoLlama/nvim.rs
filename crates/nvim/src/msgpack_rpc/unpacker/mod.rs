@@ -30,11 +30,12 @@ use crate::memory::XString;
 use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK, Next, TokBuf, read_token};
 use crate::mpack::object::{MPACK_NOMEM, Node, Parser};
 use crate::mpack::token::{self, Kind, Tok};
+use crate::msgpack_rpc::handler::ApiDispatchFn;
 use crate::msgpack_rpc::packer::{EXT_BUFFER, EXT_TABPAGE, EXT_WINDOW};
 use crate::narrow::msgpack_uint_as_u32;
 use crate::types::{
-    ApiDict, ApiDispatchFn, ApiString, DictKey, Error, GridLineEvent, Integer, KeyValuePair,
-    MessageType, MsgpackRpcRequestHandler, Object, UIClientHandler,
+    ApiDict, ApiString, DictKey, Error, GridLineEvent, Integer, KeyValuePair, MessageType,
+    MsgpackRpcRequestHandler, Object, UIClientHandler,
 };
 use crate::ui_client::handle_ui_client_redraw;
 
