@@ -32,6 +32,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::getchar::VIML_INTERNAL_CALL;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::K_SPECIAL;
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::{get_option_value, set_option_value};
 use crate::options::kOptShada;
 use crate::os::libc::size_t;
@@ -41,10 +42,7 @@ use crate::shada::{
 };
 use crate::types::DictBuilder;
 use crate::types::TypVal;
-use crate::types::{
-    ApiDict, ApiString, Array, Context, Error, KeyValuePair, Object, OptVal, OptionSetFlags,
-    VAR_LIST,
-};
+use crate::types::{ApiDict, ApiString, Array, Context, Error, KeyValuePair, Object, VAR_LIST};
 use core::ffi::{CStr, c_int};
 
 /// The `ContextTypeFlags` a `Context` can carry, one bit per section.

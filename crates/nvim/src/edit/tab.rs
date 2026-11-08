@@ -41,7 +41,8 @@ use core::ffi::c_int;
 use super::*;
 use crate::change::OPENLINE_DO_COM;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, Failed, FoFlag};
+use crate::option::defs::{CpoFlag, FoFlag};
+use crate::types::Failed;
 
 /// `i_CTRL-T` and `i_CTRL-D`: add or remove one 'shiftwidth' of indent.
 ///

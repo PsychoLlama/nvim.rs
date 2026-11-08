@@ -29,6 +29,7 @@ use crate::drawscreen::state::{need_maketitle, redraw_tabline};
 use crate::eval::typval::{DictRef, callback_free, tv_dict_alloc};
 use crate::eval::{callback_from_typval, eval_expr};
 use crate::memory::XString;
+use crate::option::defs::{BsFlag, CpoFlag, OptVal, OptionSetFlags, ShmFlag};
 use crate::option::vars::{
     P_BS, P_CPO, P_FFS, P_SHM, P_SISO, P_SO, bkc_flags, p_magic, p_sh, p_siso, p_so, p_wc, p_wcm,
     ve_flags,
@@ -41,10 +42,7 @@ use crate::path::{full_name_save, tail_index};
 use crate::regexp::state::{OPTION_MAGIC_OFF, OPTION_MAGIC_ON};
 use crate::search::state::magic_overruled;
 use crate::state::mode::State;
-use crate::types::{
-    BsFlag, Callback, CpoFlag, ExArg, Failed, OptInt, OptVal, OptionSetFlags, ScriptId, ShmFlag,
-    TypVal,
-};
+use crate::types::{Callback, ExArg, Failed, OptInt, ScriptId, TypVal};
 
 use super::{
     EOL_DOS, EOL_MAC, EOL_UNIX, FORCE_BIN, get_option, get_varp, kOptScopeBuf, kOptScopeWin,

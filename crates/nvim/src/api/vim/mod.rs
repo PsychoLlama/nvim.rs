@@ -89,6 +89,7 @@ use crate::mpack::typedefs::mpack_token_type_t;
 use crate::msgpack_rpc::channel::rpc_set_client_info;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::normal::reset_visual_and_resel;
+use crate::option::defs::OptVal;
 use crate::option::vars::{P_LZ, p_cpo, p_lz};
 use crate::option::{OptionTarget, buf_copy_options, set_option_direct_for};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptCotFlagPopup, kOptInvalid};
@@ -115,7 +116,7 @@ use crate::terminal::{
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, Context, Error, Float, Handle, Integer,
-    LineNr, LuaRef, MessageType, MotionType, Object, OptVal, ScreenChar, ScriptId, TabpageHandle,
+    LineNr, LuaRef, MessageType, MotionType, Object, ScreenChar, ScriptId, TabpageHandle,
     VarNumber, Vv, WindowHandle, YankReg, kCdScopeGlobal, kErrorTypeException,
     kErrorTypeValidation, kObjectTypeString,
 };

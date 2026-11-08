@@ -32,7 +32,8 @@ use crate::option::vars::{P_PP, P_RTP};
 use crate::os::fs::dir_exists;
 use crate::path::{ExpandFlags, add_pathsep};
 
-use crate::types::{Failed, OptionSetFlags};
+use crate::option::defs::OptionSetFlags;
+use crate::types::Failed;
 use core::ffi::{CStr, c_int};
 use std::rc::Rc;
 

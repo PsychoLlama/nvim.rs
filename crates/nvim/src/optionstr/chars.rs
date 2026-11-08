@@ -49,15 +49,14 @@ use crate::grid::schar_from_char;
 use crate::mbyte::{c_cluster_len, c_cluster_schar};
 use crate::message::{e_invarg, e_leadtab_requires_tab};
 use crate::narrow::number_as_int;
+use crate::option::defs::{OptError, OptSet, OptionSetFlags};
 use crate::option::vars::{P_FCS, P_LCS};
 use crate::option::{StrVar, option_var};
 use crate::options::kOptListchars as kOptListcharsIdx;
 use crate::optionstr::CharsOption;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
-use crate::types::{
-    Expand, FcsChars, LcsChars, NUL, OptError, OptSet, OptionSetFlags, ScreenChar, WinOpt,
-};
+use crate::types::{Expand, FcsChars, LcsChars, NUL, ScreenChar, WinOpt};
 use crate::winlayer;
 
 use super::frame::new_bytes;

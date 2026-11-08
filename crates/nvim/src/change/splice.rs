@@ -40,7 +40,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::memline::MlFlags;
 use crate::normal::visual_active;
 use crate::option::cpo_has;
-use crate::types::CpoFlag;
+use crate::option::defs::CpoFlag;
 use crate::winlayer::{Buf, TabPage, Win, tab_windows, windows};
 
 /// Drop the cached display information one window holds about the lines a

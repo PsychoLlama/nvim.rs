@@ -46,9 +46,9 @@
 
 use crate::highlight::HlAttrFlags;
 use crate::highlight::{HlAttrs, RgbValue};
+use crate::option::defs::OptScope;
 use crate::optionstr::CharsOption;
 use crate::os::libc::{int16_t, int32_t};
-use crate::types::OptScope;
 use core::ffi::{c_int, c_uint};
 
 mod check;
@@ -56,6 +56,7 @@ mod context;
 mod copy;
 mod cpo;
 mod defaults;
+pub mod defs;
 mod didset;
 mod expand;
 mod info;

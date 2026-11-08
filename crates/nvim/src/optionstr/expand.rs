@@ -34,10 +34,11 @@ use crate::global_cell::GlobalCell;
 use crate::highlight_group::get_highlight_name;
 use crate::mbyte::get_encoding_name;
 use crate::memory::XString;
+use crate::option::defs::OptExpand;
 use crate::options::{
     kOptEventignore, kOptListchars, opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values,
 };
-use crate::types::{Candidate, CompleteListItemGetter, Expand, OptExpand};
+use crate::types::{Candidate, CompleteListItemGetter, Expand};
 
 use super::{
     COCU_ALL, CPO_VI, FO_ALL, MOUSE_ALL, SHM_ALL, WW_ALL, get_fillchars_name, get_listchars_name,

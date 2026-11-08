@@ -19,7 +19,7 @@
 use super::*;
 use crate::keycodes::{Ctrl_V, KE_LUA};
 use crate::option::cpo_has;
-use crate::types::CpoFlag;
+use crate::option::defs::CpoFlag;
 use core::ffi::{CStr, c_int};
 
 /// The modes `:map!` covers.

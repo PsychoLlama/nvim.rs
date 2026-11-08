@@ -57,6 +57,7 @@ use crate::message::{
     msg_putchar, msg_reset_scroll, msg_str, msg_str_hl, set_keep_msg, verb_msg,
 };
 use crate::message_fmt::msg_cstr_opt;
+use crate::option::defs::OptVal;
 use crate::option::vars::{P_DIR, P_SHM, p_uc, p_verbose};
 use crate::option::{get_fileformat, set_fileformat, set_option_value_give_err};
 use crate::options::kOptFileencoding;
@@ -78,7 +79,7 @@ use crate::semsg;
 use crate::spell::spell_delete_wordlist;
 use crate::startup::{getout, recoverymode};
 use crate::types::{
-    Buffer, CmdModFlags, ColNr, Dict, Failed, LineNr, List, OptVal, Pos, Timestamp, VarNumber,
+    Buffer, CmdModFlags, ColNr, Dict, Failed, LineNr, List, Pos, Timestamp, VarNumber,
 };
 use crate::ui::state::kUIMessages;
 use crate::ui::{ui_flush, ui_has};

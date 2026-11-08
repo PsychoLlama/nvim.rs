@@ -31,10 +31,11 @@ use crate::r#move::WinValid;
 use crate::narrow::as_index;
 use crate::narrow::count_as_int;
 use crate::option::cpo_has;
+use crate::option::defs::CpoFlag;
 use crate::optionstr::OptString;
 use crate::path::MAXPATHL;
 use crate::statusline::defs::StlOpt;
-use crate::types::{CpoFlag, NUL, Vv};
+use crate::types::{NUL, Vv};
 use crate::winlayer::Win;
 use std::io::Write as _;
 

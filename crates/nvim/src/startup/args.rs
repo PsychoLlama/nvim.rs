@@ -36,6 +36,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::guard::{SavedSctx, Script};
 use crate::lua::state::nlua_disable_preload;
 use crate::message_fmt::msg_cstr;
+use crate::option::defs::{OptIndex, OptVal, OptionSetFlags};
 use crate::option::vars::{P_LPL, P_UC, P_VERBOSE, P_WRITE, p_shadafile};
 use crate::option::{boolean_optval, reset_modifiable, set_option_value_give_err, set_options_bin};
 use crate::os::cshim::{gettext, write_c_stderr};
@@ -59,7 +60,7 @@ use crate::startup::{
     stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty,
 };
 use crate::state::mode::exmode_active;
-use crate::types::{Failed, LineNr, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, Vv};
+use crate::types::{Failed, LineNr, OptInt, ScriptId, Vv};
 use std::os::fd::AsFd as _;
 
 /// A bare `-V` is "a little bit verbose".

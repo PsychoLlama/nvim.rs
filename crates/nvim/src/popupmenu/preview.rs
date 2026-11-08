@@ -25,9 +25,9 @@ use crate::ex_cmds::newlnum;
 use crate::guard::{Allow, Suppress};
 use crate::message::emsg;
 use crate::option::boolean_optval;
+use crate::option::defs::OptionSetFlags;
 use crate::optionstr::OptString;
 use crate::types::ColNr;
-use crate::types::OptionSetFlags;
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, TabId, TabPage, WinId};
 

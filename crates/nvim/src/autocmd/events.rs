@@ -22,9 +22,10 @@
 use super::*;
 use crate::getchar::typeahead;
 use crate::memory::XString;
+use crate::option::defs::OptionSetFlags;
 use crate::option::vars::P_EI;
 use crate::types::Candidate;
-use crate::types::{Failed, OptionSetFlags};
+use crate::types::Failed;
 
 /// The [`EVENT_NAMES`] row an event number names.
 ///

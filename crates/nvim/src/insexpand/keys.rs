@@ -19,8 +19,8 @@ use crate::keycodes::SpecialKey;
 use crate::mbyte::head_off;
 use crate::mbyte::{char_at, cluster_len, encode_char};
 use crate::memline::Lines;
+use crate::option::defs::{BsFlag, ShmFlag};
 use crate::types::Key;
-use crate::types::{BsFlag, ShmFlag};
 use crate::winlayer::Win;
 
 /// Delete one character before the cursor and show the subset of the matches

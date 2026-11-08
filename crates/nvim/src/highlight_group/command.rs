@@ -33,12 +33,12 @@ use crate::highlight::state::{
 use crate::lua::executor::nlua_set_sctx;
 use crate::message::{emsg, msg_ext_set_kind};
 use crate::message_fmt::{msg_bytes, msg_cstr};
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
 use crate::options::kOptBackground;
 use crate::os::cshim::gettext;
 use crate::runtime::state::current_sctx;
 use crate::startup::starting;
-use crate::types::{OptVal, OptionSetFlags};
 use crate::ui::state::kUILinegrid;
 use crate::ui::state::t_colors;
 use crate::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};

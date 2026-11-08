@@ -33,12 +33,13 @@ use crate::charset::try_getdigits_at;
 use crate::global_cell::GlobalCell;
 use crate::guard::Depth;
 use crate::guard::secure;
+use crate::option::defs::OptionSetFlags;
 use crate::option::do_set;
 use crate::option::vars::p_mls;
 use crate::os::libc::intmax_t;
 use crate::runtime::state::current_sctx;
 use crate::runtime::{estack_pop, estack_push};
-use crate::types::{Failed, LineNr, OptionSetFlags, ScriptId};
+use crate::types::{Failed, LineNr, ScriptId};
 use crate::version::min_vim_version;
 use crate::winlayer::Buf;
 

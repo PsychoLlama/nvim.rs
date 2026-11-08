@@ -23,10 +23,11 @@
 
 use super::arith::{MinSize, NextCurwin};
 use super::*;
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_value;
 use crate::option::vars::{p_ch, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::options::kOptCmdheight;
-use crate::types::{OptInt, OptVal, OptionSetFlags};
+use crate::types::OptInt;
 use crate::ui::state::Rows;
 use crate::winlayer::{FrameRef, Win};
 

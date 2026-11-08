@@ -36,6 +36,7 @@ use crate::highlight::{HlAttrFlags, ns_hl_def};
 use crate::highlight_group::{highlight_changed, syn_check_group};
 use crate::indent::replace_tabstop_array;
 use crate::r#move::changed_window_setting;
+use crate::option::defs::{OptIndex, OptionSetFlags};
 use crate::option::vars::{P_BIN, P_ET, P_ML, P_TW, P_WM, p_et, p_ml, p_tw, p_wm};
 use crate::options::*;
 use crate::optionstr::{
@@ -46,7 +47,7 @@ use crate::spell::{compile_cap_prog, did_set_spell_option};
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::startup::starting;
-use crate::types::{ApiString, Buffer, OptIndex, OptInt, OptionSetFlags, WinOpt};
+use crate::types::{ApiString, Buffer, OptInt, WinOpt};
 use crate::winlayer::Win;
 
 use super::{

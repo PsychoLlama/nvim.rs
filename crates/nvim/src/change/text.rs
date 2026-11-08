@@ -31,7 +31,8 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, Failed, Key};
+use crate::option::defs::CpoFlag;
+use crate::types::{Failed, Key};
 use crate::winlayer::{Buf, Win};
 
 /// Insert `bytes` at the cursor, one character at a time, so that Replace

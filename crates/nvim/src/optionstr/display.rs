@@ -40,6 +40,7 @@ use crate::mbyte::c_cluster_len;
 use crate::message::e_unsupportedoption;
 use crate::message::{messagesopt_changed, msg_grid_validate};
 use crate::r#move::validate_virtcol;
+use crate::option::defs::{OptError, OptSet, OptionSetFlags};
 use crate::option::vars::{
     P_BG, P_MOUSESCROLL, breakat_flags, p_breakat, p_km, p_mousescroll_hor, p_mousescroll_vert,
     p_pumborder, p_winborder, ve_flags,
@@ -49,8 +50,7 @@ use crate::options::{kOptAmbiwidth, opt_ve_values};
 use crate::optionstr::BreakAt;
 use crate::state::mode::{km_startsel, km_stopsel};
 use crate::types::{
-    ColNr, FloatAnchor, LPos, LineNr, OptError, OptInt, OptSet, OptionSetFlags, VirtText,
-    WinConfig, WinOpt, kFloatRelativeEditor,
+    ColNr, FloatAnchor, LPos, LineNr, OptInt, VirtText, WinConfig, WinOpt, kFloatRelativeEditor,
 };
 use crate::window::check_colorcolumn;
 

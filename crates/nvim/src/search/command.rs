@@ -27,6 +27,7 @@ use crate::memory::XString;
 use crate::message::msg_display_bytes;
 use crate::narrow::number_as_lnum;
 use crate::narrow::{len_as_int, number_as_int};
+use crate::option::defs::{CpoFlag, ShmFlag};
 use crate::option::{ScrollMargin, ScrollOff, cpo_has};
 use crate::optionstr::{OptString, OptStringRef};
 use crate::plines::getvcol;
@@ -38,7 +39,7 @@ use crate::search::{
     SEARCH_OPT, SEARCH_PEEK, SEARCH_REV, SEARCH_START, SEARCH_STAT_BUF_LEN,
     SEARCH_STAT_DEF_TIMEOUT,
 };
-use crate::types::{CmdModFlags, CpoFlag, NUL, ShmFlag};
+use crate::types::{CmdModFlags, NUL};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};

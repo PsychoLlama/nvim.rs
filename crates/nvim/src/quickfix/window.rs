@@ -21,10 +21,10 @@ use crate::buffer::find_buf;
 use crate::cursor::check_cursor;
 use crate::eval::vars::set_internal_string_var;
 use crate::ex_cmds::{EcmdFlags, edit_buffer_number};
+use crate::option::defs::{OptError, OptionSetFlags};
 use crate::option::vars::P_QFTF;
 use crate::option::{boolean_optval, callback_from_option};
 use crate::types::Handle;
-use crate::types::{OptError, OptionSetFlags};
 use crate::window::{
     WSP_BELOW, WSP_BOT, WSP_NEWLOC, WSP_QUICKFIX, WSP_VERT, close, goto_win, setheight_win,
     setwidth_win, split, tabline_rows, valid_win,

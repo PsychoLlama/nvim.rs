@@ -50,6 +50,7 @@ use crate::message::{
     msg_putchar, msg_start, msg_str, msg_str_hl, msg_title, verbose_enter, verbose_enter_scroll,
     verbose_leave, verbose_leave_scroll,
 };
+use crate::option::defs::OptVal;
 use crate::option::set_option_direct;
 use crate::option::vars::{P_ACD, p_acd, p_ei, p_verbose};
 use crate::options::kOptEventignore;
@@ -71,8 +72,8 @@ use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     AcoSave, ApiString, AutoCmd, AutoPat, AutoPatCmd, BufferHandle, Callback, EStackType, Error,
-    EventCmds, ExArg, Expand, Integer, LuaRef, Object, OptVal, ProfTime, SaveVEvent, ScriptCtx,
-    Timestamp, VarNumber, Vv,
+    EventCmds, ExArg, Expand, Integer, LuaRef, Object, ProfTime, SaveVEvent, ScriptCtx, Timestamp,
+    VarNumber, Vv,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;

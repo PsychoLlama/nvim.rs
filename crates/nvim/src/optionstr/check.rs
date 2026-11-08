@@ -35,6 +35,7 @@ use crate::global_cell::{Field, field};
 use crate::guard::secure;
 use crate::indent_c::parse_cino;
 use crate::memory::XString;
+use crate::option::defs::OptError;
 use crate::option::{kOptFlagNDname, kOptFlagNFname, valid_name};
 use crate::options::{
     kOptBackupcopy, kOptBelloff, kOptCasemap, kOptClipboard, kOptCompleteopt, kOptDisplay,
@@ -45,7 +46,7 @@ use crate::options::{
 use crate::os::cshim::gettext;
 use crate::os::libc::uint32_t;
 use crate::statusline::defs::StlOpt;
-use crate::types::{Buffer, Failed, NUL, OptError};
+use crate::types::{Buffer, Failed, NUL};
 
 use super::OptStringRef;
 

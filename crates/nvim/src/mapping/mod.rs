@@ -71,6 +71,7 @@ use crate::message::{
     emsg, iemsg, message_filtered, msg, msg_clr_eos, msg_display, msg_display_keys,
     msg_ext_set_kind, msg_putchar, msg_start, msg_str, msg_str_hl, special_keys_text,
 };
+use crate::option::defs::OptSet;
 use crate::option::vars::{p_cpo, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::libc::{ptrdiff_t, size_t, uint64_t};
@@ -83,7 +84,7 @@ use crate::state::{
 };
 use crate::types::{
     ApiDict, ApiString, Array, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand, Integer,
-    LineNr, LuaRef, Object, OptSet, RegMatch, ScriptId, TypVal, VarNumber,
+    LineNr, LuaRef, Object, RegMatch, ScriptId, TypVal, VarNumber,
 };
 use std::rc::Rc;
 

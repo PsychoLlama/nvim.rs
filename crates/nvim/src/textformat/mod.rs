@@ -32,9 +32,9 @@ use core::ffi::c_int;
 use crate::ascii::ascii_iswhite;
 use crate::mbyte::{char_at, utf_iscomposing_first};
 use crate::memline::Lines;
+use crate::option::defs::FoFlag;
 use crate::option::vars::p_paste;
 use crate::optionstr::OptStringRef;
-use crate::types::FoFlag;
 use crate::window::win_fdccol_count;
 use crate::winlayer::graph::cmdwin_buf;
 

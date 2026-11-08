@@ -57,6 +57,7 @@ use crate::memory::XString;
 use crate::message::e_bufloaded;
 use crate::message::emsg;
 use crate::message_fmt::msg_bytes;
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_value_give_err;
 use crate::option::split_option_part;
 use crate::options::kOptSpellfile;
@@ -66,7 +67,6 @@ use crate::path::MAXPATHL;
 use crate::path::{dir_of_file_exists, path_tail, tail_with_sep_index, vim_ispathsep};
 use crate::spell::SpellAddType;
 use crate::spell::{int_wordlist, spell_enc, with_lang};
-use crate::types::{OptVal, OptionSetFlags};
 use crate::undo::buf_is_changed;
 
 use super::wordtree::valid_spell_word;

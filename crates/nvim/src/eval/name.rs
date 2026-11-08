@@ -31,10 +31,11 @@ use crate::eval::{
 use crate::keycodes::{K_SPECIAL, KE_SNR, KS_EXTRA};
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
+use crate::option::defs::{OptIndex, OptionSetFlags};
 use crate::option::option_end;
 use crate::semsg;
 use crate::strings::has_char;
-use crate::types::{OptIndex, OptionSetFlags, TypVal};
+use crate::types::TypVal;
 use core::ffi::c_int;
 
 /// The NUL byte, as the scans below compare it.

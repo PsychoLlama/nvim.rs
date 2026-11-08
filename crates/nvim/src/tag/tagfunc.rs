@@ -17,9 +17,10 @@
 use super::*;
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::option::defs::{OptError, OptionSetFlags};
 use crate::optionstr::OptString;
 use crate::types::TypVal;
-use crate::types::{OptError, OptionSetFlags, VAR_DICT, VAR_LIST, VarLock, kSpecialVarNull};
+use crate::types::{VAR_DICT, VAR_LIST, VarLock, kSpecialVarNull};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 

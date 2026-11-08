@@ -42,15 +42,14 @@ use crate::global_cell::GlobalCell;
 use crate::message::set_keep_msg;
 use crate::mouse::reset_dragwin;
 use crate::normal::reset_visual_and_resel;
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_value;
 use crate::option::vars::{p_ch, p_tpm};
 use crate::options::kOptCmdheight;
 use crate::os::libc::int64_t;
 use crate::startup::starting;
 use crate::tag::state::postponed_split_tab;
-use crate::types::{
-    Failed, Handle, OptInt, OptVal, OptionSetFlags, ScopeDictItem, SwitchWin, Tabpage, VAR_SCOPE,
-};
+use crate::types::{Failed, Handle, OptInt, ScopeDictItem, SwitchWin, Tabpage, VAR_SCOPE};
 use crate::ui::state::{Columns, Rows};
 use crate::window::state::{skip_win_fix_scroll, tabpage_move_disallowed};
 use crate::winfloat::{win_config_float, win_float_update_statusline};

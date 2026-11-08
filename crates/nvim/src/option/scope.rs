@@ -26,19 +26,20 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::types::option::kOptValTypeBoolean;
-use crate::types::option::kOptValTypeNumber;
-use crate::types::option::kOptValTypeString;
+use crate::option::defs::kOptValTypeBoolean;
+use crate::option::defs::kOptValTypeNumber;
+use crate::option::defs::kOptValTypeString;
 use core::ffi::c_int;
 
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 // The generated index enum and `local_var`, the ladder naming each local
 // option's field.
+use crate::option::defs::{OptIndex, OptScope, OptValType, OptVar, OptionSetFlags};
 use crate::options::*;
 use crate::optionstr::OptString;
 use crate::os::libc::ssize_t;
-use crate::types::{OptIndex, OptInt, OptScope, OptValType, OptVar, OptionSetFlags};
+use crate::types::OptInt;
 use crate::winlayer::{Buf, Win};
 
 use super::{

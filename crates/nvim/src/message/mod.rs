@@ -133,6 +133,7 @@ use crate::message::state::{
     verbose_did_open, verbose_fd,
 };
 use crate::mouse::{MOUSE_SETPOS, jump_to_mouse, setmouse};
+use crate::option::defs::ShmFlag;
 use crate::option::shortmess;
 use crate::option::vars::p_vfile;
 use crate::option::vars::{
@@ -163,7 +164,7 @@ use crate::types::TAB;
 use crate::types::{ApiDict, Integer};
 use crate::types::{
     ApiString, Array, EStackArg, ExArg, HlMessage, IOSIZE, Object, OptInt, ScreenAttr, ScreenChar,
-    ShmFlag, TypVal, Vv,
+    TypVal, Vv,
 };
 use crate::ui::state::{Columns, Rows, resize_events};
 use crate::ui::state::{kUIMessages, kUIMultigrid};

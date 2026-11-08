@@ -20,13 +20,13 @@ use crate::cstr;
 use crate::mbyte::{strcmp_ic_in, strnicmp_in};
 use crate::narrow::len_as_int;
 use crate::option::cpo_has;
+use crate::option::defs::{CpoFlag, ShmFlag};
 use crate::pos::MAXCOL;
 use crate::regexp::{LineMatcher, RE_SEARCH, walk_lines};
 use crate::search::{
     SEARCH_COL, SEARCH_END, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, SEARCH_NOOF, SEARCH_PEEK,
     SEARCH_START,
 };
-use crate::types::{CpoFlag, ShmFlag};
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 use core::ffi::c_int;

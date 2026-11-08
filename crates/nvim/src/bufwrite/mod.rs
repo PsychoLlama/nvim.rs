@@ -53,6 +53,7 @@ use crate::message::state::{msg_scroll, msg_silent, no_wait_return};
 use crate::message::{e_empty_buffer, e_fsync, e_interr, e_longname};
 use crate::message::{emsg, msg_progress, msg_str_hl, set_keep_msg};
 use crate::message_fmt::{emsg_text, msg_cstr};
+use crate::option::defs::{CpoFlag, ShmFlag};
 use crate::option::vars::{P_BSK, P_CCV, P_PM, p_bk, p_bsk, p_fs, p_pm, p_wb};
 use crate::option::{cpo_has, get_bkc_flags, get_fileformat_force, shortmess};
 use crate::options::{
@@ -72,9 +73,7 @@ use crate::path::{after_pathsep, path_fnamecmp, tail_index};
 use crate::sha256::Sha256;
 use crate::startup::exiting;
 use crate::strings::{FmtArg, format_into};
-use crate::types::{
-    AcoSave, CmdModFlags, CpoFlag, ExArg, Failed, IOSIZE, LineNr, Pos, ShmFlag, VimAcl,
-};
+use crate::types::{AcoSave, CmdModFlags, ExArg, Failed, IOSIZE, LineNr, Pos, VimAcl};
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};
 use crate::winlayer::Buf;

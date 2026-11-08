@@ -33,12 +33,13 @@ use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::message::{emsg, iemsg};
 use crate::message_fmt::msg_bytes;
+use crate::option::defs::OptVal;
 use crate::option::optval_as_tv;
 use crate::option::{get_option_value, get_tty_option, is_option_hidden, is_tty_option};
 use crate::options::kOptInvalid;
 use crate::os::cshim::gettext;
 use crate::semsg;
-use crate::types::{Failed, Float, OptVal, TypVal};
+use crate::types::{Failed, Float, TypVal};
 use core::ffi::c_int;
 
 /// The NUL byte, as the walks below compare it.

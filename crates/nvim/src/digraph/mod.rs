@@ -44,6 +44,7 @@ use crate::message::{msg_advance, msg_display, msg_ext_set_kind, msg_putchar};
 use crate::message_fmt::emsg_text;
 use crate::normal::add_to_showcmd;
 use crate::option::SavedCpo;
+use crate::option::defs::OptError;
 use crate::option::vars::{p_dg, p_enc};
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
@@ -54,8 +55,7 @@ use crate::state::MODE_LANGMAP;
 use crate::tr;
 use crate::types::Key;
 use crate::types::{
-    BoolVarValue, EvalFuncData, ExArg, Failed, KeymapEntry, List, OptError, OptInt, TypVal,
-    VAR_LIST,
+    BoolVarValue, EvalFuncData, ExArg, Failed, KeymapEntry, List, OptInt, TypVal, VAR_LIST,
 };
 use crate::ui::state::Columns;
 use crate::winlayer::Buf;

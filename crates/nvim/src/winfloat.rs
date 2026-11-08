@@ -51,13 +51,14 @@ use crate::message::e_cmdwin;
 use crate::message::emsg;
 use crate::mouse::{MousePos, find_win_inner};
 use crate::r#move::{textpos2screenpos, validate_cursor};
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::vars::{p_ch, p_ls};
 use crate::option::{OptionTarget, parse_winhl_opt, set_option_direct_for};
 use crate::options::kOptBufhidden;
 use crate::optionstr::OptStringRef;
 use crate::types::{
-    AlignTextPos, BufferHandle, Error, FloatAnchor, LPos, LineNr, OptInt, OptVal, OptionSetFlags,
-    Pos, ScreenChar, VirtText, WinConfig, WinSplit, WinStyle, WindowHandle, kErrorTypeException,
+    AlignTextPos, BufferHandle, Error, FloatAnchor, LPos, LineNr, OptInt, Pos, ScreenChar,
+    VirtText, WinConfig, WinSplit, WinStyle, WindowHandle, kErrorTypeException,
     kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
     kFloatRelativeWindow,
 };

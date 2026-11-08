@@ -42,7 +42,7 @@ use crate::path::{ExpandFlags, add_pathsep};
 use crate::semsg;
 use crate::smsg;
 
-use crate::types::OptError;
+use crate::option::defs::OptError;
 use core::ffi::{CStr, c_int};
 use std::rc::Rc;
 use std::sync::PoisonError;

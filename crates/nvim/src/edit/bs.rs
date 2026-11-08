@@ -41,7 +41,8 @@ use core::ffi::c_int;
 use super::*;
 use crate::memline::Moved;
 use crate::option::cpo_has;
-use crate::types::{BsFlag, CpoFlag, Failed, FoFlag, NUL};
+use crate::option::defs::{BsFlag, CpoFlag, FoFlag};
+use crate::types::{Failed, NUL};
 
 /// Which backwards-delete key is running.
 ///

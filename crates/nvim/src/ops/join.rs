@@ -33,7 +33,8 @@ use super::*;
 use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::char_at;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, Failed, FoFlag, NUL};
+use crate::option::defs::{CpoFlag, FoFlag};
+use crate::types::{Failed, NUL};
 
 /// Where the text of `line` starts once its comment leader is skipped, and
 /// whether the line ends *inside* an unclosed comment.

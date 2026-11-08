@@ -24,7 +24,8 @@ use crate::narrow::len_as_int;
 use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::types::{IOSIZE, ShmFlag};
+use crate::option::defs::ShmFlag;
+use crate::types::IOSIZE;
 
 /// What a pass over the lines produced.
 #[derive(Default)]

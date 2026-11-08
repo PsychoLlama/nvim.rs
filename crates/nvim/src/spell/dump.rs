@@ -49,13 +49,14 @@ use crate::mbyte::{c_cluster_len, char_at, strnicmp_in};
 use crate::memline::{ml_append_text, ml_delete};
 use crate::memory::XString;
 use crate::message::{msg_end, msg_ext_set_kind, msg_putchar, msg_start, msg_str};
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::vars::p_ic;
 use crate::option::{boolean_optval, get_option_value, set_option_value_give_err};
 use crate::options::{kOptSpell, kOptSpelllang};
 use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
 use crate::spell::SpellLang;
-use crate::types::{Direction, ExArg, IOSIZE, LineNr, OptVal, OptionSetFlags};
+use crate::types::{Direction, ExArg, IOSIZE, LineNr};
 
 use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
 use super::check::no_spell_checking;

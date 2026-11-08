@@ -65,6 +65,7 @@ use crate::message::{
     emsg, internal_error, msg_clr_cmdline, msg_delay, msg_ext_set_kind, msg_progress,
 };
 use crate::r#move::{changed_cline_bef_curs, curs_columns, validate_cursor};
+use crate::option::defs::OptSet;
 use crate::option::vars::{
     P_IC, P_SCS, P_WS, cot_flags, p_ac, p_acl, p_act, p_cto, p_dict, p_fic, p_ic, p_inf, p_js,
     p_paste, p_scs, p_smd, p_tsr, p_tsrfu, p_wic, p_ws,
@@ -106,7 +107,7 @@ use crate::tag::state::g_tag_at_cursor;
 use crate::textformat::auto_format;
 use crate::types::{
     ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand, HashTab,
-    LineNr, List, OptInt, OptSet, Pos, RegMatch, SaveVEvent, TypVal, VarNumber, Vv,
+    LineNr, List, OptInt, Pos, RegMatch, SaveVEvent, TypVal, VarNumber, Vv,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;

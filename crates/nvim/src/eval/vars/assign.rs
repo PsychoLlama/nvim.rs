@@ -42,13 +42,14 @@ use crate::eval::{
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::ends_excmd;
 use crate::message::{e_invarg, e_listreq, internal_error};
+use crate::option::defs::OptVal;
 use crate::option::{
     boolean_optval, get_option_value, get_tty_option, is_option_hidden, is_tty_option,
     optval_concat, set_option_value_handle_tty,
 };
 use crate::os::env::vim_setenv_named;
 use crate::register::{get_reg_contents_owned, write_reg_contents};
-use crate::types::{ExArg, Failed, OptInt, OptVal, TypVal, VAR_LIST, VarNumber};
+use crate::types::{ExArg, Failed, OptInt, TypVal, VAR_LIST, VarNumber};
 
 /// The compound assignment operators, as they appear before the `=`.
 const OPERATORS: &[u8] = b"+-*/%.";

@@ -34,8 +34,9 @@ use core::ffi::{CStr, c_int};
 use crate::bufwrite::translate;
 
 use super::*;
+use crate::option::defs::ShmFlag;
 use crate::path::MAXPATHL;
-use crate::types::{Failed, ShmFlag};
+use crate::types::Failed;
 
 /// `filemess` about the current buffer, with a translated note.
 fn filemess_note(fname: Option<&CStr>, note: &'static CStr) {

@@ -25,7 +25,8 @@ use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::AutoEvent;
 
-use crate::types::{CmdModFlags, CpoFlag, Failed};
+use crate::option::defs::CpoFlag;
+use crate::types::{CmdModFlags, Failed};
 
 use super::*;
 use crate::buffer::BufRef;

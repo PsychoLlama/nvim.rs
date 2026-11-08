@@ -23,7 +23,8 @@ use crate::grid::{SLF_INC_VCOL, SLF_WRAP, grid_of_view, with_linebuf};
 use crate::r#move::WinValid;
 use crate::narrow::as_index;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, NUL};
+use crate::option::defs::CpoFlag;
+use crate::types::NUL;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 

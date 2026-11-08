@@ -64,6 +64,7 @@ use crate::highlight::Hlf;
 pub(crate) use crate::highlight::namespace::hl_attr;
 use crate::highlight::{hl_combine_attr, win_hl_attr};
 use crate::highlight_group::{HLF_S, HLF_SNC};
+use crate::option::defs::{OptIndex, OptionSetFlags};
 use crate::options::kOptStatuscolumn;
 use crate::optionstr::OptStringRef;
 use crate::path::MAXPATHL;
@@ -71,7 +72,7 @@ use crate::sign::SignTextAttrs;
 use crate::statusline::defs::{
     ClickLine, StatusCol, StlClickDefinition, StlClickDefinition_type_0, StlClickRecord,
 };
-use crate::types::{LineNr, Object, OptIndex, OptionSetFlags, ScreenChar, Vv};
+use crate::types::{LineNr, Object, ScreenChar, Vv};
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
 

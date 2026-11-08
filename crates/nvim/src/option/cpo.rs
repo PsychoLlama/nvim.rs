@@ -30,9 +30,10 @@
 use core::ffi::CStr;
 
 use crate::memory::XString;
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::vars::{P_CPO, p_cpo};
 use crate::options::kOptCpoptions;
-use crate::types::{ApiString, OptVal, OptionSetFlags};
+use crate::types::ApiString;
 
 use super::set_option_value_give_err;
 

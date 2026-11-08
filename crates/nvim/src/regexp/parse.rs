@@ -22,10 +22,10 @@ use crate::cstr;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::option::cpo_has;
+use crate::option::defs::CpoFlag;
 use crate::regexp::RegCompiler;
 use crate::regexp::low_byte;
 use crate::tr;
-use crate::types::CpoFlag;
 use core::ffi::{c_char, c_int};
 
 use super::mbyte::{char_at_nul, char_len_at, cluster_len_at};

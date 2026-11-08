@@ -22,9 +22,10 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{SpecialKey, key_unescape};
 use crate::lua::executor::funcref_description;
 use crate::memory::XString;
+use crate::option::defs::CpoFlag;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
-use crate::types::{CpoFlag, ExpandContext, Key};
+use crate::types::{ExpandContext, Key};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 

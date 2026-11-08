@@ -24,9 +24,10 @@ use crate::formatted;
 use crate::mbyte::{char_at, char_len};
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
+use crate::option::defs::OptError;
 use crate::option::vars::P_LANGMAP;
 use crate::swmsg;
-use crate::types::{Key, OptError};
+use crate::types::Key;
 
 /// One `'langmap'` pair for a character that does not fit `langmap_mapchar`.
 struct LangmapEntry {

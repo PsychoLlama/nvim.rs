@@ -54,6 +54,7 @@ use crate::message::{
     emsg, message_filtered, msg, msg_clr_eos, msg_display, msg_end, msg_outnum, msg_putchar,
     msg_start, msg_starthere, msg_str, msgmore,
 };
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_direct;
 use crate::options::kOptFoldcolumn;
 use crate::os::cshim::gettext;
@@ -66,9 +67,7 @@ use crate::types::CAR;
 use crate::types::CmdIdx;
 use crate::types::ESC;
 use crate::types::NL;
-use crate::types::{
-    CmdModFlags, ExArg, GetFileRet, LPos, LineNr, List, OptVal, OptionSetFlags, Vv,
-};
+use crate::types::{CmdModFlags, ExArg, GetFileRet, LPos, LineNr, List, Vv};
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
 use core::ffi::CStr;

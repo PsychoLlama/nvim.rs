@@ -17,8 +17,8 @@ use super::*;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::memory::XString;
 use crate::narrow::number_as_int;
+use crate::option::defs::OptionSetFlags;
 use crate::types::Handle;
-use crate::types::OptionSetFlags;
 use crate::winlayer::Buf;
 
 pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Result<(), Error> {

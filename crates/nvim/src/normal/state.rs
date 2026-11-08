@@ -66,6 +66,7 @@ use crate::normal::{
     NormalState, NvCmd, NvFlags, check_scrollbind, clear_op, clear_op_beep, end_visual_mode,
     find_command, normal_execute, nv_cmds, unshift_special, visual_active,
 };
+use crate::option::defs::ShmFlag;
 use crate::option::shortmess;
 use crate::option::vars::{fdo_flags, p_smd};
 use crate::options::kOptFdoFlagAll;
@@ -82,7 +83,7 @@ use crate::state::{
     may_trigger_safestate, state_enter, state_no_longer_safe,
 };
 use crate::terminal::terminal_check_refresh;
-use crate::types::{CmdArg, OpArg, OpType, Outcome, Pos, ShmFlag};
+use crate::types::{CmdArg, OpArg, OpType, Outcome, Pos};
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
 use crate::winlayer::graph::cmdwin_result;

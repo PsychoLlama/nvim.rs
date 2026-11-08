@@ -19,6 +19,7 @@ use crate::drawscreen::status_redraw_all;
 use crate::global_cell::GlobalCell;
 use crate::indent::replace_tabstop_array;
 use crate::memory::XString;
+use crate::option::defs::{OptError, OptIndex, OptSet, OptionSetFlags};
 use crate::option::vars::{
     P_AI, P_ET, P_RI, P_RU, P_SM, P_STA, P_STS, P_TW, P_VSTS, P_WM, p_ai, p_et, p_paste, p_ri,
     p_ru, p_sm, p_sta, p_sts, p_tw, p_wm,
@@ -27,7 +28,7 @@ use crate::options::{
     kOptAutoindent, kOptExpandtab, kOptRevins, kOptRuler, kOptShowmatch, kOptSmarttab,
     kOptSofttabstop, kOptTextwidth, kOptVarsofttabstop, kOptWrapmargin,
 };
-use crate::types::{OptError, OptIndex, OptInt, OptSet, OptionSetFlags};
+use crate::types::OptInt;
 
 use crate::winlayer::buffers;
 

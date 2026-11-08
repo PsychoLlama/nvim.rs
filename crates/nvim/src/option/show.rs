@@ -30,11 +30,11 @@ use crate::global_cell::field;
 use crate::keycodes::{Ctrl_V, ModMask};
 use crate::mbyte::unescape_at;
 use crate::narrow::number_as_int;
+use crate::option::defs::kOptValTypeBoolean;
+use crate::option::defs::kOptValTypeNumber;
 use crate::option::vars::P_MOUSE;
 use crate::optionstr::OptString;
 use crate::types::Key;
-use crate::types::option::kOptValTypeBoolean;
-use crate::types::option::kOptValTypeNumber;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 use std::io::Write;
@@ -49,6 +49,7 @@ use crate::message::{
     message_filtered, msg_advance, msg_display, msg_ext_set_kind, msg_putchar, msg_str, msg_title,
 };
 use crate::mouse::setmouse;
+use crate::option::defs::{OptIndex, OptVal, OptionSetFlags};
 use crate::options::{
     kOptAleph, kOptCount, kOptFiletype, kOptFoldenable, kOptFoldexpr, kOptFoldignore,
     kOptFoldlevel, kOptFoldmarker, kOptFoldmethod, kOptFoldminlines, kOptFoldnestmax, kOptPackpath,
@@ -59,7 +60,7 @@ use crate::os::input::os_breakcheck;
 use crate::os::libc::uint32_t;
 use crate::path::MAXPATHL;
 use crate::startup::silent_mode;
-use crate::types::{ApiString, Failed, NL, OptIndex, OptInt, OptVal, OptionSetFlags, WinOpt};
+use crate::types::{ApiString, Failed, NL, OptInt, WinOpt};
 use crate::ui::state::Columns;
 use crate::ui::ui_call_option_set;
 use crate::undo::curbuf_is_changed;

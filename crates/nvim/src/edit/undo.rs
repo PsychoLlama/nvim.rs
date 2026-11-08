@@ -35,7 +35,8 @@ use core::ffi::c_int;
 use super::*;
 use crate::normal::visual_active;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, Failed, FoFlag, NUL};
+use crate::option::defs::{CpoFlag, FoFlag};
+use crate::types::{Failed, NUL};
 
 /// Where an insert ended, as [`stop_insert`] reads it.
 ///

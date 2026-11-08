@@ -66,6 +66,7 @@ use crate::drawscreen::{
 };
 use crate::fold::fold_adjust_cursor;
 use crate::normal::visual_active;
+use crate::option::defs::CpoFlag;
 use crate::option::{cpo_has, get_scrolloff_value, get_sidescrolloff_value};
 use crate::options::{OptCuloptFlags, kOptCuloptFlagScreenline};
 use crate::optionstr::OptString;
@@ -74,7 +75,7 @@ use crate::plines::{
     linetabsize_eol, plines_m_win, plines_win, plines_win_full, plines_win_nofill, win_get_fill,
     win_may_fill,
 };
-use crate::types::{ColNr, CpoFlag, LineNr, MotionType, WLine};
+use crate::types::{ColNr, LineNr, MotionType, WLine};
 use crate::window::win_fdccol_count;
 use crate::winfloat::win_check_anchored_floats;
 use crate::winlayer::Win;

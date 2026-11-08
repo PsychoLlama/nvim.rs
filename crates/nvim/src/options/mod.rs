@@ -53,6 +53,8 @@ use crate::global_cell::ConstTable;
 use crate::insexpand::{did_set_completefunc, did_set_omnifunc, did_set_thesaurusfunc};
 use crate::mapping::did_set_langmap;
 use crate::ops::did_set_operatorfunc;
+use crate::option::defs::{MAX_MCO, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString};
+use crate::option::defs::{OptDefault, OptIndex, OptScopeFlags, OptVar, VimOption};
 use crate::option::vars::{
     bkc_flags, bo_flags, cb_flags, cmp_flags, cot_flags, dy_flags, fdo_flags, jop_flags, rdb_flags,
     ssop_flags, swb_flags, tc_flags, tcl_flags, tpf_flags, ve_flags, vop_flags, wop_flags,
@@ -105,9 +107,8 @@ use crate::os::libc::ssize_t;
 use crate::quickfix::did_set_quickfixtextfunc;
 use crate::runtime::did_set_runtimepackpath;
 use crate::tag::did_set_tagfunc;
+use crate::types::OptInt;
 use crate::types::ascii::TAB;
-use crate::types::option::{MAX_MCO, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString};
-use crate::types::{OptDefault, OptIndex, OptInt, OptScopeFlags, OptVar, VimOption};
 use crate::window::{did_set_winminheight, did_set_winminwidth};
 
 /// `scope_flags` bits.

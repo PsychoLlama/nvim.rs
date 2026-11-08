@@ -49,6 +49,7 @@ use crate::highlight_group::{
 use crate::mbyte::c_cluster_len;
 use crate::message::state::{msg_col, msg_row};
 use crate::message::{msg_clr_eos, msg_grid_view};
+use crate::option::defs::{OptIndex, OptionSetFlags};
 use crate::option::vars::{P_RUF, P_STL, P_WBR, p_ch, p_ru, p_ruf, p_tal};
 use crate::options::{kOptRulerformat, kOptStatusline, kOptTabline, kOptWinbar};
 use crate::optionstr::OptStringRef;
@@ -59,9 +60,7 @@ use crate::state::MODE_INSERT;
 use crate::state::mode::{State, edit_submode};
 use crate::statusline::defs::{StlHlRun, StlOpt};
 use crate::strings::{FmtArg, formatted};
-use crate::types::{
-    ApiString, Array, ColNr, Integer, NUL, Object, OptIndex, OptInt, OptionSetFlags, ScreenChar,
-};
+use crate::types::{ApiString, Array, ColNr, Integer, NUL, Object, OptInt, ScreenChar};
 use crate::ui::state::kUIMessages;
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_msg_ruler, ui_has};

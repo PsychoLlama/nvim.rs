@@ -40,13 +40,14 @@ use crate::ex_getln::{cmdline_at_end, cmdline_overstrike};
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{syn_check_group, syn_id2attr};
 use crate::normal::visual_active;
+use crate::option::defs::OptError;
 use crate::option::vars::{P_GUICURSOR, P_SEL, p_guicursor};
 use crate::os::libc::size_t;
 use crate::state::mode::{State, finish_op};
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_SHOWMATCH, MODE_TERMINAL, REPLACE_FLAG, VREPLACE_FLAG,
 };
-use crate::types::{Array, Object, OptError};
+use crate::types::{Array, Object};
 use crate::ui::ui_mode_info_set;
 
 pub(crate) type CursorShape = ::core::ffi::c_uint;

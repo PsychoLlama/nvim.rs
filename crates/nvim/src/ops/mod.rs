@@ -74,6 +74,7 @@ use crate::normal::{
     clear_op, clear_op_beep, may_clear_cmdline, prep_redo, prep_redo_num2, restore_visual_mode,
     unadjust_for_sel,
 };
+use crate::option::defs::OptSet;
 use crate::option::vars::{
     P_RI, P_SBR, P_SHM, p_ch, p_fp, p_js, p_opfunc, p_report, p_ri, p_sol, p_sr,
 };
@@ -101,7 +102,7 @@ use crate::textformat::{auto_format, has_format_option, op_format, op_formatexpr
 use crate::types::TAB;
 use crate::types::{
     BlockDef, Callback, CmdArg, CmdModFlags, ColNr, Dict, LineNr, MotionType, OpArg, OpType,
-    OptInt, OptSet, Pos, TypVal, UVarNumber, VarNumber,
+    OptInt, Pos, TypVal, UVarNumber, VarNumber,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};

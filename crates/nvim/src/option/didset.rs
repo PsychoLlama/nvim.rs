@@ -55,6 +55,7 @@ use crate::message::e_invarg;
 use crate::message::{msg, msg_source};
 use crate::r#move::changed_window_setting;
 use crate::normal::{do_check_scrollbind, get_vtopline};
+use crate::option::defs::{OptError, OptIndex, OptSet, OptVal, OptionSetFlags};
 use crate::option::vars::{
     P_ARSHAPE, P_CH, P_DECO, P_LNR, P_LRM, P_SJ, P_UL, P_WINDOW, p_arshape, p_ch, p_columns, p_ea,
     p_enc, p_hh, p_hls, p_lines, p_lnr, p_lrm, p_sj, p_tbidi, p_titlelen, p_uc, p_udf, p_wh,
@@ -70,9 +71,7 @@ use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::spell::parse_spelllang;
 use crate::startup::{full_screen, readonlymode, starting};
 use crate::terminal::on_scrollback_changed_in;
-use crate::types::{
-    Buffer, ColNr, LineNr, OptError, OptIndex, OptInt, OptSet, OptVal, OptionSetFlags, Vv,
-};
+use crate::types::{Buffer, ColNr, LineNr, OptInt, Vv};
 use crate::ui::state::{Columns, Rows};
 use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};
 use crate::window::{

@@ -26,10 +26,10 @@ use crate::edit::BeginlineOpts;
 use crate::ex_cmds::{EcmdFlags, edit_buffer_number};
 use crate::ex_docmd::cmdmod_tab;
 use crate::message::msg_keep_text;
+use crate::option::defs::ShmFlag;
 use crate::search::search_forward_keep;
 use crate::tr;
 use crate::types::Handle;
-use crate::types::ShmFlag;
 use crate::winlayer::prev_window;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 

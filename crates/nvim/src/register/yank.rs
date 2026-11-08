@@ -39,7 +39,7 @@ use core::ffi::{c_int, c_ulong};
 
 use super::*;
 use crate::option::cpo_has;
-use crate::types::CpoFlag;
+use crate::option::defs::CpoFlag;
 
 /// One line of a block, as `bd` measured it on `line`: the text with the
 /// spaces `block_prep` counted on both ends.

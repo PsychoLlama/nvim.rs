@@ -65,6 +65,7 @@ use crate::memline::MlFlags;
 use crate::memline::ml_delete_buf;
 use crate::narrow::as_index;
 use crate::narrow::count_as_int;
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_value;
 use crate::options::kOptBuftype;
 use crate::os::libc::int16_t;
@@ -76,8 +77,8 @@ use crate::types::ApiString;
 use crate::types::AutoEvent;
 use crate::types::builders::DictBuf;
 use crate::types::{
-    AcoSave, BufferHandle, ColNr, Handle, LineNr, Object, OptVal, OptionSetFlags, Pos,
-    RefcountSize, SaveVEvent, Terminal, VarNumber,
+    AcoSave, BufferHandle, ColNr, Handle, LineNr, Object, Pos, RefcountSize, SaveVEvent, Terminal,
+    VarNumber,
 };
 use crate::vterm::host::Value;
 use crate::vterm::screen::ZERO_SCREEN_CELL;

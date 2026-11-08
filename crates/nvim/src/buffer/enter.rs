@@ -54,6 +54,7 @@ use crate::message::{
 use crate::r#move::WinValid;
 use crate::normal::visual_active;
 use crate::option::buf_copy_options;
+use crate::option::defs::ShmFlag;
 use crate::option::vars::p_acd;
 use crate::optionstr::OptString;
 use crate::os::state::last_chdir_reason;
@@ -62,9 +63,7 @@ use crate::startup::starting;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, VIsual_reselect};
 use crate::terminal::check_buf_terminal_size;
-use crate::types::{
-    CmdModFlags, ColNr, DictItem, DictKey, LineNr, NUL, OptInt, ShmFlag, TypVal, VarLock,
-};
+use crate::types::{CmdModFlags, ColNr, DictItem, DictKey, LineNr, NUL, OptInt, TypVal, VarLock};
 use crate::undo::u_sync;
 use crate::window::get_last_winid;
 use crate::winlayer::window_at;

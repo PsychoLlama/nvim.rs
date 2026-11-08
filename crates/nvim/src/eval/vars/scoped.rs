@@ -28,7 +28,7 @@ use crate::types::ApiString;
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::option::boolean_optval;
-use crate::types::OptionSetFlags;
+use crate::option::defs::OptionSetFlags;
 use crate::window::valid_tab;
 use crate::winlayer::graph::switch_buffer;
 use crate::winlayer::{Buf, TabPage, Win, WinId, first_window};

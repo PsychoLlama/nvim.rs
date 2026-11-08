@@ -73,6 +73,7 @@ use crate::highlight_group::{HLF_CLF, HLF_FC, syn_name2id_bytes};
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::memline::ml_find_line_or_offset;
 use crate::message::state::did_emsg;
+use crate::option::defs::OptIndex;
 use crate::option::vars::{p_sc, p_sloc};
 use crate::option::{
     find_option, get_fileformat, get_option_default, set_option_direct, was_set_insecurely,
@@ -88,7 +89,7 @@ use crate::state::MODE_INSERT;
 use crate::state::mode::State;
 use crate::statusline::defs::{StlClickRecord, StlHlRun};
 use crate::strings::{FmtArg, format_into};
-use crate::types::{ColNr, LineNr, OptIndex, ScreenChar, TypVal, VarNumber, Vv};
+use crate::types::{ColNr, LineNr, ScreenChar, TypVal, VarNumber, Vv};
 use crate::undo::buf_is_changed;
 use crate::winlayer::graph::{switch_buffer, switch_window};
 use crate::winlayer::{Buf, Win};

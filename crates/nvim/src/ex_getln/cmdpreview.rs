@@ -19,8 +19,9 @@ use crate::buffer::DOBUF_FIRST;
 use crate::buffer::DOBUF_GOTO;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_split, cmdmod_set_tab};
 use crate::guard::{Allow, Suppress};
+use crate::option::defs::OptionSetFlags;
 use crate::option::vars::P_ICM;
-use crate::types::{CmdLine, CmdModFlags, ExArgt, OptionSetFlags};
+use crate::types::{CmdLine, CmdModFlags, ExArgt};
 use crate::winlayer::{Buf, TabPage, Win, windows_in_tab};
 use crate::winlayer::{BufId, WinId};
 

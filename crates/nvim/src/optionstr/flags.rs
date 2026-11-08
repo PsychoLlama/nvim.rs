@@ -27,9 +27,10 @@
 use core::ffi::{CStr, c_int, c_uint};
 
 use crate::message::e_invarg;
+use crate::option::defs::{OptError, OptIndex, OptSet};
 use crate::option::{get_option, kOptFlagComma, kOptFlagOneComma, option_var};
 use crate::options::{kOptFileformat, kOptFileformats, kOptSessionoptions, kOptViewoptions};
-use crate::types::{Failed, OptError, OptIndex, OptSet};
+use crate::types::Failed;
 
 use super::illegal_char;
 

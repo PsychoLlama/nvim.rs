@@ -54,9 +54,10 @@ use crate::option::set_option_direct;
 use crate::options::kOptEventignore;
 
 use crate::charset::atoi;
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp_at};
-use crate::types::{CmdAddr, CmdMod, CmdModFlags, ExArg, Failed, OptInt, OptVal, OptionSetFlags};
+use crate::types::{CmdAddr, CmdMod, CmdModFlags, ExArg, Failed, OptInt};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 
 /// One recognised modifier name, for the two callers that only need to know

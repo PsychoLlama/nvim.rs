@@ -40,9 +40,10 @@ use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char};
 use crate::message::emsg;
 use crate::message::{e_invarg, e_usingsid};
+use crate::option::defs::CpoFlag;
 use crate::os::cshim::gettext;
 use crate::runtime::state::current_sctx;
-use crate::types::{CpoFlag, ScriptId};
+use crate::types::ScriptId;
 
 mod codes;
 pub use self::codes::*;

@@ -24,12 +24,13 @@ use crate::drawscreen::comp_col;
 use crate::drawscreen::state::ru_wid;
 use crate::message::e_invalid_format_string_single_percent_s;
 use crate::message::{verbose_open, verbose_stop};
+use crate::option::defs::{OptError, OptSet, OptionSetFlags, StlSyntax};
 use crate::option::vars::{P_SHADA, P_VFILE, p_ruf, ssop_flags};
 use crate::option::{did_set_title, get_option_default};
 use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt_ssop_values};
 use crate::shada::get_shada_parameter;
 use crate::statusline::state::stl_syntax;
-use crate::types::{LineNr, OptError, OptSet, OptionSetFlags, StlSyntax};
+use crate::types::LineNr;
 use crate::winfloat::win_config_float;
 
 use super::frame::{invalid, new_bytes, old_bytes, varp, win};

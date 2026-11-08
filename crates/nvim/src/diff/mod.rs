@@ -81,6 +81,7 @@ use crate::r#move::{
     invalidate_botline_win, validate_cursor,
 };
 use crate::normal::check_scrollbind;
+use crate::option::defs::OptVal;
 use crate::option::vars::{p_dex, p_sbo, p_srr};
 use crate::option::{OptionTarget, set_option_direct_for, set_option_value_give_err};
 use crate::options::{kOptBoFlagOperator, kOptDiff, kOptFoldmethod};
@@ -94,7 +95,7 @@ use crate::strings::shellescape;
 use crate::types::AutoEvent;
 use crate::types::{
     AcoSave, ApiString, CmdAddr, CmdModFlags, ColNr, DiffBlock, DiffLine, DiffLineChange,
-    EvalFuncData, ExArg, LineNr, OptInt, OptVal, ScriptId, TypVal, VarNumber,
+    EvalFuncData, ExArg, LineNr, OptInt, ScriptId, TypVal, VarNumber,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_save, u_sync};

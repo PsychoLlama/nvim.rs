@@ -44,7 +44,8 @@ use crate::highlight_group::HLF_E;
 use crate::message::{emsg, msg};
 use crate::message_fmt::msg_cstr;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, IOSIZE};
+use crate::option::defs::CpoFlag;
+use crate::types::IOSIZE;
 
 /// `st_mode & S_IFMT` for a regular file.
 const S_IFREG: uint64_t = 0o100000;

@@ -1513,13 +1513,13 @@ fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), Stri
     let types = [
         "OptDefault",
         "OptIndex",
-        "OptInt",
         "OptScopeFlags",
         "OptVar",
         "VimOption",
     ];
-    writeln!(out, "use crate::types::{{{}}};", types.join(", ")).unwrap();
+    writeln!(out, "use crate::option::defs::{{{}}};", types.join(", ")).unwrap();
     writeln!(out, "use crate::os::libc::ssize_t;").unwrap();
+    writeln!(out, "use crate::types::OptInt;").unwrap();
     Ok(())
 }
 
@@ -1534,7 +1534,15 @@ pub fn generate(
     let opts = parse_options(&source)?;
     // c2rust copied the option-index constants into every module that
     // included the generated header; `option.rs` is their canonical home.
-    let symbols = Symbols::collect(root, out_dir, &["crate::option", "crate::types::ascii"])?;
+    let symbols = Symbols::collect(
+        root,
+        out_dir,
+        &[
+            "crate::option",
+            "crate::option::defs",
+            "crate::types::ascii",
+        ],
+    )?;
 
     // Each section is formatted as one batch so the chunker counts the lines
     // the file will actually have.

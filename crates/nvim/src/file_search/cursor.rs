@@ -26,10 +26,11 @@ use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::narrow::number_as_lnum;
 use crate::normal::visual_active;
+use crate::option::defs::OptionSetFlags;
 use crate::optionstr::OptString;
 use crate::semsg;
 use crate::strings::has_char;
-use crate::types::{OptionSetFlags, Vv};
+use crate::types::Vv;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_long};
 

@@ -40,12 +40,13 @@ use crate::r#move::{
 };
 use crate::narrow::len_as_int;
 use crate::option::cpo_has;
+use crate::option::defs::CpoFlag;
 use crate::option::vars::{P_LZ, p_lz};
 use crate::os::cshim::gettext;
 use crate::plines::getvcol;
 use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
 use crate::state::mode::{State, exmode_active};
-use crate::types::{Callback, ColNr, CpoFlag, ExpandContext, IOSIZE, NUL};
+use crate::types::{Callback, ColNr, ExpandContext, IOSIZE, NUL};
 use crate::ui::state::kUIMessages;
 use crate::ui::ui_has;
 use crate::winlayer::{Buf, Win};

@@ -25,7 +25,7 @@ use crate::buffer::BLN_NEW;
 use crate::buffer::BLN_NOOPT;
 use crate::buffer::DOBUF_FIRST;
 use crate::buffer::DOBUF_GOTO;
-use crate::types::OptionSetFlags;
+use crate::option::defs::OptionSetFlags;
 use core::ffi::CStr;
 
 use crate::buffer::BufRef;

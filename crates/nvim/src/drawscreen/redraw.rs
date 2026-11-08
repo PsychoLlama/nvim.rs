@@ -23,9 +23,9 @@
 
 use super::*;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
+use crate::option::defs::StlSyntax;
 use crate::option::vars::P_WBR;
 use crate::optionstr::OptString;
-use crate::types::StlSyntax;
 use crate::window::FR_COL;
 use crate::window::FR_LEAF;
 use crate::window::FR_ROW;

@@ -28,11 +28,11 @@
 
 use crate::message_fmt::emsg_text;
 use crate::narrow::as_index;
+use crate::option::defs::kOptValTypeString;
 use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::ColNr;
 use crate::types::LineNr;
-use crate::types::option::kOptValTypeString;
 use crate::winlayer::Win;
 use core::ffi::CStr;
 
@@ -53,6 +53,7 @@ use crate::runtime::state::current_sctx;
 use crate::startup::starting;
 use crate::ui::state::t_colors;
 
+use crate::option::defs::{OptError, OptIndex, OptSet, OptVal, OptionSetFlags, VimOption};
 use crate::options::{
     find_option_index, kOptAutocomplete, kOptAutoread, kOptFiletype, kOptFormatlistpat, kOptFsync,
     kOptInvalid, kOptMouse, kOptScrolloff, kOptSidescrolloff, kOptSpelllang, kOptSyntax,
@@ -60,10 +61,7 @@ use crate::options::{
 };
 use crate::optionstr::check_illegal_path_names;
 use crate::os::libc::uint32_t;
-use crate::types::{
-    ApiString, OptError, OptIndex, OptSet, OptVal, OptionSetFlags, ScriptCtx, ScriptId, VimOption,
-    Vv,
-};
+use crate::types::{ApiString, ScriptCtx, ScriptId, Vv};
 use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
 

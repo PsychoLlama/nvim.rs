@@ -27,9 +27,10 @@ use core::ffi::c_int;
 
 use crate::global_cell::{Field, field};
 use crate::memory::XString;
+use crate::option::defs::{OptIndex, OptStr, OptVal};
 use crate::options::vars::{BoolOpt, NumOpt, StrOpt};
 use crate::optionstr::OptString;
-use crate::types::{Buffer, OptIndex, OptInt, OptStr, OptVal, SynBlock, WinOpt};
+use crate::types::{Buffer, OptInt, SynBlock, WinOpt};
 use crate::winlayer::{Buf, Win};
 
 use super::{option_default, replace_option_default, tristate, with_option_default};

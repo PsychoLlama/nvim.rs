@@ -30,9 +30,10 @@ use crate::mark::setpcmark;
 use crate::memline::{Lines, Moved, decl, gchar_pos, inc, incl};
 use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor};
 use crate::option::cpo_has;
+use crate::option::defs::CpoFlag;
 use crate::pos::{equalpos, lt};
 use crate::search::{BACKWARD, FORWARD};
-use crate::types::{CpoFlag, Direction, NUL, OpArg, Pos};
+use crate::types::{Direction, NUL, OpArg, Pos};
 
 /// One step of a position walk: [`incl`] going forward, [`decl`] going back.
 type StepFn = fn(&mut Pos) -> Moved;

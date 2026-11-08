@@ -51,6 +51,7 @@ use crate::normal::{
 use crate::ops::{
     REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, do_join, do_pending_operator, op_addsub, swapchar,
 };
+use crate::option::defs::FoFlag;
 use crate::option::get_ve_flags;
 use crate::option::vars::{P_SEL, cb_flags, p_sta, p_to, p_ww};
 use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptVeFlagAll};
@@ -61,8 +62,8 @@ use crate::state::mode::{State, restart_edit};
 use crate::state::{MODE_INSERT, MODE_REPLACE, virtual_active};
 use crate::textformat::{auto_format, has_format_option};
 use crate::types::{
-    CmdArg, ColNr, FoFlag, LineNr, NUL, OpType, Outcome, PUT_BLOCK_INNER, PUT_CURSEND,
-    PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, YankReg,
+    CmdArg, ColNr, LineNr, NUL, OpType, Outcome, PUT_BLOCK_INNER, PUT_CURSEND, PUT_FIXINDENT,
+    PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, YankReg,
 };
 use crate::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
 use core::ffi::{CStr, c_int, c_uint};

@@ -53,6 +53,7 @@ use crate::normal::{
     set_visual_select, start_selection, visual_active, visual_select,
 };
 use crate::ops::{Op, do_pending_operator, get_op_type};
+use crate::option::defs::CpoFlag;
 use crate::option::vars::{P_LANGMAP, fdo_flags, p_lrm, p_tm, p_ttm};
 use crate::os::libc::int64_t;
 use crate::register::get_default_register_name;
@@ -66,7 +67,7 @@ use crate::state::{
     get_real_state, may_trigger_modechanged,
 };
 use crate::types::Key;
-use crate::types::{CmdArg, CpoFlag, OpType, OptInt, Outcome};
+use crate::types::{CmdArg, OpType, OptInt, Outcome};
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};

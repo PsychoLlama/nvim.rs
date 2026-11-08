@@ -47,6 +47,7 @@ use crate::getchar::vgetc;
 use crate::memline::ml_recover;
 use crate::message::msg_putchar;
 use crate::message::state::{did_emsg, msg_didany, msg_scroll, no_wait_return};
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::vars::{P_EF, P_EFM, P_MENC, p_ef, p_fdls, p_shm};
 use crate::option::{set_option_direct, set_option_value_give_err};
 use crate::os::input::os_breakcheck;
@@ -60,9 +61,7 @@ use crate::startup::exit::getout;
 use crate::startup::{
     EDIT_QF, MainParams, WIN_HOR, WIN_TABS, WIN_VER, kOptErrorfile, kOptShortmess, recoverymode,
 };
-use crate::types::{
-    Handle, IOSIZE, Integer, LineNr, OptInt, OptVal, OptionSetFlags, VarLock, Vv, kListLenMayKnow,
-};
+use crate::types::{Handle, IOSIZE, Integer, LineNr, OptInt, VarLock, Vv, kListLenMayKnow};
 use crate::ui::ui_call_error_exit;
 use crate::window::{
     goto_tabpage, make_tabpages, make_windows, only_one_window, win_close, win_count, win_enter,

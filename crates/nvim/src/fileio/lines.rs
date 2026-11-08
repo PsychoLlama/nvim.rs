@@ -22,7 +22,7 @@ use crate::memline::ml_append_terminated;
 use crate::memory::memchr_in;
 
 use super::*;
-use crate::types::OptionSetFlags;
+use crate::option::defs::OptionSetFlags;
 
 /// What a pass of line splitting decided.
 pub(crate) enum Split {

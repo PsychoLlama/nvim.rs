@@ -51,6 +51,7 @@ use crate::message::msg_str;
 use crate::message::state::{msg_row, msg_scroll, need_fileinfo};
 use crate::message::{e_cannot_switch_to_a_closing_buffer, e_trailing_arg};
 use crate::message_fmt::{msg_cstr_opt, report_msg};
+use crate::option::defs::OptionSetFlags;
 use crate::option::vars::{jop_flags, p_confirm, p_report, p_write};
 use crate::options::kOptJopFlagClean;
 use crate::os::cshim::ngettext;
@@ -58,7 +59,7 @@ use crate::os::input::os_breakcheck;
 use crate::os::libc::int64_t;
 use crate::search::FORWARD;
 use crate::terminal::buf_terminal_running;
-use crate::types::{Cleanup, CmdModFlags, ExArg, Failed, LineNr, OptInt, OptionSetFlags};
+use crate::types::{Cleanup, CmdModFlags, ExArg, Failed, LineNr, OptInt};
 use crate::window::{
     NotClosed, check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close,
     win_locked, win_split,

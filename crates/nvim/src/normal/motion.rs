@@ -36,6 +36,7 @@ use crate::normal::{
     TAB, adjust_for_sel, clear_op_beep, kMTCharWise, kMTLineWise, may_fold_open, nv_page,
     unadjust_for_sel, visual_active, visual_mode,
 };
+use crate::option::defs::CpoFlag;
 use crate::option::vars::{P_SEL, p_sel, p_ww};
 use crate::option::{cpo_has, get_ve_flags};
 use crate::options::{
@@ -48,7 +49,7 @@ use crate::search::{BACKWARD, FORWARD, findmatch, searchc};
 use crate::state::mode::{VIsual_select_exclu_adj, ins_at_eol, restart_edit};
 use crate::state::virtual_active;
 use crate::textobject::{bck_word, end_word, findpar, findsent, fwd_word};
-use crate::types::{CmdArg, ColNr, CpoFlag, Direction, LineNr, NUL, OpType, Outcome};
+use crate::types::{CmdArg, ColNr, Direction, LineNr, NUL, OpType, Outcome};
 use crate::winlayer::graph::{cmdwin_result, cmdwin_type};
 use core::ffi::{c_int, c_uint};
 

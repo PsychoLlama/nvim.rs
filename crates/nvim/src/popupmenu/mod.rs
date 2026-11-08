@@ -52,6 +52,7 @@ use crate::message::emsg;
 use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
 use crate::mouse::{MousePos, find_win_outer};
 use crate::r#move::{update_topline, validate_cheight, validate_cursor, validate_cursor_col};
+use crate::option::defs::OptVal;
 use crate::option::set_option_value_give_err;
 use crate::option::vars::{cia_flags, p_mousemev, p_pb, p_ph, p_pmw, p_pumborder, p_pvh, p_pw};
 use crate::options::{
@@ -69,7 +70,7 @@ use crate::statusline::hl_attr;
 use crate::strings::reversed_text;
 use crate::tag::state::g_do_tagpreview;
 use crate::types::{
-    ApiString, Array, BufferHandle, Dict, Float, Handle, Integer, LineNr, Object, OptInt, OptVal,
+    ApiString, Array, BufferHandle, Dict, Float, Handle, Integer, LineNr, Object, OptInt,
     ScreenAttr, ScreenChar, VarNumber, WinConfig, kBoolVarFalse, kBoolVarTrue,
 };
 use crate::ui::state::{Columns, Rows};

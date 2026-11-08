@@ -30,12 +30,12 @@ use std::ffi::CString;
 use super::*;
 use crate::api::private::validate::{Bad, err_expected, err_invalid};
 use crate::api_error;
+use crate::option::defs::OptionSetFlags;
 use crate::path::MAXPATHL;
 use crate::statusline::defs::{StlHlRun, StlOpt};
 use crate::statusline::{
     SIGN_SHOW_MAX, StcLine, StlJob, fillchar_status_of, push, put, stl_is_global,
 };
-use crate::types::OptionSetFlags;
 use crate::winlayer::Win;
 
 /// Everything `nvim_eval_statusline()` needs to have settled before it can

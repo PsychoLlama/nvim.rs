@@ -16,6 +16,7 @@ use core::ffi::{CStr, c_int, c_uint};
 
 use crate::eval::userfunc::scriptlocal_funcname;
 use crate::insexpand::set_cpt_callbacks;
+use crate::option::defs::{OptError, OptSet, OptionSetFlags};
 use crate::option::split_option_part;
 use crate::option::vars::{P_CIA, P_HLG, cia_flags, cot_flags, spo_flags, tc_flags};
 use crate::options::{opt_cot_values, opt_spo_values, opt_tc_values};
@@ -24,7 +25,6 @@ use crate::os::state::{didset_vim, didset_vimruntime};
 use crate::spell::{compile_cap_prog, did_set_spell_option, valid_spellfile, valid_spelllang};
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
-use crate::types::{OptError, OptSet, OptionSetFlags};
 
 use super::frame::{invalid, new_bytes, new_value, varp, win};
 use super::{

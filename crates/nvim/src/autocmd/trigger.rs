@@ -25,10 +25,11 @@ use crate::event_queue::{put_job_in, put_job_on_main_loop};
 use crate::guard::Depth;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
+use crate::option::defs::OptionSetFlags;
 use crate::optionstr::OptString;
 use crate::smsg;
+use crate::types::Failed;
 use crate::types::TypVal;
-use crate::types::{Failed, OptionSetFlags};
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, first_buffer};
 

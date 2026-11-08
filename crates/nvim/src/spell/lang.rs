@@ -53,6 +53,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::message::e_invarg;
+use crate::option::defs::OptError;
 use crate::option::vars::{P_ENC, p_enc};
 use crate::option::{split_option_part, valid_name};
 use crate::os::fs::os_remove;
@@ -63,7 +64,7 @@ use crate::spell::{LangId, LangP, SpellLang};
 use crate::spellfile::spell_load_file;
 use crate::startup::starting;
 use crate::strings::concat;
-use crate::types::{OptError, SynBlock};
+use crate::types::SynBlock;
 use crate::window::win_valid_any_tab;
 
 use super::chartab::init_spell_chartab;

@@ -99,6 +99,7 @@ use crate::r#move::{
     validate_cursor,
 };
 use crate::normal::{clear_showcmd, normal_enter};
+use crate::option::defs::{OptSet, OptVal};
 use crate::option::vars::{
     P_HLS, p_ari, p_arshape, p_cedit, p_ch, p_cwh, p_hls, p_ic, p_icm, p_is, p_paste, p_ru, p_scs,
     p_tbidi, p_wmnu, wim_flags,
@@ -155,7 +156,7 @@ use crate::types::{
     AcoSave, ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdLine, CmdMod, CmdParseInfo,
     CmdParseMagic, ColNr, Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt, Expand,
     ExpandContext, Handle, HashTab, Integer, LineNr, Magic, MotionType, Object, OptInt, OptMagic,
-    OptSet, OptVal, Pos, ProfTime, SaveVEvent, TypVal, VarNumber,
+    Pos, ProfTime, SaveVEvent, TypVal, VarNumber,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::state::{kUICmdline, kUIMessages};

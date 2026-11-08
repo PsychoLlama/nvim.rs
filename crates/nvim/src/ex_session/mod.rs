@@ -63,6 +63,7 @@ use crate::memory::XString;
 use crate::message::emsg;
 use crate::message::{e_noname, e_prev_dir, e_write};
 use crate::message_fmt::{emsg_text, msg_cstr};
+use crate::option::defs::OptionSetFlags;
 use crate::option::makeset;
 use crate::option::vars::{P_VDIR, p_acd, p_hls, ssop_flags, vop_flags};
 use crate::options::{
@@ -79,7 +80,7 @@ use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::PATHSEPSTR;
-use crate::types::{CdCause, ExArg, OptionSetFlags, Vv};
+use crate::types::{CdCause, ExArg, Vv};
 use crate::window::{DirOwner, own_dir};
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, TabPage};

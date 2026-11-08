@@ -43,6 +43,7 @@ use crate::option::vars::{
 
 use super::check::bin_save;
 use super::paste::{paste_save, paste_saved_vsts};
+use crate::option::defs::CpoFlag;
 use crate::options::{
     BufOptIndex, buf_opt_idx, kBufOptAutoindent, kBufOptBinary, kBufOptBomb, kBufOptCindent,
     kBufOptCinkeys, kBufOptCinoptions, kBufOptCinscopedecls, kBufOptCinwords, kBufOptComments,
@@ -62,7 +63,7 @@ use crate::optionstr::{
 };
 use crate::spell::compile_cap_prog;
 use crate::tag::set_buflocal_tfu_callback;
-use crate::types::{CmdModFlags, ColNr, CpoFlag, OptInt, ScriptCtx, WinOpt};
+use crate::types::{CmdModFlags, ColNr, OptInt, ScriptCtx, WinOpt};
 use crate::window::{check_window_colorcolumn, set_winbar_win};
 use crate::winlayer::{Buf, Win};
 

@@ -33,7 +33,8 @@ use super::*;
 use crate::buffer::BufRef;
 use crate::highlight_group::{HLF_E, HLF_W};
 use crate::memline::LineError;
-use crate::types::{Failed, ShmFlag, Vv};
+use crate::option::defs::ShmFlag;
+use crate::types::{Failed, Vv};
 
 /// Has a warning already been shown this sweep? Only one is worth reading.
 static ALREADY_WARNED: GlobalCell<bool> = GlobalCell::new(false);

@@ -62,11 +62,12 @@ use crate::option::{cpo_has, option_last_set};
 
 use crate::options::kOptFindfunc;
 
+use crate::option::defs::{CpoFlag, OptError, OptSet, OptionSetFlags};
 use crate::optionstr::OptString;
 use crate::types::{
-    BoolVarValue, Callback, CdScope, CpoFlag, ExArg, Failed, OptError, OptInt, OptSet,
-    OptionSetFlags, ScriptCtx, TypVal, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kBoolVarFalse,
-    kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow,
+    BoolVarValue, Callback, CdScope, ExArg, Failed, OptInt, ScriptCtx, TypVal, VAR_LIST,
+    VAR_STRING, VAR_UNKNOWN, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage,
+    kCdScopeWindow,
 };
 
 /// A copy of the buffer-local 'findfunc' callback if the option is set

@@ -69,6 +69,7 @@ use crate::message::{
     emsg, message_filtered, msg_display, msg_ext_set_kind, msg_ext_ui_flush, msg_putchar,
     verbose_enter, verbose_leave,
 };
+use crate::option::defs::{OptSet, OptVal};
 use crate::option::vars::{p_enc, p_ic, p_lpl, p_verbose};
 use crate::option::{set_option_value_give_err, vimrc_found};
 use crate::options::kOptRuntimepath;
@@ -92,8 +93,8 @@ use crate::runtime::state::{current_sctx, did_source_packages};
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, ApiString, Array, EStack, EStackArg, EStackType, EstackInfo, EvalFuncData, ExArg,
-    Expand, FrameName, Integer, LineNr, Object, OptSet, OptVal, ProfTime, ScriptCtx, ScriptId,
-    ScriptItem, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber, kBoolVarFalse,
+    Expand, FrameName, Integer, LineNr, Object, ProfTime, ScriptCtx, ScriptId, ScriptItem, TypVal,
+    UserFunc, VAR_DICT, VarLock, VarNumber, kBoolVarFalse,
 };
 use core::cell::Cell;
 use std::rc::Rc;

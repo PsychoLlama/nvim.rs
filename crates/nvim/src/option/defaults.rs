@@ -40,6 +40,7 @@ use crate::log::{LOGLVL_INF, logmsg};
 use crate::mapping::langmap_init;
 use crate::mbyte::enc_locale;
 use crate::message_fmt::msg_cstr;
+use crate::option::defs::{OptIndex, OptVal, OptionSetFlags};
 use crate::option::vars::{P_CH, P_HLG, P_ICON, P_TITLE, P_WINDOW, fenc_default};
 use crate::option::vars::{mark_option_defaults_set, p_enc, p_rtp, p_sh};
 use crate::options::{
@@ -58,7 +59,7 @@ use crate::path::{invocation_path_tail, path_fnamecmp, vim_ispathlistsep};
 use crate::runtime::runtimepath_default;
 use crate::runtime::state::current_sctx;
 use crate::spell::init_spell_chartab;
-use crate::types::{OptIndex, OptInt, OptVal, OptionSetFlags, PATHSEPSTR};
+use crate::types::{OptInt, PATHSEPSTR};
 use crate::ui::state::Rows;
 use crate::window::{last_status, win_comp_scroll};
 use crate::winlayer::{self, Buf};

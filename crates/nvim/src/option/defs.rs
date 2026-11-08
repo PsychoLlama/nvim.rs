@@ -9,11 +9,10 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-use super::*;
 use crate::memory::XString;
-use crate::os::libc::{ssize_t, uint8_t, uint32_t};
+use crate::os::libc::uint8_t;
+use crate::os::libc::{ssize_t, uint32_t};
+use crate::types::{Expand, IOSIZE, OptInt, RegMatch};
 
 use crate::global_cell::GlobalCell;
 use crate::option::OptSlot;
@@ -666,3 +665,5 @@ pub const kOptValTypeNumber: OptValType = 1;
 
 /// A `'string'` option's value.
 pub const kOptValTypeString: OptValType = 2;
+
+pub type OptIndex = ::core::ffi::c_int;

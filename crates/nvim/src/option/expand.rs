@@ -20,9 +20,9 @@
 )]
 
 use crate::env::expand_env_escaped;
+use crate::option::defs::kOptValTypeBoolean;
+use crate::option::defs::kOptValTypeNumber;
 use crate::optionstr::OptString;
-use crate::types::option::kOptValTypeBoolean;
-use crate::types::option::kOptValTypeNumber;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 use std::ffi::CString;
@@ -33,6 +33,7 @@ use crate::fuzzy::fuzzy_match_str;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::{special_key_code, termcap_name};
 use crate::memory::XString;
+use crate::option::defs::{OptExpand, OptIndex, OptionSetFlags};
 use crate::options::{
     kOptAleph, kOptBackupdir, kOptCdpath, kOptCount, kOptDirectory, kOptFiletype, kOptInvalid,
     kOptKeymap, kOptPackpath, kOptPath, kOptRuntimepath, kOptSpellsuggest, kOptSyntax, kOptTags,
@@ -42,9 +43,7 @@ use crate::os::libc::uint32_t;
 use crate::path::MAXPATHL;
 use crate::regexp::vim_regexec;
 use crate::strings::escaped_bytes;
-use crate::types::{
-    BackslashEscape, Expand, ExpandContext, OptExpand, OptIndex, OptionSetFlags, RegMatch, XpPrefix,
-};
+use crate::types::{BackslashEscape, Expand, ExpandContext, RegMatch, XpPrefix};
 
 use super::{
     FUZZY_SCORE_NONE, find_option_len, get_option, get_varp_scope_from, is_option_hidden,

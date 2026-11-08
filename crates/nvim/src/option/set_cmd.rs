@@ -31,10 +31,10 @@ use crate::keycodes::Ctrl_V;
 use crate::keycodes::SpecialKey;
 use crate::keycodes::special_key_at;
 use crate::memory::ThinCString;
+use crate::option::defs::kOptValTypeBoolean;
+use crate::option::defs::kOptValTypeNumber;
 use crate::optionstr::OptString;
 use crate::types::CmdIdx;
-use crate::types::option::kOptValTypeBoolean;
-use crate::types::option::kOptValTypeNumber;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
@@ -48,13 +48,12 @@ use crate::guard::sandbox;
 use crate::message::state::info_message;
 use crate::message::{e_invarg, e_sandbox, e_trailing};
 use crate::message::{emsg, msg_ext_set_kind, msg_putchar};
+use crate::option::defs::{OptError, OptIndex, OptVal, OptionSetFlags};
 use crate::option::vars::{p_mle, p_verbose};
 use crate::options::{kOptFoldmethod, kOptInvalid, kOptWildchar, kOptWildcharm, kOptWrap};
 use crate::os::libc::uint32_t;
 use crate::startup::silent_mode;
-use crate::types::{
-    ExArg, Failed, IOSIZE, NUL, OptError, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId,
-};
+use crate::types::{ExArg, Failed, IOSIZE, NUL, OptInt, ScriptId};
 
 use super::{
     FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING,

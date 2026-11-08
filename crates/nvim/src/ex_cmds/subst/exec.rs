@@ -53,6 +53,7 @@ use crate::message_fmt::msg_bytes;
 use crate::r#move::changed_window_setting;
 use crate::narrow::len_as_int;
 use crate::narrow::number_as_int;
+use crate::option::defs::OptionSetFlags;
 use crate::option::set_option_direct;
 use crate::option::vars::{p_ch, p_cwh, p_icm};
 use crate::options::kOptInccommand;
@@ -64,9 +65,7 @@ use crate::regexp::vim_regexec_multi;
 use crate::search::get_search_pat;
 use crate::semsg;
 use crate::types::RegMMatch;
-use crate::types::{
-    CmdModFlags, ColNr, ExArg, Handle, LPos, LineNr, OptInt, OptionSetFlags, Pos, ProfTime,
-};
+use crate::types::{CmdModFlags, ColNr, ExArg, Handle, LPos, LineNr, OptInt, Pos, ProfTime};
 use crate::ui::state::kUIMessages;
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;

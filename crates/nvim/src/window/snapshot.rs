@@ -29,10 +29,11 @@ use crate::drawscreen::UPD_NOT_VALID;
 use crate::message::e_invarg;
 use crate::message::msg_ui_flush;
 use crate::r#move::WinValid;
+use crate::option::defs::OptError;
 use crate::optionstr::OptStringRef;
 use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
-use crate::types::{Handle, Integer, LineNr, OptError, OptInt};
+use crate::types::{Handle, Integer, LineNr, OptInt};
 use crate::ui::ui_call_win_hide;
 use crate::winlayer::{
     Buf, FrameId, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,

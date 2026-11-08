@@ -32,10 +32,11 @@ use crate::extmark::BCount;
 use crate::guard::Lock;
 use crate::memline::{MlFlags, ml_append_bytes};
 use crate::memory::XString;
+use crate::option::defs::OptionSetFlags;
 use crate::os::fs::current_dir;
 use crate::path::tail_index;
 use crate::types::Handle;
-use crate::types::{ListRef, OptionSetFlags, VarLock};
+use crate::types::{ListRef, VarLock};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 

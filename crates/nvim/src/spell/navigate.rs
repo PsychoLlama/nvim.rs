@@ -50,6 +50,7 @@ use crate::getchar::state::got_int;
 use crate::highlight::Hlf;
 use crate::message::give_warning;
 use crate::message::state::{bot_top_msg, top_bot_msg};
+use crate::option::defs::ShmFlag;
 use crate::option::shortmess;
 use crate::option::vars::p_ws;
 use crate::options::kOptSpoFlagNoplainbuffer;
@@ -60,7 +61,7 @@ use crate::pos::{MAXCOL, clearpos};
 use crate::search::{BACKWARD, FORWARD};
 use crate::spell::SpellMoveType;
 use crate::syntax::syntax_present;
-use crate::types::{ColNr, LineNr, Pos, ShmFlag};
+use crate::types::{ColNr, LineNr, Pos};
 
 use super::chartab::tail;
 use super::check::{check_need_cap, no_spell_checking, spell_check};

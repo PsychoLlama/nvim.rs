@@ -61,6 +61,7 @@ use crate::message::{
 use crate::message_fmt::msg_bytes;
 use crate::r#move::update_topline;
 use crate::narrow::len_as_int;
+use crate::option::defs::{OptVal, OptionSetFlags, ShmFlag};
 use crate::option::vars::{P_FFS, p_ar, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose};
 use crate::option::{
     default_fileformat, get_fileformat, get_fileformat_force, set_fileformat, set_option_direct,
@@ -91,9 +92,7 @@ use crate::state::mode::{State, exmode_active, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{FmtArg, formatted};
 use crate::types::AutoEvent;
-use crate::types::{
-    AcoSave, ExArg, Failed, IOSIZE, LineNr, OptVal, OptionSetFlags, RegMatch, ScriptId, ShmFlag,
-};
+use crate::types::{AcoSave, ExArg, Failed, IOSIZE, LineNr, RegMatch, ScriptId};
 use crate::ui::state::kUIMessages;
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{

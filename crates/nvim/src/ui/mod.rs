@@ -67,6 +67,7 @@ use crate::highlight_group::HLF_W;
 use crate::message::state::{emsg_silent, in_assert_fails};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};
 use crate::narrow::as_index;
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::vars::{
     P_GUICURSOR, P_LZ, bo_flags, p_debug, p_lz, p_tgc, p_vb, p_wd, rdb_flags,
 };
@@ -79,9 +80,7 @@ use crate::startup::{exiting, full_screen, starting, ui_client_channel_id};
 use crate::state::MODE_CMDLINE;
 use crate::state::mode::State;
 use crate::types::DictBuilder;
-use crate::types::{
-    ApiDict, ApiString, Array, Boolean, Error, Handle, Integer, Object, OptVal, OptionSetFlags,
-};
+use crate::types::{ApiDict, ApiString, Array, Boolean, Error, Handle, Integer, Object};
 use crate::ui::state::{LineFlags, RemoteUI, UIExtension};
 use crate::ui::state::{called_vim_beep, resize_events, ui_ext_names, ui_refresh_cmdheight};
 use crate::ui::state::{

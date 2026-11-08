@@ -31,8 +31,9 @@ use super::*;
 use crate::grid::default_grid_ref;
 use crate::mbyte::MB_MAXCHAR;
 use crate::option::cpo_has;
+use crate::option::defs::CpoFlag;
 use crate::statusline::hl_attr;
-use crate::types::{CpoFlag, NUL};
+use crate::types::NUL;
 
 /// Redraw for Insert mode.
 ///

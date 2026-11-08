@@ -38,6 +38,7 @@ use crate::mbyte::canonize;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::memline::ml_setflags;
 use crate::message::{e_modifiable, e_unsupportedoption};
+use crate::option::defs::{OptError, OptSet, OptVal, OptionSetFlags};
 use crate::option::option_var;
 use crate::option::vars::{P_BS, bkc_flags, p_bex, p_enc, p_pm};
 use crate::option::{
@@ -49,7 +50,7 @@ use crate::options::{
     kOptFileencoding, kOptIskeyword, opt_bh_values, opt_bkc_values, opt_bt_values,
 };
 use crate::spell::spell_reload;
-use crate::types::{Buffer, OptError, OptInt, OptSet, OptVal, OptionSetFlags, Pos};
+use crate::types::{Buffer, OptInt, Pos};
 use crate::window::global_stl_height;
 
 use super::OptStringRef;

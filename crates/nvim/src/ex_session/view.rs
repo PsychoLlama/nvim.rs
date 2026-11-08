@@ -34,6 +34,7 @@ use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_normal, buf_is_termin
 use crate::fileio::IoFailed;
 use crate::fold::put_folds;
 use crate::mapping::makemap;
+use crate::option::defs::OptionSetFlags;
 use crate::option::vars::ssop_flags;
 use crate::option::{makefoldset, makeset};
 use crate::options::{
@@ -43,7 +44,7 @@ use crate::options::{
 use crate::os::libc::int64_t;
 use crate::types::ArgListId;
 use crate::types::ColNr;
-use crate::types::{Failed, OptionSetFlags};
+use crate::types::Failed;
 use crate::window::{DirOwner, has_own_dir, own_dir};
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{TabPage, Win};

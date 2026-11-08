@@ -29,12 +29,13 @@ use crate::keycodes::Ctrl_V;
 
 use crate::memory::XString;
 use crate::option::cpo_has;
+use crate::option::defs::CpoFlag;
 use crate::quickfix::grep_internal;
 use crate::register::{set_expr_line, valid_yank_reg};
 use crate::strings::trailing_spaces_start;
 use crate::types::ex_cmds::ExArg;
 use crate::types::pos::LineNr;
-use crate::types::{CmdAddr, CmdLine, CpoFlag, ExArgt, Failed, NUL};
+use crate::types::{CmdAddr, CmdLine, ExArgt, Failed, NUL};
 use crate::winlayer::Buf;
 
 /// Step over a run of `:` at `at`, which is how a mapping's `:cmd<CR>` and a

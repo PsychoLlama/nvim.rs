@@ -22,16 +22,16 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::types::option::kOptValTypeBoolean;
-use crate::types::option::kOptValTypeNil;
-use crate::types::option::kOptValTypeNumber;
-use crate::types::option::kOptValTypeString;
+use crate::option::defs::kOptValTypeBoolean;
+use crate::option::defs::kOptValTypeNil;
+use crate::option::defs::kOptValTypeNumber;
+use crate::option::defs::kOptValTypeString;
 use core::ffi::{CStr, c_int};
 
 use crate::memory::{ThinCString, XString};
+use crate::option::defs::{OptIndex, OptStr, OptVal, OptValType};
 use crate::types::{
-    ApiString, Object, OptIndex, OptStr, OptVal, OptValType, kObjectTypeBoolean,
-    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
+    ApiString, Object, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
 };
 use crate::types::{BoolVarValue, TypVal, VarNumber, kSpecialVarNull};
 use crate::undo::curbuf_is_changed;

@@ -31,8 +31,9 @@ use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_has;
 use crate::memfile::MfDirty;
 use crate::option::cpo_has;
+use crate::option::defs::{CpoFlag, OptionSetFlags};
 use crate::pos::MAXCOL;
-use crate::types::{CmdModFlags, CpoFlag, Failed, OptionSetFlags};
+use crate::types::{CmdModFlags, Failed};
 use std::io::Read;
 
 mod tail;

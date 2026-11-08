@@ -55,8 +55,9 @@ use super::*;
 use crate::edit::buf_prompt_text_owned;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
 use crate::mbyte::char_at;
+use crate::option::defs::FoFlag;
 use crate::optionstr::OptString;
-use crate::types::{Failed, FoFlag, NUL};
+use crate::types::{Failed, NUL};
 
 mod comment;
 mod smart;

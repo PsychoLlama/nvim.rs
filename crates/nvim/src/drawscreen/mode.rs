@@ -26,9 +26,10 @@ use std::ffi::CString;
 
 use super::*;
 use crate::normal::{visual_active, visual_mode, visual_select};
+use crate::option::defs::ShmFlag;
 use crate::os::cshim::gettext;
 use crate::path::MAXPATHL;
-use crate::types::{ShmFlag, Vv};
+use crate::types::Vv;
 
 /// Whether to postpone the mode message: not redrawing, or inside a mapping.
 ///

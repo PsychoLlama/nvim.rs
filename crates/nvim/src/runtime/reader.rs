@@ -22,7 +22,7 @@ use crate::charset::skip;
 use crate::cstr;
 use crate::ex_docmd::{DebugName, DebugPos};
 use crate::option::cpo_has;
-use crate::types::CpoFlag;
+use crate::option::defs::CpoFlag;
 use core::cell::Cell;
 use core::ffi::c_int;
 use std::ffi::CString;

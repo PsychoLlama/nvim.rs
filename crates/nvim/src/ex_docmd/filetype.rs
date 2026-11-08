@@ -43,7 +43,8 @@ use crate::options::kOptFiletype;
 
 use crate::runtime::RuntimeOpts;
 
-use crate::types::{ApiString, Array, ExArg, Object, OptVal, OptionSetFlags};
+use crate::option::defs::{OptVal, OptionSetFlags};
+use crate::types::{ApiString, Array, ExArg, Object};
 use crate::winlayer::Buf;
 
 /// `:autocmd` and `:augroup`.

@@ -21,9 +21,10 @@ use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::guard::{Keys, Lock, Suppress};
 use crate::keycodes::SpecialKey;
 use crate::option::cpo_has;
+use crate::option::defs::CpoFlag;
 use crate::option::vars::P_ICM;
 use crate::state::Step;
-use crate::types::{CpoFlag, ExpandContext};
+use crate::types::ExpandContext;
 use crate::winlayer::Win;
 
 /// What `CTRL-\` did with the key typed after it.

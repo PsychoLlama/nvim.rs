@@ -30,8 +30,8 @@ use super::bt::BtEmitter;
 use super::nfa::Postfix;
 use super::{MAGIC_OFF, MAGIC_ON, Magic, NSUBEXP, NfaState, RE_MAGIC, RE_STRICT, RE_STRING};
 use crate::option::cpo_has;
+use crate::option::defs::CpoFlag;
 use crate::os::libc::uint8_t;
-use crate::types::CpoFlag;
 use crate::winlayer::Buf;
 
 /// One compile's state. See the module docs.

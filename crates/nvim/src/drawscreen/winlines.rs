@@ -25,8 +25,9 @@ use crate::r#move::WinValid;
 use crate::narrow::as_index;
 use crate::narrow::number_as_u16;
 use crate::option::cpo_has;
+use crate::option::defs::CpoFlag;
 use crate::optionstr::OptString;
-use crate::types::{CpoFlag, WLine};
+use crate::types::WLine;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 

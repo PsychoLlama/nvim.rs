@@ -27,11 +27,12 @@ use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
 use crate::message::{e_invarg, e_positive, e_scroll, e_winheight, e_winwidth};
+use crate::option::defs::{MAX_MCO, OptError, OptIndex, OptVal, OptionSetFlags};
 use crate::option::vars::{p_wh, p_wiw, p_wmh, p_wmw};
 use crate::options::*;
 use crate::os::cshim::gettext;
 use crate::startup::full_screen;
-use crate::types::{MAX_MCO, OptError, OptIndex, OptInt, OptVal, OptionSetFlags};
+use crate::types::OptInt;
 use crate::ui::state::Rows;
 use crate::window::{min_rows_for_all_tabpages, win_default_scroll};
 

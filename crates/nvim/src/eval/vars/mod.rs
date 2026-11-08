@@ -9,9 +9,9 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::types::kOptValTypeBoolean;
-use crate::types::kOptValTypeNumber;
-use crate::types::kOptValTypeString;
+use crate::option::defs::kOptValTypeBoolean;
+use crate::option::defs::kOptValTypeNumber;
+use crate::option::defs::kOptValTypeString;
 use core::ffi::{CStr, c_int, c_uint, c_void};
 use core::mem::ManuallyDrop;
 
@@ -58,6 +58,7 @@ use crate::message::{
     internal_error, message_filtered, msg_advance, msg_bytes, msg_clr_eos, msg_display_bytes,
     msg_ext_set_kind, msg_putchar, msg_start, msg_str,
 };
+use crate::option::defs::{OptIndex, OptVal};
 use crate::option::vars::{p_ccv, p_dex, p_pex, p_verbose};
 use crate::option::{
     find_option, get_option, get_winbuf_options, is_tty_option, kOptFlagFunc, option_has_type,
@@ -74,12 +75,12 @@ use crate::runtime::{
 use crate::search::set_search_direction;
 use crate::search::state::no_hlsearch;
 use crate::types::{
-    BoolVarValue, Dict, DictItem, EvalFuncData, ExArg, Expand, GRegFlags, List, OptIndex, OptVal,
-    Partial, ScopeDictItem, ScopeType, ScriptId, ScriptVar, SpecialVarValue, TypVal, VAR_BLOB,
-    VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT,
-    VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN,
-    VarLock, VarNumber, VarType, VimVarFlags, Vv, kBoolVarFalse, kBoolVarTrue, kListLenUnknown,
+    BoolVarValue, Dict, DictItem, EvalFuncData, ExArg, Expand, GRegFlags, List, Partial,
+    ScopeDictItem, ScopeType, ScriptId, ScriptVar, SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL,
+    VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE,
+    VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT,
+    VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN, VarLock,
+    VarNumber, VarType, VimVarFlags, Vv, kBoolVarFalse, kBoolVarTrue, kListLenUnknown,
     kSpecialVarNull,
 };
 use crate::version::{highest_patch, min_vim_version};

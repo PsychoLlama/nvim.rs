@@ -81,6 +81,7 @@ use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::r#move::update_topline;
 use crate::normal::reset_visual_and_resel;
 use crate::ops::get_region_bytecount;
+use crate::option::defs::{OptSet, OptVal};
 use crate::option::vars::{
     P_ENC, P_MLS, P_SWB, fdo_flags, p_ch, p_chi, p_hh, p_ic, p_mef, p_mls, swb_flags,
 };
@@ -106,8 +107,8 @@ use crate::types::AutoEvent;
 use crate::types::Failed;
 use crate::types::TAB;
 use crate::types::{
-    Callback, ColNr, Dict, Direction, EvalFuncData, ExArg, LineNr, List, ListRef, OptInt, OptSet,
-    OptVal, Pos, RegMMatch, RegMatch, ScriptId, TypVal, VarNumber, VarType,
+    Callback, ColNr, Dict, Direction, EvalFuncData, ExArg, LineNr, List, ListRef, OptInt, Pos,
+    RegMMatch, RegMatch, ScriptId, TypVal, VarNumber, VarType,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_flush;

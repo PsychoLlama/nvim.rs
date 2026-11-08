@@ -16,8 +16,8 @@
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
+use crate::option::defs::StlSyntax;
 use crate::statusline::defs::ClickLine;
-use crate::types::StlSyntax;
 
 pub(crate) static stl_syntax: GlobalCell<StlSyntax> = GlobalCell::new(StlSyntax::NONE);
 /// The tab page line's click definitions, one per screen column; sized by

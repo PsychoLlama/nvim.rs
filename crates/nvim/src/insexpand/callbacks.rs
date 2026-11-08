@@ -20,10 +20,11 @@ use crate::option::vars::P_TSRFU;
 use crate::optionstr::{OptString, local_or_global};
 
 use crate::guard::Lock;
+use crate::option::defs::{OptError, OptionSetFlags};
 use crate::option::{NotACallback, next_option_part};
 use crate::optionstr::OptStringRef;
 use crate::semsg;
-use crate::types::{DictRef, Failed, ListRef, OptError, OptionSetFlags, VAR_DICT, VAR_LIST};
+use crate::types::{DictRef, Failed, ListRef, VAR_DICT, VAR_LIST};
 use crate::winlayer::{Buf, Win};
 
 /// A second reference to a completion callback, released when it drops.

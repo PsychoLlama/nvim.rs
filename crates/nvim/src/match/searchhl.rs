@@ -26,8 +26,8 @@ use super::*;
 use crate::drawscreen::state::screen_search_hl;
 use crate::mbyte::c_cluster_len;
 use crate::option::cpo_has;
+use crate::option::defs::CpoFlag;
 use crate::search::SEARCH_HL_PRIORITY;
-use crate::types::CpoFlag;
 use crate::winlayer::{Buf, Win};
 
 /// Which pattern's highlight state: `'hlsearch'`'s, or the window's match

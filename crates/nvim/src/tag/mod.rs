@@ -45,6 +45,7 @@ use crate::message::{
 };
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::r#move::{set_topline, validate_cursor};
+use crate::option::defs::OptSet;
 use crate::option::vars::{
     P_IC, P_SCS, P_WS, fdo_flags, jop_flags, p_enc, p_ic, p_scs, p_sft, p_tbs, p_tgst, p_tl, p_tr,
     p_verbose, p_ws, swb_flags, tc_flags,
@@ -70,7 +71,7 @@ use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::Handle;
 use crate::types::{
-    Callback, ColNr, Dict, ExArg, Expand, GetFileRet, LineNr, List, OptMagic, OptSet, Pos, Taggy,
+    Callback, ColNr, Dict, ExArg, Expand, GetFileRet, LineNr, List, OptMagic, Pos, Taggy,
     Timestamp, VarNumber,
 };
 use crate::ui::state::Columns;

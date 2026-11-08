@@ -20,8 +20,8 @@ use core::ffi::c_int;
 
 use super::program::{StateId, States};
 use crate::mbyte::{utf_char2len, utf_iscomposing_legacy};
+use crate::option::defs::MAX_MCO;
 use crate::regexp::Rex;
-use crate::types::MAX_MCO;
 
 /// Does the grapheme at the input match the group whose first member state
 /// is `sta`, a member of an `NFA_COMPOSING` group of `prog`? `clen` is the

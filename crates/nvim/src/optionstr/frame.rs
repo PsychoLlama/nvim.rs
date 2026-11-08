@@ -23,7 +23,8 @@ use crate::option::StrVar;
 
 use crate::memory::XString;
 use crate::message::e_invarg;
-use crate::types::{OptError, OptSet, OptStr, WinOpt};
+use crate::option::defs::{OptError, OptSet, OptStr};
+use crate::types::WinOpt;
 
 /// "E474: Invalid argument", the message almost every string option's check
 /// reports when it has nothing more specific to say.

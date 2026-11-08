@@ -661,6 +661,7 @@ const TYPE_HOMES: &[&str] = &[
     "src/memline/state.rs",
     "src/mpack/typedefs.rs",
     "src/msgpack_rpc/handler.rs",
+    "src/option/defs.rs",
     "src/optionstr/mod.rs::CharsOption",
     "src/os/libc.rs",
     "src/os/pty_proc_unix/mod.rs",

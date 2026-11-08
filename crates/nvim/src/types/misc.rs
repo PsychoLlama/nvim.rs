@@ -18,7 +18,6 @@ use core::mem::ManuallyDrop;
 
 use super::*;
 
-pub type OptIndex = ::core::ffi::c_int;
 /// The [`DictItem`] a scope dictionary is reached through, whose key is the
 /// empty string and whose value is the scope dictionary itself.
 ///

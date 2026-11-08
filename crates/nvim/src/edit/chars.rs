@@ -44,8 +44,8 @@ use core::ffi::c_int;
 use super::*;
 use crate::guard::Lock;
 use crate::mbyte::MB_MAXCHAR;
+use crate::option::defs::FoFlag;
 use crate::optionstr::{OptString, OptStringRef};
-use crate::types::FoFlag;
 
 /// Upstream's `ISSPECIAL`: a key that needs processing other than the
 /// simple insert this file can do -- a special key, a control character,

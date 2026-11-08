@@ -18,9 +18,9 @@ use super::*;
 use crate::api::private::helpers::{find_buffer_by_handle, find_window_by_handle};
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::option::OptionTarget;
+use crate::option::defs::OptionSetFlags;
 use crate::option::kOptScopeGlobal;
 use crate::option::kOptScopeWin;
-use crate::types::OptionSetFlags;
 use crate::winlayer::{Buf, Win};
 
 pub fn nvim_get_option_info(name: ApiString) -> Result<ApiDict, Error> {

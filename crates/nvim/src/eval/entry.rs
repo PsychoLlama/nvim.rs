@@ -46,13 +46,14 @@ use crate::eval::{
 };
 use crate::ex_eval::aborting;
 use crate::message::state::{called_emsg, did_emsg};
+use crate::option::defs::OptionSetFlags;
 use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::optionstr::OptString;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    ApiString, ExArg, Failed, NUL, Object, OptionSetFlags, ScriptCtx, TypVal, VAR_DICT, VAR_FUNC,
-    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv,
+    ApiString, ExArg, Failed, NUL, Object, ScriptCtx, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv,
 };
 
 /// A freshly declared typval.

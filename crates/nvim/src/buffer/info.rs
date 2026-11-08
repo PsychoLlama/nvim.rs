@@ -46,6 +46,7 @@ use crate::message::{
     set_keep_msg,
 };
 use crate::r#move::validate_virtcol;
+use crate::option::defs::{OptIndex, OptionSetFlags, ShmFlag, StlSyntax};
 use crate::option::shortmess;
 use crate::option::vars::{P_ICONSTRING, P_TITLESTRING, p_icon, p_ru, p_title, p_titlelen};
 use crate::options::{kOptIconstring, kOptTitlestring};
@@ -59,7 +60,7 @@ use crate::statusline::state::stl_syntax;
 use crate::statusline::{FmtSource, build_stl_text};
 use crate::terminal::buf_terminal_running;
 use crate::types::ApiString;
-use crate::types::{ExArg, IOSIZE, LineNr, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax};
+use crate::types::{ExArg, IOSIZE, LineNr, OptInt};
 use crate::ui::state::Columns;
 use crate::ui::state::kUIMessages;
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};

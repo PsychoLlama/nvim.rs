@@ -52,6 +52,7 @@ use crate::message::{emsg, emsg_multiline};
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::narrow::len_as_int;
 use crate::narrow::number_as_int;
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_direct;
 use crate::option::vars::{p_hf, p_hh, p_hlg, p_sb};
 use crate::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
@@ -67,9 +68,7 @@ use crate::tag::{HelpTagMatch, TagCmd, do_tag, find_help_tag_matches};
 use crate::types::ApiString;
 use crate::types::Handle;
 use crate::types::Key;
-use crate::types::{
-    Array, ArrayBuf, CmdModFlags, ExArg, Failed, IOSIZE, Object, OptInt, OptVal, OptionSetFlags,
-};
+use crate::types::{Array, ArrayBuf, CmdModFlags, ExArg, Failed, IOSIZE, Object, OptInt};
 use crate::ui::state::Columns;
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::winlayer::Buf;

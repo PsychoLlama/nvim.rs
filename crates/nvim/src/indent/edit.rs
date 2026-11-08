@@ -16,6 +16,7 @@ use crate::narrow::as_index;
 use crate::narrow::len_as_int;
 use crate::narrow::number_as_col;
 use crate::narrow::number_as_int;
+use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::options::kOptVartabstop;
 use crate::os::libc::int64_t;
 use crate::plines::CharsizeArg;

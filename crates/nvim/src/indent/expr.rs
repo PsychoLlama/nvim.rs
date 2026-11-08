@@ -11,6 +11,7 @@
 #![forbid(unsafe_code)]
 
 use crate::mbyte::CharInfo;
+use crate::option::defs::OptionSetFlags;
 use crate::options::kBufOptIndentexpr;
 use crate::options::kOptIndentexpr;
 use crate::os::libc::int32_t;
