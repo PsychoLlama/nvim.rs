@@ -26,7 +26,7 @@ use crate::api_error;
 use crate::message_fmt::msg_bytes;
 use crate::narrow::len_as_integer;
 use crate::types::DictBuilder;
-use crate::types::NodeId;
+use crate::viml::parser::expressions::NodeId;
 use crate::viml::parser::expressions::kExprAsgnPlain;
 use crate::viml::parser::expressions::kExprFlagsDisallowEOC;
 use crate::viml::parser::expressions::kExprFlagsMulti;

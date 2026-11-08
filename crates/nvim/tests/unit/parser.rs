@@ -2,8 +2,8 @@
 //! the reader over the caller's lines, the cursor across them, and the
 //! highlight log.
 
-use neovim::types::{ParserPosition, ParserState};
 use neovim::viml::parser::expressions::viml_pexpr_parse;
+use neovim::viml::parser::parser::{ParserPosition, ParserState};
 
 /// Parse a real expression end to end over a parser that keeps no
 /// highlight log.

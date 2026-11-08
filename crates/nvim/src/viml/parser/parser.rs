@@ -17,9 +17,8 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::os::libc::size_t;
 use core::ffi::CStr;
-
-use crate::types::{ParserHighlightChunk, ParserPosition, ParserState};
 
 impl<'a> ParserState<'a> {
     /// A parser over `input`, which has read nothing yet. With `highlight`
@@ -118,6 +117,41 @@ impl<'a> ParserState<'a> {
     pub fn take_highlight(&mut self) -> Vec<ParserHighlightChunk> {
         self.colors.take().unwrap_or_default()
     }
+}
+
+/// One highlighted stretch of a line: `[start, end_col)` on `start.line`, in
+/// the group the parser named.
+#[derive(Copy, Clone, Debug)]
+pub struct ParserHighlightChunk {
+    pub start: ParserPosition,
+    pub end_col: size_t,
+    pub group: &'static ::core::ffi::CStr,
+}
+
+/// A line and column inside a parsed string.
+///
+/// `Copy`: a position is a value.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct ParserPosition {
+    pub line: size_t,
+    pub col: size_t,
+}
+
+/// What a VimL parser reads and where it has got to: the input lines, the
+/// cursor, and the highlight log when the caller asked for one.
+///
+/// The lines are the caller's and are borrowed for the whole parse, which is
+/// what lets the tree and the error point into them; a parse ends at the
+/// first line past the last one, as upstream's reader ended at a null line.
+pub struct ParserState<'a> {
+    /// Every line of the input, in order.
+    pub(crate) input: &'a [&'a [u8]],
+    /// How many lines the reader has handed out, counting the absent one
+    /// past the end once the parse has asked for it.
+    pub(crate) lines_read: usize,
+    pub pos: ParserPosition,
+    /// The highlight log; `None` when the caller wanted none.
+    pub(crate) colors: Option<Vec<ParserHighlightChunk>>,
 }
 
 #[cfg(test)]

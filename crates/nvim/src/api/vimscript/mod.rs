@@ -19,12 +19,14 @@ use crate::message::{capture_finish, capture_start};
 use crate::os::libc::{size_t, uint64_t};
 use crate::runtime::do_source_str;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, Error, ExprAST, ExprASTNode, Integer, Object, ParserState,
-    TypVal, VAR_FUNC, VAR_PARTIAL, kErrorTypeException, kErrorTypeValidation,
+    ApiDict, ApiString, Array, Boolean, Error, Integer, Object, TypVal, VAR_FUNC, VAR_PARTIAL,
+    kErrorTypeException, kErrorTypeValidation,
 };
 use crate::viml::parser::expressions::{
     ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, NODE_TYPE_NAMES, viml_pexpr_parse,
 };
+use crate::viml::parser::expressions::{ExprAST, ExprASTNode};
+use crate::viml::parser::parser::ParserState;
 
 // The carve of the transpiled module; see each child's docs.
 mod eval;

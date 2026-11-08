@@ -9,8 +9,9 @@
 use std::ffi::c_int;
 use std::fmt::Write as _;
 
-use neovim::types::{ExprAST, NodeId, ParserState};
+use neovim::viml::parser::expressions::{ExprAST, NodeId};
 use neovim::viml::parser::expressions::{NODE_TYPE_NAMES, viml_pexpr_parse};
+use neovim::viml::parser::parser::ParserState;
 
 /// `kExprFlagsMulti`, the flag `nvim_parse_expression` passes when it is
 /// allowed to stop at the first thing that cannot continue the expression.
@@ -700,10 +701,6 @@ mod lexer {
     use std::ffi::{CStr, c_int};
     use std::fmt;
 
-    use neovim::types::{
-        ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ParserPosition,
-        ParserState,
-    };
     use neovim::viml::parser::expressions::{
         ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, LexExprToken, LexExprTokenData,
         LexExprTokenNumberValue, LexExprTokenType, kELFlagAllowFloat, kELFlagForbidEOC,
@@ -716,6 +713,10 @@ mod lexer {
         kExprLexRegister, kExprLexSingleQuotedString, kExprLexSpacing, kExprOptScopeGlobal,
         kExprOptScopeLocal, kExprOptScopeUnspecified, viml_pexpr_next_token,
     };
+    use neovim::viml::parser::expressions::{
+        ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType,
+    };
+    use neovim::viml::parser::parser::{ParserPosition, ParserState};
 
     // -- the input ---------------------------------------------------------
 

@@ -23,7 +23,7 @@ use core::ffi::CStr;
 
 use super::*;
 use crate::os::cshim::gettext;
-use crate::types::ExprNodeFigure;
+use crate::viml::parser::expressions::ExprNodeFigure;
 
 /// A place a node can hang from: the root of the tree, a node's first
 /// child, or a node's next sibling.

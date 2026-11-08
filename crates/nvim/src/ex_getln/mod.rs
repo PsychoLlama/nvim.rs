@@ -155,7 +155,7 @@ use crate::types::{
     AcoSave, ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdLine, CmdMod, CmdParseInfo,
     CmdParseMagic, ColNr, Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt, Expand,
     ExpandContext, Handle, HashTab, Integer, LineNr, Magic, MotionType, Object, OptInt, OptMagic,
-    OptSet, OptVal, ParserState, Pos, ProfTime, SaveVEvent, TryState, TypVal, VarNumber,
+    OptSet, OptVal, Pos, ProfTime, SaveVEvent, TryState, TypVal, VarNumber,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -168,6 +168,7 @@ use crate::undo::store::header_chain;
 use crate::undo::{u_blockfree, u_clearall, u_sync, u_undo_and_forget};
 use crate::usercmd::{cmdcomplete_type_to_str, parse_compl_arg};
 use crate::viml::parser::expressions::viml_pexpr_parse;
+use crate::viml::parser::parser::ParserState;
 use crate::window::state::skip_win_fix_cursor;
 use crate::window::{
     WSP_BOT, close_windows, global_stl_height, last_window, lastwin_nofloating, win_close,
