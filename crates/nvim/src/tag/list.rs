@@ -21,7 +21,6 @@ use crate::formatted;
 use crate::highlight_group::{HLF_CM, HLF_D, HLF_T};
 use crate::message::IOSIZE;
 use crate::path::MAXPATHL;
-use crate::pos::MAXCOL;
 use crate::tag::CMDBUFFSIZE;
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -61,7 +60,7 @@ pub(crate) fn print_tag_list(new_tag: bool, use_tagstack: bool, matches: &[TagMa
     let mut taglen = name_width.max(MIN_TAG_WIDTH);
     if taglen > COLUMNS.get() - 25 {
         // Too wide to line up: every file name goes on its own line.
-        taglen = MAXCOL;
+        taglen = c_int::MAX;
     }
 
     if MSG_COL.get() == 0 {
@@ -295,7 +294,7 @@ fn command_text_end(line: &[u8], command: usize) -> usize {
 /// A `taglen` of `MAXCOL` means the names were too wide to line up, so the
 /// file goes on a line of its own.
 fn advance_to_files(taglen: c_int) {
-    if taglen == MAXCOL {
+    if taglen == c_int::MAX {
         msg_putchar('\n' as c_int);
         msg_advance(24);
     } else {

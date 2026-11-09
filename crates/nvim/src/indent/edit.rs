@@ -452,14 +452,14 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
     if new_cursor_col >= 0 {
         if new_cursor_col == 0 {
             // The cursor is touching the indent, so `INSSTART.col` resets.
-            insstart_less = MAXCOL;
+            insstart_less = c_int::MAX;
         }
         new_cursor_col += win.w_cursor.col.get();
     } else if STATE.get() & MODE_INSERT == 0 {
         new_cursor_col = win.w_cursor.col.get();
     } else {
         new_cursor_col = place_cursor_in_indent((get_indent() - vcol).max(0));
-        insstart_less = MAXCOL;
+        insstart_less = c_int::MAX;
     }
 
     win.w_onebuf_opt.wo_list = save_p_list;
@@ -675,7 +675,7 @@ impl Retab {
         let len = self.num_spaces + num_tabs;
         let old_len = len_as_int(scan.text.len());
         let new_len = old_len - scan.col + self.start_col + len + 1;
-        if new_len <= 0 || new_len == MAXCOL {
+        if new_len <= 0 || new_len == c_int::MAX {
             emsg_text_too_long();
             return Retabulated::TooLong;
         }

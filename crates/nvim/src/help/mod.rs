@@ -53,7 +53,6 @@ use crate::option::vars::{p_hf, p_hh, p_hlg, p_sb};
 use crate::options::{OPT_BUFTYPE, OPT_FOLDMETHOD, OPT_ISKEYWORD};
 use crate::optionstr::{OptStringRef, check_buf_options};
 use crate::os::cshim::gettext;
-use crate::pos::MAXCOL;
 use crate::semsg;
 use crate::smsg;
 use crate::state::mode::RESTART_EDIT;
@@ -399,7 +398,7 @@ fn find_help_tags(subject: &[u8], keep_lang: bool) -> Option<Vec<Vec<u8>>> {
     if keep_lang {
         flags |= TAG_KEEP_LANG;
     }
-    let mut matches = find_help_tag_matches(pattern.as_cstr(), flags, MAXCOL)?;
+    let mut matches = find_help_tag_matches(pattern.as_cstr(), flags, c_int::MAX)?;
     // Sort on the heuristic number `find_tags` put after the tag.
     matches.sort_unstable_by(help_compare);
     // Drop everything past TAG_MANY to keep the listing short.

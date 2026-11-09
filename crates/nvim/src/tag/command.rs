@@ -27,7 +27,6 @@ use crate::message::IOSIZE;
 use crate::message::{MSG_IOBUFF_LEN, msg};
 use crate::message_fmt::{msg_cstr, to_message};
 use crate::narrow::const_len_as_int;
-use crate::pos::MAXCOL;
 use crate::semsg;
 use crate::types::{Handle, Vv};
 use crate::winlayer::{Buf, Win, WinId};
@@ -430,13 +429,13 @@ impl DoTag {
 
         match self.kind {
             TagCmd::First => self.cur_match = self.count - 1,
-            TagCmd::Select | TagCmd::Jump | TagCmd::Last => self.cur_match = MAXCOL - 1,
+            TagCmd::Select | TagCmd::Jump | TagCmd::Last => self.cur_match = c_int::MAX - 1,
             TagCmd::Next => self.cur_match += self.count,
             TagCmd::Prev => self.cur_match -= self.count,
             _ => {}
         }
-        if self.cur_match == MAXCOL {
-            self.cur_match = MAXCOL - 1;
+        if self.cur_match == c_int::MAX {
+            self.cur_match = c_int::MAX - 1;
         } else if self.cur_match < 0 {
             tag_emsg(c"E425: Cannot go before first matching tag");
             self.skip_msg = true;
@@ -501,7 +500,7 @@ impl DoTag {
                     .is_none_or(|remembered| remembered != &name)
             });
             if (self.new_tag
-                || (self.cur_match >= match_count() && MATCH_LIMIT.get() != MAXCOL)
+                || (self.cur_match >= match_count() && MATCH_LIMIT.get() != c_int::MAX)
                 || other)
                 && !self.search(&mut name, other)
             {
@@ -562,10 +561,10 @@ impl DoTag {
 
         if matches!(self.kind, TagCmd::Select | TagCmd::Jump | TagCmd::LTag) {
             // Every match is wanted, to list them.
-            self.cur_match = MAXCOL - 1;
+            self.cur_match = c_int::MAX - 1;
         }
         MATCH_LIMIT.set(if self.kind == TagCmd::Tag {
-            MAXCOL
+            c_int::MAX
         } else {
             self.cur_match + 1
         });
@@ -592,7 +591,7 @@ impl DoTag {
             Some(found) => {
                 if c_int::try_from(found.len()).is_ok_and(|n| n < MATCH_LIMIT.get()) {
                     // Fewer than the limit: that is all of them.
-                    MATCH_LIMIT.set(MAXCOL);
+                    MATCH_LIMIT.set(c_int::MAX);
                 }
                 found
             }
@@ -736,7 +735,7 @@ impl DoTag {
         // can be one.
         let more = (self.kind == TagCmd::Prev && self.cur_match > 0)
             || (matches!(self.kind, TagCmd::Tag | TagCmd::Next | TagCmd::First)
-                && (MATCH_LIMIT.get() != MAXCOL || self.cur_match < match_count() - 1));
+                && (MATCH_LIMIT.get() != c_int::MAX || self.cur_match < match_count() - 1));
         if !more {
             let missing = MISSING_FILE.with(Clone::clone).unwrap_or_default();
             return Err(TagError::NoSuchFile(missing.as_cstr().into()));
@@ -764,7 +763,7 @@ impl DoTag {
         {
             return;
         }
-        let more = if MATCH_LIMIT.get() != MAXCOL {
+        let more = if MATCH_LIMIT.get() != c_int::MAX {
             tr!(" or more")
         } else {
             String::new()

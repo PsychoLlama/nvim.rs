@@ -27,7 +27,6 @@ use crate::drawscreen::UPD_NOT_VALID;
 use crate::mouse::state::MOUSE_DRAGGING;
 use crate::narrow::number_as_int;
 use crate::os::libc::int64_t;
-use crate::pos::MAXCOL;
 use crate::search::{BACKWARD, FORWARD};
 use crate::types::{ColNr, Direction, LineNr};
 
@@ -270,7 +269,7 @@ impl Win {
         let mut loff = lineoff_at(last + 1);
         loop {
             topline_back_winheight(self, &mut loff, false);
-            if loff.height == MAXCOL {
+            if loff.height == c_int::MAX {
                 break;
             }
             if used + loff.height > self.w_view_height {
@@ -355,8 +354,8 @@ impl Win {
             // Add one line above.
             let loff_lnum_before = loff.lnum;
             topline_back(self, &mut loff);
-            if loff.height == MAXCOL {
-                used = MAXCOL;
+            if loff.height == c_int::MAX {
+                used = c_int::MAX;
             } else {
                 used += loff.height;
             }
@@ -382,7 +381,7 @@ impl Win {
             // Add one line below.
             let boff_lnum_before = boff.lnum;
             botline_forw(self, &mut boff);
-            debug_assert!(boff.height != MAXCOL, "boff.height != MAXCOL");
+            debug_assert!(boff.height != c_int::MAX, "boff.height != MAXCOL");
             used += boff.height;
             if used > self.w_view_height {
                 break;
@@ -473,7 +472,7 @@ impl Win {
                 // With 'smoothscroll' we can scroll to the exact point where
                 // the cursor is halfway down the screen.
                 topline_back_winheight(self, &mut loff, false);
-                if loff.height == MAXCOL {
+                if loff.height == c_int::MAX {
                     break;
                 }
                 used += loff.height;
@@ -537,8 +536,8 @@ impl Win {
                     };
                 if add_above {
                     topline_back(self, &mut loff);
-                    if loff.height == MAXCOL {
-                        used = MAXCOL;
+                    if loff.height == c_int::MAX {
+                        used = c_int::MAX;
                     } else {
                         used += loff.height;
                     }
@@ -749,17 +748,17 @@ pub(super) fn get_scroll_overlap(win: Win, dir: Direction) -> c_int {
     }
     step(&mut loff);
     let h2 = loff.height;
-    if h2 == MAXCOL || h2 + h1 > min_height {
+    if h2 == c_int::MAX || h2 + h1 > min_height {
         return min_height + 2;
     }
     step(&mut loff);
     let h3 = loff.height;
-    if h3 == MAXCOL || h3 + h2 > min_height {
+    if h3 == c_int::MAX || h3 + h2 > min_height {
         return min_height + 2;
     }
     step(&mut loff);
     let h4 = loff.height;
-    if h4 == MAXCOL || h4 + h3 + h2 > min_height || h3 + h2 + h1 > min_height {
+    if h4 == c_int::MAX || h4 + h3 + h2 > min_height || h3 + h2 + h1 > min_height {
         // One line of overlap.
         min_height + 1
     } else {

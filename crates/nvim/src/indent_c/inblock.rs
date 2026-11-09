@@ -211,7 +211,7 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         start_brace,
         amount,
         scope_amount: amount,
-        cur_amount: MAXCOL,
+        cur_amount: c_int::MAX,
         cont_amount: 0,
         // A copy: the C++ base-class arm sets it to zero mid-scan.
         ind_continuation: Buf::current().b_ind_continuation,

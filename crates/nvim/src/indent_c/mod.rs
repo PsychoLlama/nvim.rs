@@ -42,7 +42,7 @@ use crate::mbyte::cluster_len;
 use crate::memline::Lines;
 use crate::option::vars::p_paste;
 use crate::os::libc::int64_t;
-use crate::pos::{MAXCOL, MAXLNUM, lt};
+use crate::pos::{MAXLNUM, lt};
 use crate::search::{FM_BACKWARD, FM_BLOCKSTOP};
 use crate::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::state::MODE_INSERT;

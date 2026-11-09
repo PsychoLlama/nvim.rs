@@ -32,7 +32,6 @@ use crate::ex_docmd::cmdmod_has;
 use crate::memfile::MfDirty;
 use crate::option::cpo_has;
 use crate::option::defs::{CpoFlag, OptionSetFlags};
-use crate::pos::MAXCOL;
 use crate::types::{CmdModFlags, Failed};
 use std::io::Read;
 
@@ -431,7 +430,7 @@ pub(crate) fn readfile_named(
                 // length must stay below MAXCOL - 1 (we add 1 for the NUL
                 // when casting to ColNr). If it fires we insert a newline
                 // right away, so linerest does not grow.
-                if w.size < 0 || w.linerest.cast_signed() >= MAXCOL as isize - w.size {
+                if w.size < 0 || w.linerest.cast_signed() >= c_int::MAX as isize - w.size {
                     split += 1;
                     w.bytes[w.ptr] = b'\n'; // split the line by inserting a NL
                     w.size = 1;

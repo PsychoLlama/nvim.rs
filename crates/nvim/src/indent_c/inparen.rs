@@ -28,7 +28,7 @@ use core::ffi::c_int;
 /// The indent for a line inside the unclosed paren at `our_paren_pos`.
 pub(crate) fn indent_in_parens(line: &Line, our_paren_pos: Pos) -> c_int {
     let mut our_paren_pos = our_paren_pos;
-    let mut cur_amount = MAXCOL;
+    let mut cur_amount = c_int::MAX;
 
     let mut amount = if line.starts_with(b')') && Buf::current().b_ind_paren_prev != 0 {
         // Line up with the start of the matching paren's line.
@@ -178,7 +178,7 @@ fn align_with_unclosed_paren(
 
     if line.starts_with(b')') || line_up_with_paren() {
         if !line.starts_with(b')') {
-            *cur_amount = MAXCOL;
+            *cur_amount = c_int::MAX;
             // `our_paren_pos` is a paren position in this buffer, so the
             // cache answers with the line holding it; the `&&` keeps the
             // scan behind the option test, as upstream does.
@@ -233,7 +233,7 @@ fn align_with_unclosed_paren(
         // 'cinoptions' `m`: line up with the start of the matching
         // paren's line, which `amount` already holds.
     } else if line_up_with_paren() {
-        if *cur_amount != MAXCOL {
+        if *cur_amount != c_int::MAX {
             amount = *cur_amount;
         }
     } else {

@@ -27,7 +27,6 @@ use crate::cursor::coladvance;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::edit::{cursor_down, cursor_up};
 use crate::os::libc::int64_t;
-use crate::pos::MAXCOL;
 use crate::types::{ColNr, LineNr};
 
 impl Win {
@@ -610,7 +609,7 @@ pub(super) fn topline_back_winheight(win: Win, line: &mut LineOff, winheight: bo
         line.lnum -= 1;
         line.fill = 0;
         if line.lnum < LineNr::ONE {
-            line.height = MAXCOL;
+            line.height = c_int::MAX;
         } else if let Some(first) = win.fold_first(line.lnum) {
             // Add a closed fold, unless it is concealed.
             line.lnum = first;
@@ -638,7 +637,7 @@ pub(super) fn botline_forw(win: Win, line: &mut LineOff) {
         line.fill = 0;
         debug_assert!(!win.buffer().raw().is_null(), "wp->w_buffer != 0");
         if line.lnum > win.buffer().line_count() {
-            line.height = MAXCOL;
+            line.height = c_int::MAX;
             return;
         }
         let (folded, _, last) = win.fold_span(line.lnum);

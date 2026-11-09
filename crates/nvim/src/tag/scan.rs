@@ -29,7 +29,6 @@ use crate::options::{
     OPT_TC_FLAG_SMART,
 };
 use crate::optionstr::OptString;
-use crate::pos::MAXCOL;
 use crate::regexp::{RE_MAGIC, RegMatch};
 use crate::search::ignorecase_opt;
 use crate::semsg;
@@ -656,7 +655,7 @@ fn search(
 ) -> Option<Vec<Found>> {
     // Find every match when the caller wants them all, and also for
     // completion, where the count is only a cut-off.
-    let findall = mincount == MAXCOL || mincount == TAG_MANY;
+    let findall = mincount == c_int::MAX || mincount == TAG_MANY;
     let has_re = flags & TAG_REGEXP != 0;
     let noic = flags & TAG_NOIC != 0;
     // The pattern as the caller gave it, for 'tagcase' and 'tagfunc'.

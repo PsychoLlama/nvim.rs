@@ -49,7 +49,6 @@ use crate::memory::XString;
 use crate::message::{E_NULL, E_RE_CORR, E_RE_DAMG, E_RESULTING_TEXT_TOO_LONG};
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
-use crate::pos::MAXCOL;
 use crate::regexp::{RegMMatch, RegMatch};
 use crate::strings::escaped_bytes;
 use crate::types::{ColNr, LineNr, TypVal};
@@ -264,7 +263,7 @@ fn regtilde(mut source: Vec<u8>, magic: bool, preview: bool) -> (Vec<u8>, bool) 
             continue;
         };
         // Text longer than MAXCOL causes trouble further downstream.
-        if tmpsublen > MAXCOL as usize {
+        if tmpsublen > c_int::MAX as usize {
             emsg(gettext(E_RESULTING_TEXT_TOO_LONG));
             error = true;
             break;

@@ -20,7 +20,6 @@ use crate::mbyte::c_cluster_len;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::path::MAXPATHL;
-use crate::pos::MAXCOL;
 use crate::smsg;
 use crate::types::Failed;
 use crate::winlayer::Buf;
@@ -94,7 +93,7 @@ fn reshape_match(found: &TagMatch) -> XString {
 /// far as it got.
 pub fn get_tags(list: &mut List, pat: &CStr, buf_fname: Option<&CStr>) {
     let flags = TAG_REGEXP | TAG_NOIC;
-    let mincount = MAXCOL;
+    let mincount = c_int::MAX;
     let Some(found) = find_tags(pat.to_bytes(), flags, mincount, buf_fname) else {
         return;
     };

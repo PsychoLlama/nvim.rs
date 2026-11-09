@@ -37,7 +37,6 @@ use super::{
     CHARTAB_INITIALIZED, CT_CELL_MASK, NL, OPT_DY_FLAG_UHEX, TAB, chartab, transchar as render,
     vim_isprintc,
 };
-use crate::pos::MAXCOL;
 
 /// A cursor over the characters of a C string's bytes.
 ///
@@ -473,7 +472,7 @@ pub fn ptr2cells_at(bytes: &[u8]) -> c_int {
 
 /// The display width of the whole of `s`, the bytes of a C string.
 pub fn strsize(s: &[u8]) -> c_int {
-    strnsize(s, MAXCOL)
+    strnsize(s, c_int::MAX)
 }
 
 /// [`strsize`] of a string the caller owns.

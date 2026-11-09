@@ -147,7 +147,6 @@ use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::{input_available, os_breakcheck};
 use crate::os::libc::{int64_t, size_t, uint64_t};
 use crate::os::time::os_delay;
-use crate::pos::MAXCOL;
 use crate::register::write_reg_contents;
 use crate::runtime::defs::ESTACK_NONE;
 use crate::startup::{
@@ -640,7 +639,7 @@ pub fn fit_head(text: &[u8], force: bool) -> Cow<'_, [u8]> {
     {
         // May have up to 18 bytes per cell (6 per char, up to two
         // composing chars).
-        let mut size = c_display_width(s, MAXCOL);
+        let mut size = c_display_width(s, c_int::MAX);
         if size <= room {
             return Cow::Borrowed(text);
         }
