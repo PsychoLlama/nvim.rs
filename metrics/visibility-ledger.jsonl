@@ -455,6 +455,7 @@
 {"path":"neovim::regexp::vim_regcomp","kind":"fn","file":"crates/nvim/src/regexp/api.rs","tests":["crates/nvim/tests/unit/regexp.rs"]}
 {"path":"neovim::regexp::vim_regexec","kind":"fn","file":"crates/nvim/src/regexp/api.rs","tests":["crates/nvim/tests/unit/regexp.rs"]}
 {"path":"neovim::regexp::vim_regexec_multi","kind":"fn","file":"crates/nvim/src/regexp/api.rs","tests":["crates/nvim/tests/unit/regexp.rs"]}
+{"path":"neovim::register::RegName","kind":"struct","file":"crates/nvim/src/register/store.rs","tests":["crates/nvim/tests/unit/register.rs"]}
 {"path":"neovim::register::get_spec_reg","kind":"fn","file":"crates/nvim/src/register/special.rs","tests":["crates/nvim/tests/unit/register.rs"]}
 {"path":"neovim::search::pat_has_uppercase","kind":"fn","file":"crates/nvim/src/search/pattern.rs","tests":["crates/nvim/tests/unit/search.rs"]}
 {"path":"neovim::sha256::SHA256_SUM_SIZE","kind":"const","file":"crates/nvim/src/sha256.rs","tests":["crates/nvim/tests/unit/sha256.rs"]}

@@ -46,7 +46,7 @@ use crate::ascii::NUL;
 pub fn get_reg_type(regname: RegName) -> (MotionType, i32) {
     // Every computed register reads as charwise.
     if matches!(
-        regname,
+        regname.byte(),
         REG_CTRL_F
             | REG_CTRL_P
             | REG_CTRL_W
@@ -62,7 +62,7 @@ pub fn get_reg_type(regname: RegName) -> (MotionType, i32) {
         return (MotionType::CharWise, 0);
     }
 
-    if regname != 0 && !valid_yank_reg(regname, false) {
+    if !regname.is_unnamed() && !regname.is_valid(false) {
         return (MotionType::Unknown, 0);
     }
     get_yank_register(regname, YREG_PASTE).read(|reg| {
@@ -118,9 +118,9 @@ fn get_reg_contents(regname: RegName, flags: c_int) -> Option<RegContents> {
         return one_line(get_expr_line());
     }
     if regname == b'@' {
-        regname = b'"'; // `getreg('@')` means the unnamed register
+        regname = RegName::QUOTE; // `getreg('@')` means the unnamed register
     }
-    if regname != 0 && !valid_yank_reg(regname, false) {
+    if !regname.is_unnamed() && !regname.is_valid(false) {
         return None;
     }
 
@@ -187,10 +187,10 @@ fn init_write_reg(
     old_y_previous: &mut Option<usize>,
     must_append: bool,
 ) -> Result<Reg, Failed> {
-    if !valid_yank_reg(name, true) {
+    if !name.is_valid(true) {
         // Every writer's name is a byte of a string, which upstream's
         // `char` sign-extended into the `int` the message shows.
-        emsg_invreg(c_int::from(name.cast_signed()));
+        emsg_invreg(c_int::from(name.byte().cast_signed()));
         return Err(Failed);
     }
     // `get_yank_register` moves `""`, which a write to a *named* register

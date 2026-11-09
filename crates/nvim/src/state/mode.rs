@@ -82,7 +82,7 @@ state_record! {
 
     // -- Visual mode --
     /// The register Select mode puts replaced text in.
-    pub(crate) V_ISUAL_SELECT_REG: u8 = 0;
+    pub(crate) V_ISUAL_SELECT_REG: crate::register::RegName = crate::register::RegName::UNNAMED;
     /// An exclusive Select-mode selection was adjusted by one.
     pub(crate) V_ISUAL_SELECT_EXCLU_ADJ: bool = false;
     /// Go back to Select mode when the CTRL-O command is done.

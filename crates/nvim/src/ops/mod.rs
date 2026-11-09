@@ -94,7 +94,7 @@ use crate::register::YREG_YANK;
 use crate::register::defs::BlockDef;
 use crate::register::{
     do_autocmd_textyankpost, get_y_register, get_yank_register, op_yank, op_yank_reg,
-    shift_delete_registers, valid_yank_reg,
+    shift_delete_registers,
 };
 use crate::state::mode::{
     AI_COL, CAN_SI, DID_AI, FINISH_OP, INSSTART, MOTION_FORCE, REDO_V_ISUAL_BUSY,

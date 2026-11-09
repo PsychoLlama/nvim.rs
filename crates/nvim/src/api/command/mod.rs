@@ -33,7 +33,6 @@ use crate::message::state::{MSG_COL, REDIR_OFF};
 use crate::message::{capture_finish, capture_start};
 use crate::os::libc::{int64_t, size_t, uint64_t};
 use crate::regexp::RE_MAGIC;
-use crate::register::valid_yank_reg;
 use crate::types::{
     ApiDict, ApiString, Array, BufferHandle, CmdAddr, CmdMod, CmdModFlags, CmdParseInfo,
     ERROR_TYPE_VALIDATION, Error, ExArg, Integer, LuaRef, OBJECT_TYPE_LUA_REF, OBJECT_TYPE_STRING,

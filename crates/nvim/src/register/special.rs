@@ -39,11 +39,11 @@ use crate::file_search::FileNameOpts;
 /// the control character typed after CTRL-R: the file name (CTRL-F), the
 /// same expanded to a full path (CTRL-P), the word (CTRL-W), the WORD
 /// (CTRL-A) and the line (CTRL-L).
-pub(crate) const REG_CTRL_A: RegName = 0x01;
-pub(crate) const REG_CTRL_F: RegName = 0x06;
-pub(crate) const REG_CTRL_L: RegName = 0x0c;
-pub(crate) const REG_CTRL_P: RegName = 0x10;
-pub(crate) const REG_CTRL_W: RegName = 0x17;
+pub(crate) const REG_CTRL_A: u8 = 0x01;
+pub(crate) const REG_CTRL_F: u8 = 0x06;
+pub(crate) const REG_CTRL_L: u8 = 0x0c;
+pub(crate) const REG_CTRL_P: u8 = 0x10;
+pub(crate) const REG_CTRL_W: u8 = 0x17;
 
 /// Prompt for the `"=` expression on the command line.
 ///
@@ -102,7 +102,7 @@ pub fn get_expr_line_src() -> Option<XString> {
 /// in it -- E29 for `".`, E30 for `":`, E35 for `"/`. `"=` runs arbitrary
 /// Vimscript.
 pub fn get_spec_reg(regname: RegName, errmsg: bool) -> Option<Option<XString>> {
-    let value = match regname {
+    let value = match regname.byte() {
         // `"%` -- the current file name.
         b'%' => {
             if errmsg {

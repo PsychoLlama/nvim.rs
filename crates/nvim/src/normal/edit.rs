@@ -55,6 +55,7 @@ use crate::option::get_ve_flags;
 use crate::option::vars::{CB_FLAGS, P_SEL, p_sta, p_to, p_ww};
 use crate::options::{OPT_CB_FLAG_UNNAMED, OPT_CB_FLAG_UNNAMEDPLUS, OPT_VE_FLAG_ALL};
 use crate::os::cshim::gettext;
+use crate::register::RegName;
 use crate::register::defs::{
     PUT_BLOCK_INNER, PUT_CURSEND, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT,
     YankReg,
@@ -184,7 +185,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     }
 
     prep_redo(
-        cmd_arg.op().regname,
+        RegName::from_byte((cmd_arg.op().regname).byte()),
         cmd_arg.count1,
         Key::NUL,
         Key::ascii(b'r'),
@@ -584,7 +585,7 @@ pub(crate) fn nv_join(cmd_arg: &mut CmdArg) {
             (Buf::current().b_ml.ml_line_count - Win::current().w_cursor.lnum + 1) as c_int;
     }
     prep_redo(
-        cmd_arg.op().regname,
+        RegName::from_byte((cmd_arg.op().regname).byte()),
         cmd_arg.count0,
         Key::NUL,
         cmd_arg.cmdchar,
@@ -672,10 +673,10 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         // otherwise overwrite the very register being put.
         let clipoverwrite = (regname == b'+' || regname == b'*')
             && CB_FLAGS.get() & (OPT_CB_FLAG_UNNAMED | OPT_CB_FLAG_UNNAMEDPLUS) != 0;
-        if regname == 0
+        if regname.is_unnamed()
             || regname == b'"'
             || clipoverwrite
-            || regname.is_ascii_digit()
+            || regname.byte().is_ascii_digit()
             || regname == b'-'
         {
             savereg = Some(copy_register(regname));
@@ -687,7 +688,11 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         if !visual_active() || visual_mode().is_line() || regname != b'.' {
             cmd_arg.cmdchar = Key::ascii(b'd');
             cmd_arg.nchar = Key::NUL;
-            cmd_arg.op().regname = if keep_registers { b'_' } else { 0 };
+            cmd_arg.op().regname = if keep_registers {
+                RegName::BLACK_HOLE
+            } else {
+                RegName::UNNAMED
+            };
             let silenced = Suppress::messages();
             nv_operator(cmd_arg);
             do_pending_operator(cmd_arg, 0, false);

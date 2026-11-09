@@ -39,7 +39,11 @@ fn regname(args: &[TypVal]) -> Option<RegName> {
     } else {
         with_vim_var_str(Vv::Register, cstr::first)
     };
-    Some(if first == 0 { b'"' } else { first })
+    Some(if first == 0 {
+        RegName::QUOTE
+    } else {
+        RegName::from_byte(first)
+    })
 }
 
 /// `getreg([{regname} [, 1 [, {list}]]])`.
@@ -92,7 +96,7 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     };
     if regname == b'@' {
-        regname = b'"';
+        regname = RegName::QUOTE;
     }
     dict_alloc_ret(result);
     // Reading `"*`/`"+` runs the provider, so the answer's dictionary is
@@ -118,7 +122,7 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // reports whether it is what the unnamed register points at.
     let unnamed = get_register_name(get_unname_register());
     if regname == b'"' {
-        let name = ThinCString::from_bytes(&[unnamed]);
+        let name = ThinCString::from_bytes(&[unnamed.byte()]);
         let _ = dict(result).add_str(b"points_to", Some(&name));
     } else {
         let flag = if regname == unnamed {
@@ -138,7 +142,7 @@ fn dict(result: &mut TypVal) -> &mut Dict {
 /// The single-character String the three recording-state builtins return.
 fn return_register(regname: RegName, result: &mut TypVal) {
     // A NUL register name answers the empty string.
-    result.write_string(Some(ThinCString::from_bytes(&[regname])));
+    result.write_string(Some(ThinCString::from_bytes(&[regname.byte()])));
 }
 
 /// `reg_executing()` — the register a macro is being played from.
@@ -209,13 +213,19 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut yank_type: MotionType = MotionType::Unknown;
     let mut block_len: c_int = -1;
     let regcontents: Option<&TypVal>;
-    let mut pointreg: RegName = 0;
+    let mut pointreg: RegName = RegName::UNNAMED;
 
     if args[1].v_type() == VAR_DICT {
         let d_ref = args[1].dict_ref();
         // An empty dict clears the register outright.
         if dict_len(d_ref) == 0 {
-            write_reg_contents_lst(regname, &[], false, MotionType::Unknown, -1);
+            write_reg_contents_lst(
+                RegName::from_byte(regname),
+                &[],
+                false,
+                MotionType::Unknown,
+                -1,
+            );
             return;
         }
         // The value is copied out before the register writer runs, which
@@ -239,11 +249,11 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
         if regname == b'"' {
             if let Some(stropt) = numbuf3.dict_string(d_ref, b"points_to") {
-                pointreg = cstr::byte_at(stropt.to_bytes(), 0);
-                regname = pointreg;
+                pointreg = RegName::from_byte(cstr::byte_at(stropt.to_bytes(), 0));
+                regname = pointreg.byte();
             }
         } else if dict_get_number(d_ref, b"isunnamed") != 0 {
-            pointreg = regname;
+            pointreg = RegName::from_byte(regname);
         }
     } else {
         regcontents = Some(&args[1]);
@@ -284,21 +294,33 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // only leaves the register alone.
         if let Some(lines) = list_lines(contents) {
             let lines: Vec<&CStr> = lines.iter().map(|line| line.as_cstr()).collect();
-            write_reg_contents_lst(regname, &lines, append, yank_type, block_len);
+            write_reg_contents_lst(
+                RegName::from_byte(regname),
+                &lines,
+                append,
+                yank_type,
+                block_len,
+            );
         }
     } else if let Some(contents) = regcontents {
         let Ok(strval) = numbuf5.string_chk(contents) else {
             return;
         };
         let text = ThinCString::from_cstr(strval);
-        write_reg_contents_cstr(regname, &text, append, yank_type, block_len);
+        write_reg_contents_cstr(
+            RegName::from_byte(regname),
+            &text,
+            append,
+            yank_type,
+            block_len,
+        );
     }
     if pointreg != 0 {
         point_unnamed_at(pointreg);
     }
     result.write_number(0);
     if set_unnamed {
-        op_reg_set_previous(regname);
+        op_reg_set_previous(RegName::from_byte(regname));
     }
 }
 

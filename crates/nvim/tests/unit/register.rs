@@ -17,7 +17,7 @@
 #![cfg(not(miri))]
 
 use crate::support::{Probe, Sandbox};
-use neovim::register::get_spec_reg;
+use neovim::register::{RegName, get_spec_reg};
 
 /// Every register these cases write, cleared on the way in and out.
 const CLEAR: &str = "for r in split('abcdefxyz', '\\zs') | call setreg(r, []) | endfor";
@@ -219,7 +219,7 @@ fn get_spec_reg_answers_the_computed_registers_only() {
     // `None`: not computed; `Some(None)`: computed, and nothing in it.
     let ask = |name: char, errmsg: bool| -> Option<Option<Vec<u8>>> {
         let name = u8::try_from(name).expect("a register name is a byte");
-        get_spec_reg(name, errmsg).map(|value| value.map(|text| text.to_vec()))
+        get_spec_reg(RegName::from_byte(name), errmsg).map(|value| value.map(|text| text.to_vec()))
     };
 
     assert_eq!(ask('%', false), Some(Some(b"spec.txt".to_vec())));

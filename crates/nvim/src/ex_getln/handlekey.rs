@@ -382,9 +382,9 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
         KeyKind::Special(SpecialKey::Middlemouse) => {
             cmdline_paste(
                 if eval_has_provider(c"clipboard") {
-                    b'*'
+                    RegName::STAR
                 } else {
-                    0
+                    RegName::UNNAMED
                 },
                 true,
                 true,

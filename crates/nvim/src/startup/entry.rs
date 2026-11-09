@@ -458,7 +458,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         time_msg_at(c"UIEnter autocommands");
     }
 
-    set_reg_var(get_default_register_name());
+    set_reg_var(get_default_register_name().byte());
 
     if Win::current().w_onebuf_opt.wo_diff != 0 && Win::current().w_onebuf_opt.wo_scb != 0 {
         update_topline(Win::current());

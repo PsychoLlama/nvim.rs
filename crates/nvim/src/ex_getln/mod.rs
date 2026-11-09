@@ -131,7 +131,6 @@ use crate::regexp::{RE_SEARCH, skip_regexp_magic};
 use crate::register::{
     REG_CTRL_A, REG_CTRL_F, REG_CTRL_L, REG_CTRL_P, REG_CTRL_W, RegName, cmdline_paste_reg,
     get_expr_line, get_expr_register, get_spec_reg, is_literal_register, register_name,
-    valid_yank_reg,
 };
 use crate::registry::{IdSet, id_set};
 use crate::runtime::SID_NONE;
@@ -443,7 +442,7 @@ pub(crate) const EXARG_T_INIT: ExArg<'static> = ExArg {
     append: false,
     usefilter: false,
     amount: 0,
-    regname: 0,
+    regname: RegName::UNNAMED,
     force_bin: None,
     read_edit: false,
     mkdir_p: false,

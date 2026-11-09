@@ -42,6 +42,7 @@ use crate::r#move::WinValid;
 use crate::normal::visual_active;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
+use crate::register::RegName;
 
 /// The three CTRL-G commands that are spelled with a letter.
 const CTRL_G_UP: Key = Key::ascii(b'k');
@@ -112,18 +113,18 @@ pub(crate) fn ins_reg() {
     // Don't `u_sync()` while typing the expression, or while giving an
     // error message for it; only explicitly.
     let no_sync = Suppress::undo_sync();
-    if regname == Some(b'=') {
+    if regname == Some(RegName::EXPRESSION) {
         let curpos = Win::current().w_cursor;
         // Sync undo if the expression calls setline() or append(), so
         // that can be undone separately.
         U_SYNC_ONCE.set(2);
-        regname = get_expr_register().then_some(b'=');
+        regname = get_expr_register().then_some(RegName::EXPRESSION);
         // The cursor may have been moved back a column.
         Win::current().w_cursor = curpos;
         check_cursor(Win::current());
     }
 
-    let regname = regname.filter(|&name| name != 0 && valid_yank_reg(name, false));
+    let regname = regname.filter(|&name| name != 0 && name.is_valid(false));
     if let Some(regname) = regname {
         let reg = get_yank_register(regname, YREG_PASTE);
 

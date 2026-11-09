@@ -20,6 +20,7 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{SpecialKey, key_unescape};
 use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::char_at;
+use crate::register::RegName;
 use crate::types::Key;
 use core::ffi::c_int;
 
@@ -383,7 +384,7 @@ pub(crate) fn vungetc(c: Key) {
 pub fn check_end_reg_executing(advance: bool) {
     if REG_EXECUTING.get() != 0 && (typeahead().maplen() == 0 || PENDING_END_REG_EXECUTING.get()) {
         if advance {
-            REG_EXECUTING.set(0);
+            REG_EXECUTING.set(RegName::UNNAMED);
             PENDING_END_REG_EXECUTING.set(false);
         } else {
             PENDING_END_REG_EXECUTING.set(true);

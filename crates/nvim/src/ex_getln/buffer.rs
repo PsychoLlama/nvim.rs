@@ -299,9 +299,9 @@ pub(crate) fn cmdline_paste(regname: RegName, literally: bool, remcr: bool) -> b
     // Check for a valid regname; also accept the special characters
     // CTRL-R takes on the command line.
     if !matches!(
-        regname,
+        regname.byte(),
         REG_CTRL_F | REG_CTRL_P | REG_CTRL_W | REG_CTRL_A | REG_CTRL_L
-    ) && !valid_yank_reg(regname, false)
+    ) && !regname.is_valid(false)
     {
         return false;
     }

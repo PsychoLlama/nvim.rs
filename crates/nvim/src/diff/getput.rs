@@ -26,6 +26,7 @@ use crate::narrow::as_index;
 use crate::narrow::len_as_int;
 use crate::narrow::number_as_int;
 use crate::optionstr::OptString;
+use crate::register::RegName;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::EcmdCmd;
@@ -76,7 +77,7 @@ pub fn nv_diffgetput(put: bool, count: size_t) {
         append: false,
         usefilter: false,
         amount: 0,
-        regname: 0,
+        regname: RegName::UNNAMED,
         force_bin: None,
         read_edit: false,
         mkdir_p: false,

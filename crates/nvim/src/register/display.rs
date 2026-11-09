@@ -74,7 +74,7 @@ fn dis_special(
     let Some(text) = text else {
         return;
     };
-    if arg.is_some_and(|arg| !arg.to_bytes().contains(&name)) {
+    if arg.is_some_and(|arg| !arg.to_bytes().contains(&name.byte())) {
         return;
     }
     if GOT_INT.get() || message_filtered(text) {
@@ -99,7 +99,7 @@ fn dis_register(yb: &YankReg, name: RegName, type_0: u8, hl_id: c_int) {
     msg_putchar(c_int::from(type_0));
     msg_str(c"  ");
     msg_putchar(c_int::from(b'"'));
-    msg_putchar(c_int::from(name));
+    msg_putchar(c_int::from(name.byte()));
     msg_str(c"   ");
 
     // The content, cut off at the window width. A line break inside the
@@ -142,7 +142,7 @@ pub fn ex_display(excmd: &mut ExArg) {
             break;
         }
         let name = get_register_name(i);
-        if arg.is_none_or(|arg| arg.to_bytes().contains(&name)) {
+        if arg.is_none_or(|arg| arg.to_bytes().contains(&name.byte())) {
             // Before `get_clipboard` below, because for `"*`/`"+` this
             // queries the provider itself, and upstream's order of the
             // two queries is what the messages depend on.
@@ -159,7 +159,7 @@ pub fn ex_display(excmd: &mut ExArg) {
 
             // Don't show the register `:redir` is writing into: it would
             // record its own listing.
-            let redir_target = name == REDIR_REG.get().to_ascii_lowercase()
+            let redir_target = name == REDIR_REG.get().byte().to_ascii_lowercase()
                 || REDIR_REG.get() == b'"' && Some(yb) == get_y_previous();
             // A share of the lines: printing can run `:redir`, which writes
             // a register.
@@ -179,7 +179,7 @@ pub fn ex_display(excmd: &mut ExArg) {
     let insert =
         (!insert.is_null()).then(|| XString::from_bytes(cstr::until_nul(insert.as_bytes())));
     special(
-        b'.',
+        RegName::LAST_INSERTED,
         c"\n  c  \".   ",
         insert.as_ref().map(XString::as_cstr),
         true,
@@ -187,14 +187,14 @@ pub fn ex_display(excmd: &mut ExArg) {
     // A copy: listing it runs the message machinery.
     let last = LAST_CMDLINE.with(Clone::clone);
     special(
-        b':',
+        RegName::LAST_COMMAND,
         c"\n  c  \":   ",
         last.as_ref().map(XString::as_cstr),
         false,
     );
     let current = Buf::current().name.shown().map(XString::from_cstr);
     special(
-        b'%',
+        RegName::FILE_NAME,
         c"\n  c  \"%   ",
         current.as_ref().map(XString::as_cstr),
         false,
@@ -218,7 +218,7 @@ pub fn ex_display(excmd: &mut ExArg) {
     // A copy, as the expression below.
     let last = last_search_pat();
     special(
-        b'/',
+        RegName::LAST_SEARCH,
         c"\n  c  \"/   ",
         last.as_ref().map(XString::as_cstr),
         false,
@@ -226,7 +226,7 @@ pub fn ex_display(excmd: &mut ExArg) {
     // A copy: listing a register may run a message callback that sets it.
     let expr = EXPR_LINE.with(Clone::clone);
     special(
-        b'=',
+        RegName::EXPRESSION,
         c"\n  c  \"=   ",
         expr.as_ref().map(XString::as_cstr),
         false,

@@ -244,7 +244,7 @@ pub fn nvim_parse_cmd(str: ApiString, _opts: &mut KeyDict_empty) -> Result<KeyDi
 
     if excmd.argt.has(ExArgt::REGSTR) {
         // `%c` of the low byte, read back as a C string: nothing for NUL.
-        let byte = excmd.regname.to_le_bytes()[0];
+        let byte = excmd.regname.byte();
         let reg = if byte == 0 {
             &[][..]
         } else {

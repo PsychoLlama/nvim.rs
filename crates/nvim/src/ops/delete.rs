@@ -41,6 +41,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::normal::visual_select;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
+use crate::register::RegName;
 use crate::register::is_append_register;
 use crate::types::Failed;
 use crate::undo::UndoFailed;
@@ -187,8 +188,8 @@ fn save_deleted_text(op: &OpArg) -> bool {
     let mut reg: Option<crate::register::Reg> = None;
     let mut did_yank = false;
 
-    if op.regname != 0 {
-        if !valid_yank_reg(op.regname, true) {
+    if !op.regname.is_unnamed() {
+        if !op.regname.is_valid(true) {
             beep_flush();
             return false;
         }
@@ -212,14 +213,14 @@ fn save_deleted_text(op: &OpArg) -> bool {
 
     // Into the small-delete register when no register was named and the
     // delete is within one line.
-    if op.regname == 0 && op.motion_type != MotionType::LineWise && op.line_count == 1 {
-        let small = get_yank_register(b'-', YREG_YANK);
+    if op.regname.is_unnamed() && op.motion_type != MotionType::LineWise && op.line_count == 1 {
+        let small = get_yank_register(RegName::SMALL_DELETE, YREG_YANK);
         op_yank_reg(op, false, small, false);
         reg = Some(small);
         did_yank = true;
     }
 
-    if did_yank || op.regname == 0 {
+    if did_yank || op.regname.is_unnamed() {
         let Some(reg) = reg else {
             std::process::abort();
         };

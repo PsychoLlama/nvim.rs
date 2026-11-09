@@ -38,7 +38,7 @@ use crate::normal::visual_active;
 /// Put `p` in register `regname` as a single charwise line, appending for an
 /// uppercase name.
 fn stuff_yank(regname: RegName, p: XString) -> Result<(), Failed> {
-    if regname != 0 && !valid_yank_reg(regname, true) {
+    if !regname.is_unnamed() && !regname.is_valid(true) {
         return Err(Failed);
     }
     if regname == b'_' {
@@ -79,7 +79,7 @@ fn fire_recording_leave(regname: RegName, contents: &XString) {
     let _ = dict
         .edit()
         .add_str(b"regcontents", Some(contents.as_cstr()));
-    let name = [regname, 0];
+    let name = [regname.byte(), 0];
     let _ = dict.edit().add_str(b"regname", Some(cstr::in_bytes(&name)));
     dict.edit().set_keys_readonly();
     apply_autocmds(
@@ -100,12 +100,13 @@ fn fire_recording_leave(regname: RegName, contents: &XString) {
 pub fn do_record(c: Key) -> Result<(), Failed> {
     /// Which register the recording in progress goes into; kept across
     /// the two calls because `REG_RECORDING` is cleared before the store.
-    static REGNAME: GlobalCell<RegName> = GlobalCell::new(0);
+    static REGNAME: GlobalCell<RegName> = GlobalCell::new(RegName::UNNAMED);
 
     if REG_RECORDING.get() == 0 {
         // Start recording. A letter or a digit, and `"` -- note that
         // this is *not* `is_literal_register`, which also takes `*`/`+`.
-        let Some(c) = register_name(c).filter(|&c| c.is_ascii_alphanumeric() || c == b'"') else {
+        let Some(c) = register_name(c).filter(|&c| c.byte().is_ascii_alphanumeric() || c == b'"')
+        else {
             return Err(Failed);
         };
         REG_RECORDING.set(c);
@@ -129,7 +130,7 @@ pub fn do_record(c: Key) -> Result<(), Failed> {
     // The autocommands this fires are the ones the caller allows.
     fire_recording_leave(REGNAME.get(), &p);
     REG_RECORDED.set(REG_RECORDING.get());
-    REG_RECORDING.set(0);
+    REG_RECORDING.set(RegName::UNNAMED);
     if p_ch() == 0 || ui_has(UI_MESSAGES) {
         showmode();
     } else {
@@ -269,8 +270,8 @@ pub fn do_execreg(regname: RegName, colon: bool, addcr: bool, silent: bool) -> R
         }
         regname = EXECREG_LASTC.get();
     }
-    if regname == b'%' || regname == b'#' || !valid_yank_reg(regname, false) {
-        emsg_invreg(c_int::from(regname));
+    if regname == b'%' || regname == b'#' || !regname.is_valid(false) {
+        emsg_invreg(c_int::from(regname.byte()));
         return Err(Failed);
     }
     EXECREG_LASTC.set(regname);
@@ -363,7 +364,11 @@ pub fn do_execreg(regname: RegName, colon: bool, addcr: bool, silent: bool) -> R
             return Err(Failed);
         }
     }
-    REG_EXECUTING.set(if regname == 0 { b'"' } else { regname });
+    REG_EXECUTING.set(if regname.is_unnamed() {
+        RegName::QUOTE
+    } else {
+        regname
+    });
     PENDING_END_REG_EXECUTING.set(false);
     retval
 }
@@ -386,7 +391,7 @@ pub fn insert_reg(
     if GOT_INT.get() {
         return Err(Failed);
     }
-    if regname != 0 && !valid_yank_reg(regname, false) {
+    if !regname.is_unnamed() && !regname.is_valid(false) {
         return Err(Failed);
     }
 

@@ -300,7 +300,7 @@ pub(crate) fn recording_mode(hl_id: c_int) {
     // Upstream formats this with `snprintf(s, 4, " @%c", REG_RECORDING)`,
     // which is exactly three bytes and the terminator.
     let reg = REG_RECORDING.get();
-    let suffix = [b' ', b'@', reg, 0];
+    let suffix = [b' ', b'@', reg.byte(), 0];
     msg_str_hl(cstr::in_bytes(&suffix), hl_id, false);
 }
 

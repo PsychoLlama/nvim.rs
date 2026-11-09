@@ -117,13 +117,13 @@ pub(crate) fn adjust_clipboard_name(
     }
     let reg = if CB_FLAGS.get() & OPT_CB_FLAG_UNNAMEDPLUS != 0 {
         *name = if CB_FLAGS.get() & OPT_CB_FLAG_UNNAMED != 0 && writing {
-            b'"'
+            RegName::QUOTE
         } else {
-            b'+'
+            RegName::PLUS
         };
         PLUS_REGISTER
     } else {
-        *name = b'*';
+        *name = RegName::STAR;
         STAR_REGISTER
     };
     Some(reg)
@@ -222,7 +222,7 @@ pub(crate) fn get_clipboard(mut name: RegName, quiet: bool) -> Option<(usize, bo
     get_y_register(slot).write(YankReg::clear);
 
     let args = tv_list_alloc(1);
-    args.edit().push_bytes(Some(&[name]));
+    args.edit().push_bytes(Some(&[name.byte()]));
     let result = eval_call_provider(c"clipboard", c"get", Some(args), false);
 
     match register_from_provider(&result) {
@@ -278,7 +278,7 @@ pub(crate) fn set_clipboard(mut name: RegName, reg: Reg) {
     let args = tv_list_alloc(3);
     args.edit().push_list(Some(lines));
     args.edit().push_bytes(Some(&[regtype]));
-    args.edit().push_bytes(Some(&[name]));
+    args.edit().push_bytes(Some(&[name.byte()]));
     eval_call_provider(c"clipboard", c"set", Some(args), true);
 }
 
@@ -286,7 +286,7 @@ pub(crate) fn set_clipboard(mut name: RegName, reg: Reg) {
 fn flush_unnamed() {
     // A pending update means something was written, so `""` points at it.
     if let Some(reg) = get_y_previous() {
-        set_clipboard(0, reg);
+        set_clipboard(RegName::UNNAMED, reg);
     }
 }
 

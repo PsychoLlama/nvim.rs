@@ -44,6 +44,7 @@ use crate::normal::defs::OpArg;
 use crate::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::types::{ColNr, ExArg};
 
+use crate::register::RegName;
 use crate::winlayer::{Buf, Win};
 
 /// Save the state `:normal` is about to disturb.
@@ -58,7 +59,7 @@ pub fn save_current_state(s: &mut SaveState) -> bool {
     s.save_state = STATE.get();
     s.save_finish_op = FINISH_OP.get();
     s.save_opcount = OPCOUNT.get();
-    s.save_reg_executing = REG_EXECUTING.get();
+    s.save_reg_executing = REG_EXECUTING.get().byte();
     s.save_pending_end_reg_executing = PENDING_END_REG_EXECUTING.get();
     MSG_SCROLL.set(0);
     // Not entering Insert mode from here.
@@ -80,7 +81,7 @@ pub fn restore_current_state(s: &mut SaveState) {
     }
     FINISH_OP.set(s.save_finish_op);
     OPCOUNT.set(s.save_opcount);
-    REG_EXECUTING.set(s.save_reg_executing);
+    REG_EXECUTING.set(RegName::from_byte(s.save_reg_executing));
     PENDING_END_REG_EXECUTING.set(s.save_pending_end_reg_executing);
     MSG_DIDOUT.set(MSG_DIDOUT.get() || s.save_msg_didout);
     STATE.set(s.save_state);

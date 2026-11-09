@@ -32,7 +32,8 @@ use crate::memory::XString;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
 use crate::quickfix::grep_internal;
-use crate::register::{set_expr_line, valid_yank_reg};
+use crate::register::RegName;
+use crate::register::set_expr_line;
 use crate::strings::trailing_spaces_start;
 use crate::types::ex_cmds::ExArg;
 use crate::types::pos::LineNr;
@@ -72,10 +73,10 @@ pub(crate) fn parse_register(excmd: &mut ExArg) {
     // `:put` and `:iput` are the two commands that may name a write-only
     // register; every other one is writing to whichever it names.
     let writing = !is_user_command && excmd.cmdidx != CmdIdx::put && excmd.cmdidx != CmdIdx::iput;
-    if !valid_yank_reg(excmd.line.byte_at(excmd.line.arg), writing) {
+    if RegName::valid(excmd.line.byte_at(excmd.line.arg), writing).is_none() {
         return;
     }
-    excmd.regname = excmd.line.byte_at(excmd.line.arg);
+    excmd.regname = RegName::from_byte(excmd.line.byte_at(excmd.line.arg));
     excmd.line.arg += 1;
     // The expression register swallows the rest of the line: it *is* the
     // expression, and evaluating it is deferred until the register is read.

@@ -37,12 +37,13 @@ use crate::types::{ColNr, Key, LIST_LEN_MAY_KNOW, LineNr, Pos, TypVal, VAR_DICT,
 use core::ffi::{CStr, c_int};
 
 use crate::ascii::CTRL_V;
+use crate::register::RegName;
 use crate::winlayer::{Buf, Win};
 
 /// A cleared operator argument, which only the blockwise path fills in.
 const NO_OPARG: OpArg = OpArg {
     op_type: OpType::Nop,
-    regname: 0,
+    regname: RegName::UNNAMED,
     motion_type: MotionType::CharWise,
     motion_force: Key::NUL,
     use_reg_one: false,

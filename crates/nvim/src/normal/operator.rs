@@ -35,9 +35,7 @@ use crate::ops::OpType;
 use crate::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
-use crate::register::{
-    RegName, do_execreg, do_record, get_expr_register, register_name, valid_yank_reg,
-};
+use crate::register::{RegName, do_execreg, do_record, get_expr_register, register_name};
 use crate::state::mode::{ARROW_USED, RESTART_EDIT, V_ISUAL_SELECT_REG};
 use crate::undo::{u_redo, u_undo, u_undoline};
 use crate::winlayer::graph::CMDWIN_TYPE;
@@ -131,12 +129,12 @@ pub(crate) fn nv_regname(cmd_arg: &mut CmdArg) {
         cmd_arg.nchar = Key::NUL;
     }
     if let Some(regname) =
-        register_name(cmd_arg.nchar).filter(|&name| name != 0 && valid_yank_reg(name, false))
+        register_name(cmd_arg.nchar).filter(|&name| name != 0 && name.is_valid(false))
     {
         cmd_arg.op().regname = regname;
         // The count so far belongs to the command, not to the `"`.
         cmd_arg.opcount = cmd_arg.count0;
-        set_reg_var(cmd_arg.op().regname);
+        set_reg_var((cmd_arg.op().regname).byte());
     } else {
         clear_op_beep(cmd_arg.op());
     }
@@ -169,8 +167,8 @@ pub(crate) fn nv_redo_or_register(cmd_arg: &mut CmdArg) {
         }
         V_ISUAL_SELECT_REG.set(
             register_name(reg)
-                .filter(|&name| valid_yank_reg(name, true))
-                .unwrap_or(0),
+                .filter(|&name| name.is_valid(true))
+                .unwrap_or(RegName::UNNAMED),
         );
         return;
     }

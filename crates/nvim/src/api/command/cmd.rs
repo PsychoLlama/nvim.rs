@@ -48,6 +48,7 @@ use crate::guard::Suppress;
 use crate::memory::XString;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::narrow::{len_as_int, number_as_int};
+use crate::register::RegName;
 use crate::types::CmdIdx;
 use crate::types::Object;
 use crate::types::{CmdFilter, CmdLine, ExArgt};
@@ -447,7 +448,7 @@ fn apply_register(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
     // `:put`/`:iput` read the register, everything else writes it.
     let writing =
         !is_user_cmd(excmd.cmdidx) && excmd.cmdidx != CmdIdx::put && excmd.cmdidx != CmdIdx::iput;
-    if !valid_yank_reg(regname.cast_unsigned(), writing) {
+    if RegName::valid(regname.cast_unsigned(), writing).is_none() {
         // `%c` wrote the one byte, whatever it was.
         let byte = regname.cast_unsigned();
         let reg = msg_bytes(core::slice::from_ref(&byte));
@@ -456,7 +457,7 @@ fn apply_register(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
             "Invalid register: \"{reg}"
         ));
     }
-    excmd.regname = regname.cast_unsigned();
+    excmd.regname = RegName::from_byte(regname.cast_unsigned());
     Ok(())
 }
 

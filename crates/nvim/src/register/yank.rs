@@ -101,10 +101,14 @@ fn append_to_register(curr: &mut YankReg, new: Vec<XString>, yank_type: MotionTy
 /// The "N lines yanked" message.
 fn report_yank(op: &OpArg, yank_type: MotionType, yanklines: size_t) {
     let regname = op.regname;
-    let name = if regname == 0 {
+    let name = if regname.is_unnamed() {
         Vec::new()
     } else {
-        formatted!(100, gettext(c" into \"%c").to_bytes(), c_int::from(regname))
+        formatted!(
+            100,
+            gettext(c" into \"%c").to_bytes(),
+            c_int::from(regname.byte())
+        )
     };
 
     // The message may be the first thing that scrolls, so make sure the
@@ -281,7 +285,7 @@ pub fn do_autocmd_textyankpost(op: &OpArg, reg: Reg) {
     let _ = dict.edit().add_list(b"regcontents", Some(list));
     let _ = dict.edit().add_str(b"regtype", Some(&regtype));
 
-    let name = [op.regname, 0];
+    let name = [op.regname.byte(), 0];
     let _ = dict.edit().add_str(b"regname", Some(cstr::in_bytes(&name)));
 
     let flag = |set| if set { BOOL_VAR_TRUE } else { BOOL_VAR_FALSE };
@@ -317,7 +321,7 @@ pub fn do_autocmd_textyankpost(op: &OpArg, reg: Reg) {
 /// TextYankPost, and so arbitrary Lua.
 pub fn op_yank(op: &OpArg, message: bool) -> bool {
     let regname = op.regname;
-    if regname != 0 && !valid_yank_reg(regname, true) {
+    if !regname.is_unnamed() && !regname.is_valid(true) {
         beep_flush();
         return false;
     }

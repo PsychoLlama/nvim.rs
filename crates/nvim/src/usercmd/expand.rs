@@ -400,8 +400,12 @@ fn uc_check_code(
         }
         Code::Mods => CMDMOD.with(|cmod| uc_mods_into(out, cmod, quote != Quote::None)),
         Code::Register => {
-            let register = [args.regname];
-            let body: &[u8] = if args.regname != 0 { &register } else { b"" };
+            let register = [args.regname.byte()];
+            let body: &[u8] = if args.regname.is_unnamed() {
+                b""
+            } else {
+                &register
+            };
             put_quoted(out, quotes(b'\''), body);
         }
         Code::Lt => out.push(b'<'),

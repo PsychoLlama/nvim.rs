@@ -710,7 +710,7 @@ pub(crate) fn get_register_completion() {
     for i in 0..NUM_REGISTERS {
         let regname = get_register_name(Some(i));
         // Skip an invalid or black hole register.
-        if !valid_yank_reg(regname, false) || regname == b'_' {
+        if !regname.is_valid(false) || regname == b'_' {
             continue;
         }
 

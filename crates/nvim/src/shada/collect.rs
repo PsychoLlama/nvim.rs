@@ -52,6 +52,7 @@ use super::{
     ShadaFileMark, ShadaGlobalVar, ShadaRegister, WriteMergerState, WriteStatus,
 };
 use crate::cmdhist::{HIST_CMD, HIST_SEARCH};
+use crate::register::RegName;
 
 /// Whether a buffer's marks are not worth remembering: it has no file name,
 /// it was unlisted on purpose, it is a quickfix or terminal buffer, or its
@@ -164,8 +165,8 @@ pub(crate) fn shada_initialize_registers(wms: &mut WriteMergerState, limit: Opti
             }),
             extra: yank.extra,
         };
-        let idx =
-            op_reg_index(name.cast_unsigned()).expect("a register the store answered has a slot");
+        let idx = op_reg_index(RegName::from_byte(name.cast_unsigned()))
+            .expect("a register the store answered has a slot");
         wms.registers[idx] = entry;
     }
 }

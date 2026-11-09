@@ -58,6 +58,7 @@ use core::ffi::c_int;
 
 use crate::memory::XString;
 use crate::r#move::{update_curswant_force, update_topline, validate_virtcol};
+use crate::register::RegName;
 
 /// Whether 'selection' is "exclusive": the character under the far end of the
 /// selection is not part of it.
@@ -720,7 +721,7 @@ pub(crate) fn nv_gv_cmd(cmd_arg: &mut CmdArg) {
     update_topline(Win::current());
     if cmd_arg.arg != 0 {
         set_visual_select(true);
-        V_ISUAL_SELECT_REG.set(0);
+        V_ISUAL_SELECT_REG.set(RegName::UNNAMED);
     } else {
         may_start_select(Key::ascii(b'c'));
     }
@@ -786,7 +787,7 @@ pub(crate) fn unadjust_for_sel_inner(pos: &mut Pos) -> bool {
 pub(crate) fn nv_select(cmd_arg: &mut CmdArg) {
     if visual_active() {
         set_visual_select(true);
-        V_ISUAL_SELECT_REG.set(0);
+        V_ISUAL_SELECT_REG.set(RegName::UNNAMED);
     } else if V_ISUAL_RESELECT.get() != 0 {
         // Re-enter through `gv`, which is where the reselection lives.
         cmd_arg.nchar = Key::ascii(b'v');

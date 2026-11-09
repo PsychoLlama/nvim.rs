@@ -48,6 +48,7 @@ use crate::message::emsg;
 use crate::message::state::{CALLED_EMSG, DID_EMSG};
 use crate::option::vars::p_ic;
 use crate::os::cshim::gettext;
+use crate::register::RegName;
 use crate::register::get_reg_contents_owned;
 use crate::strings::find_bytes;
 use crate::types::{
@@ -525,7 +526,8 @@ pub(crate) fn eval7(
             if evaluate {
                 result.write_empty(VAR_STRING);
                 let name = cursor.byte();
-                let text = get_reg_contents_owned(name, G_REG_EXPR_SRC.cast_signed());
+                let text =
+                    get_reg_contents_owned(RegName::from_byte(name), G_REG_EXPR_SRC.cast_signed());
                 result.write_string(text.map(ThinCString::from));
             }
             // `@` at the very end of the line names no register.

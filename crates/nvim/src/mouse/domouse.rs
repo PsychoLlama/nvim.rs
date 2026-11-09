@@ -145,7 +145,7 @@ pub(crate) fn do_mouse(
         return answer;
     }
 
-    let regname = op.map_or(0, |o| o.regname);
+    let regname = op.map_or(RegName::UNNAMED, |o| o.regname);
     if which_button == MOUSE_MIDDLE
         && let Some(answer) = middle_button_insert(op, regname, fixindent)
     {
@@ -470,8 +470,8 @@ fn middle_button_insert(op: Option<Op>, mut regname: RegName, fixindent: bool) -
         let _ = insert_reg(regname, None, true);
         return Some(false);
     }
-    if regname == 0 && has_clipboard_provider() {
-        regname = b'*';
+    if regname.is_unnamed() && has_clipboard_provider() {
+        regname = RegName::STAR;
     }
 
     // The register is looked up only in Replace mode, as the C's `&&` has it;
@@ -496,7 +496,11 @@ fn middle_button_insert(op: Option<Op>, mut regname: RegName, fixindent: bool) -
     } else {
         Key::ctrl(b'O')
     });
-    append_to_redobuff_char(register_key(if regname == 0 { b'"' } else { regname }));
+    append_to_redobuff_char(register_key(if regname.is_unnamed() {
+        RegName::QUOTE
+    } else {
+        regname
+    }));
     Some(false)
 }
 
@@ -670,8 +674,8 @@ fn dispatch_action(a: Action, win: Win) {
 
     if which_button == MOUSE_MIDDLE {
         // Middle mouse click: Put text before cursor.
-        if regname == 0 && has_clipboard_provider() {
-            regname = b'*';
+        if regname.is_unnamed() && has_clipboard_provider() {
+            regname = RegName::STAR;
         }
         let (mline, reg) = yank_register_mline(regname);
         if if mline {

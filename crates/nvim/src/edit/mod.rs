@@ -161,7 +161,7 @@ use crate::register::YREG_PASTE;
 use crate::register::defs::{PUT_CURSEND, PUT_FIXINDENT};
 use crate::register::{
     do_put, get_expr_register, get_yank_register, insert_reg, is_literal_register, register_key,
-    register_name, valid_yank_reg,
+    register_name,
 };
 use crate::search::{BACKWARD, FORWARD};
 use crate::spell::SPELL_REDRAW_LNUM;

@@ -257,7 +257,7 @@ pub(crate) fn op_pending() -> bool {
         && prev_opcount == 0
         && prev_count0 == 0
         && op_type == OpType::Nop
-        && regname == 0)
+        && regname.is_unnamed())
 }
 
 /// Run normal mode until something asks to leave it.
@@ -300,7 +300,7 @@ pub(crate) fn normal_prepare(ns: &mut NormalState) {
     // With no operator and no register pending, the count starts over --
     // and `set_prevcount` remembers to publish it as v:prevcount.
     ns.set_prevcount = false;
-    if !FINISH_OP.get() && ns.oa.regname == 0 {
+    if !FINISH_OP.get() && ns.oa.regname.is_unnamed() {
         ns.ca.opcount = 0;
         ns.set_prevcount = true;
     }
@@ -390,7 +390,7 @@ pub(crate) fn normal_need_redraw_mode_message(ns: &mut NormalState) -> bool {
         && EMSG_ON_DISPLAY.get();
 
     (showing_mode || error_on_display)
-        && ns.oa.regname == 0
+        && ns.oa.regname.is_unnamed()
         && !ns.ca.outcome.has(Outcome::COMMAND_BUSY)
         && stuff_empty()
         && typeahead().maplen() == 0

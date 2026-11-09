@@ -241,7 +241,7 @@ pub(crate) fn nv_esc(cmd_arg: &mut CmdArg) {
     let no_reason = cmd_arg.op().op_type == OpType::Nop
         && cmd_arg.opcount == 0
         && cmd_arg.count0 == 0
-        && cmd_arg.op().regname == 0;
+        && cmd_arg.op().regname.is_unnamed();
     if cmd_arg.arg != 0 {
         if RESTART_EDIT.get().is_nul() && CMDWIN_TYPE.get() == 0 && !visual_active() && no_reason {
             let hint = if any_buf_is_changed() {

@@ -43,11 +43,13 @@ use crate::os::cshim::gettext;
 use crate::r#move::{update_topline, validate_cursor};
 use crate::normal::visual_active;
 
-use crate::register::{valid_yank_reg, write_reg_contents};
+use crate::register::write_reg_contents;
 use crate::state::MODE_CMDLINE;
 use crate::statusline::draw_tabline;
 use crate::types::{ExArg, Failed, VarNumber, Vv};
 
+use crate::register::RegName;
+use crate::register::is_append_register;
 use crate::winlayer::Win;
 
 /// `:colorscheme` — with no argument, report `g:colors_name`.
@@ -107,8 +109,8 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         close_redir();
         at += 1;
         let name = excmd.line.byte_at(at);
-        if valid_yank_reg(name, true) && name != b'_' {
-            REDIR_REG.set(name);
+        if RegName::valid(name, true).is_some() && name != b'_' {
+            REDIR_REG.set(RegName::from_byte(name));
             at += 1;
             if excmd.line.byte_at(at) == b'>' && excmd.line.byte_at(at + 1) == b'>' {
                 // `:redir @a>>` appends.
@@ -119,13 +121,13 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
                 }
                 // A lower-case register name overwrites, so empty it
                 // now; an upper-case one always appends.
-                if excmd.line.byte_at(at) == 0 && !REDIR_REG.get().is_ascii_uppercase() {
+                if excmd.line.byte_at(at) == 0 && !is_append_register(REDIR_REG.get()) {
                     write_reg_contents(REDIR_REG.get(), b"", false);
                 }
             }
         }
         if excmd.line.byte_at(at) != 0 {
-            REDIR_REG.set(0);
+            REDIR_REG.set(RegName::UNNAMED);
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = msg_bytes(excmd.line.arg());
             semsg!("E475: Invalid argument: {arg}");
@@ -238,7 +240,7 @@ fn suspend_lazyredraw() -> LazyRedrawOff {
 /// Stop capturing message output, whichever destination is open.
 pub(crate) fn close_redir() {
     REDIR_FD.set(None);
-    REDIR_REG.set(0);
+    REDIR_REG.set(RegName::UNNAMED);
     if REDIR_VNAME.get() {
         var_redir_stop();
         REDIR_VNAME.set(false);

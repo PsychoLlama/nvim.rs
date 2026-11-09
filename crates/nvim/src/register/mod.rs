@@ -147,7 +147,7 @@ pub const YREG_PASTE: ::core::ffi::c_int = 0;
 
 static EXPR_LINE: GlobalCell<Option<XString>> = GlobalCell::new(None);
 /// The register `@@` replays: the last one `@` ran, 0 for none yet.
-static EXECREG_LASTC: GlobalCell<RegName> = GlobalCell::new(0);
+static EXECREG_LASTC: GlobalCell<RegName> = GlobalCell::new(RegName::UNNAMED);
 /// The 39 register slots, laid out as [`op_reg_index`] says; reached only
 /// through [`Reg`]'s closures.
 static Y_REGS: GlobalCell<[YankReg; NUM_REGISTERS]> =

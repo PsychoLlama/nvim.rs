@@ -100,7 +100,7 @@ fn put_last_insert(dir: Direction, mut count: c_int, flags: PutFlags, ve_flags: 
     if flags & PUT_LINE != 0 {
         // Open the line with a black-hole `:put _`, so that 'autoindent'
         // does not reach the text.
-        do_put(b'_', None, dir, 1, PUT_LINE);
+        do_put(RegName::BLACK_HOLE, None, dir, 1, PUT_LINE);
 
         stuff_readbuf_char(command_start_char);
         while count > 0 {
@@ -442,8 +442,8 @@ pub fn do_put(
         }
 
         if put.lines.is_empty() {
-            let display = transchar(c_int::from(regname));
-            let name = if regname != 0 {
+            let display = transchar(c_int::from(regname.byte()));
+            let name = if !regname.is_unnamed() {
                 cstr::in_bytes(&display)
             } else {
                 c"\""

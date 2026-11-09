@@ -52,6 +52,7 @@ use super::{
     FileMarks, HistoryMergerState, ReadKinds, ReadStatus, ShadaEntry, ShadaEntryData,
     ShadaHistoryItem, WriteMergerState, WriteStatus, mark_global_index, mark_local_index,
 };
+use crate::register::RegName;
 
 /// One slot of a [`HistoryRing`]: an entry and its neighbours in timestamp
 /// order.
@@ -474,7 +475,7 @@ pub(crate) fn read_when_writing(
                 }
             }
             ShadaEntryData::Register(reg) => {
-                match op_reg_index(reg.name.cast_unsigned()).ok_or(()) {
+                match op_reg_index(RegName::from_byte(reg.name.cast_unsigned())).ok_or(()) {
                     // Likewise a register this session emptied.
                     Ok(idx)
                         if wms.registers[idx].is_missing()

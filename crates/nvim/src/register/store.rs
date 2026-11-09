@@ -43,25 +43,95 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 
-/// A register's name: a byte, 0 meaning the unnamed (default) register.
+/// A register's name: the character typed after `"`, `@`, `q` or CTRL-R, or
+/// [`RegName::UNNAMED`] (0) for none -- the default register.
 ///
-/// The name is the character typed after `"`, `@`, `q` or CTRL-R; a key
-/// that is not a byte -- a special key, a character past U+00FF -- names no
-/// register, which [`register_name`] says with `None`.
-pub(crate) type RegName = u8;
+/// [`RegName::valid`] is the constructor that checks the name is one (what
+/// upstream's `valid_yank_reg` asks); [`RegName::from_byte`] carries a byte
+/// that arrived from text (`:registers` arguments, ShaDa, `getreg()`), whose
+/// readers check or answer for an unknown name themselves. A key that is not
+/// a byte -- a special key, a character past U+00FF -- names no register,
+/// which [`register_name`] says with `None`.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+pub struct RegName(u8);
+
+impl RegName {
+    /// No name: the unnamed register, or "not given".
+    pub const UNNAMED: RegName = RegName(0);
+    /// `""`: the unnamed register, named.
+    pub const QUOTE: RegName = RegName(b'"');
+    /// `"*`: the selection.
+    pub const STAR: RegName = RegName(b'*');
+    /// `"+`: the clipboard.
+    pub const PLUS: RegName = RegName(b'+');
+    /// `"_`: the black hole.
+    pub const BLACK_HOLE: RegName = RegName(b'_');
+    /// `"-`: the small delete register.
+    pub const SMALL_DELETE: RegName = RegName(b'-');
+    /// `".`: the last inserted text.
+    pub const LAST_INSERTED: RegName = RegName(b'.');
+    /// `":`: the last command line.
+    pub const LAST_COMMAND: RegName = RegName(b':');
+    /// `"%`: the current file name.
+    pub const FILE_NAME: RegName = RegName(b'%');
+    /// `"/`: the last search pattern.
+    pub const LAST_SEARCH: RegName = RegName(b'/');
+    /// `"=`: the expression register.
+    pub const EXPRESSION: RegName = RegName(b'=');
+
+    /// The register `name` names, if it is one. With `writing`, the
+    /// read-only registers (`"/ ". "% ": "=`) are refused. The unnamed
+    /// register (0) is not a name typed and is refused too; the black hole
+    /// `"_` is a register.
+    pub fn valid(name: u8, writing: bool) -> Option<RegName> {
+        let ok = name.is_ascii_alphanumeric()
+            || !writing && b"/.%:=".contains(&name)
+            || b"#\"-_*+".contains(&name);
+        ok.then_some(RegName(name))
+    }
+
+    /// The byte as a name, whether or not it names a register.
+    pub const fn from_byte(name: u8) -> RegName {
+        RegName(name)
+    }
+
+    /// The character that types the name; 0 for the unnamed register.
+    pub const fn byte(self) -> u8 {
+        self.0
+    }
+
+    /// Whether this is no name at all.
+    pub const fn is_unnamed(self) -> bool {
+        self.0 == 0
+    }
+
+    /// Whether this names a register: [`valid`](Self::valid) for a name
+    /// already held.
+    pub fn is_valid(self, writing: bool) -> bool {
+        RegName::valid(self.0, writing).is_some()
+    }
+}
+
+/// A name compares with the character that types it: `name == b'_'`.
+impl PartialEq<u8> for RegName {
+    fn eq(&self, other: &u8) -> bool {
+        self.0 == *other
+    }
+}
 
 /// The register a typed key names, or `None` when the key is not even a
 /// byte. The name still has to pass [`valid_yank_reg`].
 #[inline]
 pub(crate) fn register_name(key: Key) -> Option<RegName> {
-    key.as_byte()
+    key.as_byte().map(RegName)
 }
 
 /// The key that types register `name`, for the redo buffer and the
 /// typeahead.
 #[inline]
 pub(crate) fn register_key(name: RegName) -> Key {
-    Key::byte(name)
+    Key::byte(name.0)
 }
 
 /// A register a name resolved to: one of the 39 slots, or the empty register
@@ -125,21 +195,10 @@ pub fn get_y_previous() -> Option<Reg> {
     Y_PREVIOUS.get().map(get_y_register)
 }
 
-/// Whether `regname` names a register.
-///
-/// With `writing`, the read-only registers (`"/ ". "% ": "=`) are rejected.
-/// 0 -- the default register -- is *not* handled here; the caller must check
-/// for it. The black hole `"_` counts as valid.
-pub fn valid_yank_reg(regname: RegName, writing: bool) -> bool {
-    regname.is_ascii_alphanumeric()
-        || !writing && b"/.%:=".contains(&regname)
-        || b"#\"-_*+".contains(&regname)
-}
-
 /// Which clipboard register an unnamed paste should use, or 0 when
 /// 'clipboard' does not ask for one (or no provider is available).
 pub fn get_default_register_name() -> RegName {
-    let mut name = 0;
+    let mut name = RegName::UNNAMED;
     let _ = clipboard::adjust_clipboard_name(&mut name, true, false);
     name
 }
@@ -178,7 +237,7 @@ pub(crate) fn shada_registers(max_lines: Option<usize>) -> Vec<(c_char, bool, Sh
                     timestamp: reg.timestamp,
                     extra: reg.extra.clone(),
                 };
-                let name = get_register_name(Some(i)).cast_signed();
+                let name = get_register_name(Some(i)).byte().cast_signed();
                 Some((name, previous == Some(i), yank))
             })
             .collect()
@@ -188,7 +247,7 @@ pub(crate) fn shada_registers(max_lines: Option<usize>) -> Vec<(c_char, bool, Sh
 /// Look at the register named `name`, or answer `None` for a name with no
 /// slot.
 fn with_named_register<R>(name: c_char, f: impl FnOnce(&YankReg) -> R) -> Option<R> {
-    op_reg_index(name.cast_unsigned()).map(|i| get_y_register(i).read(f))
+    op_reg_index(RegName::from_byte(name.cast_unsigned())).map(|i| get_y_register(i).read(f))
 }
 
 /// When the register named `name` was set, or `None` for a name with no
@@ -221,7 +280,7 @@ fn shada_line(bytes: &[u8]) -> XString {
 /// and point `""` at it when `is_unnamed`. Answers false for a name with no
 /// slot.
 pub(crate) fn shada_set_register(name: c_char, yank: ShadaYank, is_unnamed: bool) -> bool {
-    let Some(i) = op_reg_index(name.cast_unsigned()) else {
+    let Some(i) = op_reg_index(RegName::from_byte(name.cast_unsigned())) else {
         return false;
     };
     let lines = yank
@@ -303,7 +362,7 @@ pub fn get_yank_register(regname: RegName, mode: c_int) -> Reg {
         return Reg::Empty;
     }
     if mode != YREG_YANK
-        && matches!(regname, 0 | b'"' | b'*' | b'+')
+        && matches!(regname.byte(), 0 | b'"' | b'*' | b'+')
         && let Some(previous) = Y_PREVIOUS.get()
     {
         // An unnamed paste reads the last register written.
@@ -321,7 +380,7 @@ pub fn get_yank_register(regname: RegName, mode: c_int) -> Reg {
 /// as it is, prepared for pasting -- `None` for an invalid or black-hole
 /// name. May run the clipboard provider.
 pub fn yank_register_mline(regname: RegName) -> (bool, Option<YankReg>) {
-    if regname != 0 && !valid_yank_reg(regname, false) {
+    if !regname.is_unnamed() && !regname.is_valid(false) {
         return (false, None);
     }
     if regname == b'_' {
@@ -367,14 +426,14 @@ pub fn shift_delete_registers(y_append: bool) {
 /// register is one of the real slots rather than a computed one.
 #[inline]
 pub fn is_literal_register(regname: RegName) -> bool {
-    regname == b'*' || regname == b'+' || regname.is_ascii_alphanumeric()
+    regname == b'*' || regname == b'+' || regname.byte().is_ascii_alphanumeric()
 }
 
 /// The slot `regname` names, or `None` for a name with no slot.
 #[inline]
 pub fn op_reg_index(regname: RegName) -> Option<usize> {
-    let index = |base: u8| usize::from(regname - base);
-    match regname {
+    let index = |base: u8| usize::from(regname.byte() - base);
+    match regname.byte() {
         b'0'..=b'9' => Some(index(b'0')),
         b'a'..=b'z' => Some(index(b'a') + 10),
         // An uppercase name is the same slot, appending rather than replacing.
@@ -390,24 +449,24 @@ pub fn op_reg_index(regname: RegName) -> Option<usize> {
 /// rather than replacing it.
 #[inline]
 pub(crate) fn is_append_register(regname: RegName) -> bool {
-    regname.is_ascii_uppercase()
+    regname.byte().is_ascii_uppercase()
 }
 
 /// The name of slot `num`; `None` is the unnamed register.
 #[inline]
 pub fn get_register_name(num: Option<usize>) -> RegName {
     let Some(num) = num else {
-        return b'"';
+        return RegName::QUOTE;
     };
     // The slots are fewer than 39, so the offsets fit a byte.
     let offset =
         |base: u8, minus: usize| base + u8::try_from(num - minus).expect("a register slot");
     match num {
-        0..=9 => offset(b'0', 0),
-        DELETION_REGISTER => b'-',
-        STAR_REGISTER => b'*',
-        PLUS_REGISTER => b'+',
-        _ => offset(b'a', 10),
+        0..=9 => RegName::from_byte(offset(b'0', 0)),
+        DELETION_REGISTER => RegName::SMALL_DELETE,
+        STAR_REGISTER => RegName::STAR,
+        PLUS_REGISTER => RegName::PLUS,
+        _ => RegName::from_byte(offset(b'a', 10)),
     }
 }
 

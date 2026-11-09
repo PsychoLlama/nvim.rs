@@ -70,6 +70,7 @@ use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 
 use crate::undo::{u_clearline, u_redo, u_undo};
 
+use crate::register::RegName;
 use crate::winlayer::{Buf, Win, windows};
 
 /// `:print`, `:number` and `:list`.
@@ -403,7 +404,7 @@ pub(crate) fn ex_at(excmd: &mut ExArg) {
     }
     // 'cpoptions' `e` makes `:@` run the register's last line
     // immediately rather than leaving it on the command line.
-    if do_execreg(c, true, cpo_has(CpoFlag::EXECBUF), true).is_err() {
+    if do_execreg(RegName::from_byte(c), true, cpo_has(CpoFlag::EXECBUF), true).is_err() {
         beep_flush();
         return;
     }

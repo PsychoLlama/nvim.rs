@@ -118,10 +118,10 @@ pub(crate) fn build_cmdline_str(excmd: &mut ExArg, cmdinfo: &CmdParseInfo, args:
     if excmd.argt.has(ExArgt::BANG) && excmd.forceit {
         cmdline_concat_str(&mut cmdline, c"!");
     }
-    if excmd.argt.has(ExArgt::REGSTR) && excmd.regname != 0 {
+    if excmd.argt.has(ExArgt::REGSTR) && !excmd.regname.is_unnamed() {
         // `%c`: the low byte of the register name, not its UTF-8 encoding.
         cmdline.push(b' ');
-        cmdline.push(excmd.regname.to_le_bytes()[0]);
+        cmdline.push(excmd.regname.byte());
     }
 
     let mut spans: Vec<(usize, usize)> = Vec::with_capacity(argc);

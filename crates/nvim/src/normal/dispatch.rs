@@ -78,6 +78,7 @@ use crate::getchar::{
     append_to_redobuff, append_to_redobuff_char, append_to_redobuff_number, reset_redobuff,
 };
 use crate::r#move::{do_check_cursorbind, validate_cursor};
+use crate::register::{RegName, register_key};
 
 /// Where a row sorts: the magnitude of its character, so that a special key
 /// (stored negative) sorts after every character and `find_command` can
@@ -472,7 +473,7 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
                 .is_none_or(|i| !NV_CMD_TABLE[i].cmd_flags.has(NvFlags::KEEPREG))
         {
             clear_op(ns.op());
-            set_reg_var(get_default_register_name());
+            set_reg_var(get_default_register_name().byte());
         }
         if ns.old_mapped_len > 0 {
             ns.old_mapped_len = typeahead().maplen();
@@ -490,7 +491,7 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
     MSG_NOWAIT.set(false);
 
     if FINISH_OP.get() || did_visual_op {
-        set_reg_var(get_default_register_name());
+        set_reg_var(get_default_register_name().byte());
     }
     let prev_finish_op = FINISH_OP.get();
     if ns.oa.op_type == OpType::Nop {
@@ -502,7 +503,10 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
     if prev_finish_op || ns.ca.cmdchar.is('r') || (ns.ca.cmdchar.is('g') && ns.ca.nchar.is('r')) {
         ui_cursor_shape();
     }
-    if ns.oa.op_type == OpType::Nop && ns.oa.regname == 0 && ns.ca.cmdchar != SpecialKey::Event {
+    if ns.oa.op_type == OpType::Nop
+        && ns.oa.regname.is_unnamed()
+        && ns.ca.cmdchar != SpecialKey::Event
+    {
         clear_showcmd();
     }
     checkpcmark();
@@ -525,11 +529,11 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
         && (want_insert || RESTART_V_ISUAL_SELECT.get() == 1)
         && !ns.ca.outcome.has(Outcome::COMMAND_BUSY)
         && stuff_empty()
-        && ns.oa.regname == 0
+        && ns.oa.regname.is_unnamed()
     {
         if RESTART_V_ISUAL_SELECT.get() == 1 {
             set_visual_select(true);
-            V_ISUAL_SELECT_REG.set(0);
+            V_ISUAL_SELECT_REG.set(RegName::UNNAMED);
             may_trigger_modechanged();
             showmode();
             RESTART_V_ISUAL_SELECT.set(0);
@@ -684,7 +688,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
 /// Record a command for `.`, taking its second character from `cmd_arg`.
 pub(crate) fn prep_redo_cmd(cmd_arg: &mut CmdArg) {
     prep_redo(
-        cmd_arg.op().regname,
+        RegName::from_byte((cmd_arg.op().regname).byte()),
         cmd_arg.count0,
         Key::NUL,
         cmd_arg.cmdchar,
@@ -703,7 +707,7 @@ pub(crate) fn prep_redo_cmd(cmd_arg: &mut CmdArg) {
 /// Record a command for `.`: an optional register, a count, and up to five
 /// command characters.
 pub(crate) fn prep_redo(
-    regname: u8,
+    regname: RegName,
     num: c_int,
     cmd1: Key,
     cmd2: Key,
@@ -719,7 +723,7 @@ pub(crate) fn prep_redo(
 /// the `Z` commands need.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn prep_redo_num2(
-    regname: u8,
+    regname: RegName,
     num1: c_int,
     cmd1: Key,
     cmd2: Key,
@@ -729,9 +733,9 @@ pub(crate) fn prep_redo_num2(
     cmd5: Key,
 ) {
     reset_redobuff();
-    if regname != 0 {
+    if !regname.is_unnamed() {
         append_to_redobuff_char(Key::ascii(b'"'));
-        append_to_redobuff_char(Key::byte(regname));
+        append_to_redobuff_char(register_key(regname));
     }
     if num1 != 0 {
         append_to_redobuff_number(num1);
@@ -778,7 +782,7 @@ pub(crate) fn check_clear_op_quit(op: Op) -> bool {
 /// Forget the pending operator, its register and its forced motion kind.
 pub(crate) fn clear_op(mut op: Op) {
     op.op_type = OpType::Nop;
-    op.regname = 0;
+    op.regname = RegName::UNNAMED;
     op.motion_force = Key::NUL;
     op.use_reg_one = false;
     MOTION_FORCE.set(Key::NUL);

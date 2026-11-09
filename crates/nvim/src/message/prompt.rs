@@ -25,6 +25,7 @@ use crate::event_queue::process_events_in;
 use crate::guard::Keys;
 use crate::keycodes::SpecialKey;
 use crate::log::logmsg;
+use crate::register::RegName;
 use crate::types::{Key, KeyKind};
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -142,7 +143,7 @@ pub fn wait_return(redraw: c_int) {
                 let raw_key = Keys::unmapped_with_codes();
                 let save_reg_recording = REG_RECORDING.get();
                 let save_scriptout = SCRIPTOUT.take();
-                REG_RECORDING.set(0);
+                REG_RECORDING.set(RegName::UNNAMED);
                 c = safe_vgetc();
                 if had_got_int && GLOBAL_BUSY.get() == 0 {
                     GOT_INT.set(false);

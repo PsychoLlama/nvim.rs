@@ -684,8 +684,8 @@ pub struct ExArg<'s> {
     pub append: bool,
     pub usefilter: bool,
     pub amount: ::core::ffi::c_int,
-    /// The register the command names, 0 for none.
-    pub regname: u8,
+    /// The register the command names, unnamed for none.
+    pub regname: crate::register::RegName,
     /// `++bin` (`Some(true)`) or `++nobin` (`Some(false)`); `None` leaves
     /// 'binary' to the buffer.
     pub force_bin: Option<bool>,
@@ -817,7 +817,7 @@ impl Default for ExArg<'_> {
             append: false,
             usefilter: false,
             amount: 0,
-            regname: 0,
+            regname: crate::register::RegName::UNNAMED,
             force_bin: None,
             read_edit: false,
             mkdir_p: false,

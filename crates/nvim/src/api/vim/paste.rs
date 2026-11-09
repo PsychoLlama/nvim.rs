@@ -21,6 +21,7 @@ use crate::guard::Suppress;
 use crate::lua::executor::LuaRetMode;
 use crate::memory::XString;
 use crate::normal::{set_visual_active, visual_active};
+use crate::register::RegName;
 use crate::register::defs::{PUT_CURSEND, RegLines};
 use crate::winlayer::Buf;
 
@@ -135,7 +136,7 @@ pub fn nvim_put(
         // `do_put` can leave Visual mode; the caller's is put back.
         let visual_was_active = visual_active();
         let silenced = Suppress::messages();
-        do_put(0, Some(&reg), dir, 1, flags);
+        do_put(RegName::UNNAMED, Some(&reg), dir, 1, flags);
         drop(silenced);
         set_visual_active(visual_was_active);
     })

@@ -120,8 +120,8 @@ impl CmdArg {
 #[derive(Clone, Debug)]
 pub struct OpArg {
     pub op_type: OpType,
-    /// The register the operator reads or writes, 0 for the default.
-    pub regname: u8,
+    /// The register the operator reads or writes, unnamed for the default.
+    pub regname: crate::register::RegName,
     pub motion_type: MotionType,
     /// The `v`/`V`/CTRL-V typed between the operator and its motion, or NUL.
     pub motion_force: Key,
@@ -149,7 +149,7 @@ impl OpArg {
     /// from before filling in the two vcols.
     pub const ZERO: Self = OpArg {
         op_type: OpType::Nop,
-        regname: 0,
+        regname: crate::register::RegName::UNNAMED,
         motion_type: MotionType::CharWise,
         motion_force: Key::NUL,
         use_reg_one: false,

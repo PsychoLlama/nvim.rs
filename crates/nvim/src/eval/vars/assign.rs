@@ -47,6 +47,7 @@ use crate::option::{
     get_option_value, get_tty_option, is_option_hidden, is_tty_option, set_option_value_handle_tty,
 };
 use crate::os::env::vim_setenv_named;
+use crate::register::RegName;
 use crate::register::{get_reg_contents_owned, write_reg_contents};
 use crate::types::{ExArg, Failed, OptInt, TypVal, VAR_LIST, VarNumber};
 
@@ -546,12 +547,13 @@ fn ex_let_register(
     let joined;
     let mut value = value;
     if op == Some(b'.')
-        && let Some(old) = get_reg_contents_owned(regname, G_REG_EXPR_SRC.cast_signed())
+        && let Some(old) =
+            get_reg_contents_owned(RegName::from_byte(regname), G_REG_EXPR_SRC.cast_signed())
     {
         joined = join(&old, value);
         value = joined.to_bytes();
     }
-    write_reg_contents(regname, value, false);
+    write_reg_contents(RegName::from_byte(regname), value, false);
     Ok(past)
 }
 
