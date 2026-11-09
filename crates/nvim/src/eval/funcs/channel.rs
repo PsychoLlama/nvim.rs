@@ -9,10 +9,6 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{
-    CHANNEL_PART_ALL, CHANNEL_PART_RPC, CHANNEL_PART_STDERR, CHANNEL_PART_STDIN,
-    CHANNEL_PART_STDOUT,
-};
 use crate::autocmd::state::{AUTOCMD_BUFNR, AUTOCMD_FNAME, AUTOCMD_FNAME_FULL, AUTOCMD_MATCH};
 use crate::channel::defs::{CallbackReader, ChannelPart};
 use crate::channel::{channel_close, channel_connect, channel_from_stdio, channel_send};
@@ -49,10 +45,10 @@ use core::ffi::{CStr, c_int};
 /// A cleared `Object`.
 /// The `{stream}` names `chanclose()` accepts.
 const CHANNEL_PARTS: [(&CStr, ChannelPart); 4] = [
-    (c"stdin", CHANNEL_PART_STDIN),
-    (c"stdout", CHANNEL_PART_STDOUT),
-    (c"stderr", CHANNEL_PART_STDERR),
-    (c"rpc", CHANNEL_PART_RPC),
+    (c"stdin", ChannelPart::Stdin),
+    (c"stdout", ChannelPart::Stdout),
+    (c"stderr", ChannelPart::Stderr),
+    (c"rpc", ChannelPart::Rpc),
 ];
 
 /// The trailing arguments of `rpcnotify()`/`rpcrequest()` as an API `Array`
@@ -78,7 +74,7 @@ pub fn f_chanclose(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let mut part = CHANNEL_PART_ALL;
+    let mut part = ChannelPart::All;
     if args.get(1).is_some_and(|arg| arg.v_type() == VAR_STRING) {
         let stream = numbuf.string(&args[1]);
         let found = CHANNEL_PARTS.iter().find(|&&(name, _)| name == stream);

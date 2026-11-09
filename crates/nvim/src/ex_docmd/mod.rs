@@ -24,7 +24,6 @@ use crate::arglist::{
 };
 use crate::autocmd::ex_doautoall;
 use crate::buffer::{buflist_list, ex_buffer_all};
-use crate::channel::defs::ChannelPart;
 use crate::cmdhist::ex_history;
 use crate::debugger::{ex_breakadd, ex_breakdel, ex_breaklist, ex_debug, ex_debuggreedy};
 use crate::diff::{
@@ -193,7 +192,6 @@ pub struct CommandDefinition {
     pub cmd_argt: ExArgt,
     pub cmd_addr_type: CmdAddr,
 }
-pub const CHANNEL_PART_ALL: ChannelPart = 4;
 pub const VALID_HEAD: c_uint = 2;
 pub const VALID_PATH: c_uint = 1;
 pub const DIALOG_MSG_SIZE: c_uint = 1000;

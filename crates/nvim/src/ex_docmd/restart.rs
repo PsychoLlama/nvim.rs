@@ -12,6 +12,7 @@
 use crate::channel::channel_close_or_report;
 use crate::channel::channel_job_start;
 use crate::channel::channel_job_stop_wait;
+use crate::channel::defs::ChannelPart;
 use crate::channel::open::JobOptions;
 use crate::eval::funcs::create_environment;
 use crate::lua::executor::LuaRetMode;
@@ -35,7 +36,7 @@ use crate::channel::channel_exists;
 use crate::eval::typval::{NumBuf, list_items, list_len};
 use crate::eval::vars::{get_vim_var_list_handle, set_vim_var_string, vim_var_bytes};
 
-use crate::ex_docmd::{CHANNEL_PART_ALL, cmdmod_has};
+use crate::ex_docmd::cmdmod_has;
 use crate::log::{LOGLVL_INF, logmsg};
 use crate::message::E_INVCHAN;
 use crate::startup::{EXITING, getout};
@@ -428,7 +429,7 @@ fn detach_ui() {
         return;
     }
 
-    if channel_close_or_report(id, CHANNEL_PART_ALL).is_err() {
+    if channel_close_or_report(id, ChannelPart::All).is_err() {
         return;
     }
     logmsg!(LOGLVL_INF, c"ex_detach", 6019, "detach current_ui={id}");

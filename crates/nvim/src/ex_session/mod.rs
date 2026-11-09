@@ -91,9 +91,6 @@ use std::io::{BufWriter, Write};
 use session::makeopens;
 use view::put_view;
 
-/// Constants the transpiler copied in from the headers this module includes.
-mod flag {}
-
 const EXRC_FILE: &CStr = c".exrc";
 
 /// Whether a `:lcd` or `:tcd` has been written for this session. Once one

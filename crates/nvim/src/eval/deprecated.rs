@@ -43,8 +43,6 @@ use crate::semsg;
 use crate::types::{BOOL_VAR_TRUE, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber};
 use crate::winlayer::buffers;
 
-pub const CHANNEL_PART_RPC: ChannelPart = 3;
-
 /// `rpcstart(prog[, argv])`: start a job and speak RPC over its pipes.
 ///
 /// Deprecated in favour of `jobstart(..., {'rpc': v:true})`.
@@ -109,7 +107,7 @@ pub fn f_rpcstop(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
     if channel_job_running(id) {
         f_jobstop(args, result, fptr);
     } else {
-        let closed = channel_close_or_report(id, CHANNEL_PART_RPC).is_ok();
+        let closed = channel_close_or_report(id, ChannelPart::Rpc).is_ok();
         result.write_number(VarNumber::from(closed));
     }
 }

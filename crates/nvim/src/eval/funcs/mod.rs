@@ -13,7 +13,6 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::channel::defs::ChannelPart;
 use crate::env::XDGVarType;
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash
@@ -74,11 +73,6 @@ pub use self::strings::*;
 pub use self::timer::*;
 pub use self::variables::*;
 pub use self::wrappers::*;
-pub const CHANNEL_PART_ALL: ChannelPart = 4;
-pub const CHANNEL_PART_RPC: ChannelPart = 3;
-pub const CHANNEL_PART_STDERR: ChannelPart = 2;
-pub const CHANNEL_PART_STDOUT: ChannelPart = 1;
-pub const CHANNEL_PART_STDIN: ChannelPart = 0;
 pub type SomeMatchType = ::core::ffi::c_uint;
 pub const SOME_MATCH_STR_POS: SomeMatchType = 4;
 pub const SOME_MATCH_STR: SomeMatchType = 3;

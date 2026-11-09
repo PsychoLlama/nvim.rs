@@ -222,7 +222,16 @@ pub struct ChannelCallFrame {
     pub errored: bool,
     pub result: Object,
 }
-pub type ChannelPart = ::core::ffi::c_uint;
+/// Which of a channel's streams a close applies to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChannelPart {
+    Stdin,
+    Stdout,
+    Stderr,
+    /// The RPC stream: stdin and stdout of an RPC channel together.
+    Rpc,
+    All,
+}
 pub type ChannelStdinMode = ::core::ffi::c_uint;
 /// What a channel does with the job's stdin.
 pub const CHANNEL_STDIN_PIPE: ChannelStdinMode = 0;

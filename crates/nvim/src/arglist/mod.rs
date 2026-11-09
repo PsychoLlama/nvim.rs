@@ -80,9 +80,6 @@ pub use command::{
 };
 pub use eval::{f_argc, f_argidx, f_arglistid, f_argv};
 
-/// Constants the transpiler copied in from the headers this module includes.
-mod flag {}
-
 /// `flag` when `cond`, and no bits otherwise — the `cond ? FLAG : 0` the
 /// flag arguments of `buflist_add`, `check_changed` and `do_ecmd` are
 /// assembled from.

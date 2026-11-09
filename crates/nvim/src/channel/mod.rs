@@ -64,20 +64,6 @@ use crate::terminal::{terminal_close, terminal_receive};
 use crate::types::{Failed, LuaRef};
 use std::os::fd::AsFd as _;
 
-/// Values these belong to other modules; nested so they stay out of the flat
-/// namespace the unit-test header generator collects constants into.
-mod known {
-    use super::ChannelPart;
-
-    pub(super) const CHANNEL_PART_STDIN: ChannelPart = 0;
-    pub(super) const CHANNEL_PART_STDOUT: ChannelPart = 1;
-    pub(super) const CHANNEL_PART_STDERR: ChannelPart = 2;
-    pub(super) const CHANNEL_PART_RPC: ChannelPart = 3;
-    pub(super) const CHANNEL_PART_ALL: ChannelPart = 4;
-}
-
-use known::*;
-
 /// The id of the channel over this process's own stdin/stdout.
 pub(crate) const CHAN_STDIO: u64 = 1;
 /// The id of the channel over this process's own stderr.
@@ -157,7 +143,7 @@ pub fn channel_teardown() {
     // The ids are snapshotted rather than walked live because closing a
     // channel queues a free against the same table.
     for id in CHANNELS.with(SlotTable::snapshot_keys) {
-        let _ = channel_close(id, CHANNEL_PART_ALL);
+        let _ = channel_close(id, ChannelPart::All);
     }
 }
 
@@ -283,14 +269,14 @@ pub fn channel_close(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> 
         };
     };
 
-    let close_main = part == CHANNEL_PART_RPC || part == CHANNEL_PART_ALL;
+    let close_main = part == ChannelPart::Rpc || part == ChannelPart::All;
     if close_main {
         if is_rpc {
             rpc_close(id);
-        } else if part == CHANNEL_PART_RPC {
+        } else if part == ChannelPart::Rpc {
             return Err(E_INVSTREAM);
         }
-    } else if (part == CHANNEL_PART_STDIN || part == CHANNEL_PART_STDOUT) && is_rpc {
+    } else if (part == ChannelPart::Stdin || part == ChannelPart::Stdout) && is_rpc {
         return Err(E_INVSTREAMRPC);
     }
 
@@ -332,11 +318,11 @@ fn close_job_parts(id: uint64_t, part: ChannelPart, close_main: bool) {
     with_channel(id, |channel| {
         if let Some(mut job) = channel.stream_mut().job() {
             job.as_mut().close_streams(
-                part == CHANNEL_PART_STDIN || close_main,
-                part == CHANNEL_PART_STDOUT || close_main,
-                part == CHANNEL_PART_STDERR || part == CHANNEL_PART_ALL,
+                part == ChannelPart::Stdin || close_main,
+                part == ChannelPart::Stdout || close_main,
+                part == ChannelPart::Stderr || part == ChannelPart::All,
             );
-            if part == CHANNEL_PART_ALL {
+            if part == ChannelPart::All {
                 job.close_master();
             }
         }
@@ -346,15 +332,15 @@ fn close_job_parts(id: uint64_t, part: ChannelPart, close_main: bool) {
 /// Closes this process's own stdin/stdout.
 fn close_stdio_parts(id: uint64_t, part: ChannelPart, close_main: bool) -> Result<(), CloseError> {
     // This process's stderr belongs to the stderr channel, not here.
-    if part == CHANNEL_PART_STDERR {
+    if part == ChannelPart::Stderr {
         return Err(E_INVSTREAM);
     }
     with_channel(id, |channel| {
         if let TransportMut::Stdio(stdin, stdout) = channel.stream_mut().project() {
-            if part == CHANNEL_PART_STDIN || close_main {
+            if part == ChannelPart::Stdin || close_main {
                 stdin.close();
             }
-            if part == CHANNEL_PART_STDOUT || close_main {
+            if part == ChannelPart::Stdout || close_main {
                 stdout.close();
             }
         }
@@ -364,7 +350,7 @@ fn close_stdio_parts(id: uint64_t, part: ChannelPart, close_main: bool) -> Resul
 
 /// Closes the stderr channel, which is a descriptor rather than a stream.
 fn close_stderr(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> {
-    if part != CHANNEL_PART_ALL && part != CHANNEL_PART_STDERR {
+    if part != ChannelPart::All && part != ChannelPart::Stderr {
         return Err(E_INVSTREAM);
     }
     let was_open = with_channel(id, |channel| match channel.stream_mut().project() {

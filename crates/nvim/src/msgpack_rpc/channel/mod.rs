@@ -65,9 +65,7 @@ use receive::parse_msgpack;
 /// Values these belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
 mod known {
-    use super::{ChannelPart, ClientType};
-
-    pub(super) const CHANNEL_PART_RPC: ChannelPart = 3;
+    use super::ClientType;
 
     pub(super) const CLIENT_TYPE_MSGPACK_RPC: ClientType = 5;
 
@@ -194,7 +192,7 @@ fn chan_close_on_err(id: uint64_t, msg: &[u8], loglevel: c_int) {
             }
         }
     });
-    let _ = channel_close(id, CHANNEL_PART_RPC);
+    let _ = channel_close(id, ChannelPart::Rpc);
     let msg = msg_bytes(msg);
     // Upstream's `LOG(loglevel, …)`: a level known only at run time, so the
     // line is filtered by the minimum level rather than compiled out.
