@@ -182,11 +182,11 @@ pub(crate) fn draw_virt_text(
                     Some(eol_col + eol_offset)
                 }
                 kVPosRightAlign => {
-                    right_pos -= vt.map_or(0, |vt| vt.width);
+                    right_pos -= vt.as_ref().map_or(0, |vt| vt.width);
                     Some(right_pos)
                 }
                 kVPosEndOfLine if do_eol => Some(eol_col),
-                kVPosWinCol => Some((col_off + vt.map_or(0, |vt| vt.col)).max(0)),
+                kVPosWinCol => Some((col_off + vt.as_ref().map_or(0, |vt| vt.col)).max(0)),
                 // Inline, overlay, or an eol form with no end of line to
                 // hang off: placed elsewhere, or not at all.
                 _ => None,
@@ -216,7 +216,7 @@ pub(crate) fn draw_virt_text(
             });
         }
 
-        if let Some(vt) = vt {
+        if let Some(vt) = &vt {
             let col = buffer.draw_virt_text_item(
                 item.draw_col,
                 VirtChunks::Text(vt.link),
@@ -244,7 +244,7 @@ pub(crate) fn draw_virt_text(
 
 /// The fields of a virtual-text link [`draw_virt_text`] reads, copied out of
 /// the store.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 struct VirtShape {
     link: uint32_t,
     width: ::core::ffi::c_int,

@@ -219,7 +219,7 @@ fn free_owned(range: &DecorRange) {
 /// # Panics
 /// If `i` is not an index into `ranges_i`.
 pub(crate) fn decor_range(i: usize) -> DecorRange {
-    with_state(|state| *state.range_at(i))
+    with_state(|state| state.range_at(i).clone())
 }
 
 /// Sets the `draw_col` of the range `ranges_i[i]` names.
@@ -460,6 +460,7 @@ impl HlSource {
 fn decor_range_insert(state: &mut DecorState, mut range: DecorRange) {
     range.ordering = state.new_range_ordering;
     state.new_range_ordering += 1;
+    let (start_row, start_col) = (range.start_row, range.start_col);
 
     // Reuse a freed slot if there is one; the freelist is threaded through
     // the slots themselves.
@@ -485,9 +486,9 @@ fn decor_range_insert(state: &mut DecorState, mut range: DecorRange) {
         let mid = begin + ((end - begin) >> 1);
         let mr = state.range_at(mid);
         let (mrow, mcol) = (mr.start_row, mr.start_col);
-        if mrow < range.start_row || (mrow == range.start_row && mcol <= range.start_col) {
+        if mrow < start_row || (mrow == start_row && mcol <= start_col) {
             begin = mid + 1;
-            if mrow == range.start_row && mcol == range.start_col {
+            if mrow == start_row && mcol == start_col {
                 break;
             }
         } else {
@@ -609,7 +610,8 @@ fn add_sh(
             // Outside the state's borrow: this can run a provider's `hl_def`.
             range.attr_id = syn_id2attr(sh.hl_id);
         }
-        with_state(|state| decor_range_insert(state, range));
+        // The highlight range; the UI-watched one below starts from it too.
+        with_state(|state| decor_range_insert(state, range.clone()));
     }
 
     if flags & kSHUIWatched != 0 {

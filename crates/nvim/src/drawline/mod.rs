@@ -189,7 +189,7 @@ pub fn win_line(
     // The spell look-ahead, filled by the setup half and read by the loop.
     let mut nextline: SpellLookahead = [0; SPELL_LOOKAHEAD * 2];
 
-    let setup = prepare_line(
+    let mut setup = prepare_line(
         &mut wlv,
         window,
         endrow,
@@ -211,7 +211,8 @@ pub fn win_line(
         endrow,
         col_rows,
         spv,
-        statuscol: setup.statuscol,
+        // The frame owns the request from here; the cells never read it.
+        statuscol: core::mem::take(&mut setup.statuscol),
         term_attrs: &term_attrs,
         nextline: &nextline,
     };

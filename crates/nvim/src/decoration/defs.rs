@@ -61,7 +61,7 @@ impl DecorInline {
 }
 pub type DecorPriority = uint16_t;
 pub type DecorPriorityInternal = uint32_t;
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct DecorProvider {
     pub ns_id: NS,
     pub state: DecorProvider_state,
@@ -81,7 +81,7 @@ pub struct DecorProvider {
     pub error_count: uint8_t,
 }
 pub type DecorProvider_state = ::core::ffi::c_uint;
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 #[repr(C)]
 pub struct DecorRange {
     pub start_row: ::core::ffi::c_int,
@@ -101,7 +101,7 @@ pub type DecorRangeKind = uint8_t;
 pub type HlMode = uint8_t;
 /// One slot of the `DecorRange` slab: either a range, or a link in the
 /// freelist threaded through the slab itself.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum DecorRangeSlot {
     /// An occupied slot; one of the two sorted index lists names it.
     Range(DecorRange),

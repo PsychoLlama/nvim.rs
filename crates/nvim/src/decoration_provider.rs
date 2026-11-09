@@ -86,10 +86,10 @@ fn provider_count() -> usize {
     PROVIDERS.with(Vec::len)
 }
 
-/// A copy of provider `idx`. `DecorProvider` is `Copy` and small, so the
-/// loops here take a snapshot rather than hold a borrow across a Lua call.
+/// A copy of provider `idx`: the loops here take a snapshot rather than
+/// hold a borrow across a Lua call.
 fn provider(idx: usize) -> DecorProvider {
-    PROVIDERS.with(|providers| providers[idx])
+    PROVIDERS.with(|providers| providers[idx].clone())
 }
 
 /// Runs `f` on provider `idx`. The borrow must not outlive `f` — in
@@ -314,7 +314,7 @@ pub(crate) fn decor_providers_invoke_win(window: Win) {
             }
             p.win_skip_row = 0;
             p.win_skip_col = 0;
-            *p
+            p.clone()
         });
 
         if p.state == kDecorProviderActive && p.redraw_win != LUA_NOREF {

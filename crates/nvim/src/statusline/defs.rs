@@ -224,7 +224,7 @@ impl PartialEq for StlOpt {
 /// What `win_line` and `nvim_eval_statusline` tell a `'statuscolumn'`
 /// expansion about the line, and the fold column's virtual columns it
 /// answers.
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct StatusCol {
     pub width: ::core::ffi::c_int,
     pub lnum: LineNr,
