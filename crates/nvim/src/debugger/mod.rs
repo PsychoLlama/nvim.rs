@@ -56,7 +56,7 @@ use crate::ex_docmd::state::{ex_nesting_level, ex_normal_busy};
 use crate::ex_getln::getcmdline_bare;
 use crate::fileio::file_pat_to_regpat;
 use crate::getchar::state::TypeaheadSave;
-use crate::getchar::state::{got_int, ignore_script};
+use crate::getchar::state::{GOT_INT, IGNORE_SCRIPT};
 use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
@@ -258,14 +258,14 @@ pub fn dbg_check_skipped(excmd: &mut ExArg) -> bool {
     }
     // A previous interruption must not flush this prompt's input; only a
     // `CTRL-C` typed at it counts.
-    let prev_got_int = got_int.get();
-    got_int.set(false);
+    let prev_got_int = GOT_INT.get();
+    GOT_INT.set(false);
     debug_breakpoint_name.set(debug_skipped_name.take());
     // `skip` is true on entry, and is put back.
     excmd.skip = false;
     dbg_check_breakpoint(excmd);
     excmd.skip = true;
-    got_int.set(got_int.get() | prev_got_int);
+    GOT_INT.set(GOT_INT.get() | prev_got_int);
     true
 }
 
@@ -600,8 +600,8 @@ fn debuggy_find(file: bool, fname: &CStr, after: LineNr, list: BreakList) -> (Li
         if candidate {
             // A previous interruption must not cancel the match; only a
             // CTRL-C typed while matching should.
-            let prev_got_int = got_int.get();
-            got_int.set(false);
+            let prev_got_int = GOT_INT.get();
+            GOT_INT.set(false);
             // Out of the entry while it runs: the list is not borrowed
             // across the match.
             let mut prog = list.with(i, |entry| entry.prog.take());
@@ -613,7 +613,7 @@ fn debuggy_find(file: bool, fname: &CStr, after: LineNr, list: BreakList) -> (Li
                 lnum = line.get();
                 forced = forceit;
             }
-            got_int.set(got_int.get() | prev_got_int);
+            GOT_INT.set(GOT_INT.get() | prev_got_int);
         } else if kind == DBG_EXPR && watch_changed(list, i) {
             lnum = if after > LineNr::ZERO { after.get() } else { 1 };
             break;

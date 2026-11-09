@@ -139,7 +139,7 @@ pub fn list_copy(
     // effectively did.
     let len = orig.len();
     for at in 0..len {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         let mut value = TV_INITIAL_VALUE;

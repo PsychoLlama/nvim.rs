@@ -13,7 +13,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::lua::executor::{LuaRetMode, NluaRefState};
@@ -29,5 +28,5 @@ pub(crate) static MAIN_REFS: GlobalCell<NluaRefState> = GlobalCell::new(NluaRefS
     empty_dict_ref: LUA_NOREF,
     ref_count: 0,
 });
-pub(crate) static nlua_disable_preload: SharedCell<bool> = SharedCell::new(false);
-pub(crate) static tslua_query_parse_count: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
+pub(crate) static NLUA_DISABLE_PRELOAD: SharedCell<bool> = SharedCell::new(false);
+pub(crate) static TSLUA_QUERY_PARSE_COUNT: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);

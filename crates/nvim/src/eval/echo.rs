@@ -24,7 +24,7 @@ use crate::eval::{Cursor, ECHO_HL_ID, eval1, eval1_emsg};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::ex_eval::aborting;
 use crate::ex_eval::state::force_abort;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::highlight_group::syn_name2id;
 use crate::message::state::{
     CALLED_EMSG, DID_EMSG, LINE_MSG, MSG_DIDOUT, MSG_EXT_SKIP_VERBOSE, NEED_CLR_EOS,
@@ -64,7 +64,7 @@ pub fn ex_echo(excmd: &mut ExArg) {
 
     let base = excmd.line.arg;
     let mut cursor = Cursor::new(excmd.line.rest_of(base));
-    while !ends_args(cursor.byte()) && !got_int.get() {
+    while !ends_args(cursor.byte()) && !GOT_INT.get() {
         // The flag is set across the evaluation only: an expression
         // that writes to the screen itself must not have the rest of
         // the line cleared out from under it.

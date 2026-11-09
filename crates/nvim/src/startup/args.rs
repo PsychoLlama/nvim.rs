@@ -34,7 +34,7 @@ use crate::diff::diffopt_horizontal;
 use crate::eval::vars::set_vim_var_string;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::guard::{SavedSctx, Script};
-use crate::lua::state::nlua_disable_preload;
+use crate::lua::state::NLUA_DISABLE_PRELOAD;
 use crate::message_fmt::msg_cstr;
 use crate::option::defs::{OptIndex, OptVal, OptionSetFlags};
 use crate::option::vars::{P_LPL, P_UC, P_VERBOSE, P_WRITE, p_shadafile};
@@ -275,7 +275,7 @@ impl<'a> Scan<'a> {
             self.parm.clean = true;
             set_opt(kOptShadafile, OptVal::from_cstr(c"NONE"));
         } else if self.tail_starts_with(c"luamod-dev") {
-            nlua_disable_preload.set(true);
+            NLUA_DISABLE_PRELOAD.set(true);
         } else if self.has_tail() {
             mainerr(err_opt_unknown, Some(self.arg()), None);
         } else {

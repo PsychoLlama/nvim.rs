@@ -23,7 +23,7 @@ use crate::cmdexpand::defs::ExpandContext;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::list::{string_bytes, string_tv};
 use crate::eval::typval::{list_items, tv_clear};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::{editor_state::Held, editor_state_lock};
 use crate::memory::XString;
 use crate::option::vars::{P_CPO, P_PP, P_RTP, P_SU, P_WIC, P_WIG, WOP_FLAGS, p_wic};
@@ -50,7 +50,7 @@ struct Fixture {
 impl Fixture {
     fn new() -> Fixture {
         let held = editor_state_lock();
-        got_int.set(false);
+        GOT_INT.set(false);
         // Compiling a pattern reads the current buffer's 'iskeyword'.
         let buffer = bare_buffer();
         buffer.make_current();

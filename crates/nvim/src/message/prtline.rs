@@ -84,7 +84,7 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
     let mut extra_text: CharDisplay = [0; _];
     let mut extra_at = 0;
 
-    while !got_int.get() {
+    while !GOT_INT.get() {
         let sc: ScreenChar;
         if extra_left > 0 {
             extra_left -= 1;

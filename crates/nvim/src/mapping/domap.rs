@@ -60,7 +60,7 @@ fn abbrev_lhs_ok(lhs: &MapStr) -> bool {
 /// `mode`, which is what makes a new `<unique>` buffer-local one fail.
 fn global_map_exists(mode: c_int, lhs: &[u8], is_abbrev: bool) -> bool {
     let clashes = |mp: &MapBlock| {
-        if got_int.get() {
+        if GOT_INT.get() {
             return Some(false);
         }
         // Check entries with the same mode.
@@ -84,7 +84,7 @@ fn listed(table: MapTable, is_abbrev: bool, keep: impl Fn(&MapBlock) -> bool) ->
 /// Print `entries`, stopping when `q` was typed at the `--More--` prompt.
 fn show_all(entries: &[MapBlock], local: bool) {
     for mp in entries {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         showmap(mp, local);
@@ -97,7 +97,7 @@ fn show_all(entries: &[MapBlock], local: bool) {
 /// Without `has_lhs` every entry in `mode` is shown; with it, every entry
 /// whose LHS and `lhs` agree as far as the shorter of the two.
 fn show_buffer_local(buffer: Buf, mode: c_int, lhs: &[u8], has_lhs: bool, is_abbrev: bool) -> bool {
-    if got_int.get() {
+    if GOT_INT.get() {
         return false;
     }
     let entries = listed(MapTable::Buffer(buffer), is_abbrev, |mp| {
@@ -282,7 +282,7 @@ pub(crate) fn buf_do_map(
                 // A listing: every entry in the mode, or every one whose LHS
                 // agrees with `lhs` in the one bucket it hashes to.
                 let hash = map_hash(mode, lhs.first().copied().unwrap_or(0));
-                let entries = if got_int.get() {
+                let entries = if GOT_INT.get() {
                     Vec::new()
                 } else if has_lhs {
                     table.with(|tables| {
@@ -312,7 +312,7 @@ pub(crate) fn buf_do_map(
                 // been replaced by "bar".
                 let num_rounds = if is_unmap && !unmap_lhs_only { 2 } else { 1 };
                 let mut round = 0;
-                while round < num_rounds && !did_it && !got_int.get() {
+                while round < num_rounds && !did_it && !GOT_INT.get() {
                     let (hash_start, hash_end) = if round == 0 || is_abbrev {
                         // Just one hash.
                         let start = if is_abbrev {
@@ -337,7 +337,7 @@ pub(crate) fn buf_do_map(
                     };
                     let walked = table.with_mut(|tables| {
                         for hash in hash_start..hash_end {
-                            if got_int.get() {
+                            if GOT_INT.get() {
                                 break;
                             }
                             let found = step.bucket(tables, hash, &mut did_it);
@@ -367,7 +367,7 @@ pub(crate) fn buf_do_map(
                     // CTRL-C has been unmapped, reuse it for Interrupting.
                     match table {
                         MapTable::Buffer(mut buf) => buf.b_mapped_ctrl_c &= !mode,
-                        MapTable::Global => mapped_ctrl_c.set(mapped_ctrl_c.get() & !mode),
+                        MapTable::Global => MAPPED_CTRL_C.set(MAPPED_CTRL_C.get() & !mode),
                     }
                 }
                 continue;
@@ -454,7 +454,7 @@ impl Step<'_> {
             let found = list[..at].iter().rposition(|entry| {
                 // 'q' typed at a `--More--` prompt stops the walk where it
                 // is, as upstream tests it per entry.
-                got_int.get()
+                GOT_INT.get()
                     || (entry.m_mode & self.mode != 0
                         && agrees(
                             if self.round != 0 {
@@ -469,7 +469,7 @@ impl Step<'_> {
                 break;
             };
             at = found;
-            if got_int.get() {
+            if GOT_INT.get() {
                 break;
             }
             let entry = &mut tables.list_mut(hash, abbr)[at];

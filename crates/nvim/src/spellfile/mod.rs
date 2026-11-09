@@ -12,7 +12,7 @@
 use crate::arglist::expand_arglist;
 use crate::charset::getdigits_int_at;
 use crate::cstr;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use core::cell::RefCell;
 
 use crate::ascii::TAB;
@@ -564,7 +564,7 @@ pub fn mkspell(fnames: &[&[u8]], ascii: bool, over_write: bool, added_word: bool
             let text = c"Warning: both compounding and NOBREAK specified";
             msg(gettext(text), 0);
         }
-        if !error && !got_int.get() {
+        if !error && !GOT_INT.get() {
             spell_message(&spin, MSG_COMPRESSING);
             for (root, name) in [
                 (spin.si_foldroot, c"case-folded"),
@@ -574,7 +574,7 @@ pub fn mkspell(fnames: &[&[u8]], ascii: bool, over_write: bool, added_word: bool
                 wordtree_compress(&mut spin, root, name);
             }
         }
-        if !error && !got_int.get() {
+        if !error && !GOT_INT.get() {
             let name = wfname.to_string_lossy();
             spell_message_fmt(&spin, format_args!("Writing spell file {name}..."));
             error = write_vim_spell(&mut spin, wfname).is_err();
@@ -600,7 +600,7 @@ pub fn mkspell(fnames: &[&[u8]], ascii: bool, over_write: bool, added_word: bool
         // The `.sug` pass reads the file back and builds its own tree,
         // so the trees go first.
         spin.clear_trees();
-        if spin.si_sugtime != 0 && !error && !got_int.get() {
+        if spin.si_sugtime != 0 && !error && !GOT_INT.get() {
             spell_make_sugfile(&mut spin, wfname);
         }
     }

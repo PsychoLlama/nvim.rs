@@ -578,8 +578,8 @@ impl<T> GlobalCell<T> {
 }
 
 /// The rare global that worker threads touch by upstream design — the
-/// thread-local Lua states (`nlua_init_state` reads `in_script` /
-/// `main_thread`) and the helpers exposed to `vim.uv.new_thread` threads
+/// thread-local Lua states (`nlua_init_state` reads `IN_SCRIPT` /
+/// `MAIN_THREAD`) and the helpers exposed to `vim.uv.new_thread` threads
 /// (mpack/json/base64). Same raw-cell semantics as [`GlobalCell`] minus the
 /// debug main-thread assertion; cross-thread coordination remains the
 /// accessors' responsibility, exactly as it was in C. Every exemption is a

@@ -162,7 +162,7 @@ pub fn nvim__redraw(opts: &mut KeyDict_redraw) -> Result<(), Error> {
     if cursor && stale_grid {
         flush = true;
     }
-    if flush && !cmdpreview.get() {
+    if flush && !CMDPREVIEW.get() {
         let cur = Win::current();
         validate_cursor(cur);
         update_topline(cur);

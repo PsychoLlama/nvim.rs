@@ -36,7 +36,7 @@ pub(crate) fn cmdline_in_use() -> bool {
 /// The id of the most recently *started* command line, which
 /// [`super::color::color_cmdline`] compares against a cached colouring.
 pub fn get_cmdline_last_prompt_id() -> ::core::ffi::c_uint {
-    last_prompt_id.get()
+    LAST_PROMPT_ID.get()
 }
 
 /// The command line the Vimscript functions should answer about, if any.
@@ -69,7 +69,7 @@ pub(crate) fn get_cmdline_type() -> u8 {
 /// A copy of the current command line, up to its first NUL; `None` when
 /// there is none or the line is obscured (`inputsecret()`).
 pub(crate) fn get_cmdline_str() -> Option<ThinCString> {
-    if cmdline_star.get() > 0 {
+    if CMDLINE_STAR.get() > 0 {
         return None;
     }
     let p = get_ccline_ptr()?;
@@ -88,7 +88,7 @@ pub(crate) fn get_cmdline_str() -> Option<ThinCString> {
 /// `None` means there is nothing to report: no command line, an obscured one
 /// (`inputsecret()`), or `ExpandContext::Unsuccessful`.
 fn cmdline_completion_state<R>(f: impl FnOnce(Cc, &Expand, ExpandContext) -> R) -> Option<R> {
-    if cmdline_star.get() > 0 {
+    if CMDLINE_STAR.get() > 0 {
         return None;
     }
     let cc = get_ccline_ptr()?;
@@ -191,7 +191,7 @@ pub(crate) fn set_cmdline_str(text: &[u8], pos: ::core::ffi::c_int) -> bool {
     } else {
         pos
     };
-    new_cmdpos.set(p.cmdpos);
+    NEW_CMDPOS.set(p.cmdpos);
     p.cmdbuff_replaced = true;
 
     redrawcmd();
@@ -210,7 +210,7 @@ pub(crate) fn set_cmdline_pos(pos: ::core::ffi::c_int) -> bool {
     if get_ccline_ptr().is_none() {
         return false;
     }
-    new_cmdpos.set(pos.max(0));
+    NEW_CMDPOS.set(pos.max(0));
     true
 }
 

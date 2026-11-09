@@ -27,7 +27,7 @@ use crate::eval::typval::{
 use crate::eval::vars::{set_vim_var_string, vim_var_bytes};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::{suppress_errthrow, trylevel};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::guard::{MsgBump, Suppress};
 use crate::memory::{ThinCString, XString};
 use crate::message::state::{
@@ -223,7 +223,7 @@ fn finish_assert_fails(save_trylevel: c_int, no_prompt: MsgBump) {
     suppress_errthrow.set(false);
     IN_ASSERT_FAILS.set(false);
     DID_EMSG.set(0);
-    got_int.set(false);
+    GOT_INT.set(false);
     MSG_COL.set(0);
     drop(no_prompt);
     NEED_WAIT_RETURN.set(false);

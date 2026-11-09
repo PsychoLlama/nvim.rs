@@ -5,7 +5,7 @@
 //! executed against *that* thread's `lua_State`, and one raised on the main
 //! loop against the global one. [`nlua_fast_cfpcall`] is the main-loop half:
 //! its body is [`fast_pcall`](super::fast_pcall), which is what raises
-//! `in_fast_callback` -- the flag every api function marked `fast` is
+//! `IN_FAST_CALLBACK` -- the flag every api function marked `fast` is
 //! allowed to run under.
 //!
 //! What stays raw here is luv's C surface: the hooks it calls with a bare

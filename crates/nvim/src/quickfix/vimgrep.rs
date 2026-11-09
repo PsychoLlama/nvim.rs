@@ -297,7 +297,7 @@ fn match_buflines(
         }
 
         line_breakcheck();
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         lnum += 1;
@@ -353,7 +353,7 @@ fn process_files(
     let mut duplicate_name = false;
     let mut seconds = 0;
     for file in files {
-        if got_int.get() || search.tomatch <= 0 {
+        if GOT_INT.get() || search.tomatch <= 0 {
             break;
         }
         let fname = XString::from_cstr(path_try_shorten_fname(file.as_cstr()));
@@ -398,7 +398,7 @@ fn process_files(
                     out,
                 );
             }
-        } else if !got_int.get() {
+        } else if !GOT_INT.get() {
             let fname = msg_bytes(&fname);
             smsg!(0, "Cannot open file \"{fname}\"");
         }

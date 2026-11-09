@@ -5,10 +5,10 @@
 //!
 //! | cell | written by |
 //! | --- | --- |
-//! | `y_regs` | the 39 register slots; `store`, `yank` and `contents` |
-//! | `y_previous` | the last register written; `store` and `contents` |
-//! | `expr_line` | the `"=` source text, kept for a repeat; `special` |
-//! | `execreg_lastc` | the last `@` register, so that `@@` repeats it; `exec` |
+//! | `Y_REGS` | the 39 register slots; `store`, `yank` and `contents` |
+//! | `Y_PREVIOUS` | the last register written; `store` and `contents` |
+//! | `EXPR_LINE` | the `"=` source text, kept for a repeat; `special` |
+//! | `EXECREG_LASTC` | the last `@` register, so that `@@` repeats it; `exec` |
 //!
 //! What each child answers:
 //!
@@ -57,7 +57,7 @@ use crate::extmark::BCount;
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::file_search::file_name_at_cursor;
 use crate::getchar::state::{
-    got_int, pending_end_reg_executing, reg_executing, reg_recorded, reg_recording,
+    GOT_INT, PENDING_END_REG_EXECUTING, REG_EXECUTING, REG_RECORDED, REG_RECORDING,
 };
 use crate::getchar::{
     append_to_redobuff_char, beep_flush, get_recorded, ins_typebuf, stuff_readbuf,
@@ -132,7 +132,7 @@ pub const MT_UNKNOWN: MotionType = -1;
 pub const MT_BLOCK_WISE: MotionType = 2;
 pub const MT_LINE_WISE: MotionType = 1;
 pub const MT_CHAR_WISE: MotionType = 0;
-/// The layout of `y_regs`, and the slots with a fixed meaning: upstream's
+/// The layout of `Y_REGS`, and the slots with a fixed meaning: upstream's
 /// anonymous enum in `register_defs.h`, as indices into the array.
 pub const NUM_REGISTERS: usize = 39;
 /// `"+`, the system clipboard.
@@ -145,10 +145,10 @@ pub const NUM_SAVED_REGISTERS: usize = 37;
 pub const DELETION_REGISTER: usize = 36;
 pub const G_REG_LIST: GRegFlags = 4;
 pub const G_REG_EXPR_SRC: GRegFlags = 2;
-pub const kGRegNoExpr: GRegFlags = 1;
+pub const G_REG_NO_EXPR: GRegFlags = 1;
 
 /// What `get_yank_register()` is being asked for.  `YREG_PASTE` may query
-/// the clipboard provider, `YREG_YANK` moves `y_previous`, and `YREG_PUT`
+/// the clipboard provider, `YREG_YANK` moves `Y_PREVIOUS`, and `YREG_PUT`
 /// only reports where a paste would read from.
 pub const YREG_PUT: ::core::ffi::c_int = 2;
 pub const YREG_YANK: ::core::ffi::c_int = 1;
@@ -156,15 +156,15 @@ pub const YREG_PASTE: ::core::ffi::c_int = 0;
 
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-static expr_line: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static EXPR_LINE: GlobalCell<Option<XString>> = GlobalCell::new(None);
 /// The register `@@` replays: the last one `@` ran, 0 for none yet.
-static execreg_lastc: GlobalCell<RegName> = GlobalCell::new(0);
+static EXECREG_LASTC: GlobalCell<RegName> = GlobalCell::new(0);
 /// The 39 register slots, laid out as [`op_reg_index`] says; reached only
 /// through [`Reg`]'s closures.
-static y_regs: GlobalCell<[YankReg; NUM_REGISTERS]> =
+static Y_REGS: GlobalCell<[YankReg; NUM_REGISTERS]> =
     GlobalCell::new([YankReg::EMPTY; NUM_REGISTERS]);
-/// The slot of `y_regs` that `""` reads: the last register written.
-static y_previous: GlobalCell<Option<usize>> = GlobalCell::new(None);
+/// The slot of `Y_REGS` that `""` reads: the last register written.
+static Y_PREVIOUS: GlobalCell<Option<usize>> = GlobalCell::new(None);
 static e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines:
     &::core::ffi::CStr =
     c"E883: Search pattern and expression register may not contain two or more lines";

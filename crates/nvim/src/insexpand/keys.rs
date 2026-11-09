@@ -582,7 +582,7 @@ pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
             if c != SpecialKey::Ignore {
                 // Don't interrupt completion when the character wasn't
                 // typed, e.g. when doing @q to replay keys.
-                if c != Key::CTRL_R && KeyTyped.get() {
+                if c != Key::CTRL_R && KEY_TYPED.get() {
                     compl_interrupted.set(true);
                 }
                 vungetc(c);
@@ -600,7 +600,7 @@ pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
     }
 
     if compl_pending.get() != 0
-        && !got_int.get()
+        && !GOT_INT.get()
         && COT_FLAGS.get() & (kOptCotFlagNoinsert as c_uint | kOptCotFlagFuzzy as c_uint) == 0
         && (!compl_autocomplete.get() || ins_compl_has_preinsert())
     {

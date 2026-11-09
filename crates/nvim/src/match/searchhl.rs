@@ -470,7 +470,7 @@ fn next_search_hl(window: Win, which: Which, lnum: LineNr, mincol: ColNr) {
         if has_prog(window, which) {
             let mut timed_out = false;
             nmatched = exec_shl(window, which, lnum, matchcol, &mut timed_out);
-            if CALLED_EMSG.get() > called_emsg_before || got_int.get() || timed_out {
+            if CALLED_EMSG.get() > called_emsg_before || GOT_INT.get() || timed_out {
                 // Something went wrong in the regexp: stop using it --
                 // `'hlsearch'` for good, a match for the rest of this redraw.
                 match which {
@@ -481,7 +481,7 @@ fn next_search_hl(window: Win, which: Which, lnum: LineNr, mincol: ColNr) {
                     Which::Item(i) => window.with_match_item(i, |item| item.mit_suspended = true),
                 }
                 set_lnum(LineNr::ZERO);
-                got_int.set(false); // avoid the "Type :quit to exit Vim" message
+                GOT_INT.set(false); // avoid the "Type :quit to exit Vim" message
                 break;
             }
         } else if let Which::Item(i) = which {

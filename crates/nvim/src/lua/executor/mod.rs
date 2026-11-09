@@ -26,7 +26,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use core::ffi::c_int;
 
@@ -68,8 +67,8 @@ pub(crate) use self::vim_module::*;
 /// What a Lua call's result is converted to.
 pub const RET_OBJECT: LuaRetMode = 0;
 pub const RET_NIL_BOOL: LuaRetMode = 1;
-pub const kRetLuaref: LuaRetMode = 2;
-pub const kRetMulti: LuaRetMode = 3;
+pub const RET_LUAREF: LuaRetMode = 2;
+pub const RET_MULTI: LuaRetMode = 3;
 
 /// `call_func`'s answers: the two this module can produce.
 pub type FuncErrorType = ::core::ffi::c_uint;
@@ -89,14 +88,14 @@ pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 /// How deep inside a *fast* callback we are: a libuv callback running on the
 /// main loop, where nothing that touches the editor's own state may run.
 /// Counted rather than flagged, because one may nest inside another.
-static in_fast_callback: GlobalCell<c_int> = GlobalCell::new(0);
+static IN_FAST_CALLBACK: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Whether this process is `nvim -l`, with no editor at all: errors go to
 /// stderr and the runtime path is never rebuilt.
-static in_script: SharedCell<bool> = SharedCell::new(false);
+static IN_SCRIPT: SharedCell<bool> = SharedCell::new(false);
 
 /// The stock `require`, kept so `--startuptime`'s wrapper can delegate to it.
-static require_ref: GlobalCell<LuaRef> = GlobalCell::new(LUA_REFNIL);
+static REQUIRE_REF: GlobalCell<LuaRef> = GlobalCell::new(LUA_REFNIL);
 
 pub type LuaRetMode = ::core::ffi::c_uint;
 #[derive(Debug)]

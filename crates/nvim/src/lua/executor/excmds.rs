@@ -22,7 +22,7 @@ use crate::cursor::check_cursor;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::ex_getln::script_get;
 use crate::fileio::buffered::ReadFile;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::lua::abi::lua_Number;
 use crate::lua::stack::{At, Kind};
 use crate::memline::ml_replace_owned;
@@ -162,7 +162,7 @@ fn read_stdin() -> Option<Vec<u8>> {
     let mut text = Vec::with_capacity(STDIN_CHUNK);
     let mut chunk = [0u8; STDIN_CHUNK];
     loop {
-        if got_int.get() {
+        if GOT_INT.get() {
             let _ = stdin.close();
             return None;
         }

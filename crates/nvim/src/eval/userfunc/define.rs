@@ -257,7 +257,7 @@ impl Definition<'_, '_> {
         );
         self.at += cursor.offset();
         parsed.map_err(|_| Refusal::Unwind)?;
-        if KeyTyped.get() && ui_has(kUICmdline) {
+        if KEY_TYPED.get() && ui_has(kUICmdline) {
             self.show_block = true;
             ui_ext_cmdline_block_append(0, self.excmd.line.cmd());
         }
@@ -329,7 +329,7 @@ impl Definition<'_, '_> {
             semsg!("E488: Trailing characters: {rest}");
         }
 
-        if KeyTyped.get() {
+        if KEY_TYPED.get() {
             self.report_existing();
             if !self.excmd.skip && DID_EMSG.get() != 0 {
                 return Err(Refusal::Unwind);

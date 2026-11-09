@@ -364,7 +364,7 @@ pub(super) fn parse_quoted_string(
         pstate.highlight(start, len, group);
     };
 
-    let is_double = token.type_0 == kExprLexDoubleQuotedString;
+    let is_double = token.type_0 == EXPR_LEX_DOUBLE_QUOTED_STRING;
     // Everything between the quotes: the token less its opening quote and,
     // when the lexer found one, its closing quote.
     let body_len = token.len - closed - 1;

@@ -42,8 +42,8 @@ pub fn paste_store(channel_id: uint64_t, phase: PastePhase, text: &[u8], crlf: b
     if State.get() & MODE_CMDLINE != 0 {
         return;
     }
-    let need_redo = !block_redo.get();
-    let need_record = reg_recording.get() != 0 && !is_internal_call(channel_id);
+    let need_redo = !BLOCK_REDO.get();
+    let need_record = REG_RECORDING.get() != 0 && !is_internal_call(channel_id);
     if !need_redo && !need_record {
         return;
     }
@@ -111,7 +111,7 @@ pub fn paste_repeat(count: c_int) {
     let mut aborted = false;
 
     let unmapped = Keys::unmapped();
-    got_int.set(false);
+    GOT_INT.set(false);
     while !aborted {
         let first = vgetorpeek(true);
         if first == K_SPECIAL {
@@ -129,7 +129,7 @@ pub fn paste_repeat(count: c_int) {
         } else {
             pasted.push(first);
         }
-        aborted = got_int.get();
+        aborted = GOT_INT.get();
     }
     drop(unmapped);
 

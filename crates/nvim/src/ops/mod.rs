@@ -44,7 +44,7 @@ use crate::extmark::BCount;
 use crate::extmark::curbuf_splice_pending;
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::fold::{delete_fold, fold_create, fold_open_cursor, op_fold_range};
-use crate::getchar::state::{KeyTyped, bangredo, got_int, repeat_luaref};
+use crate::getchar::state::{BANGREDO, GOT_INT, KEY_TYPED, REPEAT_LUAREF};
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_keys, append_to_redobuff_literally,
     append_to_redobuff_number, beep_flush, cancel_redo, reset_redobuff, stuff_readbuf,

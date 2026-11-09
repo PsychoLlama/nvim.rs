@@ -159,7 +159,7 @@ pub(crate) fn show_pat_in_path(
     } else if MSG_SILENT.get() == 0 {
         gotocmdline(true); // cursor at the status line
     }
-    if got_int.get() {
+    if GOT_INT.get() {
         return; // 'q' typed at the "--more--" message
     }
     let mut line = cstr::until_nul(line).to_vec();
@@ -190,7 +190,7 @@ pub(crate) fn show_pat_in_path(
 
         // A definition continues until a line that does not end in a
         // backslash.
-        if got_int.get() || kind != FIND_DEFINE || last != Some(b'\\') {
+        if GOT_INT.get() || kind != FIND_DEFINE || last != Some(b'\\') {
             break;
         }
 

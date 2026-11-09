@@ -21,7 +21,7 @@ use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, tv_dict_alloc_ret, tv_list_alloc_ret};
 use crate::eval::vars::{get_vim_var_nr, set_vim_var_nr};
 use crate::eval::{get_callback_depth, has_provider_from_vimscript};
-use crate::getchar::state::vgetc_busy;
+use crate::getchar::state::VGETC_BUSY;
 use crate::getchar::{stuff_empty, typeahead, using_script};
 use crate::global_cell::GlobalCell;
 use crate::indent::{get_sw_value, get_sw_value_col};
@@ -306,7 +306,7 @@ pub fn f_did_filetype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 
 /// `eventhandler()` — whether we are inside a `vgetc().code()` from an event.
 pub fn f_eventhandler(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(VarNumber::from(vgetc_busy.get()));
+    result.write_number(VarNumber::from(VGETC_BUSY.get()));
 }
 
 /// `foreground()` — a no-op; nvim has no window to raise.

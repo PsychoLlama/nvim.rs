@@ -100,7 +100,7 @@ pub(crate) fn op_insert(op: &mut OpArg, count1: c_int) {
 
     // The user moved off the line, or left Insert mode with CTRL-C: there
     // is nothing to replay.
-    if Win::current().w_cursor.lnum != op.start.lnum || got_int.get() {
+    if Win::current().w_cursor.lnum != op.start.lnum || GOT_INT.get() {
         return;
     }
 
@@ -363,7 +363,7 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
 
     // Copy the new text to the rest of a Visual block. Not when Insert
     // mode ended with CTRL-C.
-    if op.motion_type == MT_BLOCK_WISE && op.start.lnum != op.end.lnum && !got_int.get() {
+    if op.motion_type == MT_BLOCK_WISE && op.start.lnum != op.end.lnum && !GOT_INT.get() {
         replay_change(op, &mut bd, pre_textlen, pre_indent);
     }
 

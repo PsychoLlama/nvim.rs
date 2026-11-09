@@ -41,7 +41,7 @@ use core::ffi::c_int;
 use crate::buffer::buf_is_empty;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::insexpand::{
     Added, ins_compl_add_infercase, ins_compl_check_keys, ins_compl_interrupted,
 };
@@ -111,7 +111,7 @@ pub fn ex_spellinfo(_excmd: &mut ExArg) {
     msg_start();
     let count = entries.len();
     for (lpi, (fname, info)) in entries.iter().enumerate() {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         msg_str(c"file: ");
@@ -294,7 +294,7 @@ fn dump_language(
         let mut depth: isize = 0;
         arridx[0] = 0;
         curi[0] = 1;
-        while depth >= 0 && !got_int.get() && (sink.pat.is_none() || !ins_compl_interrupted()) {
+        while depth >= 0 && !GOT_INT.get() && (sink.pat.is_none() || !ins_compl_interrupted()) {
             let d = depth.cast_unsigned();
             if curi[d] > tree.node_len(arridx[d]) {
                 // Every child of this node is done.
@@ -496,7 +496,7 @@ fn dump_prefixes(
     let mut depth: isize = 0;
     arridx[0] = 0;
     curi[0] = 1;
-    while depth >= 0 && !got_int.get() {
+    while depth >= 0 && !GOT_INT.get() {
         let d = depth.cast_unsigned();
         let mut n = arridx[d];
         let len = tree.node_len(n);

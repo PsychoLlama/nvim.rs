@@ -22,7 +22,7 @@ use crate::cursor::set_leftcol;
 use crate::diff::diff_set_topline;
 use crate::drawscreen::{UPD_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::getchar::state::mod_mask;
+use crate::getchar::state::MOD_MASK;
 use crate::global_cell::GlobalCell;
 use crate::normal::defs::CmdArg;
 use crate::normal::{
@@ -157,7 +157,7 @@ pub(crate) fn nv_page(cmd_arg: &mut CmdArg) {
     if check_clear_op(cmd_arg.op()) {
         return;
     }
-    if mod_mask.get().has(ModMask::CTRL) {
+    if MOD_MASK.get().has(ModMask::CTRL) {
         if cmd_arg.arg == BACKWARD as c_int {
             goto_tabpage(-cmd_arg.count1);
         } else {

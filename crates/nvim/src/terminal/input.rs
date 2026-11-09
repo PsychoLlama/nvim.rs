@@ -29,7 +29,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::getchar::state::{KeyTyped, mod_mask, vgetc_char, vgetc_mod_mask};
+use crate::getchar::state::{KEY_TYPED, MOD_MASK, VGETC_CHAR, VGETC_MOD_MASK};
 use crate::getchar::{ins_char_typebuf, ungetchars};
 use crate::keycodes::{Ctrl_AT, Ctrl_M, NotAKey, SpecialKey};
 use crate::keycodes::{ModMask, unsimplify_key};
@@ -221,7 +221,7 @@ fn convert_key(key: &mut c_int, mods: ModMask, state: &mut VTermModifier) -> VTe
 /// A keycode with no vterm name is a codepoint, unless it is negative — one
 /// of the extras vterm has no equivalent for, which is simply dropped.
 pub(super) fn terminal_send_key(mut term: Term, c: c_int) {
-    send_key(&mut term.vt, c, mod_mask.get());
+    send_key(&mut term.vt, c, MOD_MASK.get());
 }
 
 /// [`terminal_send_key`] with the emulator and the editor's modifiers named,
@@ -409,7 +409,7 @@ pub(super) fn send_mouse_event(mut term: Term, c: c_int) -> bool {
                 return false;
             };
             let mut state = VTERM_MOD_NONE;
-            convert_modifiers(&mut { c }, mod_mask.get(), &mut state);
+            convert_modifiers(&mut { c }, MOD_MASK.get(), &mut state);
             term.vt.mouse_move(row, col - offset, state);
             if button != 0 {
                 term.vt.mouse_button(button, pressed, state);
@@ -441,9 +441,9 @@ pub(super) fn send_mouse_event(mut term: Term, c: c_int) -> bool {
 
     // Hand the event back for normal mode, then rewind the typeahead so
     // that terminal mode ends before it is read.
-    let (c, mods) = (vgetc_char.get(), vgetc_mod_mask.get());
+    let (c, mods) = (VGETC_CHAR.get(), VGETC_MOD_MASK.get());
     let len = ins_char_typebuf(c, mods, true);
-    if KeyTyped.get() {
+    if KEY_TYPED.get() {
         ungetchars(len); // rewind over the key just pushed
     }
     true

@@ -353,7 +353,7 @@ fn find_hash_match(mut pos: Pos, hash_dir: c_int, initc: c_int) -> Option<Pos> {
     let mut count = 0;
     pos.col = ColNr::ZERO;
     let mut lines = Lines::current();
-    while !got_int.get() {
+    while !GOT_INT.get() {
         if hash_dir > 0 {
             if pos.lnum == Buf::current().b_ml.ml_line_count {
                 break;
@@ -876,7 +876,7 @@ fn find_match(
         walk.lispcomm = true; // find the match inside this comment
     }
 
-    while !got_int.get() {
+    while !GOT_INT.get() {
         // Go to the next position. inc() and dec() would do, but they
         // are much slower.
         let moved = if walk.backwards {

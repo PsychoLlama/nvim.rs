@@ -25,7 +25,7 @@ use crate::drawscreen::state::updating_screen;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_all_later};
 use crate::eval::vars::do_unlet;
 use crate::ex_docmd::ends_excmd;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::highlight::state::{
     cterm_normal_bg_color, cterm_normal_fg_color, need_highlight_changed, normal_bg, normal_fg,
     normal_sp,
@@ -128,7 +128,7 @@ pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
     if !init && line.at_end() {
         msg_ext_set_kind(c"list_cmd");
         let mut id = 1;
-        while id <= highlight_num_groups() && !got_int.get() {
+        while id <= highlight_num_groups() && !GOT_INT.get() {
             // TODO(brammool): only call when the group has attributes set
             highlight_list_one(id);
             id += 1;

@@ -80,7 +80,7 @@ use std::os::unix::fs::MetadataExt as _;
 
 use crate::event::r#loop::main_loop_is_recursing;
 use crate::fileio::FileOffset;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::memline::ml_open_file;
 use crate::message::E_SWAPCLOSE;
@@ -493,7 +493,7 @@ impl MemFile {
     /// on a full disk is the common case, so after the first failure only
     /// blocks that already have a place in the file are attempted.
     pub(crate) fn sync(&mut self, flags: c_int) -> Result<(), SwapFailed> {
-        let got_int_save = got_int.get();
+        let got_int_save = GOT_INT.get();
 
         if self.file.is_none() {
             self.mf_dirty = MfDirty::No;
@@ -502,7 +502,7 @@ impl MemFile {
 
         // Only a CTRL-C typed *while* writing interrupts this, not one
         // typed earlier.
-        got_int.set(false);
+        GOT_INT.set(false);
 
         // Last to first, which makes a half-written file likelier to be
         // consistent. The last block is typically early in the table.
@@ -535,7 +535,7 @@ impl MemFile {
                     // the event loop must not be re-entered.
                     os_breakcheck();
                 }
-                if got_int.get() {
+                if GOT_INT.get() {
                     break;
                 }
             }
@@ -557,7 +557,7 @@ impl MemFile {
             status = Err(SwapFailed);
         }
 
-        got_int.set(got_int.get() || got_int_save);
+        GOT_INT.set(GOT_INT.get() || got_int_save);
         status
     }
 

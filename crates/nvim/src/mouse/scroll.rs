@@ -25,7 +25,7 @@ use super::*;
 use crate::buffer::buf_is_prompt;
 use crate::drawscreen::redraw_statuslines;
 use crate::edit::{InsertEnd, set_can_cindent, start_arrow, undisplay_dollar};
-use crate::getchar::state::mod_mask;
+use crate::getchar::state::MOD_MASK;
 use crate::mouse::state::{mouse_col, mouse_row};
 use crate::r#move::pagescroll;
 use crate::narrow::number_as_int;
@@ -85,7 +85,7 @@ pub(crate) fn ins_mouse(c: Key) {
 /// `curwin` may have been changed to the window that should be scrolled and
 /// differ from the window that actually has focus.
 pub(crate) fn do_mousescroll(cmd_arg: &mut CmdArg) {
-    let shift_or_ctrl = mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL);
+    let shift_or_ctrl = MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL);
     let win = Win::current();
     let arg = cmd_arg.arg;
 

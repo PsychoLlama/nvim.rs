@@ -76,14 +76,14 @@ fn dis_special(
     if arg.is_some_and(|arg| !arg.to_bytes().contains(&name)) {
         return;
     }
-    if got_int.get() || message_filtered(text) {
+    if GOT_INT.get() || message_filtered(text) {
         return;
     }
     msg_str(label);
     dis_msg(text.to_bytes(), skip_esc);
 }
 
-/// Print one slot of `y_regs`, as it was when the listing reached it.
+/// Print one slot of `Y_REGS`, as it was when the listing reached it.
 fn dis_register(yb: &YankReg, name: RegName, type_0: u8, hl_id: c_int) {
     let lines = yb.lines.as_slice();
 
@@ -137,7 +137,7 @@ pub fn ex_display(excmd: &mut ExArg) {
     // `None` is the unnamed register, which aliases whichever slot was
     // written last.
     for i in ::core::iter::once(None).chain((0..NUM_REGISTERS).map(Some)) {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         let name = get_register_name(i);
@@ -150,7 +150,7 @@ pub fn ex_display(excmd: &mut ExArg) {
                 MT_CHAR_WISE => b'c',
                 _ => b'b',
             };
-            let mut yb = get_y_register(i.unwrap_or_else(|| y_previous.get().unwrap_or(0)));
+            let mut yb = get_y_register(i.unwrap_or_else(|| Y_PREVIOUS.get().unwrap_or(0)));
             // This is the call that may run the clipboard provider's Lua.
             if let Some((slot, _)) = clipboard::get_clipboard(name, true) {
                 yb = Reg::Slot(slot);
@@ -201,7 +201,7 @@ pub fn ex_display(excmd: &mut ExArg) {
 
     // `"#` is listed under the `%` argument, as upstream has it.
     let want_alt = arg.is_none_or(|arg| arg.to_bytes().contains(&b'%'));
-    if want_alt && !got_int.get() {
+    if want_alt && !GOT_INT.get() {
         // A copy: the filter runs a regexp and the display the message
         // machinery.
         let alt =
@@ -223,7 +223,7 @@ pub fn ex_display(excmd: &mut ExArg) {
         false,
     );
     // A copy: listing a register may run a message callback that sets it.
-    let expr = expr_line.with(Clone::clone);
+    let expr = EXPR_LINE.with(Clone::clone);
     special(
         b'=',
         c"\n  c  \"=   ",

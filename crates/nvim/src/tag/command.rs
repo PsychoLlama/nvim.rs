@@ -338,7 +338,7 @@ impl DoTag {
     /// This does the whole jump itself, so it always answers `false`.
     fn pop_older(&mut self) -> bool {
         // Opening the file resets it.
-        let old_key_typed = KeyTyped.get();
+        let old_key_typed = KEY_TYPED.get();
 
         self.idx -= self.count;
         if self.idx < 0 {
@@ -643,7 +643,7 @@ impl DoTag {
 
         if ask {
             let chosen = prompt_for_input(None, 0, false, None);
-            if chosen <= 0 || chosen > found || got_int.get() {
+            if chosen <= 0 || chosen > found || GOT_INT.get() {
                 // No valid choice: change nothing.
                 if self.use_tagstack {
                     let saved = self.saved_fmark.clone();

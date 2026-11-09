@@ -14,7 +14,7 @@
 )]
 
 use super::*;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::getchar::{char_avail, vpeekc};
 use crate::guard::Suppress;
 use crate::mbyte::class_in;
@@ -252,10 +252,10 @@ pub(crate) fn expand_pattern_in_buf(pat: &CStr, dir: Direction) -> Option<Vec<XS
         prev_match_pos = cur_match_pos;
 
         // Abort if the user typed a character or interrupted.
-        if char_avail() || got_int.get() {
-            if got_int.get() {
+        if char_avail() || GOT_INT.get() {
+            if GOT_INT.get() {
                 vpeekc(); // Remove <C-C> from input stream
-                got_int.set(false); // Don't abandon the command line
+                GOT_INT.set(false); // Don't abandon the command line
             }
             return None;
         }

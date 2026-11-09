@@ -69,7 +69,7 @@ fn opts_cancelreturn(opts: &TypVal) -> Option<&TypVal> {
 pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, secret: bool) {
     result.write_string(None);
 
-    if cmdpreview.get() {
+    if CMDPREVIEW.get() {
         return;
     }
 

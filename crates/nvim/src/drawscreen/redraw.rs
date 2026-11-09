@@ -70,7 +70,7 @@ pub fn show_cursor_info_later(force: bool) {
         || wp.w_buffer.b_ml.ml_line_count != wp.w_stl_line_count
         || wp.w_topfill != wp.w_stl_topfill
         || empty_line != wp.w_stl_empty
-        || reg_recording.get() != wp.w_stl_recording
+        || REG_RECORDING.get() != wp.w_stl_recording
         || state != wp.w_stl_state
         || visual_moved
     {
@@ -93,7 +93,7 @@ pub fn show_cursor_info_later(force: bool) {
     wp.w_stl_topline = wp.w_topline;
     wp.w_stl_line_count = wp.w_buffer.b_ml.ml_line_count;
     wp.w_stl_topfill = wp.w_topfill;
-    wp.w_stl_recording = reg_recording.get();
+    wp.w_stl_recording = REG_RECORDING.get();
     wp.w_stl_state = state;
     // Upstream leaves the remembered Visual position alone when Visual mode
     // is not active, so that leaving and re-entering it on the same

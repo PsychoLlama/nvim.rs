@@ -24,7 +24,7 @@ use super::compile::BtProg;
 use super::matcher::regmatch;
 use super::state::{BT_STATE, BtState};
 use crate::ascii::NUL;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::mbyte::{mb_tolower, utf_fold};
 use crate::message::{E_NULL, E_RE_CORR};
 use crate::message::{emsg, iemsg};
@@ -279,7 +279,7 @@ fn scan_from<'t>(rex: Rex<'t>, prog: BtProg, state: &mut BtState, mut at: usize)
     let mut tm_count = 0;
     // The line from `at` on; past its end, its NUL.
     let rest = |line: &'t [u8], at: usize| line.get(at..).unwrap_or(&line[line.len() - 1..]);
-    while !got_int.get() {
+    while !GOT_INT.get() {
         // The pattern's first character is known: skip straight to the
         // next place it occurs.
         if prog.regstart() != NUL {

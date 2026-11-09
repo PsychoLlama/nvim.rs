@@ -23,7 +23,7 @@ use crate::charset::getdigits_int_at;
 use crate::eval::typval::list_iter;
 use crate::eval::vars::{eval_spell_expr, get_spellword};
 use crate::fileio::Fgets;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::message_fmt::msg_bytes;
 use crate::option::split_option_part;
 use crate::option::vars::P_SPS;
@@ -145,7 +145,7 @@ pub(super) fn spell_suggest_file(su: &mut SugInfo, fname: &[u8]) {
 
     let mut line = Vec::new();
     let mut cword = [0u8; MAXWLEN];
-    while file.line_capped(&mut line, MAXWLEN * 2) && !got_int.get() {
+    while file.line_capped(&mut line, MAXWLEN * 2) && !GOT_INT.get() {
         line_breakcheck();
 
         // As C reads the line: up to its first NUL.

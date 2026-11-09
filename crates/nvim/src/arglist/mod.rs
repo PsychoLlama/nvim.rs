@@ -44,7 +44,7 @@ use crate::ex_cmds2::{autowrite, check_changed};
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_getln::gotocmdline;
 use crate::fileio::file_pat_to_regpat;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::mark::{setmark, setpcmark};
 use crate::memory::XString;
@@ -286,7 +286,7 @@ fn alist_set(id: ArgListId, files: Vec<XString>, use_curbuf: bool) {
     alist_clear(id);
     with_list(id, |al| al.entries.reserve(files.len()));
     for name in files {
-        if got_int.get() {
+        if GOT_INT.get() {
             // Adding many buffers can take a long time, so the user can
             // interrupt; the names not yet added are dropped.
             break;
@@ -493,7 +493,7 @@ fn delete_matching_args(regex_match: &mut RegMatch) -> bool {
 /// that matches nothing reports E480 and the rest still run.
 fn arglist_del_files(patterns: &[XString]) {
     for pattern in patterns {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         let Ok(regexp) = file_pat_to_regpat(pattern.as_cstr()).inspect_err(|err| err.report())

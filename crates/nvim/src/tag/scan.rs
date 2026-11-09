@@ -556,7 +556,7 @@ impl FindTags {
             if self.flags & TAG_INS_COMP != 0 {
                 ins_compl_check_keys(30, false);
             }
-            if got_int.get() || ins_compl_interrupted() {
+            if GOT_INT.get() || ins_compl_interrupted() {
                 self.stop_searching = true;
                 break;
             }

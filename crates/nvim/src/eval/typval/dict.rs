@@ -391,7 +391,7 @@ pub fn dict_copy(
     let conv = conv.filter(|conv| conv.vc_type != CONV_NONE);
     let mut cursor = DictCursor::new(orig);
     while let Some(slot) = cursor.next(orig) {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         let Some(item) = orig.item_at(slot) else {
@@ -420,7 +420,7 @@ pub fn dict_copy(
         }
     }
 
-    if got_int.get() {
+    if GOT_INT.get() {
         // The partial copy goes with the handle, which is its only
         // reference.
         return None;

@@ -45,7 +45,7 @@ use crate::eval::{
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::{GlobalCell, state_record};
 use crate::guard::sandbox;
 use crate::hashtab::hash_reset;

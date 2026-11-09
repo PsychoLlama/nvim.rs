@@ -49,7 +49,7 @@ use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::tags::ex_findpat;
 use crate::file_search::FileNameOpts;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::highlight_group::HLF_T;
 use crate::keycodes::Ctrl_G;
 use crate::message::IOSIZE;
@@ -351,7 +351,7 @@ pub(crate) fn ex_tabs(_excmd: &mut ExArg) {
     let lastused_win = last_used_tab().and_then(TabPage::current_window);
 
     for (tabcount, tp) in tabs().enumerate() {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         if MSG_COL.get() > 0 {
@@ -370,7 +370,7 @@ pub(crate) fn ex_tabs(_excmd: &mut ExArg) {
 /// The `:tabs` entry for each window of `tabpage`.
 fn list_tab_windows(tabpage: TabPage, lastused_win: Option<Win>) {
     for wp in windows_in_tab(tabpage) {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         // A hidden or unfocusable floating window is not listed.

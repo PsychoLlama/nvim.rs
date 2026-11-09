@@ -29,7 +29,7 @@ use crate::edit::{
 };
 use crate::eval::prompt_invoke_callback;
 use crate::getchar::beep_flush;
-use crate::getchar::state::mod_mask;
+use crate::getchar::state::MOD_MASK;
 use crate::mark::setpcmark;
 use crate::mbyte::{cluster_len, mb_adjust_cursor};
 use crate::normal::defs::{CmdArg, Outcome};
@@ -286,8 +286,8 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
 /// `l`, `<Space>` and `<Right>`.
 pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
     // A modifier turns this into a word move.
-    if mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL) {
-        if mod_mask.get().has(ModMask::CTRL) {
+    if MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL) {
+        if MOD_MASK.get().has(ModMask::CTRL) {
             cmd_arg.arg = 1;
         }
         nv_wordcmd(cmd_arg);
@@ -373,8 +373,8 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
 pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
     let mut win = Win::current();
     // A modifier turns this into a word move.
-    if mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL) {
-        if mod_mask.get().has(ModMask::CTRL) {
+    if MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL) {
+        if MOD_MASK.get().has(ModMask::CTRL) {
             cmd_arg.arg = 1;
         }
         nv_bck_word(cmd_arg);
@@ -433,7 +433,7 @@ pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
 
 /// `k`, `CTRL-P`, `-` and `<Up>`. Shifted, it is a page up.
 pub(crate) fn nv_up(cmd_arg: &mut CmdArg) {
-    if mod_mask.get().has(ModMask::SHIFT) {
+    if MOD_MASK.get().has(ModMask::SHIFT) {
         cmd_arg.arg = BACKWARD as c_int;
         nv_page(cmd_arg);
         return;
@@ -449,7 +449,7 @@ pub(crate) fn nv_up(cmd_arg: &mut CmdArg) {
 
 /// `j`, `CTRL-N`, `+`, `<CR>` and `<Down>`. Shifted, it is a page down.
 pub(crate) fn nv_down(cmd_arg: &mut CmdArg) {
-    if mod_mask.get().has(ModMask::SHIFT) {
+    if MOD_MASK.get().has(ModMask::SHIFT) {
         cmd_arg.arg = FORWARD as c_int;
         nv_page(cmd_arg);
         return;
@@ -488,7 +488,7 @@ pub(crate) fn nv_down(cmd_arg: &mut CmdArg) {
 /// `<End>`: the end of the line -- of the last line with CTRL, which is what
 /// the argument says.
 pub(crate) fn nv_end(cmd_arg: &mut CmdArg) {
-    if cmd_arg.arg != 0 || mod_mask.get().has(ModMask::CTRL) {
+    if cmd_arg.arg != 0 || MOD_MASK.get().has(ModMask::CTRL) {
         cmd_arg.arg = 1;
         nv_goto(cmd_arg);
         // The count named the line, so `$` must not use it again.
@@ -636,7 +636,7 @@ pub(crate) fn nv_findpar(cmd_arg: &mut CmdArg) {
 
 /// `<Home>`: the first column -- the first line with CTRL.
 pub(crate) fn nv_home(cmd_arg: &mut CmdArg) {
-    if mod_mask.get().has(ModMask::CTRL) {
+    if MOD_MASK.get().has(ModMask::CTRL) {
         nv_goto(cmd_arg);
     } else {
         // `<Home>` is `1|`.

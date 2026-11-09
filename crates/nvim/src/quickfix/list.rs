@@ -261,7 +261,7 @@ pub(crate) fn copy_loclist(from: &QfList, to: &mut QfList) {
     to.entries = Vec::with_capacity(from.entries.len());
     to.cursor = 0;
     for (at, entry) in from.entries.iter().enumerate() {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         to.entries.push(copy_entry(entry));
@@ -355,7 +355,7 @@ fn adjust_entries(
     let mut found_one = false;
     for list in &mut stack.lists[..count] {
         for entry in &mut list.entries {
-            if got_int.get() {
+            if GOT_INT.get() {
                 break;
             }
             if entry.fnum != Some(buffer.handle) {

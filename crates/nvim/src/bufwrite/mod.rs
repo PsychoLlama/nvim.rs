@@ -45,7 +45,7 @@ use crate::fileio::{
     msg_add_fileformat, msg_add_lines, need_conversion, rename_file, set_rw_fname, temp_name,
     time_differs,
 };
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::highlight_group::HLF_E;
 use crate::input::ask_yesno;
 use crate::memline::{ml_preserve, ml_timestamp};
@@ -296,7 +296,7 @@ impl Buf {
         let (mut buf, mut start, mut end) = (self, start, end);
         let mut retval = Ok(());
         let msg_save = MSG_SCROLL.get();
-        let mut prev_got_int = got_int.get();
+        let mut prev_got_int = GOT_INT.get();
         let whole = start == LineNr::ONE && end == b.b_ml.ml_line_count;
         let mut write_undo_file = false;
         let mut sha_ctx = Sha256::new();
@@ -446,8 +446,8 @@ impl Buf {
 
                 // Save got_int and reset it: an earlier interruption must not
                 // cancel this write, only CTRL-C during it.
-                prev_got_int = got_int.get();
-                got_int.set(false);
+                prev_got_int = GOT_INT.get();
+                GOT_INT.set(false);
                 // Mark the buffer as being saved, to suppress changed-buffer
                 // warnings.
                 b.b_saving = true;
@@ -532,7 +532,7 @@ impl Buf {
                     {
                         let fsync = if b.b_p_fs >= 0 { b.b_p_fs != 0 } else { p_fs() };
                         ml_preserve(buf, false, fsync);
-                        if got_int.get() {
+                        if GOT_INT.get() {
                             err = Some(WriteError::Interrupted);
                             break 'restore_backup;
                         }
@@ -706,7 +706,7 @@ impl Buf {
                         if err.is_none() {
                             err = Some(if writer.conv_error {
                                 WriteError::ConversionFailed(writer.conv_error_lnum)
-                            } else if got_int.get() {
+                            } else if GOT_INT.get() {
                                 WriteError::Interrupted
                             } else {
                                 WriteError::WriteFailed
@@ -834,7 +834,7 @@ impl Buf {
             }
         }
 
-        got_int.set(got_int.get() | prev_got_int);
+        GOT_INT.set(GOT_INT.get() | prev_got_int);
         retval
     }
 }

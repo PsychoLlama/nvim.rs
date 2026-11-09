@@ -41,12 +41,12 @@ fn langmap_applies(maplen: c_int) -> bool {
     // +24%). This is upstream's `*p_langmap`.
     P_LANGMAP.first_byte() != 0
         && (p_lrm()
-            || if vgetc_busy.get() != 0 {
+            || if VGETC_BUSY.get() != 0 {
                 maplen == 0
             } else {
-                KeyTyped.get()
+                KEY_TYPED.get()
             })
-        && !KeyStuffed.get()
+        && !KEY_STUFFED.get()
 }
 
 /// The other half of `LANGMAP_ADJUST`: typeahead byte `byte` through
@@ -54,7 +54,7 @@ fn langmap_applies(maplen: c_int) -> bool {
 /// always below 256, so this is the table and never the multibyte search.
 #[inline(always)]
 fn langmap_map(byte: u8) -> u8 {
-    langmap_mapchar.with(|map| map[usize::from(byte)])
+    LANGMAP_MAPCHAR.with(|map| map[usize::from(byte)])
 }
 
 /// Replace `slen` bytes at `offset` in the typeahead with `string`.
@@ -107,7 +107,7 @@ pub(crate) fn at_ins_compl_key() -> bool {
 pub(crate) fn check_simplify_modifier(max_offset: c_int) -> Result<usize, Failed> {
     // Terminal mode wants the full modifiers, so that the key can be
     // encoded for the child process.
-    if State.get() & MODE_TERMINAL != 0 || no_reduce_keys.get() > 0 {
+    if State.get() & MODE_TERMINAL != 0 || NO_REDUCE_KEYS.get() > 0 {
         return Ok(0);
     }
 
@@ -133,8 +133,8 @@ pub(crate) fn check_simplify_modifier(max_offset: c_int) -> Result<usize, Failed
             // At the start: remember the character and mod_mask from
             // before the merge. In some cases -- at the hit-return
             // prompt, say -- they are put back into the typeahead.
-            vgetc_char.set(c);
-            vgetc_mod_mask.set(ModMask::from_byte(tb.byte(2)));
+            VGETC_CHAR.set(c);
+            VGETC_MOD_MASK.set(ModMask::from_byte(tb.byte(2)));
         }
 
         let mut new_string = [0u8; MB_MAXBYTES];
@@ -479,7 +479,7 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> MapResult {
     // The depth check catches `:map x y` plus `:map y x`.
     *mapdepth += 1;
     if OptInt::from(*mapdepth) >= p_mmd() {
-        emsg(gettext(e_recursive_mapping));
+        emsg(gettext(E_RECURSIVE_MAPPING));
         if State.get() & MODE_CMDLINE != 0 {
             redrawcmdline();
         } else {
@@ -499,11 +499,11 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> MapResult {
 
     // `:map <expr>`: the RHS is an expression to evaluate.
     let evaluated = if let Some(expr) = &applied.expr {
-        let save_vgetc_busy = vgetc_busy.get();
+        let save_vgetc_busy = VGETC_BUSY.get();
         let save_may_garbage_collect = MAY_GARBAGE_COLLECT.get();
         let prev_did_emsg = DID_EMSG.get();
 
-        vgetc_busy.set(0);
+        VGETC_BUSY.set(0);
         MAY_GARBAGE_COLLECT.set(false);
 
         let mut map_str = eval_map_expr(expr, Key::NUL);
@@ -526,7 +526,7 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> MapResult {
             }
         }
 
-        vgetc_busy.set(save_vgetc_busy);
+        VGETC_BUSY.set(save_vgetc_busy);
         MAY_GARBAGE_COLLECT.set(save_may_garbage_collect);
         map_str
     } else {
@@ -613,8 +613,8 @@ pub(crate) fn handle_mapping(
     // - a hit-return prompt is up and CR or space was typed;
     // - a --More-- prompt is up;
     // - we are in CTRL-X mode and this is a key that mode uses.
-    let mappable = no_mapping.get() == 0
-        && (no_zero_mapping.get() == 0 || tb_c1 != b'0')
+    let mappable = NO_MAPPING.get() == 0
+        && (NO_ZERO_MAPPING.get() == 0 || tb_c1 != b'0')
         && (tb.maplen() == 0 || is_plug_map || tb.noremap(0) & (RM_NONE | RM_ABBR) == 0)
         && !(p_paste() && State.get() & (MODE_INSERT | MODE_CMDLINE) != 0)
         && !(State.get() == MODE_HITRETURN && (tb_c1 == b'\r' || tb_c1 == b' '))
@@ -636,7 +636,7 @@ pub(crate) fn handle_mapping(
         // No mapping matched, or one matched but a non-matching entry
         // agreed on at least as much: try folding the modifier into the
         // key, where mappings are allowed at all.
-        if no_mapping.get() == 0 || allow_keys.get() != 0 {
+        if NO_MAPPING.get() == 0 || ALLOW_KEYS.get() != 0 {
             if tb_c1 == K_SPECIAL && (tb.len() < 2 || (tb.byte(1) == KS_MODIFIER && tb.len() < 4)) {
                 // An incomplete modifier sequence: it is not yet possible
                 // to decide whether to simplify.

@@ -406,11 +406,11 @@ pub(crate) fn may_do_incsearch_highlighting(
         }
 
         // Interrupted while searching: behave as if it failed.
-        if got_int.get() {
+        if GOT_INT.get() {
             // Remove <C-C> from the input stream.
             vpeekc();
             // Don't abandon the command line.
-            got_int.set(false);
+            GOT_INT.set(false);
             found = false;
         } else if char_avail() {
             // Searching was cancelled because a character was typed.

@@ -15,7 +15,7 @@ use crate::cstr;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, dict_get_number, dict_len, list_iter, tv_list_alloc};
 use crate::eval::vars::with_vim_var_str;
-use crate::getchar::state::{reg_executing, reg_recorded, reg_recording};
+use crate::getchar::state::{REG_EXECUTING, REG_RECORDED, REG_RECORDING};
 use crate::memory::ThinCString;
 use crate::normal::defs::MotionType;
 use crate::register::{
@@ -143,17 +143,17 @@ fn return_register(regname: RegName, result: &mut TypVal) {
 
 /// `reg_executing()` — the register a macro is being played from.
 pub fn f_reg_executing(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    return_register(reg_executing.get(), &mut *result);
+    return_register(REG_EXECUTING.get(), &mut *result);
 }
 
 /// `reg_recording()` — the register `q` is recording into.
 pub fn f_reg_recording(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    return_register(reg_recording.get(), &mut *result);
+    return_register(REG_RECORDING.get(), &mut *result);
 }
 
 /// `reg_recorded()` — the register the last recording went into.
 pub fn f_reg_recorded(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    return_register(reg_recorded.get(), &mut *result);
+    return_register(REG_RECORDED.get(), &mut *result);
 }
 
 /// Read the register-type letter at `text[*at]`, moving `at` past the width

@@ -31,7 +31,7 @@ use super::run::nfa_did_time_out;
 use super::step::{Run, Step, lookaround_held, step};
 use super::sub::{copy_sub, copy_sub_off, has_zsubexpr, match_follows_from};
 use crate::ascii::NUL;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::mbyte::utf_fold;
 use crate::regexp::{
     NFA_MAX_STATES, NFA_TOO_EXPENSIVE, PimResult, RegSubs, Rex, recursive_regmatch, reg_breakcheck,
@@ -57,7 +57,7 @@ pub(crate) fn nfa_regmatch(
     listids: &mut Vec<c_int>,
 ) -> c_int {
     reg_breakcheck(rex);
-    if got_int.get() || nfa_did_time_out(rex) {
+    if GOT_INT.get() || nfa_did_time_out(rex) {
         return 0;
     }
     rex.set_nfa_match(0);
@@ -169,7 +169,7 @@ fn scan<'p>(
         let mut listidx: c_int = 0;
         while usize::try_from(listidx).is_ok_and(|idx| idx < thislist.len()) {
             reg_breakcheck(rex);
-            if got_int.get() || out_of_time(rex) {
+            if GOT_INT.get() || out_of_time(rex) {
                 break;
             }
             let outcome = step(
@@ -218,7 +218,7 @@ fn scan<'p>(
             reg_nextline(rex);
         }
         reg_breakcheck(rex);
-        if got_int.get() || out_of_time(rex) {
+        if GOT_INT.get() || out_of_time(rex) {
             return;
         }
     }

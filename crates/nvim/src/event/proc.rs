@@ -60,7 +60,7 @@ use crate::event::rstream::{Reader, rstream_may_close};
 use crate::event::stream::{stream_init, stream_may_close};
 use crate::event::uv::{uv_loop_t, uv_timer_t};
 use crate::event_queue::{self, QueueId};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_INF, logmsg};
 use crate::message_fmt::msg_cstr_opt;
@@ -425,13 +425,13 @@ pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, events: Option<QueueId>) -> 
     // Hold a reference of our own so the exit callback cannot free the child
     // before its status has been read.
     child.refcount.retain();
-    let interrupted_or_last = move || got_int.get() || child.refcount == Refcount::one();
+    let interrupted_or_last = move || GOT_INT.get() || child.refcount == Refcount::one();
     // SAFETY: the child's loop, and the caller's queue.
     unsafe { process_events_until(child.loop_0, events, i64::from(ms), interrupted_or_last) };
 
     // A user hitting CTRL-C is assumed not to like the current job.
-    if got_int.get() {
-        got_int.set(false);
+    if GOT_INT.get() {
+        GOT_INT.set(false);
         // SAFETY: a live child.
         unsafe { proc_stop(child.as_ptr()) };
         if ms == -1 {

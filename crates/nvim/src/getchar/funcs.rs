@@ -191,7 +191,7 @@ pub(crate) fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_number:
         ui_busy_start();
     }
     let raw_key = Keys::unmapped_with_codes();
-    let unsimplified = (!opts.simplify).then(|| Suppress::counter(no_reduce_keys));
+    let unsimplified = (!opts.simplify).then(|| Suppress::counter(NO_REDUCE_KEYS));
 
     let n = getchar_read(args, opts.cursor);
 
@@ -206,15 +206,15 @@ pub(crate) fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_number:
     set_vim_var_nr(Vv::MouseLnum, 0);
     set_vim_var_nr(Vv::MouseCol, 0);
 
-    if !n.is_nul() && (!opts.allow_number || n.is_special() || !mod_mask.get().is_empty()) {
+    if !n.is_nul() && (!opts.allow_number || n.is_special() || !MOD_MASK.get().is_empty()) {
         // Render the key as a string: modifier prefix, then either the
         // key code's three bytes or the character's UTF-8 ones.
         let mut temp = [0u8; 10]; // modifier 3 + mbyte char 6 + NUL
         let mut i = 0;
-        if !mod_mask.get().is_empty() {
+        if !MOD_MASK.get().is_empty() {
             temp[0] = K_SPECIAL;
             temp[1] = KS_MODIFIER;
-            temp[2] = mod_mask.get().byte();
+            temp[2] = MOD_MASK.get().byte();
             i = 3;
         }
         if n.is_special() {
@@ -253,5 +253,5 @@ pub fn f_getcharstr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// The `getcharmod()` Vimscript function: the modifiers of the last key.
 pub(crate) fn f_getcharmod(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): as [`f_getchar`].
-    result.write_number(VarNumber::from(mod_mask.get().bits()));
+    result.write_number(VarNumber::from(MOD_MASK.get().bits()));
 }

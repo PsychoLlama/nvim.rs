@@ -256,7 +256,7 @@ fn update_search_stat(
         // `searchit` walks `c.at` forward one match at a time; without
         // 'wrapscan' it fails once past the last one.
         let (win, buf) = (Some(Win::current()), Buf::current());
-        while !got_int.get()
+        while !GOT_INT.get()
             && searchit(
                 win,
                 buf,
@@ -290,7 +290,7 @@ fn update_search_stat(
                 break;
             }
         }
-        if got_int.get() {
+        if GOT_INT.get() {
             c.cur = -1; // abort
         }
         if done_search {

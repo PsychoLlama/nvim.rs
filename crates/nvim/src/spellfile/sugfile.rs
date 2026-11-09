@@ -48,7 +48,7 @@ use std::fs::File;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::memline::{LineError, ml_append_buf_terminated};
 use crate::memory::XString;
 use crate::message::E_WRITE;
@@ -156,7 +156,7 @@ fn sug_filltree(spin: &mut SpellInfo, slang: &mut SpellLang) -> Result<(), Faile
     curi[0] = 1;
     let mut depth: usize = 0;
     loop {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         if curi[depth] > slang.sl_fold_tree.node_len(arridx[depth]) {

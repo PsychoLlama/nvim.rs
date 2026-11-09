@@ -28,7 +28,7 @@ use crate::buffer::buf_is_empty;
 use crate::charset::vim_strsize_cstr;
 use crate::drawscreen::screenclear;
 use crate::getchar::plain_vgetc;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::grid::{default_gridview, grid_line_flush, grid_line_puts, grid_line_start};
 use crate::highlight::namespace::hl_attr;
 use crate::highlight_group::{HLF_8, syn_id2attr, syn_name2id};
@@ -196,14 +196,14 @@ pub(crate) fn ex_version(excmd: &mut ExArg) {
 /// bracketing it when `wrap` marks it as the current item.
 fn version_msg_wrap(s: &CStr, wrap: bool) {
     let len = vim_strsize_cstr(s) + if wrap { 2 } else { 0 };
-    if !got_int.get()
+    if !GOT_INT.get()
         && len < Columns.get()
         && MSG_COL.get() + len >= Columns.get()
         && !s.to_bytes().starts_with(b"\n")
     {
         msg_putchar(c_int::from(b'\n'));
     }
-    if got_int.get() {
+    if GOT_INT.get() {
         return;
     }
     if wrap {
@@ -250,7 +250,7 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
     let nrow = count / ncol + if count % ncol != 0 { 1 } else { 0 };
     let mut cur_row = 1;
     for i in 0..nrow * ncol {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         // Filled top-to-bottom, so the item printed here is the one

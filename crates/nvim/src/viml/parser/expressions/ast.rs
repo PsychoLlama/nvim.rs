@@ -17,7 +17,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use core::ffi::CStr;
 
@@ -155,12 +154,12 @@ impl<'a> ExprAST<'a> {
 
     /// The precedence level a node binds at.
     pub(super) fn lvl(&self, id: NodeId) -> ExprOpLvl {
-        node_type_to_node_props[self.kind(id) as usize].lvl
+        NODE_TYPE_TO_NODE_PROPS[self.kind(id) as usize].lvl
     }
 
     /// Which way a node of equal precedence associates.
     fn ass(&self, id: NodeId) -> ExprOpAssociativity {
-        node_type_to_node_props[self.kind(id) as usize].ass
+        NODE_TYPE_TO_NODE_PROPS[self.kind(id) as usize].ass
     }
 
     /// Whether the parse has already reported an error. The first one wins.
@@ -176,7 +175,7 @@ impl<'a> ExprAST<'a> {
             let Some(first) = node.children else {
                 continue;
             };
-            let maxchildren = node_maxchildren[node.type_0 as usize];
+            let maxchildren = NODE_MAXCHILDREN[node.type_0 as usize];
             debug_assert!(maxchildren > 0, "maxchildren > 0");
             debug_assert!(maxchildren <= 2, "maxchildren <= 2");
             let second = self.node(first).next;
@@ -313,7 +312,7 @@ pub const NODE_TYPE_NAMES: [&CStr; 39] = [
     c"Environment",
     c"Assignment",
 ];
-pub(super) static node_maxchildren: [uint8_t; 39] = [
+pub(super) static NODE_MAXCHILDREN: [uint8_t; 39] = [
     0 as uint8_t,
     2 as uint8_t,
     2 as uint8_t,
@@ -354,162 +353,162 @@ pub(super) static node_maxchildren: [uint8_t; 39] = [
     0 as uint8_t,
     2 as uint8_t,
 ];
-pub(super) static node_type_to_node_props: [ExprNodeProps; 39] = [
+pub(super) static NODE_TYPE_TO_NODE_PROPS: [ExprNodeProps; 39] = [
     ExprNodeProps {
-        lvl: kEOpLvlInvalid,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_INVALID,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlMultiplication,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_MULTIPLICATION,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlTernary,
-        ass: kEOpAssRight,
+        lvl: E_OP_LVL_TERNARY,
+        ass: E_OP_ASS_RIGHT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlTernaryValue,
-        ass: kEOpAssRight,
+        lvl: E_OP_LVL_TERNARY_VALUE,
+        ass: E_OP_ASS_RIGHT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlValue,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_VALUE,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlParens,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_PARENS,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlParens,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_PARENS,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlUnary,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_UNARY,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlAddition,
-        ass: kEOpAssLeft,
+        lvl: E_OP_LVL_ADDITION,
+        ass: E_OP_ASS_LEFT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlParens,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_PARENS,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlParens,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_PARENS,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlValue,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_VALUE,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlValue,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_VALUE,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlValue,
-        ass: kEOpAssLeft,
+        lvl: E_OP_LVL_VALUE,
+        ass: E_OP_ASS_LEFT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlParens,
-        ass: kEOpAssLeft,
+        lvl: E_OP_LVL_PARENS,
+        ass: E_OP_ASS_LEFT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlParens,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_PARENS,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlParens,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_PARENS,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlComplexIdentifier,
-        ass: kEOpAssLeft,
+        lvl: E_OP_LVL_COMPLEX_IDENTIFIER,
+        ass: E_OP_ASS_LEFT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlComma,
-        ass: kEOpAssRight,
+        lvl: E_OP_LVL_COMMA,
+        ass: E_OP_ASS_RIGHT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlColon,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_COLON,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlArrow,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_ARROW,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlComparison,
-        ass: kEOpAssRight,
+        lvl: E_OP_LVL_COMPARISON,
+        ass: E_OP_ASS_RIGHT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlAddition,
-        ass: kEOpAssLeft,
+        lvl: E_OP_LVL_ADDITION,
+        ass: E_OP_ASS_LEFT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlSubscript,
-        ass: kEOpAssLeft,
+        lvl: E_OP_LVL_SUBSCRIPT,
+        ass: E_OP_ASS_LEFT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlValue,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_VALUE,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlValue,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_VALUE,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlValue,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_VALUE,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlValue,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_VALUE,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlOr,
-        ass: kEOpAssLeft,
+        lvl: E_OP_LVL_OR,
+        ass: E_OP_ASS_LEFT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlAnd,
-        ass: kEOpAssLeft,
+        lvl: E_OP_LVL_AND,
+        ass: E_OP_ASS_LEFT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlUnary,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_UNARY,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlAddition,
-        ass: kEOpAssLeft,
+        lvl: E_OP_LVL_ADDITION,
+        ass: E_OP_ASS_LEFT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlUnary,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_UNARY,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlMultiplication,
-        ass: kEOpAssLeft,
+        lvl: E_OP_LVL_MULTIPLICATION,
+        ass: E_OP_ASS_LEFT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlMultiplication,
-        ass: kEOpAssLeft,
+        lvl: E_OP_LVL_MULTIPLICATION,
+        ass: E_OP_ASS_LEFT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlMultiplication,
-        ass: kEOpAssLeft,
+        lvl: E_OP_LVL_MULTIPLICATION,
+        ass: E_OP_ASS_LEFT,
     },
     ExprNodeProps {
-        lvl: kEOpLvlValue,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_VALUE,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlValue,
-        ass: kEOpAssNo,
+        lvl: E_OP_LVL_VALUE,
+        ass: E_OP_ASS_NO,
     },
     ExprNodeProps {
-        lvl: kEOpLvlAssignment,
-        ass: kEOpAssLeft,
+        lvl: E_OP_LVL_ASSIGNMENT,
+        ass: E_OP_ASS_LEFT,
     },
 ];
 
@@ -524,13 +523,13 @@ pub(super) fn viml_pexpr_handle_bop<'a>(
 ) -> bool {
     let mut ret = true;
     let mut top_node_p: Option<Slot> = None;
-    let mut top_node_lvl: ExprOpLvl = kEOpLvlInvalid;
+    let mut top_node_lvl: ExprOpLvl = E_OP_LVL_INVALID;
     let mut top_node_ass: ExprOpAssociativity = 0 as ExprOpAssociativity;
     debug_assert!(!ast_stack.is_empty(), "kv_size(*ast_stack)");
     // A call and a subscript are written as brackets rather than as operators,
     // so their own level says nothing about how tightly they bind.
-    let bop_node_lvl = if matches!(ast.kind(bop_node), kExprNodeCall | kExprNodeSubscript) {
-        kEOpLvlSubscript
+    let bop_node_lvl = if matches!(ast.kind(bop_node), EXPR_NODE_CALL | EXPR_NODE_SUBSCRIPT) {
+        E_OP_LVL_SUBSCRIPT
     } else {
         ast.lvl(bop_node)
     };
@@ -542,7 +541,7 @@ pub(super) fn viml_pexpr_handle_bop<'a>(
         let new_top_node_ass = ast.ass(new_top_node);
         if top_node_p.is_some()
             && (bop_node_lvl > new_top_node_lvl
-                || bop_node_lvl == new_top_node_lvl && new_top_node_ass == kEOpAssNo)
+                || bop_node_lvl == new_top_node_lvl && new_top_node_ass == E_OP_ASS_NO)
         {
             break;
         }
@@ -550,7 +549,7 @@ pub(super) fn viml_pexpr_handle_bop<'a>(
         top_node_p = Some(new_top_node_p);
         top_node_lvl = new_top_node_lvl;
         top_node_ass = new_top_node_ass;
-        if bop_node_lvl == top_node_lvl && top_node_ass == kEOpAssRight {
+        if bop_node_lvl == top_node_lvl && top_node_ass == E_OP_ASS_RIGHT {
             break;
         }
         if ast_stack.is_empty() {
@@ -559,7 +558,7 @@ pub(super) fn viml_pexpr_handle_bop<'a>(
     }
     let top_node_p = top_node_p.expect("the loop ran at least once");
     let top_node = ast.filled(top_node_p);
-    if top_node_ass == kEOpAssLeft || top_node_lvl != bop_node_lvl {
+    if top_node_ass == E_OP_ASS_LEFT || top_node_lvl != bop_node_lvl {
         // The operator takes the whole of what was unwound as its left
         // operand, and stands where that used to.
         ast.set_slot(top_node_p, Some(bop_node));
@@ -572,7 +571,7 @@ pub(super) fn viml_pexpr_handle_bop<'a>(
         ast_stack.push(Slot::Next(top_node));
     } else {
         assert!(
-            top_node_lvl == bop_node_lvl && top_node_ass == kEOpAssRight,
+            top_node_lvl == bop_node_lvl && top_node_ass == E_OP_ASS_RIGHT,
             "top_node_lvl == bop_node_lvl && top_node_ass == kEOpAssRight"
         );
         // Right-associative and equal: the operator steals the right operand
@@ -592,14 +591,14 @@ pub(super) fn viml_pexpr_handle_bop<'a>(
         ast_stack.push(top_node_p);
         ast_stack.push(Slot::Next(top_children));
         ast_stack.push(Slot::Next(left));
-        if ast.kind(bop_node) == kExprNodeComparison {
+        if ast.kind(bop_node) == EXPR_NODE_COMPARISON {
             let msg = gettext(c"E15: Operator is not associative: %.*s");
             let start = ast.start(bop_node);
             east_set_error(pstate, ast, msg, start);
             ret = false;
         }
     }
-    *want_node = kENodeValue;
+    *want_node = E_NODE_VALUE;
     ret
 }
 

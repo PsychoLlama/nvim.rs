@@ -255,7 +255,7 @@ pub fn ml_recover(checkext: bool) {
         Buf::current().b_flags |= BufFlags::RECOVERED;
         check_cursor(Win::current());
 
-        MSG_EXT_SKIP_FLUSH.set(!got_int.get());
+        MSG_EXT_SKIP_FLUSH.set(!GOT_INT.get());
         recoverymode.set(false);
         report_recovery(error, &recorded, &fname_used);
         redraw_curbuf_later(UPD_NOT_VALID);
@@ -464,7 +464,7 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), MemlineError> {
         append(lnum, gettext(text).to_bytes_with_nul());
     };
 
-    'walk: while !got_int.get() {
+    'walk: while !GOT_INT.get() {
         'step: {
             if let Some(held) = buffer.b_ml.unlock() {
                 buffer.b_ml.put(held.id, false); // release the previous block
@@ -682,7 +682,7 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), MemlineError> {
 
 /// Say how it went, and what the user should do next.
 fn report_recovery(error: c_int, recorded: &Recorded, fname_used: &CStr) {
-    if got_int.get() {
+    if GOT_INT.get() {
         complain(c"E311: Recovery Interrupted");
         return;
     }
@@ -814,8 +814,8 @@ fn preserve(mut buffer: Buf, do_fsync: bool) -> Result<(), MemlineError> {
     }
 
     // Only an interrupt from here on counts, not one from before.
-    let got_int_save = got_int.get();
-    got_int.set(false);
+    let got_int_save = GOT_INT.get();
+    GOT_INT.set(false);
 
     ml_flush_line(buffer); // flush the buffered line
     let _ = ml_find_line(buffer, LineNr::ZERO, ML_FLUSH); // flush the locked block
@@ -835,7 +835,7 @@ fn preserve(mut buffer: Buf, do_fsync: bool) -> Result<(), MemlineError> {
     // a full file system, say). `ml_find_line` does the work, translating
     // the negative numbers as it fetches each block's first line.
     'theend: {
-        if buffer.b_ml.memfile().need_trans() && !got_int.get() {
+        if buffer.b_ml.memfile().need_trans() && !GOT_INT.get() {
             let mut lnum: LineNr = LineNr::ONE;
             while buffer.b_ml.memfile().need_trans() && lnum <= buffer.b_ml.ml_line_count {
                 if ml_find_line(buffer, lnum, ML_FIND).is_none() {
@@ -852,6 +852,6 @@ fn preserve(mut buffer: Buf, do_fsync: bool) -> Result<(), MemlineError> {
             buffer.b_ml.stack_clear(); // the stack is invalid now
         }
     }
-    got_int.set(got_int.get() | got_int_save);
+    GOT_INT.set(GOT_INT.get() | got_int_save);
     status
 }

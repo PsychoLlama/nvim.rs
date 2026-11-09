@@ -26,7 +26,7 @@ use crate::ex_cmds2::autowrite;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_eval::defs::Cleanup;
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::getchar::vgetc;
 use crate::guard::Suppress;
 use crate::mark::setpcmark;
@@ -358,7 +358,7 @@ impl Buf {
         }
 
         os_breakcheck();
-        if got_int.get() {
+        if GOT_INT.get() {
             // Only break the file loading, not the rest.
             get_key();
             return false;

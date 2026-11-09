@@ -225,7 +225,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         let (line1, line2) = (excmd.line1, excmd.line2);
         diffgetput(excmd.addr_count, idx_cur, idx_from, idx_to, line1, line2);
         if put {
-            if KeyTyped.get() {
+            if KEY_TYPED.get() {
                 u_sync(false);
             }
             aucmd_restbuf(&mut aco);

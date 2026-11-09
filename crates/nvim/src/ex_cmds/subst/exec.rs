@@ -41,7 +41,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::state::global_busy;
 use crate::ex_eval::aborting;
 use crate::fold::has_any_folding;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::syn_check_group;
 use crate::mark::setpcmark;
@@ -359,7 +359,7 @@ fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult) {
 /// pattern like `bar\|\nfoo` may match at the NUL.  `lnum` can be below
 /// `line2` when there is a `\zs` in the pattern after a line break.
 fn is_last_match(st: &Sub) -> bool {
-    if st.skip_match || got_int.get() || st.got_quit || st.lnum > st.line2 {
+    if st.skip_match || GOT_INT.get() || st.got_quit || st.lnum > st.line2 {
         return true;
     }
     if !(SUB_FLAGS.with(|flags| flags.do_all) || st.do_again) {
@@ -596,7 +596,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             );
         }
     } else if global_busy.get() == 0 {
-        if got_int.get() {
+        if GOT_INT.get() {
             // Interrupted.
             emsg(gettext(E_INTERR));
         } else if st.got_match {

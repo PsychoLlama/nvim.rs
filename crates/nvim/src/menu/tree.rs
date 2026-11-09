@@ -23,7 +23,7 @@ use crate::getchar::Remap;
 use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::highlight_group::{HLF_8, HLF_D};
 use crate::message::E_MENU_ONLY_EXISTS_IN_ANOTHER_MODE;
 use crate::message::{
@@ -300,7 +300,7 @@ fn show_menus_recursive(node: &VimMenu, modes: c_int, depth: c_int) {
         return;
     }
     put_char(b'\n');
-    if got_int.get() {
+    if GOT_INT.get() {
         // "q" hit at the --more-- prompt.
         return;
     }
@@ -323,7 +323,7 @@ fn show_menus_recursive(node: &VimMenu, modes: c_int, depth: c_int) {
             continue;
         }
         put_char(b'\n');
-        if got_int.get() {
+        if GOT_INT.get() {
             return;
         }
         for _ in 0..depth + 2 {
@@ -352,7 +352,7 @@ fn show_menus_recursive(node: &VimMenu, modes: c_int, depth: c_int) {
 /// Recursively show `children`, skipping PopUp[nvoci].
 fn show_children(children: &[VimMenu], modes: c_int, depth: c_int) {
     for child in children {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         if !is_hidden(child.dname.as_bytes()) {

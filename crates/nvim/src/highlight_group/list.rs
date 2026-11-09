@@ -24,7 +24,7 @@ use core::ffi::{CStr, c_int};
 use crate::charset::vim_strsize_cstr;
 use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::eval::last_set_msg;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::highlight::HlAttrFlags;
 use crate::highlight::state::{include_default, include_link, include_none};
 use crate::message::state::{MSG_COL, MSG_SILENT};
@@ -144,7 +144,7 @@ impl ValueBuf {
 /// Answers whether a header has been printed for this group by now, which is
 /// threaded through the whole of [`highlight_list_one`].
 fn list_arg(id: c_int, didh: bool, value: ListValue, name: &CStr) -> bool {
-    if got_int.get() {
+    if GOT_INT.get() {
         return false;
     }
     let mut buf = ValueBuf::new();
@@ -154,7 +154,7 @@ fn list_arg(id: c_int, didh: bool, value: ListValue, name: &CStr) -> bool {
 
     let width = vim_strsize_cstr(text) + len_as_int(name.count_bytes()) + 1;
     syn_list_header(didh, width, id, false);
-    if !got_int.get() {
+    if !GOT_INT.get() {
         if !name.is_empty() {
             msg_str_hl(name, HLF_D, false);
             msg_str_hl(c"=", HLF_D, false);
@@ -198,7 +198,7 @@ pub(crate) fn highlight_list_one(id: c_int) {
         didh = list_arg(id, didh, value, name);
     }
 
-    if entry.link != 0 && !got_int.get() {
+    if entry.link != 0 && !GOT_INT.get() {
         syn_list_header(didh, 0, id, true);
         didh = true;
         msg_str_hl(c"links to", HLF_D, false);
@@ -235,7 +235,7 @@ pub(crate) fn syn_list_header(
         if !ui_has(kUIMessages) || MSG_COL.get() > 0 {
             msg_putchar(c_int::from(b'\n'));
         }
-        if got_int.get() {
+        if GOT_INT.get() {
             return true;
         }
         name_col = msg_display(group(id).name, 0, false);
@@ -246,7 +246,7 @@ pub(crate) fn syn_list_header(
         adjust = false;
     } else if MSG_COL.get() + outlen + 1 >= Columns.get() || force_newline {
         msg_putchar(c_int::from(b'\n'));
-        if got_int.get() {
+        if GOT_INT.get() {
             return true;
         }
     } else if MSG_COL.get() >= endcol {

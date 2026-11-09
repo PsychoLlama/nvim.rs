@@ -5,7 +5,7 @@
 //! keyboard does not have to be switched back to ASCII to leave Insert mode.
 //!
 //! Two tables hold the answer, and both are written only from here.
-//! `langmap_mapchar` covers the 256 single-byte characters directly;
+//! `LANGMAP_MAPCHAR` covers the 256 single-byte characters directly;
 //! [`LANGMAP_MULTIBYTE`] is a sorted table of `from`/`to` pairs doing the same
 //! job for everything at or above U+0100, searched by [`langmap_adjust_mb`].
 //! [`did_set_langmap`] parses the option into both.
@@ -29,7 +29,7 @@ use crate::option::vars::P_LANGMAP;
 use crate::swmsg;
 use crate::types::Key;
 
-/// One `'langmap'` pair for a character that does not fit `langmap_mapchar`.
+/// One `'langmap'` pair for a character that does not fit `LANGMAP_MAPCHAR`.
 #[derive(Debug)]
 struct LangmapEntry {
     from: Key,
@@ -73,7 +73,7 @@ pub(crate) fn langmap_init() {
     for (slot, byte) in identity.iter_mut().zip(0..=u8::MAX) {
         *slot = byte;
     }
-    langmap_mapchar.set(identity);
+    LANGMAP_MAPCHAR.set(identity);
     LANGMAP_MULTIBYTE.with_mut(Vec::clear);
 }
 
@@ -180,7 +180,7 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
                 // The closure is a store; it cannot re-enter the cell.
                 // Upstream's `(uint8_t)`: a wider `to` keeps its low byte.
                 let to = to.code().to_le_bytes()[0];
-                langmap_mapchar.with_mut(|map| map[usize::from(from)] = to);
+                LANGMAP_MAPCHAR.with_mut(|map| map[usize::from(from)] = to);
             } else {
                 langmap_set_entry(from, to);
             }

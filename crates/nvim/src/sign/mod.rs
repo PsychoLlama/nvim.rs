@@ -56,7 +56,7 @@ use crate::eval::typval::{
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::extmark::{self, extmark_del_id};
 use crate::fold::fold_open_cursor;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_D, get_highlight_name_ext, syn_check_group};
 use crate::marktree::cursor::{Cursor, lookup_ns};

@@ -39,12 +39,12 @@ use crate::drawscreen::state::{
 };
 use crate::eval::vars::set_vim_var_nr;
 use crate::ex_docmd::state::global_busy;
-use crate::ex_getln::state::cmdline_was_last_drawn;
+use crate::ex_getln::state::CMDLINE_WAS_LAST_DRAWN;
 use crate::ex_getln::{cmdline_screen_cleared, compute_cmdrow, redrawcmdline};
 use crate::fold::FoldInfo;
 use crate::fold::{fold_info, foldmethod_is_syntax, has_any_folding};
 use crate::getchar::char_avail;
-use crate::getchar::state::{KeyTyped, got_int, reg_recording};
+use crate::getchar::state::{GOT_INT, KEY_TYPED, REG_RECORDING};
 use crate::global_cell::GlobalCell;
 use crate::grid::{
     default_grid_ref, default_gridview, grid_adjust, grid_alloc, grid_clear, grid_del_lines,
@@ -204,7 +204,8 @@ pub fn conceal_check_cursor_line() {
 /// -- i.e. inside a mapping or a script -- unless something asked for a redraw
 /// explicitly.
 pub fn redrawing() -> bool {
-    RedrawingDisabled.get() == 0 && !(p_lz() && char_avail() && !KeyTyped.get() && !do_redraw.get())
+    RedrawingDisabled.get() == 0
+        && !(p_lz() && char_avail() && !KEY_TYPED.get() && !do_redraw.get())
 }
 
 /// Put the screen back together after messages scrolled it up.
@@ -541,7 +542,7 @@ pub fn update_screen() -> Result<(), Failed> {
     // Either the cmdline was cleared, not drawn, or the mode was drawn last.
     // This does not necessarily overwrite an external cmdline.
     if !ui_has(kUICmdline) {
-        cmdline_was_last_drawn.set(false);
+        CMDLINE_WAS_LAST_DRAWN.set(false);
     }
     Ok(())
 }

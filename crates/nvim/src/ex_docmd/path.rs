@@ -49,7 +49,7 @@ use crate::ex_getln::allbuf_locked;
 use crate::file_search::vim_chdir;
 
 use crate::fileio::shorten_fnames;
-use crate::getchar::state::KeyTyped;
+use crate::getchar::state::KEY_TYPED;
 use crate::message::{E_FAILED, E_INVALID_RETURN_TYPE_FROM_FINDFUNC, E_INVARG};
 use crate::option::vars::{p_cdh, p_ffu, p_verbose};
 use crate::os::state::last_chdir_reason;
@@ -333,7 +333,7 @@ pub fn ex_cd(excmd: &mut ExArg) {
     } else {
         kCdScopeGlobal
     };
-    if change_dir(&new_dir, scope).is_ok() && (KeyTyped.get() || p_verbose() >= OptInt::from(5)) {
+    if change_dir(&new_dir, scope).is_ok() && (KEY_TYPED.get() || p_verbose() >= OptInt::from(5)) {
         report_working_dir();
     }
 }

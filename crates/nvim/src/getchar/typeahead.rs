@@ -333,7 +333,7 @@ pub(crate) fn init_typebuf() {
 
 /// Whether the keys being read now may not be remapped.
 pub fn noremap_keys() -> bool {
-    KeyNoremap.get() & (RM_NONE | RM_SCRIPT) != 0
+    KEY_NOREMAP.get() & (RM_NONE | RM_SCRIPT) != 0
 }
 
 impl TypeAhead {
@@ -544,7 +544,7 @@ pub fn ins_char_typebuf(c: Key, modifiers: ModMask, on_key_ignore: bool) -> usiz
     let len = key.as_bytes().len();
     // Upstream hands `KeyNoremap`'s flag value on as a count of bytes not to
     // remap.
-    let noremap = match KeyNoremap.get() {
+    let noremap = match KEY_NOREMAP.get() {
         RM_YES => Remap::Yes,
         flags => Remap::First(usize::from(flags)),
     };
@@ -552,11 +552,11 @@ pub fn ins_char_typebuf(c: Key, modifiers: ModMask, on_key_ignore: bool) -> usiz
         key.as_bytes(),
         noremap,
         0,
-        !KeyTyped.get(),
+        !KEY_TYPED.get(),
         CMD_SILENT.get(),
     );
-    if KeyTyped.get() && on_key_ignore {
-        on_key_ignore_len.set(on_key_ignore_len.get() + len);
+    if KEY_TYPED.get() && on_key_ignore {
+        ON_KEY_IGNORE_LEN.set(ON_KEY_IGNORE_LEN.get() + len);
     }
     len
 }
@@ -568,7 +568,7 @@ pub fn ins_char_typebuf(c: Key, modifiers: ModMask, on_key_ignore: bool) -> usiz
 /// been reallocated, and `off` may have moved so that what was read for the
 /// old window would land on bytes that were just added.
 pub fn typebuf_changed(change_cnt: c_int) -> bool {
-    change_cnt != 0 && (typeahead().change_cnt() != change_cnt || typebuf_was_filled.get())
+    change_cnt != 0 && (typeahead().change_cnt() != change_cnt || TYPEBUF_WAS_FILLED.get())
 }
 
 /// Remove `len` characters at `offset` from the typeahead buffer. `offset +
@@ -583,7 +583,7 @@ pub fn del_typebuf(len: c_int, offset: c_int) {
     });
     // Text received from a client or from feedkeys() is no longer what is in
     // the buffer.
-    typebuf_was_filled.set(false);
+    TYPEBUF_WAS_FILLED.set(false);
 }
 
 /// Throw away the mapped characters in the typeahead, or all of it.
@@ -593,7 +593,7 @@ pub(crate) fn flush_typebuf(minimal: bool) {
     TYPEBUF.with_mut(|tb| tb.flush(minimal));
     if !minimal || typeahead().is_empty() {
         // Text received from a client or from feedkeys() is gone with it.
-        typebuf_was_filled.set(false);
+        TYPEBUF_WAS_FILLED.set(false);
     }
     CMD_SILENT.set(false);
 }
@@ -604,14 +604,14 @@ pub(crate) fn flush_typebuf(minimal: bool) {
 /// Only the recording is affected. `len` is expected to be at most what the
 /// last `gotchars` recorded.
 pub fn ungetchars(len: usize) {
-    if reg_recording.get() == 0 {
+    if REG_RECORDING.get() == 0 {
         return;
     }
     recordbuff().delete_tail(len);
     // Wrapping, as the C's `size_t -=` is: `delete_tail` gives up when the
     // bytes are not all in the last block, and the counter then goes below
     // zero rather than tracking what was really removed.
-    last_recorded_len.set(last_recorded_len.get().wrapping_sub(len));
+    LAST_RECORDED_LEN.set(LAST_RECORDED_LEN.get().wrapping_sub(len));
 }
 
 /// Sync undo, as reading typed characters out of the typeahead should.
@@ -619,7 +619,7 @@ pub fn ungetchars(len: usize) {
 /// Not in Insert or Cmdline mode unless a cursor key was used, and not while
 /// reading a script file — in both cases the keys are one edit, not several.
 pub(crate) fn may_sync_undo() {
-    if (State.get() & (MODE_INSERT | MODE_CMDLINE) == 0 || arrow_used.get()) && curscript.get() < 0
+    if (State.get() & (MODE_INSERT | MODE_CMDLINE) == 0 || arrow_used.get()) && CURSCRIPT.get() < 0
     {
         u_sync(false);
     }
@@ -640,17 +640,17 @@ pub(crate) fn alloc_typebuf(was: c_int) {
         tb.change_cnt = was;
         tb.note_change();
     });
-    typebuf_was_filled.set(false);
+    TYPEBUF_WAS_FILLED.set(false);
 }
 
 /// Put the current typeahead aside for the script `:source!` is about to
 /// read, and start a fresh one.
 pub(crate) fn save_typebuf() {
-    debug_assert!(curscript.get() >= 0);
+    debug_assert!(CURSCRIPT.get() >= 0);
     init_typebuf();
     let saved = typeahead().take();
     let was = saved.change_cnt();
-    SAVED_TYPEBUF.with_mut(|slots| slots[script_slot(curscript.get())] = saved);
+    SAVED_TYPEBUF.with_mut(|slots| slots[script_slot(CURSCRIPT.get())] = saved);
     alloc_typebuf(was);
 }
 
@@ -671,7 +671,7 @@ fn script_slot(script: c_int) -> usize {
 /// It cannot when it was not stuffed and something has since been added to
 /// the stuff buffer: those characters have to come first.
 pub(crate) fn ungot_key_ready() -> bool {
-    ungot
+    UNGOT
         .with(|key| key.as_ref().map(|key| key.stuffed))
         .is_some_and(|stuffed| stuffed || stuff_empty())
 }
@@ -683,7 +683,7 @@ pub fn save_typeahead(save: &mut TypeaheadSave) {
     // A fresh buffer for the typeahead just moved out.
     alloc_typebuf(save.save_typebuf.change_cnt());
     save.typebuf_valid = true;
-    save.ungot = ungot.take();
+    save.ungot = UNGOT.take();
 
     save.save_readbuf1 = readbuf1().take();
     save.save_readbuf2 = readbuf2().take();
@@ -695,7 +695,7 @@ pub fn restore_typeahead(save: &mut TypeaheadSave) {
     if save.typebuf_valid {
         typeahead().set(core::mem::take(&mut save.save_typebuf));
     }
-    ungot.set(save.ungot.take());
+    UNGOT.set(save.ungot.take());
 
     readbuf1().set(core::mem::take(&mut save.save_readbuf1));
     readbuf2().set(core::mem::take(&mut save.save_readbuf2));
@@ -732,7 +732,7 @@ mod tests {
     fn clear() {
         init_typebuf();
         flush_typebuf(false);
-        ungot.set(None);
+        UNGOT.set(None);
         while read_readbuffers(true) != 0 {}
     }
 
@@ -889,9 +889,9 @@ mod tests {
         // does not.
         stuff_readbuf(b"s");
         assert!(!ungot_key_ready());
-        KeyStuffed.set(true);
+        KEY_STUFFED.set(true);
         vungetc(Key::ascii(b'u'));
-        KeyStuffed.set(false);
+        KEY_STUFFED.set(false);
         assert!(ungot_key_ready());
     }
 }

@@ -38,7 +38,7 @@ use crate::event::objects::ProcType;
 use crate::ex_docmd::state::global_busy;
 use crate::ex_getln::cmdline_overstrike;
 use crate::ex_getln::{CommandLineState, command_line_check, command_line_execute};
-use crate::getchar::state::{got_int, mod_mask};
+use crate::getchar::state::{GOT_INT, MOD_MASK};
 use crate::getchar::{
     check_end_reg_executing, may_sync_undo, safe_vgetc, stuff_empty, typeahead, using_script,
     vpeekc,
@@ -206,7 +206,7 @@ pub(crate) fn state_enter(mut s: ModeState<'_>) {
                 let keyname = if key == SpecialKey::Event {
                     c"K_EVENT"
                 } else {
-                    keyname_buf = get_special_key_name(key, mod_mask.get());
+                    keyname_buf = get_special_key_name(key, MOD_MASK.get());
                     cstr::in_bytes(&keyname_buf)
                 };
                 let keyname = msg_cstr(keyname);
@@ -256,7 +256,7 @@ pub fn state_handle_k_event() {
             return;
         }
         os_breakcheck();
-        if input_available() != 0 || got_int.get() {
+        if input_available() != 0 || GOT_INT.get() {
             return;
         }
     }
@@ -511,7 +511,7 @@ fn modechanged_pattern(old: &ModeName, new: &ModeName) -> [u8; 2 * size_of::<Mod
 /// Fire `ModeChanged` if the mode string has changed since the last time
 /// this ran. Called from wherever a mode transition finishes.
 pub fn may_trigger_modechanged() {
-    if !has_event(AutoEvent::ModeChanged) || got_int.get() {
+    if !has_event(AutoEvent::ModeChanged) || GOT_INT.get() {
         return;
     }
     let old_mode = last_mode.get();

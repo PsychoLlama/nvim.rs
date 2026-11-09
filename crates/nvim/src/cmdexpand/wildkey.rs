@@ -21,7 +21,7 @@ use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{redraw_statuslines, update_screen};
 use crate::ex_docmd::set_no_hlsearch;
 use crate::ex_getln::{put_on_cmdline, redrawcmd};
-use crate::getchar::state::KeyTyped;
+use crate::getchar::state::KEY_TYPED;
 use crate::guard::Allow;
 use crate::keycodes::SpecialKey;
 use crate::mbyte::head_off;
@@ -94,7 +94,7 @@ fn cmdline_del(mut cclp: Cc, from: c_int) {
 /// `KeyTyped` is set in case the key that got us here came from a mapping:
 /// the wildchar has to look typed or the completion will not run.
 fn recomplete() -> Key {
-    KeyTyped.set(true);
+    KEY_TYPED.set(true);
     wildchar()
 }
 
@@ -268,7 +268,7 @@ pub(crate) fn wildmenu_cleanup(cclp: Cc) {
         return;
     }
 
-    let skt = KeyTyped.get();
+    let skt = KEY_TYPED.get();
     let redraw = cclp.input_fn.then(Allow::redraw);
 
     // Clear highlighting applied during wildmenu activity.
@@ -294,6 +294,6 @@ pub(crate) fn wildmenu_cleanup(cclp: Cc) {
     }
     wild_menu_showing.set(0);
 
-    KeyTyped.set(skt);
+    KEY_TYPED.set(skt);
     drop(redraw);
 }

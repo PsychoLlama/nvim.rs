@@ -58,7 +58,7 @@ use crate::ex_eval::{
     PendingAction, PendingValue, aborting, cleanup_conditionals, cond_stack_of, report_pending,
 };
 use crate::getchar::openscript;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
 use crate::lua::executor::LuaRetMode;

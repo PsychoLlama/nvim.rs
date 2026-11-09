@@ -42,7 +42,7 @@ use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
     E_INVRANGE, ExFunc, SID_NONE, builtin_command_cstr, cmdnames, ex_msg, ex_pressedreturn,
 };
-use crate::getchar::state::expr_map_lock;
+use crate::getchar::state::EXPR_MAP_LOCK;
 use crate::guard::sandbox;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::message::state::{DID_EMSG, EMSG_SILENT, MSG_COL, MSG_SCROLL, MSG_SILENT};
@@ -777,7 +777,7 @@ pub(crate) fn shared_prefix(p: &[u8], name: &CStr) -> usize {
 /// lock is about the *user's* text.
 pub fn expr_map_locked() -> bool {
     // SAFETY: `curbuf` is a live buffer whenever a mapping can be running.
-    expr_map_lock.get() > 0 && !Buf::current().b_flags.has(BufFlags::DUMMY)
+    EXPR_MAP_LOCK.get() > 0 && !Buf::current().b_flags.has(BufFlags::DUMMY)
 }
 
 /// Is this the location-list spelling of a quickfix command? Upstream tells

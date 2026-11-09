@@ -27,7 +27,7 @@ use crate::winlayer::TabPage;
 
 use crate::api::keysets::KeyDict_win_text_height;
 use crate::api::private::validate::{Bad, err_expected, err_invalid, err_out_of_range};
-use crate::lua::executor::{kRetLuaref, nlua_call_ref_reporting};
+use crate::lua::executor::{RET_LUAREF, nlua_call_ref_reporting};
 use crate::message::emsg;
 use crate::message::{E_AUTOCMD_CLOSE, E_CMDWIN};
 use crate::r#move::{update_topline, validate_cursor};
@@ -274,7 +274,7 @@ pub fn nvim_win_call(win: WindowHandle, fun: LuaRef) -> Result<Object, Error> {
         let switched = win_execute_before(&mut switch_args, w, tabpage);
         if switched {
             // The call runs Lua, which `api_try` catches.
-            res = nlua_call_ref_reporting(fun, None, Array::new(), kRetLuaref);
+            res = nlua_call_ref_reporting(fun, None, Array::new(), RET_LUAREF);
         }
         win_execute_after(&mut switch_args);
         res

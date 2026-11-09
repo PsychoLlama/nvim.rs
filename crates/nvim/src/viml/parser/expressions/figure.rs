@@ -48,14 +48,14 @@ pub(super) fn figure_brace(p: &mut ExprParser) -> Flow {
     if p.cur_token.is_closing() {
         return closing_figure_brace(p);
     }
-    if p.want_node == kENodeValue {
+    if p.want_node == E_NODE_VALUE {
         p.hl_token(hl!(p, FigureBrace));
         // Value: may be any of a lambda, a dictionary literal and a curly
         // braces name. Though if this is an assignment it may only be a curly
         // braces name.
         let in_assignment = pt_is_assignment(p.cur_pt);
         let node = if in_assignment {
-            let node = p.new_node(kExprNodeCurlyBracesIdentifier);
+            let node = p.new_node(EXPR_NODE_CURLY_BRACES_IDENTIFIER);
             let fig = highlighted(
                 p,
                 ExprFigureGuesses {
@@ -65,10 +65,10 @@ pub(super) fn figure_brace(p: &mut ExprParser) -> Flow {
                 },
             );
             p.ast.set_data(node, ExprNodeData::Figure(fig));
-            p.pt_stack.push(kEPTExpr);
+            p.pt_stack.push(EPT_EXPR);
             node
         } else {
-            let node = p.new_node(kExprNodeUnknownFigure);
+            let node = p.new_node(EXPR_NODE_UNKNOWN_FIGURE);
             let fig = highlighted(
                 p,
                 ExprFigureGuesses {
@@ -100,7 +100,7 @@ pub(super) fn figure_brace(p: &mut ExprParser) -> Flow {
             // drops the entry (and clears `lambda_node`) for every token except
             // a bare identifier, `,` and `->` — and `,`/`->` are exactly the two
             // that misbehaved.
-            p.pt_stack.push(kEPTLambdaArguments);
+            p.pt_stack.push(EPT_LAMBDA_ARGUMENTS);
             p.lambda_node = Some(node);
         }
     } else {
@@ -108,7 +108,7 @@ pub(super) fn figure_brace(p: &mut ExprParser) -> Flow {
         let Some(slot) = p.open_complex_identifier() else {
             return p.op_missing();
         };
-        let node = p.new_node(kExprNodeCurlyBracesIdentifier);
+        let node = p.new_node(EXPR_NODE_CURLY_BRACES_IDENTIFIER);
         // The opening brace is highlighted at the end of this arm, so its
         // chunk is the next one to be recorded.
         let fig = unhighlighted(
@@ -122,15 +122,15 @@ pub(super) fn figure_brace(p: &mut ExprParser) -> Flow {
         p.ast.set_data(node, ExprNodeData::Figure(fig));
         p.ast_stack.push(Slot::Children(node));
         if pt_is_assignment(p.cur_pt) {
-            p.pt_stack.push(kEPTExpr);
+            p.pt_stack.push(EPT_EXPR);
         }
-        p.want_node = kENodeValue;
+        p.want_node = E_NODE_VALUE;
         p.ast.set_slot(slot, Some(node));
         p.hl_token(hl!(p, Curly));
     }
     if pt_is_assignment(p.cur_pt) && !pt_is_assignment(p.pt_top()) {
         // Subtract 1 for the NULL at the top.
-        debug_assert!(p.want_node == kENodeValue, "want_node == kENodeValue");
+        debug_assert!(p.want_node == E_NODE_VALUE, "want_node == kENodeValue");
         p.asgn_level = p.ast_stack.len().wrapping_sub(1);
     }
     Flow::NextToken
@@ -146,7 +146,7 @@ fn closing_figure_brace(p: &mut ExprParser) -> Flow {
     let new_top_node_p: Slot;
     let mut unexpected = false;
     if p.ast_stack.is_empty() {
-        let node = p.new_node(kExprNodeUnknownFigure);
+        let node = p.new_node(EXPR_NODE_UNKNOWN_FIGURE);
         let fig = unhighlighted(
             p,
             ExprFigureGuesses {
@@ -157,7 +157,7 @@ fn closing_figure_brace(p: &mut ExprParser) -> Flow {
         );
         p.ast.set_data(node, ExprNodeData::Figure(fig));
         p.ast.set_len(node, 0);
-        if p.want_node != kENodeValue {
+        if p.want_node != E_NODE_VALUE {
             let operand = p.ast.slot(p.top_node_p);
             p.ast.set_children(node, operand);
         }
@@ -165,10 +165,10 @@ fn closing_figure_brace(p: &mut ExprParser) -> Flow {
         new_top_node_p = p.top_node_p;
         unexpected = true;
     } else {
-        if p.want_node == kENodeValue
+        if p.want_node == E_NODE_VALUE
             && !matches!(
                 p.ast.kind(p.ast.filled(stack_top(&p.ast_stack, 0))),
-                kExprNodeUnknownFigure | kExprNodeComma
+                EXPR_NODE_UNKNOWN_FIGURE | EXPR_NODE_COMMA
             )
         {
             // The top being UnknownFigure may occur for an empty dictionary
@@ -181,10 +181,10 @@ fn closing_figure_brace(p: &mut ExprParser) -> Flow {
             if !(!p.ast_stack.is_empty()
                 && (!matches!(
                     p.ast.kind(p.ast.filled(slot)),
-                    kExprNodeUnknownFigure
-                        | kExprNodeDictLiteral
-                        | kExprNodeCurlyBracesIdentifier
-                        | kExprNodeLambda
+                    EXPR_NODE_UNKNOWN_FIGURE
+                        | EXPR_NODE_DICT_LITERAL
+                        | EXPR_NODE_CURLY_BRACES_IDENTIFIER
+                        | EXPR_NODE_LAMBDA
                 )))
             {
                 break;
@@ -193,21 +193,21 @@ fn closing_figure_brace(p: &mut ExprParser) -> Flow {
         new_top_node_p = slot;
         let new_top_node = p.ast.filled(new_top_node_p);
         match p.ast.kind(new_top_node) {
-            kExprNodeUnknownFigure => {
+            EXPR_NODE_UNKNOWN_FIGURE => {
                 if p.ast.first_child(new_top_node).is_none() {
                     // No children of a curly braces node indicates an empty
                     // dictionary.
-                    debug_assert!(p.want_node == kENodeValue, "want_node == kENodeValue");
+                    debug_assert!(p.want_node == E_NODE_VALUE, "want_node == kENodeValue");
                     debug_assert!(
                         p.ast.fig(new_top_node).type_guesses.allow_dict,
                         "new_top_node->data.fig.type_guesses.allow_dict"
                     );
-                    p.select_figure_brace_type(new_top_node, kExprNodeDictLiteral, hl!(p, Dict));
+                    p.select_figure_brace_type(new_top_node, EXPR_NODE_DICT_LITERAL, hl!(p, Dict));
                     p.hl_token(hl!(p, Dict));
                 } else if p.ast.fig(new_top_node).type_guesses.allow_ident {
                     p.select_figure_brace_type(
                         new_top_node,
-                        kExprNodeCurlyBracesIdentifier,
+                        EXPR_NODE_CURLY_BRACES_IDENTIFIER,
                         hl!(p, Curly),
                     );
                     p.hl_token(hl!(p, Curly));
@@ -224,9 +224,9 @@ fn closing_figure_brace(p: &mut ExprParser) -> Flow {
                     p.hl_token(hl!(p, FigureBrace));
                 }
             }
-            kExprNodeDictLiteral => p.hl_token(hl!(p, Dict)),
-            kExprNodeCurlyBracesIdentifier => p.hl_token(hl!(p, Curly)),
-            kExprNodeLambda => p.hl_token(hl!(p, Lambda)),
+            EXPR_NODE_DICT_LITERAL => p.hl_token(hl!(p, Dict)),
+            EXPR_NODE_CURLY_BRACES_IDENTIFIER => p.hl_token(hl!(p, Curly)),
+            EXPR_NODE_LAMBDA => p.hl_token(hl!(p, Lambda)),
             _ => unexpected = true,
         }
     }
@@ -236,13 +236,13 @@ fn closing_figure_brace(p: &mut ExprParser) -> Flow {
         p.hl_token(hl!(p, FigureBrace));
     }
     p.ast_stack.push(new_top_node_p);
-    p.want_node = kENodeOperator;
+    p.want_node = E_NODE_OPERATOR;
     if p.ast_stack.len() <= p.asgn_level {
         debug_assert!(
             p.ast_stack.len() == p.asgn_level,
             "kv_size(ast_stack) == asgn_level"
         );
-        if p.cur_pt == kEPTExpr
+        if p.cur_pt == EPT_EXPR
             && p.pt_stack.len() > 1
             && pt_is_assignment(p.pt_stack[p.pt_stack.len() - 2])
         {

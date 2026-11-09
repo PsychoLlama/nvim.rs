@@ -38,7 +38,7 @@ use crate::edit::{
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::state::trylevel;
 use crate::extmark::extmark_splice_cols;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::guard::Suppress;
 use crate::indent_c::in_cinkeys;
 use crate::mbyte::{c_char_info, c_cluster_len, c_next_cluster};
@@ -102,7 +102,7 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
     .is_ok()
     {
         i = line_count - 1;
-        while i >= 0 && !got_int.get() {
+        while i >= 0 && !GOT_INT.get() {
             // A slow thing to do, so say so — otherwise it looks hung.
             if i > 1 && (i % 50 == 0 || i == line_count - 1) && i64::from(line_count) > p_report() {
                 // Restore the cursor first, so the `msg_show` callback
@@ -553,7 +553,7 @@ pub fn copy_indent(size: c_int, src: &[u8]) -> bool {
 fn emsg_text_too_long() {
     emsg(gettext(E_RESULTING_TEXT_TOO_LONG));
     if trylevel.get() == 0 {
-        got_int.set(true);
+        GOT_INT.set(true);
     }
 }
 
@@ -795,14 +795,14 @@ pub fn ex_retab(excmd: &mut ExArg) {
     };
     let mut retab = Retab::default();
     let mut lnum = excmd.line1;
-    while !got_int.get() && lnum <= excmd.line2 {
+    while !GOT_INT.get() && lnum <= excmd.line2 {
         if !retab.line(lnum, &tabs, excmd.forceit) {
             break;
         }
         line_breakcheck();
         lnum += 1;
     }
-    if got_int.get() {
+    if GOT_INT.get() {
         emsg(gettext(E_INTERR));
     }
     // A single value given is equal to either 'tabstop' or 'vartabstop',

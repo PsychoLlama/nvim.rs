@@ -54,7 +54,7 @@ pub(crate) fn showmap(mp: &MapBlock, local: bool) {
 
     if MSG_COL.get() > 0 || MSG_SILENT.get() != 0 {
         msg_putchar(c_int::from(b'\n'));
-        if got_int.get() {
+        if GOT_INT.get() {
             return; // 'q' typed at the MORE prompt
         }
     }

@@ -23,7 +23,7 @@ use crate::buffer::{buf_ensure_loaded, find_buf};
 use crate::decoration::bufhl_add_hl_pos_offset;
 use crate::ex_cmds::{PreviewLines, SID_NONE, SubResult, do_sub};
 use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
-use crate::getchar::state::{KeyTyped, got_int};
+use crate::getchar::state::{GOT_INT, KEY_TYPED};
 use crate::memline::{Lines, ml_append_bytes, ml_replace_buf_text};
 use crate::memory::XString;
 use crate::message::E_INTERR;
@@ -78,7 +78,7 @@ pub fn do_sub_msg(count_only: bool) -> bool {
     // the command was typed by the user or more than one line changed, and
     // messages are not disabled.
     let worth_reporting = OptInt::from(SUB_NSUBS.get()) > p_report()
-        && (KeyTyped.get() || SUB_NLINES.get() > 1 || p_report() < 1 as OptInt);
+        && (KEY_TYPED.get() || SUB_NLINES.get() > 1 || p_report() < 1 as OptInt);
     if (worth_reporting || count_only) && messaging() {
         let forms = report_forms(count_only);
         let nsubs = SUB_NSUBS.get();
@@ -86,7 +86,7 @@ pub fn do_sub_msg(count_only: bool) -> bool {
         // Upstream builds the report in a `MSG_BUF_LEN` buffer: the count
         // is cut to what the interruption note leaves of it.
         let room = MSG_BUF_LEN as usize;
-        let mut report = if got_int.get() {
+        let mut report = if GOT_INT.get() {
             gettext(c"(Interrupted) ").to_bytes().to_vec()
         } else {
             Vec::new()
@@ -118,7 +118,7 @@ pub fn do_sub_msg(count_only: bool) -> bool {
         }
         return true;
     }
-    if got_int.get() {
+    if GOT_INT.get() {
         emsg(gettext(E_INTERR));
         return true;
     }

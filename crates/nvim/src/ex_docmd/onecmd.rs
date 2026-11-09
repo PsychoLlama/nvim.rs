@@ -58,7 +58,7 @@ use crate::ex_getln::{get_text_locked_msg, script_get, text_locked};
 
 use crate::ex_docmd::state::{did_emsg_syntax, ex_nesting_level, global_busy};
 use crate::ex_eval::state::{check_cstack, did_throw, need_rethrow};
-use crate::getchar::state::{got_int, pending_end_reg_executing, reg_executing};
+use crate::getchar::state::{GOT_INT, PENDING_END_REG_EXECUTING, REG_EXECUTING};
 use crate::guard::Depth;
 use crate::guard::sandbox;
 use crate::input::ask_yesno;
@@ -202,7 +202,7 @@ impl ExArg<'_> {
         let after_modifier = self.line.cmd;
 
         let cond = cond_stack_of(self);
-        self.skip = DID_EMSG.get() != 0 || got_int.get() || did_throw.get() || in_inactive;
+        self.skip = DID_EMSG.get() != 0 || GOT_INT.get() || did_throw.get() || in_inactive;
 
         let mut p = find_excmd_after_range(self);
         profile_cmd(self, cond);
@@ -212,7 +212,7 @@ impl ExArg<'_> {
             // an interrupt exception is thrown and this command is skipped.
             dbg_check_breakpoint(self);
         }
-        if !self.skip && got_int.get() {
+        if !self.skip && GOT_INT.get() {
             self.skip = true;
             do_intthrow(cond);
         }
@@ -559,8 +559,8 @@ pub(crate) fn do_one_cmd(
     source: Option<&mut dyn ReadLines>,
 ) -> CmdLine {
     let mut errormsg: Option<CString> = None;
-    let save_reg_executing = reg_executing.get();
-    let save_pending_end_reg_executing = pending_end_reg_executing.get();
+    let save_reg_executing = REG_EXECUTING.get();
+    let save_pending_end_reg_executing = PENDING_END_REG_EXECUTING.get();
     let mut excmd = fresh_exarg();
     let nesting = Depth::of(ex_nesting_level);
 
@@ -639,8 +639,8 @@ pub(crate) fn do_one_cmd(
     });
 
     drop(mods);
-    reg_executing.set(save_reg_executing);
-    pending_end_reg_executing.set(save_pending_end_reg_executing);
+    REG_EXECUTING.set(save_reg_executing);
+    PENDING_END_REG_EXECUTING.set(save_pending_end_reg_executing);
 
     // A trailing bar with nothing after it is not really a next command.
     if excmd
@@ -677,7 +677,7 @@ pub(crate) fn profile_cmd(excmd: &ExArg, cond: CondId) {
     if !(!excmd.skip || idx == 0 || below.is_some_and(|flags| flags.has(CsFlags::ACTIVE))) {
         return;
     }
-    let mut skip = DID_EMSG.get() != 0 || got_int.get() || did_throw.get();
+    let mut skip = DID_EMSG.get() != 0 || GOT_INT.get() || did_throw.get();
     match excmd.cmdidx {
         CmdIdx::catch => {
             skip = !skip

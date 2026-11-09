@@ -134,8 +134,8 @@ pub(crate) fn msg_display_part(bytes: &[u8], hl_id: c_int, hist: bool) {
 
 fn display(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) -> c_int {
     // Only quit when got_int was set in here.
-    let save_got_int = got_int.get();
-    got_int.set(false);
+    let save_got_int = GOT_INT.get();
+    GOT_INT.set(false);
 
     if hist {
         msg_hist_add(bytes, hl_id);
@@ -163,7 +163,7 @@ fn display(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) -> c_int
         Shown::Instead(text) => msg_str_hl(cstr::in_bytes(&text), special_hl(hl_id), false),
     });
 
-    got_int.set(got_int.get() | save_got_int);
+    GOT_INT.set(GOT_INT.get() | save_got_int);
     cells
 }
 
@@ -194,7 +194,7 @@ fn walk_display(bytes: &[u8], emit: &mut impl FnMut(Shown<'_>)) -> c_int {
     // Start of the run of printable bytes not yet emitted.
     let mut run = 0;
     let mut at = 0;
-    while at < bytes.len() && !got_int.get() {
+    while at < bytes.len() && !GOT_INT.get() {
         let rest = &bytes[at..];
         // A composing character only partly inside `bytes` is left out.
         let len = cluster_len(rest);
@@ -229,7 +229,7 @@ fn walk_display(bytes: &[u8], emit: &mut impl FnMut(Shown<'_>)) -> c_int {
 
     // The printable characters at the end -- or, for a message that reached
     // here with nothing replaced, the empty run the callers rely on.
-    if (at > run || run == 0) && !got_int.get() {
+    if (at > run || run == 0) && !GOT_INT.get() {
         emit(Shown::Plain(&bytes[run..at]));
     }
     cells

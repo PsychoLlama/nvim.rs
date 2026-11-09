@@ -35,7 +35,7 @@
 )]
 
 use crate::ascii::NUL;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::mbyte::{c_cluster_len, char_at, utf_iscomposing_legacy, utf8len_tab};
 use crate::narrow::as_index;
 use crate::spell::SpellIdx;
@@ -351,7 +351,7 @@ impl Walk<'_> {
         // the mismatch had been seen; this guards whichever tree is being
         // walked, so a disagreement can never reach the index below.
         if as_index(at) >= self.tree.len() {
-            got_int.set(true);
+            GOT_INT.set(true);
             return;
         }
 

@@ -53,7 +53,7 @@ use crate::ex_eval::state::{
     check_cstack, current_exception, did_endif, did_throw, force_abort, need_rethrow,
     suppress_errthrow, trylevel,
 };
-use crate::getchar::state::{KeyTyped, got_int};
+use crate::getchar::state::{GOT_INT, KEY_TYPED};
 use crate::guard::{Bump, Depth, MsgBump, Suppress};
 use crate::message::state::{DID_EMSG, MSG_DIDANY, MSG_DIDOUT, MSG_SCROLL, NEED_WAIT_RETURN};
 use crate::message::{E_COMMAND_TOO_RECURSIVE, E_ENDFOR, E_ENDIF, E_ENDTRY, E_ENDWHILE};
@@ -250,7 +250,7 @@ fn ask_for_line(
         // An aborted command line does not wait for a return. The end of a
         // sourced file or a function is not an abort and does not reach
         // here with 'KeyTyped' set.
-        if KeyTyped.get() && !flags.has(DoCmdOpts::REPEAT) {
+        if KEY_TYPED.get() && !flags.has(DoCmdOpts::REPEAT) {
             NEED_WAIT_RETURN.set(false);
         }
         return None;
@@ -316,7 +316,7 @@ fn advance_loop(
         };
         let flags = cs.flags[top];
         if DID_EMSG.get() == 0
-            && !got_int.get()
+            && !GOT_INT.get()
             && !did_throw.get()
             && flags.has(CsFlags::LOOP)
             && cs.line[top] >= 0
@@ -358,7 +358,7 @@ fn advance_loop(
 /// `:endtry` -- a try block in its finally clause drops anything pending,
 /// one in a catch clause finishes what it caught. Frees the `cs_forinfo`s.
 fn unwind_conditionals(source: &Source, cond: CondId, initial_trylevel: c_int) {
-    if !got_int.get()
+    if !GOT_INT.get()
         && !did_throw.get()
         && !aborting()
         && (source.is_script() && !source.finished() || source.is_func() && !source.func_ended())
@@ -460,7 +460,7 @@ struct Run {
     /// started.
     looping: bool,
     line_before: c_int,
-    /// A `cmdline_block` UI event is open; what 'msg_didout' was before the
+    /// A `CMDLINE_BLOCK` UI event is open; what 'msg_didout' was before the
     /// first `msg_start`; the suppression held from it to the run's end.
     did_block: bool,
     msg_didout_before: bool,
@@ -634,7 +634,7 @@ impl Run {
                 carried,
             );
             DID_EMSG.set(0);
-            got_int.set(false);
+            GOT_INT.set(false);
             did_throw.set(false);
             self.seen.in_inactive = cond.with(|cs| {
                 let top = cs.top().expect("the :try is open");
@@ -650,7 +650,7 @@ impl Run {
         // sourced files -- aborting cancels everything. Leaving it normally
         // puts the non-exception abort behaviour back for the rest of the
         // script.
-        if trylevel.get() == 0 && DID_EMSG.get() == 0 && !got_int.get() && !did_throw.get() {
+        if trylevel.get() == 0 && DID_EMSG.get() == 0 && !GOT_INT.get() && !did_throw.get() {
             force_abort.set(false);
         }
 
@@ -666,7 +666,7 @@ impl Run {
     fn keep_going(&self, source: &Source, flags: DoCmdOpts) -> Pass {
         let CondSummary { try_level, idx, .. } = self.seen;
         let aborting_now =
-            (got_int.get() || DID_EMSG.get() != 0 && force_abort.get() || did_throw.get())
+            (GOT_INT.get() || DID_EMSG.get() != 0 && force_abort.get() || did_throw.get())
                 && try_level == 0;
         // Inside try/catch an error keeps going, so that it can be dealt
         // with -- unless it is a syntax error, which may make the `:endtry`
@@ -741,7 +741,7 @@ impl Run {
         if self.quiet_output.take().is_some() {
             MSG_SCROLL.set(0);
 
-            if self.retval.is_err() || did_endif.get() && KeyTyped.get() && DID_EMSG.get() == 0 {
+            if self.retval.is_err() || did_endif.get() && KEY_TYPED.get() && DID_EMSG.get() == 0 {
                 // A typed `:if`/`:else` that has just finished, or an error.
                 NEED_WAIT_RETURN.set(false);
                 MSG_DIDANY.set(false);
@@ -779,7 +779,7 @@ impl Run {
                 // discard it, stop converting errors and interrupts to
                 // exceptions, and run nothing more.
                 handle_did_throw();
-            } else if got_int.get() || DID_EMSG.get() != 0 && force_abort.get() {
+            } else if GOT_INT.get() || DID_EMSG.get() != 0 && force_abort.get() {
                 // An interrupt, or an aborting error that did not become an
                 // exception. Errors stop being converted -- which is also
                 // what lets the interrupt message through when 'force_abort'
@@ -859,7 +859,7 @@ pub(crate) fn do_cmdline(
     // 'KeyTyped' is only set by `vgetc`; a sourced line never went
     // through it.
     if !flags.has(DoCmdOpts::KEYTYPED) && !source.is_typed() {
-        KeyTyped.set(false);
+        KEY_TYPED.set(false);
     }
 
     let first = first.map(|line| {

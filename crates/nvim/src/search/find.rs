@@ -400,7 +400,7 @@ impl Searcher<'_, '_> {
                     'next_line: {
                         if nmatched <= 0 {
                             line_breakcheck(); // stop if ctrl-C typed
-                            if got_int.get() {
+                            if GOT_INT.get() {
                                 break 'lines;
                             }
                             // Cancel the search if a character was typed,
@@ -462,7 +462,7 @@ impl Searcher<'_, '_> {
                 // twice.
                 if !p_ws()
                     || stop_lnum != LineNr::ZERO
-                    || got_int.get()
+                    || GOT_INT.get()
                     || self.aborted()
                     || break_loop
                     || found != 0
@@ -496,7 +496,7 @@ impl Searcher<'_, '_> {
                 }
             }
 
-            if got_int.get() || self.aborted() || break_loop {
+            if GOT_INT.get() || self.aborted() || break_loop {
                 break;
             }
             // Stop after "count" matches, or as soon as one is missed.
@@ -661,7 +661,7 @@ fn search_buffer(
     }
 
     if found == 0 {
-        return Err(if got_int.get() {
+        return Err(if GOT_INT.get() {
             SearchError::Interrupted
         } else if p_ws() {
             SearchError::NotFound(Edge::Wrapped)

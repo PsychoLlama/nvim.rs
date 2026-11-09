@@ -30,7 +30,7 @@ use super::{LUA_NOREF, Scope, Table};
 use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::eval::last_set_msg;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::highlight_group::{HLF_8, HLF_D};
 use crate::lua::executor::{api_new_luaref, funcref_description};
 use crate::message::msg_display_bytes;
@@ -175,13 +175,13 @@ pub(super) fn uc_list(wanted: &[u8]) {
             }
             found = true;
             msg_putchar(c_int::from(b'\n'));
-            if got_int.get() {
+            if GOT_INT.get() {
                 interrupted = true;
                 break;
             }
             list_one(&row, scope, wanted.len());
             line_breakcheck();
-            if got_int.get() {
+            if GOT_INT.get() {
                 interrupted = true;
                 break;
             }

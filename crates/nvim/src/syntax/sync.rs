@@ -163,7 +163,7 @@ impl SynState {
 
             // This can take a long time: stop when CTRL-C is pressed.
             line_breakcheck();
-            if got_int.get() {
+            if GOT_INT.get() {
                 self.invalidate_current_state();
                 self.lnum = start_lnum;
                 break;

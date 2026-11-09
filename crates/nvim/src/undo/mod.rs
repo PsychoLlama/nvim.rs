@@ -42,7 +42,7 @@ use crate::extmark::{extmark_apply_undo, extmark_splice_cols};
 use crate::fold::fold_open_cursor;
 use crate::formatted;
 use crate::getchar::beep_flush;
-use crate::getchar::state::{KeyTyped, got_int};
+use crate::getchar::state::{GOT_INT, KEY_TYPED};
 use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, textlock};
 use crate::mark::NMARKS;
@@ -537,7 +537,7 @@ fn record_entry(
     let mut lines = Vec::with_capacity(usize::try_from(size).unwrap_or(0));
     for i in 0..size {
         fast_breakcheck();
-        if got_int.get() {
+        if GOT_INT.get() {
             return Err(Failed);
         }
         lines.push(line_copy(b, top + 1 + i));

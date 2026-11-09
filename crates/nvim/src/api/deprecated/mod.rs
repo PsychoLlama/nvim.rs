@@ -22,7 +22,7 @@ use crate::decoration::{
     with_decor_virt_mut,
 };
 use crate::eval::vars::globvar_dict;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::highlight::hl_get_attr_by_id;
 use crate::highlight_group::{syn_check_group, syn_get_final_id, syn_id2attr, syn_name2id};

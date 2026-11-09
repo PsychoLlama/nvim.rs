@@ -38,7 +38,7 @@ pub fn skip_showmode() -> bool {
     if global_busy.get() != 0
         || MSG_SILENT.get() != 0
         || !redrawing()
-        || (char_avail() && !KeyTyped.get())
+        || (char_avail() && !KEY_TYPED.get())
     {
         redraw_mode.set(true);
         return true;
@@ -66,7 +66,7 @@ pub fn showmode() -> c_int {
             || visual_active());
     let can_show_mode = p_ch() != 0 || ui_has(kUIMessages);
 
-    if (do_mode || reg_recording.get() != 0) && can_show_mode {
+    if (do_mode || REG_RECORDING.get() != 0) && can_show_mode {
         if skip_showmode() {
             return 0;
         }
@@ -215,7 +215,7 @@ pub fn showmode() -> c_int {
         }
 
         // The submode text already gets too long to share the line with it.
-        if reg_recording.get() != 0 && edit_submode.get().is_none() {
+        if REG_RECORDING.get() != 0 && edit_submode.get().is_none() {
             recording_mode(hl_id);
             need_clear = true;
         }
@@ -265,7 +265,7 @@ pub(crate) fn msg_pos_mode() {
 /// Insert mode has not actually ended yet at that point, which is why this is
 /// separate from [`showmode`]. Callers check `mode_displayed` first.
 pub fn unshowmode(force: bool) {
-    if !redrawing() || (!force && char_avail() && !KeyTyped.get()) {
+    if !redrawing() || (!force && char_avail() && !KEY_TYPED.get()) {
         redraw_cmdline.set(true); // delete it later
     } else {
         clearmode();
@@ -280,7 +280,7 @@ pub fn clearmode() {
     msg_ext_ui_flush();
     msg_pos_mode();
     // The recording indicator outlives the mode message.
-    if reg_recording.get() != 0 {
+    if REG_RECORDING.get() != 0 {
         recording_mode(HLF_CM);
     }
     msg_clr_eos();
@@ -298,7 +298,7 @@ pub(crate) fn recording_mode(hl_id: c_int) {
     msg_str_hl(gettext(c"recording"), hl_id, false);
     // Upstream formats this with `snprintf(s, 4, " @%c", reg_recording)`,
     // which is exactly three bytes and the terminator.
-    let reg = reg_recording.get();
+    let reg = REG_RECORDING.get();
     let suffix = [b' ', b'@', reg, 0];
     msg_str_hl(cstr::in_bytes(&suffix), hl_id, false);
 }

@@ -37,7 +37,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::GotcharsState;
 use crate::getchar::{KeyBuffer, TypeAhead};
@@ -49,7 +48,7 @@ use crate::types::{Key, LuaRef};
 use core::ffi::c_int;
 
 pub use crate::harness::test_disable_char_avail;
-pub(crate) static langmap_mapchar: GlobalCell<[uint8_t; 256]> = GlobalCell::new([0; 256]);
+pub(crate) static LANGMAP_MAPCHAR: GlobalCell<[uint8_t; 256]> = GlobalCell::new([0; 256]);
 
 /// The key [`vungetc`](super::vungetc) put back, and what came with it.
 ///
@@ -73,69 +72,69 @@ state_record! {
 
     // -- the key just read --
     /// The modifiers of the key `vgetc` answered last.
-    pub(crate) mod_mask: ModMask = ModMask::NONE;
+    pub(crate) MOD_MASK: ModMask = ModMask::NONE;
     /// The modifiers and the key as `vgetc` read them, before the
     /// modifiers were folded into the key: what a terminal or a hit-enter
     /// prompt puts back to be read again.
-    pub(crate) vgetc_mod_mask: ModMask = ModMask::NONE;
-    pub(crate) vgetc_char: Key = Key::NUL;
+    pub(crate) VGETC_MOD_MASK: ModMask = ModMask::NONE;
+    pub(crate) VGETC_CHAR: Key = Key::NUL;
     /// Nesting depth of `vgetc`.
-    pub(crate) vgetc_busy: c_int = 0;
+    pub(crate) VGETC_BUSY: c_int = 0;
     /// The key was typed, not mapped or stuffed.
-    pub(crate) KeyTyped: bool = false;
+    pub(crate) KEY_TYPED: bool = false;
     /// Nonzero: the key came from the stuff buffer.
-    pub(crate) KeyStuffed: bool = false;
+    pub(crate) KEY_STUFFED: bool = false;
     /// What remapping the key is still allowed (`RM_*`).
-    pub(crate) KeyNoremap: u8 = 0;
+    pub(crate) KEY_NOREMAP: u8 = 0;
     /// CTRL-C was typed, or an operation was interrupted.
-    pub(crate) got_int: bool = false;
+    pub(crate) GOT_INT: bool = false;
 
     // -- what may be done with the next keys --
     /// Nonzero: no mappings at all.
-    pub(crate) no_mapping: c_int = 0;
+    pub(crate) NO_MAPPING: c_int = 0;
     /// Nonzero: no mapping for a `0` typed as a count.
-    pub(crate) no_zero_mapping: c_int = 0;
+    pub(crate) NO_ZERO_MAPPING: c_int = 0;
     /// Nonzero: special keys are recognised even with `no_mapping`.
-    pub(crate) allow_keys: c_int = 0;
+    pub(crate) ALLOW_KEYS: c_int = 0;
     /// Nonzero while an `<expr>` mapping is evaluated: no text changes.
-    pub(crate) expr_map_lock: c_int = 0;
+    pub(crate) EXPR_MAP_LOCK: c_int = 0;
     /// Nonzero: keys are not simplified (`getchar()`'s `simplify: false`).
-    pub(crate) no_reduce_keys: c_int = 0;
+    pub(crate) NO_REDUCE_KEYS: c_int = 0;
     /// The modes CTRL-C is mapped in; it does not interrupt there.
-    pub(crate) mapped_ctrl_c: c_int = 0;
+    pub(crate) MAPPED_CTRL_C: c_int = 0;
     /// CTRL-C interrupts (sets `got_int`) rather than being a key.
-    pub(crate) ctrl_c_interrupts: bool = true;
+    pub(crate) CTRL_C_INTERRUPTS: bool = true;
     /// Don't read from the `:source!` streams.
-    pub(crate) ignore_script: bool = false;
+    pub(crate) IGNORE_SCRIPT: bool = false;
 
     // -- the typeahead --
     /// `:normal` ran out of keys, and the last one was made up to end it.
-    pub(crate) typebuf_was_empty: bool = false;
+    pub(crate) TYPEBUF_WAS_EMPTY: bool = false;
     /// The typeahead was filled from a client or `feedkeys()`.
-    pub(crate) typebuf_was_filled: bool = false;
+    pub(crate) TYPEBUF_WAS_FILLED: bool = false;
     /// Bumped whenever keys are read or mapped, for the cmdline's
     /// "was this typed since" tests.
-    pub(crate) maptick: c_int = 0;
+    pub(crate) MAPTICK: c_int = 0;
     /// A character `flush_buffers` must not throw away.
-    pub(super) typeahead_char: u8 = 0;
+    pub(super) TYPEAHEAD_CHAR: u8 = 0;
     /// Bytes `ins_char_typebuf` put back that `vim.on_key()` must not see
     /// again.
-    pub(super) on_key_ignore_len: size_t = 0;
+    pub(super) ON_KEY_IGNORE_LEN: size_t = 0;
     /// The key `vungetc` put back, until `vgetc` answers it.
-    pub(super) ungot: Option<UngotKey> = None;
+    pub(super) UNGOT: Option<UngotKey> = None;
     /// The key the previous forced answer to `:normal` used, so that the
     /// cmdline window alternates between ESC and CTRL-C.
-    pub(super) normal_busy_last_key: u8 = 0;
+    pub(super) NORMAL_BUSY_LAST_KEY: u8 = 0;
 
     // -- recording and replaying --
     /// The register `q` is recording into, or 0.
-    pub(crate) reg_recording: u8 = 0;
+    pub(crate) REG_RECORDING: u8 = 0;
     /// The register `@` is executing, or 0.
-    pub(crate) reg_executing: u8 = 0;
+    pub(crate) REG_EXECUTING: u8 = 0;
     /// Clear `reg_executing` at the next advancing read.
-    pub(crate) pending_end_reg_executing: bool = false;
+    pub(crate) PENDING_END_REG_EXECUTING: bool = false;
     /// The register last recorded into.
-    pub(crate) reg_recorded: u8 = 0;
+    pub(crate) REG_RECORDED: u8 = 0;
     /// How many bytes the last `gotchars` recorded, so that `get_recorded`
     /// can drop the keys that stopped the recording.
     ///
@@ -146,30 +145,30 @@ state_record! {
     /// `len >= last_recorded_len` fail and nothing is trimmed, which is
     /// what upstream does. `test_registers`' Test_recording_with_select_mode
     /// reaches it.
-    pub(super) last_recorded_len: size_t = 0;
+    pub(super) LAST_RECORDED_LEN: size_t = 0;
     /// How many bytes the last `vgetc` recorded. Peeking can record more,
     /// so `last_recorded_len` may have grown past it since.
-    pub(super) last_vgetc_recorded_len: size_t = 0;
+    pub(super) LAST_VGETC_RECORDED_LEN: size_t = 0;
     /// What `gotchars` has half a key of, between calls. Changed through
     /// `with_mut`: the state machine is a leaf, and moving the key buffer
     /// out and back per typed byte showed in the input benchmark.
-    pub(super) gotchars_pending: GotcharsState = GotcharsState::new();
+    pub(super) GOTCHARS_PENDING: GotcharsState = GotcharsState::new();
     /// What the 'showcmd' echo of a partial mapping has half a key of.
-    pub(super) showcmd_pending: GotcharsState = GotcharsState::new();
+    pub(super) SHOWCMD_PENDING: GotcharsState = GotcharsState::new();
     /// The redo buffer may not change: an insert repeat is reading it.
-    pub(super) block_redo: bool = false;
+    pub(super) BLOCK_REDO: bool = false;
     /// `!` was typed with the command being made redoable.
-    pub(crate) bangredo: bool = false;
+    pub(crate) BANGREDO: bool = false;
     /// The Lua callback a `K_LUA` key ran, which `.` repeats.
-    pub(crate) repeat_luaref: LuaRef = -2;
+    pub(crate) REPEAT_LUAREF: LuaRef = -2;
 
     // -- scripts --
     /// The `:source!` stream being read, or -1.
-    pub(super) curscript: c_int = -1;
+    pub(super) CURSCRIPT: c_int = -1;
     /// Typed characters since the swap files were last synced.
-    pub(super) typed_since_sync: c_int = 0;
+    pub(super) TYPED_SINCE_SYNC: c_int = 0;
     /// The `-w`/`-W` file every typed character is copied to.
-    pub(crate) scriptout: Option<CFile> = None;
+    pub(crate) SCRIPTOUT: Option<CFile> = None;
 }
 
 pub type FlushBuffers = ::core::ffi::c_uint;

@@ -417,7 +417,7 @@ fn resolve_swapfile_clash(mut buffer: Buf, fname: &CStr, buf_fname: &CStr) -> bo
         SEA_CHOICE_QUIT => swap_exists_action.set(SEA_QUIT),
         SEA_CHOICE_ABORT => {
             swap_exists_action.set(SEA_QUIT);
-            got_int.set(true);
+            GOT_INT.set(true);
         }
         SEA_CHOICE_NONE => {
             msg_str(c"\n");
@@ -452,7 +452,7 @@ fn ask_about_swapfile(buffer: Buf, fname: &CStr) -> SwapExistsChoice {
     // A 'q' typed at the more-prompt must not interrupt loading the
     // file, and a "simalt ~x" in the vimrc must not answer the prompt
     // below.
-    got_int.set(false);
+    GOT_INT.set(false);
     flush_buffers(FLUSH_TYPEAHEAD);
 
     if swap_exists_action.get() != SEA_NONE {

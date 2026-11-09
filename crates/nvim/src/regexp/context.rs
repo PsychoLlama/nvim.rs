@@ -24,7 +24,7 @@ use super::{
     Rex, cstrncmp, head_off_at, peekchr, prefix_at, re_multi_type,
 };
 use crate::charset::vim_iswordc_buf;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::mbyte::{class_in, strnicmp_in};
 use crate::normal::{VisualMode, visual_ever_started, visual_selection};
 use crate::os::input::fast_breakcheck;
@@ -332,7 +332,7 @@ pub(crate) fn match_with_backref(
         }
         clnum += 1;
         ccol = ColNr::ZERO;
-        if got_int.get() {
+        if GOT_INT.get() {
             return RA_FAIL;
         }
     }

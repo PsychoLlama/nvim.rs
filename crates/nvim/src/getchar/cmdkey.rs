@@ -34,12 +34,12 @@ pub fn read_cmd_key_line() -> Option<XString> {
     let mut aborted = false;
 
     let unmapped = Keys::unmapped(); // no mapping for these characters
-    got_int.set(false);
+    GOT_INT.set(false);
     while !aborted {
         if vgetorpeek(false) == 0 {
             // An incomplete <Cmd> is an error: there is not much the user
             // could do from this state.
-            emsg(gettext(e_cmd_mapping_must_end_with_cr));
+            emsg(gettext(E_CMD_MAPPING_MUST_END_WITH_CR));
             aborted = true;
             break;
         }
@@ -58,7 +58,7 @@ pub fn read_cmd_key_line() -> Option<XString> {
             Key::byte(lead)
         };
 
-        if got_int.get() {
+        if GOT_INT.get() {
             aborted = true;
         } else if c1 == Key::CAR || c1 == Key::NL {
             break; // end of the line
@@ -66,7 +66,7 @@ pub fn read_cmd_key_line() -> Option<XString> {
             aborted = true;
         } else if c1 == SpecialKey::Command {
             // A nicer error message for this special case.
-            emsg(gettext(e_cmd_mapping_must_end_with_cr_before_second_cmd));
+            emsg(gettext(E_CMD_MAPPING_MUST_END_WITH_CR_BEFORE_SECOND_CMD));
             aborted = true;
         } else if c1 == SpecialKey::Snr {
             line.extend_from_slice(b"<SNR>");
@@ -105,10 +105,10 @@ pub fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
     let mut aborted = false;
 
     let unmapped = Keys::unmapped();
-    got_int.set(false);
+    GOT_INT.set(false);
     while !aborted {
         let c1 = vgetorpeek(true);
-        if got_int.get() {
+        if GOT_INT.get() {
             aborted = true;
         } else if c1 == b'\r' || c1 == b'\n' {
             break; // end of the line
@@ -128,7 +128,7 @@ pub fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
 
     let luaref: LuaRef = atoi(&line);
     if may_repeat {
-        repeat_luaref.set(luaref);
+        REPEAT_LUAREF.set(luaref);
     }
 
     let called = nlua_call_ref_reporting(luaref, None, Array::new(), RET_NIL_BOOL);

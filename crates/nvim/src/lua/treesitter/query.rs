@@ -23,7 +23,7 @@ use core::ptr::NonNull;
 use super::lang::check_language;
 use super::*;
 use crate::lua::stack::Raise;
-use crate::lua::state::tslua_query_parse_count;
+use crate::lua::state::TSLUA_QUERY_PARSE_COUNT;
 use crate::lua_functions;
 
 /// A compiled query, as its userdatum owns it. Empty once collected.
@@ -59,7 +59,7 @@ pub(crate) fn parse_query(stack: &mut Stack) -> Result<c_int, Raise> {
         return Err(Raise::message("string expected"));
     }
     let language = check_language(stack, At::arg(1))?;
-    tslua_query_parse_count.set(tslua_query_parse_count.get().wrapping_add(1));
+    TSLUA_QUERY_PARSE_COUNT.set(TSLUA_QUERY_PARSE_COUNT.get().wrapping_add(1));
     let source = stack.to_bytes(At::arg(2)).unwrap_or_default();
     // `(uint32_t)len`: the low 32 bits.
     let length = u32::try_from(source.len() & 0xFFFF_FFFF).expect("masked to 32 bits");

@@ -26,7 +26,7 @@ use crate::cstr;
 use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later, setcursor, update_screen};
 use crate::eval::call_vim_function;
 use crate::eval::typval::tv_clear;
-use crate::getchar::state::mod_mask;
+use crate::getchar::state::MOD_MASK;
 use crate::menu::show_popupmenu;
 use crate::mouse::state::{mouse_grid, mouse_row};
 use crate::normal::{visual_active, visual_anchor, visual_mode};
@@ -41,13 +41,13 @@ use crate::ui::ui_flush;
 /// `click_defs`, for button `which_button`.
 pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_button: c_int) {
     let def = click_defs.at(col);
-    let modifiers = modifier_letters(mod_mask.get());
+    let modifiers = modifier_letters(MOD_MASK.get());
     // Upstream builds these argument slots `VAR_FIXED`; an argument vector's
     // lock is never read, and with the lock on the slot there is none to set.
     // The two strings are copies the array owns and releases.
     let argv = [
         TypVal::Number(VarNumber::from(def.tabnr)),
-        TypVal::Number(click_count(mod_mask.get())),
+        TypVal::Number(click_count(MOD_MASK.get())),
         TypVal::string_from(button_name(which_button).to_bytes()),
         TypVal::string_from(cstr::in_bytes(&modifiers).to_bytes()),
     ];

@@ -59,7 +59,7 @@ use crate::ex_eval::state::{
     EXCEPTIONS, MsgLists, caught_stack, current_exception, did_throw, force_abort, msg_lists,
     need_rethrow, suppress_errthrow, trylevel,
 };
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::guard::{Allow, Suppress};
 use crate::memory::XString;
 use crate::message::E_INTERR;
@@ -138,7 +138,7 @@ pub(crate) fn cause_errthrow(
         // becoming an exception again and discarding the error about to be
         // thrown here.
         if current_type() == Some(ET_INTERRUPT) {
-            got_int.set(false);
+            GOT_INT.set(false);
         }
         discard_current_exception();
     }
@@ -271,7 +271,7 @@ pub(crate) fn do_intthrow(cond: CondId) -> bool {
     // No interrupt, or no try conditional active and nothing being thrown:
     // do nothing, for the sake of non-EH scripts. Asked after every
     // command, so the answer is inline and the throw is not.
-    if !got_int.get() || (trylevel.get() == 0 && !did_throw.get()) {
+    if !GOT_INT.get() || (trylevel.get() == 0 && !did_throw.get()) {
         return false;
     }
     throw_interrupt(cond)

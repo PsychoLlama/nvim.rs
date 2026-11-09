@@ -55,7 +55,7 @@ use crate::drawscreen::state::updating_screen;
 use crate::drawscreen::{conceal_check_cursor_line, screen_resize};
 use crate::event_queue::put_job_in;
 use crate::ex_getln::cmdline_ui_flush;
-use crate::getchar::state::expr_map_lock;
+use crate::getchar::state::EXPR_MAP_LOCK;
 use crate::global_cell::GlobalCell;
 use crate::grid::{GridRef, default_grid_ref, get_win_by_grid_handle};
 use crate::guard::textlock;
@@ -674,7 +674,7 @@ pub fn ui_flush() {
     }
 
     win_ui_flush(false);
-    if textlock.get() == 0 && expr_map_lock.get() == 0 {
+    if textlock.get() == 0 && EXPR_MAP_LOCK.get() == 0 {
         // Both can run Lua handlers, which the locks exist to keep out.
         cmdline_ui_flush();
         msg_ext_ui_flush();

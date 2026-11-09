@@ -31,7 +31,7 @@ use crate::event::objects::{Event, RStream, Stream};
 use crate::event::rstream::{rstream_init_fd, rstream_may_close, rstream_start, rstream_stop};
 use crate::event::uv::uv_handle_type;
 use crate::event_queue::{self, ChildQueue, QueueId, queue_in};
-use crate::getchar::state::{ctrl_c_interrupts, got_int, mapped_ctrl_c, typebuf_was_filled};
+use crate::getchar::state::{CTRL_C_INTERRUPTS, GOT_INT, MAPPED_CTRL_C, TYPEBUF_WAS_FILLED};
 use crate::getchar::{before_blocking, typebuf_changed};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::KeyExtra;
@@ -236,8 +236,8 @@ pub(crate) fn input_get(
 
     // No risk of a UI flood, so disable CTRL-C "interrupt" behaviour if
     // it is mapped.
-    if (mapped_ctrl_c.get() | Buf::current().b_mapped_ctrl_c) & get_real_state() != 0 {
-        ctrl_c_interrupts.set(false);
+    if (MAPPED_CTRL_C.get() | Buf::current().b_mapped_ctrl_c) & get_real_state() != 0 {
+        CTRL_C_INTERRUPTS.set(false);
     }
 
     let mut result;
@@ -268,7 +268,7 @@ pub(crate) fn input_get(
         }
     }
 
-    ctrl_c_interrupts.set(true);
+    CTRL_C_INTERRUPTS.set(true);
 
     // If input went straight into the typeahead buffer, bail out here.
     if typebuf_changed(tb_change_cnt) {
@@ -302,7 +302,7 @@ pub fn os_char_avail() -> bool {
 /// `got_int` before calling again, and often wants `input_available()` too,
 /// to throttle idle processing while there is user input waiting.
 pub(crate) fn os_breakcheck() {
-    if got_int.get() {
+    if GOT_INT.get() {
         return;
     }
     let uv_loop = main_loop.ptr();
@@ -771,7 +771,7 @@ unsafe fn input_read_cb(
 /// Reverse-search the buffered input for a CTRL-C, and discard everything
 /// typed before it.
 fn process_ctrl_c() {
-    if !ctrl_c_interrupts.get() {
+    if !CTRL_C_INTERRUPTS.get() {
         return;
     }
     let read = input_read_pos.get();
@@ -791,7 +791,7 @@ fn process_ctrl_c() {
     }) else {
         return;
     };
-    got_int.set(true);
+    GOT_INT.set(true);
     if at > 0 {
         // Drop the unprocessed typeahead in front of the CTRL-C.
         input_read_pos.set(read + at);
@@ -819,7 +819,7 @@ fn push_event_key(buf: &mut [u8]) -> usize {
 /// Whether there is input waiting, in the typeahead, the buffer or
 /// `events`.
 pub(crate) fn input_ready(events: InputEvents) -> bool {
-    typebuf_was_filled.get()      // an API call filled the typeahead
+    TYPEBUF_WAS_FILLED.get()      // an API call filled the typeahead
         || input_available() != 0 // the input buffer holds something
         || events.pending() // events must be processed
 }

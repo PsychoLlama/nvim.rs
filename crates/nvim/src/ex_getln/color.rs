@@ -14,7 +14,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::cstr;
@@ -25,7 +24,7 @@ use crate::message_fmt::msg_cstr;
 use crate::narrow::{len_as_int, number_as_int};
 use crate::tr_plural;
 use crate::types::VAR_LIST;
-use crate::viml::parser::expressions::kExprFlagsDisallowEOC;
+use crate::viml::parser::expressions::EXPR_FLAGS_DISALLOW_EOC;
 
 /// Colour a `=` expression command line with the Vimscript expression parser,
 /// filling the gaps the parser leaves uncoloured with `hl_id` 0, into the
@@ -35,7 +34,7 @@ pub(crate) fn color_expr_cmdline(mut colored_ccline: Cc) {
         let text = cstr::until_nul(colored_ccline.bytes());
         let line = [text];
         let mut pstate = ParserState::new(&line, true);
-        let _ = viml_pexpr_parse(&mut pstate, kExprFlagsDisallowEOC.cast_signed());
+        let _ = viml_pexpr_parse(&mut pstate, EXPR_FLAGS_DISALLOW_EOC.cast_signed());
         pstate.take_highlight()
     };
 
@@ -133,11 +132,11 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
     let mut arg = TypVal::string(None);
     let mut tv = TV_INITIAL_VALUE;
 
-    // Both are C function-level statics. `prev_prompt_id` starts at
+    // Both are C function-level statics. `PREV_PROMPT_ID` starts at
     // UINT_MAX so that the first prompt of a session, whatever its id,
     // counts as a new one.
-    static prev_prompt_id: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(UINT_MAX);
-    static prev_prompt_errors: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+    static PREV_PROMPT_ID: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(UINT_MAX);
+    static PREV_PROMPT_ERRORS: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
     let mut color_cb = Callback::None;
     let mut can_free_cb = false;
@@ -146,10 +145,10 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
     let mut dgc_ret = true;
 
     let outcome = 'body: {
-        if colored_ccline.prompt_id != prev_prompt_id.get() {
-            prev_prompt_errors.set(0);
-            prev_prompt_id.set(colored_ccline.prompt_id);
-        } else if prev_prompt_errors.get() >= MAX_CB_ERRORS {
+        if colored_ccline.prompt_id != PREV_PROMPT_ID.get() {
+            PREV_PROMPT_ERRORS.set(0);
+            PREV_PROMPT_ID.set(colored_ccline.prompt_id);
+        } else if PREV_PROMPT_ERRORS.get() >= MAX_CB_ERRORS {
             break 'body Label::End;
         }
 
@@ -201,7 +200,7 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
         //
         // TRY_WRAP too, because error messages would otherwise overwrite
         // the typed command line.
-        getln_interrupted_highlight.set(false);
+        GETLN_INTERRUPTED_HIGHLIGHT.set(false);
         let mut tstate: TryState = TRY_STATE_INIT;
         try_enter(&mut tstate);
         err_errmsg = c"E5407: Callback has thrown an exception: %s";
@@ -210,8 +209,8 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
         let called = callback_call(&color_cb, ::core::slice::from_ref(&arg), &mut tv) == Ok(true);
         drop(silenced);
         MSG_COL.set(saved_msg_col);
-        if got_int.get() {
-            getln_interrupted_highlight.set(true);
+        if GOT_INT.get() {
+            GETLN_INTERRUPTED_HIGHLIGHT.set(true);
         }
         err.absorb(try_leave(&tstate));
 
@@ -298,7 +297,7 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
             };
             colored_ccline.last_colors.push(coloured);
         }
-        prev_prompt_errors.set(0);
+        PREV_PROMPT_ERRORS.set(0);
         Label::End
     };
 
@@ -311,7 +310,7 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
             err.clear();
         }
         debug_assert!(printed_errmsg);
-        prev_prompt_errors.set(prev_prompt_errors.get() + 1);
+        PREV_PROMPT_ERRORS.set(PREV_PROMPT_ERRORS.get() + 1);
         colored_ccline.last_colors.clear_chunks();
         redrawcmdline();
         ret = false;

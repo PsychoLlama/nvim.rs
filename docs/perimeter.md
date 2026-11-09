@@ -197,7 +197,7 @@ that needs `unsafe` — so a few appear there; they are listed too.
   (`memory/blocks.rs`). The raw escape hatches `.ptr()`/`.as_raw()`
   (`cell_ptr`, 22) are all on the perimeter too: the globals libuv holds by
   address (`main_loop`, `read_stream`, the signal watchers, the refresh timer,
-  `main_thread`, the saved termios) and `global_cell.rs`'s own tests.
+  `MAIN_THREAD`, the saved termios) and `global_cell.rs`'s own tests.
 
 **Pointer arithmetic** (`ptr_arith`, 100: `.add`/`.offset`/`.sub`/
 `.offset_from` and pointer `wrapping_*`). On the perimeter, 46: the C-shaped

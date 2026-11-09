@@ -21,7 +21,7 @@ use crate::winlayer::Win;
 use crate::buffer::{buf_is_prompt, current_buf};
 use crate::edit::{BeginlineOpts, beginline, cursor_down, prompt_curpos_editable};
 use crate::eval::vars::{set_reg_var, set_vim_var_string};
-use crate::getchar::state::{got_int, reg_executing, reg_recorded};
+use crate::getchar::state::{GOT_INT, REG_EXECUTING, REG_RECORDED};
 use crate::getchar::{plain_vgetc, start_redo, stuff_readbuf_char};
 use crate::guard::Keys;
 use crate::keycodes::SpecialKey;
@@ -53,7 +53,7 @@ fn as_g_operator(cmd_arg: &mut CmdArg, nchar: u8) {
 /// Play a register back `count1` times, stopping at the first failure or
 /// interrupt.
 fn replay(cmd_arg: &mut CmdArg, regname: RegName) {
-    while cmd_arg.count1 != 0 && !got_int.get() {
+    while cmd_arg.count1 != 0 && !GOT_INT.get() {
         cmd_arg.count1 -= 1;
         if do_execreg(regname, false, false, false).is_err() {
             clear_op_beep(cmd_arg.op());
@@ -68,7 +68,7 @@ pub(crate) fn nv_regreplay(cmd_arg: &mut CmdArg) {
     if check_clear_op(cmd_arg.op()) {
         return;
     }
-    replay(cmd_arg, reg_recorded.get());
+    replay(cmd_arg, REG_RECORDED.get());
 }
 
 /// `@`: replay a named register.
@@ -252,7 +252,7 @@ pub(crate) fn nv_record(cmd_arg: &mut CmdArg) {
         }
         stuff_readbuf_char(cmd_arg.nchar);
         stuff_readbuf_char(SpecialKey::Cmdwin.into());
-    } else if reg_executing.get() == 0 && do_record(cmd_arg.nchar).is_err() {
+    } else if REG_EXECUTING.get() == 0 && do_record(cmd_arg.nchar).is_err() {
         clear_op_beep(cmd_arg.op());
     }
 }

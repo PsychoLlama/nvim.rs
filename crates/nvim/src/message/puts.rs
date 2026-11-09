@@ -48,7 +48,7 @@ pub fn msg_start() {
     if need_highlight_changed.get() {
         highlight_changed();
     }
-    if NEED_CLR_EOS.get() || (p_ch() == 0 && redrawing_cmdline.get()) {
+    if NEED_CLR_EOS.get() || (p_ch() == 0 && REDRAWING_CMDLINE.get()) {
         // Halfway an `:echo` and getting an (error) message: clear any
         // text the command left.
         NEED_CLR_EOS.set(false);
@@ -166,7 +166,7 @@ fn put_bytes(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) {
                 Object::integer(-1),
                 ApiString::NULL,
             );
-            cmdline_was_last_drawn.set(false);
+            CMDLINE_WAS_LAST_DRAWN.set(false);
         }
         return;
     }
@@ -248,7 +248,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
 
     let print_attr = hl_combine_attr(hl_attr(HLF_MSG as c_int), attr);
     msg_grid_validate();
-    cmdline_was_last_drawn.set(redrawing_cmdline.get());
+    CMDLINE_WAS_LAST_DRAWN.set(REDRAWING_CMDLINE.get());
 
     // The text being shown, which is not always the caller's: the pager can
     // jump ahead to a dialog's buttons, and those are a string of their own.

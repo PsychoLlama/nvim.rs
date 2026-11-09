@@ -69,11 +69,11 @@ pub fn ex_undolist(_excmd: &mut ExArg) {
     let heading = gettext(c"number changes  when               saved");
     msg_str_hl(heading, HLF_T, false);
     for row in &rows {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         msg_putchar('\n' as c_int);
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         msg_str(row);

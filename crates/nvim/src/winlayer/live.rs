@@ -201,7 +201,7 @@ impl Cc {
     pub(crate) fn current() -> Self {
         // SAFETY: a `&'static GlobalCell`'s address is live for the whole
         // run, which is the promise.
-        unsafe { Cc::new(crate::ex_getln::ccline.ptr()) }
+        unsafe { Cc::new(crate::ex_getln::CCLINE.ptr()) }
     }
 
     /// The command line suspended `depth` levels under the current one
@@ -211,7 +211,7 @@ impl Cc {
     /// which the `Vec` cannot move, however it grows -- and does nothing
     /// else.
     pub(crate) fn saved(depth: usize) -> Option<Self> {
-        crate::ex_getln::saved_cmdlines.with_mut(|stack| {
+        crate::ex_getln::SAVED_CMDLINES.with_mut(|stack| {
             let i = stack.len().checked_sub(depth)?;
             // SAFETY: the address of a `Box`'s target, which the `Vec`
             // cannot move however it grows; the entry lives until it is

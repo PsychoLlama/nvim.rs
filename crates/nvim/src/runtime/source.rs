@@ -584,7 +584,7 @@ fn source_bracket(
     if profiling && item.is_some() {
         profile_script_stop(wait_start);
     }
-    if got_int.get() {
+    if GOT_INT.get() {
         emsg(gettext(E_INTERR));
     }
     estack_pop();
@@ -604,7 +604,7 @@ fn source_bracket(
         time_msg(&to_bytes(&label), Some(start_time));
         time_pop(rel_time);
     }
-    let trigger_source_post = !got_int.get();
+    let trigger_source_post = !GOT_INT.get();
 
     // After a `:finish` in debug mode, break at the first command of the next
     // sourced file.

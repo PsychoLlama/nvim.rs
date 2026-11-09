@@ -26,7 +26,7 @@ use crate::eval::gc::MAY_GARBAGE_COLLECT;
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::compute_cmdrow;
-use crate::getchar::state::{KeyTyped, got_int, typebuf_was_empty};
+use crate::getchar::state::{GOT_INT, KEY_TYPED, TYPEBUF_WAS_EMPTY};
 use crate::getchar::{
     map_execute_lua, paste_repeat, stuff_readbuf, stuff_readbuf_char, stuff_readbuf_number,
 };
@@ -98,7 +98,7 @@ pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
     }
     // A typed `:` scrolls the message area up to make room for the
     // command line; a mapped one leaves the display alone.
-    if KeyTyped.get() {
+    if KEY_TYPED.get() {
         msg_ext_set_trigger(c"typed_cmd");
         compute_cmdrow();
     }
@@ -260,10 +260,10 @@ pub(crate) fn nv_esc(cmd_arg: &mut CmdArg) {
         restart_edit.set(Key::NUL);
         if cmdwin_type.get() != 0 {
             cmdwin_result.set(Key::from(SpecialKey::Ignore));
-            got_int.set(false);
+            GOT_INT.set(false);
             return;
         }
-    } else if cmdwin_type.get() != 0 && ex_normal_busy.get() != 0 && typebuf_was_empty.get() {
+    } else if cmdwin_type.get() != 0 && ex_normal_busy.get() != 0 && TYPEBUF_WAS_EMPTY.get() {
         // `:normal` in the command-line window ran out of keys: leave the
         // window open rather than acting on the <Esc> it synthesised.
         cmdwin_result.set(Key::from(SpecialKey::Ignore));

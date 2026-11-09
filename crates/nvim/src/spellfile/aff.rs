@@ -63,7 +63,7 @@ use std::os::unix::ffi::OsStrExt;
 use crate::charset::atoi;
 use crate::cstr;
 use crate::fileio::Fgets;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::mbyte::CONV_NONE;
 use crate::mbyte::canonize;
 use crate::message::msg;
@@ -363,7 +363,7 @@ pub(super) fn spell_read_aff(spin: &mut SpellInfo, fname: &CStr) -> Result<AffFi
     let mut line: Vec<uint8_t> = Vec::new();
     let mut lnum: c_int = 0;
 
-    while fd.line_capped(&mut rline, MAXLINELEN as usize) && !got_int.get() {
+    while fd.line_capped(&mut rline, MAXLINELEN as usize) && !GOT_INT.get() {
         line_breakcheck();
         lnum += 1;
         let read = cstr::until_nul(&rline);

@@ -35,7 +35,7 @@ use crate::extmark::extmark_splice;
 use crate::extmark::kExtmarkNOOP;
 use crate::extmark::kExtmarkUndo;
 use crate::extmark::{BCount, ExtmarkOp};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::mark::mark_adjust;
 use crate::memline::{Lines, ml_append_cstr, ml_delete};
 use crate::memory::ThinCString;
@@ -510,7 +510,7 @@ fn collect_sort_keys(
         if regmatch.is_some() {
             fast_breakcheck();
         }
-        if got_int.get() {
+        if GOT_INT.get() {
             return None;
         }
     }
@@ -587,7 +587,7 @@ fn append_sorted(
         }
 
         fast_breakcheck();
-        if got_int.get() {
+        if GOT_INT.get() {
             placed.interrupted = true;
             return placed;
         }
@@ -651,7 +651,7 @@ fn sort_range(args: &mut ExArg) {
     }
 
     drop(regmatch);
-    if got_int.get() {
+    if GOT_INT.get() {
         emsg(gettext(E_INTERR));
     }
 }
@@ -864,7 +864,7 @@ fn uniq_range(args: &mut ExArg) {
             }
 
             fast_breakcheck();
-            if got_int.get() {
+            if GOT_INT.get() {
                 break 'uniqend;
             }
             i += 1;
@@ -898,7 +898,7 @@ fn uniq_range(args: &mut ExArg) {
     }
 
     drop(regmatch);
-    if got_int.get() {
+    if GOT_INT.get() {
         emsg(gettext(E_INTERR));
     }
 }

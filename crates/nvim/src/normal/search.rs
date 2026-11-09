@@ -32,7 +32,7 @@ use crate::cursor::check_cursor;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_later};
 use crate::ex_getln::search_cmdline;
 use crate::fold::fold_open_cursor;
-use crate::getchar::state::{KeyTyped, mod_mask};
+use crate::getchar::state::{KEY_TYPED, MOD_MASK};
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::{HLF_L, HLF_LC};
 use crate::mark::defs::{FileMark, MarkMove, MarkMoveRes};
@@ -157,7 +157,8 @@ pub(crate) fn normal_search(
             op.motion_type = MT_LINE_WISE;
         }
         Win::current().w_cursor.coladd = 0;
-        if op.op_type == OpType::Nop && FDO_FLAGS.get() & kOptFdoFlagSearch != 0 && KeyTyped.get() {
+        if op.op_type == OpType::Nop && FDO_FLAGS.get() & kOptFdoFlagSearch != 0 && KEY_TYPED.get()
+        {
             fold_open_cursor();
         }
     } else {
@@ -245,7 +246,7 @@ pub(crate) fn nv_gomark(cmd_arg: &mut CmdArg) {
     } else {
         view_flag()
     };
-    let old_key_typed = KeyTyped.get();
+    let old_key_typed = KEY_TYPED.get();
 
     // `g'` and ``g` `` jump without touching the previous-context mark.
     let name = if cmd_arg.cmdchar.is('g') {
@@ -282,12 +283,12 @@ pub(crate) fn nv_gomark(cmd_arg: &mut CmdArg) {
 pub(crate) fn nv_pcmark(cmd_arg: &mut CmdArg) {
     let mut flags = view_flag();
     let mut move_res: MarkMoveRes = 0;
-    let old_key_typed = KeyTyped.get();
+    let old_key_typed = KEY_TYPED.get();
     if check_clear_op_quit(cmd_arg.op()) {
         return;
     }
     // CTRL-TAB is the last-used tab page, not a jump.
-    if cmd_arg.cmdchar == Key::TAB && mod_mask.get() == ModMask::CTRL {
+    if cmd_arg.cmdchar == Key::TAB && MOD_MASK.get() == ModMask::CTRL {
         if !goto_tabpage_lastused() {
             clear_op_beep(cmd_arg.op());
         }

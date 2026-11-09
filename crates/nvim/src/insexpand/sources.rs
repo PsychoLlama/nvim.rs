@@ -82,7 +82,7 @@ pub(crate) fn ins_compl_dictionaries(dict_start: &[u8], pat: &CStr, flags: c_int
 
         // Ignore case depends on 'ignorecase', 'smartcase' and "pat".
         regmatch.rm_ic = ignorecase(pat.to_bytes());
-        while !dict.is_empty() && !got_int.get() && !compl_interrupted.get() {
+        while !dict.is_empty() && !GOT_INT.get() && !compl_interrupted.get() {
             // The files to scan; `None` is "complete from active spelling".
             let files: Option<Vec<XString>> = if flags == DICT_EXACT {
                 // The whole rest of the list is one name.
@@ -141,7 +141,7 @@ fn thesaurus_add_words_in_line(
 
     // Add the other matches on the line.
     let mut at = 0;
-    while !got_int.get() {
+    while !GOT_INT.get() {
         // Find the start of the next word, skipping white space and
         // punctuation.
         at = word_start(line, at);
@@ -191,7 +191,7 @@ pub(crate) fn ins_compl_files(
     let mut raw: Vec<u8> = Vec::with_capacity(LSIZE as usize);
 
     for file in files {
-        if got_int.get() || ins_compl_interrupted() {
+        if GOT_INT.get() || ins_compl_interrupted() {
             break;
         }
         let fname = file.as_cstr();
@@ -211,7 +211,7 @@ pub(crate) fn ins_compl_files(
         let mut reader = Fgets::new(fp);
 
         // Read the dictionary file line by line, checking each for a match.
-        while !got_int.get()
+        while !GOT_INT.get()
             && !ins_compl_interrupted()
             && reader.line_capped(&mut raw, LSIZE as usize)
         {
@@ -266,7 +266,7 @@ pub(crate) fn ins_compl_files(
                     }
                     // Avoid an expensive call to vim_regexec() at the end
                     // of the line.
-                    if line.get(at) == Some(&b'\n') || got_int.get() {
+                    if line.get(at) == Some(&b'\n') || GOT_INT.get() {
                         break;
                     }
                 }

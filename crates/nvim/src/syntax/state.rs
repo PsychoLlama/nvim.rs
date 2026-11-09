@@ -126,7 +126,7 @@ impl SynState {
             // This can take a long time: stop when CTRL-C is pressed. The
             // current state is then wrong.
             line_breakcheck();
-            if got_int.get() {
+            if GOT_INT.get() {
                 self.lnum = lnum;
                 break;
             }

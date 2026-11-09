@@ -113,7 +113,7 @@ pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> 
     if c != NUL {
         // Normal search: remember the arguments for a later repeat,
         // but not while redoing (the remembered ones are in play).
-        if !KeyStuffed.get() {
+        if !KEY_STUFFED.get() {
             lastc.set(low_byte(c));
             set_csearch_direction(dir as Direction);
             set_csearch_until(c_int::from(t_cmd));

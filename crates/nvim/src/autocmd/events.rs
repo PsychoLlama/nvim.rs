@@ -213,7 +213,7 @@ fn has_cursorhold() -> bool {
 pub fn trigger_cursorhold() -> bool {
     if did_cursorhold.get()
         || !has_cursorhold()
-        || reg_recording.get() != 0
+        || REG_RECORDING.get() != 0
         || !typeahead().is_empty()
         || ins_compl_active()
     {

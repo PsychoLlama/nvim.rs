@@ -145,8 +145,8 @@ pub(crate) fn win_update(window: Win) {
     let mut buf = win.buffer();
 
     // Reset `got_int`, otherwise the regexp engine will not work.
-    let save_got_int = got_int.get();
-    got_int.set(false);
+    let save_got_int = GOT_INT.get();
+    GOT_INT.set(false);
     // Bound syntax highlighting by 'redrawtime'.
     let syntax_tm = profile_setlimit(p_rdt() as int64_t);
     syn_set_timeout(Some(syntax_tm));
@@ -263,8 +263,8 @@ pub(crate) fn win_update(window: Win) {
     finish_botline(window, buf, old_botline, nrwidth_before);
 
     // Restore `got_int`, unless CTRL-C was hit while redrawing.
-    if !got_int.get() {
-        got_int.set(save_got_int);
+    if !GOT_INT.get() {
+        GOT_INT.set(save_got_int);
     }
 }
 

@@ -151,7 +151,7 @@ pub(crate) fn command_line_toggle_langmap(s: &CommandLineState) {
 /// Handle CTRL-R: insert the contents of a numbered or named register.
 pub(crate) fn command_line_insert_reg(s: &mut CommandLineState) -> KeyOutcome {
     let mut cc = Cc::current();
-    let save_new_cmdpos = new_cmdpos.get();
+    let save_new_cmdpos = NEW_CMDPOS.get();
 
     putcmdline(b'"'.cast_signed(), true);
     let raw_key = Keys::unmapped_with_codes();
@@ -166,10 +166,10 @@ pub(crate) fn command_line_insert_reg(s: &mut CommandLineState) -> KeyOutcome {
     drop(raw_key);
 
     // Insert the result of an expression.
-    new_cmdpos.set(-1);
+    NEW_CMDPOS.set(-1);
     if s.c.is('=') {
         if cc.cmdfirstc == b'='  // can't do this recursively
-            || cmdline_star.get() > 0
+            || CMDLINE_STAR.get() > 0
         // or when typing a password
         {
             beep_flush();
@@ -199,13 +199,13 @@ pub(crate) fn command_line_insert_reg(s: &mut CommandLineState) -> KeyOutcome {
             s.gotesc = true;
             return KeyOutcome::GotoNormalMode;
         }
-        KeyTyped.set(false); // don't do 'wildchar' completion
-        if new_cmdpos.get() >= 0 {
+        KEY_TYPED.set(false); // don't do 'wildchar' completion
+        if NEW_CMDPOS.get() >= 0 {
             // set_cmdline_pos() was used.
-            cc.cmdpos = cc.len().min(new_cmdpos.get());
+            cc.cmdpos = cc.len().min(NEW_CMDPOS.get());
         }
     }
-    new_cmdpos.set(save_new_cmdpos);
+    NEW_CMDPOS.set(save_new_cmdpos);
 
     cc.special_char = 0; // remove the double quote
     redrawcmd();
@@ -294,9 +294,9 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             // ":normal" runs out of characters. Also, when the highlight
             // callback is active <C-c> should interrupt only that.
             if (exmode_active.get() && (ex_normal_busy.get() == 0 || !typeahead().is_empty()))
-                || (getln_interrupted_highlight.get() && s.c == Key::CTRL_C)
+                || (GETLN_INTERRUPTED_HIGHLIGHT.get() && s.c == Key::CTRL_C)
             {
-                getln_interrupted_highlight.set(false);
+                GETLN_INTERRUPTED_HIGHLIGHT.set(false);
                 return Some(command_line_not_changed(s));
             }
 
@@ -322,14 +322,14 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
         Ok(SpecialKey::Right | SpecialKey::SRight | SpecialKey::CRight) => {
             while cc.cmdpos < cc.len() {
                 let cells = cmdline_charsize(cc.cmdpos);
-                if KeyTyped.get() && cc.cmdspos + cells >= Columns.get() * Rows.get() {
+                if KEY_TYPED.get() && cc.cmdspos + cells >= Columns.get() * Rows.get() {
                     break;
                 }
                 cc.cmdspos += cells;
                 cc.cmdpos += cluster_len_at(cc, cc.cmdpos);
                 if !((s.c == SpecialKey::SRight
                     || s.c == SpecialKey::CRight
-                    || mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL))
+                    || MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL))
                     && cc
                         .cmdbuff
                         .raw_byte_at(usize::try_from(cc.cmdpos).unwrap_or(0))
@@ -357,7 +357,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
                 if !(cc.cmdpos > 0
                     && (s.c == SpecialKey::SLeft
                         || s.c == SpecialKey::CLeft
-                        || mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL))
+                        || MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL))
                     && cc.byte_at(cc.cmdpos - 1) != b' ')
                 {
                     break;
@@ -551,7 +551,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
 
             // Get the next (two) characters. Do not include the modifiers
             // in the key, for CTRL-SHIFT-V.
-            s.c = get_literal(mod_mask.get().has(ModMask::SHIFT));
+            s.c = get_literal(MOD_MASK.get().has(ModMask::SHIFT));
 
             s.do_abbr = false; // don't do abbreviation now
             cc.special_char = 0;
@@ -604,7 +604,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             // doesn't enter the string <S-Space>. This should only happen
             // after ^V.
             if !c.is_special() {
-                mod_mask.set(ModMask::NONE);
+                MOD_MASK.set(ModMask::NONE);
             }
             None
         }
@@ -633,8 +633,8 @@ pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> Step {
     }
 
     // C's `end:` — put the character in the command line.
-    if s.c.is_special() || !mod_mask.get().is_empty() {
-        let name = get_special_key_name(s.c, mod_mask.get());
+    if s.c.is_special() || !MOD_MASK.get().is_empty() {
+        let name = get_special_key_name(s.c, MOD_MASK.get());
         put_on_cmdline(cstr::in_bytes(&name).to_bytes(), true);
     } else {
         // One character, its own buffer, without its composing characters.

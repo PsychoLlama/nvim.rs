@@ -48,7 +48,7 @@ use crate::ex_eval::aborting;
 use crate::extmark::ExtmarkUndoObject;
 use crate::extmark::extmark_apply_undo;
 use crate::fuzzy::fuzzy_match_str;
-use crate::getchar::state::{KeyTyped, got_int, test_disable_char_avail};
+use crate::getchar::state::{GOT_INT, KEY_TYPED, test_disable_char_avail};
 use crate::getchar::{
     append_to_redobuff_char, append_to_redobuff_literally, char_avail, safe_vgetc, using_script,
     vgetc, vpeekc, vpeekc_any, vungetc,

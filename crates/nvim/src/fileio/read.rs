@@ -417,7 +417,7 @@ pub(crate) fn readfile_named(
                 }
             }
 
-            while !error && !got_int.get() {
+            while !error && !GOT_INT.get() {
                 if !skip_read {
                     // Use a buffer of at least 64K. Add linerest to double
                     // the size if the line gets very long, to avoid a lot
@@ -694,7 +694,7 @@ pub(crate) fn readfile_named(
 
         // If we hit end of file in the middle of a line, note that and
         // complete the line ourselves.
-        if !error && !got_int.get() && w.linerest != 0 {
+        if !error && !GOT_INT.get() && w.linerest != 0 {
             // Remember it for when writing.
             if set_options {
                 Buf::current().b_p_eol = c_int::from(false);
@@ -772,7 +772,7 @@ pub(crate) fn readfile_named(
                 appended_lines_mark(from, linecnt);
             }
 
-            if got_int.get() {
+            if GOT_INT.get() {
                 if !how.dummy {
                     Buf::current().file_message(sfname, gettext(E_INTERR));
                     if how.newfile {

@@ -249,7 +249,7 @@ pub fn qf_list(excmd: &mut ExArg) {
     let all = excmd.forceit || qfl.no_valid;
     msg_ext_set_kind(c"list_cmd");
     let mut i: c_int = 1;
-    while !got_int.get() {
+    while !GOT_INT.get() {
         // Re-found every time round: printing and the break check can
         // both run user code, which may have changed the list.
         let wanted = {

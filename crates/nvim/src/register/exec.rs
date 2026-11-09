@@ -22,7 +22,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::cstr::{self, until_nul};
 use crate::getchar::Remap;
@@ -102,17 +101,17 @@ fn fire_recording_leave(regname: RegName, contents: &XString) {
 pub fn do_record(c: Key) -> Result<(), Failed> {
     /// Which register the recording in progress goes into; kept across
     /// the two calls because `reg_recording` is cleared before the store.
-    static regname: GlobalCell<RegName> = GlobalCell::new(0);
+    static REGNAME: GlobalCell<RegName> = GlobalCell::new(0);
 
-    if reg_recording.get() == 0 {
+    if REG_RECORDING.get() == 0 {
         // Start recording. A letter or a digit, and `"` -- note that
         // this is *not* `is_literal_register`, which also takes `*`/`+`.
         let Some(c) = register_name(c).filter(|&c| c.is_ascii_alphanumeric() || c == b'"') else {
             return Err(Failed);
         };
-        reg_recording.set(c);
+        REG_RECORDING.set(c);
         showmode();
-        regname.set(c);
+        REGNAME.set(c);
         apply_autocmds(
             AutoEvent::RecordingEnter,
             None,
@@ -129,9 +128,9 @@ pub fn do_record(c: Key) -> Result<(), Failed> {
     recorded.truncate(unescaped);
     let p = XString::from_vec(recorded);
     // The autocommands this fires are the ones the caller allows.
-    fire_recording_leave(regname.get(), &p);
-    reg_recorded.set(reg_recording.get());
-    reg_recording.set(0);
+    fire_recording_leave(REGNAME.get(), &p);
+    REG_RECORDED.set(REG_RECORDING.get());
+    REG_RECORDING.set(0);
     if p_ch() == 0 || ui_has(kUIMessages) {
         showmode();
     } else {
@@ -139,9 +138,9 @@ pub fn do_record(c: Key) -> Result<(), Failed> {
         msg(c"", 0);
     }
     // Recording into a register must not move `""`.
-    let old_y_previous = y_previous.get();
-    let retval = stuff_yank(regname.get(), p);
-    y_previous.set(old_y_previous);
+    let old_y_previous = Y_PREVIOUS.get();
+    let retval = stuff_yank(REGNAME.get(), p);
+    Y_PREVIOUS.set(old_y_previous);
     retval
 }
 
@@ -265,17 +264,17 @@ pub fn do_execreg(regname: RegName, colon: bool, addcr: bool, silent: bool) -> R
     let mut regname = regname;
     if regname == b'@' {
         // `@@` repeats the last `@`.
-        if execreg_lastc.get() == 0 {
+        if EXECREG_LASTC.get() == 0 {
             emsg(gettext(c"E748: No previously used register"));
             return Err(Failed);
         }
-        regname = execreg_lastc.get();
+        regname = EXECREG_LASTC.get();
     }
     if regname == b'%' || regname == b'#' || !valid_yank_reg(regname, false) {
         emsg_invreg(c_int::from(regname));
         return Err(Failed);
     }
-    execreg_lastc.set(regname);
+    EXECREG_LASTC.set(regname);
 
     if regname == b'_' {
         return Ok(()); // black hole: nothing to do
@@ -365,8 +364,8 @@ pub fn do_execreg(regname: RegName, colon: bool, addcr: bool, silent: bool) -> R
             return Err(Failed);
         }
     }
-    reg_executing.set(if regname == 0 { b'"' } else { regname });
-    pending_end_reg_executing.set(false);
+    REG_EXECUTING.set(if regname == 0 { b'"' } else { regname });
+    PENDING_END_REG_EXECUTING.set(false);
     retval
 }
 
@@ -385,7 +384,7 @@ pub fn insert_reg(
 
     // A register may be a long list of lines; let CTRL-C out.
     os_breakcheck();
-    if got_int.get() {
+    if GOT_INT.get() {
         return Err(Failed);
     }
     if regname != 0 && !valid_yank_reg(regname, false) {
@@ -465,7 +464,7 @@ pub fn cmdline_paste_reg(regname: RegName, literally_arg: bool, remcr: bool) -> 
             cmdline_paste_str(c"\r", literally);
         }
         os_breakcheck();
-        if got_int.get() {
+        if GOT_INT.get() {
             return false;
         }
     }

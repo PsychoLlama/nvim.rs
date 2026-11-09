@@ -26,7 +26,7 @@ use crate::charset::is_word_at;
 use crate::cstr;
 use crate::drawscreen::state::clear_cmdline;
 use crate::fold::fold_open_cursor;
-use crate::getchar::state::KeyTyped;
+use crate::getchar::state::KEY_TYPED;
 use crate::mark::setpcmark;
 use crate::mbyte::{class_in, cluster_len, head_off};
 use crate::memline::Lines;
@@ -260,7 +260,7 @@ pub(crate) fn nv_gd(op: Op, nchar: Key, thisblock: bool) {
         return;
     }
     if FDO_FLAGS.get() & kOptFdoFlagSearch as c_uint != 0
-        && KeyTyped.get()
+        && KEY_TYPED.get()
         && op.op_type == OpType::Nop
     {
         fold_open_cursor();

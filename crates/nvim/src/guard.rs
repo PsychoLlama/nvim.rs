@@ -91,7 +91,7 @@
 //!   `p_ri` still overwritten, so one blockwise `<` over ragged lines
 //!   switches the user's `'revins'` off. Upstream does the same and
 //!   restoring it is a user-visible change, so it stays (p24-7).
-//! - **`ex_getln::command_line_insert_reg`** abandons `new_cmdpos` at its
+//! - **`ex_getln::command_line_insert_reg`** abandons `NEW_CMDPOS` at its
 //!   "no position asked for" value when `aborting()` cuts the register
 //!   insert short, exactly as upstream does. The command line it belonged
 //!   to is being thrown away on that path.
@@ -116,11 +116,11 @@
 
 use crate::autocmd::state::{AutocmdField, autocmd_no_enter, autocmd_no_leave};
 use crate::drawscreen::state::RedrawingDisabled;
-use crate::ex_getln::state::cmdline_star;
+use crate::ex_getln::state::CMDLINE_STAR;
 use crate::extmark::curbuf_splice_pending;
 use crate::fileio::state::no_check_timestamps;
 use crate::fold::disable_fold_update;
-use crate::getchar::state::{GetcharField, allow_keys, expr_map_lock, no_mapping, no_zero_mapping};
+use crate::getchar::state::{ALLOW_KEYS, EXPR_MAP_LOCK, GetcharField, NO_MAPPING, NO_ZERO_MAPPING};
 use crate::global_cell::{GlobalCell, Level};
 use crate::memline::inhibit_delete_count;
 use crate::message::state::{
@@ -430,11 +430,11 @@ impl Suppress {
         Bump::new(MSG_LISTDO_OVERWRITE)
     }
 
-    /// `cmdline_star` — the command line shows `*` for each character
+    /// `CMDLINE_STAR` — the command line shows `*` for each character
     /// instead of what was typed, and nothing typed in the scope is
     /// recorded, echoed or completed. `inputsecret()`'s guard.
     pub(crate) fn cmdline_echo() -> Bump {
-        Bump::new(&cmdline_star)
+        Bump::new(&CMDLINE_STAR)
     }
 
     /// `no_check_timestamps` — a file whose timestamp changed under the
@@ -446,7 +446,7 @@ impl Suppress {
     /// `no_zero_mapping` — a `0` read in this scope is a count digit, not
     /// the "go to column 0" command, so it must not resolve a mapping.
     pub(crate) fn zero_mapping() -> KeyBump {
-        Bump::new(no_zero_mapping)
+        Bump::new(NO_ZERO_MAPPING)
     }
 
     /// `autocmd_no_enter` — no `WinEnter`/`BufEnter` fires in this scope.
@@ -548,34 +548,34 @@ impl Allow {
     /// `expr_map_lock = 0` — [`Allow::text_changes`]'s companion; the two
     /// sites that invite arbitrary Lua in lift both locks together.
     pub(crate) fn expr_map() -> Saved<GetcharField<c_int>> {
-        Saved::new(expr_map_lock, 0)
+        Saved::new(EXPR_MAP_LOCK, 0)
     }
 
     /// [`Allow::expr_map`], lifting the lock only when `cond`, but
     /// restoring it either way.
     pub(crate) fn expr_map_when(cond: bool) -> Saved<GetcharField<c_int>> {
-        Saved::when(cond, expr_map_lock, 0)
+        Saved::when(cond, EXPR_MAP_LOCK, 0)
     }
 
     /// `allow_keys = 0` — key codes are *not* recognised in this scope, so
     /// a raw `<BS>` byte stays a byte.
     pub(crate) fn no_key_codes() -> Saved<GetcharField<c_int>> {
-        Saved::new(allow_keys, 0)
+        Saved::new(ALLOW_KEYS, 0)
     }
 
     /// `no_mapping -= 1` — the inverse of [`Keys::unmapped`], for the
     /// callee that has to read a *mapped* key back out of a caller that
     /// had suppressed mapping (`'langmap'`, composing characters).
     pub(crate) fn mapping() -> KeyBump {
-        Bump::by(no_mapping, -1)
+        Bump::by(NO_MAPPING, -1)
     }
 
     /// [`Allow::mapping`] for both halves of the pair — the inverse of
     /// [`Keys::unmapped_with_codes`].
     pub(crate) fn mapping_with_codes() -> RawKeys {
         RawKeys {
-            _no_mapping: Bump::by(no_mapping, -1),
-            _allow_keys: Bump::by(allow_keys, -1),
+            _no_mapping: Bump::by(NO_MAPPING, -1),
+            _allow_keys: Bump::by(ALLOW_KEYS, -1),
         }
     }
 
@@ -623,7 +623,7 @@ impl Lock {
     /// mapping and abbreviation expansions, which additionally must not
     /// change the mapping tables they are being read from.
     pub(crate) fn expr_map() -> KeyBump {
-        Bump::new(expr_map_lock)
+        Bump::new(EXPR_MAP_LOCK)
     }
 
     /// `allbuf_lock` — no buffer may be added, removed or renamed while
@@ -666,7 +666,7 @@ impl Keys {
     /// `no_mapping` — the keys read in this scope do not go through
     /// mappings or abbreviations.
     pub(crate) fn unmapped() -> KeyBump {
-        Bump::new(no_mapping)
+        Bump::new(NO_MAPPING)
     }
 
     /// `no_mapping` + `allow_keys`: the recurring pair. Read the next key
@@ -674,7 +674,7 @@ impl Keys {
     pub(crate) fn unmapped_with_codes() -> RawKeys {
         RawKeys {
             _no_mapping: Self::unmapped(),
-            _allow_keys: Bump::new(allow_keys),
+            _allow_keys: Bump::new(ALLOW_KEYS),
         }
     }
 }
@@ -789,13 +789,13 @@ mod tests {
     #[test]
     fn a_negative_bump_adds_back() {
         let _serial = counters();
-        no_mapping.set(2);
+        NO_MAPPING.set(2);
         {
             let _lifted = Allow::mapping();
-            assert_eq!(no_mapping.get(), 1);
+            assert_eq!(NO_MAPPING.get(), 1);
         }
-        assert_eq!(no_mapping.get(), 2);
-        no_mapping.set(0);
+        assert_eq!(NO_MAPPING.get(), 2);
+        NO_MAPPING.set(0);
     }
 
     #[test]
@@ -837,8 +837,8 @@ mod tests {
         let _serial = counters();
         {
             let _guard = Keys::unmapped_with_codes();
-            assert_eq!((no_mapping.get(), allow_keys.get()), (1, 1));
+            assert_eq!((NO_MAPPING.get(), ALLOW_KEYS.get()), (1, 1));
         }
-        assert_eq!((no_mapping.get(), allow_keys.get()), (0, 0));
+        assert_eq!((NO_MAPPING.get(), ALLOW_KEYS.get()), (0, 0));
     }
 }

@@ -40,7 +40,7 @@ use crate::ex_getln::gotocmdline;
 use crate::file_search::{file_name_in_line, find_file_name_in_path};
 use crate::fold::fold_open_cursor;
 use crate::getchar::char_avail;
-use crate::getchar::state::{KeyStuffed, KeyTyped, got_int};
+use crate::getchar::state::{GOT_INT, KEY_STUFFED, KEY_TYPED};
 use crate::global_cell::{GlobalCell, state_record};
 use crate::indent_c::is_pos_in_string;
 use crate::insexpand::{

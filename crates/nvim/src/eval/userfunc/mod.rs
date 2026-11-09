@@ -38,7 +38,7 @@ use crate::ex_eval::{
 };
 use crate::ex_getln::{ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
 use crate::getchar::state::SaveRedo;
-use crate::getchar::state::{KeyTyped, got_int};
+use crate::getchar::state::{GOT_INT, KEY_TYPED};
 use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
 use crate::guard::sandbox;

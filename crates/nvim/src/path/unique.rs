@@ -193,7 +193,7 @@ pub(crate) fn uniquefy_paths(names: &mut Vec<XString>, pattern: &CStr, path_opti
     let mut sort_again = false;
 
     for i in 0..names.len() {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         let path = &names[i];
@@ -254,7 +254,7 @@ pub(crate) fn uniquefy_paths(names: &mut Vec<XString>, pattern: &CStr, path_opti
     // that leaves something another entry also ends with, in which case
     // they keep a leading "./".
     for (i, slot) in in_curdir.iter().enumerate() {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         let Some(path) = slot else {

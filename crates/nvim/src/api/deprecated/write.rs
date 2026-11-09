@@ -56,7 +56,7 @@ fn write_msg(message: ApiString, to_err: bool, writeln: bool) {
 
     let no_prompt = Suppress::wait_return();
     for &byte in message.as_bytes() {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         match byte {

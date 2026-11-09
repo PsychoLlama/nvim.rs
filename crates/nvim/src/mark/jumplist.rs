@@ -23,7 +23,7 @@
 use crate::buffer::find_buf;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::state::{global_busy, listcmd_busy};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::memory::XString;
 use crate::message::{
     message_filtered, msg_display, msg_display_bytes, msg_ext_set_kind, msg_putchar, msg_str,
@@ -327,7 +327,7 @@ pub fn ex_jumps(_excmd: &mut ExArg) {
     msg_ext_set_kind(c"list_cmd");
     msg_title(gettext(c"\n jump line  col file/text"));
     let mut i: c_int = 0;
-    while i < win.w_jumplistlen && !got_int.get() {
+    while i < win.w_jumplistlen && !GOT_INT.get() {
         let fmark = win.w_jumplist[slot(i)].fmark.clone();
         if fmark.mark.lnum != LineNr::ZERO {
             // The entry the index stands on is shown even when its file has
@@ -338,7 +338,7 @@ pub fn ex_jumps(_excmd: &mut ExArg) {
                 && !message_filtered(name.as_cstr())
             {
                 msg_putchar(c_int::from(b'\n'));
-                if got_int.get() {
+                if GOT_INT.get() {
                     break;
                 }
                 let here = Buf::current().handle;
@@ -376,11 +376,11 @@ pub fn ex_changes(_excmd: &mut ExArg) {
     msg_ext_set_kind(c"list_cmd");
     msg_title(gettext(c"\nchange line  col text"));
     let mut i: c_int = 0;
-    while i < buf.b_changelistlen && !got_int.get() {
+    while i < buf.b_changelistlen && !GOT_INT.get() {
         let pos = buf.b_changelist[slot(i)].mark;
         if pos.lnum != LineNr::ZERO {
             msg_putchar(c_int::from(b'\n'));
-            if got_int.get() {
+            if GOT_INT.get() {
                 break;
             }
             let row = list_row(

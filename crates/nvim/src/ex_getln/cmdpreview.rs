@@ -27,20 +27,20 @@ use crate::winlayer::{BufId, WinId};
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
 pub fn cmdpreview_get_bufnr() -> Handle {
-    cmdpreview_bufnr.get()
+    CMDPREVIEW_BUFNR.get()
 }
 
 /// The namespace the preview's extmarks and highlights live in.
 pub fn cmdpreview_get_ns() -> ::core::ffi::c_int {
-    cmdpreview_ns.get()
+    CMDPREVIEW_NS.get()
 }
 
 /// Set up the command preview buffer, creating it if it does not exist.
 ///
 /// Answers NULL if the buffer could not be made ready.
 pub(crate) fn cmdpreview_open_buf() -> Option<Buf> {
-    let existing = (cmdpreview_bufnr.get() != Handle::NONE)
-        .then(|| find_buf(Handle::from_number(cmdpreview_bufnr.get().get())))
+    let existing = (CMDPREVIEW_BUFNR.get() != Handle::NONE)
+        .then(|| find_buf(Handle::from_number(CMDPREVIEW_BUFNR.get().get())))
         .flatten();
 
     // If the preview buffer doesn't exist, open one.
@@ -77,7 +77,7 @@ pub(crate) fn cmdpreview_open_buf() -> Option<Buf> {
     // Reset 'textwidth', which a ftplugin may have set.
     Buf::current().b_p_tw = 0;
     aucmd_restbuf(&mut aco);
-    cmdpreview_bufnr.set(cmdpreview_buf.handle);
+    CMDPREVIEW_BUFNR.set(cmdpreview_buf.handle);
 
     Some(cmdpreview_buf)
 }
@@ -129,8 +129,8 @@ pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
 
 /// Close any open command preview windows.
 pub(crate) fn cmdpreview_close_win() {
-    if cmdpreview_bufnr.get() != Handle::NONE
-        && let Some(buffer) = find_buf(Handle::from_number(cmdpreview_bufnr.get().get()))
+    if CMDPREVIEW_BUFNR.get() != Handle::NONE
+        && let Some(buffer) = find_buf(Handle::from_number(CMDPREVIEW_BUFNR.get().get()))
     {
         close_windows(buffer, false);
     }
@@ -187,7 +187,7 @@ pub(crate) fn cmdpreview_prepare(cpinfo: &mut CpInfo) {
         let mut buf = win.buffer();
 
         // Don't save the state of the command preview buffer or window.
-        if buf.handle == cmdpreview_bufnr.get() {
+        if buf.handle == CMDPREVIEW_BUFNR.get() {
             continue;
         }
 
@@ -258,7 +258,7 @@ pub(crate) fn cmdpreview_restore_state(cpinfo: &mut CpInfo) {
 
         extmark_clear(
             buf,
-            cmdpreview_ns.get().cast_unsigned(),
+            CMDPREVIEW_NS.get().cast_unsigned(),
             0,
             ColNr::ZERO,
             MAXLNUM.get(),
@@ -396,12 +396,12 @@ pub(crate) fn cmdpreview_may_show() -> bool {
             icm_split = false;
         }
         // Set up the preview namespace if it is not already set.
-        if cmdpreview_ns.get() == 0 {
+        if CMDPREVIEW_NS.get() == 0 {
             let ns = nvim_create_namespace(ApiString::NULL);
-            cmdpreview_ns.set(::core::ffi::c_int::try_from(ns).unwrap_or(0));
+            CMDPREVIEW_NS.set(::core::ffi::c_int::try_from(ns).unwrap_or(0));
         }
 
-        cmdpreview.set(true);
+        CMDPREVIEW.set(true);
 
         // Execute the preview callback: its return value says whether to
         // show a preview and whether to open the preview window. It also

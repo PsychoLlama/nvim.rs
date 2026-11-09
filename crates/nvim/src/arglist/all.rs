@@ -351,7 +351,7 @@ fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
     }
     let mut split_ret = Ok(());
     let mut i = 0;
-    while i < count && !got_int.get() {
+    while i < count && !GOT_INT.get() {
         if aall.alist == ArgListId::GLOBAL && i == alist_count(ArgListId::GLOBAL) - 1 {
             ARG_HAD_LAST.set(true);
         }

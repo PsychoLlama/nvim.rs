@@ -269,7 +269,7 @@ pub fn apply_autocmds_group(
     let mut retval = false;
     let mut did_save_redobuff = false;
     let mut save_redo = SAVE_REDO_INIT;
-    let save_key_typed = KeyTyped.get();
+    let save_key_typed = KEY_TYPED.get();
 
     'bypass: {
         // Nothing to fire, or firing is off.
@@ -524,7 +524,7 @@ pub fn apply_autocmds_group(
         if do_profiling.get() == PROF_YES {
             prof_child_exit(wait_time);
         }
-        KeyTyped.set(save_key_typed);
+        KEY_TYPED.set(save_key_typed);
         drop(patcmd);
         // The handlers below run at the enclosing level, not this one.
         drop(nested);

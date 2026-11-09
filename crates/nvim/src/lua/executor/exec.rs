@@ -19,7 +19,7 @@ use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use super::{
-    FCERR_NONE, FCERR_OTHER, RET_NIL_BOOL, RET_OBJECT, fast_pcall, kRetLuaref, kRetMulti,
+    FCERR_NONE, FCERR_OTHER, RET_LUAREF, RET_MULTI, RET_NIL_BOOL, RET_OBJECT, fast_pcall,
     nlua_error, nlua_pcall, with_main_stack,
 };
 use crate::ex_cmds::check_secure;
@@ -249,7 +249,7 @@ pub(crate) fn nlua_call_ref_reporting(
 
 /// How many results `mode` wants off the call.
 fn mode_ret(mode: LuaRetMode) -> c_int {
-    if mode == kRetMulti { LUA_MULTRET } else { 1 }
+    if mode == RET_MULTI { LUA_MULTRET } else { 1 }
 }
 
 /// Call the function `reference` refers to.
@@ -300,10 +300,10 @@ pub fn nlua_call_ref_ctx(
 
 /// Convert whatever the call left on the stack, and pop it.
 ///
-/// A `nil` answer is nil whatever the mode asked for — except `kRetMulti`,
+/// A `nil` answer is nil whatever the mode asked for — except `RET_MULTI`,
 /// where it is one element of the list. The results sit above `pretop`.
 fn nlua_call_pop_retval(stack: &mut Stack, mode: LuaRetMode, pretop: At) -> Result<Object, Error> {
-    if mode != kRetMulti && stack.kind(At::TOP) == Kind::Nil {
+    if mode != RET_MULTI && stack.kind(At::TOP) == Kind::Nil {
         stack.pop(1);
         return Ok(Object::Nil);
     }
@@ -313,13 +313,13 @@ fn nlua_call_pop_retval(stack: &mut Stack, mode: LuaRetMode, pretop: At) -> Resu
             stack.pop(1);
             Ok(Object::boolean(bool_value))
         }
-        kRetLuaref => {
+        RET_LUAREF => {
             let reference = stack.reference(At::TOP);
             stack.pop(1);
             Ok(Object::luaref(reference))
         }
         RET_OBJECT => pop_object(stack, false),
-        kRetMulti => {
+        RET_MULTI => {
             let nres = stack.top().index() - pretop.index();
             // The values come off the stack topmost first, so they are
             // collected and then turned back into call order.

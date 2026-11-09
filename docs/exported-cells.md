@@ -56,10 +56,10 @@ binary as well as the default one.
 
 ## `ex_getln`
 
-- `neovim::ex_getln::ccline`
-- `neovim::ex_getln::cmdpreview_bufnr`
-- `neovim::ex_getln::cmdpreview_ns`
-- `neovim::ex_getln::last_prompt_id`
+- `neovim::ex_getln::CCLINE`
+- `neovim::ex_getln::CMDPREVIEW_BUFNR`
+- `neovim::ex_getln::CMDPREVIEW_NS`
+- `neovim::ex_getln::LAST_PROMPT_ID`
 
 ## `getchar`
 
@@ -90,7 +90,7 @@ binary as well as the default one.
 
 ## `lua`
 
-- `neovim::lua::executor::in_fast_callback`
+- `neovim::lua::executor::IN_FAST_CALLBACK`
 
 ## `message`
 

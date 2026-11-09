@@ -31,7 +31,7 @@ use crate::ex_docmd::modifier::expr_map_locked;
 use crate::getchar::{restore_typeahead, save_typeahead, stuff_empty, typeahead, vpeekc};
 
 use crate::ex_docmd::state::ex_normal_busy;
-use crate::getchar::state::{got_int, pending_end_reg_executing, reg_executing};
+use crate::getchar::state::{GOT_INT, PENDING_END_REG_EXECUTING, REG_EXECUTING};
 use crate::keycodes::{Ctrl_C, K_SPECIAL, KE_FILLER};
 use crate::message::E_SECURE;
 use crate::message::state::{MSG_DIDOUT, MSG_SCROLL};
@@ -65,8 +65,8 @@ pub fn save_current_state(s: &mut SaveState) -> bool {
     s.save_state = State.get();
     s.save_finish_op = finish_op.get();
     s.save_opcount = opcount.get();
-    s.save_reg_executing = reg_executing.get();
-    s.save_pending_end_reg_executing = pending_end_reg_executing.get();
+    s.save_reg_executing = REG_EXECUTING.get();
+    s.save_pending_end_reg_executing = PENDING_END_REG_EXECUTING.get();
     MSG_SCROLL.set(0);
     // Not entering Insert mode from here.
     restart_edit.set(Key::NUL);
@@ -87,8 +87,8 @@ pub fn restore_current_state(s: &mut SaveState) {
     }
     finish_op.set(s.save_finish_op);
     opcount.set(s.save_opcount);
-    reg_executing.set(s.save_reg_executing);
-    pending_end_reg_executing.set(s.save_pending_end_reg_executing);
+    REG_EXECUTING.set(s.save_reg_executing);
+    PENDING_END_REG_EXECUTING.set(s.save_pending_end_reg_executing);
     MSG_DIDOUT.set(MSG_DIDOUT.get() || s.save_msg_didout);
     State.set(s.save_state);
     ui_cursor_shape();
@@ -129,7 +129,7 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
                 check_cursor_moved(Win::current());
             }
             exec_normal_cmd(keys, remap, false);
-            if !(excmd.addr_count > 0 && excmd.line1 <= excmd.line2 && !got_int.get()) {
+            if !(excmd.addr_count > 0 && excmd.line1 <= excmd.line2 && !GOT_INT.get()) {
                 break;
             }
         }
@@ -244,7 +244,7 @@ fn exec_normal_on(op: Op, was_typed: bool, use_vpeekc: bool) {
             c = vpeekc().code();
             c != NUL
         } && c != Ctrl_C)
-        && !got_int.get()
+        && !GOT_INT.get()
     {
         update_topline_cursor();
         normal_cmd(op, true);

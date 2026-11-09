@@ -159,7 +159,7 @@ pub fn ex_scriptnames(excmd: &mut ExArg) {
     let mut sid: ScriptId = 1;
     // The registry is re-read every round, because the output below can
     // pause for the user, who can run anything.
-    while sid <= script_count() && !got_int.get() {
+    while sid <= script_count() && !GOT_INT.get() {
         let listed = sid;
         sid += 1;
         let Some(name) = script_name(listed) else {

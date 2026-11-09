@@ -341,7 +341,7 @@ pub fn qf_get_valid_size(cmdidx: CmdIdx) -> size_t {
     let mut prev_fnum = None;
     let mut size: size_t = 0;
     for entry in &qfl.entries {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         if entry.valid {
@@ -401,7 +401,7 @@ pub(crate) fn qf_get_nth_valid_entry(qfl: &QfList, n: size_t, fdo: bool) -> size
     let mut prev_fnum = None;
     let mut eidx: size_t = 0;
     for (at, entry) in qfl.entries.iter().enumerate() {
-        if got_int.get() {
+        if GOT_INT.get() {
             // Upstream's walk stops where it was interrupted and answers
             // that entry.
             return at + 1;

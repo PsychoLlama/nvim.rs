@@ -34,7 +34,7 @@ pub(crate) fn list_functions(mut pattern: Option<&mut OwnedProg>) {
     let mut idx = 0;
 
     msg_ext_set_kind(c"list_cmd");
-    while todo > 0 && !got_int.get() {
+    while todo > 0 && !GOT_INT.get() {
         if let Some(func) = func_at_slot(idx) {
             todo -= 1;
             // Without a pattern, skip what the user filtered out and the
@@ -92,7 +92,7 @@ pub(crate) fn list_one_function(excmd: &mut ExArg, name: &[u8], at: usize) {
     if excmd.line.next.is_some() {
         excmd.line.terminate_at(at);
     }
-    if excmd.skip || got_int.get() {
+    if excmd.skip || GOT_INT.get() {
         return;
     }
 
@@ -110,7 +110,7 @@ pub(crate) fn list_one_function(excmd: &mut ExArg, name: &[u8], at: usize) {
     }
     let body = func.body();
     for (j, line) in body.lines.iter().enumerate() {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         let Some(line) = line else {
@@ -133,7 +133,7 @@ pub(crate) fn list_one_function(excmd: &mut ExArg, name: &[u8], at: usize) {
         cstr::with_terminated(line, |line| msg_prt_line(line, false));
         line_breakcheck();
     }
-    if !got_int.get() {
+    if !GOT_INT.get() {
         msg_putchar(c_int::from(b'\n'));
         if function_list_modified(prev_ht_changed) == 0 {
             msg_str(if excmd.forceit {

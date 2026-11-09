@@ -15,7 +15,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::cmdexpand::defs::{BackslashEscape, ExpandContext};
@@ -136,9 +135,9 @@ pub(crate) fn init_ccline(firstc: u8, indent: ::core::ffi::c_int) {
 
 pub(crate) fn ui_ext_cmdline_hide(abort: bool) {
     if ui_has(kUICmdline) {
-        cmdline_was_last_drawn.set(false);
+        CMDLINE_WAS_LAST_DRAWN.set(false);
         let mut cc = Cc::current();
-        cc.redraw_state = kCmdRedrawNone;
+        cc.redraw_state = CMD_REDRAW_NONE;
         ui_call_cmdline_hide(Integer::from(cc.level), abort);
     }
 }
@@ -172,11 +171,11 @@ pub(crate) fn command_line_enter(
     clear_ccline: bool,
 ) -> Option<XString> {
     // Can be invoked recursively; identify each level.
-    static cmdline_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-    let level = Depth::of(&cmdline_level);
+    static CMDLINE_LEVEL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+    let level = Depth::of(&CMDLINE_LEVEL);
 
-    let save_cmdpreview = cmdpreview.get();
-    cmdpreview.set(false);
+    let save_cmdpreview = CMDPREVIEW.get();
+    CMDPREVIEW.set(false);
     let mut state = CommandLineState {
         firstc: firstc.unwrap_or(0),
         break_ctrl_c: firstc.is_none(),
@@ -203,20 +202,20 @@ pub(crate) fn command_line_enter(
         save_cmdline();
         did_save_ccline = true;
     } else if clear_ccline {
-        ccline.set(CMDLINE_INFO_INIT);
+        CCLINE.set(CMDLINE_INFO_INIT);
     }
 
     init_ccline(s.firstc, s.indent);
     debug_assert!(cc.in_use());
-    let prompt_id = last_prompt_id.get();
-    last_prompt_id.set(prompt_id.wrapping_add(1));
+    let prompt_id = LAST_PROMPT_ID.get();
+    LAST_PROMPT_ID.set(prompt_id.wrapping_add(1));
     cc.prompt_id = prompt_id;
-    cc.level = cmdline_level.get();
+    cc.level = CMDLINE_LEVEL.get();
 
     let mut err: Error = Error::none();
     let mut firstcbuf = [0u8; 2];
 
-    if cmdline_level.get() == 50 {
+    if CMDLINE_LEVEL.get() == 50 {
         // Somehow got into a loop recursively calling getcmdline(), bail
         // out. (C's `goto theend`.)
         emsg(gettext(E_COMMAND_TOO_RECURSIVE));
@@ -338,7 +337,7 @@ pub(crate) fn command_line_enter(
         }
 
         DID_EMSG.set(0);
-        got_int.set(false);
+        GOT_INT.set(false);
         state_enter(ModeState::command_line(s));
 
         // Trigger CmdlineLeavePre autocommands if not already triggered.
@@ -456,8 +455,8 @@ pub(crate) fn command_line_enter(
             SID_NONE,
         );
         State.set(s.save_state);
-        if cmdpreview.get() != save_cmdpreview {
-            cmdpreview.set(save_cmdpreview); // restore the preview state
+        if CMDPREVIEW.get() != save_cmdpreview {
+            CMDPREVIEW.set(save_cmdpreview); // restore the preview state
             redraw_all_later(UPD_SOME_VALID);
         }
         may_trigger_modechanged();
@@ -630,10 +629,10 @@ pub fn getcmdline_prompt(
         save_cmdline();
         did_save_ccline = true;
     } else {
-        ccline.set(CMDLINE_INFO_INIT);
+        CCLINE.set(CMDLINE_INFO_INIT);
     }
-    let prompt_id = last_prompt_id.get();
-    last_prompt_id.set(prompt_id.wrapping_add(1));
+    let prompt_id = LAST_PROMPT_ID.get();
+    LAST_PROMPT_ID.set(prompt_id.wrapping_add(1));
     cc.prompt_id = prompt_id;
     cc.cmdprompt = prompt.map(XString::from_cstr);
     cc.hl_id = hl_id;
@@ -650,7 +649,7 @@ pub fn getcmdline_prompt(
     CMD_SILENT.set(false); // want to see the prompt
 
     let ret = command_line_enter(firstc, 1, 0, false);
-    cc.redraw_state = kCmdRedrawNone;
+    cc.redraw_state = CMD_REDRAW_NONE;
     if let Some(clicked) = mouse_used {
         *clicked = cc.mouse_used;
     }

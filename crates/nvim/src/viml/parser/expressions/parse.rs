@@ -15,7 +15,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use core::ffi::{CStr, c_int};
 
@@ -23,15 +22,15 @@ use super::ast::{east_set_error, translate};
 use super::{brackets, figure, operators, values, *};
 
 /// Additional flags to pass to the lexer, indexed by the wanted node.
-static want_node_to_lexer_flags: [c_int; 2] = [
-    kELFlagForbidScope.cast_signed(), // kENodeOperator
-    kELFlagIsNotCmp.cast_signed(),    // kENodeValue
+static WANT_NODE_TO_LEXER_FLAGS: [c_int; 2] = [
+    EL_FLAG_FORBID_SCOPE.cast_signed(), // kENodeOperator
+    EL_FLAG_IS_NOT_CMP.cast_signed(),   // kENodeValue
 ];
 
 /// Determine whether the given parse type is an assignment.
 #[inline(always)]
 pub(super) fn pt_is_assignment(pt: ExprASTParseType) -> bool {
-    pt == kEPTAssignment || pt == kEPTSingleAssignment
+    pt == EPT_ASSIGNMENT || pt == EPT_SINGLE_ASSIGNMENT
 }
 
 /// The highlight group for the current token: `Nvim<group>`, or
@@ -71,7 +70,7 @@ pub(super) use hl;
 /// deliberate: an invalid option token is asked for its scope and an invalid
 /// comparison for its case strategy, over a payload the lexer wrote as an
 /// error. `values::option` and `operators::comparison` each have a
-/// `kExprLexInvalid` arm that then reads on regardless, and the answer
+/// `EXPR_LEX_INVALID` arm that then reads on regardless, and the answer
 /// reaches the highlight list. The C reads a union member the error did not
 /// cover, which is the zeroes `blank_token` left -- except for the option
 /// scope, which an error *does* leave standing and
@@ -82,7 +81,7 @@ impl LexExprToken {
     pub(super) fn assignment_type(&self) -> ExprAssignmentType {
         match self.data {
             LexExprTokenData::Assignment(ass) => ass.type_0,
-            _ => kExprAsgnPlain,
+            _ => EXPR_ASGN_PLAIN,
         }
     }
 
@@ -102,9 +101,9 @@ impl LexExprToken {
         match self.data {
             LexExprTokenData::Error(err) => err,
             _ => LexExprTokenError {
-                type_0: kExprLexInvalid,
+                type_0: EXPR_LEX_INVALID,
                 msg: c"",
-                opt_scope: kExprOptScopeUnspecified,
+                opt_scope: EXPR_OPT_SCOPE_UNSPECIFIED,
             },
         }
     }
@@ -114,7 +113,7 @@ impl LexExprToken {
         match self.data {
             LexExprTokenData::Var(var) => var,
             _ => LexExprTokenVar {
-                scope: kExprVarScopeMissing,
+                scope: EXPR_VAR_SCOPE_MISSING,
                 autoload: false,
             },
         }
@@ -128,7 +127,7 @@ impl LexExprToken {
         let scope = match self.data {
             LexExprTokenData::Option(opt) => return opt,
             LexExprTokenData::Error(err) => err.opt_scope,
-            _ => kExprOptScopeUnspecified,
+            _ => EXPR_OPT_SCOPE_UNSPECIFIED,
         };
         LexExprTokenOption {
             name_offset: 0,
@@ -165,7 +164,7 @@ impl LexExprToken {
     pub(super) fn multiplication_type(&self) -> ExprLexMulType {
         match self.data {
             LexExprTokenData::Multiplication(mul) => mul.type_0,
-            _ => kExprLexMulMul,
+            _ => EXPR_LEX_MUL_MUL,
         }
     }
 
@@ -174,8 +173,8 @@ impl LexExprToken {
         match self.data {
             LexExprTokenData::Comparison(cmp) => cmp,
             _ => LexExprTokenComparison {
-                type_0: kExprCmpEqual,
-                ccs: kCCStrategyUseOption,
+                type_0: EXPR_CMP_EQUAL,
+                ccs: CC_STRATEGY_USE_OPTION,
                 inv: false,
             },
         }
@@ -194,7 +193,7 @@ pub(super) enum Flow {
     /// spliced in ahead of it.
     Reprocess,
     /// Stop parsing and return what has been built. Deliberately *without*
-    /// consuming the token: with `kExprFlagsMulti` the caller resumes here
+    /// consuming the token: with `EXPR_FLAGS_MULTI` the caller resumes here
     /// with a second expression.
     Stop,
 }
@@ -258,14 +257,14 @@ pub(super) struct ExprParser<'a, 's> {
 impl<'a, 's> ExprParser<'a, 's> {
     fn new(pstate: &'s mut ParserState<'a>, flags: c_int) -> Self {
         let mut pt_stack = Vec::new();
-        pt_stack.push(kEPTExpr);
-        if flags & kExprFlagsParseLet.cast_signed() != 0 {
-            pt_stack.push(kEPTAssignment);
+        pt_stack.push(EPT_EXPR);
+        if flags & EXPR_FLAGS_PARSE_LET.cast_signed() != 0 {
+            pt_stack.push(EPT_ASSIGNMENT);
         }
         let blank = LexExprToken {
             start: ParserPosition { line: 0, col: 0 },
             len: 0,
-            type_0: kExprLexMissing,
+            type_0: EXPR_LEX_MISSING,
             data: LexExprTokenData::Blank,
         };
         ExprParser {
@@ -274,20 +273,20 @@ impl<'a, 's> ExprParser<'a, 's> {
             flags,
             ast_stack: vec![Slot::Root],
             pt_stack,
-            want_node: kENodeValue,
+            want_node: E_NODE_VALUE,
             prev_token: blank,
             highlighted_prev_spacing: false,
             lambda_node: None,
             asgn_level: 0,
             cur_token: blank,
-            tok_type: kExprLexMissing,
+            tok_type: EXPR_LEX_MISSING,
             is_invalid: false,
             lexer_flags: 0,
             is_concat_or_subscript: false,
             pline: &[],
             top_node_p: Slot::Root,
             node_is_key: false,
-            cur_pt: kEPTExpr,
+            cur_pt: EPT_EXPR,
         }
     }
 
@@ -306,7 +305,7 @@ impl<'a, 's> ExprParser<'a, 's> {
     fn next_token(&mut self) -> LexExprToken {
         viml_pexpr_next_token(
             self.pstate,
-            want_node_to_lexer_flags[self.want_node as usize] | self.lexer_flags,
+            WANT_NODE_TO_LEXER_FLAGS[self.want_node as usize] | self.lexer_flags,
         )
     }
 
@@ -355,7 +354,7 @@ impl<'a, 's> ExprParser<'a, 's> {
     /// and the spacing before it if there was any.
     pub(super) fn new_node(&mut self, type_0: ExprASTNodeType) -> NodeId {
         let node = self.ast.new_node(type_0);
-        if self.prev_token.type_0 == kExprLexSpacing {
+        if self.prev_token.type_0 == EXPR_LEX_SPACING {
             let len = self.cur_token.len.wrapping_add(self.prev_token.len);
             self.ast.set_span(node, self.prev_token.start, len);
         } else {
@@ -392,23 +391,23 @@ impl<'a, 's> ExprParser<'a, 's> {
     /// `ADD_VALUE_IF_MISSING`: stand a Missing node in for the value an
     /// operator was expecting, as in `* 5`.
     pub(super) fn add_value_if_missing(&mut self, msg: &'static CStr) {
-        if self.want_node == kENodeValue {
+        if self.want_node == E_NODE_VALUE {
             self.error(msg);
-            let node = self.new_node(kExprNodeMissing);
+            let node = self.new_node(EXPR_NODE_MISSING);
             self.ast.set_len(node, 0);
             self.ast.set_slot(self.top_node_p, Some(node));
-            self.want_node = kENodeOperator;
+            self.want_node = E_NODE_OPERATOR;
         }
     }
 
     /// `OP_MISSING`: two values in a row, as in `:echo @a @a`.
     ///
-    /// With `kExprFlagsMulti` and nothing but the root on the stack the caller
+    /// With `EXPR_FLAGS_MULTI` and nothing but the root on the stack the caller
     /// gets to start a second expression at this token; otherwise an OpMissing
     /// operator is spliced in and the token is dispatched again, this time in
     /// value position.
     pub(super) fn op_missing(&mut self) -> Flow {
-        if self.flags & kExprFlagsMulti.cast_signed() != 0 && self.may_have_next_expr() {
+        if self.flags & EXPR_FLAGS_MULTI.cast_signed() != 0 && self.may_have_next_expr() {
             return Flow::Stop;
         }
         debug_assert!(
@@ -416,7 +415,7 @@ impl<'a, 's> ExprParser<'a, 's> {
             "*top_node_p != NULL"
         );
         self.error(c"E15: Missing operator: %.*s");
-        let node = self.new_node(kExprNodeOpMissing);
+        let node = self.new_node(EXPR_NODE_OP_MISSING);
         self.ast.set_len(node, 0);
         self.add_op_node(node);
         Flow::Reprocess
@@ -432,7 +431,7 @@ impl<'a, 's> ExprParser<'a, 's> {
         group: &'static CStr,
     ) {
         assert!(
-            self.ast.kind(node) == kExprNodeUnknownFigure || self.ast.kind(node) == new_type,
+            self.ast.kind(node) == EXPR_NODE_UNKNOWN_FIGURE || self.ast.kind(node) == new_type,
             "the node is still an unknown figure brace, or already the new type"
         );
         self.ast.set_kind(node, new_type);
@@ -448,10 +447,10 @@ impl<'a, 's> ExprParser<'a, 's> {
     /// before it, or what precedes it is not an identifier.
     pub(super) fn open_complex_identifier(&mut self) -> Option<Slot> {
         debug_assert!(
-            self.want_node == kENodeOperator,
+            self.want_node == E_NODE_OPERATOR,
             "want_node == kENodeOperator"
         );
-        if self.prev_token.type_0 == kExprLexSpacing {
+        if self.prev_token.type_0 == EXPR_LEX_SPACING {
             return None;
         }
         match self.ast.kind(self.ast.filled(self.top_node_p)) {
@@ -459,12 +458,12 @@ impl<'a, 's> ExprParser<'a, 's> {
             // handle environment variables like those bash uses for
             // `export -f`: their names consist not only of alphanumeric
             // characters.
-            kExprNodeComplexIdentifier
-            | kExprNodePlainIdentifier
-            | kExprNodeCurlyBracesIdentifier => {}
+            EXPR_NODE_COMPLEX_IDENTIFIER
+            | EXPR_NODE_PLAIN_IDENTIFIER
+            | EXPR_NODE_CURLY_BRACES_IDENTIFIER => {}
             _ => return None,
         }
-        let node = self.new_node(kExprNodeComplexIdentifier);
+        let node = self.new_node(EXPR_NODE_COMPLEX_IDENTIFIER);
         self.ast.set_len(node, 0);
         let operand = self.ast.slot(self.top_node_p);
         self.ast.set_children(node, operand);
@@ -478,36 +477,36 @@ impl<'a, 's> ExprParser<'a, 's> {
     /// The whole parse: one iteration of the loop per token.
     fn run(&mut self) {
         loop {
-            self.is_concat_or_subscript = self.want_node == kENodeValue
+            self.is_concat_or_subscript = self.want_node == E_NODE_VALUE
                 && self.ast_stack.len() > 1
                 && self
                     .ast
                     .kind(self.ast.filled(stack_top(&self.ast_stack, 1)))
-                    == kExprNodeConcatOrSubscript;
-            self.lexer_flags = kELFlagPeek.cast_signed()
-                | (if self.flags & kExprFlagsDisallowEOC.cast_signed() != 0 {
-                    kELFlagForbidEOC.cast_signed()
+                    == EXPR_NODE_CONCAT_OR_SUBSCRIPT;
+            self.lexer_flags = EL_FLAG_PEEK.cast_signed()
+                | (if self.flags & EXPR_FLAGS_DISALLOW_EOC.cast_signed() != 0 {
+                    EL_FLAG_FORBID_EOC.cast_signed()
                 } else {
                     0
                 })
-                | (if self.want_node == kENodeValue
+                | (if self.want_node == E_NODE_VALUE
                     && (self.ast_stack.len() == 1
                         || !matches!(
                             self.ast
                                 .kind(self.ast.filled(stack_top(&self.ast_stack, 1))),
-                            kExprNodeConcat | kExprNodeConcatOrSubscript
+                            EXPR_NODE_CONCAT | EXPR_NODE_CONCAT_OR_SUBSCRIPT
                         ))
                 {
-                    kELFlagAllowFloat.cast_signed()
+                    EL_FLAG_ALLOW_FLOAT.cast_signed()
                 } else {
                     0
                 });
             self.cur_token = self.next_token();
-            if self.cur_token.type_0 == kExprLexEOC {
+            if self.cur_token.type_0 == EXPR_LEX_EOC {
                 break;
             }
             self.tok_type = self.cur_token.type_0;
-            self.is_invalid = self.tok_type == kExprLexInvalid;
+            self.is_invalid = self.tok_type == EXPR_LEX_INVALID;
             let flow = loop {
                 match self.process_token() {
                     Flow::Reprocess => {}
@@ -528,7 +527,7 @@ impl<'a, 's> ExprParser<'a, 's> {
     fn process_token(&mut self) -> Flow {
         // May use different flags this time.
         self.cur_token = self.next_token();
-        if self.tok_type == kExprLexSpacing {
+        if self.tok_type == EXPR_LEX_SPACING {
             if self.is_invalid {
                 self.hl_token(hl!(self, Spacing));
             }
@@ -537,7 +536,7 @@ impl<'a, 's> ExprParser<'a, 's> {
             // invalid.
             return Flow::NextToken;
         } else if self.is_invalid
-            && self.prev_token.type_0 == kExprLexSpacing
+            && self.prev_token.type_0 == EXPR_LEX_SPACING
             && !self.highlighted_prev_spacing
         {
             self.hl_at(
@@ -567,23 +566,23 @@ impl<'a, 's> ExprParser<'a, 's> {
         // a spare colon for the ternary and because concatenating a dictionary
         // with anything is not valid.
         self.node_is_key = self.is_concat_or_subscript
-            && (if self.cur_token.type_0 == kExprLexPlainIdentifier {
+            && (if self.cur_token.type_0 == EXPR_LEX_PLAIN_IDENTIFIER {
                 !self.cur_token.variable().autoload
-                    && self.cur_token.variable().scope == kExprVarScopeMissing
+                    && self.cur_token.variable().scope == EXPR_VAR_SCOPE_MISSING
             } else {
-                self.cur_token.type_0 == kExprLexNumber
+                self.cur_token.type_0 == EXPR_LEX_NUMBER
             })
-            && self.prev_token.type_0 != kExprLexSpacing;
+            && self.prev_token.type_0 != EXPR_LEX_SPACING;
         if self.is_concat_or_subscript && !self.node_is_key {
             // Note: in Vim "d. a" (this is the reason behind the
-            // `prev_token.type != kExprLexSpacing` part of the condition) as
+            // `prev_token.type != EXPR_LEX_SPACING` part of the condition) as
             // well as any other "d.{expr}" where "{expr}" does not look like a
             // key is invalid whenever "d" happens to be a dictionary. Since the
             // parser has no idea whether the preceding expression is actually a
             // dictionary it can't outright reject anything, so it turns
             // kExprNodeConcatOrSubscript into kExprNodeConcat instead.
             let enclosing = self.ast.filled(stack_top(&self.ast_stack, 1));
-            self.ast.set_kind(enclosing, kExprNodeConcat);
+            self.ast.set_kind(enclosing, EXPR_NODE_CONCAT);
         }
         if let Some(flow) = self.reconcile_parse_type() {
             return flow;
@@ -591,7 +590,7 @@ impl<'a, 's> ExprParser<'a, 's> {
         debug_assert!(!self.pt_stack.is_empty(), "kv_size(pt_stack)");
         self.cur_pt = self.pt_top();
         debug_assert!(
-            self.lambda_node.is_none() || self.cur_pt == kEPTLambdaArguments,
+            self.lambda_node.is_none() || self.cur_pt == EPT_LAMBDA_ARGUMENTS,
             "lambda_node == NULL || cur_pt == kEPTLambdaArguments"
         );
         self.dispatch()
@@ -608,7 +607,7 @@ impl<'a, 's> ExprParser<'a, 's> {
         if !cfg!(debug_assertions) {
             return;
         }
-        let want_value = self.want_node == kENodeValue;
+        let want_value = self.want_node == E_NODE_VALUE;
         let ast = &self.ast;
         debug_assert!(
             want_value == ast.slot(self.top_node_p).is_none(),
@@ -646,24 +645,24 @@ impl<'a, 's> ExprParser<'a, 's> {
     /// as-yet-undecided figure brace that cannot be a lambda after all, or an
     /// assignment lvalue that this token cannot be part of.
     fn reconcile_parse_type(&mut self) -> Option<Flow> {
-        let is_single_assignment = self.pt_top() == kEPTSingleAssignment;
+        let is_single_assignment = self.pt_top() == EPT_SINGLE_ASSIGNMENT;
         match self.pt_top() {
-            kEPTLambdaArguments => {
-                if self.want_node == kENodeOperator
-                    && self.tok_type != kExprLexComma
-                    && self.tok_type != kExprLexArrow
-                    || self.want_node == kENodeValue
-                        && !(self.cur_token.type_0 == kExprLexPlainIdentifier
-                            && self.cur_token.variable().scope == kExprVarScopeMissing
+            EPT_LAMBDA_ARGUMENTS => {
+                if self.want_node == E_NODE_OPERATOR
+                    && self.tok_type != EXPR_LEX_COMMA
+                    && self.tok_type != EXPR_LEX_ARROW
+                    || self.want_node == E_NODE_VALUE
+                        && !(self.cur_token.type_0 == EXPR_LEX_PLAIN_IDENTIFIER
+                            && self.cur_token.variable().scope == EXPR_VAR_SCOPE_MISSING
                             && !self.cur_token.variable().autoload)
-                        && self.tok_type != kExprLexArrow
+                        && self.tok_type != EXPR_LEX_ARROW
                 {
                     let lambda_node = self.lambda_node.expect("a lambda's arguments are open");
                     let mut fig = self.ast.fig(lambda_node);
                     fig.type_guesses.allow_lambda = false;
                     self.ast.set_data(lambda_node, ExprNodeData::Figure(fig));
                     let first = self.ast.first_child(lambda_node);
-                    if first.is_some_and(|first| self.ast.kind(first) == kExprNodeComma) {
+                    if first.is_some_and(|first| self.ast.kind(first) == EXPR_NODE_COMMA) {
                         // A comma child means the parser has already seen at
                         // least "{arg1,", so the node cannot possibly be
                         // anything but a lambda.
@@ -682,31 +681,31 @@ impl<'a, 's> ExprParser<'a, 's> {
                     }
                 }
             }
-            kEPTSingleAssignment | kEPTAssignment => {
-                if self.want_node == kENodeValue
-                    && self.tok_type != kExprLexBracket
-                    && self.tok_type != kExprLexPlainIdentifier
-                    && (self.tok_type != kExprLexFigureBrace || self.cur_token.is_closing())
-                    && !(self.node_is_key && self.tok_type == kExprLexNumber)
-                    && self.tok_type != kExprLexEnv
-                    && self.tok_type != kExprLexOption
-                    && self.tok_type != kExprLexRegister
+            EPT_SINGLE_ASSIGNMENT | EPT_ASSIGNMENT => {
+                if self.want_node == E_NODE_VALUE
+                    && self.tok_type != EXPR_LEX_BRACKET
+                    && self.tok_type != EXPR_LEX_PLAIN_IDENTIFIER
+                    && (self.tok_type != EXPR_LEX_FIGURE_BRACE || self.cur_token.is_closing())
+                    && !(self.node_is_key && self.tok_type == EXPR_LEX_NUMBER)
+                    && self.tok_type != EXPR_LEX_ENV
+                    && self.tok_type != EXPR_LEX_OPTION
+                    && self.tok_type != EXPR_LEX_REGISTER
                 {
                     self.error(c"E15: Expected value part of assignment lvalue: %.*s");
                     self.pt_stack.truncate(self.pt_stack.len() - 1);
-                } else if self.want_node == kENodeOperator
-                    && self.tok_type != kExprLexBracket
-                    && (self.tok_type != kExprLexFigureBrace || self.cur_token.is_closing())
-                    && self.tok_type != kExprLexDot
-                    && (self.tok_type != kExprLexComma || !is_single_assignment)
-                    && self.tok_type != kExprLexAssignment
+                } else if self.want_node == E_NODE_OPERATOR
+                    && self.tok_type != EXPR_LEX_BRACKET
+                    && (self.tok_type != EXPR_LEX_FIGURE_BRACE || self.cur_token.is_closing())
+                    && self.tok_type != EXPR_LEX_DOT
+                    && (self.tok_type != EXPR_LEX_COMMA || !is_single_assignment)
+                    && self.tok_type != EXPR_LEX_ASSIGNMENT
                     // Curly brace identifiers: these contain a plain identifier
                     // or another curly brace where an operator is wanted.
-                    && !((self.tok_type == kExprLexPlainIdentifier
-                        || self.tok_type == kExprLexFigureBrace && !self.cur_token.is_closing())
-                        && self.prev_token.type_0 != kExprLexSpacing)
+                    && !((self.tok_type == EXPR_LEX_PLAIN_IDENTIFIER
+                        || self.tok_type == EXPR_LEX_FIGURE_BRACE && !self.cur_token.is_closing())
+                        && self.prev_token.type_0 != EXPR_LEX_SPACING)
                 {
-                    if self.flags & kExprFlagsMulti.cast_signed() != 0 && self.may_have_next_expr()
+                    if self.flags & EXPR_FLAGS_MULTI.cast_signed() != 0 && self.may_have_next_expr()
                     {
                         return Some(Flow::Stop);
                     }
@@ -723,37 +722,39 @@ impl<'a, 's> ExprParser<'a, 's> {
     /// Hand the token to the handler for its class.
     fn dispatch(&mut self) -> Flow {
         match self.tok_type {
-            kExprLexMissing | kExprLexSpacing | kExprLexEOC => {
+            EXPR_LEX_MISSING | EXPR_LEX_SPACING | EXPR_LEX_EOC => {
                 unreachable!("the token loop handles these itself")
             }
-            kExprLexInvalid => {
+            EXPR_LEX_INVALID => {
                 self.error_at(self.cur_token.error().msg, self.cur_token.start);
                 // Dispatch it again as whatever it was trying to be.
                 self.tok_type = self.cur_token.error().type_0;
                 Flow::Reprocess
             }
-            kExprLexRegister => values::register(self),
-            kExprLexOption => values::option(self),
-            kExprLexEnv => values::environment(self),
-            kExprLexNumber => values::number(self),
-            kExprLexPlainIdentifier => values::plain_identifier(self),
-            kExprLexDoubleQuotedString | kExprLexSingleQuotedString => values::quoted_string(self),
-            kExprLexPlus => operators::plus(self),
-            kExprLexMinus => operators::minus(self),
-            kExprLexOr => operators::or(self),
-            kExprLexAnd => operators::and(self),
-            kExprLexMultiplication => operators::multiplication(self),
-            kExprLexNot => operators::not(self),
-            kExprLexComparison => operators::comparison(self),
-            kExprLexDot => operators::dot(self),
-            kExprLexQuestion => operators::question(self),
-            kExprLexArrow => operators::arrow(self),
-            kExprLexAssignment => operators::assignment(self),
-            kExprLexComma => brackets::comma(self),
-            kExprLexColon => brackets::colon(self),
-            kExprLexBracket => brackets::bracket(self),
-            kExprLexParenthesis => brackets::parenthesis(self),
-            kExprLexFigureBrace => figure::figure_brace(self),
+            EXPR_LEX_REGISTER => values::register(self),
+            EXPR_LEX_OPTION => values::option(self),
+            EXPR_LEX_ENV => values::environment(self),
+            EXPR_LEX_NUMBER => values::number(self),
+            EXPR_LEX_PLAIN_IDENTIFIER => values::plain_identifier(self),
+            EXPR_LEX_DOUBLE_QUOTED_STRING | EXPR_LEX_SINGLE_QUOTED_STRING => {
+                values::quoted_string(self)
+            }
+            EXPR_LEX_PLUS => operators::plus(self),
+            EXPR_LEX_MINUS => operators::minus(self),
+            EXPR_LEX_OR => operators::or(self),
+            EXPR_LEX_AND => operators::and(self),
+            EXPR_LEX_MULTIPLICATION => operators::multiplication(self),
+            EXPR_LEX_NOT => operators::not(self),
+            EXPR_LEX_COMPARISON => operators::comparison(self),
+            EXPR_LEX_DOT => operators::dot(self),
+            EXPR_LEX_QUESTION => operators::question(self),
+            EXPR_LEX_ARROW => operators::arrow(self),
+            EXPR_LEX_ASSIGNMENT => operators::assignment(self),
+            EXPR_LEX_COMMA => brackets::comma(self),
+            EXPR_LEX_COLON => brackets::colon(self),
+            EXPR_LEX_BRACKET => brackets::bracket(self),
+            EXPR_LEX_PARENTHESIS => brackets::parenthesis(self),
+            EXPR_LEX_FIGURE_BRACE => figure::figure_brace(self),
             _ => Flow::NextToken,
         }
     }
@@ -764,7 +765,7 @@ impl<'a, 's> ExprParser<'a, 's> {
         debug_assert!(!self.ast_stack.is_empty(), "kv_size(ast_stack)");
         // kEPTLambdaArguments is blacklisted because its presence means a
         // better error message comes out of the other branch.
-        if self.want_node == kENodeValue && self.pt_top() != kEPTLambdaArguments {
+        if self.want_node == E_NODE_VALUE && self.pt_top() != EPT_LAMBDA_ARGUMENTS {
             let pos = self.pstate.pos;
             self.error_at(translate(c"E15: Expected value, got EOC: %.*s"), pos);
             return;
@@ -785,17 +786,19 @@ impl<'a, 's> ExprParser<'a, 's> {
             // TODO(ZyX-I): Rehighlight as invalid?
             let msg: &'static CStr = match self.ast.kind(node) {
                 // The error should've been already reported.
-                kExprNodeOpMissing | kExprNodeMissing => continue,
-                kExprNodeCall => c"E116: Missing closing parenthesis for function call: %.*s",
-                kExprNodeNested => c"E110: Missing closing parenthesis for nested expression: %.*s",
+                EXPR_NODE_OP_MISSING | EXPR_NODE_MISSING => continue,
+                EXPR_NODE_CALL => c"E116: Missing closing parenthesis for function call: %.*s",
+                EXPR_NODE_NESTED => {
+                    c"E110: Missing closing parenthesis for nested expression: %.*s"
+                }
                 // For whatever reason "[1" yields "E696: Missing comma in
                 // list" in Vim while "[1," yields E697.
-                kExprNodeListLiteral => c"E697: Missing end of List ']': %.*s",
+                EXPR_NODE_LIST_LITERAL => c"E697: Missing end of List ']': %.*s",
                 // The same problem as with the list literal, E722 (missing
                 // comma) vs E723, but additionally just "{" yields only E15.
-                kExprNodeDictLiteral => c"E723: Missing end of Dictionary '}': %.*s",
-                kExprNodeUnknownFigure => c"E15: Missing closing figure brace: %.*s",
-                kExprNodeLambda => c"E15: Missing closing figure brace for lambda: %.*s",
+                EXPR_NODE_DICT_LITERAL => c"E723: Missing end of Dictionary '}': %.*s",
+                EXPR_NODE_UNKNOWN_FIGURE => c"E15: Missing closing figure brace: %.*s",
+                EXPR_NODE_LAMBDA => c"E15: Missing closing figure brace for lambda: %.*s",
                 // Upstream `abort()`s here, on the premise that until the
                 // trailing "}" a curly braces identifier cannot be told from a
                 // Dict and so can never be left unfinished on the stack. The
@@ -805,21 +808,21 @@ impl<'a, 's> ExprParser<'a, 's> {
                 // reaches this loop. `nvim_parse_expression('a{b')` — no flags
                 // — killed the process. It is an unclosed figure brace like any
                 // other; say so.
-                kExprNodeCurlyBracesIdentifier => c"E15: Missing closing figure brace: %.*s",
+                EXPR_NODE_CURLY_BRACES_IDENTIFIER => c"E15: Missing closing figure brace: %.*s",
                 // These are plain values and not containers; they can only
                 // show up in the topmost stack element, which was
                 // unconditionally popped above.
-                kExprNodeInteger
-                | kExprNodeFloat
-                | kExprNodeSingleQuotedString
-                | kExprNodeDoubleQuotedString
-                | kExprNodeOption
-                | kExprNodeEnvironment
-                | kExprNodeRegister
-                | kExprNodePlainIdentifier
-                | kExprNodePlainKey => unreachable!("a plain value is only ever on top"),
+                EXPR_NODE_INTEGER
+                | EXPR_NODE_FLOAT
+                | EXPR_NODE_SINGLE_QUOTED_STRING
+                | EXPR_NODE_DOUBLE_QUOTED_STRING
+                | EXPR_NODE_OPTION
+                | EXPR_NODE_ENVIRONMENT
+                | EXPR_NODE_REGISTER
+                | EXPR_NODE_PLAIN_IDENTIFIER
+                | EXPR_NODE_PLAIN_KEY => unreachable!("a plain value is only ever on top"),
                 // Actually Vim throws E109 in more cases.
-                kExprNodeTernaryValue if !self.ast.got_colon(node) => {
+                EXPR_NODE_TERNARY_VALUE if !self.ast.got_colon(node) => {
                     c"E109: Missing ':' after '?': %.*s"
                 }
                 // Everything else is either only valid inside something that

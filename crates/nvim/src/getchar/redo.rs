@@ -28,7 +28,7 @@ use core::ffi::c_int;
 ///
 /// The previous contents are what `CTRL-O .` in Insert mode repeats.
 pub fn reset_redobuff() {
-    if block_redo.get() {
+    if BLOCK_REDO.get() {
         return;
     }
     old_redobuff().free();
@@ -37,7 +37,7 @@ pub fn reset_redobuff() {
 
 /// Discard the redo buffer and put the previous one back.
 pub fn cancel_redo() {
-    if block_redo.get() {
+    if BLOCK_REDO.get() {
         return;
     }
     redobuff().free();
@@ -69,7 +69,7 @@ pub fn restore_redobuff(save_redo: &mut SaveRedo) {
 /// Append `s` to the redo buffer, up to its first NUL. `K_SPECIAL` must
 /// already be escaped.
 pub fn append_to_redobuff(s: &[u8]) {
-    if !block_redo.get() {
+    if !BLOCK_REDO.get() {
         redobuff().add_bytes(up_to_nul(s));
     }
 }
@@ -80,7 +80,7 @@ pub fn append_to_redobuff(s: &[u8]) {
 /// `s` is read up to its first NUL, and its end is where upstream's NUL
 /// was: a `0` or `^` there is quoted too.
 pub fn append_to_redobuff_literally(s: &[u8]) {
-    if block_redo.get() {
+    if BLOCK_REDO.get() {
         return;
     }
     let s = up_to_nul(s);
@@ -129,7 +129,7 @@ const DEL_BYTE: u8 = 0x7f;
 /// Append `s` to the redo buffer, up to its first NUL, passing three-byte
 /// key codes through unmodified and escaping every other `K_SPECIAL` byte.
 pub fn append_to_redobuff_keys(s: &[u8]) {
-    if block_redo.get() {
+    if BLOCK_REDO.get() {
         return;
     }
     let mut s = up_to_nul(s);
@@ -149,14 +149,14 @@ pub fn append_to_redobuff_keys(s: &[u8]) {
 /// Append one character to the redo buffer, escaping special keys, NUL and
 /// `K_SPECIAL` and splitting a codepoint into its UTF-8 bytes.
 pub fn append_to_redobuff_char(c: Key) {
-    if !block_redo.get() {
+    if !BLOCK_REDO.get() {
         redobuff().add_char(c);
     }
 }
 
 /// Append the decimal spelling of `n` to the redo buffer.
 pub fn append_to_redobuff_number(n: c_int) {
-    if !block_redo.get() {
+    if !BLOCK_REDO.get() {
         redobuff().add_num(n);
     }
 }
@@ -341,13 +341,13 @@ pub fn start_redo_ins() -> Result<(), Failed> {
 
     // Then the text that was typed.
     redo.copy_rest();
-    block_redo.set(true);
+    BLOCK_REDO.set(true);
     Ok(())
 }
 
 /// Stop blocking changes to the redo buffer; the pair of [`start_redo_ins`].
 pub fn stop_redo_ins() {
-    block_redo.set(false);
+    BLOCK_REDO.set(false);
 }
 
 #[cfg(test)]

@@ -42,7 +42,7 @@ use crate::ex_cmds::do_ecmd;
 use crate::ex_cmds::newlnum;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{cmdmod_has, do_cmdline_cmd};
-use crate::getchar::state::KeyTyped;
+use crate::getchar::state::KEY_TYPED;
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_exec_cstr;
@@ -130,7 +130,7 @@ pub(crate) fn ex_help(excmd: &mut ExArg) {
 /// The command's `arg` is truncated at the first `\n`, `\r`, or `|` that
 /// starts a following command.
 pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
-    let old_key_typed = KeyTyped.get();
+    let old_key_typed = KEY_TYPED.get();
 
     let forceit = excmd.as_deref().is_some_and(|command| command.forceit);
     // The subject, owned: a `@xx` is split off it below.
@@ -186,7 +186,7 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
         restart_edit.set(Key::NUL);
         // Restore KeyTyped: setting 'filetype=help' may have reset it,
         // and `do_tag` needs it to open folds under the cursor.
-        KeyTyped.set(old_key_typed);
+        KEY_TYPED.set(old_key_typed);
 
         do_tag(tag.as_cstr(), TagCmd::Help, 1, 0, true);
 

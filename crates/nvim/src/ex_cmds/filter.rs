@@ -41,7 +41,7 @@ use crate::ex_eval::aborting;
 use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
 use crate::fileio::{ReadFlags, readfile_named, temp_name, write_lnum_adjust};
 use crate::fold::fold_update;
-use crate::getchar::state::{bangredo, got_int};
+use crate::getchar::state::{BANGREDO, GOT_INT};
 use crate::getchar::{append_to_redobuff, append_to_redobuff_literally};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
@@ -153,7 +153,7 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
     newcmd.push(0);
 
     'theend: {
-        if bangredo.get() {
+        if BANGREDO.get() {
             // Put the command in the redo buffer.
             if prevcmd_is_set().is_err() {
                 break 'theend;
@@ -161,7 +161,7 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
             let escaped = PREVCMD.with(|cmd| escaped_bytes(cmd, b"%#"));
             append_to_redobuff_literally(escaped.as_cstr().to_bytes());
             append_to_redobuff(b"\n");
-            bangredo.set(false);
+            BANGREDO.set(false);
         }
 
         // A copy: the quoting below outlives the projection's borrow.
@@ -383,7 +383,7 @@ fn do_filter(
             // some useful output.  Reset got_int here, so that readfile()
             // won't cancel reading.
             os_breakcheck();
-            got_int.set(false);
+            GOT_INT.set(false);
 
             if !do_out {
                 break 'error;

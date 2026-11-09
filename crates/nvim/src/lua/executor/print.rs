@@ -18,7 +18,7 @@
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use super::{in_fast_callback, nlua_error, nlua_pcall, require_ref, until_nul};
+use super::{IN_FAST_CALLBACK, REQUIRE_REF, nlua_error, nlua_pcall, until_nul};
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
 use crate::event::r#loop::schedule_deferred_job;
 use crate::event_queue::put_job_on_main_loop;
@@ -127,7 +127,7 @@ fn print(stack: &mut Stack) -> Result<c_int, Raise> {
 
     if is_thread {
         schedule_deferred_job(Box::new(move || show_printed(text)));
-    } else if in_fast_callback.get() != 0 {
+    } else if IN_FAST_CALLBACK.get() != 0 {
         put_job_on_main_loop(Box::new(move || show_printed(text)));
     } else {
         show_printed(text);
@@ -179,7 +179,7 @@ fn require(stack: &mut Stack) -> Result<c_int, Raise> {
     }
     stack.pop(2);
 
-    stack.push_reference(require_ref.get());
+    stack.push_reference(REQUIRE_REF.get());
     stack.insert(At::arg(1));
 
     if !startup_timing() {

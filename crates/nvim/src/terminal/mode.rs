@@ -44,7 +44,7 @@ use crate::drawscreen::{
     unshowmode, update_screen,
 };
 use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
-use crate::getchar::state::{got_int, mapped_ctrl_c, mod_mask};
+use crate::getchar::state::{GOT_INT, MAPPED_CTRL_C, MOD_MASK};
 use crate::getchar::{map_execute_lua, merge_modifiers, paste_repeat};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, SpecialKey};
@@ -270,7 +270,7 @@ pub(crate) fn terminal_enter() -> bool {
 
     let save_state = State.get();
     State.set(MODE_TERMINAL);
-    mapped_ctrl_c.set(mapped_ctrl_c.get() | MODE_TERMINAL);
+    MAPPED_CTRL_C.set(MAPPED_CTRL_C.get() | MODE_TERMINAL);
     let redraw = Allow::redraw();
     set_terminal_winopts(s);
     s.term.pending.cursor = true;
@@ -477,7 +477,7 @@ pub(crate) fn terminal_check(s: &mut TerminalState) -> Step {
 pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> Step {
     // `merge_modifiers` folds a pending modifier into the key so that e.g.
     // `<C-\>` is one code to compare against.
-    let mut mods = mod_mask.get();
+    let mut mods = MOD_MASK.get();
     let mod_key = merge_modifiers(key, &mut mods).code();
 
     // Keys the editor handles itself. Everything but CTRL-N/CTRL-O is dealt
@@ -531,7 +531,7 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> Step {
     // CTRL-C in terminal mode belongs to the child, so the interrupt the
     // editor recorded is dropped.
     if mod_key == Ctrl_C {
-        got_int.set(false);
+        GOT_INT.set(false);
     }
     if mod_key == Ctrl_BSL && !s.got_bsl {
         s.got_bsl = true;

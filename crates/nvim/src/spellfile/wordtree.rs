@@ -102,7 +102,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
 use crate::ascii::NUL;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::valid_utf8;
 use crate::message::state::{MSG_COL, MSG_DIDOUT};
@@ -779,7 +779,7 @@ fn node_compress(
     let mut next = Some(node);
     while let Some(np) = next {
         next = spin.node(np).wn_sibling;
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         len += 1;

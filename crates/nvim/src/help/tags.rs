@@ -32,7 +32,7 @@
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::cmdexpand::{WildMode, WildOpts, expand_one};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::memory::XString;
 use crate::message::E_FNAMETOOLONG;
 use crate::message::IOSIZE;
@@ -222,7 +222,7 @@ fn helptags_one(
         return;
     }
     let Some(files) = expand_help_files(&glob) else {
-        if !got_int.get() {
+        if !GOT_INT.get() {
             let glob = msg_bytes(&glob);
             semsg!("E151: No match: {glob}");
         }
@@ -255,7 +255,7 @@ fn helptags_one(
     }
 
     for path in &files {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         let path = path.as_cstr().to_bytes();
@@ -276,7 +276,7 @@ fn helptags_one(
     drop(files);
 
     let mut out = BufWriter::new(tags_file);
-    if !got_int.get() && !tags.is_empty() {
+    if !GOT_INT.get() && !tags.is_empty() {
         tags.sort_unstable();
         report_duplicates(&tags, dir);
         // There is no check for a write error, as upstream.
@@ -375,7 +375,7 @@ fn scan_help_file(data: Vec<u8>, fname: &[u8], tags: &mut Vec<Vec<u8>>) {
     let mut reader = HelpReader { data, at: 0 };
     let mut in_example = false;
     while let Some(buf) = reader.help_line()
-        && !got_int.get()
+        && !GOT_INT.get()
     {
         // The line as the C string functions saw it: up to a NUL.
         let line = &buf[..find_byte(buf, 0).unwrap_or(buf.len())];

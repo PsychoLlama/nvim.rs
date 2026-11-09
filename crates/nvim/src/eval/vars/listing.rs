@@ -39,7 +39,7 @@ pub(crate) fn list_dict_vars(dict: &DictRef, prefix: &CStr, empty: bool, first: 
     let mut cursor = DictCursor::new(dict);
     // Upstream re-reads `got_int` in the loop condition, so a `:let`
     // listing stops at the interrupt rather than at the end.
-    while !got_int.get()
+    while !GOT_INT.get()
         && let Some(slot) = cursor.next(dict)
     {
         let Some((key, value)) = dict
@@ -110,7 +110,7 @@ pub(crate) fn list_arg_vars(text: &[u8], skip: bool, first: &mut bool) -> usize 
     let mut error = false;
     let mut arg = 0;
     let rest = |at: usize| text.get(at..).unwrap_or_default();
-    while ends_excmd(c_int::from(cstr::byte_at(text, arg))) == 0 && !got_int.get() {
+    while ends_excmd(c_int::from(cstr::byte_at(text, arg))) == 0 && !GOT_INT.get() {
         if error || skip {
             // Nothing is being printed any more; just check that what is
             // left parses as names.

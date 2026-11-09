@@ -84,7 +84,7 @@ impl ExArg<'_> {
 
         'theend: {
             loop {
-                if KeyTyped.get() {
+                if KEY_TYPED.get() {
                     MSG_SCROLL.set(1);
                     saved_wait_return = false;
                 }
@@ -113,7 +113,7 @@ impl ExArg<'_> {
                 } else {
                     *line_to_free = None;
                     *line_to_free = self.next_body_line(Some(b':'), indent, do_concat);
-                    if KeyTyped.get() {
+                    if KEY_TYPED.get() {
                         LINES_LEFT.set(Rows.get() - 1);
                     }
                     let Some(read) = line_to_free.as_ref() else {
@@ -127,7 +127,7 @@ impl ExArg<'_> {
                     };
                     (read.as_cstr().to_bytes().to_vec(), None)
                 };
-                if line_at.is_some() && KeyTyped.get() {
+                if line_at.is_some() && KEY_TYPED.get() {
                     LINES_LEFT.set(Rows.get() - 1);
                 }
                 let line = &line[..];

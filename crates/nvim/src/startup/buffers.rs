@@ -42,7 +42,7 @@ use crate::eval::vars::set_vim_var_list;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::fileio::{ReadFlags, readfile_named};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::getchar::vgetc;
 use crate::memline::ml_recover;
 use crate::message::IOSIZE;
@@ -291,7 +291,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
             let _ = open_buffer(false, None, ReadFlags::NONE);
 
             if swap_exists_action.get() == SEA_QUIT {
-                if got_int.get() || only_one_window() {
+                if GOT_INT.get() || only_one_window() {
                     quit_on_swap_exists(true);
                 }
                 // The window cannot be closed here without disturbing
@@ -308,7 +308,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
         }
 
         os_breakcheck();
-        if got_int.get() {
+        if GOT_INT.get() {
             // Interrupt the file loading, not the rest of the startup.
             vgetc().code();
             break;
@@ -386,7 +386,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
             let name = name.as_ref().map(XString::as_cstr);
             let _ = do_ecmd(None, name, None, None, last, hide, Some(win));
             if swap_exists_did_quit.get() {
-                if got_int.get() || only_one_window() {
+                if GOT_INT.get() || only_one_window() {
                     quit_on_swap_exists(true);
                 }
                 let _ = win_close(Win::current(), true, false);
@@ -399,7 +399,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
         }
 
         os_breakcheck();
-        if got_int.get() {
+        if GOT_INT.get() {
             vgetc().code();
             break;
         }

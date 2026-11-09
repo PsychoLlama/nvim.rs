@@ -19,29 +19,28 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::api_error;
 use crate::message_fmt::msg_bytes;
 use crate::narrow::len_as_integer;
 use crate::types::DictBuilder;
+use crate::viml::parser::expressions::EXPR_ASGN_PLAIN;
+use crate::viml::parser::expressions::EXPR_FLAGS_DISALLOW_EOC;
+use crate::viml::parser::expressions::EXPR_FLAGS_MULTI;
+use crate::viml::parser::expressions::EXPR_FLAGS_PARSE_LET;
+use crate::viml::parser::expressions::EXPR_NODE_ASSIGNMENT;
+use crate::viml::parser::expressions::EXPR_NODE_COMPARISON;
+use crate::viml::parser::expressions::EXPR_NODE_DOUBLE_QUOTED_STRING;
+use crate::viml::parser::expressions::EXPR_NODE_ENVIRONMENT;
+use crate::viml::parser::expressions::EXPR_NODE_FLOAT;
+use crate::viml::parser::expressions::EXPR_NODE_INTEGER;
+use crate::viml::parser::expressions::EXPR_NODE_OPTION;
+use crate::viml::parser::expressions::EXPR_NODE_PLAIN_IDENTIFIER;
+use crate::viml::parser::expressions::EXPR_NODE_PLAIN_KEY;
+use crate::viml::parser::expressions::EXPR_NODE_REGISTER;
+use crate::viml::parser::expressions::EXPR_NODE_SINGLE_QUOTED_STRING;
 use crate::viml::parser::expressions::NodeId;
-use crate::viml::parser::expressions::kExprAsgnPlain;
-use crate::viml::parser::expressions::kExprFlagsDisallowEOC;
-use crate::viml::parser::expressions::kExprFlagsMulti;
-use crate::viml::parser::expressions::kExprFlagsParseLet;
-use crate::viml::parser::expressions::kExprNodeAssignment;
-use crate::viml::parser::expressions::kExprNodeComparison;
-use crate::viml::parser::expressions::kExprNodeDoubleQuotedString;
-use crate::viml::parser::expressions::kExprNodeEnvironment;
-use crate::viml::parser::expressions::kExprNodeFloat;
-use crate::viml::parser::expressions::kExprNodeInteger;
-use crate::viml::parser::expressions::kExprNodeOption;
-use crate::viml::parser::expressions::kExprNodePlainIdentifier;
-use crate::viml::parser::expressions::kExprNodePlainKey;
-use crate::viml::parser::expressions::kExprNodeRegister;
-use crate::viml::parser::expressions::kExprNodeSingleQuotedString;
 use core::ffi::{CStr, c_int, c_uint};
 
 pub fn nvim_parse_expression(
@@ -102,9 +101,9 @@ fn parse_flags(flags: &ApiString) -> Result<c_int, Error> {
     let mut pflags: c_int = 0;
     for &ch in flags.as_bytes() {
         match ch {
-            b'm' => pflags |= kExprFlagsMulti.cast_signed(),
-            b'E' => pflags |= kExprFlagsDisallowEOC.cast_signed(),
-            b'l' => pflags |= kExprFlagsParseLet.cast_signed(),
+            b'm' => pflags |= EXPR_FLAGS_MULTI.cast_signed(),
+            b'E' => pflags |= EXPR_FLAGS_DISALLOW_EOC.cast_signed(),
+            b'l' => pflags |= EXPR_FLAGS_PARSE_LET.cast_signed(),
             // A NUL has no `%c` spelling worth printing.
             0 => {
                 let code = c_uint::from(ch);
@@ -180,20 +179,20 @@ fn convert_ast(east: &ExprAST<'_>) -> Object {
 /// every node gets are "type", "start" and "len".
 fn node_dict_size(node: &ExprASTNode) -> size_t {
     let type_0 = node.type_0;
-    let has_scope = type_0 == kExprNodeOption || type_0 == kExprNodePlainIdentifier;
-    let has_ident = has_scope || type_0 == kExprNodePlainKey || type_0 == kExprNodeEnvironment;
+    let has_scope = type_0 == EXPR_NODE_OPTION || type_0 == EXPR_NODE_PLAIN_IDENTIFIER;
+    let has_ident = has_scope || type_0 == EXPR_NODE_PLAIN_KEY || type_0 == EXPR_NODE_ENVIRONMENT;
     3 + size_t::from(node.children.is_some())
         + size_t::from(has_scope)
         + size_t::from(has_ident)
-        + size_t::from(type_0 == kExprNodeRegister)
+        + size_t::from(type_0 == EXPR_NODE_REGISTER)
         // cmp_type, ccs_strategy and invert.
-        + 3 * size_t::from(type_0 == kExprNodeComparison)
-        + size_t::from(type_0 == kExprNodeInteger)
-        + size_t::from(type_0 == kExprNodeFloat)
+        + 3 * size_t::from(type_0 == EXPR_NODE_COMPARISON)
+        + size_t::from(type_0 == EXPR_NODE_INTEGER)
+        + size_t::from(type_0 == EXPR_NODE_FLOAT)
         + size_t::from(
-            type_0 == kExprNodeDoubleQuotedString || type_0 == kExprNodeSingleQuotedString,
+            type_0 == EXPR_NODE_DOUBLE_QUOTED_STRING || type_0 == EXPR_NODE_SINGLE_QUOTED_STRING,
         )
-        + size_t::from(type_0 == kExprNodeAssignment)
+        + size_t::from(type_0 == EXPR_NODE_ASSIGNMENT)
 }
 
 /// The pairs a node contributes once its children have been rendered: the
@@ -220,13 +219,13 @@ fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut DictBuilder) {
 
     let data = &node.data;
     match type_0 {
-        kExprNodeDoubleQuotedString | kExprNodeSingleQuotedString => {
+        EXPR_NODE_DOUBLE_QUOTED_STRING | EXPR_NODE_SINGLE_QUOTED_STRING => {
             // An unterminated or empty literal may have no body at all.
             let value = data.string().value.as_deref();
             let str = value.map_or(Object::string(ApiString::NULL), bytes);
             put(ret_node, c"svalue", str);
         }
-        kExprNodeOption => {
+        EXPR_NODE_OPTION => {
             put(
                 ret_node,
                 c"scope",
@@ -234,7 +233,7 @@ fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut DictBuilder) {
             );
             put(ret_node, c"ident", bytes(data.option().ident));
         }
-        kExprNodePlainIdentifier => {
+        EXPR_NODE_PLAIN_IDENTIFIER => {
             put(
                 ret_node,
                 c"scope",
@@ -242,20 +241,20 @@ fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut DictBuilder) {
             );
             put(ret_node, c"ident", bytes(data.variable().ident));
         }
-        kExprNodePlainKey => {
+        EXPR_NODE_PLAIN_KEY => {
             put(ret_node, c"ident", bytes(data.variable().ident));
         }
-        kExprNodeEnvironment => {
+        EXPR_NODE_ENVIRONMENT => {
             put(ret_node, c"ident", bytes(data.environment().ident));
         }
-        kExprNodeRegister => {
+        EXPR_NODE_REGISTER => {
             put(
                 ret_node,
                 c"name",
                 Object::integer(Integer::from(data.register().name)),
             );
         }
-        kExprNodeComparison => {
+        EXPR_NODE_COMPARISON => {
             let cmp = COMPARISON_NAMES[data.comparison().type_0 as usize];
             put(ret_node, c"cmp_type", table_name(cmp));
             let ccs = CASE_STRATEGY_NAMES[data.comparison().ccs as usize];
@@ -266,19 +265,19 @@ fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut DictBuilder) {
             );
             put(ret_node, c"invert", Object::boolean(data.comparison().inv));
         }
-        kExprNodeFloat => {
+        EXPR_NODE_FLOAT => {
             put(ret_node, c"fvalue", Object::float(data.float().value));
         }
-        kExprNodeInteger => {
+        EXPR_NODE_INTEGER => {
             // The lexer's value is unsigned; the wire's is not.
             let value = Integer::try_from(data.integer().value).unwrap_or(Integer::MAX);
             put(ret_node, c"ivalue", Object::integer(value));
         }
-        kExprNodeAssignment => {
+        EXPR_NODE_ASSIGNMENT => {
             let asgn_type = data.assignment().type_0;
             // Plain "=" has no augmentation, and the table's slot for it is
             // the empty string rather than a name.
-            let augmentation = if asgn_type == kExprAsgnPlain {
+            let augmentation = if asgn_type == EXPR_ASGN_PLAIN {
                 Object::string(ApiString::NULL)
             } else {
                 table_name(ASSIGNMENT_NAMES[asgn_type as usize])

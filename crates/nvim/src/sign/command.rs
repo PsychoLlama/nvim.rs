@@ -71,7 +71,7 @@ pub(crate) fn sign_list_placed(rbuf: Option<Buf>, group: Option<&[u8]>) {
         rbuf.is_none().then(|| buf.next()).flatten()
     });
     for cbuf in walk {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         if buf_has_signs(cbuf) {

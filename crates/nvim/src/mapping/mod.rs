@@ -55,7 +55,7 @@ use crate::eval::{eval_to_string, last_set_msg};
 use crate::ex_cmds::check_secure;
 use crate::fuzzy::fuzzy_match_str;
 use crate::getchar::noremap_keys;
-use crate::getchar::state::{got_int, langmap_mapchar, mapped_ctrl_c};
+use crate::getchar::state::{GOT_INT, LANGMAP_MAPCHAR, MAPPED_CTRL_C};
 use crate::global_cell::GlobalCell;
 use crate::guard::secure;
 use crate::highlight_group::HLF_8;
@@ -204,7 +204,7 @@ pub const E_ENTRIES_MISSING_IN_MAPSET_DICT_ARGUMENT: &CStr =
 pub const E_ILLEGAL_MAP_MODE_STRING_STR: &CStr = c"E1276: Illegal map mode string: '%s'";
 
 /// The largest value a `'langmap'` pair's target can have and still fit in
-/// `langmap_mapchar`.
+/// `LANGMAP_MAPCHAR`.
 pub const UCHAR_MAX: ::core::ffi::c_int = 255;
 
 /// The NUL an empty [`MapStr`] hands out instead of owning one.

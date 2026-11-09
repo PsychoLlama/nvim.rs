@@ -51,7 +51,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::memline::ml_append_buf_terminated;
 use crate::memory::XString;
 use crate::message::{verbose_enter, verbose_leave};
@@ -534,7 +534,7 @@ fn tree_count_words(tree: &mut WordTree) {
     let mut depth: usize = 0;
     curi[0] = 1;
     loop {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         if curi[depth] > tree.node_len(arridx[depth]) {

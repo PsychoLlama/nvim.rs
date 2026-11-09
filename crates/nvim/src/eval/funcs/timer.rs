@@ -23,7 +23,7 @@ use crate::eval::{
 use crate::event::r#loop::{Drain, wait_on_main_loop};
 use crate::event::time::ScopedTimer;
 use crate::ex_cmds::check_secure;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::getchar::vgetc;
 use crate::memory::ThinCString;
 use crate::message::state::CALLED_EMSG;
@@ -86,14 +86,14 @@ pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             )
             || CALLED_EMSG.get() > called_emsg_before
             || error
-            || got_int.get()
+            || GOT_INT.get()
     };
     wait_on_main_loop(Drain::Events, i64::from(timeout), done);
     drop(waker);
     if CALLED_EMSG.get() > called_emsg_before || error {
         result.write_number(-3);
-    } else if got_int.get() {
-        got_int.set(false);
+    } else if GOT_INT.get() {
+        GOT_INT.set(false);
         vgetc().code();
         result.write_number(-2);
     } else if tv_get_number_chk(&exprval).is_ok_and(|n| n != 0) {

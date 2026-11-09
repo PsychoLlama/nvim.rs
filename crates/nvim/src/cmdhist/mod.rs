@@ -38,7 +38,7 @@ use crate::eval::typval::{NumBuf, tv_get_number, tv_get_number_chk};
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_getln::{get_cmdline_firstc, get_list_range};
-use crate::getchar::state::{got_int, maptick};
+use crate::getchar::state::{GOT_INT, MAPTICK};
 use crate::global_cell::GlobalCell;
 use crate::memory::ThinCString;
 use crate::message::IOSIZE;
@@ -212,7 +212,7 @@ pub fn add_to_history(histype: HistoryType, new_entry: &[u8], in_map: bool, sep:
     let now = os_time();
     HISTORY.with_mut(|h| {
         if histype == HIST_SEARCH && in_map {
-            if maptick.get() == LAST_MAPTICK.get() && !h[search].is_empty() {
+            if MAPTICK.get() == LAST_MAPTICK.get() && !h[search].is_empty() {
                 // Consecutive searches from one mapping: only the last one
                 // is kept.
                 h[search].drop_newest();
@@ -230,7 +230,7 @@ pub fn add_to_history(histype: HistoryType, new_entry: &[u8], in_map: bool, sep:
         }
         ring.add(new_entry, sep, now);
         if histype == HIST_SEARCH && in_map {
-            LAST_MAPTICK.set(maptick.get());
+            LAST_MAPTICK.set(MAPTICK.get());
         }
     });
 }
@@ -279,7 +279,7 @@ fn del_history_idx(histype: HistoryType, num: c_int) -> bool {
     HISTORY.with_mut(|h| {
         let ring = &mut h[ring_for(histype)];
         if histype == HIST_SEARCH
-            && maptick.get() == LAST_MAPTICK.get()
+            && MAPTICK.get() == LAST_MAPTICK.get()
             && Some(i) == ring.newest_idx()
         {
             LAST_MAPTICK.set(-1);
@@ -397,7 +397,7 @@ pub fn ex_history(excmd: &mut ExArg) {
         }
     };
     for histype in histypes {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         list_one_history(histype, first, last);
@@ -482,7 +482,7 @@ fn list_one_history(histype: HistoryType, first: c_int, last: c_int) {
     }
     // List from the oldest slot forward, ending at the newest.
     let mut i = idx + 1;
-    while !got_int.get() {
+    while !GOT_INT.get() {
         if i == hislen {
             i = 0;
         }

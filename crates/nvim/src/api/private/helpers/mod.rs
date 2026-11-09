@@ -40,7 +40,7 @@ use crate::ex_eval::state::{
 use crate::ex_eval::{
     discard_current_exception, error_exception_string, pop_msg_list, push_msg_list, take_msg_list,
 };
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::guard::{SavedSctx, Script};
 use crate::highlight_group::syn_id2name;
 use crate::mark::setmark_at;
@@ -138,7 +138,7 @@ pub(crate) fn find_tab_by_handle(tabpage: TabpageHandle) -> Result<Option<TabPag
 pub(crate) fn try_enter(tstate: &mut TryState) {
     let saved = TryState {
         current_exception: current_exception.get(),
-        got_int: c_int::from(got_int.get()),
+        got_int: c_int::from(GOT_INT.get()),
         did_throw: did_throw.get(),
         need_rethrow: c_int::from(need_rethrow.get()),
         did_emsg: DID_EMSG.get(),
@@ -148,7 +148,7 @@ pub(crate) fn try_enter(tstate: &mut TryState) {
     // `:echoerr` inside the call does not reach an enclosing `:try`.
     push_msg_list();
     current_exception.set(None);
-    got_int.set(false);
+    GOT_INT.set(false);
     did_throw.set(false);
     need_rethrow.set(false);
     DID_EMSG.set(0);
@@ -169,13 +169,13 @@ pub(crate) fn try_leave(tstate: &TryState) -> Result<(), Error> {
         msg_lists.with(|lists| lists.innermost().is_some_and(|l| !l.entries.is_empty()));
 
     let mut caught = None;
-    if got_int.get() {
+    if GOT_INT.get() {
         // An interrupt outranks anything that was thrown along the way.
         if did_throw.get() {
             discard_current_exception();
         }
         caught = Some(Error::exception(c"Keyboard interrupt"));
-        got_int.set(false);
+        GOT_INT.set(false);
     } else if has_messages {
         let messages = take_msg_list();
         let msg = error_exception_string(&messages, b"");
@@ -204,7 +204,7 @@ pub(crate) fn try_leave(tstate: &TryState) -> Result<(), Error> {
     let saved = *tstate;
     pop_msg_list();
     current_exception.set(saved.current_exception);
-    got_int.set(saved.got_int != 0);
+    GOT_INT.set(saved.got_int != 0);
     did_throw.set(saved.did_throw);
     need_rethrow.set(saved.need_rethrow != 0);
     DID_EMSG.set(saved.did_emsg);

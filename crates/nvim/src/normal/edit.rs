@@ -32,7 +32,7 @@ use crate::edit::{
     set_last_insert,
 };
 use crate::fold::fold_update_after_insert;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_char, stuff_empty, stuff_readbuf, stuff_readbuf_char,
     stuff_readbuf_number,
@@ -124,8 +124,8 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     if visual_active() {
         // The selection form is an operator; the interrupt a long
         // selection may have raised is not this command's business.
-        if got_int.get() {
-            got_int.set(false);
+        if GOT_INT.get() {
+            GOT_INT.set(false);
         }
         if literal {
             // A literal line break has to survive being carried through

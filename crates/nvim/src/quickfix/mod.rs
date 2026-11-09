@@ -65,7 +65,7 @@ use crate::extmark::{extmark_splice, kExtmarkNoUndo};
 use crate::fileio::shorten_fnames;
 use crate::fold::{fold_open_cursor, fold_update_all};
 use crate::fuzzy::{FUZZY_MATCH_MAX_LEN, fuzzy_match};
-use crate::getchar::state::{KeyTyped, got_int};
+use crate::getchar::state::{GOT_INT, KEY_TYPED};
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::syn_name2id;
 use crate::mark::setpcmark;

@@ -36,7 +36,7 @@ use crate::autocmd::{AucmdBuf, au_event_disable, au_event_restore, fire_autocmds
 use crate::buffer::{BufFlags, buf_hide, goto_buffer};
 use crate::ex_docmd::state::listcmd_busy;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::guard::Suppress;
 use crate::mark::setpcmark;
 use crate::memory::XString;
@@ -236,7 +236,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
     // Avoids setting the previous-context mark for every step below.
     listcmd_busy.set(true);
     let mut next_fnum: c_int = 0;
-    while !got_int.get() && buf.is_some() {
+    while !GOT_INT.get() && buf.is_some() {
         let mut execute = true;
         match list {
             ListDo::Args => {

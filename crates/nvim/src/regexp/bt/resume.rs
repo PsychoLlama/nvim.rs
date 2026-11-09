@@ -23,7 +23,7 @@ use super::compile::BtProg;
 use super::op::BtOp;
 use super::repeat::regrepeat;
 use super::state::{BackPos, Braces, RegStack, capture_slot};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 
 use crate::ascii::NUL;
 use crate::os::libc::int64_t;
@@ -377,7 +377,7 @@ fn star(
                 }
                 rst.count += 1;
             }
-            if got_int.get() {
+            if GOT_INT.get() {
                 break;
             }
         } else {

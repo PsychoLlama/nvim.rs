@@ -23,7 +23,7 @@ use core::ffi::c_int;
 use super::{
     MOUSE_FOCUS, MOUSE_LEFT, MOUSE_MAY_STOP_VIS, MOUSE_MAY_VIS, MOUSE_RIGHT, vcols_between,
 };
-use crate::getchar::state::mod_mask;
+use crate::getchar::state::MOD_MASK;
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
 };
@@ -44,7 +44,7 @@ pub(crate) fn visual_jump_flags(
     old_curwin: Win,
 ) -> Option<(Pos, Pos)> {
     if State.get() & (MODE_NORMAL | MODE_INSERT) == 0
-        || mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL)
+        || MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL)
     {
         return None;
     }
@@ -89,7 +89,7 @@ pub(crate) fn visual_jump_flags(
 /// in the quarter the cursor is in is the one that moves.
 pub(crate) fn extend_visual_block(mut win: Win, mut start_visual: Pos, mut end_visual: Pos) {
     // When ALT is pressed make Visual mode blockwise.
-    if mod_mask.get().has(ModMask::ALT) {
+    if MOD_MASK.get().has(ModMask::ALT) {
         set_visual_mode(VisualMode::BLOCK);
     }
 

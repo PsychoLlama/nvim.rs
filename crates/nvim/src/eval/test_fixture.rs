@@ -13,7 +13,7 @@
 
 use crate::buffer::{bare_buffer, free_bare_buffer};
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::{editor_state::Held, editor_state_lock};
 use crate::memory::XString;
 use crate::option::vars::{P_CPO, P_DEBUG, P_MFD};
@@ -39,7 +39,7 @@ pub(crate) struct Fixture {
 impl Fixture {
     pub(crate) fn new() -> Fixture {
         let held = editor_state_lock();
-        got_int.set(false);
+        GOT_INT.set(false);
         let mut window = bare_window();
         window.make_current();
         let buffer = bare_buffer();

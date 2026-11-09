@@ -409,7 +409,7 @@ fn handle_include(
     {
         if kind != CHECK_PATH && action == ACTION_SHOW_ALL && matched {
             msg_putchar('\n' as c_int); // cursor below the last one
-            if !got_int.get() {
+            if !GOT_INT.get() {
                 // Don't display if 'q' was typed at the
                 // "--more--" message.
                 msg_home_replace(name.as_cstr());
@@ -488,7 +488,7 @@ fn show_include_name(
     walk.did_show = true;
 
     // Catch the tree display up with how deep the walk has gone.
-    while walk.depth_displayed < walk.files.depth() && !got_int.get() {
+    while walk.depth_displayed < walk.files.depth() && !GOT_INT.get() {
         walk.depth_displayed += 1;
         for _ in 0..walk.depth_displayed {
             msg_str(c"  ");
@@ -498,7 +498,7 @@ fn show_include_name(
         msg_home_replace(shown.as_cstr());
         msg_str(c" -->\n");
     }
-    if got_int.get() {
+    if GOT_INT.get() {
         // Don't display if 'q' was typed at the "--more--" message.
         return;
     }
@@ -685,7 +685,7 @@ fn list_match(walk: &mut Walk, kind: c_int, action: c_int) {
         if walk.did_show {
             msg_putchar('\n' as c_int); // cursor below the last one
         }
-        if !got_int.get() {
+        if !GOT_INT.get() {
             // Don't display if 'q' was typed at the "--more--"
             // message. A buffer with no name shows nothing, as
             // upstream's `home_replace` of a null name.
@@ -695,7 +695,7 @@ fn list_match(walk: &mut Walk, kind: c_int, action: c_int) {
         walk.prev_fname = walk.curr_fname;
     }
     walk.did_show = true;
-    if !got_int.get() {
+    if !GOT_INT.get() {
         let count = walk.match_count;
         walk.match_count += 1;
         walk.show(kind, true, action, count);
@@ -895,7 +895,7 @@ pub fn find_pattern_in_path(
         if action == ACTION_EXPAND {
             ins_compl_check_keys(30, false);
         }
-        if got_int.get() || ins_compl_interrupted() {
+        if GOT_INT.get() || ins_compl_interrupted() {
             break;
         }
         if !walk.next_line() {
@@ -915,7 +915,7 @@ pub fn find_pattern_in_path(
             }
         }
     } else if !walk.found && action != ACTION_EXPAND && !silent {
-        if got_int.get() || ins_compl_interrupted() {
+        if GOT_INT.get() || ins_compl_interrupted() {
             emsg(gettext(E_INTERR));
         } else if kind == FIND_DEFINE {
             emsg(gettext(c"E388: Couldn't find definition"));

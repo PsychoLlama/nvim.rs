@@ -18,7 +18,7 @@
 
 use crate::buffer::{buf_is_prompt, buflist_nr2name, find_buf};
 use crate::charset::ptr2cells_at;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{c_cells_at, c_cluster_len};
 use crate::memory::XString;
@@ -140,7 +140,7 @@ pub(super) fn show_one_mark(
     current: bool,
 ) {
     let wanted = arg.is_none_or(|arg| arg.contains(&c));
-    if got_int.get() || !wanted || pos.lnum == LineNr::ZERO {
+    if GOT_INT.get() || !wanted || pos.lnum == LineNr::ZERO {
         return;
     }
 
@@ -160,7 +160,7 @@ pub(super) fn show_one_mark(
         msg_title(gettext(c"\nmark line  col file/text"));
     }
     msg_putchar(c_int::from(b'\n'));
-    if got_int.get() {
+    if GOT_INT.get() {
         return;
     }
     // ` %c %6d %4d `

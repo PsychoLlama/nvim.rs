@@ -14,7 +14,6 @@
 
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -64,7 +63,7 @@ pub fn get_expr_register() -> bool {
 
 /// Set the `"=` expression.
 pub fn set_expr_line(new_line: XString) {
-    expr_line.set(Some(new_line));
+    EXPR_LINE.set(Some(new_line));
 }
 
 /// Evaluate the `"=` expression and answer the result.
@@ -75,21 +74,21 @@ pub fn set_expr_line(new_line: XString) {
 ///
 /// Runs arbitrary Vimscript.
 pub fn get_expr_line() -> Option<XString> {
-    static nested: GlobalCell<c_int> = GlobalCell::new(0);
+    static NESTED: GlobalCell<c_int> = GlobalCell::new(0);
 
-    // Evaluating may set `expr_line` again, so work on a copy.
-    let expression = expr_line.with(Clone::clone)?;
-    if nested.get() >= 10 {
+    // Evaluating may set `EXPR_LINE` again, so work on a copy.
+    let expression = EXPR_LINE.with(Clone::clone)?;
+    if NESTED.get() >= 10 {
         return Some(expression);
     }
-    let _nesting = Depth::of(&nested);
+    let _nesting = Depth::of(&NESTED);
     // The copy is this call's own, whatever the expression does to `"=`.
     eval_to_string(&expression, true, false)
 }
 
 /// A copy of the `"=` expression itself, without evaluating it.
 pub fn get_expr_line_src() -> Option<XString> {
-    expr_line.with(Clone::clone)
+    EXPR_LINE.with(Clone::clone)
 }
 
 /// The contents of a computed register, copied.

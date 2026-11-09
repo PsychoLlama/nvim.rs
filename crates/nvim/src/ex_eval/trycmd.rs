@@ -61,7 +61,7 @@ use crate::eval::eval_cmd_string;
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::defs::{Cleanup, CondId, Pend};
 use crate::ex_eval::state::{current_exception, did_throw, force_abort, need_rethrow};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::guard::Suppress;
 use crate::message::E_ARGREQ;
 use crate::message::state::{DID_EMSG, EMSG_SILENT};
@@ -271,7 +271,7 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
                 cs.pending_exception(at)
             });
             DID_EMSG.set(0);
-            got_int.set(false);
+            GOT_INT.set(false);
             did_throw.set(false);
             catch_exception(caught.expect("a thrown exception at the level that catches it"));
             // The current exception must be the one in the stack, so that
@@ -321,14 +321,14 @@ fn pattern_catches(pat: &[u8]) -> Result<bool, Failed> {
     };
     // Save got_int and reset it: an earlier interruption must not cancel
     // the match, only a CTRL-C hit during it.
-    let prev_got_int = got_int.get();
-    got_int.set(false);
+    let prev_got_int = GOT_INT.get();
+    GOT_INT.set(false);
     let thrown = current_exception.get().expect("an exception being thrown");
     // A copy: the match cannot run user code, but the exception table is
     // not borrowed across a call into another module.
     let value = thrown.with(|exception| exception.value.clone());
     let caught = prog.exec_nl(value.as_cstr(), 0, false).is_some();
-    got_int.set(got_int.get() | prev_got_int);
+    GOT_INT.set(GOT_INT.get() | prev_got_int);
     Ok(caught)
 }
 
@@ -401,7 +401,7 @@ pub(crate) fn ex_finally(excmd: &mut ExArg) {
     // ":endfor" or ":endif" detected above counts as did_emsg and
     // did_throw respectively. did_emsg must not be set here: that would
     // suppress the error message.
-    if pending == CSTP_ERROR || DID_EMSG.get() != 0 || got_int.get() || did_throw.get() {
+    if pending == CSTP_ERROR || DID_EMSG.get() != 0 || GOT_INT.get() || did_throw.get() {
         let top = cond.with(|cs| cs.top().expect("the :try is open"));
         let returning = cond.with(|cs| (cs.pending[top] == CSTP_RETURN).then(|| cs.take_pend(top)));
         if let Some(pend) = returning {
@@ -422,7 +422,7 @@ pub(crate) fn ex_finally(excmd: &mut ExArg) {
             pending |= if did_throw.get() { CSTP_THROW } else { 0 };
         }
         pending |= if DID_EMSG.get() != 0 { CSTP_ERROR } else { 0 };
-        pending |= if got_int.get() { CSTP_INTERRUPT } else { 0 };
+        pending |= if GOT_INT.get() { CSTP_INTERRUPT } else { 0 };
         let parked = cond.with(|cs| {
             cs.pending[top] = pending;
             cs.pending_exception(top)
@@ -476,7 +476,7 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
     // not be tested: anything pending has already been discarded then.
     let top_flags = cond.with(|cs| cs.top_flags());
     let mut skip =
-        DID_EMSG.get() != 0 || got_int.get() || did_throw.get() || !top_flags.has(CsFlags::TRUE);
+        DID_EMSG.get() != 0 || GOT_INT.get() || did_throw.get() || !top_flags.has(CsFlags::TRUE);
 
     if top_flags.has(CsFlags::TRY) {
         idx = cond.with(|cs| cs.idx);
@@ -513,7 +513,7 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
     let (flags, pending_here) = cond.with(|cs| (cs.flags[at], cs.pending[at]));
     if (rethrow || (!skip && !flags.has(CsFlags::FINALLY) && pending_here == 0))
         && dbg_check_skipped(excmd)
-        && got_int.get()
+        && GOT_INT.get()
     {
         // A ">quit" counts as an interrupt before the ":endtry".
         skip = true;
@@ -586,7 +586,7 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
                     DID_EMSG.set(1);
                 }
                 if pending & CSTP_INTERRUPT != 0 {
-                    got_int.set(true);
+                    GOT_INT.set(true);
                 }
                 if pending & CSTP_THROW != 0 {
                     rethrow = true;
@@ -618,14 +618,14 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
 pub(crate) fn enter_cleanup(parked: &mut Cleanup) {
     // The pending values are restored by `leave_cleanup`, unless an aborting
     // error, an interrupt or an uncaught exception happens in between.
-    if !(DID_EMSG.get() != 0 || got_int.get() || did_throw.get() || need_rethrow.get()) {
+    if !(DID_EMSG.get() != 0 || GOT_INT.get() || did_throw.get() || need_rethrow.get()) {
         parked.pending = CSTP_NONE;
         parked.exception = None;
         return;
     }
 
     parked.pending = if DID_EMSG.get() != 0 { CSTP_ERROR } else { 0 }
-        | if got_int.get() { CSTP_INTERRUPT } else { 0 }
+        | if GOT_INT.get() { CSTP_INTERRUPT } else { 0 }
         | if did_throw.get() { CSTP_THROW } else { 0 }
         | if need_rethrow.get() { CSTP_THROW } else { 0 };
 
@@ -644,7 +644,7 @@ pub(crate) fn enter_cleanup(parked: &mut Cleanup) {
         }
     }
     DID_EMSG.set(0);
-    got_int.set(false);
+    GOT_INT.set(false);
     did_throw.set(false);
     need_rethrow.set(false);
 
@@ -703,7 +703,7 @@ pub(crate) fn leave_cleanup(parked: &mut Cleanup) {
         DID_EMSG.set(1);
     }
     if pending & CSTP_INTERRUPT != 0 {
-        got_int.set(true);
+        GOT_INT.set(true);
     }
     if pending & CSTP_THROW != 0 {
         // `do_one_cmd` will set did_throw.

@@ -123,11 +123,11 @@ pub(crate) fn au_show_for_event(group: ::core::ffi::c_int, event: AutoEvent, pat
                 last_group = row.group;
                 let group_name = augroup_name(row.group);
 
-                if got_int.get() {
+                if GOT_INT.get() {
                     return;
                 }
                 msg_putchar('\n' as ::core::ffi::c_int);
-                if got_int.get() {
+                if GOT_INT.get() {
                     return;
                 }
                 if row.group != AUGROUP_DEFAULT {
@@ -146,21 +146,21 @@ pub(crate) fn au_show_for_event(group: ::core::ffi::c_int, event: AutoEvent, pat
             if last_pat != Some(row.pat_id) {
                 last_pat = Some(row.pat_id);
                 msg_putchar('\n' as ::core::ffi::c_int);
-                if got_int.get() {
+                if GOT_INT.get() {
                     return;
                 }
                 msg_advance(4);
                 msg_display(row.pattern.as_cstr(), 0, false);
             }
 
-            if got_int.get() {
+            if GOT_INT.get() {
                 return;
             }
             if MSG_COL.get() >= 14 {
                 msg_putchar('\n' as ::core::ffi::c_int);
             }
             msg_advance(14);
-            if got_int.get() {
+            if GOT_INT.get() {
                 return;
             }
 
@@ -189,7 +189,7 @@ pub(crate) fn au_show_for_event(group: ::core::ffi::c_int, event: AutoEvent, pat
             if p_verbose() > 0 {
                 last_set_msg(row.script_ctx);
             }
-            if got_int.get() {
+            if GOT_INT.get() {
                 return;
             }
         }

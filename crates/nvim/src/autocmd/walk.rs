@@ -173,7 +173,7 @@ pub(crate) fn aucmd_next(apc: &mut AutoPatCmd) {
         // defines more autocommands for its own event must not extend the
         // walk it is running under.
         for idx in apc.auidx..apc.ausize {
-            if got_int.get() {
+            if GOT_INT.get() {
                 break;
             }
             match step_at(apc, &names, idx) {

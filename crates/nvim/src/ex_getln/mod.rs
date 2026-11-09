@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
 use crate::api::extmark::nvim_create_namespace;
@@ -64,10 +63,10 @@ use crate::ex_docmd::{
     undo_cmdmod,
 };
 use crate::ex_eval::aborting;
+use crate::ex_getln::state::{CMDLINE_STAR, CMDLINE_WAS_LAST_DRAWN, CMDPREVIEW, REDRAWING_CMDLINE};
 use crate::ex_getln::state::{CmdBuff, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColoredCmdline};
-use crate::ex_getln::state::{cmdline_star, cmdline_was_last_drawn, cmdpreview, redrawing_cmdline};
 use crate::extmark::extmark_clear;
-use crate::getchar::state::{KeyStuffed, KeyTyped, got_int, mod_mask};
+use crate::getchar::state::{GOT_INT, KEY_STUFFED, KEY_TYPED, MOD_MASK};
 use crate::getchar::{
     beep_flush, char_avail, ins_typebuf, map_execute_lua, plain_vgetc, stuff_empty, stuff_readbuf,
     stuff_readbuf_char, stuff_readbuf_one_line, vgetc, vpeekc, vpeekc_any, vungetc,
@@ -222,9 +221,9 @@ pub const OPTION_MAGIC_NOT_SET: OptMagic = 0;
 pub const MAGIC_ALL: Magic = 4;
 pub const MAGIC_ON: Magic = 3;
 pub const MT_CHAR_WISE: MotionType = 0;
-pub const kCmdRedrawAll: CmdRedraw = 2;
-pub const kCmdRedrawPos: CmdRedraw = 1;
-pub const kCmdRedrawNone: CmdRedraw = 0;
+pub const CMD_REDRAW_ALL: CmdRedraw = 2;
+pub const CMD_REDRAW_POS: CmdRedraw = 1;
+pub const CMD_REDRAW_NONE: CmdRedraw = 0;
 pub(crate) use crate::cmdhist::{HIST_CMD, HIST_DEBUG, HIST_INVALID, HIST_SEARCH};
 pub const VSE_NONE: ::core::ffi::c_int = 0;
 pub const VSE_BUFFER: ::core::ffi::c_int = 2;
@@ -377,7 +376,7 @@ pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi
 pub const B_IMODE_USE_INSERT: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-static last_prompt_id: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0 as ::core::ffi::c_uint);
+static LAST_PROMPT_ID: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0 as ::core::ffi::c_uint);
 
 /// No command line: C's `CLEAR_FIELD(ccline)`, and what [`save_cmdline`]
 /// leaves behind when it moves the command line onto the saved stack.
@@ -401,7 +400,7 @@ pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
     level: 0,
     special_char: 0,
     special_shift: false,
-    redraw_state: kCmdRedrawNone,
+    redraw_state: CMD_REDRAW_NONE,
     one_key: false,
     mouse_prompt: false,
     mouse_used: false,
@@ -545,7 +544,7 @@ pub(crate) const SAVE_V_EVENT_INIT: SaveVEvent = SaveVEvent {
 
 /// The command line being edited. Reached through [`Cc::current`], whose
 /// constructor lives beside `Cc` in the handle perimeter.
-pub(crate) static ccline: GlobalCell<CmdlineInfo> = GlobalCell::new(CMDLINE_INFO_INIT);
+pub(crate) static CCLINE: GlobalCell<CmdlineInfo> = GlobalCell::new(CMDLINE_INFO_INIT);
 /// The command lines suspended under [`ccline`], innermost last.
 ///
 /// C threads these on a `prev_ccline` pointer through the stack frame of
@@ -558,15 +557,15 @@ pub(crate) static ccline: GlobalCell<CmdlineInfo> = GlobalCell::new(CMDLINE_INFO
 // address of an entry to the Vimscript functions, and a bare `Vec` would move
 // every entry the next `save_cmdline` grows it.
 #[allow(clippy::vec_box)]
-pub(crate) static saved_cmdlines: GlobalCell<Vec<Box<CmdlineInfo>>> = GlobalCell::new(Vec::new());
-static new_cmdpos: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static cmdline_block: GlobalCell<CmdlineBlock> = GlobalCell::new(CmdlineBlock::EMPTY);
-static getln_interrupted_highlight: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static SAVED_CMDLINES: GlobalCell<Vec<Box<CmdlineInfo>>> = GlobalCell::new(Vec::new());
+static NEW_CMDPOS: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static CMDLINE_BLOCK: GlobalCell<CmdlineBlock> = GlobalCell::new(CmdlineBlock::EMPTY);
+static GETLN_INTERRUPTED_HIGHLIGHT: GlobalCell<bool> = GlobalCell::new(false);
 /// The key `'cedit'` names, which opens the command-line window.
-static cedit_key: GlobalCell<Option<Key>> = GlobalCell::new(None);
-static cmdpreview_bufnr: GlobalCell<Handle> = GlobalCell::new(Handle::NONE);
-static cmdpreview_ns: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static e_active_window_or_buffer_changed_or_deleted: &::core::ffi::CStr =
+static CEDIT_KEY: GlobalCell<Option<Key>> = GlobalCell::new(None);
+static CMDPREVIEW_BUFNR: GlobalCell<Handle> = GlobalCell::new(Handle::NONE);
+static CMDPREVIEW_NS: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static E_ACTIVE_WINDOW_OR_BUFFER_CHANGED_OR_DELETED: &::core::ffi::CStr =
     c"E199: Active window or buffer changed or deleted";
 pub const PATH_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[{`$\\%#'\"|!<";
 pub const SHELL_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[{`$\\%#'\"|!<>();&";

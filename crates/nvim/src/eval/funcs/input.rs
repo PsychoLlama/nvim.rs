@@ -20,8 +20,8 @@ use crate::eval::prompt_get_input;
 use crate::eval::typval::{NumBuf, list_iter, list_len};
 use crate::ex_cmds::check_secure;
 use crate::ex_getln::get_user_input;
+use crate::getchar::state::GOT_INT;
 use crate::getchar::state::TypeaheadSave;
-use crate::getchar::state::got_int;
 use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
@@ -232,7 +232,7 @@ pub fn f_inputrestore(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 
 /// `interrupt()` — raise the same flag CTRL-C does.
 pub(crate) fn f_interrupt(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
-    got_int.set(true);
+    GOT_INT.set(true);
 }
 
 /// The prompt buffer an accessor was asked about, or `None` for anything

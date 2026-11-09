@@ -20,7 +20,7 @@
 use core::ffi::{CStr, c_int};
 use std::io::Write;
 
-use super::{LUA_ERRMEM, LUVF_CALLBACK_NOEXIT, in_fast_callback, in_script};
+use super::{IN_FAST_CALLBACK, IN_SCRIPT, LUA_ERRMEM, LUVF_CALLBACK_NOEXIT};
 use crate::event_queue::put_job_on_main_loop;
 use crate::guard::Depth;
 use crate::lua::ffi::LUA_MULTRET;
@@ -62,7 +62,7 @@ pub(crate) fn nlua_get_error(stack: &mut Stack) -> Option<&[u8]> {
 /// stderr.
 pub fn nlua_error(stack: &mut Stack, template: &'static CStr) {
     let text = nlua_get_error(stack);
-    if in_script.get() {
+    if IN_SCRIPT.get() {
         // `fprintf(stderr, template, len, text)`: the bytes as they are,
         // `%.*s` stopping at a NUL, and a null string printing as nothing
         // at the zero precision it comes with.
@@ -133,7 +133,7 @@ pub(crate) fn report_luv_error(kind: LuvError, error: Option<&[u8]>) {
 }
 
 /// Run a libuv callback on the main loop: [`nlua_pcall`] with
-/// `in_fast_callback` raised for its duration. Expects the callback and
+/// `IN_FAST_CALLBACK` raised for its duration. Expects the callback and
 /// `nargs` arguments on top; answers how many results it left, or a failure's
 /// negated status.
 ///
@@ -145,7 +145,7 @@ pub(crate) fn fast_pcall(
     mut nresult: c_int,
     flags: c_int,
 ) -> c_int {
-    let _fast = Depth::of(&in_fast_callback);
+    let _fast = Depth::of(&IN_FAST_CALLBACK);
     let top = stack.top().index();
     if let Err(LuaFailed(status)) = nlua_pcall(stack, nargs, nresult) {
         if status == LUA_ERRMEM && flags & LUVF_CALLBACK_NOEXIT == 0 {

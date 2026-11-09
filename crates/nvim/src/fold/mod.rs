@@ -44,7 +44,7 @@ use crate::ascii::TAB;
 use crate::decoration::defs::VirtText;
 use crate::diff::state::need_diff_redraw;
 use crate::drawscreen::{UPD_NOT_VALID, find_wl_entry};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::plines::plines_win_nofold;
 use crate::state::mode::State;
@@ -605,10 +605,10 @@ pub fn fold_update(window: Win, top: LineNr, bot: LineNr) {
         // `fold_update_computed` runs 'foldexpr', which the user can
         // interrupt; a CTRL-C there must not leak out into whatever the
         // caller was doing.
-        let save_got_int = got_int.get();
-        got_int.set(false);
+        let save_got_int = GOT_INT.get();
+        GOT_INT.set(false);
         fold_update_computed(window, top, bot);
-        got_int.set(got_int.get() | save_got_int);
+        GOT_INT.set(GOT_INT.get() | save_got_int);
     }
 }
 

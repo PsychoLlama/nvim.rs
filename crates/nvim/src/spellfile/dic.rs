@@ -54,7 +54,7 @@ use std::os::unix::ffi::OsStrExt;
 
 use crate::cstr::byte_at;
 use crate::fileio::Fgets;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::mbyte::CONV_NONE;
 use crate::mbyte::{c_cluster_len, char_count, head_off};
 use crate::message::state::{MSG_COL, MSG_DIDOUT};
@@ -119,7 +119,7 @@ pub(super) fn spell_read_dic(
     let mut retval = Ok(());
     let mut last_msg_time: Timestamp = 0;
 
-    while fd.line_capped(&mut raw, MAXLINELEN as usize) && !got_int.get() {
+    while fd.line_capped(&mut raw, MAXLINELEN as usize) && !GOT_INT.get() {
         line_breakcheck();
         lnum += 1;
         // As C reads the line: up to its first NUL.

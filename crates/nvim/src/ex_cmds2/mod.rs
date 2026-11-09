@@ -63,7 +63,7 @@ use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{DoCmdOpts, cmdmod_has, dialog_msg, do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::script_get;
 use crate::fileio::{buf_check_timestamp, check_timestamps};
-use crate::getchar::state::vgetc_busy;
+use crate::getchar::state::VGETC_BUSY;
 use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
 use crate::memline::MlFlags;
@@ -497,7 +497,7 @@ pub(crate) fn check_changed_any(hidden: bool, unload: bool) -> bool {
 fn report_unwritten(buffer: Buf) {
     // `wait_return` is a no-op while `vgetc` is busy (Quit used from a window
     // menu); make sure the message does not scroll up then.
-    if vgetc_busy.get() > 0 {
+    if VGETC_BUSY.get() > 0 {
         MSG_ROW.set(cmdline_row.get());
         MSG_COL.set(0);
         MSG_DIDOUT.set(false);

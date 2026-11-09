@@ -85,8 +85,8 @@ pub fn nvim_feedkeys(keys: ApiString, mode: ApiString, escape_ks: Boolean) {
         // they go after whatever is already queued.
         let offset = if insert { 0 } else { typeahead().len() };
         let _ = ins_typebuf(keys_esc, remap_flag, offset, !typed, false);
-        if vgetc_busy.get() != 0 {
-            typebuf_was_filled.set(true);
+        if VGETC_BUSY.get() != 0 {
+            TYPEBUF_WAS_FILLED.set(true);
         }
     }
     if execute {

@@ -46,7 +46,7 @@ use crate::decoration::{
     decor_redraw_col, decor_redraw_line, decor_spell, decor_state_restore, decor_state_set_aside,
 };
 use crate::decoration_provider::decor_providers_invoke_spell;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::highlight::Hlf;
 use crate::message::give_warning;
 use crate::message::state::{BOT_TOP_MSG, TOP_BOT_MSG};
@@ -145,7 +145,7 @@ impl Win {
         let mut decor_lnum: LineNr = LineNr::new(-1);
 
         let mut lines = self.buffer().lines();
-        while !got_int.get() {
+        while !GOT_INT.get() {
             let line_len = lines.line_len(lnum).as_usize();
             if buf.len() < line_len + MAXWLEN + 2 {
                 buf = vec![0; line_len + MAXWLEN + 2];

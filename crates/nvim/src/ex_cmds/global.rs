@@ -25,7 +25,7 @@ use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
 use crate::ex_docmd::state::global_busy;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::mark::setpcmark;
 use crate::memline::{ml_clearmarked, ml_firstmarked, ml_setmarked};
 use crate::message::state::{MSG_COL, MSG_DIDOUT, MSG_SCROLLED};
@@ -173,7 +173,7 @@ fn global_pattern(args: &mut ExArg) -> Result<GlobalPat, GlobalError> {
 fn global_mark(args: &ExArg, regmatch: &mut RegMMatch, kind: u8) -> c_int {
     let (mut lnum, line2) = (args.line1, args.line2);
     let mut ndone = 0 as c_int;
-    while lnum <= line2 && !got_int.get() {
+    while lnum <= line2 && !GOT_INT.get() {
         let matched = matches_line(regmatch, lnum);
         // Re-compiling the program can have failed.
         if !regmatch.has_program() {
@@ -248,7 +248,7 @@ pub fn ex_global(excmd: &mut ExArg) {
     } else {
         let ndone = global_mark(excmd, &mut regmatch, kind);
         // Pass 2: execute the command for each line that has been marked.
-        if got_int.get() {
+        if GOT_INT.get() {
             msg(gettext(E_INTERR), 0 as c_int);
         } else if ndone == 0 as c_int {
             let pat = msg_bytes(&used_pat);
@@ -287,7 +287,7 @@ pub fn global_exe(cmd: &[u8]) {
     global_busy.set(1 as c_int);
     let old_lcount = Buf::current().b_ml.ml_line_count;
 
-    while !got_int.get() {
+    while !GOT_INT.get() {
         let lnum = ml_firstmarked();
         if lnum == LineNr::ZERO || global_busy.get() != 1 as c_int {
             break;

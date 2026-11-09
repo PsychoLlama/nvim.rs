@@ -627,9 +627,9 @@ pub fn ins_complete(c: Key, enable_pum: bool) -> Result<(), Failed> {
 
     // Eat the ESC that vgetc() returns after a CTRL-C, to avoid leaving
     // Insert mode.
-    if got_int.get() && global_busy.get() == 0 {
+    if GOT_INT.get() && global_busy.get() == 0 {
         vgetc();
-        got_int.set(false);
+        GOT_INT.set(false);
     }
 
     // We found no match if the list has only the "compl_orig_text" entry.

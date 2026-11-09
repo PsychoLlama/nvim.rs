@@ -21,7 +21,7 @@ use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
 use crate::env::{expand_env, home_to_tilde};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::highlight_group::{HLF_D, HLF_T};
 use crate::lua::executor::nlua_expand_pat;
 use crate::message::state::{MSG_COL, MSG_DIDANY, MSG_ROW};
@@ -192,8 +192,8 @@ pub fn showmatches(
         msg_start(); // prepare for paging
     }
 
-    if got_int.get() {
-        got_int.set(false); // only interrupt the completion, not the cmd line
+    if GOT_INT.get() {
+        GOT_INT.set(false); // only interrupt the completion, not the cmd line
     } else if display_wildmenu && !display_list {
         // Display statusbar menu.
         redraw_wildmenu(expand, matches, if noselect { -1 } else { 0 }, showtail);
@@ -240,8 +240,8 @@ pub fn showmatches(
         // List the files line by line.
         for i in 0..lines {
             showmatches_oneline(expand, matches, lines, i, maxlen, showtail);
-            if got_int.get() {
-                got_int.set(false);
+            if GOT_INT.get() {
+                GOT_INT.set(false);
                 break;
             }
         }

@@ -39,7 +39,7 @@ use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::change::{changed, save_file_ff};
 use crate::charset::buf_init_chartab;
 use crate::fileio::{Loaded, ReadFlags, prep_exarg, readfile_named};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::help::get_local_additions;
 use crate::indent_c::parse_cino;
 use crate::memfile::MfDirty;
@@ -427,7 +427,7 @@ fn open_buffer_inner(
     // When reading stdin, the buffer contents always needs writing, so set the
     // changed flag.  Unless in readonly mode: "ls | nvim -R -".  When
     // interrupted and 'cpoptions' contains 'i' set changed flag.
-    if got_int.get() && cpo_has(CpoFlag::INTMOD)
+    if GOT_INT.get() && cpo_has(CpoFlag::INTMOD)
         || buf.b_modified_was_set
         || aborting_now() && cpo_has(CpoFlag::INTMOD)
     {

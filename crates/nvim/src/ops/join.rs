@@ -262,7 +262,7 @@ fn measure_join(
         }
 
         line_breakcheck();
-        if got_int.get() {
+        if GOT_INT.get() {
             return Err(Failed);
         }
     }

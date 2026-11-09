@@ -34,7 +34,7 @@ use crate::drawscreen::{
 };
 use crate::eval::vars::{do_unlet, var_string_value};
 use crate::ex_getln::check_opt_wim;
-use crate::ex_getln::state::cmdpreview;
+use crate::ex_getln::state::CMDPREVIEW;
 use crate::highlight_group::init_highlight;
 use crate::indent::briopt_check;
 use crate::mbyte::c_cluster_len;
@@ -201,7 +201,7 @@ pub fn did_set_highlight(args: &mut OptSet) -> Result<(), OptError> {
 /// 'inccommand' cannot change while a preview is on screen, because the
 /// preview was set up under the old value.
 pub fn did_set_inccommand(args: &mut OptSet) -> Result<(), OptError> {
-    if cmdpreview.get() {
+    if CMDPREVIEW.get() {
         return invalid();
     }
     did_set_str_generic(args)

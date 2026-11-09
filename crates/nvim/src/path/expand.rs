@@ -242,7 +242,7 @@ pub fn gen_expand_wildcards(
     // along the 'path', every later one is uniquefied too.
     let mut did_expand_in_path = false;
     for pattern in patterns {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         // How many names this pattern added, or `None` when nothing tried.
@@ -435,7 +435,7 @@ pub fn expand_wildcards(patterns: &[&CStr], flags: ExpandFlags) -> Result<Vec<XS
 
     // Move the names where 'suffixes' match to the end. Skip it when
     // interrupted: the result probably won't be used.
-    if names.len() > 1 && !got_int.get() {
+    if names.len() > 1 && !GOT_INT.get() {
         let (plain, suffixed): (Vec<XString>, Vec<XString>) =
             names.into_iter().partition(|name| !match_suffix(name));
         names = plain;

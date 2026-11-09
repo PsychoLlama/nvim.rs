@@ -37,7 +37,7 @@ use super::*;
 use crate::charset::{strsize, trans_characters_in};
 use crate::drawscreen::redrawing;
 use crate::drawscreen::state::need_maketitle;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::mbyte::cp_bounds;
 use crate::memory::XString;
 use crate::message::IOSIZE;
@@ -101,7 +101,7 @@ pub fn buflist_list(excmd: &mut ExArg) {
     let mut walk = Walk::new(sorted.as_deref());
 
     while let Some(buf) = walk.step() {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         if skip(buf, arg, c_int::from(forceit)) {

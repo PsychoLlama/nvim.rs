@@ -88,12 +88,12 @@ use crate::eval::vars::{set_vim_var_string, var_redir_str, with_vim_var_str};
 use crate::ex_docmd::do_sleep;
 use crate::ex_docmd::state::global_busy;
 use crate::ex_eval::cause_errthrow;
-use crate::ex_getln::state::{cmdline_was_last_drawn, redrawing_cmdline};
+use crate::ex_getln::state::{CMDLINE_WAS_LAST_DRAWN, REDRAWING_CMDLINE};
 use crate::fileio::check_timestamps;
 use crate::fileio::state::need_check_timestamps;
 use crate::getchar::state::FlushBuffers;
 use crate::getchar::state::{
-    KeyTyped, got_int, reg_recording, scriptout, vgetc_busy, vgetc_char, vgetc_mod_mask,
+    GOT_INT, KEY_TYPED, REG_RECORDING, SCRIPTOUT, VGETC_BUSY, VGETC_CHAR, VGETC_MOD_MASK,
 };
 use crate::getchar::{
     beep_flush, char_avail, flush_buffers, ins_char_typebuf, safe_vgetc, stuff_empty,
@@ -273,7 +273,7 @@ pub fn msg_multiline(
     let mut chunk = 0;
     let mut at = 0;
     while at < text.len() {
-        if check_int && got_int.get() {
+        if check_int && GOT_INT.get() {
             return;
         }
         if matches!(text[at], b'\n' | b'\t' | b'\r' | 0x07) {
@@ -690,7 +690,7 @@ pub(crate) fn has_keep_msg() -> bool {
 
 /// Would a message be seen if it were shown now?
 pub fn messaging() -> bool {
-    !(p_lz() && char_avail() && !KeyTyped.get()) && (p_ch() > 0 || ui_has(kUIMessages))
+    !(p_lz() && char_avail() && !KEY_TYPED.get()) && (p_ch() > 0 || ui_has(kUIMessages))
 }
 
 /// Report "N more lines" / "N fewer lines" after an edit, if `'report'`
@@ -720,7 +720,7 @@ pub fn msgmore(n: c_int) {
     // is cut to what is left of it.
     let room = MSG_BUF_LEN as usize;
     let mut text = crate::formatted!(room, fmt.to_bytes(), pn);
-    if got_int.get() {
+    if GOT_INT.get() {
         let note = gettext(c" (Interrupted)").to_bytes();
         let left = (room - 1).saturating_sub(text.len());
         text.extend_from_slice(&note[..note.len().min(left)]);

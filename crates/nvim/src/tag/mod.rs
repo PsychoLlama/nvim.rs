@@ -28,7 +28,7 @@ use crate::ex_docmd::{do_cmdline_cmd, set_no_hlsearch};
 use crate::file_search::{FindContext, split_stop_directories};
 use crate::fileio::FileOffset;
 use crate::fold::fold_open_cursor;
-use crate::getchar::state::{KeyTyped, got_int};
+use crate::getchar::state::{GOT_INT, KEY_TYPED};
 use crate::global_cell::GlobalCell;
 use crate::guard::secure;
 use crate::help::help_heuristic;

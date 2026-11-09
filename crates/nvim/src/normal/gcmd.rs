@@ -24,7 +24,7 @@ use crate::edit::{BeginlineOpts, beginline, cursor_down, cursor_up, oneleft, one
 use crate::ex_cmds::describe_cursor_char;
 use crate::ex_docmd::{do_cmdline_cmd, do_exmode, do_sleep};
 use crate::fold::has_any_folding;
-use crate::getchar::state::mod_mask;
+use crate::getchar::state::MOD_MASK;
 use crate::mbyte::{cells_at, show_utf8, utf_find_illegal};
 use crate::memline::Lines;
 use crate::memline::goto_byte;
@@ -282,7 +282,7 @@ fn nv_g_key(cmd_arg: &mut CmdArg, nchar: Key) -> bool {
             | SpecialKey::X2drag
             | SpecialKey::X2release,
         ) => {
-            mod_mask.set(ModMask::CTRL);
+            MOD_MASK.set(ModMask::CTRL);
             do_mouse(Some(cmd_arg.op()), nchar, BACKWARD, cmd_arg.count1, false);
         }
         Some(SpecialKey::Ignore) => {}

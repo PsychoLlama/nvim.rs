@@ -1,6 +1,6 @@
 //! The register array, and who is allowed to reach into it.
 //!
-//! `y_regs` is 39 slots, and [`op_reg_index`] is the only place their layout
+//! `Y_REGS` is 39 slots, and [`op_reg_index`] is the only place their layout
 //! is written down:
 //!
 //! | slot | register |
@@ -81,11 +81,11 @@ impl Reg {
     /// a nested one).
     ///
     /// Crate-private, as [`write`](Self::write) is: a `pub` generic is
-    /// instantiated by whichever crate calls it, which makes `y_regs` an
+    /// instantiated by whichever crate calls it, which makes `Y_REGS` an
     /// exported symbol (`just state-exports`).
     pub(crate) fn read<R>(self, f: impl FnOnce(&YankReg) -> R) -> R {
         match self {
-            Reg::Slot(slot) => y_regs.with(|regs| f(&regs[slot])),
+            Reg::Slot(slot) => Y_REGS.with(|regs| f(&regs[slot])),
             Reg::Empty => f(&YankReg::EMPTY),
         }
     }
@@ -94,7 +94,7 @@ impl Reg {
     /// write to the empty register is dropped, as nothing reads it back.
     pub(crate) fn write<R>(self, f: impl FnOnce(&mut YankReg) -> R) -> R {
         match self {
-            Reg::Slot(slot) => y_regs.with_mut(|regs| f(&mut regs[slot])),
+            Reg::Slot(slot) => Y_REGS.with_mut(|regs| f(&mut regs[slot])),
             Reg::Empty => f(&mut YankReg::EMPTY.clone()),
         }
     }
@@ -109,7 +109,7 @@ impl Reg {
 /// The slot `""` currently points at, or `None` when nothing has been
 /// written yet.
 pub(crate) fn get_unname_register() -> Option<usize> {
-    y_previous.get()
+    Y_PREVIOUS.get()
 }
 
 /// Slot `reg` of the register array.
@@ -122,7 +122,7 @@ pub fn get_y_register(reg: usize) -> Reg {
 
 /// The register `""` points at, if anything has been written.
 pub fn get_y_previous() -> Option<Reg> {
-    y_previous.get().map(get_y_register)
+    Y_PREVIOUS.get().map(get_y_register)
 }
 
 /// Whether `regname` names a register.
@@ -159,8 +159,8 @@ pub(crate) struct ShadaYank {
 /// its name and whether `""` points at it, in slot order. A register of
 /// more than `max_lines` lines is left out.
 pub(crate) fn shada_registers(max_lines: Option<usize>) -> Vec<(c_char, bool, ShadaYank)> {
-    let previous = y_previous.get();
-    y_regs.with(|regs| {
+    let previous = Y_PREVIOUS.get();
+    Y_REGS.with(|regs| {
         (0..NUM_SAVED_REGISTERS)
             .filter_map(|i| {
                 let reg = &regs[i];
@@ -238,7 +238,7 @@ pub(crate) fn shada_set_register(name: c_char, yank: ShadaYank, is_unnamed: bool
     };
     get_y_register(i).write(|slot| *slot = reg);
     if is_unnamed {
-        y_previous.set(Some(i));
+        Y_PREVIOUS.set(Some(i));
     }
     true
 }
@@ -250,14 +250,14 @@ pub fn op_reg_set_previous(name: RegName) -> bool {
     let Some(i) = op_reg_index(name) else {
         return false;
     };
-    y_previous.set(Some(i));
+    Y_PREVIOUS.set(Some(i));
     true
 }
 
 /// Point `""` at register `regname`'s slot -- the first slot, for a name
 /// that has none -- the way a yank into it would.
 pub(crate) fn point_unnamed_at(regname: RegName) {
-    y_previous.set(Some(op_reg_index(regname).unwrap_or(0)));
+    Y_PREVIOUS.set(Some(op_reg_index(regname).unwrap_or(0)));
 }
 
 impl YankReg {
@@ -304,7 +304,7 @@ pub fn get_yank_register(regname: RegName, mode: c_int) -> Reg {
     }
     if mode != YREG_YANK
         && matches!(regname, 0 | b'"' | b'*' | b'+')
-        && let Some(previous) = y_previous.get()
+        && let Some(previous) = Y_PREVIOUS.get()
     {
         // An unnamed paste reads the last register written.
         return get_y_register(previous);
@@ -312,7 +312,7 @@ pub fn get_yank_register(regname: RegName, mode: c_int) -> Reg {
 
     let i = op_reg_index(regname).unwrap_or(0);
     if mode == YREG_YANK {
-        y_previous.set(Some(i));
+        Y_PREVIOUS.set(Some(i));
     }
     get_y_register(i)
 }
@@ -343,7 +343,7 @@ pub fn copy_register(name: RegName) -> YankReg {
 /// With `y_append` the caller is appending to an uppercase register, so `""`
 /// is left where it is.
 pub fn shift_delete_registers(y_append: bool) {
-    y_regs.with_mut(|regs| {
+    Y_REGS.with_mut(|regs| {
         regs[1..=9].rotate_right(1);
         // `"1` is left unset, keeping the type, width and time of the
         // register that moved to `"2` -- upstream copies the struct and nulls
@@ -359,7 +359,7 @@ pub fn shift_delete_registers(y_append: bool) {
         };
     });
     if !y_append {
-        y_previous.set(Some(1));
+        Y_PREVIOUS.set(Some(1));
     }
 }
 

@@ -30,7 +30,7 @@ use core::ffi::{CStr, c_int};
 
 use crate::api::buffer::LineSink;
 use crate::buffer::buf_get_changedtick;
-use crate::ex_getln::state::cmdpreview;
+use crate::ex_getln::state::CMDPREVIEW;
 use crate::extmark::BCount;
 use crate::guard::Lock;
 use crate::log::{LOGLVL_ERR, logmsg};
@@ -509,7 +509,7 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
 
     // Don't send b:changedtick during 'inccommand' preview if "buf" is the
     // current buffer.
-    let send_tick = !(cmdpreview.get() && buffer.raw() == Buf::current_raw());
+    let send_tick = !(CMDPREVIEW.get() && buffer.raw() == Buf::current_raw());
 
     // If one of the channels doesn't work, put its ID here so we can remove
     // it later.
@@ -556,7 +556,7 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
     while i < buffer.callbacks().len() {
         let cb = buffer.callbacks().at(i);
         let mut keep = true;
-        if cb.on_lines != LUA_NOREF && (cb.preview || !cmdpreview.get()) {
+        if cb.on_lines != LUA_NOREF && (cb.preview || !CMDPREVIEW.get()) {
             // Six arguments, or eight with the UTF sizes.
             let mut args = ArrayBuf::<8>::new();
             args.push(Object::buffer(buffer.handle));
@@ -644,7 +644,7 @@ fn send_splice(mut buffer: Buf, start: Corner, old: Corner, new: Corner) {
     while i < buffer.callbacks().len() {
         let cb = buffer.callbacks().at(i);
         let mut keep = true;
-        if cb.on_bytes != LUA_NOREF && (cb.preview || !cmdpreview.get()) {
+        if cb.on_bytes != LUA_NOREF && (cb.preview || !CMDPREVIEW.get()) {
             let mut args = ArrayBuf::<11>::new();
             args.push(Object::buffer(buffer.handle));
             args.push(Object::integer(changedtick(buffer)));

@@ -415,7 +415,7 @@ fn walk_to_target(
 
 /// Undoes up the tree until the destination is reached, or CTRL-C.
 fn undo_up_to(dest: &UndoDest) {
-    while !got_int.get() {
+    while !GOT_INT.get() {
         // The change warning first, for the reason `u_doit` gives.
         change_warning(Buf::current(), 0);
         let mut buf = Buf::current();
@@ -441,7 +441,7 @@ fn undo_up_to(dest: &UndoDest) {
 /// end reports as "before" rather than "after".
 fn redo_down_to(dest: &UndoDest) -> bool {
     let mut did_undo = true;
-    while !got_int.get() {
+    while !GOT_INT.get() {
         change_warning(Buf::current(), 0);
         let mut buf = Buf::current();
         let fork = buf.b_u_curhead;

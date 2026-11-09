@@ -48,7 +48,7 @@ use crate::event::proc::proc_teardown;
 use crate::ex_docmd::{filetype_maybe_enable, filetype_plugin_enable};
 use crate::ex_getln::cmdline_init;
 use crate::fileio::shorten_fnames;
-use crate::getchar::state::scriptout;
+use crate::getchar::state::SCRIPTOUT;
 use crate::getchar::{open_scriptin, stuff_readbuf_char};
 use crate::highlight::highlight_init;
 use crate::highlight_group::init_highlight;
@@ -337,8 +337,8 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         } else {
             WRITEBIN
         };
-        scriptout.set(CFile::open(name, mode));
-        if scriptout.with(Option::is_none) {
+        SCRIPTOUT.set(CFile::open(name, mode));
+        if SCRIPTOUT.with(Option::is_none) {
             let what = gettext(c"Cannot open for script output: \"").to_bytes();
             write_c_stderr(&[what, name.to_bytes(), b"\"\n"].concat());
             os_exit(2);

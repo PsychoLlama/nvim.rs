@@ -43,7 +43,7 @@ use crate::ex_docmd::state::{ex_no_reprint, global_busy};
 use crate::ex_eval::aborting;
 use crate::fileio::state::{did_check_timestamps, need_check_timestamps, no_check_timestamps};
 use crate::fold::{fold_update_all, foldmethod_is_manual};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::getchar::stuff_empty;
 use crate::global_cell::GlobalCell;
 use crate::guard::allbuf_lock;

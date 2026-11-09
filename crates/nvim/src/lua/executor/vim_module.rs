@@ -26,7 +26,7 @@ use super::{
 use crate::api::extmark::ns_initialized;
 use crate::lua::converter::{pop_array, push_array};
 use crate::lua::stack::{At, Function, Kind, Raise, Stack};
-use crate::lua::state::{MAIN_REFS, nlua_disable_preload};
+use crate::lua::state::{MAIN_REFS, NLUA_DISABLE_PRELOAD};
 use crate::lua_functions;
 use crate::runtime::runtime_get_named_thread;
 use crate::ui::state::kUILinegrid;
@@ -164,7 +164,7 @@ fn module_preloader(stack: &mut Stack) -> Result<c_int, Raise> {
 /// Register every embedded module in `package.preload`, then `require`
 /// `vim._init_packages`, which is what wires up the rest of the runtime.
 ///
-/// `nlua_disable_preload` (`--luamod-dev`) stops the registration at
+/// `NLUA_DISABLE_PRELOAD` (`--luamod-dev`) stops the registration at
 /// `vim.inspect`, so everything after it is loaded from the runtime
 /// directory instead.
 pub(crate) fn init_packages(stack: &mut Stack, is_standalone: bool) -> bool {
@@ -175,7 +175,7 @@ pub(crate) fn init_packages(stack: &mut Stack, is_standalone: bool) -> bool {
         stack.push_integer(index);
         stack.push_closure(preloader, 1);
         stack.set_field(At::from_top(2), def.name);
-        if nlua_disable_preload.get() && !is_standalone && def.name == FIRST_DEV_MODULE {
+        if NLUA_DISABLE_PRELOAD.get() && !is_standalone && def.name == FIRST_DEV_MODULE {
             break;
         }
     }

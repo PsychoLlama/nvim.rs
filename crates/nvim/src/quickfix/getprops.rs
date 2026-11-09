@@ -124,7 +124,7 @@ pub(crate) fn get_errorlist(
         return Ok(());
     }
     for entry in &qfl.entries {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         get_qfline_items(entry, list);

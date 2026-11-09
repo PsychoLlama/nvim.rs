@@ -39,7 +39,7 @@ use crate::diff::state::diff_context;
 use crate::drawscreen::redraw_win_range_later;
 use crate::eval::eval_foldexpr;
 use crate::eval::vars::set_vim_var_nr;
-use crate::getchar::state::{KeyTyped, got_int};
+use crate::getchar::state::{GOT_INT, KEY_TYPED};
 use crate::indent::{get_indent_buf, get_sw_value};
 use crate::r#move::changed_window_setting;
 use crate::os::input::line_breakcheck;
@@ -160,7 +160,7 @@ impl Win {
         let linecount = line.win.buffer().b_ml.ml_line_count - line.off;
         let mut finish = false;
         line.lnum_save = line.lnum;
-        while !got_int.get() {
+        while !GOT_INT.get() {
             line_breakcheck();
             lvl = line.lvl.min(MAX_LEVEL);
             if line.lnum > firstlnum && (level > lvl - line.start || level >= line.had_end) {
@@ -298,7 +298,7 @@ impl Win {
                     // where that search started so the caller sees both.
                     line.lnum = line.lnum_save;
                     let next = line.lnum + 1;
-                    while !got_int.get() {
+                    while !GOT_INT.get() {
                         // 'foldexpr' may ask for the level of this line while we
                         // are working out the next one; park the answer.
                         prev_lnum.set(line.lnum);
@@ -420,7 +420,7 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
         // Indent and expr can answer "undefined" (-1); walk back until a
         // line has a level of its own.
         line.lvl = -1;
-        while !got_int.get() {
+        while !GOT_INT.get() {
             line.lvl_next = -1;
             method.level(&mut line);
             if line.lvl >= 0 {
@@ -464,7 +464,7 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
     }
     let mut path = Vec::new();
     let mut lost = false;
-    while !got_int.get() {
+    while !GOT_INT.get() {
         if line.lnum > line_count() {
             break;
         }
@@ -649,7 +649,7 @@ impl Reuse<'_> {
     fn find_or_make(&mut self) -> Option<usize> {
         let (line, firstlnum, startlnum) = (&*self.line, self.firstlnum, self.startlnum);
         let (level, lvl) = (self.level, self.lvl);
-        while !got_int.get() {
+        while !GOT_INT.get() {
             let folds = &mut *self.folds;
             // Whether an existing fold that ends just above `firstlnum` may
             // be joined onto this one.
@@ -846,9 +846,9 @@ pub(super) fn foldlevel_expr(line: &mut FoldLine) {
         line.lvl = 0;
     }
     // 'foldexpr' must not count as typed input.
-    let save_keytyped = KeyTyped.get();
+    let save_keytyped = KEY_TYPED.get();
     let (n, verdict) = eval_foldexpr(line.win);
-    KeyTyped.set(save_keytyped);
+    KEY_TYPED.set(save_keytyped);
     // `eval_foldexpr` writes one byte of the expression's answer, so the
     // conversion below is exact.
     match u8::try_from(verdict).unwrap_or(0) {

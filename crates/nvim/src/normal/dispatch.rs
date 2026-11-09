@@ -31,7 +31,7 @@ use crate::eval::vars::{set_reg_var, set_vcount};
 use crate::ex_docmd::do_sleep;
 use crate::fold::fold_open_cursor;
 use crate::getchar::state::{
-    KeyStuffed, KeyTyped, langmap_mapchar, mod_mask, vgetc_busy, vgetc_char, vgetc_mod_mask,
+    KEY_STUFFED, KEY_TYPED, LANGMAP_MAPCHAR, MOD_MASK, VGETC_BUSY, VGETC_CHAR, VGETC_MOD_MASK,
 };
 use crate::getchar::{
     beep_flush, gotchars_ignore, ins_char_typebuf, plain_vgetc, readbuf1_empty, stuff_empty,
@@ -186,12 +186,12 @@ pub(crate) fn find_command(cmdchar: Key) -> Option<usize> {
 #[inline(always)]
 fn langmap_wanted(condition: bool) -> bool {
     let have_langmap = P_LANGMAP.first_byte() != 0;
-    let from_a_map = if vgetc_busy.get() != 0 {
+    let from_a_map = if VGETC_BUSY.get() != 0 {
         typeahead().maplen() == 0
     } else {
-        KeyTyped.get()
+        KEY_TYPED.get()
     };
-    have_langmap && condition && (p_lrm() || from_a_map) && !KeyStuffed.get()
+    have_langmap && condition && (p_lrm() || from_a_map) && !KEY_STUFFED.get()
 }
 
 /// Translate one key through 'langmap', if this key and this moment call for
@@ -200,7 +200,7 @@ fn langmap_wanted(condition: bool) -> bool {
 pub(crate) fn langmap_adjust(c: &mut Key, condition: bool) {
     if !c.is_special() && langmap_wanted(condition) {
         *c = match c.as_byte() {
-            Some(b) => Key::byte(langmap_mapchar.with(|map| map[usize::from(b)])),
+            Some(b) => Key::byte(LANGMAP_MAPCHAR.with(|map| map[usize::from(b)])),
             None => langmap_adjust_mb(*c),
         };
     }
@@ -575,8 +575,8 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
             || ns.c == Key::CAR
             || ns.c == SpecialKey::Kenter)
     {
-        let len = ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true);
-        if KeyTyped.get() {
+        let len = ins_char_typebuf(VGETC_CHAR.get(), VGETC_MOD_MASK.get(), true);
+        if KEY_TYPED.get() {
             ungetchars(len);
         }
         ns.c = if !restart_edit.get().is_nul() {
@@ -632,8 +632,8 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
         ns.command_finished = true;
     } else {
         if Win::current().w_onebuf_opt.wo_rl != 0
-            && KeyTyped.get()
-            && !KeyStuffed.get()
+            && KEY_TYPED.get()
+            && !KEY_STUFFED.get()
             && ns.row().cmd_flags.has(NvFlags::RL)
         {
             normal_invert_horizontal(ns);
@@ -668,9 +668,9 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
                     unshift_special(&mut ns.ca);
                     ns.idx = find_command(ns.ca.cmdchar);
                     debug_assert!(ns.idx.is_some());
-                } else if flags.has(NvFlags::SSS) && mod_mask.get().has(ModMask::SHIFT) {
+                } else if flags.has(NvFlags::SSS) && MOD_MASK.get().has(ModMask::SHIFT) {
                     start_selection();
-                    mod_mask.set(mod_mask.get().without(ModMask::SHIFT));
+                    MOD_MASK.set(MOD_MASK.get().without(ModMask::SHIFT));
                 }
             }
 
@@ -810,7 +810,7 @@ pub(crate) fn read_command_char() -> Key {
 /// of movement is set, the key was typed rather than mapped, and no operator
 /// is waiting for the motion to finish.
 pub(crate) fn may_fold_open(cmd_arg: &mut CmdArg, fdo_flag: c_uint) {
-    if FDO_FLAGS.get() & fdo_flag != 0 && KeyTyped.get() && cmd_arg.op().op_type == OpType::Nop {
+    if FDO_FLAGS.get() & fdo_flag != 0 && KEY_TYPED.get() && cmd_arg.op().op_type == OpType::Nop {
         fold_open_cursor();
     }
 }

@@ -27,18 +27,18 @@ use crate::eval::AUTOLOAD_CHAR;
 /// The scope letters an identifier may carry before its colon, as in `g:foo`.
 /// (The C's `EXPR_VAR_SCOPE_LIST` lists `b` twice; the duplicate is inert.)
 const VAR_SCOPES: [ExprVarScope; 8] = [
-    kExprVarScopeScript,
-    kExprVarScopeGlobal,
-    kExprVarScopeVim,
-    kExprVarScopeBuffer,
-    kExprVarScopeWindow,
-    kExprVarScopeTabpage,
-    kExprVarScopeLocal,
-    kExprVarScopeArguments,
+    EXPR_VAR_SCOPE_SCRIPT,
+    EXPR_VAR_SCOPE_GLOBAL,
+    EXPR_VAR_SCOPE_VIM,
+    EXPR_VAR_SCOPE_BUFFER,
+    EXPR_VAR_SCOPE_WINDOW,
+    EXPR_VAR_SCOPE_TABPAGE,
+    EXPR_VAR_SCOPE_LOCAL,
+    EXPR_VAR_SCOPE_ARGUMENTS,
 ];
 
 /// The scope letters an option may carry before its colon, as in `&g:sw`.
-const OPT_SCOPES: [ExprOptScope; 2] = [kExprOptScopeGlobal, kExprOptScopeLocal];
+const OPT_SCOPES: [ExprOptScope; 2] = [EXPR_OPT_SCOPE_GLOBAL, EXPR_OPT_SCOPE_LOCAL];
 
 use super::ast::translate;
 
@@ -70,7 +70,7 @@ fn blank_token(start: ParserPosition) -> LexExprToken {
     LexExprToken {
         start,
         len: 0,
-        type_0: kExprLexInvalid,
+        type_0: EXPR_LEX_INVALID,
         data: LexExprTokenData::Blank,
     }
 }
@@ -115,7 +115,7 @@ fn scan_while(line: &[u8], from: size_t, accept: impl Fn(u8) -> bool) -> size_t 
 ///
 /// The C indexes a designated-initializer table that names only `0`, `x`/`X`
 /// and `b`/`B`, so an `0o…` literal answers **zero** rather than eight. Kept:
-/// the only reader is `values.rs`'s `base_to_prefix_length`, where zero and
+/// the only reader is `values.rs`'s `BASE_TO_PREFIX_LENGTH`, where zero and
 /// ten mean the same thing (no prefix to highlight).
 fn base_for_prefix(prefix: u8) -> uint8_t {
     match prefix {
@@ -132,7 +132,7 @@ fn base_for_prefix(prefix: u8) -> uint8_t {
 ///
 /// The C tests `strchr("?#", c)`, which also answers non-NULL for the
 /// terminating NUL: a NUL byte here is consumed as a strategy of zero, which
-/// is what `kCCStrategyUseOption` is anyway. Only the token's length differs,
+/// is what `CC_STRATEGY_USE_OPTION` is anyway. Only the token's length differs,
 /// and it differs in the C too.
 ///
 /// `!` and `=` reach this with no comparison to put the answer in, and the
@@ -144,7 +144,7 @@ fn scan_ccs(ret: &mut LexExprToken, line: &[u8]) -> ExprCaseCompareStrategy {
         ret.len += 1;
         ccs
     } else {
-        kCCStrategyUseOption
+        CC_STRATEGY_USE_OPTION
     }
 }
 
@@ -153,16 +153,16 @@ fn scan_ccs(ret: &mut LexExprToken, line: &[u8]) -> ExprCaseCompareStrategy {
 /// `scope` is what the `&g:` prefix named, which the highlight still covers:
 /// see [`LexExprTokenError::opt_scope`].
 fn option_name_missing(ret: &mut LexExprToken, scope: ExprOptScope) {
-    ret.type_0 = kExprLexInvalid;
+    ret.type_0 = EXPR_LEX_INVALID;
     ret.data = LexExprTokenData::Error(LexExprTokenError {
-        type_0: kExprLexOption,
+        type_0: EXPR_LEX_OPTION,
         msg: translate(c"E112: Option name missing: %.*s"),
         opt_scope: scope,
     });
 }
 
 /// A number literal: an integer in whichever base its prefix names, or a
-/// float when `kELFlagAllowFloat` lets one through.
+/// float when `EL_FLAG_ALLOW_FLOAT` lets one through.
 fn scan_number(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
     let mut is_float = false;
     let mut base: uint8_t = 10;
@@ -170,9 +170,9 @@ fn scan_number(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
     let mut frac_end: size_t = 0;
     let mut exp_start: size_t = 0;
     let mut exp_negative = false;
-    ret.type_0 = kExprLexNumber;
+    ret.type_0 = EXPR_LEX_NUMBER;
     ret.len = scan_while(line, ret.len, |b| b.is_ascii_digit());
-    if flags & kELFlagAllowFloat.cast_signed() != 0 {
+    if flags & EL_FLAG_ALLOW_FLOAT.cast_signed() != 0 {
         let non_float = *ret;
         if line.len() > ret.len + 1 && line[ret.len] == b'.' && line[ret.len + 1].is_ascii_digit() {
             ret.len += 1;
@@ -200,7 +200,7 @@ fn scan_number(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
                     ret.len += 1;
                 }
                 exp_start = ret.len;
-                ret.type_0 = kExprLexNumber;
+                ret.type_0 = EXPR_LEX_NUMBER;
                 ret.len = scan_while(line, ret.len, |b| b.is_ascii_digit());
             }
         }
@@ -254,18 +254,18 @@ fn scan_number(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
 /// like one.
 fn scan_identifier(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
     let schar = line[0];
-    let mut scope = kExprVarScopeMissing;
+    let mut scope = EXPR_VAR_SCOPE_MISSING;
     let mut autoload = false;
-    ret.type_0 = kExprLexPlainIdentifier;
+    ret.type_0 = EXPR_LEX_PLAIN_IDENTIFIER;
     ret.len = scan_while(line, ret.len, |b| ascii_isident(b.into()));
-    if flags & kELFlagIsNotCmp.cast_signed() == 0
+    if flags & EL_FLAG_IS_NOT_CMP.cast_signed() == 0
         && ((ret.len == 2 && &line[..2] == b"is") || (ret.len == 5 && &line[..5] == b"isnot"))
     {
-        ret.type_0 = kExprLexComparison;
+        ret.type_0 = EXPR_LEX_COMPARISON;
         let inv = ret.len == 5;
         let ccs = scan_ccs(ret, line);
         ret.data = LexExprTokenData::Comparison(LexExprTokenComparison {
-            type_0: kExprCmpIdentical,
+            type_0: EXPR_CMP_IDENTICAL,
             ccs,
             inv,
         });
@@ -275,11 +275,11 @@ fn scan_identifier(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
         && line.len() > 1
         && VAR_SCOPES.contains(&ExprVarScope::from(schar))
         && line[1] == b':'
-        && flags & kELFlagForbidScope.cast_signed() == 0
+        && flags & EL_FLAG_FORBID_SCOPE.cast_signed() == 0
     {
         ret.len += 1;
         scope = ExprVarScope::from(schar);
-        ret.type_0 = kExprLexPlainIdentifier;
+        ret.type_0 = EXPR_LEX_PLAIN_IDENTIFIER;
         // The scan above stopped at the first `#` so that `is#` could be read
         // as a comparison; from here autoload characters belong to the name.
         //
@@ -292,7 +292,7 @@ fn scan_identifier(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
         autoload = line[2..ret.len].contains(&AUTOLOAD_CHAR);
     } else if line.len() > ret.len && line[ret.len] == AUTOLOAD_CHAR {
         autoload = true;
-        ret.type_0 = kExprLexPlainIdentifier;
+        ret.type_0 = EXPR_LEX_PLAIN_IDENTIFIER;
         ret.len = scan_while(line, ret.len, |b| {
             ascii_isident(b.into()) || b == AUTOLOAD_CHAR
         });
@@ -303,21 +303,21 @@ fn scan_identifier(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
 /// `&&`, or an option name with an optional `g:`/`l:` scope.
 fn scan_option(ret: &mut LexExprToken, line: &[u8]) {
     if line.len() > 1 && line[1] == b'&' {
-        ret.type_0 = kExprLexAnd;
+        ret.type_0 = EXPR_LEX_AND;
         ret.len += 1;
         return;
     }
     if line.len() == 1 || !line[1].is_ascii_alphabetic() {
-        option_name_missing(ret, kExprOptScopeUnspecified);
+        option_name_missing(ret, EXPR_OPT_SCOPE_UNSPECIFIED);
         return;
     }
-    ret.type_0 = kExprLexOption;
+    ret.type_0 = EXPR_LEX_OPTION;
     let (name_at, scope): (size_t, ExprOptScope) =
         if line.len() > 2 && line[2] == b':' && OPT_SCOPES.contains(&ExprOptScope::from(line[1])) {
             ret.len += 2;
             (3, ExprOptScope::from(line[1]))
         } else {
-            (1, kExprOptScopeUnspecified)
+            (1, EXPR_OPT_SCOPE_UNSPECIFIED)
         };
     let name = &line[name_at..];
     let name_len = if name.len() >= 4 && name[0] == b't' && name[1] == b'_' {
@@ -346,7 +346,7 @@ fn scan_option(ret: &mut LexExprToken, line: &[u8]) {
 
 /// A single-quoted string, which ends at the first `'` that is not doubled.
 fn scan_single_quoted(ret: &mut LexExprToken, line: &[u8]) {
-    ret.type_0 = kExprLexSingleQuotedString;
+    ret.type_0 = EXPR_LEX_SINGLE_QUOTED_STRING;
     let mut closed = false;
     while ret.len < line.len() && !closed {
         if line[ret.len] == b'\'' {
@@ -363,7 +363,7 @@ fn scan_single_quoted(ret: &mut LexExprToken, line: &[u8]) {
 
 /// A double-quoted string, which ends at the first `"` that is not escaped.
 fn scan_double_quoted(ret: &mut LexExprToken, line: &[u8]) {
-    ret.type_0 = kExprLexDoubleQuotedString;
+    ret.type_0 = EXPR_LEX_DOUBLE_QUOTED_STRING;
     let mut closed = false;
     while ret.len < line.len() && !closed {
         if line[ret.len] == b'\\' {
@@ -384,38 +384,42 @@ fn scan_bang_or_equals(ret: &mut LexExprToken, line: &[u8]) {
     let schar = line[0];
     let inv = schar == b'!';
     if line.len() == 1 {
-        ret.type_0 = if inv { kExprLexNot } else { kExprLexAssignment };
+        ret.type_0 = if inv {
+            EXPR_LEX_NOT
+        } else {
+            EXPR_LEX_ASSIGNMENT
+        };
         ret.data = LexExprTokenData::Assignment(LexExprTokenAssignment {
-            type_0: kExprAsgnPlain,
+            type_0: EXPR_ASGN_PLAIN,
         });
         return;
     }
     let comparison = if line[1] == b'=' {
         ret.len += 1;
-        Some(kExprCmpEqual)
+        Some(EXPR_CMP_EQUAL)
     } else if line[1] == b'~' {
         ret.len += 1;
-        Some(kExprCmpMatches)
+        Some(EXPR_CMP_MATCHES)
     } else {
         None
     };
     match comparison {
         Some(type_0) => {
-            ret.type_0 = kExprLexComparison;
+            ret.type_0 = EXPR_LEX_COMPARISON;
             let ccs = scan_ccs(ret, line);
             ret.data = LexExprTokenData::Comparison(LexExprTokenComparison { type_0, ccs, inv });
         }
         // `!?` and `!#`: the marker is consumed, nothing reads it back, and
         // the token's length is what the consumption was for.
         None if inv => {
-            ret.type_0 = kExprLexNot;
+            ret.type_0 = EXPR_LEX_NOT;
             scan_ccs(ret, line);
         }
         None => {
-            ret.type_0 = kExprLexAssignment;
+            ret.type_0 = EXPR_LEX_ASSIGNMENT;
             scan_ccs(ret, line);
             ret.data = LexExprTokenData::Assignment(LexExprTokenAssignment {
-                type_0: kExprAsgnPlain,
+                type_0: EXPR_ASGN_PLAIN,
             });
         }
     }
@@ -423,7 +427,7 @@ fn scan_bang_or_equals(ret: &mut LexExprToken, line: &[u8]) {
 
 /// `<` and `>`, with or without a trailing `=`.
 fn scan_ordering(ret: &mut LexExprToken, line: &[u8]) {
-    ret.type_0 = kExprLexComparison;
+    ret.type_0 = EXPR_LEX_COMPARISON;
     let has_eq_sign = line.len() > 1 && line[1] == b'=';
     if has_eq_sign {
         ret.len += 1;
@@ -432,9 +436,9 @@ fn scan_ordering(ret: &mut LexExprToken, line: &[u8]) {
     let inv = line[0] == b'<';
     ret.data = LexExprTokenData::Comparison(LexExprTokenComparison {
         type_0: if inv ^ has_eq_sign {
-            kExprCmpGreaterOrEqual
+            EXPR_CMP_GREATER_OR_EQUAL
         } else {
-            kExprCmpGreater
+            EXPR_CMP_GREATER
         },
         ccs,
         inv,
@@ -457,7 +461,7 @@ fn lex_error(type_0: LexExprTokenType, msg: &'static CStr) -> LexExprTokenData {
     LexExprTokenData::Error(LexExprTokenError {
         type_0,
         msg: translate(msg),
-        opt_scope: kExprOptScopeUnspecified,
+        opt_scope: EXPR_OPT_SCOPE_UNSPECIFIED,
     })
 }
 
@@ -467,61 +471,61 @@ fn lex_error(type_0: LexExprTokenType, msg: &'static CStr) -> LexExprTokenData {
 fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
     let mut ret = blank_token(start);
     if line.is_empty() {
-        ret.type_0 = kExprLexEOC;
+        ret.type_0 = EXPR_LEX_EOC;
         return ret;
     }
     ret.len = 1;
     let schar = line[0];
     match schar {
         b'(' | b')' => {
-            ret.type_0 = kExprLexParenthesis;
+            ret.type_0 = EXPR_LEX_PARENTHESIS;
             ret.data = brace(schar == b')');
         }
         b'[' | b']' => {
-            ret.type_0 = kExprLexBracket;
+            ret.type_0 = EXPR_LEX_BRACKET;
             ret.data = brace(schar == b']');
         }
         b'{' | b'}' => {
-            ret.type_0 = kExprLexFigureBrace;
+            ret.type_0 = EXPR_LEX_FIGURE_BRACE;
             ret.data = brace(schar == b'}');
         }
-        b'?' => ret.type_0 = kExprLexQuestion,
-        b':' => ret.type_0 = kExprLexColon,
-        b',' => ret.type_0 = kExprLexComma,
+        b'?' => ret.type_0 = EXPR_LEX_QUESTION,
+        b':' => ret.type_0 = EXPR_LEX_COLON,
+        b',' => ret.type_0 = EXPR_LEX_COMMA,
         b'*' | b'/' | b'%' => {
-            ret.type_0 = kExprLexMultiplication;
+            ret.type_0 = EXPR_LEX_MULTIPLICATION;
             ret.data = LexExprTokenData::Multiplication(LexExprTokenMultiplication {
                 type_0: match schar {
-                    b'*' => kExprLexMulMul,
-                    b'/' => kExprLexMulDiv,
-                    _ => kExprLexMulMod,
+                    b'*' => EXPR_LEX_MUL_MUL,
+                    b'/' => EXPR_LEX_MUL_DIV,
+                    _ => EXPR_LEX_MUL_MOD,
                 },
             });
         }
         b' ' | b'\t' => {
-            ret.type_0 = kExprLexSpacing;
+            ret.type_0 = EXPR_LEX_SPACING;
             ret.len = scan_while(line, ret.len, |b| ascii_iswhite(b.into()));
         }
         // The control characters, less NUL, TAB and NL, which have their own
         // arms. The C's case list stops at 0x1a, so ESC and the four above it
         // fall through to "unidentified character" — as they do here.
         0x01..=0x08 | 0x0b..=0x1a => {
-            ret.type_0 = kExprLexInvalid;
+            ret.type_0 = EXPR_LEX_INVALID;
             ret.len = scan_while(line, ret.len, |b| b < b' ');
             ret.data = lex_error(
-                kExprLexSpacing,
+                EXPR_LEX_SPACING,
                 c"E15: Invalid control character present in input: %.*s",
             );
         }
         b'0'..=b'9' => scan_number(&mut ret, line, flags),
         b'$' => {
-            ret.type_0 = kExprLexEnv;
+            ret.type_0 = EXPR_LEX_ENV;
             ret.len = scan_while(line, ret.len, |b| ascii_isident(b.into()));
         }
         b'a'..=b'z' | b'A'..=b'Z' | b'_' => scan_identifier(&mut ret, line, flags),
         b'&' => scan_option(&mut ret, line),
         b'@' => {
-            ret.type_0 = kExprLexRegister;
+            ret.type_0 = EXPR_LEX_REGISTER;
             let name = if line.len() > 1 {
                 ret.len += 1;
                 c_int::from(line[1])
@@ -537,24 +541,24 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
         b'-' => {
             if line.len() > 1 && line[1] == b'>' {
                 ret.len += 1;
-                ret.type_0 = kExprLexArrow;
+                ret.type_0 = EXPR_LEX_ARROW;
             } else if line.len() > 1 && line[1] == b'=' {
                 ret.len += 1;
-                ret.type_0 = kExprLexAssignment;
-                ret.data = assignment(kExprAsgnSubtract);
+                ret.type_0 = EXPR_LEX_ASSIGNMENT;
+                ret.data = assignment(EXPR_ASGN_SUBTRACT);
             } else {
-                ret.type_0 = kExprLexMinus;
+                ret.type_0 = EXPR_LEX_MINUS;
             }
         }
         b'+' | b'.' => {
             let (plain, augmented) = if schar == b'+' {
-                (kExprLexPlus, kExprAsgnAdd)
+                (EXPR_LEX_PLUS, EXPR_ASGN_ADD)
             } else {
-                (kExprLexDot, kExprAsgnConcat)
+                (EXPR_LEX_DOT, EXPR_ASGN_CONCAT)
             };
             if line.len() > 1 && line[1] == b'=' {
                 ret.len += 1;
-                ret.type_0 = kExprLexAssignment;
+                ret.type_0 = EXPR_LEX_ASSIGNMENT;
                 ret.data = assignment(augmented);
             } else {
                 ret.type_0 = plain;
@@ -562,31 +566,31 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
         }
         // The Ex command ended, so the expression does too.
         b'\0' | b'\n' => {
-            if flags & kELFlagForbidEOC.cast_signed() != 0 {
-                ret.type_0 = kExprLexInvalid;
-                ret.data = lex_error(kExprLexSpacing, c"E15: Unexpected EOC character: %.*s");
+            if flags & EL_FLAG_FORBID_EOC.cast_signed() != 0 {
+                ret.type_0 = EXPR_LEX_INVALID;
+                ret.data = lex_error(EXPR_LEX_SPACING, c"E15: Unexpected EOC character: %.*s");
             } else {
-                ret.type_0 = kExprLexEOC;
+                ret.type_0 = EXPR_LEX_EOC;
             }
         }
         b'|' => {
             if line.len() >= 2 && line[1] == b'|' {
                 ret.len += 1;
-                ret.type_0 = kExprLexOr;
-            } else if flags & kELFlagForbidEOC.cast_signed() != 0 {
+                ret.type_0 = EXPR_LEX_OR;
+            } else if flags & EL_FLAG_FORBID_EOC.cast_signed() != 0 {
                 // Note: `<C-r>=1 | 2<CR>` yields 1 in Vim, with no error at
                 // all. That is deliberately not what happens here.
-                ret.type_0 = kExprLexInvalid;
-                ret.data = lex_error(kExprLexOr, c"E15: Unexpected EOC character: %.*s");
+                ret.type_0 = EXPR_LEX_INVALID;
+                ret.data = lex_error(EXPR_LEX_OR, c"E15: Unexpected EOC character: %.*s");
             } else {
-                ret.type_0 = kExprLexEOC;
+                ret.type_0 = EXPR_LEX_EOC;
             }
         }
         _ => {
             ret.len = first_char_len(line);
-            ret.type_0 = kExprLexInvalid;
+            ret.type_0 = EXPR_LEX_INVALID;
             ret.data = lex_error(
-                kExprLexPlainIdentifier,
+                EXPR_LEX_PLAIN_IDENTIFIER,
                 c"E15: Unidentified character: %.*s",
             );
         }
@@ -595,16 +599,16 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
 }
 
 /// The next token of the Vimscript expression `pstate` is reading, advancing
-/// the cursor past it unless `kELFlagPeek` is set.
+/// the cursor past it unless `EL_FLAG_PEEK` is set.
 pub fn viml_pexpr_next_token(pstate: &mut ParserState<'_>, flags: c_int) -> LexExprToken {
     let start = pstate.pos;
     let Some(line) = pstate.remaining_line() else {
         let mut ret = blank_token(start);
-        ret.type_0 = kExprLexEOC;
+        ret.type_0 = EXPR_LEX_EOC;
         return ret;
     };
     let ret = scan(line, start, flags);
-    if flags & kELFlagPeek.cast_signed() == 0 {
+    if flags & EL_FLAG_PEEK.cast_signed() == 0 {
         pstate.advance(ret.len);
     }
     ret

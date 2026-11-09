@@ -17,12 +17,12 @@
 
 use core::ffi::c_int;
 
-use super::{fast_api_refusal, in_fast_callback, nlua_error, nlua_pcall, with_main_stack};
+use super::{IN_FAST_CALLBACK, fast_api_refusal, nlua_error, nlua_pcall, with_main_stack};
 use crate::eval::funcs::find_builtin;
 use crate::event::r#loop::{Drain, main_loop_is_closing, wait_on_main_loop};
 use crate::event::time::ScopedTimer;
 use crate::event_queue::put_id_event_on_main_loop;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::getchar::vgetc;
 use crate::guard::Allow;
 use crate::lua::abi::lua_Integer;
@@ -123,7 +123,7 @@ fn wait_condition(stack: &mut Stack) -> Condition {
 
 /// `vim.wait(timeout[, condition[, interval[, fast_only]]])`.
 pub(crate) fn wait(stack: &mut Stack) -> Result<c_int, Raise> {
-    if in_fast_callback.get() != 0 {
+    if IN_FAST_CALLBACK.get() != 0 {
         return Err(Raise::message(fast_api_refusal(b"vim.wait")));
     }
 
@@ -179,7 +179,7 @@ pub(crate) fn wait(stack: &mut Stack) -> Result<c_int, Raise> {
     let mut outcome = Condition::Unmet;
     ui_flush();
     wait_on_main_loop(drain, timeout, || {
-        if got_int.get() {
+        if GOT_INT.get() {
             return true;
         }
         if !is_function {
@@ -203,10 +203,10 @@ pub(crate) fn wait(stack: &mut Stack) -> Result<c_int, Raise> {
                 Ok(nresults + 1)
             }
         }
-        Condition::Unmet if got_int.get() => {
+        Condition::Unmet if GOT_INT.get() => {
             // Swallow the interrupt: `vim.wait` reports it rather than
             // letting it escape into whatever called it.
-            got_int.set(false);
+            GOT_INT.set(false);
             vgetc().code();
             stack.push_boolean(false);
             stack.push_integer(WAIT_INTERRUPTED);
@@ -222,7 +222,7 @@ pub(crate) fn wait(stack: &mut Stack) -> Result<c_int, Raise> {
 
 /// `vim.in_fast_event()`.
 pub(crate) fn in_fast_event(stack: &mut Stack) -> Result<c_int, Raise> {
-    stack.push_boolean(in_fast_callback.get() > 0);
+    stack.push_boolean(IN_FAST_CALLBACK.get() > 0);
     Ok(1)
 }
 
@@ -234,5 +234,5 @@ pub(crate) fn viml_func_is_fast(name: &[u8]) -> bool {
 
 /// Whether anything that is not `fast` may run right now.
 pub fn nlua_is_deferred_safe() -> bool {
-    in_fast_callback.get() == 0
+    IN_FAST_CALLBACK.get() == 0
 }

@@ -245,7 +245,7 @@ pub(crate) fn do_path_expand(
     // Expanding "**" may take a long time; let CTRL-C out of it.
     if STARDEPTH.get() > 0 && !flags.has(ExpandFlags::NOBREAK) {
         os_breakcheck();
-        if got_int.get() {
+        if GOT_INT.get() {
             return 0;
         }
     }
@@ -308,7 +308,7 @@ pub(crate) fn do_path_expand(
     if let Some(mut scan) = ScanWithDots::open(dirpath) {
         // The component as the pattern spells it, for a literal match.
         let comp = &pattern[dir_len.min(pattern.len())..];
-        while !got_int.get() {
+        while !GOT_INT.get() {
             let Some(name) = scan.next() else { break };
             if !name_is_wanted(name.to_bytes(), starts_with_dot, flags)
                 || !name_matches(&mut regmatch, name, flags, comp, split.comp_end - dir_len)
@@ -358,7 +358,7 @@ pub(crate) fn do_path_expand(
     // When interrupted the matches probably won't be used, and sorting
     // can be slow.
     let matches = names.len() - start_len;
-    if matches > 0 && !got_int.get() {
+    if matches > 0 && !GOT_INT.get() {
         // Stable: with 'fileignorecase' two names that differ can compare
         // equal, and they keep the order the scan found them in.
         names[start_len..].sort_by(|a, b| pathcmp(a, b, None).cmp(&0));

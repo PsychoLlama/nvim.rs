@@ -1,6 +1,6 @@
 //! What the command line is doing between keys.
 //!
-//! `cmdline_star` hides the text behind `*` for `inputsecret()`, the two
+//! `CMDLINE_STAR` hides the text behind `*` for `inputsecret()`, the two
 //! `*_drawn` flags say whether the last thing painted was the command line
 //! (so a message knows whether it has to repaint it), and `cmdpreview` says
 //! the buffer is showing an `'inccommand'` preview rather than its own text.
@@ -17,17 +17,16 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::global_cell::GlobalCell;
 use crate::types::Callback;
 use core::ffi::c_int;
 
-pub(crate) static cmdline_star: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static redrawing_cmdline: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static cmdline_was_last_drawn: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static cmdpreview: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static CMDLINE_STAR: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static REDRAWING_CMDLINE: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static CMDLINE_WAS_LAST_DRAWN: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static CMDPREVIEW: GlobalCell<bool> = GlobalCell::new(false);
 
 pub(crate) type CmdRedraw = ::core::ffi::c_uint;
 #[derive(Copy, Clone, Debug)]

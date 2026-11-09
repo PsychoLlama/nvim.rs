@@ -559,7 +559,7 @@ pub(crate) fn recover_from_backup(backup: &Backup, fname: &CStr) -> Result<(), I
     }
     // Copying may take a while; if we were interrupted, let the user
     // know the message arrived.
-    if got_int.get() {
+    if GOT_INT.get() {
         msg(gettext(E_INTERR), 0);
         ui_flush();
     }

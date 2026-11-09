@@ -29,7 +29,7 @@ use super::resume::resume;
 use super::single::match_one;
 use super::state::{BackPos, Braces, BtState, RegStack, capture_slot};
 use crate::ascii::NUL;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::mbyte::{mb_isupper, mb_tolower, mb_toupper};
 use crate::message::E_RE_CORR;
 use crate::message::{iemsg, internal_error};
@@ -90,7 +90,7 @@ fn walk(
 
         // Walk forward until something needs deciding.
         loop {
-            if got_int.get() || scan == 0 {
+            if GOT_INT.get() || scan == 0 {
                 status = RA_FAIL;
                 break;
             }
@@ -442,7 +442,7 @@ fn counted_repeat(
     }
 
     rst.count = super::repeat::regrepeat(rex, prog, scan + 3, rst.maxval);
-    if got_int.get() {
+    if GOT_INT.get() {
         return RA_FAIL;
     }
     // A reversed bound (`\{-n,m}`) is the non-greedy form, and then the

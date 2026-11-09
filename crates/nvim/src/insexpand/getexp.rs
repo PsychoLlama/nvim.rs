@@ -697,7 +697,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
         // Break out for the specialised modes — 'complete' is only for the
         // generic CTRL_X_NORMAL — or when a new match has been found.
         if (ctrl_x_mode_not_default() && !ctrl_x_mode_line_or_eval()) || found_new_match {
-            if got_int.get() {
+            if GOT_INT.get() {
                 break;
             }
             // Fill the popup menu as soon as possible.

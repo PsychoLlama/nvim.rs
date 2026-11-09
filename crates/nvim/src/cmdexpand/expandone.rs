@@ -19,7 +19,7 @@ use super::*;
 use crate::cmdexpand::defs::{ExpandContext, XpPrefix};
 use crate::ex_getln::{cursorcmd, redrawcmd};
 use crate::getchar::beep_flush;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::lua::executor::nlua_expand_pat;
 use crate::mbyte::char_at;
 use crate::mbyte::{cluster_len, mb_tolower};
@@ -186,7 +186,7 @@ pub(crate) fn nextwild(
     }
 
     if let Some(text) = &p
-        && !got_int.get()
+        && !GOT_INT.get()
         && !options.has(WildOpts::NOSELECT)
     {
         // Replace what was typed with the match, the cursor moving with it.
@@ -493,7 +493,7 @@ pub fn expand_one(
 
     // Concatenate all matching names.  Unless interrupted this can be
     // slow, and the result probably won't be used.
-    if mode == WildMode::All && !expand.matches().is_empty() && !got_int.get() {
+    if mode == WildMode::All && !expand.matches().is_empty() && !GOT_INT.get() {
         let suffix: &[u8] = if options.has(WildOpts::USE_NL) {
             b"\n"
         } else {

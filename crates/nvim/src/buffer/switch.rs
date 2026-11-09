@@ -45,7 +45,7 @@ use crate::ex_cmds2::{can_abandon, dialog_changed, dialog_close_terminal};
 use crate::ex_docmd::{cmdmod_has, ex_errmsg, ex_msg};
 use crate::ex_eval::defs::Cleanup;
 use crate::ex_eval::{enter_cleanup, leave_cleanup};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::memline::ml_recover;
 use crate::message::msg_str;
 use crate::message::state::{MSG_ROW, MSG_SCROLL, NEED_FILEINFO};
@@ -309,7 +309,7 @@ pub fn do_bufdel(
         end_bnr // addr_count == 1
     };
 
-    while !got_int.get() {
+    while !GOT_INT.get() {
         // delete the current buffer last, otherwise when the current buffer is
         // deleted, the next buffer becomes the current one and will be loaded,
         // which may then also be deleted, etc.
@@ -347,7 +347,7 @@ pub fn do_bufdel(
         }
         os_breakcheck();
     }
-    if !got_int.get() && do_current != 0 && delete_one(command, do_current, forceit) {
+    if !GOT_INT.get() && do_current != 0 && delete_one(command, do_current, forceit) {
         deleted += 1;
     }
 

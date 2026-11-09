@@ -33,7 +33,7 @@ use crate::eval::eval_to_number;
 use crate::eval::vars::{set_vim_var_char, set_vim_var_nr, set_vim_var_string};
 use crate::ex_docmd::cmdmod_has;
 use crate::getchar::beep_flush;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::guard::{Lock, Script};
 use crate::indent::{
     get_expr_indent, get_indent, get_indent_lnum, get_lisp_indent, get_number_indent, set_indent,
@@ -265,7 +265,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
 
     Win::current().w_cursor.lnum -= 1;
     let mut count = i64::from(line_count);
-    while count != 0 && !got_int.get() {
+    while count != 0 && !GOT_INT.get() {
         if advance {
             Win::current().w_cursor.lnum += 1;
             prev_is_end_par = is_end_par;

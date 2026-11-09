@@ -60,7 +60,7 @@ fn hgr_search_file(qfl: Qfl, fname: &CStr, prog: &mut OwnedProg) {
     let mut file = crate::fileio::Fgets::new(file);
     let mut line = Vec::new();
     let mut lnum: LineNr = LineNr::ONE;
-    while !got_int.get() && file.line_capped(&mut line, IOSIZE as usize) {
+    while !GOT_INT.get() && file.line_capped(&mut line, IOSIZE as usize) {
         // As C reads the line: up to its first NUL.
         let end = line.iter().position(|&b| b == 0).unwrap_or(line.len());
         line.truncate(end);
@@ -115,7 +115,7 @@ fn hgr_search_files_in_dir(qfl: Qfl, dir: &[u8], prog: &mut OwnedProg, lang: Opt
         return;
     };
     for fname in &fnames {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         if lang.is_none_or(|lang| wanted_language(lang, fname)) {
@@ -141,7 +141,7 @@ fn hgr_search_in_rtp(qfl: Qfl, prog: &mut OwnedProg, lang: Option<&[u8]>) {
     let rtp = P_RTP.get();
     let mut rest: &[u8] = &rtp;
     let mut dir = Vec::new();
-    while !rest.is_empty() && !got_int.get() {
+    while !rest.is_empty() && !GOT_INT.get() {
         rest = next_option_part(rest, &mut dir);
         // Upstream copies each entry into a `MAXPATHL` buffer.
         dir.truncate(MAXPATHL as usize - 1);

@@ -207,7 +207,7 @@ fn show_partial_key(at: CursorAt) -> Partial {
     }
 
     // The same on the command line, where `get_number()` has none.
-    if State.get() & MODE_CMDLINE != 0 && cmdline_in_use() && cmdline_star.get() == 0 {
+    if State.get() & MODE_CMDLINE != 0 && cmdline_in_use() && CMDLINE_STAR.get() == 0 {
         let byte = tb.byte(tb.len() - 1);
         if last_byte_is_one_cell(byte) && byte < 128 {
             putcmdline(byte.cast_signed(), false);
@@ -304,15 +304,15 @@ fn read_from_typeahead(
             line_breakcheck();
         } else {
             // os_breakcheck() can call input_enqueue().
-            if (mapped_ctrl_c.get() | Buf::current().b_mapped_ctrl_c) & get_real_state() != 0 {
-                ctrl_c_interrupts.set(false);
+            if (MAPPED_CTRL_C.get() | Buf::current().b_mapped_ctrl_c) & get_real_state() != 0 {
+                CTRL_C_INTERRUPTS.set(false);
             }
             os_breakcheck(); // check for CTRL-C
-            ctrl_c_interrupts.set(true);
+            CTRL_C_INTERRUPTS.set(true);
         }
 
         let mut keylen = 0;
-        if got_int.get() {
+        if GOT_INT.get() {
             return Some(interrupted(advance));
         } else if !typeahead().is_empty() {
             // Check for a mapping in the typeahead.
@@ -326,13 +326,13 @@ fn read_from_typeahead(
                     if advance {
                         CMD_SILENT.set(tb.silent() > 0);
                         if tb.maplen() > 0 {
-                            KeyTyped.set(false);
+                            KEY_TYPED.set(false);
                         } else {
-                            KeyTyped.set(true);
+                            KEY_TYPED.set(true);
                             // Write the character to the script file(s).
                             gotchars(&[c]);
                         }
-                        KeyNoremap.set(tb.noremap(0));
+                        KEY_NOREMAP.set(tb.noremap(0));
                         del_typebuf(1, 0);
                     }
                     return Some(c);
@@ -361,7 +361,7 @@ fn read_from_typeahead(
         if advance
             && tb.len() == 1
             && tb.byte(0) == ESC_BYTE
-            && no_mapping.get() == 0
+            && NO_MAPPING.get() == 0
             && ex_normal_busy.get() == 0
             && tb.maplen() == 0
             && State.get() & MODE_INSERT != 0
@@ -403,17 +403,17 @@ fn read_from_typeahead(
             // window alternate between ESC (for most situations) and
             // CTRL-C (which closes the window).
             let c = if State.get() & MODE_CMDLINE != 0
-                || (cmdwin_type.get() > 0 && normal_busy_last_key.get() == ESC_BYTE)
+                || (cmdwin_type.get() > 0 && NORMAL_BUSY_LAST_KEY.get() == ESC_BYTE)
             {
                 CTRL_C_BYTE
             } else {
                 ESC_BYTE
             };
-            normal_busy_last_key.set(c);
+            NORMAL_BUSY_LAST_KEY.set(c);
 
             // A flag saying this was not a normal character.
             if advance {
-                typebuf_was_empty.set(true);
+                TYPEBUF_WAS_EMPTY.set(true);
             }
             // Answer 0 in normal_check().
             if pending_exmode_active.get() {
@@ -507,14 +507,14 @@ pub(crate) fn vgetorpeek(advance: bool) -> u8 {
     // callback that writes to the screen can raise a `wait_return`. Using
     // `:normal` can do it too, but that saves the typeahead buffer, so it
     // is allowed -- it just must not read a key from the user.
-    if vgetc_busy.get() > 0 && ex_normal_busy.get() == 0 {
+    if VGETC_BUSY.get() > 0 && ex_normal_busy.get() == 0 {
         return 0;
     }
-    let _busy = Depth::of(vgetc_busy);
+    let _busy = Depth::of(VGETC_BUSY);
 
     if advance {
-        KeyStuffed.set(false);
-        typebuf_was_empty.set(false);
+        KEY_STUFFED.set(false);
+        TYPEBUF_WAS_EMPTY.set(false);
     }
 
     let mut timedout = false; // waited longer than 'timeoutlen' for a
@@ -528,23 +528,23 @@ pub(crate) fn vgetorpeek(advance: bool) -> u8 {
 
     let c = loop {
         // Get a character: 1. from the stuff buffer.
-        let c = if typeahead_char.get() != 0 {
-            let c = typeahead_char.get();
+        let c = if TYPEAHEAD_CHAR.get() != 0 {
+            let c = TYPEAHEAD_CHAR.get();
             if advance {
-                typeahead_char.set(0);
+                TYPEAHEAD_CHAR.set(0);
             }
             c
         } else {
             read_readbuffers(advance)
         };
 
-        let c = if c != 0 && !got_int.get() {
+        let c = if c != 0 && !GOT_INT.get() {
             if advance {
                 // KeyTyped is deliberately left alone: when the command
                 // that stuffed something was typed, behave as if the
                 // stuffed command was typed. Needed for CTRL-W CTRL-] to
                 // open a fold, for example.
-                KeyStuffed.set(true);
+                KEY_STUFFED.set(true);
             }
             if typeahead().no_abbr_cnt() == 0 {
                 typeahead().set_no_abbr_cnt(1); // no abbreviations now
@@ -566,14 +566,14 @@ pub(crate) fn vgetorpeek(advance: bool) -> u8 {
     // to leave Insert mode the message is deleted, and if we do not
     // answer an ESC but deleted the message before, it is redisplayed.
     if advance && p_smd() && MSG_SILENT.get() == 0 && State.get() & MODE_INSERT != 0 {
-        if c == ESC_BYTE && !mode_deleted && no_mapping.get() == 0 && mode_displayed.get() {
-            if !typeahead().is_empty() && !KeyTyped.get() {
+        if c == ESC_BYTE && !mode_deleted && NO_MAPPING.get() == 0 && mode_displayed.get() {
+            if !typeahead().is_empty() && !KEY_TYPED.get() {
                 redraw_cmdline.set(true); // delete the mode later
             } else {
                 unshowmode(false);
             }
         } else if c != ESC_BYTE && mode_deleted {
-            if !typeahead().is_empty() && !KeyTyped.get() {
+            if !typeahead().is_empty() && !KEY_TYPED.get() {
                 redraw_cmdline.set(true); // show the mode later
             } else {
                 showmode();
@@ -621,19 +621,19 @@ pub(crate) fn inchar(buf: &mut [u8], wait_time: c_long) -> Option<usize> {
     // Get a character from a script file if there is one. On an
     // interrupt, stop reading script files and close them all.
     let mut read_size: ptrdiff_t = -1;
-    while curscript.get() >= 0 && read_size <= 0 && !ignore_script.get() {
+    while CURSCRIPT.get() >= 0 && read_size <= 0 && !IGNORE_SCRIPT.get() {
         let mut script_char = [0u8; 1];
         // Short-circuit deliberately: once interrupted, no further read
         // is attempted and `read_size` keeps the value it had.
-        let failed = got_int.get() || {
-            read_size = read_script(curscript.get(), &mut script_char);
+        let failed = GOT_INT.get() || {
+            read_size = read_script(CURSCRIPT.get(), &mut script_char);
             read_size != 1
         };
         if failed {
             // EOF, or some error: close the script, which puts back the
             // typeahead it displaced.
             closescript();
-            if got_int.get() {
+            if GOT_INT.get() {
                 // Reading the script was interrupted: answer an ESC to
                 // get back to Normal mode.
                 retesc = true;
@@ -652,7 +652,7 @@ pub(crate) fn inchar(buf: &mut [u8], wait_time: c_long) -> Option<usize> {
         //
         // On an interrupt, skip everything typed so far and answer
         // whether reading a script file was quit.
-        if got_int.get() {
+        if GOT_INT.get() {
             const DUM_LEN: usize = MAXMAPLEN * 3 + 3;
             let mut dum = [0u8; DUM_LEN];
             loop {

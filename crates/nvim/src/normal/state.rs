@@ -54,7 +54,7 @@ use crate::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
 use crate::fileio::check_timestamps;
 use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
 use crate::fold::{fold_adjust_visual, fold_check_close, fold_open_cursor, has_any_folding};
-use crate::getchar::state::{KeyTyped, got_int, mod_mask, reg_executing, reg_recording};
+use crate::getchar::state::{GOT_INT, KEY_TYPED, MOD_MASK, REG_EXECUTING, REG_RECORDING};
 use crate::getchar::{char_avail, readbuf1_empty, safe_vgetc, stuff_empty, typeahead, vgetc};
 use crate::message::state::{
     DID_EMSG, DID_WAIT_RETURN, EMSG_ON_DISPLAY, EMSG_SILENT, IN_ASSERT_FAILS, KEEP_MSG,
@@ -327,7 +327,7 @@ pub(crate) fn normal_prepare(ns: &mut NormalState) {
 pub(crate) fn normal_handle_special_visual_command(ns: &mut NormalState) -> bool {
     let flags = ns.row().cmd_flags;
     // "stopsel": an unshifted movement ends the selection.
-    if km_stopsel.get() && flags.has(NvFlags::STS) && !mod_mask.get().has(ModMask::SHIFT) {
+    if km_stopsel.get() && flags.has(NvFlags::STS) && !MOD_MASK.get().has(ModMask::SHIFT) {
         end_visual_mode();
         redraw_curbuf_later(UPD_INVERTED);
     }
@@ -341,8 +341,8 @@ pub(crate) fn normal_handle_special_visual_command(ns: &mut NormalState) -> bool
                 clear_op_beep(ns.op());
                 return true;
             }
-        } else if flags.has(NvFlags::SSS) && mod_mask.get().has(ModMask::SHIFT) {
-            mod_mask.set(mod_mask.get().without(ModMask::SHIFT));
+        } else if flags.has(NvFlags::SSS) && MOD_MASK.get().has(ModMask::SHIFT) {
+            MOD_MASK.set(MOD_MASK.get().without(ModMask::SHIFT));
         }
     }
     false
@@ -364,8 +364,8 @@ pub(crate) fn normal_need_additional_char(ns: &mut NormalState) -> bool {
             || flags.has_all(NvFlags::NCH_ALW)
             || cmdchar.is('q')
                 && !pending_op
-                && reg_recording.get() == 0
-                && reg_executing.get() == 0
+                && REG_RECORDING.get() == 0
+                && REG_EXECUTING.get() == 0
             || (cmdchar.is('a') || cmdchar.is('i')) && (pending_op || visual_active()))
 }
 
@@ -381,7 +381,7 @@ pub(crate) fn normal_need_redraw_mode_message(ns: &mut NormalState) -> bool {
         && (clear_cmdline.get() || redraw_cmdline.get())
         && (MSG_DIDOUT.get() || MSG_DIDANY.get() && MSG_SCROLL.get() != 0)
         && !MSG_NOWAIT.get()
-        && KeyTyped.get();
+        && KEY_TYPED.get();
     // The other way in: an error is on display and insert mode is
     // pending, with no Visual selection to describe instead.
     let error_on_display = !restart_edit.get().is_nul()
@@ -451,7 +451,7 @@ fn normal_check_stuff_buffer() {
 /// what gets you into Ex mode; otherwise the interrupt is swallowed, along
 /// with the key that caused it when the more-prompt is not up.
 fn normal_check_interrupt(ns: &mut NormalState) {
-    if !got_int.get() {
+    if !GOT_INT.get() {
         ns.previous_got_int = false;
         return;
     }
@@ -462,7 +462,7 @@ fn normal_check_interrupt(ns: &mut NormalState) {
         if !QUIT_MORE.get() {
             vgetc();
         }
-        got_int.set(false);
+        GOT_INT.set(false);
     }
     ns.previous_got_int = true;
 }

@@ -265,7 +265,7 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
             }
         }
     } else if cmd_arg.cmdchar == SpecialKey::Lua {
-        append_to_redobuff_number(repeat_luaref.get() as c_int);
+        append_to_redobuff_number(REPEAT_LUAREF.get() as c_int);
         append_to_redobuff(b"\n");
     }
 }
@@ -683,7 +683,7 @@ fn run_operator(
                 append_to_redobuff(b"!\r");
             } else {
                 // `do_bang` will put the command in the redo buffer.
-                bangredo.set(true);
+                BANGREDO.set(true);
             }
             // Falls through to the `:` handling below, as upstream does.
             indent_or_colon(op);
@@ -821,7 +821,7 @@ fn run_change(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
     // A new edit command, not a restart. Remembering that is what makes
     // `i_CTRL-O` work with a mapping for Visual mode -- but only when the
     // key was not typed.
-    let restart_edit_save = if KeyTyped.get() {
+    let restart_edit_save = if KEY_TYPED.get() {
         Key::NUL
     } else {
         restart_edit.get()

@@ -38,7 +38,7 @@ use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::eval::eval_has_provider;
 use crate::ex_docmd::{do_cmdline_cmd, tabpage_new};
 use crate::fold::{close_fold, open_fold};
-use crate::getchar::state::{KeyStuffed, mod_mask};
+use crate::getchar::state::{KEY_STUFFED, MOD_MASK};
 use crate::getchar::{
     append_to_redobuff_char, safe_vgetc, stuff_readbuf, stuff_readbuf_char, stuff_readbuf_number,
     vpeekc, vungetc,
@@ -186,7 +186,7 @@ pub(crate) fn do_mouse(
         let over_text = m_pos_flag & (IN_STATUS_LINE | MOUSE_WINBAR | MOUSE_STATUSCOL) == 0;
         if over_text
             && which_button == MOUSE_RIGHT
-            && !mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL)
+            && !MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL)
         {
             if !is_click {
                 // Ignore right button release events, only shows the popup
@@ -198,10 +198,10 @@ pub(crate) fn do_mouse(
         // Only do this translation when mouse is over the buffer text.
         if over_text
             && which_button == MOUSE_LEFT
-            && mod_mask.get().has(ModMask::SHIFT | ModMask::ALT)
+            && MOD_MASK.get().has(ModMask::SHIFT | ModMask::ALT)
         {
             which_button = MOUSE_RIGHT;
-            mod_mask.set(mod_mask.get().without(ModMask::SHIFT));
+            MOD_MASK.set(MOD_MASK.get().without(ModMask::SHIFT));
         }
     }
 
@@ -264,7 +264,7 @@ pub(crate) fn do_mouse(
         clear_op(op);
     }
 
-    if mod_mask.get().is_empty()
+    if MOD_MASK.get().is_empty()
         && !is_drag
         && jump_flags & (MOUSE_FOLD_CLOSE | MOUSE_FOLD_OPEN) != 0
         && which_button == MOUSE_LEFT
@@ -346,7 +346,7 @@ pub(crate) fn do_mouse(
 fn coalesce_drags(c: Key) -> (c_int, bool, bool) {
     loop {
         let (which_button, is_click, is_drag) = mouse_button(c);
-        if !is_drag || KeyStuffed.get() || vpeekc().is_nul() {
+        if !is_drag || KEY_STUFFED.get() || vpeekc().is_nul() {
             return (which_button, is_click, is_drag);
         }
 
@@ -386,7 +386,7 @@ fn ignore_stray_event(is_click: bool, is_drag: bool) -> Option<bool> {
 
 /// The events a modifier turns into something else entirely, or suppresses.
 fn modifier_shortcuts(is_click: bool, which_button: c_int, count: c_int) -> Option<bool> {
-    let mods = mod_mask.get();
+    let mods = MOD_MASK.get();
 
     // CTRL right mouse button does CTRL-T.
     if is_click && mods.has(ModMask::CTRL) && which_button == MOUSE_RIGHT {
@@ -539,7 +539,7 @@ fn tab_line_click(
         if def.type_0 == kStlClickTabSwitch {
             if which_button == MOUSE_MIDDLE {
                 close = true;
-            } else if mod_mask.get().masked(ModMask::MULTI_CLICK) == ModMask::TWO_CLICK {
+            } else if MOD_MASK.get().masked(ModMask::MULTI_CLICK) == ModMask::TWO_CLICK {
                 // Double click opens a new page.
                 end_visual_mode();
                 tabpage_new();
@@ -618,7 +618,7 @@ fn click_definition(
                 if landed.statuscol
                     && mouse_model_popup()
                     && which_button == MOUSE_RIGHT
-                    && !mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL)
+                    && !MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL)
                 {
                     do_popup(which_button, m_pos_flag, m_pos);
                 }
@@ -669,7 +669,7 @@ fn dispatch_action(a: Action, win: Win) {
         mouse_can_visual,
         landed,
     } = a;
-    let mods = mod_mask.get();
+    let mods = MOD_MASK.get();
 
     if which_button == MOUSE_MIDDLE {
         // Middle mouse click: Put text before cursor.

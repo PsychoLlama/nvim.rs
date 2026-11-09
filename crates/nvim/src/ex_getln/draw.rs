@@ -22,7 +22,7 @@ use crate::winlayer::cmdline_window;
 
 /// The screen width of the command-line byte at `idx`.
 pub(crate) fn cmdline_charsize(idx: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    if cmdline_star.get() > 0 {
+    if CMDLINE_STAR.get() > 0 {
         // Showing '*': always one position.
         return 1;
     }
@@ -45,7 +45,7 @@ pub fn cmd_screencol(bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int {
 
     // The maximum column. A weird 'columns'/'lines' can overflow the
     // product, which reads as negative.
-    let m = if KeyTyped.get() {
+    let m = if KEY_TYPED.get() {
         let cells = match cmdline_window() {
             Some(w) => w.w_view_width * w.w_view_height,
             None => Columns.get() * Rows.get(),
@@ -97,7 +97,7 @@ pub(crate) fn correct_screencol(
 }
 
 /// Draw `len` bytes of the command line from `start`, at the cursor position
-/// — or stars, when `cmdline_star` is set.
+/// — or stars, when `CMDLINE_STAR` is set.
 pub(crate) fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
     let mut cc = Cc::current();
     if !cc.in_use() || !color_cmdline(cc) {
@@ -106,11 +106,11 @@ pub(crate) fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
 
     if ui_has(kUICmdline) {
         cc.special_char = 0;
-        cc.redraw_state = kCmdRedrawAll;
+        cc.redraw_state = CMD_REDRAW_ALL;
         return;
     }
 
-    if cmdline_star.get() > 0 {
+    if CMDLINE_STAR.get() > 0 {
         // One star per character, not per byte.
         let mut i = 0;
         while i < len {
@@ -179,7 +179,7 @@ pub fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
             draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
         }
         MSG_NO_MORE.set(false);
-    } else if cc.redraw_state != kCmdRedrawAll {
+    } else if cc.redraw_state != CMD_REDRAW_ALL {
         ui_call_cmdline_special_char(
             ApiString::from_bytes(cstr::until_nul(&[c.cast_unsigned()])),
             shift as Boolean,
@@ -268,7 +268,7 @@ pub fn put_on_cmdline(text: &[u8], redraw: bool) {
     }
 
     // The maximum column; an overflowed product reads as negative.
-    let m = if KeyTyped.get() {
+    let m = if KEY_TYPED.get() {
         let cells = Columns.get() * Rows.get();
         if cells < 0 { MAXCOL } else { cells }
     } else {
@@ -317,7 +317,7 @@ pub(crate) fn redrawcmdprompt() {
     }
     let mut cc = Cc::current();
     if ui_has(kUICmdline) {
-        cc.redraw_state = kCmdRedrawAll;
+        cc.redraw_state = CMD_REDRAW_ALL;
         return;
     }
     if cc.cmdfirstc != 0 {
@@ -359,7 +359,7 @@ pub fn redrawcmd() {
         return;
     }
 
-    redrawing_cmdline.set(true);
+    REDRAWING_CMDLINE.set(true);
 
     sb_text_restart_cmdline();
     msg_start();
@@ -385,8 +385,8 @@ pub fn redrawcmd() {
     // Typing ':' at the more prompt may set skip_redraw, which is not
     // wanted in command-line mode.
     skip_redraw.set(false);
-    cmdline_was_last_drawn.set(true);
-    redrawing_cmdline.set(false);
+    CMDLINE_WAS_LAST_DRAWN.set(true);
+    REDRAWING_CMDLINE.set(false);
 }
 
 /// Recompute the screen row the command line lives on.

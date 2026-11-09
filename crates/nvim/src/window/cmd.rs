@@ -48,7 +48,7 @@ use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_getln::curbuf_locked;
 use crate::file_search::grab_file_name;
-use crate::getchar::state::{KeyStuffed, KeyTyped, langmap_mapchar, vgetc_busy};
+use crate::getchar::state::{KEY_STUFFED, KEY_TYPED, LANGMAP_MAPCHAR, VGETC_BUSY};
 use crate::getchar::{plain_vgetc, typeahead};
 use crate::guard::Keys;
 use crate::mapping::langmap_adjust_mb;
@@ -665,16 +665,16 @@ fn detach_window() {
 /// came from the keyboard rather than from a mapping.
 fn langmap_adjust(c: c_int) -> c_int {
     let mapping = P_LANGMAP.first_byte() != 0;
-    let typed = if vgetc_busy.get() != 0 {
+    let typed = if VGETC_BUSY.get() != 0 {
         typeahead().maplen() == 0
     } else {
-        KeyTyped.get()
+        KEY_TYPED.get()
     };
-    if !(mapping && (p_lrm() || typed) && !KeyStuffed.get() && c >= 0) {
+    if !(mapping && (p_lrm() || typed) && !KEY_STUFFED.get() && c >= 0) {
         return c;
     }
     if c < 256 {
-        return langmap_mapchar.with(|map| c_int::from(map[as_index(c)]));
+        return LANGMAP_MAPCHAR.with(|map| c_int::from(map[as_index(c)]));
     }
     langmap_adjust_mb(Key::from_code(c)).code()
 }

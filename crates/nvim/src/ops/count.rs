@@ -247,7 +247,7 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
     for lnum in 1..=Buf::current().line_count().get() {
         if counts.bytes > last_check {
             os_breakcheck();
-            if got_int.get() {
+            if GOT_INT.get() {
                 return false;
             }
             last_check = counts.bytes + 100_000;

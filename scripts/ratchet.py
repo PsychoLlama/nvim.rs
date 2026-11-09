@@ -1020,7 +1020,7 @@ CELL_PTR_ALLOW = {
     # has none today, and `cell_ptr` still counts it.
     "WATCHERS": "uv_signal_t array whose addresses are registered with uv",
     "REFRESH_TIMER": "TimeWatcher — a uv timer handle",
-    "main_thread": "uv_thread_t, compared with uv_thread_equal",
+    "MAIN_THREAD": "uv_thread_t, compared with uv_thread_equal",
     "TERMIOS_DEFAULT": "struct termios handed to tcsetattr",
 }
 # No whitespace is tolerated around the `.`, so that what this subtracts is

@@ -21,7 +21,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 mod ast;
 mod brackets;
@@ -47,58 +46,58 @@ use crate::types::{Float, UVarNumber};
 use crate::viml::parser::parser::{ParserPosition, ParserState};
 pub const FSK_SIMPLIFY: ::core::ffi::c_uint = 8;
 pub const FSK_KEYCODE: ::core::ffi::c_uint = 1;
-pub const kCCStrategyIgnoreCase: ExprCaseCompareStrategy = 63;
-pub const kCCStrategyMatchCase: ExprCaseCompareStrategy = 35;
-pub const kCCStrategyUseOption: ExprCaseCompareStrategy = 0;
+pub const CC_STRATEGY_IGNORE_CASE: ExprCaseCompareStrategy = 63;
+pub const CC_STRATEGY_MATCH_CASE: ExprCaseCompareStrategy = 35;
+pub const CC_STRATEGY_USE_OPTION: ExprCaseCompareStrategy = 0;
 pub type LexExprTokenType = ::core::ffi::c_uint;
-pub const kExprLexAssignment: LexExprTokenType = 26;
-pub const kExprLexArrow: LexExprTokenType = 25;
-pub const kExprLexComma: LexExprTokenType = 24;
-pub const kExprLexParenthesis: LexExprTokenType = 23;
-pub const kExprLexFigureBrace: LexExprTokenType = 22;
-pub const kExprLexBracket: LexExprTokenType = 21;
-pub const kExprLexPlainIdentifier: LexExprTokenType = 20;
-pub const kExprLexEnv: LexExprTokenType = 19;
-pub const kExprLexRegister: LexExprTokenType = 18;
-pub const kExprLexOption: LexExprTokenType = 17;
-pub const kExprLexDoubleQuotedString: LexExprTokenType = 16;
-pub const kExprLexSingleQuotedString: LexExprTokenType = 15;
-pub const kExprLexNumber: LexExprTokenType = 14;
-pub const kExprLexNot: LexExprTokenType = 13;
-pub const kExprLexMultiplication: LexExprTokenType = 12;
-pub const kExprLexDot: LexExprTokenType = 11;
-pub const kExprLexMinus: LexExprTokenType = 10;
-pub const kExprLexPlus: LexExprTokenType = 9;
-pub const kExprLexComparison: LexExprTokenType = 8;
-pub const kExprLexAnd: LexExprTokenType = 7;
-pub const kExprLexOr: LexExprTokenType = 6;
-pub const kExprLexColon: LexExprTokenType = 5;
-pub const kExprLexQuestion: LexExprTokenType = 4;
-pub const kExprLexEOC: LexExprTokenType = 3;
-pub const kExprLexSpacing: LexExprTokenType = 2;
-pub const kExprLexMissing: LexExprTokenType = 1;
-pub const kExprLexInvalid: LexExprTokenType = 0;
-pub const kExprCmpIdentical: ExprComparisonType = 4;
-pub const kExprCmpGreaterOrEqual: ExprComparisonType = 3;
-pub const kExprCmpGreater: ExprComparisonType = 2;
-pub const kExprCmpMatches: ExprComparisonType = 1;
-pub const kExprCmpEqual: ExprComparisonType = 0;
-pub const kExprOptScopeLocal: ExprOptScope = 108;
-pub const kExprOptScopeGlobal: ExprOptScope = 103;
-pub const kExprOptScopeUnspecified: ExprOptScope = 0;
-pub const kExprAsgnConcat: ExprAssignmentType = 3;
-pub const kExprAsgnSubtract: ExprAssignmentType = 2;
-pub const kExprAsgnAdd: ExprAssignmentType = 1;
-pub const kExprAsgnPlain: ExprAssignmentType = 0;
-pub const kExprVarScopeArguments: ExprVarScope = 97;
-pub const kExprVarScopeLocal: ExprVarScope = 108;
-pub const kExprVarScopeTabpage: ExprVarScope = 116;
-pub const kExprVarScopeWindow: ExprVarScope = 119;
-pub const kExprVarScopeBuffer: ExprVarScope = 98;
-pub const kExprVarScopeVim: ExprVarScope = 118;
-pub const kExprVarScopeGlobal: ExprVarScope = 103;
-pub const kExprVarScopeScript: ExprVarScope = 115;
-pub const kExprVarScopeMissing: ExprVarScope = 0;
+pub const EXPR_LEX_ASSIGNMENT: LexExprTokenType = 26;
+pub const EXPR_LEX_ARROW: LexExprTokenType = 25;
+pub const EXPR_LEX_COMMA: LexExprTokenType = 24;
+pub const EXPR_LEX_PARENTHESIS: LexExprTokenType = 23;
+pub const EXPR_LEX_FIGURE_BRACE: LexExprTokenType = 22;
+pub const EXPR_LEX_BRACKET: LexExprTokenType = 21;
+pub const EXPR_LEX_PLAIN_IDENTIFIER: LexExprTokenType = 20;
+pub const EXPR_LEX_ENV: LexExprTokenType = 19;
+pub const EXPR_LEX_REGISTER: LexExprTokenType = 18;
+pub const EXPR_LEX_OPTION: LexExprTokenType = 17;
+pub const EXPR_LEX_DOUBLE_QUOTED_STRING: LexExprTokenType = 16;
+pub const EXPR_LEX_SINGLE_QUOTED_STRING: LexExprTokenType = 15;
+pub const EXPR_LEX_NUMBER: LexExprTokenType = 14;
+pub const EXPR_LEX_NOT: LexExprTokenType = 13;
+pub const EXPR_LEX_MULTIPLICATION: LexExprTokenType = 12;
+pub const EXPR_LEX_DOT: LexExprTokenType = 11;
+pub const EXPR_LEX_MINUS: LexExprTokenType = 10;
+pub const EXPR_LEX_PLUS: LexExprTokenType = 9;
+pub const EXPR_LEX_COMPARISON: LexExprTokenType = 8;
+pub const EXPR_LEX_AND: LexExprTokenType = 7;
+pub const EXPR_LEX_OR: LexExprTokenType = 6;
+pub const EXPR_LEX_COLON: LexExprTokenType = 5;
+pub const EXPR_LEX_QUESTION: LexExprTokenType = 4;
+pub const EXPR_LEX_EOC: LexExprTokenType = 3;
+pub const EXPR_LEX_SPACING: LexExprTokenType = 2;
+pub const EXPR_LEX_MISSING: LexExprTokenType = 1;
+pub const EXPR_LEX_INVALID: LexExprTokenType = 0;
+pub const EXPR_CMP_IDENTICAL: ExprComparisonType = 4;
+pub const EXPR_CMP_GREATER_OR_EQUAL: ExprComparisonType = 3;
+pub const EXPR_CMP_GREATER: ExprComparisonType = 2;
+pub const EXPR_CMP_MATCHES: ExprComparisonType = 1;
+pub const EXPR_CMP_EQUAL: ExprComparisonType = 0;
+pub const EXPR_OPT_SCOPE_LOCAL: ExprOptScope = 108;
+pub const EXPR_OPT_SCOPE_GLOBAL: ExprOptScope = 103;
+pub const EXPR_OPT_SCOPE_UNSPECIFIED: ExprOptScope = 0;
+pub const EXPR_ASGN_CONCAT: ExprAssignmentType = 3;
+pub const EXPR_ASGN_SUBTRACT: ExprAssignmentType = 2;
+pub const EXPR_ASGN_ADD: ExprAssignmentType = 1;
+pub const EXPR_ASGN_PLAIN: ExprAssignmentType = 0;
+pub const EXPR_VAR_SCOPE_ARGUMENTS: ExprVarScope = 97;
+pub const EXPR_VAR_SCOPE_LOCAL: ExprVarScope = 108;
+pub const EXPR_VAR_SCOPE_TABPAGE: ExprVarScope = 116;
+pub const EXPR_VAR_SCOPE_WINDOW: ExprVarScope = 119;
+pub const EXPR_VAR_SCOPE_BUFFER: ExprVarScope = 98;
+pub const EXPR_VAR_SCOPE_VIM: ExprVarScope = 118;
+pub const EXPR_VAR_SCOPE_GLOBAL: ExprVarScope = 103;
+pub const EXPR_VAR_SCOPE_SCRIPT: ExprVarScope = 115;
+pub const EXPR_VAR_SCOPE_MISSING: ExprVarScope = 0;
 #[derive(Copy, Clone, Debug)]
 pub struct LexExprToken {
     pub start: ParserPosition,
@@ -199,92 +198,92 @@ pub struct LexExprTokenMultiplication {
     pub type_0: ExprLexMulType,
 }
 pub type ExprLexMulType = ::core::ffi::c_uint;
-pub const kExprLexMulMod: ExprLexMulType = 2;
-pub const kExprLexMulDiv: ExprLexMulType = 1;
-pub const kExprLexMulMul: ExprLexMulType = 0;
+pub const EXPR_LEX_MUL_MOD: ExprLexMulType = 2;
+pub const EXPR_LEX_MUL_DIV: ExprLexMulType = 1;
+pub const EXPR_LEX_MUL_MUL: ExprLexMulType = 0;
 #[derive(Copy, Clone, Debug)]
 pub struct LexExprTokenComparison {
     pub type_0: ExprComparisonType,
     pub ccs: ExprCaseCompareStrategy,
     pub inv: bool,
 }
-pub const kELFlagForbidEOC: ::core::ffi::c_uint = 16;
-pub const kELFlagIsNotCmp: ::core::ffi::c_uint = 8;
-pub const kELFlagAllowFloat: ::core::ffi::c_uint = 4;
-pub const kELFlagForbidScope: ::core::ffi::c_uint = 2;
-pub const kELFlagPeek: ::core::ffi::c_uint = 1;
-pub const kExprNodeAssignment: ExprASTNodeType = 38;
-pub const kExprNodeEnvironment: ExprASTNodeType = 37;
-pub const kExprNodeOption: ExprASTNodeType = 36;
-pub const kExprNodeMod: ExprASTNodeType = 35;
-pub const kExprNodeDivision: ExprASTNodeType = 34;
-pub const kExprNodeMultiplication: ExprASTNodeType = 33;
-pub const kExprNodeNot: ExprASTNodeType = 32;
-pub const kExprNodeBinaryMinus: ExprASTNodeType = 31;
-pub const kExprNodeUnaryMinus: ExprASTNodeType = 30;
-pub const kExprNodeAnd: ExprASTNodeType = 29;
-pub const kExprNodeOr: ExprASTNodeType = 28;
-pub const kExprNodeDoubleQuotedString: ExprASTNodeType = 27;
-pub const kExprNodeSingleQuotedString: ExprASTNodeType = 26;
-pub const kExprNodeFloat: ExprASTNodeType = 25;
-pub const kExprNodeInteger: ExprASTNodeType = 24;
-pub const kExprNodeConcatOrSubscript: ExprASTNodeType = 23;
-pub const kExprNodeConcat: ExprASTNodeType = 22;
-pub const kExprNodeComparison: ExprASTNodeType = 21;
-pub const kExprNodeArrow: ExprASTNodeType = 20;
-pub const kExprNodeColon: ExprASTNodeType = 19;
-pub const kExprNodeComma: ExprASTNodeType = 18;
-pub const kExprNodeCurlyBracesIdentifier: ExprASTNodeType = 17;
-pub const kExprNodeDictLiteral: ExprASTNodeType = 16;
-pub const kExprNodeLambda: ExprASTNodeType = 15;
-pub const kExprNodeUnknownFigure: ExprASTNodeType = 14;
-pub const kExprNodeComplexIdentifier: ExprASTNodeType = 13;
-pub const kExprNodePlainKey: ExprASTNodeType = 12;
-pub const kExprNodePlainIdentifier: ExprASTNodeType = 11;
-pub const kExprNodeCall: ExprASTNodeType = 10;
-pub const kExprNodeNested: ExprASTNodeType = 9;
-pub const kExprNodeBinaryPlus: ExprASTNodeType = 8;
-pub const kExprNodeUnaryPlus: ExprASTNodeType = 7;
-pub const kExprNodeListLiteral: ExprASTNodeType = 6;
-pub const kExprNodeSubscript: ExprASTNodeType = 5;
-pub const kExprNodeRegister: ExprASTNodeType = 4;
-pub const kExprNodeTernaryValue: ExprASTNodeType = 3;
-pub const kExprNodeTernary: ExprASTNodeType = 2;
-pub const kExprNodeOpMissing: ExprASTNodeType = 1;
-pub const kExprNodeMissing: ExprASTNodeType = 0;
-pub const kExprFlagsParseLet: ExprParserFlags = 4;
-pub const kExprFlagsDisallowEOC: ExprParserFlags = 2;
-pub const kExprFlagsMulti: ExprParserFlags = 1;
-pub const kEPTLambdaArguments: ExprASTParseType = 1;
+pub const EL_FLAG_FORBID_EOC: ::core::ffi::c_uint = 16;
+pub const EL_FLAG_IS_NOT_CMP: ::core::ffi::c_uint = 8;
+pub const EL_FLAG_ALLOW_FLOAT: ::core::ffi::c_uint = 4;
+pub const EL_FLAG_FORBID_SCOPE: ::core::ffi::c_uint = 2;
+pub const EL_FLAG_PEEK: ::core::ffi::c_uint = 1;
+pub const EXPR_NODE_ASSIGNMENT: ExprASTNodeType = 38;
+pub const EXPR_NODE_ENVIRONMENT: ExprASTNodeType = 37;
+pub const EXPR_NODE_OPTION: ExprASTNodeType = 36;
+pub const EXPR_NODE_MOD: ExprASTNodeType = 35;
+pub const EXPR_NODE_DIVISION: ExprASTNodeType = 34;
+pub const EXPR_NODE_MULTIPLICATION: ExprASTNodeType = 33;
+pub const EXPR_NODE_NOT: ExprASTNodeType = 32;
+pub const EXPR_NODE_BINARY_MINUS: ExprASTNodeType = 31;
+pub const EXPR_NODE_UNARY_MINUS: ExprASTNodeType = 30;
+pub const EXPR_NODE_AND: ExprASTNodeType = 29;
+pub const EXPR_NODE_OR: ExprASTNodeType = 28;
+pub const EXPR_NODE_DOUBLE_QUOTED_STRING: ExprASTNodeType = 27;
+pub const EXPR_NODE_SINGLE_QUOTED_STRING: ExprASTNodeType = 26;
+pub const EXPR_NODE_FLOAT: ExprASTNodeType = 25;
+pub const EXPR_NODE_INTEGER: ExprASTNodeType = 24;
+pub const EXPR_NODE_CONCAT_OR_SUBSCRIPT: ExprASTNodeType = 23;
+pub const EXPR_NODE_CONCAT: ExprASTNodeType = 22;
+pub const EXPR_NODE_COMPARISON: ExprASTNodeType = 21;
+pub const EXPR_NODE_ARROW: ExprASTNodeType = 20;
+pub const EXPR_NODE_COLON: ExprASTNodeType = 19;
+pub const EXPR_NODE_COMMA: ExprASTNodeType = 18;
+pub const EXPR_NODE_CURLY_BRACES_IDENTIFIER: ExprASTNodeType = 17;
+pub const EXPR_NODE_DICT_LITERAL: ExprASTNodeType = 16;
+pub const EXPR_NODE_LAMBDA: ExprASTNodeType = 15;
+pub const EXPR_NODE_UNKNOWN_FIGURE: ExprASTNodeType = 14;
+pub const EXPR_NODE_COMPLEX_IDENTIFIER: ExprASTNodeType = 13;
+pub const EXPR_NODE_PLAIN_KEY: ExprASTNodeType = 12;
+pub const EXPR_NODE_PLAIN_IDENTIFIER: ExprASTNodeType = 11;
+pub const EXPR_NODE_CALL: ExprASTNodeType = 10;
+pub const EXPR_NODE_NESTED: ExprASTNodeType = 9;
+pub const EXPR_NODE_BINARY_PLUS: ExprASTNodeType = 8;
+pub const EXPR_NODE_UNARY_PLUS: ExprASTNodeType = 7;
+pub const EXPR_NODE_LIST_LITERAL: ExprASTNodeType = 6;
+pub const EXPR_NODE_SUBSCRIPT: ExprASTNodeType = 5;
+pub const EXPR_NODE_REGISTER: ExprASTNodeType = 4;
+pub const EXPR_NODE_TERNARY_VALUE: ExprASTNodeType = 3;
+pub const EXPR_NODE_TERNARY: ExprASTNodeType = 2;
+pub const EXPR_NODE_OP_MISSING: ExprASTNodeType = 1;
+pub const EXPR_NODE_MISSING: ExprASTNodeType = 0;
+pub const EXPR_FLAGS_PARSE_LET: ExprParserFlags = 4;
+pub const EXPR_FLAGS_DISALLOW_EOC: ExprParserFlags = 2;
+pub const EXPR_FLAGS_MULTI: ExprParserFlags = 1;
+pub const EPT_LAMBDA_ARGUMENTS: ExprASTParseType = 1;
 pub type ExprASTParseType = ::core::ffi::c_uint;
-pub const kEPTSingleAssignment: ExprASTParseType = 3;
-pub const kEPTAssignment: ExprASTParseType = 2;
-pub const kEPTExpr: ExprASTParseType = 0;
-pub const kENodeValue: ExprASTWantedNode = 1;
+pub const EPT_SINGLE_ASSIGNMENT: ExprASTParseType = 3;
+pub const EPT_ASSIGNMENT: ExprASTParseType = 2;
+pub const EPT_EXPR: ExprASTParseType = 0;
+pub const E_NODE_VALUE: ExprASTWantedNode = 1;
 pub type ExprASTWantedNode = ::core::ffi::c_uint;
-pub const kENodeOperator: ExprASTWantedNode = 0;
-pub const kEOpAssRight: ExprOpAssociativity = 114;
+pub const E_NODE_OPERATOR: ExprASTWantedNode = 0;
+pub const E_OP_ASS_RIGHT: ExprOpAssociativity = 114;
 pub type ExprOpAssociativity = ::core::ffi::c_uint;
-pub const kEOpAssLeft: ExprOpAssociativity = 108;
-pub const kEOpAssNo: ExprOpAssociativity = 110;
+pub const E_OP_ASS_LEFT: ExprOpAssociativity = 108;
+pub const E_OP_ASS_NO: ExprOpAssociativity = 110;
 pub type ExprOpLvl = ::core::ffi::c_uint;
-pub const kEOpLvlValue: ExprOpLvl = 16;
-pub const kEOpLvlSubscript: ExprOpLvl = 15;
-pub const kEOpLvlUnary: ExprOpLvl = 14;
-pub const kEOpLvlMultiplication: ExprOpLvl = 13;
-pub const kEOpLvlAddition: ExprOpLvl = 12;
-pub const kEOpLvlComparison: ExprOpLvl = 11;
-pub const kEOpLvlAnd: ExprOpLvl = 10;
-pub const kEOpLvlOr: ExprOpLvl = 9;
-pub const kEOpLvlTernary: ExprOpLvl = 8;
-pub const kEOpLvlTernaryValue: ExprOpLvl = 7;
-pub const kEOpLvlColon: ExprOpLvl = 6;
-pub const kEOpLvlComma: ExprOpLvl = 5;
-pub const kEOpLvlArrow: ExprOpLvl = 4;
-pub const kEOpLvlAssignment: ExprOpLvl = 3;
-pub const kEOpLvlParens: ExprOpLvl = 2;
-pub const kEOpLvlComplexIdentifier: ExprOpLvl = 1;
-pub const kEOpLvlInvalid: ExprOpLvl = 0;
+pub const E_OP_LVL_VALUE: ExprOpLvl = 16;
+pub const E_OP_LVL_SUBSCRIPT: ExprOpLvl = 15;
+pub const E_OP_LVL_UNARY: ExprOpLvl = 14;
+pub const E_OP_LVL_MULTIPLICATION: ExprOpLvl = 13;
+pub const E_OP_LVL_ADDITION: ExprOpLvl = 12;
+pub const E_OP_LVL_COMPARISON: ExprOpLvl = 11;
+pub const E_OP_LVL_AND: ExprOpLvl = 10;
+pub const E_OP_LVL_OR: ExprOpLvl = 9;
+pub const E_OP_LVL_TERNARY: ExprOpLvl = 8;
+pub const E_OP_LVL_TERNARY_VALUE: ExprOpLvl = 7;
+pub const E_OP_LVL_COLON: ExprOpLvl = 6;
+pub const E_OP_LVL_COMMA: ExprOpLvl = 5;
+pub const E_OP_LVL_ARROW: ExprOpLvl = 4;
+pub const E_OP_LVL_ASSIGNMENT: ExprOpLvl = 3;
+pub const E_OP_LVL_PARENS: ExprOpLvl = 2;
+pub const E_OP_LVL_COMPLEX_IDENTIFIER: ExprOpLvl = 1;
+pub const E_OP_LVL_INVALID: ExprOpLvl = 0;
 #[derive(Debug)]
 pub struct ExprNodeProps {
     pub lvl: ExprOpLvl,
@@ -363,28 +362,28 @@ pub struct ExprASTNode<'a> {
 pub enum ExprNodeData<'a> {
     /// Every node type that carries no payload.
     None,
-    /// `kExprNodeRegister`.
+    /// `EXPR_NODE_REGISTER`.
     Register(ExprNodeRegister),
-    /// `kExprNodeUnknownFigure`, `kExprNodeLambda`, `kExprNodeDictLiteral`
-    /// and `kExprNodeCurlyBracesIdentifier`.
+    /// `EXPR_NODE_UNKNOWN_FIGURE`, `EXPR_NODE_LAMBDA`, `EXPR_NODE_DICT_LITERAL`
+    /// and `EXPR_NODE_CURLY_BRACES_IDENTIFIER`.
     Figure(ExprNodeFigure),
-    /// `kExprNodePlainIdentifier` and `kExprNodePlainKey`.
+    /// `EXPR_NODE_PLAIN_IDENTIFIER` and `EXPR_NODE_PLAIN_KEY`.
     Variable(ExprNodeVariable<'a>),
-    /// `kExprNodeTernaryValue`.
+    /// `EXPR_NODE_TERNARY_VALUE`.
     Ternary(ExprNodeTernary),
-    /// `kExprNodeComparison`.
+    /// `EXPR_NODE_COMPARISON`.
     Comparison(ExprNodeComparison),
-    /// `kExprNodeInteger`.
+    /// `EXPR_NODE_INTEGER`.
     Integer(ExprNodeInteger),
-    /// `kExprNodeFloat`.
+    /// `EXPR_NODE_FLOAT`.
     Float(ExprNodeFloat),
-    /// `kExprNodeSingleQuotedString` and `kExprNodeDoubleQuotedString`.
+    /// `EXPR_NODE_SINGLE_QUOTED_STRING` and `EXPR_NODE_DOUBLE_QUOTED_STRING`.
     Str(ExprNodeStr),
-    /// `kExprNodeOption`.
+    /// `EXPR_NODE_OPTION`.
     Opt(ExprNodeOption<'a>),
-    /// `kExprNodeEnvironment`.
+    /// `EXPR_NODE_ENVIRONMENT`.
     Environment(ExprNodeEnvironment<'a>),
-    /// `kExprNodeAssignment`.
+    /// `EXPR_NODE_ASSIGNMENT`.
     Assignment(ExprNodeAssignment),
 }
 

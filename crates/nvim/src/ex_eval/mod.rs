@@ -66,7 +66,7 @@ use crate::eval::{eval_cmd_bool, eval_for_line, eval0_in_cmd, next_for_item};
 use crate::ex_docmd::{ends_excmd, modifier_len};
 use crate::ex_eval::defs::{CondId, CondStack, Pend};
 use crate::ex_eval::state::{did_endif, did_throw, force_abort, trylevel};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::message::state::{DID_EMSG, EMSG_SILENT};
 use crate::message::{E_ENDFOR, E_ENDIF, E_ENDTRY, E_ENDWHILE, E_FOR, E_WHILE};
@@ -199,7 +199,7 @@ pub(crate) fn cond_stack_of(excmd: &ExArg) -> CondId {
 /// surrounding conditional was not active. Upstream's `CHECK_SKIP`.
 fn check_skip(cond: CondId) -> bool {
     DID_EMSG.get() != 0
-        || got_int.get()
+        || GOT_INT.get()
         || did_throw.get()
         || cond.with(|cs| cs.idx > 0 && !cs.flags[cs.top().expect("open") - 1].has(CsFlags::ACTIVE))
 }
@@ -214,7 +214,7 @@ fn check_skip(cond: CondId) -> bool {
 /// point is reached, so that during such a cancellation this keeps answering
 /// the same thing. `got_int` is also set by `interrupt()`.
 pub(crate) fn aborting() -> bool {
-    (DID_EMSG.get() != 0 && force_abort.get()) || got_int.get() || did_throw.get()
+    (DID_EMSG.get() != 0 && force_abort.get()) || GOT_INT.get() || did_throw.get()
 }
 
 /// Put `force_abort` back, when it must be restored before the throw point
@@ -354,7 +354,7 @@ pub(crate) fn ex_else(excmd: &mut ExArg) {
     // counts as an interrupt before it, so set "skip" and throw an
     // interrupt exception -- doing it here stops the exception for a
     // parsing error being discarded by that interrupt exception later.
-    if !skip && dbg_check_skipped(excmd) && got_int.get() {
+    if !skip && dbg_check_skipped(excmd) && GOT_INT.get() {
         do_intthrow(cond);
         skip = true;
     }
@@ -444,7 +444,7 @@ pub(crate) fn ex_while(excmd: &mut ExArg) {
         return;
     };
 
-    let skip = DID_EMSG.get() != 0 || got_int.get() || did_throw.get() || outer_inactive;
+    let skip = DID_EMSG.get() != 0 || GOT_INT.get() || did_throw.get() || outer_inactive;
     let (result, error) = if is_while {
         let answer = eval_cmd_bool(excmd, skip);
         (answer == Ok(true), answer.is_err())
@@ -717,7 +717,7 @@ pub(crate) fn cleanup_conditionals(
 /// interrupt happened after it.
 fn discard_finally_pending(cond: CondId, at: usize) {
     let (flags, pending) = cond.with(|cs| (cs.flags[at], cs.pending[at]));
-    if !(DID_EMSG.get() != 0 || got_int.get() || flags.has(CsFlags::FINALLY)) {
+    if !(DID_EMSG.get() != 0 || GOT_INT.get() || flags.has(CsFlags::FINALLY)) {
         return;
     }
     match pending {

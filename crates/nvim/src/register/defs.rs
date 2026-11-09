@@ -134,7 +134,7 @@ pub struct YankReg {
 
 impl YankReg {
     /// The empty register every slot starts as: upstream's
-    /// `static yankreg_T y_regs[NUM_REGISTERS] = { 0 }`.
+    /// `static yankreg_T Y_REGS[NUM_REGISTERS] = { 0 }`.
     pub const EMPTY: YankReg = YankReg {
         lines: RegLines::NONE,
         kind: 0, // kMTCharWise

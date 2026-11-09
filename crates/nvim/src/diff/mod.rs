@@ -65,7 +65,7 @@ use crate::autocmd::defs::AcoSave;
 use crate::autocmd::defs::AutoEvent;
 use crate::diff::state::{diff_context, diff_foldcolumn, diff_need_scrollbind, need_diff_redraw};
 use crate::eval::funcs::builtin::EvalFuncData;
-use crate::getchar::state::KeyTyped;
+use crate::getchar::state::KEY_TYPED;
 use crate::global_cell::GlobalCell;
 use crate::highlight::Hlf;
 use crate::highlight_group::{HLF_ADD, HLF_CHD, HLF_NONE, HLF_TXA, HLF_TXD};

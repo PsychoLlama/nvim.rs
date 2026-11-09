@@ -153,7 +153,7 @@ impl Buf {
                     break;
                 }
                 os_breakcheck();
-                if got_int.get() {
+                if GOT_INT.get() {
                     end = LineNr::ZERO; // interrupted: break the loop
                     break;
                 }

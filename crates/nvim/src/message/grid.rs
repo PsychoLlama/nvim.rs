@@ -351,7 +351,7 @@ pub fn msg_clr_eos_force() {
     if MSG_ROW.get() < Rows.get() - 1 || MSG_COL.get() == 0 {
         clear_cmdline.set(false);
         mode_displayed.set(false);
-        cmdline_was_last_drawn.set(false);
+        CMDLINE_WAS_LAST_DRAWN.set(false);
     }
 }
 

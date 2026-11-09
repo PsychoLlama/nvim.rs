@@ -91,7 +91,7 @@ pub(crate) fn ins_compl_add(
     } else {
         os_breakcheck();
     }
-    if got_int.get() {
+    if GOT_INT.get() {
         return Added::Refused;
     }
     let text = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];

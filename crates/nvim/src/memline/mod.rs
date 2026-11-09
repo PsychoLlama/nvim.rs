@@ -39,7 +39,7 @@ use crate::fileio::{
 };
 use crate::getchar::flush_buffers;
 use crate::getchar::state::FlushBuffers;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;

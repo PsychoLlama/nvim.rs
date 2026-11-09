@@ -53,7 +53,7 @@ struct Fixture {
 impl Fixture {
     fn new(slots: c_int) -> Fixture {
         let held = editor_state_lock();
-        got_int.set(false);
+        GOT_INT.set(false);
         let window = bare_window();
         window.make_current();
         // Compiling a pattern reads the current buffer's 'iskeyword'.

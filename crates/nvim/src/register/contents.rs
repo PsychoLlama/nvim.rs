@@ -89,7 +89,7 @@ enum RegContents {
 /// The contents of register `regname`, as one string or -- with
 /// `G_REG_LIST` -- a `List` of lines.
 ///
-/// `kGRegNoExpr` refuses `"=` outright and `G_REG_EXPR_SRC` answers its source
+/// `G_REG_NO_EXPR` refuses `"=` outright and `G_REG_EXPR_SRC` answers its source
 /// rather than evaluating it, which is what `getreg('=', 1, ...)` wants.
 /// `"=` may run arbitrary Vimscript, and `"*`/`"+` the clipboard provider.
 fn get_reg_contents(regname: RegName, flags: c_int) -> Option<RegContents> {
@@ -107,7 +107,7 @@ fn get_reg_contents(regname: RegName, flags: c_int) -> Option<RegContents> {
     };
     let mut regname = regname;
     if regname == b'=' {
-        if flags & kGRegNoExpr.cast_signed() != 0 {
+        if flags & G_REG_NO_EXPR.cast_signed() != 0 {
             return None;
         }
         if flags & G_REG_EXPR_SRC.cast_signed() != 0 {
@@ -194,7 +194,7 @@ fn init_write_reg(
     }
     // `get_yank_register` moves `""`, which a write to a *named* register
     // must not do; `finish_write_reg` puts it back.
-    *old_y_previous = y_previous.get();
+    *old_y_previous = Y_PREVIOUS.get();
     let reg = get_yank_register(name, YREG_YANK);
     if !is_append_register(name) && !must_append {
         reg.write(YankReg::clear);
@@ -344,7 +344,7 @@ fn finish_write_reg(name: RegName, reg: Reg, old_y_previous: Option<usize>) {
     clipboard::set_clipboard(name, reg);
     // Only an explicit write to `""` moves it.
     if name != b'"' {
-        y_previous.set(old_y_previous);
+        Y_PREVIOUS.set(old_y_previous);
     }
 }
 
@@ -444,7 +444,7 @@ pub fn write_reg_contents_ex(
 
     if name == b'=' {
         // The expression register keeps its source, not a yankreg.
-        expr_line.with_mut(|line| {
+        EXPR_LINE.with_mut(|line| {
             if !must_append {
                 *line = None;
             }

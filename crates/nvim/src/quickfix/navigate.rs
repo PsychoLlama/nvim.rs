@@ -130,7 +130,7 @@ impl Adjacent<'_> {
     fn first_in_buf(&self) -> Option<usize> {
         self.entries
             .iter()
-            .take_while(|_| !got_int.get())
+            .take_while(|_| !GOT_INT.get())
             .position(|entry| entry.fnum == self.bnr)
     }
 
@@ -153,7 +153,7 @@ impl Adjacent<'_> {
     /// The entries of a list are in line order, so the run of entries
     /// sharing a line is contiguous.
     fn first_on_line(&self, mut at: usize) -> usize {
-        while !got_int.get()
+        while !GOT_INT.get()
             && let Some(prev) = self.prev(at)
             && self.same_line(prev, at)
         {
@@ -164,7 +164,7 @@ impl Adjacent<'_> {
 
     /// The last entry on the same line of the same file as `at`.
     fn last_on_line(&self, mut at: usize) -> usize {
-        while !got_int.get()
+        while !GOT_INT.get()
             && let Some(next) = self.next(at)
             && self.same_line(next, at)
         {
@@ -228,7 +228,7 @@ impl Adjacent<'_> {
     /// is.
     fn nth_below(&self, mut at: usize, n: i32) -> usize {
         let mut left = n;
-        while left > 0 && !got_int.get() {
+        while left > 0 && !GOT_INT.get() {
             left -= 1;
             let first = at;
             if self.linewise {
@@ -250,7 +250,7 @@ impl Adjacent<'_> {
     /// is.
     fn nth_above(&self, mut at: usize, n: i32) -> usize {
         let mut left = n;
-        while left > 0 && !got_int.get() {
+        while left > 0 && !GOT_INT.get() {
             left -= 1;
             let Some(prev) = self.prev(at).filter(|&prev| self.same_file(prev, at)) else {
                 break;

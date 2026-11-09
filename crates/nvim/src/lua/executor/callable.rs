@@ -22,7 +22,7 @@ use std::ffi::CString;
 use super::{RET_NIL_BOOL, nlua_error, nlua_exec, with_main_stack};
 use crate::env::home_to_tilde;
 use crate::eval::userfunc::register_luafunc;
-use crate::getchar::state::{got_int, mod_mask};
+use crate::getchar::state::{GOT_INT, MOD_MASK};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::{special_key_bytes, unescape_ks_in};
 use crate::lua::ffi::LUA_NOREF;
@@ -99,7 +99,7 @@ pub fn nlua_execute_on_key(c: Key, typed: &mut Vec<u8>) -> bool {
     }
     RECURSIVE.set(true);
 
-    let key = special_key_bytes(c, mod_mask.get(), false);
+    let key = special_key_bytes(c, MOD_MASK.get(), false);
     let up_to_nul = |bytes: &[u8]| bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     typed.truncate(up_to_nul(typed));
     let unescaped = unescape_ks_in(typed);
@@ -116,8 +116,8 @@ pub fn nlua_execute_on_key(c: Key, typed: &mut Vec<u8>) -> bool {
         stack.push_bytes(key.as_bytes());
         stack.push_bytes(typed);
 
-        let save_got_int = got_int.get();
-        got_int.set(false);
+        let save_got_int = GOT_INT.get();
+        GOT_INT.set(false);
         let mut discard = false;
         if stack.pcall(2, 1, None).is_err() {
             nlua_error(stack, c"vim.on_key() callbacks: %.*s");
@@ -127,7 +127,7 @@ pub fn nlua_execute_on_key(c: Key, typed: &mut Vec<u8>) -> bool {
             }
             stack.pop(1);
         }
-        got_int.set(got_int.get() || save_got_int);
+        GOT_INT.set(GOT_INT.get() || save_got_int);
         stack.pop(1);
         debug_assert!(top == stack.top());
 

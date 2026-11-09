@@ -80,7 +80,7 @@ pub(crate) fn print_tag_list(new_tag: bool, use_tagstack: bool, matches: &[TagMa
 
     let count = matches.len();
     for (i, found) in matches.iter().enumerate() {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         let (tagp, _) = found.parse();
@@ -92,7 +92,7 @@ pub(crate) fn print_tag_list(new_tag: bool, use_tagstack: bool, matches: &[TagMa
         if MSG_COL.get() > 0 {
             msg_putchar('\n' as c_int);
         }
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         msg_advance(INFO_COLUMN);
@@ -116,9 +116,9 @@ pub(crate) fn print_tag_list(new_tag: bool, use_tagstack: bool, matches: &[TagMa
         }
         os_breakcheck();
     }
-    if got_int.get() {
+    if GOT_INT.get() {
         // Only stop the listing, not whatever asked for it.
-        got_int.set(false);
+        GOT_INT.set(false);
     }
 }
 
@@ -196,7 +196,7 @@ fn print_extra_fields(line: &[u8], command_end: usize, tagp: &TagParts) -> bool 
         while !matches!(byte(line, p), 0 | b'\r' | b'\n') {
             if MSG_COL.get() + ptr2cells_at(&line[p..]) >= Columns.get() {
                 msg_putchar('\n' as c_int);
-                if got_int.get() {
+                if GOT_INT.get() {
                     break;
                 }
                 msg_advance(INFO_COLUMN);
@@ -213,7 +213,7 @@ fn print_extra_fields(line: &[u8], command_end: usize, tagp: &TagParts) -> bool 
     }
     if MSG_COL.get() > INFO_COLUMN {
         msg_putchar('\n' as c_int);
-        if got_int.get() {
+        if GOT_INT.get() {
             return false;
         }
         msg_advance(INFO_COLUMN);
@@ -249,7 +249,7 @@ fn print_command(line: &[u8], command: usize, command_end: usize) {
         if MSG_COL.get() + width > Columns.get() {
             msg_putchar('\n' as c_int);
         }
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         msg_advance(INFO_COLUMN);

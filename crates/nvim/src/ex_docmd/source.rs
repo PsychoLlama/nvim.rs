@@ -51,7 +51,7 @@ use crate::ex_eval::state::{
     suppress_errthrow, trylevel,
 };
 use crate::ex_getln::{cmdline_input, getexline};
-use crate::getchar::state::{KeyTyped, got_int};
+use crate::getchar::state::{GOT_INT, KEY_TYPED};
 use crate::highlight_group::HLF_E;
 use crate::message::E_EMPTY_BUFFER;
 use crate::message::state::{
@@ -91,7 +91,7 @@ pub(crate) fn save_dbg_stuff() -> SavedDebugState {
         vv_exception: vim_var_string(Vv::Exception),
         vv_throwpoint: vim_var_string(Vv::Throwpoint),
         did_emsg: DID_EMSG.replace(0),
-        got_int: c_int::from(got_int.replace(false)),
+        got_int: c_int::from(GOT_INT.replace(false)),
         did_throw: did_throw.replace(false),
         need_rethrow: c_int::from(need_rethrow.replace(false)),
         check_cstack: c_int::from(check_cstack.replace(false)),
@@ -114,7 +114,7 @@ pub(crate) fn restore_dbg_stuff(saved: SavedDebugState) {
         set_vim_var_owned(Vv::Throwpoint, Some(throwpoint));
     }
     DID_EMSG.set(saved.did_emsg);
-    got_int.set(saved.got_int != 0);
+    GOT_INT.set(saved.got_int != 0);
     did_throw.set(saved.did_throw);
     need_rethrow.set(saved.need_rethrow != 0);
     check_cstack.set(saved.check_cstack != 0);
@@ -453,7 +453,7 @@ impl LoopLines<'_> {
         };
         // A replayed line was not typed. It is handed out as a copy: the
         // store keeps its line, and a command modifies what it is handed.
-        KeyTyped.set(false);
+        KEY_TYPED.set(false);
         *self.current_line += 1;
         set_sourcing_lnum(stored.lnum);
         Some(XString::from_bytes(&stored.line))

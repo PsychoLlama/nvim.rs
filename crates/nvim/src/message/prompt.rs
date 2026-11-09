@@ -80,7 +80,7 @@ pub fn wait_return(redraw: c_int) {
         return;
     }
     // Inside vgetc().code() we can't wait for a typed character at all.
-    if vgetc_busy.get() > 0 {
+    if VGETC_BUSY.get() > 0 {
         return;
     }
     NEED_WAIT_RETURN.set(true);
@@ -100,11 +100,11 @@ pub fn wait_return(redraw: c_int) {
     if QUIT_MORE.get() {
         c = CAR; // just pretend CR was hit
         QUIT_MORE.set(false);
-        got_int.set(false);
+        GOT_INT.set(false);
     } else if exmode_active.get() {
         msg_str(c" "); // make sure the cursor is on the right line
         c = CAR; // no need for a return in ex mode
-        got_int.set(false);
+        GOT_INT.set(false);
     } else if !stuff_empty() {
         // With stuffed characters the next one would dismiss the prompt
         // immediately and have to be put back, so don't show it at all.
@@ -134,23 +134,23 @@ pub fn wait_return(redraw: c_int) {
             loop {
                 // Remember "got_int": if it is set vgetc().code() probably
                 // answers CTRL-C, and we need to loop then.
-                let had_got_int = got_int.get();
+                let had_got_int = GOT_INT.get();
 
                 // Don't do mappings here: the character goes back into the
                 // typeahead buffer. Recording is disabled for the same
                 // reason -- the character is recorded later, when it is
                 // added to the typebuf after the loop.
                 let raw_key = Keys::unmapped_with_codes();
-                let save_reg_recording = reg_recording.get();
-                let save_scriptout = scriptout.take();
-                reg_recording.set(0);
+                let save_reg_recording = REG_RECORDING.get();
+                let save_scriptout = SCRIPTOUT.take();
+                REG_RECORDING.set(0);
                 c = safe_vgetc().code();
                 if had_got_int && global_busy.get() == 0 {
-                    got_int.set(false);
+                    GOT_INT.set(false);
                 }
                 drop(raw_key);
-                reg_recording.set(save_reg_recording);
-                scriptout.set(save_scriptout);
+                REG_RECORDING.set(save_reg_recording);
+                SCRIPTOUT.set(save_scriptout);
 
                 if p_more() {
                     // Allow scrolling back in the messages. Also accept
@@ -172,7 +172,7 @@ pub fn wait_return(redraw: c_int) {
                         if QUIT_MORE.get() {
                             c = CAR; // just pretend CR was hit
                             QUIT_MORE.set(false);
-                            got_int.set(false);
+                            GOT_INT.set(false);
                         } else if c != SpecialKey::Ignore.code() {
                             c = SpecialKey::Ignore.code();
                             hit_return_msg(false);
@@ -222,7 +222,7 @@ pub fn wait_return(redraw: c_int) {
             } else if !has_char(c"\r\n ", c) && c != Ctrl_C && c != KEY_Q {
                 // Put the character back in the typeahead buffer. Not the
                 // stuff buffer, because lmaps wouldn't work.
-                ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true);
+                ins_char_typebuf(VGETC_CHAR.get(), VGETC_MOD_MASK.get(), true);
                 do_redraw.set(true); // need a redraw even though there is typeahead
             }
         } else {
@@ -286,7 +286,7 @@ pub(crate) fn hit_return_msg(newline_sb: bool) {
         msg_putchar(c_int::from(b'\n')); // start on a new line
     }
     P_MORE.set(false); // don't want to see this message when scrolling back
-    if got_int.get() {
+    if GOT_INT.get() {
         msg_str(gettext(c"Interrupt: "));
     }
     let prompt = gettext(c"Press ENTER or type command to continue");
@@ -414,7 +414,7 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
             if CONFIRM_MSG_USED.get() != 0 {
                 retval = true;
             } else {
-                got_int.set(true);
+                GOT_INT.set(true);
                 QUIT_MORE.set(true);
             }
             LINES_LEFT.set(Rows.get() - 1);

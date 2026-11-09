@@ -26,7 +26,7 @@ use std::os::unix::ffi::OsStrExt;
 
 use crate::cstr;
 use crate::fileio::Fgets;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::mbyte::CONV_NONE;
 use crate::mbyte::canonize;
 use crate::option::vars::p_enc;
@@ -55,7 +55,7 @@ pub(super) fn spell_read_wordfile(spin: &mut SpellInfo, fname: &CStr) -> Result<
     let mut did_word = false;
     let mut non_ascii = 0;
 
-    while fd.line_capped(&mut rline, MAXLINELEN as usize) && !got_int.get() {
+    while fd.line_capped(&mut rline, MAXLINELEN as usize) && !GOT_INT.get() {
         line_breakcheck();
         lnum += 1;
         let read = cstr::until_nul(&rline);

@@ -47,7 +47,7 @@ use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_curbuf_later, redr
 use crate::eval::vars::{do_unlet, set_internal_string_var, var_string_value};
 use crate::ex_docmd::{do_cmdline_cmd, ends_excmd, separate_nextcmd};
 use crate::fold::{fold_update_all, foldmethod_is_syntax};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::highlight::state::{include_default, include_link, include_none};
 use crate::highlight_group::{

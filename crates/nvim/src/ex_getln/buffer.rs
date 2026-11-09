@@ -262,8 +262,8 @@ pub(crate) fn realloc_cmdbuff(cc: Cc, len: ::core::ffi::c_int) {
 pub(crate) fn save_cmdline() {
     // Both closures are leaves -- a move out of the cell and a push onto a
     // `Vec` -- so neither exclusive borrow can overlap another.
-    let saved = ccline.with_mut(|cc| core::mem::replace(cc, CMDLINE_INFO_INIT));
-    saved_cmdlines.with_mut(|stack| stack.push(Box::new(saved)));
+    let saved = CCLINE.with_mut(|cc| core::mem::replace(cc, CMDLINE_INFO_INIT));
+    SAVED_CMDLINES.with_mut(|stack| stack.push(Box::new(saved)));
 }
 
 /// Resume the command line [`save_cmdline`] suspended.
@@ -272,8 +272,8 @@ pub(crate) fn save_cmdline() {
 /// `did_save_ccline` flag, and an unpaired restore would otherwise silently
 /// leave the wrong line current.
 pub(crate) fn restore_cmdline() {
-    let saved = saved_cmdlines.with_mut(|stack| stack.pop());
-    ccline.set(*saved.expect("restore_cmdline without save_cmdline"));
+    let saved = SAVED_CMDLINES.with_mut(|stack| stack.pop());
+    CCLINE.set(*saved.expect("restore_cmdline without save_cmdline"));
 }
 
 /// The command line `depth` levels out: 0 is the one being edited, 1 the one
@@ -309,7 +309,7 @@ pub(crate) fn cmdline_paste(regname: RegName, literally: bool, remcr: bool) -> b
     // A register containing CTRL-R can cause an endless loop. Allow
     // using CTRL-C to break out of it.
     line_breakcheck();
-    if got_int.get() {
+    if GOT_INT.get() {
         return false;
     }
 

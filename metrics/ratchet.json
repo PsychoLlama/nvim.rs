@@ -10,7 +10,7 @@
   "semsg_c": 19,
   "raw_cstr": 236,
   "libc_strings": 5,
-  "const_c_int": 821,
+  "const_c_int": 826,
   "const_int_alias": 1868,
   "unions": 20,
   "repr_c_ffi_types": 91,
@@ -55,7 +55,7 @@
   "files_without_deny_casts": 15,
   "files_allowing_non_camel_case_types": 16,
   "files_allowing_non_snake_case": 3,
-  "files_allowing_non_upper_case_globals": 153,
+  "files_allowing_non_upper_case_globals": 136,
   "files": {
     "crates/mainthread/lib.rs": {"pub_items": 4},
     "crates/nvim/src/allocator.rs": {"unsafe_stmts": 20},

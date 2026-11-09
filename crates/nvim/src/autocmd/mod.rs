@@ -38,7 +38,7 @@ use crate::ex_docmd::{do_cmdline, ends_excmd, expand_sfile, get_pressedreturn, s
 use crate::ex_eval::{aborting, should_abort};
 use crate::fileio::{check_timestamps, file_pat_to_reg_pat, match_file_pat};
 use crate::getchar::state::SaveRedo;
-use crate::getchar::state::{KeyTyped, got_int, reg_recording};
+use crate::getchar::state::{GOT_INT, KEY_TYPED, REG_RECORDING};
 use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
 use crate::guard::secure;

@@ -53,7 +53,7 @@ pub(crate) fn ins_start_select(c: Key) -> bool {
             | SpecialKey::Kpageup
             | SpecialKey::Pagedown
             | SpecialKey::Kpagedown,
-        ) => mod_mask.get().has(ModMask::SHIFT),
+        ) => MOD_MASK.get().has(ModMask::SHIFT),
         Some(
             SpecialKey::SLeft
             | SpecialKey::SRight
@@ -70,13 +70,13 @@ pub(crate) fn ins_start_select(c: Key) -> bool {
 
     start_selection();
     stuff_readbuf_char(Key::ctrl(b'O'));
-    if !mod_mask.get().is_empty() {
+    if !MOD_MASK.get().is_empty() {
         // The modifiers have to be stuffed back too, as the three-byte
         // K_SPECIAL sequence that carries them.
         let buf: [u8; 3] = [
             K_SPECIAL.to_le_bytes()[0],
             KS_MODIFIER.to_le_bytes()[0],
-            mod_mask.get().bits().to_le_bytes()[0],
+            MOD_MASK.get().bits().to_le_bytes()[0],
         ];
         stuff_readbuf_len(&buf);
     }
@@ -87,7 +87,7 @@ pub(crate) fn ins_start_select(c: Key) -> bool {
 /// Open the fold under the cursor if 'foldopen' contains `hor` and the key
 /// was typed rather than mapped.
 fn may_open_fold_hor() {
-    if FDO_FLAGS.get() & kOptFdoFlagHor as ::core::ffi::c_uint != 0 && KeyTyped.get() {
+    if FDO_FLAGS.get() & kOptFdoFlagHor as ::core::ffi::c_uint != 0 && KEY_TYPED.get() {
         fold_open_cursor();
     }
 }
@@ -285,7 +285,7 @@ pub(crate) fn ins_updown(up: bool, startcol: bool) {
 pub(crate) fn ins_page(back: bool) {
     hide_dollar();
 
-    if mod_mask.get().has(ModMask::CTRL) {
+    if MOD_MASK.get().has(ModMask::CTRL) {
         // <C-PageUp>/<C-PageDown>: another tab page, if there is one.
         if first_tab().is_some_and(|tp| tp.next().is_some()) {
             start_arrow_at(InsertEnd::cursor());

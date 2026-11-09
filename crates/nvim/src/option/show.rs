@@ -42,7 +42,7 @@ use std::io::Write;
 use crate::ascii::NL;
 use crate::ascii::ascii_iswhite;
 use crate::charset::{transchar, vim_strsize_cstr};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::keycodes::{get_special_key_name, has_key_name};
 use crate::memory::XString;
 use crate::message::state::INFO_MESSAGE;
@@ -102,7 +102,7 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
     msg_title(gettext(title));
 
     for run in 1..=2 {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         items.clear();
@@ -153,9 +153,9 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
         // Down the first column, then the second: item `i` of row `r`
         // is `r + i * rows`.
         let mut row = 0;
-        while row < rows && !got_int.get() {
+        while row < rows && !GOT_INT.get() {
             msg_putchar(c_int::from(b'\n'));
-            if got_int.get() {
+            if GOT_INT.get() {
                 break;
             }
             let mut col = 0;

@@ -86,7 +86,7 @@ pub fn allbuf_locked() -> bool {
 
 /// Zero the command-line state at startup.
 pub fn cmdline_init() {
-    ccline.set(CMDLINE_INFO_INIT);
+    CCLINE.set(CMDLINE_INFO_INIT);
 }
 
 /// `'cedit'` changed: re-derive the key that opens the command-line window.
@@ -101,14 +101,14 @@ pub fn did_set_cedit(_args: &mut OptSet) -> Result<(), OptError> {
 /// is initialised, which is the whole of the precondition.
 pub(crate) fn derive_cedit_key() -> Result<(), OptError> {
     if p_cedit(CStr::is_empty) {
-        cedit_key.set(None);
+        CEDIT_KEY.set(None);
     } else {
         // The option names the key the way `'wildchar'` does: by its code.
         let n = p_cedit(|value| string_to_key(value.to_bytes()));
         if n == 0 || vim_isprintc(n) {
             return Err(E_INVARG.into());
         }
-        cedit_key.set(Some(Key::from_code(n)));
+        CEDIT_KEY.set(Some(Key::from_code(n)));
     }
     Ok(())
 }
@@ -129,7 +129,7 @@ pub(crate) fn open_cmdwin() -> Key {
 
     // Can't do this when text or buffer is locked, can't do it
     // recursively, and can't do it when typing a password.
-    if text_or_buf_locked() || cmdwin_type.get() != 0 || cmdline_star.get() > 0 {
+    if text_or_buf_locked() || cmdwin_type.get() != 0 || CMDLINE_STAR.get() > 0 {
         beep_flush();
         return Key::from(SpecialKey::Ignore);
     }
@@ -167,7 +167,7 @@ pub(crate) fn open_cmdwin() -> Key {
         return Key::CTRL_C;
     }
     // Don't let quitting the More prompt make this fail.
-    got_int.set(false);
+    GOT_INT.set(false);
 
     // Set the "cmdwin_*" variables before any autocommand can mess
     // things up.
@@ -315,10 +315,10 @@ pub(crate) fn open_cmdwin() -> Key {
     drop(redraw);
     crate::clipboard::restore_batch_count(save_count);
 
-    let save_key_typed = KeyTyped.get();
+    let save_key_typed = KEY_TYPED.get();
     trigger_cmd_autocmd(cmdwin_type.get(), AutoEvent::CmdwinLeave);
     // Restore KeyTyped in case an autocommand modified it.
-    KeyTyped.set(save_key_typed);
+    KEY_TYPED.set(save_key_typed);
 
     cmdwin_type.set(0);
     cmdwin_level.set(0);
@@ -334,7 +334,7 @@ pub(crate) fn open_cmdwin() -> Key {
         || !old_curbuf.valid()
     {
         cmdwin_result.set(Key::CTRL_C);
-        emsg(gettext(e_active_window_or_buffer_changed_or_deleted));
+        emsg(gettext(E_ACTIVE_WINDOW_OR_BUFFER_CHANGED_OR_DELETED));
     } else {
         // Autocmds may abort script processing.
         if aborting() && cmdwin_result.get() != SpecialKey::Ignore {

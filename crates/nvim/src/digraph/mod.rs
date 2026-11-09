@@ -30,9 +30,9 @@ use crate::eval::typval::{
 };
 use crate::ex_docmd::{do_cmdline_cmd, reads_sourced_lines};
 use crate::ex_getln::putcmdline;
-use crate::ex_getln::state::cmdline_star;
+use crate::ex_getln::state::CMDLINE_STAR;
 use crate::getchar::plain_vgetc;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::guard::{Keys, Suppress};
 use crate::highlight_group::{HLF_8, HLF_CM};
@@ -247,7 +247,7 @@ pub fn get_digraph(cmdline: bool) -> Key {
     if cmdline {
         if let Some(byte) = c.as_byte().filter(|&b| b < 128)
             && char2cells(c.code()) == 1
-            && cmdline_star.get() == 0
+            && CMDLINE_STAR.get() == 0
         {
             putcmdline(byte.cast_signed(), true);
         }
@@ -430,7 +430,7 @@ pub fn listdigraphs(use_headers: bool) {
     newline();
     let mut previous: c_int = 0;
     for dp in tables::DEFAULT_DIGRAPHS.iter() {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         // getexactdigraph() so that user-defined digraphs override the
@@ -446,7 +446,7 @@ pub fn listdigraphs(use_headers: bool) {
     }
     let users = USER_DIGRAPHS.with(|user| user.clone());
     for dp in &users {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         if previous >= 0 && use_headers {
@@ -481,7 +481,7 @@ fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
     let list = tv_list_alloc_ret(result, capacity);
     if list_all {
         for dp in tables::DEFAULT_DIGRAPHS.iter() {
-            if got_int.get() {
+            if GOT_INT.get() {
                 break;
             }
             let result = get_exact_digraph(Key::byte(dp.char1), Key::byte(dp.char2), false);
@@ -492,7 +492,7 @@ fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
     }
     let users = USER_DIGRAPHS.with(|user| user.clone());
     for dp in &users {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         getlist_append_pair(dp, list);

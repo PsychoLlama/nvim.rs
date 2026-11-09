@@ -373,8 +373,8 @@ pub fn get_recorded() -> Vec<u8> {
     // Drop the characters added last, which must be the (possibly mapped)
     // keys that stopped the recording.
     let mut len = recorded.len();
-    if len >= last_recorded_len.get() {
-        len -= last_recorded_len.get();
+    if len >= LAST_RECORDED_LEN.get() {
+        len -= LAST_RECORDED_LEN.get();
     }
     // Stopping a recording from Insert mode with CTRL-O q also leaves the
     // CTRL-O behind.
@@ -447,7 +447,7 @@ pub fn readbuf1_empty() -> bool {
 
 /// Set a typeahead character that `flush_buffers` will not throw away.
 pub fn typeahead_noflush(c: u8) {
-    typeahead_char.set(c);
+    TYPEAHEAD_CHAR.set(c);
 }
 
 /// Throw away the stuff buffer and the mapped characters in the typeahead
@@ -659,10 +659,10 @@ mod tests {
         let _fresh = Fresh::new();
         recordbuff().add_bytes(b"ihello");
         recordbuff().add_bytes(b"q");
-        last_recorded_len.set(1);
+        LAST_RECORDED_LEN.set(1);
         assert_eq!(get_recorded(), b"ihello");
         // Read out: nothing recorded is still a string.
-        last_recorded_len.set(0);
+        LAST_RECORDED_LEN.set(0);
         assert_eq!(get_recorded(), b"");
     }
 }

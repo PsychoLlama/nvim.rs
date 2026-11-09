@@ -70,7 +70,7 @@ pub fn nvim__stats() -> ApiDict {
         ),
         (
             c"ts_query_parse_count",
-            Object::integer(tslua_query_parse_count.get().cast_signed()),
+            Object::integer(TSLUA_QUERY_PARSE_COUNT.get().cast_signed()),
         ),
     ];
     let mut rv = DictBuilder::with_capacity(entries.len());

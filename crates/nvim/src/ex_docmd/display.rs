@@ -28,7 +28,7 @@ use crate::eval::eval_to_string;
 use crate::eval::vars::{set_vim_var_nr, var_redir_start, var_redir_stop};
 use crate::ex_docmd::argopt::open_exfile;
 use crate::ex_docmd::ex_pressedreturn;
-use crate::ex_getln::state::cmdpreview;
+use crate::ex_getln::state::CMDPREVIEW;
 use crate::highlight_group::{do_highlight, load_colors};
 use crate::message::state::{
     MSG_COL, MSG_DIDOUT, NEED_WAIT_RETURN, REDIR_FD, REDIR_OFF, REDIR_REG, REDIR_VNAME,
@@ -155,7 +155,7 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
 /// `:redraw` — draw now, with 'lazyredraw' and the redraw suppression
 /// counter out of the way.
 pub(crate) fn ex_redraw(excmd: &mut ExArg) {
-    if cmdpreview.get() {
+    if CMDPREVIEW.get() {
         return;
     }
     let lazyredraw_off = suspend_lazyredraw();
@@ -182,7 +182,7 @@ pub(crate) fn ex_redraw(excmd: &mut ExArg) {
 /// `:redrawstatus` — the status lines only, unless a full redraw is
 /// needed to show them.
 pub(crate) fn ex_redrawstatus(excmd: &mut ExArg) {
-    if cmdpreview.get() {
+    if CMDPREVIEW.get() {
         return;
     }
     if excmd.forceit {

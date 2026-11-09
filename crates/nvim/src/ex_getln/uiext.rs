@@ -21,7 +21,7 @@ use crate::cstr;
 /// `[[attr, text, hl_id], …]`, the cursor position and the prompt.
 pub(crate) fn ui_ext_cmdline_show(line: Cc) {
     let mut content: Vec<Object>;
-    if cmdline_star.get() != 0 {
+    if CMDLINE_STAR.get() != 0 {
         // Obscured (`inputsecret()`): one '*' per *character*.
         content = Vec::with_capacity(1);
         let stars = {
@@ -101,7 +101,7 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
 /// The `ext_cmdline` block: the lines a `:if` or `:function` body
 /// accumulates while it is being typed.
 ///
-/// Deliberately not `Copy`: `cmdline_block.get()` handed every caller a
+/// Deliberately not `Copy`: `CMDLINE_BLOCK.get()` handed every caller a
 /// second owner of the same `items` pointer, so the cell and the caller both
 /// believed they had to free it. The array owns its lines, so the free is
 /// the field's own, and [`ui_ext_cmdline_block_leave`]'s move a `take`.
@@ -148,12 +148,12 @@ pub fn ui_ext_cmdline_block_append(indent: size_t, line: &[u8]) {
 
     // A leaf closure over the array itself: nothing it runs can re-enter
     // the block, so the exclusive borrow cannot overlap another.
-    let first = cmdline_block.with_mut(|block| {
+    let first = CMDLINE_BLOCK.with_mut(|block| {
         block.0.push(Object::array(content.clone()));
         block.0.len() == 1
     });
     if first {
-        ui_call_cmdline_block_show(cmdline_block.with(CmdlineBlock::lines));
+        ui_call_cmdline_block_show(CMDLINE_BLOCK.with(CmdlineBlock::lines));
     } else {
         ui_call_cmdline_block_append(content.into());
     }
@@ -162,7 +162,7 @@ pub fn ui_ext_cmdline_block_append(indent: size_t, line: &[u8]) {
 /// Drop the `ext_cmdline` block and tell the UI to hide it.
 pub fn ui_ext_cmdline_block_leave() {
     // The block moves out of the cell and is freed by its own `Drop`.
-    drop(cmdline_block.take());
+    drop(CMDLINE_BLOCK.take());
     ui_call_cmdline_block_hide();
 }
 
@@ -172,8 +172,8 @@ pub fn cmdline_screen_cleared() {
         return;
     }
 
-    if !cmdline_block.with(CmdlineBlock::is_empty) {
-        ui_call_cmdline_block_show(cmdline_block.with(CmdlineBlock::lines));
+    if !CMDLINE_BLOCK.with(CmdlineBlock::is_empty) {
+        ui_call_cmdline_block_show(CMDLINE_BLOCK.with(CmdlineBlock::lines));
     }
 
     // Every command line suspended under this one wants redrawing too.
@@ -186,7 +186,7 @@ pub fn cmdline_screen_cleared() {
         if line.level == prev_level {
             // Don't redraw a command line already shown in the cmdline window.
             if prev_level != cmdwin_level.get() {
-                line.redraw_state = kCmdRedrawAll;
+                line.redraw_state = CMD_REDRAW_ALL;
             }
             prev_level -= 1;
         }
@@ -209,11 +209,11 @@ pub fn cmdline_ui_flush() {
         };
         if line.level == level {
             let redraw_state = line.redraw_state;
-            line.redraw_state = kCmdRedrawNone;
-            if redraw_state == kCmdRedrawAll {
-                cmdline_was_last_drawn.set(true);
+            line.redraw_state = CMD_REDRAW_NONE;
+            if redraw_state == CMD_REDRAW_ALL {
+                CMDLINE_WAS_LAST_DRAWN.set(true);
                 ui_ext_cmdline_show(line);
-            } else if redraw_state == kCmdRedrawPos && cmdline_was_last_drawn.get() {
+            } else if redraw_state == CMD_REDRAW_POS && CMDLINE_WAS_LAST_DRAWN.get() {
                 ui_call_cmdline_pos(Integer::from(line.cmdpos), Integer::from(line.level));
             }
             level -= 1;

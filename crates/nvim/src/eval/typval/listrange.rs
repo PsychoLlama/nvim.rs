@@ -199,7 +199,7 @@ pub fn list_flatten(list: &ListRef, first: usize, maxitems: int64_t, maxdepth: i
     let mut done = 0;
     while at < list.len() && done < maxitems {
         fast_breakcheck();
-        if got_int.get() {
+        if GOT_INT.get() {
             return;
         }
         let step = if list.items()[at].li_tv.v_type() == VAR_LIST {
@@ -315,7 +315,7 @@ pub fn list_join(out: &mut XString, l: Option<&List>, sep: &CStr) -> Result<(), 
     }
     let mut joined: Vec<Vec<u8>> = Vec::with_capacity(list_len(l).cast_unsigned() as usize);
     for item in list_iter(l) {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         joined.push(tv2echo_bytes(&item.li_tv));
@@ -327,7 +327,7 @@ pub fn list_join(out: &mut XString, l: Option<&List>, sep: &CStr) -> Result<(), 
         joined.iter().map(Vec::len).sum::<usize>() + sep.len() * joined.len().saturating_sub(1);
     let mut text = Vec::with_capacity(total);
     for (i, s) in joined.iter().enumerate() {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         if i > 0 {

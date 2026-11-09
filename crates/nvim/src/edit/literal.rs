@@ -51,7 +51,7 @@ pub(crate) fn ins_ctrl_v() {
     add_to_showcmd_c(Key::CTRL_V);
 
     // Do not fold the modifiers into the key for CTRL-SHIFT-V.
-    let c = get_literal(mod_mask.get().has(ModMask::SHIFT));
+    let c = get_literal(MOD_MASK.get().has(ModMask::SHIFT));
     if did_putchar {
         // When the line fits in 'columns' the `^` is at the start of the
         // next line and the redraw will not have removed it.
@@ -77,7 +77,7 @@ pub(crate) fn ins_ctrl_v() {
 /// sets both `hex` and `octal`, and every test below asks about `hex` first,
 /// so hex wins.  An enum here would be a behaviour change.
 pub(crate) fn get_literal(no_simplify: bool) -> Key {
-    if got_int.get() {
+    if GOT_INT.get() {
         return Key::CTRL_C;
     }
 
@@ -95,7 +95,7 @@ pub(crate) fn get_literal(no_simplify: bool) -> Key {
         if !no_simplify {
             nc = merge_mod_mask(nc);
         }
-        if !mod_mask.get().without(ModMask::SHIFT).is_empty() {
+        if !MOD_MASK.get().without(ModMask::SHIFT).is_empty() {
             // A character with a non-Shift modifier cannot be part of
             // i_CTRL-V_digit.
             break;
@@ -167,9 +167,9 @@ pub(crate) fn get_literal(no_simplify: bool) -> Key {
     if !nc.is_nul() {
         vungetc(nc);
         // A character typed with i_CTRL-V_digit cannot have modifiers.
-        mod_mask.set(ModMask::NONE);
+        MOD_MASK.set(ModMask::NONE);
     }
-    got_int.set(false); // CTRL-C after CTRL-V is not an interrupt
+    GOT_INT.set(false); // CTRL-C after CTRL-V is not an interrupt
     key
 }
 
@@ -184,12 +184,12 @@ pub(crate) fn get_literal(no_simplify: bool) -> Key {
 ///
 /// `ctrlv` says `c` was typed just after CTRL-V.
 pub(crate) fn insert_special(mut c: Key, mut allow_modmask: bool, mut ctrlv: bool) {
-    if mod_mask.get().has(ModMask::CMD) {
+    if MOD_MASK.get().has(ModMask::CMD) {
         // The Command key never produces a normal key.
         allow_modmask = true;
     }
-    if c.is_special() || (!mod_mask.get().is_empty() && allow_modmask) {
-        let name = get_special_key_name(c, mod_mask.get());
+    if c.is_special() || (!MOD_MASK.get().is_empty() && allow_modmask) {
+        let name = get_special_key_name(c, MOD_MASK.get());
         let name = cstr::until_nul(&name);
         let (&last, head) = name.split_last().expect("a key name is never empty");
         c = Key::byte(last);
@@ -246,7 +246,7 @@ pub(crate) fn ins_digraph() -> Key {
         edit_unputchar();
     }
 
-    if c.is_special() || !mod_mask.get().is_empty() {
+    if c.is_special() || !MOD_MASK.get().is_empty() {
         clear_showcmd();
         insert_special(c, true, false);
         return Key::NUL;

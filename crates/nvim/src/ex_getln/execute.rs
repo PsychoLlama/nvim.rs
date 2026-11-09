@@ -65,7 +65,7 @@ fn command_line_handle_ctrl_bsl(s: &mut CommandLineState) -> CtrlBsl {
     // in a mapping.
     if s.c != Key::CTRL_N
         && s.c != Key::CTRL_G
-        && (!s.c.is('e') || (cc.cmdfirstc == b'=' && KeyTyped.get()) || cmdline_star.get() > 0)
+        && (!s.c.is('e') || (cc.cmdfirstc == b'=' && KEY_TYPED.get()) || CMDLINE_STAR.get() > 0)
     {
         vungetc(s.c);
         return CtrlBsl::ProcessNextKey;
@@ -79,7 +79,7 @@ fn command_line_handle_ctrl_bsl(s: &mut CommandLineState) -> CtrlBsl {
 
     // Replace the command line with the result of an expression. This
     // calls getcmdline() recursively, from get_expr_register().
-    new_cmdpos.set(if cc.cmdpos == cc.len() {
+    NEW_CMDPOS.set(if cc.cmdpos == cc.len() {
         99999 // keep it at the end
     } else {
         cc.cmdpos
@@ -106,15 +106,15 @@ fn command_line_handle_ctrl_bsl(s: &mut CommandLineState) -> CtrlBsl {
 
             // Restore the cursor, or use the position set with
             // set_cmdline_pos().
-            cc.cmdpos = cc.len().min(new_cmdpos.get());
+            cc.cmdpos = cc.len().min(NEW_CMDPOS.get());
 
-            KeyTyped.set(false); // don't do 'wildchar' completion
+            KEY_TYPED.set(false); // don't do 'wildchar' completion
             redrawcmd();
             return CtrlBsl::Changed;
         }
     }
     beep_flush();
-    got_int.set(false); // don't abandon the command line
+    GOT_INT.set(false); // don't abandon the command line
     DID_EMSG.set(0);
     EMSG_ON_DISPLAY.set(false);
     redrawcmd();
@@ -209,16 +209,16 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
             pum_ext_want_done();
         }
 
-        if !cmdline_was_last_drawn.get() {
+        if !CMDLINE_WAS_LAST_DRAWN.get() {
             redrawcmdline();
         }
         return Step::Go;
     }
 
-    if KeyTyped.get() {
+    if KEY_TYPED.get() {
         s.some_key_typed = true;
 
-        if CMDMSG_RL.get() && !KeyStuffed.get() {
+        if CMDMSG_RL.get() && !KEY_STUFFED.get() {
             // Invert horizontal movements and operations. Only when typed
             // by the user directly, not as the result of a mapping.
             match s.c.special() {
@@ -242,7 +242,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
         && (!s.break_ctrl_c || exmode_active.get())
         && global_busy.get() == 0
     {
-        got_int.set(false);
+        GOT_INT.set(false);
     }
 
     // Free the old command line when finished moving around in the
@@ -276,7 +276,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
 
     // Which wildmenu gesture, if any, the key was already used for.
     let mut wild_type = None;
-    let key_is_wc = (s.c == wildchar() && KeyTyped.get()) || is_wildcharm(s.c);
+    let key_is_wc = (s.c == wildchar() && KEY_TYPED.get()) || is_wildcharm(s.c);
     if (cmdline_pum_active() || wild_menu_showing.get() != 0 || s.did_wild_list)
         && !key_is_wc
         && match_count() > 0
@@ -287,7 +287,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
     }
 
     // Trigger the CmdlineLeavePre autocommand.
-    if (KeyTyped.get()
+    if (KEY_TYPED.get()
         && (s.c == Key::NL || s.c == Key::CAR || s.c == SpecialKey::Kenter || s.c == Key::ESC))
         || s.c == Key::CTRL_C
     {
@@ -338,9 +338,9 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
         }
     }
 
-    if cedit_key.get() == Some(s.c) || s.c == SpecialKey::Cmdwin {
+    if CEDIT_KEY.get() == Some(s.c) || s.c == SpecialKey::Cmdwin {
         // TODO(vim): why is ex_normal_busy checked here?
-        if (s.c == SpecialKey::Cmdwin || ex_normal_busy.get() == 0) && !got_int.get() {
+        if (s.c == SpecialKey::Cmdwin || ex_normal_busy.get() == 0) && !GOT_INT.get() {
             // Open a window to edit the command line (and history).
             s.c = open_cmdwin();
             s.some_key_typed = true;
@@ -352,7 +352,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
     if s.c == Key::NL
         || s.c == Key::CAR
         || s.c == SpecialKey::Kenter
-        || (s.c == Key::ESC && (!KeyTyped.get() || cpo_has(CpoFlag::ESC)))
+        || (s.c == Key::ESC && (!KEY_TYPED.get() || cpo_has(CpoFlag::ESC)))
     {
         // In Ex mode a backslash escapes a newline.
         if exmode_active.get()
@@ -383,7 +383,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
     }
 
     // Completion for 'wildchar', 'wildcharm' and wildtrigger().
-    if (s.c == wildchar() && !s.gotesc && KeyTyped.get())
+    if (s.c == wildchar() && !s.gotesc && KEY_TYPED.get())
         || is_wildcharm(s.c)
         || s.c == SpecialKey::Wild
         || s.c == Key::CTRL_Z
@@ -404,7 +404,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
 
     // <S-Tab> goes to the last match, in a clumsy way.
     if s.c == SpecialKey::STab
-        && KeyTyped.get()
+        && KEY_TYPED.get()
         && s.next_wild(WildMode::ExpandKeep, WildOpts::NONE)
     {
         if match_count() > 1
@@ -435,7 +435,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
         if s.is_state.winid != Win::current().handle {
             init_incsearch_state(&mut s.is_state);
         }
-        if KeyTyped.get() || vpeekc().is_nul() {
+        if KEY_TYPED.get() || vpeekc().is_nul() {
             may_do_incsearch_highlighting(s.firstc, s.count, &mut s.is_state);
         }
         return command_line_not_changed(s);
@@ -448,7 +448,7 @@ pub(crate) fn may_trigger_cursormovedc(s: &CommandLineState) {
     let mut cc = Cc::current();
     if cc.cmdpos != s.prev_cmdpos {
         trigger_cmd_autocmd(s.cmdline_type, AutoEvent::CursorMovedC);
-        cc.redraw_state = cc.redraw_state.max(kCmdRedrawPos);
+        cc.redraw_state = cc.redraw_state.max(CMD_REDRAW_POS);
     }
 }
 
@@ -499,23 +499,23 @@ pub(crate) fn do_autocmd_cmdlinechanged(firstc: u8) {
 /// `'incsearch'` highlighting, and fire `CmdlineChanged`.
 pub(crate) fn command_line_changed(s: &mut CommandLineState) -> Step {
     let cc = Cc::current();
-    let prev_cmdpreview = cmdpreview.get();
+    let prev_cmdpreview = CMDPREVIEW.get();
     let preview_shown = s.firstc == b':'
         && current_sctx.get().sc_sid == 0 // only if interactive
         && P_ICM.first_byte() != 0 // 'inccommand' is set
         && !exmode_active.get() // not in ex mode
-        && cmdline_star.get() == 0 // not typing a password
+        && CMDLINE_STAR.get() == 0 // not typing a password
         && vpeekc_any().is_nul()
         && cmdpreview_may_show();
     if !preview_shown {
-        cmdpreview.set(false);
+        CMDPREVIEW.set(false);
         if prev_cmdpreview {
             // TODO(bfredl): add an immediate redraw flag for cmdline mode
             // which will trigger at the next wait-for-input.
             let _ = update_screen(); // clear the 'inccommand' preview
         }
         if completion(|xpc| xpc.context) == ExpandContext::Nothing
-            && (KeyTyped.get() || vpeekc().is_nul())
+            && (KEY_TYPED.get() || vpeekc().is_nul())
         {
             may_do_incsearch_highlighting(s.firstc, s.count, &mut s.is_state);
         }

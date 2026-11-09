@@ -49,7 +49,7 @@ use crate::eval::vars::get_vim_var_list_handle;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::state::cmdmod;
 use crate::extmark::BCount;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::guard::{sandbox, secure};
 use crate::input::prompt_for_input;
 use crate::message::state::{MSG_SCROLL, QUIT_MORE};
@@ -313,7 +313,7 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
     say::start();
     MSG_SCROLL.set(1);
     list_oldfiles(&list);
-    got_int.set(false);
+    GOT_INT.set(false);
     if !cmdmod_has(CmdModFlags::BROWSE) {
         return;
     }
@@ -342,7 +342,7 @@ fn list_oldfiles(list: &List) {
     let mut text = NumBuf::new();
     let mut nr = 0;
     for item in list_iter(Some(list)) {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         nr += 1;

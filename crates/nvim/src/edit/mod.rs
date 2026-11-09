@@ -80,8 +80,8 @@ use crate::fileio::check_timestamps;
 use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
 use crate::fold::{fold_check_close, fold_open_cursor, fold_update_after_insert};
 use crate::getchar::state::{
-    KeyStuffed, KeyTyped, got_int, langmap_mapchar, mod_mask, reg_recording,
-    test_disable_char_avail, vgetc_busy,
+    GOT_INT, KEY_STUFFED, KEY_TYPED, LANGMAP_MAPCHAR, MOD_MASK, REG_RECORDING, VGETC_BUSY,
+    test_disable_char_avail,
 };
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_char, append_to_redobuff_literally,

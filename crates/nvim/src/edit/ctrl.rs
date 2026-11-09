@@ -73,17 +73,20 @@ pub(crate) fn ins_reg() {
     // `LANGMAP_ADJUST(c, true)`: apply 'langmap' to a *typed* key only,
     // and only when it was not produced by a mapping.
     let langmap_adjust = |c: Key| -> Key {
-        let typed = if vgetc_busy.get() != 0 {
+        let typed = if VGETC_BUSY.get() != 0 {
             typeahead().maplen() == 0
         } else {
-            KeyTyped.get()
+            KEY_TYPED.get()
         };
         // `first_byte` is upstream's `*p_langmap`; the projecting reader
         // would walk the value to hand out a `&CStr`.
-        if P_LANGMAP.first_byte() != 0 && (p_lrm() || typed) && !KeyStuffed.get() && !c.is_special()
+        if P_LANGMAP.first_byte() != 0
+            && (p_lrm() || typed)
+            && !KEY_STUFFED.get()
+            && !c.is_special()
         {
             match c.as_byte() {
-                Some(b) => Key::byte(langmap_mapchar.with(|map| map[usize::from(b)])),
+                Some(b) => Key::byte(LANGMAP_MAPCHAR.with(|map| map[usize::from(b)])),
                 None => langmap_adjust_mb(c),
             }
         } else {
@@ -256,7 +259,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
         // interrupt now and then.
         if *count > 0 {
             line_breakcheck();
-            if got_int.get() {
+            if GOT_INT.get() {
                 *count = 0;
             }
         }
@@ -335,10 +338,10 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
 
     // While recording, and for CTRL-O, the new mode has to be displayed;
     // otherwise the mode message is removed.
-    if reg_recording.get() != 0 || !restart_edit.get().is_nul() {
+    if REG_RECORDING.get() != 0 || !restart_edit.get().is_nul() {
         show_mode();
     } else if p_smd()
-        && (got_int.get() || !skip_showmode())
+        && (GOT_INT.get() || !skip_showmode())
         && !(p_ch() == 0 && !ui_has(kUIMessages))
     {
         unshowmode(false);

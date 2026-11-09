@@ -233,8 +233,8 @@ fn debug_prompt(cmd: &CStr) {
         if !debug_greedy.get() {
             save_typeahead(&mut typeaheadbuf);
             typeahead_saved = true;
-            save_ignore_script = ignore_script.get();
-            ignore_script.set(true);
+            save_ignore_script = IGNORE_SCRIPT.get();
+            IGNORE_SCRIPT.set(true);
         }
 
         // Do not debug whatever reading the line itself runs -- an expression
@@ -247,7 +247,7 @@ fn debug_prompt(cmd: &CStr) {
             // Paired with the `save_typeahead` above (or an earlier pass's,
             // per the note on the declaration).
             restore_typeahead(&mut typeaheadbuf);
-            ignore_script.set(save_ignore_script);
+            IGNORE_SCRIPT.set(save_ignore_script);
         }
         ex_normal_busy.set(save_ex_normal_busy);
 
@@ -304,11 +304,11 @@ fn run_debug_cmd(
         DebugCmd::Step => debug_break_level.set(9999),
         DebugCmd::Finish => debug_break_level.set(ex_nesting_level.get() - 1),
         DebugCmd::Quit => {
-            got_int.set(true);
+            GOT_INT.set(true);
             debug_break_level.set(-1);
         }
         DebugCmd::Interrupt => {
-            got_int.set(true);
+            GOT_INT.set(true);
             debug_break_level.set(9999);
             // `>interrupt` does not repeat on a blank line; keep stepping.
             last_cmd.set(Some(DebugCmd::Step));
@@ -396,7 +396,7 @@ fn do_showbacktrace(cmd: &CStr) {
         // the next separator.
         let mut i = 0;
         let mut rest = &sname[..];
-        while !got_int.get() {
+        while !GOT_INT.get() {
             let next = rest.windows(2).position(|pair| pair == b"..");
             let frame = msg_bytes(&rest[..next.unwrap_or(rest.len())]);
             let at = max - i;

@@ -91,7 +91,7 @@ pub(crate) fn load_dummy_buffer(
         let mut newbuf_to_wipe = BufRef::NONE;
         let read = read_dummy_file(fname);
         newbuf.b_locked -= 1;
-        if read.is_ok() && !got_int.get() && !Buf::current().b_flags.has(BufFlags::NEW) {
+        if read.is_ok() && !GOT_INT.get() && !Buf::current().b_flags.has(BufFlags::NEW) {
             failed = false;
             if Buf::current_or_none() != Some(newbuf) {
                 // Bloody autocommands changed the buffer! Restore

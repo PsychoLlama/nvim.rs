@@ -54,9 +54,9 @@ pub fn merge_modifiers(key: Key, modifiers: &mut ModMask) -> Key {
 /// [`merge_modifiers`] applied to the global `mod_mask`, which is where the
 /// editor's own key handling keeps the pending modifiers.
 pub(crate) fn merge_mod_mask(c: Key) -> Key {
-    let mut modifiers = mod_mask.get();
+    let mut modifiers = MOD_MASK.get();
     let merged = merge_modifiers(c, &mut modifiers);
-    mod_mask.set(modifiers);
+    MOD_MASK.set(modifiers);
     merged
 }
 
@@ -79,11 +79,11 @@ pub fn vgetc() -> Key {
 
     let mut c;
     if ungot_key_ready()
-        && let Some(key) = ungot.take()
+        && let Some(key) = UNGOT.take()
     {
         // A character `vungetc` put back has already been processed.
         c = key.c;
-        mod_mask.set(key.mod_mask);
+        MOD_MASK.set(key.mod_mask);
         mouse_grid.set(key.mouse_grid);
         mouse_row.set(key.mouse_row);
         mouse_col.set(key.mouse_col);
@@ -99,10 +99,10 @@ pub fn vgetc() -> Key {
     // Hand the key's bytes to the Lua on_key callbacks. The buffer is moved
     // out for the call: a callback can read keys, which append to it, and
     // all of that is cleared below anyway.
-    let mut typed = on_key_buf.take();
+    let mut typed = ON_KEY_BUF.take();
     let discarded = nlua_execute_on_key(c, &mut typed);
     typed.clear();
-    on_key_buf.set(typed);
+    ON_KEY_BUF.set(typed);
     if discarded {
         // Keys following K_COMMAND/K_LUA/K_PASTE_START are not normally
         // seen by vim.on_key() callbacks, so drop them with this one.
@@ -115,7 +115,7 @@ pub fn vgetc() -> Key {
         }
         c = SpecialKey::Ignore.into();
     }
-    on_key_buf.with_mut(Vec::clear);
+    ON_KEY_BUF.with_mut(Vec::clear);
 
     // The character has to be processed before anything else is safe.
     if c != SpecialKey::Ignore {
@@ -136,9 +136,9 @@ fn vgetc_from_typeahead() -> Key {
         vgetorpeek(true)
     }
 
-    mod_mask.set(ModMask::NONE);
-    vgetc_mod_mask.set(ModMask::NONE);
-    vgetc_char.set(Key::NUL);
+    MOD_MASK.set(ModMask::NONE);
+    VGETC_MOD_MASK.set(ModMask::NONE);
+    VGETC_CHAR.set(Key::NUL);
     // `wrapping_sub` and not `-`: upstream's comment says
     // `last_recorded_len` can be *larger* than what the last `vgetc`
     // recorded, but it can also be smaller -- `ungetchars` shrinks it --
@@ -146,15 +146,15 @@ fn vgetc_from_typeahead() -> Key {
     // makes `get_recorded`'s `len >= last_recorded_len` fail, so nothing
     // is trimmed off the recording, which is the upstream behaviour.
     // `test_registers`' Test_recording_with_select_mode reaches it.
-    last_recorded_len.set(
-        last_recorded_len
+    LAST_RECORDED_LEN.set(
+        LAST_RECORDED_LEN
             .get()
-            .wrapping_sub(last_vgetc_recorded_len.get()),
+            .wrapping_sub(LAST_VGETC_RECORDED_LEN.get()),
     );
 
     let c = loop {
         // No mapping once a modifier has been read.
-        let raw_key = (!mod_mask.get().is_empty()).then(Keys::unmapped_with_codes);
+        let raw_key = (!MOD_MASK.get().is_empty()).then(Keys::unmapped_with_codes);
         let lead = next_byte();
         drop(raw_key);
 
@@ -166,7 +166,7 @@ fn vgetc_from_typeahead() -> Key {
             let third = next_byte();
             drop((unmapped, no_codes));
             if second == KS_MODIFIER {
-                mod_mask.set(ModMask::from_byte(third));
+                MOD_MASK.set(ModMask::from_byte(third));
                 continue;
             }
             key_unescape(second, third)
@@ -202,13 +202,13 @@ fn vgetc_from_typeahead() -> Key {
         // Not in Terminal mode (#16202, #16220), and not for mouse keys:
         // terminals encode those as CSI sequences where ModMask::ALT
         // means something even unmapped.
-        if no_mapping.get() == 0
-            && KeyTyped.get()
-            && mod_mask.get() == ModMask::ALT
+        if NO_MAPPING.get() == 0
+            && KEY_TYPED.get()
+            && MOD_MASK.get() == ModMask::ALT
             && State.get() & MODE_TERMINAL == 0
             && !is_mouse_key(c)
         {
-            mod_mask.set(ModMask::NONE);
+            MOD_MASK.set(ModMask::NONE);
             let len = ins_char_typebuf(c, ModMask::NONE, false);
             ins_char_typebuf(Key::ESC, ModMask::NONE, false);
             // K_SPECIAL KS_MODIFIER ModMask::ALT takes three more bytes.
@@ -218,15 +218,15 @@ fn vgetc_from_typeahead() -> Key {
             continue;
         }
 
-        if vgetc_char.get().is_nul() {
-            vgetc_mod_mask.set(mod_mask.get());
-            vgetc_char.set(c);
+        if VGETC_CHAR.get().is_nul() {
+            VGETC_MOD_MASK.set(MOD_MASK.get());
+            VGETC_CHAR.set(c);
         }
 
         break keypad_equivalent(c);
     };
 
-    last_vgetc_recorded_len.set(last_recorded_len.get());
+    LAST_VGETC_RECORDED_LEN.set(LAST_RECORDED_LEN.get());
     c
 }
 
@@ -277,11 +277,11 @@ fn keypad_equivalent(c: Key) -> Key {
 ///
 /// Safe: it only reads and writes the editor's own `mod_mask`.
 fn modified_key(shifted: SpecialKey, control: SpecialKey, plain: SpecialKey) -> SpecialKey {
-    if mod_mask.get() == ModMask::SHIFT {
-        mod_mask.set(ModMask::NONE);
+    if MOD_MASK.get() == ModMask::SHIFT {
+        MOD_MASK.set(ModMask::NONE);
         shifted
-    } else if mod_mask.get() == ModMask::CTRL {
-        mod_mask.set(ModMask::NONE);
+    } else if MOD_MASK.get() == ModMask::CTRL {
+        MOD_MASK.set(ModMask::NONE);
         control
     } else {
         plain
@@ -329,7 +329,7 @@ pub fn plain_vgetc() -> Key {
 ///
 /// Safe: it only looks at the editor's own typeahead, and never blocks.
 pub fn vpeekc() -> Key {
-    match ungot.with(|key| key.as_ref().map(|key| key.c)) {
+    match UNGOT.with(|key| key.as_ref().map(|key| key.c)) {
         Some(c) if ungot_key_ready() => c,
         _ => Key::byte(vgetorpeek(false)),
     }
@@ -370,13 +370,13 @@ pub fn char_avail() -> bool {
 /// A stuffed character comes back immediately; anything else waits until the
 /// stuff buffer is empty.
 pub(crate) fn vungetc(c: Key) {
-    ungot.set(Some(UngotKey {
+    UNGOT.set(Some(UngotKey {
         c,
-        mod_mask: mod_mask.get(),
+        mod_mask: MOD_MASK.get(),
         mouse_grid: mouse_grid.get(),
         mouse_row: mouse_row.get(),
         mouse_col: mouse_col.get(),
-        stuffed: KeyStuffed.get(),
+        stuffed: KEY_STUFFED.get(),
     }));
 }
 
@@ -385,12 +385,12 @@ pub(crate) fn vungetc(c: Key) {
 /// While *peeking* the register is not finished with yet, so the flag is only
 /// noted; the next advancing read acts on it.
 pub fn check_end_reg_executing(advance: bool) {
-    if reg_executing.get() != 0 && (typeahead().maplen() == 0 || pending_end_reg_executing.get()) {
+    if REG_EXECUTING.get() != 0 && (typeahead().maplen() == 0 || PENDING_END_REG_EXECUTING.get()) {
         if advance {
-            reg_executing.set(0);
-            pending_end_reg_executing.set(false);
+            REG_EXECUTING.set(0);
+            PENDING_END_REG_EXECUTING.set(false);
         } else {
-            pending_end_reg_executing.set(true);
+            PENDING_END_REG_EXECUTING.set(true);
         }
     }
 }
@@ -398,7 +398,7 @@ pub fn check_end_reg_executing(advance: bool) {
 /// Take the last `len` bytes back off the `vim.on_key()` buffer, for keys
 /// that were put back into the typeahead rather than acted on.
 fn unsee_keys(len: usize) {
-    on_key_buf.with_mut(|buf| {
+    ON_KEY_BUF.with_mut(|buf| {
         if buf.len() >= len {
             let kept = buf.len() - len;
             buf.truncate(kept);

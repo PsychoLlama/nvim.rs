@@ -119,12 +119,12 @@ fn syntime_report() {
     ));
     msg_str(c"\n");
     for entry in &entries {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         report_row(entry);
     }
-    if !got_int.get() {
+    if !GOT_INT.get() {
         msg_str(c"\n");
         crate::message::msg_bytes(profile_msg_str(total_total).as_bytes(), 0, false);
         msg_advance(13);

@@ -63,7 +63,7 @@ fn mark_stack(stack: &QfStack, copy_id: c_int) -> bool {
             continue;
         }
         for entry in &list.entries {
-            if got_int.get() {
+            if GOT_INT.get() {
                 break;
             }
             // The value is inline in the entry, so it is always there; only

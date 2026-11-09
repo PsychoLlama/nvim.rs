@@ -37,7 +37,7 @@ use crate::cursor::{
 use crate::drawscreen::{UPD_VALID, redraw_curbuf_later};
 use crate::edit::{INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT};
 use crate::edit::{backspace_until_column, get_nolist_virtcol, set_can_cindent, undisplay_dollar};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::indent::{change_indent, get_number_indent, set_indent};
 use crate::mbyte::{utf_allow_break, utf_allow_break_before};
 use crate::r#move::update_topline;
@@ -351,7 +351,7 @@ pub fn internal_format(
     }
 
     // Break lines until the current one is no longer too long.
-    while !got_int.get() {
+    while !GOT_INT.get() {
         let mut orig_col = 0;
         let mut did_do_comment = false;
 

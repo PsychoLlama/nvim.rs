@@ -7,7 +7,6 @@
 
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -30,7 +29,7 @@ use std::io::Write;
 
 /// Streams to read script (`-s` / `:source!`) input from, innermost last;
 /// `curscript` names the innermost open one.
-static scriptin: GlobalCell<[Option<ReadFile>; NSCRIPT as usize]> =
+static SCRIPTIN: GlobalCell<[Option<ReadFile>; NSCRIPT as usize]> =
     GlobalCell::new([const { None }; NSCRIPT as usize]);
 
 /// The stack slot of script `at`, which is in range of the stack.
@@ -41,13 +40,13 @@ fn slot(at: c_int) -> usize {
 /// Read into `buf` from script `at`: what [`ReadFile::read`] answers, or -1
 /// when nothing is open there.
 pub(crate) fn read_script(at: c_int, buf: &mut [u8]) -> ptrdiff_t {
-    scriptin.with_mut(|stack| stack[slot(at)].as_mut().map_or(-1, |file| file.read(buf)))
+    SCRIPTIN.with_mut(|stack| stack[slot(at)].as_mut().map_or(-1, |file| file.read(buf)))
 }
 
 /// Open a script file for `:source!`, and with `directly` run its commands
 /// there and then.
 pub fn openscript(name: &CStr, directly: bool) {
-    if curscript.get() + 1 == NSCRIPT.cast_signed() {
+    if CURSCRIPT.get() + 1 == NSCRIPT.cast_signed() {
         emsg(gettext(E_NESTING));
         return;
     }
@@ -56,22 +55,22 @@ pub fn openscript(name: &CStr, directly: bool) {
     if check_secure() {
         return;
     }
-    if ignore_script.get() {
+    if IGNORE_SCRIPT.get() {
         // Not reading from a script, so don't open one either.
         return;
     }
 
-    curscript.set(curscript.get() + 1);
+    CURSCRIPT.set(CURSCRIPT.get() + 1);
     // The expanded name; upstream expands into `NameBuff`, cut to
     // `MAXPATHL`.
     let expanded = CString::new(expand_env_within(name, MAXPATHL as usize + 1))
         .expect("an expansion up to its NUL");
     match ReadFile::open(&expanded, FILE_READ_ONLY) {
-        Ok(file) => scriptin.with_mut(|stack| stack[slot(curscript.get())] = Some(file)),
+        Ok(file) => SCRIPTIN.with_mut(|stack| stack[slot(CURSCRIPT.get())] = Some(file)),
         Err(error) => {
             let (name, why) = (msg_cstr(name), msg_cstr(os_strerror(error)));
             semsg!("E484: Can't open file {name}: {why}");
-            curscript.set(curscript.get() - 1);
+            CURSCRIPT.set(CURSCRIPT.get() - 1);
             return;
         }
     }
@@ -95,13 +94,13 @@ pub fn openscript(name: &CStr, directly: bool) {
     restart_edit.set(Key::NUL); // don't go to Insert mode
     finish_op.set(false);
 
-    let started_at = curscript.get();
+    let started_at = CURSCRIPT.get();
     crate::normal::with_frame_op(OpArg::default(), |op| {
         while {
             update_topline_cursor(); // cursor position and topline
             normal_cmd(op, false); // one command
             vpeekc(); // check for end of file
-            curscript.get() >= started_at
+            CURSCRIPT.get() >= started_at
         } {}
     });
 
@@ -113,13 +112,13 @@ pub fn openscript(name: &CStr, directly: bool) {
 
 /// Close the innermost script and put back the typeahead it displaced.
 pub(crate) fn closescript() {
-    debug_assert!(curscript.get() >= 0);
-    restore_saved_typebuf(curscript.get());
+    debug_assert!(CURSCRIPT.get() >= 0);
+    restore_saved_typebuf(CURSCRIPT.get());
 
-    if let Some(file) = scriptin.with_mut(|stack| stack[slot(curscript.get())].take()) {
+    if let Some(file) = SCRIPTIN.with_mut(|stack| stack[slot(CURSCRIPT.get())].take()) {
         let _ = file.close();
     }
-    curscript.set(curscript.get() - 1);
+    CURSCRIPT.set(CURSCRIPT.get() - 1);
 }
 
 /// Open the `-s` script, which is always the outermost one.
@@ -127,23 +126,23 @@ pub(crate) fn closescript() {
 /// The name `-` means standard input. Answers false, with a message on
 /// stderr, when the file cannot be read.
 pub fn open_scriptin(scriptin_name: &CStr) -> bool {
-    debug_assert!(curscript.get() == -1);
-    curscript.set(curscript.get() + 1);
+    debug_assert!(CURSCRIPT.get() == -1);
+    CURSCRIPT.set(CURSCRIPT.get() + 1);
 
     let opened = if scriptin_name.to_bytes() == b"-" {
         ReadFile::stdin()
     } else {
-        ReadFile::open(scriptin_name, FILE_READ_ONLY | kFileNonBlocking)
+        ReadFile::open(scriptin_name, FILE_READ_ONLY | FILE_NON_BLOCKING)
     };
     match opened {
-        Ok(file) => scriptin.with_mut(|stack| stack[0] = Some(file)),
+        Ok(file) => SCRIPTIN.with_mut(|stack| stack[0] = Some(file)),
         Err(error) => {
             let message = printf_s(
                 gettext(c"Cannot open for reading: \"%s\": %s\n").to_bytes(),
                 &[scriptin_name.to_bytes(), os_strerror(error).to_bytes()],
             );
             let _ = std::io::stderr().write_all(&message);
-            curscript.set(curscript.get() - 1);
+            CURSCRIPT.set(CURSCRIPT.get() - 1);
             return false;
         }
     }
@@ -168,7 +167,7 @@ fn printf_s(template: &[u8], args: &[&[u8]]) -> Vec<u8> {
 
 /// Whether keys are being read from a script file.
 pub fn using_script() -> c_int {
-    c_int::from(curscript.get() >= 0)
+    c_int::from(CURSCRIPT.get() >= 0)
 }
 
 /// Called just before a blocking wait, so after waiting `'updatetime'` for a
@@ -188,17 +187,17 @@ pub fn before_blocking() {
 /// `'updatecount'` characters have been typed.
 pub(crate) fn updatescript(c: u8) {
     if c != 0 {
-        scriptout.with(|file| file.as_ref().map(|file| file.putc(c)));
+        SCRIPTOUT.with(|file| file.as_ref().map(|file| file.putc(c)));
     }
     let idle = c == 0;
     if idle
         || (p_uc() > 0 && {
-            typed_since_sync.set(typed_since_sync.get() + 1);
-            OptInt::from(typed_since_sync.get()) >= p_uc()
+            TYPED_SINCE_SYNC.set(TYPED_SINCE_SYNC.get() + 1);
+            OptInt::from(TYPED_SINCE_SYNC.get()) >= p_uc()
         })
     {
         // Always fsync at idle (CursorHold).
         ml_sync_all(c_int::from(idle), 1, p_fs() || idle);
-        typed_since_sync.set(0);
+        TYPED_SINCE_SYNC.set(0);
     }
 }

@@ -98,7 +98,7 @@ pub fn screenclear() {
 
     // Sets UPD_NOT_VALID on every window.
     redraw_all_later(UPD_NOT_VALID);
-    cmdline_was_last_drawn.set(false);
+    CMDLINE_WAS_LAST_DRAWN.set(false);
     redraw_cmdline.set(true);
     redraw_tabline.set(true);
     redraw_popupmenu.set(true);

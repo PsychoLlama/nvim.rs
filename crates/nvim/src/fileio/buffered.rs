@@ -27,7 +27,6 @@
     clippy::ptr_as_ptr
 )]
 // The flag names keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::event::uv::{uv_gid_t, uv_uid_t};
 use crate::log::{LOGLVL_ERR, logmsg};
@@ -65,7 +64,7 @@ pub const FILE_NO_SYMLINK: FileOpenFlags = 8;
 pub const FILE_CREATE_ONLY: FileOpenFlags = 16;
 pub const FILE_TRUNCATE: FileOpenFlags = 32;
 pub(crate) const FILE_APPEND: FileOpenFlags = 64;
-pub(crate) const kFileNonBlocking: FileOpenFlags = 128;
+pub(crate) const FILE_NON_BLOCKING: FileOpenFlags = 128;
 pub(crate) const FILE_MK_DIR: FileOpenFlags = 256;
 
 /// Every flag that opens the file for writing.
@@ -226,7 +225,7 @@ impl BufferedFile {
     /// afterwards. `flags` says which side it is.
     pub fn from_file(file: File, flags: FileOpenFlags) -> Self {
         let wr = has(flags, WRITING);
-        let non_blocking = has(flags, kFileNonBlocking);
+        let non_blocking = has(flags, FILE_NON_BLOCKING);
         // Non-blocking writes are not supported.
         debug_assert!(!wr || !non_blocking);
         BufferedFile {
@@ -492,7 +491,7 @@ impl ReadFile {
         };
         Ok(Self(BufferedFile::from_file(
             file,
-            FILE_READ_ONLY | kFileNonBlocking,
+            FILE_READ_ONLY | FILE_NON_BLOCKING,
         )))
     }
 
@@ -581,7 +580,7 @@ mod tests {
             O_CREAT | O_TRUNC | O_WRONLY | O_NOFOLLOW
         );
         // Non-blocking is a property of the buffered file, not an open flag.
-        assert_eq!(open_flags(FILE_READ_ONLY | kFileNonBlocking), O_RDONLY);
+        assert_eq!(open_flags(FILE_READ_ONLY | FILE_NON_BLOCKING), O_RDONLY);
     }
 
     #[test]

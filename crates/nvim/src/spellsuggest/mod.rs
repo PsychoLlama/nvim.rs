@@ -69,7 +69,7 @@ pub(crate) use sps::spell_check_sps;
 use sps::{spell_suggest_expr, spell_suggest_file};
 
 use crate::charset::atoi;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::getchar::vgetc;
 use crate::global_cell::GlobalCell;
 use crate::highlight::Hlf;
@@ -572,9 +572,9 @@ fn spell_suggest_intern(su: &mut SugInfo, interactive: bool) {
     // Interrupted searches still show what they found. `got_int` is
     // only cleared for a command, not for `spellsuggest()`.
     os_breakcheck();
-    if interactive && got_int.get() {
+    if interactive && GOT_INT.get() {
         vgetc().code();
-        got_int.set(false);
+        GOT_INT.set(false);
     }
 
     if sps_flags.get() & SPS_DOUBLE == 0 && !su.su_ga.is_empty() {

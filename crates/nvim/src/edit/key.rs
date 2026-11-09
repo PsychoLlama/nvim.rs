@@ -108,7 +108,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
         }
 
         // CTRL-@ arrives as a CTRL-modified space on some terminals.
-        Err(Key::SPACE) if mod_mask.get() != ModMask::CTRL => Next::Normal,
+        Err(Key::SPACE) if MOD_MASK.get() != ModMask::CTRL => Next::Normal,
         Ok(SpecialKey::Zero) | Err(Key::SPACE | Key::NUL | Key::CTRL_A) => key_stuff_last_insert(s),
 
         Err(Key::CTRL_R) => {
@@ -163,7 +163,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
         Err(Key::CTRL_W) => {
             // In a prompt buffer plain CTRL-W is the window prefix, so
             // Shift-CTRL-W is what deletes a word.
-            if in_prompt_buf() && !mod_mask.get().has(ModMask::SHIFT) {
+            if in_prompt_buf() && !MOD_MASK.get().has(ModMask::SHIFT) {
                 stuff_readbuf_char(Key::ctrl(b'W'));
                 restart_edit.set(Key::ascii(b'A'));
                 s.nomove = true;
@@ -265,7 +265,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             Next::Continue
         }
         Ok(SpecialKey::Left) => {
-            if mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL) {
+            if MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL) {
                 ins_s_left();
             } else {
                 ins_left();
@@ -277,7 +277,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             Next::Continue
         }
         Ok(SpecialKey::Right) => {
-            if mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL) {
+            if MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL) {
                 ins_s_right();
             } else {
                 ins_right();
@@ -293,7 +293,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
         Ok(SpecialKey::Up) => {
             if pum_visible() {
                 insert_do_complete(s);
-            } else if mod_mask.get().has(ModMask::SHIFT) {
+            } else if MOD_MASK.get().has(ModMask::SHIFT) {
                 ins_page(true);
             } else {
                 ins_updown(true, false);
@@ -311,7 +311,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
         Ok(SpecialKey::Down) => {
             if pum_visible() {
                 insert_do_complete(s);
-            } else if mod_mask.get().has(ModMask::SHIFT) {
+            } else if MOD_MASK.get().has(ModMask::SHIFT) {
                 ins_page(false);
             } else {
                 ins_updown(false, false);
@@ -408,7 +408,7 @@ fn key_end_insert(s: &mut InsertState) -> Next {
     if s.c == Key::CTRL_C && cmdwin_type.get() != 0 {
         // Close the command-line window.
         cmdwin_result.set(Key::from(SpecialKey::Ignore));
-        got_int.set(false); // don't stop executing autocommands et al
+        GOT_INT.set(false); // don't stop executing autocommands et al
         s.nomove = true;
         return Next::Leave;
     }
@@ -483,7 +483,7 @@ fn key_eol(s: &mut InsertState) -> Next {
         return Next::Leave;
     }
     // In a prompt buffer it submits, unless Shift is held.
-    if !mod_mask.get().has(ModMask::SHIFT) && in_prompt_buf() {
+    if !MOD_MASK.get().has(ModMask::SHIFT) && in_prompt_buf() {
         prompt_invoke_callback();
         if !in_prompt_buf() {
             // The callback turned this into an ordinary buffer.

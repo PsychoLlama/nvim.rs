@@ -23,7 +23,7 @@ use super::op::BtOp;
 use crate::ascii::NUL;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::mbyte::{mb_tolower, mb_toupper, utf_fold};
 use crate::message::E_RE_CORR;
 use crate::message::iemsg;
@@ -72,7 +72,7 @@ pub(crate) fn regrepeat(rex: Rex, prog: BtProg<'_>, p: usize, maxcount: int64_t)
             return Line::End;
         }
         reg_nextline(rex);
-        if got_int.get() {
+        if GOT_INT.get() {
             Line::Interrupted
         } else {
             Line::Crossed
@@ -263,7 +263,7 @@ pub(crate) fn regrepeat(rex: Rex, prog: BtProg<'_>, p: usize, maxcount: int64_t)
                     reg_nextline(rex);
                 }
                 (line, scan) = (rex.line(), rex.input());
-                if got_int.get() {
+                if GOT_INT.get() {
                     break;
                 }
             }

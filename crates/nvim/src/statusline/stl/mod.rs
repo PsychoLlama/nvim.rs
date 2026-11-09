@@ -67,7 +67,7 @@ use crate::drawscreen::state::{redraw_not_allowed, updating_screen};
 use crate::eval::eval_to_string_safe;
 use crate::eval::vars::{do_unlet, get_vim_var_nr, set_internal_string_var, set_var};
 use crate::fold::FoldInfo;
-use crate::getchar::state::KeyTyped;
+use crate::getchar::state::KEY_TYPED;
 use crate::grid::{SCHAR_BUF_SIZE, SCharBuf, schar_copy, schar_get_adv};
 use crate::highlight_group::{HLF_CLF, HLF_FC, syn_name2id_bytes};
 use crate::mbyte::{c_cluster_len, char_at};
@@ -653,7 +653,7 @@ impl Win {
         let mut out = vec![0u8; room];
         let win = self;
         let save_redraw_not_allowed = redraw_not_allowed.get();
-        let save_key_typed = KeyTyped.get();
+        let save_key_typed = KEY_TYPED.get();
         let did_emsg_before = DID_EMSG.get();
 
         // Inside update_screen() we do not want redrawing a statusline, ruler or
@@ -751,7 +751,7 @@ impl Win {
         }
 
         // A user function may reset KeyTyped; restore it.
-        KeyTyped.set(save_key_typed);
+        KEY_TYPED.set(save_key_typed);
         out.truncate(crate::cstr::until_nul(&out).len());
         StlOutput {
             text: out,

@@ -37,7 +37,7 @@ impl Fixture {
     fn new(cot: c_uint) -> Fixture {
         let held = editor_state_lock();
         reset_breakcheck_count();
-        got_int.set(false);
+        GOT_INT.set(false);
         let saved = COT_FLAGS.replace(cot);
         reset();
         Fixture {
@@ -319,9 +319,9 @@ fn duplicates_are_refused_unless_allowed() {
     );
     assert_eq!(texts(), ["<o>", "apple", "app", "apples", "ap", "apple"]);
     // An interrupt refuses everything.
-    got_int.set(true);
+    GOT_INT.set(true);
     assert_eq!(add("apricot"), Added::Refused);
-    got_int.set(false);
+    GOT_INT.set(false);
     assert_eq!(texts().len(), 6);
 }
 

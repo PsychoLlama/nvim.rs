@@ -89,7 +89,7 @@ mod split;
 mod transpose;
 
 use crate::cstr::until_nul;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::mbyte::head_off;
 use crate::narrow::as_index;
 use crate::os::input::os_breakcheck;
@@ -413,7 +413,7 @@ impl<'a> Walk<'a> {
     /// interrupts.
     #[inline(always)]
     fn run(&mut self) {
-        while !self.finished && !got_int.get() {
+        while !self.finished && !GOT_INT.get() {
             self.step();
         }
     }
@@ -461,7 +461,7 @@ impl<'a> Walk<'a> {
             os_breakcheck();
             self.breakcheckcount = 1000;
             if spell_suggest_timeout.get() > 0 && profile_passed_limit(self.time_limit) {
-                got_int.set(true);
+                GOT_INT.set(true);
             }
         }
     }

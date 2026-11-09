@@ -370,7 +370,7 @@ fn splice(buffer: Buf, at: &Splice) {
 /// `curbuf`, because lines are deleted and autocommands are triggered.
 pub(crate) fn qf_fill_buffer(qfl: Qfl, buffer: Buf, old_last: Option<usize>, qf_winid: c_int) {
     let mut numbuf = NumBuf::new();
-    let old_key_typed = KeyTyped.get();
+    let old_key_typed = KEY_TYPED.get();
     let rewriting = old_last.is_none();
     if rewriting {
         if Buf::current_or_none() != Some(buffer) {
@@ -456,5 +456,5 @@ pub(crate) fn qf_fill_buffer(qfl: Qfl, buffer: Buf, old_last: Option<usize>, qf_
     }
 
     // Restore KeyTyped, setting 'filetype' may reset it.
-    KeyTyped.set(old_key_typed);
+    KEY_TYPED.set(old_key_typed);
 }

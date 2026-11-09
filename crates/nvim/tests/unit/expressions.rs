@@ -13,11 +13,11 @@ use neovim::viml::parser::expressions::{ExprAST, NodeId};
 use neovim::viml::parser::expressions::{NODE_TYPE_NAMES, viml_pexpr_parse};
 use neovim::viml::parser::parser::ParserState;
 
-/// `kExprFlagsMulti`, the flag `nvim_parse_expression` passes when it is
+/// `EXPR_FLAGS_MULTI`, the flag `nvim_parse_expression` passes when it is
 /// allowed to stop at the first thing that cannot continue the expression.
 const MULTI: c_int = 1;
 
-/// `kExprFlagsParseLet`: the token stream is an assignment lvalue, which has
+/// `EXPR_FLAGS_PARSE_LET`: the token stream is an assignment lvalue, which has
 /// its own grammar and its own parse-type stack.
 const PARSE_LET: c_int = 4;
 
@@ -329,7 +329,7 @@ fn errors_carry_the_offending_text() {
     );
 }
 
-/// With `kExprFlagsMulti` the parser stops at the first token that cannot
+/// With `EXPR_FLAGS_MULTI` the parser stops at the first token that cannot
 /// continue the expression rather than reporting an error.
 #[test]
 fn multi_stops_instead_of_failing() {
@@ -702,16 +702,17 @@ mod lexer {
     use std::fmt;
 
     use neovim::viml::parser::expressions::{
-        ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, LexExprToken, LexExprTokenData,
-        LexExprTokenNumberValue, LexExprTokenType, kELFlagAllowFloat, kELFlagForbidEOC,
-        kELFlagForbidScope, kELFlagIsNotCmp, kELFlagPeek, kExprLexAnd, kExprLexArrow,
-        kExprLexAssignment, kExprLexBracket, kExprLexColon, kExprLexComma, kExprLexComparison,
-        kExprLexDot, kExprLexDoubleQuotedString, kExprLexEOC, kExprLexEnv, kExprLexFigureBrace,
-        kExprLexInvalid, kExprLexMinus, kExprLexMissing, kExprLexMulDiv, kExprLexMulMod,
-        kExprLexMulMul, kExprLexMultiplication, kExprLexNot, kExprLexNumber, kExprLexOption,
-        kExprLexOr, kExprLexParenthesis, kExprLexPlainIdentifier, kExprLexPlus, kExprLexQuestion,
-        kExprLexRegister, kExprLexSingleQuotedString, kExprLexSpacing, kExprOptScopeGlobal,
-        kExprOptScopeLocal, kExprOptScopeUnspecified, viml_pexpr_next_token,
+        ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, EL_FLAG_ALLOW_FLOAT,
+        EL_FLAG_FORBID_EOC, EL_FLAG_FORBID_SCOPE, EL_FLAG_IS_NOT_CMP, EL_FLAG_PEEK, EXPR_LEX_AND,
+        EXPR_LEX_ARROW, EXPR_LEX_ASSIGNMENT, EXPR_LEX_BRACKET, EXPR_LEX_COLON, EXPR_LEX_COMMA,
+        EXPR_LEX_COMPARISON, EXPR_LEX_DOT, EXPR_LEX_DOUBLE_QUOTED_STRING, EXPR_LEX_ENV,
+        EXPR_LEX_EOC, EXPR_LEX_FIGURE_BRACE, EXPR_LEX_INVALID, EXPR_LEX_MINUS, EXPR_LEX_MISSING,
+        EXPR_LEX_MUL_DIV, EXPR_LEX_MUL_MOD, EXPR_LEX_MUL_MUL, EXPR_LEX_MULTIPLICATION,
+        EXPR_LEX_NOT, EXPR_LEX_NUMBER, EXPR_LEX_OPTION, EXPR_LEX_OR, EXPR_LEX_PARENTHESIS,
+        EXPR_LEX_PLAIN_IDENTIFIER, EXPR_LEX_PLUS, EXPR_LEX_QUESTION, EXPR_LEX_REGISTER,
+        EXPR_LEX_SINGLE_QUOTED_STRING, EXPR_LEX_SPACING, EXPR_OPT_SCOPE_GLOBAL,
+        EXPR_OPT_SCOPE_LOCAL, EXPR_OPT_SCOPE_UNSPECIFIED, LexExprToken, LexExprTokenData,
+        LexExprTokenNumberValue, LexExprTokenType, viml_pexpr_next_token,
     };
     use neovim::viml::parser::expressions::{
         ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType,
@@ -925,33 +926,33 @@ mod lexer {
 
     fn kind_name(kind: LexExprTokenType) -> &'static str {
         match kind {
-            kExprLexInvalid => "Invalid",
-            kExprLexMissing => "Missing",
-            kExprLexSpacing => "Spacing",
-            kExprLexEOC => "EOC",
-            kExprLexQuestion => "Question",
-            kExprLexColon => "Colon",
-            kExprLexOr => "Or",
-            kExprLexAnd => "And",
-            kExprLexComparison => "Comparison",
-            kExprLexPlus => "Plus",
-            kExprLexMinus => "Minus",
-            kExprLexDot => "Dot",
-            kExprLexMultiplication => "Multiplication",
-            kExprLexNot => "Not",
-            kExprLexNumber => "Number",
-            kExprLexSingleQuotedString => "SingleQuotedString",
-            kExprLexDoubleQuotedString => "DoubleQuotedString",
-            kExprLexOption => "Option",
-            kExprLexRegister => "Register",
-            kExprLexEnv => "Env",
-            kExprLexPlainIdentifier => "PlainIdentifier",
-            kExprLexBracket => "Bracket",
-            kExprLexFigureBrace => "FigureBrace",
-            kExprLexParenthesis => "Parenthesis",
-            kExprLexComma => "Comma",
-            kExprLexArrow => "Arrow",
-            kExprLexAssignment => "Assignment",
+            EXPR_LEX_INVALID => "Invalid",
+            EXPR_LEX_MISSING => "Missing",
+            EXPR_LEX_SPACING => "Spacing",
+            EXPR_LEX_EOC => "EOC",
+            EXPR_LEX_QUESTION => "Question",
+            EXPR_LEX_COLON => "Colon",
+            EXPR_LEX_OR => "Or",
+            EXPR_LEX_AND => "And",
+            EXPR_LEX_COMPARISON => "Comparison",
+            EXPR_LEX_PLUS => "Plus",
+            EXPR_LEX_MINUS => "Minus",
+            EXPR_LEX_DOT => "Dot",
+            EXPR_LEX_MULTIPLICATION => "Multiplication",
+            EXPR_LEX_NOT => "Not",
+            EXPR_LEX_NUMBER => "Number",
+            EXPR_LEX_SINGLE_QUOTED_STRING => "SingleQuotedString",
+            EXPR_LEX_DOUBLE_QUOTED_STRING => "DoubleQuotedString",
+            EXPR_LEX_OPTION => "Option",
+            EXPR_LEX_REGISTER => "Register",
+            EXPR_LEX_ENV => "Env",
+            EXPR_LEX_PLAIN_IDENTIFIER => "PlainIdentifier",
+            EXPR_LEX_BRACKET => "Bracket",
+            EXPR_LEX_FIGURE_BRACE => "FigureBrace",
+            EXPR_LEX_PARENTHESIS => "Parenthesis",
+            EXPR_LEX_COMMA => "Comma",
+            EXPR_LEX_ARROW => "Arrow",
+            EXPR_LEX_ASSIGNMENT => "Assignment",
             other => panic!("unknown token type {other}"),
         }
     }
@@ -994,9 +995,9 @@ mod lexer {
             },
             ("Multiplication", LexExprTokenData::Multiplication(mul)) => {
                 Tkd::Mul(match mul.type_0 {
-                    kExprLexMulMul => "Mul",
-                    kExprLexMulDiv => "Div",
-                    kExprLexMulMod => "Mod",
+                    EXPR_LEX_MUL_MUL => "Mul",
+                    EXPR_LEX_MUL_DIV => "Div",
+                    EXPR_LEX_MUL_MOD => "Mod",
                     other => panic!("unknown multiplication type {other}"),
                 })
             }
@@ -1011,9 +1012,9 @@ mod lexer {
             }
             ("Option", LexExprTokenData::Option(opt)) => Tkd::Opt {
                 scope: match opt.scope {
-                    kExprOptScopeUnspecified => "Unspecified",
-                    kExprOptScopeGlobal => "Global",
-                    kExprOptScopeLocal => "Local",
+                    EXPR_OPT_SCOPE_UNSPECIFIED => "Unspecified",
+                    EXPR_OPT_SCOPE_GLOBAL => "Global",
+                    EXPR_OPT_SCOPE_LOCAL => "Local",
                     other => panic!("unknown option scope {other}"),
                 },
                 name: Bytes({
@@ -1294,7 +1295,7 @@ mod lexer {
         empty_is_eoc(flags, &[absent()]);
         empty_is_eoc(flags, &[src(b"")]);
 
-        // A float needs `kELFlagAllowFloat`; without it the scan stops at the
+        // A float needs `EL_FLAG_ALLOW_FLOAT`; without it the scan stops at the
         // dot, whatever follows it.
         for text in [
             "2.", "2e5", "2.x", "2.2.", "2.0x", "2.0e", "2.0e+", "2.0e-", "2.0e+x", "2.0e-x",
@@ -1389,7 +1390,7 @@ mod lexer {
         }
     }
 
-    /// Without `kELFlagAllowFloat` a fractional part is not part of the
+    /// Without `EL_FLAG_ALLOW_FLOAT` a fractional part is not part of the
     /// number at all.
     fn numbers(flags: c_int) {
         for text in ["2.0", "2.0e5", "2.0e+5", "2.0e-5"] {
@@ -1418,7 +1419,7 @@ mod lexer {
 
     #[test]
     fn peeking_reads_the_same_token_without_moving_the_cursor() {
-        let flags = kELFlagPeek as c_int;
+        let flags = EL_FLAG_PEEK as c_int;
         stable(flags, false);
         eoc(flags, false);
         scopes(flags, false);
@@ -1428,7 +1429,7 @@ mod lexer {
 
     #[test]
     fn forbidding_scope_stops_the_name_before_the_colon() {
-        let flags = kELFlagForbidScope as c_int;
+        let flags = EL_FLAG_FORBID_SCOPE as c_int;
         stable(flags, true);
         eoc(flags, true);
         is_comparison(flags, true);
@@ -1446,7 +1447,7 @@ mod lexer {
 
     #[test]
     fn allowing_floats_takes_the_fractional_part() {
-        let flags = kELFlagAllowFloat as c_int;
+        let flags = EL_FLAG_ALLOW_FLOAT as c_int;
         stable(flags, true);
         eoc(flags, true);
         scopes(flags, true);
@@ -1495,7 +1496,7 @@ mod lexer {
 
     #[test]
     fn is_can_be_read_as_an_identifier_instead() {
-        let flags = kELFlagIsNotCmp as c_int;
+        let flags = EL_FLAG_IS_NOT_CMP as c_int;
         stable(flags, true);
         eoc(flags, true);
         scopes(flags, true);
@@ -1524,7 +1525,7 @@ mod lexer {
 
     #[test]
     fn forbidding_eoc_makes_the_three_end_characters_invalid() {
-        let flags = kELFlagForbidEOC as c_int;
+        let flags = EL_FLAG_FORBID_EOC as c_int;
         stable(flags, true);
         scopes(flags, true);
         is_comparison(flags, true);

@@ -22,7 +22,7 @@
 
 use crate::cstr;
 use crate::event::libuv_proc::{ChildRun, OutputSink, run_to_exit};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::guard::Suppress;
 use crate::message::msg_str;
 use crate::message::state::{LINES_LEFT, MSG_NO_MORE};
@@ -111,7 +111,7 @@ pub(crate) fn do_os_system(
         ChildRun::InputRefused => return (-1, None),
         ChildRun::Exited(code) => code,
     };
-    if !got_int.get() && out_data_decide_throttle(0) {
+    if !GOT_INT.get() && out_data_decide_throttle(0) {
         // The last chunk of output was skipped; show it now.
         out_data_ring(Ring::Print);
     }

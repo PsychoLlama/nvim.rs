@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub mod state;
 use crate::api::vim::nvim_paste;
@@ -26,19 +25,19 @@ use crate::eval::vars::set_vim_var_nr;
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::update_topline_cursor;
-use crate::ex_getln::state::cmdline_star;
+use crate::ex_getln::state::CMDLINE_STAR;
 use crate::ex_getln::{cmdline_in_use, putcmdline, redrawcmd, redrawcmdline, unputcmdline};
 use crate::fileio::buffered::FileOpenFlags;
-use crate::getchar::state::{FlushBuffers, SaveRedo, TypeaheadSave};
 use crate::getchar::state::{
-    KeyNoremap, KeyStuffed, KeyTyped, UngotKey, allow_keys, block_redo, ctrl_c_interrupts,
-    curscript, got_int, gotchars_pending, ignore_script, langmap_mapchar, last_recorded_len,
-    last_vgetc_recorded_len, mapped_ctrl_c, maptick, mod_mask, no_mapping, no_reduce_keys,
-    no_zero_mapping, normal_busy_last_key, on_key_ignore_len, pending_end_reg_executing,
-    reg_executing, reg_recording, repeat_luaref, scriptout, showcmd_pending,
-    test_disable_char_avail, typeahead_char, typebuf_was_empty, typebuf_was_filled,
-    typed_since_sync, ungot, vgetc_busy, vgetc_char, vgetc_mod_mask,
+    ALLOW_KEYS, BLOCK_REDO, CTRL_C_INTERRUPTS, CURSCRIPT, GOT_INT, GOTCHARS_PENDING, IGNORE_SCRIPT,
+    KEY_NOREMAP, KEY_STUFFED, KEY_TYPED, LANGMAP_MAPCHAR, LAST_RECORDED_LEN,
+    LAST_VGETC_RECORDED_LEN, MAPPED_CTRL_C, MAPTICK, MOD_MASK, NO_MAPPING, NO_REDUCE_KEYS,
+    NO_ZERO_MAPPING, NORMAL_BUSY_LAST_KEY, ON_KEY_IGNORE_LEN, PENDING_END_REG_EXECUTING,
+    REG_EXECUTING, REG_RECORDING, REPEAT_LUAREF, SCRIPTOUT, SHOWCMD_PENDING, TYPEAHEAD_CHAR,
+    TYPEBUF_WAS_EMPTY, TYPEBUF_WAS_FILLED, TYPED_SINCE_SYNC, UNGOT, UngotKey, VGETC_BUSY,
+    VGETC_CHAR, VGETC_MOD_MASK, test_disable_char_avail,
 };
+use crate::getchar::state::{FlushBuffers, SaveRedo, TypeaheadSave};
 use crate::global_cell::GlobalCell;
 use crate::input::get_keystroke;
 use crate::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
@@ -173,7 +172,7 @@ pub(crate) enum MapResult {
 pub const KEYLEN_PART_MAP: ::core::ffi::c_int = -2;
 pub const MT_CHAR_WISE: MotionType = 0;
 pub const FILE_READ_ONLY: FileOpenFlags = 1;
-pub const kFileNonBlocking: FileOpenFlags = 128;
+pub const FILE_NON_BLOCKING: FileOpenFlags = 128;
 pub const RET_NIL_BOOL: LuaRetMode = 1;
 pub const FILE_TRUNCATE: FileOpenFlags = 32;
 pub const FILE_CREATE_ONLY: FileOpenFlags = 16;
@@ -202,10 +201,10 @@ static READBUF2: GlobalCell<KeyBuffer> = GlobalCell::new(KeyBuffer::EMPTY);
 /// The bytes of the key `vgetc` is assembling, for the `vim.on_key()`
 /// callbacks. Upstream is a `kvec_withinit_t(char, MAXMAPLEN + 1)`; nothing
 /// outside this module touches it, so it is an owned `Vec` here.
-static on_key_buf: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
-static e_recursive_mapping: &::core::ffi::CStr = c"E223: Recursive mapping";
-static e_cmd_mapping_must_end_with_cr: &::core::ffi::CStr =
+static ON_KEY_BUF: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
+static E_RECURSIVE_MAPPING: &::core::ffi::CStr = c"E223: Recursive mapping";
+static E_CMD_MAPPING_MUST_END_WITH_CR: &::core::ffi::CStr =
     c"E1255: <Cmd> mapping must end with <CR>";
-static e_cmd_mapping_must_end_with_cr_before_second_cmd: &::core::ffi::CStr =
+static E_CMD_MAPPING_MUST_END_WITH_CR_BEFORE_SECOND_CMD: &::core::ffi::CStr =
     c"E1136: <Cmd> mapping must end with <CR> before second <Cmd>";
 pub const K_SELECT_STRING: &::core::ffi::CStr = c"\x80\xF5X";

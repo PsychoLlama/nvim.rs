@@ -53,7 +53,7 @@ use std::borrow::Cow;
 use crate::change::inserted_bytes;
 use crate::ex_cmds::do_sub_msg;
 use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::memline::ml_replace_owned;
 use crate::message::emsg;
@@ -419,7 +419,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
     SUB_NSUBS.set(0);
     SUB_NLINES.set(0);
     Win::current().w_cursor.lnum = LineNr::ZERO;
-    while !got_int.get() {
+    while !GOT_INT.get() {
         let slash = c_int::from(b'/');
         let found = do_search(None, slash, slash, &frompat, 1, SEARCH_KEEP, None);
         if found.is_none() || u_save_cursor().is_err() {

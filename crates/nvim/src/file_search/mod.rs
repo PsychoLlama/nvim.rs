@@ -28,7 +28,7 @@ use crate::charset::vim_isfilec;
 use crate::cstr;
 use crate::eval::vars::set_vim_var_string;
 use crate::eval::{eval_to_string_safe, get_v_event, restore_v_event};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::mb_tolower;
 use crate::memory::XString;
@@ -573,7 +573,7 @@ impl FindContext {
         loop {
             // Check if the user wants to stop the search.
             os_breakcheck();
-            if got_int.get() {
+            if GOT_INT.get() {
                 return Down::Exhausted;
             }
             let Some(mut frame) = self.stack.pop() else {
@@ -739,7 +739,7 @@ impl FindContext {
             }
 
             // We didn't find anything downwards. Should we search upwards?
-            if self.start_dir.is_none() || self.stopdirs.is_none() || got_int.get() {
+            if self.start_dir.is_none() || self.stopdirs.is_none() || GOT_INT.get() {
                 return None;
             }
             match self.step_up(&mut path_end, &mut file_path) {

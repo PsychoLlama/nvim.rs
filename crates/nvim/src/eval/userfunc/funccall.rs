@@ -738,7 +738,7 @@ pub fn set_ref_in_call_stack(copy_id: c_int) -> bool {
 /// Mark everything reachable from a function that is still available by name.
 pub fn set_ref_in_functions(copy_id: c_int) -> bool {
     for func in all_funcs() {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         if !func_name_refcount(func.name().as_bytes())

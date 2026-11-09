@@ -393,7 +393,7 @@ pub(crate) fn qf_jump_newwin(qi: Qi, dir: c_int, errornr: c_int, forceit: bool, 
     let old_swb = (!P_SWB.is_unset()).then(|| P_SWB.get());
     let old_swb_flags = SWB_FLAGS.get();
     // Getting the file may reset it.
-    let old_key_typed = KeyTyped.get();
+    let old_key_typed = KEY_TYPED.get();
 
     let busy = QuickfixBusy::hold();
     let mut qfl = qi.current_slot();

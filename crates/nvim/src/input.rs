@@ -19,7 +19,7 @@ use crate::cmdexpand::defs::ExpandContext;
 use crate::drawscreen::state::cmdline_row;
 use crate::event_queue::ChildQueue;
 use crate::ex_getln::getcmdline_prompt;
-use crate::getchar::state::{mapped_ctrl_c, mod_mask};
+use crate::getchar::state::{MAPPED_CTRL_C, MOD_MASK};
 use crate::getchar::{fix_input_buffer, merge_modifiers};
 use crate::global_cell::GlobalCell;
 use crate::guard::{Keys, Suppress};
@@ -96,9 +96,9 @@ fn is_swallowed_key(first: u8, key: c_int) -> bool {
 /// `events` names the queue to drain while waiting, if any.
 pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue>>>) -> c_int {
     let events = events.map_or(InputEvents::None, InputEvents::Queue);
-    let save_mapped_ctrl_c = mapped_ctrl_c.get();
-    mod_mask.set(ModMask::NONE);
-    mapped_ctrl_c.set(0); // Mappings are not used here.
+    let save_mapped_ctrl_c = MAPPED_CTRL_C.get();
+    MOD_MASK.set(ModMask::NONE);
+    MAPPED_CTRL_C.set(0); // Mappings are not used here.
 
     let mut buf: Vec<u8> = Vec::new();
     let mut buflen: c_int = 150;
@@ -160,7 +160,7 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
             break key;
         }
         if buf[1] == KS_MODIFIER {
-            mod_mask.set(ModMask::from_byte(buf[2]));
+            MOD_MASK.set(ModMask::from_byte(buf[2]));
         }
         len -= 3;
         if len > 0 {
@@ -168,13 +168,13 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
         }
     };
 
-    mapped_ctrl_c.set(save_mapped_ctrl_c);
+    MAPPED_CTRL_C.set(save_mapped_ctrl_c);
     // `merge_modifiers` consumes the modifier it folds in, so the global has
     // to be written back.
-    let mut modifiers = mod_mask.get();
+    let mut modifiers = MOD_MASK.get();
     // SAFETY: `modifiers` is a live local the callee reads and writes.
     let key = merge_modifiers(Key::from_code(key), &mut modifiers);
-    mod_mask.set(modifiers);
+    MOD_MASK.set(modifiers);
     key.code()
 }
 

@@ -276,7 +276,7 @@ pub(crate) fn jumpto_tag(
                 saved_win: None,
                 reused_window: false,
                 // Opening the file may reset it.
-                key_typed: KeyTyped.get(),
+                key_typed: KEY_TYPED.get(),
             }
             .run(line, &tagp, forceit, keep_help)
         }

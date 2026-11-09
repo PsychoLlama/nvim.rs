@@ -357,7 +357,7 @@ pub(crate) fn map_add(
     if keys.first().copied().map(c_int::from) == Some(Ctrl_C) {
         match table {
             MapTable::Buffer(mut buf) => buf.b_mapped_ctrl_c |= mode,
-            MapTable::Global => mapped_ctrl_c.set(mapped_ctrl_c.get() | mode),
+            MapTable::Global => MAPPED_CTRL_C.set(MAPPED_CTRL_C.get() | mode),
         }
     }
 

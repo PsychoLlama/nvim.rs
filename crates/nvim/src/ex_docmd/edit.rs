@@ -42,7 +42,7 @@ use crate::fold::{fold_create, fold_manual_allowed, op_fold_range};
 use crate::getchar::{beep_flush, stuff_empty, typeahead, vpeekc};
 
 use crate::ex_docmd::state::{ex_no_reprint, exec_from_reg};
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::lua::executor::ex_lua;
 use crate::mark::{checkpcmark, setmark, setpcmark};
 use crate::message::{E_ARGREQ, E_EMPTY_BUFFER, E_INVRANGE, E_UNDOBANG_CANNOT_REDO_OR_MOVE_BRANCH};
@@ -88,7 +88,7 @@ pub(crate) fn ex_print(excmd: &mut ExArg) {
             idx == CmdIdx::number || idx == CmdIdx::pound || excmd.flags & EXFLAG_NR != 0;
         let listed = idx == CmdIdx::list || excmd.flags & EXFLAG_LIST != 0;
         let mut line = excmd.line1;
-        while line <= excmd.line2 && !got_int.get() {
+        while line <= excmd.line2 && !GOT_INT.get() {
             print_line(line, numbered, listed, line == excmd.line1);
             line += 1;
             os_breakcheck();
@@ -194,7 +194,7 @@ pub fn do_sleep(msec: int64_t, hide_cursor: bool) {
     }
     ui_flush();
     sleep_serving_events(msec);
-    if got_int.get() {
+    if GOT_INT.get() {
         // Take the interrupt out of the typeahead.
         vpeekc().code();
     }

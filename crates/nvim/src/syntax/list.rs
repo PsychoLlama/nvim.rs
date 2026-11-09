@@ -51,18 +51,18 @@ pub(crate) fn syn_cmd_list(args: &mut ExArg, syncing: c_int) {
     if ends_excmd(c_int::from(args.line.byte_at(at))) != 0 {
         // No argument: list every group id, then every cluster.
         let mut id = 1;
-        while id <= highlight_num_groups() && !got_int.get() {
+        while id <= highlight_num_groups() && !GOT_INT.get() {
             syn_list_one(id, false, false);
             id += 1;
         }
         let mut id = 0;
-        while id < cur_cluster_count() && !got_int.get() {
+        while id < cur_cluster_count() && !GOT_INT.get() {
             syn_list_cluster(id);
             id += 1;
         }
     } else {
         // List the groups and clusters the argument names.
-        while ends_excmd(c_int::from(args.line.byte_at(at))) == 0 && !got_int.get() {
+        while ends_excmd(c_int::from(args.line.byte_at(at))) == 0 && !GOT_INT.get() {
             let (word, word_len) = word_at(args.line.tail(at));
             if word.first() == Some(&b'@') {
                 let id = syn_scl_namen2id(&word[1..]);
@@ -105,7 +105,7 @@ fn list_sync_items() {
             syn_match_msg();
         }
         let mut id = 1;
-        while id <= highlight_num_groups() && !got_int.get() {
+        while id <= highlight_num_groups() && !GOT_INT.get() {
             syn_list_one(id, true, false);
             id += 1;
         }
@@ -208,7 +208,7 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
     // lists; `put_item_patterns` leaves `idx` on its last.
     let block = cur_syn_block();
     let mut idx = 0;
-    while idx < block.patterns().len() && !got_int.get() {
+    while idx < block.patterns().len() && !GOT_INT.get() {
         let first = idx;
         let spp = &block.patterns()[first];
         if c_int::from(spp.sp_syn.id) != id || spp.sp_syncing != syncing {
@@ -239,7 +239,7 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
 
     // The link, if there is one.
     let link = highlight_link_id(id - 1);
-    if link != 0 && (did_header || link_only) && !got_int.get() {
+    if link != 0 && (did_header || link_only) && !GOT_INT.get() {
         syn_list_header(did_header, 0, id, true);
         msg_str_hl(c"links to", LIST_HL, false);
         msg_putchar(c_int::from(b' '));
@@ -506,7 +506,7 @@ impl KeywordOpts {
 fn syn_list_keywords(id: c_int, table: &KeywordTable, mut did_header: bool) -> bool {
     let mut prev = KeywordOpts::none();
     for (keyword, entry) in table.entries() {
-        if got_int.get() {
+        if GOT_INT.get() {
             break;
         }
         if c_int::from(entry.syn.id) == id {

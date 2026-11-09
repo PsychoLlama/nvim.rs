@@ -38,7 +38,7 @@ use crate::eval::userfunc::{CallStackAside, CallWith, call_func_with, current_fc
 use crate::eval::vars::eval_variable;
 use crate::eval::vars::{clear_local, emsg_static};
 use crate::ex_cmds::check_secure;
-use crate::getchar::state::got_int;
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::nlua_is_deferred_safe;
 use crate::memline::{Lines, ml_append_bytes};
@@ -358,7 +358,7 @@ pub fn invoke_prompt_interrupt() -> bool {
     let mut rettv = UNSET_TV;
     // The interrupt is consumed here; the callback decides what to do
     // about it.
-    got_int.set(false);
+    GOT_INT.set(false);
     // A copy: the callback may replace itself, or wipe the buffer.
     let callback = Buf::current().b_prompt_interrupt.duplicate();
     let called = callback_call(&callback, &[], &mut rettv) == Ok(true);

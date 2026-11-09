@@ -113,12 +113,12 @@ pub(crate) fn gotchars_add_byte(state: &mut GotcharsState, byte: u8) -> bool {
 /// the swap files between bytes.
 pub(crate) fn gotchars(chars: &[u8]) {
     for &byte in chars {
-        if !gotchars_pending.with_mut(|st| gotchars_add_byte(st, byte)) {
+        if !GOTCHARS_PENDING.with_mut(|st| gotchars_add_byte(st, byte)) {
             continue;
         }
         // A copy of the finished key, so that nothing below holds the
         // state across `updatescript` or the callbacks.
-        let key = gotchars_pending.get();
+        let key = GOTCHARS_PENDING.get();
         let buflen = key.buflen;
 
         // One byte at a time; no translation to be done.
@@ -128,22 +128,22 @@ pub(crate) fn gotchars(chars: &[u8]) {
 
         // `ins_char_typebuf` can ask for the bytes it puts back to be
         // hidden from vim.on_key(); that is what the ignore count is.
-        if buflen > on_key_ignore_len.get() {
-            let from = on_key_ignore_len.get();
-            on_key_buf.with_mut(|buf| buf.extend_from_slice(&key.buf[from..buflen]));
-            on_key_ignore_len.set(0);
+        if buflen > ON_KEY_IGNORE_LEN.get() {
+            let from = ON_KEY_IGNORE_LEN.get();
+            ON_KEY_BUF.with_mut(|buf| buf.extend_from_slice(&key.buf[from..buflen]));
+            ON_KEY_IGNORE_LEN.set(0);
         } else {
-            on_key_ignore_len.set(on_key_ignore_len.get() - buflen);
+            ON_KEY_IGNORE_LEN.set(ON_KEY_IGNORE_LEN.get() - buflen);
         }
 
-        if reg_recording.get() != 0 {
+        if REG_RECORDING.get() != 0 {
             recordbuff().add_bytes(&key.buf[..buflen]);
             // Remember how many characters were recorded last, so that
             // `get_recorded` can drop the keys that stopped the recording.
-            last_recorded_len.set(last_recorded_len.get().wrapping_add(buflen));
+            LAST_RECORDED_LEN.set(LAST_RECORDED_LEN.get().wrapping_add(buflen));
         }
 
-        gotchars_pending.with_mut(|st| st.buflen = 0);
+        GOTCHARS_PENDING.with_mut(|st| st.buflen = 0);
     }
 
     may_sync_undo();
@@ -153,7 +153,7 @@ pub(crate) fn gotchars(chars: &[u8]) {
 
     // Characters have been typed, so whatever follows counts as another
     // mapping. A search string is kept in the history.
-    maptick.set(maptick.get() + 1);
+    MAPTICK.set(MAPTICK.get() + 1);
 }
 
 /// Record an `<Ignore>` key, which nothing acts on.
@@ -162,7 +162,7 @@ pub(crate) fn gotchars(chars: &[u8]) {
 /// whatever is typed next into a key code.
 pub fn gotchars_ignore() {
     let nop = [K_SPECIAL, KS_EXTRA, KE_IGNORE];
-    on_key_ignore_len.set(on_key_ignore_len.get() + 3);
+    ON_KEY_IGNORE_LEN.set(ON_KEY_IGNORE_LEN.get() + 3);
     gotchars(&nop);
 }
 
@@ -172,14 +172,14 @@ pub(crate) fn add_byte_to_showcmd(byte: u8) {
     if !p_sc() || MSG_SILENT.get() != 0 {
         return;
     }
-    if !showcmd_pending.with_mut(|st| gotchars_add_byte(st, byte)) {
+    if !SHOWCMD_PENDING.with_mut(|st| gotchars_add_byte(st, byte)) {
         return;
     }
     // A copy of the finished key: `add_to_showcmd` below can reach the
     // screen.
-    let pending = showcmd_pending.get();
+    let pending = SHOWCMD_PENDING.get();
     let buflen = pending.buflen;
-    showcmd_pending.with_mut(|st| st.buflen = 0);
+    SHOWCMD_PENDING.with_mut(|st| st.buflen = 0);
 
     // Split the key into its modifier prefix and the key itself. The key
     // is read up to its first NUL, as upstream's string is.
