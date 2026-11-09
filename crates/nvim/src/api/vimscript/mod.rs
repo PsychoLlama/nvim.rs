@@ -37,5 +37,3 @@ pub use self::eval::*;
 pub use self::exec::*;
 pub use self::expression::*;
 pub const MAX_FUNC_ARGS: ::core::ffi::c_uint = 20;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

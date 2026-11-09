@@ -50,7 +50,5 @@ pub use self::query::*;
 pub const AUGROUP_DEFAULT: ::core::ffi::c_int = -1;
 pub const AUGROUP_ERROR: ::core::ffi::c_int = -2;
 pub const AUGROUP_ALL: ::core::ffi::c_int = -3;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 static NEXT_AUTOCMD_ID: GlobalCell<int64_t> = GlobalCell::new(1 as int64_t);

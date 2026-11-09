@@ -96,7 +96,6 @@ pub const SIGN_SHOW_MAX: ::core::ffi::c_int = 9;
 pub type NumberBase = ::core::ffi::c_uint;
 pub const NUM_BASE_HEXADECIMAL: NumberBase = 16;
 pub const NUM_BASE_DECIMAL: NumberBase = 10;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const SID_ERROR: ::core::ffi::c_int = -5 as ::core::ffi::c_int;

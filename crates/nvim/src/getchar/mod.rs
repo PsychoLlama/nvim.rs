@@ -179,7 +179,6 @@ pub const FILE_CREATE_ONLY: FileOpenFlags = 16;
 pub const FILE_NO_SYMLINK: FileOpenFlags = 8;
 pub const FILE_WRITE_ONLY: FileOpenFlags = 4;
 pub const FILE_CREATE: FileOpenFlags = 2;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 /// The top bit of a channel id, which no real channel has: a call that
 /// carries it came from inside nvim rather than over a channel.
 pub const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);

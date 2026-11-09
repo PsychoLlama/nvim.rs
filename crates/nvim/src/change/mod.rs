@@ -136,7 +136,6 @@ pub const KEY_OPEN_FORW: ::core::ffi::c_int = 257;
 
 /// `ml_delete_flags()`: report "N fewer lines".
 pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const COM_NEST: u8 = b'n';
 pub const COM_BLANK: u8 = b'b';
 pub const COM_START: u8 = b's';

@@ -158,7 +158,6 @@ pub const UPD_VALID: RedrawType = 10;
 pub const SHOWCMD_COLS: ::core::ffi::c_int = 10;
 /// The narrowest screen the editor will lay windows out on.
 pub const MIN_COLUMNS: ::core::ffi::c_int = 12;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 static REDRAW_POPUPMENU: GlobalCell<bool> = GlobalCell::new(false);
 static MSG_GRID_INVALID: GlobalCell<bool> = GlobalCell::new(false);
 static RESIZING_AUTOCMD: GlobalCell<bool> = GlobalCell::new(false);

@@ -84,7 +84,6 @@ pub const FILE_CREATE_ONLY: FileOpenFlags = 16;
 pub const FILE_NO_SYMLINK: FileOpenFlags = 8;
 pub const FILE_WRITE_ONLY: FileOpenFlags = 4;
 pub const FILE_READ_ONLY: FileOpenFlags = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 

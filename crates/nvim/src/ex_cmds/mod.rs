@@ -224,8 +224,6 @@ pub struct LineData {
 pub const VGR_FUZZY: ::core::ffi::c_int = 4;
 pub const VGR_NOJUMP: ::core::ffi::c_int = 2;
 pub const VGR_GLOBAL: ::core::ffi::c_int = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NODE_OTHER: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const EXFLAG_LIST: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;

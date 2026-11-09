@@ -11,7 +11,7 @@
 use crate::option::defs::OPT_VAL_TYPE_BOOLEAN;
 use crate::option::defs::OPT_VAL_TYPE_NUMBER;
 use crate::option::defs::OPT_VAL_TYPE_STRING;
-use core::ffi::{CStr, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint};
 use core::mem::ManuallyDrop;
 
 use crate::eval::gc::{RootId, unroot_dict};
@@ -130,7 +130,6 @@ pub const GLV_QUIET: c_int = 2;
 
 pub const G_REG_EXPR_SRC: GRegFlags = 2;
 
-pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const INT64_MIN: ::core::ffi::c_long = -9223372036854775807 - 1;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615;

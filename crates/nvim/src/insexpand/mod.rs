@@ -329,7 +329,6 @@ pub(crate) const SAVE_V_EVENT_INIT: SaveVEvent = SaveVEvent {
     sve_did_save: false,
     sve_hashtab: HashTab::new(),
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const CTRL_X_WANT_IDENT: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 /// Message for CTRL-X mode, indexed by `CTRL_X_MODE` with `CTRL_X_WANT_IDENT`
 /// masked off (C's `CTRL_X_MSG(i)` macro; see `ctrl_x_msg`). `None` is

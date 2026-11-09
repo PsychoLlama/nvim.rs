@@ -124,7 +124,6 @@ pub const INT64_MIN: ::core::ffi::c_long =
     -9223372036854775807 as ::core::ffi::c_long - 1 as ::core::ffi::c_long;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const INTERNAL_CALL_MASK: uint64_t = 1_u64
     << ::core::mem::size_of::<uint64_t>()

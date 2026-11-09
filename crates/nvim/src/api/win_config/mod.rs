@@ -71,7 +71,6 @@ pub const WIN_SPLIT_ABOVE: WinSplit = 2;
 pub const WIN_SPLIT_RIGHT: WinSplit = 1;
 pub const BORDER_TEXT_FOOTER: BorderTextType = 1;
 pub const BORDER_TEXT_TITLE: BorderTextType = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

@@ -153,8 +153,6 @@ pub const YREG_PUT: ::core::ffi::c_int = 2;
 pub const YREG_YANK: ::core::ffi::c_int = 1;
 pub const YREG_PASTE: ::core::ffi::c_int = 0;
 
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 static EXPR_LINE: GlobalCell<Option<XString>> = GlobalCell::new(None);
 /// The register `@@` replays: the last one `@` ran, 0 for none yet.
 static EXECREG_LASTC: GlobalCell<RegName> = GlobalCell::new(0);

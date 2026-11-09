@@ -193,7 +193,6 @@ pub struct LinemapEntry {
     pub num_bytes: i32,
     pub lineoff: ::core::ffi::c_int,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DB_COUNT: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 static DIFF_BUSY: GlobalCell<bool> = GlobalCell::new(false);
 static DIFF_NEED_UPDATE: GlobalCell<bool> = GlobalCell::new(false);

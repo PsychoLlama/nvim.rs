@@ -63,5 +63,4 @@ pub use self::write::*;
 pub const RET_OBJECT: LuaRetMode = 0;
 pub const LINE_BUFFER_MIN_SIZE: ::core::ffi::c_uint = 4096;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub(crate) use crate::decoration::DECOR_ID_INVALID;

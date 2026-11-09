@@ -163,7 +163,6 @@ pub const RET_NIL_BOOL: LuaRetMode = 1;
 pub const RET_OBJECT: LuaRetMode = 0;
 pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
 pub const MT_CHAR_WISE: MotionType = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 /// The top bit of a channel id: an API call made by the editor itself
 /// rather than by a client.

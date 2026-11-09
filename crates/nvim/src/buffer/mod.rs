@@ -164,8 +164,6 @@ pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
 
 pub const READ_DUMMY: ::core::ffi::c_uint = 16;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 crate::flag_set! {
     /// What has and has not happened to a buffer -- upstream's `BF_*`, the
     /// bits `Buffer::b_flags` carries.
