@@ -292,7 +292,7 @@ impl Put {
         if self.ve_flags != OPT_VE_FLAG_ALL as c_uint || self.kind != MotionType::CharWise {
             return;
         }
-        if gchar_cursor() == TAB {
+        if gchar_cursor() == c_int::from(TAB) {
             let viscol = getviscol();
             // No spaces needed for `p` on the last position of a tab, or
             // `P` on the first.

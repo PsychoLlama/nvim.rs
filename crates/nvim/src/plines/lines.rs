@@ -141,7 +141,7 @@ pub(crate) fn plines_win_col(window: Win, lnum: LineNr, mut column: c_long) -> c
     // only fixes an error when the TAB wraps from one screen line to the
     // next (when 'columns' is not a multiple of 'ts') -- webb.
     let mut col = vcol;
-    if chr.value == TAB && STATE.get() & MODE_NORMAL != 0 && csarg.use_tabstop {
+    if chr.value == c_int::from(TAB) && STATE.get() & MODE_NORMAL != 0 && csarg.use_tabstop {
         col += win_charsize(cstype, col.get(), at, chr.value, &mut csarg).width - 1;
     }
 

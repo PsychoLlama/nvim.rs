@@ -83,20 +83,28 @@ pub(crate) const NUL: ::core::ffi::c_int = 0;
 /// The path separator as a string, for the code that appends one.
 pub(crate) const PATHSEPSTR: &::core::ffi::CStr = c"/";
 
-/// A horizontal tab, as the `int` a widened byte compares against.
-pub(crate) const TAB: ::core::ffi::c_int = 9;
+/// A horizontal tab. The control bytes below are bytes: a key code compares
+/// against [`crate::types::Key`]'s copies, and a reader holding a `c_int`
+/// widens the byte where it compares.
+pub(crate) const TAB: u8 = 9;
 
-/// A line feed, as the `int` a widened byte compares against.
-pub(crate) const NL: ::core::ffi::c_int = 10;
+/// A line feed.
+pub(crate) const NL: u8 = 10;
 
-/// A carriage return, as the `int` a widened byte compares against.
-pub(crate) const CAR: ::core::ffi::c_int = 13;
+/// A carriage return.
+pub(crate) const CAR: u8 = 13;
 
-/// The escape byte, as the `int` a widened byte compares against.
-pub(crate) const ESC: ::core::ffi::c_int = 27;
+/// The escape byte.
+pub(crate) const ESC: u8 = 27;
 
-/// A backspace, as the `int` a widened byte compares against.
-pub(crate) const BS: ::core::ffi::c_int = 8;
+/// A backspace.
+pub(crate) const BS: u8 = 8;
+
+/// A form feed.
+pub(crate) const FF: u8 = 0x0c;
+
+/// The delete byte, which some terminals send for backspace.
+pub(crate) const DEL: u8 = 0x7f;
 
 #[cfg(test)]
 mod tests {

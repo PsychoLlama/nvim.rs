@@ -37,7 +37,7 @@ fn put_cut(text: &[u8], n: &mut c_int, skip_esc: bool) {
     while at < text.len() {
         let rest = &text[at..];
         // A recording's trailing <Esc> is noise, not content.
-        if skip_esc && rest.len() == 1 && c_int::from(rest[0]) == ESC {
+        if skip_esc && rest.len() == 1 && rest[0] == ESC {
             break;
         }
         // As `ptr2cells` measures the C string `text` is the bytes of.

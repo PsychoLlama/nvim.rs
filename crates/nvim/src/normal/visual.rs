@@ -15,7 +15,7 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::ops::Op;
+use crate::ops::{Op, OpType, adjust_cursor_eol};
 use crate::strings::has_char;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
@@ -40,8 +40,6 @@ use crate::normal::{
     TAB, V_ISUAL_MODE_ORIG, clear_op_beep, may_clear_cmdline, nv_down, nv_g_cmd, nv_operator,
     nv_right,
 };
-use crate::ops::OpType;
-use crate::ops::adjust_cursor_eol;
 use crate::option::get_ve_flags;
 use crate::option::vars::{P_SEL, p_slm, p_smd};
 use crate::options::OPT_VE_FLAG_BLOCK;
@@ -657,7 +655,7 @@ pub(crate) fn n_start_visual_mode(c: Key) {
     // cursor is displayed at, not at the TAB's first column.
     if c == Key::CTRL_V
         && get_ve_flags(Win::current()) & OPT_VE_FLAG_BLOCK != 0
-        && gchar_cursor() == TAB
+        && gchar_cursor() == c_int::from(TAB)
     {
         validate_virtcol(Win::current());
         coladvance(Win::current(), Win::current().w_virtcol);

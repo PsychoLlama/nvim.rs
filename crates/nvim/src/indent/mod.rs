@@ -23,30 +23,25 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::ascii::{TAB, ascii_iswhite};
 use crate::cstr;
-use crate::extmark::EXTMARK_UNDO;
-use crate::narrow::as_index;
-use crate::narrow::len_as_int;
-use crate::narrow::number_as_int;
+use crate::extmark::{EXTMARK_UNDO, extmark_splice_cols};
+use crate::narrow::{as_index, len_as_int, number_as_int};
 use crate::option::defs::FoFlag;
 use crate::regexp::RegMatch;
 use crate::semsg;
 use crate::types::{ColNr, Failed, LineNr, OptInt, Pos};
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int, c_uint};
 
-use crate::ascii::ascii_iswhite;
 use crate::change::{changed_bytes, get_leader_len};
 use crate::charset::{byte2cells, char2cells, getwhitecols_curline, skip};
 use crate::cstr::byte_at;
 use crate::edit::get_nolist_virtcol;
-use crate::extmark::extmark_splice_cols;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::memline::Lines;
-use crate::memline::ml_replace_owned;
+use crate::memline::{Lines, ml_replace_owned};
 use crate::memory::XString;
-use crate::message::E_POSITIVE;
-use crate::message::emsg;
+use crate::message::{E_POSITIVE, emsg};
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::options::OPT_DY_FLAG_UHEX;
 use crate::os::cshim::gettext;
@@ -68,7 +63,6 @@ pub mod tabstop;
 use crate::optionstr::OptString;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec};
 use crate::state::MODE_INSERT;
-use crate::winlayer::Win;
 pub(crate) use breakindent::check_window_briopt;
 pub use breakindent::{briopt_check, get_breakindent_win};
 pub use edit::{
@@ -84,7 +78,6 @@ pub use expr::{
 pub(crate) const INDENT_SET: c_int = 1;
 pub(crate) const INDENT_INC: c_int = 2;
 pub(crate) const INDENT_DEC: c_int = 3;
-const TAB: c_int = 9;
 /// `set_indent` flags.
 pub(crate) const SIN_CHANGED: c_int = 1;
 pub(crate) const SIN_INSERT: c_int = 2;
@@ -355,12 +348,12 @@ pub fn get_indent_buf(buffer: Buf, lnum: LineNr) -> c_int {
 /// going to change, so where the tabstops actually sit does not matter.
 ///
 pub fn indent_size_no_ts(text: &[u8]) -> c_int {
-    let tab_size = byte2cells(TAB);
+    let tab_size = byte2cells(c_int::from(TAB));
     let mut vcol = 0;
     for &c in text {
         if c == b' ' {
             vcol += 1;
-        } else if c_int::from(c) == TAB {
+        } else if c == TAB {
             vcol += tab_size;
         } else {
             break;
@@ -412,7 +405,7 @@ fn indent_width(text: &[u8], stops: Option<&[i32]>, ts: OptInt) -> c_int {
                         if cur_vcol == vcol {
                             break;
                         }
-                    } else if c_int::from(c) == TAB {
+                    } else if c == TAB {
                         break;
                     } else {
                         return cur_vcol;
@@ -431,7 +424,7 @@ fn indent_width(text: &[u8], stops: Option<&[i32]>, ts: OptInt) -> c_int {
             if vcol == next_tab_vcol {
                 next_tab_vcol += tabstop_width;
             }
-        } else if c_int::from(c) == TAB {
+        } else if c == TAB {
             vcol = next_tab_vcol;
             next_tab_vcol += tabstop_width;
         } else {
@@ -492,7 +485,7 @@ fn plan_indent(size: c_int, flags: c_int, oldline: &[u8]) -> IndentPlan {
         if preserve {
             // Reuse as much of the existing indent's structure as fits.
             while todo > 0 && ascii_iswhite(at(plan.rest)) {
-                if at(plan.rest) == TAB {
+                if at(plan.rest) == c_int::from(TAB) {
                     let tab_pad = pad(plan.ind_done);
                     // Stop if this tab would overshoot the target.
                     if todo < tab_pad {
@@ -531,7 +524,7 @@ fn plan_indent(size: c_int, flags: c_int, oldline: &[u8]) -> IndentPlan {
             if todo < tab_pad {
                 break;
             }
-            if at(plan.rest) != TAB {
+            if at(plan.rest) != c_int::from(TAB) {
                 plan.doit = true;
             } else {
                 plan.rest += 1;
@@ -653,7 +646,7 @@ fn reindent_line(size: c_int, flags: c_int, oldline: &[u8]) -> Option<Reindented
             p = 0;
             ind_done = 0;
             while todo > 0 && ascii_iswhite(at(p)) {
-                if at(p) == TAB {
+                if at(p) == c_int::from(TAB) {
                     let tab_pad = pad(ind_done);
                     // Stop if this tab would overshoot the target.
                     if todo < tab_pad {

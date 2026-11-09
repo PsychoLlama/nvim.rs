@@ -23,6 +23,7 @@
 )]
 
 use super::decode_create_map_special_dict;
+use crate::ascii::{BS, CAR, FF, NL, TAB};
 use crate::eval::typval::{ListRef, tv_clear, tv_dict_alloc, tv_list_alloc};
 use crate::message_fmt::emsg_text;
 use crate::os::libc::ptrdiff_t;
@@ -38,14 +39,6 @@ use self::error::DecodeError;
 
 use self::scan::{parse_json_number, parse_json_string};
 use self::stack::{Container, Decoder, OpenContainer};
-
-/// The ASCII bytes JSON's grammar names.  `BS`/`FF` are only reachable
-/// through an escape; the other three are the whitespace between tokens.
-pub(crate) const BS: u8 = 0x08;
-pub(crate) const TAB: u8 = 0x09;
-pub(crate) const NL: u8 = 0x0a;
-pub(crate) const FF: u8 = 0x0c;
-pub(crate) const CAR: u8 = 0x0d;
 
 const NULL_TV: TypVal = TypVal::Special(SPECIAL_VAR_NULL);
 

@@ -15,6 +15,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::ascii::ESC;
 use crate::cmdexpand::defs::ExpandContext;
 use crate::drawscreen::state::CMDLINE_ROW;
 use crate::event_queue::ChildQueue;
@@ -31,19 +32,16 @@ use crate::message::IOSIZE;
 use crate::message::state::{KEEP_MSG, KEEP_MSG_HL_ID, MSG_ROW, MSG_SCROLLED, NEED_WAIT_RETURN};
 use crate::message::{msg_putchar, set_keep_msg};
 use crate::mouse::{is_mouse_key, setmouse};
-use crate::narrow::as_index;
-use crate::narrow::len_as_int;
+use crate::narrow::{as_index, len_as_int};
 use crate::os::cshim::gettext;
 use crate::os::input::{InputEvents, input_get};
 use crate::state::mode::STATE;
-use crate::types::Callback;
-use crate::types::Key;
+use crate::types::{Callback, Key};
 use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_flush, ui_has};
 use crate::{cstr, formatted};
 use core::ffi::{CStr, c_int};
 
-const ESC: c_int = 0x1b;
 /// The unset callback, as `CALLBACK_NONE`.
 const CALLBACK_NONE: Callback = Callback::None;
 
@@ -65,7 +63,7 @@ pub(crate) fn ask_yesno(question: &CStr) -> c_int {
     while r != c_int::from(b'y') && r != c_int::from(b'n') {
         // Same highlighting as for wait_return().
         r = prompt_for_input(Some(&prompt), HLF_R, true, None);
-        if r == CTRL_C || r == ESC {
+        if r == CTRL_C || r == c_int::from(ESC) {
             r = c_int::from(b'n');
             if !ui_has(UI_MESSAGES) {
                 msg_putchar(r);
@@ -195,7 +193,7 @@ pub(crate) fn prompt_for_input(
     one_key: bool,
     mouse_used: Option<&mut bool>,
 ) -> c_int {
-    let mut ret = if one_key { ESC } else { 0 };
+    let mut ret = if one_key { c_int::from(ESC) } else { 0 };
     // A copy: the prompt's own messages replace the kept one.
     let kmsg = KEEP_MSG.with(Clone::clone);
 

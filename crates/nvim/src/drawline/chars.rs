@@ -491,7 +491,7 @@ impl Cells {
         // broken line. A background or reverse-video highlight reads fine
         // there, so it stays. A Tab keeps its own full-width highlight, and
         // search highlighting also stops when its match ends right here.
-        if self.char_code != TAB {
+        if self.char_code != ::core::ffi::c_int::from(TAB) {
             if self.on_last_col || attr_has_line_deco(self.search_attr) {
                 self.search_attr = 0;
             }
@@ -502,13 +502,15 @@ impl Cells {
                 self.area_attr = 0;
             }
         }
-        if self.char_code == TAB && wlv.extra_todo + wlv.col > self.view_width {
+        if self.char_code == ::core::ffi::c_int::from(TAB)
+            && wlv.extra_todo + wlv.col > self.view_width
+        {
             wlv.extra_todo = window.w_buffer.tab_padding(wlv.vcol) - 1;
         }
         wlv.extra_fill = schar_from_ascii(if mb_off > 0 { MB_FILLER_CHAR } else { b' ' });
         wlv.extra_last = NUL as ScreenChar;
         if self.char_code < 128 && ascii_iswhite(self.char_code) {
-            if self.char_code == TAB {
+            if self.char_code == ::core::ffi::c_int::from(TAB) {
                 // See "Tab alignment" in `unprintable`.
                 wlv.fix_for_boguscols();
             }

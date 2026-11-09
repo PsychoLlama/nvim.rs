@@ -16,8 +16,7 @@
 use super::*;
 use crate::ascii::NUL;
 use crate::guard::{Allow, Suppress};
-use crate::keycodes::CTRL_C;
-use crate::keycodes::ModMask;
+use crate::keycodes::{CTRL_C, ModMask};
 use crate::mbyte::{char_at, cluster_len};
 use crate::types::Key;
 use core::ffi::{CStr, c_int};
@@ -77,12 +76,12 @@ pub fn do_dialog(
         // SAFETY: a main-thread prompt, with no mouse flag.
         let mut c = prompt_for_input(Some(prompt.as_cstr()), HLF_M, true, None);
         match c {
-            CAR | NUL => {
+            _ if c == c_int::from(CAR) || c == NUL => {
                 // User accepts the default option.
                 retval = dfltbutton;
                 break;
             }
-            CTRL_C | ESC => {
+            _ if c == CTRL_C || c == c_int::from(ESC) => {
                 // User aborts/cancels.
                 retval = 0;
                 break;

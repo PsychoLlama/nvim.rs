@@ -1654,6 +1654,7 @@ static const int CTRL_I = 9;
 static const int CTRL_J = 10;
 static const int CTRL_K = 11;
 static const int CTRL_L = 12;
+static const int CTRL_LSB = 27;
 static const int CTRL_M = 13;
 static const int CTRL_N = 14;
 static const int CTRL_O = 15;

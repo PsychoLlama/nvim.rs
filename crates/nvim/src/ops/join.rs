@@ -181,7 +181,7 @@ fn measure_join(
             if at != NUL
                 && at != c_int::from(b')')
                 && plan.sumsize != 0
-                && endcurr1 != TAB
+                && endcurr1 != c_int::from(TAB)
                 // 'formatoptions' M: no space between two multi-byte
                 // characters. B: no space if either side is a character
                 // that eats one.

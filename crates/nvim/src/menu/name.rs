@@ -21,6 +21,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::TAB;
 use crate::getchar::Remap;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -29,12 +30,6 @@ use super::*;
 use crate::cstr;
 use crate::keycodes::CTRL_V;
 use crate::mbyte::cluster_len;
-
-/// The accelerator separator inside a menu name. `\t` in a `:menu` argument
-/// is a backslash escaping the letter `t`; only a literal `<Tab>`, which
-/// [`menu_translate_tab_and_shift`] rewrites before the name is parsed,
-/// becomes this byte.
-const TAB: u8 = b'\t';
 
 /// The byte at `i`, with a NUL for anything past the end -- how C reads a
 /// string it has already tested the length of.

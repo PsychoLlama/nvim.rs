@@ -332,7 +332,7 @@ fn emit_char_class(rc: &mut RegCompiler, class: CharClass) {
         CharClass::Tab => rc.code.byte(c_int::from(b'\t')),
         CharClass::Return => rc.code.byte(c_int::from(b'\r')),
         CharClass::Backspace => rc.code.byte(0x08),
-        CharClass::Escape => rc.code.byte(ESC),
+        CharClass::Escape => rc.code.byte(c_int::from(ESC)),
         _ => {}
     }
 }

@@ -73,7 +73,7 @@ pub fn msg_start() {
         if p_ch() == 0 && !MSG_DIDOUT.get() && msg_use_printf() != 0 {
             msg_bytes_to_grid(b"\n", 0, false);
         } else {
-            msg_putchar(NL);
+            msg_putchar(c_int::from(NL));
         }
         did_return = true;
         CMDLINE_ROW.set(MSG_ROW.get());
@@ -331,7 +331,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
         }
 
         let byte = text[at];
-        if MSG_ROW.get() != open_row && (byte >= 0x20 || c_int::from(byte) == TAB) {
+        if MSG_ROW.get() != open_row && (byte >= 0x20 || byte == TAB) {
             if open_row >= 0 {
                 msg_line_flush();
             }
@@ -359,7 +359,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
         }
 
         at += 1;
-        match c_int::from(byte) {
+        match byte {
             NL => {
                 MSG_DIDOUT.set(false); // remember that the line is empty
                 MSG_COL.set(0);

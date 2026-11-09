@@ -396,10 +396,10 @@ pub fn cmdline_paste_str(s: &CStr, literally: bool) {
         let c = info.value;
         at += usize::try_from(info.len).unwrap_or(1).max(1);
         if cv == CTRL_V
-            || c == ESC
+            || c == c_int::from(ESC)
             || c == CTRL_C
-            || c == CAR
-            || c == NL
+            || c == c_int::from(CAR)
+            || c == c_int::from(NL)
             || c == CTRL_L
             || (c == CTRL_BSL && cstr::byte_at(text, at) == 0x0e)
         {

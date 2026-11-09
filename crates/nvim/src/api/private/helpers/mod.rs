@@ -26,6 +26,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::{CAR, NL};
 use crate::deref::deref_to_field;
 use crate::ex_eval::defs::ExcId;
 use crate::narrow::{number_as_int, number_as_lnum};
@@ -62,9 +63,6 @@ pub(crate) use self::value::*;
 // Reached by name from `crates/nvim/tests/unit`, which links the library from
 // outside; the rest of `value` stays in-crate.
 pub(crate) use self::vimdict::*;
-
-const NL: u8 = b'\n';
-const CAR: u8 = b'\r';
 
 /// Channel ids with the top bit set are not channels at all: they mark a call
 /// nvim made of itself, from Vimscript or from Lua.

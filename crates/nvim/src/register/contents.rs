@@ -220,9 +220,7 @@ fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, b
     if yank_type == MotionType::Unknown {
         let ends_line = match text {
             RegText::Lines(_) => true,
-            RegText::Text(text) => text
-                .last()
-                .is_some_and(|&last| c_int::from(last) == NL || c_int::from(last) == CAR),
+            RegText::Text(text) => text.last().is_some_and(|&last| last == NL || last == CAR),
         };
         yank_type = if ends_line {
             MotionType::LineWise

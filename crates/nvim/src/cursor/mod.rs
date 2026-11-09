@@ -23,8 +23,8 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::narrow::len_as_int;
-use crate::narrow::number_as_col;
+use crate::ascii::{NUL, TAB};
+use crate::narrow::{len_as_int, number_as_col};
 use crate::option::vars::P_SEL;
 use core::ffi::{c_int, c_uint};
 
@@ -33,7 +33,6 @@ pub mod arith;
 use self::arith::{
     ColAdd, carried_coladd, checked_col, folded_line_span, gap_coladd, step_back, wrap_target_col,
 };
-use crate::ascii::NUL;
 use crate::change::inserted_bytes;
 use crate::cstr;
 use crate::drawscreen::UPD_NOT_VALID;
@@ -52,8 +51,6 @@ use crate::state::mode::{RESTART_EDIT, STATE};
 use crate::state::{MODE_INSERT, MODE_TERMINAL, virtual_active};
 use crate::types::{ColNr, LineNr, Pos};
 use crate::winlayer::{Buf, PosRef, Win};
-
-const TAB: c_int = 9;
 
 // ---------------------------------------------------------------------------
 // The window layer, as this module uses it
@@ -224,7 +221,7 @@ pub fn coladvance(win: Win, wcol: ColNr) -> bool {
     } else if c_int::from(cstr::byte_at(
         win.buffer().lines().line(cursor.lnum),
         cursor.col.as_usize(),
-    )) != TAB
+    )) != c_int::from(TAB)
     {
         // The current window, not `win` — which is what the C does.
         Win::current().note_virtcol(wcol);

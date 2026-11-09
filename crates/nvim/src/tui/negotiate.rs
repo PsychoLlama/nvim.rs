@@ -19,6 +19,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::DEL;
 use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
 use crate::message_fmt::msg_bytes_opt;
 use crate::startup::NVIM_TESTING;
@@ -47,9 +48,6 @@ const MODE_RESET: TermModeState = 2;
 const MODE_PERMANENTLY_SET: TermModeState = 3;
 const MODE_PERMANENTLY_RESET: TermModeState = 4;
 
-/// The two characters that can mean "erase", one of which the terminal
-/// sends and the other of which the editor must be told about.
-const DEL: u8 = 0x7f;
 const CTRL_H: u8 = 8;
 
 /// Ask the terminal whether it has `mode` (DECRQM).

@@ -154,7 +154,7 @@ fn printable(mut text: Vec<u8>) -> XString {
                 break;
             }
             at += len - 1;
-        } else if c_int::from(rest[0]) == TAB {
+        } else if rest[0] == TAB {
             text[at] = b' ';
         } else if ptr2cells_at(rest) > 1 {
             break;

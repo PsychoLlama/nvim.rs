@@ -370,7 +370,7 @@ fn default_bigness(forceit: c_int) -> int64_t {
 
 /// The line of dashes `:z=` rules the current line off with.
 fn rule_off() {
-    say::putchar(NL);
+    say::putchar(c_int::from(NL));
     for _ in 1..COLUMNS.get() {
         say::putchar('-' as c_int);
     }

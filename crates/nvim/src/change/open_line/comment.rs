@@ -25,7 +25,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::charset::ptr2cells_at;
+use crate::charset::{getdigits_int_at, ptr2cells_at};
 use crate::cstr::{byte_at, until_nul};
 use crate::mbyte::{c_cluster_len, c_display_width, head_off};
 use crate::narrow::len_as_int;
@@ -33,7 +33,6 @@ use core::ffi::c_int;
 
 use crate::ascii::NUL;
 use crate::change::*;
-use crate::charset::getdigits_int_at;
 use crate::option::split_option_part;
 use crate::optionstr::OptStringRef;
 use crate::winlayer::{Buf, Win};
@@ -406,7 +405,7 @@ fn left_adjust(buf: &mut [u8], mut lead_len: usize, repl: &[u8]) -> usize {
     p += repl_len;
     while p < lead_len {
         if !ascii_iswhite(c_int::from(buf[p])) {
-            if p + 1 < lead_len && c_int::from(buf[p + 1]) == TAB {
+            if p + 1 < lead_len && buf[p + 1] == TAB {
                 // Don't put a space in front of a TAB: drop the byte.
                 lead_len -= 1;
                 buf.copy_within(p + 1..lead_len + 1, p);

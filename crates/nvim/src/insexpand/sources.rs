@@ -399,7 +399,7 @@ impl Buf {
                 // Find the start and then the end of the next word.
                 let end = word_end(next, word_start(next, start));
                 if end > start {
-                    if next[start] != b')' && c_int::from(out[len - 1]) != TAB {
+                    if next[start] != b')' && out[len - 1] != TAB {
                         if out[len - 1] != b' ' {
                             out.push(b' ');
                             len += 1;

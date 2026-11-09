@@ -521,7 +521,7 @@ pub fn mark_mb_adjustpos(buffer: Buf, pos: &mut Pos) {
     pos.col = ColNr::try_from(col).unwrap_or(ColNr::MAX);
     let at = &line[col..];
     if pos.coladd == 1
-        && c_int::from(cstr::byte_at(at, 0)) != TAB
+        && cstr::byte_at(at, 0) != TAB
         && vim_isprintc(char_at(at))
         && ptr2cells_at(at) > 1
     {

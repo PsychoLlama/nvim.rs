@@ -181,7 +181,7 @@ fn split_carriage_returns(st: &mut Sub, at: usize) {
             st.sublen -= 1;
             line.remove(at);
             at += 1;
-        } else if c_int::from(here) == CAR {
+        } else if here == CAR {
             // Prepare for undo of the line about to be split.
             if u_inssub(st.lnum).is_ok() {
                 // The text up to the CR becomes a line of its own, and is

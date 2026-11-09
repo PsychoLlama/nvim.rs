@@ -17,12 +17,12 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::{CAR, NUL};
 use crate::cstr;
 use crate::fileio::EOL_MAC;
 use core::ffi::CStr;
 use core::ffi::c_int;
 
-use crate::ascii::NUL;
 use crate::mbyte::{
     c_cluster_len, char_at, char_len, cluster_len, encode_char, mb_tolower, utf_char2cells,
     utf8_len,
@@ -38,8 +38,6 @@ use super::{
     vim_isprintc,
 };
 use crate::pos::MAXCOL;
-
-const CAR: c_int = 13;
 
 /// A cursor over the characters of a C string's bytes.
 ///
@@ -193,7 +191,7 @@ fn transstr_len_in(s: &[u8], untab: bool) -> usize {
                 }
             }
             cursor.advance(l);
-        } else if c_int::from(byte) == TAB && !untab {
+        } else if byte == TAB && !untab {
             len += 1;
             cursor.advance(1);
         } else {
@@ -245,7 +243,7 @@ pub fn transstr_into(s: &[u8], slen: Option<usize>, out: &mut [u8], untab: bool)
             }
             cursor.advance(l);
             read += l;
-        } else if c_int::from(cursor.byte()) == TAB && !untab {
+        } else if cursor.byte() == TAB && !untab {
             out[written] = cursor.byte();
             written += 1;
             cursor.advance(1);
@@ -345,11 +343,11 @@ fn owned(rendered: &render::Rendered) -> CharDisplay {
 ///
 #[inline(always)]
 fn render_nonprint(buffer: Option<Buf>, c: c_int) -> render::Rendered {
-    let c = if c == NL {
+    let c = if c == c_int::from(NL) {
         // A NUL is stored as a newline internally.
         NUL
-    } else if c == CAR && buffer.is_some_and(|b| get_fileformat(b) == EOL_MAC) {
-        NL
+    } else if c == c_int::from(CAR) && buffer.is_some_and(|b| get_fileformat(b) == EOL_MAC) {
+        c_int::from(NL)
     } else {
         c
     };

@@ -21,8 +21,7 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{key_unescape, termcap_name};
 use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{cells_at, char_at, cluster_len, encode_char, unescape_at};
-use crate::narrow::as_index;
-use crate::narrow::count_as_int;
+use crate::narrow::{as_index, count_as_int};
 use crate::types::Key;
 use core::ffi::{CStr, c_int};
 
@@ -260,7 +259,7 @@ pub fn msg_make(arg: &CStr) {
         }
     }
     if left == 0 {
-        msg_putchar(NL);
+        msg_putchar(c_int::from(NL));
         for &byte in SHIFTED {
             msg_putchar(c_int::from(byte - 3));
         }

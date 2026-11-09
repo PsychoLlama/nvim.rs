@@ -12,7 +12,7 @@
 
 use crate::cstr;
 use crate::keycodes::SpecialKey;
-use crate::memline::MlFlags;
+use crate::memline::{ML_DEL_MESSAGE, MlFlags};
 use crate::narrow::len_as_int;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
@@ -39,10 +39,8 @@ use crate::getchar::{
 };
 use crate::guard::Suppress;
 use crate::mbyte::{char_count, mb_adjust_cursor};
-use crate::memline::ML_DEL_MESSAGE;
 use crate::memline::{inc, ml_delete_flags};
-use crate::message::E_MODIFIABLE;
-use crate::message::emsg;
+use crate::message::{E_MODIFIABLE, emsg};
 use crate::r#move::WinValid;
 use crate::normal::defs::{CmdArg, Outcome};
 use crate::normal::{
@@ -148,7 +146,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
             // then step back to where the replacing starts.
             coladvance_force(getviscol() + cmd_arg.count1);
             Win::current().w_cursor.col -= cmd_arg.count1;
-        } else if gchar_cursor() == TAB {
+        } else if gchar_cursor() == c_int::from(TAB) {
             // Land on the tab's first cell, not the cell of it the cursor
             // happens to be showing on.
             coladvance_force(getviscol());
@@ -519,7 +517,7 @@ pub(crate) fn nv_edit(cmd_arg: &mut CmdArg) {
             if virtual_active(Win::current())
                 && (Win::current().w_cursor.coladd > 0
                     || gchar_cursor() == NUL
-                    || gchar_cursor() == TAB)
+                    || gchar_cursor() == c_int::from(TAB))
             {
                 Win::current().w_cursor.coladd += 1;
             } else if gchar_cursor() != NUL {

@@ -15,8 +15,7 @@ use super::program::{NfaRegProg, NfaState, StateId};
 use super::step::Run;
 use super::sub::slots;
 use crate::narrow::len_as_int;
-use crate::regexp::NfaOp;
-use crate::regexp::byte_count;
+use crate::regexp::{NfaOp, byte_count};
 use crate::siemsg;
 use crate::types::LineNr;
 use core::ffi::c_int;
@@ -64,7 +63,7 @@ pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> Result<(), Fai
         Ok(NfaOp::ClassTab) => c == c_int::from(b'\t'),
         Ok(NfaOp::ClassReturn) => c == c_int::from(b'\r'),
         Ok(NfaOp::ClassBackspace) => c == 0x08,
-        Ok(NfaOp::ClassEscape) => c == ESC,
+        Ok(NfaOp::ClassEscape) => c == c_int::from(ESC),
         Ok(NfaOp::ClassIdent) => vim_is_ident_char(c),
         Ok(NfaOp::ClassKeyword) => reg_iswordc(rex, c),
         Ok(NfaOp::ClassFname) => vim_isfilec(c),

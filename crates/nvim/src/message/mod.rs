@@ -219,7 +219,7 @@ pub const SB_CLEAR_NONE: ScrollbackClear = 0;
 /// a newline separates buttons.
 pub const DLG_HOTKEY_CHAR: c_uint = 38;
 pub const DLG_BUTTON_SEP: c_uint = 10;
-pub const BELL: ::core::ffi::c_int = '\u{7}' as ::core::ffi::c_int;
+pub const BELL: u8 = 0x07;
 pub const PROGRESS_TARGET_CMD: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 
 pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
@@ -268,11 +268,11 @@ pub fn msg_multiline(
         }
         if matches!(text[at], b'\n' | b'\t' | b'\r' | 0x07) {
             msg_display_part(&text[chunk..at], hl_id, hist);
-            if c_int::from(text[at]) != TAB && *need_clear {
+            if text[at] != TAB && *need_clear {
                 msg_clr_eos();
                 *need_clear = false;
             }
-            if c_int::from(text[at]) == BELL {
+            if text[at] == BELL {
                 vim_beep(OPT_BO_FLAG_SHELL as c_uint);
             } else {
                 msg_putchar_hl(c_int::from(text[at]), hl_id);

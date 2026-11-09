@@ -29,6 +29,7 @@ mod expand;
 pub mod system;
 pub(crate) mod throttle;
 
+use crate::ascii::NL;
 use crate::eval::vars::set_vim_var_nr;
 use crate::ex_cmds::{check_secure, make_filter_cmd};
 use crate::fileio::temp_name;
@@ -85,8 +86,6 @@ crate::flag_set! {
     /// Run without any message at all, not even the mode change.
     const HIDE_MESS = 64;
 }
-
-const NL: c_int = '\n' as c_int;
 
 /// Characters a shell would act on, so they get a backslash when a pattern is
 /// pasted into a command line.
@@ -224,7 +223,7 @@ pub(crate) fn run_shell(cmd: Option<&CStr>, opts: ShellOpts, extra_args: Option<
     if EMSG_SILENT.get() == 0 && exitcode != 0 && !opts.has(ShellOpts::SILENT) {
         msg_ext_set_kind(c"shell_ret");
         if !ui_has(UI_MESSAGES) {
-            msg_putchar(NL);
+            msg_putchar(c_int::from(NL));
         }
         msg_str(gettext(c"shell returned "));
         msg_outnum(exitcode);
@@ -288,7 +287,7 @@ pub(crate) fn call_shell(
             "Executing command: \"{}\"",
             msg_cstr(cmd.unwrap_or(shell.as_cstr()))
         );
-        msg_putchar(NL);
+        msg_putchar(c_int::from(NL));
         verbose_leave();
     }
 

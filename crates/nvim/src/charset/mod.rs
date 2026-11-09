@@ -23,6 +23,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::ascii::{NL, TAB};
 use crate::cstr;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
@@ -70,9 +71,6 @@ const CT_CELL_MASK: uint8_t = 0x7;
 const CT_PRINT_CHAR: uint8_t = 0x10;
 const CT_ID_CHAR: uint8_t = 0x20;
 const CT_FNAME_CHAR: uint8_t = 0x40;
-
-const TAB: c_int = 9;
-const NL: c_int = 10;
 
 static CHARTAB_INITIALIZED: GlobalCell<bool> = GlobalCell::new(false);
 static G_CHARTAB: GlobalCell<[uint8_t; 256]> = GlobalCell::new([0; 256]);

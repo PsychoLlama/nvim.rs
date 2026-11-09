@@ -19,6 +19,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::ascii::TAB;
 use crate::edit::BeginlineOpts;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::SpecialKey;
@@ -114,7 +115,6 @@ pub(crate) struct NormalState {
     pub old_col: c_int,
     pub old_pos: Pos,
 }
-pub(crate) const TAB: c_int = 9;
 static V_ISUAL_MODE_ORIG: GlobalCell<VisualMode> = GlobalCell::new(VisualMode::NONE);
 const E_CHANGELIST_IS_EMPTY: &CStr = c"E664: Changelist is empty";
 const E_CMDLINE_WINDOW_ALREADY_OPEN: &CStr = c"E1292: Command-line window is already open";

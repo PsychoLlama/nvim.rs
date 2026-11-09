@@ -97,7 +97,7 @@ pub(crate) fn getvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
 
     let start = vcol + head;
     let end = vcol + incr - 1;
-    let cursor_at_tab_end = chr.value == TAB
+    let cursor_at_tab_end = chr.value == c_int::from(TAB)
         && STATE.get() & MODE_NORMAL != 0
         && window.w_onebuf_opt.wo_list == 0
         && !virtual_active(window)
@@ -147,7 +147,7 @@ pub(crate) fn getvvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
         .filter(|t| !t.is_empty())
     {
         let c = char_at(text);
-        if c != TAB && vim_isprintc(c) {
+        if c != c_int::from(TAB) && vim_isprintc(c) {
             endadd = ptr2cells_at(text) - 1;
             if coladd > endadd {
                 // Past the end of the line.

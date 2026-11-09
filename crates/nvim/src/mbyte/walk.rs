@@ -98,7 +98,7 @@ pub fn char_count(bytes: &[u8]) -> usize {
 /// cell wide; a Tab has its own rules, and an unprintable character is drawn
 /// as an escape whose cells are not the character's.
 fn coladd_drops(text: &[u8]) -> bool {
-    text.first().is_none_or(|&byte| c_int::from(byte) != TAB)
+    text.first().is_none_or(|&byte| byte != TAB)
         && vim_isprintc(char_at(text))
         && ptr2cells_at(text) > 1
 }

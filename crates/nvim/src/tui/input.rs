@@ -31,6 +31,7 @@
 // Unsafe perimeter: the `tui/{tui,input,output,events}.rs` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 
+use crate::ascii::ESC;
 use crate::event::libuv::{
     uv_close, uv_timer_get_due_in, uv_timer_init, uv_timer_start, uv_timer_stop,
 };
@@ -96,8 +97,6 @@ const FOCUS_LOST: &[u8; 3] = b"\x1b[O";
 
 /// How long to sit on background-colour queries before making another.
 const BG_QUERY_DELAY_MS: u64 = 100;
-
-const ESC: u8 = 0x1b;
 
 // -------------------------------------------------------------- the lifecycle
 

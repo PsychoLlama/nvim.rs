@@ -77,13 +77,13 @@ pub(crate) fn describe_cursor_char() {
 
     // TODO(bfredl): merge this with the main loop
     if c < 0x80 {
-        if c == NL {
+        if c == c_int::from(NL) {
             // NUL is stored as NL.
             c = NUL;
         }
         // NL is stored as CR.
-        let mac = c == CAR && get_fileformat(Buf::current()) == EOL_MAC;
-        describe_byte(c, if mac { NL } else { c }, &mut need_clear);
+        let mac = c == c_int::from(CAR) && get_fileformat(Buf::current()) == EOL_MAC;
+        describe_byte(c, if mac { c_int::from(NL) } else { c }, &mut need_clear);
         // needed for overlong ascii?
         off += char_len(data);
     }

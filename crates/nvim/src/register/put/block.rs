@@ -84,7 +84,7 @@ fn land_block(line: &[u8], col: ColNr) -> Landing {
         land.delcount = 1;
         let back = head_off(line, land.textcol.as_usize());
         land.textcol -= ColNr::try_from(back).expect("a column of the line").get();
-        if c_int::from(cstr::byte_at(line, land.textcol.as_usize())) != TAB {
+        if c_int::from(cstr::byte_at(line, land.textcol.as_usize())) != c_int::from(TAB) {
             land.delcount = 0;
             land.endspaces = 0;
         }
@@ -150,7 +150,7 @@ impl Put {
             if self.dir != FORWARD && c != NUL && Win::current().w_cursor.coladd > 0 {
                 Win::current().w_cursor.col += 1;
             }
-            if c == TAB {
+            if c == c_int::from(TAB) {
                 if self.dir == BACKWARD && Win::current().w_cursor.col != ColNr::ZERO {
                     Win::current().w_cursor.col -= 1;
                 }

@@ -22,8 +22,7 @@
 use super::*;
 use crate::ascii::NUL;
 use crate::grid::with_linebuf;
-use crate::narrow::as_index;
-use crate::narrow::count_as_int;
+use crate::narrow::{as_index, count_as_int};
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::optionstr::OptStringRef;
 use crate::strings::has_char;
@@ -205,7 +204,7 @@ impl Cells {
     /// A character that cannot be put on the screen as itself: a Tab, the NUL
     /// that ends the line, or something that shows as `^X` or `<xx>`.
     pub(super) fn unprintable(&mut self, wlv: &mut WinLineVars, window: Win) {
-        if self.char_code == TAB
+        if self.char_code == ::core::ffi::c_int::from(TAB)
             && (window.w_onebuf_opt.wo_list == 0 || window.w_p_lcs_chars.tab1 != 0)
         {
             self.tab(wlv, window);

@@ -281,10 +281,10 @@ impl Env<'_> {
     /// file format actually uses.
     pub(super) fn byte_value(&self) -> c_int {
         let num = self.byteval;
-        if num == NL {
+        if num == c_int::from(NL) {
             0
-        } else if num == CAR && self.fileformat() == EOL_MAC {
-            NL
+        } else if num == c_int::from(CAR) && self.fileformat() == EOL_MAC {
+            c_int::from(NL)
         } else {
             num
         }

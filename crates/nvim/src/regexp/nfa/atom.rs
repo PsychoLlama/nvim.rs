@@ -89,7 +89,7 @@ pub(crate) fn nfa_regatom(rc: &mut RegCompiler) -> Parsed {
         // lines and it is just the byte.
         M_N => {
             if rc.string_match != 0 {
-                rc.post.emit(NL);
+                rc.post.emit(c_int::from(NL));
             } else {
                 rc.post.emit_op(NfaOp::Newl);
                 rc.flags |= RF_HASNL as u32;

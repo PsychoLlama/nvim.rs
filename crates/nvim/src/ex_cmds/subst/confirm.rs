@@ -225,7 +225,7 @@ pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
         };
 
         NEED_WAIT_RETURN.set(false); // no hit-return prompt
-        if typed == 'q' as c_int || typed == ESC || typed == CTRL_C {
+        if typed == 'q' as c_int || typed == c_int::from(ESC) || typed == CTRL_C {
             st.got_quit = true;
             break;
         }

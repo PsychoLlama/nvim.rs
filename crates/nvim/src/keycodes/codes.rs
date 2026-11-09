@@ -61,6 +61,8 @@ pub const CTRL_W: c_int = 23;
 pub const CTRL_X: c_int = 24;
 pub const CTRL_Y: c_int = 25;
 pub const CTRL_Z: c_int = 26;
+/// `CTRL-[`: the escape key.
+pub const CTRL_LSB: c_int = 27;
 pub const CTRL_BSL: c_int = 28;
 pub const CTRL_RSB: c_int = 29;
 pub const CTRL_HAT: c_int = 30;

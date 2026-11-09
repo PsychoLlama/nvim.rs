@@ -30,7 +30,7 @@
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::getchar::state::{KEY_TYPED, MOD_MASK, VGETC_CHAR, VGETC_MOD_MASK};
 use crate::getchar::{ins_char_typebuf, ungetchars};
-use crate::keycodes::{CTRL_AT, CTRL_M, NotAKey, SpecialKey};
+use crate::keycodes::{CTRL_AT, CTRL_I, CTRL_LSB, CTRL_M, NotAKey, SpecialKey};
 use crate::keycodes::{ModMask, unsimplify_key};
 use crate::mbyte::{char_at, char_len};
 use crate::memory::XString;
@@ -44,6 +44,7 @@ use crate::options::{
     OPT_TPF_FLAG_FF, OPT_TPF_FLAG_HT,
 };
 use crate::types::Key;
+
 use crate::vterm::keycodes::{VTermKey, VTermModifier};
 use crate::vterm::types::VTerm;
 use crate::winlayer::graph::switch_to;
@@ -63,9 +64,6 @@ use crate::vterm::vterm::{
     VTERM_KEY_NONE, VTERM_KEY_PAGEDOWN, VTERM_KEY_PAGEUP, VTERM_KEY_RIGHT, VTERM_KEY_TAB,
     VTERM_KEY_UP, VTERM_MOD_ALT, VTERM_MOD_CTRL, VTERM_MOD_NONE, VTERM_MOD_SHIFT,
 };
-
-const TAB: c_int = 9;
-const ESC: c_int = 27;
 
 /// vterm's name for function key `n`.
 const fn function_key(n: c_int) -> VTermKey {
@@ -117,9 +115,9 @@ fn convert_key(key: &mut c_int, mods: ModMask, state: &mut VTermModifier) -> VTe
     convert_modifiers(key, mods, state);
     match SpecialKey::try_from(*key) {
         Ok(SpecialKey::Bs) => VTERM_KEY_BACKSPACE,
-        Ok(SpecialKey::Tab) | Err(NotAKey(TAB)) => VTERM_KEY_TAB,
+        Ok(SpecialKey::Tab) | Err(NotAKey(CTRL_I)) => VTERM_KEY_TAB,
         Err(NotAKey(CTRL_M)) => VTERM_KEY_ENTER,
-        Err(NotAKey(ESC)) => VTERM_KEY_ESCAPE,
+        Err(NotAKey(CTRL_LSB)) => VTERM_KEY_ESCAPE,
         Ok(SpecialKey::Up) => VTERM_KEY_UP,
         Ok(SpecialKey::Down) => VTERM_KEY_DOWN,
         Ok(SpecialKey::Left) => VTERM_KEY_LEFT,
@@ -515,9 +513,9 @@ mod tests {
 
     #[test]
     fn the_raw_control_bytes_are_named_keys() {
-        assert_eq!(converted(TAB, NONE).0, VTERM_KEY_TAB);
+        assert_eq!(converted(CTRL_I, NONE).0, VTERM_KEY_TAB);
         assert_eq!(converted(CTRL_M, NONE).0, VTERM_KEY_ENTER);
-        assert_eq!(converted(ESC, NONE).0, VTERM_KEY_ESCAPE);
+        assert_eq!(converted(CTRL_LSB, NONE).0, VTERM_KEY_ESCAPE);
         assert_eq!(
             converted(SpecialKey::Bs.code(), NONE).0,
             VTERM_KEY_BACKSPACE
@@ -583,7 +581,7 @@ mod tests {
             (SpecialKey::STab.code(), NONE, b"\x1b[Z"),
             (SpecialKey::Bs.code(), NONE, b"\x7f"),
             (CTRL_M, NONE, b"\r"),
-            (ESC, NONE, b"\x1b"),
+            (CTRL_LSB, NONE, b"\x1b"),
         ];
         for &(key, mods, want) in rows {
             assert_eq!(

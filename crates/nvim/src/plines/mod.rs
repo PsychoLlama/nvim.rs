@@ -23,7 +23,7 @@
 //! This runs per character on every redraw. Prefer plain loops and keep the
 //! small helpers inlined.
 
-use crate::ascii::NUL;
+use crate::ascii::{NUL, TAB};
 use crate::buffer::buf_meta_total;
 use crate::charset::{byte2cells, vim_isbreak, vim_isprintc};
 use crate::cstr::byte_at;
@@ -56,7 +56,6 @@ use core::ffi::{CStr, c_int, c_long};
 const INVALID_BYTE_CELLS: c_int = 4;
 /// `V_POS_INLINE` — the virtual text sits between two characters of the line.
 const VPOS_INLINE: uint32_t = 2;
-const TAB: int32_t = b'\t' as int32_t;
 
 /// The most bytes measuring one character reads: its own sequence and the
 /// one after it, which a VS-16 can widen it by. A caller holding a long
@@ -107,7 +106,7 @@ fn char_cells(line: &[u8], at: usize, cur_char: int32_t) -> c_int {
 /// starts at virtual column `col` (which only matters for a tab).
 pub(crate) fn win_chartabsize(window: Win, text: &[u8], col: ColNr) -> c_int {
     let byte = byte_at(text, 0);
-    if c_int::from(byte) == TAB && window.expands_tab() {
+    if byte == TAB && window.expands_tab() {
         return window.buffer().tab_padding(col);
     }
     if byte < 0x80 {
@@ -506,7 +505,7 @@ pub(crate) fn charsize_regular(
 
     let wp = csarg.win;
     let buf = wp.buffer();
-    let expand_tab = cur_char == TAB && csarg.use_tabstop;
+    let expand_tab = cur_char == c_int::from(TAB) && csarg.use_tabstop;
     let has_lcs_eol = wp.w_onebuf_opt.wo_list != 0 && wp.w_p_lcs_chars.eol != 0;
     let at_nul = byte_at(csarg.line, at) == b'\0';
 
@@ -566,7 +565,7 @@ fn charsize_fast_impl(
     cur_char: int32_t,
 ) -> CharSize {
     // A tab is expanded according to the column it starts at.
-    if cur_char == TAB && use_tabstop {
+    if cur_char == c_int::from(TAB) && use_tabstop {
         let width = window.buffer().tab_padding(vcol);
         return CharSize { width, head: 0 };
     }
@@ -624,7 +623,7 @@ pub(crate) fn charsize_nowrap(
     vcol: ColNr,
     cur_char: int32_t,
 ) -> c_int {
-    if cur_char == TAB && use_tabstop {
+    if cur_char == c_int::from(TAB) && use_tabstop {
         buffer.tab_padding(vcol)
     } else {
         char_cells(text, 0, cur_char)

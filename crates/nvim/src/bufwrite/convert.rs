@@ -347,7 +347,7 @@ impl ByteWriter {
                     self.conv_error = true;
                     self.conv_error_lnum = self.start_lnum;
                 }
-                if c == NL as c_uint {
+                if c == c_uint::from(NL) {
                     self.start_lnum += 1;
                 }
                 wlen += n;

@@ -43,7 +43,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 pub(crate) mod state;
-use crate::ascii::{CAR, TAB};
+
 use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
 use crate::memory::XString;

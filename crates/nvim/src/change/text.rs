@@ -94,7 +94,7 @@ fn vreplace_extent(new: &[u8], col: usize) -> (usize, usize) {
         vcol += win_chartabsize(win, at, vcol);
         // A TAB that lands exactly where the new character ends does not
         // need removing.
-        if vcol > new_vcol && c_int::from(at[0]) == TAB {
+        if vcol > new_vcol && at[0] == TAB {
             break;
         }
         oldlen += cluster_len(at);

@@ -16,8 +16,8 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::NL;
 use crate::buffer::find_buf;
-use crate::eval::NL;
 use crate::eval::encode::encode_list_write;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
@@ -44,7 +44,6 @@ use crate::types::{
     VarNumber, Vv,
 };
 use crate::types::{Handle, LineNr};
-use core::ffi::c_int;
 
 /// Why [`tv_to_argv`] built no vector. Either way it has been reported.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -116,7 +115,7 @@ fn string_to_list(output: &[u8], keepempty: bool) -> ListRef {
     // A trailing newline does not start an empty last line unless the
     // caller asked to keep one.
     let output = match output.split_last() {
-        Some((&last, rest)) if !keepempty && c_int::from(last) == NL => rest,
+        Some((&last, rest)) if !keepempty && last == NL => rest,
         _ => output,
     };
     let mut list = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);

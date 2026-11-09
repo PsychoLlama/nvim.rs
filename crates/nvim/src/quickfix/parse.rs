@@ -344,7 +344,7 @@ impl Fields {
                 self.col = 0;
                 for &b in &line[at..end] {
                     self.col += 1;
-                    if c_int::from(b) == TAB {
+                    if b == TAB {
                         self.col += 7;
                         self.col -= self.col % 8;
                     }

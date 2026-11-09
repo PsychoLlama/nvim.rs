@@ -16,8 +16,7 @@
 )]
 
 use super::*;
-use crate::ascii::TAB;
-use crate::ascii::ascii_isspace;
+use crate::ascii::{TAB, ascii_isspace};
 use crate::autocmd::set_context_in_autocmd;
 use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
@@ -29,9 +28,8 @@ use crate::keycodes::CTRL_V;
 use crate::mapping::set_context_in_map_cmd;
 use crate::menu::set_context_in_menu_cmd;
 use crate::option::defs::OptionSetFlags;
-use crate::option::get_findfunc;
-use crate::option::set_context_in_set_cmd;
 use crate::option::vars::{WOP_FLAGS, p_wic};
+use crate::option::{get_findfunc, set_context_in_set_cmd};
 use crate::options::OPT_WOP_FLAG_TAGFILE;
 use crate::profile::set_context_in_profile_cmd;
 use crate::runtime::set_context_in_runtime_cmd;
@@ -551,7 +549,7 @@ pub(crate) fn set_one_cmd_context(expand: &mut Expand, text: &CStr, buff: usize)
     p = buff;
     expand.pattern = p;
     while byte(t, p) != 0 {
-        if byte(t, p) == b' ' || c_int::from(byte(t, p)) == TAB {
+        if byte(t, p) == b' ' || byte(t, p) == TAB {
             // Argument starts after a space.
             p += 1;
             expand.pattern = p;

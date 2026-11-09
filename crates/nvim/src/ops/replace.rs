@@ -296,7 +296,7 @@ fn replace_chars(op: &mut OpArg, c: Key) {
                 replace_character(c);
                 done = true;
             } else {
-                if under_cursor == TAB {
+                if under_cursor == c_int::from(TAB) {
                     // Breaking the TAB moves the end, so remember where it
                     // was in columns first.
                     let mut end_vcol = 0;

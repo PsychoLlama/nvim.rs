@@ -64,8 +64,7 @@ use crate::charset::atoi;
 use crate::cstr;
 use crate::fileio::Fgets;
 use crate::getchar::state::GOT_INT;
-use crate::mbyte::CONV_NONE;
-use crate::mbyte::canonize;
+use crate::mbyte::{CONV_NONE, canonize};
 use crate::message::msg;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::vars::p_enc;
@@ -428,7 +427,7 @@ fn split_items(line: &mut [uint8_t]) -> Vec<&CStr> {
         if spans.len() == 1 && is_info_keyword(&line[spans[0].0..spans[0].1]) {
             // Take the rest of the line, stopping only at a control
             // character that is not a tab.
-            while line[at] >= b' ' || c_int::from(line[at]) == TAB {
+            while line[at] >= b' ' || line[at] == TAB {
                 at += 1;
             }
         } else {

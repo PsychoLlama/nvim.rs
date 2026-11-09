@@ -24,7 +24,9 @@ use super::*;
 use crate::ascii::NUL;
 use crate::event_queue::process_events_in;
 use crate::guard::Keys;
-use crate::keycodes::{CTRL_B, CTRL_C, CTRL_F, NotAKey, SpecialKey};
+use crate::keycodes::{
+    CTRL_B, CTRL_C, CTRL_F, CTRL_H, CTRL_J, CTRL_LSB, CTRL_M, NotAKey, SpecialKey,
+};
 use crate::log::logmsg;
 use crate::strings::has_char;
 use crate::types::Key;
@@ -96,19 +98,19 @@ pub fn wait_return(redraw: c_int) {
 
     REDIR_OFF.set(true); // don't redirect this message
     let old_state = STATE.get();
-    let mut c;
+    let mut c: c_int;
     if QUIT_MORE.get() {
-        c = CAR; // just pretend CR was hit
+        c = CTRL_M; // just pretend CR was hit
         QUIT_MORE.set(false);
         GOT_INT.set(false);
     } else if EXMODE_ACTIVE.get() {
         msg_str(c" "); // make sure the cursor is on the right line
-        c = CAR; // no need for a return in ex mode
+        c = CTRL_M; // no need for a return in ex mode
         GOT_INT.set(false);
     } else if !stuff_empty() {
         // With stuffed characters the next one would dismiss the prompt
         // immediately and have to be put back, so don't show it at all.
-        c = CAR;
+        c = CTRL_M;
     } else {
         STATE.set(MODE_HITRETURN);
         setmouse();
@@ -170,7 +172,7 @@ pub fn wait_return(redraw: c_int) {
                             MSG_COL.set(0);
                         }
                         if QUIT_MORE.get() {
-                            c = CAR; // just pretend CR was hit
+                            c = CTRL_M; // just pretend CR was hit
                             QUIT_MORE.set(false);
                             GOT_INT.set(false);
                         } else if c != SpecialKey::Ignore.code() {
@@ -226,7 +228,7 @@ pub fn wait_return(redraw: c_int) {
                 DO_REDRAW.set(true); // need a redraw even though there is typeahead
             }
         } else {
-            c = CAR;
+            c = CTRL_M;
             // Wait to allow the user to verify the output.
             do_sleep(int64_t::from(MSG_WAIT.get()), true);
         }
@@ -351,11 +353,11 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
         let mut toscroll = 0;
         'scroll: {
             match SpecialKey::try_from(c) {
-                Ok(SpecialKey::Bs | SpecialKey::Up) | Err(NotAKey(BS | KEY_K)) => {
+                Ok(SpecialKey::Bs | SpecialKey::Up) | Err(NotAKey(CTRL_H | KEY_K)) => {
                     toscroll = -1;
                     break 'scroll;
                 }
-                Ok(SpecialKey::Down) | Err(NotAKey(CAR | NL | KEY_J)) => {
+                Ok(SpecialKey::Down) | Err(NotAKey(CTRL_M | CTRL_J | KEY_J)) => {
                     toscroll = 1;
                     break 'scroll;
                 }
@@ -395,7 +397,7 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
                     }
                     // falls through to the quit tail
                 }
-                Err(NotAKey(KEY_Q | CTRL_C | ESC)) => {
+                Err(NotAKey(KEY_Q | CTRL_C | CTRL_LSB)) => {
                     // falls through to the quit tail
                 }
                 Ok(SpecialKey::Event) => {

@@ -31,7 +31,6 @@ pub mod userfunc;
 pub mod vars;
 pub mod window;
 
-use crate::ascii::NL;
 use crate::global_cell::GlobalCell;
 // Named here so the expression tree and `list.rs` can reach it by one
 // path; it belongs to `message`.
@@ -94,7 +93,6 @@ pub const GLV_OK: GlvStatus = 1;
 pub const GLV_FAIL: GlvStatus = 0;
 pub const VARNUMBER_MAX: crate::types::VarNumber = crate::types::VarNumber::MAX;
 pub const VARNUMBER_MIN: crate::types::VarNumber = crate::types::VarNumber::MIN;
-pub const FF: c_int = '\u{c}' as c_int;
 pub const NOTDONE: c_int = 2 as c_int;
 
 /// What a parser that is allowed to *decline* answers, in the shape `?`

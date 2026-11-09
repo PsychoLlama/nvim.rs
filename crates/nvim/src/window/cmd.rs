@@ -20,19 +20,15 @@
 
 use crate::autocmd::defs::AutoEvent;
 use crate::buffer::GETF_ALT;
-use crate::ex_cmds::EcmdFlags;
-use crate::ex_cmds::newlnum;
+use crate::ex_cmds::{EcmdFlags, do_ecmd, newlnum};
 use crate::keycodes::{
     CTRL_, CTRL_B, CTRL_C, CTRL_D, CTRL_F, CTRL_G, CTRL_H, CTRL_HAT, CTRL_I, CTRL_J, CTRL_K,
-    CTRL_L, CTRL_N, CTRL_O, CTRL_P, CTRL_Q, CTRL_R, CTRL_RSB, CTRL_S, CTRL_T, CTRL_V, CTRL_W,
-    CTRL_X, CTRL_Z, NotAKey, SpecialKey,
+    CTRL_L, CTRL_M, CTRL_N, CTRL_O, CTRL_P, CTRL_Q, CTRL_R, CTRL_RSB, CTRL_S, CTRL_T, CTRL_V,
+    CTRL_W, CTRL_X, CTRL_Z, NotAKey, SpecialKey,
 };
-use crate::narrow::as_index;
-use crate::narrow::number_as_int;
+use crate::narrow::{as_index, number_as_int};
 use crate::normal::FIND_IDENT;
-use crate::search::ACTION_SPLIT;
-use crate::search::FIND_ANY;
-use crate::search::FIND_DEFINE;
+use crate::search::{ACTION_SPLIT, FIND_ANY, FIND_DEFINE, find_pattern_in_path};
 use crate::types::Key;
 use crate::winlayer::prev_window;
 use core::ffi::{CStr, c_int};
@@ -44,7 +40,6 @@ use crate::ascii::NUL;
 use crate::buffer::{buflist_getfile, find_buf, set_pcmark};
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
-use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::state::CMDMOD;
 use crate::ex_getln::curbuf_locked;
 use crate::file_search::grab_file_name;
@@ -63,7 +58,6 @@ use crate::options::{OPT_SWB_FLAG_USEOPEN, OPT_SWB_FLAG_USETAB};
 use crate::os::libc::int64_t;
 use crate::pos::MAXLNUM;
 use crate::quickfix::qf_view_result;
-use crate::search::find_pattern_in_path;
 use crate::tag::state::{G_DO_TAGPREVIEW, POSTPONED_SPLIT};
 use crate::tr_c;
 use crate::types::{Failed, LineNr, WinConfig};
@@ -339,7 +333,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             }
         }
         // quickfix window only: view the result under the cursor in a new split
-        Ok(SpecialKey::Kenter) | Err(NotAKey(CAR)) => {
+        Ok(SpecialKey::Kenter) | Err(NotAKey(CTRL_M)) => {
             if buf_is_quickfix(Some(Buf::current())) {
                 view_quickfix_result();
             }
@@ -617,7 +611,7 @@ fn window_g_command(prenum: c_int, prenum1: c_int, xchar: c_int) {
         // CTRL-W gt / gT / g<Tab>: the next, previous or last used tab page
         TOP => goto_tab_number(prenum), // gt: the next tab page
         TO_NEW_TAB => goto_tab_number(-prenum1), // gT: the previous one
-        TAB => {
+        CTRL_I => {
             if !goto_last_used_tab() {
                 beep();
             }

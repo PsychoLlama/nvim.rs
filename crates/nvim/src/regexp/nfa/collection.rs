@@ -149,7 +149,7 @@ pub(crate) fn collection(
                     // no lines, `\n` is the byte; otherwise it widens the
                     // collection to accept a line break.
                     startc = if rc.string_match != 0 || emit_range || pat_byte(rc, 1) == b'-' {
-                        NL
+                        c_int::from(NL)
                     } else {
                         NfaOp::Newl.code()
                     };
@@ -224,7 +224,7 @@ pub(crate) fn collection(
     });
     if accepts_newline {
         rc.post.emit(if rc.string_match != 0 {
-            NL
+            c_int::from(NL)
         } else {
             NfaOp::Newl.code()
         });

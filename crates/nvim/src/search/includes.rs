@@ -621,7 +621,7 @@ fn expand_match(walk: &mut Walk, startp: usize, dir: &mut Direction) -> After {
         p = word_end(text, p);
         if p > aux {
             let last = |buf: &[u8], back: usize| buf.len().checked_sub(back).map_or(0, |i| buf[i]);
-            if text[aux] != b')' && c_int::from(last(&iobuff, 1)) != TAB {
+            if text[aux] != b')' && last(&iobuff, 1) != TAB {
                 if last(&iobuff, 1) != b' ' {
                     iobuff.push(b' ');
                 }

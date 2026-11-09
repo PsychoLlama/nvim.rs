@@ -652,9 +652,9 @@ fn expand_replacement(rex: Expanding<'_>, source: &[u8], flags: c_int, out: &mut
 
         if c == '\\' as c_int && at(src) != b'\0' {
             match at(src) {
-                b'r' => c = CAR,
-                b'n' => c = NL,
-                b't' => c = TAB,
+                b'r' => c = c_int::from(CAR),
+                b'n' => c = c_int::from(NL),
+                b't' => c = c_int::from(TAB),
                 // `\e` already means "end the case fold", so there is no
                 // escape for ESC here.
                 b'b' => c = CTRL_H,

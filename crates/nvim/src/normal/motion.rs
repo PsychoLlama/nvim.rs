@@ -541,7 +541,7 @@ pub(crate) fn nv_csearch(cmd_arg: &mut CmdArg) {
     Win::current().w_set_curswant = true;
     // Landing on a TAB with 'virtualedit' means the *last* cell of it,
     // so that `dt<Tab>` takes the whole tab.
-    if gchar_cursor() == TAB
+    if gchar_cursor() == c_int::from(TAB)
         && virtual_active(Win::current())
         && cmd_arg.arg == FORWARD as c_int
         && (t_cmd || cmd_arg.op().op_type != OpType::Nop)

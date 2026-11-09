@@ -90,7 +90,7 @@ pub(crate) fn regatom(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node>
         M_N => {
             if rc.string_match != 0 {
                 let ret = rc.code.node(BtOp::Exactly);
-                rc.code.byte(NL);
+                rc.code.byte(c_int::from(NL));
                 rc.code.byte(NUL);
                 *flagp |= HASWIDTH | SIMPLE;
                 Ok(ret)

@@ -30,8 +30,7 @@ use crate::global_cell::field;
 use crate::keycodes::{CTRL_V, ModMask};
 use crate::mbyte::unescape_at;
 use crate::narrow::number_as_int;
-use crate::option::defs::OPT_VAL_TYPE_BOOLEAN;
-use crate::option::defs::OPT_VAL_TYPE_NUMBER;
+use crate::option::defs::{OPT_VAL_TYPE_BOOLEAN, OPT_VAL_TYPE_NUMBER};
 use crate::option::vars::P_MOUSE;
 use crate::optionstr::OptString;
 use crate::types::Key;
@@ -39,8 +38,7 @@ use crate::winlayer::Win;
 use core::ffi::c_int;
 use std::io::Write;
 
-use crate::ascii::NL;
-use crate::ascii::ascii_iswhite;
+use crate::ascii::{NL, ascii_iswhite};
 use crate::charset::{transchar, vim_strsize_cstr};
 use crate::getchar::state::GOT_INT;
 use crate::keycodes::{get_special_key_name, has_key_name};
@@ -519,7 +517,7 @@ pub(crate) fn escaped_set_value(value: &[u8]) -> Vec<u8> {
             continue;
         }
         let code = c_int::from(c);
-        if code == NL {
+        if code == c_int::from(NL) {
             out.extend_from_slice(b"\\\x16\n");
         } else {
             if ascii_iswhite(code) || c == b'"' || c == b'\\' {

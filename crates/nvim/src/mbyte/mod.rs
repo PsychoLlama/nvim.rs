@@ -90,7 +90,6 @@ use core::fmt::Write as _;
 use crate::ascii::{NL, TAB, ascii_iswhite};
 use crate::cstr;
 use crate::winlayer::{Buf, Win};
-use core::ffi::c_int;
 
 use crate::charset::{ptr2cells_at, vim_isprintc, vim_iswordc_tab};
 use crate::cmdexpand::defs::Expand;
@@ -158,7 +157,7 @@ pub fn show_utf8() {
         }
         for &byte in &cluster[at..at + char_len(&cluster[at..])] {
             // A NUL is stored in the buffer as a newline.
-            let byte = if c_int::from(byte) == NL { 0 } else { byte };
+            let byte = if byte == NL { 0 } else { byte };
             let _ = write!(hex, "{byte:02x} ");
         }
         at += char_len(&cluster[at..]);

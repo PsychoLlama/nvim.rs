@@ -17,8 +17,7 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::narrow::as_index;
-use crate::narrow::const_len_as_int;
+use crate::narrow::{as_index, const_len_as_int};
 use crate::tui::termkey::csi::{self, CSI_MAX_PARAMS, CsiSeq};
 use crate::tui::termkey::keytables::{
     CSI_FINAL_BASE, CSI_FUNC_COUNT, CSI_FUNCS, CSI_SS3, SS3, SS3_KEYPAD_ALT,
@@ -44,7 +43,6 @@ type Params<'a> = [Option<&'a [u8]>; CSI_MAX_PARAMS];
 /// Nested so these short, generic names stay out of the flat namespace the unit
 /// tests' generated C declarations share.
 mod byte {
-    pub(super) const ESC: u8 = 0x1b;
     pub(super) const BEL: u8 = 0x07;
     pub(super) const SS3_7BIT: u8 = b'O';
     pub(super) const CSI_7BIT: u8 = b'[';
@@ -57,9 +55,10 @@ mod byte {
     pub(super) const STRING_TERMINATOR_8BIT: u8 = 0x9c;
     pub(super) const OSC_8BIT: u8 = 0x9d;
 }
+use crate::ascii::ESC;
 use byte::{
-    APC_7BIT, BEL, CSI_7BIT, CSI_8BIT, DCS_7BIT, DCS_8BIT, ESC, OSC_7BIT, OSC_8BIT, SS3_7BIT,
-    SS3_8BIT, STRING_TERMINATOR_8BIT,
+    APC_7BIT, BEL, CSI_7BIT, CSI_8BIT, DCS_7BIT, DCS_8BIT, OSC_7BIT, OSC_8BIT, SS3_7BIT, SS3_8BIT,
+    STRING_TERMINATOR_8BIT,
 };
 
 /// The driver's per-reader state: the last control string's payload, and
