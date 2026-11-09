@@ -14,7 +14,7 @@
   "const_int_alias": 1868,
   "unions": 20,
   "repr_c_ffi_types": 91,
-  "repr_c_editor_state": 70,
+  "repr_c_editor_state": 28,
   "derive_copy": 217,
   "manual_alloc": 26,
   "garray_sites": 0,
@@ -53,7 +53,7 @@
   "untested_dirs": 0,
   "cchar_scratch": 4,
   "files_without_deny_casts": 15,
-  "files_allowing_non_camel_case_types": 15,
+  "files_allowing_non_camel_case_types": 16,
   "files_allowing_non_snake_case": 3,
   "files_allowing_non_upper_case_globals": 192,
   "files": {
