@@ -60,8 +60,8 @@ EXTRA = [
 # drawn cell) and the unnamed-register index (every put and yank).
 HOT = [
     ("FUNC_CALLS", f"{CRATE}::eval::userfunc::frames::FUNC_CALLS"),
-    ("hl_attr_active", f"{CRATE}::highlight::state::hl_attr_active"),
-    ("y_previous", f"{CRATE}::register::y_previous"),
+    ("HL_ATTR_ACTIVE", f"{CRATE}::highlight::state::HL_ATTR_ACTIVE"),
+    ("Y_PREVIOUS", f"{CRATE}::register::Y_PREVIOUS"),
 ]
 
 # Every `GlobalCell`/`SharedCell` static, at any depth (a fn-local one is

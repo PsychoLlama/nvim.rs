@@ -178,7 +178,7 @@ binary as well as the default one.
 
 ## `tui`
 
-- `neovim::TUI::cursor::CURSOR_STYLE_ENABLED`
+- `neovim::tui::cursor::CURSOR_STYLE_ENABLED`
 
 ## `ui`
 

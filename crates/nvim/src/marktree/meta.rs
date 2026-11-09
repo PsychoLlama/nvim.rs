@@ -88,7 +88,7 @@ pub fn meta_apply_delta(dst: &mut MetaCount, new: &MetaCount, old: &MetaCount) {
 
 /// Does this count hold anything the filter selects?
 ///
-/// A filter slot is [`MT_FILTER_SELECT`](super::key::kMTFilterSelect) for a
+/// A filter slot is [`MT_FILTER_SELECT`](super::key::MT_FILTER_SELECT) for a
 /// selected kind and zero otherwise, so the mask-and-sum is exact rather than
 /// a heuristic.
 pub fn meta_has(count: &MetaCount, filter: &MetaCount) -> bool {

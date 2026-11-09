@@ -7,7 +7,7 @@
 //!
 //! # Ownership
 //!
-//! The channel table ([`channels`]) owns every channel, boxed, by its id.
+//! The channel table ([`CHANNELS`]) owns every channel, boxed, by its id.
 //! Editor code names a channel by id and borrows it from the table for one
 //! step at a time ([`with_channel`]); nothing holds that borrow across a
 //! call that can run user code, because a channel's callbacks run Vimscript
