@@ -22,12 +22,12 @@
 )]
 
 use crate::cursor::getvpos;
-use crate::extmark::EXTMARK_NOOP;
-use crate::extmark::EXTMARK_UNDO;
+use crate::extmark::{EXTMARK_NOOP, EXTMARK_UNDO};
 use crate::indent::SIN_NOMARK;
 use crate::mbyte::head_off;
 use crate::memory::XString;
 use crate::narrow::len_as_int;
+use crate::normal::defs::MotionType;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -211,7 +211,7 @@ impl Put {
         col: ColNr,
         lendiff: c_int,
     ) {
-        if self.kind == MT_LINE_WISE {
+        if self.kind == MotionType::LineWise {
             Buf::current().b_op_start.col = ColNr::ZERO;
             if self.dir == FORWARD {
                 Buf::current().b_op_start.lnum += 1;
@@ -220,16 +220,16 @@ impl Put {
 
         // Only a plain linewise put moves the marks itself; a split put
         // has already spliced them.
-        let kind = if self.kind == MT_LINE_WISE && self.flags & PUT_LINE_SPLIT == 0 {
+        let kind = if self.kind == MotionType::LineWise && self.flags & PUT_LINE_SPLIT == 0 {
             EXTMARK_UNDO
         } else {
             EXTMARK_NOOP
         };
-        let from = Buf::current().b_op_start.lnum + i32::from(self.kind == MT_CHAR_WISE);
+        let from = Buf::current().b_op_start.lnum + i32::from(self.kind == MotionType::CharWise);
         mark_adjust(from, MAXLNUM, self.nr_lines, 0, kind);
 
         // The range is the lines the put just rewrote.
-        if self.kind == MT_CHAR_WISE {
+        if self.kind == MotionType::CharWise {
             let at = Win::current().w_cursor.lnum;
             changed_lines(Buf::current(), at, col, at + 1, self.nr_lines, true);
         } else {
@@ -258,7 +258,7 @@ impl Put {
             beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         } else if self.flags & PUT_CURSEND != 0 {
             // The cursor goes after the inserted text.
-            if self.kind == MT_LINE_WISE {
+            if self.kind == MotionType::LineWise {
                 Win::current().w_cursor.lnum = if lnum >= Buf::current().b_ml.ml_line_count {
                     Buf::current().b_ml.ml_line_count
                 } else {
@@ -273,7 +273,7 @@ impl Put {
                     Buf::current().b_op_end.col = col - 1;
                 }
             }
-        } else if self.kind == MT_LINE_WISE {
+        } else if self.kind == MotionType::LineWise {
             // The cursor goes on the first non-blank of the first line.
             Win::current().w_cursor.col = ColNr::ZERO;
             if self.dir == FORWARD {
@@ -305,7 +305,7 @@ impl Put {
         'error: {
             for cnt in 1..=self.count {
                 let mut i: size_t = 0;
-                if self.kind == MT_CHAR_WISE {
+                if self.kind == MotionType::CharWise {
                     lnum = new_cursor.lnum;
                     self.split_line_for_charwise(lnum, col);
                     new_lnum += 1;
@@ -317,7 +317,7 @@ impl Put {
                 while i < y_size {
                     // A charwise register's last line is already on the
                     // second half of the split.
-                    if self.kind != MT_CHAR_WISE || i < y_size - 1 {
+                    if self.kind != MotionType::CharWise || i < y_size - 1 {
                         let line = self.lines[i].as_bytes_with_nul();
                         if ml_append_terminated(lnum, line, false).is_err() {
                             break 'error;
@@ -344,8 +344,9 @@ impl Put {
                 // Splice the extmarks for what was inserted. A linewise
                 // put that did *not* split a line has its marks moved by
                 // `mark_adjust` below instead.
-                let splits_a_line = self.kind == MT_LINE_WISE && self.flags & PUT_LINE_SPLIT != 0;
-                if self.kind == MT_CHAR_WISE || splits_a_line {
+                let splits_a_line =
+                    self.kind == MotionType::LineWise && self.flags & PUT_LINE_SPLIT != 0;
+                if self.kind == MotionType::CharWise || splits_a_line {
                     let (last, init) = self.lines.split_last().expect("a register holds a line");
                     let mut totsize: BCount = 0;
                     // A register's lines are shorter than `BCount` counts.
@@ -359,7 +360,7 @@ impl Put {
                     let buf = Buf::current();
                     let at = new_cursor.lnum - 1;
                     let y_size = len_as_int(self.lines.len());
-                    let (start, rows, cols, bytes) = if self.kind == MT_CHAR_WISE {
+                    let (start, rows, cols, bytes) = if self.kind == MotionType::CharWise {
                         (col, y_size - 1, lastsize, totsize)
                     } else {
                         // Account for the last pasted newline and the

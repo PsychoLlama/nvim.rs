@@ -22,6 +22,7 @@ use crate::ascii::NUL;
 use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::mbyte::{c_cluster_len, char_at};
+use crate::normal::defs::MotionType;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
 use crate::optionstr::OptStringRef;
@@ -325,7 +326,7 @@ fn make_plan(
 
     // Look for a matching #if, #else, #elif or #endif.
     if let Some(op) = op {
-        op.motion_type = MT_LINE_WISE; // linewise for this case only
+        op.motion_type = MotionType::LineWise; // linewise for this case only
     }
     if initc != '#' as c_int {
         let word = after_hash(line, skip::white(line));

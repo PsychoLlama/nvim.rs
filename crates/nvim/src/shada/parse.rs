@@ -22,9 +22,7 @@ use crate::api::keysets::{
 use crate::eval::decode::decode_string;
 use crate::memory::XString;
 use crate::mpack::mpack_core::MPACK_OK;
-use crate::narrow::number_as_col;
-use crate::narrow::number_as_lnum;
-use crate::normal::defs::MotionType;
+use crate::narrow::{number_as_col, number_as_lnum};
 use crate::types::{ApiDict, ColNr, Integer, LineNr, VAR_TYPE_BLOB};
 use core::ffi::CStr;
 use std::ffi::CString;
@@ -181,7 +179,7 @@ fn parse_register(pos: u64, cursor: &mut Cursor, extra: &mut Option<ShadaExtra>)
         reg.is_unnamed = is_unnamed;
     }
     if let Some(motion) = it.rt {
-        reg.motion = MotionType::from(low_byte(motion));
+        reg.motion = low_byte(motion);
     }
     if let Some(name) = it.n {
         reg.name = low_byte(name).cast_signed();

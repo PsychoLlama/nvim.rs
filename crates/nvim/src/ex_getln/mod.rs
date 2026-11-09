@@ -13,12 +13,9 @@ use crate::api::extmark::nvim_create_namespace;
 use crate::api::private::helpers::TryState;
 use crate::api::private::helpers::{try_enter, try_leave};
 use crate::api::vim::nvim_create_buf;
-use crate::ascii::CAR;
-use crate::ascii::ESC;
-use crate::ascii::NL;
+use crate::ascii::{CAR, ESC, NL};
 use crate::ascii::{ascii_isspace, ascii_iswhite};
-use crate::autocmd::defs::AcoSave;
-use crate::autocmd::defs::AutoEvent;
+use crate::autocmd::defs::{AcoSave, AutoEvent};
 use crate::autocmd::{
     apply_autocmds, aucmd_prepbuf, aucmd_restbuf, block_autocmds, has_event, unblock_autocmds,
 };
@@ -105,7 +102,6 @@ use crate::r#move::{
     changed_cline_bef_curs, changed_line_abv_curs, invalidate_botline_win, update_topline,
     validate_cursor,
 };
-use crate::normal::defs::MotionType;
 use crate::normal::{clear_showcmd, normal_enter};
 use crate::option::defs::{OptSet, OptVal};
 use crate::option::vars::{
@@ -155,14 +151,12 @@ use crate::state::{
     may_trigger_safestate, state_enter, state_handle_k_event,
 };
 use crate::strings::escaped_bytes;
-use crate::types::CmdIdx;
-use crate::types::EcmdCmd;
-use crate::types::Key;
 use crate::types::{
     ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdLine, CmdMod, CmdParseInfo,
     CmdParseMagic, ColNr, Direction, DispTick, Error, ExArg, ExArgt, Handle, Integer, LineNr,
     Object, OptInt, Pos, ProfTime, SaveVEvent, TypVal, VarNumber,
 };
+use crate::types::{CmdIdx, EcmdCmd, Key};
 use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::state::{UI_CMDLINE, UI_MESSAGES};
 use crate::ui::{
@@ -221,7 +215,6 @@ pub const OPTION_MAGIC_ON: OptMagic = 1;
 pub const OPTION_MAGIC_NOT_SET: OptMagic = 0;
 pub const MAGIC_ALL: Magic = 4;
 pub const MAGIC_ON: Magic = 3;
-pub const MT_CHAR_WISE: MotionType = 0;
 pub const CMD_REDRAW_ALL: CmdRedraw = 2;
 pub const CMD_REDRAW_POS: CmdRedraw = 1;
 pub const CMD_REDRAW_NONE: CmdRedraw = 0;

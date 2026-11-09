@@ -26,8 +26,8 @@ use crate::charset::str2nr::atoi;
 use crate::cstr;
 use crate::eval::typval::ListRef;
 use crate::mbyte::{c_partial_cells_in, c_string_cells, promised_char_len};
-use crate::memory::ThinCString;
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
+use crate::normal::defs::MotionType;
 use crate::register::defs::RegLines;
 use crate::semsg;
 use crate::types::Handle;
@@ -59,17 +59,17 @@ pub fn get_reg_type(regname: RegName) -> (MotionType, i32) {
             | b'%'
             | b'_'
     ) {
-        return (MT_CHAR_WISE, 0);
+        return (MotionType::CharWise, 0);
     }
 
     if regname != 0 && !valid_yank_reg(regname, false) {
-        return (MT_UNKNOWN, 0);
+        return (MotionType::Unknown, 0);
     }
     get_yank_register(regname, YREG_PASTE).read(|reg| {
         if !reg.lines.is_set() {
-            return (MT_UNKNOWN, 0);
+            return (MotionType::Unknown, 0);
         }
-        let width = if reg.kind == MT_BLOCK_WISE {
+        let width = if reg.kind == MotionType::BlockWise {
             reg.width
         } else {
             0
@@ -143,7 +143,8 @@ fn get_reg_contents(regname: RegName, flags: c_int) -> Option<RegContents> {
 
         // One string, with a newline between lines and after the last one if
         // the register is linewise.
-        let needs_nl = |i: usize| reg.kind == MT_LINE_WISE || i < lines.len().wrapping_sub(1);
+        let needs_nl =
+            |i: usize| reg.kind == MotionType::LineWise || i < lines.len().wrapping_sub(1);
         let mut text = XString::with_capacity(lines.iter().map(|line| line.len() + 1).sum());
         for (i, line) in lines.iter().enumerate() {
             text.push_bytes(line);
@@ -212,11 +213,11 @@ enum RegText<'a> {
 
 /// Put `text` in `reg`, appending to whatever is already there.
 ///
-/// `yank_type` may be `MT_UNKNOWN`, in which case it is worked out from the
+/// `yank_type` may be `MotionType::Unknown`, in which case it is worked out from the
 /// text: a trailing newline (or carriage return) means linewise. `blocklen`
 /// is the block width, or -1 to measure it.
 fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, blocklen: i32) {
-    if yank_type == MT_UNKNOWN {
+    if yank_type == MotionType::Unknown {
         let ends_line = match text {
             RegText::Lines(_) => true,
             RegText::Text(text) => text
@@ -224,9 +225,9 @@ fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, b
                 .is_some_and(|&last| c_int::from(last) == NL || c_int::from(last) == CAR),
         };
         yank_type = if ends_line {
-            MT_LINE_WISE
+            MotionType::LineWise
         } else {
-            MT_CHAR_WISE
+            MotionType::CharWise
         };
     }
 
@@ -239,13 +240,13 @@ fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, b
         RegText::Text(text) => {
             let mut newlines = text.iter().filter(|&&b| b == b'\n').count();
             let extraline =
-                yank_type == MT_CHAR_WISE || text.last().is_none_or(|&last| last != b'\n');
+                yank_type == MotionType::CharWise || text.last().is_none_or(|&last| last != b'\n');
             if extraline {
                 newlines += 1;
             }
             // A charwise register's last line has no newline of its own, so
             // the first new line continues it.
-            let append = y_size > 0 && reg.kind == MT_CHAR_WISE;
+            let append = y_size > 0 && reg.kind == MotionType::CharWise;
             if append {
                 newlines -= 1;
             }
@@ -263,7 +264,7 @@ fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, b
     match text {
         RegText::Lines(new) => {
             for line in new {
-                if yank_type == MT_BLOCK_WISE {
+                if yank_type == MotionType::BlockWise {
                     maxlen = maxlen.max(c_string_cells(line.to_bytes()));
                 }
                 lines.push(XString::from_cstr(line));
@@ -283,7 +284,7 @@ fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, b
                     if byte == b'\n' {
                         break;
                     }
-                    if yank_type == MT_BLOCK_WISE {
+                    if yank_type == MotionType::BlockWise {
                         charlen += c_partial_cells_in(text, line_end, end);
                     }
                     // A NUL is one byte and is translated below, so it must
@@ -324,7 +325,7 @@ fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, b
         }
     }
 
-    reg.width = if yank_type == MT_BLOCK_WISE {
+    reg.width = if yank_type == MotionType::BlockWise {
         if blocklen == -1 {
             c_int::try_from(maxlen).unwrap_or(c_int::MAX) - 1
         } else {
@@ -350,7 +351,7 @@ fn finish_write_reg(name: RegName, reg: Reg, old_y_previous: Option<usize>) {
 
 /// Write `text` to register `name`, working out the motion type from it.
 pub fn write_reg_contents(name: RegName, text: &[u8], must_append: bool) {
-    write_reg_contents_ex(name, text, must_append, MT_UNKNOWN, 0);
+    write_reg_contents_ex(name, text, must_append, MotionType::Unknown, 0);
 }
 
 /// Write `lines` to register `name`, one line apiece.
@@ -471,11 +472,11 @@ pub fn write_reg_contents_ex(
 /// Answers false for a `regtype` that does not parse.
 pub fn prepare_yankreg_from_object(reg: &mut YankReg, regtype: &[u8]) -> bool {
     let kind = match regtype.first().copied().unwrap_or(0) {
-        0 => MT_UNKNOWN, // "" means "work it out from the text"
-        b'v' | b'c' => MT_CHAR_WISE,
-        b'V' | b'l' => MT_LINE_WISE,
+        0 => MotionType::Unknown, // "" means "work it out from the text"
+        b'v' | b'c' => MotionType::CharWise,
+        b'V' | b'l' => MotionType::LineWise,
         // CTRL-V.
-        b'b' | 0x16 => MT_BLOCK_WISE,
+        b'b' | 0x16 => MotionType::BlockWise,
         _ => return false,
     };
     // As upstream, both fields are settled before the width is parsed, so a
@@ -485,7 +486,7 @@ pub fn prepare_yankreg_from_object(reg: &mut YankReg, regtype: &[u8]) -> bool {
 
     if regtype.len() > 1 {
         // A width only means something for a block.
-        if kind != MT_BLOCK_WISE {
+        if kind != MotionType::BlockWise {
             return false;
         }
         if !regtype[1].is_ascii_digit() {
@@ -511,16 +512,16 @@ pub fn prepare_yankreg_from_object(reg: &mut YankReg, regtype: &[u8]) -> bool {
 pub fn finish_yankreg_from_object(reg: &mut YankReg, clipboard_adjust: bool) {
     let ends_empty = reg.lines.last().is_some_and(|last| last.is_empty());
     if ends_empty {
-        if reg.kind != MT_CHAR_WISE {
-            if reg.kind == MT_UNKNOWN || clipboard_adjust {
+        if reg.kind != MotionType::CharWise {
+            if reg.kind == MotionType::Unknown || clipboard_adjust {
                 reg.lines.lines_mut().pop();
             }
-            if reg.kind == MT_UNKNOWN {
-                reg.kind = MT_LINE_WISE;
+            if reg.kind == MotionType::Unknown {
+                reg.kind = MotionType::LineWise;
             }
         }
-    } else if reg.kind == MT_UNKNOWN {
-        reg.kind = MT_CHAR_WISE;
+    } else if reg.kind == MotionType::Unknown {
+        reg.kind = MotionType::CharWise;
     }
     reg.update_width();
 }

@@ -38,6 +38,7 @@
 
 use crate::extmark::EXTMARK_UNDO;
 use crate::narrow::len_as_int;
+use crate::normal::defs::MotionType;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -487,7 +488,7 @@ pub(crate) fn get_op_vcol(op: &mut OpArg, redo_visual_vcol: ColNr, initial: bool
         return;
     }
 
-    op.motion_type = MT_BLOCK_WISE;
+    op.motion_type = MotionType::BlockWise;
     // Do not let the end land on a trail byte.
     op.end = snap_pos_to_char(Win::current().buffer(), op.end);
 

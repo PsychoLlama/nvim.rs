@@ -18,6 +18,7 @@
 use crate::cstr::byte_at;
 use crate::memline::Lines;
 use crate::narrow::len_as_int;
+use crate::normal::defs::{MotionType, OpArg};
 use crate::option::vars::P_SEL;
 use crate::regexp::low_byte;
 use crate::strings::find_char;
@@ -25,14 +26,12 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
-use crate::ascii::ascii_iswhite;
+use crate::ascii::{NUL, ascii_iswhite};
 use crate::cursor::{dec_cursor, inc_cursor};
 use crate::drawscreen::state::REDRAW_CMDLINE;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::mbyte::{c_cluster_len, head_off};
 use crate::memline::{Moved, dec};
-use crate::normal::defs::OpArg;
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
     with_visual_anchor,
@@ -347,7 +346,7 @@ pub(crate) fn current_quote(
         }
     } else {
         op.start = Win::current().w_cursor;
-        op.motion_type = MT_CHAR_WISE;
+        op.motion_type = MotionType::CharWise;
     }
 
     // The end position.

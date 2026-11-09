@@ -37,6 +37,7 @@
 
 use crate::indent::Indenter;
 use crate::keycodes::SpecialKey;
+use crate::normal::defs::{MotionType, Outcome};
 use crate::option::vars::{P_FP, P_SEL};
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
@@ -45,7 +46,6 @@ use core::ffi::c_int;
 use super::*;
 use crate::ascii::NUL;
 use crate::r#move::WinValid;
-use crate::normal::defs::Outcome;
 use crate::normal::{
     VisualMode, set_visual_active, set_visual_anchor, set_visual_mode, set_visual_select,
     visual_active, visual_anchor, visual_mode, visual_select,
@@ -141,7 +141,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
     // The `gchar_pos` reads a live position of the current buffer,
     // and only when the operator is a yank -- the chain is left as it is so
     // that it stays as conditional as upstream wrote it.
-    op.empty = op.motion_type != MT_LINE_WISE
+    op.empty = op.motion_type != MotionType::LineWise
         && (!op.inclusive || (op.op_type == OpType::Yank && gchar_pos(&op.end) == NUL))
         && equalpos(op.start, op.end)
         && !(op_virtual() && op.start.coladd != op.end.coladd);
@@ -163,7 +163,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
     if gui_yank {
         Win::current().w_cursor = old_cursor;
     } else if !p_sol()
-        && op.motion_type == MT_LINE_WISE
+        && op.motion_type == MotionType::LineWise
         && !op.end_adjusted
         && (op.op_type == OpType::Lshift
             || op.op_type == OpType::Rshift
@@ -184,16 +184,16 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
 /// `v`, `V` or CTRL-V typed between the operator and its motion.
 fn apply_motion_force(mut op: Op) {
     if op.motion_force.is('V') {
-        op.motion_type = MT_LINE_WISE;
+        op.motion_type = MotionType::LineWise;
     } else if op.motion_force.is('v') {
-        if op.motion_type == MT_LINE_WISE {
+        if op.motion_type == MotionType::LineWise {
             // A linewise motion never set `inclusive`; "exclusive" is the
             // consistent reading, and makes `dvj` behave.
             op.inclusive = false;
-        } else if op.motion_type == MT_CHAR_WISE {
+        } else if op.motion_type == MotionType::CharWise {
             op.inclusive = !op.inclusive;
         }
-        op.motion_type = MT_CHAR_WISE;
+        op.motion_type = MotionType::CharWise;
     } else if op.motion_force == Key::CTRL_V {
         // Turn a line- or charwise motion into a Visual block.
         if !visual_active() {
@@ -365,7 +365,7 @@ fn order_region(mut op: Op) {
             }
             let past_start = Win::current().w_cursor.col > ColNr::ZERO
                 || op.inclusive
-                || op.motion_type == MT_LINE_WISE;
+                || op.motion_type == MotionType::LineWise;
             if past_start && let Some(last) = win.fold_end(Win::current().w_cursor.lnum) {
                 Win::current().w_cursor.lnum = last;
                 // The cursor line is a line of the buffer.
@@ -378,7 +378,7 @@ fn order_region(mut op: Op) {
         // recomputed automatically when the cursor goes back.
         Win::current().w_valid.clear(WinValid::VIRTCOL);
     } else {
-        if !visual_active() && op.motion_type == MT_LINE_WISE {
+        if !visual_active() && op.motion_type == MotionType::LineWise {
             if let Some(first) = win.fold_first(Win::current().w_cursor.lnum) {
                 Win::current().w_cursor.lnum = first;
                 Win::current().w_cursor.col = ColNr::ZERO;
@@ -512,13 +512,13 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
 fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lbr_saved: c_int) {
     // `inclusive` defaults to true; an end on a NUL (an empty line) makes
     // it false, which is what makes `d}P` and `v}dP` behave the same.
-    if op.motion_force.is_nul() || op.motion_type == MT_LINE_WISE {
+    if op.motion_force.is_nul() || op.motion_type == MotionType::LineWise {
         op.inclusive = true;
     }
     if visual_mode().is_line() {
-        op.motion_type = MT_LINE_WISE;
+        op.motion_type = MotionType::LineWise;
     } else if visual_mode().is_char() {
-        op.motion_type = MT_CHAR_WISE;
+        op.motion_type = MotionType::CharWise;
         // `op.end` is a position of the current buffer, so the cache answers
         // with the line it sits on; a column past its end reads as the NUL.
         let ends_on_nul = {
@@ -566,7 +566,7 @@ fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lb
 /// And if the start is on or before that line's first non-blank, the operator
 /// becomes linewise -- strange, but that is what vi does.
 fn adjust_region_end(cmd_arg: &CmdArg, mut op: Op) {
-    if !(op.motion_type == MT_CHAR_WISE
+    if !(op.motion_type == MotionType::CharWise
         && !op.inclusive
         && !cmd_arg.outcome.has(Outcome::NO_ADJ_OP_END)
         && op.end.col == ColNr::ZERO
@@ -583,7 +583,7 @@ fn adjust_region_end(cmd_arg: &CmdArg, mut op: Op) {
     op.line_count -= 1;
     op.end.lnum -= 1;
     if inindent(0) {
-        op.motion_type = MT_LINE_WISE;
+        op.motion_type = MotionType::LineWise;
     } else {
         op.end.col = Lines::current().line_len(op.end.lnum);
         if op.end.col != ColNr::ZERO {
@@ -643,7 +643,7 @@ fn run_operator(
                 // the buffer is untouched.
                 let _ = op.on_copy(op_delete);
                 // Save the cursor line for undo if that has not happened.
-                if op.motion_type == MT_LINE_WISE
+                if op.motion_type == MotionType::LineWise
                     && has_format_option(FoFlag::AUTO)
                     && u_save_cursor().is_ok()
                 {

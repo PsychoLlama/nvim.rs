@@ -9,7 +9,41 @@
 use crate::ops::OpType;
 use crate::types::{ColNr, Key, LineNr, Pos};
 
-pub(crate) type MotionType = ::core::ffi::c_int;
+/// The shape of the text a motion or a register covers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MotionType {
+    /// Not known yet: a register type that has still to be worked out.
+    Unknown = -1,
+    /// From one character to another.
+    #[default]
+    CharWise = 0,
+    /// Whole lines.
+    LineWise = 1,
+    /// A rectangle of columns over a range of lines.
+    BlockWise = 2,
+}
+
+impl MotionType {
+    /// The type ShaDa's `rt` byte names; `None` for any other byte.
+    pub(crate) const fn from_byte(byte: u8) -> Option<Self> {
+        match byte {
+            0 => Some(Self::CharWise),
+            1 => Some(Self::LineWise),
+            2 => Some(Self::BlockWise),
+            _ => None,
+        }
+    }
+
+    /// The byte ShaDa stores for this type: C's `int` held in a `char`.
+    pub(crate) const fn byte(self) -> u8 {
+        match self {
+            Self::Unknown => 0xff,
+            Self::CharWise => 0,
+            Self::LineWise => 1,
+            Self::BlockWise => 2,
+        }
+    }
+}
 
 crate::flag_set! {
     /// What a handler tells the dispatcher about what it did, in the
@@ -116,7 +150,7 @@ impl OpArg {
     pub const ZERO: Self = OpArg {
         op_type: OpType::Nop,
         regname: 0,
-        motion_type: 0,
+        motion_type: MotionType::CharWise,
         motion_force: Key::NUL,
         use_reg_one: false,
         inclusive: false,

@@ -14,6 +14,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::normal::defs::{MotionType, OpArg};
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -23,14 +24,12 @@ use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, showmode};
 use crate::mark::setpcmark;
 use crate::mbyte::head_off;
 use crate::memline::Lines;
-use crate::normal::defs::OpArg;
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
 };
 use crate::option::vars::{p_para, p_sections};
 use crate::search::{BACKWARD, FORWARD, linewhite};
-use crate::types::ColNr;
-use crate::types::LineNr;
+use crate::types::{ColNr, LineNr};
 
 /// `{` / `}` / `[[` / `]]`: move to the `count`th paragraph or section
 /// boundary in `dir`, answering whether one was found.
@@ -326,7 +325,7 @@ pub(crate) fn current_par(
     } else {
         op.start.lnum = start_lnum;
         op.start.col = ColNr::ZERO;
-        op.motion_type = MT_LINE_WISE;
+        op.motion_type = MotionType::LineWise;
     }
     Win::current().w_cursor.lnum = end_lnum;
     Win::current().w_cursor.col = ColNr::ZERO;

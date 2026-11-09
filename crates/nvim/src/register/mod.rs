@@ -31,10 +31,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::ascii::CAR;
-use crate::ascii::ESC;
-use crate::ascii::NL;
-use crate::ascii::TAB;
+use crate::ascii::{CAR, ESC, NL, TAB};
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{apply_autocmds, has_event};
@@ -78,7 +75,7 @@ use crate::message::{
     msg_str, msg_str_hl, msg_title, msgmore,
 };
 use crate::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
-use crate::normal::defs::{MotionType, OpArg};
+use crate::normal::defs::OpArg;
 use crate::ops::{adjust_cursor_eol, get_op_char};
 use crate::option::get_ve_flags;
 use crate::option::vars::{p_ch, p_report};
@@ -104,8 +101,7 @@ use crate::types::{
     ApiString, BOOL_VAR_FALSE, BOOL_VAR_TRUE, CmdModFlags, ColNr, Direction, ExArg, LineNr, Pos,
     SaveVEvent, VarLock,
 };
-use crate::ui::state::COLUMNS;
-use crate::ui::state::UI_MESSAGES;
+use crate::ui::state::{COLUMNS, UI_MESSAGES};
 use crate::ui::ui_has;
 use crate::undo::{u_save, u_save_cursor};
 
@@ -127,10 +123,6 @@ pub use self::special::*;
 pub use self::store::*;
 pub use self::yank::*;
 
-pub const MT_UNKNOWN: MotionType = -1;
-pub const MT_BLOCK_WISE: MotionType = 2;
-pub const MT_LINE_WISE: MotionType = 1;
-pub const MT_CHAR_WISE: MotionType = 0;
 /// The layout of `Y_REGS`, and the slots with a fixed meaning: upstream's
 /// anonymous enum in `register_defs.h`, as indices into the array.
 pub const NUM_REGISTERS: usize = 39;

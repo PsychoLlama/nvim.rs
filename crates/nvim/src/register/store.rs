@@ -265,7 +265,7 @@ impl YankReg {
     ///
     /// Does nothing to a register that is not blockwise.
     pub fn update_width(&mut self) {
-        if self.kind != MT_BLOCK_WISE {
+        if self.kind != MotionType::BlockWise {
             return;
         }
         let widest = self
@@ -328,7 +328,7 @@ pub fn yank_register_mline(regname: RegName) -> (bool, Option<YankReg>) {
         return (false, None); // black hole
     }
     let reg = get_yank_register(regname, YREG_PASTE).snapshot();
-    (reg.kind == MT_LINE_WISE, Some(reg))
+    (reg.kind == MotionType::LineWise, Some(reg))
 }
 
 /// Register `name` as it is now, for `do_put` to work on after something has
@@ -417,7 +417,7 @@ pub fn get_register_name(num: Option<usize>) -> RegName {
 fn reg_empty(reg: &YankReg) -> bool {
     match reg.lines.as_slice() {
         [] => true,
-        [only] => reg.kind == MT_CHAR_WISE && only.is_empty(),
+        [only] => reg.kind == MotionType::CharWise && only.is_empty(),
         _ => false,
     }
 }

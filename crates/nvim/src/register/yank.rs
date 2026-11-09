@@ -29,6 +29,7 @@ use crate::mbyte::head_off;
 use crate::memory::{ThinCString, XString};
 use crate::message_fmt::{msg_bytes, report_msg};
 use crate::narrow::len_as_integer;
+use crate::normal::defs::MotionType;
 use crate::ops::{block_def_of, charwise_block_def};
 use crate::option::vars::P_SEL;
 use crate::register::defs::RegLines;
@@ -82,10 +83,10 @@ fn yank_copy_line(line: &[u8], bd: &BlockDef, exclude_trailing_space: bool) -> X
 /// has `>`. `curr` keeps its width, time and extra data, as upstream's does.
 fn append_to_register(curr: &mut YankReg, new: Vec<XString>, yank_type: MotionType) {
     // Appending linewise text makes the whole register linewise.
-    if yank_type == MT_LINE_WISE {
-        curr.kind = MT_LINE_WISE;
+    if yank_type == MotionType::LineWise {
+        curr.kind = MotionType::LineWise;
     }
-    let join = curr.kind == MT_CHAR_WISE && !cpo_has(CpoFlag::REGAPPEND);
+    let join = curr.kind == MotionType::CharWise && !cpo_has(CpoFlag::REGAPPEND);
     let lines = curr.lines.lines_mut();
     let mut new = new.into_iter();
     if join && let Some(last_old) = lines.last_mut() {
@@ -113,7 +114,7 @@ fn report_yank(op: &OpArg, yank_type: MotionType, yanklines: size_t) {
         let _ = update_screen();
     }
 
-    let (one, many) = if yank_type == MT_BLOCK_WISE {
+    let (one, many) = if yank_type == MotionType::BlockWise {
         (
             c"block of %ld line yanked%s",
             c"block of %ld lines yanked%s",
@@ -146,20 +147,20 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
     // A charwise yank that starts in column 0 and ends before column 0 of
     // a later line is really a linewise one.
     let sel_old = region.is_visual && P_SEL.first_byte() != b'o';
-    if region.motion_type == MT_CHAR_WISE
+    if region.motion_type == MotionType::CharWise
         && region.start.col == ColNr::ZERO
         && !region.inclusive
         && !sel_old
         && region.end.col == ColNr::ZERO
         && yanklines > 1
     {
-        yank_type = MT_LINE_WISE;
+        yank_type = MotionType::LineWise;
         yankendlnum -= 1;
         yanklines = yanklines.wrapping_sub(1);
     }
 
     let mut width = 0;
-    if yank_type == MT_BLOCK_WISE {
+    if yank_type == MotionType::BlockWise {
         // A `$`-extended block has no fixed width.
         let narrow = Win::current().w_curswant == ColNr::MAX;
         width = region.end_vcol - region.start_vcol;
@@ -172,14 +173,16 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
     let mut lnum = region.start.lnum;
     while lnum <= yankendlnum {
         match yank_type {
-            MT_BLOCK_WISE => {
+            MotionType::BlockWise => {
                 let mut text = Buf::current().lines();
                 let line = text.line(lnum);
                 let bd = block_def_of(op, lnum, line);
                 lines.push(yank_copy_line(line, &bd, region.excl_tr_ws));
             }
-            MT_LINE_WISE => lines.push(XString::from_bytes(Buf::current().lines().line(lnum))),
-            MT_CHAR_WISE => {
+            MotionType::LineWise => {
+                lines.push(XString::from_bytes(Buf::current().lines().line(lnum)))
+            }
+            MotionType::CharWise => {
                 let mut bd = charwise_block_def(region.start, region.end, lnum, region.inclusive);
                 let mut text = Buf::current().lines();
                 let line = text.line(lnum);
@@ -208,7 +211,7 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
 
     if message {
         // A single charwise line is not worth reporting.
-        if yank_type == MT_CHAR_WISE && yanklines == 1 {
+        if yank_type == MotionType::CharWise && yanklines == 1 {
             yanklines = 0;
         }
         if len_as_integer(yanklines) > p_report() {
@@ -219,11 +222,11 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         Buf::current().b_op_start = region.start;
         Buf::current().b_op_end = region.end;
-        if yank_type == MT_LINE_WISE {
+        if yank_type == MotionType::LineWise {
             Buf::current().b_op_start.col = ColNr::ZERO;
             Buf::current().b_op_end.col = ColNr::MAX;
         }
-        if yank_type != MT_LINE_WISE && !region.inclusive {
+        if yank_type != MotionType::LineWise && !region.inclusive {
             // An exclusive region's `']` is the character *before* the end.
             // Stepped on a copy: `decl` reads the current buffer itself.
             let mut end = Buf::current().b_op_end;
@@ -238,9 +241,11 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
 /// unknown type.
 pub fn format_reg_type(reg_type: MotionType, reg_width: i32) -> ThinCString {
     match reg_type {
-        MT_LINE_WISE => ThinCString::from_bytes(b"V"),
-        MT_CHAR_WISE => ThinCString::from_bytes(b"v"),
-        MT_BLOCK_WISE => ThinCString::from_vec(format!("\x16{}", reg_width + 1).into_bytes()),
+        MotionType::LineWise => ThinCString::from_bytes(b"V"),
+        MotionType::CharWise => ThinCString::from_bytes(b"v"),
+        MotionType::BlockWise => {
+            ThinCString::from_vec(format!("\x16{}", reg_width + 1).into_bytes())
+        }
         _ => ThinCString::empty(),
     }
 }

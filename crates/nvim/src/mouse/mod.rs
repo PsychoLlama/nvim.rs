@@ -51,7 +51,7 @@ use crate::grid::grid_adjust;
 use crate::mbyte::{c_cluster_len, char_at, class_of, cluster_len, utf8len_tab};
 use crate::mouse::state::{MOUSE_COL, MOUSE_ROW};
 use crate::narrow::len_as_int;
-use crate::normal::defs::{CmdArg, MotionType};
+use crate::normal::defs::CmdArg;
 use crate::normal::sel_exclusive;
 use crate::optionstr::OptString;
 use crate::plines::{getvcols, win_chartabsize};
@@ -87,9 +87,6 @@ pub(crate) use self::visual::*;
 
 // ---------------------------------------------------------------------------
 // The flag alphabet
-
-pub(crate) const MT_CHAR_WISE: MotionType = 0;
-pub(crate) const MT_LINE_WISE: MotionType = 1;
 
 /// Where a click landed, as [`jump_to_mouse`] and `get_fpos_of_mouse()` report
 /// it: one `IN_*` value, plus the `MOUSE_*`/`CURSOR_MOVED` bits above them.

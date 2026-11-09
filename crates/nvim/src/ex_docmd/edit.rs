@@ -9,16 +9,16 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::getchar::Remap;
-use crate::getchar::ins_typebuf;
+use crate::getchar::{Remap, ins_typebuf};
 use crate::memline::MlFlags;
 use crate::message::emsg;
 use crate::message_fmt::msg_bytes;
 use crate::narrow::number_as_lnum;
-use crate::ops::run_ex_operator;
+use crate::normal::defs::{MotionType, OpArg};
+use crate::ops::{OpType, do_join, run_ex_operator};
 use crate::os::cshim::gettext;
 use crate::os::time::sleep_serving_events;
-use crate::register::put_at_cursor;
+use crate::register::{do_execreg, put_at_cursor};
 use crate::semsg;
 use crate::smsg;
 use crate::types::CmdIdx;
@@ -35,9 +35,7 @@ use crate::ex_docmd::address::get_address;
 use crate::ex_docmd::cmdline::do_cmdline;
 use crate::ex_docmd::scan::get_flags;
 use crate::ex_docmd::source::LineSource;
-use crate::ex_docmd::{
-    DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, MT_LINE_WISE, OPTION_MAGIC_OFF, OPTION_MAGIC_ON,
-};
+use crate::ex_docmd::{DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, OPTION_MAGIC_OFF, OPTION_MAGIC_ON};
 use crate::fold::{fold_create, fold_manual_allowed, op_fold_range};
 use crate::getchar::{beep_flush, stuff_empty, typeahead, vpeekc};
 
@@ -56,12 +54,9 @@ use crate::r#move::{
     validate_cursor,
 };
 use crate::normal::{end_visual_mode, get_vtopline, visual_active};
-use crate::ops::do_join;
 
 use crate::option::{cpo_has, get_scrolloff_value};
 
-use crate::normal::defs::OpArg;
-use crate::ops::OpType;
 use crate::option::defs::CpoFlag;
 use crate::os::input::os_breakcheck;
 use crate::os::libc::int64_t;
@@ -69,7 +64,6 @@ use crate::plines::plines_m_win_fill;
 use crate::pos::MAXLNUM;
 use crate::regexp::OptMagic;
 use crate::register::defs::{PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, PutFlags};
-use crate::register::do_execreg;
 use crate::search::{BACKWARD, FORWARD};
 use crate::types::{ColNr, ExArg, Handle, LineNr, Pos};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
@@ -215,7 +209,7 @@ pub(crate) fn ex_operators(excmd: &mut ExArg) {
         start: line(excmd.line1),
         end: line(excmd.line2),
         line_count: (excmd.line2 - excmd.line1 + 1),
-        motion_type: MT_LINE_WISE,
+        motion_type: MotionType::LineWise,
         ..OpArg::default()
     };
     // An Ex range is whole lines, so 'virtualedit' must not apply.

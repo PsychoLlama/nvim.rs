@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::normal::defs::{MotionType, OpArg};
 use crate::option::vars::P_SEL;
 use crate::strings::has_char;
 use crate::types::ColNr;
@@ -22,14 +23,12 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
-use crate::ascii::ascii_iswhite;
+use crate::ascii::{NUL, ascii_iswhite};
 use crate::cursor::gchar_cursor;
 use crate::drawscreen::state::REDRAW_CMDLINE;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::mark::setpcmark;
 use crate::memline::{Lines, Moved, decl, gchar_pos, inc, incl};
-use crate::normal::defs::OpArg;
 use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor};
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
@@ -397,7 +396,7 @@ pub(crate) fn current_sent(op: &mut OpArg, count: c_int, include: bool) -> Resul
         let inclusive = incl(&mut Win::current().cursor()).is_stuck();
         op.inclusive = inclusive;
         op.start = start_pos;
-        op.motion_type = MT_CHAR_WISE;
+        op.motion_type = MotionType::CharWise;
     }
     Ok(())
 }

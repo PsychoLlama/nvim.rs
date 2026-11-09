@@ -37,6 +37,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
 use crate::message_fmt::report_msg;
 use crate::narrow::len_as_int;
+use crate::normal::defs::MotionType;
 use crate::os::cshim::ctype_bits;
 use crate::tr_plural;
 use crate::types::Key;
@@ -183,12 +184,12 @@ pub fn op_addsub(op: &mut OpArg, prenum1: i32, g_cmd: bool) {
 /// `pos.lnum` must be a line of the region.
 fn addsub_line_span(op: &mut OpArg, bd: &mut BlockDef, pos: &mut Pos) -> c_int {
     // Every line touched below is one of the region's.
-    if op.motion_type == MT_BLOCK_WISE {
+    if op.motion_type == MotionType::BlockWise {
         block_prep(bd, op, pos.lnum, false);
         pos.col = bd.textcol;
         return bd.textlen;
     }
-    if op.motion_type == MT_LINE_WISE {
+    if op.motion_type == MotionType::LineWise {
         Win::current().w_cursor.col = ColNr::ZERO;
         pos.col = ColNr::ZERO;
         return Lines::current().line_len(pos.lnum).get();

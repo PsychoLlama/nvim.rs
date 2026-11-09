@@ -11,14 +11,13 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
-use crate::keycodes::ModMask;
-use crate::keycodes::SpecialKey;
-use crate::ops::Op;
+use crate::keycodes::{ModMask, SpecialKey};
+use crate::normal::defs::MotionType;
+use crate::ops::{Op, OpType};
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
-use crate::ascii::NUL;
-use crate::ascii::ascii_iswhite;
+use crate::ascii::{NUL, ascii_iswhite};
 use crate::buffer::{buf_is_prompt, buf_is_quickfix, current_buf};
 use crate::charset::vim_isprintc;
 use crate::cursor::{coladvance, gchar_cursor, with_cursor_rest};
@@ -34,10 +33,9 @@ use crate::mark::setpcmark;
 use crate::mbyte::{cluster_len, mb_adjust_cursor};
 use crate::normal::defs::{CmdArg, Outcome};
 use crate::normal::{
-    MT_CHAR_WISE, MT_LINE_WISE, TAB, adjust_for_sel, clear_op_beep, may_fold_open, nv_page,
-    unadjust_for_sel, visual_active, visual_mode,
+    TAB, adjust_for_sel, clear_op_beep, may_fold_open, nv_page, unadjust_for_sel, visual_active,
+    visual_mode,
 };
-use crate::ops::OpType;
 use crate::option::defs::CpoFlag;
 use crate::option::vars::{P_SEL, p_sel, p_ww};
 use crate::option::{cpo_has, get_ve_flags};
@@ -76,7 +74,7 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
     // `$` asked for the end of the line, which has to be recomputed on
     // every row rather than carried as a column.
     let mut atend = false;
-    op.motion_type = MT_CHAR_WISE;
+    op.motion_type = MotionType::CharWise;
     op.inclusive = win.w_curswant == ColNr::MAX;
 
     // The first screen row of a line can be narrower than the rest: only
@@ -206,7 +204,7 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
     let mut op = cmd_arg.op();
     let mut win = Win::current();
     let wp = win;
-    op.motion_type = MT_LINE_WISE;
+    op.motion_type = MotionType::LineWise;
     setpcmark();
     if cmdchar.is('L') {
         validate_botline_win(wp);
@@ -297,7 +295,7 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
     let (cmdchar, count1) = (cmd_arg.cmdchar, cmd_arg.count1);
     let mut op = cmd_arg.op();
     let mut win = Win::current();
-    op.motion_type = MT_CHAR_WISE;
+    op.motion_type = MotionType::CharWise;
     op.inclusive = false;
     // With an inclusive selection the cursor may sit one past the last
     // character; 'virtualedit' handles that itself.
@@ -381,7 +379,7 @@ pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
         nv_bck_word(cmd_arg);
         return;
     }
-    cmd_arg.op().motion_type = MT_CHAR_WISE;
+    cmd_arg.op().motion_type = MotionType::CharWise;
     cmd_arg.op().inclusive = false;
 
     // Which 'whichwrap' flag lets this key wrap to the previous line.
@@ -439,7 +437,7 @@ pub(crate) fn nv_up(cmd_arg: &mut CmdArg) {
         nv_page(cmd_arg);
         return;
     }
-    cmd_arg.op().motion_type = MT_LINE_WISE;
+    cmd_arg.op().motion_type = MotionType::LineWise;
     if cursor_up(cmd_arg.count1, cmd_arg.op().op_type == OpType::Nop).is_err() {
         clear_op_beep(cmd_arg.op());
     } else if cmd_arg.arg != 0 {
@@ -476,7 +474,7 @@ pub(crate) fn nv_down(cmd_arg: &mut CmdArg) {
             return;
         }
     }
-    cmd_arg.op().motion_type = MT_LINE_WISE;
+    cmd_arg.op().motion_type = MotionType::LineWise;
     if cursor_down(cmd_arg.count1, cmd_arg.op().op_type == OpType::Nop).is_err() {
         clear_op_beep(cmd_arg.op());
     } else if cmd_arg.arg != 0 {
@@ -500,7 +498,7 @@ pub(crate) fn nv_end(cmd_arg: &mut CmdArg) {
 
 /// `$`: the end of the line, `count1 - 1` lines down.
 pub(crate) fn nv_dollar(cmd_arg: &mut CmdArg) {
-    cmd_arg.op().motion_type = MT_CHAR_WISE;
+    cmd_arg.op().motion_type = MotionType::CharWise;
     cmd_arg.op().inclusive = true;
     // Under 'virtualedit' an operator that starts past the end of the
     // line keeps the column it has rather than asking for the end again.
@@ -532,7 +530,7 @@ pub(crate) fn nv_csearch(cmd_arg: &mut CmdArg) {
     }
     // `t` and `T` stop *before* the character.
     let t_cmd = cmd_arg.cmdchar.is('t') || cmd_arg.cmdchar.is('T');
-    cmd_arg.op().motion_type = MT_CHAR_WISE;
+    cmd_arg.op().motion_type = MotionType::CharWise;
     if cmd_arg.nchar.is_special() || searchc(cmd_arg, t_cmd).is_err() {
         clear_op_beep(cmd_arg.op());
         if cursor_dec {
@@ -570,7 +568,7 @@ pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
         if count0 > 100 {
             clear_op_beep(op);
         } else {
-            op.motion_type = MT_LINE_WISE;
+            op.motion_type = MotionType::LineWise;
             setpcmark();
             let line_count = Buf::current().b_ml.ml_line_count;
             let count = line_count.get();
@@ -585,7 +583,7 @@ pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
             beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
     } else {
-        op.motion_type = MT_CHAR_WISE;
+        op.motion_type = MotionType::CharWise;
         op.use_reg_one = true;
         let pos = findmatch(Some(&mut op), NUL);
         if let Some(pos) = pos {
@@ -605,7 +603,7 @@ pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
 
 /// `(` and `)`: back and forward a sentence.
 pub(crate) fn nv_brace(cmd_arg: &mut CmdArg) {
-    cmd_arg.op().motion_type = MT_CHAR_WISE;
+    cmd_arg.op().motion_type = MotionType::CharWise;
     cmd_arg.op().use_reg_one = true;
     cmd_arg.op().inclusive = false;
     Win::current().w_set_curswant = true;
@@ -620,7 +618,7 @@ pub(crate) fn nv_brace(cmd_arg: &mut CmdArg) {
 
 /// `{` and `}`: back and forward a paragraph.
 pub(crate) fn nv_findpar(cmd_arg: &mut CmdArg) {
-    cmd_arg.op().motion_type = MT_CHAR_WISE;
+    cmd_arg.op().motion_type = MotionType::CharWise;
     cmd_arg.op().inclusive = false;
     cmd_arg.op().use_reg_one = true;
     Win::current().w_set_curswant = true;
@@ -649,7 +647,7 @@ pub(crate) fn nv_home(cmd_arg: &mut CmdArg) {
 
 /// `|`: to a screen column.
 pub(crate) fn nv_pipe(cmd_arg: &mut CmdArg) {
-    cmd_arg.op().motion_type = MT_CHAR_WISE;
+    cmd_arg.op().motion_type = MotionType::CharWise;
     cmd_arg.op().inclusive = false;
     beginline(BeginlineOpts::NONE);
     if cmd_arg.count0 > 0 {
@@ -664,7 +662,7 @@ pub(crate) fn nv_pipe(cmd_arg: &mut CmdArg) {
 
 /// `b` and `B`: back a word.
 pub(crate) fn nv_bck_word(cmd_arg: &mut CmdArg) {
-    cmd_arg.op().motion_type = MT_CHAR_WISE;
+    cmd_arg.op().motion_type = MotionType::CharWise;
     cmd_arg.op().inclusive = false;
     Win::current().w_set_curswant = true;
     if bck_word(cmd_arg.count1, cmd_arg.arg != 0, false).is_err() {
@@ -694,7 +692,7 @@ pub(crate) fn nv_wordcmd(cmd_arg: &mut CmdArg) {
         }
     }
 
-    cmd_arg.op().motion_type = MT_CHAR_WISE;
+    cmd_arg.op().motion_type = MotionType::CharWise;
     Win::current().w_set_curswant = true;
     let moved = if word_end {
         end_word(cmd_arg.count1, cmd_arg.arg != 0, cw_on_word, false)
@@ -734,7 +732,7 @@ pub(crate) fn adjust_cursor(mut op: Op) {
 /// `0` and `^`: the first column, or the first non-blank, which is what the
 /// argument says.
 pub(crate) fn nv_beginline(cmd_arg: &mut CmdArg) {
-    cmd_arg.op().motion_type = MT_CHAR_WISE;
+    cmd_arg.op().motion_type = MotionType::CharWise;
     cmd_arg.op().inclusive = false;
     beginline(BeginlineOpts::from_bits(cmd_arg.arg));
     may_fold_open(cmd_arg, OPT_FDO_FLAG_HOR as c_uint);
@@ -745,7 +743,7 @@ pub(crate) fn nv_beginline(cmd_arg: &mut CmdArg) {
 pub(crate) fn nv_goto(cmd_arg: &mut CmdArg) {
     let last = Buf::current().b_ml.ml_line_count;
     let mut lnum = if cmd_arg.arg != 0 { last } else { LineNr::ONE };
-    cmd_arg.op().motion_type = MT_LINE_WISE;
+    cmd_arg.op().motion_type = MotionType::LineWise;
     setpcmark();
     if cmd_arg.count0 != 0 {
         lnum = LineNr::new(cmd_arg.count0);

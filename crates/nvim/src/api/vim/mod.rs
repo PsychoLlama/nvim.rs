@@ -45,8 +45,7 @@ use crate::ex_docmd::state::EX_NORMAL_BUSY;
 use crate::ex_docmd::{change_dir, exec_normal};
 use crate::ex_eval::aborting;
 use crate::ex_getln::state::CMDPREVIEW;
-use crate::fold::FoldInfo;
-use crate::fold::fold_info;
+use crate::fold::{FoldInfo, fold_info};
 use crate::getchar::state::{TYPEBUF_WAS_FILLED, VGETC_BUSY};
 use crate::getchar::{ins_typebuf, paste_store};
 use crate::global_cell::GlobalCell;
@@ -66,8 +65,7 @@ use crate::highlight_group::{
 };
 use crate::insexpand::get_cot_flags;
 use crate::keycodes::{name_to_mod_mask, replace_termcodes};
-use crate::log::G_STATS;
-use crate::log::LOGLVL_DBG;
+use crate::log::{G_STATS, LOGLVL_DBG};
 use crate::lua::executor::{nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe};
 use crate::lua::state::TSLUA_QUERY_PARSE_COUNT;
 use crate::mapping::{keymap_array, modify_keymap};
@@ -87,7 +85,6 @@ use crate::r#move::{changed_window_setting, update_topline, validate_cursor};
 use crate::mpack::typedefs::mpack_token_type_t;
 use crate::msgpack_rpc::channel::rpc_set_client_info;
 use crate::msgpack_rpc::unpacker::unpack;
-use crate::normal::defs::MotionType;
 use crate::normal::reset_visual_and_resel;
 use crate::option::defs::OptVal;
 use crate::option::vars::{P_LZ, p_cpo, p_lz};
@@ -159,7 +156,6 @@ pub const REPTERM_NO_SPECIAL: ::core::ffi::c_uint = 4;
 pub const REPTERM_DO_LT: ::core::ffi::c_uint = 2;
 pub const REPTERM_FROM_PART: ::core::ffi::c_uint = 1;
 pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
-pub const MT_CHAR_WISE: MotionType = 0;
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 /// The top bit of a channel id: an API call made by the editor itself
 /// rather than by a client.

@@ -20,6 +20,7 @@ use super::pack::{Packer, pack_entry};
 use super::unpack::{Cursor, Source};
 use super::*;
 use crate::api::keysets::{KeyDict__shada_mark, KeyDict__shada_register};
+use crate::normal::defs::MotionType;
 use core::ffi::CStr;
 use std::ffi::CString;
 
@@ -138,7 +139,7 @@ fn widths_the_writer_keeps() {
     let mut out = Packer::default();
     let reg = ShadaRegister {
         name: b'q'.cast_signed(),
-        motion: MOTION_BLOCKWISE,
+        motion: MotionType::BlockWise.byte(),
         contents: vec![ApiString::from_bytes(&[b'y'; 255])],
         is_unnamed: true,
         width: 300_000_000,

@@ -25,10 +25,8 @@ use crate::api::keysets::KeyDict__shada_search_pat;
 use crate::memory::XString;
 use crate::normal::defs::MotionType;
 use crate::registry::{IdMap, IdSet, id_map, id_set};
-use crate::types::Buffer;
-use crate::types::ColNr;
-use crate::types::LineNr;
 use crate::types::{ApiDict, ApiString, Pos, Timestamp, TypVal};
+use crate::types::{Buffer, ColNr, LineNr};
 use core::ffi::{CStr, c_char};
 use std::collections::VecDeque;
 use std::rc::Rc;
@@ -180,11 +178,6 @@ pub(crate) const HIST_COUNT: usize = 5;
 /// The search history's number: the only one with a separator.
 pub(crate) const HIST_SEARCH: u8 = 1;
 
-/// The three motion types a register can have.
-pub(crate) const MOTION_CHARWISE: MotionType = 0;
-pub(crate) const MOTION_LINEWISE: MotionType = 1;
-pub(crate) const MOTION_BLOCKWISE: MotionType = 2;
-
 /// The lettered marks of one buffer.
 pub(crate) const NMARKS: usize = 26;
 /// The most entries a jump list or a change list holds.
@@ -329,7 +322,8 @@ pub struct ShadaGlobalVar {
 #[derive(Debug)]
 pub struct ShadaRegister {
     pub(crate) name: c_char,
-    pub(crate) motion: MotionType,
+    /// The `rt` byte as the file holds it: a reader may find any value.
+    pub(crate) motion: u8,
     pub(crate) contents: Vec<ApiString>,
     pub(crate) is_unnamed: bool,
     /// The width of a blockwise register; 0 for the other two.
@@ -510,7 +504,7 @@ const DEFAULT_SEARCH_PATTERN: KeyDict__shada_search_pat = KeyDict__shada_search_
 /// What a register entry defaults to: charwise, unnamed, no width.
 const DEFAULT_REGISTER: ShadaRegister = ShadaRegister {
     name: 0,
-    motion: MOTION_CHARWISE,
+    motion: MotionType::CharWise.byte(),
     contents: Vec::new(),
     is_unnamed: false,
     width: 0,

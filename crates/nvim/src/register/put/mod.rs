@@ -36,6 +36,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::c_cluster_len;
 use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_int;
+use crate::normal::defs::MotionType;
 use crate::register::defs::RegLines;
 use crate::semsg;
 use crate::types::Key;
@@ -179,7 +180,7 @@ fn split_expr_result(insert_string: &XString) -> (Vec<XString>, MotionType) {
     // Each line is its own string now, so the walk is one pass over the
     // bytes rather than upstream's count-then-fill over one allocation it
     // punched NULs into.
-    let mut y_type = MT_CHAR_WISE;
+    let mut y_type = MotionType::CharWise;
     let mut lines: Vec<XString> = Vec::new();
     let mut rest: &[u8] = insert_string;
     loop {
@@ -193,7 +194,7 @@ fn split_expr_result(insert_string: &XString) -> (Vec<XString>, MotionType) {
                 rest = &rest[at + 1..];
                 // A trailing newline makes the register linewise.
                 if rest.is_empty() {
-                    y_type = MT_LINE_WISE;
+                    y_type = MotionType::LineWise;
                     break;
                 }
             }
@@ -244,14 +245,14 @@ impl Put {
     ///
     /// Answers false when undo could not be saved.
     fn save_for_undo(&self) -> bool {
-        if self.kind == MT_BLOCK_WISE {
+        if self.kind == MotionType::BlockWise {
             let mut lnum = Win::current().w_cursor.lnum + len_as_int(self.lines.len()) + 1;
             lnum = lnum.min(Buf::current().b_ml.ml_line_count + 1);
             // `lnum` is capped at one past the last line.
             return u_save(Win::current().w_cursor.lnum - 1, lnum).is_ok();
         }
 
-        if self.kind != MT_LINE_WISE {
+        if self.kind != MotionType::LineWise {
             return u_save_cursor().is_ok();
         }
 
@@ -288,7 +289,7 @@ impl Put {
     /// text goes in: break a tab into spaces, or pad out past the end of the
     /// line.
     fn make_room_for_virtualedit(&self) {
-        if self.ve_flags != OPT_VE_FLAG_ALL as c_uint || self.kind != MT_CHAR_WISE {
+        if self.ve_flags != OPT_VE_FLAG_ALL as c_uint || self.kind != MotionType::CharWise {
             return;
         }
         if gchar_cursor() == TAB {
@@ -389,7 +390,7 @@ pub fn do_put(
         count,
         flags,
         ve_flags,
-        kind: MT_CHAR_WISE,
+        kind: MotionType::CharWise,
         width: 0,
         lines: RegLines::NONE,
         nr_lines: 0,
@@ -421,7 +422,7 @@ pub fn do_put(
             break 'end;
         }
 
-        if put.kind == MT_LINE_WISE {
+        if put.kind == MotionType::LineWise {
             let split_failed = put.flags & PUT_LINE_SPLIT != 0 && !put.split_current_line();
             if split_failed {
                 break 'end;
@@ -437,7 +438,7 @@ pub fn do_put(
 
         if put.flags & PUT_LINE != 0 {
             // `:put`, or `p` in Visual line mode.
-            put.kind = MT_LINE_WISE;
+            put.kind = MotionType::LineWise;
         }
 
         if put.lines.is_empty() {
@@ -460,10 +461,10 @@ pub fn do_put(
         let mut lnum = Win::current().w_cursor.lnum;
         let mut col = Win::current().w_cursor.col;
 
-        if put.kind == MT_BLOCK_WISE {
+        if put.kind == MotionType::BlockWise {
             put.blockwise(lnum);
         } else {
-            if put.kind == MT_CHAR_WISE {
+            if put.kind == MotionType::CharWise {
                 // For charwise text, FORWARD is BACKWARD on the next
                 // character.
                 if put.dir == FORWARD && gchar_cursor() != NUL {
@@ -481,7 +482,7 @@ pub fn do_put(
             }
             let new_cursor = Win::current().w_cursor;
 
-            if put.kind == MT_CHAR_WISE && put.lines.len() == 1 {
+            if put.kind == MotionType::CharWise && put.lines.len() == 1 {
                 put.charwise_one_line(lnum, col);
             } else {
                 put.multiline(lnum, col, new_cursor);

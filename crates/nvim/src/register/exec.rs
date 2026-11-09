@@ -26,15 +26,14 @@
 use crate::cstr::{self, until_nul};
 use crate::getchar::Remap;
 use crate::mbyte::char_count;
+use crate::normal::defs::MotionType;
 use crate::register::defs::RegLines;
-use crate::types::Key;
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
+use crate::types::{Failed, Key};
+use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
 use crate::normal::visual_active;
-use crate::types::Failed;
 
 /// Put `p` in register `regname` as a single charwise line, appending for an
 /// uppercase name.
@@ -60,7 +59,7 @@ fn stuff_yank(regname: RegName, p: XString) -> Result<(), Failed> {
         } else {
             reg.clear();
             reg.lines = RegLines::new(vec![p]);
-            reg.kind = MT_CHAR_WISE;
+            reg.kind = MotionType::CharWise;
         }
         reg.timestamp = os_time();
     });
@@ -338,7 +337,7 @@ pub fn do_execreg(regname: RegName, colon: bool, addcr: bool, silent: bool) -> R
         i -= 1;
         // A linewise register, and every line of a charwise one but the
         // last, is followed by a newline.
-        let nl_failed = (reg.kind == MT_LINE_WISE || i < lines.len() - 1 || addcr)
+        let nl_failed = (reg.kind == MotionType::LineWise || i < lines.len() - 1 || addcr)
             && ins_typebuf(b"\n", remap, 0, true, silent).is_err();
         if nl_failed {
             return Err(Failed);
@@ -417,7 +416,7 @@ pub fn insert_reg(
     }
     let lines = reg.lines.as_slice();
     for (i, line) in lines.iter().enumerate() {
-        if regname == b'-' && reg.kind == MT_CHAR_WISE {
+        if regname == b'-' && reg.kind == MotionType::CharWise {
             // The small-delete register goes in through `do_put`, so that
             // Replace mode's stack and the redo buffer stay right.
             let mut dir = BACKWARD;
@@ -441,7 +440,7 @@ pub fn insert_reg(
             do_put(regname, None, dir, 1, PUT_CURSEND);
         } else {
             stuffescaped(line, literally);
-            if reg.kind == MT_LINE_WISE || i < lines.len() - 1 {
+            if reg.kind == MotionType::LineWise || i < lines.len() - 1 {
                 stuff_readbuf_char(Key::ascii(b'\n'));
             }
         }

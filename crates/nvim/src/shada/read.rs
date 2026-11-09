@@ -21,8 +21,7 @@
 use super::low_byte;
 use crate::buffer::BLN_LISTED;
 use crate::buffer::{buflist_new, buflist_setfpos};
-use crate::eval::typval::ListRef;
-use crate::eval::typval::tv_list_alloc;
+use crate::eval::typval::{ListRef, tv_list_alloc};
 use crate::eval::var_set_global;
 use crate::eval::vars::{get_vim_var_list_handle, set_vim_var_list};
 use crate::ex_cmds::{shada_replacement, sub_restore_replacement};
@@ -33,6 +32,7 @@ use crate::mark::{
 };
 use crate::memory::{ThinCString, XString};
 use crate::narrow::len_as_int;
+use crate::normal::defs::MotionType;
 use crate::option::vars::p_hi;
 use crate::path::{path_fnamecmp, path_try_shorten_fname};
 use crate::register::{ShadaYank, shada_register_timestamp, shada_set_register};
@@ -49,9 +49,9 @@ use core::ffi::{c_char, c_int};
 use super::file::{find_shada_parameter, get_shada_parameter};
 use super::unpack::Source;
 use super::{
-    DEFAULT_SEARCH_PATTERN, HIST_COUNT, HistoryMergerState, MOTION_BLOCKWISE, MOTION_CHARWISE,
-    MOTION_LINEWISE, ReadKinds, ReadStatus, ShadaBufferListItem, ShadaEntry, ShadaEntryData,
-    ShadaExtra, ShadaFileMark, WANT_ALWAYS, kind, read_flags, want,
+    DEFAULT_SEARCH_PATTERN, HIST_COUNT, HistoryMergerState, ReadKinds, ReadStatus,
+    ShadaBufferListItem, ShadaEntry, ShadaEntryData, ShadaExtra, ShadaFileMark, WANT_ALWAYS, kind,
+    read_flags, want,
 };
 
 /// The kinds of entry a read with these flags is looking for.
@@ -203,12 +203,9 @@ impl Reading {
                 }
             }
             ShadaEntryData::Register(reg) => {
-                if reg.motion != MOTION_CHARWISE
-                    && reg.motion != MOTION_LINEWISE
-                    && reg.motion != MOTION_BLOCKWISE
-                {
+                let Some(motion) = MotionType::from_byte(reg.motion) else {
                     return;
-                }
+                };
                 if !self.force
                     && shada_register_timestamp(reg.name).is_none_or(|held| held >= timestamp)
                 {
@@ -216,7 +213,7 @@ impl Reading {
                 }
                 let yank = ShadaYank {
                     contents: reg.contents,
-                    motion: reg.motion,
+                    motion,
                     width: len_as_int(reg.width),
                     timestamp,
                     extra,

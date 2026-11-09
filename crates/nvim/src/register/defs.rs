@@ -123,8 +123,8 @@ impl core::ops::Deref for RegLines {
 #[derive(Clone, Debug)]
 pub struct YankReg {
     pub lines: RegLines,
-    /// `MT_CHAR_WISE`, `MT_LINE_WISE`, `MT_BLOCK_WISE`, or `MT_UNKNOWN` while a
-    /// write is still deciding.
+    /// The register's shape; [`MotionType::Unknown`] while a write is still
+    /// deciding.
     pub kind: MotionType,
     /// A blockwise register's width in cells, less one.
     pub width: i32,
@@ -137,7 +137,7 @@ impl YankReg {
     /// `static yankreg_T Y_REGS[NUM_REGISTERS] = { 0 }`.
     pub const EMPTY: YankReg = YankReg {
         lines: RegLines::NONE,
-        kind: 0, // kMTCharWise
+        kind: MotionType::CharWise,
         width: 0,
         timestamp: 0,
         extra: None,

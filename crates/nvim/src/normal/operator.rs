@@ -15,7 +15,8 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::types::Key;
+use crate::normal::defs::{CmdArg, MotionType};
+use crate::types::{Key, Vv};
 use crate::winlayer::Win;
 
 use crate::buffer::{buf_is_prompt, current_buf};
@@ -26,10 +27,9 @@ use crate::getchar::{plain_vgetc, start_redo, stuff_readbuf_char};
 use crate::guard::Keys;
 use crate::keycodes::SpecialKey;
 use crate::message::{emsg, emsg_invreg};
-use crate::normal::defs::CmdArg;
 use crate::normal::{
-    E_CMDLINE_WINDOW_ALREADY_OPEN, MT_LINE_WISE, check_clear_op, check_clear_op_quit,
-    clear_op_beep, langmap_adjust, visual_active, visual_select,
+    E_CMDLINE_WINDOW_ALREADY_OPEN, check_clear_op, check_clear_op_quit, clear_op_beep,
+    langmap_adjust, visual_active, visual_select,
 };
 use crate::ops::OpType;
 use crate::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};
@@ -39,7 +39,6 @@ use crate::register::{
     RegName, do_execreg, do_record, get_expr_register, register_name, valid_yank_reg,
 };
 use crate::state::mode::{ARROW_USED, RESTART_EDIT, V_ISUAL_SELECT_REG};
-use crate::types::Vv;
 use crate::undo::{u_redo, u_undo, u_undoline};
 use crate::winlayer::graph::CMDWIN_TYPE;
 
@@ -216,7 +215,7 @@ pub(crate) fn set_op_var(optype: OpType) {
 
 /// The linewise form of an operator: `count1` lines from this one.
 pub(crate) fn nv_lineop(cmd_arg: &mut CmdArg) {
-    cmd_arg.op().motion_type = MT_LINE_WISE;
+    cmd_arg.op().motion_type = MotionType::LineWise;
     let op = cmd_arg.op();
     if cursor_down(cmd_arg.count1 - 1, op.op_type == OpType::Nop).is_err() {
         clear_op_beep(op);

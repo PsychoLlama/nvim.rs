@@ -16,7 +16,6 @@
 use crate::channel::defs::ChannelPart;
 use crate::env::XDGVarType;
 use crate::event::objects::ProcType;
-use crate::normal::defs::MotionType;
 use crate::os::libc::uint64_t;
 use crate::register::defs::GRegFlags;
 
@@ -86,10 +85,6 @@ pub const CHANNEL_PART_RPC: ChannelPart = 3;
 pub const CHANNEL_PART_STDERR: ChannelPart = 2;
 pub const CHANNEL_PART_STDOUT: ChannelPart = 1;
 pub const CHANNEL_PART_STDIN: ChannelPart = 0;
-pub const MT_UNKNOWN: MotionType = -1;
-pub const MT_BLOCK_WISE: MotionType = 2;
-pub const MT_LINE_WISE: MotionType = 1;
-pub const MT_CHAR_WISE: MotionType = 0;
 pub type SomeMatchType = ::core::ffi::c_uint;
 pub const SOME_MATCH_STR_POS: SomeMatchType = 4;
 pub const SOME_MATCH_STR: SomeMatchType = 3;

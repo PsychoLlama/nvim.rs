@@ -26,7 +26,8 @@ use crate::extmark::EXTMARK_UNDO;
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
 use crate::narrow::len_as_int;
-use crate::types::Key;
+use crate::normal::defs::MotionType;
+use crate::types::{Failed, Key};
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -36,7 +37,6 @@ use crate::cursor::getvpos;
 use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{c_cluster_len, encode_char};
-use crate::types::Failed;
 
 /// Overwrite the single byte at `pos` with `c`.
 ///
@@ -106,7 +106,7 @@ pub(crate) fn op_replace(op: &mut OpArg, mut c: Key) -> Result<(), Failed> {
     let (above, below) = (op.start.lnum - 1, op.end.lnum + 1);
     u_save(above, below)?;
 
-    if op.motion_type == MT_BLOCK_WISE {
+    if op.motion_type == MotionType::BlockWise {
         replace_block(op, c, had_ctrl_v_cr);
     } else {
         replace_chars(op, c);
@@ -262,7 +262,7 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: 
 fn replace_chars(op: &mut OpArg, c: Key) {
     // The cursor walks the region, so it names a position of the current
     // buffer at every step, which is what each of these asks for.
-    if op.motion_type == MT_LINE_WISE {
+    if op.motion_type == MotionType::LineWise {
         op.start.col = ColNr::ZERO;
         Win::current().w_cursor.col = ColNr::ZERO;
         op.end.col = Lines::current().line_len(op.end.lnum);

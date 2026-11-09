@@ -15,14 +15,14 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::normal::defs::{MotionType, OpArg};
 use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor};
 use crate::types::LineNr;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
-use crate::ascii::ascii_iswhite;
+use crate::ascii::{NUL, ascii_iswhite};
 use crate::cstr::byte_at;
 use crate::cursor::{dec_cursor, gchar_cursor, inc_cursor};
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, showmode};
@@ -31,7 +31,6 @@ use crate::indent::inindent;
 use crate::mark::setpcmark;
 use crate::mbyte::{c_cluster_len, head_off};
 use crate::memline::{Lines, Moved, decl, inc, incl};
-use crate::normal::defs::OpArg;
 use crate::option::defs::CpoFlag;
 use crate::option::vars::{P_SEL, P_WS, p_ws};
 use crate::option::{SavedCpo, cpo_has};
@@ -207,7 +206,7 @@ pub(crate) fn current_block(
         showmode();
     } else {
         op.start = start_pos;
-        op.motion_type = MT_CHAR_WISE;
+        op.motion_type = MotionType::CharWise;
         op.inclusive = false;
         if sol {
             incl(&mut Win::current().cursor());
@@ -457,7 +456,7 @@ pub(crate) fn current_tagblock(
         showmode();
     } else {
         op.start = start_pos;
-        op.motion_type = MT_CHAR_WISE;
+        op.motion_type = MotionType::CharWise;
         if lt(end_pos, start_pos) {
             // No text between the tags: operate on an empty area.
             Win::current().w_cursor = start_pos;

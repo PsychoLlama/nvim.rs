@@ -15,17 +15,12 @@
 #![forbid(unsafe_code)]
 
 use crate::keycodes::ModMask;
-use crate::mark::MARK_BEGIN_LINE;
-use crate::mark::MARK_CHANGED_CURSOR;
-use crate::mark::MARK_CHANGED_LINE;
-use crate::mark::MARK_CONTEXT;
-use crate::mark::MARK_JUMP_LIST;
-use crate::mark::MARK_MOVE_FAILED;
-use crate::mark::MARK_MOVE_SUCCESS;
-use crate::mark::MARK_SET_VIEW;
-use crate::mark::MARK_SWITCHED_BUF;
-use crate::types::Failed;
-use crate::types::Key;
+use crate::mark::{
+    MARK_BEGIN_LINE, MARK_CHANGED_CURSOR, MARK_CHANGED_LINE, MARK_CONTEXT, MARK_JUMP_LIST,
+    MARK_MOVE_FAILED, MARK_MOVE_SUCCESS, MARK_SET_VIEW, MARK_SWITCHED_BUF,
+};
+use crate::normal::defs::{CmdArg, MotionType};
+use crate::types::{Failed, Key};
 use crate::winlayer::{Buf, Win};
 
 use crate::cursor::check_cursor;
@@ -38,18 +33,16 @@ use crate::highlight_group::{HLF_L, HLF_LC};
 use crate::mark::defs::{FileMark, MarkMove, MarkMoveRes};
 use crate::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark};
 use crate::message::emsg;
-use crate::normal::defs::CmdArg;
 use crate::normal::{
-    E_CHANGELIST_IS_EMPTY, K_MARK_NO_CONTEXT, MARK_ALL, MT_CHAR_WISE, MT_LINE_WISE, check_clear_op,
-    check_clear_op_quit, clear_op, clear_op_beep, nv_operator,
+    E_CHANGELIST_IS_EMPTY, K_MARK_NO_CONTEXT, MARK_ALL, check_clear_op, check_clear_op_quit,
+    clear_op, clear_op_beep, nv_operator,
 };
 use crate::ops::OpType;
 use crate::option::vars::{FDO_FLAGS, JOP_FLAGS, p_hls};
 use crate::options::{OPT_FDO_FLAG_MARK, OPT_FDO_FLAG_SEARCH, OPT_JOP_FLAG_VIEW};
 use crate::os::cshim::gettext;
 use crate::pos::equalpos;
-use crate::search::state::NO_HLSEARCH;
-use crate::search::state::SearchItArg;
+use crate::search::state::{NO_HLSEARCH, SearchItArg};
 use crate::search::{Hit, SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search};
 use crate::state::virtual_active;
 use crate::window::goto_tabpage_lastused;
@@ -137,7 +130,7 @@ pub(crate) fn normal_search(
     let mut sia = SearchItArg::default();
     let prev_cursor = Win::current().w_cursor;
     let mut op = cmd_arg.op();
-    op.motion_type = MT_CHAR_WISE;
+    op.motion_type = MotionType::CharWise;
     op.inclusive = false;
     // A search is one of the motions that fills the "1 last change"
     // register rather than the small-delete one.
@@ -154,7 +147,7 @@ pub(crate) fn normal_search(
     if let Some(hit) = i {
         // A `/pat/+1`-style offset makes the motion linewise.
         if hit == Hit::Linewise {
-            op.motion_type = MT_LINE_WISE;
+            op.motion_type = MotionType::LineWise;
         }
         Win::current().w_cursor.coladd = 0;
         if op.op_type == OpType::Nop
@@ -204,9 +197,9 @@ pub(crate) fn nv_mark_move_to(
     // `'a` is linewise, `` `a `` is charwise -- and only the charwise form
     // fills the "1 last change" register.
     cmd_arg.op().motion_type = if flags & MARK_BEGIN_LINE as MarkMove != 0 {
-        MT_LINE_WISE
+        MotionType::LineWise
     } else {
-        MT_CHAR_WISE
+        MotionType::CharWise
     };
     if cmd_arg.cmdchar.is('`') {
         cmd_arg.op().use_reg_one = true;

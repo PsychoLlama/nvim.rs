@@ -57,7 +57,7 @@ use crate::message::{emsg, iemsg};
 use crate::mouse::state::{MOUSE_COL, MOUSE_GRID, MOUSE_ROW};
 use crate::mouse::{MousePos, comp_pos, find_win_inner, is_mouse_key};
 use crate::r#move::validate_cursor;
-use crate::normal::defs::{MotionType, OpArg};
+use crate::normal::defs::OpArg;
 use crate::normal::{add_to_showcmd, normal_cmd, pop_showcmd, push_showcmd};
 use crate::option::vars::{
     p_fs, p_lrm, p_lz, p_mmd, p_paste, p_sc, p_smd, p_timeout, p_tm, p_ttimeout, p_ttm, p_uc,
@@ -169,7 +169,6 @@ pub(crate) enum MapResult {
     NoMatch,
 }
 pub const KEYLEN_PART_MAP: ::core::ffi::c_int = -2;
-pub const MT_CHAR_WISE: MotionType = 0;
 pub const FILE_READ_ONLY: FileOpenFlags = 1;
 pub const FILE_NON_BLOCKING: FileOpenFlags = 128;
 pub const FILE_TRUNCATE: FileOpenFlags = 32;

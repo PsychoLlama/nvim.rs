@@ -43,15 +43,13 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 pub(crate) mod state;
-use crate::ascii::CAR;
-use crate::ascii::TAB;
+use crate::ascii::{CAR, TAB};
 use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
 use crate::memory::XString;
 use crate::narrow::count_as_int;
-use crate::types::CmdIdx;
-use crate::winlayer::WinId;
-use crate::winlayer::prev_window;
+use crate::types::{CmdIdx, Failed};
+use crate::winlayer::{WinId, prev_window};
 use core::ffi::c_int;
 
 use crate::autocmd::{apply_autocmds, is_aucmd_win};
@@ -66,12 +64,10 @@ use crate::message::{E_AUTOCMD_CLOSE, E_CMDWIN, E_NOALT, E_NOROOM, emsg, msg};
 use crate::message::{
     E_NOT_ALLOWED_TO_CHANGE_WINDOW_LAYOUT_IN_THIS_AUTOCMD, E_WINFIXBUF_CANNOT_GO_TO_BUFFER,
 };
-use crate::normal::defs::MotionType;
 use crate::option::vars::SWB_FLAGS;
 use crate::options::{OPT_SWB_FLAG_USEOPEN, OPT_SWB_FLAG_USETAB};
 use crate::os::cshim::gettext;
 use crate::terminal::buf_terminal_check_size;
-use crate::types::Failed;
 use crate::types::{
     CdCause, Direction, DoBufStart, ERROR_TYPE_EXCEPTION, Error, Handle, OptInt, Window,
 };
@@ -123,8 +119,6 @@ pub const DIRECTION_NOT_SET: Direction = 0;
 pub const CD_CAUSE_WINDOW: CdCause = 1;
 pub const CD_CAUSE_MANUAL: CdCause = 0;
 pub const DOBUF_LAST: DoBufStart = 2;
-pub const MT_LINE_WISE: MotionType = 1;
-pub const MT_CHAR_WISE: MotionType = 0;
 pub const WSP_QUICKFIX: c_int = 1024;
 pub const WSP_NOENTER: c_int = 512;
 pub const WSP_NEWLOC: c_int = 256;

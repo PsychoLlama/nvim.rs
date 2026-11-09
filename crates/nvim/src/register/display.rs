@@ -22,6 +22,7 @@ use crate::charset::byte2cells;
 use crate::cstr;
 use crate::mbyte::{c_cells_at, c_cluster_len};
 use crate::memory::XString;
+use crate::normal::defs::MotionType;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
@@ -114,7 +115,7 @@ fn dis_register(yb: &YankReg, name: RegName, type_0: u8, hl_id: c_int) {
         }
         put_cut(line, &mut n, false);
     }
-    if n > 1 && yb.kind == MT_LINE_WISE {
+    if n > 1 && yb.kind == MotionType::LineWise {
         msg_str_hl(c"^J", hl_id, false);
     }
 }
@@ -146,8 +147,8 @@ pub fn ex_display(excmd: &mut ExArg) {
             // queries the provider itself, and upstream's order of the
             // two queries is what the messages depend on.
             let type_0 = match get_reg_type(name).0 {
-                MT_LINE_WISE => b'l',
-                MT_CHAR_WISE => b'c',
+                MotionType::LineWise => b'l',
+                MotionType::CharWise => b'c',
                 _ => b'b',
             };
             let mut yb = get_y_register(i.unwrap_or_else(|| Y_PREVIOUS.get().unwrap_or(0)));

@@ -36,7 +36,6 @@ use crate::global_cell::GlobalCell;
 // path; it belongs to `message`.
 use crate::mark::defs::MarkGet;
 pub(crate) use crate::message::E_INVALBLOB;
-use crate::normal::defs::MotionType;
 use crate::os::libc::uint64_t;
 use crate::register::defs::GRegFlags;
 use crate::registry::SlotTable;
@@ -101,7 +100,6 @@ pub const GLV_STOP: GlvStatus = 2;
 pub type GlvStatus = c_uint;
 pub const GLV_OK: GlvStatus = 1;
 pub const GLV_FAIL: GlvStatus = 0;
-pub const MT_CHAR_WISE: MotionType = 0;
 pub const INT64_MIN: c_long = -9223372036854775807 as c_long - 1 as c_long;
 pub const INT64_MAX: c_long = 9223372036854775807 as c_long;
 pub const UINT32_MAX: c_uint = 4294967295 as c_uint;

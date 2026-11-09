@@ -39,7 +39,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 pub mod arith;
@@ -64,7 +64,6 @@ use crate::drawscreen::{
     redraw_win_line, redrawing, win_cursorline_standout,
 };
 use crate::fold::fold_adjust_cursor;
-use crate::normal::defs::MotionType;
 use crate::normal::visual_active;
 use crate::option::defs::CpoFlag;
 use crate::option::{cpo_has, get_scrolloff_value, get_sidescrolloff_value};
@@ -77,10 +76,7 @@ use crate::plines::{
 use crate::types::{ColNr, LineNr, WLine};
 use crate::window::win_fdccol_count;
 use crate::winfloat::win_check_anchored_floats;
-use crate::winlayer::Win;
 use crate::winlayer::graph::CMDWIN_WIN;
-
-pub const MT_CHAR_WISE: MotionType = 0;
 
 /// One buffer line as the vertical scrolling walks it: the line, the filler
 /// lines drawn above it, and the screen lines it takes.

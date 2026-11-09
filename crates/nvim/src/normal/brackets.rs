@@ -11,19 +11,12 @@
 #![forbid(unsafe_code)]
 
 use crate::keycodes::SpecialKey;
-use crate::mark::MARK_BEGIN_LINE;
-use crate::mark::MARK_CONTEXT;
-use crate::search::ACTION_GOTO;
-use crate::search::ACTION_SHOW;
-use crate::search::ACTION_SHOW_ALL;
-use crate::search::FIND_ANY;
-use crate::search::FIND_DEFINE;
+use crate::mark::{MARK_BEGIN_LINE, MARK_CONTEXT};
+use crate::normal::defs::{CmdArg, MotionType};
+use crate::search::{ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, FIND_ANY, FIND_DEFINE};
 use crate::strings::has_char;
-use crate::types::ColNr;
-use crate::types::Key;
-use crate::types::LineNr;
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
+use crate::types::{ColNr, Key, LineNr, Pos};
+use crate::winlayer::{Buf, Win};
 
 use crate::cursor::{dec_cursor, gchar_cursor, inc_cursor};
 use crate::diff::diff_move_to;
@@ -32,21 +25,17 @@ use crate::fold::fold_move_to;
 use crate::mark::defs::MarkMove;
 use crate::mark::{getnextmark, pos_to_mark, setpcmark};
 use crate::mouse::do_mouse;
-use crate::normal::defs::CmdArg;
 use crate::normal::{
-    DIRECTION_NOT_SET, FIND_IDENT, FM_BACKWARD, FM_FORWARD, MT_CHAR_WISE, SMT_BAD, SMT_RARE,
-    clear_op, clear_op_beep, ident_under_cursor, may_fold_open, nv_gotofile, nv_mark_move_to,
-    nv_put_opt,
+    DIRECTION_NOT_SET, FIND_IDENT, FM_BACKWARD, FM_FORWARD, SMT_BAD, SMT_RARE, clear_op,
+    clear_op_beep, ident_under_cursor, may_fold_open, nv_gotofile, nv_mark_move_to, nv_put_opt,
 };
 use crate::ops::OpType;
 use crate::options::{OPT_FDO_FLAG_BLOCK, OPT_FDO_FLAG_SEARCH};
 use crate::pos::MAXLNUM;
 use crate::register::defs::PUT_FIXINDENT;
 use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
-use crate::spell::SMT_ALL;
-use crate::spell::SpellMoveType;
+use crate::spell::{SMT_ALL, SpellMoveType};
 use crate::textobject::findpar;
-use crate::types::Pos;
 use core::ffi::{CStr, c_int, c_uint};
 
 /// Which way a `[` or `]` command searches.
@@ -288,7 +277,7 @@ fn nv_bracket_spell(cmd_arg: &mut CmdArg) {
 
 /// `[` and `]`, whose second character says what kind of jump this is.
 pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
-    cmd_arg.op().motion_type = MT_CHAR_WISE;
+    cmd_arg.op().motion_type = MotionType::CharWise;
     cmd_arg.op().inclusive = false;
     let old_pos = Win::current().w_cursor;
     Win::current().w_cursor.coladd = 0;

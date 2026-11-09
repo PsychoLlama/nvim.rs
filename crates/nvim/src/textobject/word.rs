@@ -15,9 +15,9 @@
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::normal::defs::{MotionType, OpArg};
 use crate::option::vars::P_SEL;
-use crate::types::ColNr;
-use crate::types::LineNr;
+use crate::types::{ColNr, LineNr, Pos};
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -31,7 +31,6 @@ use crate::global_cell::GlobalCell;
 use crate::mbyte::utf_class;
 use crate::memline::{Lines, Moved, decl, incl};
 use crate::r#move::adjust_skipcol;
-use crate::normal::defs::OpArg;
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, unadjust_for_sel, visual_active, visual_anchor,
     visual_mode,
@@ -39,7 +38,6 @@ use crate::normal::{
 use crate::pos::{clearpos, equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::mode::V_ISUAL_SELECT_EXCLU_ADJ;
-use crate::types::Pos;
 
 /// Whether [`cls`] should answer a WORD's classes rather than a word's.
 ///
@@ -385,7 +383,7 @@ pub(crate) fn current_word(
             redraw_curbuf_later(UPD_INVERTED); // update the inversion
         } else {
             op.start = start_pos;
-            op.motion_type = MT_CHAR_WISE;
+            op.motion_type = MotionType::CharWise;
         }
         count -= 1;
     }

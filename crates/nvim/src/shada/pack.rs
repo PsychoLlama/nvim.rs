@@ -25,7 +25,6 @@
     clippy::ptr_as_ptr
 )]
 
-use super::low_byte;
 use crate::api::keysets::KeyDict__shada_search_pat;
 use crate::eval::encode::encode_vim_to_msgpack;
 use crate::message_fmt::msg_cstr;
@@ -358,7 +357,7 @@ fn pack_register(reg: &ShadaRegister, extra: &Option<ShadaExtra>, out: &mut Pack
     out.uint(u32::from(reg.name.cast_unsigned()));
     if reg.motion != default.motion {
         out.key(b"rt");
-        out.uint(u32::from(low_byte(reg.motion)));
+        out.uint(u32::from(reg.motion));
     }
     if reg.width != default.width {
         out.key(b"rw");

@@ -39,8 +39,7 @@ use crate::edit::{beginline, display_dollar, edit};
 use crate::eval::typval::tv_clear;
 use crate::eval::{callback_call, set_ref_in_callback};
 use crate::ex_docmd::state::REPEAT_CMDLINE;
-use crate::extmark::BCount;
-use crate::extmark::CURBUF_SPLICE_PENDING;
+use crate::extmark::{BCount, CURBUF_SPLICE_PENDING};
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::fold::{delete_fold, fold_create, fold_open_cursor, op_fold_range};
 use crate::getchar::state::{BANGREDO, GOT_INT, KEY_TYPED, REPEAT_LUAREF};
@@ -70,7 +69,7 @@ use crate::message::{emsg, msg, msg_keep_text, msg_start, msgmore};
 use crate::mouse::setmouse;
 use crate::mouse::state::MOUSE_DRAGGING;
 use crate::r#move::validate_virtcol;
-use crate::normal::defs::{CmdArg, MotionType, OpArg};
+use crate::normal::defs::{CmdArg, OpArg};
 use crate::normal::{
     clear_op, clear_op_beep, may_clear_cmdline, prep_redo, prep_redo_num2, restore_visual_mode,
     unadjust_for_sel,
@@ -145,11 +144,6 @@ pub const IS_UPPER: ::core::ffi::c_ushort = 256;
 
 /// Enough for any number this module formats, plus its NUL.
 pub const NUMBUFLEN: usize = 65;
-
-/// The three region shapes an operator can be given.
-pub const MT_CHAR_WISE: MotionType = 0;
-pub const MT_LINE_WISE: MotionType = 1;
-pub const MT_BLOCK_WISE: MotionType = 2;
 
 /// `CmdArg::retval`: normal mode must not act on what the operator left.
 pub const CA_COMMAND_BUSY: ::core::ffi::c_int = 1;

@@ -57,14 +57,12 @@ use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::mark::defs::MarkGet;
 use crate::mark::{ex_changes, ex_clearjumps, ex_delmarks, ex_jumps, ex_marks};
 use crate::r#match::ex_match;
-use crate::memory::ThinCString;
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::menu::{ex_emenu, ex_menu, ex_menutranslate};
 use crate::message::ex_messages;
 use crate::message::{
     E_BACKSLASH, E_INVRANGE, E_LINE_NUMBER_OUT_OF_RANGE, E_NO_ERRORS, E_NORANGE, E_ZEROCOUNT,
 };
-use crate::normal::defs::MotionType;
 use crate::option::ex_set;
 use crate::os::lang::ex_language;
 use crate::os::libc::{uint8_t, uint16_t};
@@ -208,7 +206,6 @@ pub struct CommandDefinition {
 }
 pub const DOBUF_LAST: DoBufStart = 2;
 pub const CHANNEL_PART_ALL: ChannelPart = 4;
-pub const MT_LINE_WISE: MotionType = 1;
 pub const VALID_HEAD: c_uint = 2;
 pub const VALID_PATH: c_uint = 1;
 pub const DIALOG_MSG_SIZE: c_uint = 1000;

@@ -30,8 +30,6 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::normal::defs::MotionType;
-
 mod pair;
 mod para;
 mod quote;
@@ -48,6 +46,3 @@ pub(crate) use self::word::*;
 /// further to move. Nothing is said about it; the caller beeps.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct NoObject;
-
-pub const MT_LINE_WISE: MotionType = 1;
-pub const MT_CHAR_WISE: MotionType = 0;

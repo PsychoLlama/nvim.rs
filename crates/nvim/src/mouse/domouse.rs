@@ -27,8 +27,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use super::*;
-use crate::ascii::NUL;
-use crate::ascii::ascii_iswhite;
+use crate::ascii::{NUL, ascii_iswhite};
 use crate::buffer::buf_is_quickfix;
 use crate::charset::vim_iswordc;
 use crate::cursor::with_cursor_rest;
@@ -51,6 +50,7 @@ use crate::mouse::state::{
     MOUSE_COL, MOUSE_DRAGGING, MOUSE_GRID, MOUSE_PAST_BOTTOM, MOUSE_PAST_EOL, MOUSE_ROW,
 };
 use crate::r#move::scroll_redraw;
+use crate::normal::defs::MotionType;
 use crate::normal::{
     VisualMode, clear_op, clear_op_beep, end_visual_mode, may_start_select, prep_redo,
     set_visual_active, set_visual_anchor, set_visual_mode, visual_active, visual_anchor,
@@ -67,11 +67,9 @@ use crate::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG};
 use crate::statusline::{
     STL_CLICK_DISABLED, STL_CLICK_FUNC_RUN, STL_CLICK_TAB_CLOSE, STL_CLICK_TAB_SWITCH,
 };
-use crate::types::Direction;
-use crate::types::Key;
-use crate::ui::MOUSE_VISUAL;
+use crate::types::{Direction, Key};
 use crate::ui::state::COLUMNS;
-use crate::ui::ui_mouse_has;
+use crate::ui::{MOUSE_VISUAL, ui_mouse_has};
 use crate::window::{goto_tabpage, tabpage_move};
 use crate::winlayer::graph::CMDWIN_TYPE;
 
@@ -217,7 +215,7 @@ pub(crate) fn do_mouse(
     // mouse click.
     if let Some(mut op) = op.filter(|o| !is_drag && o.pending()) {
         GOT_CLICK.set(false);
-        op.motion_type = MT_CHAR_WISE;
+        op.motion_type = MotionType::CharWise;
     }
 
     // When releasing the button let jump_to_mouse() know.
@@ -851,7 +849,7 @@ impl Win {
         let Some(mut op) = op else {
             return false;
         };
-        op.motion_type = MT_CHAR_WISE;
+        op.motion_type = MotionType::CharWise;
 
         if !visual_mode().is_char() {
             return false;
@@ -867,7 +865,7 @@ impl Win {
         };
 
         self.w_cursor = pos;
-        if op.motion_type == MT_LINE_WISE {
+        if op.motion_type == MotionType::LineWise {
             set_visual_mode(VisualMode::LINE);
         } else if sel_exclusive() {
             if lt(self.w_cursor, visual_anchor()) {

@@ -23,8 +23,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::ascii::NUL;
-use crate::ascii::TAB;
+use crate::ascii::{NUL, TAB};
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{aucmd_defer, has_event};
 use crate::buffer::{buf_is_prompt, buflist_new, find_buf};
@@ -39,7 +38,6 @@ use crate::memory::XString;
 use crate::message::IOSIZE;
 use crate::message::{E_MARKINVAL, E_MARKNOTSET, E_UMARK};
 use crate::r#move::set_topline;
-use crate::normal::defs::MotionType;
 use crate::options::OPT_JOP_FLAG_STACK;
 use crate::os::fs::dirname_within;
 use crate::path::MAXPATHL;
@@ -85,7 +83,6 @@ pub use show::{ex_delmarks, ex_marks, fm_getname};
 use store::{NO_VIEW, mark_name, slot};
 
 pub const AUGROUP_ALL: c_int = -3;
-pub const MT_CHAR_WISE: MotionType = 0;
 
 /// How `mark_get` is allowed to resolve a mark's name.
 pub const MARK_BUF_LOCAL: MarkGet = 0;

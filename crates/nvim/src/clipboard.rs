@@ -17,20 +17,17 @@
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::eval::eval_call_provider;
-use crate::eval::eval_has_provider;
 use crate::eval::typval::{list_iter, tv_list_alloc};
+use crate::eval::{eval_call_provider, eval_has_provider};
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
 use crate::message::{emsg, msg, redirecting};
+use crate::normal::defs::MotionType;
 use crate::option::vars::CB_FLAGS;
 use crate::options::{OPT_CB_FLAG_UNNAMED, OPT_CB_FLAG_UNNAMEDPLUS};
 use crate::os::libc::ptrdiff_t;
 use crate::register::defs::{RegLines, YankReg};
-use crate::register::{
-    MT_BLOCK_WISE, MT_CHAR_WISE, MT_LINE_WISE, MT_UNKNOWN, PLUS_REGISTER, Reg, RegName,
-    STAR_REGISTER, get_y_previous, get_y_register,
-};
+use crate::register::{PLUS_REGISTER, Reg, RegName, STAR_REGISTER, get_y_previous, get_y_register};
 use crate::types::{TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING};
 use core::ffi::c_int;
 
@@ -134,12 +131,12 @@ pub(crate) fn adjust_clipboard_name(
 
 /// The register type a provider's one-character `regtype` names, or `None`
 /// for anything else (which is an error).
-fn regtype_of(byte: u8) -> Option<c_int> {
+fn regtype_of(byte: u8) -> Option<MotionType> {
     match byte {
-        0 => Some(MT_UNKNOWN),
-        b'v' | b'c' => Some(MT_CHAR_WISE),
-        b'V' | b'l' => Some(MT_LINE_WISE),
-        b'b' | 22 => Some(MT_BLOCK_WISE), // 22 == Ctrl_V
+        0 => Some(MotionType::Unknown),
+        b'v' | b'c' => Some(MotionType::CharWise),
+        b'V' | b'l' => Some(MotionType::LineWise),
+        b'b' | 22 => Some(MotionType::BlockWise), // 22 == Ctrl_V
         _ => None,
     }
 }
@@ -176,7 +173,7 @@ fn register_from_provider(result: &TypVal) -> Result<YankReg, bool> {
             (lines.li_tv.list_ref(), kind)
         }
         // The provider did not specify a regtype; inferred below.
-        _ => (result.list_ref(), MT_UNKNOWN),
+        _ => (result.list_ref(), MotionType::Unknown),
     };
 
     let mut reg = YankReg {
@@ -198,14 +195,14 @@ fn register_from_provider(result: &TypVal) -> Result<YankReg, bool> {
     if text.last().is_some_and(|last| last.is_empty()) {
         // A known-to-be charwise yank might have a final linebreak, but
         // otherwise there is no line after the final newline.
-        if reg.kind != MT_CHAR_WISE {
+        if reg.kind != MotionType::CharWise {
             text.pop();
-            if reg.kind == MT_UNKNOWN {
-                reg.kind = MT_LINE_WISE;
+            if reg.kind == MotionType::Unknown {
+                reg.kind = MotionType::LineWise;
             }
         }
-    } else if reg.kind == MT_UNKNOWN {
-        reg.kind = MT_CHAR_WISE;
+    } else if reg.kind == MotionType::Unknown {
+        reg.kind = MotionType::CharWise;
     }
     // A provider that answered no lines still set the register: upstream's
     // array of none, which `@*` replays as nothing rather than failing.
@@ -257,11 +254,11 @@ pub(crate) fn set_clipboard(mut name: RegName, reg: Reg) {
 
     let (lines, regtype) = reg.read(|reg| {
         // A line-wise or block-wise register carries a trailing empty line.
-        let trailing = reg.kind != MT_CHAR_WISE;
+        let trailing = reg.kind != MotionType::CharWise;
         let regtype: u8 = match reg.kind {
-            MT_LINE_WISE => b'V',
-            MT_CHAR_WISE => b'v',
-            MT_BLOCK_WISE => b'b',
+            MotionType::LineWise => b'V',
+            MotionType::CharWise => b'v',
+            MotionType::BlockWise => b'b',
             // kMTUnknown, which has no spelling the provider would accept.
             // Upstream aborts here and so does this; every register handed
             // over has been through `get_clipboard` or a yank, both of which

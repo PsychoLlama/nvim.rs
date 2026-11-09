@@ -31,6 +31,7 @@ use crate::mark::{ShadaMark, cleanup_jumplist, setpcmark, shada_jumps};
 use crate::memory::XString;
 use crate::message_fmt::msg_addr;
 use crate::narrow::len_as_int;
+use crate::normal::defs::MotionType;
 use crate::os::time::os_time;
 use crate::register::{op_reg_index, shada_registers};
 use crate::search::shada_pattern;
@@ -46,9 +47,8 @@ use core::ffi::c_int;
 use super::file::{get_shada_parameter, shada_removable};
 use super::pack::{Packer, pack_entry};
 use super::{
-    DEFAULT_SEARCH_PATTERN, JUMPLISTSIZE, MOTION_BLOCKWISE, RemovableBufs, ShadaBufferListItem,
-    ShadaEntry, ShadaEntryData, ShadaFileMark, ShadaGlobalVar, ShadaRegister, WriteMergerState,
-    WriteStatus,
+    DEFAULT_SEARCH_PATTERN, JUMPLISTSIZE, RemovableBufs, ShadaBufferListItem, ShadaEntry,
+    ShadaEntryData, ShadaFileMark, ShadaGlobalVar, ShadaRegister, WriteMergerState, WriteStatus,
 };
 use crate::cmdhist::{HIST_CMD, HIST_SEARCH};
 
@@ -151,11 +151,11 @@ pub(crate) fn shada_initialize_registers(wms: &mut WriteMergerState, limit: Opti
             timestamp: yank.timestamp,
             data: ShadaEntryData::Register(ShadaRegister {
                 name,
-                motion: yank.motion,
+                motion: yank.motion.byte(),
                 contents: yank.contents,
                 is_unnamed,
                 // Only a blockwise register has a width.
-                width: if yank.motion == MOTION_BLOCKWISE {
+                width: if yank.motion == MotionType::BlockWise {
                     usize::try_from(yank.width).expect("a block's width")
                 } else {
                     0

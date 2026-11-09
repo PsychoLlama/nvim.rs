@@ -10,11 +10,10 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::buffer::GETF_ALT;
-use crate::buffer::GETF_SETMARK;
+use crate::buffer::{GETF_ALT, GETF_SETMARK};
 use crate::keycodes::SpecialKey;
-use crate::types::Handle;
-use crate::types::Key;
+use crate::normal::defs::MotionType;
+use crate::types::{Handle, Key, LineNr};
 use crate::winlayer::{Buf, Win, windows};
 
 use crate::ascii::NUL;
@@ -35,8 +34,8 @@ use crate::message::state::DID_EMSG;
 use crate::message::{msg, msg_ext_set_trigger};
 use crate::normal::defs::{CmdArg, Outcome};
 use crate::normal::{
-    MT_CHAR_WISE, check_clear_op, check_clear_op_quit, clear_op, clear_op_beep, end_visual_mode,
-    nv_left, nv_operator, nv_pcmark, set_visual_select, v_visop, visual_active, visual_select,
+    check_clear_op, check_clear_op_quit, clear_op, clear_op_beep, end_visual_mode, nv_left,
+    nv_operator, nv_pcmark, set_visual_select, v_visop, visual_active, visual_select,
 };
 use crate::ops::OpType;
 use crate::options::OPT_BO_FLAG_ESC;
@@ -44,7 +43,6 @@ use crate::os::cshim::gettext;
 use crate::state::mode::{FINISH_OP, RESTART_EDIT, RESTART_V_ISUAL_SELECT};
 use crate::state::{may_trigger_modechanged, state_handle_k_event};
 use crate::syntax::{cur_syn_block, syn_stack_free_all};
-use crate::types::LineNr;
 use crate::ui::vim_beep;
 use crate::undo::any_buf_is_changed;
 use crate::window::do_window;
@@ -86,7 +84,7 @@ pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
     }
     let mut op = cmd_arg.op();
     if op.op_type != OpType::Nop {
-        op.motion_type = MT_CHAR_WISE;
+        op.motion_type = MotionType::CharWise;
         op.inclusive = false;
     } else if cmd_arg.count0 != 0 && !is_cmdkey && !is_lua {
         // A count in front of `:` becomes a range: `3:` is `:.,.+2`.
