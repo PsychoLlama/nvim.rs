@@ -431,7 +431,7 @@ fn wider_sibling(oldwin: Win, taller: impl Fn(Win) -> bool) -> bool {
 }
 
 impl FrameRef {
-    /// The minimum width of every frame in every *row* above `frame`, its own
+    /// The minimum width of every frame in every *row* above `self`, its own
     /// ancestors excluded -- what a split with 'equalalways' has to leave alone.
     fn siblings_min_width(self) -> c_int {
         let mut total = 0;
@@ -447,7 +447,7 @@ impl FrameRef {
         total
     }
 
-    /// [`FrameRef::siblings_min_width`] for the columns above `frame`.
+    /// [`FrameRef::siblings_min_width`] for the columns above `self`.
     fn siblings_min_height(self) -> c_int {
         let mut total = 0;
         let mut prev = self;
@@ -462,7 +462,7 @@ impl FrameRef {
         total
     }
 
-    /// A copy of `frame`, allocated: the C's `*frp = *curfrp` over a fresh
+    /// A copy of `self`, allocated: the C's `*frp = *curfrp` over a fresh
     /// `xcalloc`.
     ///
     /// Written out field by field because `Frame` is deliberately neither

@@ -59,7 +59,7 @@ pub fn buflist_name_nr(fnum: Option<Handle>) -> Option<(Buf, LineNr)> {
 // Setting one
 
 impl Buf {
-    /// Give `buffer` the file name `ffname_arg` (short form `sfname_arg`).
+    /// Give `self` the file name `ffname_arg` (short form `sfname_arg`).
     ///
     /// Fails, with `message`, when another *loaded* buffer already has the name;
     /// an unloaded one is wiped to make room.

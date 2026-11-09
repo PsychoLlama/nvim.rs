@@ -212,7 +212,7 @@ impl ExArg<'_> {
     /// Check if it is allowed to overwrite a file.  If `b_flags` has `BufFlags::NOTEDITED`,
     /// `BufFlags::NEW` or `BufFlags::READERR`, check for overwriting the current file.
     ///
-    /// May set `args.forceit` if a dialog says it is fine to overwrite.  `fname` is
+    /// May set `self.forceit` if a dialog says it is fine to overwrite.  `fname` is
     /// the file name to be used (which can differ from `buffer`'s), `ffname` its full
     /// path version, and `other` says the write goes under another name.
     ///

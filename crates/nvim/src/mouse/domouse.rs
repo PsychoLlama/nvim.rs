@@ -880,7 +880,7 @@ impl Win {
         true
     }
 
-    /// Run `f` over `win`'s cursor through a copy, put back afterwards.
+    /// Run `f` over `self`'s cursor through a copy, put back afterwards.
     fn with_cursor_copy(mut self, f: fn(&mut Pos)) {
         let mut cursor = self.w_cursor;
         f(&mut cursor);

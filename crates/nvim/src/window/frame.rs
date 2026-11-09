@@ -218,7 +218,7 @@ pub(crate) fn find_altwin(win: Win, tabpage: Option<TabPage>) -> Option<AltWin> 
 }
 
 impl FrameRef {
-    /// Collapse `frp` into its parent when it is the only child left, and then the
+    /// Collapse `self` into its parent when it is the only child left, and then the
     /// parent into *its* parent when the two have the same layout.
     pub(crate) fn flatten(self) {
         if self.next().is_some() || self.prev().is_some() {
@@ -277,7 +277,7 @@ impl FrameRef {
         parent.free();
     }
 
-    /// Whether `window` is one of the windows in frame `frp`.
+    /// Whether `window` is one of the windows in this frame.
     pub(crate) fn has_win(self, window: Option<Win>) -> bool {
         if c_int::from(self.fr_layout) == FR_LEAF {
             return self.win() == window;
@@ -285,7 +285,7 @@ impl FrameRef {
         self.children().any(|child| child.has_win(window))
     }
 
-    /// The first window in frame `frp`, following `fr_child` down to a leaf.
+    /// The first window in this frame, following `fr_child` down to a leaf.
     pub(crate) fn first_window(mut self) -> Win {
         loop {
             match self.win() {

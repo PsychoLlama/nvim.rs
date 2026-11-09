@@ -80,7 +80,7 @@ fn parse_args(excmd: &mut ExArg) -> Array {
 }
 
 impl ExArg<'_> {
-    /// The name of the command `excmd` names: a user command's own spelling
+    /// The name of the command `self` names: a user command's own spelling
     /// (`user`), the built-in table's, or the empty string where the line named
     /// no command.
     fn command_name(&self, user: Option<&CStr>) -> ApiString {

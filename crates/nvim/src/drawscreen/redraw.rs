@@ -293,7 +293,7 @@ pub fn redraw_statuslines() {
 }
 
 impl FrameRef {
-    /// Mark the status lines at the bottom of frame `frp`.
+    /// Mark the status lines at the bottom of this frame.
     ///
     /// One per column of a row frame; the last one of a column frame.
     pub fn redraw_last_status(self) {

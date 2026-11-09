@@ -151,7 +151,7 @@ pub(crate) fn get_buffer_signs(buffer: Buf) -> ListRef {
 }
 
 impl Buf {
-    /// Appends `buffer`'s `{ bufnr, signs }` entry to `retlist`, filtered by `lnum`,
+    /// Appends `self`'s `{ bufnr, signs }` entry to `retlist`, filtered by `lnum`,
     /// `sign_id` and `group`.
     ///
     /// A zero `lnum` or `sign_id` means "any"; the two combine, so naming both

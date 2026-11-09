@@ -192,7 +192,7 @@ impl Win {
         text_lines + filler_lines
     }
 
-    /// Screen lines a range of text takes in `window`.
+    /// Screen lines a range of text takes in `self`.
     ///
     /// `start_vcol` below zero counts all of `start_lnum` including the filler
     /// lines above it; at or above zero it starts at that virtual column, rounded

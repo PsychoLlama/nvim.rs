@@ -347,7 +347,7 @@ fn is_word_at(text: &[u8]) -> bool {
 }
 
 impl Buf {
-    /// The next word or line from `ins_buf` at `pos`, copied into `out` from its
+    /// The next word or line from `self` at `pos`, copied into `out` from its
     /// start to the end of the string it was found in (which
     /// [`ins_compl_add_infercase`] wants), with its length and whether the next
     /// `CTRL-X <>` sets the initial position; `None` when there is nothing to
@@ -427,7 +427,7 @@ impl Buf {
         Some((len, cont_s_ipos))
     }
 
-    /// Search `buffer` for the next fuzzy match of `pattern`, starting at `pos` and
+    /// Search `self` for the next fuzzy match of `pattern`, starting at `pos` and
     /// going in `dir`, wrapping around to `start_pos` if `'wrapscan'` is set.
     /// `pos` is left on the match, and `out` holds the match on to the end of its
     /// line. In whole-line mode (`CTRL-X CTRL-L`) whole lines are matched rather

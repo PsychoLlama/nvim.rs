@@ -73,7 +73,7 @@ fn flush_full(writer: &mut ByteWriter, nchars: &mut c_int) -> bool {
 }
 
 impl Buf {
-    /// Write lines `start` through `end` of `buffer`.
+    /// Write lines `start` through `end` of `self`.
     ///
     /// `sha` hashes the text as it goes, for the undo file. When `writer.fd` is
     /// -1 nothing reaches a file: that pass only exists to find out whether the

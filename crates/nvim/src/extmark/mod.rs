@@ -307,7 +307,7 @@ fn undo_header(buffer: Buf) -> Option<UndoLink> {
 }
 
 impl Buf {
-    /// The extmark list of the header `link` names in `buffer`, handed to `f`.
+    /// The extmark list of the header `link` names in `self`, handed to `f`.
     /// The borrow is the closure's: the list is looked up through the buffer
     /// each time.
     fn with_undo_marks<R>(

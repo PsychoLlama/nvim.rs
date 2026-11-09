@@ -176,7 +176,7 @@ crate::flag_set! {
 }
 
 impl ExArg<'_> {
-    /// The next line `excmd`'s source answers -- upstream's
+    /// The next line `self`'s source answers -- upstream's
     /// `eap->ea_getline(c, eap->cookie, indent, do_concat)` -- or `None` at the
     /// end of the input, or when the command was given no source.
     pub(crate) fn next_source_line(

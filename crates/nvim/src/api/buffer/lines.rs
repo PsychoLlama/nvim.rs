@@ -355,7 +355,7 @@ impl<'a> LineSink<'a> {
 }
 
 impl Buf {
-    /// Collect `n` lines of `buffer` from `start` into `lines`, as items
+    /// Collect `n` lines of `self` from `start` into `lines`, as items
     /// `start_idx..`.
     pub(crate) fn collect_lines(
         self,

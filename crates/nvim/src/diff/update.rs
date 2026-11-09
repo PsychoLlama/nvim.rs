@@ -52,7 +52,7 @@ fn clear_diffout(dout: &mut DiffOut) {
 }
 
 impl Buf {
-    /// Write lines `start`..`end` of `buffer` into `out` as one memory image for
+    /// Write lines `start`..`end` of `self` into `out` as one memory image for
     /// the internal engine.
     ///
     /// The image is one NL-terminated line after another.  A NL *inside* a line

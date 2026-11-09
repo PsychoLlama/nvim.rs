@@ -375,7 +375,7 @@ impl Iterator for TreeWalk {
 }
 
 impl Buf {
-    /// Hands `header` to `buffer`'s store and returns the link that now names it.
+    /// Hands `header` to `self`'s store and returns the link that now names it.
     ///
     /// The header's `seq` must already be set: it is the key. A header whose
     /// number is not one a buffer hands out is dropped, since nothing could name

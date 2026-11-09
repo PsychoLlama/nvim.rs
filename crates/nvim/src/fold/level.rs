@@ -96,7 +96,7 @@ impl Method<'_> {
 struct TreeLost;
 
 impl Win {
-    /// Lend the list `path` names in `win`'s tree to `f`; [`TreeLost`] when the
+    /// Lend the list `path` names in `self`'s tree to `f`; [`TreeLost`] when the
     /// path no longer resolves.
     fn with_fold_list<R>(
         self,

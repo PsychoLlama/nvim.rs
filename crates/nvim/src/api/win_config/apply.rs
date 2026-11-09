@@ -37,7 +37,7 @@ fn expect_tab(tabpage: Option<TabPage>) -> TabPage {
 }
 
 impl FrameRef {
-    /// How many frames sit in `frame`'s row or column, `frame` included.
+    /// How many frames sit in `self`'s row or column, `self` included.
     fn sibling_count(self) -> c_int {
         self.children()
             .count()

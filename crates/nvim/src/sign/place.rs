@@ -20,7 +20,7 @@ use crate::decoration::decor_sign;
 use crate::types::ColNr;
 
 impl Buf {
-    /// Places or replaces the sign extmark `*id` in `buffer` at `lnum`.
+    /// Places or replaces the sign extmark `*id` in `self` at `lnum`.
     ///
     /// Writes `*id` back when it was zero: `extmark_set` allocates one.
     fn set_sign(
@@ -106,7 +106,7 @@ impl Buf {
         lookup_ns(self, ns, id.cast_unsigned(), false).pos.row + 1
     }
 
-    /// Every sign placement in `buffer` from `first_row` on, in marktree order.
+    /// Every sign placement in `self` from `first_row` on, in marktree order.
     ///
     /// The walk `:sign place`, `sign_getplaced()` and `getbufinfo()` share.
     /// `keep` narrows it further; it sees only marks that are already signs in
@@ -131,7 +131,7 @@ impl Buf {
         out
     }
 
-    /// Deletes signs from `buffer`.
+    /// Deletes signs from `self`.
     ///
     /// `id` of zero means any id and `group` selects a namespace (see
     /// [`group_get_ns`]). `atlnum` above zero narrows to one line — where,

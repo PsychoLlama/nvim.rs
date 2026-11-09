@@ -114,7 +114,7 @@ fn remember_last_cursor(win: Win) {
 }
 
 impl Win {
-    /// Forget every mark and jump-list entry naming buffer `fnum` in `win`.
+    /// Forget every mark and jump-list entry naming buffer `fnum` in `self`.
     fn forget_file(self, fnum: Option<Handle>) {
         self.forget_file_marks(fnum);
     }

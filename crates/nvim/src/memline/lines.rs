@@ -416,7 +416,7 @@ fn begin_replace(buffer: Buf, lnum: LineNr) -> Result<(), Failed> {
 }
 
 impl Buf {
-    /// Replace line `lnum` of `buffer` with `line` (its NUL the last byte),
+    /// Replace line `lnum` of `self` with `line` (its NUL the last byte),
     /// which the memline takes over, with buffering: the text is parked in the
     /// line cache and only written back by [`ml_flush_line`].
     ///

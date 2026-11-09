@@ -79,7 +79,7 @@ pub(crate) fn current_topframe() -> FrameRef {
 }
 
 impl FrameRef {
-    /// Give `frp`'s memory back. It must already be out of the tree.
+    /// Give `self`'s memory back. It must already be out of the tree.
     ///
     /// The C's `xfree(frp)`. Taking it out of the registry is what makes every
     /// [`FrameId`] still naming it answer `None` from here on, and dropping what

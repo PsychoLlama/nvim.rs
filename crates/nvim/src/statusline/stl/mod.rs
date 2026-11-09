@@ -635,7 +635,7 @@ impl Win {
     /// in a `room`-byte buffer (whose size decides where the text is cut and
     /// whether the separators spread).
     ///
-    /// Normally works for window `window`, except when working for `'tabline'`,
+    /// Normally works for this window, except when working for `'tabline'`,
     /// when it is `curwin`. `fmt` is the caller's own copy: expanding it can run
     /// a function that `:set`s the option it came from. This re-enters the
     /// editor, so nothing may be held across it.

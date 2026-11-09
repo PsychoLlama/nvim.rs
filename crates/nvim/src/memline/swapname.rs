@@ -486,7 +486,7 @@ fn ask_about_swapfile(buffer: Buf, fname: &CStr) -> SwapExistsChoice {
 }
 
 impl Buf {
-    /// Find a name for `buffer`'s swap file under the `'directory'` entry
+    /// Find a name for `self`'s swap file under the `'directory'` entry
     /// `dir_name`.
     ///
     /// Names are tried in turn until one is free: `".swp"`, then `".swo"`,

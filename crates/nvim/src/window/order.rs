@@ -358,7 +358,7 @@ fn move_after(win1: Win, win2: Win) {
 }
 
 impl FrameRef {
-    /// How many windows would fit in `height` rows of frame `fr`: each costs
+    /// How many windows would fit in `height` rows of this frame: each costs
     /// `'winminheight'` plus a status line,
     /// plus its window bar where there is one.
     pub(crate) fn max_win_count(self, height: c_int) -> c_int {

@@ -503,7 +503,7 @@ pub fn command_height() {
 }
 
 impl FrameRef {
-    /// Add `n` rows to frame `frp` and to every frame above it, from
+    /// Add `n` rows to this frame and to every frame above it, from
     /// `frame_add_height()`. Negative `n` takes them away.
     fn add_height(self, n: c_int) {
         new_height(self, self.fr_height + n, false, false, false);
@@ -512,7 +512,7 @@ impl FrameRef {
         }
     }
 
-    /// The nearest frame at or above `fr` that has a row to spare, from
+    /// The nearest frame at or above `self` that has a row to spare, from
     /// `find_horizontally_resizable_frame()`. `None` when the layout is full.
     fn resizable_ancestor(self) -> Option<FrameRef> {
         let mut fp = self;
@@ -530,7 +530,7 @@ impl FrameRef {
         Some(fp)
     }
 
-    /// Make room for the status line `fr`'s window has just been given.
+    /// Make room for the status line `self`'s window has just been given.
     fn resize_for_status(self) -> Result<(), WinError> {
         let wp = self.win().expect("a leaf frame holds a window");
         let Some(fp) = self.resizable_ancestor() else {
@@ -546,7 +546,7 @@ impl FrameRef {
         Ok(())
     }
 
-    /// Make room for the window bar `fr`'s window has just been given, which --
+    /// Make room for the window bar `self`'s window has just been given, which --
     /// unlike a status line -- cannot come out of the window's own text.
     fn resize_for_winbar(self) -> Result<(), WinError> {
         let wp = self.win().expect("a leaf frame holds a window");
@@ -561,7 +561,7 @@ impl FrameRef {
     }
 
     /// Add or remove the status lines `'laststatus'` asks for, over every window in
-    /// frame `fr`.
+    /// this frame.
     fn set_last_status(self, statusline: bool, is_stl_global: bool) {
         let Some(mut wp) = self.win() else {
             for fp in self.children() {

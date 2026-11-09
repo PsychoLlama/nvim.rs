@@ -158,7 +158,7 @@ fn lines_differ(buffer: Buf, lnum: LineNr) -> bool {
 }
 
 impl Buf {
-    /// Run `f` with `buffer` current and in a window, then restore what was current.
+    /// Run `f` with `self` current and in a window, then restore what was current.
     ///
     /// The `aucmd_prepbuf`/`aucmd_restbuf` pair must always be matched, which is
     /// what makes this a scope rather than two calls: only a panic can skip the
@@ -172,7 +172,7 @@ impl Buf {
         answer
     }
 
-    /// Append lines `start` to `end` of `buffer` to `out`, NL-separated, with the
+    /// Append lines `start` to `end` of `self` to `out`, NL-separated, with the
     /// buffer's embedded NULs translated back from newlines. Line `start` is
     /// read even when it is past `end`.
     pub fn read_into(self, start: LineNr, end: LineNr, out: &mut Vec<u8>) {

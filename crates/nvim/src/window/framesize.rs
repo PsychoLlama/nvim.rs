@@ -59,12 +59,12 @@ fn width_opts() -> MinSize {
 }
 
 impl FrameRef {
-    /// The minimal height of frame `topfrp`, from `frame_minheight()`.
+    /// The minimal height of this frame, from `frame_minheight()`.
     pub(crate) fn min_height(self, next_curwin: NextCurwin) -> ::core::ffi::c_int {
         self.min_height_with(next_curwin, height_opts())
     }
 
-    /// The minimal width of frame `topfrp`, from `frame_minwidth()`.
+    /// The minimal width of this frame, from `frame_minwidth()`.
     pub(crate) fn min_width(self, next_curwin: NextCurwin) -> ::core::ffi::c_int {
         self.min_width_with(next_curwin, width_opts())
     }
@@ -101,7 +101,7 @@ impl FrameRef {
         next
     }
 
-    /// Whether `frp` may not be given a new height: a leaf whose window has
+    /// Whether `self` may not be given a new height: a leaf whose window has
     /// `'winfixheight'`, a row with any such frame in it, or a column of them.
     pub(crate) fn fixed_height(self) -> bool {
         if let Some(win) = self.win() {
@@ -127,7 +127,7 @@ impl FrameRef {
         self.children().all(FrameRef::fixed_width)
     }
 
-    /// Give the windows along the bottom of `frp` a status line, without changing
+    /// Give the windows along the bottom of `self` a status line, without changing
     /// any height: the caller has already made room.
     pub(crate) fn add_statusline(self) {
         if let Some(mut win) = self.win() {
@@ -199,7 +199,7 @@ impl FrameRef {
         }
     }
 
-    /// Add or remove the separator column along the right edge of `frp`, taking
+    /// Add or remove the separator column along the right edge of `self`, taking
     /// the column it needs out of the windows' text.
     pub(crate) fn set_vsep(self, add: bool) {
         if let Some(mut win) = self.win() {

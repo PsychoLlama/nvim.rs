@@ -57,7 +57,7 @@ pub(crate) fn comp_positions() -> c_int {
 }
 
 impl FrameRef {
-    /// Give frame `topfrp` and everything in it its screen position, advancing
+    /// Give this frame and everything in it its screen position, advancing
     /// `row` and `col` past it, from `frame_comp_pos()`.
     pub(crate) fn compute_position(self, row: &mut c_int, col: &mut c_int) {
         if let Some(mut wp) = self.win() {
@@ -88,7 +88,7 @@ impl FrameRef {
         }
     }
 
-    /// Give frame `curfrp` height `height`, resizing everything around it to fit,
+    /// Give this frame height `height`, resizing everything around it to fit,
     /// from `frame_setheight()`.
     ///
     /// A frame in a row needs its siblings resized too, so the whole row is sized

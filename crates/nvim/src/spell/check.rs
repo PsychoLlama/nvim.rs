@@ -77,7 +77,7 @@ fn is_upper(c: c_int) -> bool {
 }
 
 impl Win {
-    /// Check the word `text` starts with in window `window`.
+    /// Check the word `text` starts with in this window.
     ///
     /// `text` runs from the word to the end of its string; its end, or a NUL
     /// in it, is the end of the text.

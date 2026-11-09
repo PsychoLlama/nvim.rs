@@ -129,7 +129,7 @@ pub(crate) fn take_snapshot(idx: c_int) {
 }
 
 impl FrameRef {
-    /// Copy `fr` and everything hanging off it into a freshly allocated tree,
+    /// Copy `self` and everything hanging off it into a freshly allocated tree,
     /// and answer that tree's root.
     ///
     /// The copies are registered frames like any other, so a snapshot's links
@@ -148,7 +148,7 @@ impl FrameRef {
         copy.id()
     }
 
-    /// Free `fr` and everything hanging off it.
+    /// Free `self` and everything hanging off it.
     fn free_snapshot(self) {
         if let Some(next) = self.next() {
             next.free_snapshot();
@@ -188,7 +188,7 @@ impl FrameRef {
         self.snapshot_window()
     }
 
-    /// Whether the saved tree `sn` still has the shape of the live tree `fr`, and
+    /// Whether the saved tree `self` still has the shape of the live tree `fr`, and
     /// every window it remembers is still there.
     fn snapshot_matches(self, fr: FrameRef) -> bool {
         if self.fr_layout != fr.fr_layout
@@ -210,7 +210,7 @@ impl FrameRef {
         self.fr_win.is_none() || self.snapshot_window().is_some()
     }
 
-    /// Give the live tree `fr` the sizes saved in `sn`, and answer the window `sn`
+    /// Give the live tree `fr` the sizes saved in `self`, and answer the window `self`
     /// remembered as current.
     fn restore_snapshot(self, fr: FrameRef) -> Option<Win> {
         let mut fr = fr;

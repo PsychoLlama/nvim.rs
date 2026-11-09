@@ -184,7 +184,7 @@ impl ExArg<'_> {
     /// because it is what says whether an address counts lines, windows,
     /// buffers or tab pages -- so the two are one stage.
     ///
-    /// The position is left in `excmd.arg`, which nothing has read yet.
+    /// The position is left in `self.arg`, which nothing has read yet.
     fn locate_command(
         &mut self,
         in_inactive: bool,
@@ -384,7 +384,7 @@ impl ExArg<'_> {
     /// redirections `:write` and `:read` spell with `>`/`!`, the register and
     /// the count, and where the *next* command starts.
     ///
-    /// On entry `excmd.arg` is where the command word ended, which is what
+    /// On entry `self.arg` is where the command word ended, which is what
     /// [`ExArg::locate_command`] left there.
     fn read_command_args(
         &mut self,

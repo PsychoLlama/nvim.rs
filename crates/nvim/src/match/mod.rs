@@ -72,7 +72,7 @@ pub(crate) use self::vimscript::*;
 const DEFAULT_PRIORITY: c_int = 10;
 
 impl Win {
-    /// Adds a match to `window`'s match list, and answers its id.
+    /// Adds a match to `self`'s match list, and answers its id.
     ///
     /// Exactly one of `pat` and `pos_list` describes what to highlight: a
     /// pattern, or a list of `[lnum]` / `[lnum, col]` / `[lnum, col, len]`

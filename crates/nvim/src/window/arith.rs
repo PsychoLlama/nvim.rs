@@ -80,7 +80,7 @@ pub(crate) struct MinSize {
 }
 
 impl FrameRef {
-    /// The minimal height of frame `topfrp`, from `frame_minheight()`.
+    /// The minimal height of this frame, from `frame_minheight()`.
     ///
     /// A leaf costs its window's minimum plus the rows that are not text (window
     /// bar, separator, status line); a row of frames costs the tallest of them and
@@ -116,7 +116,7 @@ impl FrameRef {
         }
     }
 
-    /// The minimal width of frame `topfrp`, from `frame_minwidth()`: the mirror of
+    /// The minimal width of this frame, from `frame_minwidth()`: the mirror of
     /// [`FrameRef::min_height_with`], with a column taking the widest child and a row the
     /// sum, and the separator column standing in for the status line.
     pub(crate) fn min_width_with(self, next_curwin: NextCurwin, opts: MinSize) -> c_int {
@@ -147,7 +147,7 @@ impl FrameRef {
         }
     }
 
-    /// Whether `topfrp` and its children are at height `height`, from
+    /// Whether `self` and its children are at height `height`, from
     /// `frame_check_height()`.
     ///
     /// Only a *row*'s children are checked, because only they share their parent's
@@ -162,7 +162,7 @@ impl FrameRef {
         true
     }
 
-    /// Whether `topfrp` and its children are at width `width`, from
+    /// Whether `self` and its children are at width `width`, from
     /// `frame_check_width()` — [`FrameRef::check_height`] with the axes exchanged, so
     /// it is a *column* whose children must match.
     pub(crate) fn check_width(self, width: c_int) -> bool {
