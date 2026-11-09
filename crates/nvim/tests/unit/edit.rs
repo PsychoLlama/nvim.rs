@@ -568,3 +568,86 @@ fn normal_mode_reads_its_character_arguments_as_keys() {
     }
     restore(&fx);
 }
+
+#[test]
+fn a_literal_line_break_replaces_a_character_in_place() {
+    // `r CTRL-V <CR>` over a selection carries the literal carriage return
+    // through the operator as a code no key has; a plain `r <CR>` breaks the
+    // line where the selection is a block.
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    restore(&fx);
+    typed(
+        &fx,
+        "['abc', 'def']",
+        r"vlr\<C-V>\<CR>",
+        &[("getline(1) == \"\\r\\rc\"", "1"), ("line('$')", "2")],
+    );
+    typed(
+        &fx,
+        "['abc', 'def']",
+        r"vlr\<C-V>\<C-J>",
+        &[("getline(1) == \"\\n\\nc\"", "1"), ("line('$')", "2")],
+    );
+    typed(
+        &fx,
+        "['abc', 'def']",
+        r"vlr\<CR>",
+        &[("getline(1) == \"\\r\\rc\"", "1"), ("line('$')", "2")],
+    );
+    // Blockwise, a plain `<CR>` breaks the line and the literal one does not.
+    typed(
+        &fx,
+        "['abc', 'def']",
+        r"\<C-V>lr\<CR>",
+        &[("getline(1, '$')", "['', 'c', 'def']")],
+    );
+    typed(
+        &fx,
+        "['abc', 'def']",
+        r"\<C-V>lr\<C-V>\<CR>",
+        &[("getline(1) == \"\\r\\rc\"", "1"), ("line('$')", "2")],
+    );
+    // With 'virtualedit' the redo buffer gets the key back, not the code.
+    fx.run("set virtualedit=all");
+    typed(
+        &fx,
+        "['abc', 'def']",
+        r"vlr\<C-V>\<CR>j0.",
+        &[
+            ("getline(1) == \"\\r\\rc\"", "1"),
+            ("getline(2) == \"\\r\\rf\"", "1"),
+        ],
+    );
+    restore(&fx);
+}
+
+#[test]
+fn indentkeys_o_and_o_upper_reindent_the_opened_line_and_a_completion_reindents() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    restore(&fx);
+    fx.run("setlocal indentexpr=7 indentkeys=o");
+    typed(&fx, "['x']", r"oy\<Esc>", &[("indent(2)", "7")]);
+    typed(&fx, "['x']", r"Oy\<Esc>", &[("indent(1)", "0")]);
+    fx.run("setlocal indentkeys=O");
+    typed(&fx, "['x']", r"oy\<Esc>", &[("indent(2)", "0")]);
+    typed(&fx, "['x']", r"Oy\<Esc>", &[("indent(1)", "7")]);
+    // `=word`: a completion that ends on the word reindents the line.
+    fx.run("setlocal indentkeys==foobar");
+    typed(
+        &fx,
+        "['foobarbaz', '']",
+        r"jAfoob\<C-N>\<C-Y>\<Esc>",
+        &[("getline(2)", "'       foobarbaz'")],
+    );
+    fx.run("setlocal indentkeys=");
+    typed(
+        &fx,
+        "['foobarbaz', '']",
+        r"jAfoob\<C-N>\<C-Y>\<Esc>",
+        &[("getline(2)", "'foobarbaz'")],
+    );
+    fx.run("setlocal indentexpr& indentkeys&");
+    restore(&fx);
+}
