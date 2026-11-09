@@ -121,7 +121,7 @@ impl RtpParts<'_> {
     /// already end in one (C's `after_pathsep`, which on this platform is
     /// exactly "the previous byte is a [`PATHSEP`]").
     fn push_components(&self, out: &mut Vec<u8>, sufs: &[&[u8]]) {
-        let sep = u8::try_from(PATHSEP).expect("`PATHSEP` is an ASCII byte");
+        let sep = PATHSEP;
         if out.last() != Some(&sep) {
             out.push(sep);
         }

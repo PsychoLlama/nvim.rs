@@ -83,6 +83,9 @@ pub(crate) const NUL: ::core::ffi::c_int = 0;
 /// The path separator as a string, for the code that appends one.
 pub(crate) const PATHSEPSTR: &::core::ffi::CStr = c"/";
 
+/// The path separator.
+pub(crate) const PATHSEP: u8 = b'/';
+
 /// A horizontal tab. The control bytes below are bytes: a key code compares
 /// against [`crate::types::Key`]'s copies, and a reader holding a `c_int`
 /// widens the byte where it compares.

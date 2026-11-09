@@ -1904,7 +1904,6 @@ static const int ENOTSUP = 95;
 static const int ENTRY_LINES_RESERVED = 1024;
 static const int ENVELOPE_MAX = 16;
 static const int ENV_SEPCHAR = 58;
-static const int EOF = -1;
 static const int EOL_DOS = 1;
 static const int EOL_MAC = 2;
 static const int EOL_UNIX = 0;

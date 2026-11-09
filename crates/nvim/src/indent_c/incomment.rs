@@ -132,14 +132,14 @@ fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> 
         let mut off = 0;
         let mut what = 0;
         while byte_at(com, p) != 0 && byte_at(com, p) != b':' {
-            let c = c_int::from(byte_at(com, p));
+            let c = byte_at(com, p);
             if c == COM_START || c == COM_END || c == COM_MIDDLE {
                 what = c;
                 p += 1;
             } else if c == COM_LEFT || c == COM_RIGHT {
                 align = c;
                 p += 1;
-            } else if ascii_isdigit(c) || c == c_int::from(b'-') {
+            } else if c.is_ascii_digit() || c == b'-' {
                 (off, p) = getdigits_int_at(com, p, true, 0);
             } else {
                 p += 1;

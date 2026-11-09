@@ -112,7 +112,6 @@ pub const DIFFERENT_FILES: FileComparison = 2;
 pub const EQUAL_FILES: FileComparison = 1;
 pub const URL_BACKSLASH: c_int = 2;
 pub const URL_SLASH: c_int = 1;
-pub const PATHSEP: c_int = '/' as c_int;
 pub const MAXSUFLEN: c_int = 30;
 
 /// The full path of `fname`, in a string the caller owns — or a copy of

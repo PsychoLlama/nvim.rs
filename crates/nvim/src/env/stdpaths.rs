@@ -13,9 +13,9 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::ascii::PATHSEP;
 use crate::cstr;
-use crate::env::XdgVar;
-use crate::env::expand_env;
+use crate::env::{XdgVar, expand_env};
 use crate::fileio::vim_gettempdir;
 use crate::memory::{ThinCString, XString};
 use crate::message::IOSIZE;
@@ -23,8 +23,6 @@ use crate::os::env::{ENV_SEPCHAR, env_exists, env_get_bounded, getenv_owned};
 use crate::path::{concat_fnames, path_fnamecmp, path_is_absolute};
 use core::ffi::CStr;
 use std::ffi::CString;
-
-const PATHSEP: u8 = b'/';
 
 /// The environment variable behind each [`XdgVar`].
 const XDG_ENV_VARS: [&CStr; 7] = [

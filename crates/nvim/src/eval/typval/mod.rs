@@ -93,7 +93,9 @@ pub const DICT2_LIST_VALUES: DictListType = 1;
 pub const DICT2_LIST_KEYS: DictListType = 0;
 pub const INT8_MIN: ::core::ffi::c_int = -128 as ::core::ffi::c_int;
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = u64::MAX;
-pub const TV_CSTRING: ::core::ffi::c_ulong = u64::MAX.wrapping_sub(1 as ::core::ffi::c_ulong);
+/// The two `name_len` sentinels the `var_check_*` family accepts in place of
+/// a real length: translate the name and measure it, or just measure it.
+pub const TV_CSTRING: usize = usize::MAX - 1;
 static E_VARIABLE_NESTED_TOO_DEEP_FOR_UNLOCK: &::core::ffi::CStr =
     c"E743: Variable nested too deep for (un)lock";
 static E_USING_INVALID_VALUE_AS_STRING: &::core::ffi::CStr =

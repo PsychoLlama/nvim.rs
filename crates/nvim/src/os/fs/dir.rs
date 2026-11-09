@@ -17,18 +17,18 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::PATHSEP;
 use crate::os::uv_error::UV_EOF;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use super::{LIBUV_SUCCESS, NO_LOOP, PATHSEP, dir_exists, fs_ok, fs_request, fs_result};
+use super::{LIBUV_SUCCESS, NO_LOOP, dir_exists, fs_ok, fs_request, fs_result};
 use crate::cstr;
 use crate::event::libuv::{
     uv_fs_mkdir, uv_fs_mkdtemp, uv_fs_rename, uv_fs_req_cleanup, uv_fs_rmdir, uv_fs_scandir,
     uv_fs_scandir_next, uv_fs_unlink,
 };
-use crate::message::E_NONAME;
-use crate::message::emsg;
+use crate::message::{E_NONAME, emsg};
 use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
 use crate::os::fs::Directory;
@@ -94,7 +94,7 @@ pub fn mkdir_recurse(dir: &CStr, mode: int32_t) -> Result<Option<CString>, Mkdir
     let mut created = None;
     while e != real_end {
         if e > past_head {
-            curdir[e] = PATHSEP as u8;
+            curdir[e] = PATHSEP;
         } else {
             curdir[past_head] = past_head_save;
         }
@@ -106,7 +106,7 @@ pub fn mkdir_recurse(dir: &CStr, mode: int32_t) -> Result<Option<CString>, Mkdir
             // `curdir` always ends in the NUL it was copied with.
             .unwrap_or(real_end - e);
         let component = &curdir[e..e + component_len];
-        let all_separators = component.iter().all(|&b| b == PATHSEP as u8);
+        let all_separators = component.iter().all(|&b| b == PATHSEP);
         e += component_len;
         if e == real_end && all_separators {
             // The path ends with something like "////". Ignore this.

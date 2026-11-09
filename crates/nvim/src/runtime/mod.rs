@@ -35,6 +35,7 @@
 // The constants here keep upstream's spelling (`kXDG*`, `kRet*`).
 
 pub(crate) mod state;
+use crate::ascii::PATHSEP;
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::has_autocmd;
 use crate::cmdexpand::defs::Expand;
@@ -181,7 +182,6 @@ impl SearchPathItem {
         }
     }
 }
-pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 pub const SYS_OPTWIN_FILE: &::core::ffi::CStr = c"$VIMRUNTIME/scripts/optwin.lua";
 pub const SID_MODELINE: ScriptId = -1;
 pub const SID_CMDARG: ScriptId = -2;

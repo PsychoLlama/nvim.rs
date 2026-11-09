@@ -9,11 +9,9 @@
     clippy::ptr_as_ptr
 )]
 
-use super::MENU_ALL_MODES;
 use super::wrappers::{arg_lnum, arg_number, arg_number_chk, non_zero_arg};
 use crate::api::private::helpers::api_metadata;
-use crate::ascii::NUL;
-use crate::ascii::ascii_iswhite;
+use crate::ascii::{NUL, ascii_iswhite};
 use crate::autocmd::state::AUTOCMD_BUSY;
 use crate::cmdexpand::cmdline_pum_active;
 use crate::cmdexpand::state::WILD_MENU_SHOWING;
@@ -26,14 +24,13 @@ use crate::getchar::{stuff_empty, typeahead, using_script};
 use crate::global_cell::GlobalCell;
 use crate::indent::{get_sw_value, get_sw_value_col};
 use crate::insexpand::ins_compl_active;
-use crate::lua::executor::LuaRetMode;
-use crate::lua::executor::nlua_exec_cstr;
+use crate::lua::executor::{LuaRetMode, nlua_exec_cstr};
 use crate::memline::Lines;
 use crate::memory::ThinCString;
+use crate::menu::MENU_ALL_MODES;
 use crate::menu::{cmd_modes, menu_get};
 use crate::message::state::MSG_SCROLLED;
-use crate::narrow::number_as_col;
-use crate::narrow::number_as_int;
+use crate::narrow::{number_as_col, number_as_int};
 use crate::normal::op_pending;
 use crate::ops::cursor_pos_info;
 use crate::os::cshim::cstr_ncasecmp;
@@ -341,7 +338,7 @@ pub fn f_menu_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let modes = if args.get(1).is_some_and(|arg| arg.v_type() == VAR_STRING) {
         cmd_modes(numbuf.string(&args[1]).to_bytes(), false).0
     } else {
-        MENU_ALL_MODES.cast_signed()
+        MENU_ALL_MODES
     };
     menu_get(numbuf2.string(&args[0]), modes, list);
 }

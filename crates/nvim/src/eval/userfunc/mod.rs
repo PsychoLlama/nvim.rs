@@ -62,7 +62,6 @@ use crate::message_fmt::msg_bytes;
 use crate::option::vars::{p_ic, p_mfd, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
-use crate::os::libc::size_t;
 use crate::path::path_fnamecmp;
 use crate::profile::{
     func_do_profile, func_line_end, func_line_start, prof_def_func, profile_add, profile_end,
@@ -132,7 +131,6 @@ pub const FCERR_TOOFEW: c_int = 2;
 pub const FCERR_TOOMANY: c_int = 1;
 pub const FCERR_UNKNOWN: c_int = 0;
 
-pub const TV_CSTRING: size_t = size_t::MAX - 1;
 use crate::message::MSG_BUF_LEN;
 pub const MSG_BUF_CLEN: c_int = MSG_BUF_LEN / 6;
 

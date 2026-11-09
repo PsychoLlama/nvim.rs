@@ -27,6 +27,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::ascii::PATHSEP;
 use crate::ascii::{TAB, ascii_iswhite};
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{
@@ -96,7 +97,7 @@ use crate::os::env::process_id;
 use crate::os::fs::os_remove;
 use crate::os::input::{line_breakcheck, os_breakcheck};
 use crate::os::libc::{ptrdiff_t, size_t};
-use crate::path::{PATHSEP, path_fnamecmp, path_is_absolute, vim_is_abs_name};
+use crate::path::{path_fnamecmp, path_is_absolute, vim_is_abs_name};
 use crate::pos::MAXLNUM;
 use crate::quickfix::model::{
     DirStack, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, QfEntry, QfList, QfListType, QfStack,

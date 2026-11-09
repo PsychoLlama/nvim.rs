@@ -18,9 +18,8 @@ use super::*;
 use crate::memory::XString;
 use crate::message::IOSIZE;
 use crate::message_fmt::msg_bytes;
-use crate::option::SavedCpo;
-use crate::option::next_option_part;
 use crate::option::vars::P_RTP;
+use crate::option::{SavedCpo, next_option_part};
 use crate::path::MAXPATHL;
 use crate::path::{ExpandFlags, gen_expand_wildcards, vim_ispathsep};
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING};
@@ -102,7 +101,7 @@ fn hgr_search_files_in_dir(qfl: Qfl, dir: &[u8], prog: &mut OwnedProg, lang: Opt
     // owned here instead.
     let mut pattern: Vec<u8> = dir.to_vec();
     if dir.last().is_some_and(|&c| !vim_ispathsep(c_int::from(c))) {
-        pattern.push(u8::try_from(PATHSEP).unwrap_or(b'/'));
+        pattern.push(PATHSEP);
     }
     pattern.extend_from_slice(HELP_FILES);
     let pattern = XString::from_bytes(&pattern);

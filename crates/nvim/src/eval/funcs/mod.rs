@@ -11,6 +11,7 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
+
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash
@@ -77,7 +78,6 @@ pub const SOME_MATCH_STR: SomeMatchType = 3;
 pub const SOME_MATCH_LIST: SomeMatchType = 2;
 pub const SOME_MATCH_END: SomeMatchType = 1;
 pub const SOME_MATCH: SomeMatchType = 0;
-pub const MENU_ALL_MODES: ::core::ffi::c_uint = 127;
 static E_STRING_LIST_OR_BLOB_REQUIRED: &::core::ffi::CStr = c"E1098: String, List or Blob required";
 static E_MISSING_FUNCTION_ARGUMENT: &::core::ffi::CStr = c"E1132: Missing function argument";
 

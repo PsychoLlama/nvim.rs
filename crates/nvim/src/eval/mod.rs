@@ -38,7 +38,7 @@ pub(crate) use crate::message::E_INVALBLOB;
 use crate::os::libc::uint64_t;
 use crate::registry::SlotTable;
 use crate::types::{ExprType, Failed, Timer};
-use core::ffi::{CStr, c_int, c_uint, c_ulong};
+use core::ffi::{CStr, c_int, c_uint};
 
 mod entry;
 pub use self::entry::*;
@@ -159,4 +159,3 @@ static LAST_TIMER_ID: GlobalCell<uint64_t> = GlobalCell::new(1 as uint64_t);
 /// this across one.
 static TIMERS: GlobalCell<SlotTable<uint64_t, Timer>> = GlobalCell::new(SlotTable::new());
 static CALLBACK_DEPTH: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub const TV_CSTRING: c_ulong = u64::MAX.wrapping_sub(1 as c_ulong);

@@ -31,7 +31,7 @@
 #![forbid(unsafe_code)]
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::change::COM_MAX_LEN;
+use crate::change::{COM_END, COM_LEFT, COM_MAX_LEN, COM_MIDDLE, COM_RIGHT, COM_START};
 use crate::charset::skip;
 use crate::charset::{getwhitecols_curline, vim_is_ident_char, vim_iswordc};
 use crate::eval::funcs::builtin::EvalFuncData;
@@ -93,11 +93,6 @@ pub struct CppBaseclassCache {
     pub found: ::core::ffi::c_int,
     pub lpos: LPos,
 }
-pub const COM_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
-pub const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
-pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;
-pub const COM_LEFT: ::core::ffi::c_int = 'l' as ::core::ffi::c_int;
-pub const COM_RIGHT: ::core::ffi::c_int = 'r' as ::core::ffi::c_int;
 pub const FIND_NAMESPACE_LIM: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const BRACE_IN_COL0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const BRACE_AT_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

@@ -31,7 +31,7 @@ use crate::cstr;
 use crate::event::uv::{uv_dirent_t, uv_fs_t, uv_gid_t, uv_stat_t, uv_uid_t};
 use crate::os::libc::{FILE, uint64_t};
 use crate::os::uv_error::{UV_EAGAIN, UV_EINTR, UV_ENOBUFS, UV_UNKNOWN, uv_code};
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::ptr;
 use core::ptr::NonNull;
 use std::ffi::{CString, OsStr};
@@ -100,7 +100,6 @@ pub(crate) const S_IFBLK: u64 = 0o60000;
 pub(crate) const S_IFLNK: u64 = 0o120000;
 pub(crate) const S_IFCHR: u64 = 0o20000;
 
-const PATHSEP: c_char = b'/' as c_char;
 /// The buffer [`os_mkdtemp`] fills, sized by its callers.
 pub const TEMP_FILE_PATH_MAXLEN: c_int = 256;
 

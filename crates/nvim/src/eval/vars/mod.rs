@@ -121,10 +121,6 @@ pub use self::vvar::*;
 /// ... can name, whether on a `:let` line or as the whole of one.
 pub(crate) type ScopeLister = fn(&mut bool);
 
-/// The two `name_len` sentinels the `var_check_*` family accepts in place of
-/// a real length: translate the name and measure it, or just measure it.
-pub const TV_CSTRING: ::core::ffi::c_ulong = u64::MAX - 1;
-
 // The error texts this family owns.  They are `%`-format strings handed to
 // the variadic `semsg`/`emsg`, so they stay C strings rather than becoming
 // `semsg!` arguments.

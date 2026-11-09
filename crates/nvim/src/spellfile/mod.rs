@@ -318,7 +318,6 @@ impl Keyed for CompItem {
         &self.ci_key
     }
 }
-pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const SPL_FNAME_ADD: &::core::ffi::CStr = c".add.";
 pub const SPL_FNAME_ASCII: &::core::ffi::CStr = c".ascii.";
 pub const VIMSUGMAGIC: &::core::ffi::CStr = c"VIMsug";
