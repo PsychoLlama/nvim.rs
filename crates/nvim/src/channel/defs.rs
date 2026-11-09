@@ -231,7 +231,6 @@ pub const kChannelStdinNull: ChannelStdinMode = 1;
 pub type ChannelStreamType = ::core::ffi::c_uint;
 pub type ClientType = ::core::ffi::c_int;
 #[derive(Copy, Clone, Debug)]
-#[repr(C)]
 pub struct InternalState {
     pub cb: LuaRef,
     pub closed: bool,
@@ -247,11 +246,9 @@ pub struct RpcState {
     pub client_type: ClientType,
 }
 #[derive(Copy, Clone, Debug)]
-#[repr(C)]
 pub struct StderrState {
     pub closed: bool,
 }
-#[repr(C)]
 #[derive(Debug)]
 pub struct StdioPair {
     pub in_0: RStream,

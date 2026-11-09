@@ -584,7 +584,6 @@ pub fn marktree_lookup(
 }
 
 #[derive(Copy, Clone, Debug)]
-#[repr(C)]
 pub struct MTKey {
     pub pos: MTPos,
     pub ns: uint32_t,
@@ -599,7 +598,6 @@ pub struct MTPair {
     pub end_right_gravity: bool,
 }
 #[derive(Copy, Clone, Default, Debug)]
-#[repr(C)]
 pub struct MTPos {
     pub row: int32_t,
     pub col: int32_t,

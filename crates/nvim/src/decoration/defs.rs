@@ -19,13 +19,11 @@ use crate::winlayer::WinId;
 /// sign/highlight item and of the first virtual-text link in the
 /// decoration stores, either `DECOR_ID_INVALID` for none.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-#[repr(C)]
 pub struct DecorExt {
     pub sh_idx: uint32_t,
     pub vt_idx: uint32_t,
 }
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-#[repr(C)]
 pub struct DecorHighlightInline {
     pub flags: uint16_t,
     pub priority: DecorPriority,
@@ -41,11 +39,7 @@ pub struct DecorHighlightInline {
 /// Copying one is a second name for the same entries, not a second owner of
 /// them -- which is why both keys of a paired mark carry the decoration and
 /// only the start key's removal frees it.
-///
-/// `repr(C, u32)` so that `MTKey`, which stores one, keeps a C layout the
-/// unit suite's declarations can spell.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-#[repr(C, u32)]
 pub enum DecorInline {
     Hl(DecorHighlightInline),
     Ext(DecorExt),
@@ -82,7 +76,6 @@ pub struct DecorProvider {
 }
 pub type DecorProvider_state = ::core::ffi::c_uint;
 #[derive(Clone, Debug)]
-#[repr(C)]
 pub struct DecorRange {
     pub start_row: ::core::ffi::c_int,
     pub start_col: ::core::ffi::c_int,
@@ -157,7 +150,6 @@ impl DecorRange_data {
     }
 }
 #[derive(Copy, Clone, Debug)]
-#[repr(C)]
 pub struct DecorRange_data_ui {
     pub ns_id: uint32_t,
     pub mark_id: uint32_t,

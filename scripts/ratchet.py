@@ -2206,7 +2206,7 @@ COPY_KEEPERS = {
     "crates/nvim/src/spellsuggest/soundalike.rs::KeepCapLevel": "value",
     "crates/nvim/src/statusline/stl/arena.rs::StlItem": "value",
     "crates/nvim/src/strings/charindex.rs::CharLen": "value",
-    "crates/nvim/src/syntax/mod.rs::sp_syn": "value",
+    "crates/nvim/src/syntax/mod.rs::SynGroup": "value",
     "crates/nvim/src/syntax/mod.rs::PatOffsets": "value",
     "crates/nvim/src/textformat/para.rs::Leader": "value",
     "crates/nvim/src/tui/terminfo/param.rs::Param": "value",

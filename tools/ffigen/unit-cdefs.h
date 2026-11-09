@@ -5,7 +5,6 @@ typedef struct ApiDict ApiDict;
 typedef struct ApiString ApiString;
 typedef struct Array Array;
 typedef struct Blob Blob;
-typedef struct DecorRange_data DecorRange_data;
 typedef struct Dict Dict;
 typedef struct DictItem DictItem;
 typedef struct Expand Expand;
@@ -13,32 +12,22 @@ typedef struct List List;
 typedef struct OptSet OptSet;
 typedef struct Partial Partial;
 typedef struct ScreenOwned ScreenOwned;
-typedef struct Scrollback Scrollback;
 typedef struct StateOwned StateOwned;
-typedef struct TerminalOptions TerminalOptions;
 typedef struct VTermInner VTermInner;
 typedef struct Window Window;
 typedef struct key_value_pair key_value_pair;
 typedef struct loop loop;
 typedef struct queue queue;
 typedef struct socket_watcher socket_watcher;
+typedef struct terminal terminal;
 typedef struct __pthread_mutex_s __pthread_mutex_s;
 typedef struct __pthread_rwlock_arch_t __pthread_rwlock_arch_t;
 typedef struct termios termios;
 typedef struct winsize winsize;
 typedef struct Callback Callback;
 typedef struct CharInfo CharInfo;
-typedef struct DecorExt DecorExt;
-typedef struct DecorHighlightInline DecorHighlightInline;
-typedef struct DecorInline DecorInline;
-typedef struct DecorRange DecorRange;
-typedef struct DecorRange_data_ui DecorRange_data_ui;
 typedef struct DictKey DictKey;
-typedef struct ExtmarkMove ExtmarkMove;
-typedef struct ExtmarkSavePos ExtmarkSavePos;
-typedef struct ExtmarkSplice ExtmarkSplice;
 typedef struct HarnessString HarnessString;
-typedef struct InternalState InternalState;
 typedef struct uv__queue uv__queue;
 typedef union uv_idle_s_u uv_idle_s_u;
 typedef struct uv_idle_s uv_idle_s;
@@ -58,8 +47,6 @@ typedef struct uv_process_s uv_process_s;
 typedef union uv_stdio_container_s_data uv_stdio_container_s_data;
 typedef struct uv_stdio_container_s uv_stdio_container_s;
 typedef struct LibuvProc LibuvProc;
-typedef struct MTPos MTPos;
-typedef struct MTKey MTKey;
 typedef struct Object Object;
 typedef struct ParserScratch ParserScratch;
 typedef struct Pos Pos;
@@ -74,16 +61,11 @@ typedef struct uv_signal_s_tree_entry uv_signal_s_tree_entry;
 typedef union uv_signal_s_u uv_signal_s_u;
 typedef struct uv_signal_s uv_signal_s;
 typedef struct signal_watcher signal_watcher;
-typedef struct StderrState StderrState;
-typedef struct StdioPair StdioPair;
 typedef struct StrCharInfo StrCharInfo;
-typedef struct TerminalCursor TerminalCursor;
-typedef struct TerminalPending TerminalPending;
+typedef struct TypVal TypVal;
 typedef struct VTerm_mode VTerm_mode;
 typedef struct VTerm_parser VTerm_parser;
 typedef struct VTerm VTerm;
-typedef struct terminal terminal;
-typedef struct TypVal TypVal;
 typedef struct VTermEncoding VTermEncoding;
 typedef struct VTermEncodingInstance VTermEncodingInstance;
 typedef struct VTermGlyphInfo VTermGlyphInfo;
@@ -251,7 +233,6 @@ typedef unsigned int MessagePackType;
 typedef int MessageType;
 typedef unsigned int MetaIndex;
 typedef int MotionType;
-typedef uint16_t MtFlags;
 typedef Handle NS;
 typedef unsigned int ObjectType;
 typedef int OpType;
@@ -302,7 +283,7 @@ typedef int TermKeySym;
 typedef int TermKeyType;
 typedef unsigned int TermMode;
 typedef unsigned int TermModeState;
-typedef struct terminal Terminal;
+typedef terminal Terminal;
 typedef char *ThinCString;
 typedef uint64_t Timestamp;
 typedef unsigned int UIExtension;
@@ -429,63 +410,9 @@ struct CharInfo {
   int32_t value;
   int len;
 };
-struct DecorExt {
-  uint32_t sh_idx;
-  uint32_t vt_idx;
-};
-struct DecorHighlightInline {
-  uint16_t flags;
-  DecorPriority priority;
-  int hl_id;
-  ScreenChar conceal_char;
-};
-struct DecorInline {
-  unsigned int tag;
-  union {
-    DecorHighlightInline hl_;
-    DecorExt ext_;
-  } payload;
-};
-struct DecorRange_data_ui {
-  uint32_t ns_id;
-  uint32_t mark_id;
-  VirtTextPos pos;
-};
-struct ExtmarkMove {
-  int start_row;
-  int start_col;
-  int extent_row;
-  int extent_col;
-  int new_row;
-  int new_col;
-  BCount start_byte;
-  BCount extent_byte;
-  BCount new_byte;
-};
-struct ExtmarkSavePos {
-  uint64_t mark;
-  int old_row;
-  ColNr old_col;
-  bool invalidated;
-};
-struct ExtmarkSplice {
-  int start_row;
-  ColNr start_col;
-  int old_row;
-  ColNr old_col;
-  int new_row;
-  ColNr new_col;
-  BCount start_byte;
-  BCount old_byte;
-  BCount new_byte;
-};
 struct HarnessString {
   const char *data;
   size_t size;
-};
-struct InternalState {
-  LuaRef cb;
-  bool closed;
 };
 struct uv__queue {
   uv__queue *next;
@@ -646,17 +573,6 @@ struct uv_stdio_container_s {
   uv_stdio_flags flags;
   uv_stdio_container_s_data data;
 };
-struct MTPos {
-  int32_t row;
-  int32_t col;
-};
-struct MTKey {
-  MTPos pos;
-  uint32_t ns;
-  uint32_t id;
-  MtFlags flags;
-  DecorInline decor_data;
-};
 struct ParserScratch {
   int leaderlen;
   uint8_t leader[16];
@@ -738,23 +654,24 @@ struct uv_signal_s {
   unsigned int caught_signals;
   unsigned int dispatched_signals;
 };
-struct StderrState {
-  bool closed;
-};
-struct StdioPair {
-  RStream in;
-  Stream out;
-};
 struct StrCharInfo {
   char *ptr;
   CharInfo chr;
 };
-struct TerminalCursor {
-  int row;
-  int col;
-  int shape;
-  bool visible;
-  bool blink;
+struct TypVal {
+  unsigned int tag;
+  union {
+    VarNumber number_;
+    ThinCString string_;
+    ThinCString func_;
+    ListRef list_;
+    DictRef dict_;
+    Float float_;
+    BoolVarValue bool_;
+    SpecialVarValue special_;
+    PartialRef partial_;
+    BlobRef blob_;
+  } payload;
 };
 struct __attribute__((aligned(4))) VTerm_mode {
   unsigned int utf8 : 1;
@@ -777,21 +694,6 @@ struct VTerm {
   VTerm_mode mode;
   VTerm_parser parser;
   VTermInner *inner;
-};
-struct TypVal {
-  unsigned int tag;
-  union {
-    VarNumber number_;
-    ThinCString string_;
-    ThinCString func_;
-    ListRef list_;
-    DictRef dict_;
-    Float float_;
-    BoolVarValue bool_;
-    SpecialVarValue special_;
-    PartialRef partial_;
-    BlobRef blob_;
-  } payload;
 };
 struct VTermEncoding {
   void (*init)(VTermEncoding *, void *);

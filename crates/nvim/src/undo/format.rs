@@ -15,7 +15,7 @@
 
 use crate::types::ColNr;
 use core::ffi::c_int;
-use core::mem::{offset_of, size_of};
+use core::mem::size_of;
 
 use crate::extmark::{BCount, ExtmarkMove, ExtmarkSplice};
 
@@ -64,11 +64,11 @@ pub fn decode_be(bytes: &[u8]) -> u64 {
 /// How many bytes an extmark record's payload occupies.
 ///
 /// The payload is the one field in the whole format that is not a
-/// big-endian integer: it is the *native memory image* of an
-/// [`ExtmarkSplice`] or an [`ExtmarkMove`], which is why both keep
-/// `#[repr(C)]`. Both have the same shape — six `c_int`s, then three
-/// `bcount_t`s — and the codec below spells that shape out field by field so
-/// that reading a payload never has to reinterpret bytes as a struct.
+/// big-endian integer: it is the *native memory image* of the C struct
+/// upstream wrote for a splice or a move -- six `c_int`s, then three
+/// `bcount_t`s. The codec below spells that shape out field by field, so
+/// neither [`ExtmarkSplice`] nor [`ExtmarkMove`] needs the C layout, and
+/// reading a payload never reinterprets bytes as a struct.
 pub const EXTMARK_PAYLOAD_LEN: usize = 48;
 
 /// Where each field of the image begins.
@@ -77,34 +77,11 @@ const INT_LEN: usize = size_of::<c_int>();
 const BYTE_LEN: usize = size_of::<BCount>();
 const BYTES_AT: usize = PAYLOAD_INTS * INT_LEN;
 
-/// The claim the codec rests on: the layout it writes out by hand is exactly
-/// the layout the two structs already have, so the file's bytes do not move.
-const _: () = {
-    assert!(
-        INT_LEN == 4 && BYTE_LEN == 8,
-        "the payload is 6 i32 + 3 i64"
-    );
-    assert!(size_of::<ExtmarkSplice>() == EXTMARK_PAYLOAD_LEN);
-    assert!(size_of::<ExtmarkMove>() == EXTMARK_PAYLOAD_LEN);
-    assert!(offset_of!(ExtmarkSplice, start_row) == 0);
-    assert!(offset_of!(ExtmarkSplice, start_col) == INT_LEN);
-    assert!(offset_of!(ExtmarkSplice, old_row) == 2 * INT_LEN);
-    assert!(offset_of!(ExtmarkSplice, old_col) == 3 * INT_LEN);
-    assert!(offset_of!(ExtmarkSplice, new_row) == 4 * INT_LEN);
-    assert!(offset_of!(ExtmarkSplice, new_col) == 5 * INT_LEN);
-    assert!(offset_of!(ExtmarkSplice, start_byte) == BYTES_AT);
-    assert!(offset_of!(ExtmarkSplice, old_byte) == BYTES_AT + BYTE_LEN);
-    assert!(offset_of!(ExtmarkSplice, new_byte) == BYTES_AT + 2 * BYTE_LEN);
-    assert!(offset_of!(ExtmarkMove, start_row) == 0);
-    assert!(offset_of!(ExtmarkMove, start_col) == INT_LEN);
-    assert!(offset_of!(ExtmarkMove, extent_row) == 2 * INT_LEN);
-    assert!(offset_of!(ExtmarkMove, extent_col) == 3 * INT_LEN);
-    assert!(offset_of!(ExtmarkMove, new_row) == 4 * INT_LEN);
-    assert!(offset_of!(ExtmarkMove, new_col) == 5 * INT_LEN);
-    assert!(offset_of!(ExtmarkMove, start_byte) == BYTES_AT);
-    assert!(offset_of!(ExtmarkMove, extent_byte) == BYTES_AT + BYTE_LEN);
-    assert!(offset_of!(ExtmarkMove, new_byte) == BYTES_AT + 2 * BYTE_LEN);
-};
+/// The claim the codec rests on: the image is 6 `i32`s and 3 `i64`s.
+const _: () = assert!(
+    INT_LEN == 4 && BYTE_LEN == 8 && BYTES_AT + 3 * BYTE_LEN == EXTMARK_PAYLOAD_LEN,
+    "the payload is 6 i32 + 3 i64"
+);
 
 /// The largest row or column an extmark undo record may name, and the
 /// largest byte offset.

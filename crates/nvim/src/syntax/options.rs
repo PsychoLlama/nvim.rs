@@ -509,7 +509,7 @@ impl SynState {
         &self,
         cur_si: Option<c_int>,
         list: &IdList,
-        ssp: sp_syn,
+        ssp: SynGroup,
         cont_in_list: &IdList,
         flags: SynFlags,
     ) -> bool {
@@ -546,7 +546,7 @@ impl SynState {
 fn id_list_has(
     block: SynBlockRef,
     list: &IdList,
-    ssp: sp_syn,
+    ssp: SynGroup,
     flags: SynFlags,
     depth: c_int,
 ) -> bool {

@@ -457,7 +457,6 @@ pub fn extmark_move_region(
 }
 
 #[derive(Clone, Debug)]
-#[repr(C)]
 pub struct ExtmarkMove {
     pub start_row: ::core::ffi::c_int,
     pub start_col: ::core::ffi::c_int,
@@ -471,7 +470,6 @@ pub struct ExtmarkMove {
 }
 pub type ExtmarkOp = ::core::ffi::c_uint;
 #[derive(Copy, Clone, Debug)]
-#[repr(C)]
 pub struct ExtmarkSavePos {
     pub mark: uint64_t,
     pub old_row: ::core::ffi::c_int,
@@ -479,7 +477,6 @@ pub struct ExtmarkSavePos {
     pub invalidated: bool,
 }
 #[derive(Clone, Debug)]
-#[repr(C)]
 pub struct ExtmarkSplice {
     pub start_row: ::core::ffi::c_int,
     pub start_col: ColNr,

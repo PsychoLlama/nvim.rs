@@ -588,7 +588,7 @@ impl SynState {
     /// left at `sip`.
     fn item_can_spell(&self, sip: c_int) -> bool {
         let block = self.block();
-        let mut sps = sp_syn { inc_tag: 0, id: 0 };
+        let mut sps = SynGroup { inc_tag: 0, id: 0 };
         // The two cluster ids are looked up as bare groups: no `containedin=`.
         let no_cont_in = &IdList::NONE;
         let contains = &self.item(sip).si_cont_list;
@@ -665,7 +665,7 @@ struct PatScan {
     ty: c_int,
     line_id: c_int,
     startcol: c_int,
-    syn: sp_syn,
+    syn: SynGroup,
     offsets: PatOffsets,
 }
 

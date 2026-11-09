@@ -26,12 +26,8 @@ pub(crate) const SELECTIONBUF_SIZE: usize = 0x400;
 /// Owned by the buffer it draws into: `terminal_alloc` makes it and
 /// `terminal_destroy` frees it. Not `Copy` — there is exactly one of
 /// these per terminal buffer, reached through `Buffer::terminal`, and
-/// duplicating it would duplicate the allocations it owns.
-///
-/// Still `repr(C)`: `Buffer` is `repr(C)` and holds a `*mut Terminal`, so
-/// the FFI-safety lint follows the pointer into this definition. Reached
+/// duplicating it would duplicate the allocations it owns. Reached
 /// through `winlayer::Term`.
-#[repr(C)]
 #[derive(Debug)]
 pub struct terminal {
     pub opts: TerminalOptions,
@@ -243,7 +239,6 @@ impl Scrollback {
         self.pending -= 1;
     }
 }
-#[repr(C)]
 #[derive(Debug, Default)]
 pub struct TerminalPending {
     pub resize: bool,
@@ -255,7 +250,6 @@ pub struct TerminalPending {
     pub send: Option<std::rc::Rc<std::cell::RefCell<Vec<u8>>>>,
     pub(crate) events: Option<crate::event_queue::ParkingQueue>,
 }
-#[repr(C)]
 #[derive(Debug, Default)]
 pub struct TerminalCursor {
     pub row: ::core::ffi::c_int,

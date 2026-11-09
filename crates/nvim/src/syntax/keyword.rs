@@ -33,7 +33,7 @@ use crate::ascii::NUL;
 #[derive(Debug)]
 pub(crate) struct KeyEntry {
     /// The group, and the `:syntax include` level it was defined at.
-    pub(crate) syn: sp_syn,
+    pub(crate) syn: SynGroup,
     /// `containedin=`: this entry's own copy.
     pub(crate) cont_in_list: IdList,
     /// `nextgroup=`: this entry's own copy.
@@ -240,7 +240,7 @@ fn add_keyword(name: &[u8], def: &KeywordDef) {
         name
     };
     let entry = KeyEntry {
-        syn: sp_syn {
+        syn: SynGroup {
             inc_tag: current_syn_inc_tag.get(),
             id: id16(def.id),
         },

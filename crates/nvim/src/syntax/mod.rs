@@ -138,8 +138,7 @@ pub(crate) const EXPAND_BUF_LEN: ::core::ffi::c_uint = 1025;
 /// nesting it was declared. Both a pattern and a keyword carry one, and
 /// [`in_id_list`] tests against it.
 #[derive(Copy, Clone, Debug)]
-#[repr(C)]
-pub(crate) struct sp_syn {
+pub(crate) struct SynGroup {
     pub inc_tag: ::core::ffi::c_int,
     pub id: int16_t,
 }
@@ -271,7 +270,7 @@ pub(crate) struct SynPat {
     /// [`in_id_list`] could take one pointer; it is an owned list here and
     /// a keyword's is not, so the two travel separately.
     pub sp_cont_in_list: IdList,
-    pub sp_syn: sp_syn,
+    pub sp_syn: SynGroup,
     /// The pattern text, as `:syntax list` prints it. `None` only in a
     /// half-built pattern that never got one.
     pub sp_pattern: Option<::std::ffi::CString>,
@@ -319,7 +318,7 @@ pub(crate) const EMPTY_SYNPAT: SynPat = SynPat {
     sp_cont_list: IdList::NONE,
     sp_next_list: IdList::NONE,
     sp_cont_in_list: IdList::NONE,
-    sp_syn: sp_syn { inc_tag: 0, id: 0 },
+    sp_syn: SynGroup { inc_tag: 0, id: 0 },
     sp_pattern: None,
     sp_prog: None,
     sp_time: SynTime {
