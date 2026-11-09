@@ -63,7 +63,6 @@ use crate::keycodes::{
     K_SPECIAL, escape_ks_bytes, get_special_key_name, push_char_escaped, replace_termcodes,
     unescape_ks, unescape_ks_in,
 };
-use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::api_new_luaref;
 use crate::mbyte::cluster_len;
 use crate::message::state::{MSG_COL, MSG_ROW, MSG_SILENT};
@@ -114,7 +113,6 @@ pub use self::langmap::*;
 pub use crate::getchar::MAXMAPLEN;
 pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
 pub use crate::keycodes::{REPTERM_DO_LT, REPTERM_FROM_PART, REPTERM_NO_SIMPLIFY};
-pub const RET_OBJECT: LuaRetMode = 0;
 /// The `:map` arguments being parsed, and the owner of everything a parse
 /// allocates.
 ///

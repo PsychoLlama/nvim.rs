@@ -13,6 +13,7 @@
 
 use crate::eval::typval::{LUA_NOREF, PartialRef, partial_name};
 use crate::guard::Depth;
+use crate::lua::executor::LuaRetMode;
 use crate::memory::ThinCString;
 use crate::types::Array;
 use crate::types::Failed;
@@ -25,7 +26,7 @@ use crate::eval::userfunc::{
     CallWith, call_func_with, func_ref_name, func_unref_name, scriptlocal_funcname,
 };
 use crate::eval::vars::{emsg_static, lua_partial};
-use crate::eval::{CALLBACK_DEPTH, RET_NIL_BOOL, check_luafunc_name};
+use crate::eval::{CALLBACK_DEPTH, check_luafunc_name};
 use crate::lua::executor::{
     api_new_luaref, funcref_description, nlua_call_ref_quiet, nlua_is_table_from_lua,
     register_table_as_callable, release_luaref,
@@ -271,7 +272,7 @@ pub fn callback_call(
             // general-purpose call.
             let no_args = Array::new();
             // No arguments, no arena and no error sink.
-            let rv = nlua_call_ref_quiet(*luaref, None, no_args, RET_NIL_BOOL);
+            let rv = nlua_call_ref_quiet(*luaref, None, no_args, LuaRetMode::NilBool);
             return Ok(rv.as_boolean().unwrap_or(false));
         }
         Callback::None => return Ok(false),

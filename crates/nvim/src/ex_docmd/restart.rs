@@ -14,7 +14,7 @@ use crate::channel::channel_job_start;
 use crate::channel::channel_job_stop_wait;
 use crate::channel::open::JobOptions;
 use crate::eval::funcs::create_environment;
-use crate::ex_docmd::RET_NIL_BOOL;
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_exec_cstr;
 use crate::memory::ThinCString;
 use crate::message::emsg;
@@ -97,7 +97,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
         obj_str(quit_cmd),
     ]);
     const CHUNK: &CStr = c"require'vim._core.server'.ex_session_restart(...)";
-    if let Err(e) = nlua_exec_cstr(CHUNK, args, RET_NIL_BOOL) {
+    if let Err(e) = nlua_exec_cstr(CHUNK, args, LuaRetMode::NilBool) {
         emsg(e.message_or_empty());
     }
 }

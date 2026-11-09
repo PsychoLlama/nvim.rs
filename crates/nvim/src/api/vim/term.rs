@@ -19,6 +19,7 @@ use super::*;
 use crate::api_error;
 use crate::channel::defs::{ChannelStream, InternalState};
 use crate::guard::Lock;
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_call_ref_quiet;
 use crate::lua::executor::release_luaref;
 use crate::winlayer::Win;
@@ -107,7 +108,7 @@ fn term_write(bytes: &[u8], id: uint64_t) {
     ];
     let _locked = Lock::text();
     // The handler reports nothing, so it is given no error slot.
-    nlua_call_ref_quiet(cb, Some(c"input"), args.into(), RET_NIL_BOOL);
+    nlua_call_ref_quiet(cb, Some(c"input"), args.into(), LuaRetMode::NilBool);
 }
 
 fn term_resize(_width: uint16_t, _height: uint16_t, _owner: uint64_t) {}

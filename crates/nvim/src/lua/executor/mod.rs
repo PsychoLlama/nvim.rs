@@ -65,10 +65,17 @@ pub use self::ucmd::*;
 pub(crate) use self::vim_module::*;
 
 /// What a Lua call's result is converted to.
-pub const RET_OBJECT: LuaRetMode = 0;
-pub const RET_NIL_BOOL: LuaRetMode = 1;
-pub const RET_LUAREF: LuaRetMode = 2;
-pub const RET_MULTI: LuaRetMode = 3;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LuaRetMode {
+    /// The first result, as an `Object`.
+    Object,
+    /// The first result read as a boolean: nil or `false` is false.
+    NilBool,
+    /// The first result kept in the registry: a `LuaRef` to it.
+    LuaRef,
+    /// Every result, as an `Array`.
+    Multi,
+}
 
 /// `call_func`'s answers: the two this module can produce.
 pub type FuncErrorType = ::core::ffi::c_uint;
@@ -97,7 +104,6 @@ static IN_SCRIPT: SharedCell<bool> = SharedCell::new(false);
 /// The stock `require`, kept so `--startuptime`'s wrapper can delegate to it.
 static REQUIRE_REF: GlobalCell<LuaRef> = GlobalCell::new(LUA_REFNIL);
 
-pub type LuaRetMode = ::core::ffi::c_uint;
 #[derive(Debug)]
 pub struct NluaRefState {
     pub nil_ref: LuaRef,

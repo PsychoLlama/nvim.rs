@@ -60,7 +60,6 @@ use crate::getchar::openscript;
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::CTRL_V;
-use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::{nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
 use crate::mbyte::cluster_len;
 use crate::mbyte::{CONV_NONE, VimConv};
@@ -144,8 +143,6 @@ pub const ETYPE_TOP: EStackType = 0;
 pub const ESTACK_SCRIPT: EStackArg = 3;
 pub const ESTACK_STACK: EStackArg = 2;
 pub const ESTACK_SFILE: EStackArg = 1;
-pub const RET_NIL_BOOL: LuaRetMode = 1;
-pub const RET_OBJECT: LuaRetMode = 0;
 crate::flag_set! {
     /// How a runtime-file search should behave -- upstream's `DIP_*`, the
     /// `flags` argument [`do_in_path_visit`] and everything under it thread:

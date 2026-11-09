@@ -16,10 +16,11 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::lua::executor::LuaRetMode;
 use core::ffi::CStr;
 use std::ffi::CString;
 
-use super::{RET_NIL_BOOL, nlua_error, nlua_exec, with_main_stack};
+use super::{nlua_error, nlua_exec, with_main_stack};
 use crate::env::home_to_tilde;
 use crate::eval::userfunc::register_luafunc;
 use crate::getchar::state::{GOT_INT, MOD_MASK};
@@ -176,7 +177,7 @@ pub fn nlua_func_exists(lua_funcname: &CStr) -> bool {
         b"return type(loadstring(...)()) == 'function'",
         None,
         args,
-        RET_NIL_BOOL,
+        LuaRetMode::NilBool,
     );
     result.is_ok_and(|value| value.as_boolean() == Some(true))
 }

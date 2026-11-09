@@ -17,6 +17,7 @@
 mod vim_patches;
 
 use crate::env::{DEFAULT_VIM_DIR, DEFAULT_VIMRUNTIME_DIR};
+use crate::lua::executor::LuaRetMode;
 use crate::narrow::len_as_int;
 use crate::types::Handle;
 use crate::winlayer::{Buf, Win};
@@ -32,7 +33,7 @@ use crate::getchar::state::GOT_INT;
 use crate::grid::{default_gridview, grid_line_flush, grid_line_puts, grid_line_start};
 use crate::highlight::namespace::hl_attr;
 use crate::highlight_group::{HLF_8, syn_id2attr, syn_name2id};
-use crate::lua::executor::{RET_OBJECT, nlua_exec};
+use crate::lua::executor::nlua_exec;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::message::state::MSG_COL;
 use crate::message::{msg_ext_set_kind, msg_putchar, msg_str};
@@ -292,7 +293,7 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
 pub(crate) fn list_lua_version() {
     const CODE: &CStr = c"return ((jit and jit.version) and jit.version or _VERSION)";
 
-    let ret = nlua_exec(CODE.to_bytes(), None, Array::new(), RET_OBJECT)
+    let ret = nlua_exec(CODE.to_bytes(), None, Array::new(), LuaRetMode::Object)
         .expect("a literal chunk cannot fail");
     let version = ret.as_string().expect("_VERSION is a string");
     msg_str(version.as_cstr());

@@ -9,8 +9,8 @@
     clippy::ptr_as_ptr
 )]
 
+use super::MENU_ALL_MODES;
 use super::wrappers::{arg_lnum, arg_number, arg_number_chk, non_zero_arg};
-use super::{MENU_ALL_MODES, RET_NIL_BOOL};
 use crate::api::private::helpers::api_metadata;
 use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
@@ -26,6 +26,7 @@ use crate::getchar::{stuff_empty, typeahead, using_script};
 use crate::global_cell::GlobalCell;
 use crate::indent::{get_sw_value, get_sw_value_col};
 use crate::insexpand::ins_compl_active;
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_exec_cstr;
 use crate::memline::Lines;
 use crate::memory::ThinCString;
@@ -251,7 +252,7 @@ fn has_wsl() -> bool {
     if ANSWER.get().is_none() {
         let mut err = Error::none();
         const PROBE: &CStr = c"return vim.uv.os_uname()['release']:lower():match('microsoft')";
-        let o: Object = match nlua_exec_cstr(PROBE, Array::new(), RET_NIL_BOOL) {
+        let o: Object = match nlua_exec_cstr(PROBE, Array::new(), LuaRetMode::NilBool) {
             Ok(value) => value,
             Err(e) => {
                 err = e;

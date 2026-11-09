@@ -11,7 +11,7 @@
 
 use super::{
     CHANNEL_PART_ALL, CHANNEL_PART_RPC, CHANNEL_PART_STDERR, CHANNEL_PART_STDIN,
-    CHANNEL_PART_STDOUT, RET_OBJECT,
+    CHANNEL_PART_STDOUT,
 };
 use crate::autocmd::state::{AUTOCMD_BUFNR, AUTOCMD_FNAME, AUTOCMD_FNAME_FULL, AUTOCMD_MATCH};
 use crate::channel::defs::{CallbackReader, ChannelPart};
@@ -25,6 +25,7 @@ use crate::eval::typval::{
 use crate::eval::userfunc::{CallStackAside, set_current_fc};
 use crate::ex_cmds::check_secure;
 use crate::log::{LOGLVL_ERR, logmsg};
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_exec_cstr;
 use crate::memory::{ThinCString, XString};
 use crate::message::E_INVARG;
@@ -309,7 +310,7 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     {
         let lua_args = Array::from(vec![Object::array(addrs_arr)]);
         const PEERS: &CStr = c"return require('vim._core.server').serverlist(...)";
-        match nlua_exec_cstr(PEERS, lua_args, RET_OBJECT) {
+        match nlua_exec_cstr(PEERS, lua_args, LuaRetMode::Object) {
             Err(err) => {
                 // A missing or broken helper is logged, not reported: the
                 // local addresses above are still a useful answer.

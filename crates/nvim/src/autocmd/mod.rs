@@ -43,7 +43,6 @@ use crate::global_cell::GlobalCell;
 use crate::guard::SECURE;
 use crate::highlight_group::{HLF_8, HLF_E, HLF_T};
 use crate::insexpand::ins_compl_active;
-use crate::lua::executor::LuaRetMode;
 use crate::message::state::{DID_EMSG, MSG_COL};
 use crate::message::{E_ARGREQ, E_CANNOT_DEFINE_AUTOCOMMANDS_FOR_ALL_EVENTS};
 use crate::message::{
@@ -117,7 +116,6 @@ pub const AUGROUP_ERROR: ::core::ffi::c_int = -2;
 pub const AUGROUP_DEFAULT: ::core::ffi::c_int = -1;
 pub const BUFLOCAL_PAT_LEN: ::core::ffi::c_uint = 25;
 pub const ETYPE_AUCMD: EStackType = 3;
-pub const RET_NIL_BOOL: LuaRetMode = 1;
 /// `e_autocommand_nesting_too_deep`.  A `GlobalCell` holding a transmuted
 /// byte array upstream, because c2rust had no `CStr`; nothing writes it.
 const E_AUTOCOMMAND_NESTING_TOO_DEEP: &CStr = c"E218: Autocommand nesting too deep";

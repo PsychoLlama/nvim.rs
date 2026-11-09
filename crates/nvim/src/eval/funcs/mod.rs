@@ -16,7 +16,6 @@
 use crate::channel::defs::ChannelPart;
 use crate::env::XDGVarType;
 use crate::event::objects::ProcType;
-use crate::lua::executor::LuaRetMode;
 use crate::normal::defs::MotionType;
 use crate::os::libc::uint64_t;
 use crate::register::defs::GRegFlags;
@@ -98,8 +97,6 @@ pub const SOME_MATCH_LIST: SomeMatchType = 2;
 pub const SOME_MATCH_END: SomeMatchType = 1;
 pub const SOME_MATCH: SomeMatchType = 0;
 pub const VSE_NONE: ::core::ffi::c_uint = 0;
-pub const RET_NIL_BOOL: LuaRetMode = 1;
-pub const RET_OBJECT: LuaRetMode = 0;
 pub const G_REG_LIST: GRegFlags = 4;
 pub const G_REG_EXPR_SRC: GRegFlags = 2;
 pub const MENU_ALL_MODES: ::core::ffi::c_uint = 127;

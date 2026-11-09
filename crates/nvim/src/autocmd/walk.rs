@@ -26,6 +26,7 @@
 
 use super::*;
 use crate::autocmd::defs::{AutoHandler, PatId};
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_call_ref_quiet;
 use crate::memory::XString;
 use crate::runtime::defs::{EstackInfo, FrameName};
@@ -297,7 +298,7 @@ fn au_callback(
     args.push(data.object());
 
     // `args` stands for the length of the call.
-    let result = nlua_call_ref_quiet(luaref, None, args.array(), RET_NIL_BOOL);
+    let result = nlua_call_ref_quiet(luaref, None, args.array(), LuaRetMode::NilBool);
     matches!(result, Object::Boolean(true))
 }
 

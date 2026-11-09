@@ -21,6 +21,7 @@ use crate::api::private::validate::handle_arg;
 use crate::api_error;
 use crate::grid::default_grid_ref;
 use crate::log::logmsg;
+use crate::lua::executor::LuaRetMode;
 use crate::narrow::{len_as_integer, number_as_int};
 use crate::popupmenu::pum_grid_ref;
 use crate::types::DictBuilder;
@@ -106,7 +107,7 @@ pub fn nvim_get_proc_children(pid: Integer) -> Result<Array, Error> {
         b"return vim._os_proc_children(...)",
         None,
         a.into(),
-        RET_OBJECT,
+        LuaRetMode::Object,
     )?;
     o.into_array().ok_or_else(|| {
         api_error!(
@@ -122,7 +123,12 @@ pub fn nvim_get_proc(pid: Integer) -> Result<Object, Error> {
         return Err(err_bad_number(c"pid", pid));
     }
     let a = vec![Object::integer(pid)];
-    let o = nlua_exec(b"return vim._os_proc_info(...)", None, a.into(), RET_OBJECT)?;
+    let o = nlua_exec(
+        b"return vim._os_proc_info(...)",
+        None,
+        a.into(),
+        LuaRetMode::Object,
+    )?;
     if o.as_array().is_some_and(|array| array.is_empty()) {
         return Ok(Object::Nil);
     }

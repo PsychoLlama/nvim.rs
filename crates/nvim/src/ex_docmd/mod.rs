@@ -51,7 +51,6 @@ use crate::global_cell::GlobalCell;
 use crate::help::{ex_exusage, ex_help, ex_helpclose, ex_helptags, ex_viusage};
 use crate::indent::ex_retab;
 use crate::keycodes::KS_SPECIAL;
-use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::{ex_lua, ex_luado, ex_luafile};
 use crate::lua::secure::ex_trust;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
@@ -230,7 +229,6 @@ pub struct SavedDebugState {
 }
 
 pub const ETYPE_EXCEPT: EStackType = 5;
-pub const RET_NIL_BOOL: LuaRetMode = 1;
 pub const ESTACK_SCRIPT: EStackArg = 3;
 pub const ESTACK_STACK: EStackArg = 2;
 pub const ESTACK_SFILE: EStackArg = 1;

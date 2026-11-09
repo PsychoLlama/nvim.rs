@@ -652,7 +652,6 @@ const TYPE_HOMES: &[&str] = &[
     "src/highlight/mod.rs::RgbValue",
     "src/keycodes/mod.rs::KeyExtra",
     "src/lua/abi.rs",
-    "src/lua/executor/mod.rs::LuaRetMode",
     "src/mark/defs.rs",
     "src/marktree/mod.rs::MetaIndex",
     "src/mbyte/mod.rs::CharInfo",

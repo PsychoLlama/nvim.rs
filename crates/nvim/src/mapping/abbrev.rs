@@ -21,6 +21,7 @@ use crate::getchar::Remap;
 use crate::getchar::{ins_typebuf, typeahead};
 use crate::guard::Lock;
 use crate::keycodes::key_escape;
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_call_ref_reporting;
 use crate::mbyte::head_off;
 use crate::message_fmt::msg_cstr;
@@ -231,7 +232,7 @@ pub(crate) fn eval_map_expr(expr: &MapExpr, c: Key) -> Option<MapStr> {
     let save_msg_row = MSG_ROW.get();
 
     let answer: Option<Vec<u8>> = if let Some(lua) = &expr.lua {
-        match nlua_call_ref_reporting(lua.0, None, Array::new(), RET_OBJECT) {
+        match nlua_call_ref_reporting(lua.0, None, Array::new(), LuaRetMode::Object) {
             Ok(ret) => ret.as_string().map(|s| c_prefix(s.as_bytes()).to_vec()),
             Err(mut err) => {
                 semsg_multiline!(c"emsg", "E5108: {}", msg_cstr(err.message_or_empty()));

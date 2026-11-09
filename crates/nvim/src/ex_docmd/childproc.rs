@@ -10,13 +10,14 @@
 
 use crate::ex_docmd::DoCmdOpts;
 use crate::ex_docmd::do_cmdline;
+use crate::lua::executor::LuaRetMode;
 use crate::shell::Argv;
 use crate::strings::escaped_bytes;
 use crate::usercmd::win_cmd_modifiers;
 use core::ffi::CStr;
 
 use crate::ex_docmd::state::CMDMOD;
-use crate::ex_docmd::{RET_NIL_BOOL, cmdmod_split, cmdmod_tab};
+use crate::ex_docmd::{cmdmod_split, cmdmod_tab};
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec_cstr;
 use crate::message::E_SHELLEMPTY;
@@ -81,7 +82,7 @@ pub(crate) fn ex_lsp(excmd: &mut ExArg) {
         excmd.line.arg(),
     ))]);
     const CHUNK: &CStr = c"require'vim._core.ex_cmd'.ex_lsp(...)";
-    let ran = nlua_exec_cstr(CHUNK, excmd, RET_NIL_BOOL);
+    let ran = nlua_exec_cstr(CHUNK, excmd, LuaRetMode::NilBool);
     if let Err(e) = ran {
         emsg_multiline(e.message_or_empty(), Some(c"lua_error"), HLF_E, true);
     }

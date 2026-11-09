@@ -18,10 +18,7 @@
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use super::{
-    FCERR_NONE, FCERR_OTHER, RET_LUAREF, RET_MULTI, RET_NIL_BOOL, RET_OBJECT, fast_pcall,
-    nlua_error, nlua_pcall, with_main_stack,
-};
+use super::{FCERR_NONE, FCERR_OTHER, fast_pcall, nlua_error, nlua_pcall, with_main_stack};
 use crate::ex_cmds::check_secure;
 use crate::lua::converter::{pop_object, pop_typval, push_object, push_typval};
 use crate::lua::executor::LuaRetMode;
@@ -249,7 +246,11 @@ pub(crate) fn nlua_call_ref_reporting(
 
 /// How many results `mode` wants off the call.
 fn mode_ret(mode: LuaRetMode) -> c_int {
-    if mode == RET_MULTI { LUA_MULTRET } else { 1 }
+    if mode == LuaRetMode::Multi {
+        LUA_MULTRET
+    } else {
+        1
+    }
 }
 
 /// Call the function `reference` refers to.
@@ -300,26 +301,26 @@ pub fn nlua_call_ref_ctx(
 
 /// Convert whatever the call left on the stack, and pop it.
 ///
-/// A `nil` answer is nil whatever the mode asked for — except `RET_MULTI`,
+/// A `nil` answer is nil whatever the mode asked for — except `LuaRetMode::Multi`,
 /// where it is one element of the list. The results sit above `pretop`.
 fn nlua_call_pop_retval(stack: &mut Stack, mode: LuaRetMode, pretop: At) -> Result<Object, Error> {
-    if mode != RET_MULTI && stack.kind(At::TOP) == Kind::Nil {
+    if mode != LuaRetMode::Multi && stack.kind(At::TOP) == Kind::Nil {
         stack.pop(1);
         return Ok(Object::Nil);
     }
     match mode {
-        RET_NIL_BOOL => {
+        LuaRetMode::NilBool => {
             let bool_value = stack.to_boolean(At::TOP);
             stack.pop(1);
             Ok(Object::boolean(bool_value))
         }
-        RET_LUAREF => {
+        LuaRetMode::LuaRef => {
             let reference = stack.reference(At::TOP);
             stack.pop(1);
             Ok(Object::luaref(reference))
         }
-        RET_OBJECT => pop_object(stack, false),
-        RET_MULTI => {
+        LuaRetMode::Object => pop_object(stack, false),
+        LuaRetMode::Multi => {
             let nres = stack.top().index() - pretop.index();
             // The values come off the stack topmost first, so they are
             // collected and then turned back into call order.
@@ -330,6 +331,5 @@ fn nlua_call_pop_retval(stack: &mut Stack, mode: LuaRetMode, pretop: At) -> Resu
             res.reverse();
             Ok(Object::array(Array::from(res)))
         }
-        _ => unreachable!(),
     }
 }

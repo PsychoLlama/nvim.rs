@@ -24,6 +24,7 @@ use crate::autocmd::fire_autocmds_for;
 use crate::cstr;
 use crate::env::expand_env;
 use crate::formatted;
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_exec_cstr;
 use crate::memory::XString;
 use crate::message_fmt::{msg_bytes, msg_cstr, msg_cstr_opt, report_msg, to_bytes};
@@ -438,7 +439,7 @@ fn range_is_lua(excmd: &ExArg) -> bool {
         integer_obj(Integer::from(line2)),
     ]);
     let src = c"return require('vim._core.util').source_is_lua(...)";
-    match nlua_exec_cstr(src, args, RET_NIL_BOOL) {
+    match nlua_exec_cstr(src, args, LuaRetMode::NilBool) {
         Ok(value) => value.as_boolean() == Some(true),
         Err(mut err) => {
             err.clear();

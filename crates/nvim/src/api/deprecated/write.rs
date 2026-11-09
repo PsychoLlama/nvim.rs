@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::guard::Suppress;
+use crate::lua::executor::LuaRetMode;
 use crate::message::{emsg, msg};
 use crate::types::builders::ArrayBuf;
 use core::ffi::CStr;
@@ -92,5 +93,10 @@ pub fn nvim_notify(msg_0: ApiString, log_level: Integer, opts: ApiDict) -> Resul
     args.push(Object::string(msg_0));
     args.push(Object::integer(log_level));
     args.push(Object::dict(opts));
-    nlua_exec(b"return vim.notify(...)", None, args.array(), RET_OBJECT)
+    nlua_exec(
+        b"return vim.notify(...)",
+        None,
+        args.array(),
+        LuaRetMode::Object,
+    )
 }

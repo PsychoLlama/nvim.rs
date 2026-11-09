@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::lua::executor::LuaRetMode;
 use crate::narrow::number_as_int;
 use core::ffi::{CStr, c_int};
 
@@ -23,7 +24,6 @@ use crate::channel::defs::CallbackReader;
 use crate::cstr;
 use crate::event::socket::socket_address_is_tcp;
 use crate::lua::executor::nlua_exec_cstr;
-use crate::lua::state::RET_OBJECT;
 use crate::os::cshim::{write_c_stderr, write_c_stdout};
 use crate::os::env::{ENV_NVIM, env_get_bounded};
 use crate::os::libc::{size_t, uint64_t};
@@ -129,7 +129,7 @@ pub(crate) fn remote_request(parm: &mut MainParams, remote_args: usize, ui_only:
         Object::array(args),
     ]);
 
-    let reply = match nlua_exec_cstr(CS_REMOTE, call_args, RET_OBJECT) {
+    let reply = match nlua_exec_cstr(CS_REMOTE, call_args, LuaRetMode::Object) {
         Ok(value) => value,
         Err(err) => fail(&[err.message_or_empty().to_bytes(), b"\n"], 2),
     };

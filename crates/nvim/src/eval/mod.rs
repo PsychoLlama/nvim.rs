@@ -34,7 +34,6 @@ use crate::ascii::NL;
 use crate::global_cell::GlobalCell;
 // Named here so the expression tree and `list.rs` can reach it by one
 // path; it belongs to `message`.
-use crate::lua::executor::LuaRetMode;
 use crate::mark::defs::MarkGet;
 pub(crate) use crate::message::E_INVALBLOB;
 use crate::normal::defs::MotionType;
@@ -103,7 +102,6 @@ pub type GlvStatus = c_uint;
 pub const GLV_OK: GlvStatus = 1;
 pub const GLV_FAIL: GlvStatus = 0;
 pub const MT_CHAR_WISE: MotionType = 0;
-pub const RET_NIL_BOOL: LuaRetMode = 1;
 pub const INT64_MIN: c_long = -9223372036854775807 as c_long - 1 as c_long;
 pub const INT64_MAX: c_long = 9223372036854775807 as c_long;
 pub const UINT32_MAX: c_uint = 4294967295 as c_uint;

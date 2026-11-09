@@ -19,6 +19,7 @@ use crate::cursor::check_cursor_col;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::eval::window::{restore_win, switch_win, win_execute_after, win_execute_before};
 use crate::ex_docmd::ex_win_close;
+use crate::lua::executor::LuaRetMode;
 use crate::narrow::number_as_lnum;
 use crate::types::ColNr;
 use crate::types::DictBuilder;
@@ -27,7 +28,7 @@ use crate::winlayer::TabPage;
 
 use crate::api::keysets::KeyDict_win_text_height;
 use crate::api::private::validate::{Bad, err_expected, err_invalid, err_out_of_range};
-use crate::lua::executor::{RET_LUAREF, nlua_call_ref_reporting};
+use crate::lua::executor::nlua_call_ref_reporting;
 use crate::message::emsg;
 use crate::message::{E_AUTOCMD_CLOSE, E_CMDWIN};
 use crate::r#move::{update_topline, validate_cursor};
@@ -274,7 +275,7 @@ pub fn nvim_win_call(win: WindowHandle, fun: LuaRef) -> Result<Object, Error> {
         let switched = win_execute_before(&mut switch_args, w, tabpage);
         if switched {
             // The call runs Lua, which `api_try` catches.
-            res = nlua_call_ref_reporting(fun, None, Array::new(), RET_LUAREF);
+            res = nlua_call_ref_reporting(fun, None, Array::new(), LuaRetMode::LuaRef);
         }
         win_execute_after(&mut switch_args);
         res

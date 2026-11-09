@@ -68,10 +68,6 @@ pub(crate) const DECOR_PROVIDER_DISABLED: DecorProvider_state = 4;
 const LUA_NOREF: LuaRef = -2;
 /// Errors reported from one provider before it is disabled.
 const CB_MAX_ERROR: u8 = 3;
-/// Ask `nlua_call_ref` for all return values (an `Array`).
-const RET_MULTI: LuaRetMode = 3;
-/// Ask `nlua_call_ref` for one value, interpreted as a boolean.
-const RET_NIL_BOOL: LuaRetMode = 1;
 
 /// The registered providers, in registration order — which is the order every
 /// callback runs in. Entries are never removed: unregistering clears the
@@ -138,7 +134,11 @@ fn decor_provider_invoke(
     let want_list = res.is_some();
 
     let locked = Lock::text();
-    let mode = if want_list { RET_MULTI } else { RET_NIL_BOOL };
+    let mode = if want_list {
+        LuaRetMode::Multi
+    } else {
+        LuaRetMode::NilBool
+    };
     // The call owns `args` from here; a reference that names nothing pushes
     // nil, which the protected call reports.
     let ret = match nlua_call_ref_reporting(callback, Some(name), args, mode) {
@@ -153,7 +153,7 @@ fn decor_provider_invoke(
     if !err.is_set() {
         with_provider(idx, |p| p.error_count = 0);
         if let Some(res) = res {
-            // `RET_MULTI` is what asked for an array, so this is the shape
+            // `LuaRetMode::Multi` is what asked for an array, so this is the shape
             // `nlua_call_ref` promises back.
             *res = ret.into_array().unwrap_or(Array::new());
             return true;

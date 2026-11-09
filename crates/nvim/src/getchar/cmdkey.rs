@@ -17,6 +17,7 @@ use super::*;
 use crate::charset::atoi;
 use crate::guard::Keys;
 use crate::keycodes::{SpecialKey, key_escape, key_unescape};
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_call_ref_reporting;
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
@@ -131,7 +132,7 @@ pub fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
         REPEAT_LUAREF.set(luaref);
     }
 
-    let called = nlua_call_ref_reporting(luaref, None, Array::new(), RET_NIL_BOOL);
+    let called = nlua_call_ref_reporting(luaref, None, Array::new(), LuaRetMode::NilBool);
     if let Err(e) = called {
         let msg = msg_cstr(e.message_or_empty());
         semsg_multiline!(c"emsg", "E5108: {msg}");

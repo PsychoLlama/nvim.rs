@@ -18,6 +18,7 @@ use crate::api::private::helpers::api_try;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::getchar::PastePhase;
 use crate::guard::Suppress;
+use crate::lua::executor::LuaRetMode;
 use crate::memory::XString;
 use crate::normal::{set_visual_active, visual_active};
 use crate::register::defs::{PUT_CURSEND, RegLines};
@@ -54,7 +55,12 @@ pub fn nvim_paste(
         let lines = string_to_array(&data, crlf);
         let args = vec![Object::array(lines), Object::integer(phase)];
         // The handler re-enters the editor through Lua.
-        let rv = match nlua_exec(b"return vim.paste(...)", None, args.into(), RET_NIL_BOOL) {
+        let rv = match nlua_exec(
+            b"return vim.paste(...)",
+            None,
+            args.into(),
+            LuaRetMode::NilBool,
+        ) {
             Ok(value) => value,
             Err(e) => {
                 failure = Some(e);

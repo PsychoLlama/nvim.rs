@@ -10,6 +10,7 @@
 )]
 
 use crate::autocmd::do_doautocmd;
+use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_exec_cstr;
 use crate::message::emsg;
 use crate::message_fmt::{msg_bytes, msg_cstr};
@@ -31,7 +32,7 @@ use crate::buffer::do_modelines;
 use crate::ex_docmd::state::CMDMOD;
 use crate::ex_docmd::{
     FILETYPE_DETECT, FILETYPE_FILE, FILETYPE_INDENT, FILETYPE_PLUGIN, FTOFF_FILE, FTPLUGIN_FILE,
-    FTPLUGOF_FILE, INDENT_FILE, INDOFF_FILE, RET_NIL_BOOL, cmdmod_split, cmdmod_tab, ex_msg,
+    FTPLUGOF_FILE, INDENT_FILE, INDOFF_FILE, cmdmod_split, cmdmod_tab, ex_msg,
 };
 use crate::guard::SECURE;
 use crate::message::E_CURDIR;
@@ -219,7 +220,7 @@ pub(crate) fn ex_checkhealth(excmd: &mut ExArg) {
         Object::string(ApiString::from_bytes(excmd.line.arg())),
     ]);
 
-    let ran = nlua_exec_cstr(c"vim.health._check(...)", argv, RET_NIL_BOOL);
+    let ran = nlua_exec_cstr(c"vim.health._check(...)", argv, LuaRetMode::NilBool);
     let Err(err) = ran else {
         return;
     };

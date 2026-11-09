@@ -40,8 +40,6 @@ use crate::ui::state::UI_EVENT_NS_ID;
 use crate::ui::state::{UI_CMDLINE, UI_LINEGRID, UI_MESSAGES};
 use core::ffi::CStr;
 
-const RET_NIL_BOOL: LuaRetMode = 1;
-
 /// How many times a handler may raise an error before it is unregistered.
 const MAX_ERRORS: u8 = 3;
 
@@ -175,7 +173,14 @@ fn offer_to_handlers(name: &CStr, args: &Array) -> bool {
         };
         UI_EVENT_NS_ID.set(ns_id);
         let fast = is_fast(name, args);
-        let res = nlua_call_ref_ctx(fast, callback, Some(name), args.clone(), RET_NIL_BOOL, true);
+        let res = nlua_call_ref_ctx(
+            fast,
+            callback,
+            Some(name),
+            args.clone(),
+            LuaRetMode::NilBool,
+            true,
+        );
         UI_EVENT_NS_ID.set(0);
         match res {
             Ok(res) => {

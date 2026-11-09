@@ -84,7 +84,7 @@ pub(crate) use tags::ex_helptags;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
-    use super::{FileComparison, LuaRetMode};
+    use super::FileComparison;
     use core::ffi::c_uint;
 
     /// `find_tags` flags.
@@ -99,15 +99,9 @@ mod flag {
 
     /// `path_full_compare`'s "same file" answer.
     pub(super) const EQUAL_FILES: FileComparison = 1;
-    /// `nlua_exec` return modes.
-    pub(super) const RET_OBJECT: LuaRetMode = 0;
-    pub(super) const RET_NIL_BOOL: LuaRetMode = 1;
 }
 
-use flag::{
-    RET_NIL_BOOL, RET_OBJECT, TAG_HELP, TAG_KEEP_LANG, TAG_MANY, TAG_NAMES, TAG_NO_TAGFUNC,
-    TAG_REGEXP, TAG_VERBOSE,
-};
+use flag::{TAG_HELP, TAG_KEEP_LANG, TAG_MANY, TAG_NAMES, TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE};
 
 /// Whether the `:keepalt` modifier is off, so that the alternate file may
 /// be changed.
@@ -238,7 +232,7 @@ fn trimmed_subject(arg: &[u8]) -> Vec<u8> {
 /// owned bytes, or `None` when it declines to pick one.
 fn resolve_tag_at_cursor() -> Option<Vec<u8>> {
     let chunk = c"return require'vim._core.help'.resolve_tag()";
-    let res = nlua_exec_cstr(chunk, Array::new(), RET_OBJECT).ok()?;
+    let res = nlua_exec_cstr(chunk, Array::new(), LuaRetMode::Object).ok()?;
     let tag = res.as_string().filter(|tag| !tag.is_empty())?;
     // Upstream copied the answer as a C string: up to a NUL.
     Some(
@@ -410,7 +404,7 @@ fn find_help_tags(subject: &[u8], keep_lang: bool) -> Option<Vec<Vec<u8>>> {
     let mut args = ArrayBuf::<1>::new();
     args.push(Object::string(ApiString::from_bytes(subject)));
     let chunk = c"return require'vim._core.help'.escape_subject(...)";
-    let res = match nlua_exec_cstr(chunk, args.array(), RET_OBJECT) {
+    let res = match nlua_exec_cstr(chunk, args.array(), LuaRetMode::Object) {
         Ok(value) => value,
         Err(mut err) => {
             emsg_multiline(err.message_or_empty(), Some(c"lua_error"), HLF_E, true);
@@ -551,7 +545,7 @@ pub(crate) fn prepare_help_buffer() {
 /// Populate `*local-additions*` in `help.txt`.
 pub(crate) fn get_local_additions() {
     let chunk = c"return require'vim._core.help'.local_additions()";
-    if let Err(mut err) = nlua_exec_cstr(chunk, Array::new(), RET_NIL_BOOL) {
+    if let Err(mut err) = nlua_exec_cstr(chunk, Array::new(), LuaRetMode::NilBool) {
         emsg_multiline(err.message_or_empty(), Some(c"lua_error"), HLF_E, true);
         err.clear();
     }

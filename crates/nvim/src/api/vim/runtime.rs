@@ -17,12 +17,13 @@
 use super::*;
 use crate::api::private::helpers::api_try;
 use crate::api::private::validate::err_bad_value;
+use crate::lua::executor::LuaRetMode;
 use crate::narrow::len_as_integer;
 use core::ffi::CStr;
 
 /// Run `code` as a Lua chunk with `args` as its `...`.
 pub fn nvim_exec_lua(code: ApiString, args: Array) -> Result<Object, Error> {
-    nlua_exec(code.as_bytes(), None, args, RET_OBJECT)
+    nlua_exec(code.as_bytes(), None, args, LuaRetMode::Object)
 }
 
 /// [`nvim_exec_lua`], marked fast for the RPC dispatcher.
