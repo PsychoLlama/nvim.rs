@@ -28,11 +28,12 @@
 )]
 #![forbid(unsafe_code)]
 
-use super::flag::{CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, DOBUF_FIRST};
+use super::flag::{CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT};
 use super::{buffers, check_changed};
 use crate::arglist::{do_argfile, editing_arg_idx, wargcount};
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{AucmdBuf, au_event_disable, au_event_restore, fire_autocmds_for};
+use crate::buffer::DOBUF_FIRST;
 use crate::buffer::{BufFlags, buf_hide, goto_buffer};
 use crate::ex_docmd::state::LISTCMD_BUSY;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
@@ -42,15 +43,13 @@ use crate::mark::setpcmark;
 use crate::memory::XString;
 use crate::message::emsg;
 use crate::r#move::validate_cursor;
-use crate::narrow::as_index;
-use crate::narrow::len_as_int;
+use crate::narrow::{as_index, len_as_int};
 use crate::normal::do_check_scrollbind;
 use crate::optionstr::OptString;
 use crate::os::libc::size_t;
 use crate::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
 use crate::search::FORWARD;
-use crate::types::CmdIdx;
-use crate::types::Handle;
+use crate::types::{CmdIdx, Handle};
 use crate::types::{ExArg, Failed};
 use crate::window::{goto_tab, valid_tab, valid_win, win_goto, win_split, win_valid};
 use crate::winlayer::prev_window;

@@ -16,11 +16,12 @@
 )]
 
 use crate::env::getenv_resolved;
+use crate::fileio::{EOL_DOS, EOL_MAC, EOL_UNIX};
 use crate::keycodes::SpecialKey;
 use crate::optionstr::{OptString, local_or_global};
 use crate::strings::find_bytes;
 use crate::types::Key;
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int, c_uint};
 
 use crate::buffer::{buf_is_prompt, current_buf};
@@ -45,12 +46,11 @@ use crate::state::mode::STATE;
 use crate::types::{Callback, ExArg, Failed, OptInt, ScriptId, TypVal};
 
 use super::{
-    EOL_DOS, EOL_MAC, EOL_UNIX, OPT_SCOPE_BUF, OPT_SCOPE_WIN, get_option, get_varp,
-    option_has_scope, set_option_direct, slot_value,
+    OPT_SCOPE_BUF, OPT_SCOPE_WIN, get_option, get_varp, option_has_scope, set_option_direct,
+    slot_value,
 };
 
 use crate::state::MODE_TERMINAL;
-use crate::winlayer::Win;
 
 /// 'equalprg', local where set.
 pub(crate) fn get_equalprg() -> XString {

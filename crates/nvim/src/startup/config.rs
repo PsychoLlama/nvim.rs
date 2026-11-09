@@ -18,6 +18,7 @@
 use crate::env::{get_appname, user_config_path, xdg_var};
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
+use crate::path::{EQUAL_FILES, path_full_compare};
 use crate::runtime::defs::ETYPE_ARGS;
 use crate::runtime::{SID_CARG, SID_CMDARG};
 use crate::semsg;
@@ -32,8 +33,7 @@ use crate::message::state::MSG_SCROLL;
 use crate::option::vars::p_exrc;
 use crate::os::cshim::{gettext, write_c_stderr};
 use crate::os::fs::path_exists;
-use crate::os::state::{EQUAL_FILES, XDG_CONFIG_DIRS};
-use crate::path::path_full_compare;
+use crate::os::state::XDG_CONFIG_DIRS;
 use crate::profile::time_msg_at;
 use crate::quickfix::qf_jump_to_current;
 use crate::runtime::state::CURRENT_SCTX;

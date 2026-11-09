@@ -40,6 +40,7 @@
 
 use super::low_byte;
 use crate::narrow::len_as_int;
+use crate::path::{EQUAL_FILES, path_full_compare};
 use crate::semsg;
 use crate::smsg;
 use core::ffi::{CStr, c_int, c_uint};
@@ -51,12 +52,10 @@ use std::path::Path;
 use crate::getchar::state::GOT_INT;
 use crate::memline::{LineError, ml_append_buf_terminated};
 use crate::memory::XString;
-use crate::message::E_WRITE;
-use crate::message::emsg;
+use crate::message::{E_WRITE, emsg};
 use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
-use crate::path::path_full_compare;
 use crate::spell::{SpellIdx, SpellLang};
 use crate::spell::{languages, open_spellbuf, put_lang, spell_soundfold, take_lang, with_lang};
 use crate::types::{Failed, LineNr};
@@ -64,7 +63,7 @@ use crate::types::{Failed, LineNr};
 use super::wordtree::{NodeId, tree_add_word, wordtree_alloc, wordtree_compress};
 use super::write::{SplWriter, clear_node, put_node};
 use super::{
-    EQUAL_FILES, MAXWLEN, SpellInfo, VIMSUGMAGIC, VIMSUGVERSION, spell_load_file, spell_message,
+    MAXWLEN, SpellInfo, VIMSUGMAGIC, VIMSUGVERSION, spell_load_file, spell_message,
     spell_message_fmt,
 };
 

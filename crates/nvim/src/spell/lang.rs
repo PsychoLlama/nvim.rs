@@ -40,6 +40,7 @@ use crate::cstr;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::narrow::len_as_int;
+use crate::path::{EQUAL_FILES, MAXPATHL};
 use crate::smsg;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
@@ -56,7 +57,6 @@ use crate::option::defs::OptError;
 use crate::option::vars::{P_ENC, p_enc};
 use crate::option::{split_option_part, valid_name};
 use crate::os::fs::os_remove;
-use crate::path::MAXPATHL;
 use crate::path::{path_fnamecmp, path_full_compare, tail_index};
 use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::spell::{LangId, LangP, SpellLang};
@@ -69,8 +69,7 @@ use crate::window::win_valid_any_tab;
 use super::chartab::init_spell_chartab;
 use super::slang::{free_langs, register_lang, with_lang};
 use super::{
-    EQUAL_FILES, INT_WORDLIST, LAST_REPLACEMENT, LOADED_LANGS, MAXWLEN, REGION_ALL, SpellLoad,
-    languages,
+    INT_WORDLIST, LAST_REPLACEMENT, LOADED_LANGS, MAXWLEN, REGION_ALL, SpellLoad, languages,
 };
 use crate::optionstr::{OptString, OptStringRef};
 use crate::runtime::RuntimeOpts;

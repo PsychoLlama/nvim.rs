@@ -73,7 +73,6 @@ const CT_FNAME_CHAR: uint8_t = 0x40;
 
 const TAB: c_int = 9;
 const NL: c_int = 10;
-const EOL_MAC: c_int = 2;
 
 static CHARTAB_INITIALIZED: GlobalCell<bool> = GlobalCell::new(false);
 static G_CHARTAB: GlobalCell<[uint8_t; 256]> = GlobalCell::new([0; 256]);

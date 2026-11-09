@@ -20,6 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::fileio::convert::ICONV_MULT;
 use std::fs::File;
 use std::io::Write as _;
 
@@ -36,9 +37,6 @@ use crate::os::iconv::Iconv;
 /// memory cannot be had, so that writing still works when out of memory.
 const WRITEBUFSIZE: usize = 8192;
 const SMALLBUFSIZE: usize = 256;
-
-/// How much room an iconv conversion is given per staged byte.
-const ICONV_MULT: usize = 8;
 
 /// Encode one character for the file.
 ///
@@ -201,7 +199,7 @@ impl ByteWriter {
 
     /// Reserve the scratch buffer an iconv conversion needs.
     pub(crate) fn reserve_iconv_buf(&mut self) -> bool {
-        self.reserve_conv_buf(ICONV_MULT)
+        self.reserve_conv_buf(ICONV_MULT.unsigned_abs())
     }
 
     /// Is iconv doing the conversion?

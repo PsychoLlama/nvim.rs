@@ -42,6 +42,7 @@
 
 pub(crate) mod state;
 use crate::ascii::{CAR, NL};
+use crate::fileio::EOL_MAC;
 use crate::narrow::{as_index, len_as_int};
 use crate::runtime::SID_ERROR;
 use crate::statusline::state::TAB_PAGE_CLICK_DEFS;
@@ -95,7 +96,6 @@ pub const SIGN_SHOW_MAX: ::core::ffi::c_int = 9;
 pub type NumberBase = ::core::ffi::c_uint;
 pub const NUM_BASE_HEXADECIMAL: NumberBase = 16;
 pub const NUM_BASE_DECIMAL: NumberBase = 10;
-pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const MAX_STL_EVAL_DEPTH: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub const RULER_BUF_LEN: ::core::ffi::c_int = 70 as ::core::ffi::c_int;

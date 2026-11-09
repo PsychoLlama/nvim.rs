@@ -108,6 +108,7 @@ use crate::option::vars::{
     P_HLS, WIM_FLAGS, p_ari, p_arshape, p_cedit, p_ch, p_cwh, p_hls, p_ic, p_icm, p_is, p_paste,
     p_ru, p_scs, p_tbidi, p_wmnu,
 };
+use crate::option::{B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT};
 use crate::option::{
     csh_like_shell, magic_isset, set_iminsert_global, set_imsearch_global, set_option_direct,
     set_option_value_give_err, string_to_key,
@@ -367,9 +368,6 @@ pub(crate) enum KeyOutcome {
     GotoNormalMode,
 }
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const B_IMODE_USE_INSERT: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-pub const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 static LAST_PROMPT_ID: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0 as ::core::ffi::c_uint);
 
 /// No command line: C's `CLEAR_FIELD(ccline)`, and what [`save_cmdline`]

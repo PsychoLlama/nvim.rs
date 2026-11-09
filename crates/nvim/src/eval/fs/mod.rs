@@ -41,7 +41,6 @@ use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     NumBuf, tv_check_for_nonempty_string_arg, tv_check_for_string_arg, tv_get_number_chk,
 };
-use crate::fileio::buffered::FileOpenFlags;
 use crate::mbyte::head_off;
 use crate::memory::ThinCString;
 use crate::message::emsg;
@@ -72,16 +71,6 @@ pub use self::read::*;
 pub use self::write::*;
 
 pub const DIRECTION_NOT_SET: Direction = 0;
-pub const FINDFILE_DIR: ::core::ffi::c_uint = 1;
-pub const FINDFILE_FILE: ::core::ffi::c_uint = 0;
-pub const FILE_CREATE: FileOpenFlags = 2;
-pub const FILE_MK_DIR: FileOpenFlags = 256;
-pub const FILE_TRUNCATE: FileOpenFlags = 32;
-pub const FILE_APPEND: FileOpenFlags = 64;
-pub const FILE_CREATE_ONLY: FileOpenFlags = 16;
-pub const FILE_NO_SYMLINK: FileOpenFlags = 8;
-pub const FILE_WRITE_ONLY: FileOpenFlags = 4;
-pub const FILE_READ_ONLY: FileOpenFlags = 1;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 

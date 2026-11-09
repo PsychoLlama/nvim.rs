@@ -29,6 +29,7 @@ use crate::env::{getenv_resolved, state_subpath};
 use crate::memory::XString;
 use crate::optionstr::{OptString, check_buf_options};
 use crate::runtime::{SID_NONE, runtimepath_default};
+use crate::undo::NO_LOCAL_UNDOLEVEL;
 use crate::winlayer::Win;
 use core::ffi::CStr;
 
@@ -65,8 +66,8 @@ use crate::window::{last_status, win_comp_scroll};
 use crate::winlayer::{self, Buf};
 
 use super::{
-    NO_LOCAL_UNDOLEVEL, OPT_FLAG_GETTEXT, OPT_FLAG_NO_DEF_EXP, OPT_FLAG_NO_DEFAULT, PROJECT_NAME,
-    ROOT_UID, default_fileformat, didset_options, didset_options2, find_dup_item, get_option,
+    OPT_FLAG_GETTEXT, OPT_FLAG_NO_DEF_EXP, OPT_FLAG_NO_DEFAULT, PROJECT_NAME, ROOT_UID,
+    default_fileformat, didset_options, didset_options2, find_dup_item, get_option,
     get_option_unset_value, insecure_flag, option_default, option_expand, option_is_global_local,
     option_var, option_was_set, replace_option_default, set_fileformat, set_option_direct,
     set_option_value_give_err, write_slot,

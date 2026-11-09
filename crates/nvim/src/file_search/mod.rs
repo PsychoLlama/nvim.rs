@@ -48,6 +48,7 @@ use crate::path::{
     path_has_drive_letter, path_with_url, pathcmp, shorten_index, simplify_filename, tail_index,
     tail_with_sep_index, vim_is_abs_name, vim_ispathsep,
 };
+use crate::types::vim::{CD_CAUSE_AUTO, CD_CAUSE_OTHER, CD_CAUSE_WINDOW};
 use crate::types::{BoolVarValue, CdCause, CdScope, LineNr, SaveVEvent};
 use crate::winlayer::Buf;
 use core::ffi::c_int;
@@ -65,9 +66,6 @@ pub(crate) use self::init::*;
 pub(crate) use self::resolve::*;
 pub(crate) use self::visited::*;
 
-pub(crate) const CD_CAUSE_AUTO: CdCause = 2;
-pub(crate) const CD_CAUSE_WINDOW: CdCause = 1;
-pub(crate) const CD_CAUSE_OTHER: CdCause = -1;
 pub(crate) const BUF_OPT_INCLUDEEXPR: c_int = 46;
 
 /// What a search should accept as a match.
@@ -109,6 +107,7 @@ pub(crate) const FIND_LEVEL: c_int = 100;
 
 /// How far `**` descends when the pattern does not say.
 pub(crate) const FF_MAX_STAR_STAR_EXPAND: u8 = 30;
+pub(crate) const FINDFILE_FILE: ::core::ffi::c_uint = 0;
 
 /// An owned NUL-terminated byte string.
 ///

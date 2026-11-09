@@ -18,14 +18,11 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::buffer::BCO_ALWAYS;
-use crate::buffer::BCO_ENTER;
-use crate::buffer::BCO_NOHELP;
-use crate::buffer::KEYMAP_INIT;
+use crate::buffer::{BCO_ALWAYS, BCO_ENTER, BCO_NOHELP, KEYMAP_INIT, free_buf_options};
 use crate::narrow::as_index;
+use crate::undo::NO_LOCAL_UNDOLEVEL;
 use core::ffi::{CStr, c_int, c_uint};
 
-use crate::buffer::free_buf_options;
 use crate::charset::buf_init_chartab;
 use crate::ex_docmd::cmdmod_has;
 use crate::indent::{TabStopArray, check_window_briopt, tabstop_array_of};
@@ -69,8 +66,8 @@ use crate::window::{check_window_colorcolumn, set_winbar_win};
 use crate::winlayer::{Buf, Win};
 
 use super::{
-    FILLCHARS, LISTCHARS, NO_LOCAL_UNDOLEVEL, change_option_default, check_blending,
-    fill_culopt_flags, option_last_set, parse_winhl_opt,
+    FILLCHARS, LISTCHARS, change_option_default, check_blending, fill_culopt_flags,
+    option_last_set, parse_winhl_opt,
 };
 use crate::option::cpo_has;
 

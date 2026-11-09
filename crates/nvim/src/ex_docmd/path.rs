@@ -16,24 +16,20 @@
 use crate::cstr;
 use crate::env::expand_env;
 use crate::eval::callback_copy;
-use crate::file_search::do_autocmd_dirchanged;
+use crate::file_search::{do_autocmd_dirchanged, vim_chdir};
 use crate::guard::Lock;
-use crate::memory::ThinCString;
-use crate::memory::XString;
-use crate::message::emsg;
+use crate::memory::{ThinCString, XString};
+use crate::message::{emsg, msg};
 use crate::option::callback_from_option;
-use crate::optionstr::did_set_optexpr;
+use crate::optionstr::{OptString, did_set_optexpr};
 use crate::os::cshim::gettext;
 use crate::os::fs::current_dir;
 use crate::path::pathcmp;
 use crate::semsg;
 use crate::smsg;
 use crate::types::CmdIdx;
-use crate::window::DirOwner;
-use crate::window::has_own_dir;
-use crate::window::prev_dir_of;
-use crate::window::set_own_dir;
-use crate::window::set_prev_dir;
+use crate::types::vim::CD_CAUSE_MANUAL;
+use crate::window::{DirOwner, has_own_dir, prev_dir_of, set_own_dir, set_prev_dir};
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
@@ -44,9 +40,8 @@ use crate::eval::typval::{
 };
 
 use crate::eval::{callback_call, get_copy_id, set_ref_in_callback};
-use crate::ex_docmd::{CD_CAUSE_MANUAL, FFU_CB, PREV_DIR};
+use crate::ex_docmd::{FFU_CB, PREV_DIR};
 use crate::ex_getln::allbuf_locked;
-use crate::file_search::vim_chdir;
 
 use crate::fileio::shorten_fnames;
 use crate::getchar::state::KEY_TYPED;
@@ -55,7 +50,6 @@ use crate::option::vars::{p_cdh, p_ffu, p_verbose};
 use crate::os::state::LAST_CHDIR_REASON;
 use crate::runtime::state::CURRENT_SCTX;
 
-use crate::message::msg;
 use crate::message_fmt::msg_cstr;
 
 use crate::option::{cpo_has, option_last_set};
@@ -63,7 +57,6 @@ use crate::option::{cpo_has, option_last_set};
 use crate::options::OPT_FINDFUNC;
 
 use crate::option::defs::{CpoFlag, OptError, OptSet, OptionSetFlags};
-use crate::optionstr::OptString;
 use crate::types::{
     BOOL_VAR_FALSE, BOOL_VAR_TRUE, BoolVarValue, CD_SCOPE_GLOBAL, CD_SCOPE_TABPAGE,
     CD_SCOPE_WINDOW, Callback, CdScope, ExArg, Failed, OptInt, ScriptCtx, TypVal, VAR_LIST,

@@ -33,6 +33,7 @@ use crate::option::defs::OPT_VAL_TYPE_STRING;
 use crate::runtime::SID_NONE;
 use crate::tr;
 use crate::types::{ColNr, LineNr};
+use crate::undo::NO_LOCAL_UNDOLEVEL;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 
@@ -65,13 +66,12 @@ use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
 
 use super::{
-    NO_LOCAL_UNDOLEVEL, OPT_FLAG_CURSWANT, OPT_FLAG_HL_ONLY, OPT_FLAG_REDR_ALL, OPT_FLAG_SECURE,
-    OPT_FLAG_UI_OPTION, OPT_SCOPE_BUF, OPT_SCOPE_WIN, OptSlot, Replaced, check_redraw,
-    do_spelllang_source, do_syntax_autocmd, get_varp, get_varp_scope, insecure_flag,
-    is_option_hidden, mark_option_was_set, option_has_scope, option_has_type,
-    option_is_global_local, option_is_global_only, option_scope_idx, option_var, replace_slot,
-    restore_slot, set_option_last_set, slot_holds, slot_value, tty_option_end,
-    validate_option_value, write_slot,
+    OPT_FLAG_CURSWANT, OPT_FLAG_HL_ONLY, OPT_FLAG_REDR_ALL, OPT_FLAG_SECURE, OPT_FLAG_UI_OPTION,
+    OPT_SCOPE_BUF, OPT_SCOPE_WIN, OptSlot, Replaced, check_redraw, do_spelllang_source,
+    do_syntax_autocmd, get_varp, get_varp_scope, insecure_flag, is_option_hidden,
+    mark_option_was_set, option_has_scope, option_has_type, option_is_global_local,
+    option_is_global_only, option_scope_idx, option_var, replace_slot, restore_slot,
+    set_option_last_set, slot_holds, slot_value, tty_option_end, validate_option_value, write_slot,
 };
 
 /// Record where the option was just set, in every scope the flags name.

@@ -40,6 +40,7 @@
 use super::low_byte;
 use crate::memory::{ThinCString, XString};
 use crate::narrow::len_as_int;
+use crate::path::EQUAL_FILES;
 use crate::runtime::defs::ETYPE_SPELL;
 use crate::smsg;
 use crate::spell::{WordFlags, WordTree};
@@ -75,8 +76,8 @@ use super::sections::{
 };
 use super::spl::{SpellReadError, Spl, SplResult, trim_nul};
 use super::{
-    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, BY_SPECIAL, E_SPELL_TRUNC, EQUAL_FILES, MAXWLEN,
-    SN_CHARFLAGS, SN_COMPOUND, SN_END, SN_INFO, SN_MAP, SN_MIDWORD, SN_NOBREAK, SN_NOCOMPOUNDSUGS,
+    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, BY_SPECIAL, E_SPELL_TRUNC, MAXWLEN, SN_CHARFLAGS,
+    SN_COMPOUND, SN_END, SN_INFO, SN_MAP, SN_MIDWORD, SN_NOBREAK, SN_NOCOMPOUNDSUGS,
     SN_NOSPLITSUGS, SN_PREFCOND, SN_REGION, SN_REP, SN_REPSAL, SN_SAL, SN_SOFO, SN_SUGFILE,
     SN_SYLLABLE, SN_WORDS, SNF_REQUIRED, SPL_FNAME_ADD, VIMSPELLMAGIC, VIMSPELLMAGICL,
     VIMSPELLVERSION, VIMSUGMAGIC, VIMSUGMAGICL, VIMSUGVERSION,

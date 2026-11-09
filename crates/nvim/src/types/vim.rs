@@ -33,6 +33,11 @@
 pub struct Failed;
 
 pub type CdCause = ::core::ffi::c_int;
+pub(crate) const CD_CAUSE_AUTO: CdCause = 2;
+pub(crate) const CD_CAUSE_MANUAL: CdCause = 0;
+pub(crate) const CD_CAUSE_WINDOW: CdCause = 1;
+/// `vim_chdirfile`'s reason code: not a `:cd`, so no autocommand.
+pub(crate) const CD_CAUSE_OTHER: CdCause = -1;
 pub type CdScope = ::core::ffi::c_int;
 /// Which scope a `:cd` applies to (`getcwd()`/`haslocaldir()` report it).
 pub const CD_SCOPE_INVALID: CdScope = -1;

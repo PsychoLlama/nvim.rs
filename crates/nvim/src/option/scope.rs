@@ -26,9 +26,8 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::option::defs::OPT_VAL_TYPE_BOOLEAN;
-use crate::option::defs::OPT_VAL_TYPE_NUMBER;
-use crate::option::defs::OPT_VAL_TYPE_STRING;
+use crate::option::defs::{OPT_VAL_TYPE_BOOLEAN, OPT_VAL_TYPE_NUMBER, OPT_VAL_TYPE_STRING};
+use crate::undo::NO_LOCAL_UNDOLEVEL;
 use core::ffi::c_int;
 
 use crate::message::iemsg;
@@ -43,8 +42,8 @@ use crate::types::OptInt;
 use crate::winlayer::{Buf, Win};
 
 use super::{
-    BoolVar, NO_LOCAL_UNDOLEVEL, NumVar, OPT_SCOPE_BUF, OPT_SCOPE_GLOBAL, OPT_SCOPE_WIN, OptSlot,
-    StrVar, WinOptSet, get_option,
+    BoolVar, NumVar, OPT_SCOPE_BUF, OPT_SCOPE_GLOBAL, OPT_SCOPE_WIN, OptSlot, StrVar, WinOptSet,
+    get_option,
 };
 
 /// The [`OptSlot`] naming one field of `$buf`. The generated ladder

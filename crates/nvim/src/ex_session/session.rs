@@ -31,7 +31,6 @@
     clippy::ptr_as_ptr
 )]
 
-use super::flag::{FR_COL, FR_LEAF};
 use super::view::put_view;
 use super::{
     DID_LCD, SessionFile, SessionOpts, Written, ses_arglist, ses_do_win, ses_escape_fname,
@@ -57,8 +56,8 @@ use crate::types::{
     TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, Window,
 };
 use crate::ui::state::{COLUMNS, ROWS};
-use crate::window::tab_index;
 use crate::window::{DirOwner, own_dir};
+use crate::window::{FR_COL, FR_LEAF, tab_index};
 use crate::winlayer::graph::FIRSTWIN;
 use crate::winlayer::{
     FrameRef, TabPage, Win, WinId, buffers, current_topframe, first_tab, tabs, windows_in_tab,
@@ -279,7 +278,7 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> Written {
             out.line(c"tabnext")?;
         }
 
-        if tab_topframe.fr_layout != FR_LEAF {
+        if core::ffi::c_int::from(tab_topframe.fr_layout) != FR_LEAF {
             out.line(c"let s:save_splitbelow = &splitbelow")?;
             out.line(c"let s:save_splitright = &splitright")?;
             out.line(c"set splitbelow splitright")?;
@@ -409,10 +408,10 @@ fn ses_winsizes(out: &mut SessionFile, restore_size: bool, tab: TabPage) -> Writ
 /// Write the splits that recreate the windows of frame `fr`, recursively.
 /// Afterwards the last window in the frame is the current one.
 fn ses_win_rec(out: &mut SessionFile, fr: FrameRef) -> Written {
-    if fr.fr_layout == FR_LEAF {
+    if core::ffi::c_int::from(fr.fr_layout) == FR_LEAF {
         return Ok(());
     }
-    let column = fr.fr_layout == FR_COL;
+    let column = core::ffi::c_int::from(fr.fr_layout) == FR_COL;
 
     // Find the first frame that is not skipped, then create a window for
     // each one after it -- the first window is already there.

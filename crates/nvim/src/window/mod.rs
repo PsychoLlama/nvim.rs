@@ -49,6 +49,7 @@ use crate::cstr;
 use crate::memory::XString;
 use crate::narrow::count_as_int;
 use crate::runtime::SID_WINLAYOUT;
+use crate::types::vim::CD_CAUSE_WINDOW;
 use crate::types::{CmdIdx, Failed};
 use crate::winlayer::{WinId, prev_window};
 use core::ffi::c_int;
@@ -69,9 +70,7 @@ use crate::option::vars::SWB_FLAGS;
 use crate::options::{OPT_SWB_FLAG_USEOPEN, OPT_SWB_FLAG_USETAB};
 use crate::os::cshim::gettext;
 use crate::terminal::buf_terminal_check_size;
-use crate::types::{
-    CdCause, Direction, DoBufStart, ERROR_TYPE_EXCEPTION, Error, Handle, OptInt, Window,
-};
+use crate::types::{Direction, ERROR_TYPE_EXCEPTION, Error, Handle, OptInt, Window};
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winlayer::graph::{FIRST_TABPAGE, FIRSTWIN, LASTWIN};
 use crate::winlayer::{
@@ -117,9 +116,6 @@ pub use self::winclose::*;
 pub const Z_INDEX_MESSAGES: c_int = 200;
 pub const Z_INDEX_FLOAT_DEFAULT: c_int = 50;
 pub const DIRECTION_NOT_SET: Direction = 0;
-pub const CD_CAUSE_WINDOW: CdCause = 1;
-pub const CD_CAUSE_MANUAL: CdCause = 0;
-pub const DOBUF_LAST: DoBufStart = 2;
 pub const WSP_QUICKFIX: c_int = 1024;
 pub const WSP_NOENTER: c_int = 512;
 pub const WSP_NEWLOC: c_int = 256;
@@ -143,9 +139,10 @@ pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c
 pub const SNAP_HELP_IDX: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SNAP_QUICKFIX_IDX: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const SNAP_COUNT: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const FR_LEAF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const FR_ROW: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+/// Frame layouts.
+pub const FR_LEAF: ::core::ffi::c_int = 0;
+pub const FR_ROW: ::core::ffi::c_int = 1;
+pub const FR_COL: ::core::ffi::c_int = 2;
 pub const NOWIN: *mut Window = -1 as ::core::ffi::c_int as *mut Window;
 static E_CANNOT_CLOSE_LAST_WINDOW: &::core::ffi::CStr = c"E444: Cannot close last window";
 static E_CANNOT_SPLIT_WINDOW_WHEN_CLOSING_BUFFER: &::core::ffi::CStr =

@@ -47,9 +47,9 @@ use crate::mbyte::{encode_char, iscomposing, utf8len_tab};
 use crate::message::state::{MSG_COL, MSG_DIDOUT, MSG_NOWAIT};
 use crate::normal::defs::{CmdArg, Outcome};
 use crate::normal::{
-    B_IMODE_LMAP, GRAPHEME_STATE_INIT, NV_CMD_TABLE, NV_CMDS, NV_CMDS_SIZE, NormalState, NvFlags,
-    add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd,
-    do_check_scrollbind, normal_handle_special_visual_command, normal_need_additional_char,
+    GRAPHEME_STATE_INIT, NV_CMD_TABLE, NV_CMDS, NV_CMDS_SIZE, NormalState, NvFlags, add_to_showcmd,
+    check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd, do_check_scrollbind,
+    normal_handle_special_visual_command, normal_need_additional_char,
     normal_need_redraw_mode_message, normal_redraw_mode_message, set_vcount_ca, set_visual_select,
     start_selection, visual_active, visual_select,
 };
@@ -57,6 +57,7 @@ use crate::ops::OpType;
 use crate::ops::{Op, do_pending_operator, get_op_type};
 use crate::option::defs::CpoFlag;
 use crate::option::vars::{FDO_FLAGS, P_LANGMAP, p_lrm, p_tm, p_ttm};
+use crate::option::{B_IMODE_LMAP, cpo_has};
 use crate::os::libc::int64_t;
 use crate::register::get_default_register_name;
 use crate::state::Step;
@@ -69,7 +70,6 @@ use crate::state::{
     get_real_state, may_trigger_modechanged,
 };
 use crate::types::Key;
-use crate::types::OptInt;
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};
@@ -78,7 +78,6 @@ use crate::getchar::{
     append_to_redobuff, append_to_redobuff_char, append_to_redobuff_number, reset_redobuff,
 };
 use crate::r#move::{do_check_cursorbind, validate_cursor};
-use crate::option::cpo_has;
 
 /// Where a row sorts: the magnitude of its character, so that a special key
 /// (stored negative) sorts after every character and `find_command` can
@@ -329,7 +328,7 @@ pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
         }
         // A language-mapped argument is read *with* mappings on, which is
         // the whole point of 'iminsert' being lmap.
-        let langmap_active = lang && Buf::current().b_p_iminsert == OptInt::from(B_IMODE_LMAP);
+        let langmap_active = lang && Buf::current().b_p_iminsert == B_IMODE_LMAP;
         let mapped = langmap_active.then(Allow::mapping_with_codes);
         if langmap_active {
             STATE.set(if repl { MODE_LREPLACE } else { MODE_LANGMAP });

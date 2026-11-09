@@ -31,26 +31,20 @@
 mod switch;
 
 use self::switch::{Switch, delbuf_msg, switch_to_other_buffer};
-use super::{READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG, SEA_QUIT};
 use crate::arglist::check_arg_idx;
 use crate::autocmd::defs::AutoEvent;
-use crate::buffer::BFA_KEEP_UNDO;
-use crate::buffer::KEYMAP_INIT;
+use crate::buffer::{BFA_KEEP_UNDO, KEYMAP_INIT, current_buf};
 use crate::ex_cmds::say;
-use crate::ex_cmds2::CCGD_AW;
-use crate::ex_cmds2::CCGD_EXCMD;
-use crate::ex_cmds2::CCGD_FORCEIT;
-use crate::ex_cmds2::CCGD_MULTWIN;
-use crate::fileio::ReadFlags;
-use crate::types::ColNr;
-use crate::types::Handle;
-use crate::winlayer::WinId;
+use crate::ex_cmds2::{CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN};
+use crate::fileio::{READ_KEEP_UNDO, READ_NOWINENTER, ReadFlags};
+use crate::memline::{Lines, SEA_DIALOG, SEA_QUIT};
+use crate::types::{ColNr, Handle};
+use crate::winlayer::{Buf, Win, WinId, tab_windows};
 use core::ffi::CStr;
 use std::ffi::CString;
 
 use crate::ascii::NUL;
 use crate::autocmd::fire_autocmds_retval;
-use crate::buffer::current_buf;
 use crate::buffer::state::SWAP_EXISTS_ACTION;
 use crate::buffer::{
     BufFlags, BufRef, buf_clear_file, buf_freeall, do_autochdir, do_modelines, fileinfo,
@@ -71,7 +65,6 @@ use crate::fold::fold_update_all;
 use crate::guard::Suppress;
 use crate::help::prepare_help_buffer;
 use crate::mark::set_last_cursor;
-use crate::memline::Lines;
 use crate::message::msg_check_for_delay;
 use crate::message::state::{MSG_LISTDO_OVERWRITE, MSG_SCROLL, MSG_SCROLLED_IGN};
 use crate::r#move::{changed_line_abv_curs, update_topline};
@@ -92,9 +85,6 @@ use crate::terminal::buf_terminal_check_size;
 use crate::types::{ExArg, Failed, LineNr, Vv};
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
-use crate::winlayer::tab_windows;
 use core::ffi::c_int;
 
 /// Set `v:swapcommand` for the SwapExists autocommands: `[+cmd]` to be

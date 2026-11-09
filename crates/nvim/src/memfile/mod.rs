@@ -68,7 +68,7 @@ pub(crate) use table::BlockHdr;
 pub(crate) use table::BlockId;
 use table::BlockTable;
 
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, buffers};
 use core::ffi::{CStr, c_int, c_uint};
 use core::hash::{BuildHasherDefault, Hasher};
 use std::collections::HashMap;
@@ -87,7 +87,6 @@ use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
 use crate::os::fs::{close_file, fsync_file, open_file, os_remove};
 use crate::os::input::{os_breakcheck, os_char_avail};
-use crate::winlayer::buffers;
 
 pub(crate) static DID_SWAPWRITE_MSG: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -133,7 +132,7 @@ const BH_DIRTY: c_uint = 1;
 /// Page size to use when the device will not say.
 pub(crate) const MEMFILE_PAGE_SIZE: c_uint = 4096;
 /// A device block size outside this range is not believed.
-pub(crate) const MIN_SWAP_PAGE_SIZE: u64 = 1048;
+pub(crate) const MIN_SWAP_PAGE_SIZE: u32 = 1048;
 pub(crate) const MAX_SWAP_PAGE_SIZE: u64 = 50000;
 
 const O_RDWR: c_int = 0o2;
@@ -254,7 +253,7 @@ impl MemFile {
         // makes every read and write a whole number of device blocks.
         let blocksize = memfile.file.as_ref().and_then(|file| file.metadata().ok());
         if let Some(blocksize) = blocksize.map(|metadata| metadata.blksize())
-            && (MIN_SWAP_PAGE_SIZE..=MAX_SWAP_PAGE_SIZE).contains(&blocksize)
+            && (u64::from(MIN_SWAP_PAGE_SIZE)..=MAX_SWAP_PAGE_SIZE).contains(&blocksize)
             && let Ok(blocksize) = c_uint::try_from(blocksize)
         {
             memfile.mf_page_size = blocksize;

@@ -38,7 +38,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::memline::Lines;
+use crate::memline::{Lines, ml_replace_owned};
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::narrow::{const_len_as_int, len_as_int};
@@ -54,11 +54,9 @@ use crate::ex_cmds::do_sub_msg;
 use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
-use crate::memline::ml_replace_owned;
 use crate::message::emsg;
 use crate::option::vars::{P_WS, p_ws};
 use crate::os::cshim::gettext;
-use crate::path::FileComparison;
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{ExArg, LineNr, Pos};
 use crate::undo::u_save_cursor;
@@ -101,8 +99,6 @@ pub(crate) use wordtree::Tree;
 pub use wordtree::WordTree;
 
 pub(crate) static SPELL_REDRAW_LNUM: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
-
-pub const EQUAL_FILES: FileComparison = 1;
 
 /// The longest word, in bytes, that any of this can handle. Every word
 /// buffer in the subsystem is this size.

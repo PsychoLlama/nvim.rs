@@ -19,6 +19,7 @@
 
 use crate::ascii::NL;
 use crate::ex_docmd::cmdmod_has;
+use crate::fileio::{EOL_DOS, EOL_MAC, EOL_UNIX, FileOffset};
 use crate::mbyte::canonize;
 use crate::memline::MlFlags;
 use crate::narrow::len_as_int;
@@ -39,7 +40,6 @@ use crate::event::uv::{uv_gid_t, uv_uid_t};
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::state::EX_NO_REPRINT;
 use crate::ex_eval::{aborting, should_abort_err};
-use crate::fileio::FileOffset;
 use crate::fileio::{
     FioFlags, Report, buf_store_file_info, get_fio_flags, match_file_list, modname,
     msg_add_fileformat, msg_add_lines, need_conversion, rename_file, set_rw_fname, temp_name,
@@ -62,9 +62,8 @@ use crate::options::{
     OPT_BKC_FLAG_AUTO, OPT_BKC_FLAG_BREAKHARDLINK, OPT_BKC_FLAG_BREAKSYMLINK, OPT_BKC_FLAG_YES,
 };
 use crate::os::cshim::gettext;
-use crate::os::fs::FileInfo;
 use crate::os::fs::meta::VimAcl;
-use crate::os::fs::os_strerror;
+use crate::os::fs::{FileInfo, os_strerror};
 use crate::os::fs::{
     os_chown, os_copy, os_file_is_writable, os_file_settime, os_free_acl, os_get_acl, os_nodetype,
     os_remove, os_set_acl, os_setperm,
@@ -839,7 +838,4 @@ impl Buf {
     }
 }
 
-pub const EOL_UNIX: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;

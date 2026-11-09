@@ -21,6 +21,9 @@
 
 use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
+use crate::fileio::{EOL_DOS, FileOffset, READ_NEW};
+use crate::memfile::{BlockNr, MIN_SWAP_PAGE_SIZE};
+use crate::path::EQUAL_FILES;
 
 use crate::autocmd::has_autocmd;
 use crate::buffer::state::SWAP_EXISTS_ACTION;
@@ -31,20 +34,17 @@ use crate::drawscreen::state::CMDLINE_ROW;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::eval::vars::{set_vim_var_string, with_vim_var_str};
 use crate::ex_docmd::cmdmod_has;
-use crate::fileio::FileOffset;
 use crate::fileio::state::{DID_CHECK_TIMESTAMPS, NEED_CHECK_TIMESTAMPS};
 use crate::fileio::{
     buf_store_file_info, modname, readfile_named, rename_file, temp_name, vim_deltempdir,
 };
 use crate::getchar::flush_buffers;
-use crate::getchar::state::FlushBuffers;
-use crate::getchar::state::GOT_INT;
+use crate::getchar::state::{FlushBuffers, GOT_INT};
 use crate::global_cell::GlobalCell;
 use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;
 use crate::mark::setpcmark;
 use crate::mbyte::{char_at, cluster_len, head_off, mb_adjust_cursor, utf_lengths};
-use crate::memfile::BlockNr;
 use crate::memfile::{MFS_ALL, MFS_FLUSH, MFS_STOP, MFS_ZERO, MemFile, MfDirty, mf_close_file};
 use crate::memline::state::InfoPtr;
 use crate::memory::XString;
@@ -67,7 +67,6 @@ use crate::os::input::{line_breakcheck, os_char_avail};
 use crate::os::libc::{int64_t, size_t, time_t, uint64_t};
 use crate::os::proc::os_proc_running;
 use crate::os::time::{ctime_text, os_time};
-use crate::path::FileComparison;
 use crate::path::{
     after_pathsep, concat_fnames, expand_wildcards, fix_fname, path_fnamecmp, path_full_compare,
     path_is_absolute, path_tail, same_directory, shorten_dir, tail_index, vim_full_name,
@@ -111,11 +110,7 @@ pub use self::lines::*;
 
 pub(crate) static INHIBIT_DELETE_COUNT: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
-pub const READ_NEW: ::core::ffi::c_uint = 1;
 pub const FLUSH_TYPEAHEAD: FlushBuffers = 1;
-/// The smallest page a swap file can have, which is what block zero is first
-/// read at when its real page size is not known yet.
-pub const MIN_SWAP_PAGE_SIZE: ::core::ffi::c_uint = 1048;
 pub const SEA_CHOICE_NONE: SwapExistsChoice = 0;
 pub type SwapExistsChoice = ::core::ffi::c_uint;
 pub const SEA_CHOICE_ABORT: SwapExistsChoice = 6;
@@ -148,7 +143,6 @@ pub const ML_APPEND_NEW: ::core::ffi::c_int = 1;
 /// `flags` for `ml_delete_int`: say "--No lines in buffer--" if the buffer
 /// ends up empty.
 pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
-pub const EQUAL_FILES: FileComparison = 1;
 pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const ML_CHNK_ADDLINE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const ML_CHNK_DELLINE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -173,6 +167,7 @@ pub const SEA_QUIT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const SEA_RECOVER: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const SEA_READONLY: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const STACK_INCR: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
+pub(crate) const SEA_DIALOG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 /// One translated static message on the report, in `hl_id`.
 ///
 /// These four exist because `recover.rs` and `swapname.rs` print forty-odd
@@ -453,8 +448,6 @@ pub fn ml_close_notmod() {
         }
     }
 }
-
-pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 
 /// [`makeswapname`](swapname::makeswapname) for names the caller holds: the
 /// swap file name for `fname` under the `'directory'` entry `dir_name`, or

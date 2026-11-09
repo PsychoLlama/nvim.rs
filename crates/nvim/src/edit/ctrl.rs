@@ -218,10 +218,10 @@ pub(crate) fn ins_ctrl_hat() {
     if map_to_exists_mode(b"", MODE_LANGMAP, false) {
         // `:lmap` mappings exist, so the key toggles their use.
         if STATE.get() & MODE_LANGMAP != 0 {
-            Buf::current().b_p_iminsert = OptInt::from(B_IMODE_NONE);
+            Buf::current().b_p_iminsert = B_IMODE_NONE;
             STATE.set(STATE.get() & !MODE_LANGMAP);
         } else {
-            Buf::current().b_p_iminsert = OptInt::from(B_IMODE_LMAP);
+            Buf::current().b_p_iminsert = B_IMODE_LMAP;
             STATE.set(STATE.get() | MODE_LANGMAP);
         }
     }

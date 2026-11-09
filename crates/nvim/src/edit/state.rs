@@ -127,7 +127,7 @@ fn insert_enter(s: &mut InsertState) {
             .w_valid
             .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
     }
-    if Buf::current().b_p_iminsert == OptInt::from(B_IMODE_LMAP) {
+    if Buf::current().b_p_iminsert == B_IMODE_LMAP {
         STATE.set(STATE.get() | MODE_LANGMAP);
     }
 

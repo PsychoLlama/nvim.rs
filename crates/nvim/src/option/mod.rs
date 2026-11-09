@@ -136,8 +136,12 @@ pub(crate) const MIN_COLUMNS: c_uint = 12;
 pub(crate) const LISTCHARS: CharsOption = 1;
 pub(crate) const FILLCHARS: CharsOption = 0;
 pub(crate) const ROOT_UID: c_int = 0 as c_int;
-pub(crate) const B_IMODE_USE_INSERT: c_int = -1 as c_int;
-pub(crate) const B_IMODE_NONE: c_int = 0 as c_int;
+/// 'imsearch' at -1 follows 'iminsert' rather than answering for itself.
+pub(crate) const B_IMODE_USE_INSERT: crate::types::OptInt = -1;
+pub(crate) const B_IMODE_NONE: crate::types::OptInt = 0;
+pub(crate) const B_IMODE_LMAP: crate::types::OptInt = 1;
+/// The largest 'iminsert'/'imsearch' value: the language-mapping mode.
+pub(crate) const B_IMODE_LAST: crate::types::OptInt = 1;
 pub(crate) const CTRL_F_STR: &::core::ffi::CStr = c"\x06";
 pub(crate) const HLATTRS_INIT: HlAttrs = HlAttrs {
     rgb_ae_attr: HlAttrFlags::NONE,
@@ -156,13 +160,9 @@ pub(crate) const DFLT_GFN: &::core::ffi::CStr =
     c"Source Code Pro,DejaVu Sans Mono,Courier New,monospace";
 pub(crate) const DFLT_GREPFORMAT: &::core::ffi::CStr = c"%f:%l:%m,%f:%l%m,%f  %l%m";
 pub(crate) const ENC_DFLT: &::core::ffi::CStr = c"utf-8";
-pub(crate) const EOL_UNIX: c_int = 0 as c_int;
-pub(crate) const EOL_DOS: c_int = 1 as c_int;
-pub(crate) const EOL_MAC: c_int = 2 as c_int;
 pub(crate) const DFLT_FO_VIM: &::core::ffi::CStr = c"tcqj";
 pub(crate) const CPO_VIM: &::core::ffi::CStr = c"aABceFs_";
 pub(crate) const LISPWORD_VALUE: &::core::ffi::CStr = c"defun,define,defmacro,set!,lambda,if,case,let,flet,let*,letrec,do,do*,define-syntax,let-syntax,letrec-syntax,destructuring-bind,defpackage,defparameter,defstruct,deftype,defvar,do-all-symbols,do-external-symbols,do-symbols,dolist,dotimes,ecase,etypecase,eval-when,labels,macrolet,multiple-value-bind,multiple-value-call,multiple-value-prog1,multiple-value-setq,prog1,progv,typecase,unless,unwind-protect,when,with-input-from-string,with-open-file,with-open-stream,with-output-to-string,with-package-iterator,define-condition,handler-bind,handler-case,restart-bind,restart-case,with-simple-restart,store-value,use-value,muffle-warning,abort,continue,with-slots,with-slots*,with-accessors,with-accessors*,defclass,defmethod,print-unreadable-object";
-pub(crate) const NO_LOCAL_UNDOLEVEL: c_int = -123456 as c_int;
 pub(crate) const SB_MAX: c_int = 1000000 as c_int;
 pub(crate) const MAX_NUMBERWIDTH: c_int = 20 as c_int;
 pub(crate) const TABSTOP_MAX: c_int = 9999 as c_int;

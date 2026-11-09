@@ -13,7 +13,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::fileio::EOL_MAC;
 use crate::global_cell::{Field, field};
+use crate::option::{B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT, option_var};
 use crate::runtime::SID_NONE;
 use crate::strings::has_bytes;
 use core::ffi::{CStr, c_int, c_uint};
@@ -39,7 +41,6 @@ use crate::mbyte::{c_cluster_len, char_at};
 use crate::memline::ml_setflags;
 use crate::message::{E_MODIFIABLE, E_UNSUPPORTEDOPTION};
 use crate::option::defs::{OptError, OptSet, OptVal, OptionSetFlags};
-use crate::option::option_var;
 use crate::option::vars::{BKC_FLAGS, P_BS, p_bex, p_enc, p_pm};
 use crate::option::{
     get_fileformat, redraw_titles, set_iminsert_global, set_imsearch_global, set_option_direct,
@@ -50,16 +51,15 @@ use crate::options::{
     OPT_BT_VALUES, OPT_COMMENTS, OPT_ENCODING, OPT_EVENTIGNOREWIN, OPT_FILEENCODING, OPT_ISKEYWORD,
 };
 use crate::spell::spell_reload;
-use crate::types::{Buffer, OptInt, Pos};
+use crate::types::{Buffer, Pos};
 use crate::window::global_stl_height;
 
 use super::OptStringRef;
 use super::frame::{invalid, new_bytes, new_value, old_bytes, varp, win};
 use super::{
-    B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT, COM_ALL, CPO_VI,
-    E_BACKUPEXT_AND_PATCHMODE_ARE_EQUAL, E_COMMA_REQUIRED, EOL_MAC, FO_ALL, did_set_opt_flags,
-    did_set_optexpr, did_set_option_listflag, did_set_str_generic, illegal_char, opt_strings_mask,
-    opt_strings_ok, valid_filetype,
+    COM_ALL, CPO_VI, E_BACKUPEXT_AND_PATCHMODE_ARE_EQUAL, E_COMMA_REQUIRED, FO_ALL,
+    did_set_opt_flags, did_set_optexpr, did_set_option_listflag, did_set_str_generic, illegal_char,
+    opt_strings_mask, opt_strings_ok, valid_filetype,
 };
 
 /// 'backspace' is a word list, except that the number 2 is also accepted
@@ -414,18 +414,18 @@ pub fn did_set_keymap(args: &mut OptSet) -> Result<(), OptError> {
     errmsg?;
 
     if !buf.b_p_keymap.bytes().is_empty() {
-        buf.b_p_iminsert = OptInt::from(B_IMODE_LMAP);
+        buf.b_p_iminsert = B_IMODE_LMAP;
         // 'imsearch' at -1 means "follow 'iminsert'", and stays that
         // way.
-        if buf.b_p_imsearch != OptInt::from(B_IMODE_USE_INSERT) {
-            buf.b_p_imsearch = OptInt::from(B_IMODE_LMAP);
+        if buf.b_p_imsearch != B_IMODE_USE_INSERT {
+            buf.b_p_imsearch = B_IMODE_LMAP;
         }
     } else {
-        if buf.b_p_iminsert == OptInt::from(B_IMODE_LMAP) {
-            buf.b_p_iminsert = OptInt::from(B_IMODE_NONE);
+        if buf.b_p_iminsert == B_IMODE_LMAP {
+            buf.b_p_iminsert = B_IMODE_NONE;
         }
-        if buf.b_p_imsearch == OptInt::from(B_IMODE_LMAP) {
-            buf.b_p_imsearch = OptInt::from(B_IMODE_USE_INSERT);
+        if buf.b_p_imsearch == B_IMODE_LMAP {
+            buf.b_p_imsearch = B_IMODE_USE_INSERT;
         }
     }
     if !opt_flags.has(OptionSetFlags::LOCAL) {

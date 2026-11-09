@@ -27,7 +27,7 @@ use crate::ex_docmd::state::EX_NORMAL_BUSY;
 use crate::ex_docmd::update_topline_cursor;
 use crate::ex_getln::state::CMDLINE_STAR;
 use crate::ex_getln::{cmdline_in_use, putcmdline, redrawcmd, redrawcmdline, unputcmdline};
-use crate::fileio::buffered::FileOpenFlags;
+use crate::fileio::buffered::{FILE_NON_BLOCKING, FILE_READ_ONLY};
 use crate::getchar::state::{
     ALLOW_KEYS, BLOCK_REDO, CTRL_C_INTERRUPTS, CURSCRIPT, GOT_INT, GOTCHARS_PENDING, IGNORE_SCRIPT,
     KEY_NOREMAP, KEY_STUFFED, KEY_TYPED, LANGMAP_MAPCHAR, LAST_RECORDED_LEN,
@@ -169,13 +169,6 @@ pub(crate) enum MapResult {
     NoMatch,
 }
 pub const KEYLEN_PART_MAP: ::core::ffi::c_int = -2;
-pub const FILE_READ_ONLY: FileOpenFlags = 1;
-pub const FILE_NON_BLOCKING: FileOpenFlags = 128;
-pub const FILE_TRUNCATE: FileOpenFlags = 32;
-pub const FILE_CREATE_ONLY: FileOpenFlags = 16;
-pub const FILE_NO_SYMLINK: FileOpenFlags = 8;
-pub const FILE_WRITE_ONLY: FileOpenFlags = 4;
-pub const FILE_CREATE: FileOpenFlags = 2;
 /// The top bit of a channel id, which no real channel has: a call that
 /// carries it came from inside nvim rather than over a channel.
 pub const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);

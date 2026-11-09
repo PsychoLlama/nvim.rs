@@ -85,9 +85,7 @@ use crate::spell::{ex_spelldump, ex_spellinfo, ex_spellrepall};
 use crate::spellfile::{ex_mkspell, ex_spell};
 use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
-use crate::types::{
-    Callback, CdCause, CmdAddr, Direction, DoBufStart, ExArg, ExArgt, Handle, LineNr,
-};
+use crate::types::{Callback, CmdAddr, Direction, ExArg, ExArgt, Handle, LineNr};
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
 use crate::version::{ex_intro, ex_version};
@@ -146,7 +144,6 @@ mod childproc;
 mod tests;
 pub(crate) use self::childproc::*;
 pub const DIRECTION_NOT_SET: Direction = 0;
-pub const CD_CAUSE_MANUAL: CdCause = 0;
 pub const OPTION_MAGIC_OFF: OptMagic = 2;
 pub const OPTION_MAGIC_ON: OptMagic = 1;
 pub const MARK_ALL: MarkGet = 1;
@@ -202,7 +199,6 @@ pub struct CommandDefinition {
     pub cmd_argt: ExArgt,
     pub cmd_addr_type: CmdAddr,
 }
-pub const DOBUF_LAST: DoBufStart = 2;
 pub const CHANNEL_PART_ALL: ChannelPart = 4;
 pub const VALID_HEAD: c_uint = 2;
 pub const VALID_PATH: c_uint = 1;

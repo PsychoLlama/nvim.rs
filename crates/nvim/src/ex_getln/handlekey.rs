@@ -20,8 +20,7 @@ use crate::cmdexpand::{Expanded, WildMode, WildOpts};
 use crate::cstr;
 use crate::getchar::typeahead;
 use crate::guard::Keys;
-use crate::keycodes::ModMask;
-use crate::keycodes::SpecialKey;
+use crate::keycodes::{ModMask, SpecialKey};
 use crate::mbyte::MB_MAXCHAR;
 use crate::narrow::len_as_int;
 use crate::state::Step;
@@ -126,9 +125,9 @@ pub(crate) fn command_line_toggle_langmap(s: &CommandLineState) {
         STATE.set(STATE.get() ^ MODE_LANGMAP);
         if let Some((which, buffer)) = b_im {
             let value = if STATE.get() & MODE_LANGMAP != 0 {
-                OptInt::from(B_IMODE_LMAP)
+                B_IMODE_LMAP
             } else {
-                OptInt::from(B_IMODE_NONE)
+                B_IMODE_NONE
             };
             set_im_value(buffer, which, value);
         }

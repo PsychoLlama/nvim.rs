@@ -23,8 +23,10 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::set_vim_var_string;
 use crate::eval::{callback_call, list2fpos, set_ref_in_callback};
+use crate::ex_cmds::{GETFILE_OPEN_OTHER, GETFILE_SAME_FILE};
 use crate::ex_cmds::{getfile, prepare_tagpreview};
 use crate::ex_docmd::{do_cmdline_cmd, set_no_hlsearch};
+use crate::file_search::FINDFILE_FILE;
 use crate::file_search::{FindContext, split_stop_directories};
 use crate::fileio::FileOffset;
 use crate::fold::fold_open_cursor;
@@ -62,8 +64,7 @@ use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::path::{full_name_save, has_wildcard, path_full_compare, vim_is_abs_name};
 use crate::pos::MAXLNUM;
 use crate::quickfix::set_errorlist;
-use crate::regexp::OptMagic;
-use crate::regexp::vim_regexec;
+use crate::regexp::{OptMagic, vim_regexec};
 use crate::search::state::{MAGIC_OVERRULED, NO_HLSEARCH};
 use crate::state::MODE_INSERT;
 use crate::state::mode::STATE;
@@ -72,11 +73,8 @@ use crate::tag::state::{
 };
 use crate::tr;
 use crate::types::Handle;
-use crate::types::{
-    Callback, ColNr, Dict, ExArg, GetFileRet, LineNr, List, Pos, Taggy, Timestamp, VarNumber,
-};
-use crate::ui::state::COLUMNS;
-use crate::ui::state::UI_MESSAGES;
+use crate::types::{Callback, ColNr, Dict, ExArg, LineNr, List, Pos, Taggy, Timestamp, VarNumber};
+use crate::ui::state::{COLUMNS, UI_MESSAGES};
 use crate::ui::ui_has;
 use crate::window::{
     check_can_set_curbuf_forceit, swbuf_goto_win_with_buf, win_close, win_enter, win_split,
@@ -105,9 +103,6 @@ pub use self::stack::*;
 mod command;
 pub(crate) use self::command::*;
 pub const OPTION_MAGIC_OFF: OptMagic = 2;
-pub const GETFILE_OPEN_OTHER: GetFileRet = -1;
-pub const GETFILE_SAME_FILE: GetFileRet = 0;
-pub const FINDFILE_FILE: ::core::ffi::c_uint = 0;
 pub const LSIZE: ::core::ffi::c_uint = 512;
 pub const TAG_MANY: ::core::ffi::c_int = 300;
 pub const TAG_NO_TAGFUNC: ::core::ffi::c_int = 256;

@@ -27,7 +27,7 @@ use crate::drawscreen::NO_SCREEN;
 use crate::keycodes::{CTRL_C, SpecialKey};
 use crate::narrow::number_as_int;
 use crate::types::Key;
-use crate::winlayer::TabPage;
+use crate::winlayer::{TabPage, current_topframe};
 use core::ffi::{CStr, c_int};
 
 use crate::buffer::{BufFlags, do_autochdir};
@@ -44,7 +44,7 @@ use crate::ex_docmd::set_no_hlsearch;
 use crate::fold::{
     fold_update_all, foldmethod_is_diff, foldmethod_is_indent, foldmethod_is_syntax, new_fold_level,
 };
-use crate::global_cell::GlobalCell;
+use crate::global_cell::{GlobalCell, field};
 use crate::guard::Depth;
 use crate::highlight::hl_invalidate_blends;
 use crate::indent_c::parse_cino;
@@ -79,7 +79,6 @@ use crate::window::{
     win_setheight, win_setwidth,
 };
 use crate::winfloat::win_float_update_statusline;
-use crate::winlayer::current_topframe;
 use crate::winlayer::graph::{FIRSTWIN, LASTWIN};
 
 use super::{
@@ -91,7 +90,6 @@ use crate::memory::XString;
 use crate::winlayer::{self, Buf, Win};
 
 use super::Local;
-use crate::global_cell::field;
 
 /// "E590", the one message a callback in this module reports.
 const E_PREVIEW_WINDOW_EXISTS: &CStr = c"E590: A preview window already exists";
@@ -169,8 +167,8 @@ pub(crate) fn did_set_arabic(args: &mut OptSet) -> Result<(), OptError> {
         }
         // SAFETY: a live window's buffer is live.
         let mut buf = win.buffer();
-        buf.b_p_iminsert = OptInt::from(B_IMODE_NONE);
-        buf.b_p_imsearch = OptInt::from(B_IMODE_USE_INSERT);
+        buf.b_p_iminsert = B_IMODE_NONE;
+        buf.b_p_imsearch = B_IMODE_USE_INSERT;
         return Ok(());
     }
 

@@ -16,21 +16,19 @@
     clippy::ptr_as_ptr
 )]
 
+use super::CmdModFlags;
 use super::LineCopy;
 use super::say;
-use super::{CmdModFlags, ML_DEL_MESSAGE};
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::{appended_lines_mark, changed_lines};
 use crate::cursor::check_pos;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::state::GLOBAL_BUSY;
-use crate::extmark::BCount;
-use crate::extmark::EXTMARK_NOOP;
-use crate::extmark::EXTMARK_UNDO;
-use crate::extmark::extmark_move_region;
+use crate::extmark::{BCount, EXTMARK_NOOP, EXTMARK_UNDO, extmark_move_region};
 use crate::fold::fold_move_range;
 use crate::guard::Suppress;
 use crate::mark::mark_adjust_nofold;
+use crate::memline::ML_DEL_MESSAGE;
 use crate::memline::{ml_append_cstr, ml_delete_flags};
 use crate::message::emsg;
 use crate::message_fmt::report_msg;
@@ -153,7 +151,7 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     // Now we delete the original text -- webb
     u_save(line1 + extra - 1, line2 + extra + 1)?;
     for _ in line1.through(line2) {
-        let _ = ml_delete_flags(line1 + extra, ML_DEL_MESSAGE.cast_signed());
+        let _ = ml_delete_flags(line1 + extra, ML_DEL_MESSAGE);
     }
 
     if GLOBAL_BUSY.get() == 0 && OptInt::from(num_lines) > p_report() {

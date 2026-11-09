@@ -9,35 +9,22 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::buffer::DOBUF_CURRENT;
-use crate::buffer::DOBUF_FIRST;
-use crate::buffer::DOBUF_MOD;
-use crate::ex_cmds::EcmdFlags;
-use crate::ex_cmds::do_ecmd;
-use crate::ex_cmds::newlnum;
-use crate::ex_cmds2::CCGD_AW;
-use crate::ex_cmds2::CCGD_EXCMD;
-use crate::ex_cmds2::CCGD_FORCEIT;
-use crate::ex_cmds2::CCGD_MULTWIN;
-use crate::file_search::find_nth_file_in_path;
+use crate::buffer::{DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD};
+use crate::ex_cmds::{EcmdFlags, do_ecmd, newlnum};
+use crate::ex_cmds2::{CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN};
+use crate::file_search::{FileNameOpts, find_nth_file_in_path};
 use crate::fileio::{ReadFlags, readfile_named};
 use crate::guard::Allow;
 use crate::memfile::buf_swap_name;
-use crate::memline::MlFlags;
-use crate::memline::ml_get_len;
-use crate::memory::ThinCString;
-use crate::memory::XString;
-use crate::message::msg;
+use crate::memline::{MlFlags, ml_get_len};
+use crate::memory::{ThinCString, XString};
+use crate::message::{E_TRAILING_ARG, emsg, msg};
 use crate::message_fmt::msg_bytes;
 use crate::os::cshim::gettext;
-use crate::search::ACTION_SHOW;
-use crate::search::ACTION_SHOW_ALL;
-use crate::search::CHECK_PATH;
+use crate::search::{ACTION_SHOW, ACTION_SHOW_ALL, CHECK_PATH};
 use crate::semsg;
-use crate::types::CmdIdx;
-use crate::types::ColNr;
-use crate::undo::UNDO_HASH_SIZE;
-use crate::undo::u_compute_hash;
+use crate::types::{CmdIdx, ColNr};
+use crate::undo::{UNDO_HASH_SIZE, u_compute_hash};
 use crate::window::valid_win;
 use crate::winlayer::WinId;
 use core::ffi::{CStr, c_int};
@@ -52,23 +39,19 @@ use crate::ex_cmds2::{check_changed, check_fname};
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
 use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::source::ex_errmsg;
-use crate::ex_docmd::{DIRECTION_NOT_SET, DOBUF_LAST, EX_PRESSEDRETURN, cmdmod_has};
+use crate::ex_docmd::{DIRECTION_NOT_SET, EX_PRESSEDRETURN, cmdmod_has};
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
-use crate::file_search::FileNameOpts;
 
 use crate::ex_docmd::state::{EX_NO_REPRINT, GLOBAL_BUSY};
 use crate::getchar::stuff_readbuf;
 use crate::mark::setpcmark;
-use crate::message::E_TRAILING_ARG;
 use crate::message::state::{MSG_SCROLL, NEED_WAIT_RETURN};
 use crate::option::vars::{P_SHADA, p_awa, p_shada};
 use crate::startup::{READONLYMODE, RECOVERYMODE};
 use crate::state::mode::{EXMODE_ACTIVE, PENDING_EXMODE_ACTIVE};
 
 use crate::memline::{ml_delete, ml_preserve, ml_recover};
-
-use crate::message::emsg;
 
 use crate::normal::normal_enter;
 use crate::option::{cpo_has, get_findfunc};

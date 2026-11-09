@@ -78,7 +78,7 @@ use crate::runtime::do_source;
 use crate::search::state::NO_HLSEARCH;
 use crate::tr;
 use crate::types::CmdIdx;
-use crate::types::{CdCause, ExArg, Vv};
+use crate::types::{ExArg, Vv};
 use crate::window::{DirOwner, own_dir};
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, TabPage};
@@ -91,16 +91,7 @@ use session::makeopens;
 use view::put_view;
 
 /// Constants the transpiler copied in from the headers this module includes.
-mod flag {
-    use super::CdCause;
-
-    /// `vim_chdirfile`'s reason code: not a `:cd`, so no autocommand.
-    pub(super) const CD_CAUSE_OTHER: CdCause = -1;
-
-    /// Frame layouts.
-    pub(super) const FR_LEAF: core::ffi::c_char = 0;
-    pub(super) const FR_COL: core::ffi::c_char = 2;
-}
+mod flag {}
 
 /// The default file name of each command that has one.
 const SESSION_FILE: &CStr = c"Session.vim";
@@ -536,7 +527,7 @@ fn write_session(out: &mut SessionFile, fname: &CStr) -> Written {
     let to_sesdir = known && SSOP_FLAGS.get() & OPT_SSOP_FLAG_SESDIR != 0;
     let to_globaldir = known && SSOP_FLAGS.get() & OPT_SSOP_FLAG_CURDIR != 0 && globaldir.is_some();
     if to_sesdir {
-        if vim_chdirfile(fname, flag::CD_CAUSE_OTHER).is_ok() {
+        if vim_chdirfile(fname, crate::types::vim::CD_CAUSE_OTHER).is_ok() {
             shorten_fnames(true);
         }
     } else if to_globaldir

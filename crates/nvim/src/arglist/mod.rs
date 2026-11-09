@@ -34,6 +34,7 @@ pub(crate) mod state;
 use crate::arglist::state::{ARG_HAD_LAST, ARG_LISTS, MAX_ALIST_ID};
 use crate::ascii::ascii_isspace;
 use crate::autocmd::is_aucmd_win;
+use crate::buffer::{BLN_CURBUF, BLN_LISTED};
 use crate::buffer::{
     buf_hide, buf_is_empty, buflist_add_name, curbuf_reusable, find_buf, maketitle, otherfile,
 };
@@ -52,7 +53,7 @@ use crate::normal::reset_visual_and_resel;
 use crate::option::magic_isset;
 use crate::option::vars::{P_EA, p_ea, p_fic, p_tpm};
 use crate::os::input::os_breakcheck;
-use crate::path::FileComparison;
+use crate::path::EQUAL_FILES;
 use crate::path::{
     ExpandFlags, expand_wildcards, fix_fname, full_name_save, gen_expand_wildcards, path_fnamecmp,
     path_full_compare,
@@ -80,17 +81,7 @@ pub use command::{
 pub use eval::{f_argc, f_argidx, f_arglistid, f_argv};
 
 /// Constants the transpiler copied in from the headers this module includes.
-mod flag {
-    use super::{BlnFlags, FileComparison};
-
-    /// `buflist_new` flags.
-    pub(super) const BLN_CURBUF: BlnFlags = 1;
-    pub(super) const BLN_LISTED: BlnFlags = 2;
-
-    /// `path_full_compare` result bit meaning "the same file".
-    pub(super) const EQUAL_FILES: FileComparison = 1;
-}
-use flag::*;
+mod flag {}
 
 /// `flag` when `cond`, and no bits otherwise — the `cond ? FLAG : 0` the
 /// flag arguments of `buflist_add`, `check_changed` and `do_ecmd` are

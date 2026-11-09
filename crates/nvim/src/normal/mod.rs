@@ -123,7 +123,6 @@ pub(crate) struct NormalState {
     pub old_pos: Pos,
 }
 pub(crate) const TAB: c_int = 9;
-pub(crate) const B_IMODE_LMAP: c_int = 1 as c_int;
 pub(crate) const GRAPHEME_STATE_INIT: c_int = 0 as c_int;
 static V_ISUAL_MODE_ORIG: GlobalCell<VisualMode> = GlobalCell::new(VisualMode::NONE);
 const E_CHANGELIST_IS_EMPTY: &CStr = c"E664: Changelist is empty";

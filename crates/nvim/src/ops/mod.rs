@@ -41,6 +41,7 @@ use crate::eval::{callback_call, set_ref_in_callback};
 use crate::ex_docmd::state::REPEAT_CMDLINE;
 use crate::extmark::{BCount, CURBUF_SPLICE_PENDING};
 use crate::extmark::{extmark_splice, extmark_splice_cols};
+use crate::fileio::EOL_DOS;
 use crate::fold::{delete_fold, fold_create, fold_open_cursor, op_fold_range};
 use crate::getchar::state::{BANGREDO, GOT_INT, KEY_TYPED, REPEAT_LUAREF};
 use crate::getchar::{
@@ -210,9 +211,6 @@ impl Op {
 pub(crate) fn op_virtual() -> bool {
     VIRTUAL_OP.get() != Some(false)
 }
-
-/// `get_fileformat`: lines end with CR LF, so a line break is two bytes.
-pub const EOL_DOS: ::core::ffi::c_int = 1;
 
 /// 'comments' flag: this leader ends a three-part comment.
 pub(crate) use crate::change::COM_END;

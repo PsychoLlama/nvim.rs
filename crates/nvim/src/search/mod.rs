@@ -72,7 +72,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::os::libc::{int64_t, size_t};
 use crate::os::time::{os_delay, os_time};
-use crate::path::{FileComparison, path_full_compare};
+use crate::path::{EQUAL_FILES, path_full_compare};
 use crate::pos::{clearpos, equalpos, lt, ltoreq};
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::{
@@ -125,7 +125,6 @@ pub const FORWARD_FILE: Direction = 3;
 pub const BACKWARD: Direction = -1;
 pub const FORWARD: Direction = 1;
 pub(crate) use crate::cmdhist::HIST_SEARCH;
-pub const EQUAL_FILES: FileComparison = 1;
 pub const CHECK_PATH: ::core::ffi::c_int = 3;
 pub const FIND_DEFINE: ::core::ffi::c_int = 2;
 pub const ACTION_EXPAND: ::core::ffi::c_int = 5;

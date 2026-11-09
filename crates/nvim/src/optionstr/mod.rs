@@ -55,13 +55,6 @@ pub const CPT_MENU: c_uint = 2;
 pub const CPT_KIND: c_uint = 1;
 pub const CPT_ABBR: c_uint = 0;
 pub const LSIZE: c_uint = 512;
-/// 'imsearch' at -1 follows 'iminsert' rather than answering for itself.
-pub const B_IMODE_USE_INSERT: c_int = -1;
-pub const B_IMODE_NONE: c_int = 0;
-pub const B_IMODE_LMAP: c_int = 1;
-/// The only value nvim accepts for 'highlight': Vim's highlight-group
-/// mapping is not implemented, so the option can only be left alone.
-pub const EOL_MAC: c_int = 2;
 /// The letters 'formatoptions' accepts.
 pub const FO_ALL: &CStr = c"tcro/q2vlb1mMBn,aw]jp";
 /// The letters 'cpoptions' accepts.

@@ -25,7 +25,7 @@ use crate::option::vars::{p_msm, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::fs::{dir_exists, path_exists};
 use crate::os::libc::time_t;
-use crate::path::{FileComparison, MAXPATHL};
+use crate::path::MAXPATHL;
 use crate::path::{path_tail, tail_index};
 use crate::spell::SpellBuf;
 use crate::spell::{DID_SET_SPELLTAB, SPELLTAB, spell_enc};
@@ -66,7 +66,6 @@ use wordtree::{
 };
 use write::write_vim_spell;
 pub const XDG_DATA_HOME: XDGVarType = 1;
-pub const EQUAL_FILES: FileComparison = 1;
 pub use crate::spell::MAXWLEN;
 pub const MAXREGIONS: ::core::ffi::c_uint = 8;
 pub const WFP_COMPFORBID: ::core::ffi::c_uint = 16;

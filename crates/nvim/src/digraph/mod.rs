@@ -44,9 +44,9 @@ use crate::message::state::MSG_COL;
 use crate::message::{msg_advance, msg_display, msg_ext_set_kind, msg_putchar};
 use crate::message_fmt::emsg_text;
 use crate::normal::add_to_showcmd;
-use crate::option::SavedCpo;
 use crate::option::defs::OptError;
 use crate::option::vars::{p_dg, p_enc};
+use crate::option::{B_IMODE_LMAP, SavedCpo};
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
@@ -55,11 +55,10 @@ use crate::runtime::{RuntimeOpts, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::tr;
 use crate::types::Key;
-use crate::types::{BoolVarValue, ExArg, Failed, KeymapEntry, List, OptInt, TypVal, VAR_LIST};
+use crate::types::{BoolVarValue, ExArg, Failed, KeymapEntry, List, TypVal, VAR_LIST};
 use crate::ui::state::COLUMNS;
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
 use crate::winlayer::graph::switch_to;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
@@ -629,7 +628,6 @@ fn digraph_setlist_common(arg: &TypVal) -> Result<(), DigraphError> {
 // 'keymap' option: language mappings loaded from a keymap file.
 
 const KEYMAP_LOADED: int16_t = 2;
-const B_IMODE_LMAP: OptInt = 1;
 /// Maximum length of `from` plus `to` in one keymap entry.
 const KMAP_LLEN: usize = 200;
 

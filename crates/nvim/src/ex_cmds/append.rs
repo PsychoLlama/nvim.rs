@@ -19,7 +19,7 @@
 
 use super::lines::set_op_range;
 use super::say;
-use super::{B_IMODE_LMAP, NL, print_line};
+use super::{NL, print_line};
 use crate::change::{appended_lines, appended_lines_mark, deleted_lines_mark};
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
@@ -32,13 +32,14 @@ use crate::memline::{ml_append_cstr, ml_delete};
 use crate::message::emsg;
 use crate::message::state::{LINES_LEFT, MSG_SCROLL, NEED_WAIT_RETURN};
 use crate::narrow::{len_as_int, number_as_int};
+use crate::option::B_IMODE_LMAP;
 use crate::option::vars::P_WINDOW;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
 use crate::state::mode::STATE;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
 use crate::types::{CmdIdx, ColNr};
-use crate::types::{ExArg, LineNr, OptInt};
+use crate::types::{ExArg, LineNr};
 use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
@@ -78,7 +79,7 @@ pub fn ex_append(excmd: &mut ExArg) {
 
     // Behave like in Insert mode.
     STATE.set(MODE_INSERT);
-    if Buf::current().b_p_iminsert == OptInt::from(B_IMODE_LMAP) {
+    if Buf::current().b_p_iminsert == B_IMODE_LMAP {
         STATE.set(STATE.get() | MODE_LANGMAP);
     }
 

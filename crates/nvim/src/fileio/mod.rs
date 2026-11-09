@@ -48,6 +48,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::ALLBUF_LOCK;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::mbyte::{canon_props, canonize, utf_byte2len};
+use crate::memline::SEA_QUIT;
 use crate::memline::{check_need_swap, ml_append_terminated, ml_delete, ml_open};
 use crate::memory::{XString, try_grow_zeroed};
 use crate::message::state::{
@@ -108,7 +109,7 @@ mod error;
 pub(crate) use self::error::IoFailed;
 pub use self::error::PatternError;
 pub(crate) use self::error::ReadError;
-mod convert;
+pub(crate) mod convert;
 pub use self::convert::*;
 mod lines;
 pub(crate) use self::lines::*;
@@ -130,9 +131,9 @@ pub const BAD_REPLACE: c_int = b'?' as c_int;
 pub const ENC_UCSBOM: &CStr = c"ucs-bom";
 pub const EOL_UNKNOWN: c_int = -1;
 pub const EOL_UNIX: c_int = 0;
+/// `get_fileformat`: lines end with CR LF, so a line break is two bytes.
 pub const EOL_DOS: c_int = 1;
 pub const EOL_MAC: c_int = 2;
-const SEA_QUIT: c_int = 2;
 const EOVERFLOW: c_int = ::libc::EOVERFLOW;
 /// The file-type bits of a mode.
 const S_IFMT: c_int = 0o170000;
@@ -189,6 +190,9 @@ static E_AUCHANGEDBUF: &CStr = c"E812: Autocommands changed buffer or buffer nam
 const NONASCII_MASK: u64 = u64::MAX / 0xff * 0x80;
 pub(crate) const BAD_KEEP: c_int = -1;
 pub(crate) const BAD_DROP: c_int = -2;
+pub(crate) const READ_NEW: ::core::ffi::c_uint = 1;
+pub(crate) const READ_KEEP_UNDO: ::core::ffi::c_uint = 32;
+pub(crate) const READ_NOWINENTER: ::core::ffi::c_uint = 128;
 impl Buf {
     /// Report which file is being read or written.
     ///

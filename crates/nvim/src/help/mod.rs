@@ -36,44 +36,33 @@ mod tags;
 use crate::ascii::{ascii_isalpha, ascii_iswhite};
 use crate::buffer::{buf_is_help, find_buf, set_buflisted, wipe_buffer};
 use crate::charset::buf_init_chartab;
-use crate::ex_cmds::EcmdFlags;
-use crate::ex_cmds::do_ecmd;
-use crate::ex_cmds::newlnum;
+use crate::ex_cmds::{EcmdFlags, do_ecmd, newlnum};
 use crate::ex_docmd::state::CMDMOD;
 use crate::ex_docmd::{cmdmod_has, do_cmdline_cmd};
 use crate::getchar::state::KEY_TYPED;
 use crate::highlight_group::HLF_E;
-use crate::lua::executor::LuaRetMode;
-use crate::lua::executor::nlua_exec_cstr;
+use crate::lua::executor::{LuaRetMode, nlua_exec_cstr};
 use crate::memory::XString;
-use crate::message::E_NOIDENT;
-use crate::message::IOSIZE;
+use crate::message::{E_NOIDENT, IOSIZE};
 use crate::message::{emsg, emsg_multiline};
 use crate::message_fmt::{msg_bytes, msg_cstr};
-use crate::narrow::len_as_int;
-use crate::narrow::number_as_int;
+use crate::narrow::{len_as_int, number_as_int};
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_direct;
 use crate::option::vars::{p_hf, p_hh, p_hlg, p_sb};
 use crate::options::{OPT_BUFTYPE, OPT_FOLDMETHOD, OPT_ISKEYWORD};
-use crate::optionstr::OptStringRef;
-use crate::optionstr::check_buf_options;
+use crate::optionstr::{OptStringRef, check_buf_options};
 use crate::os::cshim::gettext;
-use crate::path::FileComparison;
 use crate::pos::MAXCOL;
 use crate::semsg;
 use crate::smsg;
 use crate::state::mode::RESTART_EDIT;
 use crate::tag::{HelpTagMatch, TagCmd, do_tag, find_help_tag_matches};
-use crate::types::ApiString;
-use crate::types::Handle;
-use crate::types::Key;
+use crate::types::{ApiString, Handle, Key};
 use crate::types::{Array, ArrayBuf, CmdModFlags, ExArg, Failed, Object, OptInt};
 use crate::ui::state::COLUMNS;
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
-use crate::winlayer::windows;
+use crate::winlayer::{Buf, Win, windows};
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_int};
 use std::ffi::OsStr;
@@ -84,7 +73,6 @@ pub(crate) use tags::ex_helptags;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
-    use super::FileComparison;
     use core::ffi::c_uint;
 
     /// `find_tags` flags.
@@ -96,9 +84,6 @@ mod flag {
     pub(super) const TAG_NO_TAGFUNC: c_uint = 256;
     /// The longest match list `:help` will show.
     pub(super) const TAG_MANY: c_uint = 300;
-
-    /// `path_full_compare`'s "same file" answer.
-    pub(super) const EQUAL_FILES: FileComparison = 1;
 }
 
 use flag::{TAG_HELP, TAG_KEEP_LANG, TAG_MANY, TAG_NAMES, TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE};

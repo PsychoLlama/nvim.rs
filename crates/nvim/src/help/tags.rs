@@ -34,15 +34,13 @@ use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::cmdexpand::{WildMode, WildOpts, expand_one};
 use crate::getchar::state::GOT_INT;
 use crate::memory::XString;
-use crate::message::E_FNAMETOOLONG;
-use crate::message::IOSIZE;
-use crate::message::emsg;
+use crate::message::{E_FNAMETOOLONG, IOSIZE, emsg};
 use crate::message_fmt::msg_bytes;
 use crate::option::vars::P_RTP;
 use crate::os::cshim::gettext;
 use crate::os::fs::dir_exists;
 use crate::os::input::line_breakcheck;
-use crate::path::MAXPATHL;
+use crate::path::{EQUAL_FILES, MAXPATHL};
 use crate::path::{ExpandFlags, gen_expand_wildcards, path_full_compare};
 use crate::runtime::{RuntimeOpts, do_in_path_visit};
 use crate::semsg;
@@ -52,8 +50,6 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{BufWriter, Read, Write};
 use std::os::unix::ffi::OsStrExt;
-
-use super::flag::EQUAL_FILES;
 
 /// The room upstream's `NameBuff` had, terminator included.
 const NAME_ROOM: usize = MAXPATHL as usize;

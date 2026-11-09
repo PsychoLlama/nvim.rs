@@ -256,13 +256,13 @@ pub(crate) fn command_line_enter(
 
         if s.firstc == b'/' || s.firstc == b'?' || s.firstc == b'@' {
             // Use ":lmap" mappings for the search pattern and input().
-            let which = if Buf::current().b_p_imsearch == OptInt::from(B_IMODE_USE_INSERT) {
+            let which = if Buf::current().b_p_imsearch == B_IMODE_USE_INSERT {
                 ImOption::Insert
             } else {
                 ImOption::Search
             };
             s.b_im = Some((which, Buf::current().id()));
-            if im_value(Buf::current(), which) == OptInt::from(B_IMODE_LMAP) {
+            if im_value(Buf::current(), which) == B_IMODE_LMAP {
                 STATE.set(STATE.get() | MODE_LANGMAP);
             }
         }

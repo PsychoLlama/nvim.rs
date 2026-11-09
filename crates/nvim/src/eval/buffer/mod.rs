@@ -54,13 +54,12 @@ use crate::eval::typval::{
 use crate::eval::{callback_from_typval, typval_tostring};
 use crate::ex_cmds::check_secure;
 use crate::extmark::extmark_splice_cols;
+use crate::memline::{ML_DEL_MESSAGE, SEA_NONE, SEA_READONLY, ml_delete_flags};
 use crate::narrow::number_as_int;
 use crate::types::{LineNr, TypVal};
 use core::ffi::{CStr, c_int};
 
 use crate::buffer::state::SWAP_EXISTS_ACTION;
-use crate::memline::ML_DEL_MESSAGE;
-use crate::memline::ml_delete_flags;
 use crate::message::state::DID_EMSG;
 use crate::r#move::update_topline;
 use crate::normal::{set_visual_active, visual_active};
@@ -160,6 +159,3 @@ fn find_win_for_curbuf() {
         win.make_current();
     }
 }
-
-pub const SEA_NONE: c_int = 0;
-pub const SEA_READONLY: c_int = 4;

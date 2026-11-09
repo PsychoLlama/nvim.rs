@@ -25,8 +25,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ascii::TAB;
-use crate::ascii::ascii_iswhite;
+use crate::ascii::{TAB, ascii_iswhite};
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::state::{AUTOCMD_BUSY, LAST_CURSORMOVED, LAST_CURSORMOVED_WIN};
 use crate::buffer::{
@@ -46,8 +45,7 @@ use crate::drawscreen::{
 };
 use crate::edit::{replace_push, replace_push_nul, truncate_spaces};
 use crate::eval::vars::set_vim_var_string;
-use crate::extmark::BCount;
-use crate::extmark::CURBUF_SPLICE_PENDING;
+use crate::extmark::{BCount, CURBUF_SPLICE_PENDING};
 use crate::extmark::{extmark_adjust, extmark_splice, extmark_splice_cols};
 use crate::fold::fold_update;
 use crate::highlight_group::HLF_W;
@@ -61,6 +59,7 @@ use crate::mark::defs::FileMarkView;
 use crate::mark::{mark_adjust, mark_col_adjust, mark_view_make};
 use crate::mbyte::GraphemeState;
 use crate::mbyte::{mb_adjust_cursor, utf_iscomposing_first};
+use crate::memline::ML_DEL_MESSAGE;
 use crate::memline::{
     ml_add_deleted_len, ml_delete_flags, ml_line_alloced, ml_open_file, ml_replace_buf_text,
     ml_replace_owned, ml_setflags,
@@ -94,8 +93,7 @@ use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG, virtual_active};
 use crate::strings::concat;
 use crate::textformat::{comp_textwidth, has_format_option};
 use crate::types::{CmdModFlags, ColNr, LineNr, Pos, Vv};
-use crate::ui::state::ROWS;
-use crate::ui::state::UI_MESSAGES;
+use crate::ui::state::{ROWS, UI_MESSAGES};
 use crate::ui::{ui_active, ui_has};
 use crate::undo::{curbuf_is_changed, u_clearline, u_save_cursor, u_savedel};
 
@@ -134,8 +132,6 @@ pub const OPENLINE_DELSPACES: ::core::ffi::c_int = 1;
 pub const KEY_OPEN_BACK: ::core::ffi::c_int = 258;
 pub const KEY_OPEN_FORW: ::core::ffi::c_int = 257;
 
-/// `ml_delete_flags()`: report "N fewer lines".
-pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
 pub const COM_NEST: u8 = b'n';
 pub const COM_BLANK: u8 = b'b';
 pub const COM_START: u8 = b's';

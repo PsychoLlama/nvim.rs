@@ -36,6 +36,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use crate::ex_docmd::cmdmod_has;
+use crate::option::set_option_direct;
 
 use crate::ascii::{CAR, ESC, NL};
 use crate::autocmd::defs::AutoEvent;
@@ -57,7 +58,6 @@ use crate::message::{
     msg_start, msg_starthere, msg_str, msgmore,
 };
 use crate::option::defs::{OptVal, OptionSetFlags};
-use crate::option::set_option_direct;
 use crate::options::OPT_FOLDCOLUMN;
 use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
@@ -173,10 +173,6 @@ pub const GETFILE_SAME_FILE: GetFileRet = 0;
 pub const GETFILE_NOT_WRITTEN: GetFileRet = 2;
 pub const GETFILE_ERROR: GetFileRet = 1;
 pub(crate) use crate::cmdhist::HIST_SEARCH;
-pub const ML_DEL_MESSAGE: ::core::ffi::c_uint = 1;
-pub const READ_FILTER: ::core::ffi::c_uint = 2;
-pub const READ_NOWINENTER: ::core::ffi::c_uint = 128;
-pub const READ_KEEP_UNDO: ::core::ffi::c_uint = 32;
 #[derive(Copy, Clone, Debug)]
 pub struct SubResult {
     pub start: LPos,
@@ -221,9 +217,7 @@ pub struct LineData {
 pub const VGR_FUZZY: ::core::ffi::c_int = 4;
 pub const VGR_NOJUMP: ::core::ffi::c_int = 2;
 pub const VGR_GLOBAL: ::core::ffi::c_int = 1;
-pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NODE_OTHER: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 /// Fire `event` for `buffer`: no file name, no pattern, no forcing -- the shape
 /// every buffer-lifecycle autocommand in this family uses.
 ///
@@ -444,8 +438,6 @@ pub(crate) mod say {
         msgmore(n)
     }
 }
-pub const SEA_DIALOG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const SEA_QUIT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const DBL_MAX: ::core::ffi::c_double = __DBL_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

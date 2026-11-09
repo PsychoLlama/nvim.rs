@@ -22,6 +22,7 @@ use crate::buffer::BLN_LISTED;
 use crate::cstr;
 use crate::ex_cmds::{EcmdFlags, do_ecmd, newlnum};
 use crate::guard::Suppress;
+use crate::memline::{SEA_DIALOG, SEA_NONE, SEA_QUIT, ml_recover};
 use crate::memory::XString;
 use crate::runtime::SID_CARG;
 use crate::semsg;
@@ -30,9 +31,7 @@ use std::ffi::CString;
 
 use crate::arglist::state::ARG_HAD_LAST;
 use crate::arglist::{alist_count, arg_name, with_arg_names};
-use crate::buffer::state::{
-    SEA_DIALOG, SEA_NONE, SEA_QUIT, SWAP_EXISTS_ACTION, SWAP_EXISTS_DID_QUIT,
-};
+use crate::buffer::state::{SWAP_EXISTS_ACTION, SWAP_EXISTS_DID_QUIT};
 use crate::buffer::{
     buf_is_empty, buflist_add_name, do_modelines, handle_swap_exists, open_buffer, set_buflisted,
     set_curbuf,
@@ -43,7 +42,6 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::fileio::{ReadFlags, readfile_named};
 use crate::getchar::state::GOT_INT;
 use crate::getchar::vgetc;
-use crate::memline::ml_recover;
 use crate::message::state::{DID_EMSG, MSG_DIDANY, MSG_SCROLL, NO_WAIT_RETURN};
 use crate::message::{IOSIZE, msg_putchar};
 use crate::option::defs::{OptVal, OptionSetFlags};

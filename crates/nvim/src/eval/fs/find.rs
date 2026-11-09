@@ -32,7 +32,7 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{FINDFILE_DIR, nr_arg, str_arg, str_arg_chk};
+use super::{nr_arg, str_arg, str_arg_chk};
 use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one, globpath};
 use crate::eval::eval_expr_typval;
@@ -40,6 +40,7 @@ use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_number_chk, tv_list_alloc_ret};
 use crate::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
+use crate::file_search::FINDFILE_DIR;
 use crate::file_search::{FileNameOpts, PathWalk};
 use crate::fileio::readdir_core;
 use crate::memory::{ThinCString, XString};
@@ -113,7 +114,7 @@ fn ret_list(result: &mut TypVal) {
 
 /// The suffixes `findfile()` tries, and none for `finddir()`.
 fn suffixes(find_what: c_int) -> XString {
-    if find_what == FINDFILE_DIR.cast_signed() {
+    if find_what == FINDFILE_DIR {
         return XString::new();
     }
     Buf::current().b_p_sua.get()
@@ -194,12 +195,16 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
 
 /// `finddir({name} [, {path} [, {count}]])`.
 pub fn f_finddir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    findfilendir(args, result, FINDFILE_DIR.cast_signed());
+    findfilendir(args, result, FINDFILE_DIR);
 }
 
 /// `findfile({name} [, {path} [, {count}]])`.
 pub fn f_findfile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    findfilendir(args, result, super::FINDFILE_FILE.cast_signed());
+    findfilendir(
+        args,
+        result,
+        crate::file_search::FINDFILE_FILE.cast_signed(),
+    );
 }
 
 /// `glob({pattern} [, {nosuf} [, {list} [, {alllinks}]]])`.

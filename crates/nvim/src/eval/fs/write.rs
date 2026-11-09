@@ -26,12 +26,12 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{FILE_APPEND, FILE_CREATE, FILE_MK_DIR, FILE_TRUNCATE, from, str_arg_chk};
+use super::{from, str_arg_chk};
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, blob_bytes, list_items, tv_check_str_or_nr};
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::ex_cmds::check_secure;
-use crate::fileio::buffered::WriteFile;
+use crate::fileio::buffered::{FILE_APPEND, FILE_CREATE, FILE_MK_DIR, FILE_TRUNCATE, WriteFile};
 use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;

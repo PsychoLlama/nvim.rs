@@ -74,18 +74,15 @@ use crate::message::{
     VIM_ALL, VIM_DISCARDALL, VIM_NO, VIM_YES, emsg, msg, msg_source, vim_dialog_yesnoallcancel,
     vim_dialog_yesnocancel, wait_return,
 };
-use crate::message_fmt::msg_bytes;
-use crate::message_fmt::msg_cstr_opt;
+use crate::message_fmt::{msg_bytes, msg_cstr_opt};
 use crate::option::vars::{p_aw, p_awa, p_confirm, p_write};
 use crate::os::cshim::gettext;
 use crate::os::libc::ptrdiff_t;
-use crate::path::MAXPATHL;
-use crate::path::vim_full_name;
+use crate::path::{MAXPATHL, vim_full_name};
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg;
 use crate::startup::EXITING;
-use crate::types::CmdIdx;
-use crate::types::Handle;
+use crate::types::{CmdIdx, Handle};
 use crate::types::{CmdModFlags, ExArg, Failed, LineNr, VarNumber, Vv};
 use crate::undo::buf_is_changed;
 use crate::window::goto_tabpage_win;
@@ -93,15 +90,14 @@ use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win, buffers, first_buffer, tabs, windows, windows_in_tab};
 use core::ffi::{CStr, c_int};
 
+use crate::buffer::{DOBUF_GOTO, DOBUF_UNLOAD};
 pub(crate) use flag::{CCGD_ALLBUF, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN};
-use flag::{DOBUF_GOTO, DOBUF_UNLOAD};
 
 pub(crate) use listdo::ex_listdo;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
     use super::c_int;
-    use crate::types::{DoBufAction, DoBufStart};
 
     /// `check_changed` flags.
     pub(crate) const CCGD_AW: c_int = 1;
@@ -109,11 +105,6 @@ mod flag {
     pub(crate) const CCGD_FORCEIT: c_int = 4;
     pub(crate) const CCGD_ALLBUF: c_int = 8;
     pub(crate) const CCGD_EXCMD: c_int = 16;
-
-    /// `do_buffer` actions and starting points.
-    pub(super) const DOBUF_GOTO: DoBufAction = 0;
-    pub(super) const DOBUF_UNLOAD: DoBufAction = 2;
-    pub(super) const DOBUF_FIRST: DoBufStart = 1;
 }
 
 // -- List walks -------------------------------------------------------------

@@ -108,6 +108,7 @@ pub const EQUAL_FILE_NAMES: FileComparison = 7;
 pub const ONE_FILE_MISSING: FileComparison = 6;
 pub const BOTH_FILES_MISSING: FileComparison = 4;
 pub const DIFFERENT_FILES: FileComparison = 2;
+/// `path_full_compare` result bit meaning "the same file".
 pub const EQUAL_FILES: FileComparison = 1;
 pub const URL_BACKSLASH: c_int = 2;
 pub const URL_SLASH: c_int = 1;

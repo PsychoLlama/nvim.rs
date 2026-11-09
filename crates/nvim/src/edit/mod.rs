@@ -139,6 +139,7 @@ use crate::ops::do_join;
 use crate::option::vars::{
     FDO_FLAGS, P_RI, p_ari, p_ch, p_deco, p_lrm, p_paste, p_ri, p_smd, p_sol, p_sta, p_ww,
 };
+use crate::option::{B_IMODE_LMAP, B_IMODE_NONE};
 use crate::option::{can_bs, get_scrolloff_value, get_ve_flags, set_iminsert_global};
 use crate::options::{
     OPT_BO_FLAG_BACKSPACE, OPT_BO_FLAG_COPY, OPT_BO_FLAG_CTRLG, OPT_BO_FLAG_CURSOR,
@@ -243,8 +244,6 @@ pub(crate) struct InsertState {
     pub replace_state: ::core::ffi::c_int,
     pub nomove: bool,
 }
-pub(crate) const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub(crate) const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub(crate) const NL_STR: &::core::ffi::CStr = c"\n";
 pub(crate) const ESC_STR: &::core::ffi::CStr = c"\x1B";
 pub(crate) const CTRL_V_STR: &::core::ffi::CStr = c"\x16";

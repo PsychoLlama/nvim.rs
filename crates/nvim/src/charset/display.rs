@@ -18,6 +18,7 @@
 )]
 
 use crate::cstr;
+use crate::fileio::EOL_MAC;
 use core::ffi::CStr;
 use core::ffi::c_int;
 
@@ -33,8 +34,8 @@ use crate::os::libc::uint8_t;
 use crate::winlayer::Buf;
 
 use super::{
-    CHARTAB_INITIALIZED, CT_CELL_MASK, EOL_MAC, NL, OPT_DY_FLAG_UHEX, TAB, chartab,
-    transchar as render, vim_isprintc,
+    CHARTAB_INITIALIZED, CT_CELL_MASK, NL, OPT_DY_FLAG_UHEX, TAB, chartab, transchar as render,
+    vim_isprintc,
 };
 use crate::pos::MAXCOL;
 

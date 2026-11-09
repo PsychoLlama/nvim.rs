@@ -18,8 +18,5 @@
 use crate::global_cell::GlobalCell;
 use core::ffi::c_int;
 
-pub(crate) const SEA_NONE: c_int = 0 as c_int;
-pub(crate) const SEA_DIALOG: c_int = 1 as c_int;
-pub(crate) const SEA_QUIT: c_int = 2 as c_int;
 pub(crate) static SWAP_EXISTS_ACTION: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) static SWAP_EXISTS_DID_QUIT: GlobalCell<bool> = GlobalCell::new(false);

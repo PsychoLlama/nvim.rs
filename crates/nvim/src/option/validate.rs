@@ -22,6 +22,7 @@
 )]
 
 use crate::message_fmt::msg_cstr;
+use crate::option::B_IMODE_LAST;
 use crate::tr;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
@@ -49,8 +50,6 @@ const E_QUICKFIX_TOO_MANY: &CStr =
 
 /// The most matches 'maxsearchcount' may ask the search-count display for.
 const MAX_SEARCH_COUNT: c_int = 9999;
-/// The largest 'iminsert'/'imsearch' value: the language-mapping mode.
-const B_IMODE_LAST: c_int = 1;
 
 /// "E487: Argument must be positive", for a value below its floor.
 fn too_small() -> OptError {
@@ -191,9 +190,9 @@ pub(crate) fn validate_num_option(opt_idx: OptIndex, newval: &mut OptInt) -> Res
             OptInt::from(MAX_NUMBERWIDTH),
             invalid(),
         ),
-        OPT_IMINSERT => bounded(value, 0, invalid(), OptInt::from(B_IMODE_LAST), invalid()),
+        OPT_IMINSERT => bounded(value, 0, invalid(), B_IMODE_LAST, invalid()),
         // 'imsearch' has one value more than 'iminsert': -1 is "follow it".
-        OPT_IMSEARCH => bounded(value, -1, invalid(), OptInt::from(B_IMODE_LAST), invalid()),
+        OPT_IMSEARCH => bounded(value, -1, invalid(), B_IMODE_LAST, invalid()),
         // 'channel' is read-only; every value is refused.
         OPT_CHANNEL => Err(invalid()),
         OPT_SCROLLBACK => bounded(value, -1, invalid(), OptInt::from(SB_MAX), invalid()),

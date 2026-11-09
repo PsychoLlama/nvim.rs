@@ -53,12 +53,16 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 pub(crate) mod state;
+use crate::undo::{NO_LOCAL_UNDOLEVEL, buf_is_changed};
+
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::fire_autocmds;
 use crate::ex_cmds::{EcmdFlags, do_ecmd};
+use crate::memline::{SEA_DIALOG, SEA_NONE, SEA_QUIT, SEA_RECOVER, ml_delete};
 use crate::runtime::SID_MODELINE;
 use crate::runtime::defs::ETYPE_MODELINE;
 use crate::types::Handle;
+use crate::types::vim::CD_CAUSE_AUTO;
 use crate::winlayer::BufId;
 use core::ffi::{CStr, c_int};
 use core::ptr;
@@ -73,7 +77,6 @@ use crate::fold::{clear_folding, fold_update_all};
 use crate::global_cell::GlobalCell;
 use crate::mark::setpcmark;
 use crate::marktree::MetaIndex;
-use crate::memline::ml_delete;
 use crate::memory::XString;
 use crate::message::emsg;
 use crate::normal::end_visual_mode;
@@ -82,10 +85,9 @@ use crate::os::cshim::gettext;
 use crate::os::libc::uint32_t;
 use crate::syntax::reset_synblock;
 use crate::types::{
-    BfaFlags, BlnFlags, Buffer, BufferRef, CdCause, DoBufAction, DoBufStart, ExArg, Failed,
-    GetFileFlags, LineNr, VarNumber,
+    BfaFlags, BlnFlags, Buffer, BufferRef, DoBufAction, DoBufStart, ExArg, Failed, GetFileFlags,
+    LineNr, VarNumber,
 };
-use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
 use crate::winlayer::graph::leave_curbuf;
 use crate::winlayer::{Buf, Win, buffers_back, first_buffer, last_buffer};
@@ -117,7 +119,6 @@ pub use self::pos::*;
 pub use self::switch::*;
 pub use self::r#type::*;
 pub const IS_DIGIT: ::core::ffi::c_uint = 2048;
-pub const CD_CAUSE_AUTO: CdCause = 2;
 pub const GETF_SWITCH: GetFileFlags = 4;
 pub const GETF_ALT: GetFileFlags = 2;
 pub const GETF_SETMARK: GetFileFlags = 1;
@@ -142,12 +143,6 @@ pub const BFA_IGNORE_ABORT: BfaFlags = 8;
 pub const BFA_KEEP_UNDO: BfaFlags = 4;
 pub const BFA_WIPE: BfaFlags = 2;
 pub const BFA_DEL: BfaFlags = 1;
-pub const READ_NOWINENTER: ::core::ffi::c_uint = 128;
-pub const READ_BUFFER: ::core::ffi::c_uint = 8;
-pub const READ_STDIN: ::core::ffi::c_uint = 4;
-pub const READ_NEW: ::core::ffi::c_uint = 1;
-pub const READ_FIFO: ::core::ffi::c_uint = 64;
-pub const READ_NOFILE: ::core::ffi::c_uint = 256;
 pub const BCO_NOHELP: ::core::ffi::c_int = 4;
 pub const BCO_ENTER: ::core::ffi::c_int = 1;
 pub const BFF_INIT_CHANGEDTICK: ::core::ffi::c_int = 2;
@@ -161,7 +156,6 @@ pub struct BufMatch {
 }
 pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
 
-pub const READ_DUMMY: ::core::ffi::c_uint = 16;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 crate::flag_set! {
     /// What has and has not happened to a buffer -- upstream's `BF_*`, the
@@ -307,12 +301,8 @@ pub fn buf_valid(buffer: BufId) -> bool {
 /// null -- "the UI has never been told one".
 static LASTTITLE: GlobalCell<Option<XString>> = GlobalCell::new(None);
 static LASTICON: GlobalCell<Option<XString>> = GlobalCell::new(None);
-pub const NO_LOCAL_UNDOLEVEL: ::core::ffi::c_int = -123456 as ::core::ffi::c_int;
-pub const SEA_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const SEA_DIALOG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const SEA_QUIT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const SEA_RECOVER: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
+pub(crate) const DOBUF_LAST: DoBufStart = 2;
 
 /// The buffer's running total of one kind of extmark metadata, kept at the
 /// root of its marktree. `buffer.h` had this as a `static inline`.
