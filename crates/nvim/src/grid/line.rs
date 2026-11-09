@@ -45,7 +45,7 @@ pub(crate) fn with_linebuf<R>(f: impl FnOnce(&mut LineBuf) -> R) -> R {
 
 /// The line batch in progress. Only one exists at a time; `grid` being
 /// `None` means there is none.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct LineBatch {
     grid: Option<GridRef>,
     row: c_int,
@@ -64,6 +64,12 @@ struct LineBatch {
 }
 
 impl LineBatch {
+    /// Grow the written span to cover `from..to`.
+    fn widen(&mut self, from: c_int, to: c_int) {
+        self.first = self.first.min(from);
+        self.last = self.last.max(to);
+    }
+
     const fn new() -> Self {
         LineBatch {
             grid: None,
@@ -136,7 +142,7 @@ pub fn grid_line_start(view: GridView, mut row: c_int) {
 /// [`grid_line_start`] against a `ScreenGrid` directly, for the callers that
 /// have no `GridView` (float borders, the popup menu, the statusline).
 pub fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
-    debug_assert!(BATCH.get().grid.is_none(), "grid_line_grid == NULL");
+    debug_assert!(BATCH.with(|b| b.grid.is_none()), "grid_line_grid == NULL");
     let poison = full_screen.get() && rdb_flags.get() & kOptRdbFlagInvalid != 0;
     let width = with_linebuf(|buf| {
         if poison {
@@ -170,32 +176,32 @@ pub fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
 /// put there -- with its attribute. A space and no attribute when `col` is
 /// off the end of the line. A batch must be in progress.
 pub fn grid_line_getchar(mut col: c_int) -> (ScreenChar, Option<c_int>) {
-    let b = BATCH.get();
-    if col >= b.maxcol {
+    let (maxcol, coloff, grid, row) = BATCH.with(|b| (b.maxcol, b.coloff, b.grid, b.row));
+    if col >= maxcol {
         // NUL is a very special value (right half of a double-width
         // cell); a space is True Neutral.
         return (schar_from_ascii(b' '), None);
     }
-    col += b.coloff;
-    let grid = b.grid.expect("a batch is in progress");
-    let off = grid.cell_offset(b.row, col);
+    col += coloff;
+    let grid = grid.expect("a batch is in progress");
+    let off = grid.cell_offset(row, col);
     (grid.char_at(off), Some(grid.attr_at(off)))
 }
 
 /// Put one glyph at `col`. A no-op when no batch is open.
 pub fn grid_line_put_schar(col: c_int, schar: ScreenChar, attr: c_int) {
-    let mut b = BATCH.get();
-    debug_assert!(b.grid.is_some(), "grid_line_grid");
-    if col >= b.maxcol {
+    let maxcol = BATCH.with(|b| {
+        debug_assert!(b.grid.is_some(), "grid_line_grid");
+        b.maxcol
+    });
+    if col >= maxcol {
         return;
     }
 
     with_linebuf(|buf| buf.put(as_index(col), schar, attr, ColNr::NONE));
 
-    b.first = b.first.min(col);
     // TODO(bfredl): Y U NO DOUBLEWIDTH?
-    b.last = b.last.max(col + 1);
-    BATCH.set(b);
+    BATCH.with_mut(|b| b.widen(col, col + 1));
 }
 
 /// Put `text` at `col`, answering the number of cells used. Only ever writes
@@ -204,10 +210,11 @@ pub fn grid_line_put_schar(col: c_int, schar: ScreenChar, attr: c_int) {
 /// Draws into the batch in progress; with none there is no room
 /// (`maxcol` is zero) and nothing is drawn.
 pub fn grid_line_puts(col: c_int, text: &[u8], attr: c_int) -> c_int {
-    let mut b = BATCH.get();
-    debug_assert!(b.grid.is_some(), "grid_line_grid");
-
-    let max_col = b.maxcol;
+    let max_col = BATCH.with(|b| {
+        debug_assert!(b.grid.is_some(), "grid_line_grid");
+        b.maxcol
+    });
+    let (written_first, written_last) = BATCH.with(|b| (b.first, b.last));
     let start_col = col;
     let col = with_linebuf(|buf| {
         let (chars, attrs, vcols) = buf.parts_mut();
@@ -235,7 +242,7 @@ pub fn grid_line_puts(col: c_int, text: &[u8], attr: c_int) -> c_int {
 
             // At the start of the text, overwriting the right half of a
             // two-cell character already in this batch truncates it to '>'.
-            if at == 0 && col > b.first && col < b.last && chars[as_index(col)] == 0 {
+            if at == 0 && col > written_first && col < written_last && chars[as_index(col)] == 0 {
                 chars[as_index(col - 1)] = schar_from_ascii(b'>');
             }
 
@@ -255,9 +262,7 @@ pub fn grid_line_puts(col: c_int, text: &[u8], attr: c_int) -> c_int {
     });
 
     if col > start_col {
-        b.first = b.first.min(start_col);
-        b.last = b.last.max(col);
-        BATCH.set(b);
+        BATCH.with_mut(|b| b.widen(start_col, col));
     }
 
     col - start_col
@@ -283,8 +288,7 @@ fn cluster_glyph(rest: &[u8]) -> (ScreenChar, c_int, usize) {
 
 /// Fill `start_col..end_col` with one glyph, answering where it stopped.
 pub fn grid_line_fill(start_col: c_int, mut end_col: c_int, sc: ScreenChar, attr: c_int) -> c_int {
-    let mut b = BATCH.get();
-    end_col = end_col.min(b.maxcol);
+    end_col = end_col.min(BATCH.with(|b| b.maxcol));
     if start_col >= end_col {
         return end_col;
     }
@@ -297,9 +301,7 @@ pub fn grid_line_fill(start_col: c_int, mut end_col: c_int, sc: ScreenChar, attr
         vcols[span].fill(ColNr::NONE);
     });
 
-    b.first = b.first.min(start_col);
-    b.last = b.last.max(end_col);
-    BATCH.set(b);
+    BATCH.with_mut(|b| b.widen(start_col, end_col));
     end_col
 }
 
@@ -308,39 +310,40 @@ pub fn grid_line_fill(start_col: c_int, mut end_col: c_int, sc: ScreenChar, attr
 /// `bg_attr` applies to both the buffered line and the cleared columns;
 /// `clear_attr` only to the cleared columns.
 pub fn grid_line_clear_end(start_col: c_int, end_col: c_int, bg_attr: c_int, clear_attr: c_int) {
-    let mut b = BATCH.get();
-    if b.first > start_col {
-        b.first = start_col;
-        b.last = start_col;
-    }
-    b.clear_to = end_col;
-    b.bg_attr = bg_attr;
-    b.clear_attr = clear_attr;
-    BATCH.set(b);
+    BATCH.with_mut(|b| {
+        if b.first > start_col {
+            b.first = start_col;
+            b.last = start_col;
+        }
+        b.clear_to = end_col;
+        b.bg_attr = bg_attr;
+        b.clear_attr = clear_attr;
+    });
 }
 
 /// Move the cursor to a column of the line being rendered.
 pub fn grid_line_cursor_goto(col: c_int) {
-    let b = BATCH.get();
-    let grid = b.grid.expect("a batch is in progress");
-    ui_grid_cursor_goto(grid.handle, b.row, col);
+    let (grid, row) = BATCH.with(|b| (b.grid, b.row));
+    let grid = grid.expect("a batch is in progress");
+    ui_grid_cursor_goto(grid.handle, row, col);
 }
 
 /// Reverse the batch for a 'rightleft' window.
 pub fn grid_line_mirror(width: c_int) {
-    let mut b = BATCH.get();
-    b.clear_to = b.last.max(b.clear_to);
-    if b.first >= b.clear_to {
-        BATCH.set(b);
+    let (mut first, mut last, mut clear_to) = BATCH.with_mut(|b| {
+        b.clear_to = b.last.max(b.clear_to);
+        (b.first, b.last, b.clear_to)
+    });
+    if first >= clear_to {
         return;
     }
-    let (mut first, mut last, mut clear_to) = (b.first, b.last, b.clear_to);
     linebuf_mirror(&mut first, &mut last, &mut clear_to, width);
-    b.first = first;
-    b.last = last;
-    b.clear_to = clear_to;
-    b.flags |= SLF_RIGHTLEFT;
-    BATCH.set(b);
+    BATCH.with_mut(|b| {
+        b.first = first;
+        b.last = last;
+        b.clear_to = clear_to;
+        b.flags |= SLF_RIGHTLEFT;
+    });
 }
 
 /// Reverse `*firstp..*lastp` of the line buffer about a line of `width`
@@ -356,11 +359,12 @@ pub fn linebuf_mirror(firstp: &mut c_int, lastp: &mut c_int, clearp: &mut c_int,
 
 /// End the batch and send the line to the UI.
 pub fn grid_line_flush() {
-    let mut b = BATCH.get();
-    // Ended here, whether or not there turns out to be anything to send.
-    let grid = b.grid.take();
-    b.clear_to = b.last.max(b.clear_to);
-    BATCH.set(b);
+    // Ended here, whether or not there turns out to be anything to send:
+    // the batch keeps its bounds, the snapshot is what gets sent.
+    let (grid, b) = BATCH.with_mut(|b| {
+        b.clear_to = b.last.max(b.clear_to);
+        (b.grid.take(), b.clone())
+    });
     debug_assert!(
         b.clear_to <= b.maxcol,
         "grid_line_clear_to <= grid_line_maxcol"
@@ -391,13 +395,12 @@ pub fn grid_line_flush() {
 ///
 /// A stopgap until message.c has been refactored to behave.
 pub fn grid_line_flush_if_valid_row() {
-    let mut b = BATCH.get();
-    if b.row < 0 || b.row >= b.grid.expect("a batch is in progress").rows {
+    let (row, grid) = BATCH.with(|b| (b.row, b.grid));
+    if row < 0 || row >= grid.expect("a batch is in progress").rows {
         if rdb_flags.get() & kOptRdbFlagInvalid != 0 {
             std::process::abort();
         }
-        b.grid = None;
-        BATCH.set(b);
+        BATCH.with_mut(|b| b.grid = None);
         return;
     }
     grid_line_flush();
@@ -415,12 +418,11 @@ pub fn grid_clear(
     let mut row = start_row;
     while row < end_row {
         grid_line_start(view, row);
-        let mut b = BATCH.get();
-        end_col = end_col.min(b.maxcol);
-        if b.row >= b.grid.expect("a batch is in progress").rows || start_col >= end_col {
+        let (maxcol, batch_row, grid) = BATCH.with(|b| (b.maxcol, b.row, b.grid));
+        end_col = end_col.min(maxcol);
+        if batch_row >= grid.expect("a batch is in progress").rows || start_col >= end_col {
             // TODO(bfredl): make callers behave instead.
-            b.grid = None;
-            BATCH.set(b);
+            BATCH.with_mut(|b| b.grid = None);
             return;
         }
         grid_line_clear_end(start_col, end_col, attr, 0);

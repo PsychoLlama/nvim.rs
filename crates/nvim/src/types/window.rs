@@ -523,7 +523,7 @@ impl WinOpt {
         wo_script_ctx: [ScriptCtx::NONE; 51],
     };
 }
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct WLine {
     pub wl_lnum: LineNr,
     pub wl_size: uint16_t,

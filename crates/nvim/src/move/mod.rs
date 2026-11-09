@@ -294,7 +294,7 @@ impl Win {
     /// calls back into the fold and decoration layers between reads.
     pub(super) fn remembered_line(self, i: c_int) -> WLine {
         debug_assert!(i >= 0 && i < self.w_lines_valid, "i < wp->w_lines_valid");
-        self.w_lines[usize::try_from(i).expect("a valid w_lines index")]
+        self.w_lines[usize::try_from(i).expect("a valid w_lines index")].clone()
     }
 }
 

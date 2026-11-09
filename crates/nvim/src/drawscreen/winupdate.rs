@@ -403,7 +403,7 @@ fn widen_over_folds(win: Win, rg: &mut Regions) {
     let mut lnumt = win.w_topline;
     let mut lnumb = MAXLNUM;
     for i in 0..win.w_lines_valid {
-        let wl = win.w_lines[as_index(i)];
+        let wl = &win.w_lines[as_index(i)];
         if !wl.wl_valid {
             continue;
         }
@@ -467,7 +467,7 @@ fn plan_scroll(win: Win, buffer: Buf, rg: &mut Regions) {
         return;
     }
 
-    let first = win.w_lines[0];
+    let first = &win.w_lines[0];
     if rg.mod_top != LineNr::ZERO
         && win.w_topline == rg.mod_top
         && (!first.wl_valid || topline_conceal == first.wl_lnum)
@@ -542,7 +542,7 @@ fn scroll_down(mut win: Win, rg: &mut Regions) {
     win.w_lines_valid = (win.w_lines_valid + off).min(win.w_view_height);
     let mut idx = win.w_lines_valid;
     while idx - off >= 0 {
-        win.w_lines[as_index(idx)] = win.w_lines[as_index(idx - off)];
+        win.w_lines[as_index(idx)] = win.w_lines[as_index(idx - off)].clone();
         idx -= 1;
     }
     // The entries the scrolled ones vacated describe lines that are gone.
@@ -559,7 +559,7 @@ fn scroll_up(mut win: Win, rg: &mut Regions) {
     let mut at = -1;
     let mut rows = 0;
     for i in 0..win.w_lines_valid {
-        let wl = win.w_lines[as_index(i)];
+        let wl = &win.w_lines[as_index(i)];
         if wl.wl_valid && wl.wl_lnum == win.w_topline {
             at = i;
             break;
@@ -596,7 +596,7 @@ fn scroll_up(mut win: Win, rg: &mut Regions) {
     rg.bot_start = 0;
     let mut idx = 0usize;
     loop {
-        win.w_lines[idx] = win.w_lines[at];
+        win.w_lines[idx] = win.w_lines[at].clone();
         let size = c_int::from(win.w_lines[idx].wl_size);
         // Stop at a line that did not fit -- unless nothing was deleted, in
         // which case it is still valid where it is.
@@ -661,7 +661,7 @@ fn plan_visual_area(win: Win, buffer: Buf, rg: &mut Regions) {
     rg.mid_start = if rg.scrolled_down { rg.top_end } else { 0 };
 
     while lnum < from && idx < win.w_lines_valid {
-        let wl = win.w_lines[as_index(idx)];
+        let wl = &win.w_lines[as_index(idx)];
         if wl.wl_valid {
             rg.mid_start += c_int::from(wl.wl_size);
         } else if !rg.scrolled_down {
@@ -678,7 +678,7 @@ fn plan_visual_area(win: Win, buffer: Buf, rg: &mut Regions) {
 
     rg.mid_end = win.w_view_height;
     while idx < win.w_lines_valid {
-        let wl = win.w_lines[as_index(idx)];
+        let wl = &win.w_lines[as_index(idx)];
         if wl.wl_valid && wl.wl_lnum > to {
             // Only update to the first row of this line.
             rg.mid_end = srow;

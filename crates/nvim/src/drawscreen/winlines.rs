@@ -82,7 +82,7 @@ pub(crate) fn find_wl_entry(win: Win, lnum: LineNr) -> Option<WLine> {
             return None;
         }
         if lnum <= entry.wl_foldend {
-            return Some(*entry);
+            return Some(entry.clone());
         }
     }
     None
@@ -434,7 +434,7 @@ fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) {
     let mut old_rows = 0;
     let mut i = w.idx;
     while i < window.w_lines_valid {
-        let wl = window.w_lines[as_index(i)];
+        let wl = &window.w_lines[as_index(i)];
         // Only valid entries have a meaningful `wl_lnum`; invalid ones are
         // part of the changed area.
         if wl.wl_valid && wl.wl_lnum == rg.mod_bot {
@@ -545,7 +545,7 @@ fn move_line_entries(
                 window.w_lines_valid = j;
                 break;
             }
-            window.w_lines[as_index(j)] = window.w_lines[as_index(i)];
+            window.w_lines[as_index(j)] = window.w_lines[as_index(i)].clone();
             let size = c_int::from(window.w_lines[as_index(j)].wl_size);
             // Stop at a line that will not fit.
             if at_row + size > window.w_view_height {
@@ -563,7 +563,7 @@ fn move_line_entries(
         window.w_lines_valid = (window.w_lines_valid + j).min(window.w_view_height);
         let mut at = window.w_lines_valid;
         while at - j >= w.idx {
-            window.w_lines[as_index(at)] = window.w_lines[as_index(at - j)];
+            window.w_lines[as_index(at)] = window.w_lines[as_index(at - j)].clone();
             at -= 1;
         }
         // The entries for the inserted lines are invalid now, but `wl_size`

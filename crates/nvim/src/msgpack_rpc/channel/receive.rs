@@ -179,7 +179,7 @@ fn next_message(chan: &mut Channel, input: &mut &[u8]) -> Step {
     match p.type_0 {
         kMessageTypeRedrawEvent => Step::Redraw(if p.has_grid_line_event {
             p.has_grid_line_event = false;
-            Redraw::Line(p.grid_line_event)
+            Redraw::Line(core::mem::take(&mut p.grid_line_event))
         } else {
             Redraw::Event(p.ui_handler.fn_0, p.result.take())
         }),

@@ -74,10 +74,10 @@ impl Stream {
     }
 
     /// The `grid_line` event the last `advance` completed, if it did.
-    fn event(&self) -> Option<GridLineEvent> {
+    fn event(&self) -> Option<&GridLineEvent> {
         self.unpacker
             .has_grid_line_event
-            .then_some(self.unpacker.grid_line_event)
+            .then_some(&self.unpacker.grid_line_event)
     }
 }
 

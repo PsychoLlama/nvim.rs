@@ -13,7 +13,7 @@ use crate::types::{ColNr, Handle, ScreenAttr, ScreenChar};
 /// The `grid_line` message being decoded, mid-flight.
 ///
 /// `Copy`: counters and offsets.
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct GridLineEvent {
     pub args: [::core::ffi::c_int; 3],
     pub icell: ::core::ffi::c_int,

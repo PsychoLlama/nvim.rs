@@ -15,7 +15,7 @@
   "unions": 20,
   "repr_c_ffi_types": 91,
   "repr_c_editor_state": 70,
-  "derive_copy": 232,
+  "derive_copy": 229,
   "manual_alloc": 26,
   "garray_sites": 0,
   "kvec_sites": 0,
