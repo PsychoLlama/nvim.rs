@@ -48,6 +48,7 @@ const XDL_K_HEUR: i64 = 4;
 const XDL_LINE_MAX: i64 = i64::MAX;
 
 /// `xdalgoenv_t`: the three knobs [`split`]'s heuristics read.
+#[derive(Debug)]
 struct AlgoEnv {
     /// Edit cost at which to stop searching and take the best path so far.
     mxcost: i64,
@@ -60,6 +61,7 @@ struct AlgoEnv {
 /// One of the Myers walk's two K-vectors: the furthest point reached on each
 /// diagonal. Diagonals run from `off1 - lim2` to `lim1 - off2`, so the index
 /// is signed and the storage is biased.
+#[derive(Debug)]
 struct KVec {
     cells: Vec<i64>,
     bias: i64,
@@ -90,7 +92,7 @@ impl IndexMut<i64> for KVec {
 
 /// The sub-problem one recursion level works on: the half-open box
 /// `off1 ..< lim1` by `off2 ..< lim2` over the two reduced files.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Bounds {
     off1: i64,
     lim1: i64,
@@ -100,7 +102,7 @@ struct Bounds {
 
 /// The band of diagonals one frontier currently spans, plus the diagonal it
 /// started from — the heuristics score a diagonal by its distance from that.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Band {
     min: i64,
     max: i64,
@@ -109,6 +111,7 @@ struct Band {
 
 /// Where [`split`] cut the box, and whether each half must be solved
 /// minimally (it need not be when the cut was a heuristic guess).
+#[derive(Debug)]
 struct Split {
     i1: i64,
     i2: i64,

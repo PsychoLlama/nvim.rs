@@ -34,13 +34,13 @@ use core::mem::offset_of;
 /// writes back.
 pub type VTermOutputCallback =
     unsafe extern "C" fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> ();
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct ScreenCell {
     pub schar: ScreenChar,
     pub pen: ScreenPen,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct ScreenPen {
     pub fg: VTermColor,
@@ -73,6 +73,7 @@ crate::bitfield_accessors! {
 /// block, through the unit fixtures and the battery's own declaration -- keeps
 /// libvterm's layout; everything else it owns is Rust's, behind `inner`.
 #[repr(C)]
+#[derive(Debug)]
 pub struct VTerm {
     pub rows: ::core::ffi::c_int,
     pub cols: ::core::ffi::c_int,
@@ -88,13 +89,28 @@ pub union VTermColor {
     pub rgb: VTermColor_rgb,
     pub indexed: VTermColor_indexed,
 }
-#[derive(Copy, Clone)]
+/// The type byte names the live arm, so this prints that arm and no other.
+impl ::core::fmt::Debug for VTermColor {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        use crate::vterm::vterm::{VTERM_COLOR_INDEXED, VTERM_COLOR_TYPE_MASK};
+        let flags = self.type_byte();
+        let mut out = f.debug_struct("VTermColor");
+        out.field("type", &flags);
+        if flags & VTERM_COLOR_TYPE_MASK == VTERM_COLOR_INDEXED {
+            out.field("index", &self.index());
+        } else {
+            out.field("rgb", &self.channels());
+        }
+        out.finish()
+    }
+}
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VTermColor_indexed {
     pub type_0: uint8_t,
     pub idx: uint8_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VTermColor_rgb {
     pub type_0: uint8_t,
@@ -104,6 +120,7 @@ pub struct VTermColor_rgb {
 }
 pub type VTermDamageSize = ::core::ffi::c_uint;
 #[repr(C)]
+#[derive(Debug)]
 pub struct VTermGlyphInfo {
     pub schar: ScreenChar,
     pub width: ::core::ffi::c_int,
@@ -117,7 +134,7 @@ crate::bitfield_accessors! {
         2..=3 => dhl, set_dhl: ::core::ffi::c_uint;
     }
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 // align(4): `unsigned` bitfields, as on `VTermScreenCellAttrs`.
 #[repr(C, align(4))]
 pub struct VTermLineInfo {
@@ -132,6 +149,7 @@ crate::bitfield_accessors! {
     }
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct VTermParserCallbacks {
     pub text: Option<
         unsafe extern "C" fn(
@@ -191,7 +209,7 @@ pub struct VTermParserCallbacks {
         ) -> ::core::ffi::c_int,
     >,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VTermPos {
     pub row: ::core::ffi::c_int,
@@ -209,6 +227,7 @@ pub struct VTermRect {
 /// A terminal's screen. The C side reads the fields up to `reflow`; the cell
 /// grids and the host's callbacks are owned behind `owned`.
 #[repr(C)]
+#[derive(Debug)]
 pub struct VTermScreen {
     /// The terminal this screen belongs to. Only the C entry points read it,
     /// to get from a screen pointer back to the terminal that owns it.
@@ -237,7 +256,7 @@ crate::bitfield_accessors! {
         1..=1 => reflow, set_reflow: ::core::ffi::c_uint;
     }
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VTermScreenCallbacks {
     pub damage:
@@ -286,7 +305,7 @@ pub struct VTermScreenCallbacks {
     >,
     pub sb_clear: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VTermScreenCell {
     pub schar: ScreenChar,
@@ -296,7 +315,7 @@ pub struct VTermScreenCell {
     pub bg: VTermColor,
     pub uri: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 // align(4) is the C ABI, not a choice. Every field here is an `unsigned`
 // bitfield, so the C lays the struct out in 4-byte storage units and gives it
 // 4-byte alignment; c2rust turned the bits into a byte array, which aligns to
@@ -329,6 +348,7 @@ crate::bitfield_accessors! {
     }
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct VTermSelectionCallbacks {
     pub set: Option<
         unsafe extern "C" fn(
@@ -347,6 +367,7 @@ pub type VTermSelectionMask = ::core::ffi::c_uint;
 /// (the tab stops, the line marks, the selection buffer and the Rust
 /// callbacks) lives behind `owned`, in the slot the tab-stop pointer had.
 #[repr(C)]
+#[derive(Debug)]
 pub struct VTermState {
     /// The terminal this state belongs to. Only the C entry points read it,
     /// to get from a state pointer back to the terminal that owns it.
@@ -405,6 +426,7 @@ crate::bitfield_accessors! {
     }
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct VTermStateCallbacks {
     pub putglyph: Option<
         unsafe extern "C" fn(
@@ -476,6 +498,7 @@ pub struct VTermStateCallbacks {
     pub sb_clear: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct VTermStateFallbacks {
     pub control:
         Option<unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
@@ -515,11 +538,12 @@ pub struct VTermStateFallbacks {
     >,
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct VTermStateFields {
     pub pos: VTermPos,
     pub lineinfos: [*mut VTermLineInfo; 2],
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 // align(4): `unsigned` bitfields, as on `VTermScreenCellAttrs`.
 #[repr(C, align(4))]
 pub struct VTermState_mode {
@@ -549,12 +573,13 @@ crate::bitfield_accessors! {
 }
 pub type VTermState_mouse_protocol = ::core::ffi::c_uint;
 #[repr(C)]
+#[derive(Debug)]
 pub struct VTermState_saved {
     pub pos: VTermPos,
     pub pen: VTermPen,
     pub mode: VTermState_saved_mode,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 // align(4): `unsigned` bitfields, as on `VTermScreenCellAttrs`.
 #[repr(C, align(4))]
 pub struct VTermState_saved_mode {
@@ -569,6 +594,7 @@ crate::bitfield_accessors! {
     }
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct VTermState_selection {
     /// The table a C consumer installed, as C sees it.
     pub callbacks: *const VTermSelectionCallbacks,
@@ -581,12 +607,12 @@ pub struct VTermState_selection {
 /// What a control string being read in pieces has got to: an OSC 52's
 /// selection progress, or -- in the same first four bytes, as libvterm's
 /// union had it -- a DECRQSS request's name.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VTermState_tmp {
     pub selection: VTermState_tmp_selection,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VTermState_tmp_selection {
     pub mask: uint16_t,
@@ -601,7 +627,7 @@ crate::bitfield_accessors! {
     }
 }
 pub type VTermState_tmp_selection_state = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VTermStringFragment {
     pub str: *const ::core::ffi::c_char,
@@ -631,8 +657,10 @@ pub union VTermValue {
     pub string: VTermStringFragment,
     pub color: VTermColor,
 }
+// The value's type is the attribute's (`attr_value_type`), not the union's.
+crate::untagged_union_debug!(VTermValue);
 pub type VTermValueType = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 // align(4): `unsigned` bitfields, as on `VTermScreenCellAttrs`.
 #[repr(C, align(4))]
 pub struct VTerm_mode {
@@ -645,7 +673,7 @@ crate::bitfield_accessors! {
         1..=1 => ctrl8bit, set_ctrl8bit: ::core::ffi::c_uint;
     }
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VTerm_parser {
     pub state: VTermParserState,
@@ -671,7 +699,7 @@ crate::bitfield_accessors! {
 /// marker bytes (`leader`, `leaderlen` of them), then the parameters. An OSC
 /// keeps its command number in `leaderlen`; a DCS keeps its command bytes in
 /// `leader` and their count in `leaderlen`.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct ParserScratch {
     pub leaderlen: ::core::ffi::c_int,

@@ -23,6 +23,7 @@ use core::ffi::c_int;
 use std::collections::BTreeMap;
 
 /// Every argument list there is.
+#[derive(Debug)]
 pub(crate) struct ArgLists {
     global: ArgList,
     local: BTreeMap<ArgListId, ArgList>,

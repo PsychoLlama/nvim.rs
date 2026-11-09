@@ -35,6 +35,7 @@ use super::*;
 /// `m_endpos.lnum == 0` is the "no END pattern matched in this line" answer,
 /// and then every other field is meaningless -- the region continues into the
 /// next line. That spelling is upstream's, and callers test it directly.
+#[derive(Debug)]
 pub(crate) struct RegionEnd {
     /// End of the match: where the region stops.
     pub(crate) m_endpos: LPos,
@@ -220,6 +221,7 @@ impl SynState {
 }
 
 /// What the SKIP pattern did to the search position.
+#[derive(Debug)]
 enum Skipped {
     /// It did not match before the end pattern; use the end pattern.
     No,
@@ -546,6 +548,7 @@ impl SynState {
 }
 
 /// A keyword the hash tables claimed.
+#[derive(Debug)]
 pub(crate) struct KeywordMatch {
     /// Highlight group id of the keyword.
     pub(crate) id: c_int,

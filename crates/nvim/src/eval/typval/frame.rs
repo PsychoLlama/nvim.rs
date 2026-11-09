@@ -34,6 +34,7 @@ use core::mem::ManuallyDrop;
 /// would have the compiler walk all `N` of them a second time afterwards --
 /// twenty-one tag tests on every call the interpreter makes, whatever the
 /// arity.
+#[derive(Debug)]
 pub(crate) struct CallFrame<const N: usize> {
     slots: ManuallyDrop<[TypVal; N]>,
     len: usize,

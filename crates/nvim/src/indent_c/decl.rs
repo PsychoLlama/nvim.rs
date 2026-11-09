@@ -239,6 +239,7 @@ pub(crate) fn preproc_start(lnum: &mut LineNr, amount: &mut c_int) -> bool {
 /// reads it again itself, which is the same pair of reads and one it can see.
 pub(crate) fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
     /// Why the walk stopped on the line it was looking at.
+    #[derive(Debug)]
     enum Stopped {
         /// Something that cannot be a declaration: not one.
         NotOne,

@@ -62,7 +62,7 @@ use core::ffi::{CStr, c_int};
 /// and `l` wins when both are given because upstream tests it first.  It is a
 /// file static upstream only because `qsort`'s comparator cannot be handed
 /// anything; here it is a value the flag parse answers with.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct StringOrder {
     locale: bool,
     ignore_case: bool,
@@ -99,6 +99,7 @@ impl StringOrder {
 
 /// One line's text key: the compared bytes plus the NUL `strcoll` and
 /// `strcasecmp` need.  Built once per line, not once per comparison.
+#[derive(Debug)]
 struct Key(Box<[u8]>);
 
 impl Key {
@@ -112,6 +113,7 @@ impl Key {
 
 /// What one line is sorted on.  Every line of a range gets the same variant:
 /// the flags decide which once, before the range is walked.
+#[derive(Debug)]
 enum SortKey {
     /// The bytes of the line the comparison looks at.
     Text(Key),
@@ -123,6 +125,7 @@ enum SortKey {
 }
 
 /// One line of the range as `:sort` sees it.
+#[derive(Debug)]
 struct SortLine {
     lnum: LineNr,
     key: SortKey,
@@ -340,6 +343,7 @@ fn is_alpha(byte: u8) -> bool {
 }
 
 /// The flags `:sort` was given.
+#[derive(Debug)]
 struct SortSpec {
     /// `u`: drop a line equal to the one before it.
     unique: bool,
@@ -372,6 +376,7 @@ const NUL_BYTE: u8 = 0;
 /// What one byte of a `:sort`/`:uniq` argument turned out to be.  Both
 /// commands share the text-order letters and the `r` flag; the rest is each
 /// command's own.
+#[derive(Debug)]
 enum Flag {
     /// A letter both commands understand, already applied.
     Shared,
@@ -382,6 +387,7 @@ enum Flag {
 }
 
 /// What [`ExArg::sort_flag_fallback`] made of a byte that was no flag letter.
+#[derive(Debug)]
 enum Fallback {
     /// A following command, which ends the argument.
     NextCmd,
@@ -512,6 +518,7 @@ fn collect_sort_keys(
 }
 
 /// How much of the range `:sort` put back, and what it cost.
+#[derive(Debug)]
 struct Placed {
     /// How many of the range's lines the walk got through; short of the
     /// range's length only when an append failed.
@@ -695,7 +702,7 @@ fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Placed) {
 }
 
 /// Which lines `:uniq` keeps.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum UniqMode {
     /// The plain form: collapse each run of equal lines to its first.
     Dedup,
@@ -706,6 +713,7 @@ enum UniqMode {
 }
 
 /// The running state of `:uniq`'s single pass over the range.
+#[derive(Debug)]
 struct UniqScan {
     /// The previous line was part of a run of equal lines.
     in_run: bool,

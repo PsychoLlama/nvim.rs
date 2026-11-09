@@ -195,6 +195,7 @@ state_record! {
 
 /// The `v:` scope: the entry a bare `v:` resolves to, whose value is the
 /// `v:` dictionary, and a hint per row of where it is in that dictionary.
+#[derive(Debug)]
 pub(crate) struct VimScope {
     pub(crate) entry: ScopeDictItem,
     /// Where each row last was in the dictionary's table, and the address
@@ -207,6 +208,7 @@ pub(crate) struct VimScope {
 
 /// One row of the `v:` table: the name, the type the variable is declared
 /// with, and its flags.
+#[derive(Debug)]
 pub(crate) struct VimVarRow {
     pub(crate) name: &'static CStr,
     pub(crate) declared: VarType,

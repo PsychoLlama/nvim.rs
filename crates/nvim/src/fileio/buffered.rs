@@ -189,6 +189,7 @@ fn write_from(file: &File, bytes: &[u8], non_blocking: bool) -> ptrdiff_t {
 }
 
 /// An open file and the block it buffers through.
+#[derive(Debug)]
 pub struct BufferedFile {
     file: File,
     block: Box<[u8]>,
@@ -423,6 +424,7 @@ impl BufferedFile {
 /// The only way to make one is [`WriteFile::open`]. Closing is not a
 /// `Drop`: closing answers an error code the caller reports, so
 /// [`WriteFile::close`] spends the value instead.
+#[derive(Debug)]
 pub(crate) struct WriteFile(BufferedFile);
 
 impl WriteFile {
@@ -463,6 +465,7 @@ impl WriteFile {
 /// A [`BufferedFile`] opened for reading: the read half of [`WriteFile`].
 /// `-s` and `:source!` read their keys through one. Closing is not a
 /// `Drop`, as for `WriteFile`.
+#[derive(Debug)]
 pub(crate) struct ReadFile(BufferedFile);
 
 impl ReadFile {

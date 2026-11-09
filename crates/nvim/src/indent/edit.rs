@@ -558,6 +558,7 @@ fn emsg_text_too_long() {
 }
 
 /// The tabstops `:retab` was asked to retabulate to.
+#[derive(Debug)]
 struct RetabTabs {
     /// The list to measure against: the one given, or a copy of the
     /// buffer's own.
@@ -600,6 +601,7 @@ fn parse_retab_arg(arg: &[u8]) -> Result<RetabTabs, Failed> {
 }
 
 /// How one white-space run's retabulation ended.
+#[derive(Debug)]
 enum Retabulated {
     /// Either the line was rewritten or it did not need to be.
     Done,
@@ -615,6 +617,7 @@ enum Retabulated {
 /// upstream, so a white-space run that reaches the end of a line is still
 /// open when the next line starts. That is observable, so they live here
 /// rather than being per-line locals.
+#[derive(Debug)]
 struct Retab {
     got_tab: bool,
     num_spaces: c_int,
@@ -626,6 +629,7 @@ struct Retab {
 }
 
 /// One line's walk: where the scan has got to, and the line as it stands.
+#[derive(Debug)]
 struct LineScan {
     lnum: LineNr,
     /// The line's text, a copy: the walk rewrites the line under it.

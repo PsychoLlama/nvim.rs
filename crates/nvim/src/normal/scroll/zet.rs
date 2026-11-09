@@ -53,7 +53,7 @@ use crate::r#move::{
 use crate::search::{BACKWARD, FORWARD};
 
 /// Where the positioning commands put the cursor's line.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum Place {
     /// `zt`, `z<CR>`, `z+`.
     Top,

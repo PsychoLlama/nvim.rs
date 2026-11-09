@@ -52,6 +52,7 @@ use crate::vterm::vterm::{VTERM_ATTR_URI, VTERM_TERMINATOR_BEL};
 /// Only the string-carrying ones are taken: a control or CSI sequence vterm
 /// does not know is not something an autocommand could make sense of
 /// either.
+#[derive(Debug)]
 pub(crate) struct Requests(pub(crate) Term);
 
 impl Fallbacks for Requests {
@@ -77,6 +78,7 @@ impl Fallbacks for Requests {
 ///
 /// Owned by the queued event, which hands it to [`emit_termrequest`],
 /// possibly after re-queueing itself once.
+#[derive(Debug)]
 pub(crate) struct TermRequest {
     /// The buffer rather than the terminal: by the time this runs the
     /// terminal may have been destroyed, and a handle can be checked.

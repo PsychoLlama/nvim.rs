@@ -38,6 +38,7 @@ const OPF_LINES: u8 = 1;
 const OPF_CHANGE: u8 = 2;
 
 /// One row of [`OPCHARS`]: the keys that name an operator, and what it does.
+#[derive(Debug)]
 struct OpChar {
     /// First character typed, `NUL` for [`OpType::Nop`]'s placeholder row.
     first: u8,

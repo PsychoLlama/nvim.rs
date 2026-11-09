@@ -19,7 +19,7 @@ pub type MarkMoveRes = ::core::ffi::c_uint;
 /// Not `Copy`, because `extra` is owned: `Clone` is deep and dropping a
 /// record releases it. A store's record is replaced by assignment; nothing
 /// frees one by hand.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FileMark {
     pub mark: Pos,
     /// The buffer the mark is in, `Handle::NONE` for none: read it as
@@ -35,7 +35,7 @@ pub struct FileMark {
     /// all-zero bytes -- which also keeps the record five words.
     pub(crate) extra: Option<Box<crate::shada::ShadaExtra>>,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct FileMarkView {
     pub topline_offset: i32,
     pub skipcol: ColNr,
@@ -107,7 +107,7 @@ impl FileMark {
 /// a named mark, to put back when the change is undone. `Copy`, because a
 /// header is saved per change and a deep copy of twenty-six marks each time
 /// costs more than the save.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct SavedMark {
     pub mark: Pos,
     /// [`FileMark::fnum`] with `Handle::NONE` for `None`: an
@@ -165,7 +165,7 @@ impl SavedMark {
 /// Not `Copy`, for `fname` on top of [`FileMark`]'s own; `Clone` is deep.
 /// The name is one word wide and its `None` is all-zero bytes: a window is a
 /// zeroed allocation holding a hundred of these.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct XFileMark {
     pub fmark: FileMark,
     pub fname: Option<crate::memory::ThinCString>,

@@ -88,6 +88,7 @@ impl AttrError {
 /// meets it; the sentinel is also what [`super::complete::
 /// get_user_cmd_addr_type`] answers null for, ending completion. Here the
 /// end of the slice is that sentinel.
+#[derive(Debug)]
 pub(super) struct AddrType {
     pub(super) expand: CmdAddr,
     pub(super) name: &'static CStr,
@@ -194,6 +195,7 @@ pub(crate) fn parse_compl_arg(
 }
 
 /// Everything one attribute can change about a command being defined.
+#[derive(Debug)]
 pub(super) struct Attributes<'a> {
     pub(super) argt: &'a mut ExArgt,
     pub(super) def: &'a mut c_int,

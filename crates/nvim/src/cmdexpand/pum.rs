@@ -51,6 +51,7 @@ use std::rc::Rc;
 /// drawing asks about the completion while it is up.
 ///
 /// The rows own copies of the matches' text, and are shared with the menu.
+#[derive(Debug)]
 pub(crate) struct CmdlinePum {
     rows: Rc<[PumItem]>,
     /// The text the matches replaced, which the menu highlights in each

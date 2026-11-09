@@ -108,6 +108,7 @@ fn lookaround(rc: &mut RegCompiler) -> Parsed {
 }
 
 /// What a repeat left for [`nfa_regpiece`] to do.
+#[derive(Debug)]
 enum Repeat {
     /// Emitted; the caller still rejects a second repeat after it.
     Emitted,

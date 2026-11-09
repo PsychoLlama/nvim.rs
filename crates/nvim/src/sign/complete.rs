@@ -24,7 +24,7 @@ use crate::narrow::number_as_int;
 use crate::types::Handle;
 
 /// What [`get_sign_name`] should enumerate.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum ExpandWhat {
     /// `:sign {subcmd}`.
     Subcmd,

@@ -235,6 +235,7 @@ pub const VSE_SHELL: ::core::ffi::c_int = 1;
 /// loop, which hands it down. Nothing outside the loop reaches it: the one
 /// field C's globals pointed into, the completion, belongs to the command
 /// line ([`CmdlineInfo::xpc`]) instead.
+#[derive(Debug)]
 pub struct CommandLineState {
     /// The character the line starts with (`:`, `/`, `?`, `=`, `@`, `>`, ...),
     /// 0 for none.
@@ -283,6 +284,7 @@ pub(crate) enum ImOption {
     Search,
 }
 
+#[derive(Debug)]
 pub struct IncsearchState {
     pub search_start: Pos,
     pub save_cursor: Pos,
@@ -295,7 +297,7 @@ pub struct IncsearchState {
     pub incsearch_postponed: bool,
     pub magic_overruled_save: OptMagic,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ViewState {
     pub vs_curswant: ColNr,
     pub vs_leftcol: ColNr,
@@ -306,7 +308,7 @@ pub struct ViewState {
     pub vs_empty_rows: ::core::ffi::c_int,
 }
 pub const MAX_CB_ERRORS: ::core::ffi::c_int = 1;
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CpInfo {
     pub win_info: Vec<CpWinInfo>,
     pub buf_info: Vec<CpBufInfo>,
@@ -314,7 +316,7 @@ pub struct CpInfo {
     pub save_cmdmod: CmdMod,
     pub save_view: Vec<::core::ffi::c_int>,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CpBufInfo {
     /// The buffer saved. An id: the preview runs the command's Lua
     /// `preview` callback between the save and the restore.
@@ -327,7 +329,7 @@ pub struct CpBufInfo {
     pub save_changedtick: VarNumber,
     pub undo_info: CpUndoInfo,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CpUndoInfo {
     pub save_b_u_oldhead: UndoLink,
     pub save_b_u_newhead: UndoLink,
@@ -343,7 +345,7 @@ pub struct CpUndoInfo {
     pub save_b_u_line_lnum: LineNr,
     pub save_b_u_line_colnr: ColNr,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct CpWinInfo {
     /// The window saved. [`CpBufInfo::buf`]'s reason.
     pub(crate) win: Option<WinId>,

@@ -49,7 +49,7 @@ pub(crate) enum TimerQueue {
 }
 
 /// What an expiry does.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum OnDue {
     /// Nothing armed yet.
     Unset,
@@ -63,6 +63,7 @@ enum OnDue {
 /// The boxed watcher. `uv` comes first so the handle's address is the
 /// watcher's.
 #[repr(C)]
+#[derive(Debug)]
 struct Watcher {
     uv: uv_timer_t,
     /// The owner's id, handed back to each callback.
@@ -85,7 +86,7 @@ struct Watcher {
 /// A watcher, reached through the box's pointer -- which libuv also keeps
 /// in the handle's `data` -- wrapped once, so the field accesses below are
 /// ordinary Rust. Nothing here may move a watcher.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct Handle(*mut Watcher);
 
 impl Handle {
@@ -128,6 +129,7 @@ impl core::ops::DerefMut for Handle {
 }
 
 /// A libuv timer this module owns at a fixed address. See the module docs.
+#[derive(Debug)]
 pub(crate) struct OwnedTimer(Handle);
 
 impl OwnedTimer {
@@ -232,6 +234,7 @@ fn close_watcher(mut watcher: Handle, on_closed: Option<fn(u64)>) {
 /// If the loop shuts down under the waiting frame -- the frame never gets
 /// back to drop this -- the tick closes the timer itself, so that the loop
 /// can finish closing.
+#[derive(Debug)]
 pub(crate) struct ScopedTimer {
     /// Held for its drop, which closes it.
     _timer: OwnedTimer,

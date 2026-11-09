@@ -51,7 +51,7 @@ use crate::types::{Array, Object};
 use crate::ui::ui_mode_info_set;
 
 pub(crate) type CursorShape = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct CursorEntry {
     pub full_name: &'static ::core::ffi::CStr,
     pub shape: CursorShape,

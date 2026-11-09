@@ -166,7 +166,7 @@ pub const REPLACE_NL_NCHAR: crate::types::Key = crate::types::Key::from_code(-2)
 pub const YREG_YANK: ::core::ffi::c_int = 1;
 
 /// The Visual area a `.` replays -- see `pending::REDO_VISUAL`.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct RedoVisual {
     /// `v`, `V` or CTRL-V.
     pub rv_mode: ::core::ffi::c_int,

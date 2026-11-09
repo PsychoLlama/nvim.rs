@@ -151,6 +151,7 @@ pub(crate) fn with_started_tui<R>(f: impl FnOnce(&mut TUIData) -> R) -> R {
 
 /// The running TUI, as its client holds it: a token for the state in
 /// [`STATE`], which the process exits with.
+#[derive(Debug)]
 pub struct Tui {
     _started: (),
 }
@@ -226,6 +227,7 @@ impl Tui {
 }
 
 /// What a started TUI tells its client about the terminal it found.
+#[derive(Debug)]
 pub struct TuiStart {
     pub width: c_int,
     pub height: c_int,

@@ -561,6 +561,7 @@ pub fn do_wqall(excmd: &mut ExArg) {
 }
 
 /// What `:wall`'s walk should do after one buffer.
+#[derive(Debug)]
 enum WriteAll {
     /// Step to the next buffer.
     Next,

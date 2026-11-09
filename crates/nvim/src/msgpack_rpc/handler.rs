@@ -21,7 +21,7 @@ pub type ApiDispatchFn = fn(uint64_t, Array) -> Result<Object, Error>;
 /// One row of the API dispatch table.
 ///
 /// `Copy`: a static name and a function pointer.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct MsgpackRpcRequestHandler {
     pub name: Option<&'static ::core::ffi::CStr>,
     pub fn_0: Option<ApiDispatchFn>,

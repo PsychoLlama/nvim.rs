@@ -79,7 +79,7 @@ fn cstr_or_null(bytes: Option<&CStr>) -> *const c_char {
 // ------------------------------------------------- a C consumer's tables
 
 /// A C consumer's parser callbacks.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct ForeignParser {
     pub(super) table: NonNull<VTermParserCallbacks>,
     pub(super) data: *mut c_void,
@@ -172,7 +172,7 @@ impl ParserHandler for ForeignParser {
 
 /// A C consumer's state callbacks: what the state machine paints through
 /// when the consumer is not the terminal's own screen.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct ForeignState {
     pub(super) table: NonNull<VTermStateCallbacks>,
     pub(super) data: *mut c_void,
@@ -283,6 +283,7 @@ impl ForeignState {
 }
 
 /// A C consumer's fallbacks for the sequences the state does not recognise.
+#[derive(Debug)]
 pub(super) struct ForeignFallbacks {
     pub(super) table: NonNull<VTermStateFallbacks>,
     pub(super) data: *mut c_void,
@@ -355,6 +356,7 @@ impl Fallbacks for ForeignFallbacks {
 }
 
 /// A C consumer's OSC 52 callbacks.
+#[derive(Debug)]
 pub(super) struct ForeignSelection {
     pub(super) table: NonNull<VTermSelectionCallbacks>,
     pub(super) data: *mut c_void,
@@ -387,6 +389,7 @@ impl SelectionHost for ForeignSelection {
 }
 
 /// A C host's screen callbacks.
+#[derive(Debug)]
 pub(super) struct ForeignScreen {
     pub(super) table: NonNull<VTermScreenCallbacks>,
     pub(super) data: *mut c_void,
@@ -472,6 +475,7 @@ impl ScreenHost for ForeignScreen {
 }
 
 /// A C consumer's reply sink.
+#[derive(Debug)]
 pub(crate) struct ForeignOutput {
     pub(super) func: VTermOutputCallback,
     pub(super) data: *mut c_void,

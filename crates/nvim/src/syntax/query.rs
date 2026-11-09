@@ -35,7 +35,7 @@ pub(crate) fn syntax_present(win: Win) -> bool {
 /// What the next `get_syntax_name` call should offer, which
 /// `set_context_in_syntax_cmd` decides from the part of the command already
 /// typed.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum ExpandWhat {
     /// `:syntax` subcommand names.
     SubCmd,

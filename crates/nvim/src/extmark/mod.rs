@@ -327,7 +327,7 @@ fn splice_pending() -> bool {
 
 /// One (row, col, byte) triple of a splice -- its start, the extent removed
 /// or the extent inserted, in the order `buf_updates_send_splice` takes them.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub(crate) struct Extent {
     pub row: c_int,
     pub col: ColNr,
@@ -456,7 +456,7 @@ pub fn extmark_move_region(
     splice::move_region(buffer, start, extent, new, undo);
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct ExtmarkMove {
     pub start_row: ::core::ffi::c_int,
@@ -470,7 +470,7 @@ pub struct ExtmarkMove {
     pub new_byte: BCount,
 }
 pub type ExtmarkOp = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct ExtmarkSavePos {
     pub mark: uint64_t,
@@ -478,7 +478,7 @@ pub struct ExtmarkSavePos {
     pub old_col: ColNr,
     pub invalidated: bool,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct ExtmarkSplice {
     pub start_row: ::core::ffi::c_int,
@@ -499,7 +499,7 @@ pub type BCount = ptrdiff_t;
 /// Upstream is a `type` tag beside an untagged union. The tag's numbers are
 /// what the undo *file* writes, so they stay reachable as
 /// [`ExtmarkUndoObject::wire_type`]; nothing else needs them.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum ExtmarkUndoObject {
     /// A text change: every operation that moves marks except `:move`.
     Splice(ExtmarkSplice),

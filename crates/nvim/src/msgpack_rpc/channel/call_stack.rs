@@ -21,7 +21,7 @@ use crate::os::libc::uint32_t;
 /// Nested calls unwind in order — the reply that resumes a `rpc_send_call`
 /// pops the frame that call pushed — so this is a stack, not a map, even
 /// though a well-behaved msgpack-rpc peer is allowed to answer out of order.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct CallStack {
     frames: Vec<ChannelCallFrame>,
 }

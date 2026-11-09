@@ -41,6 +41,7 @@ use crate::winlayer::Win;
 /// Everything `nvim_eval_statusline()` needs to have settled before it can
 /// expand anything, and the two highlight ids the `'statuscolumn'` arm
 /// leaves behind for the `highlights` answer.
+#[derive(Debug)]
 struct Context {
     win: Win,
     fillchar: ScreenChar,

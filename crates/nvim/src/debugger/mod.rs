@@ -93,6 +93,7 @@ mod mode;
 pub use self::mode::*;
 
 /// One breakpoint or profiling point.
+#[derive(Debug)]
 pub(crate) struct Breakpoint {
     /// Breakpoint number, as `:breaklist` prints it.
     nr: c_int,
@@ -131,7 +132,7 @@ static last_breakp: GlobalCell<c_int> = GlobalCell::new(0);
 static has_expr_breakpoint: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Which of the two lists of [`Breakpoint`] entries a command works on.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum BreakList {
     /// `:breakadd`/`:breakdel`/`:breaklist` -- the debugger's breakpoints.
     Debug,

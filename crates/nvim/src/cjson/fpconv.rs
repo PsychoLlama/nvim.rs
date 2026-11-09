@@ -44,6 +44,7 @@ pub const G_FMT_BUFSIZE: usize = 32;
 
 /// A stack buffer `core::fmt` can write into, so the scientific rendering
 /// [`append_g_fmt`] reshapes costs no allocation.
+#[derive(Debug)]
 struct Scratch {
     buf: [u8; G_FMT_BUFSIZE],
     len: usize,

@@ -84,7 +84,7 @@ type CaseFolder = fn(c_int) -> c_int;
 
 /// The case hooks in force: `\u` and `\l` fold one character, `\U` and `\L`
 /// fold every character until `\e` or `\E`.
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Case {
     once: Option<CaseFolder>,
     rest: Option<CaseFolder>,
@@ -105,6 +105,7 @@ impl Case {
 /// `at` advances identically on both passes; only the copying pass has a
 /// `dest` to write into, and only it can run out of room -- in which case
 /// the passes have disagreed, see the module docs.
+#[derive(Debug)]
 struct Out<'d> {
     dest: Option<&'d mut [u8]>,
     at: usize,
@@ -210,6 +211,7 @@ impl RegsubError {
 }
 
 /// How an expansion ended.
+#[derive(Debug)]
 enum Outcome {
     /// The whole replacement was expanded.
     Done,
@@ -391,7 +393,7 @@ fn regsub_buffer(
 }
 
 /// The match a replacement is expanded against.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum Matched<'a> {
     /// A string match, and the string it ran over.
     Str {
@@ -409,7 +411,7 @@ enum Matched<'a> {
 
 /// The match a replacement is expanded against, and how its line breaks
 /// read.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Expanding<'a> {
     matched: Matched<'a>,
     /// Is a newline in the replacement a literal one?

@@ -173,7 +173,7 @@ pub(crate) fn replace_tabstop_array(slot: &mut TabStopArray, value: Option<&CStr
 }
 
 /// Which of a buffer's two tab-stop lists.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum StopList {
     /// 'vartabstop', which 'tabstop' stands in for.
     Tab,
@@ -449,6 +449,7 @@ pub fn indent_size_ts(text: &[u8], ts: OptInt, vts: Option<&[i32]>) -> c_int {
 
 /// What [`set_indent`] is going to write, measured before anything is
 /// allocated.
+#[derive(Debug)]
 struct IndentPlan {
     /// The line's existing indent is not already the one asked for, so the
     /// line has to be rebuilt.
@@ -554,6 +555,7 @@ fn plan_indent(size: c_int, flags: c_int, oldline: &[u8]) -> IndentPlan {
 }
 
 /// The line [`set_indent`] writes, and where its text starts in both lines.
+#[derive(Debug)]
 struct Reindented {
     line: Vec<u8>,
     /// The new indent's length in bytes, which is where the cursor goes.

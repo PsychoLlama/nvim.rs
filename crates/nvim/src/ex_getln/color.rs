@@ -75,6 +75,7 @@ pub(crate) fn color_expr_cmdline(mut colored_ccline: Cc) {
 /// Not a `Result`: neither answer carries anything, and "the callback had
 /// nothing to colour" is not an error — it takes the same exit as a full set
 /// of chunks.
+#[derive(Debug)]
 enum Label {
     /// `color_cmdline_end`: keep whatever chunks were pushed.
     End,

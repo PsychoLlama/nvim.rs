@@ -59,6 +59,7 @@ const E5101_BAD_TYPE: &CStr = c"E5101: Cannot convert given Lua type";
 /// Each holds its own reference to the container, so the half-built tree is
 /// reachable for the self-reference check and is released by dropping the
 /// stack.  `table` is the container's Lua table.
+#[derive(Debug)]
 enum OpenValue {
     /// A Lua array table becoming a list, `wanted` items long.
     List {
@@ -181,6 +182,7 @@ impl OpenValue {
 }
 
 /// What converting the Lua value on top of the stack produced.
+#[derive(Debug)]
 enum Converted {
     /// A finished value.  The Lua value it came from is still on the stack.
     Value(TypVal),
@@ -319,6 +321,7 @@ fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Convert
 }
 
 /// What the walk does next.
+#[derive(Debug)]
 enum Step {
     /// Convert the Lua value on top of the stack.
     Convert,

@@ -22,7 +22,7 @@ use crate::hashtab::HashTab;
 use crate::hashtab::{SlotEntry, hash_bytes};
 
 /// What a slot holds: the index of its entry.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(super) struct EntryId(u32);
 
 impl SlotEntry for EntryId {
@@ -53,6 +53,7 @@ impl Keyed for Box<[u8]> {
 }
 
 /// Entries by key, walked in slot order.
+#[derive(Debug)]
 pub(super) struct KeyedTable<T> {
     slots: HashTab<EntryId>,
     entries: Vec<T>,

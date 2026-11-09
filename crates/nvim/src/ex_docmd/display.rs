@@ -213,6 +213,7 @@ pub(crate) fn ex_redrawtabline(_excmd: &mut ExArg) {
 
 /// The redraw suppression counter and 'lazyredraw' held out of the way,
 /// and put back when the guard is dropped.
+#[derive(Debug)]
 struct LazyRedrawOff {
     _redraw: Saved,
     p_lz: bool,

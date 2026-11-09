@@ -257,6 +257,7 @@ fn virt_text_cursor_off(csarg: &CharsizeArg<'_>, on_nul: bool) -> c_int {
 }
 
 /// Extra cells 'showbreak' and 'breakindent' contribute around one character.
+#[derive(Debug)]
 struct BreakHead {
     /// Added to the character's width.
     added: c_int,
@@ -764,7 +765,7 @@ pub(crate) enum CharsizeKind {
     Regular = 0,
     Fast = 1,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct CharSize {
     pub width: ::core::ffi::c_int,
     pub head: ::core::ffi::c_int,
@@ -775,6 +776,7 @@ pub(crate) struct CharSize {
 /// `line` is the text without its NUL: a walk reads a NUL past its end, and
 /// stops at a NUL inside it, exactly as the pointer walk it replaces
 /// stopped at the terminator. Positions in it are byte offsets.
+#[derive(Debug)]
 pub(crate) struct CharsizeArg<'a> {
     /// The window being measured in, taken live by `CharsizeArg::new`; the
     /// walk is one call that nothing in it can close a window during.

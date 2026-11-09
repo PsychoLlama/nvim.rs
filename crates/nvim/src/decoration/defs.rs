@@ -18,13 +18,13 @@ use crate::winlayer::WinId;
 /// The two chains an `ext` decoration names: indices of the first
 /// sign/highlight item and of the first virtual-text link in the
 /// decoration stores, either `DECOR_ID_INVALID` for none.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(C)]
 pub struct DecorExt {
     pub sh_idx: uint32_t,
     pub vt_idx: uint32_t,
 }
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(C)]
 pub struct DecorHighlightInline {
     pub flags: uint16_t,
@@ -44,7 +44,7 @@ pub struct DecorHighlightInline {
 ///
 /// `repr(C, u32)` so that `MTKey`, which stores one, keeps a C layout the
 /// unit suite's declarations can spell.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(C, u32)]
 pub enum DecorInline {
     Hl(DecorHighlightInline),
@@ -61,7 +61,7 @@ impl DecorInline {
 }
 pub type DecorPriority = uint16_t;
 pub type DecorPriorityInternal = uint32_t;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct DecorProvider {
     pub ns_id: NS,
     pub state: DecorProvider_state,
@@ -81,7 +81,7 @@ pub struct DecorProvider {
     pub error_count: uint8_t,
 }
 pub type DecorProvider_state = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct DecorRange {
     pub start_row: ::core::ffi::c_int,
@@ -101,7 +101,7 @@ pub type DecorRangeKind = uint8_t;
 pub type HlMode = uint8_t;
 /// One slot of the `DecorRange` slab: either a range, or a link in the
 /// freelist threaded through the slab itself.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum DecorRangeSlot {
     /// An occupied slot; one of the two sorted index lists names it.
     Range(DecorRange),
@@ -110,7 +110,7 @@ pub enum DecorRangeSlot {
 }
 /// What a `DecorRange` draws. Its `kind` says the same thing and more --
 /// it tells inline virtual text from virtual lines, which share a link.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum DecorRange_data {
     /// A highlight, a conceal, a spell override or a URL.
     Highlight(RangeHighlight),
@@ -124,7 +124,7 @@ pub enum DecorRange_data {
 /// What a highlight range needs of the item it came from, which is not all
 /// of it: the item's own strings stay in the store, and `url` names the
 /// store entry holding the URL (`DECOR_ID_INVALID` for none).
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct RangeHighlight {
     pub flags: uint16_t,
     pub conceal_char: ScreenChar,
@@ -156,7 +156,7 @@ impl DecorRange_data {
         }
     }
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct DecorRange_data_ui {
     pub ns_id: uint32_t,
@@ -167,7 +167,7 @@ pub struct DecorRange_data_ui {
 ///
 /// Not `Copy`: the definition name a `:sign` placement was copied from and
 /// a `url` are the item's own strings, dropped when its slot is freed.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DecorSignHighlight {
     pub flags: uint16_t,
     pub priority: DecorPriority,
@@ -184,7 +184,7 @@ pub struct DecorSignHighlight {
 /// Not `Copy`: the two vectors below own their storage. `spell/navigate.rs`
 /// puts the state aside for the length of a scan, which is a `mem::take`
 /// rather than the struct copy upstream does.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct DecorState {
     pub itr: [MarkTreeIter; 1],
     /// The `DecorRange` slab, with a freelist through `next_free_i`.
@@ -211,7 +211,7 @@ pub struct DecorState {
 }
 /// One link of a decoration's virtual-text chain, in the virtual-text store.
 /// `next` is the index of the next link, `DECOR_ID_INVALID` at the end.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DecorVirtText {
     pub flags: uint8_t,
     pub hl_mode: HlMode,
@@ -225,7 +225,7 @@ pub struct DecorVirtText {
 /// What one link of a virtual-text chain carries: inline chunks, or whole
 /// virtual lines. `kVTIsLines` in the link's `flags` says which, and the
 /// two are always set together.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum DecorVirtText_data {
     Text(VirtText),
     Lines(VirtLines),
@@ -275,7 +275,7 @@ impl DecorVirtText_data {
 /// One chunk of a virtual text: its text, already made printable, and the
 /// highlight group it is drawn in (-1 for none). A chunk with no text only
 /// stacks its highlight onto the next one.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct VirtTextChunk {
     pub text: Option<::std::ffi::CString>,
     pub hl_id: ::core::ffi::c_int,
@@ -289,7 +289,7 @@ pub type VirtLines = Vec<VirtLine>;
 pub type VirtText = Vec<VirtTextChunk>;
 
 /// One line of a virtual-lines block, and its `kVL*` flags.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct VirtLine {
     pub line: VirtText,
     pub flags: ::core::ffi::c_int,

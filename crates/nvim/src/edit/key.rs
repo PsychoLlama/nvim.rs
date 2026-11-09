@@ -45,7 +45,7 @@ use crate::optionstr::OptString;
 const SPELL_S: Key = Key::ascii(b's');
 
 /// What the dispatcher does after an arm has run.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum Next {
     /// The key is done with: run the per-key tail and ask for another.
     Continue,

@@ -87,6 +87,7 @@ pub fn set_buflocal_tfu_callback(mut buffer: Buf) {
 }
 
 /// What `'tagfunc'` said.
+#[derive(Debug)]
 pub(crate) enum TagfuncAnswer {
     /// It answered `v:null`: read the tags files after all.
     Declined,
@@ -264,6 +265,7 @@ fn tag_of(d: &Dict, flags: c_int) -> Option<Found> {
 
 /// One string-valued entry of a `'tagfunc'` result dictionary, borrowed
 /// from the item.
+#[derive(Debug)]
 struct Field<'a> {
     key: &'a [u8],
     value: &'a CStr,

@@ -49,7 +49,7 @@ pub(crate) fn diff_function() -> CFunction {
 }
 
 /// What `vim.diff` was asked to produce.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Mode {
     /// A unified-diff string.
     Unified,
@@ -106,7 +106,7 @@ const COMPARED_BUFFER0: c_int = 1 << 0;
 const COMPARED_BUFFER1: c_int = 1 << 1;
 
 /// What the options table asked of the engine, beyond the [`Mode`].
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Config {
     /// The `XDF_*` bits.
     flags: u64,

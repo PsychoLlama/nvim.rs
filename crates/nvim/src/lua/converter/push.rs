@@ -41,6 +41,7 @@ use crate::types::{Failed, Float, TypVal, kObjectTypeDict};
 const CONTAINER_SLOTS: c_int = 3;
 
 /// The `push_typval()` sink.
+#[derive(Debug)]
 struct LuaSink<'a> {
     stack: &'a mut Stack,
     /// Push `nil` and a typed table for Vimscript's `null` and empty

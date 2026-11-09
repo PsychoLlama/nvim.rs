@@ -59,6 +59,7 @@ pub fn os_mkdir(path: &CStr, mode: int32_t) -> c_int {
 /// be made, and libuv's own word for the code -- which is here rather than at
 /// the caller because `uv_strerror` is a C call and this is the side of the
 /// boundary that makes those.
+#[derive(Debug)]
 pub struct MkdirFailure {
     pub code: c_int,
     pub dir: Option<CString>,

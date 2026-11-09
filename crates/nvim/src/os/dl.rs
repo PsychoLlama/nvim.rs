@@ -32,6 +32,7 @@ use core::ptr;
 use std::ffi::CString;
 
 /// The single argument handed to the library function.
+#[derive(Debug)]
 pub enum LibcallArg<'a> {
     Str(&'a CStr),
     Int(c_int),
@@ -39,12 +40,13 @@ pub enum LibcallArg<'a> {
 
 /// Which return prototype to assume, and — in [`LibcallResult`] — what came
 /// back.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum LibcallReturn {
     Str,
     Int,
 }
 
+#[derive(Debug)]
 pub enum LibcallResult {
     /// `None` when the callee returned a pointer value of NULL, 1 or -1:
     /// upstream assumes those are never legal strings.
@@ -58,6 +60,7 @@ type StrToInt = unsafe extern "C" fn(*const c_char) -> c_int;
 type IntToInt = unsafe extern "C" fn(c_int) -> c_int;
 
 /// A library held open by libuv, closed on drop.
+#[derive(Debug)]
 struct DynLib(uv_lib_t);
 
 impl DynLib {

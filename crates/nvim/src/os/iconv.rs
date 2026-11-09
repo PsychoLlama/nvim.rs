@@ -33,7 +33,7 @@ use ::libc::{__errno_location, iconv, iconv_close, iconv_open};
 use crate::global_cell::GlobalCell;
 
 /// Has the host's iconv been proved to work?
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Working {
     Unknown,
     Yes,
@@ -48,6 +48,7 @@ fn failed() -> *mut c_void {
 }
 
 /// An open iconv descriptor, closed when dropped.
+#[derive(Debug)]
 pub struct Iconv(NonNull<c_void>);
 
 impl Iconv {

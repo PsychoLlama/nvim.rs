@@ -15,7 +15,7 @@ use crate::types::TypVal;
 
 /// One row of the builtin-function table: what `abs()` *is* to the
 /// evaluator.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct EvalFuncDef {
     /// The name it answers to; `None` on the blank row that ends the table.
     pub name: Option<&'static ::core::ffi::CStr>,
@@ -37,7 +37,7 @@ pub type VimLFunc = Option<fn(&[TypVal], &mut TypVal, EvalFuncData)>;
 ///
 /// The argument slice a builtin is handed *is* the count, so this says only
 /// what the dispatcher checks before the call.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Arity {
     /// Exactly this many.
     Exact(u8),
@@ -85,7 +85,7 @@ impl Arity {
 }
 
 /// Which argument a `base->method()` call fills in.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum BaseArg {
     /// The function cannot be called as a method.
     Never,
@@ -112,7 +112,7 @@ pub type FloatFunc = Option<fn(Float) -> Float>;
 ///
 /// There is no tag beside it: which arm a row holds follows from the row's
 /// `func`, because only the two shared wrappers read one at all.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum EvalFuncData {
     /// The builtin has a body of its own and carries nothing.
     None,

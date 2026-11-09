@@ -58,7 +58,7 @@ const INIT_POS: Pos = Pos {
 /// gets when lines are inserted, deleted or moved. Marks in `line1..=line2`
 /// move by `amount`; `amount == MAXLNUM` means those lines are gone. Marks
 /// past `line2` move by `amount_after`.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct LineShift {
     line1: LineNr,
     line2: LineNr,
@@ -137,7 +137,7 @@ impl LineShift {
 
 /// `mark_col_adjust`'s `COL_ADJUST`: the column rewrite a mark on line
 /// `lnum` at or after `mincol` gets when text on that line moves.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct ColShift {
     lnum: LineNr,
     mincol: ColNr,

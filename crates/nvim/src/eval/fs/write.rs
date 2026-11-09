@@ -204,6 +204,7 @@ fn writable(args: &[TypVal]) -> Result<(), Failed> {
 }
 
 /// The flags of the third argument, or None having reported an unknown one.
+#[derive(Debug)]
 struct Flags {
     binary: bool,
     append: bool,

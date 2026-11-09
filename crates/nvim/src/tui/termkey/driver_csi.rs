@@ -64,7 +64,7 @@ use byte::{
 
 /// The driver's per-reader state: the last control string's payload, and
 /// the serial number that ties it to the key that reported it.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct CsiDriver {
     pub(super) saved_string_id: c_int,
     pub(super) saved_string: Vec<u8>,

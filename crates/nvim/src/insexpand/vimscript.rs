@@ -178,7 +178,7 @@ pub(crate) fn ins_compl_add_dict(dict: &DictRef) {
 ///
 /// `ComplOrigExtmarks` names the cell rather than pointing into it, so it is
 /// `Copy` and needs no `unsafe` to make.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct ComplOrigExtmarks(());
 
 /// The extmarks saved over the original text. See [`ComplOrigExtmarks`].

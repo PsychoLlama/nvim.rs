@@ -44,6 +44,7 @@ use core::ffi::{CStr, c_int};
 /// `'winborder'` value that does not spell a border -- and upstream answers
 /// both by making no window and reporting nothing. `Err` is the other half:
 /// a message for the client, which is every other refusal here.
+#[derive(Debug)]
 pub(crate) enum Parsed {
     /// The keyset was decoded into the config.
     Done,
@@ -162,6 +163,7 @@ fn float_bufpos(bufpos: &Array) -> Option<LPos> {
 /// already had: clearing the text with an empty string writes `present` and
 /// nothing else, which is a distinction the three bare field writes this
 /// replaces made only by leaving early.
+#[derive(Debug)]
 struct BorderText {
     present: bool,
     chunks: Option<VirtText>,
@@ -300,6 +302,7 @@ pub(crate) fn parse_win_config(
 /// The three flags are what the `goto fail` this replaces shared between its
 /// sections: each is settled by an earlier key and read by a later one, and
 /// naming them together is what lets each section be a method of its own.
+#[derive(Debug)]
 struct Decode<'a> {
     /// The window being reconfigured, `None` when one is being created.
     window: Option<Win>,

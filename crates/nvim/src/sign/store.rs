@@ -118,7 +118,7 @@ pub(crate) fn placed_sign_name(sh: &DecorSignHighlight) -> &[u8] {
 /// What `:sign define` and `sign_define()` set: each `None` leaves that
 /// property alone, which is what makes `:sign define X texthl=Y` an update
 /// rather than a redefinition.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct SignAttrs {
     pub(crate) icon: Option<Vec<u8>>,
     /// The value as given; [`sign_define_by_name`] unescapes it.

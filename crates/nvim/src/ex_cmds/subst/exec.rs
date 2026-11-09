@@ -77,6 +77,7 @@ use core::ffi::c_int;
 static PRE_HL_ID: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// What the whole command was asked for, and never changes while it runs.
+#[derive(Debug)]
 pub(super) struct SubArgs {
     /// The command's range, which the `'[`/`']` marks and the preview's
     /// "is this more than the current line" test are all it wanted the
@@ -107,6 +108,7 @@ pub(super) struct SubArgs {
 }
 
 /// Everything the substitute's stages hand one another.
+#[derive(Debug)]
 pub(super) struct Sub {
     /// The compiled pattern and its last match.
     pub regmatch: RegMMatch,

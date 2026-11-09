@@ -126,7 +126,7 @@ impl VisualMode {
 /// only thing that makes one -- which is the whole point: upstream leaves
 /// `VIsual` set after a selection ends and guards every read of it with a
 /// separate `VIsual_active`, an invariant no reader is obliged to honour.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct VisualSelection {
     /// Upstream's `VIsual`: where the selection was started.
     pub(crate) anchor: Pos,
@@ -138,7 +138,7 @@ pub(crate) struct VisualSelection {
 
 /// `VIsual`, `VIsual_active`, `VIsual_mode` and `VIsual_select`, which
 /// upstream keeps as four unrelated globals that have to agree.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct VisualState {
     /// Upstream's `VIsual_active`.
     active: bool,
@@ -310,6 +310,7 @@ pub(crate) fn restore_visual_mode() {
 /// `:123` line number, which is what upstream's pointer into the buffer's own
 /// line let it do. It is a copy, because every caller goes on to run a
 /// command with it.
+#[derive(Debug)]
 pub(crate) struct VisualText {
     /// The line from the selection's first byte on.
     line: XString,

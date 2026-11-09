@@ -188,6 +188,7 @@ pub(crate) fn slot_holds(opt_idx: OptIndex, slot: OptSlot, value: &OptVal) -> bo
 /// What a variable held before [`replace_slot`] wrote it, which
 /// [`restore_slot`] puts back exactly: a string variable that owned no
 /// string of its own goes back to owning none.
+#[derive(Debug)]
 pub(crate) struct Replaced {
     /// The value as the setter's callbacks see it.
     pub(crate) value: OptVal,

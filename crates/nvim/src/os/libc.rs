@@ -40,14 +40,14 @@ pub type __compar_fn_t = Option<
     ) -> ::core::ffi::c_int,
 >;
 pub type __gnuc_va_list = __builtin_va_list;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct __pthread_internal_list {
     pub __prev: *mut __pthread_internal_list,
     pub __next: *mut __pthread_internal_list,
 }
 pub type __pthread_list_t = __pthread_internal_list;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct __pthread_mutex_s {
     pub __lock: ::core::ffi::c_int,
@@ -59,7 +59,7 @@ pub struct __pthread_mutex_s {
     pub __elision: ::core::ffi::c_short,
     pub __list: __pthread_list_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct __pthread_rwlock_arch_t {
     pub __readers: ::core::ffi::c_uint,
@@ -76,6 +76,7 @@ pub struct __pthread_rwlock_arch_t {
     pub __flags: ::core::ffi::c_uint,
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct __va_list_tag {
     pub gp_offset: ::core::ffi::c_uint,
     pub fp_offset: ::core::ffi::c_uint,
@@ -123,3 +124,4 @@ pub type uint8_t = u8;
 pub type uintmax_t = ::libc::uintmax_t;
 pub type uintptr_t = usize;
 pub type va_list = __gnuc_va_list;
+crate::untagged_union_debug!(pthread_mutex_t, pthread_rwlock_t);

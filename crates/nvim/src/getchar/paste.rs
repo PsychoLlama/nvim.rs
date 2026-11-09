@@ -24,7 +24,7 @@ use core::ffi::c_int;
 ///
 /// Upstream passes a `TriState` here, but the three values are phases of a
 /// stream, not an unknown boolean.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum PastePhase {
     /// The paste is beginning; `K_PASTE_START` goes into the buffers.
     Start,

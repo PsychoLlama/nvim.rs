@@ -35,6 +35,7 @@ use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 /// One of the named (non-`key_fN`) capabilities the driver looks up.
+#[derive(Debug)]
 struct NamedKey {
     /// Which of `tui::terminfo::caps::KEYS` this is. That index is also the
     /// slot in `TerminfoEntry::keys`, and it carries the capability names the
@@ -82,7 +83,7 @@ static NAMED_KEYS: [NamedKey; 16] = [
 ];
 
 /// The driver's per-reader state: the key trie, built on the first start.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TerminfoDriver {
     keys: Option<KeyTrie>,
 }

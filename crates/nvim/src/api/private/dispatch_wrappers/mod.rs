@@ -266,6 +266,7 @@ fn is_empty_array(o: &Object) -> bool {
 }
 
 /// What reading a keyset argument produced.
+#[derive(Debug)]
 enum KeySetArg<K> {
     /// Decoded.
     Read(K),

@@ -96,6 +96,7 @@ const SHELL_SPECIAL: &[u8] = b"\t \"&'$;<>()\\|\n";
 /// An owned argument vector, the program first: what a child process is
 /// started with. `crate::shell::system` lays it out as the NULL-terminated
 /// `char **` libuv wants when the child is spawned.
+#[derive(Debug)]
 pub struct Argv(Vec<ThinCString>);
 
 impl Argv {

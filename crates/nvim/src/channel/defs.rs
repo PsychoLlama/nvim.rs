@@ -24,6 +24,7 @@ use crate::eval::typval::DictRef;
 use crate::msgpack_rpc::unpacker::Unpacker;
 
 /// Where a channel's `on_stdout`/`on_stderr`/`on_data` output goes.
+#[derive(Debug)]
 pub struct CallbackReader {
     pub cb: Callback,
     /// The dictionary a buffered reader with no callback collects into
@@ -76,6 +77,7 @@ impl Default for CallbackReader {
 /// `event/channel.rs` defines on [`Pin<&mut ChannelStream>`](Pin), which is
 /// the one module that hands those addresses to libuv. Nothing else can move
 /// a transport out of its box or swap two of them.
+#[derive(Debug)]
 pub struct Channel {
     pub id: uint64_t,
     /// Who still stands on the channel: its transport's open handles, queued
@@ -152,6 +154,7 @@ impl Channel {
 /// Not `Unpin` (every variant with a libuv handle embeds a `Stream`, which
 /// is not): a channel keeps it in a pinned box, see [`Channel`].
 #[allow(clippy::large_enum_variant)]
+#[derive(Debug)]
 pub enum ChannelStream {
     /// A child process, with up to three pipes or a pty master.
     Job(JobProc),
@@ -182,6 +185,7 @@ impl ChannelStream {
 /// A job's child, started through libuv or behind a pty. Both begin with
 /// the `Proc` the process layer works on.
 #[allow(clippy::large_enum_variant)]
+#[derive(Debug)]
 pub enum JobProc {
     Uv(LibuvProc),
     Pty(PtyProc),
@@ -212,6 +216,7 @@ pub const kChannelStreamStdio: ChannelStreamType = 2;
 pub const kChannelStreamStderr: ChannelStreamType = 3;
 pub const kChannelStreamInternal: ChannelStreamType = 4;
 
+#[derive(Debug)]
 pub struct ChannelCallFrame {
     pub request_id: uint32_t,
     pub returned: bool,
@@ -225,12 +230,13 @@ pub const kChannelStdinPipe: ChannelStdinMode = 0;
 pub const kChannelStdinNull: ChannelStdinMode = 1;
 pub type ChannelStreamType = ::core::ffi::c_uint;
 pub type ClientType = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct InternalState {
     pub cb: LuaRef,
     pub closed: bool,
 }
+#[derive(Debug)]
 pub struct RpcState {
     pub closed: bool,
     pub unpacker: Option<Box<Unpacker>>,
@@ -240,12 +246,13 @@ pub struct RpcState {
     pub info: ApiDict,
     pub client_type: ClientType,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct StderrState {
     pub closed: bool,
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct StdioPair {
     pub in_0: RStream,
     pub out: Stream,

@@ -449,6 +449,7 @@ pub(crate) fn put_set(
 }
 
 /// What [`put_string_value`] wrote.
+#[derive(Debug)]
 enum Written {
     /// The value is on the current line, which still needs its terminator.
     Value,

@@ -49,7 +49,7 @@ use crate::winlayer::{Buf, Win, windows};
 
 /// What `pagescroll` measured before it scrolled: the buffer's length, and
 /// the cursor position a half-page scroll puts back before moving it itself.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Saved {
     buflen: LineNr,
     cursor: Pos,

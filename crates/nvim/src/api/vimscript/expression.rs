@@ -133,6 +133,7 @@ fn parse_flags(flags: &ApiString) -> Result<c_int, Error> {
 /// node is entered once, its children rendered first, and its dictionary
 /// built when it is left from the rendered children on top of `done`.
 fn convert_ast(east: &ExprAST<'_>) -> Object {
+    #[derive(Debug)]
     enum Step {
         Enter(NodeId),
         Leave(NodeId),

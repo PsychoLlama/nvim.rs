@@ -26,7 +26,7 @@ use crate::lua::stack::Raise;
 use crate::lua_functions;
 
 /// A tree, as its userdatum owns it. Empty once collected.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct Tree(Option<NonNull<TSTree>>);
 
 impl Drop for Tree {

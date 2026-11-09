@@ -82,6 +82,7 @@ impl ComFlags {
 ///
 /// `COM_MAX_LEN` bytes is upstream's `part_buf`, and the copy is cut to fit
 /// it the way `copy_option_part` cuts it: at most `COM_MAX_LEN - 1` bytes.
+#[derive(Debug)]
 struct ComItem {
     buf: [u8; COM_MAX_LEN],
     len: usize,

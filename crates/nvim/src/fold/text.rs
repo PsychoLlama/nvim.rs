@@ -42,6 +42,7 @@ use crate::options::kWinOptFoldtext;
 use crate::optionstr::OptString;
 
 /// What [`get_foldtext`] rendered a closed fold as.
+#[derive(Debug)]
 pub(crate) enum FoldText {
     /// The default text, NUL-terminated in the caller's scratch buffer.
     Scratch,

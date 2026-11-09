@@ -142,6 +142,7 @@ fn version_of(v: Option<&[u8]>) -> c_int {
 /// Every field is a guess. `$TERM` is routinely wrong -- terminals emulate
 /// each other and multiplexers rewrite it -- which is why several of these
 /// are "X pretending to be an xterm" rather than plain "is X".
+#[derive(Debug)]
 pub struct Terminal {
     pub xterm: bool,
     pub hterm: bool,
@@ -441,6 +442,7 @@ pub fn patch_terminfo_bugs(ti: &mut TerminfoEntry, t: &Terminal) {
 
 /// What [`augment_terminfo`] concluded, over and above the capabilities it
 /// wrote into the description.
+#[derive(Debug)]
 pub struct Augmentation {
     pub can_resize_screen: bool,
     pub can_set_title: bool,

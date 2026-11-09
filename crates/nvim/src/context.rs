@@ -292,7 +292,7 @@ pub fn ctx_from_dict(dict: ApiDict, ctx: &mut Context) -> Result<c_int, Error> {
     Ok(types)
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Context {
     pub regs: ApiString,
     pub jumps: ApiString,

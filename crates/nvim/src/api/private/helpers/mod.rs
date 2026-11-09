@@ -341,7 +341,7 @@ pub(crate) fn api_set_sctx(channel_id: uint64_t) -> SavedSctx {
     Script::context(sctx)
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TryState {
     pub(crate) current_exception: Option<ExcId>,
     pub got_int: ::core::ffi::c_int,
@@ -370,7 +370,7 @@ impl Default for TryState {
 
 /// A vector of owned API strings: ShaDa's register contents, the one keyset
 /// field whose value is a list of binaries rather than an [`Object`](crate::types::Object) tree.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct StringArray(Vec<ApiString>);
 
 impl StringArray {

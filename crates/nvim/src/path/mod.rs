@@ -136,6 +136,7 @@ pub fn save_abs_path(name: &CStr) -> XString {
 }
 
 /// A file name being reduced to its simplest form, in place.
+#[derive(Debug)]
 struct Simplify<'a> {
     /// The name, its NUL included.
     name: &'a mut [u8],

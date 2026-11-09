@@ -62,6 +62,7 @@ fn vgr_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
 }
 
 /// The command line of one `:vimgrep`, parsed.
+#[derive(Debug)]
 struct Search {
     /// The pattern as the user wrote it, for the fuzzy matcher and for the
     /// "no match" message.
@@ -306,7 +307,7 @@ fn match_buflines(
 }
 
 /// What searching the files left behind for [`ex_vimgrep`]'s tail.
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Outcome {
     /// A dummy buffer was loaded, so folds have to be rebuilt afterwards.
     redraw_for_dummy: bool,

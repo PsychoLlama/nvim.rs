@@ -28,6 +28,7 @@ use crate::state::Step;
 use crate::winlayer::Win;
 
 /// What `CTRL-\` did with the key typed after it.
+#[derive(Debug)]
 enum CtrlBsl {
     /// `CTRL-\ e` replaced the line with an expression's value.
     Changed,

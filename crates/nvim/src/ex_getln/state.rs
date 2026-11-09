@@ -30,7 +30,7 @@ pub(crate) static cmdline_was_last_drawn: GlobalCell<bool> = GlobalCell::new(fal
 pub(crate) static cmdpreview: GlobalCell<bool> = GlobalCell::new(false);
 
 pub(crate) type CmdRedraw = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct CmdlineColorChunk {
     pub start: ::core::ffi::c_int,
     pub end: ::core::ffi::c_int,
@@ -50,7 +50,7 @@ pub(crate) struct CmdlineColorChunk {
 /// The `Vec` is kept at its full allocated length rather than at the text's,
 /// so `text.len()` is exactly C's `cmdbufflen`, and a command line opened
 /// for `n` bytes grows when C's did.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub(crate) struct CmdBuff {
     /// The allocation. Empty exactly when no command line is in use.
     text: Vec<u8>,
@@ -198,7 +198,7 @@ impl CmdBuff {
 /// pair by hand at each exit that had to -- including a `theend:` label
 /// reached from a dozen `goto`s. Both are `Vec`s here, so the only release
 /// is the one `Drop` does, and re-caching a line cannot leak the last one.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub(crate) struct ColoredCmdline {
     /// C's `prompt_id`: which command line the chunks were computed for.
     prompt_id: ::core::ffi::c_uint,
@@ -268,6 +268,7 @@ impl ColoredCmdline {
 }
 /// One command line: the one being edited (`ccline`), or one suspended under
 /// it on the saved stack.
+#[derive(Debug)]
 pub(crate) struct CmdlineInfo {
     pub(crate) cmdbuff: CmdBuff,
     pub cmdpos: ::core::ffi::c_int,

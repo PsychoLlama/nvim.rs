@@ -451,6 +451,7 @@ fn put_pattern_offsets(spp: &SynPat) {
 /// The two lists are compared by *identity* ([`IdList::same`]), as upstream
 /// compared its pointers: every keyword has its own copy ([`IdList::copy`]),
 /// so two keywords' lists are the same only when neither has one.
+#[derive(Debug)]
 struct KeywordOpts {
     contained: SynFlags,
     skipnl: SynFlags,

@@ -146,6 +146,7 @@ fn reuse_mapblock(
 }
 
 /// What a walk of one bucket for a definition or an `:unmap` ended with.
+#[derive(Debug)]
 enum Walked {
     /// Every entry was looked at.
     Done,
@@ -414,6 +415,7 @@ pub(crate) fn buf_do_map(
 
 /// What one bucket walk of [`buf_do_map`] needs to know: the LHS, how to
 /// match it, and what to do with a match.
+#[derive(Debug)]
 struct Step<'a> {
     lhs: &'a [u8],
     args: &'a MapArguments,

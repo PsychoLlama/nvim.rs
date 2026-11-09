@@ -37,7 +37,7 @@ pub(crate) static searchcmdlen: GlobalCell<c_int> = GlobalCell::new(0);
 pub(crate) static no_hlsearch: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static magic_overruled: GlobalCell<OptMagic> = GlobalCell::new(OPTION_MAGIC_NOT_SET);
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct SearchOffset {
     pub dir: ::core::ffi::c_char,
     pub line: bool,
@@ -47,7 +47,7 @@ pub(crate) struct SearchOffset {
 /// What a caller of `searchit` may add: a line to stop after, a deadline,
 /// and the two answers -- whether the deadline was passed, and whether the
 /// search wrapped around the end of the buffer.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct SearchItArg<'a> {
     /// Stop after this line, when it is not zero.
     pub sa_stop_lnum: LineNr,

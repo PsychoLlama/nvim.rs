@@ -83,7 +83,7 @@ fn check_self_reference<S: TypvalSink>(
 
 /// The eight `_TYPE` markers a special dictionary can carry, in the order
 /// `v:msgpack_types` holds them (upstream's `MessagePackType`).
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum SpecialKind {
     Nil,
     Bool,

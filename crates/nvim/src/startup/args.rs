@@ -131,6 +131,7 @@ pub(crate) fn edit_stdin(parm: &MainParams) -> bool {
 }
 
 /// The walking cursor over argv.
+#[derive(Debug)]
 struct Scan<'a> {
     parm: &'a mut MainParams,
     /// The whole command line, `argv[0]` included.

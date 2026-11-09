@@ -327,6 +327,7 @@ fn close_the_floats(win: Win, force: bool) -> Result<(), NotClosed> {
 }
 
 /// What `leave_closing_window` found.
+#[derive(Debug)]
 enum Leave {
     /// An autocommand invalidated the window, or aborted the script.
     Failed,

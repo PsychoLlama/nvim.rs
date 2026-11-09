@@ -37,7 +37,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{DI_FLAGS_FIX, DI_FLAGS_LOCK};
 
 /// What [`ex_unletlock`] does to each argument it resolves.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum Action {
     /// `:unlet`; `!` suppresses "no such variable".
     Unlet { forceit: bool },

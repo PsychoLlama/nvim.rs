@@ -47,7 +47,7 @@ use self::containers::{filter_map_blob, filter_map_dict, filter_map_list, filter
 
 /// Which of the four builtins is running: what to do with the value the
 /// callback answered.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum FilterMap {
     /// `filter()`: drop the item when the answer is falsy.
     Filter,

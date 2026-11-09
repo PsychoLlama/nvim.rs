@@ -56,7 +56,7 @@ const UV_RUN_NOWAIT: uv_run_mode = 2;
 /// `data` field of every handle registered with it — so wrapping that pointer
 /// is the only unsafe step, and the accessors below derive their handle
 /// pointers from the wrapped pointer rather than from a borrow of it.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct EventLoop(*mut Loop);
 
 impl EventLoop {
@@ -452,6 +452,7 @@ pub unsafe fn process_events_until(
 }
 
 /// What a wait on the editor's own loop drains between polls.
+#[derive(Debug)]
 pub(crate) enum Drain {
     /// The main queue: everything the editor has deferred.
     Events,
@@ -488,6 +489,7 @@ impl Drain {
 /// A budget of zero means "one pass, then stop"; a negative one is unlimited.
 /// The clock is only read when the budget is finite, which is why `now` is
 /// taken as a closure rather than a value.
+#[derive(Debug)]
 pub struct Budget {
     remaining: i64,
     /// The reading `remaining` was last charged against.
@@ -553,6 +555,7 @@ unsafe extern "C" fn timer_close_cb(handle: *mut uv_handle_t) {
 /// A C-shaped event: a handler and the one argument word it is run with --
 /// upstream's `Event`, which the stream, process, timer and signal watchers
 /// here still post with their own address as the argument.
+#[derive(Debug)]
 pub struct RawEvent {
     handler: unsafe extern "C" fn(*mut *mut c_void),
     arg: *mut c_void,
@@ -593,6 +596,7 @@ impl Event {
 type ThreadJob = Box<dyn FnOnce() + Send>;
 
 /// Which of the editor's queues a [`ThreadJob`] is for.
+#[derive(Debug)]
 enum Lane {
     Fast,
     Deferred,

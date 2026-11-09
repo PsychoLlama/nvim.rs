@@ -33,6 +33,7 @@ pub(crate) fn au_show_for_all_events(group: ::core::ffi::c_int, pat: &[u8]) {
 
 /// One row of a listing, copied out of the table: printing can run Lua,
 /// which can define an autocommand, so nothing holds the table across it.
+#[derive(Debug)]
 struct ShownRow {
     pat_id: PatId,
     group: ::core::ffi::c_int,

@@ -42,6 +42,7 @@ use core::ffi::c_int;
 /// rebased onto it here. A pair that lands nowhere sensible comes out of
 /// bounds rather than as an error, which is what these builtins report with
 /// -1 or an empty answer.
+#[derive(Debug)]
 struct Cell {
     grid: GridRef,
     row: c_int,
@@ -160,6 +161,7 @@ pub fn f_hlexists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 }
 
 /// What a `synIDattr()` `{what}` argument selects.
+#[derive(Debug)]
 enum Attr {
     /// A colour or a font name. `highlight_color` re-reads `{what}` itself,
     /// because the trailing `#` is part of the request.

@@ -192,6 +192,7 @@ pub(crate) const JUMPLISTSIZE: usize = 100;
 
 /// One ShaDa entry: when it was made, what it holds, and the extra data it
 /// carried that this Nvim has no field for.
+#[derive(Debug)]
 pub struct ShadaEntry {
     pub(crate) timestamp: Timestamp,
     pub(crate) data: ShadaEntryData,
@@ -228,6 +229,7 @@ impl ShadaEntry {
 }
 
 /// One entry's payload, and by which variant it is, the kind of entry.
+#[derive(Debug)]
 pub enum ShadaEntryData {
     /// No entry at all: an empty slot in a merger's arrays.
     Missing,
@@ -300,6 +302,7 @@ impl ShadaEntryData {
 }
 
 /// One buffer of the buffer list: its file and where its cursor was.
+#[derive(Debug)]
 pub struct ShadaBufferListItem {
     pub(crate) pos: Pos,
     pub(crate) fname: XString,
@@ -307,6 +310,7 @@ pub struct ShadaBufferListItem {
 }
 
 /// An entry of a kind this Nvim does not know.
+#[derive(Debug)]
 pub struct ShadaUnknownItem {
     /// The kind it arrived as.
     pub(crate) kind: u64,
@@ -315,12 +319,14 @@ pub struct ShadaUnknownItem {
 }
 
 /// One global variable.
+#[derive(Debug)]
 pub struct ShadaGlobalVar {
     pub(crate) name: XString,
     pub(crate) value: TypVal,
 }
 
 /// One register: its name, how it is put back, and its lines.
+#[derive(Debug)]
 pub struct ShadaRegister {
     pub(crate) name: c_char,
     pub(crate) motion: MotionType,
@@ -331,6 +337,7 @@ pub struct ShadaRegister {
 }
 
 /// One history line.
+#[derive(Debug)]
 pub struct ShadaHistoryItem {
     pub(crate) histtype: u8,
     /// Shared with the history table when the line is the editor's own.
@@ -340,6 +347,7 @@ pub struct ShadaHistoryItem {
 }
 
 /// A global mark, local mark, jump or change.
+#[derive(Debug)]
 pub struct ShadaFileMark {
     /// The mark's letter; NUL for a jump or a change.
     pub(crate) name: c_char,
@@ -349,6 +357,7 @@ pub struct ShadaFileMark {
 
 /// Merging one history type: a ring of the newest entries, and the part of
 /// Nvim's own history not yet folded in.
+#[derive(Debug)]
 pub(crate) struct HistoryMergerState {
     pub(crate) hmll: merge::HistoryRing,
     /// Nvim's own history (oldest first), taken when the merger started and
@@ -358,6 +367,7 @@ pub(crate) struct HistoryMergerState {
 }
 
 /// Everything collected for one write, and what the merge decides between.
+#[derive(Debug)]
 pub(crate) struct WriteMergerState {
     pub(crate) hms: [Option<HistoryMergerState>; HIST_COUNT],
     pub(crate) global_marks: [ShadaEntry; 26],
@@ -419,6 +429,7 @@ impl WriteMergerState {
 }
 
 /// One file's marks, as the merge collects them.
+#[derive(Debug)]
 pub(crate) struct FileMarks {
     /// `a`-`z`, then `"`, `^` and `.`.
     pub(crate) marks: [ShadaEntry; 29],

@@ -82,6 +82,7 @@ use crate::types::{Failed, Refcount};
 /// is not null: `v:_null_list` is `TypVal::list(None)`, which
 /// [`TypVal::list_ref`] answers as `None`.
 #[repr(transparent)]
+#[derive(Debug)]
 pub struct ListRef(NonNull<List>);
 
 impl ListRef {
@@ -327,6 +328,7 @@ impl Dict {
 /// handle over one is a *borrow* spelled as a handle ([`DictRef::owning`]),
 /// and `unref_var_dict` is what gives the whole block back.
 #[repr(transparent)]
+#[derive(Debug)]
 pub struct DictRef(NonNull<Dict>);
 
 /// The same API as [`ListRef`]'s, method for method.
@@ -525,6 +527,7 @@ pub(crate) fn free_registered_list(view: ::core::mem::ManuallyDrop<ListRef>) {
 /// One reference to a [`Blob`], given back when the handle goes: the blob
 /// half of [`ListRef`].
 #[repr(transparent)]
+#[derive(Debug)]
 pub struct BlobRef(NonNull<Blob>);
 
 /// The same API as [`ListRef`]'s, less the raw bridges: a blob is only
@@ -620,6 +623,7 @@ pub fn tv_blob_alloc() -> BlobRef {
 /// One reference to a [`Partial`], given back when the handle goes: the
 /// partial half of [`ListRef`].
 #[repr(transparent)]
+#[derive(Debug)]
 pub struct PartialRef(NonNull<Partial>);
 
 /// The same API as [`ListRef`]'s, less the raw bridges: a partial is only
@@ -705,7 +709,7 @@ impl ::core::ops::DerefMut for PartialRef {
 /// `Copy`, and a raw pointer, for the same reason the slots of every other
 /// table are: the table names its items, and which of them it is responsible
 /// for freeing is the item's own `DI_FLAGS_ALLOC`.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct DictEntry(*mut DictItem);
 
 impl DictEntry {

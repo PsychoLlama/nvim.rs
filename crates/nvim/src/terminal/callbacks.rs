@@ -46,6 +46,7 @@ use super::refresh::invalidate_terminal;
 use super::{Term, scrollback, term_buf};
 
 /// What the screen reports, for the terminal it belongs to.
+#[derive(Debug)]
 pub(crate) struct ScreenReports(pub(crate) Term);
 
 impl ScreenHost for ScreenReports {
@@ -224,6 +225,7 @@ fn term_clipboard_set(mask: VTermSelectionMask, payload: &[u8]) {
 }
 
 /// OSC 52 writes, for the terminal they arrive at.
+#[derive(Debug)]
 pub(crate) struct Clipboard(pub(crate) Term);
 
 impl SelectionHost for Clipboard {

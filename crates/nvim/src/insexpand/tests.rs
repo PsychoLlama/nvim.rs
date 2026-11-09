@@ -27,6 +27,7 @@ use std::ffi::CString;
 
 /// The completion's list state cleared, `'completeopt'` set to `cot`, and
 /// both put back on drop.
+#[derive(Debug)]
 struct Fixture {
     cot: c_uint,
     _held: Held,

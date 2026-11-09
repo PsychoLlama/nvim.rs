@@ -18,6 +18,7 @@ use crate::message::HlMessageChunk;
 use crate::os::libc::{int64_t, size_t};
 use core::mem::ManuallyDrop;
 
+#[derive(Debug)]
 pub struct AdditionalDataBuilder {
     pub size: size_t,
     pub capacity: size_t,

@@ -73,6 +73,7 @@ pub fn skip_comment(line: &[u8], process: bool, include_space: bool) -> (usize, 
 }
 
 /// What [`measure_join`] worked out and [`assemble_join`] replays.
+#[derive(Debug)]
 struct JoinPlan {
     /// 'formatoptions' `j`: comment leaders are removed.
     remove_comments: bool,

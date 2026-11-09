@@ -35,14 +35,14 @@ use crate::types::{
     WindowHandle,
 };
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict__shada_buflist_item {
     pub l: Option<Integer>,
     pub c: Option<Integer>,
     pub f: Option<ApiString>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict__shada_mark {
     pub n: Option<Integer>,
@@ -50,7 +50,7 @@ pub struct KeyDict__shada_mark {
     pub c: Option<Integer>,
     pub f: Option<ApiString>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict__shada_register {
     pub rc: Option<StringArray>,
@@ -61,7 +61,7 @@ pub struct KeyDict__shada_register {
 }
 /// ShaDa entries spell their keys as two-letter codes, so every field here
 /// names the one it travels under.
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict__shada_search_pat {
     /// Wire key: `sm`.
@@ -85,7 +85,7 @@ pub struct KeyDict__shada_search_pat {
     /// Wire key: `sp`.
     pub pat: Option<ApiString>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_buf_attach {
     pub on_lines: Option<LuaRef>,
@@ -96,13 +96,13 @@ pub struct KeyDict_buf_attach {
     pub utf_sizes: Option<Boolean>,
     pub preview: Option<Boolean>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_buf_delete {
     pub force: Option<Boolean>,
     pub unload: Option<Boolean>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_clear_autocmds {
     pub buffer: Option<BufferHandle>,
@@ -111,7 +111,7 @@ pub struct KeyDict_clear_autocmds {
     pub group: Option<Object>,
     pub pattern: Option<Object>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_cmd {
     pub cmd: Option<ApiString>,
@@ -126,13 +126,13 @@ pub struct KeyDict_cmd {
     pub addr: Option<ApiString>,
     pub nextcmd: Option<ApiString>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_cmd_magic {
     pub file: Option<Boolean>,
     pub bar: Option<Boolean>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_cmd_mods {
     pub silent: Option<Boolean>,
@@ -156,33 +156,33 @@ pub struct KeyDict_cmd_mods {
     pub vertical: Option<Boolean>,
     pub split: Option<ApiString>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_cmd_mods_filter {
     pub pattern: Option<ApiString>,
     pub force: Option<Boolean>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_cmd_opts {
     pub output: Option<Boolean>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_complete_set {
     pub info: Option<ApiString>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_context {
     pub types: Option<Array>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_create_augroup {
     pub clear: Option<Boolean>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_create_autocmd {
     pub buffer: Option<BufferHandle>,
@@ -195,7 +195,7 @@ pub struct KeyDict_create_autocmd {
     pub once: Option<Boolean>,
     pub pattern: Option<Object>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_echo_opts {
     pub err: Option<Boolean>,
@@ -209,10 +209,10 @@ pub struct KeyDict_echo_opts {
     pub source: Option<ApiString>,
     pub data: Option<ApiDict>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_empty {}
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_eval_statusline {
     pub winid: Option<WindowHandle>,
@@ -223,7 +223,7 @@ pub struct KeyDict_eval_statusline {
     pub use_tabline: Option<Boolean>,
     pub use_statuscol_lnum: Option<Integer>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_exec_autocmds {
     pub buffer: Option<BufferHandle>,
@@ -233,12 +233,12 @@ pub struct KeyDict_exec_autocmds {
     pub pattern: Option<Object>,
     pub data: Option<Object>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_exec_opts {
     pub output: Option<Boolean>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_get_autocmds {
     pub event: Option<Object>,
@@ -248,18 +248,18 @@ pub struct KeyDict_get_autocmds {
     pub buf: Option<Object>,
     pub id: Option<Integer>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_get_commands {
     pub builtin: Option<Boolean>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_get_extmark {
     pub details: Option<Boolean>,
     pub hl_name: Option<Boolean>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_get_extmarks {
     pub limit: Option<Integer>,
@@ -269,7 +269,7 @@ pub struct KeyDict_get_extmarks {
     /// Wire key: `type`.
     pub type_0: Option<ApiString>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_get_highlight {
     pub id: Option<Integer>,
@@ -277,12 +277,12 @@ pub struct KeyDict_get_highlight {
     pub link: Option<Boolean>,
     pub create: Option<Boolean>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_get_ns {
     pub winid: Option<WindowHandle>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_highlight {
     pub altfont: Option<Boolean>,
@@ -324,7 +324,7 @@ pub struct KeyDict_highlight {
 }
 /// The `cterm` sub-dict of a highlight definition. An unset attribute reads
 /// as false, like every other attribute here that the caller left out.
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_highlight_cterm {
     pub bold: Option<Boolean>,
@@ -345,7 +345,7 @@ pub struct KeyDict_highlight_cterm {
     pub nocombine: Option<Boolean>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_keymap {
     pub noremap: Option<Boolean>,
@@ -358,18 +358,18 @@ pub struct KeyDict_keymap {
     pub desc: Option<ApiString>,
     pub replace_keycodes: Option<Boolean>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_ns_opts {
     pub wins: Option<Array>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_open_term {
     pub on_input: Option<LuaRef>,
     pub force_crlf: Option<Boolean>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_option {
     pub scope: Option<ApiString>,
@@ -377,7 +377,7 @@ pub struct KeyDict_option {
     pub buf: Option<BufferHandle>,
     pub filetype: Option<ApiString>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_redraw {
     pub flush: Option<Boolean>,
@@ -391,13 +391,13 @@ pub struct KeyDict_redraw {
     pub win: Option<WindowHandle>,
     pub buf: Option<BufferHandle>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_runtime {
     pub is_lua: Option<Boolean>,
     pub do_source: Option<Boolean>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_set_decoration_provider {
     pub on_start: Option<LuaRef>,
@@ -410,7 +410,7 @@ pub struct KeyDict_set_decoration_provider {
     pub _on_spell_nav: Option<LuaRef>,
     pub _on_conceal_line: Option<LuaRef>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_set_extmark {
     pub id: Option<Integer>,
@@ -449,12 +449,12 @@ pub struct KeyDict_set_extmark {
     pub scoped: Option<Boolean>,
     pub _subpriority: Option<Integer>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_tabpage_config {
     pub after: Option<Integer>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_user_command {
     pub addr: Option<Object>,
@@ -471,7 +471,7 @@ pub struct KeyDict_user_command {
     /// Wire key: `register`.
     pub register_: Option<Boolean>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_win_config {
     pub external: Option<Boolean>,
@@ -499,7 +499,7 @@ pub struct KeyDict_win_config {
     pub title_pos: Option<ApiString>,
     pub _cmdline_offset: Option<Integer>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_win_text_height {
     pub start_row: Option<Integer>,
@@ -508,7 +508,7 @@ pub struct KeyDict_win_text_height {
     pub end_vcol: Option<Integer>,
     pub max_height: Option<Integer>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 pub struct KeyDict_xdl_diff {
     pub on_hunk: Option<LuaRef>,

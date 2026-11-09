@@ -170,6 +170,7 @@ pub fn append_to_redobuff_number(n: c_int) {
 /// means nothing without the bytes it came from, so the two are one value,
 /// and nothing a caller does to the redo buffers between two reads can
 /// leave it pointing into a freed block.
+#[derive(Debug)]
 struct RedoReader {
     bytes: Vec<u8>,
     at: usize,
@@ -361,6 +362,7 @@ mod tests {
 
     /// The editor's key buffers are process-wide; hold the lock and start
     /// from empty ones. Dropping the answer leaves them empty again.
+    #[derive(Debug)]
     struct Fresh(#[allow(dead_code, reason = "held for its drop")] Held);
 
     impl Fresh {

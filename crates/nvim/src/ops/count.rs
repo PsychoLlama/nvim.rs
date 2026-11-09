@@ -99,7 +99,7 @@ fn line_count_info(
 /// The `_cursor` three are "up to the cursor" outside Visual mode and "over
 /// the selection" inside it, which is the whole difference between the two
 /// messages [`report_counts`] can print.
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct PosCounts {
     /// Bytes in the buffer.
     bytes: VarNumber,
@@ -116,6 +116,7 @@ struct PosCounts {
 }
 
 /// The Visual selection, as the counting walk needs to see it.
+#[derive(Debug)]
 struct Selection {
     /// Upper-left corner.
     min: Pos,

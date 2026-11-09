@@ -253,6 +253,7 @@ fn get_script_local_funcs(sid: ScriptId) -> ListRef {
 }
 
 /// Which scripts `getscriptinfo()` was asked about.
+#[derive(Debug)]
 enum ScriptQuery {
     /// No argument, or one that named neither key: every script, names only.
     All,

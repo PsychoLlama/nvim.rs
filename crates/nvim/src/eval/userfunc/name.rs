@@ -48,6 +48,7 @@ fn byte(text: &[u8], i: usize) -> u8 {
 }
 
 /// What a name, read as a variable, turned out to call.
+#[derive(Debug)]
 pub(crate) struct Dereffed {
     /// The function a Funcref or a partial in the variable names; `None`
     /// when there is no such variable, or it holds something else.
@@ -180,6 +181,7 @@ fn builtin_function_in(text: &[u8], len: usize) -> bool {
 /// The entry is found again by its key whenever it is used: reading a
 /// function body or evaluating the arguments of a call runs code that may
 /// remove it.
+#[derive(Debug)]
 pub(crate) struct FuncDict {
     /// The dictionary, held across whatever runs before it is used.
     pub(crate) dict: DictRef,
@@ -190,7 +192,7 @@ pub(crate) struct FuncDict {
 }
 
 /// What [`trans_function_name`] read.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct FunctionName {
     /// The name the function is stored under; `None` when there is not one
     /// there, which has been reported unless the name was a `dict.key` that
@@ -328,6 +330,7 @@ fn trans_selected(
     }
 
     /// What the selected value is, as far as a function name goes.
+    #[derive(Debug)]
     enum Selected {
         Func(XString),
         Partial(PartialRef, XString),

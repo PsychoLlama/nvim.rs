@@ -51,7 +51,7 @@ use super::{MAXWLEN, MAXWLEN_INT, MAXWORDCOUNT, SY_MAXLEN, SylItem, WordEnd, Wor
 /// that short words do not all land in the table's low buckets. The table
 /// is asked once per word checked while counting, where SipHash cost as
 /// much as the rest of the count.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct WordHasher(u64);
 
 impl core::hash::Hasher for WordHasher {
@@ -291,6 +291,15 @@ pub(crate) struct LoadedLangs {
     /// it for the length of one word and puts it back empty.
     word_ends: Cell<Vec<WordEnd>>,
 }
+impl ::core::fmt::Debug for LoadedLangs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        f.debug_struct("LoadedLangs")
+            .field("slots", &self.slots)
+            .field("order", &self.order)
+            .field("word_ends", &format_args!("Cell {{ .. }}"))
+            .finish()
+    }
+}
 
 impl LoadedLangs {
     const fn new() -> Self {
@@ -388,6 +397,7 @@ pub(crate) fn free_langs() {
 /// `alloc_unregistered_buffer` -- so it has no number and nothing can find
 /// it: this value is its only owner. Dropping it closes the memline
 /// (deleting the swap file) and frees the buffer.
+#[derive(Debug)]
 pub struct SpellBuf(Owned<Buffer>);
 
 impl SpellBuf {

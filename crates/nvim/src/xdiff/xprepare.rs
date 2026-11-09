@@ -38,6 +38,7 @@ const XDL_GUESS_NLINES2: i64 = 20;
 
 /// One equivalence class of lines: every line in both files that matches
 /// this one under the whitespace flags.
+#[derive(Debug)]
 struct Class<'a> {
     /// The class's hash, as [`hash_record`] computed it.
     ha: u64,
@@ -57,6 +58,7 @@ struct Class<'a> {
 }
 
 /// `xdlclassifier_t`: hash-to-class-id, shared across both files.
+#[derive(Debug)]
 struct Classifier<'a> {
     /// Width of [`Self::buckets`], in bits.
     hbits: u32,

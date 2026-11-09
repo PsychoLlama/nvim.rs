@@ -14,7 +14,7 @@ use crate::types::{ColNr, Timestamp};
 use std::rc::Rc;
 
 pub type GRegFlags = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct BlockDef {
     pub startspaces: ::core::ffi::c_int,
     pub endspaces: ::core::ffi::c_int,

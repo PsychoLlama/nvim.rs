@@ -51,7 +51,7 @@ const SH_GLOBSTAR_OPT: &str = "[[ ${BASH_VERSINFO[0]} -ge 4 ]] && shopt -s globs
 /// How the shell is asked to print the expansion, and therefore how the names
 /// come back separated. There is no portable answer, so each family gets the
 /// spelling that works best for it.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum ShellStyle {
     /// `echo`, space separated. A shell we do not recognise; stay safe.
     Echo,
@@ -78,6 +78,7 @@ impl ShellStyle {
     }
 }
 
+#[derive(Debug)]
 enum Separator {
     Space,
     Newline,
@@ -466,6 +467,7 @@ pub(crate) fn shell_expand_wildcards(
 /// under [`ExpandFlags::NOTFOUND`], while one that would not seek or read is a
 /// hard
 /// `FAIL`.
+#[derive(Debug)]
 enum Read {
     Content(Vec<u8>),
     NotFound,

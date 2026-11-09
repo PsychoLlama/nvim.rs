@@ -75,6 +75,7 @@ impl Default for RootId {
 }
 
 /// The live population of one container kind.
+#[derive(Debug)]
 struct Registry<T> {
     /// The registered addresses; a `None` is a hole.
     slots: Vec<Option<NonNull<T>>>,

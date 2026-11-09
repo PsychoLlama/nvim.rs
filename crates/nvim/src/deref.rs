@@ -63,15 +63,18 @@ pub(crate) use deref_to_field;
 
 #[cfg(test)]
 mod tests {
+    #[derive(Debug)]
     struct Named {
         tag: u8,
         inner: Vec<u8>,
     }
     deref_to_field!(Named => mut Vec<u8>, inner);
 
+    #[derive(Debug)]
     struct Lent<'a, T>(&'a mut T);
     deref_to_field!(impl['a, T] Lent<'a, T> => mut T, 0);
 
+    #[derive(Debug)]
     struct Shown<T>(T);
     deref_to_field!(impl[T: Copy] Shown<T> => T, 0);
 

@@ -69,6 +69,7 @@ pub(crate) enum Algorithm {
 }
 
 /// `xpparam_t`, with the anchors already read off the C `char **`.
+#[derive(Debug)]
 pub(crate) struct Params<'a> {
     /// The `XDF_*` bits above.
     pub flags: u64,
@@ -104,6 +105,7 @@ impl Params<'_> {
 }
 
 /// `xdemitconf_t`, less the two `#if 0`-ed function-name hooks.
+#[derive(Debug)]
 pub(crate) struct EmitConf {
     /// Unchanged lines to show either side of a hunk.
     pub ctxlen: i64,
@@ -143,7 +145,7 @@ pub(crate) struct Rec {
 /// start, so index `-1` and index `nrec` are permanent zero sentinels. Every
 /// group walk in [`super::xdiffi::change_compact`] leans on them: they are
 /// what makes `while (rchg[end]) end++` terminate without a bounds test.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct Changed(Vec<u8>);
 
 impl Changed {
@@ -181,6 +183,7 @@ impl Changed {
 }
 
 /// `xdfile_t`: one side of a diff, prepared.
+#[derive(Debug)]
 pub(crate) struct XdFile<'a> {
     /// The whole input file. Every [`Rec`] indexes into this.
     pub text: &'a [u8],
@@ -243,6 +246,7 @@ impl<'a> XdFile<'a> {
 }
 
 /// `diffdata_t`: the reduced view of an [`XdFile`] the Myers walk sees.
+#[derive(Debug)]
 pub(crate) struct DiffData<'a> {
     /// How many entries of [`Self::ha`] and [`Self::rindex`] are live.
     pub nrec: i64,
@@ -262,6 +266,7 @@ impl DiffData<'_> {
 }
 
 /// `xdfenv_t`: both prepared sides.
+#[derive(Debug)]
 pub(crate) struct Env<'a> {
     /// The "before" file.
     pub xdf1: XdFile<'a>,
@@ -292,7 +297,7 @@ pub(crate) struct Change {
 /// A sub-problem: the same lines of both files, 1-based and inclusive of
 /// `line1`/`line2`, as [`super::xpatience`] and [`super::xhistogram`] carry
 /// it down their recursions.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Block {
     /// First line of file 1 in the block.
     pub line1: i64,

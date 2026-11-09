@@ -34,7 +34,7 @@ use crate::winlayer::prev_window;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 /// What became of one jump.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Jumped {
     /// Went there.
     Done,
@@ -48,6 +48,7 @@ enum Jumped {
 }
 
 /// The list a jump step started on, to check it against afterwards.
+#[derive(Debug)]
 struct Started {
     qfl: Qfl,
     curlist: c_int,
@@ -191,6 +192,7 @@ fn escape_winfixbuf(
 
 /// Where an entry sends the cursor, copied out of the list before the
 /// cursor moves: a search can print, and printing can run user code.
+#[derive(Debug)]
 struct Position {
     lnum: LineNr,
     col: c_int,

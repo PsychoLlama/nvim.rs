@@ -47,6 +47,7 @@ use core::ffi::c_int;
 /// The previous `:s` replacement: what a bare `:s` repeats and what `~`
 /// stands for, and the one ShaDa saves and restores with whatever extra
 /// data the file carried for it.
+#[derive(Debug)]
 struct LastReplacement {
     text: Option<XString>,
     timestamp: Timestamp,

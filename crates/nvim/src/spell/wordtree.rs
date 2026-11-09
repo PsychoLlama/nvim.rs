@@ -43,7 +43,7 @@ use crate::spell::SpellIdx;
 ///
 /// An empty tree is the language not having that tree at all, which is
 /// what a null `byts` used to say; [`WordTree::is_empty`] is the test.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct WordTree {
     byts: Box<[u8]>,
     idxs: Box<[SpellIdx]>,
@@ -128,7 +128,7 @@ impl WordTree {
 ///
 /// `Copy`, so a walk that moves between the case-folded tree and the
 /// prefix tree assigns rather than re-borrows.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Tree<'a> {
     byts: &'a [u8],
     idxs: &'a [SpellIdx],

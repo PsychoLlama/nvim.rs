@@ -165,6 +165,7 @@ fn find_mps_values(target: &mut Target, switchit: bool) {
 
 /// What the walk is looking for, once `initc` and the text under the
 /// cursor have been interpreted.
+#[derive(Debug)]
 struct Target {
     /// The character that opens; NUL when looking for a comment end.
     initc: c_int,
@@ -185,6 +186,7 @@ struct Target {
 }
 
 /// What interpreting `initc` decided to do.
+#[derive(Debug)]
 enum Plan {
     /// Walk the buffer looking for this target.
     Walk(Target),
@@ -402,6 +404,7 @@ fn find_hash_match(mut pos: Pos, hash_dir: c_int, initc: c_int) -> Option<Pos> {
 // ---------------------------------------------------------------------
 
 /// What looking at one position decided.
+#[derive(Debug)]
 enum Step {
     /// Look at the next position.
     Next,
@@ -415,6 +418,7 @@ enum Step {
 ///
 /// The position is a line and a *byte* column: the walk steps over the
 /// line's bytes, and a [`Pos`] is built only for an answer.
+#[derive(Debug)]
 struct Walk {
     lnum: LineNr,
     col: usize,

@@ -77,6 +77,7 @@ impl QueueId {
 }
 
 /// One queue's state.
+#[derive(Debug)]
 struct Queue {
     parent: Option<QueueId>,
     /// Run, with nothing borrowed, after an event is put on one of this
@@ -88,12 +89,14 @@ struct Queue {
     items: ItemList,
 }
 
+#[derive(Debug)]
 struct Slot {
     generation: u32,
     queue: Option<Queue>,
 }
 
 /// Every queue, by [`QueueId`].
+#[derive(Debug)]
 pub struct Queues {
     slots: Vec<Slot>,
     /// Slots holding no queue, for the next one made.
@@ -370,6 +373,7 @@ pub fn replace_parent(id: QueueId, new_parent: QueueId) {
 /// A child of the editor loop's main queue, freed when dropped: what a
 /// channel, a timer or a cell outside `event/` holds (`resize_events`,
 /// `deferred_events`, `ch_before_blocking_events`).
+#[derive(Debug)]
 pub(crate) struct ChildQueue(QueueId);
 
 impl ChildQueue {
@@ -398,6 +402,7 @@ impl Drop for ChildQueue {
 /// queues on, so that only their events run while it blocks;
 /// [`ParkingQueue::detached`] wakes nobody, for a terminal's pending
 /// events.
+#[derive(Debug)]
 pub(crate) struct ParkingQueue(QueueId);
 
 impl ParkingQueue {

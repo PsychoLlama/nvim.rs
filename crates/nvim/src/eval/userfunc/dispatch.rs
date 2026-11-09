@@ -33,6 +33,7 @@ use std::borrow::Cow;
 
 /// What a call is made with besides its name and its arguments, as borrows
 /// the caller holds for the length of the call.
+#[derive(Debug)]
 pub(crate) struct CallWith<'a> {
     /// Fills in the arguments once the function is known: a `\=`
     /// expression's submatch list goes only to a function that takes it.

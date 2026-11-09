@@ -84,6 +84,7 @@ pub(crate) use self::tree::*;
 
 /// The menu tree: the top-level menus, in menubar order, each owning its
 /// children in turn.
+#[derive(Debug)]
 pub(crate) struct MenuTree {
     pub(crate) menus: Vec<VimMenu>,
     /// The id the next node gets; never reused.
@@ -131,6 +132,7 @@ pub(crate) fn with_menu<R>(id: MenuId, f: impl FnOnce(&VimMenu) -> R) -> Option<
 }
 
 /// Why a walk of the tree gave up, reported once it has let go of the tree.
+#[derive(Debug)]
 pub(crate) enum MenuError {
     /// One of the fixed messages, untranslated.
     Msg(&'static CStr),
@@ -422,7 +424,7 @@ pub(crate) struct MenuId(pub(crate) u64);
 ///
 /// The node owns its names, its right-hand sides and its children, which
 /// are kept in display order (by priority, then by when they were added).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct VimMenu {
     pub(crate) id: MenuId,
     /// The modes the node is available in, `MENU_*_MODE` bits.

@@ -217,12 +217,14 @@ pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
 
 /// One start/skip/end pattern of a `:syntax region`, with the `matchgroup=`
 /// that was in force when it was read.
+#[derive(Debug)]
 struct RegionPat {
     pat: SynPat,
     matchgroup_id: c_int,
 }
 
 /// What `:syntax region` parsing produced, or why it stopped.
+#[derive(Debug)]
 struct RegionArgs {
     /// The start, skip and end patterns, indexed by `ITEM_*`, each in
     /// **reverse** command order: upstream prepends to a linked list because

@@ -36,6 +36,7 @@ use super::*;
 /// One mark as ShaDa reads and writes it: where it is, in which buffer (or
 /// file, when no buffer holds it), when it was set, and the extra data the
 /// file gave it.
+#[derive(Debug)]
 pub(crate) struct ShadaMark {
     pub(crate) mark: Pos,
     /// The buffer's number; 0 when the mark names a file instead.

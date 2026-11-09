@@ -113,6 +113,7 @@ const KEEP_EDGES: usize = BACKPOS_INITIAL as usize;
 pub(crate) static BT_STATE: GlobalCell<BtState> = GlobalCell::new(BtState::new());
 
 /// The backtracker's working state for one match.
+#[derive(Debug)]
 pub(crate) struct BtState {
     /// What the forward walk decided, and how to undo it.
     pub(crate) stack: RegStack,
@@ -151,6 +152,7 @@ impl BtState {
 }
 
 /// One `BACK` node and the input position the walk last reached it at.
+#[derive(Debug)]
 struct BackEdge {
     /// The `BACK` node, which is what identifies the loop.
     scan: usize,
@@ -179,6 +181,7 @@ struct BackEdge {
 /// attempt. A `Vec::truncate` in [`BackPos::rewind`] would silently drop
 /// those two — which is why the `debug_assert` below is the tripwire for
 /// anyone who tries it, and it fires on that pattern immediately.
+#[derive(Debug)]
 pub(crate) struct BackPos {
     /// Every entry written this match, whether or not it is live.
     seen: Vec<BackEdge>,
@@ -256,7 +259,7 @@ impl BackPos {
 
 /// One complex `\{n,m}`: the bounds the `BRACE_LIMITS` node in front of it
 /// left, and how many passes the walk has taken.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Brace {
     /// The lower bound — the *upper* one when the repeat is non-greedy, which
     /// is how `\{-n,m}` is spelled in the program.
@@ -270,6 +273,7 @@ pub(crate) struct Brace {
 /// The complex repeats' bounds and counters, one per `BRACE_COMPLEX` operand.
 ///
 /// The compiler bounds the operand to nine, so ten slots is all there can be.
+#[derive(Debug)]
 pub(crate) struct Braces([Brace; NSUBEXP_SLOTS]);
 
 impl Braces {
@@ -292,6 +296,7 @@ impl Braces {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct RegStack {
     /// One frame per decision, innermost last.
     frames: Vec<RegItem>,

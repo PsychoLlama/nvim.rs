@@ -71,6 +71,15 @@ mod template;
 #[derive(Clone, Copy)]
 pub(crate) struct TrArg<'a>(&'a dyn fmt::Display);
 
+/// The argument as it renders: a `dyn Display` is all there is to show.
+impl fmt::Debug for TrArg<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("TrArg")
+            .field(&format_args!("{}", self.0))
+            .finish()
+    }
+}
+
 impl<'a> TrArg<'a> {
     /// `value` as a message argument. Spelled by the macros, not by hand.
     #[doc(hidden)]
@@ -91,6 +100,7 @@ impl fmt::Display for TrArg<'_> {
 ///
 /// Bytes that are not UTF-8 render as U+FFFD, as everywhere else the tree
 /// puts a C string into a Rust message.
+#[derive(Debug)]
 pub(crate) struct CDisplay<'a>(Option<&'a CStr>);
 
 impl fmt::Display for CDisplay<'_> {
@@ -152,6 +162,7 @@ pub(crate) fn msg_cstr_opt(text: Option<&CStr>) -> CDisplay<'_> {
 
 /// Bytes as a message argument, rendered like [`CDisplay`]. `None` is a null
 /// pointer, which vim's printf writes as `[NULL]` whatever the precision.
+#[derive(Debug)]
 pub(crate) struct BytesDisplay<'a>(Option<&'a [u8]>);
 
 impl fmt::Display for BytesDisplay<'_> {
@@ -172,6 +183,7 @@ pub(crate) fn msg_addr<T: ?Sized>(p: *const T) -> AddrDisplay {
 }
 
 /// An address as a message argument. See [`msg_addr`].
+#[derive(Debug)]
 pub(crate) struct AddrDisplay(usize);
 
 impl fmt::Display for AddrDisplay {

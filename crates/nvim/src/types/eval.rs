@@ -395,12 +395,13 @@ crate::flag_set! {
     const RO_SBX = 4;
 }
 pub type ExprType = ::core::ffi::c_uint;
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct SaveVEvent {
     pub sve_did_save: bool,
     pub sve_hashtab: DictTab,
 }
 /// A `timer_start()` timer, as the timer table owns it.
+#[derive(Debug)]
 pub struct Timer {
     /// The libuv timer behind it; `None` once it has been closed.
     pub(crate) watcher: Option<crate::event::time::OwnedTimer>,

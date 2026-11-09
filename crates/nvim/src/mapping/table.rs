@@ -181,7 +181,7 @@ impl MapTables {
 }
 
 /// Which pair of tables a walk reads: the global one, or a buffer's.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) enum MapTable {
     Global,
     Buffer(Buf),
@@ -247,7 +247,7 @@ pub(crate) fn map_walk<T>(
 /// The match runs no user code, so the index is normally right; an `<expr>`
 /// evaluation can delete the mapping, which is why everything after that
 /// re-finds it by id.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct MapAt {
     table: MapTable,
     hash: usize,

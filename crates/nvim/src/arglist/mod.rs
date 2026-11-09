@@ -513,7 +513,7 @@ fn arglist_del_files(patterns: &[XString]) {
 }
 
 /// What [`do_arglist`] should do with the names it parses.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum ArgListOp {
     /// `:args {file}` — redefine the list.
     Set,
@@ -627,7 +627,7 @@ pub fn check_arg_idx(mut win: Win) {
 
 /// One argument: the name it was given, owned, and the buffer it was listed
 /// as, if any.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ArgEntry {
     pub name: XString,
     pub fnum: Option<Handle>,
@@ -647,6 +647,7 @@ impl ArgListId {
 
 /// An argument list: the global one, or a window-local one shared by
 /// reference count between the windows that use it.
+#[derive(Debug)]
 pub struct ArgList {
     pub entries: Vec<ArgEntry>,
     /// The windows (and `:all` walks) holding the list. The global list's

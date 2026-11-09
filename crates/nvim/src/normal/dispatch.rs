@@ -212,7 +212,7 @@ pub(crate) fn langmap_adjust(c: &mut Key, condition: bool) {
 /// and later compares that pointer against `&ca.extra_char` to decide what to
 /// do next. Naming the two slots makes that test a `match` rather than a
 /// pointer identity.
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 enum Slot {
     /// Nothing more to read.
     None,

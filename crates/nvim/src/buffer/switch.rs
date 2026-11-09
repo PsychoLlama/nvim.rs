@@ -657,6 +657,7 @@ fn step_to_listed(buffer: Buf, dir: c_int, count: c_int, flags: c_int, unload: b
 }
 
 /// What the unload half of [`do_buffer_ext`] decided.
+#[derive(Debug)]
 enum Unloaded {
     /// The command is finished; this is its result.
     Done(Result<(), Failed>),

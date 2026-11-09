@@ -41,6 +41,7 @@ use crate::types::{
 
 /// A container whose last reference the free holds, and how far through its
 /// items it has got.
+#[derive(Debug)]
 enum Owned {
     List { list: ListRef, at: usize },
     Dict { dict: DictRef, slot: usize },

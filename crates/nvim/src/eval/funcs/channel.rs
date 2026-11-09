@@ -176,6 +176,7 @@ pub fn f_rpcnotify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// A provider call reaches back into the script that started it: the
 /// request has to run with *that* script's context, autocommand state and
 /// function call stack, not with whatever the provider left behind.
+#[derive(Debug)]
 struct ProviderScope {
     sctx: ScriptCtx,
     autocmd_fname: Option<XString>,

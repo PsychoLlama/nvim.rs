@@ -99,7 +99,7 @@ pub const kExprVarScopeVim: ExprVarScope = 118;
 pub const kExprVarScopeGlobal: ExprVarScope = 103;
 pub const kExprVarScopeScript: ExprVarScope = 115;
 pub const kExprVarScopeMissing: ExprVarScope = 0;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct LexExprToken {
     pub start: ParserPosition,
     pub len: size_t,
@@ -119,7 +119,7 @@ pub struct LexExprToken {
 /// the option scope -- which is why [`LexExprTokenError`] names that scope
 /// outright. Every other arm answers its zero, which is what the C reads
 /// there. See the accessors in `parse.rs`.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum LexExprTokenData {
     /// No payload: a token whose type says everything about it, and what
     /// every token starts as.
@@ -136,26 +136,26 @@ pub enum LexExprTokenData {
     Assignment(LexExprTokenAssignment),
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct LexExprTokenAssignment {
     pub type_0: ExprAssignmentType,
 }
 /// A number literal: its value, and the base its prefix named -- which is
 /// what decides how much of the token the `NumberPrefix` highlight covers.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct LexExprTokenNumber {
     pub val: LexExprTokenNumberValue,
     pub base: uint8_t,
 }
 /// A number literal's value.  The C pairs a union with the `is_float` flag
 /// that selects it; the flag *is* the tag here.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum LexExprTokenNumberValue {
     Integer(UVarNumber),
     Floating(Float),
 }
 /// What an invalid token was trying to be, and why it is not.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct LexExprTokenError {
     pub type_0: LexExprTokenType,
     /// The translated message, with a `%.*s` where the rest of the line goes.
@@ -169,12 +169,12 @@ pub struct LexExprTokenError {
     /// highlight a scope prefix. Carried rather than left to the layout.
     pub opt_scope: ExprOptScope,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct LexExprTokenVar {
     pub scope: ExprVarScope,
     pub autoload: bool,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct LexExprTokenOption {
     /// Where the name starts, counted from the start of the token: past the
     /// `&`, and past its `g:`/`l:` when there is one.
@@ -182,19 +182,19 @@ pub struct LexExprTokenOption {
     pub len: size_t,
     pub scope: ExprOptScope,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct LexExprTokenString {
     pub closed: bool,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct LexExprTokenRegister {
     pub name: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct LexExprTokenBrace {
     pub closing: bool,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct LexExprTokenMultiplication {
     pub type_0: ExprLexMulType,
 }
@@ -202,7 +202,7 @@ pub type ExprLexMulType = ::core::ffi::c_uint;
 pub const kExprLexMulMod: ExprLexMulType = 2;
 pub const kExprLexMulDiv: ExprLexMulType = 1;
 pub const kExprLexMulMul: ExprLexMulType = 0;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct LexExprTokenComparison {
     pub type_0: ExprComparisonType,
     pub ccs: ExprCaseCompareStrategy,
@@ -285,10 +285,12 @@ pub const kEOpLvlAssignment: ExprOpLvl = 3;
 pub const kEOpLvlParens: ExprOpLvl = 2;
 pub const kEOpLvlComplexIdentifier: ExprOpLvl = 1;
 pub const kEOpLvlInvalid: ExprOpLvl = 0;
+#[derive(Debug)]
 pub struct ExprNodeProps {
     pub lvl: ExprOpLvl,
     pub ass: ExprOpAssociativity,
 }
+#[derive(Debug)]
 pub struct StringShift {
     pub start: size_t,
     pub orig_len: size_t,
@@ -310,6 +312,7 @@ fn stack_top(stack: &[Slot], back: usize) -> Slot {
 /// tree of boxes could only do by walking down from the root each time. The
 /// tree borrows the parsed lines, which its identifiers and its error point
 /// into.
+#[derive(Debug)]
 pub struct ExprAST<'a> {
     pub err: Option<ExprASTError<'a>>,
     pub nodes: Vec<ExprASTNode<'a>>,
@@ -321,7 +324,7 @@ pub struct ExprAST<'a> {
 pub struct NodeId(pub(crate) usize);
 
 /// Where a parse stopped, and why.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExprASTError<'a> {
     /// The translated message, with a `%.*s` where `arg` goes.
     pub msg: &'static ::core::ffi::CStr,
@@ -336,6 +339,7 @@ pub type ExprComparisonType = ::core::ffi::c_uint;
 pub type ExprOptScope = ::core::ffi::c_uint;
 pub type ExprParserFlags = ::core::ffi::c_uint;
 pub type ExprVarScope = ::core::ffi::c_uint;
+#[derive(Debug)]
 pub struct ExprASTNode<'a> {
     pub type_0: ExprASTNodeType,
     /// The first child; the second, if any, is its `next`.
@@ -355,7 +359,7 @@ pub struct ExprASTNode<'a> {
 /// silently. The node types that carry nothing get [`ExprNodeData::None`],
 /// which is also what a freshly allocated node starts as -- upstream left
 /// those bytes uninitialised.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ExprNodeData<'a> {
     /// Every node type that carries no payload.
     None,
@@ -484,60 +488,60 @@ impl<'a> ExprNodeData<'a> {
         }
     }
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExprNodeAssignment {
     pub type_0: ExprAssignmentType,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExprNodeComparison {
     pub type_0: ExprComparisonType,
     pub ccs: ExprCaseCompareStrategy,
     pub inv: bool,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExprNodeEnvironment<'a> {
     pub ident: &'a [u8],
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExprNodeFigure {
     pub type_guesses: ExprFigureGuesses,
     pub opening_hl_idx: size_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExprFigureGuesses {
     pub allow_dict: bool,
     pub allow_lambda: bool,
     pub allow_ident: bool,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExprNodeFloat {
     pub value: Float,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExprNodeInteger {
     pub value: UVarNumber,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExprNodeOption<'a> {
     pub ident: &'a [u8],
     pub scope: ExprOptScope,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExprNodeRegister {
     pub name: ::core::ffi::c_int,
 }
 /// A string literal's decoded value. `None` where upstream allocated no
 /// buffer at all -- an empty single-quoted literal, or a double-quoted one
 /// whose reserve came to nothing -- which is not the same as an empty one.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ExprNodeStr {
     pub value: Option<Vec<u8>>,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExprNodeTernary {
     pub got_colon: bool,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExprNodeVariable<'a> {
     pub scope: ExprVarScope,
     pub ident: &'a [u8],

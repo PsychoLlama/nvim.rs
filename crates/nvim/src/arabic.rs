@@ -36,6 +36,7 @@ const A_S_LAM_ALEF: c_int = 0xfefb;
 const A_F_LAM_ALEF: c_int = 0xfefc;
 
 /// One shapable codepoint and its presentation forms (0 = no such form).
+#[derive(Debug)]
 struct Achar {
     c: u32,
     isolated: u32,

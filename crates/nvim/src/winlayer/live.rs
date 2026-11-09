@@ -91,6 +91,7 @@ use crate::id_table::{IdTable, TableId};
 /// projections it needs off `impl Op`, which is an inherent impl on a local
 /// type and so is allowed in any module of this crate.
 #[repr(transparent)]
+#[derive(Debug)]
 pub(crate) struct Live<T>(*mut T);
 
 // Hand-written rather than derived: `derive` would demand `T: Copy`, and the

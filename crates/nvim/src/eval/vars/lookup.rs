@@ -195,6 +195,7 @@ pub(crate) enum ScopeKind {
 
 /// Where a variable name lives: the scope, its dictionary, and where in the
 /// name the variable's own name starts -- past the `x:` prefix, or 0.
+#[derive(Debug)]
 pub(crate) struct VarHome {
     pub(crate) kind: ScopeKind,
     pub(crate) dict: DictRef,
@@ -202,6 +203,7 @@ pub(crate) struct VarHome {
 }
 
 /// What [`locate`] found for a name.
+#[derive(Debug)]
 pub(crate) enum Located {
     /// A variable: the dictionary holding it and its slot there, good
     /// until user code runs.

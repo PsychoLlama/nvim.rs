@@ -25,6 +25,7 @@ use super::TrArg;
 use core::fmt::Write as _;
 
 /// A conversion's alignment and padding, read off the template.
+#[derive(Debug)]
 struct Pad {
     left: bool,
     zero: bool,

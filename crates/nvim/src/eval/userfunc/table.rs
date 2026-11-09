@@ -34,6 +34,7 @@ use crate::hashtab::{HT_INIT_SIZE, Probe, hash_bytes_len, resize_decision};
 use crate::types::UserFunc;
 
 /// One slot.
+#[derive(Debug)]
 enum Slot {
     /// Never held a function: ends a probe.
     Empty,
@@ -45,6 +46,7 @@ enum Slot {
 }
 
 /// The table itself.
+#[derive(Debug)]
 pub(crate) struct FuncTable {
     slots: Vec<Slot>,
     /// Live entries.

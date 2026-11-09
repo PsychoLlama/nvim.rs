@@ -52,6 +52,7 @@ const MAPARG_DICT_KEYS: size_t = 20;
 /// size with nothing checking that the reservation was big enough.  The
 /// promise is made once, at construction; every [`Filling::put`] after it is
 /// ordinary checked code, which is what makes the twenty appends below safe.
+#[derive(Debug)]
 struct Filling(DictBuilder);
 
 impl Filling {

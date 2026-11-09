@@ -431,7 +431,7 @@ pub(crate) fn decor_range_add_from_inline(
 
 /// What a highlight range is made from: one sign/highlight item's fields,
 /// and the store entry holding its URL (`DECOR_ID_INVALID` for none).
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct HlSource {
     pub(crate) flags: uint16_t,
     pub(crate) priority: DecorPriority,
@@ -913,7 +913,7 @@ pub fn decor_redraw_eol(window: Win, eol_attr: &mut c_int, eol_col: c_int) -> bo
 /// active list `ranges_i[..current_end]`, the later-starting list
 /// `ranges_i[future_begin..count]`, and the column the end-of-line virtual
 /// texts start at (-1 for none yet).
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct DecorLists {
     pub(crate) row: c_int,
     pub(crate) current_end: usize,

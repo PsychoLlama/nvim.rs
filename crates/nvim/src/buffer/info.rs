@@ -128,6 +128,7 @@ fn sorted_by_last_used() -> Vec<Buf> {
 /// The walk `:ls` makes: over the sorted array when there is one, otherwise
 /// down the buffer list itself. Upstream reads `b_next` after each line is
 /// printed, which is what the second arm does.
+#[derive(Debug)]
 struct Walk<'a> {
     sorted: Option<&'a [Buf]>,
     at: usize,

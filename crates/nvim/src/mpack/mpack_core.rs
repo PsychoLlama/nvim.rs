@@ -90,6 +90,7 @@ impl Default for TokBuf {
 }
 
 /// What [`read_step`] produced.
+#[derive(Debug)]
 pub(crate) enum Step {
     /// A complete token.
     Token(Tok),

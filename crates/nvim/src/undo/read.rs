@@ -140,6 +140,7 @@ fn read_undo_file(
 }
 
 /// Everything the undo file says before its first header record.
+#[derive(Debug)]
 struct FileHeader {
     /// The `U` shadow line, and where it came from.
     line: Option<XString>,

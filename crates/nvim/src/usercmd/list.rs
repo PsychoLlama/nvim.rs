@@ -58,6 +58,7 @@ use std::rc::Rc;
 /// The Lua references are the table's, not taken: a row is rendered before
 /// anything can delete the command, and [`describe`] takes a reference of
 /// its own for the API's answer.
+#[derive(Debug)]
 struct Row {
     name: Rc<CStr>,
     argt: ExArgt,
@@ -122,6 +123,7 @@ fn nargs_str(argt: ExArgt) -> &'static CStr {
 /// `over` is how far the name column overran; every following column is
 /// pulled left by it, and a column that would then start before the text
 /// already written still gets its one separating space.
+#[derive(Debug)]
 struct Cols {
     buf: Vec<u8>,
 }

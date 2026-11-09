@@ -65,6 +65,7 @@ const RESERVE_MAX: usize = 1 << 16;
 
 /// A channel's decoder: the walk in progress, the header it read, and the
 /// message it is assembling.
+#[derive(Debug)]
 pub struct Unpacker {
     pub(crate) parser: Parser<Building>,
     /// The header's own tokenizer, reset whenever a header has to wait for
@@ -286,6 +287,7 @@ impl Unpacker {
 }
 
 /// Why a header could not be read yet.
+#[derive(Debug)]
 enum HeaderStop {
     /// Not all of it has arrived; it is read again from the start.
     Incomplete,
@@ -389,6 +391,7 @@ pub(crate) struct ExtPayload {
 /// The body walk: every node builds its object in its own `data` and hands
 /// it to its parent on the way out; the root's lands in `result`. A scalar
 /// is handed over on the way in, as it is complete the moment it is read.
+#[derive(Debug)]
 pub(crate) struct BodyWalk<'a> {
     result: &'a mut Object,
 }

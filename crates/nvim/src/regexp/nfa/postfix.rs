@@ -41,6 +41,7 @@ use core::ffi::c_int;
 
 /// The postfix program under construction. A field of the compile's
 /// [`RegCompiler`](crate::regexp::RegCompiler).
+#[derive(Debug)]
 pub(crate) struct Postfix {
     /// The items, zero-filled past `len` to the buffer's whole length, so
     /// that appending never calls into `Vec`.

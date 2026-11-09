@@ -51,7 +51,7 @@ use crate::types::Failed;
 /// [`Backspace::WordNotSpace`] *inside* the delete loop, at the first
 /// non-blank: that is how "delete the white space, then the word" is
 /// spelled.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum Backspace {
     /// `i_BS`: one character.
     Char,

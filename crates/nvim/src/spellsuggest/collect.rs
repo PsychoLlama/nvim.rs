@@ -51,7 +51,7 @@ use core::mem;
 const SCORE_BIG: c_int = SCORE_INS * 3;
 
 /// Which of the two suggestion lists a candidate goes into.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum List {
     /// `su_ga`, the list that is shown.
     Main,

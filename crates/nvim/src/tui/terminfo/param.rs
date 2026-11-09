@@ -50,7 +50,7 @@ mod limits {
 use limits::{LONG_STR_MAX, STACK_DEPTH};
 
 /// One of the nine parameters a capability is expanded with.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct Param<'a> {
     pub num: i64,
     pub string: Option<&'a [u8]>,
@@ -58,6 +58,7 @@ pub struct Param<'a> {
 
 /// The output buffer, filled left to right. Nothing is ever partially
 /// written: a conversion that will not fit fails the expansion first.
+#[derive(Debug)]
 pub struct Out<'a> {
     buf: &'a mut [u8],
     pos: usize,
@@ -102,6 +103,7 @@ impl<'a> Out<'a> {
 /// A writer that drops anything past `budget`, the way the truncating
 /// `snprintf` upstream called did. The caller has already checked that the
 /// budget fits in the output.
+#[derive(Debug)]
 struct Capped<'a, 'b> {
     out: &'a mut Out<'b>,
     budget: usize,
@@ -128,13 +130,13 @@ impl Capped<'_, '_> {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 struct Slot<'a> {
     num: i64,
     string: Option<&'a [u8]>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Stack<'a> {
     slots: [Slot<'a>; STACK_DEPTH],
     depth: usize,
@@ -164,7 +166,7 @@ impl<'a> Stack<'a> {
 }
 
 /// The numeric conversions, which differ only in base and case.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Radix {
     Dec,
     Oct,
@@ -173,7 +175,7 @@ enum Radix {
 }
 
 /// A parsed printf-style conversion spec.
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Spec {
     /// `#`: force a base prefix.
     alt: bool,

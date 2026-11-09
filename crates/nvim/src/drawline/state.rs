@@ -40,6 +40,7 @@ use crate::winlayer::WinId;
 /// `#[repr(C)]` is not required of it any more — nothing outside this family
 /// names the type — but the field order is upstream's and is left alone so the
 /// C can still be read beside it.
+#[derive(Debug)]
 pub struct WinLineVars {
     /// Buffer line being drawn.
     pub lnum: LineNr,
@@ -172,6 +173,7 @@ pub(crate) type SpellLookahead = [u8; SPELL_LOOKAHEAD * 2];
 /// [`WinLineVars`] carries the state the two halves *share* and that the
 /// column drawers also touch; this carries the rest — facts about the window
 /// and the line, and the highlighting sources found for it.
+#[derive(Debug)]
 pub(crate) struct LineSetup {
     // -- the window and the line, decided once ------------------------------
     /// `w_view_width` of the window being drawn.
@@ -327,9 +329,11 @@ pub(crate) struct LineSetup {
 /// `Vec` here would put its drop glue in `win_line`). A nested `win_line` --
 /// a redraw from inside `'statuscolumn'` -- finds the pool empty and allocates
 /// its own.
+#[derive(Debug)]
 pub(crate) struct HeldLine(ManuallyDrop<Vec<u8>>);
 
 /// The allocations `win_line`'s scratch buffers are lent between lines.
+#[derive(Debug)]
 struct Pool {
     /// [`HeldLine`]'s.
     line: Vec<u8>,
@@ -409,6 +413,7 @@ impl HeldLine {
 ///
 /// The allocation is lent from the [`Pool`] for the line, as
 /// [`HeldLine`]'s is: this state is drop-free.
+#[derive(Debug)]
 pub(crate) struct ExtraText {
     bytes: ManuallyDrop<Vec<u8>>,
     at: usize,

@@ -35,6 +35,7 @@ use crate::os::libc::uint8_t;
 use crate::winlayer::Buf;
 
 /// One compile's state. See the module docs.
+#[derive(Debug)]
 pub(crate) struct RegCompiler<'p> {
     /// The pattern, and the flags the compile was asked for (`RE_MAGIC`,
     /// `RE_STRING`, `RE_STRICT`, `RE_AUTO`). Only ever read.
@@ -117,6 +118,7 @@ pub(crate) struct RegCompiler<'p> {
 
 /// The NFA program's states while [`super::nfa`]'s builder lays them out:
 /// counted on the first pass, written on the second.
+#[derive(Debug)]
 pub(crate) struct NfaStates {
     /// How many the program needs.
     pub(crate) count: c_int,

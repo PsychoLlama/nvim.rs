@@ -50,6 +50,7 @@ const LOOKBACK_LINE_COUNT: i32 = 1000;
 ///
 /// The copy is taken at all because `'complete'` belongs to a buffer, and a
 /// completion runs user code that can wipe that buffer out.
+#[derive(Debug)]
 pub(crate) struct CptScan {
     /// The copy, `None` before the first completion.
     option: Option<XString>,
@@ -124,6 +125,7 @@ pub(crate) fn may_advance_cpt_index(rest: &[u8]) -> bool {
 }
 
 /// What [`process_next_cpt_value`] makes of the next `'complete'` entry.
+#[derive(Debug)]
 pub(crate) struct CptValue {
     /// `INS_COMPL_CPT_OK` when the entry is ready to collect from,
     /// `INS_COMPL_CPT_CONT` to skip it, `INS_COMPL_CPT_END` when

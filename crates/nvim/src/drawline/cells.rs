@@ -53,7 +53,7 @@ use crate::winlayer::Buf;
 pub(super) const MB_FILLER_CHAR: u8 = b'<';
 
 /// What a phase of the loop wants the driver to do next.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Step {
     /// Carry on with the rest of this pass.
     Go,
@@ -67,6 +67,7 @@ pub(crate) enum Step {
 
 /// The parts of `win_line`'s own frame the character loop borrows, and the
 /// `'statuscolumn'` request it owns.
+#[derive(Debug)]
 pub(crate) struct LineFrame<'a> {
     /// Row after the last one this buffer line may use.
     pub(crate) endrow: ::core::ffi::c_int,
@@ -94,6 +95,7 @@ pub(crate) struct LineFrame<'a> {
 /// checker's running position). The second half is the loop's own working
 /// state, which upstream declares at the top of `win_line` because C has no
 /// better place for it.
+#[derive(Debug)]
 pub(crate) struct Cells {
     // -- the window and the line, decided by the setup half -----------------
     /// `w_view_width` of the window being drawn.

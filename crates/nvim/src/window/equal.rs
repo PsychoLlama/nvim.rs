@@ -100,6 +100,7 @@ impl FrameRef {
 /// How much room a row or column has to give away, and how many windows will
 /// be sharing it: the state upstream carries in `room`, `totwincount`,
 /// `next_curwin_size`, `extra_sep` and `has_next_curwin`.
+#[derive(Debug)]
 struct Share {
     room: c_int,
     totwincount: c_int,

@@ -76,6 +76,7 @@ pub(crate) static FMT_PAT: [(u8, &[u8]); FMT_PATTERNS] = [
 ];
 
 /// One part of `'errorformat'`, compiled.
+#[derive(Debug)]
 pub(crate) struct Format {
     /// The compiled pattern, which the engine may replace when it is first
     /// used.
@@ -134,6 +135,7 @@ impl Format {
 }
 
 /// A compiled `'errorformat'`: every part, in order.
+#[derive(Debug)]
 pub(crate) struct Efm {
     formats: Vec<Format>,
     /// Set by `%>`: the format the *next* line should start matching at.

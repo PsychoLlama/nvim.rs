@@ -96,6 +96,7 @@ fn unescape(byte: u8) -> u8 {
 /// A token, minus its text: a string's bytes are left in
 /// [`Parser::scratch`], because decoding escapes needs somewhere to put
 /// them and that buffer is sized once for the whole document.
+#[derive(Debug)]
 enum Token {
     ObjBegin,
     ObjEnd,
@@ -136,6 +137,7 @@ impl Token {
     }
 }
 
+#[derive(Debug)]
 struct Parser<'a> {
     /// The document; [`Parser::byte`] answers a NUL past its end.
     data: &'a [u8],
@@ -560,7 +562,7 @@ fn scan_integer(text: &[u8]) -> (lua_Integer, usize) {
 }
 
 /// The three flags the optional second argument can set.
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Options {
     luanil_object: bool,
     luanil_array: bool,

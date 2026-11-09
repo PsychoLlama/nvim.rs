@@ -15,7 +15,7 @@ use crate::types::ExArg;
 use core::ffi::CStr;
 
 /// What `:trust` asks `vim.secure.trust` to do with the path.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum TrustAction {
     Allow,
     Deny,

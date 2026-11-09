@@ -79,7 +79,7 @@ pub(crate) const ESCAPE_CHARS: &CStr = c" \t\\\"|";
 
 /// What `:normal` sets aside. Not `Copy`: `tabuf` owns the typeahead it
 /// saved. `Default` is the state its callers declare it in.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct SaveState {
     pub save_msg_scroll: ::core::ffi::c_int,
     pub save_restart_edit: Key,

@@ -51,7 +51,7 @@ use super::{
 ///
 /// `Copy` on purpose: [`super::highlight_changed`] builds ten scratch entries
 /// by cloning real ones, which upstream does with `memmove`.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) struct HlGroup {
     /// The name as written.
     pub name: &'static CStr,
@@ -163,6 +163,7 @@ impl HlGroup {
 type Table<K, V> = HashMap<K, V, BuildHasherDefault<DefaultHasher>>;
 
 /// The groups in id order, plus the reverse lookup from uppercased name.
+#[derive(Debug)]
 struct GroupTable {
     entries: Vec<HlGroup>,
     ids: Table<&'static CStr, c_int>,

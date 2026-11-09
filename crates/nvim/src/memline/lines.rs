@@ -90,6 +90,7 @@ use core::ffi::{CStr, c_int};
 /// used to step one past the last character and read the terminator want
 /// [`crate::cstr::byte_at`], which answers `NUL` past the end.
 ///
+#[derive(Debug)]
 pub struct Lines(Buf);
 
 impl Lines {
@@ -230,6 +231,7 @@ pub(crate) fn held_line(buffer: &Buf, lnum: LineNr) -> &[u8] {
 /// So the copy keeps the NUL, and the slice it derefs to leaves it out: the
 /// bytes are the line's, and the byte after them is a terminator, exactly as
 /// they were in the buffer.
+#[derive(Debug)]
 pub struct LineCopy(Vec<u8>);
 
 impl ::core::ops::Deref for LineCopy {

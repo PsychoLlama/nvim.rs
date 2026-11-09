@@ -73,6 +73,7 @@ pub(crate) fn qf_range_text(out: &mut Vec<u8>, entry: &QfEntry) {
 }
 
 /// What `:clist` shows of one entry, copied out of the list.
+#[derive(Debug)]
 struct Listed {
     module: Option<XString>,
     /// The file name as shown: the entry's own, or its buffer's, or the

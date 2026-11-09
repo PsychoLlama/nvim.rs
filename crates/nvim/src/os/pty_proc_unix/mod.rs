@@ -449,6 +449,7 @@ unsafe extern "C" fn chld_handler(handle: *mut uv_signal_t, _signum: c_int) {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct PtyProc {
     pub proc: Proc,
     pub width: uint16_t,

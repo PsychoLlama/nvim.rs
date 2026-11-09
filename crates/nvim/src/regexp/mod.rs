@@ -86,7 +86,7 @@ pub const REGSUB_COPY: c_uint = 1;
 /// The caller's bound on how long an NFA match may run: how many steps
 /// since the clock was last read. The deadline itself is the match
 /// context's ([`Rex::deadline`]). The default is [`TimeBudget::NONE`].
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub(crate) struct TimeBudget {
     count: c_int,
 }
@@ -110,7 +110,7 @@ impl TimeBudget {
 /// expanded against, as [`substitute`] found it before evaluating — taken
 /// whole, so that a search or substitution the expression runs cannot
 /// change what `submatch()` reports.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) enum RegSubMatch {
     /// No substitution is evaluating an expression.
     #[default]
@@ -130,7 +130,7 @@ pub(crate) enum RegSubMatch {
 }
 /// A backtracking program: what the compiler found out about the pattern,
 /// and the node text itself (see [`bt::BtProg`]).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct BtRegProg {
     /// The `RF_*` flags the compiler found.
     pub(crate) regflags: c_uint,
@@ -149,14 +149,14 @@ pub(crate) struct BtRegProg {
 }
 /// The `\1`..`\9` captures one thread is carrying, and how many of them it
 /// has reached. Only the entries below `in_use` mean anything.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct RegSub {
     pub in_use: c_int,
     pub list: [Capture; NSUBEXP as usize],
     /// Where a `:substitute` resumes scanning, which travels with group 0.
     pub orig_start_col: ColNr,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct RegSubs {
     pub norm: RegSub,
     pub synt: RegSub,
@@ -164,6 +164,7 @@ pub(crate) struct RegSubs {
 pub const NFA_TOO_EXPENSIVE: c_int = -1;
 pub const NFA_MAX_STATES: c_int = 100000;
 pub const AUTOMATIC_ENGINE: c_uint = 0;
+#[derive(Debug)]
 pub struct ParseState {
     pub regparse: usize,
     pub prevchr_len: usize,
@@ -176,6 +177,7 @@ pub struct ParseState {
     pub regnpar: usize,
 }
 /// One decision the forward walk made, and what undoing it needs.
+#[derive(Debug)]
 pub(crate) struct RegItem {
     /// Which decision, and so which of the fields below mean anything.
     pub rs_state: RegState,
@@ -206,6 +208,7 @@ pub const RS_ZOPEN: RegState = 3;
 pub const RS_MCLOSE: RegState = 2;
 pub const RS_MOPEN: RegState = 1;
 pub const RS_NOPEN: RegState = 0;
+#[derive(Debug)]
 pub struct RegStar {
     pub nextb: c_int,
     pub nextb_ic: c_int,
@@ -213,6 +216,7 @@ pub struct RegStar {
     pub minval: int64_t,
     pub maxval: int64_t,
 }
+#[derive(Debug)]
 pub(crate) struct RegBehind {
     pub save_after: SavedInput,
     pub save_behind: SavedInput,
@@ -333,6 +337,7 @@ pub type OptMagic = ::core::ffi::c_uint;
 ///
 /// The structure owns its program (see [`OwnedProg`]): a match borrows it
 /// from here and puts back whatever it ends up with.
+#[derive(Debug)]
 pub struct RegMatch {
     pub regprog: Option<OwnedProg>,
     /// Where each `\0`..`\9` group starts, and where it ends.
@@ -384,7 +389,7 @@ impl RegMatch {
 /// A pattern and where its groups landed in the buffer it last ran over:
 /// line and column pairs. Owns its program, as [`RegMatch`] does; a clone
 /// copies the program.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct RegMMatch {
     pub regprog: Option<OwnedProg>,
     pub startpos: [LPos; 10],

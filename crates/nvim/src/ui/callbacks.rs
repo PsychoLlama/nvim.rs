@@ -47,6 +47,7 @@ const kRetNilBool: LuaRetMode = 1;
 const MAX_ERRORS: u8 = 3;
 
 /// One registered `vim.ui_attach()` handler.
+#[derive(Debug)]
 struct Handler {
     /// The namespace that registered it, and the key it is removed by.
     ns_id: u32,

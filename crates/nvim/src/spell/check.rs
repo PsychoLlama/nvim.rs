@@ -464,6 +464,7 @@ pub fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
 }
 
 /// What [`check_need_cap`] has to look at.
+#[derive(Debug)]
 enum CapCheck {
     /// A capital is wanted outright: the word is at the start of the file,
     /// or the line before it is blank.

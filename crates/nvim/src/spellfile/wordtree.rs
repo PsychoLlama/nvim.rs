@@ -140,6 +140,7 @@ pub(super) const MSG_COMPRESSING: &CStr = c"Compressing word tree...";
 
 /// The byte count of everything a spell file under construction would
 /// have allocated from upstream's arena; see the module doc.
+#[derive(Debug)]
 pub(crate) struct SpellArena {
     /// Whether a block has been taken since the last [`clear`](Self::clear).
     started: bool,
@@ -209,7 +210,7 @@ impl NodeId {
 
 /// One byte of one word, or — when [`wn_byte`](Self::wn_byte) is NUL — the
 /// end of a word and the properties that go with it.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub(crate) struct WordNode {
     /// Compression phase: this node's sibling chain's length and four hash
     /// bytes, none of them zero (upstream keyed a string on them). See
@@ -381,7 +382,7 @@ fn add_per_affix(
 
 /// The link a node was reached through, which is where a replacement for
 /// it has to be written back.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum Link {
     /// The tree's root itself, which nothing points at.
     Root,
@@ -579,6 +580,7 @@ pub(super) fn tree_add_word(
 /// What decides where a word end goes among its siblings: the entry's
 /// flags (negative for the prefix tree), those flags as stored, whether
 /// this is the `.sug` tree, and its region and affix id.
+#[derive(Debug)]
 struct EndOrder {
     flags: c_int,
     masked: c_int,
@@ -857,7 +859,7 @@ fn write_digest(spin: &mut SpellInfo, node: NodeId, len: c_int) {
 /// The hasher of the two node tables. A key is a node id or a digest
 /// (already four hash bytes and a length), so it only needs spreading over
 /// the table's index bits.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(super) struct DigestHasher(u64);
 
 impl Hasher for DigestHasher {

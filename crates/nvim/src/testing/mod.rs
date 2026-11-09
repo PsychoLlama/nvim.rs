@@ -51,7 +51,7 @@ use crate::types::{
 use crate::ui::state::called_vim_beep;
 
 /// Which `assert_*()` is reporting. Decides the wording of the message.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum AssertType {
     Equal,
     NotEqual,
@@ -191,6 +191,7 @@ fn assert_beeps(args: &[TypVal], no_beep: bool) -> bool {
 
 /// The first difference between two files, as `assert_equalfile()` words it,
 /// plus the tail of the line it was on.
+#[derive(Debug)]
 struct FileDiff {
     /// The verdict, e.g. `difference at byte 3, line 1`. Empty means equal.
     verdict: Vec<u8>,

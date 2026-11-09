@@ -28,6 +28,7 @@ pub struct UCell {
 
 /// A [`UGrid`]'s cells, row-major. Carries its own width so a row slice stays
 /// correct no matter what the grid's public dimensions say.
+#[derive(Debug)]
 pub struct UGridCells {
     pub(crate) width: usize,
     pub(crate) cells: Vec<UCell>,
@@ -40,6 +41,7 @@ pub struct UGridCells {
 /// zeroed `TUIData` the TUI allocates itself out of leaves behind, because
 /// `Option<Box<_>>` spells `None` as a null pointer — so there is nothing to
 /// initialise before the first resize.
+#[derive(Debug)]
 pub struct UGrid {
     pub row: ::core::ffi::c_int,
     pub col: ::core::ffi::c_int,

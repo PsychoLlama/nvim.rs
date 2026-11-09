@@ -38,7 +38,7 @@ use crate::winlayer::Buf;
 ///
 /// The values are `time_t` wide because a timestamp is one of them; upstream
 /// narrows the clock to `int` here, which stops fitting in January 2038.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Aim {
     /// The value to reach, in the unit the flags select.
     target: time_t,
@@ -62,6 +62,7 @@ impl Aim {
 }
 
 /// The nearest approach to the target the search has seen.
+#[derive(Debug)]
 struct Closest {
     /// Its value, in the aim's unit.
     val: time_t,
@@ -127,7 +128,7 @@ fn approaches(val: time_t, target: time_t, closest: time_t) -> bool {
 }
 
 /// The buffer counters a move through the tree navigates by.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct UndoCounters {
     time_cur: time_t,
     seq_cur: c_int,
@@ -137,6 +138,7 @@ struct UndoCounters {
 }
 
 /// Where a move through the tree decided to go.
+#[derive(Debug)]
 struct UndoDest {
     /// The sequence number to stop at. Zero is the state before any change.
     target: c_int,

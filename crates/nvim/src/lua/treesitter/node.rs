@@ -25,7 +25,7 @@ use crate::lua_functions;
 use crate::memory::xfree;
 
 /// A node, as its userdatum holds it.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Node(pub TSNode);
 
 impl Default for Node {

@@ -20,6 +20,7 @@
 use core::ffi::{CStr, c_int};
 
 /// A Vim release line, and the patches from it that Nvim picked up.
+#[derive(Debug)]
 pub(super) struct VimBaseline {
     /// How `:version` names the line, e.g. `8.1`.
     pub name: &'static CStr,

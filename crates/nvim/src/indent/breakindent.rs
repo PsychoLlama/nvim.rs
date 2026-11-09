@@ -34,6 +34,7 @@ use crate::winlayer::Win;
 
 /// 'breakindentopt', parsed: the five values [`briopt_check`] writes onto a
 /// window as `w_briopt_*`.
+#[derive(Debug)]
 struct Briopt {
     /// "shift:" — added to the measured indent.
     shift: c_int,
@@ -146,7 +147,7 @@ pub fn briopt_check(briopt: Option<&CStr>, window: Option<Win>) -> bool {
 /// Everything the cached indent depends on that is a plain value. The three
 /// that are not — the line, 'vartabstop' and 'formatlistpat' — are compared
 /// by content.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 struct BreakindentKey {
     fnum: c_int,
     ts: OptInt,
@@ -165,6 +166,7 @@ struct BreakindentKey {
 /// Upstream's eleven function-local `static`s. The answer is asked for once
 /// per screen line of a wrapped line, so a miss here is a redraw's worth of
 /// `indent_size_*` and one regex match.
+#[derive(Debug)]
 struct BreakindentCache {
     key: BreakindentKey,
     /// The measured indent, in screen cells.

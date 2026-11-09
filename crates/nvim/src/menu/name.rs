@@ -176,6 +176,7 @@ pub(crate) fn popup_mode_name(name: &[u8], idx: c_int) -> Vec<u8> {
 
 /// A menu name taken apart: what is displayed, the `&` mnemonic, and the
 /// accelerator after the first TAB.
+#[derive(Debug)]
 pub(crate) struct MenuText {
     pub(crate) display: CString,
     /// The byte after the first `&` that is not `&&`, if there was one.

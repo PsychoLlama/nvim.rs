@@ -13,7 +13,7 @@ use crate::types::{ColNr, Handle, ScreenAttr, ScreenChar};
 /// The `grid_line` message being decoded, mid-flight.
 ///
 /// `Copy`: counters and offsets.
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub struct GridLineEvent {
     pub args: [::core::ffi::c_int; 3],
     pub icell: ::core::ffi::c_int,
@@ -23,7 +23,7 @@ pub struct GridLineEvent {
     pub clear_width: ::core::ffi::c_int,
     pub wrap: bool,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct GridView {
     pub target: *mut ScreenGrid,
     pub row_offset: ::core::ffi::c_int,
@@ -31,6 +31,7 @@ pub struct GridView {
 }
 /// Not `Copy` and not `Clone`: a grid owns its cells outright. Resizing one
 /// is [`ScreenGrid::alloc`], which replaces the buffers in place.
+#[derive(Debug)]
 pub struct ScreenGrid {
     pub handle: Handle,
     /// One glyph per cell, `rows * cols` of them. Empty until
@@ -67,6 +68,7 @@ pub struct ScreenGrid {
 /// A run of cells, as the three parallel slices that make one up. Handed out
 /// by [`ScreenGrid::cells_mut`] so that a per-cell loop indexes slices
 /// instead of walking three raw pointers.
+#[derive(Debug)]
 pub(crate) struct GridCells<'a> {
     pub chars: &'a mut [ScreenChar],
     pub attrs: &'a mut [ScreenAttr],
@@ -315,6 +317,7 @@ impl ScreenGrid {
 /// times; three typed ones cost twelve bytes a column and no `unsafe`.
 ///
 /// All six stay as wide as the widest grid: see `grid_alloc`.
+#[derive(Debug)]
 pub(crate) struct LineBuf {
     chars: Vec<ScreenChar>,
     attrs: Vec<ScreenAttr>,
@@ -454,6 +457,7 @@ impl LineBuf {
 /// building an array per event, and `ui_client_event_raw_line` hands the
 /// whole run to the TUI. Kept as wide as the widest grid the server has
 /// announced -- see `Unpacker::widen_grid_line_buf`.
+#[derive(Debug)]
 pub(crate) struct RawLine {
     chars: Vec<ScreenChar>,
     attrs: Vec<ScreenAttr>,

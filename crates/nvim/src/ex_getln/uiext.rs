@@ -105,6 +105,7 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
 /// second owner of the same `items` pointer, so the cell and the caller both
 /// believed they had to free it. The array owns its lines, so the free is
 /// the field's own, and [`ui_ext_cmdline_block_leave`]'s move a `take`.
+#[derive(Debug)]
 pub(crate) struct CmdlineBlock(Vec<Object>);
 
 impl CmdlineBlock {

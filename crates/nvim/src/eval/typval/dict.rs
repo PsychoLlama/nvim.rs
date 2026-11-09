@@ -786,6 +786,7 @@ mod tests {
 
     /// Hold `tv_in_free_unref_items` up for a scope, and put it down even
     /// when an assertion unwinds through it.
+    #[derive(Debug)]
     struct Collecting;
     impl Collecting {
         fn start() -> Collecting {

@@ -51,6 +51,7 @@ fn abbr_matches(mp: &MapBlock, word: &[u8]) -> bool {
 /// What an `<expr>` mapping or abbreviation evaluates, copied out of the
 /// entry before any of it runs: the evaluation is user code, which can
 /// delete or redefine the entry.
+#[derive(Debug)]
 pub(crate) struct MapExpr {
     /// The RHS with its `K_SPECIAL` escaping removed: `m_str` is in the
     /// format used for typeahead, not the one the expression is written in.
@@ -76,6 +77,7 @@ impl MapExpr {
 
 /// What [`check_abbr`] needs of the abbreviation it found, copied out of the
 /// table: an `<expr>` one can delete itself.
+#[derive(Debug)]
 struct Found {
     noremap: Remap,
     silent: bool,

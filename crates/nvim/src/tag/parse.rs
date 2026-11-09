@@ -31,6 +31,7 @@ use std::io::{BufRead, BufReader, ErrorKind, Seek, SeekFrom};
 use std::os::unix::ffi::OsStrExt;
 
 /// What reading the next line produced.
+#[derive(Debug)]
 pub(crate) enum Line {
     /// A line is in the buffer and should be looked at.
     Read,
@@ -41,6 +42,7 @@ pub(crate) enum Line {
 }
 
 /// What a line means for the search.
+#[derive(Debug)]
 pub(crate) enum Verdict {
     /// The line was parsed and may be the tag wanted.
     Success,
@@ -62,6 +64,7 @@ const DISCARD_CHUNK: usize = 200;
 /// line too long for the buffer leaves behind — so this reads with exactly
 /// those answers. Where the next byte comes from is tracked here rather
 /// than asked of the file.
+#[derive(Debug)]
 pub(crate) struct TagReader {
     file: BufReader<File>,
     /// The offset of the next byte a read answers.

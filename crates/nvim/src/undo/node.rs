@@ -21,7 +21,7 @@ use crate::types::{ColNr, LineNr, Pos};
 /// The entry says "lines `top + 1 .. bot - 1` of the buffer used to be
 /// `lines`". Applying it swaps the two, so the same entry put back moves the
 /// buffer forward again.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct UndoEntry {
     /// The line above the change; 0 for a change at the top of the buffer.
     pub top: LineNr,
@@ -99,7 +99,7 @@ impl UndoLink {
 ///
 /// Owned by the buffer's [`UndoStore`](crate::undo::store::UndoStore), which
 /// a [`UndoLink`] names it through. Dropping one drops everything it saved.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UndoHeader {
     /// The change before this one on the same branch (older).
     pub next: UndoLink,
@@ -173,7 +173,7 @@ impl Default for UndoHeader {
         }
     }
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct VisualInfo {
     pub vi_start: Pos,
     pub vi_end: Pos,

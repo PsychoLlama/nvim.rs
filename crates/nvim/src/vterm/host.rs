@@ -40,7 +40,7 @@ use super::state::StateCx;
 /// terminator ended. A fragment can carry no bytes at all; one the selection
 /// decoder sends to clear a selection carries no *buffer* either, which a C
 /// consumer sees as a null pointer rather than an empty run.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct Fragment<'a> {
     bytes: Option<&'a [u8]>,
     pub initial: bool,
@@ -88,7 +88,7 @@ impl<'a> Fragment<'a> {
 ///
 /// libvterm passes a union and lets the property or attribute say which arm
 /// is live; here the arm is the variant.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) enum Value<'a> {
     Bool(bool),
     Int(c_int),
@@ -117,6 +117,7 @@ impl Value<'_> {
 }
 
 /// A complete control sequence, as the parser gathered it.
+#[derive(Debug)]
 pub(crate) struct Csi<'a> {
     /// The private-marker bytes ahead of the parameters, if any.
     pub leader: Option<&'a CStr>,
@@ -143,6 +144,7 @@ pub(crate) trait ParserHandler {
 }
 
 /// A parser with no consumer: every event is dropped.
+#[derive(Debug)]
 pub(crate) struct NoParserHandler;
 
 impl ParserHandler for NoParserHandler {
@@ -184,7 +186,7 @@ impl ParserHandler for NoParserHandler {
 /// An OSC is offered with the state machine itself, so that a consumer can
 /// act on it at once -- `:terminal` applies a hyperlink to the pen before the
 /// next glyph is printed.
-pub(crate) trait Fallbacks {
+pub(crate) trait Fallbacks: ::core::fmt::Debug {
     fn control(&mut self, _control: u8) -> Option<c_int> {
         None
     }
@@ -214,7 +216,7 @@ pub(crate) trait Fallbacks {
 }
 
 /// OSC 52 traffic: libvterm's `VTermSelectionCallbacks`.
-pub(crate) trait SelectionHost {
+pub(crate) trait SelectionHost: ::core::fmt::Debug {
     /// Whether the consumer takes writes at all; the decoder does not run
     /// otherwise.
     fn takes_set(&self) -> bool;
@@ -228,7 +230,7 @@ pub(crate) trait SelectionHost {
 /// The screen asks [`ScreenHost::takes_moves`] and
 /// [`ScreenHost::takes_scrollback`] before it does the work a move or a
 /// pushed line needs, so those two answer for their slots ahead of time.
-pub(crate) trait ScreenHost {
+pub(crate) trait ScreenHost: ::core::fmt::Debug {
     fn takes_moves(&self) -> bool {
         false
     }

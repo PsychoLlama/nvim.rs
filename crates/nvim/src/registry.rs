@@ -106,6 +106,7 @@ pub(crate) fn interned_key(name: &[u8]) -> Box<[u8]> {
 ///
 /// See the module docs for why the order is modelled rather than left to a
 /// `HashMap`, and for the reentrancy rule the API enforces.
+#[derive(Debug)]
 pub(crate) struct SlotTable<K, V> {
     /// The slots, in iteration order. `swap_remove` keeps it dense.
     slots: Vec<(K, V)>,
@@ -246,6 +247,7 @@ impl<K: Eq + Hash, V: Copy> SlotTable<K, V> {
 /// outlives the session, keep `base` at 1 and pay four to eight bytes per
 /// buffer ever created — under a megabyte for any plausible session, and
 /// upstream's khash was not free either.
+#[derive(Debug)]
 struct HandleMap<V> {
     /// `slots[h - base]` is what handle `h` names, `None` for a hole.
     slots: Vec<Option<V>>,
@@ -363,6 +365,7 @@ impl<V> HandleMap<V> {
 /// "registered" and "owned" are not the same lifetime for a `Window` the way
 /// they are for a `Buffer`. Moving windows across means giving the idle
 /// autocommand window a named owner first.
+#[derive(Debug)]
 pub(crate) struct HandleRegistry<T> {
     /// Handle to the object it names. The value is `Copy` — see the module
     /// docs on reentrancy; an autocommand fires between two of these calls
@@ -420,6 +423,7 @@ impl<T> HandleRegistry<T> {
 /// The free paths still call [`forget`](Self::forget) *first* and hold the
 /// `Owned` while they tear the object down, so nothing can find it
 /// half-freed, and the drop happens exactly where the `xfree` used to.
+#[derive(Debug)]
 pub(crate) struct OwnedRegistry<T> {
     /// Handle to the object it names, which this table owns.
     live: HandleMap<Owned<T>>,
@@ -474,6 +478,7 @@ impl<T> OwnedRegistry<T> {
 /// gave. Nothing here dereferences a parked address — this type stores it and
 /// hands it back — which is why the module can `forbid(unsafe_code)` and the
 /// free itself lives with the caller.
+#[derive(Debug)]
 pub(crate) struct PendingFree<V> {
     /// What was parked, oldest first: an [`Owned`] for the objects a
     /// registry owns, a bare address for the ones it does not yet.
@@ -511,7 +516,7 @@ impl<V> PendingFree<V> {
 /// on all of it. Registry ids are small and consecutive, which the identity
 /// hash spreads badly and SipHash costs too much for. As
 /// `memfile::BlockNrHasher`, whose keys have the same shape.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct IdHasher(u64);
 
 impl IdHasher {
@@ -719,6 +724,7 @@ mod tests {
 
     /// A stand-in for `Window`: the registry stores an address and never
     /// reads through it, so an empty type will do.
+    #[derive(Debug)]
     struct Object;
 
     #[test]
@@ -802,6 +808,7 @@ mod tests {
 
     /// Counts its own drops through a shared cell, so a test can say when the
     /// allocation went back.
+    #[derive(Debug)]
     struct Tracked<'a>(&'a Cell<u32>);
 
     impl Drop for Tracked<'_> {

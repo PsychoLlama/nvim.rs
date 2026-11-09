@@ -65,6 +65,7 @@ pub(crate) fn expand_env_within(src: &CStr, capacity: usize) -> Vec<u8> {
 }
 
 /// What one `$VAR`, `~`, or `~user` at the cursor expands to.
+#[derive(Debug)]
 struct Expansion {
     /// The expansion, or `None` when the name did not resolve.
     value: Option<Vec<u8>>,

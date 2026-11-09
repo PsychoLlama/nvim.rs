@@ -456,7 +456,7 @@ pub fn bufhl_add_hl_pos_offset(
 }
 
 /// What [`decor_redraw_sh`] needs to know about one sign/highlight item.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct ShRedraw {
     flags: uint16_t,
     hl_id: c_int,

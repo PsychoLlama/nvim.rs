@@ -96,6 +96,7 @@ impl Object {
 /// panics past it rather than growing. The elements wait in the builder
 /// itself, so the array is one allocation of exactly the size pushed: a
 /// heap reservation of `N` would be a second, and a shrink when fewer came.
+#[derive(Debug)]
 pub struct ArrayBuf<const N: usize> {
     items: [Object; N],
     len: usize,
@@ -138,6 +139,7 @@ impl<const N: usize> Default for ArrayBuf<N> {
 
 /// A builder for an [`ApiDict`] of at most `N` entries. [`ArrayBuf`]'s rules
 /// apply unchanged.
+#[derive(Debug)]
 pub struct DictBuf<const N: usize> {
     entries: [KeyValuePair; N],
     len: usize,

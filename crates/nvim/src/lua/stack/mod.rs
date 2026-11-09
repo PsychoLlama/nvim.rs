@@ -259,6 +259,7 @@ pub struct LuaFailed(pub c_int);
 ///
 /// Not `Copy`, not `Send`: one per frame, on the thread that runs the state.
 /// See the [module documentation](self) for what it guarantees.
+#[derive(Debug)]
 pub struct Stack {
     state: NonNull<lua_State>,
     /// The absolute slot below this view's first own one: 0 for a view
@@ -884,6 +885,7 @@ impl Stack {
 /// references: x86-64 and arm64 builds), as far as `top`: [`Stack::top`]
 /// reads the depth of the running frame from it, as `lua_gettop` does.
 #[repr(C)]
+#[derive(Debug)]
 struct StateHead {
     _nextgc: u64,
     _marked: u8,
@@ -901,6 +903,7 @@ struct StateHead {
 /// A view over the slots above one of another view's own, lent by
 /// [`Stack::above`]: a [`Stack`] whose base is that slot, for as long as the
 /// lending view's borrow.
+#[derive(Debug)]
 pub struct Above<'a> {
     stack: Stack,
     _lent_by: PhantomData<&'a mut Stack>,

@@ -216,7 +216,7 @@ fn recurse_nodes_compare(tree: &MarkTree, x: NodeId, checked: &Records) -> bool 
 }
 
 /// One end of a mark, as the unit suite spells it.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct MarkEnd {
     pub row: ::core::ffi::c_int,
     pub col: ::core::ffi::c_int,

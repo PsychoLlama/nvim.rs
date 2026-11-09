@@ -49,6 +49,7 @@ pub(crate) type Blame = Option<&'static CStr>;
 pub(crate) type Convert = fn(&mut Stack, &mut Blame) -> Result<(), Error>;
 
 /// One entry of `vim.api`.
+#[derive(Debug)]
 pub(crate) struct Binding {
     /// The name Lua calls it by, which is the API function's.
     name: &'static CStr,
@@ -106,6 +107,7 @@ impl Binding {
 }
 
 /// [`BINDINGS`] as the trampoline's table.
+#[derive(Debug)]
 struct Api;
 
 impl Dispatch for Api {

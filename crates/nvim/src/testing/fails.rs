@@ -49,6 +49,7 @@ use super::{
 
 /// What checking `assert_fails()`'s expectations against the reported error
 /// produced.
+#[derive(Debug)]
 enum FailsCheck {
     /// Everything the caller asked for matched.
     Matched,
@@ -62,6 +63,7 @@ enum FailsCheck {
 }
 
 /// The mismatch a failed `assert_fails()` describes.
+#[derive(Debug)]
 struct FailsMismatch {
     /// The pattern the caller gave, quoted in the message, copied out of
     /// the scratch buffer it may have been rendered into (a Number item),

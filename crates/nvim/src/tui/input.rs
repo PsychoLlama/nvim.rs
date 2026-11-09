@@ -711,6 +711,7 @@ fn handle_term_response(tui: &mut TUIData, key: &TermKeyKey) {
 }
 
 /// [`core::fmt`] over a byte vector, for building a response out of numbers.
+#[derive(Debug)]
 struct Bytes<'a>(&'a mut Vec<u8>);
 
 impl Write for Bytes<'_> {

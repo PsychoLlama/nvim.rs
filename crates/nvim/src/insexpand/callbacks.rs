@@ -36,6 +36,7 @@ use crate::winlayer::{Buf, Win};
 /// the completefunc), which frees the original while the call is still
 /// running. The copy keeps the function alive for the length of the call,
 /// as `'operatorfunc'` does.
+#[derive(Debug)]
 pub(crate) struct HeldCallback(Callback);
 
 impl HeldCallback {
@@ -59,7 +60,7 @@ impl Drop for HeldCallback {
 /// `Callback` the editor *calls*. The cell is only ever borrowed for the
 /// length of one helper; a call takes a [`HeldCallback`] of it, so nothing
 /// borrows the cell while user code runs.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct CompleteFuncCb(&'static GlobalCell<Callback>);
 
 /// The global `'completefunc'` callback.
@@ -116,7 +117,7 @@ impl CompleteFuncCb {
 /// keeps both as a `Callback *` with a count beside it; here both are a
 /// `Vec`, and a `Callback` owns what it names without a destructor, so
 /// replacing either frees the old slots by hand.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct CptCallbacks(());
 
 /// The cached global `'complete'` `F{func}` callbacks. See [`CptCallbacks`].
@@ -181,7 +182,7 @@ impl CptCallbacks {
 /// through the stale pointer; an out-of-range index here is ignored, and an
 /// out-of-range read answers [`CPT_SOURCE_INIT`], the zeroed row `xcalloc`
 /// used to hand back.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct CptSources(());
 
 /// The per-`'complete'`-entry state. See [`CptSources`].
@@ -275,6 +276,7 @@ impl CptSources {
 }
 
 /// One entry of `'complete'`, as the walks over the option see it.
+#[derive(Debug)]
 pub(crate) struct CptEntry<'a> {
     /// The option from this entry on.
     pub(crate) at: &'a [u8],

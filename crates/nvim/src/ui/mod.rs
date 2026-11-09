@@ -140,7 +140,7 @@ static busy: GlobalCell<c_int> = GlobalCell::new(0);
 /// compositor's single flattened grid rather than the real ones, so the
 /// grid events it gets are the compositor's, sent later and from a
 /// different entry point.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Reach {
     /// Every attached UI. Used by everything that is not about a grid.
     All,

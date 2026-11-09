@@ -39,6 +39,7 @@ fn is_phrase(name: &CStr) -> bool {
 }
 
 /// What an [`err_invalid`] message names as the offending value.
+#[derive(Debug)]
 pub(crate) enum Bad<'a> {
     /// Nothing: "Invalid 'name'". An empty [`Quoted`](Self::Quoted) or
     /// [`Bare`](Self::Bare) reads the same way, as upstream's did.

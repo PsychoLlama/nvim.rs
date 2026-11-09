@@ -85,6 +85,7 @@ impl SubError {
 }
 
 /// What `do_sub` needs from the command line before it can start matching.
+#[derive(Debug)]
 pub(super) struct SubSetup {
     /// The replacement text.
     pub sub: XString,
@@ -106,6 +107,7 @@ pub(super) struct SubSetup {
 
 /// The pattern half of the command line, before any of the checks that can
 /// still refuse it.
+#[derive(Debug)]
 struct Parsed {
     /// The pattern, copied out of the line. `None` reuses the previous one
     /// (upstream's null `pat`); the `\/`, `\?` and `\&` forms give an empty

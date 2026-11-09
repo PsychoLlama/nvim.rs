@@ -64,6 +64,7 @@ impl Win {
 /// The syntax block is reached through the window (`w_s`) at each access,
 /// not remembered: an `:ownsyntax` in between moves it, and the C read
 /// `win->w_s` at the moment of the read too.
+#[derive(Debug)]
 pub(crate) enum Local<T> {
     /// A field of a buffer.
     Buf(Buf, Field<Buffer, T>),
@@ -143,7 +144,7 @@ impl<T: Copy> Local<T> {
 ///
 /// [`NumVar`], [`StrVar`] and [`BoolVar`] are the three; the third is
 /// spelled out separately because its two halves disagree about the type.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum NumVar {
     /// The global value: a field of the option record.
     Global(NumOpt),
@@ -183,7 +184,7 @@ impl NumVar {
 /// record, a local copy an `Option<XString>` field of a window, a buffer or
 /// a syntax block, and `None` on either side is upstream's shared empty
 /// string -- the option holding no value of its own.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum StrVar {
     /// The global value: a field of the option record.
     Global(StrOpt),
@@ -298,7 +299,7 @@ impl StrVar {
 /// The two halves disagree about the type: the global value is a `bool`,
 /// and a local copy is the tri-state word upstream gave every boolean — 0
 /// false, 1 true, **-1 not set in this scope**.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum BoolVar {
     /// The global value: a field of the option record.
     Global(BoolOpt),
@@ -354,7 +355,7 @@ impl BoolVar {
 /// The arm carries the type, so a field whose type disagrees with its
 /// option's does not compile, and "which variable is this" is a comparison
 /// of holders and selectors rather than of addresses.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum OptSlot {
     /// The option has no variable in this scope.
     None,

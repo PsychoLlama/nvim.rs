@@ -32,6 +32,7 @@ pub enum Lookup {
     None,
 }
 
+#[derive(Debug)]
 enum Node {
     /// Interior node: next byte -> child index.
     Branch(BTreeMap<u8, usize>),
@@ -39,6 +40,7 @@ enum Node {
     Key(keyinfo),
 }
 
+#[derive(Debug)]
 pub struct KeyTrie {
     /// Arena; index 0 is the root, always a `Branch`.
     nodes: Vec<Node>,

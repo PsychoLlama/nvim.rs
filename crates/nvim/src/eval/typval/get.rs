@@ -141,6 +141,7 @@ pub fn tv_get_float(tv: &TypVal) -> Float {
 ///
 /// The answer borrows either the value's own string, a static name, or
 /// this buffer, so it lives no longer than the shorter of the two borrows.
+#[derive(Debug)]
 pub struct NumBuf([u8; NUMBUFLEN as usize]);
 
 impl Default for NumBuf {
@@ -200,6 +201,7 @@ impl NumBuf {
     /// `args` written into the buffer, terminated -- cut short to fit, as
     /// `snprintf` would.
     fn formatted(&mut self, args: ::core::fmt::Arguments<'_>) -> &CStr {
+        #[derive(Debug)]
         struct Cursor<'b>(&'b mut [u8], usize);
         impl ::core::fmt::Write for Cursor<'_> {
             fn write_str(&mut self, text: &str) -> ::core::fmt::Result {

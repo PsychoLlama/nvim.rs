@@ -733,11 +733,12 @@ pub fn msgmore(n: c_int) {
 }
 
 /// Not `Copy`: `text` is an owned string.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HlMessageChunk {
     pub text: ApiString,
     pub hl_id: ::core::ffi::c_int,
 }
+#[derive(Debug)]
 pub struct MessageData {
     pub source: ApiString,
     pub percent: Integer,

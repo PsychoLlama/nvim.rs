@@ -365,6 +365,7 @@ fn to_latin9_byte(c: c_int) -> c_int {
 }
 
 /// A conversion from one encoding to another, torn down when dropped.
+#[derive(Debug)]
 pub(crate) struct Converter(VimConv);
 
 impl Converter {

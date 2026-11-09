@@ -127,6 +127,7 @@ impl OptString for StrOpt {
 ///
 /// An empty local copy is upstream's "not set here" whether the field owns
 /// the empty string or owns nothing at all.
+#[derive(Debug)]
 pub(crate) struct LocalOrGlobal<'a> {
     local: &'a Option<XString>,
     global: StrOpt,

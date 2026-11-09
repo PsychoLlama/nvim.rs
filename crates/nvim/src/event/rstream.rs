@@ -57,7 +57,7 @@ const ARENA_BLOCK_SIZE: usize = 4096;
 /// `RStream` embeds a `Stream` as its first field, so a reading stream is
 /// also a [`Conn`] — but the two are kept apart on purpose: only the reading
 /// half knows about the block, and only the common half knows about closing.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Reader(*mut RStream);
 
 impl Reader {

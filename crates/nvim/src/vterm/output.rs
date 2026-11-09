@@ -21,6 +21,7 @@
 use core::fmt;
 
 /// One outbound escape sequence, assembled in place.
+#[derive(Debug)]
 pub struct EscapeSeq {
     buf: [u8; EscapeSeq::CAPACITY],
     len: usize,

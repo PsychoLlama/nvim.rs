@@ -270,6 +270,7 @@ macro_rules! options {
         /// value that must outlive it is cloned. Either way the record is
         /// not open across a call, so a `did_set_*` callback that re-enters
         /// the editor cannot be holding the option table while it does.
+        #[derive(Debug)]
         pub struct $record {
             $($(#[$doc])* $field: $ty,)*
         }

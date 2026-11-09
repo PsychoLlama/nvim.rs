@@ -32,6 +32,7 @@ use crate::tr_c;
 /// The editor state [`do_debug`] takes over while the `>` prompt is up, and
 /// puts back on the way out. The prompt has to be *visible*, so silence and
 /// redirection are off for its duration whatever the debugged code asked for.
+#[derive(Debug)]
 struct SavedState {
     msg_scroll: c_int,
     state: c_int,
@@ -143,7 +144,7 @@ fn show_debug_line(cmd: &CStr) {
 }
 
 /// A command understood at the `>` prompt.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum DebugCmd {
     /// `cont`: run on without stopping again.
     Cont,

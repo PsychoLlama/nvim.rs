@@ -54,6 +54,7 @@ pub(crate) const kLineFlagInvalid: LineFlags = 2;
 ///
 /// Owned by the attach table in [`crate::ui`] and reached by its channel id;
 /// nothing keeps its address.
+#[derive(Debug)]
 pub struct RemoteUI {
     pub rgb: bool,
     pub override_0: bool,
@@ -95,7 +96,7 @@ pub struct RemoteUI {
 /// One row of the UI-client redraw dispatch table.
 ///
 /// `Copy`: a static name and a function pointer.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct UIClientHandler {
     pub name: *const ::core::ffi::c_char,
     pub fn_0: Option<fn(Array)>,

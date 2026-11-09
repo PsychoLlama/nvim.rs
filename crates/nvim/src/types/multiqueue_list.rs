@@ -27,6 +27,7 @@ use crate::event_queue::QueueId;
 pub type ItemList = List<Item>;
 
 /// A slot in a queue's list.
+#[derive(Debug)]
 pub enum Item {
     /// An event on the queue it was pushed to. `parent_slot` names the link
     /// standing for it in the parent's list, when there is a parent.
@@ -47,6 +48,7 @@ pub struct Handle {
     generation: u32,
 }
 
+#[derive(Debug)]
 struct Slot<T> {
     prev: Option<u32>,
     next: Option<u32>,
@@ -54,6 +56,7 @@ struct Slot<T> {
     generation: u32,
 }
 
+#[derive(Debug)]
 pub struct List<T> {
     slots: Vec<Slot<T>>,
     /// Slots holding no element, available for the next insertion.

@@ -60,6 +60,7 @@ pub(super) const TMP: usize = 350;
 /// value `vim_snprintf` documents -- so it is not an index. `fits` records
 /// whether the *last* write stayed inside the buffer; once it is false
 /// nothing more is written, but `produced` still grows.
+#[derive(Debug)]
 struct Sink<'o> {
     buf: &'o mut [u8],
     produced: usize,
@@ -122,6 +123,7 @@ impl<'o> Sink<'o> {
 // ---------------------------------------------------------------------
 
 /// Where a conversion's arguments come from.
+#[derive(Debug)]
 pub(in crate::strings) enum Source<'a> {
     /// Values a Rust caller passed (the `formatted!` and `format_into!`
     /// macros).
@@ -132,6 +134,7 @@ pub(in crate::strings) enum Source<'a> {
 }
 
 /// The arguments of one `printf`, and the one-based index of the next.
+#[derive(Debug)]
 pub(super) struct Args<'a> {
     src: Source<'a>,
     arg_idx: c_int,
@@ -219,6 +222,7 @@ impl<'a> Args<'a> {
 
 /// A parsed `%` conversion: everything between the `%` and the end of the
 /// specifier, plus the two padding counts the render step fills in.
+#[derive(Debug)]
 pub(super) struct Conversion {
     pub(super) min_field_width: usize,
     pub(super) precision: usize,
@@ -240,6 +244,7 @@ pub(super) struct Conversion {
 }
 
 /// Where a rendered conversion ended up.
+#[derive(Debug)]
 pub(super) enum Body<'b> {
     /// The first `n` bytes of the caller's scratch buffer.
     Tmp(usize),
@@ -485,6 +490,7 @@ fn render_string<'b, 'a: 'b>(
 }
 
 /// Text rendered into the scratch buffer, from an offset on.
+#[derive(Debug)]
 pub(super) struct TmpWriter<'t> {
     pub(super) buf: &'t mut [u8; TMP],
     pub(super) len: usize,

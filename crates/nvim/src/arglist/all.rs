@@ -33,6 +33,7 @@ use crate::winlayer::{TabPage, Win, first_tab, first_window, last_window, window
 /// What the two passes of `:all` share. A stack local of [`do_arg_all`],
 /// never handed to C, so the passes take it by reference and its fields
 /// need no unsafe to reach.
+#[derive(Debug)]
 struct ArgAllState {
     /// The argument list being laid out; held by a reference of its own.
     alist: ArgListId,

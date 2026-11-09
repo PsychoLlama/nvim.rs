@@ -205,7 +205,7 @@ pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
 
 /// Which `++opt=value` was given: the three that take a value, and so the
 /// three `ExArg` offsets one can be recorded in.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Opt {
     FileFormat,
     Encoding,

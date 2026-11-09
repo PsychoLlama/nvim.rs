@@ -29,7 +29,7 @@ use crate::eval::typval::{DictRef, ListRef, dict_find, tv_clear, tv_list_alloc};
 use crate::types::{TypVal, VAR_STRING};
 
 /// A container that is open: a handle on the value [`Decoder::stack`] holds.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum OpenContainer {
     List(ListRef),
     Dict(DictRef),
@@ -50,7 +50,7 @@ impl OpenContainer {
 }
 
 /// What [`Decoder::containers`] records about one open container.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct Container {
     /// Where the container itself sits in [`Decoder::stack`].
     pub(crate) stack_index: usize,
@@ -61,6 +61,7 @@ pub(crate) struct Container {
     pub(crate) container: OpenContainer,
 }
 
+#[derive(Debug)]
 pub(crate) struct Value {
     pub(crate) is_special_string: bool,
     pub(crate) didcomma: bool,
@@ -68,6 +69,7 @@ pub(crate) struct Value {
     pub(crate) val: TypVal,
 }
 
+#[derive(Debug)]
 pub(crate) struct Decoder<'a> {
     pub(crate) buf: &'a [u8],
     pub(crate) stack: Vec<Value>,

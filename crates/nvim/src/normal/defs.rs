@@ -23,6 +23,7 @@ crate::flag_set! {
     const NO_ADJ_OP_END = 2;
 }
 /// One normal-mode command as the dispatcher hands it to its handler.
+#[derive(Debug)]
 pub struct CmdArg {
     /// The operator the command is pending on: the normal-mode frame's own,
     /// held in the frame table so `op_pending` can read it from inside
@@ -82,7 +83,7 @@ impl CmdArg {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct OpArg {
     pub op_type: OpType,
     /// The register the operator reads or writes, 0 for the default.

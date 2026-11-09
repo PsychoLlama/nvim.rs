@@ -224,6 +224,7 @@ pub(crate) use self::undo::*;
 /// The alphanumeric bit of the C library's `__ctype_b_loc()` table, the one
 /// `isalnum()` reads.  Locale-dependent by construction.
 pub(crate) const _ISalnum: ::core::ffi::c_ushort = 8;
+#[derive(Debug)]
 pub(crate) struct InsertState {
     pub mincol: ::core::ffi::c_int,
     pub cmdchar: Key,
@@ -253,7 +254,7 @@ pub(crate) const CTRL_V_STR: &::core::ffi::CStr = c"\x16";
 ///
 /// A three-state latch, not a tri-state boolean: `Armed` is not "unknown",
 /// it is "the *next* real key is the covered one".
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum KeepUndo {
     /// Normal: a cursor motion ends the undoable change.
     No,
@@ -265,7 +266,7 @@ pub(crate) enum KeepUndo {
 
 /// What the last `edit_putchar` did to the screen cell it wrote over, and so
 /// how `edit_unputchar` has to take it back.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum PutChar {
     /// Nothing was put on the screen.
     Unset,

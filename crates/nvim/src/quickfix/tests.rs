@@ -41,6 +41,7 @@ const _: () = assert!(kListLenMayKnow == -3);
 /// an entry asks for the current window's alternate buffer, and
 /// `'errorformat'` and `'cpoptions'` are given values, since nothing ran the
 /// option defaults.
+#[derive(Debug)]
 struct Fixture {
     window: Win,
     buffer: Buf,
@@ -88,6 +89,7 @@ impl Drop for Fixture {
 
 /// One entry: `text` at `lnum`, valid or not as `valid` says. An entry
 /// naming no file would be invalid by default, so every one says.
+#[derive(Debug)]
 struct Item {
     text: &'static str,
     lnum: VarNumber,

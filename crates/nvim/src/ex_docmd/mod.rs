@@ -200,6 +200,7 @@ pub(crate) fn sourcing_lnum() -> LineNr {
 pub type ExFunc = Option<fn(&mut ExArg)>;
 /// An 'inccommand' preview callback, likewise.
 pub type ExPreviewFunc = Option<fn(&mut ExArg, c_int, Handle) -> c_int>;
+#[derive(Debug)]
 pub struct CommandDefinition {
     pub cmd_name: &'static CStr,
     pub cmd_func: ExFunc,
@@ -213,6 +214,7 @@ pub const kMTLineWise: MotionType = 1;
 pub const VALID_HEAD: c_uint = 2;
 pub const VALID_PATH: c_uint = 1;
 pub const DIALOG_MSG_SIZE: c_uint = 1000;
+#[derive(Debug)]
 pub struct SavedDebugState {
     pub trylevel: c_int,
     pub force_abort: c_int,

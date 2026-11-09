@@ -155,7 +155,7 @@ impl MatchPos {
 /// pair of positions, sixteen bytes, and that the size did not move is
 /// load-bearing: a capture set rides in every `NfaThread`, twice over, and
 /// 'maxmempattern' is charged in threads.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Capture {
     /// Where the group started, or unset.
     pub(crate) start: MatchPos,
@@ -188,7 +188,7 @@ impl Capture {
 /// `backpos` records where each loop back-edge has already been, so undoing a
 /// decision has to forget the positions discovered after it: truncating to
 /// `backpos_len` is that.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct SavedInput {
     pub(crate) pos: MatchPos,
     pub(crate) backpos_len: usize,

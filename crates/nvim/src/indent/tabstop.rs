@@ -36,7 +36,7 @@ fn stop_index(n: c_int) -> usize {
 
 /// A list of tabstops: `stops[0]` is the count, `stops[1..=count]` the
 /// widths.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct TabStops<'a> {
     stops: &'a [i32],
 }

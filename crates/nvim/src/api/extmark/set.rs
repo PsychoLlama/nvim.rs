@@ -38,6 +38,7 @@ const MAX_PRIORITY: Integer = 65535;
 ///
 /// Everything below is this call's until the mark or the redraw's decor
 /// state takes it; a refusal on the way drops it.
+#[derive(Debug)]
 struct Decoration {
     hl: DecorHighlightInline,
     sign: DecorSignHighlight,
@@ -453,6 +454,7 @@ fn take_virt(vt: &mut DecorVirtText) -> DecorVirtText {
 /// Where the mark goes, once both ends have been clamped against the buffer.
 ///
 /// `line2`/`col2` are `-1` for a mark with no end.
+#[derive(Debug)]
 struct Range {
     line: Integer,
     col: Integer,

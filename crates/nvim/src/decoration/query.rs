@@ -271,7 +271,7 @@ impl Win {
 /// Where one virtual line [`Win::virt_lines`] collected lives: line `line`
 /// of virtual-text link `link`, which the mark it came from owns for the rest
 /// of the redraw (a provider deleting it defers the free).
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct VirtLineRef {
     pub(crate) link: uint32_t,
     pub(crate) line: uint32_t,
@@ -284,7 +284,7 @@ pub(crate) struct VirtLineRef {
 /// The stored forms are walked a chunk at a time, borrowing the store for
 /// the read of one chunk only: resolving a chunk's highlight can run a
 /// provider's `hl_def` Lua, which may reach the store again.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) enum VirtChunks<'a> {
     Owned(&'a [VirtTextChunk]),
     Text(uint32_t),

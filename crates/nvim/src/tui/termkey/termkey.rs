@@ -165,11 +165,31 @@ pub struct TermKey {
     /// The CSI driver's state.
     pub(super) csi: CsiDriver,
 }
+impl ::core::fmt::Debug for TermKey {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        f.debug_struct("TermKey")
+            .field("flags", &self.flags)
+            .field("canonflags", &self.canonflags)
+            .field("buffer", &self.buffer)
+            .field("buffstart", &self.buffstart)
+            .field("buffcount", &self.buffcount)
+            .field("hightide", &self.hightide)
+            .field(
+                "ti_getstr_hook",
+                &self.ti_getstr_hook.as_ref().map(|_| format_args!("<fn>")),
+            )
+            .field("is_started", &self.is_started)
+            .field("ti", &self.ti)
+            .field("csi", &self.csi)
+            .finish()
+    }
+}
 
 /// An unrecognised control sequence, re-read: its parameters (`None` for an
 /// omitted one) and its packed command -- the final byte, with the
 /// private-use introducer in bits 8-15 and the intermediate byte in bits
 /// 16-23.
+#[derive(Debug)]
 pub struct UnknownCsi<'a> {
     params: [Option<&'a [u8]>; CSI_MAX_PARAMS],
     nparams: usize,

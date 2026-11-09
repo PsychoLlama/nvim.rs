@@ -146,6 +146,7 @@ const O_NOFOLLOW: c_int = 0o400000;
 const SWAPFILE_MODE: c_int = 0o400 | 0o200;
 
 /// A run of pages in the file that no block uses.
+#[derive(Debug)]
 struct FreeBlock {
     bnum: BlockNr,
     page_count: c_uint,
@@ -154,7 +155,7 @@ struct FreeBlock {
 /// Mixes a block number so the top bits — which the hash table probes
 /// first — depend on all of it. Block numbers are small and consecutive,
 /// which the identity hash spreads badly and SipHash costs too much for.
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct BlockNrHasher(u64);
 
 impl Hasher for BlockNrHasher {
@@ -188,6 +189,7 @@ type BlockMap<V> = HashMap<BlockNr, V, BuildHasherDefault<BlockNrHasher>>;
 ///
 /// Owned by the buffer whose lines it holds (`MemLine::ml_mfp`), and
 /// dropped by [`MemFile::close`], which is the only way one ends.
+#[derive(Debug)]
 pub struct MemFile {
     /// Name of the swap file, as given, or `None` for memory only. Private:
     /// readers go through [`MemFile::fname`], which is all any of them need.

@@ -61,6 +61,7 @@ use super::{
 const FLUSH_AT: usize = 64 * 1024;
 
 /// What the `'shada'` option allows a write to contain.
+#[derive(Debug)]
 struct Limits {
     /// `s`: entries whose payload is bigger than this many kilobytes are
     /// dropped. Zero means nothing is written at all.
@@ -106,6 +107,7 @@ impl Limits {
 }
 
 /// One ShaDa write in progress.
+#[derive(Debug)]
 struct Writing<'a> {
     /// Everything collected so far, and what the merge decides between.
     /// Boxed because it is some hundreds of KiB of mark and jump slots.

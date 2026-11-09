@@ -229,6 +229,7 @@ pub const kTerm_set_underline_style: TerminfoDef = 48;
 pub const kTermCount: TerminfoDef = 49;
 
 /// A string capability terminfo names in its standard set.
+#[derive(Debug)]
 pub struct StringCap {
     /// Its terminfo long name, as `:verbose` terminal dumps print it.
     pub name: &'static str,
@@ -406,6 +407,7 @@ pub const STRING_CAPS: [StringCap; 41] = [
 
 /// A string capability terminfo only knows as an extension, so it is looked
 /// up by name rather than by number.
+#[derive(Debug)]
 pub struct ExtCap {
     /// nvim's name for it.
     pub name: &'static str,
@@ -453,6 +455,7 @@ pub const EXT_CAPS: [ExtCap; 8] = [
 /// A special key, paired with its shifted variant where terminfo describes
 /// one. The shifted capability is only consulted when the unshifted one is
 /// present.
+#[derive(Debug)]
 pub struct KeyCap {
     /// The bare key name: the capability is `key_<stem>`, its shifted form
     /// `key_s<stem>`.

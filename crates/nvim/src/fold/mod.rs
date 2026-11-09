@@ -149,6 +149,7 @@ impl Fold {
 
 /// What the per-'foldmethod' level computations are handed, and what they
 /// answer in.
+#[derive(Debug)]
 pub struct FoldLine {
     /// The window whose folds are being computed, taken live by
     /// `fold_update`; the computation is one call.
@@ -394,6 +395,7 @@ impl Win {
 }
 
 /// Where [`Win::has_folding_with`]'s walk down the tree has got to.
+#[derive(Debug)]
 struct ClosedWalk {
     /// `lnum` relative to the list the walk is in.
     lnum_rel: LineNr,
@@ -409,6 +411,7 @@ struct ClosedWalk {
 }
 
 /// What a stretch of [`ClosedWalk::descend`] ended on.
+#[derive(Debug)]
 enum WalkEnd {
     /// The walk ran out of folds containing the line, or found it closed
     /// (`closed`).
@@ -724,7 +727,7 @@ fn forget_small_flags(folds: &mut [Fold]) {
 }
 
 /// [`check_closed`]'s answer.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum Closed {
     No,
     Yes,
@@ -734,7 +737,7 @@ enum Closed {
     CountRows,
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub struct FoldInfo {
     pub fi_lnum: LineNr,
     pub fi_level: ::core::ffi::c_int,

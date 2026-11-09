@@ -72,6 +72,7 @@ const MAX_CHAIN_LENGTH: u32 = 64;
 /// `ptr` is the *most recently scanned* occurrence, and A is scanned
 /// backwards, so it is the earliest line seen so far; the rest of the
 /// occurrences hang off [`HistIndex::next_ptrs`] in increasing order.
+#[derive(Debug)]
 struct Occurrence {
     /// Line number of the first known occurrence.
     ptr: i64,
@@ -82,6 +83,7 @@ struct Occurrence {
 }
 
 /// `struct histindex`: the A range, indexed by line content.
+#[derive(Debug)]
 struct HistIndex {
     /// Head of each hash bucket's chain.
     records: Vec<Option<u32>>,
@@ -104,7 +106,7 @@ struct HistIndex {
 }
 
 /// The common run [`find_lcs`] settled on, as inclusive line ranges.
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Region {
     begin1: i64,
     end1: i64,

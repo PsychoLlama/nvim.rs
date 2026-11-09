@@ -396,13 +396,14 @@ fn invoke_range_next(
     }
 }
 
+#[derive(Debug)]
 pub struct WinExtmark {
     pub ns_id: NS,
     pub mark_id: uint64_t,
     pub win_row: ::core::ffi::c_int,
     pub win_col: ::core::ffi::c_int,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct SpellVars {
     pub spv_has_spell: bool,
     pub spv_unchanged: bool,

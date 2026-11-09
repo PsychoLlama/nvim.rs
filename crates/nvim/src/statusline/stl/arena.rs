@@ -30,7 +30,7 @@ use crate::statusline::defs::{StlClickDefinition, StlClickRecord, StlHlRun, StlO
 /// What one `%` item turned into. Upstream's `StlItem`, with the `char *`
 /// into the output buffer replaced by a byte offset into it -- which is what
 /// lets every stage that shifts the text around be safe code.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(super) struct StlItem {
     /// Where the item starts in the output buffer.
     pub start: usize,
@@ -126,6 +126,7 @@ impl Kind {
 ///   group of its own therefore overwrites the outer group's remembered item
 ///   index, and the outer `%)` closes against the wrong item. That is
 ///   upstream's behaviour and is reproduced rather than fixed.
+#[derive(Debug)]
 pub(super) struct StlScratch {
     /// The items, in the order the format named them. Longer than
     /// [`Self::curitem`]: entries above the cursor are the arena's spare
@@ -226,6 +227,7 @@ pub(super) fn with_scratch<R>(f: impl FnOnce(&mut StlScratch) -> R) -> R {
 
 /// What one expansion left behind: the width it drew, and which slice of the
 /// item arena describes it.
+#[derive(Debug)]
 pub(super) struct Built {
     pub width: c_int,
     /// The first item of this recursion level.

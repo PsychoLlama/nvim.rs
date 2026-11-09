@@ -124,6 +124,7 @@ pub const kRetObject: LuaRetMode = 0;
 /// will *share*, so `map_add` clones the [`Rc`] rather than taking a pointer
 /// and the caller no longer has to null its own fields out afterwards.  If no
 /// mapping is created, dropping the struct releases the Lua reference too.
+#[derive(Debug)]
 pub(crate) struct MapArguments {
     pub buffer: bool,
     pub expr: bool,
@@ -245,6 +246,7 @@ static EMPTY_MAP_STR: [u8; 1] = [0];
 /// `<Nop>` mapping's RHS is empty, and the mapping table's per-entry heap is
 /// exactly what `inbench`'s bucket walk measures (see the module docs of
 /// `mapping`).
+#[derive(Debug)]
 pub(crate) struct MapStr(Option<Box<[u8]>>);
 
 impl MapStr {
@@ -308,6 +310,7 @@ impl Clone for MapStr {
 /// and it must be released exactly once.  `impl Drop` is in `mapping::table`,
 /// because releasing it is the one thing about a mapping that is not plain
 /// memory.  A mapping without a callback pays nothing for this.
+#[derive(Debug)]
 pub(crate) struct MapCallback(pub(crate) LuaRef);
 
 /// The right-hand side of a mapping: three strings and an optional callback.
@@ -319,6 +322,7 @@ pub(crate) struct MapCallback(pub(crate) LuaRef);
 /// shared box would be an extra allocation and an extra indirection on every
 /// entry of every bucket walk.  Only [`MapCallback`] is shared, and `m_alt`
 /// is now no more than the twin's address.
+#[derive(Debug)]
 pub(crate) struct MapRhs {
     /// The RHS in typeahead form: termcodes replaced, `K_SPECIAL` escaped.
     pub(crate) str: MapStr,
@@ -372,6 +376,7 @@ pub(crate) struct MapTwin {
 /// Owned by the list it is on -- a hash bucket of a [`MapTables`], or its
 /// abbreviation list -- by value. The twin of a `<C-H>`-style pair is named
 /// by id, not by address; everything else the entry holds is its own.
+#[derive(Debug)]
 pub struct MapBlock {
     /// This entry's identity.
     pub(crate) m_id: MapId,
@@ -453,6 +458,7 @@ impl MapBlock {
     clippy::vec_box,
     reason = "boxed so that deleting from a 5,000-entry bucket shifts pointers"
 )]
+#[derive(Debug)]
 pub(crate) struct MapTables {
     pub(crate) hash: Vec<Vec<Box<MapBlock>>>,
     pub(crate) abbr: Vec<Box<MapBlock>>,

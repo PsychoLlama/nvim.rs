@@ -278,6 +278,7 @@ fn script_dump_source(fd: &mut dyn Write, path: &[u8], counters: &[SnPrl]) -> io
 }
 
 /// What the report reads of one script's item.
+#[derive(Debug)]
 struct ScriptProfile {
     count: c_int,
     total: ProfTime,

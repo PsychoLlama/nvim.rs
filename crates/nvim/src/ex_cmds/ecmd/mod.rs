@@ -154,6 +154,7 @@ pub mod newlnum {
 
 /// The line and column `do_ecmd`'s stages hand each other, plus the flags that
 /// say how far the switch has got.
+#[derive(Debug)]
 struct Ecmd {
     /// Where to put the cursor: `> 0` a line number, or one of
     /// [`newlnum`]'s three sentinels.
@@ -178,6 +179,7 @@ struct Ecmd {
 
 /// The immutable half of what [`do_ecmd`] was asked for, once the file name
 /// has been resolved.
+#[derive(Debug)]
 struct EcmdArgs<'a, 'e> {
     /// The buffer number to switch to, or zero to go by name.
     fnum: Option<Handle>,
@@ -193,6 +195,7 @@ struct EcmdArgs<'a, 'e> {
 }
 
 /// What resolving the target file decided.
+#[derive(Debug)]
 enum Target {
     /// The file is already being edited in this very buffer: nothing to do.
     AlreadyHere,

@@ -137,7 +137,7 @@ pub(crate) const EXPAND_BUF_LEN: ::core::ffi::c_uint = 1025;
 /// Which syntax group an item belongs to, and at what `:syntax include`
 /// nesting it was declared. Both a pattern and a keyword carry one, and
 /// [`in_id_list`] tests against it.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub(crate) struct sp_syn {
     pub inc_tag: ::core::ffi::c_int,
@@ -153,7 +153,7 @@ pub(crate) struct sp_syn {
 /// told apart by pointer -- a cached state's `nextgroup=` against the
 /// parser's, and two keywords' lists in `:syntax list` -- is told apart by
 /// [`IdList::same`], which compares identity, not contents.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub(crate) enum IdList {
     /// No list at all, which upstream spells as a NULL pointer. Not the same
     /// as an *empty* list: `contains=` naming nothing admits nothing, while
@@ -225,7 +225,7 @@ pub(crate) const MAX_HL_ID: ::core::ffi::c_uint = 20000;
 pub(crate) const SYNID_ALLBUT: ::core::ffi::c_int = 20000;
 const _: () = assert!(SYNID_ALLBUT.cast_unsigned() == MAX_HL_ID);
 /// `do_source` flag: this is not a plugin or a package.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct StateItem {
     pub si_idx: ::core::ffi::c_int,
     pub si_id: ::core::ffi::c_int,
@@ -252,6 +252,7 @@ pub(crate) struct StateItem {
 }
 /// One `:syntax match` pattern, or one start/skip/end pattern of a
 /// `:syntax region`. Lives in its block's `b_syn_patterns`.
+#[derive(Debug)]
 pub(crate) struct SynPat {
     pub sp_type: ::core::ffi::c_char,
     pub sp_syncing: bool,
@@ -296,7 +297,7 @@ impl SynPat {
 
 /// One pattern's offset suffixes: the `SPO_*` flag word and the seven values
 /// it selects. See [`SynPat::offsets`].
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct PatOffsets {
     pub flags: int16_t,
     pub offsets: [::core::ffi::c_int; SPO_COUNT as usize],
@@ -330,6 +331,7 @@ pub(crate) const EMPTY_SYNPAT: SynPat = SynPat {
 };
 
 /// One `:syntax cluster`: a name and the ids it stands for.
+#[derive(Debug)]
 pub(crate) struct SynCluster {
     pub scl_name: ::std::ffi::CString,
     /// The name upper-cased, because a lookup compares that rather than
@@ -341,6 +343,7 @@ pub(crate) struct SynCluster {
 /// The options a `:syntax` item definition accepts, as they are parsed.
 ///
 /// The owner of the three lists until an item takes them.
+#[derive(Debug)]
 pub(crate) struct SynOptArg {
     pub flags: SynFlags,
     pub keyword: bool,

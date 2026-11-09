@@ -40,7 +40,7 @@ const FIRST_EMOJI_BLOCK: c_int = 0x1f000;
 
 /// One `setcellwidths()` override: every codepoint in `first..=last` is
 /// `width` cells wide.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct CellWidthRange {
     first: VarNumber,
     last: VarNumber,

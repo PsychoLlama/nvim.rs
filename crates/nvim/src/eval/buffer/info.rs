@@ -107,7 +107,7 @@ pub fn f_getbufinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// The `getbufinfo({dict})` selectors. Each is an *additional* requirement,
 /// and `on` is false when no dictionary was given at all.
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Filter {
     on: bool,
     buflisted: bool,

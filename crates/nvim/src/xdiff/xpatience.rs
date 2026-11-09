@@ -27,7 +27,7 @@ const NON_UNIQUE: u64 = u64::MAX;
 
 /// One slot of [`HashMap`]: a line hash and the (at most one) line on each
 /// side that carries it.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 struct Entry {
     /// The record hash, meaningful only when [`Self::line1`] is set.
     hash: u64,
@@ -48,6 +48,7 @@ struct Entry {
 
 /// The open-addressed table `insert_record` fills, plus the file-1-order
 /// chain through the slots it used.
+#[derive(Debug)]
 struct HashMap {
     entries: Vec<Entry>,
     /// Head of the file-1-order chain.

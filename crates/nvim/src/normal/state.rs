@@ -101,6 +101,7 @@ use crate::r#move::{update_curswant, update_topline, validate_cursor};
 /// `op_pending` must still be able to read the operator meanwhile: a handle
 /// ([`Op`]) to a table slot is read one field access at a time, as every
 /// other handle in the tree is.
+#[derive(Debug)]
 struct NormalFrames {
     table: IdTable<OpArg>,
     current: Option<TableId<OpArg>>,

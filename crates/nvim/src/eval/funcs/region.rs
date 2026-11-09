@@ -69,6 +69,7 @@ const NO_OPARG: OpArg = OpArg {
 };
 
 /// What `getregionpos` resolved the arguments to.
+#[derive(Debug)]
 struct Region {
     /// The upper-left corner, zero-based, after the swap and the
     /// exclusivity adjustment.
@@ -88,6 +89,7 @@ struct Region {
 /// Both entry points move the current buffer to the one the positions name
 /// so that the line accessors answer for it, and both must put it back
 /// however they leave.
+#[derive(Debug)]
 struct BufferSwap {
     buf: Buf,
     virtual_op: Option<bool>,

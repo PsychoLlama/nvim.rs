@@ -155,6 +155,7 @@ pub const BCO_ENTER: ::core::ffi::c_int = 1;
 pub const kBffInitChangedtick: ::core::ffi::c_int = 2;
 pub const kBffClearWinInfo: ::core::ffi::c_int = 1;
 pub const BCO_ALWAYS: ::core::ffi::c_int = 2;
+#[derive(Debug)]
 pub struct BufMatch {
     /// Matched and sorted within the one expansion call.
     pub buf: Buf,
@@ -234,7 +235,7 @@ pub(crate) fn trigger_undo_ftplugin(mut buffer: Buf, mut win: Win) {
 /// [`get`](BufRef::get) it afterwards: it re-validates and only then answers a
 /// [`Buf`]. The buffer number is part of the check because a `:bwipe` followed
 /// by a `:new` can hand the same allocation back as a *different* buffer.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct BufRef(BufferRef);
 
 impl BufRef {

@@ -486,6 +486,7 @@ fn fopen_stream(path: &CStr, flags: &CStr) -> Option<NonNull<FILE>> {
 /// writes them byte by byte (`:redir > file`, `'verbosefile'`). Writing
 /// takes `&self`: the stream's buffer is C's, behind the pointer, and no
 /// Rust reference reaches it.
+#[derive(Debug)]
 pub struct CFile {
     stream: NonNull<FILE>,
     /// The buffer [`buffer_fully`](CFile::buffer_fully) handed to
@@ -719,7 +720,7 @@ pub(crate) fn set_umask(mask: ::libc::mode_t) -> ::libc::mode_t {
     unsafe { ::libc::umask(mask) }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Directory {
     pub request: uv_fs_t,
     pub ent: uv_dirent_t,
@@ -732,7 +733,7 @@ pub struct FileID {
 /// A `stat` answer.
 ///
 /// `Copy`: a value.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct FileInfo {
     pub stat: uv_stat_t,
 }

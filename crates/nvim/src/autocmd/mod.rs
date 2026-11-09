@@ -131,7 +131,7 @@ pub fn autocmd_init() {
 /// Three states, and the middle one is not "unknown": it is "an autocommand
 /// for this pair is running right now", which is what keeps the pair from
 /// firing twice for one suspension.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum SuspendLatch {
     /// Nothing owed.
     Idle,
@@ -156,6 +156,7 @@ pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 /// every name whose `auevents.lua` entry is `true`, and it was read back as
 /// `event <= 0`, which made `BufAdd`, event 0, window-local by having no
 /// sign at all.  A flag in a field of its own needs no such coincidence.
+#[derive(Debug)]
 pub struct EventName {
     pub name: &'static CStr,
     pub event: AutoEvent,

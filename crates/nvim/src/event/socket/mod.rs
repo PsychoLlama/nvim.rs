@@ -69,6 +69,7 @@ const AI_NUMERICSERV: c_int = 0x400;
 
 /// The buffer `uv_tcp_getsockname` fills in.
 #[repr(C)]
+#[derive(Debug)]
 pub struct sockaddr_storage {
     pub ss_family: sa_family_t,
     pub __ss_padding: [c_char; 118],
@@ -79,6 +80,7 @@ pub struct sockaddr_storage {
 /// it, in network order, immediately after the address family. Nothing here
 /// looks any further, so the family does not have to be inspected at all.
 #[repr(C)]
+#[derive(Debug)]
 pub struct sockaddr_head {
     pub family: sa_family_t,
     pub port: u16,
@@ -86,7 +88,7 @@ pub struct sockaddr_head {
 
 /// A listening socket this module is working with, plus the promise that the
 /// pointer behind it stays live for as long as the handle does.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct Watcher(*mut SocketWatcher);
 
 impl Watcher {
@@ -533,6 +535,7 @@ pub unsafe fn socket_watcher_close(watcher: *mut SocketWatcher, cb: socket_close
 /// A socket this process listens on: the watcher, boxed at the address
 /// libuv's handle points back to, from [`Listener::new`] until
 /// [`Listener::close`] hands it to libuv's close callback, which frees it.
+#[derive(Debug)]
 pub(crate) struct Listener(ptr::NonNull<SocketWatcher>);
 
 impl Listener {

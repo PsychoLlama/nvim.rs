@@ -41,7 +41,7 @@ pub(crate) type EntryId = usize;
 
 /// One item of a cached state stack: what [`load_current_state`] needs to
 /// rebuild a [`StateItem`]. The rest of the item it works out again.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct CachedItem {
     idx: c_int,
     flags: SynFlags,
@@ -51,6 +51,7 @@ struct CachedItem {
 }
 
 /// The parser's state at the start of one line, as the cache keeps it.
+#[derive(Debug)]
 pub(crate) struct CachedState {
     /// The next entry on whichever list this one is on.
     next: Option<EntryId>,
@@ -87,6 +88,7 @@ impl CachedState {
 /// -- each on one of two lists: the used entries, lowest line first, and the
 /// free ones. A freed entry keeps its item `Vec`'s capacity, so recycling
 /// it does not allocate.
+#[derive(Debug)]
 pub(crate) struct StateCache {
     entries: Vec<CachedState>,
     first: Option<EntryId>,
@@ -619,6 +621,7 @@ mod tests {
     /// A parser over a bare buffer's syntax block with `patterns` plain
     /// match patterns, a cache of `entries` entries and an empty, valid state
     /// stack. Dropping it puts the globals it touched back.
+    #[derive(Debug)]
     struct Fixture {
         parser: SynState,
         /// The buffer whose block the parser reaches through its handle.

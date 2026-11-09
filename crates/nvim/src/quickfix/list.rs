@@ -65,6 +65,7 @@ pub(crate) fn qf_new_list(mut qi: Qi, title: Option<&CStr>) {
 /// into the entry. [`Fields::entry`] builds one from a parsed line; the
 /// other producers — `:vimgrep`, `:helpgrep` and `setqflist()` — fill it in
 /// themselves.
+#[derive(Debug)]
 pub(crate) struct NewEntry<'a> {
     /// The directory `fname` is relative to, from a `%D` line.
     pub(crate) dir: Option<&'a CStr>,

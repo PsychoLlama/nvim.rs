@@ -41,7 +41,7 @@ use super::{
 };
 
 /// A msgpack encoder into a byte vector.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct Packer {
     out: Vec<u8>,
     /// Where one entry's payload is packed before its length is known,

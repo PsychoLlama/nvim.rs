@@ -141,6 +141,7 @@ fn compute_bonus(last_c: c_int, c: c_int) -> Score {
 /// Both strings reduced to what the score depends on: their lowercased
 /// codepoints, plus the bonus each haystack character earns from its
 /// predecessor. Anything past [`FUZZY_MATCH_MAX_LEN`] characters is ignored.
+#[derive(Debug)]
 struct Match {
     lower_needle: Vec<c_int>,
     lower_haystack: Vec<c_int>,

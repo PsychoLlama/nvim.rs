@@ -62,6 +62,7 @@ pub(crate) fn get_syntime_arg(_expand: &Expand, idx: usize) -> Option<Candidate>
 
 /// One row of the `:syntime report` table: a pattern's accumulated timings,
 /// copied out of its `SynTime` so the table can be sorted.
+#[derive(Debug)]
 struct TimeEntry {
     total: ProfTime,
     count: c_int,

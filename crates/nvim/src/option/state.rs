@@ -47,6 +47,7 @@ use crate::types::ScriptCtx;
 use super::{kOptFlagInsecure, kOptFlagWasSet};
 
 /// One option's mutable state. See the module docs.
+#[derive(Debug)]
 struct OptionState {
     /// `kOptFlagWasSet` and `kOptFlagInsecure`, in their table positions so
     /// that the shared word and a window's or buffer's own read alike.

@@ -98,7 +98,7 @@ static USER_COMMANDS: GlobalCell<Vec<UserCmd>> = GlobalCell::new(Vec::new());
 /// The two are the same `Vec<UserCmd>` in different places, and every walker
 /// here is written against this so that one function serves both. It is the
 /// *where*; [`Scope`] is the *which of the two the current buffer sees*.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum Table {
     /// The global [`USER_COMMANDS`].
     Global,
@@ -139,7 +139,7 @@ impl Table {
 /// `&ucmds`; the identity test is the only thing distinguishing "this entry
 /// is buffer-local" from "this entry is global", and it appears in four
 /// different walks.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Scope {
     /// The current buffer's `b_ucmds`, searched first.
     Buffer,
@@ -341,6 +341,7 @@ pub(crate) fn uc_validate_name(name: &[u8]) -> Option<usize> {
 ///
 /// It owns the completion argument and the three Lua references: a
 /// definition that is never installed gives them back when it is dropped.
+#[derive(Debug)]
 pub(crate) struct Definition {
     pub(crate) argt: ExArgt,
     pub(crate) default_count: int64_t,
@@ -654,6 +655,7 @@ pub(crate) fn uc_del_named(table: Table, name: &CStr) -> bool {
 /// calls into Lua, which must not happen with the table borrowed. The
 /// strings are shared (`Rc`), so a copy of what a run or a listing needs
 /// costs a count, not an allocation.
+#[derive(Debug)]
 pub struct UserCmd {
     pub name: Rc<CStr>,
     pub argt: ExArgt,

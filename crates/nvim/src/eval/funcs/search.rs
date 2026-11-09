@@ -76,6 +76,7 @@ const FLAG_BITS: [(u8, c_int); 8] = [
 /// The flag parser writes the option directly (that is what `w` and `W`
 /// mean) and every caller restores it, including on the error paths the C
 /// reaches with `goto theend`.
+#[derive(Debug)]
 struct SavedWrapScan(bool);
 
 impl SavedWrapScan {

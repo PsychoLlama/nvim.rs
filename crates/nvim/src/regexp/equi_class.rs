@@ -26,6 +26,7 @@
 use core::ffi::c_int;
 
 /// One equivalence class: every character that belongs to it.
+#[derive(Debug)]
 pub(crate) struct EquiClass {
     /// The members both of upstream's copies agree on, in the order the
     /// backtracking compiler emitted them.

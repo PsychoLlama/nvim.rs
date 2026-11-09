@@ -488,7 +488,7 @@ pub fn marktree_move_region(
 }
 
 /// Where one half of a pair was, and where a splice moved it to.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct MTDamage {
     pub old: Option<NodeId>,
     pub new: Option<NodeId>,
@@ -496,7 +496,7 @@ pub struct MTDamage {
     pub new_i: ::core::ffi::c_int,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct MTDamagePair {
     pub start: MTDamage,
     pub end: MTDamage,

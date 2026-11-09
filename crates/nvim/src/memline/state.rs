@@ -17,7 +17,7 @@ use crate::memline::MlFlags;
 use crate::os::libc::size_t;
 use crate::types::{ColNr, LineNr};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ChunkSize {
     pub mlcs_numlines: ::core::ffi::c_int,
     pub mlcs_totalsize: ::core::ffi::c_int,
@@ -36,7 +36,7 @@ pub struct ChunkSize {
 /// one-chunk table leaves a *built* table with no entries.
 ///
 /// All of the arithmetic lives here, in a file that forbids `unsafe`.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct MlChunks {
     entries: Vec<ChunkSize>,
     /// `ml_chunksize != NULL`.
@@ -191,6 +191,7 @@ impl MlChunks {
 /// acquire (`ml_find_line`'s walk, through [`MemLine::lock`]) and exactly one
 /// release ([`MemLine::unlock`]), and that the release arguments travel with
 /// the block instead of in flag bits that outlive it.
+#[derive(Debug)]
 pub(crate) struct LockedBlock {
     /// What `MemFile::get` handed out.
     pub id: BlockId,
@@ -211,7 +212,7 @@ pub(crate) struct LockedBlock {
 }
 
 /// Where the line `ml_get` last handed out lives.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) enum CachedText {
     /// Nothing is cached.
     #[default]
@@ -243,7 +244,7 @@ pub(crate) enum CachedText {
 /// (Upstream's `ML_ALLOCATED` -- a copy taken because the block was about to
 /// be released -- is only ever set under `ML_GET_ALLOC_LINES`, a build-time
 /// debugging switch that is off in every shipped build; it was not ported.)
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct LineCache {
     /// `ml_line_lnum`: which line is cached, or 0 for none.
     lnum: LineNr,
@@ -258,13 +259,14 @@ pub(crate) struct LineCache {
     offset: size_t,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct InfoPtr {
     pub ip_bnum: BlockNr,
     pub ip_low: LineNr,
     pub ip_high: LineNr,
     pub ip_index: ::core::ffi::c_int,
 }
+#[derive(Debug)]
 pub struct MemLine {
     pub ml_line_count: LineNr,
     /// The memfile holding the lines, or `None` while the buffer is not

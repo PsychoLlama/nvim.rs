@@ -79,7 +79,7 @@ const E_NUMBER_REQUIRED_AFTER_EQUAL: &CStr = c"E521: Number required after =";
 const ERRBUF_LEN: usize = 80;
 
 /// What `no` or `inv` in front of a boolean option's name asks for.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Prefix {
     None,
     No,

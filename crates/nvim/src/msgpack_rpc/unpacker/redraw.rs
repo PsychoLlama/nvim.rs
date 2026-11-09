@@ -72,6 +72,7 @@ enum Halt {
 }
 
 /// The bytes still to be read, as libmpack's token reader wants them.
+#[derive(Debug)]
 struct Cursor<'a> {
     data: &'a [u8],
 }

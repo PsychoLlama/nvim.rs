@@ -115,6 +115,7 @@ static last_skipped_len: GlobalCell<usize> = GlobalCell::new(0);
 
 /// What [`out_data_ring`] is being asked to do. Upstream spells all three as
 /// one function taking a NULL pointer and a magic size.
+#[derive(Debug)]
 pub(crate) enum Ring<'a> {
     /// Forget everything saved.
     Reset,

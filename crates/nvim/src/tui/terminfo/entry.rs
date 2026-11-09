@@ -21,6 +21,7 @@ pub type Capability = Option<Cow<'static, [u8]>>;
 
 /// A terminal's description, as the TUI reads it: three flags, three
 /// numbers, and the string capabilities by slot.
+#[derive(Debug)]
 pub struct TerminfoEntry {
     pub bce: bool,
     pub has_tc_or_rgb: bool,

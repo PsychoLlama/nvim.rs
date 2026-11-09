@@ -33,6 +33,7 @@ use crate::types::{ExArg, ListWatch, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, Var
 const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// One `:for` loop's iteration: its targets and what it walks.
+#[derive(Debug)]
 pub(crate) struct ForInfo {
     /// The loop's variable list, read off the header.
     targets: VarList,
@@ -40,6 +41,7 @@ pub(crate) struct ForInfo {
 }
 
 /// What a `:for` walks.
+#[derive(Debug)]
 enum Walk {
     /// Nothing: a failed header, a skipped one, or a null List or Blob.
     Nothing,

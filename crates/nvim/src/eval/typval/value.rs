@@ -182,6 +182,7 @@ pub(crate) fn tv_item_lock_slot(
 
 /// The rest of a [`tv_item_lock`]: the container a slot held, still to be
 /// locked (and its items below it), at one level of the recursion counter.
+#[derive(Debug)]
 pub(crate) struct Descent {
     _depth: crate::guard::Bump,
     held: Held,
@@ -237,6 +238,7 @@ pub(crate) fn tv_list_item_lock(
 }
 
 /// A container [`tv_item_lock`] descends into, held for the descent.
+#[derive(Debug)]
 enum Held {
     Blob(BlobRef),
     List(ListRef),

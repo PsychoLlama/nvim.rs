@@ -212,7 +212,7 @@ fn set_buf_chartab(mut buffer: Buf, c: u8, on: bool) {
 }
 
 /// Which of the four tables an 'isident'-style option fills.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum IsoptTable {
     Ident,
     Print,
@@ -222,6 +222,7 @@ enum IsoptTable {
 
 /// One entry of such an option: a character or a range of them, added to
 /// the table or — with a leading `^` — removed from it.
+#[derive(Debug)]
 struct IsoptEntry {
     tilde: bool,
     /// A lone `@` stands for "every alphabetic character in the locale",
@@ -438,6 +439,7 @@ pub fn vim_isprintc(c: c_int) -> bool {
 /// A lazy cursor over the digits of a number, bounded either by `maxlen`
 /// bytes or by the first byte that is not a digit. The end of `text` reads
 /// as the NUL a C string would have there.
+#[derive(Debug)]
 struct Scan<'a> {
     text: &'a [u8],
     at: usize,

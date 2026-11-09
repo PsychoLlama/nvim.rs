@@ -124,7 +124,7 @@ pub type CharsOption = ::core::ffi::c_uint;
 /// [`GlobalCell::get`](crate::global_cell::GlobalCell::get) — the cheap
 /// accessor — rather than `with`, whose debug-build borrow tracking costs
 /// far more than the lookup, or a 256-byte copy per character.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct BreakAt([u64; 4]);
 
 impl BreakAt {

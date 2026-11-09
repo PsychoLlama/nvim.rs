@@ -54,6 +54,7 @@ use super::{
 
 /// One slot of a [`HistoryRing`]: an entry and its neighbours in timestamp
 /// order.
+#[derive(Debug)]
 pub(crate) struct RingSlot {
     pub(crate) data: ShadaEntry,
     next: Option<usize>,
@@ -66,6 +67,7 @@ pub(crate) struct RingSlot {
 /// Slots are handed out from the front until `size` have been; after that a
 /// removal leaves exactly one hole, which `hole` remembers and the next
 /// insertion fills. Removing the slot handed out last gives it back instead.
+#[derive(Debug)]
 pub(crate) struct HistoryRing {
     slots: Vec<RingSlot>,
     first: Option<usize>,

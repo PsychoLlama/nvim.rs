@@ -97,6 +97,7 @@ pub fn ex_cnext(excmd: &mut ExArg) {
 /// The entries of one list, and the position the adjacency search compares
 /// them with. Nothing in the search can run user code, so it borrows the
 /// list. An entry is named by its position; its number is one more.
+#[derive(Debug)]
 struct Adjacent<'a> {
     entries: &'a [QfEntry],
     bnr: Option<Handle>,

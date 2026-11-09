@@ -84,7 +84,7 @@ macro_rules! syn_var {
 pub(crate) use syn_var;
 
 /// What "not set here" looks like in a global-local option's local copy.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum Unset {
     /// The option is local only: whatever its variable holds is the value.
     Never,

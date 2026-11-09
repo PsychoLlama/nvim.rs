@@ -83,6 +83,7 @@ pub fn do_cmdline_cmd(cmd: &CStr) -> Result<(), Failed> {
 
 /// Where a `do_cmdline` run gets its lines, and which kind of source that
 /// is -- asked once, since a run's source does not change under it.
+#[derive(Debug)]
 struct Source<'s, 'a> {
     lines: &'s mut (dyn ReadLines + 'a),
     kind: SourceKind,
@@ -424,7 +425,7 @@ fn leave_nesting(source: &Source) {
 static RECURSIVE: crate::global_cell::GlobalCell<c_int> = crate::global_cell::GlobalCell::new(0);
 
 /// What one pass of the loop decided.
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 enum Pass {
     Again,
     /// The run is over; `Run::retval` is its answer.
@@ -435,6 +436,7 @@ enum Pass {
 /// to the next. C kept these as a dozen locals of a 600-line function whose
 /// loop body read and wrote all of them; naming the set is what lets a pass be
 /// a method.
+#[derive(Debug)]
 struct Run {
     /// The `:if`/`:while`/`:try` stack this run opens and closes, the body it
     /// is storing or replaying, and which line of it is next.

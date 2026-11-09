@@ -73,6 +73,7 @@ impl Link for DecorVirtText {
 }
 
 /// A slab of chained entries with a freelist through them.
+#[derive(Debug)]
 pub(crate) struct Store<T> {
     entries: Vec<T>,
     /// Index of the first free slot, or [`NO_ENTRY`].

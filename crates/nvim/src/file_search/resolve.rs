@@ -200,7 +200,7 @@ fn report_missing(first: bool, find_what: c_int, name: &CStr) {
 
 /// The walk over the entries of `'path'` or `'cdpath'`: the search running
 /// over one entry, and where in the option the next entry starts.
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct OptionWalk {
     /// A copy of the option, and how far into it the walk has got: the walk
     /// outlives the call that started it, and the option's own value may
@@ -274,7 +274,7 @@ impl OptionWalk {
 /// the calls in between -- which can run user code. For the same reason
 /// every string handed to it must be the caller's own, never a borrow of an
 /// option or a buffer: the search itself can reach user code.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct PathWalk {
     /// The name looked for, environment variables expanded; `None` until a
     /// start that had a name.

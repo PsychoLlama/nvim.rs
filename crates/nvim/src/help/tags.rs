@@ -313,6 +313,7 @@ fn find_byte(haystack: &[u8], needle: u8) -> Option<usize> {
 /// A help file read the way `fgets(3)` reads one: [`HelpReader::fgets`]
 /// answers the next stretch of at most `size - 1` bytes, through the first
 /// `\n`. The whole file is read up front, so a line is a range of it.
+#[derive(Debug)]
 struct HelpReader {
     data: Vec<u8>,
     at: usize,

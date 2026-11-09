@@ -41,6 +41,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 /// A parse failure: the entry is dropped, with what to say about it --
 /// `None` for a value msgpack could not step over, which upstream drops
 /// without a word.
+#[derive(Debug)]
 pub(crate) struct Malformed(pub(crate) Option<ShadaError>);
 
 /// The `E575` for an entry at `pos` that says something it cannot.

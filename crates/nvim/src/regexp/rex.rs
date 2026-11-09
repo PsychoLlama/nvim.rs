@@ -48,7 +48,7 @@ use core::ffi::{CStr, c_int};
 
 use super::pos::{MatchPos, PosKind, SavedInput};
 use super::word_char_at;
-use super::{ExtMatch, ExtMatchRef, NSUBEXP, TimeBudget};
+use super::{ExtMatch, ExtMatchRef, ExtOut, NSUBEXP, TimeBudget};
 use super::{char_at_nul, char_len_at, cluster_len_at};
 use crate::memline::held_line;
 use crate::types::{ColNr, LPos, LineNr, ProfTime};
@@ -66,6 +66,7 @@ pub(crate) fn byte_count(len: usize) -> c_int {
 const SLOTS: usize = NSUBEXP as usize;
 
 /// One running match: see the module docs.
+#[derive(Debug)]
 pub(crate) struct RegExec<'t> {
     // ------------------------------------------------ fixed for the match
     /// A buffer match (positions are line and column) rather than a string
@@ -129,7 +130,7 @@ pub(crate) struct RegExec<'t> {
     /// Where a successful syntax match leaves its `\z(` captures: the
     /// caller's own slot, written only by a match that wrote it upstream,
     /// or `None` for a caller that does not want them.
-    ext_out: Option<&'t Cell<Option<ExtMatchRef>>>,
+    ext_out: Option<ExtOut<'t>>,
 
     // ------------------------------------------ each engine's own state
     bt: BtVars,
@@ -139,6 +140,7 @@ pub(crate) struct RegExec<'t> {
 /// The backtracker's own variables. Each engine's are a struct of their own
 /// so that they sit together and setting up a match blanks them in a few
 /// wide stores rather than one per field.
+#[derive(Debug)]
 struct BtVars {
     behind_pos: Cell<SavedInput>,
     brace_limits: Cell<(i64, i64)>,
@@ -163,7 +165,7 @@ impl BtVars {
 }
 
 /// The NFA engine's own variables: see [`BtVars`].
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct NfaVars {
     has_zend: Cell<bool>,
     has_backref: Cell<bool>,
@@ -205,6 +207,7 @@ const UNSET: LPos = LPos {
 
 /// Two slot arrays: the ones a string match records its groups in, or a
 /// `\z(` program's.
+#[derive(Debug)]
 pub(crate) struct GroupSlots {
     pub(crate) starts: Slots,
     pub(crate) ends: Slots,
@@ -220,7 +223,7 @@ impl GroupSlots {
 }
 
 /// One capture slot, read and written as a [`MatchPos`].
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Slot<'t>(&'t Cell<LPos>);
 
 impl Slot<'_> {
@@ -242,6 +245,7 @@ impl Slot<'_> {
 }
 
 /// What every match is set up with, whichever kind it is.
+#[derive(Debug)]
 pub(crate) struct MatchSetup<'t> {
     /// The buffer: lines for a buffer match, 'iskeyword' for both.
     pub(crate) buf: &'t Buf,
@@ -254,7 +258,7 @@ pub(crate) struct MatchSetup<'t> {
     pub(crate) ext_in: Option<&'t ExtMatch>,
     /// Where a successful match leaves its `\z(` captures, if the caller
     /// wants them.
-    pub(crate) ext_out: Option<&'t Cell<Option<ExtMatchRef>>>,
+    pub(crate) ext_out: Option<ExtOut<'t>>,
     /// The `\z(` slots: `Some` exactly when the program has `\z(` groups.
     pub(crate) zslots: Option<&'t GroupSlots>,
 }
@@ -406,7 +410,7 @@ impl<'t> RegExec<'t> {
 /// A running match's context, by shared borrow: `Copy`, one word, passed
 /// down by value. It deliberately has no `Deref`, so every field the
 /// engines touch is named by an accessor here.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Rex<'t>(&'t RegExec<'t>);
 
 impl<'t> Rex<'t> {

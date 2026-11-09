@@ -59,6 +59,7 @@ const CLASS_OPCODES: [c_int; 19] = [
 ];
 
 /// What a `[` at the cursor turned out to be.
+#[derive(Debug)]
 pub(crate) enum Collection {
     /// Emitted.
     Done,
@@ -240,6 +241,7 @@ fn skip_past(rc: &mut RegCompiler, end: usize) {
 }
 
 /// What a `[` inside the collection turned out to be.
+#[derive(Debug)]
 enum Bracketed {
     /// A `[:alpha:]` class or a `[=a=]` equivalence class: already emitted.
     Emitted,

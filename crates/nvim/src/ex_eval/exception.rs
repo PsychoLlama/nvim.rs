@@ -355,6 +355,7 @@ fn error_number_at(rest: &[u8]) -> bool {
 }
 
 /// What is being thrown.
+#[derive(Debug)]
 pub(crate) enum Thrown {
     /// A `:throw`, with its value, which the exception takes over.
     User(XString),
@@ -448,7 +449,7 @@ fn reporting_exceptions() -> bool {
 }
 
 /// What became of an exception, as 'verbose' reports it.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum Fate {
     Thrown,
     Caught,
@@ -621,7 +622,7 @@ pub(crate) fn exception_state_clear() {
 }
 
 /// What [`report_pending`] is saying about the pending thing.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum PendingAction {
     /// A finally clause made it pending.
     Made,
@@ -644,7 +645,7 @@ impl PendingAction {
 
 /// What a pending report is about, beside its `CSTP_*` value: a pending
 /// `:return`'s value (none for a bare `:return`), or the pending exception.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum PendingValue<'a> {
     None,
     Return(Option<&'a TypVal>),

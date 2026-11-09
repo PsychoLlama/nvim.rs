@@ -49,6 +49,7 @@ pub(crate) const NO_ROW: c_int = 999;
 /// plus the buffer-line range `mod_top .. mod_bot` that changed, which the line
 /// loop widens as it discovers folds and syntax that did not stop where the
 /// change did.
+#[derive(Debug)]
 pub(crate) struct Regions {
     /// Below the last row of the top area; 0 when there is none.
     pub top_end: c_int,

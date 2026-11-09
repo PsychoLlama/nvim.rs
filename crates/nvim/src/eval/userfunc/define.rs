@@ -113,6 +113,7 @@ pub(crate) fn list_func_head(func: &UserFunc, indent: bool, force: bool) -> Resu
 /// of them it was; dropping the record does the rest.
 ///
 /// The parse walks the command line by offset, `at`.
+#[derive(Debug)]
 struct Definition<'a, 'e> {
     /// The command being run.
     excmd: &'a mut ExArg<'e>,
@@ -150,6 +151,7 @@ struct Definition<'a, 'e> {
 /// Which of the transpiled cleanup labels a refusal inside the definition
 /// jumps to. Both now only drop what the record owns; the distinction is
 /// kept because it says whether an existing function was touched.
+#[derive(Debug)]
 enum Refusal {
     /// `erret`: unwind the part-built function.
     Unwind,

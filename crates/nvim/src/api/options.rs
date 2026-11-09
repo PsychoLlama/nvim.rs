@@ -54,6 +54,7 @@ const SID_NONE: c_int = -6;
 
 /// What an `opts` dictionary resolved to: the option itself, the scope to
 /// read or write it at, and the buffer or window that scope names.
+#[derive(Debug)]
 struct OptionRequest<'a> {
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,

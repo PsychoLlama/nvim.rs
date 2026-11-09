@@ -71,6 +71,7 @@ use super::{
 };
 
 /// A `.spl` or `.sug` file being written.
+#[derive(Debug)]
 pub(super) struct SplWriter {
     out: BufWriter<File>,
     /// Cleared by the first write that fails. Checked once, when the file

@@ -124,6 +124,7 @@ fn err0(msg: &'static CStr) {
 
 /// Which rung of the window/tabpage/global ladder the arguments name, and
 /// the objects they name it on.
+#[derive(Debug)]
 struct Scope {
     /// The narrowest scope asked for, or [`kCdScopeInvalid`] for none.
     scope: CdScope,

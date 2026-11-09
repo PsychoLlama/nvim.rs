@@ -75,6 +75,7 @@ pub(crate) const SHOWCMD_BUFLEN: c_uint = 41;
 pub(crate) const FIND_EVAL: c_int = 4;
 pub(crate) const FIND_STRING: c_int = 2;
 pub(crate) const FIND_IDENT: c_int = 1;
+#[derive(Debug)]
 pub(crate) struct NvCmd {
     pub cmd_char: Key,
     pub cmd_func: NvFunc,
@@ -107,6 +108,7 @@ pub(crate) const FM_BACKWARD: c_uint = 1;
 /// operator from inside whatever a handler re-entered, while the handler
 /// holds this state mutably, so the operator lives in the frame table
 /// ([`Op`](crate::ops::Op), a handle to it) and this state only names it.
+#[derive(Debug)]
 pub(crate) struct NormalState {
     pub command_finished: bool,
     pub ctrl_w: bool,

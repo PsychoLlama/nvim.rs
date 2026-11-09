@@ -157,6 +157,7 @@ pub fn channel_reader_callbacks(id: uint64_t, stderr: bool) {
 
 /// A buffered reader's one delivery, at EOF.
 fn deliver_buffered(id: uint64_t, stderr: bool) {
+    #[derive(Debug)]
     enum Into {
         Callback,
         Dict,

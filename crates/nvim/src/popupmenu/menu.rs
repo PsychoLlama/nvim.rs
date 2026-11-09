@@ -138,6 +138,7 @@ fn pum_menu_entries(menu: &VimMenu, mode: c_int) -> Vec<CString> {
 }
 
 /// What one key of the `:popup` loop asked for.
+#[derive(Debug)]
 enum MenuStep {
     /// Keep the menu up.
     Continue,

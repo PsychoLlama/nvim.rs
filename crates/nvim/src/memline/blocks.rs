@@ -36,6 +36,7 @@ use crate::types::LineNr;
 
 /// The data block layout: a header and the index that follows it.
 #[repr(C)]
+#[derive(Debug)]
 pub(crate) struct DataBlockLayout {
     pub db_id: u16,
     /// Bytes free between the end of the index and the start of the text.
@@ -86,6 +87,7 @@ pub(crate) struct PointerEntry {
 
 /// The pointer block layout: a header and the entries that follow it.
 #[repr(C)]
+#[derive(Debug)]
 pub(crate) struct PointerBlockLayout {
     pub pb_id: u16,
     pub pb_count: u16,
@@ -119,6 +121,7 @@ pub(crate) const B0_HAS_FENC: c_int = 8;
 /// so that a build with another endianness or another type size reads them
 /// as a mismatch.
 #[repr(C)]
+#[derive(Debug)]
 pub struct ZeroBlockLayout {
     pub b0_id: [u8; 2],
     pub b0_version: [u8; 10],
@@ -209,6 +212,7 @@ pub(crate) fn b0_read_number(src: &[u8; 4]) -> c_long {
 
 /// The four numbers of a data block's header that an edit changes, read
 /// and written together: one bounds check for the lot.
+#[derive(Debug)]
 pub(crate) struct DataHeader {
     pub(crate) free: c_uint,
     pub(crate) txt_start: c_uint,
@@ -249,6 +253,7 @@ fn shifted(entry: [u8; INDEX_SIZE], delta: c_uint) -> [u8; INDEX_SIZE] {
 }
 
 /// A data block, over its page.
+#[derive(Debug)]
 pub(crate) struct DataBlock<P>(pub(crate) P);
 
 impl<P: AsRef<[u8]>> DataBlock<P> {
@@ -550,6 +555,7 @@ impl<P: AsRef<[u8]> + AsMut<[u8]>> DataBlock<P> {
 }
 
 /// A pointer block, over its page.
+#[derive(Debug)]
 pub(crate) struct PointerBlock<P>(pub(crate) P);
 
 const PE_AT: usize = offset_of!(PointerBlockLayout, pb_pointer);
@@ -732,6 +738,7 @@ impl<P: AsRef<[u8]> + AsMut<[u8]>> PointerBlock<P> {
 
 /// Block zero, over its page (or over the bytes read from a swap file's
 /// start).
+#[derive(Debug)]
 pub(crate) struct ZeroBlock<P>(pub(crate) P);
 
 impl ZeroBlock<()> {

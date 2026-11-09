@@ -188,6 +188,7 @@ fn apply_new_indent(
 
 /// Where [`truncate_old_line`] splices the extmarks of the line that was
 /// split.
+#[derive(Debug)]
 struct Split {
     lnum: LineNr,
     mincol: ColNr,

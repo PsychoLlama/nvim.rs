@@ -116,7 +116,7 @@ pub(crate) const FF_MAX_STAR_STAR_EXPAND: u8 = 30;
 /// The searcher hands nearly every name it builds to the file system as a
 /// `&CStr`, so the terminator is part of the value; [`len`](Name::len) and
 /// [`bytes`](Name::bytes) count only what comes before it.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub(crate) struct Name(Vec<u8>);
 
 impl Name {
@@ -187,6 +187,7 @@ impl Name {
 /// The state of one file search: what is left to look at, and where it has
 /// already been.
 ///
+#[derive(Debug)]
 pub(crate) struct FindContext {
     /// Directories still to search, deepest last.
     pub(crate) stack: Vec<StackFrame>,
@@ -252,6 +253,7 @@ impl FindContext {
 ///
 /// A fixed `MAXPATHL` buffer, as upstream's: a name that does not fit gives
 /// the search up rather than being truncated.
+#[derive(Debug)]
 pub(crate) struct Candidate {
     buf: Vec<u8>,
     len: usize,
@@ -259,6 +261,7 @@ pub(crate) struct Candidate {
 
 /// A name did not fit in `MAXPATHL`. The search gives up rather than
 /// truncating.
+#[derive(Debug)]
 pub(crate) struct TooLong;
 
 impl Candidate {
@@ -331,6 +334,7 @@ impl Candidate {
 }
 
 /// What one pass of the downward walk ended on.
+#[derive(Debug)]
 enum Down {
     /// A file was found; it is in the caller's [`Candidate`].
     Found,

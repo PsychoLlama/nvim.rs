@@ -35,6 +35,7 @@ use core::ffi::c_int;
 /// The text is a private copy: `ml_get` only guarantees the *most recent*
 /// line it answered, and this code asks for hundreds of others before it is
 /// done.
+#[derive(Debug)]
 pub(crate) struct Line {
     /// The copy, from column 0.
     copy: Vec<u8>,

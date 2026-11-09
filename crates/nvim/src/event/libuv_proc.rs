@@ -69,7 +69,7 @@ const UV_PROCESS_DETACHED: u32 = 8;
 ///
 /// The same address is a `*mut Proc` and a `*mut LibuvProc`, so one of these
 /// is built from whichever of the two libuv or the process layer handed back.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct Uv(*mut LibuvProc);
 
 impl Uv {
@@ -402,6 +402,7 @@ pub(crate) unsafe fn free_raw_argv(argv: *mut *mut c_char) {
 pub(crate) type OutputSink<'a> = &'a mut dyn FnMut(&[u8], c_int, bool) -> usize;
 
 /// How a [`run_to_exit`] went.
+#[derive(Debug)]
 pub(crate) enum ChildRun {
     /// The child could not be started: libuv's error.
     NotStarted(c_int),
@@ -529,6 +530,7 @@ unsafe fn input_written_shim(stream: *mut Stream, data: *mut c_void, status: c_i
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct LibuvProc {
     pub proc: Proc,
     pub uv: uv_process_t,

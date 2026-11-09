@@ -36,6 +36,7 @@ use std::borrow::Cow;
 
 /// A built-in terminal description: what the terminal can do, in the sparse
 /// form it is written in.
+#[derive(Debug)]
 pub struct Description {
     pub bce: bool,
     /// Advertises truecolour, through either the `Tc` or the `RGB` extension.

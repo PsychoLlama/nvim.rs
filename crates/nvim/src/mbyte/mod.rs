@@ -329,18 +329,19 @@ pub(crate) fn unescape_at(text: &[u8]) -> Option<([u8; MB_MAXCHAR], usize)> {
 /// How far the character under a byte starts before it and ends after it.
 ///
 /// `Copy`: two offsets, and nothing else.
+#[derive(Debug)]
 pub struct CharBoundsOff {
     pub begin_off: int8_t,
     pub end_off: int8_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct CharInfo {
     pub value: int32_t,
     pub len: ::core::ffi::c_int,
 }
 pub type GraphemeState = utf8proc_int32_t;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct StrCharInfo {
     pub ptr: *mut ::core::ffi::c_char,
@@ -348,6 +349,7 @@ pub struct StrCharInfo {
 }
 /// A conversion plan (`VimConv::setup`). Neither `Copy` nor `Clone`: `vc_fd`
 /// owns an iconv descriptor, which dropping the plan closes.
+#[derive(Debug)]
 pub struct VimConv {
     pub vc_type: ::core::ffi::c_int,
     pub vc_factor: ::core::ffi::c_int,

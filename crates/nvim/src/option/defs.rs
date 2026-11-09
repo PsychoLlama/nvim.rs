@@ -233,7 +233,7 @@ impl OptVal {
 /// What the option table declares as an option's default: a value fixed at
 /// compile time, which [`OptDefault::value`] turns into an [`OptVal`]
 /// without copying the literal. `Copy`, so the table stays a `const`.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum OptDefault {
     Boolean(bool),
     Number(OptInt),
@@ -311,6 +311,7 @@ pub type OptExpandCb = Option<fn(&mut OptExpand<'_>) -> Option<Vec<XString>>>;
 
 /// What an option's completer is told: which option, its value, and what the
 /// command line has typed for it -- upstream's `optexpand_T`.
+#[derive(Debug)]
 pub struct OptExpand<'a> {
     // Upstream carries an `oe_varp` here, and its two readers -- the
     // 'listchars'/'fillchars' and 'eventignore'/'eventignorewin' expansions
@@ -344,6 +345,7 @@ impl OptExpand<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct OptSet {
     /// The option's storage in the scope being set, with the type its row
     /// declares. `pub(crate)` because [`OptSlot`] is: every `did_set_*`
@@ -378,7 +380,7 @@ pub struct OptSet {
 /// field of [`crate::options::vars::Options`], so a row cannot point a
 /// string option at a number and still compile, and the table holds no
 /// address at all.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum OptVar {
     /// The option has no global variable: its value lives only in a window
     /// or a buffer.
@@ -419,7 +421,7 @@ impl OptVar {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct VimOption {
     pub fullname: &'static ::core::ffi::CStr,
     /// The abbreviation, for an option that has one.

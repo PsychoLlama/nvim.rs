@@ -30,6 +30,7 @@ use crate::regexp::RE_MAGIC;
 use crate::winlayer::graph::{switch_buffer, switch_window};
 
 /// Where a `:syntax sync match` matched, and what it said to do there.
+#[derive(Debug)]
 struct SyncPoint {
     /// The sync item's flags -- `grouphere` or `groupthere`.
     flags: SynFlags,
@@ -372,13 +373,14 @@ impl SynState {
 /// Upstream parses the number out of that copy rather than out of the command
 /// line, at a fixed offset per keyword — hence the offsets here, which are the
 /// keyword's length plus one for the `=`.
+#[derive(Debug)]
 struct SyncCount {
     digits_at: usize,
     field: SyncField,
 }
 
 /// The three counters `:syntax sync` keeps.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum SyncField {
     MinLines,
     MaxLines,

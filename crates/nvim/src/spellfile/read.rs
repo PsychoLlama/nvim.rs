@@ -152,6 +152,7 @@ impl SpellLoadError {
 ///
 /// [`Stop::Silent`] is the section reader's "stop, and say nothing further":
 /// the case is one upstream abandons the file over without a word.
+#[derive(Debug)]
 enum Stop {
     /// One of the reader's own three errors.
     Read(SpellReadError),

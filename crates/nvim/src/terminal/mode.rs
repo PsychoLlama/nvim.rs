@@ -74,6 +74,7 @@ use crate::optionstr::OptStringRef;
 use crate::search::FORWARD;
 
 /// One terminal-mode session, as the editor's state loop sees it.
+#[derive(Debug)]
 pub(crate) struct TerminalState {
     pub term: Term,
     /// The terminal ended while its mode was running; wipe it on the way

@@ -32,6 +32,7 @@ use ::core::ptr::NonNull;
 /// the borrow checker sees the same type in both builds: a binding's
 /// borrow ends at its last use, and only the debug loan waits for the end
 /// of the scope (drop the binding to end it sooner).
+#[derive(Debug)]
 pub struct Edit<'a, T> {
     pub(super) target: &'a mut T,
     #[cfg(debug_assertions)]
@@ -78,6 +79,7 @@ deref_to_field!(impl[T] Edit<'_, T> => mut T, target);
 /// An [`Edit`]'s record in the debug builds' loan table: the object's
 /// address, given back when the edit goes.
 #[cfg(debug_assertions)]
+#[derive(Debug)]
 pub(super) struct Loan(usize);
 
 #[cfg(debug_assertions)]

@@ -52,7 +52,7 @@ const PRIORITY_DEFAULT: c_int = 500;
 const PRIORITY_END: c_int = -1;
 
 /// Whether `:menu` was asked to enable, disable, or neither.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum Enable {
     Unchanged,
     On,
@@ -60,6 +60,7 @@ enum Enable {
 }
 
 /// The mode-independent half of a `:menu` definition.
+#[derive(Debug)]
 struct MenuArg {
     modes: c_int,
     noremap: Remap,

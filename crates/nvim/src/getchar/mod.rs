@@ -147,7 +147,7 @@ pub const RM_YES: u8 = 0;
 pub const RM_NONE: u8 = 1;
 pub const RM_SCRIPT: u8 = 2;
 pub const RM_ABBR: u8 = 4;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct GotcharsState {
     pub buf: [uint8_t; 67],
     /// The byte before this one: inside a key escape, its second byte.

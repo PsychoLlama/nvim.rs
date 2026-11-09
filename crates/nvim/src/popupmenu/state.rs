@@ -18,7 +18,7 @@ use crate::global_cell::GlobalCell;
 use crate::grid::defs::ScreenGrid;
 use core::ffi::c_int;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct PumWant {
     pub active: bool,
     pub item: c_int,
@@ -42,7 +42,7 @@ pub(crate) static pum_want: GlobalCell<PumWant> = GlobalCell::new(PumWant {
 /// owns copies, so the menu's array (an `Rc<[PumItem]>` shared with the
 /// producer) stays good whatever the producer does next. `pum_text` is the
 /// one column every row has; the other three are absent rather than empty.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct PumItem {
     pub pum_text: crate::memory::XString,
     pub pum_kind: Option<crate::memory::XString>,

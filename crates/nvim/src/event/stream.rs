@@ -55,7 +55,7 @@ const UV_RUN_NOWAIT: uv_run_mode = 2;
 /// the only unsafe step. The accessors derive their handle pointers from the
 /// wrapped pointer rather than from what `deref_mut` hands back: a pointer
 /// taken from a borrow would be invalidated by the next field write.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Conn(*mut Stream);
 
 impl Conn {

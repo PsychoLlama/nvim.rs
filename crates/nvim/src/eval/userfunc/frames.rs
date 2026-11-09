@@ -35,6 +35,7 @@ use crate::types::FuncCall;
 
 /// The funccalls, each beside its caller, and the three ids upstream kept as
 /// raw globals.
+#[derive(Debug)]
 struct FuncCalls {
     table: RcTable<FuncCall, Option<FcId>>,
     /// The call in progress: upstream's `current_funccal`.
@@ -214,6 +215,7 @@ pub(crate) fn set_aside_call_stacks() -> Vec<Option<FcId>> {
 /// a provider -- runs from no function at all; dropping it puts the stack
 /// back. Upstream's `save_funccal`/`restore_funccal` pair.
 #[must_use = "dropping it puts the call stack straight back"]
+#[derive(Debug)]
 pub(crate) struct CallStackAside(());
 
 impl CallStackAside {

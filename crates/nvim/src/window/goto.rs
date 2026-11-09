@@ -113,7 +113,7 @@ pub(crate) fn win_find_tabpage(win: WinId) -> Option<TabPage> {
 /// The vertical and horizontal searches are exact duals: each looks for a
 /// parent frame laid out along its own axis, and descends through a frame laid
 /// out along the other one by following the cursor's position across it.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Axis {
     /// Up and down, through `FR_COL` parents.
     Vertical,
@@ -397,6 +397,7 @@ pub fn win_fix_current_dir() {
 }
 
 /// Whose own directory [`own_dir`] reads and [`set_own_dir`] writes.
+#[derive(Debug)]
 pub(crate) enum DirOwner {
     Window(Win),
     TabPage(TabPage),

@@ -26,7 +26,7 @@ use core::fmt::{self, Write};
 /// A byte buffer that `write!` can target. The rendered text is not always
 /// valid UTF-8: a key's `utf8` field holds the editor's six-byte encoding, and
 /// codepoints past U+10FFFF have no valid spelling.
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Out(Vec<u8>);
 
 impl Write for Out {
@@ -38,6 +38,7 @@ impl Write for Out {
 
 /// What a key is, with everything the union and the driver would have to be
 /// consulted for already resolved.
+#[derive(Debug)]
 pub enum KeyBody<'a> {
     /// A character, and its UTF-8 spelling.
     Unicode {
@@ -71,6 +72,7 @@ pub enum KeyBody<'a> {
 
 /// How the three modifiers are spelled, chosen by the LONGMOD, ALTISMETA and
 /// LOWERMOD format bits.
+#[derive(Debug)]
 struct ModNames {
     shift: &'static str,
     alt: &'static str,

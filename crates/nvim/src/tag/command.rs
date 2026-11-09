@@ -106,6 +106,7 @@ pub(crate) fn do_tag(tag: &CStr, kind: TagCmd, count: c_int, forceit: c_int, ver
 }
 
 /// One `:tag`-family command in progress.
+#[derive(Debug)]
 struct DoTag {
     /// The tag or pattern given, empty for the argument-less forms.
     tag: XString,

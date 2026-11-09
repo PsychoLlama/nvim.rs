@@ -35,7 +35,7 @@ use crate::winlayer::Buf;
 
 /// How a write was asked for. Chooses which autocommand events fire, and is
 /// carried through `buf_write` because most of its decisions turn on these.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct WriteMode {
     /// What the caller asked for.
     pub req: WriteRequest,
@@ -53,7 +53,7 @@ pub(crate) struct WriteMode {
 /// the buffer. The copy is what the write reads (an autocommand can free the
 /// buffer's storage, never this); the address is only ever compared, against
 /// where the buffer keeps its names, to ask the same question.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct WriteNameCopy {
     pub text: XString,
     addr: usize,
@@ -92,6 +92,7 @@ impl WriteNameCopy {
 /// was the buffer's own `b_ffname`/`b_sfname` is re-read from the buffer
 /// afterwards. One the autocommands took away altogether (`:0file`) keeps
 /// the name it had: upstream would go on with a null name.
+#[derive(Debug)]
 pub(crate) struct WriteNames {
     pub fname: WriteNameCopy,
     pub sfname: WriteNameCopy,
@@ -100,13 +101,14 @@ pub(crate) struct WriteNames {
 
 /// The `'[` and `']` marks as they were before the write set them to the
 /// line range, so `:lockmarks` can put them back.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct OpMarks {
     pub start: Pos,
     pub end: Pos,
 }
 
 /// What the pre-write autocommands left for `buf_write` to do.
+#[derive(Debug)]
 pub(crate) enum PreWrite {
     /// Nothing was written; go ahead with the write.
     Proceed,

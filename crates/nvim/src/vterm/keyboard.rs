@@ -57,7 +57,7 @@ enum KeyForm {
     Keypad,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Keycode {
     form: KeyForm,
     literal: c_int,
@@ -143,7 +143,7 @@ const KEYPAD: [(u8, c_int, u8); 18] = [
 
 /// Everything about the terminal's current modes that changes how a key is
 /// spelled.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct KeyModes {
     /// DECCKM: cursor keys send SS3 rather than CSI.
     cursor: bool,

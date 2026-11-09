@@ -93,6 +93,7 @@ fn wanted_kinds(flags: u32, want_marks: bool, get_old_files: bool) -> ReadKinds 
 type FnameBufs = IdMap<Box<[u8]>, Option<BufId>>;
 
 /// What one pass of [`shada_read`] carries between entries.
+#[derive(Debug)]
 struct Reading {
     /// `:rshada!` — take what the file says whatever this session holds.
     force: bool,

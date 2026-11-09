@@ -62,6 +62,7 @@ use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 
 /// One recognised modifier name, for the two callers that only need to know
 /// *whether* a word is one: `modifier_len` and `cmd_exists`.
+#[derive(Debug)]
 pub(crate) struct CmdModSpec {
     pub(crate) name: &'static CStr,
     pub(crate) minlen: usize,
@@ -661,6 +662,7 @@ pub(crate) fn undo_cmdmod(cm: &mut CmdMod) {
 /// in the cell* — a command may have changed them, `:tag` and `:help` both
 /// do — and only then does the previous set go back.
 #[must_use = "the modifiers are taken back out as soon as the guard is dropped"]
+#[derive(Debug)]
 pub(crate) struct CmdModScope {
     saved: CmdMod,
 }

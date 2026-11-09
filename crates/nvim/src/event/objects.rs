@@ -37,6 +37,24 @@ pub enum Event {
     /// again by them.
     Ids(fn(u64, u64), u64, u64),
 }
+// By hand: a job is a closure, which has no `Debug`.
+impl ::core::fmt::Debug for Event {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        match self {
+            Self::Raw(raw) => f.debug_tuple("Raw").field(raw).finish(),
+            Self::Job(_) => f
+                .debug_tuple("Job")
+                .field(&format_args!("<closure>"))
+                .finish(),
+            Self::Ids(handler, a, b) => f
+                .debug_tuple("Ids")
+                .field(handler)
+                .field(a)
+                .field(b)
+                .finish(),
+        }
+    }
+}
 pub type Loop = loop_0;
 pub type Proc = proc;
 pub type ProcType = ::core::ffi::c_uint;
@@ -45,6 +63,7 @@ pub type SignalWatcher = signal_watcher;
 pub type SocketWatcher = socket_watcher;
 pub type Stream = stream;
 pub type internal_proc_cb = Option<unsafe fn(*mut Proc) -> ()>;
+#[derive(Debug)]
 pub struct loop_0 {
     pub uv: uv_loop_t,
     /// The job-control children. Owned: a `Box<Vec<*mut Proc>>` that
@@ -59,6 +78,7 @@ pub struct loop_0 {
     pub closing: bool,
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct proc {
     pub type_0: ProcType,
     pub loop_0: *mut Loop,
@@ -95,6 +115,7 @@ pub type proc_state_cb = Option<unsafe fn(*mut Proc, bool, *mut ::core::ffi::c_v
 /// address of the handle inside, so a registered one must not move or be
 /// duplicated.
 #[repr(C)]
+#[derive(Debug)]
 pub struct rstream {
     pub s: Stream,
     pub did_eof: bool,
@@ -112,6 +133,7 @@ pub type signal_cb =
     Option<unsafe fn(*mut SignalWatcher, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type signal_close_cb = Option<unsafe fn(*mut SignalWatcher, *mut ::core::ffi::c_void) -> ()>;
 #[repr(C)]
+#[derive(Debug)]
 pub struct signal_watcher {
     pub uv: uv_signal_t,
     pub data: *mut ::core::ffi::c_void,
@@ -123,6 +145,7 @@ pub struct signal_watcher {
 /// status for the connection.
 pub type socket_cb = Option<fn(&mut SocketWatcher, ::core::ffi::c_int)>;
 pub type socket_close_cb = Option<unsafe fn(*mut SocketWatcher, *mut ::core::ffi::c_void) -> ()>;
+#[derive(Debug)]
 pub struct socket_watcher {
     pub addr: [::core::ffi::c_char; 256],
     pub uv: socket_watcher_uv,
@@ -136,12 +159,12 @@ pub union socket_watcher_uv {
     pub tcp: socket_watcher_uv_tcp,
     pub pipe: socket_watcher_uv_pipe,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct socket_watcher_uv_pipe {
     pub handle: uv_pipe_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct socket_watcher_uv_tcp {
     pub handle: uv_tcp_t,
@@ -155,6 +178,7 @@ pub struct socket_watcher_uv_tcp {
 /// stream must not move or be duplicated. The transports that hold one are
 /// reached through `Pin` everywhere outside `event/`.
 #[repr(C)]
+#[derive(Debug)]
 pub struct stream {
     pub closed: bool,
     pub uv: stream_uv,
@@ -192,3 +216,4 @@ pub union stream_uv {
 }
 pub type stream_write_cb =
     Option<unsafe fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+crate::untagged_union_debug!(socket_watcher_uv, stream_uv);

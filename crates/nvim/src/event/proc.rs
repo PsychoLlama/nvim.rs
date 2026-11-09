@@ -104,7 +104,7 @@ static EXIT_NEED_DELAY: GlobalCell<c_int> = GlobalCell::new(0);
 /// A child this module is working with, plus the promise that the pointer
 /// behind it stays live for as long as the handle does. See the module's
 /// aliasing note.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct Child(*mut Proc);
 
 impl Child {

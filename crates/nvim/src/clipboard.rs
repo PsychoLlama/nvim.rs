@@ -41,7 +41,7 @@ const MSG_NO_CLIP: &core::ffi::CStr =
     c"clipboard: No provider. Try \":checkhealth\" or \":h clipboard\".";
 
 /// The module's mutable state, all of it.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct ClipboardState {
     /// Depth of nested `start_batch_changes` scopes.
     batch_change_count: c_int,

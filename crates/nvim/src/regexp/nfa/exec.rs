@@ -197,6 +197,7 @@ pub(crate) fn nfa_regexec(rex: Rex, prog: &NfaRegProg, startcol: ColNr) -> c_int
 }
 
 /// What `try_match` settled on.
+#[derive(Debug)]
 enum Attempt {
     /// The machine ran; the caller still tidies the reported positions.
     Ran(c_int),

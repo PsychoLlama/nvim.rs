@@ -205,6 +205,7 @@ pub(crate) fn hist_type2char(type_0: c_int) -> c_int {
 ///
 /// A slot *index* rather than an item: the walk's position comes round again
 /// between steps, and a pointer would not survive a mutation of the table.
+#[derive(Debug)]
 pub(crate) struct VarWalk {
     next: usize,
     flavour: VarFlavour,

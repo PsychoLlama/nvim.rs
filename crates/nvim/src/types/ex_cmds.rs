@@ -13,12 +13,12 @@ use super::*;
 use crate::ex_eval::defs::CondId;
 use crate::types::CmdIdx;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CmdParseInfo {
     pub cmdmod: CmdMod,
     pub magic: CmdParseMagic,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct CmdParseMagic {
     pub file: bool,
     pub bar: bool,
@@ -169,7 +169,7 @@ crate::flag_set! {
 /// `apply_cmdmod` put aside so `undo_cmdmod` can put it back — a duplicate
 /// of those would undo the same suppression twice. A clone *shares* the
 /// `:filter` pattern, as upstream's struct copy shared the pointers.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CmdMod {
     pub cmod_flags: CmdModFlags,
     pub cmod_split: ::core::ffi::c_int,
@@ -221,6 +221,14 @@ pub struct CmdFilter {
     /// program (the NFA one falls back to the backtracking one), and a
     /// message given while matching asks the filter again.
     pub(crate) prog: ::core::cell::Cell<Option<crate::regexp::OwnedProg>>,
+}
+impl ::core::fmt::Debug for CmdFilter {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        f.debug_struct("CmdFilter")
+            .field("pat", &self.pat)
+            .field("prog", &format_args!("Cell {{ .. }}"))
+            .finish()
+    }
 }
 
 impl CmdFilter {
@@ -280,7 +288,7 @@ fn nul_at(bytes: &[u8]) -> usize {
 /// consumer handed `eap->arg` sees.
 ///
 /// [`separate_nextcmd`]: crate::ex_docmd::separate_nextcmd
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct CmdLine {
     /// The line's bytes, empty or ending in a NUL.
     text: Vec<u8>,
@@ -641,6 +649,7 @@ impl EcmdCmd {
 ///
 /// Not `Clone`: `line` is the buffer the command is parsed out of, owned for
 /// as long as it runs, and `source` is the run's own, lent for as long.
+#[derive(Debug)]
 pub struct ExArg<'s> {
     /// The command line and the three cursors into it.
     pub line: CmdLine,

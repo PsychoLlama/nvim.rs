@@ -32,6 +32,7 @@ fn key_len(key: &[u8]) -> u32 {
 }
 
 /// Interned glyphs, each named by the byte offset it starts at.
+#[derive(Debug)]
 pub(crate) struct GlyphCache {
     table: ProbeTable,
     /// The packed run: every glyph followed by its NUL.

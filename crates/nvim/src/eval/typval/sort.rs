@@ -50,6 +50,7 @@ const ITEM_COMPARE_FAIL: c_int = 999;
 
 /// The ordering `sort()` or `uniq()` was asked for, as
 /// [`parse_sort_uniq_args`] read it from the arguments it borrows.
+#[derive(Debug)]
 pub(crate) struct SortInfo<'a> {
     /// `'i'` or `1`: ignore case.
     ic: bool,

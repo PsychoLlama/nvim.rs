@@ -70,6 +70,7 @@ const MPACK_TOKEN_STR: u32 = TokenKind::Str as u32;
 const MPACK_TOKEN_EXT: u32 = TokenKind::Ext as u32;
 
 /// Why a walk stopped: what the binding raises once the codec returns.
+#[derive(Debug)]
 pub enum Failure {
     /// `luaL_error`'s message.
     Message(&'static str),
@@ -98,6 +99,7 @@ impl Failure {
 }
 
 /// The decoding walk of one [`super::Unpacker`] (or of `mpack.decode`).
+#[derive(Debug)]
 pub struct LuaDecoder<'s> {
     stack: &'s mut Stack,
     /// The instance's private table.
@@ -273,6 +275,7 @@ fn store_in_parent(stack: &mut Stack, reg: At, parent: &mut Node) {
 }
 
 /// What a [`super::Packer`] was built with.
+#[derive(Debug)]
 pub struct PackOptions {
     /// The `ext` option's handler table, or `LUA_NOREF`.
     pub ext: c_int,
@@ -283,6 +286,7 @@ pub struct PackOptions {
 }
 
 /// The encoding walk of one [`super::Packer`] (or of `mpack.encode`).
+#[derive(Debug)]
 pub struct LuaEncoder<'s> {
     stack: &'s mut Stack,
     /// The instance's private table.

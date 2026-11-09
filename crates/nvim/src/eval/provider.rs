@@ -369,6 +369,7 @@ pub fn invoke_prompt_interrupt() -> bool {
 
 /// What a provider call reaches back into: the context of the script that
 /// started it.
+#[derive(Debug)]
 pub(crate) struct CallerScope {
     pub(crate) script_ctx: ScriptCtx,
     pub(crate) es_entry: EStack,

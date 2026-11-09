@@ -266,6 +266,7 @@ pub fn nvim_ui_set_option(channel_id: u64, name: ApiString, value: Object) -> Re
 }
 
 /// What an option change after attach has to tell the rest of the editor.
+#[derive(Debug)]
 enum Publish {
     Nothing,
     /// The colour model of a legacy UI changed.

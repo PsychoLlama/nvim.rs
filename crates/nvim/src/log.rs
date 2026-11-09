@@ -144,6 +144,7 @@ static DID_RECURSION_MSG: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Held for the length of one log line: the cross-thread lock and this
 /// thread's "inside a line" flag, both released however the line ends.
+#[derive(Debug)]
 struct Writing(#[expect(dead_code, reason = "held for its lock")] MutexGuard<'static, ()>);
 
 impl Drop for Writing {
@@ -303,6 +304,7 @@ pub(crate) fn with_log_lock<T>(f: impl FnOnce() -> T) -> T {
 
 /// Where a log line goes: the file that was chosen, or stderr when there is
 /// none or it could not be opened.
+#[derive(Debug)]
 enum Sink {
     File(File),
     Stderr,
@@ -601,7 +603,7 @@ fn line_prefix(
     Some(prefix)
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct NvimStats {
     pub fsync: int64_t,
     pub redraw: int64_t,

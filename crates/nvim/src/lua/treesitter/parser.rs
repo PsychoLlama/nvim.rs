@@ -35,7 +35,7 @@ use crate::winlayer::{self, Buf};
 
 /// A parser, as its userdatum owns it, with the logger it was given.
 /// Empty once collected.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct Parser {
     parser: Option<NonNull<TSParser>>,
     pub(crate) logger: Option<Rc<Logger>>,
@@ -108,6 +108,7 @@ const CHUNK_SIZE: usize = 256;
 
 /// A buffer parse's source: the buffer, and the chunk the last read
 /// answered, which tree-sitter reads until it asks again.
+#[derive(Debug)]
 struct BufferInput {
     buffer: Buf,
     chunk: [u8; CHUNK_SIZE],
@@ -165,6 +166,7 @@ unsafe extern "C" fn input_cb(
 }
 
 /// When a parse with a timeout started, and the timeout.
+#[derive(Debug)]
 struct ParseDeadline {
     start: u64,
     timeout: u64,
@@ -183,6 +185,7 @@ unsafe extern "C" fn on_parser_progress(state: *mut TSParseState) -> bool {
 }
 
 /// The source `parse` was asked to read.
+#[derive(Debug)]
 enum Source {
     String,
     Buffer(Buf),

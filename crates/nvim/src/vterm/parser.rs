@@ -96,6 +96,7 @@ fn is_intermed(c: u8) -> bool {
 }
 
 /// Something the parser recognised, on its way to the consumer's callback.
+#[derive(Debug)]
 enum ParserEvent<'a> {
     /// A control character the parser does not act on itself.
     Control(u8),
@@ -117,6 +118,7 @@ enum ParserEvent<'a> {
 
 /// The parser block of a terminal and the consumer it reports to, for the
 /// length of one write.
+#[derive(Debug)]
 struct Parser<'a, H: ParserHandler + ?Sized> {
     block: &'a mut VTerm_parser,
     handler: &'a mut H,

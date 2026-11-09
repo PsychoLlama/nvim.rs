@@ -37,6 +37,7 @@ use core::ffi::c_int;
 /// -- because the `WinNew` autocommand and the `:enter` below can close the
 /// window that was just made, and every question asked after them is about
 /// exactly that.
+#[derive(Debug)]
 struct Opening {
     /// The buffer the new window is to show, and a reference that says
     /// whether it is still there once autocommands have run.

@@ -55,7 +55,7 @@ macro_rules! translate {
 /// Upstream carries the name as a string and dispatches on its characters —
 /// `reason[2] == 'n'` for "conflict", `reason[1] == 'h'` for "changed" — which
 /// picks out exactly these five.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Reason {
     /// The file is gone.
     Deleted,
@@ -83,7 +83,7 @@ impl Reason {
 }
 
 /// Whether, and how, to re-read the file.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Reload {
     No,
     /// Re-read the text, keeping the buffer's options.
@@ -94,6 +94,7 @@ enum Reload {
 }
 
 /// What `FileChangedShell` decided.
+#[derive(Debug)]
 enum Fcs {
     /// Nothing handled it, or something asked for the usual prompt.
     Ask,

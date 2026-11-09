@@ -32,6 +32,7 @@ lua_functions! {
 
 /// One misspelling `vim.spell.check` reports: the word, its kind, and the
 /// 0-based byte offset it starts at.
+#[derive(Debug)]
 struct Misspelling {
     word: Vec<u8>,
     kind: &'static CStr,

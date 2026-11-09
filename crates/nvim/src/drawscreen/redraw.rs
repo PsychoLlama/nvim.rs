@@ -329,6 +329,7 @@ mod tests {
 
     /// The fixture, with `must_redraw` and the window's redraw state zeroed
     /// for the case and put back when it goes.
+    #[derive(Debug)]
     struct Redraw {
         fx: Fixture,
         saved_must_redraw: c_int,

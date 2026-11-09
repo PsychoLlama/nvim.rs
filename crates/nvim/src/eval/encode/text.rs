@@ -42,6 +42,7 @@ const NULL_FUNC_NAME: &CStr = c"string(): NULL function name";
 /// `ECHO` picks between upstream's two instantiations.  It is a `const`
 /// parameter rather than a field so that each of the two monomorphisations is
 /// exactly the code its macro expansion was, with no branch left at run time.
+#[derive(Debug)]
 struct TextSink<'a, const ECHO: bool> {
     gap: &'a mut Vec<u8>,
 }

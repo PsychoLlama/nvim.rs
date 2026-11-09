@@ -53,10 +53,11 @@ use std::os::unix::fs::MetadataExt;
 // ---------------------------------------------------------------------
 
 /// An open file, read the way upstream's binary-mode `FILE *` reads it.
+#[derive(Debug)]
 struct File(std::fs::File);
 
 /// Where a [`File::seek`] counts from: upstream's `fseeko` `whence`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum Whence {
     Start,
     End,
@@ -117,6 +118,7 @@ fn push_line(lines: &mut List, s: ThinCString) {
 /// Upstream's `prev`/`prevlen`/`prevsize` triple, read back when a CR run
 /// or a BOM straddles two reads, and finally handed to the list as the head
 /// of the finished line.
+#[derive(Debug)]
 struct Carry(Vec<u8>);
 
 impl Carry {

@@ -57,6 +57,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A global editor-state cell. See the module docs for the contract.
 #[repr(transparent)]
+#[derive(Debug)]
 pub struct GlobalCell<T>(UnsafeCell<T>);
 
 // SAFETY: editor globals are only accessed from the main thread (checked in
@@ -319,6 +320,7 @@ impl<T> GlobalCell<T> {
 /// that re-enters the editor cannot find one open.
 ///
 /// Spell one with the crate's `field!` macro.
+#[derive(Debug)]
 pub struct Field<S, T> {
     /// The field's offset in `S` — the selector's identity.
     at: usize,
@@ -451,6 +453,7 @@ macro_rules! state_record {
     ) => {
         $(#[$rdoc])*
         #[allow(non_snake_case, reason = "each field keeps its selector's (upstream) name")]
+        #[derive(Debug)]
         $rvis struct $record {
             $($field: $ty,)*
         }
@@ -583,6 +586,7 @@ impl<T> GlobalCell<T> {
 /// deliberate, hand-reviewed downgrade — the mechanical conversion never
 /// emits this type.
 #[repr(transparent)]
+#[derive(Debug)]
 pub struct SharedCell<T>(UnsafeCell<T>);
 
 // SAFETY: same (weak) claim the transpiled C made: concurrent access is
@@ -639,6 +643,7 @@ impl<T> SharedCell<T> {
 /// say `.cast_mut()` and answer for the write itself. That is the point —
 /// the tables that *are* written keep their cell.
 #[repr(transparent)]
+#[derive(Debug)]
 pub struct ConstTable<T>(T);
 
 // SAFETY: the contents are never written, so sharing `&T` across threads
@@ -769,6 +774,7 @@ fn check_no_field_loan(addr: usize) {
 /// The two shared borrows [`GlobalCell::with_field`] holds while `f` runs:
 /// one of the field, one of the record. Debug builds only.
 #[cfg(debug_assertions)]
+#[derive(Debug)]
 struct FieldLoan {
     _field: BorrowGuard,
     _record: BorrowGuard,
@@ -784,6 +790,7 @@ impl FieldLoan {
     }
 }
 
+#[derive(Debug)]
 struct BorrowGuard {
     #[cfg(debug_assertions)]
     addr: usize,
@@ -889,6 +896,7 @@ pub(crate) mod editor_state {
 
     /// What [`editor_state_lock`](super::editor_state_lock) hands back. The
     /// outermost guard on a thread owns the mutex; nested ones only count.
+    #[derive(Debug)]
     pub(crate) struct Held(
         #[expect(dead_code, reason = "held for its lock")] Option<MutexGuard<'static, ()>>,
     );
@@ -988,6 +996,7 @@ mod tests {
 
     #[test]
     fn a_field_selector_reaches_one_field_per_access() {
+        #[derive(Debug)]
         struct Record {
             count: i32,
             name: Option<Vec<u8>>,
@@ -1030,6 +1039,7 @@ mod tests {
 
     #[test]
     fn a_field_write_nested_in_a_field_borrow_leaves_the_borrow_live() {
+        #[derive(Debug)]
         struct Record {
             count: i32,
             name: Option<Vec<u8>>,
@@ -1061,6 +1071,7 @@ mod tests {
         assert_eq!((count, cell.get_at(COUNT)), (Some(3), 4));
     }
 
+    #[derive(Debug)]
     struct Lent {
         count: i32,
         name: Option<Vec<u8>>,

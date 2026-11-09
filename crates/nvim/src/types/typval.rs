@@ -39,6 +39,7 @@ pub const kBoolVarTrue: BoolVarValue = 1;
 /// discriminant may not move into a niche, or "no callback" stops being
 /// what those zeroes mean.
 #[repr(C, u32)]
+#[derive(Debug)]
 pub enum Callback {
     None = 0,
     /// A function name, owned, plus a counted use of the function.
@@ -61,6 +62,7 @@ impl Callback {
 /// Shared (`Rc`) so that the walk firing it can keep it alive across its
 /// callback while that callback edits the list; `busy` and `needs_free` are
 /// cells for the same reason.
+#[derive(Debug)]
 pub struct DictWatcher {
     pub callback: Callback,
     pub key_pattern: Vec<u8>,
@@ -376,6 +378,7 @@ mod refcount_tests {
 }
 
 /// A `Blob`: a byte vector with a reference count and a lock.
+#[derive(Debug)]
 pub struct Blob {
     pub bv_data: Vec<u8>,
     pub bv_refcount: Refcount,
@@ -386,6 +389,7 @@ pub struct Blob {
 /// Neither `Copy` nor `Clone`: it owns its hashtab -- and through it the
 /// items every key points into -- its watchers and a Lua table
 /// reference, none of which a second holder may free.
+#[derive(Debug)]
 pub struct Dict {
     pub dv_lock: VarLock,
     pub dv_scope: ScopeType,
@@ -407,6 +411,7 @@ pub struct Dict {
 /// Shared (`Rc`) by the table and whoever is using it across user code; the
 /// fields that change during the call are cells, each borrowed only for the
 /// access that asks.
+#[derive(Debug)]
 pub struct FuncCall {
     /// The function being run.
     pub(crate) func: ::std::rc::Rc<UserFunc>,
@@ -456,6 +461,7 @@ const _: () = {
 ///
 /// Twenty-four bytes and no links: the list owns its items in an array, so
 /// an item's identity is its index and there is nothing to thread.
+#[derive(Debug)]
 pub struct ListItem {
     pub li_tv: TypVal,
     pub li_lock: VarLock,
@@ -480,6 +486,7 @@ impl ListItem {
 /// why an item's identity outside the array is an *index* and not an
 /// address.  [`ListWatch`] is the one identity that has to survive an edit,
 /// and `tv_list_watch_*` is what keeps it pointing at the same item.
+#[derive(Debug)]
 pub struct List {
     pub lv_items: Vec<ListItem>,
     /// The `:for` cursors on this list, each named by its `id`.
@@ -524,7 +531,7 @@ impl List {
 ///
 /// The list owns its cursors; a loop holds the `id` its cursor was
 /// registered under and asks the list for the index.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ListWatch {
     /// Unique among the cursors of one list.
     pub id: u32,
@@ -543,6 +550,7 @@ impl ListWatch {
 /// It owns its name, its arguments and its dictionary reference; the last
 /// [`PartialRef`] going is what releases them (`partial_free`, in upstream's
 /// order). Built in place with [`PartialRef::new`].
+#[derive(Debug)]
 pub struct Partial {
     pub pt_refcount: Refcount,
     pub pt_copy_id: ::core::ffi::c_int,
@@ -555,7 +563,7 @@ pub struct Partial {
     pub pt_dict: Option<DictRef>,
 }
 pub type ScriptId = ::core::ffi::c_int;
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 #[repr(C)]
 pub struct ScriptCtx {
     pub sc_sid: ScriptId,
@@ -635,6 +643,7 @@ impl Default for ScriptCtx {
 ///
 /// [`ManuallyDrop`]: ::core::mem::ManuallyDrop
 #[repr(C, u32)]
+#[derive(Debug)]
 pub enum TypVal {
     /// No value: what a fresh slot holds, and what one is left as after being
     /// moved out of.
@@ -674,6 +683,7 @@ pub enum TypVal {
 /// ([`crate::eval::userfunc::func_clear_free`]). The fields that change after
 /// the definition are cells, borrowed only for the access that asks, never
 /// across a call that can run user code.
+#[derive(Debug)]
 pub struct UserFunc {
     /// The name the table holds it under: a global name, `<SNR>`-mangled
     /// (`K_SPECIAL KS_EXTRA KE_SNR` + `123_name`), a number, `<lambda>N`.
@@ -696,7 +706,7 @@ pub struct UserFunc {
 }
 
 /// What `:function` collected between the parentheses and `:endfunction`.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct FuncBody {
     /// The argument names.
     pub args: Vec<Box<[u8]>>,
@@ -710,7 +720,7 @@ pub(crate) struct FuncBody {
 }
 
 /// A function's `:profile` counters, the per-line ones sized to its body.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct FuncProfile {
     pub profiling: bool,
     pub initialized: bool,

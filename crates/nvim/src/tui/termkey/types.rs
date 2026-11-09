@@ -17,7 +17,7 @@
 pub type TermKeyEvent = ::core::ffi::c_uint;
 pub type TermKeyFormat = ::core::ffi::c_uint;
 /// One key, as the reader hands it back.
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub struct TermKeyKey {
     /// Which kind of key this is (`TERMKEY_TYPE_*`), which is also what
     /// says how to read `code`.

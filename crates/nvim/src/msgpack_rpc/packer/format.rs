@@ -382,6 +382,7 @@ pub fn handle(ext_type: i8, value: i32) -> Item {
 /// remember the container it came from. Most objects it sends nest one or two
 /// deep, and it runs per RPC message, so the common case has to stay free of
 /// allocation — which is what upstream's inline-array vector bought.
+#[derive(Debug)]
 pub struct SmallStack<T> {
     inline: [Option<T>; 2],
     inline_len: usize,

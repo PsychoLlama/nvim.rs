@@ -67,7 +67,7 @@ const BUFFER_CAPACITY: usize = 1023;
 
 /// One module table's mutable state: the userdatum every function in the
 /// table carries as its first upvalue.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct Config {
     buffer: Vec<u8>,
 }

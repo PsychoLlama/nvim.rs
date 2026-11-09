@@ -820,6 +820,7 @@ mod tests {
     /// Hold `tv_in_free_unref_items` up for a scope, and put it down even
     /// when an assertion unwinds through it -- a flag left up would turn
     /// every later case's frees into leaks.
+    #[derive(Debug)]
     struct Collecting;
     impl Collecting {
         fn start() -> Collecting {

@@ -113,6 +113,7 @@ pub(crate) fn with_active_stack<R>(body: impl FnOnce(&mut Stack) -> R) -> Option
 /// Marks `stack`'s state as the one the running API call came in on, until
 /// dropped.
 #[must_use = "the state is only active while the guard lives"]
+#[derive(Debug)]
 pub(crate) struct ActiveState {
     _restore: Restore<Option<NonNull<lua_State>>>,
 }

@@ -58,6 +58,7 @@ use crate::winlayer::graph::{cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_
 use crate::winlayer::{Buf, Win};
 
 /// What the "edit another file" stage decided.
+#[derive(Debug)]
 pub(super) enum Switch {
     /// The buffer is in place; carry on.
     Ready,

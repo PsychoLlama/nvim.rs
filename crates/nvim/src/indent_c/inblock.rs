@@ -25,7 +25,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 /// What the backwards scan should do after looking at one line.
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub(crate) enum Step {
     /// Upstream's `continue`: keep walking up.
     Again,
@@ -34,6 +34,7 @@ pub(crate) enum Step {
 }
 
 /// The backwards scan inside a `{}` block, and everything it carries.
+#[derive(Debug)]
 pub(crate) struct BlockScan<'a> {
     /// The line being indented.
     pub line: &'a Line,

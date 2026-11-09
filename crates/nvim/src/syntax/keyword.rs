@@ -30,6 +30,7 @@ use crate::ascii::NUL;
 ///
 /// A text can have several, with different groups or options; they hang off
 /// one [`KeyChain`] in the table, newest first.
+#[derive(Debug)]
 pub(crate) struct KeyEntry {
     /// The group, and the `:syntax include` level it was defined at.
     pub(crate) syn: sp_syn,
@@ -47,13 +48,14 @@ pub(crate) struct KeyEntry {
 /// Upstream chains the entries through `ke_next` from the hash slot, adding
 /// each new one at the head; `entries` is that chain oldest first, so a walk
 /// from the head is `entries.iter().rev()`.
+#[derive(Debug)]
 struct KeyChain {
     keyword: Box<[u8]>,
     entries: Vec<KeyEntry>,
 }
 
 /// What a slot of a keyword table holds: the index of its [`KeyChain`].
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 struct ChainId(u32);
 
 impl SlotEntry for ChainId {
@@ -80,6 +82,7 @@ impl SlotEntry for ChainId {
 /// into `chains`, which owns the text and the entries; a chain that empties
 /// goes on the free list and its slot becomes a tombstone, as upstream's
 /// `hash_remove` left one.
+#[derive(Debug)]
 pub(crate) struct KeywordTable {
     slots: HashTab<ChainId>,
     chains: Vec<KeyChain>,
@@ -209,6 +212,7 @@ impl Default for KeywordTable {
 }
 
 /// Everything a run of `:syntax keyword` gives every keyword it defines.
+#[derive(Debug)]
 struct KeywordDef<'a> {
     /// The syntax group the keywords belong to.
     id: c_int,

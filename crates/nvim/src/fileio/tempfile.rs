@@ -65,6 +65,7 @@ macro_rules! log_at {
 /// every append that it still fits; the bound is real, because `os_mkdtemp`
 /// copied the template into a buffer of exactly that size. Overflowing it
 /// panics here where upstream aborts on the assertion.
+#[derive(Debug)]
 struct Template(Vec<u8>);
 
 impl Template {

@@ -47,6 +47,7 @@ impl BlockId {
 }
 
 /// One block: a run of `page_count` pages, and the bytes holding them.
+#[derive(Debug)]
 pub(crate) struct BlockHdr {
     /// The block number, which is also the key it is filed under.
     pub(super) bnum: BlockNr,
@@ -94,6 +95,7 @@ fn position(at: usize) -> u32 {
     u32::try_from(at).expect("fewer than 2^32 blocks in memory")
 }
 
+#[derive(Debug)]
 struct Slot {
     /// The block, or an empty stand-in while the slot is vacant.
     block: BlockHdr,
@@ -106,7 +108,7 @@ struct Slot {
     order_at: u32,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(super) struct BlockTable {
     slots: Vec<Slot>,
     /// Slots with no block in them, reused before `slots` grows.

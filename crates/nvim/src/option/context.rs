@@ -37,7 +37,7 @@ use super::{
 /// cast: the `OptScope` tag plus a `void *` this used to take could be
 /// mismatched at a call site and the mistake would only show as a window
 /// pointer being read as a buffer.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum OptionTarget {
     /// A window, whose buffer comes with it — the option code reads both.
     Win(Win),
@@ -85,6 +85,7 @@ impl OptionTarget {
 /// The two scopes need different machinery: a window is switched to with
 /// `switch_win_noblock`, a buffer is borrowed through the autocommand window
 /// with `aucmd_prepbuf`.
+#[derive(Debug)]
 enum OptionContext {
     Win(SwitchWin),
     Buf(AcoSave),

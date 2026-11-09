@@ -13,6 +13,9 @@
 //!   higher bits; `bool` fills the whole range with the flag.
 //! - Only unsigned value types are supported. No signed bitfield exists in
 //!   the tree; add the sign-extension here if one ever appears.
+//!
+//! [`untagged_union_debug!`] is the other C-layout helper: the `Debug` of a
+//! union whose live arm is recorded somewhere else, or nowhere.
 #![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
@@ -143,9 +146,35 @@ macro_rules! bitfield_accessors {
     };
 }
 
+/// `Debug` for C unions that carry no tag of their own: which arm is live is
+/// the owner's business (a libuv handle's type, a value's type code), so the
+/// impl names the type and prints no arm rather than guess one.
+///
+/// ```ignore
+/// crate::untagged_union_debug!(uv_handle_s_u, uv_timer_s_node);
+/// ```
+#[macro_export]
+macro_rules! untagged_union_debug {
+    ($($Union:ident),+ $(,)?) => {
+        $(
+            impl ::core::fmt::Debug for $Union {
+                fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                    f.debug_struct(stringify!($Union)).finish_non_exhaustive()
+                }
+            }
+        )+
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_untagged_union_prints_its_name_and_no_arm() {
+        let mutex = crate::os::libc::pthread_mutex_t { __align: 7 };
+        assert_eq!(format!("{mutex:?}"), "pthread_mutex_t { .. }");
+    }
 
     #[test]
     fn get_reads_lsb_first_within_and_across_bytes() {

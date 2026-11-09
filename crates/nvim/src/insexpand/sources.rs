@@ -802,6 +802,7 @@ fn add_scanned_word(
 
 /// A fuzzy match of a word in a line: where it starts, how long it is, and
 /// its score.
+#[derive(Debug)]
 pub(super) struct WordMatch {
     pub start: usize,
     pub len: usize,
@@ -847,6 +848,7 @@ pub(super) fn fuzzy_match_in_line(line: &[u8], at: usize, pat: &CStr) -> Option<
 /// Where a fuzzy match was found in a buffer line: its length in bytes, and
 /// its score — missing for a whole-line match, where upstream leaves the
 /// caller's score alone.
+#[derive(Debug)]
 pub(super) struct LineMatch {
     pub len: usize,
     pub score: Option<c_int>,

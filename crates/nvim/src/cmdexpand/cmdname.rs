@@ -617,7 +617,7 @@ pub fn set_cmd_context(expand: &mut Expand, line: &[u8], col: c_int, use_ccline:
 ///
 /// Upstream answers through the same `int` as an `xp_context` and reuses
 /// three of its names, one of which (`EXPAND_OK`) is not a context at all.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Expanded {
     /// The matches came back.
     Ok,

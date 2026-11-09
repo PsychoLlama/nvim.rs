@@ -294,6 +294,7 @@ pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer,
 
 /// Where collected lines go: straight into the Lua table on top of the
 /// stack, when Lua asked, or into an API array.
+#[derive(Debug)]
 pub(crate) enum LineSink<'a> {
     Lua(&'a mut Stack),
     Api(&'a mut Vec<Object>),

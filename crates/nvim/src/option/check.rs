@@ -59,7 +59,7 @@ use super::{
 /// What 'binary' overrode, so that switching it off again restores the
 /// values the user set rather than the defaults. The per-buffer copies live
 /// in `Buffer`; this is the global set, saved and restored as one.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct BinSave {
     /// 'textwidth' and 'wrapmargin'.
     pub(crate) tw: OptInt,
@@ -200,7 +200,7 @@ pub(crate) fn was_set_insecurely(
 /// option. Upstream answers both with a `uint32_t *` and lets the caller
 /// poke it; here the two homes are arms, and reading or writing the mark is
 /// [`is_set`](Self::is_set)/[`set`](Self::set).
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) enum InsecureFlag {
     /// The one mark the option shares, in `crate::option::state`.
     Shared(OptIndex),

@@ -56,6 +56,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 /// What the prompt decided for this match.
+#[derive(Debug)]
 pub(super) enum Confirm {
     /// Replace it -- `y`, and also `a` and `l`, which change the flags first.
     Replace,

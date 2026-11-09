@@ -56,6 +56,7 @@ use crate::optionstr::OptString;
 static HEX_UPPER: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The 'nrformats' letters, read once per call.
+#[derive(Debug)]
 struct NrFormats {
     /// `x` -- `0x1f` is a number.
     hex: bool,
@@ -87,6 +88,7 @@ impl NrFormats {
 }
 
 /// What the scan decided about a `-` in front of the number.
+#[derive(Debug)]
 enum Minus {
     /// There is none, or it does not belong to the number.
     Absent,
@@ -461,6 +463,7 @@ fn bump_alpha_char(firstdigit: u8, op_type: OpType, prenum1: i32, col: ColNr) ->
 }
 
 /// What the scan for the number found, handed to [`replace_number`].
+#[derive(Debug)]
 struct Scan<'a> {
     /// The line the number is in, copied out of the buffer.
     text: &'a [u8],

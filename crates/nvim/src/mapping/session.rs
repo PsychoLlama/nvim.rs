@@ -204,7 +204,7 @@ pub fn makemap(out: &mut dyn Write, buffer: Option<Buf>) -> Result<(), Failed> {
 }
 
 /// What [`put_escstr`] is writing, which decides how much escaping it needs.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum EscTarget {
     /// The `{lhs}` of a `:map` command, where a space needs a CTRL-V.
     MapLhs,

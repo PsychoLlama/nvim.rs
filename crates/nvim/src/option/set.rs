@@ -214,6 +214,7 @@ static TTYTYPE: TtyName = TtyName(GlobalCell::new(None));
 
 /// A string kept only so that a script setting `term` or `ttytype` reads
 /// back what it wrote.
+#[derive(Debug)]
 struct TtyName(GlobalCell<Option<XString>>);
 
 impl TtyName {
@@ -467,6 +468,7 @@ pub(crate) fn did_set_option(
 }
 
 /// What an `OptionSet` autocommand is told the option held before.
+#[derive(Debug)]
 struct OldValues {
     /// What was in effect: for `:setlocal` on a global-local option with no
     /// local value, whatever the option read through.

@@ -36,6 +36,7 @@ use crate::message::e_invarg;
 use crate::types::{Dict, ExArg, TypVal, VarNumber};
 
 /// One `:menutranslate from to` entry.
+#[derive(Debug)]
 struct Translation {
     /// The English name, as typed.
     from: CString,

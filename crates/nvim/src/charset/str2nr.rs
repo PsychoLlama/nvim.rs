@@ -171,6 +171,7 @@ fn forced_radix(what_without_force: Str2NrBases) -> Option<Radix> {
 /// What [`scan`] found: the prefix letter `vim_str2nr` reports through its
 /// `prep` out-argument, the magnitude the digits add up to, and whether
 /// accumulating them saturated.
+#[derive(Debug)]
 pub(super) struct Scanned {
     pub pre: u8,
     pub magnitude: UVarNumber,

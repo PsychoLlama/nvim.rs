@@ -108,6 +108,7 @@ impl From<WinError> for NotSplit {
 
 /// The room a split needs and the size it will take, from the first half of
 /// `win_split_ins()`.
+#[derive(Debug)]
 struct Room {
     /// The size the new window gets.
     new_size: c_int,

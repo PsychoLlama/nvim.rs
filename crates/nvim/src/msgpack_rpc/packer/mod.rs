@@ -37,6 +37,7 @@ pub type PackerBufferFlush = fn(&mut PackerBuffer);
 /// has been packed, `capacity - len` how much room is left. A detached
 /// packer holds no block (capacity 0) until its owner [`adopt`](Self::adopt)s
 /// one.
+#[derive(Debug)]
 pub struct PackerBuffer {
     block: Vec<u8>,
     /// The channels an RPC packer's flush writes to.
@@ -348,6 +349,7 @@ pub fn mpack_object_array(arr: &mut Array, packer: &mut PackerBuffer) {
 }
 
 /// A container whose remaining elements the walk will come back for.
+#[derive(Debug)]
 enum Resume<'a> {
     Array(core::slice::IterMut<'a, Object>),
     Dict(core::slice::IterMut<'a, KeyValuePair>),

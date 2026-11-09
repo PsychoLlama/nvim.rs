@@ -287,6 +287,7 @@ fn sign_jump_cmd(args: &SignCmdArgs) -> Result<(), SignError> {
 /// The "absent" values are what the three `sign_*_cmd` functions test
 /// against, and they are not all zero: `id` and `lnum` are −1 so that an
 /// explicit `0` can be told from no argument at all.
+#[derive(Debug)]
 struct SignCmdArgs {
     /// Leading zeroes already stripped.
     name: Option<Vec<u8>>,

@@ -62,6 +62,7 @@ const KEY_TEXT_MAX: usize = 64;
 /// Overflowing it is a bug in this module rather than something a terminal
 /// can provoke — no sequence names a key longer than [`KEY_TEXT_MAX`] — so
 /// it panics rather than truncating, as the C asserted.
+#[derive(Debug)]
 pub(super) struct KeyText {
     buf: [u8; KEY_TEXT_MAX],
     len: usize,

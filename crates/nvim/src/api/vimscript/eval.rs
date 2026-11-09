@@ -46,6 +46,7 @@ fn enter_recursive(recursive: &'static GlobalCell<c_int>) -> RecursionGuard {
     RecursionGuard(recursive)
 }
 
+#[derive(Debug)]
 struct RecursionGuard(&'static GlobalCell<c_int>);
 
 impl Drop for RecursionGuard {

@@ -75,6 +75,7 @@ impl<T> fmt::Debug for TableId<T> {
 /// undropped so the owner decides what of it to give back.
 pub(crate) type Boxed<T> = Box<UnsafeCell<ManuallyDrop<T>>>;
 
+#[derive(Debug)]
 struct Slot<T, M> {
     generation: NonZeroU32,
     value: Option<Boxed<T>>,
@@ -82,6 +83,7 @@ struct Slot<T, M> {
 }
 
 /// Values of type `T`, each with an `M` beside it, owned at fixed addresses.
+#[derive(Debug)]
 pub(crate) struct IdTable<T, M = ()> {
     slots: Vec<Slot<T, M>>,
     /// Empty slots, reused last-emptied first.
@@ -234,11 +236,13 @@ impl<T, M> IdTable<T, M> {
 /// rather than by a raw pointer into a fixed box: the table owns one
 /// reference, an id resolves to another, and emptying the slot drops the
 /// table's -- the value goes when its last holder does.
+#[derive(Debug)]
 pub(crate) struct RcTable<T, M = ()> {
     slots: Vec<RcSlot<T, M>>,
     vacant: Vec<u32>,
 }
 
+#[derive(Debug)]
 struct RcSlot<T, M> {
     generation: NonZeroU32,
     value: Option<::std::rc::Rc<T>>,

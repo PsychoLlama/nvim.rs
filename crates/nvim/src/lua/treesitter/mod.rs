@@ -44,26 +44,31 @@ use self::query::Query;
 
 // Opaque C types: layout unknown here, only ever used behind a pointer.
 #[repr(C)]
+#[derive(Debug)]
 pub struct TSLanguage {
     _data: [u8; 0],
     _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct TSParser {
     _data: [u8; 0],
     _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct TSTree {
     _data: [u8; 0],
     _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct TSQuery {
     _data: [u8; 0],
     _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct TSQueryCursor {
     _data: [u8; 0],
     _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
@@ -220,11 +225,13 @@ pub type TSSymbolType = c_uint;
 pub const SYMBOL_TYPE_AUXILIARY: TSSymbolType = 3;
 pub const SYMBOL_TYPE_ANONYMOUS: TSSymbolType = 1;
 #[repr(C)]
+#[derive(Debug)]
 pub struct TSPoint {
     pub row: uint32_t,
     pub column: uint32_t,
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct TSRange {
     pub start_point: TSPoint,
     pub end_point: TSPoint,
@@ -232,6 +239,7 @@ pub struct TSRange {
     pub end_byte: uint32_t,
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct TSInput {
     pub payload: *mut c_void,
     pub read: Option<
@@ -241,12 +249,14 @@ pub struct TSInput {
     pub decode: TSDecodeFunction,
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct TSParseState {
     pub payload: *mut c_void,
     pub current_byte_offset: uint32_t,
     pub has_error: bool,
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct TSParseOptions {
     pub payload: *mut c_void,
     pub progress_callback: Option<unsafe extern "C" fn(*mut TSParseState) -> bool>,
@@ -255,11 +265,13 @@ pub type TSLogType = c_uint;
 pub const LOG_TYPE_LEX: TSLogType = 1;
 pub const LOG_TYPE_PARSE: TSLogType = 0;
 #[repr(C)]
+#[derive(Debug)]
 pub struct TSLogger {
     pub payload: *mut c_void,
     pub log: Option<unsafe extern "C-unwind" fn(*mut c_void, TSLogType, *const c_char) -> ()>,
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct TSInputEdit {
     pub start_byte: uint32_t,
     pub old_end_byte: uint32_t,
@@ -268,20 +280,20 @@ pub struct TSInputEdit {
     pub old_end_point: TSPoint,
     pub new_end_point: TSPoint,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct TSNode {
     pub context: [uint32_t; 4],
     pub id: *const c_void,
     pub tree: *const TSTree,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct TSQueryCapture {
     pub node: TSNode,
     pub index: uint32_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct TSQueryMatch {
     pub id: uint32_t,
@@ -294,6 +306,7 @@ pub const STEP_TYPE_STRING: TSQueryPredicateStepType = 2;
 pub const STEP_TYPE_CAPTURE: TSQueryPredicateStepType = 1;
 pub const STEP_TYPE_DONE: TSQueryPredicateStepType = 0;
 #[repr(C)]
+#[derive(Debug)]
 pub struct TSQueryPredicateStep {
     pub type_0: TSQueryPredicateStepType,
     pub value_id: uint32_t,
@@ -304,6 +317,7 @@ pub const QUERY_ERROR_FIELD: TSQueryError = 3;
 pub const QUERY_ERROR_NODE_TYPE: TSQueryError = 2;
 pub const QUERY_ERROR_NONE: TSQueryError = 0;
 #[repr(C)]
+#[derive(Debug)]
 pub struct TSLanguageMetadata {
     pub major_version: uint8_t,
     pub minor_version: uint8_t,

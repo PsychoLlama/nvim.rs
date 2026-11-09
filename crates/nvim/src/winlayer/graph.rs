@@ -318,9 +318,11 @@ pub(crate) fn switch_buffer(buffer: Buf) -> Saved {
 /// the globals back early and then keep working. A `Drop` would fire at the
 /// end of the scope in every one of those, silently, after the code that
 /// cared had already moved on. Restoring is a statement the caller writes.
+#[derive(Debug)]
 pub(crate) struct Saved(Displaced);
 
 /// Which halves a switch took, and what they held.
+#[derive(Debug)]
 enum Displaced {
     /// [`switch_to`]: the window, with `curbuf` following it back.
     WindowAndBuffer(Win),
@@ -363,6 +365,7 @@ impl Saved {
 ///
 /// The one way to get one is [`forget_window`], so the only blocks freed
 /// this way are the ones the window registry held.
+#[derive(Debug)]
 pub(crate) struct ParkedWindow {
     /// Held for its drop alone, which is the free.
     _block: Box<MaybeUninit<Window>>,

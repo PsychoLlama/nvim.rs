@@ -34,7 +34,7 @@ use crate::types::LineNr;
 /// `flags` names an item of the 'comments' option by where it starts, which
 /// is what lets `format_lines` carry one from the "next line" slot to the
 /// "current line" slot without copying.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Leader {
     /// Bytes of leader, including the white space in front of it.
     pub(crate) len: c_int,

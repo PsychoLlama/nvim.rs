@@ -40,6 +40,7 @@ use crate::ui::{ui_flush, ui_has};
 use super::{ATTR_NAMES, HLF_D, HexBuf, coloridx_to_name, group, highlight_num_groups};
 
 /// One value in `:highlight`'s `key=value` output for a group.
+#[derive(Debug)]
 enum ListValue<'a> {
     /// A set of attribute bits, spelled as the comma-separated names
     /// `cterm=`/`gui=` would take. An empty set prints nothing.
@@ -70,6 +71,7 @@ impl<'a> ListValue<'a> {
 
 /// Where an attribute list or a number is spelled out. 100 bytes, as
 /// upstream: every attribute name and its comma fits twice over.
+#[derive(Debug)]
 struct ValueBuf {
     bytes: [u8; 100],
     len: usize,

@@ -154,7 +154,7 @@ pub fn marktree_put_key(tree: &mut MarkTree, mut k: MTKey) {
 /// `&itr->s[rlvl].i`, and compares it *by address* to decide whether the node
 /// it just merged is the one the iterator stands on. Naming the two cases says
 /// the same thing without the pointer.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum Lasti {
     /// The key index within the node the iterator is on.
     Cur,
@@ -583,7 +583,7 @@ pub fn marktree_lookup(
     marktree_itr_set_node(tree, iter, n, count_as_int(i))
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct MTKey {
     pub pos: MTPos,
@@ -592,13 +592,13 @@ pub struct MTKey {
     pub flags: MtFlags,
     pub decor_data: DecorInline,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct MTPair {
     pub start: MTKey,
     pub end_pos: MTPos,
     pub end_right_gravity: bool,
 }
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 #[repr(C)]
 pub struct MTPos {
     pub row: int32_t,
@@ -609,6 +609,7 @@ pub struct MTPos {
 /// Its nodes live in [`NodeSlab`], addressed by [`NodeId`]: a node names its
 /// parent and children by id, and so does an iterator, so nothing outside the
 /// slab holds a node's address.
+#[derive(Debug)]
 pub struct MarkTree {
     /// The top node, or `None` for a tree that has never held a key or has
     /// been emptied by `marktree_clear`.
@@ -643,7 +644,7 @@ impl Default for MarkTree {
 /// marktree code does with it. It names its node by [`NodeId`] and the path
 /// down to it by child index, so it holds nothing a tree change can leave
 /// dangling: a stale iterator reads a wrong key, never freed memory.
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub struct MarkTreeIter {
     /// The absolute position the keys of `node` are relative to.
     pub pos: MTPos,
@@ -685,7 +686,7 @@ impl MarkTreeIter {
 
 /// One level of a [`MarkTreeIter`]'s path: which child it descended into, and
 /// the column its position had before it did.
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub struct PathStep {
     pub old_col: ::core::ffi::c_int,
     pub index: ::core::ffi::c_int,

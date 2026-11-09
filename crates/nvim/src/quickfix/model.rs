@@ -27,6 +27,7 @@ pub(crate) type QfId = crate::id_table::TableId<QfStack>;
 /// one table and everything else names one by [`QfId`]. A location list
 /// stack is shared by reference between the window that owns it and the
 /// location list window showing it, and freed at the last reference.
+#[derive(Debug)]
 pub struct QfStack {
     /// How many windows hold this stack. Meaningless for the quickfix
     /// stack, which is never freed.
@@ -114,6 +115,7 @@ pub const QFLT_LOCATION: QfListType = 1;
 pub const QFLT_QUICKFIX: QfListType = 0;
 
 /// One quickfix list within a stack.
+#[derive(Debug)]
 pub struct QfList {
     /// The list's identity, which `getqflist()` reports and a command that
     /// ran user code compares to tell whether it is still on the same list.
@@ -236,12 +238,13 @@ impl Drop for QfList {
 
 /// The directories `%D`/`%X` (or `%O`/`%P`/`%Q`) pushed while parsing, the
 /// one most recently entered last. See `quickfix::entry` for the operations.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct DirStack {
     pub(crate) dirs: Vec<Name>,
 }
 
 /// One entry in a quickfix list.
+#[derive(Debug)]
 pub struct QfEntry {
     /// The line the entry names, or 0 for none.
     pub lnum: LineNr,

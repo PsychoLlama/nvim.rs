@@ -23,6 +23,7 @@ use crate::winlayer::graph::{firstwin, lastwin};
 
 /// The fixture's window as the whole of the current tab page's list: a
 /// set reaches `comp_col`, which asks the first window for its status line.
+#[derive(Debug)]
 struct Listed;
 
 impl Listed {

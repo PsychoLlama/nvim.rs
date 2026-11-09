@@ -89,6 +89,7 @@ pub(crate) fn schedule(stack: &mut Stack) -> Result<c_int, Raise> {
 }
 
 /// How one call of `vim.wait`'s condition went.
+#[derive(Debug)]
 enum Condition {
     /// Keep waiting: the condition answered nothing, or something falsy.
     Unmet,

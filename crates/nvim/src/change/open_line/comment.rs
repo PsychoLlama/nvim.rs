@@ -65,6 +65,7 @@ fn copy_part(com: &[u8], p: &mut usize) -> Vec<u8> {
 }
 
 /// What the new line's leader should be built from.
+#[derive(Debug)]
 pub(crate) enum Repl {
     /// Keep the old line's leader as it is.
     Same,
@@ -75,6 +76,7 @@ pub(crate) enum Repl {
 }
 
 /// [`plan_leader`]'s answer.
+#[derive(Debug)]
 pub(crate) struct LeaderPlan {
     /// Bytes of the old line to take as the leader; 0 means "no leader".
     pub(crate) lead_len: c_int,
@@ -434,6 +436,7 @@ fn left_adjust(buf: &mut [u8], mut lead_len: usize, repl: &[u8]) -> usize {
 }
 
 /// What [`build_leader`] produced.
+#[derive(Debug)]
 pub(crate) struct BuiltLeader {
     /// The leader text, without the indent it may have carried.
     pub(crate) text: Vec<u8>,
@@ -443,6 +446,7 @@ pub(crate) struct BuiltLeader {
 }
 
 /// What the line being split contributes to the leader's size and shape.
+#[derive(Debug)]
 pub(crate) struct LeaderContext {
     /// Where the leader starts in the old line when it is a comment *after*
     /// code (`code(); // why`); everything before it is blanked out so that

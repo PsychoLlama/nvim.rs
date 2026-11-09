@@ -144,6 +144,7 @@ pub fn f_eval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// Where an `execute([...])` List walk is up to: the
 /// [`List`](crate::ex_docmd::LineSource::List) arm of `do_cmdline`'s line
 /// source.
+#[derive(Debug)]
 pub(crate) struct ListLines {
     /// The list being walked, held across the run: a command may drop the
     /// variable holding it.

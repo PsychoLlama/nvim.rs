@@ -23,10 +23,10 @@
 
 use crate::cstr;
 use crate::global_cell::GlobalCell;
-use crate::regexp::ExtMatchIo;
 use crate::regexp::RegCompiler;
 use crate::regexp::bt_regcomp;
 use crate::regexp::nfa_regcomp;
+use crate::regexp::{ExtMatchIo, ExtOut};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::cell::Cell;
@@ -75,7 +75,7 @@ pub(crate) fn in_match_scope<R>(first: Option<LineNr>, f: impl FnOnce(LineNr) ->
 }
 
 /// One engine's program.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum Program {
     Bt(BtRegProg),
     Nfa(NfaRegProg),
@@ -83,7 +83,7 @@ pub(crate) enum Program {
 
 /// A compiled pattern: the engine's program, and what [`vim_regcomp`]
 /// recorded about how it was asked for.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Compiled {
     /// The engine 'regexpengine' or a `\%#=` named: automatic, backtracking
     /// or NFA. An automatic one may hand the pattern over mid-match.
@@ -106,7 +106,7 @@ struct Compiled {
 ///
 /// `Clone` is a deep copy, for the one holder that needs a private program
 /// per redraw (a window's match list).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OwnedProg(Box<Compiled>);
 
 impl OwnedProg {
@@ -380,6 +380,7 @@ fn regexec_string(
 }
 
 /// What one string match runs with, whichever program runs it.
+#[derive(Debug)]
 struct StringRun<'a> {
     /// The current buffer, whose 'iskeyword' `\k` and friends read.
     buffer: &'a Buf,
@@ -613,7 +614,7 @@ fn walk_with<R>(
         nobreak: prog.nobreak(),
         deadline: tm.copied(),
         ext_in: io.input,
-        ext_out: io.output.map(Cell::from_mut),
+        ext_out: io.output.map(ExtOut::new),
         zslots: if prog.has_z() {
             zslots = GroupSlots::new();
             Some(&zslots)
@@ -636,6 +637,7 @@ fn walk_with<R>(
 }
 
 /// A buffer match set up by [`walk_lines`], run one line at a time.
+#[derive(Debug)]
 pub(crate) struct LineMatcher<'t> {
     ctx: &'t RegExec<'t>,
     prog: &'t mut OwnedProg,
@@ -716,6 +718,7 @@ impl LineMatcher<'_> {
 
 /// What a buffer match reads from its `RegMMatch` and writes back to it,
 /// borrowed apart from the program that runs.
+#[derive(Debug)]
 struct MultiOut<'a> {
     starts: &'a mut [LPos; RE_GROUPS],
     ends: &'a mut [LPos; RE_GROUPS],

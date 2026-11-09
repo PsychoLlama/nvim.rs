@@ -51,7 +51,7 @@ fn digit_at(fmt: &[u8], at: usize) -> bool {
 ///
 /// Two uses of one position must agree on it: `%1$d %1$s` names one
 /// argument as two different things.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum ArgType {
     Unknown,
     Int,

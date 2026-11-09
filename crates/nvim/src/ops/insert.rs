@@ -49,6 +49,7 @@ use crate::cursor::getvpos;
 /// [`op_insert`] recovers what was typed by measuring the line again
 /// afterwards and subtracting; everything here exists so that the difference
 /// is the *text* and not an indent change.
+#[derive(Debug)]
 struct BlockInsertPre {
     /// Indent of the first line in bytes.
     ind_pre_col: ColNr,

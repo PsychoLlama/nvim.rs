@@ -374,7 +374,7 @@ fn slot<'a>(tv: Option<&'a TypVal>, dict: Option<&'a Dict>, name: &str) -> Optio
 
 /// `sign_place()`'s positional arguments, all `None` for
 /// `sign_placelist()`, where the dictionary carries them instead.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 struct PlaceArgs<'a> {
     id: Option<&'a TypVal>,
     group: Option<&'a TypVal>,

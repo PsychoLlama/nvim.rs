@@ -194,7 +194,7 @@ use crate::winlayer::graph::{curbuf, curtab, curwin};
 /// Two handles are equal when they name the same **address**: a hand-written
 /// `PartialEq` rather than a derive, so that the comparison stays the C's
 /// `wp == curwin`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Win {
     ptr: *mut Window,
     /// The window's handle, read while it was live. Named `id` rather than
@@ -214,7 +214,7 @@ pub struct Win {
 /// window losing a buffer and being given another, and an empty `tp_diffbuf`
 /// slot is null too. A null one carries handle zero and may only be compared
 /// or tested — see [`Win::buffer_or_none`].
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Buf {
     ptr: *mut Buffer,
     /// The buffer's number, read while it was live. [`Win`]'s `id`.
@@ -227,7 +227,7 @@ pub struct Buf {
 /// A frame is either a leaf holding one window (`fr_win`) or a row or column
 /// of child frames (`fr_child`, chained through `fr_next`); `fr_parent` walks
 /// back up. Which of the two a frame is, `fr_layout` says.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct FrameRef {
     ptr: *mut Frame,
     /// The frame's handle, read while it was live. [`Win`]'s `id`.
@@ -235,7 +235,7 @@ pub struct FrameRef {
 }
 
 /// A tab page the caller has promised is live. [`Win`]'s shape.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct TabPage {
     ptr: *mut Tabpage,
     /// The tab page's handle, read while it was live. [`Win`]'s `id`.
@@ -262,7 +262,7 @@ macro_rules! address_eq {
 address_eq!(Win, Buf, FrameRef, TabPage);
 
 /// A cursor or mark position the caller has promised is live.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct PosRef(*mut Pos);
 
 impl Deref for Win {

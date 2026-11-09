@@ -34,6 +34,7 @@ use crate::regexp::{
 };
 
 /// What stepping onto the next line produced.
+#[derive(Debug)]
 enum Line {
     /// The line break counts as one match; the cursor is at the start of
     /// the next line.

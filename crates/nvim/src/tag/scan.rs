@@ -61,7 +61,7 @@ const MT_RE_OFF: usize = super::MT_RE_OFF as usize;
 const LSIZE: usize = super::LSIZE as usize;
 
 /// How the tags file being read is being read.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Reading {
     /// At the start of the file, where the header is.
     Start,
@@ -76,6 +76,7 @@ pub(crate) enum Reading {
 }
 
 /// The tag pattern, as it is searched for.
+#[derive(Debug)]
 pub(crate) struct Pattern {
     /// What to look for: the caller's pattern, less the `@xx` help
     /// language [`find_tags`] stripped off the end.
@@ -137,7 +138,7 @@ impl Pattern {
 }
 
 /// Where a bisection of a sorted tags file has got to.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct SearchInfo {
     /// Offset of the first line that could still match.
     pub(crate) low_offset: FileOffset,
@@ -159,6 +160,7 @@ pub(crate) struct SearchInfo {
 }
 
 /// What comparing one line against the pattern established.
+#[derive(Debug)]
 pub(crate) struct MatchArgs {
     /// Where in the tag name the regexp matched.
     pub(crate) matchoff: c_int,
@@ -192,6 +194,7 @@ impl MatchArgs {
 ///
 /// Two matches are the same match when their keys are equal; the score
 /// and the order found take no part in that.
+#[derive(Debug)]
 pub(crate) struct Found {
     /// When it was found, which orders a bucket.
     seq: usize,
@@ -232,7 +235,7 @@ impl Eq for Found {}
 
 /// A match [`find_tags`] answered: one line of a tags file — or a
 /// `'tagfunc'` answer in that shape — and the file it came from.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct TagMatch {
     /// The `MT_*` priority it was filed under.
     pub(crate) priority: u8,
@@ -285,6 +288,7 @@ impl TagMatch {
 type Seen = HashSet<Found>;
 
 /// The state one [`find_tags`] call threads through the readers.
+#[derive(Debug)]
 pub(crate) struct FindTags {
     /// How the file being read is being read.
     pub(crate) state: Reading,

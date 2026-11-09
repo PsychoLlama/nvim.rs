@@ -58,11 +58,13 @@ const NO_VIEW: FileMarkView = FileMarkView {
 /// `w_tagstacklen` are in use, with `w_tagstackidx` the one `CTRL-T` would
 /// pop next. This borrows the three together so the bookkeeping stays in
 /// one place.
+#[derive(Debug)]
 pub(crate) struct TagStack {
     win: Win,
 }
 
 /// A new entry for [`TagStack::push`].
+#[derive(Debug)]
 pub(crate) struct Push {
     /// The tag being jumped to.
     pub(crate) tagname: ThinCString,

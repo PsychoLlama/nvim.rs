@@ -81,6 +81,7 @@ pub extern "C" fn block_autocmds() {
 /// The fields are private, so only the C side ever makes one; the two fronts
 /// below copy the bytes out and keep nothing.
 #[repr(C)]
+#[derive(Debug)]
 pub struct HarnessString {
     data: *const c_char,
     size: size_t,

@@ -53,6 +53,7 @@ mod lines;
 ///
 /// `kind`, `width` and `lines` are the text being put, which may come from a
 /// real register or from a computed one.
+#[derive(Debug)]
 pub(crate) struct Put {
     /// `FORWARD` for `p`, `BACKWARD` for `P`. A `PUT_LINE_SPLIT` or
     /// `PUT_LINE_FORWARD` put rewrites it to `FORWARD`.

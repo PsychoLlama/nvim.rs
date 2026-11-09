@@ -198,14 +198,14 @@ pub(crate) const CMDS: [&CStr; SIGNCMD_LAST as usize] = [
 /// One sign on a row, as the sign column sorts it: the sign item's index in
 /// the decoration store, its mark's id, and the two fields of the item the
 /// order reads.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct SignItem {
     pub idx: uint32_t,
     pub id: uint32_t,
     pub priority: DecorPriority,
     pub sign_add_id: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct SignTextAttrs {
     pub text: [ScreenChar; 2],
     pub hl_id: ::core::ffi::c_int,
@@ -214,7 +214,7 @@ pub struct SignTextAttrs {
 ///
 /// Owns its strings; the highlight groups are the ids `syn_check_group`
 /// answered for them, as upstream keeps them.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub(crate) struct Sign {
     pub name: ::std::ffi::CString,
     /// The `icon=` path, backslashes already halved; never drawn.

@@ -31,6 +31,7 @@ use crate::regexp::RE_MAGIC;
 use crate::winlayer::Win;
 
 /// Where a `:syntax` command's group name ends and its next argument begins.
+#[derive(Debug)]
 pub(crate) struct GroupName {
     /// How many bytes of the line the name itself takes.
     pub(crate) len: usize,
@@ -85,6 +86,7 @@ impl OptArg {
 }
 
 /// One recognised option word.
+#[derive(Debug)]
 struct SynFlag {
     name: &'static CStr,
     arg: OptArg,
@@ -283,6 +285,7 @@ fn read_sync_group(line: &[u8], at: usize, opt: &mut SynOptArg) -> Result<usize,
 }
 
 /// What one pass of [`parse_id_list`] found.
+#[derive(Debug)]
 struct IdListPass {
     /// The ids, in the order the list named them.
     ids: Vec<int16_t>,
@@ -294,6 +297,7 @@ struct IdListPass {
 }
 
 /// A group list that was refused, and where the scan stopped.
+#[derive(Debug)]
 pub(crate) struct ListRefused {
     /// The offset `:syntax cluster` reports its E475 against.
     pub(crate) at: usize,

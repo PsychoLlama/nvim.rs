@@ -82,6 +82,7 @@ const VACANT_KEY: MTKey = MTKey {
 };
 
 /// One node of a marktree.
+#[derive(Debug)]
 pub struct Node {
     key_count: u8,
     /// Distance from the leaves.
@@ -274,6 +275,7 @@ impl Node {
 
 /// Every node of one tree, by [`NodeId`], with the vacated slots kept for
 /// reuse.
+#[derive(Debug)]
 pub struct NodeSlab {
     slots: Vec<Node>,
     /// Vacated slots, most recently freed last.

@@ -175,6 +175,7 @@ pub fn digraph_get(char1: Key, char2: Key, meta_char: bool) -> Key {
 
 /// What 'digraph' is in the middle of: the character typed before the last
 /// backspace, and the last character typed. `None` is upstream's `-1`.
+#[derive(Debug)]
 struct Typed {
     backspaced: Option<Key>,
     last: Option<Key>,

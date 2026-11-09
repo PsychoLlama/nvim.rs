@@ -31,6 +31,7 @@ const MASK_V: c_int = MODE_VISUAL | MODE_SELECT;
 
 /// The mode letters [`map_mode_to_chars`] spells a mode set with: at most six
 /// letters, NUL-terminated.
+#[derive(Debug)]
 pub(crate) struct ModeChars([u8; 7]);
 
 impl ModeChars {

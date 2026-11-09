@@ -64,6 +64,7 @@ fn read_autocmd(
 }
 
 /// The file, open and ready to read.
+#[derive(Debug)]
 pub(crate) struct Opened<'a> {
     /// The names, after the short one was substituted for the long one.
     pub fname: Option<&'a CStr>,

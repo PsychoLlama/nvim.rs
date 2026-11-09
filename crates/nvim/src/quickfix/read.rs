@@ -55,6 +55,7 @@ fn c_len(bytes: &[u8]) -> usize {
 }
 
 /// Where the lines being read come from, as the caller names it.
+#[derive(Debug)]
 pub(crate) enum Input<'a> {
     /// An error file, or standard input when it is named `-`.
     File(&'a CStr),
@@ -69,6 +70,7 @@ pub(crate) enum Input<'a> {
 }
 
 /// Where the lines being read come from.
+#[derive(Debug)]
 enum Source {
     File(Fgets),
     Buffer {
@@ -91,6 +93,7 @@ enum Source {
 
 /// One read in progress: where the lines come from, the buffer they are
 /// read into and the encoding conversion applied to each.
+#[derive(Debug)]
 pub(crate) struct Reader {
     source: Source,
     /// The line last read, NUL-terminated. Reused between lines and never

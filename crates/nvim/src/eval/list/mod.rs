@@ -93,7 +93,7 @@ pub(crate) const UNKNOWN_TV: TypVal = TV_INITIAL_VALUE;
 /// Which container a `TypVal` holds, read from the arm its `v_type` says
 /// is live.  Everything else -- Number, Float, Funcref, ... -- is
 /// [`Container::Other`], which is what the family's type errors report.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum Container<'a> {
     List(ListArg<'a>),
     Dict(DictArg<'a>),
@@ -131,7 +131,7 @@ impl<'a> Container<'a> {
 ///
 /// NULL is not an error state: `v:_null_list` reaches every builtin here, and
 /// every helper reads it as an empty, `VarLock::Fixed` list.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct ListArg<'a>(Option<&'a ListRef>);
 
 impl<'a> ListArg<'a> {
@@ -290,7 +290,7 @@ pub(crate) fn list_alloc_ret(result: &mut TypVal) -> ListArg<'_> {
 /// that named a slot that has since gone panics rather than reading a stale
 /// one -- the walks here re-derive it through [`ListArg::at`] each step,
 /// which answers `None` instead.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Item<'a> {
     list: ListArg<'a>,
     at: usize,
@@ -359,7 +359,7 @@ impl<'a> Item<'a> {
 /// nothing here holds a borrow of the dictionary across a step, and
 /// [`DictArg::items`] is a *slot cursor* rather than an iterator that
 /// borrows the table.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct DictArg<'a>(Option<&'a DictRef>);
 
 impl<'a> DictArg<'a> {
@@ -461,7 +461,7 @@ impl<'a> DictArg<'a> {
 /// A slot and not an address, for [`Item`]'s reason: it is re-read after
 /// every callback. The walks run under the table's lock, so the slot does
 /// not move.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct DictItemRef<'a>(&'a DictRef, usize);
 
 impl<'a> DictItemRef<'a> {
@@ -534,7 +534,7 @@ impl<'a> DictItemRef<'a> {
 /// A borrow of the handle, for [`DictArg`]'s reason: `filter()`/`map()`/
 /// `foreach()` run a callback per byte and the callback reaches this same
 /// blob, so every method here re-derives the borrow of the blob.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct BlobArg<'a>(Option<&'a BlobRef>);
 
 impl<'a> BlobArg<'a> {

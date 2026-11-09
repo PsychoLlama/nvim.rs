@@ -43,7 +43,7 @@ use crate::winlayer::Win;
 /// good whatever happens to the match list. Upstream finds the shown match's
 /// row by comparing string *addresses*; the copies have addresses of their
 /// own, so the row is found by the match id it came from instead.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct ComplMatchArray(());
 
 /// The popup menu's item array. See [`ComplMatchArray`].
@@ -53,6 +53,7 @@ pub(crate) fn compl_match_array() -> ComplMatchArray {
 
 /// The array behind [`ComplMatchArray`]: the rows, and the match each came
 /// from.
+#[derive(Debug)]
 pub(crate) struct MatchRows {
     rows: Option<Rc<[PumItem]>>,
     ids: Vec<MatchId>,

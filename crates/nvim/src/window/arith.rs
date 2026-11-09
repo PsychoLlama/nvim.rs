@@ -45,7 +45,7 @@ use crate::winlayer::{FrameRef, Win, WinId};
 ///   pass, asks for the same minimum with **no** such reservation;
 /// * a window asks for the minimum given that this window is about to become
 ///   current, so it gets `'winheight'`/`'winwidth'` rather than the minimum.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum NextCurwin {
     /// The C's `NULL`.
     Unset,
@@ -72,7 +72,7 @@ impl NextCurwin {
 /// size a `next_curwin` window is owed (`'winheight'` / `'winwidth'`), the
 /// minimum any other window may shrink to (`'winminheight'` / `'winminwidth'`)
 /// and the current window, for the one-line reservation the `NULL` case makes.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct MinSize {
     pub wanted: c_int,
     pub minimum: c_int,
@@ -254,6 +254,7 @@ mod tests {
     use crate::winlayer::{FrameRef, new_frame};
 
     /// A window with the chrome a leaf frame's minimum size is made of.
+    #[derive(Debug)]
     struct Chrome {
         winbar: c_int,
         hsep: c_int,
@@ -262,6 +263,7 @@ mod tests {
     }
 
     /// A frame tree, and the registrations it has to give back.
+    #[derive(Debug)]
     struct Tree {
         frames: Vec<FrameRef>,
         windows: Vec<Win>,

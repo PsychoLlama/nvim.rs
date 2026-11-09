@@ -25,6 +25,7 @@ use super::*;
 use crate::option::defs::OptionSetFlags;
 
 /// What a pass of line splitting decided.
+#[derive(Debug)]
 pub(crate) enum Split {
     /// The bytes became lines.
     Done,
@@ -37,6 +38,7 @@ pub(crate) enum Split {
 }
 
 /// What line splitting needs to know, and what it changes.
+#[derive(Debug)]
 pub(crate) struct LineSplit<'a> {
     /// The line to append after.
     pub lnum: LineNr,

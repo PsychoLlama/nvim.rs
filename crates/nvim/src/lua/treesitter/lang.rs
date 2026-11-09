@@ -41,7 +41,7 @@ fn language_key(name: &CStr) -> &[u8] {
 /// A loaded language: what a parser library's constructor answered. The
 /// library is never closed once a language from it is registered, so the
 /// language is valid for the rest of the process, and its names with it.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Language(NonNull<TSLanguage>);
 
 impl Language {

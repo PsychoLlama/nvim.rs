@@ -198,7 +198,7 @@ pub const NODE_WRITABLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub(crate) const E_READONLY_CPO: &CStr = c"is read-only (cannot override: \"W\" in 'cpoptions')";
 
 /// What the caller is asking a write to be.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct WriteRequest {
     /// Append to the file instead of replacing it.
     pub append: bool,
@@ -230,7 +230,7 @@ impl WriteRequest {
 /// The buffer's own names are *named*, not borrowed: the write's
 /// autocommands may rename the buffer, and the write follows such a rename
 /// for a name that was the buffer's own (see [`WriteNameCopy`]).
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum WriteName<'a> {
     /// The buffer's full name, `b_ffname`.
     Full,
@@ -261,6 +261,7 @@ impl WriteName<'_> {
 
 /// Where the text goes: straight into the file, or into a temp file that
 /// `'charconvert'` turns into the file afterwards.
+#[derive(Debug)]
 enum WriteTarget {
     Direct,
     Temp(XString),

@@ -61,7 +61,7 @@ use crate::pos::MAXLNUM;
 ///
 /// The marker method carries 'foldmarker''s two halves, cut once per update:
 /// it runs no user code, so the option cannot change under it.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum Method<'m> {
     Indent,
     Expr,
@@ -92,6 +92,7 @@ impl Method<'_> {
 
 /// The tree changed shape while a level getter ran, and the update's
 /// positions no longer name anything.
+#[derive(Debug)]
 struct TreeLost;
 
 impl Win {
@@ -539,6 +540,7 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
 
 /// What one pass of [`Win::update_computed_folds`]'s loop does once the
 /// tree has had its say, if it goes on.
+#[derive(Debug)]
 enum Next {
     /// The levels go deeper here: recurse into the nested list of fold
     /// `index`, whose `top` and `state` are given.
@@ -624,6 +626,7 @@ fn finish_fold(
 
 /// The state [`Reuse::find_or_make`] works with: one level of
 /// [`Win::update_computed_folds`], at the line where a fold should start.
+#[derive(Debug)]
 struct Reuse<'a> {
     folds: &'a mut Vec<Fold>,
     line: &'a mut FoldLine,

@@ -112,7 +112,7 @@ pub(crate) fn find_ident_under_cursor(find_type: c_int) -> Option<(ColNr, usize)
 
 /// The buffer line `find_ident_at_pos` walks, addressed by byte column; a
 /// column at or past its end reads as the terminator.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct ScanLine<'a>(&'a [u8]);
 
 impl<'a> ScanLine<'a> {

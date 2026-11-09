@@ -42,6 +42,7 @@ pub const DBCS_CHTU: c_int = 9950;
 pub const DBCS_DEBUG: c_int = -1;
 
 /// One canonical encoding.
+#[derive(Debug)]
 pub struct Encoding {
     /// The name nvim canonicalises to.
     pub name: &'static CStr,

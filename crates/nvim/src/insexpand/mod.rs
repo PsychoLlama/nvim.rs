@@ -174,6 +174,7 @@ pub const CTRL_X_BUFNAMES: ::core::ffi::c_int = 18;
 /// `complete_add()` from inside a completion function) cannot move anything
 /// out from under the reader -- only the storage `Vec` grows, and each
 /// string here is a heap block of its own that stays where it is.
+#[derive(Debug)]
 pub(crate) struct ComplItem {
     /// The match after this one, `None` past the tail of an opened list.
     pub(crate) next: Option<MatchId>,
@@ -235,7 +236,7 @@ pub const CPT_KIND: usize = 1;
 pub const CPT_MENU: usize = 2;
 pub const CPT_INFO: usize = 3;
 pub const CPT_COUNT: usize = 4;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct CptSource {
     pub cs_refresh_always: bool,
     /// Where a `'complete'` function said its matches start; `None` when
@@ -258,6 +259,7 @@ pub(crate) const CPT_SOURCE_INIT: CptSource = CptSource {
 pub const CP_EQUAL: ::core::ffi::c_int = 8;
 /// Where [`ins_compl_get_exp`] is up to in `'complete'` and in the buffer it
 /// is scanning.
+#[derive(Debug)]
 pub(crate) struct InsComplNextState {
     /// The copy of `'complete'` being walked, and where the walk is up to.
     /// Owning, which is why this struct is no longer `Copy`.
@@ -406,7 +408,7 @@ pub(crate) fn ctrl_x_msg(mode: c_int) -> Option<&'static CStr> {
 /// callbacks, and a callback can reach the same string. The bytes are only
 /// lent to a closure ([`with_bytes`](ComplStr::with_bytes),
 /// [`with_cstr`](ComplStr::with_cstr)) or copied out.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct ComplStr(ComplField<ApiString>);
 
 impl ComplStr {

@@ -51,6 +51,7 @@ const CLASS_WORD: c_int = 2;
 /// what this decides.  `Merge` folds the next block into this one; `Keep` moves
 /// on; the `bool` is "this gap was a candidate but was left alone", which
 /// only `inline:char` uses.
+#[derive(Debug)]
 enum Gap {
     Merge,
     Keep(bool),

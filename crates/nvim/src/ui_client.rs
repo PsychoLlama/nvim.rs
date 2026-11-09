@@ -350,6 +350,7 @@ pub(crate) fn handle_ui_client_redraw(_channel_id: u64, _args: Array) -> Result<
 }
 
 /// One event's name and the wrapper that decodes it.
+#[derive(Debug)]
 struct Handler {
     event: &'static CStr,
     wrapper: fn(Array),
@@ -739,6 +740,7 @@ fn connect_and_reattach(address: &CStr) {
 /// second owner of the same `items` pointer, so the cell and the caller both
 /// believed they had to free it. Owning them here makes the free this type's
 /// `Drop` and the one genuine move `GlobalCell::take`.
+#[derive(Debug)]
 struct RestartArgs(Vec<Object>);
 
 impl RestartArgs {

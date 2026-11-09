@@ -510,6 +510,7 @@ mod tests {
     use crate::global_cell::editor_state_lock;
 
     /// A scratch file of this case's own, removed on drop.
+    #[derive(Debug)]
     struct Scratch(std::path::PathBuf);
 
     impl Scratch {

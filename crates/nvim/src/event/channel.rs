@@ -96,6 +96,7 @@ fn job_proc(id: u64) -> *mut Proc {
 /// A channel's transport lent for one step: every part libuv holds by
 /// address stays pinned, and only the two without a handle are plain
 /// references.
+#[derive(Debug)]
 pub(crate) enum TransportMut<'a> {
     Job(Pin<&'a mut JobProc>),
     Socket(Pin<&'a mut RStream>),
@@ -336,6 +337,7 @@ impl Stream {
 // ---------------------------------------------------------------------------
 
 /// What a job is started with.
+#[derive(Debug)]
 pub(crate) struct JobSpawn<'a> {
     pub argv: Argv,
     pub exepath: Option<&'a CStr>,

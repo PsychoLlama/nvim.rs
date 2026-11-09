@@ -202,9 +202,23 @@ pub(crate) enum OutputSink {
     /// A Rust consumer's.
     Rust(ReplySink),
 }
+// By hand: a Rust consumer's sink is a closure, which has no `Debug`.
+impl ::core::fmt::Debug for OutputSink {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        match self {
+            Self::Buffer => f.write_str("Buffer"),
+            Self::Foreign(output) => f.debug_tuple("Foreign").field(output).finish(),
+            Self::Rust(_) => f
+                .debug_tuple("Rust")
+                .field(&format_args!("<closure>"))
+                .finish(),
+        }
+    }
+}
 
 /// The terminal's reply channel: what keys, mouse reports and the state
 /// machine's answers are written to.
+#[derive(Debug)]
 pub(crate) struct Output {
     sink: OutputSink,
     buffer: Vec<u8>,
@@ -226,6 +240,7 @@ impl Output {
 }
 
 /// Who the parser reports to.
+#[derive(Debug)]
 pub(crate) enum ParserTarget {
     None,
     /// The terminal's own state machine, once it has one.
@@ -235,6 +250,7 @@ pub(crate) enum ParserTarget {
 }
 
 /// What a terminal owns that C does not read.
+#[derive(Debug)]
 pub(crate) struct VTermInner {
     pub(crate) output: Output,
     /// Where the text decoder writes codepoints, sized as libvterm's scratch.

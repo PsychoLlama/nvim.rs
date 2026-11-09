@@ -183,7 +183,7 @@ impl Span {
 /// `command` to the end of the line, or to `command_end` when extension
 /// fields follow it. The parts a line need not have — the kind, the user
 /// data — are `None` when absent.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub(crate) struct TagParts {
     pub(crate) tagname: Span,
     pub(crate) fname: Span,

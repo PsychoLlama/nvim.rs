@@ -51,6 +51,7 @@ pub(crate) const MPACK_NOMEM: c_int = MPACK_ERROR + 1;
 const MAX_RESERVE: usize = 1 << 12;
 
 /// One value still being built.
+#[derive(Debug)]
 enum Node {
     Array {
         list: ListRef,
@@ -173,6 +174,7 @@ fn map_value(mut pairs: Vec<TypVal>) -> TypVal {
 
 /// A streaming msgpack-to-typval decoder: one object at a time, fed as many
 /// slices as it takes.
+#[derive(Debug)]
 pub(crate) struct MsgpackDecoder {
     tokbuf: TokBuf,
     stack: Vec<Node>,

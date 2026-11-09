@@ -168,6 +168,7 @@ fn display(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) -> c_int
 }
 
 /// One run of a message on its way to the screen.
+#[derive(Debug)]
 enum Shown<'a> {
     /// Bytes that display as themselves.
     Plain(&'a [u8]),

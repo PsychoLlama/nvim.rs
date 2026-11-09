@@ -139,6 +139,7 @@ pub const SN_END: ::core::ffi::c_uint = 255;
 ///
 /// Parse-time only. The trees live in [`si_nodes`](Self::si_nodes) and are
 /// reached through the three roots; every string is owned.
+#[derive(Debug)]
 pub(crate) struct SpellInfo {
     si_foldroot: Option<NodeId>,
     si_foldwcount: ::core::ffi::c_int,
@@ -212,6 +213,7 @@ pub(crate) struct SpellInfo {
 /// Parse-time only: `:mkspell` reads the affix and dictionary files into
 /// this and the word trees, and [`write::write_vim_spell`] then emits the
 /// `.spl` a field at a time.
+#[derive(Debug)]
 pub(crate) struct AffFile {
     /// The `SET` encoding, canonized.
     af_enc: Option<XString>,
@@ -273,7 +275,7 @@ impl AffFile {
 }
 
 /// Which of an affix file's two affix tables.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum AffixKind {
     Prefix,
     Suffix,
@@ -281,6 +283,7 @@ enum AffixKind {
 
 /// One `PFX`/`SFX` line: what to chop, what to add, and when. Each string
 /// is the item without its terminator; `None` is upstream's null (`0`).
+#[derive(Debug)]
 pub(crate) struct AffEntry {
     ae_chop: Option<Vec<u8>>,
     ae_add: Option<Vec<u8>>,
@@ -295,6 +298,7 @@ pub(crate) struct AffEntry {
 }
 
 /// All the `PFX`/`SFX` blocks that share one affix name.
+#[derive(Debug)]
 pub(crate) struct AffHeader {
     ah_key: Vec<u8>,
     ah_flag: ::core::ffi::c_uint,
@@ -313,6 +317,7 @@ impl Keyed for AffHeader {
 }
 
 /// One `COMPOUNDFLAG` value and the internal id standing in for it.
+#[derive(Debug)]
 pub(crate) struct CompItem {
     ci_key: Vec<u8>,
     ci_new_id: ::core::ffi::c_int,

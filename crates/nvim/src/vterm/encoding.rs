@@ -37,6 +37,7 @@ const UNICODE_INVALID: u32 = 0xfffd;
 /// abandoned sequence, then the byte itself — and upstream did that without
 /// re-checking the bound, so a full array could be written one element past
 /// its end. Pushes here stop at capacity instead.
+#[derive(Debug)]
 pub(crate) struct Codepoints<'a> {
     pub(crate) out: &'a mut [uint32_t],
     pub(crate) len: usize,
@@ -59,6 +60,7 @@ impl Codepoints<'_> {
 ///
 /// Lives in `VTermEncodingInstance::data`, a 16-byte inline buffer, so the
 /// layout is dictated by that.
+#[derive(Debug)]
 struct Utf8Decoder {
     /// Continuation bytes still expected for the sequence in progress.
     bytes_remaining: c_int,

@@ -85,6 +85,7 @@ pub(crate) fn path_expand(names: &mut Vec<XString>, path: &[u8], flags: ExpandFl
 
 /// A directory scan that answers `"."` and `".."` before the entries libuv
 /// reports, which do not include them.
+#[derive(Debug)]
 struct ScanWithDots {
     dir: Directory,
     count: u32,
@@ -119,6 +120,7 @@ impl Drop for ScanWithDots {
 
 /// The first component of a pattern that holds a wildcard, and where the
 /// components around it are.
+#[derive(Debug)]
 struct Split {
     /// Where the component starts in the buffer.
     comp: usize,

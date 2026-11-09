@@ -61,6 +61,7 @@ use super::{
 static did_stdio: GlobalCell<bool> = GlobalCell::new(false);
 
 /// What a job is started with: [`channel_job_start`]'s arguments.
+#[derive(Debug)]
 pub struct JobOptions<'a> {
     /// The command line, the program first.
     pub argv: Argv,

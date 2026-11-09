@@ -108,7 +108,7 @@ pub fn nlua_pcall(stack: &mut Stack, nargs: c_int, mut nresults: c_int) -> Resul
 }
 
 /// Where an error [`report_luv_error`] reports was raised.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum LuvError {
     /// A libuv callback on the main loop.
     Callback,

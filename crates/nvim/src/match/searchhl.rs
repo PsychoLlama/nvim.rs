@@ -32,7 +32,7 @@ use crate::winlayer::{Buf, Win};
 
 /// Which pattern's highlight state: `'hlsearch'`'s, or the window's match
 /// at this index.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Which {
     Search,
     Item(usize),
@@ -257,6 +257,7 @@ impl MatchItem {
 /// [`Order::SearchFirst`], which takes `'hlsearch'` before any match, and
 /// [`Order::ByPriority`], which takes it at its place in the priority order
 /// (the list is kept in ascending priority).
+#[derive(Debug)]
 struct ShlWalk {
     /// The next match to visit.
     next: usize,
@@ -266,7 +267,7 @@ struct ShlWalk {
 }
 
 /// Which of `'hlsearch'` and the match list [`ShlWalk`] visits first.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum Order {
     /// `'hlsearch'` first, then every match. Used where the body's work is
     /// independent per item and the order cannot matter.
@@ -702,6 +703,7 @@ pub(crate) fn prepare_search_hl_line(
 }
 
 /// What [`Win::update_search_hl`] reads of a pattern's state at each column.
+#[derive(Debug)]
 struct Peek {
     /// The pattern can still search, or (a position match) still has
     /// positions to visit on this line.

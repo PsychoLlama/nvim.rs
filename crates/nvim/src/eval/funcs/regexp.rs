@@ -462,6 +462,7 @@ pub fn f_matchstrlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 /// Where the string to match comes from: the list items are strings, and a
 /// dict item then contributes nothing — or they are dicts, to look a key up
 /// in or to hand to a callback.
+#[derive(Debug)]
 enum Source<'a> {
     Item,
     Key(&'a CStr),
@@ -472,6 +473,7 @@ enum Source<'a> {
 /// where each item's string comes from, whether the words of a multi-word
 /// pattern have to match in sequence, whether the matching positions are
 /// wanted too (that is `matchfuzzypos()`), and how many matches are enough.
+#[derive(Debug)]
 struct Request<'a> {
     pattern: &'a CStr,
     source: Source<'a>,
@@ -481,6 +483,7 @@ struct Request<'a> {
 }
 
 /// One list item that matched.
+#[derive(Debug)]
 struct FuzzyItem {
     /// Where it sat among the matches, which is how ties are broken.
     idx: usize,

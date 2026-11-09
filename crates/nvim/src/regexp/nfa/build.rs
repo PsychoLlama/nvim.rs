@@ -44,7 +44,7 @@ const MAX_DEPTH: c_int = 4;
 /// [`StateId::NONE`] — so an edge patched to "nowhere" also reads as the
 /// end of a list, which the `\%[` construction below relies on exactly as
 /// upstream's did on `NULL`.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 struct Slot(u32);
 
 impl Slot {
@@ -83,7 +83,7 @@ impl Slot {
 
 /// A partly built machine: where it starts, and every edge out of it that
 /// still has to be told where to go.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Frag {
     start: StateId,
     out: Slot,
@@ -143,6 +143,7 @@ fn append(states: &mut NfaStates, first: Slot, second: Slot) -> Slot {
 ///
 /// Capped at the state count the counting pass produced, as upstream's is: a
 /// push past the cap is silently dropped rather than growing the stack.
+#[derive(Debug)]
 struct Stack {
     frags: Vec<Frag>,
     cap: usize,
@@ -163,7 +164,7 @@ impl Stack {
 }
 
 /// Which of the two passes is running.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) enum Pass {
     /// Only add up the states the program needs, into `count`.
     Count,

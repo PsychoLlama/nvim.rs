@@ -118,6 +118,7 @@ fn parse_msgpack_reporting(id: uint64_t, bytes: &[u8]) -> (usize, bool) {
 
 /// What the decoder made of the next message, once it has been routed as
 /// far as can be done with the channel borrowed.
+#[derive(Debug)]
 enum Step {
     /// No whole message yet.
     Wait,
@@ -136,6 +137,7 @@ enum Step {
 }
 
 /// One `redraw` event, decoded.
+#[derive(Debug)]
 enum Redraw {
     /// A `grid_line`, decoded straight into the shared line buffers.
     Line(GridLineEvent),
@@ -145,6 +147,7 @@ enum Redraw {
 
 /// A request or notification on its way to its handler. It holds a
 /// reference to its channel, which [`request_event`] drops.
+#[derive(Debug)]
 struct Request {
     channel: uint64_t,
     type_0: MessageType,

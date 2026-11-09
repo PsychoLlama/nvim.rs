@@ -44,6 +44,7 @@ use tables::{PROPERTIES, SEQUENCES, STAGE1, STAGE2};
 /// length packed in the top two bits; the `comb_*` fields describe the
 /// canonical-composition pairing of the unported compose path and are kept
 /// so the tables remain a faithful translation of upstream's.
+#[derive(Debug)]
 pub struct utf8proc_property_t {
     pub category: i16,
     pub combining_class: i16,

@@ -109,6 +109,7 @@ pub(crate) fn set_search_match(t: &mut Pos) {
 
 /// Where `'incsearch'` finds the pattern in the command line: the
 /// delimiter, how many bytes come before the pattern, and its length.
+#[derive(Debug)]
 pub(crate) struct PatternSpan {
     pub(crate) delim: ::core::ffi::c_int,
     pub(crate) skiplen: ::core::ffi::c_int,

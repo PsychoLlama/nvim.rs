@@ -30,6 +30,7 @@ use crate::swmsg;
 use crate::types::Key;
 
 /// One `'langmap'` pair for a character that does not fit `langmap_mapchar`.
+#[derive(Debug)]
 struct LangmapEntry {
     from: Key,
     to: Key,

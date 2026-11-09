@@ -48,6 +48,7 @@ use std::os::unix::ffi::OsStrExt;
 const LSIZE: usize = super::LSIZE as usize;
 
 /// One file on the include stack.
+#[derive(Debug)]
 struct SearchedFile {
     /// Open while the walk is reading the file; `None` once it has been
     /// read to the end and moved to the "already searched" list.
@@ -67,7 +68,7 @@ struct SearchedFile {
 /// Upstream compared file *name pointers*, and the buffer's could be null
 /// for a buffer with no name; [`Walk::curr_fname`] and its kin are `None`
 /// exactly where that pointer was.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum FileRef {
     Buffer,
     Included(u32),
@@ -79,6 +80,7 @@ enum FileRef {
 /// the files it has open and down from the top for the ones it has
 /// finished with — the second half is what makes "have I already been
 /// here?" answerable after a file has been closed.
+#[derive(Debug)]
 struct FileStack {
     /// Currently open, outermost first.
     open: Vec<SearchedFile>,
@@ -144,6 +146,7 @@ impl FileStack {
 
 /// The three patterns the walk compiles: what to look for, `'include'`
 /// and `'define'`. Any of them may be absent.
+#[derive(Debug)]
 pub(crate) struct Patterns {
     pub(crate) pat: RegMatch,
     pub(crate) incl: RegMatch,
@@ -237,6 +240,7 @@ fn read_line_copy(mut read: Vec<u8>) -> Vec<u8> {
 
 /// The walk's position and the state that survives from one line to the
 /// next.
+#[derive(Debug)]
 struct Walk {
     /// The line being looked at, terminated: a copy of a buffer line or a
     /// line read from an included file -- except that the ACTION_EXPAND
@@ -560,6 +564,7 @@ fn show_include_name(
 }
 
 /// What the walk should do after handling a match.
+#[derive(Debug)]
 enum After {
     /// Done with this match; the rest of the line may still be searched,
     /// resuming the pattern search from this offset. Upstream leaves this

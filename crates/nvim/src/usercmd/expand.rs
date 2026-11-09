@@ -295,7 +295,7 @@ pub(crate) fn uc_mods(cmod: &CmdMod, quote: bool) -> Vec<u8> {
 }
 
 /// The `<...>` codes a replacement string may contain.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Code {
     Args,
     Bang,
@@ -341,7 +341,7 @@ impl Code {
 }
 
 /// How a code wants its expansion quoted.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Quote {
     /// `<args>`: as it stands.
     None,
@@ -454,6 +454,7 @@ fn expand_args(out: &mut Vec<u8>, args: &ExArg, quote: Quote, split: &mut Option
 
 /// What a Lua command's run needs of its entry, copied out of the table:
 /// the callback may redefine or delete the command while it runs.
+#[derive(Debug)]
 pub(crate) struct LuaCommand {
     pub(crate) name: Rc<CStr>,
     pub(crate) argt: ExArgt,
@@ -463,6 +464,7 @@ pub(crate) struct LuaCommand {
 }
 
 /// How one run goes, decided under the table's borrow.
+#[derive(Debug)]
 enum Run {
     Lua(LuaCommand),
     Vim {

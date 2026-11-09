@@ -58,7 +58,7 @@ use crate::winlayer::{Buf, TabId, TabPage, Win, WinId, first_buffer, first_tab, 
 use core::ffi::{CStr, c_int};
 
 /// Which list [`ex_listdo`] walks.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum ListDo {
     /// `:argdo` -- the argument list of the current window.
     Args,

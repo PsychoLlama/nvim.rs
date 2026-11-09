@@ -284,6 +284,7 @@ pub type CompleteListItemGetter = fn(&Expand, usize) -> Option<Candidate>;
 /// copy of that text, and the pattern is an offset into it: the command
 /// line's own offsets are the same numbers, so the one caller that edits
 /// the command line in place keeps using them there.
+#[derive(Debug)]
 pub struct Expand {
     /// What is being completed: upstream's `xp_context`.
     pub context: ExpandContext,

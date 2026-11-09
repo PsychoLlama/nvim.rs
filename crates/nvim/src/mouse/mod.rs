@@ -127,7 +127,7 @@ pub(crate) const MSCR_RIGHT: c_int = -2;
 
 /// Which of the window's decorations [`jump_to_mouse`] says the click landed
 /// on.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Landed {
     pub winbar: bool,
     pub statuscol: bool,
@@ -264,7 +264,7 @@ impl Win {
 /// screen column of the line they describe. Named rather than borrowed, and
 /// read a definition at a time: the handler a definition names can redraw
 /// the line and replace them all.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum ClickDefs {
     Tabline,
     Status(Win),

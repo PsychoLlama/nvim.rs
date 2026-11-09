@@ -32,6 +32,7 @@ pub(super) const MAX_ITEM_WIDTH: c_int = 50;
 pub(super) const DEFAULT_MAXWID: c_int = 9999;
 
 /// The width and alignment prefix of one `%` item.
+#[derive(Debug)]
 pub(super) struct Spec {
     /// The minimum width, negative when the item is left-aligned. Some item
     /// letters read it before it is clamped and signed, as their argument.
@@ -110,6 +111,7 @@ pub(super) fn digits(fmt: &[u8], p: &mut usize, def: c_int) -> c_int {
 
 /// How a number item prints: the `vim_snprintf` template, the value, and the
 /// width or exponent it takes as its argument.
+#[derive(Debug)]
 pub(super) struct NumPlan {
     /// The NUL-terminated template. At most `-%0*X>%X` plus the terminator.
     template: [u8; 10],

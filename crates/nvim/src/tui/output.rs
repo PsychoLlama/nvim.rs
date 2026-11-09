@@ -101,6 +101,7 @@ pub fn out_fmt(tui: &mut TUIData, args: core::fmt::Arguments<'_>) {
 
     /// Enough for any escape sequence these callers build: the longest is a
     /// 24-bit underline colour, at 22 bytes.
+    #[derive(Debug)]
     struct Scratch {
         buf: [u8; 64],
         len: usize,

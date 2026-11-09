@@ -261,6 +261,7 @@ pub(crate) fn syn_maybe_enable() {
 }
 
 /// One `:syntax` subcommand.
+#[derive(Debug)]
 pub(crate) struct SubCommand {
     pub(crate) name: &'static CStr,
     func: fn(&mut ExArg, c_int),

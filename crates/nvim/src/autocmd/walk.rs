@@ -44,6 +44,7 @@ fn walk_bufnr(apc: &AutoPatCmd) -> BufferHandle {
 }
 
 /// What [`aucmd_next`] makes of row `idx`.
+#[derive(Debug)]
 enum Step {
     /// Deleted, or its pattern does not match: go on.
     Skip,
@@ -54,6 +55,7 @@ enum Step {
 }
 
 /// What the table says of row `idx` before any matching.
+#[derive(Debug)]
 enum Probe {
     Skip,
     Same(PatId),
@@ -65,6 +67,7 @@ enum Probe {
 
 /// The names one [`aucmd_next`] call matches every row against, measured
 /// once rather than per row.
+#[derive(Debug)]
 struct Names<'a> {
     fname: &'a CStr,
     sfname: Option<&'a CStr>,
@@ -222,6 +225,7 @@ pub(crate) fn aucmd_next(apc: &mut AutoPatCmd) {
 }
 
 /// What a callback handler is, held outside the table for its call.
+#[derive(Debug)]
 enum Handler {
     /// A Lua function, by its registry reference -- which is all the call
     /// needs, as upstream's bit copy of the row was.
@@ -298,6 +302,7 @@ fn au_callback(
 }
 
 /// What [`getnextac`] reads off the row it runs, before anything runs.
+#[derive(Debug)]
 struct Running {
     once: bool,
     nested: bool,

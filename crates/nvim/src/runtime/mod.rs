@@ -175,7 +175,7 @@ crate::flag_set! {
     const DIRFILE = 512;
 }
 /// One directory of the cached search path -- see [`cache`].
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SearchPathItem {
     pub path: XString,
     /// Whether it is an `after/` directory.

@@ -24,6 +24,7 @@ use std::ffi::CString;
 use std::rc::Rc;
 
 /// One history entry.
+#[derive(Debug)]
 pub struct HistEntry {
     pub(super) number: c_int,
     /// Shared, so that the ShaDa writer can hold the text without a copy.
@@ -73,6 +74,7 @@ pub(super) fn to_cstring(bytes: &[u8]) -> CString {
 /// `idx` is the raw slot of the newest entry, `None` when empty. Entries
 /// sit contiguously behind `idx` (wrapping); vacant slots elsewhere are
 /// normal after resizes and deletions.
+#[derive(Debug)]
 pub struct Ring {
     pub(super) entries: Vec<Option<HistEntry>>,
     pub(super) idx: Option<usize>,

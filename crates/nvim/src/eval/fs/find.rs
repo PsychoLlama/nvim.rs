@@ -56,6 +56,7 @@ use core::ffi::{CStr, c_int};
 // ---------------------------------------------------------------------
 
 /// The wildcard expander, over file names.
+#[derive(Debug)]
 struct Expander(Expand);
 
 impl Expander {

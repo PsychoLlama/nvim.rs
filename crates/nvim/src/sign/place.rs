@@ -281,6 +281,7 @@ fn wanted_sign(mark: MTKey, ns: int64_t) -> bool {
 }
 
 /// What [`Buf::placed_signs`]' filter says about one mark.
+#[derive(Debug)]
 pub(super) enum Keep {
     /// Report it, if it is a sign in the right group.
     Yes,

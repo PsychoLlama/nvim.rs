@@ -71,6 +71,7 @@ impl FieldKind {
 }
 
 /// One field of a keyset: the key clients spell it with and what it holds.
+#[derive(Debug)]
 pub(crate) struct KeyField {
     pub(crate) name: &'static CStr,
     pub(crate) kind: FieldKind,
@@ -83,6 +84,7 @@ impl KeyField {
 }
 
 /// One keyset field, borrowed as the `Option` it is.
+#[derive(Debug)]
 pub(crate) enum Slot<'a> {
     Any(&'a mut Option<Object>),
     Boolean(&'a mut Option<Boolean>),

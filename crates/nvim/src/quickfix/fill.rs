@@ -43,6 +43,7 @@ use core::ffi::{CStr, c_int};
 
 /// The directory file names are shortened against, resolved the first time
 /// an entry needs it.
+#[derive(Debug)]
 struct CurrentDir(Option<XString>);
 
 impl CurrentDir {
@@ -335,6 +336,7 @@ fn finish_qf_buffer() {
 
 /// What one rewrite of the quickfix buffer moved: where it started, and the
 /// rows, columns and bytes the old and the new text took from there.
+#[derive(Debug)]
 struct Splice {
     start: (LineNr, ColNr),
     old: (LineNr, ColNr, BCount),

@@ -76,6 +76,7 @@ pub(crate) const ICONV_MULT: isize = 8;
 ///
 /// A copy of the option, taken when the read starts, so that an autocommand
 /// changing it mid-read does not move the walk.
+#[derive(Debug)]
 pub(crate) struct FencList {
     list: Vec<u8>,
     /// Where the next entry starts, or `None` once the list is exhausted.
@@ -292,6 +293,7 @@ pub(crate) fn check_for_bom(bytes: &[u8], flags: FioFlags) -> Option<(&'static C
 /// just read, which conversion rewrites in place or moves further into the
 /// buffer (up to `ptr + real_size`), moving the line's earlier bytes to just
 /// before them -- which is where `line_start` ends up.
+#[derive(Debug)]
 pub(crate) struct ReadBuf {
     pub bytes: Vec<u8>,
     pub ptr: usize,
@@ -385,6 +387,7 @@ fn widen_latin1(bytes: &mut [u8], len: usize) -> usize {
 }
 
 /// What the conversion knows, carried from one read to the next.
+#[derive(Debug)]
 pub(crate) struct Conv {
     /// What Nvim converts itself, or nothing.
     pub flags: FioFlags,
@@ -818,6 +821,7 @@ fn read_word(bytes: &[u8], p: &mut usize, flags: FioFlags) -> u32 {
 /// `try_dos`/`try_unix`/`try_mac` say which ones `'fileformats'` allows;
 /// `try_mac` doubles as the count of carriage returns seen, so it is a
 /// counter rather than a flag.
+#[derive(Debug)]
 pub(crate) struct FormatGuess {
     pub try_dos: bool,
     pub try_unix: c_int,

@@ -143,6 +143,7 @@ pub fn nvim_buf_set_text(
 
 /// The edit `nvim_buf_set_text` has prepared, once its arguments are checked
 /// and the replacement lines are built.
+#[derive(Debug)]
 struct Replacement {
     buffer: Buf,
     start_row: LineNr,

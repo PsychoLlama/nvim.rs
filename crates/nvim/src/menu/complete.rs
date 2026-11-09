@@ -38,7 +38,7 @@ const TBUFFER_LEN: usize = 256;
 const SUBMENU_MARK: u8 = 0x01;
 
 /// A sibling list of the tree: the top level, or a node's children.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum Level {
     Top,
     Children(MenuId),
@@ -69,6 +69,7 @@ static EXPAND_EMENU: GlobalCell<bool> = GlobalCell::new(false);
 
 /// What the completion machinery should do next, and where the word it is
 /// completing starts.
+#[derive(Debug)]
 struct Context {
     xp_context: ExpandContext,
     pattern: Option<usize>,
@@ -207,6 +208,7 @@ fn menu_context(cmd: &CStr, line: &[u8], arg: usize, forceit: bool) -> Context {
 
 /// What a generator needs of the node it answers for, copied out of the
 /// tree.
+#[derive(Debug)]
 struct Item {
     in_modes: bool,
     has_children: bool,
@@ -217,6 +219,7 @@ struct Item {
 /// The candidate generators alternate between a node's translated and
 /// English display names, advancing to the next node when both are spent.
 /// A node without an English name yields one candidate.
+#[derive(Debug)]
 struct Generator {
     item: Item,
     advance: bool,

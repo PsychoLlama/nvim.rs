@@ -48,7 +48,7 @@ const NODE_HDR: usize = 3;
 /// as the `Vec` it was written into. Nodes are offsets into that text; the
 /// `REGMAGIC` stamp is its byte 0, so no node is ever at offset 0 and 0
 /// serves as "no node" where the C had a null pointer.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct BtProg<'a>(&'a BtRegProg);
 
 impl<'a> BtProg<'a> {
@@ -178,6 +178,7 @@ impl Node {
 }
 
 /// The backtracker's program writer.
+#[derive(Debug)]
 pub(crate) struct BtEmitter {
     /// The program text so far, `REGMAGIC` stamp first.
     text: Vec<u8>,

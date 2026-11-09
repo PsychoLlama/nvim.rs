@@ -37,7 +37,7 @@ use core::ffi::c_int;
 /// One `vim_regexec_multi` result: where the match starts, where it ends
 /// (both relative to the line the search was run from) and the number of
 /// the first sub-pattern that took part.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Found {
     start: LPos,
     end: LPos,
@@ -45,7 +45,7 @@ struct Found {
 }
 
 /// Where the search started from, and how close to it a match may sit.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct StartPos {
     pos: Pos,
     /// Zero when a match at the start position itself counts; otherwise
@@ -56,6 +56,7 @@ struct StartPos {
 
 /// Everything a [`searchit`] line walk needs that does not change while it
 /// runs.
+#[derive(Debug)]
 struct Searcher<'a, 'm> {
     buf: Buf,
     /// The compiled pattern, set up once to be run line after line.

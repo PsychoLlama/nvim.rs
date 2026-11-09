@@ -146,6 +146,7 @@ pub fn get_default_register_name() -> RegName {
 
 /// One register as ShaDa reads and writes it: its lines, how it is put
 /// back, when it was set, and the extra data the file gave it.
+#[derive(Debug)]
 pub(crate) struct ShadaYank {
     pub(crate) contents: Vec<ApiString>,
     pub(crate) motion: MotionType,

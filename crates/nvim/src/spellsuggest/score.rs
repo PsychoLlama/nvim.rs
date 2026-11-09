@@ -499,7 +499,7 @@ fn substitute_cost(slang: Option<&SpellLang>, bc: c_int, gc: c_int) -> c_int {
 }
 
 /// One alternative still to be tried by [`spell_edit_score_limit`].
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 struct Alternative {
     badi: usize,
     goodi: usize,

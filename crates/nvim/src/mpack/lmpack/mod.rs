@@ -69,6 +69,7 @@ const EMPTY_DICT_NAME: &CStr = c"mpack.empty_dict";
 const BUFFER_SIZE: usize = 8192;
 
 /// One `mpack.Unpacker` instance. Its private table is its environment.
+#[derive(Debug)]
 pub struct Unpacker {
     /// Out of the instance while a walk runs (see `unpacking`).
     parser: Option<Box<LuaParser>>,
@@ -100,6 +101,7 @@ impl Userdata for Unpacker {
 }
 
 /// One `mpack.Packer` instance. Its private table is its environment.
+#[derive(Debug)]
 pub struct Packer {
     /// As [`Unpacker::parser`].
     parser: Option<Box<LuaParser>>,
@@ -483,6 +485,7 @@ fn packer_new(stack: &mut Stack) -> Result<c_int, Raise> {
 }
 
 /// Why an encoding walk did not finish.
+#[derive(Debug)]
 enum Unfinished {
     /// The parser stack was too shallow and may not grow.
     TooDeep,

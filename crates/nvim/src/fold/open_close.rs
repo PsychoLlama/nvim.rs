@@ -196,6 +196,7 @@ pub fn fold_manual_allowed(create: bool) -> Result<(), Failed> {
 }
 
 /// Where [`insert_new_fold`] put the fold, and what the folds above it said.
+#[derive(Debug)]
 struct Inserted {
     /// How deep it is; it contains the line it was created from.
     depth: usize,
@@ -457,6 +458,7 @@ pub(super) fn set_manual_fold(
 }
 
 /// What [`set_folds_on_line`] found and did.
+#[derive(Debug)]
 struct ManualFold {
     found_fold: bool,
     done: c_int,

@@ -182,6 +182,7 @@ pub(super) fn show_one_mark(
 /// out as upstream's `snprintf` into `IObuff` lays them -- by hand, in a
 /// stack buffer: the crate's `printf` makes two passes, which cost a
 /// `:marks` loop twice what the listing itself does.
+#[derive(Debug)]
 pub(super) struct Row {
     bytes: [u8; 48],
     len: usize,

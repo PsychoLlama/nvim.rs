@@ -178,6 +178,7 @@ unsafe extern "C-unwind" {
 
 /// What `lua_getinfo` fills in: `lua.h`'s `lua_Debug`, layout and all.
 #[repr(C)]
+#[derive(Debug)]
 pub struct lua_Debug {
     pub event: ::core::ffi::c_int,
     pub name: *const ::core::ffi::c_char,

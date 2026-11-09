@@ -244,7 +244,7 @@ pub(crate) fn draw_virt_text(
 
 /// The fields of a virtual-text link [`draw_virt_text`] reads, copied out of
 /// the store.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct VirtShape {
     link: uint32_t,
     width: ::core::ffi::c_int,

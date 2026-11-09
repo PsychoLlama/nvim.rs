@@ -287,7 +287,7 @@ pub(crate) fn update_attrs(tui: &mut TUIData, attr_id: c_int) {
 }
 
 /// Which half of a colour pair is being set.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum ColorRole {
     Foreground,
     Background,

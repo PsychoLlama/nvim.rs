@@ -80,6 +80,7 @@ pub fn get_reg_type(regname: RegName) -> (MotionType, i32) {
 
 /// What a register read answers: one string, or -- with `kGRegList` -- its
 /// lines.
+#[derive(Debug)]
 enum RegContents {
     Text(XString),
     Lines(ListRef),
@@ -203,7 +204,7 @@ fn init_write_reg(
 
 /// What [`str_to_reg`] splits into lines: text with newlines in it, or
 /// lines already split.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum RegText<'a> {
     Text(&'a [u8]),
     Lines(&'a [&'a CStr]),

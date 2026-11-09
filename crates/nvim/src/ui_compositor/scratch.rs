@@ -34,6 +34,7 @@ pub(super) type Cells = core::ops::Range<usize>;
 
 /// The scratch line, kept at the width of the default grid by
 /// `ui_comp_grid_resize`.
+#[derive(Debug)]
 pub(super) struct Bufs {
     pub(super) chars: Vec<ScreenChar>,
     pub(super) attrs: Vec<ScreenAttr>,

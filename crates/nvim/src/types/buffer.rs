@@ -47,7 +47,7 @@ pub type BorderTextType = ::core::ffi::c_uint;
 ///
 /// Not `Copy`. Each `LuaRef` is a reference into the Lua registry that
 /// `free_update_callbacks` releases; a second copy would be a second release.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BufUpdateCallbacks {
     pub on_lines: LuaRef,
     pub on_bytes: LuaRef,
@@ -74,7 +74,7 @@ pub const kFloatRelativeLaststatus: FloatRelative = 5;
 /// `window::config::merge_win_config` decides which of two configs
 /// keeps them by comparing the `items` pointers. A `clone` is the shallow
 /// copy that comparison expects; it duplicates no allocation.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WinConfig {
     pub window: WindowHandle,
     pub bufpos: LPos,
@@ -117,7 +117,7 @@ pub type BlnFlags = ::core::ffi::c_int;
 /// free count that says whether the address still means that buffer. The
 /// handle is never dereferenced until `BufRef::get` has re-validated it.
 /// Duplicating one duplicates no claim on anything.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct BufferRef {
     pub br_buf: Buf,
     pub br_buf_free_count: ::core::ffi::c_int,
@@ -127,7 +127,7 @@ pub struct BufferRef {
 /// Not `Copy` and not `Clone`: a block owns its cached `df_changes`, and
 /// nothing wants two of one. Code that wants a block's ranges past a call
 /// that may rebuild the list copies the two `LineNr` arrays.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct DiffBlock {
     pub df_lnum: [LineNr; 8],
     pub df_count: [i32; 8],
@@ -157,7 +157,7 @@ impl DiffBlock {
 /// providers, which run Lua that may rebuild the block list the ranges live
 /// in, so it names them by position and the list's generation, and reads
 /// them back only while that generation stands.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct DiffLine {
     pub(crate) changes: DiffLineChanges,
     pub(crate) bufidx: ::core::ffi::c_int,
@@ -165,7 +165,7 @@ pub(crate) struct DiffLine {
 }
 
 /// Which ranges a [`DiffLine`] carries.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub(crate) enum DiffLineChanges {
     /// None: the line is an addition, or was never looked at.
     #[default]
@@ -182,7 +182,7 @@ pub(crate) enum DiffLineChanges {
         generation: u32,
     },
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct DiffLineChange {
     pub dc_start: [ColNr; 8],
     pub dc_end: [ColNr; 8],
@@ -192,6 +192,7 @@ pub struct DiffLineChange {
 pub type DispTick = uint64_t;
 pub type DoBufAction = ::core::ffi::c_int;
 pub type DoBufStart = ::core::ffi::c_int;
+#[derive(Debug)]
 pub struct FcsChars {
     pub stl: ScreenChar,
     pub stlnc: ScreenChar,
@@ -217,6 +218,7 @@ pub struct FcsChars {
 }
 /// One `:loadkeymap` entry: the two sides of a buffer-local language
 /// mapping, each without its terminator. Owned by the buffer's `b_kmap_ga`.
+#[derive(Debug)]
 pub(crate) struct KeymapEntry {
     pub(crate) from: Vec<u8>,
     pub(crate) to: Vec<u8>,
@@ -243,7 +245,7 @@ pub(crate) struct KeymapEntry {
 /// `short_ptr` and never a third address, so the identity tests the editor
 /// makes ("did the caller hand me this buffer's own name?",
 /// `fileio::open`) still mean what they meant.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct BufName {
     /// `b_ffname`.
     full: Option<XString>,
@@ -254,7 +256,7 @@ pub struct BufName {
 }
 
 /// The short name: its own allocation, the full name's, or nothing.
-#[derive(Default)]
+#[derive(Default, Debug)]
 enum ShortName {
     /// A null `b_sfname`.
     #[default]
@@ -405,6 +407,7 @@ impl BufName {
 /// here whose type is not valid zeroed must be added to that allocator, and
 /// to the unit case `buffer::list::tests::a_fresh_buffer_holds_valid_owners`
 /// that reads each one back.
+#[derive(Debug)]
 pub struct Buffer {
     pub handle: Handle,
     pub b_ml: MemLine,
@@ -689,6 +692,7 @@ pub struct Buffer {
     pub deleted_codeunits: size_t,
     pub flush_count: ::core::ffi::c_int,
 }
+#[derive(Debug)]
 pub struct file_buffer_b_signcols {
     pub max: ::core::ffi::c_int,
     pub last_max: ::core::ffi::c_int,
@@ -700,7 +704,7 @@ pub type GetFileFlags = ::core::ffi::c_int;
 /// Not `Copy`: `multispace` and `leadmultispace` are owned runs, made by
 /// 'listchars' and dropped when the window's value is replaced. A zeroed
 /// struct holds neither, which is what a zeroed window starts with.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LcsChars {
     pub eol: ScreenChar,
     pub ext: ScreenChar,
@@ -724,13 +728,13 @@ pub struct LcsChars {
 }
 /// One `matchaddpos()` position: a line, and a 1-based column and length
 /// (column 0 for the whole line). A zero line ends a match's positions.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct LLPos {
     pub lnum: LineNr,
     pub col: ColNr,
     pub len: ::core::ffi::c_int,
 }
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct MatchState {
     pub rm: RegMMatch,
     pub lnum: LineNr,
@@ -749,6 +753,7 @@ pub struct MatchState {
 }
 /// One entry of a window's match list: a pattern or a list of positions,
 /// painted in a highlight group.
+#[derive(Debug)]
 pub struct MatchItem {
     pub mit_id: ::core::ffi::c_int,
     pub mit_priority: ::core::ffi::c_int,
@@ -771,19 +776,21 @@ pub struct MatchItem {
     /// `'redrawtime'` budget) and is not used again until the next one.
     pub mit_suspended: bool,
 }
+#[derive(Debug)]
 pub struct PosSave {
     pub w_topline_save: ::core::ffi::c_int,
     pub w_topline_corr: ::core::ffi::c_int,
     pub w_cursor_save: Pos,
     pub w_cursor_corr: Pos,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct SynTime {
     pub total: ProfTime,
     pub slowest: ProfTime,
     pub count: ::core::ffi::c_int,
     pub match_0: ::core::ffi::c_int,
 }
+#[derive(Debug)]
 pub struct SynBlock {
     /// `:syntax keyword`s defined under `:syntax case match`.
     pub(crate) b_keywtab: crate::syntax::KeywordTable,
@@ -845,7 +852,7 @@ pub struct SynBlock {
 /// The strings are [`ThinCString`]s rather than `XString`s because a window
 /// is allocated zeroed, and all-zero bytes are `None` only for an `Option`
 /// of a non-null pointer: an `Option<XString>`'s niche is its capacity.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Taggy {
     /// The tag that was jumped to; `None` in a slot no jump has used.
     pub tagname: Option<ThinCString>,

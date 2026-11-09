@@ -50,12 +50,14 @@ const CTRL_C_BYTE: u8 = 0x03;
 
 /// Where the cursor was left after the `<Esc>`-in-Insert peek, which is where
 /// `'showcmd'` has to draw the partially matched keys.
+#[derive(Debug)]
 struct CursorAt {
     wcol: c_int,
     wrow: c_int,
 }
 
 /// What [`show_partial_key`] put on the screen and has to take back off.
+#[derive(Debug)]
 struct Partial {
     /// Index into the typeahead the showcmd display started at; 0 when
     /// nothing was pushed.

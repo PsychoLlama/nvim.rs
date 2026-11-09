@@ -61,6 +61,7 @@ fn dict_int(d: &Dict, key: &[u8]) -> c_int {
 }
 
 /// One entry described by a `setqflist()` dictionary, copied out of it.
+#[derive(Debug)]
 struct DictEntry {
     filename: Option<XString>,
     module: Option<XString>,
@@ -308,6 +309,7 @@ fn qf_add_entries(
 /// What a `setqflist()` `what` dictionary holds under each key it knows,
 /// copied out of it: setting a list runs autocommands, and those can change
 /// the dictionary.
+#[derive(Debug)]
 struct What {
     nr: Option<TypVal>,
     id: Option<TypVal>,

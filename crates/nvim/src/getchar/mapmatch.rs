@@ -163,7 +163,7 @@ pub(crate) fn check_simplify_modifier(max_offset: c_int) -> Result<usize, Failed
 
 /// A mapping the walk is considering: where it is, and the two flags the
 /// walk compares against later candidates.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct Candidate {
     at: MapAt,
     nowait: bool,
@@ -171,6 +171,7 @@ struct Candidate {
 }
 
 /// What the maphash walk found.
+#[derive(Debug)]
 struct MapSearch {
     /// The best candidate, or `None` when there is none.
     mp: Option<Candidate>,
@@ -400,6 +401,7 @@ fn finish_search(mut found: MapSearch, mp_match: Option<Candidate>) -> MapSearch
 /// What [`apply_mapping`] reads off the mapping it applies, copied out
 /// before anything runs: evaluating an `<expr>` mapping can invoke a function
 /// that redefines the mapping, which deletes it.
+#[derive(Debug)]
 struct Applied {
     mode: c_int,
     noremap: Remap,

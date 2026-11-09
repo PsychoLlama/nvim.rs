@@ -61,6 +61,7 @@ fn shown(name: &CStr) -> impl core::fmt::Display + '_ {
 
 /// What a swap file's block zero says about the buffer it belongs to, kept
 /// once the block has gone back to the memfile.
+#[derive(Debug)]
 struct Recorded {
     /// The edited file's name, as block zero spells it.
     fname: Vec<u8>,

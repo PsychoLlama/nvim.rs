@@ -93,6 +93,7 @@ pub(super) const MAXITEMCNT: usize = 30;
 /// Most of this is not applied until the end: several keywords have to be
 /// checked against what an *earlier* `.aff` file of the same run already
 /// set, which cannot happen until the file is known to be complete.
+#[derive(Debug)]
 pub(super) struct AffState {
     /// Entries still expected in the affix block being read.
     pub aff_todo: c_int,
@@ -131,7 +132,7 @@ pub(super) struct AffState {
 }
 
 /// A keyword that declares one flag, and the field it fills in.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum FlagField {
     Rare,
     KeepCase,
@@ -202,7 +203,7 @@ const FLAG_RULES: &[(&[&CStr], FlagField)] = &[
 /// A keyword whose argument is a number, and where it is kept. Every one of
 /// them is a `COMPOUND*` keyword, so the variants name only the tail:
 /// `COMPOUNDWORDMAX`, `COMPOUNDMIN`, `COMPOUNDSYLMAX`.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum NumField {
     WordMax,
     Min,
@@ -260,7 +261,7 @@ const COMPOPT_RULES: &[(&CStr, c_uint)] = &[
 ];
 
 /// A bare keyword that turns one thing on.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum Toggle {
     NoBreak,
     NoSplitSugs,
@@ -280,7 +281,7 @@ const TOGGLE_RULES: &[(&CStr, Toggle)] = &[
 ];
 
 /// A keyword giving one of the case tables, kept until the file is done.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum CaseTable {
     Fol,
     Low,

@@ -30,6 +30,7 @@ impl PatId {
 }
 
 /// What an autocommand runs.
+#[derive(Debug)]
 pub(crate) enum AutoHandler {
     /// An Ex command line.
     Cmd(XString),
@@ -38,6 +39,7 @@ pub(crate) enum AutoHandler {
     Fn(Callback),
 }
 
+#[derive(Debug)]
 pub struct AutoCmd {
     /// The command's pattern, `None` once [`aucmd_del`] has deleted it --
     /// the mark compaction removes it on.
@@ -52,6 +54,7 @@ pub struct AutoCmd {
     pub nested: bool,
 }
 
+#[derive(Debug)]
 pub struct AutoPat {
     /// How many commands name this pattern; the slot is cleared at zero.
     pub refcount: usize,
@@ -69,6 +72,7 @@ pub struct AutoPat {
 /// A deleted command stays in place, its `pat` cleared, until no walk is
 /// running; then [`compact`](Self::compact) removes the deleted rows and
 /// the cleared slots together.
+#[derive(Debug)]
 pub(crate) struct EventCmds {
     pub(crate) pats: Vec<Option<AutoPat>>,
     pub(crate) cmds: Vec<AutoCmd>,
@@ -180,6 +184,7 @@ impl EventCmds {
 
 /// The cursor of one firing walk: where it is in its event's commands, and
 /// the names its patterns are matched against.
+#[derive(Debug)]
 pub struct AutoPatCmd {
     /// The pattern of the command the walk last stopped at; `None` when it
     /// has not started, or has run out.
@@ -205,6 +210,7 @@ pub struct AutoPatCmd {
     pub arg_bufnr: ::core::ffi::c_int,
     pub(crate) walk: Option<usize>,
 }
+#[derive(Debug)]
 pub struct AcoSave {
     pub use_aucmd_win_idx: ::core::ffi::c_int,
     pub save_curwin_handle: Handle,
@@ -237,6 +243,7 @@ impl Default for AcoSave {
     }
 }
 
+#[derive(Debug)]
 pub struct AucmdWin {
     /// The slot's window, `None` until `win_alloc_aucmd_win` makes it. The
     /// slot owns it -- it is unregistered while idle, so no id finds it --

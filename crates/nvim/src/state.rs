@@ -110,6 +110,7 @@ pub const MODE_NORMAL: ModeFlags = 1;
 /// its operator, which the frame table owns, and the command line's
 /// completion, which the Vimscript functions read, belongs to the command
 /// line rather than to its key loop.
+#[derive(Debug)]
 pub(crate) struct ModeState<'a>(Machine<'a>);
 
 /// What a mode's `check` or `execute` asks [`state_enter`] to do next --
@@ -129,6 +130,7 @@ pub(crate) enum Step {
 
 /// [`ModeState`]'s arms. Private, so the only way to make one is through
 /// one of its constructors.
+#[derive(Debug)]
 enum Machine<'a> {
     Normal(&'a mut NormalState),
     Insert(&'a mut InsertState),
@@ -334,6 +336,7 @@ fn letters(mode: &ModeName) -> &[u8] {
 }
 
 /// Appends to a [`ModeName`] as upstream's `buf[i++] = ...` did.
+#[derive(Debug)]
 struct ModeWriter {
     name: ModeName,
     len: usize,
@@ -361,6 +364,7 @@ fn is_restart_key(key: Key) -> bool {
 
 /// Everything [`mode_name`]'s decision tree reads, snapshotted from the
 /// editor's globals in one place so the tree itself touches none of them.
+#[derive(Debug)]
 struct ModeInputs {
     /// The `State` bitmask.
     state: ModeFlags,

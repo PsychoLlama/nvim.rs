@@ -18,6 +18,7 @@ use crate::os::libc::ptrdiff_t;
 
 // Opaque C type: layout unknown here, only ever used behind a pointer.
 #[repr(C)]
+#[derive(Debug)]
 pub struct lua_State {
     _data: [u8; 0],
     _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,

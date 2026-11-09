@@ -128,7 +128,7 @@ pub fn same_directory(f1: &CStr, f2: &CStr) -> bool {
 
 /// Which of the two names [`pathcmp`] was still reading when the other ran
 /// out.
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 enum Side {
     Left,
     Right,

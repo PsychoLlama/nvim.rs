@@ -92,6 +92,31 @@ pub(crate) struct ExtMatch {
 /// A shared [`ExtMatch`].
 pub(crate) type ExtMatchRef = ::std::rc::Rc<ExtMatch>;
 
+/// Where a successful run leaves its `\z(` captures: the caller's slot, lent
+/// for the run. A `Cell` because the run holds it through a shared borrow.
+#[derive(Clone, Copy)]
+pub(crate) struct ExtOut<'t>(&'t ::core::cell::Cell<Option<ExtMatchRef>>);
+
+impl<'t> ExtOut<'t> {
+    /// Lends `slot` to a run.
+    pub(crate) fn new(slot: &'t mut Option<ExtMatchRef>) -> Self {
+        Self(::core::cell::Cell::from_mut(slot))
+    }
+
+    /// Stores a run's captures in the caller's slot.
+    pub(crate) fn set(self, captures: Option<ExtMatchRef>) {
+        self.0.set(captures);
+    }
+}
+
+/// By hand: the slot is a `Cell` of a non-`Copy` value, which cannot be read
+/// through `&self`; and it is the caller's, written once at the end.
+impl ::core::fmt::Debug for ExtOut<'_> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        f.debug_tuple("ExtOut").finish_non_exhaustive()
+    }
+}
+
 impl ExtMatch {
     /// What `\z(` group `no` matched, if it matched on one line.
     pub(crate) fn capture(&self, no: usize) -> Option<&CStr> {
@@ -108,6 +133,7 @@ impl ExtMatch {
 /// The `\z` traffic of one syntax match: the captures of the region's
 /// start match that `\z1`..`\z9` read, and the slot, if any, the match's own
 /// `\z(` captures go to when it succeeds.
+#[derive(Debug)]
 pub(crate) struct ExtMatchIo<'a> {
     pub(crate) input: Option<&'a ExtMatch>,
     pub(crate) output: Option<&'a mut Option<ExtMatchRef>>,

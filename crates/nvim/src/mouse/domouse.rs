@@ -640,6 +640,7 @@ fn click_definition(
 /// Everything the click and the modifiers decide once the cursor is where it
 /// belongs: the middle-button paste, the quickfix and tag jumps, the
 /// Shift-click search and the multi-click word or block selection.
+#[derive(Debug)]
 struct Action {
     op: Option<Op>,
     which_button: c_int,

@@ -115,7 +115,7 @@ const NO_LIST_CHARS: LcsChars = LcsChars {
 
 /// What a field does with the characters it is given, beyond the one
 /// character every field takes.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Shape {
     /// One character, and nothing else. Every 'fillchars' field, and most
     /// of 'listchars'.
@@ -135,7 +135,7 @@ enum Shape {
 
 /// Where a field's character lands: the `ScreenChar` of the option's
 /// character struct it fills.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum Slot {
     /// A field of a window's 'fillchars' characters.
     Fill(fn(&mut FcsChars) -> &mut ScreenChar),
@@ -144,6 +144,7 @@ enum Slot {
 }
 
 /// The two character structs a parse fills, one of which it hands over.
+#[derive(Debug)]
 struct Chars {
     fill: FcsChars,
     list: LcsChars,
@@ -174,6 +175,7 @@ macro_rules! list {
 }
 
 /// One field of 'fillchars' or 'listchars'.
+#[derive(Debug)]
 struct Field {
     name: &'static CStr,
     /// The `ScreenChar` this field's character fills. The two run-valued

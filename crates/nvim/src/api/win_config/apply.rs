@@ -54,6 +54,7 @@ impl FrameRef {
 /// config either way and reports the exception last -- which is what the
 /// `bool` answer and a borrowed error slot used to say between them, and
 /// what nothing in either signature admitted.
+#[derive(Debug)]
 enum Applied {
     /// The window was reconfigured.
     Done,
@@ -66,6 +67,7 @@ enum Applied {
 
 /// A refusal, and whether the editor is still standing on the window the
 /// relayout moved away from.
+#[derive(Debug)]
 enum Refusal {
     /// Nothing moved, or the move itself is what failed: report and leave.
     AsIs(Error),
@@ -79,6 +81,7 @@ enum Refusal {
 /// Every window here is named twice over -- as a [`Win`] and as a [`WinId`]
 /// -- because [`win_goto`] fires autocommands that can close either of them,
 /// and every question asked after it is about exactly that.
+#[derive(Debug)]
 struct Relayout {
     /// The window being moved, and its identity.
     win: Win,
@@ -448,6 +451,7 @@ fn apply_float(
 
 /// A float on its way to another tab page, and the state that move shares
 /// with the refusal that puts the current window back.
+#[derive(Debug)]
 struct Refloat {
     win: Win,
     /// The tab page the float is on, re-read after every `win_goto`.

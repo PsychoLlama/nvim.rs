@@ -483,6 +483,7 @@ impl Dict {
 /// What [`Dict::remove_at`] took out of a table: an allocated item, or the
 /// value of one embedded in a structure that keeps the item itself.
 /// Dropping it releases the value.
+#[derive(Debug)]
 pub(crate) enum RemovedItem {
     /// An item the dictionary owned.
     Allocated(Box<DictItem>),
@@ -507,6 +508,7 @@ impl RemovedItem {
 /// what lets a body remove entries as it goes -- with the table locked
 /// ([`Dict::lock_table`]), since an unlocked removal may rehash and renumber
 /// the slots under the walk.
+#[derive(Debug)]
 pub(crate) struct DictCursor {
     slot: usize,
     todo: usize,
@@ -554,6 +556,7 @@ impl DictCursor {
 /// `offset_of!(DictItem, di_tv)` to the field's offset in a buffer, a window
 /// or a tab page.  Both are casts through this wrapper.
 #[repr(transparent)]
+#[derive(Debug)]
 pub struct ScopeDictItem(pub ManuallyDrop<DictItem>);
 
 impl ScopeDictItem {
@@ -791,6 +794,7 @@ impl DictItem {
 /// own entry ([`ScopeDictItem`]), `b:changedtick` and a `v:` row -- were
 /// separate structs only because each spelled the flexible key member out at
 /// a different length; an owned key makes them all this.
+#[derive(Debug)]
 pub struct DictItem {
     pub di_tv: TypVal,
     pub di_lock: VarLock,

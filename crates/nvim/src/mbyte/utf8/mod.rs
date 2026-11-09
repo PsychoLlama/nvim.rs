@@ -299,6 +299,7 @@ pub fn c_display_width(bytes: &[u8], len: c_int) -> c_int {
 /// loop, for a caller that has the text rather than a pointer into it. Every
 /// byte of `bytes` is visited, an embedded NUL included; [`chars`] is the
 /// same walk over a [`CStr`].
+#[derive(Debug)]
 pub struct Clusters<'a> {
     bytes: &'a [u8],
     /// Byte offset of the next cluster.

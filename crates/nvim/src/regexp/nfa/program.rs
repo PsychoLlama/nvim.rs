@@ -67,7 +67,7 @@ impl StateId {
 }
 
 /// One state of the machine.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct NfaState {
     /// The opcode (negative), or the literal character the state matches.
     pub(crate) c: c_int,
@@ -99,7 +99,7 @@ impl NfaState {
 }
 
 /// An NFA program: the states, and the shortcuts the compiler found.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct NfaRegProg {
     /// The `RF_*` flags the compiler found.
     pub(crate) regflags: c_uint,
@@ -141,7 +141,7 @@ impl NfaRegProg {
 /// A program's states, by shared borrow: `Copy`, and the slice it holds
 /// travels in registers rather than being reloaded from the program at
 /// every state the walk visits.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct States<'p>(&'p [NfaState]);
 
 impl<'p> States<'p> {

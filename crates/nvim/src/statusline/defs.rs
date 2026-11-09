@@ -16,7 +16,7 @@ use crate::types::{ColNr, LineNr};
 /// `func` names the `%@Func@` handler of a `kStlClickFuncRun` definition
 /// by its place in the line's [`ClickLine::funcs`], one more than the
 /// index; 0 for none. Every cell of a click region holds the same one.
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub struct StlClickDefinition {
     pub type_0: StlClickDefinition_type_0,
     pub tabnr: ::core::ffi::c_int,
@@ -25,7 +25,7 @@ pub struct StlClickDefinition {
 pub type StlClickDefinition_type_0 = ::core::ffi::c_uint;
 /// A click definition, the handler name it carries, and the byte of the
 /// built line it starts at.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct StlClickRecord {
     pub def: StlClickDefinition,
     pub func: Option<::std::ffi::CString>,
@@ -35,7 +35,7 @@ pub struct StlClickRecord {
 /// `'statuscolumn'`'s or the tab page line's -- kept from the redraw that
 /// built them until the click that reads them: one per screen cell, and
 /// the handler names they refer to. Empty until the line is first drawn.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ClickLine {
     pub cells: Vec<StlClickDefinition>,
     pub funcs: Vec<::std::ffi::CString>,
@@ -51,7 +51,7 @@ impl ClickLine {
 
 /// A window's click definitions, for the click that lands on one of its
 /// lines.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct WinClickDefs {
     pub status: ClickLine,
     pub winbar: ClickLine,
@@ -224,7 +224,7 @@ impl PartialEq for StlOpt {
 /// What `win_line` and `nvim_eval_statusline` tell a `'statuscolumn'`
 /// expansion about the line, and the fold column's virtual columns it
 /// answers.
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub struct StatusCol {
     pub width: ::core::ffi::c_int,
     pub lnum: LineNr,
@@ -235,7 +235,7 @@ pub struct StatusCol {
 }
 /// One highlight run of a built statusline: where it starts, as a byte
 /// offset into the built text, and what it switches to.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct StlHlRun {
     pub start: usize,
     pub userhl: ::core::ffi::c_int,

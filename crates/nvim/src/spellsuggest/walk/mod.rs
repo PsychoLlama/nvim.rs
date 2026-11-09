@@ -189,7 +189,7 @@ pub(crate) enum State {
 /// so anything not explicitly reset is inherited.
 ///
 /// The layout is pinned to 32 bytes; see the module docs.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 #[repr(C)]
 pub(crate) struct Frame {
     /// The edit to try next at this level.
@@ -268,6 +268,7 @@ const _: () = assert!(size_of::<Frame>() == 32);
 /// The languages are borrowed from the language table for the whole walk,
 /// resolved once when it starts; the arrays are the walk's own working
 /// storage.
+#[derive(Debug)]
 pub(crate) struct Walk<'a> {
     /// The suggestion state being filled, and the language being searched.
     pub su: &'a mut SugInfo,

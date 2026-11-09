@@ -192,6 +192,7 @@ pub fn restore_win_noblock(switchwin: &mut SwitchWin, no_display: bool) {
 
 /// A window made current by [`switch_win`] for as long as this value lives:
 /// [`restore_win`] runs when it is dropped, whether the switch worked or not.
+#[derive(Debug)]
 pub(crate) struct WinSwitch {
     saved: SwitchWin,
     no_display: bool,

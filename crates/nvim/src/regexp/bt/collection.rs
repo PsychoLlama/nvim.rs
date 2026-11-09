@@ -35,6 +35,7 @@ use crate::regexp::{
 };
 
 /// What a `[` at the cursor turned out to be.
+#[derive(Debug)]
 pub(crate) enum Collection {
     Node(Node),
     /// No closing `]`: the `[` is an ordinary character.

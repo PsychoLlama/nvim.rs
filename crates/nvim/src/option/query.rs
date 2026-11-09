@@ -532,7 +532,7 @@ pub(crate) fn get_sidescrolloff_value(window: Win) -> int64_t {
 
 /// Which scroll margin: 'scrolloff', in lines, or 'sidescrolloff', in
 /// columns.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum ScrollMargin {
     Lines,
     Columns,
@@ -547,7 +547,7 @@ pub(crate) enum ScrollMargin {
 /// redraw and put it back. Resolving the fallback once and answering a
 /// `get`/`set` pair is the same thing without the address, which is also
 /// what keeps the write from landing in the wrong scope.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum ScrollOff {
     /// The window's own value, which it has set.
     Window(Win, ScrollMargin),

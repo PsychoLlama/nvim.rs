@@ -268,6 +268,7 @@ fn restart_server(excmd: &mut ExArg) {
 }
 
 /// What `:restart!` was asked to do.
+#[derive(Debug)]
 struct RestartPlan {
     /// What the new server's `v:startreason` and this one's `v:exitreason`
     /// say: `restart` for a plain `:restart`, `restart!` otherwise.

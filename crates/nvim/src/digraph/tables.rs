@@ -22,6 +22,7 @@ use core::ffi::c_int;
 /// A `:digraphs!` section header: the first codepoint of a Unicode block
 /// and its display name (NUL-terminated, translated with `gettext` when
 /// printed).
+#[derive(Debug)]
 pub(super) struct BlockHeader {
     pub start: c_int,
     pub name: &'static [u8],

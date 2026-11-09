@@ -25,6 +25,7 @@ use std::path::PathBuf;
 
 /// A current window and buffer, the evaluator brought up once per process,
 /// `'maxfuncdepth'` at its default, and no screen to draw messages on.
+#[derive(Debug)]
 pub(crate) struct Fixture {
     window: Win,
     buffer: Buf,
@@ -217,6 +218,7 @@ impl Drop for Fixture {
 
 /// A scratch directory for the files a case sources or writes, removed when
 /// it goes.
+#[derive(Debug)]
 pub(crate) struct Scratch(pub(crate) PathBuf);
 
 impl Scratch {

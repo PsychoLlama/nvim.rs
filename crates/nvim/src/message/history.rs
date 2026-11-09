@@ -31,6 +31,7 @@ use core::ffi::{CStr, c_int};
 use std::collections::VecDeque;
 
 /// One message in the history. Owns its chunks.
+#[derive(Debug)]
 pub(crate) struct Entry {
     /// Where the entry is in the order of every message ever added.
     seq: u64,
@@ -45,6 +46,7 @@ pub(crate) struct Entry {
 }
 
 /// The history itself.
+#[derive(Debug)]
 pub(crate) struct History {
     entries: VecDeque<Entry>,
     /// The sequence number the next entry gets.
@@ -253,6 +255,7 @@ pub fn messagesopt_changed() -> Result<(), Failed> {
 
 /// One history entry, copied out so it can be shown with the history
 /// unborrowed.
+#[derive(Debug)]
 struct Shown {
     seq: u64,
     /// Deep: the chunks' strings are the copy's own.

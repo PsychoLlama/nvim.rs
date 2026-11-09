@@ -55,7 +55,7 @@ use crate::ui::state::kUIMessages;
 /// The C buffer was a shared global with no length, so every reader had to
 /// walk it for one and any writer reached from a redraw could move the text
 /// under a reader. Owning it as a `Copy` value retires both.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct ShowCmd {
     /// `len` bytes of text, then a NUL, then whatever the last longer text
     /// left behind.

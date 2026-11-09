@@ -166,6 +166,7 @@ pub fn channel_teardown() {
 
 /// A reference to a channel, held for as long as this value is: the
 /// channel stays in the table, at its address, until it is dropped.
+#[derive(Debug)]
 pub(crate) struct ChannelRef(uint64_t);
 
 impl ChannelRef {
@@ -422,6 +423,7 @@ pub fn channel_send(id: uint64_t, data: Vec<u8>) -> Result<usize, &'static CStr>
     const CLOSED: &CStr = c"Can't send data to closed stream";
     const RAW_TO_RPC: &CStr = c"Can't send raw data to rpc channel";
 
+    #[derive(Debug)]
     enum Route {
         Stderr,
         Terminal(crate::terminal::Term),

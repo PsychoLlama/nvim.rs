@@ -27,7 +27,7 @@ use std::collections::HashMap;
 /// first — depend on all of it. Ids are small and consecutive, which the
 /// identity hash spreads badly, and this sits on the per-cell path where
 /// SipHash's setup is not worth paying.
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct AttrPairHasher(u64);
 
 impl Hasher for AttrPairHasher {
@@ -53,6 +53,7 @@ impl Hasher for AttrPairHasher {
 }
 
 /// Attribute ids remembered by the pair they came from.
+#[derive(Debug)]
 pub struct AttrCache(HashMap<u64, c_int, BuildHasherDefault<AttrPairHasher>>);
 
 impl AttrCache {

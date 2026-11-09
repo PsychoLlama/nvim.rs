@@ -58,6 +58,7 @@ pub fn is_main_thread() -> bool {
 /// A namespace rather than free functions because the editor crate's ratchet
 /// counts items at a crate's boundary, and this is one boundary item however
 /// many operations it carries.
+#[derive(Debug)]
 pub struct BorrowTable;
 
 /// How many cells may be borrowed at once, per thread. The editor nests a
@@ -69,6 +70,7 @@ const SLOTS: usize = 64;
 /// cell's address and its state — a positive shared count, or -1 for an
 /// exclusive borrow. The prefix is almost always empty or one entry long,
 /// so the scan is shorter than one hash of the address would be.
+#[derive(Debug)]
 struct Table {
     len: Cell<usize>,
     slots: [Cell<(usize, isize)>; SLOTS],
@@ -146,6 +148,7 @@ impl BorrowTable {
 /// while an edit can be held at every level of a walk over a nested value,
 /// so this set has no fixed capacity. Like the cells' table it is
 /// thread-local, and empty whenever no edit is live.
+#[derive(Debug)]
 pub struct EditTable;
 
 thread_local! {

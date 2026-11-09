@@ -32,6 +32,7 @@ pub(crate) const SELECTIONBUF_SIZE: usize = 0x400;
 /// the FFI-safety lint follows the pointer into this definition. Reached
 /// through `winlayer::Term`.
 #[repr(C)]
+#[derive(Debug)]
 pub struct terminal {
     pub opts: TerminalOptions,
     /// The emulator the child's output is written into.
@@ -131,7 +132,7 @@ impl terminal {
 ///
 /// A capacity of zero means the scrollback has not been sized yet: that
 /// waits until there is a buffer to read `'scrollback'` from.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Scrollback {
     rows: VecDeque<Box<[VTermScreenCell]>>,
     capacity: usize,
@@ -253,6 +254,7 @@ impl Scrollback {
     }
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct TerminalPending {
     pub resize: bool,
     pub cursor: bool,
@@ -264,6 +266,7 @@ pub struct TerminalPending {
     pub(crate) events: Option<crate::event_queue::ParkingQueue>,
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct TerminalCursor {
     pub row: ::core::ffi::c_int,
     pub col: ::core::ffi::c_int,
@@ -274,7 +277,7 @@ pub struct TerminalCursor {
 
 /// What a terminal is built with: its size and its driver's callbacks, each
 /// told the driver's id. Rust-only: no C code reads it.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TerminalOptions {
     /// Who drives the terminal (a channel's id), handed to each callback.
     pub owner: u64,

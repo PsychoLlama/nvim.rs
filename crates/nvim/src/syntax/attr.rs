@@ -71,6 +71,7 @@ impl Buf {
 }
 
 /// What [`Buf::syntax_attr`] answers for one cell.
+#[derive(Debug)]
 pub(crate) struct SyntaxCell {
     /// The highlight attribute.
     pub(crate) attr: c_int,
@@ -657,6 +658,7 @@ fn default_can_spell(block: SynBlockRef) -> bool {
 ///
 /// The loop calls `find_endpos`, which reaches the pattern array again and
 /// writes into it, so no borrow of the array may be live across the body.
+#[derive(Debug)]
 struct PatScan {
     syncing: bool,
     flags: SynFlags,

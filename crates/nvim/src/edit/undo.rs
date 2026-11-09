@@ -44,7 +44,7 @@ use crate::types::Failed;
 /// Upstream passes a `pos_T *`, and the callers point it either at a copy of
 /// the position or at the window's own cursor -- which `stop_insert` then
 /// sees move as it moves the cursor itself. The two are two arms here.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum InsertEnd {
     /// This position.
     At(Pos),

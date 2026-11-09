@@ -32,6 +32,7 @@ use crate::vterm::vterm::{
 };
 
 /// What became of a control sequence.
+#[derive(Debug)]
 pub(super) enum Outcome {
     /// Acted upon.
     Handled,

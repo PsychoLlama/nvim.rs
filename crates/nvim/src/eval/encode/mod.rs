@@ -317,6 +317,7 @@ pub enum ListRead {
 
 /// A position in a `readfile()`-style list being read back as bytes:
 /// upstream's `ListReaderState`.
+#[derive(Debug)]
 pub struct ListReader<'a> {
     list: &'a List,
     /// The item being read.

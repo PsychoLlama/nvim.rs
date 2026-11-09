@@ -27,7 +27,7 @@ use crate::types::{Key, VAR_DICT, VAR_STRING};
 use crate::winlayer::windows;
 
 /// What the `cursor` option asked for while the key is awaited.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum CursorFlag {
     /// No option given: move the cursor to the message only if something has
     /// already been written there.
@@ -41,6 +41,7 @@ enum CursorFlag {
 }
 
 /// The options dictionary `getchar()` and `getcharstr()` accept.
+#[derive(Debug)]
 struct GetcharOpts {
     /// Whether an ordinary character may be answered as a number.
     allow_number: bool,

@@ -47,7 +47,7 @@ const NO_OFFSET: SearchOffset = SearchOffset {
 
 /// One remembered search pattern, with the flags and offset it was used
 /// with.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct SearchPattern {
     /// The pattern's text, or `None` when there is no pattern -- which is
     /// also what setting an empty one (`:let @/ = ""`) leaves.
@@ -606,6 +606,7 @@ pub(crate) fn is_zero_width(
 }
 
 /// One remembered pattern as ShaDa reads and writes it, owned.
+#[derive(Debug)]
 pub(crate) struct ShadaPattern {
     pub(crate) pat: ApiString,
     pub(crate) magic: bool,

@@ -76,6 +76,7 @@ fn screen_canvas() -> GridRef {
 }
 
 /// Where one of the four formats is drawn, and what it is drawn with.
+#[derive(Debug)]
 struct Target {
     /// The grid and the row of it the line goes on.
     canvas: GridRef,
@@ -91,6 +92,7 @@ struct Target {
 
 /// The format to expand, a copy of the option's value, and which option it
 /// came from.
+#[derive(Debug)]
 struct Source {
     fmt: Vec<u8>,
     opt: (OptIndex, OptionSetFlags),
@@ -268,7 +270,7 @@ fn ruler_body(ruf: &[u8]) -> &[u8] {
 }
 
 /// Which of a window's click definitions are meant.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum ClickKind {
     Status,
     Winbar,

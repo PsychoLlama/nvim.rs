@@ -45,7 +45,7 @@ const CAR: c_int = 13;
 /// The text is the string's bytes, and its end or a NUL in it ends the walk,
 /// as the terminator did; every step is by the length the multibyte readers
 /// measure, which never runs past either.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Chars<'a> {
     text: &'a [u8],
     at: usize,

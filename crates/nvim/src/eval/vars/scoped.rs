@@ -33,7 +33,7 @@ use crate::winlayer::graph::switch_buffer;
 use crate::winlayer::{Buf, TabPage, Win, WinId, first_window};
 
 /// Which scope [`get_var_from`] reads.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Scope {
     Buffer,
     Window,

@@ -31,7 +31,7 @@ use crate::winlayer::{self, Buf};
 
 /// A compiled program, as the userdatum `vim.regex()` answers holds it.
 /// Empty once collected -- or, transiently, while a match has it out.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct Regex(Option<OwnedProg>);
 
 impl Userdata for Regex {

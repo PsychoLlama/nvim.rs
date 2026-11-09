@@ -87,7 +87,7 @@ pub(crate) enum ConvType {
 }
 
 /// A container the walk has met: what a self-reference names.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) enum Container<'a> {
     List(&'a List),
     Dict(&'a Dict),
@@ -104,7 +104,7 @@ pub(crate) enum PartialStage {
 /// One suspended container: upstream's `MPConvStackVal`, whose `type` tag and
 /// `data` union become one enum, each arm holding a borrow of the container
 /// and the position the walk has reached in it.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) enum Frame<'a> {
     Dict {
         dict: &'a Dict,
@@ -192,6 +192,7 @@ impl ConvStack<'_> {
 ///
 /// Indexable from the bottom, because that is the order the error path names
 /// the frames in and the position a `@N` self-reference marker counts to.
+#[derive(Debug)]
 pub(crate) struct InlineStack<T, const N: usize> {
     inline: [Option<T>; N],
     spilled: Vec<T>,
@@ -251,6 +252,7 @@ impl<T, const N: usize> InlineStack<T, N> {
 
 /// What the two failing hooks need to name the value they failed on: the path
 /// down to it and the name of the object being dumped.
+#[derive(Debug)]
 pub(crate) struct ConvPath<'s, 'a> {
     pub stack: &'s ConvStack<'a>,
     pub objname: &'s CStr,

@@ -58,6 +58,7 @@ const SKIP_FRAMES: usize = 32;
 
 /// One open frame of [`Cursor::skip`]'s walk: a token, and how many of its
 /// children (items, pairs or bytes) have been seen.
+#[derive(Debug)]
 struct Frame {
     kind: Kind,
     len: u64,
@@ -67,6 +68,7 @@ struct Frame {
 }
 
 /// A msgpack cursor over the bytes of one entry.
+#[derive(Debug)]
 pub(crate) struct Cursor<'a> {
     rest: &'a [u8],
 }
@@ -337,6 +339,7 @@ fn complaint(message: &[u8], key: &[u8]) -> CString {
 
 /// Where the entries come from: a file, or a ShaDa string the context stack
 /// holds in memory.
+#[derive(Debug)]
 pub(crate) enum Source<'a> {
     File(ReadFile),
     Bytes { data: &'a [u8], read: usize },
@@ -596,6 +599,7 @@ pub(crate) fn check_status(
 }
 
 /// The type, timestamp and length that head every entry.
+#[derive(Debug)]
 pub(crate) struct Header {
     /// The raw kind: not yet known to be one this Nvim reads.
     pub(crate) kind: u64,
@@ -616,6 +620,7 @@ fn wanted(header: &Header, kinds: ReadKinds, max_kbyte: usize) -> bool {
 }
 
 /// What to do with an entry once its header has been read.
+#[derive(Debug)]
 enum Disposition {
     /// Parse it into an entry.
     Parse,

@@ -31,6 +31,7 @@ static COND_STACKS: GlobalCell<CondStacks> = GlobalCell::new(CondStacks {
     spare: Vec::new(),
 });
 
+#[derive(Debug)]
 struct CondStacks {
     live: IdTable<CondStack>,
     spare: Vec<Boxed<CondStack>>,
@@ -52,6 +53,7 @@ impl CondId {
 }
 
 /// A condition stack a command line opened, closed when this goes.
+#[derive(Debug)]
 pub(crate) struct OwnedCondStack(CondId);
 
 impl OwnedCondStack {

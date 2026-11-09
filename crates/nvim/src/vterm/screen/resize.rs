@@ -37,6 +37,7 @@ const BLANK_LINEINFO: VTermLineInfo = VTermLineInfo {
 };
 
 /// The cell grid and line marks a resize builds before installing them.
+#[derive(Debug)]
 struct NewBuffer {
     cells: Vec<ScreenCell>,
     lineinfo: Vec<VTermLineInfo>,
@@ -86,6 +87,7 @@ impl NewBuffer {
 }
 
 /// The grid a resize is reading from.
+#[derive(Debug)]
 struct OldBuffer<'a> {
     cells: &'a [ScreenCell],
     lineinfo: &'a [VTermLineInfo],

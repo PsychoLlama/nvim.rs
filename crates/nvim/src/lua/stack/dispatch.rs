@@ -79,6 +79,7 @@ fn run<D: Dispatch, const N: usize>(stack: &mut Stack) -> Result<c_int, Raise> {
 /// them is what [`Stack::register_functions`] sets on a Lua table, and its
 /// entries are the very pointers Lua holds, so one can be compared with what
 /// Lua hands back.
+#[derive(Debug)]
 pub struct Function {
     name: &'static CStr,
     index: usize,
@@ -153,6 +154,7 @@ macro_rules! lua_functions {
         }
     ) => {
         $(#[$meta])*
+        #[derive(Debug)]
         $vis enum $name {}
 
         impl $crate::lua::stack::Dispatch for $name {

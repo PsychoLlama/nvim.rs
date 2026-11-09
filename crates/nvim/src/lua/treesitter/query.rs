@@ -27,7 +27,7 @@ use crate::lua::state::tslua_query_parse_count;
 use crate::lua_functions;
 
 /// A compiled query, as its userdatum owns it. Empty once collected.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct Query(Option<NonNull<TSQuery>>);
 
 impl Drop for Query {

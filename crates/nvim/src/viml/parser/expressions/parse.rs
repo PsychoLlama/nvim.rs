@@ -203,6 +203,7 @@ pub(super) enum Flow {
 ///
 /// The first block lives for the whole parse; the second is refreshed for
 /// each token before the handlers see it.
+#[derive(Debug)]
 pub(super) struct ExprParser<'a, 's> {
     /// Reader and highlight state, owned by the caller.
     pub(super) pstate: &'s mut ParserState<'a>,

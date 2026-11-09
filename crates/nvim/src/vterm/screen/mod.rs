@@ -68,6 +68,7 @@ pub(crate) const ZERO_SCREEN_CELL: VTermScreenCell = VTermScreenCell {
 };
 
 /// What a screen owns that C does not read.
+#[derive(Debug)]
 pub(crate) struct ScreenOwned {
     /// The cells, row-major, `rows * cols` of them: the primary screen's at
     /// [`BUFIDX_PRIMARY`], the alternate screen's at [`BUFIDX_ALTSCREEN`]
@@ -391,6 +392,7 @@ impl VTermScreen {
 
 /// One row of the screen, to read cells out of in their reported form
 /// without finding the row again for each.
+#[derive(Debug)]
 pub(crate) struct ScreenRow<'a> {
     line: &'a [ScreenCell],
     global_reverse: bool,
@@ -455,6 +457,7 @@ fn line_popcount(row: &[ScreenCell]) -> c_int {
 }
 
 /// A scroll as the host sees it: a move it may perform itself, and damage.
+#[derive(Debug)]
 struct ReportMoves<'a>(&'a mut VTermScreen);
 
 impl ScrollTarget for ReportMoves<'_> {
@@ -470,6 +473,7 @@ impl ScrollTarget for ReportMoves<'_> {
 }
 
 /// A scroll as the cells see it: moved and blanked.
+#[derive(Debug)]
 struct MoveCells<'a> {
     screen: &'a mut VTermScreen,
     state_rows: c_int,

@@ -134,6 +134,7 @@ pub(crate) fn make_bom(buf: &mut [u8], name: &[u8]) -> usize {
 /// [pushed](Self::push) in and [flushed](Self::flush) whenever the buffer
 /// fills up; the flush is where conversion happens, so a multi-byte character
 /// split across two flushes is carried over rather than mangled.
+#[derive(Debug)]
 pub(crate) struct ByteWriter {
     /// Where the bytes go; `None` while conversion is only being checked.
     pub file: Option<File>,
@@ -394,7 +395,7 @@ impl ByteWriter {
 }
 
 /// Which buffer a conversion left its bytes in.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum Out {
     /// The staging buffer itself: no conversion, or Latin1 in place.
     Staged,

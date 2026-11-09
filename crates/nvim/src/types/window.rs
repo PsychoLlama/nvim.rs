@@ -22,6 +22,7 @@ use crate::registry::IdSet;
 use crate::statusline::defs::WinClickDefs;
 use crate::winlayer::{Buf, BufId, FrameId, TabId, WinId};
 
+#[derive(Debug)]
 pub struct SwitchWin {
     /// The window and tab page to go back to. Handles: `switch_win` runs
     /// user code between the save and the restore, and that code can close
@@ -31,6 +32,7 @@ pub struct SwitchWin {
     pub sw_same_win: bool,
     pub sw_visual_active: bool,
 }
+#[derive(Debug)]
 pub struct WinExecute {
     /// The window the command ran in, as a handle: it may be gone by the
     /// time `win_execute_after` looks.
@@ -81,6 +83,7 @@ impl Default for WinExecute {
 /// tree, and duplicating one would put a second node into a structure the
 /// editor walks. They are allocated one at a time by `winlayer::new_frame`
 /// and freed by `free_frame`; the absence of the derives is what says so.
+#[derive(Debug)]
 pub struct Frame {
     /// This frame's key in the frame registry; `winlayer::FrameId` names it.
     pub handle: Handle,
@@ -105,6 +108,7 @@ pub struct Frame {
 /// window list, so a bitwise copy would be a second owner of all of them.
 /// Tab pages are reached through `winlayer::TabPage`, which is the `Copy`
 /// handle naming this one.
+#[derive(Debug)]
 pub struct Tabpage {
     pub handle: Handle,
     /// The tab page list off `first_tabpage`. A handle, as the buffer
@@ -152,6 +156,7 @@ pub struct Tabpage {
 /// grid, its option strings, its tag stack and its jump list; nothing in
 /// the tree may duplicate one, and the absence of the derives is what says
 /// so.
+#[derive(Debug)]
 pub struct Window {
     pub handle: Handle,
     /// The buffer this window shows: a handle, set by whoever installs the
@@ -352,7 +357,7 @@ pub struct Window {
     /// definitions, for the click that lands on one of them.
     pub w_click_defs: WinClickDefs,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WinInfo {
     /// The window this entry remembers the buffer in, `None` for the entry
     /// `:badd` leaves and once that window is freed.
@@ -402,7 +407,7 @@ impl WinInfo {
 /// has no value of its own there. A window is allocated zeroed and freed
 /// with `xfree`, so `window::alloc`'s `clear_options` is what releases these
 /// -- there is no destructor to lean on.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WinOpt {
     pub wo_arab: ::core::ffi::c_int,
     pub wo_bri: ::core::ffi::c_int,
@@ -546,7 +551,7 @@ impl WinOpt {
         wo_script_ctx: [ScriptCtx::NONE; 51],
     };
 }
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub struct WLine {
     pub wl_lnum: LineNr,
     pub wl_size: uint16_t,

@@ -57,6 +57,7 @@ state_record! {
 /// Opening and closing one is a counter: every API call and command line
 /// does both, and nearly all of them collect nothing, so a list only comes
 /// into being when an error is filed in it.
+#[derive(Debug)]
 pub(crate) struct MsgLists {
     /// How many are open.
     depth: usize,

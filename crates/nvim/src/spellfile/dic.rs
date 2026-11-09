@@ -342,7 +342,7 @@ fn get_compflags(affile: &AffFile, afflist: &[u8], out: &mut [u8]) {
 }
 
 /// One call's worth of [`store_aff_word`] arguments.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct AffWord<'a> {
     /// The stem to affix, and the flags it declared.
     word: &'a CStr,
@@ -364,7 +364,7 @@ struct AffWord<'a> {
 
 /// Where a pass's id list lives: the caller's, or one of this pass's two
 /// arrays, from an offset.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum IdList {
     Caller(usize),
     Store(usize),

@@ -31,7 +31,7 @@ use crate::types::{ColNr, VarNumber};
 /// The C carries these as three `int *` because [`super::find_win_inner`] and
 /// friends rewrite them in place, from screen coordinates into coordinates
 /// relative to the window they found.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct MousePos {
     /// Grid handle: `DEFAULT_GRID_HANDLE` for the screen, 0 for "ask the
     /// compositor", a window's own handle under `ext_multigrid`.

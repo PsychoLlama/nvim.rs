@@ -127,7 +127,7 @@ static did_lcd: GlobalCell<bool> = GlobalCell::new(false);
 /// apply: a session knows the working directory it will be sourced in and a
 /// view does not, so several decisions turn on the *kind* rather than on any
 /// flag.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum SessionOpts {
     /// 'sessionoptions', for `:mksession` -- and for `:mkvimrc`/`:mkexrc`,
     /// which never reach the parts that read a flag.
@@ -166,6 +166,7 @@ pub(crate) type Written = Result<(), IoFailed>;
 ///
 /// A write error the buffer holds back surfaces at the next write that
 /// reaches the file, or at [`SessionFile::finish`].
+#[derive(Debug)]
 pub(crate) struct SessionFile(BufWriter<File>);
 
 impl SessionFile {

@@ -284,6 +284,7 @@ pub fn shift_line(left: bool, round: bool, amount: c_int, call_changed_bytes: bo
 /// `old_len`/`new_len` are what the extmark splice at `start_col` is told, and
 /// they are *not* the whole line: everything either side of the shift is
 /// copied verbatim.
+#[derive(Debug)]
 struct ShiftedLine {
     /// Replacement for the whole line; `ml_replace` takes it.
     line: Vec<u8>,

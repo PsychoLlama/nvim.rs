@@ -329,6 +329,7 @@ pub(crate) enum SourceKind {
 /// Where the debugger keeps the breakpoint of a function or a script being
 /// run, and the tick it was looked up at: borrowed from the function's frame
 /// or the script's cookie, so a lookup made through it is the frame's own.
+#[derive(Debug)]
 pub(crate) struct DebugPos<'s> {
     /// The function's or the script's name, which a breakpoint names.
     pub(crate) name: DebugName<'s>,
@@ -341,7 +342,7 @@ pub(crate) struct DebugPos<'s> {
 /// Every line a function or a script runs asks for its [`DebugPos`] to
 /// compare the ticks, and measuring a script's path for each of those was
 /// over 1 % of a sourced script's instructions.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum DebugName<'s> {
     Function(&'s ThinCString),
     Script(&'s XString),
@@ -364,7 +365,7 @@ impl<'s> DebugName<'s> {
 /// loop arm for any shorter borrow than the source's own. A trait object can:
 /// `&'b mut (dyn ReadLines + 'a)` shortens to `+ 'b`. Every method sees
 /// through the loops to the source underneath, but [`is_loop`](Self::is_loop).
-pub(crate) trait ReadLines {
+pub(crate) trait ReadLines: ::core::fmt::Debug {
     /// The next line, or `None` at the end of the input. `c` is the prompt
     /// character, `indent` the indent to show and `do_concat` whether `\`
     /// continuation lines are joined -- each source takes what it needs.
@@ -387,6 +388,7 @@ pub(crate) trait ReadLines {
 }
 
 /// Every source a `do_cmdline` run reads its lines from.
+#[derive(Debug)]
 pub(crate) enum LineSource<'a> {
     /// No reader: the run has the one line it was given.
     None,
@@ -410,6 +412,7 @@ pub(crate) enum LineSource<'a> {
 
 /// One line of a `:while`/`:for` body, as it was read, and the line number
 /// it was read at.
+#[derive(Debug)]
 pub(crate) struct StoredLine {
     pub(crate) line: Vec<u8>,
     pub(crate) lnum: LineNr,
@@ -421,6 +424,7 @@ pub(crate) struct StoredLine {
 /// from the source underneath and stores it on the way through. That is
 /// what lets a `:function` be defined inside a loop: its body is read once
 /// and replayed with everything else. A loop inside a loop wraps it again.
+#[derive(Debug)]
 pub(crate) struct LoopLines<'a> {
     /// The body stored so far, and the line last handed out.
     pub(crate) store: &'a mut Vec<StoredLine>,

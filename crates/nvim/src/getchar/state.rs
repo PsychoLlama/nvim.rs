@@ -56,6 +56,7 @@ pub(crate) static langmap_mapchar: GlobalCell<[uint8_t; 256]> = GlobalCell::new(
 /// The next `vgetc` answers it -- with these modifiers and this mouse
 /// position -- instead of reading the typeahead; a typed key waits for the
 /// stuff buffer to empty first, a stuffed one does not.
+#[derive(Debug)]
 pub(crate) struct UngotKey {
     pub(crate) c: Key,
     pub(crate) mod_mask: ModMask,
@@ -176,7 +177,7 @@ pub type FlushBuffers = ::core::ffi::c_uint;
 /// field owns a block chain, and `save_redobuff` *moves* them here.
 /// [`Default`] is the "nothing saved yet" state its callers declare it in --
 /// `mem::zeroed` is not usable on a struct holding an enum with a niche.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct SaveRedo {
     pub(crate) sr_redobuff: KeyBuffer,
     pub(crate) sr_old_redobuff: KeyBuffer,
@@ -184,7 +185,7 @@ pub struct SaveRedo {
 /// All three kinds of typeahead, set aside so that a prompt has to be
 /// answered by the user. Not `Copy`, and `Default` rather than zeroed, for
 /// the same reasons as [`SaveRedo`].
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TypeaheadSave {
     pub(crate) save_typebuf: TypeAhead,
     pub(crate) typebuf_valid: bool,

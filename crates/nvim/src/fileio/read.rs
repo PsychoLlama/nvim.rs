@@ -41,7 +41,7 @@ mod tail;
 use self::tail::{report_and_place, run_read_autocmds};
 use crate::optionstr::OptString;
 /// What the read is being asked to do, decoded from `readfile`'s `flags`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct How {
     /// Starting to edit a new buffer.
     pub newfile: bool,

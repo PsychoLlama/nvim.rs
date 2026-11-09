@@ -104,7 +104,7 @@ impl<E: SlotEntry> HashItem<E> {
 ///
 /// A handle, so a tuple: the index and the copy are reached through
 /// [`Slot::index`] and `Deref`, never as fields.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Slot<E: SlotEntry>(usize, HashItem<E>);
 
 impl<E: SlotEntry> Slot<E> {
@@ -210,6 +210,7 @@ impl<E: SlotEntry> HashTab<E> {
 /// `idx * 5 + perturb + 1` computed from the previous (masked-on-first,
 /// unmasked-after) index. Never terminates — every walk ends by finding an
 /// empty slot, which is guaranteed because the table is never full.
+#[derive(Debug)]
 pub(crate) struct Probe {
     idx: HashValue,
     perturb: HashValue,
@@ -384,7 +385,7 @@ pub type HashValue = size_t;
 /// `Copy`: the entry names something the table does not own -- a dictionary
 /// item, or an index into storage beside the table -- and copying the slot
 /// copies only that name.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct HashItem<E: SlotEntry> {
     pub hi_hash: HashValue,
     pub hi_key: E,
@@ -405,6 +406,7 @@ pub struct HashItem<E: SlotEntry> {
 // `clippy::large_enum_variant` has nothing to say about a generic enum, but
 // the size difference is deliberate either way: the small run is stored, not
 // pointed at, which is what costs a dictionary no allocation.
+#[derive(Debug)]
 enum Slots<E: SlotEntry> {
     /// No array at all: a [`HashTab::new`], or a table
     /// [`crate::hashtab::hash_clear`] emptied.
@@ -469,6 +471,7 @@ impl<E: SlotEntry> Slots<E> {
 /// held, and every write goes back through the table. An index survives a
 /// mutation; what it does not survive is a *resize*, which is what
 /// [`HashTab::lock`] exists to prevent.
+#[derive(Debug)]
 pub struct HashTab<E: SlotEntry> {
     /// Live entries.
     pub ht_used: size_t,

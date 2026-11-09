@@ -26,12 +26,14 @@ use crate::undo::node::UndoLink;
 use crate::winlayer::Buf;
 
 /// Which way the undo file is open.
+#[derive(Debug)]
 enum Stream {
     Read(BufReader<File>),
     Write(BufWriter<File>),
 }
 
 /// An undo file being read or written, and the buffer it describes.
+#[derive(Debug)]
 pub(crate) struct BufInfo {
     pub(crate) bi_buf: Buf,
     stream: Stream,

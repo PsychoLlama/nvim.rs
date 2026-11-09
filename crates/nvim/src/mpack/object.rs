@@ -310,7 +310,7 @@ mod tests {
     use super::*;
 
     /// Counts tokens into a flat list: `(depth, kind, len, chunk)`.
-    #[derive(Default)]
+    #[derive(Default, Debug)]
     struct Trace(Vec<(usize, Option<Kind>, u32, Vec<u8>)>, Vec<usize>);
 
     impl Decode<()> for Trace {
@@ -372,6 +372,7 @@ mod tests {
     }
 
     /// Encodes `[n, "xyz"]` for each `n` given.
+    #[derive(Debug)]
     struct Emit(u32);
 
     impl Encode<u8> for Emit {

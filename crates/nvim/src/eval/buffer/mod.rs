@@ -96,6 +96,7 @@ pub(super) fn arg_buf_chk(args: &[TypVal], i: usize) -> Option<Buf> {
 
 /// The editor state [`SavedBufferState::prepare`] saves so that
 /// [`SavedBufferState::restore`] can put it back.
+#[derive(Debug)]
 struct SavedBufferState {
     curwin_save: Win,
     /// The autocommand window the buffer was made current in, when no window

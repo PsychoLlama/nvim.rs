@@ -73,6 +73,7 @@ const fn border_char(text: &str) -> BorderChar {
 }
 
 /// A border style `border = "name"` and `'winborder'` both accept.
+#[derive(Debug)]
 struct BorderStyle {
     /// The style's name, which is also its `'winborder'` spelling.
     name: &'static CStr,

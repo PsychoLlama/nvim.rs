@@ -121,6 +121,7 @@ pub fn f_prompt_setinterrupt(args: &[TypVal], _result: &mut TypVal, _fptr: EvalF
 }
 
 /// Which of a prompt buffer's two callbacks to set.
+#[derive(Debug)]
 enum PromptSlot {
     Callback,
     Interrupt,

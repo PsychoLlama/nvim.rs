@@ -58,6 +58,7 @@ const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 /// one property of that layout the loops below lean on: shrinking the live
 /// length forgets nothing. `slots` is every element ever written (the
 /// allocation, as far as anything reads it); `len` is the live prefix.
+#[derive(Debug)]
 pub(crate) struct SubscriberList<T> {
     slots: Vec<T>,
     len: usize,
@@ -134,7 +135,7 @@ impl<T: Clone> SubscriberList<T> {
 /// What is watching a buffer: the RPC channels and the Lua callback tables.
 /// A buffer holds one only once something attached (`Buffer` is allocated
 /// zeroed, and a `None` box is what zeroed bytes are).
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct Subscribers {
     channels: SubscriberList<uint64_t>,
     callbacks: SubscriberList<BufUpdateCallbacks>,
@@ -246,6 +247,7 @@ fn elog_dead_channel(channelid: uint64_t) {
 }
 
 /// What `ml_flush_deleted_bytes` reports.
+#[derive(Debug)]
 struct Deleted {
     bytes: size_t,
     codepoints: size_t,
@@ -619,7 +621,7 @@ pub fn buf_updates_send_splice(
 /// One corner of a splice, as `on_bytes` reports it: a row, a column, and a
 /// byte offset. Upstream spells the same three numbers as nine separate
 /// parameters.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Corner {
     row: c_int,
     col: ColNr,

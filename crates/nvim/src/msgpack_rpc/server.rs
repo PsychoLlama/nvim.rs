@@ -57,7 +57,7 @@ static WATCHERS: GlobalCell<Vec<Listener>> = GlobalCell::new(Vec::new());
 /// Upstream keeps this in a `TriState`, but the three values name three
 /// sources, not an unknown boolean: only the first two are worth a message
 /// when listening fails, and each gets its own wording.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum ListenSource {
     /// `--listen <address>`.
     Argument,

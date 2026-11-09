@@ -57,6 +57,7 @@ use crate::highlight_group::highlight_changed;
 /// The command line being parsed, as bytes plus the C string the error
 /// messages need: several of them print the rest of the line from the key
 /// that failed.
+#[derive(Debug)]
 struct Line<'a> {
     text: &'a CStr,
     bytes: &'a [u8],
@@ -325,6 +326,7 @@ fn sourcing_name_is_null() -> bool {
 }
 
 /// The `key=value` pairs of one `:highlight {group} ...` command.
+#[derive(Debug)]
 struct KeyLoop {
     id: c_int,
     init: bool,

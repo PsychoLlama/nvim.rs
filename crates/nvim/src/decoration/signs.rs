@@ -276,7 +276,7 @@ impl DecorSignHighlight {
 /// A marktree splice moves the marks between the two halves, so the counts
 /// have to come off the histogram before it and go back on after it. That is
 /// three answers, not an unknown boolean.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum SignCountHalf {
     /// Subtract the old counts and add the new ones in one pass.
     Both,

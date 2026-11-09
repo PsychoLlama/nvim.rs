@@ -289,6 +289,7 @@ pub(crate) fn jumpto_tag(
 }
 
 /// One jump in progress.
+#[derive(Debug)]
 struct Jump {
     /// The tag's command, as a search pattern or an ex command.
     pattern: Pattern,
@@ -585,6 +586,7 @@ impl Jump {
 }
 
 /// How well the jump found the tag, which decides what the user is told.
+#[derive(Debug)]
 enum Found {
     /// The tag's own pattern matched.
     Exactly,
@@ -597,6 +599,7 @@ enum Found {
 }
 
 /// A tag's command, in the fixed buffer the guesses are written into.
+#[derive(Debug)]
 struct Pattern {
     /// `LSIZE` bytes, whatever the command's length: the guesses are
     /// formatted straight into it.

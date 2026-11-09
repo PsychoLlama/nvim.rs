@@ -35,6 +35,7 @@ use crate::winlayer::{FrameId, FrameRef, TabPage, Win, tabs};
 
 /// Which neighbour inherits a closing window's room, and along which axis --
 /// the C's `wp`, `*altfr` and `*dirp` out-parameters as one value.
+#[derive(Debug)]
 pub(crate) struct AltWin {
     /// The window the cursor goes to.
     pub win: Win,
@@ -70,6 +71,7 @@ pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, u8) 
 
 /// What taking a window's frame out of the tree left behind: the C's
 /// `wp` return, `*dirp` and `*unflat_altfr` as one value.
+#[derive(Debug)]
 pub(crate) struct Removed {
     /// The window the caller should go to, `None` when `win` was the only one.
     pub win: Option<Win>,

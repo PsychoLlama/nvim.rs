@@ -606,6 +606,7 @@ static INTERNED: ::std::sync::Mutex<Interned> = ::std::sync::Mutex::new(Interned
 
 /// [`INTERNED`]'s contents: the catalogue epoch the entries were looked up
 /// under, and the entries.
+#[derive(Debug)]
 struct Interned {
     epoch: ::core::ffi::c_int,
     texts: ::std::collections::BTreeMap<Box<[u8]>, &'static ::core::ffi::CStr>,
@@ -897,6 +898,7 @@ static TEMPLATES: ::std::sync::Mutex<Templates> = ::std::sync::Mutex::new(Templa
 });
 
 /// [`TEMPLATES`]'s contents.
+#[derive(Debug)]
 struct Templates {
     epoch: ::core::ffi::c_int,
     seen: ::std::collections::BTreeMap<(usize, usize), Option<&'static str>>,

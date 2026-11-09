@@ -124,6 +124,7 @@ pub(crate) fn char_delim(byte: u8) -> c_int {
 }
 
 /// The pattern text a skip walks: read only, or the caller's to rewrite.
+#[derive(Debug)]
 enum PatText<'a> {
     Read(&'a [u8]),
     Write(&'a mut [u8]),
@@ -140,6 +141,7 @@ impl PatText<'_> {
 
 /// What a skip found: where the pattern ends, the 'magic' in force there,
 /// and whether a `?`-delimited walk met a `\?` it would unescape.
+#[derive(Debug)]
 struct Skipped {
     end: usize,
     magic: Magic,

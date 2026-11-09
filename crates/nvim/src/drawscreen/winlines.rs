@@ -36,7 +36,7 @@ use crate::winlayer::Win;
 /// Used to decide whether a syntax-highlighted line after the changed range
 /// still has to be drawn: after a folded line the state is unknown, after a
 /// normal line it can be asked for.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum DidUpdate {
     /// Did not draw a line.
     None,
@@ -47,6 +47,7 @@ enum DidUpdate {
 }
 
 /// Where the walk got to.
+#[derive(Debug)]
 struct Walk {
     /// Next `w_lines[]` entry to fill.
     idx: c_int,

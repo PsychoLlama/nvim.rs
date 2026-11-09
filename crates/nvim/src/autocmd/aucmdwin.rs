@@ -318,6 +318,7 @@ pub fn aucmd_restbuf(aco: &mut AcoSave) {
 
 /// A buffer made current for the length of a value: [`aucmd_prepbuf`] when
 /// it is made, [`aucmd_restbuf`] when it is dropped.
+#[derive(Debug)]
 pub(crate) struct AucmdBuf {
     aco: AcoSave,
 }

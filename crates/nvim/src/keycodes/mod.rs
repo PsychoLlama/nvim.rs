@@ -229,6 +229,7 @@ pub fn get_special_key_name(key: Key, modifiers: ModMask) -> SpecialKeyName {
 
 /// The bytes one key is encoded as, held inline: room for a modifier prefix
 /// and a character whose every byte is an escaped `K_SPECIAL`.
+#[derive(Debug)]
 pub struct KeyBytes {
     bytes: [u8; 3 * MB_MAXBYTES + 4],
     len: usize,

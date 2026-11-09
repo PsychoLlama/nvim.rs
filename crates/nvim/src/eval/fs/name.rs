@@ -58,6 +58,7 @@ use std::ffi::CString;
 // ---------------------------------------------------------------------
 
 /// The modifier text and how much of it has been read.
+#[derive(Debug)]
 struct Mods<'a> {
     text: &'a CStr,
     used: &'a mut usize,
@@ -80,6 +81,7 @@ impl Mods<'_> {
 }
 
 /// Where the name being modified lives.
+#[derive(Debug)]
 enum Storage<'a> {
     /// The caller's own string.
     Borrowed(&'a CStr),
@@ -93,6 +95,7 @@ enum Storage<'a> {
 ///
 /// The length is the answer's, not the string's: `:h` leaves the tail in
 /// place and just shortens it, which is what makes `:h:e` work.
+#[derive(Debug)]
 struct Fname<'a> {
     storage: Storage<'a>,
     start: usize,

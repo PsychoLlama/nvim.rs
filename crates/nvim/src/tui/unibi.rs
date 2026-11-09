@@ -69,6 +69,7 @@ const MAGIC_32BIT: u16 = 0o1036;
 /// A parsed terminfo description. The C `unibi_term` also kept the terminal
 /// name/aliases and extended numeric values; nvim never reads those, so they
 /// are validated during parsing but not stored.
+#[derive(Debug)]
 pub struct Term {
     bools: [bool; NBOOL],
     nums: [i32; NNUM],
@@ -324,6 +325,7 @@ pub fn from_mem(data: &[u8]) -> Option<Term> {
 /// `NotFound`/`Denied` (ENOENT/EPERM/EACCES) move the search along, while
 /// `Abort` (any other error, including a file that exists but fails to
 /// parse) ends the whole search empty-handed.
+#[derive(Debug)]
 enum Lookup {
     Found(Box<Term>),
     NotFound,
@@ -440,6 +442,7 @@ mod tests {
     use super::*;
 
     /// Build a compiled terminfo description from its sections.
+    #[derive(Debug)]
     struct Entry {
         magic: u16,
         names: &'static [u8],
@@ -450,7 +453,7 @@ mod tests {
         ext: Option<Ext>,
     }
 
-    #[derive(Default)]
+    #[derive(Default, Debug)]
     struct Ext {
         bools: Vec<u8>,
         nums: Vec<u32>,

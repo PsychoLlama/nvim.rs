@@ -34,7 +34,7 @@ use core::ffi::{CStr, c_char, c_int};
 const FIELD_MAX: usize = CMDBUFFSIZE as usize;
 
 /// What became of one line, or of one attempt to match it.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Status {
     /// Parsed; [`Fields`] describes the entry to add.
     Ok,
@@ -55,6 +55,7 @@ pub(crate) enum Status {
 /// The name, module and pattern are bounded as upstream's fixed buffers
 /// were; the message grows, since `%m` and `%+` can copy a whole line into
 /// it.
+#[derive(Debug)]
 pub(crate) struct Fields {
     namebuf: XString,
     module: XString,

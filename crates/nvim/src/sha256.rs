@@ -35,6 +35,7 @@ const K: [u32; 64] = [
 
 /// Streaming SHA-256 context: feed bytes with [`update`](Self::update), then
 /// take the digest with [`finish`](Self::finish).
+#[derive(Debug)]
 pub struct Sha256 {
     /// Total message length in bytes.
     total: u64,

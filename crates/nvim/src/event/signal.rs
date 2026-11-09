@@ -31,7 +31,7 @@ use crate::event_queue::{self, QueueId};
 
 /// A signal watcher, reached through the raw pointer libuv keeps in its
 /// handle's `data` field.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct Signal(*mut SignalWatcher);
 
 impl Signal {

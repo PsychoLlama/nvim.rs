@@ -153,6 +153,7 @@ fn record_slow(event: AllocEvent) {
 /// This is the twin of the Lua harness's `alloc_log`, minus the mocking: the
 /// real allocator still serves every request, exactly as the Lua callbacks
 /// forwarded to the saved originals.
+#[derive(Debug)]
 pub struct Recorder {
     /// A recorder belongs to the thread that started it.
     _not_send: PhantomData<*const ()>,

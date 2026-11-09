@@ -720,6 +720,7 @@ pub(crate) fn leave_cleanup(parked: &mut Cleanup) {
 /// A pending exception, error or `:return` parked for the length of a
 /// value: [`enter_cleanup`] when it is made, [`leave_cleanup`] when it is
 /// dropped. For code that has to run autocommands while one is pending.
+#[derive(Debug)]
 pub(crate) struct CleanupGuard(Cleanup);
 
 impl CleanupGuard {

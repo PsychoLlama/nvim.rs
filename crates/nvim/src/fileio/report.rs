@@ -28,6 +28,7 @@ use crate::option::defs::ShmFlag;
 
 /// A message assembled the way upstream assembles one in `IObuff`: never
 /// more than `IOSIZE - 1` bytes, each piece cut to what still fits.
+#[derive(Debug)]
 pub(crate) struct Report(XString);
 
 impl Report {
@@ -125,6 +126,7 @@ pub(crate) fn msg_add_lines(
 }
 
 /// Everything the closing message needs to know about how the read went.
+#[derive(Debug)]
 pub(crate) struct Outcome {
     pub perm: c_int,
     pub read_no_eol_lnum: LineNr,

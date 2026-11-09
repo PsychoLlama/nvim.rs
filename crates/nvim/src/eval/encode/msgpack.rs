@@ -27,6 +27,7 @@ use crate::msgpack_rpc::packer::{
 };
 use crate::types::{Float, TypVal};
 
+#[derive(Debug)]
 struct MsgpackSink<'a> {
     packer: &'a mut PackerBuffer,
 }

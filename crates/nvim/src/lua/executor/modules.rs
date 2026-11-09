@@ -18,6 +18,7 @@
 use core::ffi::CStr;
 
 /// One embedded module: the name `require` knows it by, and its bytecode.
+#[derive(Debug)]
 pub(crate) struct ModuleDef {
     pub name: &'static CStr,
     /// The compiled chunk *plus* the NUL `build.rs` appends, which is why

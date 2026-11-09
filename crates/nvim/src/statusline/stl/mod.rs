@@ -118,6 +118,7 @@ const MAX_STCWIDTH: c_int = MAX_NUMBERWIDTH + SIGN_SHOW_MAX * SIGN_WIDTH as c_in
 /// fields as ordinary Rust fields; everything that calls back into the
 /// editor goes through a method here, which is what lets that stage forbid
 /// unsafe code.
+#[derive(Debug)]
 pub(super) struct Env<'a> {
     /// The window the items describe. For `'tabline'` this is `curwin`.
     pub win: Win,
@@ -137,6 +138,7 @@ pub(super) struct Env<'a> {
 
 /// What a `'statuscolumn'` expansion reads about its line, and the fold
 /// column's virtual columns it answers.
+#[derive(Debug)]
 pub struct StcLine<'a> {
     /// The line's fold, and the line `%C` draws the fold column for.
     pub foldinfo: FoldInfo,
@@ -465,6 +467,7 @@ pub(super) fn char_len_at(out: &[u8], at: usize) -> usize {
 /// `schar_get_adv` is a cache lookup, a `strlen` and a `memcpy` per cell,
 /// and a padded line is nothing but such cells. Resolving it once turns
 /// padding into a short `copy_from_slice`.
+#[derive(Debug)]
 pub(super) struct Fill {
     /// The glyph itself, for the two arms that compare it to `-`.
     schar: ScreenChar,
@@ -556,6 +559,7 @@ fn put_number(out: &mut [u8], at: usize, plan: &parse::NumPlan) -> usize {
 /// runs in the sandbox (a `'statusline'` set from a modeline is not
 /// trusted), and which option to reset to its default when expanding it
 /// provokes an error.
+#[derive(Debug)]
 pub struct FmtSource {
     pub opt_idx: OptIndex,
     pub opt_scope: OptionSetFlags,
@@ -572,6 +576,7 @@ impl FmtSource {
 
 /// What [`Win::build_stl_str_hl`] is asked to record on the way, beyond the text
 /// itself.
+#[derive(Debug)]
 pub struct StlWants<'a> {
     /// The highlight runs, one per group change.
     pub hl: bool,
@@ -591,6 +596,7 @@ impl StlWants<'_> {
 }
 
 /// What one expansion answered.
+#[derive(Debug)]
 pub struct StlOutput {
     /// The text, without a terminator.
     pub text: Vec<u8>,

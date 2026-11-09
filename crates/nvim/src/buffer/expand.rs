@@ -48,6 +48,7 @@ fn home_replaced(buffer: Option<Buf>, name: &CStr) -> XString {
 // Completing ":buffer"
 
 /// One buffer name `:buffer` completion found, and what orders it.
+#[derive(Debug)]
 struct Found {
     buf: Buf,
     name: XString,
@@ -129,7 +130,7 @@ pub(crate) fn buf_name_matches(pat: &CStr, options: WildOpts) -> Option<Vec<XStr
 }
 
 /// The order `qsort` sorts by: the buffer each name came from.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct ByBuffer(usize, Buf);
 
 impl LastUsed for ByBuffer {
@@ -167,7 +168,7 @@ fn order_by_last_used(found: Vec<Found>) -> Vec<XString> {
 // Matching one buffer
 
 /// Which of a buffer's names matched.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum BufNameKind {
     /// The short name, `b_sfname`.
     Short,

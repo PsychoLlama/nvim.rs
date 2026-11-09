@@ -110,6 +110,7 @@ pub const TMPLEN: ::core::ffi::c_int = 70 as ::core::ffi::c_int;
 // ---------------------------------------------------------------------------
 
 /// One expansion of a `%`-format: everything `build_stl_str_hl()` takes.
+#[derive(Debug)]
 pub(crate) struct StlJob<'a> {
     /// The window the items describe. For `'tabline'` this is `curwin`.
     pub win: Win,

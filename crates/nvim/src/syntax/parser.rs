@@ -43,7 +43,7 @@ use crate::winlayer::{Buf, BufId, WinId};
 
 /// The match [`SynState::current_attr`] found ahead of the current column and
 /// has not pushed yet.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct NextMatch {
     /// Its pattern; -1 for "not looked yet".
     pub(crate) idx: c_int,
@@ -66,6 +66,7 @@ pub(crate) struct NextMatch {
 
 /// What the last attribute walk decided about the current position. The
 /// query API reads these back, so they outlive the call that set them.
+#[derive(Debug)]
 pub(crate) struct CurrentAttr {
     /// Attribute number of the current character.
     pub(crate) attr: c_int,
@@ -96,6 +97,7 @@ impl CurrentAttr {
 /// The syntax parser.
 /// The line being parsed, copied out of the memline: see
 /// [`SynState::curline`].
+#[derive(Debug)]
 pub(crate) struct ParsedLine {
     /// Which line of which buffer at which change the copy is of; line 0
     /// is no line. The buffer by its number, not its address: a buffer
@@ -118,6 +120,7 @@ impl ParsedLine {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct SynState {
     // --------------------------------------------------- what is parsed
     /// The window being parsed for. An identity, not an address: it outlives

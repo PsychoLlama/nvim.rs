@@ -63,6 +63,18 @@ pub(crate) enum Emit<'a> {
     /// Hunk extents only, never a line.
     Hunks(&'a mut dyn FnMut(i64, i64, i64, i64) -> XdResult),
 }
+// By hand: both consumers are closures, which have no `Debug`.
+impl ::core::fmt::Debug for Emit<'_> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        let kind = match self {
+            Self::Lines(_) => "Lines",
+            Self::Hunks(_) => "Hunks",
+        };
+        f.debug_tuple(kind)
+            .field(&format_args!("<closure>"))
+            .finish()
+    }
+}
 
 impl Emit<'_> {
     /// Is there a hunk consumer? That is what picks between the

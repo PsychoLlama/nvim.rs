@@ -187,6 +187,7 @@ fn pum_border_width() -> c_int {
 }
 
 /// Where the menu is anchored: the position the placement is computed from.
+#[derive(Debug)]
 struct PumAnchor {
     /// The window the menu belongs to. `None` only for a cmdline menu with
     /// no cmdline window, which is why the placement code guards on it.

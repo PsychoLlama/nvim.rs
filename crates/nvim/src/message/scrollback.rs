@@ -25,6 +25,7 @@ use core::ffi::{c_int, c_uint};
 use std::collections::VecDeque;
 
 /// One run of displayed message text.
+#[derive(Debug)]
 struct Chunk {
     text: Box<[u8]>,
     /// The run ends its screen line.
@@ -39,6 +40,7 @@ struct Chunk {
 pub(crate) type SbPos = usize;
 
 /// The scrollback: `chunks[0]` is at position `first`.
+#[derive(Debug)]
 struct Scrollback {
     chunks: VecDeque<Chunk>,
     first: SbPos,

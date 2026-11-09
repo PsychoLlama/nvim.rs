@@ -155,6 +155,7 @@ pub static sandbox: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 /// Crate-private, as its constructors are: an inlined drop reachable from
 /// outside the crate would export the records it writes.
 #[must_use = "the counter is released as soon as the guard is dropped"]
+#[derive(Debug)]
 pub(crate) struct Bump<C: Level = &'static GlobalCell<c_int>> {
     counter: C,
     by: c_int,
@@ -187,6 +188,7 @@ impl<C: Level> Drop for Bump<C> {
 /// constructor saw, whatever happened in between. That is what the C does
 /// at these sites and why they are spelled differently.
 #[must_use = "the old value is restored as soon as the guard is dropped"]
+#[derive(Debug)]
 pub(crate) struct Saved<C: Level = &'static GlobalCell<c_int>> {
     counter: C,
     saved: c_int,
@@ -245,6 +247,7 @@ pub(crate) type AutocmdBump = Bump<AutocmdField<c_int>>;
 /// that shape around the active Lua state, with the restore repeated in the
 /// failed-call arm.
 #[must_use = "the old value is restored as soon as the guard is dropped"]
+#[derive(Debug)]
 pub struct Restore<T: Copy + 'static> {
     cell: &'static GlobalCell<T>,
     saved: T,
@@ -269,6 +272,7 @@ impl<T: Copy + 'static> Drop for Restore<T> {
 
 /// Both halves of the "read a key literally" pair, released together.
 #[must_use = "the counters are released as soon as the guard is dropped"]
+#[derive(Debug)]
 pub(crate) struct RawKeys {
     _no_mapping: KeyBump,
     _allow_keys: KeyBump,
@@ -276,12 +280,14 @@ pub(crate) struct RawKeys {
 
 /// `emsg_off` and `msg_silent` together: "run this and tell me nothing".
 #[must_use = "the counters are released as soon as the guard is dropped"]
+#[derive(Debug)]
 pub(crate) struct Quiet {
     _emsg: MsgBump,
     _messages: MsgBump,
 }
 
 /// Guards that turn some part of the editor's output off for a scope.
+#[derive(Debug)]
 pub struct Suppress;
 
 impl Suppress {
@@ -490,6 +496,7 @@ impl Suppress {
 /// rest are named. The shape is [`Bump`]'s; what it buys is that the un-bump
 /// can no longer be skipped by a `?` on the way out, which is exactly what
 /// happens the moment such a body starts answering `Result`.
+#[derive(Debug)]
 pub struct Depth;
 
 impl Depth {
@@ -504,6 +511,7 @@ impl Depth {
 /// The mirror of [`Suppress`]: these are the sites where the editor has to
 /// reach the user *despite* an enclosing `:silent` or a redraw-disabled
 /// operation — a prompt, a dialog, a swap-file question.
+#[derive(Debug)]
 pub struct Allow;
 
 impl Allow {
@@ -594,6 +602,7 @@ impl Allow {
 
 /// Guards over the two locks that say what the code running inside them is
 /// allowed to do.
+#[derive(Debug)]
 pub struct Lock;
 
 impl Lock {
@@ -643,12 +652,14 @@ impl Lock {
 /// Both halves of the "walk the windows without the user noticing" pair,
 /// released together.
 #[must_use = "the counters are released as soon as the guard is dropped"]
+#[derive(Debug)]
 pub(crate) struct WinAutocmds {
     _enter: AutocmdBump,
     _leave: AutocmdBump,
 }
 
 /// Guards over how the next key read is decoded.
+#[derive(Debug)]
 pub struct Keys;
 
 impl Keys {
@@ -670,6 +681,7 @@ impl Keys {
 
 /// The script context put back when the guard is dropped.
 #[must_use = "the previous script context is restored as soon as the guard is dropped"]
+#[derive(Debug)]
 pub(crate) struct SavedSctx {
     saved: ScriptCtx,
 }
@@ -688,6 +700,7 @@ impl Drop for SavedSctx {
 /// call — points `current_sctx` at whoever *wrote* that code, so that
 /// `:verbose`, `<SID>`, `<sfile>` and the error messages name the script
 /// rather than whatever happened to be running when it fired.
+#[derive(Debug)]
 pub(crate) struct Script;
 
 impl Script {

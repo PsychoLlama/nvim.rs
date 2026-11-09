@@ -100,6 +100,7 @@ pub(crate) static SUB_NSUBS: GlobalCell<c_int> = GlobalCell::new(0);
 pub(crate) static SUB_NLINES: GlobalCell<i32> = GlobalCell::new(0);
 
 /// `:vimgrep`'s pattern argument at the start of a command line's string.
+#[derive(Debug)]
 struct VimgrepPat<'a> {
     /// The pattern: the bare word, or what is between the delimiters.
     pattern: &'a [u8],
@@ -180,7 +181,7 @@ pub const ML_DEL_MESSAGE: ::core::ffi::c_uint = 1;
 pub const READ_FILTER: ::core::ffi::c_uint = 2;
 pub const READ_NOWINENTER: ::core::ffi::c_uint = 128;
 pub const READ_KEEP_UNDO: ::core::ffi::c_uint = 32;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct SubResult {
     pub start: LPos,
     pub end: LPos,
@@ -189,12 +190,12 @@ pub struct SubResult {
 /// The matches an `'inccommand'` preview has to show, and how many lines they
 /// need on screen -- which is what caps the scan when the preview window is
 /// smaller than the range.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct PreviewLines {
     pub subresults: Vec<SubResult>,
     pub lines_needed: i32,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct SubFlags {
     pub do_all: bool,
     pub do_ask: bool,
@@ -209,6 +210,7 @@ pub type SubIgnoreType = ::core::ffi::c_uint;
 pub const kSubMatchCase: SubIgnoreType = 2;
 pub const kSubIgnoreCase: SubIgnoreType = 1;
 pub const kSubHonorOptions: SubIgnoreType = 0;
+#[derive(Debug)]
 pub struct LineData {
     pub start_col: ::core::ffi::c_int,
     pub start: LPos,
@@ -365,6 +367,7 @@ fn list_oldfiles(list: &List) {
 /// or an `xstrnsave`/`xfree` pair per line. One `Vec` that keeps its capacity
 /// says it once, and starts out holding the empty string so a comparison
 /// against a copy that has not been filled in yet still reads a string.
+#[derive(Debug)]
 pub(crate) struct LineCopy(Vec<u8>);
 
 impl LineCopy {

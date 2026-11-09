@@ -103,7 +103,7 @@ const E_PREVIEW_WINDOW_EXISTS: &CStr = c"E590: A preview window already exists";
 /// The accessors below each belong to a callback whose option the table
 /// declares as that type; the values now carry their own kind, so a
 /// mismatch is a panic naming the option rather than a bad read.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Frame {
     /// The variable that already holds the new value.
     varp: OptSlot,

@@ -252,6 +252,7 @@ fn resolve_tag_at_cursor() -> Option<Vec<u8>> {
 }
 
 /// The buffer numbers [`ex_help`] must undo if the jump lands elsewhere.
+#[derive(Debug)]
 struct HelpWindow {
     /// The empty buffer a freshly split help window holds, to be wiped if
     /// the tag jump does not land in it.

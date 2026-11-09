@@ -66,6 +66,7 @@ pub(crate) enum Hit {
 }
 
 /// Where the pattern to search for comes from.
+#[derive(Debug)]
 enum Source {
     /// The text the command holds.
     Typed,

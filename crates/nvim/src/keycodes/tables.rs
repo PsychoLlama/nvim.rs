@@ -40,6 +40,7 @@ use crate::keycodes::{
 };
 
 /// A modifier prefix letter and the bits it stands for.
+#[derive(Debug)]
 struct ModPrefix {
     /// The bits of the modifier state this row is about.
     mask: ModMask,
@@ -92,6 +93,7 @@ pub(crate) fn printed_modifiers(modifiers: ModMask) -> impl Iterator<Item = u8> 
 
 /// A terminal code that already carries a modifier, and the code for the same
 /// key without it. Mouse codes are deliberately not in here.
+#[derive(Debug)]
 struct ModifierKey {
     /// The modifier bit the shifted code carries.
     modifier: ModMask,
@@ -233,6 +235,7 @@ pub(crate) fn unshift(key: Key) -> Option<(Key, ModMask)> {
 }
 
 /// One name of one key code.
+#[derive(Debug)]
 struct KeyName {
     /// The key this name spells.
     key: Key,
@@ -509,6 +512,7 @@ pub fn has_key_name(key: Key) -> bool {
 }
 
 /// What a mouse pseudo-code means.
+#[derive(Debug)]
 pub(crate) struct MouseEvent {
     /// Which button, as a `MOUSE_*` code.
     pub button: c_int,
@@ -519,6 +523,7 @@ pub(crate) struct MouseEvent {
 }
 
 /// A mouse pseudo-code and what it means.
+#[derive(Debug)]
 struct MouseCode {
     code: KeyExtra,
     event: MouseEvent,

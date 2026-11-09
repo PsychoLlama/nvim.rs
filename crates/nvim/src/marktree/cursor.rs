@@ -52,6 +52,7 @@ use crate::winlayer::Buf;
 /// Built from a buffer and an iterator that belongs to its tree; from then on
 /// every step is a safe call. See the module documentation for why it holds
 /// the buffer handle rather than a reference to the tree.
+#[derive(Debug)]
 pub struct Cursor<'a> {
     buffer: Buf,
     iter: &'a mut MarkTreeIter,
@@ -166,6 +167,7 @@ impl<'a> Cursor<'a> {
 ///
 /// The shape both `decoration/` and `plines.rs` spell out: `seek`, then a
 /// loop that reads the mark, stops at a row bound, and steps.
+#[derive(Debug)]
 pub struct Marks<'c, 'a> {
     cursor: &'c mut Cursor<'a>,
     step: Step,
@@ -173,6 +175,7 @@ pub struct Marks<'c, 'a> {
 }
 
 /// How a [`Marks`] walk advances.
+#[derive(Debug)]
 enum Step {
     /// Plain `marktree_itr_next`.
     All,

@@ -179,6 +179,7 @@ pub(crate) type Banned = HashSet<Box<[u8]>, BuildHasherDefault<WordHasher>>;
 
 /// What is known while looking for suggestions: the search's whole state,
 /// which every step of it is handed by reference.
+#[derive(Debug)]
 pub(crate) struct SugInfo {
     /// The suggestions found so far, best last until they are sorted.
     pub su_ga: Vec<Suggest>,
@@ -260,6 +261,7 @@ impl SugInfo {
 }
 
 /// One suggestion.
+#[derive(Debug)]
 pub(crate) struct Suggest {
     /// The suggested word.
     pub st_word: Box<[u8]>,

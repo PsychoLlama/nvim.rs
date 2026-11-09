@@ -65,6 +65,7 @@ impl RegSubMatch {
 }
 
 /// A buffer match's snapshot, as the readers below want it.
+#[derive(Debug)]
 struct BufferMatch {
     buf: Buf,
     firstlnum: LineNr,
@@ -76,6 +77,7 @@ struct BufferMatch {
 /// What the snapshot says about group `no`: its text for a string match,
 /// its span for a buffer one, or `None` — no snapshot, a group that did not
 /// match, or a group number past the ten there are.
+#[derive(Debug)]
 enum Group {
     Str(Option<Vec<u8>>),
     Buf(BufferMatch),

@@ -25,6 +25,7 @@ use crate::path::ExpandFlags;
 use core::ffi::c_int;
 
 /// The names one directory's wildcard expansion produced.
+#[derive(Debug)]
 pub(crate) struct FileList {
     names: Vec<XString>,
 }
@@ -60,6 +61,7 @@ impl FileList {
 /// A frame is pushed back onto the stack when a match is answered from it,
 /// so that the next call carries on with the same directory's remaining
 /// entries — that is what `files_cur` and `stage` remember.
+#[derive(Debug)]
 pub(crate) struct StackFrame {
     /// The part of the search path with no wildcards in it.
     pub(crate) fix_path: Name,
@@ -105,6 +107,7 @@ impl StackFrame {
 }
 
 /// One file or directory the search has already reported.
+#[derive(Debug)]
 struct Visited {
     /// The wildcard tail it was reached through.
     wc_path: Name,
@@ -115,7 +118,7 @@ struct Visited {
 }
 
 /// Everywhere one search for one file name has already been.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct VisitedList {
     /// The file name this list is about.
     filename: Name,
@@ -171,7 +174,7 @@ impl VisitedList {
 /// `"./**/tags,./**/TAGS,**/tags"`: the first and third searches are for the
 /// same file, so the third can reuse the first's list, but the second has to
 /// start from an empty one.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct VisitedLists {
     lists: Vec<VisitedList>,
     at: usize,

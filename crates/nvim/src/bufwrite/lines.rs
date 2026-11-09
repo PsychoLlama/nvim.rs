@@ -28,7 +28,7 @@ use crate::message::IOSIZE;
 use crate::option::defs::ShmFlag;
 
 /// What a pass over the lines produced.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct Written {
     /// One past the last line written, so `lnum - start` is the count.
     pub lnum: LineNr,
@@ -41,6 +41,7 @@ pub(crate) struct Written {
 }
 
 /// The notes that go between the file name and the counts in the message.
+#[derive(Debug)]
 pub(crate) struct WriteNotes {
     /// Some character could not be represented in `'fileencoding'`.
     pub conv_error: bool,

@@ -625,6 +625,7 @@ pub(crate) fn buflist_findpat_prefix(
 }
 
 /// What a buffer-name pattern matched.
+#[derive(Debug)]
 enum Matched {
     /// No buffer.
     Nothing,

@@ -48,6 +48,7 @@ const CANNOT_CONVERT: &CStr = c"Cannot convert given Lua type";
 /// `wanted` is how many elements the container takes, decided from the Lua
 /// table's shape before the descent: a table with more than that in it has
 /// the rest ignored, which is what the capacity test upstream writes says.
+#[derive(Debug)]
 enum OpenValue {
     /// A Lua array table becoming an [`Array`], filled in a vector sized
     /// to `wanted` so that the freeze in [`finish`](Self::finish) is free.
@@ -133,6 +134,7 @@ impl OpenValue {
 }
 
 /// What converting the Lua value on top of the stack produced.
+#[derive(Debug)]
 enum Converted {
     /// A finished value.  The Lua value it came from is still on the stack.
     Value(Object),
@@ -230,6 +232,7 @@ fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Convert
 }
 
 /// What the walk does next.
+#[derive(Debug)]
 enum Step {
     /// Convert the Lua value on top of the stack.
     Convert,

@@ -79,7 +79,7 @@ impl Text for &[u8] {
 /// interrupts is just not one, as it would be at a NUL. The readers answer
 /// over this exactly what upstream's pointer forms answered over the string
 /// the bytes came from.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(super) struct CBytes<'a>(pub(super) &'a [u8]);
 
 impl Text for CBytes<'_> {
@@ -101,7 +101,7 @@ impl Text for CBytes<'_> {
 
 /// The first `len` bytes of a text, ended early by a NUL in them: the span a
 /// pointer form with a length (`utfc_ptr2len_len(p, n)`) looks at.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(super) struct Prefix<T> {
     text: T,
     from: usize,

@@ -126,6 +126,7 @@ pub fn do_sub_msg(count_only: bool) -> bool {
 }
 
 /// The `[Preview]` buffer being filled, and how far the fill has reached.
+#[derive(Debug)]
 struct PreviewBuf {
     buf: Buf,
     /// Width of the "|lnum| " column that carries the line numbers.

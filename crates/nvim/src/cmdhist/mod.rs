@@ -121,6 +121,7 @@ pub fn get_hisidx(histype: HistoryType) -> Option<usize> {
 
 /// A copy of the entry at raw ring index `idx`: what a caller keeps while it
 /// runs code that may add to or delete from the history.
+#[derive(Debug)]
 pub struct HistEntryText {
     /// The entry's text.
     pub text: CString,
@@ -532,6 +533,7 @@ pub fn get_history_arg(_expand: &Expand, idx: usize) -> Option<Candidate> {
 }
 
 /// One history entry copied for, or taken by, the shada writer and merger.
+#[derive(Debug)]
 pub(crate) struct HistShadaEntry {
     pub text: Rc<CStr>,
     /// Separator character (search history only; NUL elsewhere).
@@ -541,6 +543,7 @@ pub(crate) struct HistShadaEntry {
 }
 
 /// One entry of the merged history the shada reader hands back, owned.
+#[derive(Debug)]
 pub(crate) struct HistRestored {
     pub text: Rc<CStr>,
     /// Separator character (search history only; NUL elsewhere).

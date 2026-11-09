@@ -46,6 +46,7 @@ pub enum UserMatch {
 /// What the password database says about one user, copied out of libc's
 /// static entry. NULL fields, and an empty name, are `None`, as the C's
 /// `add_user` dropped them.
+#[derive(Debug)]
 struct Passwd {
     name: Option<CString>,
     dir: Option<Vec<u8>>,

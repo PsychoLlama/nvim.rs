@@ -265,6 +265,7 @@ fn diff_mark_adjust_tp(
 
 /// One edit in buffer `idx`, as [`diff_mark_adjust_tp`] merges it into the
 /// block list.
+#[derive(Debug)]
 struct Edit {
     idx: usize,
     line1: LineNr,

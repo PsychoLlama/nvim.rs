@@ -45,6 +45,7 @@ use crate::mpack::rpc::{
 const ENVELOPE_MAX: usize = 16;
 
 /// One `mpack.Session` instance. Its private table is its environment.
+#[derive(Debug)]
 pub struct Session {
     session: Option<Box<rpc::Session>>,
     unpacked: Unpacked,
@@ -72,6 +73,7 @@ impl Userdata for Session {
 }
 
 /// The message [`receive`] is part way through.
+#[derive(Debug)]
 pub struct Unpacked {
     pub type_0: c_int,
     pub msg: RpcMessage,

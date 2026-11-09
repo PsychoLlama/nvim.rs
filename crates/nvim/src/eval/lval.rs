@@ -76,7 +76,7 @@ pub(crate) enum LvalError {
 }
 
 /// The part of a List or Blob a subscript named: one index, or a range.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub(crate) struct Span {
     /// The index, or the range's first; a List's is made non-negative.
     pub(crate) n1: c_int,
@@ -90,6 +90,7 @@ pub(crate) struct Span {
 
 /// Where a value lives, held so that it can be found again after user code
 /// has run.
+#[derive(Debug)]
 pub(crate) enum Slot {
     /// The variable the name resolved to, found again by name.
     Variable,
@@ -100,6 +101,7 @@ pub(crate) enum Slot {
 }
 
 /// What a left-hand side resolved to.
+#[derive(Debug)]
 pub(crate) enum Target {
     /// A whole variable, by name: nothing was subscripted.
     Variable,
@@ -114,6 +116,7 @@ pub(crate) enum Target {
 }
 
 /// A resolved left-hand side.
+#[derive(Debug)]
 pub(crate) struct LValue<'a> {
     /// The text it was read from: its first byte to the end of the string
     /// that holds it.
@@ -229,6 +232,7 @@ fn item_value<R>(item: &mut DictItem, f: impl FnOnce(&mut TypVal, &mut VarLock) 
 }
 
 /// A container, as a subscript sees it.
+#[derive(Debug)]
 enum Container {
     List(Option<ListRef>),
     Dict(Option<DictRef>),
@@ -249,6 +253,7 @@ impl Container {
 }
 
 /// How the slot the walk starts at answered.
+#[derive(Debug)]
 enum Opened {
     /// The container is ready to be subscripted.
     Ready,
@@ -257,6 +262,7 @@ enum Opened {
 }
 
 /// What one subscript's key text came to.
+#[derive(Debug)]
 enum Key {
     /// A `.key`: the bytes from `start` for `len`.
     Text { start: usize, len: usize },
@@ -266,6 +272,7 @@ enum Key {
 
 /// The subscript walk's state: where the walk is, and the slot holding the
 /// container the next subscript selects into.
+#[derive(Debug)]
 struct Walk<'t, 'v> {
     text: &'t [u8],
     /// The variable's name, to find it again by.
@@ -369,6 +376,7 @@ impl Walk<'_, '_> {
     /// The first call is the one that finds the variable, and the one that
     /// notices `v:lua`.
     fn open(&mut self, opener: u8, first: bool) -> Result<Opened, LvalError> {
+        #[derive(Debug)]
         enum Refused {
             Dot,
             Index,

@@ -70,6 +70,7 @@ pub(super) type SplResult<T> = Result<T, SpellReadError>;
 /// The one byte of pushback exists for `SN_COMPOUND`, which has to look at
 /// the byte after the syllable maximum to tell the old section layout from
 /// the new one and put it back when it turns out to be a flag.
+#[derive(Debug)]
 pub(super) struct Spl {
     file: BufReader<File>,
     /// A byte handed back by [`Spl::unget`], read before the file again.

@@ -75,7 +75,7 @@ const fn hex_escapes() -> [[u8; 6]; 256] {
 
 /// Which buffer an appender writes into: the document, or the scratch the
 /// sorted-object path lays keys out in before it knows their order.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Sink {
     Document,
     Keys,
@@ -84,6 +84,7 @@ enum Sink {
 /// One key of a `sort_keys` object: where its *encoded* text sits in
 /// [`Encoder::keys`], and enough of the original to look the value up
 /// again once the order is settled.
+#[derive(Debug)]
 struct Key {
     offset: usize,
     length: usize,
@@ -95,6 +96,7 @@ struct Key {
 /// The string arm owns a copy rather than pointing into the Lua string,
 /// which is what upstream does: its pointer stays valid only because the
 /// table being encoded is still on the stack and still holds the key.
+#[derive(Debug)]
 enum RawKey {
     Text(Vec<u8>),
     /// Upstream stores `lua_tointeger` here, not `lua_tonumber`, so a
@@ -103,6 +105,7 @@ enum RawKey {
     Number(isize),
 }
 
+#[derive(Debug)]
 struct Encoder {
     out: Vec<u8>,
     keys: Vec<u8>,

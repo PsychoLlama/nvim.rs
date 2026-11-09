@@ -360,6 +360,7 @@ fn broadcast_event(name: &CStr, args: Array) {
 }
 
 /// What [`channel_write`] did with a buffer.
+#[derive(Debug)]
 enum Written {
     /// The channel is closed; the buffer was dropped.
     Refused,

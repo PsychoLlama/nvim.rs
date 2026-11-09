@@ -59,6 +59,7 @@ pub const MOUSE_WANT_DRAG: c_int = 0x2;
 pub const MOUSE_WANT_MOVE: c_int = 0x4;
 
 /// A change to the pen that the consumer is told about.
+#[derive(Debug)]
 pub(super) enum PenChange<'a> {
     /// Apply an SGR control sequence.
     Sgr(&'a [c_long]),
@@ -85,7 +86,7 @@ fn tabstop_bytes(cols: c_int) -> usize {
 }
 
 /// Who the state machine paints through.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) enum Consumer {
     None,
     /// The terminal's own screen.
@@ -95,6 +96,7 @@ pub(crate) enum Consumer {
 }
 
 /// What a state machine owns that C does not read.
+#[derive(Debug)]
 pub(crate) struct StateOwned {
     /// One bit per column.
     tabstops: Vec<u8>,
@@ -364,6 +366,7 @@ impl VTermState {
 /// Dereferences to the [`VTermState`], so the sequence handlers read and write
 /// its fields directly; what goes past the state -- a reply on the wire, a
 /// glyph on the screen, a report to the consumer -- is a method here.
+#[derive(Debug)]
 pub(crate) struct StateCx<'a> {
     state: &'a mut VTermState,
     /// The terminal's mode bits: whether input is UTF-8, and whether C1

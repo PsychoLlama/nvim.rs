@@ -46,7 +46,7 @@ use crate::types::{TypVal, VarNumber};
 /// two stopped having the same type. A choice between two rules is what the
 /// flag actually is, and it reads better at the call sites than a pointer
 /// did.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct CharLen {
     separate_composing: bool,
 }

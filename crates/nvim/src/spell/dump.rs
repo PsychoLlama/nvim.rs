@@ -164,6 +164,7 @@ pub fn ex_spelldump(excmd: &mut ExArg) {
 
 /// Where the words of a walk go: the current buffer, or Insert-mode
 /// completion.
+#[derive(Debug)]
 struct Sink<'a> {
     /// The completion pattern, or `None` to dump into the buffer.
     pat: Option<&'a [u8]>,

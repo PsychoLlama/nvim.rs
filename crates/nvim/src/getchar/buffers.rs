@@ -45,7 +45,7 @@ use std::collections::VecDeque;
 const MINIMAL_SIZE: usize = 20;
 
 /// Where a [`KeyBuffer`] puts the bytes it is given next.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum InsertPoint {
     /// Before everything the buffer already holds. What [`KeyBuffer::restart`]
     /// sets while the buffer is being read, so that text stuffed mid-read is
@@ -60,6 +60,7 @@ enum InsertPoint {
 }
 
 /// One key buffer: a byte string of already-escaped keys.
+#[derive(Debug)]
 pub(crate) struct KeyBuffer {
     /// The blocks, front first.
     blocks: VecDeque<Vec<u8>>,
@@ -248,7 +249,7 @@ impl KeyBuffer {
 /// it, so making one needs no `unsafe` and every operation takes its own
 /// short borrow. Each method below is a leaf — the one call-out, `E222`'s
 /// message, is deliberately made after the borrow ends.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct KeyBufferRef(&'static GlobalCell<KeyBuffer>);
 
 /// The redo buffer: the keys `.` replays.
@@ -569,6 +570,7 @@ mod tests {
     use super::*;
     use crate::global_cell::{editor_state::Held, editor_state_lock};
 
+    #[derive(Debug)]
     struct Fresh(#[allow(dead_code, reason = "held for its drop")] Held);
 
     impl Fresh {

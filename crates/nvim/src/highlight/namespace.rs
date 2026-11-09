@@ -106,6 +106,7 @@ static NS_HL_ATTR: GlobalCell<Table<NS, NsHlTable>> =
 /// [`NS_HL_ATTR`], which is why the storage is a separate allocation rather
 /// than inline in the map. Nothing removes an entry, so the table is leaked
 /// on purpose: it lives for the process, as its `'static` says.
+#[derive(Debug)]
 struct NsHlTable(&'static HlAttrTable);
 
 impl Default for NsHlTable {

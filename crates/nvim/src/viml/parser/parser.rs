@@ -143,6 +143,7 @@ pub struct ParserPosition {
 /// The lines are the caller's and are borrowed for the whole parse, which is
 /// what lets the tree and the error point into them; a parse ends at the
 /// first line past the last one, as upstream's reader ended at a null line.
+#[derive(Debug)]
 pub struct ParserState<'a> {
     /// Every line of the input, in order.
     pub(crate) input: &'a [&'a [u8]],

@@ -45,7 +45,7 @@ pub(crate) fn with_linebuf<R>(f: impl FnOnce(&mut LineBuf) -> R) -> R {
 
 /// The line batch in progress. Only one exists at a time; `grid` being
 /// `None` means there is none.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct LineBatch {
     grid: Option<GridRef>,
     row: c_int,
@@ -98,12 +98,14 @@ fn at(col: c_int) -> size_t {
 ///
 /// `start` of -1 means nothing was touched, matching the sentinel the
 /// original carries through this whole function.
+#[derive(Debug)]
 struct Dirty {
     start: c_int,
     end: c_int,
 }
 
 /// The columns of a line that hold content, and how far the rest is cleared.
+#[derive(Debug)]
 pub struct LineSpan {
     /// First column with content.
     pub col: c_int,
@@ -114,6 +116,7 @@ pub struct LineSpan {
 }
 
 /// The two attributes [`grid_put_linebuf`] applies.
+#[derive(Debug)]
 pub struct LineAttrs {
     /// Combined into every cell of the line and of the cleared columns.
     pub bg: c_int,
@@ -451,6 +454,7 @@ fn grid_char_needs_redraw(
 }
 
 /// What [`copy_changed_cells`] wrote.
+#[derive(Debug)]
 struct Copied {
     dirty: Dirty,
     /// Whether the cell just past `endcol` is the orphaned right half of a

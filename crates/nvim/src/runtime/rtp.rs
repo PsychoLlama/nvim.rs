@@ -45,6 +45,7 @@ const AFTER: &[u8] = b"after";
 /// A `NULL` from the environment and an empty value behave identically
 /// everywhere below -- both contribute nothing -- so both arrive here as an
 /// empty slice.
+#[derive(Debug)]
 struct RtpParts<'a> {
     /// `$NVIM_APPNAME`, or `nvim`: the component appended to each *home*
     /// directory and to every entry of the two dirs lists.
@@ -132,7 +133,7 @@ impl RtpParts<'_> {
 }
 
 /// Which end of an [`ENV_SEPCHAR`]-separated list to start from.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Order {
     Forward,
     Reverse,

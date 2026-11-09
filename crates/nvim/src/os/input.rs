@@ -172,7 +172,7 @@ fn try_read(buf: &mut [u8], tb_change_cnt: c_int) -> Option<usize> {
 }
 
 /// Which event queue [`input_get`] processes while it waits.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum InputEvents {
     /// None: only input wakes the wait.
     None,
@@ -680,7 +680,7 @@ pub fn input_enqueue_mouse(code: c_int, modifier: uint8_t, grid: c_int, row: c_i
 ///
 /// The third value is EOF, not "unknown", so this is an enumeration and not
 /// a tri-state boolean.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum InputAvail {
     /// Input or events are available.
     Ready,

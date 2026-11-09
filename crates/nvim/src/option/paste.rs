@@ -42,7 +42,7 @@ use super::didset_options_sctx;
 /// already on"; they are only ever read and written together, on the two
 /// transitions, and a saved value means nothing without `on` to say whether
 /// it was ever taken. One record says that.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct PasteSave {
     /// Whether 'paste' was on last time the callback ran — which is what
     /// makes setting 'paste' twice keep the first save.

@@ -19,6 +19,7 @@ use std::io::{BufRead, BufReader, ErrorKind};
 
 /// C's `fgets` over a reader: the same chunking, so that a long line is cut
 /// where upstream cuts it.
+#[derive(Debug)]
 pub(crate) struct Fgets<R = BufReader<File>> {
     reader: R,
     /// A read failed with something other than an interrupt: `ferror()`.

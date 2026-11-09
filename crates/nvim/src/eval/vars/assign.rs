@@ -86,7 +86,7 @@ fn ends_target(endchars: Option<&[u8]>, text: &[u8], at: usize) -> bool {
 }
 
 /// What [`skip_var_list`] found.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct VarList {
     /// Where the target, or the `[...]` of them, ends.
     pub(crate) end: usize,

@@ -26,6 +26,7 @@ use core::ffi::c_int;
 pub const CSI_MAX_PARAMS: usize = 16;
 
 /// A parsed control sequence.
+#[derive(Debug)]
 pub struct CsiSeq {
     /// One entry per parameter: its byte range within the parsed slice, or
     /// `None` for an omitted parameter (`CSI 1;;3 m`).

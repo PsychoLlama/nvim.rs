@@ -29,6 +29,7 @@ use crate::mbyte::{class_in, utf_fold, utf_iscomposing_legacy};
 use crate::regexp::{NFA_TOO_EXPENSIVE, PimResult, RegSubs, Rex, reg_prev_class};
 
 /// Where a thread's state leaves it.
+#[derive(Debug)]
 pub(crate) enum Step<'p> {
     /// Nothing further: the thread does not survive this character.
     Dead,
@@ -83,6 +84,7 @@ impl<'p> Step<'p> {
 
 /// The state of the match this step belongs to, for the arms that run a
 /// sub-match of their own.
+#[derive(Debug)]
 pub(crate) struct Run<'a, 'p> {
     pub(crate) prog: &'p NfaRegProg,
     /// Where a successful match leaves its captures.

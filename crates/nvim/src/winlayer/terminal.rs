@@ -37,7 +37,7 @@ use crate::terminal::state::Terminal;
 use super::Buf;
 
 /// A live terminal.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct Term(NonNull<Terminal>);
 
 impl Deref for Term {

@@ -58,6 +58,7 @@ use super::lastmark;
 /// every link followed is a lookup, so SipHash would be most of its cost.
 /// Upstream matched a file's links by scanning every pair; a file crafted to
 /// collide costs no more here than that did.
+#[derive(Debug)]
 pub struct UndoStore {
     headers: IdMap<c_int, Box<UndoHeader>>,
 }
@@ -196,7 +197,7 @@ impl Buf {
 ///
 /// A walk that does not care about the difference — the undo-file writer only
 /// asks "have I written this header yet" — passes one number as both.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Marks {
     pub(crate) mark: c_int,
     pub(crate) nomark: c_int,
@@ -240,6 +241,7 @@ fn next_mark() -> c_int {
 }
 
 /// One header, as a depth-first [`TreeWalk`] arrives at it.
+#[derive(Debug)]
 pub(crate) struct Visit {
     /// The header, already stamped with the walk's `mark`.
     pub(crate) link: UndoLink,
@@ -264,6 +266,7 @@ pub(crate) struct Visit {
 /// were on arrival, not the header: the caller is free to look headers up
 /// (and change their contents) between steps. No caller relinks headers
 /// mid-walk; one that did would be steered by the links it arrived through.
+#[derive(Debug)]
 pub(crate) struct TreeWalk {
     buf: Buf,
     marks: Marks,
@@ -273,6 +276,7 @@ pub(crate) struct TreeWalk {
 }
 
 /// Where a walk stands: the header it arrived at last, and its links.
+#[derive(Debug)]
 struct Arrived {
     link: UndoLink,
     prev: UndoLink,
@@ -281,6 +285,7 @@ struct Arrived {
     next: UndoLink,
 }
 
+#[derive(Debug)]
 enum WalkState {
     Start(UndoLink),
     At(Arrived),
@@ -418,12 +423,14 @@ pub(crate) fn header_free(mut buffer: Buf, link: UndoLink) {
 }
 
 /// The iterator [`Buf::header_chain`] returns.
+#[derive(Debug)]
 pub(crate) struct HeaderChain {
     buf: Buf,
     state: ChainState,
     step: fn(&UndoHeader) -> UndoLink,
 }
 
+#[derive(Debug)]
 enum ChainState {
     Start(UndoLink),
     At(UndoLink),

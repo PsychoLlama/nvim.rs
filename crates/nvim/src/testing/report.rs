@@ -204,7 +204,7 @@ fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> Option<(TypVal, T
 
 /// What a failed check expected: text already formatted (`True`, a range,
 /// the pattern `assert_fails()` was given), or a value to encode.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(super) enum Expected<'a> {
     Text(&'a [u8]),
     Value(&'a TypVal),

@@ -214,6 +214,7 @@ pub const SY_MAXLEN: c_int = 30;
 /// A "a word could end here" node [`find_word`](lookup::find_word) passed
 /// on its way down the tree: one past the node's index, and how far into
 /// the word it sat.
+#[derive(Debug)]
 pub(crate) struct WordEnd {
     pub len: usize,
     pub node: usize,
@@ -225,6 +226,7 @@ pub(crate) struct WordEnd {
 ///
 /// Positions in the word are offsets into [`MatchInf::word`], the text from
 /// the word's first character to the end of its string.
+#[derive(Debug)]
 pub(crate) struct MatchInf<'a> {
     /// The language table the window's entries name.
     pub langs: &'a LoadedLangs,
@@ -345,11 +347,13 @@ pub(crate) fn c_text(text: &[u8]) -> Cow<'_, CStr> {
 
 /// One `SYLLABLE` item: a short sequence of characters counting as one
 /// syllable.
+#[derive(Debug)]
 pub struct SylItem {
     pub sy_chars: Box<[u8]>,
 }
 
 /// The cookie `do_in_runtimepath` carries while loading a language.
+#[derive(Debug)]
 pub struct SpellLoad {
     /// The language name, cleared when an error is found.
     pub lang: Vec<u8>,
@@ -375,7 +379,7 @@ pub static did_set_spelltab: GlobalCell<bool> = GlobalCell::new(false);
 pub const e_format: &CStr = c"E759: Format error in spell file";
 
 /// What `z=` last replaced, and with what, for [`ex_spellrepall`].
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct SpellReplacement {
     pub(crate) from: XString,
     pub(crate) to: XString,
@@ -467,6 +471,7 @@ pub type SpellAddType = ::core::ffi::c_uint;
 /// One `REP`/`REPSAL` item: text to look for, and what to put in its
 /// place. Both ends of the format hold it — the loaded language's tables
 /// and `:mkspell`'s, whose copies the writer sorts.
+#[derive(Debug)]
 pub struct RepItem {
     pub from: Box<[u8]>,
     pub to: Box<[u8]>,
@@ -481,7 +486,7 @@ pub struct LangId(pub(crate) u32);
 
 /// One entry of a window's `'spelllang'`: a language, the region mask
 /// chosen for it, and where its sound folding and REP items come from.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct LangP {
     pub slang: LangId,
     /// The language to sound-fold with: this one, or a similarly named one
@@ -498,6 +503,7 @@ pub type SalFirst = ::core::ffi::c_int;
 /// the file stores existed to be widened, and nothing but the reader ever
 /// looked at them. `sm_rules` stays narrow because it is a run of ASCII
 /// flag characters.
+#[derive(Debug)]
 pub struct SalItem {
     /// The characters this rule matches, terminated by a `NUL`.
     pub sm_lead_w: Box<[::core::ffi::c_int]>,
@@ -510,6 +516,7 @@ pub struct SalItem {
     /// What the match is replaced by.
     pub sm_to_w: Option<Box<[::core::ffi::c_int]>>,
 }
+#[derive(Debug)]
 pub struct SpellLang {
     /// The language name, as `'spelllang'` names it; empty for a file
     /// loaded without one.
@@ -597,7 +604,7 @@ impl SpellLang {
     }
 }
 pub type SpellMoveType = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct SpellTab {
     pub st_isw: [bool; 256],
     pub st_isu: [bool; 256],

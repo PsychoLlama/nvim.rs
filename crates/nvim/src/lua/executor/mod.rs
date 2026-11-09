@@ -99,6 +99,7 @@ static in_script: SharedCell<bool> = SharedCell::new(false);
 static require_ref: GlobalCell<LuaRef> = GlobalCell::new(LUA_REFNIL);
 
 pub type LuaRetMode = ::core::ffi::c_uint;
+#[derive(Debug)]
 pub struct NluaRefState {
     pub nil_ref: LuaRef,
     pub empty_dict_ref: LuaRef,

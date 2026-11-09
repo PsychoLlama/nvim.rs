@@ -186,6 +186,7 @@ impl ExArg<'_> {
                         }
                         // Where the next command starts: in the command's own
                         // line, or in the line the last read handed back.
+                        #[derive(Debug)]
                         enum Next {
                             InCommand(usize),
                             InRead(usize),

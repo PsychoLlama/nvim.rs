@@ -38,6 +38,7 @@ use crate::types::ApiString;
 use super::set_option_value_give_err;
 
 /// 'cpoptions' held at a value until this drops. See the module docs.
+#[derive(Debug)]
 pub(crate) struct SavedCpo {
     /// What the option owned on entry.
     saved: Option<XString>,

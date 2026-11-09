@@ -32,6 +32,7 @@ use crate::message::IOSIZE;
 use crate::types::Failed;
 
 /// One call recorded by `:defer`, to be made when the function returns.
+#[derive(Debug)]
 pub struct Defer {
     /// The callee's name; emptied once the call is under way, so that a
     /// deferred call that throws cannot make this one run twice.

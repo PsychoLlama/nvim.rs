@@ -65,7 +65,7 @@ pub(crate) const NFA_THREAD_BYTES: usize = 712;
 /// The state is a reference into the running program, as upstream's was a
 /// pointer: the match loop reads it once per thread per character, and an
 /// index would cost a bounds check there.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct NfaThread<'p> {
     pub(crate) state: &'p NfaState,
     /// How many bytes a back-reference still owes before `NFA_SKIP` lets the
@@ -77,7 +77,7 @@ pub(crate) struct NfaThread<'p> {
 
 /// A lookaround postponed until what follows it has proved itself: a
 /// "postponed invisible match".
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct NfaPim<'p> {
     pub(crate) result: PimResult,
     /// The lookaround's start state. Meaningless while `result` is
@@ -114,6 +114,13 @@ pub(crate) const BLANK_SUBS: RegSubs = RegSubs {
 /// slot count 'maxmempattern' is charged for is the list's own, not the
 /// storage's capacity, so reuse cannot move E363.
 pub(crate) struct SpareLists(Cell<Vec<Vec<NfaThread<'static>>>>);
+
+/// By hand: a `Cell` of a `Vec` cannot be read through `&self`.
+impl ::core::fmt::Debug for SpareLists {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        f.debug_tuple("SpareLists").finish_non_exhaustive()
+    }
+}
 
 /// A copy of a program starts with no spare lists of its own.
 impl Clone for SpareLists {
@@ -167,6 +174,7 @@ fn relabel<'a, 'b>(mut list: Vec<NfaThread<'a>>) -> Vec<NfaThread<'b>> {
 
 /// The threads alive at one input position, in the priority order the
 /// submatch rules need: the first thread to reach `NFA_MATCH` wins.
+#[derive(Debug)]
 pub(crate) struct ThreadList<'t, 'p> {
     /// The slots that have ever been used. Everything below `n` is live;
     /// everything from `n` to the end is a slot a previous character left
@@ -481,6 +489,7 @@ fn walk<'p>(
 }
 
 /// What [`place`] decided about a state.
+#[derive(Debug)]
 enum Place {
     /// It is on the list now.
     Added,
@@ -622,6 +631,7 @@ fn slot_of(c: NfaOp, open: bool) -> (usize, bool) {
 /// buffer match's opening bracket *also* marks the end unset on the way in,
 /// so it owes both ends back, where a string match's leaves the end for
 /// whatever the walk inside the group records.
+#[derive(Debug)]
 enum SavedSlot {
     /// A buffer match's slot, both ends of it.
     Whole(Capture),
@@ -661,6 +671,7 @@ impl SavedSlot {
 /// What an opening bracket has to put back when the walk comes out of it:
 /// either the slot's own snapshot, or — when the slot was past `in_use` —
 /// the count itself.
+#[derive(Debug)]
 enum Saved {
     Slot(SavedSlot),
     InUse(c_int),

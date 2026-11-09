@@ -37,6 +37,7 @@ use std::path::PathBuf;
 
 /// The editor lock, held for the test, with `'wildoptions'` and
 /// `'wildignorecase'` as a test found them put back on drop.
+#[derive(Debug)]
 struct Fixture {
     window: Win,
     buffer: Buf,
@@ -420,6 +421,7 @@ fn expand_one_walks_the_matches() {
 
 /// A scratch directory under the system's temporary one, removed on drop,
 /// with the options a file expansion reads given values for as long.
+#[derive(Debug)]
 struct Scratch(PathBuf, Option<XString>, Option<XString>);
 
 impl Scratch {

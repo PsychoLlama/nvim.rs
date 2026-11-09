@@ -33,6 +33,7 @@ use crate::memline::state::MemLine;
 /// The pointer-block walk mutates this as it climbs — once a pointer block
 /// itself splits, *it* becomes the left/right pair its own parent must
 /// describe.
+#[derive(Debug)]
 struct SplitBlocks {
     bnum_left: BlockNr,
     bnum_right: BlockNr,
@@ -51,6 +52,7 @@ struct SplitBlocks {
 }
 
 /// The line being inserted, as `ml_append_int` was handed it.
+#[derive(Debug)]
 struct NewLine<'a> {
     /// The text, the last byte of which is the NUL standing for the line's
     /// newline.
@@ -77,6 +79,7 @@ impl<'a> NewLine<'a> {
 }
 
 /// Where in the data block `ml_find_line` returned the new line goes.
+#[derive(Debug)]
 struct InsertAt {
     /// Index of the line being appended *after*, within the block. Negative
     /// means "in front of the block's first line", which is the `lnum == 0`

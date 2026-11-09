@@ -26,6 +26,7 @@ use crate::highlight::state::{normal_bg, normal_fg};
 use super::{kColorIdxBg, kColorIdxFg, kColorIdxHex, kColorIdxNone};
 
 /// One entry of X11's colour table.
+#[derive(Debug)]
 pub(crate) struct ColorName {
     pub name: &'static CStr,
     pub color: RgbValue,

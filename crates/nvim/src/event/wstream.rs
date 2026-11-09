@@ -38,6 +38,7 @@ const DEFAULT_MAXMEM: size_t = 1024 * 1024 * 2000;
 
 /// One queued `uv_write`. libuv is handed `&uv_req` and finds its way back
 /// through that request's `data` field, which points at the whole `WRequest`.
+#[derive(Debug)]
 struct WRequest {
     stream: *mut Stream,
     /// The payload, held until libuv is done reading it.
@@ -195,10 +196,11 @@ unsafe extern "C" fn write_cb(req: *mut uv_write_t, status: c_int) {
 ///
 /// Cloning takes a reference and dropping gives one up; the last frees the
 /// bytes, back onto the block pool's reuse list when they are a block's size.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct SharedBuffer(Rc<Payload>);
 
 /// The bytes a [`SharedBuffer`] shares.
+#[derive(Debug)]
 struct Payload(Vec<u8>);
 
 impl Drop for Payload {

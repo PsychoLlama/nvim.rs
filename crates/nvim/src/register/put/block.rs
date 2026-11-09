@@ -29,6 +29,7 @@ use crate::ascii::NUL;
 use crate::register::*;
 
 /// Where in one buffer line the block goes, measured by [`Put::blockwise`].
+#[derive(Debug)]
 struct Landing {
     /// Byte offset in the line where the insert starts.
     textcol: ColNr,

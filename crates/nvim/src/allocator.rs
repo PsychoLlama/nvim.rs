@@ -51,6 +51,7 @@ use core::alloc::{GlobalAlloc, Layout};
 /// `posix_memalign`; `free` accepts pointers from either source.
 const MALLOC_ALIGN: usize = align_of::<libc::max_align_t>();
 
+#[derive(Debug)]
 struct LibcAllocator;
 
 /// Uninitialized block of `size` bytes at `align`, null on failure.
@@ -170,6 +171,7 @@ static GLOBAL: LibcAllocator = LibcAllocator;
 /// installs, so it is interchangeable with `xmalloc` memory in every way but
 /// one: releasing it with `xfree` would skip `T`'s destructor. Dropping the
 /// `Owned` is the only correct way to give it back.
+#[derive(Debug)]
 pub(crate) struct Owned<T> {
     /// The address `Box::into_raw` answered. Never null, never reassigned.
     addr: *mut T,
@@ -209,6 +211,7 @@ mod tests {
     use super::Owned;
 
     /// Counts its own drops, so a test can say when the allocation went back.
+    #[derive(Debug)]
     struct Tracked<'a>(&'a Cell<u32>);
 
     impl Drop for Tracked<'_> {
@@ -260,6 +263,7 @@ mod tests {
     /// it from `just miri` rather than from a user.
     #[test]
     fn an_address_survives_the_table_changing_and_the_object_leaving_it() {
+        #[derive(Debug)]
         struct Object<'a> {
             drops: &'a Cell<u32>,
             mark: u64,

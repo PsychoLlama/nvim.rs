@@ -43,7 +43,7 @@ use std::rc::Rc;
 /// `do_in_path` as cookies, purely because three distinct addresses were the
 /// cheapest three distinct tokens available. The closures carry the value
 /// itself.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum PackWork {
     /// `:packadd!` — add the directory to 'runtimepath' and stop there.
     AddDir,
@@ -92,6 +92,7 @@ fn package_root(fname: &CStr) -> XString {
 
 /// Where in 'runtimepath' a package and its `after/` directory belong, as
 /// byte offsets into the copy of the option they were found in.
+#[derive(Debug)]
 struct InsertPoints {
     /// The entry to insert before; the option's length when the package
     /// belongs at the end.
@@ -150,6 +151,7 @@ fn find_insert_points(rtp: &[u8], ffname: &[u8]) -> InsertPoints {
 }
 
 /// The new 'runtimepath', and where the two new entries landed in it.
+#[derive(Debug)]
 struct Spliced {
     rtp: Vec<u8>,
     /// Byte offset of the package directory.

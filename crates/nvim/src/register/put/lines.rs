@@ -391,6 +391,7 @@ impl Put {
 }
 
 /// What `PUT_FIXINDENT` carries from one line to the next.
+#[derive(Debug)]
 struct FixIndent {
     /// The indent of the line the put started on, which the whole block is
     /// moved to.

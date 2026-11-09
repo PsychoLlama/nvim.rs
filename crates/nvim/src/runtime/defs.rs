@@ -10,7 +10,7 @@ use crate::eval::typval::ScopeDictItem;
 use crate::types::{LineNr, ProfTime, ScriptCtx, UserFunc};
 
 /// One frame of the execution stack -- see `runtime::estack`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EStack {
     pub es_lnum: LineNr,
     pub(crate) es_name: FrameName,
@@ -36,7 +36,7 @@ impl EStack {
 
 /// What a frame is called, owned by the frame -- upstream's `es_name`, a
 /// pointer into whatever the pusher kept alive.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub(crate) enum FrameName {
     /// No name: the bottom frame, an autocommand frame between commands.
     #[default]
@@ -62,7 +62,7 @@ impl FrameName {
 /// Upstream is a four-armed union keyed by `es_type`; only these two arms
 /// were ever read, and an autocommand frame whose walk has run out holds
 /// [`EstackInfo::None`] rather than a null pointer under an `aucmd` tag.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum EstackInfo {
     /// Nothing beyond the frame's name: the bottom frame, a script, a
     /// modeline, an exception, `--cmd` arguments, and so on.
@@ -96,13 +96,14 @@ pub type EStackArg = ::core::ffi::c_uint;
 pub type EStackType = ::core::ffi::c_uint;
 /// Per-line counters of a profiled script, the element type of
 /// [`ScriptItem::sn_prl_ga`].
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub(crate) struct SnPrl {
     pub(crate) snp_count: ::core::ffi::c_int,
     pub(crate) sn_prl_total: ProfTime,
     pub(crate) sn_prl_self: ProfTime,
 }
 
+#[derive(Debug)]
 pub struct ScriptItem {
     pub sn_vars: Option<Box<ScriptVar>>,
     /// The script's resolved file name; `None` for an anonymous chunk.
@@ -159,6 +160,7 @@ impl Default for ScriptItem {
 }
 /// A script's `s:` scope: the entry a bare `s:` resolves to, whose value is
 /// the scope's dictionary.
+#[derive(Debug)]
 pub struct ScriptVar {
     pub sv_var: ScopeDictItem,
 }

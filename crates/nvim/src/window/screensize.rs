@@ -178,6 +178,7 @@ fn new_dict() -> DictRef {
 /// What [`scan_windows`] is collecting on this pass: the counts and first
 /// windows `may_trigger_win_scrolled_resized` needs, the window list
 /// `WinResized` reports, or the per-window dictionary `WinScrolled` does.
+#[derive(Debug)]
 enum Scan<'a> {
     /// The first pass: how many windows changed size, and the first window of
     /// each kind.
@@ -266,6 +267,7 @@ fn scan_windows(what: &mut Scan) {
 }
 
 /// The window whose id and buffer an event is reported against.
+#[derive(Debug)]
 struct Subject {
     winid: CString,
     bufref: BufRef,

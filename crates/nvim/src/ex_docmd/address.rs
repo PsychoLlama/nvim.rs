@@ -643,6 +643,7 @@ pub(crate) fn get_address(
 /// counts from 1 for relative tabs and from 0 for the other two. The
 /// transpile wrote the three tables out separately and it is worth keeping
 /// them apart.
+#[derive(Debug)]
 enum Addr {
     /// Use this line number.
     At(LineNr),

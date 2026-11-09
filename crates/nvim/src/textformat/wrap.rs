@@ -55,6 +55,7 @@ use crate::types::ColNr;
 /// These are upstream's three ways out of the search loop's body: `break`,
 /// `continue`, and falling off the end -- which steps back one character
 /// before going round again.
+#[derive(Debug)]
 enum Step {
     /// Stop searching; whatever `foundcol` holds is the answer.
     Stop,
@@ -69,6 +70,7 @@ enum Step {
 /// The cursor itself is the walk's position -- upstream moves it and every
 /// character test reads it -- so this holds only what the walk decides and
 /// what it was told.
+#[derive(Debug)]
 struct BreakSearch {
     /// The cursor column the search started from.
     startcol: c_int,

@@ -77,6 +77,7 @@ fn matches_line(regmatch: &mut RegMMatch, lnum: LineNr) -> bool {
 }
 
 /// The head of a `:global` argument, parsed.
+#[derive(Debug)]
 struct GlobalPat {
     /// The pattern text, copied out of the line.  Empty for the `\/`, `\?`
     /// and `\&` forms, which take the remembered pattern that `which_pat`

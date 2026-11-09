@@ -196,6 +196,7 @@ pub fn do_source_str(text: &CStr, traceback_name: &CStr) {
 ///
 /// The C asks this with two null checks in seven separate places; naming it
 /// is what makes the stages below readable.
+#[derive(Debug)]
 enum Origin<'a, 'e> {
     /// The current buffer, over the command's range; `ex_lua` sources it as
     /// Lua regardless of what it looks like.
@@ -208,6 +209,7 @@ enum Origin<'a, 'e> {
 }
 
 /// One call into [`do_source_ext`], minus the cookie it fills in.
+#[derive(Debug)]
 struct SourceRequest<'a, 'e> {
     origin: Origin<'a, 'e>,
     /// The name as the caller spelled it -- messages only; the resolved name

@@ -11,6 +11,7 @@ use crate::types::{LineNr, TypVal};
 
 /// What [`enter_cleanup`](crate::ex_eval::enter_cleanup) parked for
 /// [`leave_cleanup`](crate::ex_eval::leave_cleanup) to restore.
+#[derive(Debug)]
 pub(crate) struct Cleanup {
     pub pending: ::core::ffi::c_int,
     pub(crate) exception: Option<ExcId>,
@@ -23,7 +24,7 @@ pub(crate) const COND_STACK_DEPTH: usize = 50;
 /// value a `:return` carries, which the level owns, or the exception, which
 /// the exception table owns. Upstream's union of two pointer arrays, with
 /// its tag made explicit.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) enum Pend {
     #[default]
     None,
@@ -38,6 +39,7 @@ pub(crate) enum Pend {
 /// each array is indexed by level, and `idx` is the innermost, -1 when none
 /// is open. A stack is reached by its [`CondId`] through the condition-stack
 /// table, which keeps the ones not in use for the next command line.
+#[derive(Debug)]
 pub(crate) struct CondStack {
     /// What each level is and how it stands.
     pub(crate) flags: [crate::ex_eval::CsFlags; COND_STACK_DEPTH],
@@ -166,6 +168,7 @@ impl CondStack {
 
 /// The parts of a condition stack the command loop reads between commands:
 /// all that changes them is a command, so the loop asks once after each.
+#[derive(Debug)]
 pub(crate) struct CondSummary {
     pub(crate) idx: ::core::ffi::c_int,
     pub(crate) loop_level: ::core::ffi::c_int,
@@ -189,6 +192,7 @@ impl CondSummary {
 pub(crate) type CondId = crate::id_table::TableId<CondStack>;
 
 pub(crate) type ExceptType = ::core::ffi::c_uint;
+#[derive(Debug)]
 pub(crate) struct ExceptionState {
     pub(crate) estate_current_exception: Option<ExcId>,
     pub estate_did_throw: bool,
@@ -198,6 +202,7 @@ pub(crate) struct ExceptionState {
 }
 
 /// One error message an error exception may be built from.
+#[derive(Debug)]
 pub(crate) struct ErrorMsg {
     pub(crate) msg: crate::memory::XString,
     /// The script it came from, when there was one.
@@ -209,7 +214,7 @@ pub(crate) struct ErrorMsg {
 /// The error messages one command gave on its way to becoming an error
 /// exception: upstream's `msglist_T` chain, plus where in it the exception
 /// value starts (the head's `throw_msg`) as an entry and a byte offset.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct ErrorMsgs {
     pub(crate) entries: Vec<ErrorMsg>,
     pub(crate) throw_at: (usize, usize),
@@ -225,6 +230,7 @@ impl ErrorMsgs {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct Exception {
     pub type_0: ExceptType,
     /// What a `:catch` pattern is matched against: `v:exception`.

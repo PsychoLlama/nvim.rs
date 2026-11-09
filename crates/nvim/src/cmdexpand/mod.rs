@@ -158,7 +158,7 @@ crate::flag_set! {
 }
 /// Which of the `:breakadd` family's arguments to offer: upstream's
 /// `EXP_BREAKPT_*`.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum BreakptWhat {
     /// `:breakadd`: all four.
     Add,
@@ -195,7 +195,7 @@ static compl_selected: GlobalCell<c_int> = GlobalCell::new(0);
 static cmdline_orig: GlobalCell<Option<XString>> = GlobalCell::new(None);
 /// How much of `:filetype` has already been typed, and so which of its
 /// arguments are still worth offering -- upstream's `EXP_FILETYPECMD_*`.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum FiletypeWhat {
     /// Nothing after `:filetype`.
     All,
@@ -211,6 +211,7 @@ static filetype_expand_what: GlobalCell<FiletypeWhat> = GlobalCell::new(Filetype
 static breakpt_expand_what: GlobalCell<BreakptWhat> = GlobalCell::new(BreakptWhat::Add);
 
 /// A match `fuzzy_match_str` scored, numbered in the order it was found.
+#[derive(Debug)]
 pub(crate) struct Scored {
     pub(crate) text: XString,
     pub(crate) score: c_int,

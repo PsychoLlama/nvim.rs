@@ -30,6 +30,7 @@ use crate::eval::encode::{
 use crate::eval::typval_encode::{Container, ConvPath, ConvType, Flow, TypvalSink, encode_typval};
 use crate::types::{Float, TypVal};
 
+#[derive(Debug)]
 struct JsonSink<'a> {
     gap: &'a mut Vec<u8>,
 }

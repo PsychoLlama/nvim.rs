@@ -548,7 +548,7 @@ pub fn update_screen() -> Result<(), Failed> {
 
 /// The search-highlight matcher the whole redraw shares: a name for the
 /// `screen_search_hl` cell, each method one short borrow of it.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct SearchHl;
 
 impl SearchHl {

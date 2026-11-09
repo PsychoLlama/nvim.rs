@@ -25,6 +25,7 @@ pub use limit::MAX_LEN;
 
 /// A rendered character: a fixed buffer plus the number of bytes used. The
 /// buffer is NUL-terminated, because the callers hand it to C string code.
+#[derive(Debug)]
 pub struct Rendered {
     pub bytes: [u8; MAX_LEN],
     pub len: usize,

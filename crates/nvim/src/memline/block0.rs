@@ -38,6 +38,7 @@ use crate::os::users::{uname_within, username_named_within};
 use crate::path::MAXPATHL;
 
 /// Why a swap file yielded no block zero.
+#[derive(Debug)]
 pub(crate) enum NoBlock {
     CannotOpen,
     CannotRead,

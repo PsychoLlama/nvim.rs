@@ -231,7 +231,7 @@ fn forget_handle(fnum: Handle) -> Owned<Buffer> {
 /// How far [`close_buffer`] goes, once `'bufhidden'` has had its say.
 ///
 /// The three are cumulative: a wipe is a delete is an unload.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Disposition {
     unload: bool,
     del: bool,

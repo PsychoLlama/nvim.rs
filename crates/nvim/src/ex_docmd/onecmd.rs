@@ -173,6 +173,7 @@ pub(crate) fn skip_cmd(excmd: &mut ExArg) -> bool {
 /// Whatever it has to say is in the caller's `errormsg`; an empty one is a
 /// silent refusal, which is what a skipped command and a locked buffer both
 /// are. C spelled all of these `goto doend`.
+#[derive(Debug)]
 struct Refused;
 
 impl ExArg<'_> {

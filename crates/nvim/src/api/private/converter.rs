@@ -55,12 +55,14 @@ use crate::types::{
 
 /// A container the walk has opened and not yet closed: the open form of
 /// an [`Array`] or an [`ApiDict`], which freezes into one when it closes.
+#[derive(Debug)]
 enum Open {
     Array(Vec<Object>),
     Dict(DictBuilder),
 }
 
 /// The `From<&TypVal> for Object` sink: upstream's `EncodedData`.
+#[derive(Debug)]
 struct ObjectSink {
     /// The containers the walk has opened and not yet closed, innermost
     /// last. A converted value is not on it: it goes straight into the

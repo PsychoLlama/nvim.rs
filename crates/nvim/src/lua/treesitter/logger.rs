@@ -36,6 +36,7 @@ use crate::lua::stack::{Kind, Raise};
 
 /// One installed logger: the payload tree-sitter hands back to
 /// [`logger_cb`].
+#[derive(Debug)]
 pub(crate) struct Logger {
     lex: bool,
     parse: bool,
@@ -145,6 +146,7 @@ pub(crate) fn parser_get_logger(stack: &mut Stack) -> Result<c_int, Raise> {
 }
 
 /// The logger of one parse, armed for its length.
+#[derive(Debug)]
 pub(crate) struct LogScope {
     logger: Rc<Logger>,
     /// What an outer parse of the same parser had armed.

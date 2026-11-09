@@ -35,6 +35,7 @@ use std::io::{BufRead, BufReader, ErrorKind};
 const SOURCE_CHUNK: usize = 120;
 
 /// Where a script's lines come from.
+#[derive(Debug)]
 pub(crate) enum ScriptLines {
     /// Nothing: the file could not be opened (or nothing was loaded yet).
     None,
@@ -47,6 +48,7 @@ pub(crate) enum ScriptLines {
 
 /// One script being read: the reader and everything `do_cmdline` and the
 /// debugger ask about it while it runs.
+#[derive(Debug)]
 pub(crate) struct SourceCookie {
     pub(crate) lines: ScriptLines,
     /// The line read ahead to see whether it continues the current one.

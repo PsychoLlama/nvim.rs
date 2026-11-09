@@ -57,6 +57,7 @@ const HEAD_ROOM: c_int = MAPLEN + 4;
 /// Not `Copy`: `buf` and `noremap` are owned allocations. `GlobalCell::take`
 /// moves one out; `save_typeahead` and `:source!` are the two callers that
 /// do.
+#[derive(Debug)]
 pub(crate) struct TypeAhead {
     /// The bytes; the valid ones are `off..off + len`.
     buf: Vec<u8>,
@@ -143,7 +144,7 @@ static SAVED_TYPEBUF: GlobalCell<[TypeAhead; NSCRIPT as usize]> =
 ///
 /// See the module docs: every method takes its own short borrow, so nothing
 /// here can hold a reference across a call-out.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct TypeAheadRef(&'static GlobalCell<TypeAhead>);
 
 /// The typeahead buffer.
@@ -157,6 +158,7 @@ const COPY_INLINE: usize = 64;
 
 /// Bytes copied out of the typeahead: on the stack when they fit, which is
 /// every key and nearly every mapping.
+#[derive(Debug)]
 pub(crate) enum KeyBytes {
     Inline([u8; COPY_INLINE], usize),
     Heap(Vec<u8>),
@@ -710,6 +712,7 @@ mod tests {
 
     /// The typeahead is process-wide; hold the lock and start from an
     /// empty one. Dropping the answer empties it again.
+    #[derive(Debug)]
     struct Fresh(#[allow(dead_code, reason = "held for its drop")] Held);
 
     impl Fresh {

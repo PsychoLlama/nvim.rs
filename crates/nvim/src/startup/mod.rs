@@ -64,6 +64,7 @@ pub use self::exit::*;
 /// It owns its words. `argv` is the command line as the process got it, and
 /// every string field is a copy of (a tail of) one of them, so nothing here
 /// borrows from the process's own argument block.
+#[derive(Debug)]
 pub(crate) struct MainParams {
     /// The command line, `argv[0]` included.
     pub(crate) argv: Vec<CString>,

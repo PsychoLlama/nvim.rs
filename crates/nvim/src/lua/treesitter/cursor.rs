@@ -34,7 +34,7 @@ use crate::lua::stack::{Kind, Raise};
 use crate::lua_functions;
 
 /// A query cursor, as its userdatum owns it. Empty once collected.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct QueryCursor(Option<NonNull<TSQueryCursor>>);
 
 impl Drop for QueryCursor {
@@ -51,7 +51,7 @@ impl Userdata for QueryCursor {
 }
 
 /// A match, as its userdatum holds it: its captures are the cursor's.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Match(TSQueryMatch);
 
 impl Default for Match {

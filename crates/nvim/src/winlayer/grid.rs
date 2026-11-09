@@ -34,7 +34,7 @@ use crate::grid::defs::{GridView, ScreenGrid};
 
 /// A live grid, named by address rather than borrowed. See the module docs
 /// for why nothing in the draw path may hold a `&mut ScreenGrid`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct GridRef(*mut ScreenGrid);
 
 impl GridRef {

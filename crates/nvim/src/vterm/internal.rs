@@ -24,6 +24,7 @@ use crate::vterm::types::VTermColor;
 use core::mem::offset_of;
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct VTermEncoding {
     pub init: Option<unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> ()>,
     pub decode: Option<
@@ -41,14 +42,14 @@ pub struct VTermEncoding {
 }
 /// One character-set slot: which set, and the scratch its decoder keeps
 /// between calls.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VTermEncodingInstance {
     pub enc: Option<::core::ptr::NonNull<VTermEncoding>>,
     pub data: [u8; 16],
 }
 pub type VTermEncodingType = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VTermKeyEncodingFlags {
     pub disambiguate_report_events_report_alternate_report_all_keys_report_associated: [u8; 1],
@@ -63,12 +64,13 @@ crate::bitfield_accessors! {
     }
 }
 #[repr(C)]
+#[derive(Debug)]
 pub struct VTermKeyEncodingStack {
     pub items: [VTermKeyEncodingFlags; 16],
     pub size: uint8_t,
 }
 pub type VTermParserState = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VTermPen {
     pub fg: VTermColor,

@@ -34,7 +34,7 @@ use core::ffi::{CStr, c_int};
 const STAT_BUF_LEN: usize = SEARCH_STAT_BUF_LEN as usize;
 
 /// What `[N/M]` and `searchcount()` report.
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Stat {
     /// Which match the cursor is on, 1-based; -1 when the count was
     /// interrupted, 0 when there is nothing to report.
@@ -56,7 +56,7 @@ struct Stat {
 /// nothing has been counted yet. The pattern, the buffer and the buffer's
 /// changedtick are remembered beside the numbers — if any of them moved,
 /// the numbers are stale and the count starts again.
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Counted {
     at: Pos,
     cur: c_int,

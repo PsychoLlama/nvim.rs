@@ -423,7 +423,7 @@ pub(super) fn soundfold_find(slang: &SpellLang, word: &[u8]) -> Option<c_int> {
 }
 
 /// One level of the keep-case search.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 struct KeepCapLevel {
     /// Tree node this level starts from.
     arridx: usize,

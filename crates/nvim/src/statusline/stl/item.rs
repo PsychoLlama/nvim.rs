@@ -38,6 +38,7 @@ use crate::statusline::defs::StlOpt;
 use crate::types::Vv;
 
 /// What carries across items while the format is walked.
+#[derive(Debug)]
 struct State {
     /// How many `%(` are open.
     groupdepth: c_int,
@@ -52,6 +53,7 @@ struct State {
 }
 
 /// What one item evaluated to, apart from its text.
+#[derive(Debug)]
 struct Value {
     /// The number to print, or negative for "no number".
     num: c_int,
@@ -83,6 +85,7 @@ impl Default for Value {
 }
 
 /// What a `%{}` item did.
+#[derive(Debug)]
 enum Expr {
     /// It produced a value; the text, if any, is in the scratch buffer.
     Value { num: c_int, itemisflag: bool },

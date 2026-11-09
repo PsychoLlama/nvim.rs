@@ -45,6 +45,7 @@ pub(crate) enum DiffStyle {
 /// the block at `at` has *not* yet had `idx_new`'s range written into it,
 /// which is what tells the merge whether it is looking at a block from an
 /// earlier pass or one it just made.
+#[derive(Debug)]
 struct Walk {
     at: usize,
     notset: bool,
@@ -210,6 +211,7 @@ fn process_hunk(
 
 /// Where a run of hunks comes from: the internal engine's answer, or an
 /// external diff's output file.
+#[derive(Debug)]
 pub(crate) enum HunkSource<'a> {
     Internal(core::slice::Iter<'a, DiffHunk>),
     External(Fgets, DiffStyle),

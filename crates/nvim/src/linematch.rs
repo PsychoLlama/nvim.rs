@@ -45,7 +45,7 @@ const MATCH_CHAR_MAX_LEN: usize = 800;
 
 /// One cell of the tensor: the best score reached here, and every
 /// equally-scored way of reaching it.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct PathNode {
     /// Total score of the paths recorded below.
     score: c_int,
@@ -193,6 +193,7 @@ fn unwrap_indexes(values: &[c_int], diff_len: &[c_int]) -> usize {
 }
 
 /// The flattened tensor, plus the inputs every step of the walk needs.
+#[derive(Debug)]
 struct Tensor<'a> {
     nodes: Vec<PathNode>,
     /// Block text of each buffer, one entry per axis.

@@ -183,6 +183,7 @@ type Table<K, V> = HashMap<K, V, BuildHasherDefault<DefaultHasher>>;
 /// An index map rather than a plain map because both directions are used: the
 /// screen has ids and wants colours, and everything that produces attributes
 /// has colours and wants an id.
+#[derive(Debug)]
 struct AttrTable {
     entries: Vec<HlEntry>,
     ids: Table<HlEntry, uint32_t>,
@@ -238,6 +239,7 @@ impl AttrTable {
 
 /// The interned URLs, by index. Same index-map shape as [`AttrTable`]: an
 /// attribute set stores the index, and the UI is sent the string.
+#[derive(Debug)]
 struct UrlTable {
     urls: Vec<CString>,
     ids: Table<CString, uint32_t>,
@@ -675,7 +677,7 @@ fn put(dict: &mut DictBuilder, key: &'static CStr, value: Object) {
     dict.insert(key, value);
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ColorItem {
     pub attr_id: ::core::ffi::c_int,
     pub link_id: ::core::ffi::c_int,
@@ -683,12 +685,12 @@ pub struct ColorItem {
     pub is_default: bool,
     pub link_global: bool,
 }
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Debug)]
 pub struct ColorKey {
     pub ns_id: ::core::ffi::c_int,
     pub syn_id: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct HlAttrs {
     pub rgb_ae_attr: HlAttrFlags,
     pub cterm_ae_attr: HlAttrFlags,
@@ -700,7 +702,7 @@ pub struct HlAttrs {
     pub hl_blend: int32_t,
     pub url: int32_t,
 }
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct HlEntry {
     pub attr: HlAttrs,
     pub kind: HlKind,

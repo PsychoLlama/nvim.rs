@@ -144,7 +144,7 @@ pub const _ISdigit: ::core::ffi::c_uint = 2048;
 /// `internal` picks the engine: the built-in one reads each side's `text`
 /// and fills `diff.hunks`; the external one (or `'diffexpr'`) reads the temp
 /// files named by each side's `fname` and writes the one `diff.fname` names.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct DiffIo {
     pub orig: DiffIn,
     pub new: DiffIn,
@@ -164,7 +164,7 @@ impl DiffIo {
         ])
     }
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct DiffOut {
     /// The temp file the external diff writes; `None` for the internal one.
     pub fname: Option<XString>,
@@ -172,7 +172,7 @@ pub struct DiffOut {
     /// through a temp file named by `fname` instead.
     pub hunks: Vec<DiffHunk>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct DiffIn {
     /// The temp file the buffer is written to; `None` for the internal
     /// engine, which reads `text`.
@@ -180,7 +180,7 @@ pub struct DiffIn {
     /// The buffer's lines as one NL-terminated memory image.
     pub text: Vec<u8>,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct DiffHunk {
     pub lnum_orig: LineNr,
     pub count_orig: ::core::ffi::c_int,
@@ -188,6 +188,7 @@ pub struct DiffHunk {
     pub count_new: ::core::ffi::c_int,
 }
 pub const MAX_DIFF_ANCHORS: ::core::ffi::c_int = 20;
+#[derive(Debug)]
 pub struct LinemapEntry {
     pub byte_start: ColNr,
     pub num_bytes: i32,

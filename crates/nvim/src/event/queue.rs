@@ -18,7 +18,7 @@ pub type QUEUE = queue;
 /// **Self-referential.** An empty queue's `next` and `prev` both point at the
 /// node itself, and a linked node's neighbours point back at *its* address, so
 /// a node is only valid where it was initialised. Not `Copy`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct queue {
     pub next: *mut queue,
     pub prev: *mut queue,

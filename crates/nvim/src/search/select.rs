@@ -28,6 +28,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 /// Where the two searches [`current_search`] runs left the match.
+#[derive(Debug)]
 struct Match {
     /// The start of the match; where `pos` ended up.
     start: Pos,

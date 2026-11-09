@@ -31,6 +31,7 @@ use crate::winlayer::{Buf, Win};
 
 /// Where the cursor should land once every entry in a header has been
 /// applied.
+#[derive(Debug)]
 struct CursorPick {
     /// The earliest line an entry actually changed: `MAXLNUM` until one
     /// does, and `-1` once the header's own saved cursor claimed the

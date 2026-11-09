@@ -51,6 +51,7 @@ use crate::types::{Refcount, ScopeType};
 /// A funccall whose scopes nothing else holds gives them back emptied, and
 /// the next call starts from them: a call then allocates nothing for its
 /// scopes, where upstream allocated nothing because it embedded them.
+#[derive(Debug)]
 pub(crate) struct FrameScopes {
     pub(crate) l_vars: DictRef,
     /// The entry `l:` evaluates to. It holds a counted reference of its own,
@@ -551,6 +552,7 @@ pub fn free_unref_funccal(copy_id: c_int, testing: c_int) -> bool {
 }
 
 /// How far a walk of the parked list goes.
+#[derive(Debug)]
 enum Sweep {
     /// Stop as soon as one has been freed: `funccal_unref` is looking for
     /// one specific funccall.

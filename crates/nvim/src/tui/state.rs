@@ -53,6 +53,7 @@ pub const KEY_BUFFER_SIZE: usize = 0x1000;
 /// strength of that, rather than re-asserting it at every call. The half of
 /// that which can be enforced rather than promised -- that what is staged
 /// really is within the buffer -- is [`Staging`]'s doing.
+#[derive(Debug)]
 pub struct TUIData {
     /// Bytes on their way to the terminal.
     pub staging: Staging,
@@ -153,6 +154,7 @@ pub struct TUIData {
 /// here straight to
 /// the terminal without bounds-checking it first, which is sound because
 /// nothing can put more in than fits.
+#[derive(Debug)]
 pub struct Staging {
     /// Boxed: 64 KiB has no business on the stack of whoever builds a TUI.
     buf: Box<[u8; BUF_SIZE]>,
@@ -237,6 +239,7 @@ impl Staging {
 }
 
 /// A rectangle of the screen, in half-open rows and columns.
+#[derive(Debug)]
 pub struct Rect {
     pub top: c_int,
     pub bot: c_int,
@@ -245,6 +248,7 @@ pub struct Rect {
 }
 
 /// Terminal modes the TUI turned on, packed so the whole set can be reset.
+#[derive(Debug)]
 pub struct TermModes {
     pub grapheme_clusters_theme_updates_resize_events: [u8; 1],
 }
@@ -261,12 +265,15 @@ pub union OutputHandle {
     pub tty: uv_tty_t,
     pub pipe: uv_pipe_t,
 }
+// Which arm is live is `TUIData::out_isatty`'s to say.
+crate::untagged_union_debug!(OutputHandle);
 
 /// Everything needed to read one terminal.
 ///
 /// It lives inside the [`TUIData`] it belongs to, and holds that one's
 /// pointer: what the terminal says about its modes and its size is the TUI's
 /// business rather than the editor's.
+#[derive(Debug)]
 pub struct TermInput {
     /// The terminal's file descriptor: this process's own stdin.
     pub in_fd: c_int,
@@ -295,6 +302,7 @@ pub struct TermInput {
 }
 
 /// What the TUI wants to be told about.
+#[derive(Debug)]
 pub struct TermInputCallbacks {
     /// Called on the next reply to a device-attributes query, once. The TUI
     /// sends such a query after resetting the terminal, so the reply is what
@@ -304,7 +312,7 @@ pub struct TermInputCallbacks {
 
 /// The extra capability strings nvim carries because terminfo has no slot
 /// for them. All are fixed sequences chosen by terminal, never parameterised.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TerminfoExt {
     pub enable_focus_reporting: Option<&'static CStr>,
     pub disable_focus_reporting: Option<&'static CStr>,

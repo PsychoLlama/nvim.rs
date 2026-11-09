@@ -47,6 +47,7 @@ use core::ffi::{CStr, c_int, c_uint};
 use core::ops::{Deref, DerefMut};
 
 /// Every stack, and what the table's owner keeps beside them.
+#[derive(Debug)]
 struct QfStacks {
     table: IdTable<QfStack>,
     /// The quickfix stack, made the first time anything asks for it.
@@ -85,7 +86,7 @@ pub(crate) fn next_list_id() -> c_uint {
 /// under a [`QuickfixBusy`], which keeps the stack from being freed — and
 /// every field access is a fresh, momentary borrow. Two are equal when they
 /// name the same stack.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct Qi {
     id: QfId,
     live: Live<QfStack>,
@@ -133,7 +134,7 @@ impl Qi {
 /// A view for the same reason as [`Qi`]. A command that ran user code
 /// re-checks the list by its id before trusting that the slot still holds
 /// the list it started on.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct Qfl {
     qi: Qi,
     idx: c_int,
@@ -179,6 +180,7 @@ fn global_id() -> QfId {
 /// While one is held, a location list stack whose last reference goes is
 /// not freed but queued, and the queue is emptied when the last hold ends —
 /// which can itself fire autocommands, as freeing a stack wipes its buffer.
+#[derive(Debug)]
 pub(crate) struct QuickfixBusy(());
 
 impl QuickfixBusy {

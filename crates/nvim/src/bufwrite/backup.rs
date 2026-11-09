@@ -53,6 +53,7 @@ const S_IFREG: uint64_t = 0o100000;
 const S_IFDIR: uint64_t = 0o40000;
 
 /// What the pre-flight learned about the file being written over.
+#[derive(Debug)]
 pub(crate) struct TargetFile {
     /// The permission bits to give the written file, or -1 when there is no
     /// existing file to copy them from.
@@ -70,6 +71,7 @@ pub(crate) struct TargetFile {
 }
 
 /// The backup a write left behind, if any.
+#[derive(Debug)]
 pub(crate) struct Backup {
     /// The backup is a *copy*; the original file is still where it was.
     /// When false the original was renamed to the backup, so putting it
@@ -773,6 +775,7 @@ mod tests {
 
     /// A scratch directory holding `f.txt` ("orig") and `f.txt~` ("backup"),
     /// either of which a case may leave out.
+    #[derive(Debug)]
     struct Files {
         dir: Scratch,
     }

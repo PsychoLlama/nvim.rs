@@ -438,7 +438,7 @@ impl ComplMatches {
 }
 
 /// How [`sort_compl_match_list`] orders the matches.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum MatchOrder {
     /// Highest fuzzy score first.
     Fuzzy,

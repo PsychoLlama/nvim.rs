@@ -243,7 +243,7 @@ static recursive: GlobalCell<bool> = GlobalCell::new(false);
 /// copy, and reads through it after later names have been copied over that
 /// buffer -- so a later name changes what an earlier region says. Kept as a
 /// place rather than a value so that the answer stays upstream's.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum RegionAt {
     /// That many bytes into the name buffer.
     Name(usize),

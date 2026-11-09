@@ -219,6 +219,7 @@ fn split_at_bang(text: &mut Vec<u8>, from: usize) -> Option<usize> {
 
 /// A temp file's name: the file is taken off disk when it goes out of scope,
 /// which is what upstream's `filterend` label does by hand.
+#[derive(Debug)]
 struct TempFile(XString);
 
 impl TempFile {
@@ -546,7 +547,7 @@ pub(crate) fn do_shell(cmd: &CStr, flags: ShellOpts) {
 }
 
 /// Which shell 'shell' names, as far as building a command line goes.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Shell {
     /// `begin; ...; end` instead of `(...)`.
     Fish,

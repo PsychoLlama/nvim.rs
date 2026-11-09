@@ -40,6 +40,7 @@ use core::ffi::CStr;
 /// on the first, so a buffer that stopped being a help buffer part-way
 /// through a walk would dereference a NULL `'tags'` copy. Deciding once
 /// is the same behaviour without the crash.)
+#[derive(Debug)]
 pub(crate) struct TagFiles {
     /// The help tags files found in `'runtimepath'`, and how many of them
     /// have been answered. `None` outside a help buffer.
@@ -54,6 +55,7 @@ pub(crate) struct TagFiles {
 }
 
 /// The help tags files, once `'runtimepath'` has been walked for them.
+#[derive(Debug)]
 struct HelpTags {
     found: Vec<Name>,
     /// How many have been answered. One past the end means the
@@ -66,7 +68,7 @@ struct HelpTags {
 /// The same context is handed back to [`FindContext::start`] for each new
 /// `'tags'` entry, which is what keeps one entry from answering a file an
 /// earlier entry already did.
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Search {
     ctx: Option<FindContext>,
     /// Whether `ctx` is set up for an entry and can be stepped.
@@ -142,6 +144,7 @@ impl TagFiles {
 }
 
 /// One `'tags'` entry, split into what [`FindContext::start`] wants.
+#[derive(Debug)]
 struct Entry {
     /// Where to start looking, wildcards and all.
     dir: Name,
