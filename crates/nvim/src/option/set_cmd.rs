@@ -27,7 +27,7 @@
 use crate::charset::Str2NrBases;
 use crate::charset::{str2nr_in, trans_characters_in};
 use crate::cstr;
-use crate::keycodes::Ctrl_V;
+use crate::keycodes::CTRL_V;
 use crate::keycodes::SpecialKey;
 use crate::keycodes::special_key_at;
 use crate::memory::ThinCString;
@@ -560,7 +560,7 @@ fn skip_to_white_escaped(arg: &[u8], mut p: usize) -> usize {
         if byte == 0 || ascii_iswhite(c_int::from(byte)) {
             return p;
         }
-        let escapes = (byte == b'\\' || c_int::from(byte) == Ctrl_V) && at(arg, p + 1) != 0;
+        let escapes = (byte == b'\\' || c_int::from(byte) == CTRL_V) && at(arg, p + 1) != 0;
         p += 1 + usize::from(escapes);
     }
 }

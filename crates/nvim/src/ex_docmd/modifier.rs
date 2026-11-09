@@ -47,7 +47,7 @@ use crate::guard::sandbox;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::message::state::{DID_EMSG, EMSG_SILENT, MSG_COL, MSG_SCROLL, MSG_SILENT};
 use crate::option::vars::{P_EI, P_VERBOSE, p_verbose};
-use crate::state::mode::exmode_active;
+use crate::state::mode::EXMODE_ACTIVE;
 
 use crate::message::redirecting;
 use crate::option::set_option_direct;
@@ -158,7 +158,7 @@ impl ExArg<'_> {
             // In Ex mode an empty line means "print the next one", which is
             // spelled by substituting a `+` command.
             if first == 0
-                && exmode_active.get()
+                && EXMODE_ACTIVE.get()
                 && self.source_kind() == SourceKind::Typed
                 && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
             {

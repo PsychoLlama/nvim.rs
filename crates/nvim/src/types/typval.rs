@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
@@ -20,8 +19,8 @@ use crate::os::libc::{int64_t, size_t, uint64_t};
 
 pub type BoolVarValue = ::core::ffi::c_uint;
 /// The two `VAR_BOOL` values: `v:false` and `v:true`.
-pub const kBoolVarFalse: BoolVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
+pub const BOOL_VAR_FALSE: BoolVarValue = 0;
+pub const BOOL_VAR_TRUE: BoolVarValue = 1;
 /// A Vimscript or Lua callable, held by whatever registered it.
 ///
 /// Neither `Copy` nor `Clone`. Whichever variant is live -- a funcref name,
@@ -77,9 +76,9 @@ impl Drop for DictWatcher {
 }
 pub type ListLenSpecials = ::core::ffi::c_int;
 /// The negative lengths `tv_list_alloc` accepts in place of a real count.
-pub const kListLenUnknown: ListLenSpecials = -1;
-pub const kListLenShouldKnow: ListLenSpecials = -2;
-pub const kListLenMayKnow: ListLenSpecials = -3;
+pub const LIST_LEN_UNKNOWN: ListLenSpecials = -1;
+pub const LIST_LEN_SHOULD_KNOW: ListLenSpecials = -2;
+pub const LIST_LEN_MAY_KNOW: ListLenSpecials = -3;
 pub type ScopeType = ::core::ffi::c_uint;
 /// `dv_scope`: whether a dict is a scope dict, and whether it is the
 /// function-local one `l:` refers to by default.
@@ -88,7 +87,7 @@ pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub type SpecialVarValue = ::core::ffi::c_uint;
 /// The only `VAR_SPECIAL` value: `v:null`.
-pub const kSpecialVarNull: SpecialVarValue = 0;
+pub const SPECIAL_VAR_NULL: SpecialVarValue = 0;
 /// `v_lock`, `dv_lock`, `lv_lock`, `bv_lock`: whether a value may be
 /// changed.
 ///

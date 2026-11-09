@@ -543,7 +543,7 @@ pub fn apply_autocmds_group(
         // Only if we are still in the same buffer.
         if Buf::current_raw() == old_curbuf && keeps_changed_flag(event) {
             if Buf::current().b_changed != ::core::ffi::c_int::from(save_changed) {
-                need_maketitle.set(true);
+                NEED_MAKETITLE.set(true);
             }
             Buf::current().b_changed = ::core::ffi::c_int::from(save_changed);
         }

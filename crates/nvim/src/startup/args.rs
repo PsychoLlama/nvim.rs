@@ -59,7 +59,7 @@ use crate::startup::{
     kOptShadafile, kOptVerbosefile, kOptWindow, readonlymode, recoverymode, silent_mode,
     stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty,
 };
-use crate::state::mode::exmode_active;
+use crate::state::mode::EXMODE_ACTIVE;
 use crate::types::{Failed, LineNr, OptInt, ScriptId, Vv};
 use std::os::fd::AsFd as _;
 
@@ -123,7 +123,7 @@ pub(crate) fn get_number_arg(word: &[u8], idx: &mut usize, def: c_int) -> c_int 
 pub(crate) fn edit_stdin(parm: &MainParams) -> bool {
     let implicit = !headless_mode.get()
         && !(embedded_mode.get() && stdin_fd.get() <= 0)
-        && (!exmode_active.get() || parm.input_is_text)
+        && (!EXMODE_ACTIVE.get() || parm.input_is_text)
         && !stdin_isatty.get()
         && parm.edit_type <= EDIT_STDIN.cast_signed()
         && parm.scriptin.is_none();
@@ -299,7 +299,7 @@ impl<'a> Scan<'a> {
             b'\0' => {
                 // A bare `-`: read the buffer from standard input, unless
                 // Ex mode already claimed it, where it means "silent".
-                if exmode_active.get() {
+                if EXMODE_ACTIVE.get() {
                     silent_mode.set(true);
                     self.parm.no_swap_file = true;
                 } else {
@@ -327,9 +327,9 @@ impl<'a> Scan<'a> {
             }
             b'D' => self.parm.debug_break_at = DEBUG_BREAK_ALL,
             b'd' => self.parm.diff_mode = true,
-            b'e' => exmode_active.set(true),
+            b'e' => EXMODE_ACTIVE.set(true),
             b'E' => {
-                exmode_active.set(true);
+                EXMODE_ACTIVE.set(true);
                 self.parm.input_is_text = true;
             }
             // `-f` meant "GUI: run in the foreground"; there is no GUI.
@@ -382,7 +382,7 @@ impl<'a> Scan<'a> {
             // `-L` is the historical spelling of `-r`.
             b'r' | b'L' => recoverymode.set(true),
             b's' => {
-                if exmode_active.get() {
+                if EXMODE_ACTIVE.get() {
                     // `-es`: silent (batch) Ex mode.
                     silent_mode.set(true);
                     self.parm.no_swap_file = true;

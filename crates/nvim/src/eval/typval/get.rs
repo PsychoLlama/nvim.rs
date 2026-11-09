@@ -54,7 +54,7 @@ pub fn tv_get_number_chk(tv: &TypVal) -> Result<VarNumber, Unconvertible> {
             let text = val.string_bytes();
             return Ok(str2nr_in(text, Str2NrBases::ALL, false).value);
         }
-        VAR_BOOL => return Ok(VarNumber::from(val.as_bool() == Some(kBoolVarTrue))),
+        VAR_BOOL => return Ok(VarNumber::from(val.as_bool() == Some(BOOL_VAR_TRUE))),
         VAR_SPECIAL => return Ok(0),
         VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_FLOAT => {
             emsg(gettext(NUM_ERRORS[val.v_type() as usize]));
@@ -167,11 +167,11 @@ impl NumBuf {
             }
             VAR_STRING => Ok(tv.string_cstr().unwrap_or(c"")),
             VAR_BOOL => {
-                let which = tv.as_bool().unwrap_or(crate::types::kBoolVarFalse);
+                let which = tv.as_bool().unwrap_or(crate::types::BOOL_VAR_FALSE);
                 Ok(self.copied(BOOL_VAR_NAMES[which as usize]))
             }
             VAR_SPECIAL => {
-                let which = tv.as_special().unwrap_or(kSpecialVarNull);
+                let which = tv.as_special().unwrap_or(SPECIAL_VAR_NULL);
                 Ok(self.copied(SPECIAL_VAR_NAMES[which as usize]))
             }
             VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
@@ -248,8 +248,8 @@ pub fn tv2bool(tv: &TypVal) -> bool {
         VAR_FUNC | VAR_STRING => tv.text_or_name().is_some_and(|text| !text.is_empty()),
         VAR_LIST => list_len(tv.list_ref()) > 0,
         VAR_DICT => tv.dict_ref().is_some_and(|d| d.dv_hashtab.ht_used > 0),
-        VAR_BOOL => tv.as_bool() == Some(kBoolVarTrue),
-        VAR_SPECIAL => tv.as_special().is_some_and(|s| s != kSpecialVarNull),
+        VAR_BOOL => tv.as_bool() == Some(BOOL_VAR_TRUE),
+        VAR_SPECIAL => tv.as_special().is_some_and(|s| s != SPECIAL_VAR_NULL),
         VAR_BLOB => tv.blob_ref().is_some_and(|b| !b.is_empty()),
         _ => false,
     }

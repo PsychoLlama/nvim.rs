@@ -40,7 +40,7 @@ use crate::winlayer::Win;
 /// The width `:popup` asks for even when the entries are narrower.
 const PUM_POPUP_MIN_WIDTH: c_int = 20;
 
-/// Point `pum_selected` at the item under the mouse, or clear it.
+/// Point `PUM_SELECTED` at the item under the mouse, or clear it.
 ///
 /// Three cases: the mouse is over the menu's own grid (the row is the item,
 /// less the top border), it is over the grid the menu is anchored to (the row
@@ -56,7 +56,7 @@ pub(crate) fn pum_select_mouse_pos() {
         // On the menu itself. A box border (width 2) takes the top row.
         let border_offset = c_int::from(pum_border_width() == 2);
         let item = pos.row - border_offset;
-        pum_selected.set(if item >= 0 && item < pum_height.get() {
+        PUM_SELECTED.set(if item >= 0 && item < PUM_HEIGHT.get() {
             item
         } else {
             -1
@@ -64,17 +64,17 @@ pub(crate) fn pum_select_mouse_pos() {
         return;
     }
 
-    if pos.grid != pum_anchor_grid.get()
-        || pos.col < pum_left_col.get() - pum_win_col_offset.get()
-        || pos.col >= pum_right_col.get() - pum_win_col_offset.get()
+    if pos.grid != PUM_ANCHOR_GRID.get()
+        || pos.col < PUM_LEFT_COL.get() - PUM_WIN_COL_OFFSET.get()
+        || pos.col >= PUM_RIGHT_COL.get() - PUM_WIN_COL_OFFSET.get()
     {
-        pum_selected.set(-1);
+        PUM_SELECTED.set(-1);
         return;
     }
 
-    let idx = pos.row - (pum_row.get() - pum_win_row_offset.get());
-    if idx < 0 || idx >= pum_height.get() {
-        pum_selected.set(-1);
+    let idx = pos.row - (PUM_ROW.get() - PUM_WIN_ROW_OFFSET.get());
+    if idx < 0 || idx >= PUM_HEIGHT.get() {
+        PUM_SELECTED.set(-1);
         return;
     }
     let empty = pum_items()[usize::try_from(idx).unwrap_or(usize::MAX)]
@@ -83,7 +83,7 @@ pub(crate) fn pum_select_mouse_pos() {
     if !empty {
         // A separator has empty text and cannot be selected; the selection
         // stays where it was.
-        pum_selected.set(idx);
+        PUM_SELECTED.set(idx);
     }
 }
 
@@ -110,7 +110,7 @@ fn pum_execute_menu(menu: MenuId, mode: c_int) {
             .filter(|mp| mp.modes & mp.enabled & mode != 0);
         enabled
             .enumerate()
-            .find(|(idx, _)| c_int::try_from(*idx).is_ok_and(|idx| idx == pum_selected.get()))
+            .find(|(idx, _)| c_int::try_from(*idx).is_ok_and(|idx| idx == PUM_SELECTED.get()))
             .map(|(_, mp)| mp.id)
     })
     .flatten();
@@ -155,9 +155,9 @@ fn pum_menu_key(c: Key, items: &[CString]) -> MenuStep {
         Key::CAR | Key::NL => MenuStep::Execute,
         _ if c.is('k') || c == SpecialKey::Up || c == SpecialKey::Mouseup => {
             // Previous selectable item; separators are skipped over.
-            while pum_selected.get() > 0 {
-                pum_selected.set(pum_selected.get() - 1);
-                if !items[usize::try_from(pum_selected.get()).unwrap_or(usize::MAX)]
+            while PUM_SELECTED.get() > 0 {
+                PUM_SELECTED.set(PUM_SELECTED.get() - 1);
+                if !items[usize::try_from(PUM_SELECTED.get()).unwrap_or(usize::MAX)]
                     .as_bytes()
                     .is_empty()
                 {
@@ -167,9 +167,9 @@ fn pum_menu_key(c: Key, items: &[CString]) -> MenuStep {
             MenuStep::Continue
         }
         _ if c.is('j') || c == SpecialKey::Down || c == SpecialKey::Mousedown => {
-            while pum_selected.get() < pum_size.get() - 1 {
-                pum_selected.set(pum_selected.get() + 1);
-                if !items[usize::try_from(pum_selected.get()).unwrap_or(usize::MAX)]
+            while PUM_SELECTED.get() < PUM_SIZE.get() - 1 {
+                PUM_SELECTED.set(PUM_SELECTED.get() + 1);
+                if !items[usize::try_from(PUM_SELECTED.get()).unwrap_or(usize::MAX)]
                     .as_bytes()
                     .is_empty()
                 {
@@ -197,7 +197,7 @@ fn pum_menu_key(c: Key, items: &[CString]) -> MenuStep {
             // A left click always closes; a right release only closes when
             // it landed on an item.
             pum_select_mouse_pos();
-            if pum_selected.get() >= 0 {
+            if PUM_SELECTED.get() >= 0 {
                 MenuStep::Execute
             } else if c == SpecialKey::Rightrelease {
                 MenuStep::Continue
@@ -218,7 +218,7 @@ pub(crate) fn pum_show_popupmenu(menu: MenuId) {
     let entries = with_menu(menu, |menu| pum_menu_entries(menu, mode)).unwrap_or_default();
 
     // "popup Edit" with only Terminal-mode entries lands here.
-    pum_size.set(c_int::try_from(entries.len()).unwrap_or(c_int::MAX));
+    PUM_SIZE.set(c_int::try_from(entries.len()).unwrap_or(c_int::MAX));
     if entries.is_empty() {
         emsg(gettext(E_MENU_ONLY_EXISTS_IN_ANOTHER_MODE));
         return;
@@ -231,15 +231,15 @@ pub(crate) fn pum_show_popupmenu(menu: MenuId) {
             ..Default::default()
         })
         .collect();
-    pum_array.set(Some(array));
+    PUM_ARRAY.set(Some(array));
     pum_compute_size();
-    pum_scrollbar.set(0);
-    pum_height.set(pum_size.get());
-    pum_rl.set(Win::current().w_onebuf_opt.wo_rl != 0);
+    PUM_SCROLLBAR.set(0);
+    PUM_HEIGHT.set(PUM_SIZE.get());
+    PUM_RL.set(Win::current().w_onebuf_opt.wo_rl != 0);
     pum_position_at_mouse(PUM_POPUP_MIN_WIDTH);
 
-    pum_selected.set(-1);
-    pum_first.set(0);
+    PUM_SELECTED.set(-1);
+    PUM_FIRST.set(0);
     if !p_mousemev() {
         // Pretend 'mousemoveevent' is set so the menu can follow the
         // pointer, and put it back afterwards.
@@ -247,17 +247,17 @@ pub(crate) fn pum_show_popupmenu(menu: MenuId) {
     }
 
     loop {
-        pum_is_visible.set(true);
-        pum_is_drawn.set(true);
+        PUM_IS_VISIBLE.set(true);
+        PUM_IS_DRAWN.set(true);
         // Above the cmdline area: #23275.
         let mut grid = pum_grid_ref();
-        grid.zindex = kZIndexCmdlinePopupMenu;
+        grid.zindex = Z_INDEX_CMDLINE_POPUP_MENU;
         pum_redraw();
         setcursor_mayforce(Win::current(), true);
         let c = vgetc();
         // A callback or <expr> mapping run from `vgetc` may have taken the
         // menu down under us.
-        if pum_array.with(Option::is_none) {
+        if PUM_ARRAY.with(Option::is_none) {
             break;
         }
         match pum_menu_key(c, &entries) {
@@ -286,8 +286,8 @@ pub fn pum_make_popup(path_name: &CStr, use_mouse_pos: c_int) {
     if use_mouse_pos == 0 {
         // Put the mouse where the cursor is, so the menu pops up there.
         let win = Win::current();
-        mouse_row.set(win.w_grid.row_offset + win.w_wrow);
-        mouse_col.set(
+        MOUSE_ROW.set(win.w_grid.row_offset + win.w_wrow);
+        MOUSE_COL.set(
             win.w_grid.col_offset
                 + if win.w_onebuf_opt.wo_rl != 0 {
                     win.w_view_width - win.w_wcol - 1
@@ -295,17 +295,17 @@ pub fn pum_make_popup(path_name: &CStr, use_mouse_pos: c_int) {
                     win.w_wcol
                 },
         );
-        if ui_has(kUIMultigrid) {
+        if ui_has(UI_MULTIGRID) {
             // Only under multigrid is the window's own grid guaranteed to
             // have been allocated -- headless it can still be null, which is
             // why this read stays inside the branch.
-            mouse_grid.set(grid_of_view(win.w_grid).handle.get());
+            MOUSE_GRID.set(grid_of_view(win.w_grid).handle.get());
         } else if !ptr::eq(win.w_grid.target, default_grid_ref().raw()) {
             // Without multigrid the window's own grid is composed onto the
             // screen, so the position has to be screen-relative.
-            mouse_grid.set(0);
-            mouse_row.set(mouse_row.get() + win.w_winrow);
-            mouse_col.set(mouse_col.get() + win.w_wincol);
+            MOUSE_GRID.set(0);
+            MOUSE_ROW.set(MOUSE_ROW.get() + win.w_winrow);
+            MOUSE_COL.set(MOUSE_COL.get() + win.w_wincol);
         }
     }
 

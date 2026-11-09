@@ -35,10 +35,10 @@ use crate::narrow::number_as_int;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
-    Blob, BoolVarValue, List, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT,
-    VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL,
-    VAR_TYPE_STRING, VAR_UNKNOWN, VarNumber, Vv, kBoolVarTrue, kSpecialVarNull,
+    BOOL_VAR_TRUE, Blob, BoolVarValue, List, SPECIAL_VAR_NULL, TypVal, VAR_BLOB, VAR_BOOL,
+    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
+    VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST,
+    VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL, VAR_TYPE_STRING, VAR_UNKNOWN, VarNumber, Vv,
 };
 use core::ffi::{CStr, c_int};
 
@@ -79,10 +79,10 @@ pub fn f_empty(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         VAR_LIST => tv.list_ref().is_none_or(List::is_empty),
         VAR_DICT => (dict_len(tv.dict_ref())) == 0,
         VAR_BLOB => tv.blob_ref().is_none_or(Blob::is_empty),
-        VAR_SPECIAL => tv.as_special() == Some(kSpecialVarNull),
+        VAR_SPECIAL => tv.as_special() == Some(SPECIAL_VAR_NULL),
         // A Bool other than the two named values leaves the answer at its
         // "empty" default, as upstream's switch does.
-        VAR_BOOL => tv.as_bool() != Some(kBoolVarTrue),
+        VAR_BOOL => tv.as_bool() != Some(BOOL_VAR_TRUE),
         VAR_UNKNOWN => {
             internal_error(c"f_empty(UNKNOWN)");
             true

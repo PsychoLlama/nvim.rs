@@ -268,10 +268,10 @@ fn replay_insert(op: &mut OpArg, bd: &mut BlockDef, pre: &mut BlockInsertPre, st
         // The cursor may have been moved during the insert when `$` was
         // used, and then the block has no right edge to measure from.
         if bd.is_max
-            && start_insert.lnum == Insstart.get().lnum
-            && start_insert.col > Insstart.get().col
+            && start_insert.lnum == INSSTART.get().lnum
+            && start_insert.col > INSSTART.get().col
         {
-            offset = start_insert.col - Insstart.get().col;
+            offset = start_insert.col - INSSTART.get().col;
             add -= offset;
             if op.end_vcol <= ColNr::new(offset) {
                 // Moved outside the Visual block; nothing sensible to do.
@@ -315,7 +315,7 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
     if op.motion_type == MT_LINE_WISE {
         l = ColNr::ZERO;
         // Like opening a new line: do smart indent.
-        can_si.set(may_do_si());
+        CAN_SI.set(may_do_si());
     }
 
     // Delete the region first. In an empty buffer there is nothing to
@@ -356,10 +356,10 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
     }
 
     // Reset `finish_op` now: it must not be set inside `edit()`.
-    let save_finish_op = finish_op.get();
-    finish_op.set(false);
+    let save_finish_op = FINISH_OP.get();
+    FINISH_OP.set(false);
     let retval = c_int::from(edit(Key::NUL, false, 1) == Ok(true));
-    finish_op.set(save_finish_op);
+    FINISH_OP.set(save_finish_op);
 
     // Copy the new text to the rest of a Visual block. Not when Insert
     // mode ended with CTRL-C.
@@ -462,7 +462,7 @@ pub fn adjust_cursor_eol() {
         && gchar_cursor() == NUL
         && cur_ve_flags & kOptVeFlagOnemore as c_uint == 0
         && cur_ve_flags & kOptVeFlagAll as c_uint == 0
-        && !(!restart_edit.get().is_nul() || State.get() & MODE_INSERT != 0);
+        && !(!RESTART_EDIT.get().is_nul() || STATE.get() & MODE_INSERT != 0);
     if !adj_cursor {
         return;
     }

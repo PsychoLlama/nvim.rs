@@ -23,7 +23,7 @@
 )]
 
 use super::*;
-use crate::decoration::kHlModeReplace;
+use crate::decoration::HL_MODE_REPLACE;
 use crate::highlight::HlAttrFlags;
 
 /// Whether `attr` draws an underline (of any style), a strikethrough or an
@@ -52,7 +52,7 @@ impl Cells {
         // While inline virtual text is being drawn the real area
         // attribute is parked in `saved_area_attr`; the two are the same
         // slot as far as this test is concerned.
-        let use_saved = wlv.extra_is_virt_text && wlv.virt_inline_hl_mode <= kHlModeReplace;
+        let use_saved = wlv.extra_is_virt_text && wlv.virt_inline_hl_mode <= HL_MODE_REPLACE;
         let mut area = if use_saved {
             self.saved_area_attr
         } else {
@@ -169,7 +169,7 @@ impl Cells {
             return;
         }
         wlv.handle_inline_virtual_text(self.byte_col(), selected);
-        if wlv.extra_todo > 0 && wlv.virt_inline_hl_mode <= kHlModeReplace {
+        if wlv.extra_todo > 0 && wlv.virt_inline_hl_mode <= HL_MODE_REPLACE {
             // Park the attributes the virtual text replaces; they come
             // back when `extra_todo` is spent.
             self.saved_search_attr = self.search_attr;
@@ -206,7 +206,7 @@ impl Cells {
             self.has_match_conc = 0;
         }
 
-        if State.get() & MODE_INSERT != 0
+        if STATE.get() & MODE_INSERT != 0
             && ins_compl_win_active(window)
             && (self.in_curline || ins_compl_lnum_in_range(wlv.lnum))
             && let Some(ins_match_attr) =
@@ -310,8 +310,8 @@ impl Cells {
             // The window-local Normal background, which 'winhighlight' can
             // change.
             let (mut normal_rgb_bg, mut normal_cterm_bg) = (
-                normal_bg.get() as ::core::ffi::c_int,
-                cterm_normal_bg_color.get(),
+                NORMAL_BG.get() as ::core::ffi::c_int,
+                CTERM_NORMAL_BG_COLOR.get(),
             );
             if self.bg_attr != 0 {
                 let norm_ae = syn_attr2entry(self.bg_attr);

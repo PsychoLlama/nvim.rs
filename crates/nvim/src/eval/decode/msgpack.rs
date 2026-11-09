@@ -34,7 +34,7 @@ use crate::eval::typval::{ListRef, tv_dict_alloc, tv_list_alloc};
 use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK, Step, TokBuf, read_step};
 use crate::mpack::token::{Kind, Tok, unpack_boolean, unpack_float, unpack_sint, unpack_uint};
 use crate::types::{
-    TypVal, VarNumber, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
+    BOOL_VAR_FALSE, BOOL_VAR_TRUE, LIST_LEN_MAY_KNOW, SPECIAL_VAR_NULL, TypVal, VarNumber,
 };
 
 /// How deep a value may nest, counting each string's bytes as one more
@@ -99,7 +99,7 @@ impl Node {
                 // TODO notes.
                 let mut list = tv_list_alloc(2);
                 list.push_number(VarNumber::from(ext_type));
-                let mut payload = tv_list_alloc(kListLenMayKnow as isize);
+                let mut payload = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
                 encode_list_write(&mut payload, &bytes);
                 list.push_list(Some(payload));
                 create_special_dict(MP_EXT, TypVal::list(Some(list)))
@@ -222,11 +222,11 @@ impl MsgpackDecoder {
         }
         let len = tok.len;
         let value = match tok.kind {
-            Some(Kind::Nil) => TypVal::Special(kSpecialVarNull),
+            Some(Kind::Nil) => TypVal::Special(SPECIAL_VAR_NULL),
             Some(Kind::Boolean) => TypVal::Bool(if unpack_boolean(&tok) {
-                kBoolVarTrue
+                BOOL_VAR_TRUE
             } else {
-                kBoolVarFalse
+                BOOL_VAR_FALSE
             }),
             Some(Kind::Sint) => TypVal::Number(unpack_sint(&tok)),
             Some(Kind::Uint) => positive_integer_to_special_typval(unpack_uint(&tok)),

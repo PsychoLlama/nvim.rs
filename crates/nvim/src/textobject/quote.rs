@@ -28,7 +28,7 @@ use super::*;
 use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::cursor::{dec_cursor, inc_cursor};
-use crate::drawscreen::state::redraw_cmdline;
+use crate::drawscreen::state::REDRAW_CMDLINE;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::mbyte::{c_cluster_len, head_off};
 use crate::memline::{Moved, dec};
@@ -378,7 +378,7 @@ pub(crate) fn current_quote(
         }
         if visual_mode().is_line() {
             set_visual_mode(VisualMode::CHAR);
-            redraw_cmdline.set(true); // show the mode later
+            REDRAW_CMDLINE.set(true); // show the mode later
         }
     } else {
         op.inclusive = inclusive;

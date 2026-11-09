@@ -19,7 +19,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use core::ffi::{CStr, c_uint};
 
@@ -176,57 +175,57 @@ pub use unibi_cap::{BACK_COLOR_ERASE, COLUMNS, LINES, MAX_COLORS};
 /// A slot in `TerminfoEntry::defs`.
 pub type TerminfoDef = c_uint;
 
-pub const kTerm_carriage_return: TerminfoDef = 0;
-pub const kTerm_change_scroll_region: TerminfoDef = 1;
-pub const kTerm_clear_screen: TerminfoDef = 2;
-pub const kTerm_clr_eol: TerminfoDef = 3;
-pub const kTerm_clr_eos: TerminfoDef = 4;
-pub const kTerm_cursor_address: TerminfoDef = 5;
-pub const kTerm_cursor_down: TerminfoDef = 6;
-pub const kTerm_cursor_invisible: TerminfoDef = 7;
-pub const kTerm_cursor_left: TerminfoDef = 8;
-pub const kTerm_cursor_home: TerminfoDef = 9;
-pub const kTerm_cursor_normal: TerminfoDef = 10;
-pub const kTerm_cursor_up: TerminfoDef = 11;
-pub const kTerm_cursor_right: TerminfoDef = 12;
-pub const kTerm_delete_line: TerminfoDef = 13;
-pub const kTerm_enter_blink_mode: TerminfoDef = 14;
-pub const kTerm_enter_bold_mode: TerminfoDef = 15;
-pub const kTerm_enter_ca_mode: TerminfoDef = 16;
-pub const kTerm_enter_dim_mode: TerminfoDef = 17;
-pub const kTerm_enter_italics_mode: TerminfoDef = 18;
-pub const kTerm_enter_reverse_mode: TerminfoDef = 19;
-pub const kTerm_enter_secure_mode: TerminfoDef = 20;
-pub const kTerm_enter_standout_mode: TerminfoDef = 21;
-pub const kTerm_enter_underline_mode: TerminfoDef = 22;
-pub const kTerm_erase_chars: TerminfoDef = 23;
-pub const kTerm_exit_attribute_mode: TerminfoDef = 24;
-pub const kTerm_exit_ca_mode: TerminfoDef = 25;
-pub const kTerm_from_status_line: TerminfoDef = 26;
-pub const kTerm_insert_line: TerminfoDef = 27;
-pub const kTerm_keypad_local: TerminfoDef = 28;
-pub const kTerm_keypad_xmit: TerminfoDef = 29;
-pub const kTerm_parm_delete_line: TerminfoDef = 30;
-pub const kTerm_parm_down_cursor: TerminfoDef = 31;
-pub const kTerm_parm_insert_line: TerminfoDef = 32;
-pub const kTerm_parm_left_cursor: TerminfoDef = 33;
-pub const kTerm_parm_right_cursor: TerminfoDef = 34;
-pub const kTerm_parm_up_cursor: TerminfoDef = 35;
-pub const kTerm_set_a_background: TerminfoDef = 36;
-pub const kTerm_set_a_foreground: TerminfoDef = 37;
-pub const kTerm_set_attributes: TerminfoDef = 38;
-pub const kTerm_set_lr_margin: TerminfoDef = 39;
-pub const kTerm_to_status_line: TerminfoDef = 40;
-pub const kTerm_reset_cursor_style: TerminfoDef = 41;
-pub const kTerm_set_cursor_style: TerminfoDef = 42;
-pub const kTerm_enter_strikethrough_mode: TerminfoDef = 43;
-pub const kTerm_set_rgb_foreground: TerminfoDef = 44;
-pub const kTerm_set_rgb_background: TerminfoDef = 45;
-pub const kTerm_set_cursor_color: TerminfoDef = 46;
-pub const kTerm_reset_cursor_color: TerminfoDef = 47;
-pub const kTerm_set_underline_style: TerminfoDef = 48;
+pub const TERM_CARRIAGE_RETURN: TerminfoDef = 0;
+pub const TERM_CHANGE_SCROLL_REGION: TerminfoDef = 1;
+pub const TERM_CLEAR_SCREEN: TerminfoDef = 2;
+pub const TERM_CLR_EOL: TerminfoDef = 3;
+pub const TERM_CLR_EOS: TerminfoDef = 4;
+pub const TERM_CURSOR_ADDRESS: TerminfoDef = 5;
+pub const TERM_CURSOR_DOWN: TerminfoDef = 6;
+pub const TERM_CURSOR_INVISIBLE: TerminfoDef = 7;
+pub const TERM_CURSOR_LEFT: TerminfoDef = 8;
+pub const TERM_CURSOR_HOME: TerminfoDef = 9;
+pub const TERM_CURSOR_NORMAL: TerminfoDef = 10;
+pub const TERM_CURSOR_UP: TerminfoDef = 11;
+pub const TERM_CURSOR_RIGHT: TerminfoDef = 12;
+pub const TERM_DELETE_LINE: TerminfoDef = 13;
+pub const TERM_ENTER_BLINK_MODE: TerminfoDef = 14;
+pub const TERM_ENTER_BOLD_MODE: TerminfoDef = 15;
+pub const TERM_ENTER_CA_MODE: TerminfoDef = 16;
+pub const TERM_ENTER_DIM_MODE: TerminfoDef = 17;
+pub const TERM_ENTER_ITALICS_MODE: TerminfoDef = 18;
+pub const TERM_ENTER_REVERSE_MODE: TerminfoDef = 19;
+pub const TERM_ENTER_SECURE_MODE: TerminfoDef = 20;
+pub const TERM_ENTER_STANDOUT_MODE: TerminfoDef = 21;
+pub const TERM_ENTER_UNDERLINE_MODE: TerminfoDef = 22;
+pub const TERM_ERASE_CHARS: TerminfoDef = 23;
+pub const TERM_EXIT_ATTRIBUTE_MODE: TerminfoDef = 24;
+pub const TERM_EXIT_CA_MODE: TerminfoDef = 25;
+pub const TERM_FROM_STATUS_LINE: TerminfoDef = 26;
+pub const TERM_INSERT_LINE: TerminfoDef = 27;
+pub const TERM_KEYPAD_LOCAL: TerminfoDef = 28;
+pub const TERM_KEYPAD_XMIT: TerminfoDef = 29;
+pub const TERM_PARM_DELETE_LINE: TerminfoDef = 30;
+pub const TERM_PARM_DOWN_CURSOR: TerminfoDef = 31;
+pub const TERM_PARM_INSERT_LINE: TerminfoDef = 32;
+pub const TERM_PARM_LEFT_CURSOR: TerminfoDef = 33;
+pub const TERM_PARM_RIGHT_CURSOR: TerminfoDef = 34;
+pub const TERM_PARM_UP_CURSOR: TerminfoDef = 35;
+pub const TERM_SET_A_BACKGROUND: TerminfoDef = 36;
+pub const TERM_SET_A_FOREGROUND: TerminfoDef = 37;
+pub const TERM_SET_ATTRIBUTES: TerminfoDef = 38;
+pub const TERM_SET_LR_MARGIN: TerminfoDef = 39;
+pub const TERM_TO_STATUS_LINE: TerminfoDef = 40;
+pub const TERM_RESET_CURSOR_STYLE: TerminfoDef = 41;
+pub const TERM_SET_CURSOR_STYLE: TerminfoDef = 42;
+pub const TERM_ENTER_STRIKETHROUGH_MODE: TerminfoDef = 43;
+pub const TERM_SET_RGB_FOREGROUND: TerminfoDef = 44;
+pub const TERM_SET_RGB_BACKGROUND: TerminfoDef = 45;
+pub const TERM_SET_CURSOR_COLOR: TerminfoDef = 46;
+pub const TERM_RESET_CURSOR_COLOR: TerminfoDef = 47;
+pub const TERM_SET_UNDERLINE_STYLE: TerminfoDef = 48;
 /// One past the last `defs` slot.
-pub const kTermCount: TerminfoDef = 49;
+pub const TERM_COUNT: TerminfoDef = 49;
 
 /// A string capability terminfo names in its standard set.
 #[derive(Debug)]
@@ -416,7 +415,7 @@ pub struct ExtCap {
 }
 
 /// The extension string capabilities, filling the `defs` slots from
-/// `kTerm_reset_cursor_style` on.
+/// `TERM_RESET_CURSOR_STYLE` on.
 pub const EXT_CAPS: [ExtCap; 8] = [
     ExtCap {
         name: "reset_cursor_style",
@@ -717,171 +716,159 @@ mod tests {
     #[test]
     fn def_slots_address_their_own_capabilities() {
         assert_eq!(
-            STRING_CAPS[kTerm_carriage_return as usize].name,
+            STRING_CAPS[TERM_CARRIAGE_RETURN as usize].name,
             "carriage_return"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_change_scroll_region as usize].name,
+            STRING_CAPS[TERM_CHANGE_SCROLL_REGION as usize].name,
             "change_scroll_region"
         );
+        assert_eq!(STRING_CAPS[TERM_CLEAR_SCREEN as usize].name, "clear_screen");
+        assert_eq!(STRING_CAPS[TERM_CLR_EOL as usize].name, "clr_eol");
+        assert_eq!(STRING_CAPS[TERM_CLR_EOS as usize].name, "clr_eos");
         assert_eq!(
-            STRING_CAPS[kTerm_clear_screen as usize].name,
-            "clear_screen"
-        );
-        assert_eq!(STRING_CAPS[kTerm_clr_eol as usize].name, "clr_eol");
-        assert_eq!(STRING_CAPS[kTerm_clr_eos as usize].name, "clr_eos");
-        assert_eq!(
-            STRING_CAPS[kTerm_cursor_address as usize].name,
+            STRING_CAPS[TERM_CURSOR_ADDRESS as usize].name,
             "cursor_address"
         );
-        assert_eq!(STRING_CAPS[kTerm_cursor_down as usize].name, "cursor_down");
+        assert_eq!(STRING_CAPS[TERM_CURSOR_DOWN as usize].name, "cursor_down");
         assert_eq!(
-            STRING_CAPS[kTerm_cursor_invisible as usize].name,
+            STRING_CAPS[TERM_CURSOR_INVISIBLE as usize].name,
             "cursor_invisible"
         );
-        assert_eq!(STRING_CAPS[kTerm_cursor_left as usize].name, "cursor_left");
-        assert_eq!(STRING_CAPS[kTerm_cursor_home as usize].name, "cursor_home");
+        assert_eq!(STRING_CAPS[TERM_CURSOR_LEFT as usize].name, "cursor_left");
+        assert_eq!(STRING_CAPS[TERM_CURSOR_HOME as usize].name, "cursor_home");
         assert_eq!(
-            STRING_CAPS[kTerm_cursor_normal as usize].name,
+            STRING_CAPS[TERM_CURSOR_NORMAL as usize].name,
             "cursor_normal"
         );
-        assert_eq!(STRING_CAPS[kTerm_cursor_up as usize].name, "cursor_up");
+        assert_eq!(STRING_CAPS[TERM_CURSOR_UP as usize].name, "cursor_up");
+        assert_eq!(STRING_CAPS[TERM_CURSOR_RIGHT as usize].name, "cursor_right");
+        assert_eq!(STRING_CAPS[TERM_DELETE_LINE as usize].name, "delete_line");
         assert_eq!(
-            STRING_CAPS[kTerm_cursor_right as usize].name,
-            "cursor_right"
-        );
-        assert_eq!(STRING_CAPS[kTerm_delete_line as usize].name, "delete_line");
-        assert_eq!(
-            STRING_CAPS[kTerm_enter_blink_mode as usize].name,
+            STRING_CAPS[TERM_ENTER_BLINK_MODE as usize].name,
             "enter_blink_mode"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_enter_bold_mode as usize].name,
+            STRING_CAPS[TERM_ENTER_BOLD_MODE as usize].name,
             "enter_bold_mode"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_enter_ca_mode as usize].name,
+            STRING_CAPS[TERM_ENTER_CA_MODE as usize].name,
             "enter_ca_mode"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_enter_dim_mode as usize].name,
+            STRING_CAPS[TERM_ENTER_DIM_MODE as usize].name,
             "enter_dim_mode"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_enter_italics_mode as usize].name,
+            STRING_CAPS[TERM_ENTER_ITALICS_MODE as usize].name,
             "enter_italics_mode"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_enter_reverse_mode as usize].name,
+            STRING_CAPS[TERM_ENTER_REVERSE_MODE as usize].name,
             "enter_reverse_mode"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_enter_secure_mode as usize].name,
+            STRING_CAPS[TERM_ENTER_SECURE_MODE as usize].name,
             "enter_secure_mode"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_enter_standout_mode as usize].name,
+            STRING_CAPS[TERM_ENTER_STANDOUT_MODE as usize].name,
             "enter_standout_mode"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_enter_underline_mode as usize].name,
+            STRING_CAPS[TERM_ENTER_UNDERLINE_MODE as usize].name,
             "enter_underline_mode"
         );
-        assert_eq!(STRING_CAPS[kTerm_erase_chars as usize].name, "erase_chars");
+        assert_eq!(STRING_CAPS[TERM_ERASE_CHARS as usize].name, "erase_chars");
         assert_eq!(
-            STRING_CAPS[kTerm_exit_attribute_mode as usize].name,
+            STRING_CAPS[TERM_EXIT_ATTRIBUTE_MODE as usize].name,
             "exit_attribute_mode"
         );
+        assert_eq!(STRING_CAPS[TERM_EXIT_CA_MODE as usize].name, "exit_ca_mode");
         assert_eq!(
-            STRING_CAPS[kTerm_exit_ca_mode as usize].name,
-            "exit_ca_mode"
-        );
-        assert_eq!(
-            STRING_CAPS[kTerm_from_status_line as usize].name,
+            STRING_CAPS[TERM_FROM_STATUS_LINE as usize].name,
             "from_status_line"
         );
-        assert_eq!(STRING_CAPS[kTerm_insert_line as usize].name, "insert_line");
+        assert_eq!(STRING_CAPS[TERM_INSERT_LINE as usize].name, "insert_line");
+        assert_eq!(STRING_CAPS[TERM_KEYPAD_LOCAL as usize].name, "keypad_local");
+        assert_eq!(STRING_CAPS[TERM_KEYPAD_XMIT as usize].name, "keypad_xmit");
         assert_eq!(
-            STRING_CAPS[kTerm_keypad_local as usize].name,
-            "keypad_local"
-        );
-        assert_eq!(STRING_CAPS[kTerm_keypad_xmit as usize].name, "keypad_xmit");
-        assert_eq!(
-            STRING_CAPS[kTerm_parm_delete_line as usize].name,
+            STRING_CAPS[TERM_PARM_DELETE_LINE as usize].name,
             "parm_delete_line"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_parm_down_cursor as usize].name,
+            STRING_CAPS[TERM_PARM_DOWN_CURSOR as usize].name,
             "parm_down_cursor"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_parm_insert_line as usize].name,
+            STRING_CAPS[TERM_PARM_INSERT_LINE as usize].name,
             "parm_insert_line"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_parm_left_cursor as usize].name,
+            STRING_CAPS[TERM_PARM_LEFT_CURSOR as usize].name,
             "parm_left_cursor"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_parm_right_cursor as usize].name,
+            STRING_CAPS[TERM_PARM_RIGHT_CURSOR as usize].name,
             "parm_right_cursor"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_parm_up_cursor as usize].name,
+            STRING_CAPS[TERM_PARM_UP_CURSOR as usize].name,
             "parm_up_cursor"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_set_a_background as usize].name,
+            STRING_CAPS[TERM_SET_A_BACKGROUND as usize].name,
             "set_a_background"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_set_a_foreground as usize].name,
+            STRING_CAPS[TERM_SET_A_FOREGROUND as usize].name,
             "set_a_foreground"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_set_attributes as usize].name,
+            STRING_CAPS[TERM_SET_ATTRIBUTES as usize].name,
             "set_attributes"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_set_lr_margin as usize].name,
+            STRING_CAPS[TERM_SET_LR_MARGIN as usize].name,
             "set_lr_margin"
         );
         assert_eq!(
-            STRING_CAPS[kTerm_to_status_line as usize].name,
+            STRING_CAPS[TERM_TO_STATUS_LINE as usize].name,
             "to_status_line"
         );
         assert_eq!(
-            EXT_CAPS[kTerm_reset_cursor_style as usize - 41].name,
+            EXT_CAPS[TERM_RESET_CURSOR_STYLE as usize - 41].name,
             "reset_cursor_style"
         );
         assert_eq!(
-            EXT_CAPS[kTerm_set_cursor_style as usize - 41].name,
+            EXT_CAPS[TERM_SET_CURSOR_STYLE as usize - 41].name,
             "set_cursor_style"
         );
         assert_eq!(
-            EXT_CAPS[kTerm_enter_strikethrough_mode as usize - 41].name,
+            EXT_CAPS[TERM_ENTER_STRIKETHROUGH_MODE as usize - 41].name,
             "enter_strikethrough_mode"
         );
         assert_eq!(
-            EXT_CAPS[kTerm_set_rgb_foreground as usize - 41].name,
+            EXT_CAPS[TERM_SET_RGB_FOREGROUND as usize - 41].name,
             "set_rgb_foreground"
         );
         assert_eq!(
-            EXT_CAPS[kTerm_set_rgb_background as usize - 41].name,
+            EXT_CAPS[TERM_SET_RGB_BACKGROUND as usize - 41].name,
             "set_rgb_background"
         );
         assert_eq!(
-            EXT_CAPS[kTerm_set_cursor_color as usize - 41].name,
+            EXT_CAPS[TERM_SET_CURSOR_COLOR as usize - 41].name,
             "set_cursor_color"
         );
         assert_eq!(
-            EXT_CAPS[kTerm_reset_cursor_color as usize - 41].name,
+            EXT_CAPS[TERM_RESET_CURSOR_COLOR as usize - 41].name,
             "reset_cursor_color"
         );
         assert_eq!(
-            EXT_CAPS[kTerm_set_underline_style as usize - 41].name,
+            EXT_CAPS[TERM_SET_UNDERLINE_STYLE as usize - 41].name,
             "set_underline_style"
         );
-        assert_eq!(kTermCount as usize, STRING_CAPS.len() + EXT_CAPS.len());
+        assert_eq!(TERM_COUNT as usize, STRING_CAPS.len() + EXT_CAPS.len());
     }
 }

@@ -300,9 +300,9 @@ fn count_selected_line(
 ) {
     // `lnum` is a line of the current buffer, and `start_col` a column of it.
     let span = if sel.mode.is_block() {
-        virtual_op.set(Some(virtual_active(Win::current())));
+        VIRTUAL_OP.set(Some(virtual_active(Win::current())));
         block_prep(bd, &sel.oparg, lnum, false);
-        virtual_op.set(None);
+        VIRTUAL_OP.set(None);
         Some((bd.textcol, bd.textlen))
     } else if sel.mode.is_line() {
         Some((ColNr::ZERO, MAXCOL))

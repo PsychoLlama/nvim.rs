@@ -40,13 +40,13 @@ use crate::os::env::{hostname_into, process_id};
 use crate::os::state::windowsVersion;
 use crate::popupmenu::{pum_set_event_info, pum_visible};
 use crate::startup::{starting, stdin_isatty, stdout_isatty};
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::state::{MODE_CMDLINE, get_mode, get_was_safe_state};
 use crate::strings::has_char;
 use crate::syntax::syntax_present;
 use crate::types::LineNr;
 use crate::types::{
-    Array, ColNr, Error, Object, TypVal, VAR_STRING, VarNumber, Vv, kListLenMayKnow,
+    Array, ColNr, Error, LIST_LEN_MAY_KNOW, Object, TypVal, VAR_STRING, VarNumber, Vv,
 };
 use crate::ui::ui_gui_attached;
 use crate::version::{has_nvim_version, has_vim_patch};
@@ -334,7 +334,7 @@ pub fn f_hostname(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_menu_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    let list = tv_list_alloc_ret(result, kListLenMayKnow as isize);
+    let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
     // A non-String second argument is not an error: it just leaves the
     // mode set at "all".
     let modes = if args.get(1).is_some_and(|arg| arg.v_type() == VAR_STRING) {
@@ -485,7 +485,7 @@ pub fn f_tabpagebuflist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
     let Some(tab) = tab else {
         return;
     };
-    let list = tv_list_alloc_ret(result, kListLenMayKnow as isize);
+    let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
     // `windows_in_tab` knows that the current tab's window list lives in
     // `firstwin` rather than in the tab page record, which is only
     // updated on the way out.
@@ -508,7 +508,7 @@ pub fn f_visualmode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `wildmenumode()`
 pub(crate) fn f_wildmenumode(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    if wild_menu_showing.get() != 0 || (State.get() & MODE_CMDLINE != 0 && cmdline_pum_active()) {
+    if wild_menu_showing.get() != 0 || (STATE.get() & MODE_CMDLINE != 0 && cmdline_pum_active()) {
         result.write_number(1);
     }
 }

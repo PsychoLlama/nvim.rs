@@ -48,7 +48,7 @@ use crate::option::get_ve_flags;
 use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::plines::CharsizeArg;
 use crate::plines::{getvcol, linetabsize, linetabsize_eol, win_charsize};
-use crate::state::mode::{State, restart_edit};
+use crate::state::mode::{RESTART_EDIT, STATE};
 use crate::state::{MODE_INSERT, MODE_TERMINAL, virtual_active};
 use crate::types::{ColNr, LineNr, Pos};
 use crate::winlayer::{Buf, PosRef, Win};
@@ -260,9 +260,9 @@ fn coladvance2(win: Win, pos: &mut Pos, addspaces: bool, finetune: bool, wcol_ar
         "wp == curwin || !addspaces"
     );
     let mut wcol = wcol_arg;
-    let one_more = State.get() & MODE_INSERT != 0
-        || State.get() & MODE_TERMINAL != 0
-        || !restart_edit.get().is_nul()
+    let one_more = STATE.get() & MODE_INSERT != 0
+        || STATE.get() & MODE_TERMINAL != 0
+        || !RESTART_EDIT.get().is_nul()
         || (visual_active() && !selection_is_old())
         || (win.ve_flags() & kOptVeFlagOnemore != 0 && wcol < ColNr::MAX);
     let buf = win.buffer();
@@ -299,7 +299,7 @@ fn coladvance2(win: Win, pos: &mut Pos, addspaces: bool, finetune: bool, wcol_ar
             if csize > 0 {
                 csize -= 1;
             }
-            wcol = wrap_target_col(wcol, width, csize, State.get() & MODE_INSERT != 0);
+            wcol = wrap_target_col(wcol, width, csize, STATE.get() & MODE_INSERT != 0);
         }
 
         let mut lines = buf.lines();
@@ -535,9 +535,9 @@ pub fn check_cursor_col(win: Win) {
     let len = buf.line_len_raw(cursor.lnum());
 
     let (col, snap) = checked_col(oldcol, len, || {
-        State.get() & MODE_INSERT != 0
-            || !restart_edit.get().is_nul()
-            || State.get() & MODE_TERMINAL != 0
+        STATE.get() & MODE_INSERT != 0
+            || !RESTART_EDIT.get().is_nul()
+            || STATE.get() & MODE_TERMINAL != 0
             || (visual_active() && !selection_is_old())
             || cur_ve_flags & kOptVeFlagOnemore != 0
             || win.virtual_active()

@@ -162,7 +162,7 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
     // Only the part of the message after the last NL is the command
     // line's prompt, unless the command line is externalised.
     let mut p = prompt;
-    if !ui_has(kUICmdline) {
+    if !ui_has(UI_CMDLINE) {
         let text = prompt.to_bytes();
         if let Some(lastnl) = text.iter().rposition(|&b| b == b'\n') {
             p = cstr::suffix(prompt, lastnl + 1);
@@ -173,7 +173,7 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             msg_starthere();
         }
     }
-    cmdline_row.set(MSG_ROW.get());
+    CMDLINE_ROW.set(MSG_ROW.get());
 
     stuff_readbuf_one_line(defstr.to_bytes());
 

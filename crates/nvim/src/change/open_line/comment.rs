@@ -161,7 +161,7 @@ fn plan_start_or_middle(
     if auto_end {
         // An empty end part has no last character; upstream reads the byte
         // in front of its buffer.
-        end_comment_pending.set(lead_end.last().copied().filter(|&b| b != 0));
+        END_COMMENT_PENDING.set(lead_end.last().copied().filter(|&b| b != 0));
     }
 
     let lead_len = usize::try_from(plan.lead_len).expect("non-negative");
@@ -237,7 +237,7 @@ fn plan_end(plan: &mut LeaderPlan, com: &[u8], mut p: usize, dir: c_int, saved_l
         while at(com, p2) != 0 && at(com, p2) != b',' {
             p2 += 1;
         }
-        end_comment_pending.set(Some(before(com, p2)).filter(|&b| b != 0));
+        END_COMMENT_PENDING.set(Some(before(com, p2)).filter(|&b| b != 0));
     }
 }
 
@@ -552,15 +552,15 @@ pub(crate) fn build_leader(
     // An indent is about to be set below, so drop the one the leader
     // carries -- starting past it rather than moving the text.
     let mut start = 0;
-    if newindent != 0 || did_si.get() {
+    if newindent != 0 || DID_SI.get() {
         while lead_len != 0 && ascii_iswhite(c_int::from(buf[start])) {
             lead_len -= 1;
             newcol -= 1;
             start += 1;
         }
     }
-    can_si.set(false);
-    did_si.set(false);
+    CAN_SI.set(false);
+    DID_SI.set(false);
 
     BuiltLeader {
         text: until_nul(&buf[start..]).to_vec(),

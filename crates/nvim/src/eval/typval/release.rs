@@ -35,8 +35,8 @@
 use super::{DictRef, ListRef, PartialRef};
 use crate::eval::userfunc::func_unref_name;
 use crate::types::{
-    TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, kBoolVarFalse, kSpecialVarNull,
+    BOOL_VAR_FALSE, SPECIAL_VAR_NULL, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
+    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
 };
 
 /// A container whose last reference the free holds, and how far through its
@@ -55,8 +55,8 @@ fn release_slot(tv: &mut TypVal) -> Option<Owned> {
     match tv.v_type() {
         VAR_NUMBER => tv.write_number(0),
         VAR_FLOAT => tv.write_float(0.0),
-        VAR_BOOL => tv.write_boolean(kBoolVarFalse),
-        VAR_SPECIAL => tv.write_special(kSpecialVarNull),
+        VAR_BOOL => tv.write_boolean(BOOL_VAR_FALSE),
+        VAR_SPECIAL => tv.write_special(SPECIAL_VAR_NULL),
         // The text goes with the value.
         VAR_STRING => drop(tv.take_string()),
         // A funcref holds a reference to the function by name, and the name

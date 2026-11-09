@@ -20,14 +20,14 @@ use crate::cursor_shape::cursor_is_block_during_visual;
 use crate::decoration::defs::VirtText;
 use crate::decoration::defs::{DecorRange, HlMode, VirtTextPos};
 use crate::decoration::{
-    DECOR_ID_INVALID, VirtChunks, VirtLineRef, decor_conceal, decor_has_more_decorations,
-    decor_init_draw_col, decor_recheck_draw_col, decor_redraw_col, decor_redraw_eol,
-    decor_redraw_line, decor_redraw_signs, decor_spell, decor_virt_pos, decor_virt_pos_kind,
-    kHlModeUnknown, with_decor_virt,
+    DECOR_ID_INVALID, HL_MODE_UNKNOWN, VirtChunks, VirtLineRef, decor_conceal,
+    decor_has_more_decorations, decor_init_draw_col, decor_recheck_draw_col, decor_redraw_col,
+    decor_redraw_eol, decor_redraw_line, decor_redraw_signs, decor_spell, decor_virt_pos,
+    decor_virt_pos_kind, with_decor_virt,
 };
 use crate::decoration_provider::{decor_providers_invoke_line, decor_providers_invoke_range};
 use crate::diff::{diff_check_with_linestatus, diff_find_change};
-use crate::drawscreen::state::{dollar_vcol, win_extmark_arr};
+use crate::drawscreen::state::{DOLLAR_VCOL, WIN_EXTMARK_ARR};
 use crate::drawscreen::{compute_foldcolumn, conceal_cursor_line, number_width, win_draw_end};
 use crate::eval::vars::set_vim_var_nr;
 use crate::fold::FoldInfo;
@@ -41,7 +41,7 @@ use crate::grid::{
 };
 use crate::highlight::default_hl_attr;
 use crate::highlight::namespace::hl_attr;
-use crate::highlight::state::{cterm_normal_bg_color, normal_bg};
+use crate::highlight::state::{CTERM_NORMAL_BG_COLOR, NORMAL_BG};
 use crate::highlight::{Hlf, RgbValue};
 use crate::highlight::{
     hl_blend_attrs, hl_combine_attr, hl_get_underline, syn_attr2entry, win_bg_attr, win_hl_attr,
@@ -77,7 +77,7 @@ use crate::search::state::{highlight_match, search_match_endcol, search_match_li
 use crate::sign::SignTextAttrs;
 use crate::spell::spell_redraw_lnum;
 use crate::spell::{check_need_cap, spell_cat_line, spell_to_word_end};
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::state::{MODE_INSERT, virtual_active};
 use crate::statusline::defs::StatusCol;
 use crate::statusline::{SIGN_SHOW_MAX, build_statuscol_str};
@@ -179,7 +179,7 @@ pub fn win_line(
         virt_inline: DECOR_ID_INVALID,
         virt_inline_len: 0,
         virt_inline_i: 0,
-        virt_inline_hl_mode: kHlModeUnknown,
+        virt_inline_hl_mode: HL_MODE_UNKNOWN,
         reset_extra_attr: false,
         skip_cells: 0,
         skipped_cells: 0,

@@ -18,7 +18,7 @@ use crate::decoration::defs::{
     DecorExt, DecorInline, DecorPriority, DecorVirtText, DecorVirtText_data,
 };
 use crate::decoration::{
-    decor_find_virttext, decor_inline_hl, decor_put_vt, kHlModeUnknown, kVPosEndOfLine,
+    HL_MODE_UNKNOWN, V_POS_END_OF_LINE, decor_find_virttext, decor_inline_hl, decor_put_vt,
     with_decor_virt_mut,
 };
 use crate::eval::vars::globvar_dict;
@@ -40,8 +40,8 @@ use crate::options::kOptInvalid;
 use crate::os::libc::{int64_t, size_t, uint8_t, uint32_t, uint64_t};
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, BufferHandle, ColNr, Error, Integer, Object, TabpageHandle,
-    WindowHandle, kObjectTypeArray, kObjectTypeString,
+    ApiDict, ApiString, Array, Boolean, BufferHandle, ColNr, Error, Integer, OBJECT_TYPE_ARRAY,
+    OBJECT_TYPE_STRING, Object, TabpageHandle, WindowHandle,
 };
 
 // The carve of the transpiled module; see each child's docs.

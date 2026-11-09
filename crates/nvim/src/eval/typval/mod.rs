@@ -30,10 +30,10 @@ use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::os::libc::{int64_t, ptrdiff_t};
 use crate::types::{
-    Blob, BoolVarValue, Callback, Dict, DictWatcher, Float, LineNr, List, ListItem, ListWatch,
-    LuaRef, Partial, SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
-    VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
+    BOOL_VAR_TRUE, Blob, BoolVarValue, Callback, Dict, DictWatcher, Float, LIST_LEN_MAY_KNOW,
+    LineNr, List, ListItem, ListWatch, LuaRef, Partial, SPECIAL_VAR_NULL, SpecialVarValue, TypVal,
+    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER,
+    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
 };
 
 // The carve of the transpiled module; see each child's docs.

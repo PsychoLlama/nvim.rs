@@ -507,8 +507,8 @@ mod tests {
             TypVal::list(Some(list(vec![TypVal::Number(1)]))),
             TypVal::dict(Some(tv_dict_alloc())),
             TypVal::blob(Some(blob)),
-            TypVal::Bool(kBoolVarTrue),
-            TypVal::Special(kSpecialVarNull),
+            TypVal::Bool(BOOL_VAR_TRUE),
+            TypVal::Special(SPECIAL_VAR_NULL),
             TypVal::func(None),
         ];
         for tv in &mut values {

@@ -33,7 +33,7 @@ use crate::os::time::os_time;
 use crate::profile::{profile_end, profile_msg_str, profile_signed, profile_start, profile_sub};
 use crate::semsg;
 use crate::types::{
-    Callback, Float, ProfTime, TypVal, VAR_LIST, VAR_NUMBER, VarNumber, kListLenUnknown,
+    Callback, Float, LIST_LEN_UNKNOWN, ProfTime, TypVal, VAR_LIST, VAR_NUMBER, VarNumber,
 };
 use crate::ui::ui_flush;
 use core::ffi::c_int;
@@ -189,7 +189,7 @@ pub fn f_reltimefloat(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 
 /// `timer_info([{id}])` — one timer's state, or every live timer's.
 pub fn f_timer_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let list = tv_list_alloc(kListLenUnknown as isize);
+    let list = tv_list_alloc(LIST_LEN_UNKNOWN as isize);
     result.write_list(Some(list.clone()));
     if tv_check_for_opt_number_arg(args, 0).is_err() {
         return;

@@ -114,7 +114,7 @@ fn move_prompt_down(text: &[u8]) -> Option<XString> {
 /// following line instead of adding one -- or `None` when `ml_append` failed.
 /// The cursor is left on the line *above* the new one either way.
 fn append_new_line(text: &XString, old_cursor: Pos) -> Option<bool> {
-    if State.get() & VREPLACE_FLAG == 0 || old_cursor.lnum >= orig_line_count.get() {
+    if STATE.get() & VREPLACE_FLAG == 0 || old_cursor.lnum >= ORIG_LINE_COUNT.get() {
         let line = text.as_bytes_with_nul();
         if ml_append_terminated(Win::current().w_cursor.lnum, line, false).is_err() {
             return None;
@@ -129,11 +129,11 @@ fn append_new_line(text: &XString, old_cursor: Pos) -> Option<bool> {
 
     // Virtual Replace: start replacing the next line.
     Win::current().w_cursor.lnum += 1;
-    if Win::current().w_cursor.lnum >= Insstart.get().lnum + vr_lines_changed.get() {
+    if Win::current().w_cursor.lnum >= INSSTART.get().lnum + VR_LINES_CHANGED.get() {
         // NL to a new line, BS back, NL again: don't save the new line
         // for undo twice. Errors are ignored.
         let _ = u_save_cursor();
-        vr_lines_changed.set(vr_lines_changed.get() + 1);
+        VR_LINES_CHANGED.set(VR_LINES_CHANGED.get() + 1);
     }
     let _ = ml_replace_buf_text(Buf::current(), Win::current().w_cursor.lnum, text);
     changed_bytes(Win::current().w_cursor.lnum, ColNr::ZERO);
@@ -154,7 +154,7 @@ fn apply_new_indent(
     no_si: bool,
 ) {
     Win::current().w_cursor.lnum += 1;
-    if did_si.get() {
+    if DID_SI.get() {
         let sw = get_sw_value(Buf::current());
         if p_sr() {
             newindent -= newindent % sw;
@@ -171,18 +171,18 @@ fn apply_new_indent(
         set_indent(newindent, SIN_INSERT | SIN_NOMARK);
     }
     *less_cols -= Win::current().w_cursor.col.get();
-    ai_col.set(Win::current().w_cursor.col);
+    AI_COL.set(Win::current().w_cursor.col);
 
     // In Replace mode every character of the new indent needs a NUL on
     // the replace stack, for when BS deletes it.
-    if replace_normal(State.get()) {
+    if replace_normal(STATE.get()) {
         for _ in 0..Win::current().w_cursor.col.get() {
             replace_push_nul();
         }
     }
     *newcol += Win::current().w_cursor.col.get();
     if no_si {
-        did_si.set(false);
+        DID_SI.set(false);
     }
 }
 
@@ -282,9 +282,9 @@ fn truncate_old_line(
 /// plain Insert first to stop `change_indent()` from touching it. The cursor
 /// must be on the new line.
 fn reindent_new_line(has_leader: bool, do_cindent: bool) {
-    let vreplace_mode = if State.get() & VREPLACE_FLAG != 0 {
-        let saved = State.get();
-        State.set(MODE_INSERT);
+    let vreplace_mode = if STATE.get() & VREPLACE_FLAG != 0 {
+        let saved = STATE.get();
+        STATE.set(MODE_INSERT);
         saved
     } else {
         0
@@ -297,15 +297,15 @@ fn reindent_new_line(has_leader: bool, do_cindent: bool) {
             && Buf::current().b_p_ai != 0
         {
             fixthisline(Indenter::Lisp);
-            ai_col.set(getwhitecols_curline());
+            AI_COL.set(getwhitecols_curline());
         } else if do_cindent || (Buf::current().b_p_ai != 0 && use_indentexpr_for_lisp()) {
             do_c_expr_indent();
-            ai_col.set(getwhitecols_curline());
+            AI_COL.set(getwhitecols_curline());
         }
     }
 
     if vreplace_mode != 0 {
-        State.set(vreplace_mode);
+        STATE.set(vreplace_mode);
     }
 }
 
@@ -337,13 +337,13 @@ pub fn open_line(
     let col = Win::current().w_cursor.col.as_usize().min(saved_line.len());
     let mut next_line = None;
 
-    if State.get() & VREPLACE_FLAG != 0 {
+    if STATE.get() & VREPLACE_FLAG != 0 {
         // Virtual Replace keeps a copy of the line it is about to start
         // replacing. The new line is built empty so that the indent and
         // leader machinery below can do as it likes; what it produces is
         // taken off again at the bottom and inserted character by
         // character over the original.  -- webb.
-        next_line = Some(if lnum < orig_line_count.get() {
+        next_line = Some(if lnum < ORIG_LINE_COUNT.get() {
             XString::from_bytes(Lines::current().line(lnum + 1))
         } else {
             XString::new()
@@ -364,7 +364,7 @@ pub fn open_line(
     let mut extra = None;
     let mut extra_len = 0;
     let mut first_char = NUL;
-    if State.get() & MODE_INSERT != 0 && State.get() & VREPLACE_FLAG == 0 {
+    if STATE.get() & MODE_INSERT != 0 && STATE.get() & VREPLACE_FLAG == 0 {
         extra = Some(col);
         let tail = &saved_line[col..];
         if do_si {
@@ -376,13 +376,13 @@ pub fn open_line(
     let cut = extra.unwrap_or(saved_line.len());
 
     u_clearline(Buf::current()); // "U" cannot undo added lines
-    did_si.set(false);
-    ai_col.set(ColNr::ZERO);
+    DID_SI.set(false);
+    AI_COL.set(ColNr::ZERO);
 
     // An auto-indent means nothing was typed on the line being left, so
     // it should be truncated. Also true when only a comment leader was
     // inserted automatically, which sets did_ai too.
-    let trunc_line = dir == FORWARD && did_ai.get();
+    let trunc_line = dir == FORWARD && DID_AI.get();
 
     let mut newindent = 0;
     let mut no_si = false;
@@ -404,9 +404,9 @@ pub fn open_line(
             (newindent, no_si) = smart_indent(dir, flags, head, newindent);
         }
         if do_si {
-            can_si.set(true);
+            CAN_SI.set(true);
         }
-        did_ai.set(true);
+        DID_AI.set(true);
     }
 
     // Whether to reindent once the line is open.
@@ -429,7 +429,7 @@ pub fn open_line(
 
     // Does the current line start with a comment leader that should be
     // repeated in front of the new line?
-    end_comment_pending.set(None);
+    END_COMMENT_PENDING.set(None);
     let mut lead_flags = None;
     let mut comment_start = 0;
     let mut lead_len = 0;
@@ -491,14 +491,14 @@ pub fn open_line(
         // With 'autoindent' or OPENLINE_DELSPACES, skip to the first
         // non-blank. In Replace mode the blanks go on the replace stack,
         // preceded by a NUL, so BS can put them back.
-        if replace_normal(State.get()) {
+        if replace_normal(STATE.get()) {
             replace_push_nul(); // end of the extra blanks
         }
         if Buf::current().b_p_ai != 0 || flags & OPENLINE_DELSPACES != 0 {
             while matches!(byte_at(&saved_line, from), b' ' | b'\t')
                 && !utf_iscomposing_first(char_at(&saved_line[from + 1..]))
             {
-                if replace_normal(State.get()) {
+                if replace_normal(STATE.get()) {
                     // The byte the loop just tested. Always ASCII.
                     replace_push(&saved_line[from..=from]);
                 }
@@ -527,12 +527,12 @@ pub fn open_line(
                 }
             }
             text.extend_from_slice(tail);
-            did_ai.set(true); // so that truncating blanks works with comments
+            DID_AI.set(true); // so that truncating blanks works with comments
             less_cols -= lead_len;
             XString::from_vec(text)
         }
         None => {
-            end_comment_pending.set(None); // there was no leader after all
+            END_COMMENT_PENDING.set(None); // there was no leader after all
             XString::from_bytes(tail) // an empty line when nothing moves
         }
     };
@@ -555,14 +555,14 @@ pub fn open_line(
         };
 
         let uncounted = Suppress::delete_count();
-        if newindent != 0 || did_si.get() {
+        if newindent != 0 || DID_SI.get() {
             apply_new_indent(newindent, &saved_line, &mut less_cols, &mut newcol, no_si);
         }
         drop(uncounted);
 
         // One NUL on the replace stack per character of the leader, for
         // when BS deletes it.
-        if replace_normal(State.get()) {
+        if replace_normal(STATE.get()) {
             while lead_len > 0 {
                 replace_push_nul();
                 lead_len -= 1;
@@ -571,7 +571,7 @@ pub fn open_line(
 
         Win::current().w_cursor = old_cursor;
         if dir == FORWARD {
-            if trunc_line || State.get() & MODE_INSERT != 0 {
+            if trunc_line || STATE.get() & MODE_INSERT != 0 {
                 let split = Split {
                     lnum,
                     mincol,
@@ -612,7 +612,7 @@ pub fn open_line(
 
         reindent_new_line(has_leader, do_cindent);
 
-        if State.get() & VREPLACE_FLAG != 0 {
+        if STATE.get() & VREPLACE_FLAG != 0 {
             // Take what ended up on the new line back off, put the
             // original line back, and insert the new text character by
             // character so that each replaced byte reaches the replace

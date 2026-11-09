@@ -110,7 +110,7 @@ pub fn nvim_get_proc_children(pid: Integer) -> Result<Array, Error> {
     )?;
     o.into_array().ok_or_else(|| {
         api_error!(
-            kErrorTypeException,
+            ERROR_TYPE_EXCEPTION,
             "Failed to get process children. pid={pid} error=2"
         )
     })
@@ -128,7 +128,7 @@ pub fn nvim_get_proc(pid: Integer) -> Result<Object, Error> {
     }
     if !matches!(o, Object::Dict(_)) {
         return Err(api_error!(
-            kErrorTypeException,
+            ERROR_TYPE_EXCEPTION,
             "Failed to get process info. pid={pid}"
         ));
     }
@@ -184,7 +184,7 @@ pub fn nvim__screenshot(path: ApiString) {
 #[allow(non_snake_case)]
 pub fn nvim__invalidate_glyph_cache() {
     schar_cache_clear();
-    must_redraw.set(UPD_CLEAR);
+    MUST_REDRAW.set(UPD_CLEAR);
 }
 
 // `nvim__unpack` is an API method's own name, published over msgpack-RPC.

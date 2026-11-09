@@ -145,7 +145,7 @@ pub(crate) fn ins_reg() {
         } else if insert_reg(regname, None, !literally.is_nul()).is_err() {
             beep(kOptBoFlagRegister as ::core::ffi::c_uint);
             need_redraw = true; // remove the `"`
-        } else if stop_insert_mode.get() {
+        } else if STOP_INSERT_MODE.get() {
             // The `=` register invoked a function that did
             // `:stopinsert`: `stuff_empty()` answers false but nothing
             // will be inserted, so the `"` still has to go.
@@ -201,7 +201,7 @@ pub(crate) fn ins_ctrl_g() {
             // Insstart has to be reset too, because a BS that joins this
             // line to the previous one must save for undo.
             update_Insstart_orig.set(false);
-            Insstart.set(Win::current().w_cursor);
+            INSSTART.set(Win::current().w_cursor);
         }
         // CTRL-G U: allow one left/right cursor movement with the next
         // key without breaking undo.
@@ -217,12 +217,12 @@ pub(crate) fn ins_ctrl_g() {
 pub(crate) fn ins_ctrl_hat() {
     if map_to_exists_mode(b"", MODE_LANGMAP, false) {
         // `:lmap` mappings exist, so the key toggles their use.
-        if State.get() & MODE_LANGMAP != 0 {
+        if STATE.get() & MODE_LANGMAP != 0 {
             Buf::current().b_p_iminsert = OptInt::from(B_IMODE_NONE);
-            State.set(State.get() & !MODE_LANGMAP);
+            STATE.set(STATE.get() & !MODE_LANGMAP);
         } else {
             Buf::current().b_p_iminsert = OptInt::from(B_IMODE_LMAP);
-            State.set(State.get() | MODE_LANGMAP);
+            STATE.set(STATE.get() | MODE_LANGMAP);
         }
     }
     set_iminsert_global(Buf::current());
@@ -244,12 +244,12 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
 
     let temp = Win::current().w_cursor.col;
     if disabled_redraw.get() {
-        RedrawingDisabled.set(RedrawingDisabled.get() - 1);
+        REDRAWING_DISABLED.set(REDRAWING_DISABLED.get() - 1);
         disabled_redraw.set(false);
     }
 
     let single_char_insert = cmdchar.is('r') || cmdchar.is('v');
-    if !arrow_used.get() {
+    if !ARROW_USED.get() {
         // Don't append the ESC for `r<CR>` and `grx`.
         if !single_char_insert {
             append_to_redobuff(ESC_STR.to_bytes());
@@ -269,13 +269,13 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
             // Repeat what was typed.  Vi repeats the insert without
             // replacing characters.
             if cpo_has(CpoFlag::REPLCNT) {
-                State.set(State.get() & !REPLACE_FLAG);
+                STATE.set(STATE.get() & !REPLACE_FLAG);
             }
             let _ = start_redo_ins();
             if single_char_insert {
                 stuff_redo_readbuf(ESC_STR.to_bytes()); // no ESC in the redo buffer
             }
-            RedrawingDisabled.set(RedrawingDisabled.get() + 1);
+            REDRAWING_DISABLED.set(REDRAWING_DISABLED.get() + 1);
             disabled_redraw.set(true);
             return false;
         }
@@ -288,7 +288,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
     }
 
     // When an auto-indent was removed, curswant stays after the indent.
-    if restart_edit.get().is_nul() && temp == Win::current().w_cursor.col {
+    if RESTART_EDIT.get().is_nul() && temp == Win::current().w_cursor.col {
         Win::current().w_set_curswant = true;
     }
 
@@ -303,14 +303,14 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
     // CTRL-O, unless it is past the end of the line.
     if !nomove
         && (Win::current().w_cursor.col != ColNr::ZERO || Win::current().w_cursor.coladd > 0)
-        && (restart_edit.get().is_nul() || (char_at_cursor() == NUL && !visual_active()))
+        && (RESTART_EDIT.get().is_nul() || (char_at_cursor() == NUL && !visual_active()))
         && !revins_on.get()
     {
         if Win::current().w_cursor.coladd > 0
             || get_ve_flags(Win::current()) == kOptVeFlagAll as ::core::ffi::c_uint
         {
             let _ = oneleft();
-            if !restart_edit.get().is_nul() {
+            if !RESTART_EDIT.get().is_nul() {
                 Win::current().w_cursor.coladd += 1;
             }
         } else {
@@ -323,11 +323,12 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
         }
     }
 
-    State.set(MODE_NORMAL);
+    STATE.set(MODE_NORMAL);
     may_trigger_modechanged();
     // The cursor needs positioning again when it is on a TAB, and when
     // the line carries inline virtual text.
-    if char_at_cursor() == c_int::from(b'\t') || buf_meta_total(Buf::current(), kMTMetaInline) > 0 {
+    if char_at_cursor() == c_int::from(b'\t') || buf_meta_total(Buf::current(), MT_META_INLINE) > 0
+    {
         Win::current()
             .w_valid
             .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
@@ -338,11 +339,11 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
 
     // While recording, and for CTRL-O, the new mode has to be displayed;
     // otherwise the mode message is removed.
-    if REG_RECORDING.get() != 0 || !restart_edit.get().is_nul() {
+    if REG_RECORDING.get() != 0 || !RESTART_EDIT.get().is_nul() {
         show_mode();
     } else if p_smd()
         && (GOT_INT.get() || !skip_showmode())
-        && !(p_ch() == 0 && !ui_has(kUIMessages))
+        && !(p_ch() == 0 && !ui_has(UI_MESSAGES))
     {
         unshowmode(false);
     }
@@ -368,7 +369,7 @@ pub(crate) fn ins_ctrl_() {
     }
 
     P_RI.set(!p_ri());
-    revins_on.set(State.get() == MODE_INSERT && p_ri());
+    revins_on.set(STATE.get() == MODE_INSERT && p_ri());
     if revins_on.get() {
         revins_scol.set(Win::current().w_cursor.col.get());
         revins_legal.set(revins_legal.get() + 1);
@@ -385,7 +386,7 @@ pub(crate) fn ins_ctrl_() {
 /// `replace_state` is the Replace mode to go *to* -- `MODE_REPLACE` or
 /// `MODE_VREPLACE`, depending on how the insert was started.
 pub(crate) fn ins_insert(replace_state: c_int) {
-    let mode: &[u8] = if State.get() & REPLACE_FLAG != 0 {
+    let mode: &[u8] = if STATE.get() & REPLACE_FLAG != 0 {
         b"i"
     } else if replace_state == MODE_VREPLACE {
         b"v"
@@ -395,10 +396,10 @@ pub(crate) fn ins_insert(replace_state: c_int) {
     set_vim_var_string(Vv::Insertmode, Some(mode));
     ins_apply_autocmds(AutoEvent::InsertChange);
 
-    if State.get() & REPLACE_FLAG != 0 {
-        State.set(MODE_INSERT | State.get() & MODE_LANGMAP);
+    if STATE.get() & REPLACE_FLAG != 0 {
+        STATE.set(MODE_INSERT | STATE.get() & MODE_LANGMAP);
     } else {
-        State.set(replace_state | State.get() & MODE_LANGMAP);
+        STATE.set(replace_state | STATE.get() & MODE_LANGMAP);
     }
     may_trigger_modechanged();
     append_to_redobuff_char(Key::from(SpecialKey::Ins));
@@ -412,15 +413,15 @@ pub(crate) fn ins_insert(replace_state: c_int) {
 /// and `ins_at_eol` remembers whether the cursor was past the last character
 /// so it can be put back there.
 pub(crate) fn ins_ctrl_o() {
-    restart_VIsual_select.set(0);
-    restart_edit.set(if State.get() & VREPLACE_FLAG != 0 {
+    RESTART_V_ISUAL_SELECT.set(0);
+    RESTART_EDIT.set(if STATE.get() & VREPLACE_FLAG != 0 {
         Key::ascii(b'V')
-    } else if State.get() & REPLACE_FLAG != 0 {
+    } else if STATE.get() & REPLACE_FLAG != 0 {
         Key::ascii(b'R')
     } else {
         Key::ascii(b'I')
     });
-    ins_at_eol.set(if virtual_active(Win::current()) {
+    INS_AT_EOL.set(if virtual_active(Win::current()) {
         false
     } else {
         char_at_cursor() == NUL

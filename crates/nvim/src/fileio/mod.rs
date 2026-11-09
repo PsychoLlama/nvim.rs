@@ -33,7 +33,7 @@ use crate::buffer_updates::buf_updates_unload;
 use crate::change::{appended_lines_mark, save_file_ff, unchanged};
 use crate::cursor::{check_cursor, check_cursor_lnum};
 use crate::diff::diff_invalidate;
-use crate::drawscreen::state::{redraw_cmdline, redraw_tabline};
+use crate::drawscreen::state::{REDRAW_CMDLINE, REDRAW_TABLINE};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later, status_redraw_all};
 use crate::edit::beginline;
 use crate::env::home_to_tilde;
@@ -92,11 +92,11 @@ use crate::regexp::vim_regexec;
 use crate::sha256::Sha256;
 use crate::shada::check_marks_read;
 use crate::startup::{exiting, readonlymode, recoverymode, stdin_fd, vim_ignored};
-use crate::state::mode::{State, exmode_active, restart_edit};
+use crate::state::mode::{EXMODE_ACTIVE, RESTART_EDIT, STATE};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{FmtArg, formatted};
 use crate::types::{ExArg, Failed, LineNr, ScriptId};
-use crate::ui::state::kUIMessages;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{
     buf_is_changed, u_clearallandblockfree, u_clearline, u_compute_hash, u_find_first_changed,

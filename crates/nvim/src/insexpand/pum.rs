@@ -497,7 +497,7 @@ pub fn ins_compl_show_pum() {
     }
 
     // Avoid a wait_return() when the message is cleared.
-    dollar_vcol.set(ColNr::NONE);
+    DOLLAR_VCOL.set(ColNr::NONE);
 
     // Move the cursor to the start of the match for the popup menu's sake,
     // then put it back.
@@ -540,7 +540,7 @@ pub(crate) fn compl_match_curr_select(selected: c_int) -> bool {
 /// left to whatever room the status line leaves.
 pub(crate) fn ins_compl_show_filename() {
     let lead = gettext(c"match in file");
-    let mut space = sc_col.get() - strsize(lead.to_bytes()) - 2;
+    let mut space = SC_COL.get() - strsize(lead.to_bytes()) - 2;
     if space <= 0 {
         return;
     }
@@ -571,7 +571,7 @@ pub(crate) fn ins_compl_show_filename() {
     let text = formatted!(IOSIZE as usize, b"%s %s%s", lead, ellipsis, &fname[s..]);
     msg(XString::from_vec(text).as_cstr(), 0);
     MSG_HIST_OFF.set(false);
-    redraw_cmdline.set(false);
+    REDRAW_CMDLINE.set(false);
 }
 
 /// The next match that is actually in the menu, in the direction the menu is
@@ -603,21 +603,21 @@ pub(crate) fn ins_compl_show_statusmsg() {
         } else {
             E_PATNOTF
         };
-        edit_submode_extra.set(Some(XString::from_cstr(gettext(text))));
-        edit_submode_highl.set(HLF_E);
+        EDIT_SUBMODE_EXTRA.set(Some(XString::from_cstr(gettext(text))));
+        EDIT_SUBMODE_HIGHL.set(HLF_E);
     }
 
-    if edit_submode_extra.with(Option::is_none) {
+    if EDIT_SUBMODE_EXTRA.with(Option::is_none) {
         let curr = curr_match().expect("a running completion has a current match");
         if curr.is_original() {
-            edit_submode_extra.set(Some(XString::from_cstr(gettext(c"Back at original"))));
-            edit_submode_highl.set(HLF_W);
+            EDIT_SUBMODE_EXTRA.set(Some(XString::from_cstr(gettext(c"Back at original"))));
+            EDIT_SUBMODE_HIGHL.set(HLF_W);
         } else if compl_cont_status.get() & CONT_S_IPOS != 0 {
-            edit_submode_extra.set(Some(XString::from_cstr(gettext(c"Word from other line"))));
-            edit_submode_highl.set(HLF_COUNT);
+            EDIT_SUBMODE_EXTRA.set(Some(XString::from_cstr(gettext(c"Word from other line"))));
+            EDIT_SUBMODE_HIGHL.set(HLF_COUNT);
         } else if curr.next() == curr.prev() {
-            edit_submode_extra.set(Some(XString::from_cstr(gettext(c"The only match"))));
-            edit_submode_highl.set(HLF_COUNT);
+            EDIT_SUBMODE_EXTRA.set(Some(XString::from_cstr(gettext(c"The only match"))));
+            EDIT_SUBMODE_HIGHL.set(HLF_COUNT);
             curr.update(|m| m.number = 1);
         } else {
             // Update the number, it is used in `msg_ext_set_kind`.
@@ -627,25 +627,25 @@ pub(crate) fn ins_compl_show_statusmsg() {
             let number = curr.with(|m| m.number);
             if number != -1 {
                 let msg = match_position_message(number, compl_matches.get());
-                edit_submode_extra.set(Some(msg));
-                edit_submode_highl.set(HLF_R);
-                if dollar_vcol.get() >= ColNr::ZERO {
+                EDIT_SUBMODE_EXTRA.set(Some(msg));
+                EDIT_SUBMODE_HIGHL.set(HLF_R);
+                if DOLLAR_VCOL.get() >= ColNr::ZERO {
                     curs_columns(Win::current(), 0);
                 }
             }
         }
     }
 
-    redraw_mode.set(true);
+    REDRAW_MODE.set(true);
     if shortmess(ShmFlag::COMPLETIONMENU) {
         return;
     }
     // A copy: showing it runs the message machinery.
-    match edit_submode_extra.with(Clone::clone) {
+    match EDIT_SUBMODE_EXTRA.with(Clone::clone) {
         None => msg_clr_cmdline(),
         Some(extra) if !p_smd() => {
             MSG_HIST_OFF.set(true);
-            let highl = edit_submode_highl.get();
+            let highl = EDIT_SUBMODE_HIGHL.get();
             let attr = if (0..HLF_COUNT).contains(&highl) {
                 highl + 1
             } else {

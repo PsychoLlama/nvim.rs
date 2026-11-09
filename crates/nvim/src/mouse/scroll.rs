@@ -26,7 +26,7 @@ use crate::buffer::buf_is_prompt;
 use crate::drawscreen::redraw_statuslines;
 use crate::edit::{InsertEnd, set_can_cindent, start_arrow, undisplay_dollar};
 use crate::getchar::state::MOD_MASK;
-use crate::mouse::state::{mouse_col, mouse_row};
+use crate::mouse::state::{MOUSE_COL, MOUSE_ROW};
 use crate::r#move::pagescroll;
 use crate::narrow::number_as_int;
 use crate::normal::defs::CmdArg;
@@ -37,7 +37,7 @@ use crate::pos::equalpos;
 use crate::search::{BACKWARD, FORWARD};
 use crate::siemsg;
 use crate::state::MODE_NORMAL;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::types::Direction;
 
 /// A mouse click in Insert mode: place the cursor, then get Insert mode's own
@@ -91,7 +91,7 @@ pub(crate) fn do_mousescroll(cmd_arg: &mut CmdArg) {
 
     if arg == MSCR_UP || arg == MSCR_DOWN {
         // Vertical scrolling.
-        if State.get() & MODE_NORMAL != 0 && shift_or_ctrl {
+        if STATE.get() & MODE_NORMAL != 0 && shift_or_ctrl {
             // Whole page up or down.
             let dir = if arg != 0 { FORWARD } else { BACKWARD } as Direction;
             pagescroll(dir, 1, false);
@@ -142,7 +142,7 @@ fn ins_mousescroll_with(cmd_arg: &mut CmdArg, dir: c_int) {
     };
 
     let old_curwin = Win::current();
-    if mouse_row.get() >= 0 && mouse_col.get() >= 0 {
+    if MOUSE_ROW.get() >= 0 && MOUSE_COL.get() >= 0 {
         // Find the window at the mouse pointer coordinates.
         // NOTE: Must restore "curwin" to "old_curwin" before returning!
         let mut pos = MousePos::current();

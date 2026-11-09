@@ -109,7 +109,7 @@ pub fn nvim_put(
     for i in 0..lines.len() {
         let item = &lines[i];
         let Some(line) = item.as_string() else {
-            let (want, got) = (api_typename(kObjectTypeString), api_typename(item.kind()));
+            let (want, got) = (api_typename(OBJECT_TYPE_STRING), api_typename(item.kind()));
             return Err(err_expected(c"line", want, Some(got)));
         };
         // A NUL in an API string stands for a newline, as it does in every

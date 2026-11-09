@@ -47,7 +47,7 @@ use crate::drawscreen::{UPD_NOT_VALID, find_wl_entry};
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::plines::plines_win_nofold;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::types::{LineNr, OptInt};
 use crate::winlayer::Win;
 use core::ffi::{c_int, c_uint};
@@ -580,7 +580,7 @@ pub fn clear_folding(mut win: Win) {
 ///
 pub fn fold_update(window: Win, top: LineNr, bot: LineNr) {
     if disable_fold_update.get() != 0
-        || State.get() & MODE_INSERT != 0 && !foldmethod_is_indent(window)
+        || STATE.get() & MODE_INSERT != 0 && !foldmethod_is_indent(window)
     {
         return;
     }

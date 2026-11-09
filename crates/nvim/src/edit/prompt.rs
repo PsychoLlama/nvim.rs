@@ -104,15 +104,15 @@ pub(crate) fn init_prompt(cmdchar_todo: Key) {
 
     // The insert always starts after the prompt; text after it stays
     // editable.
-    if Insstart_orig.get().lnum != start().lnum || Insstart_orig.get().col != start().col {
-        let mut insstart = Insstart.get();
+    if INSSTART_ORIG.get().lnum != start().lnum || INSSTART_ORIG.get().col != start().col {
+        let mut insstart = INSSTART.get();
         insstart.lnum = start().lnum;
         insstart.col = start().col;
-        Insstart.set(insstart);
-        Insstart_orig.set(insstart);
+        INSSTART.set(insstart);
+        INSSTART_ORIG.set(insstart);
         Insstart_textlen.set(insstart.col);
         Insstart_blank_vcol.set(ColNr::MAX);
-        arrow_used.set(false);
+        ARROW_USED.set(false);
     }
 
     if cmdchar_todo.is('A') {

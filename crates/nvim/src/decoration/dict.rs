@@ -19,16 +19,16 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::{
-    DECOR_ID_INVALID, decor_sh_from_inline, kSHConceal, kSHConcealLines, kSHHlEol, kSHIsSign,
-    kSHSpellOff, kSHSpellOn, kSHUIWatched, sh_chain, virt_chain, with_decor_item, with_decor_virt,
+    DECOR_ID_INVALID, SH_CONCEAL, SH_CONCEAL_LINES, SH_HL_EOL, SH_IS_SIGN, SH_SPELL_OFF,
+    SH_SPELL_ON, SHUI_WATCHED, decor_sh_from_inline, sh_chain, virt_chain, with_decor_item,
+    with_decor_virt,
 };
 use crate::api::extmark::virt_text_to_array;
 use crate::decoration::defs::{DecorInline, DecorSignHighlight, DecorVirtText};
 use crate::decoration::{
-    kVLLeftcol, kVLScroll, kVPosWinCol, kVTHide, kVTIsLines, kVTLinesAbove, kVTRepeatLinebreak,
+    V_POS_WIN_COL, VL_LEFTCOL, VL_SCROLL, VT_HIDE, VT_IS_LINES, VT_LINES_ABOVE, VT_REPEAT_LINEBREAK,
 };
 use crate::grid::schar_bytes;
 use crate::highlight::dict::put;
@@ -41,7 +41,7 @@ use core::ffi::{CStr, c_int};
 
 /// `kExtmark*`: which kinds of decoration a mark carries, as the bit mask the
 /// marktree stores beside it.
-const kExtmarkNone: uint16_t = 1;
+const EXTMARK_NONE: uint16_t = 1;
 const EXTMARK_SIGN: uint16_t = 2;
 const EXTMARK_VIRT_TEXT: uint16_t = 8;
 const EXTMARK_VIRT_LINES: uint16_t = 16;
@@ -85,14 +85,14 @@ pub fn decor_to_dict_legacy(dict: &mut DictBuilder, decor: DecorInline, hl_name:
     match decor {
         DecorInline::Ext(ext) => {
             for vt in virt_chain(ext.vt_idx) {
-                if with_decor_virt(vt, |link| link.flags & kVTIsLines != 0) {
+                if with_decor_virt(vt, |link| link.flags & VT_IS_LINES != 0) {
                     virt_lines = vt;
                 } else {
                     virt_text = vt;
                 }
             }
             for idx in sh_chain(decor) {
-                if with_decor_item(idx, |sh| sh.flags & kSHIsSign != 0) {
+                if with_decor_item(idx, |sh| sh.flags & SH_IS_SIGN != 0) {
                     sh_sign = idx;
                 } else {
                     sh_hl = idx;
@@ -139,28 +139,28 @@ fn put_highlight(
     let flags = sh_hl.flags;
     if sh_hl.hl_id != 0 {
         put(dict, c"hl_group", hl_group_name(sh_hl.hl_id, hl_name));
-        let value = Object::boolean(flags & kSHHlEol != 0);
+        let value = Object::boolean(flags & SH_HL_EOL != 0);
         put(dict, c"hl_eol", value);
         *priority = i32::from(sh_hl.priority);
     }
 
-    if flags & kSHConceal != 0 {
+    if flags & SH_CONCEAL != 0 {
         let text = schar_bytes(sh_hl.text[0]);
         let value = Object::string(ApiString::from_bytes(crate::cstr::until_nul(&text)));
         put(dict, c"conceal", value);
     }
 
-    if flags & kSHConcealLines != 0 {
+    if flags & SH_CONCEAL_LINES != 0 {
         put(dict, c"conceal_lines", Object::literal(""));
     }
 
-    if flags & kSHSpellOn != 0 {
+    if flags & SH_SPELL_ON != 0 {
         put(dict, c"spell", Object::boolean(true));
-    } else if flags & kSHSpellOff != 0 {
+    } else if flags & SH_SPELL_OFF != 0 {
         put(dict, c"spell", Object::boolean(false));
     }
 
-    if flags & kSHUIWatched != 0 {
+    if flags & SHUI_WATCHED != 0 {
         put(dict, c"ui_watched", Object::boolean(true));
     }
 
@@ -184,11 +184,11 @@ fn put_virt_text(dict: &mut DictBuilder, vt: &DecorVirtText, hl_name: bool) {
 
     let chunks = virt_text_to_array(vt.data.text(), hl_name);
     put(dict, c"virt_text", Object::array(chunks));
-    let value = Object::boolean(vt.flags & kVTHide != 0);
+    let value = Object::boolean(vt.flags & VT_HIDE != 0);
     put(dict, c"virt_text_hide", value);
-    let value = Object::boolean(vt.flags & kVTRepeatLinebreak != 0);
+    let value = Object::boolean(vt.flags & VT_REPEAT_LINEBREAK != 0);
     put(dict, c"virt_text_repeat_linebreak", value);
-    if vt.pos == kVPosWinCol {
+    if vt.pos == V_POS_WIN_COL {
         put(dict, c"virt_text_win_col", Object::integer(vt.col.into()));
     }
     let pos = VIRT_TEXT_POS_STR[vt.pos as usize];
@@ -213,11 +213,11 @@ fn put_virt_lines(dict: &mut DictBuilder, vt: &DecorVirtText, hl_name: bool) {
     }
 
     put(dict, c"virt_lines", Object::array(all_chunks));
-    let value = Object::boolean(vt.flags & kVTLinesAbove != 0);
+    let value = Object::boolean(vt.flags & VT_LINES_ABOVE != 0);
     put(dict, c"virt_lines_above", value);
-    let value = Object::boolean(line_flags & kVLLeftcol != 0);
+    let value = Object::boolean(line_flags & VL_LEFTCOL != 0);
     put(dict, c"virt_lines_leftcol", value);
-    let overflow = if line_flags & kVLScroll != 0 {
+    let overflow = if line_flags & VL_SCROLL != 0 {
         c"scroll"
     } else {
         c"trunc"
@@ -258,7 +258,7 @@ fn put_sign(dict: &mut DictBuilder, sh: &DecorSignHighlight, hl_name: bool) {
 pub fn decor_type_flags(decor: DecorInline) -> uint16_t {
     let ext = match decor {
         DecorInline::Hl(hl) => {
-            return if hl.flags & kSHIsSign != 0 {
+            return if hl.flags & SH_IS_SIGN != 0 {
                 EXTMARK_SIGN
             } else {
                 EXTMARK_HIGHLIGHT
@@ -267,16 +267,16 @@ pub fn decor_type_flags(decor: DecorInline) -> uint16_t {
         DecorInline::Ext(ext) => ext,
     };
 
-    let mut type_flags = kExtmarkNone;
+    let mut type_flags = EXTMARK_NONE;
     for vt in virt_chain(ext.vt_idx) {
-        type_flags |= if with_decor_virt(vt, |link| link.flags & kVTIsLines != 0) {
+        type_flags |= if with_decor_virt(vt, |link| link.flags & VT_IS_LINES != 0) {
             EXTMARK_VIRT_LINES
         } else {
             EXTMARK_VIRT_TEXT
         };
     }
     for idx in sh_chain(decor) {
-        type_flags |= if with_decor_item(idx, |sh| sh.flags & kSHIsSign != 0) {
+        type_flags |= if with_decor_item(idx, |sh| sh.flags & SH_IS_SIGN != 0) {
             EXTMARK_SIGN
         } else {
             EXTMARK_HIGHLIGHT

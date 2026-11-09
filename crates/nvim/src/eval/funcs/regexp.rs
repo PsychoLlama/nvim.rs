@@ -41,8 +41,8 @@ use crate::regexp::RegMatch;
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING};
 use crate::semsg;
 use crate::types::{
-    Callback, Failed, LineNr, List, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VarNumber, kListLenMayKnow, kListLenUnknown,
+    Callback, Failed, LIST_LEN_MAY_KNOW, LIST_LEN_UNKNOWN, LineNr, List, TypVal, VAR_BOOL,
+    VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber,
 };
 use core::ffi::{CStr, c_int};
 
@@ -61,7 +61,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
     result.write_number(-1);
     match kind {
         SOME_MATCH_LIST => {
-            tv_list_alloc_ret(result, kListLenMayKnow as isize);
+            tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
         }
         SOME_MATCH_STR_POS => {
             // Seeded with the "no match" answer, which the tail of this
@@ -302,7 +302,7 @@ fn get_matches_in_str(
 pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_number(-1);
-    tv_list_alloc_ret(result, kListLenUnknown as isize);
+    tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as isize);
     if tv_check_for_buffer_arg(args, 0).is_err()
         || tv_check_for_string_arg(args, 1).is_err()
         || tv_check_for_lnum_arg(args, 2).is_err()
@@ -419,7 +419,7 @@ pub fn f_matchstrpos(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
 /// `matchstrlist({list}, {pat} [, {dict}])`.
 pub fn f_matchstrlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1);
-    tv_list_alloc_ret(result, kListLenUnknown as isize);
+    tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as isize);
     if tv_check_for_list_arg(args, 0).is_err()
         || tv_check_for_string_arg(args, 1).is_err()
         || tv_check_for_opt_dict_arg(args, 2).is_err()
@@ -552,7 +552,7 @@ fn fuzzy_match_in_list(list: &ListRef, request: &Request) -> Vec<FuzzyItem> {
                     .get(first..)
                     .is_some_and(|tail| tail.starts_with(pattern.to_bytes()));
                 let positions = request.retmatchpos.then(|| {
-                    let positions = tv_list_alloc(kListLenMayKnow as isize);
+                    let positions = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
                     // One position per pattern character that took part
                     // in the match, i.e. all but the word separators.
                     let placed = matched_char_count(pattern, request.matchseq);
@@ -660,7 +660,7 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
     // matchfuzzy() answers just the strings; matchfuzzypos() answers them
     // in the first of three lists, the matching positions in the second and
     // the scores in the third.
-    let strings = tv_list_alloc(kListLenUnknown as isize);
+    let strings = tv_list_alloc(LIST_LEN_UNKNOWN as isize);
     for item in &found {
         // A callback above may have shortened the list, in which case the
         // item it matched is simply gone.
@@ -673,8 +673,8 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
         return;
     }
     let out = tv_list_alloc_ret(result, 3);
-    let positions = tv_list_alloc(kListLenUnknown as isize);
-    let scores = tv_list_alloc(kListLenUnknown as isize);
+    let positions = tv_list_alloc(LIST_LEN_UNKNOWN as isize);
+    let scores = tv_list_alloc(LIST_LEN_UNKNOWN as isize);
     for item in found {
         positions
             .edit()

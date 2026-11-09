@@ -98,7 +98,7 @@ pub enum WildMode {
     PageUp,
     /// Move the selection a page towards the end.
     PageDown,
-    /// Select the item the UI named in `pum_want`.
+    /// Select the item the UI named in `PUM_WANT`.
     PumWant,
 }
 

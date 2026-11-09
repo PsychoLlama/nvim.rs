@@ -34,8 +34,8 @@ use crate::msgpack_rpc::handler::MsgpackRpcRequestHandler;
 use crate::os::input::input_blocking;
 use crate::os::libc::{uint32_t, uint64_t};
 use crate::startup::ui_client_attached;
-use crate::types::{Array, Error, MessageType, Object, kErrorTypeException};
-use crate::ui::state::resize_events;
+use crate::types::{Array, ERROR_TYPE_EXCEPTION, Error, MessageType, Object};
+use crate::ui::state::RESIZE_EVENTS;
 use crate::ui_client::ui_client_event_raw_line;
 
 use super::envelope::serialize_response;
@@ -259,7 +259,7 @@ fn schedule(chan: &mut Channel, request: Request, method_name_len: usize) -> Ste
     // first, and run only once.
     let is_resize = core::ptr::fn_addr_eq(handler_fn, handle_nvim_ui_try_resize as ApiDispatchFn);
     if is_resize {
-        put_job_on_either(&chan.events, &resize_events, job(request));
+        put_job_on_either(&chan.events, &RESIZE_EVENTS, job(request));
         return Step::Routed;
     }
     put_job(&chan.events, job(request));
@@ -329,7 +329,7 @@ fn request_event(request: Request) {
 /// Answers a request that never reached a handler.
 fn send_error(request: &Request, why: &Error) {
     let mut answer = Object::Nil;
-    let e = Error::from_message(kErrorTypeException, why.message_or_empty());
+    let e = Error::from_message(ERROR_TYPE_EXCEPTION, why.message_or_empty());
     serialize_response(
         request.channel,
         request.handler,

@@ -342,7 +342,7 @@ fn qf_msg(qi: Qi, which: c_int, lead: &str) {
     }
     // Upstream builds this in an `IOSIZE` buffer.
     line.truncate(IOSIZE as usize - 1);
-    let text = cut_middle(&line, Columns.get() - 1, IOSIZE as usize);
+    let text = cut_middle(&line, COLUMNS.get() - 1, IOSIZE as usize);
     msg(&owned_cstr(&text), 0);
 }
 

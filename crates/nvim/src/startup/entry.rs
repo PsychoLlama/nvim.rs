@@ -33,7 +33,7 @@ use crate::channel::defs::CallbackReader;
 use crate::channel::{channel_from_stdio, channel_init, channel_teardown};
 use crate::debugger::state::debug_break_level;
 use crate::diff::diff_win_options;
-use crate::drawscreen::state::{RedrawingDisabled, cmdline_row};
+use crate::drawscreen::state::{CMDLINE_ROW, REDRAWING_DISABLED};
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_VALID, default_grid_alloc, redraw_all_later, redraw_later, screenclear,
 };
@@ -94,11 +94,11 @@ use crate::startup::{
     recoverymode, silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty,
     ui_client_channel_id, ui_client_forward_stdin,
 };
-use crate::state::mode::{exmode_active, restart_edit};
+use crate::state::mode::{EXMODE_ACTIVE, RESTART_EDIT};
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
 use crate::types::{OptInt, VarNumber, Vv};
-use crate::ui::state::{Rows, resize_events};
+use crate::ui::state::{RESIZE_EVENTS, ROWS};
 use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
 use crate::ui_compositor::ui_comp_syn_init;
@@ -111,7 +111,7 @@ use crate::winlayer::{Win, first_window, windows};
 pub fn event_init() {
     main_loop_init();
     env_init();
-    resize_events.set(Some(ChildQueue::of_main_loop()));
+    RESIZE_EVENTS.set(Some(ChildQueue::of_main_loop()));
     autocmd_init();
     signal_init();
     channel_init();
@@ -272,7 +272,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         params.window_count = 0;
     }
 
-    RedrawingDisabled.set(RedrawingDisabled.get() + 1);
+    REDRAWING_DISABLED.set(REDRAWING_DISABLED.get() + 1);
     unbuffer_c_stdout();
     full_screen.set(!silent_mode.get());
 
@@ -283,12 +283,12 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
 
     debug_assert!(
         p_ch() >= 0
-            && OptInt::from(Rows.get()) >= p_ch()
-            && OptInt::from(Rows.get()) - p_ch() <= OptInt::from(c_int::MAX),
+            && OptInt::from(ROWS.get()) >= p_ch()
+            && OptInt::from(ROWS.get()) - p_ch() <= OptInt::from(c_int::MAX),
         "'cmdheight' does not fit in the screen"
     );
-    cmdline_row.set(Rows.get() - c_int::try_from(p_ch()).expect("checked against the screen"));
-    MSG_ROW.set(cmdline_row.get());
+    CMDLINE_ROW.set(ROWS.get() - c_int::try_from(p_ch()).expect("checked against the screen"));
+    MSG_ROW.set(CMDLINE_ROW.get());
     default_grid_alloc();
 
     set_init_2(headless_mode.get());
@@ -304,7 +304,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
 
     // `-es` with a pipe: start reading it now, so the Ex commands are
     // there when the loop asks.
-    if !stdin_isatty.get() && !params.input_is_text && silent_mode.get() && exmode_active.get() {
+    if !stdin_isatty.get() && !params.input_is_text && silent_mode.get() && EXMODE_ACTIVE.get() {
         input_start();
     }
 
@@ -397,7 +397,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
 
     starting.set(NO_BUFFERS);
     NO_WAIT_RETURN.set(0);
-    if !exmode_active.get() {
+    if !EXMODE_ACTIVE.get() {
         MSG_SCROLL.set(0);
     }
 
@@ -416,7 +416,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     // from here on are the user's own doing.
     set_vim_var_string(Vv::Swapcommand, None);
 
-    if exmode_active.get() {
+    if EXMODE_ACTIVE.get() {
         Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
     }
     fire_autocmds(AutoEvent::BufEnter, false, Buf::current_or_none());
@@ -445,7 +445,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     }
 
     starting.set(0);
-    RedrawingDisabled.set(0);
+    REDRAWING_DISABLED.set(0);
     redraw_all_later(UPD_NOT_VALID);
     NO_WAIT_RETURN.set(0);
     do_autochdir();
@@ -466,7 +466,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         time_msg_at(c"diff scrollbinding");
     }
 
-    if !restart_edit.get().is_nul() {
+    if !RESTART_EDIT.get().is_nul() {
         // A `-c startinsert` and friends: push the key that gets there.
         stuff_readbuf_char(Key::from_code(-(253 + (c_int::from(KE_NOP) << 8))));
     }

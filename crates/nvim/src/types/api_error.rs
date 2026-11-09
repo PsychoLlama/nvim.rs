@@ -38,7 +38,7 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{ErrorType, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
+use super::{ERROR_TYPE_EXCEPTION, ERROR_TYPE_NONE, ERROR_TYPE_VALIDATION, ErrorType};
 use crate::message_fmt::to_message;
 use core::ffi::CStr;
 use core::fmt;
@@ -50,7 +50,7 @@ const MAXLEN: usize = 1024 * 1024;
 
 /// Why an `nvim_*` function refused, and what to tell the client.
 ///
-/// A value with [`kErrorTypeNone`] carries no failure: that is what
+/// A value with [`ERROR_TYPE_NONE`] carries no failure: that is what
 /// [`none`](Error::none) builds, and what the out-parameter slots the
 /// migration has not reached yet start out holding. An `Error` inside an
 /// `Err` always carries one.
@@ -66,7 +66,7 @@ impl Error {
     /// what that name used to buy at 245 call sites.
     pub(crate) const fn none() -> Self {
         Self {
-            kind: kErrorTypeNone,
+            kind: ERROR_TYPE_NONE,
             msg: None,
         }
     }
@@ -78,7 +78,7 @@ impl Error {
     /// [`MAXLEN`] and ends at an interior NUL, exactly where
     /// `api_set_error`'s `vsnprintf` ended it.
     pub(crate) fn new(kind: ErrorType, args: fmt::Arguments<'_>) -> Self {
-        debug_assert!(kind != kErrorTypeNone);
+        debug_assert!(kind != ERROR_TYPE_NONE);
         Self {
             kind,
             msg: Some(to_message(args.to_string(), MAXLEN)),
@@ -87,7 +87,7 @@ impl Error {
 
     /// A failure of kind `kind`, carrying `msg` as its message.
     pub(crate) fn from_message(kind: ErrorType, msg: &CStr) -> Self {
-        debug_assert!(kind != kErrorTypeNone);
+        debug_assert!(kind != ERROR_TYPE_NONE);
         let mut bytes = msg.to_bytes();
         bytes = &bytes[..bytes.len().min(MAXLEN - 1)];
         Self {
@@ -96,25 +96,25 @@ impl Error {
         }
     }
 
-    /// `kErrorTypeException`: the call failed. Vim's own errors, and
+    /// `ERROR_TYPE_EXCEPTION`: the call failed. Vim's own errors, and
     /// whatever a Lua callback threw, arrive as this.
     pub(crate) fn exception(msg: &CStr) -> Self {
-        Self::from_message(kErrorTypeException, msg)
+        Self::from_message(ERROR_TYPE_EXCEPTION, msg)
     }
 
-    /// `kErrorTypeValidation`: the call's arguments were wrong.
+    /// `ERROR_TYPE_VALIDATION`: the call's arguments were wrong.
     pub(crate) fn validation(msg: &CStr) -> Self {
-        Self::from_message(kErrorTypeValidation, msg)
+        Self::from_message(ERROR_TYPE_VALIDATION, msg)
     }
 
-    /// Which kind of failure this is, or [`kErrorTypeNone`] for none.
+    /// Which kind of failure this is, or [`ERROR_TYPE_NONE`] for none.
     pub(crate) fn kind(&self) -> ErrorType {
         self.kind
     }
 
     /// Whether this carries a failure at all: C's `ERROR_SET`.
     pub(crate) fn is_set(&self) -> bool {
-        self.kind != kErrorTypeNone
+        self.kind != ERROR_TYPE_NONE
     }
 
     /// The message, or the empty string, for the reporting paths that had a
@@ -142,7 +142,7 @@ impl Error {
 
 /// Build an [`Error`] from a checked format literal.
 ///
-/// `api_error!(kErrorTypeValidation, "Invalid buffer id: {id}")` replaces
+/// `api_error!(ERROR_TYPE_VALIDATION, "Invalid buffer id: {id}")` replaces
 /// upstream's `api_set_error(err, kErrorTypeValidation, "Invalid buffer id:
 /// %d", id)`: `format_args!` checks the placeholders against the arguments,
 /// and the `const` block rejects a literal that still holds a C conversion,
@@ -179,33 +179,33 @@ mod tests {
         let err = Error::none();
         assert!(!err.is_set());
         assert_eq!(err.message_or_empty(), c"");
-        assert_eq!(err.kind(), kErrorTypeNone);
+        assert_eq!(err.kind(), ERROR_TYPE_NONE);
     }
 
     #[test]
     fn a_message_keeps_its_bytes() {
-        let err = Error::from_message(kErrorTypeValidation, c"caf\xe9");
-        assert_eq!(err.kind(), kErrorTypeValidation);
+        let err = Error::from_message(ERROR_TYPE_VALIDATION, c"caf\xe9");
+        assert_eq!(err.kind(), ERROR_TYPE_VALIDATION);
         assert_eq!(err.message_or_empty().to_bytes(), b"caf\xe9");
     }
 
     #[test]
     fn a_formatted_message_keeps_its_bytes() {
         let name = crate::message_fmt::msg_bytes(b"caf\xe9");
-        let err = api_error!(kErrorTypeValidation, "Invalid file: {name}");
-        assert_eq!(err.kind(), kErrorTypeValidation);
+        let err = api_error!(ERROR_TYPE_VALIDATION, "Invalid file: {name}");
+        assert_eq!(err.kind(), ERROR_TYPE_VALIDATION);
         assert_eq!(err.message_or_empty().to_bytes(), b"Invalid file: caf\xe9");
     }
 
     #[test]
     fn a_formatted_message_ends_at_an_interior_nul() {
-        let err = api_error!(kErrorTypeException, "a{}b", '\0');
+        let err = api_error!(ERROR_TYPE_EXCEPTION, "a{}b", '\0');
         assert_eq!(err.message_or_empty(), c"a");
     }
 
     #[test]
     fn display_is_lossy_where_the_message_is_not() {
-        let err = Error::from_message(kErrorTypeException, c"\xff");
+        let err = Error::from_message(ERROR_TYPE_EXCEPTION, c"\xff");
         assert_eq!(err.message_or_empty().to_bytes(), b"\xff");
         assert_eq!(err.to_string(), "\u{fffd}");
     }

@@ -27,7 +27,7 @@ use std::ffi::CString;
 
 use super::*;
 use crate::cstr;
-use crate::keycodes::Ctrl_V;
+use crate::keycodes::CTRL_V;
 use crate::mbyte::cluster_len;
 
 /// The accelerator separator inside a menu name. `\t` in a `:menu` argument
@@ -51,7 +51,7 @@ pub(crate) fn take_component(name: &[u8]) -> (Vec<u8>, &[u8]) {
     let mut component = Vec::with_capacity(name.len());
     let mut i = 0;
     while i < name.len() && name[i] != b'.' {
-        if name[i] == b'\\' || c_int::from(name[i]) == Ctrl_V {
+        if name[i] == b'\\' || c_int::from(name[i]) == CTRL_V {
             i += 1;
             if i == name.len() {
                 break;

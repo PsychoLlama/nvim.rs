@@ -39,7 +39,7 @@ use crate::cmdhist::{
 };
 use crate::cursor::{coladvance, gchar_cursor, with_cursor_rest};
 use crate::digraph::{do_digraph, get_digraph, reset_digraph};
-use crate::drawscreen::state::{cmdline_row, redraw_cmdline, redraw_tabline, skip_redraw};
+use crate::drawscreen::state::{CMDLINE_ROW, REDRAW_CMDLINE, REDRAW_TABLINE, SKIP_REDRAW};
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, redraw_all_later, redraw_custom_title_later,
     redraw_later, redraw_statuslines, set_must_redraw, setcursor, status_redraw_all,
@@ -100,7 +100,7 @@ use crate::message::{
     sb_text_restart_cmdline, sb_text_start_cmdline,
 };
 use crate::mouse::setmouse;
-use crate::mouse::state::{mouse_col, mouse_row};
+use crate::mouse::state::{MOUSE_COL, MOUSE_ROW};
 use crate::r#move::{
     changed_cline_bef_curs, changed_line_abv_curs, invalidate_botline_win, update_topline,
     validate_cursor,
@@ -125,7 +125,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::os::libc::{size_t, time_t, uint8_t};
 use crate::path::vim_ispathsep;
-use crate::popupmenu::state::pum_want;
+use crate::popupmenu::state::PUM_WANT;
 use crate::popupmenu::{pum_check_clear, pum_ext_want_done, pum_undisplay};
 use crate::pos::{MAXCOL, MAXLNUM, clearpos, equalpos, lt};
 use crate::profile::profile_setlimit;
@@ -148,7 +148,7 @@ use crate::search::{
     do_search, last_search_pattern, pat_has_uppercase, restore_last_search_pattern,
     restore_search_patterns, save_last_search_pattern, save_search_patterns, searchit,
 };
-use crate::state::mode::{State, exmode_active, no_abbr, restart_edit};
+use crate::state::mode::{EXMODE_ACTIVE, NO_ABBR, RESTART_EDIT, STATE};
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, ModeState, may_trigger_modechanged,
     may_trigger_safestate, state_enter, state_handle_k_event,
@@ -162,8 +162,8 @@ use crate::types::{
     CmdParseMagic, ColNr, Direction, DispTick, Error, ExArg, ExArgt, Handle, Integer, LineNr,
     Object, OptInt, Pos, ProfTime, SaveVEvent, TypVal, VarNumber,
 };
-use crate::ui::state::{Columns, Rows};
-use crate::ui::state::{kUICmdline, kUIMessages};
+use crate::ui::state::{COLUMNS, ROWS};
+use crate::ui::state::{UI_CMDLINE, UI_MESSAGES};
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
     ui_call_cmdline_block_show, ui_call_cmdline_hide, ui_call_cmdline_pos, ui_call_cmdline_show,

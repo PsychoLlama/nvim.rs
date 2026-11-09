@@ -48,7 +48,7 @@ use crate::plines::{linetabsize, plines_win, win_get_fill};
 use crate::pos::lt;
 use crate::quickfix::qf_view_result;
 use crate::search::{BACKWARD, FORWARD, findmatch, searchc};
-use crate::state::mode::{VIsual_select_exclu_adj, ins_at_eol, restart_edit};
+use crate::state::mode::{INS_AT_EOL, RESTART_EDIT, V_ISUAL_SELECT_EXCLU_ADJ};
 use crate::state::virtual_active;
 use crate::textobject::{bck_word, end_word, findpar, findsent, fwd_word};
 use crate::types::{ColNr, Direction, LineNr};
@@ -469,8 +469,8 @@ pub(crate) fn nv_down(cmd_arg: &mut CmdArg) {
             && Win::current().w_cursor.lnum == Buf::current().b_ml.ml_line_count
         {
             prompt_invoke_callback();
-            if restart_edit.get().is_nul() {
-                restart_edit.set(Key::ascii(b'a'));
+            if RESTART_EDIT.get().is_nul() {
+                RESTART_EDIT.set(Key::ascii(b'a'));
             }
             return;
         }
@@ -524,7 +524,7 @@ pub(crate) fn nv_csearch(cmd_arg: &mut CmdArg) {
     if P_SEL.first_byte() == b'e'
         && visual_active()
         && visual_mode().is_char()
-        && VIsual_select_exclu_adj.get()
+        && V_ISUAL_SELECT_EXCLU_ADJ.get()
     {
         unadjust_for_sel();
         cursor_dec = true;
@@ -643,7 +643,7 @@ pub(crate) fn nv_home(cmd_arg: &mut CmdArg) {
         cmd_arg.count0 = 1;
         nv_pipe(cmd_arg);
     }
-    ins_at_eol.set(false);
+    INS_AT_EOL.set(false);
 }
 
 /// `|`: to a screen column.
@@ -737,7 +737,7 @@ pub(crate) fn nv_beginline(cmd_arg: &mut CmdArg) {
     cmd_arg.op().inclusive = false;
     beginline(BeginlineOpts::from_bits(cmd_arg.arg));
     may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint);
-    ins_at_eol.set(false);
+    INS_AT_EOL.set(false);
 }
 
 /// `gg` and `G`: to the first or last line, or to the count'th.

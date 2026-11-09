@@ -84,9 +84,9 @@ pub fn vgetc() -> Key {
         // A character `vungetc` put back has already been processed.
         c = key.c;
         MOD_MASK.set(key.mod_mask);
-        mouse_grid.set(key.mouse_grid);
-        mouse_row.set(key.mouse_row);
-        mouse_col.set(key.mouse_col);
+        MOUSE_GRID.set(key.mouse_grid);
+        MOUSE_ROW.set(key.mouse_row);
+        MOUSE_COL.set(key.mouse_col);
     } else {
         c = vgetc_from_typeahead();
     }
@@ -205,7 +205,7 @@ fn vgetc_from_typeahead() -> Key {
         if NO_MAPPING.get() == 0
             && KEY_TYPED.get()
             && MOD_MASK.get() == ModMask::ALT
-            && State.get() & MODE_TERMINAL == 0
+            && STATE.get() & MODE_TERMINAL == 0
             && !is_mouse_key(c)
         {
             MOD_MASK.set(ModMask::NONE);
@@ -373,9 +373,9 @@ pub(crate) fn vungetc(c: Key) {
     UNGOT.set(Some(UngotKey {
         c,
         mod_mask: MOD_MASK.get(),
-        mouse_grid: mouse_grid.get(),
-        mouse_row: mouse_row.get(),
-        mouse_col: mouse_col.get(),
+        mouse_grid: MOUSE_GRID.get(),
+        mouse_row: MOUSE_ROW.get(),
+        mouse_col: MOUSE_COL.get(),
         stuffed: KEY_STUFFED.get(),
     }));
 }

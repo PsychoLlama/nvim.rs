@@ -46,9 +46,9 @@ use crate::message::state::{EMSG_ON_DISPLAY, EMSG_SILENT};
 use crate::os::cshim::gettext;
 use crate::runtime::defs::EStackArg;
 use crate::types::{
-    BoolVarValue, TypVal, VAR_FLOAT, VAR_NUMBER, VarNumber, Vv, kBoolVarFalse, kBoolVarTrue,
+    BOOL_VAR_FALSE, BOOL_VAR_TRUE, BoolVarValue, TypVal, VAR_FLOAT, VAR_NUMBER, VarNumber, Vv,
 };
-use crate::ui::state::called_vim_beep;
+use crate::ui::state::CALLED_VIM_BEEP;
 
 /// Which `assert_*()` is reporting. Decides the wording of the message.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -126,7 +126,11 @@ fn assert_bool(args: &[TypVal], is_true: bool) -> bool {
     let actual = &args[0];
     let number_ok = actual.v_type() == VAR_NUMBER
         && tv_get_number_chk(actual).is_ok_and(|n| (n == 0) != is_true);
-    let want = (if is_true { kBoolVarTrue } else { kBoolVarFalse }) as BoolVarValue;
+    let want = (if is_true {
+        BOOL_VAR_TRUE
+    } else {
+        BOOL_VAR_FALSE
+    }) as BoolVarValue;
     let bool_ok = actual.as_bool() == Some(want);
     if number_ok || bool_ok {
         return true;
@@ -163,13 +167,13 @@ fn assert_beeps(args: &[TypVal], no_beep: bool) -> bool {
     // has reported itself and runs as the empty command. The text is the
     // argument's own, which the call holds for its whole length.
     let cmd = numbuf.string_chk(&args[0]).unwrap_or(c"");
-    called_vim_beep.set(false);
+    CALLED_VIM_BEEP.set(false);
     suppress_errthrow.set(true);
     EMSG_SILENT.set(0);
     let _ = do_cmdline_cmd(cmd);
 
     let mut held = true;
-    if called_vim_beep.get() == no_beep {
+    if CALLED_VIM_BEEP.get() == no_beep {
         let mut message = prepare_assert_error();
         push_lit(
             &mut message,

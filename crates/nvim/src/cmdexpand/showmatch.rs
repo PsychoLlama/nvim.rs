@@ -19,7 +19,7 @@ use super::*;
 use crate::charset::vim_strsize_cstr;
 use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
-use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::state::CMDLINE_ROW;
 use crate::env::{expand_env, home_to_tilde};
 use crate::getchar::state::GOT_INT;
 use crate::highlight_group::{HLF_D, HLF_T};
@@ -34,8 +34,8 @@ use crate::os::fs::dir_exists;
 use crate::path::MAXPATHL;
 use crate::path::{tail_index, vim_ispathsep};
 use crate::popupmenu::pum_clear;
-use crate::ui::state::Columns;
-use crate::ui::state::kUIMessages;
+use crate::ui::state::COLUMNS;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_flush, ui_has};
 use crate::winlayer::Cc;
 use core::ffi::c_int;
@@ -182,11 +182,11 @@ pub fn showmatches(
     if display_list {
         MSG_DIDANY.set(false); // lines_left will be set
         msg_start(); // prepare for paging
-        if !ui_has(kUIMessages) {
+        if !ui_has(UI_MESSAGES) {
             msg_putchar(c_int::from(b'\n'));
         }
         ui_flush();
-        cmdline_row.set(MSG_ROW.get());
+        CMDLINE_ROW.set(MSG_ROW.get());
         MSG_DIDANY.set(false); // lines_left will be set again
         msg_ext_set_kind(c"wildlist");
         msg_start(); // prepare for paging
@@ -226,7 +226,7 @@ pub fn showmatches(
         } else {
             // Compute the number of columns and lines for the listing.
             maxlen += 2; // two spaces between file names
-            let columns = ((Columns.get() + 2) / maxlen).max(1);
+            let columns = ((COLUMNS.get() + 2) / maxlen).max(1);
             (num_matches + columns - 1) / columns
         };
 
@@ -248,7 +248,7 @@ pub fn showmatches(
 
         // We redraw the command below the lines that we have just listed.
         // This is a bit tricky, but it saves a lot of screen updating.
-        cmdline_row.set(MSG_ROW.get()); // will put it back later
+        CMDLINE_ROW.set(MSG_ROW.get()); // will put it back later
     }
 
     Expanded::Ok

@@ -35,7 +35,7 @@ use crate::option::vars::{JOP_FLAGS, P_EA, p_ch, p_ea, p_tpm};
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
 use crate::types::{ExArg, Failed, LineNr, OptInt};
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::undo::buf_is_changed;
 use crate::window::{
     NotClosed, WSP_BELOW, WSP_ROOM, WSP_VERT, global_stl_height, goto_tab as goto_tab_page,
@@ -281,12 +281,12 @@ fn close_superfluous_windows(had_tab: c_int, open_wins: &mut c_int) {
 fn should_close(win: Win, had_tab: c_int) -> bool {
     let too_small = if cmdmod.with(|m| m.cmod_split) & WSP_VERT != 0 {
         OptInt::from(win.w_height + win.w_hsep_height + win.w_status_height)
-            < OptInt::from(Rows.get())
+            < OptInt::from(ROWS.get())
                 - p_ch()
                 - OptInt::from(tabline_rows())
                 - OptInt::from(global_stl_rows())
     } else {
-        win.w_width != Columns.get()
+        win.w_width != COLUMNS.get()
     };
     let buf = win.buffer();
     (buf.b_nwindows > 1 || win.w_floating || too_small || had_tab > 0 && win != first_win())

@@ -25,7 +25,7 @@ use crate::api::extmark::nvim_create_namespace;
 use crate::buffer::maketitle;
 use crate::charset::init_chartab;
 use crate::decoration_provider::with_decor_provider;
-use crate::drawscreen::state::{need_maketitle, redraw_tabline};
+use crate::drawscreen::state::{NEED_MAKETITLE, REDRAW_TABLINE};
 use crate::drawscreen::{
     UPD_NOT_VALID, redraw_all_later, redraw_buf_later, redraw_later, status_redraw_all,
 };
@@ -276,8 +276,8 @@ pub(crate) fn insecure_flag(
 
 /// Ask for the window title and the tabline to be rebuilt.
 pub(crate) fn redraw_titles() {
-    need_maketitle.set(true);
-    redraw_tabline.set(true);
+    NEED_MAKETITLE.set(true);
+    REDRAW_TABLINE.set(true);
 }
 
 /// Whether every byte of `val` is a letter, a digit, or one of `allowed` —
@@ -395,7 +395,7 @@ pub(crate) fn check_redraw_for(buffer: Buf, win: Win, flags: uint32_t) {
         status_redraw_all();
     }
     if flags & OPT_FLAG_REDR_TABL != 0 || all {
-        redraw_tabline.set(true);
+        REDRAW_TABLINE.set(true);
     }
     if flags & (OPT_FLAG_REDR_BUF | OPT_FLAG_REDR_WIN) != 0 || all {
         if flags & OPT_FLAG_HL_ONLY != 0 {

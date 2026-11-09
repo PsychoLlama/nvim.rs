@@ -34,7 +34,7 @@ use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::find_func;
 use crate::lua::abi::lua_Number;
 use crate::lua::stack::{At, Stack};
-use crate::types::{Failed, Float, TypVal, kObjectTypeDict};
+use crate::types::{Failed, Float, OBJECT_TYPE_DICT, TypVal};
 
 /// How many Lua slots opening a container needs: its table, the key or index
 /// it is about to set, and the value that will land on top of them.
@@ -179,7 +179,7 @@ impl TypvalSink for LuaSink<'_> {
     /// caller asked for the special form.
     fn conv_empty_dict(&mut self) {
         if self.special {
-            create_typed_table(self.stack, 0, 0, kObjectTypeDict);
+            create_typed_table(self.stack, 0, 0, OBJECT_TYPE_DICT);
         } else {
             self.stack.new_table(0, 0);
             self.stack.push_empty_dict_metatable();

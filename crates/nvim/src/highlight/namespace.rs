@@ -20,7 +20,7 @@
 //! The drawing code cannot afford that lookup per cell, so each namespace
 //! also gets a resolved table — one attribute id per `HLF_*` builtin — built
 //! by [`update_ns_hl`] and cached until the provider invalidates it.
-//! `hl_attr_active` refers to the one `HL_ATTR` reads, and each window's
+//! `HL_ATTR_ACTIVE` refers to the one `HL_ATTR` reads, and each window's
 //! `w_ns_hl_attr` to the one [`win_hl_attr`] reads. That is why the tables
 //! are leaked cells handed out as `&'static` references — they outlive any
 //! borrow of the map, and nothing ever removes an entry.
@@ -31,8 +31,8 @@
 
 use super::default_hl_attr;
 use super::{
-    HLATTRS_INIT, dict2hlattrs, get_attr_entry, hl_apply_winblend, hl_combine_attr,
-    hl_get_syn_attr, kHlUI, syn_attr2entry,
+    HL_UI, HLATTRS_INIT, dict2hlattrs, get_attr_entry, hl_apply_winblend, hl_combine_attr,
+    hl_get_syn_attr, syn_attr2entry,
 };
 use crate::api::keysets::KeyDict_highlight;
 use crate::api::private::helpers::api_dict_to_keydict;
@@ -42,12 +42,12 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Depth;
 use crate::highlight::HlAttrFlags;
 use crate::highlight::state::{
-    HlAttrTable, highlight_attr, hl_attr_active, need_highlight_changed, ns_hl_active, ns_hl_fast,
-    ns_hl_global, ns_hl_win,
+    HIGHLIGHT_ATTR, HL_ATTR_ACTIVE, HlAttrTable, NEED_HIGHLIGHT_CHANGED, NS_HL_ACTIVE, NS_HL_FAST,
+    NS_HL_GLOBAL, NS_HL_WIN,
 };
 use crate::highlight::{ColorItem, ColorKey, HlAttrs, HlEntry};
 use crate::highlight_group::{
-    HLF_BORDER, HLF_COUNT, HLF_INACTIVE, HLF_NFLOAT, HLF_NONE, HLF_PNI, HLF_PST, hlf_names,
+    HLF_BORDER, HLF_COUNT, HLF_INACTIVE, HLF_NAMES, HLF_NFLOAT, HLF_NONE, HLF_PNI, HLF_PST,
     set_hl_group, syn_check_group, syn_id2name, syn_ns_id2attr,
 };
 use crate::lua::executor::LuaRetMode;
@@ -55,7 +55,7 @@ use crate::lua::executor::nlua_call_ref_reporting;
 use crate::option::check_blending;
 use crate::option::vars::p_pb;
 use crate::popupmenu::pum_drawn;
-use crate::popupmenu::state::must_redraw_pum;
+use crate::popupmenu::state::MUST_REDRAW_PUM;
 use crate::types::Handle;
 use crate::types::builders::ArrayBuf;
 use crate::types::{ApiString, NS, Object};
@@ -100,7 +100,7 @@ static NS_HL_ATTR: GlobalCell<Table<NS, NsHlTable>> =
 
 /// One namespace's builtin-group table: `HLF_COUNT` attribute ids.
 ///
-/// Owned here, but reached from [`hl_attr_active`] and from every window's
+/// Owned here, but reached from [`HL_ATTR_ACTIVE`] and from every window's
 /// `w_ns_hl_attr`. Those outlive any borrow of
 /// [`NS_HL_ATTR`], which is why the storage is a separate allocation rather
 /// than inline in the map. Nothing removes an entry, so the table is leaked
@@ -120,7 +120,7 @@ impl Default for NsHlTable {
 /// i.e. C's `HL_ATTR`.
 #[inline]
 pub(crate) fn hl_attr(hlf: c_int) -> c_int {
-    table_attr(hl_attr_active.get(), hlf)
+    table_attr(HL_ATTR_ACTIVE.get(), hlf)
 }
 
 /// One entry of an `HLF_*` table.
@@ -235,10 +235,10 @@ fn ns_speaks(ns_hl: &mut NS) -> bool {
         return false;
     }
     if *ns_hl < Handle::NONE {
-        if ns_hl_active.get() <= Handle::NONE {
+        if NS_HL_ACTIVE.get() <= Handle::NONE {
             return false;
         }
-        *ns_hl = ns_hl_active.get();
+        *ns_hl = NS_HL_ACTIVE.get();
     }
     true
 }
@@ -328,33 +328,33 @@ const UNSET: ColorItem = ColorItem {
 /// Re-resolves which namespace is active and makes its table the one
 /// [`hl_attr`] reads. Answers whether it changed, which is the caller's cue to redraw.
 pub fn hl_check_ns() -> bool {
-    let ns = if ns_hl_fast.get() > Handle::NONE {
-        ns_hl_fast.get()
-    } else if ns_hl_win.get() >= Handle::NONE {
-        ns_hl_win.get()
+    let ns = if NS_HL_FAST.get() > Handle::NONE {
+        NS_HL_FAST.get()
+    } else if NS_HL_WIN.get() >= Handle::NONE {
+        NS_HL_WIN.get()
     } else {
-        ns_hl_global.get()
+        NS_HL_GLOBAL.get()
     };
-    if ns_hl_active.get() == ns {
+    if NS_HL_ACTIVE.get() == ns {
         return false;
     }
 
-    ns_hl_active.set(ns);
-    hl_attr_active.set(&highlight_attr);
+    NS_HL_ACTIVE.set(ns);
+    HL_ATTR_ACTIVE.set(&HIGHLIGHT_ATTR);
     if ns > Handle::NONE {
         update_ns_hl(ns.get());
         if let Some(table) = NS_HL_ATTR.with(|tables| tables.get(&ns).map(|table| table.0)) {
-            hl_attr_active.set(table);
+            HL_ATTR_ACTIVE.set(table);
         }
     }
-    need_highlight_changed.set(true);
+    NEED_HIGHLIGHT_CHANGED.set(true);
     true
 }
 
 /// [`hl_check_ns`] for the window about to be drawn, or for the global
 /// elements when there is none.
 pub fn win_check_ns_hl(window: Option<Win>) -> bool {
-    ns_hl_win.set(window.map_or(Handle::new(-1), |window| window.w_ns_hl));
+    NS_HL_WIN.set(window.map_or(Handle::new(-1), |window| window.w_ns_hl));
     hl_check_ns()
 }
 
@@ -399,7 +399,7 @@ pub fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional: bool)
             attrs.hl_blend = c_int::try_from(p_pb()).unwrap_or(c_int::MAX);
         }
         if pum_drawn() {
-            must_redraw_pum.set(true);
+            MUST_REDRAW_PUM.set(true);
         }
     }
 
@@ -408,7 +408,7 @@ pub fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional: bool)
     }
     let entry = HlEntry {
         attr: attrs,
-        kind: kHlUI,
+        kind: HL_UI,
         id1: idx,
         id2: final_id,
     };
@@ -428,7 +428,7 @@ pub fn update_window_hl(mut window: Win, invalid: bool) {
             window.w_ns_hl_active = ns_id;
             let table = NS_HL_ATTR.with(|tables| tables.get(&ns_id).map(|table| table.0));
             // No namespace table: read the global one.
-            let table = table.unwrap_or(&highlight_attr);
+            let table = table.unwrap_or(&HIGHLIGHT_ATTR);
             window.w_ns_hl_attr = Some(table);
             table
         }
@@ -512,7 +512,7 @@ pub fn update_ns_hl(ns_id: c_int) {
     // entry is resolved before the table is written.
     let table = NS_HL_ATTR.with_mut(|tables| tables.entry(Handle::new(ns_id)).or_default().0);
     for hlf in 1..HLF_COUNT {
-        let id = syn_check_group(hlf_names[usize::try_from(hlf).unwrap_or(usize::MAX)].to_bytes());
+        let id = syn_check_group(HLF_NAMES[usize::try_from(hlf).unwrap_or(usize::MAX)].to_bytes());
         // These two are the groups where "undefined" is meaningful.
         let optional = hlf == HLF_INACTIVE || hlf == HLF_NFLOAT;
         let attr = hl_get_ui_attr(ns_id, hlf, id, optional);
@@ -534,7 +534,7 @@ pub fn update_ns_hl(ns_id: c_int) {
 /// The attribute a window's background cells are drawn with.
 pub fn win_bg_attr(window: Win) -> c_int {
     // A fast callback's namespace overrides the window's own cache.
-    if ns_hl_fast.get() < Handle::NONE {
+    if NS_HL_FAST.get() < Handle::NONE {
         let local = if window.raw() == Win::current_raw() {
             window.w_hl_attr_normal
         } else {
@@ -559,8 +559,8 @@ pub(crate) fn win_hl_attr(window: Win, hlf: c_int) -> c_int {
     // `w_ns_hl_attr` is still `None` if highlights are checked before the
     // first redraw.
     let table = match window.w_ns_hl_attr {
-        Some(table) if ns_hl_fast.get() < Handle::NONE => table,
-        _ => hl_attr_active.get(),
+        Some(table) if NS_HL_FAST.get() < Handle::NONE => table,
+        _ => HL_ATTR_ACTIVE.get(),
     };
     table_attr(table, hlf)
 }

@@ -37,7 +37,7 @@ use crate::message::state::{
 use crate::message::{emsg, msg_reset_scroll};
 use crate::os::cshim::gettext;
 use crate::types::{TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, Vv};
-use crate::ui::state::Rows;
+use crate::ui::state::ROWS;
 
 use super::report::{
     Expected, fill_assert_error, prepare_assert_error, push_lit, report_assert_error,
@@ -229,7 +229,7 @@ fn finish_assert_fails(save_trylevel: c_int, no_prompt: MsgBump) {
     NEED_WAIT_RETURN.set(false);
     EMSG_ON_DISPLAY.set(false);
     msg_reset_scroll();
-    LINES_LEFT.set(Rows.get());
+    LINES_LEFT.set(ROWS.get());
     EMSG_ASSERT_FAILS_MSG.set(None);
     set_vim_var_string(Vv::Errmsg, None);
 }

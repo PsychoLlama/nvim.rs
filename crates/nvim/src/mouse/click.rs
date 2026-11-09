@@ -28,13 +28,13 @@ use crate::eval::call_vim_function;
 use crate::eval::typval::tv_clear;
 use crate::getchar::state::MOD_MASK;
 use crate::menu::show_popupmenu;
-use crate::mouse::state::{mouse_grid, mouse_row};
+use crate::mouse::state::{MOUSE_GRID, MOUSE_ROW};
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::option::vars::p_ch;
 use crate::plines::getvcol;
 use crate::pos::{lt, ltoreq};
 use crate::types::{OptInt, TypVal};
-use crate::ui::state::Rows;
+use crate::ui::state::ROWS;
 use crate::ui::ui_flush;
 
 /// Call the click definition function recorded for column `col` in
@@ -62,7 +62,7 @@ pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_butto
 
     // Make sure next click does not register as drag when callback absorbs
     // the release event.
-    got_click.set(false);
+    GOT_CLICK.set(false);
 }
 
 /// Translate window coordinates to a buffer position without any side effects.
@@ -92,10 +92,10 @@ pub(crate) fn get_fpos_of_mouse(mpos: &mut Pos) -> c_int {
     // winpos and height may change in win_enter()!
     if winrow >= win.w_view_height + win.w_status_height {
         // Below the window; the global status line spans the whole screen.
-        let below_screen = OptInt::from(Rows.get()) - p_ch();
-        if mouse_grid.get() <= 1
-            && OptInt::from(mouse_row.get()) < below_screen
-            && OptInt::from(mouse_row.get()) >= below_screen - OptInt::from(global_stl_height())
+        let below_screen = OptInt::from(ROWS.get()) - p_ch();
+        if MOUSE_GRID.get() <= 1
+            && OptInt::from(MOUSE_ROW.get()) < below_screen
+            && OptInt::from(MOUSE_ROW.get()) >= below_screen - OptInt::from(global_stl_height())
         {
             return IN_STATUS_LINE;
         }
@@ -142,7 +142,7 @@ pub(crate) fn do_popup(which_button: c_int, m_pos_flag: c_int, m_pos: Pos) -> c_
     }
 
     show_popupmenu();
-    got_click.set(false); // ignore release events
+    GOT_CLICK.set(false); // ignore release events
     jump_flags
 }
 

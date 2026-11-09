@@ -74,7 +74,7 @@ pub fn nvim_eval(expr: ApiString) -> Result<Object, Error> {
             let shown = expr.len().min(256);
             let text = msg_bytes(&expr.as_bytes()[..shown]);
             Err(api_error!(
-                kErrorTypeException,
+                ERROR_TYPE_EXCEPTION,
                 "Failed to evaluate expression: '{text}'"
             ))
         }
@@ -176,7 +176,7 @@ fn call_in_dict(
     if !fn_0.data().is_null() && !fn_0.is_empty() && !dict_given {
         let Some(di) = self_dict.find(fn_0.as_bytes()) else {
             let name = msg_cstr(fn_0.as_cstr());
-            return Err(api_error!(kErrorTypeValidation, "Not found: {name}"));
+            return Err(api_error!(ERROR_TYPE_VALIDATION, "Not found: {name}"));
         };
         let v_type = di.di_tv.v_type();
         if v_type == VAR_PARTIAL {
@@ -184,7 +184,7 @@ fn call_in_dict(
         }
         if v_type != VAR_FUNC {
             let name = msg_cstr(fn_0.as_cstr());
-            return Err(api_error!(kErrorTypeValidation, "Not a function: {name}"));
+            return Err(api_error!(ERROR_TYPE_VALIDATION, "Not a function: {name}"));
         }
         let name = di.di_tv.callable_name().map_or(&[][..], CStr::to_bytes);
         *fn_0 = ApiString::from_bytes(name);

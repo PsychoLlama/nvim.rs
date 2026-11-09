@@ -261,7 +261,7 @@ pub(crate) fn get_userdefined_compl_info(
 ) -> Result<ColNr, Declined> {
     // Call the user-defined function with "a:findstart" set to 1 to obtain
     // the length of the text to complete.
-    let save_state = State.get();
+    let save_state = STATE.get();
 
     let is_cpt_function = cb.is_some();
     let held;
@@ -291,7 +291,7 @@ pub(crate) fn get_userdefined_compl_info(
     let col = number_as_col(callback_call_retnr(cb, &args));
     drop(locked);
 
-    State.set(save_state);
+    STATE.set(save_state);
     Win::current().w_cursor = pos; // restore the cursor position
     check_cursor(Win::current()); // make sure the position is valid, just in case
     validate_cursor(Win::current());
@@ -317,7 +317,7 @@ pub(crate) fn get_userdefined_compl_info(
             return Err(Declined::Leave);
         }
         ctrl_x_mode.set(CTRL_X_NORMAL);
-        edit_submode.set(None);
+        EDIT_SUBMODE.set(None);
         if !shortmess(ShmFlag::COMPLETIONMENU) {
             msg_clr_cmdline();
         }
@@ -462,13 +462,13 @@ pub(crate) fn ins_compl_continue_search() {
 /// Start insert-mode completion.
 pub(crate) fn ins_compl_start() -> Result<(), Failed> {
     // First time we hit ^N or ^P (in a row, I mean).
-    let save_did_ai = did_ai.get();
-    did_ai.set(false);
-    did_si.set(false);
-    can_si.set(false);
-    can_si_back.set(false);
+    let save_did_ai = DID_AI.get();
+    DID_AI.set(false);
+    DID_SI.set(false);
+    CAN_SI.set(false);
+    CAN_SI_BACK.set(false);
     if stop_arrow().is_err() {
-        did_ai.set(save_did_ai);
+        DID_AI.set(save_did_ai);
         return Err(Failed);
     }
 
@@ -507,14 +507,14 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
             || thesaurus_func_complete(ctrl_x_mode.get())
         {
             // Restore did_ai, so that adding a comment leader works.
-            did_ai.set(save_did_ai);
+            DID_AI.set(save_did_ai);
         }
         return Err(Failed);
     }
 
     if compl_status_adding() {
         if !shortmess(ShmFlag::COMPLETIONMENU) {
-            edit_submode_pre.set(Some(gettext(c" Adding")));
+            EDIT_SUBMODE_PRE.set(Some(gettext(c" Adding")));
         }
         if ctrl_x_mode_line_or_eval() {
             // Insert a new line, keep indentation but ignore 'comments'.
@@ -527,15 +527,15 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
             compl_lnum.set(Win::current().w_cursor.lnum);
         }
     } else {
-        edit_submode_pre.set(None);
+        EDIT_SUBMODE_PRE.set(None);
         compl_startpos.set(compl_startpos.get().with_col(compl_col.get()));
     }
 
     if !shortmess(ShmFlag::COMPLETIONMENU) && !compl_autocomplete.get() {
         if compl_cont_status.get() & CONT_LOCAL != 0 {
-            edit_submode.set(ctrl_x_msg(CTRL_X_LOCAL_MSG));
+            EDIT_SUBMODE.set(ctrl_x_msg(CTRL_X_LOCAL_MSG));
         } else {
-            edit_submode.set(ctrl_x_msg(ctrl_x_mode.get()));
+            EDIT_SUBMODE.set(ctrl_x_msg(ctrl_x_mode.get()));
         }
     }
 
@@ -556,7 +556,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
         compl_pattern().clear();
         compl_orig_text().clear();
         compl_orig_extmarks().clear();
-        did_ai.set(save_did_ai);
+        DID_AI.set(save_did_ai);
         return Err(Failed);
     }
 
@@ -564,14 +564,14 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
     // memline's pointers, so this had to come after the last use of it
     // (-- Acevedo). Nothing holds a line across it now.
     if !shortmess(ShmFlag::COMPLETIONMENU) && !compl_autocomplete.get() {
-        edit_submode_extra.set(Some(XString::from_cstr(gettext(c"-- Searching..."))));
-        edit_submode_highl.set(HLF_COUNT);
+        EDIT_SUBMODE_EXTRA.set(Some(XString::from_cstr(gettext(c"-- Searching..."))));
+        EDIT_SUBMODE_HIGHL.set(HLF_COUNT);
         showmode();
-        edit_submode_extra.set(None);
+        EDIT_SUBMODE_EXTRA.set(None);
         ui_flush();
     }
 
-    did_ai.set(save_did_ai);
+    DID_AI.set(save_did_ai);
     Ok(())
 }
 

@@ -25,7 +25,7 @@ use crate::eval::skip_expr;
 use crate::ex_cmds::skip_vimgrep_pat_at;
 use crate::ex_docmd::onecmd::shift_cmd_args;
 use crate::ex_docmd::{E_ZEROCOUNT, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, ex_msg};
-use crate::keycodes::Ctrl_V;
+use crate::keycodes::CTRL_V;
 
 use crate::ascii::NUL;
 use crate::memory::XString;
@@ -229,7 +229,7 @@ pub fn separate_nextcmd(excmd: &mut ExArg) {
     let mut at = skip_grep_pat(excmd);
     while excmd.line.byte_at(at) != 0 {
         let c = excmd.line.byte_at(at);
-        if c_int::from(c) == Ctrl_V {
+        if c_int::from(c) == CTRL_V {
             if excmd.argt.has(ExArgt::CTRLV | ExArgt::XFILE) {
                 at += 1;
             } else {

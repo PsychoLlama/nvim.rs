@@ -31,7 +31,7 @@ use neovim::eval::typval::{
 };
 use neovim::memory::xstrdup;
 use neovim::os::libc::ptrdiff_t;
-use neovim::types::{Callback, VAR_UNKNOWN, kListLenUnknown};
+use neovim::types::{Callback, LIST_LEN_UNKNOWN, VAR_UNKNOWN};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Payload};
@@ -50,7 +50,7 @@ fn tv_list_append_string_copies_the_string_and_allocates_no_item() {
     // SAFETY: the list is this case's own, freed at the end; the strings
     // outlive every call that reads them.
     unsafe {
-        let l = tv_list_alloc(kListLenUnknown as isize).into_raw();
+        let l = tv_list_alloc(LIST_LEN_UNKNOWN as isize).into_raw();
         log.check(&[alloc::list(l)]);
 
         let test = cstr("test");
@@ -232,7 +232,7 @@ fn removing_a_run_shortens_the_list() {
     let _editor = editor_lock();
     // SAFETY: the list is this case's own, freed below.
     unsafe {
-        let l = tv_list_alloc(kListLenUnknown as ptrdiff_t).into_raw();
+        let l = tv_list_alloc(LIST_LEN_UNKNOWN as ptrdiff_t).into_raw();
         for n in 1..=4 {
             (*l).push_number(n);
         }
@@ -268,7 +268,7 @@ fn a_watcher_on_a_removed_item_advances_past_it() {
     let _editor = editor_lock();
     // SAFETY: as above.
     unsafe {
-        let l = tv_list_alloc(kListLenUnknown as ptrdiff_t).into_raw();
+        let l = tv_list_alloc(LIST_LEN_UNKNOWN as ptrdiff_t).into_raw();
         for n in 1..=3 {
             (*l).push_number(n);
         }

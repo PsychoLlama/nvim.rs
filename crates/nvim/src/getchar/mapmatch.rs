@@ -107,7 +107,7 @@ pub(crate) fn at_ins_compl_key() -> bool {
 pub(crate) fn check_simplify_modifier(max_offset: c_int) -> Result<usize, Failed> {
     // Terminal mode wants the full modifiers, so that the key can be
     // encoded for the child process.
-    if State.get() & MODE_TERMINAL != 0 || NO_REDUCE_KEYS.get() > 0 {
+    if STATE.get() & MODE_TERMINAL != 0 || NO_REDUCE_KEYS.get() > 0 {
         return Ok(0);
     }
 
@@ -215,7 +215,7 @@ fn search_maphash(
         2
     } else {
         if langmap
-            && State.get() & (MODE_CMDLINE | MODE_INSERT) == 0
+            && STATE.get() & (MODE_CMDLINE | MODE_INSERT) == 0
             && get_real_state() != MODE_SELECT
         {
             tb_c1 = langmap_map(tb_c1);
@@ -480,7 +480,7 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> MapResult {
     *mapdepth += 1;
     if OptInt::from(*mapdepth) >= p_mmd() {
         emsg(gettext(E_RECURSIVE_MAPPING));
-        if State.get() & MODE_CMDLINE != 0 {
+        if STATE.get() & MODE_CMDLINE != 0 {
             redrawcmdline();
         } else {
             setcursor();
@@ -514,13 +514,13 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> MapResult {
                 // nothing: generate a <Nop> so that a redraw can happen.
                 let nop = [K_SPECIAL, KS_EXTRA, KE_IGNORE];
                 map_str = Some(MapStr::new(&nop));
-                if State.get() & MODE_CMDLINE != 0 {
+                if STATE.get() & MODE_CMDLINE != 0 {
                     // Redraw the command below the error.
                     MSG_DIDOUT.set(true);
-                    MSG_ROW.set(MSG_ROW.get().max(cmdline_row.get()));
+                    MSG_ROW.set(MSG_ROW.get().max(CMDLINE_ROW.get()));
                     redrawcmd();
                 }
-            } else if State.get() & (MODE_NORMAL | MODE_INSERT) != 0 {
+            } else if STATE.get() & (MODE_NORMAL | MODE_INSERT) != 0 {
                 // Otherwise just put the cursor back.
                 setcursor();
             }
@@ -616,9 +616,9 @@ pub(crate) fn handle_mapping(
     let mappable = NO_MAPPING.get() == 0
         && (NO_ZERO_MAPPING.get() == 0 || tb_c1 != b'0')
         && (tb.maplen() == 0 || is_plug_map || tb.noremap(0) & (RM_NONE | RM_ABBR) == 0)
-        && !(p_paste() && State.get() & (MODE_INSERT | MODE_CMDLINE) != 0)
-        && !(State.get() == MODE_HITRETURN && (tb_c1 == b'\r' || tb_c1 == b' '))
-        && State.get() != MODE_ASKMORE
+        && !(p_paste() && STATE.get() & (MODE_INSERT | MODE_CMDLINE) != 0)
+        && !(STATE.get() == MODE_HITRETURN && (tb_c1 == b'\r' || tb_c1 == b' '))
+        && STATE.get() != MODE_ASKMORE
         && !at_ins_compl_key();
 
     let mut mp: Option<Candidate> = None;

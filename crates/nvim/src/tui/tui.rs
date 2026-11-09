@@ -68,16 +68,16 @@ use crate::tui::paint::cursor_goto;
 use crate::tui::quirks::{Terminal, augment_terminfo, patch_terminfo_bugs};
 use crate::tui::state::{Staging, TUIData, TermInput, TerminfoExt};
 use crate::tui::terminfo::caps::{
-    TerminfoDef, kTerm_change_scroll_region, kTerm_clear_screen, kTerm_cursor_normal,
-    kTerm_delete_line, kTerm_enter_ca_mode, kTerm_erase_chars, kTerm_exit_attribute_mode,
-    kTerm_exit_ca_mode, kTerm_insert_line, kTerm_keypad_local, kTerm_keypad_xmit,
-    kTerm_parm_delete_line, kTerm_parm_insert_line, kTerm_reset_cursor_color,
-    kTerm_reset_cursor_style, kTerm_set_lr_margin, kTerm_set_underline_style,
+    TERM_CHANGE_SCROLL_REGION, TERM_CLEAR_SCREEN, TERM_CURSOR_NORMAL, TERM_DELETE_LINE,
+    TERM_ENTER_CA_MODE, TERM_ERASE_CHARS, TERM_EXIT_ATTRIBUTE_MODE, TERM_EXIT_CA_MODE,
+    TERM_INSERT_LINE, TERM_KEYPAD_LOCAL, TERM_KEYPAD_XMIT, TERM_PARM_DELETE_LINE,
+    TERM_PARM_INSERT_LINE, TERM_RESET_CURSOR_COLOR, TERM_RESET_CURSOR_STYLE, TERM_SET_LR_MARGIN,
+    TERM_SET_UNDERLINE_STYLE, TerminfoDef,
 };
 use crate::tui::terminfo::entry::TerminfoEntry;
 use crate::tui::terminfo::{terminfo_from_builtin, terminfo_from_database};
 use crate::types::ApiString;
-use crate::ui::state::t_colors;
+use crate::ui::state::T_COLORS;
 use crate::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use ::libc::{abort, kill};
 use core::ffi::{CStr, c_int, c_void};
@@ -369,20 +369,20 @@ fn terminfo_start(tui: &mut TUIData) {
     }
 
     let defined = |tui: &TUIData, cap: TerminfoDef| tui.ti.has(cap);
-    tui.can_change_scroll_region = defined(tui, kTerm_change_scroll_region);
-    tui.can_set_lr_margin = defined(tui, kTerm_set_lr_margin);
-    tui.can_scroll = defined(tui, kTerm_delete_line)
-        && defined(tui, kTerm_parm_delete_line)
-        && defined(tui, kTerm_insert_line)
-        && defined(tui, kTerm_parm_insert_line);
-    tui.can_erase_chars = defined(tui, kTerm_erase_chars);
+    tui.can_change_scroll_region = defined(tui, TERM_CHANGE_SCROLL_REGION);
+    tui.can_set_lr_margin = defined(tui, TERM_SET_LR_MARGIN);
+    tui.can_scroll = defined(tui, TERM_DELETE_LINE)
+        && defined(tui, TERM_PARM_DELETE_LINE)
+        && defined(tui, TERM_INSERT_LINE)
+        && defined(tui, TERM_PARM_INSERT_LINE);
+    tui.can_erase_chars = defined(tui, TERM_ERASE_CHARS);
     tui.immediate_wrap_after_last_column = quirks.wraps_after_last_column;
     tui.bce = tui.ti.bce;
-    t_colors.set(tui.ti.max_colors);
+    T_COLORS.set(tui.ti.max_colors);
 
-    terminfo_out(tui, kTerm_enter_ca_mode);
-    terminfo_out(tui, kTerm_keypad_xmit);
-    terminfo_out(tui, kTerm_clear_screen);
+    terminfo_out(tui, TERM_ENTER_CA_MODE);
+    terminfo_out(tui, TERM_KEYPAD_XMIT);
+    terminfo_out(tui, TERM_CLEAR_SCREEN);
     tui_set_term_mode(tui, BRACKETED_PASTE, true);
 
     // What the terminal supports is only known once it answers; assume
@@ -402,8 +402,7 @@ fn terminfo_start(tui: &mut TUIData) {
             tui_request_term_mode(tui, mode);
         }
     }
-    if !defined(tui, kTerm_set_underline_style) && !quirks.screen && !quirks.tmux && !quirks.nsterm
-    {
+    if !defined(tui, TERM_SET_UNDERLINE_STYLE) && !quirks.screen && !quirks.tmux && !quirks.nsterm {
         tui_query_extended_underline(tui);
     }
     tui_query_kitty_keyboard(tui);
@@ -469,10 +468,10 @@ fn terminfo_disable(tui: &mut TUIData) {
     }
     tui_mode_change(tui, ApiString::NULL, 0);
     tui_mouse_off(tui);
-    terminfo_out(tui, kTerm_exit_attribute_mode);
-    terminfo_out(tui, kTerm_cursor_normal);
-    terminfo_out(tui, kTerm_reset_cursor_style);
-    terminfo_out(tui, kTerm_keypad_local);
+    terminfo_out(tui, TERM_EXIT_ATTRIBUTE_MODE);
+    terminfo_out(tui, TERM_CURSOR_NORMAL);
+    terminfo_out(tui, TERM_RESET_CURSOR_STYLE);
+    terminfo_out(tui, TERM_KEYPAD_LOCAL);
     tui_reset_key_encoding(tui);
     if tui.modes.resize_events() {
         tui_set_term_mode(tui, RESIZE_EVENTS, false);
@@ -482,7 +481,7 @@ fn terminfo_disable(tui: &mut TUIData) {
     }
     tui_set_title(tui, ApiString::NULL);
     if tui.cursor_has_color {
-        terminfo_out(tui, kTerm_reset_cursor_color);
+        terminfo_out(tui, TERM_RESET_CURSOR_COLOR);
     }
     tui_set_term_mode(tui, BRACKETED_PASTE, false);
     let focus_off = tui.terminfo_ext.disable_focus_reporting;
@@ -501,7 +500,7 @@ fn terminfo_stop(tui: &mut TUIData) {
     }
     if ui_client_exit_status.get() == ui_client_error_exit.get().max(0) {
         cursor_goto(tui, tui.height - 1, 0);
-        terminfo_out(tui, kTerm_exit_ca_mode);
+        terminfo_out(tui, TERM_EXIT_CA_MODE);
     }
     flush(tui);
     // SAFETY: the output handle and the write loop `open_output` opened;

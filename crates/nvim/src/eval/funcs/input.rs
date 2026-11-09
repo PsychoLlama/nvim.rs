@@ -13,7 +13,7 @@ use super::wrappers::{arg_number, arg_number_chk};
 use super::{SIGINT, tv_get_buf_from_arg};
 use crate::api::vim::nvim_feedkeys;
 use crate::buffer::buf_is_prompt;
-use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::state::CMDLINE_ROW;
 use crate::edit::buf_prompt_text_owned;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::prompt_get_input;
@@ -36,7 +36,7 @@ use crate::message::state::{LINES_LEFT, MSG_ROW, MSG_SCROLL};
 use crate::message::{
     confirm_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_start, msg_str, verb_msg,
 };
-use crate::mouse::state::mouse_row;
+use crate::mouse::state::MOUSE_ROW;
 use crate::narrow::as_index;
 use crate::narrow::number_as_int;
 use crate::option::vars::p_verbose;
@@ -44,8 +44,8 @@ use crate::os::cshim::gettext;
 use crate::os::proc::os_kill;
 use crate::semsg;
 use crate::types::{ApiString, TypVal, VAR_LIST, VarNumber};
-use crate::ui::state::Rows;
-use crate::ui::state::kUIMessages;
+use crate::ui::state::ROWS;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::ui_has;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
@@ -174,8 +174,8 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // Start at the bottom of the screen so the whole list is visible.
     msg_ext_set_kind(c"confirm");
     msg_start();
-    MSG_ROW.set(Rows.get() - 1);
-    LINES_LEFT.set(Rows.get());
+    MSG_ROW.set(ROWS.get() - 1);
+    LINES_LEFT.set(ROWS.get());
     MSG_SCROLL.set(1);
     msg_clr_eos();
 
@@ -187,7 +187,7 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         msg_str(numbuf.string(&li.li_tv));
         // A UI that owns the message area keeps the items in one message,
         // bar the last separator.
-        if !ui_has(kUIMessages) || at + 1 < len {
+        if !ui_has(UI_MESSAGES) || at + 1 < len {
             msg_putchar(c_int::from(b'\n'));
         }
     }
@@ -197,7 +197,7 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // A click names a line rather than an item, so count back from the
     // bottom of the list.
     if mouse_used {
-        selected = list_len(args[0].list_ref()) - (cmdline_row.get() - mouse_row.get());
+        selected = list_len(args[0].list_ref()) - (CMDLINE_ROW.get() - MOUSE_ROW.get());
     }
     result.write_number(VarNumber::from(selected));
 }

@@ -30,7 +30,6 @@
 
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -174,31 +173,31 @@ pub(super) fn log_event(name: &'static CStr) {
     const UI_TAG: &CStr = c"UI: ";
     const LOGLVL_DBG: c_int = 1;
 
-    static seen: GlobalCell<usize> = GlobalCell::new(0);
-    static last_event: GlobalCell<Option<&'static CStr>> = GlobalCell::new(None);
+    static SEEN: GlobalCell<usize> = GlobalCell::new(0);
+    static LAST_EVENT: GlobalCell<Option<&'static CStr>> = GlobalCell::new(None);
 
     // Upstream's `UI_LOG` is empty without `NVIM_LOG_DEBUG`, run tracking
     // included.
     if !crate::log::LOG_DEBUG {
         return;
     }
-    if last_event
+    if LAST_EVENT
         .get()
         .is_some_and(|previous| core::ptr::eq(previous, name))
     {
-        seen.set(seen.get() + 1);
+        SEEN.set(SEEN.get() + 1);
         return;
     }
-    if let Some(previous) = last_event.get()
-        && seen.get() > 0
+    if let Some(previous) = LAST_EVENT.get()
+        && SEEN.get() > 0
     {
-        let (was, n) = (msg_cstr(previous), seen.get());
+        let (was, n) = (msg_cstr(previous), SEEN.get());
         logmsg_tagged!(LOGLVL_DBG, UI_TAG, true, "{was} (+{n} times...)");
     }
     let shown = msg_cstr(name);
     logmsg_tagged!(LOGLVL_DBG, UI_TAG, true, "{shown}");
-    seen.set(0);
-    last_event.set(Some(name));
+    SEEN.set(0);
+    LAST_EVENT.set(Some(name));
 }
 
 /// Hands every UI that `reach` selects to `send`, and logs `name` if there

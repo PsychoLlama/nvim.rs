@@ -145,11 +145,11 @@ fn display(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) -> c_int
     // later or to remove the mode message.
     if MSG_SILENT.get() == 0
         && !bytes.is_empty()
-        && MSG_ROW.get() >= cmdline_row.get()
+        && MSG_ROW.get() >= CMDLINE_ROW.get()
         && MSG_COL.get() == 0
     {
-        clear_cmdline.set(false);
-        mode_displayed.set(false);
+        CLEAR_CMDLINE.set(false);
+        MODE_DISPLAYED.set(false);
     }
 
     let cells = walk_display(bytes, &mut |shown| match shown {
@@ -410,8 +410,8 @@ fn to_special(second: u8, third: u8) -> c_int {
 pub fn msg_display_elided(text: &CStr, hl_id: c_int) {
     let bytes = text.to_bytes();
     let mut tail = bytes.len();
-    let room = usize::try_from(Columns.get() - MSG_COL.get()).unwrap_or(0);
-    if !ui_has(kUIMessages) && bytes.len() > room && room >= 20 {
+    let room = usize::try_from(COLUMNS.get() - MSG_COL.get()).unwrap_or(0);
+    if !ui_has(UI_MESSAGES) && bytes.len() > room && room >= 20 {
         tail = (room - 3) / 2;
         msg_display_bytes(&bytes[..tail], hl_id, false);
         msg_str_hl(c"...", SPECIAL_HL, false);

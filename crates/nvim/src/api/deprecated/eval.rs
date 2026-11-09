@@ -56,7 +56,7 @@ pub fn nvim_call_atomic(channel_id: uint64_t, calls: Array) -> Result<Array, Err
     while i < calls.len() {
         let item = &calls[i];
         let Some(call) = item.as_array() else {
-            let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.kind()));
+            let (want, got) = (api_typename(OBJECT_TYPE_ARRAY), api_typename(item.kind()));
             return Err(err_expected(c"'calls' item", want, Some(got)));
         };
         if call.len() != 2 as size_t {
@@ -66,11 +66,11 @@ pub fn nvim_call_atomic(channel_id: uint64_t, calls: Array) -> Result<Array, Err
         // The length check above says the pair has both of its items.
         let (head, tail) = (&call[0], &call[1]);
         let Some(name) = head.as_string() else {
-            let (want, got) = (api_typename(kObjectTypeString), api_typename(head.kind()));
+            let (want, got) = (api_typename(OBJECT_TYPE_STRING), api_typename(head.kind()));
             return Err(err_expected(c"name", want, Some(got)));
         };
         let Some(args) = tail.as_array() else {
-            let (want, got) = (api_typename(kObjectTypeArray), api_typename(tail.kind()));
+            let (want, got) = (api_typename(OBJECT_TYPE_ARRAY), api_typename(tail.kind()));
             return Err(err_expected(c"call args", want, Some(got)));
         };
 

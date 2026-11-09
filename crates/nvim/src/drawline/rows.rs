@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::ascii::NUL;
-use crate::decoration::{kHlModeCombine, kHlModeReplace, kVLLeftcol, kVLScroll};
+use crate::decoration::{HL_MODE_COMBINE, HL_MODE_REPLACE, VL_LEFTCOL, VL_SCROLL};
 use crate::grid::{SLF_INC_VCOL, SLF_WRAP, grid_of_view, with_linebuf};
 use crate::r#move::WinValid;
 use crate::narrow::as_index;
@@ -68,7 +68,7 @@ impl Cells {
         }
 
         if self.virt_line_index.is_some()
-            && self.virt_line_flags & kVLLeftcol as ::core::ffi::c_int != 0
+            && self.virt_line_flags & VL_LEFTCOL as ::core::ffi::c_int != 0
         {
             // A virtual line pinned to the left edge covers the columns.
         } else if f.statuscol.draw {
@@ -236,16 +236,16 @@ impl Cells {
 
         if let Some(line) = self.virt_line_index {
             buffer.draw_virt_text_item(
-                if self.virt_line_flags & kVLLeftcol as ::core::ffi::c_int != 0 {
+                if self.virt_line_flags & VL_LEFTCOL as ::core::ffi::c_int != 0 {
                     0
                 } else {
                     self.text_start_col
                 },
                 VirtChunks::Line(self.virt_lines[line]),
-                kHlModeReplace,
+                HL_MODE_REPLACE,
                 self.view_width,
                 0,
-                if self.virt_line_flags & kVLScroll as ::core::ffi::c_int != 0 {
+                if self.virt_line_flags & VL_SCROLL as ::core::ffi::c_int != 0 {
                     window.w_leftcol.get()
                 } else {
                     0
@@ -379,7 +379,7 @@ impl Cells {
             buffer.draw_virt_text_item(
                 self.text_start_col,
                 VirtChunks::Owned(&self.fold_vt),
-                kHlModeCombine,
+                HL_MODE_COMBINE,
                 self.view_width,
                 0,
                 0,

@@ -108,7 +108,7 @@ fn parse_flags(flags: &ApiString) -> Result<c_int, Error> {
             0 => {
                 let code = c_uint::from(ch);
                 return Err(api_error!(
-                    kErrorTypeValidation,
+                    ERROR_TYPE_VALIDATION,
                     "Invalid flag: '\\0' ({code})"
                 ));
             }
@@ -117,7 +117,7 @@ fn parse_flags(flags: &ApiString) -> Result<c_int, Error> {
                 let code = c_int::from(ch.cast_signed()).cast_unsigned();
                 let shown = msg_bytes(core::slice::from_ref(&ch));
                 return Err(api_error!(
-                    kErrorTypeValidation,
+                    ERROR_TYPE_VALIDATION,
                     "Invalid flag: '{shown}' ({code})"
                 ));
             }

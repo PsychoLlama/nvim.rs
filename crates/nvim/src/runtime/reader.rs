@@ -330,7 +330,7 @@ fn escaped_newline(line: &[u8]) -> bool {
     let run = body
         .iter()
         .rev()
-        .take_while(|&&b| c_int::from(b) == Ctrl_V)
+        .take_while(|&&b| c_int::from(b) == CTRL_V)
         .count();
     run % 2 == 1
 }

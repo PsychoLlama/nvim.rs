@@ -73,7 +73,7 @@ pub fn shorten_fnames(force: bool) {
         buf.make_swap_name_full();
     }
     status_redraw_all();
-    redraw_tabline.set(true);
+    REDRAW_TABLINE.set(true);
 }
 
 /// Get a new file name ended by the given extension.

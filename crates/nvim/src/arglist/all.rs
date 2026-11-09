@@ -101,7 +101,7 @@ fn arg_index_for_window(
     let unwanted = buffer.name.full().is_none()
         || !aall.keep_tabs
             && (buffer.b_nwindows > 1
-                || window.w_width != Columns.get()
+                || window.w_width != COLUMNS.get()
                 || window.w_floating && !aucmd_win);
     if unwanted {
         return aall.opened_len;

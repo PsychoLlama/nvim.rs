@@ -58,12 +58,13 @@ use crate::option::{OptionTarget, parse_winhl_opt, set_option_direct_for};
 use crate::options::kOptBufhidden;
 use crate::optionstr::OptStringRef;
 use crate::types::{
-    AlignTextPos, BufferHandle, Error, FloatAnchor, LPos, LineNr, OptInt, Pos, ScreenChar,
-    WinConfig, WinSplit, WinStyle, WindowHandle, kErrorTypeException, kFloatRelativeCursor,
-    kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeWindow,
+    AlignTextPos, BufferHandle, ERROR_TYPE_EXCEPTION, Error, FLOAT_RELATIVE_CURSOR,
+    FLOAT_RELATIVE_EDITOR, FLOAT_RELATIVE_LASTSTATUS, FLOAT_RELATIVE_MOUSE, FLOAT_RELATIVE_WINDOW,
+    FloatAnchor, LPos, LineNr, OptInt, Pos, ScreenChar, WinConfig, WinSplit, WinStyle,
+    WindowHandle,
 };
-use crate::ui::state::kUIMultigrid;
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::UI_MULTIGRID;
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::ui_has;
 use crate::window::{
     NotClosed, STATUS_HEIGHT, last_status, lastwin_nofloating, merge_win_config, win_alloc,
@@ -97,7 +98,7 @@ pub(crate) const WIN_CONFIG_INIT: WinConfig = WinConfig {
     row: 0.0,
     col: 0.0,
     anchor: 0,
-    relative: kFloatRelativeEditor,
+    relative: FLOAT_RELATIVE_EDITOR,
     external: false,
     focusable: true,
     mouse: true,
@@ -246,7 +247,7 @@ fn set_window_buf(win: Win, buffer: Buf) -> Result<(), Error> {
     win_set_buf(win, buffer)
 }
 fn make_error(msg: &'static CStr) -> Error {
-    Error::from_message(kErrorTypeException, msg)
+    Error::from_message(ERROR_TYPE_EXCEPTION, msg)
 }
 
 fn report_error(err: &Error) {
@@ -492,19 +493,19 @@ pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
     win.w_width = fconfig.width.max(1);
     win.w_height = fconfig.height.max(1);
 
-    if fconfig.relative == kFloatRelativeCursor {
+    if fconfig.relative == FLOAT_RELATIVE_CURSOR {
         let cur = current_win();
         // The cursor may have moved since the last redraw: `w_wrow`/`w_wcol`
         // are only current once validated.
         validate_cursor(cur);
-        fconfig.relative = kFloatRelativeWindow;
+        fconfig.relative = FLOAT_RELATIVE_WINDOW;
         fconfig.row += f64::from(cur.w_wrow);
         fconfig.col += f64::from(cur.w_wcol);
         fconfig.window = cur.handle as WindowHandle;
-    } else if fconfig.relative == kFloatRelativeMouse {
+    } else if fconfig.relative == FLOAT_RELATIVE_MOUSE {
         let mut pos = MousePos::current();
         if let Some(mouse_win) = find_win_inner(&mut pos) {
-            fconfig.relative = kFloatRelativeWindow;
+            fconfig.relative = FLOAT_RELATIVE_WINDOW;
             fconfig.row += f64::from(pos.row);
             fconfig.col += f64::from(pos.col);
             fconfig.window = mouse_win.handle as WindowHandle;
@@ -526,7 +527,7 @@ pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
         }
     }
 
-    if !ui_has(kUIMultigrid) {
+    if !ui_has(UI_MULTIGRID) {
         let above_ch = if win.w_config.zindex < kZIndexMessages {
             number_as_int(p_ch())
         } else {
@@ -534,8 +535,8 @@ pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
         };
         win.w_height = win
             .w_height
-            .min(Rows.get() - win_border_height(win) - above_ch);
-        win.w_width = win.w_width.min(Columns.get() - win_border_width(win));
+            .min(ROWS.get() - win_border_height(win) - above_ch);
+        win.w_width = win.w_width.min(COLUMNS.get() - win_border_width(win));
     }
 
     set_inner_size(win);
@@ -548,7 +549,7 @@ pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
     }
 
     // compute initial position
-    if win.w_config.relative == kFloatRelativeWindow {
+    if win.w_config.relative == FLOAT_RELATIVE_WINDOW {
         let (row, col) = anchored_position(win);
         win.w_winrow = row;
         win.w_wincol = col;
@@ -631,7 +632,7 @@ pub(crate) fn win_check_anchored_floats(win: Win) {
     let handle = win.handle;
     for mut wp in floats() {
         // float might be anchored to moved window
-        if wp.w_config.relative == kFloatRelativeWindow && wp.w_config.window == handle {
+        if wp.w_config.relative == FLOAT_RELATIVE_WINDOW && wp.w_config.window == handle {
             wp.w_pos_changed = true;
         }
     }
@@ -649,7 +650,7 @@ pub(crate) fn win_float_update_statusline() {
 
 pub(crate) fn win_float_anchor_laststatus() {
     for mut win in windows_in_tab(current_tab()) {
-        if win.w_config.relative == kFloatRelativeLaststatus {
+        if win.w_config.relative == FLOAT_RELATIVE_LASTSTATUS {
             win.w_pos_changed = true;
         }
     }
@@ -718,7 +719,7 @@ pub(crate) fn win_float_create_preview(enter: bool, new_buf: bool) -> Option<Win
     let cur = current_win();
     config.col = f64::from(cur.w_wcol);
     config.row = f64::from(cur.w_wrow);
-    config.relative = kFloatRelativeEditor;
+    config.relative = FLOAT_RELATIVE_EDITOR;
     config.focusable = false;
     config.mouse = true;
     config.anchor = 0 as FloatAnchor; // NW

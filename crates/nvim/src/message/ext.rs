@@ -102,7 +102,7 @@ pub(crate) fn msg_ext_init_chunks() -> Array {
 /// Without `ext_messages` this only clears the pending kind: the text went to
 /// the grid as it was written.
 pub fn msg_ext_ui_flush() {
-    if !ui_has(kUIMessages) {
+    if !ui_has(UI_MESSAGES) {
         MSG_EXT_KIND.set(ApiString::NULL);
         return;
     }
@@ -180,7 +180,7 @@ pub fn msg_ext_flush_showmode() {
     // One trailing empty event after the mode text goes away, so the UI
     // knows to clear what it drew.
     let pending = MSG_EXT_LAST_ATTR.get() != -1;
-    if ui_has(kUIMessages) && (pending || SHOWMODE_CLEAR_PENDING.get()) {
+    if ui_has(UI_MESSAGES) && (pending || SHOWMODE_CLEAR_PENDING.get()) {
         SHOWMODE_CLEAR_PENDING.set(pending);
         msg_ext_emit_chunk();
         ui_call_msg_showmode(msg_ext_init_chunks());

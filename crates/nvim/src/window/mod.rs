@@ -74,7 +74,7 @@ use crate::os::cshim::gettext;
 use crate::terminal::buf_terminal_check_size;
 use crate::types::Failed;
 use crate::types::{
-    CdCause, Direction, DoBufStart, Error, Handle, OptInt, Window, kErrorTypeException,
+    CdCause, Direction, DoBufStart, ERROR_TYPE_EXCEPTION, Error, Handle, OptInt, Window,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};
@@ -461,7 +461,7 @@ fn first_tab() -> TabPage {
 
 /// An exception whose whole message is `msg`.
 pub(crate) fn make_err(msg: &::core::ffi::CStr) -> Error {
-    Error::from_message(kErrorTypeException, msg)
+    Error::from_message(ERROR_TYPE_EXCEPTION, msg)
 }
 
 /// `apply_autocmds(event, NULL, NULL, false, buf)`.

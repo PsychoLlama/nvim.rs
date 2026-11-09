@@ -17,12 +17,12 @@ use core::ffi::c_int;
 
 use crate::api::keysets::KeyDict_highlight;
 use crate::cursor_shape::cursor_mode_uses_syn_id;
-use crate::drawscreen::state::updating_screen;
+use crate::drawscreen::state::UPDATING_SCREEN;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::highlight::HlAttrs;
 use crate::highlight::state::{
-    cterm_normal_bg_color, cterm_normal_fg_color, need_highlight_changed, normal_bg, normal_fg,
-    normal_sp,
+    CTERM_NORMAL_BG_COLOR, CTERM_NORMAL_FG_COLOR, NEED_HIGHLIGHT_CHANGED, NORMAL_BG, NORMAL_FG,
+    NORMAL_SP,
 };
 use crate::highlight::{HlAttrFlags, hl_get_syn_attr};
 use crate::lua::executor::nlua_set_sctx;
@@ -32,7 +32,7 @@ use crate::ui::{ui_default_colors_set, ui_mode_info_set};
 
 use super::command::sourcing_lnum;
 use super::{
-    SG_LINK, group, highlight_attr_set_all, hl_has_settings, kColorIdxHex, kColorIdxNone,
+    COLOR_IDX_HEX, COLOR_IDX_NONE, SG_LINK, group, highlight_attr_set_all, hl_has_settings,
     name_to_color, with_group,
 };
 
@@ -79,7 +79,7 @@ pub(crate) fn set_hl_group(id: c_int, attrs: HlAttrs, dict: &KeyDict_highlight, 
     let update = dict.update.unwrap_or(false);
     let entry = group(id);
     // The colour *spellings*: what `:highlight` will print back. A name
-    // becomes its table index, a number `kColorIdxHex`, and an absent key
+    // becomes its table index, a number `COLOR_IDX_HEX`, and an absent key
     // either clears the index or — with `update` — inherits the linked
     // group's, so that an inherited colour still shows a name.
     let linked = (old_link > 0).then(|| group(old_link));
@@ -105,24 +105,24 @@ pub(crate) fn set_hl_group(id: c_int, attrs: HlAttrs, dict: &KeyDict_highlight, 
         // An absent key and an explicit `nil` are the same thing here.
         *slot = if name.is_some_and(|given| !given.is_nil()) {
             if value < 0 {
-                kColorIdxNone
+                COLOR_IDX_NONE
             } else if let Some(spelling) = name
                 .and_then(Object::as_string)
                 .filter(|spelling| !spelling.is_empty())
             {
                 name_to_color(spelling.as_cstr()).1
             } else {
-                kColorIdxHex
+                COLOR_IDX_HEX
             }
         } else if !update {
-            kColorIdxNone
+            COLOR_IDX_NONE
         } else if let Some(linked_idx) = linked_idx
             && value >= 0
         {
-            if linked_idx != kColorIdxNone {
+            if linked_idx != COLOR_IDX_NONE {
                 linked_idx
             } else {
-                kColorIdxHex
+                COLOR_IDX_HEX
             }
         } else {
             // `update` with nothing to inherit: leave what is there.
@@ -166,14 +166,14 @@ pub(crate) fn set_hl_group(id: c_int, attrs: HlAttrs, dict: &KeyDict_highlight, 
     // 'Normal' is special.
     let entry = group(id);
     if entry.name_u == c"NORMAL" {
-        cterm_normal_fg_color.set(entry.cterm_fg);
-        cterm_normal_bg_color.set(entry.cterm_bg);
-        let changed = normal_bg.get() != entry.rgb_bg
-            || normal_fg.get() != entry.rgb_fg
-            || normal_sp.get() != entry.rgb_sp;
-        normal_fg.set(entry.rgb_fg);
-        normal_bg.set(entry.rgb_bg);
-        normal_sp.set(entry.rgb_sp);
+        CTERM_NORMAL_FG_COLOR.set(entry.cterm_fg);
+        CTERM_NORMAL_BG_COLOR.set(entry.cterm_bg);
+        let changed = NORMAL_BG.get() != entry.rgb_bg
+            || NORMAL_FG.get() != entry.rgb_fg
+            || NORMAL_SP.get() != entry.rgb_sp;
+        NORMAL_FG.set(entry.rgb_fg);
+        NORMAL_BG.set(entry.rgb_bg);
+        NORMAL_SP.set(entry.rgb_sp);
         if changed {
             highlight_attr_set_all();
         }
@@ -183,10 +183,10 @@ pub(crate) fn set_hl_group(id: c_int, attrs: HlAttrs, dict: &KeyDict_highlight, 
         ui_mode_info_set();
     }
 
-    if !updating_screen.get() {
+    if !UPDATING_SCREEN.get() {
         redraw_all_later(UPD_NOT_VALID);
     }
-    need_highlight_changed.set(true);
+    NEED_HIGHLIGHT_CHANGED.set(true);
 }
 
 /// Not a colour index: "leave the one that is there alone".

@@ -60,7 +60,7 @@ use crate::charset::skip;
 use crate::cursor::{check_cursor, check_cursor_col, check_cursor_lnum};
 use crate::diff::{diff_buf_add, diff_invalidate};
 use crate::digraph::keymap_init;
-use crate::drawscreen::state::skip_redraw;
+use crate::drawscreen::state::SKIP_REDRAW;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::edit::{BeginlineOpts, beginline};
 use crate::eval::vars::{set_vim_var_string, with_vim_var_str};
@@ -86,7 +86,7 @@ use crate::plines::plines_m_win_fill;
 use crate::pos::equalpos;
 use crate::spell::parse_spelllang;
 use crate::startup::exiting;
-use crate::state::mode::exmode_active;
+use crate::state::mode::EXMODE_ACTIVE;
 use crate::tag::state::keep_help_flag;
 use crate::terminal::buf_terminal_check_size;
 use crate::types::{ExArg, Failed, LineNr, Vv};
@@ -442,7 +442,7 @@ pub(crate) fn do_ecmd(
         }
 
         drop(redraw_off.take());
-        if !skip_redraw.get() {
+        if !SKIP_REDRAW.get() {
             recenter(so, state.topline, command.is_some());
         }
 
@@ -679,7 +679,7 @@ fn place_cursor(state: &Ecmd) {
         }
     } else {
         // no line number, go to last line in Ex mode
-        if exmode_active.get() {
+        if EXMODE_ACTIVE.get() {
             Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
         }
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);

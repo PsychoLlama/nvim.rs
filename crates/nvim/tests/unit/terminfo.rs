@@ -8,7 +8,7 @@
 
 use neovim::tui::terminfo::builtin::{DESCRIPTIONS, Description, from_term};
 use neovim::tui::terminfo::caps::{
-    EXT_CAPS, KEYS, MAX_FUNCTION_KEY, STRING_CAPS, kTermCount, key_slot,
+    EXT_CAPS, KEYS, MAX_FUNCTION_KEY, STRING_CAPS, TERM_COUNT, key_slot,
 };
 use neovim::tui::terminfo::param::{Out, Param, expand};
 use std::ffi::CStr;
@@ -65,7 +65,7 @@ fn builtin_descriptions_match_the_generated_table() {
         }
 
         let defs = dense(
-            kTermCount as usize,
+            TERM_COUNT as usize,
             description
                 .defs
                 .iter()

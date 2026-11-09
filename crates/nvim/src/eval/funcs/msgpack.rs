@@ -24,7 +24,7 @@ use crate::mpack::mpack_core::MPACK_OK;
 use crate::msgpack_rpc::packer::pack_to_bytes;
 use crate::semsg;
 use crate::types::{
-    Blob, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
+    Blob, LIST_LEN_MAY_KNOW, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
 };
 use core::ffi::{CStr, c_int};
 use core::fmt::Write as _;
@@ -93,7 +93,7 @@ pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         // The Blob adopts the packed bytes as they are; nothing copies.
         blob_alloc_ret(result).bv_data = data;
     } else {
-        let mut lines = tv_list_alloc(kListLenMayKnow as isize);
+        let mut lines = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
         encode_list_write(&mut lines, &data);
         result.write_list(Some(lines));
     }
@@ -178,7 +178,7 @@ pub fn f_msgpackparse(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         semsg!("E899: Argument of {arg0} must be a List or Blob");
         return;
     }
-    let mut ret_list = tv_list_alloc(kListLenMayKnow as isize);
+    let mut ret_list = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
     if args[0].v_type() == VAR_LIST {
         if let Some(list) = args[0].list_ref() {
             msgpackparse_unpack_list(list, &mut ret_list);

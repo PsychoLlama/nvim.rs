@@ -40,7 +40,7 @@ use super::{
 use crate::ascii::NUL;
 use crate::eval::eval_to_string;
 use crate::global_cell::GlobalCell;
-use crate::keycodes::{Ctrl_H, K_SPECIAL};
+use crate::keycodes::{CTRL_H, K_SPECIAL};
 use crate::mbyte::{
     c_cluster_len, char_at, char_len, encode_char, mb_tolower, mb_toupper, utf_char2len,
 };
@@ -657,7 +657,7 @@ fn expand_replacement(rex: Expanding<'_>, source: &[u8], flags: c_int, out: &mut
                 b't' => c = TAB,
                 // `\e` already means "end the case fold", so there is no
                 // escape for ESC here.
-                b'b' => c = Ctrl_H,
+                b'b' => c = CTRL_H,
                 escaped => {
                     // A backslash the caller will strip later: double it
                     // so the literal survives, e.g. an inserted CR.

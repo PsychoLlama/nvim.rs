@@ -42,7 +42,7 @@ use crate::search::{
     ShadaPattern, set_last_used_pattern, shada_pattern_timestamp, shada_set_pattern,
 };
 use crate::types::LineNr;
-use crate::types::{ApiString, TypVal, Vv, kListLenUnknown};
+use crate::types::{ApiString, LIST_LEN_UNKNOWN, TypVal, Vv};
 use crate::winlayer::{Buf, BufId, Win, buffers, tab_windows};
 use core::ffi::{c_char, c_int};
 
@@ -138,7 +138,7 @@ pub(crate) fn shada_read(source: &mut Source, flags: u32) {
         }
     }
     if get_old_files && (oldfiles_list.is_none() || force) {
-        let held = tv_list_alloc(kListLenUnknown as isize);
+        let held = tv_list_alloc(LIST_LEN_UNKNOWN as isize);
         oldfiles_list = Some(held.clone());
         set_vim_var_list(Vv::Oldfiles, Some(held));
     }

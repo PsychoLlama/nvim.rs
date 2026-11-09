@@ -36,11 +36,11 @@ const PUM_PREVIEW_HEIGHT: c_int = 3;
 /// The selected item's `info` text, if it has one.
 ///
 /// Answers `None` for "nothing selected" as well; upstream reads
-/// `pum_array[pum_selected]` after testing only the lower bound, which is out
+/// `PUM_ARRAY[PUM_SELECTED]` after testing only the lower bound, which is out
 /// of range whenever a caller passes an index past the end. A copy: showing
 /// it runs autocommands, which may replace the menu's rows.
 fn pum_selected_info() -> Option<XString> {
-    let selected = usize::try_from(pum_selected.get()).ok()?;
+    let selected = usize::try_from(PUM_SELECTED.get()).ok()?;
     pum_items().get(selected)?.pum_info.clone()
 }
 
@@ -95,11 +95,11 @@ fn pum_preview_set_text(mut win: Win, info: &[u8]) -> (LineNr, c_int) {
 /// window hidden — when neither side has enough space to be worth it.
 fn pum_adjust_info_position(mut window: Win, width: c_int) -> bool {
     let border_width = pum_border_width();
-    let col = pum_col.get() + pum_width.get() + 1 + border_width.max(pum_scrollbar.get());
+    let col = PUM_COL.get() + PUM_WIDTH.get() + 1 + border_width.max(PUM_SCROLLBAR.get());
     // TODO(glepnir): support config align border by using completepopup
     // align menu
-    let right_extra = Columns.get() - col;
-    let left_extra = pum_col.get() - 2;
+    let right_extra = COLUMNS.get() - col;
+    let left_extra = PUM_COL.get() - 2;
 
     // TODO(glepnir): Replace the hardcoded value (10) with values from the
     // 'completepopup' width/height options.
@@ -114,22 +114,22 @@ fn pum_adjust_info_position(mut window: Win, width: c_int) -> bool {
         window.w_config.col = f64::from(col - 1);
     } else if left_extra > width {
         window.w_config.width = width;
-        window.w_config.col = f64::from(pum_col.get() - width - 1);
+        window.w_config.col = f64::from(PUM_COL.get() - width - 1);
     } else {
         // Neither side fits the text; take the bigger one.
         window.w_config.width = max_extra;
         window.w_config.col = f64::from(if right_extra > left_extra {
             col - 1
         } else {
-            pum_col.get() - max_extra - 1
+            PUM_COL.get() - max_extra - 1
         });
     }
 
     window.w_config.anchor = 0; // NW: align its top with the menu's top
     let count = window.w_buffer.b_ml.ml_line_count;
     window.w_view_width = window.w_config.width;
-    window.w_config.height = plines_m_win(window, window.w_topline, count, Rows.get());
-    window.w_config.row = f64::from(pum_row.get());
+    window.w_config.height = plines_m_win(window, window.w_topline, count, ROWS.get());
+    window.w_config.row = f64::from(PUM_ROW.get());
     window.w_config.hide = false;
     win_config_float(window, window.w_config.clone());
     true
@@ -141,11 +141,11 @@ fn pum_adjust_info_position(mut window: Win, width: c_int) -> bool {
 /// the selected one, or there is no room for the window.
 ///
 pub fn pum_set_info(selected: c_int, info: &[u8]) -> Option<Win> {
-    if !pum_is_visible.get() || !compl_match_curr_select(selected) {
+    if !PUM_IS_VISIBLE.get() || !compl_match_curr_select(selected) {
         return None;
     }
     block_autocmds();
-    RedrawingDisabled.set(RedrawingDisabled.get() + 1);
+    REDRAWING_DISABLED.set(REDRAWING_DISABLED.get() + 1);
     no_u_sync.set(no_u_sync.get() + 1);
 
     let wp = match win_float_find_preview() {
@@ -162,7 +162,7 @@ pub fn pum_set_info(selected: c_int, info: &[u8]) -> Option<Win> {
 
     let (_lnum, max_info_width) = pum_preview_set_text(wp, info);
     no_u_sync.set(no_u_sync.get() - 1);
-    RedrawingDisabled.set(RedrawingDisabled.get() - 1);
+    REDRAWING_DISABLED.set(REDRAWING_DISABLED.get() - 1);
     redraw_later(wp, UPD_NOT_VALID);
 
     // `unblock_autocmds` has to run whichever way the placement went, so
@@ -173,14 +173,14 @@ pub fn pum_set_info(selected: c_int, info: &[u8]) -> Option<Win> {
     placed.and_then(WinId::get)
 }
 
-/// Scroll the menu so that `pum_selected` is visible, with context around it.
+/// Scroll the menu so that `PUM_SELECTED` is visible, with context around it.
 ///
 /// A jump of more than a few items is treated as a PageUp/PageDown and
 /// scrolls a whole page; a small step keeps three lines of context.
 fn pum_scroll_to_selected() {
-    let (selected, height, size) = (pum_selected.get(), pum_height.get(), pum_size.get());
+    let (selected, height, size) = (PUM_SELECTED.get(), PUM_HEIGHT.get(), PUM_SIZE.get());
     let scroll_offset = selected - height;
-    let mut first = pum_first.get();
+    let mut first = PUM_FIRST.get();
 
     if first > selected - 4 {
         // Scroll up towards the selection; a jump means a PageUp.
@@ -209,7 +209,7 @@ fn pum_scroll_to_selected() {
         }
     }
 
-    pum_first.set(first.min(size - height));
+    PUM_FIRST.set(first.min(size - height));
 }
 
 /// Whether `'completeopt'` wants an info window for this call.
@@ -218,7 +218,7 @@ fn pum_scroll_to_selected() {
 /// (`repeat` above 1), and — for the split, not the float — inside the
 /// command-line window.
 fn wants_info_window(cot_flags: c_uint, repeat: c_int) -> bool {
-    Rows.get() > 10
+    ROWS.get() > 10
         && repeat <= 1
         && cot_flags & (kOptCotFlagPreview | kOptCotFlagPopup) != 0
         && !(cot_flags & kOptCotFlagPreview != 0 && cmdwin_type.get() != 0)
@@ -329,7 +329,7 @@ fn pum_fill_info(
 
     Buf::current().b_changed = 0;
     Buf::current().b_p_ma = 0;
-    if pum_selected.get() != prev_selected {
+    if PUM_SELECTED.get() != prev_selected {
         Win::current().w_topline = LineNr::ONE;
     } else if Win::current().w_topline > Buf::current().b_ml.ml_line_count {
         Win::current().w_topline = Buf::current().b_ml.ml_line_count;
@@ -385,9 +385,9 @@ fn pum_restore_window(curwin_save: WinId, curtab_save: TabId, resized: bool) -> 
     // status lines enabled again.
     // TODO(bfredl): can simplify, get rid of the flag munging? or at
     // least eliminate the extra redraw before win_enter()?
-    pum_is_visible.set(false);
+    PUM_IS_VISIBLE.set(false);
     let _ = update_screen();
-    pum_is_visible.set(true);
+    PUM_IS_VISIBLE.set(true);
 
     if !resized && let Some(saved) = valid_win(curwin_save) {
         let _no_sync = Suppress::undo_sync();
@@ -395,9 +395,9 @@ fn pum_restore_window(curwin_save: WinId, curtab_save: TabId, resized: bool) -> 
     }
 
     // Autocommands may have changed it again.
-    pum_is_visible.set(false);
+    PUM_IS_VISIBLE.set(false);
     let _ = update_screen();
-    pum_is_visible.set(true);
+    PUM_IS_VISIBLE.set(true);
     resized
 }
 
@@ -410,7 +410,7 @@ fn pum_restore_window(curwin_save: WinId, curtab_save: TabId, resized: bool) -> 
 /// Answers true when a window was resized, so the caller must recompute the
 /// menu's placement.
 pub(crate) fn pum_set_selected(n: c_int, repeat: c_int) -> bool {
-    let prev_selected = pum_selected.replace(n);
+    let prev_selected = PUM_SELECTED.replace(n);
     let cot_flags = get_cot_flags();
     let use_float = cot_flags & kOptCotFlagPopup != 0;
     let info = pum_selected_info();
@@ -425,7 +425,7 @@ pub(crate) fn pum_set_selected(n: c_int, repeat: c_int) -> bool {
         win_config_float(wp, wp.w_config.clone());
     }
 
-    if pum_selected.get() < 0 || pum_selected.get() >= pum_size.get() {
+    if PUM_SELECTED.get() < 0 || PUM_SELECTED.get() >= PUM_SIZE.get() {
         return false;
     }
     pum_scroll_to_selected();

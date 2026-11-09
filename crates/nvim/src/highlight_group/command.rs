@@ -21,14 +21,14 @@ use crate::semsg;
 use core::ffi::{CStr, c_int};
 
 use crate::ascii::ascii_isdigit;
-use crate::drawscreen::state::updating_screen;
+use crate::drawscreen::state::UPDATING_SCREEN;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_all_later};
 use crate::eval::vars::do_unlet;
 use crate::ex_docmd::ends_excmd;
 use crate::getchar::state::GOT_INT;
 use crate::highlight::state::{
-    cterm_normal_bg_color, cterm_normal_fg_color, need_highlight_changed, normal_bg, normal_fg,
-    normal_sp,
+    CTERM_NORMAL_BG_COLOR, CTERM_NORMAL_FG_COLOR, NEED_HIGHLIGHT_CHANGED, NORMAL_BG, NORMAL_FG,
+    NORMAL_SP,
 };
 use crate::lua::executor::nlua_set_sctx;
 use crate::message::{emsg, msg_ext_set_kind};
@@ -39,18 +39,18 @@ use crate::options::kOptBackground;
 use crate::os::cshim::gettext;
 use crate::runtime::state::current_sctx;
 use crate::startup::starting;
-use crate::ui::state::kUILinegrid;
-use crate::ui::state::t_colors;
+use crate::ui::state::T_COLORS;
+use crate::ui::state::UI_LINEGRID;
 use crate::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};
 
 use crate::memory::ThinCString;
 
 use super::{
-    ATTR_NAMES, HighlightError, SG_CTERM, SG_GUI, SG_LINK, cterm_color_index,
-    e_group_has_settings_highlight_link_ignored, group, highlight_attr_set_all, highlight_clear,
-    highlight_list_one, highlight_num_groups, hl_has_settings, init_highlight, kColorIdxNone,
-    lookup_color, name_to_color, restore_cterm_colors, set_hl_attr, syn_check_group,
-    syn_name2id_bytes, with_group,
+    ATTR_NAMES, COLOR_IDX_NONE, E_GROUP_HAS_SETTINGS_HIGHLIGHT_LINK_IGNORED, HighlightError,
+    SG_CTERM, SG_GUI, SG_LINK, cterm_color_index, group, highlight_attr_set_all, highlight_clear,
+    highlight_list_one, highlight_num_groups, hl_has_settings, init_highlight, lookup_color,
+    name_to_color, restore_cterm_colors, set_hl_attr, syn_check_group, syn_name2id_bytes,
+    with_group,
 };
 use crate::highlight_group::highlight_changed;
 
@@ -217,7 +217,7 @@ pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
         // Every group may be using "bg" and/or "fg", which just moved.
         highlight_attr_set_all();
 
-        if !ui_has(kUILinegrid) && starting.get() == 0 {
+        if !ui_has(UI_LINEGRID) && starting.get() == 0 {
             // Older UIs assume the screen is cleared after the Normal
             // group changes.
             ui_refresh();
@@ -242,10 +242,10 @@ pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
     if (state.did_change || group(id) != before) && !did_highlight_changed {
         // Do not redraw while redrawing: evaluating 'statusline' can
         // change the StatusLine group.
-        if !updating_screen.get() {
+        if !UPDATING_SCREEN.get() {
             redraw_all_later(UPD_NOT_VALID);
         }
-        need_highlight_changed.set(true);
+        NEED_HIGHLIGHT_CHANGED.set(true);
     }
 }
 
@@ -298,7 +298,7 @@ fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
         // Don't allow a link when the group already has highlighting,
         // unless '!' is used.
         if sourcing_name_is_null() && !dodefault {
-            emsg(gettext(e_group_has_settings_highlight_link_ignored));
+            emsg(gettext(E_GROUP_HAS_SETTINGS_HIGHLIGHT_LINK_IGNORED));
         }
     } else if entry.link != to_id
         || entry.script_ctx.sc_sid != current_sctx.get().sc_sid
@@ -316,7 +316,7 @@ fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
         });
         redraw_all_later(UPD_SOME_VALID);
         // Only call highlight_changed() once after multiple changes.
-        need_highlight_changed.set(true);
+        NEED_HIGHLIGHT_CHANGED.set(true);
     }
 }
 
@@ -514,15 +514,15 @@ impl KeyLoop {
         let color = if arg.first().is_some_and(|&b| ascii_isdigit(c_int::from(b))) {
             parse_int(arg)
         } else if arg.eq_ignore_ascii_case(b"fg") {
-            if cterm_normal_fg_color.get() == 0 {
+            if CTERM_NORMAL_FG_COLOR.get() == 0 {
                 return Err(HighlightError::FgUnknown);
             }
-            cterm_normal_fg_color.get() - 1
+            CTERM_NORMAL_FG_COLOR.get() - 1
         } else if arg.eq_ignore_ascii_case(b"bg") {
-            if cterm_normal_bg_color.get() <= 0 {
+            if CTERM_NORMAL_BG_COLOR.get() <= 0 {
                 return Err(HighlightError::BgUnknown);
             }
-            cterm_normal_bg_color.get() - 1
+            CTERM_NORMAL_BG_COLOR.get() - 1
         } else {
             let name = arg.to_vec();
             let name =
@@ -550,12 +550,12 @@ impl KeyLoop {
         if foreground {
             with_group(self.id, |entry| entry.cterm_fg = color + 1);
             if self.is_normal_group {
-                cterm_normal_fg_color.set(color + 1);
+                CTERM_NORMAL_FG_COLOR.set(color + 1);
             }
         } else {
             with_group(self.id, |entry| entry.cterm_bg = color + 1);
             if self.is_normal_group {
-                cterm_normal_bg_color.set(color + 1);
+                CTERM_NORMAL_BG_COLOR.set(color + 1);
                 self.guess_background(color);
             }
         }
@@ -569,7 +569,7 @@ impl KeyLoop {
         if ui_rgb_attached() || color < 0 {
             return;
         }
-        let dark = if t_colors.get() < 16 {
+        let dark = if T_COLORS.get() < 16 {
             Some(color == 0 || color == 4)
         } else if color < 16 {
             // Limit the heuristic to the standard 16 colours.
@@ -599,13 +599,13 @@ impl KeyLoop {
         }
 
         let (color, idx) = if arg == b"NONE" {
-            (-1, kColorIdxNone)
+            (-1, COLOR_IDX_NONE)
         } else {
             let owned = [arg, b"\0"].concat();
             match CStr::from_bytes_with_nul(&owned) {
                 Ok(name) => name_to_color(name),
                 // An embedded NUL cannot reach here: the parse stopped at it.
-                Err(_) => (-1, kColorIdxNone),
+                Err(_) => (-1, COLOR_IDX_NONE),
             }
         };
 
@@ -627,9 +627,9 @@ impl KeyLoop {
         if self.is_normal_group {
             let entry = group(self.id);
             match key[3] {
-                b'F' => normal_fg.set(entry.rgb_fg),
-                b'B' => normal_bg.set(entry.rgb_bg),
-                _ => normal_sp.set(entry.rgb_sp),
+                b'F' => NORMAL_FG.set(entry.rgb_fg),
+                b'B' => NORMAL_BG.set(entry.rgb_bg),
+                _ => NORMAL_SP.set(entry.rgb_sp),
             }
         }
     }

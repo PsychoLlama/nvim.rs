@@ -183,7 +183,7 @@ pub fn clear_sb_text(all: bool) {
 
 /// The `g<` command.
 pub fn show_sb_text() {
-    if ui_has(kUIMessages) {
+    if ui_has(UI_MESSAGES) {
         let mut ea = ExArg {
             line: CmdLine::from_bytes(b""),
             skip: true,

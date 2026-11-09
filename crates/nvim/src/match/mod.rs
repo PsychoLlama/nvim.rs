@@ -27,7 +27,7 @@ use crate::semsg;
 use core::ffi::{CStr, c_int};
 
 use crate::ascii::ascii_iswhite;
-use crate::drawscreen::state::search_hl_has_cursor_lnum;
+use crate::drawscreen::state::SEARCH_HL_HAS_CURSOR_LNUM;
 use crate::drawscreen::{UPD_SOME_VALID, UPD_VALID, redraw_later, redraw_win_range_later};
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::funcs::get_optional_window;

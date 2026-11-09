@@ -42,7 +42,7 @@ use crate::ascii::NUL;
 /// keys when Shift is in `mod_mask`.  Answers whether a CTRL-O and the key
 /// were stuffed.
 pub(crate) fn ins_start_select(c: Key) -> bool {
-    if !km_startsel.get() {
+    if !KM_STARTSEL.get() {
         return false;
     }
     let starts = match c.special() {
@@ -268,7 +268,7 @@ pub(crate) fn ins_updown(up: bool, startcol: bool) {
         if startcol {
             // `getvcol_nolist` only reads: a copy keeps the global out
             // of the call's reach.
-            coladvance_to(getvcol_nolist(&mut Insstart.get()).get());
+            coladvance_to(getvcol_nolist(&mut INSSTART.get()).get());
         }
         if old_topline != Win::current().w_topline || old_topfill != Win::current().w_topfill {
             redraw_later(Win::current(), UPD_VALID);

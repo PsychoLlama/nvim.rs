@@ -74,7 +74,7 @@ pub fn nvim_buf_del_user_command(buf: BufferHandle, name: ApiString) -> Result<(
     }
     let name = msg_cstr(name.as_cstr());
     Err(api_error!(
-        kErrorTypeException,
+        ERROR_TYPE_EXCEPTION,
         "Invalid command (not found): {name}"
     ))
 }
@@ -195,7 +195,7 @@ pub fn create_user_command(
 
         if let Some(given) = given_addr {
             let Some(addr) = given.as_string() else {
-                let expected = api_typename(kObjectTypeString);
+                let expected = api_typename(OBJECT_TYPE_STRING);
                 let actual = api_typename(given.kind());
                 failed = Some(err_expected(c"addr", expected, Some(actual)));
                 break '_err;
@@ -268,7 +268,7 @@ pub fn create_user_command(
 
         if let Some(given) = opts.preview.as_ref() {
             let Some(preview) = given.as_luaref() else {
-                let expected = api_typename(kObjectTypeLuaRef);
+                let expected = api_typename(OBJECT_TYPE_LUA_REF);
                 let actual = api_typename(given.kind());
                 failed = Some(err_expected(c"preview", expected, Some(actual)));
                 break '_err;

@@ -32,7 +32,7 @@ pub fn handle_nvim__buf_debug_extmarks(channel_id: uint64_t, args: Array) -> Res
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim__buf_debug_extmarks", c"Buffer"));
     };
     let Some(arg_2) = as_boolean(args[1].take()) else {
@@ -108,7 +108,7 @@ pub fn handle_nvim_buf_clear_namespace(channel_id: uint64_t, args: Array) -> Res
     if args.len() != 4 {
         return Err(wrong_arity(4, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_clear_namespace", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -140,7 +140,7 @@ pub fn handle_nvim_buf_del_extmark(channel_id: uint64_t, args: Array) -> Result<
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_del_extmark", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -172,7 +172,7 @@ pub fn handle_nvim_buf_get_extmark_by_id(
     if args.len() != 4 {
         return Err(wrong_arity(4, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_get_extmark_by_id", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -212,7 +212,7 @@ pub fn handle_nvim_buf_get_extmarks(channel_id: uint64_t, args: Array) -> Result
     if args.len() != 5 {
         return Err(wrong_arity(5, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_get_extmarks", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -251,7 +251,7 @@ pub fn handle_nvim_buf_set_extmark(channel_id: uint64_t, args: Array) -> Result<
     if args.len() != 5 {
         return Err(wrong_arity(5, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_set_extmark", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {

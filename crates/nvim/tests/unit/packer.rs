@@ -171,7 +171,7 @@ fn extension_headers_skip_the_wider_fixed_forms() {
 }
 
 /// Handles are extension objects whose type byte is the object type's
-/// distance from `kObjectTypeBuffer`. Small ones are a fixext1 carrying the
+/// distance from `OBJECT_TYPE_BUFFER`. Small ones are a fixext1 carrying the
 /// raw byte; larger ones wrap the handle's own unsigned encoding, so they
 /// spend an ext8 header even at two bytes.
 #[test]

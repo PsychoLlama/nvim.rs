@@ -17,7 +17,7 @@
 )]
 
 use super::*;
-use crate::keycodes::{Ctrl_V, KE_LUA};
+use crate::keycodes::{CTRL_V, KE_LUA};
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
 use core::ffi::{CStr, c_int};
@@ -255,7 +255,7 @@ pub(crate) fn str_to_mapargs(strargs: &[u8], is_unmap: bool, args: &mut MapArgum
         if !is_unmap && ascii_iswhite(c_int::from(ch)) {
             break;
         }
-        let escape = c_int::from(ch) == Ctrl_V || ch == b'\\' && do_backslash;
+        let escape = c_int::from(ch) == CTRL_V || ch == b'\\' && do_backslash;
         // Skip the CTRL-V or backslash *and* whatever it escapes, unless the
         // escape is the last byte.
         if escape && rest.get(at + 1).is_some_and(|&next| next != 0) {

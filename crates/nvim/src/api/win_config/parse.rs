@@ -94,9 +94,9 @@ fn float_anchor(spelling: &CStr) -> Option<FloatAnchor> {
     // NW is the default, and is neither bit.
     const CORNERS: [FloatAnchor; 4] = [
         0,
-        kFloatAnchorEast,
-        kFloatAnchorSouth,
-        kFloatAnchorSouth | kFloatAnchorEast,
+        FLOAT_ANCHOR_EAST,
+        FLOAT_ANCHOR_SOUTH,
+        FLOAT_ANCHOR_SOUTH | FLOAT_ANCHOR_EAST,
     ];
     Some(CORNERS[imatch(spelling, &NAMES)?])
 }
@@ -112,12 +112,12 @@ fn float_relative(spelling: &CStr) -> Option<FloatRelative> {
         c"laststatus",
     ];
     const KINDS: [FloatRelative; 6] = [
-        kFloatRelativeEditor,
-        kFloatRelativeWindow,
-        kFloatRelativeCursor,
-        kFloatRelativeMouse,
-        kFloatRelativeTabline,
-        kFloatRelativeLaststatus,
+        FLOAT_RELATIVE_EDITOR,
+        FLOAT_RELATIVE_WINDOW,
+        FLOAT_RELATIVE_CURSOR,
+        FLOAT_RELATIVE_MOUSE,
+        FLOAT_RELATIVE_TABLINE,
+        FLOAT_RELATIVE_LASTSTATUS,
     ];
     Some(KINDS[imatch(spelling, &NAMES)?])
 }
@@ -370,7 +370,7 @@ impl Decode<'_> {
                 }
                 self.has_relative = true;
                 self.fconfig.external = false;
-                if kind == kFloatRelativeWindow {
+                if kind == FLOAT_RELATIVE_WINDOW {
                     self.relative_is_win = true;
                     self.fconfig.bufpos.lnum = LineNr::new(-1);
                 }
@@ -441,7 +441,7 @@ impl Decode<'_> {
         // `bufpos` without `row`/`col` puts the float just below the
         // position, or just above it for a south anchor.
         if self.config.row.is_none() {
-            self.fconfig.row = if self.fconfig.anchor & kFloatAnchorSouth != 0 {
+            self.fconfig.row = if self.fconfig.anchor & FLOAT_ANCHOR_SOUTH != 0 {
                 0.0
             } else {
                 1.0
@@ -480,7 +480,7 @@ impl Decode<'_> {
             if self.has_relative && external {
                 return Err(err_conflict(c"relative", c"external"));
             }
-            if external && !ui_has(kUIMultigrid) {
+            if external && !ui_has(UI_MULTIGRID) {
                 return Err(Error::validation(c"UI doesn't support external windows"));
             }
         }
@@ -490,7 +490,7 @@ impl Decode<'_> {
         let win_is_target = self.config.win.is_some()
             && !self.is_split
             && self.on_a_float()
-            && self.fconfig.relative == kFloatRelativeWindow;
+            && self.fconfig.relative == FLOAT_RELATIVE_WINDOW;
         if !(self.relative_is_win || win_is_target) {
             return self.split_target();
         }
@@ -679,12 +679,12 @@ mod tests {
     #[cfg_attr(miri, ignore = "strcasecmp is a foreign function")]
     fn relative_names_its_six_kinds() {
         let named = [
-            (c"editor", kFloatRelativeEditor),
-            (c"win", kFloatRelativeWindow),
-            (c"cursor", kFloatRelativeCursor),
-            (c"mouse", kFloatRelativeMouse),
-            (c"tabline", kFloatRelativeTabline),
-            (c"laststatus", kFloatRelativeLaststatus),
+            (c"editor", FLOAT_RELATIVE_EDITOR),
+            (c"win", FLOAT_RELATIVE_WINDOW),
+            (c"cursor", FLOAT_RELATIVE_CURSOR),
+            (c"mouse", FLOAT_RELATIVE_MOUSE),
+            (c"tabline", FLOAT_RELATIVE_TABLINE),
+            (c"laststatus", FLOAT_RELATIVE_LASTSTATUS),
         ];
         for (name, kind) in named {
             assert_eq!(float_relative(name), Some(kind), "{name:?}");
@@ -698,11 +698,11 @@ mod tests {
     #[cfg_attr(miri, ignore = "strcasecmp is a foreign function")]
     fn the_anchor_is_a_corner_of_two_bits() {
         assert_eq!(float_anchor(c"NW"), Some(0));
-        assert_eq!(float_anchor(c"NE"), Some(kFloatAnchorEast));
-        assert_eq!(float_anchor(c"SW"), Some(kFloatAnchorSouth));
+        assert_eq!(float_anchor(c"NE"), Some(FLOAT_ANCHOR_EAST));
+        assert_eq!(float_anchor(c"SW"), Some(FLOAT_ANCHOR_SOUTH));
         assert_eq!(
             float_anchor(c"SE"),
-            Some(kFloatAnchorSouth | kFloatAnchorEast)
+            Some(FLOAT_ANCHOR_SOUTH | FLOAT_ANCHOR_EAST)
         );
         assert_eq!(float_anchor(c""), None);
     }
@@ -712,7 +712,7 @@ mod tests {
     #[cfg_attr(miri, ignore = "strcasecmp is a foreign function")]
     fn a_name_is_matched_whatever_its_case() {
         assert_eq!(float_anchor(c"nw"), Some(0));
-        assert_eq!(float_relative(c"EDITOR"), Some(kFloatRelativeEditor));
+        assert_eq!(float_relative(c"EDITOR"), Some(FLOAT_RELATIVE_EDITOR));
         assert_eq!(config_split(c"Above"), Some(WIN_SPLIT_ABOVE));
     }
 

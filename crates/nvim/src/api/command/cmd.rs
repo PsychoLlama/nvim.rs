@@ -234,7 +234,7 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
     if !(found.is_some() && excmd.cmdidx != CmdIdx::SIZE) && !range_only {
         let name = msg_bytes(&cmdname);
         return Err(api_error!(
-            kErrorTypeValidation,
+            ERROR_TYPE_VALIDATION,
             "Command not found: {name}"
         ));
     }
@@ -243,7 +243,7 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
     if !range_only && is_cmd_ni(excmd.cmdidx) {
         let name = msg_bytes(&cmdname);
         return Err(api_error!(
-            kErrorTypeValidation,
+            ERROR_TYPE_VALIDATION,
             "Command not implemented: {name}"
         ));
     }
@@ -261,7 +261,7 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
         if !matched {
             let name = msg_bytes(&cmdname);
             return Err(api_error!(
-                kErrorTypeValidation,
+                ERROR_TYPE_VALIDATION,
                 "Invalid command: \"{name}\""
             ));
         }
@@ -452,7 +452,7 @@ fn apply_register(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
         let byte = regname.cast_unsigned();
         let reg = msg_bytes(core::slice::from_ref(&byte));
         return Err(api_error!(
-            kErrorTypeValidation,
+            ERROR_TYPE_VALIDATION,
             "Invalid register: \"{reg}"
         ));
     }
@@ -478,7 +478,10 @@ fn err_cannot_accept(what: &CStr, cmd: &KeyDict_cmd) -> Error {
         .as_ref()
         .map_or(c"", |cmd| cmd.as_cstr())
         .to_string_lossy();
-    api_error!(kErrorTypeValidation, "Command cannot accept {what}: {name}")
+    api_error!(
+        ERROR_TYPE_VALIDATION,
+        "Command cannot accept {what}: {name}"
+    )
 }
 
 /// Unpack the `magic` sub-keyset, defaulting each half to what `argt` says.

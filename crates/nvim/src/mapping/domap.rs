@@ -18,7 +18,7 @@ use super::*;
 use crate::charset::is_word_at;
 use crate::ex_docmd::sourcing_lnum;
 use crate::getchar::Remap;
-use crate::keycodes::Ctrl_C;
+use crate::keycodes::CTRL_C;
 use crate::lua::executor::nlua_set_sctx;
 use crate::mapping::{MapTables, MapTwin};
 use crate::message_fmt::{emsg_text, msg_bytes};
@@ -253,7 +253,7 @@ pub(crate) fn buf_do_map(
             if has_lhs && has_rhs && is_abbrev {
                 // We are adding an abbreviation, so reset the flag that
                 // says there are none.
-                no_abbr.set(false);
+                NO_ABBR.set(false);
             }
 
             if do_print {
@@ -363,7 +363,7 @@ pub(crate) fn buf_do_map(
                     if !keyround1_simplified {
                         retval = 2; // no match
                     }
-                } else if lhs.first().copied().map(c_int::from) == Some(Ctrl_C) {
+                } else if lhs.first().copied().map(c_int::from) == Some(CTRL_C) {
                     // CTRL-C has been unmapped, reuse it for Interrupting.
                     match table {
                         MapTable::Buffer(mut buf) => buf.b_mapped_ctrl_c &= !mode,

@@ -69,7 +69,7 @@ use crate::message::state::{MSG_SCROLL, NO_LINES_MSG};
 use crate::message::{E_INVARG, E_MODIFIABLE};
 use crate::message::{emsg, msg, msg_keep_text, msg_start, msgmore};
 use crate::mouse::setmouse;
-use crate::mouse::state::mouse_dragging;
+use crate::mouse::state::MOUSE_DRAGGING;
 use crate::r#move::validate_virtcol;
 use crate::normal::defs::{CmdArg, MotionType, OpArg};
 use crate::normal::{
@@ -96,9 +96,9 @@ use crate::register::{
     shift_delete_registers, valid_yank_reg,
 };
 use crate::state::mode::{
-    Insstart, State, VIsual_reselect, VIsual_select_reg, ai_col, can_si, did_ai, finish_op,
-    motion_force, redo_VIsual_busy, resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol,
-    restart_edit, virtual_op,
+    AI_COL, CAN_SI, DID_AI, FINISH_OP, INSSTART, MOTION_FORCE, REDO_V_ISUAL_BUSY,
+    RESEL_V_ISUAL_LINE_COUNT, RESEL_V_ISUAL_MODE, RESEL_V_ISUAL_VCOL, RESTART_EDIT, STATE,
+    V_ISUAL_RESELECT, V_ISUAL_SELECT_REG, VIRTUAL_OP,
 };
 use crate::state::{MODE_INSERT, MODE_REPLACE, VREPLACE_FLAG, virtual_active};
 use crate::textformat::{auto_format, has_format_option, op_format, op_formatexpr};
@@ -220,7 +220,7 @@ impl Op {
 /// `virtual_op` test reads that as "yes" — only an explicit `Some(false)`,
 /// which `do_pending_operator` sets from `virtual_active`, turns it off.
 pub(crate) fn op_virtual() -> bool {
-    virtual_op.get() != Some(false)
+    VIRTUAL_OP.get() != Some(false)
 }
 
 /// `get_fileformat`: lines end with CR LF, so a line break is two bytes.

@@ -25,7 +25,7 @@ use crate::eval::vars::var_string_value;
 use crate::global_cell::GlobalCell;
 use crate::highlight::RgbValue;
 use crate::highlight::state::{
-    cterm_normal_bg_color, cterm_normal_fg_color, normal_bg, normal_fg, normal_sp,
+    CTERM_NORMAL_BG_COLOR, CTERM_NORMAL_FG_COLOR, NORMAL_BG, NORMAL_FG, NORMAL_SP,
 };
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 
@@ -594,11 +594,11 @@ pub(crate) fn load_colors(name: &CStr) -> bool {
 /// Forgets the `Normal` colours, so that the next `:highlight` starts from
 /// the terminal's own.
 pub(crate) fn restore_cterm_colors() {
-    normal_fg.set(-1 as RgbValue);
-    normal_bg.set(-1 as RgbValue);
-    normal_sp.set(-1 as RgbValue);
-    cterm_normal_fg_color.set(0);
-    cterm_normal_bg_color.set(0);
+    NORMAL_FG.set(-1 as RgbValue);
+    NORMAL_BG.set(-1 as RgbValue);
+    NORMAL_SP.set(-1 as RgbValue);
+    CTERM_NORMAL_FG_COLOR.set(0);
+    CTERM_NORMAL_BG_COLOR.set(0);
 }
 
 #[cfg(test)]

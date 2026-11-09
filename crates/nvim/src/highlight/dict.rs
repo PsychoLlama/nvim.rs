@@ -34,7 +34,7 @@ use crate::message_fmt::msg_cstr;
 use crate::os::libc::{int16_t, int32_t, size_t};
 use crate::types::DictBuilder;
 use crate::types::{
-    ApiDict, Boolean, Error, Integer, Object, kErrorTypeException, kErrorTypeValidation,
+    ApiDict, Boolean, ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, Error, Integer, Object,
 };
 use core::ffi::{CStr, c_int};
 
@@ -66,7 +66,7 @@ pub fn hl_get_attr_by_id(attr_id: Integer, rgb: Boolean) -> Result<ApiDict, Erro
         return Ok(empty);
     }
     if attr_id < 0 || attr_id >= Integer::from(attr_entry_count()) {
-        let why = api_error!(kErrorTypeException, "Invalid attribute id: {attr_id}");
+        let why = api_error!(ERROR_TYPE_EXCEPTION, "Invalid attribute id: {attr_id}");
         return Err(why);
     }
     let mut retval = DictBuilder::with_capacity(HLATTRS_DICT_SIZE);
@@ -357,7 +357,7 @@ pub fn dict2hlattrs(
                 c"link"
             };
             let name = msg_cstr(name);
-            return Err(api_error!(kErrorTypeValidation, "Invalid Key: '{name}'"));
+            return Err(api_error!(ERROR_TYPE_VALIDATION, "Invalid Key: '{name}'"));
         };
         match global {
             Some(id) => {

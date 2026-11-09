@@ -23,7 +23,7 @@ use core::ffi::CStr;
 
 use crate::ascii::NUL;
 use crate::cursor::{adjust_cursor_col, check_cursor, coladvance, gchar_cursor, inc_cursor};
-use crate::drawscreen::state::redraw_cmdline;
+use crate::drawscreen::state::REDRAW_CMDLINE;
 use crate::drawscreen::{
     UPD_INVERTED, UPD_VALID, conceal_check_cursor_line, redraw_curbuf_later, showmode,
 };
@@ -34,7 +34,7 @@ use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::cluster_len;
 use crate::message::state::MSG_SILENT;
 use crate::mouse::setmouse;
-use crate::mouse::state::mouse_dragging;
+use crate::mouse::state::MOUSE_DRAGGING;
 use crate::normal::defs::{CmdArg, Outcome};
 use crate::normal::{
     TAB, VIsual_mode_orig, clear_op_beep, may_clear_cmdline, nv_down, nv_g_cmd, nv_operator,
@@ -48,8 +48,8 @@ use crate::options::kOptVeFlagBlock;
 use crate::plines::{getvcol, getvcols};
 use crate::pos::{equalpos, lt};
 use crate::state::mode::{
-    VIsual_reselect, VIsual_select_exclu_adj, VIsual_select_reg, finish_op, motion_force,
-    resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol,
+    FINISH_OP, MOTION_FORCE, RESEL_V_ISUAL_LINE_COUNT, RESEL_V_ISUAL_MODE, RESEL_V_ISUAL_VCOL,
+    V_ISUAL_RESELECT, V_ISUAL_SELECT_EXCLU_ADJ, V_ISUAL_SELECT_REG,
 };
 use crate::state::{may_trigger_modechanged, virtual_active};
 use crate::textobject::{
@@ -58,7 +58,7 @@ use crate::textobject::{
 use crate::types::{ColNr, LineNr, Pos};
 use core::ffi::c_int;
 
-use crate::keycodes::Ctrl_V;
+use crate::keycodes::CTRL_V;
 use crate::memory::XString;
 use crate::r#move::{update_curswant_force, update_topline, validate_virtcol};
 
@@ -89,7 +89,7 @@ impl VisualMode {
     /// Linewise, entered with `V`.
     pub(crate) const LINE: Self = Self(Key::ascii(b'V').code());
     /// Blockwise, entered with CTRL-V.
-    pub(crate) const BLOCK: Self = Self(Ctrl_V);
+    pub(crate) const BLOCK: Self = Self(CTRL_V);
     /// The `NUL` that `resel_VIsual_mode` and `VIsual_mode_orig` use to mean
     /// "nothing remembered".
     pub(crate) const NONE: Self = Self(NUL);
@@ -258,10 +258,10 @@ pub(crate) fn with_visual_anchor<R>(f: impl FnOnce(&mut Pos) -> R) -> R {
 
 /// Leave Visual mode, remembering the selection for `gv` and `'<`/`'>`.
 pub(crate) fn end_visual_mode() {
-    VIsual_select_exclu_adj.set(false);
+    V_ISUAL_SELECT_EXCLU_ADJ.set(false);
     set_visual_active(false);
     setmouse();
-    mouse_dragging.set(0);
+    MOUSE_DRAGGING.set(0);
     Buf::current().b_visual.vi_mode = visual_mode().raw();
     Buf::current().b_visual.vi_start = visual_anchor();
     Buf::current().b_visual.vi_end = Win::current().w_cursor;
@@ -281,7 +281,7 @@ pub(crate) fn reset_visual_and_resel() {
         end_visual_mode();
         redraw_curbuf_later(UPD_INVERTED);
     }
-    VIsual_reselect.set(0);
+    V_ISUAL_RESELECT.set(0);
 }
 
 /// As [`reset_visual_and_resel`], but only when there was a selection.
@@ -289,7 +289,7 @@ pub(crate) fn reset_visual() {
     if visual_active() {
         end_visual_mode();
         redraw_curbuf_later(UPD_INVERTED);
-        VIsual_reselect.set(0);
+        V_ISUAL_RESELECT.set(0);
     }
 }
 
@@ -502,13 +502,13 @@ pub(crate) fn v_visop(cmd_arg: &mut CmdArg) {
 fn reselect_scaled(cmd_arg: &mut CmdArg) {
     set_visual_anchor(Win::current().w_cursor);
     set_visual_active(true);
-    VIsual_reselect.set(1);
+    V_ISUAL_RESELECT.set(1);
     if cmd_arg.arg == 0 {
         may_start_select(Key::ascii(b'c'));
     }
     setmouse();
     if p_smd() && MSG_SILENT.get() == 0 {
-        redraw_cmdline.set(true);
+        REDRAW_CMDLINE.set(true);
     }
     // The count multiplies the size of the remembered selection, and it
     // is user input: `999999999v` after a three-column selection
@@ -516,10 +516,10 @@ fn reselect_scaled(cmd_arg: &mut CmdArg) {
     // `check_cursor`/`coladvance` clamp whatever comes out -- so wrapping
     // is both what the C produces and safe. The transpile used Rust's
     // checked operators here and aborted the debug build instead.
-    if !resel_VIsual_mode.get().is_char() || resel_VIsual_line_count.get() > 1 {
+    if !RESEL_V_ISUAL_MODE.get().is_char() || RESEL_V_ISUAL_LINE_COUNT.get() > 1 {
         Win::current().w_cursor.lnum = LineNr::new(
             Win::current().w_cursor.lnum.get().wrapping_add(
-                resel_VIsual_line_count
+                RESEL_V_ISUAL_LINE_COUNT
                     .get()
                     .wrapping_mul(cmd_arg.count0)
                     .wrapping_sub(1),
@@ -527,25 +527,25 @@ fn reselect_scaled(cmd_arg: &mut CmdArg) {
         );
         check_cursor(Win::current());
     }
-    set_visual_mode(resel_VIsual_mode.get());
+    set_visual_mode(RESEL_V_ISUAL_MODE.get());
 
     if visual_mode().is_char() {
-        if resel_VIsual_line_count.get() <= 1 {
+        if RESEL_V_ISUAL_LINE_COUNT.get() <= 1 {
             update_curswant_force();
             let count0 = cmd_arg.count0;
-            let extra = resel_VIsual_vcol.get().get().wrapping_mul(count0);
+            let extra = RESEL_V_ISUAL_VCOL.get().get().wrapping_mul(count0);
             Win::current().w_curswant =
                 ColNr::new(Win::current().w_curswant.get().wrapping_add(extra));
             if !sel_exclusive() {
                 Win::current().w_curswant -= 1;
             }
         } else {
-            Win::current().w_curswant = resel_VIsual_vcol.get();
+            Win::current().w_curswant = RESEL_V_ISUAL_VCOL.get();
         }
         coladvance(Win::current(), Win::current().w_curswant);
     }
 
-    if resel_VIsual_vcol.get() == ColNr::MAX {
+    if RESEL_V_ISUAL_VCOL.get() == ColNr::MAX {
         Win::current().w_curswant = ColNr::MAX;
         coladvance(Win::current(), ColNr::MAX);
     } else if visual_mode().is_block() {
@@ -556,7 +556,7 @@ fn reselect_scaled(cmd_arg: &mut CmdArg) {
         update_curswant_force();
         Win::current().w_curswant = ColNr::new(
             Win::current().w_curswant.get().wrapping_add(
-                resel_VIsual_vcol
+                RESEL_V_ISUAL_VCOL
                     .get()
                     .get()
                     .wrapping_mul(cmd_arg.count0)
@@ -586,8 +586,8 @@ pub(crate) fn nv_visual(cmd_arg: &mut CmdArg) {
     // `dv`, `dV`, `d CTRL-V`.
     if cmd_arg.op().op_type != OpType::Nop {
         cmd_arg.op().motion_force = cmd_arg.cmdchar;
-        motion_force.set(cmd_arg.op().motion_force);
-        finish_op.set(false);
+        MOTION_FORCE.set(cmd_arg.op().motion_force);
+        FINISH_OP.set(false);
         return;
     }
 
@@ -603,7 +603,7 @@ pub(crate) fn nv_visual(cmd_arg: &mut CmdArg) {
             may_trigger_modechanged();
         }
         redraw_curbuf_later(UPD_INVERTED);
-    } else if cmd_arg.count0 > 0 && resel_VIsual_mode.get() != VisualMode::NONE {
+    } else if cmd_arg.count0 > 0 && RESEL_V_ISUAL_MODE.get() != VisualMode::NONE {
         reselect_scaled(cmd_arg);
     } else {
         if cmd_arg.arg == 0 {
@@ -615,7 +615,7 @@ pub(crate) fn nv_visual(cmd_arg: &mut CmdArg) {
         if !visual_mode().is_line() && sel_exclusive() {
             cmd_arg.count1 += 1;
         } else {
-            VIsual_select_exclu_adj.set(false);
+            V_ISUAL_SELECT_EXCLU_ADJ.set(false);
         }
         // A count means "select this many characters or lines".
         if cmd_arg.count0 > 0 && {
@@ -652,7 +652,7 @@ pub(crate) fn may_start_select(c: Key) {
 pub(crate) fn n_start_visual_mode(c: Key) {
     set_visual_mode(VisualMode::from_raw(c.code()));
     set_visual_active(true);
-    VIsual_reselect.set(1);
+    V_ISUAL_RESELECT.set(1);
     // A block selection starting inside a TAB starts at the column the
     // cursor is displayed at, not at the TAB's first column.
     if c == Key::CTRL_V
@@ -668,7 +668,7 @@ pub(crate) fn n_start_visual_mode(c: Key) {
     setmouse();
     conceal_check_cursor_line();
     if p_smd() && MSG_SILENT.get() == 0 {
-        redraw_cmdline.set(true);
+        REDRAW_CMDLINE.set(true);
     }
     // Seed the "what was highlighted last time" pair so the first redraw
     // has something to compare against.
@@ -714,7 +714,7 @@ pub(crate) fn nv_gv_cmd(cmd_arg: &mut CmdArg) {
     }
 
     set_visual_active(true);
-    VIsual_reselect.set(1);
+    V_ISUAL_RESELECT.set(1);
     // Both ends are checked against the buffer: it may have shrunk since.
     check_cursor(Win::current());
     set_visual_anchor(Win::current().w_cursor);
@@ -723,7 +723,7 @@ pub(crate) fn nv_gv_cmd(cmd_arg: &mut CmdArg) {
     update_topline(Win::current());
     if cmd_arg.arg != 0 {
         set_visual_select(true);
-        VIsual_select_reg.set(0);
+        V_ISUAL_SELECT_REG.set(0);
     } else {
         may_start_select(Key::ascii(b'c'));
     }
@@ -743,7 +743,7 @@ pub(crate) fn adjust_for_sel(cmd_arg: &mut CmdArg) {
     {
         inc_cursor();
         cmd_arg.op().inclusive = false;
-        VIsual_select_exclu_adj.set(true);
+        V_ISUAL_SELECT_EXCLU_ADJ.set(true);
     }
 }
 
@@ -765,7 +765,7 @@ pub(crate) fn unadjust_for_sel() -> bool {
 ///
 /// Answers whether it crossed one.
 pub(crate) fn unadjust_for_sel_inner(pos: &mut Pos) -> bool {
-    VIsual_select_exclu_adj.set(false);
+    V_ISUAL_SELECT_EXCLU_ADJ.set(false);
     if pos.coladd > 0 {
         pos.coladd -= 1;
     } else if pos.col > ColNr::ZERO {
@@ -789,8 +789,8 @@ pub(crate) fn unadjust_for_sel_inner(pos: &mut Pos) -> bool {
 pub(crate) fn nv_select(cmd_arg: &mut CmdArg) {
     if visual_active() {
         set_visual_select(true);
-        VIsual_select_reg.set(0);
-    } else if VIsual_reselect.get() != 0 {
+        V_ISUAL_SELECT_REG.set(0);
+    } else if V_ISUAL_RESELECT.get() != 0 {
         // Re-enter through `gv`, which is where the reselection lives.
         cmd_arg.nchar = Key::ascii(b'v');
         cmd_arg.arg = 1;

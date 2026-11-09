@@ -52,8 +52,8 @@
 #![forbid(unsafe_code)]
 
 use super::{
-    DECOR_ID_INVALID, decor_release_sh, decor_release_vt, kSHConceal, kSHHlEol, kSHIsSign,
-    kSHSpellOff, kSHSpellOn, kSHUIWatched, kSHUIWatchedOverlay, kVTHide, kVTIsLines, ns_in_win,
+    DECOR_ID_INVALID, SH_CONCEAL, SH_HL_EOL, SH_IS_SIGN, SH_SPELL_OFF, SH_SPELL_ON, SHUI_WATCHED,
+    SHUI_WATCHED_OVERLAY, VT_HIDE, VT_IS_LINES, decor_release_sh, decor_release_vt, ns_in_win,
     sh_chain, virt_chain, with_decor_item, with_decor_virt,
 };
 use crate::decoration::defs::{
@@ -61,8 +61,8 @@ use crate::decoration::defs::{
     DecorRange_data, DecorRange_data_ui, DecorRangeSlot, DecorState, RangeHighlight, VirtTextPos,
 };
 use crate::decoration::{
-    kDecorKindHighlight, kDecorKindUIWatched, kDecorKindVirtLines, kDecorKindVirtText,
-    kVPosEndOfLine, kVPosInline, kVPosOverlay,
+    DECOR_KIND_HIGHLIGHT, DECOR_KIND_UI_WATCHED, DECOR_KIND_VIRT_LINES, DECOR_KIND_VIRT_TEXT,
+    V_POS_END_OF_LINE, V_POS_INLINE, V_POS_OVERLAY,
 };
 use crate::global_cell::GlobalCell;
 use crate::highlight::{hl_add_url, hl_combine_attr};
@@ -173,23 +173,23 @@ fn slot_range(slot: &mut DecorRangeSlot) -> &mut DecorRange {
 
 /// The virtual-text link a range draws, if it is a virtual *text* at all.
 fn virt_opt(range: &DecorRange) -> Option<uint32_t> {
-    (range.kind == kDecorKindVirtText).then(|| range.data.virt())
+    (range.kind == DECOR_KIND_VIRT_TEXT).then(|| range.data.virt())
 }
 
 /// Whether `range` occupies a position of its own rather than colouring the
 /// text under it — virtual text, or a mark a UI wants told about.
 #[inline]
 pub(crate) fn decor_virt_pos(range: &DecorRange) -> bool {
-    range.kind == kDecorKindVirtText || range.kind == kDecorKindUIWatched
+    range.kind == DECOR_KIND_VIRT_TEXT || range.kind == DECOR_KIND_UI_WATCHED
 }
 
 /// Where a virtual-position range wants to be drawn.
 pub(crate) fn decor_virt_pos_kind(range: &DecorRange) -> VirtTextPos {
     match range.kind {
-        kDecorKindVirtText => with_decor_virt(range.data.virt(), |vt| vt.pos),
-        kDecorKindUIWatched => range.data.ui_watched().pos,
+        DECOR_KIND_VIRT_TEXT => with_decor_virt(range.data.virt(), |vt| vt.pos),
+        DECOR_KIND_UI_WATCHED => range.data.ui_watched().pos,
         // Not used; answer whatever.
-        _ => kVPosEndOfLine,
+        _ => V_POS_END_OF_LINE,
     }
 }
 
@@ -201,8 +201,8 @@ fn free_owned(range: &DecorRange) {
         return;
     }
     match range.kind {
-        kDecorKindVirtText | kDecorKindVirtLines => decor_release_vt(range.data.virt()),
-        kDecorKindHighlight if range.data.highlight().url != DECOR_ID_INVALID => {
+        DECOR_KIND_VIRT_TEXT | DECOR_KIND_VIRT_LINES => decor_release_vt(range.data.virt()),
+        DECOR_KIND_HIGHLIGHT if range.data.highlight().url != DECOR_ID_INVALID => {
             decor_release_sh(range.data.highlight().url);
         }
         _ => {}
@@ -444,7 +444,7 @@ impl HlSource {
     /// An inline highlight, which has no URL.
     pub(crate) fn inline(hl: DecorHighlightInline) -> Self {
         // A sign is never inline; see `decor_sh_from_inline`.
-        debug_assert!(hl.flags & kSHIsSign == 0);
+        debug_assert!(hl.flags & SH_IS_SIGN == 0);
         Self {
             flags: hl.flags,
             priority: hl.priority,
@@ -522,10 +522,10 @@ pub fn decor_range_add_virt(
         // shift or the two kinds no longer interleave.
         priority_internal: DecorPriorityInternal::from(priority) << 16,
         owned,
-        kind: if flags & kVTIsLines != 0 {
-            kDecorKindVirtLines
+        kind: if flags & VT_IS_LINES != 0 {
+            DECOR_KIND_VIRT_LINES
         } else {
-            kDecorKindVirtText
+            DECOR_KIND_VIRT_TEXT
         },
         data: DecorRange_data::Virt(vt),
         attr_id: 0,
@@ -579,7 +579,7 @@ fn add_sh(
     subpriority: DecorPriority,
 ) {
     let flags = sh.flags;
-    if flags & kSHIsSign != 0 {
+    if flags & SH_IS_SIGN != 0 {
         return;
     }
 
@@ -592,7 +592,7 @@ fn add_sh(
         priority_internal: (DecorPriorityInternal::from(sh.priority) << 16)
             + DecorPriorityInternal::from(subpriority),
         owned,
-        kind: kDecorKindHighlight,
+        kind: DECOR_KIND_HIGHLIGHT,
         data: DecorRange_data::Highlight(RangeHighlight {
             flags,
             conceal_char: sh.conceal_char,
@@ -604,7 +604,7 @@ fn add_sh(
 
     if sh.hl_id != 0
         || sh.url != DECOR_ID_INVALID
-        || flags & (kSHConceal | kSHSpellOn | kSHSpellOff) != 0
+        || flags & (SH_CONCEAL | SH_SPELL_ON | SH_SPELL_OFF) != 0
     {
         if sh.hl_id != 0 {
             // Outside the state's borrow: this can run a provider's `hl_def`.
@@ -614,15 +614,15 @@ fn add_sh(
         with_state(|state| decor_range_insert(state, range.clone()));
     }
 
-    if flags & kSHUIWatched != 0 {
-        range.kind = kDecorKindUIWatched;
+    if flags & SHUI_WATCHED != 0 {
+        range.kind = DECOR_KIND_UI_WATCHED;
         range.data = DecorRange_data::UIWatched(DecorRange_data_ui {
             ns_id: ns,
             mark_id,
-            pos: if flags & kSHUIWatchedOverlay != 0 {
-                kVPosOverlay
+            pos: if flags & SHUI_WATCHED_OVERLAY != 0 {
+                V_POS_OVERLAY
             } else {
-                kVPosEndOfLine
+                V_POS_END_OF_LINE
             },
         });
         with_state(|state| decor_range_insert(state, range));
@@ -642,12 +642,12 @@ pub(crate) fn decor_init_draw_col(win_col: c_int, hidden: bool, i: usize) {
 /// [`decor_init_draw_col`] for a range in hand.
 fn init_draw_col(win_col: c_int, hidden: bool, item: &mut DecorRange) {
     let pos = decor_virt_pos_kind(item);
-    item.draw_col = if win_col < 0 && pos != kVPosInline {
+    item.draw_col = if win_col < 0 && pos != V_POS_INLINE {
         // A negative `win_col` is itself a sentinel the caller passes in.
         win_col
-    } else if pos == kVPosOverlay {
+    } else if pos == V_POS_OVERLAY {
         let hides =
-            virt_opt(item).is_some_and(|vt| with_decor_virt(vt, |link| link.flags & kVTHide != 0));
+            virt_opt(item).is_some_and(|vt| with_decor_virt(vt, |link| link.flags & VT_HIDE != 0));
         if hides && hidden {
             DRAW_COL_NEVER
         } else {
@@ -802,9 +802,9 @@ fn columns_reached(
             if r.attr_id > 0 {
                 attr = hl_combine_attr(attr, r.attr_id);
             }
-            if r.kind == kDecorKindHighlight {
+            if r.kind == DECOR_KIND_HIGHLIGHT {
                 let sh = r.data.highlight();
-                if sh.flags & kSHConceal != 0 {
+                if sh.flags & SH_CONCEAL != 0 {
                     conceal = 1;
                     // The replacement character only shows at the very first
                     // cell of the concealed range.
@@ -815,9 +815,9 @@ fn columns_reached(
                         conceal_attr = r.attr_id;
                     }
                 }
-                if sh.flags & kSHSpellOn != 0 {
+                if sh.flags & SH_SPELL_ON != 0 {
                     spell = Some(true);
-                } else if sh.flags & kSHSpellOff != 0 {
+                } else if sh.flags & SH_SPELL_OFF != 0 {
                     spell = Some(false);
                 }
                 if sh.url != DECOR_ID_INVALID {
@@ -899,7 +899,7 @@ pub fn decor_redraw_eol(window: Win, eol_attr: &mut c_int, eol_col: c_int) -> bo
         for i in 0..state.current_end {
             let r = state.range_at(i);
             has_virt_pos |= r.start_row == row && decor_virt_pos(r);
-            if r.kind == kDecorKindHighlight && r.data.highlight().flags & kSHHlEol != 0 {
+            if r.kind == DECOR_KIND_HIGHLIGHT && r.data.highlight().flags & SH_HL_EOL != 0 {
                 *eol_attr = hl_combine_attr(*eol_attr, r.attr_id);
             }
         }
@@ -953,11 +953,11 @@ pub(crate) fn decor_inline_virt_from(v: isize) -> bool {
                     unreachable!("decor: a sorted index names a freed slot")
                 };
                 item.start_row == row
-                    && item.kind == kDecorKindVirtText
+                    && item.kind == DECOR_KIND_VIRT_TEXT
                     && item.draw_col >= -1
                     && item.start_col as isize >= v
                     && with_decor_virt(item.data.virt(), |vt| {
-                        vt.pos == kVPosInline && vt.width != 0
+                        vt.pos == V_POS_INLINE && vt.width != 0
                     })
             })
         })

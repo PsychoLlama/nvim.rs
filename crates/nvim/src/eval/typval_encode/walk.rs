@@ -27,9 +27,9 @@ use crate::eval::typval::{blob_bytes, dict_find, list_len};
 use crate::eval::vars::msgpack_type_of;
 use crate::message::internal_error;
 use crate::types::{
-    Dict, List, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, kBoolVarFalse, kBoolVarTrue,
-    kSpecialVarNull,
+    BOOL_VAR_FALSE, BOOL_VAR_TRUE, Dict, List, SPECIAL_VAR_NULL, TypVal, VAR_BLOB, VAR_BOOL,
+    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
+    VAR_UNKNOWN,
 };
 
 /// Apply a hook's verdict inside `convert_one_value`, where "stop" is
@@ -180,13 +180,13 @@ fn convert_one_value<'a, S: TypvalSink>(
         VAR_BOOL => {
             // Upstream switches over the two named values and ignores
             // anything else.
-            let b = tv.as_bool().unwrap_or(kBoolVarFalse);
-            if b == kBoolVarTrue || b == kBoolVarFalse {
-                sink.conv_bool(b == kBoolVarTrue);
+            let b = tv.as_bool().unwrap_or(BOOL_VAR_FALSE);
+            if b == BOOL_VAR_TRUE || b == BOOL_VAR_FALSE {
+                sink.conv_bool(b == BOOL_VAR_TRUE);
             }
         }
         VAR_SPECIAL => {
-            if tv.as_special() == Some(kSpecialVarNull) {
+            if tv.as_special() == Some(SPECIAL_VAR_NULL) {
                 sink.conv_nil();
             }
         }

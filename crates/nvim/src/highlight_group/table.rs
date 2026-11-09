@@ -36,7 +36,7 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::vim_isprintc;
 use crate::cursor_shape::cursor_mode_uses_syn_id;
 use crate::global_cell::GlobalCell;
-use crate::highlight::state::{normal_bg, normal_fg};
+use crate::highlight::state::{NORMAL_BG, NORMAL_FG};
 use crate::highlight::{HLATTRS_INIT, HlAttrFlags, hl_get_syn_attr, ns_get_attr, ns_get_link};
 use crate::highlight::{HlAttrs, RgbValue};
 use crate::os::libc::int16_t;
@@ -44,7 +44,7 @@ use crate::types::{NS, ScriptCtx};
 use crate::ui::ui_mode_info_set;
 
 use super::{
-    HighlightError, MAX_HL_ID, MAX_SYN_NAME, SG_LINK, kColorIdxBg, kColorIdxFg, kColorIdxNone,
+    COLOR_IDX_BG, COLOR_IDX_FG, COLOR_IDX_NONE, HighlightError, MAX_HL_ID, MAX_SYN_NAME, SG_LINK,
 };
 
 /// Information about one highlight group.
@@ -136,9 +136,9 @@ impl HlGroup {
             rgb_fg: -1,
             rgb_bg: -1,
             rgb_sp: -1,
-            rgb_fg_idx: kColorIdxNone,
-            rgb_bg_idx: kColorIdxNone,
-            rgb_sp_idx: kColorIdxNone,
+            rgb_fg_idx: COLOR_IDX_NONE,
+            rgb_bg_idx: COLOR_IDX_NONE,
+            rgb_sp_idx: COLOR_IDX_NONE,
             blend: -1,
             parent,
             ..Self::ZEROED
@@ -151,9 +151,9 @@ impl HlGroup {
             && (self.attr != 0
                 || self.cterm_fg != 0
                 || self.cterm_bg != 0
-                || self.rgb_fg_idx != kColorIdxNone
-                || self.rgb_bg_idx != kColorIdxNone
-                || self.rgb_sp_idx != kColorIdxNone
+                || self.rgb_fg_idx != COLOR_IDX_NONE
+                || self.rgb_bg_idx != COLOR_IDX_NONE
+                || self.rgb_sp_idx != COLOR_IDX_NONE
                 || (check_link && self.set & SG_LINK.cast_signed() != 0))
     }
 }
@@ -230,9 +230,9 @@ pub(crate) fn highlight_clear(id: c_int) {
             rgb_fg: -1,
             rgb_bg: -1,
             rgb_sp: -1,
-            rgb_fg_idx: kColorIdxNone,
-            rgb_bg_idx: kColorIdxNone,
-            rgb_sp_idx: kColorIdxNone,
+            rgb_fg_idx: COLOR_IDX_NONE,
+            rgb_bg_idx: COLOR_IDX_NONE,
+            rgb_sp_idx: COLOR_IDX_NONE,
             blend: -1,
             ..*group
         };
@@ -251,17 +251,17 @@ pub(crate) fn set_hl_attr(id: c_int) {
             cterm_fg_color: int16_t::try_from(group.cterm_fg).expect("a cterm colour fits 16 bits"),
             cterm_bg_color: int16_t::try_from(group.cterm_bg).expect("a cterm colour fits 16 bits"),
             rgb_ae_attr: group.gui,
-            rgb_fg_color: if group.rgb_fg_idx != kColorIdxNone {
+            rgb_fg_color: if group.rgb_fg_idx != COLOR_IDX_NONE {
                 group.rgb_fg
             } else {
                 -1
             },
-            rgb_bg_color: if group.rgb_bg_idx != kColorIdxNone {
+            rgb_bg_color: if group.rgb_bg_idx != COLOR_IDX_NONE {
                 group.rgb_bg
             } else {
                 -1
             },
-            rgb_sp_color: if group.rgb_sp_idx != kColorIdxNone {
+            rgb_sp_color: if group.rgb_sp_idx != COLOR_IDX_NONE {
                 group.rgb_sp
             } else {
                 -1
@@ -294,10 +294,10 @@ pub(crate) fn highlight_attr_set_all() {
                 (group.rgb_fg_idx, &mut group.rgb_fg),
                 (group.rgb_sp_idx, &mut group.rgb_sp),
             ] {
-                if idx == kColorIdxFg {
-                    *color = normal_fg.get();
-                } else if idx == kColorIdxBg {
-                    *color = normal_bg.get();
+                if idx == COLOR_IDX_FG {
+                    *color = NORMAL_FG.get();
+                } else if idx == COLOR_IDX_BG {
+                    *color = NORMAL_BG.get();
                 }
             }
         });

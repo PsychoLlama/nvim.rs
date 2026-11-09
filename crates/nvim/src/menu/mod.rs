@@ -57,13 +57,13 @@ use crate::normal::{visual_active, visual_select};
 use crate::os::cshim::gettext;
 use crate::os::libc::ptrdiff_t;
 use crate::popupmenu::pum_show_popupmenu;
-use crate::state::mode::{State, finish_op};
+use crate::state::mode::{FINISH_OP, STATE};
 use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_HITRETURN, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL,
     MODE_TERMINAL,
 };
 use crate::tr;
-use crate::types::kListLenMayKnow;
+use crate::types::LIST_LEN_MAY_KNOW;
 
 // The carve of the transpiled module; see each child's docs.
 mod complete;
@@ -268,7 +268,7 @@ pub(crate) fn dict_alloc() -> DictRef {
 }
 
 pub(crate) fn list_alloc() -> ListRef {
-    tv_list_alloc(kListLenMayKnow as ptrdiff_t)
+    tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t)
 }
 
 /// A right-hand side with its special keys spelled out.
@@ -335,7 +335,7 @@ pub(crate) fn is_hidden(name: &[u8]) -> bool {
 /// Which mode's right-hand side a menu invoked right now should run, or
 /// [`MENU_INDEX_INVALID`] if the editor is in none of them.
 pub(crate) fn get_menu_mode() -> c_int {
-    if State.get() & MODE_TERMINAL != 0 {
+    if STATE.get() & MODE_TERMINAL != 0 {
         return MENU_INDEX_TERMINAL;
     }
     if visual_active() {
@@ -345,22 +345,22 @@ pub(crate) fn get_menu_mode() -> c_int {
             MENU_INDEX_VISUAL
         };
     }
-    if State.get() & MODE_INSERT != 0 {
+    if STATE.get() & MODE_INSERT != 0 {
         return MENU_INDEX_INSERT;
     }
-    if State.get() & MODE_CMDLINE != 0
-        || State.get() == MODE_ASKMORE
-        || State.get() == MODE_HITRETURN
+    if STATE.get() & MODE_CMDLINE != 0
+        || STATE.get() == MODE_ASKMORE
+        || STATE.get() == MODE_HITRETURN
     {
         return MENU_INDEX_CMDLINE;
     }
-    if finish_op.get() {
+    if FINISH_OP.get() {
         return MENU_INDEX_OP_PENDING;
     }
-    if State.get() & MODE_NORMAL != 0 {
+    if STATE.get() & MODE_NORMAL != 0 {
         return MENU_INDEX_NORMAL;
     }
-    if State.get() & MODE_LANGMAP != 0 {
+    if STATE.get() & MODE_LANGMAP != 0 {
         // Must be an "r" command, which behaves like Insert mode.
         return MENU_INDEX_INSERT;
     }

@@ -323,8 +323,8 @@ fn syn_list_cluster(id: c_int) {
     if MSG_COL.get() >= endcol {
         endcol = MSG_COL.get() + 1; // output at least one space
     }
-    if Columns.get() <= endcol {
-        endcol = Columns.get() - 1; // avoid a hang for a tiny window
+    if COLUMNS.get() <= endcol {
+        endcol = COLUMNS.get() - 1; // avoid a hang for a tiny window
     }
     msg_advance(endcol);
 

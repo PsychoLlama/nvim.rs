@@ -9,7 +9,7 @@
 //!
 //! The order of the impure calls in both is load-bearing and unchanged:
 //! `block_autocmds` brackets the window surgery so no `BufEnter`/`WinEnter`
-//! escapes it, `p_acd` and `RedrawingDisabled` bracket `win_enter` so it
+//! escapes it, `p_acd` and `REDRAWING_DISABLED` bracket `win_enter` so it
 //! cannot `chdir` or redraw, and `aucmd_win[]` entries are re-read by
 //! index after every call that might have grown the vector.
 
@@ -167,7 +167,7 @@ pub fn aucmd_prepbuf(aco: &mut AcoSave, mut buffer: Buf) {
             win_config_float(auc, config);
         }
         // `p_acd` off keeps `win_enter_ext` out of `do_autochdir`;
-        // `RedrawingDisabled` keeps it from redrawing or setting the
+        // `REDRAWING_DISABLED` keeps it from redrawing or setting the
         // window title.
         let save_acd = p_acd();
         P_ACD.set(false);

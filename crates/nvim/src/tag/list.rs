@@ -62,7 +62,7 @@ pub(crate) fn print_tag_list(new_tag: bool, use_tagstack: bool, matches: &[TagMa
     let (first, _) = matches[0].parse();
     let name_width = c_int::try_from(first.tagname.len()).unwrap_or(c_int::MAX - 2) + 2;
     let mut taglen = name_width.max(MIN_TAG_WIDTH);
-    if taglen > Columns.get() - 25 {
+    if taglen > COLUMNS.get() - 25 {
         // Too wide to line up: every file name goes on its own line.
         taglen = MAXCOL;
     }
@@ -111,7 +111,7 @@ pub(crate) fn print_tag_list(new_tag: bool, use_tagstack: bool, matches: &[TagMa
 
         // The last entry needs no line ending of its own when the UI
         // draws the messages itself.
-        if MSG_COL.get() != 0 && (!ui_has(kUIMessages) || i + 1 < count) {
+        if MSG_COL.get() != 0 && (!ui_has(UI_MESSAGES) || i + 1 < count) {
             msg_putchar('\n' as c_int);
         }
         os_breakcheck();
@@ -194,7 +194,7 @@ fn print_extra_fields(line: &[u8], command_end: usize, tagp: &TagParts) -> bool 
         // its colon.
         let mut hl_id = HLF_CM;
         while !matches!(byte(line, p), 0 | b'\r' | b'\n') {
-            if MSG_COL.get() + ptr2cells_at(&line[p..]) >= Columns.get() {
+            if MSG_COL.get() + ptr2cells_at(&line[p..]) >= COLUMNS.get() {
                 msg_putchar('\n' as c_int);
                 if GOT_INT.get() {
                     break;
@@ -246,7 +246,7 @@ fn print_command(line: &[u8], command: usize, command_end: usize) {
         } else {
             ptr2cells_at(&line[p..])
         };
-        if MSG_COL.get() + width > Columns.get() {
+        if MSG_COL.get() + width > COLUMNS.get() {
             msg_putchar('\n' as c_int);
         }
         if GOT_INT.get() {

@@ -198,10 +198,10 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
 
         // nvim_select_popupmenu_item() can be called from the handling of
         // K_EVENT, K_COMMAND or K_LUA.
-        if pum_want.get().active {
+        if PUM_WANT.get().active {
             if cmdline_pum_active() {
                 s.next_wild(WildMode::PumWant, WildOpts::NONE);
-                if pum_want.get().finish {
+                if PUM_WANT.get().finish {
                     s.next_wild(WildMode::Apply, WildOpts::NO_BEEP);
                     command_line_end_wildmenu(s, false, Some(s.c));
                 }
@@ -239,7 +239,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
     if s.c == Key::CTRL_C
         && s.firstc != b'@'
         // do clear got_int in Ex mode, to avoid an infinite Ctrl-C loop
-        && (!s.break_ctrl_c || exmode_active.get())
+        && (!s.break_ctrl_c || EXMODE_ACTIVE.get())
         && global_busy.get() == 0
     {
         GOT_INT.set(false);
@@ -355,7 +355,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
         || (s.c == Key::ESC && (!KEY_TYPED.get() || cpo_has(CpoFlag::ESC)))
     {
         // In Ex mode a backslash escapes a newline.
-        if exmode_active.get()
+        if EXMODE_ACTIVE.get()
             && s.c != Key::ESC
             && cc.cmdpos == cc.len()
             && cc.cmdpos > 0
@@ -373,7 +373,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
             }
 
             if !CMD_SILENT.get() {
-                if !ui_has(kUICmdline) {
+                if !ui_has(UI_CMDLINE) {
                     msg_cursor_goto(MSG_ROW.get(), 0);
                 }
                 ui_flush();
@@ -485,7 +485,7 @@ pub(crate) fn do_autocmd_cmdlinechanged(firstc: u8) {
     err.absorb(try_leave(&tstate));
 
     if err.is_set() {
-        if !ui_has(kUIMessages) {
+        if !ui_has(UI_MESSAGES) {
             msg_putchar(::core::ffi::c_int::from(b'\n'));
         }
         MSG_SCROLL.set(1);
@@ -503,7 +503,7 @@ pub(crate) fn command_line_changed(s: &mut CommandLineState) -> Step {
     let preview_shown = s.firstc == b':'
         && current_sctx.get().sc_sid == 0 // only if interactive
         && P_ICM.first_byte() != 0 // 'inccommand' is set
-        && !exmode_active.get() // not in ex mode
+        && !EXMODE_ACTIVE.get() // not in ex mode
         && CMDLINE_STAR.get() == 0 // not typing a password
         && vpeekc_any().is_nul()
         && cmdpreview_may_show();
@@ -538,7 +538,7 @@ pub(crate) fn command_line_changed(s: &mut CommandLineState) -> Step {
         // there are no characters left to read, to avoid useless
         // intermediate redraws. If the cmdline is external the UI handles
         // shaping and no redraw is needed.
-        if !ui_has(kUICmdline) && vpeekc().is_nul() {
+        if !ui_has(UI_CMDLINE) && vpeekc().is_nul() {
             redrawcmd();
         }
     }

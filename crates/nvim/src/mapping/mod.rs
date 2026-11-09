@@ -79,7 +79,7 @@ use crate::os::libc::{ptrdiff_t, size_t, uint64_t};
 use crate::regexp::RegMatch;
 use crate::regexp::vim_regexec;
 use crate::runtime::state::current_sctx;
-use crate::state::mode::{State, no_abbr};
+use crate::state::mode::{NO_ABBR, STATE};
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_OP_PENDING, MODE_SELECT,
     MODE_TERMINAL, MODE_VISUAL,

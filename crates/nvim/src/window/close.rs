@@ -31,7 +31,7 @@ use super::*;
 use crate::autocmd::state::autocmd_busy;
 use crate::buffer::{BufRef, buf_is_prompt, close_buffer, is_changed, reset_syntax};
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::drawscreen::state::{clear_cmdline, mode_displayed};
+use crate::drawscreen::state::{CLEAR_CMDLINE, MODE_DISPLAYED};
 use crate::ex_cmds2::{can_abandon, dialog_changed};
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
@@ -39,7 +39,7 @@ use crate::message::{E_CMDWIN, E_FLOATONLY};
 use crate::r#move::WinValid;
 use crate::option::vars::{p_confirm, p_write};
 use crate::state::MODE_INSERT;
-use crate::state::mode::{State, restart_edit, stop_insert_mode};
+use crate::state::mode::{RESTART_EDIT, STATE, STOP_INSERT_MODE};
 use crate::types::{CmdModFlags, Error, LineNr};
 use crate::winlayer::graph::{
     cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, leave_curbuf,
@@ -57,17 +57,17 @@ pub(crate) fn leave_window(win: Win) {
     if !is_prompt(win) || is_autocmd_window(Some(win)) {
         return;
     }
-    win.buffer().b_prompt_insert = restart_edit.get();
-    if !restart_edit.get().is_nul() && mode_displayed.get() {
-        clear_cmdline.set(true); // unshow mode later
+    win.buffer().b_prompt_insert = RESTART_EDIT.get();
+    if !RESTART_EDIT.get().is_nul() && MODE_DISPLAYED.get() {
+        CLEAR_CMDLINE.set(true); // unshow mode later
     }
-    restart_edit.set(Key::NUL);
+    RESTART_EDIT.set(Key::NUL);
 
     // When leaving (or closing) the window was done from a callback we need to
     // break out of the Insert mode loop and restart Insert mode on the way
     // back in.
-    if State.get() & MODE_INSERT != 0 && !stop_insert_mode.get() {
-        stop_insert_mode.set(true);
+    if STATE.get() & MODE_INSERT != 0 && !STOP_INSERT_MODE.get() {
+        STOP_INSERT_MODE.set(true);
         if win.buffer().b_prompt_insert.is_nul() {
             win.buffer().b_prompt_insert = Key::ascii(b'A');
         }
@@ -83,10 +83,10 @@ pub(crate) fn enter_window(win: Win) {
     // Switching to a prompt buffer that was in Insert mode must not stop Insert
     // mode: `leave_window` may have set it.
     if !win.buffer().b_prompt_insert.is_nul() {
-        stop_insert_mode.set(false);
+        STOP_INSERT_MODE.set(false);
     }
-    if State.get() & MODE_INSERT == 0 {
-        restart_edit.set(win.buffer().b_prompt_insert);
+    if STATE.get() & MODE_INSERT == 0 {
+        RESTART_EDIT.set(win.buffer().b_prompt_insert);
     }
 }
 

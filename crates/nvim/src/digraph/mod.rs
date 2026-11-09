@@ -56,7 +56,7 @@ use crate::state::MODE_LANGMAP;
 use crate::tr;
 use crate::types::Key;
 use crate::types::{BoolVarValue, ExArg, Failed, KeymapEntry, List, OptInt, TypVal, VAR_LIST};
-use crate::ui::state::Columns;
+use crate::ui::state::COLUMNS;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use crate::winlayer::graph::switch_to;
@@ -397,7 +397,7 @@ fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
         }
         *previous = result;
     }
-    if MSG_COL.get() > Columns.get() - LIST_WIDTH {
+    if MSG_COL.get() > COLUMNS.get() - LIST_WIDTH {
         newline();
     }
     if MSG_COL.get() % LIST_WIDTH != 0 {

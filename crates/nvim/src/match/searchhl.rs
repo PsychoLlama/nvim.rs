@@ -4,7 +4,7 @@
 //! per window redraw, [`prepare_search_hl`] once per line to advance every
 //! pattern to that line, [`prepare_search_hl_line`] to find what is already
 //! highlighted at the left edge, then [`Win::update_search_hl`] per column.
-//! The `'hlsearch'` state (the redraw's `screen_search_hl`) and the window's
+//! The `'hlsearch'` state (the redraw's `SCREEN_SEARCH_HL`) and the window's
 //! match list are walked together, ordered by priority, with
 //! SEARCH_HL_PRIORITY (0) as `'hlsearch'`'s own place in that order.
 //!
@@ -23,7 +23,7 @@
 )]
 
 use super::*;
-use crate::drawscreen::state::screen_search_hl;
+use crate::drawscreen::state::SCREEN_SEARCH_HL;
 use crate::mbyte::c_cluster_len;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
@@ -43,7 +43,7 @@ impl Win {
     #[inline(always)]
     fn with_search_hl<R>(mut self, which: Which, f: impl FnOnce(&mut MatchState) -> R) -> R {
         match which {
-            Which::Search => screen_search_hl.with_mut(f),
+            Which::Search => SCREEN_SEARCH_HL.with_mut(f),
             Which::Item(i) => f(&mut self.w_matches[i].mit_hl),
         }
     }
@@ -80,7 +80,7 @@ impl Win {
             item.mit_suspended = false;
         }
         let attr = win_hl_attr(self, HLF_L);
-        screen_search_hl.with_mut(|shl| {
+        SCREEN_SEARCH_HL.with_mut(|shl| {
             shl.lnum = LineNr::ZERO;
             shl.first_lnum = LineNr::ZERO;
             shl.attr = attr;
@@ -137,7 +137,7 @@ impl Win {
                     // Inside the match. Widen it to a whole character.
                     let next_col = col + col_len(char_len_here()).get();
                     let cursor_attr = match which {
-                        Which::Search if screen_search_hl.with(|shl| shl.has_cursor) => {
+                        Which::Search if SCREEN_SEARCH_HL.with(|shl| shl.has_cursor) => {
                             Some(win_hl_attr(self, HLF_LC))
                         }
                         _ => None,
@@ -150,7 +150,7 @@ impl Win {
                         if let Some(attr) = cursor_attr {
                             shl.attr_cur = attr;
                             if shl.attr_cur != shl.attr {
-                                search_hl_has_cursor_lnum.set(lnum);
+                                SEARCH_HL_HAS_CURSOR_LNUM.set(lnum);
                             }
                         } else {
                             shl.attr_cur = shl.attr;
@@ -228,7 +228,7 @@ impl Win {
 #[inline(always)]
 fn has_prog(window: Win, which: Which) -> bool {
     match which {
-        Which::Search => screen_search_hl.with(|shl| shl.rm.regprog.is_some()),
+        Which::Search => SCREEN_SEARCH_HL.with(|shl| shl.rm.regprog.is_some()),
         Which::Item(i) => window.w_matches[i].active(),
     }
 }
@@ -236,7 +236,7 @@ fn has_prog(window: Win, which: Which) -> bool {
 /// Whether `which`'s pattern can match a line break.
 fn is_multiline(window: Win, which: Which) -> bool {
     match which {
-        Which::Search => screen_search_hl.with(|shl| shl.rm.is_multiline()),
+        Which::Search => SCREEN_SEARCH_HL.with(|shl| shl.rm.is_multiline()),
         Which::Item(i) => {
             window.w_matches[i].active() && window.w_matches[i].mit_match.is_multiline()
         }
@@ -376,7 +376,7 @@ fn exec_shl(window: Win, which: Which, lnum: LineNr, col: ColNr, timed_out: &mut
     let buffer = window.buffer();
     let nmatched = match which {
         // The matcher does not reach the redraw's matcher cell.
-        Which::Search => screen_search_hl.with_mut(|shl| {
+        Which::Search => SCREEN_SEARCH_HL.with_mut(|shl| {
             let tm = shl.tm;
             let rm = &mut shl.rm;
             vim_regexec_multi(
@@ -476,7 +476,7 @@ fn next_search_hl(window: Win, which: Which, lnum: LineNr, mincol: ColNr) {
                 match which {
                     Which::Search => {
                         set_no_hlsearch(true);
-                        screen_search_hl.with_mut(|shl| shl.rm.regprog = None);
+                        SCREEN_SEARCH_HL.with_mut(|shl| shl.rm.regprog = None);
                     }
                     Which::Item(i) => window.with_match_item(i, |item| item.mit_suspended = true),
                 }
@@ -582,7 +582,7 @@ pub(crate) fn prepare_search_hl(window: Win, lnum: LineNr) {
 /// what makes `CurSearch` apply to one match and not the others.
 fn check_cur_search_hl(window: Win) {
     let cursor = window.w_cursor;
-    screen_search_hl.with_mut(|shl| {
+    SCREEN_SEARCH_HL.with_mut(|shl| {
         let linecount = shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum;
         shl.has_cursor = cursor.lnum >= shl.lnum
             && cursor.lnum <= shl.lnum + linecount
@@ -727,7 +727,7 @@ fn peek(window: Win, which: Which, reset: bool, in_progress: bool) -> Peek {
         conceals: shl.conceals,
     };
     match which {
-        Which::Search => screen_search_hl.with(|shl| read(shl, shl.rm.regprog.is_some())),
+        Which::Search => SCREEN_SEARCH_HL.with(|shl| read(shl, shl.rm.regprog.is_some())),
         Which::Item(i) => window.with_match_item(i, |item| {
             if reset {
                 item.mit_pos_cur = 0;
@@ -755,7 +755,7 @@ pub(crate) fn get_prevcol_hl_flag(window: Win, curcol: ColNr) -> bool {
         !m.is_addpos && (prevcol == m.startcol || (prevcol > m.startcol && m.endcol == ColNr::MAX))
     };
 
-    screen_search_hl.with(covers) || window.w_matches.iter().any(|item| covers(&item.mit_hl))
+    SCREEN_SEARCH_HL.with(covers) || window.w_matches.iter().any(|item| covers(&item.mit_hl))
 }
 
 /// The attribute for the character after the text, when a match starts

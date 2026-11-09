@@ -24,7 +24,7 @@ use crate::ascii::ascii_iswhite;
 use crate::change::get_leader_len;
 use crate::charset::is_word_at;
 use crate::cstr;
-use crate::drawscreen::state::clear_cmdline;
+use crate::drawscreen::state::CLEAR_CMDLINE;
 use crate::fold::fold_open_cursor;
 use crate::getchar::state::KEY_TYPED;
 use crate::mark::setpcmark;
@@ -268,7 +268,7 @@ pub(crate) fn nv_gd(op: Op, nchar: Key, thisblock: bool) {
     // The search left a "search hit" message that has nothing to say
     // here, unless 'shortmess' has already suppressed it.
     if messaging() && MSG_SILENT.get() == 0 && !shortmess(ShmFlag::SEARCHCOUNT) {
-        clear_cmdline.set(true);
+        CLEAR_CMDLINE.set(true);
     }
 }
 

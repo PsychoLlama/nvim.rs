@@ -130,7 +130,7 @@ pub fn nvim__redraw(opts: &mut KeyDict_redraw) -> Result<(), Error> {
     if opts.tabline.unwrap_or(false) {
         // A window that has never been drawn cannot have its tabline drawn
         // on its own; the whole screen has to go first.
-        if redraw_tabline.get() && first_window().is_some_and(|wp| wp.w_lines_valid == 0) {
+        if REDRAW_TABLINE.get() && first_window().is_some_and(|wp| wp.w_lines_valid == 0) {
             flush = true;
         } else {
             draw_tabline();

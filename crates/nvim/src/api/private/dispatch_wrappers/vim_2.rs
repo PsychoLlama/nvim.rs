@@ -351,7 +351,7 @@ pub fn handle_nvim_open_term(channel_id: uint64_t, args: Array) -> Result<Object
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_open_term", c"Buffer"));
     };
     let mut arg_2: KeyDict_open_term = match read_keydict(args[1].take()) {
@@ -551,7 +551,7 @@ pub fn handle_nvim_set_current_buf(channel_id: uint64_t, args: Array) -> Result<
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_set_current_buf", c"Buffer"));
     };
     if text_locked() {
@@ -626,7 +626,7 @@ pub fn handle_nvim_set_current_tabpage(channel_id: uint64_t, args: Array) -> Res
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_TABPAGE) else {
         return Err(wrong_type(1, c"nvim_set_current_tabpage", c"Tabpage"));
     };
     if text_locked() {
@@ -652,7 +652,7 @@ pub fn handle_nvim_set_current_win(channel_id: uint64_t, args: Array) -> Result<
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_set_current_win", c"Window"));
     };
     if text_locked() {

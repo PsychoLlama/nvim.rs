@@ -83,7 +83,7 @@ pub const kExtmarkSplice: UndoObjectType = 0;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
-pub const kExtmarkNone: ExtmarkType = 1;
+pub const EXTMARK_NONE: ExtmarkType = 1;
 // ---------------------------------------------------------------------------
 // The two containers hanging off a buffer
 

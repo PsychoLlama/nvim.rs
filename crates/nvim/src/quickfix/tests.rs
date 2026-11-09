@@ -24,15 +24,15 @@ use crate::eval::typval::{dict_find, list_items};
 use crate::global_cell::{editor_state::Held, editor_state_lock};
 use crate::memory::XString;
 use crate::option::vars::{P_CPO, P_EFM};
-use crate::types::kListLenMayKnow;
+use crate::types::LIST_LEN_MAY_KNOW;
 use crate::window::{bare_window, free_bare_window};
 use crate::winlayer::graph::{leave_curbuf, leave_curwin};
 use core::ffi::c_int;
 use std::ffi::CString;
 
-/// `kListLenMayKnow`, as the length hint `tv_list_alloc` takes.
+/// `LIST_LEN_MAY_KNOW`, as the length hint `tv_list_alloc` takes.
 const MAY_KNOW: ptrdiff_t = -3;
-const _: () = assert!(kListLenMayKnow == -3);
+const _: () = assert!(LIST_LEN_MAY_KNOW == -3);
 
 /// The quickfix stack emptied, with room for `slots` lists; emptied and
 /// given back its default room on drop.

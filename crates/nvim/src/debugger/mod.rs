@@ -47,7 +47,7 @@ use crate::charset::atoi;
 use crate::debugger::state::{
     debug_backtrace_level, debug_break_level, debug_did_msg, debug_mode, debug_tick,
 };
-use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::state::CMDLINE_ROW;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::env::{expand_env, home_to_tilde};
 use crate::eval::{eval_expr, typval_compare, typval_tostring};
@@ -76,10 +76,10 @@ use crate::runtime::{estack_sfile, sourcing_lnum};
 use crate::semsg;
 use crate::smsg;
 use crate::state::MODE_NORMAL;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::types::CmdIdx;
 use crate::types::{ExArg, Failed, LineNr, TypVal};
-use crate::ui::state::Rows;
+use crate::ui::state::ROWS;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;

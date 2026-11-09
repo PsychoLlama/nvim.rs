@@ -39,7 +39,7 @@ use crate::ex_docmd::{CHANNEL_PART_ALL, cmdmod_has};
 use crate::log::{LOGLVL_INF, logmsg};
 use crate::message::E_INVCHAN;
 use crate::startup::{exiting, getout};
-use crate::ui::state::current_ui;
+use crate::ui::state::CURRENT_UI;
 
 use crate::msgpack_rpc::server::{server_start, server_stop};
 
@@ -406,11 +406,11 @@ pub(crate) fn ex_detach(excmd: &mut ExArg) {
 /// Split from the handler because `:connect` detaches once it has attached
 /// somewhere else, and has no bang of its own to answer for.
 fn detach_ui() {
-    if current_ui.get() == 0 {
+    if CURRENT_UI.get() == 0 {
         emsg(c"UI not attached");
         return;
     }
-    let id = current_ui.get();
+    let id = CURRENT_UI.get();
     if !channel_exists(id) {
         emsg(E_INVCHAN);
         return;
@@ -442,7 +442,7 @@ fn detach_ui() {
 pub(crate) fn ex_connect(excmd: &mut ExArg) {
     let stop_server = excmd.forceit && ui_active() == 1;
     let addr = excmd.line.cstr_from(excmd.line.arg);
-    if let Err(e) = remote_ui_connect(current_ui.get(), addr) {
+    if let Err(e) = remote_ui_connect(CURRENT_UI.get(), addr) {
         emsg(e.message_or_empty());
         return;
     }

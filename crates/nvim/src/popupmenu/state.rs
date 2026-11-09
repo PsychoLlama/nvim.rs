@@ -1,6 +1,6 @@
 //! The popup menu's own grid, and what the editor wants it to show next.
 //!
-//! `pum_want` is a request rather than a state: completion writes the item
+//! `PUM_WANT` is a request rather than a state: completion writes the item
 //! it would like selected and whether to insert it, and the menu applies
 //! that on its next redraw.
 #![forbid(unsafe_code)]
@@ -12,7 +12,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
 use crate::grid::defs::ScreenGrid;
@@ -25,9 +24,9 @@ pub(crate) struct PumWant {
     pub insert: bool,
     pub finish: bool,
 }
-pub(crate) static must_redraw_pum: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static pum_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
-pub(crate) static pum_want: GlobalCell<PumWant> = GlobalCell::new(PumWant {
+pub(crate) static MUST_REDRAW_PUM: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static PUM_GRID: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
+pub(crate) static PUM_WANT: GlobalCell<PumWant> = GlobalCell::new(PumWant {
     active: false,
     item: 0,
     insert: false,

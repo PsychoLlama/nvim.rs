@@ -64,13 +64,13 @@ use crate::path::FileComparison;
 use crate::pos::MAXCOL;
 use crate::semsg;
 use crate::smsg;
-use crate::state::mode::restart_edit;
+use crate::state::mode::RESTART_EDIT;
 use crate::tag::{HelpTagMatch, TagCmd, do_tag, find_help_tag_matches};
 use crate::types::ApiString;
 use crate::types::Handle;
 use crate::types::Key;
 use crate::types::{Array, ArrayBuf, CmdModFlags, ExArg, Failed, Object, OptInt};
-use crate::ui::state::Columns;
+use crate::ui::state::COLUMNS;
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
@@ -183,7 +183,7 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
     drop(found);
 
     if let Ok(opened) = enter_help_window() {
-        restart_edit.set(Key::NUL);
+        RESTART_EDIT.set(Key::NUL);
         // Restore KeyTyped: setting 'filetype=help' may have reset it,
         // and `do_tag` needs it to open folds under the cursor.
         KEY_TYPED.set(old_key_typed);
@@ -301,7 +301,7 @@ fn enter_help_window() -> Result<HelpWindow, Failed> {
     // was given and the current window is vertically split and narrow.
     let mut split = WSP_HELP;
     if cmdmod.with(|m| m.cmod_split) == 0
-        && Win::current().w_width != Columns.get()
+        && Win::current().w_width != COLUMNS.get()
         && Win::current().w_width < 80
     {
         split |= if p_sb() { WSP_BOT } else { WSP_TOP };

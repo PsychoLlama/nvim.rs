@@ -36,7 +36,7 @@ impl Buf {
         });
 
         let mut sign = DECOR_SIGN_HIGHLIGHT_INIT;
-        sign.flags |= kSHIsSign;
+        sign.flags |= SH_IS_SIGN;
         sign.text = def.text;
         // The decoration store drops it with the placement.
         sign.sign_name = Some(def.name.clone());
@@ -294,7 +294,7 @@ pub(super) enum Keep {
 
 /// Whether `buffer` carries any sign at all — text or highlight.
 pub(crate) fn buf_has_signs(buffer: Buf) -> bool {
-    buffer.meta_total(kMTMetaSignHL) + buffer.meta_total(kMTMetaSignText) != 0
+    buffer.meta_total(MT_META_SIGN_HL) + buffer.meta_total(MT_META_SIGN_TEXT) != 0
 }
 
 /// Places the sign `name` in `buffer`, or changes the existing sign `*id`.

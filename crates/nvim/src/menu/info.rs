@@ -30,7 +30,7 @@ use crate::eval::typval::{NumBuf, tv_dict_alloc_ret};
 use crate::eval::vars::del_menutrans_vars;
 use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
-use crate::keycodes::Ctrl_V;
+use crate::keycodes::CTRL_V;
 use crate::mbyte::cluster_len;
 use crate::message::E_INVARG;
 use crate::types::{Dict, ExArg, TypVal, VarNumber};
@@ -94,7 +94,7 @@ pub(crate) fn ex_menutranslate(excmd: &mut ExArg) {
 fn menu_skip_part(p: &[u8]) -> usize {
     let mut i = 0;
     while i < p.len() && p[i] != b'.' && !ascii_iswhite(c_int::from(p[i])) {
-        let escaped = p[i] == b'\\' || c_int::from(p[i]) == Ctrl_V;
+        let escaped = p[i] == b'\\' || c_int::from(p[i]) == CTRL_V;
         if escaped && i + 1 < p.len() {
             i += 1;
         }
@@ -160,7 +160,7 @@ pub(crate) fn menu_translate_tab_and_shift(arg: &[u8]) -> (Vec<u8>, &[u8]) {
     let mut name = Vec::with_capacity(arg.len());
     let mut i = 0;
     while i < arg.len() && !ascii_iswhite(c_int::from(arg[i])) {
-        let escaped = arg[i] == b'\\' || c_int::from(arg[i]) == Ctrl_V;
+        let escaped = arg[i] == b'\\' || c_int::from(arg[i]) == CTRL_V;
         if escaped && i + 1 < arg.len() {
             name.extend_from_slice(&arg[i..i + 2]);
             i += 2;

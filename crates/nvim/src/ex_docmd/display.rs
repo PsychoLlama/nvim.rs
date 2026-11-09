@@ -23,7 +23,7 @@ use crate::drawscreen::{
     status_redraw_all, status_redraw_curbuf,
 };
 
-use crate::drawscreen::state::{need_maketitle, redraw_cmdline};
+use crate::drawscreen::state::{NEED_MAKETITLE, REDRAW_CMDLINE};
 use crate::eval::eval_to_string;
 use crate::eval::vars::{set_vim_var_nr, var_redir_start, var_redir_stop};
 use crate::ex_docmd::argopt::open_exfile;
@@ -35,7 +35,7 @@ use crate::message::state::{
 };
 use crate::option::vars::{P_LZ, p_hls, p_lz};
 use crate::search::state::no_hlsearch;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 
 use crate::message::{msg, msg_ext_set_kind};
 use crate::os::cshim::gettext;
@@ -163,12 +163,12 @@ pub(crate) fn ex_redraw(excmd: &mut ExArg) {
     update_topline(Win::current());
     if excmd.forceit {
         redraw_all_later(UPD_NOT_VALID);
-        redraw_cmdline.set(true);
+        REDRAW_CMDLINE.set(true);
     } else if visual_active() {
         redraw_curbuf_later(UPD_INVERTED);
     }
     let _ = update_screen();
-    if need_maketitle.get() {
+    if NEED_MAKETITLE.get() {
         maketitle();
     }
     drop(lazyredraw_off);
@@ -191,7 +191,7 @@ pub(crate) fn ex_redrawstatus(excmd: &mut ExArg) {
         status_redraw_curbuf();
     }
     let lazyredraw_off = suspend_lazyredraw();
-    if State.get() & MODE_CMDLINE != 0 {
+    if STATE.get() & MODE_CMDLINE != 0 {
         redraw_statuslines();
     } else {
         if visual_active() {

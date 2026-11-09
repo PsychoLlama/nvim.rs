@@ -21,7 +21,7 @@ use crate::lua::executor::funcref_description;
 use crate::memory::ThinCString;
 use crate::option::vars::P_CPO;
 use crate::types::DictBuilder;
-use crate::types::{VAR_DICT, kListLenUnknown};
+use crate::types::{LIST_LEN_UNKNOWN, VAR_DICT};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
@@ -261,7 +261,7 @@ pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // A copy: the walk below hands each mapping to a closure.
     let cpo = P_CPO.get();
     let abbr = args.first().is_some_and(|tv| tv_get_bool(tv) != 0);
-    let list = tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t);
+    let list = tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as ptrdiff_t);
     let cur = Buf::current();
 
     // Do it twice: once for global maps and once for local maps.

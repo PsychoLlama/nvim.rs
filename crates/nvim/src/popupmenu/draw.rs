@@ -6,7 +6,7 @@
 //! [`pum_compute_text_attrs`] works out the per-cell attributes that make the
 //! typed leader stand out inside a match.
 //!
-//! The menu has a grid of its own (`pum_grid`), composited over the editor
+//! The menu has a grid of its own (`PUM_GRID`), composited over the editor
 //! grid, so every row is one `screengrid_line_start` .. `grid_line_flush`
 //! batch and all the columns below are grid columns, not screen columns.
 //! Under `'rightleft'` the row is drawn from the right edge leftwards, which
@@ -91,7 +91,7 @@ fn pum_compute_text_attrs(text: &XString, hlf: Hlf, user_hlattr: c_int) -> Optio
         return None;
     }
 
-    if State.get() & MODE_CMDLINE != 0 {
+    if STATE.get() & MODE_CMDLINE != 0 {
         let leader = cmdline_compl_pattern()?;
         text_attrs_for(
             text,
@@ -203,7 +203,7 @@ fn pum_grid_puts_with_attrs(col: c_int, cells: c_int, text: &[u8], attrs: &[c_in
     while at < text.len() {
         let rest = &text[at..];
         let char_len = c_cluster_len(rest);
-        let cell = if pum_rl.get() {
+        let cell = if PUM_RL.get() {
             col_start + cells - col - 1
         } else {
             col - col_start
@@ -273,7 +273,7 @@ fn resolve_border(config: &mut WinConfig) -> Result<Option<PumBorder>, Failed> {
         };
     }
 
-    let scrollbar = (pum_scrollbar.get() != 0).then(|| {
+    let scrollbar = (PUM_SCROLLBAR.get() != 0).then(|| {
         let right = cstr::in_bytes(&config.border_chars[3]);
         (schar_from_str(right), config.border_attr[3])
     });
@@ -332,7 +332,7 @@ impl PumRow {
         attr: c_int,
         next_isempty: bool,
     ) {
-        let width_limit = pum_width.get();
+        let width_limit = PUM_WIDTH.get();
         // Two cells are kept for the separator unless nothing follows.
         let pad = if next_isempty { 0 } else { 2 };
         let mut cells = len_as_int(c_string_cells(text));
@@ -340,7 +340,7 @@ impl PumRow {
             self.need_trunc = true;
         }
 
-        if pum_rl.get() {
+        if PUM_RL.get() {
             let mut at = 0;
             // Drop leading characters until what is left fits.
             if self.grid_col - cells < style.col_off - width_limit {
@@ -435,7 +435,7 @@ impl PumRow {
             let start = *run_start.get_or_insert(at);
             let byte = cstr::byte_at(text, at);
             let w = ptr2cells_at(&text[at..]);
-            if byte != 0 && byte != b'\t' && self.totwidth + w <= pum_width.get() {
+            if byte != 0 && byte != b'\t' && self.totwidth + w <= PUM_WIDTH.get() {
                 width += w;
                 at += c_cluster_len(&text[at..]);
                 continue;
@@ -452,12 +452,12 @@ impl PumRow {
 
             // `emit` writes into the text it is lent: a `<` over a cut
             // character.
-            let mut run = if pum_rl.get() {
+            let mut run = if PUM_RL.get() {
                 reversed_text(&st)
             } else {
                 st.into_vec()
             };
-            if !pum_rl.get() {
+            if !PUM_RL.get() {
                 run.pop();
             }
             self.emit(style, &mut run, width, attrs.as_deref(), attr, next_isempty);
@@ -467,7 +467,7 @@ impl PumRow {
             }
 
             // A Tab shows as two spaces, and the walk starts a new run.
-            if pum_rl.get() {
+            if PUM_RL.get() {
                 grid_line_puts(self.grid_col - 1, b"  ", attr);
                 self.grid_col -= 2;
             } else {
@@ -484,15 +484,15 @@ impl PumRow {
 
 /// Draw one row of the menu: its item, the truncation marker, the scrollbar.
 ///
-/// No line batch may be in progress; `pum_grid` must be allocated for
+/// No line batch may be in progress; `PUM_GRID` must be allocated for
 /// `pum_height` rows, and `items` must hold the row's item -- the indices
-/// come from `pum_first`/`pum_height`, which `pum_redraw` has already
+/// come from `PUM_FIRST`/`pum_height`, which `pum_redraw` has already
 /// clamped to the array.
 fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) {
     let win = Win::current();
-    let idx = i + pum_first.get();
+    let idx = i + PUM_FIRST.get();
     let item = &items[usize::try_from(idx).expect("a menu row")];
-    let selected = idx == pum_selected.get();
+    let selected = idx == PUM_SELECTED.get();
     let mut row = PumRow {
         hlfs: if selected {
             [HLF_PSI as Hlf, HLF_PSK as Hlf, HLF_PSX as Hlf]
@@ -513,7 +513,7 @@ fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) 
             win_hl_attr(win, HLF_PNI),
             win_hl_attr(win, row.hlfs[0] as c_int),
         );
-        let col = if pum_rl.get() {
+        let col = if PUM_RL.get() {
             style.col_off + 1
         } else {
             style.col_off - 1
@@ -523,9 +523,9 @@ fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) 
 
     let order = pum_align_order();
     let widths = [
-        pum_base_width.get(),
-        pum_kind_width.get(),
-        pum_extra_width.get(),
+        PUM_BASE_WIDTH.get(),
+        PUM_KIND_WIDTH.get(),
+        PUM_EXTRA_WIDTH.get(),
     ];
     // Where the second and third columns start: the first column's width,
     // plus the separator the layout reserved.
@@ -546,13 +546,13 @@ fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) 
         // Stop when there is nothing more to display.
         if j == 2
             || (next_isempty && (j == 1 || (j == 0 && item_text(item, order[j + 2]).is_none())))
-            || basic_width + n >= pum_width.get()
+            || basic_width + n >= PUM_WIDTH.get()
         {
             break;
         }
 
         // Pad out to where the next column starts.
-        if pum_rl.get() {
+        if PUM_RL.get() {
             grid_line_fill(
                 style.col_off - basic_width - n + 1,
                 row.grid_col + 1,
@@ -576,8 +576,8 @@ fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) 
     // truncation marker if anything was cut. The marker is written
     // straight into the line buffer because it replaces a cell
     // `grid_line_fill` has already put there.
-    if pum_rl.get() {
-        let lcol = style.col_off - pum_width.get() + 1;
+    if PUM_RL.get() {
+        let lcol = style.col_off - PUM_WIDTH.get() + 1;
         grid_line_fill(
             lcol,
             row.grid_col + 1,
@@ -594,17 +594,17 @@ fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) 
                 line.attrs_mut()[cell_index(lcol)] = trunc_attr as ScreenAttr;
                 // The marker may have replaced the left half of a wide
                 // character; give the orphaned right half a space.
-                if pum_width.get() > 1 && line.chars()[cell_index(lcol) + 1] == 0 {
+                if PUM_WIDTH.get() > 1 && line.chars()[cell_index(lcol) + 1] == 0 {
                     line.chars_mut()[cell_index(lcol) + 1] = schar_from_ascii(b' ');
                 }
             });
         }
     } else {
-        let rcol = style.col_off + pum_width.get();
+        let rcol = style.col_off + PUM_WIDTH.get();
         grid_line_fill(row.grid_col, rcol, schar_from_ascii(b' '), row.orig_attr);
         if row.need_trunc {
             with_linebuf(|line| {
-                if pum_width.get() > 1 && line.chars()[cell_index(rcol - 1)] == 0 {
+                if PUM_WIDTH.get() > 1 && line.chars()[cell_index(rcol - 1)] == 0 {
                     line.chars_mut()[cell_index(rcol - 2)] = schar_from_ascii(b' ');
                 }
                 line.chars_mut()[cell_index(rcol - 1)] = if style.fcs_trunc != 0 {
@@ -617,13 +617,13 @@ fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) 
         }
     }
 
-    if pum_scrollbar.get() > 0 {
+    if PUM_SCROLLBAR.get() > 0 {
         let thumb = i >= style.thumb_pos && i < style.thumb_pos + style.thumb_height;
         let scrollbar_col = style.col_off
-            + if pum_rl.get() {
-                -pum_width.get()
+            + if PUM_RL.get() {
+                -PUM_WIDTH.get()
             } else {
-                pum_width.get()
+                PUM_WIDTH.get()
             };
         let (sc, attr) = match (thumb, style.border_scroll) {
             (true, _) => (schar_from_ascii(b' '), style.attr_thumb),
@@ -635,24 +635,24 @@ fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) 
     grid_line_flush();
 }
 
-/// Redraw the popup menu, using `pum_first` and `pum_selected`.
+/// Redraw the popup menu, using `PUM_FIRST` and `PUM_SELECTED`.
 pub fn pum_redraw() {
     let mut grid = pum_grid_ref();
     let win = Win::current();
 
     // Room for one padding cell beside the text, when there is any.
-    let mut grid_width = pum_width.get();
+    let mut grid_width = PUM_WIDTH.get();
     let mut col_off = 0;
     let mut extra_space = false;
-    if pum_rl.get() {
-        col_off = pum_width.get() - 1;
-        debug_assert!(State.get() & MODE_CMDLINE == 0, "!(State & MODE_CMDLINE)");
+    if PUM_RL.get() {
+        col_off = PUM_WIDTH.get() - 1;
+        debug_assert!(STATE.get() & MODE_CMDLINE == 0, "!(State & MODE_CMDLINE)");
         let win_end_col = win.w_wincol + win.w_width;
-        if pum_col.get() < win_end_col - 1 {
+        if PUM_COL.get() < win_end_col - 1 {
             grid_width += 1;
             extra_space = true;
         }
-    } else if pum_col.get() > 0 {
+    } else if PUM_COL.get() > 0 {
         grid_width += 1;
         col_off = 1;
         extra_space = true;
@@ -666,9 +666,9 @@ pub fn pum_redraw() {
 
     // A scrollbar drawn by the menu itself needs a column of its own; one
     // drawn into a box border reuses the border's.
-    if pum_scrollbar.get() > 0 && (!config.border || config.shadow) {
+    if PUM_SCROLLBAR.get() > 0 && (!config.border || config.shadow) {
         grid_width += 1;
-        if pum_rl.get() {
+        if PUM_RL.get() {
             col_off += 1;
         }
     }
@@ -676,22 +676,22 @@ pub fn pum_redraw() {
     grid.blending = p_pb() > 0 || config.shadow;
     grid_assign_handle(&mut grid);
 
-    pum_left_col.set(pum_col.get() - col_off);
-    pum_right_col.set(pum_left_col.get() + grid_width);
+    PUM_LEFT_COL.set(PUM_COL.get() - col_off);
+    PUM_RIGHT_COL.set(PUM_LEFT_COL.get() + grid_width);
     let moved = ui_comp_put_grid(
         grid,
-        pum_row.get(),
-        pum_left_col.get(),
-        pum_height.get() + border.width,
+        PUM_ROW.get(),
+        PUM_LEFT_COL.get(),
+        PUM_HEIGHT.get() + border.width,
         grid_width + border.width,
         false,
         true,
     );
-    let invalid_grid = moved || pum_invalid.get();
-    pum_invalid.set(false);
-    must_redraw_pum.set(false);
+    let invalid_grid = moved || PUM_INVALID.get();
+    PUM_INVALID.set(false);
+    MUST_REDRAW_PUM.set(false);
 
-    let (rows, cols) = (pum_height.get() + border.width, grid_width + border.width);
+    let (rows, cols) = (PUM_HEIGHT.get() + border.width, grid_width + border.width);
     if !grid.is_allocated() || grid.rows != rows || grid.cols != cols {
         grid_alloc(&mut grid, rows, cols, !invalid_grid, false);
         ui_call_grid_resize(
@@ -702,7 +702,7 @@ pub fn pum_redraw() {
     } else if invalid_grid {
         grid.invalidate();
     }
-    if ui_has(kUIMultigrid) {
+    if ui_has(UI_MULTIGRID) {
         pum_send_float_pos();
     }
 
@@ -716,20 +716,20 @@ pub fn pum_redraw() {
     }
 
     // Never display more than there is.
-    let scroll_range = pum_size.get() - pum_height.get();
-    pum_first.set(pum_first.get().min(scroll_range));
+    let scroll_range = PUM_SIZE.get() - PUM_HEIGHT.get();
+    PUM_FIRST.set(PUM_FIRST.get().min(scroll_range));
 
     let (mut thumb_pos, mut thumb_height) = (0, 1);
-    if pum_scrollbar.get() != 0 {
-        thumb_height = (pum_height.get() * pum_height.get() / pum_size.get()).max(1);
+    if PUM_SCROLLBAR.get() != 0 {
+        thumb_height = (PUM_HEIGHT.get() * PUM_HEIGHT.get() / PUM_SIZE.get()).max(1);
         thumb_pos =
-            (pum_first.get() * (pum_height.get() - thumb_height) + scroll_range / 2) / scroll_range;
+            (PUM_FIRST.get() * (PUM_HEIGHT.get() - thumb_height) + scroll_range / 2) / scroll_range;
     }
 
     let style = RowStyle {
         col_off,
         extra_space,
-        fcs_trunc: if pum_rl.get() {
+        fcs_trunc: if PUM_RL.get() {
             win.w_p_fcs_chars.truncrl
         } else {
             win.w_p_fcs_chars.trunc
@@ -746,7 +746,7 @@ pub fn pum_redraw() {
     };
 
     let items = pum_items();
-    for i in 0..pum_height.get() {
+    for i in 0..PUM_HEIGHT.get() {
         pum_draw_row(&style, &items, i, grid_row);
         grid_row += 1;
     }

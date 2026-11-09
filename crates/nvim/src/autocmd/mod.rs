@@ -29,7 +29,7 @@ use crate::autocmd::state::{
 use crate::buffer::{buf_is_prompt, current_buf, do_modelines, find_buf};
 use crate::cmdexpand::defs::Expand;
 use crate::cursor::{check_cursor, check_pos};
-use crate::drawscreen::state::need_maketitle;
+use crate::drawscreen::state::NEED_MAKETITLE;
 use crate::eval::typval::{TV_INITIAL_VALUE, callback_to_string, tv_clear};
 use crate::eval::userfunc::CallStackAside;
 use crate::eval::vars::{get_vim_var_nr, set_cmdarg, set_vim_var_nr, vars_clear, vim_var_bytes};
@@ -70,7 +70,7 @@ use crate::runtime::state::current_sctx;
 use crate::runtime::{estack_pop, estack_push};
 use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::startup::starting;
-use crate::state::mode::last_mode;
+use crate::state::mode::LAST_MODE;
 use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{

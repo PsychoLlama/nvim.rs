@@ -36,8 +36,8 @@ use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::CmdLine;
 use crate::types::{
-    CmdAddr, ExArg, ExArgt, OptInt, TypVal, VAR_DICT, VAR_LIST, VAR_STRING, VarNumber,
-    kBoolVarFalse, kListLenShouldKnow, kListLenUnknown, kSpecialVarNull,
+    BOOL_VAR_FALSE, CmdAddr, ExArg, ExArgt, LIST_LEN_SHOULD_KNOW, LIST_LEN_UNKNOWN, OptInt,
+    SPECIAL_VAR_NULL, TypVal, VAR_DICT, VAR_LIST, VAR_STRING, VarNumber,
 };
 use core::ffi::c_int;
 
@@ -69,7 +69,7 @@ pub fn f_environ(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_getenv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     match getenv_resolved(numbuf.string(&args[0])) {
-        None => result.write_special(kSpecialVarNull),
+        None => result.write_special(SPECIAL_VAR_NULL),
         Some(value) => result.write_string(Some(ThinCString::from(value))),
     }
 }
@@ -151,7 +151,7 @@ pub fn f_expandcmd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // {'errmsg': v:true} asks for the expansion's own error instead of
     // silence.
     let errmsg = args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT)
-        && dict_get_bool(args[1].dict_ref(), b"errmsg", kBoolVarFalse.cast_signed()) != 0;
+        && dict_get_bool(args[1].dict_ref(), b"errmsg", BOOL_VAR_FALSE.cast_signed()) != 0;
     let quiet = !errmsg;
     let line = numbuf.bytes(&args[0]).to_vec();
     let mut eap = ExArg {
@@ -183,7 +183,7 @@ pub fn f_setenv(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     if check_secure() {
         return;
     }
-    if args[1].as_special() == Some(kSpecialVarNull) {
+    if args[1].as_special() == Some(SPECIAL_VAR_NULL) {
         vim_unsetenv_named(name);
     } else {
         vim_setenv_named(name, valbuf.string(&args[1]));
@@ -220,7 +220,7 @@ pub fn f_setfperm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// path, each with the application name appended.
 fn get_xdg_var_list(xdg: XDGVarType, result: &mut TypVal) {
     let appname = get_appname(false);
-    let list = tv_list_alloc_ret(result, kListLenShouldKnow as isize);
+    let list = tv_list_alloc_ret(result, LIST_LEN_SHOULD_KNOW as isize);
     let Some(dirs) = xdg_var(xdg) else {
         return;
     };
@@ -261,7 +261,7 @@ pub fn f_stdpath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `swapfilelist()` — every swap file in 'directory'.
 pub fn f_swapfilelist(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    list_swap_files(Some(tv_list_alloc_ret(result, kListLenUnknown as isize)));
+    list_swap_files(Some(tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as isize)));
 }
 
 /// `swapinfo({fname})` — what a swap file says about its buffer.

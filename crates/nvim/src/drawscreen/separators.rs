@@ -22,8 +22,8 @@
 )]
 
 use super::*;
+use crate::decoration::MT_META_SIGN_TEXT;
 use crate::decoration::SignCountHalf;
-use crate::decoration::kMTMetaSignText;
 use crate::grid::default_gridview;
 use crate::optionstr::OptString;
 use crate::window::FR_COL;
@@ -94,7 +94,7 @@ pub(crate) fn win_redraw_signcols(mut window: Win) -> bool {
     } else if window.w_minscwidth == 0 && window.w_maxscwidth == 1 {
         // Plain `'signcolumn'` "auto": one column iff the buffer has any
         // sign text at all, which is cheaper than the per-line counts.
-        width = c_int::from(buf_meta_total(buf, kMTMetaSignText) > 0);
+        width = c_int::from(buf_meta_total(buf, MT_META_SIGN_TEXT) > 0);
     }
 
     let was = window.w_scwidth;

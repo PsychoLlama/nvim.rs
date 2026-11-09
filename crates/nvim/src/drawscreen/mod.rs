@@ -7,7 +7,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub mod state;
 use crate::autocmd::defs::AutoEvent;
@@ -19,7 +18,7 @@ use crate::charset::{vim_isprintc, vim_strsize_cstr};
 use crate::cmdexpand::cmdline_pum_display;
 use crate::decoration::defs::{DecorVirtText, DecorVirtText_data, VirtTextChunk};
 use crate::decoration::{
-    SCL_NUM, buf_signcols_count_range, decor_conceal_line, decor_range_add_virt, kMTMetaSignText,
+    MT_META_SIGN_TEXT, SCL_NUM, buf_signcols_count_range, decor_conceal_line, decor_range_add_virt,
     win_lines_concealed,
 };
 use crate::decoration_provider::{
@@ -32,10 +31,10 @@ use crate::digraph::keymap_str;
 use crate::drawline::SpellVars;
 use crate::drawline::win_line;
 use crate::drawscreen::state::{
-    RedrawingDisabled, clear_cmdline, cmdline_row, display_tick, do_redraw, dollar_vcol,
-    mode_displayed, must_redraw, need_maketitle, redraw_cmdline, redraw_mode, redraw_not_allowed,
-    redraw_tabline, resizing_screen, ru_col, ru_wid, sc_col, screen_search_hl,
-    search_hl_has_cursor_lnum, updating_screen, win_extmark_arr,
+    CLEAR_CMDLINE, CMDLINE_ROW, DO_REDRAW, DOLLAR_VCOL, MODE_DISPLAYED, MUST_REDRAW,
+    NEED_MAKETITLE, REDRAW_CMDLINE, REDRAW_MODE, REDRAW_NOT_ALLOWED, REDRAW_TABLINE,
+    REDRAWING_DISABLED, RESIZING_SCREEN, RU_COL, RU_WID, SC_COL, SCREEN_SEARCH_HL,
+    SEARCH_HL_HAS_CURSOR_LNUM, UPDATING_SCREEN, WIN_EXTMARK_ARR, display_tick,
 };
 use crate::eval::vars::set_vim_var_nr;
 use crate::ex_docmd::state::global_busy;
@@ -53,7 +52,7 @@ use crate::grid::{
     schar_cache_clear_if_full, schar_from_ascii, win_grid_alloc,
 };
 use crate::highlight::Hlf;
-use crate::highlight::state::{need_highlight_changed, ns_hl_fast};
+use crate::highlight::state::{NEED_HIGHLIGHT_CHANGED, NS_HL_FAST};
 use crate::highlight::{
     hl_combine_attr, update_window_hl, win_bg_attr, win_check_ns_hl, win_hl_attr,
 };
@@ -87,7 +86,7 @@ use crate::option::{get_ve_flags, shortmess};
 use crate::options::{kOptDyFlagLastline, kOptDyFlagTruncate, kOptVeFlagAll, kOptVeFlagBlock};
 use crate::os::libc::int64_t;
 use crate::plines::{getvcols, getvvcol, plines_m_win, plines_win, win_get_fill, win_may_fill};
-use crate::popupmenu::state::must_redraw_pum;
+use crate::popupmenu::state::MUST_REDRAW_PUM;
 use crate::popupmenu::{pum_check_clear, pum_drawn, pum_invalidate, pum_redraw};
 use crate::pos::MAXLNUM;
 use crate::profile::profile_setlimit;
@@ -96,15 +95,15 @@ use crate::search::state::no_hlsearch;
 use crate::spell::spell_check_window;
 use crate::startup::{exiting, starting};
 use crate::state::mode::{
-    State, edit_submode, edit_submode_extra, edit_submode_highl, edit_submode_pre, exmode_active,
-    restart_edit,
+    EDIT_SUBMODE, EDIT_SUBMODE_EXTRA, EDIT_SUBMODE_HIGHL, EDIT_SUBMODE_PRE, EXMODE_ACTIVE,
+    RESTART_EDIT, STATE,
 };
 use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_INSERT, MODE_LANGMAP,
     MODE_NORMAL, MODE_SETWSIZE, MODE_TERMINAL, MODE_VISUAL, REPLACE_FLAG, VREPLACE_FLAG,
     get_real_state,
 };
-use crate::statusline::state::{stl_syntax, tab_page_click_defs};
+use crate::statusline::state::{STL_SYNTAX, TAB_PAGE_CLICK_DEFS};
 use crate::statusline::{draw_tabline, redraw_ruler, win_redr_status, win_redr_winbar};
 use crate::syntax::{
     syn_set_timeout, syn_stack_apply_changes, syntax_check_changed, syntax_end_parsing,
@@ -115,8 +114,8 @@ use crate::types::{
     ColNr, Failed, Handle, Integer, LineNr, OptInt, Pos, ProfTime, ScreenChar, VarNumber,
     WindowHandle,
 };
-use crate::ui::state::{Columns, Rows};
-use crate::ui::state::{kUICmdline, kUIMessages, kUIMultigrid};
+use crate::ui::state::{COLUMNS, ROWS};
+use crate::ui::state::{UI_CMDLINE, UI_MESSAGES, UI_MULTIGRID};
 use crate::ui::{
     ui_call_grid_clear, ui_call_grid_resize, ui_call_msg_clear, ui_call_win_extmark, ui_flush,
     ui_grid_cursor_goto, ui_has,
@@ -158,10 +157,10 @@ pub const SHOWCMD_COLS: ::core::ffi::c_int = 10;
 /// The narrowest screen the editor will lay windows out on.
 pub const MIN_COLUMNS: ::core::ffi::c_int = 12;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-static redraw_popupmenu: GlobalCell<bool> = GlobalCell::new(false);
-static msg_grid_invalid: GlobalCell<bool> = GlobalCell::new(false);
-static resizing_autocmd: GlobalCell<bool> = GlobalCell::new(false);
-static conceal_cursor_used: GlobalCell<bool> = GlobalCell::new(false);
+static REDRAW_POPUPMENU: GlobalCell<bool> = GlobalCell::new(false);
+static MSG_GRID_INVALID: GlobalCell<bool> = GlobalCell::new(false);
+static RESIZING_AUTOCMD: GlobalCell<bool> = GlobalCell::new(false);
+static CONCEAL_CURSOR_USED: GlobalCell<bool> = GlobalCell::new(false);
 /// The screen row below window `window`'s last one -- `W_ENDROW`.
 ///
 /// That is where its horizontal separator or status line goes.
@@ -183,7 +182,7 @@ pub(crate) fn win_endcol(window: Win) -> c_int {
 pub fn conceal_check_cursor_line() {
     let wp = Win::current();
     let should_conceal = conceal_cursor_line(wp);
-    if wp.w_onebuf_opt.wo_cole <= 0 || conceal_cursor_used.get() == should_conceal {
+    if wp.w_onebuf_opt.wo_cole <= 0 || CONCEAL_CURSOR_USED.get() == should_conceal {
         return;
     }
 
@@ -204,8 +203,8 @@ pub fn conceal_check_cursor_line() {
 /// -- i.e. inside a mapping or a script -- unless something asked for a redraw
 /// explicitly.
 pub fn redrawing() -> bool {
-    RedrawingDisabled.get() == 0
-        && !(p_lz() && char_avail() && !KEY_TYPED.get() && !do_redraw.get())
+    REDRAWING_DISABLED.get() == 0
+        && !(p_lz() && char_avail() && !KEY_TYPED.get() && !DO_REDRAW.get())
 }
 
 /// Put the screen back together after messages scrolled it up.
@@ -213,14 +212,14 @@ pub fn redrawing() -> bool {
 /// The message area grew over the windows below it; this clears the rows it
 /// used and marks everything that reached into them for a redraw. With
 /// multigrid the message grid is a grid of its own, so there is nothing on the
-/// default grid to repair -- which is what the `kUIMultigrid` test is for.
+/// default grid to repair -- which is what the `UI_MULTIGRID` test is for.
 fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
-    clear_cmdline.set(true);
+    CLEAR_CMDLINE.set(true);
 
     // `msg_scrollsize` is a pure function of `MSG_SCROLLED` and 'cmdheight',
     // neither of which changes until the end of this function.
     let scrollsize = msg_scrollsize();
-    let valid = (Rows.get() - scrollsize).max(0);
+    let valid = (ROWS.get() - scrollsize).max(0);
 
     // The part of the message grid that is not displayed is invalid.
     let mut mg = msg_grid_ref();
@@ -234,13 +233,13 @@ fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
 
     let mut was_invalidated = false;
     // UPD_CLEAR is already handled by the caller.
-    if redr_type == UPD_NOT_VALID && !ui_has(kUIMultigrid) && MSG_SCROLLED.get() != 0 {
+    if redr_type == UPD_NOT_VALID && !ui_has(UI_MULTIGRID) && MSG_SCROLLED.get() != 0 {
         was_invalidated = ui_comp_set_screen_valid(false);
         let mut dg = default_grid_ref();
         let mut row = valid;
-        while OptInt::from(row) < OptInt::from(Rows.get()) - p_ch() {
+        while OptInt::from(row) < OptInt::from(ROWS.get()) - p_ch() {
             let off = dg.row_start(row);
-            dg.clear_line(off, Columns.get(), false);
+            dg.clear_line(off, COLUMNS.get(), false);
             row += 1;
         }
         for mut wp in winlayer::windows() {
@@ -256,13 +255,13 @@ fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
                 wp.w_redr_status = true;
             }
         }
-        if is_stl_global && OptInt::from(Rows.get()) - p_ch() - 1 > OptInt::from(valid) {
+        if is_stl_global && OptInt::from(ROWS.get()) - p_ch() - 1 > OptInt::from(valid) {
             Win::current().w_redr_status = true;
         }
     }
 
-    msg_grid_set_pos(Rows.get() - number_as_int(p_ch()), false);
-    msg_grid_invalid.set(false);
+    msg_grid_set_pos(ROWS.get() - number_as_int(p_ch()), false);
+    MSG_GRID_INVALID.set(false);
     if was_invalidated {
         // Only the message area was invalid, not the floats.
         ui_comp_set_screen_valid(true);
@@ -320,7 +319,7 @@ pub fn update_screen() -> Result<(), Failed> {
 
     // A VimResized autocommand can redraw in the middle of a resize, which
     // would bypass the checks in `screen_resize`.
-    if resizing_autocmd.get() || !default_grid_ref().is_allocated() {
+    if RESIZING_AUTOCMD.get() || !default_grid_ref().is_allocated() {
         return Err(Failed);
     }
 
@@ -329,17 +328,17 @@ pub fn update_screen() -> Result<(), Failed> {
         diff_redraw(true);
     }
 
-    if !redrawing() || updating_screen.get() || cmdline_number_prompt() {
+    if !redrawing() || UPDATING_SCREEN.get() || cmdline_number_prompt() {
         return Err(Failed);
     }
 
-    let mut redr_type = must_redraw.get();
+    let mut redr_type = MUST_REDRAW.get();
     // Reset now, so that a redraw asked for while redrawing -- by
     // asynchronous scrolling, by `update_topline` in `win_update`, or by a
     // decoration provider -- happens later rather than being lost.
-    must_redraw.set(0);
+    MUST_REDRAW.set(0);
 
-    updating_screen.set(true);
+    UPDATING_SCREEN.set(true);
     display_tick.set(display_tick.get().wrapping_add(1));
 
     // Glyph cache full, very rare. The screen buffers cannot be compared
@@ -359,43 +358,43 @@ pub fn update_screen() -> Result<(), Failed> {
         ui_comp_set_screen_valid(false);
     }
 
-    if MSG_SCROLLED.get() != 0 || msg_grid_invalid.get() {
+    if MSG_SCROLLED.get() != 0 || MSG_GRID_INVALID.get() {
         restore_scrolled_messages(redr_type, is_stl_global);
     }
 
     win_ui_flush(true);
 
-    // `cmdline_row` may have been moved temporarily.
+    // `CMDLINE_ROW` may have been moved temporarily.
     compute_cmdrow();
 
     let mut hl_changed = false;
-    if need_highlight_changed.get() {
+    if NEED_HIGHLIGHT_CHANGED.get() {
         highlight_changed();
         hl_changed = true;
     }
 
     if redr_type == UPD_CLEAR {
-        // Resets `clear_cmdline` and sets UPD_NOT_VALID on every window.
+        // Resets `CLEAR_CMDLINE` and sets UPD_NOT_VALID on every window.
         screenclear();
         cmdline_screen_cleared();
-        if ui_has(kUIMessages) {
+        if ui_has(UI_MESSAGES) {
             ui_call_msg_clear();
         }
         redr_type = UPD_NOT_VALID;
-        // `must_redraw` may have been set indirectly; avoid another redraw.
-        must_redraw.set(0);
+        // `MUST_REDRAW` may have been set indirectly; avoid another redraw.
+        MUST_REDRAW.set(0);
     } else if !default_grid_ref().valid {
         default_grid_ref().revalidate();
     }
 
     // May need to clear space on the default grid for the message area.
-    if redr_type == UPD_NOT_VALID && clear_cmdline.get() && !ui_has(kUIMessages) {
+    if redr_type == UPD_NOT_VALID && CLEAR_CMDLINE.get() && !ui_has(UI_MESSAGES) {
         grid_clear(
             default_gridview(),
-            Rows.get() - number_as_int(p_ch()),
-            Rows.get(),
+            ROWS.get() - number_as_int(p_ch()),
+            ROWS.get(),
             0,
-            Columns.get(),
+            COLUMNS.get(),
             0,
         );
     }
@@ -407,11 +406,11 @@ pub fn update_screen() -> Result<(), Failed> {
     // The "start" callback may have changed highlights used by the global
     // elements.
     if win_check_ns_hl(None) {
-        redraw_cmdline.set(true);
-        redraw_tabline.set(true);
+        REDRAW_CMDLINE.set(true);
+        REDRAW_TABLINE.set(true);
     }
 
-    if clear_cmdline.get() {
+    if CLEAR_CMDLINE.get() {
         msg_check_for_delay(false);
     }
 
@@ -442,7 +441,7 @@ pub fn update_screen() -> Result<(), Failed> {
         update_curswant();
     }
 
-    if redraw_tabline.get() || redr_type >= UPD_NOT_VALID {
+    if REDRAW_TABLINE.get() || redr_type >= UPD_NOT_VALID {
         update_window_hl(Win::current(), redr_type >= UPD_NOT_VALID);
         for tp in winlayer::tabs() {
             if !tp.is_current()
@@ -506,10 +505,10 @@ pub fn update_screen() -> Result<(), Failed> {
 
     end_search_hl();
 
-    if pum_drawn() && must_redraw_pum.get() {
+    if pum_drawn() && MUST_REDRAW_PUM.get() {
         win_check_ns_hl(Win::current_or_none());
         pum_redraw();
-    } else if State.get() & MODE_CMDLINE != 0 {
+    } else if STATE.get() & MODE_CMDLINE != 0 {
         pum_check_clear();
     }
 
@@ -521,14 +520,14 @@ pub fn update_screen() -> Result<(), Failed> {
         wp.w_buffer.b_mod_set = false;
     }
 
-    updating_screen.set(false);
+    UPDATING_SCREEN.set(false);
 
-    if need_maketitle.get() {
+    if NEED_MAKETITLE.get() {
         maketitle();
     }
 
     // Last, because scrolling may mess the command line up.
-    if clear_cmdline.get() || redraw_cmdline.get() || redraw_mode.get() {
+    if CLEAR_CMDLINE.get() || REDRAW_CMDLINE.get() || REDRAW_MODE.get() {
         showmode();
     }
 
@@ -541,14 +540,14 @@ pub fn update_screen() -> Result<(), Failed> {
 
     // Either the cmdline was cleared, not drawn, or the mode was drawn last.
     // This does not necessarily overwrite an external cmdline.
-    if !ui_has(kUICmdline) {
+    if !ui_has(UI_CMDLINE) {
         CMDLINE_WAS_LAST_DRAWN.set(false);
     }
     Ok(())
 }
 
 /// The search-highlight matcher the whole redraw shares: a name for the
-/// `screen_search_hl` cell, each method one short borrow of it.
+/// `SCREEN_SEARCH_HL` cell, each method one short borrow of it.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct SearchHl;
 
@@ -561,18 +560,18 @@ impl SearchHl {
     /// Can the compiled `'hlsearch'` pattern match a line break? False when
     /// there is none.
     pub(crate) fn is_multiline(self) -> bool {
-        screen_search_hl.with(|hl| hl.rm.is_multiline())
+        SCREEN_SEARCH_HL.with(|hl| hl.rm.is_multiline())
     }
 
     /// Drop the compiled pattern, if there is one.
     pub(crate) fn forget_regprog(self) {
-        let old = screen_search_hl.with_mut(|hl| hl.rm.regprog.take());
+        let old = SCREEN_SEARCH_HL.with_mut(|hl| hl.rm.regprog.take());
         drop(old);
     }
 
     /// Bound the matching by `'redrawtime'`.
     fn set_time_limit(self, tm: ProfTime) {
-        screen_search_hl.with_mut(|hl| hl.tm = tm);
+        SCREEN_SEARCH_HL.with_mut(|hl| hl.tm = tm);
     }
 }
 
@@ -585,9 +584,9 @@ pub fn start_search_hl() {
     let hl = SearchHl::current();
     // Compiled outside the cell: the compile reports through the message
     // machinery, which must not find the cell borrowed.
-    let mut rm = screen_search_hl.with_mut(|hl| core::mem::take(&mut hl.rm));
+    let mut rm = SCREEN_SEARCH_HL.with_mut(|hl| core::mem::take(&mut hl.rm));
     last_pat_prog(&mut rm);
-    screen_search_hl.with_mut(|hl| hl.rm = rm);
+    SCREEN_SEARCH_HL.with_mut(|hl| hl.rm = rm);
     // Bound the search by 'redrawtime'.
     hl.set_time_limit(profile_setlimit(p_rdt() as int64_t));
 }
@@ -699,7 +698,7 @@ pub fn number_width(mut window: Win) -> c_int {
     // With `'signcolumn'` "number" and a sign to show, the number column
     // needs room for the two-cell sign text.
     if n < 2
-        && buf_meta_total(window.buffer(), kMTMetaSignText) != 0
+        && buf_meta_total(window.buffer(), MT_META_SIGN_TEXT) != 0
         && window.w_minscwidth == SCL_NUM
     {
         n = 2;
@@ -717,11 +716,11 @@ pub fn conceal_cursor_line(window: Win) -> bool {
     }
     let mode = if get_real_state() & MODE_VISUAL != 0 {
         b'v'
-    } else if State.get() & MODE_INSERT != 0 {
+    } else if STATE.get() & MODE_INSERT != 0 {
         b'i'
-    } else if State.get() & MODE_NORMAL != 0 {
+    } else if STATE.get() & MODE_NORMAL != 0 {
         b'n'
-    } else if State.get() & MODE_CMDLINE != 0 {
+    } else if STATE.get() & MODE_CMDLINE != 0 {
         b'c'
     } else {
         return false;

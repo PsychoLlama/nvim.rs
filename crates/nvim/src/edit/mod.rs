@@ -62,10 +62,10 @@ use crate::cursor::{
     char_before_cursor, check_cursor, check_cursor_col, check_visual_pos, coladvance, dec_cursor,
     gchar_cursor, get_cursor_pos_len, getviscol, inc_cursor,
 };
-use crate::decoration::{decor_conceal_line, kMTMetaInline, win_lines_concealed};
+use crate::decoration::{MT_META_INLINE, decor_conceal_line, win_lines_concealed};
 use crate::digraph::{digraph_get, do_digraph, reset_digraph};
 use crate::drawscreen::state::{
-    RedrawingDisabled, clear_cmdline, dollar_vcol, must_redraw, redraw_cmdline, redraw_mode,
+    CLEAR_CMDLINE, DOLLAR_VCOL, MUST_REDRAW, REDRAW_CMDLINE, REDRAW_MODE, REDRAWING_DISABLED,
 };
 use crate::drawscreen::{
     UPD_VALID, redraw_later, redraw_statuslines, redraw_win_line, redrawing, setcursor,
@@ -94,7 +94,7 @@ use crate::grid::{
     grid_line_flush, grid_line_getchar, grid_line_put_schar, grid_line_puts, grid_line_start,
 };
 use crate::guard::{sandbox, textlock};
-use crate::highlight::state::need_highlight_changed;
+use crate::highlight::state::NEED_HIGHLIGHT_CHANGED;
 use crate::highlight_group::{HLF_8, highlight_changed};
 use crate::indent::{
     change_indent, fix_indent, get_indent, get_sts_value, get_sw_value, inindent, ins_try_si,
@@ -154,7 +154,7 @@ use crate::plines::{
     CHAR_CELLS_SPAN, charsize_nowrap, getvcol, getvcol_nolist, linetabsize_str, win_charsize,
     win_chartabsize,
 };
-use crate::popupmenu::state::pum_want;
+use crate::popupmenu::state::PUM_WANT;
 use crate::popupmenu::{pum_check_clear, pum_ext_want_done, pum_visible};
 use crate::pos::{MAXCOL, equalpos};
 use crate::register::defs::{PUT_CURSEND, PUT_FIXINDENT};
@@ -165,10 +165,10 @@ use crate::register::{
 use crate::search::{BACKWARD, FORWARD};
 use crate::spell::spell_redraw_lnum;
 use crate::state::mode::{
-    Insstart, Insstart_orig, State, ai_col, arrow_used, can_si, can_si_back, did_ai, did_si,
-    edit_submode_extra, end_comment_pending, force_restart_edit, ins_at_eol, km_startsel,
-    need_start_insertmode, no_abbr, old_indent, orig_line_count, replace_offset,
-    restart_VIsual_select, restart_edit, stop_insert_mode, vr_lines_changed, where_paste_started,
+    AI_COL, ARROW_USED, CAN_SI, CAN_SI_BACK, DID_AI, DID_SI, EDIT_SUBMODE_EXTRA,
+    END_COMMENT_PENDING, FORCE_RESTART_EDIT, INS_AT_EOL, INSSTART, INSSTART_ORIG, KM_STARTSEL,
+    NEED_START_INSERTMODE, NO_ABBR, OLD_INDENT, ORIG_LINE_COUNT, REPLACE_OFFSET, RESTART_EDIT,
+    RESTART_V_ISUAL_SELECT, STATE, STOP_INSERT_MODE, VR_LINES_CHANGED, WHERE_PASTE_STARTED,
 };
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_REPLACE, MODE_VREPLACE, ModeState,
@@ -183,7 +183,7 @@ use crate::textformat::{
 use crate::textobject::{bck_word, fwd_word};
 use crate::types::Key;
 use crate::types::{ApiString, CmdModFlags, ColNr, LineNr, OptInt, Pos, ScreenChar, Vv};
-use crate::ui::state::kUIMessages;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::u_sync_once;
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -312,7 +312,7 @@ state_record! {
     pc_attr: ::core::ffi::c_int = 0;
     pc_row: ::core::ffi::c_int = 0;
     pc_col: ::core::ffi::c_int = 0;
-    /// `ins_esc` took one `RedrawingDisabled` level it still has to give
+    /// `ins_esc` took one `REDRAWING_DISABLED` level it still has to give
     /// back.
     disabled_redraw: bool = false;
 }

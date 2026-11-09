@@ -58,7 +58,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub mod state;
 use crate::api::keysets::KeyDict_echo_opts;
@@ -77,7 +76,7 @@ use crate::charset::{
 };
 use crate::cstr;
 use crate::drawscreen::state::{
-    clear_cmdline, cmdline_row, do_redraw, mode_displayed, redraw_cmdline, sc_col, skip_redraw,
+    CLEAR_CMDLINE, CMDLINE_ROW, DO_REDRAW, MODE_DISPLAYED, REDRAW_CMDLINE, SC_COL, SKIP_REDRAW,
 };
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_VALID, redraw_all_later, redraw_later, set_must_redraw,
@@ -108,7 +107,7 @@ use crate::grid::{
 };
 use crate::guard::{Depth, Suppress};
 use crate::highlight::hl_combine_attr;
-use crate::highlight::state::need_highlight_changed;
+use crate::highlight::state::NEED_HIGHLIGHT_CHANGED;
 use crate::highlight_group::{
     HLF_0, HLF_8, HLF_AT, HLF_E, HLF_M, HLF_MSG, HLF_N, HLF_R, HLF_T, HLF_W, highlight_changed,
     syn_check_group, syn_id2attr,
@@ -159,15 +158,15 @@ use crate::runtime::defs::EStackArg;
 use crate::startup::{
     embedded_mode, ex_exitval, exiting, full_screen, headless_mode, nvim_testing, silent_mode,
 };
-use crate::state::mode::{State, exmode_active};
+use crate::state::mode::{EXMODE_ACTIVE, STATE};
 use crate::state::{MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE};
 use crate::statusline::hl_attr;
 use crate::types::{ApiDict, Integer};
 use crate::types::{
     ApiString, Array, ExArg, HlMessage, Object, OptInt, ScreenAttr, ScreenChar, TypVal, Vv,
 };
-use crate::ui::state::{Columns, Rows, resize_events};
-use crate::ui::state::{kUIMessages, kUIMultigrid};
+use crate::ui::state::{COLUMNS, RESIZE_EVENTS, ROWS};
+use crate::ui::state::{UI_MESSAGES, UI_MULTIGRID};
 use crate::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
     ui_call_msg_history_show, ui_call_msg_set_pos, ui_call_msg_show, ui_call_msg_showmode,
@@ -375,7 +374,7 @@ pub fn msg_multihl(
             );
         }
         debug_assert!(
-            !ui_has(kUIMessages)
+            !ui_has(UI_MESSAGES)
                 || kind.is_none_or(|kind| MSG_EXT_KIND.with(|held| held.as_bytes() == kind.to_bytes()))
         );
     }
@@ -460,7 +459,7 @@ pub(crate) fn show_message(s: &CStr, hl_id: c_int, keep: bool, multiline: bool) 
     if keep
         && retval
         && vim_strsize_cstr(text)
-            < (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get()
+            < (ROWS.get() - CMDLINE_ROW.get() - 1) * COLUMNS.get() + SC_COL.get()
     {
         set_keep_msg(Some(text), 0);
     }
@@ -478,19 +477,19 @@ pub(crate) fn fit_middle(text: &[u8], force: bool) -> Option<XString> {
     let wanted = MSG_SCROLL.get() == 0
         && !NEED_WAIT_RETURN.get()
         && shortmess(ShmFlag::TRUNCALL)
-        && !exmode_active.get()
+        && !EXMODE_ACTIVE.get()
         && MSG_SILENT.get() == 0
-        && !ui_has(kUIMessages);
+        && !ui_has(UI_MESSAGES);
     if !(wanted || force) {
         return None;
     }
     let len = strsize(text);
     let room = if MSG_SCROLLED.get() != 0 {
         // Use all the columns.
-        (Rows.get() - MSG_ROW.get()) * Columns.get() - 1
+        (ROWS.get() - MSG_ROW.get()) * COLUMNS.get() - 1
     } else {
         // Use up to the 'showcmd' column.
-        (Rows.get() - MSG_ROW.get() - 1) * Columns.get() + sc_col.get() - 1
+        (ROWS.get() - MSG_ROW.get() - 1) * COLUMNS.get() + SC_COL.get() - 1
     };
     if len <= room || room <= 0 {
         return None;
@@ -637,16 +636,16 @@ pub fn msg_fit_head(text: &CStr, force: bool, hl_id: c_int) -> Option<XString> {
 /// into the caller's string and answered a pointer into it.
 pub fn fit_head(text: &[u8], force: bool) -> Cow<'_, [u8]> {
     // Under ext_messages the UI decides what fits. This guard changes no
-    // answer -- nothing shrinks `cmdline_row` off `Rows` there, so `room`
+    // answer -- nothing shrinks `CMDLINE_ROW` off `ROWS` there, so `room`
     // is already negative -- but it says what the intent is; see docket
     // O-B13-6.
-    if ui_has(kUIMessages) {
+    if ui_has(UI_MESSAGES) {
         return Cow::Borrowed(text);
     }
     let s = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];
-    let room = (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get() - 1;
+    let room = (ROWS.get() - CMDLINE_ROW.get() - 1) * COLUMNS.get() + SC_COL.get() - 1;
     let len = c_int::try_from(s.len()).unwrap_or(c_int::MAX);
-    if room > 0 && (force || (shortmess(ShmFlag::TRUNC) && !exmode_active.get())) && len - room > 0
+    if room > 0 && (force || (shortmess(ShmFlag::TRUNC) && !EXMODE_ACTIVE.get())) && len - room > 0
     {
         // May have up to 18 bytes per cell (6 per char, up to two
         // composing chars).
@@ -675,7 +674,7 @@ pub fn fit_head(text: &[u8], force: bool) -> Cow<'_, [u8]> {
 pub fn set_keep_msg(s: Option<&CStr>, hl_id: c_int) {
     // The kept message is not cleared and re-emitted with ext_messages:
     // neovim/neovim#20416.
-    if ui_has(kUIMessages) {
+    if ui_has(UI_MESSAGES) {
         return;
     }
     KEEP_MSG.set(s.filter(|_| MSG_SILENT.get() == 0).map(XString::from_cstr));
@@ -690,7 +689,7 @@ pub(crate) fn has_keep_msg() -> bool {
 
 /// Would a message be seen if it were shown now?
 pub fn messaging() -> bool {
-    !(p_lz() && char_avail() && !KEY_TYPED.get()) && (p_ch() > 0 || ui_has(kUIMessages))
+    !(p_lz() && char_avail() && !KEY_TYPED.get()) && (p_ch() > 0 || ui_has(UI_MESSAGES))
 }
 
 /// Report "N more lines" / "N fewer lines" after an edit, if `'report'`

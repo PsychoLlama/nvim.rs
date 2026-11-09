@@ -77,8 +77,8 @@ fn changed_lines_invalidate_win(
     // after the change part of it as far as the display cache goes.
     let widen = xtra < 0
         && window.w_onebuf_opt.wo_wrap != 0
-        && buf_meta_total(window.buffer(), kMTMetaInline) != 0
-        || xtra != 0 && buf_meta_total(window.buffer(), kMTMetaLines) != 0;
+        && buf_meta_total(window.buffer(), MT_META_INLINE) != 0
+        || xtra != 0 && buf_meta_total(window.buffer(), MT_META_LINES) != 0;
     if widen {
         lnume += 1;
     }
@@ -212,7 +212,7 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
 /// Bring one window's fold, scroll and cursor-line state up to date with a
 /// change that covered `lnum`..`lnume` and moved what follows by `xtra`.
 fn redraw_win_for_change(mut window: Win, mut lnum: LineNr, col: ColNr, lnume: LineNr, xtra: i32) {
-    if !redraw_not_allowed.get() && window.w_redr_type < UPD_VALID {
+    if !REDRAW_NOT_ALLOWED.get() && window.w_redr_type < UPD_VALID {
         window.w_redr_type = UPD_VALID;
     }
     // Adding or removing lines invalidates a pending w_redraw_top/bot
@@ -310,8 +310,8 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: i3
         if wp.w_buffer == buffer {
             redraw_win_for_change(wp, lnum, col, lnume, xtra);
         }
-        if wp.is_current() && xtra != 0 && search_hl_has_cursor_lnum.get() >= lnum {
-            search_hl_has_cursor_lnum.set(search_hl_has_cursor_lnum.get() + xtra);
+        if wp.is_current() && xtra != 0 && SEARCH_HL_HAS_CURSOR_LNUM.get() >= lnum {
+            SEARCH_HL_HAS_CURSOR_LNUM.set(SEARCH_HL_HAS_CURSOR_LNUM.get() + xtra);
         }
     }
 
@@ -438,7 +438,7 @@ pub fn changed_lines_redraw_buf(mut buffer: Buf, lnum: LineNr, mut lnume: LineNr
     // wherever it moved to, so widen by one line; a virt_line mark may be
     // drawn two lines below, so a deletion widens by one more.
     if xtra != 0 && buffer.b_marktree.n_keys > 0 {
-        let lines = buf_meta_total(buffer, kMTMetaLines);
+        let lines = buf_meta_total(buffer, MT_META_LINES);
         lnume += 1 + i32::from(xtra < 0 && lines != 0);
     }
 

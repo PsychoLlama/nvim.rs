@@ -62,7 +62,7 @@ use crate::startup::exit::getout;
 use crate::startup::{
     EDIT_QF, MainParams, WIN_HOR, WIN_TABS, WIN_VER, kOptErrorfile, kOptShortmess, recoverymode,
 };
-use crate::types::{Handle, Integer, LineNr, OptInt, VarLock, Vv, kListLenMayKnow};
+use crate::types::{Handle, Integer, LIST_LEN_MAY_KNOW, LineNr, OptInt, VarLock, Vv};
 use crate::ui::ui_call_error_exit;
 use crate::window::{
     goto_tabpage, make_tabpages, make_windows, only_one_window, win_close, win_count, win_enter,
@@ -90,7 +90,7 @@ fn quit_on_swap_exists(clear_hit_enter: bool) -> ! {
 
 /// Set `v:argf` to the full paths of the file arguments.
 pub(crate) fn set_argf_var() {
-    let mut list = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
+    let mut list = tv_list_alloc(LIST_LEN_MAY_KNOW as c_int as ptrdiff_t);
     // Inside the list's borrow: resolving a name runs no user code.
     with_arg_names(ArgListId::GLOBAL, |fname| {
         let full = vim_full_name(fname, MAXPATHL as usize, false).unwrap_or_else(|name| name);

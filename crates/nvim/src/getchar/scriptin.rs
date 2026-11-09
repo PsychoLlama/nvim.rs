@@ -84,15 +84,15 @@ pub fn openscript(name: &CStr, directly: bool) {
     // `:global` or `:argdo`, or inside a loop, or with another command
     // following, needs. The display is not updated while this runs. Not
     // done always -- "make test" would fail.
-    let save_state = State.get();
-    let save_restart_edit = restart_edit.get();
-    let save_finish_op = finish_op.get();
+    let save_state = STATE.get();
+    let save_restart_edit = RESTART_EDIT.get();
+    let save_finish_op = FINISH_OP.get();
     let save_msg_scroll = MSG_SCROLL.get();
 
-    State.set(MODE_NORMAL);
+    STATE.set(MODE_NORMAL);
     MSG_SCROLL.set(0); // no message scrolling in Normal mode
-    restart_edit.set(Key::NUL); // don't go to Insert mode
-    finish_op.set(false);
+    RESTART_EDIT.set(Key::NUL); // don't go to Insert mode
+    FINISH_OP.set(false);
 
     let started_at = CURSCRIPT.get();
     crate::normal::with_frame_op(OpArg::default(), |op| {
@@ -104,10 +104,10 @@ pub fn openscript(name: &CStr, directly: bool) {
         } {}
     });
 
-    State.set(save_state);
+    STATE.set(save_state);
     MSG_SCROLL.set(save_msg_scroll);
-    restart_edit.set(save_restart_edit);
-    finish_op.set(save_finish_op);
+    RESTART_EDIT.set(save_restart_edit);
+    FINISH_OP.set(save_finish_op);
 }
 
 /// Close the innermost script and put back the typeahead it displaced.

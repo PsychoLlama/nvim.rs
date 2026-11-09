@@ -102,7 +102,7 @@ pub(crate) fn get_literal(no_simplify: bool) -> Key {
         }
         // MB_BYTE2LEN_CHECK
         let byte_len = nc.as_byte().map_or(1, |b| utf8len_tab[usize::from(b)]);
-        if State.get() & MODE_CMDLINE == 0 && byte_len == 1 {
+        if STATE.get() & MODE_CMDLINE == 0 && byte_len == 1 {
             add_to_showcmd(nc);
         }
 

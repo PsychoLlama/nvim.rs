@@ -18,9 +18,9 @@ use neovim::eval::typval::{
 };
 use neovim::memory::{xfree, xmalloc};
 use neovim::types::{
-    Failed, LineNr, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType,
-    kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
+    BOOL_VAR_FALSE, BOOL_VAR_TRUE, Failed, LineNr, SPECIAL_VAR_NULL, TypVal, VAR_BLOB, VAR_BOOL,
+    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
+    VAR_UNKNOWN, VarLock, VarNumber, VarType,
 };
 use neovim::winlayer::Win;
 
@@ -58,8 +58,8 @@ fn bogus_inner(v_type: VarType, bits: usize) -> TypVal {
         VAR_PARTIAL => tv::partial_tv(None),
         // A NULL blob, as the partial arm.
         VAR_BLOB => tv::blob_tv(None),
-        VAR_BOOL => TypVal::Bool(kBoolVarTrue),
-        VAR_SPECIAL => TypVal::Special(kSpecialVarNull),
+        VAR_BOOL => TypVal::Bool(BOOL_VAR_TRUE),
+        VAR_SPECIAL => TypVal::Special(SPECIAL_VAR_NULL),
         VAR_UNKNOWN => TypVal::Unknown,
         other => panic!("no bogus value for v_type {other}"),
     }
@@ -1173,9 +1173,9 @@ fn number_rows(number: &CString) -> Vec<Row> {
             tv::dict_tv(None),
             Some("E728: Using a Dictionary as a Number"),
         ),
-        row(TypVal::Special(kSpecialVarNull), None),
-        row(TypVal::Bool(kBoolVarTrue), None),
-        row(TypVal::Bool(kBoolVarFalse), None),
+        row(TypVal::Special(SPECIAL_VAR_NULL), None),
+        row(TypVal::Bool(BOOL_VAR_TRUE), None),
+        row(TypVal::Bool(BOOL_VAR_FALSE), None),
         row(
             TypVal::Unknown,
             Some("E685: Internal error: tv_get_number(UNKNOWN)"),
@@ -1308,17 +1308,17 @@ fn getting_a_float_accepts_only_numbers() {
             0.0,
         ),
         (
-            ManuallyDrop::new(TypVal::Special(kSpecialVarNull)),
+            ManuallyDrop::new(TypVal::Special(SPECIAL_VAR_NULL)),
             Some("E907: Using a special value as a Float"),
             0.0,
         ),
         (
-            ManuallyDrop::new(TypVal::Bool(kBoolVarTrue)),
+            ManuallyDrop::new(TypVal::Bool(BOOL_VAR_TRUE)),
             Some("E362: Using a boolean value as a Float"),
             0.0,
         ),
         (
-            ManuallyDrop::new(TypVal::Bool(kBoolVarFalse)),
+            ManuallyDrop::new(TypVal::Bool(BOOL_VAR_FALSE)),
             Some("E362: Using a boolean value as a Float"),
             0.0,
         ),
@@ -1382,17 +1382,17 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
                 None,
             ),
             (
-                ManuallyDrop::new(TypVal::Special(kSpecialVarNull)),
+                ManuallyDrop::new(TypVal::Special(SPECIAL_VAR_NULL)),
                 None,
                 Some("v:null"),
             ),
             (
-                ManuallyDrop::new(TypVal::Bool(kBoolVarTrue)),
+                ManuallyDrop::new(TypVal::Bool(BOOL_VAR_TRUE)),
                 None,
                 Some("v:true"),
             ),
             (
-                ManuallyDrop::new(TypVal::Bool(kBoolVarFalse)),
+                ManuallyDrop::new(TypVal::Bool(BOOL_VAR_FALSE)),
                 None,
                 Some("v:false"),
             ),

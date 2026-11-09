@@ -53,7 +53,7 @@ impl Fixture {
         // scrolling a grid nobody sized.
         crate::option::vars::P_CH.set(1);
         // No highlight groups exist: a message must not try to make them.
-        crate::highlight::state::need_highlight_changed.set(false);
+        crate::highlight::state::NEED_HIGHLIGHT_CHANGED.set(false);
         // Nothing ran the option defaults; the ones a call reads.
         let saved = [(&P_CPO, "aABceFs_"), (&P_DEBUG, "")]
             .into_iter()

@@ -49,8 +49,8 @@ use crate::msgpack_rpc::unpacker::Unpacker;
 use crate::os::libc::uint64_t;
 use crate::startup::{ui_client_channel_id, ui_client_error_exit};
 use crate::types::{
-    ApiDict, ApiString, Array, Error, Integer, MessageType, Object, kErrorTypeException,
-    kErrorTypeValidation,
+    ApiDict, ApiString, Array, ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, Error, Integer,
+    MessageType, Object,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
 
@@ -258,7 +258,7 @@ pub(crate) fn rpc_call_with<T>(
 /// The call's frame lives on the channel's call stack; the decoder fills it
 /// in when the matching response lands.
 fn rpc_send_call(id: uint64_t, method_name: &CStr, args: Array) -> Result<Object, Error> {
-    let invalid = || api_error!(kErrorTypeException, "Invalid channel: {id}");
+    let invalid = || api_error!(ERROR_TYPE_EXCEPTION, "Invalid channel: {id}");
     // The reference taken here keeps the channel, and so the frame, until
     // the answer has been read back.
     let request_id = with_channel(id, |chan| {
@@ -322,15 +322,15 @@ fn rpc_send_call(id: uint64_t, method_name: &CStr, args: Array) -> Result<Object
 /// API defines, is reported as "unknown error" rather than trusted.
 fn call_error(result: &Object) -> Error {
     if let Some(text) = result.as_string() {
-        return Error::from_message(kErrorTypeException, text.as_cstr());
+        return Error::from_message(ERROR_TYPE_EXCEPTION, text.as_cstr());
     }
     if let Some(array) = result.as_array()
         && array.len() == 2
     {
         let (kind, message) = (&array[0], &array[1]);
         if let (Some(kind), Some(message)) = (kind.as_integer(), message.as_string())
-            && (kind == Integer::from(kErrorTypeException)
-                || kind == Integer::from(kErrorTypeValidation))
+            && (kind == Integer::from(ERROR_TYPE_EXCEPTION)
+                || kind == Integer::from(ERROR_TYPE_VALIDATION))
         {
             let kind = crate::narrow::number_as_int(kind);
             return Error::from_message(kind, message.as_cstr());

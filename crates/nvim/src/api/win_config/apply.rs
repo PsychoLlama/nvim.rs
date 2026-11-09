@@ -189,7 +189,7 @@ impl Relayout {
         if Win::current_raw() == self.win.raw() {
             let handle = self.win_id.handle();
             let why = api_error!(
-                kErrorTypeException,
+                ERROR_TYPE_EXCEPTION,
                 "Failed to switch away from window {handle}"
             );
             // The editor is still on the window, so there is nothing to
@@ -311,7 +311,7 @@ impl Relayout {
         let why = raised.unwrap_or_else(|| {
             let handle = self.win_id.handle();
             api_error!(
-                kErrorTypeException,
+                ERROR_TYPE_EXCEPTION,
                 "Failed to move window {handle} into split"
             )
         });
@@ -496,7 +496,7 @@ impl Refloat {
         if self.win.is_current() {
             let handle = self.win.id().handle();
             let why = api_error!(
-                kErrorTypeException,
+                ERROR_TYPE_EXCEPTION,
                 "Failed to switch away from window {handle}"
             );
             // The editor is still on the window, so there is nothing to

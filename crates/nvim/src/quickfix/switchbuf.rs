@@ -59,14 +59,14 @@ pub(crate) fn jump_to_help_window(
     };
     if let Some(wp) = wp.filter(|wp| wp.w_buffer.b_nwindows > 0) {
         win_enter(wp, true);
-        restart_edit.set(Key::NUL);
+        RESTART_EDIT.set(Key::NUL);
         return Ok(());
     }
 
     // Put the split at the very top when no position was asked for and
     // the current window is one of a narrow vertical split.
     let mut flags = WSP_HELP;
-    if cmdmod_split() == 0 && Win::current().w_width != Columns.get() && Win::current().w_width < 80
+    if cmdmod_split() == 0 && Win::current().w_width != COLUMNS.get() && Win::current().w_width < 80
     {
         flags |= WSP_TOP;
     }
@@ -85,7 +85,7 @@ pub(crate) fn jump_to_help_window(
         Win::current().set_location_list(qi);
     }
     // Do not want insert mode in a help file.
-    restart_edit.set(Key::NUL);
+    RESTART_EDIT.set(Key::NUL);
     Ok(())
 }
 

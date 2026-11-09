@@ -41,7 +41,7 @@ use crate::autocmd::state::autocmd_busy;
 use crate::buffer_updates::{buf_free_callbacks, buf_updates_unload};
 use crate::change::deleted_lines_mark;
 use crate::diff::{diff_buf_delete, diffopt_hiddenoff};
-use crate::drawscreen::state::updating_screen;
+use crate::drawscreen::state::UPDATING_SCREEN;
 use crate::eval::typval::{callback_free, tv_dict_item_copy, unlink_buf_changedtick};
 use crate::eval::vars::{release_var_scope, vars_clear};
 use crate::extmark::extmark_free_all;
@@ -284,7 +284,7 @@ impl Disposition {
 pub(crate) fn can_unload_buffer(buffer: Buf) -> bool {
     let mut can_unload = buffer.b_locked == 0;
 
-    if can_unload && updating_screen.get() {
+    if can_unload && UPDATING_SCREEN.get() {
         can_unload = !windows().any(|wp| wp.w_buffer == buffer);
     }
     // Don't unload the buffer while it's still being saved

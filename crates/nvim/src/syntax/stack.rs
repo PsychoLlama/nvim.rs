@@ -374,7 +374,7 @@ impl SynState {
     pub(crate) fn stack_alloc(&mut self) {
         let block = self.block();
         let lines = self.line_count().get();
-        let want = clamp_entries(lines / SST_DIST + Rows.get() * 2);
+        let want = clamp_entries(lines / SST_DIST + ROWS.get() * 2);
         let have = c_int::try_from(block.b_sst.len()).unwrap_or(c_int::MAX);
         if have <= want * 2 && have >= want {
             return; // neither much too big nor a bit too small
@@ -382,7 +382,7 @@ impl SynState {
 
         // Allocate 50% too much, to avoid reallocating too often.
         self.resize_cache(clamp_entries(
-            (lines + lines / 2) / SST_DIST + Rows.get() * 2,
+            (lines + lines / 2) / SST_DIST + ROWS.get() * 2,
         ));
     }
 
@@ -645,7 +645,7 @@ mod tests {
             parser.validate_current_state();
             // More rows than entries keeps the cleanup from asking the
             // (empty) buffer how long it is.
-            let rows = Rows.replace(10_000);
+            let rows = ROWS.replace(10_000);
             parser.resize_cache(entries);
             Fixture {
                 parser,
@@ -701,7 +701,7 @@ mod tests {
         fn drop(&mut self) {
             self.parser.invalidate_current_state();
             self.parser.parsed = None;
-            Rows.set(self.rows);
+            ROWS.set(self.rows);
             free_bare_buffer(self.buffer);
         }
     }

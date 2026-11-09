@@ -48,7 +48,7 @@ use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
 use crate::search::state::no_smartcase;
 use crate::state::MODE_TERMINAL;
-use crate::state::mode::restart_edit;
+use crate::state::mode::RESTART_EDIT;
 use crate::strings::shellescape;
 use crate::tag::state::g_tag_at_cursor;
 use crate::tag::{TagCmd, do_tag};
@@ -344,7 +344,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         g_tag_at_cursor.set(false);
         if cmdchar.is('K') && !kp_ex && !kp_help {
             // The terminal 'keywordprg' opened above: let <Esc> close it.
-            restart_edit.set(Key::ascii(b'i'));
+            RESTART_EDIT.set(Key::ascii(b'i'));
             add_map(b"<esc>", b"<Cmd>bdelete!<CR>", MODE_TERMINAL, true);
         }
     }

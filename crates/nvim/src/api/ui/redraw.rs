@@ -36,7 +36,7 @@ use crate::types::DictBuilder;
 use crate::types::builders::ArrayBuf;
 use crate::types::{ApiDict, Array, Integer, Object};
 use crate::ui::state::RemoteUI;
-use crate::ui::state::{kUIHlState, kUIPopupmenu, kUIWildmenu};
+use crate::ui::state::{UI_HL_STATE, UI_POPUPMENU, UI_WILDMENU};
 use core::ffi::CStr;
 
 /// Announces a highlight attribute id and what it resolves to.
@@ -71,7 +71,7 @@ pub fn remote_ui_hl_attr_define(
 
     // `info` says which highlight groups produced the attributes, which is
     // only meaningful to a UI that asked to track highlight state.
-    let hl_state = ui.ui_ext[kUIHlState as usize];
+    let hl_state = ui.ui_ext[UI_HL_STATE as usize];
     let info = if hl_state { info } else { Array::new() };
     send!(
         ui,
@@ -121,7 +121,7 @@ pub fn remote_ui_event(ui: &mut RemoteUI, name: &'static CStr, args: Array) {
     // fewer arguments, different name. A UI that asked for both gets
     // the popupmenu events, and only completion in the cmdline (which
     // the popupmenu reports as row -1) falls back to the wildmenu.
-    if ui.ui_ext[kUIWildmenu as usize] {
+    if ui.ui_ext[UI_WILDMENU as usize] {
         match name.to_bytes() {
             b"popupmenu_show" => {
                 // The editor built `args` for this event, which has five
@@ -129,7 +129,7 @@ pub fn remote_ui_event(ui: &mut RemoteUI, name: &'static CStr, args: Array) {
                 let row = args[4]
                     .as_integer()
                     .expect("popupmenu_show carries an anchor row");
-                ui.wildmenu_active = row == -1 || !ui.ui_ext[kUIPopupmenu as usize];
+                ui.wildmenu_active = row == -1 || !ui.ui_ext[UI_POPUPMENU as usize];
                 if ui.wildmenu_active {
                     // The wildmenu shows only the completion word, so
                     // each item's remaining fields are dropped.

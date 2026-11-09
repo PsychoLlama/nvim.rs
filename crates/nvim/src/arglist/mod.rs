@@ -60,7 +60,7 @@ use crate::path::{
 use crate::regexp::RegMatch;
 use crate::regexp::{RE_MAGIC, vim_regexec};
 use crate::types::{Failed, *};
-use crate::ui::state::Columns;
+use crate::ui::state::COLUMNS;
 use crate::undo::buf_is_changed;
 use crate::version::list_in_columns;
 use crate::window::{

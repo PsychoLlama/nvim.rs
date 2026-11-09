@@ -54,7 +54,7 @@ use crate::buffer::{
 use crate::bufwrite::{WriteName, WriteRequest};
 use crate::change::unchanged;
 use crate::channel::channel_job_running;
-use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::state::CMDLINE_ROW;
 use crate::eval::eval_call_provider;
 use crate::eval::typval::tv_list_alloc;
 use crate::eval::vars::{do_unlet, set_internal_string_var, set_vim_var_string, var_string_value};
@@ -498,7 +498,7 @@ fn report_unwritten(buffer: Buf) {
     // `wait_return` is a no-op while `vgetc` is busy (Quit used from a window
     // menu); make sure the message does not scroll up then.
     if VGETC_BUSY.get() > 0 {
-        MSG_ROW.set(cmdline_row.get());
+        MSG_ROW.set(CMDLINE_ROW.get());
         MSG_COL.set(0);
         MSG_DIDOUT.set(false);
     }

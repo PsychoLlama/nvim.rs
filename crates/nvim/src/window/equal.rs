@@ -24,10 +24,10 @@ use core::ffi::c_int;
 use super::arith::NextCurwin;
 use super::*;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::state::CMDLINE_ROW;
 use crate::option::vars::{p_ead, p_ls, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::types::OptInt;
-use crate::ui::state::Columns;
+use crate::ui::state::COLUMNS;
 use crate::winlayer::{FrameRef, Win};
 
 pub fn win_equal(next_curwin: Option<Win>, current: bool, dir: u8) {
@@ -49,7 +49,7 @@ pub(crate) fn equal(next_curwin: Option<Win>, current: bool, dir: u8) {
         dir,
         0,
         tabline_rows(),
-        Columns.get(),
+        COLUMNS.get(),
         topfr.fr_height,
     );
     if !is_autocmd_window(next_curwin) {
@@ -191,7 +191,7 @@ fn row_share(next_curwin: Win, topfr: FrameRef, col: c_int, width: c_int) -> Sha
     // The maximum number of windows horizontally in this frame; the rightmost
     // one has no separator, so it is worth one extra column.
     let mut n = topfr.min_width(NextCurwin::NoWin);
-    let extra_sep = if col + width == Columns.get() { 1 } else { 0 };
+    let extra_sep = if col + width == COLUMNS.get() { 1 } else { 0 };
     let mut totwincount = (n + extra_sep) / (number_as_int(p_wmw()) + 1);
     let has_next_curwin = topfr.has_win(Some(next_curwin));
 
@@ -334,7 +334,7 @@ fn col_share(next_curwin: Win, topfr: FrameRef, row: c_int, height: c_int) -> Sh
     let mut n = topfr.min_height(NextCurwin::NoWin);
     // Add one for the bottom window if it has neither status line nor
     // separator.
-    let extra_sep = if row + height >= cmdline_row.get() && p_ls() == 0 as OptInt {
+    let extra_sep = if row + height >= CMDLINE_ROW.get() && p_ls() == 0 as OptInt {
         STATUS_HEIGHT
     } else if global_stl_rows() > 0 {
         1

@@ -25,7 +25,7 @@ use crate::narrow::{number_as_int, number_as_lnum};
 use crate::option::vars::P_CPO;
 use crate::semsg;
 use crate::types::Handle;
-use crate::types::{VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
+use crate::types::{ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, VAR_DICT, VAR_FUNC};
 use crate::winlayer::Buf;
 use core::ffi::CStr;
 
@@ -249,7 +249,7 @@ pub fn modify_keymap(
         if !ok || parsed_args.lhs_len > MAXMAPLEN || parsed_args.alt_lhs_len > MAXMAPLEN {
             let lhs = msg_cstr(lhs.as_cstr());
             failed = Some(api_error!(
-                kErrorTypeValidation,
+                ERROR_TYPE_VALIDATION,
                 "LHS exceeds maximum map length: {lhs}"
             ));
             break 'fail_and_free;
@@ -262,7 +262,7 @@ pub fn modify_keymap(
         if !mode.is_empty() && consumed != mode.len() {
             let mode = msg_cstr(mode.as_cstr());
             failed = Some(api_error!(
-                kErrorTypeValidation,
+                ERROR_TYPE_VALIDATION,
                 "Invalid mode shortname: \"{mode}\""
             ));
             break 'fail_and_free;
@@ -290,7 +290,7 @@ pub fn modify_keymap(
             failed = Some(if parsed_args.rhs_len() != 0 {
                 let rhs = msg_bytes(parsed_args.rhs().str.as_bytes());
                 api_error!(
-                    kErrorTypeValidation,
+                    ERROR_TYPE_VALIDATION,
                     "Gave nonempty RHS in unmap command: {rhs}"
                 )
             } else {
@@ -317,19 +317,19 @@ pub fn modify_keymap(
             (1, _) => Some(Error::exception(E_INVARG)),
             (2, _) => Some(Error::exception(E_NOMAP)),
             (5, true) => Some(api_error!(
-                kErrorTypeException,
+                ERROR_TYPE_EXCEPTION,
                 "E226: Abbreviation already exists for {lhs}"
             )),
             (5, false) => Some(api_error!(
-                kErrorTypeException,
+                ERROR_TYPE_EXCEPTION,
                 "E227: Mapping already exists for {lhs}"
             )),
             (6, true) => Some(api_error!(
-                kErrorTypeException,
+                ERROR_TYPE_EXCEPTION,
                 "E224: Global abbreviation already exists for {lhs}"
             )),
             (6, false) => Some(api_error!(
-                kErrorTypeException,
+                ERROR_TYPE_EXCEPTION,
                 "E225: Global mapping already exists for {lhs}"
             )),
             _ => None,

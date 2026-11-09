@@ -33,7 +33,7 @@ pub fn handle_nvim_buf_create_user_command(
     if args.len() != 4 {
         return Err(wrong_arity(4, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_create_user_command", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -74,7 +74,7 @@ pub fn handle_nvim_buf_del_user_command(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_del_user_command", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -100,7 +100,7 @@ pub fn handle_nvim_buf_get_commands(channel_id: uint64_t, args: Array) -> Result
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_get_commands", c"Buffer"));
     };
     let mut arg_2: KeyDict_get_commands = match read_keydict(args[1].take()) {

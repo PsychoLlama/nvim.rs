@@ -34,7 +34,7 @@ use crate::global_cell::GlobalCell;
 use crate::memline::{Lines, ml_replace_owned};
 use crate::memory::XString;
 use crate::state::MODE_INSERT;
-use crate::state::mode::{State, saved_cursor};
+use crate::state::mode::{SAVED_CURSOR, STATE};
 use crate::undo::u_save_cursor;
 
 /// `auto_format` added an extra space under the cursor, and it has to come
@@ -98,7 +98,7 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
         && !trailblank
         && !wasatend
         && pos.col > ColNr::ZERO
-        && State.get() & MODE_INSERT != 0
+        && STATE.get() & MODE_INSERT != 0
     {
         let before = byte_at(
             Lines::current().line(pos.lnum),
@@ -131,10 +131,10 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
 
     // Format, then restore the cursor: `saved_cursor` is adjusted by the
     // formatting as the text moves under it.
-    saved_cursor.set(pos);
+    SAVED_CURSOR.set(pos);
     format_lines(LineNr::new(-1), false);
-    Win::current().w_cursor = saved_cursor.get();
-    saved_cursor.set(saved_cursor.get().with_lnum(LineNr::ZERO));
+    Win::current().w_cursor = SAVED_CURSOR.get();
+    SAVED_CURSOR.set(SAVED_CURSOR.get().with_lnum(LineNr::ZERO));
 
     if Win::current().w_cursor.lnum > Buf::current().b_ml.ml_line_count {
         // "cannot happen"

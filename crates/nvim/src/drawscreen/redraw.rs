@@ -2,7 +2,7 @@
 //!
 //! None of this draws: every function sets a flag that [`update_screen`] reads
 //! on the next pass through the main loop. [`redraw_later`] is the primitive --
-//! it raises one window's `w_redr_type` and the global `must_redraw` -- and the
+//! it raises one window's `w_redr_type` and the global `MUST_REDRAW` -- and the
 //! rest name a scope: all windows ([`redraw_all_later`]), every window on one
 //! buffer ([`redraw_buf_later`]), a line range ([`redraw_win_range_later`]), a
 //! status line ([`status_redraw_buf`]).
@@ -37,10 +37,10 @@ use crate::winlayer::Win;
 ///
 /// Answers whether either does.
 pub(crate) fn redraw_custom_title_later() -> bool {
-    let custom = (p_icon() && stl_syntax.get().has(StlSyntax::ICON))
-        || (p_title() && stl_syntax.get().has(StlSyntax::TITLE));
+    let custom = (p_icon() && STL_SYNTAX.get().has(StlSyntax::ICON))
+        || (p_title() && STL_SYNTAX.get().has(StlSyntax::TITLE));
     if custom {
-        need_maketitle.set(true);
+        NEED_MAKETITLE.set(true);
     }
     custom
 }
@@ -57,7 +57,7 @@ pub fn show_cursor_info_later(force: bool) {
     // "The cursor is on an empty line" is a status-line item of its own, and
     // in Insert mode it is deliberately always reported as false.
     let empty_line =
-        State.get() & MODE_INSERT == 0 && wp.buffer().lines().line(wp.w_cursor.lnum).is_empty();
+        STATE.get() & MODE_INSERT == 0 && wp.buffer().lines().line(wp.w_cursor.lnum).is_empty();
 
     validate_virtcol(wp);
 
@@ -77,7 +77,7 @@ pub fn show_cursor_info_later(force: bool) {
         if wp.w_status_height != 0 || global_stl_height() != 0 {
             wp.w_redr_status = true;
         } else {
-            redraw_cmdline.set(true);
+            REDRAW_CMDLINE.set(true);
         }
         // A window bar can show the same items, and it is never on the
         // command line, so it needs the status-line treatment either way.
@@ -106,10 +106,10 @@ pub fn show_cursor_info_later(force: bool) {
 
 /// Redraw window `window` later, with `w_redr_type` at least `redr_type`.
 ///
-/// `must_redraw` is the maximum over all windows, so it only ever rises here;
+/// `MUST_REDRAW` is the maximum over all windows, so it only ever rises here;
 /// [`update_screen`] resets it.
 pub fn redraw_later(mut window: Win, redr_type: c_int) {
-    if exiting.get() || redraw_not_allowed.get() {
+    if exiting.get() || REDRAW_NOT_ALLOWED.get() {
         return;
     }
     if window.w_redr_type < redr_type {
@@ -131,17 +131,17 @@ pub fn redraw_all_later(redr_type: c_int) {
     set_must_redraw(redr_type);
 }
 
-/// Raise `must_redraw` to `redr_type`, unless redrawing is currently forbidden.
+/// Raise `MUST_REDRAW` to `redr_type`, unless redrawing is currently forbidden.
 pub fn set_must_redraw(redr_type: c_int) {
-    if !redraw_not_allowed.get() {
+    if !REDRAW_NOT_ALLOWED.get() {
         set_must_redraw_unchecked(redr_type);
     }
 }
 
-/// [`set_must_redraw`] without the `redraw_not_allowed` test, for callers that
+/// [`set_must_redraw`] without the `REDRAW_NOT_ALLOWED` test, for callers that
 /// have already made it.
 fn set_must_redraw_unchecked(redr_type: c_int) {
-    must_redraw.set(must_redraw.get().max(redr_type));
+    MUST_REDRAW.set(MUST_REDRAW.get().max(redr_type));
 }
 
 /// Drop every window's cached attribute state; used when the highlight tables
@@ -267,7 +267,7 @@ pub fn status_redraw_buf(buffer: Buf) {
     // already mark the current window.
     let wp = Win::current();
     if p_ru() && wp.w_status_height == 0 && !wp.w_redr_status {
-        redraw_cmdline.set(true);
+        REDRAW_CMDLINE.set(true);
         redraw_later(wp, UPD_VALID);
     }
 }
@@ -284,10 +284,10 @@ pub fn redraw_statuslines() {
     }
     win_check_ns_hl(None);
 
-    if redraw_tabline.get() {
+    if REDRAW_TABLINE.get() {
         draw_tabline();
     }
-    if need_maketitle.get() {
+    if NEED_MAKETITLE.get() {
         maketitle();
     }
 }
@@ -317,17 +317,17 @@ impl FrameRef {
 }
 
 /// The redraw-level arithmetic `update_screen` is fed by: which request
-/// raises a window's `w_redr_type` and the global `must_redraw`, which is
+/// raises a window's `w_redr_type` and the global `MUST_REDRAW`, which is
 /// swallowed, and how a line range widens. Driven on the fixture's bare
 /// current window, which is in no window list, so only the per-window
-/// entry points are reachable; `must_redraw` and the window's fields are put
+/// entry points are reachable; `MUST_REDRAW` and the window's fields are put
 /// back as they were found.
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::eval::test_fixture::Fixture;
 
-    /// The fixture, with `must_redraw` and the window's redraw state zeroed
+    /// The fixture, with `MUST_REDRAW` and the window's redraw state zeroed
     /// for the case and put back when it goes.
     #[derive(Debug)]
     struct Redraw {
@@ -338,7 +338,7 @@ mod tests {
     impl Redraw {
         fn new() -> Redraw {
             let fx = Fixture::new();
-            let saved_must_redraw = must_redraw.replace(0);
+            let saved_must_redraw = MUST_REDRAW.replace(0);
             let mut win = Win::current();
             win.w_redr_type = 0;
             win.w_lines_valid = 0;
@@ -358,8 +358,8 @@ mod tests {
 
     impl Drop for Redraw {
         fn drop(&mut self) {
-            must_redraw.set(self.saved_must_redraw);
-            redraw_not_allowed.set(false);
+            MUST_REDRAW.set(self.saved_must_redraw);
+            REDRAW_NOT_ALLOWED.set(false);
             exiting.set(false);
         }
     }
@@ -369,35 +369,35 @@ mod tests {
         let t = Redraw::new();
         redraw_later(t.win(), UPD_VALID);
         assert_eq!(
-            (t.win().w_redr_type, must_redraw.get()),
+            (t.win().w_redr_type, MUST_REDRAW.get()),
             (UPD_VALID, UPD_VALID)
         );
         redraw_later(t.win(), UPD_INVERTED);
         assert_eq!(
-            (t.win().w_redr_type, must_redraw.get()),
+            (t.win().w_redr_type, MUST_REDRAW.get()),
             (UPD_INVERTED, UPD_INVERTED)
         );
     }
 
     #[test]
     fn a_lower_request_than_the_window_has_is_swallowed_whole() {
-        // `must_redraw` is raised only when the *window's* level rises: a
-        // window already at NOT_VALID leaves a zero `must_redraw` at zero.
+        // `MUST_REDRAW` is raised only when the *window's* level rises: a
+        // window already at NOT_VALID leaves a zero `MUST_REDRAW` at zero.
         let t = Redraw::new();
         let mut win = t.win();
         win.w_redr_type = UPD_NOT_VALID;
         redraw_later(win, UPD_VALID);
         redraw_later(win, UPD_NOT_VALID);
-        assert_eq!((win.w_redr_type, must_redraw.get()), (UPD_NOT_VALID, 0));
+        assert_eq!((win.w_redr_type, MUST_REDRAW.get()), (UPD_NOT_VALID, 0));
     }
 
     #[test]
     fn must_redraw_never_falls_below_another_windows_request() {
         let t = Redraw::new();
-        must_redraw.set(UPD_CLEAR);
+        MUST_REDRAW.set(UPD_CLEAR);
         redraw_later(t.win(), UPD_SOME_VALID);
         assert_eq!(t.win().w_redr_type, UPD_SOME_VALID);
-        assert_eq!(must_redraw.get(), UPD_CLEAR);
+        assert_eq!(MUST_REDRAW.get(), UPD_CLEAR);
     }
 
     #[test]
@@ -417,17 +417,17 @@ mod tests {
     #[test]
     fn exiting_or_redraw_not_allowed_drops_the_request() {
         let t = Redraw::new();
-        redraw_not_allowed.set(true);
+        REDRAW_NOT_ALLOWED.set(true);
         redraw_later(t.win(), UPD_CLEAR);
         set_must_redraw(UPD_CLEAR);
-        assert_eq!((t.win().w_redr_type, must_redraw.get()), (0, 0));
-        redraw_not_allowed.set(false);
+        assert_eq!((t.win().w_redr_type, MUST_REDRAW.get()), (0, 0));
+        REDRAW_NOT_ALLOWED.set(false);
         exiting.set(true);
         redraw_later(t.win(), UPD_CLEAR);
         assert_eq!(t.win().w_redr_type, 0);
-        // `set_must_redraw` asks only about `redraw_not_allowed`.
+        // `set_must_redraw` asks only about `REDRAW_NOT_ALLOWED`.
         set_must_redraw(UPD_VALID);
-        assert_eq!(must_redraw.get(), UPD_VALID);
+        assert_eq!(MUST_REDRAW.get(), UPD_VALID);
     }
 
     #[test]
@@ -435,9 +435,9 @@ mod tests {
         let _t = Redraw::new();
         set_must_redraw(UPD_NOT_VALID);
         set_must_redraw(UPD_VALID);
-        assert_eq!(must_redraw.get(), UPD_NOT_VALID);
+        assert_eq!(MUST_REDRAW.get(), UPD_NOT_VALID);
         set_must_redraw(UPD_CLEAR);
-        assert_eq!(must_redraw.get(), UPD_CLEAR);
+        assert_eq!(MUST_REDRAW.get(), UPD_CLEAR);
     }
 
     #[test]
@@ -450,7 +450,7 @@ mod tests {
 
         redraw_win_range_later(win, LineNr::new(15), LineNr::new(17));
         assert_eq!(range(win), (15, 17));
-        assert_eq!((win.w_redr_type, must_redraw.get()), (UPD_VALID, UPD_VALID));
+        assert_eq!((win.w_redr_type, MUST_REDRAW.get()), (UPD_VALID, UPD_VALID));
         redraw_win_range_later(win, LineNr::new(12), LineNr::new(16));
         assert_eq!(range(win), (12, 17), "the top moves up, the bottom stays");
         redraw_win_line(win, LineNr::new(20));
@@ -473,6 +473,6 @@ mod tests {
             (win.w_redraw_top, win.w_redraw_bot),
             (LineNr::ZERO, LineNr::ZERO)
         );
-        assert_eq!((win.w_redr_type, must_redraw.get()), (0, 0));
+        assert_eq!((win.w_redr_type, MUST_REDRAW.get()), (0, 0));
     }
 }

@@ -40,7 +40,7 @@ fn clamp_to_option(value: c_int, limit: OptInt) -> c_int {
 
 /// Measure the three item columns.
 ///
-/// `pum_base_width` is the widest `word`. The kind and extra columns each
+/// `PUM_BASE_WIDTH` is the widest `word`. The kind and extra columns each
 /// get one cell more than their widest entry, for the space that separates
 /// them from what precedes.
 pub(crate) fn pum_compute_size() {
@@ -54,9 +54,9 @@ pub(crate) fn pum_compute_size() {
             extra = extra.max(strsize(text) + 1);
         }
     }
-    pum_base_width.set(base);
-    pum_kind_width.set(kind);
-    pum_extra_width.set(extra);
+    PUM_BASE_WIDTH.set(base);
+    PUM_KIND_WIDTH.set(kind);
+    PUM_EXTRA_WIDTH.set(extra);
 }
 
 /// Decide `pum_row` and `pum_height`.
@@ -82,7 +82,7 @@ pub(crate) fn pum_compute_vertical_placement(
     // `validate_cheight` is the only call out of here and reaches nothing
     // that reads the pum state, which is why the row and height can be
     // settled in locals first.
-    let cmdline_pum = State.get() & MODE_CMDLINE != 0 && target_win.is_none();
+    let cmdline_pum = STATE.get() & MODE_CMDLINE != 0 && target_win.is_none();
     let mut height = clamp_to_option(size.min(PUM_DEF_HEIGHT), p_ph());
     let mut row;
 
@@ -90,7 +90,7 @@ pub(crate) fn pum_compute_vertical_placement(
         && pum_win_row - above_row > (below_row - above_row) / 2
     {
         // Above "pum_win_row", leaving two lines of context if possible.
-        pum_above.set(true);
+        PUM_ABOVE.set(true);
         let context_lines = match target_win.filter(|_| !cmdline_pum) {
             None => 0,
             Some(target) => 2.min(target.w_wrow - target.w_cline_row),
@@ -118,7 +118,7 @@ pub(crate) fn pum_compute_vertical_placement(
         }
     } else {
         // Below "pum_win_row", leaving three lines of context if possible.
-        pum_above.set(false);
+        PUM_ABOVE.set(false);
         let context_lines = match target_win.filter(|_| !cmdline_pum) {
             None => 0,
             Some(target) => {
@@ -131,7 +131,7 @@ pub(crate) fn pum_compute_vertical_placement(
 
         row = pum_win_row + context_lines;
         height = clamp_to_option((below_row - row).min(size), p_ph());
-        if row + height + pum_border_size >= cmdline_row.get() {
+        if row + height + pum_border_size >= CMDLINE_ROW.get() {
             height -= pum_border_size;
         }
     }
@@ -141,8 +141,8 @@ pub(crate) fn pum_compute_vertical_placement(
         row = above_row;
         height = pum_win_row - above_row;
     }
-    pum_row.set(row);
-    pum_height.set(height);
+    PUM_ROW.set(row);
+    PUM_HEIGHT.set(height);
 }
 
 /// Set `pum_width` to `width` bounded by `'pumwidth'` and `'pummaxwidth'`.
@@ -163,8 +163,8 @@ fn set_pum_width_aligned_with_cursor(width: c_int, available_width: c_int) -> bo
         end_padding = false;
     }
 
-    pum_width.set(width + c_int::from(end_padding && OptInt::from(width) >= p_pw()));
-    available_width >= pum_width.get()
+    PUM_WIDTH.set(width + c_int::from(end_padding && OptInt::from(width) >= p_pw()));
+    available_width >= PUM_WIDTH.get()
 }
 
 /// Decide `pum_col` and `pum_width`.
@@ -180,64 +180,64 @@ pub(crate) fn pum_compute_horizontal_placement(
     border_width: c_int,
 ) {
     let win_end_col = target_win.map_or(0, |t| t.w_wincol + t.w_view_width);
-    let max_col = Columns.get().max(win_end_col);
-    let desired_width = pum_base_width.get() + pum_kind_width.get() + pum_extra_width.get();
+    let max_col = COLUMNS.get().max(win_end_col);
+    let desired_width = PUM_BASE_WIDTH.get() + PUM_KIND_WIDTH.get() + PUM_EXTRA_WIDTH.get();
 
-    let mut available_width = if pum_rl.get() {
-        cursor_col - pum_scrollbar.get() + 1 - border_width
+    let mut available_width = if PUM_RL.get() {
+        cursor_col - PUM_SCROLLBAR.get() + 1 - border_width
     } else {
-        max_col - cursor_col - pum_scrollbar.get() - border_width
+        max_col - cursor_col - PUM_SCROLLBAR.get() - border_width
     };
 
     // Align the menu with "cursor_col".
-    pum_col.set(cursor_col);
+    PUM_COL.set(cursor_col);
     if set_pum_width_aligned_with_cursor(desired_width, available_width) {
         return;
     }
 
     // Show it truncated, provided it is at least 'pumwidth' wide.
     if OptInt::from(available_width) > p_pw() {
-        pum_width.set(available_width);
+        PUM_WIDTH.set(available_width);
         return;
     }
 
     // A truncated menu is no longer aligned with "cursor_col".
-    if pum_rl.get() {
-        available_width = max_col - pum_scrollbar.get() - border_width;
+    if PUM_RL.get() {
+        available_width = max_col - PUM_SCROLLBAR.get() - border_width;
     } else {
         available_width += cursor_col;
     }
 
     if OptInt::from(available_width) > p_pw() {
-        pum_width.set(c_int::try_from(p_pw()).unwrap_or(c_int::MAX - 1) + 1); // truncate beyond 'pumwidth'
-        if pum_rl.get() {
-            pum_col.set(pum_width.get() + pum_scrollbar.get() + border_width);
+        PUM_WIDTH.set(c_int::try_from(p_pw()).unwrap_or(c_int::MAX - 1) + 1); // truncate beyond 'pumwidth'
+        if PUM_RL.get() {
+            PUM_COL.set(PUM_WIDTH.get() + PUM_SCROLLBAR.get() + border_width);
         } else {
-            pum_col.set(max_col - pum_width.get() - pum_scrollbar.get() - border_width);
+            PUM_COL.set(max_col - PUM_WIDTH.get() - PUM_SCROLLBAR.get() - border_width);
         }
         return;
     }
 
     // Not enough room anywhere: use what there is.
-    pum_col.set(if pum_rl.get() { max_col - 1 } else { 0 });
-    pum_width.set(max_col - pum_scrollbar.get() - border_width);
+    PUM_COL.set(if PUM_RL.get() { max_col - 1 } else { 0 });
+    PUM_WIDTH.set(max_col - PUM_SCROLLBAR.get() - border_width);
 }
 
 /// Place the whole menu around the mouse, for `:popup`.
 ///
 /// Unlike the completion menu this one does not scroll, so it is sized to
-/// `pum_size` outright and only shrinks when a screen edge says so.
+/// `PUM_SIZE` outright and only shrinks when a screen edge says so.
 /// `min_width` is the width the caller wants even for narrow items.
 pub(crate) fn pum_position_at_mouse(min_width: c_int) {
     let pum_handle = pum_grid_ref().handle;
     let (min_row, min_col) = (0, 0);
-    let mut max_row = Rows.get();
-    let mut max_col = Columns.get();
+    let mut max_row = ROWS.get();
+    let mut max_col = COLUMNS.get();
     let mut pos = MousePos::current();
-    pum_win_row_offset.set(0);
-    pum_win_col_offset.set(0);
+    PUM_WIN_ROW_OFFSET.set(0);
+    PUM_WIN_COL_OFFSET.set(0);
 
-    if ui_has(kUIMultigrid) && pos.grid == 0 {
+    if ui_has(UI_MULTIGRID) && pos.grid == 0 {
         find_win_outer(&mut pos);
     }
     let (grid, mut row, mut col) = (pos.grid, pos.row, pos.col);
@@ -246,58 +246,58 @@ pub(crate) fn pum_position_at_mouse(min_width: c_int) {
     {
         row += wp.w_winrow;
         col += wp.w_wincol;
-        pum_win_row_offset.set(wp.w_winrow);
-        pum_win_col_offset.set(wp.w_wincol);
+        PUM_WIN_ROW_OFFSET.set(wp.w_winrow);
+        PUM_WIN_COL_OFFSET.set(wp.w_wincol);
 
         if wp.w_view_height > 0 || wp.w_view_width > 0 {
             // The user asked for a different grid size; let the menu
             // extend to it.
             let (winrow, wincol) = (wp.w_winrow, wp.w_wincol);
-            max_row = (Rows.get() - winrow).max(winrow + wp.w_view_height);
-            max_col = (Columns.get() - wincol).max(wincol + wp.w_view_width);
+            max_row = (ROWS.get() - winrow).max(winrow + wp.w_view_height);
+            max_col = (COLUMNS.get() - wincol).max(wincol + wp.w_view_width);
         }
     }
     if pum_handle != Handle::NONE && grid == pum_handle.get() {
         // Repositioning the menu by right-clicking on itself.
-        row += pum_row.get();
-        col += pum_left_col.get();
+        row += PUM_ROW.get();
+        col += PUM_LEFT_COL.get();
     } else {
-        pum_anchor_grid.set(grid);
+        PUM_ANCHOR_GRID.set(grid);
     }
 
     // Width and height are both 1 for a shadow border, otherwise 2.
     let border_height = pum_border_width();
     let border_width = border_height;
-    if max_row - row > pum_size.get() + border_height || max_row - row > row - min_row {
+    if max_row - row > PUM_SIZE.get() + border_height || max_row - row > row - min_row {
         // Room below the mouse row, or more room below than above.
-        pum_above.set(false);
-        pum_row.set(row + 1);
-        if pum_height.get() + border_height > max_row - pum_row.get() {
-            pum_height.set(max_row - pum_row.get() - border_height);
+        PUM_ABOVE.set(false);
+        PUM_ROW.set(row + 1);
+        if PUM_HEIGHT.get() + border_height > max_row - PUM_ROW.get() {
+            PUM_HEIGHT.set(max_row - PUM_ROW.get() - border_height);
         }
     } else {
         // Above the mouse row, shorter if it does not fit.
-        pum_above.set(true);
-        pum_row.set(row - pum_size.get() - border_height);
-        if pum_row.get() < min_row {
-            pum_height.set(pum_height.get() + pum_row.get() - min_row);
-            pum_row.set(min_row);
+        PUM_ABOVE.set(true);
+        PUM_ROW.set(row - PUM_SIZE.get() - border_height);
+        if PUM_ROW.get() < min_row {
+            PUM_HEIGHT.set(PUM_HEIGHT.get() + PUM_ROW.get() - min_row);
+            PUM_ROW.set(min_row);
         }
     }
 
     // The fallback width when the mouse column has no room for the items.
-    let aligned = (pum_base_width.get() + border_width).min(min_width + border_width);
-    if pum_rl.get() {
-        let fits = col - min_col + 1 >= pum_base_width.get() + border_width
+    let aligned = (PUM_BASE_WIDTH.get() + border_width).min(min_width + border_width);
+    if PUM_RL.get() {
+        let fits = col - min_col + 1 >= PUM_BASE_WIDTH.get() + border_width
             || col - min_col + 1 > min_width + border_width;
-        pum_col.set(if fits { col } else { min_col + aligned - 1 });
-        pum_width.set(pum_col.get() - min_col + 1 - border_width);
+        PUM_COL.set(if fits { col } else { min_col + aligned - 1 });
+        PUM_WIDTH.set(PUM_COL.get() - min_col + 1 - border_width);
     } else {
-        let fits = max_col - col >= pum_base_width.get() + border_width
+        let fits = max_col - col >= PUM_BASE_WIDTH.get() + border_width
             || max_col - col > min_width + border_width;
-        pum_col.set(if fits { col } else { max_col - aligned });
-        pum_width.set(max_col - pum_col.get() - border_width);
+        PUM_COL.set(if fits { col } else { max_col - aligned });
+        PUM_WIDTH.set(max_col - PUM_COL.get() - border_width);
     }
 
-    pum_width.set(pum_width.get().min(pum_base_width.get() + 1));
+    PUM_WIDTH.set(PUM_WIDTH.get().min(PUM_BASE_WIDTH.get() + 1));
 }

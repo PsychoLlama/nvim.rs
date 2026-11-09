@@ -18,7 +18,7 @@
 
 use super::*;
 use crate::api::private::validate::{err_bad_number, err_expected};
-use crate::extmark::kExtmarkNone;
+use crate::extmark::EXTMARK_NONE;
 use crate::narrow::{number_as_int, number_as_u32};
 use crate::types::DictBuilder;
 use crate::winlayer::Buf;
@@ -153,7 +153,7 @@ pub fn nvim_buf_get_extmarks(
     }
     let details: bool = opts.details.unwrap_or(false);
     let hl_name: bool = opts.hl_name.unwrap_or(true);
-    let mut type_0: ExtmarkType = kExtmarkNone;
+    let mut type_0: ExtmarkType = EXTMARK_NONE;
     if let Some(named) = opts.type_0.as_ref() {
         let name = (!named.is_null()).then(|| named.as_cstr());
         type_0 = match name.map(CStr::to_bytes) {

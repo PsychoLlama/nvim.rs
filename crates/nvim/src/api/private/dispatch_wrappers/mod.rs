@@ -150,7 +150,8 @@ use crate::message::E_TEXTLOCK;
 use crate::message_fmt::msg_cstr;
 use crate::os::libc::uint64_t;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, Error, Float, Handle, Integer, Object, ObjectType,
+    ApiDict, ApiString, Array, Boolean, Error, ErrorType, Float, Handle, Integer, Object,
+    ObjectType,
 };
 use core::ffi::CStr;
 
@@ -159,12 +160,13 @@ use core::ffi::CStr;
 /// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
 /// unreachable from outside the crate and `unreachable_pub` says so.
 mod known {
+    use super::{ErrorType, ObjectType};
     use core::ffi::c_int;
 
-    pub(crate) use crate::types::kErrorTypeException;
-    pub(crate) use crate::types::kObjectTypeBuffer;
-    pub(crate) use crate::types::kObjectTypeTabpage;
-    pub(crate) use crate::types::kObjectTypeWindow;
+    pub(crate) const ERROR_TYPE_EXCEPTION: ErrorType = 0;
+    pub(crate) const OBJECT_TYPE_BUFFER: ObjectType = 8;
+    pub(crate) const OBJECT_TYPE_WINDOW: ObjectType = 9;
+    pub(crate) const OBJECT_TYPE_TABPAGE: ObjectType = 10;
     pub(crate) const LOGLVL_DBG: c_int = 1;
 }
 
@@ -185,7 +187,7 @@ fn log_invoke(handler: &'static CStr, method: &CStr, line: u32, channel_id: uint
 /// Refuses a call that arrived with the wrong number of arguments.
 fn wrong_arity(expected: usize, got: usize) -> Error {
     api_error!(
-        kErrorTypeException,
+        ERROR_TYPE_EXCEPTION,
         "Wrong number of arguments: expecting {expected} but got {got}"
     )
 }
@@ -195,7 +197,7 @@ fn wrong_arity(expected: usize, got: usize) -> Error {
 fn wrong_type(slot: usize, func: &CStr, expected: &CStr) -> Error {
     let (func, expected) = (msg_cstr(func), msg_cstr(expected));
     api_error!(
-        kErrorTypeException,
+        ERROR_TYPE_EXCEPTION,
         "Wrong type for argument {slot} when calling {func}, expecting {expected}"
     )
 }
@@ -298,11 +300,11 @@ fn read_keydict<K: KeySet + Default>(item: Object) -> KeySetArg<K> {
 
 /// Refuses a call made while the text is locked.
 fn text_locked_error() -> Error {
-    Error::from_message(kErrorTypeException, get_text_locked_msg())
+    Error::from_message(ERROR_TYPE_EXCEPTION, get_text_locked_msg())
 }
 
 /// Refuses a call made from an expression mapping, which the cmdline window
 /// alone would have allowed.
 fn expr_map_locked_error() -> Error {
-    Error::from_message(kErrorTypeException, E_TEXTLOCK)
+    Error::from_message(ERROR_TYPE_EXCEPTION, E_TEXTLOCK)
 }

@@ -27,7 +27,7 @@ use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::os::fs::os_strerror;
 use crate::startup::{stdin_isatty, ui_client_channel_id};
 use crate::tui::cursor::{
-    cursor_style_enabled, decode_cursor_entry, reset_style as cursor_reset_style,
+    CURSOR_STYLE_ENABLED, decode_cursor_entry, reset_style as cursor_reset_style,
     set_mode as cursor_set_mode,
 };
 use crate::tui::negotiate::{
@@ -36,7 +36,7 @@ use crate::tui::negotiate::{
 use crate::tui::output::{TERMINFO_SEQ_LIMIT, flush, out, terminfo_out};
 use crate::tui::paint::invalidate;
 use crate::tui::state::TUIData;
-use crate::tui::terminfo::caps::{kTerm_from_status_line, kTerm_to_status_line};
+use crate::tui::terminfo::caps::{TERM_FROM_STATUS_LINE, TERM_TO_STATUS_LINE};
 use crate::tui::terminfo::terminfo_info_msg;
 use crate::types::{ApiString, Array, ArrayBuf, DictBuf, Integer, Object};
 
@@ -91,7 +91,7 @@ pub fn tui_mouse_off(tui: &mut TUIData) {
 /// The editor's `'guicursor'` was (re)parsed: take the cursor description
 /// for every mode. `args` is an array of mode dictionaries.
 pub fn tui_mode_info_set(tui: &mut TUIData, guicursor_enabled: bool, args: Array) {
-    cursor_style_enabled.set(guicursor_enabled);
+    CURSOR_STYLE_ENABLED.set(guicursor_enabled);
     if !guicursor_enabled {
         cursor_reset_style(tui);
         return;
@@ -228,9 +228,9 @@ pub fn tui_set_title(tui: &mut TUIData, title: ApiString) {
         if tui.staging.room() < title.len() + 2 * TERMINFO_SEQ_LIMIT {
             flush(tui);
         }
-        terminfo_out(tui, kTerm_to_status_line);
+        terminfo_out(tui, TERM_TO_STATUS_LINE);
         out(tui, title.as_bytes());
-        terminfo_out(tui, kTerm_from_status_line);
+        terminfo_out(tui, TERM_FROM_STATUS_LINE);
     } else if tui.title_enabled {
         out(tui, b"\x1b[23;0t");
         tui.title_enabled = false;

@@ -92,7 +92,7 @@ fn goto_cwindow(qi: Qi, resize: bool, sz: c_int, vertsplit: bool) -> bool {
             }
         } else if sz != win.w_height
             && win.w_height + win.w_hsep_height + win.w_status_height + tabline_rows()
-                < cmdline_row.get()
+                < CMDLINE_ROW.get()
         {
             setheight_win(sz, Win::current());
         }
@@ -177,7 +177,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
 
     // Only set the height when still in the same tab page and there is
     // no window to the side.
-    if TabPage::current_raw() == prevtab && Win::current().w_width == Columns.get() {
+    if TabPage::current_raw() == prevtab && Win::current().w_width == COLUMNS.get() {
         setheight_win(height, Win::current());
     }
     Win::current().w_onebuf_opt.wo_wfh = c_int::from(true); // 'winfixheight'

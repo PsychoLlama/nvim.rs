@@ -55,9 +55,9 @@ use crate::plines::{getvcol, getvvcol};
 /// rest, and it runs once, after Insert mode has been left. The caller
 /// prepares undo.
 pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut BlockDef) {
-    let old_state = State.get();
+    let old_state = STATE.get();
     // Not MODE_REPLACE, whatever the user was in.
-    State.set(MODE_INSERT);
+    STATE.set(MODE_INSERT);
 
     let mut lnum = op.start.lnum + 1;
     while lnum <= op.end.lnum {
@@ -173,7 +173,7 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
         lnum += 1;
     }
 
-    State.set(old_state);
+    STATE.set(old_state);
 
     // Only if lines past the first were actually modified, which is the
     // loop's own bound.
@@ -493,7 +493,7 @@ pub(crate) fn get_op_vcol(op: &mut OpArg, redo_visual_vcol: ColNr, initial: bool
 
     let (start, _, end) = getvvcol(Win::current(), &mut op.start);
     (op.start_vcol, op.end_vcol) = (start, end);
-    if !redo_VIsual_busy.get() {
+    if !REDO_V_ISUAL_BUSY.get() {
         let (start, _, end) = getvvcol(Win::current(), &mut op.end);
         op.start_vcol = op.start_vcol.min(start);
         if end > op.end_vcol {
@@ -515,7 +515,7 @@ pub(crate) fn get_op_vcol(op: &mut OpArg, redo_visual_vcol: ColNr, initial: bool
             op.end_vcol = op.end_vcol.max(end);
             Win::current().w_cursor.lnum += 1;
         }
-    } else if redo_VIsual_busy.get() {
+    } else if REDO_V_ISUAL_BUSY.get() {
         op.end_vcol = op.start_vcol + redo_visual_vcol.get() - 1;
     }
 

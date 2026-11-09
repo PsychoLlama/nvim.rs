@@ -28,10 +28,10 @@
 //! colours, which is not what the unblended cell would have looked like.
 
 use super::cache::AttrCache;
-use super::{get_attr_entry, kHlBlend, kHlBlendThrough, syn_attr2entry, update_window_hl};
+use super::{HL_BLEND, HL_BLEND_THROUGH, get_attr_entry, syn_attr2entry, update_window_hl};
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
-use crate::highlight::state::{normal_bg, normal_fg, normal_sp};
+use crate::highlight::state::{NORMAL_BG, NORMAL_FG, NORMAL_SP};
 use crate::highlight::{HlAttrs, HlEntry, RgbValue};
 use crate::highlight_group::highlight_changed;
 use crate::option::vars::P_BG;
@@ -104,7 +104,7 @@ pub fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: &mut bool) -
     // The blend property was consumed producing this set.
     blended.hl_blend = -1;
 
-    let kind = if *through { kHlBlendThrough } else { kHlBlend };
+    let kind = if *through { HL_BLEND_THROUGH } else { HL_BLEND };
     let entry = HlEntry {
         attr: blended,
         kind,
@@ -165,13 +165,13 @@ fn blend_over(ratio: c_int, back: &HlAttrs, front: &HlAttrs) -> HlAttrs {
 fn get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
     let dark = P_BG.first_byte() == b'd';
     if attrs.rgb_bg_color == -1 {
-        attrs.rgb_bg_color = normal_bg.get();
+        attrs.rgb_bg_color = NORMAL_BG.get();
     }
     if attrs.rgb_fg_color == -1 {
-        attrs.rgb_fg_color = normal_fg.get();
+        attrs.rgb_fg_color = NORMAL_FG.get();
     }
     if attrs.rgb_sp_color == -1 {
-        attrs.rgb_sp_color = normal_sp.get();
+        attrs.rgb_sp_color = NORMAL_SP.get();
     }
     if attrs.rgb_fg_color == -1 {
         attrs.rgb_fg_color = if dark { 0xffffff } else { 0x000000 };

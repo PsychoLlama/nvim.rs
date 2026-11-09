@@ -20,7 +20,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::option::defs::{OptError, OptionSetFlags};
 use crate::optionstr::OptString;
 use crate::types::TypVal;
-use crate::types::{VAR_DICT, VAR_LIST, VarLock, kSpecialVarNull};
+use crate::types::{SPECIAL_VAR_NULL, VAR_DICT, VAR_LIST, VarLock};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
@@ -168,7 +168,7 @@ pub(crate) fn find_tagfunc_tags(
     if !called {
         return TagfuncAnswer::Unusable;
     }
-    if rettv.as_special() == Some(kSpecialVarNull) {
+    if rettv.as_special() == Some(SPECIAL_VAR_NULL) {
         // "Read the tags files after all."
         tv_clear(&mut rettv);
         return TagfuncAnswer::Declined;

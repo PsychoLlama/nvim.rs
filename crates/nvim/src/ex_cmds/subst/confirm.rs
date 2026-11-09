@@ -32,7 +32,7 @@ use crate::ex_getln::{getcmdline_prompt_text, gotocmdline};
 use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_R;
 use crate::input::prompt_for_input;
-use crate::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
+use crate::keycodes::{CTRL_C, CTRL_E, CTRL_Y};
 use crate::memline::{Lines, ml_replace_buf_text};
 use crate::memory::XString;
 use crate::message::IOSIZE;
@@ -48,9 +48,9 @@ use crate::option::vars::{P_LZ, p_lz};
 use crate::os::cshim::gettext;
 use crate::plines::getvcol;
 use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
-use crate::state::mode::{State, exmode_active};
+use crate::state::mode::{EXMODE_ACTIVE, STATE};
 use crate::types::{Callback, ColNr};
-use crate::ui::state::kUIMessages;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::ui_has;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -120,7 +120,7 @@ fn prompt_exmode(st: &Sub) -> c_int {
         no_callback(),
         false,
     );
-    if !ui_has(kUIMessages) {
+    if !ui_has(UI_MESSAGES) {
         say::putchar('\n' as c_int);
     }
     // getcmdline_prompt() answers NULL when there is no command line to
@@ -206,7 +206,7 @@ fn prompt_visual(st: &Sub) -> c_int {
 /// Ask about this match, looping over the answers that only scroll.
 pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
     let mut typed = 0 as c_int;
-    let save_state = State.get();
+    let save_state = STATE.get();
     Win::current().w_cursor.col = st.regmatch.startpos[0].col;
     if Win::current().w_onebuf_opt.wo_crb != 0 {
         do_check_cursorbind();
@@ -218,14 +218,14 @@ pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
 
     // Loop until 'y', 'n', 'q', CTRL-E or CTRL-Y is typed.
     while SUB_FLAGS.with(|flags| flags.do_ask) {
-        typed = if exmode_active.get() {
+        typed = if EXMODE_ACTIVE.get() {
             prompt_exmode(st)
         } else {
             prompt_visual(st)
         };
 
         NEED_WAIT_RETURN.set(false); // no hit-return prompt
-        if typed == 'q' as c_int || typed == ESC || typed == Ctrl_C {
+        if typed == 'q' as c_int || typed == ESC || typed == CTRL_C {
             st.got_quit = true;
             break;
         }
@@ -242,13 +242,13 @@ pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
             SUB_FLAGS.with_mut(|flags| flags.do_ask = false);
             break;
         }
-        if typed == Ctrl_E {
+        if typed == CTRL_E {
             scrollup_clamp();
-        } else if typed == Ctrl_Y {
+        } else if typed == CTRL_Y {
             scrolldown_clamp();
         }
     }
-    State.set(save_state);
+    STATE.set(save_state);
     setmouse();
     drop(no_sync);
 

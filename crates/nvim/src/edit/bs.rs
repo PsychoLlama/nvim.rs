@@ -69,9 +69,9 @@ pub(crate) enum Backspace {
 /// started drags that mark along with it.
 fn pull_insstart_orig_to_cursor() {
     let cursor = Win::current().w_cursor;
-    let orig = Insstart_orig.get();
+    let orig = INSSTART_ORIG.get();
     if cursor.lnum == orig.lnum && cursor.col < orig.col {
-        Insstart_orig.set(orig.with_col(cursor.col));
+        INSSTART_ORIG.set(orig.with_col(cursor.col));
     }
 }
 
@@ -92,20 +92,20 @@ pub(crate) fn ins_del() {
             Win::current().w_cursor.col = temp;
             // Adjust `orig_line_count` when more lines were deleted than
             // added, so a later `open_line` can still reach every line.
-            if State.get() & VREPLACE_FLAG != 0
-                && orig_line_count.get() > Buf::current().b_ml.ml_line_count
+            if STATE.get() & VREPLACE_FLAG != 0
+                && ORIG_LINE_COUNT.get() > Buf::current().b_ml.ml_line_count
             {
-                orig_line_count.set(Buf::current().b_ml.ml_line_count);
+                ORIG_LINE_COUNT.set(Buf::current().b_ml.ml_line_count);
             }
         }
     } else if delete_one_char().is_err() {
         // Delete the character under the cursor.
         beep_backspace();
     }
-    did_ai.set(false);
-    did_si.set(false);
-    can_si.set(false);
-    can_si_back.set(false);
+    DID_AI.set(false);
+    DID_SI.set(false);
+    CAN_SI.set(false);
+    CAN_SI_BACK.set(false);
     append_to_redobuff_char(Key::from(SpecialKey::Del));
 }
 
@@ -124,15 +124,15 @@ fn bs_blocked() -> bool {
         return false;
     }
     let cursor = Win::current().w_cursor;
-    let start = Insstart_orig.get();
+    let start = INSSTART_ORIG.get();
     (cursor.lnum == LineNr::ONE && cursor.col == ColNr::ZERO)
         || (!can_bs(BsFlag::START)
-            && ((arrow_used.get() && !buf_is_prompt(current_buf()))
+            && ((ARROW_USED.get() && !buf_is_prompt(current_buf()))
                 || (cursor.lnum == start.lnum && cursor.col <= start.col)))
         || (!can_bs(BsFlag::INDENT)
-            && !arrow_used.get()
-            && ai_col.get() > ColNr::ZERO
-            && cursor.col <= ai_col.get())
+            && !ARROW_USED.get()
+            && AI_COL.get() > ColNr::ZERO
+            && cursor.col <= AI_COL.get())
         || (!can_bs(BsFlag::EOL) && cursor.col == ColNr::ZERO)
 }
 
@@ -157,7 +157,7 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
     if in_indent {
         can_cindent.set(false);
     }
-    end_comment_pending.set(None); // after BS, don't auto-end a comment
+    END_COMMENT_PENDING.set(None); // after BS, don't auto-end a comment
     if revins_on.get() {
         cursor_forward(); // put the cursor after the last inserted character
     }
@@ -184,7 +184,7 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
         if !bs_join_line() {
             return false;
         }
-        did_ai.set(false);
+        DID_AI.set(false);
     } else {
         if revins_on.get() {
             cursor_back(); // put the cursor on the last inserted character
@@ -220,7 +220,7 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
                     // The cursor is past column 0, so the byte before it is
                     // a byte of the cursor's own line.
                     let before = with_cursor_line(|line, col| byte_at(line, col - 1));
-                    before == b'\t' || (before == b' ' && (!*inserted_space || arrow_used.get()))
+                    before == b'\t' || (before == b' ' && (!*inserted_space || ARROW_USED.get()))
                 }
         };
         let one_step = mode == Backspace::Char && ((p_sta() && in_indent) || soft_tab());
@@ -233,11 +233,11 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
         did_backspace = true;
     }
 
-    did_si.set(false);
-    can_si.set(false);
-    can_si_back.set(false);
+    DID_SI.set(false);
+    CAN_SI.set(false);
+    CAN_SI_BACK.set(false);
     if Win::current().w_cursor.col <= ColNr::new(1) {
-        did_ai.set(false);
+        DID_AI.set(false);
     }
     if call_fix_indent {
         fix_indent();
@@ -254,8 +254,8 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
     // Vim erases it.  The vi behaviour is emulated by pretending a
     // dollar is displayed even when there is not one.
     //  --pkv Sun Jan 19 01:56:40 EST 2003
-    if cpo_has(CpoFlag::BACKSPACE) && dollar_vcol.get() == ColNr::NONE {
-        dollar_vcol.set(Win::current().w_virtcol);
+    if cpo_has(CpoFlag::BACKSPACE) && DOLLAR_VCOL.get() == ColNr::NONE {
+        DOLLAR_VCOL.set(Win::current().w_virtcol);
     }
 
     // After deleting a character the cursor line must never be in a
@@ -276,7 +276,7 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
 /// on the replace stack: first a NUL-terminated run that was deleted after
 /// the cursor, then the characters the NL itself replaced.
 fn bs_join_line() -> bool {
-    let lnum = Insstart.get().lnum;
+    let lnum = INSSTART.get().lnum;
     if Win::current().w_cursor.lnum == lnum || revins_on.get() {
         if u_save(
             Win::current().w_cursor.lnum - 2,
@@ -286,27 +286,27 @@ fn bs_join_line() -> bool {
         {
             return false;
         }
-        let lnum = Insstart.get().lnum - 1;
+        let lnum = INSSTART.get().lnum - 1;
         let len = ml_get_len(lnum);
-        Insstart.set(Insstart.get().with_lnum(lnum).with_col(len));
+        INSSTART.set(INSSTART.get().with_lnum(lnum).with_col(len));
     }
 
     // In Replace mode: below zero the NL was inserted, so delete it; at
     // or above zero it replaced characters, which go back.
     let mut open = false;
-    if State.get() & REPLACE_FLAG != 0 {
+    if STATE.get() & REPLACE_FLAG != 0 {
         // Nothing open if the NL was inserted.
         open = is_open(replace_pop_if_nul());
     }
 
     // In Replace mode, on the line the replacing started on, only the
     // cursor moves.
-    if State.get() & REPLACE_FLAG != 0 && Win::current().w_cursor.lnum <= lnum {
+    if STATE.get() & REPLACE_FLAG != 0 && Win::current().w_cursor.lnum <= lnum {
         cursor_back();
         return true;
     }
 
-    if State.get() & VREPLACE_FLAG == 0 || Win::current().w_cursor.lnum > orig_line_count.get() {
+    if STATE.get() & VREPLACE_FLAG == 0 || Win::current().w_cursor.lnum > ORIG_LINE_COUNT.get() {
         let temp = char_at_cursor(); // remember the current character
         Win::current().w_cursor.lnum -= 1;
 
@@ -334,11 +334,11 @@ fn bs_join_line() -> bool {
         cursor_back();
     }
 
-    if State.get() & REPLACE_FLAG != 0 {
+    if STATE.get() & REPLACE_FLAG != 0 {
         // Do the insertions in MODE_NORMAL state, so `ins_char` does not
         // replace characters and does not call `showmatch`.
-        let old_state = State.get();
-        State.set(MODE_NORMAL);
+        let old_state = STATE.get();
+        STATE.set(MODE_NORMAL);
         // Restore the characters (blanks) that were deleted after the
         // cursor...
         while open {
@@ -349,7 +349,7 @@ fn bs_join_line() -> bool {
         }
         // ... and then the ones the NL replaced.
         replace_pop_ins();
-        State.set(old_state);
+        STATE.set(old_state);
     }
     true
 }
@@ -414,10 +414,10 @@ fn bs_one_shiftwidth(in_indent: bool) {
     // Delete until at or before `want_col`.
     while Win::current().w_cursor.col > want_col {
         cursor_back();
-        if State.get() & REPLACE_FLAG != 0 {
+        if STATE.get() & REPLACE_FLAG != 0 {
             // Don't delete before the insert point in Replace mode.
-            if Win::current().w_cursor.lnum != Insstart.get().lnum
-                || Win::current().w_cursor.col >= Insstart.get().col
+            if Win::current().w_cursor.lnum != INSSTART.get().lnum
+                || Win::current().w_cursor.col >= INSSTART.get().col
             {
                 replace_do_bs(-1);
             }
@@ -431,11 +431,11 @@ fn bs_one_shiftwidth(in_indent: bool) {
         // Remember the first character inserted.
         pull_insstart_orig_to_cursor();
 
-        if State.get() & VREPLACE_FLAG != 0 {
+        if STATE.get() & VREPLACE_FLAG != 0 {
             ins_char(Key::SPACE);
         } else {
             ins_str(b" ");
-            if State.get() & REPLACE_FLAG != 0 {
+            if STATE.get() & REPLACE_FLAG != 0 {
                 replace_push_nul();
             }
         }
@@ -478,13 +478,13 @@ fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
             // The end of the word.
             if !revins_on.get() {
                 cursor_forward();
-            } else if State.get() & REPLACE_FLAG != 0 {
+            } else if STATE.get() & REPLACE_FLAG != 0 {
                 cursor_back();
             }
             break;
         }
 
-        if State.get() & REPLACE_FLAG != 0 {
+        if STATE.get() & REPLACE_FLAG != 0 {
             replace_do_bs(-1);
         } else {
             let mut has_composing = false;
@@ -520,8 +520,8 @@ fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
         let more = revins_on.get()
             || (Win::current().w_cursor.col > mincol
                 && (can_bs(BsFlag::NOSTOP)
-                    || (Win::current().w_cursor.lnum != Insstart_orig.get().lnum
-                        || Win::current().w_cursor.col != Insstart_orig.get().col)));
+                    || (Win::current().w_cursor.lnum != INSSTART_ORIG.get().lnum
+                        || Win::current().w_cursor.col != INSSTART_ORIG.get().col)));
         if !more {
             break;
         }

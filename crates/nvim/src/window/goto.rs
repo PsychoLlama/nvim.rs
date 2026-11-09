@@ -32,7 +32,7 @@ use std::ffi::CStr;
 
 use super::*;
 use crate::buffer::{do_autochdir, maketitle};
-use crate::drawscreen::state::redraw_tabline;
+use crate::drawscreen::state::REDRAW_TABLINE;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_win_line};
 use crate::ex_eval::aborting;
 use crate::ex_getln::text_or_buf_locked;
@@ -47,9 +47,9 @@ use crate::option::vars::{P_SPK, p_acd, p_wh, p_wiw};
 use crate::os::fs::{current_dir, os_chdir};
 use crate::os::state::{globaldir, last_chdir_reason};
 use crate::path::pathcmp;
-use crate::state::mode::restart_edit;
+use crate::state::mode::RESTART_EDIT;
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state, virtual_active};
-use crate::types::{CdScope, OptInt, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow};
+use crate::types::{CD_SCOPE_GLOBAL, CD_SCOPE_TABPAGE, CD_SCOPE_WINDOW, CdScope, OptInt};
 use crate::undo::u_sync;
 use crate::winlayer::graph::prevwin;
 use crate::winlayer::{first_window, frames, tabs, windows_in_tab};
@@ -348,8 +348,8 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
 
     maketitle();
     Win::current().w_redr_status = true;
-    redraw_tabline.set(true);
-    if !restart_edit.get().is_nul() {
+    REDRAW_TABLINE.set(true);
+    if !RESTART_EDIT.get().is_nul() {
         Win::current().redraw_later(UPD_VALID); // causes status line redraw
     }
     // Change background colour according to NormalNC, but only if actually
@@ -472,16 +472,16 @@ fn fix_current_dir() {
             globaldir.set(Some(cwd.clone()));
         }
         let scope = if has_window_dir {
-            kCdScopeWindow
+            CD_SCOPE_WINDOW
         } else {
-            kCdScopeTabpage
+            CD_SCOPE_TABPAGE
         };
         chdir_to(new_dir.as_cstr(), scope as CdScope, cwd.as_cstr());
     } else if let Some(global) = globaldir.with(Clone::clone) {
         // The window has no local directory and we are not in the global one:
         // change back to it. The global one is only forgotten afterwards, as
         // upstream frees it after the directory-change autocommands.
-        chdir_to(global.as_cstr(), kCdScopeGlobal, cwd.as_cstr());
+        chdir_to(global.as_cstr(), CD_SCOPE_GLOBAL, cwd.as_cstr());
         globaldir.set(None);
     } else {
         return;

@@ -24,7 +24,7 @@ use crate::msgpack_rpc::packer::{
     Addressees, mpack_array, mpack_integer, mpack_object, mpack_object_array, mpack_str, mpack_uint,
 };
 use crate::os::libc::{uint32_t, uint64_t};
-use crate::types::{ApiString, Array, Error, Integer, MessageType, Object, kErrorTypeNone};
+use crate::types::{ApiString, Array, ERROR_TYPE_NONE, Error, Integer, MessageType, Object};
 
 use super::known::*;
 use super::{channel_write, trace};
@@ -72,7 +72,7 @@ pub fn serialize_response(
     arg: &mut Object,
 ) {
     let err_type = err.kind();
-    let errored = err_type != kErrorTypeNone;
+    let errored = err_type != ERROR_TYPE_NONE;
 
     if errored && type_0 == MESSAGE_TYPE_NOTIFICATION {
         report_failed_notification(channel_id, handler, err);

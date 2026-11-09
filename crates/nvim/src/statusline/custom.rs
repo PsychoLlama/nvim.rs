@@ -39,11 +39,11 @@ use crate::ascii::ascii_isdigit;
 use crate::autocmd::is_aucmd_win;
 use crate::buffer::{col_text, get_rel_pos};
 use crate::charset::{strsize, transstr_into};
-use crate::drawscreen::state::ru_col;
+use crate::drawscreen::state::RU_COL;
 use crate::global_cell::GlobalCell;
 use crate::grid::{SCHAR_BUF_SIZE, default_grid_ref, schar_copy, schar_from_ascii};
 use crate::highlight::Hlf;
-use crate::highlight::state::{highlight_stlnc, highlight_user};
+use crate::highlight::state::{HIGHLIGHT_STLNC, HIGHLIGHT_USER};
 use crate::highlight_group::{
     HLF_MSG, HLF_TPF, HLF_WBR, HLF_WBRNC, syn_id2attr, syn_name2id_bytes,
 };
@@ -58,12 +58,12 @@ use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
 use crate::path::MAXPATHL;
 use crate::state::MODE_INSERT;
-use crate::state::mode::{State, edit_submode};
+use crate::state::mode::{EDIT_SUBMODE, STATE};
 use crate::statusline::defs::{StlHlRun, StlOpt};
 use crate::strings::{FmtArg, formatted};
 use crate::types::{ApiString, Array, ColNr, Integer, Object, OptInt, ScreenChar};
-use crate::ui::state::kUIMessages;
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::UI_MESSAGES;
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::{ui_call_msg_ruler, ui_has};
 use crate::window::lastwin_nofloating;
 
@@ -119,7 +119,7 @@ impl Target {
                 canvas,
                 row: 0,
                 col,
-                maxwidth: Columns.get(),
+                maxwidth: COLUMNS.get(),
                 fillchar: schar_from_ascii(b' '),
                 group: HLF_TPF,
                 attr: hl_attr(HLF_TPF),
@@ -175,14 +175,14 @@ impl Target {
             maxwidth = win.w_view_width;
         } else {
             row = if is_stl_global {
-                Rows.get() - number_as_int(p_ch()) - 1
+                ROWS.get() - number_as_int(p_ch()) - 1
             } else {
                 win.w_winrow + win.w_height
             };
             maxwidth = if in_status_line && !is_stl_global {
                 win.w_width
             } else {
-                Columns.get()
+                COLUMNS.get()
             };
         }
         let (mut group, mut fillchar) = fillchar_status_of(win);
@@ -190,10 +190,10 @@ impl Target {
 
         let source = if draw_ruler {
             let fmt = p_ruf(|value| ruler_body(value.to_bytes()).to_vec());
-            col = (ru_col.get() - (Columns.get() - maxwidth)).max((maxwidth + 1) / 2);
+            col = (RU_COL.get() - (COLUMNS.get() - maxwidth)).max((maxwidth + 1) / 2);
             maxwidth -= col;
             if !in_status_line {
-                row = Rows.get() - 1;
+                row = ROWS.get() - 1;
                 canvas = grid_adjust(msg_grid_view(), &mut row, &mut col);
                 maxwidth -= 1; // Writing in the last column may scroll.
                 fillchar = schar_from_ascii(b' ');
@@ -237,7 +237,7 @@ impl Target {
 }
 
 /// `'rulerformat'` may open with `%-<width>(`, which reserves that many
-/// columns; `ru_col` already accounts for it, so the group spec is stepped
+/// columns; `RU_COL` already accounts for it, so the group spec is stepped
 /// over here rather than expanded. Anything else after the `%` is a plain
 /// item and the whole format is used.
 fn ruler_body(ruf: &[u8]) -> &[u8] {
@@ -384,9 +384,9 @@ fn run_highlight(
     let stlnc = win.is_some_and(|w| !w.is_current() && w.w_status_height != 0);
     let idx = as_index(run.userhl - 1);
     let attr = if stlnc {
-        highlight_stlnc.with(|hl| hl[idx])
+        HIGHLIGHT_STLNC.with(|hl| hl[idx])
     } else {
-        highlight_user.with(|hl| hl[idx])
+        HIGHLIGHT_USER.with(|hl| hl[idx])
     };
     let name = [b'U', b's', b'e', b'r', b"0123456789"[as_index(run.userhl)]];
     let group = syn_name2id_bytes(&name);
@@ -496,7 +496,7 @@ pub fn win_redr_winbar(window: Win) {
 static DID_RULER_COL: GlobalCell<c_int> = GlobalCell::new(-1);
 
 /// Redraw the ruler: `'rulerformat'` if it is set, else `line,col` and the
-/// relative position, right-aligned at `ru_col`.
+/// relative position, right-aligned at `RU_COL`.
 pub fn redraw_ruler() {
     // The ruler belongs to the window it describes, unless that window has a
     // status line of its own to put it on -- then it is the last window's.
@@ -513,14 +513,14 @@ pub fn redraw_ruler() {
     if !p_ru()
         || win.w_status_height > 0
         || is_stl_global
-        || (p_ch() == 0 as OptInt && !ui_has(kUIMessages))
+        || (p_ch() == 0 as OptInt && !ui_has(UI_MESSAGES))
     {
-        if DID_SHOW_EXT_RULER.get() && ui_has(kUIMessages) {
+        if DID_SHOW_EXT_RULER.get() && ui_has(UI_MESSAGES) {
             ui_call_msg_ruler(Array::new());
             DID_SHOW_EXT_RULER.set(false);
         } else if DID_RULER_COL.get() > 0 {
             MSG_COL.set(DID_RULER_COL.get());
-            MSG_ROW.set(Rows.get() - 1);
+            MSG_ROW.set(ROWS.get() - 1);
             msg_clr_eos();
         }
         DID_RULER_COL.set(-1);
@@ -534,14 +534,14 @@ pub fn redraw_ruler() {
     }
     // Not while insert-completion is running: it might overwrite the (long)
     // mode message.
-    if win.w_status_height == 0 && !is_stl_global && edit_submode.get().is_some() {
+    if win.w_status_height == 0 && !is_stl_global && EDIT_SUBMODE.get().is_some() {
         return;
     }
 
     let part_of_status = win.w_status_height != 0 || is_stl_global;
-    if P_RUF.first_byte() != 0 && (p_ch() > 0 as OptInt || (ui_has(kUIMessages) && !part_of_status))
+    if P_RUF.first_byte() != 0 && (p_ch() > 0 as OptInt || (ui_has(UI_MESSAGES) && !part_of_status))
     {
-        win_redr_custom(Some(win), false, true, ui_has(kUIMessages));
+        win_redr_custom(Some(win), false, true, ui_has(UI_MESSAGES));
         return;
     }
 
@@ -554,7 +554,7 @@ pub fn redraw_ruler() {
     let width = if win.w_status_height != 0 {
         win.w_width
     } else {
-        Columns.get()
+        COLUMNS.get()
     };
     let fillchar = if part_of_status {
         let (g, fillchar) = fillchar_status_of(win);
@@ -592,7 +592,7 @@ pub fn redraw_ruler() {
 
     // Never use more than half the window/screen width, so that there is a
     // half left for the file name.
-    let this_ru_col = (ru_col.get() - (Columns.get() - width)).max((width + 1) / 2);
+    let this_ru_col = (RU_COL.get() - (COLUMNS.get() - width)).max((width + 1) / 2);
     if this_ru_col + n1 < width {
         // Pad up to `this_ru_col`, but leave room for rel_pos and its NUL.
         let mut glyph = [0u8; SCHAR_BUF_SIZE];
@@ -605,7 +605,7 @@ pub fn redraw_ruler() {
         buffer.extend_from_slice(&rel_pos[..keep]);
     }
 
-    if ui_has(kUIMessages) && !part_of_status {
+    if ui_has(UI_MESSAGES) && !part_of_status {
         show_ext_ruler(&buffer, attr);
         return;
     }
@@ -615,7 +615,7 @@ pub fn redraw_ruler() {
     }
     truncate_at_width(&mut buffer, this_ru_col, width);
 
-    view_line_start(msg_grid_view(), Rows.get() - 1);
+    view_line_start(msg_grid_view(), ROWS.get() - 1);
     DID_RULER_COL.set(off + this_ru_col);
     let w = paint_text(DID_RULER_COL.get(), &buffer, attr);
     paint_fill(DID_RULER_COL.get() + w, off + width, fillchar, attr);
@@ -629,7 +629,7 @@ pub fn redraw_ruler() {
 fn ruler_position(win: Win, virtcol: ColNr) -> Vec<u8> {
     let empty_buffer = win.buffer().b_ml.ml_flags.has(MlFlags::EMPTY);
     let cursor_line_empty = win.buffer().lines().line(win.w_cursor.lnum).is_empty();
-    let empty_line = State.get() & MODE_INSERT == 0 && cursor_line_empty;
+    let empty_line = STATE.get() & MODE_INSERT == 0 && cursor_line_empty;
     let lnum = if empty_buffer {
         0 as int64_t
     } else {

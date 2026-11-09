@@ -30,7 +30,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::api::keysets::KeyDict_highlight;
 use crate::api::private::helpers::{api_dict_to_keydict, api_metadata};
@@ -73,12 +72,12 @@ use crate::tui::tui::Tui;
 use crate::tui::tui::tui_suspend;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    ApiDict, ApiString, Array, Error, Integer, Object, ObjectType, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
+    ApiDict, ApiString, Array, Error, Integer, OBJECT_TYPE_ARRAY, OBJECT_TYPE_BOOLEAN,
+    OBJECT_TYPE_DICT, OBJECT_TYPE_INTEGER, OBJECT_TYPE_STRING, Object, ObjectType,
 };
+use crate::ui::state::LINE_FLAG_WRAP;
+use crate::ui::state::T_COLORS;
 use crate::ui::state::UIClientHandler;
-use crate::ui::state::kLineFlagWrap;
-use crate::ui::state::t_colors;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
@@ -95,25 +94,25 @@ const UI_CONNECT_TIMEOUT_MS: c_int = 50;
 /// The TUI this client draws through, and the size and terminal it was
 /// started with. Attaching needs all four, and so does re-attaching after
 /// `:restart`, which is why they outlive `ui_client_run`.
-static tui: GlobalCell<Option<Tui>> = GlobalCell::new(None);
+static TUI: GlobalCell<Option<Tui>> = GlobalCell::new(None);
 
 /// Run `sink` on the started TUI's state.
 fn tui_state<R>(sink: impl FnOnce(&mut TUIData) -> R) -> R {
-    tui.with(|started| {
+    TUI.with(|started| {
         started
             .as_ref()
             .expect("the TUI is started")
             .with_state(sink)
     })
 }
-static tui_width: GlobalCell<c_int> = GlobalCell::new(0);
-static tui_height: GlobalCell<c_int> = GlobalCell::new(0);
+static TUI_WIDTH: GlobalCell<c_int> = GlobalCell::new(0);
+static TUI_HEIGHT: GlobalCell<c_int> = GlobalCell::new(0);
 /// The terminal name, **owned**. `tui_wait_ready` answers a pointer into
 /// the TUI's own arena, which `tui_terminal_stop` frees; a re-attach can
 /// run after that (a `:restart` that fails, or a close event during
 /// shutdown), so this keeps a copy rather than the TUI's pointer.
-static tui_term: GlobalCell<ApiString> = GlobalCell::new(ApiString::NULL);
-static tui_rgb: GlobalCell<bool> = GlobalCell::new(false);
+static TUI_TERM: GlobalCell<ApiString> = GlobalCell::new(ApiString::NULL);
+static TUI_RGB: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Spawns the server this client will talk to, returning its channel.
 ///
@@ -163,22 +162,22 @@ pub(crate) fn ui_client_start_server(exepath: &CStr, argv: &[CString]) -> u64 {
 /// Attaches this client to the server as a UI, remembering the terminal
 /// description for a later [`ui_client_reattach`]. A channel must be set.
 pub(crate) fn ui_client_attach(width: c_int, height: c_int, term: Option<&CStr>, rgb: bool) {
-    tui_width.set(width);
-    tui_height.set(height);
-    tui_rgb.set(rgb);
+    TUI_WIDTH.set(width);
+    TUI_HEIGHT.set(height);
+    TUI_RGB.set(rgb);
     // A copy, not a borrow: `term` names the TUI's own arena, which
     // stopping the terminal frees, and a re-attach can run after that.
-    tui_term.set(term.map_or(ApiString::NULL, ApiString::from_cstr));
+    TUI_TERM.set(term.map_or(ApiString::NULL, ApiString::from_cstr));
     ui_client_reattach();
 }
 
 /// Attaches with the terminal description the last attach remembered.
 pub(crate) fn ui_client_reattach() {
     let (width, height, term, rgb) = (
-        tui_width.get(),
-        tui_height.get(),
-        tui_term.with(ApiString::clone),
-        tui_rgb.get(),
+        TUI_WIDTH.get(),
+        TUI_HEIGHT.get(),
+        TUI_TERM.with(ApiString::clone),
+        TUI_RGB.get(),
     );
     let mut opts = DictBuf::<8>::new();
     opts.insert(c"rgb", Object::boolean(rgb));
@@ -191,7 +190,7 @@ pub(crate) fn ui_client_reattach() {
     }
     opts.insert(
         c"term_colors",
-        Object::integer(Integer::from(t_colors.get())),
+        Object::integer(Integer::from(T_COLORS.get())),
     );
     opts.insert(c"stdin_tty", Object::boolean(stdin_isatty.get()));
     opts.insert(c"stdout_tty", Object::boolean(stdout_isatty.get()));
@@ -271,8 +270,8 @@ pub(crate) fn ui_client_detach() {
 pub(crate) fn ui_client_run() -> ! {
     // Published before the loop turns: a callback that runs during
     // `tui_wait_ready` can reach `ui_client_stop`, which needs it.
-    tui.set(Some(Tui::start()));
-    let started = tui.with(|started| started.as_ref().expect("just set").wait_ready());
+    TUI.set(Some(Tui::start()));
+    let started = TUI.with(|started| started.as_ref().expect("just set").wait_ready());
     let term = started.term.as_deref();
     ui_client_attach(started.width, started.height, term, started.rgb);
 
@@ -293,7 +292,7 @@ pub(crate) fn ui_client_run() -> ! {
 /// Stops drawing, on the way out.
 pub(crate) fn ui_client_stop() {
     ui_client_attached.set(false);
-    tui.with(|started| {
+    TUI.with(|started| {
         if let Some(started) = started
             && !started.is_stopped()
         {
@@ -315,8 +314,8 @@ pub(crate) fn ui_client_set_size(width: c_int, height: c_int) {
             args.array(),
         );
     }
-    tui_width.set(width);
-    tui_height.set(height);
+    TUI_WIDTH.set(width);
+    TUI_HEIGHT.set(height);
 }
 
 /// The wrapper for the `redraw` event named by `name`, or an empty handler.
@@ -441,19 +440,19 @@ macro_rules! cstr {
 /// The [`ObjectType`] an argument declared as `$ty` must arrive as.
 macro_rules! tag {
     (Boolean) => {
-        Some(kObjectTypeBoolean)
+        Some(OBJECT_TYPE_BOOLEAN)
     };
     (Integer) => {
-        Some(kObjectTypeInteger)
+        Some(OBJECT_TYPE_INTEGER)
     };
     (ApiString) => {
-        Some(kObjectTypeString)
+        Some(OBJECT_TYPE_STRING)
     };
     (Array) => {
-        Some(kObjectTypeArray)
+        Some(OBJECT_TYPE_ARRAY)
     };
     (Dict) => {
-        Some(kObjectTypeDict)
+        Some(OBJECT_TYPE_DICT)
     };
     (Object) => {
         None
@@ -570,9 +569,9 @@ forward! {
 /// Resizes a grid, and the buffers a `grid_line` is decoded into.
 pub(crate) fn ui_client_event_grid_resize(mut args: Array) {
     let (Some(grid), Some(width), Some(height)) = (
-        take_arg(&mut args, 0, Some(kObjectTypeInteger)),
-        take_arg(&mut args, 1, Some(kObjectTypeInteger)),
-        take_arg(&mut args, 2, Some(kObjectTypeInteger)),
+        take_arg(&mut args, 0, Some(OBJECT_TYPE_INTEGER)),
+        take_arg(&mut args, 1, Some(OBJECT_TYPE_INTEGER)),
+        take_arg(&mut args, 2, Some(OBJECT_TYPE_INTEGER)),
     ) else {
         return bad_event(c"grid_resize", c"ui_client_event_grid_resize");
     };
@@ -601,7 +600,7 @@ pub(crate) fn ui_client_event_raw_line(g: &GridLineEvent) {
     let [grid, row, startcol] = g.args;
     let endcol = Integer::from(startcol + g.coloff);
     let clearcol = endcol + Integer::from(g.clear_width);
-    let flags = if g.wrap { kLineFlagWrap } else { 0 };
+    let flags = if g.wrap { LINE_FLAG_WRAP } else { 0 };
     let (grid, row, startcol) = (
         Integer::from(grid),
         Integer::from(row),
@@ -626,10 +625,10 @@ pub(crate) fn ui_client_event_raw_line(g: &GridLineEvent) {
 /// attribute entry the TUI keeps.
 pub(crate) fn ui_client_event_hl_attr_define(mut args: Array) {
     let (Some(id), Some(rgb), Some(cterm), Some(info)) = (
-        take_arg(&mut args, 0, Some(kObjectTypeInteger)),
-        take_arg(&mut args, 1, Some(kObjectTypeDict)),
-        take_arg(&mut args, 2, Some(kObjectTypeDict)),
-        take_arg(&mut args, 3, Some(kObjectTypeArray)),
+        take_arg(&mut args, 0, Some(OBJECT_TYPE_INTEGER)),
+        take_arg(&mut args, 1, Some(OBJECT_TYPE_DICT)),
+        take_arg(&mut args, 2, Some(OBJECT_TYPE_DICT)),
+        take_arg(&mut args, 3, Some(OBJECT_TYPE_ARRAY)),
     ) else {
         return bad_event(c"hl_attr_define", c"ui_client_event_hl_attr_define");
     };
@@ -671,7 +670,7 @@ fn dict_to_hlattrs(d: &ApiDict, rgb: bool) -> HlAttrs {
 /// Records the exit status the server asked for; the client exits when the
 /// channel closes.
 pub(crate) fn ui_client_event_error_exit(mut args: Array) {
-    let Some(status) = take_arg(&mut args, 0, Some(kObjectTypeInteger)) else {
+    let Some(status) = take_arg(&mut args, 0, Some(OBJECT_TYPE_INTEGER)) else {
         return bad_event(c"error_exit", c"ui_client_event_error_exit");
     };
     let status = status.as_integer().expect("`arg` checked the tag");
@@ -684,7 +683,7 @@ pub(crate) fn ui_client_event_error_exit(mut args: Array) {
 /// connect is queued rather than done here because this runs from inside
 /// the decode of the old server's stream.
 pub(crate) fn ui_client_event_connect(mut args: Array) {
-    let Some(address) = take_arg(&mut args, 0, Some(kObjectTypeString)) else {
+    let Some(address) = take_arg(&mut args, 0, Some(OBJECT_TYPE_STRING)) else {
         return bad_event(c"connect", c"ui_client_event_connect");
     };
     let address = address.as_string().expect("`arg` checked the tag");
@@ -736,7 +735,7 @@ fn connect_and_reattach(address: &CStr) {
 
 /// The copied `restart` event arguments, owned.
 ///
-/// Deliberately not `Copy`: `restart_args.get()` handed every caller a
+/// Deliberately not `Copy`: `RESTART_ARGS.get()` handed every caller a
 /// second owner of the same `items` pointer, so the cell and the caller both
 /// believed they had to free it. Owning them here makes the free this type's
 /// `Drop` and the one genuine move `GlobalCell::take`.
@@ -755,14 +754,14 @@ impl Default for RestartArgs {
 
 /// The address the restarted server will listen on, kept until the old
 /// server's channel has finished closing.
-static restart_args: GlobalCell<RestartArgs> = GlobalCell::new(RestartArgs::EMPTY);
-static restart_pending: GlobalCell<bool> = GlobalCell::new(false);
+static RESTART_ARGS: GlobalCell<RestartArgs> = GlobalCell::new(RestartArgs::EMPTY);
+static RESTART_PENDING: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Remembers where to reconnect after `:restart`.
 pub(crate) fn ui_client_event_restart(args: Array) {
     // `set` drops what the cell held, which frees the previous arguments.
-    restart_args.set(RestartArgs(args.into_vec()));
-    restart_pending.set(true);
+    RESTART_ARGS.set(RestartArgs(args.into_vec()));
+    RESTART_PENDING.set(true);
 }
 
 /// Connects to the restarted server, if one was announced.
@@ -770,14 +769,14 @@ pub(crate) fn ui_client_event_restart(args: Array) {
 /// Called once the old channel is gone, which is why this is separate from
 /// [`ui_client_event_restart`].
 pub(crate) fn ui_client_attach_to_restarted_server() {
-    if !restart_pending.get() {
+    if !RESTART_PENDING.get() {
         return;
     }
-    restart_pending.set(false);
+    RESTART_PENDING.set(false);
     // The arguments move out here, so the cell has nothing left to free and
     // dropping `args` at the end of the scope is the only free.
-    let mut args = restart_args.take();
-    let address = take_arg(&mut args.0, 0, Some(kObjectTypeString));
+    let mut args = RESTART_ARGS.take();
+    let address = take_arg(&mut args.0, 0, Some(OBJECT_TYPE_STRING));
     match address {
         None => bad_event(c"restart", c"ui_client_attach_to_restarted_server"),
         Some(address) => {

@@ -294,7 +294,7 @@ pub(crate) fn generate_api_error(window: Option<Win>, attribute: &CStr) -> Error
         Some(window) => {
             let handle = window.handle;
             api_error!(
-                kErrorTypeValidation,
+                ERROR_TYPE_VALIDATION,
                 "Required: 'relative' when reconfiguring floating window {handle}"
             )
         }

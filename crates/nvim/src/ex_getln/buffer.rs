@@ -23,7 +23,7 @@
 use super::*;
 use crate::cstr;
 use crate::guard::Lock;
-use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_L, Ctrl_V};
+use crate::keycodes::{CTRL_BSL, CTRL_C, CTRL_L, CTRL_V};
 use crate::memory::XString;
 use core::ffi::CStr;
 
@@ -389,19 +389,19 @@ pub fn cmdline_paste_str(s: &CStr, literally: bool) {
     let mut at = 0;
     while at < text.len() {
         let cv = ::core::ffi::c_int::from(text[at]);
-        if cv == Ctrl_V && at + 1 < text.len() {
+        if cv == CTRL_V && at + 1 < text.len() {
             at += 1;
         }
         let info = c_char_info(text, at);
         let c = info.value;
         at += usize::try_from(info.len).unwrap_or(1).max(1);
-        if cv == Ctrl_V
+        if cv == CTRL_V
             || c == ESC
-            || c == Ctrl_C
+            || c == CTRL_C
             || c == CAR
             || c == NL
-            || c == Ctrl_L
-            || (c == Ctrl_BSL && cstr::byte_at(text, at) == 0x0e)
+            || c == CTRL_L
+            || (c == CTRL_BSL && cstr::byte_at(text, at) == 0x0e)
         {
             stuff_readbuf_char(Key::CTRL_V);
         }
@@ -413,7 +413,7 @@ pub fn cmdline_paste_str(s: &CStr, literally: bool) {
 /// Check whether typing `c` completes an abbreviation on the command line.
 /// `literal` says `c` goes back after the expansion without a CTRL-V.
 pub(crate) fn ccheck_abbr(c: Key, literal: bool) -> bool {
-    if p_paste() || no_abbr.get() {
+    if p_paste() || NO_ABBR.get() {
         // no abbreviations, or in paste mode
         return false;
     }

@@ -30,10 +30,10 @@ use crate::option::vars::{p_fic, p_wic, p_wmnu};
 use crate::options::kOptBoFlagWildmode;
 use crate::os::cshim::gettext;
 use crate::path::match_suffix;
-use crate::popupmenu::state::pum_want;
+use crate::popupmenu::state::PUM_WANT;
 use crate::popupmenu::{pum_clear, pum_get_height};
 use crate::semsg;
-use crate::ui::state::{kUICmdline, kUIWildmenu};
+use crate::ui::state::{UI_CMDLINE, UI_WILDMENU};
 use crate::ui::{ui_flush, ui_has, vim_beep};
 use crate::winlayer::Cc;
 use core::ffi::{CStr, c_int};
@@ -126,7 +126,7 @@ pub(crate) fn nextwild(
     if !CMD_SILENT.get()
         && !from_wildtrigger_func
         && !wild_navigate
-        && !(ui_has(kUICmdline) || ui_has(kUIWildmenu))
+        && !(ui_has(UI_CMDLINE) || ui_has(UI_WILDMENU))
     {
         msg_str(c"..."); // show that we are busy
         ui_flush();
@@ -259,8 +259,8 @@ fn next_match(mode: WildMode, expand: &mut Expand) -> Option<XString> {
         }
         WildMode::PumWant => {
             // The UI named the item it wants.
-            debug_assert!(pum_want.get().active);
-            findex = pum_want.get().item;
+            debug_assert!(PUM_WANT.get().active);
+            findex = PUM_WANT.get().item;
         }
         // `WildMode::navigates` is the caller's guard, and it names
         // exactly the five arms above; anything else is a mis-dispatch,
@@ -439,7 +439,7 @@ fn longest_common_match(expand: &Expand, options: WildOpts) -> XString {
 /// | `WildMode::AllKeep` | get all matches, keep matches |
 /// | `WildMode::Apply` | apply the item selected in the completion popup menu |
 /// | `WildMode::Cancel` | close the popup menu and use the original text |
-/// | `WildMode::PumWant` | use the match at index `pum_want.item` |
+/// | `WildMode::PumWant` | use the match at index `PUM_WANT.item` |
 ///
 /// [`Expand::context`] and [`Expand::backslash`] must have been set.
 pub fn expand_one(

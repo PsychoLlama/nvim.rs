@@ -44,7 +44,7 @@ use crate::os::libc::int64_t;
 use crate::pos::{MAXCOL, MAXLNUM, lt};
 use crate::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::state::MODE_INSERT;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::types::{ColNr, LPos, LineNr, Pos, TypVal, VarNumber};
 
 // The carve of the transpiled module; see each child's docs.

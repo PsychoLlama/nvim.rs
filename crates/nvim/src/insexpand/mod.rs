@@ -27,7 +27,7 @@ use crate::charset::{
 use crate::cmdexpand::defs::Expand;
 use crate::cmdexpand::{addstar, expand_cmdline, set_cmd_context};
 use crate::cursor::{check_cursor, dec_cursor, get_cursor_line_len, inc_cursor};
-use crate::drawscreen::state::{dollar_vcol, redraw_cmdline, redraw_mode, sc_col};
+use crate::drawscreen::state::{DOLLAR_VCOL, REDRAW_CMDLINE, REDRAW_MODE, SC_COL};
 use crate::drawscreen::{
     UPD_VALID, redraw_later, redraw_win_line, setcursor, showmode, update_screen,
 };
@@ -84,8 +84,8 @@ use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::os::libc::{ptrdiff_t, size_t, uint64_t};
 use crate::os::time::{os_delay, os_hrtime};
 use crate::path::{expand_wildcards, path_tail, vim_ispathsep};
+use crate::popupmenu::state::PUM_WANT;
 use crate::popupmenu::state::PumItem;
-use crate::popupmenu::state::pum_want;
 use crate::popupmenu::{
     pum_clear, pum_display, pum_get_height, pum_set_event_info, pum_undisplay, pum_visible,
 };
@@ -101,8 +101,8 @@ use crate::spell::{
     SMT_ALL, expand_spelling, spell_dump_compl, spell_expand_check_cap, spell_word_start,
 };
 use crate::state::mode::{
-    State, arrow_used, can_si, can_si_back, did_ai, did_si, edit_submode, edit_submode_extra,
-    edit_submode_highl, edit_submode_pre,
+    ARROW_USED, CAN_SI, CAN_SI_BACK, DID_AI, DID_SI, EDIT_SUBMODE, EDIT_SUBMODE_EXTRA,
+    EDIT_SUBMODE_HIGHL, EDIT_SUBMODE_PRE, STATE,
 };
 use crate::state::{MODE_INSERT, REPLACE_FLAG, may_trigger_modechanged};
 use crate::tag::find_tag_names;

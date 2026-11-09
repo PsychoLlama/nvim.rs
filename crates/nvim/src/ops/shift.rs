@@ -270,7 +270,7 @@ pub fn shift_line(left: bool, round: bool, amount: c_int, call_changed_bytes: bo
     };
 
     let indent = crate::math::trim_to_int(count);
-    if State.get() & VREPLACE_FLAG != 0 {
+    if STATE.get() & VREPLACE_FLAG != 0 {
         change_indent(INDENT_SET, indent, 0, call_changed_bytes);
     } else {
         let flags = if call_changed_bytes { SIN_CHANGED } else { 0 };
@@ -302,14 +302,14 @@ struct ShiftedLine {
 /// `op` must be blockwise, and the cursor must name the line.
 fn shift_block(op: &OpArg, amount: c_int) {
     let left = op.op_type == OpType::Lshift;
-    let old_state = State.get();
+    let old_state = STATE.get();
     let old_col = Win::current().w_cursor.col;
     let sw_val = get_sw_value_indent(Buf::current(), left);
     let old_p_ri = p_ri();
 
     // No 'revins' and no MODE_REPLACE while we rebuild the indent.
     P_RI.set(false);
-    State.set(MODE_INSERT);
+    STATE.set(MODE_INSERT);
 
     let mut bd = BlockDef::ZERO;
     let lnum = Win::current().w_cursor.lnum;
@@ -348,7 +348,7 @@ fn shift_block(op: &OpArg, amount: c_int) {
         kExtmarkUndo,
     );
 
-    State.set(old_state);
+    STATE.set(old_state);
     Win::current().w_cursor.col = old_col;
     P_RI.set(old_p_ri);
 }

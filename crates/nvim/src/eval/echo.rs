@@ -41,7 +41,7 @@ use crate::types::{
     ExArg, LineNr, ScriptCtx, TypVal, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA,
     VAR_STRING, VarFlavour,
 };
-use crate::ui::state::kUIMessages;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::ui_has;
 
 /// A freshly declared typval.
@@ -112,7 +112,7 @@ pub fn ex_echo(excmd: &mut ExArg) {
     if excmd.skip {
         return;
     }
-    if ui_has(kUIMessages) && ends_args(excmd.line.byte_at(excmd.line.arg)) {
+    if ui_has(UI_MESSAGES) && ends_args(excmd.line.byte_at(excmd.line.arg)) {
         // A bare `:echo` still has to produce an (empty) message.
         msg_bytes_out(b"", 0, false);
     } else if need_clear {

@@ -25,7 +25,7 @@ use crate::eval::typval::{
 use crate::eval::vars::{VvarStore, before_set_vvar, vimvar_dict};
 use crate::os::libc::size_t;
 use crate::types::TypVal;
-use crate::types::{ApiString, Error, Object, kErrorTypeException, kErrorTypeValidation};
+use crate::types::{ApiString, ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, Error, Object};
 use core::ffi::c_int;
 
 // -- Vimscript dictionaries ------------------------------------------------
@@ -43,7 +43,7 @@ pub(crate) fn scope_vars(entry: &ScopeDictItem) -> DictRef {
 pub(crate) fn dict_get_value(dict: &DictRef, key: &ApiString) -> Result<Object, Error> {
     let Some(di) = dict_find(Some(dict), key.as_bytes()) else {
         let key = key.as_cstr().to_string_lossy();
-        return Err(api_error!(kErrorTypeValidation, "Key not found: {key}"));
+        return Err(api_error!(ERROR_TYPE_VALIDATION, "Key not found: {key}"));
     };
     Ok(Object::from(&di.di_tv))
 }
@@ -77,7 +77,7 @@ fn item_writable(item: &DictItem, key: &ApiString, del: bool) -> Result<(), Erro
     match refused {
         Some(why) => {
             let key = key.as_cstr().to_string_lossy();
-            Err(api_error!(kErrorTypeException, "Key is {why}: {key}"))
+            Err(api_error!(ERROR_TYPE_EXCEPTION, "Key is {why}: {key}"))
         }
         None => Ok(()),
     }
@@ -87,11 +87,11 @@ fn item_writable(item: &DictItem, key: &ApiString, del: bool) -> Result<(), Erro
 /// stops it.
 fn absent_writable(dict: &DictRef, key: &ApiString) -> Result<(), Error> {
     let refused = if dict.dv_lock.is_locked() {
-        Some((kErrorTypeException, c"Dict is locked"))
+        Some((ERROR_TYPE_EXCEPTION, c"Dict is locked"))
     } else if key.is_empty() {
-        Some((kErrorTypeValidation, c"Key name is empty"))
+        Some((ERROR_TYPE_VALIDATION, c"Key name is empty"))
     } else if key.len() > c_int::MAX as size_t {
-        Some((kErrorTypeValidation, c"Key name is too long"))
+        Some((ERROR_TYPE_VALIDATION, c"Key name is too long"))
     } else {
         None
     };
@@ -130,7 +130,7 @@ pub(crate) fn dict_set_var(
     if del {
         if !exists {
             let key = key.as_cstr().to_string_lossy();
-            return Err(api_error!(kErrorTypeValidation, "Key not found: {key}"));
+            return Err(api_error!(ERROR_TYPE_VALIDATION, "Key not found: {key}"));
         }
         if watched {
             // The watchers are shown a copy: they may do anything to the
@@ -167,7 +167,7 @@ pub(crate) fn dict_set_var(
             if verdict == VvarStore::TypeError {
                 let key = key.as_cstr().to_string_lossy();
                 return Err(api_error!(
-                    kErrorTypeValidation,
+                    ERROR_TYPE_VALIDATION,
                     "Setting v:{key} to value with wrong type"
                 ));
             }

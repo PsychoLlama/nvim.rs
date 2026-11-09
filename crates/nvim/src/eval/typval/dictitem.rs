@@ -158,7 +158,7 @@ pub(crate) fn tv_list2items(args: &[TypVal], result: &mut TypVal) {
 
 /// `items()` over a string: a list of `[index, character]` pairs.
 pub(crate) fn tv_string2items(args: &[TypVal], result: &mut TypVal) {
-    tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
+    tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
     let Some(list) = result.list_mut() else {
         return;
     };

@@ -131,7 +131,7 @@ pub fn do_record(c: Key) -> Result<(), Failed> {
     fire_recording_leave(REGNAME.get(), &p);
     REG_RECORDED.set(REG_RECORDING.get());
     REG_RECORDING.set(0);
-    if p_ch() == 0 || ui_has(kUIMessages) {
+    if p_ch() == 0 || ui_has(UI_MESSAGES) {
         showmode();
     } else {
         // Clear the "recording @a" message.
@@ -181,26 +181,26 @@ fn put_in_typebuf(s: &[u8], esc: bool, colon: bool, silent: bool) -> Result<(), 
 /// `restart_edit` holds the mode as a key: `i`/`a`/`R`, or `V` for Virtual
 /// Replace, which is two keys.
 fn put_reedit_in_typebuf(silent: bool) {
-    if restart_edit.get().is_nul() {
+    if RESTART_EDIT.get().is_nul() {
         return;
     }
     let mut buf: [u8; 3] = [0; 3];
-    if restart_edit.get().is('V') {
+    if RESTART_EDIT.get().is('V') {
         buf[0] = b'g';
         buf[1] = b'R';
     } else {
         // `I` means "insert at the first non-blank", which as a key is a
         // plain `i` -- the column has already been set.
-        buf[0] = if restart_edit.get().is('I') {
+        buf[0] = if RESTART_EDIT.get().is('I') {
             b'i'
         } else {
-            restart_edit.get().as_byte().unwrap_or(0)
+            RESTART_EDIT.get().as_byte().unwrap_or(0)
         };
     }
     // `ins_typebuf` reads `buf` up to the NUL the branches above left.
     let queued = ins_typebuf(&buf, Remap::No, 0, true, silent);
     if queued.is_ok() {
-        restart_edit.set(Key::NUL);
+        RESTART_EDIT.set(Key::NUL);
     }
 }
 
@@ -421,7 +421,7 @@ pub fn insert_reg(
             // The small-delete register goes in through `do_put`, so that
             // Replace mode's stack and the redo buffer stay right.
             let mut dir = BACKWARD;
-            if State.get() & REPLACE_FLAG != 0 {
+            if STATE.get() & REPLACE_FLAG != 0 {
                 // Saves the cursor line for undo.
                 u_save_cursor()?;
                 // As many characters as the register's first line holds, as

@@ -29,7 +29,7 @@ use super::*;
 use crate::ascii::NUL;
 use crate::buffer::{buf_is_help, current_buf};
 use crate::decoration::decor_conceal_line;
-use crate::drawscreen::state::{cmdline_row, redraw_cmdline};
+use crate::drawscreen::state::{CMDLINE_ROW, REDRAW_CMDLINE};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, comp_col};
 use crate::edit::{cursor_down_inner, cursor_up_inner};
 use crate::grid::{default_gridview, grid_clear};
@@ -50,8 +50,8 @@ use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state};
 use crate::statusline::defs::ClickLine;
 use crate::terminal::buf_terminal_check_size;
 use crate::types::{ColNr, Integer, LineNr, OptInt, ScriptId, WindowHandle};
-use crate::ui::state::{Columns, Rows};
-use crate::ui::state::{kUIMessages, kUIMultigrid, kUITabline};
+use crate::ui::state::{COLUMNS, ROWS};
+use crate::ui::state::{UI_MESSAGES, UI_MULTIGRID, UI_TABLINE};
 use crate::ui::{ui_call_win_viewport_margins, ui_has};
 use crate::window::state::{skip_update_topline, skip_win_fix_cursor};
 use crate::winfloat::{win_border_height, win_border_width, win_float_anchor_laststatus};
@@ -390,7 +390,7 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
     window.w_width_outer = window.w_view_width + border_width;
     window.w_winrow_off = window.w_border_adj[0] + window.w_winbar_height;
     window.w_wincol_off = window.w_border_adj[3];
-    if ui_has(kUIMultigrid) {
+    if ui_has(UI_MULTIGRID) {
         {
             ui_call_win_viewport_margins(
                 Integer::from(window.w_grid_alloc.handle),
@@ -452,7 +452,7 @@ pub fn command_height() {
     // Find the last frame that spans the whole width and is not pinned by
     // 'winfixheight', which is the one the command line trades rows with.
     let mut frp = Some(lastwin_nofloating(None).frame());
-    while let Some(fr) = frp.filter(|fr| fr.fr_width != Columns.get()) {
+    while let Some(fr) = frp.filter(|fr| fr.fr_width != COLUMNS.get()) {
         frp = fr.parent();
         if frp.is_none() {
             frp = Some(fr);
@@ -487,16 +487,16 @@ pub fn command_height() {
     }
 
     comp_positions();
-    cmdline_row.set(Rows.get() - number_as_int(p_ch()));
-    redraw_cmdline.set(true);
+    CMDLINE_ROW.set(ROWS.get() - number_as_int(p_ch()));
+    REDRAW_CMDLINE.set(true);
     if MSG_SCROLLED.get() == 0 && full_screen.get() {
         let mut grid = default_gridview();
-        if !ui_has(kUIMessages) {
+        if !ui_has(UI_MESSAGES) {
             msg_grid_validate();
             grid = msg_grid_view();
         }
-        grid_clear(grid, cmdline_row.get(), Rows.get(), 0, Columns.get(), 0);
-        MSG_ROW.set(cmdline_row.get());
+        grid_clear(grid, CMDLINE_ROW.get(), ROWS.get(), 0, COLUMNS.get(), 0);
+        MSG_ROW.set(CMDLINE_ROW.get());
     }
     TabPage::current().tp_ch_used = p_ch();
     min_set_ch.set(p_ch());
@@ -687,7 +687,7 @@ pub fn tabline_height() -> c_int {
 /// The rows `'showtabline'` takes off the top of the screen.
 pub(crate) fn tabline_rows() -> c_int {
     // Tabline is always 0 when the UI draws it itself.
-    if ui_has(kUITabline) {
+    if ui_has(UI_TABLINE) {
         return 0;
     }
     debug_assert!(tabs().next().is_some(), "first_tabpage");

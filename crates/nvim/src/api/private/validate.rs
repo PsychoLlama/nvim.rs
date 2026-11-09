@@ -29,7 +29,7 @@ use crate::api::private::helpers::api_typename;
 use crate::api_error;
 use crate::message_fmt::msg_cstr;
 use crate::os::libc::int64_t;
-use crate::types::{Array, Error, Handle, kErrorTypeValidation, kObjectTypeString};
+use crate::types::{Array, ERROR_TYPE_VALIDATION, Error, Handle, OBJECT_TYPE_STRING};
 use core::ffi::CStr;
 
 /// Whether `name` is a phrase rather than a single name, which is what
@@ -63,26 +63,26 @@ pub(crate) fn err_invalid(name: &CStr, bad: Bad<'_>) -> Error {
     };
     let name = msg_cstr(name);
     match bad {
-        Bad::Unsaid if phrase => api_error!(kErrorTypeValidation, "Invalid {name}"),
-        Bad::Unsaid => api_error!(kErrorTypeValidation, "Invalid '{name}'"),
+        Bad::Unsaid if phrase => api_error!(ERROR_TYPE_VALIDATION, "Invalid {name}"),
+        Bad::Unsaid => api_error!(ERROR_TYPE_VALIDATION, "Invalid '{name}'"),
         Bad::Quoted(v) => {
             let v = msg_cstr(v);
             if phrase {
-                api_error!(kErrorTypeValidation, "Invalid {name}: '{v}'")
+                api_error!(ERROR_TYPE_VALIDATION, "Invalid {name}: '{v}'")
             } else {
-                api_error!(kErrorTypeValidation, "Invalid '{name}': '{v}'")
+                api_error!(ERROR_TYPE_VALIDATION, "Invalid '{name}': '{v}'")
             }
         }
         Bad::Bare(v) => {
             let v = msg_cstr(v);
             if phrase {
-                api_error!(kErrorTypeValidation, "Invalid {name}: {v}")
+                api_error!(ERROR_TYPE_VALIDATION, "Invalid {name}: {v}")
             } else {
-                api_error!(kErrorTypeValidation, "Invalid '{name}': {v}")
+                api_error!(ERROR_TYPE_VALIDATION, "Invalid '{name}': {v}")
             }
         }
-        Bad::Number(n) if phrase => api_error!(kErrorTypeValidation, "Invalid {name}: {n}"),
-        Bad::Number(n) => api_error!(kErrorTypeValidation, "Invalid '{name}': {n}"),
+        Bad::Number(n) if phrase => api_error!(ERROR_TYPE_VALIDATION, "Invalid {name}: {n}"),
+        Bad::Number(n) => api_error!(ERROR_TYPE_VALIDATION, "Invalid '{name}': {n}"),
     }
 }
 
@@ -115,21 +115,21 @@ pub(crate) fn err_expected(name: &CStr, expected: &CStr, actual: Option<&CStr>) 
     let phrase = is_phrase(name);
     let (name, expected) = (msg_cstr(name), msg_cstr(expected));
     match actual {
-        None if phrase => api_error!(kErrorTypeValidation, "Invalid {name}: expected {expected}"),
+        None if phrase => api_error!(ERROR_TYPE_VALIDATION, "Invalid {name}: expected {expected}"),
         None => api_error!(
-            kErrorTypeValidation,
+            ERROR_TYPE_VALIDATION,
             "Invalid '{name}': expected {expected}"
         ),
         Some(actual) => {
             let actual = msg_cstr(actual);
             if phrase {
                 api_error!(
-                    kErrorTypeValidation,
+                    ERROR_TYPE_VALIDATION,
                     "Invalid {name}: expected {expected}, got {actual}"
                 )
             } else {
                 api_error!(
-                    kErrorTypeValidation,
+                    ERROR_TYPE_VALIDATION,
                     "Invalid '{name}': expected {expected}, got {actual}"
                 )
             }
@@ -142,9 +142,9 @@ pub(crate) fn err_required(name: &CStr) -> Error {
     let phrase = is_phrase(name);
     let name = msg_cstr(name);
     if phrase {
-        api_error!(kErrorTypeValidation, "Required: {name}")
+        api_error!(ERROR_TYPE_VALIDATION, "Required: {name}")
     } else {
-        api_error!(kErrorTypeValidation, "Required: '{name}'")
+        api_error!(ERROR_TYPE_VALIDATION, "Required: '{name}'")
     }
 }
 
@@ -156,12 +156,12 @@ pub(crate) fn err_conflict(name: &CStr, name2: &CStr) -> Error {
     let (name, name2) = (msg_cstr(name), msg_cstr(name2));
     if phrase {
         api_error!(
-            kErrorTypeValidation,
+            ERROR_TYPE_VALIDATION,
             "Conflict: '{name}' not allowed with {name2}"
         )
     } else {
         api_error!(
-            kErrorTypeValidation,
+            ERROR_TYPE_VALIDATION,
             "Conflict: '{name}' not allowed with '{name2}'"
         )
     }
@@ -178,16 +178,16 @@ pub(crate) fn check_string_array(arr: &Array, name: &CStr, disallow_nl: bool) ->
     let name = msg_cstr(name);
     for item in arr {
         let Some(l) = item.as_string() else {
-            let want = msg_cstr(api_typename(kObjectTypeString));
+            let want = msg_cstr(api_typename(OBJECT_TYPE_STRING));
             let got = msg_cstr(api_typename(item.kind()));
             return Err(api_error!(
-                kErrorTypeValidation,
+                ERROR_TYPE_VALIDATION,
                 "Invalid '{name}' item: expected {want}, got {got}"
             ));
         };
         if disallow_nl && l.as_bytes().contains(&b'\n') {
             return Err(api_error!(
-                kErrorTypeValidation,
+                ERROR_TYPE_VALIDATION,
                 "'{name}' item contains newlines"
             ));
         }

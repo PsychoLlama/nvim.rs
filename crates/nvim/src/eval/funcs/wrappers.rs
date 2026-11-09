@@ -46,8 +46,8 @@ use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::Handle;
 use crate::types::{
-    Array, Blob, Failed, Float, LineNr, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER,
-    VAR_STRING, VarNumber, kBoolVarTrue,
+    Array, BOOL_VAR_TRUE, Blob, Failed, Float, LineNr, Object, TypVal, VAR_BOOL, VAR_FLOAT,
+    VAR_NUMBER, VAR_STRING, VarNumber,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{CStr, c_int};
@@ -262,7 +262,7 @@ pub fn get_expr_name(expand: &Expand, idx: usize) -> Option<Candidate> {
 pub(crate) fn non_zero_arg(tv: &TypVal) -> bool {
     match tv.v_type() {
         VAR_NUMBER => tv.number_or_zero() != 0,
-        VAR_BOOL => tv.as_bool() == Some(kBoolVarTrue),
+        VAR_BOOL => tv.as_bool() == Some(BOOL_VAR_TRUE),
         VAR_STRING => tv.string_ref().is_some_and(|s| !s.is_empty()),
         _ => false,
     }

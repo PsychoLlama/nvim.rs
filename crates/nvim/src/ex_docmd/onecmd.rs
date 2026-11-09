@@ -70,7 +70,7 @@ use crate::message::{
 };
 use crate::profile::do_profiling;
 use crate::startup::exiting;
-use crate::state::mode::exmode_active;
+use crate::state::mode::EXMODE_ACTIVE;
 use crate::winlayer::graph::cmdwin_type;
 
 use crate::ex_eval::defs::CondId;
@@ -345,7 +345,7 @@ impl ExArg<'_> {
             let (first, last) = self.range_numbers();
             if global_busy.get() == 0 && first > last {
                 if MSG_SILENT.get() == 0 {
-                    if flags.has(DoCmdOpts::VERBOSE) || exmode_active.get() {
+                    if flags.has(DoCmdOpts::VERBOSE) || EXMODE_ACTIVE.get() {
                         *errormsg = Some(ex_msg(c"E493: Backwards range given"));
                         return Err(Refused);
                     }
@@ -744,7 +744,7 @@ fn refuses_here(excmd: &ExArg) -> Option<CString> {
 pub(crate) fn ex_range_without_command(excmd: &mut ExArg) -> Option<CString> {
     let mut errormsg: Option<CString> = None;
     let past_substituted_plus = excmd.line.substituted && excmd.line.cmd == 1;
-    if excmd.line.byte_at(excmd.line.cmd) == b'|' || (exmode_active.get() && !past_substituted_plus)
+    if excmd.line.byte_at(excmd.line.cmd) == b'|' || (EXMODE_ACTIVE.get() && !past_substituted_plus)
     {
         excmd.cmdidx = CmdIdx::print;
         excmd.argt = ExArgt::RANGE | ExArgt::COUNT | ExArgt::TRLBAR;

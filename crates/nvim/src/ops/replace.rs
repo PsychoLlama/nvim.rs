@@ -73,10 +73,10 @@ pub(crate) fn pbyte(mut pos: Pos, c: u8) {
 /// Goes through Replace mode's own insert so that a multi-byte character on
 /// either side is handled; leaves the cursor back on the replaced character.
 fn replace_character(c: Key) {
-    let saved = State.get();
-    State.set(MODE_REPLACE);
+    let saved = STATE.get();
+    STATE.set(MODE_REPLACE);
     ins_char(c);
-    State.set(saved);
+    STATE.set(saved);
     // Back up onto the character just replaced.
     dec_cursor();
 }

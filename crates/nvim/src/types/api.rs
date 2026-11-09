@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
@@ -262,9 +261,9 @@ deref_to_field!(DictBuilder => mut Vec<KeyValuePair>, 0);
 pub type ErrorType = ::core::ffi::c_int;
 /// What an [`Error`] carries, and the one value that means it carries
 /// nothing. Every module that reports an API error needs these.
-pub const kErrorTypeNone: ErrorType = -1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeValidation: ErrorType = 1;
+pub const ERROR_TYPE_NONE: ErrorType = -1;
+pub const ERROR_TYPE_EXCEPTION: ErrorType = 0;
+pub const ERROR_TYPE_VALIDATION: ErrorType = 1;
 pub type HLGroupID = Integer;
 /// A message made of chunks, each with its own highlight, each owning its
 /// text. Upstream's kvec of `HlMessageChunk`.
@@ -278,19 +277,19 @@ pub type ObjectType = ::core::ffi::c_uint;
 /// editor in two places: the Lua binding recognises three of them in a
 /// table's `_TYPE` key, and the generated keyset tables store one per field
 /// as a plain `int`. [`Object::kind`] answers them.
-pub const kObjectTypeNil: ObjectType = 0;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeLuaRef: ObjectType = 7;
+pub const OBJECT_TYPE_NIL: ObjectType = 0;
+pub const OBJECT_TYPE_BOOLEAN: ObjectType = 1;
+pub const OBJECT_TYPE_INTEGER: ObjectType = 2;
+pub const OBJECT_TYPE_FLOAT: ObjectType = 3;
+pub const OBJECT_TYPE_STRING: ObjectType = 4;
+pub const OBJECT_TYPE_ARRAY: ObjectType = 5;
+pub const OBJECT_TYPE_DICT: ObjectType = 6;
+pub const OBJECT_TYPE_LUA_REF: ObjectType = 7;
 /// The three the API uses for handles, which never appear in a value the
 /// msgpack layer serialises.
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeTabpage: ObjectType = 10;
+pub const OBJECT_TYPE_BUFFER: ObjectType = 8;
+pub const OBJECT_TYPE_WINDOW: ObjectType = 9;
+pub const OBJECT_TYPE_TABPAGE: ObjectType = 10;
 pub type TabpageHandle = Handle;
 pub type WindowHandle = Handle;
 /// One entry of an [`ApiDict`]: an owned key and an owned value.
@@ -359,17 +358,17 @@ impl Object {
     /// The tag, as the number the Lua binding and the keyset tables speak.
     pub const fn kind(&self) -> ObjectType {
         match self {
-            Object::Nil => kObjectTypeNil,
-            Object::Boolean(_) => kObjectTypeBoolean,
-            Object::Integer(_) => kObjectTypeInteger,
-            Object::Float(_) => kObjectTypeFloat,
-            Object::String(_) => kObjectTypeString,
-            Object::Array(_) => kObjectTypeArray,
-            Object::Dict(_) => kObjectTypeDict,
-            Object::LuaRef(_) => kObjectTypeLuaRef,
-            Object::Buffer(_) => kObjectTypeBuffer,
-            Object::Window(_) => kObjectTypeWindow,
-            Object::Tabpage(_) => kObjectTypeTabpage,
+            Object::Nil => OBJECT_TYPE_NIL,
+            Object::Boolean(_) => OBJECT_TYPE_BOOLEAN,
+            Object::Integer(_) => OBJECT_TYPE_INTEGER,
+            Object::Float(_) => OBJECT_TYPE_FLOAT,
+            Object::String(_) => OBJECT_TYPE_STRING,
+            Object::Array(_) => OBJECT_TYPE_ARRAY,
+            Object::Dict(_) => OBJECT_TYPE_DICT,
+            Object::LuaRef(_) => OBJECT_TYPE_LUA_REF,
+            Object::Buffer(_) => OBJECT_TYPE_BUFFER,
+            Object::Window(_) => OBJECT_TYPE_WINDOW,
+            Object::Tabpage(_) => OBJECT_TYPE_TABPAGE,
         }
     }
 

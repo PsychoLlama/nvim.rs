@@ -31,7 +31,7 @@ use crate::normal::{
 };
 use crate::option::vars::p_sbo;
 use crate::plines::plines_m_win_fill;
-use crate::state::mode::did_syncbind;
+use crate::state::mode::DID_SYNCBIND;
 use crate::types::{ColNr, Direction, LineNr};
 use crate::window::goto_tabpage;
 use core::ffi::c_int;
@@ -64,9 +64,9 @@ pub(crate) fn do_check_scrollbind(check: bool) {
     let mut win = Win::current();
     let vtopline = get_vtopline(win);
     if check && win.w_onebuf_opt.wo_scb != 0 {
-        if did_syncbind.get() {
+        if DID_SYNCBIND.get() {
             // `:syncbind` has just set every bound window itself.
-            did_syncbind.set(false);
+            DID_SYNCBIND.set(false);
         } else if OLD_CURWIN.get() == Some(win.id()) {
             if (win.buffer().try_id() == OLD_BUF.get() || win.w_onebuf_opt.wo_diff != 0)
                 && (LineNr::new(vtopline) != OLD_VTOPLINE.get()

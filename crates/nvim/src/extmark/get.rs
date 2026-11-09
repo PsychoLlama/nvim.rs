@@ -21,9 +21,8 @@
 use core::ffi::c_int;
 
 use super::{
-    Buf, free_decor, itr_current, itr_get, itr_get_ext, itr_get_overlap, itr_next,
-    itr_step_overlap, kExtmarkNone, ns_destroy, tree_clear, tree_get_alt, tree_lookup_ns,
-    type_flags,
+    Buf, EXTMARK_NONE, free_decor, itr_current, itr_get, itr_get_ext, itr_get_overlap, itr_next,
+    itr_step_overlap, ns_destroy, tree_clear, tree_get_alt, tree_lookup_ns, type_flags,
 };
 use crate::extmark::ExtmarkType;
 use crate::marktree::key::{
@@ -100,7 +99,7 @@ fn push_mark(array: &mut Vec<MTPair>, ns_id: uint32_t, type_filter: ExtmarkType,
     if !(ns_id == uint32_t::MAX || mark.start.ns == ns_id) {
         return;
     }
-    if type_filter != kExtmarkNone {
+    if type_filter != EXTMARK_NONE {
         if !mt_decor_any(mark.start) {
             return;
         }

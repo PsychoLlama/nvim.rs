@@ -66,7 +66,7 @@ use crate::regexp::OptMagic;
 use crate::regexp::vim_regexec;
 use crate::search::state::{magic_overruled, no_hlsearch};
 use crate::state::MODE_INSERT;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::tag::state::{
     g_do_tagpreview, g_tag_at_cursor, keep_help_flag, postponed_split, postponed_split_flags,
 };
@@ -75,8 +75,8 @@ use crate::types::Handle;
 use crate::types::{
     Callback, ColNr, Dict, ExArg, GetFileRet, LineNr, List, Pos, Taggy, Timestamp, VarNumber,
 };
-use crate::ui::state::Columns;
-use crate::ui::state::kUIMessages;
+use crate::ui::state::COLUMNS;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::ui_has;
 use crate::window::{
     check_can_set_curbuf_forceit, swbuf_goto_win_with_buf, win_close, win_enter, win_split,

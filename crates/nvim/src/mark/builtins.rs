@@ -25,7 +25,7 @@ use core::ffi::CStr;
 use super::store::{global_mark, global_mark_names, nth_name, slot};
 use super::*;
 use crate::types::Failed;
-use crate::types::kListLenMayKnow;
+use crate::types::LIST_LEN_MAY_KNOW;
 
 /// Add information about mark `mname` to list `l`.
 fn add_mark(
@@ -42,7 +42,7 @@ fn add_mark(
     }
     let mut d_held = tv_dict_alloc();
     l.push_dict(Some(d_held.clone()));
-    let lpos = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+    let lpos = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
     lpos.edit()
         .push_number(VarNumber::from(Handle::number_of(bufnr)));
     lpos.edit().push_number(VarNumber::from(pos.lnum));

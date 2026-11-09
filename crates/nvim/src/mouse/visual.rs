@@ -28,7 +28,7 @@ use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
 };
 use crate::pos::lt;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::state::{MODE_INSERT, MODE_NORMAL};
 use crate::types::Pos;
 use crate::winlayer::Win;
@@ -43,7 +43,7 @@ pub(crate) fn visual_jump_flags(
     mouse_can_visual: bool,
     old_curwin: Win,
 ) -> Option<(Pos, Pos)> {
-    if State.get() & (MODE_NORMAL | MODE_INSERT) == 0
+    if STATE.get() & (MODE_NORMAL | MODE_INSERT) == 0
         || MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL)
     {
         return None;

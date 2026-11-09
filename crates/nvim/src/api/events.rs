@@ -18,7 +18,7 @@ use crate::eval::vars::set_vim_var_string;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message_fmt::msg_cstr;
 use crate::os::libc::uint64_t;
-use crate::types::{ApiString, Error, Integer, Object, Vv, kObjectTypeString};
+use crate::types::{ApiString, Error, Integer, OBJECT_TYPE_STRING, Object, Vv};
 
 /// Log the failure a client reported for a request it had sent us.
 pub fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: ApiString) {
@@ -43,7 +43,7 @@ pub fn nvim_ui_term_event(
         return Ok(());
     }
     let Some(termresponse) = value.as_string() else {
-        let (want, got) = (api_typename(kObjectTypeString), api_typename(value.kind()));
+        let (want, got) = (api_typename(OBJECT_TYPE_STRING), api_typename(value.kind()));
         return Err(err_expected(c"termresponse", want, Some(got)));
     };
     let text = (!termresponse.is_null()).then(|| termresponse.as_bytes());

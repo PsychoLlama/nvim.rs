@@ -30,7 +30,7 @@ pub fn handle_nvim_open_win(channel_id: uint64_t, args: Array) -> Result<Object,
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_open_win", c"Buffer"));
     };
     let Some(arg_2) = as_boolean(args[1].take()) else {
@@ -66,7 +66,7 @@ pub fn handle_nvim_win_get_config(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_get_config", c"Window"));
     };
     let mut rv = nvim_win_get_config(arg_1)?;
@@ -89,7 +89,7 @@ pub fn handle_nvim_win_set_config(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_set_config", c"Window"));
     };
     let mut arg_2: KeyDict_win_config = match read_keydict(args[1].take()) {

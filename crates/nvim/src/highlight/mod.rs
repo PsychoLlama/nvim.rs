@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 //! The attribute set: every distinct combination of colours and attributes
 //! the screen is currently using, numbered.
@@ -49,9 +48,9 @@
 pub(crate) mod state;
 use crate::drawscreen::screen_invalidate_highlights;
 use crate::global_cell::GlobalCell;
-use crate::highlight::state::{highlight_attr, highlight_attr_last};
+use crate::highlight::state::{HIGHLIGHT_ATTR, HIGHLIGHT_ATTR_LAST};
 use crate::highlight_group::{
-    HLF_COUNT, HighlightError, highlight_attr_set_all, highlight_changed, hlf_names, syn_id2name,
+    HLF_COUNT, HLF_NAMES, HighlightError, highlight_attr_set_all, highlight_changed, syn_id2name,
 };
 use crate::narrow::as_index;
 use crate::narrow::{len_as_int, len_as_integer};
@@ -122,17 +121,17 @@ crate::flag_set! {
 }
 
 // The `HLF_*` builtin-group indices this family names. The full list lives
-// with `hlf_names`; these are the ones the code here singles out.
+// with `HLF_NAMES`; these are the ones the code here singles out.
 
 // What an entry was made from, recorded for `ext_hlstate`.
-pub(crate) const kHlUnknown: HlKind = 0;
-pub(crate) const kHlUI: HlKind = 1;
-pub(crate) const kHlSyntax: HlKind = 2;
-pub(crate) const kHlTerminal: HlKind = 3;
-pub(crate) const kHlCombine: HlKind = 4;
-pub(crate) const kHlBlend: HlKind = 5;
-pub(crate) const kHlBlendThrough: HlKind = 6;
-pub(crate) const kHlInvalid: HlKind = 7;
+pub(crate) const HL_UNKNOWN: HlKind = 0;
+pub(crate) const HL_UI: HlKind = 1;
+pub(crate) const HL_SYNTAX: HlKind = 2;
+pub(crate) const HL_TERMINAL: HlKind = 3;
+pub(crate) const HL_COMBINE: HlKind = 4;
+pub(crate) const HL_BLEND: HlKind = 5;
+pub(crate) const HL_BLEND_THROUGH: HlKind = 6;
+pub(crate) const HL_INVALID: HlKind = 7;
 
 /// An attribute set with nothing set. -1 is "unset" for an RGB colour and 0
 /// for a cterm one, which is why the two halves do not look alike.
@@ -167,7 +166,7 @@ static COMBINE: GlobalCell<AttrCache> = GlobalCell::new(AttrCache::new());
 /// One `c_int` out of the table rather than a copy of all 76 of them: this
 /// is asked per spell run and per UI group.
 pub(crate) fn default_hl_attr(hlf: usize) -> c_int {
-    highlight_attr.get_field(|attrs| &attrs[hlf])
+    HIGHLIGHT_ATTR.get_field(|attrs| &attrs[hlf])
 }
 
 /// The URLs entries refer to by index (OSC 8 hyperlinks).
@@ -275,7 +274,7 @@ pub fn highlight_init() {
     ATTRS.with_mut(|attrs| {
         attrs.put(&HlEntry {
             attr: HLATTRS_INIT,
-            kind: kHlInvalid,
+            kind: HL_INVALID,
             id1: 0,
             id2: 0,
         })
@@ -304,7 +303,7 @@ pub(crate) fn get_attr_entry(mut entry: HlEntry) -> c_int {
 
     if !HLSTATE_ACTIVE.get() {
         // Nothing will read the provenance; erase it and keep the table small.
-        entry.kind = kHlUnknown;
+        entry.kind = HL_UNKNOWN;
         entry.id1 = 0;
         entry.id2 = 0;
     }
@@ -330,7 +329,7 @@ pub(crate) fn get_attr_entry(mut entry: HlEntry) -> c_int {
         REBUILDING.set(true);
         clear_hl_tables(true);
         REBUILDING.set(false);
-        if entry.kind == kHlCombine {
+        if entry.kind == HL_COMBINE {
             // The ids this entry combines are gone, so it means nothing now.
             return 0;
         }
@@ -367,7 +366,7 @@ pub fn ui_send_all_hls(
         define(len_as_integer(i), attr, inspect);
         i += 1;
     }
-    for (hlf, name) in hlf_names.iter().enumerate() {
+    for (hlf, name) in HLF_NAMES.iter().enumerate() {
         group_set(
             ApiString::from_cstr(name),
             Integer::from(default_hl_attr(hlf)),
@@ -395,7 +394,7 @@ pub fn hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlAttrs) -> c_int {
     }
     let entry = HlEntry {
         attr: at_en,
-        kind: kHlSyntax,
+        kind: HL_SYNTAX,
         id1: idx,
         id2: ns_id,
     };
@@ -420,7 +419,7 @@ pub fn hl_get_underline() -> c_int {
     attrs.rgb_ae_attr = HlAttrFlags::UNDERLINE;
     let entry = HlEntry {
         attr: attrs,
-        kind: kHlUI,
+        kind: HL_UI,
         id1: 0,
         id2: 0,
     };
@@ -437,7 +436,7 @@ pub fn hl_add_url(attr: c_int, url: &CStr) -> c_int {
     attrs.url = URLS.with_mut(|urls| urls.intern(url)).cast_signed();
     let entry = HlEntry {
         attr: attrs,
-        kind: kHlUI,
+        kind: HL_UI,
         id1: 0,
         id2: 0,
     };
@@ -457,7 +456,7 @@ pub fn hl_get_url(index: uint32_t) -> ApiString {
 pub fn hl_get_term_attr(attrs: HlAttrs) -> c_int {
     let entry = HlEntry {
         attr: attrs,
-        kind: kHlTerminal,
+        kind: HL_TERMINAL,
         id1: 0,
         id2: 0,
     };
@@ -480,7 +479,7 @@ pub fn clear_hl_tables(reinit: bool) {
     }
     highlight_init();
     // No group's attribute matches its remembered one any more.
-    highlight_attr_last.set([-1; HLF_COUNT as usize]);
+    HIGHLIGHT_ATTR_LAST.set([-1; HLF_COUNT as usize]);
     highlight_attr_set_all();
     highlight_changed();
     screen_invalidate_highlights();
@@ -570,7 +569,7 @@ pub fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int {
 
     let entry = HlEntry {
         attr: new_en,
-        kind: kHlCombine,
+        kind: HL_COMBINE,
         id1: char_attr,
         id2: prim_attr,
     };
@@ -623,7 +622,7 @@ fn hl_inspect_size(attr: c_int) -> usize {
         return 0;
     };
     match kind {
-        kHlCombine | kHlBlend | kHlBlendThrough => hl_inspect_size(id1) + hl_inspect_size(id2),
+        HL_COMBINE | HL_BLEND | HL_BLEND_THROUGH => hl_inspect_size(id1) + hl_inspect_size(id2),
         _ => 1,
     }
 }
@@ -636,31 +635,31 @@ fn hl_inspect_impl(arr: &mut Vec<Object>, attr: c_int) {
         return;
     };
     let mut item = match kind {
-        kHlSyntax => {
+        HL_SYNTAX => {
             let mut item = DictBuilder::with_capacity(3);
             put(&mut item, c"kind", Object::literal("syntax"));
             put(&mut item, c"hi_name", name_object(syn_id2name(id1)));
             item
         }
-        kHlUI => {
+        HL_UI => {
             let mut item = DictBuilder::with_capacity(4);
             put(&mut item, c"kind", Object::literal("ui"));
-            // -1 is `Normal`, which is not one of the `hlf_names`.
+            // -1 is `Normal`, which is not one of the `HLF_NAMES`.
             let ui_name = if id1 == -1 {
                 c"Normal"
             } else {
-                hlf_names[as_index(id1)]
+                HLF_NAMES[as_index(id1)]
             };
             put(&mut item, c"ui_name", name_object(ui_name));
             put(&mut item, c"hi_name", name_object(syn_id2name(id2)));
             item
         }
-        kHlTerminal => {
+        HL_TERMINAL => {
             let mut item = DictBuilder::with_capacity(2);
             put(&mut item, c"kind", Object::literal("term"));
             item
         }
-        kHlCombine | kHlBlend | kHlBlendThrough => {
+        HL_COMBINE | HL_BLEND | HL_BLEND_THROUGH => {
             // Combination is associative, so flatten it to an array.
             hl_inspect_impl(arr, id1);
             hl_inspect_impl(arr, id2);
@@ -728,7 +727,7 @@ mod tests {
         let mut table = AttrTable::new();
         let entry = |id1| HlEntry {
             attr: HLATTRS_INIT,
-            kind: kHlSyntax,
+            kind: HL_SYNTAX,
             id1,
             id2: 0,
         };

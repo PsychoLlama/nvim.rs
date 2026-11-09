@@ -2,7 +2,7 @@
 //!
 //! A namespace registers one callback and the set of external widgets it
 //! wants to draw itself. Registering makes the editor behave as though a UI
-//! had asked for those widgets — [`ui_cb_ext`] is OR'd into the real UIs'
+//! had asked for those widgets — [`UI_CB_EXT`] is OR'd into the real UIs'
 //! extension set by [`ui_refresh`](super::ui_refresh) — so `cmdline_show`
 //! and friends start being emitted even when no attached UI asked for them.
 //!
@@ -21,7 +21,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::sinks::log_event;
 use super::{Reach, each_ui_reached, ui_refresh};
@@ -37,8 +36,8 @@ use crate::msg_schedule_semsg;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::Handle;
 use crate::types::{Array, LuaRef};
-use crate::ui::state::ui_event_ns_id;
-use crate::ui::state::{kUICmdline, kUILinegrid, kUIMessages};
+use crate::ui::state::UI_EVENT_NS_ID;
+use crate::ui::state::{UI_CMDLINE, UI_LINEGRID, UI_MESSAGES};
 use core::ffi::CStr;
 
 const RET_NIL_BOOL: LuaRetMode = 1;
@@ -61,25 +60,25 @@ struct Handler {
     /// about how a UI wants the screen described, not about who draws it.
     ///
     /// [`UIExtension`]: crate::ui::state::UIExtension
-    ext_widgets: [bool; kUILinegrid as usize],
+    ext_widgets: [bool; UI_LINEGRID as usize],
 }
 
 /// The registered handlers, in registration order.
 ///
 /// A `Vec` rather than a map: there are rarely more than a handful, and the
 /// order they run in is then something a plugin author can predict.
-static registered: GlobalCell<Vec<Handler>> = GlobalCell::new(Vec::new());
+static REGISTERED: GlobalCell<Vec<Handler>> = GlobalCell::new(Vec::new());
 
 /// The union of every handler's [`Handler::ext_widgets`].
-pub static ui_cb_ext: GlobalCell<[bool; 10]> = GlobalCell::new([false; 10]);
+pub static UI_CB_EXT: GlobalCell<[bool; 10]> = GlobalCell::new([false; 10]);
 
 /// Registers `cb` for `ns_id`, replacing any handler it already had;
-/// `ext_widgets` says which of the first [`kUILinegrid`] extensions it draws.
-pub fn ui_add_cb(ns_id: u32, cb: LuaRef, mut ext_widgets: [bool; kUILinegrid as usize]) {
+/// `ext_widgets` says which of the first [`UI_LINEGRID`] extensions it draws.
+pub fn ui_add_cb(ns_id: u32, cb: LuaRef, mut ext_widgets: [bool; UI_LINEGRID as usize]) {
     // `ext_messages` moves the whole cmdline out of the message area, so a
     // handler drawing messages has to draw the cmdline too.
-    if ext_widgets[kUIMessages as usize] {
-        ext_widgets[kUICmdline as usize] = true;
+    if ext_widgets[UI_MESSAGES as usize] {
+        ext_widgets[UI_CMDLINE as usize] = true;
     }
     let handler = Handler {
         ns_id,
@@ -87,7 +86,7 @@ pub fn ui_add_cb(ns_id: u32, cb: LuaRef, mut ext_widgets: [bool; kUILinegrid as 
         errors: 0,
         ext_widgets,
     };
-    registered.with_mut(
+    REGISTERED.with_mut(
         |handlers| match handlers.iter_mut().find(|h| h.ns_id == ns_id) {
             Some(existing) => {
                 release_luaref(existing.callback);
@@ -105,7 +104,7 @@ pub fn ui_add_cb(ns_id: u32, cb: LuaRef, mut ext_widgets: [bool; kUILinegrid as 
 /// With `checkerr`, this is the error path: the handler's error count goes
 /// up and it is only dropped once it passes [`MAX_ERRORS`].
 pub fn ui_remove_cb(ns_id: u32, checkerr: bool) {
-    let removed = registered.with_mut(|handlers| {
+    let removed = REGISTERED.with_mut(|handlers| {
         let index = handlers.iter().position(|h| h.ns_id == ns_id)?;
         if checkerr {
             handlers[index].errors += 1;
@@ -128,15 +127,15 @@ pub fn ui_remove_cb(ns_id: u32, checkerr: bool) {
     }
 }
 
-/// Recomputes [`ui_cb_ext`] from the registered handlers.
+/// Recomputes [`UI_CB_EXT`] from the registered handlers.
 fn update_ext() {
     let mut ext = [false; 10];
-    registered.with(|handlers| {
-        for (widget, slot) in ext[..kUILinegrid as usize].iter_mut().enumerate() {
+    REGISTERED.with(|handlers| {
+        for (widget, slot) in ext[..UI_LINEGRID as usize].iter_mut().enumerate() {
             *slot = handlers.iter().any(|h| h.ext_widgets[widget]);
         }
     });
-    ui_cb_ext.set(ext);
+    UI_CB_EXT.set(ext);
 }
 
 /// Offers `name` to every registered handler, then to the attached UIs
@@ -163,10 +162,10 @@ fn offer_to_handlers(name: &CStr, args: &Array) -> bool {
     // Snapshot the namespaces rather than iterating the live list: a
     // handler can register or unregister handlers, including its own.
     let namespaces: Vec<u32> =
-        registered.with(|handlers| handlers.iter().map(|h| h.ns_id).collect());
+        REGISTERED.with(|handlers| handlers.iter().map(|h| h.ns_id).collect());
     let mut handled = false;
     for ns_id in namespaces {
-        let Some(callback) = registered.with(|handlers| {
+        let Some(callback) = REGISTERED.with(|handlers| {
             handlers
                 .iter()
                 .find(|h| h.ns_id == ns_id)
@@ -174,10 +173,10 @@ fn offer_to_handlers(name: &CStr, args: &Array) -> bool {
         }) else {
             continue;
         };
-        ui_event_ns_id.set(ns_id);
+        UI_EVENT_NS_ID.set(ns_id);
         let fast = is_fast(name, args);
         let res = nlua_call_ref_ctx(fast, callback, Some(name), args.clone(), RET_NIL_BOOL, true);
-        ui_event_ns_id.set(0);
+        UI_EVENT_NS_ID.set(0);
         match res {
             Ok(res) => {
                 if res.as_boolean() == Some(true) {

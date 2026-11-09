@@ -192,7 +192,7 @@ pub fn verbose_enter_scroll() {
 pub fn verbose_leave_scroll() {
     verbose_leave();
     if !verbosefile_set() {
-        cmdline_row.set(MSG_ROW.get());
+        CMDLINE_ROW.set(MSG_ROW.get());
     }
 }
 

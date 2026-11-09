@@ -15,8 +15,8 @@ use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::DictRef;
 use crate::memory::ThinCString;
 use crate::os::libc::ptrdiff_t;
+use crate::types::{LIST_LEN_MAY_KNOW, LIST_LEN_UNKNOWN, VAR_STRING};
 use crate::types::{List, TypVal, VarNumber};
-use crate::types::{VAR_STRING, kListLenMayKnow, kListLenUnknown};
 use crate::window::FR_LEAF;
 use crate::window::FR_ROW;
 
@@ -64,7 +64,7 @@ fn get_tabpage_info(tabpage: TabPage, tp_idx: c_int) -> DictRef {
     // its hash table's, which insertion order can still perturb.
     let dict = tv_dict_alloc();
     let _ = dict.edit().add_number(b"tabnr", VarNumber::from(tp_idx));
-    let windows = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+    let windows = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
     for wp in windows_in_tab(tabpage) {
         windows.edit().push_number(VarNumber::from(wp.handle));
     }
@@ -80,7 +80,11 @@ pub fn f_gettabinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // The length hint is upstream's, and is the way round it looks: one entry
     // is expected when *no* tab page was named.
     let one = !args.is_empty();
-    let hint = if one { kListLenMayKnow as ptrdiff_t } else { 1 };
+    let hint = if one {
+        LIST_LEN_MAY_KNOW as ptrdiff_t
+    } else {
+        1
+    };
     let list = tv_list_alloc_ret(result, hint);
     let wanted = if one {
         let n = number_as_int(arg_number_chk(args, 0));
@@ -110,7 +114,7 @@ pub fn f_gettabinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `tabnr` wraps negative while `tabpagenr()`, an `int`, stays right. Reaching
 /// that takes 33,000 `:tabnew`s, so no test can see either answer.
 pub fn f_getwininfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let list = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
+    let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
     let wanted = if !args.is_empty() {
         match win_by_id(number_as_int(arg_number(args, 0))) {
             Some(wp) => Some(wp),
@@ -157,7 +161,7 @@ impl FrameRef {
         } else {
             c"col"
         }));
-        let children = tv_list_alloc(kListLenUnknown as ptrdiff_t);
+        let children = tv_list_alloc(LIST_LEN_UNKNOWN as ptrdiff_t);
         for child in self.children() {
             let nested = tv_list_alloc(2);
             child.write_layout(&mut nested.edit());

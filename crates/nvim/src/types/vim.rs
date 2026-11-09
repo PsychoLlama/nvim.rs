@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
@@ -36,8 +35,8 @@ pub struct Failed;
 pub type CdCause = ::core::ffi::c_int;
 pub type CdScope = ::core::ffi::c_int;
 /// Which scope a `:cd` applies to (`getcwd()`/`haslocaldir()` report it).
-pub const kCdScopeInvalid: CdScope = -1;
-pub const kCdScopeWindow: CdScope = 0;
-pub const kCdScopeTabpage: CdScope = 1;
-pub const kCdScopeGlobal: CdScope = 2;
+pub const CD_SCOPE_INVALID: CdScope = -1;
+pub const CD_SCOPE_WINDOW: CdScope = 0;
+pub const CD_SCOPE_TABPAGE: CdScope = 1;
+pub const CD_SCOPE_GLOBAL: CdScope = 2;
 pub type Direction = ::core::ffi::c_int;

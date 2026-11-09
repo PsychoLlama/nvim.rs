@@ -39,7 +39,7 @@ use neovim::channel::defs::CallbackReader;
 use neovim::channel::reader::{callback_reader_free, callback_reader_start, reader_lines};
 use neovim::eval::gc::rooted_lists;
 use neovim::eval::typval::tv_list_alloc;
-use neovim::types::kListLenUnknown;
+use neovim::types::LIST_LEN_UNKNOWN;
 
 use crate::support::Sandbox;
 use crate::support::tv::{self, Tv};
@@ -208,7 +208,7 @@ fn a_delivered_list_is_freed_again_when_the_callback_stores_nothing() {
     // referenced, so nothing but dropping `held` at the end can free it.
     unsafe {
         let before = rooted_lists();
-        let held = tv_list_alloc(kListLenUnknown as isize);
+        let held = tv_list_alloc(LIST_LEN_UNKNOWN as isize);
         let sentinel = held.as_ptr();
         let with_sentinel = rooted_lists();
         assert_eq!(with_sentinel.len(), before.len() + 1);
@@ -253,7 +253,7 @@ fn a_delivered_list_the_callback_stored_stays_on_the_chain() {
     // SAFETY: as above. The stored reference is released before the list is
     // freed, so this case owns everything it allocates.
     unsafe {
-        let held = tv_list_alloc(kListLenUnknown as isize);
+        let held = tv_list_alloc(LIST_LEN_UNKNOWN as isize);
         let sentinel = held.as_ptr();
         let with_sentinel = rooted_lists();
         assert!(with_sentinel.contains(&sentinel));

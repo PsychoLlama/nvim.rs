@@ -25,7 +25,7 @@ use crate::charset::vim_isprintc;
 use crate::cstr;
 use crate::digraph::get_digraph;
 use crate::drawscreen::showmode;
-use crate::drawscreen::state::{clear_cmdline, mode_displayed};
+use crate::drawscreen::state::{CLEAR_CMDLINE, MODE_DISPLAYED};
 use crate::edit::edit;
 use crate::eval::vars::{set_reg_var, set_vcount};
 use crate::ex_docmd::do_sleep;
@@ -61,8 +61,8 @@ use crate::os::libc::int64_t;
 use crate::register::get_default_register_name;
 use crate::state::Step;
 use crate::state::mode::{
-    State, VIsual_select_reg, finish_op, km_startsel, motion_force, opcount, restart_VIsual_select,
-    restart_edit,
+    FINISH_OP, KM_STARTSEL, MOTION_FORCE, OPCOUNT, RESTART_EDIT, RESTART_V_ISUAL_SELECT, STATE,
+    V_ISUAL_SELECT_REG,
 };
 use crate::state::{
     MODE_LANGMAP, MODE_LREPLACE, MODE_NORMAL, MODE_NORMAL_BUSY, MODE_REPLACE, MODE_SELECT,
@@ -324,7 +324,7 @@ pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
 
     if slot != Slot::None {
         if repl {
-            State.set(MODE_REPLACE);
+            STATE.set(MODE_REPLACE);
             ui_cursor_shape_no_check_conceal();
         }
         // A language-mapped argument is read *with* mappings on, which is
@@ -332,11 +332,11 @@ pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
         let langmap_active = lang && Buf::current().b_p_iminsert == OptInt::from(B_IMODE_LMAP);
         let mapped = langmap_active.then(Allow::mapping_with_codes);
         if langmap_active {
-            State.set(if repl { MODE_LREPLACE } else { MODE_LANGMAP });
+            STATE.set(if repl { MODE_LREPLACE } else { MODE_LANGMAP });
         }
         let mut cp = plain_vgetc();
         drop(mapped);
-        State.set(MODE_NORMAL_BUSY);
+        STATE.set(MODE_NORMAL_BUSY);
         ns.need_flushbuf |= add_to_showcmd(cp);
 
         if !lit {
@@ -466,7 +466,7 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
     if !ns.command_finished {
         // A command that is not itself an operator, and does not claim
         // releases the register it was given.
-        if !finish_op.get()
+        if !FINISH_OP.get()
             && ns.oa.op_type == OpType::Nop
             && ns
                 .idx
@@ -490,12 +490,12 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
     }
     MSG_NOWAIT.set(false);
 
-    if finish_op.get() || did_visual_op {
+    if FINISH_OP.get() || did_visual_op {
         set_reg_var(get_default_register_name());
     }
-    let prev_finish_op = finish_op.get();
+    let prev_finish_op = FINISH_OP.get();
     if ns.oa.op_type == OpType::Nop {
-        finish_op.set(false);
+        FINISH_OP.set(false);
         may_trigger_modechanged();
     }
     // The cursor shape says whether an operator is pending, and `r`/`gr`
@@ -521,29 +521,29 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
 
     // A command may have asked for insert mode or for Select mode to be
     // resumed; neither happens until the command is completely done.
-    let want_insert = !restart_edit.get().is_nul() && !visual_active() && ns.old_mapped_len == 0;
+    let want_insert = !RESTART_EDIT.get().is_nul() && !visual_active() && ns.old_mapped_len == 0;
     if ns.oa.op_type == OpType::Nop
-        && (want_insert || restart_VIsual_select.get() == 1)
+        && (want_insert || RESTART_V_ISUAL_SELECT.get() == 1)
         && !ns.ca.outcome.has(Outcome::COMMAND_BUSY)
         && stuff_empty()
         && ns.oa.regname == 0
     {
-        if restart_VIsual_select.get() == 1 {
+        if RESTART_V_ISUAL_SELECT.get() == 1 {
             set_visual_select(true);
-            VIsual_select_reg.set(0);
+            V_ISUAL_SELECT_REG.set(0);
             may_trigger_modechanged();
             showmode();
-            restart_VIsual_select.set(0);
+            RESTART_V_ISUAL_SELECT.set(0);
         }
         if want_insert {
-            let _ = edit(restart_edit.get(), false, 1);
+            let _ = edit(RESTART_EDIT.get(), false, 1);
         }
     }
     // 2 means "next command", 1 means "this one"; the countdown is here.
-    if restart_VIsual_select.get() == 2 {
-        restart_VIsual_select.set(1);
+    if RESTART_V_ISUAL_SELECT.get() == 2 {
+        RESTART_V_ISUAL_SELECT.set(1);
     }
-    opcount.set(ns.ca.opcount);
+    OPCOUNT.set(ns.ca.opcount);
 }
 
 /// One normal-mode command, from its first key to the end of its effects.
@@ -554,7 +554,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
     ns.c = key;
     langmap_adjust(&mut ns.c, get_real_state() != MODE_SELECT);
 
-    if restart_edit.get().is_nul() {
+    if RESTART_EDIT.get().is_nul() {
         ns.old_mapped_len = 0;
     } else if ns.old_mapped_len != 0
         || (visual_active() && ns.mapped_len == 0 && typeahead().maplen() > 0)
@@ -579,7 +579,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
         if KEY_TYPED.get() {
             ungetchars(len);
         }
-        ns.c = if !restart_edit.get().is_nul() {
+        ns.c = if !RESTART_EDIT.get().is_nul() {
             Key::ascii(b'd')
         } else {
             Key::ascii(b'c')
@@ -647,7 +647,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
         if ns.ca.cmdchar != SpecialKey::Ignore && ns.ca.cmdchar != SpecialKey::Event {
             did_cursorhold.set(false);
         }
-        State.set(MODE_NORMAL);
+        STATE.set(MODE_NORMAL);
 
         if ns.ca.nchar == Key::ESC || ns.ca.extra_char == Key::ESC {
             clear_op(ns.op());
@@ -661,7 +661,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
 
             // 'keymodel' startsel: a shifted special key starts a
             // selection and then acts as its unshifted self.
-            if !visual_active() && km_startsel.get() {
+            if !visual_active() && KM_STARTSEL.get() {
                 let flags = ns.row().cmd_flags;
                 if flags.has(NvFlags::SS) {
                     start_selection();
@@ -782,7 +782,7 @@ pub(crate) fn clear_op(mut op: Op) {
     op.regname = 0;
     op.motion_force = Key::NUL;
     op.use_reg_one = false;
-    motion_force.set(Key::NUL);
+    MOTION_FORCE.set(Key::NUL);
 }
 
 /// [`clear_op`], and say so.
@@ -831,9 +831,9 @@ pub(crate) fn unshift_special(cmd_arg: &mut CmdArg) {
 
 /// Make room on the command line for whatever is about to be shown there.
 pub(crate) fn may_clear_cmdline() {
-    if mode_displayed.get() {
+    if MODE_DISPLAYED.get() {
         // The mode message is there; let the redraw take it away.
-        clear_cmdline.set(true);
+        CLEAR_CMDLINE.set(true);
     } else {
         clear_showcmd();
     }

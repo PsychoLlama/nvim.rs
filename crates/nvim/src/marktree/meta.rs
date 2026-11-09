@@ -28,9 +28,9 @@ use super::key::{MtFlags, mt_end, mt_invalid};
 // namespace; it collects top-level consts only, and `pub use` is invisible to
 // it.
 mod count {
-    pub const META_COUNT: usize = super::kMTMetaCount as usize;
+    pub const META_COUNT: usize = super::MT_META_COUNT as usize;
 }
-use crate::decoration::kMTMetaCount;
+use crate::decoration::MT_META_COUNT;
 pub use count::META_COUNT;
 
 /// One count per meta kind, indexed by `kMTMeta*`.
@@ -115,7 +115,7 @@ mod tests {
     use crate::decoration::DECOR_HIGHLIGHT_INLINE_INIT;
     use crate::decoration::defs::DecorInline;
     use crate::decoration::{
-        kMTMetaConcealLines, kMTMetaInline, kMTMetaLines, kMTMetaSignHL, kMTMetaSignText,
+        MT_META_CONCEAL_LINES, MT_META_INLINE, MT_META_LINES, MT_META_SIGN_HL, MT_META_SIGN_TEXT,
     };
     use crate::marktree::MTPos;
     use crate::marktree::key::kMTFilterSelect;
@@ -133,11 +133,11 @@ mod tests {
     #[test]
     fn counts_one_per_decoration_kind_the_key_carries() {
         let meta = meta_describe_key(key(MtFlags::DECOR_VIRT_LINES | MtFlags::DECOR_CONCEAL_LINES));
-        assert_eq!(meta[kMTMetaLines as usize], 1);
-        assert_eq!(meta[kMTMetaConcealLines as usize], 1);
-        assert_eq!(meta[kMTMetaInline as usize], 0);
-        assert_eq!(meta[kMTMetaSignHL as usize], 0);
-        assert_eq!(meta[kMTMetaSignText as usize], 0);
+        assert_eq!(meta[MT_META_LINES as usize], 1);
+        assert_eq!(meta[MT_META_CONCEAL_LINES as usize], 1);
+        assert_eq!(meta[MT_META_INLINE as usize], 0);
+        assert_eq!(meta[MT_META_SIGN_HL as usize], 0);
+        assert_eq!(meta[MT_META_SIGN_TEXT as usize], 0);
     }
 
     #[test]
@@ -152,13 +152,13 @@ mod tests {
             [0; META_COUNT]
         );
         // ... but the start of the same pair does count.
-        assert_eq!(meta_describe_key(key(flags))[kMTMetaSignText as usize], 1);
+        assert_eq!(meta_describe_key(key(flags))[MT_META_SIGN_TEXT as usize], 1);
     }
 
     #[test]
     fn a_filter_selects_only_its_own_kinds() {
         let mut filter = [0; META_COUNT];
-        filter[kMTMetaSignText as usize] = kMTFilterSelect;
+        filter[MT_META_SIGN_TEXT as usize] = kMTFilterSelect;
         assert!(meta_has(
             &meta_describe_key(key(MtFlags::DECOR_SIGNTEXT)),
             &filter

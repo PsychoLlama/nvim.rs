@@ -26,9 +26,10 @@ use core::ffi::CStr;
 
 use crate::api::private::helpers::StringArray;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, Float, Handle, Integer, LuaRef, Object, ObjectType,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeWindow,
+    ApiDict, ApiString, Array, Boolean, Float, Handle, Integer, LuaRef, OBJECT_TYPE_ARRAY,
+    OBJECT_TYPE_BOOLEAN, OBJECT_TYPE_BUFFER, OBJECT_TYPE_DICT, OBJECT_TYPE_FLOAT,
+    OBJECT_TYPE_INTEGER, OBJECT_TYPE_LUA_REF, OBJECT_TYPE_NIL, OBJECT_TYPE_STRING,
+    OBJECT_TYPE_WINDOW, Object, ObjectType,
 };
 
 /// What a keyset field holds, and so what a value for it has to arrive as.
@@ -56,16 +57,16 @@ impl FieldKind {
     /// The API type a value for the field is reported as expecting.
     pub(crate) fn object_type(self) -> ObjectType {
         match self {
-            FieldKind::Any => kObjectTypeNil,
-            FieldKind::Boolean => kObjectTypeBoolean,
-            FieldKind::Integer | FieldKind::HlGroup => kObjectTypeInteger,
-            FieldKind::Float => kObjectTypeFloat,
-            FieldKind::String => kObjectTypeString,
-            FieldKind::Array | FieldKind::StringArray => kObjectTypeArray,
-            FieldKind::Dict => kObjectTypeDict,
-            FieldKind::LuaRef => kObjectTypeLuaRef,
-            FieldKind::Buffer => kObjectTypeBuffer,
-            FieldKind::Window => kObjectTypeWindow,
+            FieldKind::Any => OBJECT_TYPE_NIL,
+            FieldKind::Boolean => OBJECT_TYPE_BOOLEAN,
+            FieldKind::Integer | FieldKind::HlGroup => OBJECT_TYPE_INTEGER,
+            FieldKind::Float => OBJECT_TYPE_FLOAT,
+            FieldKind::String => OBJECT_TYPE_STRING,
+            FieldKind::Array | FieldKind::StringArray => OBJECT_TYPE_ARRAY,
+            FieldKind::Dict => OBJECT_TYPE_DICT,
+            FieldKind::LuaRef => OBJECT_TYPE_LUA_REF,
+            FieldKind::Buffer => OBJECT_TYPE_BUFFER,
+            FieldKind::Window => OBJECT_TYPE_WINDOW,
         }
     }
 }

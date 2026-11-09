@@ -489,7 +489,7 @@ impl Cells {
 
                 // Still showing the '$' of a change command: stop at the
                 // cursor.
-                if dollar_vcol.get() >= ColNr::ZERO
+                if DOLLAR_VCOL.get() >= ColNr::ZERO
                     && self.in_curline
                     && wlv.vcol >= window.w_virtcol
                 {

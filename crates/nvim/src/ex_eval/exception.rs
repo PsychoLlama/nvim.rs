@@ -48,7 +48,7 @@ use super::flag::{
 };
 use super::{cause_abort, message};
 use crate::debugger::state::debug_break_level;
-use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::state::CMDLINE_ROW;
 use crate::eval::userfunc::get_return_cmd;
 use crate::eval::vars::{set_vim_var_list, set_vim_var_string};
 use crate::ex_docmd::handle_did_throw;
@@ -492,7 +492,7 @@ fn verbose_exception(fate: Fate, id: ExcId) {
     // Don't overwrite this either.
     msg_str(c"\n");
     if debug_break_level.get() > 0 || p_vfile(CStr::is_empty) {
-        cmdline_row.set(MSG_ROW.get());
+        CMDLINE_ROW.set(MSG_ROW.get());
     }
     drop(no_prompt);
     drop(loud);
@@ -707,7 +707,7 @@ pub(crate) fn report_pending(action: PendingAction, pending: c_int, value: Pendi
     let _: bool = report_msg(0, || text);
     // Don't overwrite this either.
     msg_str(c"\n");
-    cmdline_row.set(MSG_ROW.get());
+    CMDLINE_ROW.set(MSG_ROW.get());
     drop(no_prompt);
     drop(loud);
     if quiet {

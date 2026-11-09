@@ -8,7 +8,6 @@
 
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -20,7 +19,7 @@
 use crate::global_cell::GlobalCell;
 use crate::normal::visual_active;
 use crate::option::vars::p_mouse;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_INSERT, MODE_SETWSIZE,
 };
@@ -28,11 +27,11 @@ use crate::winlayer::Buf;
 use core::ffi::CStr;
 
 /// What [`ui_check_mouse`] last worked out.
-static has_mouse: GlobalCell<bool> = GlobalCell::new(false);
+static HAS_MOUSE: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Whether the mouse is currently wanted.
 pub(super) fn wanted() -> bool {
-    has_mouse.get()
+    HAS_MOUSE.get()
 }
 
 const MOUSE_NORMAL: u8 = b'n';
@@ -48,11 +47,11 @@ const MOUSE_A: &CStr = c"nvich";
 
 /// Recomputes whether the mouse is wanted in the current mode.
 pub fn ui_check_mouse() {
-    has_mouse.set(false);
+    HAS_MOUSE.set(false);
     if p_mouse(CStr::is_empty) {
         return;
     }
-    let state = State.get();
+    let state = STATE.get();
     let checkfor = if visual_active() {
         MOUSE_VISUAL
     } else if state == MODE_HITRETURN || state == MODE_ASKMORE || state == MODE_SETWSIZE {
@@ -68,7 +67,7 @@ pub fn ui_check_mouse() {
         MOUSE_NORMAL
     };
     if ui_mouse_has(checkfor) {
-        has_mouse.set(true);
+        HAS_MOUSE.set(true);
     }
 }
 

@@ -28,7 +28,7 @@ use crate::buffer::buf_meta_total;
 use crate::charset::{byte2cells, vim_isbreak, vim_isprintc};
 use crate::cstr::byte_at;
 use crate::decoration::{
-    decor_conceal_line, kMTMetaInline, mark_virt_chain, ns_in_win, with_decor_virt,
+    MT_META_INLINE, decor_conceal_line, mark_virt_chain, ns_in_win, with_decor_virt,
 };
 use crate::diff::{diff_check_fill, diffopt_filler};
 use crate::fold::line_folded;
@@ -43,7 +43,7 @@ use crate::r#move::win_col_off2;
 use crate::narrow::number_as_int;
 use crate::os::libc::{int32_t, int64_t, uint32_t};
 use crate::pos::{MAXCOL, lt, ltoreq};
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::state::{MODE_NORMAL, virtual_active};
 use crate::types::{ColNr, LineNr, Pos};
 use crate::winlayer::Buf;
@@ -54,11 +54,11 @@ use core::ffi::{CStr, c_int, c_long};
 /// Cells a byte that is not part of a valid UTF-8 sequence occupies: it is
 /// shown as `<xx>`.
 const INVALID_BYTE_CELLS: c_int = 4;
-/// `kVTIsLines` — the virtual text is a block of whole lines, not inline.
+/// `VT_IS_LINES` — the virtual text is a block of whole lines, not inline.
 const VT_IS_LINES: c_int = 1;
-/// `kVPosInline` — the virtual text sits between two characters of the line.
+/// `V_POS_INLINE` — the virtual text sits between two characters of the line.
 const VPOS_INLINE: uint32_t = 2;
-/// `kMTMetaLines` — the marktree's per-node count of virtual-line marks.
+/// `MT_META_LINES` — the marktree's per-node count of virtual-line marks.
 const MT_META_LINES: MetaIndex = 1;
 const TAB: int32_t = b'\t' as int32_t;
 
@@ -208,7 +208,7 @@ impl<'a> CharsizeArg<'a> {
         // the walk would find nothing.
         let mut virt_row = -1;
         let mut iter = None;
-        if lnum > LineNr::ZERO && window.buffer().meta_total(kMTMetaInline) != 0 {
+        if lnum > LineNr::ZERO && window.buffer().meta_total(MT_META_INLINE) != 0 {
             let mut itr = MarkTreeIter::default();
             let mut walk = Cursor::in_buffer(window.buffer(), &mut itr);
             if walk.seek_filter((lnum - 1).get(), 0, lnum.get(), 0, &INLINE_FILTER) {
@@ -247,10 +247,10 @@ impl<'a> CharsizeArg<'a> {
 /// `csarg` must hold the widths [`charsize_regular`] left in it.
 fn virt_text_cursor_off(csarg: &CharsizeArg<'_>, on_nul: bool) -> c_int {
     let mut off = 0;
-    if !on_nul || State.get() & MODE_NORMAL == 0 {
+    if !on_nul || STATE.get() & MODE_NORMAL == 0 {
         off += csarg.cur_text_width_left;
     }
-    if !on_nul && State.get() & MODE_NORMAL != 0 {
+    if !on_nul && STATE.get() & MODE_NORMAL != 0 {
         off += csarg.cur_text_width_right;
     }
     off

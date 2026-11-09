@@ -65,9 +65,9 @@ use crate::options::kOptFindfunc;
 use crate::option::defs::{CpoFlag, OptError, OptSet, OptionSetFlags};
 use crate::optionstr::OptString;
 use crate::types::{
-    BoolVarValue, Callback, CdScope, ExArg, Failed, OptInt, ScriptCtx, TypVal, VAR_LIST,
-    VAR_STRING, VAR_UNKNOWN, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage,
-    kCdScopeWindow,
+    BOOL_VAR_FALSE, BOOL_VAR_TRUE, BoolVarValue, CD_SCOPE_GLOBAL, CD_SCOPE_TABPAGE,
+    CD_SCOPE_WINDOW, Callback, CdScope, ExArg, Failed, OptInt, ScriptCtx, TypVal, VAR_LIST,
+    VAR_STRING, VAR_UNKNOWN,
 };
 
 /// A copy of the buffer-local 'findfunc' callback if the option is set
@@ -133,7 +133,7 @@ pub(crate) fn call_findfunc(pat: &[u8], cmdcomplete: BoolVarValue) -> Option<Lis
 /// Complete a `:find` argument through 'findfunc': the strings in the list
 /// it answers, the rest skipped.
 pub(crate) fn expand_findfunc_matches(pat: &CStr) -> Option<Vec<XString>> {
-    let held = call_findfunc(pat.to_bytes(), kBoolVarTrue)?;
+    let held = call_findfunc(pat.to_bytes(), BOOL_VAR_TRUE)?;
     if list_len(Some(&held)) == 0 {
         return None;
     }
@@ -154,7 +154,7 @@ pub(crate) fn expand_findfunc_matches(pat: &CStr) -> Option<Vec<XString>> {
 /// whole dance.
 pub(crate) fn findfunc_find_file(findarg: &[u8], count: c_int) -> Option<ThinCString> {
     let findarg = cstr::owned(findarg);
-    let mut held = call_findfunc(findarg.to_bytes(), kBoolVarFalse);
+    let mut held = call_findfunc(findarg.to_bytes(), BOOL_VAR_FALSE);
     let fname_count = list_len(held.as_deref());
     if fname_count == 0 {
         let findarg = msg_cstr(&findarg);
@@ -223,8 +223,8 @@ pub(crate) fn set_global_prev_dir(dir: Option<XString>) {
 /// Who keeps the directory at `scope`.
 fn owner_of(scope: CdScope) -> DirOwner {
     match scope as c_int {
-        s if s == kCdScopeTabpage as c_int => DirOwner::TabPage(TabPage::current()),
-        s if s == kCdScopeWindow as c_int => DirOwner::Window(Win::current()),
+        s if s == CD_SCOPE_TABPAGE as c_int => DirOwner::TabPage(TabPage::current()),
+        s if s == CD_SCOPE_WINDOW as c_int => DirOwner::Window(Win::current()),
         _ => DirOwner::Global,
     }
 }
@@ -238,10 +238,10 @@ fn owner_of(scope: CdScope) -> DirOwner {
 /// directory can go back to it.
 pub(crate) fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
     set_own_dir(DirOwner::Window(Win::current()), None);
-    if scope as c_int >= kCdScopeTabpage as c_int {
+    if scope as c_int >= CD_SCOPE_TABPAGE as c_int {
         set_own_dir(DirOwner::TabPage(TabPage::current()), None);
     }
-    if (scope as c_int) < kCdScopeGlobal as c_int
+    if (scope as c_int) < CD_SCOPE_GLOBAL as c_int
         && !has_own_dir(DirOwner::Global)
         && let Some(pdir) = prev_dir_of(owner_of(scope))
     {
@@ -252,18 +252,18 @@ pub(crate) fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
         return;
     };
     match scope as c_int {
-        s if s == kCdScopeGlobal as c_int => {
+        s if s == CD_SCOPE_GLOBAL as c_int => {
             // The global directory *is* the process's now, so there is
             // nothing left to remember.
             set_own_dir(DirOwner::Global, None);
         }
-        s if s == kCdScopeTabpage as c_int => {
+        s if s == CD_SCOPE_TABPAGE as c_int => {
             set_own_dir(DirOwner::TabPage(TabPage::current()), Some(cwd.clone()));
         }
-        s if s == kCdScopeWindow as c_int => {
+        s if s == CD_SCOPE_WINDOW as c_int => {
             set_own_dir(DirOwner::Window(Win::current()), Some(cwd.clone()));
         }
-        // `kCdScopeInvalid`. Upstream aborts here; so does this.
+        // `CD_SCOPE_INVALID`. Upstream aborts here; so does this.
         _ => unreachable!("post_chdir with an invalid scope"),
     }
     last_chdir_reason.set(None);
@@ -327,11 +327,11 @@ pub fn ex_cd(excmd: &mut ExArg) {
     }
     let idx = excmd.cmdidx;
     let scope = if idx == CmdIdx::tcd || idx == CmdIdx::tchdir {
-        kCdScopeTabpage
+        CD_SCOPE_TABPAGE
     } else if idx == CmdIdx::lcd || idx == CmdIdx::lchdir {
-        kCdScopeWindow
+        CD_SCOPE_WINDOW
     } else {
-        kCdScopeGlobal
+        CD_SCOPE_GLOBAL
     };
     if change_dir(&new_dir, scope).is_ok() && (KEY_TYPED.get() || p_verbose() >= OptInt::from(5)) {
         report_working_dir();

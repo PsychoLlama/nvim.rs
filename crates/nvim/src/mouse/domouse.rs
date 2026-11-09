@@ -25,7 +25,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::ascii::NUL;
@@ -33,7 +32,7 @@ use crate::ascii::ascii_iswhite;
 use crate::buffer::buf_is_quickfix;
 use crate::charset::vim_iswordc;
 use crate::cursor::with_cursor_rest;
-use crate::drawscreen::state::{mode_displayed, redraw_cmdline};
+use crate::drawscreen::state::{MODE_DISPLAYED, REDRAW_CMDLINE};
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::eval::eval_has_provider;
 use crate::ex_docmd::{do_cmdline_cmd, tabpage_new};
@@ -49,7 +48,7 @@ use crate::keycodes::{ModMask, mouse_button};
 use crate::memline::{gchar_pos, inc};
 use crate::message::state::MSG_SILENT;
 use crate::mouse::state::{
-    mouse_col, mouse_dragging, mouse_grid, mouse_past_bottom, mouse_past_eol, mouse_row,
+    MOUSE_COL, MOUSE_DRAGGING, MOUSE_GRID, MOUSE_PAST_BOTTOM, MOUSE_PAST_EOL, MOUSE_ROW,
 };
 use crate::r#move::scroll_redraw;
 use crate::normal::{
@@ -63,24 +62,24 @@ use crate::pos::{equalpos, lt};
 use crate::register::defs::{PUT_CURSEND, PUT_FIXINDENT};
 use crate::register::{RegName, do_put, insert_reg, register_key, yank_register_mline};
 use crate::search::{FORWARD, findmatch};
-use crate::state::mode::{State, VIsual_reselect, restart_edit, where_paste_started};
+use crate::state::mode::{RESTART_EDIT, STATE, V_ISUAL_RESELECT, WHERE_PASTE_STARTED};
 use crate::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG};
 use crate::statusline::{
-    kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch,
+    STL_CLICK_DISABLED, STL_CLICK_FUNC_RUN, STL_CLICK_TAB_CLOSE, STL_CLICK_TAB_SWITCH,
 };
 use crate::types::Direction;
 use crate::types::Key;
 use crate::ui::MOUSE_VISUAL;
-use crate::ui::state::Columns;
+use crate::ui::state::COLUMNS;
 use crate::ui::ui_mouse_has;
 use crate::window::{goto_tabpage, tabpage_move};
 use crate::winlayer::graph::cmdwin_type;
 
 /// Whether the last click was in the tab page line, so that its release is
 /// ignored rather than treated as a click in a window.
-static in_tab_line: GlobalCell<bool> = GlobalCell::new(false);
+static IN_TAB_LINE: GlobalCell<bool> = GlobalCell::new(false);
 /// Where the multi-click selection started, which a drag extends away from.
-static orig_cursor: GlobalCell<Pos> = GlobalCell::new(Pos {
+static ORIG_CURSOR: GlobalCell<Pos> = GlobalCell::new(Pos {
     lnum: LineNr::ZERO,
     col: ColNr::ZERO,
     coladd: 0,
@@ -217,7 +216,7 @@ pub(crate) fn do_mouse(
     // If an operator is pending, ignore all drags and releases until the next
     // mouse click.
     if let Some(mut op) = op.filter(|o| !is_drag && o.pending()) {
-        got_click.set(false);
+        GOT_CLICK.set(false);
         op.motion_type = MT_CHAR_WISE;
     }
 
@@ -286,20 +285,20 @@ pub(crate) fn do_mouse(
     // dragging; temporarily minimize 'scrolloff'.
     if visual_active() && is_drag && win.scrolloff() != 0 {
         // In the very first line, allow scrolling one line.
-        mouse_dragging.set(if mouse_row.get() == 0 { 2 } else { 1 });
+        MOUSE_DRAGGING.set(if MOUSE_ROW.get() == 0 { 2 } else { 1 });
     }
 
     // When dragging the mouse above the window, scroll down.
-    if is_drag && mouse_row.get() < 0 && !landed.status_line {
+    if is_drag && MOUSE_ROW.get() < 0 && !landed.status_line {
         scroll_redraw(0, 1);
-        mouse_row.set(0);
+        MOUSE_ROW.set(0);
     }
 
     let old_mode = visual_mode();
     if let Some((start_visual, end_visual)) = visual_corner {
         // Right click in Visual mode.
         extend_visual_block(win, start_visual, end_visual);
-    } else if State.get() & MODE_INSERT != 0 && visual_active() {
+    } else if STATE.get() & MODE_INSERT != 0 && visual_active() {
         // If Visual mode started in insert mode, execute "CTRL-O".
         stuff_char(Key::CTRL_O);
     }
@@ -322,13 +321,13 @@ pub(crate) fn do_mouse(
     );
 
     // If Visual mode changed show it later.
-    if (!visual_active() && old_active && mode_displayed.get())
+    if (!visual_active() && old_active && MODE_DISPLAYED.get())
         || (visual_active()
             && p_smd()
             && MSG_SILENT.get() == 0
             && (!old_active || visual_mode() != old_mode))
     {
-        redraw_cmdline.set(true);
+        REDRAW_CMDLINE.set(true);
     }
 
     moved
@@ -358,9 +357,9 @@ fn coalesce_drags(c: Key) -> (c_int, bool, bool) {
             continue;
         }
         vungetc(nc);
-        mouse_grid.set(saved.grid);
-        mouse_row.set(saved.row);
-        mouse_col.set(saved.col);
+        MOUSE_GRID.set(saved.grid);
+        MOUSE_ROW.set(saved.row);
+        MOUSE_COL.set(saved.col);
         return (which_button, is_click, is_drag);
     }
 }
@@ -368,16 +367,16 @@ fn coalesce_drags(c: Key) -> (c_int, bool, bool) {
 /// Ignore drag and release events if we didn't get a click.
 fn ignore_stray_event(is_click: bool, is_drag: bool) -> Option<bool> {
     if is_click {
-        got_click.set(true);
+        GOT_CLICK.set(true);
         return None;
     }
-    if !got_click.get() {
+    if !GOT_CLICK.get() {
         return Some(false); // didn't get click, ignore
     }
     if !is_drag {
-        got_click.set(false); // release, reset got_click
-        if in_tab_line.get() {
-            in_tab_line.set(false);
+        GOT_CLICK.set(false); // release, reset got_click
+        if IN_TAB_LINE.get() {
+            IN_TAB_LINE.set(false);
             return Some(false);
         }
     }
@@ -390,14 +389,14 @@ fn modifier_shortcuts(is_click: bool, which_button: c_int, count: c_int) -> Opti
 
     // CTRL right mouse button does CTRL-T.
     if is_click && mods.has(ModMask::CTRL) && which_button == MOUSE_RIGHT {
-        if State.get() & MODE_INSERT != 0 {
+        if STATE.get() & MODE_INSERT != 0 {
             stuff_char(Key::CTRL_O);
         }
         if count > 1 {
             stuff_readbuf_number(count);
         }
         stuff_char(Key::CTRL_T);
-        got_click.set(false); // ignore drag&release now
+        GOT_CLICK.set(false); // ignore drag&release now
         return Some(false);
     }
 
@@ -435,7 +434,7 @@ fn modifier_shortcuts(is_click: bool, which_button: c_int, count: c_int) -> Opti
 /// Answers `None` only in Normal mode with nothing selected and no operator
 /// pending -- the rest is below `jump_to_mouse()`.
 fn middle_button_insert(op: Option<Op>, mut regname: RegName, fixindent: bool) -> Option<bool> {
-    if State.get() == MODE_NORMAL {
+    if STATE.get() == MODE_NORMAL {
         // If an operator was pending, we don't know what the user wanted to
         // do.  Go back to normal mode: Clear the operator and beep().
         if let Some(op) = op.filter(|o| o.pending()) {
@@ -456,7 +455,7 @@ fn middle_button_insert(op: Option<Op>, mut regname: RegName, fixindent: bool) -
             return Some(false);
         }
         // The rest is below jump_to_mouse().
-    } else if State.get() & MODE_INSERT == 0 {
+    } else if STATE.get() & MODE_INSERT == 0 {
         return Some(false);
     }
 
@@ -465,7 +464,7 @@ fn middle_button_insert(op: Option<Op>, mut regname: RegName, fixindent: bool) -
     // with do_put().
     // Also paste at the cursor if the current mode isn't in 'mouse' (only
     // happens for the GUI).
-    if State.get() & MODE_INSERT == 0 {
+    if STATE.get() & MODE_INSERT == 0 {
         return None;
     }
 
@@ -480,7 +479,7 @@ fn middle_button_insert(op: Option<Op>, mut regname: RegName, fixindent: bool) -
     // The register is looked up only in Replace mode, as the C's `&&` has it;
     // everywhere else `reg` stays null and `do_put` looks it up itself.
     let mut reg = None;
-    let replacing = State.get() & REPLACE_FLAG != 0 && {
+    let replacing = STATE.get() & REPLACE_FLAG != 0 && {
         let (mline, fetched) = yank_register_mline(regname);
         reg = fetched;
         !mline
@@ -512,8 +511,8 @@ fn tab_line_click(
     which_button: c_int,
     old_curwin: Win,
 ) -> Option<bool> {
-    if !(mouse_grid.get() <= 1 && mouse_row.get() == 0 && first_window_row() > 0) {
-        if is_drag && in_tab_line.get() {
+    if !(MOUSE_GRID.get() <= 1 && MOUSE_ROW.get() == 0 && first_window_row() > 0) {
+        if is_drag && IN_TAB_LINE.get() {
             move_tab_to_mouse(defs);
             return Some(false);
         }
@@ -521,22 +520,22 @@ fn tab_line_click(
     }
 
     if is_drag {
-        if in_tab_line.get() {
+        if IN_TAB_LINE.get() {
             move_tab_to_mouse(defs);
         }
         return Some(false);
     }
 
     // A click in a tab selects that tab page.
-    if is_click && cmdwin_type.get() == 0 && mouse_col.get() < Columns.get() {
-        let def = defs.at(mouse_col.get());
-        in_tab_line.set(true);
+    if is_click && cmdwin_type.get() == 0 && MOUSE_COL.get() < COLUMNS.get() {
+        let def = defs.at(MOUSE_COL.get());
+        IN_TAB_LINE.set(true);
 
-        // The C's `kStlClickTabSwitch` arm falls through to
-        // `kStlClickTabClose` for the middle button, which is what this flag
+        // The C's `STL_CLICK_TAB_SWITCH` arm falls through to
+        // `STL_CLICK_TAB_CLOSE` for the middle button, which is what this flag
         // spells out.
-        let mut close = def.type_0 == kStlClickTabClose;
-        if def.type_0 == kStlClickTabSwitch {
+        let mut close = def.type_0 == STL_CLICK_TAB_CLOSE;
+        if def.type_0 == STL_CLICK_TAB_SWITCH {
             if which_button == MOUSE_MIDDLE {
                 close = true;
             } else if MOD_MASK.get().masked(ModMask::MULTI_CLICK) == ModMask::TWO_CLICK {
@@ -553,8 +552,8 @@ fn tab_line_click(
                     end_visual_mode();
                 }
             }
-        } else if def.type_0 == kStlClickFuncRun {
-            call_click_def_func(defs, mouse_col.get(), which_button);
+        } else if def.type_0 == STL_CLICK_FUNC_RUN {
+            call_click_def_func(defs, MOUSE_COL.get(), which_button);
             // kStlClickDisabled does nothing, and an unknown kind is not
             // reachable: the statusline builder writes only these four.
         }
@@ -598,7 +597,7 @@ fn click_definition(
         // spans the whole screen.
         let (defs, size) = Win::current().status_click_defs();
         (click_defs, limit) = (defs, size);
-        click_col = mouse_col.get();
+        click_col = MOUSE_COL.get();
     }
 
     if landed.statuscol && win.w_onebuf_opt.wo_rl != 0 {
@@ -611,7 +610,7 @@ fn click_definition(
 
     if let Some(click_defs) = click_defs {
         match click_defs.at(click_col).type_0 {
-            kStlClickDisabled => {
+            STL_CLICK_DISABLED => {
                 // If there is no click definition, still open the popupmenu
                 // for a statuscolumn click like a click in the sign/number
                 // column does.
@@ -623,7 +622,7 @@ fn click_definition(
                     do_popup(which_button, m_pos_flag, m_pos);
                 }
             }
-            kStlClickFuncRun => call_click_def_func(click_defs, click_col, which_button),
+            STL_CLICK_FUNC_RUN => call_click_def_func(click_defs, click_col, which_button),
             _ => debug_assert!(
                 false,
                 "winbar, statusline and statuscolumn only support %@ for clicks"
@@ -678,9 +677,9 @@ fn dispatch_action(a: Action, win: Win) {
         }
         let (mline, reg) = yank_register_mline(regname);
         if if mline {
-            mouse_past_bottom.get()
+            MOUSE_PAST_BOTTOM.get()
         } else {
-            mouse_past_eol.get()
+            MOUSE_PAST_EOL.get()
         } {
             dir = FORWARD;
         }
@@ -710,8 +709,8 @@ fn dispatch_action(a: Action, win: Win) {
 
         // Remember where the paste started, so in edit() Insstart can be set
         // to this position.
-        if !restart_edit.get().is_nul() {
-            where_paste_started.set(win.w_cursor);
+        if !RESTART_EDIT.get().is_nul() {
+            WHERE_PASTE_STARTED.set(win.w_cursor);
         }
         let flags = if fixindent { PUT_FIXINDENT } else { 0 } | PUT_CURSEND;
         do_put(regname, reg.as_ref(), dir, count, flags);
@@ -731,25 +730,25 @@ fn dispatch_action(a: Action, win: Win) {
             c".ll"
         };
         let _ = do_cmdline_cmd(cmd);
-        got_click.set(false); // ignore drag&release now
+        GOT_CLICK.set(false); // ignore drag&release now
         return;
     }
 
     if mods.has(ModMask::CTRL) || (buf.b_help && double_click) {
         // Ctrl-Mouse click (or double click in a help window) jumps to the
         // tag under the mouse pointer.
-        if State.get() & MODE_INSERT != 0 {
+        if STATE.get() & MODE_INSERT != 0 {
             stuff_char(Key::CTRL_O);
         }
         stuff_char(Key::CTRL_RSB);
-        got_click.set(false); // ignore drag&release now
+        GOT_CLICK.set(false); // ignore drag&release now
         return;
     }
 
     if mods.has(ModMask::SHIFT) {
         // Shift-Mouse click searches for the next occurrence of the word
         // under the mouse pointer.
-        if State.get() & MODE_INSERT != 0 || (visual_active() && visual_select()) {
+        if STATE.get() & MODE_INSERT != 0 || (visual_active() && visual_select()) {
             stuff_char(Key::CTRL_O);
         }
         stuff_char(Key::ascii(if which_button == MOUSE_LEFT {
@@ -767,7 +766,7 @@ fn dispatch_action(a: Action, win: Win) {
     }
 
     if mods.has(ModMask::MULTI_CLICK)
-        && State.get() & (MODE_NORMAL | MODE_INSERT) != 0
+        && STATE.get() & (MODE_NORMAL | MODE_INSERT) != 0
         && mouse_can_visual
     {
         win.multi_click(op, is_click, is_drag, mods);
@@ -789,12 +788,12 @@ impl Win {
     fn multi_click(mut self, op: Option<Op>, is_click: bool, is_drag: bool, mods: ModMask) {
         if is_click || !visual_active() {
             if visual_active() {
-                orig_cursor.set(visual_anchor());
+                ORIG_CURSOR.set(visual_anchor());
             } else {
                 set_visual_anchor(self.w_cursor);
-                orig_cursor.set(visual_anchor());
+                ORIG_CURSOR.set(visual_anchor());
                 set_visual_active(true);
-                VIsual_reselect.set(1);
+                V_ISUAL_RESELECT.set(1);
                 // Start Select mode if 'selectmode' contains "mouse".
                 may_start_select(Key::ascii(b'o'));
                 setmouse();
@@ -815,7 +814,7 @@ impl Win {
             if !matched && (is_click || is_drag) {
                 // When not found a match or when dragging: extend to include a
                 // word.
-                if lt(self.w_cursor, orig_cursor.get()) {
+                if lt(self.w_cursor, ORIG_CURSOR.get()) {
                     self.with_cursor_copy(find_start_of_word);
                     with_visual(find_end_of_word);
                 } else {

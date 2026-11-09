@@ -52,8 +52,8 @@ use crate::os::cshim::gettext;
 use crate::register::get_reg_contents_owned;
 use crate::strings::find_bytes;
 use crate::types::{
-    ExArg, Failed, Float, TypVal, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
-    VarNumber, kBoolVarFalse, kBoolVarTrue,
+    BOOL_VAR_FALSE, BOOL_VAR_TRUE, ExArg, Failed, Float, TypVal, VAR_BLOB, VAR_BOOL, VAR_FLOAT,
+    VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarNumber,
 };
 
 /// A freshly declared typval, which is what every level starts a second
@@ -637,9 +637,9 @@ pub(crate) fn eval7_leader(
                     // answers a Number.
                     result.write_empty(VAR_BOOL);
                     val = VarNumber::from(if f == 0.0 {
-                        kBoolVarTrue
+                        BOOL_VAR_TRUE
                     } else {
-                        kBoolVarFalse
+                        BOOL_VAR_FALSE
                     });
                 } else {
                     val = VarNumber::from(val == 0);

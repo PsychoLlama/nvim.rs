@@ -12,7 +12,7 @@ pub mod state;
 use crate::api::vim::nvim_paste;
 use crate::ascii::ascii_iswhite;
 use crate::debugger::state::debug_did_msg;
-use crate::drawscreen::state::{cmdline_row, mode_displayed, must_redraw, redraw_cmdline};
+use crate::drawscreen::state::{CMDLINE_ROW, MODE_DISPLAYED, MUST_REDRAW, REDRAW_CMDLINE};
 use crate::drawscreen::{setcursor, showmode, unshowmode, update_screen};
 use crate::edit::{edit_putchar, edit_unputchar};
 use crate::eval::funcs::builtin::EvalFuncData;
@@ -55,7 +55,7 @@ use crate::message::state::{
 };
 use crate::message::{E_NESTING, E_TOOCOMPL};
 use crate::message::{emsg, iemsg};
-use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
+use crate::mouse::state::{MOUSE_COL, MOUSE_GRID, MOUSE_ROW};
 use crate::mouse::{MousePos, comp_pos, find_win_inner, is_mouse_key};
 use crate::r#move::validate_cursor;
 use crate::normal::defs::{MotionType, OpArg};
@@ -68,8 +68,8 @@ use crate::os::cshim::gettext;
 use crate::os::input::{input_available, input_get, line_breakcheck, os_breakcheck};
 use crate::os::libc::{ptrdiff_t, size_t, uint8_t, uint64_t};
 use crate::state::mode::{
-    State, VIsual_reselect, arrow_used, did_ai, exmode_active, finish_op, pending_exmode_active,
-    redo_VIsual_busy, restart_edit,
+    ARROW_USED, DID_AI, EXMODE_ACTIVE, FINISH_OP, PENDING_EXMODE_ACTIVE, REDO_V_ISUAL_BUSY,
+    RESTART_EDIT, STATE, V_ISUAL_RESELECT,
 };
 use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_HITRETURN, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL,

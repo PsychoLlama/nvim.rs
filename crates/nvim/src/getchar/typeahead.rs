@@ -619,7 +619,7 @@ pub fn ungetchars(len: usize) {
 /// Not in Insert or Cmdline mode unless a cursor key was used, and not while
 /// reading a script file — in both cases the keys are one edit, not several.
 pub(crate) fn may_sync_undo() {
-    if (State.get() & (MODE_INSERT | MODE_CMDLINE) == 0 || arrow_used.get()) && CURSCRIPT.get() < 0
+    if (STATE.get() & (MODE_INSERT | MODE_CMDLINE) == 0 || ARROW_USED.get()) && CURSCRIPT.get() < 0
     {
         u_sync(false);
     }

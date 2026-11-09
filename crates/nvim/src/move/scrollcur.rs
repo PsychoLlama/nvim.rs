@@ -24,7 +24,7 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::mouse::state::mouse_dragging;
+use crate::mouse::state::MOUSE_DRAGGING;
 use crate::narrow::number_as_int;
 use crate::os::libc::int64_t;
 use crate::pos::MAXCOL;
@@ -34,8 +34,8 @@ use crate::types::{ColNr, Direction, LineNr};
 /// The 'scrolloff' the `scroll_cursor_*` family works with: a mouse drag
 /// slows scrolling down by standing in for the option.
 fn scrolloff_or_drag(win: Win) -> int64_t {
-    if mouse_dragging.get() > 0 {
-        int64_t::from(mouse_dragging.get() - 1)
+    if MOUSE_DRAGGING.get() > 0 {
+        int64_t::from(MOUSE_DRAGGING.get() - 1)
     } else {
         win.scrolloff()
     }
@@ -604,7 +604,7 @@ impl Win {
             below_wanted = below_wanted.min(int64_t::from(self.w_view_height / 2));
         }
         self.validate_botline();
-        if self.w_botline == self.buffer().line_count() + 1 && mouse_dragging.get() == 0 {
+        if self.w_botline == self.buffer().line_count() + 1 && MOUSE_DRAGGING.get() == 0 {
             below_wanted = 0;
             above_wanted = above_wanted.min(int64_t::from((self.w_view_height - 1) / 2));
         }

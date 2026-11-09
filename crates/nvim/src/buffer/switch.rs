@@ -40,7 +40,7 @@ use crate::autocmd::is_aucmd_win;
 use crate::autocmd::state::au_new_curbuf;
 use crate::buffer::state::{swap_exists_action, swap_exists_did_quit};
 use crate::charset::{getdigits_int_at, skip};
-use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::state::CMDLINE_ROW;
 use crate::ex_cmds2::{can_abandon, dialog_changed, dialog_close_terminal};
 use crate::ex_docmd::{cmdmod_has, ex_errmsg, ex_msg};
 use crate::ex_eval::defs::Cleanup;
@@ -262,7 +262,7 @@ pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
         MSG_SCROLL.set(1);
         recover_swapfile();
         put_message(c"\n"); // don't overwrite the last message
-        cmdline_row.set(MSG_ROW.get());
+        CMDLINE_ROW.set(MSG_ROW.get());
         do_modelines(OptionSetFlags::NONE);
         leave_cleanup_now(&mut cs);
     }

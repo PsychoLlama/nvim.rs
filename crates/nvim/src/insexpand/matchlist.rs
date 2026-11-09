@@ -669,7 +669,7 @@ pub fn ins_compl_clear() {
     compl_curr_buf.set(None);
     compl_pattern().clear();
     compl_leader().clear();
-    edit_submode_extra.set(None);
+    EDIT_SUBMODE_EXTRA.set(None);
     compl_orig_extmarks().clear();
     compl_orig_text().clear();
     compl_enter_selects.set(false);

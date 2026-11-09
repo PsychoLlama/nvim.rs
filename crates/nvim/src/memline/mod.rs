@@ -28,7 +28,7 @@ use crate::buffer::state::swap_exists_action;
 use crate::buffer::{BufFlags, buf_inc_changedtick, buf_spname, open_buffer};
 use crate::change::{changed_internal, unchanged};
 use crate::cursor::{check_cursor, coladvance};
-use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::state::CMDLINE_ROW;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::eval::vars::{set_vim_var_string, with_vim_var_str};
 use crate::ex_docmd::cmdmod_has;
@@ -81,7 +81,7 @@ use crate::startup::{getout, recoverymode};
 use crate::types::{
     Buffer, CmdModFlags, ColNr, Dict, Failed, LineNr, List, Pos, Timestamp, VarNumber,
 };
-use crate::ui::state::kUIMessages;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;
 use crate::version::min_vim_version_name;

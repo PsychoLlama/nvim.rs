@@ -25,7 +25,7 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::highlight_group::HLF_T;
 use crate::memory::ThinCString;
-use crate::types::{VAR_STRING, kListLenMayKnow};
+use crate::types::{LIST_LEN_MAY_KNOW, VAR_STRING};
 use crate::winlayer::Buf;
 
 /// One `:undolist` row: the header's sequence number, how many changes deep
@@ -88,7 +88,7 @@ pub fn ex_undolist(_excmd: &mut ExArg) {
 /// `newhead`/`curhead`/`save`/`alt` where they apply — which is the order
 /// upstream adds them in.
 fn eval_tree(buffer: Buf, first: UndoLink) -> ListRef {
-    let mut list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+    let mut list = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
     let mut link = first;
     while let Some(uh) = buffer.header(link) {
         let (seq, time, save_nr, alt_next, prev) =

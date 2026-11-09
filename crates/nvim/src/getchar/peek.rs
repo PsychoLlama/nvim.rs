@@ -75,7 +75,7 @@ struct Partial {
 /// cursor position to draw `'showcmd'` at, and whether the mode message was
 /// removed.
 fn esc_leaves_insert(at: &mut CursorAt) -> bool {
-    let deleted = mode_displayed.get();
+    let deleted = MODE_DISPLAYED.get();
     if deleted {
         unshowmode(true);
     }
@@ -98,7 +98,7 @@ fn esc_leaves_insert(at: &mut CursorAt) -> bool {
                     .iter()
                     .all(|&b| ascii_iswhite(c_int::from(b)))
             };
-            if did_ai.get() && trailing_white {
+            if DID_AI.get() && trailing_white {
                 // After auto-indenting with no text following, the
                 // trailing white space is about to be truncated, so the
                 // cursor belongs after the last non-white character: at the
@@ -175,13 +175,13 @@ fn show_partial_key(at: CursorAt) -> Partial {
         showing: false,
     };
 
-    if (State.get() & (MODE_NORMAL | MODE_INSERT) != 0 || State.get() == MODE_LANGMAP)
-        && State.get() != MODE_HITRETURN
+    if (STATE.get() & (MODE_NORMAL | MODE_INSERT) != 0 || STATE.get() == MODE_LANGMAP)
+        && STATE.get() != MODE_HITRETURN
     {
         let last = tb.byte(tb.len() - 1);
         // The last byte on its own, as upstream reads it: the typeahead's
         // NUL follows it.
-        if State.get() & MODE_INSERT != 0 && last_byte_is_one_cell(last) {
+        if STATE.get() & MODE_INSERT != 0 && last_byte_is_one_cell(last) {
             // This looks nice when typing a dead-character mapping.
             edit_putchar(Key::byte(last), false);
             setcursor(); // put the cursor back where it belongs
@@ -207,7 +207,7 @@ fn show_partial_key(at: CursorAt) -> Partial {
     }
 
     // The same on the command line, where `get_number()` has none.
-    if State.get() & MODE_CMDLINE != 0 && cmdline_in_use() && CMDLINE_STAR.get() == 0 {
+    if STATE.get() & MODE_CMDLINE != 0 && cmdline_in_use() && CMDLINE_STAR.get() == 0 {
         let byte = tb.byte(tb.len() - 1);
         if last_byte_is_one_cell(byte) && byte < 128 {
             putcmdline(byte.cast_signed(), false);
@@ -229,10 +229,10 @@ fn unshow_partial_key(partial: &Partial) {
         pop_showcmd();
     }
     if partial.showing {
-        if State.get() & MODE_INSERT != 0 {
+        if STATE.get() & MODE_INSERT != 0 {
             edit_unputchar();
         }
-        if State.get() & MODE_CMDLINE != 0 && cmdline_in_use() {
+        if STATE.get() & MODE_CMDLINE != 0 && cmdline_in_use() {
             unputcmdline();
         } else {
             setcursor(); // put the cursor back where it belongs
@@ -268,7 +268,7 @@ fn interrupted(advance: bool) -> u8 {
     // inserts one. (An ended script, `None`, counts as true, as upstream's
     // `-1` does.)
     let c = if (got != Some(0) || tb.maplen() != 0)
-        && State.get() & (MODE_INSERT | MODE_CMDLINE) != 0
+        && STATE.get() & (MODE_INSERT | MODE_CMDLINE) != 0
     {
         ESC_BYTE
     } else {
@@ -364,7 +364,7 @@ fn read_from_typeahead(
             && NO_MAPPING.get() == 0
             && ex_normal_busy.get() == 0
             && tb.maplen() == 0
-            && State.get() & MODE_INSERT != 0
+            && STATE.get() & MODE_INSERT != 0
             && (p_timeout() || (keylen == KEYLEN_PART_KEY && p_ttimeout()))
             && {
                 got = inchar(&mut peeked, 25);
@@ -402,7 +402,7 @@ fn read_from_typeahead(
             // On the command line only CTRL-C breaks it; for the cmdline
             // window alternate between ESC (for most situations) and
             // CTRL-C (which closes the window).
-            let c = if State.get() & MODE_CMDLINE != 0
+            let c = if STATE.get() & MODE_CMDLINE != 0
                 || (cmdwin_type.get() > 0 && NORMAL_BUSY_LAST_KEY.get() == ESC_BYTE)
             {
                 CTRL_C_BYTE
@@ -416,8 +416,8 @@ fn read_from_typeahead(
                 TYPEBUF_WAS_EMPTY.set(true);
             }
             // Answer 0 in normal_check().
-            if pending_exmode_active.get() {
-                exmode_active.set(true);
+            if PENDING_EXMODE_ACTIVE.get() {
+                EXMODE_ACTIVE.set(true);
             }
             // No characters to block abbreviations for.
             tb.set_no_abbr_cnt(0);
@@ -429,17 +429,17 @@ fn read_from_typeahead(
         // mapping we are about to block here, so the changed text has to
         // be shown. Same for a redraw 'lazyredraw' postponed because
         // there was something in the input buffer (a termresponse, say).
-        if (State.get() & MODE_INSERT != 0 || p_lz())
-            && State.get() & MODE_CMDLINE == 0
+        if (STATE.get() & MODE_INSERT != 0 || p_lz())
+            && STATE.get() & MODE_CMDLINE == 0
             && advance
-            && must_redraw.get() != 0
+            && MUST_REDRAW.get() != 0
             && !NEED_WAIT_RETURN.get()
         {
             let _ = update_screen();
             setcursor(); // put the cursor back where it belongs
         }
 
-        let partial = if !tb.is_empty() && advance && !exmode_active.get() {
+        let partial = if !tb.is_empty() && advance && !EXMODE_ACTIVE.get() {
             show_partial_key(at)
         } else {
             Partial {
@@ -565,16 +565,16 @@ pub(crate) fn vgetorpeek(advance: bool) -> u8 {
     // The "INSERT" message is taken care of here: if an ESC is answered
     // to leave Insert mode the message is deleted, and if we do not
     // answer an ESC but deleted the message before, it is redisplayed.
-    if advance && p_smd() && MSG_SILENT.get() == 0 && State.get() & MODE_INSERT != 0 {
-        if c == ESC_BYTE && !mode_deleted && NO_MAPPING.get() == 0 && mode_displayed.get() {
+    if advance && p_smd() && MSG_SILENT.get() == 0 && STATE.get() & MODE_INSERT != 0 {
+        if c == ESC_BYTE && !mode_deleted && NO_MAPPING.get() == 0 && MODE_DISPLAYED.get() {
             if !typeahead().is_empty() && !KEY_TYPED.get() {
-                redraw_cmdline.set(true); // delete the mode later
+                REDRAW_CMDLINE.set(true); // delete the mode later
             } else {
                 unshowmode(false);
             }
         } else if c != ESC_BYTE && mode_deleted {
             if !typeahead().is_empty() && !KEY_TYPED.get() {
-                redraw_cmdline.set(true); // show the mode later
+                REDRAW_CMDLINE.set(true); // show the mode later
             } else {
                 showmode();
             }
@@ -613,7 +613,7 @@ pub(crate) fn inchar(buf: &mut [u8], wait_time: c_long) -> Option<usize> {
     // Don't reset these at the hit-return prompt, or an endless recursion
     // can result: write error in swapfile, hit-return, timeout on the
     // character wait, flush swapfile, write error, ...
-    if State.get() != MODE_HITRETURN {
+    if STATE.get() != MODE_HITRETURN {
         did_outofmem_msg.set(false); // display the out-of-memory message again
         did_swapwrite_msg.set(false); // display the swap-write error again
     }

@@ -39,14 +39,13 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
 use crate::ascii::CAR;
 use crate::ascii::NL;
 use crate::narrow::as_index;
 use crate::narrow::len_as_int;
-use crate::statusline::state::tab_page_click_defs;
+use crate::statusline::state::TAB_PAGE_CLICK_DEFS;
 use crate::types::DictBuilder;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -88,15 +87,15 @@ pub use self::status::*;
 pub use self::stl::*;
 pub use self::tabline::*;
 
-pub const kStlClickFuncRun: StlClickDefinition_type_0 = 3;
-pub const kStlClickTabClose: StlClickDefinition_type_0 = 2;
-pub const kStlClickTabSwitch: StlClickDefinition_type_0 = 1;
-pub const kStlClickDisabled: StlClickDefinition_type_0 = 0;
+pub const STL_CLICK_FUNC_RUN: StlClickDefinition_type_0 = 3;
+pub const STL_CLICK_TAB_CLOSE: StlClickDefinition_type_0 = 2;
+pub const STL_CLICK_TAB_SWITCH: StlClickDefinition_type_0 = 1;
+pub const STL_CLICK_DISABLED: StlClickDefinition_type_0 = 0;
 /// Most sign columns `'signcolumn'` will ever ask for.
 pub const SIGN_SHOW_MAX: ::core::ffi::c_int = 9;
 pub type NumberBase = ::core::ffi::c_uint;
-pub const kNumBaseHexadecimal: NumberBase = 16;
-pub const kNumBaseDecimal: NumberBase = 10;
+pub const NUM_BASE_HEXADECIMAL: NumberBase = 16;
+pub const NUM_BASE_DECIMAL: NumberBase = 10;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
@@ -162,7 +161,7 @@ impl StlJob<'_> {
 
 /// A cell nobody claimed.
 pub(crate) const NO_CLICK: StlClickDefinition = StlClickDefinition {
-    type_0: kStlClickDisabled,
+    type_0: STL_CLICK_DISABLED,
     tabnr: 0,
     func: 0,
 };
@@ -244,8 +243,8 @@ pub(crate) fn fill_click_defs(
         // dropped with it.
         from = rec.start;
         (cur, cur_name) = (rec.def, rec.func);
-        if !tabline && !(cur.type_0 == kStlClickDisabled || cur.type_0 == kStlClickFuncRun) {
-            cur.type_0 = kStlClickDisabled;
+        if !tabline && !(cur.type_0 == STL_CLICK_DISABLED || cur.type_0 == STL_CLICK_FUNC_RUN) {
+            cur.type_0 = STL_CLICK_DISABLED;
         }
     }
     if col < width {
@@ -268,9 +267,9 @@ fn claim(
 }
 
 /// Run `f` over the tab page line's definitions, which the screen resize
-/// sizes to `Columns`.
+/// sizes to `COLUMNS`.
 pub(crate) fn with_tab_click_defs<R>(f: impl FnOnce(&mut ClickLine) -> R) -> R {
-    tab_page_click_defs.with_mut(f)
+    TAB_PAGE_CLICK_DEFS.with_mut(f)
 }
 
 // ---------------------------------------------------------------------------

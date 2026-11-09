@@ -32,7 +32,7 @@ use crate::os::cshim::gettext;
 use crate::profile::startup_timing;
 use crate::profile::{time_msg, time_pop, time_push};
 use crate::types::{ApiString, Object, TypVal};
-use crate::ui::state::kUICmdline;
+use crate::ui::state::UI_CMDLINE;
 use crate::ui::ui_has;
 
 lua_functions! {
@@ -219,7 +219,7 @@ fn debug(stack: &mut Stack) -> Result<c_int, Raise> {
         let mut input = TV_INITIAL_VALUE;
         get_user_input(&input_args, &mut input, false, false);
 
-        if ui_has(kUICmdline) {
+        if ui_has(UI_CMDLINE) {
             // `snprintf(line, IOSIZE, "lua_debug> %s", input)`: a null
             // string as the C library prints one.
             let shown = input
@@ -238,7 +238,7 @@ fn debug(stack: &mut Stack) -> Result<c_int, Raise> {
             .filter(|s| !s.is_empty() && s.as_bytes() != b"cont")
         else {
             tv_clear(&mut input);
-            if ui_has(kUICmdline) {
+            if ui_has(UI_CMDLINE) {
                 ui_ext_cmdline_block_leave();
             }
             return Ok(0);

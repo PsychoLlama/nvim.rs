@@ -44,8 +44,8 @@ use crate::msgpack_rpc::packer::{
 use crate::narrow::{len_as_integer, number_as_int, number_as_u32};
 use crate::types::builders::ArrayBuf;
 use crate::types::{Integer, ScreenAttr, ScreenChar};
-use crate::ui::state::Columns;
-use crate::ui::state::kLineFlagWrap;
+use crate::ui::state::COLUMNS;
+use crate::ui::state::LINE_FLAG_WRAP;
 use crate::ui::state::{LineFlags, RemoteUI};
 use core::ffi::c_int;
 
@@ -205,7 +205,7 @@ fn raw_line_linegrid(
     // `lenpos` is the last event's placeholder, and the reserve covers the
     // closing byte.
     ui.packer.patch_be16(lenpos, nelem);
-    mpack_bool(&mut ui.packer, flags & kLineFlagWrap != 0);
+    mpack_bool(&mut ui.packer, flags & LINE_FLAG_WRAP != 0);
 }
 
 /// Writes a `grid_line` argument list up to its cell array, returning where
@@ -258,7 +258,7 @@ fn raw_line_legacy(
     }
     remote_ui_cursor_goto(ui, row, endcol);
     remote_ui_highlight_set(ui, number_as_int(clearattr));
-    if clearattr == 0 && clearcol == Integer::from(Columns.get()) {
+    if clearattr == 0 && clearcol == Integer::from(COLUMNS.get()) {
         // Clearing the rest of the line with the default highlight has
         // its own call; anything else has to be spelled out cell by
         // cell, because the legacy protocol has no repeat count.

@@ -33,7 +33,7 @@ use crate::message_fmt::msg_cstr;
 use crate::os::fs::os_strerror;
 use crate::tui::state::{BUF_SIZE, TUIData};
 use crate::tui::terminfo::caps::{
-    TerminfoDef, kTerm_cursor_invisible, kTerm_cursor_normal, kTermCount,
+    TERM_COUNT, TERM_CURSOR_INVISIBLE, TERM_CURSOR_NORMAL, TerminfoDef,
 };
 use crate::tui::terminfo::param::Param;
 use crate::tui::terminfo::terminfo_fmt;
@@ -184,7 +184,7 @@ pub fn terminfo_print_str(tui: &mut TUIData, what: TerminfoDef, s: &CStr) {
 /// which is why the first attempt gets a copy.
 ///
 fn terminfo_print(tui: &mut TUIData, what: TerminfoDef, params: &mut [Param<'_>; 9]) {
-    assert!(what < kTermCount, "capability {what} out of range");
+    assert!(what < TERM_COUNT, "capability {what} out of range");
     if tui.ti.def(what).is_none_or(<[u8]>::is_empty) {
         return;
     }
@@ -229,7 +229,7 @@ fn flush_buf_start(tui: &mut TUIData, buf: &mut [u8]) -> usize {
     }
     if !tui.is_invisible {
         tui.is_invisible = true;
-        if let Some(seq) = tui.ti.def(kTerm_cursor_invisible) {
+        if let Some(seq) = tui.ti.def(TERM_CURSOR_INVISIBLE) {
             return fmt_into(seq, buf);
         }
     }
@@ -248,10 +248,10 @@ fn flush_buf_end(tui: &mut TUIData, buf: &mut [u8]) -> usize {
     let want_hidden = should_invisible(tui);
     let slot = if tui.is_invisible && !want_hidden {
         tui.is_invisible = false;
-        Some(kTerm_cursor_normal)
+        Some(TERM_CURSOR_NORMAL)
     } else if !tui.is_invisible && want_hidden {
         tui.is_invisible = true;
-        Some(kTerm_cursor_invisible)
+        Some(TERM_CURSOR_INVISIBLE)
     } else {
         None
     };

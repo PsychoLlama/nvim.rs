@@ -11,13 +11,12 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use core::ffi::{CStr, c_int};
 
-/// Index into `highlight_attr[]`: the builtin UI highlight groups.
+/// Index into `HIGHLIGHT_ATTR[]`: the builtin UI highlight groups.
 ///
-/// The names the indices resolve to are in `hlf_names`; the two must stay
+/// The names the indices resolve to are in `HLF_NAMES`; the two must stay
 /// in step. `HLF_COUNT` is the length of both.
 /// no UI highlight active
 pub(crate) const HLF_NONE: c_int = 0;
@@ -162,7 +161,7 @@ pub(crate) const HLF_COUNT: c_int = 76;
 ///
 /// Index 0 (`HLF_NONE`) is the empty name: the sentinel is not a group
 /// (upstream's NULL there, which its readers turn into an empty string).
-pub(crate) static hlf_names: [&CStr; HLF_COUNT as usize] = [
+pub(crate) static HLF_NAMES: [&CStr; HLF_COUNT as usize] = [
     c"",
     c"SpecialKey",
     c"EndOfBuffer",

@@ -20,7 +20,7 @@ use crate::eval::typval::{DictCursor, ListRef, RemovedItem};
 use crate::ascii::ascii_iswhite;
 use crate::charset::skip;
 use crate::cmdexpand::defs::Expand;
-use crate::drawscreen::state::sc_col;
+use crate::drawscreen::state::SC_COL;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::executor::eexe_mod_op;
@@ -79,12 +79,12 @@ use crate::runtime::{
 use crate::search::set_search_direction;
 use crate::search::state::no_hlsearch;
 use crate::types::{
-    BoolVarValue, Dict, ExArg, List, Partial, ScopeType, ScriptId, SpecialVarValue, TypVal,
-    VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT,
-    VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN,
-    VarLock, VarNumber, VarType, VimVarFlags, Vv, kBoolVarFalse, kBoolVarTrue, kListLenUnknown,
-    kSpecialVarNull,
+    BOOL_VAR_FALSE, BOOL_VAR_TRUE, BoolVarValue, Dict, ExArg, LIST_LEN_UNKNOWN, List, Partial,
+    SPECIAL_VAR_NULL, ScopeType, ScriptId, SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL,
+    VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE,
+    VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT,
+    VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN, VarLock,
+    VarNumber, VarType, VimVarFlags, Vv,
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};

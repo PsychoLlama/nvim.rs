@@ -40,7 +40,7 @@ use crate::ex_cmds::print_line_no_prefix;
 use crate::ex_docmd::cmdline::do_cmdline;
 use crate::ex_docmd::sourcing_lnum;
 
-use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::state::CMDLINE_ROW;
 use crate::ex_docmd::state::{ex_no_reprint, ex_normal_busy, global_busy};
 use crate::ex_docmd::{
     DoCmdOpts, ETYPE_EXCEPT, SavedDebugState, cmdline_call_depth, ex_pressedreturn,
@@ -59,8 +59,8 @@ use crate::message::state::{
 };
 use crate::option::vars::p_mfd;
 use crate::startup::exiting;
-use crate::state::mode::{State, exmode_active};
-use crate::ui::state::Rows;
+use crate::state::mode::{EXMODE_ACTIVE, STATE};
+use crate::ui::state::ROWS;
 
 use crate::message::{
     emsg_multiline, msg, msg_clr_eos, msg_scroll_flush, msg_str, verbose_enter_scroll,
@@ -124,8 +124,8 @@ pub(crate) fn restore_dbg_stuff(saved: SavedDebugState) {
 /// Ex mode: read and run one command line at a time, printing the current
 /// line after each one that moved the cursor or changed the buffer.
 pub fn do_exmode() {
-    exmode_active.set(true);
-    State.set(MODE_NORMAL);
+    EXMODE_ACTIVE.set(true);
+    STATE.set(MODE_NORMAL);
     may_trigger_modechanged();
 
     // `:global` runs Ex mode for each line itself; there is no prompt
@@ -142,11 +142,11 @@ pub fn do_exmode() {
         0,
     );
 
-    while exmode_active.get() {
+    while EXMODE_ACTIVE.get() {
         // `:normal` that ran out of keys leaves Ex mode rather than
         // waiting for more.
         if ex_normal_busy.get() > 0 && typeahead().is_empty() {
-            exmode_active.set(false);
+            EXMODE_ACTIVE.set(false);
             break;
         }
 
@@ -157,10 +157,10 @@ pub fn do_exmode() {
         let changedtick = buf_get_changedtick(Buf::current());
         let prev_msg_row = MSG_ROW.get();
         let prev_line = Win::current().w_cursor.lnum;
-        cmdline_row.set(MSG_ROW.get());
+        CMDLINE_ROW.set(MSG_ROW.get());
 
         let _ = do_cmdline(None, Some(&mut LineSource::Typed), DoCmdOpts::NONE);
-        LINES_LEFT.set(Rows.get() - 1);
+        LINES_LEFT.set(ROWS.get() - 1);
 
         let moved = prev_line != Win::current().w_cursor.lnum
             || changedtick != buf_get_changedtick(Buf::current());
@@ -173,7 +173,7 @@ pub fn do_exmode() {
                 if ex_pressedreturn.get() {
                     msg_scroll_flush();
                     MSG_ROW.set(prev_msg_row);
-                    if prev_msg_row == Rows.get() - 1 {
+                    if prev_msg_row == ROWS.get() - 1 {
                         MSG_ROW.set(MSG_ROW.get() - 1);
                     }
                 }

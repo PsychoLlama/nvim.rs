@@ -86,7 +86,7 @@ pub fn nvim_set_decoration_provider(
                 *dest = source.take().expect("just tested");
             }
         }
-        p.state = kDecorProviderActive;
+        p.state = DECOR_PROVIDER_ACTIVE;
         p.hl_valid += 1;
         p.hl_cached = false;
     });
@@ -119,7 +119,7 @@ fn push_chunk(
     cells: &mut ::core::ffi::c_int,
 ) -> Result<(), Error> {
     let Some(chunk) = chunk.as_array() else {
-        let want = api_typename(kObjectTypeArray);
+        let want = api_typename(OBJECT_TYPE_ARRAY);
         let got = api_typename(chunk.kind());
         return Err(err_expected(c"chunk", want, Some(got)));
     };

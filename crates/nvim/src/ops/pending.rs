@@ -83,7 +83,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
     let lbr_saved = Win::current().w_onebuf_opt.wo_lbr;
     let old_cursor = Win::current().w_cursor;
 
-    if (!finish_op.get() && !visual_active()) || op.op_type == OpType::Nop {
+    if (!FINISH_OP.get() && !visual_active()) || op.op_type == OpType::Nop {
         restore_lbr(lbr_saved != 0);
         return;
     }
@@ -99,7 +99,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
     record_operator_redo(cmd_arg, op, redo_yank);
 
     let mut include_line_break = false;
-    if redo_VIsual_busy.get() {
+    if REDO_V_ISUAL_BUSY.get() {
         resume_redo_visual(cmd_arg, op);
     } else if visual_active() {
         include_line_break = start_visual_region(op, gui_yank);
@@ -112,9 +112,9 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
     op.line_count = op.end.lnum - op.start.lnum + 1;
     // Set before `VIsual_active` is reset below.
     let virt = virtual_active(Win::current());
-    virtual_op.set(Some(virt));
+    VIRTUAL_OP.set(Some(virt));
 
-    if visual_active() || redo_VIsual_busy.get() {
+    if visual_active() || REDO_V_ISUAL_BUSY.get() {
         get_op_vcol(&mut op, REDO_VISUAL.get().rv_vcol, true);
         prepare_visual_redo(cmd_arg, op, gui_yank, redo_yank);
         finish_visual_region(op, include_line_break, gui_yank, lbr_saved);
@@ -159,7 +159,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
     adjust_region_end(cmd_arg, op);
     run_operator(cmd_arg, op, empty_region_error, gui_yank, lbr_saved);
 
-    virtual_op.set(None);
+    VIRTUAL_OP.set(None);
     if gui_yank {
         Win::current().w_cursor = old_cursor;
     } else if !p_sol()
@@ -176,7 +176,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
         Win::current().coladvance(Win::current().w_curswant);
     }
     clear_op(op);
-    motion_force.set(Key::NUL);
+    MOTION_FORCE.set(Key::NUL);
 
     restore_lbr(lbr_saved != 0);
 }
@@ -202,7 +202,7 @@ fn apply_motion_force(mut op: Op) {
         }
         set_visual_mode(VisualMode::BLOCK);
         set_visual_select(false);
-        VIsual_reselect.set(0);
+        V_ISUAL_RESELECT.set(0);
     }
 }
 
@@ -398,10 +398,10 @@ fn order_region(mut op: Op) {
 ///
 /// A Visual selection must be active or being replayed.
 fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: bool) {
-    if !redo_VIsual_busy.get() && !gui_yank {
-        resel_VIsual_mode.set(visual_mode());
+    if !REDO_V_ISUAL_BUSY.get() && !gui_yank {
+        RESEL_V_ISUAL_MODE.set(visual_mode());
         if Win::current().w_curswant == ColNr::MAX {
-            resel_VIsual_vcol.set(ColNr::MAX);
+            RESEL_V_ISUAL_VCOL.set(ColNr::MAX);
         } else {
             if !visual_mode().is_block() {
                 op.end_vcol = getvvcol(Win::current(), &mut op.end).2;
@@ -411,13 +411,13 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
                 if !visual_mode().is_block() {
                     op.start_vcol = getvvcol(Win::current(), &mut op.start).0;
                 }
-                resel_VIsual_vcol.set(ColNr::new(op.end_vcol - op.start_vcol + 1));
+                RESEL_V_ISUAL_VCOL.set(ColNr::new(op.end_vcol - op.start_vcol + 1));
             } else {
                 // Several lines: the size is the end column.
-                resel_VIsual_vcol.set(op.end_vcol);
+                RESEL_V_ISUAL_VCOL.set(op.end_vcol);
             }
         }
-        resel_VIsual_line_count.set(op.line_count);
+        RESEL_V_ISUAL_LINE_COUNT.set(op.line_count);
     }
 
     let is_fold_op = matches!(
@@ -493,11 +493,11 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
         }
     }
 
-    if !redo_VIsual_busy.get() {
+    if !REDO_V_ISUAL_BUSY.get() {
         REDO_VISUAL.set(RedoVisual {
-            rv_mode: resel_VIsual_mode.get().raw(),
-            rv_vcol: resel_VIsual_vcol.get(),
-            rv_line_count: resel_VIsual_line_count.get(),
+            rv_mode: RESEL_V_ISUAL_MODE.get().raw(),
+            rv_vcol: RESEL_V_ISUAL_VCOL.get(),
+            rv_line_count: RESEL_V_ISUAL_LINE_COUNT.get(),
             rv_count: cmd_arg.count0,
             rv_arg: cmd_arg.arg,
         });
@@ -542,12 +542,12 @@ fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lb
         }
     }
 
-    redo_VIsual_busy.set(false);
+    REDO_V_ISUAL_BUSY.set(false);
 
     if !gui_yank {
         set_visual_active(false);
         setmouse();
-        mouse_dragging.set(0);
+        MOUSE_DRAGGING.set(0);
         may_clear_cmdline();
         if (op.op_type == OpType::Yank
             || op.op_type == OpType::Colon
@@ -635,7 +635,7 @@ fn run_operator(
 
         OpType::Delete => {
             // Do not reselect now.
-            VIsual_reselect.set(0);
+            V_ISUAL_RESELECT.set(0);
             if empty_region_error {
                 refuse();
             } else {
@@ -669,7 +669,7 @@ fn run_operator(
         }
 
         OpType::Change => {
-            VIsual_reselect.set(0);
+            V_ISUAL_RESELECT.set(0);
             if empty_region_error {
                 refuse();
             } else {
@@ -731,7 +731,7 @@ fn run_operator(
         }
 
         OpType::Insert | OpType::Append => {
-            VIsual_reselect.set(0);
+            V_ISUAL_RESELECT.set(0);
             if empty_region_error {
                 refuse();
             } else {
@@ -740,7 +740,7 @@ fn run_operator(
         }
 
         OpType::Replace => {
-            VIsual_reselect.set(0);
+            V_ISUAL_RESELECT.set(0);
             if empty_region_error {
                 refuse();
             } else {
@@ -750,11 +750,11 @@ fn run_operator(
         }
 
         OpType::Fold => {
-            VIsual_reselect.set(0);
+            V_ISUAL_RESELECT.set(0);
             fold_create(Win::current(), op.start, op.end);
         }
         OpType::Foldopen | OpType::Foldopenrec | OpType::Foldclose | OpType::Foldcloserec => {
-            VIsual_reselect.set(0);
+            V_ISUAL_RESELECT.set(0);
             let opening = op.op_type == OpType::Foldopen || op.op_type == OpType::Foldopenrec;
             let recursive = op.op_type == OpType::Foldopenrec || op.op_type == OpType::Foldcloserec;
             let (start, end, visual) = (op.start, op.end, op.is_visual);
@@ -762,7 +762,7 @@ fn run_operator(
             op_fold_range(start, end, opening, recursive, visual);
         }
         OpType::Folddel | OpType::Folddelrec => {
-            VIsual_reselect.set(0);
+            V_ISUAL_RESELECT.set(0);
             let recursive = c_int::from(op.op_type == OpType::Folddelrec);
             let (first, last, visual) = (op.start.lnum, op.end.lnum, op.is_visual);
             delete_fold(Win::current(), first, last, recursive, visual);
@@ -824,9 +824,9 @@ fn run_change(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
     let restart_edit_save = if KEY_TYPED.get() {
         Key::NUL
     } else {
-        restart_edit.get()
+        RESTART_EDIT.get()
     };
-    restart_edit.set(Key::NUL);
+    RESTART_EDIT.set(Key::NUL);
 
     // The user is about to edit: 'linebreak' has to look as it did.
     restore_lbr(lbr_saved != 0);
@@ -837,15 +837,15 @@ fn run_change(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
         // `edit()` returned because of a CTRL-O command.
         cmd_arg.outcome |= Outcome::COMMAND_BUSY;
     }
-    if restart_edit.get().is_nul() {
-        restart_edit.set(restart_edit_save);
+    if RESTART_EDIT.get().is_nul() {
+        RESTART_EDIT.set(restart_edit_save);
     }
 }
 
 /// The `I`/`A` arm: run `op_insert`, which enters Insert mode.
 fn run_block_insert(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
-    let restart_edit_save = restart_edit.get();
-    restart_edit.set(Key::NUL);
+    let restart_edit_save = RESTART_EDIT.get();
+    RESTART_EDIT.set(Key::NUL);
 
     restore_lbr(lbr_saved != 0);
     Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
@@ -856,8 +856,8 @@ fn run_block_insert(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
     reset_lbr();
     auto_format(false, true);
 
-    if restart_edit.get().is_nul() {
-        restart_edit.set(restart_edit_save);
+    if RESTART_EDIT.get().is_nul() {
+        RESTART_EDIT.set(restart_edit_save);
     } else {
         cmd_arg.outcome |= Outcome::COMMAND_BUSY;
     }

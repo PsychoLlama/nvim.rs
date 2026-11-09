@@ -63,7 +63,7 @@ use crate::os::state::last_chdir_reason;
 use crate::spell::parse_spelllang;
 use crate::startup::starting;
 use crate::state::MODE_INSERT;
-use crate::state::mode::{State, VIsual_reselect};
+use crate::state::mode::{STATE, V_ISUAL_RESELECT};
 use crate::terminal::check_buf_terminal_size;
 use crate::types::{CmdModFlags, ColNr, LineNr, OptInt, TypVal, VarLock};
 use crate::undo::u_sync;
@@ -198,7 +198,7 @@ pub fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
     remember_altfpos(win); // remember curpos
 
     // Don't restart Select mode after switching to another buffer.
-    VIsual_reselect.set(0);
+    V_ISUAL_RESELECT.set(0);
 
     // close_windows() or apply_autocmds() may change curbuf and wipe out "buf"
     let prevbuf = Buf::current();
@@ -284,7 +284,7 @@ fn leave_prevbuf(
     // Do not sync when in Insert mode and the buffer is open in another
     // window, might be a timer doing something in another window.
     if prevbuf.raw() == Buf::current_raw()
-        && (State.get() & MODE_INSERT == 0 || Buf::current().b_nwindows <= 1)
+        && (STATE.get() & MODE_INSERT == 0 || Buf::current().b_nwindows <= 1)
     {
         sync_undo();
     }

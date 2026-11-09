@@ -25,7 +25,7 @@ use core::ffi::{CStr, c_int, c_uint};
 
 use crate::buffer::{buf_is_prompt, current_buf};
 use crate::drawscreen::redraw_buf_status_later;
-use crate::drawscreen::state::{need_maketitle, redraw_tabline};
+use crate::drawscreen::state::{NEED_MAKETITLE, REDRAW_TABLINE};
 use crate::eval::typval::{DictRef, callback_free, tv_dict_alloc};
 use crate::eval::{callback_from_typval, eval_expr};
 use crate::memory::XString;
@@ -41,7 +41,7 @@ use crate::os::libc::{int64_t, uint8_t};
 use crate::path::{full_name_save, tail_index};
 use crate::regexp::state::{OPTION_MAGIC_OFF, OPTION_MAGIC_ON};
 use crate::search::state::magic_overruled;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::types::{Callback, ExArg, Failed, OptInt, ScriptId, TypVal};
 
 use super::{
@@ -323,8 +323,8 @@ pub(crate) fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
         );
     }
     redraw_buf_status_later(Buf::current());
-    redraw_tabline.set(true);
-    need_maketitle.set(true);
+    REDRAW_TABLINE.set(true);
+    NEED_MAKETITLE.set(true);
 }
 
 /// One part of a separated option value and the rest after it: what
@@ -512,7 +512,7 @@ pub(crate) fn get_winbuf_options(buffer: bool) -> DictRef {
 /// scrolls off, whatever the option says.
 ///
 pub(crate) fn get_scrolloff_value(window: Win) -> int64_t {
-    if State.get() & MODE_TERMINAL != 0 && !window.w_buffer.terminal.is_null() {
+    if STATE.get() & MODE_TERMINAL != 0 && !window.w_buffer.terminal.is_null() {
         return 0;
     }
     match window.w_onebuf_opt.wo_so {

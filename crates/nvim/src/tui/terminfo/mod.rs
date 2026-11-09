@@ -26,7 +26,7 @@ pub mod param;
 use crate::charset::transstr_owned;
 use crate::tui::terminfo::caps::{
     BACK_COLOR_ERASE, COLUMNS, EXT_CAPS, FUNCTION_KEYS, KEYS, LINES, MAX_COLORS, STRING_CAPS,
-    TerminfoDef, kTerm_reset_cursor_style,
+    TERM_RESET_CURSOR_STYLE, TerminfoDef,
 };
 use crate::tui::terminfo::entry::TerminfoEntry;
 use crate::tui::unibi;
@@ -93,14 +93,14 @@ pub fn terminfo_from_database(termname: &CStr) -> Option<TerminfoEntry> {
     for (slot, cap) in STRING_CAPS.iter().enumerate() {
         entry.defs[slot] = owned(term.get_str(cap.cap));
     }
-    // The extensions fill the slots from `kTerm_reset_cursor_style` on, and
+    // The extensions fill the slots from `TERM_RESET_CURSOR_STYLE` on, and
     // are looked up by the name the description gives them.
     for (i, cap) in EXT_CAPS.iter().enumerate() {
         if let Some((_, val)) = term
             .ext_strs()
             .find(|(name, _)| name.to_bytes() == cap.terminfo_name)
         {
-            entry.defs[kTerm_reset_cursor_style as usize + i] = owned(val);
+            entry.defs[TERM_RESET_CURSOR_STYLE as usize + i] = owned(val);
         }
     }
     for (slot, key) in KEYS.iter().enumerate() {

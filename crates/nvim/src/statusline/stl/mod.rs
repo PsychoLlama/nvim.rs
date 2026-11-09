@@ -63,7 +63,7 @@ use crate::decoration::SIGN_WIDTH;
 use crate::digraph::keymap_str;
 use crate::drawline::{fill_foldcolumn, use_cursor_line_highlight};
 use crate::drawscreen::compute_foldcolumn;
-use crate::drawscreen::state::{redraw_not_allowed, updating_screen};
+use crate::drawscreen::state::{REDRAW_NOT_ALLOWED, UPDATING_SCREEN};
 use crate::eval::eval_to_string_safe;
 use crate::eval::vars::{do_unlet, get_vim_var_nr, set_internal_string_var, set_var};
 use crate::fold::FoldInfo;
@@ -85,7 +85,7 @@ use crate::quickfix::{msg_loclist, msg_qflist};
 use crate::sign::SignTextAttrs;
 use crate::sign::push_sign_text;
 use crate::state::MODE_INSERT;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::statusline::defs::{StlClickRecord, StlHlRun};
 use crate::strings::{FmtArg, format_into};
 use crate::types::{ColNr, LineNr, ScreenChar, TypVal, VarNumber, Vv};
@@ -400,7 +400,7 @@ pub(super) fn vim_var(idx: Vv) -> VarNumber {
 
 /// Whether the editor is in Insert mode, which `%c`/`%o` ask about.
 pub(super) fn in_insert_mode() -> bool {
-    State.get() & MODE_INSERT != 0
+    STATE.get() & MODE_INSERT != 0
 }
 
 /// The syntax group `name` names, for `%#name#` and `%$name$`.
@@ -652,14 +652,14 @@ impl Win {
         let FmtSource { opt_idx, opt_scope } = from;
         let mut out = vec![0u8; room];
         let win = self;
-        let save_redraw_not_allowed = redraw_not_allowed.get();
+        let save_redraw_not_allowed = REDRAW_NOT_ALLOWED.get();
         let save_key_typed = KEY_TYPED.get();
         let did_emsg_before = DID_EMSG.get();
 
         // Inside update_screen() we do not want redrawing a statusline, ruler or
         // title to trigger another redraw; it may loop forever.
-        if updating_screen.get() {
-            redraw_not_allowed.set(true);
+        if UPDATING_SCREEN.get() {
+            REDRAW_NOT_ALLOWED.set(true);
         }
 
         // A format set insecurely is evaluated in the sandbox. `opt_idx` is
@@ -741,7 +741,7 @@ impl Win {
             (runs, recs)
         });
 
-        redraw_not_allowed.set(save_redraw_not_allowed);
+        REDRAW_NOT_ALLOWED.set(save_redraw_not_allowed);
 
         // An error here would mess up the display and might loop redrawing;
         // avoid that by setting the option back to its default.

@@ -38,7 +38,7 @@ use crate::buffer::{buf_get_changedtick, fileinfo};
 use crate::diff::diff_update;
 use crate::diff::state::diff_need_scrollbind;
 use crate::drawscreen::state::{
-    clear_cmdline, do_redraw, must_redraw, redraw_cmdline, redraw_mode, skip_redraw,
+    CLEAR_CMDLINE, DO_REDRAW, MUST_REDRAW, REDRAW_CMDLINE, REDRAW_MODE, SKIP_REDRAW,
 };
 use crate::drawscreen::{
     UPD_INVERTED, redraw_curbuf_later, redraw_statuslines, setcursor, show_cursor_info_later,
@@ -78,7 +78,7 @@ use crate::pos::equalpos;
 use crate::profile::startup_timing;
 use crate::profile::{time_finish, time_msg_at};
 use crate::state::mode::{
-    State, exmode_active, finish_op, km_startsel, km_stopsel, opcount, restart_edit,
+    EXMODE_ACTIVE, FINISH_OP, KM_STARTSEL, KM_STOPSEL, OPCOUNT, RESTART_EDIT, STATE,
 };
 use crate::state::{
     MODE_INSERT, MODE_NORMAL, MODE_NORMAL_BUSY, ModeState, may_trigger_modechanged,
@@ -253,7 +253,7 @@ pub(crate) fn op_pending() -> bool {
     };
     let (prev_opcount, prev_count0, op_type, regname) =
         (op.prev_opcount, op.prev_count0, op.op_type, op.regname);
-    !(!finish_op.get()
+    !(!FINISH_OP.get()
         && prev_opcount == 0
         && prev_count0 == 0
         && op_type == OpType::Nop
@@ -287,12 +287,12 @@ pub(crate) fn normal_enter(cmdwin: bool, noexmode: bool) {
 #[inline]
 pub(crate) fn normal_prepare(ns: &mut NormalState) {
     ns.ca.reset();
-    ns.ca.opcount = opcount.get();
+    ns.ca.opcount = OPCOUNT.get();
 
     // 'finish_op' drives the cursor shape, so a change to it is a redraw.
-    let was_finishing = finish_op.get();
-    finish_op.set(ns.oa.op_type != OpType::Nop);
-    if finish_op.get() != was_finishing {
+    let was_finishing = FINISH_OP.get();
+    FINISH_OP.set(ns.oa.op_type != OpType::Nop);
+    if FINISH_OP.get() != was_finishing {
         ui_cursor_shape();
     }
     may_trigger_modechanged();
@@ -300,7 +300,7 @@ pub(crate) fn normal_prepare(ns: &mut NormalState) {
     // With no operator and no register pending, the count starts over --
     // and `set_prevcount` remembers to publish it as v:prevcount.
     ns.set_prevcount = false;
-    if !finish_op.get() && ns.oa.regname == 0 {
+    if !FINISH_OP.get() && ns.oa.regname == 0 {
         ns.ca.opcount = 0;
         ns.set_prevcount = true;
     }
@@ -313,7 +313,7 @@ pub(crate) fn normal_prepare(ns: &mut NormalState) {
     }
 
     ns.mapped_len = typeahead().maplen();
-    State.set(MODE_NORMAL_BUSY);
+    STATE.set(MODE_NORMAL_BUSY);
     if ns.toplevel && readbuf1_empty() {
         set_vcount_ca(&ns.ca, ns.set_prevcount);
         ns.set_prevcount = false;
@@ -327,11 +327,11 @@ pub(crate) fn normal_prepare(ns: &mut NormalState) {
 pub(crate) fn normal_handle_special_visual_command(ns: &mut NormalState) -> bool {
     let flags = ns.row().cmd_flags;
     // "stopsel": an unshifted movement ends the selection.
-    if km_stopsel.get() && flags.has(NvFlags::STS) && !MOD_MASK.get().has(ModMask::SHIFT) {
+    if KM_STOPSEL.get() && flags.has(NvFlags::STS) && !MOD_MASK.get().has(ModMask::SHIFT) {
         end_visual_mode();
         redraw_curbuf_later(UPD_INVERTED);
     }
-    if km_startsel.get() {
+    if KM_STARTSEL.get() {
         if flags.has(NvFlags::SS) {
             // A shifted special key becomes its unshifted self, and the
             // table has to be consulted again for the new character.
@@ -374,17 +374,17 @@ pub(crate) fn normal_need_additional_char(ns: &mut NormalState) -> bool {
 pub(crate) fn normal_need_redraw_mode_message(ns: &mut NormalState) -> bool {
     let showing_mode = p_smd()
         && MSG_SILENT.get() == 0
-        && (!restart_edit.get().is_nul()
+        && (!RESTART_EDIT.get().is_nul()
             || visual_active()
                 && ns.old_pos.lnum == Win::current().w_cursor.lnum
                 && ns.old_pos.col == Win::current().w_cursor.col)
-        && (clear_cmdline.get() || redraw_cmdline.get())
+        && (CLEAR_CMDLINE.get() || REDRAW_CMDLINE.get())
         && (MSG_DIDOUT.get() || MSG_DIDANY.get() && MSG_SCROLL.get() != 0)
         && !MSG_NOWAIT.get()
         && KEY_TYPED.get();
     // The other way in: an error is on display and insert mode is
     // pending, with no Visual selection to describe instead.
-    let error_on_display = !restart_edit.get().is_nul()
+    let error_on_display = !RESTART_EDIT.get().is_nul()
         && !visual_active()
         && MSG_SCROLL.get() != 0
         && EMSG_ON_DISPLAY.get();
@@ -403,11 +403,11 @@ pub(crate) fn normal_need_redraw_mode_message(ns: &mut NormalState) -> bool {
 /// Redraw the screen the message was scrolled off, show the message again,
 /// and pause long enough for it to be read.
 pub(crate) fn normal_redraw_mode_message() {
-    let save_state = State.get();
-    if !restart_edit.get().is_nul() {
-        State.set(MODE_INSERT);
+    let save_state = STATE.get();
+    if !RESTART_EDIT.get().is_nul() {
+        STATE.set(MODE_INSERT);
     }
-    if must_redraw.get() != 0 && has_keep_msg() && !EMSG_ON_DISPLAY.get() {
+    if MUST_REDRAW.get() != 0 && has_keep_msg() && !EMSG_ON_DISPLAY.get() {
         // The redraw must not print the kept message itself, so it is
         // taken out for the duration and put back after.
         let kmsg = KEEP_MSG.take();
@@ -426,7 +426,7 @@ pub(crate) fn normal_redraw_mode_message() {
         msg_delay(1003, true);
     }
     msg_delay(3003, false);
-    State.set(save_state);
+    STATE.set(save_state);
     MSG_SCROLL.set(0);
     EMSG_ON_DISPLAY.set(false);
 }
@@ -455,10 +455,10 @@ fn normal_check_interrupt(ns: &mut NormalState) {
         ns.previous_got_int = false;
         return;
     }
-    if ns.noexmode && global_busy.get() != 0 && !exmode_active.get() && ns.previous_got_int {
-        exmode_active.set(true);
-        State.set(MODE_NORMAL);
-    } else if global_busy.get() == 0 || !exmode_active.get() {
+    if ns.noexmode && global_busy.get() != 0 && !EXMODE_ACTIVE.get() && ns.previous_got_int {
+        EXMODE_ACTIVE.set(true);
+        STATE.set(MODE_NORMAL);
+    } else if global_busy.get() == 0 || !EXMODE_ACTIVE.get() {
         if !QUIT_MORE.get() {
             vgetc();
         }
@@ -468,13 +468,13 @@ fn normal_check_interrupt(ns: &mut NormalState) {
 }
 
 fn normal_check_window_scrolled() {
-    if !finish_op.get() {
+    if !FINISH_OP.get() {
         may_trigger_win_scrolled_resized();
     }
 }
 
 fn normal_check_cursor_moved() {
-    if !finish_op.get()
+    if !FINISH_OP.get()
         && has_event(AutoEvent::CursorMoved)
         && (last_cursormoved_win.get() != Win::current_or_none().map(Win::id)
             || !equalpos(last_cursormoved.get(), Win::current().w_cursor))
@@ -486,7 +486,7 @@ fn normal_check_cursor_moved() {
 }
 
 fn normal_check_text_changed() {
-    if !finish_op.get()
+    if !FINISH_OP.get()
         && has_event(AutoEvent::TextChanged)
         && Buf::current().b_last_changedtick != buf_get_changedtick(Buf::current())
     {
@@ -496,7 +496,7 @@ fn normal_check_text_changed() {
 }
 
 fn normal_check_buffer_modified() {
-    if !finish_op.get() && has_event(AutoEvent::BufModifiedSet) && Buf::current().b_changed_invalid
+    if !FINISH_OP.get() && has_event(AutoEvent::BufModifiedSet) && Buf::current().b_changed_invalid
     {
         fire_on_curbuf(AutoEvent::BufModifiedSet);
         Buf::current().b_changed_invalid = false;
@@ -504,7 +504,7 @@ fn normal_check_buffer_modified() {
 }
 
 fn normal_check_safe_state() {
-    may_trigger_safestate(!op_pending() && restart_edit.get().is_nul());
+    may_trigger_safestate(!op_pending() && RESTART_EDIT.get().is_nul());
 }
 
 fn normal_check_folds() {
@@ -523,11 +523,11 @@ fn normal_redraw() {
     update_topline(Win::current());
     validate_cursor(Win::current());
     show_cursor_info_later(false);
-    if must_redraw.get() != 0 {
+    if MUST_REDRAW.get() != 0 {
         let _ = update_screen();
     } else {
         redraw_statuslines();
-        if redraw_cmdline.get() || clear_cmdline.get() || redraw_mode.get() {
+        if REDRAW_CMDLINE.get() || CLEAR_CMDLINE.get() || REDRAW_MODE.get() {
             showmode();
         }
     }
@@ -561,16 +561,16 @@ pub(crate) fn normal_check(ns: &mut NormalState) -> Step {
     if did_throw.get() && ex_normal_busy.get() == 0 {
         discard_current_exception();
     }
-    if !exmode_active.get() {
+    if !EXMODE_ACTIVE.get() {
         MSG_SCROLL.set(0);
     }
     QUIT_MORE.set(false);
     state_no_longer_safe(None);
 
-    if skip_redraw.get() || exmode_active.get() {
-        skip_redraw.set(false);
+    if SKIP_REDRAW.get() || EXMODE_ACTIVE.get() {
+        SKIP_REDRAW.set(false);
         setcursor();
-    } else if do_redraw.get() || stuff_empty() {
+    } else if DO_REDRAW.get() || stuff_empty() {
         terminal_check_refresh();
         update_topline(Win::current());
         validate_cursor(Win::current());
@@ -589,7 +589,7 @@ pub(crate) fn normal_check(ns: &mut NormalState) -> Step {
         }
         normal_check_folds();
         normal_redraw();
-        do_redraw.set(false);
+        DO_REDRAW.set(false);
         // The first screen update is the end of startup profiling.
         if startup_timing() {
             time_msg_at(c"first screen update");
@@ -603,7 +603,7 @@ pub(crate) fn normal_check(ns: &mut NormalState) -> Step {
     MAY_GARBAGE_COLLECT.set(!ns.cmdwin && !ns.noexmode);
     update_curswant();
 
-    if exmode_active.get() {
+    if EXMODE_ACTIVE.get() {
         if ns.noexmode {
             return Step::Leave;
         }

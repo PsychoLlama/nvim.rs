@@ -84,7 +84,7 @@ pub fn get_c_indent() -> c_int {
     // new text should not line up with the matching '('.  The cursor can
     // be past the end of the line, for unknown reasons, so check.
     let col = usize::try_from(Win::current().w_cursor.col).unwrap_or(0);
-    if State.get() & MODE_INSERT != 0 && copy.get(col) == Some(&b')') {
+    if STATE.get() & MODE_INSERT != 0 && copy.get(col) == Some(&b')') {
         copy.truncate(col);
     }
     let start = skip::white(&copy);

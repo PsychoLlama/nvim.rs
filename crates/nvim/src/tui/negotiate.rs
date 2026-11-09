@@ -24,7 +24,7 @@ use crate::message_fmt::msg_bytes_opt;
 use crate::startup::nvim_testing;
 use crate::tui::output::{flush, out, out_fmt};
 use crate::tui::state::{KeyEncoding, TUIData, TermMode, TermModeState};
-use crate::tui::terminfo::caps::kTerm_set_underline_style;
+use crate::tui::terminfo::caps::TERM_SET_UNDERLINE_STYLE;
 use core::ffi::CStr;
 
 /// DEC private modes the TUI asks about or sets. The numbers are the
@@ -124,8 +124,8 @@ pub(crate) fn tui_query_extended_underline(tui: &mut TUIData) {
 
 /// Record that this terminal can style and colour underlines.
 pub fn tui_enable_extended_underline(tui: &mut TUIData) {
-    if !tui.ti.has(kTerm_set_underline_style) {
-        tui.ti.set_def(kTerm_set_underline_style, c"\x1b[4:%p1%dm");
+    if !tui.ti.has(TERM_SET_UNDERLINE_STYLE) {
+        tui.ti.set_def(TERM_SET_UNDERLINE_STYLE, c"\x1b[4:%p1%dm");
     }
     tui.can_set_underline_color = true;
 }

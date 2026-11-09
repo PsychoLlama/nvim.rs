@@ -22,7 +22,7 @@ use crate::options::vars::{BoolOpt, NumOpt, StrOpt};
 use crate::winlayer::{Buf, Win};
 
 crate::flag_set! {
-    /// `stl_syntax`: which of `'title'` and `'icon'` hold a *statusline
+    /// `STL_SYNTAX`: which of `'title'` and `'icon'` hold a *statusline
     /// format* rather than plain text, and so have to be re-evaluated
     /// whenever the window contents change.
     pub struct StlSyntax;

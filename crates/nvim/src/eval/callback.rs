@@ -33,7 +33,7 @@ use crate::lua::executor::{
 use crate::message::E_COMMAND_TOO_RECURSIVE;
 use crate::option::vars::p_mfd;
 use crate::types::{
-    Callback, OptInt, TypVal, VAR_FUNC, VAR_NUMBER, VAR_SPECIAL, VAR_STRING, kSpecialVarNull,
+    Callback, OptInt, SPECIAL_VAR_NULL, TypVal, VAR_FUNC, VAR_NUMBER, VAR_SPECIAL, VAR_STRING,
 };
 use crate::winlayer::Win;
 
@@ -179,7 +179,7 @@ impl Callback {
                 func_ref_name(name.as_cstr());
             }
             // A Lua callback and no callback at all have no Vimscript form.
-            Callback::Lua(_) | Callback::None => tv.write_special(kSpecialVarNull),
+            Callback::Lua(_) | Callback::None => tv.write_special(SPECIAL_VAR_NULL),
         }
     }
 }

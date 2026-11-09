@@ -40,7 +40,7 @@ use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
 use crate::message::{E_API_SPAWN_FAILED, E_INVARG};
 use crate::semsg;
-use crate::types::{TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, kBoolVarTrue};
+use crate::types::{BOOL_VAR_TRUE, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber};
 use crate::winlayer::buffers;
 
 pub const CHANNEL_PART_RPC: ChannelPart = 3;
@@ -151,7 +151,7 @@ pub fn f_termopen(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
     }
 
     if let Some(dict) = frame.args()[1].dict_shared() {
-        let _ = dict.edit().add_bool(b"term", kBoolVarTrue);
+        let _ = dict.edit().add_bool(b"term", BOOL_VAR_TRUE);
     }
     f_jobstart(frame.args(), result, fptr);
     drop(made);

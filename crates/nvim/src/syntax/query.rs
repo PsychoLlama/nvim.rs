@@ -53,9 +53,9 @@ static EXPAND_WHAT: GlobalCell<ExpandWhat> = GlobalCell::new(ExpandWhat::SubCmd)
 
 /// Done expanding: forget what `:highlight` completion was asked to include.
 pub(crate) fn reset_expand_highlight() {
-    include_none.set(0);
-    include_default.set(0);
-    include_link.set(0);
+    INCLUDE_NONE.set(0);
+    INCLUDE_DEFAULT.set(0);
+    INCLUDE_LINK.set(0);
 }
 
 /// Command-line completion for `:match` and `:echohl`: highlight group names,
@@ -63,7 +63,7 @@ pub(crate) fn reset_expand_highlight() {
 pub(crate) fn set_context_in_echohl_cmd(expand: &mut Expand, arg: usize) {
     expand.context = ExpandContext::Highlight;
     expand.pattern = arg;
-    include_none.set(1);
+    INCLUDE_NONE.set(1);
 }
 
 /// Command-line completion for `:syntax`, whose argument starts at `arg` in
@@ -73,8 +73,8 @@ pub(crate) fn set_context_in_syntax_cmd(expand: &mut Expand, arg: usize) {
     expand.context = ExpandContext::Syntax;
     EXPAND_WHAT.set(ExpandWhat::SubCmd);
     expand.pattern = arg;
-    include_link.set(0);
-    include_default.set(0);
+    INCLUDE_LINK.set(0);
+    INCLUDE_DEFAULT.set(0);
 
     let line = expand.line_cstr().to_bytes().to_vec();
     let at = |i: usize| line.get(i).copied().unwrap_or(0);

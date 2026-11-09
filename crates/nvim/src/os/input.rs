@@ -36,13 +36,13 @@ use crate::getchar::{before_blocking, typebuf_changed};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::KeyExtra;
 use crate::keycodes::{
-    Ctrl_C, FSK_KEYCODE, K_SPECIAL, KE_EVENT, KE_FILLER, KE_LEFTMOUSE, KE_MIDDLEMOUSE,
+    CTRL_C, FSK_KEYCODE, K_SPECIAL, KE_EVENT, KE_FILLER, KE_LEFTMOUSE, KE_MIDDLEMOUSE,
     KE_MOUSEDOWN, KE_MOUSEMOVE, KE_MOUSERIGHT, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1MOUSE,
     KE_X2MOUSE, KE_X2RELEASE, KS_EXTRA, KS_MODIFIER, KS_SPECIAL,
 };
 use crate::keycodes::{ModMask, special_key_at, special_key_bytes};
 use crate::log::{LOGLVL_DBG, logmsg};
-use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
+use crate::mouse::state::{MOUSE_COL, MOUSE_GRID, MOUSE_ROW};
 use crate::msgpack_rpc::channel::ch_before_blocking_events;
 use crate::option::vars::{p_mouset, p_ut};
 use crate::os::cshim::gettext;
@@ -52,10 +52,10 @@ use crate::os::time::os_hrtime;
 use crate::profile::do_profiling;
 use crate::profile::{prof_input_end, prof_input_start};
 use crate::startup::{getout, main_loop, preserve_exit, silent_mode, used_stdin};
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::state::{MODE_INSERT, get_real_state};
 use crate::types::ApiString;
-use crate::ui::state::{Columns, Rows, current_ui};
+use crate::ui::state::{COLUMNS, CURRENT_UI, ROWS};
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::MaybeUninit;
@@ -136,7 +136,7 @@ fn stdin_closed() -> bool {
 
 /// The queued CursorHold, fired once the event loop gets to it.
 fn cursorhold_event() {
-    let event = if State.get() & MODE_INSERT != 0 {
+    let event = if STATE.get() & MODE_INSERT != 0 {
         AutoEvent::CursorHoldI
     } else {
         AutoEvent::CursorHold
@@ -420,7 +420,7 @@ const MAX_TRANS_SPECIAL: usize = 19;
 /// Returns how many bytes of `keys` were consumed; an incomplete trailing
 /// `<...>` is left for the next call.
 pub fn input_enqueue(chan_id: uint64_t, keys: ApiString) -> size_t {
-    current_ui.set(chan_id);
+    CURRENT_UI.set(chan_id);
 
     let keys = keys.as_bytes();
     let mut at = 0;
@@ -620,18 +620,18 @@ fn handle_mouse_event(
     if let Some((col, row, used)) = scan_mouse_pos(rest) {
         if col >= 0 && row >= 0 {
             // Some terminals report positions off the screen.
-            mouse_grid.set(0);
-            mouse_row.set(row.min(Rows.get() - 1));
-            mouse_col.set(col.min(Columns.get() - 1));
+            MOUSE_GRID.set(0);
+            MOUSE_ROW.set(row.min(ROWS.get() - 1));
+            MOUSE_COL.set(col.min(COLUMNS.get() - 1));
         }
         advance = used;
     }
 
     let Some(modifiers) = check_multiclick(
         mouse_code,
-        mouse_grid.get(),
-        mouse_row.get(),
-        mouse_col.get(),
+        MOUSE_GRID.get(),
+        MOUSE_ROW.get(),
+        MOUSE_COL.get(),
     ) else {
         return (0, advance);
     };
@@ -669,9 +669,9 @@ pub fn input_enqueue_mouse(code: c_int, modifier: uint8_t, grid: c_int, row: c_i
     };
     buf[at..at + 3].copy_from_slice(&[K_SPECIAL, KS_EXTRA, code as u8]);
 
-    mouse_grid.set(grid);
-    mouse_row.set(row);
-    mouse_col.set(col);
+    MOUSE_GRID.set(grid);
+    MOUSE_ROW.set(row);
+    MOUSE_COL.set(col);
 
     input_enqueue_raw(&buf[..at + 3]);
 }
@@ -779,14 +779,14 @@ fn process_ctrl_c() {
     let Some(at) = input_buffer.with_mut(|input| {
         let unread = &mut input[read..write];
         let at = (0..unread.len()).rev().find(|&i| {
-            unread[i] == Ctrl_C as u8
+            unread[i] == CTRL_C as u8
                 || (unread[i] == b'C'
                     && i >= 3
                     && unread[i - 3] == K_SPECIAL
                     && unread[i - 2] == KS_MODIFIER
                     && unread[i - 1] == ModMask::CTRL.bits() as u8)
         })?;
-        unread[at] = Ctrl_C as u8;
+        unread[at] = CTRL_C as u8;
         Some(at)
     }) else {
         return;

@@ -42,7 +42,7 @@ use crate::spell::SMT_ALL;
 use crate::spell::SpellAddType;
 use crate::spellfile::spell_add_word;
 use crate::spellsuggest::spell_suggest;
-use crate::state::mode::finish_op;
+use crate::state::mode::FINISH_OP;
 use crate::types::{ColNr, Failed, LineNr, OptInt};
 use crate::window::{set_fraction, win_setheight};
 use core::ffi::c_int;
@@ -256,7 +256,7 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut Option<OptInt>) -
                 win.w_onebuf_opt.wo_fen = 1;
                 if nchar.is('F') && cmd_arg.op().op_type == OpType::Fold {
                     nv_operator(cmd_arg);
-                    finish_op.set(true);
+                    FINISH_OP.set(true);
                 }
             } else {
                 clear_op_beep(cmd_arg.op());

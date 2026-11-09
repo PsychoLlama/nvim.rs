@@ -139,10 +139,10 @@ impl SynState {
     pub(crate) fn store_distance(&self) -> i32 {
         let entries = c_int::try_from(self.block().b_sst.len())
             .expect("the cache is a few thousand entries at most");
-        if entries <= Rows.get() {
+        if entries <= ROWS.get() {
             999999
         } else {
-            self.line_count().get() / (entries - Rows.get()) + 1
+            self.line_count().get() / (entries - ROWS.get()) + 1
         }
     }
 

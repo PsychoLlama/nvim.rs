@@ -17,7 +17,7 @@
 use super::*;
 use crate::cmdexpand::defs::ExpandContext;
 use crate::cmdexpand::state::{saved_status_opts, wild_menu_showing};
-use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::state::CMDLINE_ROW;
 use crate::drawscreen::{redraw_statuslines, update_screen};
 use crate::ex_docmd::set_no_hlsearch;
 use crate::ex_getln::{put_on_cmdline, redrawcmd};
@@ -276,7 +276,7 @@ pub(crate) fn wildmenu_cleanup(cclp: Cc) {
 
     if wild_menu_showing.get() == WM_SCROLLED {
         // Entered the command line, move it up.
-        cmdline_row.set(cmdline_row.get() - 1);
+        CMDLINE_ROW.set(CMDLINE_ROW.get() - 1);
         redrawcmd();
     } else if let Some((laststatus, winminheight)) = saved_status_opts.get() {
         P_LS.set(laststatus);

@@ -196,14 +196,14 @@ fn echo_size(plen: size_t, off_len: size_t, with_stats: bool) -> size_t {
         return plen + off_len + 3;
     }
     let available = {
-        if ui_has(kUIMessages) {
+        if ui_has(UI_MESSAGES) {
             0 // adjusted below
         } else if MSG_SCROLLED.get() != 0 && !CMD_SILENT.get() {
             // Use all the columns.
-            usize::try_from((Rows.get() - MSG_ROW.get()) * Columns.get() - 1).unwrap_or(0)
+            usize::try_from((ROWS.get() - MSG_ROW.get()) * COLUMNS.get() - 1).unwrap_or(0)
         } else {
             // Use up to the 'showcmd' column.
-            let cells = (Rows.get() - MSG_ROW.get() - 1) * Columns.get() + sc_col.get() - 1;
+            let cells = (ROWS.get() - MSG_ROW.get() - 1) * COLUMNS.get() + SC_COL.get() - 1;
             usize::try_from(cells).unwrap_or(0)
         }
     };
@@ -730,14 +730,14 @@ pub fn showmatch(c: c_int) {
 
     // Handle "$" in 'cpo': if the ')' is typed on top of the "$", stop
     // displaying the "$".
-    if dollar_vcol.get() >= ColNr::ZERO && dollar_vcol.get() == Win::current().w_virtcol {
-        dollar_vcol.set(ColNr::NONE);
+    if DOLLAR_VCOL.get() >= ColNr::ZERO && DOLLAR_VCOL.get() == Win::current().w_virtcol {
+        DOLLAR_VCOL.set(ColNr::NONE);
     }
     Win::current().w_virtcol += 1; // do display ')' just before "$"
 
-    let save_dollar_vcol = dollar_vcol.get();
-    let save_state = State.get();
-    State.set(MODE_SHOWMATCH);
+    let save_dollar_vcol = DOLLAR_VCOL.get();
+    let save_state = STATE.get();
+    STATE.set(MODE_SHOWMATCH);
     ui_cursor_shape(); // may show a different cursor shape
     Win::current().w_cursor = mpos; // move to the matching char
     so.set(0); // don't use 'scrolloff' here
@@ -749,7 +749,7 @@ pub fn showmatch(c: c_int) {
     // Restore dollar_vcol: setcursor() may call curs_rows(), which
     // resets it when the matching position is on an earlier line and
     // has a higher column number.
-    dollar_vcol.set(save_dollar_vcol);
+    DOLLAR_VCOL.set(save_dollar_vcol);
 
     // Brief pause, unless 'm' is present in 'cpo' and a character is
     // available.
@@ -762,6 +762,6 @@ pub fn showmatch(c: c_int) {
     Win::current().w_cursor = save_cursor; // restore cursor position
     so.set(save_so);
     siso.set(save_siso);
-    State.set(save_state);
+    STATE.set(save_state);
     ui_cursor_shape(); // may show a different cursor shape
 }

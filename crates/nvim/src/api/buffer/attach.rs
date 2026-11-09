@@ -107,7 +107,7 @@ pub fn nvim__buf_stats(buf: BufferHandle) -> Result<ApiDict, Error> {
     rv.insert(c"dirty_bytes", d_dirty_bytes);
     let d_dirty_bytes2 = Object::integer(len_as_integer(b.deleted_bytes2));
     rv.insert(c"dirty_bytes2", d_dirty_bytes2);
-    let total = buf_meta_total(buffer, kMTMetaLines);
+    let total = buf_meta_total(buffer, MT_META_LINES);
     let d_virt_blocks = Object::integer(Integer::from(total));
     rv.insert(c"virt_blocks", d_virt_blocks);
     let tip = buffer;

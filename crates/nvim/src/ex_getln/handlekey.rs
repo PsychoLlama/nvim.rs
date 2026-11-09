@@ -97,18 +97,18 @@ pub(crate) fn command_line_erase_chars(s: &mut CommandLineState) -> KeyOutcome {
         redrawcmd();
     } else if cc.is_empty() && s.c != Key::CTRL_W && cc.cmdprompt.is_none() && s.indent == 0 {
         // In ex and debug mode it doesn't make sense to return.
-        if exmode_active.get() || cc.cmdfirstc == b'>' {
+        if EXMODE_ACTIVE.get() || cc.cmdfirstc == b'>' {
             return KeyOutcome::NotChanged;
         }
 
         dealloc_cmdbuff(); // no command line to return
 
-        if !CMD_SILENT.get() && !ui_has(kUICmdline) {
+        if !CMD_SILENT.get() && !ui_has(UI_CMDLINE) {
             MSG_COL.set(0);
             msg_putchar(::core::ffi::c_int::from(b' ')); // delete ':'
         }
         s.is_state.search_start = s.is_state.save_cursor;
-        redraw_cmdline.set(true);
+        REDRAW_CMDLINE.set(true);
         return KeyOutcome::GotoNormalMode;
     }
     KeyOutcome::Changed
@@ -123,9 +123,9 @@ pub(crate) fn command_line_toggle_langmap(s: &CommandLineState) {
         .and_then(|(which, id)| id.get().map(|buffer| (which, buffer)));
     if map_to_exists_mode(b"", MODE_LANGMAP, false) {
         // ":lmap" mappings exist; toggle the use of mappings.
-        State.set(State.get() ^ MODE_LANGMAP);
+        STATE.set(STATE.get() ^ MODE_LANGMAP);
         if let Some((which, buffer)) = b_im {
-            let value = if State.get() & MODE_LANGMAP != 0 {
+            let value = if STATE.get() & MODE_LANGMAP != 0 {
                 OptInt::from(B_IMODE_LMAP)
             } else {
                 OptInt::from(B_IMODE_NONE)
@@ -228,8 +228,8 @@ pub(crate) fn command_line_left_right_mouse(s: &mut CommandLineState) {
     cc.cmdpos = 0;
     while cc.cmdpos < cc.len() {
         let cells = cmdline_charsize(cc.cmdpos);
-        if mouse_row.get() <= cmdline_row.get() + cc.cmdspos / Columns.get()
-            && mouse_col.get() < cc.cmdspos % Columns.get() + cells
+        if MOUSE_ROW.get() <= CMDLINE_ROW.get() + cc.cmdspos / COLUMNS.get()
+            && MOUSE_COL.get() < cc.cmdspos % COLUMNS.get() + cells
         {
             break;
         }
@@ -293,7 +293,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             // In exmode it doesn't make sense to return, except when
             // ":normal" runs out of characters. Also, when the highlight
             // callback is active <C-c> should interrupt only that.
-            if (exmode_active.get() && (ex_normal_busy.get() == 0 || !typeahead().is_empty()))
+            if (EXMODE_ACTIVE.get() && (ex_normal_busy.get() == 0 || !typeahead().is_empty()))
                 || (GETLN_INTERRUPTED_HIGHLIGHT.get() && s.c == Key::CTRL_C)
             {
                 GETLN_INTERRUPTED_HIGHLIGHT.set(false);
@@ -322,7 +322,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
         Ok(SpecialKey::Right | SpecialKey::SRight | SpecialKey::CRight) => {
             while cc.cmdpos < cc.len() {
                 let cells = cmdline_charsize(cc.cmdpos);
-                if KEY_TYPED.get() && cc.cmdspos + cells >= Columns.get() * Rows.get() {
+                if KEY_TYPED.get() && cc.cmdspos + cells >= COLUMNS.get() * ROWS.get() {
                     break;
                 }
                 cc.cmdspos += cells;
@@ -413,7 +413,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             // Return on a left click above a number prompt.
             if s.c != SpecialKey::Rightmouse
                 && cc.mouse_prompt
-                && mouse_row.get() < cmdline_row.get()
+                && MOUSE_ROW.get() < CMDLINE_ROW.get()
             {
                 cc.mouse_used = true;
                 return Some(Step::Leave);
@@ -557,7 +557,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             cc.special_char = 0;
             // May need to remove the ^ when a composing char was typed.
             if utf_iscomposing_first(s.c.code()) && !CMD_SILENT.get() {
-                if ui_has(kUICmdline) {
+                if ui_has(UI_CMDLINE) {
                     // TODO(bfredl): why not make unputcmdline also work
                     // with true?
                     unputcmdline();

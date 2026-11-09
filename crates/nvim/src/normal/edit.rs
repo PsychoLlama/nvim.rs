@@ -65,7 +65,7 @@ use crate::register::defs::{
 };
 use crate::register::{copy_register, do_put};
 use crate::search::{BACKWARD, FORWARD};
-use crate::state::mode::{State, restart_edit};
+use crate::state::mode::{RESTART_EDIT, STATE};
 use crate::state::{MODE_INSERT, MODE_REPLACE, virtual_active};
 use crate::textformat::{auto_format, has_format_option};
 use crate::types::{ColNr, LineNr};
@@ -197,7 +197,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
         Key::NUL,
     );
     Buf::current().b_op_start = Win::current().w_cursor;
-    let old_state = State.get();
+    let old_state = STATE.get();
     if cmd_arg.nchar_len > 0 {
         append_to_redobuff(cstr::until_nul(&cmd_arg.nchar_composing));
     } else {
@@ -206,7 +206,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     for _ in 0..cmd_arg.count1 {
         // `ins_char` looks at 'State' to decide it is overwriting rather
         // than inserting.
-        State.set(MODE_REPLACE);
+        STATE.set(MODE_REPLACE);
         if cmd_arg.nchar == Key::CTRL_E || cmd_arg.nchar == Key::CTRL_Y {
             // `r CTRL-E` and `r CTRL-Y` copy from the line below or above.
             let from =
@@ -225,7 +225,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
         } else {
             ins_char(cmd_arg.nchar);
         }
-        State.set(old_state);
+        STATE.set(old_state);
     }
     Win::current().w_cursor.col -= 1;
     mb_adjust_cursor();
@@ -475,10 +475,10 @@ pub(crate) fn set_cursor_for_append_to_line() {
     if get_ve_flags(Win::current()) == kOptVeFlagAll as c_uint {
         // Insert mode is what makes `coladvance` allow the position one
         // past the end.
-        let save_state = State.get();
-        State.set(MODE_INSERT);
+        let save_state = STATE.get();
+        STATE.set(MODE_INSERT);
         coladvance(Win::current(), ColNr::MAX);
-        State.set(save_state);
+        STATE.set(save_state);
     } else {
         Win::current().w_cursor.col += len_as_int(with_cursor_rest(<[u8]>::len));
     }
@@ -531,10 +531,10 @@ pub(crate) fn nv_edit(cmd_arg: &mut CmdArg) {
     // Insert mode has no virtual column of its own, so anything but `A`
     // has to land on a real one first.
     if Win::current().w_cursor.coladd != 0 && !cmd_arg.cmdchar.is('A') {
-        let save_state = State.get();
-        State.set(MODE_INSERT);
+        let save_state = STATE.get();
+        STATE.set(MODE_INSERT);
         coladvance(Win::current(), getviscol());
-        State.set(save_state);
+        STATE.set(save_state);
     }
     invoke_edit(cmd_arg, false, cmd_arg.cmdchar, false);
 }
@@ -548,11 +548,11 @@ pub(crate) fn invoke_edit(cmd_arg: &mut CmdArg, repl: bool, cmd: Key, startln: b
     // A replay or leftover typeahead is allowed to resume a pending
     // insert; a fresh command is not.
     let restart_edit_save = if repl || !stuff_empty() {
-        restart_edit.get()
+        RESTART_EDIT.get()
     } else {
         Key::NUL
     };
-    restart_edit.set(Key::NUL);
+    RESTART_EDIT.set(Key::NUL);
     // `o` and `O` already recorded the tick before opening the line.
     if !cmd_arg.cmdchar.is('O') && !cmd_arg.cmdchar.is('o') {
         Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
@@ -560,8 +560,8 @@ pub(crate) fn invoke_edit(cmd_arg: &mut CmdArg, repl: bool, cmd: Key, startln: b
     if edit(cmd, startln, cmd_arg.count1) == Ok(true) {
         cmd_arg.outcome |= Outcome::COMMAND_BUSY;
     }
-    if restart_edit.get().is_nul() {
-        restart_edit.set(restart_edit_save);
+    if RESTART_EDIT.get().is_nul() {
+        RESTART_EDIT.set(restart_edit_save);
     }
 }
 

@@ -45,7 +45,7 @@ pub fn get_cmdline_last_prompt_id() -> ::core::ffi::c_uint {
 /// `<C-r>=` expression the *enclosing* command line -- one level out -- is
 /// the one with the text.
 pub(crate) fn get_ccline_ptr() -> Option<Cc> {
-    if State.get() & MODE_CMDLINE == 0 {
+    if STATE.get() & MODE_CMDLINE == 0 {
         return None;
     }
     let depth = usize::from(!Cc::current().in_use());
@@ -255,7 +255,7 @@ pub fn get_cmdline_firstc() -> u8 {
 /// `wildtrigger()` function: ask the key loop to complete, as if `'wildchar'`
 /// had been typed.
 pub fn f_wildtrigger(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
-    if State.get() & MODE_CMDLINE == 0
+    if STATE.get() & MODE_CMDLINE == 0
         || char_avail()
         || wild_menu_showing.get() != 0
         || cmdline_pum_active()

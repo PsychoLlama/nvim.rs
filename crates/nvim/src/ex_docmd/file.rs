@@ -64,7 +64,7 @@ use crate::message::E_TRAILING_ARG;
 use crate::message::state::{MSG_SCROLL, NEED_WAIT_RETURN};
 use crate::option::vars::{P_SHADA, p_awa, p_shada};
 use crate::startup::{readonlymode, recoverymode};
-use crate::state::mode::{exmode_active, pending_exmode_active};
+use crate::state::mode::{EXMODE_ACTIVE, PENDING_EXMODE_ACTIVE};
 
 use crate::memline::{ml_delete, ml_preserve, ml_recover};
 
@@ -80,7 +80,7 @@ use crate::pos::MAXLNUM;
 use crate::search::{BACKWARD, FORWARD, find_pattern_in_path};
 use crate::shada::{shada_read_everything, shada_write_file};
 use crate::types::{CmdModFlags, ExArg, LineNr};
-use crate::ui::state::kUICmdline;
+use crate::ui::state::UI_CMDLINE;
 use crate::ui::ui_has;
 use crate::undo::{curbuf_is_changed, u_read_undo, u_save, u_savedel, u_write_undo};
 
@@ -255,10 +255,10 @@ impl ExArg<'_> {
     /// left behind.
     pub(crate) fn exedit(&mut self, old_curwin: Option<WinId>) {
         // `:visual` and `:view` with no argument leave Ex mode.
-        if exmode_active.get() && (self.cmdidx == CmdIdx::visual || self.cmdidx == CmdIdx::view) {
-            exmode_active.set(false);
+        if EXMODE_ACTIVE.get() && (self.cmdidx == CmdIdx::visual || self.cmdidx == CmdIdx::view) {
+            EXMODE_ACTIVE.set(false);
             ex_pressedreturn.set(false);
-            if ui_has(kUICmdline) {
+            if ui_has(UI_CMDLINE) {
                 ui_ext_cmdline_block_leave();
             }
             if self.line.byte_at(self.line.arg) == 0 {
@@ -275,9 +275,9 @@ impl ExArg<'_> {
                     let save_ms = MSG_SCROLL.get();
                     MSG_SCROLL.set(0);
                     redraw_all_later(UPD_NOT_VALID);
-                    pending_exmode_active.set(true);
+                    PENDING_EXMODE_ACTIVE.set(true);
                     normal_enter(false, true);
-                    pending_exmode_active.set(false);
+                    PENDING_EXMODE_ACTIVE.set(false);
                     MSG_SCROLL.set(save_ms);
                 }
                 return;
@@ -451,7 +451,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
     }
     // Reading into an empty buffer in Ex mode leaves the empty line the
     // buffer started with; drop it.
-    if was_empty && exmode_active.get() {
+    if was_empty && EXMODE_ACTIVE.get() {
         let lnum = if excmd.line2 == LineNr::ZERO {
             Buf::current().b_ml.ml_line_count
         } else {

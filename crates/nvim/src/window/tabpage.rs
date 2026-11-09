@@ -33,7 +33,7 @@ use crate::allocator::Owned;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::diff::state::diff_need_scrollbind;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::drawscreen::state::redraw_tabline;
+use crate::drawscreen::state::REDRAW_TABLINE;
 use crate::eval::typval::ScopeDictItem;
 use crate::eval::vars::{new_var_scope, release_var_scope, vars_clear};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
@@ -51,7 +51,7 @@ use crate::os::libc::int64_t;
 use crate::startup::starting;
 use crate::tag::state::postponed_split_tab;
 use crate::types::{Failed, Handle, OptInt, SwitchWin, Tabpage, VAR_SCOPE};
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::window::state::{skip_win_fix_scroll, tabpage_move_disallowed};
 use crate::winfloat::{win_config_float, win_float_update_statusline};
 use crate::winlayer::graph::{
@@ -284,7 +284,7 @@ pub(crate) fn new_tabpage(
     } else {
         stash_tabpage(TabPage::current());
         adopt_tabpage(old_curtab);
-        redraw_tabline.set(true); // the tabline may have been added, or changed
+        REDRAW_TABLINE.set(true); // the tabline may have been added, or changed
         if TabPage::current().tp_old_rows_avail != rows_avail() {
             new_screen_rows();
         }
@@ -312,10 +312,10 @@ fn in_window(tabpage: TabPage, body: impl FnOnce()) {
     restore_win_noblock(&mut switchwin, true);
 }
 
-/// `Rows - 'cmdheight' - tabline - global statusline`: the rows a tab page's
+/// `ROWS - 'cmdheight' - tabline - global statusline`: the rows a tab page's
 /// windows may use.
 fn rows_avail() -> int64_t {
-    (OptInt::from(Rows.get())
+    (OptInt::from(ROWS.get())
         - p_ch()
         - OptInt::from(tabline_rows())
         - OptInt::from(global_stl_rows())) as int64_t
@@ -466,7 +466,7 @@ fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<()
     tp.tp_lastwin = lastwin.get();
     tp.tp_old_rows_avail = rows_avail();
     if tp.tp_old_columns != -1 as int64_t {
-        tp.tp_old_columns = int64_t::from(Columns.get());
+        tp.tp_old_columns = int64_t::from(COLUMNS.get());
     }
     firstwin.set(None);
     lastwin.set(None);
@@ -540,10 +540,10 @@ fn enter_tab(
     if TabPage::current().tp_old_rows_avail != rows_avail() || old_off != first_win().w_winrow {
         new_screen_rows();
     }
-    if TabPage::current().tp_old_columns != int64_t::from(Columns.get()) {
+    if TabPage::current().tp_old_columns != int64_t::from(COLUMNS.get()) {
         if starting.get() == 0 {
             new_screen_cols(); // update window widths
-            TabPage::current().tp_old_columns = int64_t::from(Columns.get());
+            TabPage::current().tp_old_columns = int64_t::from(COLUMNS.get());
         } else {
             TabPage::current().tp_old_columns = -1 as int64_t; // update window widths later
         }
@@ -752,5 +752,5 @@ pub fn tabpage_move(nr: c_int) {
         tp_dst.tp_next = Some(id);
     }
     // The tabline needs redrawing; the tab page contents do not change.
-    redraw_tabline.set(true);
+    REDRAW_TABLINE.set(true);
 }

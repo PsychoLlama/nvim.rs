@@ -32,7 +32,7 @@ use crate::autocmd::defs::AcoSave;
 use crate::autocmd::{apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf};
 use crate::buffer::{BufFlags, buf_get_changedtick, buf_is_nofilename, buf_set_file_id};
 use crate::change::unchanged;
-use crate::drawscreen::state::need_maketitle;
+use crate::drawscreen::state::NEED_MAKETITLE;
 use crate::drawscreen::status_redraw_all;
 use crate::eval::vars::eval_charconvert;
 use crate::event::uv::{uv_gid_t, uv_uid_t};
@@ -496,7 +496,7 @@ impl Buf {
                 // sense; reset it unless 'cpoptions' contains "Z".
                 if req.forceit && overwriting && !cpo_has(CpoFlag::KEEPRO) {
                     b.b_p_ro = 0;
-                    need_maketitle.set(true); // set the window title later
+                    NEED_MAKETITLE.set(true); // set the window title later
                     status_redraw_all(); // redraw status lines later
                 }
 

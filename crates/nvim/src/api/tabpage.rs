@@ -24,8 +24,8 @@ use crate::message::E_CMDWIN;
 use crate::narrow::number_as_int;
 use crate::os::libc::size_t;
 use crate::types::{
-    ApiString, Array, Boolean, BufferHandle, Error, Integer, Object, TabpageHandle, WindowHandle,
-    kErrorTypeException,
+    ApiString, Array, Boolean, BufferHandle, ERROR_TYPE_EXCEPTION, Error, Integer, Object,
+    TabpageHandle, WindowHandle,
 };
 use crate::window::{
     tabpage_win_valid, valid_tab, valid_tabpage, win_goto, win_new_tabpage, win_set_buf,
@@ -107,7 +107,7 @@ pub fn nvim_tabpage_set_win(tabpage: TabpageHandle, win: WindowHandle) -> Result
     if !tabpage_win_valid(tp, wp.id()) {
         let handle = tp.handle;
         return Err(api_error!(
-            kErrorTypeException,
+            ERROR_TYPE_EXCEPTION,
             "Window does not belong to tabpage {handle}"
         ));
     }

@@ -47,7 +47,7 @@ use crate::narrow::number_as_int;
 use crate::option::vars::{P_PATH, p_wic};
 use crate::optionstr::{OptString, local_or_global};
 use crate::os::libc::ptrdiff_t;
-use crate::types::{TypVal, VAR_LIST, VAR_STRING, VarNumber, Vv, kListLenUnknown};
+use crate::types::{LIST_LEN_UNKNOWN, TypVal, VAR_LIST, VAR_STRING, VarNumber, Vv};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
@@ -80,7 +80,7 @@ impl Expander {
     }
 
     /// How many names the last expansion left: -1 until one succeeds, which
-    /// is `kListLenUnknown` and what the List is then allocated with.
+    /// is `LIST_LEN_UNKNOWN` and what the List is then allocated with.
     fn count(&self) -> c_int {
         self.0.match_count()
     }
@@ -151,7 +151,7 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
         }
     }
     if count < 0 {
-        tv_list_alloc_ret(result, kListLenUnknown as c_int as ptrdiff_t);
+        tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as c_int as ptrdiff_t);
     }
     if fname.to_bytes().is_empty() || error {
         return;
@@ -326,7 +326,7 @@ fn readdir_checkitem(expr: &TypVal, name: &CStr) -> VarNumber {
 /// with `{expr}` deciding which of them to keep.
 pub fn f_readdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    tv_list_alloc_ret(result, kListLenUnknown as c_int as ptrdiff_t);
+    tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as c_int as ptrdiff_t);
     let path = str_arg(args, 0, &mut numbuf);
     // No filter expression keeps everything. The filter runs user code, so
     // nothing of the answer is held across the walk.

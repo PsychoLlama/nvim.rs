@@ -1,15 +1,15 @@
 //! The attribute numbers the drawing code paints with.
 //!
-//! `highlight_attr` is the resolved attribute for each `HLF_*` slot, which
-//! every `win_line` decision indexes; `highlight_user` and
-//! `highlight_stlnc` are the same for the nine `User1`..`User9` groups and
+//! `HIGHLIGHT_ATTR` is the resolved attribute for each `HLF_*` slot, which
+//! every `win_line` decision indexes; `HIGHLIGHT_USER` and
+//! `HIGHLIGHT_STLNC` are the same for the nine `User1`..`User9` groups and
 //! their not-current-window variants. The `normal_*`/`cterm_normal_*` pair
 //! is what `Normal` resolved to, which the UI needs separately because it is
 //! the screen's background rather than a run's attribute.
 //!
 //! The `ns_hl_*` cells say which highlight namespace is in force —
 //! globally, for the window being drawn, and for the fast path a decoration
-//! provider runs on — and `need_highlight_changed` is the "recompute all of
+//! provider runs on — and `NEED_HIGHLIGHT_CHANGED` is the "recompute all of
 //! the above" flag `:highlight` and `:colorscheme` raise.
 #![forbid(unsafe_code)]
 #![deny(
@@ -20,7 +20,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
 use crate::highlight::RgbValue;
@@ -28,29 +27,29 @@ use crate::types::Handle;
 use crate::types::NS;
 use core::ffi::c_int;
 
-pub(crate) static include_none: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static include_default: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static include_link: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static need_highlight_changed: GlobalCell<bool> = GlobalCell::new(true);
-pub(crate) static highlight_attr: GlobalCell<[c_int; 76]> = GlobalCell::new([0; 76]);
-pub(crate) static highlight_attr_last: GlobalCell<[c_int; 76]> = GlobalCell::new([0; 76]);
-pub(crate) static highlight_user: GlobalCell<[c_int; 9]> = GlobalCell::new([0; 9]);
-pub(crate) static highlight_stlnc: GlobalCell<[c_int; 9]> = GlobalCell::new([0; 9]);
-pub(crate) static cterm_normal_fg_color: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static cterm_normal_bg_color: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static normal_fg: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
-pub(crate) static normal_bg: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
-pub(crate) static normal_sp: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
-pub(crate) static ns_hl_global: GlobalCell<NS> = GlobalCell::new(Handle::NONE);
-pub(crate) static ns_hl_win: GlobalCell<NS> = GlobalCell::new(Handle::new(-1));
-pub(crate) static ns_hl_fast: GlobalCell<NS> = GlobalCell::new(Handle::new(-1));
-pub(crate) static ns_hl_active: GlobalCell<NS> = GlobalCell::new(Handle::NONE);
-/// One `HLF_*` attribute table: the built-in [`highlight_attr`] or a
+pub(crate) static INCLUDE_NONE: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static INCLUDE_DEFAULT: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static INCLUDE_LINK: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static NEED_HIGHLIGHT_CHANGED: GlobalCell<bool> = GlobalCell::new(true);
+pub(crate) static HIGHLIGHT_ATTR: GlobalCell<[c_int; 76]> = GlobalCell::new([0; 76]);
+pub(crate) static HIGHLIGHT_ATTR_LAST: GlobalCell<[c_int; 76]> = GlobalCell::new([0; 76]);
+pub(crate) static HIGHLIGHT_USER: GlobalCell<[c_int; 9]> = GlobalCell::new([0; 9]);
+pub(crate) static HIGHLIGHT_STLNC: GlobalCell<[c_int; 9]> = GlobalCell::new([0; 9]);
+pub(crate) static CTERM_NORMAL_FG_COLOR: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static CTERM_NORMAL_BG_COLOR: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static NORMAL_FG: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
+pub(crate) static NORMAL_BG: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
+pub(crate) static NORMAL_SP: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
+pub(crate) static NS_HL_GLOBAL: GlobalCell<NS> = GlobalCell::new(Handle::NONE);
+pub(crate) static NS_HL_WIN: GlobalCell<NS> = GlobalCell::new(Handle::new(-1));
+pub(crate) static NS_HL_FAST: GlobalCell<NS> = GlobalCell::new(Handle::new(-1));
+pub(crate) static NS_HL_ACTIVE: GlobalCell<NS> = GlobalCell::new(Handle::NONE);
+/// One `HLF_*` attribute table: the built-in [`HIGHLIGHT_ATTR`] or a
 /// namespace's. None is ever freed, which is what lets them be `'static`.
 pub(crate) type HlAttrTable = GlobalCell<[c_int; 76]>;
-/// The table in force, what `HL_ATTR` reads: [`highlight_attr`] or the
+/// The table in force, what `HL_ATTR` reads: [`HIGHLIGHT_ATTR`] or the
 /// active namespace's. A reference rather than a namespace id resolved per
 /// read, because the drawing code reads it per cell: the resolving branch
 /// cost scrbench 0.34 %.
-pub(crate) static hl_attr_active: GlobalCell<&'static HlAttrTable> =
-    GlobalCell::new(&highlight_attr);
+pub(crate) static HL_ATTR_ACTIVE: GlobalCell<&'static HlAttrTable> =
+    GlobalCell::new(&HIGHLIGHT_ATTR);

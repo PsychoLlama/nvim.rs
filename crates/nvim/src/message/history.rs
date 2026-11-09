@@ -347,17 +347,17 @@ pub fn ex_messages(excmd: &mut ExArg) {
         if temporary || counted_out {
             continue;
         }
-        if ui_has(kUIMessages) && MSG_SILENT.get() == 0 {
+        if ui_has(UI_MESSAGES) && MSG_SILENT.get() == 0 {
             entries.push(entry_to_event(&entry));
         }
-        if redirecting() || !ui_has(kUIMessages) {
+        if redirecting() || !ui_has(UI_MESSAGES) {
             // Under ext_messages the text has already gone to the UI
             // above; this pass exists only to feed the redirection, so
             // silence the display half of it.  `ui_has` is asked twice,
             // as upstream does, and deliberately not hoisted into a
             // local: `msg_multihl` can reach `wait_return`, which pumps
             // the event loop, which can service a UI attach or detach.
-            MSG_SILENT.set(MSG_SILENT.get() + c_int::from(ui_has(kUIMessages)));
+            MSG_SILENT.set(MSG_SILENT.get() + c_int::from(ui_has(UI_MESSAGES)));
             let mut needs_clear = false;
             let kind = (!entry.kind.is_null()).then(|| entry.kind.as_cstr());
             let shown = &entry.chunks;
@@ -370,7 +370,7 @@ pub fn ex_messages(excmd: &mut ExArg) {
                 None,
                 &mut needs_clear,
             );
-            MSG_SILENT.set(MSG_SILENT.get() - c_int::from(ui_has(kUIMessages)));
+            MSG_SILENT.set(MSG_SILENT.get() - c_int::from(ui_has(UI_MESSAGES)));
         }
     }
 

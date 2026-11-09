@@ -22,7 +22,7 @@
 
 use super::*;
 use crate::decoration::DECOR_PRIORITY_BASE;
-use crate::decoration::{DECOR_ID_INVALID, decor_put_vt, kVPosWinCol};
+use crate::decoration::{DECOR_ID_INVALID, V_POS_WIN_COL, decor_put_vt};
 use crate::grid::default_grid_ref;
 use crate::r#move::WinValid;
 use crate::narrow::as_index;
@@ -120,7 +120,7 @@ pub(crate) fn win_update(window: Win) {
     let mut win = window;
     // Return early when the window would overflow a shrunk terminal, which
     // would draw out of bounds and trip an assertion.
-    if win.w_grid.target == default_grid_ref().raw() && win.w_wincol >= Columns.get() {
+    if win.w_grid.target == default_grid_ref().raw() && win.w_wincol >= COLUMNS.get() {
         return;
     }
 
@@ -151,7 +151,7 @@ pub(crate) fn win_update(window: Win) {
     let syntax_tm = profile_setlimit(p_rdt() as int64_t);
     syn_set_timeout(Some(syntax_tm));
 
-    win_extmark_arr.with_mut(Vec::clear);
+    WIN_EXTMARK_ARR.with_mut(Vec::clear);
 
     // The redraw's decoration state is the one cell `decoration::state`
     // keeps, borrowed per step: the provider callbacks below re-enter it (an
@@ -201,7 +201,7 @@ pub(crate) fn win_update(window: Win) {
 
     win.w_redraw_top = LineNr::ZERO; // reset for next time
     win.w_redraw_bot = LineNr::ZERO;
-    search_hl_has_cursor_lnum.set(LineNr::ZERO);
+    SEARCH_HL_HAS_CURSOR_LNUM.set(LineNr::ZERO);
 
     // UPD_REDRAW_TOP: only the top `w_upd_rows` lines, used when the window
     // scrolled down for `MSG_SCROLLED`.
@@ -234,7 +234,7 @@ pub(crate) fn win_update(window: Win) {
     let mut cursorline_fi = FoldInfo::default();
     win_update_cursorline(window, &mut cursorline_fi);
     if window.raw() == Win::current_raw() {
-        conceal_cursor_used.set(conceal_cursor_line(Win::current()));
+        CONCEAL_CURSOR_USED.set(conceal_cursor_line(Win::current()));
     }
 
     win_check_ns_hl(Some(window));
@@ -283,7 +283,7 @@ fn add_suspended_terminal_note(buffer: Buf) {
         priority: DECOR_PRIORITY_BASE,
         width: 0,
         col: 0,
-        pos: kVPosWinCol,
+        pos: V_POS_WIN_COL,
         data: DecorVirtText_data::Text(vec![VirtTextChunk {
             text: Some(c"[Process suspended]".to_owned()),
             hl_id: -1,
@@ -363,10 +363,10 @@ fn find_changed_lines(win: Win, buffer: Buf, rg: &mut Regions) {
         }
     }
 
-    if search_hl_has_cursor_lnum.get() > LineNr::ZERO {
+    if SEARCH_HL_HAS_CURSOR_LNUM.get() > LineNr::ZERO {
         // CurSearch was used last time; that line has to be redrawn or two
         // matches end up highlighted with it.
-        let cursor_lnum = search_hl_has_cursor_lnum.get();
+        let cursor_lnum = SEARCH_HL_HAS_CURSOR_LNUM.get();
         if rg.mod_top == LineNr::ZERO || rg.mod_top > cursor_lnum {
             rg.mod_top = cursor_lnum;
         }
@@ -810,7 +810,7 @@ fn remember_visual_area(mut window: Win, buffer: Buf) {
 
 /// Report the `ui_watched` extmarks this redraw passed to the UI.
 fn send_win_extmarks(window: Win) {
-    win_extmark_arr.with(|marks| {
+    WIN_EXTMARK_ARR.with(|marks| {
         for m in marks {
             ui_call_win_extmark(
                 Integer::from(window.w_grid_alloc.handle),
@@ -836,7 +836,7 @@ fn finish_botline(mut window: Win, buffer: Buf, old_botline: LineNr, nrwidth_bef
     // Recursion guard: the second pass must not start a third.
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
-    if dollar_vcol.get() == ColNr::NONE || window.raw() != Win::current_raw() {
+    if DOLLAR_VCOL.get() == ColNr::NONE || window.raw() != Win::current_raw() {
         window.w_valid |= WinValid::BOTLINE;
         window.w_viewport_invalid = true;
         if window.raw() == Win::current_raw() && window.w_botline != old_botline && !RECURSIVE.get()
@@ -845,13 +845,13 @@ fn finish_botline(mut window: Win, buffer: Buf, old_botline: LineNr, nrwidth_bef
             Win::current().w_valid.clear(WinValid::TOPLINE);
             update_topline(Win::current()); // may invalidate w_botline again
             // A new redraw, either from a moved topline or a reset skipcol.
-            if must_redraw.get() != 0 {
+            if MUST_REDRAW.get() != 0 {
                 // Do not update for the buffer changes a second time.
                 let mod_set = Buf::current().b_mod_set;
                 Buf::current().b_mod_set = false;
                 curs_columns(Win::current(), c_int::from(true));
                 win_update(Win::current());
-                must_redraw.set(0);
+                MUST_REDRAW.set(0);
                 Buf::current().b_mod_set = mod_set;
             }
             RECURSIVE.set(false);

@@ -337,7 +337,7 @@ fn report_scripts(list: &ListRef, query: &mut ScriptQuery) {
             let _ = dict.add_number(b"sid", VarNumber::from(sid));
             let _ = dict.add_number(b"version", 1);
             // Vim9 autoload script (:h vim9-autoload), not applicable to Nvim.
-            let _ = dict.add_bool(b"autoload", kBoolVarFalse);
+            let _ = dict.add_bool(b"autoload", BOOL_VAR_FALSE);
         }
 
         // A script ID was specified, so report that script in full.

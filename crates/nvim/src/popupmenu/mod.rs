@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
 use crate::grid::DEFAULT_GRID_HANDLE;
@@ -21,7 +20,7 @@ use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::{buf_clear, buf_is_nofile, current_buf};
 use crate::charset::{ptr2cells_at, strsize, transstr_owned};
 use crate::cmdexpand::{cmdline_compl_is_fuzzy, cmdline_compl_pattern};
-use crate::drawscreen::state::{RedrawingDisabled, cmdline_row};
+use crate::drawscreen::state::{CMDLINE_ROW, REDRAWING_DISABLED};
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_SOME_VALID, redraw_later, setcursor_mayforce, update_screen,
 };
@@ -49,7 +48,7 @@ use crate::menu::VimMenu;
 use crate::menu::{execute_menu, get_menu_mode_flag, menu_find};
 use crate::message::E_MENU_ONLY_EXISTS_IN_ANOTHER_MODE;
 use crate::message::emsg;
-use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
+use crate::mouse::state::{MOUSE_COL, MOUSE_GRID, MOUSE_ROW};
 use crate::mouse::{MousePos, find_win_outer};
 use crate::r#move::{update_topline, validate_cheight, validate_cursor, validate_cursor_col};
 use crate::option::defs::OptVal;
@@ -63,18 +62,18 @@ use crate::os::cshim::gettext;
 use crate::os::libc::uint32_t;
 use crate::plines::{plines_m_win, win_linetabsize};
 use crate::popupmenu::state::PumItem;
-use crate::popupmenu::state::{PumWant, must_redraw_pum, pum_grid, pum_want};
+use crate::popupmenu::state::{MUST_REDRAW_PUM, PUM_GRID, PUM_WANT, PumWant};
 use crate::state::MODE_CMDLINE;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::statusline::hl_attr;
 use crate::strings::reversed_text;
 use crate::tag::state::g_do_tagpreview;
 use crate::types::{
-    ApiString, Array, BufferHandle, Dict, Float, Handle, Integer, LineNr, Object, OptInt,
-    ScreenAttr, ScreenChar, VarNumber, WinConfig, kBoolVarFalse, kBoolVarTrue,
+    ApiString, Array, BOOL_VAR_FALSE, BOOL_VAR_TRUE, BufferHandle, Dict, Float, Handle, Integer,
+    LineNr, Object, OptInt, ScreenAttr, ScreenChar, VarNumber, WinConfig,
 };
-use crate::ui::state::{Columns, Rows};
-use crate::ui::state::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
+use crate::ui::state::{COLUMNS, ROWS};
+use crate::ui::state::{UI_CMDLINE, UI_MULTIGRID, UI_POPUPMENU, UI_WILDMENU};
 use crate::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
     ui_call_popupmenu_select, ui_call_popupmenu_show, ui_call_win_close, ui_call_win_float_pos,
@@ -97,8 +96,8 @@ pub use self::preview::*;
 mod menu;
 pub use self::menu::*;
 
-pub const kZIndexCmdlinePopupMenu: ::core::ffi::c_int = 250;
-pub const kZIndexPopupMenu: ::core::ffi::c_int = 100;
+pub const Z_INDEX_CMDLINE_POPUP_MENU: ::core::ffi::c_int = 250;
+pub const Z_INDEX_POPUP_MENU: ::core::ffi::c_int = 100;
 pub(crate) use crate::insexpand::{CPT_ABBR, CPT_KIND, CPT_MENU};
 
 // The menu's state. Every one of these is written by one of the placement
@@ -109,52 +108,52 @@ pub(crate) use crate::insexpand::{CPT_ABBR, CPT_KIND, CPT_MENU};
 /// The items being shown: the rows [`pum_display`] was handed, shared with
 /// whoever built them, or `pum_show_popupmenu`'s own; `None` while the menu
 /// is down.
-static pum_array: GlobalCell<Option<Rc<[PumItem]>>> = GlobalCell::new(None);
-/// Number of items in `pum_array`.
-static pum_size: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_ARRAY: GlobalCell<Option<Rc<[PumItem]>>> = GlobalCell::new(None);
+/// Number of items in `PUM_ARRAY`.
+static PUM_SIZE: GlobalCell<c_int> = GlobalCell::new(0);
 /// Index of the selected item, or -1.
-static pum_selected: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_SELECTED: GlobalCell<c_int> = GlobalCell::new(0);
 /// Index of the item on the menu's top row.
-static pum_first: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_FIRST: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Number of rows the menu shows.
-static pum_height: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_HEIGHT: GlobalCell<c_int> = GlobalCell::new(0);
 /// Cells the item text may use, excluding padding and the scrollbar.
-static pum_width: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_WIDTH: GlobalCell<c_int> = GlobalCell::new(0);
 /// Width of the widest `word`.
-static pum_base_width: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_BASE_WIDTH: GlobalCell<c_int> = GlobalCell::new(0);
 /// Width of the `kind` column, including its separating space.
-static pum_kind_width: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_KIND_WIDTH: GlobalCell<c_int> = GlobalCell::new(0);
 /// Width of the `menu` column, including its separating space.
-static pum_extra_width: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_EXTRA_WIDTH: GlobalCell<c_int> = GlobalCell::new(0);
 /// One when there is a scrollbar, zero when there is not.
-static pum_scrollbar: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_SCROLLBAR: GlobalCell<c_int> = GlobalCell::new(0);
 /// The menu is drawn `'rightleft'`.
-static pum_rl: GlobalCell<bool> = GlobalCell::new(false);
+static PUM_RL: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Handle of the grid the position below is relative to.
-static pum_anchor_grid: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_ANCHOR_GRID: GlobalCell<c_int> = GlobalCell::new(0);
 /// Top row of the menu.
-static pum_row: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_ROW: GlobalCell<c_int> = GlobalCell::new(0);
 /// Left column of the menu, or its right column under `'rightleft'`.
-static pum_col: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_COL: GlobalCell<c_int> = GlobalCell::new(0);
 /// Offsets from grid coordinates back to window-relative ones.
-static pum_win_row_offset: GlobalCell<c_int> = GlobalCell::new(0);
-static pum_win_col_offset: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_WIN_ROW_OFFSET: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_WIN_COL_OFFSET: GlobalCell<c_int> = GlobalCell::new(0);
 /// Left column before padding and the scrollbar, and the column after them.
-static pum_left_col: GlobalCell<c_int> = GlobalCell::new(0);
-static pum_right_col: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_LEFT_COL: GlobalCell<c_int> = GlobalCell::new(0);
+static PUM_RIGHT_COL: GlobalCell<c_int> = GlobalCell::new(0);
 /// The menu is above the cursor line rather than below it.
-static pum_above: GlobalCell<bool> = GlobalCell::new(false);
+static PUM_ABOVE: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The menu is wanted on screen.
-static pum_is_visible: GlobalCell<bool> = GlobalCell::new(false);
+static PUM_IS_VISIBLE: GlobalCell<bool> = GlobalCell::new(false);
 /// The menu's grid (or the external UI's menu) is still up.
-static pum_is_drawn: GlobalCell<bool> = GlobalCell::new(false);
+static PUM_IS_DRAWN: GlobalCell<bool> = GlobalCell::new(false);
 /// The UI draws the menu itself; nothing here paints anything.
-static pum_external: GlobalCell<bool> = GlobalCell::new(false);
+static PUM_EXTERNAL: GlobalCell<bool> = GlobalCell::new(false);
 /// The screen was cleared, so the whole grid has to be sent again.
-static pum_invalid: GlobalCell<bool> = GlobalCell::new(false);
+static PUM_INVALID: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The items the menu is showing, empty while it is down.
 ///
@@ -164,7 +163,7 @@ static pum_invalid: GlobalCell<bool> = GlobalCell::new(false);
 /// answers stay good across that -- they own their text.
 #[inline]
 fn pum_items() -> Rc<[PumItem]> {
-    pum_array
+    PUM_ARRAY
         .with(|rows| rows.clone())
         .unwrap_or_else(|| Rc::from([]))
 }
@@ -201,23 +200,23 @@ struct PumAnchor {
     below_row: c_int,
 }
 
-/// Work out the anchor, and set `pum_anchor_grid` and the two offsets.
+/// Work out the anchor, and set `PUM_ANCHOR_GRID` and the two offsets.
 ///
 /// `cmd_startcol` is the column of the completed match, and only means
 /// anything for a cmdline menu.
 fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
     let win = Win::current();
-    let cmdline = State.get() & MODE_CMDLINE != 0;
+    let cmdline = STATE.get() & MODE_CMDLINE != 0;
     let target_win = if cmdline { cmdline_window() } else { Some(win) };
     let mut above_row = 0;
     let mut below_row = if cmdline {
-        cmdline_row.get()
+        CMDLINE_ROW.get()
     } else {
-        cmdline_row.get().max(win.w_winrow + win.w_view_height)
+        CMDLINE_ROW.get().max(win.w_winrow + win.w_view_height)
     };
 
-    pum_win_row_offset.set(0);
-    pum_win_col_offset.set(0);
+    PUM_WIN_ROW_OFFSET.set(0);
+    PUM_WIN_COL_OFFSET.set(0);
 
     let (mut win_row, mut cursor_col);
     if cmdline {
@@ -225,12 +224,12 @@ fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
         let cw = cmdline_window();
         win_row = match cw {
             Some(cw) => cw.w_wrow,
-            None if ui_has(kUICmdline) => 0,
-            None => cmdline_row.get(),
+            None if ui_has(UI_CMDLINE) => 0,
+            None => CMDLINE_ROW.get(),
         };
         cursor_col = cw.map_or(0, |cw| cw.w_config._cmdline_offset) + cmd_startcol;
-        cursor_col %= cw.map_or_else(|| Columns.get(), |cw| cw.w_view_width);
-        pum_anchor_grid.set(if ui_has(kUICmdline) {
+        cursor_col %= cw.map_or_else(|| COLUMNS.get(), |cw| cw.w_view_width);
+        PUM_ANCHOR_GRID.set(if ui_has(UI_CMDLINE) {
             -1
         } else {
             DEFAULT_GRID_HANDLE
@@ -238,7 +237,7 @@ fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
     } else {
         // The start of the completed word.
         win_row = win.w_wrow;
-        cursor_col = if pum_rl.get() {
+        cursor_col = if PUM_RL.get() {
             win.w_view_width - win.w_wcol - 1
         } else {
             win.w_wcol
@@ -246,19 +245,19 @@ fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
     }
 
     if let Some(target) = target_win {
-        pum_anchor_grid.set(grid_of_view(target.w_grid).handle.get());
+        PUM_ANCHOR_GRID.set(grid_of_view(target.w_grid).handle.get());
         win_row += target.w_grid.row_offset;
         cursor_col += target.w_grid.col_offset;
         if target.w_grid.target != default_grid_ref().raw() {
             win_row += target.w_winrow;
             cursor_col += target.w_wincol;
-            if ui_has(kUIMultigrid) {
-                pum_win_row_offset.set(target.w_winrow);
-                pum_win_col_offset.set(target.w_wincol);
+            if ui_has(UI_MULTIGRID) {
+                PUM_WIN_ROW_OFFSET.set(target.w_winrow);
+                PUM_WIN_COL_OFFSET.set(target.w_wincol);
             } else {
                 // ext_popupmenu always anchors to the default grid when
                 // multigrid is off.
-                pum_anchor_grid.set(DEFAULT_GRID_HANDLE);
+                PUM_ANCHOR_GRID.set(DEFAULT_GRID_HANDLE);
             }
         }
     }
@@ -299,9 +298,9 @@ fn pum_publish_external(items: &[PumItem], selected: c_int, anchor: &PumAnchor) 
     ui_call_popupmenu_show(
         arr.into(),
         Integer::from(selected),
-        Integer::from(anchor.win_row - pum_win_row_offset.get()),
-        Integer::from(anchor.cursor_col - pum_win_col_offset.get()),
-        Integer::from(pum_anchor_grid.get()),
+        Integer::from(anchor.win_row - PUM_WIN_ROW_OFFSET.get()),
+        Integer::from(anchor.cursor_col - PUM_WIN_COL_OFFSET.get()),
+        Integer::from(PUM_ANCHOR_GRID.get()),
     );
 }
 
@@ -319,13 +318,13 @@ pub fn pum_display(
     cmd_startcol: c_int,
 ) {
     let size = c_int::try_from(items.len()).expect("a menu fits a c_int");
-    if !pum_is_visible.get() {
+    if !PUM_IS_VISIBLE.get() {
         // The draw mode may only change while the menu is down, which
         // keeps everything below from having to handle both.
-        pum_external
-            .set(ui_has(kUIPopupmenu) || (State.get() & MODE_CMDLINE != 0 && ui_has(kUIWildmenu)));
+        PUM_EXTERNAL
+            .set(ui_has(UI_POPUPMENU) || (STATE.get() & MODE_CMDLINE != 0 && ui_has(UI_WILDMENU)));
     }
-    pum_rl.set(State.get() & MODE_CMDLINE == 0 && Win::current().w_onebuf_opt.wo_rl != 0);
+    PUM_RL.set(STATE.get() & MODE_CMDLINE == 0 && Win::current().w_onebuf_opt.wo_rl != 0);
     let border_width = pum_border_width();
 
     // Placing the menu can resize a window, which invalidates the
@@ -333,14 +332,14 @@ pub fn pum_display(
     // changing.
     for redo_count in 0..=2 {
         // Mark the menu visible up front, so that `'cursorcolumn'` does
-        // not set `must_redraw` under us.
-        pum_is_visible.set(true);
-        pum_is_drawn.set(true);
+        // not set `MUST_REDRAW` under us.
+        PUM_IS_VISIBLE.set(true);
+        PUM_IS_DRAWN.set(true);
         validate_cursor_col(Win::current());
 
         let anchor = pum_compute_anchor(cmd_startcol);
 
-        if pum_external.get() {
+        if PUM_EXTERNAL.get() {
             if !array_changed {
                 ui_call_popupmenu_select(Integer::from(selected));
                 return;
@@ -358,20 +357,20 @@ pub fn pum_display(
         );
 
         // Do not display when there is only room for one line.
-        if border_width == 0 && (pum_height.get() < 1 || (pum_height.get() == 1 && size > 1)) {
+        if border_width == 0 && (PUM_HEIGHT.get() < 1 || (PUM_HEIGHT.get() == 1 && size > 1)) {
             return;
         }
 
-        pum_array.set(Some(items.clone()));
+        PUM_ARRAY.set(Some(items.clone()));
         // Set before returning, so `pum_set_event_info` sees the size.
-        pum_size.set(size);
-        if pum_external.get() {
+        PUM_SIZE.set(size);
+        if PUM_EXTERNAL.get() {
             return;
         }
 
         pum_compute_size();
         // More items than room means a scrollbar.
-        pum_scrollbar.set(c_int::from(pum_height.get() < size));
+        PUM_SCROLLBAR.set(c_int::from(PUM_HEIGHT.get() < size));
         pum_compute_horizontal_placement(anchor.target_win, anchor.cursor_col, border_width);
 
         if !pum_set_selected(selected, redo_count) {
@@ -380,10 +379,10 @@ pub fn pum_display(
     }
 
     let mut grid = pum_grid_ref();
-    grid.zindex = if State.get() & MODE_CMDLINE != 0 {
-        kZIndexCmdlinePopupMenu
+    grid.zindex = if STATE.get() & MODE_CMDLINE != 0 {
+        Z_INDEX_CMDLINE_POPUP_MENU
     } else {
-        kZIndexPopupMenu
+        Z_INDEX_POPUP_MENU
     };
     pum_redraw();
 }
@@ -394,7 +393,7 @@ pub fn pum_display(
 /// reached from there while it is being drawn on, so it is named rather than
 /// borrowed -- see [`GridRef`] for why that matters.
 pub(crate) fn pum_grid_ref() -> GridRef {
-    GridRef::of_cell(&pum_grid)
+    GridRef::of_cell(&PUM_GRID)
 }
 
 /// Take the menu down.
@@ -403,9 +402,9 @@ pub(crate) fn pum_grid_ref() -> GridRef {
 /// [`pum_check_clear`], which is what a caller that is about to draw
 /// something else in its place wants.
 pub fn pum_undisplay(immediate: bool) {
-    pum_is_visible.set(false);
-    pum_array.set(None);
-    must_redraw_pum.set(false);
+    PUM_IS_VISIBLE.set(false);
+    PUM_ARRAY.set(None);
+    MUST_REDRAW_PUM.set(false);
 
     if immediate {
         pum_check_clear();
@@ -418,22 +417,22 @@ pub fn pum_undisplay(immediate: bool) {
 /// of a redraw, where the grid may not be freed yet.
 pub fn pum_check_clear() {
     let mut grid = pum_grid_ref();
-    if pum_is_visible.get() || !pum_is_drawn.get() {
+    if PUM_IS_VISIBLE.get() || !PUM_IS_DRAWN.get() {
         return;
     }
-    if pum_external.get() {
+    if PUM_EXTERNAL.get() {
         ui_call_popupmenu_hide();
     } else {
         ui_comp_remove_grid(grid);
-        if ui_has(kUIMultigrid) {
+        if ui_has(UI_MULTIGRID) {
             ui_call_win_close(Integer::from(grid.handle));
             ui_call_grid_destroy(Integer::from(grid.handle));
         }
         // TODO(bfredl): consider keeping float grids allocated.
         grid.free();
     }
-    pum_is_drawn.set(false);
-    pum_external.set(false);
+    PUM_IS_DRAWN.set(false);
+    PUM_EXTERNAL.set(false);
 
     if let Some(wp) = win_float_find_preview() {
         let _ = win_close(wp, false, false);
@@ -442,32 +441,32 @@ pub fn pum_check_clear() {
 
 /// Scroll the menu back to the top. Nothing else is reset.
 pub fn pum_clear() {
-    pum_first.set(0);
+    PUM_FIRST.set(0);
 }
 
 /// Whether the menu is wanted on screen.
 pub fn pum_visible() -> bool {
-    pum_is_visible.get()
+    PUM_IS_VISIBLE.get()
 }
 
 /// Whether the menu is on screen *and* drawn here rather than by the UI.
 pub fn pum_drawn() -> bool {
-    pum_visible() && !pum_external.get()
+    pum_visible() && !PUM_EXTERNAL.get()
 }
 
 /// The screen was cleared: the whole grid has to be sent again.
 pub fn pum_invalidate() {
-    pum_invalid.set(true);
+    PUM_INVALID.set(true);
 }
 
 /// Ask for an item to be selected, from a UI that draws the menu itself.
 ///
 /// The request is picked up by `insexpand` on the next key.
 pub fn pum_ext_select_item(item: c_int, insert: bool, finish: bool) {
-    if !pum_visible() || item < -1 || item >= pum_size.get() {
+    if !pum_visible() || item < -1 || item >= PUM_SIZE.get() {
         return;
     }
-    pum_want.set(PumWant {
+    PUM_WANT.set(PumWant {
         active: true,
         item,
         insert,
@@ -475,13 +474,13 @@ pub fn pum_ext_select_item(item: c_int, insert: bool, finish: bool) {
     });
 }
 
-/// The request in `pum_want` has been answered: stop offering it.
+/// The request in `PUM_WANT` has been answered: stop offering it.
 ///
-/// C's `pum_want.active = false`, written where the request is consumed --
+/// C's `PUM_WANT.active = false`, written where the request is consumed --
 /// in `edit`'s `check_pum` and in the cmdline loop.
 pub(crate) fn pum_ext_want_done() {
-    let want = pum_want.get();
-    pum_want.set(PumWant {
+    let want = PUM_WANT.get();
+    PUM_WANT.set(PumWant {
         active: false,
         ..want
     });
@@ -489,13 +488,13 @@ pub(crate) fn pum_ext_want_done() {
 
 /// Rows the menu shows. Only meaningful while [`pum_visible`].
 pub fn pum_get_height() -> c_int {
-    if pum_external.get() {
+    if PUM_EXTERNAL.get() {
         let ui_pum_height = ui_pum_get_height();
         if ui_pum_height != 0 {
             return ui_pum_height;
         }
     }
-    pum_height.get()
+    PUM_HEIGHT.get()
 }
 
 /// Add the menu's geometry to `dict`, for `v:event` of `CompleteChanged`.
@@ -507,21 +506,21 @@ pub fn pum_set_event_info(dict: &mut Dict) {
     }
     let [w, h, r, c] = ui_pum_get_pos().unwrap_or_else(|| {
         [
-            pum_width.get(),
-            pum_height.get(),
-            pum_row.get(),
-            pum_col.get(),
+            PUM_WIDTH.get(),
+            PUM_HEIGHT.get(),
+            PUM_ROW.get(),
+            PUM_COL.get(),
         ]
         .map(f64::from)
     });
     for (key, value) in [(c"height", h), (c"width", w), (c"row", r), (c"col", c)] {
         let _ = dict.add_float(key.to_bytes(), value as Float);
     }
-    let _ = dict.add_number(b"size", VarNumber::from(pum_size.get()));
-    let scrollbar = if pum_scrollbar.get() != 0 {
-        kBoolVarTrue
+    let _ = dict.add_number(b"size", VarNumber::from(PUM_SIZE.get()));
+    let scrollbar = if PUM_SCROLLBAR.get() != 0 {
+        BOOL_VAR_TRUE
     } else {
-        kBoolVarFalse
+        BOOL_VAR_FALSE
     };
     let _ = dict.add_bool(b"scrollbar", scrollbar);
 }
@@ -533,17 +532,17 @@ pub fn pum_set_event_info(dict: &mut Dict) {
 /// row reported is its last one.
 fn pum_send_float_pos() {
     let grid = pum_grid_ref();
-    let above = pum_above.get();
+    let above = PUM_ABOVE.get();
     let anchor = if above { c"SW" } else { c"NW" };
-    let row_off = if above { -pum_height.get() } else { 0 };
+    let row_off = if above { -PUM_HEIGHT.get() } else { 0 };
     let anchor = ApiString::from_cstr(anchor);
     ui_call_win_float_pos(
         Integer::from(grid.handle),
         Handle::new(-1),
         anchor,
-        Integer::from(pum_anchor_grid.get()),
-        Float::from(pum_row.get() - row_off - pum_win_row_offset.get()),
-        Float::from(pum_left_col.get() - pum_win_col_offset.get()),
+        Integer::from(PUM_ANCHOR_GRID.get()),
+        Float::from(PUM_ROW.get() - row_off - PUM_WIN_ROW_OFFSET.get()),
+        Float::from(PUM_LEFT_COL.get() - PUM_WIN_COL_OFFSET.get()),
         false,
         Integer::from(grid.zindex),
         crate::narrow::len_as_integer(grid.comp_index),
@@ -556,9 +555,9 @@ fn pum_send_float_pos() {
 /// last redraw.
 pub fn pum_ui_flush() {
     let mut grid = pum_grid_ref();
-    if ui_has(kUIMultigrid)
-        && pum_is_drawn.get()
-        && !pum_external.get()
+    if ui_has(UI_MULTIGRID)
+        && PUM_IS_DRAWN.get()
+        && !PUM_EXTERNAL.get()
         && grid.handle != Handle::NONE
         && grid.pending_comp_index_update
     {

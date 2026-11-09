@@ -30,7 +30,7 @@ pub fn handle_buffer_del_line(channel_id: uint64_t, args: Array) -> Result<Objec
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"buffer_del_line", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -56,7 +56,7 @@ pub fn handle_buffer_del_var(channel_id: uint64_t, args: Array) -> Result<Object
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"buffer_del_var", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -81,7 +81,7 @@ pub fn handle_buffer_get_line(channel_id: uint64_t, args: Array) -> Result<Objec
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"buffer_get_line", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -107,7 +107,7 @@ pub fn handle_buffer_get_line_slice(channel_id: uint64_t, args: Array) -> Result
     if args.len() != 5 {
         return Err(wrong_arity(5, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"buffer_get_line_slice", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -142,7 +142,7 @@ pub fn handle_buffer_insert(channel_id: uint64_t, args: Array) -> Result<Object,
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"buffer_insert", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -171,7 +171,7 @@ pub fn handle_buffer_set_line(channel_id: uint64_t, args: Array) -> Result<Objec
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"buffer_set_line", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -200,7 +200,7 @@ pub fn handle_buffer_set_line_slice(channel_id: uint64_t, args: Array) -> Result
     if args.len() != 6 {
         return Err(wrong_arity(6, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"buffer_set_line_slice", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -238,7 +238,7 @@ pub fn handle_buffer_set_var(channel_id: uint64_t, args: Array) -> Result<Object
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"buffer_set_var", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -264,7 +264,7 @@ pub fn handle_nvim_buf_add_highlight(channel_id: uint64_t, args: Array) -> Resul
     if args.len() != 6 {
         return Err(wrong_arity(6, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_add_highlight", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -302,7 +302,7 @@ pub fn handle_nvim_buf_clear_highlight(channel_id: uint64_t, args: Array) -> Res
     if args.len() != 4 {
         return Err(wrong_arity(4, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_clear_highlight", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -334,7 +334,7 @@ pub fn handle_nvim_buf_get_number(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_get_number", c"Buffer"));
     };
     let rv = nvim_buf_get_number(arg_1)?;
@@ -357,7 +357,7 @@ pub fn handle_nvim_buf_get_option(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_get_option", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -382,7 +382,7 @@ pub fn handle_nvim_buf_set_option(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_set_option", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -412,7 +412,7 @@ pub fn handle_nvim_buf_set_virtual_text(
     if args.len() != 5 {
         return Err(wrong_arity(5, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_set_virtual_text", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -806,7 +806,7 @@ pub fn handle_nvim_win_get_option(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_get_option", c"Window"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -831,7 +831,7 @@ pub fn handle_nvim_win_set_option(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_set_option", c"Window"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -858,7 +858,7 @@ pub fn handle_tabpage_del_var(channel_id: uint64_t, args: Array) -> Result<Objec
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_TABPAGE) else {
         return Err(wrong_type(1, c"tabpage_del_var", c"Tabpage"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -883,7 +883,7 @@ pub fn handle_tabpage_set_var(channel_id: uint64_t, args: Array) -> Result<Objec
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_TABPAGE) else {
         return Err(wrong_type(1, c"tabpage_set_var", c"Tabpage"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -944,7 +944,7 @@ pub fn handle_window_del_var(channel_id: uint64_t, args: Array) -> Result<Object
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"window_del_var", c"Window"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -969,7 +969,7 @@ pub fn handle_window_set_var(channel_id: uint64_t, args: Array) -> Result<Object
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"window_set_var", c"Window"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {

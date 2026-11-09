@@ -20,7 +20,7 @@ use crate::winlayer::{Buf, Win, windows};
 use crate::ascii::NUL;
 use crate::buffer::{buflist_getfile, fileinfo};
 use crate::cursor::check_cursor_col;
-use crate::drawscreen::state::{clear_cmdline, mode_displayed, redraw_mode};
+use crate::drawscreen::state::{CLEAR_CMDLINE, MODE_DISPLAYED, REDRAW_MODE};
 use crate::drawscreen::{UPD_CLEAR, UPD_INVERTED, redraw_curbuf_later, redraw_later, showmode};
 use crate::eval::gc::MAY_GARBAGE_COLLECT;
 use crate::ex_docmd::state::ex_normal_busy;
@@ -41,7 +41,7 @@ use crate::normal::{
 use crate::ops::OpType;
 use crate::options::kOptBoFlagEsc;
 use crate::os::cshim::gettext;
-use crate::state::mode::{finish_op, restart_VIsual_select, restart_edit};
+use crate::state::mode::{FINISH_OP, RESTART_EDIT, RESTART_V_ISUAL_SELECT};
 use crate::state::{may_trigger_modechanged, state_handle_k_event};
 use crate::syntax::{cur_syn_block, syn_stack_free_all};
 use crate::types::LineNr;
@@ -176,7 +176,7 @@ pub(crate) fn nv_ctrlo(cmd_arg: &mut CmdArg) {
         may_trigger_modechanged();
         showmode();
         // 2 means "one command, then back to Select mode".
-        restart_VIsual_select.set(2);
+        RESTART_V_ISUAL_SELECT.set(2);
     } else {
         // A backwards jump is a negative count to the same handler `CTRL-I`
         // uses forwards.
@@ -223,10 +223,10 @@ pub(crate) fn nv_normal(cmd_arg: &mut CmdArg) {
         return;
     }
     clear_op(cmd_arg.op());
-    if !restart_edit.get().is_nul() && mode_displayed.get() {
-        clear_cmdline.set(true);
+    if !RESTART_EDIT.get().is_nul() && MODE_DISPLAYED.get() {
+        CLEAR_CMDLINE.set(true);
     }
-    restart_edit.set(Key::NUL);
+    RESTART_EDIT.set(Key::NUL);
     if cmdwin_type.get() != 0 {
         cmdwin_result.set(Key::CTRL_C);
     }
@@ -246,7 +246,7 @@ pub(crate) fn nv_esc(cmd_arg: &mut CmdArg) {
         && cmd_arg.count0 == 0
         && cmd_arg.op().regname == 0;
     if cmd_arg.arg != 0 {
-        if restart_edit.get().is_nul() && cmdwin_type.get() == 0 && !visual_active() && no_reason {
+        if RESTART_EDIT.get().is_nul() && cmdwin_type.get() == 0 && !visual_active() && no_reason {
             let hint = if any_buf_is_changed() {
                 c"Type  :qa!  and press <Enter> to abandon all changes and exit Nvim"
             } else {
@@ -254,10 +254,10 @@ pub(crate) fn nv_esc(cmd_arg: &mut CmdArg) {
             };
             msg(gettext(hint), 0);
         }
-        if !restart_edit.get().is_nul() {
-            redraw_mode.set(true);
+        if !RESTART_EDIT.get().is_nul() {
+            REDRAW_MODE.set(true);
         }
-        restart_edit.set(Key::NUL);
+        RESTART_EDIT.set(Key::NUL);
         if cmdwin_type.get() != 0 {
             cmdwin_result.set(Key::from(SpecialKey::Ignore));
             GOT_INT.set(false);
@@ -291,9 +291,9 @@ pub(crate) fn nv_event(cmd_arg: &mut CmdArg) {
     // An event's callback is not a safe point for a collection: it may be
     // holding values the marker cannot see.
     MAY_GARBAGE_COLLECT.set(false);
-    let may_restart = !restart_edit.get().is_nul() || restart_VIsual_select.get() != 0;
+    let may_restart = !RESTART_EDIT.get().is_nul() || RESTART_V_ISUAL_SELECT.get() != 0;
     state_handle_k_event();
-    finish_op.set(false);
+    FINISH_OP.set(false);
     if may_restart {
         // The callback may have left insert or Select mode pending, and
         // the command loop must not treat this key as having finished a

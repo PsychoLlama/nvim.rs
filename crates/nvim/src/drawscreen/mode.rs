@@ -33,14 +33,14 @@ use crate::types::Vv;
 
 /// Whether to postpone the mode message: not redrawing, or inside a mapping.
 ///
-/// Answering true also sets `redraw_mode`, so it is shown on the next redraw.
+/// Answering true also sets `REDRAW_MODE`, so it is shown on the next redraw.
 pub fn skip_showmode() -> bool {
     if global_busy.get() != 0
         || MSG_SILENT.get() != 0
         || !redrawing()
         || (char_avail() && !KEY_TYPED.get())
     {
-        redraw_mode.set(true);
+        REDRAW_MODE.set(true);
         return true;
     }
     false
@@ -48,8 +48,8 @@ pub fn skip_showmode() -> bool {
 
 /// Show the current mode and ruler, and answer the length of what was printed.
 ///
-/// `clear_cmdline` asks for the rest of the command line to be cleared;
-/// `redraw_mode` asks for the mode to be shown or taken away even when there is
+/// `CLEAR_CMDLINE` asks for the rest of the command line to be cleared;
+/// `REDRAW_MODE` asks for the mode to be shown or taken away even when there is
 /// none to show.
 pub fn showmode() -> c_int {
     let mut length = 0;
@@ -60,11 +60,11 @@ pub fn showmode() -> c_int {
 
     let do_mode = p_smd()
         && MSG_SILENT.get() == 0
-        && (State.get() & MODE_TERMINAL != 0
-            || State.get() & MODE_INSERT != 0
-            || !restart_edit.get().is_nul()
+        && (STATE.get() & MODE_TERMINAL != 0
+            || STATE.get() & MODE_INSERT != 0
+            || !RESTART_EDIT.get().is_nul()
             || visual_active());
-    let can_show_mode = p_ch() != 0 || ui_has(kUIMessages);
+    let can_show_mode = p_ch() != 0 || ui_has(UI_MESSAGES);
 
     if (do_mode || REG_RECORDING.get() != 0) && can_show_mode {
         if skip_showmode() {
@@ -76,9 +76,9 @@ pub fn showmode() -> c_int {
         // Wait a bit before overwriting an important message.
         msg_check_for_delay(false);
 
-        let mut need_clear = clear_cmdline.get();
-        if clear_cmdline.get() && cmdline_row.get() < Rows.get() - 1 {
-            // Resets `clear_cmdline`, which is why `need_clear` was read
+        let mut need_clear = CLEAR_CMDLINE.get();
+        if CLEAR_CMDLINE.get() && CMDLINE_ROW.get() < ROWS.get() - 1 {
+            // Resets `CLEAR_CMDLINE`, which is why `need_clear` was read
             // first.
             msg_clr_cmdline();
         }
@@ -97,21 +97,21 @@ pub fn showmode() -> c_int {
 
         if do_mode {
             put(c"--");
-            if let Some(submode) = edit_submode.get()
+            if let Some(submode) = EDIT_SUBMODE.get()
                 && !shortmess(ShmFlag::COMPLETIONMENU)
             {
                 // CTRL-X in Insert mode. These get long, so they are budgeted
                 // against the room left rather than allowed to wrap; an
                 // external message UI imposes no limit of its own.
                 // `edit_submode_extra` is preferred over `edit_submode`.
-                length = if ui_has(kUIMessages) {
+                length = if ui_has(UI_MESSAGES) {
                     INT_MAX
                 } else {
-                    (Rows.get() - MSG_ROW.get()) * Columns.get() - 3
+                    (ROWS.get() - MSG_ROW.get()) * COLUMNS.get() - 3
                 };
-                let pre = edit_submode_pre.get();
+                let pre = EDIT_SUBMODE_PRE.get();
                 // A copy: drawing it runs the message machinery.
-                let extra = edit_submode_extra.with(Clone::clone);
+                let extra = EDIT_SUBMODE_EXTRA.with(Clone::clone);
                 if let Some(extra) = &extra {
                     length -= vim_strsize_cstr(extra.as_cstr());
                 }
@@ -127,8 +127,8 @@ pub fn showmode() -> c_int {
                     }
                     if let Some(extra) = &extra {
                         put(c" ");
-                        let sub_id = if edit_submode_highl.get() < HLF_COUNT {
-                            edit_submode_highl.get()
+                        let sub_id = if EDIT_SUBMODE_HIGHL.get() < HLF_COUNT {
+                            EDIT_SUBMODE_HIGHL.get()
                         } else {
                             hl_id
                         };
@@ -138,19 +138,19 @@ pub fn showmode() -> c_int {
             } else {
                 // The mode itself. Not a `match`: these are tests on
                 // different variables, in upstream's precedence order.
-                if State.get() & MODE_TERMINAL != 0 {
+                if STATE.get() & MODE_TERMINAL != 0 {
                     put_translated(c" TERMINAL");
-                } else if State.get() & VREPLACE_FLAG != 0 {
+                } else if STATE.get() & VREPLACE_FLAG != 0 {
                     put_translated(c" VREPLACE");
-                } else if State.get() & REPLACE_FLAG != 0 {
+                } else if STATE.get() & REPLACE_FLAG != 0 {
                     put_translated(c" REPLACE");
-                } else if State.get() & MODE_INSERT != 0 {
+                } else if STATE.get() & MODE_INSERT != 0 {
                     if p_ri() {
                         put_translated(c" REVERSE");
                     }
                     put_translated(c" INSERT");
                 } else if matches!(
-                    restart_edit.get().as_byte(),
+                    RESTART_EDIT.get().as_byte(),
                     Some(b'I' | b'i' | b'a' | b'A')
                 ) {
                     if Buf::current().terminal.is_null() {
@@ -158,13 +158,13 @@ pub fn showmode() -> c_int {
                     } else {
                         put_translated(c" (terminal)");
                     }
-                } else if restart_edit.get().is('R') {
+                } else if RESTART_EDIT.get().is('R') {
                     put_translated(c" (replace)");
-                } else if restart_edit.get().is('V') {
+                } else if RESTART_EDIT.get().is('V') {
                     put_translated(c" (vreplace)");
                 }
 
-                if State.get() & MODE_LANGMAP != 0 {
+                if STATE.get() & MODE_LANGMAP != 0 {
                     if Win::current().w_onebuf_opt.wo_arab != 0 {
                         put_translated(c" Arabic");
                     } else if let Some(keymap_name) = keymap_str(Win::current()) {
@@ -182,7 +182,7 @@ pub fn showmode() -> c_int {
                     }
                 }
 
-                if State.get() & MODE_INSERT != 0 && p_paste() {
+                if STATE.get() & MODE_INSERT != 0 && p_paste() {
                     put_translated(c" (paste)");
                 }
 
@@ -215,13 +215,13 @@ pub fn showmode() -> c_int {
         }
 
         // The submode text already gets too long to share the line with it.
-        if REG_RECORDING.get() != 0 && edit_submode.get().is_none() {
+        if REG_RECORDING.get() != 0 && EDIT_SUBMODE.get().is_none() {
             recording_mode(hl_id);
             need_clear = true;
         }
 
-        mode_displayed.set(true);
-        if need_clear || clear_cmdline.get() || redraw_mode.get() {
+        MODE_DISPLAYED.set(true);
+        if need_clear || CLEAR_CMDLINE.get() || REDRAW_MODE.get() {
             msg_clr_eos();
         }
         MSG_DIDOUT.set(false); // this message may be overwritten
@@ -230,10 +230,10 @@ pub fn showmode() -> c_int {
         MSG_NO_MORE.set(false);
         LINES_LEFT.set(save_lines_left);
         NEED_WAIT_RETURN.set(nwr_save); // never ask for hit-return for this
-    } else if clear_cmdline.get() && MSG_SILENT.get() == 0 {
-        // Resets `clear_cmdline`.
+    } else if CLEAR_CMDLINE.get() && MSG_SILENT.get() == 0 {
+        // Resets `CLEAR_CMDLINE`.
         msg_clr_cmdline();
-    } else if redraw_mode.get() {
+    } else if REDRAW_MODE.get() {
         msg_pos_mode();
         msg_clr_eos();
     }
@@ -247,9 +247,9 @@ pub fn showmode() -> c_int {
     }
 
     redraw_ruler();
-    redraw_cmdline.set(false);
-    redraw_mode.set(false);
-    clear_cmdline.set(false);
+    REDRAW_CMDLINE.set(false);
+    REDRAW_MODE.set(false);
+    CLEAR_CMDLINE.set(false);
 
     length
 }
@@ -257,16 +257,16 @@ pub fn showmode() -> c_int {
 /// Put the message cursor where a mode message goes.
 pub(crate) fn msg_pos_mode() {
     MSG_COL.set(0);
-    MSG_ROW.set(Rows.get() - 1);
+    MSG_ROW.set(ROWS.get() - 1);
 }
 
 /// Take the mode message away, e.g. when `<Esc>` is typed in Insert mode.
 ///
 /// Insert mode has not actually ended yet at that point, which is why this is
-/// separate from [`showmode`]. Callers check `mode_displayed` first.
+/// separate from [`showmode`]. Callers check `MODE_DISPLAYED` first.
 pub fn unshowmode(force: bool) {
     if !redrawing() || (!force && char_avail() && !KEY_TYPED.get()) {
-        redraw_cmdline.set(true); // delete it later
+        REDRAW_CMDLINE.set(true); // delete it later
     } else {
         clearmode();
     }
@@ -306,10 +306,10 @@ pub(crate) fn recording_mode(hl_id: c_int) {
 /// Columns a standard ruler needs.
 pub const COL_RULER: c_int = 17;
 
-/// Recompute `sc_col` and `ru_col`, the first column of the `'showcmd'` area
+/// Recompute `SC_COL` and `RU_COL`, the first column of the `'showcmd'` area
 /// and of the ruler on the last line.
 ///
-/// `sc_col` also bounds how long a message on the status line may be. When the
+/// `SC_COL` also bounds how long a message on the status line may be. When the
 /// last window has a status line the ruler lives there instead, so the two are
 /// independent.
 pub fn comp_col() {
@@ -320,14 +320,14 @@ pub fn comp_col() {
     let mut sc_width = 0;
     let mut ru_width = 0;
 
-    // Saturating throughout: `ru_wid` is whatever number the user put in
+    // Saturating throughout: `RU_WID` is whatever number the user put in
     // `'rulerformat'`'s leading `%<n>(`, unbounded and as large as
     // `INT_MAX`, and `+ 1` on that overflows. Any width past the screen
     // lands on the same column-one answer below, so saturating is the
     // clamp the arithmetic wanted anyway.
     if p_ru() {
-        ru_width = if ru_wid.get() != 0 {
-            ru_wid.get()
+        ru_width = if RU_WID.get() != 0 {
+            RU_WID.get()
         } else {
             COL_RULER
         }
@@ -347,18 +347,18 @@ pub fn comp_col() {
     }
 
     debug_assert!(
-        sc_width >= 0 && c_int::MIN + sc_width <= Columns.get(),
+        sc_width >= 0 && c_int::MIN + sc_width <= COLUMNS.get(),
         "sc_col >= 0 && INT_MIN + sc_col <= Columns"
     );
     debug_assert!(
-        ru_width >= 0 && c_int::MIN + ru_width <= Columns.get(),
+        ru_width >= 0 && c_int::MIN + ru_width <= COLUMNS.get(),
         "ru_col >= 0 && INT_MIN + ru_col <= Columns"
     );
 
     // A screen too narrow for either is a mess whatever we do; keep them on
     // the screen.
-    sc_col.set((Columns.get() - sc_width).max(1));
-    ru_col.set((Columns.get() - ru_width).max(1));
+    SC_COL.set((COLUMNS.get() - sc_width).max(1));
+    RU_COL.set((COLUMNS.get() - ru_width).max(1));
 
-    set_vim_var_nr(Vv::Echospace, VarNumber::from(sc_col.get() - 1));
+    set_vim_var_nr(Vv::Echospace, VarNumber::from(SC_COL.get() - 1));
 }

@@ -1,7 +1,7 @@
 //! The grid handle: [`GridRef`], a screen grid named by address.
 //!
 //! Every grid on screen is owned by something else -- a window, the message
-//! area, the popup menu, or the `default_grid` static -- and drawing on any
+//! area, the popup menu, or the `DEFAULT_GRID` static -- and drawing on any
 //! of them emits UI events, which the compositor answers by reading *the
 //! very grid being drawn on* out of its own layer list. A `&mut ScreenGrid`
 //! held across such a call would therefore be aliased, and no `&mut` will
@@ -98,7 +98,7 @@ impl ::core::ops::DerefMut for GridRef {
 
 /// The grid a view draws on.
 ///
-/// A view always names a live grid -- a window's own or `default_grid` --
+/// A view always names a live grid -- a window's own or `DEFAULT_GRID` --
 /// once `win_grid_alloc` has resolved it, which every caller runs after;
 /// that is the one promise the draw path takes on trust, and the reason
 /// [`GridRef`] stays a handle.

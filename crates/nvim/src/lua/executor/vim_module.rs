@@ -29,8 +29,8 @@ use crate::lua::stack::{At, Function, Kind, Raise, Stack};
 use crate::lua::state::{MAIN_REFS, NLUA_DISABLE_PRELOAD};
 use crate::lua_functions;
 use crate::runtime::runtime_get_named_thread;
-use crate::ui::state::kUILinegrid;
-use crate::ui::state::{ui_ext_names, ui_refresh_cmdheight};
+use crate::ui::state::UI_LINEGRID;
+use crate::ui::state::{UI_EXT_NAMES, UI_REFRESH_CMDHEIGHT};
 use crate::ui::{ui_add_cb, ui_remove_cb};
 
 lua_functions! {
@@ -205,7 +205,7 @@ fn ui_attach(stack: &mut Stack) -> Result<c_int, Raise> {
         return Err(Raise::message("callback must be a Lua function"));
     }
 
-    let mut ext_widgets = [false; kUILinegrid as usize];
+    let mut ext_widgets = [false; UI_LINEGRID as usize];
     let mut tbl_has_true_val = false;
     stack.push_value(At::arg(2));
     stack.push_nil();
@@ -215,10 +215,10 @@ fn ui_attach(stack: &mut Stack) -> Result<c_int, Raise> {
         // string in place, as upstream does, and the name is a C string.
         let key = stack.to_bytes(At::from_top(2)).map(until_nul);
         if key == Some(b"set_cmdheight".as_slice()) {
-            ui_refresh_cmdheight.set(value);
+            UI_REFRESH_CMDHEIGHT.set(value);
         } else {
             let found = key.and_then(|key| {
-                ui_ext_names[..kUILinegrid as usize]
+                UI_EXT_NAMES[..UI_LINEGRID as usize]
                     .iter()
                     .position(|name| name.to_bytes() == key)
             });
@@ -249,7 +249,7 @@ fn ui_attach(stack: &mut Stack) -> Result<c_int, Raise> {
 
     let ui_event_cb = stack.reference(At::arg(3));
     ui_add_cb(ns_id, ui_event_cb, ext_widgets);
-    ui_refresh_cmdheight.set(true);
+    UI_REFRESH_CMDHEIGHT.set(true);
     Ok(0)
 }
 

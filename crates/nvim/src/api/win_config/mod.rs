@@ -30,13 +30,13 @@ use crate::r#move::changed_window_setting;
 use crate::option::didset_window_options;
 use crate::option::vars::{p_sb, p_spr, p_winborder};
 use crate::types::{
-    AlignTextPos, ApiString, Array, Boolean, BorderTextType, BufferHandle, Error, FloatAnchor,
-    FloatRelative, Integer, LPos, Object, SwitchWin, WinConfig, WinSplit, WinStyle, WindowHandle,
-    kErrorTypeException, kErrorTypeValidation, kFloatAnchorEast, kFloatAnchorSouth,
-    kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
-    kFloatRelativeTabline, kFloatRelativeWindow,
+    AlignTextPos, ApiString, Array, Boolean, BorderTextType, BufferHandle, ERROR_TYPE_EXCEPTION,
+    ERROR_TYPE_VALIDATION, Error, FLOAT_ANCHOR_EAST, FLOAT_ANCHOR_SOUTH, FLOAT_RELATIVE_CURSOR,
+    FLOAT_RELATIVE_EDITOR, FLOAT_RELATIVE_LASTSTATUS, FLOAT_RELATIVE_MOUSE, FLOAT_RELATIVE_TABLINE,
+    FLOAT_RELATIVE_WINDOW, FloatAnchor, FloatRelative, Integer, LPos, Object, SwitchWin, WinConfig,
+    WinSplit, WinStyle, WindowHandle,
 };
-use crate::ui::state::kUIMultigrid;
+use crate::ui::state::UI_MULTIGRID;
 use crate::ui::ui_has;
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::window::{

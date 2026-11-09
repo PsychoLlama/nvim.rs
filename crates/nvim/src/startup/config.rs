@@ -38,7 +38,7 @@ use crate::runtime::state::{ETYPE_ARGS, SID_CARG, SID_CMDARG, current_sctx};
 use crate::runtime::{do_source, estack_pop, estack_push, source_init_file};
 use crate::startup::args::execute_env;
 use crate::startup::{EDIT_QF, MainParams, SYS_VIMRC_FILE, VIMRC_FILE, silent_mode};
-use crate::state::mode::exmode_active;
+use crate::state::mode::EXMODE_ACTIVE;
 use crate::types::ScriptId;
 
 /// Run the `--cmd` commands, which come before any config.
@@ -95,7 +95,7 @@ pub(crate) fn exe_commands(parm: &MainParams) {
     if Win::current().w_cursor.lnum == LineNr::ZERO {
         Win::current().w_cursor.lnum = LineNr::ONE;
     }
-    if !exmode_active.get() {
+    if !EXMODE_ACTIVE.get() {
         MSG_SCROLL.set(0);
     }
     if parm.edit_type == EDIT_QF.cast_signed() {

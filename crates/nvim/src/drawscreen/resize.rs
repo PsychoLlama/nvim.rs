@@ -1,6 +1,6 @@
 //! Allocating the screen and reacting to a size change.
 //!
-//! [`default_grid_alloc`] is the only place `default_grid` is (re)allocated;
+//! [`default_grid_alloc`] is the only place `DEFAULT_GRID` is (re)allocated;
 //! [`screenclear`] blanks it and tells every window and the message area to draw
 //! themselves again. [`screen_resize`] is what the outside world calls when the
 //! terminal changed size: it clamps the new size ([`check_screensize`]), re-lays
@@ -26,17 +26,17 @@ use crate::statusline::{NO_CLICK, clear_click_defs};
 use crate::winlayer::{self, Win};
 use crate::winlayer::{Buf, TabPage};
 
-/// The largest screen this port will allocate, so that `Rows * Columns` cannot
+/// The largest screen this port will allocate, so that `ROWS * COLUMNS` cannot
 /// overflow.
 const MAX_ROWS: c_int = 1000;
 const MAX_COLUMNS: c_int = 10000;
 
-/// Resize `default_grid` to `Rows` x `Columns`, and answer whether it moved.
+/// Resize `DEFAULT_GRID` to `ROWS` x `COLUMNS`, and answer whether it moved.
 ///
 /// The allocation only happens when the size actually changed and both
-/// dimensions are known: there is a window between setting `Rows`/`Columns` and
+/// dimensions are known: there is a window between setting `ROWS`/`COLUMNS` and
 /// getting here, at startup and on a manual resize, so everything that indexes
-/// the grid uses `default_grid.rows`/`.cols` rather than the globals.
+/// the grid uses `DEFAULT_GRID.rows`/`.cols` rather than the globals.
 pub fn default_grid_alloc() -> bool {
     // An out-of-memory message from inside the allocation redraws, which lands
     // back here; break the loop rather than recursing.
@@ -48,8 +48,8 @@ pub fn default_grid_alloc() -> bool {
     RESIZING.set(true);
 
     let mut grid = default_grid_ref();
-    let unchanged = grid.is_allocated() && Rows.get() == grid.rows && Columns.get() == grid.cols;
-    if unchanged || Rows.get() == 0 || Columns.get() == 0 {
+    let unchanged = grid.is_allocated() && ROWS.get() == grid.rows && COLUMNS.get() == grid.cols;
+    if unchanged || ROWS.get() == 0 || COLUMNS.get() == 0 {
         RESIZING.set(false);
         return false;
     }
@@ -57,18 +57,18 @@ pub fn default_grid_alloc() -> bool {
     // Allocates new arrays, moves the old lines across, clears the rest and
     // frees the old ones. On failure the arrays are left NULL rather than
     // at the old size, because the wrong size is a crash.
-    grid_alloc(&mut grid, Rows.get(), Columns.get(), true, true);
+    grid_alloc(&mut grid, ROWS.get(), COLUMNS.get(), true, true);
 
-    let columns = usize::try_from(Columns.get()).unwrap_or(0);
-    tab_page_click_defs.with_mut(|line| {
+    let columns = usize::try_from(COLUMNS.get()).unwrap_or(0);
+    TAB_PAGE_CLICK_DEFS.with_mut(|line| {
         clear_click_defs(line);
         if line.cells.len() < columns {
             line.cells.resize(columns, NO_CLICK);
         }
     });
 
-    grid.comp_height = Rows.get();
-    grid.comp_width = Columns.get();
+    grid.comp_height = ROWS.get();
+    grid.comp_width = COLUMNS.get();
     grid.handle = Handle::new(DEFAULT_GRID_HANDLE);
 
     RESIZING.set(false);
@@ -91,29 +91,29 @@ pub fn screenclear() {
     ui_call_grid_clear(1);
     ui_comp_set_screen_valid(true);
 
-    ns_hl_fast.set(Handle::new(-1));
+    NS_HL_FAST.set(Handle::new(-1));
 
-    clear_cmdline.set(false);
-    mode_displayed.set(false);
+    CLEAR_CMDLINE.set(false);
+    MODE_DISPLAYED.set(false);
 
     // Sets UPD_NOT_VALID on every window.
     redraw_all_later(UPD_NOT_VALID);
     CMDLINE_WAS_LAST_DRAWN.set(false);
-    redraw_cmdline.set(true);
-    redraw_tabline.set(true);
-    redraw_popupmenu.set(true);
+    REDRAW_CMDLINE.set(true);
+    REDRAW_TABLINE.set(true);
+    REDRAW_POPUPMENU.set(true);
     pum_invalidate();
     for mut wp in winlayer::windows() {
         if wp.w_floating {
             wp.w_redr_type = UPD_CLEAR;
         }
     }
-    if must_redraw.get() == UPD_CLEAR {
-        must_redraw.set(UPD_NOT_VALID); // no need to clear again
+    if MUST_REDRAW.get() == UPD_CLEAR {
+        MUST_REDRAW.set(UPD_NOT_VALID); // no need to clear again
     }
 
     compute_cmdrow();
-    MSG_ROW.set(cmdline_row.get()); // put the cursor on the last line for messages
+    MSG_ROW.set(CMDLINE_ROW.get()); // put the cursor on the last line for messages
     MSG_COL.set(0);
     msg_reset_scroll(); // can't scroll back
     MSG_DIDANY.set(false);
@@ -125,8 +125,8 @@ pub fn screenclear() {
     {
         msg_grid_ref().invalidate();
         msg_grid_validate();
-        msg_grid_invalid.set(false);
-        clear_cmdline.set(true);
+        MSG_GRID_INVALID.set(false);
+        CLEAR_CMDLINE.set(true);
     }
 }
 
@@ -136,40 +136,40 @@ pub fn screenclear() {
 /// stored to be re-emitted, so it must not be cleared from the message grid --
 /// which is why redrawing is refused entirely while one is up.
 pub(crate) fn cmdline_number_prompt() -> bool {
-    !ui_has(kUIMessages) && State.get() & MODE_CMDLINE != 0 && Cc::current().mouse_prompt()
+    !ui_has(UI_MESSAGES) && STATE.get() & MODE_CMDLINE != 0 && Cc::current().mouse_prompt()
 }
 
 /// Set the dimensions of the Nvim application "screen".
 pub extern "C" fn screen_resize(width: c_int, height: c_int) {
     // Setting the window size can produce another window-changed signal.
-    if updating_screen.get() || resizing_screen.get() || cmdline_number_prompt() {
+    if UPDATING_SCREEN.get() || RESIZING_SCREEN.get() || cmdline_number_prompt() {
         return;
     }
     if width < 0 || height < 0 {
         return;
     }
-    if State.get() == MODE_HITRETURN || State.get() == MODE_SETWSIZE {
-        State.set(MODE_SETWSIZE); // postpone the resize
+    if STATE.get() == MODE_HITRETURN || STATE.get() == MODE_SETWSIZE {
+        STATE.set(MODE_SETWSIZE); // postpone the resize
         return;
     }
 
-    resizing_screen.set(true);
+    RESIZING_SCREEN.set(true);
 
-    Rows.set(height);
-    Columns.set(width);
+    ROWS.set(height);
+    COLUMNS.set(width);
     check_screensize();
 
-    if !ui_has(kUIMessages) {
+    if !ui_has(UI_MESSAGES) {
         // Clamp 'cmdheight' so the windows still fit, on this tab page and
         // on every other one.
-        let max_p_ch = Rows.get() - min_rows(TabPage::current()) + 1;
+        let max_p_ch = ROWS.get() - min_rows(TabPage::current()) + 1;
         if p_ch() > 0 && p_ch() > OptInt::from(max_p_ch) {
             P_CH.set(OptInt::from(max_p_ch.max(1)));
             TabPage::current().tp_ch_used = p_ch();
         }
         for mut tp in winlayer::tabs() {
             if !tp.is_current() {
-                let max_tp_ch = Rows.get() - min_rows(tp) + 1;
+                let max_tp_ch = ROWS.get() - min_rows(tp) + 1;
                 if tp.tp_ch_used > 0 && tp.tp_ch_used > OptInt::from(max_tp_ch) {
                     tp.tp_ch_used = OptInt::from(max_tp_ch.max(1));
                 }
@@ -178,8 +178,8 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
     }
 
     // `check_screensize` may have clamped them.
-    let height = Rows.get();
-    let width = Columns.get();
+    let height = ROWS.get();
+    let width = COLUMNS.get();
     P_LINES.set(OptInt::from(height));
     P_COLUMNS.set(OptInt::from(width));
 
@@ -189,13 +189,13 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
     // retried -- but at most three times, or an autocommand that always
     // changes them never terminates.
     let mut retry_count = 0;
-    resizing_autocmd.set(true);
+    RESIZING_AUTOCMD.set(true);
     while default_grid_alloc() {
         // `win_new_screensize` recomputes float positions; tell the
         // compositor not to draw them yet.
         ui_comp_set_screen_valid(false);
         if msg_grid_ref().is_allocated() {
-            msg_grid_invalid.set(true);
+            MSG_GRID_INVALID.set(true);
         }
 
         let redraw_off = Suppress::redraw();
@@ -209,11 +209,11 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
         }
         fire_autocmds(AutoEvent::VimResized, false, Buf::current_or_none());
     }
-    resizing_autocmd.set(false);
+    RESIZING_AUTOCMD.set(false);
 
     redraw_all_later(UPD_CLEAR);
 
-    if State.get() != MODE_ASKMORE && State.get() != MODE_EXTERNCMD {
+    if STATE.get() != MODE_ASKMORE && STATE.get() != MODE_EXTERNCMD {
         screenclear();
     }
 
@@ -226,12 +226,12 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
         // At a more prompt, running an external command, in Ex mode or at a
         // one-key cmdline prompt, only the cursor is repositioned; anywhere
         // else the screen is redrawn now.
-        let deferred = State.get() == MODE_ASKMORE
-            || State.get() == MODE_EXTERNCMD
-            || exmode_active.get()
-            || (State.get() & MODE_CMDLINE != 0 && Cc::current().one_key());
+        let deferred = STATE.get() == MODE_ASKMORE
+            || STATE.get() == MODE_EXTERNCMD
+            || EXMODE_ACTIVE.get()
+            || (STATE.get() & MODE_CMDLINE != 0 && Cc::current().one_key());
         if deferred {
-            if State.get() & MODE_CMDLINE != 0 {
+            if STATE.get() & MODE_CMDLINE != 0 {
                 let _ = update_screen();
             }
             if msg_grid_ref().is_allocated() {
@@ -243,11 +243,11 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
             if Win::current().w_onebuf_opt.wo_scb != 0 {
                 do_check_scrollbind(true);
             }
-            if State.get() & MODE_CMDLINE != 0 {
+            if STATE.get() & MODE_CMDLINE != 0 {
                 // The pum is redrawn by `cmdline_pum_display` below, at the
                 // new position; keep `update_screen` from drawing it at the
                 // old one.
-                redraw_popupmenu.set(false);
+                REDRAW_POPUPMENU.set(false);
                 let _ = update_screen();
                 redrawcmdline();
                 if pum_drawn() {
@@ -259,7 +259,7 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
                     // Same again: `ins_compl_show_pum` wants the screen
                     // redrawn first, and the nested `update_screen` inside
                     // it must not draw the pum at its old position.
-                    redraw_popupmenu.set(false);
+                    REDRAW_POPUPMENU.set(false);
                     ins_compl_show_pum();
                 }
                 let _ = update_screen();
@@ -271,11 +271,11 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
         ui_flush();
     }
 
-    resizing_screen.set(false);
+    RESIZING_SCREEN.set(false);
 }
 
 /// Clamp the screen size to something the editor can lay out and index.
 pub fn check_screensize() {
-    Rows.set(Rows.get().max(min_rows_for_all_tabpages()).min(MAX_ROWS));
-    Columns.set(Columns.get().max(MIN_COLUMNS as c_int).min(MAX_COLUMNS));
+    ROWS.set(ROWS.get().max(min_rows_for_all_tabpages()).min(MAX_ROWS));
+    COLUMNS.set(COLUMNS.get().max(MIN_COLUMNS as c_int).min(MAX_COLUMNS));
 }

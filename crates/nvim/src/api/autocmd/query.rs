@@ -125,7 +125,7 @@ fn event_filter(opts: &Opts) -> Result<Option<[bool; EVENT_COUNT]>, Error> {
     };
     for item in given.iter() {
         let Some(event_name) = item.as_string() else {
-            let want = api_typename(kObjectTypeString);
+            let want = api_typename(OBJECT_TYPE_STRING);
             let got = api_typename(item.kind());
             return Err(err_expected(c"event item", want, Some(got)));
         };
@@ -162,7 +162,7 @@ fn buffer_patterns(opts: &Opts, has_buf: bool) -> Result<Array, Error> {
     if handles.len() > MAX_PATTERNS {
         let max = MAX_PATTERNS;
         return Err(api_error!(
-            kErrorTypeValidation,
+            ERROR_TYPE_VALIDATION,
             "Too many buffers (maximum of {max})"
         ));
     }
@@ -194,13 +194,13 @@ fn pattern_filters<'a>(
             if patterns.len() > MAX_PATTERNS {
                 let max = MAX_PATTERNS;
                 return Err(api_error!(
-                    kErrorTypeValidation,
+                    ERROR_TYPE_VALIDATION,
                     "Too many patterns (maximum of {max})"
                 ));
             }
             for item in patterns.iter() {
                 let Some(pattern) = item.as_string() else {
-                    let want = api_typename(kObjectTypeString);
+                    let want = api_typename(OBJECT_TYPE_STRING);
                     let got = api_typename(item.kind());
                     return Err(err_expected(c"pattern", want, Some(got)));
                 };

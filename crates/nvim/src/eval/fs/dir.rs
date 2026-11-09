@@ -52,8 +52,8 @@ use crate::path::MAXPATHL;
 use crate::path::{full_name_save, tail_index};
 use crate::semsg;
 use crate::types::{
-    CdScope, Failed, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, kCdScopeGlobal, kCdScopeInvalid,
-    kCdScopeTabpage, kCdScopeWindow,
+    CD_SCOPE_GLOBAL, CD_SCOPE_INVALID, CD_SCOPE_TABPAGE, CD_SCOPE_WINDOW, CdScope, Failed, TypVal,
+    VAR_NUMBER, VAR_STRING, VarNumber,
 };
 use crate::window::find_tabpage;
 use crate::window::{DirOwner, own_dir};
@@ -126,7 +126,7 @@ fn err0(msg: &'static CStr) {
 /// the objects they name it on.
 #[derive(Debug)]
 struct Scope {
-    /// The narrowest scope asked for, or [`kCdScopeInvalid`] for none.
+    /// The narrowest scope asked for, or [`CD_SCOPE_INVALID`] for none.
     scope: CdScope,
     /// The `{win}` and `{tab}` numbers, indexed by their `CdScope`: -1 skips
     /// the scope and moves the answer one rung up, 0 means the current
@@ -141,9 +141,9 @@ struct Scope {
 impl Scope {
     /// The scope the arguments name; a refusal has been said.
     fn read(args: &[TypVal], default_to_window: bool) -> Result<Self, Failed> {
-        let (win_i, tab_i) = (kCdScopeWindow as usize, kCdScopeTabpage as usize);
+        let (win_i, tab_i) = (CD_SCOPE_WINDOW as usize, CD_SCOPE_TABPAGE as usize);
         let mut s = Self {
-            scope: kCdScopeInvalid,
+            scope: CD_SCOPE_INVALID,
             number: [0, 0],
             tp: TabPage::current_or_none(),
             win: Win::current_or_none(),
@@ -166,7 +166,7 @@ impl Scope {
                 return Err(Failed);
             }
             // Use the narrowest scope the caller asked for.
-            if s.number[i] >= 0 && s.scope == kCdScopeInvalid {
+            if s.number[i] >= 0 && s.scope == CD_SCOPE_INVALID {
                 s.scope = len_as_int(i);
             } else if s.number[i] < 0 {
                 s.scope = len_as_int(i) + 1;
@@ -174,8 +174,8 @@ impl Scope {
         }
 
         // Called without any arguments, `haslocaldir()` means window scope.
-        if default_to_window && s.scope == kCdScopeInvalid {
-            s.scope = kCdScopeWindow;
+        if default_to_window && s.scope == CD_SCOPE_INVALID {
+            s.scope = CD_SCOPE_WINDOW;
         }
 
         // Find the tabpage by number.
@@ -231,13 +231,13 @@ pub fn f_chdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         result.write_string(Some(ThinCString::from(cwd)));
     }
 
-    let mut scope = kCdScopeGlobal;
+    let mut scope = CD_SCOPE_GLOBAL;
     if args.len() > 1 {
         let s = str_arg(args, 1, &mut numbuf);
         scope = match s.to_bytes() {
-            b"global" => kCdScopeGlobal,
-            b"tabpage" => kCdScopeTabpage,
-            b"window" => kCdScopeWindow,
+            b"global" => CD_SCOPE_GLOBAL,
+            b"tabpage" => CD_SCOPE_TABPAGE,
+            b"window" => CD_SCOPE_WINDOW,
             _ => {
                 let (arg0, value) = ("scope", msg_cstr(s));
                 semsg!("E475: Invalid value for argument {arg0}: {value}");
@@ -245,9 +245,9 @@ pub fn f_chdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
         };
     } else if win_has_localdir(Win::current()) {
-        scope = kCdScopeWindow;
+        scope = CD_SCOPE_WINDOW;
     } else if tab_has_localdir(TabPage::current()) {
-        scope = kCdScopeTabpage;
+        scope = CD_SCOPE_TABPAGE;
     }
 
     // A copy: the DirChangedPre autocommand runs while the name is read.
@@ -327,15 +327,15 @@ pub fn f_getcwd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // rung the scope names and falling one rung at a time: the window's,
     // then its tabpage's, then the global one, and finally the OS's own.
     let mut dir = None;
-    if s.scope == kCdScopeWindow {
+    if s.scope == CD_SCOPE_WINDOW {
         let win = s.win.expect("a window scope names a window");
         dir = own_dir(DirOwner::Window(win));
     }
-    if dir.is_none() && (kCdScopeWindow..=kCdScopeTabpage).contains(&s.scope) {
+    if dir.is_none() && (CD_SCOPE_WINDOW..=CD_SCOPE_TABPAGE).contains(&s.scope) {
         let tp = s.tp.expect("a tab page scope names a tab page");
         dir = own_dir(DirOwner::TabPage(tp));
     }
-    if dir.is_none() && (kCdScopeWindow..=kCdScopeGlobal).contains(&s.scope) {
+    if dir.is_none() && (CD_SCOPE_WINDOW..=CD_SCOPE_GLOBAL).contains(&s.scope) {
         // `globaldir` is not always set.
         dir = own_dir(DirOwner::Global);
     }
@@ -356,16 +356,16 @@ pub fn f_haslocaldir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     };
 
     result.write_number(match s.scope {
-        kCdScopeWindow => {
+        CD_SCOPE_WINDOW => {
             let win = s.win.expect("a window scope names a window");
             VarNumber::from(win_has_localdir(win))
         }
-        kCdScopeTabpage => {
+        CD_SCOPE_TABPAGE => {
             let tp = s.tp.expect("a tab page scope names a tab page");
             VarNumber::from(tab_has_localdir(tp))
         }
         // We should never get here: the read above defaulted it.
-        kCdScopeInvalid => std::process::abort(),
+        CD_SCOPE_INVALID => std::process::abort(),
         // The global scope never has a local directory.
         _ => 0 as VarNumber,
     });

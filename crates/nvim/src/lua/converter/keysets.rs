@@ -29,15 +29,15 @@ use crate::lua::abi::{lua_Integer, lua_Number};
 use crate::lua::stack::{At, Kind, Stack};
 use crate::message_fmt::msg_bytes;
 use crate::types::{
-    Error, Integer, kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
+    ERROR_TYPE_VALIDATION, Error, Integer, OBJECT_TYPE_ARRAY, OBJECT_TYPE_DICT, OBJECT_TYPE_FLOAT,
 };
 
 /// The three api types that need a name of their own on the Lua side, both
 /// ways round: `vim.types.float` is the tag and `vim.types[tag]` the name.
 const NAMED_TYPES: [(&CStr, c_int); 3] = [
-    (c"float", kObjectTypeFloat.cast_signed()),
-    (c"array", kObjectTypeArray.cast_signed()),
-    (c"dictionary", kObjectTypeDict.cast_signed()),
+    (c"float", OBJECT_TYPE_FLOAT.cast_signed()),
+    (c"array", OBJECT_TYPE_ARRAY.cast_signed()),
+    (c"dictionary", OBJECT_TYPE_DICT.cast_signed()),
 ];
 
 /// Install `type_idx`, `val_idx` and `types` on the `vim` table below the top
@@ -92,7 +92,7 @@ pub(crate) fn pop_keydict(
         let key = stack.to_bytes(At::from_top(2)).unwrap_or_default();
         let Some(index) = retval.find(key) else {
             let key = msg_bytes(key);
-            let refused = api_error!(kErrorTypeValidation, "invalid key: {key}");
+            let refused = api_error!(ERROR_TYPE_VALIDATION, "invalid key: {key}");
             stack.pop(3);
             return Err(refused);
         };

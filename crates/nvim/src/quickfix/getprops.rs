@@ -22,7 +22,7 @@ use crate::eval::list::string_tv;
 use crate::option::vars::P_EFM;
 use crate::quickfix::model::QfId;
 use crate::types::Handle;
-use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow};
+use crate::types::{LIST_LEN_MAY_KNOW, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 use core::ffi::{c_int, c_uint};
 
 /// Add a number under `key`.
@@ -151,7 +151,7 @@ fn qf_get_list_from_lines(what: &Dict, lines: &TypVal, retdict: &mut Dict) -> Re
     };
 
     // Only a List value is supported.
-    let mut l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+    let mut l = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
     let id = new_location_stack(QFLT_INTERNAL, 1);
     let qi = id.stack();
     // A copy of the value: parsing can run autocommands, which could change
@@ -296,7 +296,7 @@ fn qf_getprop_defaults(
         add_str(retdict, "title", None)?;
     }
     if wanted(GetListProps::ITEMS) {
-        let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+        let l = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
         add_list(retdict, "items", Some(l))?;
     }
     if wanted(GetListProps::NR) {
@@ -347,7 +347,7 @@ fn qf_getprop_filewinid(window: Option<Win>, id: QfId, retdict: &mut Dict) -> Re
 /// An empty list is a perfectly good answer, so neither the walk's refusal
 /// nor the write's is passed on — upstream discarded both here too.
 fn qf_getprop_items(qi: Qi, qf_idx: c_int, eidx: c_int, retdict: &mut Dict) {
-    let mut l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+    let mut l = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
     let _ = get_errorlist(qi, qf_idx, eidx, &mut l);
     let _ = add_list(retdict, "items", Some(l));
 }

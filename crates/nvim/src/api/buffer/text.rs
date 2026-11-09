@@ -355,7 +355,7 @@ fn fix_cursor_cols(
     new_rows: i32,
     new_cols_at_end_row: i32,
 ) {
-    let mode_col_adj: i32 = if win == Win::current() && State.get() & MODE_INSERT != 0 {
+    let mode_col_adj: i32 = if win == Win::current() && STATE.get() & MODE_INSERT != 0 {
         0
     } else {
         1

@@ -69,7 +69,7 @@ use crate::ui_client::handle_ui_client_redraw;
 /// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
 /// unreachable from outside the crate and `unreachable_pub` says so.
 mod known {
-    pub(crate) use crate::types::kErrorTypeException;
+    pub(crate) use crate::types::ERROR_TYPE_EXCEPTION;
 }
 
 use known::*;
@@ -106,5 +106,5 @@ pub fn msgpack_rpc_get_handler_for(name: &[u8]) -> Result<MsgpackRpcRequestHandl
         name
     };
     let text = msg_bytes(text);
-    Err(api_error!(kErrorTypeException, "Invalid method: {text}"))
+    Err(api_error!(ERROR_TYPE_EXCEPTION, "Invalid method: {text}"))
 }

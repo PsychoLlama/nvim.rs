@@ -30,7 +30,7 @@ pub fn handle_nvim_win_close(channel_id: uint64_t, args: Array) -> Result<Object
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_close", c"Window"));
     };
     let Some(arg_2) = as_boolean(args[1].take()) else {
@@ -59,7 +59,7 @@ pub fn handle_nvim_win_del_var(channel_id: uint64_t, args: Array) -> Result<Obje
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_del_var", c"Window"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -85,7 +85,7 @@ pub fn handle_nvim_win_get_buf(channel_id: uint64_t, args: Array) -> Result<Obje
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_get_buf", c"Window"));
     };
     let rv = nvim_win_get_buf(arg_1)?;
@@ -108,7 +108,7 @@ pub fn handle_nvim_win_get_cursor(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_get_cursor", c"Window"));
     };
     let rv = nvim_win_get_cursor(arg_1)?;
@@ -131,7 +131,7 @@ pub fn handle_nvim_win_get_height(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_get_height", c"Window"));
     };
     let rv = nvim_win_get_height(arg_1)?;
@@ -154,7 +154,7 @@ pub fn handle_nvim_win_get_number(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_get_number", c"Window"));
     };
     let rv = nvim_win_get_number(arg_1)?;
@@ -177,7 +177,7 @@ pub fn handle_nvim_win_get_position(channel_id: uint64_t, args: Array) -> Result
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_get_position", c"Window"));
     };
     let rv = nvim_win_get_position(arg_1)?;
@@ -200,7 +200,7 @@ pub fn handle_nvim_win_get_tabpage(channel_id: uint64_t, args: Array) -> Result<
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_get_tabpage", c"Window"));
     };
     let rv = nvim_win_get_tabpage(arg_1)?;
@@ -223,7 +223,7 @@ pub fn handle_nvim_win_get_var(channel_id: uint64_t, args: Array) -> Result<Obje
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_get_var", c"Window"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -248,7 +248,7 @@ pub fn handle_nvim_win_get_width(channel_id: uint64_t, args: Array) -> Result<Ob
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_get_width", c"Window"));
     };
     let rv = nvim_win_get_width(arg_1)?;
@@ -271,7 +271,7 @@ pub fn handle_nvim_win_hide(channel_id: uint64_t, args: Array) -> Result<Object,
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_hide", c"Window"));
     };
     if textlock.get() != 0 || expr_map_locked() {
@@ -297,7 +297,7 @@ pub fn handle_nvim_win_is_valid(channel_id: uint64_t, args: Array) -> Result<Obj
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_is_valid", c"Window"));
     };
     let rv = nvim_win_is_valid(arg_1);
@@ -320,10 +320,10 @@ pub fn handle_nvim_win_set_buf(channel_id: uint64_t, args: Array) -> Result<Obje
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_set_buf", c"Window"));
     };
-    let Some(arg_2) = as_handle(args[1].take(), kObjectTypeBuffer) else {
+    let Some(arg_2) = as_handle(args[1].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(2, c"nvim_win_set_buf", c"Buffer"));
     };
     if textlock.get() != 0 || expr_map_locked() {
@@ -349,7 +349,7 @@ pub fn handle_nvim_win_set_cursor(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_set_cursor", c"Window"));
     };
     let Some(arg_2) = as_array(args[1].take()) else {
@@ -379,7 +379,7 @@ pub fn handle_nvim_win_set_height(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_set_height", c"Window"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -405,7 +405,7 @@ pub fn handle_nvim_win_set_hl_ns(channel_id: uint64_t, args: Array) -> Result<Ob
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_set_hl_ns", c"Window"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -431,7 +431,7 @@ pub fn handle_nvim_win_set_var(channel_id: uint64_t, args: Array) -> Result<Obje
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_set_var", c"Window"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -458,7 +458,7 @@ pub fn handle_nvim_win_set_width(channel_id: uint64_t, args: Array) -> Result<Ob
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_set_width", c"Window"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -484,7 +484,7 @@ pub fn handle_nvim_win_text_height(channel_id: uint64_t, args: Array) -> Result<
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_text_height", c"Window"));
     };
     let mut arg_2: KeyDict_win_text_height = match read_keydict(args[1].take()) {

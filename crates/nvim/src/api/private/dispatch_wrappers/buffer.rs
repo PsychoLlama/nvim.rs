@@ -32,7 +32,7 @@ pub fn handle_nvim__buf_stats(channel_id: uint64_t, args: Array) -> Result<Objec
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim__buf_stats", c"Buffer"));
     };
     let rv = nvim__buf_stats(arg_1)?;
@@ -55,7 +55,7 @@ pub fn handle_nvim_buf_attach(channel_id: uint64_t, args: Array) -> Result<Objec
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_attach", c"Buffer"));
     };
     let Some(arg_2) = as_boolean(args[1].take()) else {
@@ -88,7 +88,7 @@ pub fn handle_nvim_buf_del_keymap(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_del_keymap", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -117,7 +117,7 @@ pub fn handle_nvim_buf_del_mark(channel_id: uint64_t, args: Array) -> Result<Obj
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_del_mark", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -143,7 +143,7 @@ pub fn handle_nvim_buf_del_var(channel_id: uint64_t, args: Array) -> Result<Obje
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_del_var", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -169,7 +169,7 @@ pub fn handle_nvim_buf_delete(channel_id: uint64_t, args: Array) -> Result<Objec
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_delete", c"Buffer"));
     };
     let mut arg_2: KeyDict_buf_delete = match read_keydict(args[1].take()) {
@@ -202,7 +202,7 @@ pub fn handle_nvim_buf_detach(channel_id: uint64_t, args: Array) -> Result<Objec
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_detach", c"Buffer"));
     };
     let rv = nvim_buf_detach(channel_id, arg_1)?;
@@ -225,7 +225,7 @@ pub fn handle_nvim_buf_get_changedtick(channel_id: uint64_t, args: Array) -> Res
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_get_changedtick", c"Buffer"));
     };
     let rv = nvim_buf_get_changedtick(arg_1)?;
@@ -248,7 +248,7 @@ pub fn handle_nvim_buf_get_keymap(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_get_keymap", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -274,7 +274,7 @@ pub fn handle_nvim_buf_get_lines(channel_id: uint64_t, args: Array) -> Result<Ob
     if args.len() != 4 {
         return Err(wrong_arity(4, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_get_lines", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -306,7 +306,7 @@ pub fn handle_nvim_buf_get_mark(channel_id: uint64_t, args: Array) -> Result<Obj
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_get_mark", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -332,7 +332,7 @@ pub fn handle_nvim_buf_get_name(channel_id: uint64_t, args: Array) -> Result<Obj
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_get_name", c"Buffer"));
     };
     let rv = nvim_buf_get_name(arg_1)?;
@@ -355,7 +355,7 @@ pub fn handle_nvim_buf_get_offset(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_get_offset", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -381,7 +381,7 @@ pub fn handle_nvim_buf_get_text(channel_id: uint64_t, args: Array) -> Result<Obj
     if args.len() != 6 {
         return Err(wrong_arity(6, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_get_text", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -425,7 +425,7 @@ pub fn handle_nvim_buf_get_var(channel_id: uint64_t, args: Array) -> Result<Obje
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_get_var", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -450,7 +450,7 @@ pub fn handle_nvim_buf_is_loaded(channel_id: uint64_t, args: Array) -> Result<Ob
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_is_loaded", c"Buffer"));
     };
     let rv = nvim_buf_is_loaded(arg_1);
@@ -473,7 +473,7 @@ pub fn handle_nvim_buf_is_valid(channel_id: uint64_t, args: Array) -> Result<Obj
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_is_valid", c"Buffer"));
     };
     let rv = nvim_buf_is_valid(arg_1);
@@ -496,7 +496,7 @@ pub fn handle_nvim_buf_line_count(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_line_count", c"Buffer"));
     };
     let rv = nvim_buf_line_count(arg_1)?;
@@ -519,7 +519,7 @@ pub fn handle_nvim_buf_set_keymap(channel_id: uint64_t, args: Array) -> Result<O
     if args.len() != 5 {
         return Err(wrong_arity(5, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_set_keymap", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -558,7 +558,7 @@ pub fn handle_nvim_buf_set_lines(channel_id: uint64_t, args: Array) -> Result<Ob
     if args.len() != 5 {
         return Err(wrong_arity(5, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_set_lines", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -596,7 +596,7 @@ pub fn handle_nvim_buf_set_mark(channel_id: uint64_t, args: Array) -> Result<Obj
     if args.len() != 5 {
         return Err(wrong_arity(5, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_set_mark", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -635,7 +635,7 @@ pub fn handle_nvim_buf_set_name(channel_id: uint64_t, args: Array) -> Result<Obj
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_set_name", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -661,7 +661,7 @@ pub fn handle_nvim_buf_set_text(channel_id: uint64_t, args: Array) -> Result<Obj
     if args.len() != 6 {
         return Err(wrong_arity(6, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_set_text", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1].take()) else {
@@ -702,7 +702,7 @@ pub fn handle_nvim_buf_set_var(channel_id: uint64_t, args: Array) -> Result<Obje
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_buf_set_var", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {

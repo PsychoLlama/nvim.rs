@@ -42,7 +42,7 @@ use crate::ops::cursor_pos_info;
 use crate::os::libc::int64_t;
 use crate::plines::linetabsize;
 use crate::search::{BACKWARD, FORWARD, current_search};
-use crate::state::mode::VIsual_reselect;
+use crate::state::mode::V_ISUAL_RESELECT;
 use crate::state::virtual_active;
 use crate::textobject::bckend_word;
 use crate::types::{ColNr, LineNr};
@@ -329,7 +329,7 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
         // `gv`: reselect the previous selection.
         Some(b'v') => nv_gv_cmd(cmd_arg),
         // `gV`: do not reselect it after the next Select-mode edit.
-        Some(b'V') => VIsual_reselect.set(0),
+        Some(b'V') => V_ISUAL_RESELECT.set(0),
         Some(b'h' | b'H' | CTRL_H) => nv_g_select(cmd_arg),
         // `gn`/`gN`: select the next/previous match of the last search.
         Some(b'N' | b'n') => {

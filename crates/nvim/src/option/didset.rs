@@ -24,7 +24,7 @@
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{fire_autocmds, fire_autocmds_for};
 use crate::drawscreen::NO_SCREEN;
-use crate::keycodes::{Ctrl_C, SpecialKey};
+use crate::keycodes::{CTRL_C, SpecialKey};
 use crate::narrow::number_as_int;
 use crate::types::Key;
 use crate::winlayer::TabPage;
@@ -34,7 +34,7 @@ use crate::buffer::{BufFlags, do_autochdir};
 use crate::change::save_file_ff;
 use crate::charset::buf_init_chartab;
 use crate::diff::diff_buf_adjust;
-use crate::drawscreen::state::{clear_cmdline, cmdline_row, need_maketitle, updating_screen};
+use crate::drawscreen::state::{CLEAR_CMDLINE, CMDLINE_ROW, NEED_MAKETITLE, UPDATING_SCREEN};
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_SOME_VALID, check_screensize, redraw_all_later, screen_resize, showmode,
     status_redraw_curbuf,
@@ -71,7 +71,7 @@ use crate::spell::parse_spelllang;
 use crate::startup::{full_screen, readonlymode, starting};
 use crate::terminal::on_scrollback_changed_in;
 use crate::types::{Buffer, ColNr, LineNr, OptInt, Vv};
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};
 use crate::window::{
     STATUS_HEIGHT, check_window_colorcolumn, command_height, global_stl_height, last_status,
@@ -230,13 +230,13 @@ pub(crate) fn did_set_buflisted(args: &mut OptSet) -> Result<(), OptError> {
 /// room for, and growing or shrinking it moves every window below it.
 pub(crate) fn did_set_cmdheight(args: &mut OptSet) -> Result<(), OptError> {
     let old_value = Frame::read(args).old_number();
-    let room = OptInt::from(Rows.get() - min_rows(TabPage::current()) + 1);
+    let room = OptInt::from(ROWS.get() - min_rows(TabPage::current()) + 1);
     if p_ch() > room {
         P_CH.set(room);
     }
     let laid_out =
         OptInt::from(tabline_height() + global_stl_height() + current_topframe().fr_height);
-    if (p_ch() != old_value || laid_out != OptInt::from(Rows.get()) - p_ch()) && full_screen.get() {
+    if (p_ch() != old_value || laid_out != OptInt::from(ROWS.get()) - p_ch()) && full_screen.get() {
         command_height();
     }
     Ok(())
@@ -343,7 +343,7 @@ pub(crate) fn did_set_laststatus(args: &mut OptSet) -> Result<(), OptError> {
     if value == 3 && old_value != 3 {
         new_height(top, top.fr_height - STATUS_HEIGHT, false, false, false);
         win_comp_pos();
-        clear_cmdline.set(true);
+        CLEAR_CMDLINE.set(true);
     }
     if old_value == 3 && value != 3 {
         new_height(top, top.fr_height + STATUS_HEIGHT, false, false, false);
@@ -362,29 +362,29 @@ pub(crate) fn did_set_laststatus(args: &mut OptSet) -> Result<(), OptError> {
 /// under it.
 pub(crate) fn did_set_lines_or_columns(args: &mut OptSet) -> Result<(), OptError> {
     let f = Frame::read(args);
-    if p_lines() != OptInt::from(Rows.get()) || p_columns() != OptInt::from(Columns.get()) {
-        if updating_screen.get() {
+    if p_lines() != OptInt::from(ROWS.get()) || p_columns() != OptInt::from(COLUMNS.get()) {
+        if UPDATING_SCREEN.get() {
             write_slot(f.idx, f.varp, OptVal::Number(f.old_number()));
         } else if full_screen.get() {
             screen_resize(number_as_int(p_columns()), number_as_int(p_lines()));
         } else {
             // Before the screen exists there is nothing to resize; just
             // record the size and keep the command line on screen.
-            Rows.set(number_as_int(p_lines()));
-            Columns.set(number_as_int(p_columns()));
+            ROWS.set(number_as_int(p_lines()));
+            COLUMNS.set(number_as_int(p_columns()));
             check_screensize();
-            let new_row = number_as_int(OptInt::from(Rows.get()) - p_ch().max(1));
-            if cmdline_row.get() > new_row && OptInt::from(Rows.get()) > p_ch() {
+            let new_row = number_as_int(OptInt::from(ROWS.get()) - p_ch().max(1));
+            if CMDLINE_ROW.get() > new_row && OptInt::from(ROWS.get()) > p_ch() {
                 debug_assert!(p_ch() >= 0);
-                cmdline_row.set(new_row);
+                CMDLINE_ROW.set(new_row);
             }
         }
-        if p_window() >= OptInt::from(Rows.get()) || !option_was_set(kOptWindow) {
-            P_WINDOW.set(OptInt::from(Rows.get() - 1));
+        if p_window() >= OptInt::from(ROWS.get()) || !option_was_set(kOptWindow) {
+            P_WINDOW.set(OptInt::from(ROWS.get() - 1));
         }
     }
-    if p_sj() >= OptInt::from(Rows.get()) && full_screen.get() {
-        P_SJ.set(OptInt::from(Rows.get() / 2));
+    if p_sj() >= OptInt::from(ROWS.get()) && full_screen.get() {
+        P_SJ.set(OptInt::from(ROWS.get() / 2));
     }
     Ok(())
 }
@@ -559,7 +559,7 @@ pub(crate) fn did_set_title_icon(_args: &mut OptSet) -> Result<(), OptError> {
 pub(crate) fn did_set_titlelen(args: &mut OptSet) -> Result<(), OptError> {
     let old_value = Frame::read(args).old_number();
     if starting.get() != NO_SCREEN && old_value != p_titlelen() {
-        need_maketitle.set(true);
+        NEED_MAKETITLE.set(true);
     }
     Ok(())
 }
@@ -614,7 +614,7 @@ pub(crate) fn did_set_updatecount(args: &mut OptSet) -> Result<(), OptError> {
 pub(crate) fn did_set_wildchar(args: &mut OptSet) -> Result<(), OptError> {
     let key = option_key(Frame::read(args).varp.number_var().get());
     let refused = [
-        Key::from_code(Ctrl_C),
+        Key::from_code(CTRL_C),
         Key::ascii(b'\n'),
         Key::ascii(b'\r'),
         Key::from(SpecialKey::Kenter),
@@ -640,8 +640,8 @@ pub(crate) fn did_set_winblend(args: &mut OptSet) -> Result<(), OptError> {
 
 /// 'window': the scroll amount `CTRL-F` uses, capped at the screen.
 pub(crate) fn did_set_window(_args: &mut OptSet) -> Result<(), OptError> {
-    if p_window() < 1 || p_window() >= OptInt::from(Rows.get()) {
-        P_WINDOW.set(OptInt::from(Rows.get() - 1));
+    if p_window() < 1 || p_window() >= OptInt::from(ROWS.get()) {
+        P_WINDOW.set(OptInt::from(ROWS.get() - 1));
     }
     Ok(())
 }

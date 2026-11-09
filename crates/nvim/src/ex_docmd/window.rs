@@ -36,7 +36,7 @@ use std::ffi::CString;
 
 use crate::ascii::NUL;
 use crate::buffer::{buf_is_quickfix, buf_spname_owned};
-use crate::drawscreen::state::must_redraw;
+use crate::drawscreen::state::MUST_REDRAW;
 use crate::drawscreen::{UPD_CLEAR, UPD_VALID, screen_resize};
 use crate::ex_cmds::prepare_tagpreview;
 use crate::ex_docmd::argopt::get_tabpage_arg;
@@ -51,7 +51,7 @@ use crate::ex_docmd::tags::ex_findpat;
 use crate::file_search::FileNameOpts;
 use crate::getchar::state::GOT_INT;
 use crate::highlight_group::HLF_T;
-use crate::keycodes::Ctrl_G;
+use crate::keycodes::CTRL_G;
 use crate::message::IOSIZE;
 use crate::message::state::{MSG_COL, MSG_SCROLL};
 use crate::message::{E_INVARG, E_INVARG2, E_INVCMD, E_INVRANGE, E_SCREENMODE};
@@ -64,7 +64,7 @@ use crate::os::input::os_breakcheck;
 use crate::popupmenu::pum_make_popup;
 use crate::tag::state::{g_do_tagpreview, postponed_split_flags, postponed_split_tab};
 use crate::types::{CmdLine, CmdModFlags, ExArg};
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::undo::buf_is_changed;
 use crate::window::{
     WSP_VERT, do_window, enter, goto_tab_number, new_tabpage, setheight_win, setwidth_win, split,
@@ -425,7 +425,7 @@ fn is_changed(buffer: Buf) -> bool {
 /// refused.
 pub(crate) fn ex_mode(excmd: &mut ExArg) {
     if excmd.line.byte_at(excmd.line.arg) == 0 {
-        must_redraw.set(UPD_CLEAR);
+        MUST_REDRAW.set(UPD_CLEAR);
         // SAFETY: a live command.
         ex_redraw(excmd);
     } else {
@@ -468,14 +468,14 @@ fn resize(excmd: &mut ExArg) {
         if relative {
             n += wp.w_width;
         } else if n == 0 && empty {
-            n = Columns.get();
+            n = COLUMNS.get();
         }
         setwidth_win(n, wp);
     } else {
         if relative {
             n += wp.w_height;
         } else if n == 0 && empty {
-            n = Rows.get() - 1;
+            n = ROWS.get() - 1;
         }
         setheight_win(n, wp);
     }
@@ -515,7 +515,7 @@ fn wincmd(excmd: &mut ExArg) {
     let mut xchar = NUL;
     let mut at;
     if excmd.line.byte_at(excmd.line.arg) == b'g'
-        || c_int::from(excmd.line.byte_at(excmd.line.arg)) == Ctrl_G
+        || c_int::from(excmd.line.byte_at(excmd.line.arg)) == CTRL_G
     {
         let second = excmd.line.byte_at(excmd.line.arg + 1);
         if second == 0 {

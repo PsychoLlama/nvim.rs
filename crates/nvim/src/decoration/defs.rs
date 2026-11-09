@@ -215,7 +215,7 @@ pub struct DecorVirtText {
     pub next: uint32_t,
 }
 /// What one link of a virtual-text chain carries: inline chunks, or whole
-/// virtual lines. `kVTIsLines` in the link's `flags` says which, and the
+/// virtual lines. `VT_IS_LINES` in the link's `flags` says which, and the
 /// two are always set together.
 #[derive(Clone, Debug)]
 pub enum DecorVirtText_data {

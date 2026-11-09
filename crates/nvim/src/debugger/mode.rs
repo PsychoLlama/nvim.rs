@@ -57,7 +57,7 @@ impl SavedState {
         let loud = Allow::messages();
         let saved = Self {
             msg_scroll: MSG_SCROLL.get(),
-            state: State.get(),
+            state: STATE.get(),
             did_emsg: DID_EMSG.get(),
             cmd_silent: CMD_SILENT.get(),
             emsg_silent: EMSG_SILENT.get(),
@@ -72,7 +72,7 @@ impl SavedState {
         EMSG_SILENT.set(0);
         // Debug commands are not part of the redirected output.
         REDIR_OFF.set(true);
-        State.set(MODE_NORMAL);
+        STATE.set(MODE_NORMAL);
         debug_mode.set(true);
         saved
     }
@@ -83,8 +83,8 @@ impl SavedState {
         redraw_all_later(UPD_NOT_VALID);
         NEED_WAIT_RETURN.set(false);
         MSG_SCROLL.set(self.msg_scroll);
-        LINES_LEFT.set(Rows.get() - 1);
-        State.set(self.state);
+        LINES_LEFT.set(ROWS.get() - 1);
+        STATE.set(self.state);
         debug_mode.set(false);
         DID_EMSG.set(self.did_emsg);
         CMD_SILENT.set(self.cmd_silent);
@@ -251,7 +251,7 @@ fn debug_prompt(cmd: &CStr) {
         }
         ex_normal_busy.set(save_ex_normal_busy);
 
-        cmdline_row.set(MSG_ROW.get());
+        CMDLINE_ROW.set(MSG_ROW.get());
         msg_starthere();
 
         if let Some(cmdline) = cmdline {
@@ -285,7 +285,7 @@ fn debug_prompt(cmd: &CStr) {
             let _ = do_cmdline(Some(&cmdline[..]), Some(&mut LineSource::Typed), flags);
             debug_break_level.set(outer_level);
         }
-        LINES_LEFT.set(Rows.get() - 1);
+        LINES_LEFT.set(ROWS.get() - 1);
     }
 }
 

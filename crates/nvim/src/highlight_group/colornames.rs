@@ -21,9 +21,9 @@ use core::cmp::Ordering;
 use core::ffi::{CStr, c_int};
 
 use crate::highlight::RgbValue;
-use crate::highlight::state::{normal_bg, normal_fg};
+use crate::highlight::state::{NORMAL_BG, NORMAL_FG};
 
-use super::{kColorIdxBg, kColorIdxFg, kColorIdxHex, kColorIdxNone};
+use super::{COLOR_IDX_BG, COLOR_IDX_FG, COLOR_IDX_HEX, COLOR_IDX_NONE};
 
 /// One entry of X11's colour table.
 #[derive(Debug)]
@@ -795,13 +795,13 @@ pub(crate) fn name_to_color(name: &CStr) -> (RgbValue, c_int) {
     if let Some(digits) = name.to_bytes().strip_prefix(b"#")
         && let Some(value) = parse_hex6(digits)
     {
-        return (value, kColorIdxHex);
+        return (value, COLOR_IDX_HEX);
     }
     for (alias, idx, value) in [
-        (c"bg", kColorIdxBg, &normal_bg),
-        (c"background", kColorIdxBg, &normal_bg),
-        (c"fg", kColorIdxFg, &normal_fg),
-        (c"foreground", kColorIdxFg, &normal_fg),
+        (c"bg", COLOR_IDX_BG, &NORMAL_BG),
+        (c"background", COLOR_IDX_BG, &NORMAL_BG),
+        (c"fg", COLOR_IDX_FG, &NORMAL_FG),
+        (c"foreground", COLOR_IDX_FG, &NORMAL_FG),
     ] {
         if casecmp(name, alias) == Ordering::Equal {
             return (value.get(), idx);
@@ -820,12 +820,12 @@ pub(crate) fn name_to_color(name: &CStr) -> (RgbValue, c_int) {
             Ordering::Equal => return (COLOR_NAMES[mid].color, len_as_int(mid)),
         }
     }
-    (-1, kColorIdxNone)
+    (-1, COLOR_IDX_NONE)
 }
 
 /// The name to print for a colour recorded as `idx` with value `val`.
 ///
-/// `None` is "this colour is not set". A `kColorIdxHex` colour is formatted
+/// `None` is "this colour is not set". A `COLOR_IDX_HEX` colour is formatted
 /// into `hexbuf`, which is why the answer borrows it.
 ///
 /// # Panics
@@ -836,10 +836,10 @@ pub(crate) fn coloridx_to_name(idx: c_int, val: c_int, hexbuf: &mut HexBuf) -> O
         return Some(COLOR_NAMES[as_index(idx)].name);
     }
     match idx {
-        kColorIdxNone => None,
-        kColorIdxFg => Some(c"fg"),
-        kColorIdxBg => Some(c"bg"),
-        kColorIdxHex => {
+        COLOR_IDX_NONE => None,
+        COLOR_IDX_FG => Some(c"fg"),
+        COLOR_IDX_BG => Some(c"bg"),
+        COLOR_IDX_HEX => {
             let [r, g, b] = [val >> 16 & 0xff, val >> 8 & 0xff, val & 0xff];
             *hexbuf = [
                 b'#',

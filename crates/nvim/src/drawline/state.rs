@@ -890,7 +890,7 @@ impl WinLineVars {
         let ae = syn_attr2entry(self.cursorline_attr);
         if ae.rgb_fg_color == -1 as RgbValue && ae.cterm_fg_color == 0 {
             self.line_attr_lowprio = self.cursorline_attr;
-        } else if State.get() & MODE_INSERT == 0
+        } else if STATE.get() & MODE_INSERT == 0
             && buf_is_quickfix(window.buffer_or_none())
             && window.quickfix_current_line() == self.lnum
         {

@@ -60,7 +60,7 @@ use crate::ex_eval::{
 use crate::getchar::openscript;
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
-use crate::keycodes::Ctrl_V;
+use crate::keycodes::CTRL_V;
 use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::{nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
 use crate::mbyte::cluster_len;
@@ -95,8 +95,8 @@ use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::runtime::defs::{EStack, EStackArg, EStackType, EstackInfo, FrameName, ScriptItem};
 use crate::runtime::state::{current_sctx, did_source_packages};
 use crate::types::{
-    ApiDict, ApiString, Array, ExArg, Integer, LineNr, Object, ProfTime, ScriptCtx, ScriptId,
-    TypVal, UserFunc, VAR_DICT, VarLock, VarNumber, kBoolVarFalse,
+    ApiDict, ApiString, Array, BOOL_VAR_FALSE, ExArg, Integer, LineNr, Object, ProfTime, ScriptCtx,
+    ScriptId, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber,
 };
 use core::cell::Cell;
 use std::rc::Rc;

@@ -72,7 +72,7 @@ fn globvar_object(name: &ApiString) -> Option<Object> {
 /// "Key not found: `name`".
 fn key_not_found(name: &ApiString) -> Error {
     let name = msg_cstr(name.as_cstr());
-    api_error!(kErrorTypeValidation, "Key not found: {name}")
+    api_error!(ERROR_TYPE_VALIDATION, "Key not found: {name}")
 }
 
 /// Set the global variable `name` to `value`.

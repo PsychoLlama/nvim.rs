@@ -34,8 +34,8 @@ use crate::memory::memchr_in;
 use crate::message_fmt::msg_cstr;
 use crate::os::libc::size_t;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, Error, Float, Handle, Integer, LuaRef, ObjectType,
-    kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil,
+    ApiDict, ApiString, Array, Boolean, ERROR_TYPE_VALIDATION, Error, Float, Handle, Integer,
+    LuaRef, OBJECT_TYPE_ARRAY, OBJECT_TYPE_DICT, OBJECT_TYPE_FLOAT, OBJECT_TYPE_NIL, ObjectType,
 };
 
 /// How many Lua slots one turn of a `pop` walk may need: a table's next key
@@ -63,7 +63,7 @@ pub(crate) fn classify_table(stack: &mut Stack) -> LuaTableProps {
     if !stack.reserve(stack.top().index() + 3) {
         let need = stack.top().index() + 2;
         semsg!("E1502: Lua failed to grow stack to {need}");
-        ret.type_0 = kObjectTypeNil;
+        ret.type_0 = OBJECT_TYPE_NIL;
         return ret;
     }
     stack.push_nil();
@@ -92,7 +92,7 @@ pub(crate) fn classify_table(stack: &mut Stack) -> LuaTableProps {
                     } else {
                         0.0
                     };
-                    let recognised = [kObjectTypeFloat, kObjectTypeArray, kObjectTypeDict]
+                    let recognised = [OBJECT_TYPE_FLOAT, OBJECT_TYPE_ARRAY, OBJECT_TYPE_DICT]
                         .into_iter()
                         .find(|&kind| is_number && n == lua_Number::from(kind));
                     if let Some(kind) = recognised {
@@ -116,9 +116,9 @@ pub(crate) fn classify_table(stack: &mut Stack) -> LuaTableProps {
     }
     if ret.has_type_key {
         debug_assert!(tsize > 0);
-        if ret.type_0 == kObjectTypeFloat && (!has_val_key || val_kind != Kind::Number) {
-            ret.type_0 = kObjectTypeNil;
-        } else if ret.type_0 == kObjectTypeArray
+        if ret.type_0 == OBJECT_TYPE_FLOAT && (!has_val_key || val_kind != Kind::Number) {
+            ret.type_0 = OBJECT_TYPE_NIL;
+        } else if ret.type_0 == OBJECT_TYPE_ARRAY
             && ret.maxidx != 0
             && ret.maxidx
                 != tsize
@@ -143,18 +143,18 @@ pub(crate) fn classify_table(stack: &mut Stack) -> LuaTableProps {
             }
         }
     } else if tsize == 0 || tsize <= ret.maxidx && other_keys_num == 0 && ret.string_keys_num == 0 {
-        ret.type_0 = kObjectTypeArray;
+        ret.type_0 = OBJECT_TYPE_ARRAY;
         if tsize == 0 && stack.get_metatable(At::TOP) {
             stack.push_empty_dict_metatable();
             if stack.raw_equal(At::from_top(2), At::TOP) {
-                ret.type_0 = kObjectTypeDict;
+                ret.type_0 = OBJECT_TYPE_DICT;
             }
             stack.pop(2);
         }
     } else if ret.string_keys_num == tsize {
-        ret.type_0 = kObjectTypeDict;
+        ret.type_0 = OBJECT_TYPE_DICT;
     } else {
-        ret.type_0 = kObjectTypeNil;
+        ret.type_0 = OBJECT_TYPE_NIL;
     }
     ret
 }
@@ -215,31 +215,31 @@ fn check_type(
 ) -> (LuaTableProps, Option<Error>) {
     if stack.kind(At::TOP) != Kind::Table {
         let why = report.then(|| {
-            let wanted = if type_0 == kObjectTypeFloat {
+            let wanted = if type_0 == OBJECT_TYPE_FLOAT {
                 c"number"
             } else {
                 c"table"
             };
             let wanted = msg_cstr(wanted);
-            api_error!(kErrorTypeValidation, "Expected Lua {wanted}")
+            api_error!(ERROR_TYPE_VALIDATION, "Expected Lua {wanted}")
         });
         return (LuaTableProps::NIL, why);
     }
     let mut table_props = classify_table(stack);
     // An empty table is an array by default; asked for a dictionary, it is
     // one.
-    if type_0 == kObjectTypeDict
-        && table_props.type_0 == kObjectTypeArray
+    if type_0 == OBJECT_TYPE_DICT
+        && table_props.type_0 == OBJECT_TYPE_ARRAY
         && table_props.maxidx == 0
         && !table_props.has_type_key
     {
-        table_props.type_0 = kObjectTypeDict;
+        table_props.type_0 = OBJECT_TYPE_DICT;
     }
     let mut why = None;
     if table_props.type_0 != type_0 && report {
         let want = msg_cstr(api_typename(type_0));
         why = Some(api_error!(
-            kErrorTypeValidation,
+            ERROR_TYPE_VALIDATION,
             "Expected {want}-like Lua table"
         ));
     }
@@ -253,12 +253,12 @@ pub fn pop_float(stack: &mut Stack) -> Result<Float, Error> {
         stack.pop(1);
         return Ok(ret);
     }
-    let (table_props, why) = check_type(stack, true, kObjectTypeFloat);
+    let (table_props, why) = check_type(stack, true, OBJECT_TYPE_FLOAT);
     stack.pop(1);
     if let Some(why) = why {
         return Err(why);
     }
-    if table_props.type_0 != kObjectTypeFloat {
+    if table_props.type_0 != OBJECT_TYPE_FLOAT {
         return Ok(0.0);
     }
     Ok(table_props.val)
@@ -284,11 +284,11 @@ fn pop_array_unchecked(stack: &mut Stack, table_props: LuaTableProps) -> Result<
 
 /// Pop an array-shaped Lua table.
 pub fn pop_array(stack: &mut Stack) -> Result<Array, Error> {
-    let (table_props, why) = check_type(stack, true, kObjectTypeArray);
+    let (table_props, why) = check_type(stack, true, OBJECT_TYPE_ARRAY);
     if let Some(why) = why {
         return Err(why);
     }
-    if table_props.type_0 != kObjectTypeArray {
+    if table_props.type_0 != OBJECT_TYPE_ARRAY {
         return Ok(Array::new());
     }
     pop_array_unchecked(stack, table_props)
@@ -334,8 +334,8 @@ fn pop_dict_unchecked(
 /// Pop a dictionary-shaped Lua table. With `as_ref`, a function value becomes
 /// a `LuaRef` rather than a refusal.
 pub fn pop_dict(stack: &mut Stack, as_ref: bool) -> Result<ApiDict, Error> {
-    let (table_props, why) = check_type(stack, true, kObjectTypeDict);
-    if table_props.type_0 != kObjectTypeDict {
+    let (table_props, why) = check_type(stack, true, OBJECT_TYPE_DICT);
+    if table_props.type_0 != OBJECT_TYPE_DICT {
         stack.pop(1);
         return match why {
             Some(why) => Err(why),

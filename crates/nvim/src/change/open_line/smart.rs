@@ -187,12 +187,12 @@ fn smart_indent_forward(
     let mut no_si = false;
     if last_char == b'{' {
         // A trailing `{` indents, with no need to look for an `if`.
-        did_si.set(true);
+        DID_SI.set(true);
         no_si = true; // ... and typing `{` must not un-indent it again
     } else if last_char != b';' && last_char != b'}' && starts_with_cinword(&text) {
         // One of 'cinwords', and the line before did not finish a
         // statement.
-        did_si.set(true);
+        DID_SI.set(true);
     }
     (newindent, no_si)
 }
@@ -222,9 +222,9 @@ fn smart_indent_backward(line: &XString, lead_len: c_int, mut newindent: c_int) 
     }
 
     if byte(&text, skip_white_at(&text)) == b'}' {
-        did_si.set(true); // a line starting with `}` indents
+        DID_SI.set(true); // a line starting with `}` indents
     } else {
-        can_si_back.set(true); // a `{` typed next can delete the indent
+        CAN_SI_BACK.set(true); // a `{` typed next can delete the indent
     }
     newindent
 }

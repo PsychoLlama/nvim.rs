@@ -70,8 +70,8 @@ use crate::startup::silent_mode;
 use crate::strings::escaped_bytes;
 use crate::tr;
 use crate::types::{CmdModFlags, ExArg, Failed, LineNr, OptInt};
-use crate::ui::state::Rows;
-use crate::ui::state::kUIMessages;
+use crate::ui::state::ROWS;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_cursor_goto, ui_has};
 use crate::undo::{buf_is_changed, u_save};
 use crate::winlayer::buffers;
@@ -341,7 +341,7 @@ fn do_filter(
                 )
                 .is_err()
         {
-            if !ui_has(kUIMessages) {
+            if !ui_has(UI_MESSAGES) {
                 say::putchar('\n' as c_int);
             }
             drop(no_prompt.take());
@@ -362,7 +362,7 @@ fn do_filter(
 
         'error: {
             let cmd_buf = make_filter_cmd(cmd, TempFile::name(&itmp), TempFile::name(&otmp), do_in);
-            ui_cursor_goto(Rows.get() - 1, 0);
+            ui_cursor_goto(ROWS.get() - 1, 0);
 
             if do_out {
                 if u_save(line2, line2 + 1).is_err() {
@@ -541,7 +541,7 @@ pub(crate) fn do_shell(cmd: &CStr, flags: ShellOpts) {
     need_check_timestamps.set(true);
 
     // Put the cursor back where it was: the shell wrote over the screen.
-    MSG_ROW.set(Rows.get() - 1);
+    MSG_ROW.set(ROWS.get() - 1);
     MSG_COL.set(0);
     buf_autocmd(AutoEvent::ShellCmdPost, Buf::current());
 }

@@ -56,7 +56,7 @@ use crate::os::input::line_breakcheck;
 use crate::plines::{CHAR_CELLS_SPAN, getvcol_nolist, win_charsize, win_chartabsize};
 use crate::pos::MAXCOL;
 use crate::search::findmatch;
-use crate::state::mode::{Insstart, State, ai_col, can_si, can_si_back, did_si, old_indent};
+use crate::state::mode::{AI_COL, CAN_SI, CAN_SI_BACK, DID_SI, INSSTART, OLD_INDENT, STATE};
 use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG};
 use crate::types::CmdModFlags;
 use crate::undo::{u_clearline, u_save, u_savecommon};
@@ -216,7 +216,7 @@ fn si_indent_like_open_brace(pos: Pos) {
     }
     let indent = get_indent();
     win.w_cursor = old_pos;
-    if State.get() & VREPLACE_FLAG != 0 {
+    if STATE.get() & VREPLACE_FLAG != 0 {
         change_indent(INDENT_SET, indent, 0, true);
     } else {
         set_indent(indent, SIN_CHANGED);
@@ -248,8 +248,8 @@ fn si_should_shift_back() -> bool {
 /// `{`, `}` and `#`.
 pub fn ins_try_si(c: c_int) {
     let win = Win::current();
-    if (did_si.get() || can_si_back.get()) && c == c_int::from(b'{')
-        || can_si.get() && c == c_int::from(b'}') && inindent(0)
+    if (DID_SI.get() || CAN_SI_BACK.get()) && c == c_int::from(b'{')
+        || CAN_SI.get() && c == c_int::from(b'}') && inindent(0)
     {
         let matching = if c == c_int::from(b'}') {
             findmatch(None, c_int::from(b'{'))
@@ -260,7 +260,7 @@ pub fn ins_try_si(c: c_int) {
             si_indent_like_open_brace(matching);
         } else if win.w_cursor.col > ColNr::ZERO {
             let shift = !(c == c_int::from(b'{')
-                && can_si_back.get()
+                && CAN_SI_BACK.get()
                 && win.w_cursor.lnum > LineNr::ONE
                 && !si_should_shift_back());
             if shift {
@@ -269,13 +269,13 @@ pub fn ins_try_si(c: c_int) {
         }
     }
     // The indent of a '#' is always zero.
-    if win.w_cursor.col > ColNr::ZERO && can_si.get() && c == c_int::from(b'#') && inindent(0) {
+    if win.w_cursor.col > ColNr::ZERO && CAN_SI.get() && c == c_int::from(b'#') && inindent(0) {
         // Remember the current indent for the next line.
-        old_indent.set(get_indent());
+        OLD_INDENT.set(get_indent());
         set_indent(0, SIN_CHANGED);
     }
     // Adjust `ai_col`: the character at this position can be deleted.
-    ai_col.set(ai_col.get().min(win.w_cursor.col));
+    AI_COL.set(AI_COL.get().min(win.w_cursor.col));
 }
 
 /// Applies the indent [`change_indent`] was asked for, leaving the cursor on
@@ -285,13 +285,13 @@ fn apply_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: 
         set_indent(amount, if call_changed_bytes { SIN_CHANGED } else { 0 });
         return;
     }
-    let save_state = State.get();
+    let save_state = STATE.get();
     // Avoid being called recursively.
-    if State.get() & VREPLACE_FLAG != 0 {
-        State.set(MODE_INSERT);
+    if STATE.get() & VREPLACE_FLAG != 0 {
+        STATE.set(MODE_INSERT);
     }
     shift_line(type_0 == INDENT_DEC, round != 0, 1, call_changed_bytes);
-    State.set(save_state);
+    STATE.set(save_state);
 }
 
 /// Puts the cursor `end_vcol` screen columns into the new indent, padding
@@ -337,7 +337,7 @@ fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
 /// Moves `Insstart` and `ai_col` back by what the indent lost, so that the
 /// insert still starts where the user began typing.
 fn adjust_insert_start(insstart_less: c_int) {
-    let mut insstart = Insstart.get();
+    let mut insstart = INSSTART.get();
     let lnum = Win::current().w_cursor.lnum;
     if lnum == insstart.lnum && insstart.col != ColNr::ZERO {
         insstart.col = if insstart.col.get() <= insstart_less {
@@ -345,12 +345,12 @@ fn adjust_insert_start(insstart_less: c_int) {
         } else {
             insstart.col - insstart_less
         };
-        Insstart.set(insstart);
+        INSSTART.set(insstart);
     }
-    ai_col.set(if ai_col.get().get() <= insstart_less {
+    AI_COL.set(if AI_COL.get().get() <= insstart_less {
         ColNr::ZERO
     } else {
-        ai_col.get() - insstart_less
+        AI_COL.get() - insstart_less
     });
 }
 
@@ -413,7 +413,7 @@ fn vreplace_restore(orig_line: XString, orig_col: ColNr) {
 pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: bool) {
     let mut win = Win::current();
     // Virtual Replace needs to know what the line looked like before.
-    let orig = (State.get() & VREPLACE_FLAG != 0).then(|| {
+    let orig = (STATE.get() & VREPLACE_FLAG != 0).then(|| {
         (
             XString::from_bytes(Lines::current().line(win.w_cursor.lnum)),
             win.w_cursor.col,
@@ -455,7 +455,7 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
             insstart_less = MAXCOL;
         }
         new_cursor_col += win.w_cursor.col.get();
-    } else if State.get() & MODE_INSERT == 0 {
+    } else if STATE.get() & MODE_INSERT == 0 {
         new_cursor_col = win.w_cursor.col.get();
     } else {
         new_cursor_col = place_cursor_in_indent((get_indent() - vcol).max(0));
@@ -466,10 +466,10 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
     win.w_cursor.col = ColNr::new(new_cursor_col.max(0));
     win.w_set_curswant = true;
     changed_cline_bef_curs(win);
-    if State.get() & MODE_INSERT != 0 {
+    if STATE.get() & MODE_INSERT != 0 {
         adjust_insert_start(insstart_less);
     }
-    if State.get() & REPLACE_FLAG != 0 && State.get() & VREPLACE_FLAG == 0 && start_col >= 0 {
+    if STATE.get() & REPLACE_FLAG != 0 && STATE.get() & VREPLACE_FLAG == 0 && start_col >= 0 {
         fix_replace_stack(start_col);
     }
     if let Some((orig_line, orig_col)) = orig {

@@ -66,7 +66,7 @@ use crate::regexp::vim_regexec_multi;
 use crate::search::get_search_pat;
 use crate::semsg;
 use crate::types::{CmdModFlags, ColNr, ExArg, Handle, LPos, LineNr, OptInt, Pos, ProfTime};
-use crate::ui::state::kUIMessages;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;
 use crate::winlayer::{Buf, Win};
@@ -601,7 +601,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             emsg(gettext(E_INTERR));
         } else if st.got_match {
             // Did find something, but nothing was substituted.
-            if p_ch() > 0 as OptInt && !ui_has(kUIMessages) {
+            if p_ch() > 0 as OptInt && !ui_has(UI_MESSAGES) {
                 msg(c"", 0 as c_int);
             }
         } else if SUB_FLAGS.with(|flags| flags.do_error) {

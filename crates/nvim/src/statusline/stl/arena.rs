@@ -23,7 +23,7 @@
 use core::ffi::c_int;
 use std::ffi::CString;
 
-use super::{kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch};
+use super::{STL_CLICK_DISABLED, STL_CLICK_FUNC_RUN, STL_CLICK_TAB_CLOSE, STL_CLICK_TAB_SWITCH};
 use crate::global_cell::GlobalCell;
 use crate::statusline::defs::{StlClickDefinition, StlClickRecord, StlHlRun, StlOpt};
 
@@ -274,10 +274,10 @@ pub(super) fn collect_clicks(s: &mut StlScratch, len: usize, built: &Built) -> V
     for i in built.items(s.items.len()) {
         let item = s.items[i];
         let (type_0, tabnr, func) = match item.kind {
-            Kind::TabPage if item.minwid == 0 => (kStlClickDisabled, 0, None),
-            Kind::TabPage if item.minwid > 0 => (kStlClickTabSwitch, item.minwid, None),
-            Kind::TabPage => (kStlClickTabClose, -item.minwid, None),
-            Kind::ClickFunc => (kStlClickFuncRun, item.minwid, s.take_cmd(item.cmd)),
+            Kind::TabPage if item.minwid == 0 => (STL_CLICK_DISABLED, 0, None),
+            Kind::TabPage if item.minwid > 0 => (STL_CLICK_TAB_SWITCH, item.minwid, None),
+            Kind::TabPage => (STL_CLICK_TAB_CLOSE, -item.minwid, None),
+            Kind::ClickFunc => (STL_CLICK_FUNC_RUN, item.minwid, s.take_cmd(item.cmd)),
             _ => continue,
         };
         recs.push(StlClickRecord {

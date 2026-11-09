@@ -22,15 +22,14 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::ascii::NUL;
 use crate::decoration::{
-    DECOR_ID_INVALID, DRAW_COL_LATER, DRAW_COL_NEVER, VirtChunks, decor_inline_virt_from,
-    decor_lists, decor_range, kDecorKindUIWatched, kDecorKindVirtText, kHlModeBlend,
-    kHlModeCombine, kVPosEndOfLine, kVPosEndOfLineRightAlign, kVPosInline, kVPosRightAlign,
-    kVPosWinCol, kVTRepeatLinebreak, set_decor_eol_col, set_decor_range_draw_col, with_decor_virt,
+    DECOR_ID_INVALID, DECOR_KIND_UI_WATCHED, DECOR_KIND_VIRT_TEXT, DRAW_COL_LATER, DRAW_COL_NEVER,
+    HL_MODE_BLEND, HL_MODE_COMBINE, V_POS_END_OF_LINE, V_POS_END_OF_LINE_RIGHT_ALIGN, V_POS_INLINE,
+    V_POS_RIGHT_ALIGN, V_POS_WIN_COL, VT_REPEAT_LINEBREAK, VirtChunks, decor_inline_virt_from,
+    decor_lists, decor_range, set_decor_eol_col, set_decor_range_draw_col, with_decor_virt,
 };
 use crate::grid::with_linebuf;
 use crate::narrow::as_index;
@@ -95,7 +94,7 @@ pub(crate) fn line_putchar(
 
 /// Append to the per-redraw `win_extmark` list `win_update` drains.
 fn push_win_extmark(m: WinExtmark) {
-    win_extmark_arr.with_mut(|marks| marks.push(m));
+    WIN_EXTMARK_ARR.with_mut(|marks| marks.push(m));
 }
 
 /// Paint every line-positioned virtual text of the row just laid out, and
@@ -136,7 +135,7 @@ pub(crate) fn draw_virt_text(
         }
 
         // The link, and a copy of the fields read off it below.
-        let vt = (item.kind == kDecorKindVirtText).then(|| {
+        let vt = (item.kind == DECOR_KIND_VIRT_TEXT).then(|| {
             let link = item.data.virt();
             with_decor_virt(link, |vt| VirtShape {
                 link,
@@ -150,7 +149,7 @@ pub(crate) fn draw_virt_text(
 
         if item.draw_col == DRAW_COL_LATER {
             let placed = match decor_virt_pos_kind(&item) {
-                kVPosEndOfLineRightAlign if do_eol => {
+                V_POS_END_OF_LINE_RIGHT_ALIGN if do_eol => {
                     let mut eol_offset = 0;
                     if total_eol_right_width == 0 {
                         for j in i..end {
@@ -161,13 +160,13 @@ pub(crate) fn draw_virt_text(
                             {
                                 continue;
                             }
-                            if decor_virt_pos_kind(&ahead) == kVPosEndOfLineRightAlign {
+                            if decor_virt_pos_kind(&ahead) == V_POS_END_OF_LINE_RIGHT_ALIGN {
                                 // Only virtual texts can report this
                                 // position: a `ui_watched` range's is
                                 // always eol or overlay
                                 // (`decor_range_add_sh`). Upstream
                                 // dereferences unconditionally here.
-                                debug_assert!(ahead.kind == kDecorKindVirtText);
+                                debug_assert!(ahead.kind == DECOR_KIND_VIRT_TEXT);
                                 // One space between neighbours.
                                 let link = ahead.data.virt();
                                 total_eol_right_width += with_decor_virt(link, |vt| vt.width) + 1;
@@ -181,12 +180,12 @@ pub(crate) fn draw_virt_text(
                     }
                     Some(eol_col + eol_offset)
                 }
-                kVPosRightAlign => {
+                V_POS_RIGHT_ALIGN => {
                     right_pos -= vt.as_ref().map_or(0, |vt| vt.width);
                     Some(right_pos)
                 }
-                kVPosEndOfLine if do_eol => Some(eol_col),
-                kVPosWinCol => Some((col_off + vt.as_ref().map_or(0, |vt| vt.col)).max(0)),
+                V_POS_END_OF_LINE if do_eol => Some(eol_col),
+                V_POS_WIN_COL => Some((col_off + vt.as_ref().map_or(0, |vt| vt.col)).max(0)),
                 // Inline, overlay, or an eol form with no end of line to
                 // hang off: placed elsewhere, or not at all.
                 _ => None,
@@ -206,7 +205,7 @@ pub(crate) fn draw_virt_text(
             continue;
         }
 
-        if item.kind == kDecorKindUIWatched {
+        if item.kind == DECOR_KIND_UI_WATCHED {
             let ui = item.data.ui_watched();
             push_win_extmark(WinExtmark {
                 ns_id: Handle::new(ui.ns_id.cast_signed()),
@@ -225,7 +224,7 @@ pub(crate) fn draw_virt_text(
                 item.draw_col - col_off,
                 0,
             );
-            if do_eol && (vt.pos == kVPosEndOfLine || vt.pos == kVPosEndOfLineRightAlign) {
+            if do_eol && (vt.pos == V_POS_END_OF_LINE || vt.pos == V_POS_END_OF_LINE_RIGHT_ALIGN) {
                 // The next end-of-line text starts one cell further on.
                 eol_col = col + 1;
                 set_decor_eol_col(eol_col);
@@ -235,7 +234,7 @@ pub(crate) fn draw_virt_text(
 
         // Deactivate, unless it is to be repeated on every screen row of
         // a wrapped line.
-        if vt.is_none_or(|vt| vt.flags & kVTRepeatLinebreak == 0) {
+        if vt.is_none_or(|vt| vt.flags & VT_REPEAT_LINEBREAK == 0) {
             set_decor_range_draw_col(i, DRAW_COL_NEVER);
         }
     }
@@ -323,8 +322,8 @@ impl Buf {
                 let mut through = false;
                 let under = line.attrs_mut()[as_index(col)];
                 let attr = match hl_mode {
-                    kHlModeCombine => hl_combine_attr(under, virt_attr),
-                    kHlModeBlend => {
+                    HL_MODE_COMBINE => hl_combine_attr(under, virt_attr),
+                    HL_MODE_BLEND => {
                         // A space blends the cell underneath through, rather than
                         // painting over it.
                         through = first == b' ';
@@ -375,9 +374,9 @@ impl Buf {
 #[inline]
 fn inline_virt_at(item: &DecorRange, row: ::core::ffi::c_int) -> bool {
     item.start_row == row
-        && item.kind == kDecorKindVirtText
+        && item.kind == DECOR_KIND_VIRT_TEXT
         && with_decor_virt(item.data.virt(), |vt| {
-            vt.pos == kVPosInline && vt.width != 0
+            vt.pos == V_POS_INLINE && vt.width != 0
         })
         && item.draw_col >= DRAW_COL_LATER
 }

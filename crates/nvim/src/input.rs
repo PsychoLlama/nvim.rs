@@ -16,7 +16,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cmdexpand::defs::ExpandContext;
-use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::state::CMDLINE_ROW;
 use crate::event_queue::ChildQueue;
 use crate::ex_getln::getcmdline_prompt;
 use crate::getchar::state::{MAPPED_CTRL_C, MOD_MASK};
@@ -25,7 +25,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{Keys, Suppress};
 use crate::highlight_group::HLF_R;
 use crate::keycodes::ModMask;
-use crate::keycodes::{Ctrl_C, K_SPECIAL, KS_MODIFIER, SpecialKey, key_unescape};
+use crate::keycodes::{CTRL_C, K_SPECIAL, KS_MODIFIER, SpecialKey, key_unescape};
 use crate::mbyte::{char_at, utf8len_tab};
 use crate::message::IOSIZE;
 use crate::message::state::{KEEP_MSG, KEEP_MSG_HL_ID, MSG_ROW, MSG_SCROLLED, NEED_WAIT_RETURN};
@@ -35,10 +35,10 @@ use crate::narrow::as_index;
 use crate::narrow::len_as_int;
 use crate::os::cshim::gettext;
 use crate::os::input::{InputEvents, input_get};
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::types::Callback;
 use crate::types::Key;
-use crate::ui::state::kUIMessages;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_flush, ui_has};
 use crate::{cstr, formatted};
 use core::ffi::{CStr, c_int};
@@ -52,7 +52,7 @@ const CALLBACK_NONE: Callback = Callback::None;
 /// or `CTRL-C`, which answers `n` — is typed.
 ///
 pub(crate) fn ask_yesno(question: &CStr) -> c_int {
-    let save_state = State.get();
+    let save_state = STATE.get();
     let no_prompt = Suppress::wait_return();
 
     // The question, owned by this frame: upstream builds it in the shared
@@ -65,9 +65,9 @@ pub(crate) fn ask_yesno(question: &CStr) -> c_int {
     while r != c_int::from(b'y') && r != c_int::from(b'n') {
         // Same highlighting as for wait_return().
         r = prompt_for_input(Some(&prompt), HLF_R, true, None);
-        if r == Ctrl_C || r == ESC {
+        if r == CTRL_C || r == ESC {
             r = c_int::from(b'n');
-            if !ui_has(kUIMessages) {
+            if !ui_has(UI_MESSAGES) {
                 msg_putchar(r);
             }
         }
@@ -75,7 +75,7 @@ pub(crate) fn ask_yesno(question: &CStr) -> c_int {
 
     NEED_WAIT_RETURN.set(MSG_SCROLLED.get() != 0);
     drop(no_prompt);
-    State.set(save_state);
+    STATE.set(save_state);
     setmouse();
     r
 }
@@ -207,7 +207,7 @@ pub(crate) fn prompt_for_input(
         None => gettext(c"Type number and <Enter> (q or empty cancels): "),
     };
 
-    cmdline_row.set(MSG_ROW.get());
+    CMDLINE_ROW.set(MSG_ROW.get());
     ui_flush();
 
     // Don't map prompt input, but do allow special keys.

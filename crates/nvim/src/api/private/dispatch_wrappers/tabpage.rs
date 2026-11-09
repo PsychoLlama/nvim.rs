@@ -30,7 +30,7 @@ pub fn handle_nvim_open_tabpage(channel_id: uint64_t, args: Array) -> Result<Obj
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(1, c"nvim_open_tabpage", c"Buffer"));
     };
     let Some(arg_2) = as_boolean(args[1].take()) else {
@@ -70,7 +70,7 @@ pub fn handle_nvim_tabpage_del_var(channel_id: uint64_t, args: Array) -> Result<
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_TABPAGE) else {
         return Err(wrong_type(1, c"nvim_tabpage_del_var", c"Tabpage"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -96,7 +96,7 @@ pub fn handle_nvim_tabpage_get_number(channel_id: uint64_t, args: Array) -> Resu
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_TABPAGE) else {
         return Err(wrong_type(1, c"nvim_tabpage_get_number", c"Tabpage"));
     };
     let rv = nvim_tabpage_get_number(arg_1)?;
@@ -119,7 +119,7 @@ pub fn handle_nvim_tabpage_get_var(channel_id: uint64_t, args: Array) -> Result<
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_TABPAGE) else {
         return Err(wrong_type(1, c"nvim_tabpage_get_var", c"Tabpage"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -144,7 +144,7 @@ pub fn handle_nvim_tabpage_get_win(channel_id: uint64_t, args: Array) -> Result<
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_TABPAGE) else {
         return Err(wrong_type(1, c"nvim_tabpage_get_win", c"Tabpage"));
     };
     let rv = nvim_tabpage_get_win(arg_1)?;
@@ -167,7 +167,7 @@ pub fn handle_nvim_tabpage_is_valid(channel_id: uint64_t, args: Array) -> Result
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_TABPAGE) else {
         return Err(wrong_type(1, c"nvim_tabpage_is_valid", c"Tabpage"));
     };
     let rv = nvim_tabpage_is_valid(arg_1);
@@ -190,7 +190,7 @@ pub fn handle_nvim_tabpage_list_wins(channel_id: uint64_t, args: Array) -> Resul
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_TABPAGE) else {
         return Err(wrong_type(1, c"nvim_tabpage_list_wins", c"Tabpage"));
     };
     let rv = nvim_tabpage_list_wins(arg_1)?;
@@ -213,7 +213,7 @@ pub fn handle_nvim_tabpage_set_var(channel_id: uint64_t, args: Array) -> Result<
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_TABPAGE) else {
         return Err(wrong_type(1, c"nvim_tabpage_set_var", c"Tabpage"));
     };
     let Some(arg_2) = as_string(args[1].take()) else {
@@ -240,10 +240,10 @@ pub fn handle_nvim_tabpage_set_win(channel_id: uint64_t, args: Array) -> Result<
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_TABPAGE) else {
         return Err(wrong_type(1, c"nvim_tabpage_set_win", c"Tabpage"));
     };
-    let Some(arg_2) = as_handle(args[1].take(), kObjectTypeWindow) else {
+    let Some(arg_2) = as_handle(args[1].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(2, c"nvim_tabpage_set_win", c"Window"));
     };
     nvim_tabpage_set_win(arg_1, arg_2)?;

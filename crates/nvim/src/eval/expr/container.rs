@@ -18,7 +18,7 @@ use crate::semsg;
 use crate::eval::typval::{NumBuf, dict_find, tv_clear, tv_dict_alloc, tv_list_alloc};
 use crate::eval::{Cursor, eval1};
 use crate::os::libc::ptrdiff_t;
-use crate::types::{Failed, TypVal, kListLenShouldKnow};
+use crate::types::{Failed, LIST_LEN_SHOULD_KNOW, TypVal};
 
 /// A freshly declared typval.
 const UNSET_TV: TypVal = TV_INITIAL_VALUE;
@@ -32,7 +32,7 @@ pub(crate) fn eval_list(
     // The one reference to the list being built. A path that gives up
     // drops it, which is what upstream's `list_free` on a list still at
     // refcount zero was.
-    let mut held = evaluate.then(|| tv_list_alloc(kListLenShouldKnow as ptrdiff_t));
+    let mut held = evaluate.then(|| tv_list_alloc(LIST_LEN_SHOULD_KNOW as ptrdiff_t));
     cursor.bump(1);
     cursor.skip_white();
 

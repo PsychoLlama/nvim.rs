@@ -29,7 +29,7 @@ use crate::autocmd::has_event;
 use crate::buffer::{BufRef, buf_is_help, close_buffer};
 use crate::diff::diffopt_closeoff;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::drawscreen::state::{redraw_cmdline, redraw_tabline};
+use crate::drawscreen::state::{REDRAW_CMDLINE, REDRAW_TABLINE};
 use crate::ex_eval::aborting;
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
@@ -39,7 +39,7 @@ use crate::normal::reset_visual_and_resel;
 use crate::option::vars::{p_ea, p_ead, p_ru};
 use crate::startup::getout;
 use crate::types::Integer;
-use crate::ui::state::kUIMultigrid;
+use crate::ui::state::UI_MULTIGRID;
 use crate::ui::{ui_call_win_close, ui_has};
 use crate::winfloat::win_float_find_altwin;
 use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};
@@ -170,7 +170,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClos
     // splitting a window, to avoid trouble.
     let no_split = Lock::held(&split_disallowed);
     let was_floating = win.w_floating;
-    if ui_has(kUIMultigrid) {
+    if ui_has(UI_MULTIGRID) {
         ui_call_win_close(Integer::from(win.w_grid_alloc.handle));
     }
     if win.w_floating {
@@ -237,7 +237,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClos
             fix_scroll(false);
         }
     } else if had_cmdline_ruler && wp.w_status_height > 0 {
-        redraw_cmdline.set(true); // clear the cmdline 'ruler'
+        REDRAW_CMDLINE.set(true); // clear the cmdline 'ruler'
     }
     if let Some(buf) = bufref.get() {
         resize_terminal(buf);
@@ -571,7 +571,7 @@ pub(crate) fn close_othertab(
                 };
                 ptp.tp_next = tabpage.tp_next;
             }
-            redraw_tabline.set(true);
+            REDRAW_TABLINE.set(true);
             if h != tabline_rows() {
                 new_screen_rows();
             }
@@ -580,7 +580,7 @@ pub(crate) fn close_othertab(
         // Take the window off the UI before freeing it: a multigrid UI
         // must hear that its grid closed, and the compositor must not keep
         // a float's grid it would otherwise draw from after the free.
-        if ui_has(kUIMultigrid) {
+        if ui_has(UI_MULTIGRID) {
             ui_call_win_close(Integer::from(win.w_grid_alloc.handle));
         }
         if win.w_floating {

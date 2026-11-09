@@ -41,7 +41,7 @@ use crate::options::kOptWindow;
 use crate::optionstr::OptStringRef;
 use crate::os::libc::ptrdiff_t;
 use crate::types::{LineNr, OptInt, SaveVEvent, TypVal, VarNumber};
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::window::state::skip_win_fix_scroll;
 use crate::winfloat::win_reconfig_floats;
 use crate::winlayer::{Win, windows};
@@ -49,7 +49,7 @@ use crate::winlayer::{Win, windows};
 /// The rows the frame tree has to itself: the screen minus the command line,
 /// the tab line and a global status line.
 fn frame_rows() -> c_int {
-    let rows = OptInt::from(Rows.get())
+    let rows = OptInt::from(ROWS.get())
         - p_ch()
         - OptInt::from(tabline_rows())
         - OptInt::from(global_stl_rows());
@@ -59,18 +59,18 @@ fn frame_rows() -> c_int {
 pub fn win_new_screensize() {
     static old_Rows: GlobalCell<c_int> = GlobalCell::new(0);
     static old_Columns: GlobalCell<c_int> = GlobalCell::new(0);
-    if old_Rows.get() != Rows.get() {
+    if old_Rows.get() != ROWS.get() {
         // If 'window' uses the whole screen, keep it using the whole screen.
         if p_window() == OptInt::from(old_Rows.get() - 1)
             || (old_Rows.get() == 0 && !option_was_set(kOptWindow))
         {
-            P_WINDOW.set(OptInt::from(Rows.get() - 1));
+            P_WINDOW.set(OptInt::from(ROWS.get() - 1));
         }
-        old_Rows.set(Rows.get());
+        old_Rows.set(ROWS.get());
         new_screen_rows();
     }
-    if old_Columns.get() != Columns.get() {
-        old_Columns.set(Columns.get());
+    if old_Columns.get() != COLUMNS.get() {
+        old_Columns.set(COLUMNS.get());
         new_screen_cols();
     }
 }
@@ -113,9 +113,9 @@ pub(crate) fn new_screen_cols() {
     let top = current_topframe();
     // First try setting the widths of windows with 'winfixwidth'; if that does
     // not result in the right width, forget about that option.
-    new_width(top, Columns.get(), false, true);
-    if !top.check_width(Columns.get()) {
-        new_width(top, Columns.get(), false, false);
+    new_width(top, COLUMNS.get(), false, true);
+    if !top.check_width(COLUMNS.get()) {
+        new_width(top, COLUMNS.get(), false, false);
     }
     comp_positions();
     win_reconfig_floats();

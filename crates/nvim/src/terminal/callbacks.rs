@@ -29,7 +29,7 @@ use crate::event_queue::put_job_on_main_loop;
 use crate::option::vars::p_bg;
 use crate::options::kOptBoFlagTerm;
 use crate::os::libc::ptrdiff_t;
-use crate::types::{ApiString, Error, Object, kListLenMayKnow};
+use crate::types::{ApiString, Error, LIST_LEN_MAY_KNOW, Object};
 use crate::ui::vim_beep;
 use crate::vterm::host::{Fragment, ScreenHost, SelectionHost, Value};
 use crate::vterm::types::{VTermPos, VTermProp, VTermRect, VTermScreenCell, VTermSelectionMask};
@@ -211,7 +211,7 @@ fn term_clipboard_set(mask: VTermSelectionMask, payload: &[u8]) {
     // A readfile()-style list of lines (`:h chansend()`), the last one kept
     // even when empty so that a trailing newline survives: a newline inside
     // one item would reach a command-line provider as a NUL.
-    let lines = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+    let lines = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
     for line in payload.split(|&byte| byte == b'\n') {
         lines.edit().push_bytes(Some(line));
     }

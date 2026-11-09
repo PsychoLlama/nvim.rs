@@ -192,8 +192,8 @@ impl TypVal {
             VAR_LIST => TypVal::list(None),
             VAR_DICT => TypVal::dict(None),
             VAR_FLOAT => TypVal::Float(0.0),
-            VAR_BOOL => TypVal::Bool(crate::types::kBoolVarFalse),
-            VAR_SPECIAL => TypVal::Special(kSpecialVarNull),
+            VAR_BOOL => TypVal::Bool(crate::types::BOOL_VAR_FALSE),
+            VAR_SPECIAL => TypVal::Special(SPECIAL_VAR_NULL),
             VAR_PARTIAL => TypVal::partial(None),
             VAR_BLOB => TypVal::blob(None),
             _ => panic!("a VarType outside the eleven the enum names"),
@@ -214,8 +214,8 @@ impl TypVal {
             // The exact `+0.0` a clear writes; `-0.0` compares equal to it
             // and is not the same value.
             TypVal::Float(f) => f.to_bits() == 0,
-            TypVal::Bool(b) => b == crate::types::kBoolVarFalse,
-            TypVal::Special(s) => s == kSpecialVarNull,
+            TypVal::Bool(b) => b == crate::types::BOOL_VAR_FALSE,
+            TypVal::Special(s) => s == SPECIAL_VAR_NULL,
             TypVal::String(ref text) | TypVal::Func(ref text) => text.is_none(),
             TypVal::List(ref list) => list.is_none(),
             TypVal::Dict(ref dict) => dict.is_none(),

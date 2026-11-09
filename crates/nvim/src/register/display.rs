@@ -57,7 +57,7 @@ fn put_cut(text: &[u8], n: &mut c_int, skip_esc: bool) {
 
 /// Print `p` as one line of `:registers`, stopping at the window width.
 fn dis_msg(p: &[u8], skip_esc: bool) {
-    put_cut(p, &mut (Columns.get() - 6), skip_esc);
+    put_cut(p, &mut (COLUMNS.get() - 6), skip_esc);
     os_breakcheck();
 }
 
@@ -103,7 +103,7 @@ fn dis_register(yb: &YankReg, name: RegName, type_0: u8, hl_id: c_int) {
 
     // The content, cut off at the window width. A line break inside the
     // register shows as `^J`.
-    let mut n = Columns.get() - 11;
+    let mut n = COLUMNS.get() - 11;
     for (j, line) in lines.iter().enumerate() {
         if n <= 1 {
             break;

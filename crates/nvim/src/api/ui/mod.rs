@@ -50,13 +50,13 @@ use crate::option::set_tty_option;
 use crate::startup::{starting, stdin_fd, stdin_isatty, stdout_isatty};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    ApiDict, ApiString, Boolean, Error, Float, Integer, Object, ObjectType, kErrorTypeException,
-    kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeString,
+    ApiDict, ApiString, Boolean, ERROR_TYPE_EXCEPTION, Error, Float, Integer, OBJECT_TYPE_BOOLEAN,
+    OBJECT_TYPE_INTEGER, OBJECT_TYPE_STRING, Object, ObjectType,
 };
+use crate::ui::state::{CURRENT_UI, T_COLORS, UI_EXT_NAMES};
 use crate::ui::state::{RemoteUI, UIExtension};
-use crate::ui::state::{current_ui, t_colors, ui_ext_names};
 use crate::ui::state::{
-    kUICmdline, kUIExtCount, kUIHlState, kUILinegrid, kUIMessages, kUIMultigrid, kUIPopupmenu,
+    UI_CMDLINE, UI_EXT_COUNT, UI_HL_STATE, UI_LINEGRID, UI_MESSAGES, UI_MULTIGRID, UI_POPUPMENU,
 };
 use crate::ui::{
     ui_active, ui_attach_impl, ui_call_ui_send, ui_can_attach_more, ui_detach_impl, ui_grid_resize,
@@ -73,7 +73,10 @@ const DEFAULT_GRID_HANDLE: Integer = 1;
 
 /// Why a call that needs the UI on `chan_id` cannot have it.
 fn not_attached(chan_id: u64) -> Error {
-    api_error!(kErrorTypeException, "UI not attached to channel: {chan_id}")
+    api_error!(
+        ERROR_TYPE_EXCEPTION,
+        "UI not attached to channel: {chan_id}"
+    )
 }
 
 /// Runs `f` on the UI attached to `chan_id`, or says there is none.
@@ -115,7 +118,7 @@ pub fn nvim_ui_attach(
 ) -> Result<(), Error> {
     if ui_is_attached(channel_id) {
         return Err(api_error!(
-            kErrorTypeException,
+            ERROR_TYPE_EXCEPTION,
             "UI already attached to channel: {channel_id}"
         ));
     }
@@ -137,15 +140,15 @@ pub fn nvim_ui_attach(
     // Options that imply others. A UI asking for anything the linegrid
     // protocol introduced is asking for the linegrid protocol; external
     // messages are drawn in a cmdline the UI must also own.
-    if ui.ui_ext[kUIHlState as usize] || ui.ui_ext[kUIMultigrid as usize] {
-        ui.ui_ext[kUILinegrid as usize] = true;
+    if ui.ui_ext[UI_HL_STATE as usize] || ui.ui_ext[UI_MULTIGRID as usize] {
+        ui.ui_ext[UI_LINEGRID as usize] = true;
     }
-    if ui.ui_ext[kUIMessages as usize] {
-        ui.ui_ext[kUILinegrid as usize] = true;
-        ui.ui_ext[kUICmdline as usize] = true;
+    if ui.ui_ext[UI_MESSAGES as usize] {
+        ui.ui_ext[UI_LINEGRID as usize] = true;
+        ui.ui_ext[UI_CMDLINE as usize] = true;
     }
 
-    current_ui.set(channel_id);
+    CURRENT_UI.set(channel_id);
     ui_attach_impl(ui);
     may_trigger_vim_suspend_resume(false);
     Ok(())
@@ -159,7 +162,7 @@ impl RemoteUI {
             rgb: true,
             override_0: false,
             composed: false,
-            ui_ext: [false; kUIExtCount as usize],
+            ui_ext: [false; UI_EXT_COUNT as usize],
             width: number_as_int(width),
             height: number_as_int(height),
             pum_nlines: 0,
@@ -212,7 +215,7 @@ pub fn nvim_ui_set_focus(channel_id: u64, gained: Boolean) -> Result<(), Error> 
     if gained {
         // Whichever UI was focused last is the one `nvim_get_current_ui`
         // means and the one a `:suspend` applies to.
-        current_ui.set(channel_id);
+        CURRENT_UI.set(channel_id);
         may_trigger_vim_suspend_resume(false);
     }
     do_autocmd_focusgained(gained);
@@ -303,7 +306,7 @@ fn ui_set_option(
         ui.rgb = on;
         // Only the legacy protocol bakes the colour model into what it
         // is sent; a linegrid UI gets both and picks.
-        if !init && !ui.ui_ext[kUILinegrid as usize] {
+        if !init && !ui.ui_ext[UI_LINEGRID as usize] {
             return Ok(Publish::Refresh);
         }
         return Ok(Publish::Nothing);
@@ -320,7 +323,7 @@ fn ui_set_option(
 
     if named(c"term_colors") {
         let colors = want_integer(c"term_colors", value)?;
-        t_colors.set(number_as_int(colors));
+        T_COLORS.set(number_as_int(colors));
         ui.term_colors = number_as_int(colors);
         return Ok(Publish::Nothing);
     }
@@ -363,18 +366,18 @@ fn ui_set_option(
     // The extensions, by their protocol names. `popupmenu_external` is
     // the pre-0.3 spelling of `ext_popupmenu` and still accepted.
     let is_popupmenu = named(c"popupmenu_external");
-    for (ext, ext_name) in ui_ext_names.iter().enumerate().take(kUIExtCount as usize) {
+    for (ext, ext_name) in UI_EXT_NAMES.iter().enumerate().take(UI_EXT_COUNT as usize) {
         let matched = name.as_cstr() == *ext_name;
-        if !matched && !(ext == kUIPopupmenu as usize && is_popupmenu) {
+        if !matched && !(ext == UI_POPUPMENU as usize && is_popupmenu) {
             continue;
         }
         let Some(active) = value.as_boolean() else {
             let name = name.as_cstr();
-            return Err(wrong_type(name, kObjectTypeBoolean, value));
+            return Err(wrong_type(name, OBJECT_TYPE_BOOLEAN, value));
         };
         // Which protocol a UI speaks is decided at attach: the editor
         // has already sent it events in that protocol's shape.
-        if !init && ext == kUILinegrid as usize && active != ui.ui_ext[ext] {
+        if !init && ext == UI_LINEGRID as usize && active != ui.ui_ext[ext] {
             return Err(Error::validation(c"ext_linegrid option cannot be changed"));
         }
         ui.ui_ext[ext] = active;
@@ -393,20 +396,20 @@ fn ui_set_option(
 fn want_boolean(name: &CStr, value: Object) -> Result<Boolean, Error> {
     value
         .as_boolean()
-        .ok_or_else(|| wrong_type(name, kObjectTypeBoolean, value))
+        .ok_or_else(|| wrong_type(name, OBJECT_TYPE_BOOLEAN, value))
 }
 
 /// [`want_boolean`] for an integer.
 fn want_integer(name: &CStr, value: Object) -> Result<Integer, Error> {
     value
         .as_integer()
-        .ok_or_else(|| wrong_type(name, kObjectTypeInteger, value))
+        .ok_or_else(|| wrong_type(name, OBJECT_TYPE_INTEGER, value))
 }
 
 /// [`want_boolean`] for a string.
 fn want_string(name: &CStr, value: Object) -> Result<ApiString, Error> {
     if value.as_string().is_none() {
-        return Err(wrong_type(name, kObjectTypeString, value));
+        return Err(wrong_type(name, OBJECT_TYPE_STRING, value));
     }
     Ok(value.into_string().expect("the check above matched"))
 }
@@ -446,7 +449,7 @@ pub fn nvim_ui_pum_set_height(channel_id: u64, height: Integer) -> Result<(), Er
         return Err(Error::validation(c"Expected pum height > 0"));
     }
     on_ui(channel_id, |ui| {
-        if !ui.ui_ext[kUIPopupmenu as usize] {
+        if !ui.ui_ext[UI_POPUPMENU as usize] {
             return Err(Error::validation(
                 c"UI must support the ext_popupmenu option",
             ));
@@ -466,7 +469,7 @@ pub fn nvim_ui_pum_set_bounds(
     col: Float,
 ) -> Result<(), Error> {
     on_ui(channel_id, |ui| {
-        if !ui.ui_ext[kUIPopupmenu as usize] {
+        if !ui.ui_ext[UI_POPUPMENU as usize] {
             return Err(Error::validation(
                 c"UI must support the ext_popupmenu option",
             ));

@@ -50,8 +50,8 @@ use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    ApiString, BufferHandle, Error, Integer, Pos, ScriptId, TabpageHandle, WindowHandle,
-    kErrorTypeException,
+    ApiString, BufferHandle, ERROR_TYPE_EXCEPTION, Error, Integer, Pos, ScriptId, TabpageHandle,
+    WindowHandle,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -179,7 +179,7 @@ pub(crate) fn try_leave(tstate: &TryState) -> Result<(), Error> {
     } else if has_messages {
         let messages = take_msg_list();
         let msg = error_exception_string(&messages, b"");
-        caught = Some(Error::from_message(kErrorTypeException, msg.as_cstr()));
+        caught = Some(Error::from_message(ERROR_TYPE_EXCEPTION, msg.as_cstr()));
     } else if did_throw.get() || need_rethrow.get() {
         // Either flag says there is an exception being unwound.
         let (name, lnum, value) = current_exception
@@ -188,13 +188,13 @@ pub(crate) fn try_leave(tstate: &TryState) -> Result<(), Error> {
             .with(|ex| (ex.throw_name.clone(), ex.throw_lnum, ex.value.clone()));
         // `throw_name` is empty for a throw with no script to name.
         if name.is_empty() {
-            caught = Some(Error::from_message(kErrorTypeException, value.as_cstr()));
+            caught = Some(Error::from_message(ERROR_TYPE_EXCEPTION, value.as_cstr()));
         } else {
             let (name, value) = (msg_cstr(name.as_cstr()), msg_cstr(value.as_cstr()));
             caught = Some(if lnum != LineNr::ZERO {
-                api_error!(kErrorTypeException, "{name}, line {lnum}: {value}")
+                api_error!(ERROR_TYPE_EXCEPTION, "{name}, line {lnum}: {value}")
             } else {
-                api_error!(kErrorTypeException, "{name}: {value}")
+                api_error!(ERROR_TYPE_EXCEPTION, "{name}: {value}")
             });
         }
         discard_current_exception();
@@ -282,8 +282,8 @@ pub(crate) fn set_mark(
     let byte = mark;
     let mark = msg_bytes(core::slice::from_ref(&byte));
     Err(match deleting {
-        true => api_error!(kErrorTypeException, "Failed to delete named mark: {mark}"),
-        false => api_error!(kErrorTypeException, "Failed to set named mark: {mark}"),
+        true => api_error!(ERROR_TYPE_EXCEPTION, "Failed to delete named mark: {mark}"),
+        false => api_error!(ERROR_TYPE_EXCEPTION, "Failed to set named mark: {mark}"),
     })
 }
 

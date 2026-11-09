@@ -22,7 +22,7 @@ use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::{
-    Refcount, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, kListLenMayKnow,
+    LIST_LEN_MAY_KNOW, Refcount, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING,
 };
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -113,7 +113,7 @@ fn get_qf_loc_list(
     result: &mut TypVal,
 ) {
     let Some(what_arg) = what_arg else {
-        tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
+        tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
         if (is_qf || window.is_some())
             && let Some(list) = result.list_mut()
         {

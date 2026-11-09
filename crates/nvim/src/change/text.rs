@@ -128,8 +128,8 @@ pub fn ins_char_bytes(new: &[u8]) {
     let mut oldlen = 0;
     let mut newlen = charlen;
 
-    if State.get() & REPLACE_FLAG != 0 {
-        if State.get() & VREPLACE_FLAG != 0 {
+    if STATE.get() & REPLACE_FLAG != 0 {
+        if STATE.get() & VREPLACE_FLAG != 0 {
             // Measures the line for itself: the screen-column walk it does
             // reads the memline, so a line taken before it is not one to
             // hold across it.
@@ -175,11 +175,11 @@ pub fn ins_char_bytes(new: &[u8]) {
 
     // In Insert or Replace mode with 'showmatch', briefly show the match
     // for a closing bracket.
-    if p_sm() && State.get() & MODE_INSERT != 0 && MSG_SILENT.get() == 0 && !ins_compl_active() {
+    if p_sm() && STATE.get() & MODE_INSERT != 0 && MSG_SILENT.get() == 0 && !ins_compl_active() {
         showmatch(char_at(new));
     }
 
-    if !p_ri() || State.get() & REPLACE_FLAG != 0 {
+    if !p_ri() || STATE.get() & REPLACE_FLAG != 0 {
         // Normal insert: move the cursor right.
         Win::current().w_cursor.col += len_as_int(charlen);
     }
@@ -317,7 +317,7 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
         // restart or 'virtualedit' contains "onemore".
         if col > ColNr::ZERO
             && fixpos
-            && restart_edit.get().is_nul()
+            && RESTART_EDIT.get().is_nul()
             && get_ve_flags(Win::current()) & kOptVeFlagOnemore == 0
         {
             Win::current().w_cursor.col -= 1;

@@ -33,14 +33,13 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 mod callbacks;
 mod mouse;
 mod sinks;
 pub(crate) mod state;
 
-pub use callbacks::{ui_add_cb, ui_call_event, ui_cb_ext, ui_remove_cb};
+pub use callbacks::{UI_CB_EXT, ui_add_cb, ui_call_event, ui_remove_cb};
 pub(crate) use mouse::MOUSE_VISUAL;
 pub use mouse::{ui_check_mouse, ui_mouse_has};
 pub use sinks::*;
@@ -51,7 +50,7 @@ use crate::buffer::resettitle;
 use crate::cursor_shape::{
     SHAPE_IDX_N, SHAPE_IDX_R, cursor_get_mode_idx, mode_style_array, shape_entry,
 };
-use crate::drawscreen::state::updating_screen;
+use crate::drawscreen::state::UPDATING_SCREEN;
 use crate::drawscreen::{conceal_check_cursor_line, screen_resize};
 use crate::event_queue::put_job_in;
 use crate::ex_getln::cmdline_ui_flush;
@@ -60,7 +59,7 @@ use crate::global_cell::GlobalCell;
 use crate::grid::{GridRef, default_grid_ref, get_win_by_grid_handle};
 use crate::guard::textlock;
 use crate::highlight::state::{
-    cterm_normal_bg_color, cterm_normal_fg_color, normal_bg, normal_fg, normal_sp,
+    CTERM_NORMAL_BG_COLOR, CTERM_NORMAL_FG_COLOR, NORMAL_BG, NORMAL_FG, NORMAL_SP,
 };
 use crate::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::highlight_group::HLF_W;
@@ -78,15 +77,15 @@ use crate::os::fs::current_dir;
 use crate::os::time::{os_hrtime, os_sleep};
 use crate::startup::{exiting, full_screen, starting, ui_client_channel_id};
 use crate::state::MODE_CMDLINE;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::types::DictBuilder;
 use crate::types::{ApiDict, ApiString, Array, Boolean, Error, Handle, Integer, Object};
-use crate::ui::state::{LineFlags, RemoteUI, UIExtension};
-use crate::ui::state::{called_vim_beep, resize_events, ui_ext_names, ui_refresh_cmdheight};
+use crate::ui::state::{CALLED_VIM_BEEP, RESIZE_EVENTS, UI_EXT_NAMES, UI_REFRESH_CMDHEIGHT};
 use crate::ui::state::{
-    kLineFlagInvalid, kLineFlagWrap, kUIExtCount, kUIFloatDebug, kUIHlState, kUILinegrid,
-    kUIMessages, kUIMultigrid, kUITermColors,
+    LINE_FLAG_INVALID, LINE_FLAG_WRAP, UI_EXT_COUNT, UI_FLOAT_DEBUG, UI_HL_STATE, UI_LINEGRID,
+    UI_MESSAGES, UI_MULTIGRID, UI_TERM_COLORS,
 };
+use crate::ui::state::{LineFlags, RemoteUI, UIExtension};
 use crate::ui_compositor::{
     ui_comp_attach, ui_comp_detach, ui_comp_get_grid_at_coord, ui_comp_init, ui_comp_should_draw,
 };
@@ -112,27 +111,27 @@ pub const MAX_UI_COUNT: usize = 16;
 /// the table is a leaf -- nothing run under one may reach the table again
 /// or run user code -- so anything that does finds its UI again by id
 /// afterwards, and copes with it having gone.
-static uis: GlobalCell<Vec<RemoteUI>> = GlobalCell::new(Vec::new());
+static UIS: GlobalCell<Vec<RemoteUI>> = GlobalCell::new(Vec::new());
 
 /// The widgets every attached UI draws itself, plus whatever
-/// [`ui_cb_ext`] adds. Read through [`ui_has`].
-static ui_ext: GlobalCell<[bool; kUIExtCount as usize]> =
-    GlobalCell::new([false; kUIExtCount as usize]);
+/// [`UI_CB_EXT`] adds. Read through [`ui_has`].
+static UI_EXT: GlobalCell<[bool; UI_EXT_COUNT as usize]> =
+    GlobalCell::new([false; UI_EXT_COUNT as usize]);
 
-static ui_mode_idx: GlobalCell<c_int> = GlobalCell::new(SHAPE_IDX_N);
-static cursor_row: GlobalCell<c_int> = GlobalCell::new(0);
-static cursor_col: GlobalCell<c_int> = GlobalCell::new(0);
-static cursor_grid_handle: GlobalCell<Handle> = GlobalCell::new(DEFAULT_GRID_HANDLE);
-static pending_cursor_update: GlobalCell<bool> = GlobalCell::new(false);
-static pending_mode_info_update: GlobalCell<bool> = GlobalCell::new(false);
-static pending_mode_update: GlobalCell<bool> = GlobalCell::new(false);
-static pending_default_colors: GlobalCell<bool> = GlobalCell::new(false);
+static UI_MODE_IDX: GlobalCell<c_int> = GlobalCell::new(SHAPE_IDX_N);
+static CURSOR_ROW: GlobalCell<c_int> = GlobalCell::new(0);
+static CURSOR_COL: GlobalCell<c_int> = GlobalCell::new(0);
+static CURSOR_GRID_HANDLE: GlobalCell<Handle> = GlobalCell::new(DEFAULT_GRID_HANDLE);
+static PENDING_CURSOR_UPDATE: GlobalCell<bool> = GlobalCell::new(false);
+static PENDING_MODE_INFO_UPDATE: GlobalCell<bool> = GlobalCell::new(false);
+static PENDING_MODE_UPDATE: GlobalCell<bool> = GlobalCell::new(false);
+static PENDING_DEFAULT_COLORS: GlobalCell<bool> = GlobalCell::new(false);
 /// `-1` until the first [`ui_flush`], so that the initial state is sent
 /// whichever way it goes.
-static pending_has_mouse: GlobalCell<c_int> = GlobalCell::new(-1);
+static PENDING_HAS_MOUSE: GlobalCell<c_int> = GlobalCell::new(-1);
 /// Nesting depth of [`ui_busy_start`]/[`ui_busy_stop`]; the UIs only hear
 /// about the outermost pair.
-static busy: GlobalCell<c_int> = GlobalCell::new(0);
+static BUSY: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Which of the attached UIs a sink reaches.
 ///
@@ -154,12 +153,12 @@ pub enum Reach {
 /// enough to ship across crates, and would take the table's cell with them.
 #[inline(never)]
 fn ui_count() -> usize {
-    uis.with(Vec::len)
+    UIS.with(Vec::len)
 }
 
 /// Runs `f` on the UI attached to `channel_id`, if there is one.
 ///
-/// A leaf: see [`uis`].
+/// A leaf: see [`UIS`].
 pub(crate) fn with_ui<R>(channel_id: u64, f: impl FnOnce(&mut RemoteUI) -> R) -> Option<R> {
     let (mut f, mut answer) = (Some(f), None);
     lend_ui(channel_id, &mut |ui| {
@@ -173,7 +172,7 @@ pub(crate) fn with_ui<R>(channel_id: u64, f: impl FnOnce(&mut RemoteUI) -> R) ->
 /// cell is named in this crate only (`just state-exports`).
 #[inline(never)]
 fn lend_ui(channel_id: u64, f: &mut dyn FnMut(&mut RemoteUI)) {
-    uis.with_mut(|table| {
+    UIS.with_mut(|table| {
         if let Some(ui) = table.iter_mut().find(|ui| ui.channel_id == channel_id) {
             f(ui);
         }
@@ -193,7 +192,7 @@ fn any_ui(mut test: impl FnMut(&RemoteUI) -> bool) -> bool {
 /// [`any_ui`]'s table step; not generic, as [`lend_ui`].
 #[inline(never)]
 fn any_ui_dyn(test: &mut dyn FnMut(&RemoteUI) -> bool) -> bool {
-    uis.with(|table| table.iter().any(test))
+    UIS.with(|table| table.iter().any(test))
 }
 
 /// Runs `send` on every attached UI that `reach` selects, in attach order,
@@ -205,7 +204,7 @@ pub(crate) fn each_ui_reached(reach: Reach, mut send: impl FnMut(&mut RemoteUI))
 /// [`each_ui_reached`]'s table step; not generic, as [`lend_ui`].
 #[inline(never)]
 fn each_ui_reached_dyn(reach: Reach, send: &mut dyn FnMut(&mut RemoteUI)) -> bool {
-    uis.with_mut(|table| {
+    UIS.with_mut(|table| {
         let mut any = false;
         for ui in table.iter_mut().filter(|ui| reaches(ui, reach)) {
             send(ui);
@@ -218,7 +217,7 @@ fn each_ui_reached_dyn(reach: Reach, send: &mut dyn FnMut(&mut RemoteUI)) -> boo
 /// The channel ids of the attached UIs, in attach order, for the callers
 /// that run user code between one UI and the next.
 fn ui_channels() -> Vec<u64> {
-    uis.with(|table| table.iter().map(|ui| ui.channel_id).collect())
+    UIS.with(|table| table.iter().map(|ui| ui.channel_id).collect())
 }
 
 /// Whether `reach` selects `ui`.
@@ -282,39 +281,39 @@ pub fn ui_refresh() {
     let inclusive = ui_override();
     // Start from all-true so the fold below is an intersection, but only if
     // there is something to intersect.
-    let mut ext_widgets = [ui_active() != 0; kUIExtCount as usize];
-    uis.with(|table| {
+    let mut ext_widgets = [ui_active() != 0; UI_EXT_COUNT as usize];
+    UIS.with(|table| {
         for ui in table {
             width = width.min(ui.width);
             height = height.min(ui.height);
-            for (widget, enabled) in ext_widgets[..kUIExtCount as usize].iter_mut().enumerate() {
+            for (widget, enabled) in ext_widgets[..UI_EXT_COUNT as usize].iter_mut().enumerate() {
                 *enabled &= ui.ui_ext[widget] || inclusive;
             }
         }
     });
 
-    cursor_row.set(0);
-    cursor_col.set(0);
-    pending_cursor_update.set(true);
+    CURSOR_ROW.set(0);
+    CURSOR_COL.set(0);
+    PENDING_CURSOR_UPDATE.set(true);
 
-    let had_message = ui_has(kUIMessages);
-    for (widget, &wanted) in ext_widgets[..kUIExtCount as usize].iter().enumerate() {
-        let enabled = wanted || ui_cb_ext.with(|cb| cb[widget]);
-        ui_ext.with_mut(|widgets| widgets[widget] = enabled);
+    let had_message = ui_has(UI_MESSAGES);
+    for (widget, &wanted) in ext_widgets[..UI_EXT_COUNT as usize].iter().enumerate() {
+        let enabled = wanted || UI_CB_EXT.with(|cb| cb[widget]);
+        UI_EXT.with_mut(|widgets| widgets[widget] = enabled);
         // The widgets past `ext_linegrid` describe how a UI wants the
         // screen expressed rather than who draws what, and are not options
         // a UI can be told about.
-        if widget < kUILinegrid as usize {
-            let name = ApiString::from_cstr(ui_ext_names[widget]);
+        if widget < UI_LINEGRID as usize {
+            let name = ApiString::from_cstr(UI_EXT_NAMES[widget]);
             ui_call_option_set(name, Object::boolean(enabled));
         }
     }
 
-    if had_message != ui_has(kUIMessages) {
+    if had_message != ui_has(UI_MESSAGES) {
         // Messages moving in or out of the grid changes how many lines the
-        // message area needs. `ui_refresh_cmdheight` is off while the
+        // message area needs. `UI_REFRESH_CMDHEIGHT` is off while the
         // user's own 'cmdheight' is being restored.
-        if ui_refresh_cmdheight.get() {
+        if UI_REFRESH_CMDHEIGHT.get() {
             let _ = set_option_value(
                 kOptCmdheight,
                 OptVal::Number(had_message.into()),
@@ -331,7 +330,7 @@ pub fn ui_refresh() {
     if ui_active() == 0 {
         return;
     }
-    if updating_screen.get() {
+    if UPDATING_SCREEN.get() {
         // Resizing mid-redraw would invalidate the grid being drawn into.
         ui_schedule_refresh();
         return;
@@ -344,15 +343,15 @@ pub fn ui_refresh() {
     screen_resize(width, height);
     P_LZ.set(save_p_lz);
     ui_mode_info_set();
-    pending_mode_update.set(true);
+    PENDING_MODE_UPDATE.set(true);
     ui_cursor_shape();
-    pending_has_mouse.set(-1);
+    PENDING_HAS_MOUSE.set(-1);
 }
 
 /// The tallest popup menu every attached UI will draw, or zero if none of
 /// them asked for a limit.
 pub fn ui_pum_get_height() -> c_int {
-    uis.with(|table| {
+    UIS.with(|table| {
         let limits = table.iter().map(|ui| ui.pum_nlines).filter(|&n| n != 0);
         limits.min().unwrap_or(0)
     })
@@ -361,7 +360,7 @@ pub fn ui_pum_get_height() -> c_int {
 /// The geometry of the externally drawn popup menu, if a UI reported one:
 /// width, height, row and column.
 pub fn ui_pum_get_pos() -> Option<[f64; 4]> {
-    uis.with(|table| {
+    UIS.with(|table| {
         let ui = table.iter().find(|ui| ui.pum_pos)?;
         Some([ui.pum_width, ui.pum_height, ui.pum_row, ui.pum_col])
     })
@@ -369,12 +368,12 @@ pub fn ui_pum_get_pos() -> Option<[f64; 4]> {
 
 /// Queues [`ui_refresh`] for after the current redraw.
 pub fn ui_schedule_refresh() {
-    put_job_in(&resize_events, Box::new(ui_refresh));
+    put_job_in(&RESIZE_EVENTS, Box::new(ui_refresh));
 }
 
 /// Marks the default colours as needing to be re-sent.
 pub fn ui_default_colors_set() {
-    pending_default_colors.set(true);
+    PENDING_DEFAULT_COLORS.set(true);
     // Before startup finishes the colours are still being computed, and
     // the pending flag is enough — `ui_line` picks it up.
     if starting.get() == 0 {
@@ -383,52 +382,52 @@ pub fn ui_default_colors_set() {
 }
 
 fn ui_may_set_default_colors() {
-    if !pending_default_colors.get() {
+    if !PENDING_DEFAULT_COLORS.get() {
         return;
     }
-    pending_default_colors.set(false);
+    PENDING_DEFAULT_COLORS.set(false);
     ui_call_default_colors_set(
-        Integer::from(normal_fg.get()),
-        Integer::from(normal_bg.get()),
-        Integer::from(normal_sp.get()),
-        Integer::from(cterm_normal_fg_color.get()),
-        Integer::from(cterm_normal_bg_color.get()),
+        Integer::from(NORMAL_FG.get()),
+        Integer::from(NORMAL_BG.get()),
+        Integer::from(NORMAL_SP.get()),
+        Integer::from(CTERM_NORMAL_FG_COLOR.get()),
+        Integer::from(CTERM_NORMAL_BG_COLOR.get()),
     );
 }
 
 /// Enters the busy state, in which UIs stop drawing a cursor.
 pub fn ui_busy_start() {
-    busy.set(busy.get() + 1);
-    if busy.get() == 1 {
+    BUSY.set(BUSY.get() + 1);
+    if BUSY.get() == 1 {
         ui_call_busy_start();
     }
 }
 
 /// Leaves it. Only the outermost [`ui_busy_start`] is announced.
 pub fn ui_busy_stop() {
-    busy.set(busy.get() - 1);
-    if busy.get() == 0 {
+    BUSY.set(BUSY.get() - 1);
+    if BUSY.get() == 0 {
         ui_call_busy_stop();
     }
 }
 
 /// Beeps, unless `'belloff'` covers `val`.
 pub fn vim_beep(val: core::ffi::c_uint) {
-    called_vim_beep.set(true);
+    CALLED_VIM_BEEP.set(true);
     if EMSG_SILENT.get() != 0 || IN_ASSERT_FAILS.get() {
         return;
     }
     if BO_FLAGS.get() & val == 0 && BO_FLAGS.get() & kOptBoFlagAll == 0 {
         // At most three beeps per half second: a stuck macro that beeps on
         // every iteration should not make the terminal unusable.
-        static beeps: GlobalCell<c_int> = GlobalCell::new(0);
-        static start_time: GlobalCell<u64> = GlobalCell::new(0);
-        if start_time.get() == 0 || os_hrtime() - start_time.get() > 500_000_000 {
-            beeps.set(0);
-            start_time.set(os_hrtime());
+        static BEEPS: GlobalCell<c_int> = GlobalCell::new(0);
+        static START_TIME: GlobalCell<u64> = GlobalCell::new(0);
+        if START_TIME.get() == 0 || os_hrtime() - START_TIME.get() > 500_000_000 {
+            BEEPS.set(0);
+            START_TIME.set(os_hrtime());
         }
-        beeps.set(beeps.get() + 1);
-        if beeps.get() <= 3 {
+        BEEPS.set(BEEPS.get() + 1);
+        if BEEPS.get() <= 3 {
             if p_vb() {
                 ui_call_visual_bell();
             } else {
@@ -461,12 +460,12 @@ pub fn ui_attach_impl(mut ui: RemoteUI) {
     let chanid = ui.channel_id;
     // A UI that reads the real grids does not want the compositor's
     // flattened one. `_debug_float` is the same thing for debugging.
-    let multigrid = ui.ui_ext[kUIMultigrid as usize];
-    let float_debug = ui.ui_ext[kUIFloatDebug as usize];
+    let multigrid = ui.ui_ext[UI_MULTIGRID as usize];
+    let float_debug = ui.ui_ext[UI_FLOAT_DEBUG as usize];
     if !multigrid && !float_debug && ui_client_channel_id.get() == 0 {
         ui_comp_attach(&mut ui);
     }
-    uis.with_mut(|table| table.push(ui));
+    UIS.with_mut(|table| table.push(ui));
 
     // Both of these can run user code (a 'titlestring' expression), which
     // can detach the UI again: from here on it is found by id each time.
@@ -479,7 +478,7 @@ pub fn ui_attach_impl(mut ui: RemoteUI) {
         ui_call_chdir(ApiString::from_xstring(cwd));
     }
 
-    for widget in kUILinegrid as usize..kUIExtCount as usize {
+    for widget in UI_LINEGRID as usize..UI_EXT_COUNT as usize {
         let Some(active) = with_ui(chanid, |ui| ui.ui_ext[widget]) else {
             break;
         };
@@ -493,7 +492,7 @@ pub fn ui_attach_impl(mut ui: RemoteUI) {
     // Highlights are sent as definitions plus ids, unless this is the
     // first UI to want that, in which case the whole table is rebuilt and
     // resent by `highlight_use_hlstate` itself.
-    let hl_state = with_ui(chanid, |ui| ui.ui_ext[kUIHlState as usize]).unwrap_or(false);
+    let hl_state = with_ui(chanid, |ui| ui.ui_ext[UI_HL_STATE as usize]).unwrap_or(false);
     let sent = hl_state && highlight_use_hlstate();
     if !sent {
         ui_send_all_hls(
@@ -513,7 +512,7 @@ pub fn ui_attach_impl(mut ui: RemoteUI) {
 
 /// Removes the UI on `chanid` from the attach table, answering it.
 pub fn ui_detach_impl(chanid: u64) -> Option<RemoteUI> {
-    let mut ui = uis.with_mut(|table| {
+    let mut ui = UIS.with_mut(|table| {
         let index = table.iter().position(|ui| ui.channel_id == chanid)?;
         Some(table.remove(index))
     })?;
@@ -523,8 +522,8 @@ pub fn ui_detach_impl(chanid: u64) -> Option<RemoteUI> {
         // make the screen bigger.
         ui_schedule_refresh();
     }
-    let multigrid = ui.ui_ext[kUIMultigrid as usize];
-    let float_debug = ui.ui_ext[kUIFloatDebug as usize];
+    let multigrid = ui.ui_ext[UI_MULTIGRID as usize];
+    let float_debug = ui.ui_ext[UI_FLOAT_DEBUG as usize];
     if !multigrid && !float_debug {
         ui_comp_detach(&mut ui);
     }
@@ -534,13 +533,13 @@ pub fn ui_detach_impl(chanid: u64) -> Option<RemoteUI> {
 
 /// Tells the UI on `chanid` that `ext` changed.
 pub fn ui_set_ext_option(chanid: u64, ext: UIExtension, active: bool) {
-    if ext < kUILinegrid {
+    if ext < UI_LINEGRID {
         // An external widget changing changes the intersection, and every
         // UI has to be told the result rather than this one's request.
         ui_refresh();
         return;
     }
-    let name = ui_ext_names[ext as usize];
+    let name = UI_EXT_NAMES[ext as usize];
     // A leading underscore marks an option that is not part of the
     // documented protocol; those are only mentioned when turned on.
     let private = name.to_bytes().first() == Some(&b'_');
@@ -549,7 +548,7 @@ pub fn ui_set_ext_option(chanid: u64, ext: UIExtension, active: bool) {
             remote_ui_option_set(ui, ApiString::from_cstr(name), Object::boolean(active));
         });
     }
-    if ext == kUITermColors {
+    if ext == UI_TERM_COLORS {
         ui_default_colors_set();
     }
 }
@@ -569,9 +568,9 @@ pub fn ui_line(
 ) {
     assert!((0..grid.rows).contains(&row), "row is outside the grid");
 
-    let mut flags: LineFlags = if wrap { kLineFlagWrap } else { 0 };
+    let mut flags: LineFlags = if wrap { LINE_FLAG_WRAP } else { 0 };
     if startcol == 0 && invalid_row {
-        flags |= kLineFlagInvalid;
+        flags |= LINE_FLAG_INVALID;
     }
     ui_may_set_default_colors();
 
@@ -595,7 +594,7 @@ pub fn ui_line(
         );
         ui_call_flush();
         os_sleep(p_wd().unsigned_abs());
-        pending_cursor_update.set(true);
+        PENDING_CURSOR_UPDATE.set(true);
     }
 }
 
@@ -609,39 +608,39 @@ pub fn ui_cursor_goto(new_row: c_int, new_col: c_int) {
 /// Not sent here: a redraw moves the cursor many times and only the last
 /// position matters, so [`ui_flush`] sends it once.
 pub fn ui_grid_cursor_goto(grid_handle: Handle, new_row: c_int, new_col: c_int) {
-    if new_row == cursor_row.get()
-        && new_col == cursor_col.get()
-        && grid_handle == cursor_grid_handle.get()
+    if new_row == CURSOR_ROW.get()
+        && new_col == CURSOR_COL.get()
+        && grid_handle == CURSOR_GRID_HANDLE.get()
     {
         return;
     }
-    cursor_row.set(new_row);
-    cursor_col.set(new_col);
-    cursor_grid_handle.set(grid_handle);
-    pending_cursor_update.set(true);
+    CURSOR_ROW.set(new_row);
+    CURSOR_COL.set(new_col);
+    CURSOR_GRID_HANDLE.set(grid_handle);
+    PENDING_CURSOR_UPDATE.set(true);
 }
 
 /// Re-sends the cursor if it is on `grid_handle`, which has been redrawn
 /// underneath it.
 pub fn ui_check_cursor_grid(grid_handle: Handle) {
-    if cursor_grid_handle.get() == grid_handle {
-        pending_cursor_update.set(true);
+    if CURSOR_GRID_HANDLE.get() == grid_handle {
+        PENDING_CURSOR_UPDATE.set(true);
     }
 }
 
 /// Marks `'guicursor'` as needing to be re-sent.
 pub fn ui_mode_info_set() {
-    pending_mode_info_update.set(true);
+    PENDING_MODE_INFO_UPDATE.set(true);
 }
 
 /// The row the cursor was last put on.
 pub fn ui_current_row() -> c_int {
-    cursor_row.get()
+    CURSOR_ROW.get()
 }
 
 /// The column the cursor was last put on.
 pub fn ui_current_col() -> c_int {
-    cursor_col.get()
+    CURSOR_COL.get()
 }
 
 /// Ends a redraw: sends everything held back, then `flush`.
@@ -659,18 +658,18 @@ pub fn ui_flush() {
 
     // A hidden floating window is still the current window, and the cursor
     // is inside it, so there is nowhere to draw it: look busy instead.
-    static was_busy: GlobalCell<bool> = GlobalCell::new(false);
-    let cursor_nowhere = State.get() & MODE_CMDLINE == 0
+    static WAS_BUSY: GlobalCell<bool> = GlobalCell::new(false);
+    let cursor_nowhere = STATE.get() & MODE_CMDLINE == 0
         && Win::current().w_floating
         && Win::current().w_config.hide;
     if cursor_nowhere {
-        if !was_busy.get() {
+        if !WAS_BUSY.get() {
             ui_call_busy_start();
-            was_busy.set(true);
+            WAS_BUSY.set(true);
         }
-    } else if was_busy.get() {
+    } else if WAS_BUSY.get() {
         ui_call_busy_stop();
-        was_busy.set(false);
+        WAS_BUSY.set(false);
     }
 
     win_ui_flush(false);
@@ -681,49 +680,49 @@ pub fn ui_flush() {
     }
     msg_scroll_flush();
 
-    if pending_cursor_update.get() {
+    if PENDING_CURSOR_UPDATE.get() {
         ui_call_grid_cursor_goto(
-            Integer::from(cursor_grid_handle.get()),
-            Integer::from(cursor_row.get()),
-            Integer::from(cursor_col.get()),
+            Integer::from(CURSOR_GRID_HANDLE.get()),
+            Integer::from(CURSOR_ROW.get()),
+            Integer::from(CURSOR_COL.get()),
         );
-        pending_cursor_update.set(false);
+        PENDING_CURSOR_UPDATE.set(false);
         // Moving the cursor can uncover a window whose viewport changed.
         win_ui_flush(false);
     }
 
-    if pending_mode_info_update.get() {
+    if PENDING_MODE_INFO_UPDATE.get() {
         let style = mode_style_array();
         let enabled = P_GUICURSOR.first_byte() != 0;
         ui_call_mode_info_set(enabled as Boolean, style);
-        pending_mode_info_update.set(false);
+        PENDING_MODE_INFO_UPDATE.set(false);
     }
 
     // A cursor behind a floating window is reported as the "replace" shape,
     // which is the closest the protocol has to "do not draw one".
-    static cursor_was_obscured: GlobalCell<bool> = GlobalCell::new(false);
+    static CURSOR_WAS_OBSCURED: GlobalCell<bool> = GlobalCell::new(false);
     let cursor_obscured = ui_cursor_is_behind_floatwin();
-    if (cursor_obscured != cursor_was_obscured.get() || pending_mode_update.get())
+    if (cursor_obscured != CURSOR_WAS_OBSCURED.get() || PENDING_MODE_UPDATE.get())
         && starting.get() == 0
     {
         let idx = if cursor_obscured {
             SHAPE_IDX_R
         } else {
-            ui_mode_idx.get()
+            UI_MODE_IDX.get()
         };
         let full_name = shape_entry(idx).full_name;
         ui_call_mode_change(ApiString::from_cstr(full_name), Integer::from(idx));
-        pending_mode_update.set(false);
-        cursor_was_obscured.set(cursor_obscured);
+        PENDING_MODE_UPDATE.set(false);
+        CURSOR_WAS_OBSCURED.set(cursor_obscured);
     }
 
-    if pending_has_mouse.get() != c_int::from(mouse::wanted()) {
+    if PENDING_HAS_MOUSE.get() != c_int::from(mouse::wanted()) {
         if mouse::wanted() {
             ui_call_mouse_on();
         } else {
             ui_call_mouse_off();
         }
-        pending_has_mouse.set(c_int::from(mouse::wanted()));
+        PENDING_HAS_MOUSE.set(c_int::from(mouse::wanted()));
     }
 
     ui_call_flush();
@@ -740,9 +739,9 @@ pub fn ui_cursor_shape_no_check_conceal() {
         return;
     }
     let new_mode_idx = cursor_get_mode_idx();
-    if new_mode_idx != ui_mode_idx.get() {
-        ui_mode_idx.set(new_mode_idx);
-        pending_mode_update.set(true);
+    if new_mode_idx != UI_MODE_IDX.get() {
+        UI_MODE_IDX.set(new_mode_idx);
+        PENDING_MODE_UPDATE.set(true);
     }
 }
 
@@ -754,7 +753,7 @@ pub fn ui_cursor_shape() {
 }
 
 fn ui_cursor_is_behind_floatwin() -> bool {
-    if State.get() & MODE_CMDLINE != 0 || !ui_comp_should_draw() {
+    if STATE.get() & MODE_CMDLINE != 0 || !ui_comp_should_draw() {
         return false;
     }
     let win = Win::current();
@@ -771,17 +770,17 @@ fn ui_cursor_is_behind_floatwin() -> bool {
 
 /// Whether `ext` is drawn by the UIs rather than into the grid.
 pub fn ui_has(ext: UIExtension) -> bool {
-    ui_ext.with(|widgets| widgets[ext as usize])
+    UI_EXT.with(|widgets| widgets[ext as usize])
 }
 
 /// Describes every attached UI, for `nvim_list_uis()`.
 pub fn ui_array() -> Array {
-    uis.with(|table| table.iter().map(|ui| Object::dict(ui_info(ui))).collect())
+    UIS.with(|table| table.iter().map(|ui| Object::dict(ui_info(ui))).collect())
 }
 
 /// One UI's entry in [`ui_array`].
 fn ui_info(ui: &RemoteUI) -> ApiDict {
-    let mut info = DictBuilder::with_capacity(10 + kUIExtCount as usize);
+    let mut info = DictBuilder::with_capacity(10 + UI_EXT_COUNT as usize);
     let fixed: [(&'static str, Object); 9] = [
         ("width", Object::integer(Integer::from(ui.width))),
         ("height", Object::integer(Integer::from(ui.height))),
@@ -801,7 +800,7 @@ fn ui_info(ui: &RemoteUI) -> ApiDict {
     for (key, value) in fixed {
         info.insert(key, value);
     }
-    for (widget, name) in ui_ext_names.iter().enumerate().take(kUIExtCount as usize) {
+    for (widget, name) in UI_EXT_NAMES.iter().enumerate().take(UI_EXT_COUNT as usize) {
         // A leading underscore marks an option outside the documented
         // protocol; those are only listed when turned on.
         let private = name.to_bytes().first() == Some(&b'_');

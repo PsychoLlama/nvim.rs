@@ -35,7 +35,7 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
         if buf_terminal_running(buffer) {
             let handle = buffer.handle;
             return Err(api_error!(
-                kErrorTypeException,
+                ERROR_TYPE_EXCEPTION,
                 "Terminal already connected to buffer {handle}"
             ));
         }

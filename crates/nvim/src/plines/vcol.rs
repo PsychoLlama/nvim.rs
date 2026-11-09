@@ -98,7 +98,7 @@ pub(crate) fn getvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
     let start = vcol + head;
     let end = vcol + incr - 1;
     let cursor_at_tab_end = chr.value == TAB
-        && State.get() & MODE_NORMAL != 0
+        && STATE.get() & MODE_NORMAL != 0
         && window.w_onebuf_opt.wo_list == 0
         && !virtual_active(window)
         && !(visual_active() && (P_SEL.first_byte() == b'e' || ltoreq(*pos, visual_anchor())));

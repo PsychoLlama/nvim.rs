@@ -109,7 +109,7 @@ fn report_yank(op: &OpArg, yank_type: MotionType, yanklines: size_t) {
     // The message may be the first thing that scrolls, so make sure the
     // window is up to date before it is written.
     update_topline(Win::current());
-    if must_redraw.get() != 0 {
+    if MUST_REDRAW.get() != 0 {
         let _ = update_screen();
     }
 
@@ -279,7 +279,7 @@ pub fn do_autocmd_textyankpost(op: &OpArg, reg: Reg) {
     let name = [op.regname, 0];
     let _ = dict.edit().add_str(b"regname", Some(cstr::in_bytes(&name)));
 
-    let flag = |set| if set { kBoolVarTrue } else { kBoolVarFalse };
+    let flag = |set| if set { BOOL_VAR_TRUE } else { BOOL_VAR_FALSE };
     let _ = dict.edit().add_bool(b"inclusive", flag(op.inclusive));
 
     let operator = [get_op_char(op.op_type), 0];

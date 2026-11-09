@@ -46,7 +46,7 @@ use crate::os::input::line_breakcheck;
 use crate::search::{FORWARD, check_linecomment};
 use crate::state::VREPLACE_FLAG;
 use crate::state::mode::{
-    Insstart, State, can_si, can_si_back, did_ai, did_si, old_indent, replace_offset,
+    CAN_SI, CAN_SI_BACK, DID_AI, DID_SI, INSSTART, OLD_INDENT, REPLACE_OFFSET, STATE,
 };
 use crate::types::ColNr;
 
@@ -255,8 +255,8 @@ impl BreakSearch {
         let mut landed: Option<c_int> = None;
         while (!fo_ins_blank && !has_format_option(FoFlag::INS_VI))
             || flags & INSCHAR_FORMAT != 0
-            || Win::current().w_cursor.lnum != Insstart.get().lnum
-            || Win::current().w_cursor.col >= Insstart.get().col
+            || Win::current().w_cursor.lnum != INSSTART.get().lnum
+            || Win::current().w_cursor.col >= INSSTART.get().col
         {
             let under = landed.take();
             let cc = if Win::current().w_cursor.col == ColNr::new(self.startcol) && self.c != NUL {
@@ -339,7 +339,7 @@ pub fn internal_format(
 
     // With 'autoindent' off, a space under the cursor must not be
     // deleted; stand an `x` in for it and put it back at the end.
-    if Buf::current().b_p_ai == 0 && State.get() & VREPLACE_FLAG == 0 {
+    if Buf::current().b_p_ai == 0 && STATE.get() & VREPLACE_FLAG == 0 {
         let cc = gchar_cursor();
         if let Some(white) = u8::try_from(cc)
             .ok()
@@ -411,10 +411,10 @@ pub fn internal_format(
         // The replace stack needs the offset between the cursor and the
         // break. MODE_VREPLACE does not use it -- it backspaces over the
         // text instead.
-        if State.get() & VREPLACE_FLAG != 0 {
+        if STATE.get() & VREPLACE_FLAG != 0 {
             orig_col = startcol; // where the backspacing will start
         } else {
-            replace_offset.set(startcol - search.end_foundcol);
+            REPLACE_OFFSET.set(startcol - search.end_foundcol);
         }
 
         // Move `startcol` past the spaces that are about to be deleted
@@ -430,7 +430,7 @@ pub fn internal_format(
         startcol = startcol.max(0);
 
         let mut saved_text = Vec::new();
-        if State.get() & VREPLACE_FLAG != 0 {
+        if STATE.get() & VREPLACE_FLAG != 0 {
             // MODE_VREPLACE backspaces over the text being wrapped, so
             // save a copy now -- the `startcol` bytes from the cursor -- to
             // put on the next line.
@@ -467,19 +467,19 @@ pub fn internal_format(
             if flags & INSCHAR_COM_LIST != 0 {
                 second_indent
             } else {
-                old_indent.get()
+                OLD_INDENT.get()
             },
             Some(&mut did_do_comment),
         );
         if flags & INSCHAR_COM_LIST == 0 {
-            old_indent.set(0);
+            OLD_INDENT.set(0);
         }
         // A comment leader was inserted, so a following line may get one
         // too.
         if did_do_comment {
             no_leader = false;
         }
-        replace_offset.set(0);
+        REPLACE_OFFSET.set(0);
 
         if first_line {
             if flags & INSCHAR_COM_LIST == 0 {
@@ -490,7 +490,7 @@ pub fn internal_format(
                     second_indent = get_number_indent(win.w_cursor.lnum - 1);
                 }
                 if second_indent >= 0 {
-                    if State.get() & VREPLACE_FLAG != 0 {
+                    if STATE.get() & VREPLACE_FLAG != 0 {
                         change_indent(INDENT_SET, second_indent, 0, true);
                     } else if leader_len > 0 && second_indent - leader_len > 0 {
                         // A numbered list item that has a comment:
@@ -509,7 +509,7 @@ pub fn internal_format(
             first_line = false;
         }
 
-        if State.get() & VREPLACE_FLAG != 0 {
+        if STATE.get() & VREPLACE_FLAG != 0 {
             // MODE_VREPLACE backspaced over the text being moved; put it
             // into the new line.
             ins_bytes(&saved_text);
@@ -524,10 +524,10 @@ pub fn internal_format(
         haveto_redraw = true;
         set_can_cindent(true);
         // The cursor moved: don't autoindent or cindent now.
-        did_ai.set(false);
-        did_si.set(false);
-        can_si.set(false);
-        can_si_back.set(false);
+        DID_AI.set(false);
+        DID_SI.set(false);
+        CAN_SI.set(false);
+        CAN_SI_BACK.set(false);
         line_breakcheck();
     }
 

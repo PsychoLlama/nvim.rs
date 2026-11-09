@@ -30,7 +30,7 @@ use crate::message::E_FAST_API_DISABLED;
 use crate::message::state::DID_EMSG;
 use crate::msgpack_rpc::channel::{rpc_call_with, rpc_send_event};
 use crate::narrow::len_as_int;
-use crate::types::{Error, kErrorTypeException, kErrorTypeValidation};
+use crate::types::{ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, Error};
 
 /// How much of a rejected function's name the "not allowed in a fast event"
 /// message quotes.
@@ -116,7 +116,7 @@ fn convert_and_call(
         stack.push_value(At::arg(len_as_int(i) + 2));
         let Ok(arg) = pop_typval(stack) else {
             return Err(api_error!(
-                kErrorTypeException,
+                ERROR_TYPE_EXCEPTION,
                 "error converting argument {}",
                 i + 1
             ));
@@ -203,7 +203,7 @@ fn rpc(stack: &mut Stack, request: bool) -> Result<c_int, Raise> {
                 err = e;
             }
         } else if !rpc_send_event(chan_id, name, converted.into()) {
-            err = api_error!(kErrorTypeValidation, "Invalid channel: {chan_id}");
+            err = api_error!(ERROR_TYPE_VALIDATION, "Invalid channel: {chan_id}");
         }
     }
 

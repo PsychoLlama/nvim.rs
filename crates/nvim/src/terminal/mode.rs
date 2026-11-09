@@ -29,7 +29,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{apply_autocmds, has_event};
@@ -38,7 +37,7 @@ use crate::buffer::DOBUF_WIPE;
 use crate::buffer::{buf_get_changedtick, do_buffer};
 use crate::cursor::coladvance;
 use crate::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
-use crate::drawscreen::state::{clear_cmdline, must_redraw, redraw_cmdline, redraw_mode};
+use crate::drawscreen::state::{CLEAR_CMDLINE, MUST_REDRAW, REDRAW_CMDLINE, REDRAW_MODE};
 use crate::drawscreen::{
     UPD_SOME_VALID, UPD_VALID, redraw_statuslines, setcursor, show_cursor_info_later, showmode,
     unshowmode, update_screen,
@@ -47,13 +46,13 @@ use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::getchar::state::{GOT_INT, MAPPED_CTRL_C, MOD_MASK};
 use crate::getchar::{map_execute_lua, merge_modifiers, paste_repeat};
 use crate::guard::Allow;
-use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, SpecialKey};
+use crate::keycodes::{CTRL_BSL, CTRL_C, CTRL_N, CTRL_O, SpecialKey};
 use crate::memory::XString;
 use crate::r#move::{set_topline, validate_cursor};
 use crate::options::kOptCuloptFlagNumber;
 use crate::os::libc::uint8_t;
 use crate::state::Step;
-use crate::state::mode::{State, restart_edit, stop_insert_mode};
+use crate::state::mode::{RESTART_EDIT, STATE, STOP_INSERT_MODE};
 use crate::state::{
     MODE_TERMINAL, ModeState, may_trigger_modechanged, state_enter, state_handle_k_event,
 };
@@ -265,11 +264,11 @@ pub(crate) fn terminal_enter() -> bool {
     let mut session = TerminalState::new(term);
     let s = &mut session;
 
-    stop_insert_mode.set(false);
+    STOP_INSERT_MODE.set(false);
     terminal_check_size(s.term);
 
-    let save_state = State.get();
-    State.set(MODE_TERMINAL);
+    let save_state = STATE.get();
+    STATE.set(MODE_TERMINAL);
     MAPPED_CTRL_C.set(MAPPED_CTRL_C.get() | MODE_TERMINAL);
     let redraw = Allow::redraw();
     set_terminal_winopts(s);
@@ -294,9 +293,9 @@ pub(crate) fn terminal_enter() -> bool {
     state_enter(ModeState::terminal(s));
 
     if !s.got_bsl_o {
-        restart_edit.set(Key::NUL);
+        RESTART_EDIT.set(Key::NUL);
     }
-    State.set(save_state);
+    STATE.set(save_state);
     drop(redraw);
     if !s.cursor_visible {
         ui_busy_stop();
@@ -309,7 +308,7 @@ pub(crate) fn terminal_enter() -> bool {
     if buf.terminal == s.term.raw() && !s.close {
         terminal_check_cursor(s.term);
     }
-    if !restart_edit.get().is_nul() {
+    if !RESTART_EDIT.get().is_nul() {
         showmode();
     } else {
         unshowmode(true);
@@ -358,7 +357,7 @@ pub(super) fn terminal_check_cursor(term: Term) {
         set_topline(win, topline);
     }
 
-    if term.suspended && State.get() & MODE_TERMINAL != 0 {
+    if term.suspended && STATE.get() & MODE_TERMINAL != 0 {
         win.w_cursor = Pos {
             lnum: buf.line_count(),
             col: ColNr::ZERO,
@@ -366,7 +365,7 @@ pub(super) fn terminal_check_cursor(term: Term) {
         };
         return;
     }
-    let off = if State.get() & MODE_TERMINAL != 0 {
+    let off = if STATE.get() & MODE_TERMINAL != 0 {
         0
     } else if win.w_onebuf_opt.wo_rl != 0 {
         1
@@ -420,7 +419,7 @@ pub(crate) fn terminal_check(s: &mut TerminalState) -> Step {
         !s.close || (s.term.buf_handle == Handle::NONE && s.term.raw() != current_buf().terminal),
         "a terminal marked closed is still the current buffer's"
     );
-    if stop_insert_mode.get() || !terminal_check_focus(s) {
+    if STOP_INSERT_MODE.get() || !terminal_check_focus(s) {
         return Step::Leave;
     }
     terminal_check_refresh();
@@ -455,11 +454,11 @@ pub(crate) fn terminal_check(s: &mut TerminalState) -> Step {
     // SAFETY: a live window.
     validate_cursor(current_win());
     show_cursor_info_later(false);
-    if must_redraw.get() != 0 {
+    if MUST_REDRAW.get() != 0 {
         let _ = update_screen();
     } else {
         redraw_statuslines();
-        if clear_cmdline.get() || redraw_cmdline.get() || redraw_mode.get() {
+        if CLEAR_CMDLINE.get() || REDRAW_CMDLINE.get() || REDRAW_MODE.get() {
             showmode();
         }
     }
@@ -519,21 +518,21 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> Step {
     }
     // CTRL-\ CTRL-N leaves for normal mode; CTRL-\ CTRL-O leaves for one
     // command and comes back.
-    if s.got_bsl && matches!(mod_key, Ctrl_N | Ctrl_O) {
-        if mod_key == Ctrl_N {
+    if s.got_bsl && matches!(mod_key, CTRL_N | CTRL_O) {
+        if mod_key == CTRL_N {
             return Step::Leave;
         }
         s.got_bsl_o = true;
-        restart_edit.set(Key::ascii(b'I'));
+        RESTART_EDIT.set(Key::ascii(b'I'));
         return Step::Leave;
     }
 
     // CTRL-C in terminal mode belongs to the child, so the interrupt the
     // editor recorded is dropped.
-    if mod_key == Ctrl_C {
+    if mod_key == CTRL_C {
         GOT_INT.set(false);
     }
-    if mod_key == Ctrl_BSL && !s.got_bsl {
+    if mod_key == CTRL_BSL && !s.got_bsl {
         s.got_bsl = true;
     } else if s.term.suspended {
         // Any key wakes a suspended child rather than being sent to it.

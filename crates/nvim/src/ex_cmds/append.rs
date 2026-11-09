@@ -34,12 +34,12 @@ use crate::narrow::{len_as_int, number_as_int};
 use crate::option::vars::P_WINDOW;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
 use crate::types::CmdIdx;
 use crate::types::ColNr;
 use crate::types::{ExArg, LineNr, OptInt};
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
 use crate::winlayer::Buf;
@@ -78,9 +78,9 @@ pub fn ex_append(excmd: &mut ExArg) {
     }
 
     // Behave like in Insert mode.
-    State.set(MODE_INSERT);
+    STATE.set(MODE_INSERT);
     if Buf::current().b_p_iminsert == OptInt::from(B_IMODE_LMAP) {
-        State.set(State.get() | MODE_LANGMAP);
+        STATE.set(STATE.get() | MODE_LANGMAP);
     }
 
     loop {
@@ -97,7 +97,7 @@ pub fn ex_append(excmd: &mut ExArg) {
         let Some(theline) = next_append_line(excmd, indent) else {
             break;
         };
-        LINES_LEFT.set(Rows.get() - 1);
+        LINES_LEFT.set(ROWS.get() - 1);
         // The line source saying the input ended.
         let Some(mut theline) = theline else {
             break;
@@ -145,7 +145,7 @@ pub fn ex_append(excmd: &mut ExArg) {
         }
     }
 
-    State.set(MODE_NORMAL);
+    STATE.set(MODE_NORMAL);
     ui_cursor_shape();
 
     if forceit {
@@ -210,7 +210,7 @@ fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Option<Vec<u8>>> 
 
     // Set State to avoid the cursor shape being set to MODE_INSERT state
     // when the line source returns.
-    let save_state = State.replace(MODE_CMDLINE);
+    let save_state = STATE.replace(MODE_CMDLINE);
     let in_loop = args
         .cond_stack
         .is_some_and(|cond| cond.with(|cs| cs.loop_level > 0));
@@ -222,7 +222,7 @@ fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Option<Vec<u8>>> 
         line.truncate(line.iter().position(|&byte| byte == 0).unwrap_or(0));
         line
     });
-    State.set(save_state);
+    STATE.set(save_state);
     Some(line)
 }
 
@@ -360,7 +360,7 @@ pub fn ex_z(excmd: &mut ExArg) {
 /// the only window, and the window's height less three otherwise.
 fn default_bigness(forceit: c_int) -> int64_t {
     if forceit != 0 {
-        int64_t::from(Rows.get() - 1)
+        int64_t::from(ROWS.get() - 1)
     } else if firstwin.get() == lastwin.get() {
         Win::current().w_onebuf_opt.wo_scr * 2
     } else {
@@ -371,7 +371,7 @@ fn default_bigness(forceit: c_int) -> int64_t {
 /// The line of dashes `:z=` rules the current line off with.
 fn rule_off() {
     say::putchar(NL);
-    for _ in 1..Columns.get() {
+    for _ in 1..COLUMNS.get() {
         say::putchar('-' as c_int);
     }
 }

@@ -42,7 +42,7 @@ use crate::buffer::{
 use crate::change::changed_lines;
 use crate::charset::{getdigits_int_at, vim_isprintc};
 use crate::cursor::{check_cursor, coladvance};
-use crate::drawscreen::state::{cmdline_row, must_redraw};
+use crate::drawscreen::state::{CMDLINE_ROW, MUST_REDRAW};
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_VALID, redraw_buf_later, redraw_curbuf_later, update_screen,
 };
@@ -106,14 +106,14 @@ use crate::quickfix::model::{
 };
 use crate::regexp::{RegMMatch, RegMatch};
 use crate::search::{BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE};
-use crate::state::mode::restart_edit;
+use crate::state::mode::RESTART_EDIT;
 use crate::tr;
 use crate::types::Failed;
 use crate::types::{
     Callback, ColNr, Dict, Direction, ExArg, LineNr, List, OptInt, Pos, ScriptId, TypVal,
     VarNumber, VarType,
 };
-use crate::ui::state::Columns;
+use crate::ui::state::COLUMNS;
 use crate::ui::ui_flush;
 use crate::undo::u_clearallandblockfree;
 use crate::window::{

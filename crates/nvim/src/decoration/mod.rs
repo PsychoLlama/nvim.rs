@@ -7,7 +7,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 //! Extmark decorations: what a mark makes the screen do.
 //!
@@ -80,71 +79,71 @@ pub use self::state::*;
 /// `kSH*`: what a `DecorSignHighlight` (or its inline form) actually does.
 /// Several can be set at once, which is why one item can be both a highlight
 /// and a spelling override.
-pub(crate) const kSHIsSign: uint16_t = 1;
+pub(crate) const SH_IS_SIGN: uint16_t = 1;
 /// Colour the rest of the screen line past the end of the text too.
-pub(crate) const kSHHlEol: uint16_t = 2;
+pub(crate) const SH_HL_EOL: uint16_t = 2;
 /// The position is reported to the UI rather than drawn (`ui_watched`).
-pub(crate) const kSHUIWatched: uint16_t = 4;
+pub(crate) const SHUI_WATCHED: uint16_t = 4;
 /// A `ui_watched` mark that reports an overlay position, not an eol one.
-pub(crate) const kSHUIWatchedOverlay: uint16_t = 8;
+pub(crate) const SHUI_WATCHED_OVERLAY: uint16_t = 8;
 /// Force spell checking on, and off, over the range.
-pub(crate) const kSHSpellOn: uint16_t = 16;
-pub(crate) const kSHSpellOff: uint16_t = 32;
+pub(crate) const SH_SPELL_ON: uint16_t = 16;
+pub(crate) const SH_SPELL_OFF: uint16_t = 32;
 /// Replace the range with `text[0]` at 'conceallevel' 2 or more.
-pub(crate) const kSHConceal: uint16_t = 64;
+pub(crate) const SH_CONCEAL: uint16_t = 64;
 /// Hide the whole line.
-pub(crate) const kSHConcealLines: uint16_t = 128;
+pub(crate) const SH_CONCEAL_LINES: uint16_t = 128;
 
 /// `kVT*`: flags of a `DecorVirtText`.
 /// The item is a block of whole lines, not text alongside the line.
-pub(crate) const kVTIsLines: uint8_t = 1;
+pub(crate) const VT_IS_LINES: uint8_t = 1;
 /// Do not draw the virtual text while the line is selected.
-pub(crate) const kVTHide: uint8_t = 2;
+pub(crate) const VT_HIDE: uint8_t = 2;
 /// Draw the virtual lines above their own line rather than below it.
-pub(crate) const kVTLinesAbove: uint8_t = 4;
+pub(crate) const VT_LINES_ABOVE: uint8_t = 4;
 /// Repeat the virtual text on every screen line a wrapped line takes.
-pub(crate) const kVTRepeatLinebreak: uint8_t = 8;
+pub(crate) const VT_REPEAT_LINEBREAK: uint8_t = 8;
 
 /// `kVL*`: flags of one `virt_line` inside a virtual-lines block.
 /// Start at the left window edge, ignoring the number column and friends.
-pub(crate) const kVLLeftcol: c_int = 1;
+pub(crate) const VL_LEFTCOL: c_int = 1;
 /// May scroll horizontally with `nowrap`.
-pub(crate) const kVLScroll: c_int = 2;
+pub(crate) const VL_SCROLL: c_int = 2;
 
 /// `VirtTextPos`: where virtual text goes relative to the line. Keep in sync
 /// with `dict::VIRT_TEXT_POS_STR`.
-pub(crate) const kVPosEndOfLine: VirtTextPos = 0;
-pub(crate) const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub(crate) const kVPosInline: VirtTextPos = 2;
-pub(crate) const kVPosOverlay: VirtTextPos = 3;
-pub(crate) const kVPosRightAlign: VirtTextPos = 4;
-pub(crate) const kVPosWinCol: VirtTextPos = 5;
+pub(crate) const V_POS_END_OF_LINE: VirtTextPos = 0;
+pub(crate) const V_POS_END_OF_LINE_RIGHT_ALIGN: VirtTextPos = 1;
+pub(crate) const V_POS_INLINE: VirtTextPos = 2;
+pub(crate) const V_POS_OVERLAY: VirtTextPos = 3;
+pub(crate) const V_POS_RIGHT_ALIGN: VirtTextPos = 4;
+pub(crate) const V_POS_WIN_COL: VirtTextPos = 5;
 
 /// `HlMode`: how a virtual text's highlight combines with what is under it.
-pub(crate) const kHlModeUnknown: HlMode = 0;
+pub(crate) const HL_MODE_UNKNOWN: HlMode = 0;
 /// Replace whatever is under the text.
-pub(crate) const kHlModeReplace: HlMode = 1;
+pub(crate) const HL_MODE_REPLACE: HlMode = 1;
 /// Combine with it, as `:highlight` links do.
-pub(crate) const kHlModeCombine: HlMode = 2;
+pub(crate) const HL_MODE_COMBINE: HlMode = 2;
 /// Blend the two colours, as `'winblend'` does.
-pub(crate) const kHlModeBlend: HlMode = 3;
+pub(crate) const HL_MODE_BLEND: HlMode = 3;
 
 /// `DecorRangeKind`: which arm of a `DecorRange`'s union is live.
-pub(crate) const kDecorKindHighlight: DecorRangeKind = 0;
-pub(crate) const kDecorKindVirtText: DecorRangeKind = 2;
-pub(crate) const kDecorKindVirtLines: DecorRangeKind = 3;
+pub(crate) const DECOR_KIND_HIGHLIGHT: DecorRangeKind = 0;
+pub(crate) const DECOR_KIND_VIRT_TEXT: DecorRangeKind = 2;
+pub(crate) const DECOR_KIND_VIRT_LINES: DecorRangeKind = 3;
 /// A position reported to the UI rather than anything drawn.
-pub(crate) const kDecorKindUIWatched: DecorRangeKind = 4;
+pub(crate) const DECOR_KIND_UI_WATCHED: DecorRangeKind = 4;
 
 /// `kMTMeta*`: the marktree's per-node counts, which is what lets a walk skip
 /// a whole subtree that has no mark of the kind it is looking for.
-pub(crate) const kMTMetaInline: MetaIndex = 0;
-pub(crate) const kMTMetaLines: MetaIndex = 1;
-pub(crate) const kMTMetaSignHL: MetaIndex = 2;
-pub(crate) const kMTMetaSignText: MetaIndex = 3;
-pub(crate) const kMTMetaConcealLines: MetaIndex = 4;
+pub(crate) const MT_META_INLINE: MetaIndex = 0;
+pub(crate) const MT_META_LINES: MetaIndex = 1;
+pub(crate) const MT_META_SIGN_HL: MetaIndex = 2;
+pub(crate) const MT_META_SIGN_TEXT: MetaIndex = 3;
+pub(crate) const MT_META_CONCEAL_LINES: MetaIndex = 4;
 /// How many kinds there are — the length of a node's count array.
-pub(crate) const kMTMetaCount: MetaIndex = 5;
+pub(crate) const MT_META_COUNT: MetaIndex = 5;
 
 /// Cells a sign takes in the sign column.
 pub(crate) const SIGN_WIDTH: c_int = 2;
@@ -327,7 +326,7 @@ pub(crate) fn decor_release_vt(idx: uint32_t) {
 /// (`v0.12.4:src/nvim/decoration.c:166`).
 /// TODO(bfredl): eventually simple signs will be inlinable as well.
 pub fn decor_sh_from_inline(item: DecorHighlightInline) -> DecorSignHighlight {
-    debug_assert!(item.flags & kSHIsSign == 0);
+    debug_assert!(item.flags & SH_IS_SIGN == 0);
     DecorSignHighlight {
         flags: item.flags,
         priority: item.priority,
@@ -388,9 +387,9 @@ pub fn decor_check_to_be_deleted() {
 /// into it once the character is longer than four bytes.
 pub fn decor_check_invalid_glyphs() {
     for_each_decor_item(|it| {
-        let width = if it.flags & kSHIsSign != 0 {
+        let width = if it.flags & SH_IS_SIGN != 0 {
             SIGN_WIDTH as usize
-        } else if it.flags & kSHConceal != 0 {
+        } else if it.flags & SH_CONCEAL != 0 {
             1
         } else {
             0
@@ -486,13 +485,13 @@ pub fn decor_redraw(buffer: Buf, row1: c_int, row2: c_int, col1: c_int, decor: D
 
     for idx in virt_chain(ext.vt_idx) {
         let (flags, pos) = with_decor_virt(idx, |vt| (vt.flags, vt.pos));
-        let is_lines = flags & kVTIsLines != 0;
-        let below = is_lines && flags & kVTLinesAbove == 0;
+        let is_lines = flags & VT_IS_LINES != 0;
+        let below = is_lines && flags & VT_LINES_ABOVE == 0;
         let vt_lnum = LineNr::new(row1) + 1 + i32::from(below);
         redraw_buf_line_later(buffer, vt_lnum, true);
         // Virtual lines and inline virtual text change how much room the
         // line takes, so the cached line sizes have to go as well.
-        if is_lines || pos == kVPosInline {
+        if is_lines || pos == V_POS_INLINE {
             let vt_col: ColNr = if is_lines {
                 ColNr::ZERO
             } else {
@@ -510,12 +509,12 @@ pub fn decor_redraw(buffer: Buf, row1: c_int, row2: c_int, col1: c_int, decor: D
 
 /// [`decor_redraw`] for one sign/highlight item.
 pub(crate) fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: ShRedraw) {
-    let paints = sh.flags & (kSHIsSign | kSHSpellOn | kSHSpellOff | kSHConceal) != 0;
+    let paints = sh.flags & (SH_IS_SIGN | SH_SPELL_ON | SH_SPELL_OFF | SH_CONCEAL) != 0;
     if (sh.hl_id != 0 || sh.has_url || paints) && row2 >= row1 {
         redraw_buf_range_later(buffer, LineNr::new(row1) + 1, LineNr::new(row2) + 1);
     }
 
-    if sh.flags & kSHConcealLines != 0 {
+    if sh.flags & SH_CONCEAL_LINES != 0 {
         // TODO(luukvbaal): redraw only unconcealed lines, and scroll
         // lines below it up or down. Also when opening/closing a fold.
         for wp in winlayer::windows() {
@@ -525,7 +524,7 @@ pub(crate) fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: ShRedra
         }
     }
 
-    if sh.flags & kSHUIWatched != 0 {
+    if sh.flags & SHUI_WATCHED != 0 {
         redraw_buf_line_later(buffer, LineNr::new(row1) + 1, false);
     }
 }

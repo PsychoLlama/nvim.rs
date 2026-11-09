@@ -69,7 +69,7 @@ use crate::runtime::set_sourcing_lnum;
 use crate::ex_eval::defs::{CondId, CondSummary};
 use crate::memory::XString;
 use crate::types::{CmdLine, Failed, LineNr, OptInt};
-use crate::ui::state::kUICmdline;
+use crate::ui::state::UI_CMDLINE;
 use crate::ui::ui_has;
 
 /// Run one Ex command line, as if the user had typed it.
@@ -231,7 +231,7 @@ fn ask_for_line(
     did_block: &mut bool,
 ) -> Option<CmdLine> {
     if count == 1 && source.is_typed() {
-        if ui_has(kUICmdline) {
+        if ui_has(UI_CMDLINE) {
             let last = last_cmdline.with(Clone::clone).unwrap_or_default();
             ui_ext_cmdline_block_append(0, &last);
             *did_block = true;
@@ -259,7 +259,7 @@ fn ask_for_line(
     // Every cmdline_block event but the first goes out immediately:
     // holding them until the commands have run would interleave them
     // wrongly with a nested command line.
-    if ui_has(kUICmdline) && count > 0 && source.is_typed() {
+    if ui_has(UI_CMDLINE) && count > 0 && source.is_typed() {
         let shown = line.as_cstr().to_bytes();
         ui_ext_cmdline_block_append(usize::try_from(indent).unwrap_or(0), shown);
     }

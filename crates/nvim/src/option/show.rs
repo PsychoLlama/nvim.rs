@@ -27,7 +27,7 @@
 use crate::cstr;
 use crate::env::home_to_tilde;
 use crate::global_cell::field;
-use crate::keycodes::{Ctrl_V, ModMask};
+use crate::keycodes::{CTRL_V, ModMask};
 use crate::mbyte::unescape_at;
 use crate::narrow::number_as_int;
 use crate::option::defs::OPT_VAL_TYPE_BOOLEAN;
@@ -62,7 +62,7 @@ use crate::os::libc::uint32_t;
 use crate::path::MAXPATHL;
 use crate::startup::silent_mode;
 use crate::types::{ApiString, Failed, OptInt, WinOpt};
-use crate::ui::state::Columns;
+use crate::ui::state::COLUMNS;
 use crate::ui::ui_call_option_set;
 use crate::undo::curbuf_is_changed;
 
@@ -127,7 +127,7 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
             }
             // `:set!` gives every option a line of its own.
             let len = if opt_flags.has(OptionSetFlags::ONECOLUMN) {
-                Columns.get()
+                COLUMNS.get()
             } else if option_has_type(opt_idx, OPT_VAL_TYPE_BOOLEAN) {
                 1
             } else {
@@ -144,7 +144,7 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
 
         let count = c_int::try_from(items.len()).expect("one entry per option");
         let rows = if run == 1 {
-            let cols = ((Columns.get() + GAP - 3) / INC).max(1);
+            let cols = ((COLUMNS.get() + GAP - 3) / INC).max(1);
             (count + cols - 1) / cols
         } else {
             count
@@ -525,7 +525,7 @@ pub(crate) fn escaped_set_value(value: &[u8]) -> Vec<u8> {
             if ascii_iswhite(code) || c == b'"' || c == b'\\' {
                 out.push(b'\\');
             } else if !(b' '..=b'~').contains(&c) || c == b'|' {
-                out.push(u8::try_from(Ctrl_V).expect("CTRL-V is a byte"));
+                out.push(u8::try_from(CTRL_V).expect("CTRL-V is a byte"));
             }
             out.push(c);
         }

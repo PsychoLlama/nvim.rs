@@ -25,7 +25,7 @@ use super::*;
 use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::cursor::gchar_cursor;
-use crate::drawscreen::state::redraw_cmdline;
+use crate::drawscreen::state::REDRAW_CMDLINE;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::mark::setpcmark;
 use crate::memline::{Lines, Moved, decl, gchar_pos, inc, incl};
@@ -390,7 +390,7 @@ pub(crate) fn current_sent(op: &mut OpArg, count: c_int, include: bool) -> Resul
         }
         set_visual_anchor(start_pos);
         set_visual_mode(VisualMode::CHAR);
-        redraw_cmdline.set(true); // show the mode later
+        REDRAW_CMDLINE.set(true); // show the mode later
         redraw_curbuf_later(UPD_INVERTED); // update the inversion
     } else {
         // Include the newline after the sentence, if there is one.

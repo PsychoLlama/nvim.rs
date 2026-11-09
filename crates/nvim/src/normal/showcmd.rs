@@ -25,7 +25,7 @@ use crate::winlayer::{Buf, Win};
 use crate::charset::{transchar, vim_isprintc};
 use crate::cstr;
 use crate::drawscreen::setcursor;
-use crate::drawscreen::state::{redraw_tabline, sc_col};
+use crate::drawscreen::state::{REDRAW_TABLINE, SC_COL};
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::getchar::char_avail;
 use crate::global_cell::GlobalCell;
@@ -42,12 +42,12 @@ use crate::plines::getvcols;
 use crate::pos::lt;
 use crate::statusline::{draw_tabline, hl_attr, win_redr_status};
 use crate::types::{ApiString, LineNr, Object, OptInt};
-use crate::ui::state::Rows;
+use crate::ui::state::ROWS;
 use crate::ui::{ui_call_msg_showcmd, ui_has};
 use core::ffi::{CStr, c_int};
 
 use crate::highlight_group::HLF_MSG;
-use crate::ui::state::kUIMessages;
+use crate::ui::state::UI_MESSAGES;
 
 /// The 'showcmd' text: at most `SHOWCMD_BUFLEN - 1` bytes and the
 /// terminator C consumers still expect, carried by value.
@@ -133,7 +133,7 @@ static old_showcmd_buf: GlobalCell<ShowCmd> = GlobalCell::new(ShowCmd::new());
 /// buffer; the last screen line gets the ten columns reserved for it.
 #[inline(always)]
 fn showcmd_limit() -> usize {
-    if ui_has(kUIMessages) {
+    if ui_has(UI_MESSAGES) {
         SHOWCMD_BUFLEN as usize - 1
     } else {
         SHOWCMD_COLS as usize
@@ -386,7 +386,7 @@ pub(crate) fn display_showcmd() {
     }
     if loc == b't' {
         if clear {
-            redraw_tabline.set(true);
+            REDRAW_TABLINE.set(true);
         } else {
             draw_tabline();
             setcursor();
@@ -394,7 +394,7 @@ pub(crate) fn display_showcmd() {
         return;
     }
 
-    if ui_has(kUIMessages) {
+    if ui_has(UI_MESSAGES) {
         show_through_ui(clear);
         return;
     }
@@ -427,18 +427,18 @@ fn show_through_ui(clear: bool) {
 fn draw_on_last_line(clear: bool) {
     let sc = showcmd_buf.get();
     msg_grid_validate();
-    let showcmd_row = Rows.get() - 1;
+    let showcmd_row = ROWS.get() - 1;
     grid_line_start(msg_grid_view(), showcmd_row);
     let attr = hl_attr(HLF_MSG as c_int);
     let mut len = 0;
     if !clear {
-        len = grid_line_puts(sc_col.get(), sc.as_cstr().to_bytes(), attr);
+        len = grid_line_puts(SC_COL.get(), sc.as_cstr().to_bytes(), attr);
     }
     // The padding is the same ten spaces every time; only the tail past
     // what was written is drawn.
     let pad = b"          ";
     // `len` is at most ten: the shown command is cut to that.
     let tail = &pad[usize::try_from(len).unwrap_or(0).min(pad.len())..];
-    grid_line_puts(sc_col.get() + len, tail, attr);
+    grid_line_puts(SC_COL.get() + len, tail, attr);
     grid_line_flush();
 }

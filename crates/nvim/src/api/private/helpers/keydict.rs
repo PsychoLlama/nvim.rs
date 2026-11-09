@@ -20,7 +20,7 @@ use crate::api::private::keyset::{FieldKind, KeySet, Slot};
 use crate::api::private::validate::{err_expected, handle_arg};
 use crate::api_error;
 use crate::types::DictBuilder;
-use crate::types::{ApiDict, Error, Float, KeyValuePair, Object, kErrorTypeValidation};
+use crate::types::{ApiDict, ERROR_TYPE_VALIDATION, Error, Float, KeyValuePair, Object};
 
 /// Fill the keyset `retval` from `dict`, type-checking each value against
 /// what the field it names holds. Refuses at the first unknown key or wrong
@@ -33,7 +33,7 @@ pub(crate) fn api_dict_to_keydict(retval: &mut dyn KeySet, dict: ApiDict) -> Res
     for KeyValuePair { key, value: given } in dict {
         let Some(index) = retval.find(key.bytes()) else {
             let name = key.as_c_str().to_string_lossy();
-            return Err(api_error!(kErrorTypeValidation, "Invalid key: '{name}'"));
+            return Err(api_error!(ERROR_TYPE_VALIDATION, "Invalid key: '{name}'"));
         };
         let field = &fields[index];
         // A mismatch reports the field's name, which is the key's.
@@ -92,7 +92,7 @@ pub(crate) fn api_dict_to_keydict(retval: &mut dyn KeySet, dict: ApiDict) -> Res
             Slot::LuaRef(_) => {
                 let name = key.as_c_str().to_string_lossy();
                 return Err(api_error!(
-                    kErrorTypeValidation,
+                    ERROR_TYPE_VALIDATION,
                     "Invalid key: '{name}' is only allowed from Lua"
                 ));
             }

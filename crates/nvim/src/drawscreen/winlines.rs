@@ -207,7 +207,7 @@ pub(crate) fn draw_window_lines(
                         continue 'restart;
                     }
                 }
-            } else if dollar_vcol.get() == ColNr::NONE || window.raw() != Win::current_raw() {
+            } else if DOLLAR_VCOL.get() == ColNr::NONE || window.raw() != Win::current_raw() {
                 window.w_botline = w.lnum;
             }
 
@@ -391,19 +391,19 @@ fn draw_one_line(
     wl.wl_lnum = w.lnum;
     wl.wl_valid = true;
 
-    // `dollar_vcol >= 0` on the cursor line means it was not fully drawn
+    // `DOLLAR_VCOL >= 0` on the cursor line means it was not fully drawn
     // for a change command, so its recorded height must not move.
     let is_curline = window.raw() == Win::current_raw() && w.lnum == window.w_cursor.lnum;
 
     if w.row > window.w_view_height {
         // Past the end of the grid. The height may still be needed later.
-        if dollar_vcol.get() == ColNr::NONE || !is_curline {
+        if DOLLAR_VCOL.get() == ColNr::NONE || !is_curline {
             window.w_lines[idx].wl_size = number_as_u16(plines_win(window, w.lnum, true).into());
         }
         w.idx += 1;
         return false;
     }
-    if dollar_vcol.get() == ColNr::NONE || !is_curline {
+    if DOLLAR_VCOL.get() == ColNr::NONE || !is_curline {
         window.w_lines[idx].wl_size = number_as_u16((w.row - w.srow).into());
     }
     w.lnum = window.w_lines[idx].wl_lastlnum + 1;
@@ -470,7 +470,7 @@ fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) {
     let mut j = w.idx;
     let mut l = w.lnum;
     while l < rg.mod_bot {
-        if dollar_vcol.get() >= ColNr::ZERO
+        if DOLLAR_VCOL.get() >= ColNr::ZERO
             && window.raw() == Win::current_raw()
             && old_cline_height > 0
             && l == window.w_cursor.lnum

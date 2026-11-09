@@ -17,7 +17,6 @@
 
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -44,8 +43,8 @@ use crate::narrow::{float_as_i64, len_as_int};
 use crate::os::cshim::gettext;
 use crate::os::libc::size_t;
 use crate::types::{
-    Failed, ListItem, LuaRef, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray,
-    kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil, kSpecialVarNull,
+    BOOL_VAR_FALSE, BOOL_VAR_TRUE, Failed, ListItem, LuaRef, OBJECT_TYPE_ARRAY, OBJECT_TYPE_DICT,
+    OBJECT_TYPE_FLOAT, OBJECT_TYPE_NIL, SPECIAL_VAR_NULL, TypVal,
 };
 
 /// Refused for a table that is neither a list nor a dictionary.
@@ -196,12 +195,12 @@ enum Converted {
 /// `Err` refuses, with the reason already reported.
 fn convert_top(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Converted, Failed> {
     match stack.kind(At::TOP) {
-        Kind::Nil => Ok(Converted::Value(TypVal::Special(kSpecialVarNull))),
+        Kind::Nil => Ok(Converted::Value(TypVal::Special(SPECIAL_VAR_NULL))),
         Kind::Boolean => Ok(Converted::Value(TypVal::Bool(
             if stack.to_boolean(At::TOP) {
-                kBoolVarTrue
+                BOOL_VAR_TRUE
             } else {
-                kBoolVarFalse
+                BOOL_VAR_FALSE
             },
         ))),
         Kind::String => {
@@ -232,7 +231,7 @@ fn convert_top(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Converted
             let is_nil = stack.raw_equal(At::TOP, At::from_top(2));
             stack.pop(1);
             if is_nil {
-                Ok(Converted::Value(TypVal::Special(kSpecialVarNull)))
+                Ok(Converted::Value(TypVal::Special(SPECIAL_VAR_NULL)))
             } else {
                 emsg(gettext(E5101_BAD_TYPE));
                 Err(Failed)
@@ -271,7 +270,7 @@ fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Convert
     // A frame opened below names this slot for as long as it lives.
     let table = stack.top();
     match table_props.type_0 {
-        kObjectTypeArray => {
+        OBJECT_TYPE_ARRAY => {
             let mut list = tv_list_alloc(table_props.maxidx.cast_signed());
             list.lua_table_ref = table_ref;
             if table_props.maxidx == 0 {
@@ -284,7 +283,7 @@ fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Convert
             });
             Ok(Converted::Opened)
         }
-        kObjectTypeDict => {
+        OBJECT_TYPE_DICT => {
             if table_props.string_keys_num == 0 {
                 let mut dict = tv_dict_alloc();
                 dict.lua_table_ref = table_ref;
@@ -311,8 +310,8 @@ fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Convert
             stack.push_nil();
             Ok(Converted::Opened)
         }
-        kObjectTypeFloat => Ok(Converted::Value(TypVal::Float(table_props.val))),
-        kObjectTypeNil => {
+        OBJECT_TYPE_FLOAT => Ok(Converted::Value(TypVal::Float(table_props.val))),
+        OBJECT_TYPE_NIL => {
             emsg(gettext(E5100_MIXED_KEYS));
             Err(Failed)
         }

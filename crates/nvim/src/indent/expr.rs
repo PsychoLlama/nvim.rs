@@ -42,7 +42,7 @@ use crate::pos::lt;
 use crate::runtime::state::current_sctx;
 use crate::search::{findmatch, linewhite};
 use crate::state::MODE_INSERT;
-use crate::state::mode::{State, did_ai};
+use crate::state::mode::{DID_AI, STATE};
 use crate::winlayer::Win;
 
 /// The indent 'indentexpr' answers for the cursor line, or the line's
@@ -73,13 +73,13 @@ pub fn get_expr_indent() -> c_int {
     // Restore the cursor so that 'indentexpr' does not have to. Pretend to
     // be in Insert mode, which allows the cursor past end of line for the
     // "o" command.
-    let save_state = State.get();
-    State.set(MODE_INSERT);
+    let save_state = STATE.get();
+    STATE.set(MODE_INSERT);
     win.w_cursor = save_pos;
     win.w_curswant = save_curswant;
     win.w_set_curswant = save_set_curswant;
     check_cursor(win);
-    State.set(save_state);
+    STATE.set(save_state);
 
     // Reset `did_throw`, unless 'debug' has "throw" and we are inside a
     // try/catch.
@@ -353,7 +353,7 @@ pub fn fixthisline(get_the_indent: Indenter) {
     change_indent(INDENT_SET, amount, 0, true);
     if linewhite(Win::current().w_cursor.lnum) {
         // Delete the indent again if the line stays empty.
-        did_ai.set(true);
+        DID_AI.set(true);
     }
 }
 

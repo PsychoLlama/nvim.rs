@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::cstr;
 use crate::narrow::as_index;
@@ -15,9 +14,9 @@ use crate::types::Handle;
 use core::ffi::{CStr, c_int, c_uint};
 
 use crate::decoration_provider::decor_provider_invalidate_hl;
-use crate::drawscreen::state::clear_cmdline;
+use crate::drawscreen::state::CLEAR_CMDLINE;
 use crate::highlight::state::{
-    highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, need_highlight_changed,
+    HIGHLIGHT_ATTR, HIGHLIGHT_ATTR_LAST, HIGHLIGHT_STLNC, HIGHLIGHT_USER, NEED_HIGHLIGHT_CHANGED,
 };
 use crate::highlight::{HlAttrFlags, hl_get_ui_attr, syn_attr2entry};
 use crate::message::msg_grid_ref;
@@ -59,12 +58,12 @@ pub(crate) const SG_LINK: c_uint = 8;
 
 /// `HlGroup::rgb_*_idx`: where an RGB colour came from. A non-negative value
 /// is an index into `COLOR_NAMES` instead.
-pub(crate) const kColorIdxNone: c_int = -1;
-pub(crate) const kColorIdxHex: c_int = -2;
-pub(crate) const kColorIdxFg: c_int = -3;
-pub(crate) const kColorIdxBg: c_int = -4;
+pub(crate) const COLOR_IDX_NONE: c_int = -1;
+pub(crate) const COLOR_IDX_HEX: c_int = -2;
+pub(crate) const COLOR_IDX_FG: c_int = -3;
+pub(crate) const COLOR_IDX_BG: c_int = -4;
 
-pub(crate) const e_group_has_settings_highlight_link_ignored: &CStr =
+pub(crate) const E_GROUP_HAS_SETTINGS_HIGHLIGHT_LINK_IGNORED: &CStr =
     c"E414: Group has settings, highlight link ignored";
 
 /// The names `term=`/`cterm=`/`gui=` accept, and the attribute bit each one
@@ -114,7 +113,7 @@ fn combine_stl_hlt(
         // a set of attribute bits at all. The arm is unreachable --
         // `id_alt` is `HLF_SNC`'s final id, and a builtin group always
         // has one -- so this is carried as written rather than fixed.
-        let attr = HlAttrFlags::from_bits(highlight_attr.with(|attrs| attrs[as_index(hlf)]));
+        let attr = HlAttrFlags::from_bits(HIGHLIGHT_ATTR.with(|attrs| attrs[as_index(hlf)]));
         HlGroup {
             cterm: attr,
             gui: attr,
@@ -154,22 +153,22 @@ fn combine_stl_hlt(
     syn_id2attr(scratch)
 }
 
-/// Resolves every builtin group into `highlight_attr[]`, and sets up
+/// Resolves every builtin group into `HIGHLIGHT_ATTR[]`, and sets up
 /// `User1`..`User9`.
 ///
 /// Called when nvim starts and on the first redraw after any `:highlight`.
 pub(crate) fn highlight_changed() {
     // `HLF_MSG`'s blend flag lives on the message grid; acquired once.
     let mut msg_grid = msg_grid_ref();
-    need_highlight_changed.set(false);
+    NEED_HIGHLIGHT_CHANGED.set(false);
 
     // Sentinel: used when no highlight is active.
-    highlight_attr.with_mut(|attrs| attrs[HLF_NONE as usize] = 0);
+    HIGHLIGHT_ATTR.with_mut(|attrs| attrs[HLF_NONE as usize] = 0);
 
     let mut id_s = None;
     let mut id_snc = 0;
     for hlf in 1..HLF_COUNT {
-        let name = hlf_names[as_index(hlf)];
+        let name = HLF_NAMES[as_index(hlf)];
         let id = syn_check_group(name.to_bytes());
         assert!(id != 0, "builtin highlight group {hlf} could not be added");
 
@@ -183,16 +182,16 @@ pub(crate) fn highlight_changed() {
         }
 
         let attr = hl_get_ui_attr(ns_id.get(), hlf, final_id, hlf == HLF_INACTIVE);
-        highlight_attr.with_mut(|attrs| attrs[as_index(hlf)] = attr);
-        if attr == highlight_attr_last.with(|last| last[as_index(hlf)]) {
+        HIGHLIGHT_ATTR.with_mut(|attrs| attrs[as_index(hlf)] = attr);
+        if attr == HIGHLIGHT_ATTR_LAST.with(|last| last[as_index(hlf)]) {
             continue;
         }
         if hlf == HLF_MSG {
-            clear_cmdline.set(true);
+            CLEAR_CMDLINE.set(true);
             msg_grid.blending = syn_attr2entry(attr).hl_blend > -1;
         }
         ui_call_hl_group_set(ApiString::from_cstr(name), Integer::from(attr));
-        highlight_attr_last.with_mut(|last| last[as_index(hlf)] = attr);
+        HIGHLIGHT_ATTR_LAST.with_mut(|last| last[as_index(hlf)] = attr);
     }
 
     // Ten scratch entries, live at once in case the attribute table
@@ -213,8 +212,8 @@ pub(crate) fn highlight_changed() {
                 combine_stl_hlt(id, id_s, id_snc, hlcnt, i, HLF_SNC),
             )
         };
-        highlight_user.with_mut(|table| table[as_index(i)] = user);
-        highlight_stlnc.with_mut(|table| table[as_index(i)] = stlnc);
+        HIGHLIGHT_USER.with_mut(|table| table[as_index(i)] = user);
+        HIGHLIGHT_STLNC.with_mut(|table| table[as_index(i)] = stlnc);
     }
     close_scratch(hlcnt);
 

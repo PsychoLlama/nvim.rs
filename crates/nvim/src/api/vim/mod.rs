@@ -35,7 +35,7 @@ use crate::context::{CTX_ALL, ctx_free, ctx_from_dict, ctx_restore, ctx_save, ct
 use crate::cursor::get_cursor_rel_lnum;
 use crate::decoration::decor_redraw_signs;
 use crate::drawline::use_cursor_line_highlight;
-use crate::drawscreen::state::{must_redraw, redraw_tabline};
+use crate::drawscreen::state::{MUST_REDRAW, REDRAW_TABLINE};
 use crate::drawscreen::{
     UPD_CLEAR, UPD_NOT_VALID, UPD_VALID, redraw_all_later, redraw_buf_later,
     redraw_buf_range_later, redraw_later, setcursor_mayforce, update_screen, win_update_cursorline,
@@ -55,7 +55,7 @@ use crate::grid::{
     win_grid_alloc,
 };
 use crate::highlight::HlAttrs;
-use crate::highlight::state::{ns_hl_fast, ns_hl_global};
+use crate::highlight::state::{NS_HL_FAST, NS_HL_GLOBAL};
 use crate::highlight::{
     dict2hlattrs, highlight_use_hlstate, hl_check_ns, hl_get_attr_by_id, hl_inspect,
     hl_ns_get_attrs, ns_hl_def, win_check_ns_hl,
@@ -116,11 +116,11 @@ use crate::terminal::{
     terminal_check_size, terminal_destroy, terminal_open,
 };
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, BufferHandle, Error, Float, Handle, Integer, LineNr,
-    LuaRef, MessageType, Object, ScreenChar, ScriptId, TabpageHandle, VarNumber, Vv, WindowHandle,
-    kCdScopeGlobal, kErrorTypeException, kErrorTypeValidation, kObjectTypeString,
+    ApiDict, ApiString, Array, Boolean, BufferHandle, CD_SCOPE_GLOBAL, ERROR_TYPE_EXCEPTION,
+    ERROR_TYPE_VALIDATION, Error, Float, Handle, Integer, LineNr, LuaRef, MessageType,
+    OBJECT_TYPE_STRING, Object, ScreenChar, ScriptId, TabpageHandle, VarNumber, Vv, WindowHandle,
 };
-use crate::ui::state::Columns;
+use crate::ui::state::COLUMNS;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};
 use crate::winlayer::graph::cmdwin_buf;

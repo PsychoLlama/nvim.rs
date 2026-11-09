@@ -81,7 +81,7 @@ pub fn nvim_echo(
         if !is_progress && has_progress_keys {
             let kind = msg_cstr_opt(kind);
             Some(api_error!(
-                kErrorTypeValidation,
+                ERROR_TYPE_VALIDATION,
                 "Conflict: title/source/status/percent/data not allowed with kind='{kind}'"
             ))
         } else if is_progress && !status_named(status.clone()) {
@@ -94,7 +94,7 @@ pub fn nvim_echo(
             Some(err_required(c"opts.source"))
         } else {
             let unknown = echo_id.filter(|&id| !msg_id_exists(id));
-            unknown.map(|id| api_error!(kErrorTypeValidation, "Invalid 'id': {id}"))
+            unknown.map(|id| api_error!(ERROR_TYPE_VALIDATION, "Invalid 'id': {id}"))
         }
     };
     if let Some(error) = rejection {

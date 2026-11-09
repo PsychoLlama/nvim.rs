@@ -23,9 +23,9 @@ use crate::buffer::GETF_ALT;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::keycodes::{
-    Ctrl__, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_I, Ctrl_J, Ctrl_K,
-    Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_V, Ctrl_W,
-    Ctrl_X, Ctrl_Z, NotAKey, SpecialKey,
+    CTRL_, CTRL_B, CTRL_C, CTRL_D, CTRL_F, CTRL_G, CTRL_H, CTRL_HAT, CTRL_I, CTRL_J, CTRL_K,
+    CTRL_L, CTRL_N, CTRL_O, CTRL_P, CTRL_Q, CTRL_R, CTRL_RSB, CTRL_S, CTRL_T, CTRL_V, CTRL_W,
+    CTRL_X, CTRL_Z, NotAKey, SpecialKey,
 };
 use crate::narrow::as_index;
 use crate::narrow::number_as_int;
@@ -67,8 +67,8 @@ use crate::search::find_pattern_in_path;
 use crate::tag::state::{g_do_tagpreview, postponed_split};
 use crate::tr_c;
 use crate::types::{Failed, LineNr, WinConfig};
-use crate::ui::state::kUIMultigrid;
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::UI_MULTIGRID;
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::ui_has;
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
 use crate::winlayer::graph::{cmdwin_type, firstwin, lastwin};
@@ -138,7 +138,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
     };
     match SpecialKey::try_from(nchar) {
         // split the current window in two parts, horizontally
-        Err(NotAKey(SPLIT | SPLIT_ALT | Ctrl_S)) => {
+        Err(NotAKey(SPLIT | SPLIT_ALT | CTRL_S)) => {
             if in_cmdwin() {
                 return;
             }
@@ -146,7 +146,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             split_or_new(nchar, prenum, 0);
         }
         // split the current window in two parts, vertically
-        Err(NotAKey(VSPLIT | Ctrl_V)) => {
+        Err(NotAKey(VSPLIT | CTRL_V)) => {
             if in_cmdwin() {
                 return;
             }
@@ -154,7 +154,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             split_or_new(nchar, prenum, WSP_VERT);
         }
         // split the current window and edit the alternate file
-        Err(NotAKey(ALTFILE | Ctrl_HAT)) => {
+        Err(NotAKey(ALTFILE | CTRL_HAT)) => {
             if in_cmdwin() {
                 return;
             }
@@ -162,7 +162,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             split_alternate(prenum);
         }
         // open a new window
-        Err(NotAKey(NEW | Ctrl_N)) => {
+        Err(NotAKey(NEW | CTRL_N)) => {
             if in_cmdwin() {
                 return;
             }
@@ -170,17 +170,17 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             new_window(nchar, prenum);
         }
         // quit the current window
-        Err(NotAKey(QUIT | Ctrl_Q)) => {
+        Err(NotAKey(QUIT | CTRL_Q)) => {
             reset_visual_and_resel();
             run_with_count(c"quit", prenum);
         }
         // close the current window
-        Err(NotAKey(CLOSE | Ctrl_C)) => {
+        Err(NotAKey(CLOSE | CTRL_C)) => {
             reset_visual_and_resel();
             run_with_count(c"close", prenum);
         }
         // close the preview window
-        Err(NotAKey(PCLOSE | Ctrl_Z)) => {
+        Err(NotAKey(PCLOSE | CTRL_Z)) => {
             if in_cmdwin() {
                 return;
             }
@@ -195,7 +195,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             Some(wp) => goto_win(wp),
         },
         // close all but the current window
-        Err(NotAKey(ONLY | Ctrl_O)) => {
+        Err(NotAKey(ONLY | CTRL_O)) => {
             if in_cmdwin() {
                 return;
             }
@@ -203,28 +203,28 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             run_with_count(c"only", prenum);
         }
         // cursor to the next ('w') or previous ('W') window, wrapping around
-        Err(NotAKey(NEXT | Ctrl_W | PREV)) => {
+        Err(NotAKey(NEXT | CTRL_W | PREV)) => {
             if !in_cmdwin() {
                 cycle_windows(nchar, prenum);
             }
         }
         // cursor to the window below, above, left or right
-        Ok(SpecialKey::Down) | Err(NotAKey(DOWN | Ctrl_J)) => {
+        Ok(SpecialKey::Down) | Err(NotAKey(DOWN | CTRL_J)) => {
             if !in_cmdwin() {
                 goto_ver(false, prenum1);
             }
         }
-        Ok(SpecialKey::Up) | Err(NotAKey(UP | Ctrl_K)) => {
+        Ok(SpecialKey::Up) | Err(NotAKey(UP | CTRL_K)) => {
             if !in_cmdwin() {
                 goto_ver(true, prenum1);
             }
         }
-        Ok(SpecialKey::Left | SpecialKey::Bs) | Err(NotAKey(LEFT | Ctrl_H)) => {
+        Ok(SpecialKey::Left | SpecialKey::Bs) | Err(NotAKey(LEFT | CTRL_H)) => {
             if !in_cmdwin() {
                 goto_hor(true, prenum1);
             }
         }
-        Ok(SpecialKey::Right) | Err(NotAKey(RIGHT | Ctrl_L)) => {
+        Ok(SpecialKey::Right) | Err(NotAKey(RIGHT | CTRL_L)) => {
             if !in_cmdwin() {
                 goto_hor(false, prenum1);
             }
@@ -236,13 +236,13 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             }
         }
         // cursor to the top-left window
-        Err(NotAKey(TOP | Ctrl_T)) => goto_win(first_win()),
+        Err(NotAKey(TOP | CTRL_T)) => goto_win(first_win()),
         // cursor to the bottom-right window
-        Err(NotAKey(BOTTOM | Ctrl_B)) => goto_win(lastwin_nofloating(None)),
+        Err(NotAKey(BOTTOM | CTRL_B)) => goto_win(lastwin_nofloating(None)),
         // cursor to the last accessed (previous) window. Upstream tests the
         // configuration without asking whether the window floats, unlike
         // [`focusable`] below.
-        Err(NotAKey(LAST_USED | Ctrl_P)) => {
+        Err(NotAKey(LAST_USED | CTRL_P)) => {
             let prev = prev_window().filter(|wp| !wp.w_config.hide && wp.w_config.focusable);
             match prev {
                 None => beep(),
@@ -250,13 +250,13 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             }
         }
         // exchange the current and the next window
-        Err(NotAKey(EXCHANGE | Ctrl_X)) => {
+        Err(NotAKey(EXCHANGE | CTRL_X)) => {
             if !in_cmdwin() {
                 exchange(prenum);
             }
         }
         // rotate the windows downwards ('r') or upwards ('R')
-        Err(NotAKey(ROTATE_DOWN | Ctrl_R)) => {
+        Err(NotAKey(ROTATE_DOWN | CTRL_R)) => {
             if in_cmdwin() {
                 return;
             }
@@ -291,11 +291,11 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
         // increase, decrease or set the current window's height
         Err(NotAKey(TALLER)) => setheight_win(Win::current().w_height + prenum1, Win::current()),
         Err(NotAKey(SHORTER)) => setheight_win(Win::current().w_height - prenum1, Win::current()),
-        Err(NotAKey(SET_HEIGHT | Ctrl__)) => {
+        Err(NotAKey(SET_HEIGHT | CTRL_)) => {
             let height = if prenum != 0 {
                 prenum
             } else {
-                Rows.get() - number_as_int(min_set_ch.get())
+                ROWS.get() - number_as_int(min_set_ch.get())
             };
             setheight_win(height, Win::current());
         }
@@ -303,7 +303,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
         Err(NotAKey(WIDER)) => setwidth_win(Win::current().w_width + prenum1, Win::current()),
         Err(NotAKey(NARROWER)) => setwidth_win(Win::current().w_width - prenum1, Win::current()),
         Err(NotAKey(SET_WIDTH)) => {
-            let width = if prenum != 0 { prenum } else { Columns.get() };
+            let width = if prenum != 0 { prenum } else { COLUMNS.get() };
             setwidth_win(width, Win::current());
         }
         // jump to the tag under the cursor in a new window, '}' putting it in
@@ -315,25 +315,25 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             g_do_tagpreview.set(tagpreview_height(prenum));
             jump_to_tag(nchar, prenum);
         }
-        Err(NotAKey(TAG_SPLIT | Ctrl_RSB)) => {
+        Err(NotAKey(TAG_SPLIT | CTRL_RSB)) => {
             if !in_cmdwin() {
                 jump_to_tag(nchar, prenum);
             }
         }
         // edit the file name under the cursor in a new window
-        Err(NotAKey(FILE | FILE_LINE | Ctrl_F)) => {
+        Err(NotAKey(FILE | FILE_LINE | CTRL_F)) => {
             if !in_cmdwin() {
                 goto_file(nchar, prenum1);
             }
         }
         // go to the first occurrence of the identifier under the cursor along
         // 'path', in a new window: any match, or the definition
-        Err(NotAKey(IDENT_ANY | Ctrl_I)) => {
+        Err(NotAKey(IDENT_ANY | CTRL_I)) => {
             if !in_cmdwin() {
                 find_in_path(FIND_ANY, prenum, prenum1);
             }
         }
-        Err(NotAKey(IDENT_DEFINE | Ctrl_D)) => {
+        Err(NotAKey(IDENT_DEFINE | CTRL_D)) => {
             if !in_cmdwin() {
                 find_in_path(FIND_DEFINE, prenum, prenum1);
             }
@@ -345,7 +345,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             }
         }
         // CTRL-W g: the extended commands
-        Err(NotAKey(EXTENDED | Ctrl_G)) => {
+        Err(NotAKey(EXTENDED | CTRL_G)) => {
             if !in_cmdwin() {
                 window_g_command(prenum, prenum1, xchar);
             }
@@ -392,7 +392,7 @@ fn new_window(nchar: c_int, prenum: c_int) {
     if prenum != 0 {
         cmd.extend_from_slice(prenum.to_string().as_bytes()); // window height
     }
-    if nchar == c_int::from(b'v') || nchar == Ctrl_V {
+    if nchar == c_int::from(b'v') || nchar == CTRL_V {
         cmd.push(b'v');
     }
     cmd.extend_from_slice(b"new");
@@ -536,7 +536,7 @@ fn jump_to_tag(nchar: c_int, prenum: c_int) {
         g_do_tagpreview.set(0);
     }
     // Execute the command right here, which "wincmd ]" in a function needs.
-    do_ident(Ctrl_RSB, NUL);
+    do_ident(CTRL_RSB, NUL);
     postponed_split.set(0);
 }
 
@@ -606,9 +606,9 @@ fn window_g_command(prenum: c_int, prenum1: c_int, xchar: c_int) {
         // CTRL-W g}: jump to the tag in the preview window
         TAG_PREVIEW => {
             g_do_tagpreview.set(tagpreview_height(prenum));
-            g_jump_to_tag(prenum, Ctrl_RSB);
+            g_jump_to_tag(prenum, CTRL_RSB);
         }
-        TAG_SPLIT | Ctrl_RSB => g_jump_to_tag(prenum, xchar),
+        TAG_SPLIT | CTRL_RSB => g_jump_to_tag(prenum, xchar),
         // CTRL-W gf / gF: "gf" or "gF" in a new tab page
         FILE | FILE_LINE => {
             cmdmod.with_mut(|m| m.cmod_tab = tab_index(TabPage::current()) + 1);
@@ -638,7 +638,7 @@ fn g_jump_to_tag(prenum: c_int, xchar: c_int) {
 
 /// CTRL-W ge -- hand the current window to the UI as an external window.
 fn detach_window() {
-    if Win::current().w_floating || !ui_has(kUIMultigrid) {
+    if Win::current().w_floating || !ui_has(UI_MULTIGRID) {
         beep();
         return;
     }

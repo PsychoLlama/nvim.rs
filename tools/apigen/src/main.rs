@@ -876,17 +876,17 @@ fn parse_spec(path: &Path) -> Result<Vec<Spec>, String> {
 /// The `kObjectType*` constant an `ApiType` arrives tagged with.
 fn object_tag(ty: &ApiType) -> &'static str {
     match ty {
-        ApiType::Boolean => "kObjectTypeBoolean",
-        ApiType::Integer => "kObjectTypeInteger",
-        ApiType::Float => "kObjectTypeFloat",
-        ApiType::String => "kObjectTypeString",
-        ApiType::Array => "kObjectTypeArray",
-        ApiType::Dict | ApiType::KeyDict(_) => "kObjectTypeDict",
-        ApiType::Object => "kObjectTypeNil",
-        ApiType::LuaRef => "kObjectTypeLuaRef",
-        ApiType::Handle("Buffer") => "kObjectTypeBuffer",
-        ApiType::Handle("Window") => "kObjectTypeWindow",
-        ApiType::Handle(_) => "kObjectTypeTabpage",
+        ApiType::Boolean => "OBJECT_TYPE_BOOLEAN",
+        ApiType::Integer => "OBJECT_TYPE_INTEGER",
+        ApiType::Float => "OBJECT_TYPE_FLOAT",
+        ApiType::String => "OBJECT_TYPE_STRING",
+        ApiType::Array => "OBJECT_TYPE_ARRAY",
+        ApiType::Dict | ApiType::KeyDict(_) => "OBJECT_TYPE_DICT",
+        ApiType::Object => "OBJECT_TYPE_NIL",
+        ApiType::LuaRef => "OBJECT_TYPE_LUA_REF",
+        ApiType::Handle("Buffer") => "OBJECT_TYPE_BUFFER",
+        ApiType::Handle("Window") => "OBJECT_TYPE_WINDOW",
+        ApiType::Handle(_) => "OBJECT_TYPE_TABPAGE",
     }
 }
 
@@ -1314,7 +1314,7 @@ fn log_invoke(handler: &'static CStr, method: &CStr, line: u32, channel_id: uint
 /// Refuses a call that arrived with the wrong number of arguments.
 fn wrong_arity(expected: usize, got: usize) -> Error {
     api_error!(
-        kErrorTypeException,
+        ERROR_TYPE_EXCEPTION,
         "Wrong number of arguments: expecting {expected} but got {got}"
     )
 }
@@ -1324,7 +1324,7 @@ fn wrong_arity(expected: usize, got: usize) -> Error {
 fn wrong_type(slot: usize, func: &CStr, expected: &CStr) -> Error {
     let (func, expected) = (msg_cstr(func), msg_cstr(expected));
     api_error!(
-        kErrorTypeException,
+        ERROR_TYPE_EXCEPTION,
         "Wrong type for argument {slot} when calling {func}, expecting {expected}"
     )
 }
@@ -1486,7 +1486,7 @@ fn read_keydict<K: KeySet + Default>(item: Object) -> KeySetArg<K> {
         r#"
 /// Refuses a call made while the text is locked.
 fn text_locked_error() -> Error {
-    Error::from_message(kErrorTypeException, get_text_locked_msg())
+    Error::from_message(ERROR_TYPE_EXCEPTION, get_text_locked_msg())
 }
 "#,
     ),
@@ -1496,7 +1496,7 @@ fn text_locked_error() -> Error {
 /// Refuses a call made from an expression mapping, which the cmdline window
 /// alone would have allowed.
 fn expr_map_locked_error() -> Error {
-    Error::from_message(kErrorTypeException, E_TEXTLOCK)
+    Error::from_message(ERROR_TYPE_EXCEPTION, E_TEXTLOCK)
 }
 "#,
     ),
@@ -1506,19 +1506,19 @@ fn expr_map_locked_error() -> Error {
 /// emitted: an unused one is a `dead_code` warning, and the dev shell builds
 /// with `-D warnings`.
 const KNOWN: &[(&str, &str, &str)] = &[
-    ("kErrorTypeNone", "ErrorType", "-1"),
-    ("kErrorTypeException", "ErrorType", "0"),
-    ("kObjectTypeNil", "ObjectType", "0"),
-    ("kObjectTypeBoolean", "ObjectType", "1"),
-    ("kObjectTypeInteger", "ObjectType", "2"),
-    ("kObjectTypeFloat", "ObjectType", "3"),
-    ("kObjectTypeString", "ObjectType", "4"),
-    ("kObjectTypeArray", "ObjectType", "5"),
-    ("kObjectTypeDict", "ObjectType", "6"),
-    ("kObjectTypeLuaRef", "ObjectType", "7"),
-    ("kObjectTypeBuffer", "ObjectType", "8"),
-    ("kObjectTypeWindow", "ObjectType", "9"),
-    ("kObjectTypeTabpage", "ObjectType", "10"),
+    ("ERROR_TYPE_NONE", "ErrorType", "-1"),
+    ("ERROR_TYPE_EXCEPTION", "ErrorType", "0"),
+    ("OBJECT_TYPE_NIL", "ObjectType", "0"),
+    ("OBJECT_TYPE_BOOLEAN", "ObjectType", "1"),
+    ("OBJECT_TYPE_INTEGER", "ObjectType", "2"),
+    ("OBJECT_TYPE_FLOAT", "ObjectType", "3"),
+    ("OBJECT_TYPE_STRING", "ObjectType", "4"),
+    ("OBJECT_TYPE_ARRAY", "ObjectType", "5"),
+    ("OBJECT_TYPE_DICT", "ObjectType", "6"),
+    ("OBJECT_TYPE_LUA_REF", "ObjectType", "7"),
+    ("OBJECT_TYPE_BUFFER", "ObjectType", "8"),
+    ("OBJECT_TYPE_WINDOW", "ObjectType", "9"),
+    ("OBJECT_TYPE_TABPAGE", "ObjectType", "10"),
     ("LOGLVL_DBG", "c_int", "1"),
 ];
 
@@ -1555,7 +1555,7 @@ fn keyset_use(referenced: &BTreeSet<String>) -> Option<String> {
 
 /// Every identifier-shaped token in `text`, so "is this referenced?" is an
 /// exact-name question rather than a substring one (`Integer` must not match
-/// inside `kObjectTypeInteger`).
+/// inside `OBJECT_TYPE_INTEGER`).
 fn idents(text: &str) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     let mut cur = String::new();
@@ -1917,7 +1917,7 @@ pub fn msgpack_rpc_get_handler_for(name: &[u8]) -> Result<MsgpackRpcRequestHandl
         name
     };
     let text = msg_bytes(text);
-    Err(api_error!(kErrorTypeException, "Invalid method: {text}"))
+    Err(api_error!(ERROR_TYPE_EXCEPTION, "Invalid method: {text}"))
 }
 "#;
 
@@ -2179,7 +2179,7 @@ fn generate_tables(
 /// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
 /// unreachable from outside the crate and `unreachable_pub` says so.
 mod known {{
-    pub(crate) use crate::types::kErrorTypeException;
+    pub(crate) use crate::types::ERROR_TYPE_EXCEPTION;
 }}
 
 use known::*;
@@ -2974,7 +2974,7 @@ fn byte_strings(expr: &syn::Expr, out: &mut Vec<String>) {
 }
 
 /// The `ui_options` the metadata advertises: the externalisable UI features,
-/// read off `ui_ext_names` — the table `nvim_ui_attach` validates its options
+/// read off `UI_EXT_NAMES` — the table `nvim_ui_attach` validates its options
 /// against, so a new one cannot be added without the metadata following.
 /// `rgb` leads, and is not in the table because it is not an extension. Names
 /// that open with an underscore are the tree's own debugging switches and stay
@@ -2989,7 +2989,7 @@ fn read_ui_options(root: &Path) -> Result<Vec<String>, String> {
         let syn::Item::Static(item) = item else {
             continue;
         };
-        if item.ident != "ui_ext_names" {
+        if item.ident != "UI_EXT_NAMES" {
             continue;
         }
         found = true;
@@ -3001,7 +3001,7 @@ fn read_ui_options(root: &Path) -> Result<Vec<String>, String> {
         );
     }
     if !found {
-        return Err(format!("{}: no ui_ext_names table", path.display()));
+        return Err(format!("{}: no UI_EXT_NAMES table", path.display()));
     }
     Ok(names)
 }
@@ -3260,7 +3260,7 @@ const METADATA_HEADER: &str = r#"//! The API metadata blob.
 //! discover the API rather than hard-code it.
 //!
 //! Generated by tools/apigen from tools/apigen/functions.txt, the API
-//! signatures, tools/apigen/metadata.txt and the tree's own `ui_ext_names`
+//! signatures, tools/apigen/metadata.txt and the tree's own `UI_EXT_NAMES`
 //! and `NVIM_VERSION_*`. Do not edit: run `just apigen`.
 #![forbid(unsafe_code)]
 #![deny(

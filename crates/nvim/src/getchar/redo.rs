@@ -296,8 +296,8 @@ pub fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
         set_visual_anchor(Win::current().w_cursor);
         set_visual_active(true);
         set_visual_select(false);
-        VIsual_reselect.set(1);
-        redo_VIsual_busy.set(true);
+        V_ISUAL_RESELECT.set(1);
+        REDO_V_ISUAL_BUSY.set(true);
         c = redo.next_char();
     }
 

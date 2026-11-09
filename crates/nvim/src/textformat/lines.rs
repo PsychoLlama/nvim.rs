@@ -52,7 +52,7 @@ use crate::optionstr::OptString;
 use crate::os::input::line_breakcheck;
 use crate::os::libc::size_t;
 use crate::search::check_linecomment;
-use crate::state::mode::{State, saved_cursor};
+use crate::state::mode::{SAVED_CURSOR, STATE};
 use crate::state::{MODE_INSERT, MODE_NORMAL};
 use crate::types::{CmdModFlags, ColNr, LineNr, VarNumber, Vv};
 use crate::ui::ui_cursor_shape;
@@ -81,7 +81,7 @@ pub(crate) fn op_format(op: &OpArg, keep_cursor: bool) {
         Buf::current().b_op_start = op.start;
     }
     if keep_cursor {
-        saved_cursor.set(op.cursor_start);
+        SAVED_CURSOR.set(op.cursor_start);
     }
 
     format_lines(LineNr::new(op.line_count), keep_cursor);
@@ -101,8 +101,8 @@ pub(crate) fn op_format(op: &OpArg, keep_cursor: bool) {
         Buf::current().b_op_end = Win::current().w_cursor;
     }
     if keep_cursor {
-        Win::current().w_cursor = saved_cursor.get();
-        saved_cursor.set(saved_cursor.get().with_lnum(LineNr::ZERO));
+        Win::current().w_cursor = SAVED_CURSOR.get();
+        SAVED_CURSOR.set(SAVED_CURSOR.get().with_lnum(LineNr::ZERO));
         // Formatting may have made the position invalid.
         check_cursor(Win::current());
     }
@@ -237,7 +237,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
     let mut need_set_indent = true;
     let first_line = Win::current().w_cursor.lnum;
     let mut force_format = false;
-    let old_state = State.get();
+    let old_state = STATE.get();
 
     // The length at which a line is formatted whether or not the
     // paragraph has ended: 3 * 'textwidth'.
@@ -355,14 +355,14 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 }
 
                 // Put the cursor on the last non-space.
-                State.set(MODE_NORMAL); // don't go past end-of-line
+                STATE.set(MODE_NORMAL); // don't go past end-of-line
                 coladvance(Win::current(), ColNr::MAX);
                 while Win::current().w_cursor.col != ColNr::ZERO && ascii_isspace(gchar_cursor()) {
                     dec_cursor();
                 }
 
                 // Format, without 'showmode'.
-                State.set(MODE_INSERT); // for open_line()
+                STATE.set(MODE_INSERT); // for open_line()
                 let smd_save = p_smd();
                 P_SMD.set(false);
                 insertchar(
@@ -377,7 +377,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                         + if avoid_fex { INSCHAR_NO_FEX } else { 0 },
                     second_indent,
                 );
-                State.set(old_state);
+                STATE.set(old_state);
                 P_SMD.set(smd_save);
                 // `insertchar` can have run `:normal`, which updates the
                 // cursor shape; put it back.

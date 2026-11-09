@@ -16,7 +16,7 @@
 use super::*;
 use crate::ascii::NUL;
 use crate::guard::{Allow, Suppress};
-use crate::keycodes::Ctrl_C;
+use crate::keycodes::CTRL_C;
 use crate::keycodes::ModMask;
 use crate::mbyte::{char_at, cluster_len};
 use crate::types::Key;
@@ -56,7 +56,7 @@ pub fn do_dialog(
         return dfltbutton;
     }
 
-    let old_state = State.get();
+    let old_state = STATE.get();
     // If the dialog prompts for input, the user needs to see it.
     let loud = Allow::messages();
     // We wait for a keypress, so don't make the user press RETURN as well.
@@ -82,7 +82,7 @@ pub fn do_dialog(
                 retval = dfltbutton;
                 break;
             }
-            Ctrl_C | ESC => {
+            CTRL_C | ESC => {
                 // User aborts/cancels.
                 retval = 0;
                 break;
@@ -118,7 +118,7 @@ pub fn do_dialog(
     CONFIRM_MSG.set(None);
 
     drop(loud);
-    State.set(old_state);
+    STATE.set(old_state);
     setmouse();
     drop(no_prompt);
     msg_end_prompt();
@@ -233,7 +233,7 @@ fn msg_show_console_dialog(message: &[u8], buttons: &[u8], dfltbutton: c_int) ->
     // With `ext_messages` the UI puts the message where it likes, so the
     // blank lines that separate it from the buttons are left out.
     let mut text = Vec::with_capacity(message.len() + 2);
-    let framed = !ui_has(kUIMessages);
+    let framed = !ui_has(UI_MESSAGES);
     if framed {
         text.push(b'\n');
     }

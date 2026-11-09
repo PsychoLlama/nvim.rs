@@ -34,7 +34,7 @@ use crate::ex_docmd::{exec_normal_cmd, restore_current_state, save_current_state
 use crate::getchar::ins_typebuf;
 use crate::normal::{VisualMode, set_visual_active, set_visual_anchor, set_visual_mode};
 use crate::runtime::state::current_sctx;
-use crate::state::mode::{State, VIsual_reselect, restart_edit};
+use crate::state::mode::{RESTART_EDIT, STATE, V_ISUAL_RESELECT};
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_TERMINAL, MODE_VISUAL, get_real_state};
 use crate::types::{Buffer, ColNr, ExArg, Failed, LineNr, Pos};
 use crate::winlayer::Win;
@@ -58,15 +58,15 @@ pub(crate) fn range_of(excmd: &ExArg) -> Range {
 pub(crate) fn execute_menu(range: Range, menu: MenuId, mode_idx: c_int) {
     let mut idx = mode_idx;
     if idx < 0 {
-        idx = if State.get() & MODE_TERMINAL != 0 {
+        idx = if STATE.get() & MODE_TERMINAL != 0 {
             MENU_INDEX_TERMINAL
-        } else if State.get() & MODE_CMDLINE != 0 {
+        } else if STATE.get() & MODE_CMDLINE != 0 {
             MENU_INDEX_CMDLINE
         } else if real_state() & MODE_VISUAL != 0 {
             // Really in Visual mode: no guessing needed, the selection is
             // whatever is selected.
             MENU_INDEX_VISUAL
-        } else if (State.get() & MODE_INSERT != 0 || !restart_edit.get().is_nul())
+        } else if (STATE.get() & MODE_INSERT != 0 || !RESTART_EDIT.get().is_nul())
             && script_id() == 0
         {
             // Use the Insert mode entry when returning to Insert mode. A
@@ -142,7 +142,7 @@ fn select_range(line1: LineNr, line2: LineNr) {
     };
 
     set_visual_active(true);
-    VIsual_reselect.set(1);
+    V_ISUAL_RESELECT.set(1);
     check_cursor_now();
     set_visual_anchor(Win::current().w_cursor);
     Win::current().w_cursor = end;

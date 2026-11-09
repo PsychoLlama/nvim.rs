@@ -451,7 +451,7 @@ fn grid_char_needs_redraw(
         && ((chars[at] != on_grid.chars[at]
             || attrs[at] != on_grid.attrs[at]
             || (cols > 1 && chars[at + 1] == 0 && chars[at + 1] != on_grid.chars[at + 1]))
-            || exmode_active.get() // TODO(bfredl): what in the actual fuck
+            || EXMODE_ACTIVE.get() // TODO(bfredl): what in the actual fuck
             || RDB_FLAGS.get() & kOptRdbFlagNodelta != 0)
 }
 

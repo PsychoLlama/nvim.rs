@@ -1,6 +1,5 @@
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -21,7 +20,7 @@
 pub(crate) mod mode;
 use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
-use crate::keycodes::{Ctrl_V, SpecialKey, get_special_key_name};
+use crate::keycodes::{CTRL_V, SpecialKey, get_special_key_name};
 use crate::memory::XString;
 use crate::types::Key;
 use crate::winlayer::Buf;
@@ -29,7 +28,7 @@ use core::ffi::{CStr, c_int};
 
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::debugger::state::debug_mode;
-use crate::drawscreen::state::must_redraw;
+use crate::drawscreen::state::MUST_REDRAW;
 use crate::drawscreen::{setcursor, update_screen};
 use crate::edit::{InsertState, insert_check, insert_execute};
 use crate::eval::{get_v_event, restore_v_event};
@@ -58,8 +57,8 @@ use crate::os::input::{
     InputEvents, input_available, input_get, main_loop_has_events, os_breakcheck,
 };
 use crate::state::mode::{
-    State, exmode_active, finish_op, last_mode, motion_force, restart_VIsual_select, restart_edit,
-    virtual_op,
+    EXMODE_ACTIVE, FINISH_OP, LAST_MODE, MOTION_FORCE, RESTART_EDIT, RESTART_V_ISUAL_SELECT, STATE,
+    VIRTUAL_OP,
 };
 use crate::terminal::{TerminalState, terminal_check, terminal_execute};
 use crate::types::{Direction, SaveVEvent};
@@ -234,7 +233,7 @@ fn next_key() -> Key {
             return Key::from(SpecialKey::Event);
         }
         // Nothing to do but wait, so show what has been decided first.
-        if must_redraw.get() != 0 && !NEED_WAIT_RETURN.get() && State.get() & MODE_CMDLINE == 0 {
+        if MUST_REDRAW.get() != 0 && !NEED_WAIT_RETURN.get() && STATE.get() & MODE_CMDLINE == 0 {
             let _ = update_screen();
             setcursor();
         }
@@ -265,14 +264,14 @@ pub fn state_handle_k_event() {
 /// Whether the cursor may sit where there is no character, in `window`.
 pub(crate) fn virtual_active(window: Win) -> bool {
     // Inside an operator, the operator's own answer stands.
-    if let Some(active) = virtual_op.get() {
+    if let Some(active) = VIRTUAL_OP.get() {
         return active;
     }
-    if State.get() & MODE_TERMINAL != 0 {
+    if STATE.get() & MODE_TERMINAL != 0 {
         return true;
     }
     let flags = get_ve_flags(window);
-    ve_flags_allow(flags, State.get(), visual_active(), visual_mode().raw())
+    ve_flags_allow(flags, STATE.get(), visual_active(), visual_mode().raw())
 }
 
 /// The `'virtualedit'` half of [`virtual_active`], as a function of the
@@ -290,7 +289,7 @@ fn ve_flags_allow(
 ) -> bool {
     let has = |flag: OptVeFlags| flags & flag != 0;
     flags == kOptVeFlagAll
-        || has(kOptVeFlagBlock) && visual_active && visual_mode == Ctrl_V
+        || has(kOptVeFlagBlock) && visual_active && visual_mode == CTRL_V
         || has(kOptVeFlagInsert) && state & MODE_INSERT != 0
 }
 
@@ -298,10 +297,10 @@ fn ve_flags_allow(
 /// does not carry.
 pub(crate) fn get_real_state() -> c_int {
     real_state(
-        State.get(),
+        STATE.get(),
         visual_active(),
         visual_select(),
-        finish_op.get(),
+        FINISH_OP.get(),
     )
 }
 
@@ -474,23 +473,23 @@ fn mode_name(m: &ModeInputs) -> ModeName {
 
 /// The current mode as `mode(1)` spells it.
 pub fn get_mode() -> ModeName {
-    let state = State.get();
+    let state = STATE.get();
     let in_cmdline = state & MODE_CMDLINE != 0;
     mode_name(&ModeInputs {
         state,
         cmdline_one_key: in_cmdline && Cc::current().one_key(),
         cmdline_overstrike: in_cmdline && cmdline_overstrike(),
-        exmode_active: exmode_active.get(),
+        exmode_active: EXMODE_ACTIVE.get(),
         ins_compl_active: ins_compl_active(),
         ctrl_x_pending: ctrl_x_mode_not_defined_yet(),
         visual_active: visual_active(),
         visual_select: visual_select(),
         visual_mode: visual_mode().raw(),
-        restart_visual_select: restart_VIsual_select.get() != 0,
+        restart_visual_select: RESTART_V_ISUAL_SELECT.get() != 0,
         terminal_buffer: !Buf::current().terminal.is_null(),
-        finish_op: finish_op.get(),
-        motion_force: motion_force.get(),
-        restart_edit: restart_edit.get(),
+        finish_op: FINISH_OP.get(),
+        motion_force: MOTION_FORCE.get(),
+        restart_edit: RESTART_EDIT.get(),
     })
 }
 
@@ -514,7 +513,7 @@ pub fn may_trigger_modechanged() {
     if !has_event(AutoEvent::ModeChanged) || GOT_INT.get() {
         return;
     }
-    let old_mode = last_mode.get();
+    let old_mode = LAST_MODE.get();
     let curr_mode = get_mode();
     if letters(&old_mode) == letters(&curr_mode) {
         return;
@@ -540,12 +539,12 @@ pub fn may_trigger_modechanged() {
         false,
         buf,
     );
-    last_mode.set(curr_mode);
+    LAST_MODE.set(curr_mode);
     restore_v_event(v_event, &mut save_v_event);
 }
 
 /// Whether `SafeState` has been announced and not yet withdrawn.
-static was_safe: GlobalCell<bool> = GlobalCell::new(false);
+static WAS_SAFE: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Nothing is pending that would make running arbitrary code surprising.
 fn is_safe_now() -> bool {
@@ -560,7 +559,7 @@ fn is_safe_now() -> bool {
 /// half of the answer: it knows whether *it* is in the middle of something.
 pub fn may_trigger_safestate(safe: bool) {
     let is_safe = safe && is_safe_now();
-    if was_safe.get() != is_safe {
+    if WAS_SAFE.get() != is_safe {
         let what = if is_safe {
             c"SafeState: Start triggering"
         } else {
@@ -574,12 +573,12 @@ pub fn may_trigger_safestate(safe: bool) {
         let buf = Buf::current_or_none();
         apply_autocmds(AutoEvent::SafeState, None, None, false, buf);
     }
-    was_safe.set(is_safe);
+    WAS_SAFE.set(is_safe);
 }
 
 /// Withdraw `SafeState`: something is pending again. `reason` is logged.
 pub(crate) fn state_no_longer_safe(reason: Option<&CStr>) {
-    if was_safe.get()
+    if WAS_SAFE.get()
         && let Some(reason) = reason
     {
         logmsg!(
@@ -590,12 +589,12 @@ pub(crate) fn state_no_longer_safe(reason: Option<&CStr>) {
             reason.to_string_lossy()
         );
     }
-    was_safe.set(false);
+    WAS_SAFE.set(false);
 }
 
 /// Whether `SafeState` currently stands. Read by `state()`.
 pub fn get_was_safe_state() -> bool {
-    was_safe.get()
+    WAS_SAFE.get()
 }
 
 #[cfg(test)]
@@ -657,7 +656,7 @@ mod tests {
         out.push(b'n');
         out.push_key(c_int::from(b'o'));
         // `CTRL-V` is 22, and `motion_force` may hold it.
-        out.push_key(Ctrl_V);
+        out.push_key(CTRL_V);
         assert_eq!(out.name, [110, 111, 22, 0]);
     }
 
@@ -708,15 +707,15 @@ mod tests {
         let all_onemore = kOptVeFlagAll | kOptVeFlagOnemore;
         assert!(ve_flags_allow(kOptVeFlagAll, MODE_NORMAL, false, 0));
         assert!(!ve_flags_allow(all_onemore, MODE_NORMAL, false, 0));
-        assert!(!ve_flags_allow(all_onemore, MODE_NORMAL, true, Ctrl_V - 1));
-        assert!(ve_flags_allow(all_onemore, MODE_NORMAL, true, Ctrl_V));
+        assert!(!ve_flags_allow(all_onemore, MODE_NORMAL, true, CTRL_V - 1));
+        assert!(ve_flags_allow(all_onemore, MODE_NORMAL, true, CTRL_V));
         assert!(ve_flags_allow(all_onemore, MODE_INSERT, false, 0));
         // `onemore` alone shares no bit with any of the three.
         assert!(!ve_flags_allow(
             kOptVeFlagOnemore,
             MODE_INSERT,
             true,
-            Ctrl_V
+            CTRL_V
         ));
     }
 
@@ -725,7 +724,7 @@ mod tests {
     fn ve_block_and_insert_need_their_mode() {
         assert!(!ve_flags_allow(kOptVeFlagBlock, MODE_NORMAL, false, 0));
         assert!(!ve_flags_allow(kOptVeFlagBlock, MODE_NORMAL, true, 0));
-        assert!(ve_flags_allow(kOptVeFlagBlock, MODE_NORMAL, true, Ctrl_V));
+        assert!(ve_flags_allow(kOptVeFlagBlock, MODE_NORMAL, true, CTRL_V));
         assert!(!ve_flags_allow(kOptVeFlagInsert, MODE_NORMAL, false, 0));
         assert!(ve_flags_allow(kOptVeFlagInsert, MODE_INSERT, false, 0));
     }
@@ -823,7 +822,7 @@ mod tests {
         let blockwise = ModeInputs {
             visual_active: true,
             visual_select: true,
-            visual_mode: Ctrl_V,
+            visual_mode: CTRL_V,
             ..quiet(MODE_NORMAL)
         };
         assert_eq!(mode_name(&blockwise), [19, 0, 0, 0]);

@@ -364,7 +364,7 @@ pub fn autocmd_register(
 /// Seed what the first autocommand for `event` compares against.
 fn seed_first_autocmd(event: AutoEvent) {
     if event == AutoEvent::ModeChanged && !has_event(AutoEvent::ModeChanged) {
-        last_mode.set(get_mode());
+        LAST_MODE.set(get_mode());
     }
     if (event == AutoEvent::CursorMoved && !has_event(AutoEvent::CursorMoved))
         || (event == AutoEvent::CursorMovedI && !has_event(AutoEvent::CursorMovedI))

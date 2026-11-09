@@ -160,10 +160,10 @@ fn report_row(entry: &TimeEntry) {
 
     // The pattern gets whatever is left of the line; under 80 columns it
     // will wrap anyway, so a fixed 20 is as good as any.
-    let room = if Columns.get() < 80 {
+    let room = if COLUMNS.get() < 80 {
         20
     } else {
-        Columns.get() - 70
+        COLUMNS.get() - 70
     };
     let pattern = &entry.pattern;
     let room = usize::try_from(room).unwrap_or(0);

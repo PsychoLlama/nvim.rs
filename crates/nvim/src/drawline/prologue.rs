@@ -26,7 +26,7 @@
 
 use super::*;
 use crate::ascii::NUL;
-use crate::decoration::kMTMetaInline;
+use crate::decoration::MT_META_INLINE;
 use crate::narrow::as_index;
 use crate::narrow::count_as_int;
 use crate::narrow::len_as_int;
@@ -154,7 +154,7 @@ pub(crate) fn prepare_line(
     }
 
     // Insert-mode completion highlights the text it inserted.
-    if State.get() & MODE_INSERT != 0
+    if STATE.get() & MODE_INSERT != 0
         && ins_compl_win_active(window)
         && (s.in_curline || ins_compl_lnum_in_range(lnum))
     {
@@ -169,7 +169,7 @@ pub(crate) fn prepare_line(
         s.has_terminal = true;
         s.extra_check = true;
     }
-    s.may_have_inline_virt = !s.has_foldtext && buf_meta_total(window.buffer(), kMTMetaInline) > 0;
+    s.may_have_inline_virt = !s.has_foldtext && buf_meta_total(window.buffer(), MT_META_INLINE) > 0;
 
     s
 }

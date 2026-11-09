@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 //! Decoration providers: the Lua callbacks a plugin registers with
 //! `nvim_set_decoration_provider` to decorate a redraw as it happens.
@@ -38,7 +37,7 @@ use crate::drawscreen::state::display_tick;
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
 use crate::highlight::hl_check_ns;
-use crate::highlight::state::ns_hl_active;
+use crate::highlight::state::NS_HL_ACTIVE;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::{nlua_call_ref_reporting, release_luaref};
@@ -57,13 +56,13 @@ use core::ffi::{CStr, c_int};
 // The provider's own lifecycle state. `Disabled` is sticky (only a fresh
 // `nvim_set_decoration_provider` clears it); the other two are per-redraw.
 /// Set up for this redraw and taking calls.
-pub(crate) const kDecorProviderActive: DecorProvider_state = 1;
+pub(crate) const DECOR_PROVIDER_ACTIVE: DecorProvider_state = 1;
 /// Turned off for the rest of *this window* — `on_win` or `on_line` declined.
-pub(crate) const kDecorProviderWinDisabled: DecorProvider_state = 2;
+pub(crate) const DECOR_PROVIDER_WIN_DISABLED: DecorProvider_state = 2;
 /// Turned off for the rest of *this redraw* — `on_start` declined.
-pub(crate) const kDecorProviderRedrawDisabled: DecorProvider_state = 3;
+pub(crate) const DECOR_PROVIDER_REDRAW_DISABLED: DecorProvider_state = 3;
 /// Turned off until it is registered again.
-pub(crate) const kDecorProviderDisabled: DecorProvider_state = 4;
+pub(crate) const DECOR_PROVIDER_DISABLED: DecorProvider_state = 4;
 
 /// `LuaRef` value meaning "no callback".
 const LUA_NOREF: LuaRef = -2;
@@ -175,7 +174,7 @@ fn decor_provider_invoke(
             with_provider(idx, |p| {
                 p.error_count = count + 1;
                 if p.error_count >= CB_MAX_ERROR {
-                    p.state = kDecorProviderDisabled;
+                    p.state = DECOR_PROVIDER_DISABLED;
                 }
             });
         }
@@ -200,7 +199,7 @@ pub(crate) fn decor_providers_invoke_spell(
     // the caller's window; the callbacks re-enter the editor.
     for idx in 0..provider_count() {
         let p = provider(idx);
-        if p.state != kDecorProviderDisabled && p.spell_nav != LUA_NOREF {
+        if p.state != DECOR_PROVIDER_DISABLED && p.spell_nav != LUA_NOREF {
             let mut args = ArrayBuf::<6>::new();
             args.push(Object::integer(window.handle.into()));
             args.push(Object::integer(window.w_buffer.handle().into()));
@@ -222,7 +221,7 @@ pub(crate) fn decor_providers_invoke_conceal_line(window: Win, row: c_int) -> bo
     let keys = window.buffer().b_marktree.n_keys;
     for idx in 0..provider_count() {
         let p = provider(idx);
-        if p.state != kDecorProviderDisabled && p.conceal_line != LUA_NOREF {
+        if p.state != DECOR_PROVIDER_DISABLED && p.conceal_line != LUA_NOREF {
             let mut args = ArrayBuf::<4>::new();
             args.push(Object::integer(window.handle.into()));
             args.push(Object::integer(window.w_buffer.handle().into()));
@@ -243,7 +242,7 @@ pub(crate) fn decor_providers_start() {
     // the callbacks re-enter the editor.
     for idx in 0..provider_count() {
         let p = provider(idx);
-        if p.state == kDecorProviderDisabled {
+        if p.state == DECOR_PROVIDER_DISABLED {
             continue;
         }
         if p.redraw_start != LUA_NOREF {
@@ -258,13 +257,13 @@ pub(crate) fn decor_providers_start() {
             set_state(
                 idx,
                 if active {
-                    kDecorProviderActive
+                    DECOR_PROVIDER_ACTIVE
                 } else {
-                    kDecorProviderRedrawDisabled
+                    DECOR_PROVIDER_REDRAW_DISABLED
                 },
             );
         } else {
-            set_state(idx, kDecorProviderActive);
+            set_state(idx, DECOR_PROVIDER_ACTIVE);
         }
     }
 }
@@ -309,15 +308,15 @@ pub(crate) fn decor_providers_invoke_win(window: Win) {
 
     for idx in 0..provider_count() {
         let p = with_provider(idx, |p| {
-            if p.state == kDecorProviderWinDisabled {
-                p.state = kDecorProviderActive;
+            if p.state == DECOR_PROVIDER_WIN_DISABLED {
+                p.state = DECOR_PROVIDER_ACTIVE;
             }
             p.win_skip_row = 0;
             p.win_skip_col = 0;
             p.clone()
         });
 
-        if p.state == kDecorProviderActive && p.redraw_win != LUA_NOREF {
+        if p.state == DECOR_PROVIDER_ACTIVE && p.redraw_win != LUA_NOREF {
             let mut args = ArrayBuf::<4>::new();
             args.push(Object::window(window.handle));
             args.push(Object::buffer(window.w_buffer.handle()));
@@ -326,7 +325,7 @@ pub(crate) fn decor_providers_invoke_win(window: Win) {
             args.push(Object::integer((botline - 1).into()));
             // TODO(bfredl): could skip a call if retval was interpreted like range?
             if !decor_provider_invoke(idx, c"win", p.redraw_win, args.array(), true, None) {
-                set_state(idx, kDecorProviderWinDisabled);
+                set_state(idx, DECOR_PROVIDER_WIN_DISABLED);
             }
         }
     }
@@ -344,7 +343,7 @@ pub(crate) fn decor_providers_invoke_line(window: Win, row: c_int) {
     set_provider_running(true);
     for idx in 0..provider_count() {
         let p = provider(idx);
-        if p.state == kDecorProviderActive && p.redraw_line != LUA_NOREF {
+        if p.state == DECOR_PROVIDER_ACTIVE && p.redraw_line != LUA_NOREF {
             let mut args = ArrayBuf::<3>::new();
             args.push(Object::window(window.handle));
             args.push(Object::buffer(window.w_buffer.handle()));
@@ -353,7 +352,7 @@ pub(crate) fn decor_providers_invoke_line(window: Win, row: c_int) {
             // as above.
             if !decor_provider_invoke(idx, name, cb, args, true, None) {
                 // returned 'false' or errored: skip the rest of this window
-                set_state(idx, kDecorProviderWinDisabled);
+                set_state(idx, DECOR_PROVIDER_WIN_DISABLED);
             }
             hl_check_ns();
         }
@@ -376,7 +375,7 @@ pub(crate) fn decor_providers_invoke_range(
     set_provider_running(true);
     for idx in 0..provider_count() {
         let p = provider(idx);
-        if p.state != kDecorProviderActive || p.redraw_range == LUA_NOREF {
+        if p.state != DECOR_PROVIDER_ACTIVE || p.redraw_range == LUA_NOREF {
             continue;
         }
         if p.win_skip_row > end_row || (p.win_skip_row == end_row && p.win_skip_col >= end_col) {
@@ -400,10 +399,10 @@ pub(crate) fn decor_providers_invoke_range(
         // everything below goes through the index again.
         if !status {
             // errored: skip the rest of this window
-            set_state(idx, kDecorProviderWinDisabled);
+            set_state(idx, DECOR_PROVIDER_WIN_DISABLED);
         } else if !res.is_empty() {
             match res[0] {
-                Object::Boolean(false) => set_state(idx, kDecorProviderWinDisabled),
+                Object::Boolean(false) => set_state(idx, DECOR_PROVIDER_WIN_DISABLED),
                 Object::Boolean(true) => {}
                 Object::Integer(row) => {
                     let mut col = 0;
@@ -432,7 +431,7 @@ pub(crate) fn decor_providers_invoke_buf(buffer: Buf) {
     // the caller's buffer; the callbacks re-enter the editor.
     for idx in 0..provider_count() {
         let p = provider(idx);
-        if p.state == kDecorProviderActive && p.redraw_buf != LUA_NOREF {
+        if p.state == DECOR_PROVIDER_ACTIVE && p.redraw_buf != LUA_NOREF {
             let mut args = ArrayBuf::<2>::new();
             args.push(Object::buffer(buffer.handle));
             args.push(Object::integer(display_tick.get().cast_signed()));
@@ -447,7 +446,7 @@ pub(crate) fn decor_providers_invoke_end() {
     // the callbacks re-enter the editor.
     for idx in 0..provider_count() {
         let p = provider(idx);
-        if p.state != kDecorProviderDisabled && p.redraw_end != LUA_NOREF {
+        if p.state != DECOR_PROVIDER_DISABLED && p.redraw_end != LUA_NOREF {
             let mut args = ArrayBuf::<1>::new();
             args.push(Object::integer(Integer::from(number_as_int(
                 display_tick.get().cast_signed(),
@@ -470,8 +469,8 @@ pub(crate) fn decor_provider_invalidate_hl() {
         }
     });
 
-    if ns_hl_active.get() != Handle::NONE {
-        ns_hl_active.set(Handle::new(-1));
+    if NS_HL_ACTIVE.get() != Handle::NONE {
+        NS_HL_ACTIVE.set(Handle::new(-1));
         hl_check_ns();
     }
 }
@@ -525,7 +524,7 @@ fn provider_index(ns_id: NS, force: bool) -> Option<usize> {
 const fn new_provider(ns_id: NS) -> DecorProvider {
     DecorProvider {
         ns_id,
-        state: kDecorProviderDisabled,
+        state: DECOR_PROVIDER_DISABLED,
         win_skip_row: 0,
         win_skip_col: 0,
         redraw_start: LUA_NOREF,
@@ -564,5 +563,5 @@ pub(crate) fn decor_provider_clear(p: &mut DecorProvider) {
             *slot = LUA_NOREF;
         }
     }
-    p.state = kDecorProviderDisabled;
+    p.state = DECOR_PROVIDER_DISABLED;
 }

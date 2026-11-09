@@ -59,7 +59,7 @@ pub(crate) fn ins_redraw(ready: bool) {
         // Update the screen first so syntax highlighting is right after a
         // change (inserting a `(`, say).  The autocommand may ask for
         // another redraw, which happens again below.
-        if syntax_present(Win::current()) && must_redraw.get() != 0 {
+        if syntax_present(Win::current()) && MUST_REDRAW.get() != 0 {
             let _ = update_screen();
         }
         // An autocommand may call getcurpos(), so curswant has to be
@@ -142,11 +142,11 @@ pub(crate) fn ins_redraw(ready: bool) {
 
     pum_check_clear();
     show_cursor_info_later(false);
-    if must_redraw.get() != 0 {
+    if MUST_REDRAW.get() != 0 {
         let _ = update_screen();
     } else {
         redraw_statuslines();
-        if clear_cmdline.get() || redraw_cmdline.get() || redraw_mode.get() {
+        if CLEAR_CMDLINE.get() || REDRAW_CMDLINE.get() || REDRAW_MODE.get() {
             showmode(); // clear cmdline and show mode
         }
     }
@@ -248,7 +248,7 @@ pub(crate) fn display_dollar(col_arg: ColNr) {
     curs_columns(win, 0); // recompute w_wrow and w_wcol
     if win.w_wcol < win.w_view_width {
         edit_putchar(Key::ascii(b'$'), false);
-        dollar_vcol.set(win.w_virtcol);
+        DOLLAR_VCOL.set(win.w_virtcol);
     }
     win.w_cursor.col = save_col;
 }
@@ -256,10 +256,10 @@ pub(crate) fn display_dollar(col_arg: ColNr) {
 /// Take the `$` away again.  Call before moving the cursor off the normal
 /// insert position.
 pub(crate) fn undisplay_dollar() {
-    if dollar_vcol.get() < ColNr::ZERO {
+    if DOLLAR_VCOL.get() < ColNr::ZERO {
         return;
     }
-    dollar_vcol.set(ColNr::NONE);
+    DOLLAR_VCOL.set(ColNr::NONE);
     redraw_win_line(Win::current(), Win::current().w_cursor.lnum);
 }
 

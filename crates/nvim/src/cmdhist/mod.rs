@@ -55,7 +55,7 @@ use crate::regexp::{RE_MAGIC, RE_STRING, vim_regexec};
 use crate::shada::ShadaExtra;
 use crate::tr;
 use crate::types::{CmdModFlags, ExArg, Timestamp, TypVal, VAR_NUMBER, VarNumber};
-use crate::ui::state::Columns;
+use crate::ui::state::COLUMNS;
 use core::ffi::{CStr, c_int};
 
 pub const HIST_DEFAULT: HistoryType = -2;
@@ -507,8 +507,8 @@ fn print_history_entry(text: &[u8], num: c_int, newest: bool) {
     // text in what is left.
     let mut row = format!("{}{num:6}  ", if newest { '>' } else { ' ' }).into_bytes();
     let left = IOSIZE as usize - row.len();
-    if strsize(text) > Columns.get() - 10 {
-        row.extend_from_slice(&cut_middle(text, Columns.get() - 10, left));
+    if strsize(text) > COLUMNS.get() - 10 {
+        row.extend_from_slice(&cut_middle(text, COLUMNS.get() - 10, left));
     } else {
         row.extend_from_slice(&text[..text.len().min(left - 1)]);
     }

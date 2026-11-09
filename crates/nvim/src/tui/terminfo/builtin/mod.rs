@@ -28,7 +28,7 @@ mod windows;
 
 use crate::tui::terminfo::caps::TerminfoDef;
 #[cfg(test)]
-use crate::tui::terminfo::caps::{MAX_FUNCTION_KEY, kTermCount};
+use crate::tui::terminfo::caps::{MAX_FUNCTION_KEY, TERM_COUNT};
 use crate::tui::terminfo::entry::TerminfoEntry;
 use crate::tui::terminfo::is_term_family;
 use core::ffi::{CStr, c_int};
@@ -168,7 +168,7 @@ mod tests {
     fn descriptions_stay_inside_their_arrays() {
         for (name, description) in DESCRIPTIONS {
             for &(slot, _) in description.defs {
-                assert!(slot < kTermCount, "{name}: def slot {slot}");
+                assert!(slot < TERM_COUNT, "{name}: def slot {slot}");
             }
             for &(slot, _, _) in description.keys {
                 assert!(slot < KEYS.len(), "{name}: key slot {slot}");
@@ -250,7 +250,7 @@ mod tests {
     fn the_fallback_is_usable() {
         let entry = from_term(None).1.entry();
         assert!(holds(&entry.defs[0], Some(c"\r")));
-        assert!(holds(&entry.defs[kTermCount as usize - 1], None));
+        assert!(holds(&entry.defs[TERM_COUNT as usize - 1], None));
         assert_eq!(entry.max_colors, 8);
     }
 }

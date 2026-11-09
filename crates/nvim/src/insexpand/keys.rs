@@ -286,7 +286,7 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: c_int, mut retval: bool) -> bool
             dec_cursor();
         }
         // Only format when something was inserted.
-        if !arrow_used.get() && !ins_need_undo_get() && c != Key::CTRL_E {
+        if !ARROW_USED.get() && !ins_need_undo_get() && c != Key::CTRL_E {
             insertchar(Key::NUL, 0, -1);
         }
         if prev_col > ColNr::ZERO && Win::current().w_cursor.col < get_cursor_line_len() {
@@ -358,9 +358,9 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: c_int, mut retval: bool) -> bool
     }
     ctrl_x_mode.set(CTRL_X_NORMAL);
     compl_enter_selects.set(false);
-    if edit_submode.get().is_some() {
-        edit_submode.set(None);
-        redraw_mode.set(true);
+    if EDIT_SUBMODE.get().is_some() {
+        EDIT_SUBMODE.set(None);
+        REDRAW_MODE.set(true);
     }
     compl_autocomplete.set(false);
     compl_from_nonkeyword.set(false);
@@ -400,7 +400,7 @@ pub fn ins_compl_prep(c: Key) -> bool {
     // Forget any previous 'special' messages if this is actually a ^X mode
     // key — bar ^R, in which case we wait to see what it gives us.
     if c != Key::CTRL_R && vim_is_ctrl_x_key(c) {
-        edit_submode_extra.set(None);
+        EDIT_SUBMODE_EXTRA.set(None);
     }
 
     // Ignore end of Select mode mapping and mouse scroll/movement.
@@ -461,16 +461,16 @@ pub fn ins_compl_prep(c: Key) -> bool {
             } else {
                 CTRL_X_FINISHED
             });
-            edit_submode.set(None);
+            EDIT_SUBMODE.set(None);
         }
-        redraw_mode.set(true);
+        REDRAW_MODE.set(true);
     }
 
     if compl_started.get() || ctrl_x_mode.get() == CTRL_X_FINISHED {
         // Show the error message from an attempted keyword completion
         // (probably 'Pattern not found') until another key is hit, then go
         // back to showing what mode we are in.
-        redraw_mode.set(true);
+        REDRAW_MODE.set(true);
         if (ctrl_x_mode_normal()
             && c != Key::CTRL_N
             && c != Key::CTRL_P

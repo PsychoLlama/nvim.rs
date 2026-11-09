@@ -29,7 +29,7 @@ use crate::memline::ml_get_len;
 use crate::memory::ThinCString;
 use crate::message::msg_scroll_flush;
 use crate::syntax::{SynFlags, get_syntax_info, syn_get_stack_item, syn_get_sub_char};
-use crate::types::{ColNr, ScreenChar, TypVal, VarNumber, kListLenMayKnow};
+use crate::types::{ColNr, LIST_LEN_MAY_KNOW, ScreenChar, TypVal, VarNumber};
 use crate::ui::{ui_current_col, ui_current_row, ui_rgb_attached};
 use crate::ui_compositor::ui_comp_get_grid_at_coord;
 use core::ffi::c_int;
@@ -110,7 +110,7 @@ pub fn f_screenchar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// combining ones `screenchar()` drops.
 pub fn f_screenchars(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let cell = Cell::at(args);
-    let list = tv_list_alloc_ret(result, kListLenMayKnow as isize);
+    let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
     if !cell.on_grid() {
         return;
     }
@@ -342,7 +342,7 @@ pub fn f_synstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         && col >= ColNr::ZERO
         && col <= ml_get_len(lnum)
     {
-        let list = tv_list_alloc_ret(result, kListLenMayKnow as isize);
+        let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
         // Run the syntax engine, keeping the stack this time.
         Win::current().syntax_id(lnum, col, false, None, true);
         for i in 0.. {

@@ -37,7 +37,7 @@ use crate::buffer::{
 use crate::bufwrite::{WriteName, WriteRequest};
 use crate::channel::channel_job_running;
 use crate::cursor::check_cursor_lnum;
-use crate::drawscreen::state::redraw_tabline;
+use crate::drawscreen::state::REDRAW_TABLINE;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::ecmd::do_ecmd;
@@ -150,7 +150,7 @@ pub fn ex_file(excmd: &mut ExArg) {
         if rename_buffer(&name).is_err() {
             return;
         }
-        redraw_tabline.set(true);
+        REDRAW_TABLINE.set(true);
     }
 
     // print file name if no argument or 'F' is not in 'shortmess'
@@ -388,7 +388,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
     // After ":saveas fname" reset 'readonly'.
     if args.cmdidx == CmdIdx::saveas && retval.is_ok() {
         Buf::current().b_p_ro = 0;
-        redraw_tabline.set(true);
+        REDRAW_TABLINE.set(true);
     }
     // Change directories when the 'acd' option is set and the file name
     // got changed or set.

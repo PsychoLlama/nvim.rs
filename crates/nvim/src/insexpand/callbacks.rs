@@ -565,7 +565,7 @@ pub(crate) fn expand_by_function(type_0: c_int, base: ComplStr, cb: Option<&Call
     let mut matchlist: Option<ListRef> = None;
     let mut matchdict: Option<DictRef> = None;
     let mut rettv = TYPVAL_T_INIT;
-    let save_state = State.get();
+    let save_state = STATE.get();
     let pos = Win::current().w_cursor;
 
     // Lock the text to avoid weird things from happening.  Also disallow
@@ -597,7 +597,7 @@ pub(crate) fn expand_by_function(type_0: c_int, base: ComplStr, cb: Option<&Call
     }
 
     // Restore State, it might have been changed.
-    State.set(save_state);
+    STATE.set(save_state);
     drop(matchdict);
     drop(matchlist);
 }

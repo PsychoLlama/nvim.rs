@@ -32,7 +32,7 @@ use crate::message::{msg_ext_set_append, msg_ext_set_kind, msg_multiline, msg_pu
 use crate::os::libc::uint64_t;
 use crate::os::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::os::time::os_hrtime;
-use crate::ui::state::kUIMessages;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_flush, ui_has};
 use core::ffi::c_int;
 
@@ -197,7 +197,7 @@ pub(crate) fn out_data_append_to_screen(output: &[u8], count: &mut usize, fd: c_
     // Done after `uv_run` to avoid recursing into a `vim.ui_attach()`
     // msg_show callback. #38664
     let text = output[..*count].to_vec();
-    if ui_has(kUIMessages) {
+    if ui_has(UI_MESSAGES) {
         put_job_on_fast_events(move || draw_chunk(&text, fd));
     } else {
         draw_chunk(&text, fd);

@@ -20,7 +20,7 @@ use super::{SHELL_SPECIAL, ShellOpts, call_shell};
 use crate::ascii::ascii_iswhite;
 use crate::charset::backslash_halved;
 use crate::cstr;
-use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::state::CMDLINE_ROW;
 use crate::ex_cmds::check_secure;
 use crate::fileio::temp_name;
 use crate::global_cell::GlobalCell;
@@ -36,7 +36,7 @@ use crate::os::time::os_delay;
 use crate::path::{ExpandFlags, add_pathsep, has_wildcard, invocation_path_tail, path_tail};
 use crate::semsg;
 use crate::types::Failed;
-use crate::ui::state::Rows;
+use crate::ui::state::ROWS;
 use core::ffi::{CStr, c_int};
 use core::ops::Range;
 use std::ffi::{CString, OsStr};
@@ -374,7 +374,7 @@ pub(crate) fn shell_expand_wildcards(
         // With interactive completion the message is not printed.
         if !flags.has(ExpandFlags::SILENT) {
             msg_putchar('\n' as c_int); // clear the bottom line quickly
-            cmdline_row.set(Rows.get() - 1); // continue on the last line
+            CMDLINE_ROW.set(ROWS.get() - 1); // continue on the last line
             msg(gettext(E_WILDEXPAND), 0);
             msg_start(); // do not overwrite this message
         }

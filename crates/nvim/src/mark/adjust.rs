@@ -37,7 +37,7 @@ use crate::extmark::kExtmarkNOOP;
 use crate::fold::fold_mark_adjust;
 use crate::mark::defs::MarkAdjustMode;
 use crate::pos::{MAXLNUM, equalpos};
-use crate::state::mode::saved_cursor;
+use crate::state::mode::SAVED_CURSOR;
 use crate::types::{Buffer, ColNr, Handle};
 use crate::winlayer::{Buf, Win, tab_windows, windows};
 use core::ffi::{c_int, c_uint};
@@ -315,10 +315,10 @@ pub fn mark_adjust_buf(
     if curwin_handle.w_buffer == buffer {
         shift.line(&mut curwin_handle.w_pcmark.lnum);
         shift.line(&mut curwin_handle.w_prev_pcmark.lnum);
-        let mut saved = saved_cursor.get();
+        let mut saved = SAVED_CURSOR.get();
         if saved.lnum != LineNr::ZERO {
             shift.line_nodel(&mut saved.lnum);
-            saved_cursor.set(saved);
+            SAVED_CURSOR.set(saved);
         }
     }
 
@@ -468,9 +468,9 @@ pub fn mark_col_adjust(
     shift.col(&mut b.b_visual.vi_end);
     shift.col(&mut cur.w_pcmark);
     shift.col(&mut cur.w_prev_pcmark);
-    let mut saved = saved_cursor.get();
+    let mut saved = SAVED_CURSOR.get();
     shift.col(&mut saved);
-    saved_cursor.set(saved);
+    SAVED_CURSOR.set(saved);
 
     // The current tab page's windows only. Upstream spells the head
     // `curtab == curtab ? firstwin : curtab->tp_firstwin`, a transpiler

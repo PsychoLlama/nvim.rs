@@ -31,7 +31,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
 use crate::strings::has_char;
@@ -50,7 +49,7 @@ use crate::ex_docmd::{tabpage_close, tabpage_close_other};
 use crate::global_cell::GlobalCell;
 use crate::grid::grid_adjust;
 use crate::mbyte::{c_cluster_len, char_at, class_of, cluster_len, utf8len_tab};
-use crate::mouse::state::{mouse_col, mouse_row};
+use crate::mouse::state::{MOUSE_COL, MOUSE_ROW};
 use crate::narrow::len_as_int;
 use crate::normal::defs::{CmdArg, MotionType};
 use crate::normal::sel_exclusive;
@@ -59,7 +58,7 @@ use crate::plines::{getvcols, win_chartabsize};
 use crate::search::BACKWARD;
 use crate::state::virtual_active;
 use crate::statusline::defs::{ClickLine, StlClickDefinition};
-use crate::statusline::state::tab_page_click_defs;
+use crate::statusline::state::TAB_PAGE_CLICK_DEFS;
 use crate::statusline::stl_connected;
 use crate::types::{ColNr, LineNr, Pos, TypVal, VarNumber};
 use crate::ui::{ui_check_mouse, ui_cursor_shape};
@@ -154,26 +153,26 @@ impl Landed {
 
 /// The top line of the window a click moved focus to, remembered so that the
 /// double click that follows still counts as one.
-static orig_topline: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
-static orig_topfill: GlobalCell<c_int> = GlobalCell::new(0);
+static ORIG_TOPLINE: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
+static ORIG_TOPFILL: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Whether a press was seen; drags and releases without one are ignored.
-static got_click: GlobalCell<bool> = GlobalCell::new(false);
+static GOT_CLICK: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The window a drag started in, whose status line or separator the drag
 /// moves.
-static dragwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+static DRAGWIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 
 /// Reset the window being dragged.  To be called when switching tab page.
 pub(crate) fn reset_dragwin() {
-    dragwin.set(None);
+    DRAGWIN.set(None);
 }
 
 /// Remember the window's top line, so a later double click can tell whether
 /// the text moved under the pointer.
 fn set_mouse_topline(win: Win) {
-    orig_topline.set(win.w_topline);
-    orig_topfill.set(win.w_topfill);
+    ORIG_TOPLINE.set(win.w_topline);
+    ORIG_TOPFILL.set(win.w_topfill);
 }
 
 // ---------------------------------------------------------------------------
@@ -275,13 +274,13 @@ pub(crate) enum ClickDefs {
 impl ClickDefs {
     /// The tab page line's click definitions, once the tabline has been drawn.
     fn tabline() -> Option<Self> {
-        (!tab_page_click_defs.with(|line| line.cells.is_empty())).then_some(Self::Tabline)
+        (!TAB_PAGE_CLICK_DEFS.with(|line| line.cells.is_empty())).then_some(Self::Tabline)
     }
 
     /// Run `f` over the line these definitions are.
     fn with_line<R>(self, f: impl FnOnce(&ClickLine) -> R) -> R {
         match self {
-            Self::Tabline => tab_page_click_defs.with(f),
+            Self::Tabline => TAB_PAGE_CLICK_DEFS.with(f),
             Self::Status(win) => f(&win.w_click_defs.status),
             Self::Winbar(win) => f(&win.w_click_defs.winbar),
             Self::Statuscol(win) => f(&win.w_click_defs.statuscol),
@@ -402,7 +401,7 @@ fn end_of_word(pos: &mut Pos, line: &[u8]) {
 /// Move the current tab to the tab in the same column as the mouse, or to the
 /// end of the tabline if there is no tab there.
 fn move_tab_to_mouse(defs: ClickDefs) {
-    let tabnr = defs.at(mouse_col.get()).tabnr;
+    let tabnr = defs.at(MOUSE_COL.get()).tabnr;
     // The index is read even where the C would not ask for it, which is a
     // pure walk of the tab page list.
     let current = tab_index(TabPage::current());
@@ -547,7 +546,7 @@ fn mouse_check_grid() -> (Option<ColNr>, c_int) {
 pub(crate) fn nv_mousescroll(cmd_arg: &mut CmdArg) {
     let old_curwin = Win::current();
 
-    if mouse_row.get() >= 0 && mouse_col.get() >= 0 {
+    if MOUSE_ROW.get() >= 0 && MOUSE_COL.get() >= 0 {
         // Find the window at the mouse pointer coordinates.
         // NOTE: Must restore "curwin" to "old_curwin" before returning!
         let mut pos = MousePos::current();
@@ -588,8 +587,8 @@ pub(crate) fn f_getmousepos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     let mut add = |key: &CStr, value: VarNumber| {
         let _ = d.add_number(key.to_bytes(), value);
     };
-    add(c"screenrow", VarNumber::from(mouse_row.get()) + 1);
-    add(c"screencol", VarNumber::from(mouse_col.get()) + 1);
+    add(c"screenrow", VarNumber::from(MOUSE_ROW.get()) + 1);
+    add(c"screencol", VarNumber::from(MOUSE_COL.get()) + 1);
 
     let mut pos = MousePos::current();
     let mut winid: VarNumber = 0;

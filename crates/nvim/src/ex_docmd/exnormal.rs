@@ -32,12 +32,12 @@ use crate::getchar::{restore_typeahead, save_typeahead, stuff_empty, typeahead, 
 
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::getchar::state::{GOT_INT, PENDING_END_REG_EXECUTING, REG_EXECUTING};
-use crate::keycodes::{Ctrl_C, K_SPECIAL, KE_FILLER};
+use crate::keycodes::{CTRL_C, K_SPECIAL, KE_FILLER};
 use crate::message::E_SECURE;
 use crate::message::state::{MSG_DIDOUT, MSG_SCROLL};
 use crate::option::vars::p_mmd;
 use crate::state::mode::{
-    State, finish_op, force_restart_edit, opcount, restart_edit, stop_insert_mode,
+    FINISH_OP, FORCE_RESTART_EDIT, OPCOUNT, RESTART_EDIT, STATE, STOP_INSERT_MODE,
 };
 
 use crate::mouse::setmouse;
@@ -60,16 +60,16 @@ use crate::winlayer::{Buf, Win};
 /// user's own pending keys back.
 pub fn save_current_state(s: &mut SaveState) -> bool {
     s.save_msg_scroll = MSG_SCROLL.get();
-    s.save_restart_edit = restart_edit.get();
+    s.save_restart_edit = RESTART_EDIT.get();
     s.save_msg_didout = MSG_DIDOUT.get();
-    s.save_state = State.get();
-    s.save_finish_op = finish_op.get();
-    s.save_opcount = opcount.get();
+    s.save_state = STATE.get();
+    s.save_finish_op = FINISH_OP.get();
+    s.save_opcount = OPCOUNT.get();
     s.save_reg_executing = REG_EXECUTING.get();
     s.save_pending_end_reg_executing = PENDING_END_REG_EXECUTING.get();
     MSG_SCROLL.set(0);
     // Not entering Insert mode from here.
-    restart_edit.set(Key::NUL);
+    RESTART_EDIT.set(Key::NUL);
     save_typeahead(&mut s.tabuf);
     s.tabuf.typebuf_valid
 }
@@ -80,23 +80,23 @@ pub fn restore_current_state(s: &mut SaveState) {
     MSG_SCROLL.set(s.save_msg_scroll);
     // A command that asked to enter Insert mode *after* `:normal`
     // finishes keeps that request; anything else is put back.
-    if force_restart_edit.get() {
-        force_restart_edit.set(false);
+    if FORCE_RESTART_EDIT.get() {
+        FORCE_RESTART_EDIT.set(false);
     } else {
-        restart_edit.set(s.save_restart_edit);
+        RESTART_EDIT.set(s.save_restart_edit);
     }
-    finish_op.set(s.save_finish_op);
-    opcount.set(s.save_opcount);
+    FINISH_OP.set(s.save_finish_op);
+    OPCOUNT.set(s.save_opcount);
     REG_EXECUTING.set(s.save_reg_executing);
     PENDING_END_REG_EXECUTING.set(s.save_pending_end_reg_executing);
     MSG_DIDOUT.set(MSG_DIDOUT.get() || s.save_msg_didout);
-    State.set(s.save_state);
+    STATE.set(s.save_state);
     ui_cursor_shape();
 }
 
 /// `:normal` — run the argument as normal-mode keys.
 pub(crate) fn ex_normal(excmd: &mut ExArg) {
-    if !Buf::current().terminal.is_null() && State.get() & MODE_TERMINAL != 0 {
+    if !Buf::current().terminal.is_null() && STATE.get() & MODE_TERMINAL != 0 {
         emsg(c"Can't re-enter normal mode from terminal mode");
         return;
     }
@@ -188,13 +188,13 @@ pub(crate) fn ex_startinsert(excmd: &mut ExArg) {
         }
         set_cursor_for_append_to_line();
     }
-    if State.get() & MODE_INSERT != 0 {
+    if STATE.get() & MODE_INSERT != 0 {
         return;
     }
     let idx = excmd.cmdidx;
     // The upper-case forms are what `edit()` reads as "started from
     // here" rather than "restarted".
-    restart_edit.set(if idx == CmdIdx::startinsert {
+    RESTART_EDIT.set(if idx == CmdIdx::startinsert {
         Key::ascii(b'a')
     } else if idx == CmdIdx::startreplace {
         Key::ascii(b'R')
@@ -203,7 +203,7 @@ pub(crate) fn ex_startinsert(excmd: &mut ExArg) {
     });
     if !excmd.forceit {
         if idx == CmdIdx::startinsert {
-            restart_edit.set(Key::ascii(b'i'));
+            RESTART_EDIT.set(Key::ascii(b'i'));
         }
         Win::current().w_curswant = ColNr::ZERO;
     }
@@ -214,8 +214,8 @@ pub(crate) fn ex_startinsert(excmd: &mut ExArg) {
 
 /// `:stopinsert`.
 pub(crate) fn ex_stopinsert(_excmd: &mut ExArg) {
-    restart_edit.set(Key::NUL);
-    stop_insert_mode.set(true);
+    RESTART_EDIT.set(Key::NUL);
+    STOP_INSERT_MODE.set(true);
     clearmode();
 }
 
@@ -227,7 +227,7 @@ pub fn exec_normal_cmd(cmd: &CStr, remap: Remap, silent: bool) {
 
 /// Run normal-mode commands until the typeahead is spent.
 pub fn exec_normal(was_typed: bool, use_vpeekc: bool) {
-    finish_op.set(false);
+    FINISH_OP.set(false);
     with_frame_op(OpArg::default(), |op| {
         exec_normal_on(op, was_typed, use_vpeekc)
     });
@@ -243,7 +243,7 @@ fn exec_normal_on(op: Op, was_typed: bool, use_vpeekc: bool) {
         || use_vpeekc && {
             c = vpeekc().code();
             c != NUL
-        } && c != Ctrl_C)
+        } && c != CTRL_C)
         && !GOT_INT.get()
     {
         update_topline_cursor();

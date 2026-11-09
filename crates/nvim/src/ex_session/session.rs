@@ -56,7 +56,7 @@ use crate::strings::escaped_bytes;
 use crate::types::{
     TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, Window,
 };
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::window::tab_index;
 use crate::window::{DirOwner, own_dir};
 use crate::winlayer::graph::firstwin;
@@ -111,8 +111,8 @@ pub(crate) fn makeopens(out: &mut SessionFile, dirnow: &XString) -> Written {
     if opts.has(kOptSsopFlagResize) {
         out.write(format_args!(
             "set lines={} columns={}\n",
-            int64_t::from(Rows.get()),
-            int64_t::from(Columns.get())
+            int64_t::from(ROWS.get()),
+            int64_t::from(COLUMNS.get())
         ))?;
     }
 
@@ -388,17 +388,17 @@ fn ses_winsizes(out: &mut SessionFile, restore_size: bool, tab: TabPage) -> Writ
                 out.write(format_args!(
                     "exe '{n}resize ' . ((&lines * {} + {}) / {})\n",
                     int64_t::from(window.w_height),
-                    int64_t::from(Rows.get()) / 2,
-                    int64_t::from(Rows.get()),
+                    int64_t::from(ROWS.get()) / 2,
+                    int64_t::from(ROWS.get()),
                 ))?;
             }
             // And the width when it is not full width.
-            if window.w_width < Columns.get() {
+            if window.w_width < COLUMNS.get() {
                 out.write(format_args!(
                     "exe 'vert {n}resize ' . ((&columns * {} + {}) / {})\n",
                     int64_t::from(window.w_width),
-                    int64_t::from(Columns.get()) / 2,
-                    int64_t::from(Columns.get()),
+                    int64_t::from(COLUMNS.get()) / 2,
+                    int64_t::from(COLUMNS.get()),
                 ))?;
             }
         }

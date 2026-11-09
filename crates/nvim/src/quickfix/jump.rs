@@ -236,7 +236,7 @@ fn qf_jump_goto_line(position: &Position) {
 fn qf_jump_print_msg(qi: Qi, qf_index: c_int, at: usize, old_curbuf: Buf, old_lnum: LineNr) {
     if MSG_SCROLLED.get() == 0 {
         update_topline(Win::current());
-        if must_redraw.get() != 0 {
+        if MUST_REDRAW.get() != 0 {
             let _ = update_screen();
         }
     }

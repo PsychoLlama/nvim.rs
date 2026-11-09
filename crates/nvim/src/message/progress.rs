@@ -95,7 +95,7 @@ pub fn msg_progress<'t>(
 
     // Under ext_messages the UI keeps the untruncated text, so history
     // gets the original either way; on a grid it gets what fits.
-    if hist && (!trunc || ui_has(kUIMessages)) {
+    if hist && (!trunc || ui_has(UI_MESSAGES)) {
         msg_hist_add(text.to_bytes(), 0);
     }
     let shown = if trunc {

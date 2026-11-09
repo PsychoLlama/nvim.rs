@@ -18,7 +18,6 @@
 
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -33,19 +32,19 @@ use crate::winlayer::cmdwin_window;
 use core::ffi::c_int;
 
 use super::*;
-use crate::drawscreen::state::redraw_cmdline;
+use crate::drawscreen::state::REDRAW_CMDLINE;
 use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later};
 use crate::global_cell::GlobalCell;
 use crate::message::state::MSG_SILENT;
 use crate::mouse::state::{
-    mouse_col, mouse_dragging, mouse_past_bottom, mouse_past_eol, mouse_row,
+    MOUSE_COL, MOUSE_DRAGGING, MOUSE_PAST_BOTTOM, MOUSE_PAST_EOL, MOUSE_ROW,
 };
 use crate::r#move::WinValid;
 use crate::normal::{
     end_visual_mode, may_start_select, set_visual_active, set_visual_anchor, visual_active,
 };
 use crate::option::vars::p_smd;
-use crate::state::mode::VIsual_reselect;
+use crate::state::mode::V_ISUAL_RESELECT;
 use crate::types::Pos;
 use crate::winlayer::graph::{cmdwin_type, cmdwin_win};
 
@@ -53,16 +52,16 @@ use crate::winlayer::graph::{cmdwin_type, cmdwin_win};
 // must act on the *same* status line or separator the press did, so these
 // outlive the call that set them -- which is also what makes `retnomove`
 // answerable without looking at the screen again.
-static status_line_offset: GlobalCell<c_int> = GlobalCell::new(0);
-static sep_line_offset: GlobalCell<c_int> = GlobalCell::new(0);
-static on_status_line: GlobalCell<bool> = GlobalCell::new(false);
-static on_sep_line: GlobalCell<bool> = GlobalCell::new(false);
-static on_winbar: GlobalCell<bool> = GlobalCell::new(false);
-static on_statuscol: GlobalCell<bool> = GlobalCell::new(false);
-static prev_row: GlobalCell<c_int> = GlobalCell::new(-1);
-static prev_col: GlobalCell<c_int> = GlobalCell::new(-1);
+static STATUS_LINE_OFFSET: GlobalCell<c_int> = GlobalCell::new(0);
+static SEP_LINE_OFFSET: GlobalCell<c_int> = GlobalCell::new(0);
+static ON_STATUS_LINE: GlobalCell<bool> = GlobalCell::new(false);
+static ON_SEP_LINE: GlobalCell<bool> = GlobalCell::new(false);
+static ON_WINBAR: GlobalCell<bool> = GlobalCell::new(false);
+static ON_STATUSCOL: GlobalCell<bool> = GlobalCell::new(false);
+static PREV_ROW: GlobalCell<c_int> = GlobalCell::new(-1);
+static PREV_COL: GlobalCell<c_int> = GlobalCell::new(-1);
 /// Whether a drag was noticed, so that the release may still move focus.
-static did_drag: GlobalCell<c_int> = GlobalCell::new(0);
+static DID_DRAG: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Move the cursor to the specified row and column on the screen.
 /// Change current window if necessary. Returns an integer with the
@@ -95,28 +94,28 @@ pub(crate) fn jump_to_mouse(
 ) -> c_int {
     let keep_focus = flags & MOUSE_FOCUS != 0;
 
-    mouse_past_bottom.set(false);
-    mouse_past_eol.set(false);
+    MOUSE_PAST_BOTTOM.set(false);
+    MOUSE_PAST_EOL.set(false);
 
     if flags & MOUSE_RELEASED != 0 {
         // On button release we may change window focus if positioned on a
         // status line and no dragging happened.
-        if dragwin.get().is_some() && did_drag.get() == 0 {
+        if DRAGWIN.get().is_some() && DID_DRAG.get() == 0 {
             flags &= !(MOUSE_FOCUS | MOUSE_DID_MOVE);
         }
-        dragwin.set(None);
-        did_drag.set(0);
+        DRAGWIN.set(None);
+        DID_DRAG.set(0);
     }
 
     if flags & MOUSE_DID_MOVE != 0
-        && prev_row.get() == mouse_row.get()
-        && prev_col.get() == mouse_col.get()
+        && PREV_ROW.get() == MOUSE_ROW.get()
+        && PREV_COL.get() == MOUSE_COL.get()
     {
         return no_move(flags);
     }
 
-    prev_row.set(mouse_row.get());
-    prev_col.set(mouse_col.get());
+    PREV_ROW.set(MOUSE_ROW.get());
+    PREV_COL.set(MOUSE_COL.get());
 
     if flags & MOUSE_SETPOS != 0 {
         return no_move(flags);
@@ -161,16 +160,16 @@ pub(crate) fn jump_to_mouse(
 fn no_move(flags: c_int) -> c_int {
     // Before moving the cursor for a left click which is NOT in a status
     // line, stop Visual mode.
-    if status_line_offset.get() != 0 {
+    if STATUS_LINE_OFFSET.get() != 0 {
         return IN_STATUS_LINE;
     }
-    if sep_line_offset.get() != 0 {
+    if SEP_LINE_OFFSET.get() != 0 {
         return IN_SEP_LINE;
     }
-    if on_winbar.get() {
+    if ON_WINBAR.get() {
         return IN_OTHER_WIN | MOUSE_WINBAR;
     }
-    if on_statuscol.get() {
+    if ON_STATUSCOL.get() {
         return IN_OTHER_WIN | MOUSE_STATUSCOL;
     }
     if flags & MOUSE_MAY_STOP_VIS != 0 {
@@ -193,27 +192,27 @@ fn stop_visual() {
 fn classify(pos: MousePos, win: Win) -> bool {
     let below_window =
         pos.grid == DEFAULT_GRID_HANDLE && pos.row + win.w_winbar_height >= win.w_height;
-    on_status_line.set(below_window && pos.row + win.w_winbar_height - win.w_height + 1 == 1);
-    on_sep_line.set(
+    ON_STATUS_LINE.set(below_window && pos.row + win.w_winbar_height - win.w_height + 1 == 1);
+    ON_SEP_LINE.set(
         pos.grid == DEFAULT_GRID_HANDLE && pos.col >= win.w_width && pos.col - win.w_width == 0,
     );
-    on_winbar.set(pos.row < 0 && pos.row + win.w_winbar_height >= 0);
-    on_statuscol.set(
+    ON_WINBAR.set(pos.row < 0 && pos.row + win.w_winbar_height >= 0);
+    ON_STATUSCOL.set(
         !below_window
-            && !on_status_line.get()
-            && !on_sep_line.get()
-            && !on_winbar.get()
+            && !ON_STATUS_LINE.get()
+            && !ON_SEP_LINE.get()
+            && !ON_WINBAR.get()
             && !win.statuscolumn_empty()
             && in_statuscolumn(pos, win),
     );
 
     // The rightmost character of the status line might be a vertical
     // separator character if there is no connecting window to the right.
-    if on_status_line.get() && on_sep_line.get() {
+    if ON_STATUS_LINE.get() && ON_SEP_LINE.get() {
         if win.status_line_connected() {
-            on_sep_line.set(false);
+            ON_SEP_LINE.set(false);
         } else {
-            on_status_line.set(false);
+            ON_STATUS_LINE.set(false);
         }
     }
 
@@ -243,40 +242,40 @@ fn enter_window(
     below_window: bool,
     old_curwin: Win,
 ) -> Option<c_int> {
-    if on_winbar.get() {
+    if ON_WINBAR.get() {
         return Some(IN_OTHER_WIN | MOUSE_WINBAR);
     }
-    if on_statuscol.get() {
+    if ON_STATUSCOL.get() {
         return None; // straight on to the fold click
     }
 
     let fdc = win.fdccol_count();
-    dragwin.set(None);
+    DRAGWIN.set(None);
 
     // winpos and height may change in win_enter()!
     if below_window {
         // In (or below) status line
-        status_line_offset.set(pos.row + win.w_winbar_height - win.w_height + 1);
-        dragwin.set(Some(win.id()));
+        STATUS_LINE_OFFSET.set(pos.row + win.w_winbar_height - win.w_height + 1);
+        DRAGWIN.set(Some(win.id()));
     } else {
-        status_line_offset.set(0);
+        STATUS_LINE_OFFSET.set(0);
     }
 
     if pos.grid == DEFAULT_GRID_HANDLE && pos.col >= win.w_width {
         // In separator line
-        sep_line_offset.set(pos.col - win.w_width + 1);
-        dragwin.set(Some(win.id()));
+        SEP_LINE_OFFSET.set(pos.col - win.w_width + 1);
+        DRAGWIN.set(Some(win.id()));
     } else {
-        sep_line_offset.set(0);
+        SEP_LINE_OFFSET.set(0);
     }
 
     // The rightmost character of the status line might be a vertical
     // separator character if there is no connecting window to the right.
-    if status_line_offset.get() != 0 && sep_line_offset.get() != 0 {
+    if STATUS_LINE_OFFSET.get() != 0 && SEP_LINE_OFFSET.get() != 0 {
         if win.status_line_connected() {
-            sep_line_offset.set(0);
+            SEP_LINE_OFFSET.set(0);
         } else {
-            status_line_offset.set(0);
+            STATUS_LINE_OFFSET.set(0);
         }
     }
 
@@ -289,8 +288,8 @@ fn enter_window(
     };
     if visual_active()
         && (win.buffer() != old_curwin.buffer()
-            || (status_line_offset.get() == 0
-                && sep_line_offset.get() == 0
+            || (STATUS_LINE_OFFSET.get() == 0
+                && SEP_LINE_OFFSET.get() == 0
                 && past_columns
                 && flags & MOUSE_MAY_STOP_VIS != 0))
     {
@@ -300,7 +299,7 @@ fn enter_window(
     if cmdwin_type.get() != 0 && cmdwin_win.get() != Some(win.id()) {
         // A click outside the command-line window: Use modeless selection if
         // possible.  Allow dragging the status lines.
-        sep_line_offset.set(0);
+        SEP_LINE_OFFSET.set(0);
         pos.row = 0;
         pos.col += win.w_wincol;
         win = cmdwin_window().expect("a command-line window while cmdwin_type is set");
@@ -309,7 +308,7 @@ fn enter_window(
     // Only change window focus when not clicking on or dragging the status
     // line.  Do change focus when releasing the mouse button (MOUSE_FOCUS was
     // set above if we dragged first).
-    if dragwin.get().is_none() || flags & MOUSE_RELEASED != 0 {
+    if DRAGWIN.get().is_none() || flags & MOUSE_RELEASED != 0 {
         win.enter(); // can make `win` invalid!
     }
 
@@ -324,11 +323,11 @@ fn enter_window(
     } else {
         CURSOR_MOVED
     };
-    if status_line_offset.get() != 0 {
+    if STATUS_LINE_OFFSET.get() != 0 {
         // In (or below) status line
         return Some(IN_STATUS_LINE | moved);
     }
-    if sep_line_offset.get() != 0 {
+    if SEP_LINE_OFFSET.get() != 0 {
         return Some(IN_SEP_LINE | moved);
     }
 
@@ -339,35 +338,35 @@ fn enter_window(
 /// The path a drag or a release takes, and a right click: the caller keeps its
 /// window, so the event either resizes a window or scrolls the current one.
 fn drag_or_extend(pos: &mut MousePos, flags: c_int, which_button: c_int) -> Option<c_int> {
-    if status_line_offset.get() != 0 {
+    if STATUS_LINE_OFFSET.get() != 0 {
         // The window may have closed since the press: a drag of nothing.
         if which_button == MOUSE_LEFT
-            && let Some(win) = dragwin.get().and_then(WinId::get)
+            && let Some(win) = DRAGWIN.get().and_then(WinId::get)
         {
             // Drag the status line.
-            let count = pos.row - win.w_winrow - win.w_height + 1 - status_line_offset.get();
+            let count = pos.row - win.w_winrow - win.w_height + 1 - STATUS_LINE_OFFSET.get();
             win.drag_status_line(count);
-            did_drag.set(did_drag.get() | count);
+            DID_DRAG.set(DID_DRAG.get() | count);
         }
         return Some(IN_STATUS_LINE); // Cursor didn't move
     }
-    if sep_line_offset.get() != 0 && which_button == MOUSE_LEFT {
-        if let Some(win) = dragwin.get().and_then(WinId::get) {
+    if SEP_LINE_OFFSET.get() != 0 && which_button == MOUSE_LEFT {
+        if let Some(win) = DRAGWIN.get().and_then(WinId::get) {
             // Drag the separator column.
-            let count = pos.col - win.w_wincol - win.w_width + 1 - sep_line_offset.get();
+            let count = pos.col - win.w_wincol - win.w_width + 1 - SEP_LINE_OFFSET.get();
             win.drag_sep_line(count);
-            did_drag.set(did_drag.get() | count);
+            DID_DRAG.set(DID_DRAG.get() | count);
         }
         return Some(IN_SEP_LINE); // Cursor didn't move
     }
-    if on_status_line.get() && which_button == MOUSE_RIGHT {
+    if ON_STATUS_LINE.get() && which_button == MOUSE_RIGHT {
         return Some(IN_STATUS_LINE);
     }
-    if on_winbar.get() && which_button == MOUSE_RIGHT {
+    if ON_WINBAR.get() && which_button == MOUSE_RIGHT {
         // After a click on the window bar don't start Visual mode.
         return Some(IN_OTHER_WIN | MOUSE_WINBAR);
     }
-    if on_statuscol.get() && which_button == MOUSE_RIGHT {
+    if ON_STATUSCOL.get() && which_button == MOUSE_RIGHT {
         // After a click on the status column don't start Visual mode.
         return Some(IN_OTHER_WIN | MOUSE_STATUSCOL);
     }
@@ -395,7 +394,7 @@ fn drag_or_extend(pos: &mut MousePos, flags: c_int, which_button: c_int) -> Opti
         scroll_forward(win, pos.row);
         pos.row = win.w_view_height - 1;
     } else if pos.row == 0
-        && mouse_dragging.get() > 0
+        && MOUSE_DRAGGING.get() > 0
         && win.w_cursor.lnum == win.buffer().line_count()
         && win.w_cursor.lnum == win.w_topline
     {
@@ -492,20 +491,20 @@ fn move_cursor_there(
     let (lnum, below_last) = comp_pos(win, &mut pos.row, &mut pos.col);
     win.w_cursor.lnum = lnum;
     if below_last {
-        mouse_past_bottom.set(true);
+        MOUSE_PAST_BOTTOM.set(true);
     }
 
     // Start Visual mode before coladvance(), for when 'sel' != "old"
     if flags & MOUSE_MAY_VIS != 0 && !visual_active() {
         set_visual_anchor(old_cursor);
         set_visual_active(true);
-        VIsual_reselect.set(1);
+        V_ISUAL_RESELECT.set(1);
         // If 'selectmode' contains "mouse", start Select mode.
         may_start_select(Key::ascii(b'o'));
         setmouse();
 
         if p_smd() && MSG_SILENT.get() == 0 {
-            redraw_cmdline.set(true); // show visual mode later
+            REDRAW_CMDLINE.set(true); // show visual mode later
         }
     }
 
@@ -520,10 +519,10 @@ fn move_cursor_there(
     }
     if past_eol {
         // Mouse click beyond end of line.
-        mouse_past_eol.set(true);
+        MOUSE_PAST_EOL.set(true);
     }
 
-    let mut count = if on_statuscol.get() {
+    let mut count = if ON_STATUSCOL.get() {
         IN_OTHER_WIN | MOUSE_STATUSCOL
     } else {
         IN_BUFFER

@@ -150,11 +150,11 @@ pub fn nvim_buf_set_virtual_text(
 
     let vt = DecorVirtText {
         flags: 0 as uint8_t,
-        hl_mode: kHlModeUnknown,
+        hl_mode: HL_MODE_UNKNOWN,
         priority: 0 as DecorPriority,
         width,
         col: 0 as ::core::ffi::c_int,
-        pos: kVPosEndOfLine,
+        pos: V_POS_END_OF_LINE,
         data: DecorVirtText_data::Text(virt_text),
         next: DECOR_ID_INVALID,
     };

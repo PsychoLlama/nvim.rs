@@ -20,7 +20,7 @@ use crate::cursor::{check_cursor_col, check_cursor_lnum, check_visual_pos};
 use crate::ex_cmds::rename_buffer;
 use crate::extmark::extmark_splice;
 
-use crate::decoration::kMTMetaLines;
+use crate::decoration::MT_META_LINES;
 use crate::lua::executor::{RET_LUAREF, nlua_call_ref_reporting};
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::{mark_adjust_buf, mark_get};
@@ -37,7 +37,7 @@ use crate::os::libc::{size_t, uint64_t};
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::FORWARD;
 use crate::state::MODE_INSERT;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufUpdateCallbacks, BufferHandle, ColNr, Error, Integer,
     LineNr, LuaRef, Object, Pos,

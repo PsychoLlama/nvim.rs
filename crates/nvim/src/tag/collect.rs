@@ -69,7 +69,7 @@ impl FindTags {
         } else if name_only {
             let key = tagp.tagname.of(line).to_vec();
             // If wanted, read the line again to get the long form too.
-            if State.get() & MODE_INSERT != 0 {
+            if STATE.get() & MODE_INSERT != 0 {
                 self.get_searchpat = p_sft();
             }
             Some(Found::new(key, bucket))

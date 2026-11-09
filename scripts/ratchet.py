@@ -1060,7 +1060,7 @@ CELL_COPY_OWNER = (
     # regexp is done: `rex` became a per-match `RegExec` on the API layer's
     # stack and `rsm` an owned snapshot (`RegSubMatch`), neither `Copy`.
     # the rest, one or a few sites each
-    "curgrid",
+    "CURGRID",
     # `au_new_curbuf` left the list in phase 23's S11. It is a `BufferRef`,
     # which is upstream's own *weak* reference -- the `br_buf_free_count`
     # generation check exists precisely because the pointer is borrowed --
@@ -4758,18 +4758,18 @@ SELF_TEST_CELL_PTR_CHECK = [
 ]
 # (source, expected cell_copy_owner)
 SELF_TEST_CELL_COPY_OWNER = [
-    ("fn f() {\n    curgrid.get();\n}\n", 1),
+    ("fn f() {\n    CURGRID.get();\n}\n", 1),
     ("fn f() {\n    let n = CLIPBOARD.get().data;\n}\n", 1),
     # Only `get`: the other accessors do not hand out a second owner.
-    ("fn f() {\n    curgrid.set(x);\n}\n", 0),
-    ("fn f() {\n    curgrid.with(|s| s);\n}\n", 0),
+    ("fn f() {\n    CURGRID.set(x);\n}\n", 0),
+    ("fn f() {\n    CURGRID.with(|s| s);\n}\n", 0),
     # rustfmt wraps a long chain, and the copy still happens.
     ("fn f() {\n    *CLIPBOARD\n        .get()\n}\n", 1),
     # A global that is not on the list.
     ("fn f() {\n    p_ai.get();\n}\n", 0),
     # A longer name ending in a listed one is not it.
-    ("fn f() {\n    saved_curgrid.get();\n}\n", 0),
-    ("// curgrid.get()\nfn f() {}\n", 0),
+    ("fn f() {\n    SAVED_CURGRID.get();\n}\n", 0),
+    ("// CURGRID.get()\nfn f() {}\n", 0),
 ]
 
 

@@ -32,11 +32,11 @@ use crate::tui::output::{out, out_cstr, out_fmt, terminfo_out, terminfo_print_nu
 use crate::tui::paint::invalidate;
 use crate::tui::state::TUIData;
 use crate::tui::terminfo::caps::{
-    kTerm_enter_blink_mode, kTerm_enter_bold_mode, kTerm_enter_dim_mode, kTerm_enter_italics_mode,
-    kTerm_enter_reverse_mode, kTerm_enter_secure_mode, kTerm_enter_standout_mode,
-    kTerm_enter_strikethrough_mode, kTerm_enter_underline_mode, kTerm_exit_attribute_mode,
-    kTerm_set_a_background, kTerm_set_a_foreground, kTerm_set_attributes, kTerm_set_rgb_background,
-    kTerm_set_rgb_foreground, kTerm_set_underline_style,
+    TERM_ENTER_BLINK_MODE, TERM_ENTER_BOLD_MODE, TERM_ENTER_DIM_MODE, TERM_ENTER_ITALICS_MODE,
+    TERM_ENTER_REVERSE_MODE, TERM_ENTER_SECURE_MODE, TERM_ENTER_STANDOUT_MODE,
+    TERM_ENTER_STRIKETHROUGH_MODE, TERM_ENTER_UNDERLINE_MODE, TERM_EXIT_ATTRIBUTE_MODE,
+    TERM_SET_A_BACKGROUND, TERM_SET_A_FOREGROUND, TERM_SET_ATTRIBUTES, TERM_SET_RGB_BACKGROUND,
+    TERM_SET_RGB_FOREGROUND, TERM_SET_UNDERLINE_STYLE,
 };
 use crate::tui::tui::DEFAULT_ATTRS;
 use crate::types::{Array, Integer};
@@ -180,7 +180,7 @@ pub(crate) fn update_attrs(tui: &mut TUIData, attr_id: c_int) {
 
     // Terminals that can style an underline get the exact style asked for;
     // the rest get a plain underline for any of them.
-    let styled_underline = tui.ti.has(kTerm_set_underline_style);
+    let styled_underline = tui.ti.has(TERM_SET_UNDERLINE_STYLE);
     let underline_bits = attr.masked(HlAttrFlags::UNDERLINE_MASK);
     let underline = if styled_underline {
         underline_bits == HlAttrFlags::UNDERLINE
@@ -190,13 +190,13 @@ pub(crate) fn update_attrs(tui: &mut TUIData, attr_id: c_int) {
     let style_of = |bit: HlAttrFlags| styled_underline && underline_bits == bit;
     let any_underline = underline || UNDERLINE_STYLES.iter().any(|&(bit, _)| style_of(bit));
 
-    if tui.ti.has(kTerm_set_attributes) {
+    if tui.ti.has(TERM_SET_ATTRIBUTES) {
         // One sequence describes the six attributes `sgr` covers, so
         // whatever it does not mention is turned off for free.
         if bold || dim || blink || reverse || underline || standout {
             terminfo_print_nums(
                 tui,
-                kTerm_set_attributes,
+                TERM_SET_ATTRIBUTES,
                 &[
                     c_int::from(standout),
                     c_int::from(underline),
@@ -207,21 +207,21 @@ pub(crate) fn update_attrs(tui: &mut TUIData, attr_id: c_int) {
                 ],
             );
         } else if !tui.default_attr {
-            terminfo_out(tui, kTerm_exit_attribute_mode);
+            terminfo_out(tui, TERM_EXIT_ATTRIBUTE_MODE);
         }
     } else {
         // Without `sgr` there is no way to say "only these": reset, then
         // build the set back up one capability at a time.
         if !tui.default_attr {
-            terminfo_out(tui, kTerm_exit_attribute_mode);
+            terminfo_out(tui, TERM_EXIT_ATTRIBUTE_MODE);
         }
         for (on, cap) in [
-            (bold, kTerm_enter_bold_mode),
-            (underline, kTerm_enter_underline_mode),
-            (standout, kTerm_enter_standout_mode),
-            (reverse, kTerm_enter_reverse_mode),
-            (dim, kTerm_enter_dim_mode),
-            (blink, kTerm_enter_blink_mode),
+            (bold, TERM_ENTER_BOLD_MODE),
+            (underline, TERM_ENTER_UNDERLINE_MODE),
+            (standout, TERM_ENTER_STANDOUT_MODE),
+            (reverse, TERM_ENTER_REVERSE_MODE),
+            (dim, TERM_ENTER_DIM_MODE),
+            (blink, TERM_ENTER_BLINK_MODE),
         ] {
             if on {
                 terminfo_out(tui, cap);
@@ -231,24 +231,24 @@ pub(crate) fn update_attrs(tui: &mut TUIData, attr_id: c_int) {
 
     // Attributes `sgr` never covered, whichever branch ran.
     if italic {
-        terminfo_out(tui, kTerm_enter_italics_mode);
+        terminfo_out(tui, TERM_ENTER_ITALICS_MODE);
     }
     if altfont {
         let cap = tui.terminfo_ext.enter_altfont_mode;
         out_cstr(tui, cap);
     }
     if strikethrough {
-        terminfo_out(tui, kTerm_enter_strikethrough_mode);
+        terminfo_out(tui, TERM_ENTER_STRIKETHROUGH_MODE);
     }
     if conceal {
-        terminfo_out(tui, kTerm_enter_secure_mode);
+        terminfo_out(tui, TERM_ENTER_SECURE_MODE);
     }
     if overline {
         out(tui, b"\x1b[53m");
     }
     for (bit, style) in UNDERLINE_STYLES {
         if style_of(bit) {
-            terminfo_print_nums(tui, kTerm_set_underline_style, &[style]);
+            terminfo_print_nums(tui, TERM_SET_UNDERLINE_STYLE, &[style]);
         }
     }
     if any_underline && tui.can_set_underline_color {
@@ -317,9 +317,9 @@ fn set_color(tui: &mut TUIData, role: ColorRole, attrs: &HlAttrs, attr: HlAttrFl
         let color = if want != -1 { want } else { fallback };
         if color != -1 {
             let cap = if foreground {
-                kTerm_set_rgb_foreground
+                TERM_SET_RGB_FOREGROUND
             } else {
-                kTerm_set_rgb_background
+                TERM_SET_RGB_BACKGROUND
             };
             terminfo_print_nums(
                 tui,
@@ -339,9 +339,9 @@ fn set_color(tui: &mut TUIData, role: ColorRole, attrs: &HlAttrs, attr: HlAttrFl
         let color = c_int::from(if want != 0 { want } else { fallback }) - 1;
         if color != -1 {
             let cap = if foreground {
-                kTerm_set_a_foreground
+                TERM_SET_A_FOREGROUND
             } else {
-                kTerm_set_a_background
+                TERM_SET_A_BACKGROUND
             };
             terminfo_print_nums(tui, cap, &[color]);
         }

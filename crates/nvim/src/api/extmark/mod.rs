@@ -22,13 +22,15 @@ use crate::decoration::defs::{
 };
 use crate::decoration::defs::{VirtLine, VirtText};
 use crate::decoration::{
-    HlSource, decor_put_sh, decor_put_vt, decor_range_add_sh, decor_range_add_virt,
-    decor_sh_from_inline, decor_to_dict_legacy, hl_group_name, kHlModeBlend, kHlModeCombine,
-    kHlModeReplace, kHlModeUnknown, kVLLeftcol, kVLScroll, kVPosEndOfLine,
-    kVPosEndOfLineRightAlign, kVPosInline, kVPosOverlay, kVPosRightAlign, kVPosWinCol, kVTHide,
-    kVTIsLines, kVTLinesAbove, kVTRepeatLinebreak,
+    HL_MODE_BLEND, HL_MODE_COMBINE, HL_MODE_REPLACE, HL_MODE_UNKNOWN, HlSource, V_POS_END_OF_LINE,
+    V_POS_END_OF_LINE_RIGHT_ALIGN, V_POS_INLINE, V_POS_OVERLAY, V_POS_RIGHT_ALIGN, V_POS_WIN_COL,
+    VL_LEFTCOL, VL_SCROLL, VT_HIDE, VT_IS_LINES, VT_LINES_ABOVE, VT_REPEAT_LINEBREAK, decor_put_sh,
+    decor_put_vt, decor_range_add_sh, decor_range_add_virt, decor_sh_from_inline,
+    decor_to_dict_legacy, hl_group_name,
 };
-use crate::decoration_provider::{decor_provider_clear, kDecorProviderActive, with_decor_provider};
+use crate::decoration_provider::{
+    DECOR_PROVIDER_ACTIVE, decor_provider_clear, with_decor_provider,
+};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::extmark::ExtmarkType;
 use crate::extmark::{extmark_clear, extmark_del_id, extmark_from_id, extmark_get};
@@ -45,7 +47,7 @@ use crate::pos::{MAXCOL, MAXLNUM};
 use crate::sign::init_sign_text;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, ColNr, Error, Integer, LineNr, LuaRef, NS,
-    Object, Window, kObjectTypeArray,
+    OBJECT_TYPE_ARRAY, Object, Window,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -65,7 +67,7 @@ pub const EXTMARK_SIGN: ExtmarkType = 2;
 /// No allocated decoration: the index a `DecorSignHighlight` chain ends on.
 pub const DECOR_ID_INVALID: uint32_t = u32::MAX;
 pub(crate) use crate::decoration::{
-    DECOR_HIGHLIGHT_INLINE_INIT, DECOR_PRIORITY_BASE, DECOR_SIGN_HIGHLIGHT_INIT, kSHConceal,
-    kSHConcealLines, kSHHlEol, kSHIsSign, kSHSpellOff, kSHSpellOn, kSHUIWatched,
-    kSHUIWatchedOverlay,
+    DECOR_HIGHLIGHT_INLINE_INIT, DECOR_PRIORITY_BASE, DECOR_SIGN_HIGHLIGHT_INIT, SH_CONCEAL,
+    SH_CONCEAL_LINES, SH_HL_EOL, SH_IS_SIGN, SH_SPELL_OFF, SH_SPELL_ON, SHUI_WATCHED,
+    SHUI_WATCHED_OVERLAY,
 };

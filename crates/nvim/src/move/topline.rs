@@ -23,10 +23,10 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::buffer::buf_is_empty;
-use crate::drawscreen::state::dollar_vcol;
+use crate::drawscreen::state::DOLLAR_VCOL;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID};
 use crate::grid::default_grid_ref;
-use crate::mouse::state::mouse_dragging;
+use crate::mouse::state::MOUSE_DRAGGING;
 use crate::option::vars::p_sj;
 use crate::option::{ScrollMargin, ScrollOff};
 use crate::os::libc::int64_t;
@@ -75,8 +75,8 @@ fn update_topline_win(mut win: Win) {
     // Dragging with the mouse should not scroll that quickly. This writes
     // the option value itself and restores it on the way out, so a window
     // reading `&l:scrolloff` from inside a drag sees the slowed-down one.
-    if mouse_dragging.get() > 0 {
-        so.set(OptInt::from(mouse_dragging.get() - 1));
+    if MOUSE_DRAGGING.get() > 0 {
+        so.set(OptInt::from(MOUSE_DRAGGING.get() - 1));
     }
 
     let old_topline = win.w_topline;
@@ -153,7 +153,7 @@ fn update_topline_win(mut win: Win) {
 
     // The top line moved, so the window has to be redrawn.
     if win.w_topline != old_topline || win.w_topfill != old_topfill {
-        dollar_vcol.set(ColNr::NONE);
+        DOLLAR_VCOL.set(ColNr::NONE);
         win.redraw_later(UPD_VALID);
 
         // Without 'smoothscroll' there is nothing for `w_skipcol` to mean.

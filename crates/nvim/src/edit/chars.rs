@@ -76,12 +76,12 @@ pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
     }
 
     end_pending_comment(c);
-    end_comment_pending.set(None);
+    END_COMMENT_PENDING.set(None);
 
-    did_ai.set(false);
-    did_si.set(false);
-    can_si.set(false);
-    can_si_back.set(false);
+    DID_AI.set(false);
+    DID_SI.set(false);
+    CAN_SI.set(false);
+    CAN_SI_BACK.set(false);
 
     // With input already pending, grab up to INPUT_BUFLEN characters at
     // once; this speeds up ordinary text input considerably.  Not with
@@ -94,7 +94,7 @@ pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
         && !has_event(AutoEvent::InsertCharPre)
         && !test_disable_char_avail.get()
         && !vpeekc().is_nul()
-        && State.get() & REPLACE_FLAG == 0
+        && STATE.get() & REPLACE_FLAG == 0
         && !cindent_on()
         && !p_ri()
     {
@@ -120,7 +120,7 @@ pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
                     virtcol += byte2cells(c_int::from(buf[i - 1]));
                     virtcol < ColNr::new(textwidth)
                 })
-                && !(!no_abbr.get()
+                && !(!NO_ABBR.get()
                     && !vim_iswordc(next.code())
                     && vim_iswordc(c_int::from(buf[i - 1])));
             if !take {
@@ -184,10 +184,10 @@ fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_i
     }
     let wanted = force_format != 0
         || (!ascii_iswhite(c.code())
-            && !(State.get() & REPLACE_FLAG != 0
-                && State.get() & VREPLACE_FLAG == 0
+            && !(STATE.get() & REPLACE_FLAG != 0
+                && STATE.get() & VREPLACE_FLAG == 0
                 && cursor_byte() != 0)
-            && (Win::current().w_cursor.lnum != Insstart.get().lnum
+            && (Win::current().w_cursor.lnum != INSSTART.get().lnum
                 || ((!fo_ins_long || Insstart_textlen.get() <= ColNr::new(textwidth))
                     && (!fo_ins_blank || Insstart_blank_vcol.get() <= ColNr::new(textwidth)))));
     if !wanted {
@@ -221,7 +221,7 @@ fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_i
 /// has to come off and the end leader go in -- all but its last character,
 /// which the caller inserts as an ordinary one.
 fn end_pending_comment(c: Key) {
-    if !did_ai.get() || end_comment_pending.get().map(Key::byte) != Some(c) {
+    if !DID_AI.get() || END_COMMENT_PENDING.get().map(Key::byte) != Some(c) {
         return;
     }
 
@@ -277,7 +277,7 @@ fn end_pending_comment(c: Key) {
     if i >= ColNr::ZERO
         && lead_end
             .last()
-            .is_some_and(|&last| Some(last) == end_comment_pending.get())
+            .is_some_and(|&last| Some(last) == END_COMMENT_PENDING.get())
     {
         // Backspace over everything being replaced.
         backspace_until_column(i.get());
@@ -296,12 +296,12 @@ fn end_pending_comment(c: Key) {
 pub(crate) fn echeck_abbr(c: Key, literal: bool) -> bool {
     // Not in 'paste' mode, not when disabled, and not just after moving
     // around with the cursor keys.
-    if p_paste() || no_abbr.get() || arrow_used.get() {
+    if p_paste() || NO_ABBR.get() || ARROW_USED.get() {
         return false;
     }
 
-    let start_col = if Win::current().w_cursor.lnum == Insstart.get().lnum {
-        Insstart.get().col
+    let start_col = if Win::current().w_cursor.lnum == INSSTART.get().lnum {
+        INSSTART.get().col
     } else {
         ColNr::ZERO
     };
@@ -325,7 +325,7 @@ pub(crate) fn do_insert_char_pre(c: Key) -> Option<XString> {
         return None;
     }
 
-    let save_state = State.get();
+    let save_state = STATE.get();
     let mut buf = [0u8; MB_MAXBYTES];
     let buflen = encode_char(c.code(), &mut buf);
 
@@ -344,7 +344,7 @@ pub(crate) fn do_insert_char_pre(c: Key) -> Option<XString> {
 
     set_vim_var_string(Vv::Char, None);
     drop(locked);
-    State.set(save_state);
+    STATE.set(save_state);
     res
 }
 

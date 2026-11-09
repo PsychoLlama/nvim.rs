@@ -1,7 +1,7 @@
 //! The compositor: flattens the editor's stack of grids into the single
 //! screen a UI without `ext_multigrid` can draw.
 //!
-//! [`LAYERS`] holds every grid the editor has put on screen — `default_grid`
+//! [`LAYERS`] holds every grid the editor has put on screen — `DEFAULT_GRID`
 //! at the bottom, then the floats, the message grid and the popup menu —
 //! sorted by `zindex`, and each grid's `comp_index` is its position in that
 //! stack. Whenever the editor draws a line into any of them,
@@ -11,7 +11,7 @@
 //! draws for.
 //!
 //! Every grid in the stack is owned by something else — a window, the
-//! message area, the popup menu, or the `default_grid` static — so a layer
+//! message area, the popup menu, or the `DEFAULT_GRID` static — so a layer
 //! is a bare pointer in C and a [`GridRef`] here: one unsafe constructor
 //! carrying the invariant, safe field access afterwards, which is what lets
 //! the composing itself be safe code. The scratch line and the stack are
@@ -31,7 +31,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 mod scratch;
 
@@ -53,9 +52,9 @@ use crate::option::vars::{RDB_FLAGS, p_wd};
 use crate::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
 use crate::os::time::os_sleep;
 use crate::types::{ApiString, Boolean, Handle, Integer, ScreenAttr, ScreenChar};
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::{COLUMNS, ROWS};
+use crate::ui::state::{LINE_FLAG_INVALID, LINE_FLAG_WRAP, UI_MULTIGRID};
 use crate::ui::state::{LineFlags, RemoteUI};
-use crate::ui::state::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
 use crate::ui::{
     ui_call_flush, ui_composed_call_grid_cursor_goto, ui_composed_call_grid_resize,
     ui_composed_call_grid_scroll, ui_composed_call_raw_line, ui_has,
@@ -74,7 +73,7 @@ fn msg_layer() -> GridRef {
 }
 
 /// How many UIs this module draws for. Zero means nothing is composed.
-static composed_uis: GlobalCell<c_int> = GlobalCell::new(0);
+static COMPOSED_UIS: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// The layer stack, bottom first.
 static LAYERS: GlobalCell<Vec<GridRef>> = GlobalCell::new(Vec::new());
@@ -84,41 +83,41 @@ static BUFS: GlobalCell<Bufs> = GlobalCell::new(Bufs::EMPTY);
 /// The grid the last [`ui_comp_set_grid`] selected: every coordinate the
 /// entry points take is relative to it. `None` until [`ui_comp_init`], and
 /// only then: nothing clears it once it is set.
-static curgrid: GlobalCell<Option<GridRef>> = GlobalCell::new(None);
+static CURGRID: GlobalCell<Option<GridRef>> = GlobalCell::new(None);
 
-/// [`curgrid`], for the callers that have already established there is one.
+/// [`CURGRID`], for the callers that have already established there is one.
 ///
 /// Every one of them reached here through an [`ui_comp_set_grid`] that
 /// answered `true`, which is what selects a layer.
 fn cur_layer() -> GridRef {
-    curgrid.get().expect("a layer is selected")
+    CURGRID.get().expect("a layer is selected")
 }
 
 /// The size the default grid was last resized to, for the assertions that
 /// composing stays inside the scratch line. C keeps both under `NDEBUG`.
-static chk_width: GlobalCell<c_int> = GlobalCell::new(0);
-static chk_height: GlobalCell<c_int> = GlobalCell::new(0);
+static CHK_WIDTH: GlobalCell<c_int> = GlobalCell::new(0);
+static CHK_HEIGHT: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// False between "the screen is about to be cleared" and the clear, which is
 /// when floats must not be redrawn.
-static valid_screen: GlobalCell<bool> = GlobalCell::new(true);
+static VALID_SCREEN: GlobalCell<bool> = GlobalCell::new(true);
 
 /// Where the message grid sits and whether it was scrolled into place —
 /// `INT_MAX` until the first `msg_set_pos`.
-static msg_current_row: GlobalCell<c_int> = GlobalCell::new(c_int::MAX);
-static msg_was_scrolled: GlobalCell<bool> = GlobalCell::new(false);
+static MSG_CURRENT_ROW: GlobalCell<c_int> = GlobalCell::new(c_int::MAX);
+static MSG_WAS_SCROLLED: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The `'msgsep'` row drawn just above the message grid, and its fill
 /// character. `-1` means there is none.
-static msg_sep_row: GlobalCell<c_int> = GlobalCell::new(-1);
-static msg_sep_char: GlobalCell<ScreenChar> = GlobalCell::new(schar_from_ascii(b' '));
+static MSG_SEP_ROW: GlobalCell<c_int> = GlobalCell::new(-1);
+static MSG_SEP_CHAR: GlobalCell<ScreenChar> = GlobalCell::new(schar_from_ascii(b' '));
 
 /// Highlight ids for the `'redrawdebug'` overlays: a forwarded line, the
 /// cleared tail, a composed line, and a recomposed area.
-static dbghl_normal: GlobalCell<c_int> = GlobalCell::new(0);
-static dbghl_clear: GlobalCell<c_int> = GlobalCell::new(0);
-static dbghl_composed: GlobalCell<c_int> = GlobalCell::new(0);
-static dbghl_recompose: GlobalCell<c_int> = GlobalCell::new(0);
+static DBGHL_NORMAL: GlobalCell<c_int> = GlobalCell::new(0);
+static DBGHL_CLEAR: GlobalCell<c_int> = GlobalCell::new(0);
+static DBGHL_COMPOSED: GlobalCell<c_int> = GlobalCell::new(0);
+static DBGHL_RECOMPOSE: GlobalCell<c_int> = GlobalCell::new(0);
 
 fn layer_count() -> usize {
     LAYERS.with(Vec::len)
@@ -139,14 +138,14 @@ fn topmost_at(row: c_int, col: c_int, accept: impl Fn(GridRef) -> bool) -> Optio
 
 pub fn ui_comp_init() {
     LAYERS.with_mut(|stack| stack.push(default_layer()));
-    curgrid.set(Some(default_layer()));
+    CURGRID.set(Some(default_layer()));
 }
 
 pub fn ui_comp_syn_init() {
-    dbghl_normal.set(syn_group(c"RedrawDebugNormal"));
-    dbghl_clear.set(syn_group(c"RedrawDebugClear"));
-    dbghl_composed.set(syn_group(c"RedrawDebugComposed"));
-    dbghl_recompose.set(syn_group(c"RedrawDebugRecompose"));
+    DBGHL_NORMAL.set(syn_group(c"RedrawDebugNormal"));
+    DBGHL_CLEAR.set(syn_group(c"RedrawDebugClear"));
+    DBGHL_COMPOSED.set(syn_group(c"RedrawDebugComposed"));
+    DBGHL_RECOMPOSE.set(syn_group(c"RedrawDebugRecompose"));
 }
 
 /// The id of a highlight group, defining it if it is new.
@@ -157,21 +156,21 @@ fn syn_group(name: &'static CStr) -> c_int {
 
 /// Starts drawing for `ui` from the flattened grid.
 pub fn ui_comp_attach(ui: &mut RemoteUI) {
-    composed_uis.set(composed_uis.get() + 1);
+    COMPOSED_UIS.set(COMPOSED_UIS.get() + 1);
     ui.composed = true;
 }
 
 /// Stops drawing for `ui`.
 pub fn ui_comp_detach(ui: &mut RemoteUI) {
-    composed_uis.set(composed_uis.get() - 1);
-    if composed_uis.get() == 0 {
+    COMPOSED_UIS.set(COMPOSED_UIS.get() - 1);
+    if COMPOSED_UIS.get() == 0 {
         BUFS.with_mut(|bufs| *bufs = Bufs::EMPTY);
     }
     ui.composed = false;
 }
 
 pub fn ui_comp_should_draw() -> bool {
-    composed_uis.get() != 0 && valid_screen.get()
+    COMPOSED_UIS.get() != 0 && VALID_SCREEN.get()
 }
 
 /// Raises or lowers the layer at `layer_idx`, bringing `comp_index` back in
@@ -251,7 +250,7 @@ pub fn ui_comp_put_grid(
         // A new grid of the current window's own zindex goes *under* that
         // window unless it asked to be on top. Upstream reads
         // `layers[insert_at - 1]` without checking `insert_at` first; that
-        // read needs a grid below `default_grid`'s zindex of 0, which
+        // read needs a grid below `DEFAULT_GRID`'s zindex of 0, which
         // nothing produces.
         if insert_at > 0
             && let Some(win) = Win::current_or_none()
@@ -290,8 +289,8 @@ pub fn ui_comp_remove_grid(grid: GridRef) {
     if grid.comp_index == 0 {
         return; // The grid was not a layer.
     }
-    if curgrid.get().is_some_and(|cur| cur.same(grid)) {
-        curgrid.set(Some(default_layer()));
+    if CURGRID.get().is_some_and(|cur| cur.same(grid)) {
+        CURGRID.set(Some(default_layer()));
     }
 
     let removed_at = grid.comp_index;
@@ -313,11 +312,11 @@ pub fn ui_comp_remove_grid(grid: GridRef) {
 
 /// Selects the layer `handle` names as the one coordinates are relative to.
 pub fn ui_comp_set_grid(handle: Handle) -> bool {
-    if curgrid.get().is_some_and(|cur| cur.handle == handle) {
+    if CURGRID.get().is_some_and(|cur| cur.handle == handle) {
         return true;
     }
     let found = LAYERS.with(|stack| stack.iter().find(|layer| layer.handle == handle).copied());
-    found.inspect(|&grid| curgrid.set(Some(grid))).is_some()
+    found.inspect(|&grid| CURGRID.set(Some(grid))).is_some()
 }
 
 /// Moves `grid` up to `new_index`, sliding everything it passes down one,
@@ -374,7 +373,7 @@ pub(crate) fn ui_comp_mouse_focus(row: c_int, col: c_int) -> Option<GridRef> {
     if let Some(grid) = topmost_at(row, col, |grid| grid.mouse_enabled) {
         return Some(grid);
     }
-    if ui_has(kUIMultigrid) {
+    if ui_has(UI_MULTIGRID) {
         // With `ext_multigrid` a window's grid is not composed and so has no
         // `comp_row`/`comp_col`; the window's own position stands in.
         for wp in windows_in_curtab() {
@@ -423,11 +422,11 @@ fn compose_line(row: Integer, startcol: Integer, endcol: Integer, mut flags: Lin
     // We may be starting on the right half of a double-width character, so
     // take in the left half too — and skip it in the output if it was not.
     let (mut skipstart, mut skipend) = (0, 0);
-    if startcol > 0 && flags & kLineFlagInvalid != 0 {
+    if startcol > 0 && flags & LINE_FLAG_INVALID != 0 {
         startcol -= 1;
         skipstart = 1;
     }
-    if endcol < Integer::from(default.cols) && flags & kLineFlagInvalid != 0 {
+    if endcol < Integer::from(default.cols) && flags & LINE_FLAG_INVALID != 0 {
         endcol += 1;
         skipend = 1;
     }
@@ -436,13 +435,13 @@ fn compose_line(row: Integer, startcol: Integer, endcol: Integer, mut flags: Lin
     let (top, skipstart, skipend) =
         BUFS.with_mut(|bufs| compose_into(bufs, row, startcol, endcol, skips));
 
-    debug_assert!(endcol <= chk_width.get().into(), "endcol <= chk_width");
-    debug_assert!(row < chk_height.get().into(), "row < chk_height");
+    debug_assert!(endcol <= CHK_WIDTH.get().into(), "endcol <= chk_width");
+    debug_assert!(row < CHK_HEIGHT.get().into(), "row < chk_height");
 
     // A line keeps its wrap flag only if it came from a full-width layer.
-    if !top.is_some_and(|top| top.same(default) || (top.comp_col == 0 && top.cols == Columns.get()))
+    if !top.is_some_and(|top| top.same(default) || (top.comp_col == 0 && top.cols == COLUMNS.get()))
     {
-        flags &= !kLineFlagWrap;
+        flags &= !LINE_FLAG_WRAP;
     }
 
     let start = startcol + len_as_integer(skipstart);
@@ -512,13 +511,13 @@ fn compose_into(
         // The default grid covers every column of every row it has, and is
         // the bottom layer, so some layer always won the column above.
         let mut grid = top.expect("a layer covers the column");
-        if Integer::from(msg_sep_row.get()) == row && grid.comp_index <= msg_layer().comp_index {
+        if Integer::from(MSG_SEP_ROW.get()) == row && grid.comp_index <= msg_layer().comp_index {
             // Upstream's TODO: once floats have borders, the separator can
             // just be one around the message grid.
             grid = msg_layer();
             // SAFETY: the highlight table is built before anything draws.
             let sep_attr = hl_attr(HLF_MSGSEP);
-            line[at..at + n].fill(msg_sep_char.get());
+            line[at..at + n].fill(MSG_SEP_CHAR.get());
             attrbuf[at..at + n].fill(sep_attr);
         } else {
             let grid_row = row - Integer::from(grid.comp_row);
@@ -608,7 +607,7 @@ fn debug_delay(lines: Integer) {
 fn compose_area<T: Into<Integer>>(startrow: T, endrow: T, startcol: T, endcol: T) {
     let (startrow, startcol) = (startrow.into(), startcol.into());
     let (endrow, endcol) = (endrow.into(), endcol.into());
-    let recompose = dbghl_recompose.get();
+    let recompose = DBGHL_RECOMPOSE.get();
     compose_debug((startrow, endrow), (startcol, endcol), recompose, true);
     let default = default_layer();
     let endrow = endrow.min(default.rows.into());
@@ -617,7 +616,7 @@ fn compose_area<T: Into<Integer>>(startrow: T, endrow: T, startcol: T, endcol: T
         return;
     }
     for r in number_as_int(startrow)..number_as_int(endrow) {
-        compose_line(r.into(), startcol, endcol, kLineFlagInvalid);
+        compose_line(r.into(), startcol, endcol, LINE_FLAG_INVALID);
     }
 }
 
@@ -662,7 +661,7 @@ pub fn ui_comp_raw_line(
     let mut endcol = endcol + Integer::from(cur.comp_col);
     let mut clearcol = clearcol + Integer::from(cur.comp_col);
     if !cur.same(default_layer()) {
-        flags &= !kLineFlagWrap;
+        flags &= !LINE_FLAG_WRAP;
     }
     debug_assert!(endcol <= clearcol, "endcol <= clearcol");
 
@@ -685,12 +684,12 @@ pub fn ui_comp_raw_line(
     let covered = curgrid_covered_above(number_as_int(row));
     // Upstream's TODO: `compose_line` should learn to respect clearing, and
     // be optimized for uncovered lines.
-    if flags & kLineFlagInvalid != 0 || covered || cur.blending {
-        let composed = dbghl_composed.get();
+    if flags & LINE_FLAG_INVALID != 0 || covered || cur.blending {
+        let composed = DBGHL_COMPOSED.get();
         compose_debug((row, row + 1), (startcol, clearcol), composed, true);
         compose_line(row, startcol, clearcol, flags);
     } else {
-        let (normal, clear) = (dbghl_normal.get(), dbghl_clear.get());
+        let (normal, clear) = (DBGHL_NORMAL.get(), DBGHL_CLEAR.get());
         compose_debug(
             (row, row + 1),
             (startcol, endcol),
@@ -708,10 +707,10 @@ pub fn ui_comp_raw_line(
 /// Marks the screen invalid — it is about to be cleared, and floats must not
 /// be redrawn until it has been. Answers the previous state.
 pub fn ui_comp_set_screen_valid(valid: bool) -> bool {
-    let old_val = valid_screen.get();
-    valid_screen.set(valid);
+    let old_val = VALID_SCREEN.get();
+    VALID_SCREEN.set(valid);
     if !valid {
-        msg_sep_row.set(-1);
+        MSG_SEP_ROW.set(-1);
     }
     old_val
 }
@@ -729,47 +728,47 @@ pub fn ui_comp_msg_set_pos(
     msg.pending_comp_index_update = true;
     msg.comp_row = number_as_int(row);
     if scrolled && row > 0 {
-        msg_sep_row.set(number_as_int(row) - 1);
+        MSG_SEP_ROW.set(number_as_int(row) - 1);
         if !sep_char.data().is_null() {
-            msg_sep_char.set(schar_from_buf(sep_char.as_bytes()));
+            MSG_SEP_CHAR.set(schar_from_buf(sep_char.as_bytes()));
         }
     } else {
-        msg_sep_row.set(-1);
+        MSG_SEP_ROW.set(-1);
     }
 
-    let was_at = msg_current_row.get();
+    let was_at = MSG_CURRENT_ROW.get();
     if row > Integer::from(was_at) && ui_comp_should_draw() {
         let first_row = Integer::from((was_at - 1).max(0));
         compose_area(first_row, row, 0, default_layer().cols.into());
     } else if row < Integer::from(was_at)
         && ui_comp_should_draw()
-        && (was_at < Rows.get() || (scrolled && !msg_was_scrolled.get()))
+        && (was_at < ROWS.get() || (scrolled && !MSG_WAS_SCROLLED.get()))
     {
         let delta = was_at - number_as_int(row);
         if msg.blending {
             let first_row = (number_as_int(row) - c_int::from(scrolled)).max(0);
-            compose_area(first_row, Rows.get() - delta, 0, Columns.get());
+            compose_area(first_row, ROWS.get() - delta, 0, COLUMNS.get());
         } else {
             // Scroll the separator together with the message text.
-            let first_row = (number_as_int(row) - c_int::from(msg_was_scrolled.get())).max(0);
-            let (bot, right) = (Integer::from(Rows.get()), Integer::from(Columns.get()));
+            let first_row = (number_as_int(row) - c_int::from(MSG_WAS_SCROLLED.get())).max(0);
+            let (bot, right) = (Integer::from(ROWS.get()), Integer::from(COLUMNS.get()));
             ui_composed_call_grid_scroll(1, first_row.into(), bot, 0, right, delta.into(), 0);
-            if scrolled && !msg_was_scrolled.get() && row > 0 {
-                compose_area(row - 1, row, 0, Columns.get().into());
+            if scrolled && !MSG_WAS_SCROLLED.get() && row > 0 {
+                compose_area(row - 1, row, 0, COLUMNS.get().into());
             }
         }
     }
 
-    msg_current_row.set(number_as_int(row));
-    msg_was_scrolled.set(scrolled);
+    MSG_CURRENT_ROW.set(number_as_int(row));
+    MSG_WAS_SCROLLED.set(scrolled);
 }
 
-/// Whether `curgrid` has something over it on `row` or above.
+/// Whether `CURGRID` has something over it on `row` or above.
 ///
 /// Upstream's TODO: this only handles the message row.
 fn curgrid_covered_above(row: c_int) -> bool {
     let above_msg = layer_at(layer_count() - 1).same(msg_layer())
-        && row < msg_current_row.get() - c_int::from(msg_was_scrolled.get());
+        && row < MSG_CURRENT_ROW.get() - c_int::from(MSG_WAS_SCROLLED.get());
     layer_count() - usize::from(above_msg) > cur_layer().comp_index + 1
 }
 
@@ -795,7 +794,7 @@ pub fn ui_comp_grid_scroll(
     if covered || cur.blending {
         // Upstream's TODO: check whether the rectangles overlap at all, and
         // work out the subareas that could still scroll.
-        let recompose = dbghl_recompose.get();
+        let recompose = DBGHL_RECOMPOSE.get();
         compose_debug((top, bot), (left, right), recompose, true);
         for r in number_as_int(top + (-rows).max(0))..number_as_int(bot - rows.max(0)) {
             // Upstream's TODO: a workaround for `win_update` scrolling twice
@@ -818,8 +817,8 @@ pub fn ui_comp_grid_scroll(
 pub fn ui_comp_grid_resize(grid: Integer, width: Integer, height: Integer) {
     if grid == 1 {
         ui_composed_call_grid_resize(1, width, height);
-        chk_width.set(number_as_int(width));
-        chk_height.set(number_as_int(height));
+        CHK_WIDTH.set(number_as_int(width));
+        CHK_HEIGHT.set(number_as_int(height));
         let new_bufsize = as_index(number_as_int(width));
         BUFS.with_mut(|bufs| {
             if bufs.chars.len() != new_bufsize {

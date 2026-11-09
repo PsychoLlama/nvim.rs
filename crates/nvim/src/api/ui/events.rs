@@ -31,7 +31,7 @@ use crate::types::DictBuilder;
 use crate::types::builders::ArrayBuf;
 use crate::types::{ApiString, Array, Boolean, Integer, Object, WindowHandle};
 use crate::ui::state::RemoteUI;
-use crate::ui::state::{kUILinegrid, kUITermColors};
+use crate::ui::state::{UI_LINEGRID, UI_TERM_COLORS};
 use core::ffi::c_int;
 
 /// Queues `name(args...)` on `ui`'s buffer, with the argument array built
@@ -163,7 +163,7 @@ pub fn remote_ui_stop(_ui: &mut RemoteUI) {}
 
 /// Whether `ui` speaks the modern grid protocol.
 pub(super) fn linegrid(ui: &RemoteUI) -> bool {
-    ui.ui_ext[kUILinegrid as usize]
+    ui.ui_ext[UI_LINEGRID as usize]
 }
 
 /// Clears a grid.
@@ -317,7 +317,7 @@ pub fn remote_ui_default_colors_set(
     // A UI that did not ask for `ext_termcolors` has no colours of its own
     // to fall back on, so "unset" has to be resolved to something, and
     // 'background' is the only hint there is.
-    if !ui.ui_ext[kUITermColors as usize] {
+    if !ui.ui_ext[UI_TERM_COLORS as usize] {
         let dark = P_BG.first_byte() == b'd';
         if rgb_fg == -1 {
             rgb_fg = if dark { 0xffffff } else { 0 };

@@ -16,7 +16,7 @@
 use crate::api::extmark::parse_virt_text;
 use crate::ascii::NUL;
 use crate::decoration::defs::VirtText;
-use crate::types::{LineNr, Object, VarNumber, kObjectTypeArray, kObjectTypeString};
+use crate::types::{LineNr, OBJECT_TYPE_ARRAY, OBJECT_TYPE_STRING, Object, VarNumber};
 use crate::winlayer::WinId;
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
@@ -97,7 +97,7 @@ pub(crate) fn get_foldtext(
             let no_emsg = Suppress::emsg();
             let obj: Object = eval_foldtext(window);
             match obj.kind() {
-                kObjectTypeArray => {
+                OBJECT_TYPE_ARRAY => {
                     // A list of `[text, hl]` chunks: the caller draws them,
                     // and the text is empty.
                     let chunks = obj.into_array().expect("the tag says Array");
@@ -106,7 +106,7 @@ pub(crate) fn get_foldtext(
                         answer = Some(FoldText::Chunks(parsed));
                     }
                 }
-                kObjectTypeString => {
+                OBJECT_TYPE_STRING => {
                     let string = obj.into_string().expect("the tag says String");
                     // The null string is what a failed evaluation answers.
                     if !string.is_null() {

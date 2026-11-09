@@ -31,7 +31,7 @@
 
 use crate::lua::abi::lua_Number;
 use crate::os::libc::size_t;
-use crate::types::{ObjectType, kObjectTypeNil};
+use crate::types::{OBJECT_TYPE_NIL, ObjectType};
 
 // The typval-to-Lua direction, carved out of this module's
 // `typval_encode.c.h` instantiation.
@@ -88,7 +88,7 @@ impl LuaTableProps {
         maxidx: 0,
         string_keys_num: 0,
         has_string_with_nul: false,
-        type_0: kObjectTypeNil,
+        type_0: OBJECT_TYPE_NIL,
         val: 0.0,
         has_type_key: false,
     };

@@ -20,9 +20,9 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{kVTIsLines, kVTLinesAbove, mark_virt_chain, ns_in_win, with_decor_virt};
+use super::{VT_IS_LINES, VT_LINES_ABOVE, mark_virt_chain, ns_in_win, with_decor_virt};
 use crate::decoration::defs::VirtTextChunk;
-use crate::decoration::{kMTMetaConcealLines, kMTMetaLines};
+use crate::decoration::{MT_META_CONCEAL_LINES, MT_META_LINES};
 use crate::decoration_provider::decor_providers_invoke_conceal_line;
 use crate::drawscreen::conceal_cursor_line;
 use crate::highlight::hl_combine_attr;
@@ -38,8 +38,8 @@ use crate::types::{LineNr, OptInt};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
-/// Marktree filters, indexed by `MetaIndex`: `kMTMetaLines` is 1 and
-/// `kMTMetaConcealLines` 4.
+/// Marktree filters, indexed by `MetaIndex`: `MT_META_LINES` is 1 and
+/// `MT_META_CONCEAL_LINES` 4.
 static LINES_FILTER: MetaCount = [0, kMTFilterSelect, 0, 0, 0];
 static CONCEAL_FILTER: MetaCount = [0, 0, 0, 0, kMTFilterSelect];
 
@@ -113,8 +113,8 @@ pub fn decor_find_virttext(buffer: Buf, row: c_int, ns_id: uint64_t) -> Option<u
         }
         if !mt_invalid(mark)
             && (ns_id == 0 || ns_id == uint64_t::from(mark.ns))
-            && let Some(vt) =
-                mark_virt_chain(mark).find(|&vt| with_decor_virt(vt, |l| l.flags & kVTIsLines == 0))
+            && let Some(vt) = mark_virt_chain(mark)
+                .find(|&vt| with_decor_virt(vt, |l| l.flags & VT_IS_LINES == 0))
         {
             return Some(vt);
         }
@@ -144,7 +144,7 @@ pub fn decor_conceal_line(window: Win, row: c_int, check_cursor: bool) -> bool {
 
     // No need to scan the marktree if there are no conceal_line marks.
     let buf = window.buffer();
-    if buf.meta_total(kMTMetaConcealLines) == 0 {
+    if buf.meta_total(MT_META_CONCEAL_LINES) == 0 {
         return window.providers_conceal_line(row);
     }
 
@@ -199,7 +199,7 @@ impl Win {
         let buf = wp.buffer();
         // Only pay for what you use: in a buffer with no virt_lines the layout
         // code does not reach the marktree at all.
-        if buf.meta_total(kMTMetaLines) == 0 {
+        if buf.meta_total(MT_META_LINES) == 0 {
             return 0;
         }
 
@@ -216,17 +216,17 @@ impl Win {
             if !mt_invalid(mark) && ns_in_win(mark.ns, wp) {
                 for vt in mark_virt_chain(mark) {
                     let (flags, count) = with_decor_virt(vt, |link| {
-                        let count = if link.flags & kVTIsLines != 0 {
+                        let count = if link.flags & VT_IS_LINES != 0 {
                             link.data.lines().len()
                         } else {
                             0
                         };
                         (link.flags, count)
                     });
-                    if flags & kVTIsLines == 0 {
+                    if flags & VT_IS_LINES == 0 {
                         continue;
                     }
-                    let above = flags & kVTLinesAbove != 0;
+                    let above = flags & VT_LINES_ABOVE != 0;
                     let mrow = mark.pos.row;
                     let draw_row = mrow + c_int::from(!above);
                     // The fold and conceal tests stay inside the `&&` chain:

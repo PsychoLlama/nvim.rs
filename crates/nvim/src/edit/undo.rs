@@ -86,11 +86,11 @@ pub(crate) fn start_arrow_with_change(end_insert_pos: Option<InsertEnd>, end_cha
 }
 
 fn start_arrow_common(end_insert_pos: Option<InsertEnd>, end_change: bool) {
-    if !arrow_used.get() && end_change {
+    if !ARROW_USED.get() && end_change {
         // Something has been inserted: close the block.
         append_to_redobuff(ESC_STR.to_bytes());
         stop_insert(end_insert_pos, false, false);
-        arrow_used.set(true);
+        ARROW_USED.set(true);
     }
     check_spell_redraw();
 }
@@ -111,9 +111,9 @@ pub(crate) fn check_spell_redraw() {
 ///
 /// `Err` when undo is impossible, in which case the caller must not insert.
 pub(crate) fn stop_arrow() -> Result<(), Failed> {
-    if arrow_used.get() {
-        Insstart.set(Win::current().w_cursor); // new insertion starts here
-        if Insstart.get().col > Insstart_orig.get().col && !ins_need_undo.get() {
+    if ARROW_USED.get() {
+        INSSTART.set(Win::current().w_cursor); // new insertion starts here
+        if INSSTART.get().col > INSSTART_ORIG.get().col && !ins_need_undo.get() {
             // Don't update the original insert position when moved to the
             // right, except when nothing was inserted yet.
             update_Insstart_orig.set(false);
@@ -124,13 +124,13 @@ pub(crate) fn stop_arrow() -> Result<(), Failed> {
         )));
 
         if save_cursor_line().is_ok() {
-            arrow_used.set(false);
+            ARROW_USED.set(false);
             ins_need_undo.set(false);
         }
-        ai_col.set(ColNr::ZERO);
-        if State.get() & VREPLACE_FLAG != 0 {
-            orig_line_count.set(Buf::current().b_ml.ml_line_count);
-            vr_lines_changed.set(1);
+        AI_COL.set(ColNr::ZERO);
+        if STATE.get() & VREPLACE_FLAG != 0 {
+            ORIG_LINE_COUNT.set(Buf::current().b_ml.ml_line_count);
+            VR_LINES_CHANGED.set(1);
         }
         reset_redobuff();
         append_to_redobuff(b"1i"); // pretend we start an insertion
@@ -142,7 +142,7 @@ pub(crate) fn stop_arrow() -> Result<(), Failed> {
     // Always open a fold at the cursor line when inserting something.
     fold_open_cursor();
 
-    if arrow_used.get() || ins_need_undo.get() {
+    if ARROW_USED.get() || ins_need_undo.get() {
         Err(Failed)
     } else {
         Ok(())
@@ -177,7 +177,7 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
         last_insert_skip.set(if added < 0 { 0 } else { new_insert_skip.get() });
     }
 
-    if !arrow_used.get()
+    if !ARROW_USED.get()
         && let Some(end_insert_pos) = end_insert_pos
     {
         // Auto-format now.  It looks odd to do this when *stopping* an
@@ -224,7 +224,7 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
         // only if the remembered position is still in the buffer -- the
         // text may have changed unexpectedly.
         if !nomove
-            && did_ai.get()
+            && DID_AI.get()
             && (esc
                 || (!cpo_has(CpoFlag::INDENT)
                     && Win::current().w_cursor.lnum != end_insert_pos.pos().lnum))
@@ -264,16 +264,16 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
         }
     }
 
-    did_ai.set(false);
-    did_si.set(false);
-    can_si.set(false);
-    can_si_back.set(false);
+    DID_AI.set(false);
+    DID_SI.set(false);
+    CAN_SI.set(false);
+    CAN_SI_BACK.set(false);
 
     // Set `'[` and `']` to the inserted text.  A null `end_insert_pos`
     // means a different buffer is current now.
     if let Some(end_insert_pos) = end_insert_pos {
-        Buf::current().b_op_start = Insstart.get();
-        Buf::current().b_op_start_orig = Insstart_orig.get();
+        Buf::current().b_op_start = INSSTART.get();
+        Buf::current().b_op_start_orig = INSSTART_ORIG.get();
         Buf::current().b_op_end = end_insert_pos.pos();
     }
 }

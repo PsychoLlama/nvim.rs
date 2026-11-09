@@ -48,7 +48,7 @@ pub fn cmd_screencol(bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let m = if KEY_TYPED.get() {
         let cells = match cmdline_window() {
             Some(w) => w.w_view_width * w.w_view_height,
-            None => Columns.get() * Rows.get(),
+            None => COLUMNS.get() * ROWS.get(),
         };
         if cells < 0 { MAXCOL } else { cells }
     } else {
@@ -89,7 +89,7 @@ pub(crate) fn correct_screencol(
     if at.first().is_none_or(|&b| b < 0x80) {
         return col;
     }
-    if c_cluster_len(at) > 1 && c_cells_at(at) > 1 && col % Columns.get() + cells > Columns.get() {
+    if c_cluster_len(at) > 1 && c_cells_at(at) > 1 && col % COLUMNS.get() + cells > COLUMNS.get() {
         col + 1
     } else {
         col
@@ -104,7 +104,7 @@ pub(crate) fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
         return;
     }
 
-    if ui_has(kUICmdline) {
+    if ui_has(UI_CMDLINE) {
         cc.special_char = 0;
         cc.redraw_state = CMD_REDRAW_ALL;
         return;
@@ -172,7 +172,7 @@ pub fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
         return;
     }
     let mut cc = Cc::current();
-    if !ui_has(kUICmdline) {
+    if !ui_has(UI_CMDLINE) {
         MSG_NO_MORE.set(true);
         msg_putchar(::core::ffi::c_int::from(c));
         if shift {
@@ -199,7 +199,7 @@ pub fn unputcmdline() {
     }
     let mut cc = Cc::current();
     MSG_NO_MORE.set(true);
-    if cc.len() == cc.cmdpos && !ui_has(kUICmdline) {
+    if cc.len() == cc.cmdpos && !ui_has(UI_CMDLINE) {
         msg_putchar(::core::ffi::c_int::from(b' '));
     } else {
         draw_cmdline(cc.cmdpos, cluster_len_at(cc, cc.cmdpos));
@@ -257,11 +257,11 @@ pub fn put_on_cmdline(text: &[u8], redraw: bool) {
 
     if redraw && !CMD_SILENT.get() {
         MSG_NO_MORE.set(true);
-        let row_before = cmdline_row.get();
+        let row_before = CMDLINE_ROW.get();
         cursorcmd();
         draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
         // Avoid clearing the rest of the line too often.
-        if cmdline_row.get() != row_before || cc.overstrike {
+        if CMDLINE_ROW.get() != row_before || cc.overstrike {
             msg_clr_eos();
         }
         MSG_NO_MORE.set(false);
@@ -269,7 +269,7 @@ pub fn put_on_cmdline(text: &[u8], redraw: bool) {
 
     // The maximum column; an overflowed product reads as negative.
     let m = if KEY_TYPED.get() {
-        let cells = Columns.get() * Rows.get();
+        let cells = COLUMNS.get() * ROWS.get();
         if cells < 0 { MAXCOL } else { cells }
     } else {
         MAXCOL
@@ -316,7 +316,7 @@ pub(crate) fn redrawcmdprompt() {
         return;
     }
     let mut cc = Cc::current();
-    if ui_has(kUICmdline) {
+    if ui_has(UI_CMDLINE) {
         cc.redraw_state = CMD_REDRAW_ALL;
         return;
     }
@@ -326,7 +326,7 @@ pub(crate) fn redrawcmdprompt() {
     // A copy: the message code re-enters the editor.
     if let Some(prompt) = cc.cmdprompt.clone() {
         msg_str_hl(prompt.as_cstr(), cc.hl_id, false);
-        cc.cmdindent = MSG_COL.get() + (MSG_ROW.get() - cmdline_row.get()) * Columns.get();
+        cc.cmdindent = MSG_COL.get() + (MSG_ROW.get() - CMDLINE_ROW.get()) * COLUMNS.get();
         // The reverse of cmd_startcol().
         if cc.cmdfirstc != 0 {
             cc.cmdindent -= 1;
@@ -347,14 +347,14 @@ pub fn redrawcmd() {
     }
 
     let mut cc = Cc::current();
-    if ui_has(kUICmdline) {
+    if ui_has(UI_CMDLINE) {
         draw_cmdline(0, cc.len());
         return;
     }
 
     // With 'incsearch' there may be no command line while redrawing.
     if !cc.in_use() {
-        msg_cursor_goto(cmdline_row.get(), 0);
+        msg_cursor_goto(CMDLINE_ROW.get(), 0);
         msg_clr_eos();
         return;
     }
@@ -384,37 +384,37 @@ pub fn redrawcmd() {
 
     // Typing ':' at the more prompt may set skip_redraw, which is not
     // wanted in command-line mode.
-    skip_redraw.set(false);
+    SKIP_REDRAW.set(false);
     CMDLINE_WAS_LAST_DRAWN.set(true);
     REDRAWING_CMDLINE.set(false);
 }
 
 /// Recompute the screen row the command line lives on.
 pub fn compute_cmdrow() {
-    if exmode_active.get() || MSG_SCROLLED.get() != 0 {
-        cmdline_row.set(Rows.get() - 1);
+    if EXMODE_ACTIVE.get() || MSG_SCROLLED.get() != 0 {
+        CMDLINE_ROW.set(ROWS.get() - 1);
     } else {
         let wp = lastwin_nofloating(None);
-        cmdline_row.set(
+        CMDLINE_ROW.set(
             wp.w_winrow + wp.w_height + wp.w_hsep_height + wp.w_status_height + global_stl_height(),
         );
     }
-    if cmdline_row.get() == Rows.get() && p_ch() > 0 {
-        cmdline_row.set(cmdline_row.get() - 1);
+    if CMDLINE_ROW.get() == ROWS.get() && p_ch() > 0 {
+        CMDLINE_ROW.set(CMDLINE_ROW.get() - 1);
     }
-    LINES_LEFT.set(cmdline_row.get());
+    LINES_LEFT.set(CMDLINE_ROW.get());
 }
 
 /// Move the screen cursor to the command line's cursor position.
 pub fn cursorcmd() {
-    if CMD_SILENT.get() || ui_has(kUICmdline) {
+    if CMD_SILENT.get() || ui_has(UI_CMDLINE) {
         return;
     }
 
     let cmdspos = Cc::current().cmdspos;
-    MSG_ROW.set(cmdline_row.get() + cmdspos / Columns.get());
-    MSG_COL.set(cmdspos % Columns.get());
-    MSG_ROW.set(MSG_ROW.get().min(Rows.get() - 1));
+    MSG_ROW.set(CMDLINE_ROW.get() + cmdspos / COLUMNS.get());
+    MSG_COL.set(cmdspos % COLUMNS.get());
+    MSG_ROW.set(MSG_ROW.get().min(ROWS.get() - 1));
 
     msg_cursor_goto(MSG_ROW.get(), MSG_COL.get());
 }
@@ -422,7 +422,7 @@ pub fn cursorcmd() {
 /// Move the screen cursor to the start of the command line, clearing the
 /// bottom lines when `clr` is set.
 pub fn gotocmdline(clr: bool) {
-    if ui_has(kUICmdline) {
+    if ui_has(UI_CMDLINE) {
         return;
     }
     msg_start();
@@ -432,5 +432,5 @@ pub fn gotocmdline(clr: bool) {
         // Clear the bottom line(s); this resets clear_cmdline.
         msg_clr_eos();
     }
-    msg_cursor_goto(cmdline_row.get(), 0);
+    msg_cursor_goto(CMDLINE_ROW.get(), 0);
 }

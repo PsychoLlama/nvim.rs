@@ -23,8 +23,8 @@ use crate::lua::abi::lua_Number;
 use crate::lua::stack::{At, Stack};
 use crate::narrow::number_as_int;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, Float, Handle, Integer, Object, ObjectType,
-    kObjectTypeFloat,
+    ApiDict, ApiString, Array, Boolean, Float, Handle, Integer, OBJECT_TYPE_FLOAT, Object,
+    ObjectType,
 };
 
 /// Push the key a special table's type tag is stored under.
@@ -63,7 +63,7 @@ pub fn push_integer(stack: &mut Stack, n: Integer) {
 /// Vimscript.
 pub fn push_float(stack: &mut Stack, f: Float, special: bool) {
     if special {
-        create_typed_table(stack, 0, 1, kObjectTypeFloat);
+        create_typed_table(stack, 0, 1, OBJECT_TYPE_FLOAT);
         push_value_index(stack);
         stack.push_number(f);
         stack.raw_set(At::from_top(3));

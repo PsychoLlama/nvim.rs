@@ -25,7 +25,7 @@ use crate::register::{
 };
 use crate::semsg;
 use crate::types::{
-    BoolVarValue, Dict, Failed, Key, TypVal, VAR_DICT, VAR_LIST, Vv, kBoolVarFalse, kBoolVarTrue,
+    BOOL_VAR_FALSE, BOOL_VAR_TRUE, BoolVarValue, Dict, Failed, Key, TypVal, VAR_DICT, VAR_LIST, Vv,
 };
 use core::ffi::{CStr, c_int};
 
@@ -122,9 +122,9 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let _ = dict(result).add_str(b"points_to", Some(&name));
     } else {
         let flag = if regname == unnamed {
-            kBoolVarTrue
+            BOOL_VAR_TRUE
         } else {
-            kBoolVarFalse
+            BOOL_VAR_FALSE
         };
         let _ = dict(result).add_bool(b"isunnamed", flag as BoolVarValue);
     }

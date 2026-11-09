@@ -28,7 +28,7 @@ use crate::lua::api_wrappers::BINDINGS;
 use crate::lua::executor::nlua_is_deferred_safe;
 use crate::lua::stack::{At, CFunction, Dispatch, Raise, Stack, dispatch_entry};
 use crate::message::{E_FAST_API_DISABLED, E_TEXTLOCK};
-use crate::types::{Error, kErrorTypeException, kErrorTypeValidation};
+use crate::types::{ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, Error};
 
 /// How a result goes back to Lua: `PUSH_SPECIAL` converts `nil` and the
 /// other special values the pre-0.11 way, which is what clients of methods
@@ -185,19 +185,19 @@ fn fast_api_refusal(name: &CStr) -> Vec<u8> {
 /// API function declares.
 fn wrong_arity(argc: c_int) -> Error {
     if argc == 1 {
-        api_error!(kErrorTypeValidation, "Expected {argc} argument")
+        api_error!(ERROR_TYPE_VALIDATION, "Expected {argc} argument")
     } else {
-        api_error!(kErrorTypeValidation, "Expected {argc} arguments")
+        api_error!(ERROR_TYPE_VALIDATION, "Expected {argc} arguments")
     }
 }
 
 /// Refuses a call made while the text is locked.
 pub(crate) fn text_locked_error() -> Error {
-    Error::from_message(kErrorTypeException, get_text_locked_msg())
+    Error::from_message(ERROR_TYPE_EXCEPTION, get_text_locked_msg())
 }
 
 /// Refuses a call made from an expression mapping, which the cmdline window
 /// alone would have allowed.
 pub(crate) fn expr_map_locked_error() -> Error {
-    Error::from_message(kErrorTypeException, E_TEXTLOCK)
+    Error::from_message(ERROR_TYPE_EXCEPTION, E_TEXTLOCK)
 }

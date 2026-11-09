@@ -61,7 +61,7 @@ use crate::runtime::runtimepath_default;
 use crate::runtime::state::current_sctx;
 use crate::spell::init_spell_chartab;
 use crate::types::OptInt;
-use crate::ui::state::Rows;
+use crate::ui::state::ROWS;
 use crate::window::{last_status, win_comp_scroll};
 use crate::winlayer::{self, Buf};
 
@@ -358,9 +358,9 @@ pub(crate) fn set_init_2(_headless: bool) {
     comp_col();
     // Same for 'window', which is one screen's worth of lines.
     if !option_was_set(kOptWindow) {
-        P_WINDOW.set(OptInt::from(Rows.get() - 1));
+        P_WINDOW.set(OptInt::from(ROWS.get() - 1));
     }
-    change_option_default(kOptWindow, OptVal::Number(OptInt::from(Rows.get() - 1)));
+    change_option_default(kOptWindow, OptVal::Number(OptInt::from(ROWS.get() - 1)));
 }
 
 /// The third startup pass: the defaults that depend on which shell 'shell'

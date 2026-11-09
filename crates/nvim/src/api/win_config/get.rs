@@ -111,7 +111,7 @@ pub fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Erro
         rv.width = Some(Integer::from(config.width));
         rv.height = Some(Integer::from(config.height));
         if !config.external {
-            if config.relative == kFloatRelativeWindow {
+            if config.relative == FLOAT_RELATIVE_WINDOW {
                 rv.win = Some(config.window);
                 if config.bufpos.lnum >= LineNr::ZERO {
                     let mut pos = Vec::with_capacity(2);

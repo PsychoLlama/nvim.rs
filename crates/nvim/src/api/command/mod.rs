@@ -34,8 +34,8 @@ use crate::regexp::RE_MAGIC;
 use crate::register::valid_yank_reg;
 use crate::types::{
     ApiDict, ApiString, Array, BufferHandle, CmdAddr, CmdMod, CmdModFlags, CmdParseInfo, Direction,
-    Error, ExArg, Integer, LuaRef, Object, kErrorTypeException, kErrorTypeValidation,
-    kObjectTypeLuaRef, kObjectTypeString,
+    ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, Error, ExArg, Integer, LuaRef,
+    OBJECT_TYPE_LUA_REF, OBJECT_TYPE_STRING, Object,
 };
 use crate::usercmd::{
     Definition, Table, commands_array, parse_addr_type_arg, parse_compl_arg, uc_add_command,

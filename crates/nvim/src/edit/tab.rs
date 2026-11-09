@@ -63,11 +63,11 @@ pub(crate) fn ins_shift(c: Key, lastc: Key) {
     {
         Win::current().w_cursor.col -= 1;
         let _ = del_char(false);
-        if State.get() & REPLACE_FLAG != 0 {
+        if STATE.get() & REPLACE_FLAG != 0 {
             replace_pop_ins();
         }
         if lastc.is('^') {
-            old_indent.set(get_indent()); // remember the indent
+            OLD_INDENT.set(get_indent()); // remember the indent
         }
         change_indent(INDENT_SET, 0, 1, true);
     } else {
@@ -79,16 +79,16 @@ pub(crate) fn ins_shift(c: Key, lastc: Key) {
         change_indent(dir, 0, 1, true);
     }
 
-    if did_ai.get() {
+    if DID_AI.get() {
         let mut lines = Lines::current();
         let line = lines.line(Win::current().w_cursor.lnum);
         if skip::white(line) < line.len() {
-            did_ai.set(false);
+            DID_AI.set(false);
         }
     }
-    did_si.set(false);
-    can_si.set(false);
-    can_si_back.set(false);
+    DID_SI.set(false);
+    CAN_SI.set(false);
+    CAN_SI_BACK.set(false);
     can_cindent.set(false);
 }
 
@@ -99,7 +99,7 @@ pub(crate) fn ins_shift(c: Key, lastc: Key) {
 /// 'smarttab' off or 'tabstop' equal to 'shiftwidth' anyway.
 pub(crate) fn ins_tab() -> bool {
     if Insstart_blank_vcol.get() == ColNr::MAX
-        && Win::current().w_cursor.lnum == Insstart.get().lnum
+        && Win::current().w_cursor.lnum == INSSTART.get().lnum
     {
         Insstart_blank_vcol.set(nolist_virtcol());
     }
@@ -130,10 +130,10 @@ pub(crate) fn ins_tab() -> bool {
         return true;
     }
 
-    did_ai.set(false);
-    did_si.set(false);
-    can_si.set(false);
-    can_si_back.set(false);
+    DID_AI.set(false);
+    DID_SI.set(false);
+    CAN_SI.set(false);
+    CAN_SI_BACK.set(false);
     append_to_redobuff(b"\t");
 
     // How many columns to the next stop, from whichever option owns it.
@@ -155,11 +155,11 @@ pub(crate) fn ins_tab() -> bool {
     insert_space();
     temp -= 1;
     while temp > 0 {
-        if State.get() & VREPLACE_FLAG != 0 {
+        if STATE.get() & VREPLACE_FLAG != 0 {
             insert_space();
         } else {
             ins_str(b" ");
-            if State.get() & REPLACE_FLAG != 0 {
+            if STATE.get() & REPLACE_FLAG != 0 {
                 replace_push_nul(); // no character was replaced
             }
         }
@@ -194,7 +194,7 @@ fn tab_spaces_to_tabs() {
     // real one must not move until the change is replayed.  Nothing holds a
     // long-lived reference to it: the editor writes `curwin`'s own cursor
     // from under this function, so it is read and written a field at a time.
-    let vreplace = State.get() & VREPLACE_FLAG != 0;
+    let vreplace = STATE.get() & VREPLACE_FLAG != 0;
     // The first column a TAB went into, once one did.
     let mut change_col: Option<ColNr> = None;
     let save_list = Win::current().w_onebuf_opt.wo_list;
@@ -220,12 +220,12 @@ fn tab_spaces_to_tabs() {
         at -= 1;
     }
     // In Replace mode the run must not reach back before the insert.
-    if State.get() & REPLACE_FLAG != 0
-        && fpos.lnum == Insstart.get().lnum
-        && fpos.col < Insstart.get().col
+    if STATE.get() & REPLACE_FLAG != 0
+        && fpos.lnum == INSSTART.get().lnum
+        && fpos.col < INSSTART.get().col
     {
-        at += usize::try_from(Insstart.get().col - fpos.col).expect("fpos is before Insstart");
-        fpos.col = Insstart.get().col;
+        at += usize::try_from(INSSTART.get().col - fpos.col).expect("fpos is before Insstart");
+        fpos.col = INSSTART.get().col;
     }
 
     let mut vcol: ColNr = getvcol(Win::current(), &mut fpos).0;
@@ -252,8 +252,8 @@ fn tab_spaces_to_tabs() {
             line[at] = b'\t';
             if change_col.is_none() {
                 change_col = Some(fpos.col); // remember the first changed column
-                if fpos.lnum == Insstart.get().lnum && fpos.col < Insstart.get().col {
-                    Insstart.set(Insstart.get().with_col(fpos.col));
+                if fpos.lnum == INSSTART.get().lnum && fpos.col < INSSTART.get().col {
+                    INSSTART.set(INSSTART.get().with_col(fpos.col));
                 }
             }
         }
@@ -314,7 +314,7 @@ fn tab_spaces_to_tabs() {
         }
         if i > 0 {
             // Each deleted space had an entry on the replace stack.
-            if State.get() & REPLACE_FLAG != 0 && !vreplace {
+            if STATE.get() & REPLACE_FLAG != 0 && !vreplace {
                 for _ in 0..i {
                     replace_join(repl_off);
                 }
@@ -352,7 +352,7 @@ pub(crate) fn ins_eol(c: Key) -> Result<(), Failed> {
     undisplay_dollar();
 
     // Strange, but this is what the NL replaces in Replace mode.
-    if State.get() & REPLACE_FLAG != 0 && State.get() & VREPLACE_FLAG == 0 {
+    if STATE.get() & REPLACE_FLAG != 0 && STATE.get() & VREPLACE_FLAG == 0 {
         replace_push_nul();
     }
 
@@ -375,9 +375,9 @@ pub(crate) fn ins_eol(c: Key) -> Result<(), Failed> {
     } else {
         0
     };
-    let indent = old_indent.get();
+    let indent = OLD_INDENT.get();
     let opened = open_line(FORWARD, comments, indent, None);
-    old_indent.set(0);
+    OLD_INDENT.set(0);
     can_cindent.set(true);
     // The new line may be in a closed fold.
     fold_open_cursor();

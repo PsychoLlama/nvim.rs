@@ -46,7 +46,7 @@ use crate::os::libc::int64_t;
 use crate::types::ApiString;
 use crate::types::DictBuilder;
 use crate::types::{ApiDict, CmdAddr, ExArgt, LuaRef, Object, ScriptCtx};
-use crate::ui::state::Columns;
+use crate::ui::state::COLUMNS;
 use crate::usercmd::UserCmd;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
@@ -277,7 +277,7 @@ fn list_one(cmd: &Row, scope: Scope, name_len: usize) {
     }
     // The definition column is what is left of the line when the whole table
     // is being listed, and the whole width when one command is.
-    let room = if name_len == 0 { Columns.get() - 47 } else { 0 };
+    let room = if name_len == 0 { COLUMNS.get() - 47 } else { 0 };
     msg_display_keys(&cmd.replacement, false, room);
     if p_verbose() > 0 {
         last_set_msg(cmd.script_ctx);

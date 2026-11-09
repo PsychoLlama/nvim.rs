@@ -22,7 +22,7 @@ use crate::optionstr::OptStringRef;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
-/// The `'s'` of C's `case 's': case Ctrl_S:` in [`set_ctrl_x_mode`].  A
+/// The `'s'` of C's `case 's': case CTRL_S:` in [`set_ctrl_x_mode`].  A
 /// constructor call is not a pattern, so the key needs a name to be matched
 /// on.
 const LOWER_S: Key = Key::ascii(b's');
@@ -40,9 +40,9 @@ pub fn ins_ctrl_x() {
             compl_cont_status.set(0);
         }
         ctrl_x_mode.set(CTRL_X_NOT_DEFINED_YET);
-        edit_submode.set(ctrl_x_msg(ctrl_x_mode.get()));
-        edit_submode_pre.set(None);
-        redraw_mode.set(true);
+        EDIT_SUBMODE.set(ctrl_x_msg(ctrl_x_mode.get()));
+        EDIT_SUBMODE_PRE.set(None);
+        REDRAW_MODE.set(true);
     }
     may_trigger_modechanged();
 }
@@ -170,7 +170,7 @@ pub fn check_compl_option(dict_opt: bool) -> bool {
         return true;
     }
     ctrl_x_mode.set(CTRL_X_NORMAL);
-    edit_submode.set(None);
+    EDIT_SUBMODE.set(None);
     emsg(gettext(if dict_opt {
         c"'dictionary' option is empty"
     } else {
@@ -466,13 +466,13 @@ pub(crate) fn set_ctrl_x_mode(c: Key) -> bool {
             // Scroll the window one line up or down.
             Err(Key::CTRL_E | Key::CTRL_Y) => {
                 ctrl_x_mode.set(CTRL_X_SCROLL);
-                edit_submode.set(Some(gettext(if State.get() & REPLACE_FLAG == 0 {
+                EDIT_SUBMODE.set(Some(gettext(if STATE.get() & REPLACE_FLAG == 0 {
                     c" (insert) Scroll (^E/^Y)"
                 } else {
                     c" (replace) Scroll (^E/^Y)"
                 })));
-                edit_submode_pre.set(None);
-                redraw_mode.set(true);
+                EDIT_SUBMODE_PRE.set(None);
+                REDRAW_MODE.set(true);
                 break 'chord;
             }
             // Complete whole lines.
@@ -544,8 +544,8 @@ pub(crate) fn set_ctrl_x_mode(c: Key) -> bool {
             // Stop completion.
             Err(Key::CTRL_Z) => {
                 ctrl_x_mode.set(CTRL_X_NORMAL);
-                edit_submode.set(None);
-                redraw_mode.set(true);
+                EDIT_SUBMODE.set(None);
+                REDRAW_MODE.set(true);
                 retval = true;
                 break 'chord;
             }
@@ -582,8 +582,8 @@ pub(crate) fn set_ctrl_x_mode(c: Key) -> bool {
             }
         }
         ctrl_x_mode.set(CTRL_X_NORMAL);
-        edit_submode.set(None);
-        redraw_mode.set(true);
+        EDIT_SUBMODE.set(None);
+        REDRAW_MODE.set(true);
     }
     retval
 }
@@ -609,7 +609,7 @@ pub(crate) fn ctrl_x_mode_name(mode: c_int) -> Option<&'static CStr> {
 /// Which way the key typed moves through the matches: BACKWARD or FORWARD.
 pub(crate) fn ins_compl_key2dir(c: Key) -> Direction {
     if c == SpecialKey::Event || c == SpecialKey::Command || c == SpecialKey::Lua {
-        return if pum_want.get().item < compl_selected_item.get() {
+        return if PUM_WANT.get().item < compl_selected_item.get() {
             BACKWARD
         } else {
             FORWARD
@@ -644,7 +644,7 @@ pub(crate) fn ins_compl_pum_key(c: Key) -> bool {
 /// for the page keys.
 pub(crate) fn ins_compl_key2count(c: Key) -> c_int {
     if c == SpecialKey::Event || c == SpecialKey::Command || c == SpecialKey::Lua {
-        return (pum_want.get().item - compl_selected_item.get()).abs();
+        return (PUM_WANT.get().item - compl_selected_item.get()).abs();
     }
     if ins_compl_pum_key(c) && c != SpecialKey::Up && c != SpecialKey::Down {
         let h = pum_get_height();
@@ -668,7 +668,7 @@ pub(crate) fn ins_compl_use_match(c: Key) -> bool {
             | SpecialKey::SUp,
         ) => false,
         Ok(SpecialKey::Event | SpecialKey::Command | SpecialKey::Lua) => {
-            let want = pum_want.get();
+            let want = PUM_WANT.get();
             want.active && want.insert
         }
         _ => true,

@@ -21,7 +21,7 @@ use core::ffi::{c_int, c_uint};
 use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int_at, transchar_byte};
 use crate::drawscreen::comp_col;
-use crate::drawscreen::state::ru_wid;
+use crate::drawscreen::state::RU_WID;
 use crate::message::E_INVALID_FORMAT_STRING_SINGLE_PERCENT_S;
 use crate::message::{verbose_open, verbose_stop};
 use crate::option::defs::{OptError, OptSet, OptionSetFlags, StlSyntax};
@@ -29,7 +29,7 @@ use crate::option::vars::{P_SHADA, P_VFILE, SSOP_FLAGS, p_ruf};
 use crate::option::{did_set_title, get_option_default};
 use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt_ssop_values};
 use crate::shada::get_shada_parameter;
-use crate::statusline::state::stl_syntax;
+use crate::statusline::state::STL_SYNTAX;
 use crate::types::LineNr;
 use crate::winfloat::win_config_float;
 
@@ -53,13 +53,13 @@ pub fn did_set_titlestring(args: &mut OptSet) -> Result<(), OptError> {
 pub(crate) fn did_set_titleiconstring(args: &OptSet, flagval: StlSyntax) -> Result<(), OptError> {
     let value = new_bytes(args);
     let formatted = value.contains(&b'%') && check_stl_option(value).is_ok();
-    let mut syntax = stl_syntax.get();
+    let mut syntax = STL_SYNTAX.get();
     if formatted {
         syntax |= flagval;
     } else {
         syntax.clear(flagval);
     }
-    stl_syntax.set(syntax);
+    STL_SYNTAX.set(syntax);
     did_set_title();
     Ok(())
 }
@@ -103,7 +103,7 @@ pub(crate) fn did_set_statustabline_rulerformat(
 ) -> Result<(), OptError> {
     let (mut wp, varp) = (win(args), varp(args));
     if rulerformat {
-        ru_wid.set(0);
+        RU_WID.set(0);
     } else if statuscolumn {
         wp.w_nrwidth_line_count = LineNr::ZERO;
     }
@@ -141,7 +141,7 @@ pub(crate) fn did_set_statustabline_rulerformat(
             errmsg = check_ruf();
             errmsg.is_ok()
         } {
-            ru_wid.set(wid);
+            RU_WID.set(wid);
         } else if text.get(1) != Some(&b'!') {
             // Not a width group and not an expression: check the whole
             // format after all.

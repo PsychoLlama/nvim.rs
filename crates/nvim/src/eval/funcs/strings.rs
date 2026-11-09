@@ -46,7 +46,7 @@ use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang};
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{escaped_bytes, format_typvals, shellescape};
 use crate::types::ColNr;
-use crate::types::{List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, kListLenMayKnow};
+use crate::types::{LIST_LEN_MAY_KNOW, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
@@ -368,7 +368,7 @@ pub fn f_split(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     // An absent or empty pattern splits on runs of whitespace.
     let pat = pat.filter(|pat| !pat.is_empty()).unwrap_or(c"[\\x01- ]\\+");
-    let list = tv_list_alloc_ret(result, kListLenMayKnow as isize);
+    let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
     if !typeerr && let Some(mut prog) = OwnedProg::compile(pat, RE_MAGIC + RE_STRING) {
         split_into(list, str, &mut prog, keepempty);
     }

@@ -25,7 +25,7 @@ use core::ffi::c_int;
 use super::*;
 use crate::ascii::NUL;
 use crate::cursor::{coladvance, dec_cursor, gchar_cursor, get_cursor_line_len, inc_cursor};
-use crate::drawscreen::state::redraw_cmdline;
+use crate::drawscreen::state::REDRAW_CMDLINE;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::edit::oneleft;
 use crate::global_cell::GlobalCell;
@@ -39,7 +39,7 @@ use crate::normal::{
 };
 use crate::pos::{clearpos, equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD};
-use crate::state::mode::VIsual_select_exclu_adj;
+use crate::state::mode::V_ISUAL_SELECT_EXCLU_ADJ;
 use crate::types::Pos;
 
 /// Whether [`cls`] should answer a WORD's classes rather than a word's.
@@ -222,7 +222,7 @@ pub(crate) fn end_word(
     if P_SEL.first_byte() == b'e'
         && visual_active()
         && visual_mode().is_char()
-        && VIsual_select_exclu_adj.get()
+        && V_ISUAL_SELECT_EXCLU_ADJ.get()
     {
         // Visual mode is active, with a current window.
         unadjust_for_sel();
@@ -458,7 +458,7 @@ pub(crate) fn current_word(
         }
         if visual_mode().is_line() {
             set_visual_mode(VisualMode::CHAR);
-            redraw_cmdline.set(true); // show the mode later
+            REDRAW_CMDLINE.set(true); // show the mode later
         }
     } else {
         op.inclusive = inclusive;

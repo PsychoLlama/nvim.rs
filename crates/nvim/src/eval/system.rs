@@ -44,8 +44,8 @@ use crate::smsg;
 use crate::types::Handle;
 use crate::types::LineNr;
 use crate::types::{
-    Failed, List, OptInt, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, Vv,
-    kListLenMayKnow,
+    Failed, LIST_LEN_MAY_KNOW, List, OptInt, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
+    VarNumber, Vv,
 };
 use core::ffi::c_int;
 
@@ -122,7 +122,7 @@ fn string_to_list(output: &[u8], keepempty: bool) -> ListRef {
         Some((&last, rest)) if !keepempty && c_int::from(last) == NL => rest,
         _ => output,
     };
-    let mut list = tv_list_alloc(kListLenMayKnow as isize);
+    let mut list = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
     encode_list_write(&mut list, output);
     list
 }

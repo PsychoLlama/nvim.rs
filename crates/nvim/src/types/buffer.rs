@@ -9,7 +9,6 @@
 // c2rust's names for `Buffer`'s anonymous members.
 #![allow(non_camel_case_types)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
@@ -60,16 +59,16 @@ pub struct BufUpdateCallbacks {
 pub type FloatAnchor = ::core::ffi::c_int;
 /// `WinConfig::anchor` is a corner, spelled as two independent bits: the
 /// north-west corner is neither of them.
-pub const kFloatAnchorEast: FloatAnchor = 1;
-pub const kFloatAnchorSouth: FloatAnchor = 2;
+pub const FLOAT_ANCHOR_EAST: FloatAnchor = 1;
+pub const FLOAT_ANCHOR_SOUTH: FloatAnchor = 2;
 pub type FloatRelative = ::core::ffi::c_uint;
 /// What `WinConfig::row`/`col` are measured from.
-pub const kFloatRelativeEditor: FloatRelative = 0;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
+pub const FLOAT_RELATIVE_EDITOR: FloatRelative = 0;
+pub const FLOAT_RELATIVE_WINDOW: FloatRelative = 1;
+pub const FLOAT_RELATIVE_CURSOR: FloatRelative = 2;
+pub const FLOAT_RELATIVE_MOUSE: FloatRelative = 3;
+pub const FLOAT_RELATIVE_TABLINE: FloatRelative = 4;
+pub const FLOAT_RELATIVE_LASTSTATUS: FloatRelative = 5;
 /// Not `Copy`: the two virtual-text chunk arrays are owned, and
 /// `window::config::merge_win_config` decides which of two configs
 /// keeps them by comparing the `items` pointers. A `clone` is the shallow

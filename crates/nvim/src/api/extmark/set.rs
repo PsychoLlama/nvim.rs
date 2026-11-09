@@ -101,14 +101,14 @@ impl Decoration {
             || self.sign.number_hl_id != 0
             || self.sign.line_hl_id != 0
         {
-            self.sign.flags |= kSHIsSign;
+            self.sign.flags |= SH_IS_SIGN;
         }
     }
 
     /// The `conceal` and `conceal_lines` keys.
     fn conceal(&mut self, opts: &Opts) -> Result<(), Error> {
         if let Some(conceal) = opts.conceal.as_ref() {
-            self.hl.flags |= kSHConceal;
+            self.hl.flags |= SH_CONCEAL;
             self.has_hl = true;
             if !conceal.is_empty() {
                 let (conceal_char, ch) = c_cluster_schar(conceal.as_bytes());
@@ -119,7 +119,7 @@ impl Decoration {
             }
         }
         if let Some(conceal_lines) = opts.conceal_lines.as_ref() {
-            self.hl.flags |= kSHConcealLines;
+            self.hl.flags |= SH_CONCEAL_LINES;
             self.has_hl = true;
             if conceal_lines.as_bytes().first().is_some_and(|&b| b != 0) {
                 return Err(Error::validation(
@@ -140,37 +140,37 @@ impl Decoration {
         }
         if let Some(pos) = opts.virt_text_pos.as_ref() {
             self.virt_text.pos = match pos.as_cstr().to_bytes() {
-                b"eol" => kVPosEndOfLine,
-                b"overlay" => kVPosOverlay,
-                b"right_align" => kVPosRightAlign,
-                b"eol_right_align" => kVPosEndOfLineRightAlign,
-                b"inline" => kVPosInline,
+                b"eol" => V_POS_END_OF_LINE,
+                b"overlay" => V_POS_OVERLAY,
+                b"right_align" => V_POS_RIGHT_ALIGN,
+                b"eol_right_align" => V_POS_END_OF_LINE_RIGHT_ALIGN,
+                b"inline" => V_POS_INLINE,
                 _ => return Err(err_bad_value(c"virt_text_pos", pos.as_cstr())),
             };
         }
         if let Some(win_col) = opts.virt_text_win_col {
             self.virt_text.col = number_as_int(win_col);
-            self.virt_text.pos = kVPosWinCol;
+            self.virt_text.pos = V_POS_WIN_COL;
         }
         if opts.hl_eol.unwrap_or(false) {
-            self.hl.flags |= kSHHlEol;
+            self.hl.flags |= SH_HL_EOL;
         }
         if opts.virt_text_hide.unwrap_or(false) {
-            self.virt_text.flags |= kVTHide as uint8_t;
+            self.virt_text.flags |= VT_HIDE as uint8_t;
         }
         if opts.virt_text_repeat_linebreak.unwrap_or(false) {
-            self.virt_text.flags |= kVTRepeatLinebreak as uint8_t;
+            self.virt_text.flags |= VT_REPEAT_LINEBREAK as uint8_t;
         }
         if let Some(mode) = opts.hl_mode.as_ref() {
             self.virt_text.hl_mode = match mode.as_cstr().to_bytes() {
-                b"replace" => kHlModeReplace,
-                b"combine" => kHlModeCombine,
+                b"replace" => HL_MODE_REPLACE,
+                b"combine" => HL_MODE_COMBINE,
                 b"blend" => {
-                    if self.virt_text.pos == kVPosInline {
+                    if self.virt_text.pos == V_POS_INLINE {
                         let why = c"cannot use 'blend' hl_mode with inline virtual text";
                         return Err(Error::validation(why));
                     }
-                    kHlModeBlend
+                    HL_MODE_BLEND
                 }
                 _ => return Err(err_bad_value(c"hl_mode", mode.as_cstr())),
             };
@@ -181,13 +181,13 @@ impl Decoration {
     /// The `virt_lines` key and the three that shape it.
     fn virtual_lines(&mut self, opts: &Opts) -> Result<(), Error> {
         let mut flags: ::core::ffi::c_int = if opts.virt_lines_leftcol.unwrap_or(false) {
-            kVLLeftcol as ::core::ffi::c_int
+            VL_LEFTCOL as ::core::ffi::c_int
         } else {
             0
         };
         if let Some(overflow) = opts.virt_lines_overflow.as_ref() {
             match overflow.as_cstr().to_bytes() {
-                b"scroll" => flags |= kVLScroll as ::core::ffi::c_int,
+                b"scroll" => flags |= VL_SCROLL as ::core::ffi::c_int,
                 b"trunc" => {}
                 _ => return Err(err_bad_value(c"virt_lines_overflow", overflow.as_cstr())),
             }
@@ -195,7 +195,7 @@ impl Decoration {
         if let Some(given) = opts.virt_lines.as_ref() {
             for item in given.iter() {
                 let Object::Array(chunks) = item else {
-                    let want = api_typename(kObjectTypeArray);
+                    let want = api_typename(OBJECT_TYPE_ARRAY);
                     let got = api_typename(item.kind());
                     return Err(err_expected(c"virt_text_line", want, Some(got)));
                 };
@@ -207,7 +207,7 @@ impl Decoration {
             }
         }
         if opts.virt_lines_above.unwrap_or(false) {
-            self.virt_lines.flags |= kVTLinesAbove as uint8_t;
+            self.virt_lines.flags |= VT_LINES_ABOVE as uint8_t;
         }
         Ok(())
     }
@@ -239,7 +239,7 @@ impl Decoration {
         if init_sign_text(text, &mut self.sign.text).is_err() {
             return Err(err_invalid(c"sign_text", Bad::Unsaid));
         }
-        self.sign.flags |= kSHIsSign;
+        self.sign.flags |= SH_IS_SIGN;
         Ok(())
     }
 
@@ -247,7 +247,7 @@ impl Decoration {
     /// highlight even when no group was named.
     fn highlight_extras(&mut self, opts: &Opts) {
         if let Some(spell) = opts.spell {
-            self.hl.flags |= if spell { kSHSpellOn } else { kSHSpellOff };
+            self.hl.flags |= if spell { SH_SPELL_ON } else { SH_SPELL_OFF };
             self.has_hl = true;
         }
         if let Some(given) = opts.url.as_ref() {
@@ -257,9 +257,9 @@ impl Decoration {
             self.has_hl = true;
         }
         if opts.ui_watched.unwrap_or(false) {
-            self.hl.flags |= kSHUIWatched;
-            if self.virt_text.pos == kVPosOverlay {
-                self.hl.flags |= kSHUIWatchedOverlay;
+            self.hl.flags |= SHUI_WATCHED;
+            if self.virt_text.pos == V_POS_OVERLAY {
+                self.hl.flags |= SHUI_WATCHED_OVERLAY;
             }
             self.has_hl = true;
         }
@@ -335,7 +335,7 @@ impl Decoration {
         let mut decor_flags = MtFlags::NONE;
         let mut decor_alloc = DECOR_ID_INVALID;
         if !self.virt_text.data.text().is_empty() {
-            if self.virt_text.pos == kVPosInline {
+            if self.virt_text.pos == V_POS_INLINE {
                 decor_flags |= MtFlags::DECOR_VIRT_TEXT_INLINE;
             }
             decor_alloc = decor_put_vt(take_virt(&mut self.virt_text), decor_alloc);
@@ -345,7 +345,7 @@ impl Decoration {
             decor_flags |= MtFlags::DECOR_VIRT_LINES;
         }
         let mut decor_indexed: uint32_t = DECOR_ID_INVALID;
-        if self.sign.flags & kSHIsSign != 0 {
+        if self.sign.flags & SH_IS_SIGN != 0 {
             if self.sign.text[0] != 0 {
                 decor_flags |= MtFlags::DECOR_SIGNTEXT;
             }
@@ -374,7 +374,7 @@ impl Decoration {
                     let mut sh: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;
                     sh.hl_id = hl_id;
                     sh.flags = if opts.hl_eol.unwrap_or(false) {
-                        kSHHlEol
+                        SH_HL_EOL
                     } else {
                         0
                     };
@@ -384,7 +384,7 @@ impl Decoration {
                 }
             }
         }
-        if self.hl.flags & kSHConcealLines != 0 {
+        if self.hl.flags & SH_CONCEAL_LINES != 0 {
             decor_flags |= MtFlags::DECOR_CONCEAL_LINES;
         }
         let decor = if decor_alloc != DECOR_ID_INVALID
@@ -429,12 +429,12 @@ impl Decoration {
 /// An unset virtual text, or block of virtual lines when `lines`.
 fn blank_virt(lines: bool) -> DecorVirtText {
     DecorVirtText {
-        flags: if lines { kVTIsLines as uint8_t } else { 0 },
-        hl_mode: kHlModeUnknown,
+        flags: if lines { VT_IS_LINES as uint8_t } else { 0 },
+        hl_mode: HL_MODE_UNKNOWN,
         priority: DECOR_PRIORITY_BASE,
         width: 0,
         col: 0,
-        pos: kVPosEndOfLine,
+        pos: V_POS_END_OF_LINE,
         data: if lines {
             DecorVirtText_data::Lines(Vec::new())
         } else {

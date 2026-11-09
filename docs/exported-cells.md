@@ -47,8 +47,8 @@ binary as well as the default one.
 
 ## `drawscreen`
 
-- `neovim::drawscreen::state::need_maketitle`
-- `neovim::drawscreen::state::redraw_tabline`
+- `neovim::drawscreen::state::NEED_MAKETITLE`
+- `neovim::drawscreen::state::REDRAW_TABLINE`
 
 ## `ex_docmd`
 
@@ -69,7 +69,7 @@ binary as well as the default one.
 
 ## `grid`
 
-- `neovim::grid::default_grid`
+- `neovim::grid::DEFAULT_GRID`
 - `neovim::grid::grid_assign_handle::LAST_GRID_HANDLE`
 - `neovim::grid::line::BATCH`
 
@@ -126,12 +126,12 @@ binary as well as the default one.
 
 ## `popupmenu`
 
-- `neovim::popupmenu::pum_external`
-- `neovim::popupmenu::pum_first`
-- `neovim::popupmenu::pum_invalid`
-- `neovim::popupmenu::pum_is_visible`
-- `neovim::popupmenu::pum_size`
-- `neovim::popupmenu::state::pum_want`
+- `neovim::popupmenu::PUM_EXTERNAL`
+- `neovim::popupmenu::PUM_FIRST`
+- `neovim::popupmenu::PUM_INVALID`
+- `neovim::popupmenu::PUM_IS_VISIBLE`
+- `neovim::popupmenu::PUM_SIZE`
+- `neovim::popupmenu::state::PUM_WANT`
 
 ## `runtime`
 
@@ -174,27 +174,27 @@ binary as well as the default one.
 
 ## `state`
 
-- `neovim::state::was_safe`
+- `neovim::state::WAS_SAFE`
 
 ## `tui`
 
-- `neovim::tui::cursor::cursor_style_enabled`
+- `neovim::TUI::cursor::CURSOR_STYLE_ENABLED`
 
 ## `ui`
 
-- `neovim::ui::callbacks::ui_cb_ext`
-- `neovim::ui::cursor_col`
-- `neovim::ui::cursor_grid_handle`
-- `neovim::ui::cursor_row`
-- `neovim::ui::pending_cursor_update`
-- `neovim::ui::pending_mode_info_update`
-- `neovim::ui::ui_ext`
+- `neovim::ui::callbacks::UI_CB_EXT`
+- `neovim::ui::CURSOR_COL`
+- `neovim::ui::CURSOR_GRID_HANDLE`
+- `neovim::ui::CURSOR_ROW`
+- `neovim::ui::PENDING_CURSOR_UPDATE`
+- `neovim::ui::PENDING_MODE_INFO_UPDATE`
+- `neovim::ui::UI_EXT`
 
 ## `ui_compositor`
 
-- `neovim::ui_compositor::composed_uis`
-- `neovim::ui_compositor::msg_sep_row`
-- `neovim::ui_compositor::valid_screen`
+- `neovim::ui_compositor::COMPOSED_UIS`
+- `neovim::ui_compositor::MSG_SEP_ROW`
+- `neovim::ui_compositor::VALID_SCREEN`
 
 ## `window`
 

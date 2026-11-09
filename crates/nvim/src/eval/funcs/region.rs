@@ -19,7 +19,7 @@ use crate::eval::typval::{
     NumBuf, dict_get_bool, tv_check_for_list_arg, tv_check_for_opt_dict_arg, tv_list_alloc,
     tv_list_alloc_ret,
 };
-use crate::keycodes::Ctrl_V;
+use crate::keycodes::CTRL_V;
 use crate::mbyte::{cluster_len, head_off};
 use crate::memline::{Lines, ml_get_buf_len};
 use crate::memory::ThinCString;
@@ -31,11 +31,11 @@ use crate::ops::{block_def, charwise_block_def, reset_lbr, restore_lbr};
 use crate::option::vars::P_SEL;
 use crate::pos::{equalpos, lt};
 use crate::register::defs::BlockDef;
-use crate::state::mode::virtual_op;
+use crate::state::mode::VIRTUAL_OP;
 use crate::state::virtual_active;
 use crate::tr;
 use crate::types::Handle;
-use crate::types::{ColNr, Key, LineNr, Pos, TypVal, VAR_DICT, VarNumber, kListLenMayKnow};
+use crate::types::{ColNr, Key, LIST_LEN_MAY_KNOW, LineNr, Pos, TypVal, VAR_DICT, VarNumber};
 use core::ffi::{CStr, c_int};
 
 use crate::winlayer::{Buf, Win};
@@ -99,7 +99,7 @@ impl BufferSwap {
     fn save() -> Self {
         BufferSwap {
             buf: Buf::current(),
-            virtual_op: virtual_op.get(),
+            virtual_op: VIRTUAL_OP.get(),
         }
     }
 }
@@ -109,7 +109,7 @@ impl Drop for BufferSwap {
         self.buf.make_current();
         // `curwin` is live for the whole of a builtin call.
         Win::current().w_buffer = self.buf;
-        virtual_op.set(self.virtual_op);
+        VIRTUAL_OP.set(self.virtual_op);
     }
 }
 
@@ -161,7 +161,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Result<Region, Unresolved> {
     let mut numbuf = NumBuf::new();
     // Every line accessor below runs against `findbuf`, which is made
     // current before it is read from.
-    tv_list_alloc_ret(result, kListLenMayKnow as isize);
+    tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
     if tv_check_for_list_arg(args, 0).is_err()
         || tv_check_for_list_arg(args, 1).is_err()
         || tv_check_for_opt_dict_arg(args, 2).is_err()
@@ -207,7 +207,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Result<Region, Unresolved> {
 
     findbuf.make_current();
     Win::current().w_buffer = findbuf;
-    virtual_op.set(Some(virtual_active(Win::current())));
+    VIRTUAL_OP.set(Some(virtual_active(Win::current())));
 
     // Columns are one-based on the way in and zero-based from here.
     p1.col -= 1;
@@ -224,7 +224,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Result<Region, Unresolved> {
         }
         // An inclusive selection ending on the line terminator does not
         // actually cover a character, unless 'virtualedit' is on.
-        if inclusive && virtual_op.get() == Some(false) && byte_at(p2) == b'\0' {
+        if inclusive && VIRTUAL_OP.get() == Some(false) && byte_at(p2) == b'\0' {
             inclusive = false;
         }
     } else if region_type == MT_BLOCK_WISE {
@@ -269,7 +269,7 @@ fn parse_type(spec: &CStr) -> Result<(MotionType, c_int), Unresolved> {
     match spec.to_bytes() {
         b"v" => Ok((MT_CHAR_WISE, 0)),
         b"V" => Ok((MT_LINE_WISE, 0)),
-        [c, rest @ ..] if c_int::from(*c) == Ctrl_V => {
+        [c, rest @ ..] if c_int::from(*c) == CTRL_V => {
             // A bare CTRL-V means "as wide as the corners"; a width
             // must be a positive number and nothing else.
             if rest.is_empty() {

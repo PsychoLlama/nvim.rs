@@ -29,7 +29,7 @@ use crate::lua::abi::lua_Integer;
 use crate::lua::ffi::LUA_MULTRET;
 use crate::lua::stack::{At, Kind, Raise, Stack};
 use crate::types::LuaRef;
-use crate::ui::state::ui_event_ns_id;
+use crate::ui::state::UI_EVENT_NS_ID;
 use crate::ui::{ui_flush, ui_remove_cb};
 
 /// How often `vim.wait` wakes to re-test its condition, in milliseconds.
@@ -83,7 +83,7 @@ pub(crate) fn schedule(stack: &mut Stack) -> Result<c_int, Raise> {
 
     let callback = stack.reference(At::arg(1));
     let callback = u64::try_from(callback).expect("a function's reference is positive");
-    put_id_event_on_main_loop(run_scheduled, callback, u64::from(ui_event_ns_id.get()));
+    put_id_event_on_main_loop(run_scheduled, callback, u64::from(UI_EVENT_NS_ID.get()));
     stack.push_nil();
     Ok(2)
 }

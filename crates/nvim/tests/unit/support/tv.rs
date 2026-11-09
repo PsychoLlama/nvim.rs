@@ -33,8 +33,8 @@ use neovim::eval::typval::{
 };
 use neovim::memory::ThinCString;
 use neovim::types::{
-    Blob, Callback, Dict, List, ListItem, Object, Partial, Refcount, TypVal, VarNumber,
-    kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
+    BOOL_VAR_FALSE, BOOL_VAR_TRUE, Blob, Callback, Dict, List, ListItem, Object, Partial, Refcount,
+    SPECIAL_VAR_NULL, TypVal, VarNumber,
 };
 
 use super::cstr;
@@ -130,8 +130,8 @@ impl Tv {
     unsafe fn build_at(&self, path: &mut Vec<Container>) -> TypVal {
         match self {
             Tv::Unknown => TypVal::Unknown,
-            Tv::Nil => TypVal::Special(kSpecialVarNull),
-            Tv::Bool(b) => TypVal::Bool(if *b { kBoolVarTrue } else { kBoolVarFalse }),
+            Tv::Nil => TypVal::Special(SPECIAL_VAR_NULL),
+            Tv::Bool(b) => TypVal::Bool(if *b { BOOL_VAR_TRUE } else { BOOL_VAR_FALSE }),
             Tv::Int(n) => TypVal::Number(*n),
             Tv::Float(f) => TypVal::Float(*f),
             Tv::Str(s) => TypVal::String(ManuallyDrop::new(Some(ThinCString::from_bytes(s)))),
@@ -353,12 +353,12 @@ unsafe fn read_at(tv: *const TypVal, path: &mut Vec<Container>) -> Tv {
     match unsafe { &*tv } {
         TypVal::Unknown => Tv::Unknown,
         TypVal::Special(special) => {
-            assert_eq!(*special, kSpecialVarNull);
+            assert_eq!(*special, SPECIAL_VAR_NULL);
             Tv::Nil
         }
         TypVal::Bool(b) => Tv::Bool(match *b {
-            b if b == kBoolVarTrue => true,
-            b if b == kBoolVarFalse => false,
+            b if b == BOOL_VAR_TRUE => true,
+            b if b == BOOL_VAR_FALSE => false,
             other => panic!("not a boolean: {other}"),
         }),
         TypVal::Number(n) => Tv::Int(*n),
@@ -690,19 +690,19 @@ pub(crate) unsafe fn eval0(expr: &str) -> Option<TypVal> {
 /// cases are about.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Obj {
-    /// `kObjectTypeNil`.
+    /// `OBJECT_TYPE_NIL`.
     Nil,
-    /// `kObjectTypeBoolean`.
+    /// `OBJECT_TYPE_BOOLEAN`.
     Bool(bool),
-    /// `kObjectTypeInteger`.
+    /// `OBJECT_TYPE_INTEGER`.
     Int(i64),
-    /// `kObjectTypeFloat`.
+    /// `OBJECT_TYPE_FLOAT`.
     Float(f64),
-    /// `kObjectTypeString`, by its `size` — interior NULs included.
+    /// `OBJECT_TYPE_STRING`, by its `size` — interior NULs included.
     Str(Vec<u8>),
-    /// `kObjectTypeArray`.
+    /// `OBJECT_TYPE_ARRAY`.
     Array(Vec<Obj>),
-    /// `kObjectTypeDict`, read back sorted by key.
+    /// `OBJECT_TYPE_DICT`, read back sorted by key.
     Dict(Vec<(Vec<u8>, Obj)>),
 }
 

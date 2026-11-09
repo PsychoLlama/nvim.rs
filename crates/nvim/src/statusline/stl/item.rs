@@ -27,10 +27,9 @@ use crate::types::ColNr;
 use core::ffi::c_int;
 
 use super::{
-    Env, Fill, Kind, MAX_STL_EVAL_DEPTH, NumberBase, StlItem, StlScratch, TMPLEN, as_number,
-    cells_at, char_len_at, dup_cstring, group, in_insert_mode, kNumBaseDecimal,
-    kNumBaseHexadecimal, parse, put_number, strsize_at, syntax_id, tr, upper, vim_var,
-    with_scratch,
+    Env, Fill, Kind, MAX_STL_EVAL_DEPTH, NUM_BASE_DECIMAL, NUM_BASE_HEXADECIMAL, NumberBase,
+    StlItem, StlScratch, TMPLEN, as_number, cells_at, char_len_at, dup_cstring, group,
+    in_insert_mode, parse, put_number, strsize_at, syntax_id, tr, upper, vim_var, with_scratch,
 };
 use crate::cstr;
 use crate::decoration::SCL_NUM;
@@ -75,7 +74,7 @@ impl Default for Value {
     fn default() -> Self {
         Value {
             num: -1,
-            base: kNumBaseDecimal,
+            base: NUM_BASE_DECIMAL,
             itemisflag: false,
             fillable: true,
             foldsignitem: None,
@@ -527,7 +526,7 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
         StlOpt::BufNo => v.num = env.buf.handle.get(),
         StlOpt::Offset | StlOpt::OffsetX => {
             if opt == StlOpt::OffsetX {
-                v.base = kNumBaseHexadecimal;
+                v.base = NUM_BASE_HEXADECIMAL;
             }
             let offset = env.line_offset().filter(|&l| l >= 0);
             v.num = match offset {
@@ -544,7 +543,7 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
         }
         StlOpt::ByteVal | StlOpt::ByteValX => {
             if opt == StlOpt::ByteValX {
-                v.base = kNumBaseHexadecimal;
+                v.base = NUM_BASE_HEXADECIMAL;
             }
             v.num = env.byte_value();
         }

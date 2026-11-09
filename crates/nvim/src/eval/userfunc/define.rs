@@ -257,7 +257,7 @@ impl Definition<'_, '_> {
         );
         self.at += cursor.offset();
         parsed.map_err(|_| Refusal::Unwind)?;
-        if KEY_TYPED.get() && ui_has(kUICmdline) {
+        if KEY_TYPED.get() && ui_has(UI_CMDLINE) {
             self.show_block = true;
             ui_ext_cmdline_block_append(0, self.excmd.line.cmd());
         }
@@ -334,11 +334,11 @@ impl Definition<'_, '_> {
             if !self.excmd.skip && DID_EMSG.get() != 0 {
                 return Err(Refusal::Unwind);
             }
-            if !ui_has(kUICmdline) {
+            if !ui_has(UI_CMDLINE) {
                 // Don't overwrite the function name.
                 msg_putchar(c_int::from(b'\n'));
             }
-            cmdline_row.set(MSG_ROW.get());
+            CMDLINE_ROW.set(MSG_ROW.get());
         }
         Ok(())
     }

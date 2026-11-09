@@ -1,7 +1,7 @@
 //! RAII guards over the editor's suppression counters and script context.
 //!
 //! `textlock`, `sandbox`, `MSG_SILENT`, `EMSG_OFF`, `EMSG_SKIP`,
-//! `NO_WAIT_RETURN`, `no_mapping`, `allow_keys` and `RedrawingDisabled` are
+//! `NO_WAIT_RETURN`, `no_mapping`, `allow_keys` and `REDRAWING_DISABLED` are
 //! the globals that say "for the duration of this operation, don't show
 //! errors / don't redraw / don't let anything touch the buffer". C bumps
 //! them by hand and unbumps them at every exit — which is fine until an
@@ -56,10 +56,10 @@
 //!   and `openscript` raise `curscript` and lower it only on the failure
 //!   path, because on success the script stays on the stack past the
 //!   return.
-//! - **The scope is a state machine, not a block.** `RedrawingDisabled`
+//! - **The scope is a state machine, not a block.** `REDRAWING_DISABLED`
 //!   under `disabled_redraw` spans Insert mode's entry and its exit;
 //!   `debug_backtrace_level` is what `:up` and `:down` move; `compl_pending`
-//!   and `pum_selected` are positions, not depths.
+//!   and `PUM_SELECTED` are positions, not depths.
 //! - **The lifetime belongs to a caller several frames up.** The
 //!   `enter`/`leave` pairs — `try_enter`/`try_leave`,
 //!   `block_autocmds`/`unblock_autocmds` (a C-ABI pair a plugin can call),
@@ -73,7 +73,7 @@
 //!   contract is written on `buf_write_do_autocmds`; a guard here would
 //!   have to be handed across the call.
 //! - **Upstream leaks it on purpose.** `win_float_setup_preview` returns
-//!   with `RedrawingDisabled` and `no_u_sync` still raised and says so.
+//!   with `REDRAWING_DISABLED` and `no_u_sync` still raised and says so.
 //!
 //! Everything else — every counter whose release is the arithmetic inverse
 //! of its bump, taken and released inside one body — is a guard, and the
@@ -115,7 +115,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::autocmd::state::{AutocmdField, autocmd_no_enter, autocmd_no_leave};
-use crate::drawscreen::state::RedrawingDisabled;
+use crate::drawscreen::state::REDRAWING_DISABLED;
 use crate::ex_getln::state::CMDLINE_STAR;
 use crate::extmark::curbuf_splice_pending;
 use crate::fileio::state::no_check_timestamps;
@@ -335,9 +335,9 @@ impl Suppress {
         Bump::new(NO_WAIT_RETURN)
     }
 
-    /// `RedrawingDisabled` — the screen is not updated while this is held.
+    /// `REDRAWING_DISABLED` — the screen is not updated while this is held.
     pub(crate) fn redraw() -> Bump {
-        Bump::new(&RedrawingDisabled)
+        Bump::new(&REDRAWING_DISABLED)
     }
 
     /// `EMSG_OFF = 1` — errors off for the scope, restoring the level that
@@ -521,10 +521,10 @@ impl Allow {
         Saved::new(MSG_SILENT, 0)
     }
 
-    /// `RedrawingDisabled = 0` — this scope redraws even inside an
+    /// `REDRAWING_DISABLED = 0` — this scope redraws even inside an
     /// operation that had disabled it.
     pub(crate) fn redraw() -> Saved {
-        Saved::new(&RedrawingDisabled, 0)
+        Saved::new(&REDRAWING_DISABLED, 0)
     }
 
     /// `NO_WAIT_RETURN = 0` — the hit-enter prompt is armed again for this

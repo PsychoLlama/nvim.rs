@@ -39,12 +39,11 @@ use crate::tui::output::{
 };
 use crate::tui::state::{Rect, TUIData};
 use crate::tui::terminfo::caps::{
-    TerminfoDef, kTerm_carriage_return, kTerm_change_scroll_region, kTerm_clear_screen,
-    kTerm_clr_eol, kTerm_clr_eos, kTerm_cursor_address, kTerm_cursor_down, kTerm_cursor_home,
-    kTerm_cursor_left, kTerm_cursor_right, kTerm_cursor_up, kTerm_delete_line, kTerm_erase_chars,
-    kTerm_exit_attribute_mode, kTerm_insert_line, kTerm_parm_delete_line, kTerm_parm_down_cursor,
-    kTerm_parm_insert_line, kTerm_parm_left_cursor, kTerm_parm_right_cursor, kTerm_parm_up_cursor,
-    kTerm_set_lr_margin,
+    TERM_CARRIAGE_RETURN, TERM_CHANGE_SCROLL_REGION, TERM_CLEAR_SCREEN, TERM_CLR_EOL, TERM_CLR_EOS,
+    TERM_CURSOR_ADDRESS, TERM_CURSOR_DOWN, TERM_CURSOR_HOME, TERM_CURSOR_LEFT, TERM_CURSOR_RIGHT,
+    TERM_CURSOR_UP, TERM_DELETE_LINE, TERM_ERASE_CHARS, TERM_EXIT_ATTRIBUTE_MODE, TERM_INSERT_LINE,
+    TERM_PARM_DELETE_LINE, TERM_PARM_DOWN_CURSOR, TERM_PARM_INSERT_LINE, TERM_PARM_LEFT_CURSOR,
+    TERM_PARM_RIGHT_CURSOR, TERM_PARM_UP_CURSOR, TERM_SET_LR_MARGIN, TerminfoDef,
 };
 use crate::tui::ugrid::UCell;
 use crate::types::{ApiString, Integer, ScreenAttr, ScreenChar};
@@ -142,7 +141,7 @@ pub(crate) fn cursor_goto(tui: &mut TUIData, row: c_int, col: c_int) {
         tui.print_attr_id = -1;
     }
     if row == 0 && col == 0 {
-        emit(tui, kTerm_cursor_home, &[]);
+        emit(tui, TERM_CURSOR_HOME, &[]);
         tui.grid.goto(row, col);
         return;
     }
@@ -150,7 +149,7 @@ pub(crate) fn cursor_goto(tui: &mut TUIData, row: c_int, col: c_int) {
     // relative to it can be trusted.
     if tui.grid.row != -1 {
         if carriage_return_helps(tui, row, col) {
-            emit(tui, kTerm_carriage_return, &[]);
+            emit(tui, TERM_CARRIAGE_RETURN, &[]);
             let grid_row = tui.grid.row;
             tui.grid.goto(grid_row, 0);
         }
@@ -164,8 +163,8 @@ pub(crate) fn cursor_goto(tui: &mut TUIData, row: c_int, col: c_int) {
                     tui,
                     tui.grid.col - col,
                     MAX_REPEATED_BACK,
-                    kTerm_cursor_left,
-                    kTerm_parm_left_cursor,
+                    TERM_CURSOR_LEFT,
+                    TERM_PARM_LEFT_CURSOR,
                 );
                 tui.grid.goto(row, col);
                 return;
@@ -174,8 +173,8 @@ pub(crate) fn cursor_goto(tui: &mut TUIData, row: c_int, col: c_int) {
                     tui,
                     col - tui.grid.col,
                     MAX_REPEATED_FORWARD,
-                    kTerm_cursor_right,
-                    kTerm_parm_right_cursor,
+                    TERM_CURSOR_RIGHT,
+                    TERM_PARM_RIGHT_CURSOR,
                 );
                 tui.grid.goto(row, col);
                 return;
@@ -187,8 +186,8 @@ pub(crate) fn cursor_goto(tui: &mut TUIData, row: c_int, col: c_int) {
                     tui,
                     row - tui.grid.row,
                     MAX_REPEATED_BACK,
-                    kTerm_cursor_down,
-                    kTerm_parm_down_cursor,
+                    TERM_CURSOR_DOWN,
+                    TERM_PARM_DOWN_CURSOR,
                 );
                 tui.grid.goto(row, col);
                 return;
@@ -197,15 +196,15 @@ pub(crate) fn cursor_goto(tui: &mut TUIData, row: c_int, col: c_int) {
                     tui,
                     tui.grid.row - row,
                     MAX_REPEATED_FORWARD,
-                    kTerm_cursor_up,
-                    kTerm_parm_up_cursor,
+                    TERM_CURSOR_UP,
+                    TERM_PARM_UP_CURSOR,
                 );
                 tui.grid.goto(row, col);
                 return;
             }
         }
     }
-    emit(tui, kTerm_cursor_address, &[row, col]);
+    emit(tui, TERM_CURSOR_ADDRESS, &[row, col]);
     tui.grid.goto(row, col);
 }
 
@@ -297,15 +296,15 @@ pub(crate) fn clear_region(
     } else {
         // Default colours are not known yet, so nothing can be assumed about
         // what a clear would paint; fall back to the terminal's own.
-        emit_out(tui, kTerm_exit_attribute_mode);
+        emit_out(tui, TERM_EXIT_ATTRIBUTE_MODE);
     }
     if tui.can_clear_attr && left == 0 && right == tui.width && bot == tui.height {
         if top == 0 {
-            emit_out(tui, kTerm_clear_screen);
+            emit_out(tui, TERM_CLEAR_SCREEN);
             tui.grid.goto(top, left);
         } else {
             cursor_goto(tui, top, 0);
-            emit_out(tui, kTerm_clr_eos);
+            emit_out(tui, TERM_CLR_EOS);
         }
         return;
     }
@@ -313,9 +312,9 @@ pub(crate) fn clear_region(
     for row in top..bot {
         cursor_goto(tui, row, left);
         if tui.can_clear_attr && right == tui.width {
-            emit_out(tui, kTerm_clr_eol);
+            emit_out(tui, TERM_CLR_EOL);
         } else if tui.can_erase_chars && tui.can_clear_attr && width >= 5 {
-            emit(tui, kTerm_erase_chars, &[width]);
+            emit(tui, TERM_ERASE_CHARS, &[width]);
         } else {
             print_spaces(tui, width);
         }
@@ -331,10 +330,10 @@ fn emit_out(tui: &mut TUIData, what: TerminfoDef) {
 
 /// Confine the terminal's own scrolling to `[top, bot] x [left, right]`.
 fn set_scroll_region(tui: &mut TUIData, top: c_int, bot: c_int, left: c_int, right: c_int) {
-    emit(tui, kTerm_change_scroll_region, &[top, bot]);
+    emit(tui, TERM_CHANGE_SCROLL_REGION, &[top, bot]);
     if left != 0 || right != tui.width - 1 {
         tui_set_term_mode(tui, LEFT_AND_RIGHT_MARGINS, true);
-        emit(tui, kTerm_set_lr_margin, &[left, right]);
+        emit(tui, TERM_SET_LR_MARGIN, &[left, right]);
     }
     // Terminals differ on where the cursor lands after this.
     tui.grid.row = -1;
@@ -345,10 +344,10 @@ fn reset_scroll_region(tui: &mut TUIData, fullwidth: bool) {
     if let Some(cap) = tui.terminfo_ext.reset_scroll_region {
         out_cstr(tui, Some(cap));
     } else {
-        emit(tui, kTerm_change_scroll_region, &[0, tui.height - 1]);
+        emit(tui, TERM_CHANGE_SCROLL_REGION, &[0, tui.height - 1]);
     }
     if !fullwidth {
-        emit(tui, kTerm_set_lr_margin, &[0, tui.width - 1]);
+        emit(tui, TERM_SET_LR_MARGIN, &[0, tui.width - 1]);
         tui_set_term_mode(tui, LEFT_AND_RIGHT_MARGINS, false);
     }
     tui.grid.row = -1;
@@ -469,10 +468,10 @@ pub fn tui_grid_scroll(
     cursor_goto(tui, top, left);
     update_attrs(tui, 0);
     match rows {
-        1 => emit_out(tui, kTerm_delete_line),
-        -1 => emit_out(tui, kTerm_insert_line),
-        _ if rows > 0 => emit(tui, kTerm_parm_delete_line, &[rows]),
-        _ => emit(tui, kTerm_parm_insert_line, &[-rows]),
+        1 => emit_out(tui, TERM_DELETE_LINE),
+        -1 => emit_out(tui, TERM_INSERT_LINE),
+        _ if rows > 0 => emit(tui, TERM_PARM_DELETE_LINE, &[rows]),
+        _ => emit(tui, TERM_PARM_INSERT_LINE, &[-rows]),
     }
     if !full_screen {
         reset_scroll_region(tui, fullwidth);
@@ -619,7 +618,7 @@ pub fn tui_screenshot(tui: &mut TUIData, path: ApiString) {
     let _ = writeln!(file, "{height},{width}");
     tui.grid.goto(0, 0);
     tui.screenshot = Some(file);
-    emit_out(tui, kTerm_clear_screen);
+    emit_out(tui, TERM_CLEAR_SCREEN);
     for row in 0..tui.grid.height {
         cursor_goto(tui, row, 0);
         for col in 0..tui.grid.width {

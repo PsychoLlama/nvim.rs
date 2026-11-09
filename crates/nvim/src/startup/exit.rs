@@ -48,7 +48,7 @@ use crate::startup::{
     ex_exitval, exiting, stderr_isatty, stdout_isatty, ui_client_channel_id, ui_client_exit_status,
     used_stdin, v_dying,
 };
-use crate::state::mode::exmode_active;
+use crate::state::mode::EXMODE_ACTIVE;
 use crate::types::{VAR_NUMBER, VarNumber, Vv};
 use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
@@ -120,7 +120,7 @@ pub fn getout(mut exitval: c_int) -> ! {
 
     // POSIX asks for a non-zero status after an error in Ex mode. The
     // standard is not 100% clear about it, but every other vi does this.
-    if exmode_active.get() {
+    if EXMODE_ACTIVE.get() {
         exitval += ex_exitval.get();
     }
 

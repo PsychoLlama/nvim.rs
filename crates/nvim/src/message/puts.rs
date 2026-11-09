@@ -38,14 +38,14 @@ pub(crate) fn with_on_print<R>(f: impl FnOnce(&mut Callback) -> R) -> R {
 /// below it, scrolling if there is no room.
 pub fn msg_start() {
     let mut did_return = false;
-    MSG_ROW.set(MSG_ROW.get().max(cmdline_row.get()));
+    MSG_ROW.set(MSG_ROW.get().max(CMDLINE_ROW.get()));
 
     if MSG_SILENT.get() == 0 {
         // Don't display the old message now.
         KEEP_MSG.set(None);
         NEED_FILEINFO.set(false);
     }
-    if need_highlight_changed.get() {
+    if NEED_HIGHLIGHT_CHANGED.get() {
         highlight_changed();
     }
     if NEED_CLR_EOS.get() || (p_ch() == 0 && REDRAWING_CMDLINE.get()) {
@@ -57,18 +57,18 @@ pub fn msg_start() {
 
     // With 'cmdheight' 0 the first line of msg_grid has to be scrolled in
     // over the screen.
-    if p_ch() == 0 && !ui_has(kUIMessages) && MSG_SCROLLED.get() == 0 {
+    if p_ch() == 0 && !ui_has(UI_MESSAGES) && MSG_SCROLLED.get() == 0 {
         msg_grid_validate();
         msg_scroll_up(false, true);
         MSG_SCROLLED.set(MSG_SCROLLED.get() + 1);
-        cmdline_row.set(Rows.get() - 1);
+        CMDLINE_ROW.set(ROWS.get() - 1);
     }
 
     if MSG_SCROLL.get() == 0 && full_screen.get() {
         // Overwrite the last message.
-        MSG_ROW.set(cmdline_row.get());
+        MSG_ROW.set(CMDLINE_ROW.get());
         MSG_COL.set(0);
-    } else if (MSG_DIDOUT.get() || p_ch() == 0) && !ui_has(kUIMessages) {
+    } else if (MSG_DIDOUT.get() || p_ch() == 0) && !ui_has(UI_MESSAGES) {
         // Start the message on the next line.
         if p_ch() == 0 && !MSG_DIDOUT.get() && msg_use_printf() != 0 {
             msg_bytes_to_grid(b"\n", 0, false);
@@ -76,7 +76,7 @@ pub fn msg_start() {
             msg_putchar(NL);
         }
         did_return = true;
-        cmdline_row.set(MSG_ROW.get());
+        CMDLINE_ROW.set(MSG_ROW.get());
     }
     if !MSG_DIDANY.get() || LINES_LEFT.get() < 0 {
         msg_starthere();
@@ -85,7 +85,7 @@ pub fn msg_start() {
         // No output on the current line yet.
         MSG_DIDOUT.set(false);
     }
-    if ui_has(kUIMessages) {
+    if ui_has(UI_MESSAGES) {
         msg_ext_ui_flush();
     }
     // When redirecting, may need to start a new line.
@@ -96,7 +96,7 @@ pub fn msg_start() {
 
 /// Note that the current message position is where messages start.
 pub fn msg_starthere() {
-    LINES_LEFT.set(cmdline_row.get());
+    LINES_LEFT.set(CMDLINE_ROW.get());
     MSG_DIDANY.set(false);
 }
 
@@ -110,7 +110,7 @@ pub fn msg_title(text: &CStr) {
     // An `ext_messages` UI lays messages out itself, so a leading newline
     // is noise there.
     let bytes = text.to_bytes();
-    let skip = usize::from(ui_has(kUIMessages) && bytes.first() == Some(&b'\n'));
+    let skip = usize::from(ui_has(UI_MESSAGES) && bytes.first() == Some(&b'\n'));
     msg_bytes(&bytes[skip..], HLF_T, false)
 }
 
@@ -155,7 +155,7 @@ fn put_bytes(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) {
 
     // Print nothing under `:silent`, or for an empty message.
     if MSG_SILENT.get() != 0 || bytes.is_empty() {
-        if bytes.is_empty() && whole_message && ui_has(kUIMessages) {
+        if bytes.is_empty() && whole_message && ui_has(UI_MESSAGES) {
             msg_ext_ui_flush(); // ensure messages until now are emitted
             ui_call_msg_show(
                 ApiString::from_cstr(c"empty"),
@@ -177,7 +177,7 @@ fn put_bytes(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) {
 
     // Writing to a screen that has already scrolled needs a hit-enter
     // prompt afterwards. Not when only using CR to move the cursor.
-    let overflow = !ui_has(kUIMessages) && MSG_SCROLLED.get() > c_int::from(p_ch() == 0);
+    let overflow = !ui_has(UI_MESSAGES) && MSG_SCROLLED.get() > c_int::from(p_ch() == 0);
     if overflow && !MSG_SCROLLED_IGN.get() && bytes != b"\r" {
         NEED_WAIT_RETURN.set(true);
     }
@@ -241,7 +241,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
     let attr = if hl_id != 0 { syn_id2attr(hl_id) } else { 0 };
     DID_WAIT_RETURN.set(false);
 
-    if ui_has(kUIMessages) {
+    if ui_has(UI_MESSAGES) {
         msg_bytes_to_ui(bytes, hl_id, attr);
         return;
     }
@@ -270,7 +270,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
     // stands in for one.
     let mut open_row = -1;
     loop {
-        if MSG_COL.get() >= Columns.get() {
+        if MSG_COL.get() >= COLUMNS.get() {
             store(&text[stored..at], &mut sb_col, true);
             stored = at;
             if MSG_NO_MORE.get() && LINES_LEFT.get() == 0 {
@@ -281,8 +281,8 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
             MSG_DIDOUT.set(false);
         }
 
-        if MSG_ROW.get() >= Rows.get() {
-            MSG_ROW.set(Rows.get() - 1);
+        if MSG_ROW.get() >= ROWS.get() {
+            MSG_ROW.set(ROWS.get() - 1);
             // No pager and no room left: truncate here.
             if MSG_NO_MORE.get() && LINES_LEFT.get() == 0 {
                 break;
@@ -295,9 +295,9 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
                 msg_scroll_up(true, false);
                 inc_msg_scrolled();
                 NEED_WAIT_RETURN.set(true); // may need wait_return() in main()
-                redraw_cmdline.set(true);
-                if cmdline_row.get() > 0 && !exmode_active.get() {
-                    cmdline_row.set(cmdline_row.get() - 1);
+                REDRAW_CMDLINE.set(true);
+                if CMDLINE_ROW.get() > 0 && !EXMODE_ACTIVE.get() {
+                    CMDLINE_ROW.set(CMDLINE_ROW.get() - 1);
                 }
                 if LINES_LEFT.get() > 0 {
                     LINES_LEFT.set(LINES_LEFT.get() - 1);
@@ -305,9 +305,9 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
                 // Screen full and 'more' set: wait for a character.
                 if p_more()
                     && LINES_LEFT.get() == 0
-                    && State.get() != MODE_HITRETURN
+                    && STATE.get() != MODE_HITRETURN
                     && !MSG_NO_MORE.get()
-                    && !exmode_active.get()
+                    && !EXMODE_ACTIVE.get()
                 {
                     if do_more_prompt(NUL) {
                         // The pager jumped ahead to the dialog buttons, so
@@ -344,7 +344,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
             let mut cw = cells_at(&text[at..]);
             // Composing characters past the end of the text are left out.
             let len = cluster_len(&text[at..]);
-            if cw > 1 && MSG_COL.get() == Columns.get() - 1 {
+            if cw > 1 && MSG_COL.get() == COLUMNS.get() - 1 {
                 // Doesn't fit: fill the last column with a highlighted '>'
                 // and let the wrap put the character on the next line.
                 grid_line_puts(MSG_COL.get(), b">", hl_attr(HLF_AT as c_int));
@@ -379,7 +379,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
                 loop {
                     grid_line_puts(MSG_COL.get(), b" ", print_attr);
                     MSG_COL.set(MSG_COL.get() + 1);
-                    if MSG_COL.get() == Columns.get() || MSG_COL.get() & 7 == 0 {
+                    if MSG_COL.get() == COLUMNS.get() || MSG_COL.get() & 7 == 0 {
                         break;
                     }
                 }
@@ -405,7 +405,7 @@ pub(crate) fn message_filtered(msg: &CStr) -> bool {
 /// Whether messages should be printed to stdout/stderr rather than drawn:
 /// batch mode (`-es`/`-Es`/`-l`), or no UI and not embedded.
 pub fn msg_use_printf() -> c_int {
-    c_int::from(!embedded_mode.get() && ui_active() == 0 && !ui_has(kUIMessages))
+    c_int::from(!embedded_mode.get() && ui_active() == 0 && !ui_has(UI_MESSAGES))
 }
 
 /// Print a message when there is no valid screen.
@@ -472,7 +472,7 @@ pub(crate) fn msg_end() -> bool {
     // A message larger than the window, or one that ran into the ruler,
     // means the window has to be redrawn -- but not while abandoning the
     // file or editing the command line.
-    if !exiting.get() && NEED_WAIT_RETURN.get() && State.get() & MODE_CMDLINE == 0 {
+    if !exiting.get() && NEED_WAIT_RETURN.get() && STATE.get() & MODE_CMDLINE == 0 {
         wait_return(0);
         return false;
     }
@@ -487,12 +487,12 @@ pub(crate) fn msg_end() -> bool {
 /// If the message ran into the shown command or the ruler, a hit-enter prompt
 /// and a redraw are owed.
 pub fn msg_check() {
-    if ui_has(kUIMessages) {
+    if ui_has(UI_MESSAGES) {
         return;
     }
-    if MSG_ROW.get() == Rows.get() - 1 && MSG_COL.get() >= sc_col.get() {
+    if MSG_ROW.get() == ROWS.get() - 1 && MSG_COL.get() >= SC_COL.get() {
         NEED_WAIT_RETURN.set(true);
-        redraw_cmdline.set(true);
+        REDRAW_CMDLINE.set(true);
     }
 }
 
@@ -504,7 +504,7 @@ pub fn msg_advance(col: c_int) {
         MSG_COL.set(col);
         return;
     }
-    let col = col.min(Columns.get() - 1); // not enough room
+    let col = col.min(COLUMNS.get() - 1); // not enough room
     while MSG_COL.get() < col {
         msg_putchar(c_int::from(b' '));
     }

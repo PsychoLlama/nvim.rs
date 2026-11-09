@@ -15,7 +15,6 @@
 
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -36,8 +35,8 @@ use crate::lua::stack::{At, Kind, Stack};
 use crate::narrow::{float_as_i64, len_as_int};
 use crate::os::libc::size_t;
 use crate::types::{
-    ApiDict, ApiString, Array, Error, Object, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeNil,
+    ApiDict, ApiString, Array, Error, OBJECT_TYPE_ARRAY, OBJECT_TYPE_DICT, OBJECT_TYPE_FLOAT,
+    OBJECT_TYPE_NIL, Object,
 };
 
 /// Refused for a Lua value with no api image.
@@ -199,7 +198,7 @@ fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Convert
     // A frame opened below names this slot for as long as it lives.
     let table = stack.top();
     match table_props.type_0 {
-        kObjectTypeArray => {
+        OBJECT_TYPE_ARRAY => {
             let wanted = table_props.maxidx;
             if wanted == 0 {
                 return Ok(Converted::Value(Object::array(Array::new())));
@@ -211,7 +210,7 @@ fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Convert
             });
             Ok(Converted::Opened)
         }
-        kObjectTypeDict => {
+        OBJECT_TYPE_DICT => {
             let wanted = table_props.string_keys_num;
             if wanted == 0 {
                 return Ok(Converted::Value(Object::dict(ApiDict::new())));
@@ -225,8 +224,8 @@ fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Convert
             stack.push_nil();
             Ok(Converted::Opened)
         }
-        kObjectTypeFloat => Ok(Converted::Value(Object::float(table_props.val))),
-        kObjectTypeNil => Err(Error::validation(c"Cannot convert given Lua table")),
+        OBJECT_TYPE_FLOAT => Ok(Converted::Value(Object::float(table_props.val))),
+        OBJECT_TYPE_NIL => Err(Error::validation(c"Cannot convert given Lua table")),
         _ => std::process::abort(),
     }
 }

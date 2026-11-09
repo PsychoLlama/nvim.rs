@@ -28,7 +28,7 @@ use crate::option::set_option_value;
 use crate::option::vars::{p_ch, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::options::kOptCmdheight;
 use crate::types::OptInt;
-use crate::ui::state::Rows;
+use crate::ui::state::ROWS;
 use crate::winlayer::{FrameRef, Win};
 
 // ---------------------------------------------------------------------------
@@ -254,7 +254,7 @@ pub(crate) fn new_height(
             let _ = set_option_value(kOptCmdheight, OptVal::Number(new_ch), OptionSetFlags::NONE);
             min_set_ch.set(save_ch);
         }
-        let room = OptInt::from(Rows.get())
+        let room = OptInt::from(ROWS.get())
             - p_ch()
             - OptInt::from(tabline_rows())
             - OptInt::from(global_stl_rows());

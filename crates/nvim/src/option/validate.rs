@@ -33,7 +33,7 @@ use crate::options::*;
 use crate::os::cshim::gettext;
 use crate::startup::full_screen;
 use crate::types::OptInt;
-use crate::ui::state::Rows;
+use crate::ui::state::ROWS;
 use crate::window::{min_rows_for_all_tabpages, win_default_scroll};
 
 use super::{
@@ -114,7 +114,7 @@ pub(crate) fn check_num_option_bounds(
         // 'pumblend' saturates silently rather than reporting.
         kOptPumblend => *newval = (*newval).clamp(0, 100),
         kOptScrolljump => {
-            if (*newval < -100 || *newval >= OptInt::from(Rows.get())) && full_screen.get() {
+            if (*newval < -100 || *newval >= OptInt::from(ROWS.get())) && full_screen.get() {
                 errmsg = Err(E_SCROLL.into());
                 *newval = 1;
             }

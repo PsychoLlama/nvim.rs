@@ -47,12 +47,12 @@ use crate::os::libc::{int64_t, size_t};
 use crate::pos::MAXCOL;
 use crate::search::FORWARD;
 use crate::types::{
-    ApiString, Boolean, Error, Failed, Float, Integer, LineNr, Pos, SwitchWin, WinConfig, WinStyle,
-    WindowHandle, kErrorTypeException, kFloatAnchorEast, kFloatAnchorSouth,
-    kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
+    ApiString, Boolean, ERROR_TYPE_EXCEPTION, Error, FLOAT_ANCHOR_EAST, FLOAT_ANCHOR_SOUTH,
+    FLOAT_RELATIVE_LASTSTATUS, FLOAT_RELATIVE_TABLINE, FLOAT_RELATIVE_WINDOW, Failed, Float,
+    Integer, LineNr, Pos, SwitchWin, WinConfig, WinStyle, WindowHandle,
 };
-use crate::ui::state::kUIMultigrid;
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::UI_MULTIGRID;
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::{
     ui_call_win_external_pos, ui_call_win_float_pos, ui_call_win_hide, ui_call_win_pos,
     ui_call_win_viewport, ui_check_cursor_grid, ui_has,
@@ -98,7 +98,7 @@ fn set_buf(win: Win, buffer: Buf) -> Result<(), Error> {
     if win_result.is_err() && caught.is_ok() {
         let handle = win.id().handle();
         caught = Err(api_error!(
-            kErrorTypeException,
+            ERROR_TYPE_EXCEPTION,
             "Failed to switch to window {handle}"
         ));
     }
@@ -162,7 +162,7 @@ fn ext_win_position(window: Win, validate: bool) {
     let mut wp = window;
     wp.w_pos_changed = false;
     if !wp.w_floating {
-        if ui_has(kUIMultigrid) {
+        if ui_has(UI_MULTIGRID) {
             wp.w_grid_alloc.comp_col = wp.w_wincol;
             wp.w_grid_alloc.comp_row = wp.w_winrow;
         }
@@ -191,13 +191,13 @@ fn ext_win_position(window: Win, validate: bool) {
     let mut grid = default_grid_ref();
     let mut row = c.row as Float;
     let mut col = c.col as Float;
-    if c.relative as c_uint == kFloatRelativeWindow as c_uint {
+    if c.relative as c_uint == FLOAT_RELATIVE_WINDOW as c_uint {
         if let Some(parent) = parent_window(c.window) {
             anchor_to_window(parent, &c, validate, &mut grid, &mut row, &mut col);
         }
-    } else if c.relative as c_uint == kFloatRelativeLaststatus as c_uint {
-        row += Float::from(Rows.get() - number_as_int(p_ch()) - last_stl_rows(false));
-    } else if c.relative as c_uint == kFloatRelativeTabline as c_uint {
+    } else if c.relative as c_uint == FLOAT_RELATIVE_LASTSTATUS as c_uint {
+        row += Float::from(ROWS.get() - number_as_int(p_ch()) - last_stl_rows(false));
+    } else if c.relative as c_uint == FLOAT_RELATIVE_TABLINE as c_uint {
         row += Float::from(tabline_rows());
     }
 
@@ -211,14 +211,14 @@ fn ext_win_position(window: Win, validate: bool) {
         ui_comp_layers_adjust(wp.w_grid_alloc.comp_index, raise);
     }
 
-    let valid = wp.w_redr_type == 0 || ui_has(kUIMultigrid);
+    let valid = wp.w_redr_type == 0 || ui_has(UI_MULTIGRID);
     if !valid && !validate {
         wp.w_pos_changed = true;
         return;
     }
 
-    let east = c.anchor as c_int & kFloatAnchorEast as c_int != 0;
-    let south = c.anchor as c_int & kFloatAnchorSouth as c_int != 0;
+    let east = c.anchor as c_int & FLOAT_ANCHOR_EAST as c_int != 0;
+    let south = c.anchor as c_int & FLOAT_ANCHOR_SOUTH as c_int != 0;
     let mut comp_row = float_as_int(row) - if south { wp.w_height_outer } else { 0 };
     let mut comp_col = float_as_int(col) - if east { wp.w_width_outer } else { 0 };
     // Don't cover the command line unless the float sits above the messages.
@@ -230,16 +230,16 @@ fn ext_win_position(window: Win, validate: bool) {
     comp_row += grid.comp_row;
     comp_col += grid.comp_col;
     comp_row = comp_row
-        .min(Rows.get() - wp.w_height_outer - above_ch)
+        .min(ROWS.get() - wp.w_height_outer - above_ch)
         .max(0);
     if !c.fixed || east {
-        comp_col = comp_col.min(Columns.get() - wp.w_width_outer).max(0);
+        comp_col = comp_col.min(COLUMNS.get() - wp.w_width_outer).max(0);
     }
     wp.w_winrow = comp_row;
     wp.w_wincol = comp_col;
 
     if c.hide {
-        if ui_has(kUIMultigrid) {
+        if ui_has(UI_MULTIGRID) {
             ui_call_win_hide(Integer::from(wp.w_grid_alloc.handle));
         }
         ui_comp_remove_grid(wp.grid_alloc());
@@ -247,7 +247,7 @@ fn ext_win_position(window: Win, validate: bool) {
     }
     let (h, w) = (wp.w_height_outer, wp.w_width_outer);
     ui_comp_put_grid(wp.grid_alloc(), comp_row, comp_col, h, w, valid, false);
-    if ui_has(kUIMultigrid) {
+    if ui_has(UI_MULTIGRID) {
         let anchor = ApiString::from_cstr(FLOAT_ANCHOR_STR[as_index(c.anchor)]);
         let anchor_grid = grid.handle;
         ui_call_win_float_pos(
@@ -321,7 +321,7 @@ pub fn ui_ext_win_viewport(window: Win) {
 /// scrolled since the last time it was told.
 fn ext_win_viewport(window: Win) {
     let mut window = window;
-    if !((window.is_current() || ui_has(kUIMultigrid))
+    if !((window.is_current() || ui_has(UI_MULTIGRID))
         && window.w_viewport_invalid
         && window.w_redr_type == 0)
     {

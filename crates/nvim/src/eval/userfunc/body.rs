@@ -114,7 +114,7 @@ impl ExArg<'_> {
                     *line_to_free = None;
                     *line_to_free = self.next_body_line(Some(b':'), indent, do_concat);
                     if KEY_TYPED.get() {
-                        LINES_LEFT.set(Rows.get() - 1);
+                        LINES_LEFT.set(ROWS.get() - 1);
                     }
                     let Some(read) = line_to_free.as_ref() else {
                         if let Some(marker) = &skip_until {
@@ -128,7 +128,7 @@ impl ExArg<'_> {
                     (read.as_cstr().to_bytes().to_vec(), None)
                 };
                 if line_at.is_some() && KEY_TYPED.get() {
-                    LINES_LEFT.set(Rows.get() - 1);
+                    LINES_LEFT.set(ROWS.get() - 1);
                 }
                 let line = &line[..];
                 if show_block {

@@ -26,12 +26,12 @@ use core::ffi::c_int;
 
 use super::arith::NextCurwin;
 use super::*;
-use crate::drawscreen::state::{cmdline_row, redraw_cmdline};
+use crate::drawscreen::state::{CMDLINE_ROW, REDRAW_CMDLINE};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, showmode};
 use crate::option::defs::{OptError, OptSet};
 use crate::option::vars::{P_WMH, P_WMW, p_ch, p_wmh, p_wmw};
-use crate::types::{OptInt, kFloatRelativeWindow};
-use crate::ui::state::{Columns, Rows};
+use crate::types::{FLOAT_RELATIVE_WINDOW, OptInt};
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::winfloat::win_config_float;
 use crate::winlayer::{FrameRef, Win, frames, frames_back, windows_back};
 
@@ -49,7 +49,7 @@ pub(crate) fn comp_positions() -> c_int {
     // end of the window list, so the walk back from `lastwin` stops at the
     // first window that is not one.
     for mut win in windows_back().take_while(|w| w.w_floating) {
-        if win.w_config.relative == kFloatRelativeWindow {
+        if win.w_config.relative == FLOAT_RELATIVE_WINDOW {
             win.w_pos_changed = true;
         }
     }
@@ -136,18 +136,18 @@ impl FrameRef {
                     room -= frp.min_height(NextCurwin::Unset);
                 }
             }
-            room_cmdline = if self.fr_width != Columns.get() {
+            room_cmdline = if self.fr_width != COLUMNS.get() {
                 0
             } else {
                 let wp = lastwin_nofloating(None);
                 let below = wp.w_winrow + wp.w_height + wp.w_hsep_height + wp.w_status_height;
-                (Rows.get() - number_as_int(p_ch()) - global_stl_rows() - below).max(0)
+                (ROWS.get() - number_as_int(p_ch()) - global_stl_rows() - below).max(0)
             };
 
             if height <= room + room_cmdline {
                 break;
             }
-            if run == 2 || self.fr_width == Columns.get() {
+            if run == 2 || self.fr_width == COLUMNS.get() {
                 height = room + room_cmdline;
                 break;
             }
@@ -253,7 +253,7 @@ impl FrameRef {
             if width <= room {
                 break;
             }
-            let rows_avail = OptInt::from(Rows.get())
+            let rows_avail = OptInt::from(ROWS.get())
                 - p_ch()
                 - OptInt::from(tabline_rows())
                 - OptInt::from(global_stl_rows());
@@ -345,7 +345,7 @@ pub(crate) fn setheight_win(height: c_int, win: Win) {
         comp_positions();
         fix_scroll(true);
         redraw_all(UPD_NOT_VALID);
-        redraw_cmdline.set(true);
+        REDRAW_CMDLINE.set(true);
     }
 }
 
@@ -385,7 +385,7 @@ pub fn did_set_winminheight(_args: &mut OptSet) -> Result<(), OptError> {
     let mut first = true;
     // Loop until there is a 'winminheight' that is possible.
     while p_wmh() > 0 as OptInt {
-        let room = Rows.get() - number_as_int(p_ch());
+        let room = ROWS.get() - number_as_int(p_ch());
         if room >= min_rows_all_tabpages() {
             break;
         }
@@ -401,7 +401,7 @@ pub fn did_set_winminheight(_args: &mut OptSet) -> Result<(), OptError> {
 pub fn did_set_winminwidth(_args: &mut OptSet) -> Result<(), OptError> {
     let mut first = true;
     while p_wmw() > 0 as OptInt {
-        if Columns.get() >= current_topframe().min_width(NextCurwin::Unset) {
+        if COLUMNS.get() >= current_topframe().min_width(NextCurwin::Unset) {
             break;
         }
         P_WMW.set(p_wmw() - 1);
@@ -473,7 +473,7 @@ fn drag_status_line(dragwin: Win, offset: c_int) {
         grow = curfr.next();
     } else {
         // Only dragging the last status line can reduce 'cmdheight'.
-        let mut sum = Rows.get() - cmdline_row.get();
+        let mut sum = ROWS.get() - CMDLINE_ROW.get();
         if curfr.next().is_some() {
             sum -= number_as_int(p_ch()) + global_stl_rows();
         } else if min_set_ch.get() > 0 as OptInt {

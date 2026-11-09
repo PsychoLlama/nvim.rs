@@ -50,12 +50,12 @@ use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::shell::system::do_os_system;
 use crate::smsg;
 use crate::state::MODE_EXTERNCMD;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::strings::{escaped_with, unquoted};
 use crate::tag::tag_freematch;
 use crate::tr;
 use crate::types::{Failed, LineNr, ProfTime, VarNumber, Vv};
-use crate::ui::state::kUIMessages;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_flush, ui_has};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
@@ -186,7 +186,7 @@ impl Argv {
 pub(crate) fn run_shell(cmd: Option<&CStr>, opts: ShellOpts, extra_args: Option<&CStr>) -> c_int {
     let mut input: Vec<u8> = Vec::new();
     let mut capture = false;
-    let current_state = State.get();
+    let current_state = STATE.get();
     let mut forward_output = true;
 
     // Terminating signals are ignored while the child runs.
@@ -195,7 +195,7 @@ pub(crate) fn run_shell(cmd: Option<&CStr>, opts: ShellOpts, extra_args: Option<
     if opts.has(ShellOpts::HIDE_MESS | ShellOpts::EXPAND) {
         forward_output = false;
     } else {
-        State.set(MODE_EXTERNCMD);
+        STATE.set(MODE_EXTERNCMD);
         if opts.has(ShellOpts::WRITE) {
             read_input(&mut input);
         }
@@ -224,14 +224,14 @@ pub(crate) fn run_shell(cmd: Option<&CStr>, opts: ShellOpts, extra_args: Option<
 
     if EMSG_SILENT.get() == 0 && exitcode != 0 && !opts.has(ShellOpts::SILENT) {
         msg_ext_set_kind(c"shell_ret");
-        if !ui_has(kUIMessages) {
+        if !ui_has(UI_MESSAGES) {
             msg_putchar(NL);
         }
         msg_str(gettext(c"shell returned "));
         msg_outnum(exitcode);
     }
 
-    State.set(current_state);
+    STATE.set(current_state);
     signal_accept_deadly();
     exitcode
 }

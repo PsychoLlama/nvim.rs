@@ -26,7 +26,7 @@ use crate::ascii::ascii_isdigit;
 use crate::cmdexpand::defs::{Candidate, Expand, ExpandContext};
 use crate::cstr;
 use crate::global_cell::GlobalCell;
-use crate::keycodes::Ctrl_V;
+use crate::keycodes::CTRL_V;
 use std::ffi::CString;
 
 /// How much of a submenu name the generator can answer with, separator
@@ -137,7 +137,7 @@ fn menu_context(cmd: &CStr, line: &[u8], arg: usize, forceit: bool) -> Context {
     let mut after_dot = start;
     let mut i = start;
     while at(i) != 0 && !white(at(i)) {
-        let escaped = at(i) == b'\\' || c_int::from(at(i)) == Ctrl_V;
+        let escaped = at(i) == b'\\' || c_int::from(at(i)) == CTRL_V;
         if escaped && at(i + 1) != 0 {
             i += 1;
         } else if at(i) == b'.' {

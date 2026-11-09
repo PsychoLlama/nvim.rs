@@ -51,7 +51,7 @@ use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::options::kOptDyFlagUhex;
 use crate::os::cshim::gettext;
 use crate::plines::getvcol;
-use crate::state::mode::{State, saved_cursor};
+use crate::state::mode::{SAVED_CURSOR, STATE};
 use crate::textformat::has_format_option;
 
 // `regexp.rs` keeps its own copy of `RegProg`, so these stay declarations
@@ -741,15 +741,15 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
             changed_bytes(lnum, ColNr::ZERO);
         }
         // Correct the saved cursor position if it is on this line.
-        let saved = saved_cursor.get();
+        let saved = SAVED_CURSOR.get();
         if saved.lnum == lnum {
             if saved.col >= old_offset {
                 // It was after the indent: shift it by the byte delta.
-                saved_cursor.set(saved.with_col(ColNr::new(saved.col + ind_len - old_offset)));
+                SAVED_CURSOR.set(saved.with_col(ColNr::new(saved.col + ind_len - old_offset)));
             } else if saved.col >= new_offset {
                 // It was inside the indent and is now past it (spaces
                 // replaced by a tab): put it back at the indent's end.
-                saved_cursor.set(saved.with_col(new_offset));
+                SAVED_CURSOR.set(saved.with_col(new_offset));
             }
         }
         retval = true;
@@ -779,7 +779,7 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
     // so the line is copied rather than borrowed from the memline.
     let line = Lines::current().line_copy(lnum);
     let mut lead_len = 0;
-    if State.get() & MODE_INSERT != 0 || has_format_option(FoFlag::Q_COMS) {
+    if STATE.get() & MODE_INSERT != 0 || has_format_option(FoFlag::Q_COMS) {
         lead_len = get_leader_len(&line, false, true).0;
     }
     let flp = Buf::current().b_p_flp.get();

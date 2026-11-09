@@ -32,9 +32,10 @@ use crate::memory::{ThinCString, XString};
 use crate::message_fmt::msg_bytes;
 use crate::option::defs::{OptIndex, OptStr, OptVal, OptValType};
 use crate::types::{
-    ApiString, Object, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
+    ApiString, OBJECT_TYPE_BOOLEAN, OBJECT_TYPE_INTEGER, OBJECT_TYPE_NIL, OBJECT_TYPE_STRING,
+    Object,
 };
-use crate::types::{BoolVarValue, TypVal, VarNumber, kSpecialVarNull};
+use crate::types::{BoolVarValue, SPECIAL_VAR_NULL, TypVal, VarNumber};
 use crate::undo::curbuf_is_changed;
 
 use super::{OptSlot, get_option, is_option_hidden, option_has_type, with_option_default};
@@ -99,7 +100,7 @@ impl OptVal {
     /// Number, which is what the old spelling of the accessors answered. A
     /// string moves into the answer.
     pub(crate) fn into_tv(self, numbool: bool) -> TypVal {
-        let mut rettv = TypVal::Special(kSpecialVarNull);
+        let mut rettv = TypVal::Special(SPECIAL_VAR_NULL);
         match self {
             OptVal::Boolean(boolean) => {
                 if numbool {
@@ -249,10 +250,10 @@ pub(crate) fn write_slot(opt_idx: OptIndex, slot: OptSlot, value: OptVal) {
 /// hold.
 pub(crate) fn object_as_optval(o: Object) -> Option<OptVal> {
     Some(match o.kind() {
-        kObjectTypeNil => OptVal::Nil,
-        kObjectTypeBoolean => OptVal::Boolean(o.as_boolean()),
-        kObjectTypeInteger => OptVal::Number(o.as_integer().expect("the tag says Integer")),
-        kObjectTypeString => OptVal::string(o.into_string().expect("the tag says String")),
+        OBJECT_TYPE_NIL => OptVal::Nil,
+        OBJECT_TYPE_BOOLEAN => OptVal::Boolean(o.as_boolean()),
+        OBJECT_TYPE_INTEGER => OptVal::Number(o.as_integer().expect("the tag says Integer")),
+        OBJECT_TYPE_STRING => OptVal::string(o.into_string().expect("the tag says String")),
         _ => return None,
     })
 }

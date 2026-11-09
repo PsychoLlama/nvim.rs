@@ -626,7 +626,7 @@ mod tests {
     };
     use crate::global_cell::editor_state_lock;
     use crate::memory::ThinCString;
-    use crate::types::{Partial, kBoolVarTrue, kSpecialVarNull};
+    use crate::types::{BOOL_VAR_TRUE, Partial, SPECIAL_VAR_NULL};
 
     /// The editor lock, with messages suppressed: there is no screen to
     /// draw them on.
@@ -681,8 +681,8 @@ mod tests {
             TypVal::list(Some(tv_list_alloc(0))),
             TypVal::dict(Some(tv_dict_alloc())),
             TypVal::blob(Some(blob)),
-            TypVal::Special(kSpecialVarNull),
-            TypVal::Bool(kBoolVarTrue),
+            TypVal::Special(SPECIAL_VAR_NULL),
+            TypVal::Bool(BOOL_VAR_TRUE),
             TypVal::dict(Some(d)),
             TypVal::string(None),
         ])));

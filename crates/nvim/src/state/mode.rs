@@ -62,103 +62,103 @@ state_record! {
 
     // -- the mode --
     /// The mode word: `MODE_NORMAL`, `MODE_INSERT`, ... with flags.
-    pub(crate) State: c_int = MODE_NORMAL;
+    pub(crate) STATE: c_int = MODE_NORMAL;
     /// The mode `mode()` reported last, for `ModeChanged`.
-    pub(crate) last_mode: [u8; 4] = *b"n\0\0\0";
+    pub(crate) LAST_MODE: [u8; 4] = *b"n\0\0\0";
     /// In Ex mode (`Q`/`gQ`).
-    pub(crate) exmode_active: bool = false;
+    pub(crate) EXMODE_ACTIVE: bool = false;
     /// Enter Ex mode when the current command is done.
-    pub(crate) pending_exmode_active: bool = false;
+    pub(crate) PENDING_EXMODE_ACTIVE: bool = false;
 
     // -- the operator being built --
     /// An operator is pending: the next motion finishes it.
-    pub(crate) finish_op: bool = false;
+    pub(crate) FINISH_OP: bool = false;
     /// The count typed before the operator.
-    pub(crate) opcount: c_int = 0;
+    pub(crate) OPCOUNT: c_int = 0;
     /// `v`, `V` or CTRL-V typed after the operator, forcing its motion type.
-    pub(crate) motion_force: Key = Key::NUL;
+    pub(crate) MOTION_FORCE: Key = Key::NUL;
     /// 'virtualedit' forced for one operator: `None` follows the option.
-    pub(crate) virtual_op: Option<bool> = None;
+    pub(crate) VIRTUAL_OP: Option<bool> = None;
 
     // -- Visual mode --
     /// The register Select mode puts replaced text in.
-    pub(crate) VIsual_select_reg: u8 = 0;
+    pub(crate) V_ISUAL_SELECT_REG: u8 = 0;
     /// An exclusive Select-mode selection was adjusted by one.
-    pub(crate) VIsual_select_exclu_adj: bool = false;
+    pub(crate) V_ISUAL_SELECT_EXCLU_ADJ: bool = false;
     /// Go back to Select mode when the CTRL-O command is done.
-    pub(crate) restart_VIsual_select: c_int = 0;
+    pub(crate) RESTART_V_ISUAL_SELECT: c_int = 0;
     /// Restart the selection after a Select-mode mapping or menu.
-    pub(crate) VIsual_reselect: c_int = 0;
+    pub(crate) V_ISUAL_RESELECT: c_int = 0;
     /// Redoing a Visual-mode operator.
-    pub(crate) redo_VIsual_busy: bool = false;
+    pub(crate) REDO_V_ISUAL_BUSY: bool = false;
     /// The previous Visual area, for `gv` and `.`.
-    pub(crate) resel_VIsual_mode: VisualMode = VisualMode::NONE;
-    pub(crate) resel_VIsual_line_count: i32 = 0;
-    pub(crate) resel_VIsual_vcol: ColNr = ColNr::ZERO;
+    pub(crate) RESEL_V_ISUAL_MODE: VisualMode = VisualMode::NONE;
+    pub(crate) RESEL_V_ISUAL_LINE_COUNT: i32 = 0;
+    pub(crate) RESEL_V_ISUAL_VCOL: ColNr = ColNr::ZERO;
     /// 'keymodel' has `startsel`: a shifted special key starts a selection.
-    pub(crate) km_startsel: bool = false;
+    pub(crate) KM_STARTSEL: bool = false;
     /// 'keymodel' has `stopsel`: an unshifted special key stops it.
-    pub(crate) km_stopsel: bool = false;
+    pub(crate) KM_STOPSEL: bool = false;
 
     // -- the insert session --
     /// Where the insert started.
-    pub(crate) Insstart: Pos = POS_ZERO;
+    pub(crate) INSSTART: Pos = POS_ZERO;
     /// `Insstart` as it was when the insert started; `Insstart` moves.
-    pub(crate) Insstart_orig: Pos = POS_ZERO;
+    pub(crate) INSSTART_ORIG: Pos = POS_ZERO;
     /// Where 'paste' was switched on during the insert.
-    pub(crate) where_paste_started: Pos = POS_ZERO;
+    pub(crate) WHERE_PASTE_STARTED: Pos = POS_ZERO;
     /// Restart the insert when the current command is done: `i`, `a`, `R`, `V`.
-    pub(crate) restart_edit: Key = Key::NUL;
+    pub(crate) RESTART_EDIT: Key = Key::NUL;
     /// Honour `restart_edit` even where a finished command would drop it
     /// (`:normal` into a terminal buffer).
-    pub(crate) force_restart_edit: bool = false;
+    pub(crate) FORCE_RESTART_EDIT: bool = false;
     /// A cursor key was used in Insert mode: the insert is broken in two.
-    pub(crate) arrow_used: bool = false;
+    pub(crate) ARROW_USED: bool = false;
     /// Put the cursor past the end of the line when the insert restarts
     /// after CTRL-O.
-    pub(crate) ins_at_eol: bool = false;
+    pub(crate) INS_AT_EOL: bool = false;
     /// Don't check for abbreviations.
-    pub(crate) no_abbr: bool = true;
+    pub(crate) NO_ABBR: bool = true;
     /// Leave Insert mode at the next chance.
-    pub(crate) stop_insert_mode: bool = false;
+    pub(crate) STOP_INSERT_MODE: bool = false;
     /// Start Insert mode at the next chance.
-    pub(crate) need_start_insertmode: bool = false;
+    pub(crate) NEED_START_INSERTMODE: bool = false;
     /// The line count when `gR` started.
-    pub(crate) orig_line_count: LineNr = LineNr::ZERO;
+    pub(crate) ORIG_LINE_COUNT: LineNr = LineNr::ZERO;
     /// Lines changed by `gR` so far.
-    pub(crate) vr_lines_changed: c_int = 0;
+    pub(crate) VR_LINES_CHANGED: c_int = 0;
     /// The cursor before text was formatted.
-    pub(crate) saved_cursor: Pos = POS_ZERO;
+    pub(crate) SAVED_CURSOR: Pos = POS_ZERO;
     /// The offset `replace_push` inserts at.
-    pub(crate) replace_offset: c_int = 0;
+    pub(crate) REPLACE_OFFSET: c_int = 0;
     /// A scroll already synced the 'scrollbind' windows; the next check
     /// skips its own pass.
-    pub(crate) did_syncbind: bool = false;
+    pub(crate) DID_SYNCBIND: bool = false;
 
     // -- autoindent and smartindent --
     /// Autoindent was done; undone if nothing is typed.
-    pub(crate) did_ai: bool = false;
+    pub(crate) DID_AI: bool = false;
     /// The column the autoindent reached.
-    pub(crate) ai_col: ColNr = ColNr::ZERO;
+    pub(crate) AI_COL: ColNr = ColNr::ZERO;
     /// The last byte of the end of a three-part comment leader just
     /// inserted, which typed closes the comment.
-    pub(crate) end_comment_pending: Option<u8> = None;
+    pub(crate) END_COMMENT_PENDING: Option<u8> = None;
     /// Smartindent was done.
-    pub(crate) did_si: bool = false;
+    pub(crate) DID_SI: bool = false;
     /// Smartindent may indent after this line.
-    pub(crate) can_si: bool = false;
+    pub(crate) CAN_SI: bool = false;
     /// Smartindent may dedent a `}`.
-    pub(crate) can_si_back: bool = false;
+    pub(crate) CAN_SI_BACK: bool = false;
     /// The indent `^ CTRL-D` takes away for one line.
-    pub(crate) old_indent: c_int = 0;
+    pub(crate) OLD_INDENT: c_int = 0;
 
     // -- the CTRL-X submode's mode line --
     /// The submode's name, as `-- Keyword completion (^N^P)`.
-    pub(crate) edit_submode: Option<&'static CStr> = None;
+    pub(crate) EDIT_SUBMODE: Option<&'static CStr> = None;
     /// What comes before it: ` Adding`.
-    pub(crate) edit_submode_pre: Option<&'static CStr> = None;
+    pub(crate) EDIT_SUBMODE_PRE: Option<&'static CStr> = None;
     /// What comes after it: `match 1 of 4`, `Back at original`.
-    pub(crate) edit_submode_extra: Option<XString> = None;
+    pub(crate) EDIT_SUBMODE_EXTRA: Option<XString> = None;
     /// The highlight `edit_submode_extra` is drawn in.
-    pub(crate) edit_submode_highl: Hlf = HLF_NONE;
+    pub(crate) EDIT_SUBMODE_HIGHL: Hlf = HLF_NONE;
 }

@@ -59,7 +59,7 @@ pub fn change_warning(mut buffer: Buf, col: c_int) {
 
     // What msg() does, but with a column offset.
     msg_start();
-    if MSG_ROW.get() == Rows.get() - 1 {
+    if MSG_ROW.get() == ROWS.get() - 1 {
         MSG_COL.set(col);
     }
     msg_source(HLF_W);
@@ -74,8 +74,8 @@ pub fn change_warning(mut buffer: Buf, col: c_int) {
     }
     buffer.b_did_warn = true;
     // Don't redraw and erase the message.
-    redraw_cmdline.set(false);
-    if MSG_ROW.get() < Rows.get() - 1 {
+    REDRAW_CMDLINE.set(false);
+    if MSG_ROW.get() < ROWS.get() - 1 {
         showmode();
     }
 }
@@ -114,7 +114,7 @@ pub fn changed(buffer: Buf) {
             if NEED_WAIT_RETURN.get()
                 && EMSG_SILENT.get() == 0
                 && !IN_ASSERT_FAILS.get()
-                && !ui_has(kUIMessages)
+                && !ui_has(UI_MESSAGES)
             {
                 msg_delay(2002, true);
                 wait_return(c_int::from(true));
@@ -142,8 +142,8 @@ pub fn changed_internal(mut buffer: Buf) {
     buffer.b_changed_invalid = true;
     ml_setflags(buffer);
     redraw_buf_status_later(buffer);
-    redraw_tabline.set(true);
-    need_maketitle.set(true);
+    REDRAW_TABLINE.set(true);
+    NEED_MAKETITLE.set(true);
 }
 
 /// Note that `buffer` is no longer modified -- `:w`, `:e!`, and undoing back to
@@ -167,8 +167,8 @@ pub fn unchanged(mut buffer: Buf, ff: bool, always_inc_changedtick: bool) {
             save_file_ff(buffer);
         }
         redraw_buf_status_later(buffer);
-        redraw_tabline.set(true);
-        need_maketitle.set(true);
+        REDRAW_TABLINE.set(true);
+        NEED_MAKETITLE.set(true);
         buf_inc_changedtick(buffer);
     } else if always_inc_changedtick {
         buf_inc_changedtick(buffer);

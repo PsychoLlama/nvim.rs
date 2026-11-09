@@ -41,7 +41,7 @@ use crate::os::fs::dir_exists;
 use crate::os::libc::{int64_t, ptrdiff_t, uint64_t};
 use crate::pos::MAXLNUM;
 use crate::semsg;
-use crate::types::{List, TypVal, kListLenUnknown};
+use crate::types::{LIST_LEN_UNKNOWN, List, TypVal};
 use core::ffi::{CStr, c_int};
 use std::ffi::OsStr;
 use std::io::{ErrorKind, Read, Seek, SeekFrom};
@@ -392,7 +392,7 @@ fn read_file_or_blob(args: &[TypVal], result: &mut TypVal, always_blob: bool) {
     if blob {
         tv_blob_alloc_ret(result);
     } else {
-        tv_list_alloc_ret(result, kListLenUnknown as c_int as ptrdiff_t);
+        tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as c_int as ptrdiff_t);
     }
 
     let fname = str_arg(args, 0, &mut numbuf3);

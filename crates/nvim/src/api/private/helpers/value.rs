@@ -18,7 +18,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::api::private::metadata::PACKED_API_METADATA;
 use crate::api::private::validate::{err_bad_value, err_expected};
@@ -29,9 +28,10 @@ use crate::message::HlMessageChunk;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::narrow::number_as_int;
 use crate::types::{
-    ApiDict, ApiString, Array, Error, HlMessage, LuaRef, Object, ObjectType, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
-    kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
+    ApiDict, ApiString, Array, Error, HlMessage, LuaRef, OBJECT_TYPE_ARRAY, OBJECT_TYPE_BOOLEAN,
+    OBJECT_TYPE_BUFFER, OBJECT_TYPE_DICT, OBJECT_TYPE_FLOAT, OBJECT_TYPE_INTEGER,
+    OBJECT_TYPE_LUA_REF, OBJECT_TYPE_NIL, OBJECT_TYPE_STRING, OBJECT_TYPE_TABPAGE,
+    OBJECT_TYPE_WINDOW, Object, ObjectType,
 };
 use core::ffi::{CStr, c_int};
 use core::mem::ManuallyDrop;
@@ -214,17 +214,17 @@ pub(crate) fn api_metadata_raw() -> ApiString {
 /// The name of `t` as the API's documentation and error messages spell it.
 pub(crate) fn api_typename(t: ObjectType) -> &'static CStr {
     match t {
-        kObjectTypeNil => c"nil",
-        kObjectTypeBoolean => c"Boolean",
-        kObjectTypeInteger => c"Integer",
-        kObjectTypeFloat => c"Float",
-        kObjectTypeString => c"String",
-        kObjectTypeArray => c"Array",
-        kObjectTypeDict => c"Dict",
-        kObjectTypeLuaRef => c"Function",
-        kObjectTypeBuffer => c"Buffer",
-        kObjectTypeWindow => c"Window",
-        kObjectTypeTabpage => c"Tabpage",
+        OBJECT_TYPE_NIL => c"nil",
+        OBJECT_TYPE_BOOLEAN => c"Boolean",
+        OBJECT_TYPE_INTEGER => c"Integer",
+        OBJECT_TYPE_FLOAT => c"Float",
+        OBJECT_TYPE_STRING => c"String",
+        OBJECT_TYPE_ARRAY => c"Array",
+        OBJECT_TYPE_DICT => c"Dict",
+        OBJECT_TYPE_LUA_REF => c"Function",
+        OBJECT_TYPE_BUFFER => c"Buffer",
+        OBJECT_TYPE_WINDOW => c"Window",
+        OBJECT_TYPE_TABPAGE => c"Tabpage",
         _ => unreachable!(),
     }
 }
@@ -275,7 +275,7 @@ pub(crate) fn parse_hl_msg(
 ) -> Result<(), Error> {
     for item in chunks {
         let Some(chunk) = item.as_array() else {
-            let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.kind()));
+            let (want, got) = (api_typename(OBJECT_TYPE_ARRAY), api_typename(item.kind()));
             return Err(err_expected(c"chunk", want, Some(got)));
         };
         let head = (1..=2).contains(&chunk.len()).then(|| &chunk[0]);

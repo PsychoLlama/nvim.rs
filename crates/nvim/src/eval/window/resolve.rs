@@ -23,7 +23,7 @@ use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::NumBuf;
 use crate::normal::visual_active;
 use crate::os::libc::ptrdiff_t;
-use crate::types::kListLenMayKnow;
+use crate::types::LIST_LEN_MAY_KNOW;
 use crate::types::{Failed, Handle, TypVal, VarNumber};
 use crate::window::LOWEST_WIN_ID;
 use crate::window::tab_index;
@@ -294,7 +294,7 @@ pub fn f_win_id2win(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `win_findbuf({bufnr})` — the ids of every window showing that buffer.
 pub fn f_win_findbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let list = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
+    let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
     let bufnr = number_as_int(arg_number(args, 0));
     for wp in tab_windows().filter(|wp| wp.buffer().handle == Handle::new(bufnr)) {
         (*list).push_number(VarNumber::from(wp.handle));

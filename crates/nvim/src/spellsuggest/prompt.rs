@@ -39,7 +39,7 @@
 use crate::ascii::NUL;
 use crate::change::inserted_bytes;
 use crate::cursor::get_cursor_line_len;
-use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::state::CMDLINE_ROW;
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_char, append_to_redobuff_literally, beep_flush,
     reset_redobuff,
@@ -55,7 +55,7 @@ use crate::message::{
     emsg, msg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_start,
 };
 use crate::message_fmt::{msg_bytes, msg_text};
-use crate::mouse::state::mouse_row;
+use crate::mouse::state::MOUSE_ROW;
 use crate::narrow::as_index;
 use crate::narrow::len_as_int;
 use crate::normal::{end_visual_mode, visual_active, visual_anchor};
@@ -75,8 +75,8 @@ use crate::spellsuggest::{
 };
 use crate::types::Key;
 use crate::types::{ColNr, Pos};
-use crate::ui::state::Rows;
-use crate::ui::state::kUIMessages;
+use crate::ui::state::ROWS;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_has, vim_beep};
 use crate::undo::u_save_cursor;
 use crate::winlayer::Win;
@@ -130,7 +130,7 @@ fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
 
     // List at most as many as fit on the screen, or as `'spellsuggest'`
     // allows, whichever is smaller.
-    let limit = sps_limit.get().min(Rows.get() - 2);
+    let limit = sps_limit.get().min(ROWS.get() - 2);
     let mut sug = SugInfo::new();
     let col = Win::current()
         .w_cursor
@@ -226,8 +226,8 @@ fn ask_which_suggestion(sug: &SugInfo, msg_scroll_save: c_int) -> c_int {
     CMDMSG_RL.set(Win::current().w_onebuf_opt.wo_rl != 0);
 
     msg_start();
-    MSG_ROW.set(Rows.get() - 1); // for when 'cmdheight' > 1
-    LINES_LEFT.set(Rows.get()); // avoid the more-prompt
+    MSG_ROW.set(ROWS.get() - 1); // for when 'cmdheight' > 1
+    LINES_LEFT.set(ROWS.get()); // avoid the more-prompt
 
     let bad = msg_bytes(bad_prefix(sug, sug.su_badlen));
     let asked = tr!("Change \"{bad}\" to:");
@@ -248,7 +248,7 @@ fn ask_which_suggestion(sug: &SugInfo, msg_scroll_save: c_int) -> c_int {
     let last = len_as_int(sug.su_ga.len()) - 1;
     for (i, stp) in sug.su_ga.iter().enumerate() {
         show_suggestion(len_as_int(i), stp, sug);
-        if !ui_has(kUIMessages) || len_as_int(i) < last {
+        if !ui_has(UI_MESSAGES) || len_as_int(i) < last {
             msg_putchar(c_int::from(b'\n'));
         }
     }
@@ -259,10 +259,10 @@ fn ask_which_suggestion(sug: &SugInfo, msg_scroll_save: c_int) -> c_int {
     let mut mouse_used = false;
     let mut selected = prompt_for_input(None, 0, false, Some(&mut mouse_used));
     if mouse_used {
-        selected = len_as_int(sug.su_ga.len()) + 1 - (cmdline_row.get() - mouse_row.get());
+        selected = len_as_int(sug.su_ga.len()) + 1 - (CMDLINE_ROW.get() - MOUSE_ROW.get());
     }
 
-    LINES_LEFT.set(Rows.get()); // avoid the more-prompt
+    LINES_LEFT.set(ROWS.get()); // avoid the more-prompt
     MSG_SCROLL.set(msg_scroll_save); // no delay for 'smd' in normal_cmd()
     selected
 }

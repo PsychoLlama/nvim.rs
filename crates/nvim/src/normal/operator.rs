@@ -38,7 +38,7 @@ use crate::os::input::line_breakcheck;
 use crate::register::{
     RegName, do_execreg, do_record, get_expr_register, register_name, valid_yank_reg,
 };
-use crate::state::mode::{VIsual_select_reg, arrow_used, restart_edit};
+use crate::state::mode::{ARROW_USED, RESTART_EDIT, V_ISUAL_SELECT_REG};
 use crate::types::Vv;
 use crate::undo::{u_redo, u_undo, u_undoline};
 use crate::winlayer::graph::cmdwin_type;
@@ -150,7 +150,7 @@ pub(crate) fn nv_dot(cmd_arg: &mut CmdArg) {
     }
     // The insert half is only replayed when insert mode was left by a
     // command rather than by an arrow key, which ends the change.
-    let repeat_insert = !restart_edit.get().is_nul() && !arrow_used.get();
+    let repeat_insert = !RESTART_EDIT.get().is_nul() && !ARROW_USED.get();
     if start_redo(cmd_arg.count0, repeat_insert).is_err() {
         clear_op_beep(cmd_arg.op());
     }
@@ -168,7 +168,7 @@ pub(crate) fn nv_redo_or_register(cmd_arg: &mut CmdArg) {
         if reg.is('"') {
             reg = Key::NUL;
         }
-        VIsual_select_reg.set(
+        V_ISUAL_SELECT_REG.set(
             register_name(reg)
                 .filter(|&name| valid_yank_reg(name, true))
                 .unwrap_or(0),

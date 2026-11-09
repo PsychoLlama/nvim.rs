@@ -27,7 +27,7 @@ use crate::startup::vim_ignored;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::types::Handle;
 use crate::types::LineNr;
-use crate::types::{Pos, TypVal, VarNumber, kListLenMayKnow, kListLenUnknown};
+use crate::types::{LIST_LEN_MAY_KNOW, LIST_LEN_UNKNOWN, Pos, TypVal, VarNumber};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -92,7 +92,7 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 /// `getjumplist([{winnr} [, {tabnr}]])` — `[jumps, index]`.
 pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // The jump list is compacted before it is read so no entry is stale.
-    let out = tv_list_alloc_ret(result, kListLenMayKnow as isize);
+    let out = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
     let Some(wp) = find_tabwin(args.first(), args.get(1)) else {
         return;
     };
@@ -120,7 +120,7 @@ pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
 /// `getmarklist([{buf}])` — the global marks, or one buffer's local ones.
 pub fn f_getmarklist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let out = tv_list_alloc_ret(result, kListLenMayKnow as isize);
+    let out = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
     if args.is_empty() {
         get_global_marks(out);
         return;
@@ -183,7 +183,7 @@ pub fn f_settagstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
 /// `tagfiles()` — the tags files that would be searched, in order.
 pub fn f_tagfiles(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let out = tv_list_alloc_ret(result, kListLenUnknown as isize);
+    let out = tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as isize);
     let mut files = TagFiles::new();
     while let Some(name) = files.next() {
         out.push_str(Some(name.as_cstr()));
@@ -202,6 +202,6 @@ pub fn f_taglist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     let fname = args.get(1).map(|fname| numbuf2.string(fname));
-    let list = tv_list_alloc_ret(result, kListLenUnknown as isize);
+    let list = tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as isize);
     get_tags(list, pattern, fname);
 }

@@ -29,7 +29,7 @@ use crate::keycodes::SpecialKey;
 use crate::memline::Lines;
 use crate::narrow::number_as_col;
 use crate::types::Key;
-use crate::types::{VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenMayKnow};
+use crate::types::{LIST_LEN_MAY_KNOW, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
@@ -293,7 +293,7 @@ pub(crate) fn set_completion(mut startcol: ColNr, list: Option<&ListRef>) {
 
 /// The `complete()` function; a `VimLFunc` row in the builtin table.
 pub fn f_complete(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
-    if State.get() & MODE_INSERT == 0 {
+    if STATE.get() & MODE_INSERT == 0 {
         emsg(gettext(c"E785: complete() can only be used in Insert mode"));
         return;
     }
@@ -415,7 +415,7 @@ pub(crate) fn get_complete_info(what_list: Option<&List>, retdict: &mut Dict) {
     let has_matches = what_flag & CI_WHAT_MATCHES != 0;
     let has_completed = what_flag & CI_WHAT_COMPLETED != 0;
     if has_items || has_matches {
-        let held = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+        let held = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
         li = Some(held.clone());
         let key = if has_matches && !has_items {
             "matches"

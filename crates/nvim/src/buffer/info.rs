@@ -36,7 +36,7 @@ use core::ffi::{CStr, c_int};
 use super::*;
 use crate::charset::{strsize, trans_characters_in};
 use crate::drawscreen::redrawing;
-use crate::drawscreen::state::need_maketitle;
+use crate::drawscreen::state::NEED_MAKETITLE;
 use crate::getchar::state::GOT_INT;
 use crate::mbyte::cp_bounds;
 use crate::memory::XString;
@@ -56,14 +56,14 @@ use crate::os::input::line_breakcheck;
 use crate::path::MAXPATHL;
 use crate::path::path_tail;
 use crate::plines::win_get_fill;
-use crate::state::mode::restart_edit;
+use crate::state::mode::RESTART_EDIT;
 use crate::statusline::FmtSource;
-use crate::statusline::state::stl_syntax;
+use crate::statusline::state::STL_SYNTAX;
 use crate::terminal::buf_terminal_running;
 use crate::types::ApiString;
 use crate::types::{ExArg, LineNr, OptInt};
-use crate::ui::state::Columns;
-use crate::ui::state::kUIMessages;
+use crate::ui::state::COLUMNS;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{buf_is_changed, curbuf_is_changed, undo_time_text};
 use crate::winlayer::{Buf, Win, buffers, first_buffer};
@@ -223,7 +223,7 @@ fn show(buffer: Buf, by_time: bool, name: &XString) {
         };
     }
 
-    if !ui_has(kUIMessages) || MSG_COL.get() > 0 {
+    if !ui_has(UI_MESSAGES) || MSG_COL.get() > 0 {
         msg_putchar(c_int::from(b'\n'));
     }
 
@@ -389,7 +389,7 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         // Repeat the message after redrawing when 'restart_edit' is set
         // (otherwise there is a delay before redrawing), or when the screen
         // scrolled but there is no wait-return prompt.
-        if !restart_edit.get().is_nul() || MSG_SCROLLED.get() != 0 && !NEED_WAIT_RETURN.get() {
+        if !RESTART_EDIT.get().is_nul() || MSG_SCROLLED.get() != 0 && !NEED_WAIT_RETURN.get() {
             set_keep_msg(p.as_ref().map(XString::as_cstr), 0);
         }
     }
@@ -416,10 +416,10 @@ pub(crate) fn col_text(col: c_int, vcol: c_int) -> String {
 pub fn maketitle() {
     if !redrawing() {
         // Postpone updating the title when 'lazyredraw' is set.
-        need_maketitle.set(true);
+        NEED_MAKETITLE.set(true);
         return;
     }
-    need_maketitle.set(false);
+    NEED_MAKETITLE.set(false);
     if !p_title() && !p_icon() && lasttitle.with(Option::is_none) && lasticon.with(Option::is_none)
     {
         // Nothing to do.
@@ -433,10 +433,10 @@ pub fn maketitle() {
     if p_title() {
         let mut maxlen = 0;
         if p_titlelen() > 0 as OptInt {
-            maxlen = number_as_int(p_titlelen() * OptInt::from(Columns.get()) / 100).max(10);
+            maxlen = number_as_int(p_titlelen() * OptInt::from(COLUMNS.get()) / 100).max(10);
         }
         let title = if !titlestring.is_empty() {
-            if stl_syntax.get().has(StlSyntax::TITLE) {
+            if STL_SYNTAX.get().has(StlSyntax::TITLE) {
                 build_stl(&titlestring, kOptTitlestring, maxlen)
             } else {
                 titlestring.to_vec()
@@ -453,7 +453,7 @@ pub fn maketitle() {
 
     if p_icon() {
         let icon = if !iconstring.is_empty() {
-            if stl_syntax.get().has(StlSyntax::ICON) {
+            if STL_SYNTAX.get().has(StlSyntax::ICON) {
                 build_stl(&iconstring, kOptIconstring, 0)
             } else {
                 iconstring.to_vec()

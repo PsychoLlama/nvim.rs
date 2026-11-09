@@ -194,7 +194,7 @@ pub fn nvim_parse_cmd(str: ApiString, _opts: &mut KeyDict_empty) -> Result<KeyDi
             None => Error::exception(c"Parsing command-line"),
             Some(msg) => {
                 let msg = msg_cstr(msg);
-                api_error!(kErrorTypeException, "Parsing command-line: {msg}")
+                api_error!(ERROR_TYPE_EXCEPTION, "Parsing command-line: {msg}")
             }
         });
     }

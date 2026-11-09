@@ -43,7 +43,7 @@ use crate::normal::visual_active;
 use crate::option::defs::OptError;
 use crate::option::vars::{P_GUICURSOR, P_SEL, p_guicursor};
 use crate::os::libc::size_t;
-use crate::state::mode::{State, finish_op};
+use crate::state::mode::{FINISH_OP, STATE};
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_SHOWMATCH, MODE_TERMINAL, REPLACE_FLAG, VREPLACE_FLAG,
 };
@@ -529,7 +529,7 @@ pub(crate) fn cursor_mode_uses_syn_id(syn_id: c_int) -> bool {
 
 /// The entry describing the cursor for the mode the editor is in.
 pub(crate) fn cursor_get_mode_idx() -> ShapeIdx {
-    let state = State.get();
+    let state = STATE.get();
     if state == MODE_SHOWMATCH {
         SHAPE_IDX_SM
     } else if state == MODE_TERMINAL {
@@ -546,7 +546,7 @@ pub(crate) fn cursor_get_mode_idx() -> ShapeIdx {
         } else {
             SHAPE_IDX_CI
         }
-    } else if finish_op.get() {
+    } else if FINISH_OP.get() {
         SHAPE_IDX_O
     } else if visual_active() {
         if P_SEL.first_byte() == b'e' {

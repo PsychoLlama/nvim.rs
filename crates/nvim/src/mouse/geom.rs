@@ -23,7 +23,7 @@ use crate::types::Key;
 use core::ffi::{CStr, c_int};
 
 use super::{MOUSE_LEFT, MOUSE_MIDDLE, MOUSE_RIGHT, MOUSE_X1, MOUSE_X2, MSCR_RIGHT};
-use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
+use crate::mouse::state::{MOUSE_COL, MOUSE_GRID, MOUSE_ROW};
 use crate::types::{ColNr, VarNumber};
 
 /// Where a mouse event landed: a grid handle, and a row and column within it.
@@ -44,9 +44,9 @@ impl MousePos {
     /// Where the last mouse event landed.
     pub(crate) fn current() -> Self {
         Self {
-            grid: mouse_grid.get(),
-            row: mouse_row.get(),
-            col: mouse_col.get(),
+            grid: MOUSE_GRID.get(),
+            row: MOUSE_ROW.get(),
+            col: MOUSE_COL.get(),
         }
     }
 }

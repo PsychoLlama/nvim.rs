@@ -26,15 +26,15 @@ use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::eval::last_set_msg;
 use crate::getchar::state::GOT_INT;
 use crate::highlight::HlAttrFlags;
-use crate::highlight::state::{include_default, include_link, include_none};
+use crate::highlight::state::{INCLUDE_DEFAULT, INCLUDE_LINK, INCLUDE_NONE};
 use crate::message::state::{MSG_COL, MSG_SILENT};
 use crate::message::{
     message_filtered, msg_advance, msg_clr_eos, msg_display, msg_putchar, msg_str_hl,
 };
 use crate::option::vars::p_verbose;
 use crate::os::time::os_delay;
-use crate::ui::state::Columns;
-use crate::ui::state::kUIMessages;
+use crate::ui::state::COLUMNS;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_flush, ui_has};
 
 use super::{ATTR_NAMES, HLF_D, HexBuf, coloridx_to_name, group, highlight_num_groups};
@@ -232,7 +232,7 @@ pub(crate) fn syn_list_header(
 
     // SAFETY: main-thread message calls.
     if !did_header {
-        if !ui_has(kUIMessages) || MSG_COL.get() > 0 {
+        if !ui_has(UI_MESSAGES) || MSG_COL.get() > 0 {
             msg_putchar(c_int::from(b'\n'));
         }
         if GOT_INT.get() {
@@ -241,10 +241,10 @@ pub(crate) fn syn_list_header(
         name_col = msg_display(group(id).name, 0, false);
         MSG_COL.set(name_col);
         endcol = 15;
-    } else if (ui_has(kUIMessages) || MSG_SILENT.get() != 0) && !force_newline {
+    } else if (ui_has(UI_MESSAGES) || MSG_SILENT.get() != 0) && !force_newline {
         msg_putchar(c_int::from(b' '));
         adjust = false;
-    } else if MSG_COL.get() + outlen + 1 >= Columns.get() || force_newline {
+    } else if MSG_COL.get() + outlen + 1 >= COLUMNS.get() || force_newline {
         msg_putchar(c_int::from(b'\n'));
         if GOT_INT.get() {
             return true;
@@ -263,7 +263,7 @@ pub(crate) fn syn_list_header(
     }
 
     if !did_header {
-        if endcol == Columns.get() - 1 && endcol <= name_col {
+        if endcol == COLUMNS.get() - 1 && endcol <= name_col {
             msg_putchar(c_int::from(b' '));
         }
         msg_str_hl(c"xxx", id, false);
@@ -317,8 +317,8 @@ pub(crate) fn set_context_in_highlight_cmd(expand: &mut Expand, arg: usize) {
     // Default: expand group names.
     expand.context = ExpandContext::Highlight;
     expand.pattern = arg;
-    include_link.set(2);
-    include_default.set(1);
+    INCLUDE_LINK.set(2);
+    INCLUDE_DEFAULT.set(1);
 
     let line = expand.line_cstr().to_bytes().to_vec();
     let at = |i: usize| line.get(i).copied().unwrap_or(0);
@@ -337,7 +337,7 @@ pub(crate) fn set_context_in_highlight_cmd(expand: &mut Expand, arg: usize) {
     }
 
     // Past "default" or the group name.
-    include_default.set(0);
+    INCLUDE_DEFAULT.set(0);
     if is_prefix(&line[arg..p], b"default") {
         arg = skipwhite(p);
         expand.pattern = arg;
@@ -348,7 +348,7 @@ pub(crate) fn set_context_in_highlight_cmd(expand: &mut Expand, arg: usize) {
     }
 
     // Past the group name.
-    include_link.set(0);
+    INCLUDE_LINK.set(0);
     if at(arg + 1) == b'i' && at(arg) == b'N' {
         highlight_list();
     }
@@ -388,9 +388,9 @@ pub(crate) fn get_highlight_name_ext(idx: c_int, skip_cleared: bool) -> Option<&
         return Some(c"");
     }
 
-    let none = include_none.get();
-    let default = include_default.get();
-    let link = include_link.get();
+    let none = INCLUDE_NONE.get();
+    let default = INCLUDE_DEFAULT.get();
+    let link = INCLUDE_LINK.get();
     if idx == groups && none != 0 {
         Some(c"none")
     } else if idx == groups + none && default != 0 {

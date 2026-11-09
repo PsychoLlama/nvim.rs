@@ -75,7 +75,7 @@ pub fn evalvars_init() {
 
     set_vim_var_dict(Vv::CompletedItem, Some(tv_dict_alloc_lock(VarLock::Fixed)));
     set_vim_var_dict(Vv::Event, Some(tv_dict_alloc_lock(VarLock::Fixed)));
-    let errors = Some(tv_list_alloc(kListLenUnknown as ptrdiff_t));
+    let errors = Some(tv_list_alloc(LIST_LEN_UNKNOWN as ptrdiff_t));
     set_vim_var_list(Vv::Errors, errors);
 
     // The `v:` variables that start out at a constant Number, the `v:t_*`
@@ -99,15 +99,15 @@ pub fn evalvars_init() {
         (Vv::Numbermin, VARNUMBER_MIN as VarNumber),
         (Vv::Numbersize, numbersize),
         (Vv::Maxcol, VarNumber::from(MAXCOL)),
-        (Vv::Echospace, VarNumber::from(sc_col.get() - 1)),
+        (Vv::Echospace, VarNumber::from(SC_COL.get() - 1)),
     ] {
         set_vim_var_nr(idx, n);
     }
 
-    set_vim_var_special(Vv::Exiting, kSpecialVarNull);
-    set_vim_var_bool(Vv::False, kBoolVarFalse);
-    set_vim_var_bool(Vv::True, kBoolVarTrue);
-    set_vim_var_special(Vv::Null, kSpecialVarNull);
+    set_vim_var_special(Vv::Exiting, SPECIAL_VAR_NULL);
+    set_vim_var_bool(Vv::False, BOOL_VAR_FALSE);
+    set_vim_var_bool(Vv::True, BOOL_VAR_TRUE);
+    set_vim_var_special(Vv::Null, SPECIAL_VAR_NULL);
 
     // The name should never be printed, but do not crash if it is.
     let lua = Partial {

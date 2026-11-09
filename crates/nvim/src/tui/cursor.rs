@@ -16,7 +16,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::cursor_shape::{CursorEntry, CursorShape};
 use crate::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_N, SHAPE_VER, shape_entry};
@@ -31,8 +30,7 @@ use crate::os::libc::int32_t;
 use crate::tui::output::{terminfo_out, terminfo_print_nums, terminfo_print_str};
 use crate::tui::state::TUIData;
 use crate::tui::terminfo::caps::{
-    kTerm_reset_cursor_color, kTerm_reset_cursor_style, kTerm_set_cursor_color,
-    kTerm_set_cursor_style,
+    TERM_RESET_CURSOR_COLOR, TERM_RESET_CURSOR_STYLE, TERM_SET_CURSOR_COLOR, TERM_SET_CURSOR_STYLE,
 };
 use crate::types::{ApiDict, ApiString, Object};
 use core::ffi::{CStr, c_int};
@@ -40,7 +38,7 @@ use core::ffi::{CStr, c_int};
 /// Does the editor want the TUI driving cursor style at all? `'guicursor'`
 /// being empty switches the whole mechanism off, and then the TUI must put
 /// the cursor back the way it found it.
-pub static cursor_style_enabled: GlobalCell<bool> = GlobalCell::new(false);
+pub static CURSOR_STYLE_ENABLED: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The blend value `'guicursor'` uses to mean "no cursor at all".
 const BLEND_INVISIBLE: int32_t = 100;
@@ -105,19 +103,19 @@ pub fn decode_cursor_entry(args: &ApiDict) -> CursorEntry {
 
 /// Put the cursor style back to the terminal's default.
 pub fn reset_style(tui: &mut TUIData) {
-    terminfo_out(tui, kTerm_reset_cursor_style);
+    terminfo_out(tui, TERM_RESET_CURSOR_STYLE);
 }
 
 /// Emit the cursor the editor wants for `mode`.
 pub fn set_mode(tui: &mut TUIData, mode: usize) {
-    if !cursor_style_enabled.get() {
+    if !CURSOR_STYLE_ENABLED.get() {
         reset_style(tui);
         return;
     }
     // `mode` indexes the fixed-size shape array, whose bounds Rust checks.
     let entry = tui.cursor_shapes[mode].clone();
     apply_color(tui, &entry);
-    terminfo_print_nums(tui, kTerm_set_cursor_style, &[decscusr_code(&entry)]);
+    terminfo_print_nums(tui, TERM_SET_CURSOR_STYLE, &[decscusr_code(&entry)]);
 }
 
 /// Colour the cursor to match the highlight group its mode names, or undo a
@@ -135,7 +133,7 @@ fn apply_color(tui: &mut TUIData, entry: &CursorEntry) {
         if entry.id == 0 && (tui.want_invisible || tui.cursor_has_color) {
             tui.want_invisible = false;
             tui.cursor_has_color = false;
-            terminfo_out(tui, kTerm_reset_cursor_color);
+            terminfo_out(tui, TERM_RESET_CURSOR_COLOR);
         }
         return;
     }
@@ -149,7 +147,7 @@ fn apply_color(tui: &mut TUIData, entry: &CursorEntry) {
     if ae_attr.has(HlAttrFlags::INVERSE) {
         // The terminal's own inverse video is the cursor; any colour we set
         // would fight it.
-        terminfo_out(tui, kTerm_reset_cursor_color);
+        terminfo_out(tui, TERM_RESET_CURSOR_COLOR);
     } else if bg_color >= 0 as RgbValue {
         // Some terminals want `#rrggbb`, the rest a bare number; which one
         // was settled when the description was augmented.
@@ -163,9 +161,9 @@ fn apply_color(tui: &mut TUIData, entry: &CursorEntry) {
                 hex[1 + as_index(i)] = char::from_digit(nibble, 16).unwrap_or('0') as u8;
             }
             let s = CStr::from_bytes_with_nul(&hex).expect("hex buffer is NUL-terminated");
-            terminfo_print_str(tui, kTerm_set_cursor_color, s);
+            terminfo_print_str(tui, TERM_SET_CURSOR_COLOR, s);
         } else {
-            terminfo_print_nums(tui, kTerm_set_cursor_color, &[bg_color as c_int]);
+            terminfo_print_nums(tui, TERM_SET_CURSOR_COLOR, &[bg_color as c_int]);
         }
         tui.cursor_has_color = true;
     }

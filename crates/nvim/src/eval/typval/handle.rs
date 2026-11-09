@@ -231,7 +231,7 @@ const LIST_RESERVE_MAX: usize = 1 << 16;
 
 /// Allocate an empty list, **owned by the handle it answers** (a count of
 /// one, where upstream answered zero). `len` is a capacity hint, capped at
-/// [`LIST_RESERVE_MAX`]; a negative one (`kListLenUnknown`) reserves
+/// [`LIST_RESERVE_MAX`]; a negative one (`LIST_LEN_UNKNOWN`) reserves
 /// nothing.
 pub fn tv_list_alloc(len: ptrdiff_t) -> ListRef {
     let reserve = usize::try_from(len).map_or(0, |len| len.min(LIST_RESERVE_MAX));
@@ -1034,8 +1034,8 @@ mod tests {
             TypVal::list(None),
             TypVal::dict(None),
             TypVal::Float(1.0),
-            TypVal::Bool(kBoolVarTrue),
-            TypVal::Special(kSpecialVarNull),
+            TypVal::Bool(BOOL_VAR_TRUE),
+            TypVal::Special(SPECIAL_VAR_NULL),
             TypVal::partial(None),
             TypVal::blob(None),
         ] {

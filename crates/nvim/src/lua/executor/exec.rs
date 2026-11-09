@@ -30,8 +30,8 @@ use crate::lua::stack::{At, Kind, Stack};
 use crate::message_fmt::msg_bytes_opt;
 use crate::narrow::len_as_int;
 use crate::types::{
-    Array, Error, ErrorType, LuaRef, Object, TypVal, VAR_UNKNOWN, VarNumber, kErrorTypeException,
-    kErrorTypeValidation,
+    Array, ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, Error, ErrorType, LuaRef, Object, TypVal,
+    VAR_UNKNOWN, VarNumber,
 };
 
 /// `luaeval("expr")` becomes this chunk with the expression appended and a
@@ -202,14 +202,14 @@ pub fn nlua_exec(
             .unwrap_or(c"<nvim>");
         if stack.load(code, Some(name)).is_err() {
             // The message stays on the stack, as upstream leaves it.
-            return Err(lua_error_of(kErrorTypeValidation, stack));
+            return Err(lua_error_of(ERROR_TYPE_VALIDATION, stack));
         }
         let argc = len_as_int(args.len());
         for item in args.iter() {
             push_object(stack, item, false);
         }
         if nlua_pcall(stack, argc, 1).is_err() {
-            return Err(lua_error_of(kErrorTypeException, stack));
+            return Err(lua_error_of(ERROR_TYPE_EXCEPTION, stack));
         }
         nlua_call_pop_retval(stack, mode, top)
     })
@@ -292,7 +292,7 @@ pub fn nlua_call_ref_ctx(
                 nlua_error(stack, c"Lua callback: %.*s");
                 return Ok(Object::Nil);
             }
-            return Err(lua_error_of(kErrorTypeException, stack));
+            return Err(lua_error_of(ERROR_TYPE_EXCEPTION, stack));
         }
         nlua_call_pop_retval(stack, mode, top)
     })

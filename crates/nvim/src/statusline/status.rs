@@ -27,13 +27,13 @@ use core::ffi::c_int;
 use super::*;
 use crate::buffer::buf_spname;
 use crate::cmdexpand::state::wild_menu_showing;
-use crate::drawscreen::state::redraw_cmdline;
+use crate::drawscreen::state::REDRAW_CMDLINE;
 use crate::global_cell::GlobalCell;
 use crate::grid::default_gridview;
 use crate::highlight_group::HLF_C;
 use crate::optionstr::OptStringRef;
 use crate::path::MAXPATHL;
-use crate::ui::state::kUIWildmenu;
+use crate::ui::state::UI_WILDMENU;
 use crate::ui::ui_has;
 
 /// Redraw the status line of window `window`.
@@ -45,7 +45,7 @@ pub fn win_redr_status(window: Win) {
     // Reached recursively when 'statusline' (indirectly) invokes
     // ":redrawstatus"; ignore the call then. Also ignore it while the
     // wildmenu is showing, which may be drawn over the status line.
-    if BUSY.get() || (wild_menu_showing.get() != 0 && !ui_has(kUIWildmenu)) {
+    if BUSY.get() || (wild_menu_showing.get() != 0 && !ui_has(UI_WILDMENU)) {
         return;
     }
     BUSY.set(true);
@@ -54,7 +54,7 @@ pub fn win_redr_status(window: Win) {
     if win.w_status_height == 0 && !(is_stl_global && win.is_current()) {
         // No status line: either 'laststatus' is 3 or this is the last
         // window, so the command line is what has to be refreshed.
-        redraw_cmdline.set(true);
+        REDRAW_CMDLINE.set(true);
     } else if !is_redrawing() {
         // Not now -- the popup menu may be drawn over it.
         win.w_redr_status = true;

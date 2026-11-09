@@ -26,7 +26,7 @@ use core::ffi::{c_char, c_int};
 
 use super::arith::NextCurwin;
 use super::*;
-use crate::drawscreen::state::sc_col;
+use crate::drawscreen::state::SC_COL;
 use crate::drawscreen::{UPD_NOT_VALID, comp_col, status_redraw_all};
 use crate::ex_docmd::state::cmdmod;
 use crate::fold::copy_folding_state;
@@ -39,8 +39,8 @@ use crate::option::vars::{
 };
 use crate::option::win_copy_options;
 use crate::types::{Failed, Integer, OptInt};
-use crate::ui::state::kUIMultigrid;
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::UI_MULTIGRID;
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::{ui_call_win_hide, ui_has};
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winfloat::win_float_anchor_laststatus;
@@ -209,11 +209,11 @@ fn split_ins(
     status_redraw_all();
     if need_status != 0 {
         // The message area is one line shorter now.
-        MSG_ROW.set(Rows.get() - 1);
-        MSG_COL.set(sc_col.get());
+        MSG_ROW.set(ROWS.get() - 1);
+        MSG_COL.set(SC_COL.get());
         msg_clr_eos_force();
         comp_col();
-        MSG_ROW.set(Rows.get() - 1);
+        MSG_ROW.set(ROWS.get() - 1);
         MSG_COL.set(0);
     }
 
@@ -507,7 +507,7 @@ fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool
     }
     // A float becoming an ordinary window gives up its own grid.
     ui_comp_remove_grid(wp.grid_alloc());
-    if ui_has(kUIMultigrid) {
+    if ui_has(UI_MULTIGRID) {
         wp.w_pos_changed = true;
     } else {
         // No longer a float: a non-multigrid UI shouldn't draw it as such.
@@ -695,7 +695,7 @@ fn size_horizontal(
     let is_stl_global = global_stl_rows() > 0;
     if toplevel {
         wp.w_wincol = 0;
-        new_win_width(wp, Columns.get());
+        new_win_width(wp, COLUMNS.get());
         wp.w_vsep_width = 0;
     } else {
         wp.w_wincol = oldwin.w_wincol;

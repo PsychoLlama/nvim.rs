@@ -19,7 +19,7 @@ use crate::mark::setpcmark;
 use crate::mbyte::mb_adjust_cursor;
 use crate::option::vars::P_SEL;
 use crate::pos::{MAXLNUM, ltoreq};
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::types::{ColNr, LineNr};
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -206,10 +206,10 @@ pub fn fold_mark_adjust(
     if line2 < line1 {
         line2 = line1;
     }
-    if State.get() & MODE_INSERT != 0 && amount == 1 && line2 == MAXLNUM {
+    if STATE.get() & MODE_INSERT != 0 && amount == 1 && line2 == MAXLNUM {
         line1 -= 1;
     }
-    let insert_mode = State.get() & MODE_INSERT != 0;
+    let insert_mode = STATE.get() & MODE_INSERT != 0;
     window.with_folds(|folds| {
         adjust_folds(folds, line1, line2, amount, amount_after, insert_mode);
     });
@@ -232,7 +232,7 @@ pub fn adjust_fold_list(
     amount: i32,
     amount_after: i32,
 ) {
-    let insert_mode = State.get() & MODE_INSERT != 0;
+    let insert_mode = STATE.get() & MODE_INSERT != 0;
     adjust_folds(folds, line1, line2, amount, amount_after, insert_mode);
 }
 

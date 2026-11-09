@@ -24,7 +24,7 @@ use crate::buffer::buf_get_changedtick;
 use crate::charset::{skip, vim_isfilec, vim_iswordc};
 use crate::cmdhist::add_to_history;
 use crate::cursor::{check_cursor, dec_cursor, inc_cursor};
-use crate::drawscreen::state::{dollar_vcol, sc_col};
+use crate::drawscreen::state::{DOLLAR_VCOL, SC_COL};
 use crate::drawscreen::{
     UPD_INVERTED, UPD_SOME_VALID, UPD_VALID, redraw_all_later, redraw_curbuf_later, redraw_later,
     setcursor, show_cursor_info_later, showmode, update_screen,
@@ -87,12 +87,12 @@ use crate::search::state::{
     no_hlsearch, no_smartcase, search_match_endcol, search_match_lines, searchcmdlen,
 };
 use crate::state::MODE_SHOWMATCH;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::strings::reversed_text;
 use crate::tag::state::g_do_tagpreview;
 use crate::types::{ColNr, Dict, Direction, LPos, LineNr, Pos, ProfTime, TypVal, VarNumber};
-use crate::ui::state::kUIMessages;
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::UI_MESSAGES;
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::window::{win_enter, win_split};
 /// `searchit`/`do_search` flags plus the search-stat sizing constants.

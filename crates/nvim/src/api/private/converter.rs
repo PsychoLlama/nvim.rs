@@ -34,7 +34,6 @@
 )]
 // The `kObjectType*` constants keep upstream's spelling; upper-casing them is
 // a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::types::DictBuilder;
 use core::ffi::{CStr, c_int};
@@ -47,10 +46,10 @@ use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::{find_func, register_luafunc};
 use crate::lua::executor::api_new_luaref;
 use crate::types::{
-    ApiDict, ApiString, Array, BoolVarValue, Error, Float, Integer, KeyValuePair, ListItem, Object,
-    TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer,
-    kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil,
-    kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kSpecialVarNull,
+    ApiDict, ApiString, Array, BOOL_VAR_FALSE, BOOL_VAR_TRUE, BoolVarValue, Error, Float, Integer,
+    KeyValuePair, ListItem, OBJECT_TYPE_ARRAY, OBJECT_TYPE_BOOLEAN, OBJECT_TYPE_BUFFER,
+    OBJECT_TYPE_DICT, OBJECT_TYPE_FLOAT, OBJECT_TYPE_INTEGER, OBJECT_TYPE_LUA_REF, OBJECT_TYPE_NIL,
+    OBJECT_TYPE_STRING, OBJECT_TYPE_TABPAGE, OBJECT_TYPE_WINDOW, Object, SPECIAL_VAR_NULL, TypVal,
 };
 
 /// A container the walk has opened and not yet closed: the open form of
@@ -317,19 +316,19 @@ impl From<&Object> for TypVal {
 /// reference is released with it).
 fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
     match value.kind() {
-        kObjectTypeNil => TypVal::Special(kSpecialVarNull),
-        kObjectTypeBoolean => {
+        OBJECT_TYPE_NIL => TypVal::Special(SPECIAL_VAR_NULL),
+        OBJECT_TYPE_BOOLEAN => {
             let on = value.as_boolean().expect("the tag says Boolean");
-            TypVal::Bool(if on { kBoolVarTrue } else { kBoolVarFalse } as BoolVarValue)
+            TypVal::Bool(if on { BOOL_VAR_TRUE } else { BOOL_VAR_FALSE } as BoolVarValue)
         }
-        kObjectTypeInteger => TypVal::Number(value.as_integer().expect("the tag says Integer")),
+        OBJECT_TYPE_INTEGER => TypVal::Number(value.as_integer().expect("the tag says Integer")),
         // A handle is an integer with a wire type of its own; Vimscript has
         // no separate notion of one.
-        kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage => {
+        OBJECT_TYPE_BUFFER | OBJECT_TYPE_WINDOW | OBJECT_TYPE_TABPAGE => {
             TypVal::Number(value.as_handle().expect("the tag says a handle"))
         }
-        kObjectTypeFloat => TypVal::Float(value.as_float().expect("the tag says Float")),
-        kObjectTypeString => {
+        OBJECT_TYPE_FLOAT => TypVal::Float(value.as_float().expect("the tag says Float")),
+        OBJECT_TYPE_STRING => {
             let str = value.into_string().expect("the tag says String");
             if str.is_null() {
                 TypVal::string(None)
@@ -337,7 +336,7 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
                 decode_string(str.as_bytes(), false)
             }
         }
-        kObjectTypeArray => {
+        OBJECT_TYPE_ARRAY => {
             let array = value.into_array().expect("the tag says Array");
             let mut list = tv_list_alloc(array.len().cast_signed());
             for item in array {
@@ -346,7 +345,7 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
             }
             TypVal::list(Some(list))
         }
-        kObjectTypeDict => {
+        OBJECT_TYPE_DICT => {
             let pairs = value.into_dict().expect("the tag says Dict");
             let mut dict = tv_dict_alloc();
             for KeyValuePair { key, value } in pairs {
@@ -358,7 +357,7 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
             }
             TypVal::dict(Some(dict))
         }
-        kObjectTypeLuaRef => {
+        OBJECT_TYPE_LUA_REF => {
             let reference = if take_luaref {
                 // The object gives its reference up rather than lending it.
                 value.into_luaref().expect("the tag says LuaRef")

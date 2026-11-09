@@ -26,12 +26,11 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::getchar::state::{KEY_TYPED, MOD_MASK, VGETC_CHAR, VGETC_MOD_MASK};
 use crate::getchar::{ins_char_typebuf, ungetchars};
-use crate::keycodes::{Ctrl_AT, Ctrl_M, NotAKey, SpecialKey};
+use crate::keycodes::{CTRL_AT, CTRL_M, NotAKey, SpecialKey};
 use crate::keycodes::{ModMask, unsimplify_key};
 use crate::mbyte::{char_at, char_len};
 use crate::memory::XString;
@@ -119,7 +118,7 @@ fn convert_key(key: &mut c_int, mods: ModMask, state: &mut VTermModifier) -> VTe
     match SpecialKey::try_from(*key) {
         Ok(SpecialKey::Bs) => VTERM_KEY_BACKSPACE,
         Ok(SpecialKey::Tab) | Err(NotAKey(TAB)) => VTERM_KEY_TAB,
-        Err(NotAKey(Ctrl_M)) => VTERM_KEY_ENTER,
+        Err(NotAKey(CTRL_M)) => VTERM_KEY_ENTER,
         Err(NotAKey(ESC)) => VTERM_KEY_ESCAPE,
         Ok(SpecialKey::Up) => VTERM_KEY_UP,
         Ok(SpecialKey::Down) => VTERM_KEY_DOWN,
@@ -231,7 +230,7 @@ fn send_key(vt: &mut VTerm, c: c_int, mods: ModMask) {
     // The editor spells NUL as an extra so it survives being a C string;
     // vterm wants the control character back.
     let mut key = if c == SpecialKey::Zero.code() {
-        Ctrl_AT
+        CTRL_AT
     } else {
         c
     };
@@ -517,7 +516,7 @@ mod tests {
     #[test]
     fn the_raw_control_bytes_are_named_keys() {
         assert_eq!(converted(TAB, NONE).0, VTERM_KEY_TAB);
-        assert_eq!(converted(Ctrl_M, NONE).0, VTERM_KEY_ENTER);
+        assert_eq!(converted(CTRL_M, NONE).0, VTERM_KEY_ENTER);
         assert_eq!(converted(ESC, NONE).0, VTERM_KEY_ESCAPE);
         assert_eq!(
             converted(SpecialKey::Bs.code(), NONE).0,
@@ -583,7 +582,7 @@ mod tests {
             (SpecialKey::F5.code(), NONE, b"\x1b[15~"),
             (SpecialKey::STab.code(), NONE, b"\x1b[Z"),
             (SpecialKey::Bs.code(), NONE, b"\x7f"),
-            (Ctrl_M, NONE, b"\r"),
+            (CTRL_M, NONE, b"\r"),
             (ESC, NONE, b"\x1b"),
         ];
         for &(key, mods, want) in rows {

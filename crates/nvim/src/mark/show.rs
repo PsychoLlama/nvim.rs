@@ -33,7 +33,7 @@ use crate::os::time::os_time;
 use crate::pos::lt;
 use crate::semsg;
 use crate::types::{ExArg, Timestamp};
-use crate::ui::state::Columns;
+use crate::ui::state::COLUMNS;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 
@@ -407,7 +407,7 @@ pub(super) fn mark_line(pos: Pos, lead_len: c_int) -> XString {
     if pos.lnum == LineNr::ZERO || pos.lnum > buf.b_ml.ml_line_count {
         return XString::from_cstr(c"-invalid-");
     }
-    debug_assert!(Columns.get() >= 0, "Columns >= 0");
+    debug_assert!(COLUMNS.get() >= 0, "Columns >= 0");
     let mut lines = buf.lines();
     let line = lines.line(pos.lnum);
     let start = line
@@ -416,7 +416,7 @@ pub(super) fn mark_line(pos: Pos, lead_len: c_int) -> XString {
         .unwrap_or(line.len());
     // Five bytes per column is the widest a displayed cell can be, so the
     // copy can never be shorter than what the truncation below keeps.
-    let room = usize::try_from(Columns.get()).unwrap_or(0) * 5;
+    let room = usize::try_from(COLUMNS.get()).unwrap_or(0) * 5;
     let s = &line[start..line.len().min(start + room)];
     // Truncate to the screen width, measured in CELLS rather than bytes so a
     // multi-byte or double-width character is not cut in half.
@@ -429,7 +429,7 @@ pub(super) fn mark_line(pos: Pos, lead_len: c_int) -> XString {
         } else {
             ptr2cells_at(rest)
         };
-        if len >= Columns.get() - lead_len {
+        if len >= COLUMNS.get() - lead_len {
             break;
         }
         at += c_cluster_len(rest).max(1);

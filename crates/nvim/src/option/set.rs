@@ -50,7 +50,7 @@ use crate::message::{E_INVARG, E_SANDBOX, E_SECURE, E_UNSUPPORTEDOPTION};
 use crate::mouse::setmouse;
 use crate::runtime::state::current_sctx;
 use crate::startup::starting;
-use crate::ui::state::t_colors;
+use crate::ui::state::T_COLORS;
 
 use crate::option::defs::{OptError, OptIndex, OptSet, OptVal, OptionSetFlags, VimOption};
 use crate::options::{
@@ -181,10 +181,10 @@ pub(crate) fn is_tty_option(name: &[u8]) -> bool {
 /// have anything to say; the rest answer with the empty string.
 pub(crate) fn get_tty_option(name: &[u8]) -> OptVal {
     if name == b"t_Co" {
-        if t_colors.get() <= 1 {
+        if T_COLORS.get() <= 1 {
             OptVal::static_string(c"")
         } else {
-            OptVal::from_bytes(t_colors.get().to_string().as_bytes())
+            OptVal::from_bytes(T_COLORS.get().to_string().as_bytes())
         }
     } else if name == b"term" {
         OptVal::from_xstring(TERM.or(c"nvim"))

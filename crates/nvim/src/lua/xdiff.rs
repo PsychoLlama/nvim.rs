@@ -28,7 +28,7 @@ use crate::lua::executor::{release_luaref, until_nul};
 use crate::lua::stack::{At, CFunction, Kind, Raise, Stack};
 use crate::lua_functions;
 use crate::message_fmt::msg_bytes_opt;
-use crate::types::{Error, LineNr, Object, kErrorTypeException};
+use crate::types::{ERROR_TYPE_EXCEPTION, Error, LineNr, Object};
 use crate::xdiff::ffi::{Emit, diff_with};
 use crate::xdiff::xtypes::{
     XDF_HISTOGRAM_DIFF, XDF_IGNORE_BLANK_LINES, XDF_IGNORE_CR_AT_EOL, XDF_IGNORE_WHITESPACE,
@@ -291,7 +291,7 @@ fn call_on_hunk(stack: &mut Stack, hunks: &[Hunk]) -> Result<(), Option<Error>> 
         if stack.pcall(4, 1, None).is_err() {
             let why = stack.to_bytes(At::TOP).map(until_nul);
             return Err(Some(api_error!(
-                kErrorTypeException,
+                ERROR_TYPE_EXCEPTION,
                 "on_hunk: {}",
                 msg_bytes_opt(why)
             )));

@@ -31,17 +31,17 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::charset::{ptr2cells_at, strsize};
-use crate::drawscreen::state::redraw_tabline;
+use crate::drawscreen::state::REDRAW_TABLINE;
 use crate::grid::{default_grid_ref, default_gridview, schar_from_ascii};
 use crate::highlight_group::{HLF_T, HLF_TP, HLF_TPF, HLF_TPS};
 use crate::mbyte::c_cluster_len;
 use crate::normal::showcmd_buf;
 use crate::path::shorten_dir;
 use crate::statusline::defs::StlClickDefinition_type_0;
-use crate::statusline::state::tab_page_click_defs;
+use crate::statusline::state::TAB_PAGE_CLICK_DEFS;
 use crate::types::{ApiString, BufferHandle, Object, TabpageHandle};
-use crate::ui::state::kUITabline;
-use crate::ui::state::{Columns, t_colors};
+use crate::ui::state::UI_TABLINE;
+use crate::ui::state::{COLUMNS, T_COLORS};
 use crate::ui::{ui_call_tabline_update, ui_has};
 use crate::undo::buf_is_changed;
 use crate::window::tabline_height;
@@ -108,9 +108,9 @@ pub fn draw_tabline() {
     if !default_grid_ref().is_allocated() {
         return;
     }
-    redraw_tabline.set(false);
+    REDRAW_TABLINE.set(false);
 
-    if ui_has(kUITabline) {
+    if ui_has(UI_TABLINE) {
         ui_ext_tabline_update();
         return;
     }
@@ -121,8 +121,8 @@ pub fn draw_tabline() {
     // Clicking outside of any tab has no effect, so the whole line is
     // cleared first.
     debug_assert!(
-        tab_page_click_defs.with(|line| line.cells.len())
-            >= usize::try_from(Columns.get()).unwrap_or(0),
+        TAB_PAGE_CLICK_DEFS.with(|line| line.cells.len())
+            >= usize::try_from(COLUMNS.get()).unwrap_or(0),
         "tab_page_click_defs_size >= (size_t)Columns"
     );
     with_tab_click_defs(|defs| clear_click_defs(defs));
@@ -135,7 +135,7 @@ pub fn draw_tabline() {
     }
 
     // Reset the flag again, in case evaluating 'tabline' set it.
-    redraw_tabline.set(false);
+    REDRAW_TABLINE.set(false);
 }
 
 /// The built-in tab line: one label per tab page.
@@ -143,12 +143,12 @@ fn draw_default_tabline() {
     let attr_nosel = hl_attr(HLF_TP);
     let attr_fill = hl_attr(HLF_TPF);
     // Without colours the tabs are separated by `|` and underlined with `_`.
-    let use_sep_chars = t_colors.get() < 8;
+    let use_sep_chars = T_COLORS.get() < 8;
 
     view_line_start(default_gridview(), 0);
     let count = c_int::try_from(tabs().count()).unwrap_or(c_int::MAX);
     let tabwidth = if count > 0 {
-        (Columns.get() - 1 + count / 2) / count
+        (COLUMNS.get() - 1 + count / 2) / count
     } else {
         0
     }
@@ -158,7 +158,7 @@ fn draw_default_tabline() {
     let mut col = 0;
     let mut tabcount = 0;
     for tp in tabs() {
-        if col >= Columns.get() - 4 {
+        if col >= COLUMNS.get() - 4 {
             break;
         }
         let scol = col;
@@ -216,15 +216,15 @@ fn draw_default_tabline() {
         // Record the tab page number for every cell of the label, so that
         // `jump_to_mouse()` knows where each one is.
         tabcount += 1;
-        set_tab_clicks(scol..col, kStlClickTabSwitch, tabcount);
+        set_tab_clicks(scol..col, STL_CLICK_TAB_SWITCH, tabcount);
     }
 
     // Past the last label, tab page zero: a double click there opens a new
     // tab after the last one and a single click goes to the next.
-    set_tab_clicks(col..Columns.get(), kStlClickTabSwitch, 0);
+    set_tab_clicks(col..COLUMNS.get(), STL_CLICK_TAB_SWITCH, 0);
 
     let fill = if use_sep_chars { b'_' } else { b' ' };
-    paint_fill(col, Columns.get(), schar_from_ascii(fill), attr_fill);
+    paint_fill(col, COLUMNS.get(), schar_from_ascii(fill), attr_fill);
 
     if p_sc() && c_int::from(P_SLOC.first_byte()) == c_int::from(b't') {
         paint_showcmd(col, tabcount, attr_nosel);
@@ -232,8 +232,8 @@ fn draw_default_tabline() {
 
     // An "X" to close the current tab, if there are several.
     if tabcount > 1 {
-        paint_schar(Columns.get() - 1, schar_from_ascii(b'X'), attr_nosel);
-        set_tab_clicks(Columns.get() - 1..Columns.get(), kStlClickTabClose, 999);
+        paint_schar(COLUMNS.get() - 1, schar_from_ascii(b'X'), attr_nosel);
+        set_tab_clicks(COLUMNS.get() - 1..COLUMNS.get(), STL_CLICK_TAB_CLOSE, 999);
     }
     paint_flush();
 }
@@ -243,7 +243,7 @@ fn draw_default_tabline() {
 fn paint_wincount(col: c_int, wincount: c_int, attr: c_int, cwp: Win) -> Option<c_int> {
     let name = wincount.to_string();
     let len = c_int::try_from(name.len()).unwrap_or(c_int::MAX);
-    if col + len >= Columns.get() - 3 {
+    if col + len >= COLUMNS.get() - 3 {
         return None;
     }
     paint_text(col, name.as_bytes(), combine_attr(attr, win_hl(cwp, HLF_T)));
@@ -266,20 +266,20 @@ fn paint_bufname(col: c_int, room: c_int, attr: c_int, mut name: Vec<u8>) -> c_i
         at += c_cluster_len(&name[at..]);
     }
     paint_text(col, &name[at..], attr);
-    len.min(Columns.get() - col - 1)
+    len.min(COLUMNS.get() - col - 1)
 }
 
 /// Draw the `'showcmd'` text at the right-hand end of the tab line.
 fn paint_showcmd(col: c_int, tabcount: c_int, attr: c_int) {
     // Leave room for the close button when there is one.
-    let room = Columns.get() - col - c_int::from(tabcount > 1) * 3;
+    let room = COLUMNS.get() - col - c_int::from(tabcount > 1) * 3;
     let width = 10.min(room);
     if width <= 0 {
         return;
     }
     let sc = showcmd_buf.get();
     paint_text(
-        Columns.get() - width - c_int::from(tabcount > 1) * 2,
+        COLUMNS.get() - width - c_int::from(tabcount > 1) * 2,
         sc.cells(usize::try_from(width).unwrap_or(0)),
         attr,
     );

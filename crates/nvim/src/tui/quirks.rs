@@ -29,13 +29,12 @@
 use crate::os::env::{env_exists, getenv_owned};
 use crate::tui::state::{KeyEncoding, TerminfoExt};
 use crate::tui::terminfo::caps::{
-    TerminfoDef, kTerm_carriage_return, kTerm_cursor_invisible, kTerm_cursor_normal,
-    kTerm_enter_ca_mode, kTerm_enter_italics_mode, kTerm_exit_ca_mode, kTerm_from_status_line,
-    kTerm_parm_down_cursor, kTerm_parm_left_cursor, kTerm_parm_right_cursor, kTerm_parm_up_cursor,
-    kTerm_reset_cursor_color, kTerm_reset_cursor_style, kTerm_set_a_background,
-    kTerm_set_a_foreground, kTerm_set_cursor_color, kTerm_set_cursor_style, kTerm_set_lr_margin,
-    kTerm_set_rgb_background, kTerm_set_rgb_foreground, kTerm_set_underline_style,
-    kTerm_to_status_line,
+    TERM_CARRIAGE_RETURN, TERM_CURSOR_INVISIBLE, TERM_CURSOR_NORMAL, TERM_ENTER_CA_MODE,
+    TERM_ENTER_ITALICS_MODE, TERM_EXIT_CA_MODE, TERM_FROM_STATUS_LINE, TERM_PARM_DOWN_CURSOR,
+    TERM_PARM_LEFT_CURSOR, TERM_PARM_RIGHT_CURSOR, TERM_PARM_UP_CURSOR, TERM_RESET_CURSOR_COLOR,
+    TERM_RESET_CURSOR_STYLE, TERM_SET_A_BACKGROUND, TERM_SET_A_FOREGROUND, TERM_SET_CURSOR_COLOR,
+    TERM_SET_CURSOR_STYLE, TERM_SET_LR_MARGIN, TERM_SET_RGB_BACKGROUND, TERM_SET_RGB_FOREGROUND,
+    TERM_SET_UNDERLINE_STYLE, TERM_TO_STATUS_LINE, TerminfoDef,
 };
 use crate::tui::terminfo::entry::TerminfoEntry;
 use crate::tui::terminfo::{is_term_family, terminfo_is_bsd_console};
@@ -287,8 +286,8 @@ impl Terminal {
             return true;
         }
         ti.has_tc_or_rgb
-            || (cap(ti, kTerm_set_rgb_foreground).is_some()
-                && cap(ti, kTerm_set_rgb_background).is_some())
+            || (cap(ti, TERM_SET_RGB_FOREGROUND).is_some()
+                && cap(ti, TERM_SET_RGB_BACKGROUND).is_some())
     }
 }
 
@@ -299,7 +298,7 @@ pub fn patch_terminfo_bugs(ti: &mut TerminfoEntry, t: &Terminal) {
     // A `cursor_normal` that starts by re-enabling blink, or (on the linux
     // console) ends by resetting the shape, fights nvim's own cursor
     // handling. Trim both.
-    trim(ti, kTerm_cursor_normal, |full| {
+    trim(ti, TERM_CURSOR_NORMAL, |full| {
         let bytes = full.strip_prefix(SHOW_CURSOR_BLINK_PREFIX).unwrap_or(full);
         match bytes.strip_suffix(LINUX_SET_SHAPE_0) {
             Some(trimmed) if t.linuxvt => trimmed,
@@ -307,7 +306,7 @@ pub fn patch_terminfo_bugs(ti: &mut TerminfoEntry, t: &Terminal) {
         }
     });
     if t.linuxvt {
-        trim(ti, kTerm_cursor_invisible, |full| {
+        trim(ti, TERM_CURSOR_INVISIBLE, |full| {
             full.strip_suffix(LINUX_SET_SHAPE_1).unwrap_or(full)
         });
     }
@@ -323,48 +322,48 @@ pub fn patch_terminfo_bugs(ti: &mut TerminfoEntry, t: &Terminal) {
         if !t.hterm {
             // hterm has no status line; leaving these unset is what stops
             // nvim trying to set a title it cannot set.
-            set_if_empty(ti, kTerm_to_status_line, c"\x1b]0;");
-            set_if_empty(ti, kTerm_from_status_line, c"\x07");
+            set_if_empty(ti, TERM_TO_STATUS_LINE, c"\x1b]0;");
+            set_if_empty(ti, TERM_FROM_STATUS_LINE, c"\x07");
         }
-        set_if_empty(ti, kTerm_enter_italics_mode, c"\x1b[3m");
-        set_if_empty(ti, kTerm_set_lr_margin, c"\x1b[%i%p1%d;%p2%ds");
+        set_if_empty(ti, TERM_ENTER_ITALICS_MODE, c"\x1b[3m");
+        set_if_empty(ti, TERM_SET_LR_MARGIN, c"\x1b[%i%p1%d;%p2%ds");
     } else if t.rxvt {
-        set_if_empty(ti, kTerm_enter_italics_mode, c"\x1b[3m");
-        set_if_empty(ti, kTerm_to_status_line, c"\x1b]2");
-        set_if_empty(ti, kTerm_from_status_line, c"\x07");
+        set_if_empty(ti, TERM_ENTER_ITALICS_MODE, c"\x1b[3m");
+        set_if_empty(ti, TERM_TO_STATUS_LINE, c"\x1b]2");
+        set_if_empty(ti, TERM_FROM_STATUS_LINE, c"\x07");
         // rxvt's own alternate-screen entries do not save the cursor.
-        set(ti, kTerm_enter_ca_mode, c"\x1b[?1049h");
-        set(ti, kTerm_exit_ca_mode, c"\x1b[?1049l");
+        set(ti, TERM_ENTER_CA_MODE, c"\x1b[?1049h");
+        set(ti, TERM_EXIT_CA_MODE, c"\x1b[?1049l");
         // urxvt starts with a steady block cursor (unless configured for an
         // underline, which nothing here can see), and `\x1b[0 q` gives a
         // *blinking* block rather than that default. So "reset" sets a
         // steady block, the likeliest starting shape; and rxvt stays out of
         // the DECSCUSR list below, which would put `\x1b[0 q` back.
-        set(ti, kTerm_reset_cursor_style, c"\x1b[2 q");
-        set(ti, kTerm_set_cursor_style, c"\x1b[%p1%d q");
+        set(ti, TERM_RESET_CURSOR_STYLE, c"\x1b[2 q");
+        set(ti, TERM_SET_CURSOR_STYLE, c"\x1b[%p1%d q");
     } else if t.screen {
-        set_if_empty(ti, kTerm_to_status_line, c"\x1b_");
-        set_if_empty(ti, kTerm_from_status_line, c"\x1b\\");
+        set_if_empty(ti, TERM_TO_STATUS_LINE, c"\x1b_");
+        set_if_empty(ti, TERM_FROM_STATUS_LINE, c"\x1b\\");
     } else if t.tmux {
         // Deliberately not merged with the `screen` arm above: screen
         // running inside tmux matches both, and taking the `screen` arm
         // first is what leaves italics unset there. Merging the two and
         // testing `tmux` inside gives screen-in-tmux italics it has never
         // had.
-        set_if_empty(ti, kTerm_to_status_line, c"\x1b_");
-        set_if_empty(ti, kTerm_from_status_line, c"\x1b\\");
-        set_if_empty(ti, kTerm_enter_italics_mode, c"\x1b[3m");
+        set_if_empty(ti, TERM_TO_STATUS_LINE, c"\x1b_");
+        set_if_empty(ti, TERM_FROM_STATUS_LINE, c"\x1b\\");
+        set_if_empty(ti, TERM_ENTER_ITALICS_MODE, c"\x1b[3m");
     } else if t.interix {
-        set_if_empty(ti, kTerm_carriage_return, c"\r");
+        set_if_empty(ti, TERM_CARRIAGE_RETURN, c"\r");
     } else if t.linuxvt {
-        set_if_empty(ti, kTerm_parm_up_cursor, c"\x1b[%p1%dA");
-        set_if_empty(ti, kTerm_parm_down_cursor, c"\x1b[%p1%dB");
-        set_if_empty(ti, kTerm_parm_right_cursor, c"\x1b[%p1%dC");
-        set_if_empty(ti, kTerm_parm_left_cursor, c"\x1b[%p1%dD");
+        set_if_empty(ti, TERM_PARM_UP_CURSOR, c"\x1b[%p1%dA");
+        set_if_empty(ti, TERM_PARM_DOWN_CURSOR, c"\x1b[%p1%dB");
+        set_if_empty(ti, TERM_PARM_RIGHT_CURSOR, c"\x1b[%p1%dC");
+        set_if_empty(ti, TERM_PARM_LEFT_CURSOR, c"\x1b[%p1%dD");
     } else if !t.putty && t.iterm {
-        set(ti, kTerm_enter_ca_mode, c"\x1b[?1049h");
-        set(ti, kTerm_exit_ca_mode, c"\x1b[?1049l");
-        set_if_empty(ti, kTerm_enter_italics_mode, c"\x1b[3m");
+        set(ti, TERM_ENTER_CA_MODE, c"\x1b[?1049h");
+        set(ti, TERM_EXIT_CA_MODE, c"\x1b[?1049l");
+        set_if_empty(ti, TERM_ENTER_ITALICS_MODE, c"\x1b[3m");
     }
 
     // Colour counts. A description stuck at 8 or 16 colours on a terminal
@@ -372,8 +371,8 @@ pub fn patch_terminfo_bugs(ti: &mut TerminfoEntry, t: &Terminal) {
     if ti.max_colors < 256 {
         if t.true_xterm || t.iterm || t.iterm_pretending_xterm {
             ti.max_colors = 256;
-            set(ti, kTerm_set_a_foreground, XTERM_SETAF_256_COLON);
-            set(ti, kTerm_set_a_background, XTERM_SETAB_256_COLON);
+            set(ti, TERM_SET_A_FOREGROUND, XTERM_SETAF_256_COLON);
+            set(ti, TERM_SET_A_BACKGROUND, XTERM_SETAB_256_COLON);
         } else if t.konsole_version != 0
             || t.xterm
             || t.gnome
@@ -388,20 +387,20 @@ pub fn patch_terminfo_bugs(ti: &mut TerminfoEntry, t: &Terminal) {
             || t.term_says_256
         {
             ti.max_colors = 256;
-            set(ti, kTerm_set_a_foreground, XTERM_SETAF_256);
-            set(ti, kTerm_set_a_background, XTERM_SETAB_256);
+            set(ti, TERM_SET_A_FOREGROUND, XTERM_SETAF_256);
+            set(ti, TERM_SET_A_BACKGROUND, XTERM_SETAB_256);
         }
     }
     if ti.max_colors < 16 && t.colorterm.is_some() {
         ti.max_colors = 16;
-        set_if_empty(ti, kTerm_set_a_foreground, XTERM_SETAF_16);
-        set_if_empty(ti, kTerm_set_a_background, XTERM_SETAB_16);
+        set_if_empty(ti, TERM_SET_A_FOREGROUND, XTERM_SETAF_16);
+        set_if_empty(ti, TERM_SET_A_BACKGROUND, XTERM_SETAB_16);
     }
 
     // These reset the cursor to a blinking block rather than to the shape it
     // had, so nvim must not use their `reset_cursor_style`.
     if t.st || (t.vte_version != 0 && t.vte_version < 3900) || t.konsole_version != 0 {
-        clear(ti, kTerm_reset_cursor_style);
+        clear(ti, TERM_RESET_CURSOR_STYLE);
     }
 
     // DECSCUSR: nearly universal, described almost nowhere.
@@ -424,17 +423,17 @@ pub fn patch_terminfo_bugs(ti: &mut TerminfoEntry, t: &Terminal) {
             || t.ghostty
             || (t.linuxvt && (t.has_xterm_version || t.colorterm.is_some())));
     if has_decscusr {
-        set(ti, kTerm_set_cursor_style, c"\x1b[%p1%d q");
-        set(ti, kTerm_reset_cursor_style, c"\x1b[0 q");
+        set(ti, TERM_SET_CURSOR_STYLE, c"\x1b[%p1%d q");
+        set(ti, TERM_RESET_CURSOR_STYLE, c"\x1b[0 q");
     } else if t.linuxvt {
         // The linux console spells cursor shape with a private sequence, and
         // numbers the shapes differently.
         set(
             ti,
-            kTerm_set_cursor_style,
+            TERM_SET_CURSOR_STYLE,
             c"\x1b[?%?%p1%{2}%<%t%{8}%e%p1%{2}%=%t%{112}%e%p1%{3}%=%t%{4}%e%p1%{4}%=%t%{4}%e%p1%{5}%=%t%{2}%e%p1%{6}%=%t%{2}%e%{0}%;%dc",
         );
-        set(ti, kTerm_reset_cursor_style, c"\x1b[?c");
+        set(ti, TERM_RESET_CURSOR_STYLE, c"\x1b[?c");
     }
 }
 
@@ -486,7 +485,7 @@ pub fn augment_terminfo(ti: &mut TerminfoEntry, t: &Terminal) -> Augmentation {
         && (t.iterm || t.iterm_pretending_xterm || t.true_xterm);
     set_if_empty(
         ti,
-        kTerm_set_rgb_foreground,
+        TERM_SET_RGB_FOREGROUND,
         if colon_rgb {
             c"\x1b[38:2:%p1%d:%p2%d:%p3%dm"
         } else {
@@ -495,7 +494,7 @@ pub fn augment_terminfo(ti: &mut TerminfoEntry, t: &Terminal) -> Augmentation {
     );
     set_if_empty(
         ti,
-        kTerm_set_rgb_background,
+        TERM_SET_RGB_BACKGROUND,
         if colon_rgb {
             c"\x1b[48:2:%p1%d:%p2%d:%p3%dm"
         } else {
@@ -505,11 +504,11 @@ pub fn augment_terminfo(ti: &mut TerminfoEntry, t: &Terminal) -> Augmentation {
 
     // Cursor colour. iTerm uses the linux-console-style `Pl` sequence, which
     // needs wrapping when tmux is in the way; everything else uses OSC 12.
-    if cap(ti, kTerm_set_cursor_color).is_none() {
+    if cap(ti, TERM_SET_CURSOR_COLOR).is_none() {
         if t.iterm || t.iterm_pretending_xterm {
             set(
                 ti,
-                kTerm_set_cursor_color,
+                TERM_SET_CURSOR_COLOR,
                 if t.tmux {
                     c"\x1bPtmux;\x1b\x1b]Pl%p1%06x\x1b\\\x1b\\"
                 } else {
@@ -519,24 +518,24 @@ pub fn augment_terminfo(ti: &mut TerminfoEntry, t: &Terminal) -> Augmentation {
         } else if (t.xterm || t.hterm || t.rxvt || t.tmux || t.alacritty || t.st)
             && (t.vte_version == 0 || t.vte_version >= 3900)
         {
-            set(ti, kTerm_set_cursor_color, c"\x1b]12;%p1%s\x07");
+            set(ti, TERM_SET_CURSOR_COLOR, c"\x1b]12;%p1%s\x07");
         }
     }
     let set_cursor_color_as_str =
-        cap(ti, kTerm_set_cursor_color).is_some_and(|setter| contains(setter, b"%s"));
-    if ti.has(kTerm_set_cursor_color) {
-        set_if_empty(ti, kTerm_reset_cursor_color, c"\x1b]112\x07");
+        cap(ti, TERM_SET_CURSOR_COLOR).is_some_and(|setter| contains(setter, b"%s"));
+    if ti.has(TERM_SET_CURSOR_COLOR) {
+        set_if_empty(ti, TERM_RESET_CURSOR_COLOR, c"\x1b]112\x07");
     }
 
     Augmentation {
         can_resize_screen: t.dtterm || t.xterm || t.konsole_version != 0 || t.teraterm || t.rxvt,
-        can_set_title: cap(ti, kTerm_to_status_line).is_some()
-            && cap(ti, kTerm_from_status_line).is_some(),
+        can_set_title: cap(ti, TERM_TO_STATUS_LINE).is_some()
+            && cap(ti, TERM_FROM_STATUS_LINE).is_some(),
         set_cursor_color_as_str,
         // A description that already knows `set_underline_style` settles it.
         // Otherwise only versions known to have grown the feature qualify,
         // and everything else has to be asked at runtime.
-        extended_underline: cap(ti, kTerm_set_underline_style).is_some()
+        extended_underline: cap(ti, TERM_SET_UNDERLINE_STYLE).is_some()
             || t.vte_version >= 5102
             || t.konsole_version >= 221170
             || ti.su

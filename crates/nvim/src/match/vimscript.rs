@@ -19,7 +19,7 @@ use super::*;
 use crate::eval::typval::{DictRef, NumBuf, list_items, list_iter};
 use crate::narrow::number_as_int;
 use crate::semsg;
-use crate::types::{Failed, VAR_DICT, VAR_LIST, kListLenMayKnow};
+use crate::types::{Failed, LIST_LEN_MAY_KNOW, VAR_DICT, VAR_LIST};
 use crate::winlayer::Win;
 use std::ffi::CString;
 
@@ -102,7 +102,7 @@ fn match_dict(item: &MatchItem) -> DictRef {
 /// `getmatches([win])`.
 pub(crate) fn f_getmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let win = get_optional_window(args, 0);
-    let l = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
+    let l = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
     let Some(win) = win else {
         return;
     };

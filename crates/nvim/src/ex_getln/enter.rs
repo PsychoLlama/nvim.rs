@@ -30,7 +30,7 @@ use crate::option::defs::OptionSetFlags;
 use crate::option::vars::{P_STL, P_TAL, P_WBR};
 use crate::optionstr::OptString;
 use crate::state::Step;
-use crate::types::{kBoolVarFalse, kBoolVarTrue};
+use crate::types::{BOOL_VAR_FALSE, BOOL_VAR_TRUE};
 use crate::winlayer::windows as windows_in_curtab;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
@@ -134,7 +134,7 @@ pub(crate) fn init_ccline(firstc: u8, indent: ::core::ffi::c_int) {
 }
 
 pub(crate) fn ui_ext_cmdline_hide(abort: bool) {
-    if ui_has(kUICmdline) {
+    if ui_has(UI_CMDLINE) {
         CMDLINE_WAS_LAST_DRAWN.set(false);
         let mut cc = Cc::current();
         cc.redraw_state = CMD_REDRAW_NONE;
@@ -182,7 +182,7 @@ pub(crate) fn command_line_enter(
         count,
         indent,
         save_msg_scroll: MSG_SCROLL.get(),
-        save_state: State.get(),
+        save_state: STATE.get(),
         prev_cmdpos: -1,
         ignore_drag_release: true,
         ..command_line_state_init()
@@ -252,7 +252,7 @@ pub(crate) fn command_line_enter(
         // when doing ":@0" and register 0 doesn't contain a CR.
         MSG_SCROLL.set(0);
 
-        State.set(MODE_CMDLINE);
+        STATE.set(MODE_CMDLINE);
 
         if s.firstc == b'/' || s.firstc == b'?' || s.firstc == b'@' {
             // Use ":lmap" mappings for the search pattern and input().
@@ -263,7 +263,7 @@ pub(crate) fn command_line_enter(
             };
             s.b_im = Some((which, Buf::current().id()));
             if im_value(Buf::current(), which) == OptInt::from(B_IMODE_LMAP) {
-                State.set(State.get() | MODE_LANGMAP);
+                STATE.set(STATE.get() | MODE_LANGMAP);
             }
         }
 
@@ -286,7 +286,7 @@ pub(crate) fn command_line_enter(
             err.absorb(try_leave(&tstate));
 
             if err.is_set() {
-                if !ui_has(kUIMessages) {
+                if !ui_has(UI_MESSAGES) {
                     msg_putchar(::core::ffi::c_int::from(b'\n'));
                 }
                 MSG_SCROLL.set(1);
@@ -312,7 +312,7 @@ pub(crate) fn command_line_enter(
 
         // Redraw the statusline, in case it uses the current mode through
         // the mode() function.
-        if !CMD_SILENT.get() && !exmode_active.get() {
+        if !CMD_SILENT.get() && !EXMODE_ACTIVE.get() {
             let mut found_one = false;
             for mut wp in windows_in_curtab() {
                 if P_STL.first_byte() != 0
@@ -325,7 +325,7 @@ pub(crate) fn command_line_enter(
                 }
             }
             if P_TAL.first_byte() != 0 {
-                redraw_tabline.set(true);
+                REDRAW_TABLINE.set(true);
                 found_one = true;
             }
             if redraw_custom_title_later() {
@@ -353,9 +353,9 @@ pub(crate) fn command_line_enter(
             let _ = dict.edit().add_bool(
                 b"abort",
                 if s.gotesc {
-                    kBoolVarTrue
+                    BOOL_VAR_TRUE
                 } else {
-                    kBoolVarFalse
+                    BOOL_VAR_FALSE
                 },
             );
             set_vim_var_char(s.c); // set v:char
@@ -427,14 +427,14 @@ pub(crate) fn command_line_enter(
         // If the line is too long, clear it, so that the ruler and the
         // shown command do not get printed in the middle of it.
         msg_check();
-        if p_ch() == 0 as OptInt && !ui_has(kUIMessages) {
+        if p_ch() == 0 as OptInt && !ui_has(UI_MESSAGES) {
             set_must_redraw(UPD_VALID);
         }
         MSG_SCROLL.set(s.save_msg_scroll);
         REDIR_OFF.set(false);
 
         if err.is_set() {
-            if !ui_has(kUIMessages) {
+            if !ui_has(UI_MESSAGES) {
                 msg_putchar(::core::ffi::c_int::from(b'\n'));
             }
             emsg(err.message_or_empty());
@@ -454,7 +454,7 @@ pub(crate) fn command_line_enter(
             OptionSetFlags::NONE,
             SID_NONE,
         );
-        State.set(s.save_state);
+        STATE.set(s.save_state);
         if CMDPREVIEW.get() != save_cmdpreview {
             CMDPREVIEW.set(save_cmdpreview); // restore the preview state
             redraw_all_later(UPD_SOME_VALID);
@@ -468,10 +468,10 @@ pub(crate) fn command_line_enter(
     // C's pair of `xfree`s and the three fields it nulled after them.
     cc.last_colors = ColoredCmdline::NONE;
 
-    if ui_has(kUICmdline) {
+    if ui_has(UI_CMDLINE) {
         // Emit cmdline_block in Ex mode unless there is no command line,
         // which happens with <C-\><C-N> (upstream #39021).
-        if exmode_active.get() && cc.in_use() {
+        if EXMODE_ACTIVE.get() && cc.in_use() {
             ui_ext_cmdline_block_append(0, cstr::until_nul(cc.bytes()));
         }
         ui_ext_cmdline_hide(s.gotesc);
@@ -547,7 +547,7 @@ pub(crate) fn abandon_cmdline() {
     // Avoid overwriting a key prompt.
     if !Cc::current().one_key {
         msg(c"", 0);
-        redraw_cmdline.set(true);
+        REDRAW_CMDLINE.set(true);
     }
 }
 

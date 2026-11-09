@@ -19,7 +19,7 @@ use crate::cstr;
 use crate::fileio::IoFailed;
 use crate::memory::XString;
 use crate::path::MAXPATHL;
-use crate::types::{kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow};
+use crate::types::{CD_SCOPE_GLOBAL, CD_SCOPE_INVALID, CD_SCOPE_TABPAGE, CD_SCOPE_WINDOW};
 use crate::winlayer::Buf;
 use std::ffi::CStr;
 
@@ -45,12 +45,12 @@ pub(crate) fn do_autocmd_dirchanged(new_dir: &CStr, scope: CdScope, cause: CdCau
     RECURSIVE.set(true);
 
     let scope_name: &CStr = match scope {
-        kCdScopeGlobal => c"global",
-        kCdScopeTabpage => c"tabpage",
-        kCdScopeWindow => c"window",
+        CD_SCOPE_GLOBAL => c"global",
+        CD_SCOPE_TABPAGE => c"tabpage",
+        CD_SCOPE_WINDOW => c"window",
         // "Should never happen." Any other value falls through upstream's
         // switch, leaving the buffer it would have named unwritten.
-        kCdScopeInvalid => std::process::abort(),
+        CD_SCOPE_INVALID => std::process::abort(),
         _ => c"",
     };
     let pattern: &CStr = match cause {
@@ -100,13 +100,13 @@ pub(crate) fn vim_chdirfile(fname: &CStr, cause: CdCause) -> Result<(), IoFailed
 
     let announce = cause != kCdCauseOther;
     if announce {
-        do_autocmd_dirchanged(&dir, kCdScopeWindow, cause, true);
+        do_autocmd_dirchanged(&dir, CD_SCOPE_WINDOW, cause, true);
     }
     if os_chdir(&dir) != 0 {
         return Err(IoFailed);
     }
     if announce {
-        do_autocmd_dirchanged(&dir, kCdScopeWindow, cause, false);
+        do_autocmd_dirchanged(&dir, CD_SCOPE_WINDOW, cause, false);
     }
     Ok(())
 }

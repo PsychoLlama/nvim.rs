@@ -56,7 +56,7 @@ use crate::ex_eval::aborting;
 use crate::memory::XString;
 use crate::message::state::EMSG_SEVERE;
 use crate::types::{
-    Failed, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VarLock, kListLenUnknown,
+    Failed, LIST_LEN_UNKNOWN, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VarLock,
 };
 
 /// A freshly declared typval.
@@ -394,7 +394,7 @@ impl Walk<'_, '_> {
             }
             // A null List or Blob works like an empty one; allocate now.
             if kind == VAR_LIST && tv.list_ref().is_none() {
-                tv_list_alloc_ret(tv, kListLenUnknown.try_into().unwrap_or(-1));
+                tv_list_alloc_ret(tv, LIST_LEN_UNKNOWN.try_into().unwrap_or(-1));
             } else if kind == VAR_BLOB && tv.blob_ref().is_none() {
                 tv_blob_alloc_ret(tv);
             }

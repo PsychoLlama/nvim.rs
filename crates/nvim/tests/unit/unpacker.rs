@@ -88,7 +88,7 @@ fn decoded_strings_are_nul_terminated() {
 }
 
 /// Handles arrive as extension objects whose type byte is the handle kind's
-/// distance from `kObjectTypeBuffer`.
+/// distance from `OBJECT_TYPE_BUFFER`.
 #[test]
 fn decodes_handles() {
     assert!(matches!(decode(&[0xd4, 0, 3]).object, Object::Buffer(3)));

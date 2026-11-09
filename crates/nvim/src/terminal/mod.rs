@@ -72,7 +72,7 @@ use crate::option::set_option_value;
 use crate::options::kOptBuftype;
 use crate::os::libc::int16_t;
 use crate::startup::exiting;
-use crate::state::mode::State;
+use crate::state::mode::STATE;
 use crate::terminal::state::SELECTIONBUF_SIZE;
 use crate::terminal::state::Terminal;
 use crate::terminal::state::TerminalOptions;
@@ -739,7 +739,7 @@ fn linenr_to_row(term: Term, linenr: c_int) -> c_int {
 
 /// Whether the user is typing at this terminal right now.
 fn is_focused(term: Term) -> bool {
-    State.get() & MODE_TERMINAL != 0 && Buf::current().terminal == term.raw()
+    STATE.get() & MODE_TERMINAL != 0 && Buf::current().terminal == term.raw()
 }
 
 /// What `dict` holds under `key`, or nil.

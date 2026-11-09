@@ -41,8 +41,8 @@ use crate::option::vars::{P_SHM, p_ls, p_verbose};
 use crate::os::cshim::gettext;
 use crate::startup::starting;
 use crate::types::{Array, ExArg, OptInt};
-use crate::ui::state::{Columns, Rows};
-use crate::ui::state::{kUIMessages, kUIMultigrid};
+use crate::ui::state::{COLUMNS, ROWS};
+use crate::ui::state::{UI_MESSAGES, UI_MULTIGRID};
 use crate::ui::ui_has;
 use crate::window::{LOWEST_WIN_ID, one_window};
 use crate::winlayer::current_topframe;
@@ -186,7 +186,7 @@ pub(crate) fn ex_version(excmd: &mut ExArg) {
     }
     // Start the banner below the ":version" the user typed. The message
     // UI lays its own messages out, so it needs no help.
-    if !ui_has(kUIMessages) {
+    if !ui_has(UI_MESSAGES) {
         msg_putchar(c_int::from(b'\n'));
     }
     list_version();
@@ -197,8 +197,8 @@ pub(crate) fn ex_version(excmd: &mut ExArg) {
 fn version_msg_wrap(s: &CStr, wrap: bool) {
     let len = vim_strsize_cstr(s) + if wrap { 2 } else { 0 };
     if !GOT_INT.get()
-        && len < Columns.get()
-        && MSG_COL.get() + len >= Columns.get()
+        && len < COLUMNS.get()
+        && MSG_COL.get() + len >= COLUMNS.get()
         && !s.to_bytes().starts_with(b"\n")
     {
         msg_putchar(c_int::from(b'\n'));
@@ -236,7 +236,7 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
         .unwrap_or(0);
 
     // Too narrow even for one column: one item per line, wrapped.
-    if Columns.get() < width {
+    if COLUMNS.get() < width {
         for (i, item) in items.iter().enumerate() {
             version_msg_wrap(item, Some(i) == current);
             if MSG_COL.get() > 0 && len_as_int(i) < count - 1 {
@@ -246,7 +246,7 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
         return;
     }
 
-    let ncol = (Columns.get() + 1) / width;
+    let ncol = (COLUMNS.get() + 1) / width;
     let nrow = count / ncol + if count % ncol != 0 { 1 } else { 0 };
     let mut cur_row = 1;
     for i in 0..nrow * ncol {
@@ -427,12 +427,12 @@ fn news_line() -> CString {
 /// Draw the intro screen, unless the window is too small to hold it --
 /// `:intro` (`colon`) asks for it regardless.
 pub(crate) fn intro_message(colon: bool) {
-    let mut blanklines = Rows.get() - (len_as_int(INTRO_LINES.len()) - 1);
+    let mut blanklines = ROWS.get() - (len_as_int(INTRO_LINES.len()) - 1);
     if p_ls() > 1 as OptInt {
-        blanklines -= Rows.get() - current_topframe().fr_height;
+        blanklines -= ROWS.get() - current_topframe().fr_height;
     }
     let top = blanklines.max(0) / 2;
-    if !(top >= 2 && Columns.get() >= 50 || colon) {
+    if !(top >= 2 && COLUMNS.get() >= 50 || colon) {
         return;
     }
 
@@ -448,7 +448,7 @@ pub(crate) fn intro_message(colon: bool) {
             translate(line)
         };
         let row = top + len_as_int(i);
-        if !mesg.is_empty() && row < Rows.get() - 1 {
+        if !mesg.is_empty() && row < ROWS.get() - 1 {
             do_intro_line(row, mesg, colon, i < 3);
         }
     }
@@ -459,8 +459,8 @@ pub(crate) fn intro_message(colon: bool) {
 /// and `<key>` mentions in the instructions.
 fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
     let text = mesg.to_bytes();
-    let mut col = ((Columns.get() - vim_strsize_cstr(mesg)) / 2).max(0);
-    let grid = if !colon && ui_has(kUIMultigrid) {
+    let mut col = ((COLUMNS.get() - vim_strsize_cstr(mesg)) / 2).max(0);
+    let grid = if !colon && ui_has(UI_MULTIGRID) {
         first_window().map_or_else(default_gridview, |wp| wp.w_grid)
     } else {
         default_gridview()

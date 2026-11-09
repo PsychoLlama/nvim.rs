@@ -17,7 +17,7 @@ use crate::charset::skip;
 use crate::cmdexpand::defs::Expand;
 use crate::debugger::state::{debug_backtrace_level, debug_tick};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, has_profiling_named};
-use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::state::CMDLINE_ROW;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::funcs::{check_builtin_argcount, find_builtin};
 use crate::eval::gc::WANT_GARBAGE_COLLECT;
@@ -76,8 +76,8 @@ use crate::types::{
     UserFunc, VAR_DEF_SCOPE, VAR_FUNC, VAR_NUMBER, VAR_SCOPE, VAR_STRING, VAR_UNKNOWN, VarLock,
     VarNumber,
 };
-use crate::ui::state::Rows;
-use crate::ui::state::kUICmdline;
+use crate::ui::state::ROWS;
+use crate::ui::state::UI_CMDLINE;
 use crate::ui::ui_has;
 
 // The carve of the transpiled module; see each child's docs.

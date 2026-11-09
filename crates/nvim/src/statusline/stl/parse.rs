@@ -20,7 +20,7 @@ use crate::cstr;
 
 use core::ffi::{CStr, c_int};
 
-use super::{NumberBase, kNumBaseHexadecimal};
+use super::{NUM_BASE_HEXADECIMAL, NumberBase};
 #[cfg(test)]
 use crate::statusline::defs::StlOpt;
 
@@ -161,7 +161,7 @@ pub(super) fn number_plan(
     }
     // The `*` takes the width as an argument rather than spelling it here.
     push(&mut template, b'*');
-    let digit = if base == kNumBaseHexadecimal {
+    let digit = if base == NUM_BASE_HEXADECIMAL {
         b'X'
     } else {
         b'd'
@@ -214,7 +214,7 @@ pub(super) fn number_plan(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::statusline::kNumBaseDecimal;
+    use crate::statusline::NUM_BASE_DECIMAL;
 
     fn spec(fmt: &[u8]) -> (Spec, usize) {
         let mut p = 0;
@@ -273,25 +273,25 @@ mod tests {
 
     #[test]
     fn a_number_that_fits_prints_plainly() {
-        let plan = number_plan(false, false, kNumBaseDecimal, 42, 4, DEFAULT_MAXWID);
+        let plan = number_plan(false, false, NUM_BASE_DECIMAL, 42, 4, DEFAULT_MAXWID);
         assert_eq!(plan.template().to_bytes(), b"%*d");
         assert_eq!((plan.num, plan.width, plan.exp), (42, 4, None));
 
-        let plan = number_plan(false, true, kNumBaseHexadecimal, 255, 4, DEFAULT_MAXWID);
+        let plan = number_plan(false, true, NUM_BASE_HEXADECIMAL, 255, 4, DEFAULT_MAXWID);
         assert_eq!(plan.template().to_bytes(), b"%0*X");
     }
 
     #[test]
     fn a_number_too_wide_is_reduced_by_its_base() {
         // 14532 in four columns reads "14>3": three divisions by ten.
-        let plan = number_plan(false, false, kNumBaseDecimal, 14532, 0, 4);
+        let plan = number_plan(false, false, NUM_BASE_DECIMAL, 14532, 0, 4);
         assert_eq!(plan.template().to_bytes(), b"%*d>%d");
         assert_eq!((plan.num, plan.width, plan.exp), (14, 0, Some(3)));
     }
 
     #[test]
     fn the_alternate_virtual_column_pays_for_its_sign() {
-        let plan = number_plan(true, false, kNumBaseDecimal, 7, 3, DEFAULT_MAXWID);
+        let plan = number_plan(true, false, NUM_BASE_DECIMAL, 7, 3, DEFAULT_MAXWID);
         assert_eq!(plan.template().to_bytes(), b"-%*d");
         assert_eq!((plan.num, plan.width), (7, 2));
     }

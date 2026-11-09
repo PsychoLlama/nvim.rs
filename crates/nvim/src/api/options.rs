@@ -44,7 +44,7 @@ use crate::option::{
     object_as_optval, option_has_scope, set_option_direct, set_option_value_for,
 };
 use crate::os::libc::uint64_t;
-use crate::types::{ApiDict, ApiString, Error, LineNr, Object, kErrorTypeValidation};
+use crate::types::{ApiDict, ApiString, ERROR_TYPE_VALIDATION, Error, LineNr, Object};
 use crate::window::close_windows;
 use crate::winlayer::Buf;
 
@@ -115,7 +115,7 @@ fn option_target<'a>(opts: &'a KeyDict_option, name: &CStr) -> Result<OptionRequ
     let opt_idx = find_option(name);
     if opt_idx == kOptInvalid {
         let name = msg_cstr(name);
-        return Err(api_error!(kErrorTypeValidation, "Unknown option '{name}'"));
+        return Err(api_error!(ERROR_TYPE_VALIDATION, "Unknown option '{name}'"));
     } else if (scope == OPT_SCOPE_BUF || scope == OPT_SCOPE_WIN)
         && !option_has_scope(opt_idx, scope)
     {
@@ -139,7 +139,7 @@ fn option_target<'a>(opts: &'a KeyDict_option, name: &CStr) -> Result<OptionRequ
         let (tgt, global, req) = (msg_cstr(tgt), msg_cstr(global), msg_cstr(req));
         let name = msg_cstr(name);
         return Err(api_error!(
-            kErrorTypeValidation,
+            ERROR_TYPE_VALIDATION,
             "'{tgt}' cannot be passed for {global}{req}option '{name}'"
         ));
     }

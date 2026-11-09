@@ -161,7 +161,7 @@ impl Context {
             find_window_by_handle(winid).unwrap_or_default()
         };
         let Some(win) = win else {
-            return Err(api_error!(kErrorTypeException, "unknown winid {winid}"));
+            return Err(api_error!(ERROR_TYPE_EXCEPTION, "unknown winid {winid}"));
         };
 
         let mut statuscol_lnum = 0;
@@ -195,7 +195,7 @@ impl Context {
         } else if statuscol_lnum != 0 {
             win.col_off()
         } else if use_tabline || (!use_winbar && stl_is_global()) {
-            Columns.get()
+            COLUMNS.get()
         } else {
             win.w_width
         };

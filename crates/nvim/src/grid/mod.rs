@@ -30,7 +30,7 @@
 //! # Grids are named, not borrowed
 //!
 //! Every grid on screen is owned by something else -- a window, the message
-//! area, the popup menu, or the `default_grid` static -- and drawing on any
+//! area, the popup menu, or the `DEFAULT_GRID` static -- and drawing on any
 //! of them emits UI events, which the compositor answers by reading *the
 //! very grid being drawn on* out of its own layer list. A `&mut ScreenGrid`
 //! held across such a call would therefore be aliased, and no `&mut` will
@@ -46,7 +46,7 @@
 
 use crate::arabic::arabic_shape;
 use crate::decoration::{decor_check_invalid_glyphs, next_virt_text_chunk};
-use crate::drawscreen::state::resizing_screen;
+use crate::drawscreen::state::RESIZING_SCREEN;
 use crate::global_cell::GlobalCell;
 use crate::highlight::{hl_apply_winblend, hl_combine_attr};
 use crate::log::LOGLVL_DBG;
@@ -59,9 +59,9 @@ use crate::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
 use crate::optionstr::check_chars_options;
 use crate::os::libc::{size_t, uint32_t};
 use crate::startup::full_screen;
-use crate::state::mode::exmode_active;
+use crate::state::mode::EXMODE_ACTIVE;
 use crate::types::{AlignTextPos, ColNr, Handle, Integer, ScreenChar, WLine, WinConfig};
-use crate::ui::state::kUIMultigrid;
+use crate::ui::state::UI_MULTIGRID;
 use crate::ui::{
     ui_call_grid_resize, ui_call_grid_scroll, ui_check_cursor_grid, ui_grid_cursor_goto, ui_has,
     ui_line,
@@ -95,7 +95,7 @@ pub(crate) use schar::{
     SCHAR_BUF_SIZE, SCharBuf, schar_bytes, schar_copy, schar_put_scratch, schar_text,
 };
 
-pub(crate) static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
+pub(crate) static DEFAULT_GRID: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
 
 const ALIGN_CENTER: AlignTextPos = 1;
 const ALIGN_RIGHT: AlignTextPos = 2;
@@ -105,7 +105,7 @@ pub const SLF_RIGHTLEFT: c_int = 1;
 pub const SLF_WRAP: c_int = 2;
 /// `grid_put_linebuf` flag: number the cleared columns' vcols upwards.
 pub const SLF_INC_VCOL: c_int = 4;
-/// Handle of `default_grid`; window grids are numbered above it.
+/// Handle of `DEFAULT_GRID`; window grids are numbered above it.
 pub(crate) const DEFAULT_GRID_HANDLE: c_int = 1;
 
 /// The screen grid, as a handle.
@@ -114,14 +114,14 @@ pub(crate) const DEFAULT_GRID_HANDLE: c_int = 1;
 /// compositor's stack and is reached from there while it is being drawn on,
 /// so it is named rather than borrowed. See the module docs.
 pub(crate) fn default_grid_ref() -> GridRef {
-    GridRef::of_cell(&default_grid)
+    GridRef::of_cell(&DEFAULT_GRID)
 }
 
 /// A view of the whole screen: a screen row already is a row of the screen
 /// grid, so both offsets are zero.
 ///
 /// Computed, never stored. As a cell (`default_gridview`) this was a second
-/// name for `default_grid`'s address, initialised in a `const` initialiser
+/// name for `DEFAULT_GRID`'s address, initialised in a `const` initialiser
 /// through `as_raw` -- the one spelling that skips the main-thread check --
 /// and thereafter trusted to stay in step by hand. See [`msg_grid_view`],
 /// whose stored form was a live bug.
@@ -138,7 +138,7 @@ pub(crate) fn default_gridview() -> GridView {
 /// Resolve a window-relative view to the grid it really draws on, folding the
 /// view's offsets into `row_off`/`col_off`.
 ///
-/// Without `ext_multigrid` every window draws on `default_grid`, and the
+/// Without `ext_multigrid` every window draws on `DEFAULT_GRID`, and the
 /// offsets turn window-relative positions into screen-relative ones.
 pub fn grid_adjust(view: GridView, row_off: &mut c_int, col_off: &mut c_int) -> GridRef {
     *row_off += view.row_offset;
@@ -187,7 +187,7 @@ pub fn win_grid_alloc(mut window: Win) {
 
     // A window only gets a grid of its own when the UI asked for
     // multigrid, or when it is a float (which needs one to be composed).
-    let want_allocation = ui_has(kUIMultigrid) || window.w_floating;
+    let want_allocation = ui_has(UI_MULTIGRID) || window.w_floating;
     let has_allocation = window.w_grid_alloc.is_allocated();
 
     let rows = usize::try_from(window.w_view_height).unwrap_or(0) + 1;
@@ -237,7 +237,7 @@ pub fn win_grid_alloc(mut window: Win) {
 
     // Send a grid resize event when a grid was just resized, or when
     // screen_resize asked for every size to be re-sent.
-    if (resizing_screen.get() || was_resized) && want_allocation {
+    if (RESIZING_SCREEN.get() || was_resized) && want_allocation {
         let grid = &window.w_grid_alloc;
         ui_call_grid_resize(
             Integer::from(grid.handle),

@@ -41,9 +41,9 @@ use crate::ops::Op;
 use crate::option::vars::{p_sol, p_window};
 use crate::pos::equalpos;
 use crate::search::FORWARD;
-use crate::state::mode::restart_edit;
+use crate::state::mode::RESTART_EDIT;
 use crate::types::{ColNr, Direction, LineNr, OptInt, Pos};
-use crate::ui::state::Rows;
+use crate::ui::state::ROWS;
 use crate::winlayer::graph::{firstwin, lastwin};
 use crate::winlayer::{Buf, Win, windows};
 
@@ -163,7 +163,7 @@ fn whole_page(mut win: Win, dir: Direction, count: c_int) -> bool {
     // the page; otherwise a page is the window less its overlap.
     let page = if firstwin.get() == lastwin.get()
         && p_window() > 0
-        && p_window() < OptInt::from(Rows.get() - 1)
+        && p_window() < OptInt::from(ROWS.get() - 1)
     {
         (number_as_int(p_window()) - 2).max(1)
     } else {
@@ -238,15 +238,15 @@ pub fn do_check_cursorbind() {
 
             // Make sure the cursor is in a valid position. `restart_edit` is
             // set for the duration so that it may sit beyond the end of line.
-            let restart_edit_save = restart_edit.get();
-            restart_edit.set(Key::from_code(1));
+            let restart_edit_save = RESTART_EDIT.get();
+            RESTART_EDIT.set(Key::from_code(1));
             check_cursor(win);
             // Avoid a scroll here for the cursor position: 'scrollbind' is
             // more important.
             if win.w_onebuf_opt.wo_scb == 0 {
                 win.validate_cursor();
             }
-            restart_edit.set(restart_edit_save);
+            RESTART_EDIT.set(restart_edit_save);
 
             // Correct the cursor for a multi-byte character.
             mb_adjust_cursor();

@@ -51,8 +51,8 @@ use crate::tag::tagstack_clear_entry;
 use crate::types::{
     Failed, Handle, Integer, LineNr, OptInt, VAR_SCOPE, WinConfig, WinInfo, WinOpt,
 };
-use crate::ui::state::kUIMultigrid;
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::UI_MULTIGRID;
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
 use crate::winlayer::graph::{firstwin, lastwin, leave_curbuf, prevwin, topframe};
@@ -317,7 +317,7 @@ pub fn win_alloc_first() {
 
 pub fn win_alloc_aucmd_win(idx: c_int) {
     let fconfig = WinConfig {
-        width: Columns.get(),
+        width: COLUMNS.get(),
         height: 5,
         focusable: false,
         mouse: false,
@@ -361,9 +361,9 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
     }
     let mut frame = attach_frame(win);
     topframe.set(Some(frame.id()));
-    frame.fr_width = Columns.get();
+    frame.fr_width = COLUMNS.get();
     frame.fr_height =
-        Rows.get() - c_int::try_from(p_ch()).unwrap_or(c_int::MAX) - global_stl_rows();
+        ROWS.get() - c_int::try_from(p_ch()).unwrap_or(c_int::MAX) - global_stl_rows();
     Ok(())
 }
 
@@ -380,7 +380,7 @@ pub(crate) fn attach_frame(window: Win) -> FrameRef {
 pub fn win_init_size() {
     let mut win = first_win();
     let mut top = current_topframe();
-    let rows = OptInt::from(Rows.get())
+    let rows = OptInt::from(ROWS.get())
         - p_ch()
         - OptInt::from(tabline_rows())
         - OptInt::from(global_stl_rows());
@@ -391,10 +391,10 @@ pub fn win_init_size() {
     win.w_height_outer = win.w_height;
     win.w_winrow_off = win.w_winbar_height;
     top.fr_height = rows;
-    win.w_width = Columns.get();
+    win.w_width = COLUMNS.get();
     win.w_view_width = win.w_width;
     win.w_width_outer = win.w_width;
-    top.fr_width = Columns.get();
+    top.fr_width = COLUMNS.get();
 }
 
 /// The first window of the current tab page, which exists from startup to
@@ -422,7 +422,7 @@ pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
         win_append(after, new_wp, tp);
     }
     new_wp.w_wincol = 0;
-    new_wp.w_width = Columns.get();
+    new_wp.w_width = COLUMNS.get();
     new_wp.w_topline = LineNr::ONE;
     new_wp.w_topfill = 0;
     new_wp.w_botline = LineNr::new(2);
@@ -571,7 +571,7 @@ pub fn win_free_grid(window: Win, reinit: bool) {
 /// Give up the window's own grid, optionally leaving it zeroed for reuse.
 pub(crate) fn free_grid(window: Win, reinit: bool) {
     let mut window = window;
-    if window.w_grid_alloc.handle != Handle::NONE && ui_has(kUIMultigrid) {
+    if window.w_grid_alloc.handle != Handle::NONE && ui_has(UI_MULTIGRID) {
         ui_call_grid_destroy(Integer::from(window.w_grid_alloc.handle));
     }
     window.w_grid_alloc.free();

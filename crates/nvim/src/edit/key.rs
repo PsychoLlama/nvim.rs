@@ -87,7 +87,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
                 // Don't move the cursor left when 'virtualedit' has
                 // "onemore".
                 if get_ve_flags(Win::current()) & kOptVeFlagOnemore as ::core::ffi::c_uint != 0 {
-                    ins_at_eol.set(false);
+                    INS_AT_EOL.set(false);
                     s.nomove = true;
                 }
                 s.count = 0;
@@ -165,7 +165,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             // Shift-CTRL-W is what deletes a word.
             if in_prompt_buf() && !MOD_MASK.get().has(ModMask::SHIFT) {
                 stuff_readbuf_char(Key::ctrl(b'W'));
-                restart_edit.set(Key::ascii(b'A'));
+                RESTART_EDIT.set(Key::ascii(b'A'));
                 s.nomove = true;
                 s.count = 0;
                 return Step::Leave;
@@ -549,12 +549,12 @@ fn may_autocomplete_before_cursor(s: &mut InsertState) {
 /// same code may also have synced undo, in which case the next character
 /// needs the line saved again.
 fn check_pum(s: &mut InsertState) {
-    if pum_want.get().active {
+    if PUM_WANT.get().active {
         if pum_visible() {
             // Null so that `ins_complete` updates the message.
-            edit_submode_extra.set(None);
+            EDIT_SUBMODE_EXTRA.set(None);
             insert_do_complete(s);
-            if pum_want.get().finish {
+            if PUM_WANT.get().finish {
                 // Accept the item and stop completing.
                 ins_compl_prep(Key::CTRL_Y);
             }
@@ -608,7 +608,7 @@ fn insert_normal_char(s: &mut InsertState) {
             can_cindent.set(false);
         }
         if Insstart_blank_vcol.get() == ColNr::MAX
-            && Win::current().w_cursor.lnum == Insstart.get().lnum
+            && Win::current().w_cursor.lnum == INSSTART.get().lnum
         {
             Insstart_blank_vcol.set(get_nolist_virtcol());
         }

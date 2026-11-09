@@ -22,7 +22,7 @@ use crate::charset::{ptr2cells_at, transchar, transchar_byte};
 use crate::cmdexpand::defs::ExpandContext;
 use crate::cmdexpand::state::{saved_status_opts, wild_menu_showing};
 use crate::cstr;
-use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::state::CMDLINE_ROW;
 use crate::ex_getln::cmd_screencol;
 use crate::grid::{
     default_gridview, grid_line_fill, grid_line_flush, grid_line_puts, grid_line_start,
@@ -38,8 +38,8 @@ use crate::option::vars::{P_LS, P_WMH, WOP_FLAGS, p_ls, p_wmh};
 use crate::options::kOptWopFlagPum;
 use crate::popupmenu::{pum_display, pum_undisplay, pum_visible};
 use crate::statusline::{fillchar_status_of, hl_attr};
-use crate::ui::state::{Columns, Rows};
-use crate::ui::state::{kUICmdline, kUIPopupmenu, kUIWildmenu};
+use crate::ui::state::{COLUMNS, ROWS};
+use crate::ui::state::{UI_CMDLINE, UI_POPUPMENU, UI_WILDMENU};
 use crate::ui::ui_has;
 use crate::window::{global_stl_height, last_status};
 use crate::winlayer::graph::cmdline_win;
@@ -104,7 +104,7 @@ pub(crate) fn cmdline_pum_create(
         from
     };
     let col = as_count(endpos);
-    compl_startcol.set(if ui_has(kUICmdline) && cmdline_win.get().is_none() {
+    compl_startcol.set(if ui_has(UI_CMDLINE) && cmdline_win.get().is_none() {
         col
     } else {
         cmd_screencol(col)
@@ -162,9 +162,9 @@ pub fn cmdline_compl_is_fuzzy() -> bool {
 pub(crate) fn cmdline_compl_use_pum(need_wildmenu: bool) -> bool {
     (need_wildmenu
         && WOP_FLAGS.get() & kOptWopFlagPum as c_uint != 0
-        && !(ui_has(kUICmdline) && cmdline_win.get().is_none()))
-        || ui_has(kUIWildmenu)
-        || (ui_has(kUICmdline) && ui_has(kUIPopupmenu))
+        && !(ui_has(UI_CMDLINE) && cmdline_win.get().is_none()))
+        || ui_has(UI_WILDMENU)
+        || (ui_has(UI_CMDLINE) && ui_has(UI_POPUPMENU))
 }
 
 /// The number of bytes that should be skipped in the wildmenu at the start
@@ -275,14 +275,14 @@ pub(crate) fn redraw_wildmenu(
             clen += 2;
         }
         // Jumping right, put match at the left.
-        if clen > Columns.get() {
+        if clen > COLUMNS.get() {
             first_match.set(match_idx);
             // If showing the last match, we can add some on the left.
             clen = 2;
             i = match_idx;
             while i < num_matches {
                 clen += wildmenu_match_len(expand, show_match(i)) + 2;
-                if clen >= Columns.get() {
+                if clen >= COLUMNS.get() {
                     break;
                 }
                 i += 1;
@@ -295,7 +295,7 @@ pub(crate) fn redraw_wildmenu(
     if add_left {
         while first_match.get() > 0 {
             clen += wildmenu_match_len(expand, show_match(first_match.get() - 1)) + 2;
-            if clen >= Columns.get() {
+            if clen >= COLUMNS.get() {
                 break;
             }
             first_match.set(first_match.get() - 1);
@@ -312,7 +312,7 @@ pub(crate) fn redraw_wildmenu(
     clen = as_count(buf.len());
 
     i = first_match.get();
-    while clen + wildmenu_match_len(expand, show_match(i)) + 2 < Columns.get() {
+    while clen + wildmenu_match_len(expand, show_match(i)) + 2 < COLUMNS.get() {
         if i == match_idx {
             selection = Some((buf.len(), clen));
         }
@@ -363,17 +363,17 @@ pub(crate) fn redraw_wildmenu(
         clen += 1;
     }
 
-    let mut row = cmdline_row.get() - 1;
+    let mut row = CMDLINE_ROW.get() - 1;
     if row >= 0 {
         if wild_menu_showing.get() == 0 {
             if MSG_SCROLLED.get() > 0 {
                 // Put the wildmenu just above the command line.  If there
                 // is no room, scroll the screen one line up.
-                if cmdline_row.get() == Rows.get() - 1 {
+                if CMDLINE_ROW.get() == ROWS.get() - 1 {
                     msg_scroll_up(false, false);
                     MSG_SCROLLED.set(MSG_SCROLLED.get() + 1);
                 } else {
-                    cmdline_row.set(cmdline_row.get() + 1);
+                    CMDLINE_ROW.set(CMDLINE_ROW.get() + 1);
                     row += 1;
                 }
                 wild_menu_showing.set(WM_SCROLLED);
@@ -413,7 +413,7 @@ pub(crate) fn redraw_wildmenu(
             );
         }
 
-        grid_line_fill(clen, Columns.get(), fillchar, attr);
+        grid_line_fill(clen, COLUMNS.get(), fillchar, attr);
 
         grid_line_flush();
     }

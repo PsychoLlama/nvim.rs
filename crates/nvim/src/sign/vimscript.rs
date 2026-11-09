@@ -19,7 +19,7 @@ use super::*;
 use crate::eval::typval::{DictRef, ListRef, NumBuf, list_items};
 use crate::narrow::number_as_int;
 use crate::types::Handle;
-use crate::types::{VAR_DICT, VAR_LIST, kListLenMayKnow};
+use crate::types::{LIST_LEN_MAY_KNOW, VAR_DICT, VAR_LIST};
 
 /// The four highlight keys a sign definition carries, in the order every
 /// reader in this family reports them.
@@ -93,7 +93,7 @@ fn each_dict_arg(
     result: &mut TypVal,
     one: impl FnMut(Option<&Dict>) -> Result<c_int, SignError>,
 ) {
-    let retlist = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
+    let retlist = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
     match args.first() {
         Some(arg) if arg.v_type() == VAR_LIST => each_dict(retlist, arg.list_ref(), one),
         _ => SignError::ListRequired.report(),
@@ -143,7 +143,7 @@ pub(crate) fn sign_get_placed_info_dict(mark: MTKey) -> DictRef {
 /// Every sign placed in `buffer`, in marktree order — `getbufinfo()`'s `signs`.
 pub(crate) fn get_buffer_signs(buffer: Buf) -> ListRef {
     let signs = buffer.placed_signs(0, ALL_GROUPS, |_| Keep::Yes);
-    let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+    let l = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
     for mark in signs {
         l.edit().push_dict(Some(sign_get_placed_info_dict(mark)));
     }
@@ -164,7 +164,7 @@ impl Buf {
         retlist: &mut List,
     ) {
         let d = tv_dict_alloc();
-        let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+        let l = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
         retlist.push_dict(Some(d.clone()));
         put_nr(&mut d.edit(), "bufnr", VarNumber::from(self.handle));
         let _ = d.edit().add_list(b"signs", Some(l.clone()));
@@ -261,7 +261,7 @@ fn sign_define_from_dict(name: Option<&[u8]>, dict: Option<&Dict>) -> Result<c_i
 /// `sign_define()`.
 pub(crate) fn f_sign_define(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if args[0].v_type() == VAR_LIST && args.len() <= 1 {
-        let retlist = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
+        let retlist = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
         each_dict(retlist, args[0].list_ref(), |d| {
             sign_define_from_dict(None, d)
         });
@@ -461,7 +461,7 @@ pub(crate) fn f_sign_placelist(args: &[TypVal], result: &mut TypVal, _fptr: Eval
 pub(crate) fn f_sign_undefine(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     if args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) && args.len() <= 1 {
-        let retlist = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
+        let retlist = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
         for item in list_items(args[0].list_ref()) {
             let undefined = match numbuf.string_chk(&item.li_tv).ok() {
                 Some(name) => sign_undefine_by_name(name.to_bytes()).map(|()| 0),

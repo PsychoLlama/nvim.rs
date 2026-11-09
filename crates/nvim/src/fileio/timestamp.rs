@@ -318,7 +318,7 @@ fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Re
         );
     }
 
-    if State.get() > MODE_NORMAL_BUSY || State.get() & MODE_CMDLINE != 0 || ALREADY_WARNED.get() {
+    if STATE.get() > MODE_NORMAL_BUSY || STATE.get() & MODE_CMDLINE != 0 || ALREADY_WARNED.get() {
         emsg(&append(b"; %s"));
         return (Reload::No, true);
     }
@@ -331,9 +331,9 @@ fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Re
         }
         msg_clr_eos();
         msg_end();
-        if EMSG_SILENT.get() == 0 && !IN_ASSERT_FAILS.get() && !ui_has(kUIMessages) {
+        if EMSG_SILENT.get() == 0 && !IN_ASSERT_FAILS.get() && !ui_has(UI_MESSAGES) {
             msg_delay(1004, true); // give the user some time to think about it
-            redraw_cmdline.set(false); // don't redraw and erase the message
+            REDRAW_CMDLINE.set(false); // don't redraw and erase the message
         }
     }
     ALREADY_WARNED.set(true);

@@ -29,7 +29,7 @@ use crate::memory::ThinCString;
 use crate::os::libc::uint64_t;
 use crate::semsg;
 use crate::terminal::terminal_receive;
-use crate::types::{Callback, VarNumber, kListLenMayKnow};
+use crate::types::{Callback, LIST_LEN_MAY_KNOW, VarNumber};
 
 use super::{channel_decref, with_channel};
 
@@ -249,7 +249,7 @@ fn channel_callback_call(id: uint64_t, reader: Option<bool>) {
 /// The list always starts with one empty string, so a chunk that does not
 /// end in a newline leaves a partial last line the next chunk continues.
 pub fn reader_lines(reader: &CallbackReader) -> ListRef {
-    let mut l = tv_list_alloc(kListLenMayKnow as isize);
+    let mut l = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
     l.push_bytes(Some(b""));
     encode_list_write(&mut l, &reader.buffer);
     l

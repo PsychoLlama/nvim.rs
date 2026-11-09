@@ -13,7 +13,7 @@ use crate::types::{ColNr, LineNr};
 
 /// What a click on one statusline column does.
 ///
-/// `func` names the `%@Func@` handler of a `kStlClickFuncRun` definition
+/// `func` names the `%@Func@` handler of a `STL_CLICK_FUNC_RUN` definition
 /// by its place in the line's [`ClickLine::funcs`], one more than the
 /// index; 0 for none. Every cell of a click region holds the same one.
 #[derive(Copy, Clone, Default, Debug)]

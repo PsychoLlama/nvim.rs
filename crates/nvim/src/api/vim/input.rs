@@ -158,7 +158,10 @@ pub fn nvim_input_mouse(
                 // `%c` wrote the one byte, whatever it was; the adaptor keeps
                 // it rather than widening it to a char.
                 let byte = msg_bytes(core::slice::from_ref(&raw));
-                return Err(api_error!(kErrorTypeValidation, "Invalid modifier: {byte}"));
+                return Err(api_error!(
+                    ERROR_TYPE_VALIDATION,
+                    "Invalid modifier: {byte}"
+                ));
             }
             modmask |= mod_0;
         }

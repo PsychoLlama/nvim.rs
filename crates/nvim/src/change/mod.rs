@@ -35,11 +35,11 @@ use crate::buffer::{
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::charset::getwhitecols_curline;
 use crate::cursor::{check_cursor_lnum, check_visual_pos, coladvance_force, getviscol};
-use crate::decoration::{kMTMetaInline, kMTMetaLines};
+use crate::decoration::{MT_META_INLINE, MT_META_LINES};
 use crate::diff::{diff_internal, diff_lnum_win, diff_update_line};
 use crate::drawscreen::find_wl_entry;
 use crate::drawscreen::state::{
-    need_maketitle, redraw_cmdline, redraw_not_allowed, redraw_tabline, search_hl_has_cursor_lnum,
+    NEED_MAKETITLE, REDRAW_CMDLINE, REDRAW_NOT_ALLOWED, REDRAW_TABLINE, SEARCH_HL_HAS_CURSOR_LNUM,
 };
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_VALID, redraw_buf_status_later, redraw_win_line, set_must_redraw, showmode,
@@ -87,15 +87,15 @@ use crate::search::{BACKWARD, FORWARD, check_linecomment, findmatch, linewhite, 
 use crate::spell::spell_check_window;
 use crate::startup::silent_mode;
 use crate::state::mode::{
-    Insstart, State, ai_col, can_si, can_si_back, did_ai, did_si, end_comment_pending,
-    orig_line_count, restart_edit, vr_lines_changed,
+    AI_COL, CAN_SI, CAN_SI_BACK, DID_AI, DID_SI, END_COMMENT_PENDING, INSSTART, ORIG_LINE_COUNT,
+    RESTART_EDIT, STATE, VR_LINES_CHANGED,
 };
 use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG, virtual_active};
 use crate::strings::concat;
 use crate::textformat::{comp_textwidth, has_format_option};
 use crate::types::{CmdModFlags, ColNr, LineNr, Pos, Vv};
-use crate::ui::state::Rows;
-use crate::ui::state::kUIMessages;
+use crate::ui::state::ROWS;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_active, ui_has};
 use crate::undo::{curbuf_is_changed, u_clearline, u_save_cursor, u_savedel};
 

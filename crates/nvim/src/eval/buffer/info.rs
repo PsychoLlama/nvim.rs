@@ -14,8 +14,8 @@ use crate::buffer::buf_get_changedtick;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{DictRef, ListRef};
 use crate::os::libc::ptrdiff_t;
+use crate::types::{LIST_LEN_MAY_KNOW, VAR_DICT};
 use crate::types::{TypVal, VarNumber};
-use crate::types::{VAR_DICT, kListLenMayKnow};
 
 /// One `getbufinfo()` entry: a buffer's options, variables and attributes.
 fn get_buffer_info(buffer: Buf) -> DictRef {
@@ -56,7 +56,7 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
     let _ = dict.edit().add_dict(b"variables", vars);
 
     // The windows displaying this buffer.
-    let windows = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+    let windows = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
     for wp in tab_windows().filter(|wp| wp.w_buffer == buffer) {
         windows.edit().push_number(VarNumber::from(wp.handle));
     }
@@ -72,7 +72,7 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
 /// `getbufinfo([{buf}|{dict}])` — every buffer, one buffer, or the buffers a
 /// filter dictionary selects.
 pub fn f_getbufinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let list = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
+    let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
     let mut argbuf: Option<Buf> = None;
     let mut filter = Filter::default();
     if args.first().is_some_and(|arg| arg.v_type() == VAR_DICT) {

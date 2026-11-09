@@ -24,9 +24,9 @@
 
 use core::cmp::{Ordering, Reverse};
 
-use super::{kSHIsSign, ns_in_win, sh_chain, with_decor_item, with_decor_item_mut};
+use super::{SH_IS_SIGN, ns_in_win, sh_chain, with_decor_item, with_decor_item_mut};
 use crate::decoration::defs::{DecorInline, DecorPriority, DecorSignHighlight};
-use crate::decoration::{SCL_NUM, SIGN_WIDTH, kMTMetaSignText};
+use crate::decoration::{MT_META_SIGN_TEXT, SCL_NUM, SIGN_WIDTH};
 use crate::global_cell::GlobalCell;
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{MtFlags, kMTFilterSelect, mt_decor, mt_decor_sign, mt_end, mt_invalid};
@@ -41,14 +41,14 @@ use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::{CStr, c_int};
 
 /// Marktree filters: which meta counts a walk is allowed to descend into.
-/// The index is a `MetaIndex`; `kMTMetaSignText` is 3 and `kMTMetaSignHL` 2.
+/// The index is a `MetaIndex`; `MT_META_SIGN_TEXT` is 3 and `MT_META_SIGN_HL` 2.
 static SIGN_FILTER: MetaCount = [0, 0, kMTFilterSelect, kMTFilterSelect, 0];
 static SIGNTEXT_FILTER: MetaCount = [0, 0, 0, kMTFilterSelect, 0];
 
 impl DecorSignHighlight {
     /// Whether this item is a sign rather than a bare highlight.
     fn is_sign(&self) -> bool {
-        self.flags & kSHIsSign != 0
+        self.flags & SH_IS_SIGN != 0
     }
 
     /// Whether the sign has text of its own, which is what takes a cell of
@@ -103,7 +103,7 @@ pub fn buf_remove_decor_sh(mut buffer: Buf, row1: c_int, row2: c_int, idx: uint3
     if !with_decor_item(idx, |sh| sh.is_sign() && sh.has_text()) {
         return;
     }
-    if buffer.meta_total(kMTMetaSignText) != 0 {
+    if buffer.meta_total(MT_META_SIGN_TEXT) != 0 {
         buf_signcols_count(buffer, row1, row2, -1, SignCountHalf::Both);
     } else {
         may_force_numberwidth_recompute(buffer, true);
@@ -310,7 +310,7 @@ pub fn buf_signcols_count_range(
 /// added sign, -1 for a deleted one, 0 for a range being counted from scratch
 /// — and `half` is which side of a marktree splice this call is doing.
 fn buf_signcols_count(mut buffer: Buf, row1: c_int, row2: c_int, add: c_int, half: SignCountHalf) {
-    if !buffer.b_signcols.autom || row2 < row1 || buffer.meta_total(kMTMetaSignText) == 0 {
+    if !buffer.b_signcols.autom || row2 < row1 || buffer.meta_total(MT_META_SIGN_TEXT) == 0 {
         return;
     }
 

@@ -45,7 +45,7 @@ use crate::change::{changed_bytes, changed_lines, del_chars};
 use crate::charset::transchar;
 use crate::clipboard;
 use crate::cursor::{coladvance_force, gchar_cursor, get_cursor_line_len, getviscol};
-use crate::drawscreen::state::must_redraw;
+use crate::drawscreen::state::MUST_REDRAW;
 use crate::drawscreen::{showmode, update_screen};
 use crate::edit::{beginline, get_last_insert, get_last_insert_save, oneright, stuff_inserted};
 use crate::eval::typval::{list_set_lock, tv_list_alloc};
@@ -98,15 +98,15 @@ use crate::register::defs::{
 };
 use crate::search::{BACKWARD, FORWARD, last_search_pat, set_last_search_pat};
 use crate::state::REPLACE_FLAG;
-use crate::state::mode::{State, restart_edit};
+use crate::state::mode::{RESTART_EDIT, STATE};
 use crate::strings::escaped_with;
 use crate::terminal::terminal_paste;
 use crate::types::{
-    ApiString, CmdModFlags, ColNr, Direction, ExArg, LineNr, Pos, SaveVEvent, VarLock,
-    kBoolVarFalse, kBoolVarTrue,
+    ApiString, BOOL_VAR_FALSE, BOOL_VAR_TRUE, CmdModFlags, ColNr, Direction, ExArg, LineNr, Pos,
+    SaveVEvent, VarLock,
 };
-use crate::ui::state::Columns;
-use crate::ui::state::kUIMessages;
+use crate::ui::state::COLUMNS;
+use crate::ui::state::UI_MESSAGES;
 use crate::ui::ui_has;
 use crate::undo::{u_save, u_save_cursor};
 

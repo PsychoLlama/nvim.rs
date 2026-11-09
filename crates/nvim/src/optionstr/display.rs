@@ -49,9 +49,9 @@ use crate::option::vars::{
 use crate::option::{fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
 use crate::optionstr::BreakAt;
-use crate::state::mode::{km_startsel, km_stopsel};
+use crate::state::mode::{KM_STARTSEL, KM_STOPSEL};
 use crate::types::{
-    ColNr, FloatAnchor, LPos, LineNr, OptInt, WinConfig, WinOpt, kFloatRelativeEditor,
+    ColNr, FLOAT_RELATIVE_EDITOR, FloatAnchor, LPos, LineNr, OptInt, WinConfig, WinOpt,
 };
 use crate::window::check_colorcolumn;
 
@@ -209,8 +209,8 @@ pub fn did_set_inccommand(args: &mut OptSet) -> Result<(), OptError> {
 
 pub fn did_set_keymodel(args: &mut OptSet) -> Result<(), OptError> {
     did_set_str_generic(args)?;
-    km_stopsel.set(p_km(|value| has_char(value, c_int::from(b'o'))));
-    km_startsel.set(p_km(|value| has_char(value, c_int::from(b'a'))));
+    KM_STOPSEL.set(p_km(|value| has_char(value, c_int::from(b'o'))));
+    KM_STARTSEL.set(p_km(|value| has_char(value, c_int::from(b'a'))));
     Ok(())
 }
 
@@ -383,7 +383,7 @@ pub(crate) fn parse_border_opt(border_opt: &CStr) -> bool {
         row: 0.0,
         col: 0.0,
         anchor: 0 as FloatAnchor,
-        relative: kFloatRelativeEditor,
+        relative: FLOAT_RELATIVE_EDITOR,
         external: false,
         focusable: true,
         mouse: true,

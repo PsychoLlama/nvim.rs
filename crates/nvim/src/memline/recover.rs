@@ -415,7 +415,7 @@ fn choose_swapfile(fname: &CStr) -> Result<XString, MemlineError> {
         1
     } else {
         let _ = recover_names(Some(fname), true, None, 0);
-        if !ui_has(kUIMessages) {
+        if !ui_has(UI_MESSAGES) {
             msg_putchar('\n' as c_int);
         }
         let question = gettext(c"Enter number of swap file to use (0 to quit): ");
@@ -726,10 +726,10 @@ fn report_recovery(error: c_int, recorded: &Recorded, fname_used: &CStr) {
         // `%d`: the 32-bit truncation upstream printed.
         msg_outnum(low32(recorded.pid).cast_signed());
     }
-    if !ui_has(kUIMessages) {
+    if !ui_has(UI_MESSAGES) {
         msg_str(c"\n\n");
     }
-    cmdline_row.set(MSG_ROW.get());
+    CMDLINE_ROW.set(MSG_ROW.get());
 }
 
 /// Sync every buffer's memline.

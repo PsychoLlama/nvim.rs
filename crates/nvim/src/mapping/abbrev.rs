@@ -30,7 +30,7 @@ use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
-/// `Ctrl_V` as the byte a typed sequence carries.
+/// `CTRL_V` as the byte a typed sequence carries.
 const CTRL_V_BYTE: u8 = 0x16;
 
 /// Whether `mp`'s LHS is exactly `word`, in a mode that is current.
@@ -38,7 +38,7 @@ const CTRL_V_BYTE: u8 = 0x16;
 /// The stored LHS may carry `K_SPECIAL` escapes, which the text in the buffer
 /// does not, so it is unescaped into a scratch copy first.
 fn abbr_matches(mp: &MapBlock, word: &[u8]) -> bool {
-    if mp.m_mode & State.get() == 0 {
+    if mp.m_mode & STATE.get() == 0 {
         return false;
     }
     let keys = mp.keys();

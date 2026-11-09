@@ -24,7 +24,7 @@ use crate::narrow::{len_as_int, number_as_col, number_as_int};
 use core::ffi::c_int;
 
 use super::*;
-use crate::drawscreen::state::dollar_vcol;
+use crate::drawscreen::state::DOLLAR_VCOL;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, win_scroll_lines};
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
@@ -81,8 +81,8 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
     };
 
     // Remove the `$` of a change command once the cursor moves onto it.
-    if startcol > dollar_vcol.get() {
-        dollar_vcol.set(ColNr::NONE);
+    if startcol > DOLLAR_VCOL.get() {
+        DOLLAR_VCOL.set(ColNr::NONE);
     }
 
     let extra = win.col_off();

@@ -151,7 +151,7 @@ impl Put {
 
         // `CTRL-O p` in Insert mode leaves the cursor after the last
         // character rather than on it.
-        if totlen != 0 && (!restart_edit.get().is_nul() || self.flags & PUT_CURSEND != 0) {
+        if totlen != 0 && (!RESTART_EDIT.get().is_nul() || self.flags & PUT_CURSEND != 0) {
             Win::current().w_cursor.col += 1;
         } else {
             Win::current().w_cursor.col -= first_byte_off;

@@ -47,7 +47,7 @@ use crate::lua::executor::ex_lua;
 use crate::mark::{checkpcmark, setmark, setpcmark};
 use crate::message::{E_ARGREQ, E_EMPTY_BUFFER, E_INVRANGE, E_UNDOBANG_CANNOT_REDO_OR_MOVE_BRANCH};
 use crate::search::state::magic_overruled;
-use crate::state::mode::{did_syncbind, virtual_op};
+use crate::state::mode::{DID_SYNCBIND, VIRTUAL_OP};
 
 use crate::memline::{goto_byte, ml_clearmarked, ml_setmarked};
 
@@ -147,7 +147,7 @@ pub(crate) fn ex_syncbind(_excmd: &mut ExArg) {
     }
 
     if Win::current().w_onebuf_opt.wo_scb != 0 {
-        did_syncbind.set(true);
+        DID_SYNCBIND.set(true);
         checkpcmark();
         // The cursor moved with the scroll; CTRL-O puts it back.
         if old_linenr != Win::current().w_cursor.lnum {
@@ -219,7 +219,7 @@ pub(crate) fn ex_operators(excmd: &mut ExArg) {
         ..OpArg::default()
     };
     // An Ex range is whole lines, so 'virtualedit' must not apply.
-    virtual_op.set(Some(false));
+    VIRTUAL_OP.set(Some(false));
 
     // `:yank` does not move the cursor, so it does not set the previous
     // context mark either.
@@ -252,7 +252,7 @@ pub(crate) fn ex_operators(excmd: &mut ExArg) {
         }
     }
     run_ex_operator(&mut oa, excmd.amount);
-    virtual_op.set(None);
+    VIRTUAL_OP.set(None);
     ex_may_print(excmd);
 }
 

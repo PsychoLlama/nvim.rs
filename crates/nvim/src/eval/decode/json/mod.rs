@@ -26,7 +26,9 @@ use super::decode_create_map_special_dict;
 use crate::eval::typval::{ListRef, tv_clear, tv_dict_alloc, tv_list_alloc};
 use crate::message_fmt::emsg_text;
 use crate::os::libc::ptrdiff_t;
-use crate::types::{Failed, TypVal, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull};
+use crate::types::{
+    BOOL_VAR_FALSE, BOOL_VAR_TRUE, Failed, LIST_LEN_MAY_KNOW, SPECIAL_VAR_NULL, TypVal,
+};
 
 mod error;
 mod scan;
@@ -45,10 +47,10 @@ pub(crate) const NL: u8 = 0x0a;
 pub(crate) const FF: u8 = 0x0c;
 pub(crate) const CAR: u8 = 0x0d;
 
-const NULL_TV: TypVal = TypVal::Special(kSpecialVarNull);
+const NULL_TV: TypVal = TypVal::Special(SPECIAL_VAR_NULL);
 
 const fn bool_tv(value: bool) -> TypVal {
-    TypVal::Bool(if value { kBoolVarTrue } else { kBoolVarFalse })
+    TypVal::Bool(if value { BOOL_VAR_TRUE } else { BOOL_VAR_FALSE })
 }
 
 /// Decode `buf_len` bytes of JSON, assumed UTF-8, into `result`.
@@ -213,13 +215,13 @@ pub fn json_decode_string(bytes: &[u8], result: &mut TypVal) -> Result<(), Faile
                         }
                     }
                     b'[' => {
-                        let list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+                        let list = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
                         dec.open(OpenContainer::List(list), None, p);
                     }
                     b'{' => {
                         if dec.next_map_special {
                             dec.next_map_special = false;
-                            let len = kListLenMayKnow as ptrdiff_t;
+                            let len = LIST_LEN_MAY_KNOW as ptrdiff_t;
                             let (special, pairs) = decode_create_map_special_dict(len);
                             let dict = special.dict_shared().expect("a special map").clone();
                             dec.open_value(OpenContainer::Dict(dict), Some(pairs), special, p);

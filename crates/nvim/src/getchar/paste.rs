@@ -39,7 +39,7 @@ pub enum PastePhase {
 /// `text` is read only for [`PastePhase::Chunk`]; `K_SPECIAL` and NUL bytes
 /// in the content are escaped.
 pub fn paste_store(channel_id: uint64_t, phase: PastePhase, text: &[u8], crlf: bool) {
-    if State.get() & MODE_CMDLINE != 0 {
+    if STATE.get() & MODE_CMDLINE != 0 {
         return;
     }
     let need_redo = !BLOCK_REDO.get();
@@ -55,7 +55,7 @@ pub fn paste_store(channel_id: uint64_t, phase: PastePhase, text: &[u8], crlf: b
             SpecialKey::PasteEnd
         });
         if need_redo {
-            if phase == PastePhase::Start && State.get() & MODE_INSERT == 0 {
+            if phase == PastePhase::Start && STATE.get() & MODE_INSERT == 0 {
                 reset_redobuff();
             }
             redobuff().add_char(c);

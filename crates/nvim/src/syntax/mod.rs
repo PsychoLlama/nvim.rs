@@ -49,7 +49,7 @@ use crate::ex_docmd::{do_cmdline_cmd, ends_excmd, separate_nextcmd};
 use crate::fold::{fold_update_all, foldmethod_is_syntax};
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
-use crate::highlight::state::{include_default, include_link, include_none};
+use crate::highlight::state::{INCLUDE_DEFAULT, INCLUDE_LINK, INCLUDE_NONE};
 use crate::highlight_group::{
     HLF_D, highlight_link_id, highlight_num_groups, init_highlight, syn_check_group, syn_id2attr,
     syn_id2name, syn_list_header, syn_name2id, syn_name2id_bytes,
@@ -86,7 +86,7 @@ use crate::regexp::{
 use crate::regexp::{RegMMatch, RegMatch};
 use crate::runtime::{do_source, source_runtime};
 use crate::types::{ColNr, ExArg, LPos, LineNr, OptInt, ProfTime, SynBlock, SynTime};
-use crate::ui::state::{Columns, Rows};
+use crate::ui::state::{COLUMNS, ROWS};
 use crate::winlayer::Buf;
 use crate::winlayer::{Live, Win};
 use ::std::rc::Rc;

@@ -168,7 +168,7 @@ pub fn ui_ext_cmdline_block_leave() {
 
 /// Extra redrawing needed for `:redraw!` and on `ui_attach`.
 pub fn cmdline_screen_cleared() {
-    if !ui_has(kUICmdline) {
+    if !ui_has(UI_CMDLINE) {
         return;
     }
 
@@ -198,7 +198,7 @@ pub fn cmdline_screen_cleared() {
 /// Called by `ui_flush`: send whatever redraws keep the externalised command
 /// line up to date.
 pub fn cmdline_ui_flush() {
-    if !ui_has(kUICmdline) {
+    if !ui_has(UI_CMDLINE) {
         return;
     }
     let mut level = Cc::current().level;

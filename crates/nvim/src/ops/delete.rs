@@ -94,7 +94,7 @@ pub fn op_delete(op: &mut OpArg) -> Result<(), NotDeleted> {
     }
     if visual_select() && op.is_visual {
         // The register given with CTRL-R, zero by default.
-        op.regname = VIsual_select_reg.get();
+        op.regname = V_ISUAL_SELECT_REG.get();
     }
 
     mb_adjust_opend(op);
@@ -326,8 +326,8 @@ fn delete_whole_lines(op: &OpArg) -> Result<(), UndoFailed> {
         // Keep the indent, on the first non-white character; `did_ai` is
         // what deletes it again if the insert is left with ESC.
         beginline(BeginlineOpts::WHITE);
-        did_ai.set(true);
-        ai_col.set(Win::current().w_cursor.col);
+        DID_AI.set(true);
+        AI_COL.set(Win::current().w_cursor.col);
     } else {
         beginline(BeginlineOpts::NONE);
     }

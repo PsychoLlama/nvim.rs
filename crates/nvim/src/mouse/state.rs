@@ -13,14 +13,13 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
 use core::ffi::c_int;
 
-pub(crate) static mouse_grid: GlobalCell<c_int> = GlobalCell::new(0);
-pub(crate) static mouse_row: GlobalCell<c_int> = GlobalCell::new(0);
-pub(crate) static mouse_col: GlobalCell<c_int> = GlobalCell::new(0);
-pub(crate) static mouse_past_bottom: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static mouse_past_eol: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static mouse_dragging: GlobalCell<c_int> = GlobalCell::new(0);
+pub(crate) static MOUSE_GRID: GlobalCell<c_int> = GlobalCell::new(0);
+pub(crate) static MOUSE_ROW: GlobalCell<c_int> = GlobalCell::new(0);
+pub(crate) static MOUSE_COL: GlobalCell<c_int> = GlobalCell::new(0);
+pub(crate) static MOUSE_PAST_BOTTOM: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static MOUSE_PAST_EOL: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static MOUSE_DRAGGING: GlobalCell<c_int> = GlobalCell::new(0);

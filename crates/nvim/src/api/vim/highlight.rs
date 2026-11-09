@@ -59,7 +59,7 @@ pub fn nvim_set_hl(
 pub fn nvim_get_hl_ns(opts: &mut KeyDict_get_ns) -> Result<Integer, Error> {
     let winid = opts.winid;
     let Some(winid) = winid else {
-        return Ok(Integer::from(ns_hl_global.get()));
+        return Ok(Integer::from(NS_HL_GLOBAL.get()));
     };
     let Some(win) = find_window_by_handle(winid)? else {
         return Ok(0 as Integer);
@@ -71,14 +71,14 @@ pub fn nvim_set_hl_ns(ns_id: Integer) -> Result<(), Error> {
     if !(ns_id >= 0 as Integer) {
         return Err(err_bad_number(c"namespace", ns_id));
     }
-    ns_hl_global.set(handle_arg(c"namespace", ns_id)?);
+    NS_HL_GLOBAL.set(handle_arg(c"namespace", ns_id)?);
     hl_check_ns();
     redraw_all_later(UPD_NOT_VALID);
     Ok(())
 }
 
 pub fn nvim_set_hl_ns_fast(ns_id: Integer) -> Result<(), Error> {
-    ns_hl_fast.set(handle_arg(c"namespace", ns_id)?);
+    NS_HL_FAST.set(handle_arg(c"namespace", ns_id)?);
     hl_check_ns();
     Ok(())
 }

@@ -16,7 +16,7 @@
 
 use core::ffi::{CStr, c_int};
 
-use crate::ui::state::t_colors;
+use crate::ui::state::T_COLORS;
 
 /// The names `ctermfg=`/`ctermbg=` accept, in the order the number tables
 /// below are indexed. `NONE` is last and maps to -1 in every table.
@@ -106,7 +106,7 @@ pub(crate) fn lookup_color(idx: usize, foreground: bool) -> (c_int, Option<bool>
     if COLOR_NUMBERS_16[idx] < 0 {
         return (-1, None);
     }
-    match t_colors.get() {
+    match T_COLORS.get() {
         8 => {
             let color = COLOR_NUMBERS_8[idx];
             let bold = if !foreground {

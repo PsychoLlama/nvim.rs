@@ -122,9 +122,9 @@ pub(crate) fn open_cmdwin() -> Key {
     let mut bufref = BufRef::NONE;
     let old_curwin = Win::current().id();
     // Uninitialised in the C; `win_size_save` below fills it.
-    let save_restart_edit = restart_edit.get();
-    let save_state = State.get();
-    let save_exmode = exmode_active.get();
+    let save_restart_edit = RESTART_EDIT.get();
+    let save_state = STATE.get();
+    let save_exmode = EXMODE_ACTIVE.get();
     let save_cmdmsg_rl = CMDMSG_RL.get();
 
     // Can't do this when text or buffer is locked, can't do it
@@ -291,9 +291,9 @@ pub(crate) fn open_cmdwin() -> Key {
     redraw_later(Win::current(), UPD_SOME_VALID);
 
     // No Ex mode here.
-    exmode_active.set(false);
+    EXMODE_ACTIVE.set(false);
 
-    State.set(MODE_NORMAL);
+    STATE.set(MODE_NORMAL);
     setmouse();
     clear_showcmd();
 
@@ -301,7 +301,7 @@ pub(crate) fn open_cmdwin() -> Key {
     cmdwin_result.set(Key::NUL);
 
     trigger_cmd_autocmd(cmdwin_type.get(), AutoEvent::CmdwinEnter);
-    if !restart_edit.get().is_nul() {
+    if !RESTART_EDIT.get().is_nul() {
         // An autocmd ran ":startinsert".
         stuff_readbuf_char(Key::from(SpecialKey::Nop));
     }
@@ -326,7 +326,7 @@ pub(crate) fn open_cmdwin() -> Key {
     cmdwin_win.set(None);
     cmdwin_old_curwin.set(None);
 
-    exmode_active.set(save_exmode);
+    EXMODE_ACTIVE.set(save_exmode);
 
     // Safety check: the old window or buffer was changed or deleted.
     // It is a bug when this happens.
@@ -417,10 +417,10 @@ pub(crate) fn open_cmdwin() -> Key {
         skip_win_fix_cursor.set(false);
     }
 
-    restart_edit.set(save_restart_edit);
+    RESTART_EDIT.set(save_restart_edit);
     CMDMSG_RL.set(save_cmdmsg_rl);
 
-    State.set(save_state);
+    STATE.set(save_state);
     may_trigger_modechanged();
     setmouse();
     setcursor();

@@ -53,7 +53,7 @@ pub(super) fn replace_stack_clear() {
 pub(crate) fn truncate_spaces(line: &mut Vec<u8>) {
     // Walk back over the trailing white space.
     while line.last().is_some_and(|&b| ascii_iswhite(c_int::from(b))) {
-        if State.get() & REPLACE_FLAG != 0 {
+        if STATE.get() & REPLACE_FLAG != 0 {
             replace_join(0); // remove a NUL from the replace stack
         }
         line.pop();
@@ -70,7 +70,7 @@ pub(crate) fn truncate_spaces(line: &mut Vec<u8>) {
 pub(crate) fn backspace_until_column(col: c_int) {
     while Win::current().w_cursor.col > ColNr::new(col) {
         Win::current().w_cursor.col -= 1;
-        if State.get() & REPLACE_FLAG != 0 {
+        if STATE.get() & REPLACE_FLAG != 0 {
             replace_do_bs(col);
         } else if !del_char_after_col(col) {
             break;
@@ -122,7 +122,7 @@ fn del_char_after_col(limit_col: c_int) -> bool {
 /// borrow checker cannot say so for us.
 pub(crate) fn replace_push(bytes: &[u8]) {
     replace_stack.with_mut(|stack| {
-        let above = size_t::try_from(replace_offset.get()).unwrap_or(0);
+        let above = size_t::try_from(REPLACE_OFFSET.get()).unwrap_or(0);
         if stack.len() < above {
             return; // nothing to do
         }
@@ -181,13 +181,13 @@ pub(crate) fn replace_join(mut off: c_int) {
 /// *off* while it works, because the insertions it does must not push onto
 /// the stack it is popping.
 pub(crate) fn replace_pop_ins() {
-    let old_state = State.get();
-    State.set(MODE_NORMAL); // don't want MODE_REPLACE here
+    let old_state = STATE.get();
+    STATE.set(MODE_NORMAL); // don't want MODE_REPLACE here
     while is_open(replace_pop_if_nul()) {
         mb_replace_pop_ins();
         dec_cursor();
     }
-    State.set(old_state);
+    STATE.set(old_state);
 }
 
 /// Insert one whole multi-byte character popped off the stack.
@@ -217,7 +217,7 @@ pub(crate) fn mb_replace_pop_ins() {
 /// `limit_col >= 0` means "do not delete before this column", which matters
 /// with composing characters -- see [`del_char_after_col`].
 pub(crate) fn replace_do_bs(limit_col: c_int) {
-    let l_state = State.get();
+    let l_state = STATE.get();
     let cc = replace_pop_if_nul();
     if is_open(cc) {
         let mut start_vcol: ColNr = ColNr::ZERO;

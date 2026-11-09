@@ -410,7 +410,7 @@ impl Cells {
 
         // In Insert mode do not highlight a word the cursor is touching.
         if spell_hlf != HLF_COUNT
-            && State.get() & MODE_INSERT != 0
+            && STATE.get() & MODE_INSERT != 0
             && window.w_cursor.lnum == wlv.lnum
             && window.w_cursor.col >= ColNr::new(prev_col)
             && window.w_cursor.col < ColNr::new(self.word_end)

@@ -31,8 +31,8 @@ use crate::global_cell::GlobalCell;
 use crate::lua::executor::{api_new_luaref, nlua_ref_is_function};
 use crate::os::libc::{int64_t, size_t, uint64_t};
 use crate::types::{
-    ApiDict, ApiString, Array, BufferHandle, Callback, Error, Integer, Object,
-    kErrorTypeValidation, kObjectTypeString,
+    ApiDict, ApiString, Array, BufferHandle, Callback, ERROR_TYPE_VALIDATION, Error, Integer,
+    OBJECT_TYPE_STRING, Object,
 };
 
 // The carve of the transpiled module; see each child's docs.
