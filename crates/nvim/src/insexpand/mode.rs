@@ -19,7 +19,7 @@ use super::*;
 use crate::guard::Suppress;
 use crate::keycodes::SpecialKey;
 use crate::optionstr::OptStringRef;
-use crate::types::Key;
+use crate::types::{Key, KeyKind};
 use crate::winlayer::{Buf, Win};
 
 /// The `'s'` of C's `case 's': case CTRL_S:` in [`set_ctrl_x_mode`].  A
@@ -463,9 +463,9 @@ pub(crate) fn get_compl_len() -> usize {
 pub(crate) fn set_ctrl_x_mode(c: Key) -> bool {
     let mut retval = false;
     'chord: {
-        match c.special().ok_or(c) {
+        match c.kind() {
             // Scroll the window one line up or down.
-            Err(Key::CTRL_E | Key::CTRL_Y) => {
+            KeyKind::Char(Key::CTRL_E | Key::CTRL_Y) => {
                 CTRL_X_MODE.set(CTRL_X_SCROLL);
                 EDIT_SUBMODE.set(Some(gettext(if STATE.get() & REPLACE_FLAG == 0 {
                     c" (insert) Scroll (^E/^Y)"
@@ -477,21 +477,21 @@ pub(crate) fn set_ctrl_x_mode(c: Key) -> bool {
                 break 'chord;
             }
             // Complete whole lines.
-            Err(Key::CTRL_L) => {
+            KeyKind::Char(Key::CTRL_L) => {
                 CTRL_X_MODE.set(CTRL_X_WHOLE_LINE);
                 break 'chord;
             }
             // Complete file names.
-            Err(Key::CTRL_F) => {
+            KeyKind::Char(Key::CTRL_F) => {
                 CTRL_X_MODE.set(CTRL_X_FILES);
                 break 'chord;
             }
             // Complete words from a dictionary.
-            Err(Key::CTRL_K) => {
+            KeyKind::Char(Key::CTRL_K) => {
                 CTRL_X_MODE.set(CTRL_X_DICTIONARY);
                 break 'chord;
             }
-            Err(Key::CTRL_R) => {
+            KeyKind::Char(Key::CTRL_R) => {
                 // CTRL-R followed by '=' is an expression register, not
                 // register completion: leave the mode alone.
                 if !vpeekc().is('=') {
@@ -500,22 +500,22 @@ pub(crate) fn set_ctrl_x_mode(c: Key) -> bool {
                 break 'chord;
             }
             // Complete words from a thesaurus.
-            Err(Key::CTRL_T) => {
+            KeyKind::Char(Key::CTRL_T) => {
                 CTRL_X_MODE.set(CTRL_X_THESAURUS);
                 break 'chord;
             }
             // User defined completion.
-            Err(Key::CTRL_U) => {
+            KeyKind::Char(Key::CTRL_U) => {
                 CTRL_X_MODE.set(CTRL_X_FUNCTION);
                 break 'chord;
             }
             // Omni completion.
-            Err(Key::CTRL_O) => {
+            KeyKind::Char(Key::CTRL_O) => {
                 CTRL_X_MODE.set(CTRL_X_OMNI);
                 break 'chord;
             }
             // Complete spelling suggestions.
-            Err(LOWER_S | Key::CTRL_S) => {
+            KeyKind::Char(LOWER_S | Key::CTRL_S) => {
                 CTRL_X_MODE.set(CTRL_X_SPELL);
                 let no_emsg = Suppress::emsg(); // avoid E756 twice
                 spell_back_to_badword();
@@ -523,27 +523,27 @@ pub(crate) fn set_ctrl_x_mode(c: Key) -> bool {
                 break 'chord;
             }
             // Complete tag names.
-            Err(Key::CTRL_RSB) => {
+            KeyKind::Char(Key::CTRL_RSB) => {
                 CTRL_X_MODE.set(CTRL_X_TAGS);
                 break 'chord;
             }
             // Complete keywords from included files.
-            Ok(SpecialKey::STab) | Err(Key::CTRL_I) => {
+            KeyKind::Special(SpecialKey::STab) | KeyKind::Char(Key::CTRL_I) => {
                 CTRL_X_MODE.set(CTRL_X_PATH_PATTERNS);
                 break 'chord;
             }
             // Complete definitions from included files.
-            Err(Key::CTRL_D) => {
+            KeyKind::Char(Key::CTRL_D) => {
                 CTRL_X_MODE.set(CTRL_X_PATH_DEFINES);
                 break 'chord;
             }
             // Complete Vim commands.
-            Err(Key::CTRL_V | Key::CTRL_Q) => {
+            KeyKind::Char(Key::CTRL_V | Key::CTRL_Q) => {
                 CTRL_X_MODE.set(CTRL_X_CMDLINE);
                 break 'chord;
             }
             // Stop completion.
-            Err(Key::CTRL_Z) => {
+            KeyKind::Char(Key::CTRL_Z) => {
                 CTRL_X_MODE.set(CTRL_X_NORMAL);
                 EDIT_SUBMODE.set(None);
                 REDRAW_MODE.set(true);
@@ -556,7 +556,7 @@ pub(crate) fn set_ctrl_x_mode(c: Key) -> bool {
             // expansion when interrupting a different mode (^X^F^X^P or
             // ^P^X^X^P).  Nothing changes when interrupting mode 0 — the flag
             // does not change when going to ADDING mode.  -- Acevedo
-            Err(Key::CTRL_P | Key::CTRL_N) => {
+            KeyKind::Char(Key::CTRL_P | Key::CTRL_N) => {
                 if COMPL_CONT_STATUS.get() & CONT_INTRPT == 0 {
                     COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() | CONT_LOCAL);
                 } else if COMPL_CONT_MODE.get() != 0 {
@@ -657,8 +657,8 @@ pub(crate) fn ins_compl_key2count(c: Key) -> c_int {
 /// True when completing with `c` should insert the match, false when it only
 /// changes which match is selected.
 pub(crate) fn ins_compl_use_match(c: Key) -> bool {
-    match c.special().ok_or(c) {
-        Ok(
+    match c.kind() {
+        KeyKind::Special(
             SpecialKey::Up
             | SpecialKey::Down
             | SpecialKey::Pagedown
@@ -668,7 +668,7 @@ pub(crate) fn ins_compl_use_match(c: Key) -> bool {
             | SpecialKey::Kpageup
             | SpecialKey::SUp,
         ) => false,
-        Ok(SpecialKey::Event | SpecialKey::Command | SpecialKey::Lua) => {
+        KeyKind::Special(SpecialKey::Event | SpecialKey::Command | SpecialKey::Lua) => {
             let want = PUM_WANT.get();
             want.active && want.insert
         }

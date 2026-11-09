@@ -58,6 +58,7 @@ pub use self::ex_cmds::{
     ExArgt,
 };
 pub use self::key::Key;
+pub(crate) use self::key::KeyKind;
 pub use self::pos::{ColNr, LPos, LineNr, Pos};
 pub use self::time::Timestamp;
 pub use self::types::{Float, Handle, NS, OptInt, ProfTime, ScreenAttr, ScreenChar};

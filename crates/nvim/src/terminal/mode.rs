@@ -46,7 +46,7 @@ use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::getchar::state::{GOT_INT, MAPPED_CTRL_C, MOD_MASK};
 use crate::getchar::{map_execute_lua, merge_modifiers, paste_repeat};
 use crate::guard::Allow;
-use crate::keycodes::{CTRL_BSL, CTRL_C, CTRL_N, CTRL_O, SpecialKey};
+use crate::keycodes::SpecialKey;
 use crate::memory::XString;
 use crate::r#move::{set_topline, validate_cursor};
 use crate::options::OPT_CULOPT_FLAG_NUMBER;
@@ -477,23 +477,23 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> Step {
     // `merge_modifiers` folds a pending modifier into the key so that e.g.
     // `<C-\>` is one code to compare against.
     let mut mods = MOD_MASK.get();
-    let mod_key = merge_modifiers(key, &mut mods).code();
+    let mod_key = merge_modifiers(key, &mut mods);
 
     // Keys the editor handles itself. Everything but CTRL-N/CTRL-O is dealt
     // with here and done; those two continue below because they are what a
     // preceding CTRL-\ was waiting for.
     if is_mouse_key(mod_key) {
-        if send_mouse_event(s.term, key.code()) {
+        if send_mouse_event(s.term, key) {
             return Step::Leave;
         }
         return Step::Go;
     }
-    match SpecialKey::try_from(mod_key) {
-        Ok(SpecialKey::PasteStart) => {
+    match mod_key.special() {
+        Some(SpecialKey::PasteStart) => {
             paste_repeat(1);
             return Step::Go;
         }
-        Ok(SpecialKey::Event) => {
+        Some(SpecialKey::Event) => {
             // An event handler can close the terminal.
             s.term.refcount.retain();
             state_handle_k_event();
@@ -503,23 +503,23 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> Step {
             }
             return Step::Go;
         }
-        Ok(SpecialKey::Command) => {
+        Some(SpecialKey::Command) => {
             // Runs the command the key carries, which is read back out of
             // the typeahead rather than passed here.
             let _ = do_cmdline(None, Some(&mut LineSource::CmdKey), DoCmdOpts::NONE);
             return Step::Go;
         }
-        Ok(SpecialKey::Lua) => {
+        Some(SpecialKey::Lua) => {
             map_execute_lua(false, false);
             return Step::Go;
         }
-        Ok(SpecialKey::Ignore | SpecialKey::Nop) => return Step::Go,
+        Some(SpecialKey::Ignore | SpecialKey::Nop) => return Step::Go,
         _ => {}
     }
     // CTRL-\ CTRL-N leaves for normal mode; CTRL-\ CTRL-O leaves for one
     // command and comes back.
-    if s.got_bsl && matches!(mod_key, CTRL_N | CTRL_O) {
-        if mod_key == CTRL_N {
+    if s.got_bsl && matches!(mod_key, Key::CTRL_N | Key::CTRL_O) {
+        if mod_key == Key::CTRL_N {
             return Step::Leave;
         }
         s.got_bsl_o = true;
@@ -529,10 +529,10 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> Step {
 
     // CTRL-C in terminal mode belongs to the child, so the interrupt the
     // editor recorded is dropped.
-    if mod_key == CTRL_C {
+    if mod_key == Key::CTRL_C {
         GOT_INT.set(false);
     }
-    if mod_key == CTRL_BSL && !s.got_bsl {
+    if mod_key == Key::CTRL_BSL && !s.got_bsl {
         s.got_bsl = true;
     } else if s.term.suspended {
         // Any key wakes a suspended child rather than being sent to it.
@@ -548,7 +548,7 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> Step {
             return Step::Leave;
         }
         s.got_bsl = false;
-        terminal_send_key(s.term, key.code());
+        terminal_send_key(s.term, key);
     }
     Step::Go
 }

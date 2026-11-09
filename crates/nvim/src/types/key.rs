@@ -11,6 +11,15 @@
 //! tables cost what they did; what it changes is that a key no longer
 //! passes for a count, a column or a byte. [`Key::code`] is the integer, for
 //! the typeahead's escape spelling and for the callers that still carry one.
+//!
+//! A reader that dispatches on a key matches [`Key::kind`], the enum of the
+//! three halves the integer packs: a character ([`KeyKind::Char`], matched
+//! against `Key` constants such as [`Key::CTRL_W`]), a named special key
+//! ([`KeyKind::Special`]) or a [`Pseudo`] key -- a code that travels where a
+//! key does but that no key types. The enum is the *view*, not the storage: a
+//! stored enum would need a tag beside a payload that already uses every bit
+//! a character can (text decodes to codepoints a `char` cannot hold), and the
+//! typeahead and the key tables would double. The newtype stays four bytes.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -33,6 +42,67 @@ use crate::keycodes::SpecialKey;
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub struct Key(c_int);
 
+const _: () = assert!(
+    size_of::<Key>() == 4,
+    "the typeahead stores keys at four bytes"
+);
+const _: () = assert!(size_of::<KeyKind>() <= 8, "the view stays in two registers");
+
+/// A code that travels where a key does but that no key types: the operator
+/// and indent machinery hand these to a reader of keys to say something a
+/// key cannot.
+///
+/// They are negative, below every [`SpecialKey`] (whose codes are at least
+/// 256 away from zero), so no typed key or character is ever one -- unlike
+/// upstream's `KEY_OPEN_FORW`, `KEY_OPEN_BACK` and `KEY_COMPLETE`, which were
+/// U+0101..U+0103 and so were also typed by `ā`, `Ă` and `ă`.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[repr(i32)]
+pub(crate) enum Pseudo {
+    /// `r CTRL-V <CR>` over a selection: the literal carriage return, not a
+    /// line break. Upstream's `REPLACE_CR_NCHAR`.
+    ReplaceCr = -1,
+    /// `r CTRL-V <NL>` over a selection: the literal line feed. Upstream's
+    /// `REPLACE_NL_NCHAR`.
+    ReplaceNl = -2,
+    /// The `o` command opened a line: the 'cinkeys' `o` item.
+    OpenForward = -3,
+    /// The `O` command opened a line: the 'cinkeys' `O` item.
+    OpenBackward = -4,
+    /// A completion just ended: the 'cinkeys' `=word` items.
+    Completed = -5,
+}
+
+impl Pseudo {
+    /// The pseudo-key whose code is `code`, if it is one.
+    const fn from_code(code: c_int) -> Option<Pseudo> {
+        Some(match code {
+            -1 => Pseudo::ReplaceCr,
+            -2 => Pseudo::ReplaceNl,
+            -3 => Pseudo::OpenForward,
+            -4 => Pseudo::OpenBackward,
+            -5 => Pseudo::Completed,
+            _ => return None,
+        })
+    }
+}
+
+/// What a [`Key`] is, for a `match` over all of it: [`Key::kind`].
+///
+/// A character keeps its `Key`, so an arm names it by the constants --
+/// `KeyKind::Char(Key::CTRL_J | DOWN)` beside `KeyKind::Special(SpecialKey::Down)`.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) enum KeyKind {
+    /// A character: a codepoint, `NUL` and the control characters included.
+    Char(Key),
+    /// A key the `<>` notation names.
+    Special(SpecialKey),
+    /// A code no key types.
+    Pseudo(Pseudo),
+    /// A negative code nothing names: a termcap entry with no name here.
+    Unnamed(Key),
+}
+
 impl Key {
     /// No key: what a read answers when there is nothing to read.
     pub const NUL: Key = Key(0);
@@ -50,6 +120,17 @@ impl Key {
     pub const DEL: Key = Key(0x7f);
     /// `<Space>`.
     pub const SPACE: Key = Key(0x20);
+
+    /// [`Pseudo::ReplaceCr`].
+    pub const REPLACE_CR: Key = Key::pseudo(Pseudo::ReplaceCr);
+    /// [`Pseudo::ReplaceNl`].
+    pub const REPLACE_NL: Key = Key::pseudo(Pseudo::ReplaceNl);
+    /// [`Pseudo::OpenForward`].
+    pub const OPEN_FORWARD: Key = Key::pseudo(Pseudo::OpenForward);
+    /// [`Pseudo::OpenBackward`].
+    pub const OPEN_BACKWARD: Key = Key::pseudo(Pseudo::OpenBackward);
+    /// [`Pseudo::Completed`].
+    pub const COMPLETED: Key = Key::pseudo(Pseudo::Completed);
 
     // The control characters by the letter that types them, upstream's
     // `Ctrl_*`: named so that a `match` can test for them.
@@ -144,6 +225,26 @@ impl Key {
         Key((letter & 0x1f) as c_int)
     }
 
+    /// The code a pseudo-key travels as.
+    #[inline]
+    pub(crate) const fn pseudo(key: Pseudo) -> Key {
+        Key(key as c_int)
+    }
+
+    /// What this key is: a character, a named key or a pseudo-key.
+    #[inline]
+    pub(crate) fn kind(self) -> KeyKind {
+        if self.0 >= 0 {
+            KeyKind::Char(self)
+        } else if let Some(key) = self.special() {
+            KeyKind::Special(key)
+        } else if let Some(key) = Pseudo::from_code(self.0) {
+            KeyKind::Pseudo(key)
+        } else {
+            KeyKind::Unnamed(self)
+        }
+    }
+
     /// The key a special key is.
     #[inline]
     pub const fn from_special(key: SpecialKey) -> Key {
@@ -212,7 +313,7 @@ impl Key {
     /// The named special key, when this is one.
     #[inline]
     pub fn special(self) -> Option<SpecialKey> {
-        SpecialKey::try_from(self.0).ok()
+        SpecialKey::from_code(self.0)
     }
 
     /// How many bytes the character takes in UTF-8 -- one for a special
@@ -227,6 +328,13 @@ impl From<SpecialKey> for Key {
     #[inline]
     fn from(key: SpecialKey) -> Key {
         Key::from_special(key)
+    }
+}
+
+impl From<Pseudo> for Key {
+    #[inline]
+    fn from(key: Pseudo) -> Key {
+        Key::pseudo(key)
     }
 }
 
@@ -290,6 +398,41 @@ mod tests {
         assert_eq!(Key::CTRL_I, Key::TAB);
         assert_eq!(Key::CTRL_M, Key::CAR);
         assert_eq!(Key::SPACE, Key::ascii(b' '));
+    }
+
+    #[test]
+    fn kind_names_each_half_and_no_pseudo_key_is_typed() {
+        use super::{KeyKind, Pseudo};
+        assert_eq!(Key::ascii(b'w').kind(), KeyKind::Char(Key::ascii(b'w')));
+        assert_eq!(Key::NUL.kind(), KeyKind::Char(Key::NUL));
+        assert_eq!(
+            Key::from(SpecialKey::Down).kind(),
+            KeyKind::Special(SpecialKey::Down)
+        );
+        for p in [
+            Pseudo::ReplaceCr,
+            Pseudo::ReplaceNl,
+            Pseudo::OpenForward,
+            Pseudo::OpenBackward,
+            Pseudo::Completed,
+        ] {
+            let key = Key::from(p);
+            assert_eq!(key.kind(), KeyKind::Pseudo(p));
+            assert!(key.special().is_none(), "{p:?} is a named key");
+            assert!(
+                SpecialKey::ALL.iter().all(|k| k.code().abs() > 255),
+                "{p:?}"
+            );
+        }
+        assert_eq!(
+            Key::from_code(-300).kind(),
+            KeyKind::Unnamed(Key::from_code(-300))
+        );
+        // Upstream's `KEY_OPEN_FORW` was U+0101: a character, here only that.
+        assert_eq!(
+            Key::from_char('\u{101}').kind(),
+            KeyKind::Char(Key::from_char('\u{101}'))
+        );
     }
 
     #[test]

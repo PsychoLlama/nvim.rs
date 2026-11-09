@@ -21,32 +21,29 @@
 )]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::event_queue::process_events_in;
 use crate::guard::Keys;
-use crate::keycodes::{
-    CTRL_B, CTRL_C, CTRL_F, CTRL_H, CTRL_J, CTRL_LSB, CTRL_M, NotAKey, SpecialKey,
-};
+use crate::keycodes::SpecialKey;
 use crate::log::logmsg;
-use crate::strings::has_char;
-use crate::types::Key;
+use crate::types::{Key, KeyKind};
 use crate::winlayer::Win;
 use core::ffi::c_int;
 
-/// The pager's and hit-enter prompt's own keys, as `c_int` so they can share
-/// a `match` with the `K_*` codes -- which are negative, so a `u8` match
-/// would alias them onto the ASCII range.
-const KEY_SPACE: c_int = Key::ascii(b' ').code();
-const KEY_COLON: c_int = Key::ascii(b':').code();
-const KEY_UPPER_G: c_int = Key::ascii(b'G').code();
-const KEY_B: c_int = Key::ascii(b'b').code();
-const KEY_D: c_int = Key::ascii(b'd').code();
-const KEY_F: c_int = Key::ascii(b'f').code();
-const KEY_G: c_int = Key::ascii(b'g').code();
-const KEY_J: c_int = Key::ascii(b'j').code();
-const KEY_K: c_int = Key::ascii(b'k').code();
-const KEY_Q: c_int = Key::ascii(b'q').code();
-const KEY_U: c_int = Key::ascii(b'u').code();
+/// The pager's and hit-enter prompt's own letters, matched as keys beside the
+/// named ones.
+const KEY_SPACE: Key = Key::ascii(b' ');
+const KEY_COLON: Key = Key::ascii(b':');
+const KEY_QUESTION: Key = Key::ascii(b'?');
+const KEY_SLASH: Key = Key::ascii(b'/');
+const KEY_UPPER_G: Key = Key::ascii(b'G');
+const KEY_B: Key = Key::ascii(b'b');
+const KEY_D: Key = Key::ascii(b'd');
+const KEY_F: Key = Key::ascii(b'f');
+const KEY_G: Key = Key::ascii(b'g');
+const KEY_J: Key = Key::ascii(b'j');
+const KEY_K: Key = Key::ascii(b'k');
+const KEY_Q: Key = Key::ascii(b'q');
+const KEY_U: Key = Key::ascii(b'u');
 
 /// Call this after prompting the user: avoids a hit-return message and a
 /// delay.
@@ -98,19 +95,19 @@ pub fn wait_return(redraw: c_int) {
 
     REDIR_OFF.set(true); // don't redirect this message
     let old_state = STATE.get();
-    let mut c: c_int;
+    let mut c: Key;
     if QUIT_MORE.get() {
-        c = CTRL_M; // just pretend CR was hit
+        c = Key::CAR; // just pretend CR was hit
         QUIT_MORE.set(false);
         GOT_INT.set(false);
     } else if EXMODE_ACTIVE.get() {
         msg_str(c" "); // make sure the cursor is on the right line
-        c = CTRL_M; // no need for a return in ex mode
+        c = Key::CAR; // no need for a return in ex mode
         GOT_INT.set(false);
     } else if !stuff_empty() {
         // With stuffed characters the next one would dismiss the prompt
         // immediately and have to be put back, so don't show it at all.
-        c = CTRL_M;
+        c = Key::CAR;
     } else {
         STATE.set(MODE_HITRETURN);
         setmouse();
@@ -146,7 +143,7 @@ pub fn wait_return(redraw: c_int) {
                 let save_reg_recording = REG_RECORDING.get();
                 let save_scriptout = SCRIPTOUT.take();
                 REG_RECORDING.set(0);
-                c = safe_vgetc().code();
+                c = safe_vgetc();
                 if had_got_int && GLOBAL_BUSY.get() == 0 {
                     GOT_INT.set(false);
                 }
@@ -159,53 +156,55 @@ pub fn wait_return(redraw: c_int) {
                     // scroll-down commands when messages fill the screen,
                     // so one 'j' too many does not make them disappear.
                     if matches!(
-                        SpecialKey::try_from(c),
-                        Ok(SpecialKey::Up | SpecialKey::Pageup)
-                            | Err(NotAKey(KEY_B | CTRL_B | KEY_K | KEY_U | KEY_G))
+                        c.kind(),
+                        KeyKind::Special(SpecialKey::Up | SpecialKey::Pageup)
+                            | KeyKind::Char(KEY_B | Key::CTRL_B | KEY_K | KEY_U | KEY_G)
                     ) {
                         if MSG_SCROLLED.get() > ROWS.get() {
                             // scroll back to show older messages
                             do_more_prompt(c);
                         } else {
                             MSG_DIDOUT.set(false);
-                            c = SpecialKey::Ignore.code();
+                            c = Key::from(SpecialKey::Ignore);
                             MSG_COL.set(0);
                         }
                         if QUIT_MORE.get() {
-                            c = CTRL_M; // just pretend CR was hit
+                            c = Key::CAR; // just pretend CR was hit
                             QUIT_MORE.set(false);
                             GOT_INT.set(false);
-                        } else if c != SpecialKey::Ignore.code() {
-                            c = SpecialKey::Ignore.code();
+                        } else if c != SpecialKey::Ignore {
+                            c = Key::from(SpecialKey::Ignore);
                             hit_return_msg(false);
                         }
                     } else if MSG_SCROLLED.get() > ROWS.get() - 2
                         && matches!(
-                            SpecialKey::try_from(c),
-                            Ok(SpecialKey::Down | SpecialKey::Pagedown)
-                                | Err(NotAKey(KEY_J | KEY_D | KEY_F | CTRL_F))
+                            c.kind(),
+                            KeyKind::Special(SpecialKey::Down | SpecialKey::Pagedown)
+                                | KeyKind::Char(KEY_J | KEY_D | KEY_F | Key::CTRL_F)
                         )
                     {
-                        c = SpecialKey::Ignore.code();
+                        c = Key::from(SpecialKey::Ignore);
                     }
                 }
 
                 let ignored = matches!(
-                    SpecialKey::try_from(c),
-                    Ok(SpecialKey::Ignore
-                        | SpecialKey::Leftdrag
-                        | SpecialKey::Leftrelease
-                        | SpecialKey::Middledrag
-                        | SpecialKey::Middlerelease
-                        | SpecialKey::Rightdrag
-                        | SpecialKey::Rightrelease
-                        | SpecialKey::Mouseleft
-                        | SpecialKey::Mouseright
-                        | SpecialKey::Mousedown
-                        | SpecialKey::Mouseup
-                        | SpecialKey::Mousemove)
+                    c.kind(),
+                    KeyKind::Special(
+                        SpecialKey::Ignore
+                            | SpecialKey::Leftdrag
+                            | SpecialKey::Leftrelease
+                            | SpecialKey::Middledrag
+                            | SpecialKey::Middlerelease
+                            | SpecialKey::Rightdrag
+                            | SpecialKey::Rightrelease
+                            | SpecialKey::Mouseleft
+                            | SpecialKey::Mouseright
+                            | SpecialKey::Mousedown
+                            | SpecialKey::Mouseup
+                            | SpecialKey::Mousemove
+                    )
                 );
-                if !((had_got_int && c == CTRL_C) || ignored) {
+                if !((had_got_int && c == Key::CTRL_C) || ignored) {
                     break;
                 }
             }
@@ -213,22 +212,24 @@ pub fn wait_return(redraw: c_int) {
 
             // Avoid that the mouse-up event causes Visual mode to start.
             if matches!(
-                SpecialKey::try_from(c),
-                Ok(SpecialKey::Leftmouse
-                    | SpecialKey::Middlemouse
-                    | SpecialKey::Rightmouse
-                    | SpecialKey::X1mouse
-                    | SpecialKey::X2mouse)
+                c.kind(),
+                KeyKind::Special(
+                    SpecialKey::Leftmouse
+                        | SpecialKey::Middlemouse
+                        | SpecialKey::Rightmouse
+                        | SpecialKey::X1mouse
+                        | SpecialKey::X2mouse
+                )
             ) {
                 jump_to_mouse(MOUSE_SETPOS as c_int, None, 0);
-            } else if !has_char(c"\r\n ", c) && c != CTRL_C && c != KEY_Q {
+            } else if !matches!(c, Key::CAR | Key::NL | KEY_SPACE | Key::CTRL_C | KEY_Q) {
                 // Put the character back in the typeahead buffer. Not the
                 // stuff buffer, because lmaps wouldn't work.
                 ins_char_typebuf(VGETC_CHAR.get(), VGETC_MOD_MASK.get(), true);
                 DO_REDRAW.set(true); // need a redraw even though there is typeahead
             }
         } else {
-            c = CTRL_M;
+            c = Key::CAR;
             // Wait to allow the user to verify the output.
             do_sleep(int64_t::from(MSG_WAIT.get()), true);
         }
@@ -238,7 +239,7 @@ pub fn wait_return(redraw: c_int) {
     // If the user hits ':', '?' or '/' we get a command line from the next
     // line. It draws over the prompt, so move the cmdline row down to
     // where the prompt was and skip the redraw this tail would queue.
-    if c == KEY_COLON || c == c_int::from(b'?') || c == c_int::from(b'/') {
+    if c == KEY_COLON || c == KEY_QUESTION || c == KEY_SLASH {
         if !EXMODE_ACTIVE.get() {
             CMDLINE_ROW.set(MSG_ROW.get());
         }
@@ -304,7 +305,7 @@ pub(crate) fn hit_return_msg(newline_sb: bool) {
 /// `typed_char` is the key that got us here, or NUL to prompt for one.
 /// Answers true when the user answered a `:confirm` dialog rather than
 /// scrolling.
-pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
+pub(crate) fn do_more_prompt(typed_char: Key) -> bool {
     let mut used_typed_char = typed_char;
     let old_state = STATE.get();
     let mut retval = false;
@@ -317,7 +318,9 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
     // In that case don't show another prompt. Also don't take over a
     // hit-return prompt nobody asked us to.
     let no_need_more = HEADLESS_MODE.get() && !EMBEDDED_MODE.get() && ui_active() == 0;
-    if no_need_more || MORE_PROMPT_BUSY.get() || (STATE.get() == MODE_HITRETURN && typed_char == 0)
+    if no_need_more
+        || MORE_PROMPT_BUSY.get()
+        || (STATE.get() == MODE_HITRETURN && typed_char.is_nul())
     {
         return false;
     }
@@ -337,14 +340,14 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
 
     STATE.set(MODE_ASKMORE);
     setmouse();
-    if typed_char == NUL {
+    if typed_char.is_nul() {
         msg_moremsg(false);
     }
 
     'more: loop {
-        let c = if used_typed_char != NUL {
+        let c = if !used_typed_char.is_nul() {
             let c = used_typed_char;
-            used_typed_char = NUL;
+            used_typed_char = Key::NUL;
             c
         } else {
             get_keystroke(Some(&RESIZE_EVENTS))
@@ -352,42 +355,44 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
 
         let mut toscroll = 0;
         'scroll: {
-            match SpecialKey::try_from(c) {
-                Ok(SpecialKey::Bs | SpecialKey::Up) | Err(NotAKey(CTRL_H | KEY_K)) => {
+            match c.kind() {
+                KeyKind::Special(SpecialKey::Bs | SpecialKey::Up)
+                | KeyKind::Char(Key::CTRL_H | KEY_K) => {
                     toscroll = -1;
                     break 'scroll;
                 }
-                Ok(SpecialKey::Down) | Err(NotAKey(CTRL_M | CTRL_J | KEY_J)) => {
+                KeyKind::Special(SpecialKey::Down)
+                | KeyKind::Char(Key::CTRL_M | Key::CTRL_J | KEY_J) => {
                     toscroll = 1;
                     break 'scroll;
                 }
-                Err(NotAKey(KEY_U)) => {
+                KeyKind::Char(KEY_U) => {
                     toscroll = -(ROWS.get() / 2);
                     break 'scroll;
                 }
-                Err(NotAKey(KEY_D)) => {
+                KeyKind::Char(KEY_D) => {
                     toscroll = ROWS.get() / 2;
                     break 'scroll;
                 }
-                Ok(SpecialKey::Pageup) | Err(NotAKey(KEY_B | CTRL_B)) => {
+                KeyKind::Special(SpecialKey::Pageup) | KeyKind::Char(KEY_B | Key::CTRL_B) => {
                     toscroll = -(ROWS.get() - 1);
                     break 'scroll;
                 }
-                Ok(SpecialKey::Pagedown | SpecialKey::Leftmouse)
-                | Err(NotAKey(KEY_SPACE | KEY_F | CTRL_F)) => {
+                KeyKind::Special(SpecialKey::Pagedown | SpecialKey::Leftmouse)
+                | KeyKind::Char(KEY_SPACE | KEY_F | Key::CTRL_F) => {
                     toscroll = ROWS.get() - 1;
                     break 'scroll;
                 }
-                Err(NotAKey(KEY_G)) => {
+                KeyKind::Char(KEY_G) => {
                     toscroll = -999999;
                     break 'scroll;
                 }
-                Err(NotAKey(KEY_UPPER_G)) => {
+                KeyKind::Char(KEY_UPPER_G) => {
                     toscroll = 999999;
                     LINES_LEFT.set(999999);
                     break 'scroll;
                 }
-                Err(NotAKey(KEY_COLON)) => {
+                KeyKind::Char(KEY_COLON) => {
                     // Start an Ex command on the next line.
                     if CONFIRM_MSG_USED.get() == 0 {
                         typeahead_noflush(b':');
@@ -397,10 +402,10 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
                     }
                     // falls through to the quit tail
                 }
-                Err(NotAKey(KEY_Q | CTRL_C | CTRL_LSB)) => {
+                KeyKind::Char(KEY_Q | Key::CTRL_C | Key::ESC) => {
                     // falls through to the quit tail
                 }
-                Ok(SpecialKey::Event) => {
+                KeyKind::Special(SpecialKey::Event) => {
                     // Process the event on the main loop's queue.
                     process_events_in(&RESIZE_EVENTS);
                     to_redraw = true;

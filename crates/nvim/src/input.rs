@@ -92,7 +92,7 @@ fn is_swallowed_key(first: u8, key: c_int) -> bool {
 /// back as `ESC` on unix.
 ///
 /// `events` names the queue to drain while waiting, if any.
-pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue>>>) -> c_int {
+pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue>>>) -> Key {
     let events = events.map_or(InputEvents::None, InputEvents::Queue);
     let save_mapped_ctrl_c = MAPPED_CTRL_C.get();
     MOD_MASK.set(ModMask::NONE);
@@ -173,7 +173,7 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
     // SAFETY: `modifiers` is a live local the callee reads and writes.
     let key = merge_modifiers(Key::from_code(key), &mut modifiers);
     MOD_MASK.set(modifiers);
-    key.code()
+    key
 }
 
 /// Ask the user for input through a cmdline prompt.

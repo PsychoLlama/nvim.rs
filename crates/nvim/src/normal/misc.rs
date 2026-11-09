@@ -16,7 +16,6 @@ use crate::normal::defs::MotionType;
 use crate::types::{Handle, Key, LineNr};
 use crate::winlayer::{Buf, Win, windows};
 
-use crate::ascii::NUL;
 use crate::buffer::{buflist_getfile, fileinfo};
 use crate::cursor::check_cursor_col;
 use crate::drawscreen::state::{CLEAR_CMDLINE, MODE_DISPLAYED, REDRAW_MODE};
@@ -199,7 +198,7 @@ pub(crate) fn nv_window(cmd_arg: &mut CmdArg) {
         cmd_arg.nchar = Key::NUL;
         nv_colon(cmd_arg);
     } else if !check_clear_op(cmd_arg.op()) {
-        do_window(cmd_arg.nchar.code(), cmd_arg.count0, NUL);
+        do_window(cmd_arg.nchar, cmd_arg.count0, Key::NUL);
     }
 }
 

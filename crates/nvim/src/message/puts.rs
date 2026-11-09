@@ -16,13 +16,12 @@
 )]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::ex_docmd::cmdmod_filters_out;
 use crate::grid::default_grid_ref;
 use crate::mbyte::{cells_at, char_at, char_len, cluster_len, string_cells};
 use crate::os::cshim::{write_c_stderr, write_c_stdout};
-use crate::types::Callback;
+use crate::types::{Callback, Key};
 use core::ffi::{c_int, c_uint};
 use std::borrow::Cow;
 
@@ -309,7 +308,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
                     && !MSG_NO_MORE.get()
                     && !EXMODE_ACTIVE.get()
                 {
-                    if do_more_prompt(NUL) {
+                    if do_more_prompt(Key::NUL) {
                         // The pager jumped ahead to the dialog buttons, so
                         // the rest of the caller's text is not shown and
                         // nothing of it is left to store.

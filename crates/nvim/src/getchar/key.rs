@@ -295,11 +295,7 @@ fn modified_key(shifted: SpecialKey, control: SpecialKey, plain: SpecialKey) -> 
 /// editor; it may block waiting for input.
 pub fn safe_vgetc() -> Key {
     let c = vgetc();
-    if c.is_nul() {
-        Key::from_code(get_keystroke(None))
-    } else {
-        c
-    }
+    if c.is_nul() { get_keystroke(None) } else { c }
 }
 
 /// Like [`safe_vgetc`], but loops past `K_IGNORE` and scrollbar events.

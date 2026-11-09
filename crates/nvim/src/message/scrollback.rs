@@ -20,7 +20,7 @@
 )]
 
 use super::*;
-use crate::types::CmdLine;
+use crate::types::{CmdLine, Key};
 use core::ffi::{c_int, c_uint};
 use std::collections::VecDeque;
 
@@ -198,7 +198,7 @@ pub fn show_sb_text() {
     if first_of_last.and_then(sb_prev).is_none() {
         vim_beep(OPT_BO_FLAG_MESS as c_uint);
     } else {
-        do_more_prompt(c_int::from(b'G'));
+        do_more_prompt(Key::ascii(b'G'));
         wait_return(0);
     }
 }

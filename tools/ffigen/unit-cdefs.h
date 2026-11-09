@@ -247,6 +247,7 @@ typedef Partial *PartialRef;
 typedef struct proc Proc;
 typedef unsigned int ProcType;
 typedef uint64_t ProfTime;
+typedef int Pseudo;
 typedef unsigned int PutFlags;
 typedef queue QUEUE;
 typedef struct QfId QfId;

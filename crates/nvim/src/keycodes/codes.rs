@@ -225,7 +225,7 @@ pub const KE_WILD: KeyExtra = 108;
 /// two-character termcap name -- so the enum *is* the definition and not a
 /// second copy of it. They are all negative, which is what
 /// [`Key::is_special`] tests and what lets a key and a character share one `c_int`: `vgetc` and
-/// the typeahead carry either, and [`SpecialKey::try_from`] is the seam between
+/// the typeahead carry either, and [`SpecialKey::from_code`] is the seam between
 /// them. Raw bytes stay bytes; only the *named* codes are in here.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(i32)]
@@ -426,7 +426,7 @@ impl SpecialKey {
     /// Every key, in *code* order, which is why the list reads as though it
     /// were shuffled: the codes run from `Up`'s termcap name down to the
     /// highest `KE_*` byte, and nothing else about the order means anything.
-    /// It is the table [`SpecialKey::try_from`] binary searches, and the `const`
+    /// It is the table [`SpecialKey::from_code`] binary searches, and the `const`
     /// block below fails the build if it ever stops being sorted.
     pub const ALL: [SpecialKey; 185] = [
         SpecialKey::Up,
@@ -636,23 +636,14 @@ const _: () = {
     }
 };
 
-/// The number is not one of the named keys -- most often because it is a
-/// character, which shares the space.
-///
-/// It carries the number so that a dispatch over both halves can name a
-/// character in the same `match`: `Err(NotAKey(CTRL_B))` is the arm for a
-/// literal CTRL-B beside `Ok(SpecialKey::Home)` for the key.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct NotAKey(pub c_int);
-
-impl TryFrom<c_int> for SpecialKey {
-    type Error = NotAKey;
-
-    fn try_from(code: c_int) -> Result<SpecialKey, NotAKey> {
-        match SpecialKey::ALL.binary_search_by_key(&code, |key| key.code()) {
-            Ok(i) => Ok(SpecialKey::ALL[i]),
-            Err(_) => Err(NotAKey(code)),
-        }
+impl SpecialKey {
+    /// The named key whose code is `code`, if any: most numbers are
+    /// characters, which share the space.
+    pub fn from_code(code: c_int) -> Option<SpecialKey> {
+        SpecialKey::ALL
+            .binary_search_by_key(&code, |key| key.code())
+            .ok()
+            .map(|i| SpecialKey::ALL[i])
     }
 }
 

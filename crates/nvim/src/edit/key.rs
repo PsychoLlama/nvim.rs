@@ -32,7 +32,7 @@ use crate::keycodes::ModMask;
 use crate::keycodes::SpecialKey;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::state::Step;
-use crate::types::Key;
+use crate::types::{Key, KeyKind};
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -64,18 +64,18 @@ enum Next {
 pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
     // TODO(tarruda, upstream): this could look better with a lookup
     // table, the way Normal mode's `NV_CMD_TABLE[]` does it.
-    let mut next = match s.c.special().ok_or(s.c) {
+    let mut next = match s.c.kind() {
         // End input mode.
-        Err(Key::ESC) => {
+        KeyKind::Char(Key::ESC) => {
             if check_abbr(Key::ESC, true) {
                 Next::Continue
             } else {
                 key_end_insert(s)
             }
         }
-        Err(Key::CTRL_C) => key_end_insert(s),
+        KeyKind::Char(Key::CTRL_C) => key_end_insert(s),
 
-        Err(Key::CTRL_O) => {
+        KeyKind::Char(Key::CTRL_O) => {
             // CTRL-X CTRL-O completes with 'omnifunc'.
             if ctrl_x_mode_omni() {
                 insert_do_complete(s);
@@ -96,22 +96,24 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
         }
 
         // Toggle insert/replace mode.
-        Ok(SpecialKey::Ins | SpecialKey::Kins) => {
+        KeyKind::Special(SpecialKey::Ins | SpecialKey::Kins) => {
             ins_insert(s.replace_state);
             Next::Continue
         }
 
         // Help key works like CTRL-O.
-        Ok(SpecialKey::Help | SpecialKey::F1 | SpecialKey::Xf1) => {
+        KeyKind::Special(SpecialKey::Help | SpecialKey::F1 | SpecialKey::Xf1) => {
             stuff_readbuf_char(Key::from(SpecialKey::Help));
             Next::Leave
         }
 
         // CTRL-@ arrives as a CTRL-modified space on some terminals.
-        Err(Key::SPACE) if MOD_MASK.get() != ModMask::CTRL => Next::Normal,
-        Ok(SpecialKey::Zero) | Err(Key::SPACE | Key::NUL | Key::CTRL_A) => key_stuff_last_insert(s),
+        KeyKind::Char(Key::SPACE) if MOD_MASK.get() != ModMask::CTRL => Next::Normal,
+        KeyKind::Special(SpecialKey::Zero) | KeyKind::Char(Key::SPACE | Key::NUL | Key::CTRL_A) => {
+            key_stuff_last_insert(s)
+        }
 
-        Err(Key::CTRL_R) => {
+        KeyKind::Char(Key::CTRL_R) => {
             // CTRL-X CTRL-R completes with the registers.
             if ctrl_x_mode_register() && !ins_compl_active() {
                 insert_do_complete(s);
@@ -122,16 +124,16 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             }
             Next::Continue
         }
-        Err(Key::CTRL_G) => {
+        KeyKind::Char(Key::CTRL_G) => {
             ins_ctrl_g();
             Next::Continue
         }
-        Err(Key::CTRL_HAT) => {
+        KeyKind::Char(Key::CTRL_HAT) => {
             ins_ctrl_hat();
             Next::Continue
         }
         // CTRL-_ toggles 'revins', but only with 'allowrevins'.
-        Err(Key::CTRL_UNDERSCORE) => {
+        KeyKind::Char(Key::CTRL_UNDERSCORE) => {
             if !p_ari() {
                 Next::Normal
             } else {
@@ -140,7 +142,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             }
         }
 
-        Err(Key::CTRL_D) => {
+        KeyKind::Char(Key::CTRL_D) => {
             // CTRL-X CTRL-D completes with the defined identifiers.
             if ctrl_x_mode_path_defines() {
                 insert_do_complete(s);
@@ -149,18 +151,18 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
                 key_shift(s)
             }
         }
-        Err(Key::CTRL_T) => key_shift(s),
+        KeyKind::Char(Key::CTRL_T) => key_shift(s),
 
-        Ok(SpecialKey::Del | SpecialKey::Kdel) => {
+        KeyKind::Special(SpecialKey::Del | SpecialKey::Kdel) => {
             ins_del();
             autoformat(true);
             Next::Continue
         }
-        Ok(SpecialKey::Bs) | Err(Key::CTRL_H) => {
+        KeyKind::Special(SpecialKey::Bs) | KeyKind::Char(Key::CTRL_H) => {
             do_backspace(s, Backspace::Char);
             Next::Continue
         }
-        Err(Key::CTRL_W) => {
+        KeyKind::Char(Key::CTRL_W) => {
             // In a prompt buffer plain CTRL-W is the window prefix, so
             // Shift-CTRL-W is what deletes a word.
             if in_prompt_buf() && !MOD_MASK.get().has(ModMask::SHIFT) {
@@ -173,7 +175,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             do_backspace(s, Backspace::Word);
             Next::Continue
         }
-        Err(Key::CTRL_U) => {
+        KeyKind::Char(Key::CTRL_U) => {
             // CTRL-X CTRL-U completes with 'completefunc'.
             if ctrl_x_mode_function() {
                 insert_do_complete(s);
@@ -191,7 +193,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             Next::Continue
         }
 
-        Ok(
+        KeyKind::Special(
             SpecialKey::Leftmouse
             | SpecialKey::LeftmouseNm
             | SpecialKey::Leftdrag
@@ -214,31 +216,31 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             ins_mouse(s.c);
             Next::Continue
         }
-        Ok(SpecialKey::Mousedown) => {
+        KeyKind::Special(SpecialKey::Mousedown) => {
             ins_mousescroll(MSCR_DOWN);
             Next::Continue
         }
-        Ok(SpecialKey::Mouseup) => {
+        KeyKind::Special(SpecialKey::Mouseup) => {
             ins_mousescroll(MSCR_UP);
             Next::Continue
         }
-        Ok(SpecialKey::Mouseleft) => {
+        KeyKind::Special(SpecialKey::Mouseleft) => {
             ins_mousescroll(MSCR_LEFT);
             Next::Continue
         }
-        Ok(SpecialKey::Mouseright) => {
+        KeyKind::Special(SpecialKey::Mouseright) => {
             ins_mousescroll(MSCR_RIGHT);
             Next::Continue
         }
 
         // Something mapped to nothing.
-        Ok(SpecialKey::Select | SpecialKey::Ignore) => Next::Continue,
+        KeyKind::Special(SpecialKey::Select | SpecialKey::Ignore) => Next::Continue,
 
-        Ok(SpecialKey::PasteStart) => {
+        KeyKind::Special(SpecialKey::PasteStart) => {
             paste_repeat(1);
             Next::CheckPum
         }
-        Ok(SpecialKey::Event) => {
+        KeyKind::Special(SpecialKey::Event) => {
             state_handle_k_event();
             // If CTRL-G U was used, apply it to the next typed key.
             if DONT_SYNC_UNDO.get() == KeepUndo::Now {
@@ -247,24 +249,28 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             Next::CheckPum
         }
         // `<Cmd>command<CR>`.
-        Ok(SpecialKey::Command) => {
+        KeyKind::Special(SpecialKey::Command) => {
             let _ = do_cmdline(None, Some(&mut LineSource::CmdKey), DoCmdOpts::NONE);
             Next::CheckPum
         }
-        Ok(SpecialKey::Lua) => {
+        KeyKind::Special(SpecialKey::Lua) => {
             map_execute_lua(false, false);
             Next::CheckPum
         }
 
-        Ok(SpecialKey::Home | SpecialKey::Khome | SpecialKey::SHome | SpecialKey::CHome) => {
+        KeyKind::Special(
+            SpecialKey::Home | SpecialKey::Khome | SpecialKey::SHome | SpecialKey::CHome,
+        ) => {
             ins_home(s.c);
             Next::Continue
         }
-        Ok(SpecialKey::End | SpecialKey::Kend | SpecialKey::SEnd | SpecialKey::CEnd) => {
+        KeyKind::Special(
+            SpecialKey::End | SpecialKey::Kend | SpecialKey::SEnd | SpecialKey::CEnd,
+        ) => {
             ins_end(s.c);
             Next::Continue
         }
-        Ok(SpecialKey::Left) => {
+        KeyKind::Special(SpecialKey::Left) => {
             if MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL) {
                 ins_s_left();
             } else {
@@ -272,11 +278,11 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             }
             Next::Continue
         }
-        Ok(SpecialKey::SLeft | SpecialKey::CLeft) => {
+        KeyKind::Special(SpecialKey::SLeft | SpecialKey::CLeft) => {
             ins_s_left();
             Next::Continue
         }
-        Ok(SpecialKey::Right) => {
+        KeyKind::Special(SpecialKey::Right) => {
             if MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL) {
                 ins_s_right();
             } else {
@@ -284,13 +290,13 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             }
             Next::Continue
         }
-        Ok(SpecialKey::SRight | SpecialKey::CRight) => {
+        KeyKind::Special(SpecialKey::SRight | SpecialKey::CRight) => {
             ins_s_right();
             Next::Continue
         }
 
         // With the popup menu up, the vertical motions walk it instead.
-        Ok(SpecialKey::Up) => {
+        KeyKind::Special(SpecialKey::Up) => {
             if pum_visible() {
                 insert_do_complete(s);
             } else if MOD_MASK.get().has(ModMask::SHIFT) {
@@ -300,7 +306,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             }
             Next::Continue
         }
-        Ok(SpecialKey::SUp | SpecialKey::Pageup | SpecialKey::Kpageup) => {
+        KeyKind::Special(SpecialKey::SUp | SpecialKey::Pageup | SpecialKey::Kpageup) => {
             if pum_visible() {
                 insert_do_complete(s);
             } else {
@@ -308,7 +314,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             }
             Next::Continue
         }
-        Ok(SpecialKey::Down) => {
+        KeyKind::Special(SpecialKey::Down) => {
             if pum_visible() {
                 insert_do_complete(s);
             } else if MOD_MASK.get().has(ModMask::SHIFT) {
@@ -318,7 +324,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             }
             Next::Continue
         }
-        Ok(SpecialKey::SDown | SpecialKey::Pagedown | SpecialKey::Kpagedown) => {
+        KeyKind::Special(SpecialKey::SDown | SpecialKey::Pagedown | SpecialKey::Kpagedown) => {
             if pum_visible() {
                 insert_do_complete(s);
             } else {
@@ -328,19 +334,19 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
         }
 
         // Shift-TAB is a TAB in Insert mode.
-        Ok(SpecialKey::STab) => {
+        KeyKind::Special(SpecialKey::STab) => {
             s.c = Key::TAB;
             key_tab(s)
         }
-        Err(Key::TAB) => key_tab(s),
+        KeyKind::Char(Key::TAB) => key_tab(s),
 
-        Ok(SpecialKey::Kenter) => {
+        KeyKind::Special(SpecialKey::Kenter) => {
             s.c = Key::CAR;
             key_eol(s)
         }
-        Err(Key::CAR | Key::NL) => key_eol(s),
+        KeyKind::Char(Key::CAR | Key::NL) => key_eol(s),
 
-        Err(Key::CTRL_K) => {
+        KeyKind::Char(Key::CTRL_K) => {
             // CTRL-X CTRL-K completes with the 'dictionary'.
             if ctrl_x_mode_dictionary() {
                 if compl_option_ok(true) {
@@ -358,26 +364,26 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
                 }
             }
         }
-        Err(Key::CTRL_X) => {
+        KeyKind::Char(Key::CTRL_X) => {
             ins_ctrl_x();
             Next::Continue
         }
 
         // The CTRL-X submodes that reuse an ordinary key: each is only a
         // command while its submode is active.
-        Err(Key::CTRL_RSB) if !ctrl_x_mode_tags() => Next::Normal,
-        Err(Key::CTRL_F) if !ctrl_x_mode_files() => Next::Normal,
-        Err(SPELL_S | Key::CTRL_S) if !ctrl_x_mode_spell() => Next::Normal,
-        Err(Key::CTRL_RSB | Key::CTRL_F | SPELL_S | Key::CTRL_S) => {
+        KeyKind::Char(Key::CTRL_RSB) if !ctrl_x_mode_tags() => Next::Normal,
+        KeyKind::Char(Key::CTRL_F) if !ctrl_x_mode_files() => Next::Normal,
+        KeyKind::Char(SPELL_S | Key::CTRL_S) if !ctrl_x_mode_spell() => Next::Normal,
+        KeyKind::Char(Key::CTRL_RSB | Key::CTRL_F | SPELL_S | Key::CTRL_S) => {
             insert_do_complete(s);
             Next::Continue
         }
 
-        Err(Key::CTRL_L) if !ctrl_x_mode_whole_line() => Next::Normal,
-        Err(Key::CTRL_L | Key::CTRL_P | Key::CTRL_N) => key_complete(s),
+        KeyKind::Char(Key::CTRL_L) if !ctrl_x_mode_whole_line() => Next::Normal,
+        KeyKind::Char(Key::CTRL_L | Key::CTRL_P | Key::CTRL_N) => key_complete(s),
 
         // Copy from the line above or below, or scroll.
-        Err(Key::CTRL_Y | Key::CTRL_E) => {
+        KeyKind::Char(Key::CTRL_Y | Key::CTRL_E) => {
             s.c = ins_ctrl_ey(s.c);
             Next::Continue
         }

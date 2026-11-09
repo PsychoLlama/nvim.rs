@@ -30,7 +30,7 @@
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::getchar::state::{KEY_TYPED, MOD_MASK, VGETC_CHAR, VGETC_MOD_MASK};
 use crate::getchar::{ins_char_typebuf, ungetchars};
-use crate::keycodes::{CTRL_AT, CTRL_I, CTRL_LSB, CTRL_M, NotAKey, SpecialKey};
+use crate::keycodes::SpecialKey;
 use crate::keycodes::{ModMask, unsimplify_key};
 use crate::mbyte::{char_at, char_len};
 use crate::memory::XString;
@@ -43,7 +43,7 @@ use crate::options::{
     OPT_TPF_FLAG_BS, OPT_TPF_FLAG_C0, OPT_TPF_FLAG_C1, OPT_TPF_FLAG_DEL, OPT_TPF_FLAG_ESC,
     OPT_TPF_FLAG_FF, OPT_TPF_FLAG_HT,
 };
-use crate::types::Key;
+use crate::types::{Key, KeyKind};
 
 use crate::vterm::keycodes::{VTermKey, VTermModifier};
 use crate::vterm::types::VTerm;
@@ -87,14 +87,16 @@ const BUTTON_X2: c_int = 9;
 /// Control-uppercase is lowercased first: the editor reports `<C-A>` as
 /// Ctrl plus `A`, but a terminal's control codes are computed from the
 /// lowercase letter.
-fn convert_modifiers(key: &mut c_int, mods: ModMask, state: &mut VTermModifier) {
+fn convert_modifiers(key: &mut Key, mods: ModMask, state: &mut VTermModifier) {
     if mods.has(ModMask::SHIFT) {
         *state |= VTERM_MOD_SHIFT;
     }
     if mods.has(ModMask::CTRL) {
         *state |= VTERM_MOD_CTRL;
-        if !mods.has(ModMask::SHIFT) && (c_int::from(b'A')..=c_int::from(b'Z')).contains(key) {
-            *key += c_int::from(b'a') - c_int::from(b'A');
+        if !mods.has(ModMask::SHIFT)
+            && let Some(upper) = key.as_byte().filter(u8::is_ascii_uppercase)
+        {
+            *key = Key::byte(upper.to_ascii_lowercase());
         }
     }
     if mods.has(ModMask::ALT) {
@@ -109,106 +111,106 @@ fn convert_modifiers(key: &mut c_int, mods: ModMask, state: &mut VTermModifier) 
 /// A key that is itself a modified code (`<S-Del>`, `<C-Left>`) is split
 /// back into the plain key and its modifier first, so every such code the
 /// editor has reaches the child, not only a hand-picked few.
-fn convert_key(key: &mut c_int, mods: ModMask, state: &mut VTermModifier) -> VTermKey {
-    let (unsimplified, mods) = unsimplify_key(Key::from_code(*key), mods);
-    *key = unsimplified.code();
+fn convert_key(key: &mut Key, mods: ModMask, state: &mut VTermModifier) -> VTermKey {
+    let (unsimplified, mods) = unsimplify_key(*key, mods);
+    *key = unsimplified;
     convert_modifiers(key, mods, state);
-    match SpecialKey::try_from(*key) {
-        Ok(SpecialKey::Bs) => VTERM_KEY_BACKSPACE,
-        Ok(SpecialKey::Tab) | Err(NotAKey(CTRL_I)) => VTERM_KEY_TAB,
-        Err(NotAKey(CTRL_M)) => VTERM_KEY_ENTER,
-        Err(NotAKey(CTRL_LSB)) => VTERM_KEY_ESCAPE,
-        Ok(SpecialKey::Up) => VTERM_KEY_UP,
-        Ok(SpecialKey::Down) => VTERM_KEY_DOWN,
-        Ok(SpecialKey::Left) => VTERM_KEY_LEFT,
-        Ok(SpecialKey::Right) => VTERM_KEY_RIGHT,
-        Ok(SpecialKey::Ins) => VTERM_KEY_INS,
-        Ok(SpecialKey::Del) => VTERM_KEY_DEL,
-        Ok(SpecialKey::Home) => VTERM_KEY_HOME,
-        Ok(SpecialKey::End) => VTERM_KEY_END,
-        Ok(SpecialKey::Pageup) => VTERM_KEY_PAGEUP,
-        Ok(SpecialKey::Pagedown) => VTERM_KEY_PAGEDOWN,
+    match key.kind() {
+        KeyKind::Special(SpecialKey::Bs) => VTERM_KEY_BACKSPACE,
+        KeyKind::Special(SpecialKey::Tab) | KeyKind::Char(Key::TAB) => VTERM_KEY_TAB,
+        KeyKind::Char(Key::CAR) => VTERM_KEY_ENTER,
+        KeyKind::Char(Key::ESC) => VTERM_KEY_ESCAPE,
+        KeyKind::Special(SpecialKey::Up) => VTERM_KEY_UP,
+        KeyKind::Special(SpecialKey::Down) => VTERM_KEY_DOWN,
+        KeyKind::Special(SpecialKey::Left) => VTERM_KEY_LEFT,
+        KeyKind::Special(SpecialKey::Right) => VTERM_KEY_RIGHT,
+        KeyKind::Special(SpecialKey::Ins) => VTERM_KEY_INS,
+        KeyKind::Special(SpecialKey::Del) => VTERM_KEY_DEL,
+        KeyKind::Special(SpecialKey::Home) => VTERM_KEY_HOME,
+        KeyKind::Special(SpecialKey::End) => VTERM_KEY_END,
+        KeyKind::Special(SpecialKey::Pageup) => VTERM_KEY_PAGEUP,
+        KeyKind::Special(SpecialKey::Pagedown) => VTERM_KEY_PAGEDOWN,
         // The keypad's keys double as cursor keys when NumLock is off, and
         // the editor reports which face was used; vterm wants the keypad.
-        Ok(SpecialKey::K0 | SpecialKey::Kins) => VTERM_KEY_KP_0,
-        Ok(SpecialKey::K1 | SpecialKey::Kend) => VTERM_KEY_KP_1,
-        Ok(SpecialKey::K2 | SpecialKey::Kdown) => VTERM_KEY_KP_2,
-        Ok(SpecialKey::K3 | SpecialKey::Kpagedown) => VTERM_KEY_KP_3,
-        Ok(SpecialKey::K4 | SpecialKey::Kleft) => VTERM_KEY_KP_4,
-        Ok(SpecialKey::K5 | SpecialKey::Korigin) => VTERM_KEY_KP_5,
-        Ok(SpecialKey::K6 | SpecialKey::Kright) => VTERM_KEY_KP_6,
-        Ok(SpecialKey::K7 | SpecialKey::Khome) => VTERM_KEY_KP_7,
-        Ok(SpecialKey::K8 | SpecialKey::Kup) => VTERM_KEY_KP_8,
-        Ok(SpecialKey::K9 | SpecialKey::Kpageup) => VTERM_KEY_KP_9,
-        Ok(SpecialKey::Kdel | SpecialKey::Kpoint) => VTERM_KEY_KP_PERIOD,
-        Ok(SpecialKey::Kenter) => VTERM_KEY_KP_ENTER,
-        Ok(SpecialKey::Kplus) => VTERM_KEY_KP_PLUS,
-        Ok(SpecialKey::Kminus) => VTERM_KEY_KP_MINUS,
-        Ok(SpecialKey::Kmultiply) => VTERM_KEY_KP_MULT,
-        Ok(SpecialKey::Kdivide) => VTERM_KEY_KP_DIVIDE,
-        Ok(SpecialKey::F1) => function_key(1),
-        Ok(SpecialKey::F2) => function_key(2),
-        Ok(SpecialKey::F3) => function_key(3),
-        Ok(SpecialKey::F4) => function_key(4),
-        Ok(SpecialKey::F5) => function_key(5),
-        Ok(SpecialKey::F6) => function_key(6),
-        Ok(SpecialKey::F7) => function_key(7),
-        Ok(SpecialKey::F8) => function_key(8),
-        Ok(SpecialKey::F9) => function_key(9),
-        Ok(SpecialKey::F10) => function_key(10),
-        Ok(SpecialKey::F11) => function_key(11),
-        Ok(SpecialKey::F12) => function_key(12),
-        Ok(SpecialKey::F13) => function_key(13),
-        Ok(SpecialKey::F14) => function_key(14),
-        Ok(SpecialKey::F15) => function_key(15),
-        Ok(SpecialKey::F16) => function_key(16),
-        Ok(SpecialKey::F17) => function_key(17),
-        Ok(SpecialKey::F18) => function_key(18),
-        Ok(SpecialKey::F19) => function_key(19),
-        Ok(SpecialKey::F20) => function_key(20),
-        Ok(SpecialKey::F21) => function_key(21),
-        Ok(SpecialKey::F22) => function_key(22),
-        Ok(SpecialKey::F23) => function_key(23),
-        Ok(SpecialKey::F24) => function_key(24),
-        Ok(SpecialKey::F25) => function_key(25),
-        Ok(SpecialKey::F26) => function_key(26),
-        Ok(SpecialKey::F27) => function_key(27),
-        Ok(SpecialKey::F28) => function_key(28),
-        Ok(SpecialKey::F29) => function_key(29),
-        Ok(SpecialKey::F30) => function_key(30),
-        Ok(SpecialKey::F31) => function_key(31),
-        Ok(SpecialKey::F32) => function_key(32),
-        Ok(SpecialKey::F33) => function_key(33),
-        Ok(SpecialKey::F34) => function_key(34),
-        Ok(SpecialKey::F35) => function_key(35),
-        Ok(SpecialKey::F36) => function_key(36),
-        Ok(SpecialKey::F37) => function_key(37),
-        Ok(SpecialKey::F38) => function_key(38),
-        Ok(SpecialKey::F39) => function_key(39),
-        Ok(SpecialKey::F40) => function_key(40),
-        Ok(SpecialKey::F41) => function_key(41),
-        Ok(SpecialKey::F42) => function_key(42),
-        Ok(SpecialKey::F43) => function_key(43),
-        Ok(SpecialKey::F44) => function_key(44),
-        Ok(SpecialKey::F45) => function_key(45),
-        Ok(SpecialKey::F46) => function_key(46),
-        Ok(SpecialKey::F47) => function_key(47),
-        Ok(SpecialKey::F48) => function_key(48),
-        Ok(SpecialKey::F49) => function_key(49),
-        Ok(SpecialKey::F50) => function_key(50),
-        Ok(SpecialKey::F51) => function_key(51),
-        Ok(SpecialKey::F52) => function_key(52),
-        Ok(SpecialKey::F53) => function_key(53),
-        Ok(SpecialKey::F54) => function_key(54),
-        Ok(SpecialKey::F55) => function_key(55),
-        Ok(SpecialKey::F56) => function_key(56),
-        Ok(SpecialKey::F57) => function_key(57),
-        Ok(SpecialKey::F58) => function_key(58),
-        Ok(SpecialKey::F59) => function_key(59),
-        Ok(SpecialKey::F60) => function_key(60),
-        Ok(SpecialKey::F61) => function_key(61),
-        Ok(SpecialKey::F62) => function_key(62),
-        Ok(SpecialKey::F63) => function_key(63),
+        KeyKind::Special(SpecialKey::K0 | SpecialKey::Kins) => VTERM_KEY_KP_0,
+        KeyKind::Special(SpecialKey::K1 | SpecialKey::Kend) => VTERM_KEY_KP_1,
+        KeyKind::Special(SpecialKey::K2 | SpecialKey::Kdown) => VTERM_KEY_KP_2,
+        KeyKind::Special(SpecialKey::K3 | SpecialKey::Kpagedown) => VTERM_KEY_KP_3,
+        KeyKind::Special(SpecialKey::K4 | SpecialKey::Kleft) => VTERM_KEY_KP_4,
+        KeyKind::Special(SpecialKey::K5 | SpecialKey::Korigin) => VTERM_KEY_KP_5,
+        KeyKind::Special(SpecialKey::K6 | SpecialKey::Kright) => VTERM_KEY_KP_6,
+        KeyKind::Special(SpecialKey::K7 | SpecialKey::Khome) => VTERM_KEY_KP_7,
+        KeyKind::Special(SpecialKey::K8 | SpecialKey::Kup) => VTERM_KEY_KP_8,
+        KeyKind::Special(SpecialKey::K9 | SpecialKey::Kpageup) => VTERM_KEY_KP_9,
+        KeyKind::Special(SpecialKey::Kdel | SpecialKey::Kpoint) => VTERM_KEY_KP_PERIOD,
+        KeyKind::Special(SpecialKey::Kenter) => VTERM_KEY_KP_ENTER,
+        KeyKind::Special(SpecialKey::Kplus) => VTERM_KEY_KP_PLUS,
+        KeyKind::Special(SpecialKey::Kminus) => VTERM_KEY_KP_MINUS,
+        KeyKind::Special(SpecialKey::Kmultiply) => VTERM_KEY_KP_MULT,
+        KeyKind::Special(SpecialKey::Kdivide) => VTERM_KEY_KP_DIVIDE,
+        KeyKind::Special(SpecialKey::F1) => function_key(1),
+        KeyKind::Special(SpecialKey::F2) => function_key(2),
+        KeyKind::Special(SpecialKey::F3) => function_key(3),
+        KeyKind::Special(SpecialKey::F4) => function_key(4),
+        KeyKind::Special(SpecialKey::F5) => function_key(5),
+        KeyKind::Special(SpecialKey::F6) => function_key(6),
+        KeyKind::Special(SpecialKey::F7) => function_key(7),
+        KeyKind::Special(SpecialKey::F8) => function_key(8),
+        KeyKind::Special(SpecialKey::F9) => function_key(9),
+        KeyKind::Special(SpecialKey::F10) => function_key(10),
+        KeyKind::Special(SpecialKey::F11) => function_key(11),
+        KeyKind::Special(SpecialKey::F12) => function_key(12),
+        KeyKind::Special(SpecialKey::F13) => function_key(13),
+        KeyKind::Special(SpecialKey::F14) => function_key(14),
+        KeyKind::Special(SpecialKey::F15) => function_key(15),
+        KeyKind::Special(SpecialKey::F16) => function_key(16),
+        KeyKind::Special(SpecialKey::F17) => function_key(17),
+        KeyKind::Special(SpecialKey::F18) => function_key(18),
+        KeyKind::Special(SpecialKey::F19) => function_key(19),
+        KeyKind::Special(SpecialKey::F20) => function_key(20),
+        KeyKind::Special(SpecialKey::F21) => function_key(21),
+        KeyKind::Special(SpecialKey::F22) => function_key(22),
+        KeyKind::Special(SpecialKey::F23) => function_key(23),
+        KeyKind::Special(SpecialKey::F24) => function_key(24),
+        KeyKind::Special(SpecialKey::F25) => function_key(25),
+        KeyKind::Special(SpecialKey::F26) => function_key(26),
+        KeyKind::Special(SpecialKey::F27) => function_key(27),
+        KeyKind::Special(SpecialKey::F28) => function_key(28),
+        KeyKind::Special(SpecialKey::F29) => function_key(29),
+        KeyKind::Special(SpecialKey::F30) => function_key(30),
+        KeyKind::Special(SpecialKey::F31) => function_key(31),
+        KeyKind::Special(SpecialKey::F32) => function_key(32),
+        KeyKind::Special(SpecialKey::F33) => function_key(33),
+        KeyKind::Special(SpecialKey::F34) => function_key(34),
+        KeyKind::Special(SpecialKey::F35) => function_key(35),
+        KeyKind::Special(SpecialKey::F36) => function_key(36),
+        KeyKind::Special(SpecialKey::F37) => function_key(37),
+        KeyKind::Special(SpecialKey::F38) => function_key(38),
+        KeyKind::Special(SpecialKey::F39) => function_key(39),
+        KeyKind::Special(SpecialKey::F40) => function_key(40),
+        KeyKind::Special(SpecialKey::F41) => function_key(41),
+        KeyKind::Special(SpecialKey::F42) => function_key(42),
+        KeyKind::Special(SpecialKey::F43) => function_key(43),
+        KeyKind::Special(SpecialKey::F44) => function_key(44),
+        KeyKind::Special(SpecialKey::F45) => function_key(45),
+        KeyKind::Special(SpecialKey::F46) => function_key(46),
+        KeyKind::Special(SpecialKey::F47) => function_key(47),
+        KeyKind::Special(SpecialKey::F48) => function_key(48),
+        KeyKind::Special(SpecialKey::F49) => function_key(49),
+        KeyKind::Special(SpecialKey::F50) => function_key(50),
+        KeyKind::Special(SpecialKey::F51) => function_key(51),
+        KeyKind::Special(SpecialKey::F52) => function_key(52),
+        KeyKind::Special(SpecialKey::F53) => function_key(53),
+        KeyKind::Special(SpecialKey::F54) => function_key(54),
+        KeyKind::Special(SpecialKey::F55) => function_key(55),
+        KeyKind::Special(SpecialKey::F56) => function_key(56),
+        KeyKind::Special(SpecialKey::F57) => function_key(57),
+        KeyKind::Special(SpecialKey::F58) => function_key(58),
+        KeyKind::Special(SpecialKey::F59) => function_key(59),
+        KeyKind::Special(SpecialKey::F60) => function_key(60),
+        KeyKind::Special(SpecialKey::F61) => function_key(61),
+        KeyKind::Special(SpecialKey::F62) => function_key(62),
+        KeyKind::Special(SpecialKey::F63) => function_key(63),
         _ => VTERM_KEY_NONE,
     }
 }
@@ -217,26 +219,22 @@ fn convert_key(key: &mut c_int, mods: ModMask, state: &mut VTermModifier) -> VTe
 ///
 /// A keycode with no vterm name is a codepoint, unless it is negative — one
 /// of the extras vterm has no equivalent for, which is simply dropped.
-pub(super) fn terminal_send_key(mut term: Term, c: c_int) {
+pub(super) fn terminal_send_key(mut term: Term, c: Key) {
     send_key(&mut term.vt, c, MOD_MASK.get());
 }
 
 /// [`terminal_send_key`] with the emulator and the editor's modifiers named,
 /// so the key-to-bytes mapping can be driven without a live terminal.
-fn send_key(vt: &mut VTerm, c: c_int, mods: ModMask) {
+fn send_key(vt: &mut VTerm, c: Key, mods: ModMask) {
     let mut state = VTERM_MOD_NONE;
     // The editor spells NUL as an extra so it survives being a C string;
     // vterm wants the control character back.
-    let mut key = if c == SpecialKey::Zero.code() {
-        CTRL_AT
-    } else {
-        c
-    };
+    let mut key = if c == SpecialKey::Zero { Key::NUL } else { c };
     let named = convert_key(&mut key, mods, &mut state);
     if named != VTERM_KEY_NONE {
         vt.keyboard_key(named, state);
-    } else if key >= 0 {
-        vt.keyboard_unichar(key.cast_unsigned(), state);
+    } else if !key.is_special() {
+        vt.keyboard_unichar(key.code().cast_unsigned(), state);
     }
 }
 
@@ -319,53 +317,53 @@ pub(crate) fn terminal_paste(lines: &[XString], count: c_int) {
 ///
 /// Drags count as presses: vterm tracks the button down and turns a move
 /// with a button held into a drag report itself.
-fn mouse_button(c: c_int) -> Option<(c_int, bool)> {
-    match SpecialKey::try_from(c) {
-        Ok(SpecialKey::Leftmouse | SpecialKey::Leftdrag) => Some((BUTTON_LEFT, true)),
-        Ok(SpecialKey::Leftrelease) => Some((BUTTON_LEFT, false)),
-        Ok(SpecialKey::Middlemouse | SpecialKey::Middledrag) => Some((BUTTON_MIDDLE, true)),
-        Ok(SpecialKey::Middlerelease) => Some((BUTTON_MIDDLE, false)),
-        Ok(SpecialKey::Rightmouse | SpecialKey::Rightdrag) => Some((BUTTON_RIGHT, true)),
-        Ok(SpecialKey::Rightrelease) => Some((BUTTON_RIGHT, false)),
-        Ok(SpecialKey::X1mouse | SpecialKey::X1drag) => Some((BUTTON_X1, true)),
-        Ok(SpecialKey::X1release) => Some((BUTTON_X1, false)),
-        Ok(SpecialKey::X2mouse | SpecialKey::X2drag) => Some((BUTTON_X2, true)),
-        Ok(SpecialKey::X2release) => Some((BUTTON_X2, false)),
-        Ok(SpecialKey::Mousedown) => Some((BUTTON_WHEEL_UP, true)),
-        Ok(SpecialKey::Mouseup) => Some((BUTTON_WHEEL_DOWN, true)),
-        Ok(SpecialKey::Mouseleft) => Some((BUTTON_WHEEL_LEFT, true)),
-        Ok(SpecialKey::Mouseright) => Some((BUTTON_WHEEL_RIGHT, true)),
+fn mouse_button(c: Key) -> Option<(c_int, bool)> {
+    match c.special() {
+        Some(SpecialKey::Leftmouse | SpecialKey::Leftdrag) => Some((BUTTON_LEFT, true)),
+        Some(SpecialKey::Leftrelease) => Some((BUTTON_LEFT, false)),
+        Some(SpecialKey::Middlemouse | SpecialKey::Middledrag) => Some((BUTTON_MIDDLE, true)),
+        Some(SpecialKey::Middlerelease) => Some((BUTTON_MIDDLE, false)),
+        Some(SpecialKey::Rightmouse | SpecialKey::Rightdrag) => Some((BUTTON_RIGHT, true)),
+        Some(SpecialKey::Rightrelease) => Some((BUTTON_RIGHT, false)),
+        Some(SpecialKey::X1mouse | SpecialKey::X1drag) => Some((BUTTON_X1, true)),
+        Some(SpecialKey::X1release) => Some((BUTTON_X1, false)),
+        Some(SpecialKey::X2mouse | SpecialKey::X2drag) => Some((BUTTON_X2, true)),
+        Some(SpecialKey::X2release) => Some((BUTTON_X2, false)),
+        Some(SpecialKey::Mousedown) => Some((BUTTON_WHEEL_UP, true)),
+        Some(SpecialKey::Mouseup) => Some((BUTTON_WHEEL_DOWN, true)),
+        Some(SpecialKey::Mouseleft) => Some((BUTTON_WHEEL_LEFT, true)),
+        Some(SpecialKey::Mouseright) => Some((BUTTON_WHEEL_RIGHT, true)),
         // A bare move: position only, no button.
-        Ok(SpecialKey::Mousemove) => Some((0, false)),
+        Some(SpecialKey::Mousemove) => Some((0, false)),
         _ => None,
     }
 }
 
 /// Whether `c` is a mouse event, and so [`send_mouse_event`]'s to deal
 /// with rather than the child's.
-pub(super) fn is_mouse_key(c: c_int) -> bool {
+pub(super) fn is_mouse_key(c: Key) -> bool {
     mouse_button(c).is_some()
 }
 
 /// The scroll direction a wheel keycode asks for, for the editor's own
 /// scrolling when the child is not taking mouse events.
-fn scroll_direction(c: c_int) -> Option<c_int> {
-    match SpecialKey::try_from(c) {
-        Ok(SpecialKey::Mouseup) => Some(MSCR_UP),
-        Ok(SpecialKey::Mousedown) => Some(MSCR_DOWN),
-        Ok(SpecialKey::Mouseleft) => Some(MSCR_LEFT),
-        Ok(SpecialKey::Mouseright) => Some(MSCR_RIGHT),
+fn scroll_direction(c: Key) -> Option<c_int> {
+    match c.special() {
+        Some(SpecialKey::Mouseup) => Some(MSCR_UP),
+        Some(SpecialKey::Mousedown) => Some(MSCR_DOWN),
+        Some(SpecialKey::Mouseleft) => Some(MSCR_LEFT),
+        Some(SpecialKey::Mouseright) => Some(MSCR_RIGHT),
         _ => None,
     }
 }
 
 /// Scroll `mouse_win` as the editor would if the mouse were over an
 /// ordinary buffer.
-fn scroll_window(mouse_win: Win, key: c_int, direction: c_int) {
+fn scroll_window(mouse_win: Win, key: Key, direction: c_int) {
     let saved = switch_to(mouse_win);
 
     with_scratch_cmd(|cap| {
-        cap.cmdchar = Key::from_code(key);
+        cap.cmdchar = key;
         cap.arg = direction;
         do_mousescroll(cap);
     });
@@ -384,7 +382,7 @@ fn scroll_window(mouse_win: Win, key: c_int, direction: c_int) {
 /// the child gets the event, the editor scrolls the window under the
 /// pointer, or the event is pushed back for normal-mode processing (which
 /// is what makes clicking out of a terminal work).
-pub(super) fn send_mouse_event(mut term: Term, c: c_int) -> bool {
+pub(super) fn send_mouse_event(mut term: Term, c: Key) -> bool {
     let mut pos = MousePos::current();
     let mouse_win = find_win_inner(&mut pos);
     let MousePos { grid, row, col } = pos;
@@ -426,13 +424,13 @@ pub(super) fn send_mouse_event(mut term: Term, c: c_int) -> bool {
 
         // A release inside the terminal's own window is dropped: it means
         // nothing to the editor here.
-        if c == SpecialKey::Leftrelease.code() && showing_term {
+        if c == SpecialKey::Leftrelease && showing_term {
             return false;
         }
     }
 
     // A bare move is dropped for the same reason.
-    if c == SpecialKey::Mousemove.code() {
+    if c == SpecialKey::Mousemove {
         return false;
     }
 
@@ -459,14 +457,14 @@ mod tests {
 
     /// `convert_key`'s three answers: the vterm key, the modifier state and
     /// the key code it left behind.
-    fn converted(key: c_int, mods: ModMask) -> (VTermKey, VTermModifier, c_int) {
+    fn converted(key: Key, mods: ModMask) -> (VTermKey, VTermModifier, Key) {
         let (mut key, mut state) = (key, VTERM_MOD_NONE);
         let named = convert_key(&mut key, mods, &mut state);
         (named, state, key)
     }
 
     /// The bytes the child is sent for `key` with `mods`.
-    fn bytes(key: c_int, mods: ModMask) -> Vec<u8> {
+    fn bytes(key: Key, mods: ModMask) -> Vec<u8> {
         let sent = Rc::new(RefCell::new(Vec::new()));
         let mut vt = VTerm::new(24, 80);
         vt.set_utf8(true);
@@ -480,8 +478,9 @@ mod tests {
     }
 
     const NONE: ModMask = ModMask::NONE;
-    const A: c_int = Key::ascii(b'A').code();
-    const LOWER_A: c_int = Key::ascii(b'a').code();
+    const A: Key = Key::ascii(b'A');
+    const LOWER_A: Key = Key::ascii(b'a');
+    const E_ACUTE: Key = Key::from_char('\u{e9}');
 
     #[test]
     fn an_ordinary_character_is_no_named_key() {
@@ -490,8 +489,8 @@ mod tests {
             (VTERM_KEY_NONE, VTERM_MOD_NONE, LOWER_A)
         );
         assert_eq!(
-            converted(0xe9, NONE),
-            (VTERM_KEY_NONE, VTERM_MOD_NONE, 0xe9)
+            converted(E_ACUTE, NONE),
+            (VTERM_KEY_NONE, VTERM_MOD_NONE, E_ACUTE)
         );
     }
 
@@ -513,29 +512,29 @@ mod tests {
 
     #[test]
     fn the_raw_control_bytes_are_named_keys() {
-        assert_eq!(converted(CTRL_I, NONE).0, VTERM_KEY_TAB);
-        assert_eq!(converted(CTRL_M, NONE).0, VTERM_KEY_ENTER);
-        assert_eq!(converted(CTRL_LSB, NONE).0, VTERM_KEY_ESCAPE);
+        assert_eq!(converted(Key::TAB, NONE).0, VTERM_KEY_TAB);
+        assert_eq!(converted(Key::CAR, NONE).0, VTERM_KEY_ENTER);
+        assert_eq!(converted(Key::ESC, NONE).0, VTERM_KEY_ESCAPE);
         assert_eq!(
-            converted(SpecialKey::Bs.code(), NONE).0,
+            converted(Key::from(SpecialKey::Bs), NONE).0,
             VTERM_KEY_BACKSPACE
         );
-        assert_eq!(converted(SpecialKey::Tab.code(), NONE).0, VTERM_KEY_TAB);
+        assert_eq!(converted(Key::from(SpecialKey::Tab), NONE).0, VTERM_KEY_TAB);
     }
 
     #[test]
     fn a_shifted_key_code_is_split_into_the_key_and_shift() {
         assert_eq!(
-            converted(SpecialKey::SUp.code(), NONE),
-            (VTERM_KEY_UP, VTERM_MOD_SHIFT, SpecialKey::Up.code())
+            converted(Key::from(SpecialKey::SUp), NONE),
+            (VTERM_KEY_UP, VTERM_MOD_SHIFT, Key::from(SpecialKey::Up))
         );
         assert_eq!(
-            converted(SpecialKey::CLeft.code(), NONE),
-            (VTERM_KEY_LEFT, VTERM_MOD_CTRL, SpecialKey::Left.code())
+            converted(Key::from(SpecialKey::CLeft), NONE),
+            (VTERM_KEY_LEFT, VTERM_MOD_CTRL, Key::from(SpecialKey::Left))
         );
         assert_eq!(
-            converted(SpecialKey::STab.code(), NONE),
-            (VTERM_KEY_TAB, VTERM_MOD_SHIFT, SpecialKey::Tab.code())
+            converted(Key::from(SpecialKey::STab), NONE),
+            (VTERM_KEY_TAB, VTERM_MOD_SHIFT, Key::from(SpecialKey::Tab))
         );
     }
 
@@ -548,46 +547,55 @@ mod tests {
             (SpecialKey::K9, SpecialKey::Kpageup, VTERM_KEY_KP_9),
             (SpecialKey::Kpoint, SpecialKey::Kdel, VTERM_KEY_KP_PERIOD),
         ] {
-            assert_eq!(converted(number.code(), NONE).0, want);
-            assert_eq!(converted(cursor.code(), NONE).0, want);
+            assert_eq!(converted(Key::from(number), NONE).0, want);
+            assert_eq!(converted(Key::from(cursor), NONE).0, want);
         }
         assert_eq!(
-            converted(SpecialKey::Kenter.code(), NONE).0,
+            converted(Key::from(SpecialKey::Kenter), NONE).0,
             VTERM_KEY_KP_ENTER
         );
     }
 
     #[test]
     fn function_keys_count_up_from_function_zero() {
-        assert_eq!(converted(SpecialKey::F1.code(), NONE).0, function_key(1));
-        assert_eq!(converted(SpecialKey::F12.code(), NONE).0, function_key(12));
-        assert_eq!(converted(SpecialKey::F63.code(), NONE).0, function_key(63));
+        assert_eq!(
+            converted(Key::from(SpecialKey::F1), NONE).0,
+            function_key(1)
+        );
+        assert_eq!(
+            converted(Key::from(SpecialKey::F12), NONE).0,
+            function_key(12)
+        );
+        assert_eq!(
+            converted(Key::from(SpecialKey::F63), NONE).0,
+            function_key(63)
+        );
     }
 
     #[test]
     fn keys_become_the_bytes_a_terminal_sends() {
-        let rows: &[(c_int, ModMask, &[u8])] = &[
+        let rows: &[(Key, ModMask, &[u8])] = &[
             (LOWER_A, NONE, b"a"),
-            (0xe9, NONE, "\u{e9}".as_bytes()),
-            (0x01, NONE, b"\x01"),
+            (E_ACUTE, NONE, "\u{e9}".as_bytes()),
+            (Key::CTRL_A, NONE, b"\x01"),
             (LOWER_A, ModMask::ALT, b"\x1ba"),
             (A, ModMask::CTRL, b"\x01"),
-            (SpecialKey::Up.code(), NONE, b"\x1b[A"),
-            (SpecialKey::SUp.code(), NONE, b"\x1b[1;2A"),
-            (SpecialKey::Up.code(), ModMask::CTRL, b"\x1b[1;5A"),
-            (SpecialKey::Del.code(), NONE, b"\x1b[3~"),
-            (SpecialKey::F1.code(), NONE, b"\x1bOP"),
-            (SpecialKey::F5.code(), NONE, b"\x1b[15~"),
-            (SpecialKey::STab.code(), NONE, b"\x1b[Z"),
-            (SpecialKey::Bs.code(), NONE, b"\x7f"),
-            (CTRL_M, NONE, b"\r"),
-            (CTRL_LSB, NONE, b"\x1b"),
+            (Key::from(SpecialKey::Up), NONE, b"\x1b[A"),
+            (Key::from(SpecialKey::SUp), NONE, b"\x1b[1;2A"),
+            (Key::from(SpecialKey::Up), ModMask::CTRL, b"\x1b[1;5A"),
+            (Key::from(SpecialKey::Del), NONE, b"\x1b[3~"),
+            (Key::from(SpecialKey::F1), NONE, b"\x1bOP"),
+            (Key::from(SpecialKey::F5), NONE, b"\x1b[15~"),
+            (Key::from(SpecialKey::STab), NONE, b"\x1b[Z"),
+            (Key::from(SpecialKey::Bs), NONE, b"\x7f"),
+            (Key::CAR, NONE, b"\r"),
+            (Key::ESC, NONE, b"\x1b"),
         ];
         for &(key, mods, want) in rows {
             assert_eq!(
                 bytes(key, mods),
                 want,
-                "key {key:#x} mods {:#x}",
+                "key {key:?} mods {:#x}",
                 mods.byte()
             );
         }
@@ -595,7 +603,7 @@ mod tests {
 
     #[test]
     fn the_nul_extra_becomes_nul_and_other_extras_are_dropped() {
-        assert_eq!(bytes(SpecialKey::Zero.code(), NONE), b"\0");
-        assert_eq!(bytes(SpecialKey::Ignore.code(), NONE), b"");
+        assert_eq!(bytes(Key::from(SpecialKey::Zero), NONE), b"\0");
+        assert_eq!(bytes(Key::from(SpecialKey::Ignore), NONE), b"");
     }
 }

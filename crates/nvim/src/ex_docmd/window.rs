@@ -34,7 +34,6 @@ use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::ffi::CString;
 
-use crate::ascii::NUL;
 use crate::buffer::{buf_is_quickfix, buf_spname_owned};
 use crate::drawscreen::state::MUST_REDRAW;
 use crate::drawscreen::{UPD_CLEAR, UPD_VALID, screen_resize};
@@ -63,7 +62,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
 use crate::popupmenu::pum_make_popup;
 use crate::tag::state::{G_DO_TAGPREVIEW, POSTPONED_SPLIT_FLAGS, POSTPONED_SPLIT_TAB};
-use crate::types::{CmdLine, CmdModFlags, ExArg};
+use crate::types::{CmdLine, CmdModFlags, ExArg, Key};
 use crate::ui::state::{COLUMNS, ROWS};
 use crate::undo::buf_is_changed;
 use crate::window::{
@@ -512,7 +511,7 @@ pub(crate) fn ex_wincmd(excmd: &mut ExArg) {
 
 fn wincmd(excmd: &mut ExArg) {
     // `CTRL-W g` takes a second character.
-    let mut xchar = NUL;
+    let mut xchar = Key::NUL;
     let mut at;
     if excmd.line.byte_at(excmd.line.arg) == b'g'
         || c_int::from(excmd.line.byte_at(excmd.line.arg)) == CTRL_G
@@ -522,7 +521,7 @@ fn wincmd(excmd: &mut ExArg) {
             err(E_INVARG);
             return;
         }
-        xchar = c_int::from(second);
+        xchar = Key::byte(second);
         at = excmd.line.arg + 2;
     } else {
         at = excmd.line.arg + 1;
@@ -539,7 +538,7 @@ fn wincmd(excmd: &mut ExArg) {
         POSTPONED_SPLIT_FLAGS.set(CMDMOD.with(|m| m.cmod_split));
         POSTPONED_SPLIT_TAB.set(CMDMOD.with(|m| m.cmod_tab));
         let (nchar, prenum) = (
-            c_int::from(excmd.line.byte_at(excmd.line.arg)),
+            Key::byte(excmd.line.byte_at(excmd.line.arg)),
             count(excmd, 0),
         );
         do_window(nchar, prenum, xchar);

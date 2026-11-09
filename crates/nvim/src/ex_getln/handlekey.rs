@@ -24,6 +24,7 @@ use crate::keycodes::{ModMask, SpecialKey};
 use crate::mbyte::MB_MAXCHAR;
 use crate::narrow::len_as_int;
 use crate::state::Step;
+use crate::types::KeyKind;
 use crate::winlayer::Buf;
 
 /// Where the character before byte `at` of `line` starts: C's
@@ -249,9 +250,9 @@ pub(crate) fn command_line_left_right_mouse(s: &mut CommandLineState) {
 /// the abbreviation check and then to inserting it into the line.
 fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
     let mut cc = Cc::current();
-    match s.c.special().ok_or(s.c) {
-        Ok(SpecialKey::Bs | SpecialKey::Del | SpecialKey::Kdel)
-        | Err(Key::CTRL_H | Key::CTRL_W) => {
+    match s.c.kind() {
+        KeyKind::Special(SpecialKey::Bs | SpecialKey::Del | SpecialKey::Kdel)
+        | KeyKind::Char(Key::CTRL_H | Key::CTRL_W) => {
             Some(match command_line_erase_chars(s) {
                 KeyOutcome::NotChanged => command_line_not_changed(s),
                 KeyOutcome::GotoNormalMode => Step::Leave, // back to cmd mode
@@ -259,7 +260,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             })
         }
 
-        Ok(SpecialKey::Ins | SpecialKey::Kins) => {
+        KeyKind::Special(SpecialKey::Ins | SpecialKey::Kins) => {
             cc.overstrike = !cc.overstrike;
             ui_cursor_shape(); // may show a different cursor shape
             may_trigger_modechanged();
@@ -268,12 +269,12 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             Some(command_line_not_changed(s))
         }
 
-        Err(Key::CTRL_HAT) => {
+        KeyKind::Char(Key::CTRL_HAT) => {
             command_line_toggle_langmap(s);
             Some(command_line_not_changed(s))
         }
 
-        Err(Key::CTRL_U) => {
+        KeyKind::Char(Key::CTRL_U) => {
             // Delete all characters left of the cursor.
             // Shift the tail down over everything left of the cursor;
             // `set_len` writes the terminator, so it comes after the move.
@@ -288,7 +289,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
         }
 
         // Reached if 'wildchar' is not ESC, or when ESC was typed twice.
-        Err(Key::ESC | Key::CTRL_C) => {
+        KeyKind::Char(Key::ESC | Key::CTRL_C) => {
             // In exmode it doesn't make sense to return, except when
             // ":normal" runs out of characters. Also, when the highlight
             // callback is active <C-c> should interrupt only that.
@@ -304,13 +305,13 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             Some(Step::Leave) // back to cmd mode
         }
 
-        Err(Key::CTRL_R) => Some(match command_line_insert_reg(s) {
+        KeyKind::Char(Key::CTRL_R) => Some(match command_line_insert_reg(s) {
             KeyOutcome::GotoNormalMode => Step::Leave, // back to cmd mode
             KeyOutcome::Changed => command_line_changed(s),
             KeyOutcome::NotChanged => command_line_not_changed(s),
         }),
 
-        Err(Key::CTRL_D) => {
+        KeyKind::Char(Key::CTRL_D) => {
             if show_matches(false, true, wim_has(0, OPT_WIM_FLAG_NOSELECT)) == Expanded::Nothing {
                 return None; // use ^D as a normal character instead
             }
@@ -318,7 +319,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             Some(Step::Go) // don't do incremental search now
         }
 
-        Ok(SpecialKey::Right | SpecialKey::SRight | SpecialKey::CRight) => {
+        KeyKind::Special(SpecialKey::Right | SpecialKey::SRight | SpecialKey::CRight) => {
             while cc.cmdpos < cc.len() {
                 let cells = cmdline_charsize(cc.cmdpos);
                 if KEY_TYPED.get() && cc.cmdspos + cells >= COLUMNS.get() * ROWS.get() {
@@ -341,7 +342,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             Some(command_line_not_changed(s))
         }
 
-        Ok(SpecialKey::Left | SpecialKey::SLeft | SpecialKey::CLeft) => {
+        KeyKind::Special(SpecialKey::Left | SpecialKey::SLeft | SpecialKey::CLeft) => {
             if cc.cmdpos == 0 {
                 return Some(command_line_not_changed(s));
             }
@@ -371,12 +372,14 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
         }
 
         // Ignore a mouse event or an open_cmdwin() result.
-        Ok(SpecialKey::Ignore) => Some(command_line_not_changed(s)),
+        KeyKind::Special(SpecialKey::Ignore) => Some(command_line_not_changed(s)),
 
         // Ignore the mouse.
-        Ok(SpecialKey::Middledrag | SpecialKey::Middlerelease) => Some(command_line_not_changed(s)),
+        KeyKind::Special(SpecialKey::Middledrag | SpecialKey::Middlerelease) => {
+            Some(command_line_not_changed(s))
+        }
 
-        Ok(SpecialKey::Middlemouse) => {
+        KeyKind::Special(SpecialKey::Middlemouse) => {
             cmdline_paste(
                 if eval_has_provider(c"clipboard") {
                     b'*'
@@ -393,7 +396,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
         // Three C arms with a FALLTHROUGH between each pair: the
         // drag/release group falls into K_LEFTMOUSE, which falls into
         // K_RIGHTMOUSE.
-        Ok(
+        KeyKind::Special(
             SpecialKey::Leftdrag
             | SpecialKey::Leftrelease
             | SpecialKey::Rightdrag
@@ -423,7 +426,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
 
         // The mouse scroll wheel and the alternate buttons are ignored
         // here, as is the end of a Select-mode mapping.
-        Ok(
+        KeyKind::Special(
             SpecialKey::Mousedown
             | SpecialKey::Mouseup
             | SpecialKey::Mouseleft
@@ -439,22 +442,26 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
         ) => Some(command_line_not_changed(s)),
 
         // Beginning of the command line.
-        Ok(SpecialKey::Home | SpecialKey::Khome | SpecialKey::SHome | SpecialKey::CHome)
-        | Err(Key::CTRL_B) => {
+        KeyKind::Special(
+            SpecialKey::Home | SpecialKey::Khome | SpecialKey::SHome | SpecialKey::CHome,
+        )
+        | KeyKind::Char(Key::CTRL_B) => {
             cc.cmdpos = 0;
             cc.cmdspos = cmd_startcol();
             Some(command_line_not_changed(s))
         }
 
         // End of the command line.
-        Ok(SpecialKey::End | SpecialKey::Kend | SpecialKey::SEnd | SpecialKey::CEnd)
-        | Err(Key::CTRL_E) => {
+        KeyKind::Special(
+            SpecialKey::End | SpecialKey::Kend | SpecialKey::SEnd | SpecialKey::CEnd,
+        )
+        | KeyKind::Char(Key::CTRL_E) => {
             cc.cmdpos = cc.len();
             cc.cmdspos = cmd_screencol(cc.cmdpos);
             Some(command_line_not_changed(s))
         }
 
-        Err(Key::CTRL_A) => {
+        KeyKind::Char(Key::CTRL_A) => {
             // all matches
             if cmdline_pum_active() {
                 // As Ctrl-A completes all the matches, close the popup
@@ -469,7 +476,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             Some(command_line_changed(s))
         }
 
-        Err(Key::CTRL_L) => {
+        KeyKind::Char(Key::CTRL_L) => {
             if may_add_char_to_search(s.firstc, &mut s.c, &mut s.is_state).is_ok() {
                 return Some(command_line_not_changed(s));
             }
@@ -482,7 +489,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
 
         // Ctrl_N/Ctrl_P are the next/previous match while completing, and
         // FALL THROUGH into the history keys otherwise.
-        Ok(
+        KeyKind::Special(
             SpecialKey::Up
             | SpecialKey::Down
             | SpecialKey::SUp
@@ -492,7 +499,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             | SpecialKey::Pagedown
             | SpecialKey::Kpagedown,
         )
-        | Err(Key::CTRL_N | Key::CTRL_P) => {
+        | KeyKind::Char(Key::CTRL_N | Key::CTRL_P) => {
             if (s.c == Key::CTRL_N || s.c == Key::CTRL_P) && match_count() > 0 {
                 let wild_type = if s.c == Key::CTRL_P {
                     WildMode::Prev
@@ -535,7 +542,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
         }
 
         // Next (CTRL-G) or previous (CTRL-T) 'incsearch' match.
-        Err(Key::CTRL_G | Key::CTRL_T) => {
+        KeyKind::Char(Key::CTRL_G | Key::CTRL_T) => {
             let next = s.c == Key::CTRL_G;
             if may_do_command_line_next_incsearch(s.firstc, s.count, &mut s.is_state, next).is_err()
             {
@@ -544,7 +551,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             None
         }
 
-        Err(Key::CTRL_V | Key::CTRL_Q) => {
+        KeyKind::Char(Key::CTRL_V | Key::CTRL_Q) => {
             s.ignore_drag_release = true;
             putcmdline(b'^'.cast_signed(), true);
 
@@ -569,7 +576,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             None
         }
 
-        Err(Key::CTRL_K) => {
+        KeyKind::Char(Key::CTRL_K) => {
             s.ignore_drag_release = true;
             putcmdline(b'?'.cast_signed(), true);
             s.c = get_digraph(true);
@@ -583,7 +590,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
         }
 
         // CTRL-_: switch language mode.
-        Err(Key::CTRL_UNDERSCORE) => {
+        KeyKind::Char(Key::CTRL_UNDERSCORE) => {
             if !p_ari() {
                 return None;
             }
