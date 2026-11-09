@@ -21,17 +21,17 @@
 use crate::cstr::{self, byte_at};
 use crate::env::getenv_resolved;
 use crate::guard::Suppress;
-use crate::message_fmt::emsg_text;
-use crate::message_fmt::msg_bytes;
+use crate::message_fmt::{emsg_text, msg_bytes};
+use crate::register::defs::G_REG_EXPR_SRC;
 use crate::semsg;
 use crate::types::CmdIdx;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use super::{
-    E_DOUBLE_SEMICOLON_IN_LIST_OF_VARIABLES, E_LETUNEXP, G_REG_EXPR_SRC, ScopeLister, clear_local,
-    emsg_static, heredoc_get, list_arg_vars, list_buf_vars, list_func_vars, list_glob_vars,
-    list_script_vars, list_tab_vars, list_vim_vars, list_win_vars, tv_to_optval,
+    E_DOUBLE_SEMICOLON_IN_LIST_OF_VARIABLES, E_LETUNEXP, ScopeLister, clear_local, emsg_static,
+    heredoc_get, list_arg_vars, list_buf_vars, list_func_vars, list_glob_vars, list_script_vars,
+    list_tab_vars, list_vim_vars, list_win_vars, tv_to_optval,
 };
 use crate::charset::skip;
 use crate::eval::typval::{NumBuf, TV_INITIAL_VALUE, list_len, tv_copy, tv_list_alloc};

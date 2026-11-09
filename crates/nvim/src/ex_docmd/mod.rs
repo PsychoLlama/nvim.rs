@@ -17,6 +17,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 pub mod state;
+
 use crate::arglist::{
     ex_all, ex_argadd, ex_argdedupe, ex_argdelete, ex_argedit, ex_args, ex_argument, ex_last,
     ex_next, ex_previous, ex_rewind,
@@ -73,7 +74,7 @@ use crate::quickfix::{
 };
 use crate::regexp::OptMagic;
 use crate::register::ex_display;
-use crate::runtime::defs::{EStackArg, EStackType};
+
 use crate::runtime::{
     ex_finish, ex_options, ex_packadd, ex_packloadall, ex_runtime, ex_scriptencoding,
     ex_scriptnames, ex_source,
@@ -149,9 +150,6 @@ pub const CD_CAUSE_MANUAL: CdCause = 0;
 pub const OPTION_MAGIC_OFF: OptMagic = 2;
 pub const OPTION_MAGIC_ON: OptMagic = 1;
 pub const MARK_ALL: MarkGet = 1;
-pub const CSTP_THROW: c_uint = 4;
-pub const CSTP_INTERRUPT: c_uint = 2;
-pub const CSTP_ERROR: c_uint = 1;
 crate::flag_set! {
     /// How [`do_cmdline`] should run the lines it is given -- upstream's
     /// `DOCMD_*`.
@@ -225,15 +223,9 @@ pub struct SavedDebugState {
     pub(crate) current_exception: Option<ExcId>,
 }
 
-pub const ETYPE_EXCEPT: EStackType = 5;
-pub const ESTACK_SCRIPT: EStackArg = 3;
-pub const ESTACK_STACK: EStackArg = 2;
-pub const ESTACK_SFILE: EStackArg = 1;
 pub const INT32_MAX: c_int = 2147483647 as c_int;
 pub const NULL_1: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const EXIT_FAILURE: c_int = 1 as c_int;
-pub const BAD_KEEP: c_int = -1 as c_int;
-pub const BAD_DROP: c_int = -2 as c_int;
 pub const EXFLAG_LIST: c_int = 0x1 as c_int;
 pub const EXFLAG_NR: c_int = 0x2 as c_int;
 pub const EXFLAG_PRINT: c_int = 0x4 as c_int;
@@ -268,5 +260,3 @@ pub const INDENT_FILE: &CStr = c"indent.vim";
 pub const FTOFF_FILE: &CStr = c"ftoff.vim";
 pub const FTPLUGOF_FILE: &CStr = c"ftplugof.vim";
 pub const INDOFF_FILE: &CStr = c"indoff.vim";
-pub const PROF_YES: c_int = 1 as c_int;
-pub const SID_NONE: c_int = -6 as c_int;

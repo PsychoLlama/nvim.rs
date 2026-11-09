@@ -22,6 +22,8 @@
 
 use crate::arglist::ArgListId;
 use crate::memory::XString;
+use crate::runtime::SID_ENV;
+use crate::runtime::defs::ETYPE_ENV;
 use crate::semsg;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
@@ -48,7 +50,7 @@ use crate::path::MAXPATHL;
 use crate::path::{concat_fnames, path_guess_exepath, path_tail};
 use crate::profile::time_msg_at;
 use crate::profile::{time_init, time_start};
-use crate::runtime::state::{CURRENT_SCTX, ETYPE_ENV, SID_ENV};
+use crate::runtime::state::CURRENT_SCTX;
 use crate::runtime::{estack_pop, estack_push};
 use crate::startup::exit::os_exit;
 use crate::startup::usage::{fill_template, mainerr, usage, version};

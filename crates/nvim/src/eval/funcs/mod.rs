@@ -17,7 +17,6 @@ use crate::channel::defs::ChannelPart;
 use crate::env::XDGVarType;
 use crate::event::objects::ProcType;
 use crate::os::libc::uint64_t;
-use crate::register::defs::GRegFlags;
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash
 /// lookup over their names. Regenerate with `just apigen`.
@@ -78,7 +77,6 @@ pub use self::timer::*;
 pub use self::variables::*;
 pub use self::wrappers::*;
 pub const PROC_TYPE_PTY: ProcType = 1;
-pub const MAX_FUNC_ARGS: ::core::ffi::c_uint = 20;
 pub const NSUBEXP: ::core::ffi::c_uint = 10;
 pub const CHANNEL_PART_ALL: ChannelPart = 4;
 pub const CHANNEL_PART_RPC: ChannelPart = 3;
@@ -91,14 +89,7 @@ pub const SOME_MATCH_STR: SomeMatchType = 3;
 pub const SOME_MATCH_LIST: SomeMatchType = 2;
 pub const SOME_MATCH_END: SomeMatchType = 1;
 pub const SOME_MATCH: SomeMatchType = 0;
-pub const VSE_NONE: ::core::ffi::c_uint = 0;
-pub const G_REG_LIST: GRegFlags = 4;
-pub const G_REG_EXPR_SRC: GRegFlags = 2;
 pub const MENU_ALL_MODES: ::core::ffi::c_uint = 127;
-pub const TFN_NO_DEREF: ::core::ffi::c_uint = 8;
-pub const TFN_NO_AUTOLOAD: ::core::ffi::c_uint = 4;
-pub const TFN_QUIET: ::core::ffi::c_uint = 2;
-pub const TFN_INT: ::core::ffi::c_uint = 1;
 pub const XDG_DATA_DIRS: XDGVarType = 6;
 pub const XDG_CONFIG_DIRS: XDGVarType = 5;
 pub const XDG_RUNTIME_DIR: XDGVarType = 4;
@@ -106,12 +97,6 @@ pub const XDG_STATE_HOME: XDGVarType = 3;
 pub const XDG_CACHE_HOME: XDGVarType = 2;
 pub const XDG_DATA_HOME: XDGVarType = 1;
 pub const XDG_CONFIG_HOME: XDGVarType = 0;
-pub const YREG_YANK: ::core::ffi::c_uint = 1;
-pub const FCERR_TOOMANY: ::core::ffi::c_uint = 1;
-pub const FCERR_TOOFEW: ::core::ffi::c_uint = 2;
-pub const FCERR_NONE: ::core::ffi::c_uint = 5;
-pub const FCERR_UNKNOWN: ::core::ffi::c_uint = 0;
-pub const FCERR_NOTMETHOD: ::core::ffi::c_uint = 8;
 pub const INT64_MIN: ::core::ffi::c_long =
     -9223372036854775807 as ::core::ffi::c_long - 1 as ::core::ffi::c_long;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;

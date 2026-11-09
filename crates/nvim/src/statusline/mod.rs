@@ -41,10 +41,9 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 pub(crate) mod state;
-use crate::ascii::CAR;
-use crate::ascii::NL;
-use crate::narrow::as_index;
-use crate::narrow::len_as_int;
+use crate::ascii::{CAR, NL};
+use crate::narrow::{as_index, len_as_int};
+use crate::runtime::SID_ERROR;
 use crate::statusline::state::TAB_PAGE_CLICK_DEFS;
 use crate::types::DictBuilder;
 use core::ffi::{CStr, c_int};
@@ -98,7 +97,6 @@ pub const NUM_BASE_HEXADECIMAL: NumberBase = 16;
 pub const NUM_BASE_DECIMAL: NumberBase = 10;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
-pub const SID_ERROR: ::core::ffi::c_int = -5 as ::core::ffi::c_int;
 pub const MAX_STL_EVAL_DEPTH: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub const RULER_BUF_LEN: ::core::ffi::c_int = 70 as ::core::ffi::c_int;
 pub const TMPLEN: ::core::ffi::c_int = 70 as ::core::ffi::c_int;

@@ -77,7 +77,6 @@ pub const COCU_ALL: &CStr = c"nvic";
 /// The flag letters a 'comments' part may carry before its own separator.
 pub const COM_ALL: &CStr = c"nbsmexflrO";
 pub const SCL_NO: c_int = -1;
-pub const SID_NONE: c_int = -6;
 /// "E535: Illegal character after <%c>", for the options that spell a
 /// field as a character followed by a value.
 pub(crate) const E_ILLEGAL_CHARACTER_AFTER_CHR: &CStr = c"E535: Illegal character after <%c>";

@@ -22,11 +22,10 @@
 use super::do_sub_msg;
 use crate::cmdhist::add_to_history;
 use crate::ex_cmds::{
-    EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, HIST_SEARCH, IS_ALPHA, SUB_HONOR_OPTIONS,
-    SUB_IGNORE_CASE, SUB_MATCH_CASE, SubFlags,
+    HIST_SEARCH, IS_ALPHA, SUB_HONOR_OPTIONS, SUB_IGNORE_CASE, SUB_MATCH_CASE, SubFlags,
 };
 use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
-use crate::ex_docmd::ex_may_print;
+use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, ex_may_print};
 use crate::global_cell::GlobalCell;
 use crate::mbyte::cluster_len;
 use crate::memory::XString;
@@ -40,8 +39,7 @@ use crate::regexp::{RE_LAST, RE_SUBST, regtilde_owned};
 use crate::search::save_re_pat;
 use crate::shada::ShadaExtra;
 use crate::types::{CmdLine, ExArg, Failed, Timestamp};
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 /// The previous `:s` replacement: what a bare `:s` repeats and what `~`

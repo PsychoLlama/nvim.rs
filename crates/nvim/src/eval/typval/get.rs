@@ -142,7 +142,7 @@ pub fn tv_get_float(tv: &TypVal) -> Float {
 /// The answer borrows either the value's own string, a static name, or
 /// this buffer, so it lives no longer than the shorter of the two borrows.
 #[derive(Debug)]
-pub struct NumBuf([u8; NUMBUFLEN as usize]);
+pub struct NumBuf([u8; NUMBUFLEN]);
 
 impl Default for NumBuf {
     fn default() -> Self {
@@ -153,7 +153,7 @@ impl Default for NumBuf {
 impl NumBuf {
     /// A fresh, zeroed scratch.
     pub const fn new() -> Self {
-        NumBuf([0; NUMBUFLEN as usize])
+        NumBuf([0; NUMBUFLEN])
     }
 
     /// `tv` as a string, or `Err` with the error reported for a value that

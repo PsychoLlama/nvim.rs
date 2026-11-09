@@ -62,12 +62,7 @@
 pub mod state;
 use crate::api::keysets::KeyDict_echo_opts;
 use crate::api::vim::nvim_echo;
-use crate::ascii::BS;
-use crate::ascii::CAR;
-use crate::ascii::ESC;
-use crate::ascii::NL;
-use crate::ascii::TAB;
-use crate::ascii::ascii_iswhite;
+use crate::ascii::{BS, CAR, ESC, NL, TAB, ascii_iswhite};
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::has_event;
 use crate::charset::{
@@ -154,7 +149,7 @@ use crate::os::libc::{int64_t, size_t, uint64_t};
 use crate::os::time::os_delay;
 use crate::pos::MAXCOL;
 use crate::register::write_reg_contents;
-use crate::runtime::defs::EStackArg;
+use crate::runtime::defs::ESTACK_NONE;
 use crate::startup::{
     EMBEDDED_MODE, EX_EXITVAL, EXITING, FULL_SCREEN, HEADLESS_MODE, NVIM_TESTING, SILENT_MODE,
 };
@@ -220,7 +215,6 @@ pub const SB_CLEAR_CMDLINE_DONE: ScrollbackClear = 3;
 pub const SB_CLEAR_CMDLINE_BUSY: ScrollbackClear = 2;
 pub const SB_CLEAR_ALL: ScrollbackClear = 1;
 pub const SB_CLEAR_NONE: ScrollbackClear = 0;
-pub const ESTACK_NONE: EStackArg = 0;
 pub const FLUSH_MINIMAL: FlushBuffers = 0;
 /// A dialog's button list: `&` marks the next character as its hotkey, and
 /// a newline separates buttons.

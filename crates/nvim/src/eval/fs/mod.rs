@@ -72,8 +72,6 @@ pub use self::read::*;
 pub use self::write::*;
 
 pub const DIRECTION_NOT_SET: Direction = 0;
-pub const VALID_PATH: ::core::ffi::c_uint = 1;
-pub const VALID_HEAD: ::core::ffi::c_uint = 2;
 pub const FINDFILE_DIR: ::core::ffi::c_uint = 1;
 pub const FINDFILE_FILE: ::core::ffi::c_uint = 0;
 pub const FILE_CREATE: FileOpenFlags = 2;

@@ -14,6 +14,7 @@
 )]
 
 use crate::global_cell::{Field, field};
+use crate::runtime::SID_NONE;
 use crate::strings::has_bytes;
 use core::ffi::{CStr, c_int, c_uint};
 
@@ -56,9 +57,9 @@ use super::OptStringRef;
 use super::frame::{invalid, new_bytes, new_value, old_bytes, varp, win};
 use super::{
     B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT, COM_ALL, CPO_VI,
-    E_BACKUPEXT_AND_PATCHMODE_ARE_EQUAL, E_COMMA_REQUIRED, EOL_MAC, FO_ALL, SID_NONE,
-    did_set_opt_flags, did_set_optexpr, did_set_option_listflag, did_set_str_generic, illegal_char,
-    opt_strings_mask, opt_strings_ok, valid_filetype,
+    E_BACKUPEXT_AND_PATCHMODE_ARE_EQUAL, E_COMMA_REQUIRED, EOL_MAC, FO_ALL, did_set_opt_flags,
+    did_set_optexpr, did_set_option_listflag, did_set_str_generic, illegal_char, opt_strings_mask,
+    opt_strings_ok, valid_filetype,
 };
 
 /// 'backspace' is a word list, except that the number 2 is also accepted

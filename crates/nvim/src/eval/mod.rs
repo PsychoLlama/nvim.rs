@@ -30,6 +30,7 @@ pub(crate) mod typval_encode;
 pub mod userfunc;
 pub mod vars;
 pub mod window;
+
 use crate::ascii::NL;
 use crate::global_cell::GlobalCell;
 // Named here so the expression tree and `list.rs` can reach it by one
@@ -37,7 +38,6 @@ use crate::global_cell::GlobalCell;
 use crate::mark::defs::MarkGet;
 pub(crate) use crate::message::E_INVALBLOB;
 use crate::os::libc::uint64_t;
-use crate::register::defs::GRegFlags;
 use crate::registry::SlotTable;
 use crate::types::{ExprType, Failed, Timer};
 use core::ffi::{CStr, c_int, c_long, c_uint, c_ulong};
@@ -75,14 +75,13 @@ pub(crate) use self::vars::{get_v_event, restore_v_event};
 pub use self::expr::eval0;
 
 pub const IS_ALNUM: c_uint = 8;
-pub const REGSUB_MAGIC: c_uint = 2;
-pub const REGSUB_COPY: c_uint = 1;
 pub const MARK_ALL: MarkGet = 1;
-pub const GLV_READ_ONLY: c_uint = 16;
-pub const GLV_NO_AUTOLOAD: c_uint = 4;
-pub const GLV_QUIET: c_uint = 2;
+pub const GLV_READ_ONLY: c_int = 16;
+pub const GLV_NO_AUTOLOAD: c_int = 4;
+/// `get_lval`'s "do not report" flag.
+pub const GLV_QUIET: c_int = 2;
 pub const EXPR_ISNOT: ExprType = 10;
-pub const EXPR_IS: ExprType = 9;
+pub(crate) const EXPR_IS: ExprType = 9;
 pub const EXPR_NOMATCH: ExprType = 8;
 pub const EXPR_MATCH: ExprType = 7;
 pub const EXPR_SEQUAL: ExprType = 6;
@@ -92,10 +91,6 @@ pub const EXPR_GREATER: ExprType = 3;
 pub const EXPR_NEQUAL: ExprType = 2;
 pub const EXPR_EQUAL: ExprType = 1;
 pub const EXPR_UNKNOWN: ExprType = 0;
-pub const G_REG_EXPR_SRC: GRegFlags = 2;
-pub const FSK_IN_STRING: c_uint = 4;
-pub const FSK_KEYCODE: c_uint = 1;
-pub const FSK_SIMPLIFY: c_uint = 8;
 pub const GLV_STOP: GlvStatus = 2;
 pub type GlvStatus = c_uint;
 pub const GLV_OK: GlvStatus = 1;
@@ -139,6 +134,7 @@ pub const FNE_INCL_BR: c_int = 1 as c_int;
 pub const FNE_CHECK_START: c_int = 2 as c_int;
 /// The separator of an autoload name's path: `foo#bar#baz()`.
 pub const AUTOLOAD_CHAR: u8 = b'#';
+/// How deep `:const` locks the value it stores.
 pub const DICT_MAXNEST: c_int = 100 as c_int;
 
 /// The messages this tree reports, as the C spells them. Each is a
@@ -173,6 +169,5 @@ static LAST_TIMER_ID: GlobalCell<uint64_t> = GlobalCell::new(1 as uint64_t);
 static TIMERS: GlobalCell<SlotTable<uint64_t, Timer>> = GlobalCell::new(SlotTable::new());
 static CALLBACK_DEPTH: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub const TV_CSTRING: c_ulong = SIZE_MAX.wrapping_sub(1 as c_ulong);
-pub const PROF_YES: c_int = 1 as c_int;
 pub const INT_MAX: c_int = __INT_MAX__;
 pub const __INT_MAX__: c_int = 2147483647 as c_int;

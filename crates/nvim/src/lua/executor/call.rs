@@ -15,9 +15,10 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::eval::userfunc::MAX_FUNC_ARGS;
 use core::ffi::{CStr, c_int};
 
-use super::{LUA_INTERNAL_CALL, MAX_FUNC_ARGS, nlua_is_deferred_safe, viml_func_is_fast};
+use super::{LUA_INTERNAL_CALL, nlua_is_deferred_safe, viml_func_is_fast};
 use crate::api::private::helpers::{api_set_sctx, try_enter, try_leave};
 use crate::api_error;
 use crate::eval::typval::{CallFrame, TV_INITIAL_VALUE, tv_clear};

@@ -35,17 +35,15 @@ pub use ast::{ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, NODE_TYPE
 pub use lexer::viml_pexpr_next_token;
 pub use parse::viml_pexpr_parse;
 
-use crate::os::libc::size_t;
+use crate::keycodes::{FSK_KEYCODE, FSK_SIMPLIFY};
+use crate::os::libc::{size_t, uint8_t};
 use ast::{Slot, viml_pexpr_handle_bop};
 use strings::{parse_quoted_string, shifted_pos};
 
 use crate::charset::hex2nr;
 use crate::mbyte::utf_char2len;
-use crate::os::libc::uint8_t;
 use crate::types::{Float, UVarNumber};
 use crate::viml::parser::parser::{ParserPosition, ParserState};
-pub const FSK_SIMPLIFY: ::core::ffi::c_uint = 8;
-pub const FSK_KEYCODE: ::core::ffi::c_uint = 1;
 pub const CC_STRATEGY_IGNORE_CASE: ExprCaseCompareStrategy = 63;
 pub const CC_STRATEGY_MATCH_CASE: ExprCaseCompareStrategy = 35;
 pub const CC_STRATEGY_USE_OPTION: ExprCaseCompareStrategy = 0;

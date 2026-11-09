@@ -55,7 +55,9 @@
 pub(crate) mod state;
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::fire_autocmds;
-use crate::ex_cmds::EcmdFlags;
+use crate::ex_cmds::{EcmdFlags, do_ecmd};
+use crate::runtime::SID_MODELINE;
+use crate::runtime::defs::ETYPE_MODELINE;
 use crate::types::Handle;
 use crate::winlayer::BufId;
 use core::ffi::{CStr, c_int};
@@ -65,7 +67,6 @@ use crate::autocmd::{
     apply_autocmds_exarg, block_autocmds, fire_autocmds_retval, unblock_autocmds,
 };
 use crate::change::unchanged;
-use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::aborting;
 use crate::fold::{clear_folding, fold_update_all};
@@ -79,7 +80,6 @@ use crate::normal::end_visual_mode;
 use crate::option::shortmess;
 use crate::os::cshim::gettext;
 use crate::os::libc::uint32_t;
-use crate::runtime::defs::EStackType;
 use crate::syntax::reset_synblock;
 use crate::types::{
     BfaFlags, BlnFlags, Buffer, BufferRef, CdCause, DoBufAction, DoBufStart, ExArg, Failed,
@@ -143,7 +143,6 @@ pub const BFA_KEEP_UNDO: BfaFlags = 4;
 pub const BFA_WIPE: BfaFlags = 2;
 pub const BFA_DEL: BfaFlags = 1;
 pub const READ_NOWINENTER: ::core::ffi::c_uint = 128;
-pub const ETYPE_MODELINE: EStackType = 4;
 pub const READ_BUFFER: ::core::ffi::c_uint = 8;
 pub const READ_STDIN: ::core::ffi::c_uint = 4;
 pub const READ_NEW: ::core::ffi::c_uint = 1;
@@ -309,7 +308,6 @@ pub fn buf_valid(buffer: BufId) -> bool {
 static LASTTITLE: GlobalCell<Option<XString>> = GlobalCell::new(None);
 static LASTICON: GlobalCell<Option<XString>> = GlobalCell::new(None);
 pub const NO_LOCAL_UNDOLEVEL: ::core::ffi::c_int = -123456 as ::core::ffi::c_int;
-pub const SID_MODELINE: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const SEA_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEA_DIALOG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SEA_QUIT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

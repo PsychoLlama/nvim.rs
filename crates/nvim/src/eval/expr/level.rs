@@ -20,12 +20,12 @@
 )]
 
 use crate::charset::skip;
-use crate::eval::Cursor;
-use crate::eval::char_len_at;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::{Cursor, char_len_at};
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::narrow::as_index;
+use crate::register::defs::G_REG_EXPR_SRC;
 use crate::semsg;
 use core::ffi::c_int;
 
@@ -36,10 +36,9 @@ use crate::eval::typval::{tv_check_num, tv_check_str, tv_clear, tv_get_number_ch
 use crate::eval::userfunc::{call_simple_func, call_simple_luafunc, get_lambda_tv};
 use crate::eval::vars::{check_vars, eval_variable, lua_partial};
 use crate::eval::{
-    EXPR_UNKNOWN, G_REG_EXPR_SRC, Parsed, comparison_at, eval_dict, eval_env_var, eval_func,
-    eval_interp_string, eval_isnamec, eval_isnamec1, eval_list, eval_lit_dict, eval_lit_string,
-    eval_number, eval_option, eval_string, get_name_len, handle_subscript, luafunc_name_end,
-    typval_compare,
+    EXPR_UNKNOWN, Parsed, comparison_at, eval_dict, eval_env_var, eval_func, eval_interp_string,
+    eval_isnamec, eval_isnamec1, eval_list, eval_lit_dict, eval_lit_string, eval_number,
+    eval_option, eval_string, get_name_len, handle_subscript, luafunc_name_end, typval_compare,
 };
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;

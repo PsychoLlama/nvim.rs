@@ -107,7 +107,7 @@ pub(crate) fn push_decimal(out: &mut Vec<u8>, n: impl Into<i128>) {
 
 /// Append `flt` as C's `%g` spells it.
 pub(crate) fn push_float_g(out: &mut Vec<u8>, flt: crate::types::Float) {
-    let mut numbuf = [0u8; crate::eval::typval::NUMBUFLEN as usize];
+    let mut numbuf = [0u8; crate::eval::typval::NUMBUFLEN];
     let len = crate::strings::format_float_g(flt, &mut numbuf);
     out.extend_from_slice(&numbuf[..len]);
 }

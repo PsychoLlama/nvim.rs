@@ -28,7 +28,7 @@
 mod assign;
 pub(crate) use self::assign::*;
 
-use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{DictItem, TV_INITIAL_VALUE};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use core::ffi::c_int;
@@ -36,7 +36,6 @@ use core::ops::ControlFlow;
 
 use crate::ascii::ascii_iswhite;
 use crate::cstr::byte_at;
-use crate::eval::typval::DictItem;
 use crate::eval::typval::{
     BlobRef, DictRef, ListRef, NumBuf, blob_check_index, blob_check_range, blob_len, index_of,
     list_check_range_index_one, list_check_range_index_two, list_items_mut, tv_blob_alloc_ret,
@@ -648,7 +647,7 @@ impl Walk<'_, '_> {
         // An existing item: check it may be changed.
         let flags = c_int::from(flags);
         let named = &self.text[..self.at];
-        let refused = self.flags & GLV_READ_ONLY.cast_signed() == 0
+        let refused = self.flags & GLV_READ_ONLY == 0
             && (var_check_ro_named(flags, named) || var_check_lock_named(flags, named));
         if refused {
             return Err(LvalError::Said(Failed));
@@ -777,7 +776,7 @@ pub(crate) fn get_lval<'a>(
     flags: c_int,
     fne_flags: c_int,
 ) -> (LValue<'a>, Result<usize, LvalError>) {
-    let quiet = flags & GLV_QUIET.cast_signed() != 0;
+    let quiet = flags & GLV_QUIET != 0;
     let mut lval = LValue::new(text);
 
     if skip {
@@ -841,8 +840,7 @@ pub(crate) fn get_lval<'a>(
         flags,
         quiet,
         // Only a write keeps the lookup from sourcing an autoload script.
-        no_autoload: flags & (GLV_NO_AUTOLOAD | GLV_READ_ONLY).cast_signed()
-            != GLV_READ_ONLY.cast_signed(),
+        no_autoload: flags & (GLV_NO_AUTOLOAD | GLV_READ_ONLY) != GLV_READ_ONLY,
         slot: Slot::Variable,
         container: Container::Other,
         stale: false,

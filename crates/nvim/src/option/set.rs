@@ -30,10 +30,10 @@ use crate::autocmd::defs::AutoEvent;
 use crate::message_fmt::emsg_text;
 use crate::narrow::as_index;
 use crate::option::defs::OPT_VAL_TYPE_STRING;
+use crate::runtime::SID_NONE;
 use crate::tr;
-use crate::types::ColNr;
-use crate::types::LineNr;
-use crate::winlayer::Win;
+use crate::types::{ColNr, LineNr};
+use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 
 use crate::autocmd::{do_filetype_autocmd, fire_autocmds_for};
@@ -66,14 +66,13 @@ use crate::window::set_winbar;
 
 use super::{
     NO_LOCAL_UNDOLEVEL, OPT_FLAG_CURSWANT, OPT_FLAG_HL_ONLY, OPT_FLAG_REDR_ALL, OPT_FLAG_SECURE,
-    OPT_FLAG_UI_OPTION, OPT_SCOPE_BUF, OPT_SCOPE_WIN, OptSlot, Replaced, SID_NONE, check_redraw,
+    OPT_FLAG_UI_OPTION, OPT_SCOPE_BUF, OPT_SCOPE_WIN, OptSlot, Replaced, check_redraw,
     do_spelllang_source, do_syntax_autocmd, get_varp, get_varp_scope, insecure_flag,
     is_option_hidden, mark_option_was_set, option_has_scope, option_has_type,
     option_is_global_local, option_is_global_only, option_scope_idx, option_var, replace_slot,
     restore_slot, set_option_last_set, slot_holds, slot_value, tty_option_end,
     validate_option_value, write_slot,
 };
-use crate::winlayer::Buf;
 
 /// Record where the option was just set, in every scope the flags name.
 pub(crate) fn set_option_sctx(

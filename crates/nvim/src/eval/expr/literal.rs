@@ -24,13 +24,10 @@ use crate::env::{expand_env, getenv_resolved};
 use crate::eval::typval::{tv_blob_alloc, tv_blob_set_ret};
 use crate::eval::vars::eval_one_expr_in_text;
 use crate::eval::{Cursor, char_len_at, env_name_len, option_var_end};
-use crate::keycodes::{
-    FSK_IN_STRING, FSK_KEYCODE, FSK_SIMPLIFY, special_key_at, trans_special_into,
-};
-use crate::mbyte::MB_MAXCHAR;
-use crate::mbyte::encode_char;
-use crate::memory::ThinCString;
-use crate::memory::XString;
+use crate::keycodes::{FSK_IN_STRING, FSK_KEYCODE, FSK_SIMPLIFY};
+use crate::keycodes::{special_key_at, trans_special_into};
+use crate::mbyte::{MB_MAXCHAR, encode_char};
+use crate::memory::{ThinCString, XString};
 use crate::message::{emsg, iemsg};
 use crate::message_fmt::msg_bytes;
 use crate::option::defs::OptVal;

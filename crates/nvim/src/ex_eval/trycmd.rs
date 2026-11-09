@@ -46,10 +46,7 @@ use super::exception::{
     PendingAction, PendingValue, catch_exception, discard_current_exception, discard_exception,
     do_intthrow, free_global_msglist, report_pending, throw_exception,
 };
-use super::flag::{
-    CSTP_BREAK, CSTP_CONTINUE, CSTP_ERROR, CSTP_FINISH, CSTP_INTERRUPT, CSTP_NONE, CSTP_RETURN,
-    CSTP_THROW, THROW_ON_ERROR,
-};
+use super::flag::{CSTP_BREAK, CSTP_CONTINUE, CSTP_NONE, THROW_ON_ERROR};
 use super::{CsFlags, CsLoopFlags};
 use super::{
     aborting, check_skip, cleanup_conditionals, cond_stack_of, ex_break, ex_continue, get_end_emsg,
@@ -60,6 +57,7 @@ use crate::debugger::dbg_check_skipped;
 use crate::eval::eval_cmd_string;
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::defs::{Cleanup, CondId, Pend};
+use crate::ex_eval::flag::{CSTP_ERROR, CSTP_FINISH, CSTP_INTERRUPT, CSTP_RETURN, CSTP_THROW};
 use crate::ex_eval::state::{CURRENT_EXCEPTION, DID_THROW, FORCE_ABORT, NEED_RETHROW};
 use crate::getchar::state::GOT_INT;
 use crate::guard::Suppress;

@@ -17,8 +17,7 @@
 
 pub mod buffered;
 pub(crate) mod state;
-use crate::autocmd::defs::AcoSave;
-use crate::autocmd::defs::AutoEvent;
+use crate::autocmd::defs::{AcoSave, AutoEvent};
 use crate::autocmd::state::AUTOCMD_BUSY;
 use crate::autocmd::{
     apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf, augroup_exists_of, do_doautocmd,
@@ -51,12 +50,11 @@ use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::mbyte::{canon_props, canonize, utf_byte2len};
 use crate::memline::{check_need_swap, ml_append_terminated, ml_delete, ml_open};
 use crate::memory::{XString, try_grow_zeroed};
-use crate::message::E_INTERR;
-use crate::message::IOSIZE;
 use crate::message::state::{
     EMSG_SILENT, IN_ASSERT_FAILS, KEEP_MSG, MSG_COL, MSG_LISTDO_OVERWRITE, MSG_SCROLL,
     MSG_SCROLLED, MSG_SCROLLED_IGN, MSG_SILENT, NEED_FILEINFO, NEED_WAIT_RETURN, NO_WAIT_RETURN,
 };
+use crate::message::{E_INTERR, IOSIZE};
 use crate::message::{
     do_dialog, emsg, fit_head, msg, msg_check_for_delay, msg_clr_eos, msg_delay, msg_display_bytes,
     msg_end, msg_fit_head, msg_progress, msg_putchar, msg_start, msg_str, msg_str_hl, set_keep_msg,
@@ -80,15 +78,13 @@ use crate::os::fs::{
     os_scandir_next, os_set_acl, os_setperm, path_exists, reopen_stdin_on_stderr,
 };
 use crate::os::input::os_breakcheck;
-use crate::os::libc::int64_t;
-use crate::os::libc::off_t;
+use crate::os::libc::{int64_t, off_t};
 use crate::path::{
     add_pathsep, after_pathsep, dir_of_file_exists, path_fnamecmp, path_is_absolute,
     path_shorten_fname, path_tail, path_with_url, vim_full_name,
 };
 use crate::pos::MAXLNUM;
-use crate::regexp::RegMatch;
-use crate::regexp::vim_regexec;
+use crate::regexp::{RegMatch, vim_regexec};
 use crate::sha256::Sha256;
 use crate::shada::check_marks_read;
 use crate::startup::{EXITING, READONLYMODE, RECOVERYMODE, STDIN_FD, VIM_IGNORED};
@@ -131,8 +127,6 @@ pub use self::tempfile::*;
 mod stream;
 pub(crate) use self::stream::*;
 pub const BAD_REPLACE: c_int = b'?' as c_int;
-pub const BAD_KEEP: c_int = -1;
-pub const BAD_DROP: c_int = -2;
 pub const ENC_UCSBOM: &CStr = c"ucs-bom";
 pub const EOL_UNKNOWN: c_int = -1;
 pub const EOL_UNIX: c_int = 0;
@@ -193,6 +187,8 @@ static E_AUCHANGEDBUF: &CStr = c"E812: Autocommands changed buffer or buffer nam
 /// The top bit of every byte of a word: a word ANDed with it is zero when
 /// all eight bytes are ASCII.
 const NONASCII_MASK: u64 = u64::MAX / 0xff * 0x80;
+pub(crate) const BAD_KEEP: c_int = -1;
+pub(crate) const BAD_DROP: c_int = -2;
 impl Buf {
     /// Report which file is being read or written.
     ///

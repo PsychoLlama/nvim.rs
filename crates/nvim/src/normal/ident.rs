@@ -14,10 +14,10 @@ use super::identfind::find_ident_under_cursor;
 use super::state::with_scratch_cmd;
 use crate::ascii::ascii_iswhite;
 use crate::cstr;
-use crate::ex_cmds::EcmdFlags;
-use crate::ex_cmds::newlnum;
+use crate::ex_cmds::{EcmdFlags, do_ecmd, newlnum};
+use crate::ex_getln::{VSE_NONE, fnameescape};
 use crate::option::vars::P_KP;
-use crate::strings::has_char;
+use crate::strings::{has_char, shellescape};
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
@@ -26,21 +26,18 @@ use crate::charset::is_word_at;
 use crate::cmdhist::{add_to_history, init_history};
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
-use crate::ex_cmds::do_ecmd;
 use crate::ex_cmds2::autowrite;
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::ex_getln::fnameescape;
 use crate::file_search::grab_file_name;
 use crate::mapping::add_map;
 use crate::mark::setpcmark;
 use crate::mbyte::{cluster_len, head_off};
 use crate::memline::Lines;
-use crate::message::E_NOIDENT;
-use crate::message::emsg;
+use crate::message::{E_NOIDENT, emsg};
 use crate::normal::defs::CmdArg;
 use crate::normal::{
-    FIND_IDENT, FIND_STRING, HIST_SEARCH, VSE_NONE, check_clear_op_quit,
-    check_text_or_curbuf_locked, clear_op, get_visual_text, normal_search, visual_active,
+    FIND_IDENT, FIND_STRING, HIST_SEARCH, check_clear_op_quit, check_text_or_curbuf_locked,
+    clear_op, get_visual_text, normal_search, visual_active,
 };
 use crate::option::magic_isset;
 use crate::optionstr::{OptString, OptStringRef, local_or_global};
@@ -49,7 +46,6 @@ use crate::os::libc::int64_t;
 use crate::search::state::NO_SMARTCASE;
 use crate::state::MODE_TERMINAL;
 use crate::state::mode::RESTART_EDIT;
-use crate::strings::shellescape;
 use crate::tag::state::G_TAG_AT_CURSOR;
 use crate::tag::{TagCmd, do_tag};
 use crate::types::{ColNr, Failed, LineNr};
@@ -318,7 +314,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         let word = cstr::until_nul(text.get(start..).unwrap_or_default());
         let word = &word[..n.min(word.len())];
         let quoted = if kp_ex {
-            fnameescape(&cstr::owned(word), VSE_NONE.cast_signed())
+            fnameescape(&cstr::owned(word), VSE_NONE)
         } else {
             shellescape(word, true, true)
         };

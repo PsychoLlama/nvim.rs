@@ -53,6 +53,7 @@ use crate::eval::vars::new_script_vars;
 use crate::eval::{eval_to_number, get_copy_id};
 use crate::ex_docmd::state::{CMDMOD, EX_NESTING_LEVEL, GLOBAL_BUSY, LISTCMD_BUSY};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd};
+use crate::ex_eval::flag::CSTP_FINISH;
 use crate::ex_eval::{
     PendingAction, PendingValue, aborting, cleanup_conditionals, cond_stack_of, report_pending,
 };
@@ -82,6 +83,7 @@ use crate::path::{
     append_path, concat_fnames, fix_fname, gen_expand_wildcards, past_head_index, path_fnamecmp,
     path_fnamencmp, path_with_extension, tail_index, vim_ispathsep, vim_ispathsep_nocolon,
 };
+use crate::profile::PROF_YES;
 use crate::profile::{DO_PROFILING, startup_timing};
 use crate::profile::{
     prof_child_enter, prof_child_exit, profile_add, profile_end, profile_init, profile_self,
@@ -90,7 +92,9 @@ use crate::profile::{
 };
 use crate::regexp::{RE_MAGIC, RE_STRING};
 use crate::registry::{IdMap, IdSet, id_map, id_set};
+use crate::runtime::defs::{ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, ETYPE_AUCMD, ETYPE_TOP};
 use crate::runtime::defs::{EStack, EStackArg, EStackType, EstackInfo, FrameName, ScriptItem};
+use crate::runtime::defs::{ETYPE_SCRIPT, ETYPE_UFUNC};
 use crate::runtime::state::{CURRENT_SCTX, DID_SOURCE_PACKAGES};
 use crate::types::{
     ApiDict, ApiString, Array, BOOL_VAR_FALSE, ExArg, Integer, LineNr, Object, ProfTime, ScriptCtx,
@@ -124,8 +128,6 @@ pub use self::source::*;
 
 /// The room upstream's `MAXPATHL` buffers had, terminator included.
 const PATH_ROOM: usize = crate::path::MAXPATHL as usize;
-/// `:finish` as a pending control-flow reason, for `report_pending`.
-pub const CSTP_FINISH: ::core::ffi::c_int = 32;
 /// `globpath` flags.
 pub const XDG_DATA_DIRS: XDGVarType = 6;
 pub const XDG_CONFIG_DIRS: XDGVarType = 5;
@@ -135,14 +137,6 @@ pub const XDG_CACHE_HOME: XDGVarType = 2;
 pub const XDG_DATA_HOME: XDGVarType = 1;
 pub const XDG_CONFIG_HOME: XDGVarType = 0;
 pub const XDG_NONE: XDGVarType = -1;
-/// `do_cmdline` flags.
-pub const ETYPE_AUCMD: EStackType = 3;
-pub const ETYPE_UFUNC: EStackType = 2;
-pub const ETYPE_SCRIPT: EStackType = 1;
-pub const ETYPE_TOP: EStackType = 0;
-pub const ESTACK_SCRIPT: EStackArg = 3;
-pub const ESTACK_STACK: EStackArg = 2;
-pub const ESTACK_SFILE: EStackArg = 1;
 crate::flag_set! {
     /// How a runtime-file search should behave -- upstream's `DIP_*`, the
     /// `flags` argument [`do_in_path_visit`] and everything under it thread:
@@ -200,16 +194,20 @@ pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 pub const SYS_OPTWIN_FILE: &::core::ffi::CStr = c"$VIMRUNTIME/scripts/optwin.lua";
-pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const SID_MODELINE: ::core::ffi::c_int = -1;
-pub const SID_CMDARG: ::core::ffi::c_int = -2;
-pub const SID_CARG: ::core::ffi::c_int = -3;
-pub const SID_ENV: ::core::ffi::c_int = -4;
-pub const SID_ERROR: ::core::ffi::c_int = -5;
-pub const SID_WINLAYOUT: ::core::ffi::c_int = -7;
-pub const SID_LUA: ::core::ffi::c_int = -8;
-pub const SID_API_CLIENT: ::core::ffi::c_int = -9;
-pub const SID_STR: ::core::ffi::c_int = -10;
+pub const SID_MODELINE: ScriptId = -1;
+pub const SID_CMDARG: ScriptId = -2;
+pub const SID_CARG: ScriptId = -3;
+pub const SID_ENV: ScriptId = -4;
+pub const SID_ERROR: ScriptId = -5;
+/// `CURRENT_SCTX.sc_sid` for a `:set` that came from nowhere in particular,
+/// which is what the scratch buffer's two option writes are.
+pub(crate) const SID_NONE: ScriptId = -6;
+pub const SID_WINLAYOUT: ScriptId = -7;
+/// `CURRENT_SCTX.sc_sid` for a call that came from Lua, and for one that came
+/// from an RPC client.
+pub const SID_LUA: ScriptId = -8;
+pub const SID_API_CLIENT: ScriptId = -9;
+pub const SID_STR: ScriptId = -10;
 /// The execution stack, outermost frame first -- see [`estack`].
 ///
 /// A `Vec`, not a `GArray`: nothing outside this crate reads it, the

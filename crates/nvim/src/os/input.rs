@@ -21,9 +21,8 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use crate::autocmd::defs::AutoEvent;
-use crate::autocmd::fire_autocmds;
 use crate::autocmd::state::DID_CURSORHOLD;
-use crate::autocmd::trigger_cursorhold;
+use crate::autocmd::{fire_autocmds, trigger_cursorhold};
 use crate::event::libuv::uv_guess_handle;
 use crate::event::r#loop::{Drain, loop_poll_events, wait_on_main_loop};
 use crate::event::objects::{Event, RStream, Stream};
@@ -33,12 +32,12 @@ use crate::event_queue::{self, ChildQueue, QueueId, queue_in};
 use crate::getchar::state::{CTRL_C_INTERRUPTS, GOT_INT, MAPPED_CTRL_C, TYPEBUF_WAS_FILLED};
 use crate::getchar::{before_blocking, typebuf_changed};
 use crate::global_cell::GlobalCell;
-use crate::keycodes::KeyExtra;
 use crate::keycodes::{
-    CTRL_C, FSK_KEYCODE, K_SPECIAL, KE_EVENT, KE_FILLER, KE_LEFTMOUSE, KE_MIDDLEMOUSE,
-    KE_MOUSEDOWN, KE_MOUSEMOVE, KE_MOUSERIGHT, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1MOUSE,
-    KE_X2MOUSE, KE_X2RELEASE, KS_EXTRA, KS_MODIFIER, KS_SPECIAL,
+    CTRL_C, K_SPECIAL, KE_EVENT, KE_FILLER, KE_LEFTMOUSE, KE_MIDDLEMOUSE, KE_MOUSEDOWN,
+    KE_MOUSEMOVE, KE_MOUSERIGHT, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1MOUSE, KE_X2MOUSE,
+    KE_X2RELEASE, KS_EXTRA, KS_MODIFIER, KS_SPECIAL,
 };
+use crate::keycodes::{FSK_KEYCODE, KeyExtra};
 use crate::keycodes::{ModMask, special_key_at, special_key_bytes};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::mouse::state::{MOUSE_COL, MOUSE_GRID, MOUSE_ROW};
@@ -48,7 +47,7 @@ use crate::os::cshim::gettext;
 use crate::os::libc::STDIN_FILENO;
 use crate::os::libc::{size_t, uint8_t, uint64_t};
 use crate::os::time::os_hrtime;
-use crate::profile::DO_PROFILING;
+use crate::profile::{DO_PROFILING, PROF_YES};
 use crate::profile::{prof_input_end, prof_input_start};
 use crate::startup::{MAIN_LOOP, SILENT_MODE, USED_STDIN, getout, preserve_exit};
 use crate::state::mode::STATE;
@@ -61,7 +60,6 @@ use core::mem::MaybeUninit;
 use core::ptr;
 
 const UV_TTY: uv_handle_type = 14;
-const PROF_YES: c_int = 1;
 /// The longest byte sequence one key can become: `K_SPECIAL KS_MODIFIER mod`
 /// plus `K_SPECIAL KS_EXTRA code`.
 const MAX_KEY_CODE_LEN: usize = 6;

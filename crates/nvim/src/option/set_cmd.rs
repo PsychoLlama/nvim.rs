@@ -27,12 +27,10 @@
 use crate::charset::Str2NrBases;
 use crate::charset::{str2nr_in, trans_characters_in};
 use crate::cstr;
-use crate::keycodes::CTRL_V;
-use crate::keycodes::SpecialKey;
-use crate::keycodes::special_key_at;
+use crate::keycodes::{CTRL_V, SpecialKey, special_key_at};
+use crate::keycodes::{FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY};
 use crate::memory::ThinCString;
-use crate::option::defs::OPT_VAL_TYPE_BOOLEAN;
-use crate::option::defs::OPT_VAL_TYPE_NUMBER;
+use crate::option::defs::{OPT_VAL_TYPE_BOOLEAN, OPT_VAL_TYPE_NUMBER};
 use crate::optionstr::OptString;
 use crate::types::CmdIdx;
 use crate::winlayer::{Buf, Win};
@@ -44,8 +42,7 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::drawscreen::{UPD_CLEAR, redraw_all_later};
 use crate::eval::last_set_msg;
 use crate::ex_getln::gotocmdline;
-use crate::guard::SANDBOX;
-use crate::guard::Suppress;
+use crate::guard::{SANDBOX, Suppress};
 use crate::message::IOSIZE;
 use crate::message::state::INFO_MESSAGE;
 use crate::message::{E_INVARG, E_SANDBOX, E_TRAILING};
@@ -58,12 +55,12 @@ use crate::startup::SILENT_MODE;
 use crate::types::{ExArg, Failed, OptInt, ScriptId};
 
 use super::{
-    FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING,
-    OPT_FLAG_MLE, OPT_FLAG_SECURE, OPT_SCOPE_BUF, OPT_SCOPE_WIN, didset_options, didset_options2,
-    get_option, get_option_default, get_option_value, get_varp, get_varp_scope, is_tty_option,
-    option_has_scope, option_has_type, option_is_global_local, option_is_window_local,
-    option_scope_idx, option_var, set_option, set_options_default, showoneopt, showoptions,
-    slot_value, stropt_get_newval, unset_option_local_value,
+    OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, OPT_FLAG_MLE, OPT_FLAG_SECURE, OPT_SCOPE_BUF,
+    OPT_SCOPE_WIN, didset_options, didset_options2, get_option, get_option_default,
+    get_option_value, get_varp, get_varp_scope, is_tty_option, option_has_scope, option_has_type,
+    option_is_global_local, option_is_window_local, option_scope_idx, option_var, set_option,
+    set_options_default, showoneopt, showoptions, slot_value, stropt_get_newval,
+    unset_option_local_value,
 };
 
 /// The messages the parse reports. They go back to [`do_set`] rather than
@@ -611,7 +608,7 @@ fn find_key_len(arg: &[u8], len: usize, text: &[u8], has_lt: bool) -> c_int {
     if !has_lt {
         return 0;
     }
-    let how = FSK_KEYCODE.cast_signed() | FSK_KEEP_X_KEY.cast_signed() | FSK_SIMPLIFY.cast_signed();
+    let how = FSK_KEYCODE | FSK_KEEP_X_KEY | FSK_SIMPLIFY;
     match special_key_at(text, how, None) {
         // A key with a modifier left over does not fit in one option value.
         Ok(Some((key, modifiers, _))) if modifiers.is_empty() => key.code(),

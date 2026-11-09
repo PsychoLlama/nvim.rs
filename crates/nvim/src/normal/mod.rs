@@ -64,7 +64,6 @@ pub(crate) const DIRECTION_NOT_SET: Direction = 0;
 pub(crate) const K_MARK_NO_CONTEXT: MarkMove = 4;
 pub(crate) const MARK_ALL: MarkGet = 1;
 pub(crate) use crate::cmdhist::HIST_SEARCH;
-pub(crate) const VSE_NONE: c_uint = 0;
 pub(crate) const SHOWCMD_COLS: c_uint = 10;
 pub(crate) const SHOWCMD_BUFLEN: c_uint = 41;
 pub(crate) const FIND_EVAL: c_int = 4;

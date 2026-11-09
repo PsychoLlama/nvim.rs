@@ -64,6 +64,7 @@ use crate::highlight_group::{
     syn_check_group, syn_id2name,
 };
 use crate::insexpand::get_cot_flags;
+use crate::keycodes::{REPTERM_DO_LT, REPTERM_FROM_PART, REPTERM_NO_SPECIAL};
 use crate::keycodes::{name_to_mod_mask, replace_termcodes};
 use crate::log::{G_STATS, LOGLVL_DBG};
 use crate::lua::executor::{nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe};
@@ -152,9 +153,6 @@ pub use self::statusline::*;
 pub use self::term::*;
 pub use self::vars::*;
 pub const MESSAGE_TYPE_NOTIFICATION: MessageType = 2;
-pub const REPTERM_NO_SPECIAL: ::core::ffi::c_uint = 4;
-pub const REPTERM_DO_LT: ::core::ffi::c_uint = 2;
-pub const REPTERM_FROM_PART: ::core::ffi::c_uint = 1;
 pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 /// The top bit of a channel id: an API call made by the editor itself

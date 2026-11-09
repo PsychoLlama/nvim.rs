@@ -17,11 +17,10 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::eval::FSK_IN_STRING;
+use crate::keycodes::{FSK_IN_STRING, trans_special_into};
 use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::keycodes::trans_special_into;
 use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{cluster_len, encode_char};
 
@@ -317,9 +316,9 @@ fn decode_double(
             }
             // A special key, e.g. `\<C-W>`.
             b'<' => {
-                let mut flags = FSK_KEYCODE.cast_signed() | FSK_IN_STRING.cast_signed();
+                let mut flags = FSK_KEYCODE | FSK_IN_STRING;
                 if body.get(i + 1) != Some(&b'*') {
-                    flags |= FSK_SIMPLIFY.cast_signed();
+                    flags |= FSK_SIMPLIFY;
                 }
                 match trans_special_into(&body[i..], flags, false, &mut out) {
                     Ok(Some(consumed)) => i += consumed,

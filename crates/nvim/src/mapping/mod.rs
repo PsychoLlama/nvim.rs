@@ -35,6 +35,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use crate::keycodes::{KS_EXTRA, KS_MODIFIER};
+use crate::keycodes::{REPTERM_DO_LT, REPTERM_FROM_PART};
 use crate::types::ScriptCtx;
 use core::ffi::{CStr, c_int};
 
@@ -75,8 +76,7 @@ use crate::option::defs::OptSet;
 use crate::option::vars::{p_cpo, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::libc::{ptrdiff_t, size_t, uint64_t};
-use crate::regexp::RegMatch;
-use crate::regexp::vim_regexec;
+use crate::regexp::{RegMatch, vim_regexec};
 use crate::runtime::state::CURRENT_SCTX;
 use crate::state::mode::{NO_ABBR, STATE};
 use crate::state::{
@@ -112,7 +112,7 @@ mod langmap;
 pub use self::langmap::*;
 pub use crate::getchar::MAXMAPLEN;
 pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
-pub use crate::keycodes::{REPTERM_DO_LT, REPTERM_FROM_PART, REPTERM_NO_SIMPLIFY};
+pub use crate::keycodes::REPTERM_NO_SIMPLIFY;
 /// The `:map` arguments being parsed, and the owner of everything a parse
 /// allocates.
 ///

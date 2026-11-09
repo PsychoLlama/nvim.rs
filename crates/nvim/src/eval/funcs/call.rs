@@ -10,7 +10,6 @@
 )]
 
 use super::wrappers::arg_number;
-use super::{MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET};
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::{au_exists, autocmd_supported};
 use crate::env::expand_env;
@@ -20,6 +19,7 @@ use crate::eval::gc::{GARBAGE_COLLECT_AT_EXIT, WANT_GARBAGE_COLLECT};
 use crate::eval::typval::{
     ListRef, NumBuf, PartialRef, list_iter, list_len, tv_check_for_dict_arg, tv_check_for_list_arg,
 };
+use crate::eval::userfunc::{MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET};
 use crate::eval::userfunc::{
     emsg_funcname, find_func, func_call, func_exists, func_ptr_ref, func_ref_name, func_unref_name,
     function_exists, save_function_name, scriptlocal_funcname, trans_function_name,
@@ -39,8 +39,7 @@ use crate::message::emsg;
 use crate::message::state::{EMSG_NOREDIR, EMSG_SILENT, MSG_COL, NEED_CLR_EOS, REDIR_OFF};
 use crate::message::{E_TOOMANYARG, E_UNKNOWN_FUNCTION_STR, capture_finish, capture_start};
 use crate::message_fmt::{msg_bytes, msg_cstr, msg_cstr_opt};
-use crate::narrow::as_index;
-use crate::narrow::number_as_int;
+use crate::narrow::{as_index, number_as_int};
 use crate::os::cshim::gettext;
 use crate::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
 use crate::os::env::env_exists;
@@ -89,7 +88,7 @@ pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // which is what turns `s:`/`<SID>` into the real name.
     let tofree;
     if args[0].v_type() == VAR_STRING {
-        let flags = TFN_INT.cast_signed() | TFN_QUIET.cast_signed();
+        let flags = TFN_INT | TFN_QUIET;
         let written = func.to_bytes();
         let Some(translated) = trans_function_name(written, false, flags, false).name else {
             emsg_funcname(E_UNKNOWN_FUNCTION_STR, written);
@@ -309,10 +308,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     if let Some(written) = given
         && ((use_string && !has_char(written, c_int::from(AUTOLOAD_CHAR))) || is_funcref)
     {
-        let flags = TFN_INT.cast_signed()
-            | TFN_QUIET.cast_signed()
-            | TFN_NO_AUTOLOAD.cast_signed()
-            | TFN_NO_DEREF.cast_signed();
+        let flags = TFN_INT | TFN_QUIET | TFN_NO_AUTOLOAD | TFN_NO_DEREF;
         let written = written.to_bytes();
         let found = save_function_name(written, false, flags, false);
         trans_name = found.name;
@@ -398,7 +394,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
             list = args[arg_idx].list_ref();
             if list_len(list) == 0 {
                 arg_idx = 0;
-            } else if list_len(list) > MAX_FUNC_ARGS.cast_signed() {
+            } else if list_len(list) > MAX_FUNC_ARGS {
                 emsg_funcname(E_TOOMANYARG, written);
                 return;
             }

@@ -21,7 +21,7 @@
 use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_ensure_loaded, find_buf};
 use crate::decoration::bufhl_add_hl_pos_offset;
-use crate::ex_cmds::{PreviewLines, SID_NONE, SubResult, do_sub};
+use crate::ex_cmds::{PreviewLines, SubResult, do_sub};
 use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
 use crate::getchar::state::{GOT_INT, KEY_TYPED};
 use crate::memline::{Lines, ml_append_bytes, ml_replace_buf_text};
@@ -36,9 +36,9 @@ use crate::options::OPT_SHORTMESS;
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::libc::int64_t;
 use crate::profile::{profile_setlimit, profile_zero};
+use crate::runtime::SID_NONE;
 use crate::types::{ColNr, ExArg, Handle, LPos, LineNr, OptInt, Pos};
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int, c_ulong};
 use std::ffi::CString;
 

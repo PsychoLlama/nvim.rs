@@ -18,8 +18,10 @@
 use crate::env::{get_appname, user_config_path, xdg_var};
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
+use crate::runtime::defs::ETYPE_ARGS;
+use crate::runtime::{SID_CARG, SID_CMDARG};
 use crate::semsg;
-use crate::types::LineNr;
+use crate::types::{LineNr, ScriptId};
 use crate::winlayer::Win;
 use core::ffi::CStr;
 use std::ffi::CString;
@@ -34,12 +36,11 @@ use crate::os::state::{EQUAL_FILES, XDG_CONFIG_DIRS};
 use crate::path::path_full_compare;
 use crate::profile::time_msg_at;
 use crate::quickfix::qf_jump_to_current;
-use crate::runtime::state::{CURRENT_SCTX, ETYPE_ARGS, SID_CARG, SID_CMDARG};
+use crate::runtime::state::CURRENT_SCTX;
 use crate::runtime::{do_source, estack_pop, estack_push, source_init_file};
 use crate::startup::args::execute_env;
 use crate::startup::{EDIT_QF, MainParams, SILENT_MODE, SYS_VIMRC_FILE, VIMRC_FILE};
 use crate::state::mode::EXMODE_ACTIVE;
-use crate::types::ScriptId;
 
 /// Run the `--cmd` commands, which come before any config.
 pub(crate) fn exe_pre_commands(parm: &MainParams) {

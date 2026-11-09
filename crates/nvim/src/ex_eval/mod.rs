@@ -59,8 +59,7 @@ mod tests;
 mod trycmd;
 
 use crate::debugger::dbg_check_skipped;
-use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::tv_clear;
+use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
 use crate::eval::{eval_cmd_bool, eval_for_line, eval0_in_cmd, next_for_item};
 use crate::ex_docmd::{ends_excmd, modifier_len};
 use crate::ex_eval::defs::{CondId, CondStack, Pend};
@@ -134,7 +133,6 @@ pub(crate) use trycmd::{
 pub(crate) mod flag {
     use super::c_int;
     use crate::ex_eval::defs::ExceptType;
-    use crate::runtime::defs::EStackArg;
 
     /// `CondStack::pending`: what a finally clause postponed. The last
     /// three are alternatives, not bits -- `CSTP_RETURN` deliberately
@@ -146,6 +144,7 @@ pub(crate) mod flag {
     pub(crate) const CSTP_BREAK: c_int = 8;
     pub(crate) const CSTP_CONTINUE: c_int = 16;
     pub(crate) const CSTP_RETURN: c_int = 24;
+    /// `:finish` as a pending control-flow reason, for `report_pending`.
     pub(crate) const CSTP_FINISH: c_int = 32;
 
     /// `Exception.type_0`.
@@ -158,8 +157,6 @@ pub(crate) mod flag {
     /// clauses. True for a Vim release; upstream keeps the switch for its
     /// `THROW_TEST` builds, which this tree does not have.
     pub(crate) const THROW_ON_ERROR: bool = true;
-
-    pub(crate) const ESTACK_NONE: EStackArg = 0;
 }
 
 const E_MULTIPLE_ELSE: &CStr = c"E583: Multiple :else";

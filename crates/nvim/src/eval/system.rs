@@ -17,36 +17,33 @@
 )]
 
 use crate::buffer::find_buf;
+use crate::eval::NL;
 use crate::eval::encode::encode_list_write;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     ListRef, NumBuf, list_iter, list_len, tv_get_number, tv_list_alloc, tv_list_alloc_ret,
 };
 use crate::eval::vars::{emsg_static, set_vim_var_nr};
-use crate::eval::{NL, PROF_YES};
 use crate::ex_cmds::check_secure;
 use crate::memline::Lines;
 use crate::memory::ThinCString;
-use crate::message::E_INVARG;
-use crate::message::IOSIZE;
+use crate::message::{E_INVARG, IOSIZE};
 use crate::message::{msg_str, verbose_enter_scroll, verbose_leave_scroll};
 use crate::message_fmt::{msg_bytes, msg_cstr};
-use crate::narrow::as_index;
-use crate::narrow::number_as_int;
+use crate::narrow::{as_index, number_as_int};
 use crate::option::vars::p_verbose;
 use crate::os::fs::executable_path;
-use crate::profile::DO_PROFILING;
+use crate::profile::{DO_PROFILING, PROF_YES};
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::semsg;
 use crate::shell::Argv;
 use crate::shell::system::os_system_capture;
 use crate::smsg;
-use crate::types::Handle;
-use crate::types::LineNr;
 use crate::types::{
     Failed, LIST_LEN_MAY_KNOW, List, OptInt, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
     VarNumber, Vv,
 };
+use crate::types::{Handle, LineNr};
 use core::ffi::c_int;
 
 /// Why [`tv_to_argv`] built no vector. Either way it has been reported.

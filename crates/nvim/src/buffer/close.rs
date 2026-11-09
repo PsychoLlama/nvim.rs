@@ -26,9 +26,9 @@
 
 use crate::autocmd::defs::AutoEvent;
 use crate::eval::typval::DO_NOT_FREE_CNT;
-use crate::extmark::EXTMARK_NO_UNDO;
+use crate::extmark::{EXTMARK_NO_UNDO, extmark_free_all};
 use crate::mark::MARK_ADJUST_NORMAL;
-use crate::memline::MlFlags;
+use crate::memline::{MlFlags, ml_close};
 use crate::message_fmt::msg_cstr_opt;
 use crate::narrow::as_index;
 use crate::winlayer::WinId;
@@ -44,11 +44,9 @@ use crate::diff::{diff_buf_delete, diffopt_hiddenoff};
 use crate::drawscreen::state::UPDATING_SCREEN;
 use crate::eval::typval::{callback_free, tv_dict_item_copy, unlink_buf_changedtick};
 use crate::eval::vars::{release_var_scope, vars_clear};
-use crate::extmark::extmark_free_all;
 use crate::mapping::map_clear_mode;
 use crate::mark::defs::{FileMark, FileMarkView};
 use crate::mark::{NMARKS, mark_adjust_buf, set_last_cursor};
-use crate::memline::ml_close;
 use crate::message::E_AUABORT;
 use crate::normal::visual_active;
 use crate::optionstr::OptString;
@@ -751,7 +749,7 @@ fn free_buffer(mut buffer: Buf) {
         .b_bufvar
         .di_tv
         .dict_ref()
-        .is_some_and(|dict| dict.dv_refcount.get() > DO_NOT_FREE_CNT.cast_signed());
+        .is_some_and(|dict| dict.dv_refcount.get() > DO_NOT_FREE_CNT);
     if shared {
         rescue_changedtick(buffer);
     }

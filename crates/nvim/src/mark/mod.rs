@@ -24,6 +24,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use crate::ascii::{NUL, TAB};
+use crate::autocmd::AUGROUP_ALL;
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{aucmd_defer, has_event};
 use crate::buffer::{buf_is_prompt, buflist_new, find_buf};
@@ -81,8 +82,6 @@ pub(crate) use shada::{
 pub use show::{ex_delmarks, ex_marks, fm_getname};
 
 use store::{NO_VIEW, mark_name, slot};
-
-pub const AUGROUP_ALL: c_int = -3;
 
 /// How `mark_get` is allowed to resolve a mark's name.
 pub const MARK_BUF_LOCAL: MarkGet = 0;

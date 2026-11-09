@@ -12,11 +12,11 @@
 #![forbid(unsafe_code)]
 use crate::buffer::buf_get_changedtick;
 use crate::eval::vars::{set_vim_var_owned, vim_var_string};
-use crate::message::MSG_BUF_LEN;
-use crate::message::emsg;
+use crate::message::{E_EMPTY_BUFFER, IOSIZE, MSG_BUF_LEN, emsg};
 use crate::os::cshim::gettext;
+use crate::runtime::defs::ETYPE_EXCEPT;
 
-use crate::getchar::typeahead;
+use crate::getchar::{read_cmd_key_line, typeahead};
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
 use crate::smsg;
@@ -31,7 +31,6 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later, update_screen};
 use crate::eval::funcs::{ListLines, get_list_line};
 use crate::eval::userfunc::get_func_line;
 use crate::eval::vars::set_vim_var_string;
-use crate::getchar::read_cmd_key_line;
 use crate::memory::{ThinCString, XString};
 use crate::runtime::SourceCookie;
 use crate::types::{FuncCall, Object};
@@ -42,9 +41,7 @@ use crate::ex_docmd::sourcing_lnum;
 
 use crate::drawscreen::state::CMDLINE_ROW;
 use crate::ex_docmd::state::{EX_NO_REPRINT, EX_NORMAL_BUSY, GLOBAL_BUSY};
-use crate::ex_docmd::{
-    CMDLINE_CALL_DEPTH, DoCmdOpts, ETYPE_EXCEPT, EX_PRESSEDRETURN, SavedDebugState,
-};
+use crate::ex_docmd::{CMDLINE_CALL_DEPTH, DoCmdOpts, EX_PRESSEDRETURN, SavedDebugState};
 use crate::ex_eval::discard_current_exception;
 use crate::ex_eval::state::{
     CAUGHT_STACK, CHECK_CSTACK, CURRENT_EXCEPTION, DID_THROW, FORCE_ABORT, NEED_RETHROW,
@@ -53,7 +50,6 @@ use crate::ex_eval::state::{
 use crate::ex_getln::{cmdline_input, getexline};
 use crate::getchar::state::{GOT_INT, KEY_TYPED};
 use crate::highlight_group::HLF_E;
-use crate::message::E_EMPTY_BUFFER;
 use crate::message::state::{
     DID_EMSG, EMSG_SILENT, LINES_LEFT, MSG_COL, MSG_ROW, MSG_SCROLL, MSG_SILENT, NEED_WAIT_RETURN,
 };
@@ -71,7 +67,6 @@ use crate::message_fmt::msg_bytes;
 use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 
-use crate::message::IOSIZE;
 use crate::types::{CmdLine, ExArg, Failed, LineNr, OptInt, Vv};
 
 use crate::winlayer::{Buf, Win};

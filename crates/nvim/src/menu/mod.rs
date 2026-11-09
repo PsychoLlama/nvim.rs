@@ -34,7 +34,8 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use crate::autocmd::defs::AutoEvent;
-use crate::memory::XString;
+use crate::keycodes::REPTERM_DO_LT;
+use crate::memory::{ThinCString, XString};
 use crate::narrow::as_index;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
@@ -48,7 +49,6 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
 pub(crate) use crate::mapping::skip_white;
 use crate::mbyte::encode_char;
-use crate::memory::ThinCString;
 use crate::message::E_CANNOT_CHANGE_MENUS_WHILE_LISTING;
 use crate::message::{emsg, special_keys_text};
 use crate::message_fmt::msg_bytes;
@@ -201,9 +201,6 @@ pub(crate) const MENU_PLAIN_MODES: c_int =
 /// mapping under, so the order is observable.
 pub(crate) const MODE_CHARS: [&CStr; MENU_MODES] =
     [c"n", c"v", c"s", c"o", c"i", c"c", c"tl", c"t"];
-
-/// `replace_termcodes()`: also translate `<lt>`.
-pub(crate) const REPTERM_DO_LT: c_int = 2;
 
 pub(crate) static E_NOTSUBMENU: &CStr = c"E327: Part of menu-item path is not sub-menu";
 

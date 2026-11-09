@@ -9,15 +9,15 @@
     clippy::ptr_as_ptr
 )]
 
+use super::NSUBEXP;
 use super::wrappers::{arg_bool_chk, arg_number, arg_number_chk, blob_alloc_ret, non_zero_arg};
-use super::{NSUBEXP, VSE_NONE};
 use crate::eval::do_string_sub;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     NumBuf, blob_bytes, list_extend, list_len, tv_check_for_nonempty_string_arg,
     tv_check_for_string_arg, tv_check_num, tv_list_alloc_ret,
 };
-use crate::ex_getln::fnameescape;
+use crate::ex_getln::{VSE_NONE, fnameescape};
 use crate::highlight::Hlf;
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 use crate::keycodes::escape_ks_bytes;
@@ -26,15 +26,12 @@ use crate::memline::Lines;
 use crate::memory::{ThinCString, XString};
 use crate::message::E_NO_SPELL;
 use crate::message::{emsg, special_keys_text};
-use crate::narrow::len_as_int;
-use crate::narrow::len_as_integer;
-use crate::narrow::number_as_int;
+use crate::narrow::{len_as_int, len_as_integer, number_as_int};
 use crate::option::SavedCpo;
 use crate::option::vars::p_enc;
 use crate::optionstr::OptString;
 use crate::os::cshim::{gettext, gettext_owned};
-use crate::os::libc::time_t;
-use crate::os::libc::tm;
+use crate::os::libc::{time_t, tm};
 use crate::os::time::{
     os_localtime_r, os_mktime, os_strftime, os_strptime, os_time_raw, tm_zeroed,
 };
@@ -75,7 +72,7 @@ pub fn f_escape(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_fnameescape(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let name = numbuf.string(&args[0]);
-    result.write_string(Some(fnameescape(name, VSE_NONE.cast_signed()).into()));
+    result.write_string(Some(fnameescape(name, VSE_NONE).into()));
 }
 
 /// `gettext({string})` — a no-op while no message catalogs ship, but it

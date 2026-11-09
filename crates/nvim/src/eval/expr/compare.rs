@@ -14,6 +14,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::eval::EXPR_IS;
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_int, c_uint};
 
@@ -21,8 +22,8 @@ use crate::eval::typval::{
     NumBuf, blob_equal, dict_equal, list_equal, tv_clear, tv_equal, tv_get_float, tv_get_number,
 };
 use crate::eval::{
-    E_INVALBLOB, EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_IS, EXPR_ISNOT, EXPR_MATCH,
-    EXPR_NEQUAL, EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, EXPR_UNKNOWN, IS_ALNUM, pattern_match,
+    E_INVALBLOB, EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_ISNOT, EXPR_MATCH, EXPR_NEQUAL,
+    EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, EXPR_UNKNOWN, IS_ALNUM, pattern_match,
 };
 use crate::mbyte::strnicmp_in;
 use crate::message::emsg;

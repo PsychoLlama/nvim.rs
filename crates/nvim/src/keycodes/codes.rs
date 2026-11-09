@@ -728,6 +728,7 @@ pub const FSK_SIMPLIFY: c_int = 8;
 /// * `REPTERM_NO_SPECIAL` — do not accept `<key>` notation at all.
 /// * `REPTERM_NO_SIMPLIFY` — keep `<C-H>` as a key code.
 pub const REPTERM_FROM_PART: c_int = 1;
+/// `replace_termcodes()`: also translate `<lt>`.
 pub const REPTERM_DO_LT: c_int = 2;
 pub const REPTERM_NO_SPECIAL: c_int = 4;
 pub const REPTERM_NO_SIMPLIFY: c_int = 8;

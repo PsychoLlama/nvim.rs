@@ -19,11 +19,12 @@
 
 use super::lines::set_op_range;
 use super::say;
-use super::{B_IMODE_LMAP, EXFLAG_LIST, EXFLAG_NR, NL, print_line};
+use super::{B_IMODE_LMAP, NL, print_line};
 use crate::change::{appended_lines, appended_lines_mark, deleted_lines_mark};
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::state::EX_NO_REPRINT;
+use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_NR};
 use crate::global_cell::GlobalCell;
 use crate::indent::get_indent_lnum;
 use crate::memline::MlFlags;
@@ -36,15 +37,13 @@ use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
 use crate::state::mode::STATE;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
-use crate::types::CmdIdx;
-use crate::types::ColNr;
+use crate::types::{CmdIdx, ColNr};
 use crate::types::{ExArg, LineNr, OptInt};
 use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
 use crate::winlayer::graph::{FIRSTWIN, LASTWIN};
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
 /// The indent `:append`/`:insert`/`:change` gives the first line it reads,

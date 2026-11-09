@@ -14,13 +14,9 @@
 )]
 
 use super::table::{BUILTINS, builtin_index};
-use super::{
-    FCERR_NONE, FCERR_NOTMETHOD, FCERR_TOOFEW, FCERR_TOOMANY, FCERR_UNKNOWN, MAX_FUNC_ARGS,
-};
 use crate::api::private::converter::call_handler_for_vimscript;
 use crate::buffer::{buflist_findpat_prefix, find_buf};
-use crate::cmdexpand::defs::Candidate;
-use crate::cmdexpand::defs::Expand;
+use crate::cmdexpand::defs::{Candidate, Expand};
 use crate::eval::buffer::find_buffer;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::funcs::builtin::{EvalFuncDef, WrongArity};
@@ -28,17 +24,18 @@ use crate::eval::typval::{
     CallFrame, NumBuf, Unconvertible, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy,
     tv_dict_alloc_ret, tv_get_bool, tv_get_bool_chk, tv_get_lnum, tv_get_number, tv_get_number_chk,
 };
-use crate::eval::userfunc::get_user_func_name;
+use crate::eval::userfunc::{
+    FCERR_NONE, FCERR_NOTMETHOD, FCERR_TOOFEW, FCERR_TOOMANY, FCERR_UNKNOWN, MAX_FUNC_ARGS,
+    get_user_func_name,
+};
 use crate::eval::vars::{cat_prefix_varname, get_user_var_name};
 use crate::eval::window::find_win_by_nr_or_id;
 use crate::ex_cmds::check_secure;
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
-use crate::message::E_INVALWINDOW;
-use crate::message::emsg;
+use crate::message::{E_INVALWINDOW, emsg};
 use crate::message_fmt::{msg_cstr, msg_cstr_opt};
-use crate::narrow::as_index;
-use crate::narrow::number_as_int;
+use crate::narrow::{as_index, number_as_int};
 use crate::option::SavedCpo;
 use crate::option::vars::{P_MAGIC, p_magic};
 use crate::os::cshim::gettext;
@@ -146,16 +143,16 @@ pub(crate) fn check_builtin_argcount(fdef: &EvalFuncDef, argcount: c_int) -> Res
 /// Call the builtin `name` spells.
 pub(crate) fn call_internal_func_named(name: &CStr, args: &[TypVal], result: &mut TypVal) -> c_int {
     let Some(fdef) = find_builtin(name.to_bytes()) else {
-        return FCERR_UNKNOWN.cast_signed();
+        return FCERR_UNKNOWN;
     };
     match fdef.arity.accepts(args.len()) {
         Ok(()) => {}
-        Err(WrongArity::TooFew) => return FCERR_TOOFEW.cast_signed(),
-        Err(WrongArity::TooMany) => return FCERR_TOOMANY.cast_signed(),
+        Err(WrongArity::TooFew) => return FCERR_TOOFEW,
+        Err(WrongArity::TooMany) => return FCERR_TOOMANY,
     }
     let func = fdef.func.expect("non-null function pointer");
     func(args, result, fdef.data);
-    FCERR_NONE.cast_signed()
+    FCERR_NONE
 }
 
 /// Call the builtin `name` spells as a method: `base->name(args)`.
@@ -171,19 +168,19 @@ pub(crate) fn call_internal_method_named(
     base: &mut TypVal,
 ) -> c_int {
     let Some(fdef) = find_builtin(name.to_bytes()) else {
-        return FCERR_UNKNOWN.cast_signed();
+        return FCERR_UNKNOWN;
     };
     let Some(base_index) = fdef.base_arg.index() else {
-        return FCERR_NOTMETHOD.cast_signed();
+        return FCERR_NOTMETHOD;
     };
     // The base counts as one of the arguments.
     match fdef.arity.accepts(args.len() + 1) {
         Ok(()) => {}
-        Err(WrongArity::TooFew) => return FCERR_TOOFEW.cast_signed(),
-        Err(WrongArity::TooMany) => return FCERR_TOOMANY.cast_signed(),
+        Err(WrongArity::TooFew) => return FCERR_TOOFEW,
+        Err(WrongArity::TooMany) => return FCERR_TOOMANY,
     }
     if args.len() < base_index {
-        return FCERR_TOOFEW.cast_signed();
+        return FCERR_TOOFEW;
     }
 
     let mut frame = CallFrame::<{ MAX_FUNC_ARGS as usize + 1 }>::new();
@@ -194,7 +191,7 @@ pub(crate) fn call_internal_method_named(
 
     let func = fdef.func.expect("non-null function pointer");
     func(frame.args(), result, fdef.data);
-    FCERR_NONE.cast_signed()
+    FCERR_NONE
 }
 
 /// Command-line completion over builtin function names.

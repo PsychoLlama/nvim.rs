@@ -25,6 +25,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::autocmd::AUGROUP_ALL;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -43,7 +44,7 @@ use crate::vterm::types::VTermTerminator;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
-use super::{AUGROUP_ALL, Term, buf_for_handle, row_to_linenr, terminal_send};
+use super::{Term, buf_for_handle, row_to_linenr, terminal_send};
 use crate::vterm::vterm::{VTERM_ATTR_URI, VTERM_TERMINATOR_BEL};
 
 /// The sequences vterm hands over rather than acting on itself, for the

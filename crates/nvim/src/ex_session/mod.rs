@@ -53,14 +53,13 @@ use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
 use crate::env::home_to_tilde;
 use crate::eval::vars::set_vim_var_string;
 use crate::ex_docmd::{create_exfile, vim_mkdir_emsg};
-use crate::ex_getln::fnameescape;
+use crate::ex_getln::{VSE_NONE, fnameescape};
 use crate::file_search::vim_chdirfile;
 use crate::fileio::{IoFailed, shorten_fnames};
 use crate::global_cell::GlobalCell;
 use crate::mapping::makemap;
 use crate::mbyte::cluster_len;
-use crate::memory::ThinCString;
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::message::emsg;
 use crate::message::{E_NONAME, E_PREV_DIR, E_WRITE};
 use crate::message_fmt::{emsg_text, msg_cstr};
@@ -93,19 +92,15 @@ use view::put_view;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
-    use super::{CdCause, c_int};
+    use super::CdCause;
 
     /// `vim_chdirfile`'s reason code: not a `:cd`, so no autocommand.
     pub(super) const CD_CAUSE_OTHER: CdCause = -1;
-    /// `vim_strsave_fnameescape`: escape for an Ex command line.
-    pub(super) const VSE_NONE: c_int = 0;
 
     /// Frame layouts.
     pub(super) const FR_LEAF: core::ffi::c_char = 0;
     pub(super) const FR_COL: core::ffi::c_char = 2;
 }
-
-use flag::VSE_NONE;
 
 /// The default file name of each command that has one.
 const SESSION_FILE: &CStr = c"Session.vim";

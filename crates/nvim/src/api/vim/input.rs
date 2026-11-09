@@ -18,8 +18,7 @@
 
 use super::*;
 use crate::api_error;
-use crate::getchar::Remap;
-use crate::getchar::typeahead;
+use crate::getchar::{Remap, typeahead};
 use crate::guard::Depth;
 use crate::keycodes::ModMask;
 use crate::keycodes::{
@@ -187,13 +186,13 @@ pub fn nvim_replace_termcodes(
     }
     let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if from_part {
-        flags |= REPTERM_FROM_PART.cast_signed();
+        flags |= REPTERM_FROM_PART;
     }
     if do_lt {
-        flags |= REPTERM_DO_LT.cast_signed();
+        flags |= REPTERM_DO_LT;
     }
     if !special {
-        flags |= REPTERM_NO_SPECIAL.cast_signed();
+        flags |= REPTERM_NO_SPECIAL;
     }
     let text = str.as_bytes();
     let replaced = p_cpo(|cpo| replace_termcodes(text, 0 as ScriptId, flags, None, cpo, None));

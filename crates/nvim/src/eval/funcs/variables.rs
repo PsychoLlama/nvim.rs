@@ -8,13 +8,11 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::eval::FNE_CHECK_START;
-use crate::eval::GLV_NO_AUTOLOAD;
-use crate::eval::GLV_READ_ONLY;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::DI_FLAGS_LOCK;
 use crate::eval::typval::{NumBuf, callback_free, tv_islocked};
 use crate::eval::vars::with_var;
+use crate::eval::{FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY};
 use crate::eval::{Target, callback_from_typval, get_lval};
 use crate::ex_cmds::check_secure;
 use crate::message_fmt::msg_bytes;
@@ -95,7 +93,7 @@ pub fn f_islocked(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_number(-1);
     let text = numbuf.string(&args[0]).to_bytes();
-    let flags = (GLV_NO_AUTOLOAD | GLV_READ_ONLY).cast_signed();
+    let flags = GLV_NO_AUTOLOAD | GLV_READ_ONLY;
     let (mut lval, end) = get_lval(text, None, false, false, flags, FNE_CHECK_START);
     let Some(end) = end.ok().filter(|_| lval.has_name()) else {
         return;

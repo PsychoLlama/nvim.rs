@@ -49,6 +49,7 @@ use crate::debugger::state::{
 use crate::drawscreen::state::CMDLINE_ROW;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::env::{expand_env, home_to_tilde};
+use crate::eval::EXPR_IS;
 use crate::eval::{eval_expr, typval_compare, typval_tostring};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_docmd::state::{EX_NESTING_LEVEL, EX_NORMAL_BUSY};
@@ -67,10 +68,9 @@ use crate::message::state::{
     CMD_SILENT, DID_EMSG, EMSG_SILENT, LINES_LEFT, MSG_ROW, MSG_SCROLL, NEED_WAIT_RETURN, REDIR_OFF,
 };
 use crate::message_fmt::msg_bytes;
-use crate::path::MAXPATHL;
-use crate::path::fix_fname;
+use crate::path::{MAXPATHL, fix_fname};
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING};
-use crate::runtime::defs::EStackArg;
+use crate::runtime::defs::ESTACK_NONE;
 use crate::runtime::{estack_sfile, sourcing_lnum};
 use crate::semsg;
 use crate::smsg;
@@ -82,9 +82,6 @@ use crate::ui::state::ROWS;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
-
-pub const ESTACK_NONE: EStackArg = 0;
-pub const EXPR_IS: crate::types::ExprType = 9;
 
 // Debug mode itself: entered from `dbg_check_breakpoint` below.
 mod mode;

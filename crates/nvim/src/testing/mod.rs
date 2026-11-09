@@ -40,11 +40,9 @@ use crate::eval::vars::{testing_enabled, vim_var_string, with_vim_var};
 use crate::eval::{garbage_collect, pattern_match};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::SUPPRESS_ERRTHROW;
-use crate::message::E_CANT_READ_FILE_STR;
-use crate::message::emsg;
 use crate::message::state::{EMSG_ON_DISPLAY, EMSG_SILENT};
+use crate::message::{E_CANT_READ_FILE_STR, emsg};
 use crate::os::cshim::gettext;
-use crate::runtime::defs::EStackArg;
 use crate::types::{
     BOOL_VAR_FALSE, BOOL_VAR_TRUE, BoolVarValue, TypVal, VAR_FLOAT, VAR_NUMBER, VarNumber, Vv,
 };
@@ -63,8 +61,6 @@ enum AssertType {
     Other,
 }
 
-/// `ESTACK_NONE`: `estack_sfile()` wants no `<sfile>`-style expansion.
-const ESTACK_NONE: EStackArg = 0;
 const E_ASSERT_FAILS_SECOND_ARG: &CStr =
     c"E856: \"assert_fails()\" second argument must be a string or a list with one or two strings";
 const E_ASSERT_FAILS_FOURTH_ARGUMENT: &CStr =

@@ -79,11 +79,6 @@ pub enum LuaRetMode {
 
 /// `call_func`'s answers: the two this module can produce.
 pub type FuncErrorType = ::core::ffi::c_uint;
-pub const FCERR_NONE: FuncErrorType = 5;
-pub const FCERR_OTHER: FuncErrorType = 6;
-
-/// The most arguments `vim.call()` will convert.
-pub const MAX_FUNC_ARGS: ::core::ffi::c_uint = 20;
 
 /// The channel id an api call made from inside the editor carries.
 const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);

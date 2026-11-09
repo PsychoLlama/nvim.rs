@@ -15,7 +15,10 @@
 )]
 
 use crate::charset::{Str2NrBases, str2nr_in, string2float_in};
-use crate::eval::encode::SURROGATE_FIRST_CHAR;
+use crate::eval::encode::{
+    SURROGATE_FIRST_CHAR, SURROGATE_HI_END, SURROGATE_HI_START, SURROGATE_LO_END,
+    SURROGATE_LO_START,
+};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use core::ffi::c_int;
@@ -27,13 +30,6 @@ use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::eval::decode::decode_owned_string;
 use crate::mbyte::{char_at, char_len, encode_char, utf_char2len};
 use crate::types::{TypVal, UVarNumber, VAR_STRING};
-
-/// The UTF-16 surrogate range, which JSON's `\u` escapes use to spell a code
-/// point above U+FFFF as two escapes.
-const SURROGATE_HI_START: UVarNumber = 0xd800;
-const SURROGATE_HI_END: UVarNumber = 0xdbff;
-const SURROGATE_LO_START: UVarNumber = 0xdc00;
-const SURROGATE_LO_END: UVarNumber = 0xdfff;
 
 /// Scan a double-quoted JSON string and store it.
 ///
@@ -150,12 +146,12 @@ pub(crate) fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> Result<(),
             let ch: UVarNumber = str2nr_in(&buf[t + 1..t + 5], what, true).magnitude;
             t += 4;
             let code = c_int::try_from(ch).expect("four hex digits");
-            if (SURROGATE_HI_START..=SURROGATE_HI_END).contains(&ch) {
+            if (SURROGATE_HI_START..=SURROGATE_HI_END).contains(&code) {
                 flush(&mut out, &mut fst_in_pair);
                 fst_in_pair = code;
-            } else if (SURROGATE_LO_START..=SURROGATE_LO_END).contains(&ch) && fst_in_pair != 0 {
-                let low = c_int::try_from(ch - SURROGATE_LO_START).expect("ten bits");
-                let high = fst_in_pair - c_int::try_from(SURROGATE_HI_START).expect("a code unit");
+            } else if (SURROGATE_LO_START..=SURROGATE_LO_END).contains(&code) && fst_in_pair != 0 {
+                let low = code - SURROGATE_LO_START;
+                let high = fst_in_pair - SURROGATE_HI_START;
                 put_char(&mut out, low + (high << 10) + SURROGATE_FIRST_CHAR);
                 fst_in_pair = 0;
             } else {

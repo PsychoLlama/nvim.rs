@@ -22,9 +22,8 @@
 use crate::autocmd::defs::AutoEvent;
 use crate::ex_docmd::ex_msg;
 use crate::memory::XString;
-use crate::types::CmdIdx;
-use crate::types::ColNr;
-use crate::types::LineNr;
+use crate::profile::{DO_PROFILING, PROF_YES};
+use crate::types::{CmdIdx, ColNr, LineNr};
 use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::ffi::CString;
@@ -49,7 +48,7 @@ use crate::ex_docmd::source::{ReadLines, SourceKind, ex_errmsg};
 use crate::ex_docmd::verify::verify_command;
 use crate::ex_docmd::{
     CMDNAMES, DoCmdOpts, E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND, E_NOT_AN_EDITOR_COMMAND, ExFunc,
-    PROF_YES, QUITMORE,
+    QUITMORE,
 };
 use crate::ex_eval::CsFlags;
 
@@ -59,8 +58,7 @@ use crate::ex_getln::{get_text_locked_msg, script_get, text_locked};
 use crate::ex_docmd::state::{DID_EMSG_SYNTAX, EX_NESTING_LEVEL, GLOBAL_BUSY};
 use crate::ex_eval::state::{CHECK_CSTACK, DID_THROW, NEED_RETHROW};
 use crate::getchar::state::{GOT_INT, PENDING_END_REG_EXECUTING, REG_EXECUTING};
-use crate::guard::Depth;
-use crate::guard::SANDBOX;
+use crate::guard::{Depth, SANDBOX};
 use crate::input::ask_yesno;
 use crate::mbyte::{cluster_len, head_off};
 use crate::message::state::{DID_EMSG, MSG_SILENT};
@@ -68,14 +66,12 @@ use crate::message::{
     E_ARGREQ, E_CMDWIN, E_INVARG, E_INVRANGE, E_MODIFIABLE, E_NOBANG, E_NORANGE, E_SANDBOX,
     E_TRAILING_ARG,
 };
-use crate::profile::DO_PROFILING;
 use crate::startup::EXITING;
 use crate::state::mode::EXMODE_ACTIVE;
 use crate::winlayer::graph::CMDWIN_TYPE;
 
 use crate::ex_eval::defs::CondId;
-use crate::message::IOSIZE;
-use crate::message::emsg;
+use crate::message::{IOSIZE, emsg};
 use crate::os::cshim::gettext;
 use crate::profile::{func_line_exec, script_line_exec};
 use crate::runtime::do_finish;

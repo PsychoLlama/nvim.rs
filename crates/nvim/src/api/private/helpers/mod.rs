@@ -28,10 +28,9 @@
 
 use crate::deref::deref_to_field;
 use crate::ex_eval::defs::ExcId;
-use crate::narrow::number_as_int;
-use crate::narrow::number_as_lnum;
-use crate::types::ColNr;
-use crate::types::LineNr;
+use crate::narrow::{number_as_int, number_as_lnum};
+use crate::runtime::{SID_API_CLIENT, SID_LUA, script_is_lua};
+use crate::types::{ColNr, LineNr};
 use core::ffi::{CStr, c_int};
 
 use crate::ex_eval::state::{
@@ -47,11 +46,9 @@ use crate::mark::setmark_at;
 use crate::message::state::DID_EMSG;
 use crate::os::libc::uint64_t;
 use crate::pos::MAXCOL;
-use crate::runtime::script_is_lua;
 use crate::runtime::state::CURRENT_SCTX;
 use crate::types::{
-    ApiString, BufferHandle, ERROR_TYPE_EXCEPTION, Error, Integer, Pos, ScriptId, TabpageHandle,
-    WindowHandle,
+    ApiString, BufferHandle, ERROR_TYPE_EXCEPTION, Error, Integer, Pos, TabpageHandle, WindowHandle,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -69,11 +66,6 @@ pub(crate) use self::vimdict::*;
 
 const NL: u8 = b'\n';
 const CAR: u8 = b'\r';
-
-/// `CURRENT_SCTX.sc_sid` for a call that came from Lua, and for one that came
-/// from an RPC client.
-const SID_LUA: ScriptId = -8;
-const SID_API_CLIENT: ScriptId = -9;
 
 /// Channel ids with the top bit set are not channels at all: they mark a call
 /// nvim made of itself, from Vimscript or from Lua.

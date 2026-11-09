@@ -88,10 +88,12 @@ use crate::plines::CharsizeArg;
 use crate::plines::{getvcol, win_charsize};
 use crate::pos::MAXLNUM;
 use crate::regexp::RE_SEARCH;
+use crate::register::defs::G_REG_NO_EXPR;
 use crate::register::defs::{
-    BlockDef, GRegFlags, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE,
+    BlockDef, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE,
     PUT_LINE_FORWARD, PUT_LINE_SPLIT, PutFlags, YankReg,
 };
+use crate::register::defs::{G_REG_EXPR_SRC, G_REG_LIST};
 use crate::search::{BACKWARD, FORWARD, last_search_pat, set_last_search_pat};
 use crate::state::REPLACE_FLAG;
 use crate::state::mode::{RESTART_EDIT, STATE};
@@ -134,14 +136,12 @@ pub const STAR_REGISTER: usize = 37;
 pub const NUM_SAVED_REGISTERS: usize = 37;
 /// `"-`, the small-delete register.
 pub const DELETION_REGISTER: usize = 36;
-pub const G_REG_LIST: GRegFlags = 4;
-pub const G_REG_EXPR_SRC: GRegFlags = 2;
-pub const G_REG_NO_EXPR: GRegFlags = 1;
 
 /// What `get_yank_register()` is being asked for.  `YREG_PASTE` may query
 /// the clipboard provider, `YREG_YANK` moves `Y_PREVIOUS`, and `YREG_PUT`
 /// only reports where a paste would read from.
 pub const YREG_PUT: ::core::ffi::c_int = 2;
+/// `get_yank_register` mode: the register is about to be written.
 pub const YREG_YANK: ::core::ffi::c_int = 1;
 pub const YREG_PASTE: ::core::ffi::c_int = 0;
 

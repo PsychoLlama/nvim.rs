@@ -45,7 +45,7 @@ use crate::option::vars::{P_SH, P_SHCF, P_SXE, P_SXQ, p_sh, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::fs::os_remove;
 use crate::os::signal::{signal_accept_deadly, signal_reject_deadly};
-use crate::profile::DO_PROFILING;
+use crate::profile::{DO_PROFILING, PROF_YES};
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::shell::system::do_os_system;
 use crate::smsg;
@@ -86,7 +86,6 @@ crate::flag_set! {
     const HIDE_MESS = 64;
 }
 
-const PROF_YES: c_int = 1;
 const NL: c_int = '\n' as c_int;
 
 /// Characters a shell would act on, so they get a backslash when a pattern is

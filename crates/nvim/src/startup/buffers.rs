@@ -20,10 +20,10 @@
 use crate::arglist::ArgListId;
 use crate::buffer::BLN_LISTED;
 use crate::cstr;
-use crate::ex_cmds::EcmdFlags;
-use crate::ex_cmds::newlnum;
+use crate::ex_cmds::{EcmdFlags, do_ecmd, newlnum};
 use crate::guard::Suppress;
 use crate::memory::XString;
+use crate::runtime::SID_CARG;
 use crate::semsg;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -39,26 +39,22 @@ use crate::buffer::{
 };
 use crate::eval::typval::{list_set_lock, tv_list_alloc};
 use crate::eval::vars::set_vim_var_list;
-use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::fileio::{ReadFlags, readfile_named};
 use crate::getchar::state::GOT_INT;
 use crate::getchar::vgetc;
 use crate::memline::ml_recover;
-use crate::message::IOSIZE;
-use crate::message::msg_putchar;
 use crate::message::state::{DID_EMSG, MSG_DIDANY, MSG_SCROLL, NO_WAIT_RETURN};
+use crate::message::{IOSIZE, msg_putchar};
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::vars::{P_EF, P_EFM, P_MENC, p_ef, p_fdls, p_shm};
 use crate::option::{set_option_direct, set_option_value_give_err};
 use crate::os::input::os_breakcheck;
 use crate::os::libc::ptrdiff_t;
-use crate::path::MAXPATHL;
-use crate::path::vim_full_name;
+use crate::path::{MAXPATHL, vim_full_name};
 use crate::profile::time_msg_at;
 use crate::quickfix::qf_init;
-use crate::runtime::state::SID_CARG;
-use crate::startup::exit::getout;
+use crate::startup::exit::{getout, os_exit};
 use crate::startup::{
     EDIT_QF, MainParams, OPT_ERRORFILE, OPT_SHORTMESS, RECOVERYMODE, WIN_HOR, WIN_TABS, WIN_VER,
 };
@@ -70,7 +66,6 @@ use crate::window::{
 };
 
 use crate::pos::MAXLNUM;
-use crate::startup::exit::os_exit;
 use crate::winlayer::{Buf, TabPage, Win, first_window};
 
 /// The user answered "quit" to the swap-file ATTENTION prompt: leave with

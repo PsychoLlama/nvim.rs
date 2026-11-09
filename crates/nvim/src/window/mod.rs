@@ -48,6 +48,7 @@ use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
 use crate::memory::XString;
 use crate::narrow::count_as_int;
+use crate::runtime::SID_WINLAYOUT;
 use crate::types::{CmdIdx, Failed};
 use crate::winlayer::{WinId, prev_window};
 use core::ffi::c_int;
@@ -145,7 +146,6 @@ pub const SNAP_COUNT: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const FR_LEAF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const FR_ROW: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const SID_WINLAYOUT: ::core::ffi::c_int = -7 as ::core::ffi::c_int;
 pub const NOWIN: *mut Window = -1 as ::core::ffi::c_int as *mut Window;
 static E_CANNOT_CLOSE_LAST_WINDOW: &::core::ffi::CStr = c"E444: Cannot close last window";
 static E_CANNOT_SPLIT_WINDOW_WHEN_CLOSING_BUFFER: &::core::ffi::CStr =

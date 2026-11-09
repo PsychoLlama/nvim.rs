@@ -19,6 +19,7 @@ use crate::api::private::helpers::{
 use crate::api::private::validate::check_string_array;
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::defs::{AutoCmd, AutoHandler, AutoPat};
+use crate::autocmd::{AUGROUP_ALL, AUGROUP_DEFAULT, AUGROUP_ERROR};
 use crate::autocmd::{
     apply_autocmds_group, aucmd_del_for_event_and_group, aucmd_span_pattern, augroup_add,
     augroup_del, augroup_exists, augroup_find, augroup_name, aupat_get_buflocal_nr,
@@ -47,8 +48,5 @@ pub use self::exec::*;
 pub use self::group::*;
 pub(crate) use self::pattern::*;
 pub use self::query::*;
-pub const AUGROUP_DEFAULT: ::core::ffi::c_int = -1;
-pub const AUGROUP_ERROR: ::core::ffi::c_int = -2;
-pub const AUGROUP_ALL: ::core::ffi::c_int = -3;
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 static NEXT_AUTOCMD_ID: GlobalCell<int64_t> = GlobalCell::new(1 as int64_t);

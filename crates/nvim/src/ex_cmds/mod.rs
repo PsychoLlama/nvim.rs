@@ -35,9 +35,9 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::ascii::CAR;
-use crate::ascii::ESC;
-use crate::ascii::NL;
+use crate::ex_docmd::cmdmod_has;
+
+use crate::ascii::{CAR, ESC, NL};
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::fire_autocmds;
 use crate::charset::{skip, vim_is_ident_char};
@@ -45,7 +45,6 @@ use crate::cstr;
 use crate::env::expand_env;
 use crate::eval::typval::{NumBuf, list_find_str, list_iter, list_len};
 use crate::eval::vars::get_vim_var_list_handle;
-use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::state::CMDMOD;
 use crate::extmark::BCount;
 use crate::getchar::state::GOT_INT;
@@ -64,6 +63,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp_at};
+use crate::runtime::SID_NONE;
 use crate::tag::state::G_DO_TAGPREVIEW;
 use crate::types::CmdIdx;
 use crate::types::{CmdModFlags, ExArg, GetFileRet, LPos, LineNr, List, Vv};
@@ -168,9 +168,6 @@ pub(crate) fn split_vimgrep_pat(arg: &[u8]) -> Option<(Vec<u8>, ::core::ffi::c_i
 }
 
 pub const IS_ALPHA: ::core::ffi::c_uint = 1024;
-pub const REGSUB_BACKSLASH: ::core::ffi::c_uint = 4;
-pub const REGSUB_MAGIC: ::core::ffi::c_uint = 2;
-pub const REGSUB_COPY: ::core::ffi::c_uint = 1;
 pub const GETFILE_OPEN_OTHER: GetFileRet = -1;
 pub const GETFILE_SAME_FILE: GetFileRet = 0;
 pub const GETFILE_NOT_WRITTEN: GetFileRet = 2;
@@ -226,9 +223,6 @@ pub const VGR_NOJUMP: ::core::ffi::c_int = 2;
 pub const VGR_GLOBAL: ::core::ffi::c_int = 1;
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NODE_OTHER: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const EXFLAG_LIST: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const EXFLAG_NR: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const EXFLAG_PRINT: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 /// Fire `event` for `buffer`: no file name, no pattern, no forcing -- the shape
 /// every buffer-lifecycle autocommand in this family uses.
@@ -450,7 +444,6 @@ pub(crate) mod say {
         msgmore(n)
     }
 }
-pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 pub const SEA_DIALOG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SEA_QUIT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;

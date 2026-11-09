@@ -14,6 +14,9 @@ use crate::types::{ColNr, Timestamp};
 use std::rc::Rc;
 
 pub type GRegFlags = ::core::ffi::c_uint;
+pub(crate) const G_REG_EXPR_SRC: GRegFlags = 2;
+pub(crate) const G_REG_LIST: GRegFlags = 4;
+pub(crate) const G_REG_NO_EXPR: GRegFlags = 1;
 #[derive(Clone, Debug)]
 pub struct BlockDef {
     pub startspaces: ::core::ffi::c_int,

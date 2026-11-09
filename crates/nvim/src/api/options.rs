@@ -18,23 +18,21 @@
 use crate::api::private::helpers::{
     api_set_sctx, api_try, api_typename, find_buffer_by_handle, find_window_by_handle,
 };
-use crate::autocmd::defs::AutoEvent;
+use crate::autocmd::defs::{AcoSave, AutoEvent};
 use crate::autocmd::{
     aucmd_prepbuf, aucmd_restbuf, block_autocmds, do_filetype_autocmd, has_event, unblock_autocmds,
 };
 use crate::buffer::BLN_DUMMY;
 use crate::buffer::{BufFlags, BufRef, buflist_new, wipe_buffer};
-use crate::option::OPT_SCOPE_BUF;
-use crate::option::OPT_SCOPE_GLOBAL;
-use crate::option::OPT_SCOPE_WIN;
+use crate::option::{OPT_SCOPE_BUF, OPT_SCOPE_GLOBAL, OPT_SCOPE_WIN};
 use crate::options::{OPT_BUFHIDDEN, OPT_BUFTYPE, OPT_INVALID};
-use crate::winlayer::Win;
-use core::ffi::{CStr, c_int};
+use crate::runtime::SID_NONE;
+use crate::winlayer::{Buf, Win};
+use core::ffi::CStr;
 
 use crate::api::keysets::KeyDict_option;
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::api_error;
-use crate::autocmd::defs::AcoSave;
 use crate::memline::ml_open;
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
@@ -46,11 +44,6 @@ use crate::option::{
 use crate::os::libc::uint64_t;
 use crate::types::{ApiDict, ApiString, ERROR_TYPE_VALIDATION, Error, LineNr, Object};
 use crate::window::close_windows;
-use crate::winlayer::Buf;
-
-/// `CURRENT_SCTX.sc_sid` for a `:set` that came from nowhere in particular,
-/// which is what the scratch buffer's two option writes are.
-const SID_NONE: c_int = -6;
 
 /// What an `opts` dictionary resolved to: the option itself, the scope to
 /// read or write it at, and the buffer or window that scope names.

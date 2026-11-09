@@ -46,8 +46,8 @@ pub(crate) mod state;
 pub(crate) mod termrequest;
 
 use crate::api::private::helpers::{dict_get_value, scope_vars};
-use crate::autocmd::defs::AcoSave;
-use crate::autocmd::defs::AutoEvent;
+use crate::autocmd::AUGROUP_ALL;
+use crate::autocmd::defs::{AcoSave, AutoEvent};
 use crate::autocmd::{
     apply_autocmds, apply_autocmds_group, aucmd_prepbuf, aucmd_restbuf, block_autocmds,
     is_aucmd_win, is_autocmd_blocked, unblock_autocmds,
@@ -63,19 +63,15 @@ use crate::event_queue::{self, ParkingQueue, put_id_event_on_main_loop};
 use crate::highlight::{HlAttrFlags, hl_combine_attr, hl_get_term_attr};
 use crate::highlight::{HlAttrs, RgbValue};
 use crate::highlight_group::name_to_color;
-use crate::memline::MlFlags;
-use crate::memline::ml_delete_buf;
-use crate::narrow::as_index;
-use crate::narrow::count_as_int;
+use crate::memline::{MlFlags, ml_delete_buf};
+use crate::narrow::{as_index, count_as_int};
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_value;
 use crate::options::OPT_BUFTYPE;
 use crate::os::libc::int16_t;
 use crate::startup::EXITING;
 use crate::state::mode::STATE;
-use crate::terminal::state::SELECTIONBUF_SIZE;
-use crate::terminal::state::Terminal;
-use crate::terminal::state::TerminalOptions;
+use crate::terminal::state::{SELECTIONBUF_SIZE, Terminal, TerminalOptions};
 use crate::types::ApiString;
 use crate::types::builders::DictBuf;
 use crate::types::{
@@ -109,8 +105,6 @@ const SB_MAX: c_int = 1000000;
 /// The most columns [`terminal_get_line_attributes`] will resolve;
 /// `drawline` sizes its array to match.
 const TERM_ATTRS_MAX: c_int = 1024;
-/// Every autocommand group, for the events dispatched from here.
-const AUGROUP_ALL: c_int = -3;
 
 // ---------------------------------------------------------------------------
 // The emulator, through the handle

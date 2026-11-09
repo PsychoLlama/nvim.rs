@@ -93,7 +93,21 @@ impl EstackInfo {
     }
 }
 pub type EStackArg = ::core::ffi::c_uint;
+/// `ESTACK_NONE`: `estack_sfile()` wants no `<sfile>`-style expansion.
+pub(crate) const ESTACK_NONE: EStackArg = 0;
+pub(crate) const ESTACK_SCRIPT: EStackArg = 3;
+pub(crate) const ESTACK_SFILE: EStackArg = 1;
+pub(crate) const ESTACK_STACK: EStackArg = 2;
 pub type EStackType = ::core::ffi::c_uint;
+pub(crate) const ETYPE_AUCMD: EStackType = 3;
+pub(crate) const ETYPE_TOP: EStackType = 0;
+pub(crate) const ETYPE_UFUNC: EStackType = 2;
+pub(crate) const ETYPE_SCRIPT: EStackType = 1;
+pub(crate) const ETYPE_ENV: EStackType = 7;
+pub(crate) const ETYPE_ARGS: EStackType = 6;
+pub(crate) const ETYPE_MODELINE: EStackType = 4;
+pub(crate) const ETYPE_SPELL: EStackType = 9;
+pub(crate) const ETYPE_EXCEPT: EStackType = 5;
 /// Per-line counters of a profiled script, the element type of
 /// [`ScriptItem::sn_prl_ga`].
 #[derive(Copy, Clone, Default, Debug)]

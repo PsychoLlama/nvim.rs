@@ -37,18 +37,18 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{VALID_HEAD, VALID_PATH, at, is_sep, str_arg_chk};
+use super::{at, is_sep, str_arg_chk};
 use crate::env::{expand_env, home_to_tilde};
 use crate::eval::do_string_sub;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::NumBuf;
+use crate::ex_docmd::{VALID_HEAD, VALID_PATH};
 use crate::mbyte::{cluster_len, head_off};
 use crate::memory::XString;
 use crate::os::fs::{dir_exists, dirname_text};
 use crate::path::MAXPATHL;
 use crate::path::{full_name_save, path_fnamencmp, tail_index, vim_is_abs_name};
-use crate::strings::find_char;
-use crate::strings::shellescape;
+use crate::strings::{find_char, shellescape};
 use crate::types::TypVal;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;

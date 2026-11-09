@@ -16,10 +16,9 @@ use crate::cmdexpand::{WildMode, WildOpts, expand_one};
 use crate::cstr;
 use crate::env::{expand_env, expand_env_escaped};
 use crate::ex_cmds::newlnum;
-use crate::normal::FIND_EVAL;
-use crate::normal::FIND_IDENT;
-use crate::normal::FIND_STRING;
+use crate::normal::{FIND_EVAL, FIND_IDENT, FIND_STRING, ident_under_cursor};
 use crate::optionstr::{OptString, local_or_global};
+use crate::runtime::defs::{ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK};
 use crate::types::Handle;
 use crate::types::{CmdIdx, EcmdCmd};
 use core::ffi::CStr;
@@ -42,11 +41,10 @@ use crate::ex_docmd::{
     E_NO_AUTOCOMMAND_MATCH_NAME_TO_SUBSTITUTE_FOR_AMATCH, E_NO_CALL_STACK_TO_SUBSTITUTE_FOR_STACK,
     E_NO_LINE_NUMBER_TO_USE_FOR_SFLNUM, E_NO_LINE_NUMBER_TO_USE_FOR_SLNUM,
     E_NO_SCRIPT_FILE_NAME_TO_SUBSTITUTE_FOR_SCRIPT, E_NO_SOURCE_FILE_NAME_TO_SUBSTITUTE_FOR_SFILE,
-    ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, VALID_HEAD, VALID_PATH,
+    VALID_HEAD, VALID_PATH,
 };
 use crate::file_search::{FileNameOpts, file_name_at_cursor};
 use crate::message::{E_USINGSID, emsg, msg_make};
-use crate::normal::ident_under_cursor;
 use crate::option::vars::{P_GP, P_MP, p_wic};
 use crate::os::cshim::gettext;
 use crate::path::MAXPATHL;

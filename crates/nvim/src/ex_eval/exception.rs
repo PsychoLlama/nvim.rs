@@ -42,10 +42,7 @@
     clippy::ptr_as_ptr
 )]
 
-use super::flag::{
-    CSTP_BREAK, CSTP_CONTINUE, CSTP_ERROR, CSTP_FINISH, CSTP_INTERRUPT, CSTP_NONE, CSTP_RETURN,
-    CSTP_THROW, ESTACK_NONE, ET_ERROR, ET_INTERRUPT, ET_USER,
-};
+use super::flag::{CSTP_BREAK, CSTP_CONTINUE, CSTP_NONE, ET_ERROR, ET_INTERRUPT, ET_USER};
 use super::{CAUSE_ABORT, message};
 use crate::debugger::state::DEBUG_BREAK_LEVEL;
 use crate::drawscreen::state::CMDLINE_ROW;
@@ -55,6 +52,7 @@ use crate::ex_docmd::handle_did_throw;
 use crate::ex_eval::defs::{
     CondId, ErrorMsg, ErrorMsgs, ExcId, ExceptType, Exception, ExceptionState,
 };
+use crate::ex_eval::flag::{CSTP_ERROR, CSTP_FINISH, CSTP_INTERRUPT, CSTP_RETURN, CSTP_THROW};
 use crate::ex_eval::state::{
     CAUGHT_STACK, CURRENT_EXCEPTION, DID_THROW, EXCEPTIONS, FORCE_ABORT, MSG_LISTS, MsgLists,
     NEED_RETHROW, SUPPRESS_ERRTHROW, TRYLEVEL,
@@ -62,14 +60,13 @@ use crate::ex_eval::state::{
 use crate::getchar::state::GOT_INT;
 use crate::guard::{Allow, Suppress};
 use crate::memory::XString;
-use crate::message::E_INTERR;
-use crate::message::IOSIZE;
 use crate::message::state::{DID_EMSG, EMSG_SILENT, MSG_ROW, MSG_SCROLL};
+use crate::message::{E_INTERR, IOSIZE};
 use crate::message::{emsg, internal_error, msg_str, verbose_enter, verbose_leave};
 use crate::message_fmt::{msg_bytes, msg_cstr, report_msg};
-use crate::option::vars::p_verbose;
-use crate::option::vars::p_vfile;
+use crate::option::vars::{p_verbose, p_vfile};
 use crate::os::cshim::gettext;
+use crate::runtime::defs::ESTACK_NONE;
 use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::tr;
 use crate::types::LineNr;

@@ -8,9 +8,13 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::option::defs::OPT_VAL_TYPE_BOOLEAN;
-use crate::option::defs::OPT_VAL_TYPE_NUMBER;
-use crate::option::defs::OPT_VAL_TYPE_STRING;
+use crate::ex_docmd::ends_excmd;
+use crate::fileio::{BAD_DROP, BAD_KEEP};
+
+use crate::eval::DICT_MAXNEST;
+use crate::eval::typval::DO_NOT_FREE_CNT;
+use crate::option::defs::{OPT_VAL_TYPE_BOOLEAN, OPT_VAL_TYPE_NUMBER, OPT_VAL_TYPE_STRING};
+use crate::runtime::{SID_LUA, SID_STR};
 use core::ffi::{CStr, c_int, c_uint};
 use core::mem::ManuallyDrop;
 
@@ -43,7 +47,6 @@ use crate::eval::{
     get_name_len, handle_subscript, may_call_simple_func, name_end, set_ref_in_dict_items,
 };
 use crate::ex_cmds::check_secure;
-use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::{GlobalCell, state_record};
@@ -70,7 +73,6 @@ use crate::options::{OPT_CHARCONVERT, OPT_DIFFEXPR, OPT_INVALID, OPT_PATCHEXPR, 
 use crate::os::cshim::gettext;
 use crate::os::libc::{int64_t, ptrdiff_t, size_t, uint32_t};
 use crate::pos::MAXCOL;
-use crate::register::defs::GRegFlags;
 use crate::runtime::defs::ScriptVar;
 use crate::runtime::state::CURRENT_SCTX;
 use crate::runtime::{
@@ -121,33 +123,16 @@ pub(crate) type ScopeLister = fn(&mut bool);
 /// `__ctype_b_loc()`'s lower-case bit, the one `islower()` reads.
 pub const IS_LOWER: c_uint = 512;
 
-/// The reference count `init_var_dict` gives a scope dictionary: high enough
-/// that nothing ever frees one.
-pub const DO_NOT_FREE_CNT: c_int = 1073741823;
-
-/// `get_lval`'s "do not report" flag.
-pub const GLV_QUIET: c_int = 2;
-
-pub const G_REG_EXPR_SRC: GRegFlags = 2;
-
 pub const INT64_MIN: ::core::ffi::c_long = -9223372036854775807 - 1;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615;
 
-pub const BAD_KEEP: c_int = -1;
-pub const BAD_DROP: c_int = -2;
 pub const NOTDONE: c_int = 2;
 pub const CHAN_STDERR: c_int = 2;
 
 /// The two `name_len` sentinels the `var_check_*` family accepts in place of
 /// a real length: translate the name and measure it, or just measure it.
 pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX - 1;
-
-/// How deep `:const` locks the value it stores.
-pub const DICT_MAXNEST: c_int = 100;
-
-pub const SID_LUA: c_int = -8;
-pub const SID_STR: c_int = -10;
 
 // The error texts this family owns.  They are `%`-format strings handed to
 // the variadic `semsg`/`emsg`, so they stay C strings rather than becoming

@@ -43,8 +43,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use crate::ascii::{ascii_isspace, ascii_iswhite, ascii_iswhite_nl_or_nul, ascii_isxdigit};
-use crate::autocmd::defs::AcoSave;
-use crate::autocmd::defs::AutoEvent;
+use crate::autocmd::defs::{AcoSave, AutoEvent};
 use crate::autocmd::state::{DID_CURSORHOLD, LAST_CURSORMOVED, LAST_CURSORMOVED_WIN};
 use crate::autocmd::{apply_autocmds, aucmd_prepbuf, aucmd_restbuf, has_event};
 use crate::buffer::{
@@ -157,6 +156,7 @@ use crate::plines::{
 use crate::popupmenu::state::PUM_WANT;
 use crate::popupmenu::{pum_check_clear, pum_ext_want_done, pum_visible};
 use crate::pos::{MAXCOL, equalpos};
+use crate::register::YREG_PASTE;
 use crate::register::defs::{PUT_CURSEND, PUT_FIXINDENT};
 use crate::register::{
     do_put, get_expr_register, get_yank_register, insert_reg, is_literal_register, register_key,
@@ -243,7 +243,6 @@ pub(crate) struct InsertState {
     pub replace_state: ::core::ffi::c_int,
     pub nomove: bool,
 }
-pub(crate) const YREG_PASTE: ::core::ffi::c_int = 0;
 pub(crate) const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub(crate) const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub(crate) const NL_STR: &::core::ffi::CStr = c"\n";

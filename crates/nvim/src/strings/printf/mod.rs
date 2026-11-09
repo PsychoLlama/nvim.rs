@@ -232,7 +232,7 @@ fn next_arg<'a>(tvs: &'a [TypVal], idxp: &mut c_int) -> Result<&'a TypVal, Faile
 /// `value` as `%g` formats it, written into `buffer`; answers the length,
 /// the terminator excluded. The buffer is `NUMBUFLEN` bytes, which `%g`
 /// never fills.
-pub(crate) fn format_float_g(value: Float, buffer: &mut [u8; NUMBUFLEN as usize]) -> usize {
+pub(crate) fn format_float_g(value: Float, buffer: &mut [u8; NUMBUFLEN]) -> usize {
     let len = format(buffer, b"%g", Source::Values(&[FmtArg::Float(value)]));
     len.min(buffer.len() - 1)
 }

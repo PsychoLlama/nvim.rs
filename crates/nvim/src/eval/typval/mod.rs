@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::eval::DICT_MAXNEST;
 use crate::eval::encode::{BOOL_VAR_NAMES, SPECIAL_VAR_NAMES};
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::gc::{RootId, root_dict, root_list, unroot_dict, unroot_list};
@@ -72,7 +73,8 @@ mod get;
 pub use self::get::*;
 mod release;
 mod string;
-pub const DO_NOT_FREE_CNT: ::core::ffi::c_uint = 1073741823;
+/// The refcount an item that must never be freed carries.
+pub const DO_NOT_FREE_CNT: ::core::ffi::c_int = 1073741823;
 /// `DictItem::di_flags` bits: read-only, read-only in the sandbox, fixed
 /// (cannot be deleted), locked, and the item's own allocation.
 pub const DI_FLAGS_RO: u8 = 1;
@@ -82,7 +84,8 @@ pub const DI_FLAGS_LOCK: u8 = 8;
 /// A `c_uint`, unlike its siblings, for the item store's reader in
 /// `handle.rs`, which widens the field to meet it.
 pub const DI_FLAGS_ALLOC: ::core::ffi::c_uint = 16;
-pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
+/// Enough for any number this module formats, plus its NUL.
+pub const NUMBUFLEN: usize = 65;
 pub type DictListType = ::core::ffi::c_uint;
 pub const DICT2_LIST_ITEMS: DictListType = 2;
 pub const DICT2_LIST_VALUES: DictListType = 1;
@@ -136,7 +139,6 @@ static E_NON_NULL_DICT_REQUIRED_FOR_ARGUMENT_NR: &::core::ffi::CStr =
 pub const TV_INITIAL_VALUE: TypVal = TypVal::Unknown;
 
 pub(crate) static TV_IN_FREE_UNREF_ITEMS: GlobalCell<bool> = GlobalCell::new(false);
-pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 /// How many submatches a `\=` replacement expression is handed: `\0`
 /// through `\9`.
 pub const SL_SIZE: usize = 10;

@@ -15,10 +15,11 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::eval::userfunc::{FCERR_NONE, FCERR_OTHER};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use super::{FCERR_NONE, FCERR_OTHER, fast_pcall, nlua_error, nlua_pcall, with_main_stack};
+use super::{fast_pcall, nlua_error, nlua_pcall, with_main_stack};
 use crate::ex_cmds::check_secure;
 use crate::lua::converter::{pop_object, pop_typval, push_object, push_typval};
 use crate::lua::executor::LuaRetMode;
@@ -174,10 +175,10 @@ pub fn typval_exec_lua_callable(lua_cb: LuaRef, argvars: &[TypVal], rettv: &mut 
         push_typval_args(stack, argvars, false);
         if nlua_pcall(stack, len_as_int(argvars.len()), 1).is_err() {
             nlua_error(stack, c"Lua callback: %.*s");
-            return FCERR_OTHER.cast_signed();
+            return FCERR_OTHER;
         }
         rettv.overwrite(pop_typval(stack).unwrap_or(TypVal::Number(0)));
-        FCERR_NONE.cast_signed()
+        FCERR_NONE
     })
 }
 

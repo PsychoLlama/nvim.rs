@@ -36,7 +36,7 @@ use crate::cursor::{
 };
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, update_screen};
 use crate::edit::{beginline, display_dollar, edit};
-use crate::eval::typval::tv_clear;
+use crate::eval::typval::{NUMBUFLEN, tv_clear};
 use crate::eval::{callback_call, set_ref_in_callback};
 use crate::ex_docmd::state::REPEAT_CMDLINE;
 use crate::extmark::{BCount, CURBUF_SPLICE_PENDING};
@@ -88,6 +88,7 @@ use crate::os::libc::{int32_t, int64_t, size_t, ssize_t};
 use crate::plines::CharsizeArg;
 use crate::plines::{getvcols, getvvcol, linetabsize_str, win_charsize};
 use crate::pos::{MAXCOL, equalpos, lt, ltoreq};
+use crate::register::YREG_YANK;
 use crate::register::defs::BlockDef;
 use crate::register::{
     do_autocmd_textyankpost, get_y_register, get_yank_register, op_yank, op_yank_reg,
@@ -142,9 +143,6 @@ pub use self::shift::*;
 pub const IS_ALPHA: ::core::ffi::c_ushort = 1024;
 pub const IS_UPPER: ::core::ffi::c_ushort = 256;
 
-/// Enough for any number this module formats, plus its NUL.
-pub const NUMBUFLEN: usize = 65;
-
 /// `CmdArg::retval`: normal mode must not act on what the operator left.
 pub const CA_COMMAND_BUSY: ::core::ffi::c_int = 1;
 /// `CmdArg::retval`: leave `op.end` where the motion put it.
@@ -154,9 +152,6 @@ pub const CA_NO_ADJ_OP_END: ::core::ffi::c_int = 2;
 /// They travel in `CmdArg::nchar` as codes no key has.
 pub const REPLACE_CR_NCHAR: crate::types::Key = crate::types::Key::from_code(-1);
 pub const REPLACE_NL_NCHAR: crate::types::Key = crate::types::Key::from_code(-2);
-
-/// `get_yank_register` mode: the register is about to be written.
-pub const YREG_YANK: ::core::ffi::c_int = 1;
 
 /// The Visual area a `.` replays -- see `pending::REDO_VISUAL`.
 #[derive(Copy, Clone, Debug)]

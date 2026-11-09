@@ -27,7 +27,8 @@
 
 use crate::env::{getenv_resolved, state_subpath};
 use crate::memory::XString;
-use crate::optionstr::OptString;
+use crate::optionstr::{OptString, check_buf_options};
+use crate::runtime::{SID_NONE, runtimepath_default};
 use crate::winlayer::Win;
 use core::ffi::CStr;
 
@@ -50,14 +51,12 @@ use crate::options::{
     OPT_SCROLL, OPT_SHELL, OPT_SHELLPIPE, OPT_SHELLREDIR, OPT_TERMBIDI, OPT_TITLE, OPT_TTYFAST,
     OPT_UNDODIR, OPT_VIEWDIR, OPT_WINDOW,
 };
-use crate::optionstr::check_buf_options;
 use crate::os::cshim::{bind_textdomain_codeset_of, gettext_owned};
 use crate::os::env::{env_exists, getenv_owned};
 use crate::os::lang::{lang_init, mess_lang_of};
 use crate::os::libc::uint32_t;
 use crate::os::users::os_getuid;
 use crate::path::{invocation_path_tail, path_fnamecmp, vim_ispathlistsep};
-use crate::runtime::runtimepath_default;
 use crate::runtime::state::CURRENT_SCTX;
 use crate::spell::init_spell_chartab;
 use crate::types::OptInt;
@@ -67,10 +66,10 @@ use crate::winlayer::{self, Buf};
 
 use super::{
     NO_LOCAL_UNDOLEVEL, OPT_FLAG_GETTEXT, OPT_FLAG_NO_DEF_EXP, OPT_FLAG_NO_DEFAULT, PROJECT_NAME,
-    ROOT_UID, SID_NONE, default_fileformat, didset_options, didset_options2, find_dup_item,
-    get_option, get_option_unset_value, insecure_flag, option_default, option_expand,
-    option_is_global_local, option_var, option_was_set, replace_option_default, set_fileformat,
-    set_option_direct, set_option_value_give_err, write_slot,
+    ROOT_UID, default_fileformat, didset_options, didset_options2, find_dup_item, get_option,
+    get_option_unset_value, insecure_flag, option_default, option_expand, option_is_global_local,
+    option_var, option_was_set, replace_option_default, set_fileformat, set_option_direct,
+    set_option_value_give_err, write_slot,
 };
 
 /// Every option, in table order.

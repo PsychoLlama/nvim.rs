@@ -38,8 +38,9 @@
 )]
 
 use super::low_byte;
-use crate::memory::ThinCString;
+use crate::memory::{ThinCString, XString};
 use crate::narrow::len_as_int;
+use crate::runtime::defs::ETYPE_SPELL;
 use crate::smsg;
 use crate::spell::{WordFlags, WordTree};
 use crate::strings::has_bytes;
@@ -53,7 +54,6 @@ use std::path::Path;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::getchar::state::GOT_INT;
 use crate::memline::ml_append_buf_terminated;
-use crate::memory::XString;
 use crate::message::{verbose_enter, verbose_leave};
 use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::option::vars::p_verbose;
@@ -75,10 +75,10 @@ use super::sections::{
 };
 use super::spl::{SpellReadError, Spl, SplResult, trim_nul};
 use super::{
-    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, BY_SPECIAL, E_SPELL_TRUNC, EQUAL_FILES, ETYPE_SPELL,
-    MAXWLEN, SN_CHARFLAGS, SN_COMPOUND, SN_END, SN_INFO, SN_MAP, SN_MIDWORD, SN_NOBREAK,
-    SN_NOCOMPOUNDSUGS, SN_NOSPLITSUGS, SN_PREFCOND, SN_REGION, SN_REP, SN_REPSAL, SN_SAL, SN_SOFO,
-    SN_SUGFILE, SN_SYLLABLE, SN_WORDS, SNF_REQUIRED, SPL_FNAME_ADD, VIMSPELLMAGIC, VIMSPELLMAGICL,
+    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, BY_SPECIAL, E_SPELL_TRUNC, EQUAL_FILES, MAXWLEN,
+    SN_CHARFLAGS, SN_COMPOUND, SN_END, SN_INFO, SN_MAP, SN_MIDWORD, SN_NOBREAK, SN_NOCOMPOUNDSUGS,
+    SN_NOSPLITSUGS, SN_PREFCOND, SN_REGION, SN_REP, SN_REPSAL, SN_SAL, SN_SOFO, SN_SUGFILE,
+    SN_SYLLABLE, SN_WORDS, SNF_REQUIRED, SPL_FNAME_ADD, VIMSPELLMAGIC, VIMSPELLMAGICL,
     VIMSPELLVERSION, VIMSUGMAGIC, VIMSUGMAGICL, VIMSUGVERSION,
 };
 

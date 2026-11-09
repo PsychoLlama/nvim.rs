@@ -21,9 +21,11 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::ex_getln::ui_ext_cmdline_block_append;
+use crate::ex_eval::flag::{CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW};
+use crate::ex_getln::{ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
+use crate::profile::PROF_YES;
 use core::ffi::{CStr, c_int};
 
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, do_debug};
@@ -35,15 +37,12 @@ use crate::ex_docmd::source::{
 };
 use crate::ex_docmd::{DoCmdOpts, sourcing_lnum};
 
-use crate::ex_docmd::{PROF_YES, SavedDebugState};
-use crate::ex_eval::flag::{CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW};
+use crate::ex_docmd::SavedDebugState;
 use crate::ex_eval::{CsFlags, CsLoopFlags};
 use crate::ex_eval::{
     OwnedCondStack, PendingAction, PendingValue, aborting, cleanup_conditionals, do_errthrow,
     do_intthrow, has_loop_cmd, pop_msg_list, push_msg_list, report_pending, rewind_conditionals,
 };
-
-use crate::ex_getln::ui_ext_cmdline_block_leave;
 
 use crate::debugger::state::{DEBUG_BREAK_LEVEL, DEBUG_TICK};
 use crate::ex_docmd::state::{

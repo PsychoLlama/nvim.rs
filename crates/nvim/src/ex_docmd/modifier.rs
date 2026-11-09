@@ -17,6 +17,7 @@
 use crate::ex_docmd::is_user_cmd;
 use crate::ex_docmd::lookup::check_for_word;
 use crate::ex_docmd::scan::ends_excmd;
+use crate::runtime::SID_NONE;
 use crate::types::CmdIdx;
 use crate::types::{CmdFilter, CmdLine};
 use crate::window::tab_index;
@@ -40,7 +41,7 @@ use crate::ex_docmd::source::SourceKind;
 use crate::ex_docmd::state::CMDMOD;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
-    CMDNAMES, E_INVRANGE, EX_PRESSEDRETURN, ExFunc, SID_NONE, builtin_command_cstr, ex_msg,
+    CMDNAMES, E_INVRANGE, EX_PRESSEDRETURN, ExFunc, builtin_command_cstr, ex_msg,
 };
 use crate::getchar::state::EXPR_MAP_LOCK;
 use crate::guard::SANDBOX;

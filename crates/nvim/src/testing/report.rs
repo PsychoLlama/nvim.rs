@@ -17,6 +17,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::runtime::defs::ESTACK_NONE;
 use core::ffi::CStr;
 
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
@@ -27,7 +28,7 @@ use crate::memory::ThinCString;
 use crate::runtime::estack_sfile;
 use crate::types::{LineNr, TypVal};
 
-use super::{AssertType, ESTACK_NONE};
+use super::AssertType;
 
 /// Append a literal message part.
 pub(super) fn push_lit(message: &mut Vec<u8>, text: &'static CStr) {

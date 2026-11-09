@@ -11,6 +11,9 @@
 pub(crate) mod state;
 use crate::autocmd::defs::AutoEvent;
 use crate::event_queue::ChildQueue;
+use crate::profile::{DO_PROFILING, PROF_YES};
+use crate::runtime::SID_NONE;
+use crate::runtime::defs::ETYPE_AUCMD;
 use core::cmp::Ordering;
 use core::ffi::CStr;
 
@@ -60,10 +63,8 @@ use crate::os::libc::{int64_t, uint64_t};
 use crate::os::state::GLOBALDIR;
 use crate::os::time::os_now;
 use crate::path::{full_name_save, path_fnamecmp, path_tail};
-use crate::profile::DO_PROFILING;
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::regexp::{RE_MAGIC, vim_regcomp};
-use crate::runtime::defs::EStackType;
 use crate::runtime::state::CURRENT_SCTX;
 use crate::runtime::{estack_pop, estack_push};
 use crate::search::{restore_search_patterns, save_search_patterns};
@@ -115,7 +116,6 @@ pub const AUGROUP_ALL: ::core::ffi::c_int = -3;
 pub const AUGROUP_ERROR: ::core::ffi::c_int = -2;
 pub const AUGROUP_DEFAULT: ::core::ffi::c_int = -1;
 pub const BUFLOCAL_PAT_LEN: ::core::ffi::c_uint = 25;
-pub const ETYPE_AUCMD: EStackType = 3;
 /// `e_autocommand_nesting_too_deep`.  A `GlobalCell` holding a transmuted
 /// byte array upstream, because c2rust had no `CStr`; nothing writes it.
 const E_AUTOCOMMAND_NESTING_TOO_DEEP: &CStr = c"E218: Autocommand nesting too deep";
@@ -138,8 +138,6 @@ pub(crate) enum SuspendLatch {
     ResumeOwed,
 }
 
-pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 /// One row of [`EVENT_NAMES`]: a spelling of an event, and which event it
 /// is.  There is one row -- and one [`AutoEvent`] variant, at the same
 /// index -- per *name*, so the four aliases have a variant of their own

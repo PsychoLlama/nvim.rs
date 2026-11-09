@@ -28,12 +28,9 @@ use super::SUB_FLAGS;
 use super::exec::{Sub, SubArgs, save_undo_once};
 use crate::change::{appended_lines, changed_bytes, deleted_lines};
 use crate::ex_cmds::SUB_NSUBS;
-use crate::ex_cmds::{CAR, LineData, REGSUB_BACKSLASH, REGSUB_MAGIC};
+use crate::ex_cmds::{CAR, LineData};
 use crate::ex_eval::aborting;
-use crate::extmark::BCount;
-use crate::extmark::EXTMARK_NOOP;
-use crate::extmark::EXTMARK_UNDO;
-use crate::extmark::extmark_splice;
+use crate::extmark::{BCount, EXTMARK_NOOP, EXTMARK_UNDO, extmark_splice};
 use crate::guard::Lock;
 use crate::mark::mark_adjust;
 use crate::mbyte::cluster_len;
@@ -41,11 +38,11 @@ use crate::memline::{Lines, ml_append_cstr, ml_delete, ml_get_len, ml_replace_bu
 use crate::narrow::len_as_int;
 use crate::option::magic_isset;
 use crate::pos::MAXLNUM;
+use crate::regexp::{REGSUB_BACKSLASH, REGSUB_MAGIC};
 use crate::regexp::{regsub_multi_into, regsub_multi_len};
 use crate::types::{ColNr, LPos, LineNr};
 use crate::undo::{u_inssub, u_savedel, u_savesub};
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
 /// One line of `:s` text the command owns.

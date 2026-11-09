@@ -12,13 +12,12 @@ use crate::cmdexpand::defs::Candidate;
 use crate::cmdexpand::expand_generic;
 use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::source::ex_errmsg;
+use crate::fileio::{BAD_DROP, BAD_KEEP};
 use crate::memory::XString;
-use crate::message::VIM_QUESTION;
-use crate::message::VIM_YES;
+use crate::message::{VIM_QUESTION, VIM_YES, vim_dialog_yesno};
 use crate::types::CmdIdx;
 use crate::window::tab_index;
-use crate::winlayer::TabPage;
-use crate::winlayer::last_used_tab;
+use crate::winlayer::{TabPage, last_used_tab};
 
 use crate::semsg;
 use crate::tr_plural;
@@ -34,9 +33,8 @@ use crate::ex_docmd::lookup::check_for_word;
 
 use crate::arglist::state::ARG_HAD_LAST;
 use crate::ex_docmd::window::current_tab_nr;
-use crate::ex_docmd::{BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, QUITMORE, cmdmod_has};
+use crate::ex_docmd::{DIALOG_MSG_SIZE, QUITMORE, cmdmod_has};
 use crate::mbyte::{get_encoding_name, utf8len_tab};
-use crate::message::vim_dialog_yesno;
 use crate::message::{E_INVARG2, E_INVARGVAL, E_INVRANGE};
 use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::narrow::number_as_int;

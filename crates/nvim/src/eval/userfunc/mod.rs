@@ -9,7 +9,11 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use crate::autocmd::defs::AutoEvent;
-use crate::keycodes::KS_EXTRA;
+use crate::eval::GLV_READ_ONLY;
+use crate::eval::typval::{DO_NOT_FREE_CNT, DictItem};
+use crate::ex_eval::flag::CSTP_RETURN;
+use crate::keycodes::{K_SPECIAL, KS_EXTRA};
+use crate::profile::{DO_PROFILING, PROF_YES};
 use core::ffi::{CStr, c_int};
 
 use crate::ascii::{ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul};
@@ -21,7 +25,6 @@ use crate::drawscreen::state::CMDLINE_ROW;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::funcs::{check_builtin_argcount, find_builtin};
 use crate::eval::gc::WANT_GARBAGE_COLLECT;
-use crate::eval::typval::DictItem;
 use crate::eval::typval::{TV_INITIAL_VALUE, list_iter, tv_clear, tv_copy, tv_get_number_chk};
 use crate::eval::vars::{skip_var_list, testing_enabled};
 use crate::eval::{
@@ -43,7 +46,6 @@ use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
 use crate::guard::SANDBOX;
 use crate::insexpand::ins_compl_active;
-use crate::keycodes::K_SPECIAL;
 use crate::lua::executor::{release_luaref, typval_exec_lua_callable};
 use crate::message::state::{
     DID_EMSG, EMSG_SEVERE, LINES_LEFT, MSG_ROW, MSG_SCROLL, NEED_WAIT_RETURN,
@@ -61,7 +63,6 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::os::libc::size_t;
 use crate::path::path_fnamecmp;
-use crate::profile::DO_PROFILING;
 use crate::profile::{
     func_do_profile, func_line_end, func_line_start, prof_def_func, profile_add, profile_end,
     profile_self, profile_start, profile_sub_wait, profile_zero, script_prof_restore,
@@ -76,8 +77,7 @@ use crate::types::{
     UserFunc, VAR_DEF_SCOPE, VAR_FUNC, VAR_NUMBER, VAR_SCOPE, VAR_STRING, VAR_UNKNOWN, VarLock,
     VarNumber,
 };
-use crate::ui::state::ROWS;
-use crate::ui::state::UI_CMDLINE;
+use crate::ui::state::{ROWS, UI_CMDLINE};
 use crate::ui::ui_has;
 
 // The carve of the transpiled module; see each child's docs.
@@ -108,23 +108,17 @@ pub use self::listing::*;
 pub(crate) use self::name::*;
 pub use self::ret::*;
 pub(crate) use self::table::*;
-/// The refcount an item that must never be freed carries.
-pub const DO_NOT_FREE_CNT: c_int = 1073741823;
 
 /// How many arguments a call may carry, and how many locals live in the
 /// funccall's own `fc_fixvar` array before one has to be allocated.
 pub const MAX_FUNC_ARGS: c_int = 20;
 pub const FIXVAR_CNT: c_int = 12;
 
-pub const CSTP_RETURN: c_int = 24;
-
 /// `trans_function_name` flags.
 pub const TFN_NO_DEREF: c_int = 8;
 pub const TFN_NO_AUTOLOAD: c_int = 4;
 pub const TFN_QUIET: c_int = 2;
 pub const TFN_INT: c_int = 1;
-
-pub const GLV_READ_ONLY: c_int = 16;
 
 /// Why a call could not be made; `user_func_error` turns one into a message.
 pub const FCERR_NOTMETHOD: c_int = 8;
@@ -142,7 +136,6 @@ pub const NOTDONE: c_int = 2;
 pub const TV_CSTRING: size_t = size_t::MAX - 1;
 use crate::message::MSG_BUF_LEN;
 pub const MSG_BUF_CLEN: c_int = MSG_BUF_LEN / 6;
-pub const PROF_YES: c_int = 1;
 
 /// The error texts this file owns, which upstream keeps as file statics.
 pub const E_FUNCEXTS: &CStr = c"E122: Function %s already exists, add ! to replace it";

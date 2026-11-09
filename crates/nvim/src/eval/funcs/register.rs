@@ -10,7 +10,6 @@
 )]
 
 use super::wrappers::{arg_number_chk, dict_alloc_ret};
-use super::{G_REG_EXPR_SRC, G_REG_LIST};
 use crate::cstr;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, dict_get_number, dict_len, list_iter, tv_list_alloc};
@@ -18,6 +17,7 @@ use crate::eval::vars::with_vim_var_str;
 use crate::getchar::state::{REG_EXECUTING, REG_RECORDED, REG_RECORDING};
 use crate::memory::ThinCString;
 use crate::normal::defs::MotionType;
+use crate::register::defs::{G_REG_EXPR_SRC, G_REG_LIST};
 use crate::register::{
     RegName, format_reg_type, get_reg_contents_list, get_reg_contents_owned, get_reg_type,
     get_register_name, get_unname_register, op_reg_set_previous, point_unnamed_at,

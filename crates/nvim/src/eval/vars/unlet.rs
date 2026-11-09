@@ -17,8 +17,9 @@
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::getdigits_int_at;
 use crate::cstr::{self, byte_at};
+use crate::eval::GLV_QUIET;
 use crate::eval::lval::{LValue, Slot, Span, Target};
-use crate::eval::typval::ListRef;
+use crate::eval::typval::{ListRef, TV_INITIAL_VALUE};
 use crate::eval::typval::{
     dict_is_watched, dict_watcher_notify, list_locked, tv_copy, tv_item_lock_slot,
     tv_list_item_lock, value_check_lock_named,
@@ -32,8 +33,7 @@ use crate::semsg;
 use crate::types::{CmdIdx, ExArg, Failed, VAR_DICT, VAR_LIST};
 use core::ffi::c_int;
 
-use super::{GLV_QUIET, clear_local, do_unlet, with_var};
-use crate::eval::typval::TV_INITIAL_VALUE;
+use super::{clear_local, do_unlet, with_var};
 use crate::eval::typval::{DI_FLAGS_FIX, DI_FLAGS_LOCK};
 
 /// What [`ex_unletlock`] does to each argument it resolves.

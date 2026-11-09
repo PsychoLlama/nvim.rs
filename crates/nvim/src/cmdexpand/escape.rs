@@ -17,7 +17,8 @@
 
 use super::*;
 use crate::cmdexpand::defs::{BackslashEscape, ExpandContext};
-use crate::ex_getln::{VSE_BUFFER, VSE_NONE, VSE_SHELL, fnameescape, tilde_replace_matches};
+use crate::ex_getln::VSE_NONE;
+use crate::ex_getln::{VSE_BUFFER, VSE_SHELL, fnameescape, tilde_replace_matches};
 use crate::option::vars::WOP_FLAGS;
 use crate::options::OPT_WOP_FLAG_FUZZY;
 use crate::strings::escaped_bytes;

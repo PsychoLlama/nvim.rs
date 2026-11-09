@@ -134,6 +134,7 @@ use crate::register::{
     valid_yank_reg,
 };
 use crate::registry::{IdSet, id_set};
+use crate::runtime::SID_NONE;
 use crate::runtime::state::CURRENT_SCTX;
 use crate::search::state::SearchItArg;
 use crate::search::state::{
@@ -219,7 +220,8 @@ pub const CMD_REDRAW_ALL: CmdRedraw = 2;
 pub const CMD_REDRAW_POS: CmdRedraw = 1;
 pub const CMD_REDRAW_NONE: CmdRedraw = 0;
 pub(crate) use crate::cmdhist::{HIST_CMD, HIST_DEBUG, HIST_INVALID, HIST_SEARCH};
-pub const VSE_NONE: ::core::ffi::c_int = 0;
+/// `vim_strsave_fnameescape`: escape for an Ex command line.
+pub(crate) const VSE_NONE: ::core::ffi::c_int = 0;
 pub const VSE_BUFFER: ::core::ffi::c_int = 2;
 pub const VSE_SHELL: ::core::ffi::c_int = 1;
 /// The command-line key loop's own state: C's `CommandLineState`.
@@ -562,7 +564,6 @@ static E_ACTIVE_WINDOW_OR_BUFFER_CHANGED_OR_DELETED: &::core::ffi::CStr =
 pub const PATH_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[{`$\\%#'\"|!<";
 pub const SHELL_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[{`$\\%#'\"|!<>();&";
 pub const BUFFER_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[`$\\%#'\"|!<";
-pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const UINT_MAX: ::core::ffi::c_uint = (INT_MAX as ::core::ffi::c_uint)
     .wrapping_mul(2 as ::core::ffi::c_uint)
