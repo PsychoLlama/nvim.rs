@@ -121,7 +121,7 @@ impl PartialEq<u8> for RegName {
 }
 
 /// The register a typed key names, or `None` when the key is not even a
-/// byte. The name still has to pass [`valid_yank_reg`].
+/// byte. The name still has to pass [`RegName::valid`].
 #[inline]
 pub(crate) fn register_name(key: Key) -> Option<RegName> {
     key.as_byte().map(RegName)
@@ -341,7 +341,7 @@ impl YankReg {
 /// The register `regname` names, for one of the three `YREG_*` purposes.
 ///
 /// Cannot handle the black hole `"_`, and must only be called with a valid
-/// register name (see [`valid_yank_reg`]).
+/// register name (see [`RegName::valid`]).
 ///
 /// - `YREG_PASTE` -- about to paste it. With no name, read whatever was
 ///   written last, or the unnamed clipboard if 'clipboard' says so; a
