@@ -188,11 +188,11 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
         marks
             .iter()
             .rev()
-            .for_each(|&mark| extmark_apply_undo(mark, true));
+            .for_each(|mark| extmark_apply_undo(mark, true));
     } else {
         marks
             .iter()
-            .for_each(|&mark| extmark_apply_undo(mark, false));
+            .for_each(|mark| extmark_apply_undo(mark, false));
     }
     let reload = old_flags & UH_RELOAD != 0;
     if let Some(header) = buf.header_mut(link) {

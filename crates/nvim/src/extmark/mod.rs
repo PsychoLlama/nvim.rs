@@ -456,7 +456,7 @@ pub fn extmark_move_region(
     splice::move_region(buffer, start, extent, new, undo);
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 #[repr(C)]
 pub struct ExtmarkMove {
     pub start_row: ::core::ffi::c_int,
@@ -478,7 +478,7 @@ pub struct ExtmarkSavePos {
     pub old_col: ColNr,
     pub invalidated: bool,
 }
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 #[repr(C)]
 pub struct ExtmarkSplice {
     pub start_row: ::core::ffi::c_int,
@@ -499,7 +499,7 @@ pub type BCount = ptrdiff_t;
 /// Upstream is a `type` tag beside an untagged union. The tag's numbers are
 /// what the undo *file* writes, so they stay reachable as
 /// [`ExtmarkUndoObject::wire_type`]; nothing else needs them.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum ExtmarkUndoObject {
     /// A text change: every operation that moves marks except `:move`.
     Splice(ExtmarkSplice),

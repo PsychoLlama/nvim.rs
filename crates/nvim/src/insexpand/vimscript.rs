@@ -210,10 +210,10 @@ impl ComplOrigExtmarks {
         // pushes onto this list, but nothing here assumes that either.
         let count = COMPL_ORIG_EXTMARKS.with(Vec::len);
         for i in (0..count).rev() {
-            let Some(mark) = COMPL_ORIG_EXTMARKS.with(|saved| saved.get(i).copied()) else {
+            let Some(mark) = COMPL_ORIG_EXTMARKS.with(|saved| saved.get(i).cloned()) else {
                 continue;
             };
-            extmark_apply_undo(mark, true);
+            extmark_apply_undo(&mark, true);
         }
     }
 

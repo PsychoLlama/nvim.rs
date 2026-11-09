@@ -167,7 +167,7 @@ pub(crate) fn extmark_setraw(
 
     let mut row1 = 0;
     let mut row2 = 0;
-    let mut alt_iter = iter;
+    let mut alt_iter = iter.clone();
     let alt = tree_get_alt(buffer.marktree(), key, Some(&mut alt_iter));
 
     if invalid {

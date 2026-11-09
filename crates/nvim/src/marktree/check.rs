@@ -171,7 +171,7 @@ pub fn marktree_check_intersections(tree: &mut MarkTree) -> bool {
             let k = marktree_lookup(tree, end_id, Some(&mut end_iter));
             if k.pos.row >= 0 {
                 // A copy, because intersecting walks the start iterator.
-                let mut start_iter = iter;
+                let mut start_iter = iter.clone();
                 let id = mt_lookup_key(mark);
                 marktree_intersect_pair(tree, id, &mut start_iter, &end_iter, false);
             }

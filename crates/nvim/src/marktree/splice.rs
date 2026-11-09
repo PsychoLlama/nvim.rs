@@ -408,10 +408,10 @@ pub fn marktree_splice(
             marktree_lookup(tree, start_id | MARKTREE_END_FLAG, Some(&mut endpos));
             if endpos.is_positioned() {
                 iter_set_node(tree, &mut iter, d.start.old, d.start.old_i);
+                // Read-only to the intersection, so set once for both.
                 end_iter = endpos;
                 marktree_intersect_pair(tree, start_id, &mut iter, &end_iter, true);
                 iter_set_node(tree, &mut iter, d.start.new, d.start.new_i);
-                end_iter = endpos;
                 marktree_intersect_pair(tree, start_id, &mut iter, &end_iter, false);
             }
         } else if d.end.old.is_some() {
@@ -419,7 +419,8 @@ pub fn marktree_splice(
             let mut startpos = MarkTreeIter::default();
             marktree_lookup(tree, start_id, Some(&mut startpos));
             if startpos.is_positioned() {
-                iter = startpos;
+                // The intersection walks `iter`: start the second from fresh.
+                iter = startpos.clone();
                 iter_set_node(tree, &mut end_iter, d.end.old, d.end.old_i);
                 marktree_intersect_pair(tree, start_id, &mut iter, &end_iter, true);
                 iter = startpos;

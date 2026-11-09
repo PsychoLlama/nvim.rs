@@ -210,7 +210,7 @@ pub fn marktree_del_itr(tree: &mut MarkTree, iter: &mut MarkTreeIter, rev: bool)
         marktree_lookup(tree, other, Some(&mut other_iter));
         tree.key_mut(&other_iter).flags |= MtFlags::ORPHANED;
         if mt_start(raw) {
-            let mut this_iter = *iter; // a copy, because this one is mutated
+            let mut this_iter = iter.clone(); // a copy, because this one is mutated
             marktree_intersect_pair(tree, id, &mut this_iter, &other_iter, true);
         } else {
             marktree_intersect_pair(tree, other, &mut other_iter, iter, true);
@@ -644,7 +644,7 @@ impl Default for MarkTree {
 /// marktree code does with it. It names its node by [`NodeId`] and the path
 /// down to it by child index, so it holds nothing a tree change can leave
 /// dangling: a stale iterator reads a wrong key, never freed memory.
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct MarkTreeIter {
     /// The absolute position the keys of `node` are relative to.
     pub pos: MTPos,

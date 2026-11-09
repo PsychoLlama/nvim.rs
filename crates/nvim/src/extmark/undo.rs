@@ -96,7 +96,7 @@ impl Buf {
 
             let mut invalidated = false;
             if !only_copy && !mt_invalid(mark) && mt_invalidate(mark) && !mt_end(mark) {
-                let mut end_iter = iter;
+                let mut end_iter = iter.clone();
                 let endpos = tree_get_altpos(self.marktree(), mark, Some(&mut end_iter));
                 // Invalidate unpaired marks in deleted lines, and paired marks
                 // whose entire range has been deleted.
@@ -149,7 +149,7 @@ impl Buf {
 }
 
 /// Undo or redo one recorded extmark operation.
-pub fn extmark_apply_undo(undo_info: ExtmarkUndoObject, undo: bool) {
+pub fn extmark_apply_undo(undo_info: &ExtmarkUndoObject, undo: bool) {
     let buf = current_buf();
     if let ExtmarkUndoObject::Splice(splice) = undo_info {
         // A splice: any text operation that changes position except `:move`.

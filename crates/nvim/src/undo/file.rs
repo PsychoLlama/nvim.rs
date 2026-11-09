@@ -229,7 +229,7 @@ pub(crate) fn serialize_uhp(bi: &mut BufInfo, uh: &UndoHeader) -> bool {
     }
     bi.write_bytes(UF_ENTRY_END_MAGIC as uintmax_t, 2);
 
-    for &extup in &uh.extmarks {
+    for extup in &uh.extmarks {
         if !serialize_extmark(bi, extup) {
             return false;
         }
@@ -353,8 +353,8 @@ fn unserialize_extmarks(bi: &mut BufInfo, uh: &mut UndoHeader) -> Result<(), Und
 ///
 /// Only splices and moves are written; a `kExtmarkSavePos` record describes
 /// marks in a buffer this file will be read into fresh, and is dropped.
-pub(crate) fn serialize_extmark(bi: &mut BufInfo, extup: ExtmarkUndoObject) -> bool {
-    let image = match &extup {
+pub(crate) fn serialize_extmark(bi: &mut BufInfo, extup: &ExtmarkUndoObject) -> bool {
+    let image = match extup {
         ExtmarkUndoObject::Splice(splice) => encode_splice(splice),
         ExtmarkUndoObject::Move(region) => encode_move(region),
         ExtmarkUndoObject::SavePos(_) => return true,
@@ -649,7 +649,7 @@ mod tests {
             .map(ExtmarkUndoObject::wire_type)
             .collect();
         assert_eq!(kinds, vec![kExtmarkSplice, kExtmarkMove, kExtmarkSplice]);
-        match back.extmarks[2] {
+        match &back.extmarks[2] {
             ExtmarkUndoObject::Splice(s) => assert_eq!(s.start_row, 2),
             _ => panic!("the last record is the second splice"),
         }
