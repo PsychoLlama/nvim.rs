@@ -4,11 +4,11 @@
 //! whole insert repeats (in which case it answers `false` and the state
 //! machine runs again), the cursor moves back onto the last inserted
 //! character, and `'^` is set.  [`ins_ctrl_o`] leaves the mode for exactly
-//! one Normal-mode command by setting `restart_edit` to the letter that will
+//! one Normal-mode command by setting `RESTART_EDIT` to the letter that will
 //! bring this mode back.  [`ins_insert`] switches between Insert and Replace.
 //!
 //! [`ins_ctrl_g`] is the CTRL-G prefix (`CTRL-G j`/`k` move to
-//! `Insstart.col`, `CTRL-G u` starts a new undo block, `CTRL-G U` keeps the
+//! `INSSTART.col`, `CTRL-G u` starts a new undo block, `CTRL-G U` keeps the
 //! next motion inside this one), and [`ins_ctrl_hat`] and [`ins_ctrl_`]
 //! toggle the `:lmap` mappings and 'revins'.
 //!
@@ -143,7 +143,7 @@ pub(crate) fn ins_reg() {
             append_to_redobuff_char(register_key(regname));
             do_put(regname, None, BACKWARD, 1, PUT_CURSEND);
         } else if insert_reg(regname, None, !literally.is_nul()).is_err() {
-            beep(kOptBoFlagRegister as ::core::ffi::c_uint);
+            beep(OPT_BO_FLAG_REGISTER as ::core::ffi::c_uint);
             need_redraw = true; // remove the `"`
         } else if STOP_INSERT_MODE.get() {
             // The `=` register invoked a function that did
@@ -152,7 +152,7 @@ pub(crate) fn ins_reg() {
             need_redraw = true;
         }
     } else {
-        beep(kOptBoFlagRegister as ::core::ffi::c_uint);
+        beep(OPT_BO_FLAG_REGISTER as ::core::ffi::c_uint);
         need_redraw = true; // remove the `"`
     }
 
@@ -209,7 +209,7 @@ pub(crate) fn ins_ctrl_g() {
         // Esc after CTRL-G cancels it.
         Key::ESC => {}
         // Unknown; reserved for future expansion.
-        _ => beep(kOptBoFlagCtrlg as ::core::ffi::c_uint),
+        _ => beep(OPT_BO_FLAG_CTRLG as ::core::ffi::c_uint),
     }
 }
 
@@ -307,7 +307,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
         && !REVINS_ON.get()
     {
         if Win::current().w_cursor.coladd > 0
-            || get_ve_flags(Win::current()) == kOptVeFlagAll as ::core::ffi::c_uint
+            || get_ve_flags(Win::current()) == OPT_VE_FLAG_ALL as ::core::ffi::c_uint
         {
             let _ = oneleft();
             if !RESTART_EDIT.get().is_nul() {
@@ -355,9 +355,9 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
 /// text.
 pub(crate) fn ins_ctrl_() {
     if REVINS_ON.get() && REVINS_CHARS.get() != 0 && REVINS_SCOL.get() >= 0 {
-        // Upstream's `while (gchar_cursor() != NUL && revins_chars--)`:
+        // Upstream's `while (gchar_cursor() != NUL && REVINS_CHARS--)`:
         // the decrement runs on the iteration that ends the loop too, so
-        // exhausting the count leaves `revins_chars` at -1.
+        // exhausting the count leaves `REVINS_CHARS` at -1.
         while char_at_cursor() != NUL {
             let n = REVINS_CHARS.get();
             REVINS_CHARS.set(n - 1);
@@ -409,8 +409,8 @@ pub(crate) fn ins_insert(replace_state: c_int) {
 
 /// CTRL-O: leave Insert mode for exactly one Normal-mode command.
 ///
-/// `restart_edit` holds the letter that brings *this* mode back afterwards,
-/// and `ins_at_eol` remembers whether the cursor was past the last character
+/// `RESTART_EDIT` holds the letter that brings *this* mode back afterwards,
+/// and `INS_AT_EOL` remembers whether the cursor was past the last character
 /// so it can be put back there.
 pub(crate) fn ins_ctrl_o() {
     RESTART_V_ISUAL_SELECT.set(0);

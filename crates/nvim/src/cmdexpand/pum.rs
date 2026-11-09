@@ -34,7 +34,7 @@ use crate::message::state::MSG_SCROLLED;
 use crate::message::{msg_grid_view, msg_scroll_up};
 use crate::option::csh_like_shell;
 use crate::option::vars::{P_LS, P_WMH, WOP_FLAGS, p_ls, p_wmh};
-use crate::options::kOptWopFlagPum;
+use crate::options::OPT_WOP_FLAG_PUM;
 use crate::popupmenu::{pum_display, pum_undisplay, pum_visible};
 use crate::statusline::{fillchar_status_of, hl_attr};
 use crate::ui::state::{COLUMNS, ROWS};
@@ -160,7 +160,7 @@ pub fn cmdline_compl_is_fuzzy() -> bool {
 /// `need_wildmenu` says whether the current `'wildmode'` part wants one.
 pub(crate) fn cmdline_compl_use_pum(need_wildmenu: bool) -> bool {
     (need_wildmenu
-        && WOP_FLAGS.get() & kOptWopFlagPum as c_uint != 0
+        && WOP_FLAGS.get() & OPT_WOP_FLAG_PUM as c_uint != 0
         && !(ui_has(UI_CMDLINE) && CMDLINE_WIN.get().is_none()))
         || ui_has(UI_WILDMENU)
         || (ui_has(UI_CMDLINE) && ui_has(UI_POPUPMENU))
@@ -218,7 +218,7 @@ pub(crate) fn wildmenu_match_len(expand: &Expand, s: &CStr) -> c_int {
 
 /// Show wildchar matches in the status line.
 ///
-/// At least the `match_idx` item is shown.  We start at item `first_match` in
+/// At least the `match_idx` item is shown.  We start at item `FIRST_MATCH` in
 /// the list and show all matches that fit; if inversion is possible we use it,
 /// else `=` characters are used.
 pub(crate) fn redraw_wildmenu(

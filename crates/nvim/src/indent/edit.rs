@@ -19,7 +19,7 @@ use crate::narrow::number_as_col;
 use crate::narrow::number_as_int;
 use crate::normal::defs::OpArg;
 use crate::option::defs::{OptVal, OptionSetFlags};
-use crate::options::kOptVartabstop;
+use crate::options::OPT_VARTABSTOP;
 use crate::os::libc::int64_t;
 use crate::plines::CharsizeArg;
 use crate::types::{ColNr, ExArg, Failed, LineNr, OptInt, Pos};
@@ -274,7 +274,7 @@ pub fn ins_try_si(c: c_int) {
         OLD_INDENT.set(get_indent());
         set_indent(0, SIN_CHANGED);
     }
-    // Adjust `ai_col`: the character at this position can be deleted.
+    // Adjust `AI_COL`: the character at this position can be deleted.
     AI_COL.set(AI_COL.get().min(win.w_cursor.col));
 }
 
@@ -334,7 +334,7 @@ fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
     new_cursor_col + len_as_int(ptrlen)
 }
 
-/// Moves `Insstart` and `ai_col` back by what the indent lost, so that the
+/// Moves `INSSTART` and `AI_COL` back by what the indent lost, so that the
 /// insert still starts where the user began typing.
 fn adjust_insert_start(insstart_less: c_int) {
     let mut insstart = INSSTART.get();
@@ -451,7 +451,7 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
     // column, which may need spaces inserted to reach.
     if new_cursor_col >= 0 {
         if new_cursor_col == 0 {
-            // The cursor is touching the indent, so `Insstart.col` resets.
+            // The cursor is touching the indent, so `INSSTART.col` resets.
             insstart_less = MAXCOL;
         }
         new_cursor_col += win.w_cursor.col.get();
@@ -769,7 +769,7 @@ fn set_retab_tabstop(vts: TabStopArray, ts_str: &XString) {
     if stop_count(buf.b_p_vts_array.as_deref()) > 0 || stop_count(vts.as_deref()) > 1 {
         // 'vartabstop' is in use, or more than one stop was given.
         set_option_direct(
-            kOptVartabstop,
+            OPT_VARTABSTOP,
             OptVal::from_cstr(ts_str.as_cstr()),
             OptionSetFlags::LOCAL,
             0,

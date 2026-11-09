@@ -54,7 +54,7 @@ use crate::message::{
 use crate::option::defs::OptVal;
 use crate::option::set_option_direct;
 use crate::option::vars::{P_ACD, p_acd, p_ei, p_verbose};
-use crate::options::kOptEventignore;
+use crate::options::OPT_EVENTIGNORE;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::os::libc::{int64_t, uint64_t};

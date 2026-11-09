@@ -700,7 +700,7 @@ pub(crate) fn may_do_command_line_next_incsearch(
         redrawcmdline();
         Win::current().w_cursor = s.match_end;
     } else {
-        vim_beep(kOptBoFlagError as ::core::ffi::c_uint);
+        vim_beep(OPT_BO_FLAG_ERROR as ::core::ffi::c_uint);
     }
 
     restore_last_search_pattern();

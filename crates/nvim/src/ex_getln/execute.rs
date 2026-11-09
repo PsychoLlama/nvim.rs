@@ -294,7 +294,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
         set_vim_var_char(s.c); // set v:char
         trigger_cmd_autocmd(s.cmdline_type, AutoEvent::CmdlineLeavePre);
         s.event_cmdlineleavepre_triggered = true;
-        if (s.c == Key::ESC || s.c == Key::CTRL_C) && wim_has(0, kOptWimFlagList) {
+        if (s.c == Key::ESC || s.c == Key::CTRL_C) && wim_has(0, OPT_WIM_FLAG_LIST) {
             set_no_hlsearch(true);
         }
     }
@@ -408,13 +408,13 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
         && s.next_wild(WildMode::ExpandKeep, WildOpts::NONE)
     {
         if match_count() > 1
-            && ((!s.did_wild_list && wim_has(s.wim_index, kOptWimFlagList)) || p_wmnu())
+            && ((!s.did_wild_list && wim_has(s.wim_index, OPT_WIM_FLAG_LIST)) || p_wmnu())
         {
             // Trigger the popup menu when wildoptions=pum.
             show_matches(
                 p_wmnu(),
-                wim_has(s.wim_index, kOptWimFlagList),
-                wim_has(0, kOptWimFlagNoselect),
+                wim_has(s.wim_index, OPT_WIM_FLAG_LIST),
+                wim_has(0, OPT_WIM_FLAG_NOSELECT),
             );
         }
         s.next_wild(WildMode::Prev, WildOpts::NONE);

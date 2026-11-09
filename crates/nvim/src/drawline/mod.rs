@@ -65,8 +65,8 @@ use crate::narrow::as_index;
 use crate::option::OPT_FLAG_INSECURE;
 use crate::option::vars::DY_FLAGS;
 use crate::options::{
-    kOptCuloptFlagLine, kOptCuloptFlagNumber, kOptCuloptFlagScreenline, kOptDyFlagUhex,
-    kOptSpoFlagNoplainbuffer,
+    OPT_CULOPT_FLAG_LINE, OPT_CULOPT_FLAG_NUMBER, OPT_CULOPT_FLAG_SCREENLINE, OPT_DY_FLAG_UHEX,
+    OPT_SPO_FLAG_NOPLAINBUFFER,
 };
 use crate::os::libc::{ptrdiff_t, size_t, uint8_t, uint32_t, uint64_t};
 use crate::plines::{CharSize, CharsizeArg};

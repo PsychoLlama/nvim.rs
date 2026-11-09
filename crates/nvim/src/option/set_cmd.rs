@@ -52,7 +52,7 @@ use crate::message::{E_INVARG, E_SANDBOX, E_TRAILING};
 use crate::message::{emsg, msg_ext_set_kind, msg_putchar};
 use crate::option::defs::{OptError, OptIndex, OptVal, OptionSetFlags};
 use crate::option::vars::{p_mle, p_verbose};
-use crate::options::{kOptFoldmethod, kOptInvalid, kOptWildchar, kOptWildcharm, kOptWrap};
+use crate::options::{OPT_FOLDMETHOD, OPT_INVALID, OPT_WILDCHAR, OPT_WILDCHARM, OPT_WRAP};
 use crate::os::libc::uint32_t;
 use crate::startup::SILENT_MODE;
 use crate::types::{ExArg, Failed, OptInt, ScriptId};
@@ -167,7 +167,7 @@ impl Win {
                 return Err(Failed);
             }
             // A modeline must not undo what `:diffthis` set up.
-            if self.w_onebuf_opt.wo_diff != 0 && (opt_idx == kOptFoldmethod || opt_idx == kOptWrap)
+            if self.w_onebuf_opt.wo_diff != 0 && (opt_idx == OPT_FOLDMETHOD || opt_idx == OPT_WRAP)
             {
                 return Err(Failed);
             }
@@ -212,15 +212,15 @@ pub(crate) fn tty_option_end(text: &[u8]) -> Option<usize> {
 
 /// How long the option name at the start of `text` is, and the option it
 /// names. A terminal option ends where it ends but resolves to
-/// `kOptInvalid`; anything that does not start with a letter is not a name
-/// at all, and answers `None` with `kOptInvalid`.
+/// `OPT_INVALID`; anything that does not start with a letter is not a name
+/// at all, and answers `None` with `OPT_INVALID`.
 pub(crate) fn option_end(text: &[u8]) -> (OptIndex, Option<usize>) {
     if let Some(end) = tty_option_end(text) {
-        return (kOptInvalid, Some(end));
+        return (OPT_INVALID, Some(end));
     }
     let len = text.iter().take_while(|b| b.is_ascii_alphabetic()).count();
     if len == 0 {
-        return (kOptInvalid, None);
+        return (OPT_INVALID, None);
     }
     (super::find_option_len(&text[..len]), Some(len))
 }
@@ -313,7 +313,7 @@ fn get_option_newval(
 /// two a `<xx>` name, a `^x` control spelling or any single non-digit is a
 /// key; everything else is `[-]0-9` in any of the bases `vim_str2nr` reads.
 fn take_number(opt_idx: OptIndex, arg: &[u8], errmsg: &mut Option<OptError>) -> Option<OptInt> {
-    let is_key_option = matches!(opt_idx, kOptWildchar | kOptWildcharm);
+    let is_key_option = matches!(opt_idx, OPT_WILDCHAR | OPT_WILDCHARM);
     let first = c_int::from(at(arg, 0));
     let looks_like_key = first == c_int::from(b'<')
         || first == c_int::from(b'^')
@@ -353,7 +353,7 @@ fn do_one_set_option(
 
     let text = &arg[start..];
     let (opt_idx, name_len) = option_end(text);
-    if opt_idx == kOptInvalid {
+    if opt_idx == OPT_INVALID {
         // A terminal option is accepted and discarded.
         if !is_tty_option(text) {
             *errmsg = Some(E_UNKNOWN_OPTION.into());

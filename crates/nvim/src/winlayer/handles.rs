@@ -178,11 +178,11 @@ pub(crate) fn forget_frame(handle: Handle) -> Option<Owned<Frame>> {
 // object on a chain threaded through the very `b_next`/`w_next` fields the
 // editor's own buffer and window lists use (`au_pending_free_buf`,
 // `au_pending_free_win`), and the outermost `apply_autocmds` walks the chain
-// once `autocmd_busy` goes false again.
+// once `AUTOCMD_BUSY` goes false again.
 //
 // Here the pending set owns its storage ([`PendingFree`]), so those two
 // fields have one job. Nothing else changes: `free_buffer`/`win_free` still
-// park under exactly the same `autocmd_busy` test, `apply_autocmds` still
+// park under exactly the same `AUTOCMD_BUSY` test, `apply_autocmds` still
 // drains at exactly the same point, buffers still go before windows, and the
 // order within each is still last-deferred-first-freed.
 
@@ -212,7 +212,7 @@ pub(crate) fn defer_free_window(block: ParkedWindow) {
 
 /// Give back everything the handlers deferred: the C's two `while` loops at
 /// the tail of `apply_autocmds`, run when the outermost firing sees
-/// `autocmd_busy` false again.
+/// `AUTOCMD_BUSY` false again.
 ///
 /// The set is asked for one allocation at a time rather than drained, so that
 /// no borrow of it is held while a free runs — the same reason the C re-reads

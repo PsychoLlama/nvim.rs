@@ -370,13 +370,13 @@ mod tests {
                     .count()
             );
             assert!(
-                crate::options::opt_winborder_values.contains(&style.name),
+                crate::options::OPT_WINBORDER_VALUES.contains(&style.name),
                 "'winborder' does not accept {style:?}",
                 style = style.name
             );
         }
         // 'winborder' also takes "" and "none", which have no style row.
-        assert_eq!(STYLES.len() + 2, crate::options::opt_winborder_values.len());
+        assert_eq!(STYLES.len() + 2, crate::options::OPT_WINBORDER_VALUES.len());
     }
 
     /// Exactly one style is the shadow, and it leaves the top-left corner,

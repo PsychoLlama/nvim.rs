@@ -54,7 +54,7 @@ use crate::r#move::{textpos2screenpos, validate_cursor};
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::vars::{p_ch, p_ls};
 use crate::option::{OptionTarget, parse_winhl_opt, set_option_direct_for};
-use crate::options::kOptBufhidden;
+use crate::options::OPT_BUFHIDDEN;
 use crate::optionstr::OptStringRef;
 use crate::types::{
     AlignTextPos, BufferHandle, ERROR_TYPE_EXCEPTION, Error, FLOAT_RELATIVE_CURSOR,
@@ -276,7 +276,7 @@ fn create_scratch_buffer() -> Result<BufferHandle, Error> {
 fn set_bufhidden_wipe(buffer: Buf) {
     let wipe = OptVal::static_string(c"wipe");
     let target = OptionTarget::Buf(buffer);
-    set_option_direct_for(kOptBufhidden, wipe, OptionSetFlags::LOCAL, 0, target);
+    set_option_direct_for(OPT_BUFHIDDEN, wipe, OptionSetFlags::LOCAL, 0, target);
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 //! Autocommand groups: the two maps, and `:augroup`.
 //!
-//! A group is an id and a name, held in `map_augroup_name_to_id` and
-//! `map_augroup_id_to_name`; [`augroup_add`] allocates an id (reviving a
+//! A group is an id and a name, held in `MAP_AUGROUP_NAME_TO_ID` and
+//! `MAP_AUGROUP_ID_TO_NAME`; [`augroup_add`] allocates an id (reviving a
 //! deleted group's), [`augroup_del`] releases the name but *not* the
 //! autocommands defined under it, and [`augroup_name`] renders an id --
 //! including `AUGROUP_DELETED`, whose name is the `--Deleted--`
@@ -156,7 +156,7 @@ pub fn augroup_find(name: &[u8]) -> ::core::ffi::c_int {
 
 /// The name of group `group`, or `None` when no group ever had that id.
 ///
-/// `next_augroup_id` is the source of truth about which ids have existed:
+/// `NEXT_AUGROUP_ID` is the source of truth about which ids have existed:
 /// the map shrinks when a group is deleted, so its size is not.  The id
 /// one past the last is spelled `END`, which is what makes `:augroup`
 /// completion terminate. A deleted group's name is the `--Deleted--`

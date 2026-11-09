@@ -60,7 +60,7 @@ use crate::message_fmt::msg_bytes;
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_value_give_err;
 use crate::option::split_option_part;
-use crate::options::kOptSpellfile;
+use crate::options::OPT_SPELLFILE;
 use crate::os::cshim::gettext;
 use crate::os::fs::{mkdir_recurse, os_mkdir};
 use crate::path::MAXPATHL;
@@ -321,7 +321,7 @@ fn init_spellfile() {
     buf.truncate(room);
 
     set_option_value_give_err(
-        kOptSpellfile,
+        OPT_SPELLFILE,
         OptVal::from_cstr(&cstr::owned(&buf)),
         OptionSetFlags::LOCAL,
     );

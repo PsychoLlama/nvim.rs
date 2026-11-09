@@ -42,7 +42,8 @@ use crate::option::defs::CpoFlag;
 use crate::option::vars::{P_SEL, p_sel, p_ww};
 use crate::option::{cpo_has, get_ve_flags};
 use crate::options::{
-    kOptFdoFlagBlock, kOptFdoFlagHor, kOptFdoFlagJump, kOptFdoFlagPercent, kOptVeFlagOnemore,
+    OPT_FDO_FLAG_BLOCK, OPT_FDO_FLAG_HOR, OPT_FDO_FLAG_JUMP, OPT_FDO_FLAG_PERCENT,
+    OPT_VE_FLAG_ONEMORE,
 };
 use crate::plines::{linetabsize, plines_win, win_get_fill};
 use crate::pos::lt;
@@ -365,7 +366,7 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
         n -= 1;
     }
     if n != count1 {
-        may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint);
+        may_fold_open(cmd_arg, OPT_FDO_FLAG_HOR as c_uint);
     }
 }
 
@@ -427,7 +428,7 @@ pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
         n -= 1;
     }
     if n != cmd_arg.count1 {
-        may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint);
+        may_fold_open(cmd_arg, OPT_FDO_FLAG_HOR as c_uint);
     }
 }
 
@@ -512,7 +513,7 @@ pub(crate) fn nv_dollar(cmd_arg: &mut CmdArg) {
     if cursor_down(cmd_arg.count1 - 1, cmd_arg.op().op_type == OpType::Nop).is_err() {
         clear_op_beep(cmd_arg.op());
     } else {
-        may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint);
+        may_fold_open(cmd_arg, OPT_FDO_FLAG_HOR as c_uint);
     }
 }
 
@@ -554,7 +555,7 @@ pub(crate) fn nv_csearch(cmd_arg: &mut CmdArg) {
         Win::current().w_cursor.coladd = 0;
     }
     adjust_for_sel(cmd_arg);
-    may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint);
+    may_fold_open(cmd_arg, OPT_FDO_FLAG_HOR as c_uint);
 }
 
 /// `%`: to the matching bracket, or with a count to that percentage of the
@@ -598,7 +599,7 @@ pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
         }
     }
     if lnum != win.w_cursor.lnum {
-        may_fold_open(cmd_arg, kOptFdoFlagPercent as c_uint);
+        may_fold_open(cmd_arg, OPT_FDO_FLAG_PERCENT as c_uint);
     }
 }
 
@@ -614,7 +615,7 @@ pub(crate) fn nv_brace(cmd_arg: &mut CmdArg) {
     }
     adjust_cursor(cmd_arg.op());
     Win::current().w_cursor.coladd = 0;
-    may_fold_open(cmd_arg, kOptFdoFlagBlock as c_uint);
+    may_fold_open(cmd_arg, OPT_FDO_FLAG_BLOCK as c_uint);
 }
 
 /// `{` and `}`: back and forward a paragraph.
@@ -631,7 +632,7 @@ pub(crate) fn nv_findpar(cmd_arg: &mut CmdArg) {
         cmd_arg.op().inclusive = true;
     }
     Win::current().w_cursor.coladd = 0;
-    may_fold_open(cmd_arg, kOptFdoFlagBlock as c_uint);
+    may_fold_open(cmd_arg, OPT_FDO_FLAG_BLOCK as c_uint);
 }
 
 /// `<Home>`: the first column -- the first line with CTRL.
@@ -669,7 +670,7 @@ pub(crate) fn nv_bck_word(cmd_arg: &mut CmdArg) {
     if bck_word(cmd_arg.count1, cmd_arg.arg != 0, false).is_err() {
         clear_op_beep(cmd_arg.op());
     } else {
-        may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint);
+        may_fold_open(cmd_arg, OPT_FDO_FLAG_HOR as c_uint);
     }
 }
 
@@ -711,7 +712,7 @@ pub(crate) fn nv_wordcmd(cmd_arg: &mut CmdArg) {
         clear_op_beep(cmd_arg.op());
     } else {
         adjust_for_sel(cmd_arg);
-        may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint);
+        may_fold_open(cmd_arg, OPT_FDO_FLAG_HOR as c_uint);
     }
 }
 
@@ -722,7 +723,7 @@ pub(crate) fn adjust_cursor(mut op: Op) {
         && gchar_cursor() == NUL
         && (!visual_active() || P_SEL.first_byte() == b'o')
         && !virtual_active(Win::current())
-        && get_ve_flags(Win::current()) & kOptVeFlagOnemore as c_uint == 0
+        && get_ve_flags(Win::current()) & OPT_VE_FLAG_ONEMORE as c_uint == 0
     {
         Win::current().w_cursor.col -= 1;
         mb_adjust_cursor();
@@ -736,7 +737,7 @@ pub(crate) fn nv_beginline(cmd_arg: &mut CmdArg) {
     cmd_arg.op().motion_type = MT_CHAR_WISE;
     cmd_arg.op().inclusive = false;
     beginline(BeginlineOpts::from_bits(cmd_arg.arg));
-    may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint);
+    may_fold_open(cmd_arg, OPT_FDO_FLAG_HOR as c_uint);
     INS_AT_EOL.set(false);
 }
 
@@ -751,7 +752,7 @@ pub(crate) fn nv_goto(cmd_arg: &mut CmdArg) {
     }
     Win::current().w_cursor.lnum = lnum.max(LineNr::ONE).min(last);
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
-    may_fold_open(cmd_arg, kOptFdoFlagJump as c_uint);
+    may_fold_open(cmd_arg, OPT_FDO_FLAG_JUMP as c_uint);
 }
 
 /// Whether `lnum` is inside a closed fold of `window`.

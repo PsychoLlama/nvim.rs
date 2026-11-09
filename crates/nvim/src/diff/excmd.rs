@@ -216,7 +216,7 @@ fn set_diff_option(window: Win, value: bool) {
     // `curwin`/`CURBUF` name `window` and its buffer, which is what the option
     // code reads; the buffer is locked against a `:set` side effect.
     let val = OptVal::Boolean(Some(value));
-    set_option_value_give_err(kOptDiff, val, OptionSetFlags::LOCAL);
+    set_option_value_give_err(OPT_DIFF, val, OptionSetFlags::LOCAL);
     Buf::current().b_ro_locked -= 1;
     saved.restore();
 }
@@ -258,7 +258,7 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
     let foldmethod = OptVal::string(ApiString::from_cstr(c"diff"));
     let scope = OptionSetFlags::LOCAL;
     set_option_direct_for(
-        kOptFoldmethod,
+        OPT_FOLDMETHOD,
         foldmethod,
         scope,
         0 as ScriptId,

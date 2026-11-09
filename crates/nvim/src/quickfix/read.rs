@@ -553,7 +553,7 @@ pub(crate) fn qf_init_ext(
 /// the list was not built.
 fn read_lines(mut qfl: Qfl, reader: &mut Reader, efm: &mut Efm) -> Result<(), QfError> {
     let mut fields = Fields::new();
-    // `got_int` is reset here because it was probably set when killing the
+    // `GOT_INT` is reset here because it was probably set when killing the
     // ":make" command, and the error file should still be read.
     GOT_INT.set(false);
     while !GOT_INT.get() {

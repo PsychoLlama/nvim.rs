@@ -60,7 +60,7 @@ use crate::message_fmt::msg_cstr;
 
 use crate::option::{cpo_has, option_last_set};
 
-use crate::options::kOptFindfunc;
+use crate::options::OPT_FINDFUNC;
 
 use crate::option::defs::{CpoFlag, OptError, OptSet, OptionSetFlags};
 use crate::optionstr::OptString;
@@ -106,7 +106,7 @@ pub(crate) fn call_findfunc(pat: &[u8], cmdcomplete: BoolVarValue) -> Option<Lis
     let locked = Lock::text();
     // Errors are reported against the script that *set* the option, not
     // against whatever is running now.
-    CURRENT_SCTX.set(option_last_set(kOptFindfunc));
+    CURRENT_SCTX.set(option_last_set(OPT_FINDFUNC));
     let mut cb = findfunc_callback();
     let mut rettv = TV_INITIAL_VALUE;
     rettv.write_empty(VAR_UNKNOWN);

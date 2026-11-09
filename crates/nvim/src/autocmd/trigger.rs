@@ -319,7 +319,7 @@ pub fn do_autocmd_focusgained(gained: bool) {
 ///
 /// A nested `FileType` only fires when `force` says so; the *inner* one
 /// then does not `force` the autocommands themselves, which is what the
-/// `ft_recursive == 1` test says.
+/// `FT_RECURSIVE == 1` test says.
 pub fn do_filetype_autocmd(mut buffer: Buf, force: bool) -> bool {
     if FT_RECURSIVE.get() > 0 && !force {
         return false;

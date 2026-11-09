@@ -90,8 +90,8 @@ use crate::option::vars::{
 };
 use crate::option::{buf_copy_options, set_option_direct, set_option_value_give_err, shortmess};
 use crate::options::{
-    kOptBufhidden, kOptBuftype, kOptErrorfile, kOptFdoFlagQuickfix, kOptFiletype, kOptFoldmethod,
-    kOptSwapfile, kOptSwbFlagUselast, kOptSwbFlagUsetab,
+    OPT_BUFHIDDEN, OPT_BUFTYPE, OPT_ERRORFILE, OPT_FDO_FLAG_QUICKFIX, OPT_FILETYPE, OPT_FOLDMETHOD,
+    OPT_SWAPFILE, OPT_SWB_FLAG_USELAST, OPT_SWB_FLAG_USETAB,
 };
 use crate::os::cshim::gettext;
 use crate::os::env::process_id;

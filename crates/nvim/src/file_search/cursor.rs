@@ -269,7 +269,7 @@ pub(crate) fn eval_includeexpr(name: &[u8]) -> Option<XString> {
 
     // A copy: the expression may set the option and free its text.
     let expr = Buf::current().b_p_inex.get();
-    let sandbox = was_set_insecurely(Win::current(), kOptIncludeexpr, OptionSetFlags::LOCAL);
+    let sandbox = was_set_insecurely(Win::current(), OPT_INCLUDEEXPR, OptionSetFlags::LOCAL);
     let res = eval_to_string_safe(&expr, sandbox, true);
 
     set_vim_var_string(Vv::Fname, None);

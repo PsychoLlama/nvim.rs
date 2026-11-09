@@ -208,7 +208,7 @@ pub(crate) fn tv_to_optval(tv: &TypVal, opt_idx: OptIndex, name: &[u8]) -> (OptV
 /// the option `name` from `value`.
 fn set_option_from_tv(name: &[u8], value: &TypVal) {
     let opt_idx = cstr::with_terminated(name, find_option);
-    if opt_idx == kOptInvalid {
+    if opt_idx == OPT_INVALID {
         let name = msg_bytes(name);
         semsg!("E355: Unknown option: {name}");
         return;

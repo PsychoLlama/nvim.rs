@@ -23,8 +23,6 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// The names are upstream's, and each is looked up by that spelling.
-#![allow(non_upper_case_globals)]
 
 mod flags;
 mod index;
@@ -130,7 +128,7 @@ const BLANK: VimOption = VimOption {
     scope_flags: 0,
     var: OptVar::NoGlobal,
     flags_var: None,
-    scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptInvalid),
+    scope_idx: scope_idx(GLOBAL_OPT_INVALID, WIN_OPT_INVALID, BUF_OPT_INVALID),
     immutable: false,
     values: &[],
     opt_did_set_cb: None,
@@ -174,20 +172,20 @@ const fn fill<const N: usize>(
 ///
 /// Immutable, and in `.rodata`: what changes about an option while
 /// the editor runs lives in `crate::option::state` instead.
-pub static options: ConstTable<[VimOption; kOptCount as usize]> = ConstTable::new(table());
+pub static OPTION_TABLE: ConstTable<[VimOption; OPT_COUNT as usize]> = ConstTable::new(table());
 
 /// The table, spliced together from the generated parts. Public to
 /// the crate because `crate::option::state` seeds each option's
 /// starting default from the row that declares it.
-pub(crate) const fn table() -> [VimOption; kOptCount as usize] {
-    let mut table = [BLANK; kOptCount as usize];
+pub(crate) const fn table() -> [VimOption; OPT_COUNT as usize] {
+    let mut table = [BLANK; OPT_COUNT as usize];
     let mut base = 0;
     base = fill(&mut table, base, table_1::PART);
     base = fill(&mut table, base, table_2::PART);
     base = fill(&mut table, base, table_3::PART);
     base = fill(&mut table, base, table_4::PART);
     base = fill(&mut table, base, table_5::PART);
-    assert!(base == kOptCount as usize);
+    assert!(base == OPT_COUNT as usize);
     let mut i = 0;
     while i < table.len() {
         assert!(

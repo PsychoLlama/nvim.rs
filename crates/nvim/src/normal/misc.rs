@@ -39,7 +39,7 @@ use crate::normal::{
     nv_left, nv_operator, nv_pcmark, set_visual_select, v_visop, visual_active, visual_select,
 };
 use crate::ops::OpType;
-use crate::options::kOptBoFlagEsc;
+use crate::options::OPT_BO_FLAG_ESC;
 use crate::os::cshim::gettext;
 use crate::state::mode::{FINISH_OP, RESTART_EDIT, RESTART_V_ISUAL_SELECT};
 use crate::state::{may_trigger_modechanged, state_handle_k_event};
@@ -275,7 +275,7 @@ pub(crate) fn nv_esc(cmd_arg: &mut CmdArg) {
         Win::current().w_set_curswant = true;
         redraw_curbuf_later(UPD_INVERTED);
     } else if no_reason {
-        vim_beep(kOptBoFlagEsc as c_uint);
+        vim_beep(OPT_BO_FLAG_ESC as c_uint);
     }
     clear_op(cmd_arg.op());
 }

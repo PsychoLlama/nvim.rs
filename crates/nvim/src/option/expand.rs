@@ -36,9 +36,9 @@ use crate::keycodes::{special_key_code, termcap_name};
 use crate::memory::XString;
 use crate::option::defs::{OptExpand, OptIndex, OptionSetFlags};
 use crate::options::{
-    kOptAleph, kOptBackupdir, kOptCdpath, kOptCount, kOptDirectory, kOptFiletype, kOptInvalid,
-    kOptKeymap, kOptPackpath, kOptPath, kOptRuntimepath, kOptSpellsuggest, kOptSyntax, kOptTags,
-    kOptViewdir,
+    OPT_ALEPH, OPT_BACKUPDIR, OPT_CDPATH, OPT_COUNT, OPT_DIRECTORY, OPT_FILETYPE, OPT_INVALID,
+    OPT_KEYMAP, OPT_PACKPATH, OPT_PATH, OPT_RUNTIMEPATH, OPT_SPELLSUGGEST, OPT_SYNTAX, OPT_TAGS,
+    OPT_VIEWDIR,
 };
 use crate::os::libc::uint32_t;
 use crate::path::MAXPATHL;
@@ -54,10 +54,10 @@ use super::{
 
 /// What [`set_context_in_set_cmd`] worked out, for the `Expand*` half.
 ///
-/// `IDX` is `kOptInvalid` for a terminal option, whose two-letter name is
+/// `IDX` is `OPT_INVALID` for a terminal option, whose two-letter name is
 /// spelled into `NAME` instead — the whole four bytes at a time, since the
 /// first two are always `t_`; a zero byte ends the name early.
-static IDX: GlobalCell<OptIndex> = GlobalCell::new(kOptInvalid);
+static IDX: GlobalCell<OptIndex> = GlobalCell::new(OPT_INVALID);
 static NAME: GlobalCell<[u8; 4]> = GlobalCell::new(*b"t_\0\0");
 static START_COL: GlobalCell<usize> = GlobalCell::new(0);
 static FLAGS: GlobalCell<OptionSetFlags> = GlobalCell::new(OptionSetFlags::NONE);
@@ -89,10 +89,10 @@ pub(crate) fn option_expand(opt_idx: OptIndex, val: Option<&CStr>) -> Option<XSt
     }
     // 'path' and 'tags' hold escaped file names, so their separators
     // must survive the expansion.
-    let esc = matches!(opt_idx, kOptTags | kOptPath);
+    let esc = matches!(opt_idx, OPT_TAGS | OPT_PATH);
     // 'spellsuggest' items are `file:<name>`; only that prefix's tail
     // is a path.
-    let one_prefix = (opt_idx == kOptSpellsuggest).then_some(c"file:");
+    let one_prefix = (opt_idx == OPT_SPELLSUGGEST).then_some(c"file:");
     let expanded = expand_env_escaped(val, esc, false, one_prefix);
     (expanded.as_cstr() != val).then_some(expanded)
 }
@@ -173,15 +173,15 @@ pub(crate) fn set_context_in_set_cmd(expand: &mut Expand, arg: usize, opt_flags:
     }
 
     // Everything below completes the *value*, after the `=` or `:`.
-    IDX.set(if is_term_option { kOptInvalid } else { opt_idx });
+    IDX.set(if is_term_option { OPT_INVALID } else { opt_idx });
     expand.pattern = p + 1;
     START_COL.set(p + 1);
 
     // Three options reuse another command's completion wholesale.
     let borrowed = match opt_idx {
-        kOptSyntax => Some(ExpandContext::Ownsyntax),
-        kOptFiletype => Some(ExpandContext::Filetype),
-        kOptKeymap => Some(ExpandContext::Keymap),
+        OPT_SYNTAX => Some(ExpandContext::Ownsyntax),
+        OPT_FILETYPE => Some(ExpandContext::Filetype),
+        OPT_KEYMAP => Some(ExpandContext::Keymap),
         _ => None,
     };
     if let Some(context) = borrowed {
@@ -192,7 +192,7 @@ pub(crate) fn set_context_in_set_cmd(expand: &mut Expand, arg: usize, opt_flags:
     if subtract {
         expand.context = ExpandContext::SettingSubtract;
         return;
-    } else if IDX.get() != kOptInvalid && get_option(IDX.get()).opt_expand_cb.is_some() {
+    } else if IDX.get() != OPT_INVALID && get_option(IDX.get()).opt_expand_cb.is_some() {
         expand.context = ExpandContext::StringSetting;
     } else if at(expand.pattern) == 0 {
         expand.context = ExpandContext::OldSetting;
@@ -218,7 +218,7 @@ pub(crate) fn set_context_in_set_cmd(expand: &mut Expand, arg: usize, opt_flags:
         expand.pattern = argend;
     }
     // 'spellsuggest' takes `file:<name>`, whose tail is a file name.
-    if opt_idx == kOptSpellsuggest {
+    if opt_idx == OPT_SPELLSUGGEST {
         if line[expand.pattern..].starts_with(b"file:") {
             expand.pattern += 5;
         } else if get_option(IDX.get()).opt_expand_cb.is_some() {
@@ -270,7 +270,7 @@ fn take_option_name(
         // The two termcap bytes the key code packs.
         let [lo, hi] = termcap_name(key);
         NAME.set([b't', b'_', lo, hi]);
-        return Some((nextchar, kOptAleph, 0, true));
+        return Some((nextchar, OPT_ALEPH, 0, true));
     }
 
     // A bare `t_xx` spelling.
@@ -285,7 +285,7 @@ fn take_option_name(
         *p += 1;
         let nextchar = at(*p);
         NAME.set([b't', b'_', at(*p - 2), at(*p - 1)]);
-        return Some((nextchar, kOptAleph, 0, true));
+        return Some((nextchar, OPT_ALEPH, 0, true));
     }
 
     // An ordinary name. `*` is allowed as a wildcard for the name
@@ -298,7 +298,7 @@ fn take_option_name(
     }
     let nextchar = at(*p);
     let opt_idx = find_option_len(&line[arg..*p]);
-    if opt_idx == kOptInvalid || is_option_hidden(opt_idx) {
+    if opt_idx == OPT_INVALID || is_option_hidden(opt_idx) {
         expand.context = ExpandContext::Nothing;
         return None;
     }
@@ -315,16 +315,16 @@ fn take_option_name(
 fn set_file_context(expand: &mut Expand, opt_idx: OptIndex, flags: uint32_t) {
     // 'path', 'cdpath' and 'tags' need three backslashes for a space,
     // because their own parsers unescape one layer first.
-    let three = matches!(opt_idx, kOptPath | kOptCdpath | kOptTags);
+    let three = matches!(opt_idx, OPT_PATH | OPT_CDPATH | OPT_TAGS);
     let directories = matches!(
         opt_idx,
-        kOptBackupdir
-            | kOptDirectory
-            | kOptPath
-            | kOptPackpath
-            | kOptRuntimepath
-            | kOptCdpath
-            | kOptViewdir
+        OPT_BACKUPDIR
+            | OPT_DIRECTORY
+            | OPT_PATH
+            | OPT_PACKPATH
+            | OPT_RUNTIMEPATH
+            | OPT_CDPATH
+            | OPT_VIEWDIR
     );
     expand.context = if directories {
         ExpandContext::Directories
@@ -417,7 +417,7 @@ pub(crate) fn expand_settings(
         try_name(&mut found, &mut scored, c"all", regmatch);
     }
 
-    for opt_idx in kOptAleph..kOptCount as OptIndex {
+    for opt_idx in OPT_ALEPH..OPT_COUNT as OptIndex {
         let opt = get_option(opt_idx);
         if is_option_hidden(opt_idx)
             || (booleans_only && !option_has_type(opt_idx, OPT_VAL_TYPE_BOOLEAN))
@@ -452,13 +452,13 @@ pub(crate) fn escape_option_str_cmdline(var: &CStr) -> XString {
 pub(crate) fn expand_old_setting() -> Option<Vec<XString>> {
     // A terminal option has no table row, so it is looked up by the
     // name `set_context_in_set_cmd` spelled out.
-    if IDX.get() == kOptInvalid {
+    if IDX.get() == OPT_INVALID {
         IDX.set(NAME.with(|name| {
             let end = name.iter().position(|&b| b == 0).unwrap_or(name.len());
             find_option_len(&name[..end])
         }));
     }
-    let var = if IDX.get() == kOptInvalid {
+    let var = if IDX.get() == OPT_INVALID {
         XString::new()
     } else {
         option_value_text(IDX.get(), FLAGS.get())
@@ -472,7 +472,7 @@ pub(crate) fn expand_string_setting(
     regmatch: &mut RegMatch,
 ) -> Option<Vec<XString>> {
     let opt_idx = IDX.get();
-    if opt_idx == kOptInvalid {
+    if opt_idx == OPT_INVALID {
         return None;
     }
     let expand_cb = get_option(opt_idx).opt_expand_cb?;
@@ -501,7 +501,7 @@ pub(crate) fn expand_setting_subtract(
     regmatch: &mut RegMatch,
 ) -> Option<Vec<XString>> {
     let opt_idx = IDX.get();
-    if opt_idx == kOptInvalid || option_has_type(opt_idx, OPT_VAL_TYPE_NUMBER) {
+    if opt_idx == OPT_INVALID || option_has_type(opt_idx, OPT_VAL_TYPE_NUMBER) {
         return expand_old_setting();
     }
     let (buf, win) = (Buf::current(), Win::current());

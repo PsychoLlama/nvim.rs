@@ -2,10 +2,10 @@
 //!
 //! The active command modifiers (`cmdmod` — `:silent`, `:keepalt`, the
 //! `:vertical`/`:tab` split direction), how the current line was reached
-//! (`exec_from_reg`, `ex_normal_busy`, `ex_nesting_level`), whether a
-//! range command is walking lines for `:global` (`global_busy`,
-//! `listcmd_busy`), and the last Ex line typed, which `@:` replays
-//! (`last_cmdline`, `new_last_cmdline`, `repeat_cmdline`).
+//! (`EXEC_FROM_REG`, `EX_NORMAL_BUSY`, `EX_NESTING_LEVEL`), whether a
+//! range command is walking lines for `:global` (`GLOBAL_BUSY`,
+//! `LISTCMD_BUSY`), and the last Ex line typed, which `@:` replays
+//! (`LAST_CMDLINE`, `NEW_LAST_CMDLINE`, `REPEAT_CMDLINE`).
 //!
 //! All but `cmdmod` are one [`ExState`] behind one cell, with a `const`
 //! selector per field under the old name -- see
@@ -68,7 +68,7 @@ state_record! {
     /// The first line of the command being typed, which `.` repeats when
     /// the command was a single line.
     pub(crate) REPEAT_CMDLINE: Option<XString> = None;
-    /// The command line just typed; it becomes `last_cmdline` once it has
+    /// The command line just typed; it becomes `LAST_CMDLINE` once it has
     /// run, so that `:@:` inside it still sees the one before.
     pub(crate) NEW_LAST_CMDLINE: Option<XString> = None;
 }

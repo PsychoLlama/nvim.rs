@@ -475,7 +475,7 @@ pub fn flush_buffers(flush_typeahead: FlushBuffers) {
 pub fn beep_flush() {
     if EMSG_SILENT.get() == 0 {
         flush_buffers(FLUSH_MINIMAL);
-        vim_beep(kOptBoFlagError as c_uint);
+        vim_beep(OPT_BO_FLAG_ERROR as c_uint);
     }
 }
 

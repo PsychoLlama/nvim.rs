@@ -32,7 +32,7 @@ use crate::r#move::update_topline;
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_direct;
 use crate::option::vars::{P_ICM, p_rdt, p_report, p_shm};
-use crate::options::kOptShortmess;
+use crate::options::OPT_SHORTMESS;
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::libc::int64_t;
 use crate::profile::{profile_setlimit, profile_zero};
@@ -247,7 +247,7 @@ pub(crate) fn show_sub(
 
     // Disable the file info message.
     set_option_direct(
-        kOptShortmess,
+        OPT_SHORTMESS,
         OptVal::static_string(c"F"),
         OptionSetFlags::NONE,
         SID_NONE,
@@ -274,7 +274,7 @@ pub(crate) fn show_sub(
 
     let mut pv = if preview {
         // With 'inccommand' at `split` the caller's contract makes
-        // `cmdpreview_bufnr` the live preview buffer, and upstream `assert`s
+        // `CMDPREVIEW_BUFNR` the live preview buffer, and upstream `assert`s
         // exactly that -- but the assert is compiled out under `NDEBUG` and
         // every use below it sits behind `if (cmdpreview_buf)`, so a release
         // build that somehow lost the buffer *skips the preview* rather than
@@ -327,7 +327,7 @@ pub(crate) fn show_sub(
 
     drop(pv);
     set_option_direct(
-        kOptShortmess,
+        OPT_SHORTMESS,
         OptVal::from_bytes(save_shm.as_bytes()),
         OptionSetFlags::NONE,
         SID_NONE,

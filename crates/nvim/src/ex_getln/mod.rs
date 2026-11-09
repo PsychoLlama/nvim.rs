@@ -118,8 +118,9 @@ use crate::option::{
 };
 use crate::option::{is_wildcharm, wildchar};
 use crate::options::{
-    kOptBoFlagError, kOptBoFlagWildmode, kOptBufhidden, kOptFiletype, kOptInccommand,
-    kOptWimFlagFull, kOptWimFlagLastused, kOptWimFlagList, kOptWimFlagLongest, kOptWimFlagNoselect,
+    OPT_BO_FLAG_ERROR, OPT_BO_FLAG_WILDMODE, OPT_BUFHIDDEN, OPT_FILETYPE, OPT_INCCOMMAND,
+    OPT_WIM_FLAG_FULL, OPT_WIM_FLAG_LASTUSED, OPT_WIM_FLAG_LIST, OPT_WIM_FLAG_LONGEST,
+    OPT_WIM_FLAG_NOSELECT,
 };
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;

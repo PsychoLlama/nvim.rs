@@ -106,15 +106,15 @@ fn goto_cwindow(qi: Qi, resize: bool, sz: c_int, vertsplit: bool) -> bool {
 fn set_cwindow_options() {
     let local = OptionSetFlags::LOCAL;
     let off = OptVal::Boolean(Some(false));
-    set_option_value_give_err(kOptSwapfile, off, local);
-    set_option_value_give_err(kOptBuftype, OptVal::static_string(c"quickfix"), local);
-    set_option_value_give_err(kOptBufhidden, OptVal::static_string(c"hide"), local);
+    set_option_value_give_err(OPT_SWAPFILE, off, local);
+    set_option_value_give_err(OPT_BUFTYPE, OptVal::static_string(c"quickfix"), local);
+    set_option_value_give_err(OPT_BUFHIDDEN, OptVal::static_string(c"hide"), local);
     // RESET_BINDING: no 'scrollbind'/'cursorbind', and never a diff.
     let mut win = Win::current();
     win.w_onebuf_opt.wo_scb = c_int::from(false);
     win.w_onebuf_opt.wo_crb = c_int::from(false);
     win.w_onebuf_opt.wo_diff = c_int::from(false);
-    set_option_value_give_err(kOptFoldmethod, OptVal::static_string(c"manual"), local);
+    set_option_value_give_err(OPT_FOLDMETHOD, OptVal::static_string(c"manual"), local);
 }
 
 /// Open a new quickfix or location list window, load the quickfix buffer

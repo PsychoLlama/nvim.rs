@@ -355,7 +355,7 @@ fn qf_jump_to_buffer(
         }
     };
     qf_jump_goto_line(&position);
-    if FDO_FLAGS.get() & kOptFdoFlagQuickfix as c_uint != 0 && openfold {
+    if FDO_FLAGS.get() & OPT_FDO_FLAG_QUICKFIX as c_uint != 0 && openfold {
         fold_open_cursor();
     }
     if print_message {

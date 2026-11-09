@@ -68,7 +68,7 @@ use crate::normal::defs::MotionType;
 use crate::normal::visual_active;
 use crate::option::defs::CpoFlag;
 use crate::option::{cpo_has, get_scrolloff_value, get_sidescrolloff_value};
-use crate::options::{OptCuloptFlags, kOptCuloptFlagScreenline};
+use crate::options::{OPT_CULOPT_FLAG_SCREENLINE, OptCuloptFlags};
 use crate::optionstr::OptString;
 use crate::os::libc::int64_t;
 use crate::plines::{
@@ -393,7 +393,7 @@ fn redraw_for_cursorcolumn(win: Win) {
     if win.w_onebuf_opt.wo_cuc != 0 {
         win.redraw_later(UPD_SOME_VALID);
     } else if win.w_onebuf_opt.wo_cul != 0
-        && OptCuloptFlags::from(win.w_p_culopt_flags) & kOptCuloptFlagScreenline != 0
+        && OptCuloptFlags::from(win.w_p_culopt_flags) & OPT_CULOPT_FLAG_SCREENLINE != 0
     {
         win.redraw_later(UPD_VALID);
     }

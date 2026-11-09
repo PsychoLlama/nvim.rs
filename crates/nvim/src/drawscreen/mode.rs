@@ -103,7 +103,7 @@ pub fn showmode() -> c_int {
                 // CTRL-X in Insert mode. These get long, so they are budgeted
                 // against the room left rather than allowed to wrap; an
                 // external message UI imposes no limit of its own.
-                // `edit_submode_extra` is preferred over `edit_submode`.
+                // `EDIT_SUBMODE_EXTRA` is preferred over `EDIT_SUBMODE`.
                 length = if ui_has(UI_MESSAGES) {
                     INT_MAX
                 } else {
@@ -296,7 +296,7 @@ pub(crate) fn recording_mode(hl_id: c_int) {
         return;
     }
     msg_str_hl(gettext(c"recording"), hl_id, false);
-    // Upstream formats this with `snprintf(s, 4, " @%c", reg_recording)`,
+    // Upstream formats this with `snprintf(s, 4, " @%c", REG_RECORDING)`,
     // which is exactly three bytes and the terminator.
     let reg = REG_RECORDING.get();
     let suffix = [b' ', b'@', reg, 0];

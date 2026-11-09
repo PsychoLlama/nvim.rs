@@ -53,7 +53,7 @@ use crate::message::{E_CANNOT_SWITCH_TO_A_CLOSING_BUFFER, E_TRAILING_ARG};
 use crate::message_fmt::{msg_cstr_opt, report_msg};
 use crate::option::defs::OptionSetFlags;
 use crate::option::vars::{JOP_FLAGS, p_confirm, p_report, p_write};
-use crate::options::kOptJopFlagClean;
+use crate::options::OPT_JOP_FLAG_CLEAN;
 use crate::os::cshim::ngettext;
 use crate::os::input::os_breakcheck;
 use crate::os::libc::int64_t;
@@ -156,7 +156,7 @@ fn owned_err(msg: &'static CStr) -> Option<CString> {
     Some(ex_msg(msg))
 }
 fn jop_clean() -> bool {
-    JOP_FLAGS.get() & kOptJopFlagClean != 0
+    JOP_FLAGS.get() & OPT_JOP_FLAG_CLEAN != 0
 }
 fn confirming() -> bool {
     p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)
@@ -767,7 +767,7 @@ fn refuse_unload(buffer: Buf, bufref: BufRef, flags: c_int) -> Option<Result<(),
 }
 
 /// Deleting the current buffer: find another to go to.  In order:
-/// `au_new_curbuf`, the buffer most recently visited, a loaded one after --
+/// `AU_NEW_CURBUF`, the buffer most recently visited, a loaded one after --
 /// then before -- the current buffer, and finally any buffer at all, skipping
 /// buffers that are closing.  Autocommands may have deleted them all.
 fn pick_replacement(buf_fnum: c_int, update_jumplist: &mut bool) -> Option<Buf> {

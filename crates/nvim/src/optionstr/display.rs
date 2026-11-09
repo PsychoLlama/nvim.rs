@@ -47,7 +47,7 @@ use crate::option::vars::{
     p_km, p_pumborder, p_winborder,
 };
 use crate::option::{fill_culopt_flags, parse_winhl_opt};
-use crate::options::{kOptAmbiwidth, opt_ve_values};
+use crate::options::{OPT_AMBIWIDTH, OPT_VE_VALUES};
 use crate::optionstr::BreakAt;
 use crate::state::mode::{KM_STARTSEL, KM_STOPSEL};
 use crate::types::{
@@ -76,7 +76,7 @@ pub fn did_set_ambiwidth(args: &mut OptSet) -> Result<(), OptError> {
 /// 'emoji' has the same reach as 'ambiwidth', so it re-checks the same
 /// things — including 'ambiwidth' itself, whose mask depends on it.
 pub fn did_set_emoji(_args: &mut OptSet) -> Result<(), OptError> {
-    if check_str_opt(kOptAmbiwidth, None).is_err() {
+    if check_str_opt(OPT_AMBIWIDTH, None).is_err() {
         return invalid();
     }
     check_chars_options()
@@ -336,7 +336,7 @@ pub fn did_set_virtualedit(args: &mut OptSet) -> Result<(), OptError> {
         store(0 as c_uint);
         return Ok(());
     }
-    let Some(mask) = opt_strings_mask(value, &opt_ve_values, true) else {
+    let Some(mask) = opt_strings_mask(value, &OPT_VE_VALUES, true) else {
         return invalid();
     };
     store(mask);

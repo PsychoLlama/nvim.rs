@@ -29,7 +29,7 @@ use core::ffi::{CStr, c_int, c_uint};
 use crate::message::E_INVARG;
 use crate::option::defs::{OptError, OptIndex, OptSet};
 use crate::option::{OPT_FLAG_COMMA, OPT_FLAG_ONE_COMMA, get_option, option_var};
-use crate::options::{kOptFileformat, kOptFileformats, kOptSessionoptions, kOptViewoptions};
+use crate::options::{OPT_FILEFORMAT, OPT_FILEFORMATS, OPT_SESSIONOPTIONS, OPT_VIEWOPTIONS};
 use crate::types::Failed;
 
 use super::illegal_char;
@@ -41,8 +41,8 @@ use super::illegal_char;
 /// 'fileformat''s.
 pub(crate) fn opt_values(idx: OptIndex) -> &'static [&'static CStr] {
     let shared = match idx {
-        kOptViewoptions => kOptSessionoptions,
-        kOptFileformats => kOptFileformat,
+        OPT_VIEWOPTIONS => OPT_SESSIONOPTIONS,
+        OPT_FILEFORMATS => OPT_FILEFORMAT,
         _ => idx,
     };
     get_option(shared).values
@@ -154,7 +154,7 @@ pub(crate) fn check_str_opt(
 /// touching a buffer, which is why it is reachable without going through
 /// `did_set_*`.
 pub fn is_ff_value(p: &CStr) -> bool {
-    opt_strings_ok(p.to_bytes(), opt_values(kOptFileformat), false)
+    opt_strings_ok(p.to_bytes(), opt_values(OPT_FILEFORMAT), false)
 }
 
 #[cfg(test)]

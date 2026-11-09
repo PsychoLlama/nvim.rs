@@ -247,10 +247,10 @@ fn want_backup_copy(
     bkc: c_uint,
     append: bool,
 ) -> bool {
-    if bkc & kOptBkcFlagYes as c_uint != 0 || append {
+    if bkc & OPT_BKC_FLAG_YES as c_uint != 0 || append {
         return true;
     }
-    if bkc & kOptBkcFlagAuto as c_uint == 0 {
+    if bkc & OPT_BKC_FLAG_AUTO as c_uint == 0 {
         return false;
     }
 
@@ -302,8 +302,8 @@ fn breaks_link(fname: &CStr, file_info_old: &FileInfo, bkc: c_uint) -> bool {
     let same = link
         .as_ref()
         .is_some_and(|link| link.same_file_as(file_info_old));
-    let symlink = bkc & kOptBkcFlagBreaksymlink as c_uint != 0 && link.is_some() && !same;
-    let hardlink = bkc & kOptBkcFlagBreakhardlink as c_uint != 0
+    let symlink = bkc & OPT_BKC_FLAG_BREAKSYMLINK as c_uint != 0 && link.is_some() && !same;
+    let hardlink = bkc & OPT_BKC_FLAG_BREAKHARDLINK as c_uint != 0
         && file_info_old.stat.st_nlink > 1
         && (link.is_none() || same);
     symlink || hardlink
@@ -365,7 +365,7 @@ pub(crate) fn buf_write_make_backup(
 ) -> Result<Backup, WriteError> {
     let perm = target.perm;
     let mut copy = want_backup_copy(fname, file_info_old, perm, bkc, append);
-    if bkc & (kOptBkcFlagBreaksymlink as c_uint | kOptBkcFlagBreakhardlink as c_uint) != 0
+    if bkc & (OPT_BKC_FLAG_BREAKSYMLINK as c_uint | OPT_BKC_FLAG_BREAKHARDLINK as c_uint) != 0
         && breaks_link(fname, file_info_old, bkc)
     {
         copy = false;

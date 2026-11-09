@@ -27,7 +27,7 @@ use crate::getchar::state::GOT_INT;
 use crate::global_cell::{editor_state::Held, editor_state_lock};
 use crate::memory::XString;
 use crate::option::vars::{P_CPO, P_PP, P_RTP, P_SU, P_WIC, P_WIG, WOP_FLAGS, p_wic};
-use crate::options::kOptWopFlagFuzzy;
+use crate::options::OPT_WOP_FLAG_FUZZY;
 use crate::types::TypVal;
 use crate::window::{bare_window, free_bare_window};
 use crate::winlayer::graph::{leave_curbuf, leave_curwin};
@@ -71,7 +71,7 @@ impl Fixture {
     }
 
     fn fuzzy(&self) {
-        WOP_FLAGS.set(WOP_FLAGS.get() | kOptWopFlagFuzzy);
+        WOP_FLAGS.set(WOP_FLAGS.get() | OPT_WOP_FLAG_FUZZY);
     }
 }
 

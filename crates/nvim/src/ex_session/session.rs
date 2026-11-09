@@ -47,9 +47,9 @@ use crate::eval::vars::globvar_dict;
 use crate::memory::XString;
 use crate::option::vars::{p_shm, p_stal, p_wh, p_wiw};
 use crate::options::{
-    kOptSsopFlagBuffers, kOptSsopFlagCurdir, kOptSsopFlagGlobals, kOptSsopFlagHelp,
-    kOptSsopFlagOptions, kOptSsopFlagResize, kOptSsopFlagSesdir, kOptSsopFlagTabpages,
-    kOptSsopFlagTerminal, kOptSsopFlagWinsize,
+    OPT_SSOP_FLAG_BUFFERS, OPT_SSOP_FLAG_CURDIR, OPT_SSOP_FLAG_GLOBALS, OPT_SSOP_FLAG_HELP,
+    OPT_SSOP_FLAG_OPTIONS, OPT_SSOP_FLAG_RESIZE, OPT_SSOP_FLAG_SESDIR, OPT_SSOP_FLAG_TABPAGES,
+    OPT_SSOP_FLAG_TERMINAL, OPT_SSOP_FLAG_WINSIZE,
 };
 use crate::os::libc::int64_t;
 use crate::strings::escaped_bytes;
@@ -73,17 +73,17 @@ use core::ptr;
 pub(crate) fn makeopens(out: &mut SessionFile, dirnow: &XString) -> Written {
     let opts = SessionOpts::Session;
     // "buffers" means save every buffer, not only the ones in a window.
-    let only_save_windows = !opts.has(kOptSsopFlagBuffers);
+    let only_save_windows = !opts.has(OPT_SSOP_FLAG_BUFFERS);
 
     out.line(c"let v:this_session=expand(\"<sfile>:p\")")?;
     out.line(c"doautoall SessionLoadPre")?;
-    if opts.has(kOptSsopFlagGlobals) {
+    if opts.has(OPT_SSOP_FLAG_GLOBALS) {
         store_session_globals(out)?;
     }
 
     // Close all windows and tab pages but one.
     out.line(c"silent only")?;
-    if opts.has(kOptSsopFlagTabpages) {
+    if opts.has(OPT_SSOP_FLAG_TABPAGES) {
         out.line(c"silent tabonly")?;
     }
 
@@ -96,7 +96,7 @@ pub(crate) fn makeopens(out: &mut SessionFile, dirnow: &XString) -> Written {
 
     // 'shortmess' is set for the load and restored at the end; save the old
     // value here unless the file carries options anyway.
-    if !opts.has(kOptSsopFlagOptions) {
+    if !opts.has(OPT_SSOP_FLAG_OPTIONS) {
         out.line(c"let s:shortmess_save = &shortmess")?;
     }
     out.line(c"set shortmess+=aoO")?;
@@ -106,9 +106,9 @@ pub(crate) fn makeopens(out: &mut SessionFile, dirnow: &XString) -> Written {
     put_buffer_list(out, only_save_windows)?;
 
     let names = crate::arglist::arg_names(ArgListId::GLOBAL);
-    ses_arglist(out, c"argglobal", &names, !opts.has(kOptSsopFlagCurdir))?;
+    ses_arglist(out, c"argglobal", &names, !opts.has(OPT_SSOP_FLAG_CURDIR))?;
 
-    if opts.has(kOptSsopFlagResize) {
+    if opts.has(OPT_SSOP_FLAG_RESIZE) {
         out.write(format_args!(
             "set lines={} columns={}\n",
             int64_t::from(ROWS.get()),
@@ -130,7 +130,7 @@ pub(crate) fn makeopens(out: &mut SessionFile, dirnow: &XString) -> Written {
     // window lists under it.
     put_tabs(out, &mut restore_height_width)?;
 
-    if opts.has(kOptSsopFlagTabpages) {
+    if opts.has(OPT_SSOP_FLAG_TABPAGES) {
         let index = tab_index(TabPage::current());
         out.write(format_args!("tabnext {index}\n"))?;
     }
@@ -151,7 +151,7 @@ pub(crate) fn makeopens(out: &mut SessionFile, dirnow: &XString) -> Written {
     ))?;
 
     // Restore 'shortmess'.
-    if opts.has(kOptSsopFlagOptions) {
+    if opts.has(OPT_SSOP_FLAG_OPTIONS) {
         // 'shortmess''s bytes go out verbatim.
         out.puts(c"set shortmess=")?;
         p_shm(|value| out.put_bytes(value.to_bytes()))?;
@@ -174,10 +174,10 @@ pub(crate) fn makeopens(out: &mut SessionFile, dirnow: &XString) -> Written {
 /// The `:cd` that fixes what relative file names below are relative to.
 fn put_cd(out: &mut SessionFile, dirnow: &XString) -> Written {
     let opts = SessionOpts::Session;
-    if opts.has(kOptSsopFlagSesdir) {
+    if opts.has(OPT_SSOP_FLAG_SESDIR) {
         return out.line(c"exe \"cd \" . escape(expand(\"<sfile>:p:h\"), ' ')");
     }
-    if !opts.has(kOptSsopFlagCurdir) {
+    if !opts.has(OPT_SSOP_FLAG_CURDIR) {
         return Ok(());
     }
     let globaldir = own_dir(DirOwner::Global);
@@ -194,8 +194,8 @@ fn put_buffer_list(out: &mut SessionFile, only_save_windows: bool) -> Written {
     let opts = SessionOpts::Session;
     for buf in buffers() {
         let wanted = !(only_save_windows && buf.b_nwindows == 0)
-            && !(buf.b_help && !opts.has(kOptSsopFlagHelp))
-            && !(buf_is_terminal(Some(buf)) && !opts.has(kOptSsopFlagTerminal))
+            && !(buf.b_help && !opts.has(OPT_SSOP_FLAG_HELP))
+            && !(buf_is_terminal(Some(buf)) && !opts.has(OPT_SSOP_FLAG_TERMINAL))
             && !buf.name.is_unnamed()
             && buf.b_p_bl != 0;
         if wanted {
@@ -212,7 +212,7 @@ fn put_buffer_list(out: &mut SessionFile, only_save_windows: bool) -> Written {
 /// does the current tab page only.
 fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> Written {
     let opts = SessionOpts::Session;
-    let with_tabs = opts.has(kOptSsopFlagTabpages);
+    let with_tabs = opts.has(OPT_SSOP_FLAG_TABPAGES);
 
     // Populate the tab pages first, as the window layout is populated first
     // below, so that local options set later are not copied into new tabs.
@@ -327,7 +327,7 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> Written {
 
         // The tab-local working directory goes before the windows, so a
         // window-local one can override it.
-        if opts.has(kOptSsopFlagCurdir)
+        if opts.has(OPT_SSOP_FLAG_CURDIR)
             && let Some(localdir) = own_dir(DirOwner::TabPage(tab))
         {
             out.puts(c"tcd ")?;
@@ -374,7 +374,7 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> Written {
 /// `&columns`. When a window was omitted the numbers would not add up, so
 /// the sizes are just equalised instead.
 fn ses_winsizes(out: &mut SessionFile, restore_size: bool, tab: TabPage) -> Written {
-    if !restore_size || !SessionOpts::Session.has(kOptSsopFlagWinsize) {
+    if !restore_size || !SessionOpts::Session.has(OPT_SSOP_FLAG_WINSIZE) {
         return out.line(c"wincmd =");
     }
     // `topframe` is the current tab's frame tree.

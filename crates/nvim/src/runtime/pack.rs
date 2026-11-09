@@ -307,7 +307,7 @@ fn add_pack_dir_to_rtp(fname: &CStr, is_pack: bool) -> Result<(), Failed> {
     );
     let was_valid = SEARCH_PATH_VALID.get();
     set_option_value_give_err(
-        kOptRuntimepath,
+        OPT_RUNTIMEPATH,
         OptVal::string(ApiString::from_bytes(&spliced.rtp)),
         OptionSetFlags::NONE,
     );

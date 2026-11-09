@@ -30,7 +30,7 @@ use core::ffi::{CStr, c_int};
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{char_at, mb_islower, mb_isupper, utf_class_tab, utf_printable, utf8len_tab};
 use crate::option::vars::{BREAKAT_FLAGS, DY_FLAGS, p_isf, p_isi, p_isp};
-use crate::options::kOptDyFlagUhex;
+use crate::options::OPT_DY_FLAG_UHEX;
 use crate::optionstr::OptStringRef;
 use crate::os::libc::{uint8_t, uint64_t};
 use crate::path::has_wildcard;
@@ -104,7 +104,7 @@ fn set_chartab_flag(c: uint8_t, flag: uint8_t, on: bool) {
 /// two for `^X`.
 #[inline(always)]
 fn unprintable_width() -> uint8_t {
-    if DY_FLAGS.get() & kOptDyFlagUhex != 0 {
+    if DY_FLAGS.get() & OPT_DY_FLAG_UHEX != 0 {
         4
     } else {
         2

@@ -68,8 +68,8 @@ use crate::option::defs::OptionSetFlags;
 use crate::option::makeset;
 use crate::option::vars::{P_VDIR, SSOP_FLAGS, VOP_FLAGS, p_acd, p_hls};
 use crate::options::{
-    OptSsopFlags, kOptSsopFlagBlank, kOptSsopFlagCurdir, kOptSsopFlagHelp, kOptSsopFlagOptions,
-    kOptSsopFlagSesdir, kOptSsopFlagSkiprtp, kOptSsopFlagTerminal,
+    OPT_SSOP_FLAG_BLANK, OPT_SSOP_FLAG_CURDIR, OPT_SSOP_FLAG_HELP, OPT_SSOP_FLAG_OPTIONS,
+    OPT_SSOP_FLAG_SESDIR, OPT_SSOP_FLAG_SKIPRTP, OPT_SSOP_FLAG_TERMINAL, OptSsopFlags,
 };
 use crate::os::cshim::gettext;
 use crate::os::fs::{dir_exists, dirname_within, os_chdir};
@@ -231,7 +231,7 @@ fn ses_get_fname(buffer: Buf, opts: SessionOpts) -> Option<XString> {
     let short = buffer.name.short();
     let name = if short.is_some()
         && opts.is_session()
-        && opts.has(kOptSsopFlagCurdir | kOptSsopFlagSesdir)
+        && opts.has(OPT_SSOP_FLAG_CURDIR | OPT_SSOP_FLAG_SESDIR)
         && !p_acd()
         && !DID_LCD.get()
     {
@@ -307,13 +307,13 @@ pub(crate) fn ses_do_win(win: Win) -> bool {
         // The contents of a "nofile" buffer cannot be restored.
         || (buf.terminal.is_null() && buf_is_nofilename(Some(buf)))
     {
-        return SSOP_FLAGS.get() & kOptSsopFlagBlank != 0;
+        return SSOP_FLAGS.get() & OPT_SSOP_FLAG_BLANK != 0;
     }
     if buf_is_help(Some(buf)) {
-        return SSOP_FLAGS.get() & kOptSsopFlagHelp != 0;
+        return SSOP_FLAGS.get() & OPT_SSOP_FLAG_HELP != 0;
     }
     if buf_is_terminal(Some(buf)) {
-        return SSOP_FLAGS.get() & kOptSsopFlagTerminal != 0;
+        return SSOP_FLAGS.get() & OPT_SSOP_FLAG_TERMINAL != 0;
     }
     true
 }
@@ -490,9 +490,9 @@ fn write_rc(
 
     // Mappings and options: everything for the two rc commands, and for
     // `:mksession` only when "options" is in 'sessionoptions'.
-    if !view_session || (cmdidx == CmdIdx::mksession && opts.has(kOptSsopFlagOptions)) {
+    if !view_session || (cmdidx == CmdIdx::mksession && opts.has(OPT_SSOP_FLAG_OPTIONS)) {
         let mut flags = OptionSetFlags::GLOBAL;
-        if cmdidx == CmdIdx::mksession && opts.has(kOptSsopFlagSkiprtp) {
+        if cmdidx == CmdIdx::mksession && opts.has(OPT_SSOP_FLAG_SKIPRTP) {
             flags |= OptionSetFlags::SKIPRTP;
         }
         failed |= makemap(out, None).is_err() || makeset(out, flags, 0).is_err();
@@ -538,8 +538,8 @@ fn write_session(out: &mut SessionFile, fname: &CStr) -> Written {
         .map_or_else(XString::new, XString::from_vec);
     let known = !dirnow.is_empty();
     let globaldir = own_dir(DirOwner::Global);
-    let to_sesdir = known && SSOP_FLAGS.get() & kOptSsopFlagSesdir != 0;
-    let to_globaldir = known && SSOP_FLAGS.get() & kOptSsopFlagCurdir != 0 && globaldir.is_some();
+    let to_sesdir = known && SSOP_FLAGS.get() & OPT_SSOP_FLAG_SESDIR != 0;
+    let to_globaldir = known && SSOP_FLAGS.get() & OPT_SSOP_FLAG_CURDIR != 0 && globaldir.is_some();
     if to_sesdir {
         if vim_chdirfile(fname, flag::CD_CAUSE_OTHER).is_ok() {
             shorten_fnames(true);

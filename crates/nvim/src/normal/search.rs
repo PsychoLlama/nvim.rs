@@ -45,7 +45,7 @@ use crate::normal::{
 };
 use crate::ops::OpType;
 use crate::option::vars::{FDO_FLAGS, JOP_FLAGS, p_hls};
-use crate::options::{kOptFdoFlagMark, kOptFdoFlagSearch, kOptJopFlagView};
+use crate::options::{OPT_FDO_FLAG_MARK, OPT_FDO_FLAG_SEARCH, OPT_JOP_FLAG_VIEW};
 use crate::os::cshim::gettext;
 use crate::pos::equalpos;
 use crate::search::state::NO_HLSEARCH;
@@ -157,7 +157,9 @@ pub(crate) fn normal_search(
             op.motion_type = MT_LINE_WISE;
         }
         Win::current().w_cursor.coladd = 0;
-        if op.op_type == OpType::Nop && FDO_FLAGS.get() & kOptFdoFlagSearch != 0 && KEY_TYPED.get()
+        if op.op_type == OpType::Nop
+            && FDO_FLAGS.get() & OPT_FDO_FLAG_SEARCH != 0
+            && KEY_TYPED.get()
         {
             fold_open_cursor();
         }
@@ -217,7 +219,7 @@ pub(crate) fn nv_mark_move_to(
 /// The 'jumpoptions' half of a mark jump's flags: whether the view is
 /// restored along with the position.
 fn view_flag() -> MarkMove {
-    if JOP_FLAGS.get() & kOptJopFlagView != 0 {
+    if JOP_FLAGS.get() & OPT_JOP_FLAG_VIEW != 0 {
         MARK_SET_VIEW as MarkMove
     } else {
         0
@@ -231,7 +233,7 @@ fn view_flag() -> MarkMove {
 fn may_open_fold(cmd_arg: &mut CmdArg, moved: bool, old_key_typed: bool) {
     if cmd_arg.op().op_type == OpType::Nop
         && moved
-        && FDO_FLAGS.get() & kOptFdoFlagMark != 0
+        && FDO_FLAGS.get() & OPT_FDO_FLAG_MARK != 0
         && old_key_typed
     {
         fold_open_cursor();

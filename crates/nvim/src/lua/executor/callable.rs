@@ -86,7 +86,7 @@ pub(crate) fn register_table_as_callable(arg: &TypVal) -> Option<ThinCString> {
 /// whether they want it discarded.
 ///
 /// Not re-entrant — a callback that itself consumes a key is skipped — and
-/// it swallows any interrupt a callback raised, restoring whatever `got_int`
+/// it swallows any interrupt a callback raised, restoring whatever `GOT_INT`
 /// was before.
 ///
 /// `typed` is the bytes that were typed for the key, still escaped; they are

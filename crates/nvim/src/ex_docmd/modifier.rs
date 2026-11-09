@@ -40,7 +40,7 @@ use crate::ex_docmd::source::SourceKind;
 use crate::ex_docmd::state::CMDMOD;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
-    E_INVRANGE, EX_PRESSEDRETURN, ExFunc, SID_NONE, builtin_command_cstr, cmdnames, ex_msg,
+    CMDNAMES, E_INVRANGE, EX_PRESSEDRETURN, ExFunc, SID_NONE, builtin_command_cstr, ex_msg,
 };
 use crate::getchar::state::EXPR_MAP_LOCK;
 use crate::guard::SANDBOX;
@@ -51,7 +51,7 @@ use crate::state::mode::EXMODE_ACTIVE;
 
 use crate::message::redirecting;
 use crate::option::set_option_direct;
-use crate::options::kOptEventignore;
+use crate::options::OPT_EVENTIGNORE;
 
 use crate::charset::atoi;
 use crate::option::defs::{OptVal, OptionSetFlags};
@@ -599,7 +599,7 @@ fn apply_cmdmod() {
         let save_ei = P_EI.get();
         CMDMOD.with_mut(|cm| cm.cmod_save_ei = Some(save_ei));
         set_option_direct(
-            kOptEventignore,
+            OPT_EVENTIGNORE,
             eventignore_all(),
             OptionSetFlags::NONE,
             SID_NONE,
@@ -625,7 +625,7 @@ pub(crate) fn undo_cmdmod(cm: &mut CmdMod) {
     }
     if let Some(saved) = cm.cmod_save_ei.take() {
         set_option_direct(
-            kOptEventignore,
+            OPT_EVENTIGNORE,
             OptVal::from_cstr(saved.as_cstr()),
             OptionSetFlags::NONE,
             SID_NONE,
@@ -795,7 +795,7 @@ pub fn is_map_cmd(cmdidx: CmdIdx) -> bool {
     if is_user_cmd(cmdidx) {
         return false;
     }
-    let func: ExFunc = cmdnames[cmdidx.index()].cmd_func;
+    let func: ExFunc = CMDNAMES[cmdidx.index()].cmd_func;
     ex_func_is(func, ex_map)
         || ex_func_is(func, ex_unmap)
         || ex_func_is(func, ex_mapclear)

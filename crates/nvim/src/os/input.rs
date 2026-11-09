@@ -107,7 +107,7 @@ pub fn input_start() {
         return;
     }
     USED_STDIN.set(true);
-    // SAFETY: `read_stream` is this module's own static, at a fixed address,
+    // SAFETY: `READ_STREAM` is this module's own static, at a fixed address,
     // and libuv only ever touches it from the main thread; `input_read_cb`
     // has the signature `rstream_start` demands and takes no data pointer.
     unsafe {
@@ -294,11 +294,11 @@ pub fn os_char_avail() -> bool {
     inbuf_poll(0, InputEvents::None) == InputAvail::Ready
 }
 
-/// Poll for fast events; sets `got_int` if CTRL-C was typed.
+/// Poll for fast events; sets `GOT_INT` if CTRL-C was typed.
 ///
 /// This runs a full libuv loop iteration, which is expensive — prefer
 /// [`line_breakcheck`] in a busy inner loop. The caller must at least check
-/// `got_int` before calling again, and often wants `input_available()` too,
+/// `GOT_INT` before calling again, and often wants `input_available()` too,
 /// to throttle idle processing while there is user input waiting.
 pub(crate) fn os_breakcheck() {
     if GOT_INT.get() {

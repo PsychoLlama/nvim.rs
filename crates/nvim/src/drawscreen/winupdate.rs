@@ -144,7 +144,7 @@ pub(crate) fn win_update(window: Win) {
 
     let mut buf = win.buffer();
 
-    // Reset `got_int`, otherwise the regexp engine will not work.
+    // Reset `GOT_INT`, otherwise the regexp engine will not work.
     let save_got_int = GOT_INT.get();
     GOT_INT.set(false);
     // Bound syntax highlighting by 'redrawtime'.
@@ -262,7 +262,7 @@ pub(crate) fn win_update(window: Win) {
 
     finish_botline(window, buf, old_botline, nrwidth_before);
 
-    // Restore `got_int`, unless CTRL-C was hit while redrawing.
+    // Restore `GOT_INT`, unless CTRL-C was hit while redrawing.
     if !GOT_INT.get() {
         GOT_INT.set(save_got_int);
     }
@@ -755,7 +755,7 @@ fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr) {
     // "all", because that is how the selection is drawn.
     let save_ve_flags = Win::current().w_onebuf_opt.wo_ve_flags;
     if Win::current().w_onebuf_opt.wo_lbr != 0 {
-        Win::current().w_onebuf_opt.wo_ve_flags = kOptVeFlagAll;
+        Win::current().w_onebuf_opt.wo_ve_flags = OPT_VE_FLAG_ALL;
     }
     let (fromc, mut toc) = getvcols(win, &mut anchor, &mut cursor);
     Win::current().w_cursor = cursor;
@@ -768,7 +768,7 @@ fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr) {
 
     // `$` in blockwise mode: highlight to the end of every line, unless
     // 'virtualedit' has "block", in which case it stops at the longest one.
-    if get_ve_flags(Win::current()) & kOptVeFlagBlock == 0 {
+    if get_ve_flags(Win::current()) & OPT_VE_FLAG_BLOCK == 0 {
         return (fromc, ColNr::MAX);
     }
 

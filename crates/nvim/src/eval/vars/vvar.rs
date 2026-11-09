@@ -8,8 +8,8 @@
 //! Every one of them names its row by [`Vv`], so none of them can fail. The
 //! rows are items the `v:` dictionary owns, reached through the dictionary's
 //! handle and found again by name on every access (a slot hint in
-//! in [`scope_vim`] makes that one probe); `v:val` and `v:key`, while they
-//! are not in the dictionary, sit in [`outside_vimvars`].
+//! in [`SCOPE_VIM`] makes that one probe); `v:val` and `v:key`, while they
+//! are not in the dictionary, sit in [`OUTSIDE_VIMVARS`].
 //!
 //! A write takes the old value out in one borrow of the item and releases it
 //! after the borrow has ended: a value can name the `v:` dictionary itself.
@@ -83,7 +83,7 @@ fn build_vim_scope() -> DictRef {
     dict
 }
 
-/// Where in [`outside_vimvars`] `v:val` and `v:key` wait.
+/// Where in [`OUTSIDE_VIMVARS`] `v:val` and `v:key` wait.
 fn outside_index(idx: Vv) -> usize {
     match idx {
         Vv::Val => 0,

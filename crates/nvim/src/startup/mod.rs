@@ -10,8 +10,8 @@
 //!   startup stages and `exiting`/`V_DYING`/`EX_EXITVAL` describe the way
 //!   out. These are the two flags the rest of the tree tests to know whether
 //!   there is an editor yet, or still.
-//! - **What it was started as**: the three `*_isatty` answers, `stdin_fd`,
-//!   `full_screen`, `SILENT_MODE`, `READONLYMODE`, `RECOVERYMODE`,
+//! - **What it was started as**: the three `*_isatty` answers, `STDIN_FD`,
+//!   `FULL_SCREEN`, `SILENT_MODE`, `READONLYMODE`, `RECOVERYMODE`,
 //!   `EMBEDDED_MODE`, `HEADLESS_MODE` and the `ui_client_*` set, which say
 //!   this process is a UI attached to another one rather than an editor.
 //! - **[`MainParams`]**, the parsed command line, and the `EDIT_*`/`WIN_*`
@@ -38,8 +38,8 @@
 
 use crate::global_cell::GlobalCell;
 use crate::options::{
-    kOptArabic, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptErrorfile, kOptKeymap, kOptRightleft,
-    kOptShadafile, kOptShortmess, kOptVerbosefile, kOptWindow,
+    OPT_ARABIC, OPT_CB_FLAG_UNNAMED, OPT_CB_FLAG_UNNAMEDPLUS, OPT_ERRORFILE, OPT_KEYMAP,
+    OPT_RIGHTLEFT, OPT_SHADAFILE, OPT_SHORTMESS, OPT_VERBOSEFILE, OPT_WINDOW,
 };
 use crate::os::libc::uint64_t;
 use core::ffi::{CStr, c_int, c_uint};

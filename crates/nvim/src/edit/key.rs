@@ -86,7 +86,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
                 ins_ctrl_o();
                 // Don't move the cursor left when 'virtualedit' has
                 // "onemore".
-                if get_ve_flags(Win::current()) & kOptVeFlagOnemore as ::core::ffi::c_uint != 0 {
+                if get_ve_flags(Win::current()) & OPT_VE_FLAG_ONEMORE as ::core::ffi::c_uint != 0 {
                     INS_AT_EOL.set(false);
                     s.nomove = true;
                 }

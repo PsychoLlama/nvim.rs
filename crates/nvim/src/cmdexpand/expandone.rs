@@ -27,7 +27,7 @@ use crate::message::state::CMD_SILENT;
 use crate::message::{E_TOOMANY, emsg, msg_str};
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::{p_fic, p_wic, p_wmnu};
-use crate::options::kOptBoFlagWildmode;
+use crate::options::OPT_BO_FLAG_WILDMODE;
 use crate::os::cshim::gettext;
 use crate::path::match_suffix;
 use crate::popupmenu::state::PUM_WANT;
@@ -406,7 +406,7 @@ fn longest_common_match(expand: &Expand, options: WildOpts) -> XString {
         });
         if diverged {
             if !options.has(WildOpts::NO_BEEP) {
-                vim_beep(kOptBoFlagWildmode);
+                vim_beep(OPT_BO_FLAG_WILDMODE);
             }
             break;
         }

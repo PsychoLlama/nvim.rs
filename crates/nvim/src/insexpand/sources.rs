@@ -286,7 +286,7 @@ pub(crate) fn ins_compl_files(
 /// Safe: [`Buf`] is the live buffer the walk starts from, and the window it
 /// remembers between calls is vetted below rather than trusted.
 pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: u8) -> Buf {
-    // `next_buf_window` outlives the call, and a completion runs user
+    // `NEXT_BUF_WINDOW` outlives the call, and a completion runs user
     // functions and Lua in between, so it stays a handle that `win_valid`
     // vets -- a `Win` would be promising a liveness nothing here can keep.
     let wp = NEXT_BUF_WINDOW;
@@ -526,7 +526,7 @@ impl Buf {
 /// normal `^P`/`^N` and `^X^L`.
 ///
 /// Searches `st.ins_buf` from its current match position in the
-/// `compl_direction` direction, `start_pos` being where the completion
+/// `COMPL_DIRECTION` direction, `start_pos` being where the completion
 /// started; with `st.set_match_pos` set, `st.first_match_pos` and
 /// `st.last_match_pos` are set too. Answers whether a new match was found:
 /// running out of matches is the ordinary end of a scan, not a failure, and

@@ -59,7 +59,7 @@ use crate::message_fmt::msg_cstr_opt;
 use crate::option::defs::OptVal;
 use crate::option::vars::{P_DIR, P_SHM, p_uc, p_verbose};
 use crate::option::{get_fileformat, set_fileformat, set_option_value_give_err};
-use crate::options::kOptFileencoding;
+use crate::options::OPT_FILEENCODING;
 use crate::os::cshim::gettext;
 use crate::os::env::process_id;
 use crate::os::fs::{os_remove, path_exists};

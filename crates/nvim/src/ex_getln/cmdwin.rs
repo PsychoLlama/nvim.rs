@@ -217,7 +217,7 @@ pub(crate) fn open_cmdwin() -> Key {
     // The command-line buffer has bufhidden=wipe, unlike a true
     // "scratch" buffer.
     set_option_value_give_err(
-        kOptBufhidden,
+        OPT_BUFHIDDEN,
         OptVal::static_string(c"wipe"),
         OptionSetFlags::LOCAL,
     );
@@ -239,7 +239,7 @@ pub(crate) fn open_cmdwin() -> Key {
             add_map(b"<Tab>", b"a<C-X><C-V>", MODE_NORMAL, true);
         }
         set_option_value_give_err(
-            kOptFiletype,
+            OPT_FILETYPE,
             OptVal::static_string(c"vim"),
             OptionSetFlags::LOCAL,
         );

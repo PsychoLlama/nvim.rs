@@ -103,16 +103,11 @@ unused_assignments = "deny"
 # one-line reason, held shrink-only as `files_allowing_non_camel_case_types`.
 non_camel_case_types = "deny"
 
-# The value half of the same story, and the largest: almost none of these can be
-# renamed. A `p_<abbrev>` is the option table's `var` field, a `kOpt<Name>` is an
-# index the option metadata spells, a `KEYSET_OPTIDX_<method>__<key>` is a mask
-# bit apigen derives, `_ISalnum` and `TSQueryErrorNone` are glibc's and
-# tree-sitter's, and the rest are the names upstream's C uses for the editor's
-# own state. So 298 files carry a per-file `#![allow]` with a one-line reason,
-# eight generated files get theirs from apigen (a hand-written one would not
-# survive `just apigen`), and `lua/xdiff.rs` answers for six function-local
-# constants on the item. `files_allowing_non_upper_case_globals` falls a file at
-# a time as a module is rewritten to Rust's spelling.
+# The value half of the same story: every `const` and `static` is in Rust's
+# constant case, the generated tables' included (apigen emits upper case), so
+# no file carries an allow. The four data symbols the harnesses read by name
+# (`display_tick`, `starting`, `test_disable_char_avail`, `utf8len_tab`) and
+# `curwin` are `#[no_mangle]`, which rustc exempts from the lint.
 non_upper_case_globals = "deny"
 
 # `just lint` runs clippy with correctness at its deny default; suspicious,

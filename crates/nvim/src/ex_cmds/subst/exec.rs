@@ -56,7 +56,7 @@ use crate::narrow::number_as_int;
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_direct;
 use crate::option::vars::{p_ch, p_cwh, p_icm};
-use crate::options::kOptInccommand;
+use crate::options::OPT_INCCOMMAND;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::os::libc::{int64_t, size_t};
@@ -630,7 +630,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     if st.got_quit || profile_passed_limit(args.timeout) {
         // Too slow: disable.
         set_option_direct(
-            kOptInccommand,
+            OPT_INCCOMMAND,
             OptVal::static_string(c""),
             OptionSetFlags::NONE,
             SID_NONE,
@@ -658,7 +658,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
 /// `/pattern/substitution/{flags}`.  The usual escapes are supported, as
 /// described in the regexp docs.
 ///
-/// `cmdpreview_ns` is the namespace to show 'inccommand' preview highlights
+/// `CMDPREVIEW_NS` is the namespace to show 'inccommand' preview highlights
 /// in; `<= 0` means no preview.  Returns 0, 1 or 2 -- see
 /// `cmdpreview_may_show` for what they mean.
 pub(crate) fn do_sub(

@@ -11,14 +11,12 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// The names are upstream's, and each is looked up by that spelling.
-#![allow(non_upper_case_globals)]
 
 // A chunk may hold nothing that needs the parent's support code.
 #[allow(unused_imports)]
 use super::*;
 
-pub static method_handlers: ConstTable<[MsgpackRpcRequestHandler; 280]> = ConstTable::new([
+pub static METHOD_HANDLERS: ConstTable<[MsgpackRpcRequestHandler; 280]> = ConstTable::new([
     handler(c"redraw", handle_ui_client_redraw, true),
     handler(c"nvim__id", handle_nvim__id, false),
     handler(c"nvim_cmd", handle_nvim_cmd, false),
@@ -517,7 +515,7 @@ pub static method_handlers: ConstTable<[MsgpackRpcRequestHandler; 280]> = ConstT
     ),
 ]);
 
-/// The row of [`method_handlers`] the method called `name` sits in.
+/// The row of [`METHOD_HANDLERS`] the method called `name` sits in.
 pub fn handler_index(name: &[u8]) -> Option<usize> {
     Some(match name {
         b"redraw" => 0,

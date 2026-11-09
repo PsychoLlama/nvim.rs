@@ -69,7 +69,7 @@ use crate::narrow::as_index;
 use crate::narrow::count_as_int;
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_value;
-use crate::options::kOptBuftype;
+use crate::options::OPT_BUFTYPE;
 use crate::os::libc::int16_t;
 use crate::startup::EXITING;
 use crate::state::mode::STATE;
@@ -237,7 +237,7 @@ pub(crate) fn terminal_open(mut term: Term, mut buffer: Buf, attached: &dyn Fn()
     // lines are the emulator's to write.
     buffer.b_locked += 1;
     let _ = set_option_value(
-        kOptBuftype,
+        OPT_BUFTYPE,
         OptVal::static_string(c"terminal"),
         OptionSetFlags::LOCAL,
     );

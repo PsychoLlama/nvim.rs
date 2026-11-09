@@ -85,7 +85,7 @@ fn resolve_option(name: &ApiString) -> Result<OptIndex, Error> {
         return Err(err_bad_value(c"option name", c"<empty>"));
     }
     let opt_idx: OptIndex = find_option(name.as_cstr());
-    if opt_idx == kOptInvalid as OptIndex {
+    if opt_idx == OPT_INVALID as OptIndex {
         return Err(err_bad_value(c"option name", name.as_cstr()));
     }
     Ok(opt_idx)

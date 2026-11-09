@@ -718,7 +718,7 @@ pub(crate) fn readfile_named(
             // When editing a new file set 'fileencoding' for this buffer.
             // Also for ":read ++edit file".
             set_option_direct(
-                kOptFileencoding,
+                OPT_FILEENCODING,
                 OptVal::from_cstr(fenc.as_cstr()),
                 OptionSetFlags::LOCAL,
                 0 as ScriptId,

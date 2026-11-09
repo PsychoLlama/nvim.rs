@@ -32,7 +32,7 @@ use crate::guard::Suppress;
 use crate::mark::setpcmark;
 use crate::normal::reset_visual_and_resel;
 use crate::option::vars::{JOP_FLAGS, P_EA, p_ch, p_ea, p_tpm};
-use crate::options::kOptJopFlagClean;
+use crate::options::OPT_JOP_FLAG_CLEAN;
 use crate::os::input::os_breakcheck;
 use crate::types::{ExArg, Failed, LineNr, OptInt};
 use crate::ui::state::{COLUMNS, ROWS};
@@ -152,7 +152,7 @@ fn get_key() {
 
 /// Make `buffer` the current buffer, as `:buffer` does.
 fn goto_buf(buffer: Buf) {
-    let update_jumplist = JOP_FLAGS.get() & kOptJopFlagClean == 0;
+    let update_jumplist = JOP_FLAGS.get() & OPT_JOP_FLAG_CLEAN == 0;
     set_curbuf(buffer, DOBUF_GOTO, update_jumplist);
 }
 

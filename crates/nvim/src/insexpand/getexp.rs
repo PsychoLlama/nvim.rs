@@ -547,9 +547,9 @@ pub(crate) fn compl_source_start_timer(source_idx: c_int) {
 }
 
 /// Collect the next expansions using `compl_pattern`, starting at `ini` and
-/// running in `compl_direction`.
+/// running in `COMPL_DIRECTION`.
 ///
-/// With `compl_started` false the search starts at that position, otherwise it
+/// With `COMPL_STARTED` false the search starts at that position, otherwise it
 /// continues where the previous call stopped. May return before every match is
 /// found; the answer is the total number of matches, or `None` while that is
 /// still unknown. -- Acevedo
@@ -638,7 +638,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
         st.set_match_pos = false;
 
         // For CTRL-N/CTRL-P pick a new entry from `e_cpt` when
-        // `compl_started` is off, or when `found_all` says this entry is
+        // `COMPL_STARTED` is off, or when `found_all` says this entry is
         // done. For CTRL-X CTRL-L only the entries that look in loaded
         // buffers are used.
         if (ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval())
@@ -729,10 +729,10 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
             COMPL_TIMEOUT_MS.set(compl_timeout_save);
         }
 
-        // For CTRL-P completion, reset `compl_curr_match` to the head, to
+        // For CTRL-P completion, reset `COMPL_CURR_MATCH` to the head, to
         // avoid mixing matches from different sources.
         if !compl_dir_forward() {
-            // Upstream dereferences `compl_curr_match` here without checking.
+            // Upstream dereferences `COMPL_CURR_MATCH` here without checking.
             let mut curr = curr_match().expect("a running completion has a current match");
             while let Some(prev) = curr.prev().filter(|prev| !prev.is_original()) {
                 curr = prev;
@@ -761,7 +761,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
 
     if let Some(old) = old_match() {
         // If several matches were added (FORWARD), or the search failed
-        // and the list has just been made cyclic, `compl_curr_match` has
+        // and the list has just been made cyclic, `COMPL_CURR_MATCH` has
         // to move to the next or previous entry, if any. -- Acevedo
         let next = if compl_dir_forward() {
             old.next()

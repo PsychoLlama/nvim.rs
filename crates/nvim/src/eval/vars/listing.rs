@@ -37,7 +37,7 @@ use crate::message::IOSIZE;
 /// write to a dictionary -- possibly this one.
 pub(crate) fn list_dict_vars(dict: &DictRef, prefix: &CStr, empty: bool, first: &mut bool) {
     let mut cursor = DictCursor::new(dict);
-    // Upstream re-reads `got_int` in the loop condition, so a `:let`
+    // Upstream re-reads `GOT_INT` in the loop condition, so a `:let`
     // listing stops at the interrupt rather than at the end.
     while !GOT_INT.get()
         && let Some(slot) = cursor.next(dict)

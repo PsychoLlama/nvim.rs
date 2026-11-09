@@ -53,7 +53,7 @@ use crate::message::{msg_end, msg_ext_set_kind, msg_putchar, msg_start, msg_str}
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::vars::p_ic;
 use crate::option::{get_option_value, set_option_value_give_err};
-use crate::options::{kOptSpell, kOptSpelllang};
+use crate::options::{OPT_SPELL, OPT_SPELLLANG};
 use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
 use crate::spell::SpellLang;
@@ -135,18 +135,18 @@ pub fn ex_spelldump(excmd: &mut ExArg) {
     if no_spell_checking(Win::current()) {
         return;
     }
-    let spl: OptVal = get_option_value(kOptSpelllang, OptionSetFlags::LOCAL);
+    let spl: OptVal = get_option_value(OPT_SPELLLANG, OptionSetFlags::LOCAL);
 
     let _ = do_cmdline_cmd(c"new");
 
     // Spell checking has to be on in the new window for the dump to
     // mean anything.
     set_option_value_give_err(
-        kOptSpell,
+        OPT_SPELL,
         OptVal::Boolean(Some(true)),
         OptionSetFlags::LOCAL,
     );
-    set_option_value_give_err(kOptSpelllang, spl, OptionSetFlags::LOCAL);
+    set_option_value_give_err(OPT_SPELLLANG, spl, OptionSetFlags::LOCAL);
 
     if !buf_is_empty(Buf::current()) {
         return;

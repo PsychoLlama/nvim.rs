@@ -71,7 +71,7 @@ use crate::option::vars::{
     BO_FLAGS, P_GUICURSOR, P_LZ, RDB_FLAGS, p_debug, p_lz, p_tgc, p_vb, p_wd,
 };
 use crate::option::{set_option_value, ui_refresh_options};
-use crate::options::{kOptBoFlagAll, kOptCmdheight, kOptRdbFlagFlush, kOptRdbFlagLine};
+use crate::options::{OPT_BO_FLAG_ALL, OPT_CMDHEIGHT, OPT_RDB_FLAG_FLUSH, OPT_RDB_FLAG_LINE};
 use crate::os::cshim::gettext;
 use crate::os::fs::current_dir;
 use crate::os::time::{os_hrtime, os_sleep};
@@ -315,7 +315,7 @@ pub fn ui_refresh() {
         // user's own 'cmdheight' is being restored.
         if UI_REFRESH_CMDHEIGHT.get() {
             let _ = set_option_value(
-                kOptCmdheight,
+                OPT_CMDHEIGHT,
                 OptVal::Number(had_message.into()),
                 OptionSetFlags::NONE,
             );
@@ -417,7 +417,7 @@ pub fn vim_beep(val: core::ffi::c_uint) {
     if EMSG_SILENT.get() != 0 || IN_ASSERT_FAILS.get() {
         return;
     }
-    if BO_FLAGS.get() & val == 0 && BO_FLAGS.get() & kOptBoFlagAll == 0 {
+    if BO_FLAGS.get() & val == 0 && BO_FLAGS.get() & OPT_BO_FLAG_ALL == 0 {
         // At most three beeps per half second: a stuck macro that beeps on
         // every iteration should not make the terminal unusable.
         static BEEPS: GlobalCell<c_int> = GlobalCell::new(0);
@@ -586,7 +586,7 @@ pub fn ui_line(
 
     // 'writedelay' with `redrawdebug=line`: park the cursor at the end of
     // the line just drawn and pause, so the draw order is watchable.
-    if p_wd() != 0 && RDB_FLAGS.get() & kOptRdbFlagLine != 0 {
+    if p_wd() != 0 && RDB_FLAGS.get() & OPT_RDB_FLAG_LINE != 0 {
         ui_call_grid_cursor_goto(
             Integer::from(grid.handle),
             Integer::from(row),
@@ -727,7 +727,7 @@ pub fn ui_flush() {
 
     ui_call_flush();
 
-    if p_wd() != 0 && RDB_FLAGS.get() & kOptRdbFlagFlush != 0 {
+    if p_wd() != 0 && RDB_FLAGS.get() & OPT_RDB_FLAG_FLUSH != 0 {
         os_sleep(p_wd().unsigned_abs());
     }
 }

@@ -33,7 +33,7 @@ use crate::global_cell::GlobalCell;
 use crate::keycodes::K_SPECIAL;
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::{get_option_value, set_option_value};
-use crate::options::kOptShada;
+use crate::options::OPT_SHADA;
 use crate::os::libc::size_t;
 use crate::shada::{
     shada_encode_buflist, shada_encode_gvars, shada_encode_jumps, shada_encode_regs,
@@ -145,8 +145,8 @@ pub fn ctx_restore(ctx: Option<&Context>, flags: c_int) -> bool {
 
     // Reading a context's ShaDa blobs must not be filtered by whatever the
     // user's 'shada' says.
-    let op_shada = get_option_value(kOptShada, OptionSetFlags::GLOBAL);
-    let _ = set_option_value(kOptShada, shada_while_restoring(), OptionSetFlags::GLOBAL);
+    let op_shada = get_option_value(OPT_SHADA, OptionSetFlags::GLOBAL);
+    let _ = set_option_value(OPT_SHADA, shada_while_restoring(), OptionSetFlags::GLOBAL);
 
     // Each blob is read as a copy.
     if flags & CTX_REGS != 0 {
@@ -165,7 +165,7 @@ pub fn ctx_restore(ctx: Option<&Context>, flags: c_int) -> bool {
         ctx_restore_funcs(ctx);
     }
 
-    let _ = set_option_value(kOptShada, op_shada, OptionSetFlags::GLOBAL);
+    let _ = set_option_value(OPT_SHADA, op_shada, OptionSetFlags::GLOBAL);
     true
 }
 

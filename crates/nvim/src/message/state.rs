@@ -1,18 +1,18 @@
 //! Where the message area is, and what is on it.
 //!
-//! The cursor into the message area (`msg_col`, `msg_row`), how far it has
-//! scrolled and whether the user still owes it a `<CR>` (`msg_scrolled`,
-//! `need_wait_return`, `lines_left`, `quit_more`), the message that survives
-//! the next redraw (`keep_msg`), and the flags every `msg_*` entry point
-//! consults on the way in (`msg_silent`, `msg_scroll`, `msg_didout`,
-//! `msg_hist_off`).
+//! The cursor into the message area (`MSG_COL`, `MSG_ROW`), how far it has
+//! scrolled and whether the user still owes it a `<CR>` (`MSG_SCROLLED`,
+//! `NEED_WAIT_RETURN`, `LINES_LEFT`, `QUIT_MORE`), the message that survives
+//! the next redraw (`KEEP_MSG`), and the flags every `msg_*` entry point
+//! consults on the way in (`MSG_SILENT`, `MSG_SCROLL`, `MSG_DIDOUT`,
+//! `MSG_HIST_OFF`).
 //!
 //! The `emsg_*` half is the same thing for errors: whether one has been
-//! given (`did_emsg`, `called_emsg`), whether the next is to be swallowed
-//! (`emsg_off`, `emsg_silent`, `emsg_skip`), and the three cells
+//! given (`DID_EMSG`, `CALLED_EMSG`), whether the next is to be swallowed
+//! (`EMSG_OFF`, `EMSG_SILENT`, `EMSG_SKIP`), and the three cells
 //! `assert_fails()` uses to capture one instead of showing it.
 //!
-//! `redir_*` and `msg_capture` are here for the same reason: they are read on
+//! `redir_*` and `MSG_CAPTURE` are here for the same reason: they are read on
 //! the way *out* of every message, by the tee in [`redir`] that `:redir` and
 //! `'verbosefile'` turn on.
 //!
@@ -23,7 +23,7 @@
 //! Upstream declares each of these as its own `EXTERN` in `globals.h` and
 //! `message.c`. They are one [`MsgState`] here, behind one cell, and every
 //! name below is a `const` selector into it rather than a cell of its own --
-//! so a reader still writes `msg_col.get()` and `msg_scroll.set(1)`, and what
+//! so a reader still writes `MSG_COL.get()` and `MSG_SCROLL.set(1)`, and what
 //! changed is that nothing can take the address of one.
 //!
 //! The record is never borrowed whole. A number or a flag is copied in and
@@ -42,16 +42,13 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// The selectors keep upstream's spelling, so the hundred-odd files that read
-// them did not change; `message/mod.rs`'s `non_upper_case_globals` allow
-// covers them, and upper-casing them is a per-module rewrite.
 
 use super::{PROGRESS_TARGET_CMD, SB_CLEAR_NONE, ScrollbackClear};
 use crate::global_cell::{GlobalCell, state_record};
 use crate::grid::defs::ScreenGrid;
 use crate::memory::XString;
 use crate::options::{
-    OptMoptFlags, kOptMoptFlagHistory, kOptMoptFlagHitEnter, kOptMoptFlagProgress,
+    OPT_MOPT_FLAG_HISTORY, OPT_MOPT_FLAG_HIT_ENTER, OPT_MOPT_FLAG_PROGRESS, OptMoptFlags,
 };
 use crate::os::fs::CFile;
 use crate::os::libc::int64_t;
@@ -84,7 +81,7 @@ state_record! {
     // -- the message grid --
     /// The row of the default grid the message grid starts at.
     pub(crate) MSG_GRID_POS: c_int = 0;
-    /// `msg_scrolled` when the grid was last flushed to the UI.
+    /// `MSG_SCROLLED` when the grid was last flushed to the UI.
     pub(crate) MSG_SCROLLED_AT_FLUSH: c_int = 0;
     /// Lines scrolled since the last flush that the UI has not been told of.
     pub(crate) MSG_GRID_SCROLL_DISCOUNT: c_int = 0;
@@ -98,7 +95,7 @@ state_record! {
     pub(crate) MSG_ROW: c_int = 0;
     /// How many lines the message area has scrolled up the screen.
     pub(crate) MSG_SCROLLED: c_int = 0;
-    /// Leave `msg_scrolled` alone when this message scrolls.
+    /// Leave `MSG_SCROLLED` alone when this message scrolls.
     pub(crate) MSG_SCROLLED_IGN: bool = false;
     /// The message area scrolled since the last `msg_start`.
     pub(crate) MSG_DID_SCROLL: bool = false;
@@ -202,7 +199,7 @@ state_record! {
     pub(super) DO_CLEAR_HIST_TEMP: bool = true;
     /// `'messagesopt'`'s flag set.
     pub(super) MSG_FLAGS: OptMoptFlags =
-        kOptMoptFlagHitEnter | kOptMoptFlagHistory | kOptMoptFlagProgress;
+        OPT_MOPT_FLAG_HIT_ENTER | OPT_MOPT_FLAG_HISTORY | OPT_MOPT_FLAG_PROGRESS;
     /// `'messagesopt'`'s `wait:` delay, in milliseconds.
     pub(super) MSG_WAIT: c_int = 0;
     /// Where `'messagesopt'`'s `progress:` sends progress messages.
@@ -235,7 +232,7 @@ state_record! {
     /// is reported once rather than on every message.
     pub(super) VERBOSE_DID_OPEN: bool = false;
     /// The column `redir_write` has written up to, tracked separately from
-    /// `msg_col` because the redirection sees no screen.
+    /// `MSG_COL` because the redirection sees no screen.
     pub(super) REDIR_COL: c_int = 0;
 
     // -- the message being built for an ext_messages UI --

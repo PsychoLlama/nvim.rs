@@ -187,7 +187,7 @@ pub(crate) fn compl_orig_extmarks() -> ComplOrigExtmarks {
 }
 
 impl ComplOrigExtmarks {
-    /// Save the extmarks over the text `compl_col`/`compl_length` covers,
+    /// Save the extmarks over the text `COMPL_COL`/`COMPL_LENGTH` covers,
     /// invalidating them in the buffer.
     ///
     /// The list is taken out of the cell for the walk and put back after it:
@@ -227,9 +227,9 @@ impl ComplOrigExtmarks {
 /// matched text starts (1 is the first column) and `list` holds the matches.
 pub(crate) fn set_completion(mut startcol: ColNr, list: Option<&ListRef>) {
     let cur_cot_flags = get_cot_flags();
-    let compl_longest = cur_cot_flags & kOptCotFlagLongest as c_uint != 0;
-    let compl_no_insert = cur_cot_flags & kOptCotFlagNoinsert as c_uint != 0;
-    let compl_no_select = cur_cot_flags & kOptCotFlagNoselect as c_uint != 0;
+    let compl_longest = cur_cot_flags & OPT_COT_FLAG_LONGEST as c_uint != 0;
+    let compl_no_insert = cur_cot_flags & OPT_COT_FLAG_NOINSERT as c_uint != 0;
+    let compl_no_select = cur_cot_flags & OPT_COT_FLAG_NOSELECT as c_uint != 0;
 
     // If already doing completions stop it.
     if ctrl_x_mode_not_default() {

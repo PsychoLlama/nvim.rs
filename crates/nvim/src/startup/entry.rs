@@ -90,9 +90,9 @@ use crate::startup::remote::remote_request;
 use crate::startup::usage::{mainerr, print_mainerr};
 use crate::startup::{
     APPENDBIN, ARGV0, EDIT_QF, EDIT_STDIN, EMBEDDED_MODE, ERR_ARG_MISSING, FULL_SCREEN,
-    HEADLESS_MODE, MainParams, NO_BUFFERS, RECOVERYMODE, SILENT_MODE, STDERR_ISATTY, STDIN_ISATTY,
-    STDOUT_ISATTY, UI_CLIENT_CHANNEL_ID, UI_CLIENT_FORWARD_STDIN, WRITEBIN, kOptCbFlagUnnamed,
-    kOptCbFlagUnnamedplus, starting,
+    HEADLESS_MODE, MainParams, NO_BUFFERS, OPT_CB_FLAG_UNNAMED, OPT_CB_FLAG_UNNAMEDPLUS,
+    RECOVERYMODE, SILENT_MODE, STDERR_ISATTY, STDIN_ISATTY, STDOUT_ISATTY, UI_CLIENT_CHANNEL_ID,
+    UI_CLIENT_FORWARD_STDIN, WRITEBIN, starting,
 };
 use crate::state::mode::{EXMODE_ACTIVE, RESTART_EDIT};
 use crate::syntax::syn_maybe_enable;
@@ -471,7 +471,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         stuff_readbuf_char(Key::from_code(-(253 + (c_int::from(KE_NOP) << 8))));
     }
 
-    if CB_FLAGS.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0 {
+    if CB_FLAGS.get() & (OPT_CB_FLAG_UNNAMED | OPT_CB_FLAG_UNNAMEDPLUS) != 0 {
         // Warm the clipboard provider so the first yank is not slow.
         eval_has_provider(c"clipboard");
     }

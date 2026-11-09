@@ -123,9 +123,9 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     if scratch {
         let local = OptionSetFlags::LOCAL;
         let hide = OptVal::static_string(c"hide");
-        set_option_direct_for(kOptBufhidden, hide, local, 0, OptionTarget::Buf(b));
+        set_option_direct_for(OPT_BUFHIDDEN, hide, local, 0, OptionTarget::Buf(b));
         let nofile = OptVal::static_string(c"nofile");
-        set_option_direct_for(kOptBuftype, nofile, local, 0, OptionTarget::Buf(b));
+        set_option_direct_for(OPT_BUFTYPE, nofile, local, 0, OptionTarget::Buf(b));
         debug_assert!(b.swap_file_closed(), "buf->b_ml.ml_mfp->mf_fd < 0");
         b.b_p_swf = 0;
         b.b_p_ml = 0;

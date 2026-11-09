@@ -173,7 +173,7 @@ pub fn msg_scrollsize() -> c_int {
 
 /// Should message output be batched into one scroll at flush time?
 pub fn msg_do_throttle() -> bool {
-    msg_use_grid() && RDB_FLAGS.get() & kOptRdbFlagNothrottle as c_uint == 0
+    msg_use_grid() && RDB_FLAGS.get() & OPT_RDB_FLAG_NOTHROTTLE as c_uint == 0
 }
 
 /// Scroll the message area up one line.

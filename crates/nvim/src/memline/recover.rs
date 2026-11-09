@@ -203,7 +203,7 @@ pub fn ml_recover(checkext: bool) {
         }
         if let Some(fenc) = &recorded.fileencoding {
             set_option_value_give_err(
-                kOptFileencoding,
+                OPT_FILEENCODING,
                 OptVal::string(ApiString::from_bytes(fenc)),
                 OptionSetFlags::LOCAL,
             );

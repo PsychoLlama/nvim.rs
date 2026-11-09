@@ -39,8 +39,8 @@ use crate::option::defs::OptionSetFlags;
 use crate::option::vars::SSOP_FLAGS;
 use crate::option::{makefoldset, makeset};
 use crate::options::{
-    kOptSsopFlagCurdir, kOptSsopFlagCursor, kOptSsopFlagFolds, kOptSsopFlagLocaloptions,
-    kOptSsopFlagOptions, kOptSsopFlagTerminal,
+    OPT_SSOP_FLAG_CURDIR, OPT_SSOP_FLAG_CURSOR, OPT_SSOP_FLAG_FOLDS, OPT_SSOP_FLAG_LOCALOPTIONS,
+    OPT_SSOP_FLAG_OPTIONS, OPT_SSOP_FLAG_TERMINAL,
 };
 use crate::os::libc::int64_t;
 use crate::types::ColNr;
@@ -68,7 +68,7 @@ pub(crate) fn put_view(
 ) -> Written {
     // The cursor position is always restored for a session; for a view only
     // when 'viewoptions' asks.
-    let mut do_cursor = opts.is_session() || opts.has(kOptSsopFlagCursor);
+    let mut do_cursor = opts.is_session() || opts.has(OPT_SSOP_FLAG_CURSOR);
 
     // The argument list: the global one, or a local copy written out.
     if window.w_alist == ArgListId::GLOBAL {
@@ -77,7 +77,7 @@ pub(crate) fn put_view(
         // Full paths unless the session knows where it will be sourced
         // and no directory below it overrides that.
         let fullname = !opts.is_session()
-            || !opts.has(kOptSsopFlagCurdir)
+            || !opts.has(OPT_SSOP_FLAG_CURDIR)
             || has_own_dir(DirOwner::TabPage(tabpage))
             || has_own_dir(DirOwner::Window(window));
         let names = crate::arglist::arg_names(window.w_alist);
@@ -108,7 +108,7 @@ pub(crate) fn put_view(
     }
 
     // Local mappings and abbreviations.
-    if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions) {
+    if opts.has(OPT_SSOP_FLAG_OPTIONS | OPT_SSOP_FLAG_LOCALOPTIONS) {
         makemap(out, window.buffer_or_none()).map_err(|Failed| IoFailed)?;
     }
 
@@ -116,7 +116,7 @@ pub(crate) fn put_view(
 
     // Folds, when 'buftype' is empty and for help files.
     let buf = window.buffer();
-    if opts.has(kOptSsopFlagFolds)
+    if opts.has(OPT_SSOP_FLAG_FOLDS)
         && !buf.name.full().is_none()
         && (buf_is_normal(Some(buf)) || buf_is_help(Some(buf)))
     {
@@ -131,7 +131,7 @@ pub(crate) fn put_view(
     // The window-local directory, unless this is a view that was not
     // asked for directories.
     if let Some(localdir) = own_dir(DirOwner::Window(window))
-        && (opts.is_session() || opts.has(kOptSsopFlagCurdir))
+        && (opts.is_session() || opts.has(OPT_SSOP_FLAG_CURDIR))
     {
         out.puts(c"lcd ")?;
         ses_put_fname(out, localdir.as_cstr())?;
@@ -208,7 +208,7 @@ fn put_alternate(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Writt
     let wanted = opts.is_session()
         && restorable
         // Not a terminal, unless terminals are in 'sessionoptions'.
-        && !(buf_is_terminal(alt) && SSOP_FLAGS.get() & kOptSsopFlagTerminal == 0);
+        && !(buf_is_terminal(alt) && SSOP_FLAGS.get() & OPT_SSOP_FLAG_TERMINAL == 0);
     let Some(alt) = alt.filter(|_| wanted) else {
         return Ok(());
     };
@@ -224,12 +224,12 @@ fn put_alternate(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Writt
 fn put_local_options(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Written {
     // `curwin`/`CURBUF` are restored before returning either way.
     let saved = switch_to(window);
-    let f = if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions) {
+    let f = if opts.has(OPT_SSOP_FLAG_OPTIONS | OPT_SSOP_FLAG_LOCALOPTIONS) {
         // Store only the local values for a view, and for a session
         // whose 'sessionoptions' has no "options".
-        let local_only = !opts.is_session() || !opts.has(kOptSsopFlagOptions);
+        let local_only = !opts.is_session() || !opts.has(OPT_SSOP_FLAG_OPTIONS);
         makeset(out, OptionSetFlags::LOCAL, c_int::from(local_only))
-    } else if opts.has(kOptSsopFlagFolds) {
+    } else if opts.has(OPT_SSOP_FLAG_FOLDS) {
         makefoldset(out)
     } else {
         Ok(())

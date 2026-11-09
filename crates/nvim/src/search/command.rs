@@ -614,7 +614,7 @@ pub(crate) fn do_search(
             if let Some((mut echo, true)) = echoed {
                 let inexact = count != 1
                     || has_offset
-                    || (FDO_FLAGS.get() & kOptFdoFlagSearch == 0 && {
+                    || (FDO_FLAGS.get() & OPT_FDO_FLAG_SEARCH == 0 && {
                         let (w, lnum) = (Win::current(), Win::current().w_cursor.lnum);
                         w.has_folding(lnum, None, None)
                     });
@@ -701,7 +701,7 @@ pub fn showmatch(c: c_int) {
 
     let found = findmatch(None, NUL);
     let Some(mut lpos) = found else {
-        vim_beep(kOptBoFlagShowmatch); // no match, so beep
+        vim_beep(OPT_BO_FLAG_SHOWMATCH); // no match, so beep
         return;
     };
     if lpos.lnum < Win::current().w_topline || lpos.lnum >= Win::current().w_botline {

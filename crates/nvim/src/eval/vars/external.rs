@@ -69,7 +69,7 @@ pub(crate) fn eval_charconvert(
         (Vv::FnameIn, fname_from),
         (Vv::FnameOut, fname_to),
     ]);
-    CURRENT_SCTX.set(option_last_set(kOptCharconvert));
+    CURRENT_SCTX.set(option_last_set(OPT_CHARCONVERT));
 
     // A copy: the expression may set the option and free its text.
     let expr = p_ccv(XString::from_cstr);
@@ -92,7 +92,7 @@ pub fn eval_diff(origfile: &CStr, newfile: &CStr, outfile: &CStr) {
         (Vv::FnameNew, newfile),
         (Vv::FnameOut, outfile),
     ]);
-    CURRENT_SCTX.set(option_last_set(kOptDiffexpr));
+    CURRENT_SCTX.set(option_last_set(OPT_DIFFEXPR));
 
     // A copy: the expression may set the option and free its text.
     drop(eval_expr_ext(&p_dex(XString::from_cstr), true));
@@ -111,7 +111,7 @@ pub fn eval_patch(origfile: &CStr, difffile: &CStr, outfile: &CStr) {
         (Vv::FnameDiff, difffile),
         (Vv::FnameOut, outfile),
     ]);
-    CURRENT_SCTX.set(option_last_set(kOptPatchexpr));
+    CURRENT_SCTX.set(option_last_set(OPT_PATCHEXPR));
 
     // A copy: the expression may set the option and free its text.
     drop(eval_expr_ext(&p_pex(XString::from_cstr), true));
@@ -135,7 +135,7 @@ pub fn eval_spell_expr(badword: &[u8], expr: &[u8]) -> Option<ListRef> {
     prepare_vimvar(Vv::Val, &mut save_val);
     set_vim_var_string(Vv::Val, Some(badword));
     let no_emsg = (p_verbose() == 0).then(Suppress::emsg);
-    CURRENT_SCTX.set(option_last_set(kOptSpellsuggest));
+    CURRENT_SCTX.set(option_last_set(OPT_SPELLSUGGEST));
 
     let mut rettv = TV_INITIAL_VALUE;
     // A bare `Func(v:val)` call is evaluated without the expression

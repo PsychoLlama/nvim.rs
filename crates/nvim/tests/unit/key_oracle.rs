@@ -3,7 +3,7 @@
 //! the bytes the typeahead stores (`K_SPECIAL KS_MODIFIER <bits>` and
 //! `K_SPECIAL <termcap pair>`), fed with `feedkeys()` and read back with
 //! `getchar()`/`getcharmod()` -- which is `vgetc` assembling the key and
-//! setting `mod_mask`. A few characters ride along: the escaped NUL and
+//! setting `MOD_MASK`. A few characters ride along: the escaped NUL and
 //! `K_SPECIAL`, a multibyte one, and the CTRL forms that fold into a byte.
 //!
 //! The answers are folded into one digest recorded before the key pipeline

@@ -20,7 +20,7 @@
 use super::*;
 use crate::eval::typval::dict_find;
 use crate::global_cell::{editor_state::Held, editor_state_lock};
-use crate::options::kOptCotFlagNearest;
+use crate::options::OPT_COT_FLAG_NEAREST;
 use crate::os::input::reset_breakcheck_count;
 use core::ffi::c_char;
 use std::ffi::CString;
@@ -154,7 +154,7 @@ fn shown_at() -> Option<usize> {
     position(shown_match())
 }
 
-/// One `<C-N>`/`<C-P>` press of `todo` steps, in `compl_shows_dir`.
+/// One `<C-N>`/`<C-P>` press of `todo` steps, in `COMPL_SHOWS_DIR`.
 fn step(todo: c_int) {
     let mut num_matches = None;
     assert!(find_next_completion_match(
@@ -220,7 +220,7 @@ fn backward_adds_go_before_the_current_match() {
     // looks for it.
     assert_eq!(texts(), ["x3", "x2", "x1", "<o>"]);
     assert!(first_match().is_some_and(|m| !m.is_original()));
-    // An explicit direction overrides `compl_direction`.
+    // An explicit direction overrides `COMPL_DIRECTION`.
     assert_eq!(
         add_with("x4", FORWARD, 0, false, FUZZY_SCORE_NONE),
         Added::Linked
@@ -251,12 +251,12 @@ fn add_full(text: &str, fname: Option<&str>, extra: [&str; 4], user_data: Option
     )
 }
 
-/// Point `compl_shown_match` at list position `at`.
+/// Point `COMPL_SHOWN_MATCH` at list position `at`.
 fn set_shown(at: usize) {
     COMPL_SHOWN_MATCH.set(Some(nth(at)));
 }
 
-/// Point `compl_curr_match` at list position `at`.
+/// Point `COMPL_CURR_MATCH` at list position `at`.
 fn set_curr(at: usize) {
     COMPL_CURR_MATCH.set(Some(nth(at)));
 }
@@ -327,7 +327,7 @@ fn duplicates_are_refused_unless_allowed() {
 
 #[test]
 fn a_nearer_duplicate_lowers_the_score() {
-    let _f = Fixture::new(kOptCotFlagNearest);
+    let _f = Fixture::new(OPT_COT_FLAG_NEAREST);
     start("w");
     assert_eq!(add_scored("word", 5), Added::Linked);
     assert_eq!(add_scored("word", 3), Added::Duplicate);
@@ -343,7 +343,7 @@ fn a_nearer_duplicate_lowers_the_score() {
 
 #[test]
 fn fuzzy_longest_inserts_by_score() {
-    let _f = Fixture::new(kOptCotFlagFuzzy);
+    let _f = Fixture::new(OPT_COT_FLAG_FUZZY);
     COMPL_GET_LONGEST.set(true);
     start("w");
     for (word, score) in [("a", 10), ("b", 30), ("c", 20), ("d", 30)] {
@@ -446,7 +446,7 @@ fn numbers_count_out_from_the_original_in_the_running_direction() {
 
 #[test]
 fn fuzzy_scores_sort_the_matches_and_leave_the_original() {
-    let _f = Fixture::new(kOptCotFlagFuzzy);
+    let _f = Fixture::new(OPT_COT_FLAG_FUZZY);
     let words = ["grape", "apple", "map", "apricot", "pear", "papaya"];
     let score =
         |word: &str, pattern: &CStr| fuzzy_match_str(&CString::new(word).expect("no NUL"), pattern);
@@ -492,7 +492,7 @@ fn fuzzy_scores_sort_the_matches_and_leave_the_original() {
 
 #[test]
 fn a_fuzzy_resort_moves_the_shown_match_under_noinsert() {
-    let _f = Fixture::new(kOptCotFlagFuzzy | kOptCotFlagNoinsert);
+    let _f = Fixture::new(OPT_COT_FLAG_FUZZY | OPT_COT_FLAG_NOINSERT);
     ring("ap", &["grape", "apple", "map"]);
     set_shown(3);
     ins_compl_fuzzy_sort();
@@ -503,7 +503,7 @@ fn a_fuzzy_resort_moves_the_shown_match_under_noinsert() {
 
 #[test]
 fn nearest_sorts_scored_matches_and_leaves_unscored_in_runs() {
-    let _f = Fixture::new(kOptCotFlagNearest);
+    let _f = Fixture::new(OPT_COT_FLAG_NEAREST);
     const NONE: c_int = FUZZY_SCORE_NONE;
     start("");
     for (word, score) in [

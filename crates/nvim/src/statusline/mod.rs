@@ -64,7 +64,7 @@ pub(crate) use crate::highlight::namespace::hl_attr;
 use crate::highlight::{hl_combine_attr, win_hl_attr};
 use crate::highlight_group::{HLF_S, HLF_SNC};
 use crate::option::defs::{OptIndex, OptionSetFlags};
-use crate::options::kOptStatuscolumn;
+use crate::options::OPT_STATUSCOLUMN;
 use crate::optionstr::OptStringRef;
 use crate::path::MAXPATHL;
 use crate::sign::SignTextAttrs;
@@ -116,7 +116,7 @@ pub(crate) struct StlJob<'a> {
     /// The format itself, the caller's own copy: expanding a format can run
     /// a function that `:set`s the very option the format came from.
     pub fmt: Vec<u8>,
-    /// Which option the format came from, and in which scope. `kOptInvalid`
+    /// Which option the format came from, and in which scope. `OPT_INVALID`
     /// means "no option", which is also what switches the sandbox off --
     /// `nvim_eval_statusline()` can therefore never reach it.
     pub opt: (OptIndex, OptionSetFlags),
@@ -396,7 +396,7 @@ pub(crate) fn build_statuscol_str(
     let job = StlJob {
         win,
         fmt: win.w_onebuf_opt.wo_stc.bytes().to_vec(),
-        opt: (kOptStatuscolumn, OptionSetFlags::LOCAL),
+        opt: (OPT_STATUSCOLUMN, OptionSetFlags::LOCAL),
         fillchar: 0,
         maxwidth: stcp.width,
         room: MAXPATHL as usize,

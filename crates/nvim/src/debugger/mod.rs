@@ -201,7 +201,7 @@ static DEBUG_BREAKPOINT_LNUM: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO)
 static DEBUG_SKIPPED: GlobalCell<bool> = GlobalCell::new(false);
 static DEBUG_SKIPPED_NAME: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
-/// Enter debug mode if a breakpoint was hit, or if `ex_nesting_level` is at
+/// Enter debug mode if a breakpoint was hit, or if `EX_NESTING_LEVEL` is at
 /// or below the level the last `>` command asked to stop at -- but only if
 /// the command is really being executed.
 ///

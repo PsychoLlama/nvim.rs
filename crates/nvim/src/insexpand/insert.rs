@@ -1,6 +1,6 @@
 //! Putting the selected match into the buffer, and moving between matches.
 //!
-//! [`ins_compl_insert`] writes the match at `compl_col` and
+//! [`ins_compl_insert`] writes the match at `COMPL_COL` and
 //! [`ins_compl_delete`] takes it out again; [`ins_compl_next`] is what
 //! CTRL-N / CTRL-P reach, walking to the next match through
 //! [`find_next_completion_match`] and asking for more when the list runs
@@ -119,11 +119,11 @@ pub(crate) fn fuzzy_longest_match() {
     COMPL_NUM_BESTS.set(0);
 }
 
-/// Move `compl_shown_match` onto the match actually shown: `compl_leader` may
+/// Move `COMPL_SHOWN_MATCH` onto the match actually shown: `compl_leader` may
 /// have hidden the one it points at.
 pub(crate) fn ins_compl_update_shown_match() {
     clear_adjusted_leader();
-    // Upstream dereferences `compl_shown_match` throughout without checking.
+    // Upstream dereferences `COMPL_SHOWN_MATCH` throughout without checking.
     let mut shown = shown_match().expect("a running completion has a shown match");
     let mut leader = get_leader_for_startcol(shown, true);
 
@@ -250,7 +250,7 @@ pub(crate) fn insert_chars(text: &[u8]) {
 /// moves back from the inserted text to `compl_leader`. With `insert_prefix`
 /// the longest common prefix goes in instead of the shown match.
 pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
-    // Upstream dereferences `compl_shown_match` here without checking.
+    // Upstream dereferences `COMPL_SHOWN_MATCH` here without checking.
     let shown = shown_match().expect("a running completion has a shown match");
     let compl_len = get_compl_len();
     let preinsert = ins_compl_has_preinsert();
@@ -319,7 +319,7 @@ pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
     COMPL_HI_ON_AUTOCOMPL_LONGEST.set(insert_prefix && move_cursor);
 }
 
-/// Step `compl_shown_match` on `todo` matches in the current direction,
+/// Step `COMPL_SHOWN_MATCH` on `todo` matches in the current direction,
 /// answering the number of matches found in `num_matches`.
 ///
 /// With `allow_get_expansion` [`ins_compl_get_exp`] may be called for more
@@ -338,7 +338,7 @@ pub(crate) fn find_next_completion_match(
     let mut found_end;
     let mut found_compl: Option<MatchId> = None;
     let has_preinsert = ins_compl_has_preinsert();
-    let compl_no_select = completeopt_flags() & kOptCotFlagNoselect as c_uint != 0
+    let compl_no_select = completeopt_flags() & OPT_COT_FLAG_NOSELECT as c_uint != 0
         || COMPL_AUTOCOMPLETE.get() && !has_preinsert;
 
     loop {
@@ -346,7 +346,7 @@ pub(crate) fn find_next_completion_match(
         if todo < 0 {
             break;
         }
-        // Upstream dereferences `compl_shown_match` here without checking.
+        // Upstream dereferences `COMPL_SHOWN_MATCH` here without checking.
         let shown = shown_match().expect("a running completion has a shown match");
         let (next, prev) = shown.with(|m| (m.next, m.prev));
         if compl_shows_dir_forward() && next.is_some() {
@@ -401,7 +401,7 @@ pub(crate) fn find_next_completion_match(
                 && COMPL_DIRECTION.get() == COMPL_SHOWS_DIR.get()
                 && advance
             {
-                // Upstream dereferences `compl_shown_match` here unchecked.
+                // Upstream dereferences `COMPL_SHOWN_MATCH` here unchecked.
                 let shown = shown_match().expect("a running completion has a shown match");
                 let (next, prev) = shown.with(|m| (m.next, m.prev));
                 if COMPL_PENDING.get() > 0 && next.is_some() {
@@ -445,8 +445,8 @@ pub(crate) fn find_next_completion_match(
 /// Fill in the next completion in the current direction; answers the total
 /// number of matches, or `None` while that is still unknown.
 ///
-/// `compl_curr_match` belongs to [`ins_compl_get_exp`] while it runs, so this
-/// works through `compl_shown_match`. It recurses at most once: first with
+/// `COMPL_CURR_MATCH` belongs to [`ins_compl_get_exp`] while it runs, so this
+/// works through `COMPL_SHOWN_MATCH`. It recurses at most once: first with
 /// `allow_get_expansion` true, which calls [`ins_compl_get_exp`], which calls
 /// back in with it false.
 ///
@@ -465,7 +465,7 @@ pub(crate) fn ins_compl_next(
     let orig_curbuf = Buf::current().id();
     let cur_cot_flags = completeopt_flags();
     let compl_preinsert = ins_compl_has_preinsert();
-    let compl_no_insert = cur_cot_flags & kOptCotFlagNoinsert as c_uint != 0
+    let compl_no_insert = cur_cot_flags & OPT_COT_FLAG_NOINSERT as c_uint != 0
         || COMPL_AUTOCOMPLETE.get() && !compl_preinsert;
     let has_autocomplete_delay = COMPL_AUTOCOMPLETE.get() && p_acl() > 0;
 
@@ -524,7 +524,7 @@ pub(crate) fn ins_compl_next(
             debug_assert!(!compl_leader().is_unset());
             ins_compl_insert_text(untyped_part(&compl_leader().to_vec()));
         }
-        // C's `strequal(compl_shown_match->cp_str.data, compl_orig_text.data)`.
+        // C's `strequal(COMPL_SHOWN_MATCH->cp_str.data, compl_orig_text.data)`.
         let orig = compl_orig_text();
         let shown_is_orig_text = match shown_match() {
             Some(shown) => {

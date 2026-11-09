@@ -27,7 +27,7 @@ use crate::api::private::helpers::{dict_set_var, scope_vars};
 use crate::eval::typval::tv_list_alloc;
 use crate::event_queue::put_job_on_main_loop;
 use crate::option::vars::p_bg;
-use crate::options::kOptBoFlagTerm;
+use crate::options::OPT_BO_FLAG_TERM;
 use crate::os::libc::ptrdiff_t;
 use crate::types::{ApiString, Error, LIST_LEN_MAY_KNOW, Object};
 use crate::ui::vim_beep;
@@ -90,7 +90,7 @@ impl ScreenHost for ScreenReports {
     }
 
     fn bell(&mut self) -> Option<c_int> {
-        vim_beep(kOptBoFlagTerm as ::core::ffi::c_uint);
+        vim_beep(OPT_BO_FLAG_TERM as ::core::ffi::c_uint);
         Some(1)
     }
 

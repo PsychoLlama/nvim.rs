@@ -54,7 +54,7 @@ use crate::narrow::number_as_int;
 use crate::option::defs::{OptError, OptSet, OptionSetFlags};
 use crate::option::vars::{P_FCS, P_LCS};
 use crate::option::{StrVar, option_var};
-use crate::options::kOptListchars as kOptListcharsIdx;
+use crate::options::OPT_LISTCHARS as kOptListcharsIdx;
 use crate::optionstr::CharsOption;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;

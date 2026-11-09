@@ -17,7 +17,7 @@
 //!   start where the block did (`b_op_start_orig` against `op.start`);
 //! * `A` on a block opened with `$` has no fixed right edge, so the insert's
 //!   own start column is the only reference there is;
-//! * Insert mode may have been left with CTRL-C (`got_int`) or on another
+//! * Insert mode may have been left with CTRL-C (`GOT_INT`) or on another
 //!   line, in which case there is nothing sensible to replay and the operator
 //!   quietly stops.
 //!
@@ -125,7 +125,7 @@ fn measure_before_insert(op: &OpArg, bd: &mut BlockDef) -> Option<BlockInsertPre
         if u_save_cursor().is_err() {
             return None;
         }
-        Win::current().w_onebuf_opt.wo_ve_flags = kOptVeFlagAll as c_uint;
+        Win::current().w_onebuf_opt.wo_ve_flags = OPT_VE_FLAG_ALL as c_uint;
         let wcol = if op.op_type == OpType::Append {
             op.end_vcol + 1
         } else {
@@ -355,7 +355,7 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
         fix_indent();
     }
 
-    // Reset `finish_op` now: it must not be set inside `edit()`.
+    // Reset `FINISH_OP` now: it must not be set inside `edit()`.
     let save_finish_op = FINISH_OP.get();
     FINISH_OP.set(false);
     let retval = c_int::from(edit(Key::NUL, false, 1) == Ok(true));
@@ -460,8 +460,8 @@ pub fn adjust_cursor_eol() {
     let cur_ve_flags = get_ve_flags(Win::current());
     let adj_cursor = Win::current().w_cursor.col > ColNr::ZERO
         && gchar_cursor() == NUL
-        && cur_ve_flags & kOptVeFlagOnemore as c_uint == 0
-        && cur_ve_flags & kOptVeFlagAll as c_uint == 0
+        && cur_ve_flags & OPT_VE_FLAG_ONEMORE as c_uint == 0
+        && cur_ve_flags & OPT_VE_FLAG_ALL as c_uint == 0
         && !(!RESTART_EDIT.get().is_nul() || STATE.get() & MODE_INSERT != 0);
     if !adj_cursor {
         return;
@@ -470,7 +470,7 @@ pub fn adjust_cursor_eol() {
     // Onto the last character in the line.
     dec_cursor();
 
-    if cur_ve_flags == kOptVeFlagAll as c_uint {
+    if cur_ve_flags == OPT_VE_FLAG_ALL as c_uint {
         // `coladd` becomes the width of that last character.
         let (scol, ecol) = Win::current().vcol_span(Win::current().cursor());
         Win::current().w_cursor.coladd = ecol - scol + 1;

@@ -129,7 +129,7 @@ pub fn wait_return(redraw: c_int) {
             CMDLINE_ROW.set(ROWS.get() - 1);
         }
 
-        if MSG_FLAGS.get() & kOptMoptFlagHitEnter != 0 {
+        if MSG_FLAGS.get() & OPT_MOPT_FLAG_HIT_ENTER != 0 {
             hit_return_msg(true);
             loop {
                 // Remember "got_int": if it is set vgetc().code() probably

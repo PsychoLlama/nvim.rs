@@ -325,7 +325,7 @@ pub fn autocmd_register(
             seed_first_autocmd(event);
 
             // Spelled out rather than reusing `findgroup`: they are the
-            // same value (nothing above can change `current_augroup`), but
+            // same value (nothing above can change `CURRENT_AUGROUP`), but
             // upstream asks the question twice.
             new_pat.group = if group == AUGROUP_ALL {
                 CURRENT_AUGROUP.get()

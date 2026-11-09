@@ -74,7 +74,7 @@ use crate::message::{
 use crate::option::defs::{OptSet, OptVal};
 use crate::option::vars::{p_enc, p_ic, p_lpl, p_verbose};
 use crate::option::{set_option_value_give_err, vimrc_found};
-use crate::options::kOptRuntimepath;
+use crate::options::OPT_RUNTIMEPATH;
 use crate::os::cshim::gettext;
 use crate::os::fs::os_file_is_readable;
 use crate::os::input::line_breakcheck;

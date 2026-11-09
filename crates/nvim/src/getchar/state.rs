@@ -1,13 +1,13 @@
 //! What the key stream is in the middle of.
 //!
-//! Where the last key came from and what came with it (`KeyTyped`,
-//! `KeyStuffed`, `mod_mask`, `vgetc_char`), whether mapping and abbreviation
-//! are switched off for this read (`no_mapping`, `no_zero_mapping`,
-//! `allow_keys`, `expr_map_lock`), what the typeahead buffer did last
-//! (`typebuf_was_empty`, `typebuf_was_filled`, `maptick`), and the register
-//! being recorded into or replayed from (`reg_recording`, `reg_executing`).
+//! Where the last key came from and what came with it (`KEY_TYPED`,
+//! `KEY_STUFFED`, `MOD_MASK`, `VGETC_CHAR`), whether mapping and abbreviation
+//! are switched off for this read (`NO_MAPPING`, `NO_ZERO_MAPPING`,
+//! `ALLOW_KEYS`, `EXPR_MAP_LOCK`), what the typeahead buffer did last
+//! (`TYPEBUF_WAS_EMPTY`, `TYPEBUF_WAS_FILLED`, `maptick`), and the register
+//! being recorded into or replayed from (`REG_RECORDING`, `REG_EXECUTING`).
 //!
-//! `got_int` is here because this is where it is raised: `os_breakcheck`
+//! `GOT_INT` is here because this is where it is raised: `os_breakcheck`
 //! reads the input for a pending CTRL-C, and every long loop in the tree
 //! polls the flag that read sets.
 //!
@@ -62,7 +62,7 @@ pub(crate) struct UngotKey {
     pub(crate) mouse_grid: c_int,
     pub(crate) mouse_row: c_int,
     pub(crate) mouse_col: c_int,
-    /// `KeyStuffed` when it was put back.
+    /// `KEY_STUFFED` when it was put back.
     pub(crate) stuffed: bool,
 }
 
@@ -94,7 +94,7 @@ state_record! {
     pub(crate) NO_MAPPING: c_int = 0;
     /// Nonzero: no mapping for a `0` typed as a count.
     pub(crate) NO_ZERO_MAPPING: c_int = 0;
-    /// Nonzero: special keys are recognised even with `no_mapping`.
+    /// Nonzero: special keys are recognised even with `NO_MAPPING`.
     pub(crate) ALLOW_KEYS: c_int = 0;
     /// Nonzero while an `<expr>` mapping is evaluated: no text changes.
     pub(crate) EXPR_MAP_LOCK: c_int = 0;
@@ -102,7 +102,7 @@ state_record! {
     pub(crate) NO_REDUCE_KEYS: c_int = 0;
     /// The modes CTRL-C is mapped in; it does not interrupt there.
     pub(crate) MAPPED_CTRL_C: c_int = 0;
-    /// CTRL-C interrupts (sets `got_int`) rather than being a key.
+    /// CTRL-C interrupts (sets `GOT_INT`) rather than being a key.
     pub(crate) CTRL_C_INTERRUPTS: bool = true;
     /// Don't read from the `:source!` streams.
     pub(crate) IGNORE_SCRIPT: bool = false;
@@ -131,7 +131,7 @@ state_record! {
     pub(crate) REG_RECORDING: u8 = 0;
     /// The register `@` is executing, or 0.
     pub(crate) REG_EXECUTING: u8 = 0;
-    /// Clear `reg_executing` at the next advancing read.
+    /// Clear `REG_EXECUTING` at the next advancing read.
     pub(crate) PENDING_END_REG_EXECUTING: bool = false;
     /// The register last recorded into.
     pub(crate) REG_RECORDED: u8 = 0;
@@ -142,12 +142,12 @@ state_record! {
     /// `size_t` is: `vgetc` subtracts what the previous call recorded and
     /// `ungetchars` subtracts what it took back, and either can take it
     /// below zero. A huge value then makes `get_recorded`'s
-    /// `len >= last_recorded_len` fail and nothing is trimmed, which is
+    /// `len >= LAST_RECORDED_LEN` fail and nothing is trimmed, which is
     /// what upstream does. `test_registers`' Test_recording_with_select_mode
     /// reaches it.
     pub(super) LAST_RECORDED_LEN: size_t = 0;
     /// How many bytes the last `vgetc` recorded. Peeking can record more,
-    /// so `last_recorded_len` may have grown past it since.
+    /// so `LAST_RECORDED_LEN` may have grown past it since.
     pub(super) LAST_VGETC_RECORDED_LEN: size_t = 0;
     /// What `gotchars` has half a key of, between calls. Changed through
     /// `with_mut`: the state machine is a leaf, and moving the key buffer

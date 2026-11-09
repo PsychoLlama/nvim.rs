@@ -55,8 +55,8 @@ use crate::option::defs::OptVal;
 use crate::option::set_option_value_give_err;
 use crate::option::vars::{CIA_FLAGS, p_mousemev, p_pb, p_ph, p_pmw, p_pumborder, p_pvh, p_pw};
 use crate::options::{
-    kOptBufhidden, kOptBuflisted, kOptBuftype, kOptCotFlagFuzzy, kOptCotFlagPopup,
-    kOptCotFlagPreview, kOptDiff, kOptSwapfile,
+    OPT_BUFHIDDEN, OPT_BUFLISTED, OPT_BUFTYPE, OPT_COT_FLAG_FUZZY, OPT_COT_FLAG_POPUP,
+    OPT_COT_FLAG_PREVIEW, OPT_DIFF, OPT_SWAPFILE,
 };
 use crate::os::cshim::gettext;
 use crate::os::libc::uint32_t;

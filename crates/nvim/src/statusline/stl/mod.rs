@@ -77,7 +77,7 @@ use crate::option::vars::{p_sc, p_sloc};
 use crate::option::{
     find_option, get_fileformat, get_option_default, set_option_direct, was_set_insecurely,
 };
-use crate::options::kOptInvalid;
+use crate::options::OPT_INVALID;
 use crate::os::cshim::{byte_toupper, gettext};
 use crate::path::MAXPATHL;
 use crate::path::tail_index;
@@ -126,7 +126,7 @@ pub(super) struct Env<'a> {
     pub buf: Buf,
     /// The `'statuscolumn'` line, or `None` when this is not one.
     pub stc: Option<StcLine<'a>>,
-    /// The option the format came from, or `kOptInvalid`.
+    /// The option the format came from, or `OPT_INVALID`.
     pub opt_idx: OptIndex,
     /// Whether `%{}` and `%!` evaluate in the sandbox.
     pub sandbox: bool,
@@ -309,7 +309,7 @@ impl Env<'_> {
         if !p_sc() {
             return;
         }
-        if self.opt_idx as c_int != kOptInvalid as c_int {
+        if self.opt_idx as c_int != OPT_INVALID as c_int {
             let loc = p_sloc(find_option);
             if loc as c_int != self.opt_idx as c_int {
                 return;
@@ -569,7 +569,7 @@ impl FmtSource {
     /// A format that is nobody's option — which is what switches the
     /// sandbox off, so `nvim_eval_statusline()` can never reach it.
     pub const NONE: FmtSource = FmtSource {
-        opt_idx: kOptInvalid,
+        opt_idx: OPT_INVALID,
         opt_scope: OptionSetFlags::NONE,
     };
 }
@@ -663,9 +663,9 @@ impl Win {
         }
 
         // A format set insecurely is evaluated in the sandbox. `opt_idx` is
-        // `kOptInvalid` when the caller is nvim_eval_statusline(), which is
+        // `OPT_INVALID` when the caller is nvim_eval_statusline(), which is
         // therefore never sandboxed.
-        let sandbox = opt_idx as c_int != kOptInvalid as c_int && {
+        let sandbox = opt_idx as c_int != OPT_INVALID as c_int && {
             was_set_insecurely(self, opt_idx, opt_scope)
         };
 
@@ -745,7 +745,7 @@ impl Win {
 
         // An error here would mess up the display and might loop redrawing;
         // avoid that by setting the option back to its default.
-        if opt_idx as c_int != kOptInvalid as c_int && DID_EMSG.get() > did_emsg_before {
+        if opt_idx as c_int != OPT_INVALID as c_int && DID_EMSG.get() > did_emsg_before {
             let default = get_option_default(opt_idx, opt_scope);
             set_option_direct(opt_idx, default, opt_scope, SID_ERROR);
         }

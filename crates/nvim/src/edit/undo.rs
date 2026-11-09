@@ -5,10 +5,10 @@
 //! [`start_arrow`] is that: called by every motion key, it closes the current
 //! block and remembers where the insert ended.  [`stop_arrow`] is the mirror,
 //! called before any change, and is where the `u_save` for the block actually
-//! happens (`ins_need_undo`).
+//! happens (`INS_NEED_UNDO`).
 //!
-//! The pair is spelled with two flags rather than one state: `arrow_used`
-//! means "the block is closed", `ins_need_undo` means "the next change still
+//! The pair is spelled with two flags rather than one state: `ARROW_USED`
+//! means "the block is closed", `INS_NEED_UNDO` means "the next change still
 //! owes a `u_save`", and `stop_arrow` answers `FAIL` when either is still
 //! true afterwards, which is the caller's signal not to change the buffer at
 //! all.
@@ -163,8 +163,8 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
     replace_stack_clear();
 
     // Save the inserted text for a later `.`/CTRL-@/CTRL-A.  Not when
-    // `restart_edit` was set and nothing was inserted, or `CTRL-O w`
-    // followed by `<Left>` would clear `last_insert`.
+    // `RESTART_EDIT` was set and nothing was inserted, or `CTRL-O w`
+    // followed by `<Left>` would clear `LAST_INSERT`.
     let inserted = get_inserted();
     let added = if inserted.data().is_null() {
         0

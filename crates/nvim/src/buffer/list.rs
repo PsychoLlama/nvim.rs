@@ -44,7 +44,9 @@ use crate::message::{emsg, msg_delay};
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::{JOP_FLAGS, SWB_FLAGS, p_sol};
 use crate::option::{buf_copy_options, magic_isset};
-use crate::options::{kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit};
+use crate::options::{
+    OPT_JOP_FLAG_VIEW, OPT_SWB_FLAG_NEWTAB, OPT_SWB_FLAG_SPLIT, OPT_SWB_FLAG_VSPLIT,
+};
 use crate::os::cshim::gettext;
 use crate::os::fs::FileID;
 use crate::os::fs::file_id;
@@ -530,7 +532,7 @@ pub fn buflist_getfile(
         win.w_cursor.coladd = 0;
         win.w_set_curswant = true;
     }
-    if JOP_FLAGS.get() & kOptJopFlagView != 0 && fm.is_some() {
+    if JOP_FLAGS.get() & OPT_JOP_FLAG_VIEW != 0 && fm.is_some() {
         mark_view_restore(fm.as_ref());
     }
     Ok(())
@@ -540,14 +542,14 @@ pub fn buflist_getfile(
 /// showing `buffer`, or make one. Answers false when the split failed.
 fn goto_existing_window(buffer: Buf) -> bool {
     let wp = swbuf_goto_win_with_buf(Some(buffer));
-    let splits = kOptSwbFlagVsplit | kOptSwbFlagSplit | kOptSwbFlagNewtab;
+    let splits = OPT_SWB_FLAG_VSPLIT | OPT_SWB_FLAG_SPLIT | OPT_SWB_FLAG_NEWTAB;
     if wp.is_some() || SWB_FLAGS.get() & splits == 0 || buf_is_empty(Buf::current()) {
         return true;
     }
-    if SWB_FLAGS.get() & kOptSwbFlagNewtab != 0 {
+    if SWB_FLAGS.get() & OPT_SWB_FLAG_NEWTAB != 0 {
         tabpage_new();
     } else {
-        let vertical = SWB_FLAGS.get() & kOptSwbFlagVsplit != 0;
+        let vertical = SWB_FLAGS.get() & OPT_SWB_FLAG_VSPLIT != 0;
         let flags = if vertical { WSP_VERT } else { 0 };
         if win_split(0, flags).is_err() {
             return false;
@@ -575,7 +577,7 @@ pub(crate) fn buflist_getfpos() {
         win.w_cursor.coladd = 0;
         win.w_set_curswant = true;
     }
-    if JOP_FLAGS.get() & kOptJopFlagView != 0 {
+    if JOP_FLAGS.get() & OPT_JOP_FLAG_VIEW != 0 {
         mark_view_restore(Some(&fm));
     }
 }

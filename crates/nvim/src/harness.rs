@@ -36,21 +36,18 @@ use core::slice;
 /// has already been asked about this pass (`drawscreen::state` re-exports
 /// it). Exported as data: `test/functional/lua/ffi_spec.lua` declares it
 /// with `ffi.cdef` and reads it.
-#[allow(non_upper_case_globals, reason = "the name the harness declares")]
 #[unsafe(no_mangle)]
 pub static display_tick: GlobalCell<DispTick> = GlobalCell::new(0);
 
 /// How far through startup the editor is (`startup::starting` re-exports
 /// it). Exported as data: the oldtest harness (`test/old/testdir/runtest.vim`)
 /// writes it through `test_override('starting', ..)` by symbol name.
-#[allow(non_upper_case_globals, reason = "the name the harness declares")]
 #[unsafe(no_mangle)]
 pub static starting: GlobalCell<c_int> = GlobalCell::new(2);
 
 /// Whether `char_avail()` answers false regardless of the input
 /// (`getchar::state` re-exports it). Exported as data: the oldtest harness
 /// writes it through `test_override('char_avail', ..)` by symbol name.
-#[allow(non_upper_case_globals, reason = "the name the harness declares")]
 #[unsafe(no_mangle)]
 pub static test_disable_char_avail: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -143,7 +140,6 @@ pub unsafe extern "C" fn schar_get(buf_out: *mut c_char, sc: ScreenChar) -> size
 ///
 /// Exported as data: `test/unit/fixtures/shim.h` indexes it from C, so it
 /// stays a 256-byte array under this symbol.
-#[allow(non_upper_case_globals, reason = "the name the C fixture declares")]
 #[unsafe(no_mangle)]
 pub static utf8len_tab: [u8; 256] = lead_byte_lengths(1);
 

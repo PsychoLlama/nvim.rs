@@ -201,16 +201,16 @@ pub fn messagesopt_changed() -> Result<(), Failed> {
     while at < text.len() {
         if item_at(text, at, OPT_HIT_ENTER, false) {
             at += OPT_HIT_ENTER.count_bytes();
-            flags |= kOptMoptFlagHitEnter;
+            flags |= OPT_MOPT_FLAG_HIT_ENTER;
         } else if item_at(text, at, OPT_WAIT, true) {
             (wait, at) = getdigits_int_at(text, at + OPT_WAIT.count_bytes(), false, INT_MAX);
-            flags |= kOptMoptFlagWait;
+            flags |= OPT_MOPT_FLAG_WAIT;
         } else if item_at(text, at, OPT_HISTORY, true) {
             (history, at) = getdigits_int_at(text, at + OPT_HISTORY.count_bytes(), false, INT_MAX);
-            flags |= kOptMoptFlagHistory;
+            flags |= OPT_MOPT_FLAG_HISTORY;
         } else if item_at(text, at, OPT_PROGRESS, false) {
             at += OPT_PROGRESS.count_bytes();
-            flags |= kOptMoptFlagProgress;
+            flags |= OPT_MOPT_FLAG_PROGRESS;
             if cstr::byte_at(text, at) == b'c' {
                 progress_target |= PROGRESS_TARGET_CMD;
                 at += 1;
@@ -225,11 +225,11 @@ pub fn messagesopt_changed() -> Result<(), Failed> {
     }
 
     // Either "wait" or "hit-enter" is required.
-    if flags & (kOptMoptFlagHitEnter | kOptMoptFlagWait) == 0 {
+    if flags & (OPT_MOPT_FLAG_HIT_ENTER | OPT_MOPT_FLAG_WAIT) == 0 {
         return Err(Failed);
     }
     // "history" must be set, and both counts must be <= 10000.
-    if flags & kOptMoptFlagHistory == 0 {
+    if flags & OPT_MOPT_FLAG_HISTORY == 0 {
         return Err(Failed);
     }
     debug_assert!(history >= 0);

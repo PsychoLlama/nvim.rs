@@ -47,7 +47,7 @@ use crate::ops::do_join;
 use crate::option::defs::OptionSetFlags;
 use crate::option::vars::{P_SMD, p_smd};
 use crate::option::was_set_insecurely;
-use crate::options::kOptFormatexpr;
+use crate::options::OPT_FORMATEXPR;
 use crate::optionstr::OptString;
 use crate::os::input::line_breakcheck;
 use crate::os::libc::size_t;
@@ -139,7 +139,7 @@ pub(crate) fn op_formatexpr(op: &OpArg) {
 /// Evaluate 'formatexpr' over `count` lines from `lnum`, with `c` the
 /// character about to be inserted (or NUL).
 pub(crate) fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
-    let use_sandbox = was_set_insecurely(Win::current(), kOptFormatexpr, OptionSetFlags::LOCAL);
+    let use_sandbox = was_set_insecurely(Win::current(), OPT_FORMATEXPR, OptionSetFlags::LOCAL);
 
     set_vim_var_nr(Vv::Lnum, i64::from(lnum));
     set_vim_var_nr(Vv::Count, count as VarNumber);

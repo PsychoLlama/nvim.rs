@@ -40,8 +40,8 @@ use crate::mouse::{
 use crate::normal::with_scratch_cmd;
 use crate::option::vars::TPF_FLAGS;
 use crate::options::{
-    kOptTpfFlagBS, kOptTpfFlagC0, kOptTpfFlagC1, kOptTpfFlagDEL, kOptTpfFlagESC, kOptTpfFlagFF,
-    kOptTpfFlagHT,
+    OPT_TPF_FLAG_BS, OPT_TPF_FLAG_C0, OPT_TPF_FLAG_C1, OPT_TPF_FLAG_DEL, OPT_TPF_FLAG_ESC,
+    OPT_TPF_FLAG_FF, OPT_TPF_FLAG_HT,
 };
 use crate::types::Key;
 use crate::vterm::keycodes::{VTermKey, VTermModifier};
@@ -245,15 +245,15 @@ fn send_key(vt: &mut VTerm, c: c_int, mods: ModMask) {
 /// Whether `'termpastefilter'` says to drop `c` from a paste.
 fn is_filter_char(c: c_int) -> bool {
     let flag = match c {
-        0x08 => kOptTpfFlagBS as ::core::ffi::c_uint,
-        0x09 => kOptTpfFlagHT as ::core::ffi::c_uint,
+        0x08 => OPT_TPF_FLAG_BS as ::core::ffi::c_uint,
+        0x09 => OPT_TPF_FLAG_HT as ::core::ffi::c_uint,
         // Newlines are the one thing a paste is guaranteed to want.
         0x0a | 0x0d => return false,
-        0x0c => kOptTpfFlagFF as ::core::ffi::c_uint,
-        0x1b => kOptTpfFlagESC as ::core::ffi::c_uint,
-        0x7f => kOptTpfFlagDEL as ::core::ffi::c_uint,
-        _ if c < 0x20 => kOptTpfFlagC0 as ::core::ffi::c_uint,
-        _ if (0x80..=0x9f).contains(&c) => kOptTpfFlagC1 as ::core::ffi::c_uint,
+        0x0c => OPT_TPF_FLAG_FF as ::core::ffi::c_uint,
+        0x1b => OPT_TPF_FLAG_ESC as ::core::ffi::c_uint,
+        0x7f => OPT_TPF_FLAG_DEL as ::core::ffi::c_uint,
+        _ if c < 0x20 => OPT_TPF_FLAG_C0 as ::core::ffi::c_uint,
+        _ if (0x80..=0x9f).contains(&c) => OPT_TPF_FLAG_C1 as ::core::ffi::c_uint,
         _ => return false,
     };
     TPF_FLAGS.get() & flag != 0

@@ -128,7 +128,7 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
         }
     }
 
-    // Format, then restore the cursor: `saved_cursor` is adjusted by the
+    // Format, then restore the cursor: `SAVED_CURSOR` is adjusted by the
     // formatting as the text moves under it.
     SAVED_CURSOR.set(pos);
     format_lines(LineNr::new(-1), false);

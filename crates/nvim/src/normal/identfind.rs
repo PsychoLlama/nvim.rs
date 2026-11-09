@@ -38,7 +38,7 @@ use crate::ops::OpType;
 use crate::option::defs::ShmFlag;
 use crate::option::shortmess;
 use crate::option::vars::{FDO_FLAGS, P_SCS, P_WS, p_scs, p_ws};
-use crate::options::kOptFdoFlagSearch;
+use crate::options::OPT_FDO_FLAG_SEARCH;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
 use crate::pos::clearpos;
@@ -259,7 +259,7 @@ pub(crate) fn nv_gd(op: Op, nchar: Key, thisblock: bool) {
         clear_op_beep(op);
         return;
     }
-    if FDO_FLAGS.get() & kOptFdoFlagSearch as c_uint != 0
+    if FDO_FLAGS.get() & OPT_FDO_FLAG_SEARCH as c_uint != 0
         && KEY_TYPED.get()
         && op.op_type == OpType::Nop
     {

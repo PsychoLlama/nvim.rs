@@ -201,7 +201,7 @@ pub(crate) fn ins_compl_restart() {
 pub(crate) fn ins_compl_set_original_text(text: &[u8]) {
     // The CP_ORIGINAL_TEXT flag is at the first item, or possibly at the
     // last one for backward completion.
-    // Upstream dereferences `compl_first_match` here without checking.
+    // Upstream dereferences `COMPL_FIRST_MATCH` here without checking.
     let first = first_match().expect("a running completion has matches");
     let original = if first.is_original() {
         // Safety check.
@@ -445,7 +445,7 @@ pub fn ins_compl_prep(c: Key) -> bool {
 
     // Set "compl_get_longest" when finding the first matches.
     if ctrl_x_mode_not_defined_yet() || (ctrl_x_mode_normal() && !COMPL_STARTED.get()) {
-        COMPL_GET_LONGEST.set(get_cot_flags() & kOptCotFlagLongest as c_uint != 0);
+        COMPL_GET_LONGEST.set(get_cot_flags() & OPT_COT_FLAG_LONGEST as c_uint != 0);
         COMPL_USED_MATCH.set(true);
     }
 
@@ -543,10 +543,10 @@ pub(crate) fn ins_compl_fix_redo_buf_for_leader(known: Option<&CStr>) {
 
 /// While collecting matches, watch for a key that should change what is shown
 /// or leave completion; and show a completion as soon as possible while
-/// `compl_pending` is non-zero.
+/// `COMPL_PENDING` is non-zero.
 ///
 /// `frequency` says out of how many calls we actually check. `in_compl_func`
-/// is true when called from `complete_check()`, where `compl_curr_match` must
+/// is true when called from `complete_check()`, where `COMPL_CURR_MATCH` must
 /// not be set.
 pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
     // Don't check when reading keys from a script, :normal or feedkeys().
@@ -601,7 +601,7 @@ pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
 
     if COMPL_PENDING.get() != 0
         && !GOT_INT.get()
-        && COT_FLAGS.get() & (kOptCotFlagNoinsert as c_uint | kOptCotFlagFuzzy as c_uint) == 0
+        && COT_FLAGS.get() & (OPT_COT_FLAG_NOINSERT as c_uint | OPT_COT_FLAG_FUZZY as c_uint) == 0
         && (!COMPL_AUTOCOMPLETE.get() || ins_compl_has_preinsert())
     {
         // Insert the first match immediately and advance

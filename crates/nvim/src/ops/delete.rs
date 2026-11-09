@@ -323,7 +323,7 @@ fn delete_whole_lines(op: &OpArg) -> Result<(), UndoFailed> {
     }
     u_save_cursor()?;
     if Buf::current().b_p_ai != 0 {
-        // Keep the indent, on the first non-white character; `did_ai` is
+        // Keep the indent, on the first non-white character; `DID_AI` is
         // what deletes it again if the insert is left with ESC.
         beginline(BeginlineOpts::WHITE);
         DID_AI.set(true);

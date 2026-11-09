@@ -253,7 +253,7 @@ fn trigger_insert_enter(cmdchar: Key) {
 /// Restarting after CTRL-O: step the cursor back onto the position past the
 /// last character, where the insert was.
 ///
-/// Only when the insert *was* at the end of the line (`ins_at_eol` on the
+/// Only when the insert *was* at the end of the line (`INS_AT_EOL` on the
 /// same line) or the wanted column is past the last character.
 fn restore_ctrl_o_column() {
     let at_eol = INS_AT_EOL.get() && Win::current().w_cursor.lnum == O_LNUM.get();
@@ -298,7 +298,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
 
     if !Buf::current().terminal.is_null() && !STOP_INSERT_MODE.get() {
         // Exiting a terminal buffer's Insert mode: a K_NOP is stuffed so
-        // the loop wakes up and sees `stop_insert_mode`.
+        // the loop wakes up and sees `STOP_INSERT_MODE`.
         STOP_INSERT_MODE.set(true);
         RESTART_EDIT.set(Key::ascii(b'I'));
         stuff_readbuf_char(Key::from(SpecialKey::Nop));
@@ -321,7 +321,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
 
     // The mode message is not scrolled away.
     MSG_SCROLL.set(0);
-    if FDO_FLAGS.get() & kOptFdoFlagInsert as ::core::ffi::c_uint != 0 {
+    if FDO_FLAGS.get() & OPT_FDO_FLAG_INSERT as ::core::ffi::c_uint != 0 {
         fold_open_cursor();
     }
     if !key_available() {

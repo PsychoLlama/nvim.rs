@@ -568,7 +568,7 @@ fn spell_suggest_intern(su: &mut SugInfo, interactive: bool) {
         su.su_sounddone = Vec::new();
     }
 
-    // Interrupted searches still show what they found. `got_int` is
+    // Interrupted searches still show what they found. `GOT_INT` is
     // only cleared for a command, not for `spellsuggest()`.
     os_breakcheck();
     if interactive && GOT_INT.get() {

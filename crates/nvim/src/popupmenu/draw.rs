@@ -101,7 +101,7 @@ fn pum_compute_text_attrs(text: &XString, hlf: Hlf, user_hlattr: c_int) -> Optio
             user_hlattr,
         )
     } else {
-        let in_fuzzy = get_cot_flags() & kOptCotFlagFuzzy != 0;
+        let in_fuzzy = get_cot_flags() & OPT_COT_FLAG_FUZZY != 0;
         // Read in place: nothing the walk calls reaches the completion.
         ins_compl_leader_str()
             .with_cstr(|leader| text_attrs_for(text, leader, in_fuzzy, hlf, user_hlattr))
@@ -308,7 +308,7 @@ struct PumRow {
     hlfs: [Hlf; 3],
     /// Grid column the next glyph goes at.
     grid_col: c_int,
-    /// Cells of `pum_width` used so far — what the width limit is against.
+    /// Cells of `PUM_WIDTH` used so far — what the width limit is against.
     totwidth: c_int,
     /// A column did not fit: the row gets a truncation marker.
     need_trunc: bool,
@@ -405,7 +405,7 @@ impl PumRow {
     /// Draw one of the three item columns.
     ///
     /// The text is walked forwards until it runs out, hits a Tab or would
-    /// exceed `pum_width`; each such run is made printable with `transstr`
+    /// exceed `PUM_WIDTH`; each such run is made printable with `transstr`
     /// and drawn, and a Tab is drawn as two spaces before the walk resumes.
     /// A line batch must be in progress.
     fn put_column(
@@ -485,8 +485,8 @@ impl PumRow {
 /// Draw one row of the menu: its item, the truncation marker, the scrollbar.
 ///
 /// No line batch may be in progress; `PUM_GRID` must be allocated for
-/// `pum_height` rows, and `items` must hold the row's item -- the indices
-/// come from `PUM_FIRST`/`pum_height`, which `pum_redraw` has already
+/// `PUM_HEIGHT` rows, and `items` must hold the row's item -- the indices
+/// come from `PUM_FIRST`/`PUM_HEIGHT`, which `pum_redraw` has already
 /// clamped to the array.
 fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) {
     let win = Win::current();

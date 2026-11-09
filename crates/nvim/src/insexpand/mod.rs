@@ -74,9 +74,9 @@ use crate::option::vars::{
 };
 use crate::option::{callback_from_option, can_bs, install_callback, magic_isset, shortmess};
 use crate::options::{
-    kOptBoFlagComplete, kOptCotFlagFuzzy, kOptCotFlagLongest, kOptCotFlagMenu, kOptCotFlagMenuone,
-    kOptCotFlagNearest, kOptCotFlagNoinsert, kOptCotFlagNoselect, kOptCotFlagNosort,
-    kOptCotFlagPreinsert,
+    OPT_BO_FLAG_COMPLETE, OPT_COT_FLAG_FUZZY, OPT_COT_FLAG_LONGEST, OPT_COT_FLAG_MENU,
+    OPT_COT_FLAG_MENUONE, OPT_COT_FLAG_NEAREST, OPT_COT_FLAG_NOINSERT, OPT_COT_FLAG_NOSELECT,
+    OPT_COT_FLAG_NOSORT, OPT_COT_FLAG_PREINSERT,
 };
 use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
@@ -331,7 +331,7 @@ pub(crate) const SAVE_V_EVENT_INIT: SaveVEvent = SaveVEvent {
 };
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const CTRL_X_WANT_IDENT: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
-/// Message for CTRL-X mode, indexed by `ctrl_x_mode` with `CTRL_X_WANT_IDENT`
+/// Message for CTRL-X mode, indexed by `CTRL_X_MODE` with `CTRL_X_WANT_IDENT`
 /// masked off (C's `CTRL_X_MSG(i)` macro; see `ctrl_x_msg`). `None` is
 /// upstream's NULL: the mode either computes its own message or has none.
 pub(crate) const CTRL_X_MSGS: [Option<&CStr>; 20] = [
@@ -487,7 +487,7 @@ pub(crate) fn compl_pattern() -> ComplStr {
 }
 
 /// The `'complete'` source's own pattern, when its startcol differs from
-/// `compl_col`.
+/// `COMPL_COL`.
 pub(crate) fn cpt_compl_pattern() -> ComplStr {
     ComplStr(CPT_COMPL_PATTERN)
 }
@@ -765,7 +765,7 @@ state_record! {
     /// can close the window or wipe the buffer, and comparison is all that
     /// is ever done with it.
     COMPL_CURR_WIN: Option<WinId> = None;
-    /// The buffer it started in; see `compl_curr_win`.
+    /// The buffer it started in; see `COMPL_CURR_WIN`.
     COMPL_CURR_BUF: Option<BufId> = None;
     /// The completion is `'autocomplete'`'s.
     COMPL_AUTOCOMPLETE: bool = false;

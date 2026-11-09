@@ -179,7 +179,7 @@ pub(crate) fn au_event_restore(old_ignored: Option<XString>) {
 fn set_option_eventignore(value: &CStr) {
     let string = ApiString::from_bytes(value.to_bytes());
     set_option_direct(
-        kOptEventignore,
+        OPT_EVENTIGNORE,
         OptVal::string(string),
         OptionSetFlags::NONE,
         SID_NONE,
@@ -224,7 +224,7 @@ pub fn trigger_cursorhold() -> bool {
 }
 
 /// Completion source for `:autocmd`'s event argument: the augroup names
-/// first (when [`autocmd_include_groups`] is set), then every event name.
+/// first (when [`AUTOCMD_INCLUDE_GROUPS`] is set), then every event name.
 pub fn expand_get_event_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
     let idx = ::core::ffi::c_int::try_from(idx).ok()?;
     // `augroup_name` answers `None` once `idx` walks past the last group.

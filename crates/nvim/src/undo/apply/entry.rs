@@ -45,7 +45,7 @@ impl CursorPick {
     /// Decides where the cursor should end up from what this entry is about
     /// to change. Nothing moves yet — the lines are not there.
     ///
-    /// `saved_cursor` is the header's own; `last` says the entry is the
+    /// `SAVED_CURSOR` is the header's own; `last` says the entry is the
     /// last of the header's list, the one applied last.
     fn consider(
         &mut self,

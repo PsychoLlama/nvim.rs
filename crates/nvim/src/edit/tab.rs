@@ -48,7 +48,7 @@ use crate::types::Failed;
 ///
 /// `lastc` is the character typed before this one: `0 CTRL-D` deletes all
 /// indent and `^ CTRL-D` deletes it for this line only, restoring it on the
-/// next -- which is what saving `old_indent` is for.
+/// next -- which is what saving `OLD_INDENT` is for.
 pub(crate) fn ins_shift(c: Key, lastc: Key) {
     if stop_arrow_failed() {
         return;

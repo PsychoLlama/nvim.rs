@@ -35,7 +35,7 @@ use crate::message::{emsg, iemsg};
 use crate::message_fmt::msg_bytes;
 use crate::option::defs::OptVal;
 use crate::option::{get_option_value, get_tty_option, is_option_hidden, is_tty_option};
-use crate::options::kOptInvalid;
+use crate::options::OPT_INVALID;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{Failed, Float, TypVal};
@@ -73,7 +73,7 @@ pub(crate) fn eval_option(
     // the message want.
     let name = &text[option.start..end];
     let is_tty_opt = is_tty_option(name);
-    let ret = if option.index == kOptInvalid && !is_tty_opt {
+    let ret = if option.index == OPT_INVALID && !is_tty_opt {
         // Only report it when the result is going to be used.
         if result.is_some() {
             let name = msg_bytes(name);

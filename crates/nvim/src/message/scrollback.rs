@@ -196,7 +196,7 @@ pub fn show_sb_text() {
     // with no output would otherwise leave one line looking odd.
     let first_of_last = msg_sb_start(sb_last());
     if first_of_last.and_then(sb_prev).is_none() {
-        vim_beep(kOptBoFlagMess as c_uint);
+        vim_beep(OPT_BO_FLAG_MESS as c_uint);
     } else {
         do_more_prompt(c_int::from(b'G'));
         wait_return(0);

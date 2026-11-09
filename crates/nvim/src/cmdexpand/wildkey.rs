@@ -91,7 +91,7 @@ fn cmdline_del(mut cclp: Cc, from: c_int) {
 
 /// Ask for a fresh completion of what is now on the command line.
 ///
-/// `KeyTyped` is set in case the key that got us here came from a mapping:
+/// `KEY_TYPED` is set in case the key that got us here came from a mapping:
 /// the wildchar has to look typed or the completion will not run.
 fn recomplete() -> Key {
     KEY_TYPED.set(true);

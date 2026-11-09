@@ -60,7 +60,7 @@ use crate::option::vars::{
     p_enc, p_hh, p_hls, p_lines, p_lnr, p_lrm, p_sj, p_tbidi, p_titlelen, p_uc, p_udf, p_wh,
     p_window, p_wiw,
 };
-use crate::options::{kOptChistory, kOptKeymap, kOptUndolevels, kOptWindow};
+use crate::options::{OPT_CHISTORY, OPT_KEYMAP, OPT_UNDOLEVELS, OPT_WINDOW};
 use crate::optionstr::{OptString, OptStringRef, check_window_signcolumn};
 use crate::os::cshim::gettext;
 use crate::os::libc::uint8_t;
@@ -193,7 +193,7 @@ pub(crate) fn did_set_arabic(args: &mut OptSet) -> Result<(), OptError> {
         set_vim_var_string(Vv::Warningmsg, Some(gettext(warning).to_bytes()));
     }
     P_DECO.set(true);
-    set_option_value(kOptKeymap, keymap, local)
+    set_option_value(OPT_KEYMAP, keymap, local)
 }
 
 /// 'autochdir': follow the current file's directory from now on.
@@ -379,7 +379,7 @@ pub(crate) fn did_set_lines_or_columns(args: &mut OptSet) -> Result<(), OptError
                 CMDLINE_ROW.set(new_row);
             }
         }
-        if p_window() >= OptInt::from(ROWS.get()) || !option_was_set(kOptWindow) {
+        if p_window() >= OptInt::from(ROWS.get()) || !option_was_set(OPT_WINDOW) {
             P_WINDOW.set(OptInt::from(ROWS.get() - 1));
         }
     }
@@ -589,7 +589,7 @@ pub(crate) fn did_set_undofile(args: &mut OptSet) -> Result<(), OptError> {
 pub(crate) fn did_set_undolevels(args: &mut OptSet) -> Result<(), OptError> {
     let mut f = Frame::read(args);
     let (value, old_value) = (f.new_number(), f.old_number());
-    if f.varp == option_var(kOptUndolevels) {
+    if f.varp == option_var(OPT_UNDOLEVELS) {
         P_UL.set(old_value);
         u_sync(true);
         P_UL.set(value);
@@ -678,7 +678,7 @@ pub(crate) fn did_set_wrap(args: &mut OptSet) -> Result<(), OptError> {
 pub(crate) fn did_set_xhistory(args: &mut OptSet) -> Result<(), OptError> {
     let f = Frame::read(args);
     let arg = f.varp.number_var();
-    if f.varp == option_var(kOptChistory) {
+    if f.varp == option_var(OPT_CHISTORY) {
         qf_resize_stack(number_as_int(arg.get()));
     } else {
         f.win.resize_location_list_stack(number_as_int(arg.get()));

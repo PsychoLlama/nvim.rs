@@ -83,7 +83,9 @@ use crate::option::vars::{
     p_sc, p_smd, p_title, p_wmw,
 };
 use crate::option::{get_ve_flags, shortmess};
-use crate::options::{kOptDyFlagLastline, kOptDyFlagTruncate, kOptVeFlagAll, kOptVeFlagBlock};
+use crate::options::{
+    OPT_DY_FLAG_LASTLINE, OPT_DY_FLAG_TRUNCATE, OPT_VE_FLAG_ALL, OPT_VE_FLAG_BLOCK,
+};
 use crate::os::libc::int64_t;
 use crate::plines::{getvcols, getvvcol, plines_m_win, plines_win, win_get_fill, win_may_fill};
 use crate::popupmenu::state::MUST_REDRAW_PUM;

@@ -85,7 +85,7 @@ pub(crate) fn bin_save() -> BinSave {
 
 /// The options 'binary' overrides while it is on, and so re-attributes to
 /// whatever script set 'binary'.
-const BIN_DEP_OPTS: [OptIndex; 4] = [kOptTextwidth, kOptWrapmargin, kOptModeline, kOptExpandtab];
+const BIN_DEP_OPTS: [OptIndex; 4] = [OPT_TEXTWIDTH, OPT_WRAPMARGIN, OPT_MODELINE, OPT_EXPANDTAB];
 
 /// Rebuild the window title, unless the screen has not started yet.
 pub(crate) fn did_set_title() {
@@ -189,7 +189,7 @@ pub(crate) fn was_set_insecurely(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
 ) -> bool {
-    debug_assert!(opt_idx != kOptInvalid);
+    debug_assert!(opt_idx != OPT_INVALID);
     insecure_flag(Some(window), opt_idx, opt_flags).is_set()
 }
 
@@ -246,14 +246,14 @@ pub(crate) fn insecure_flag(
         let window = window.expect("a local option is set on a window");
         let buf_word = |field| Some(Local::Buf(window.buffer(), field));
         match opt_idx {
-            kOptWrap => win_word(window, one, field!(WinOpt, wo_wrap_flags)),
-            kOptStatusline => win_word(window, one, field!(WinOpt, wo_stl_flags)),
-            kOptWinbar => win_word(window, one, field!(WinOpt, wo_wbr_flags)),
-            kOptFoldexpr => win_word(window, one, field!(WinOpt, wo_fde_flags)),
-            kOptFoldtext => win_word(window, one, field!(WinOpt, wo_fdt_flags)),
-            kOptIndentexpr => buf_word(field!(Buffer, b_p_inde_flags)),
-            kOptFormatexpr => buf_word(field!(Buffer, b_p_fex_flags)),
-            kOptIncludeexpr => buf_word(field!(Buffer, b_p_inex_flags)),
+            OPT_WRAP => win_word(window, one, field!(WinOpt, wo_wrap_flags)),
+            OPT_STATUSLINE => win_word(window, one, field!(WinOpt, wo_stl_flags)),
+            OPT_WINBAR => win_word(window, one, field!(WinOpt, wo_wbr_flags)),
+            OPT_FOLDEXPR => win_word(window, one, field!(WinOpt, wo_fde_flags)),
+            OPT_FOLDTEXT => win_word(window, one, field!(WinOpt, wo_fdt_flags)),
+            OPT_INDENTEXPR => buf_word(field!(Buffer, b_p_inde_flags)),
+            OPT_FORMATEXPR => buf_word(field!(Buffer, b_p_fex_flags)),
+            OPT_INCLUDEEXPR => buf_word(field!(Buffer, b_p_inex_flags)),
             _ => None,
         }
     } else if let Some(window) = window {
@@ -263,9 +263,9 @@ pub(crate) fn insecure_flag(
         // that passes none on the shared mark instead.
         let all = WinOptSet::All;
         match opt_idx {
-            kOptWrap => win_word(window, all, field!(WinOpt, wo_wrap_flags)),
-            kOptFoldexpr => win_word(window, all, field!(WinOpt, wo_fde_flags)),
-            kOptFoldtext => win_word(window, all, field!(WinOpt, wo_fdt_flags)),
+            OPT_WRAP => win_word(window, all, field!(WinOpt, wo_wrap_flags)),
+            OPT_FOLDEXPR => win_word(window, all, field!(WinOpt, wo_fde_flags)),
+            OPT_FOLDTEXT => win_word(window, all, field!(WinOpt, wo_fdt_flags)),
             _ => None,
         }
     } else {

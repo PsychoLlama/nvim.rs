@@ -361,7 +361,7 @@ impl Cells {
         if wlv.extra_todo == 0 {
             wlv.extra_todo = byte2cells(self.char_code) - 1;
         }
-        if DY_FLAGS.get() & kOptDyFlagUhex != 0 && window.w_onebuf_opt.wo_rl != 0 {
+        if DY_FLAGS.get() & OPT_DY_FLAG_UHEX != 0 && window.w_onebuf_opt.wo_rl != 0 {
             // Reverse "<12>".
             mirror_ascii(text);
         }

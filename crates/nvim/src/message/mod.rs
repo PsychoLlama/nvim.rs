@@ -145,8 +145,8 @@ use crate::option::vars::{
     P_MORE, RDB_FLAGS, p_ch, p_debug, p_eb, p_lz, p_more, p_report, p_verbose,
 };
 use crate::options::{
-    kOptBoFlagMess, kOptBoFlagShell, kOptMoptFlagHistory, kOptMoptFlagHitEnter,
-    kOptMoptFlagProgress, kOptMoptFlagWait, kOptRdbFlagNothrottle,
+    OPT_BO_FLAG_MESS, OPT_BO_FLAG_SHELL, OPT_MOPT_FLAG_HISTORY, OPT_MOPT_FLAG_HIT_ENTER,
+    OPT_MOPT_FLAG_PROGRESS, OPT_MOPT_FLAG_WAIT, OPT_RDB_FLAG_NOTHROTTLE,
 };
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::{input_available, os_breakcheck};
@@ -282,7 +282,7 @@ pub fn msg_multiline(
                 *need_clear = false;
             }
             if c_int::from(text[at]) == BELL {
-                vim_beep(kOptBoFlagShell as c_uint);
+                vim_beep(OPT_BO_FLAG_SHELL as c_uint);
             } else {
                 msg_putchar_hl(c_int::from(text[at]), hl_id);
             }

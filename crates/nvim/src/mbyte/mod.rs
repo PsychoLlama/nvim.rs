@@ -107,7 +107,7 @@ use crate::message::IOSIZE;
 use crate::message::{emsg, msg};
 use crate::r#move::changed_window_setting_all;
 use crate::option::vars::{CMP_FLAGS, FENC_DEFAULT, p_emoji, p_enc};
-use crate::options::{kOptCmpFlagInternal, kOptCmpFlagKeepascii};
+use crate::options::{OPT_CMP_FLAG_INTERNAL, OPT_CMP_FLAG_KEEPASCII};
 use crate::optionstr::OptStringRef;
 use crate::optionstr::check_chars_options;
 use crate::os::cshim::gettext;

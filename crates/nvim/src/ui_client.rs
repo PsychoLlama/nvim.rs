@@ -81,7 +81,7 @@ use crate::ui::state::UIClientHandler;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-/// The descriptor the client hands the server as `stdin_fd` when the user
+/// The descriptor the client hands the server as `STDIN_FD` when the user
 /// piped something in: stdin has been moved there so that the terminal can
 /// take slot 0.
 const FORWARDED_STDIN_FD: Integer = 3;

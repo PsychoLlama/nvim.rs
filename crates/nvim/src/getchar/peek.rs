@@ -8,7 +8,7 @@
 //! Two upstream properties this file is faithful to, both reachable and both
 //! on the divergence docket (D-B13-1, D-B13-2):
 //!
-//! - Under `ex_normal_busy` the "get it from the user" arm never reaches
+//! - Under `EX_NORMAL_BUSY` the "get it from the user" arm never reaches
 //!   [`inchar`]; it answers a synthetic ESC (or CTRL-C on the command line)
 //!   so that `:normal` cannot block. `nvim_feedkeys(k, "Lx")` puts its bytes
 //!   in the *low-level* input buffer and then runs `exec_normal` with
@@ -493,12 +493,12 @@ static READ_BUF: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 
 /// Get a byte from the stuff buffer, the typeahead buffer, or the user.
 ///
-/// With `advance` (what `vgetc` wants) the byte is really consumed, `KeyTyped`
-/// is set when the user typed it and `KeyStuffed` when it came from the stuff
+/// With `advance` (what `vgetc` wants) the byte is really consumed, `KEY_TYPED`
+/// is set when the user typed it and `KEY_STUFFED` when it came from the stuff
 /// buffer; without it (what `vpeekc` wants) this only looks, and answers `NUL`
 /// when there is nothing.
 ///
-/// Mappings are checked when the global `no_mapping` is zero. Only one byte of
+/// Mappings are checked when the global `NO_MAPPING` is zero. Only one byte of
 /// a multibyte character comes back, and a `K_SPECIAL` may be escaped — two
 /// more bytes have to be fetched then.
 pub(crate) fn vgetorpeek(advance: bool) -> u8 {

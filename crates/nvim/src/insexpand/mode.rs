@@ -1,6 +1,6 @@
 //! Which completion is running: the CTRL-X modes and the state queries.
 //!
-//! `ctrl_x_mode` is the mode the user selected with a CTRL-X chord, and
+//! `CTRL_X_MODE` is the mode the user selected with a CTRL-X chord, and
 //! [`vim_is_ctrl_x_key`] decides whether the key just typed still belongs to
 //! it.  [`set_ctrl_x_mode`] is the chord dispatch itself.  The rest are the
 //! one-line queries the editor asks about a completion in progress.
@@ -177,7 +177,7 @@ pub fn check_compl_option(dict_opt: bool) -> bool {
         c"'thesaurus' option is empty"
     }));
     if EMSG_SILENT.get() == 0 && !IN_ASSERT_FAILS.get() {
-        vim_beep(kOptBoFlagComplete);
+        vim_beep(OPT_BO_FLAG_COMPLETE);
         setcursor();
         msg_delay(2004, false);
     }
@@ -288,13 +288,13 @@ pub fn ins_compl_accept_char(c: Key) -> bool {
 /// `'completeopt'` has `fuzzy` (and this is not thesaurus completion, which
 /// never fuzzy-matches).
 pub(crate) fn cot_fuzzy() -> bool {
-    completeopt_flags() & kOptCotFlagFuzzy != 0 && !ctrl_x_mode_thesaurus()
+    completeopt_flags() & OPT_COT_FLAG_FUZZY != 0 && !ctrl_x_mode_thesaurus()
 }
 
 /// Matches are ordered by distance from the cursor: `'completeopt'` has
 /// `nearest`, or autocompletion is on, and `fuzzy` is not overriding it.
 pub(crate) fn is_nearest_active() -> bool {
-    (COMPL_AUTOCOMPLETE.get() || completeopt_flags() & kOptCotFlagNearest != 0) && !cot_fuzzy()
+    (COMPL_AUTOCOMPLETE.get() || completeopt_flags() & OPT_COT_FLAG_NEAREST != 0) && !cot_fuzzy()
 }
 
 pub(crate) fn ins_compl_is_match_selected() -> bool {
@@ -305,8 +305,9 @@ pub(crate) fn ins_compl_is_match_selected() -> bool {
 /// `longest` without `preinsert` or `fuzzy`.
 pub fn ins_compl_preinsert_longest() -> bool {
     COMPL_AUTOCOMPLETE.get()
-        && completeopt_flags() & (kOptCotFlagLongest | kOptCotFlagPreinsert | kOptCotFlagFuzzy)
-            == kOptCotFlagLongest
+        && completeopt_flags()
+            & (OPT_COT_FLAG_LONGEST | OPT_COT_FLAG_PREINSERT | OPT_COT_FLAG_FUZZY)
+            == OPT_COT_FLAG_LONGEST
 }
 
 /// [`ins_compl_leader`] as the string itself.
@@ -328,7 +329,7 @@ pub(crate) fn ins_compl_leader_len() -> size_t {
 
 /// The shown match spans more than one line.
 ///
-/// Upstream dereferences `compl_shown_match` here without checking it; no
+/// Upstream dereferences `COMPL_SHOWN_MATCH` here without checking it; no
 /// shown match answers false.
 pub(crate) fn ins_compl_has_multiple() -> bool {
     shown_match().is_some_and(|shown| shown.with(|m| m.text.contains(&b'\n')))
@@ -419,10 +420,10 @@ pub fn ins_compl_has_preinsert() -> bool {
         return false;
     }
     if COMPL_AUTOCOMPLETE.get() {
-        flags & (kOptCotFlagPreinsert | kOptCotFlagFuzzy) == kOptCotFlagPreinsert
+        flags & (OPT_COT_FLAG_PREINSERT | OPT_COT_FLAG_FUZZY) == OPT_COT_FLAG_PREINSERT
     } else {
-        flags & (kOptCotFlagPreinsert | kOptCotFlagFuzzy | kOptCotFlagMenuone)
-            == kOptCotFlagPreinsert | kOptCotFlagMenuone
+        flags & (OPT_COT_FLAG_PREINSERT | OPT_COT_FLAG_FUZZY | OPT_COT_FLAG_MENUONE)
+            == OPT_COT_FLAG_PREINSERT | OPT_COT_FLAG_MENUONE
     }
 }
 
@@ -449,7 +450,7 @@ pub(crate) fn ins_compl_has_autocomplete() -> bool {
 }
 
 /// How much of the leader has been typed: the cursor's distance from
-/// `compl_col`, never negative.
+/// `COMPL_COL`, never negative.
 pub(crate) fn get_compl_len() -> usize {
     let off = Win::current().w_cursor.col - COMPL_COL.get();
     usize::try_from(off).unwrap_or(0)
@@ -568,8 +569,8 @@ pub(crate) fn set_ctrl_x_mode(c: Key) -> bool {
         // C's `default:` arm, which CTRL-P and CTRL-N fall into.
         //
         // After at least two CTRL-X's, for modes != 0 we clear
-        // `compl_cont_status` (as if CTRL-X mode had just started); for mode 0
-        // we set `compl_cont_mode` to an impossible value.  Either way ^X^X
+        // `COMPL_CONT_STATUS` (as if CTRL-X mode had just started); for mode 0
+        // we set `COMPL_CONT_MODE` to an impossible value.  Either way ^X^X
         // restarts the same mode, avoiding ADDING mode.  Undocumented: in a
         // mode != 0, ^X^P and ^X^X^P start 'complete' and local ^P expansions
         // respectively; in mode 0 an extra ^X is needed, since ^X^P goes to

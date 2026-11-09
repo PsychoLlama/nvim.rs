@@ -33,7 +33,7 @@ use crate::os::libc::uint8_t;
 use crate::winlayer::Buf;
 
 use super::{
-    CHARTAB_INITIALIZED, CT_CELL_MASK, EOL_MAC, NL, TAB, chartab, kOptDyFlagUhex,
+    CHARTAB_INITIALIZED, CT_CELL_MASK, EOL_MAC, NL, OPT_DY_FLAG_UHEX, TAB, chartab,
     transchar as render, vim_isprintc,
 };
 use crate::pos::MAXCOL;
@@ -353,7 +353,7 @@ fn render_nonprint(buffer: Option<Buf>, c: c_int) -> render::Rendered {
         c
     };
     debug_assert!(c <= 0xff, "c <= 0xff");
-    if DY_FLAGS.get() & kOptDyFlagUhex != 0 || c > 0x7f {
+    if DY_FLAGS.get() & OPT_DY_FLAG_UHEX != 0 || c > 0x7f {
         render::hex_form(c)
     } else {
         render::control_form(c)

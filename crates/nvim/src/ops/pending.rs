@@ -251,7 +251,7 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
         }
         append_to_redobuff(b"\n");
     } else if is_ex_cmdchar(cmd_arg) {
-        // `do_cmdline` stored the first typed line in `repeat_cmdline`.
+        // `do_cmdline` stored the first typed line in `REPEAT_CMDLINE`.
         // When several lines were typed, repeating is not possible.
         match REPEAT_CMDLINE.take() {
             None => reset_redobuff(),
@@ -609,7 +609,7 @@ fn run_operator(
 ) {
     /// Refuse an empty region: beep and drop the half-recorded `.`.
     fn refuse() {
-        vim_beep(kOptBoFlagOperator as ::core::ffi::c_uint);
+        vim_beep(OPT_BO_FLAG_OPERATOR as ::core::ffi::c_uint);
         cancel_redo();
     }
 

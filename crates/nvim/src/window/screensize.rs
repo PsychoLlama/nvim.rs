@@ -36,7 +36,7 @@ use crate::ex_getln::compute_cmdrow;
 use crate::global_cell::GlobalCell;
 use crate::option::option_was_set;
 use crate::option::vars::{P_WINDOW, p_ch, p_window};
-use crate::options::kOptWindow;
+use crate::options::OPT_WINDOW;
 use crate::optionstr::OptStringRef;
 use crate::os::libc::ptrdiff_t;
 use crate::types::{LineNr, OptInt, SaveVEvent, TypVal, VarNumber};
@@ -61,7 +61,7 @@ pub fn win_new_screensize() {
     if OLD_ROWS.get() != ROWS.get() {
         // If 'window' uses the whole screen, keep it using the whole screen.
         if p_window() == OptInt::from(OLD_ROWS.get() - 1)
-            || (OLD_ROWS.get() == 0 && !option_was_set(kOptWindow))
+            || (OLD_ROWS.get() == 0 && !option_was_set(OPT_WINDOW))
         {
             P_WINDOW.set(OptInt::from(ROWS.get() - 1));
         }

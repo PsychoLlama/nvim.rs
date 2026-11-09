@@ -39,7 +39,7 @@ use crate::normal::{
     nv_put_opt,
 };
 use crate::ops::OpType;
-use crate::options::{kOptFdoFlagBlock, kOptFdoFlagSearch};
+use crate::options::{OPT_FDO_FLAG_BLOCK, OPT_FDO_FLAG_SEARCH};
 use crate::pos::MAXLNUM;
 use crate::register::defs::PUT_FIXINDENT;
 use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
@@ -193,7 +193,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
         setpcmark();
         Win::current().w_cursor = pos;
         Win::current().w_set_curswant = true;
-        may_fold_open(cmd_arg, kOptFdoFlagBlock as c_uint);
+        may_fold_open(cmd_arg, OPT_FDO_FLAG_BLOCK as c_uint);
     }
 }
 
@@ -283,7 +283,7 @@ fn nv_bracket_spell(cmd_arg: &mut CmdArg) {
         }
         Win::current().w_set_curswant = true;
     }
-    may_fold_open(cmd_arg, kOptFdoFlagSearch as c_uint);
+    may_fold_open(cmd_arg, OPT_FDO_FLAG_SEARCH as c_uint);
 }
 
 /// `[` and `]`, whose second character says what kind of jump this is.
@@ -325,7 +325,7 @@ pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
             if cmd_arg.op().op_type == OpType::Nop {
                 beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             }
-            may_fold_open(cmd_arg, kOptFdoFlagBlock as c_uint);
+            may_fold_open(cmd_arg, OPT_FDO_FLAG_BLOCK as c_uint);
         } else {
             clear_op_beep(cmd_arg.op());
         }

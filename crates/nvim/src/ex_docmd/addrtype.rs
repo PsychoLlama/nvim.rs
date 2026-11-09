@@ -25,7 +25,7 @@ use core::ffi::c_int;
 
 use crate::buffer::{buf_is_quickfix, current_buf};
 
-use crate::ex_docmd::cmdnames;
+use crate::ex_docmd::CMDNAMES;
 use crate::ex_docmd::window::{current_tab_nr, current_win_nr};
 
 use crate::message::iemsg;
@@ -75,7 +75,7 @@ impl ExArg<'_> {
             return;
         }
         self.set_kind_unread(if self.cmdidx != CmdIdx::SIZE {
-            cmdnames[self.cmdidx.index()].cmd_addr_type
+            CMDNAMES[self.cmdidx.index()].cmd_addr_type
         } else {
             CmdAddr::Lines
         });

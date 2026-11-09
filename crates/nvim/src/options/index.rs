@@ -11,902 +11,900 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// The names are upstream's, and each is looked up by that spelling.
-#![allow(non_upper_case_globals)]
 
 // A chunk may hold nothing that needs the parent's support code.
 #[allow(unused_imports)]
 use super::*;
 
-/// Every option, in `:set all` order. `kOptInvalid` is "no such option".
-pub const kOptInvalid: OptIndex = -1;
-pub const kOptAleph: OptIndex = 0;
-pub const kOptAllowrevins: OptIndex = 1;
-pub const kOptAmbiwidth: OptIndex = 2;
-pub const kOptArabic: OptIndex = 3;
-pub const kOptArabicshape: OptIndex = 4;
-pub const kOptAutochdir: OptIndex = 5;
-pub const kOptAutocomplete: OptIndex = 6;
-pub const kOptAutocompletedelay: OptIndex = 7;
-pub const kOptAutocompletetimeout: OptIndex = 8;
-pub const kOptAutoindent: OptIndex = 9;
-pub const kOptAutoread: OptIndex = 10;
-pub const kOptAutowrite: OptIndex = 11;
-pub const kOptAutowriteall: OptIndex = 12;
-pub const kOptBackground: OptIndex = 13;
-pub const kOptBackspace: OptIndex = 14;
-pub const kOptBackup: OptIndex = 15;
-pub const kOptBackupcopy: OptIndex = 16;
-pub const kOptBackupdir: OptIndex = 17;
-pub const kOptBackupext: OptIndex = 18;
-pub const kOptBackupskip: OptIndex = 19;
-pub const kOptBelloff: OptIndex = 20;
-pub const kOptBinary: OptIndex = 21;
-pub const kOptBomb: OptIndex = 22;
-pub const kOptBreakat: OptIndex = 23;
-pub const kOptBreakindent: OptIndex = 24;
-pub const kOptBreakindentopt: OptIndex = 25;
-pub const kOptBrowsedir: OptIndex = 26;
-pub const kOptBufhidden: OptIndex = 27;
-pub const kOptBuflisted: OptIndex = 28;
-pub const kOptBuftype: OptIndex = 29;
-pub const kOptBusy: OptIndex = 30;
-pub const kOptCasemap: OptIndex = 31;
-pub const kOptCdhome: OptIndex = 32;
-pub const kOptCdpath: OptIndex = 33;
-pub const kOptCedit: OptIndex = 34;
-pub const kOptChannel: OptIndex = 35;
-pub const kOptCharconvert: OptIndex = 36;
-pub const kOptChistory: OptIndex = 37;
-pub const kOptCindent: OptIndex = 38;
-pub const kOptCinkeys: OptIndex = 39;
-pub const kOptCinoptions: OptIndex = 40;
-pub const kOptCinscopedecls: OptIndex = 41;
-pub const kOptCinwords: OptIndex = 42;
-pub const kOptClipboard: OptIndex = 43;
-pub const kOptCmdheight: OptIndex = 44;
-pub const kOptCmdwinheight: OptIndex = 45;
-pub const kOptColorcolumn: OptIndex = 46;
-pub const kOptColumns: OptIndex = 47;
-pub const kOptComments: OptIndex = 48;
-pub const kOptCommentstring: OptIndex = 49;
-pub const kOptCompatible: OptIndex = 50;
-pub const kOptComplete: OptIndex = 51;
-pub const kOptCompletefunc: OptIndex = 52;
-pub const kOptCompleteitemalign: OptIndex = 53;
-pub const kOptCompleteopt: OptIndex = 54;
-pub const kOptCompleteslash: OptIndex = 55;
-pub const kOptCompletetimeout: OptIndex = 56;
-pub const kOptConcealcursor: OptIndex = 57;
-pub const kOptConceallevel: OptIndex = 58;
-pub const kOptConfirm: OptIndex = 59;
-pub const kOptCopyindent: OptIndex = 60;
-pub const kOptCpoptions: OptIndex = 61;
-pub const kOptCursorbind: OptIndex = 62;
-pub const kOptCursorcolumn: OptIndex = 63;
-pub const kOptCursorline: OptIndex = 64;
-pub const kOptCursorlineopt: OptIndex = 65;
-pub const kOptDebug: OptIndex = 66;
-pub const kOptDefine: OptIndex = 67;
-pub const kOptDelcombine: OptIndex = 68;
-pub const kOptDictionary: OptIndex = 69;
-pub const kOptDiff: OptIndex = 70;
-pub const kOptDiffanchors: OptIndex = 71;
-pub const kOptDiffexpr: OptIndex = 72;
-pub const kOptDiffopt: OptIndex = 73;
-pub const kOptDigraph: OptIndex = 74;
-pub const kOptDirectory: OptIndex = 75;
-pub const kOptDisplay: OptIndex = 76;
-pub const kOptEadirection: OptIndex = 77;
-pub const kOptEdcompatible: OptIndex = 78;
-pub const kOptEmoji: OptIndex = 79;
-pub const kOptEncoding: OptIndex = 80;
-pub const kOptEndoffile: OptIndex = 81;
-pub const kOptEndofline: OptIndex = 82;
-pub const kOptEqualalways: OptIndex = 83;
-pub const kOptEqualprg: OptIndex = 84;
-pub const kOptErrorbells: OptIndex = 85;
-pub const kOptErrorfile: OptIndex = 86;
-pub const kOptErrorformat: OptIndex = 87;
-pub const kOptEventignore: OptIndex = 88;
-pub const kOptEventignorewin: OptIndex = 89;
-pub const kOptExpandtab: OptIndex = 90;
-pub const kOptExrc: OptIndex = 91;
-pub const kOptFileencoding: OptIndex = 92;
-pub const kOptFileencodings: OptIndex = 93;
-pub const kOptFileformat: OptIndex = 94;
-pub const kOptFileformats: OptIndex = 95;
-pub const kOptFileignorecase: OptIndex = 96;
-pub const kOptFiletype: OptIndex = 97;
-pub const kOptFillchars: OptIndex = 98;
-pub const kOptFindfunc: OptIndex = 99;
-pub const kOptFixendofline: OptIndex = 100;
-pub const kOptFoldclose: OptIndex = 101;
-pub const kOptFoldcolumn: OptIndex = 102;
-pub const kOptFoldenable: OptIndex = 103;
-pub const kOptFoldexpr: OptIndex = 104;
-pub const kOptFoldignore: OptIndex = 105;
-pub const kOptFoldlevel: OptIndex = 106;
-pub const kOptFoldlevelstart: OptIndex = 107;
-pub const kOptFoldmarker: OptIndex = 108;
-pub const kOptFoldmethod: OptIndex = 109;
-pub const kOptFoldminlines: OptIndex = 110;
-pub const kOptFoldnestmax: OptIndex = 111;
-pub const kOptFoldopen: OptIndex = 112;
-pub const kOptFoldtext: OptIndex = 113;
-pub const kOptFormatexpr: OptIndex = 114;
-pub const kOptFormatlistpat: OptIndex = 115;
-pub const kOptFormatoptions: OptIndex = 116;
-pub const kOptFormatprg: OptIndex = 117;
-pub const kOptFsync: OptIndex = 118;
-pub const kOptGdefault: OptIndex = 119;
-pub const kOptGrepformat: OptIndex = 120;
-pub const kOptGrepprg: OptIndex = 121;
-pub const kOptGuicursor: OptIndex = 122;
-pub const kOptGuifont: OptIndex = 123;
-pub const kOptGuifontwide: OptIndex = 124;
-pub const kOptGuioptions: OptIndex = 125;
-pub const kOptGuitablabel: OptIndex = 126;
-pub const kOptGuitabtooltip: OptIndex = 127;
-pub const kOptHelpfile: OptIndex = 128;
-pub const kOptHelpheight: OptIndex = 129;
-pub const kOptHelplang: OptIndex = 130;
-pub const kOptHidden: OptIndex = 131;
-pub const kOptHighlight: OptIndex = 132;
-pub const kOptHistory: OptIndex = 133;
-pub const kOptHkmap: OptIndex = 134;
-pub const kOptHkmapp: OptIndex = 135;
-pub const kOptHlsearch: OptIndex = 136;
-pub const kOptIcon: OptIndex = 137;
-pub const kOptIconstring: OptIndex = 138;
-pub const kOptIgnorecase: OptIndex = 139;
-pub const kOptImcmdline: OptIndex = 140;
-pub const kOptImdisable: OptIndex = 141;
-pub const kOptIminsert: OptIndex = 142;
-pub const kOptImsearch: OptIndex = 143;
-pub const kOptInccommand: OptIndex = 144;
-pub const kOptInclude: OptIndex = 145;
-pub const kOptIncludeexpr: OptIndex = 146;
-pub const kOptIncsearch: OptIndex = 147;
-pub const kOptIndentexpr: OptIndex = 148;
-pub const kOptIndentkeys: OptIndex = 149;
-pub const kOptInfercase: OptIndex = 150;
-pub const kOptInsertmode: OptIndex = 151;
-pub const kOptIsfname: OptIndex = 152;
-pub const kOptIsident: OptIndex = 153;
-pub const kOptIskeyword: OptIndex = 154;
-pub const kOptIsprint: OptIndex = 155;
-pub const kOptJoinspaces: OptIndex = 156;
-pub const kOptJumpoptions: OptIndex = 157;
-pub const kOptKeymap: OptIndex = 158;
-pub const kOptKeymodel: OptIndex = 159;
-pub const kOptKeywordprg: OptIndex = 160;
-pub const kOptLangmap: OptIndex = 161;
-pub const kOptLangmenu: OptIndex = 162;
-pub const kOptLangnoremap: OptIndex = 163;
-pub const kOptLangremap: OptIndex = 164;
-pub const kOptLaststatus: OptIndex = 165;
-pub const kOptLazyredraw: OptIndex = 166;
-pub const kOptLhistory: OptIndex = 167;
-pub const kOptLinebreak: OptIndex = 168;
-pub const kOptLines: OptIndex = 169;
-pub const kOptLinespace: OptIndex = 170;
-pub const kOptLisp: OptIndex = 171;
-pub const kOptLispoptions: OptIndex = 172;
-pub const kOptLispwords: OptIndex = 173;
-pub const kOptList: OptIndex = 174;
-pub const kOptListchars: OptIndex = 175;
-pub const kOptLoadplugins: OptIndex = 176;
-pub const kOptMagic: OptIndex = 177;
-pub const kOptMakeef: OptIndex = 178;
-pub const kOptMakeencoding: OptIndex = 179;
-pub const kOptMakeprg: OptIndex = 180;
-pub const kOptMatchpairs: OptIndex = 181;
-pub const kOptMatchtime: OptIndex = 182;
-pub const kOptMaxcombine: OptIndex = 183;
-pub const kOptMaxfuncdepth: OptIndex = 184;
-pub const kOptMaxmapdepth: OptIndex = 185;
-pub const kOptMaxmempattern: OptIndex = 186;
-pub const kOptMaxsearchcount: OptIndex = 187;
-pub const kOptMenuitems: OptIndex = 188;
-pub const kOptMessagesopt: OptIndex = 189;
-pub const kOptMkspellmem: OptIndex = 190;
-pub const kOptModeline: OptIndex = 191;
-pub const kOptModelineexpr: OptIndex = 192;
-pub const kOptModelines: OptIndex = 193;
-pub const kOptModifiable: OptIndex = 194;
-pub const kOptModified: OptIndex = 195;
-pub const kOptMore: OptIndex = 196;
-pub const kOptMouse: OptIndex = 197;
-pub const kOptMousefocus: OptIndex = 198;
-pub const kOptMousehide: OptIndex = 199;
-pub const kOptMousemodel: OptIndex = 200;
-pub const kOptMousemoveevent: OptIndex = 201;
-pub const kOptMousescroll: OptIndex = 202;
-pub const kOptMouseshape: OptIndex = 203;
-pub const kOptMousetime: OptIndex = 204;
-pub const kOptNrformats: OptIndex = 205;
-pub const kOptNumber: OptIndex = 206;
-pub const kOptNumberwidth: OptIndex = 207;
-pub const kOptOmnifunc: OptIndex = 208;
-pub const kOptOpendevice: OptIndex = 209;
-pub const kOptOperatorfunc: OptIndex = 210;
-pub const kOptPackpath: OptIndex = 211;
-pub const kOptParagraphs: OptIndex = 212;
-pub const kOptPaste: OptIndex = 213;
-pub const kOptPastetoggle: OptIndex = 214;
-pub const kOptPatchexpr: OptIndex = 215;
-pub const kOptPatchmode: OptIndex = 216;
-pub const kOptPath: OptIndex = 217;
-pub const kOptPreserveindent: OptIndex = 218;
-pub const kOptPreviewheight: OptIndex = 219;
-pub const kOptPreviewwindow: OptIndex = 220;
-pub const kOptPrompt: OptIndex = 221;
-pub const kOptPumblend: OptIndex = 222;
-pub const kOptPumborder: OptIndex = 223;
-pub const kOptPumheight: OptIndex = 224;
-pub const kOptPummaxwidth: OptIndex = 225;
-pub const kOptPumwidth: OptIndex = 226;
-pub const kOptPyxversion: OptIndex = 227;
-pub const kOptQuickfixtextfunc: OptIndex = 228;
-pub const kOptQuoteescape: OptIndex = 229;
-pub const kOptReadonly: OptIndex = 230;
-pub const kOptRedrawdebug: OptIndex = 231;
-pub const kOptRedrawtime: OptIndex = 232;
-pub const kOptRegexpengine: OptIndex = 233;
-pub const kOptRelativenumber: OptIndex = 234;
-pub const kOptRemap: OptIndex = 235;
-pub const kOptReport: OptIndex = 236;
-pub const kOptRevins: OptIndex = 237;
-pub const kOptRightleft: OptIndex = 238;
-pub const kOptRightleftcmd: OptIndex = 239;
-pub const kOptRuler: OptIndex = 240;
-pub const kOptRulerformat: OptIndex = 241;
-pub const kOptRuntimepath: OptIndex = 242;
-pub const kOptScroll: OptIndex = 243;
-pub const kOptScrollback: OptIndex = 244;
-pub const kOptScrollbind: OptIndex = 245;
-pub const kOptScrolljump: OptIndex = 246;
-pub const kOptScrolloff: OptIndex = 247;
-pub const kOptScrollopt: OptIndex = 248;
-pub const kOptSections: OptIndex = 249;
-pub const kOptSecure: OptIndex = 250;
-pub const kOptSelection: OptIndex = 251;
-pub const kOptSelectmode: OptIndex = 252;
-pub const kOptSessionoptions: OptIndex = 253;
-pub const kOptShada: OptIndex = 254;
-pub const kOptShadafile: OptIndex = 255;
-pub const kOptShell: OptIndex = 256;
-pub const kOptShellcmdflag: OptIndex = 257;
-pub const kOptShellpipe: OptIndex = 258;
-pub const kOptShellquote: OptIndex = 259;
-pub const kOptShellredir: OptIndex = 260;
-pub const kOptShellslash: OptIndex = 261;
-pub const kOptShelltemp: OptIndex = 262;
-pub const kOptShellxescape: OptIndex = 263;
-pub const kOptShellxquote: OptIndex = 264;
-pub const kOptShiftround: OptIndex = 265;
-pub const kOptShiftwidth: OptIndex = 266;
-pub const kOptShortmess: OptIndex = 267;
-pub const kOptShowbreak: OptIndex = 268;
-pub const kOptShowcmd: OptIndex = 269;
-pub const kOptShowcmdloc: OptIndex = 270;
-pub const kOptShowfulltag: OptIndex = 271;
-pub const kOptShowmatch: OptIndex = 272;
-pub const kOptShowmode: OptIndex = 273;
-pub const kOptShowtabline: OptIndex = 274;
-pub const kOptSidescroll: OptIndex = 275;
-pub const kOptSidescrolloff: OptIndex = 276;
-pub const kOptSigncolumn: OptIndex = 277;
-pub const kOptSmartcase: OptIndex = 278;
-pub const kOptSmartindent: OptIndex = 279;
-pub const kOptSmarttab: OptIndex = 280;
-pub const kOptSmoothscroll: OptIndex = 281;
-pub const kOptSofttabstop: OptIndex = 282;
-pub const kOptSpell: OptIndex = 283;
-pub const kOptSpellcapcheck: OptIndex = 284;
-pub const kOptSpellfile: OptIndex = 285;
-pub const kOptSpelllang: OptIndex = 286;
-pub const kOptSpelloptions: OptIndex = 287;
-pub const kOptSpellsuggest: OptIndex = 288;
-pub const kOptSplitbelow: OptIndex = 289;
-pub const kOptSplitkeep: OptIndex = 290;
-pub const kOptSplitright: OptIndex = 291;
-pub const kOptStartofline: OptIndex = 292;
-pub const kOptStatuscolumn: OptIndex = 293;
-pub const kOptStatusline: OptIndex = 294;
-pub const kOptSuffixes: OptIndex = 295;
-pub const kOptSuffixesadd: OptIndex = 296;
-pub const kOptSwapfile: OptIndex = 297;
-pub const kOptSwitchbuf: OptIndex = 298;
-pub const kOptSynmaxcol: OptIndex = 299;
-pub const kOptSyntax: OptIndex = 300;
-pub const kOptTabclose: OptIndex = 301;
-pub const kOptTabline: OptIndex = 302;
-pub const kOptTabpagemax: OptIndex = 303;
-pub const kOptTabstop: OptIndex = 304;
-pub const kOptTagbsearch: OptIndex = 305;
-pub const kOptTagcase: OptIndex = 306;
-pub const kOptTagfunc: OptIndex = 307;
-pub const kOptTaglength: OptIndex = 308;
-pub const kOptTagrelative: OptIndex = 309;
-pub const kOptTags: OptIndex = 310;
-pub const kOptTagstack: OptIndex = 311;
-pub const kOptTermbidi: OptIndex = 312;
-pub const kOptTermencoding: OptIndex = 313;
-pub const kOptTermguicolors: OptIndex = 314;
-pub const kOptTermpastefilter: OptIndex = 315;
-pub const kOptTermsync: OptIndex = 316;
-pub const kOptTerse: OptIndex = 317;
-pub const kOptTextwidth: OptIndex = 318;
-pub const kOptThesaurus: OptIndex = 319;
-pub const kOptThesaurusfunc: OptIndex = 320;
-pub const kOptTildeop: OptIndex = 321;
-pub const kOptTimeout: OptIndex = 322;
-pub const kOptTimeoutlen: OptIndex = 323;
-pub const kOptTitle: OptIndex = 324;
-pub const kOptTitlelen: OptIndex = 325;
-pub const kOptTitleold: OptIndex = 326;
-pub const kOptTitlestring: OptIndex = 327;
-pub const kOptTtimeout: OptIndex = 328;
-pub const kOptTtimeoutlen: OptIndex = 329;
-pub const kOptTtyfast: OptIndex = 330;
-pub const kOptUndodir: OptIndex = 331;
-pub const kOptUndofile: OptIndex = 332;
-pub const kOptUndolevels: OptIndex = 333;
-pub const kOptUndoreload: OptIndex = 334;
-pub const kOptUpdatecount: OptIndex = 335;
-pub const kOptUpdatetime: OptIndex = 336;
-pub const kOptVarsofttabstop: OptIndex = 337;
-pub const kOptVartabstop: OptIndex = 338;
-pub const kOptVerbose: OptIndex = 339;
-pub const kOptVerbosefile: OptIndex = 340;
-pub const kOptViewdir: OptIndex = 341;
-pub const kOptViewoptions: OptIndex = 342;
-pub const kOptVirtualedit: OptIndex = 343;
-pub const kOptVisualbell: OptIndex = 344;
-pub const kOptWarn: OptIndex = 345;
-pub const kOptWhichwrap: OptIndex = 346;
-pub const kOptWildchar: OptIndex = 347;
-pub const kOptWildcharm: OptIndex = 348;
-pub const kOptWildignore: OptIndex = 349;
-pub const kOptWildignorecase: OptIndex = 350;
-pub const kOptWildmenu: OptIndex = 351;
-pub const kOptWildmode: OptIndex = 352;
-pub const kOptWildoptions: OptIndex = 353;
-pub const kOptWinaltkeys: OptIndex = 354;
-pub const kOptWinbar: OptIndex = 355;
-pub const kOptWinblend: OptIndex = 356;
-pub const kOptWinborder: OptIndex = 357;
-pub const kOptWindow: OptIndex = 358;
-pub const kOptWinfixbuf: OptIndex = 359;
-pub const kOptWinfixheight: OptIndex = 360;
-pub const kOptWinfixwidth: OptIndex = 361;
-pub const kOptWinheight: OptIndex = 362;
-pub const kOptWinhighlight: OptIndex = 363;
-pub const kOptWinminheight: OptIndex = 364;
-pub const kOptWinminwidth: OptIndex = 365;
-pub const kOptWinwidth: OptIndex = 366;
-pub const kOptWrap: OptIndex = 367;
-pub const kOptWrapmargin: OptIndex = 368;
-pub const kOptWrapscan: OptIndex = 369;
-pub const kOptWrite: OptIndex = 370;
-pub const kOptWriteany: OptIndex = 371;
-pub const kOptWritebackup: OptIndex = 372;
-pub const kOptWritedelay: OptIndex = 373;
-pub const kOptCount: c_int = 374;
+/// Every option, in `:set all` order. `OPT_INVALID` is "no such option".
+pub const OPT_INVALID: OptIndex = -1;
+pub const OPT_ALEPH: OptIndex = 0;
+pub const OPT_ALLOWREVINS: OptIndex = 1;
+pub const OPT_AMBIWIDTH: OptIndex = 2;
+pub const OPT_ARABIC: OptIndex = 3;
+pub const OPT_ARABICSHAPE: OptIndex = 4;
+pub const OPT_AUTOCHDIR: OptIndex = 5;
+pub const OPT_AUTOCOMPLETE: OptIndex = 6;
+pub const OPT_AUTOCOMPLETEDELAY: OptIndex = 7;
+pub const OPT_AUTOCOMPLETETIMEOUT: OptIndex = 8;
+pub const OPT_AUTOINDENT: OptIndex = 9;
+pub const OPT_AUTOREAD: OptIndex = 10;
+pub const OPT_AUTOWRITE: OptIndex = 11;
+pub const OPT_AUTOWRITEALL: OptIndex = 12;
+pub const OPT_BACKGROUND: OptIndex = 13;
+pub const OPT_BACKSPACE: OptIndex = 14;
+pub const OPT_BACKUP: OptIndex = 15;
+pub const OPT_BACKUPCOPY: OptIndex = 16;
+pub const OPT_BACKUPDIR: OptIndex = 17;
+pub const OPT_BACKUPEXT: OptIndex = 18;
+pub const OPT_BACKUPSKIP: OptIndex = 19;
+pub const OPT_BELLOFF: OptIndex = 20;
+pub const OPT_BINARY: OptIndex = 21;
+pub const OPT_BOMB: OptIndex = 22;
+pub const OPT_BREAKAT: OptIndex = 23;
+pub const OPT_BREAKINDENT: OptIndex = 24;
+pub const OPT_BREAKINDENTOPT: OptIndex = 25;
+pub const OPT_BROWSEDIR: OptIndex = 26;
+pub const OPT_BUFHIDDEN: OptIndex = 27;
+pub const OPT_BUFLISTED: OptIndex = 28;
+pub const OPT_BUFTYPE: OptIndex = 29;
+pub const OPT_BUSY: OptIndex = 30;
+pub const OPT_CASEMAP: OptIndex = 31;
+pub const OPT_CDHOME: OptIndex = 32;
+pub const OPT_CDPATH: OptIndex = 33;
+pub const OPT_CEDIT: OptIndex = 34;
+pub const OPT_CHANNEL: OptIndex = 35;
+pub const OPT_CHARCONVERT: OptIndex = 36;
+pub const OPT_CHISTORY: OptIndex = 37;
+pub const OPT_CINDENT: OptIndex = 38;
+pub const OPT_CINKEYS: OptIndex = 39;
+pub const OPT_CINOPTIONS: OptIndex = 40;
+pub const OPT_CINSCOPEDECLS: OptIndex = 41;
+pub const OPT_CINWORDS: OptIndex = 42;
+pub const OPT_CLIPBOARD: OptIndex = 43;
+pub const OPT_CMDHEIGHT: OptIndex = 44;
+pub const OPT_CMDWINHEIGHT: OptIndex = 45;
+pub const OPT_COLORCOLUMN: OptIndex = 46;
+pub const OPT_COLUMNS: OptIndex = 47;
+pub const OPT_COMMENTS: OptIndex = 48;
+pub const OPT_COMMENTSTRING: OptIndex = 49;
+pub const OPT_COMPATIBLE: OptIndex = 50;
+pub const OPT_COMPLETE: OptIndex = 51;
+pub const OPT_COMPLETEFUNC: OptIndex = 52;
+pub const OPT_COMPLETEITEMALIGN: OptIndex = 53;
+pub const OPT_COMPLETEOPT: OptIndex = 54;
+pub const OPT_COMPLETESLASH: OptIndex = 55;
+pub const OPT_COMPLETETIMEOUT: OptIndex = 56;
+pub const OPT_CONCEALCURSOR: OptIndex = 57;
+pub const OPT_CONCEALLEVEL: OptIndex = 58;
+pub const OPT_CONFIRM: OptIndex = 59;
+pub const OPT_COPYINDENT: OptIndex = 60;
+pub const OPT_CPOPTIONS: OptIndex = 61;
+pub const OPT_CURSORBIND: OptIndex = 62;
+pub const OPT_CURSORCOLUMN: OptIndex = 63;
+pub const OPT_CURSORLINE: OptIndex = 64;
+pub const OPT_CURSORLINEOPT: OptIndex = 65;
+pub const OPT_DEBUG: OptIndex = 66;
+pub const OPT_DEFINE: OptIndex = 67;
+pub const OPT_DELCOMBINE: OptIndex = 68;
+pub const OPT_DICTIONARY: OptIndex = 69;
+pub const OPT_DIFF: OptIndex = 70;
+pub const OPT_DIFFANCHORS: OptIndex = 71;
+pub const OPT_DIFFEXPR: OptIndex = 72;
+pub const OPT_DIFFOPT: OptIndex = 73;
+pub const OPT_DIGRAPH: OptIndex = 74;
+pub const OPT_DIRECTORY: OptIndex = 75;
+pub const OPT_DISPLAY: OptIndex = 76;
+pub const OPT_EADIRECTION: OptIndex = 77;
+pub const OPT_EDCOMPATIBLE: OptIndex = 78;
+pub const OPT_EMOJI: OptIndex = 79;
+pub const OPT_ENCODING: OptIndex = 80;
+pub const OPT_ENDOFFILE: OptIndex = 81;
+pub const OPT_ENDOFLINE: OptIndex = 82;
+pub const OPT_EQUALALWAYS: OptIndex = 83;
+pub const OPT_EQUALPRG: OptIndex = 84;
+pub const OPT_ERRORBELLS: OptIndex = 85;
+pub const OPT_ERRORFILE: OptIndex = 86;
+pub const OPT_ERRORFORMAT: OptIndex = 87;
+pub const OPT_EVENTIGNORE: OptIndex = 88;
+pub const OPT_EVENTIGNOREWIN: OptIndex = 89;
+pub const OPT_EXPANDTAB: OptIndex = 90;
+pub const OPT_EXRC: OptIndex = 91;
+pub const OPT_FILEENCODING: OptIndex = 92;
+pub const OPT_FILEENCODINGS: OptIndex = 93;
+pub const OPT_FILEFORMAT: OptIndex = 94;
+pub const OPT_FILEFORMATS: OptIndex = 95;
+pub const OPT_FILEIGNORECASE: OptIndex = 96;
+pub const OPT_FILETYPE: OptIndex = 97;
+pub const OPT_FILLCHARS: OptIndex = 98;
+pub const OPT_FINDFUNC: OptIndex = 99;
+pub const OPT_FIXENDOFLINE: OptIndex = 100;
+pub const OPT_FOLDCLOSE: OptIndex = 101;
+pub const OPT_FOLDCOLUMN: OptIndex = 102;
+pub const OPT_FOLDENABLE: OptIndex = 103;
+pub const OPT_FOLDEXPR: OptIndex = 104;
+pub const OPT_FOLDIGNORE: OptIndex = 105;
+pub const OPT_FOLDLEVEL: OptIndex = 106;
+pub const OPT_FOLDLEVELSTART: OptIndex = 107;
+pub const OPT_FOLDMARKER: OptIndex = 108;
+pub const OPT_FOLDMETHOD: OptIndex = 109;
+pub const OPT_FOLDMINLINES: OptIndex = 110;
+pub const OPT_FOLDNESTMAX: OptIndex = 111;
+pub const OPT_FOLDOPEN: OptIndex = 112;
+pub const OPT_FOLDTEXT: OptIndex = 113;
+pub const OPT_FORMATEXPR: OptIndex = 114;
+pub const OPT_FORMATLISTPAT: OptIndex = 115;
+pub const OPT_FORMATOPTIONS: OptIndex = 116;
+pub const OPT_FORMATPRG: OptIndex = 117;
+pub const OPT_FSYNC: OptIndex = 118;
+pub const OPT_GDEFAULT: OptIndex = 119;
+pub const OPT_GREPFORMAT: OptIndex = 120;
+pub const OPT_GREPPRG: OptIndex = 121;
+pub const OPT_GUICURSOR: OptIndex = 122;
+pub const OPT_GUIFONT: OptIndex = 123;
+pub const OPT_GUIFONTWIDE: OptIndex = 124;
+pub const OPT_GUIOPTIONS: OptIndex = 125;
+pub const OPT_GUITABLABEL: OptIndex = 126;
+pub const OPT_GUITABTOOLTIP: OptIndex = 127;
+pub const OPT_HELPFILE: OptIndex = 128;
+pub const OPT_HELPHEIGHT: OptIndex = 129;
+pub const OPT_HELPLANG: OptIndex = 130;
+pub const OPT_HIDDEN: OptIndex = 131;
+pub const OPT_HIGHLIGHT: OptIndex = 132;
+pub const OPT_HISTORY: OptIndex = 133;
+pub const OPT_HKMAP: OptIndex = 134;
+pub const OPT_HKMAPP: OptIndex = 135;
+pub const OPT_HLSEARCH: OptIndex = 136;
+pub const OPT_ICON: OptIndex = 137;
+pub const OPT_ICONSTRING: OptIndex = 138;
+pub const OPT_IGNORECASE: OptIndex = 139;
+pub const OPT_IMCMDLINE: OptIndex = 140;
+pub const OPT_IMDISABLE: OptIndex = 141;
+pub const OPT_IMINSERT: OptIndex = 142;
+pub const OPT_IMSEARCH: OptIndex = 143;
+pub const OPT_INCCOMMAND: OptIndex = 144;
+pub const OPT_INCLUDE: OptIndex = 145;
+pub const OPT_INCLUDEEXPR: OptIndex = 146;
+pub const OPT_INCSEARCH: OptIndex = 147;
+pub const OPT_INDENTEXPR: OptIndex = 148;
+pub const OPT_INDENTKEYS: OptIndex = 149;
+pub const OPT_INFERCASE: OptIndex = 150;
+pub const OPT_INSERTMODE: OptIndex = 151;
+pub const OPT_ISFNAME: OptIndex = 152;
+pub const OPT_ISIDENT: OptIndex = 153;
+pub const OPT_ISKEYWORD: OptIndex = 154;
+pub const OPT_ISPRINT: OptIndex = 155;
+pub const OPT_JOINSPACES: OptIndex = 156;
+pub const OPT_JUMPOPTIONS: OptIndex = 157;
+pub const OPT_KEYMAP: OptIndex = 158;
+pub const OPT_KEYMODEL: OptIndex = 159;
+pub const OPT_KEYWORDPRG: OptIndex = 160;
+pub const OPT_LANGMAP: OptIndex = 161;
+pub const OPT_LANGMENU: OptIndex = 162;
+pub const OPT_LANGNOREMAP: OptIndex = 163;
+pub const OPT_LANGREMAP: OptIndex = 164;
+pub const OPT_LASTSTATUS: OptIndex = 165;
+pub const OPT_LAZYREDRAW: OptIndex = 166;
+pub const OPT_LHISTORY: OptIndex = 167;
+pub const OPT_LINEBREAK: OptIndex = 168;
+pub const OPT_LINES: OptIndex = 169;
+pub const OPT_LINESPACE: OptIndex = 170;
+pub const OPT_LISP: OptIndex = 171;
+pub const OPT_LISPOPTIONS: OptIndex = 172;
+pub const OPT_LISPWORDS: OptIndex = 173;
+pub const OPT_LIST: OptIndex = 174;
+pub const OPT_LISTCHARS: OptIndex = 175;
+pub const OPT_LOADPLUGINS: OptIndex = 176;
+pub const OPT_MAGIC: OptIndex = 177;
+pub const OPT_MAKEEF: OptIndex = 178;
+pub const OPT_MAKEENCODING: OptIndex = 179;
+pub const OPT_MAKEPRG: OptIndex = 180;
+pub const OPT_MATCHPAIRS: OptIndex = 181;
+pub const OPT_MATCHTIME: OptIndex = 182;
+pub const OPT_MAXCOMBINE: OptIndex = 183;
+pub const OPT_MAXFUNCDEPTH: OptIndex = 184;
+pub const OPT_MAXMAPDEPTH: OptIndex = 185;
+pub const OPT_MAXMEMPATTERN: OptIndex = 186;
+pub const OPT_MAXSEARCHCOUNT: OptIndex = 187;
+pub const OPT_MENUITEMS: OptIndex = 188;
+pub const OPT_MESSAGESOPT: OptIndex = 189;
+pub const OPT_MKSPELLMEM: OptIndex = 190;
+pub const OPT_MODELINE: OptIndex = 191;
+pub const OPT_MODELINEEXPR: OptIndex = 192;
+pub const OPT_MODELINES: OptIndex = 193;
+pub const OPT_MODIFIABLE: OptIndex = 194;
+pub const OPT_MODIFIED: OptIndex = 195;
+pub const OPT_MORE: OptIndex = 196;
+pub const OPT_MOUSE: OptIndex = 197;
+pub const OPT_MOUSEFOCUS: OptIndex = 198;
+pub const OPT_MOUSEHIDE: OptIndex = 199;
+pub const OPT_MOUSEMODEL: OptIndex = 200;
+pub const OPT_MOUSEMOVEEVENT: OptIndex = 201;
+pub const OPT_MOUSESCROLL: OptIndex = 202;
+pub const OPT_MOUSESHAPE: OptIndex = 203;
+pub const OPT_MOUSETIME: OptIndex = 204;
+pub const OPT_NRFORMATS: OptIndex = 205;
+pub const OPT_NUMBER: OptIndex = 206;
+pub const OPT_NUMBERWIDTH: OptIndex = 207;
+pub const OPT_OMNIFUNC: OptIndex = 208;
+pub const OPT_OPENDEVICE: OptIndex = 209;
+pub const OPT_OPERATORFUNC: OptIndex = 210;
+pub const OPT_PACKPATH: OptIndex = 211;
+pub const OPT_PARAGRAPHS: OptIndex = 212;
+pub const OPT_PASTE: OptIndex = 213;
+pub const OPT_PASTETOGGLE: OptIndex = 214;
+pub const OPT_PATCHEXPR: OptIndex = 215;
+pub const OPT_PATCHMODE: OptIndex = 216;
+pub const OPT_PATH: OptIndex = 217;
+pub const OPT_PRESERVEINDENT: OptIndex = 218;
+pub const OPT_PREVIEWHEIGHT: OptIndex = 219;
+pub const OPT_PREVIEWWINDOW: OptIndex = 220;
+pub const OPT_PROMPT: OptIndex = 221;
+pub const OPT_PUMBLEND: OptIndex = 222;
+pub const OPT_PUMBORDER: OptIndex = 223;
+pub const OPT_PUMHEIGHT: OptIndex = 224;
+pub const OPT_PUMMAXWIDTH: OptIndex = 225;
+pub const OPT_PUMWIDTH: OptIndex = 226;
+pub const OPT_PYXVERSION: OptIndex = 227;
+pub const OPT_QUICKFIXTEXTFUNC: OptIndex = 228;
+pub const OPT_QUOTEESCAPE: OptIndex = 229;
+pub const OPT_READONLY: OptIndex = 230;
+pub const OPT_REDRAWDEBUG: OptIndex = 231;
+pub const OPT_REDRAWTIME: OptIndex = 232;
+pub const OPT_REGEXPENGINE: OptIndex = 233;
+pub const OPT_RELATIVENUMBER: OptIndex = 234;
+pub const OPT_REMAP: OptIndex = 235;
+pub const OPT_REPORT: OptIndex = 236;
+pub const OPT_REVINS: OptIndex = 237;
+pub const OPT_RIGHTLEFT: OptIndex = 238;
+pub const OPT_RIGHTLEFTCMD: OptIndex = 239;
+pub const OPT_RULER: OptIndex = 240;
+pub const OPT_RULERFORMAT: OptIndex = 241;
+pub const OPT_RUNTIMEPATH: OptIndex = 242;
+pub const OPT_SCROLL: OptIndex = 243;
+pub const OPT_SCROLLBACK: OptIndex = 244;
+pub const OPT_SCROLLBIND: OptIndex = 245;
+pub const OPT_SCROLLJUMP: OptIndex = 246;
+pub const OPT_SCROLLOFF: OptIndex = 247;
+pub const OPT_SCROLLOPT: OptIndex = 248;
+pub const OPT_SECTIONS: OptIndex = 249;
+pub const OPT_SECURE: OptIndex = 250;
+pub const OPT_SELECTION: OptIndex = 251;
+pub const OPT_SELECTMODE: OptIndex = 252;
+pub const OPT_SESSIONOPTIONS: OptIndex = 253;
+pub const OPT_SHADA: OptIndex = 254;
+pub const OPT_SHADAFILE: OptIndex = 255;
+pub const OPT_SHELL: OptIndex = 256;
+pub const OPT_SHELLCMDFLAG: OptIndex = 257;
+pub const OPT_SHELLPIPE: OptIndex = 258;
+pub const OPT_SHELLQUOTE: OptIndex = 259;
+pub const OPT_SHELLREDIR: OptIndex = 260;
+pub const OPT_SHELLSLASH: OptIndex = 261;
+pub const OPT_SHELLTEMP: OptIndex = 262;
+pub const OPT_SHELLXESCAPE: OptIndex = 263;
+pub const OPT_SHELLXQUOTE: OptIndex = 264;
+pub const OPT_SHIFTROUND: OptIndex = 265;
+pub const OPT_SHIFTWIDTH: OptIndex = 266;
+pub const OPT_SHORTMESS: OptIndex = 267;
+pub const OPT_SHOWBREAK: OptIndex = 268;
+pub const OPT_SHOWCMD: OptIndex = 269;
+pub const OPT_SHOWCMDLOC: OptIndex = 270;
+pub const OPT_SHOWFULLTAG: OptIndex = 271;
+pub const OPT_SHOWMATCH: OptIndex = 272;
+pub const OPT_SHOWMODE: OptIndex = 273;
+pub const OPT_SHOWTABLINE: OptIndex = 274;
+pub const OPT_SIDESCROLL: OptIndex = 275;
+pub const OPT_SIDESCROLLOFF: OptIndex = 276;
+pub const OPT_SIGNCOLUMN: OptIndex = 277;
+pub const OPT_SMARTCASE: OptIndex = 278;
+pub const OPT_SMARTINDENT: OptIndex = 279;
+pub const OPT_SMARTTAB: OptIndex = 280;
+pub const OPT_SMOOTHSCROLL: OptIndex = 281;
+pub const OPT_SOFTTABSTOP: OptIndex = 282;
+pub const OPT_SPELL: OptIndex = 283;
+pub const OPT_SPELLCAPCHECK: OptIndex = 284;
+pub const OPT_SPELLFILE: OptIndex = 285;
+pub const OPT_SPELLLANG: OptIndex = 286;
+pub const OPT_SPELLOPTIONS: OptIndex = 287;
+pub const OPT_SPELLSUGGEST: OptIndex = 288;
+pub const OPT_SPLITBELOW: OptIndex = 289;
+pub const OPT_SPLITKEEP: OptIndex = 290;
+pub const OPT_SPLITRIGHT: OptIndex = 291;
+pub const OPT_STARTOFLINE: OptIndex = 292;
+pub const OPT_STATUSCOLUMN: OptIndex = 293;
+pub const OPT_STATUSLINE: OptIndex = 294;
+pub const OPT_SUFFIXES: OptIndex = 295;
+pub const OPT_SUFFIXESADD: OptIndex = 296;
+pub const OPT_SWAPFILE: OptIndex = 297;
+pub const OPT_SWITCHBUF: OptIndex = 298;
+pub const OPT_SYNMAXCOL: OptIndex = 299;
+pub const OPT_SYNTAX: OptIndex = 300;
+pub const OPT_TABCLOSE: OptIndex = 301;
+pub const OPT_TABLINE: OptIndex = 302;
+pub const OPT_TABPAGEMAX: OptIndex = 303;
+pub const OPT_TABSTOP: OptIndex = 304;
+pub const OPT_TAGBSEARCH: OptIndex = 305;
+pub const OPT_TAGCASE: OptIndex = 306;
+pub const OPT_TAGFUNC: OptIndex = 307;
+pub const OPT_TAGLENGTH: OptIndex = 308;
+pub const OPT_TAGRELATIVE: OptIndex = 309;
+pub const OPT_TAGS: OptIndex = 310;
+pub const OPT_TAGSTACK: OptIndex = 311;
+pub const OPT_TERMBIDI: OptIndex = 312;
+pub const OPT_TERMENCODING: OptIndex = 313;
+pub const OPT_TERMGUICOLORS: OptIndex = 314;
+pub const OPT_TERMPASTEFILTER: OptIndex = 315;
+pub const OPT_TERMSYNC: OptIndex = 316;
+pub const OPT_TERSE: OptIndex = 317;
+pub const OPT_TEXTWIDTH: OptIndex = 318;
+pub const OPT_THESAURUS: OptIndex = 319;
+pub const OPT_THESAURUSFUNC: OptIndex = 320;
+pub const OPT_TILDEOP: OptIndex = 321;
+pub const OPT_TIMEOUT: OptIndex = 322;
+pub const OPT_TIMEOUTLEN: OptIndex = 323;
+pub const OPT_TITLE: OptIndex = 324;
+pub const OPT_TITLELEN: OptIndex = 325;
+pub const OPT_TITLEOLD: OptIndex = 326;
+pub const OPT_TITLESTRING: OptIndex = 327;
+pub const OPT_TTIMEOUT: OptIndex = 328;
+pub const OPT_TTIMEOUTLEN: OptIndex = 329;
+pub const OPT_TTYFAST: OptIndex = 330;
+pub const OPT_UNDODIR: OptIndex = 331;
+pub const OPT_UNDOFILE: OptIndex = 332;
+pub const OPT_UNDOLEVELS: OptIndex = 333;
+pub const OPT_UNDORELOAD: OptIndex = 334;
+pub const OPT_UPDATECOUNT: OptIndex = 335;
+pub const OPT_UPDATETIME: OptIndex = 336;
+pub const OPT_VARSOFTTABSTOP: OptIndex = 337;
+pub const OPT_VARTABSTOP: OptIndex = 338;
+pub const OPT_VERBOSE: OptIndex = 339;
+pub const OPT_VERBOSEFILE: OptIndex = 340;
+pub const OPT_VIEWDIR: OptIndex = 341;
+pub const OPT_VIEWOPTIONS: OptIndex = 342;
+pub const OPT_VIRTUALEDIT: OptIndex = 343;
+pub const OPT_VISUALBELL: OptIndex = 344;
+pub const OPT_WARN: OptIndex = 345;
+pub const OPT_WHICHWRAP: OptIndex = 346;
+pub const OPT_WILDCHAR: OptIndex = 347;
+pub const OPT_WILDCHARM: OptIndex = 348;
+pub const OPT_WILDIGNORE: OptIndex = 349;
+pub const OPT_WILDIGNORECASE: OptIndex = 350;
+pub const OPT_WILDMENU: OptIndex = 351;
+pub const OPT_WILDMODE: OptIndex = 352;
+pub const OPT_WILDOPTIONS: OptIndex = 353;
+pub const OPT_WINALTKEYS: OptIndex = 354;
+pub const OPT_WINBAR: OptIndex = 355;
+pub const OPT_WINBLEND: OptIndex = 356;
+pub const OPT_WINBORDER: OptIndex = 357;
+pub const OPT_WINDOW: OptIndex = 358;
+pub const OPT_WINFIXBUF: OptIndex = 359;
+pub const OPT_WINFIXHEIGHT: OptIndex = 360;
+pub const OPT_WINFIXWIDTH: OptIndex = 361;
+pub const OPT_WINHEIGHT: OptIndex = 362;
+pub const OPT_WINHIGHLIGHT: OptIndex = 363;
+pub const OPT_WINMINHEIGHT: OptIndex = 364;
+pub const OPT_WINMINWIDTH: OptIndex = 365;
+pub const OPT_WINWIDTH: OptIndex = 366;
+pub const OPT_WRAP: OptIndex = 367;
+pub const OPT_WRAPMARGIN: OptIndex = 368;
+pub const OPT_WRAPSCAN: OptIndex = 369;
+pub const OPT_WRITE: OptIndex = 370;
+pub const OPT_WRITEANY: OptIndex = 371;
+pub const OPT_WRITEBACKUP: OptIndex = 372;
+pub const OPT_WRITEDELAY: OptIndex = 373;
+pub const OPT_COUNT: c_int = 374;
 
 /// A row of a global-scoped option's value, within whatever holds it.
 pub type GlobalOptIndex = c_int;
-pub const kGlobalOptInvalid: GlobalOptIndex = -1;
-pub const kGlobalOptAleph: GlobalOptIndex = 0;
-pub const kGlobalOptAllowrevins: GlobalOptIndex = 1;
-pub const kGlobalOptAmbiwidth: GlobalOptIndex = 2;
-pub const kGlobalOptArabicshape: GlobalOptIndex = 3;
-pub const kGlobalOptAutochdir: GlobalOptIndex = 4;
-pub const kGlobalOptAutocomplete: GlobalOptIndex = 5;
-pub const kGlobalOptAutocompletedelay: GlobalOptIndex = 6;
-pub const kGlobalOptAutocompletetimeout: GlobalOptIndex = 7;
-pub const kGlobalOptAutoread: GlobalOptIndex = 8;
-pub const kGlobalOptAutowrite: GlobalOptIndex = 9;
-pub const kGlobalOptAutowriteall: GlobalOptIndex = 10;
-pub const kGlobalOptBackground: GlobalOptIndex = 11;
-pub const kGlobalOptBackspace: GlobalOptIndex = 12;
-pub const kGlobalOptBackup: GlobalOptIndex = 13;
-pub const kGlobalOptBackupcopy: GlobalOptIndex = 14;
-pub const kGlobalOptBackupdir: GlobalOptIndex = 15;
-pub const kGlobalOptBackupext: GlobalOptIndex = 16;
-pub const kGlobalOptBackupskip: GlobalOptIndex = 17;
-pub const kGlobalOptBelloff: GlobalOptIndex = 18;
-pub const kGlobalOptBreakat: GlobalOptIndex = 19;
-pub const kGlobalOptBrowsedir: GlobalOptIndex = 20;
-pub const kGlobalOptCasemap: GlobalOptIndex = 21;
-pub const kGlobalOptCdhome: GlobalOptIndex = 22;
-pub const kGlobalOptCdpath: GlobalOptIndex = 23;
-pub const kGlobalOptCedit: GlobalOptIndex = 24;
-pub const kGlobalOptCharconvert: GlobalOptIndex = 25;
-pub const kGlobalOptChistory: GlobalOptIndex = 26;
-pub const kGlobalOptClipboard: GlobalOptIndex = 27;
-pub const kGlobalOptCmdheight: GlobalOptIndex = 28;
-pub const kGlobalOptCmdwinheight: GlobalOptIndex = 29;
-pub const kGlobalOptColumns: GlobalOptIndex = 30;
-pub const kGlobalOptCompatible: GlobalOptIndex = 31;
-pub const kGlobalOptCompleteitemalign: GlobalOptIndex = 32;
-pub const kGlobalOptCompleteopt: GlobalOptIndex = 33;
-pub const kGlobalOptCompletetimeout: GlobalOptIndex = 34;
-pub const kGlobalOptConfirm: GlobalOptIndex = 35;
-pub const kGlobalOptCpoptions: GlobalOptIndex = 36;
-pub const kGlobalOptDebug: GlobalOptIndex = 37;
-pub const kGlobalOptDefine: GlobalOptIndex = 38;
-pub const kGlobalOptDelcombine: GlobalOptIndex = 39;
-pub const kGlobalOptDictionary: GlobalOptIndex = 40;
-pub const kGlobalOptDiffanchors: GlobalOptIndex = 41;
-pub const kGlobalOptDiffexpr: GlobalOptIndex = 42;
-pub const kGlobalOptDiffopt: GlobalOptIndex = 43;
-pub const kGlobalOptDigraph: GlobalOptIndex = 44;
-pub const kGlobalOptDirectory: GlobalOptIndex = 45;
-pub const kGlobalOptDisplay: GlobalOptIndex = 46;
-pub const kGlobalOptEadirection: GlobalOptIndex = 47;
-pub const kGlobalOptEdcompatible: GlobalOptIndex = 48;
-pub const kGlobalOptEmoji: GlobalOptIndex = 49;
-pub const kGlobalOptEncoding: GlobalOptIndex = 50;
-pub const kGlobalOptEqualalways: GlobalOptIndex = 51;
-pub const kGlobalOptEqualprg: GlobalOptIndex = 52;
-pub const kGlobalOptErrorbells: GlobalOptIndex = 53;
-pub const kGlobalOptErrorfile: GlobalOptIndex = 54;
-pub const kGlobalOptErrorformat: GlobalOptIndex = 55;
-pub const kGlobalOptEventignore: GlobalOptIndex = 56;
-pub const kGlobalOptExrc: GlobalOptIndex = 57;
-pub const kGlobalOptFileencodings: GlobalOptIndex = 58;
-pub const kGlobalOptFileformats: GlobalOptIndex = 59;
-pub const kGlobalOptFileignorecase: GlobalOptIndex = 60;
-pub const kGlobalOptFillchars: GlobalOptIndex = 61;
-pub const kGlobalOptFindfunc: GlobalOptIndex = 62;
-pub const kGlobalOptFoldclose: GlobalOptIndex = 63;
-pub const kGlobalOptFoldlevelstart: GlobalOptIndex = 64;
-pub const kGlobalOptFoldopen: GlobalOptIndex = 65;
-pub const kGlobalOptFormatprg: GlobalOptIndex = 66;
-pub const kGlobalOptFsync: GlobalOptIndex = 67;
-pub const kGlobalOptGdefault: GlobalOptIndex = 68;
-pub const kGlobalOptGrepformat: GlobalOptIndex = 69;
-pub const kGlobalOptGrepprg: GlobalOptIndex = 70;
-pub const kGlobalOptGuicursor: GlobalOptIndex = 71;
-pub const kGlobalOptGuifont: GlobalOptIndex = 72;
-pub const kGlobalOptGuifontwide: GlobalOptIndex = 73;
-pub const kGlobalOptGuioptions: GlobalOptIndex = 74;
-pub const kGlobalOptGuitablabel: GlobalOptIndex = 75;
-pub const kGlobalOptGuitabtooltip: GlobalOptIndex = 76;
-pub const kGlobalOptHelpfile: GlobalOptIndex = 77;
-pub const kGlobalOptHelpheight: GlobalOptIndex = 78;
-pub const kGlobalOptHelplang: GlobalOptIndex = 79;
-pub const kGlobalOptHidden: GlobalOptIndex = 80;
-pub const kGlobalOptHighlight: GlobalOptIndex = 81;
-pub const kGlobalOptHistory: GlobalOptIndex = 82;
-pub const kGlobalOptHkmap: GlobalOptIndex = 83;
-pub const kGlobalOptHkmapp: GlobalOptIndex = 84;
-pub const kGlobalOptHlsearch: GlobalOptIndex = 85;
-pub const kGlobalOptIcon: GlobalOptIndex = 86;
-pub const kGlobalOptIconstring: GlobalOptIndex = 87;
-pub const kGlobalOptIgnorecase: GlobalOptIndex = 88;
-pub const kGlobalOptImcmdline: GlobalOptIndex = 89;
-pub const kGlobalOptImdisable: GlobalOptIndex = 90;
-pub const kGlobalOptInccommand: GlobalOptIndex = 91;
-pub const kGlobalOptInclude: GlobalOptIndex = 92;
-pub const kGlobalOptIncsearch: GlobalOptIndex = 93;
-pub const kGlobalOptInsertmode: GlobalOptIndex = 94;
-pub const kGlobalOptIsfname: GlobalOptIndex = 95;
-pub const kGlobalOptIsident: GlobalOptIndex = 96;
-pub const kGlobalOptIsprint: GlobalOptIndex = 97;
-pub const kGlobalOptJoinspaces: GlobalOptIndex = 98;
-pub const kGlobalOptJumpoptions: GlobalOptIndex = 99;
-pub const kGlobalOptKeymodel: GlobalOptIndex = 100;
-pub const kGlobalOptKeywordprg: GlobalOptIndex = 101;
-pub const kGlobalOptLangmap: GlobalOptIndex = 102;
-pub const kGlobalOptLangmenu: GlobalOptIndex = 103;
-pub const kGlobalOptLangnoremap: GlobalOptIndex = 104;
-pub const kGlobalOptLangremap: GlobalOptIndex = 105;
-pub const kGlobalOptLaststatus: GlobalOptIndex = 106;
-pub const kGlobalOptLazyredraw: GlobalOptIndex = 107;
-pub const kGlobalOptLines: GlobalOptIndex = 108;
-pub const kGlobalOptLinespace: GlobalOptIndex = 109;
-pub const kGlobalOptLispwords: GlobalOptIndex = 110;
-pub const kGlobalOptListchars: GlobalOptIndex = 111;
-pub const kGlobalOptLoadplugins: GlobalOptIndex = 112;
-pub const kGlobalOptMagic: GlobalOptIndex = 113;
-pub const kGlobalOptMakeef: GlobalOptIndex = 114;
-pub const kGlobalOptMakeencoding: GlobalOptIndex = 115;
-pub const kGlobalOptMakeprg: GlobalOptIndex = 116;
-pub const kGlobalOptMatchtime: GlobalOptIndex = 117;
-pub const kGlobalOptMaxcombine: GlobalOptIndex = 118;
-pub const kGlobalOptMaxfuncdepth: GlobalOptIndex = 119;
-pub const kGlobalOptMaxmapdepth: GlobalOptIndex = 120;
-pub const kGlobalOptMaxmempattern: GlobalOptIndex = 121;
-pub const kGlobalOptMaxsearchcount: GlobalOptIndex = 122;
-pub const kGlobalOptMenuitems: GlobalOptIndex = 123;
-pub const kGlobalOptMessagesopt: GlobalOptIndex = 124;
-pub const kGlobalOptMkspellmem: GlobalOptIndex = 125;
-pub const kGlobalOptModelineexpr: GlobalOptIndex = 126;
-pub const kGlobalOptModelines: GlobalOptIndex = 127;
-pub const kGlobalOptMore: GlobalOptIndex = 128;
-pub const kGlobalOptMouse: GlobalOptIndex = 129;
-pub const kGlobalOptMousefocus: GlobalOptIndex = 130;
-pub const kGlobalOptMousehide: GlobalOptIndex = 131;
-pub const kGlobalOptMousemodel: GlobalOptIndex = 132;
-pub const kGlobalOptMousemoveevent: GlobalOptIndex = 133;
-pub const kGlobalOptMousescroll: GlobalOptIndex = 134;
-pub const kGlobalOptMouseshape: GlobalOptIndex = 135;
-pub const kGlobalOptMousetime: GlobalOptIndex = 136;
-pub const kGlobalOptOpendevice: GlobalOptIndex = 137;
-pub const kGlobalOptOperatorfunc: GlobalOptIndex = 138;
-pub const kGlobalOptPackpath: GlobalOptIndex = 139;
-pub const kGlobalOptParagraphs: GlobalOptIndex = 140;
-pub const kGlobalOptPaste: GlobalOptIndex = 141;
-pub const kGlobalOptPastetoggle: GlobalOptIndex = 142;
-pub const kGlobalOptPatchexpr: GlobalOptIndex = 143;
-pub const kGlobalOptPatchmode: GlobalOptIndex = 144;
-pub const kGlobalOptPath: GlobalOptIndex = 145;
-pub const kGlobalOptPreviewheight: GlobalOptIndex = 146;
-pub const kGlobalOptPrompt: GlobalOptIndex = 147;
-pub const kGlobalOptPumblend: GlobalOptIndex = 148;
-pub const kGlobalOptPumborder: GlobalOptIndex = 149;
-pub const kGlobalOptPumheight: GlobalOptIndex = 150;
-pub const kGlobalOptPummaxwidth: GlobalOptIndex = 151;
-pub const kGlobalOptPumwidth: GlobalOptIndex = 152;
-pub const kGlobalOptPyxversion: GlobalOptIndex = 153;
-pub const kGlobalOptQuickfixtextfunc: GlobalOptIndex = 154;
-pub const kGlobalOptRedrawdebug: GlobalOptIndex = 155;
-pub const kGlobalOptRedrawtime: GlobalOptIndex = 156;
-pub const kGlobalOptRegexpengine: GlobalOptIndex = 157;
-pub const kGlobalOptRemap: GlobalOptIndex = 158;
-pub const kGlobalOptReport: GlobalOptIndex = 159;
-pub const kGlobalOptRevins: GlobalOptIndex = 160;
-pub const kGlobalOptRuler: GlobalOptIndex = 161;
-pub const kGlobalOptRulerformat: GlobalOptIndex = 162;
-pub const kGlobalOptRuntimepath: GlobalOptIndex = 163;
-pub const kGlobalOptScrolljump: GlobalOptIndex = 164;
-pub const kGlobalOptScrolloff: GlobalOptIndex = 165;
-pub const kGlobalOptScrollopt: GlobalOptIndex = 166;
-pub const kGlobalOptSections: GlobalOptIndex = 167;
-pub const kGlobalOptSecure: GlobalOptIndex = 168;
-pub const kGlobalOptSelection: GlobalOptIndex = 169;
-pub const kGlobalOptSelectmode: GlobalOptIndex = 170;
-pub const kGlobalOptSessionoptions: GlobalOptIndex = 171;
-pub const kGlobalOptShada: GlobalOptIndex = 172;
-pub const kGlobalOptShadafile: GlobalOptIndex = 173;
-pub const kGlobalOptShell: GlobalOptIndex = 174;
-pub const kGlobalOptShellcmdflag: GlobalOptIndex = 175;
-pub const kGlobalOptShellpipe: GlobalOptIndex = 176;
-pub const kGlobalOptShellquote: GlobalOptIndex = 177;
-pub const kGlobalOptShellredir: GlobalOptIndex = 178;
-pub const kGlobalOptShellslash: GlobalOptIndex = 179;
-pub const kGlobalOptShelltemp: GlobalOptIndex = 180;
-pub const kGlobalOptShellxescape: GlobalOptIndex = 181;
-pub const kGlobalOptShellxquote: GlobalOptIndex = 182;
-pub const kGlobalOptShiftround: GlobalOptIndex = 183;
-pub const kGlobalOptShortmess: GlobalOptIndex = 184;
-pub const kGlobalOptShowbreak: GlobalOptIndex = 185;
-pub const kGlobalOptShowcmd: GlobalOptIndex = 186;
-pub const kGlobalOptShowcmdloc: GlobalOptIndex = 187;
-pub const kGlobalOptShowfulltag: GlobalOptIndex = 188;
-pub const kGlobalOptShowmatch: GlobalOptIndex = 189;
-pub const kGlobalOptShowmode: GlobalOptIndex = 190;
-pub const kGlobalOptShowtabline: GlobalOptIndex = 191;
-pub const kGlobalOptSidescroll: GlobalOptIndex = 192;
-pub const kGlobalOptSidescrolloff: GlobalOptIndex = 193;
-pub const kGlobalOptSmartcase: GlobalOptIndex = 194;
-pub const kGlobalOptSmarttab: GlobalOptIndex = 195;
-pub const kGlobalOptSpellsuggest: GlobalOptIndex = 196;
-pub const kGlobalOptSplitbelow: GlobalOptIndex = 197;
-pub const kGlobalOptSplitkeep: GlobalOptIndex = 198;
-pub const kGlobalOptSplitright: GlobalOptIndex = 199;
-pub const kGlobalOptStartofline: GlobalOptIndex = 200;
-pub const kGlobalOptStatusline: GlobalOptIndex = 201;
-pub const kGlobalOptSuffixes: GlobalOptIndex = 202;
-pub const kGlobalOptSwitchbuf: GlobalOptIndex = 203;
-pub const kGlobalOptTabclose: GlobalOptIndex = 204;
-pub const kGlobalOptTabline: GlobalOptIndex = 205;
-pub const kGlobalOptTabpagemax: GlobalOptIndex = 206;
-pub const kGlobalOptTagbsearch: GlobalOptIndex = 207;
-pub const kGlobalOptTagcase: GlobalOptIndex = 208;
-pub const kGlobalOptTaglength: GlobalOptIndex = 209;
-pub const kGlobalOptTagrelative: GlobalOptIndex = 210;
-pub const kGlobalOptTags: GlobalOptIndex = 211;
-pub const kGlobalOptTagstack: GlobalOptIndex = 212;
-pub const kGlobalOptTermbidi: GlobalOptIndex = 213;
-pub const kGlobalOptTermencoding: GlobalOptIndex = 214;
-pub const kGlobalOptTermguicolors: GlobalOptIndex = 215;
-pub const kGlobalOptTermpastefilter: GlobalOptIndex = 216;
-pub const kGlobalOptTermsync: GlobalOptIndex = 217;
-pub const kGlobalOptTerse: GlobalOptIndex = 218;
-pub const kGlobalOptThesaurus: GlobalOptIndex = 219;
-pub const kGlobalOptThesaurusfunc: GlobalOptIndex = 220;
-pub const kGlobalOptTildeop: GlobalOptIndex = 221;
-pub const kGlobalOptTimeout: GlobalOptIndex = 222;
-pub const kGlobalOptTimeoutlen: GlobalOptIndex = 223;
-pub const kGlobalOptTitle: GlobalOptIndex = 224;
-pub const kGlobalOptTitlelen: GlobalOptIndex = 225;
-pub const kGlobalOptTitleold: GlobalOptIndex = 226;
-pub const kGlobalOptTitlestring: GlobalOptIndex = 227;
-pub const kGlobalOptTtimeout: GlobalOptIndex = 228;
-pub const kGlobalOptTtimeoutlen: GlobalOptIndex = 229;
-pub const kGlobalOptTtyfast: GlobalOptIndex = 230;
-pub const kGlobalOptUndodir: GlobalOptIndex = 231;
-pub const kGlobalOptUndolevels: GlobalOptIndex = 232;
-pub const kGlobalOptUndoreload: GlobalOptIndex = 233;
-pub const kGlobalOptUpdatecount: GlobalOptIndex = 234;
-pub const kGlobalOptUpdatetime: GlobalOptIndex = 235;
-pub const kGlobalOptVerbose: GlobalOptIndex = 236;
-pub const kGlobalOptVerbosefile: GlobalOptIndex = 237;
-pub const kGlobalOptViewdir: GlobalOptIndex = 238;
-pub const kGlobalOptViewoptions: GlobalOptIndex = 239;
-pub const kGlobalOptVirtualedit: GlobalOptIndex = 240;
-pub const kGlobalOptVisualbell: GlobalOptIndex = 241;
-pub const kGlobalOptWarn: GlobalOptIndex = 242;
-pub const kGlobalOptWhichwrap: GlobalOptIndex = 243;
-pub const kGlobalOptWildchar: GlobalOptIndex = 244;
-pub const kGlobalOptWildcharm: GlobalOptIndex = 245;
-pub const kGlobalOptWildignore: GlobalOptIndex = 246;
-pub const kGlobalOptWildignorecase: GlobalOptIndex = 247;
-pub const kGlobalOptWildmenu: GlobalOptIndex = 248;
-pub const kGlobalOptWildmode: GlobalOptIndex = 249;
-pub const kGlobalOptWildoptions: GlobalOptIndex = 250;
-pub const kGlobalOptWinaltkeys: GlobalOptIndex = 251;
-pub const kGlobalOptWinbar: GlobalOptIndex = 252;
-pub const kGlobalOptWinborder: GlobalOptIndex = 253;
-pub const kGlobalOptWindow: GlobalOptIndex = 254;
-pub const kGlobalOptWinheight: GlobalOptIndex = 255;
-pub const kGlobalOptWinminheight: GlobalOptIndex = 256;
-pub const kGlobalOptWinminwidth: GlobalOptIndex = 257;
-pub const kGlobalOptWinwidth: GlobalOptIndex = 258;
-pub const kGlobalOptWrapscan: GlobalOptIndex = 259;
-pub const kGlobalOptWrite: GlobalOptIndex = 260;
-pub const kGlobalOptWriteany: GlobalOptIndex = 261;
-pub const kGlobalOptWritebackup: GlobalOptIndex = 262;
-pub const kGlobalOptWritedelay: GlobalOptIndex = 263;
+pub const GLOBAL_OPT_INVALID: GlobalOptIndex = -1;
+pub const GLOBAL_OPT_ALEPH: GlobalOptIndex = 0;
+pub const GLOBAL_OPT_ALLOWREVINS: GlobalOptIndex = 1;
+pub const GLOBAL_OPT_AMBIWIDTH: GlobalOptIndex = 2;
+pub const GLOBAL_OPT_ARABICSHAPE: GlobalOptIndex = 3;
+pub const GLOBAL_OPT_AUTOCHDIR: GlobalOptIndex = 4;
+pub const GLOBAL_OPT_AUTOCOMPLETE: GlobalOptIndex = 5;
+pub const GLOBAL_OPT_AUTOCOMPLETEDELAY: GlobalOptIndex = 6;
+pub const GLOBAL_OPT_AUTOCOMPLETETIMEOUT: GlobalOptIndex = 7;
+pub const GLOBAL_OPT_AUTOREAD: GlobalOptIndex = 8;
+pub const GLOBAL_OPT_AUTOWRITE: GlobalOptIndex = 9;
+pub const GLOBAL_OPT_AUTOWRITEALL: GlobalOptIndex = 10;
+pub const GLOBAL_OPT_BACKGROUND: GlobalOptIndex = 11;
+pub const GLOBAL_OPT_BACKSPACE: GlobalOptIndex = 12;
+pub const GLOBAL_OPT_BACKUP: GlobalOptIndex = 13;
+pub const GLOBAL_OPT_BACKUPCOPY: GlobalOptIndex = 14;
+pub const GLOBAL_OPT_BACKUPDIR: GlobalOptIndex = 15;
+pub const GLOBAL_OPT_BACKUPEXT: GlobalOptIndex = 16;
+pub const GLOBAL_OPT_BACKUPSKIP: GlobalOptIndex = 17;
+pub const GLOBAL_OPT_BELLOFF: GlobalOptIndex = 18;
+pub const GLOBAL_OPT_BREAKAT: GlobalOptIndex = 19;
+pub const GLOBAL_OPT_BROWSEDIR: GlobalOptIndex = 20;
+pub const GLOBAL_OPT_CASEMAP: GlobalOptIndex = 21;
+pub const GLOBAL_OPT_CDHOME: GlobalOptIndex = 22;
+pub const GLOBAL_OPT_CDPATH: GlobalOptIndex = 23;
+pub const GLOBAL_OPT_CEDIT: GlobalOptIndex = 24;
+pub const GLOBAL_OPT_CHARCONVERT: GlobalOptIndex = 25;
+pub const GLOBAL_OPT_CHISTORY: GlobalOptIndex = 26;
+pub const GLOBAL_OPT_CLIPBOARD: GlobalOptIndex = 27;
+pub const GLOBAL_OPT_CMDHEIGHT: GlobalOptIndex = 28;
+pub const GLOBAL_OPT_CMDWINHEIGHT: GlobalOptIndex = 29;
+pub const GLOBAL_OPT_COLUMNS: GlobalOptIndex = 30;
+pub const GLOBAL_OPT_COMPATIBLE: GlobalOptIndex = 31;
+pub const GLOBAL_OPT_COMPLETEITEMALIGN: GlobalOptIndex = 32;
+pub const GLOBAL_OPT_COMPLETEOPT: GlobalOptIndex = 33;
+pub const GLOBAL_OPT_COMPLETETIMEOUT: GlobalOptIndex = 34;
+pub const GLOBAL_OPT_CONFIRM: GlobalOptIndex = 35;
+pub const GLOBAL_OPT_CPOPTIONS: GlobalOptIndex = 36;
+pub const GLOBAL_OPT_DEBUG: GlobalOptIndex = 37;
+pub const GLOBAL_OPT_DEFINE: GlobalOptIndex = 38;
+pub const GLOBAL_OPT_DELCOMBINE: GlobalOptIndex = 39;
+pub const GLOBAL_OPT_DICTIONARY: GlobalOptIndex = 40;
+pub const GLOBAL_OPT_DIFFANCHORS: GlobalOptIndex = 41;
+pub const GLOBAL_OPT_DIFFEXPR: GlobalOptIndex = 42;
+pub const GLOBAL_OPT_DIFFOPT: GlobalOptIndex = 43;
+pub const GLOBAL_OPT_DIGRAPH: GlobalOptIndex = 44;
+pub const GLOBAL_OPT_DIRECTORY: GlobalOptIndex = 45;
+pub const GLOBAL_OPT_DISPLAY: GlobalOptIndex = 46;
+pub const GLOBAL_OPT_EADIRECTION: GlobalOptIndex = 47;
+pub const GLOBAL_OPT_EDCOMPATIBLE: GlobalOptIndex = 48;
+pub const GLOBAL_OPT_EMOJI: GlobalOptIndex = 49;
+pub const GLOBAL_OPT_ENCODING: GlobalOptIndex = 50;
+pub const GLOBAL_OPT_EQUALALWAYS: GlobalOptIndex = 51;
+pub const GLOBAL_OPT_EQUALPRG: GlobalOptIndex = 52;
+pub const GLOBAL_OPT_ERRORBELLS: GlobalOptIndex = 53;
+pub const GLOBAL_OPT_ERRORFILE: GlobalOptIndex = 54;
+pub const GLOBAL_OPT_ERRORFORMAT: GlobalOptIndex = 55;
+pub const GLOBAL_OPT_EVENTIGNORE: GlobalOptIndex = 56;
+pub const GLOBAL_OPT_EXRC: GlobalOptIndex = 57;
+pub const GLOBAL_OPT_FILEENCODINGS: GlobalOptIndex = 58;
+pub const GLOBAL_OPT_FILEFORMATS: GlobalOptIndex = 59;
+pub const GLOBAL_OPT_FILEIGNORECASE: GlobalOptIndex = 60;
+pub const GLOBAL_OPT_FILLCHARS: GlobalOptIndex = 61;
+pub const GLOBAL_OPT_FINDFUNC: GlobalOptIndex = 62;
+pub const GLOBAL_OPT_FOLDCLOSE: GlobalOptIndex = 63;
+pub const GLOBAL_OPT_FOLDLEVELSTART: GlobalOptIndex = 64;
+pub const GLOBAL_OPT_FOLDOPEN: GlobalOptIndex = 65;
+pub const GLOBAL_OPT_FORMATPRG: GlobalOptIndex = 66;
+pub const GLOBAL_OPT_FSYNC: GlobalOptIndex = 67;
+pub const GLOBAL_OPT_GDEFAULT: GlobalOptIndex = 68;
+pub const GLOBAL_OPT_GREPFORMAT: GlobalOptIndex = 69;
+pub const GLOBAL_OPT_GREPPRG: GlobalOptIndex = 70;
+pub const GLOBAL_OPT_GUICURSOR: GlobalOptIndex = 71;
+pub const GLOBAL_OPT_GUIFONT: GlobalOptIndex = 72;
+pub const GLOBAL_OPT_GUIFONTWIDE: GlobalOptIndex = 73;
+pub const GLOBAL_OPT_GUIOPTIONS: GlobalOptIndex = 74;
+pub const GLOBAL_OPT_GUITABLABEL: GlobalOptIndex = 75;
+pub const GLOBAL_OPT_GUITABTOOLTIP: GlobalOptIndex = 76;
+pub const GLOBAL_OPT_HELPFILE: GlobalOptIndex = 77;
+pub const GLOBAL_OPT_HELPHEIGHT: GlobalOptIndex = 78;
+pub const GLOBAL_OPT_HELPLANG: GlobalOptIndex = 79;
+pub const GLOBAL_OPT_HIDDEN: GlobalOptIndex = 80;
+pub const GLOBAL_OPT_HIGHLIGHT: GlobalOptIndex = 81;
+pub const GLOBAL_OPT_HISTORY: GlobalOptIndex = 82;
+pub const GLOBAL_OPT_HKMAP: GlobalOptIndex = 83;
+pub const GLOBAL_OPT_HKMAPP: GlobalOptIndex = 84;
+pub const GLOBAL_OPT_HLSEARCH: GlobalOptIndex = 85;
+pub const GLOBAL_OPT_ICON: GlobalOptIndex = 86;
+pub const GLOBAL_OPT_ICONSTRING: GlobalOptIndex = 87;
+pub const GLOBAL_OPT_IGNORECASE: GlobalOptIndex = 88;
+pub const GLOBAL_OPT_IMCMDLINE: GlobalOptIndex = 89;
+pub const GLOBAL_OPT_IMDISABLE: GlobalOptIndex = 90;
+pub const GLOBAL_OPT_INCCOMMAND: GlobalOptIndex = 91;
+pub const GLOBAL_OPT_INCLUDE: GlobalOptIndex = 92;
+pub const GLOBAL_OPT_INCSEARCH: GlobalOptIndex = 93;
+pub const GLOBAL_OPT_INSERTMODE: GlobalOptIndex = 94;
+pub const GLOBAL_OPT_ISFNAME: GlobalOptIndex = 95;
+pub const GLOBAL_OPT_ISIDENT: GlobalOptIndex = 96;
+pub const GLOBAL_OPT_ISPRINT: GlobalOptIndex = 97;
+pub const GLOBAL_OPT_JOINSPACES: GlobalOptIndex = 98;
+pub const GLOBAL_OPT_JUMPOPTIONS: GlobalOptIndex = 99;
+pub const GLOBAL_OPT_KEYMODEL: GlobalOptIndex = 100;
+pub const GLOBAL_OPT_KEYWORDPRG: GlobalOptIndex = 101;
+pub const GLOBAL_OPT_LANGMAP: GlobalOptIndex = 102;
+pub const GLOBAL_OPT_LANGMENU: GlobalOptIndex = 103;
+pub const GLOBAL_OPT_LANGNOREMAP: GlobalOptIndex = 104;
+pub const GLOBAL_OPT_LANGREMAP: GlobalOptIndex = 105;
+pub const GLOBAL_OPT_LASTSTATUS: GlobalOptIndex = 106;
+pub const GLOBAL_OPT_LAZYREDRAW: GlobalOptIndex = 107;
+pub const GLOBAL_OPT_LINES: GlobalOptIndex = 108;
+pub const GLOBAL_OPT_LINESPACE: GlobalOptIndex = 109;
+pub const GLOBAL_OPT_LISPWORDS: GlobalOptIndex = 110;
+pub const GLOBAL_OPT_LISTCHARS: GlobalOptIndex = 111;
+pub const GLOBAL_OPT_LOADPLUGINS: GlobalOptIndex = 112;
+pub const GLOBAL_OPT_MAGIC: GlobalOptIndex = 113;
+pub const GLOBAL_OPT_MAKEEF: GlobalOptIndex = 114;
+pub const GLOBAL_OPT_MAKEENCODING: GlobalOptIndex = 115;
+pub const GLOBAL_OPT_MAKEPRG: GlobalOptIndex = 116;
+pub const GLOBAL_OPT_MATCHTIME: GlobalOptIndex = 117;
+pub const GLOBAL_OPT_MAXCOMBINE: GlobalOptIndex = 118;
+pub const GLOBAL_OPT_MAXFUNCDEPTH: GlobalOptIndex = 119;
+pub const GLOBAL_OPT_MAXMAPDEPTH: GlobalOptIndex = 120;
+pub const GLOBAL_OPT_MAXMEMPATTERN: GlobalOptIndex = 121;
+pub const GLOBAL_OPT_MAXSEARCHCOUNT: GlobalOptIndex = 122;
+pub const GLOBAL_OPT_MENUITEMS: GlobalOptIndex = 123;
+pub const GLOBAL_OPT_MESSAGESOPT: GlobalOptIndex = 124;
+pub const GLOBAL_OPT_MKSPELLMEM: GlobalOptIndex = 125;
+pub const GLOBAL_OPT_MODELINEEXPR: GlobalOptIndex = 126;
+pub const GLOBAL_OPT_MODELINES: GlobalOptIndex = 127;
+pub const GLOBAL_OPT_MORE: GlobalOptIndex = 128;
+pub const GLOBAL_OPT_MOUSE: GlobalOptIndex = 129;
+pub const GLOBAL_OPT_MOUSEFOCUS: GlobalOptIndex = 130;
+pub const GLOBAL_OPT_MOUSEHIDE: GlobalOptIndex = 131;
+pub const GLOBAL_OPT_MOUSEMODEL: GlobalOptIndex = 132;
+pub const GLOBAL_OPT_MOUSEMOVEEVENT: GlobalOptIndex = 133;
+pub const GLOBAL_OPT_MOUSESCROLL: GlobalOptIndex = 134;
+pub const GLOBAL_OPT_MOUSESHAPE: GlobalOptIndex = 135;
+pub const GLOBAL_OPT_MOUSETIME: GlobalOptIndex = 136;
+pub const GLOBAL_OPT_OPENDEVICE: GlobalOptIndex = 137;
+pub const GLOBAL_OPT_OPERATORFUNC: GlobalOptIndex = 138;
+pub const GLOBAL_OPT_PACKPATH: GlobalOptIndex = 139;
+pub const GLOBAL_OPT_PARAGRAPHS: GlobalOptIndex = 140;
+pub const GLOBAL_OPT_PASTE: GlobalOptIndex = 141;
+pub const GLOBAL_OPT_PASTETOGGLE: GlobalOptIndex = 142;
+pub const GLOBAL_OPT_PATCHEXPR: GlobalOptIndex = 143;
+pub const GLOBAL_OPT_PATCHMODE: GlobalOptIndex = 144;
+pub const GLOBAL_OPT_PATH: GlobalOptIndex = 145;
+pub const GLOBAL_OPT_PREVIEWHEIGHT: GlobalOptIndex = 146;
+pub const GLOBAL_OPT_PROMPT: GlobalOptIndex = 147;
+pub const GLOBAL_OPT_PUMBLEND: GlobalOptIndex = 148;
+pub const GLOBAL_OPT_PUMBORDER: GlobalOptIndex = 149;
+pub const GLOBAL_OPT_PUMHEIGHT: GlobalOptIndex = 150;
+pub const GLOBAL_OPT_PUMMAXWIDTH: GlobalOptIndex = 151;
+pub const GLOBAL_OPT_PUMWIDTH: GlobalOptIndex = 152;
+pub const GLOBAL_OPT_PYXVERSION: GlobalOptIndex = 153;
+pub const GLOBAL_OPT_QUICKFIXTEXTFUNC: GlobalOptIndex = 154;
+pub const GLOBAL_OPT_REDRAWDEBUG: GlobalOptIndex = 155;
+pub const GLOBAL_OPT_REDRAWTIME: GlobalOptIndex = 156;
+pub const GLOBAL_OPT_REGEXPENGINE: GlobalOptIndex = 157;
+pub const GLOBAL_OPT_REMAP: GlobalOptIndex = 158;
+pub const GLOBAL_OPT_REPORT: GlobalOptIndex = 159;
+pub const GLOBAL_OPT_REVINS: GlobalOptIndex = 160;
+pub const GLOBAL_OPT_RULER: GlobalOptIndex = 161;
+pub const GLOBAL_OPT_RULERFORMAT: GlobalOptIndex = 162;
+pub const GLOBAL_OPT_RUNTIMEPATH: GlobalOptIndex = 163;
+pub const GLOBAL_OPT_SCROLLJUMP: GlobalOptIndex = 164;
+pub const GLOBAL_OPT_SCROLLOFF: GlobalOptIndex = 165;
+pub const GLOBAL_OPT_SCROLLOPT: GlobalOptIndex = 166;
+pub const GLOBAL_OPT_SECTIONS: GlobalOptIndex = 167;
+pub const GLOBAL_OPT_SECURE: GlobalOptIndex = 168;
+pub const GLOBAL_OPT_SELECTION: GlobalOptIndex = 169;
+pub const GLOBAL_OPT_SELECTMODE: GlobalOptIndex = 170;
+pub const GLOBAL_OPT_SESSIONOPTIONS: GlobalOptIndex = 171;
+pub const GLOBAL_OPT_SHADA: GlobalOptIndex = 172;
+pub const GLOBAL_OPT_SHADAFILE: GlobalOptIndex = 173;
+pub const GLOBAL_OPT_SHELL: GlobalOptIndex = 174;
+pub const GLOBAL_OPT_SHELLCMDFLAG: GlobalOptIndex = 175;
+pub const GLOBAL_OPT_SHELLPIPE: GlobalOptIndex = 176;
+pub const GLOBAL_OPT_SHELLQUOTE: GlobalOptIndex = 177;
+pub const GLOBAL_OPT_SHELLREDIR: GlobalOptIndex = 178;
+pub const GLOBAL_OPT_SHELLSLASH: GlobalOptIndex = 179;
+pub const GLOBAL_OPT_SHELLTEMP: GlobalOptIndex = 180;
+pub const GLOBAL_OPT_SHELLXESCAPE: GlobalOptIndex = 181;
+pub const GLOBAL_OPT_SHELLXQUOTE: GlobalOptIndex = 182;
+pub const GLOBAL_OPT_SHIFTROUND: GlobalOptIndex = 183;
+pub const GLOBAL_OPT_SHORTMESS: GlobalOptIndex = 184;
+pub const GLOBAL_OPT_SHOWBREAK: GlobalOptIndex = 185;
+pub const GLOBAL_OPT_SHOWCMD: GlobalOptIndex = 186;
+pub const GLOBAL_OPT_SHOWCMDLOC: GlobalOptIndex = 187;
+pub const GLOBAL_OPT_SHOWFULLTAG: GlobalOptIndex = 188;
+pub const GLOBAL_OPT_SHOWMATCH: GlobalOptIndex = 189;
+pub const GLOBAL_OPT_SHOWMODE: GlobalOptIndex = 190;
+pub const GLOBAL_OPT_SHOWTABLINE: GlobalOptIndex = 191;
+pub const GLOBAL_OPT_SIDESCROLL: GlobalOptIndex = 192;
+pub const GLOBAL_OPT_SIDESCROLLOFF: GlobalOptIndex = 193;
+pub const GLOBAL_OPT_SMARTCASE: GlobalOptIndex = 194;
+pub const GLOBAL_OPT_SMARTTAB: GlobalOptIndex = 195;
+pub const GLOBAL_OPT_SPELLSUGGEST: GlobalOptIndex = 196;
+pub const GLOBAL_OPT_SPLITBELOW: GlobalOptIndex = 197;
+pub const GLOBAL_OPT_SPLITKEEP: GlobalOptIndex = 198;
+pub const GLOBAL_OPT_SPLITRIGHT: GlobalOptIndex = 199;
+pub const GLOBAL_OPT_STARTOFLINE: GlobalOptIndex = 200;
+pub const GLOBAL_OPT_STATUSLINE: GlobalOptIndex = 201;
+pub const GLOBAL_OPT_SUFFIXES: GlobalOptIndex = 202;
+pub const GLOBAL_OPT_SWITCHBUF: GlobalOptIndex = 203;
+pub const GLOBAL_OPT_TABCLOSE: GlobalOptIndex = 204;
+pub const GLOBAL_OPT_TABLINE: GlobalOptIndex = 205;
+pub const GLOBAL_OPT_TABPAGEMAX: GlobalOptIndex = 206;
+pub const GLOBAL_OPT_TAGBSEARCH: GlobalOptIndex = 207;
+pub const GLOBAL_OPT_TAGCASE: GlobalOptIndex = 208;
+pub const GLOBAL_OPT_TAGLENGTH: GlobalOptIndex = 209;
+pub const GLOBAL_OPT_TAGRELATIVE: GlobalOptIndex = 210;
+pub const GLOBAL_OPT_TAGS: GlobalOptIndex = 211;
+pub const GLOBAL_OPT_TAGSTACK: GlobalOptIndex = 212;
+pub const GLOBAL_OPT_TERMBIDI: GlobalOptIndex = 213;
+pub const GLOBAL_OPT_TERMENCODING: GlobalOptIndex = 214;
+pub const GLOBAL_OPT_TERMGUICOLORS: GlobalOptIndex = 215;
+pub const GLOBAL_OPT_TERMPASTEFILTER: GlobalOptIndex = 216;
+pub const GLOBAL_OPT_TERMSYNC: GlobalOptIndex = 217;
+pub const GLOBAL_OPT_TERSE: GlobalOptIndex = 218;
+pub const GLOBAL_OPT_THESAURUS: GlobalOptIndex = 219;
+pub const GLOBAL_OPT_THESAURUSFUNC: GlobalOptIndex = 220;
+pub const GLOBAL_OPT_TILDEOP: GlobalOptIndex = 221;
+pub const GLOBAL_OPT_TIMEOUT: GlobalOptIndex = 222;
+pub const GLOBAL_OPT_TIMEOUTLEN: GlobalOptIndex = 223;
+pub const GLOBAL_OPT_TITLE: GlobalOptIndex = 224;
+pub const GLOBAL_OPT_TITLELEN: GlobalOptIndex = 225;
+pub const GLOBAL_OPT_TITLEOLD: GlobalOptIndex = 226;
+pub const GLOBAL_OPT_TITLESTRING: GlobalOptIndex = 227;
+pub const GLOBAL_OPT_TTIMEOUT: GlobalOptIndex = 228;
+pub const GLOBAL_OPT_TTIMEOUTLEN: GlobalOptIndex = 229;
+pub const GLOBAL_OPT_TTYFAST: GlobalOptIndex = 230;
+pub const GLOBAL_OPT_UNDODIR: GlobalOptIndex = 231;
+pub const GLOBAL_OPT_UNDOLEVELS: GlobalOptIndex = 232;
+pub const GLOBAL_OPT_UNDORELOAD: GlobalOptIndex = 233;
+pub const GLOBAL_OPT_UPDATECOUNT: GlobalOptIndex = 234;
+pub const GLOBAL_OPT_UPDATETIME: GlobalOptIndex = 235;
+pub const GLOBAL_OPT_VERBOSE: GlobalOptIndex = 236;
+pub const GLOBAL_OPT_VERBOSEFILE: GlobalOptIndex = 237;
+pub const GLOBAL_OPT_VIEWDIR: GlobalOptIndex = 238;
+pub const GLOBAL_OPT_VIEWOPTIONS: GlobalOptIndex = 239;
+pub const GLOBAL_OPT_VIRTUALEDIT: GlobalOptIndex = 240;
+pub const GLOBAL_OPT_VISUALBELL: GlobalOptIndex = 241;
+pub const GLOBAL_OPT_WARN: GlobalOptIndex = 242;
+pub const GLOBAL_OPT_WHICHWRAP: GlobalOptIndex = 243;
+pub const GLOBAL_OPT_WILDCHAR: GlobalOptIndex = 244;
+pub const GLOBAL_OPT_WILDCHARM: GlobalOptIndex = 245;
+pub const GLOBAL_OPT_WILDIGNORE: GlobalOptIndex = 246;
+pub const GLOBAL_OPT_WILDIGNORECASE: GlobalOptIndex = 247;
+pub const GLOBAL_OPT_WILDMENU: GlobalOptIndex = 248;
+pub const GLOBAL_OPT_WILDMODE: GlobalOptIndex = 249;
+pub const GLOBAL_OPT_WILDOPTIONS: GlobalOptIndex = 250;
+pub const GLOBAL_OPT_WINALTKEYS: GlobalOptIndex = 251;
+pub const GLOBAL_OPT_WINBAR: GlobalOptIndex = 252;
+pub const GLOBAL_OPT_WINBORDER: GlobalOptIndex = 253;
+pub const GLOBAL_OPT_WINDOW: GlobalOptIndex = 254;
+pub const GLOBAL_OPT_WINHEIGHT: GlobalOptIndex = 255;
+pub const GLOBAL_OPT_WINMINHEIGHT: GlobalOptIndex = 256;
+pub const GLOBAL_OPT_WINMINWIDTH: GlobalOptIndex = 257;
+pub const GLOBAL_OPT_WINWIDTH: GlobalOptIndex = 258;
+pub const GLOBAL_OPT_WRAPSCAN: GlobalOptIndex = 259;
+pub const GLOBAL_OPT_WRITE: GlobalOptIndex = 260;
+pub const GLOBAL_OPT_WRITEANY: GlobalOptIndex = 261;
+pub const GLOBAL_OPT_WRITEBACKUP: GlobalOptIndex = 262;
+pub const GLOBAL_OPT_WRITEDELAY: GlobalOptIndex = 263;
 
 /// A row of a win-scoped option's value, within whatever holds it.
 pub type WinOptIndex = c_int;
-pub const kWinOptInvalid: WinOptIndex = -1;
-pub const kWinOptArabic: WinOptIndex = 0;
-pub const kWinOptBreakindent: WinOptIndex = 1;
-pub const kWinOptBreakindentopt: WinOptIndex = 2;
-pub const kWinOptColorcolumn: WinOptIndex = 3;
-pub const kWinOptConcealcursor: WinOptIndex = 4;
-pub const kWinOptConceallevel: WinOptIndex = 5;
-pub const kWinOptCursorbind: WinOptIndex = 6;
-pub const kWinOptCursorcolumn: WinOptIndex = 7;
-pub const kWinOptCursorline: WinOptIndex = 8;
-pub const kWinOptCursorlineopt: WinOptIndex = 9;
-pub const kWinOptDiff: WinOptIndex = 10;
-pub const kWinOptEventignorewin: WinOptIndex = 11;
-pub const kWinOptFillchars: WinOptIndex = 12;
-pub const kWinOptFoldcolumn: WinOptIndex = 13;
-pub const kWinOptFoldenable: WinOptIndex = 14;
-pub const kWinOptFoldexpr: WinOptIndex = 15;
-pub const kWinOptFoldignore: WinOptIndex = 16;
-pub const kWinOptFoldlevel: WinOptIndex = 17;
-pub const kWinOptFoldmarker: WinOptIndex = 18;
-pub const kWinOptFoldmethod: WinOptIndex = 19;
-pub const kWinOptFoldminlines: WinOptIndex = 20;
-pub const kWinOptFoldnestmax: WinOptIndex = 21;
-pub const kWinOptFoldtext: WinOptIndex = 22;
-pub const kWinOptLhistory: WinOptIndex = 23;
-pub const kWinOptLinebreak: WinOptIndex = 24;
-pub const kWinOptList: WinOptIndex = 25;
-pub const kWinOptListchars: WinOptIndex = 26;
-pub const kWinOptNumber: WinOptIndex = 27;
-pub const kWinOptNumberwidth: WinOptIndex = 28;
-pub const kWinOptPreviewwindow: WinOptIndex = 29;
-pub const kWinOptRelativenumber: WinOptIndex = 30;
-pub const kWinOptRightleft: WinOptIndex = 31;
-pub const kWinOptRightleftcmd: WinOptIndex = 32;
-pub const kWinOptScroll: WinOptIndex = 33;
-pub const kWinOptScrollbind: WinOptIndex = 34;
-pub const kWinOptScrolloff: WinOptIndex = 35;
-pub const kWinOptShowbreak: WinOptIndex = 36;
-pub const kWinOptSidescrolloff: WinOptIndex = 37;
-pub const kWinOptSigncolumn: WinOptIndex = 38;
-pub const kWinOptSmoothscroll: WinOptIndex = 39;
-pub const kWinOptSpell: WinOptIndex = 40;
-pub const kWinOptStatuscolumn: WinOptIndex = 41;
-pub const kWinOptStatusline: WinOptIndex = 42;
-pub const kWinOptVirtualedit: WinOptIndex = 43;
-pub const kWinOptWinbar: WinOptIndex = 44;
-pub const kWinOptWinblend: WinOptIndex = 45;
-pub const kWinOptWinfixbuf: WinOptIndex = 46;
-pub const kWinOptWinfixheight: WinOptIndex = 47;
-pub const kWinOptWinfixwidth: WinOptIndex = 48;
-pub const kWinOptWinhighlight: WinOptIndex = 49;
-pub const kWinOptWrap: WinOptIndex = 50;
+pub const WIN_OPT_INVALID: WinOptIndex = -1;
+pub const WIN_OPT_ARABIC: WinOptIndex = 0;
+pub const WIN_OPT_BREAKINDENT: WinOptIndex = 1;
+pub const WIN_OPT_BREAKINDENTOPT: WinOptIndex = 2;
+pub const WIN_OPT_COLORCOLUMN: WinOptIndex = 3;
+pub const WIN_OPT_CONCEALCURSOR: WinOptIndex = 4;
+pub const WIN_OPT_CONCEALLEVEL: WinOptIndex = 5;
+pub const WIN_OPT_CURSORBIND: WinOptIndex = 6;
+pub const WIN_OPT_CURSORCOLUMN: WinOptIndex = 7;
+pub const WIN_OPT_CURSORLINE: WinOptIndex = 8;
+pub const WIN_OPT_CURSORLINEOPT: WinOptIndex = 9;
+pub const WIN_OPT_DIFF: WinOptIndex = 10;
+pub const WIN_OPT_EVENTIGNOREWIN: WinOptIndex = 11;
+pub const WIN_OPT_FILLCHARS: WinOptIndex = 12;
+pub const WIN_OPT_FOLDCOLUMN: WinOptIndex = 13;
+pub const WIN_OPT_FOLDENABLE: WinOptIndex = 14;
+pub const WIN_OPT_FOLDEXPR: WinOptIndex = 15;
+pub const WIN_OPT_FOLDIGNORE: WinOptIndex = 16;
+pub const WIN_OPT_FOLDLEVEL: WinOptIndex = 17;
+pub const WIN_OPT_FOLDMARKER: WinOptIndex = 18;
+pub const WIN_OPT_FOLDMETHOD: WinOptIndex = 19;
+pub const WIN_OPT_FOLDMINLINES: WinOptIndex = 20;
+pub const WIN_OPT_FOLDNESTMAX: WinOptIndex = 21;
+pub const WIN_OPT_FOLDTEXT: WinOptIndex = 22;
+pub const WIN_OPT_LHISTORY: WinOptIndex = 23;
+pub const WIN_OPT_LINEBREAK: WinOptIndex = 24;
+pub const WIN_OPT_LIST: WinOptIndex = 25;
+pub const WIN_OPT_LISTCHARS: WinOptIndex = 26;
+pub const WIN_OPT_NUMBER: WinOptIndex = 27;
+pub const WIN_OPT_NUMBERWIDTH: WinOptIndex = 28;
+pub const WIN_OPT_PREVIEWWINDOW: WinOptIndex = 29;
+pub const WIN_OPT_RELATIVENUMBER: WinOptIndex = 30;
+pub const WIN_OPT_RIGHTLEFT: WinOptIndex = 31;
+pub const WIN_OPT_RIGHTLEFTCMD: WinOptIndex = 32;
+pub const WIN_OPT_SCROLL: WinOptIndex = 33;
+pub const WIN_OPT_SCROLLBIND: WinOptIndex = 34;
+pub const WIN_OPT_SCROLLOFF: WinOptIndex = 35;
+pub const WIN_OPT_SHOWBREAK: WinOptIndex = 36;
+pub const WIN_OPT_SIDESCROLLOFF: WinOptIndex = 37;
+pub const WIN_OPT_SIGNCOLUMN: WinOptIndex = 38;
+pub const WIN_OPT_SMOOTHSCROLL: WinOptIndex = 39;
+pub const WIN_OPT_SPELL: WinOptIndex = 40;
+pub const WIN_OPT_STATUSCOLUMN: WinOptIndex = 41;
+pub const WIN_OPT_STATUSLINE: WinOptIndex = 42;
+pub const WIN_OPT_VIRTUALEDIT: WinOptIndex = 43;
+pub const WIN_OPT_WINBAR: WinOptIndex = 44;
+pub const WIN_OPT_WINBLEND: WinOptIndex = 45;
+pub const WIN_OPT_WINFIXBUF: WinOptIndex = 46;
+pub const WIN_OPT_WINFIXHEIGHT: WinOptIndex = 47;
+pub const WIN_OPT_WINFIXWIDTH: WinOptIndex = 48;
+pub const WIN_OPT_WINHIGHLIGHT: WinOptIndex = 49;
+pub const WIN_OPT_WRAP: WinOptIndex = 50;
 
 /// A row of a buf-scoped option's value, within whatever holds it.
 pub type BufOptIndex = c_int;
-pub const kBufOptInvalid: BufOptIndex = -1;
-pub const kBufOptAutocomplete: BufOptIndex = 0;
-pub const kBufOptAutoindent: BufOptIndex = 1;
-pub const kBufOptAutoread: BufOptIndex = 2;
-pub const kBufOptBackupcopy: BufOptIndex = 3;
-pub const kBufOptBinary: BufOptIndex = 4;
-pub const kBufOptBomb: BufOptIndex = 5;
-pub const kBufOptBufhidden: BufOptIndex = 6;
-pub const kBufOptBuflisted: BufOptIndex = 7;
-pub const kBufOptBuftype: BufOptIndex = 8;
-pub const kBufOptBusy: BufOptIndex = 9;
-pub const kBufOptChannel: BufOptIndex = 10;
-pub const kBufOptCindent: BufOptIndex = 11;
-pub const kBufOptCinkeys: BufOptIndex = 12;
-pub const kBufOptCinoptions: BufOptIndex = 13;
-pub const kBufOptCinscopedecls: BufOptIndex = 14;
-pub const kBufOptCinwords: BufOptIndex = 15;
-pub const kBufOptComments: BufOptIndex = 16;
-pub const kBufOptCommentstring: BufOptIndex = 17;
-pub const kBufOptComplete: BufOptIndex = 18;
-pub const kBufOptCompletefunc: BufOptIndex = 19;
-pub const kBufOptCompleteopt: BufOptIndex = 20;
-pub const kBufOptCompleteslash: BufOptIndex = 21;
-pub const kBufOptCopyindent: BufOptIndex = 22;
-pub const kBufOptDefine: BufOptIndex = 23;
-pub const kBufOptDictionary: BufOptIndex = 24;
-pub const kBufOptDiffanchors: BufOptIndex = 25;
-pub const kBufOptEndoffile: BufOptIndex = 26;
-pub const kBufOptEndofline: BufOptIndex = 27;
-pub const kBufOptEqualprg: BufOptIndex = 28;
-pub const kBufOptErrorformat: BufOptIndex = 29;
-pub const kBufOptExpandtab: BufOptIndex = 30;
-pub const kBufOptFileencoding: BufOptIndex = 31;
-pub const kBufOptFileformat: BufOptIndex = 32;
-pub const kBufOptFiletype: BufOptIndex = 33;
-pub const kBufOptFindfunc: BufOptIndex = 34;
-pub const kBufOptFixendofline: BufOptIndex = 35;
-pub const kBufOptFormatexpr: BufOptIndex = 36;
-pub const kBufOptFormatlistpat: BufOptIndex = 37;
-pub const kBufOptFormatoptions: BufOptIndex = 38;
-pub const kBufOptFormatprg: BufOptIndex = 39;
-pub const kBufOptFsync: BufOptIndex = 40;
-pub const kBufOptGrepformat: BufOptIndex = 41;
-pub const kBufOptGrepprg: BufOptIndex = 42;
-pub const kBufOptIminsert: BufOptIndex = 43;
-pub const kBufOptImsearch: BufOptIndex = 44;
-pub const kBufOptInclude: BufOptIndex = 45;
-pub const kBufOptIncludeexpr: BufOptIndex = 46;
-pub const kBufOptIndentexpr: BufOptIndex = 47;
-pub const kBufOptIndentkeys: BufOptIndex = 48;
-pub const kBufOptInfercase: BufOptIndex = 49;
-pub const kBufOptIskeyword: BufOptIndex = 50;
-pub const kBufOptKeymap: BufOptIndex = 51;
-pub const kBufOptKeywordprg: BufOptIndex = 52;
-pub const kBufOptLisp: BufOptIndex = 53;
-pub const kBufOptLispoptions: BufOptIndex = 54;
-pub const kBufOptLispwords: BufOptIndex = 55;
-pub const kBufOptMakeencoding: BufOptIndex = 56;
-pub const kBufOptMakeprg: BufOptIndex = 57;
-pub const kBufOptMatchpairs: BufOptIndex = 58;
-pub const kBufOptModeline: BufOptIndex = 59;
-pub const kBufOptModifiable: BufOptIndex = 60;
-pub const kBufOptModified: BufOptIndex = 61;
-pub const kBufOptNrformats: BufOptIndex = 62;
-pub const kBufOptOmnifunc: BufOptIndex = 63;
-pub const kBufOptPath: BufOptIndex = 64;
-pub const kBufOptPreserveindent: BufOptIndex = 65;
-pub const kBufOptQuoteescape: BufOptIndex = 66;
-pub const kBufOptReadonly: BufOptIndex = 67;
-pub const kBufOptScrollback: BufOptIndex = 68;
-pub const kBufOptShiftwidth: BufOptIndex = 69;
-pub const kBufOptSmartindent: BufOptIndex = 70;
-pub const kBufOptSofttabstop: BufOptIndex = 71;
-pub const kBufOptSpellcapcheck: BufOptIndex = 72;
-pub const kBufOptSpellfile: BufOptIndex = 73;
-pub const kBufOptSpelllang: BufOptIndex = 74;
-pub const kBufOptSpelloptions: BufOptIndex = 75;
-pub const kBufOptSuffixesadd: BufOptIndex = 76;
-pub const kBufOptSwapfile: BufOptIndex = 77;
-pub const kBufOptSynmaxcol: BufOptIndex = 78;
-pub const kBufOptSyntax: BufOptIndex = 79;
-pub const kBufOptTabstop: BufOptIndex = 80;
-pub const kBufOptTagcase: BufOptIndex = 81;
-pub const kBufOptTagfunc: BufOptIndex = 82;
-pub const kBufOptTags: BufOptIndex = 83;
-pub const kBufOptTextwidth: BufOptIndex = 84;
-pub const kBufOptThesaurus: BufOptIndex = 85;
-pub const kBufOptThesaurusfunc: BufOptIndex = 86;
-pub const kBufOptUndofile: BufOptIndex = 87;
-pub const kBufOptUndolevels: BufOptIndex = 88;
-pub const kBufOptVarsofttabstop: BufOptIndex = 89;
-pub const kBufOptVartabstop: BufOptIndex = 90;
-pub const kBufOptWrapmargin: BufOptIndex = 91;
+pub const BUF_OPT_INVALID: BufOptIndex = -1;
+pub const BUF_OPT_AUTOCOMPLETE: BufOptIndex = 0;
+pub const BUF_OPT_AUTOINDENT: BufOptIndex = 1;
+pub const BUF_OPT_AUTOREAD: BufOptIndex = 2;
+pub const BUF_OPT_BACKUPCOPY: BufOptIndex = 3;
+pub const BUF_OPT_BINARY: BufOptIndex = 4;
+pub const BUF_OPT_BOMB: BufOptIndex = 5;
+pub const BUF_OPT_BUFHIDDEN: BufOptIndex = 6;
+pub const BUF_OPT_BUFLISTED: BufOptIndex = 7;
+pub const BUF_OPT_BUFTYPE: BufOptIndex = 8;
+pub const BUF_OPT_BUSY: BufOptIndex = 9;
+pub const BUF_OPT_CHANNEL: BufOptIndex = 10;
+pub const BUF_OPT_CINDENT: BufOptIndex = 11;
+pub const BUF_OPT_CINKEYS: BufOptIndex = 12;
+pub const BUF_OPT_CINOPTIONS: BufOptIndex = 13;
+pub const BUF_OPT_CINSCOPEDECLS: BufOptIndex = 14;
+pub const BUF_OPT_CINWORDS: BufOptIndex = 15;
+pub const BUF_OPT_COMMENTS: BufOptIndex = 16;
+pub const BUF_OPT_COMMENTSTRING: BufOptIndex = 17;
+pub const BUF_OPT_COMPLETE: BufOptIndex = 18;
+pub const BUF_OPT_COMPLETEFUNC: BufOptIndex = 19;
+pub const BUF_OPT_COMPLETEOPT: BufOptIndex = 20;
+pub const BUF_OPT_COMPLETESLASH: BufOptIndex = 21;
+pub const BUF_OPT_COPYINDENT: BufOptIndex = 22;
+pub const BUF_OPT_DEFINE: BufOptIndex = 23;
+pub const BUF_OPT_DICTIONARY: BufOptIndex = 24;
+pub const BUF_OPT_DIFFANCHORS: BufOptIndex = 25;
+pub const BUF_OPT_ENDOFFILE: BufOptIndex = 26;
+pub const BUF_OPT_ENDOFLINE: BufOptIndex = 27;
+pub const BUF_OPT_EQUALPRG: BufOptIndex = 28;
+pub const BUF_OPT_ERRORFORMAT: BufOptIndex = 29;
+pub const BUF_OPT_EXPANDTAB: BufOptIndex = 30;
+pub const BUF_OPT_FILEENCODING: BufOptIndex = 31;
+pub const BUF_OPT_FILEFORMAT: BufOptIndex = 32;
+pub const BUF_OPT_FILETYPE: BufOptIndex = 33;
+pub const BUF_OPT_FINDFUNC: BufOptIndex = 34;
+pub const BUF_OPT_FIXENDOFLINE: BufOptIndex = 35;
+pub const BUF_OPT_FORMATEXPR: BufOptIndex = 36;
+pub const BUF_OPT_FORMATLISTPAT: BufOptIndex = 37;
+pub const BUF_OPT_FORMATOPTIONS: BufOptIndex = 38;
+pub const BUF_OPT_FORMATPRG: BufOptIndex = 39;
+pub const BUF_OPT_FSYNC: BufOptIndex = 40;
+pub const BUF_OPT_GREPFORMAT: BufOptIndex = 41;
+pub const BUF_OPT_GREPPRG: BufOptIndex = 42;
+pub const BUF_OPT_IMINSERT: BufOptIndex = 43;
+pub const BUF_OPT_IMSEARCH: BufOptIndex = 44;
+pub const BUF_OPT_INCLUDE: BufOptIndex = 45;
+pub const BUF_OPT_INCLUDEEXPR: BufOptIndex = 46;
+pub const BUF_OPT_INDENTEXPR: BufOptIndex = 47;
+pub const BUF_OPT_INDENTKEYS: BufOptIndex = 48;
+pub const BUF_OPT_INFERCASE: BufOptIndex = 49;
+pub const BUF_OPT_ISKEYWORD: BufOptIndex = 50;
+pub const BUF_OPT_KEYMAP: BufOptIndex = 51;
+pub const BUF_OPT_KEYWORDPRG: BufOptIndex = 52;
+pub const BUF_OPT_LISP: BufOptIndex = 53;
+pub const BUF_OPT_LISPOPTIONS: BufOptIndex = 54;
+pub const BUF_OPT_LISPWORDS: BufOptIndex = 55;
+pub const BUF_OPT_MAKEENCODING: BufOptIndex = 56;
+pub const BUF_OPT_MAKEPRG: BufOptIndex = 57;
+pub const BUF_OPT_MATCHPAIRS: BufOptIndex = 58;
+pub const BUF_OPT_MODELINE: BufOptIndex = 59;
+pub const BUF_OPT_MODIFIABLE: BufOptIndex = 60;
+pub const BUF_OPT_MODIFIED: BufOptIndex = 61;
+pub const BUF_OPT_NRFORMATS: BufOptIndex = 62;
+pub const BUF_OPT_OMNIFUNC: BufOptIndex = 63;
+pub const BUF_OPT_PATH: BufOptIndex = 64;
+pub const BUF_OPT_PRESERVEINDENT: BufOptIndex = 65;
+pub const BUF_OPT_QUOTEESCAPE: BufOptIndex = 66;
+pub const BUF_OPT_READONLY: BufOptIndex = 67;
+pub const BUF_OPT_SCROLLBACK: BufOptIndex = 68;
+pub const BUF_OPT_SHIFTWIDTH: BufOptIndex = 69;
+pub const BUF_OPT_SMARTINDENT: BufOptIndex = 70;
+pub const BUF_OPT_SOFTTABSTOP: BufOptIndex = 71;
+pub const BUF_OPT_SPELLCAPCHECK: BufOptIndex = 72;
+pub const BUF_OPT_SPELLFILE: BufOptIndex = 73;
+pub const BUF_OPT_SPELLLANG: BufOptIndex = 74;
+pub const BUF_OPT_SPELLOPTIONS: BufOptIndex = 75;
+pub const BUF_OPT_SUFFIXESADD: BufOptIndex = 76;
+pub const BUF_OPT_SWAPFILE: BufOptIndex = 77;
+pub const BUF_OPT_SYNMAXCOL: BufOptIndex = 78;
+pub const BUF_OPT_SYNTAX: BufOptIndex = 79;
+pub const BUF_OPT_TABSTOP: BufOptIndex = 80;
+pub const BUF_OPT_TAGCASE: BufOptIndex = 81;
+pub const BUF_OPT_TAGFUNC: BufOptIndex = 82;
+pub const BUF_OPT_TAGS: BufOptIndex = 83;
+pub const BUF_OPT_TEXTWIDTH: BufOptIndex = 84;
+pub const BUF_OPT_THESAURUS: BufOptIndex = 85;
+pub const BUF_OPT_THESAURUSFUNC: BufOptIndex = 86;
+pub const BUF_OPT_UNDOFILE: BufOptIndex = 87;
+pub const BUF_OPT_UNDOLEVELS: BufOptIndex = 88;
+pub const BUF_OPT_VARSOFTTABSTOP: BufOptIndex = 89;
+pub const BUF_OPT_VARTABSTOP: BufOptIndex = 90;
+pub const BUF_OPT_WRAPMARGIN: BufOptIndex = 91;
 
 /// `BufOptIndex` -> `OptIndex`: which option a buffer-local row belongs to.
-pub static buf_opt_idx: [OptIndex; 92] = [
-    kOptAutocomplete,
-    kOptAutoindent,
-    kOptAutoread,
-    kOptBackupcopy,
-    kOptBinary,
-    kOptBomb,
-    kOptBufhidden,
-    kOptBuflisted,
-    kOptBuftype,
-    kOptBusy,
-    kOptChannel,
-    kOptCindent,
-    kOptCinkeys,
-    kOptCinoptions,
-    kOptCinscopedecls,
-    kOptCinwords,
-    kOptComments,
-    kOptCommentstring,
-    kOptComplete,
-    kOptCompletefunc,
-    kOptCompleteopt,
-    kOptCompleteslash,
-    kOptCopyindent,
-    kOptDefine,
-    kOptDictionary,
-    kOptDiffanchors,
-    kOptEndoffile,
-    kOptEndofline,
-    kOptEqualprg,
-    kOptErrorformat,
-    kOptExpandtab,
-    kOptFileencoding,
-    kOptFileformat,
-    kOptFiletype,
-    kOptFindfunc,
-    kOptFixendofline,
-    kOptFormatexpr,
-    kOptFormatlistpat,
-    kOptFormatoptions,
-    kOptFormatprg,
-    kOptFsync,
-    kOptGrepformat,
-    kOptGrepprg,
-    kOptIminsert,
-    kOptImsearch,
-    kOptInclude,
-    kOptIncludeexpr,
-    kOptIndentexpr,
-    kOptIndentkeys,
-    kOptInfercase,
-    kOptIskeyword,
-    kOptKeymap,
-    kOptKeywordprg,
-    kOptLisp,
-    kOptLispoptions,
-    kOptLispwords,
-    kOptMakeencoding,
-    kOptMakeprg,
-    kOptMatchpairs,
-    kOptModeline,
-    kOptModifiable,
-    kOptModified,
-    kOptNrformats,
-    kOptOmnifunc,
-    kOptPath,
-    kOptPreserveindent,
-    kOptQuoteescape,
-    kOptReadonly,
-    kOptScrollback,
-    kOptShiftwidth,
-    kOptSmartindent,
-    kOptSofttabstop,
-    kOptSpellcapcheck,
-    kOptSpellfile,
-    kOptSpelllang,
-    kOptSpelloptions,
-    kOptSuffixesadd,
-    kOptSwapfile,
-    kOptSynmaxcol,
-    kOptSyntax,
-    kOptTabstop,
-    kOptTagcase,
-    kOptTagfunc,
-    kOptTags,
-    kOptTextwidth,
-    kOptThesaurus,
-    kOptThesaurusfunc,
-    kOptUndofile,
-    kOptUndolevels,
-    kOptVarsofttabstop,
-    kOptVartabstop,
-    kOptWrapmargin,
+pub static BUF_OPT_IDX: [OptIndex; 92] = [
+    OPT_AUTOCOMPLETE,
+    OPT_AUTOINDENT,
+    OPT_AUTOREAD,
+    OPT_BACKUPCOPY,
+    OPT_BINARY,
+    OPT_BOMB,
+    OPT_BUFHIDDEN,
+    OPT_BUFLISTED,
+    OPT_BUFTYPE,
+    OPT_BUSY,
+    OPT_CHANNEL,
+    OPT_CINDENT,
+    OPT_CINKEYS,
+    OPT_CINOPTIONS,
+    OPT_CINSCOPEDECLS,
+    OPT_CINWORDS,
+    OPT_COMMENTS,
+    OPT_COMMENTSTRING,
+    OPT_COMPLETE,
+    OPT_COMPLETEFUNC,
+    OPT_COMPLETEOPT,
+    OPT_COMPLETESLASH,
+    OPT_COPYINDENT,
+    OPT_DEFINE,
+    OPT_DICTIONARY,
+    OPT_DIFFANCHORS,
+    OPT_ENDOFFILE,
+    OPT_ENDOFLINE,
+    OPT_EQUALPRG,
+    OPT_ERRORFORMAT,
+    OPT_EXPANDTAB,
+    OPT_FILEENCODING,
+    OPT_FILEFORMAT,
+    OPT_FILETYPE,
+    OPT_FINDFUNC,
+    OPT_FIXENDOFLINE,
+    OPT_FORMATEXPR,
+    OPT_FORMATLISTPAT,
+    OPT_FORMATOPTIONS,
+    OPT_FORMATPRG,
+    OPT_FSYNC,
+    OPT_GREPFORMAT,
+    OPT_GREPPRG,
+    OPT_IMINSERT,
+    OPT_IMSEARCH,
+    OPT_INCLUDE,
+    OPT_INCLUDEEXPR,
+    OPT_INDENTEXPR,
+    OPT_INDENTKEYS,
+    OPT_INFERCASE,
+    OPT_ISKEYWORD,
+    OPT_KEYMAP,
+    OPT_KEYWORDPRG,
+    OPT_LISP,
+    OPT_LISPOPTIONS,
+    OPT_LISPWORDS,
+    OPT_MAKEENCODING,
+    OPT_MAKEPRG,
+    OPT_MATCHPAIRS,
+    OPT_MODELINE,
+    OPT_MODIFIABLE,
+    OPT_MODIFIED,
+    OPT_NRFORMATS,
+    OPT_OMNIFUNC,
+    OPT_PATH,
+    OPT_PRESERVEINDENT,
+    OPT_QUOTEESCAPE,
+    OPT_READONLY,
+    OPT_SCROLLBACK,
+    OPT_SHIFTWIDTH,
+    OPT_SMARTINDENT,
+    OPT_SOFTTABSTOP,
+    OPT_SPELLCAPCHECK,
+    OPT_SPELLFILE,
+    OPT_SPELLLANG,
+    OPT_SPELLOPTIONS,
+    OPT_SUFFIXESADD,
+    OPT_SWAPFILE,
+    OPT_SYNMAXCOL,
+    OPT_SYNTAX,
+    OPT_TABSTOP,
+    OPT_TAGCASE,
+    OPT_TAGFUNC,
+    OPT_TAGS,
+    OPT_TEXTWIDTH,
+    OPT_THESAURUS,
+    OPT_THESAURUSFUNC,
+    OPT_UNDOFILE,
+    OPT_UNDOLEVELS,
+    OPT_VARSOFTTABSTOP,
+    OPT_VARTABSTOP,
+    OPT_WRAPMARGIN,
 ];

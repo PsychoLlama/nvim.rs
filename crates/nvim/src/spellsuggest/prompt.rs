@@ -60,7 +60,7 @@ use crate::narrow::as_index;
 use crate::narrow::len_as_int;
 use crate::normal::{end_visual_mode, visual_active, visual_anchor};
 use crate::option::vars::p_verbose;
-use crate::options::kOptBoFlagSpell;
+use crate::options::OPT_BO_FLAG_SPELL;
 use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
@@ -171,7 +171,7 @@ fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
         // The Visual selection is the bad word, but only within a
         // single line.
         if Win::current().w_cursor.lnum != visual_anchor().lnum {
-            vim_beep(kOptBoFlagSpell as core::ffi::c_uint);
+            vim_beep(OPT_BO_FLAG_SPELL as core::ffi::c_uint);
             return None;
         }
         let mut badlen = Win::current().w_cursor.col - visual_anchor().col;

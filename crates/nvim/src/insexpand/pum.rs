@@ -2,7 +2,7 @@
 //!
 //! [`ins_compl_build_pum`] is the whole of it — it filters the list by the
 //! current leader, scores and sorts what survives, and fills
-//! `compl_match_array`.  [`ins_compl_show_pum`] then hands that to
+//! `CMDLINE_PUM`.  [`ins_compl_show_pum`] then hands that to
 //! `pum_display`, and [`trigger_complete_changed_event`] fires
 //! `CompleteChanged` with the selected item.
 
@@ -60,7 +60,7 @@ pub(crate) struct MatchRows {
 }
 
 impl MatchRows {
-    /// No array: upstream's null `compl_match_array`.
+    /// No array: upstream's null `CMDLINE_PUM`.
     pub(crate) const EMPTY: MatchRows = MatchRows {
         rows: None,
         ids: Vec::new(),
@@ -69,7 +69,7 @@ impl MatchRows {
 
 impl ComplMatchArray {
     /// Whether there is no array at all -- upstream's
-    /// `compl_match_array == NULL`, which is how the completion asks whether
+    /// `CMDLINE_PUM == NULL`, which is how the completion asks whether
     /// a menu is up.
     pub(crate) fn is_unset(self) -> bool {
         COMPL_MATCH_ARRAY.with(|array| array.ids.is_empty())
@@ -150,7 +150,8 @@ pub(crate) fn ins_compl_del_pum() {
 /// Whether a popup menu is wanted at all: `'completeopt'` has `menu` or
 /// `menuone`, or autocompletion is on.
 pub fn pum_wanted() -> bool {
-    completeopt_flags() & (kOptCotFlagMenu | kOptCotFlagMenuone) != 0 || COMPL_AUTOCOMPLETE.get()
+    completeopt_flags() & (OPT_COT_FLAG_MENU | OPT_COT_FLAG_MENUONE) != 0
+        || COMPL_AUTOCOMPLETE.get()
 }
 
 /// Whether there are enough matches to show one: two, or one under
@@ -166,7 +167,7 @@ pub(crate) fn pum_enough_matches() -> bool {
             }
         }
     }
-    if completeopt_flags() & kOptCotFlagMenuone != 0 || COMPL_AUTOCOMPLETE.get() {
+    if completeopt_flags() & OPT_COT_FLAG_MENUONE != 0 || COMPL_AUTOCOMPLETE.get() {
         return i >= 1;
     }
     i >= 2
@@ -213,7 +214,7 @@ fn match_position_message(number: c_int, total: c_int) -> XString {
     XString::from(text.as_str())
 }
 
-/// Build `dest` by prepending the buffer text from `startcol` to `compl_col`
+/// Build `dest` by prepending the buffer text from `startcol` to `COMPL_COL`
 /// to `src`.
 pub(crate) fn prepend_startcol_text(dest: ComplStr, src: ComplStr, startcol: ColNr) {
     let prepend_len = usize::try_from(COMPL_COL.get() - startcol).unwrap_or(0);
@@ -240,7 +241,7 @@ pub(crate) fn clear_adjusted_leader() {
 /// The leader `match_0` should be filtered against, adjusted for the startcol
 /// of the `'complete'` source it came from.
 ///
-/// A source whose startcol is *before* `compl_col` matches text the leader
+/// A source whose startcol is *before* `COMPL_COL` matches text the leader
 /// does not contain, so the leader has that text prepended; the result is
 /// cached in `adjusted_leader`, which [`clear_adjusted_leader`] drops.
 pub(crate) fn get_leader_for_startcol(match_0: MatchId, cached: bool) -> ComplStr {
@@ -256,8 +257,8 @@ pub(crate) fn get_leader_for_startcol(match_0: MatchId, cached: bool) -> ComplSt
         if compl_leader().is_unset() {
             // The leader is not set yet (`'autocomplete'` fires before
             // `compl_leader` is initialised). Matches starting at or after
-            // `compl_col` fall back to the original text; matches starting
-            // *before* it carry pre-`compl_col` text that must not be
+            // `COMPL_COL` fall back to the original text; matches starting
+            // *before* it carry pre-`COMPL_COL` text that must not be
             // compared with the original text, so the empty
             // `compl_leader` is returned to mean "no prefix filter".
             if startcol.is_none_or(|start| start >= COMPL_COL.get()) {
@@ -283,7 +284,7 @@ pub(crate) fn get_leader_for_startcol(match_0: MatchId, cached: bool) -> ComplSt
     compl_leader()
 }
 
-/// Build `compl_match_array` from the match list.
+/// Build `CMDLINE_PUM` from the match list.
 ///
 /// Returns the entry that should be selected, if any.
 pub(crate) fn ins_compl_build_pum() -> Option<c_int> {
@@ -299,7 +300,7 @@ pub(crate) fn ins_compl_build_pum() -> Option<c_int> {
     }
 
     let has_preinsert = ins_compl_has_preinsert();
-    let compl_no_select = completeopt_flags() & kOptCotFlagNoselect != 0
+    let compl_no_select = completeopt_flags() & OPT_COT_FLAG_NOSELECT != 0
         || (COMPL_AUTOCOMPLETE.get() && !has_preinsert);
 
     // The matches the menu shows, in list order.
@@ -320,7 +321,7 @@ pub(crate) fn ins_compl_build_pum() -> Option<c_int> {
         _ => false,
     };
     if leader_is_orig && !shown_match_ok {
-        // Upstream dereferences `compl_first_match` here without checking.
+        // Upstream dereferences `COMPL_FIRST_MATCH` here without checking.
         let head = first_match().expect("a menu is built from a non-empty list");
         COMPL_SHOWN_MATCH.set(if compl_no_select {
             Some(head)
@@ -413,7 +414,7 @@ pub(crate) fn ins_compl_build_pum() -> Option<c_int> {
         if shown_match() == Some(comp) && !cot_fuzzy() {
             did_find_shown_match = true;
             // When the original text is the shown match, don't set
-            // `compl_shown_match`.
+            // `COMPL_SHOWN_MATCH`.
             if comp.is_original() {
                 shown_match_ok = true;
             }
@@ -464,7 +465,7 @@ pub(crate) fn ins_compl_build_pum() -> Option<c_int> {
     cur
 }
 
-/// Show the popup menu, adjusting `compl_shown_match` to an entry that is
+/// Show the popup menu, adjusting `COMPL_SHOWN_MATCH` to an entry that is
 /// actually displayed.
 pub fn ins_compl_show_pum() {
     if !pum_wanted() || !pum_enough_matches() {
@@ -516,7 +517,7 @@ pub fn ins_compl_show_pum() {
     }
 }
 
-/// Is `selected` (a menu index) the match `compl_curr_match` points at?
+/// Is `selected` (a menu index) the match `COMPL_CURR_MATCH` points at?
 pub(crate) fn compl_match_curr_select(selected: c_int) -> bool {
     if selected < 0 {
         return false;
@@ -595,7 +596,7 @@ pub(crate) fn find_next_match_in_menu() -> MatchId {
 /// The "match 3 of 17" / "Back at original" line under the menu.
 pub(crate) fn ins_compl_show_statusmsg() {
     // Show a message about what (completion) mode we're in.
-    // Upstream dereferences `compl_first_match` here without checking.
+    // Upstream dereferences `COMPL_FIRST_MATCH` here without checking.
     let head = first_match().expect("a completion showing a message has matches");
     if is_first_match(head.next()) {
         let text = if compl_status_adding() && COMPL_LENGTH.get() > 1 {

@@ -656,7 +656,7 @@ impl TryFrom<c_int> for SpecialKey {
 
 crate::flag_set! {
     /// Modifier bits, as they travel in a `K_SPECIAL KS_MODIFIER <bits>`
-    /// sequence and in `mod_mask`.
+    /// sequence and in `MOD_MASK`.
     ///
     /// Two of the eight bits are not a flag at all: together they are a
     /// *count*, and [`Self::MULTI_CLICK`] is the sub-field they occupy.

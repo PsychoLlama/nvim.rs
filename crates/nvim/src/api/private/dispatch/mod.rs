@@ -74,7 +74,7 @@ mod known {
 
 use known::*;
 
-/// One row of [`method_handlers`]: the name a client calls the method by, the
+/// One row of [`METHOD_HANDLERS`]: the name a client calls the method by, the
 /// wrapper that serves it, whether it may run straight from the RPC read
 /// callback instead of being deferred to the main loop, and whether its result
 const fn handler(name: &'static CStr, f: ApiDispatchFn, fast: bool) -> MsgpackRpcRequestHandler {
@@ -96,7 +96,7 @@ pub(crate) const NO_HANDLER: MsgpackRpcRequestHandler = MsgpackRpcRequestHandler
 /// Look a method up by name.
 pub fn msgpack_rpc_get_handler_for(name: &[u8]) -> Result<MsgpackRpcRequestHandler, Error> {
     if let Some(index) = handler_index(name) {
-        return Ok(method_handlers[index]);
+        return Ok(METHOD_HANDLERS[index]);
     }
     // The stand-in for an empty name is rendered as upstream measured it,
     // with `sizeof`: terminator included, so the message keeps that NUL.

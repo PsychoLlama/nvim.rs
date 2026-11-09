@@ -52,7 +52,7 @@ use crate::message::state::{MSG_COL, MSG_ROW};
 use crate::message::{msg_clr_eos, msg_grid_view};
 use crate::option::defs::{OptIndex, OptionSetFlags};
 use crate::option::vars::{P_RUF, P_STL, P_WBR, p_ch, p_ru, p_ruf, p_tal};
-use crate::options::{kOptRulerformat, kOptStatusline, kOptTabline, kOptWinbar};
+use crate::options::{OPT_RULERFORMAT, OPT_STATUSLINE, OPT_TABLINE, OPT_WINBAR};
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
@@ -126,7 +126,7 @@ impl Target {
             };
             let source = Source {
                 fmt: p_tal(|value| value.to_bytes().to_vec()),
-                opt: (kOptTabline, OptionSetFlags::NONE),
+                opt: (OPT_TABLINE, OptionSetFlags::NONE),
             };
             return (target.maxwidth > 0).then_some((target, source));
         };
@@ -154,7 +154,7 @@ impl Target {
             let source = Source {
                 fmt: wbr.to_vec(),
                 opt: (
-                    kOptWinbar,
+                    OPT_WINBAR,
                     if local {
                         OptionSetFlags::LOCAL
                     } else {
@@ -201,7 +201,7 @@ impl Target {
             }
             Source {
                 fmt,
-                opt: (kOptRulerformat, OptionSetFlags::NONE),
+                opt: (OPT_RULERFORMAT, OptionSetFlags::NONE),
             }
         } else {
             let local = !win.w_onebuf_opt.wo_stl.bytes().is_empty();
@@ -209,7 +209,7 @@ impl Target {
             Source {
                 fmt: stl.to_vec(),
                 opt: (
-                    kOptStatusline,
+                    OPT_STATUSLINE,
                     if local {
                         OptionSetFlags::LOCAL
                     } else {

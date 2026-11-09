@@ -1,10 +1,10 @@
 //! What an autocommand is being fired for, and what it may not do.
 //!
 //! `<afile>`, `<abuf>` and `<amatch>` are not arguments: the trigger writes
-//! them here (`autocmd_fname`, `autocmd_bufnr`, `autocmd_match`) and the
+//! them here (`AUTOCMD_FNAME`, `AUTOCMD_BUFNR`, `AUTOCMD_MATCH`) and the
 //! expansion reads them back, so a nested trigger has to save and restore
 //! them. Around those sit the "an autocommand is running" flag every
-//! re-entrancy check tests (`autocmd_busy`), the two counters that suppress
+//! re-entrancy check tests (`AUTOCMD_BUSY`), the two counters that suppress
 //! `BufEnter`/`BufLeave` for a switch the user did not ask for, the
 //! `CursorHold` and `CursorMoved` bookkeeping, the group tables, and the
 //! queue of events deferred out of a context that could not fire them.
@@ -38,7 +38,7 @@ state_record! {
     /// and the function-scope statics of the triggers.
     pub(crate) struct AutocmdState in AUTOCMD as AutocmdField;
 
-    /// The window `CursorMoved` last fired in, with [`last_cursormoved`]
+    /// The window `CursorMoved` last fired in, with [`LAST_CURSORMOVED`]
     /// its cursor then.
     pub(crate) LAST_CURSORMOVED_WIN: Option<WinId> = None;
     pub(crate) LAST_CURSORMOVED: Pos = Pos {

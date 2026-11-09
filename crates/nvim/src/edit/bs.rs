@@ -90,7 +90,7 @@ pub(crate) fn ins_del() {
             beep_backspace();
         } else {
             Win::current().w_cursor.col = temp;
-            // Adjust `orig_line_count` when more lines were deleted than
+            // Adjust `ORIG_LINE_COUNT` when more lines were deleted than
             // added, so a later `open_line` can still reach every line.
             if STATE.get() & VREPLACE_FLAG != 0
                 && ORIG_LINE_COUNT.get() > Buf::current().b_ml.ml_line_count
@@ -531,7 +531,7 @@ fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
 /// Beep, or flash, for a backspace that could not delete anything.
 #[inline(always)]
 fn beep_backspace() {
-    vim_beep(kOptBoFlagBackspace as ::core::ffi::c_uint)
+    vim_beep(OPT_BO_FLAG_BACKSPACE as ::core::ffi::c_uint)
 }
 
 /// Step the cursor one character forward, over a line break if need be.

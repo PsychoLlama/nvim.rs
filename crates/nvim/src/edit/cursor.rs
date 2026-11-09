@@ -111,7 +111,7 @@ pub(crate) fn oneright() -> Result<(), Failed> {
 
     // Move "l" bytes right, but do not end up on the NUL unless
     // 'virtualedit' contains "onemore".
-    if last && get_ve_flags(win) & kOptVeFlagOnemore == 0 {
+    if last && get_ve_flags(win) & OPT_VE_FLAG_ONEMORE == 0 {
         return Err(Failed);
     }
     win.w_cursor.col += ColNr::try_from(l).unwrap_or(ColNr::MAX).get();
@@ -196,7 +196,7 @@ pub(crate) fn cursor_up_inner(mut win: Win, mut n: i32, skip_conceal: bool) {
             // the last step and the fold is about to open anyway.
             if n > 0
                 || !(STATE.get() & MODE_INSERT != 0
-                    || FDO_FLAGS.get() & kOptFdoFlagAll as ::core::ffi::c_uint != 0)
+                    || FDO_FLAGS.get() & OPT_FDO_FLAG_ALL as ::core::ffi::c_uint != 0)
             {
                 fold_start(win, lnum, &mut lnum);
             }

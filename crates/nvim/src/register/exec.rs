@@ -100,7 +100,7 @@ fn fire_recording_leave(regname: RegName, contents: &XString) {
 /// produced nothing.
 pub fn do_record(c: Key) -> Result<(), Failed> {
     /// Which register the recording in progress goes into; kept across
-    /// the two calls because `reg_recording` is cleared before the store.
+    /// the two calls because `REG_RECORDING` is cleared before the store.
     static REGNAME: GlobalCell<RegName> = GlobalCell::new(0);
 
     if REG_RECORDING.get() == 0 {
@@ -178,7 +178,7 @@ fn put_in_typebuf(s: &[u8], esc: bool, colon: bool, silent: bool) -> Result<(), 
 /// Queue whatever will re-enter Insert mode, so that a register replayed from
 /// Insert mode returns there afterwards.
 ///
-/// `restart_edit` holds the mode as a key: `i`/`a`/`R`, or `V` for Virtual
+/// `RESTART_EDIT` holds the mode as a key: `i`/`a`/`R`, or `V` for Virtual
 /// Replace, which is two keys.
 fn put_reedit_in_typebuf(silent: bool) {
     if RESTART_EDIT.get().is_nul() {

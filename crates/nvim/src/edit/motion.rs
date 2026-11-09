@@ -39,7 +39,7 @@ use crate::ascii::NUL;
 /// Select-mode selection and stuff it back for Normal mode to handle.
 ///
 /// Only the shifted keys do this, plus the un-shifted `<Home>`/`<End>`/page
-/// keys when Shift is in `mod_mask`.  Answers whether a CTRL-O and the key
+/// keys when Shift is in `MOD_MASK`.  Answers whether a CTRL-O and the key
 /// were stuffed.
 pub(crate) fn ins_start_select(c: Key) -> bool {
     if !KM_STARTSEL.get() {
@@ -87,14 +87,14 @@ pub(crate) fn ins_start_select(c: Key) -> bool {
 /// Open the fold under the cursor if 'foldopen' contains `hor` and the key
 /// was typed rather than mapped.
 fn may_open_fold_hor() {
-    if FDO_FLAGS.get() & kOptFdoFlagHor as ::core::ffi::c_uint != 0 && KEY_TYPED.get() {
+    if FDO_FLAGS.get() & OPT_FDO_FLAG_HOR as ::core::ffi::c_uint != 0 && KEY_TYPED.get() {
         fold_open_cursor();
     }
 }
 
 /// Is the undoable change to be ended by this motion?
 ///
-/// `i_CTRL-G_U` sets `dont_sync_undo` for exactly one motion, which is what
+/// `i_CTRL-G_U` sets `DONT_SYNC_UNDO` for exactly one motion, which is what
 /// lets an insert survive an arrow key as a single undo block.
 fn ends_change() -> bool {
     DONT_SYNC_UNDO.get() == KeepUndo::No
@@ -307,7 +307,7 @@ pub(crate) fn ins_page(back: bool) {
 /// Beep, or flash, for a motion that could not go anywhere.
 #[inline(always)]
 fn beep_cursor() {
-    vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint)
+    vim_beep(OPT_BO_FLAG_CURSOR as ::core::ffi::c_uint)
 }
 
 /// Take the `$` 'cpoptions' puts at the end of a change off the screen.

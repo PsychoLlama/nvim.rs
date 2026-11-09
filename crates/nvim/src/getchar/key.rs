@@ -3,7 +3,7 @@
 //! [`vgetc`] is what the rest of the editor calls. It asks
 //! [`crate::getchar::vgetorpeek`] for bytes and reassembles them
 //! into a single key: a `K_SPECIAL` escape back into its key code, a modifier
-//! prefix into `mod_mask`, a UTF-8 sequence into a codepoint.
+//! prefix into `MOD_MASK`, a UTF-8 sequence into a codepoint.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -51,7 +51,7 @@ pub fn merge_modifiers(key: Key, modifiers: &mut ModMask) -> Key {
     Key::from_code(merged)
 }
 
-/// [`merge_modifiers`] applied to the global `mod_mask`, which is where the
+/// [`merge_modifiers`] applied to the global `MOD_MASK`, which is where the
 /// editor's own key handling keeps the pending modifiers.
 pub(crate) fn merge_mod_mask(c: Key) -> Key {
     let mut modifiers = MOD_MASK.get();
@@ -65,7 +65,7 @@ pub(crate) fn merge_mod_mask(c: Key) -> Key {
 /// Answers `NUL` when called recursively — use [`safe_vgetc`] when that is
 /// not wanted. Escaped `K_SPECIAL` bytes are translated back into their key
 /// code and the bytes of a multibyte character are collected into the whole
-/// character; the modifiers come back in the global `mod_mask`.
+/// character; the modifiers come back in the global `MOD_MASK`.
 ///
 /// Safe: it only reads the editor's own globals, and may block waiting for
 /// input. Re-entry into mappings and Lua callbacks is what the function is
@@ -140,10 +140,10 @@ fn vgetc_from_typeahead() -> Key {
     VGETC_MOD_MASK.set(ModMask::NONE);
     VGETC_CHAR.set(Key::NUL);
     // `wrapping_sub` and not `-`: upstream's comment says
-    // `last_recorded_len` can be *larger* than what the last `vgetc`
+    // `LAST_RECORDED_LEN` can be *larger* than what the last `vgetc`
     // recorded, but it can also be smaller -- `ungetchars` shrinks it --
     // and C's defined unsigned wrap is what happens then. A huge value
-    // makes `get_recorded`'s `len >= last_recorded_len` fail, so nothing
+    // makes `get_recorded`'s `len >= LAST_RECORDED_LEN` fail, so nothing
     // is trimmed off the recording, which is the upstream behaviour.
     // `test_registers`' Test_recording_with_select_mode reaches it.
     LAST_RECORDED_LEN.set(
@@ -233,10 +233,10 @@ fn vgetc_from_typeahead() -> Key {
 /// The ASCII or plain-key equivalent of an unmapped keypad or special
 /// function key.
 ///
-/// Reads and may clear the global `mod_mask`: `<S-Home>` has its own code, so
+/// Reads and may clear the global `MOD_MASK`: `<S-Home>` has its own code, so
 /// the shift is folded into the key rather than left in the mask.
 ///
-/// Safe: it only reads and writes the editor's own `mod_mask`.
+/// Safe: it only reads and writes the editor's own `MOD_MASK`.
 fn keypad_equivalent(c: Key) -> Key {
     let plain = match c.special() {
         Some(SpecialKey::Kplus) => return Key::ascii(b'+'),
@@ -273,9 +273,9 @@ fn keypad_equivalent(c: Key) -> Key {
 }
 
 /// Pick the shifted, control or plain code for a key that has all three, and
-/// take the modifier out of `mod_mask` when one was used.
+/// take the modifier out of `MOD_MASK` when one was used.
 ///
-/// Safe: it only reads and writes the editor's own `mod_mask`.
+/// Safe: it only reads and writes the editor's own `MOD_MASK`.
 fn modified_key(shifted: SpecialKey, control: SpecialKey, plain: SpecialKey) -> SpecialKey {
     if MOD_MASK.get() == ModMask::SHIFT {
         MOD_MASK.set(ModMask::NONE);
@@ -380,7 +380,7 @@ pub(crate) fn vungetc(c: Key) {
     }));
 }
 
-/// Clear `reg_executing` now, or arrange for it to be cleared.
+/// Clear `REG_EXECUTING` now, or arrange for it to be cleared.
 ///
 /// While *peeking* the register is not finished with yet, so the flag is only
 /// noted; the next advancing read acts on it.

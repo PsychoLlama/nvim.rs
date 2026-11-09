@@ -35,7 +35,7 @@ use crate::message::{emsg, msg_ext_set_kind};
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
-use crate::options::kOptBackground;
+use crate::options::OPT_BACKGROUND;
 use crate::os::cshim::gettext;
 use crate::runtime::state::CURRENT_SCTX;
 use crate::startup::starting;
@@ -578,15 +578,15 @@ impl KeyLoop {
             None
         };
         let Some(dark) = dark else { return };
-        if dark == (P_BG.first_byte() == b'd') || option_was_set(kOptBackground) {
+        if dark == (P_BG.first_byte() == b'd') || option_was_set(OPT_BACKGROUND) {
             return;
         }
         set_option_value_give_err(
-            kOptBackground,
+            OPT_BACKGROUND,
             OptVal::static_string(if dark { c"dark" } else { c"light" }),
             OptionSetFlags::NONE,
         );
-        reset_option_was_set(kOptBackground);
+        reset_option_was_set(OPT_BACKGROUND);
     }
 
     /// `guifg=`/`guibg=`/`guisp=`.

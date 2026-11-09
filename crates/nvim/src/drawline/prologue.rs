@@ -418,7 +418,7 @@ impl LineSetup {
     /// Apply `'cursorline'` to this line, if it is the cursor's.
     fn cursorline(&mut self, wlv: &mut WinLineVars, window: Win) {
         if window.w_onebuf_opt.wo_cul == 0
-            || u32::from(window.w_p_culopt_flags) == kOptCuloptFlagNumber
+            || u32::from(window.w_p_culopt_flags) == OPT_CULOPT_FLAG_NUMBER
             || wlv.lnum != window.w_cursorline
             // Not while Visual mode is active: it would stop being clear
             // what is selected.
@@ -427,7 +427,7 @@ impl LineSetup {
             return;
         }
         self.cul_screenline =
-            self.is_wrapped && u32::from(window.w_p_culopt_flags) & kOptCuloptFlagScreenline != 0;
+            self.is_wrapped && u32::from(window.w_p_culopt_flags) & OPT_CULOPT_FLAG_SCREENLINE != 0;
         if self.cul_screenline {
             // Only the cursor's own screen row is highlighted, so the loop
             // needs that row's margins.

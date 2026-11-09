@@ -38,32 +38,32 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
     let res;
     let mut options = WildOpts::NO_BEEP;
     let redraw_if_menu_empty = s.c == SpecialKey::Wild;
-    let wim_noselect = p_wmnu() && wim_has(0, kOptWimFlagNoselect);
+    let wim_noselect = p_wmnu() && wim_has(0, OPT_WIM_FLAG_NOSELECT);
 
-    if wim_has(s.wim_index, kOptWimFlagLastused) {
+    if wim_has(s.wim_index, OPT_WIM_FLAG_LASTUSED) {
         options |= WildOpts::BUFLASTUSED;
     }
 
     if match_count() > 0 {
         // Typed 'wildchar' at least twice. If "list" is present, list the
         // matches unless they are already listed.
-        if match_count() > 1 && !s.did_wild_list && wim_has(s.wim_index, kOptWimFlagList) {
+        if match_count() > 1 && !s.did_wild_list && wim_has(s.wim_index, OPT_WIM_FLAG_LIST) {
             show_matches(false, true, wim_noselect);
             redrawcmd();
             s.did_wild_list = true;
         }
-        if wim_has(s.wim_index, kOptWimFlagLongest) {
+        if wim_has(s.wim_index, OPT_WIM_FLAG_LONGEST) {
             res = s.next_wild(WildMode::Longest, options);
-        } else if wim_has(s.wim_index, kOptWimFlagFull) {
+        } else if wim_has(s.wim_index, OPT_WIM_FLAG_FULL) {
             res = s.next_wild(WildMode::Next, options);
         } else {
             res = true; // don't insert 'wildchar' now
         }
     } else {
         // Typed 'wildchar' for the first time.
-        let wim_longest = wim_has(0, kOptWimFlagLongest);
-        let wim_list = wim_has(0, kOptWimFlagList);
-        let wim_full = wim_has(0, kOptWimFlagFull);
+        let wim_longest = wim_has(0, OPT_WIM_FLAG_LONGEST);
+        let wim_list = wim_has(0, OPT_WIM_FLAG_LIST);
+        let wim_full = wim_has(0, OPT_WIM_FLAG_FULL);
 
         s.wim_index = 0;
         if s.c == wildchar() || is_wildcharm(s.c) || s.c == SpecialKey::Wild || s.c == Key::CTRL_Z {
@@ -110,9 +110,9 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
                 } else if !found_longest_prefix {
                     // Nothing was inserted, so look at what the *next*
                     // 'wildmode' stage asks for and do that now.
-                    let wim_list_next = wim_has(1, kOptWimFlagList);
-                    let wim_full_next = wim_has(1, kOptWimFlagFull);
-                    let wim_noselect_next = wim_has(1, kOptWimFlagNoselect);
+                    let wim_list_next = wim_has(1, OPT_WIM_FLAG_LIST);
+                    let wim_full_next = wim_has(1, OPT_WIM_FLAG_FULL);
+                    let wim_noselect_next = wim_has(1, OPT_WIM_FLAG_NOSELECT);
                     if wim_list_next || (p_wmnu() && (wim_full_next || wim_noselect_next)) {
                         if wim_full_next && !wim_noselect_next {
                             s.next_wild(WildMode::Next, options);
@@ -127,7 +127,7 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
             } else if wim_list || (p_wmnu() && (wim_full || wim_noselect)) {
                 show_matches(p_wmnu(), wim_list, wim_noselect);
             } else {
-                vim_beep(kOptBoFlagWildmode);
+                vim_beep(OPT_BO_FLAG_WILDMODE);
             }
 
             redrawcmd();
@@ -155,13 +155,13 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
 }
 
 /// The `'wildmode'` words, in the order `check_opt_wim` tests them.  Keep in
-/// sync with `opt_wim_values`.
+/// sync with `OPT_WIM_VALUES`.
 const WIM_WORDS: [(&[u8], OptWimFlags); 5] = [
-    (b"longest", kOptWimFlagLongest),
-    (b"full", kOptWimFlagFull),
-    (b"list", kOptWimFlagList),
-    (b"lastused", kOptWimFlagLastused),
-    (b"noselect", kOptWimFlagNoselect),
+    (b"longest", OPT_WIM_FLAG_LONGEST),
+    (b"full", OPT_WIM_FLAG_FULL),
+    (b"list", OPT_WIM_FLAG_LIST),
+    (b"lastused", OPT_WIM_FLAG_LASTUSED),
+    (b"noselect", OPT_WIM_FLAG_NOSELECT),
 ];
 
 /// Read the `'wildmode'` option and fill `WIM_FLAGS[]`.  Answers `Err` on a

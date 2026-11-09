@@ -397,7 +397,7 @@ impl Jump {
             if Buf::current().b_help {
                 set_topline(Win::current(), Win::current().w_cursor.lnum);
             }
-            if FDO_FLAGS.get() & kOptFdoFlagTag as c_uint != 0 && self.key_typed {
+            if FDO_FLAGS.get() & OPT_FDO_FLAG_TAG as c_uint != 0 && self.key_typed {
                 fold_open_cursor();
             }
         }
@@ -444,7 +444,7 @@ impl Jump {
     fn open_window(&mut self) -> bool {
         let switchbuf = SWB_FLAGS.get();
         if POSTPONED_SPLIT.get() != 0
-            && switchbuf & (kOptSwbFlagUseopen | kOptSwbFlagUsetab) as c_uint != 0
+            && switchbuf & (OPT_SWB_FLAG_USEOPEN | OPT_SWB_FLAG_USETAB) as c_uint != 0
             && let Some(existing) = find_buffer_by_name(self.fname())
             && !swbuf_goto_win_with_buf(Some(existing)).is_none()
         {
@@ -456,10 +456,10 @@ impl Jump {
 
         // 'switchbuf' may ask for the new window to be a vertical
         // split, or for a whole new tab page.
-        if switchbuf & kOptSwbFlagVsplit as c_uint != 0 {
+        if switchbuf & OPT_SWB_FLAG_VSPLIT as c_uint != 0 {
             cmdmod_add_split(WSP_VERT);
         }
-        if switchbuf & kOptSwbFlagNewtab as c_uint != 0 && cmdmod_tab() == 0 {
+        if switchbuf & OPT_SWB_FLAG_NEWTAB as c_uint != 0 && cmdmod_tab() == 0 {
             cmdmod_set_tab(tab_index(TabPage::current()) + 1);
         }
         if win_split(POSTPONED_SPLIT.get().max(0), POSTPONED_SPLIT_FLAGS.get()).is_err() {

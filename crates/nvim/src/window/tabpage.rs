@@ -46,7 +46,7 @@ use crate::normal::reset_visual_and_resel;
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_value;
 use crate::option::vars::{p_ch, p_tpm};
-use crate::options::kOptCmdheight;
+use crate::options::OPT_CMDHEIGHT;
 use crate::os::libc::int64_t;
 use crate::startup::starting;
 use crate::tag::state::POSTPONED_SPLIT_TAB;
@@ -563,7 +563,7 @@ fn enter_tab(
 
 /// `:set cmdheight=n`, without the frame resizing.
 fn set_cmdheight(n: OptInt) {
-    let _ = set_option_value(kOptCmdheight, OptVal::Number(n), OptionSetFlags::NONE);
+    let _ = set_option_value(OPT_CMDHEIGHT, OptVal::Number(n), OptionSetFlags::NONE);
 }
 
 /// Tell an external UI that the windows and inline floats of `old_curtab` are

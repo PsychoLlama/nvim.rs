@@ -236,7 +236,7 @@ pub fn do_check_cursorbind() {
             win.w_curswant = curswant;
             win.w_set_curswant = set_curswant;
 
-            // Make sure the cursor is in a valid position. `restart_edit` is
+            // Make sure the cursor is in a valid position. `RESTART_EDIT` is
             // set for the duration so that it may sit beyond the end of line.
             let restart_edit_save = RESTART_EDIT.get();
             RESTART_EDIT.set(Key::from_code(1));

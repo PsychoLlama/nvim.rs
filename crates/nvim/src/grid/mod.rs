@@ -54,7 +54,7 @@ use crate::mbyte::{cluster_len, utf_char2len};
 use crate::decoration::defs::VirtText;
 use crate::grid::defs::{GridCells, GridView, ScreenGrid};
 use crate::option::vars::{RDB_FLAGS, p_arshape, p_tbidi};
-use crate::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
+use crate::options::{OPT_RDB_FLAG_INVALID, OPT_RDB_FLAG_NODELTA};
 use crate::optionstr::check_chars_options;
 use crate::os::libc::{size_t, uint32_t};
 use crate::startup::FULL_SCREEN;

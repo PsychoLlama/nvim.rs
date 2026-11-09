@@ -2,7 +2,7 @@
 //! metadata upstream's `src/gen/gen_ex_cmds.lua` consumed. Do not edit; run
 //! `just apigen` (`just apigen --check` fails on drift).
 //!
-//! `cmdnames` is the whole of `:`. Each row names the command, the handler,
+//! `CMDNAMES` is the whole of `:`. Each row names the command, the handler,
 //! the `'inccommand'` preview handler if it has one, the [`ExArgt`] flags
 //! saying what syntax it accepts (aliased to `Ex` here, and `|`'d with
 //! `.or()` because a `const fn` cannot call `BitOr`), and the [`CmdAddr`]
@@ -10,7 +10,7 @@
 //!
 //! **The order is load-bearing.** A `CMD_*` (see
 //! [`crate::types::cmdidx`]) is an index into this array, and
-//! `cmdidxs1`/`cmdidxs2` are precomputed offsets into it that
+//! `CMDIDXS1`/`CMDIDXS2` are precomputed offsets into it that
 //! `find_ex_command` uses to skip straight to the first command with a given
 //! first, or first two, letters. All three come out of the same pass over
 //! `ex_cmds.lua`, so they cannot disagree.
@@ -23,8 +23,6 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// The names are upstream's, and each is looked up by that spelling.
-#![allow(non_upper_case_globals)]
 
 #[allow(unused_imports)]
 use super::*;
@@ -74,10 +72,10 @@ const fn cmd_pv(
     }
 }
 
-pub(crate) const command_count: c_int = 557;
+pub(crate) const COMMAND_COUNT: c_int = 557;
 
 #[rustfmt::skip]
-pub(crate) static cmdnames: ConstTable<[CommandDefinition; 557]> = ConstTable::new([
+pub(crate) static CMDNAMES: ConstTable<[CommandDefinition; 557]> = ConstTable::new([
     cmd(c"append", ex_append, Ex::RANGE.or(Ex::BANG).or(Ex::TRLBAR).or(Ex::ZEROR).or(Ex::CMDWIN).or(Ex::MODIFY).or(Ex::LOCK_OK), Ad::Lines),
     cmd(c"abbreviate", ex_abbreviate, Ex::EXTRA.or(Ex::TRLBAR).or(Ex::NOTRLCOM).or(Ex::CTRLV).or(Ex::CMDWIN).or(Ex::LOCK_OK), Ad::NoRange),
     cmd(c"abclear", ex_abclear, Ex::EXTRA.or(Ex::TRLBAR).or(Ex::CMDWIN).or(Ex::LOCK_OK), Ad::NoRange),
@@ -637,17 +635,17 @@ pub(crate) static cmdnames: ConstTable<[CommandDefinition; 557]> = ConstTable::n
     cmd(c"Next", ex_previous, Ex::RANGE.or(Ex::BANG).or(Ex::EXTRA).or(Ex::TRLBAR).or(Ex::COUNT).or(Ex::CMDARG).or(Ex::ARGOPT), Ad::Other),
 ]);
 
-/// For each letter a-z, the index of the first command in `cmdnames`
+/// For each letter a-z, the index of the first command in `CMDNAMES`
 /// that starts with it.
-pub(crate) static cmdidxs1: [uint16_t; 26] = [
+pub(crate) static CMDIDXS1: [uint16_t; 26] = [
     0, 20, 43, 109, 133, 154, 170, 176, 184, 203, 205, 210, 272, 290, 307, 318, 357, 360, 382, 447,
     492, 504, 522, 537, 546, 547,
 ];
 
-/// For each pair of letters, the offset from `cmdidxs1` of the first
+/// For each pair of letters, the offset from `CMDIDXS1` of the first
 /// command starting with them. Zero means there is none, which the
 /// caller reads as "start where the first letter says".
-pub(crate) static cmdidxs2: [[uint8_t; 26]; 26] = [
+pub(crate) static CMDIDXS2: [[uint8_t; 26]; 26] = [
     [
         0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 5, 6, 0, 0, 0, 7, 16, 0, 17, 0, 0, 0, 0, 0,
     ],

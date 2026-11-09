@@ -136,7 +136,7 @@ fn put_last_insert(dir: Direction, mut count: c_int, flags: PutFlags, ve_flags: 
                 (one_past_line, eol)
             });
             let ve_allows =
-                ve_flags == kOptVeFlagAll as c_uint || ve_flags == kOptVeFlagOnemore as c_uint;
+                ve_flags == OPT_VE_FLAG_ALL as c_uint || ve_flags == OPT_VE_FLAG_ONEMORE as c_uint;
             let eof =
                 Buf::current().b_ml.ml_line_count == Win::current().w_cursor.lnum && one_past_line;
             if ve_allows || !(eol || eof) {
@@ -288,7 +288,7 @@ impl Put {
     /// text goes in: break a tab into spaces, or pad out past the end of the
     /// line.
     fn make_room_for_virtualedit(&self) {
-        if self.ve_flags != kOptVeFlagAll as c_uint || self.kind != MT_CHAR_WISE {
+        if self.ve_flags != OPT_VE_FLAG_ALL as c_uint || self.kind != MT_CHAR_WISE {
             return;
         }
         if gchar_cursor() == TAB {
@@ -494,7 +494,7 @@ pub fn do_put(
         // Don't leave the cursor after the NUL.
         let len = get_cursor_line_len();
         if Win::current().w_cursor.col > len {
-            if ve_flags == kOptVeFlagAll as c_uint {
+            if ve_flags == OPT_VE_FLAG_ALL as c_uint {
                 Win::current().w_cursor.coladd = Win::current().w_cursor.col - len;
             }
             Win::current().w_cursor.col = len;

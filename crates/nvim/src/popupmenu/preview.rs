@@ -220,8 +220,8 @@ fn pum_scroll_to_selected() {
 fn wants_info_window(cot_flags: c_uint, repeat: c_int) -> bool {
     ROWS.get() > 10
         && repeat <= 1
-        && cot_flags & (kOptCotFlagPreview | kOptCotFlagPopup) != 0
-        && !(cot_flags & kOptCotFlagPreview != 0 && CMDWIN_TYPE.get() != 0)
+        && cot_flags & (OPT_COT_FLAG_PREVIEW | OPT_COT_FLAG_POPUP) != 0
+        && !(cot_flags & OPT_COT_FLAG_PREVIEW != 0 && CMDWIN_TYPE.get() != 0)
 }
 
 /// Open (or reuse) the preview window and put the item's `info` in it.
@@ -282,11 +282,11 @@ fn pum_show_info(info: &[u8], repeat: c_int, use_float: bool, prev_selected: c_i
             if res.is_ok() {
                 // A new, empty, throwaway buffer.
                 for (option, value) in [
-                    (kOptSwapfile, OptVal::Boolean(Some(false))),
-                    (kOptBuflisted, OptVal::Boolean(Some(false))),
-                    (kOptBuftype, OptVal::static_string(c"nofile")),
-                    (kOptBufhidden, OptVal::static_string(c"wipe")),
-                    (kOptDiff, OptVal::Boolean(Some(false))),
+                    (OPT_SWAPFILE, OptVal::Boolean(Some(false))),
+                    (OPT_BUFLISTED, OptVal::Boolean(Some(false))),
+                    (OPT_BUFTYPE, OptVal::static_string(c"nofile")),
+                    (OPT_BUFHIDDEN, OptVal::static_string(c"wipe")),
+                    (OPT_DIFF, OptVal::Boolean(Some(false))),
                 ] {
                     set_option_value_give_err(option, value, OptionSetFlags::LOCAL);
                 }
@@ -412,7 +412,7 @@ fn pum_restore_window(curwin_save: WinId, curtab_save: TabId, resized: bool) -> 
 pub(crate) fn pum_set_selected(n: c_int, repeat: c_int) -> bool {
     let prev_selected = PUM_SELECTED.replace(n);
     let cot_flags = get_cot_flags();
-    let use_float = cot_flags & kOptCotFlagPopup != 0;
+    let use_float = cot_flags & OPT_COT_FLAG_POPUP != 0;
     let info = pum_selected_info();
 
     // Back to no selection, or to one with nothing to show: hide the

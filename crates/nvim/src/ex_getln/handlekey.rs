@@ -312,7 +312,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
         }),
 
         Err(Key::CTRL_D) => {
-            if show_matches(false, true, wim_has(0, kOptWimFlagNoselect)) == Expanded::Nothing {
+            if show_matches(false, true, wim_has(0, OPT_WIM_FLAG_NOSELECT)) == Expanded::Nothing {
                 return None; // use ^D as a normal character instead
             }
             redrawcmd();

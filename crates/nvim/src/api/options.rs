@@ -27,7 +27,7 @@ use crate::buffer::{BufFlags, BufRef, buflist_new, wipe_buffer};
 use crate::option::OPT_SCOPE_BUF;
 use crate::option::OPT_SCOPE_GLOBAL;
 use crate::option::OPT_SCOPE_WIN;
-use crate::options::{kOptBufhidden, kOptBuftype, kOptInvalid};
+use crate::options::{OPT_BUFHIDDEN, OPT_BUFTYPE, OPT_INVALID};
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
@@ -113,7 +113,7 @@ fn option_target<'a>(opts: &'a KeyDict_option, name: &CStr) -> Result<OptionRequ
     }
 
     let opt_idx = find_option(name);
-    if opt_idx == kOptInvalid {
+    if opt_idx == OPT_INVALID {
         let name = msg_cstr(name);
         return Err(api_error!(ERROR_TYPE_VALIDATION, "Unknown option '{name}'"));
     } else if (scope == OPT_SCOPE_BUF || scope == OPT_SCOPE_WIN)
@@ -200,13 +200,13 @@ fn do_ft_buf(
     // 'bufhidden' and 'buftype' keep the scratch buffer out of everything the
     // user can see; both are set without autocommands, as `:setlocal` would.
     set_option_direct(
-        kOptBufhidden,
+        OPT_BUFHIDDEN,
         static_option(c"hide"),
         OptionSetFlags::LOCAL,
         SID_NONE,
     );
     set_option_direct(
-        kOptBuftype,
+        OPT_BUFTYPE,
         static_option(c"nofile"),
         OptionSetFlags::LOCAL,
         SID_NONE,

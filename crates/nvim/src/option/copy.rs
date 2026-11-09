@@ -45,18 +45,19 @@ use super::check::bin_save;
 use super::paste::{paste_saved, paste_saved_vsts};
 use crate::option::defs::{CpoFlag, OptVal};
 use crate::options::{
-    BufOptIndex, buf_opt_idx, kBufOptAutoindent, kBufOptBinary, kBufOptBomb, kBufOptCindent,
-    kBufOptCinkeys, kBufOptCinoptions, kBufOptCinscopedecls, kBufOptCinwords, kBufOptComments,
-    kBufOptCommentstring, kBufOptComplete, kBufOptCompletefunc, kBufOptCopyindent,
-    kBufOptExpandtab, kBufOptFixendofline, kBufOptFormatexpr, kBufOptFormatlistpat,
-    kBufOptFormatoptions, kBufOptIminsert, kBufOptImsearch, kBufOptIncludeexpr, kBufOptIndentexpr,
-    kBufOptIndentkeys, kBufOptInfercase, kBufOptIskeyword, kBufOptKeymap, kBufOptLisp,
-    kBufOptLispoptions, kBufOptMatchpairs, kBufOptModeline, kBufOptModifiable, kBufOptNrformats,
-    kBufOptOmnifunc, kBufOptPreserveindent, kBufOptQuoteescape, kBufOptScrollback,
-    kBufOptShiftwidth, kBufOptSmartindent, kBufOptSofttabstop, kBufOptSpellcapcheck,
-    kBufOptSpellfile, kBufOptSpelllang, kBufOptSpelloptions, kBufOptSuffixesadd, kBufOptSwapfile,
-    kBufOptSynmaxcol, kBufOptTabstop, kBufOptTagfunc, kBufOptTextwidth, kBufOptUndofile,
-    kBufOptVarsofttabstop, kBufOptVartabstop, kBufOptWrapmargin, kOptModifiable,
+    BUF_OPT_AUTOINDENT, BUF_OPT_BINARY, BUF_OPT_BOMB, BUF_OPT_CINDENT, BUF_OPT_CINKEYS,
+    BUF_OPT_CINOPTIONS, BUF_OPT_CINSCOPEDECLS, BUF_OPT_CINWORDS, BUF_OPT_COMMENTS,
+    BUF_OPT_COMMENTSTRING, BUF_OPT_COMPLETE, BUF_OPT_COMPLETEFUNC, BUF_OPT_COPYINDENT,
+    BUF_OPT_EXPANDTAB, BUF_OPT_FIXENDOFLINE, BUF_OPT_FORMATEXPR, BUF_OPT_FORMATLISTPAT,
+    BUF_OPT_FORMATOPTIONS, BUF_OPT_IDX, BUF_OPT_IMINSERT, BUF_OPT_IMSEARCH, BUF_OPT_INCLUDEEXPR,
+    BUF_OPT_INDENTEXPR, BUF_OPT_INDENTKEYS, BUF_OPT_INFERCASE, BUF_OPT_ISKEYWORD, BUF_OPT_KEYMAP,
+    BUF_OPT_LISP, BUF_OPT_LISPOPTIONS, BUF_OPT_MATCHPAIRS, BUF_OPT_MODELINE, BUF_OPT_MODIFIABLE,
+    BUF_OPT_NRFORMATS, BUF_OPT_OMNIFUNC, BUF_OPT_PRESERVEINDENT, BUF_OPT_QUOTEESCAPE,
+    BUF_OPT_SCROLLBACK, BUF_OPT_SHIFTWIDTH, BUF_OPT_SMARTINDENT, BUF_OPT_SOFTTABSTOP,
+    BUF_OPT_SPELLCAPCHECK, BUF_OPT_SPELLFILE, BUF_OPT_SPELLLANG, BUF_OPT_SPELLOPTIONS,
+    BUF_OPT_SUFFIXESADD, BUF_OPT_SWAPFILE, BUF_OPT_SYNMAXCOL, BUF_OPT_TABSTOP, BUF_OPT_TAGFUNC,
+    BUF_OPT_TEXTWIDTH, BUF_OPT_UNDOFILE, BUF_OPT_VARSOFTTABSTOP, BUF_OPT_VARTABSTOP,
+    BUF_OPT_WRAPMARGIN, BufOptIndex, OPT_MODIFIABLE,
 };
 use crate::optionstr::{
     OptStringRef, check_buf_options, check_window_signcolumn, set_window_chars_option,
@@ -260,9 +261,9 @@ pub(crate) fn didset_window_options(window: Win, valid_cursor: bool) {
 /// Attribute a buffer-local option to whatever script set the global value
 /// it was just copied from.
 ///
-/// `buf_opt_idx` maps every buffer-local row to a row of the option table.
+/// `BUF_OPT_IDX` maps every buffer-local row to a row of the option table.
 fn copy_sctx(mut buffer: Buf, bv: BufOptIndex) {
-    let opt_idx = buf_opt_idx[as_index(bv)];
+    let opt_idx = BUF_OPT_IDX[as_index(bv)];
     buffer.b_p_script_ctx[as_index(bv)] = option_last_set(opt_idx);
 }
 
@@ -331,35 +332,35 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         }
 
         b.b_p_ai = c_int::from(p_ai());
-        copy_sctx(b, kBufOptAutoindent);
+        copy_sctx(b, BUF_OPT_AUTOINDENT);
         b.b_p_ai_nopaste = c_int::from(paste_saved(|saved| saved.ai));
         b.b_p_sw = p_sw();
-        copy_sctx(b, kBufOptShiftwidth);
+        copy_sctx(b, BUF_OPT_SHIFTWIDTH);
         b.b_p_scbk = p_scbk();
-        copy_sctx(b, kBufOptScrollback);
+        copy_sctx(b, BUF_OPT_SCROLLBACK);
         b.b_p_tw = p_tw();
-        copy_sctx(b, kBufOptTextwidth);
+        copy_sctx(b, BUF_OPT_TEXTWIDTH);
         b.b_p_tw_nopaste = paste_saved(|saved| saved.tw);
         b.b_p_tw_nobin = bin_save().tw;
         b.b_p_wm = p_wm();
-        copy_sctx(b, kBufOptWrapmargin);
+        copy_sctx(b, BUF_OPT_WRAPMARGIN);
         b.b_p_wm_nopaste = paste_saved(|saved| saved.wm);
         b.b_p_wm_nobin = bin_save().wm;
         b.b_p_bin = c_int::from(p_bin());
-        copy_sctx(b, kBufOptBinary);
+        copy_sctx(b, BUF_OPT_BINARY);
         b.b_p_bomb = c_int::from(p_bomb());
-        copy_sctx(b, kBufOptBomb);
+        copy_sctx(b, BUF_OPT_BOMB);
         b.b_p_et = c_int::from(p_et());
-        copy_sctx(b, kBufOptExpandtab);
+        copy_sctx(b, BUF_OPT_EXPANDTAB);
         b.b_p_fixeol = c_int::from(p_fixeol());
-        copy_sctx(b, kBufOptFixendofline);
+        copy_sctx(b, BUF_OPT_FIXENDOFLINE);
         b.b_p_et_nobin = c_int::from(bin_save().et);
         b.b_p_et_nopaste = c_int::from(paste_saved(|saved| saved.et));
         b.b_p_ml = c_int::from(p_ml());
-        copy_sctx(b, kBufOptModeline);
+        copy_sctx(b, BUF_OPT_MODELINE);
         b.b_p_ml_nobin = c_int::from(bin_save().ml);
         b.b_p_inf = c_int::from(p_inf());
-        copy_sctx(b, kBufOptInfercase);
+        copy_sctx(b, BUF_OPT_INFERCASE);
 
         // `:noswapfile` wins over the global 'swapfile', and leaves the
         // script context alone because nothing set it.
@@ -367,27 +368,27 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
             b.b_p_swf = 0;
         } else {
             b.b_p_swf = c_int::from(p_swf());
-            copy_sctx(b, kBufOptSwapfile);
+            copy_sctx(b, BUF_OPT_SWAPFILE);
         }
 
         b.b_p_cpt = p_cpt(dup);
-        copy_sctx(b, kBufOptComplete);
+        copy_sctx(b, BUF_OPT_COMPLETE);
         set_buflocal_cpt_callbacks(b);
         b.b_p_cfu = p_cfu(dup);
-        copy_sctx(b, kBufOptCompletefunc);
+        copy_sctx(b, BUF_OPT_COMPLETEFUNC);
         set_buflocal_cfu_callback(b);
         b.b_p_ofu = p_ofu(dup);
-        copy_sctx(b, kBufOptOmnifunc);
+        copy_sctx(b, BUF_OPT_OMNIFUNC);
         set_buflocal_ofu_callback(b);
         b.b_p_tfu = p_tfu(dup);
-        copy_sctx(b, kBufOptTagfunc);
+        copy_sctx(b, BUF_OPT_TAGFUNC);
         set_buflocal_tfu_callback(b);
 
         b.b_p_sts = p_sts();
-        copy_sctx(b, kBufOptSofttabstop);
+        copy_sctx(b, BUF_OPT_SOFTTABSTOP);
         b.b_p_sts_nopaste = paste_saved(|saved| saved.sts);
         b.b_p_vsts = p_vsts(dup);
-        copy_sctx(b, kBufOptVarsofttabstop);
+        copy_sctx(b, BUF_OPT_VARSOFTTABSTOP);
         b.b_p_vsts_array = if P_VSTS.is_unset() {
             None
         } else {
@@ -396,73 +397,73 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         b.b_p_vsts_nopaste = paste_saved_vsts();
 
         b.b_p_com = p_com(dup);
-        copy_sctx(b, kBufOptComments);
+        copy_sctx(b, BUF_OPT_COMMENTS);
         b.b_p_cms = p_cms(dup);
-        copy_sctx(b, kBufOptCommentstring);
+        copy_sctx(b, BUF_OPT_COMMENTSTRING);
         b.b_p_fo = p_fo(dup);
-        copy_sctx(b, kBufOptFormatoptions);
+        copy_sctx(b, BUF_OPT_FORMATOPTIONS);
         b.b_p_flp = p_flp(dup);
-        copy_sctx(b, kBufOptFormatlistpat);
+        copy_sctx(b, BUF_OPT_FORMATLISTPAT);
         b.b_p_nf = p_nf(dup);
-        copy_sctx(b, kBufOptNrformats);
+        copy_sctx(b, BUF_OPT_NRFORMATS);
         b.b_p_mps = p_mps(dup);
-        copy_sctx(b, kBufOptMatchpairs);
+        copy_sctx(b, BUF_OPT_MATCHPAIRS);
         b.b_p_si = c_int::from(p_si());
-        copy_sctx(b, kBufOptSmartindent);
+        copy_sctx(b, BUF_OPT_SMARTINDENT);
         b.b_p_channel = 0 as OptInt;
         b.b_p_ci = c_int::from(p_ci());
-        copy_sctx(b, kBufOptCopyindent);
+        copy_sctx(b, BUF_OPT_COPYINDENT);
         b.b_p_cin = c_int::from(p_cin());
-        copy_sctx(b, kBufOptCindent);
+        copy_sctx(b, BUF_OPT_CINDENT);
         b.b_p_cink = p_cink(dup);
-        copy_sctx(b, kBufOptCinkeys);
+        copy_sctx(b, BUF_OPT_CINKEYS);
         b.b_p_cino = p_cino(dup);
-        copy_sctx(b, kBufOptCinoptions);
+        copy_sctx(b, BUF_OPT_CINOPTIONS);
         b.b_p_cinsd = p_cinsd(dup);
-        copy_sctx(b, kBufOptCinscopedecls);
+        copy_sctx(b, BUF_OPT_CINSCOPEDECLS);
         b.b_p_lop = p_lop(dup);
-        copy_sctx(b, kBufOptLispoptions);
+        copy_sctx(b, BUF_OPT_LISPOPTIONS);
         // 'filetype' and 'syntax' start empty: the autocommands that
         // set them have not run for this buffer yet.
         b.b_p_ft = None;
         b.b_p_pi = c_int::from(p_pi());
-        copy_sctx(b, kBufOptPreserveindent);
+        copy_sctx(b, BUF_OPT_PRESERVEINDENT);
         b.b_p_cinw = p_cinw(dup);
-        copy_sctx(b, kBufOptCinwords);
+        copy_sctx(b, BUF_OPT_CINWORDS);
         b.b_p_lisp = c_int::from(p_lisp());
-        copy_sctx(b, kBufOptLisp);
+        copy_sctx(b, BUF_OPT_LISP);
         b.b_p_syn = None;
         b.b_p_smc = p_smc();
-        copy_sctx(b, kBufOptSynmaxcol);
+        copy_sctx(b, BUF_OPT_SYNMAXCOL);
 
         b.b_s.b_syn_isk = None;
         b.b_s.b_p_spc = p_spc(dup);
-        copy_sctx(b, kBufOptSpellcapcheck);
+        copy_sctx(b, BUF_OPT_SPELLCAPCHECK);
         let _ = compile_cap_prog(&mut b.b_s);
         b.b_s.b_p_spf = p_spf(dup);
-        copy_sctx(b, kBufOptSpellfile);
+        copy_sctx(b, BUF_OPT_SPELLFILE);
         b.b_s.b_p_spl = p_spl(dup);
-        copy_sctx(b, kBufOptSpelllang);
+        copy_sctx(b, BUF_OPT_SPELLLANG);
         b.b_s.b_p_spo = p_spo(dup);
-        copy_sctx(b, kBufOptSpelloptions);
+        copy_sctx(b, BUF_OPT_SPELLOPTIONS);
         b.b_s.b_p_spo_flags = SPO_FLAGS.get();
 
         b.b_p_inde = p_inde(dup);
-        copy_sctx(b, kBufOptIndentexpr);
+        copy_sctx(b, BUF_OPT_INDENTEXPR);
         b.b_p_indk = p_indk(dup);
-        copy_sctx(b, kBufOptIndentkeys);
+        copy_sctx(b, BUF_OPT_INDENTKEYS);
         b.b_p_fp = None;
         b.b_p_fex = p_fex(dup);
-        copy_sctx(b, kBufOptFormatexpr);
+        copy_sctx(b, BUF_OPT_FORMATEXPR);
         b.b_p_sua = p_sua(dup);
-        copy_sctx(b, kBufOptSuffixesadd);
+        copy_sctx(b, BUF_OPT_SUFFIXESADD);
         b.b_p_keymap = p_keymap(dup);
-        copy_sctx(b, kBufOptKeymap);
+        copy_sctx(b, BUF_OPT_KEYMAP);
         b.b_kmap_state |= KEYMAP_INIT;
         b.b_p_iminsert = p_iminsert();
-        copy_sctx(b, kBufOptIminsert);
+        copy_sctx(b, BUF_OPT_IMINSERT);
         b.b_p_imsearch = p_imsearch();
-        copy_sctx(b, kBufOptImsearch);
+        copy_sctx(b, BUF_OPT_IMSEARCH);
 
         // The global-local options start unset, reading through to the
         // global value.
@@ -495,23 +496,23 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         b.b_cot_flags = 0 as c_uint;
         // 'includeexpr' is buffer-local only, not global-local.
         b.b_p_inex = p_inex(dup);
-        copy_sctx(b, kBufOptIncludeexpr);
+        copy_sctx(b, BUF_OPT_INCLUDEEXPR);
         b.b_p_qe = p_qe(dup);
-        copy_sctx(b, kBufOptQuoteescape);
+        copy_sctx(b, BUF_OPT_QUOTEESCAPE);
         b.b_p_udf = c_int::from(p_udf());
-        copy_sctx(b, kBufOptUndofile);
+        copy_sctx(b, BUF_OPT_UNDOFILE);
 
         if dont_do_help {
             b.b_p_isk = save_p_isk;
             b.b_p_vts_array = vts_array(b);
         } else {
             b.b_p_isk = p_isk(dup);
-            copy_sctx(b, kBufOptIskeyword);
+            copy_sctx(b, BUF_OPT_ISKEYWORD);
             did_isk = true;
             b.b_p_ts = p_ts();
-            copy_sctx(b, kBufOptTabstop);
+            copy_sctx(b, BUF_OPT_TABSTOP);
             b.b_p_vts = p_vts(dup);
-            copy_sctx(b, kBufOptVartabstop);
+            copy_sctx(b, BUF_OPT_VARTABSTOP);
             b.b_p_vts_array = vts_array(b);
             b.b_help = false;
             // The buffer is no longer a help buffer, so 'buftype' must
@@ -520,7 +521,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
                 b.b_p_bt = None;
             }
             b.b_p_ma = c_int::from(p_ma());
-            copy_sctx(b, kBufOptModifiable);
+            copy_sctx(b, BUF_OPT_MODIFIABLE);
         }
     }
 
@@ -553,7 +554,7 @@ fn vts_array(buffer: Buf) -> TabStopArray {
 pub(crate) fn reset_modifiable() {
     Buf::current().b_p_ma = 0;
     P_MA.set(false);
-    change_option_default(kOptModifiable, OptVal::Boolean(Some(false)));
+    change_option_default(OPT_MODIFIABLE, OptVal::Boolean(Some(false)));
 }
 
 /// Carry a buffer's 'iminsert' back to the global value, so that the next

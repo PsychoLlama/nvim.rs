@@ -318,7 +318,7 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
         if col > ColNr::ZERO
             && fixpos
             && RESTART_EDIT.get().is_nul()
-            && get_ve_flags(Win::current()) & kOptVeFlagOnemore == 0
+            && get_ve_flags(Win::current()) & OPT_VE_FLAG_ONEMORE == 0
         {
             Win::current().w_cursor.col -= 1;
             Win::current().w_cursor.coladd = 0;

@@ -60,7 +60,7 @@ pub fn ex_cfile(excmd: &mut ExArg) {
 
     if c_int::from(excmd.line.byte_at(excmd.line.arg)) != NUL {
         set_option_direct(
-            kOptErrorfile,
+            OPT_ERRORFILE,
             OptVal::from_bytes(excmd.line.arg()),
             OptionSetFlags::NONE,
             0 as ScriptId,

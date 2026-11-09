@@ -88,13 +88,13 @@ pub(crate) fn vimrc_found(fname: &CStr, envname: &CStr) {
 /// `Err` for a value that does not parse.
 fn culopt_flags(value: &[u8]) -> Result<uint8_t, Failed> {
     const WORDS: [(&[u8], c_int); 4] = [
-        (b"line", kOptCuloptFlagLine.cast_signed()),
+        (b"line", OPT_CULOPT_FLAG_LINE.cast_signed()),
         (
             b"both",
-            (kOptCuloptFlagLine | kOptCuloptFlagNumber).cast_signed(),
+            (OPT_CULOPT_FLAG_LINE | OPT_CULOPT_FLAG_NUMBER).cast_signed(),
         ),
-        (b"number", kOptCuloptFlagNumber.cast_signed()),
-        (b"screenline", kOptCuloptFlagScreenline.cast_signed()),
+        (b"number", OPT_CULOPT_FLAG_NUMBER.cast_signed()),
+        (b"screenline", OPT_CULOPT_FLAG_SCREENLINE.cast_signed()),
     ];
     let mut flags: c_int = 0;
     let mut rest = value;
@@ -114,8 +114,8 @@ fn culopt_flags(value: &[u8]) -> Result<uint8_t, Failed> {
     }
     // "line" and "screenline" are mutually exclusive; "both" implies
     // "line", so it collides with "screenline" too.
-    if flags & kOptCuloptFlagLine.cast_signed() != 0
-        && flags & kOptCuloptFlagScreenline.cast_signed() != 0
+    if flags & OPT_CULOPT_FLAG_LINE.cast_signed() != 0
+        && flags & OPT_CULOPT_FLAG_SCREENLINE.cast_signed() != 0
     {
         return Err(Failed);
     }
@@ -221,7 +221,7 @@ pub(crate) fn get_ve_flags(window: Win) -> c_uint {
         0 => VE_FLAGS.get(),
         local => local,
     };
-    flags & !(kOptVeFlagNone | kOptVeFlagNoneU)
+    flags & !(OPT_VE_FLAG_NONE | OPT_VE_FLAG_NONE_U)
 }
 
 impl Win {
@@ -316,7 +316,7 @@ pub(crate) fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
     // SAFETY: the names are static; `CURBUF` is live.
     if let Some(name) = name {
         set_option_direct(
-            kOptFileformat,
+            OPT_FILEFORMAT,
             OptVal::static_string(name),
             opt_flags,
             0 as ScriptId,
@@ -490,7 +490,7 @@ pub(crate) fn fish_like_shell() -> bool {
 pub(crate) fn get_winbuf_options(buffer: bool) -> DictRef {
     let scope = if buffer { OPT_SCOPE_BUF } else { OPT_SCOPE_WIN };
     let dict = tv_dict_alloc();
-    for opt_idx in kOptAleph..kOptCount {
+    for opt_idx in OPT_ALEPH..OPT_COUNT {
         if !option_has_scope(opt_idx, scope) {
             continue;
         }

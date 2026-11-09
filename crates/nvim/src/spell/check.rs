@@ -46,7 +46,7 @@ use crate::highlight::Hlf;
 use crate::mbyte::{c_cluster_len, char_at, head_off, mb_isupper};
 use crate::message::E_NO_SPELL;
 use crate::message::emsg;
-use crate::options::kOptSpoFlagCamel;
+use crate::options::OPT_SPO_FLAG_CAMEL;
 use crate::os::cshim::gettext;
 use crate::regexp::RegMatch;
 use crate::regexp::vim_regexec;
@@ -167,7 +167,7 @@ impl Win {
         let mut nrlen = 0usize; // a number came first
         let mut wrongcaplen = 0usize;
         let mut count_word = docount;
-        let use_camel_case = syn.b_p_spo_flags & kOptSpoFlagCamel != 0;
+        let use_camel_case = syn.b_p_spo_flags & OPT_SPO_FLAG_CAMEL != 0;
         let mut is_camel_case = false;
 
         // Nearly everything lives in "mi" so that it can be handed to the

@@ -216,7 +216,7 @@ fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_i
 
 /// After an auto-indent that opened a comment, does `c` finish it?
 ///
-/// `end_comment_pending` holds the last character of the 'comments' end
+/// `END_COMMENT_PENDING` holds the last character of the 'comments' end
 /// leader.  When it arrives, the *middle* leader that was auto-indented in
 /// has to come off and the end leader go in -- all but its last character,
 /// which the caller inserts as an ordinary one.

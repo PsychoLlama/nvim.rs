@@ -2,16 +2,16 @@
 //!
 //! [`State`] is the mode word the rest of the tree branches on; the names
 //! around it are the parts of a modal edit that outlive a single keystroke —
-//! the operator being built (`finish_op`, `opcount`, `motion_force`), the
+//! the operator being built (`FINISH_OP`, `opcount`, `MOTION_FORCE`), the
 //! Visual selection that can be reselected with `gv` (`VIsual_*`,
-//! `resel_VIsual_*`), and the insert session's own bookkeeping (`Insstart`,
-//! `did_ai`, the `can_si` smart-indent flags, the `edit_submode` text the
+//! `resel_VIsual_*`), and the insert session's own bookkeeping (`INSSTART`,
+//! `DID_AI`, the `CAN_SI` smart-indent flags, the `EDIT_SUBMODE` text the
 //! ruler shows).
 //!
 //! They are here rather than in [`edit`] or [`normal`] because they are what
 //! those two modes say to *each other* and to everything that has to know
-//! whether an edit is in progress: `restart_edit` is set by Normal mode and
-//! read by the insert loop, `Insstart` is written by the insert loop and read
+//! whether an edit is in progress: `RESTART_EDIT` is set by Normal mode and
+//! read by the insert loop, `INSSTART` is written by the insert loop and read
 //! by the operators, and `State` is read by nearly everything.
 //!
 //! # One record
@@ -22,7 +22,7 @@
 //! writes `State.get()`, and nothing can take the address of one. See
 //! [`state_record`](crate::global_cell::state_record) for the access rules.
 //!
-//! The three `edit_submode*` texts are the mode line's while a CTRL-X
+//! The three `EDIT_SUBMODE*` texts are the mode line's while a CTRL-X
 //! submode runs. Upstream holds `char *`s to translated literals and to a
 //! static buffer `ins_compl_show_statusmsg` formats into; the first two are
 //! always literals here (`&'static CStr`), and the third owns its text.
@@ -103,13 +103,13 @@ state_record! {
     // -- the insert session --
     /// Where the insert started.
     pub(crate) INSSTART: Pos = POS_ZERO;
-    /// `Insstart` as it was when the insert started; `Insstart` moves.
+    /// `INSSTART` as it was when the insert started; `INSSTART` moves.
     pub(crate) INSSTART_ORIG: Pos = POS_ZERO;
     /// Where 'paste' was switched on during the insert.
     pub(crate) WHERE_PASTE_STARTED: Pos = POS_ZERO;
     /// Restart the insert when the current command is done: `i`, `a`, `R`, `V`.
     pub(crate) RESTART_EDIT: Key = Key::NUL;
-    /// Honour `restart_edit` even where a finished command would drop it
+    /// Honour `RESTART_EDIT` even where a finished command would drop it
     /// (`:normal` into a terminal buffer).
     pub(crate) FORCE_RESTART_EDIT: bool = false;
     /// A cursor key was used in Insert mode: the insert is broken in two.
@@ -159,6 +159,6 @@ state_record! {
     pub(crate) EDIT_SUBMODE_PRE: Option<&'static CStr> = None;
     /// What comes after it: `match 1 of 4`, `Back at original`.
     pub(crate) EDIT_SUBMODE_EXTRA: Option<XString> = None;
-    /// The highlight `edit_submode_extra` is drawn in.
+    /// The highlight `EDIT_SUBMODE_EXTRA` is drawn in.
     pub(crate) EDIT_SUBMODE_HIGHL: Hlf = HLF_NONE;
 }

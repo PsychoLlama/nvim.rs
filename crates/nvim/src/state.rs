@@ -52,7 +52,7 @@ use crate::normal::{
     NormalState, normal_check, normal_execute, visual_active, visual_mode, visual_select,
 };
 use crate::option::get_ve_flags;
-use crate::options::{OptVeFlags, kOptVeFlagAll, kOptVeFlagBlock, kOptVeFlagInsert};
+use crate::options::{OPT_VE_FLAG_ALL, OPT_VE_FLAG_BLOCK, OPT_VE_FLAG_INSERT, OptVeFlags};
 use crate::os::input::{
     InputEvents, input_available, input_get, main_loop_has_events, os_breakcheck,
 };
@@ -288,9 +288,9 @@ fn ve_flags_allow(
     visual_mode: c_int,
 ) -> bool {
     let has = |flag: OptVeFlags| flags & flag != 0;
-    flags == kOptVeFlagAll
-        || has(kOptVeFlagBlock) && visual_active && visual_mode == CTRL_V
-        || has(kOptVeFlagInsert) && state & MODE_INSERT != 0
+    flags == OPT_VE_FLAG_ALL
+        || has(OPT_VE_FLAG_BLOCK) && visual_active && visual_mode == CTRL_V
+        || has(OPT_VE_FLAG_INSERT) && state & MODE_INSERT != 0
 }
 
 /// `State`, with the visual and operator-pending distinctions `State` alone
@@ -348,14 +348,14 @@ impl ModeWriter {
     }
 
     /// A letter upstream computes rather than spells: the visual mode's own
-    /// key, or `motion_force`. Both are single bytes by construction.
+    /// key, or `MOTION_FORCE`. Both are single bytes by construction.
     fn push_key(&mut self, key: c_int) {
         let [byte, ..] = key.to_le_bytes();
         self.push(byte);
     }
 }
 
-/// The `restart_edit` values that report as insert mode: the three
+/// The `RESTART_EDIT` values that report as insert mode: the three
 /// `:startinsert`-family letters.
 fn is_restart_key(key: Key) -> bool {
     key.is('I') || key.is('R') || key.is('V')
@@ -600,7 +600,7 @@ pub fn get_was_safe_state() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::options::kOptVeFlagOnemore;
+    use crate::options::OPT_VE_FLAG_ONEMORE;
 
     /// A [`ModeName`] from its letters, NUL-padded as the writer leaves it.
     fn name(letters: &str) -> ModeName {
@@ -655,7 +655,7 @@ mod tests {
         };
         out.push(b'n');
         out.push_key(c_int::from(b'o'));
-        // `CTRL-V` is 22, and `motion_force` may hold it.
+        // `CTRL-V` is 22, and `MOTION_FORCE` may hold it.
         out.push_key(CTRL_V);
         assert_eq!(out.name, [110, 111, 22, 0]);
     }
@@ -704,15 +704,15 @@ mod tests {
     /// insert mode may make it true.
     #[test]
     fn ve_all_is_the_whole_value() {
-        let all_onemore = kOptVeFlagAll | kOptVeFlagOnemore;
-        assert!(ve_flags_allow(kOptVeFlagAll, MODE_NORMAL, false, 0));
+        let all_onemore = OPT_VE_FLAG_ALL | OPT_VE_FLAG_ONEMORE;
+        assert!(ve_flags_allow(OPT_VE_FLAG_ALL, MODE_NORMAL, false, 0));
         assert!(!ve_flags_allow(all_onemore, MODE_NORMAL, false, 0));
         assert!(!ve_flags_allow(all_onemore, MODE_NORMAL, true, CTRL_V - 1));
         assert!(ve_flags_allow(all_onemore, MODE_NORMAL, true, CTRL_V));
         assert!(ve_flags_allow(all_onemore, MODE_INSERT, false, 0));
         // `onemore` alone shares no bit with any of the three.
         assert!(!ve_flags_allow(
-            kOptVeFlagOnemore,
+            OPT_VE_FLAG_ONEMORE,
             MODE_INSERT,
             true,
             CTRL_V
@@ -722,11 +722,11 @@ mod tests {
     /// `ve=block` only counts in block-visual, `ve=insert` only in insert.
     #[test]
     fn ve_block_and_insert_need_their_mode() {
-        assert!(!ve_flags_allow(kOptVeFlagBlock, MODE_NORMAL, false, 0));
-        assert!(!ve_flags_allow(kOptVeFlagBlock, MODE_NORMAL, true, 0));
-        assert!(ve_flags_allow(kOptVeFlagBlock, MODE_NORMAL, true, CTRL_V));
-        assert!(!ve_flags_allow(kOptVeFlagInsert, MODE_NORMAL, false, 0));
-        assert!(ve_flags_allow(kOptVeFlagInsert, MODE_INSERT, false, 0));
+        assert!(!ve_flags_allow(OPT_VE_FLAG_BLOCK, MODE_NORMAL, false, 0));
+        assert!(!ve_flags_allow(OPT_VE_FLAG_BLOCK, MODE_NORMAL, true, 0));
+        assert!(ve_flags_allow(OPT_VE_FLAG_BLOCK, MODE_NORMAL, true, CTRL_V));
+        assert!(!ve_flags_allow(OPT_VE_FLAG_INSERT, MODE_NORMAL, false, 0));
+        assert!(ve_flags_allow(OPT_VE_FLAG_INSERT, MODE_INSERT, false, 0));
     }
 
     /// The prompting modes, which are whole `State` values rather than
@@ -864,7 +864,7 @@ mod tests {
             ..quiet(MODE_NORMAL)
         };
         assert_eq!(text(&mode_name(&pending)), "nov");
-        // An unforced motion pads with the NUL `motion_force` holds, so the
+        // An unforced motion pads with the NUL `MOTION_FORCE` holds, so the
         // name is the two letters `no`.
         let unforced = ModeInputs {
             motion_force: Key::NUL,
@@ -893,7 +893,7 @@ mod tests {
             let expected = format!("ni{}", char::from(key));
             assert_eq!(text(&mode_name(&restarting)), expected);
         }
-        // Anything else in `restart_edit` is not a restart at all.
+        // Anything else in `RESTART_EDIT` is not a restart at all.
         let idle = ModeInputs {
             restart_edit: Key::ascii(b'i'),
             ..quiet(MODE_NORMAL)

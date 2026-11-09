@@ -53,7 +53,7 @@ use crate::message::state::{BOT_TOP_MSG, TOP_BOT_MSG};
 use crate::option::defs::ShmFlag;
 use crate::option::shortmess;
 use crate::option::vars::p_ws;
-use crate::options::kOptSpoFlagNoplainbuffer;
+use crate::options::OPT_SPO_FLAG_NOPLAINBUFFER;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::os::libc::size_t;
@@ -210,7 +210,7 @@ impl Win {
 
                     if past_cursor {
                         let no_plain_buffer =
-                            self.syn_block().b_p_spo_flags & kOptSpoFlagNoplainbuffer != 0;
+                            self.syn_block().b_p_spo_flags & OPT_SPO_FLAG_NOPLAINBUFFER != 0;
                         let mut can_spell = !no_plain_buffer;
                         let decor_says =
                             decor_spell_nav_col(self, lnum, &mut decor_lnum, col.get());

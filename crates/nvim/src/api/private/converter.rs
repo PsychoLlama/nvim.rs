@@ -375,7 +375,7 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
 /// Call the RPC handler in row `row` of the method table with `args` on
 /// behalf of Vimscript, and convert its answer to a value.
 pub(crate) fn call_handler_for_vimscript(row: usize, args: Array) -> Result<TypVal, Error> {
-    let handler = crate::api::private::dispatch::method_handlers[row];
+    let handler = crate::api::private::dispatch::METHOD_HANDLERS[row];
     let call = handler.fn_0.expect("non-null function pointer");
     call(crate::eval::funcs::VIML_INTERNAL_CALL, args).map(TypVal::from)
 }

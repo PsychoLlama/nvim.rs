@@ -40,7 +40,7 @@
 
 use crate::global_cell::GlobalCell;
 use crate::option::defs::{OptIndex, OptVal};
-use crate::options::{kOptCount, kOptInvalid, options};
+use crate::options::{OPT_COUNT, OPT_INVALID, OPTION_TABLE};
 use crate::os::libc::uint32_t;
 use crate::types::ScriptCtx;
 
@@ -70,13 +70,13 @@ impl OptionState {
 }
 
 /// Every option's state, indexed by `OptIndex`.
-static STATE: GlobalCell<[OptionState; kOptCount as usize]> =
-    GlobalCell::new([OptionState::INITIAL; kOptCount as usize]);
+static STATE: GlobalCell<[OptionState; OPT_COUNT as usize]> =
+    GlobalCell::new([OptionState::INITIAL; OPT_COUNT as usize]);
 
 /// An option index as a slot in the array above. Every `OptIndex` that
 /// reaches this module names a row, so the conversion cannot fail.
 fn slot(opt_idx: OptIndex) -> usize {
-    debug_assert!(opt_idx != kOptInvalid);
+    debug_assert!(opt_idx != OPT_INVALID);
     usize::try_from(opt_idx).expect("an option index is never negative")
 }
 
@@ -85,7 +85,7 @@ fn slot(opt_idx: OptIndex) -> usize {
 pub(crate) fn with_option_default<R>(opt_idx: OptIndex, f: impl FnOnce(&OptVal) -> R) -> R {
     STATE.with(|state| match &state[slot(opt_idx)].default {
         Some(default) => f(default),
-        None => f(&options[slot(opt_idx)].def_val.value()),
+        None => f(&OPTION_TABLE[slot(opt_idx)].def_val.value()),
     })
 }
 
@@ -98,7 +98,7 @@ pub(crate) fn option_default(opt_idx: OptIndex) -> OptVal {
 /// [`crate::option::change_option_default`] is the spelling that drops it.
 pub(crate) fn replace_option_default(opt_idx: OptIndex, value: OptVal) -> OptVal {
     let old = STATE.with_mut(|state| state[slot(opt_idx)].default.replace(value));
-    old.unwrap_or_else(|| options[slot(opt_idx)].def_val.value())
+    old.unwrap_or_else(|| OPTION_TABLE[slot(opt_idx)].def_val.value())
 }
 
 /// Where the option's global value was last set from.

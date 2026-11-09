@@ -152,7 +152,7 @@ pub fn mark_get_local(buffer: Buf, win: Win, name: u8) -> Option<FileMark> {
 pub fn mark_get_motion(buffer: Buf, win: Win, name: u8) -> Option<FileMark> {
     let mut cur = Win::current();
     // The motion is computed by *moving the cursor* and reading where it
-    // landed, so the cursor is put back before answering. `listcmd_busy`
+    // landed, so the cursor is put back before answering. `LISTCMD_BUSY`
     // suppresses the jumplist entry the move would otherwise push.
     let saved = cur.w_cursor;
     let was_busy = LISTCMD_BUSY.get();

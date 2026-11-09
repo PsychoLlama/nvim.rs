@@ -371,7 +371,7 @@ pub fn replace_parent(id: QueueId, new_parent: QueueId) {
 // ---------------------------------------------------------------------------
 
 /// A child of the editor loop's main queue, freed when dropped: what a
-/// channel, a timer or a cell outside `event/` holds (`resize_events`,
+/// channel, a timer or a cell outside `event/` holds (`RESIZE_EVENTS`,
 /// `DEFERRED_EVENTS`, `CH_BEFORE_BLOCKING_EVENTS`).
 #[derive(Debug)]
 pub(crate) struct ChildQueue(QueueId);

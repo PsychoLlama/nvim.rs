@@ -538,7 +538,7 @@ pub(crate) fn attach_socket(id: u64) {
     unsafe { rstream_init(socket) };
 }
 
-/// Open stdio channel `id`'s two streams over `stdin_fd` and `stdout_fd`.
+/// Open stdio channel `id`'s two streams over `STDIN_FD` and `stdout_fd`.
 pub(crate) fn open_stdio(id: u64, stdin_fd: c_int, stdout_fd: c_int) {
     let (stdin, stdout) = with(id, |channel| match channel.stream_mut().project() {
         TransportMut::Stdio(stdin, stdout) => (address(stdin), address(stdout)),

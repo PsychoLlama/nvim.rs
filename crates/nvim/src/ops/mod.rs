@@ -82,7 +82,7 @@ use crate::option::vars::{
 use crate::option::{
     callback_from_option, get_equalprg, get_fileformat, get_ve_flags, install_callback,
 };
-use crate::options::{kOptBoFlagOperator, kOptVeFlagAll, kOptVeFlagOnemore};
+use crate::options::{OPT_BO_FLAG_OPERATOR, OPT_VE_FLAG_ALL, OPT_VE_FLAG_ONEMORE};
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::{line_breakcheck, os_breakcheck};
 use crate::os::libc::{int32_t, int64_t, size_t, ssize_t};
@@ -215,8 +215,8 @@ impl Op {
 
 /// Whether the operator in progress may work past the end of a line.
 ///
-/// `virtual_op` is `None` when no operator is running, and upstream's bare
-/// `virtual_op` test reads that as "yes" — only an explicit `Some(false)`,
+/// `VIRTUAL_OP` is `None` when no operator is running, and upstream's bare
+/// `VIRTUAL_OP` test reads that as "yes" — only an explicit `Some(false)`,
 /// which `do_pending_operator` sets from `virtual_active`, turns it off.
 pub(crate) fn op_virtual() -> bool {
     VIRTUAL_OP.get() != Some(false)

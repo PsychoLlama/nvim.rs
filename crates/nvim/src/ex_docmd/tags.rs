@@ -2,7 +2,7 @@
 //!
 //! Both families are dispatched by *spelling*: every one of the twenty-odd
 //! commands runs the same handler, which reads its own name out of
-//! `cmdnames` to decide what it does. `:djump`, `:dlist`, `:dsearch` and
+//! `CMDNAMES` to decide what it does. `:djump`, `:dlist`, `:dsearch` and
 //! `:dsplit` differ only in their third letter; `:tnext`, `:tprevious`,
 //! `:tselect` and the rest only in their second.
 #![deny(
@@ -29,7 +29,7 @@ use crate::charset::getdigits_int_at;
 
 use crate::ex_docmd::scan::ends_excmd;
 use crate::ex_docmd::source::ex_errmsg;
-use crate::ex_docmd::{DIRECTION_NOT_SET, cmdmod_split, cmdmod_tab, cmdnames};
+use crate::ex_docmd::{CMDNAMES, DIRECTION_NOT_SET, cmdmod_split, cmdmod_tab};
 use crate::message::E_TRAILING_ARG;
 use crate::option::magic_isset;
 use crate::option::vars::p_pvh;
@@ -46,7 +46,7 @@ use crate::types::ExArg;
 /// the first says whether the search is for a *definition* or for any
 /// occurrence.
 pub(crate) fn ex_findpat(excmd: &mut ExArg) {
-    let name = cmdnames[excmd.cmdidx.index()].cmd_name.to_bytes_with_nul();
+    let name = CMDNAMES[excmd.cmdidx.index()].cmd_name.to_bytes_with_nul();
     let action = match name[2] {
         // `:isearch`/`:dsearch` show the first match; `:psearch` goes
         // to it in the preview window.
@@ -114,7 +114,7 @@ pub(crate) fn ex_ptag(excmd: &mut ExArg) {
     G_DO_TAGPREVIEW.set(number_as_int(p_pvh()));
     ex_tag_cmd(
         excmd,
-        &cmdnames[excmd.cmdidx.index()].cmd_name.to_bytes()[1..],
+        &CMDNAMES[excmd.cmdidx.index()].cmd_name.to_bytes()[1..],
     );
 }
 
@@ -126,7 +126,7 @@ pub(crate) fn ex_stag(excmd: &mut ExArg) {
     POSTPONED_SPLIT_TAB.set(cmdmod_tab());
     ex_tag_cmd(
         excmd,
-        &cmdnames[excmd.cmdidx.index()].cmd_name.to_bytes()[1..],
+        &CMDNAMES[excmd.cmdidx.index()].cmd_name.to_bytes()[1..],
     );
     POSTPONED_SPLIT_FLAGS.set(0);
     POSTPONED_SPLIT_TAB.set(0);
@@ -134,7 +134,7 @@ pub(crate) fn ex_stag(excmd: &mut ExArg) {
 
 /// `:tag`, `:tnext`, `:tselect`, `:tjump`, `:tprevious`, `:tpop`, …
 pub(crate) fn ex_tag(excmd: &mut ExArg) {
-    ex_tag_cmd(excmd, cmdnames[excmd.cmdidx.index()].cmd_name.to_bytes());
+    ex_tag_cmd(excmd, CMDNAMES[excmd.cmdidx.index()].cmd_name.to_bytes());
 }
 
 /// Run a tag command named by `name`, whose *second* letter says which one

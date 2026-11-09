@@ -73,7 +73,7 @@ pub(crate) fn spell_check_sps() -> Result<(), Failed> {
             {
                 f = -1;
             }
-        // Keep the three names in sync with `opt_sps_values`.
+        // Keep the three names in sync with `OPT_SPS_VALUES`.
         } else if part == b"best" {
             f = SPS_BEST;
         } else if part == b"fast" {

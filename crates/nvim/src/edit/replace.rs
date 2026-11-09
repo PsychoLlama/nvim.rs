@@ -9,7 +9,7 @@
 //! the white space that was deleted after the cursor, which is what
 //! [`replace_join`] merges back.
 //!
-//! Two things make it more than a stack of bytes.  `replace_offset` says how
+//! Two things make it more than a stack of bytes.  `REPLACE_OFFSET` says how
 //! many bytes at the top belong to text the insert has already moved past,
 //! so a push has to go *underneath* them -- that is the `memmove` in
 //! [`replace_push`].  And an entry may hold a multi-byte character, so a pop
@@ -112,7 +112,7 @@ fn del_char_after_col(limit_col: c_int) -> bool {
 
 /// Push the bytes a character replaced onto the stack.
 ///
-/// With `replace_offset` non-zero that many bytes are left *above* the new
+/// With `REPLACE_OFFSET` non-zero that many bytes are left *above* the new
 /// entry, which is how a push reaches under text the insert has already
 /// passed.  Upstream grew the vector to `kv_roundup32(size + len)` and then
 /// `memmove`d those bytes up by hand; a `splice` at the same index is both.

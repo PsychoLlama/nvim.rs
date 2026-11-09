@@ -49,7 +49,7 @@ use crate::ex_eval::aborting;
 use crate::message::state::{CALLED_EMSG, DID_EMSG};
 use crate::option::defs::OptionSetFlags;
 use crate::option::was_set_insecurely;
-use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
+use crate::options::{OPT_FOLDEXPR, OPT_FOLDTEXT, WIN_OPT_FOLDEXPR};
 use crate::optionstr::OptString;
 use crate::runtime::state::CURRENT_SCTX;
 use crate::types::{
@@ -423,11 +423,11 @@ fn leading_long(text: &[u8]) -> VarNumber {
 /// marker character (`>`, `<`, `=`, `a`, `s`) when there was one, else NUL.
 pub(crate) fn eval_foldexpr(window: Win) -> (c_int, c_int) {
     let saved_sctx: ScriptCtx = CURRENT_SCTX.get();
-    let use_sandbox = was_set_insecurely(window, kOptFoldexpr, OptionSetFlags::LOCAL);
+    let use_sandbox = was_set_insecurely(window, OPT_FOLDEXPR, OptionSetFlags::LOCAL);
     // A copy: the expression may set 'foldexpr' and free the option's text.
     let expr = window.w_onebuf_opt.wo_fde.get();
     let text = &expr[skip::white(&expr)..];
-    CURRENT_SCTX.set(window.w_onebuf_opt.wo_script_ctx[kWinOptFoldexpr as usize]);
+    CURRENT_SCTX.set(window.w_onebuf_opt.wo_script_ctx[WIN_OPT_FOLDEXPR as usize]);
     let mut marker = NUL;
     let retval: VarNumber = {
         let _no_emsg = Suppress::emsg();
@@ -465,7 +465,7 @@ pub(crate) fn eval_foldexpr(window: Win) -> (c_int, c_int) {
 /// is coerced to a String.
 pub fn eval_foldtext(window: Win) -> Object {
     let mut numbuf = NumBuf::new();
-    let use_sandbox = was_set_insecurely(window, kOptFoldtext, OptionSetFlags::LOCAL);
+    let use_sandbox = was_set_insecurely(window, OPT_FOLDTEXT, OptionSetFlags::LOCAL);
     // A copy: the expression may set 'foldtext' and free the option's text.
     let expr = window.w_onebuf_opt.wo_fdt.get();
     let call_stack_aside = CallStackAside::new();

@@ -47,7 +47,7 @@ use crate::memline::ml_open;
 use crate::r#move::WinValid;
 use crate::option::defs::{CpoFlag, OptVal, OptionSetFlags, ShmFlag};
 use crate::option::{cpo_has, set_option_value_give_err};
-use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
+use crate::options::{OPT_BUFHIDDEN, OPT_BUFTYPE, OPT_SWAPFILE};
 use crate::os::fs::getperm;
 use crate::os::libc::int64_t;
 use crate::pos::MAXLNUM;
@@ -576,9 +576,9 @@ pub fn buf_open_scratch(bufnr: Handle, bufname: Option<&CStr>) -> Result<(), Fai
         let _ = Buf::current().set_name(Some(bufname), None, true);
         fire(AutoEvent::BufFilePost, Buf::current());
     }
-    set_option_string(kOptBufhidden, c"hide");
-    set_option_string(kOptBuftype, c"nofile");
-    set_option_false(kOptSwapfile);
+    set_option_string(OPT_BUFHIDDEN, c"hide");
+    set_option_string(OPT_BUFTYPE, c"nofile");
+    set_option_false(OPT_SWAPFILE);
     let mut win = Win::current();
     win.w_onebuf_opt.wo_scb = 0; // reset 'scrollbind'
     win.w_onebuf_opt.wo_crb = 0; // reset 'cursorbind'

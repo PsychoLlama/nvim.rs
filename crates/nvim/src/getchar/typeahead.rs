@@ -504,7 +504,7 @@ impl TypeAhead {
 ///
 /// `noremap` says how much of it may be mapped again; see [`Remap`].
 ///
-/// With `nottyped` the string does not set `KeyTyped` — do not use it with a
+/// With `nottyped` the string does not set `KEY_TYPED` — do not use it with a
 /// non-zero `offset`. With `silent`, `CMD_SILENT` is set when the characters
 /// are read back. `text` is read up to its first NUL, as upstream's `char *`
 /// is, and `offset` must be within the current typeahead. Answers `Err` when
@@ -533,7 +533,7 @@ pub fn ins_typebuf(
 }
 
 /// Put character `c` back into the typeahead buffer, restoring the flags that
-/// belong to it from `CMD_SILENT`, `KeyTyped` and `KeyNoremap`.
+/// belong to it from `CMD_SILENT`, `KEY_TYPED` and `KEY_NOREMAP`.
 ///
 /// Used for a character `vgetc` handed out and the caller then decided not to
 /// consume. With `on_key_ignore` the bytes are not reported to `vim.on_key()`.
@@ -542,7 +542,7 @@ pub fn ins_char_typebuf(c: Key, modifiers: ModMask, on_key_ignore: bool) -> usiz
     // The modifier prefix plus a K_SPECIAL-escaped character.
     let key = special_key_bytes(c, modifiers, true);
     let len = key.as_bytes().len();
-    // Upstream hands `KeyNoremap`'s flag value on as a count of bytes not to
+    // Upstream hands `KEY_NOREMAP`'s flag value on as a count of bytes not to
     // remap.
     let noremap = match KEY_NOREMAP.get() {
         RM_YES => Remap::Yes,
@@ -749,7 +749,7 @@ mod tests {
         assert_eq!(ins_char_typebuf(Key::byte(b'a'), ModMask::NONE, false), 1);
         assert_eq!(ins_char_typebuf(Key::byte(b'b'), ModMask::NONE, false), 1);
         assert_eq!(bytes(), b"ba");
-        // Remappable: `KeyNoremap` was clear.
+        // Remappable: `KEY_NOREMAP` was clear.
         assert_eq!(typeahead().noremap(0), 0);
         assert_eq!(typeahead().noremap(1), 0);
     }

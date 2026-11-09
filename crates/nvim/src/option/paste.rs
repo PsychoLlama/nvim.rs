@@ -25,8 +25,8 @@ use crate::option::vars::{
     p_ru, p_sm, p_sta, p_sts, p_tw, p_wm,
 };
 use crate::options::{
-    kOptAutoindent, kOptExpandtab, kOptRevins, kOptRuler, kOptShowmatch, kOptSmarttab,
-    kOptSofttabstop, kOptTextwidth, kOptVarsofttabstop, kOptWrapmargin,
+    OPT_AUTOINDENT, OPT_EXPANDTAB, OPT_REVINS, OPT_RULER, OPT_SHOWMATCH, OPT_SMARTTAB,
+    OPT_SOFTTABSTOP, OPT_TEXTWIDTH, OPT_VARSOFTTABSTOP, OPT_WRAPMARGIN,
 };
 use crate::types::OptInt;
 
@@ -101,16 +101,16 @@ pub(crate) fn paste_saved_vsts() -> Option<XString> {
 /// The options 'paste' overrides while it is on, and so re-attributes to
 /// whatever script set 'paste'.
 const PASTE_DEP_OPTS: [OptIndex; 10] = [
-    kOptAutoindent,
-    kOptExpandtab,
-    kOptRuler,
-    kOptShowmatch,
-    kOptSmarttab,
-    kOptSofttabstop,
-    kOptTextwidth,
-    kOptWrapmargin,
-    kOptRevins,
-    kOptVarsofttabstop,
+    OPT_AUTOINDENT,
+    OPT_EXPANDTAB,
+    OPT_RULER,
+    OPT_SHOWMATCH,
+    OPT_SMARTTAB,
+    OPT_SOFTTABSTOP,
+    OPT_TEXTWIDTH,
+    OPT_WRAPMARGIN,
+    OPT_REVINS,
+    OPT_VARSOFTTABSTOP,
 ];
 
 /// 'paste': switch off everything that would reformat pasted text, and

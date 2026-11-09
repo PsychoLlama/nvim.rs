@@ -55,7 +55,7 @@ use crate::narrow::number_as_int;
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_direct;
 use crate::option::vars::{p_hf, p_hh, p_hlg, p_sb};
-use crate::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
+use crate::options::{OPT_BUFTYPE, OPT_FOLDMETHOD, OPT_ISKEYWORD};
 use crate::optionstr::OptStringRef;
 use crate::optionstr::check_buf_options;
 use crate::os::cshim::gettext;
@@ -500,7 +500,7 @@ pub(crate) fn help_tag_matches(arg: &CStr) -> Option<Vec<XString>> {
 pub(crate) fn prepare_help_buffer() {
     Buf::current().b_help = true;
     set_option_direct(
-        kOptBuftype,
+        OPT_BUFTYPE,
         OptVal::static_string(c"help"),
         OptionSetFlags::LOCAL,
         0,
@@ -512,7 +512,7 @@ pub(crate) fn prepare_help_buffer() {
     let isk = c"!-~,^*,^|,^\",192-255";
     if Buf::current().b_p_isk.bytes() != isk.to_bytes() {
         set_option_direct(
-            kOptIskeyword,
+            OPT_ISKEYWORD,
             OptVal::static_string(isk),
             OptionSetFlags::LOCAL,
             0,
@@ -523,7 +523,7 @@ pub(crate) fn prepare_help_buffer() {
 
     // Don't use the global foldmethod.
     set_option_direct(
-        kOptFoldmethod,
+        OPT_FOLDMETHOD,
         OptVal::static_string(c"manual"),
         OptionSetFlags::LOCAL,
         0,

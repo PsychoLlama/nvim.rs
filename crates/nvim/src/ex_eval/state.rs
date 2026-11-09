@@ -1,11 +1,11 @@
 //! What a `:try` is in the middle of.
 //!
 //! The exceptions themselves (`EXCEPTIONS`, their one owner), the one being
-//! propagated (`current_exception`, `did_throw`, `need_rethrow`), how deep
+//! propagated (`CURRENT_EXCEPTION`, `DID_THROW`, `NEED_RETHROW`), how deep
 //! the `:try` nesting goes (`trylevel`), the errors turned into exceptions
-//! along the way (`msg_lists`, `suppress_errthrow`) and the `:catch` history
-//! a `:finally` may resume (`caught_stack`, `force_abort`). The condition
-//! stack's own two flags (`did_endif`, `check_cstack`) sit with them: they
+//! along the way (`MSG_LISTS`, `SUPPRESS_ERRTHROW`) and the `:catch` history
+//! a `:finally` may resume (`CAUGHT_STACK`, `FORCE_ABORT`). The condition
+//! stack's own two flags (`DID_ENDIF`, `CHECK_CSTACK`) sit with them: they
 //! are what tells `do_cmdline` that a `:endif` closed something it did not
 //! open.
 //!

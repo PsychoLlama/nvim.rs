@@ -59,7 +59,7 @@ use crate::option::defs::{CpoFlag, ShmFlag};
 use crate::option::vars::{P_BSK, P_CCV, P_PM, p_bk, p_bsk, p_fs, p_pm, p_wb};
 use crate::option::{cpo_has, get_bkc_flags, shortmess};
 use crate::options::{
-    kOptBkcFlagAuto, kOptBkcFlagBreakhardlink, kOptBkcFlagBreaksymlink, kOptBkcFlagYes,
+    OPT_BKC_FLAG_AUTO, OPT_BKC_FLAG_BREAKHARDLINK, OPT_BKC_FLAG_BREAKSYMLINK, OPT_BKC_FLAG_YES,
 };
 use crate::os::cshim::gettext;
 use crate::os::fs::FileInfo;

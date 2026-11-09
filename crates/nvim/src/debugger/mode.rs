@@ -257,7 +257,7 @@ fn debug_prompt(cmd: &CStr) {
             let start = skip_white(&cmdline, 0);
             let line = &cmdline[start..];
             // A blank line repeats: only a line with something on it decides
-            // what `last_cmd` is.
+            // what `LAST_CMD` is.
             let mut arg = line;
             if !line.is_empty() {
                 match parse_debug_cmd(line) {

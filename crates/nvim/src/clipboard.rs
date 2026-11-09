@@ -24,7 +24,7 @@ use crate::global_cell::GlobalCell;
 use crate::memory::XString;
 use crate::message::{emsg, msg, redirecting};
 use crate::option::vars::CB_FLAGS;
-use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus};
+use crate::options::{OPT_CB_FLAG_UNNAMED, OPT_CB_FLAG_UNNAMEDPLUS};
 use crate::os::libc::ptrdiff_t;
 use crate::register::defs::{RegLines, YankReg};
 use crate::register::{
@@ -71,7 +71,7 @@ pub(crate) fn adjust_clipboard_name(
 ) -> Option<usize> {
     let explicit_cb_reg = *name == b'*' || *name == b'+';
     let implicit_cb_reg =
-        *name == 0 && CB_FLAGS.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0;
+        *name == 0 && CB_FLAGS.get() & (OPT_CB_FLAG_UNNAMED | OPT_CB_FLAG_UNNAMEDPLUS) != 0;
     if !explicit_cb_reg && !implicit_cb_reg {
         return None;
     }
@@ -96,9 +96,9 @@ pub(crate) fn adjust_clipboard_name(
     if explicit_cb_reg {
         let star = *name == b'*';
         let (reg, flag) = if star {
-            (STAR_REGISTER, kOptCbFlagUnnamed)
+            (STAR_REGISTER, OPT_CB_FLAG_UNNAMED)
         } else {
-            (PLUS_REGISTER, kOptCbFlagUnnamedplus)
+            (PLUS_REGISTER, OPT_CB_FLAG_UNNAMEDPLUS)
         };
         if writing && CB_FLAGS.get() & flag != 0 {
             CLIPBOARD.with_mut(|st| st.needs_update = false);
@@ -118,8 +118,8 @@ pub(crate) fn adjust_clipboard_name(
         // register instead of stale provider contents.
         return None;
     }
-    let reg = if CB_FLAGS.get() & kOptCbFlagUnnamedplus != 0 {
-        *name = if CB_FLAGS.get() & kOptCbFlagUnnamed != 0 && writing {
+    let reg = if CB_FLAGS.get() & OPT_CB_FLAG_UNNAMEDPLUS != 0 {
+        *name = if CB_FLAGS.get() & OPT_CB_FLAG_UNNAMED != 0 && writing {
             b'"'
         } else {
             b'+'

@@ -38,7 +38,7 @@ use crate::message::E_CURDIR;
 use crate::option::vars::p_rtp;
 
 use crate::option::set_option_value_give_err;
-use crate::options::kOptFiletype;
+use crate::options::OPT_FILETYPE;
 
 use crate::runtime::RuntimeOpts;
 
@@ -194,7 +194,7 @@ pub(crate) fn ex_setfiletype(excmd: &mut ExArg) {
     let fallback = excmd.line.starts_with(excmd.line.arg, b"FALLBACK ");
     let at = excmd.line.arg + if fallback { 9 } else { 0 };
     set_option_value_give_err(
-        kOptFiletype,
+        OPT_FILETYPE,
         OptVal::string(ApiString::from_bytes(excmd.line.rest_of(at))),
         OptionSetFlags::LOCAL,
     );

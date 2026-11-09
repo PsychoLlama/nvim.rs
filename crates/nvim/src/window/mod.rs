@@ -68,7 +68,7 @@ use crate::message::{
 };
 use crate::normal::defs::MotionType;
 use crate::option::vars::SWB_FLAGS;
-use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
+use crate::options::{OPT_SWB_FLAG_USEOPEN, OPT_SWB_FLAG_USETAB};
 use crate::os::cshim::gettext;
 use crate::terminal::buf_terminal_check_size;
 use crate::types::Failed;
@@ -256,10 +256,10 @@ pub fn swbuf_goto_win_with_buf(buffer: Option<Buf>) -> Option<Win> {
 fn swbuf_goto_win(buffer: Buf) -> Option<Win> {
     let flag = |f: ::core::ffi::c_uint| SWB_FLAGS.get() & f != 0;
     let mut wp = None;
-    if flag(kOptSwbFlagUseopen) {
+    if flag(OPT_SWB_FLAG_USEOPEN) {
         wp = jump_open_win(buffer);
     }
-    if wp.is_none() && flag(kOptSwbFlagUsetab) {
+    if wp.is_none() && flag(OPT_SWB_FLAG_USETAB) {
         wp = jump_open_tab(buffer);
     }
     wp

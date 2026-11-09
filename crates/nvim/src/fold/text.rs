@@ -38,7 +38,7 @@ use core::ffi::{c_int, c_ulong};
 
 use super::marker::*;
 use super::*;
-use crate::options::kWinOptFoldtext;
+use crate::options::WIN_OPT_FOLDTEXT;
 use crate::optionstr::OptString;
 
 /// What [`get_foldtext`] rendered a closed fold as.
@@ -93,7 +93,7 @@ pub(crate) fn get_foldtext(
         if !GOT_FDT_ERROR.get() {
             let saved = switch_to(window);
             let saved_sctx = CURRENT_SCTX.get();
-            CURRENT_SCTX.set(win.w_onebuf_opt.wo_script_ctx[kWinOptFoldtext as usize]);
+            CURRENT_SCTX.set(win.w_onebuf_opt.wo_script_ctx[WIN_OPT_FOLDTEXT as usize]);
             let no_emsg = Suppress::emsg();
             let obj: Object = eval_foldtext(window);
             match obj.kind() {

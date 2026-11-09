@@ -78,7 +78,7 @@ use crate::r#move::{
 };
 use crate::option::get_ve_flags;
 use crate::option::vars::{p_deco, p_paste, p_ri, p_sm, p_sr};
-use crate::options::kOptVeFlagOnemore;
+use crate::options::OPT_VE_FLAG_ONEMORE;
 use crate::os::libc::int64_t;
 use crate::plines::{linetabsize_eol, win_chartabsize};
 use crate::pos::MAXLNUM;

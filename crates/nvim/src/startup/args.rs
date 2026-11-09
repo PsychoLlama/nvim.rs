@@ -55,9 +55,9 @@ use crate::startup::usage::{fill_template, mainerr, usage, version};
 use crate::startup::{
     EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, EMBEDDED_MODE, ERR_ARG_MISSING,
     ERR_EXTRA_CMD, ERR_OPT_GARBAGE, ERR_OPT_UNKNOWN, ERR_TOO_MANY_ARGS, HEADLESS_MODE,
-    MAX_ARG_CMDS, MainParams, READONLYMODE, RECOVERYMODE, SESSION_FILE, SILENT_MODE, STDERR_ISATTY,
-    STDIN_FD, STDIN_ISATTY, STDOUT_ISATTY, WIN_HOR, WIN_TABS, WIN_VER, kOptArabic, kOptKeymap,
-    kOptRightleft, kOptShadafile, kOptVerbosefile, kOptWindow,
+    MAX_ARG_CMDS, MainParams, OPT_ARABIC, OPT_KEYMAP, OPT_RIGHTLEFT, OPT_SHADAFILE,
+    OPT_VERBOSEFILE, OPT_WINDOW, READONLYMODE, RECOVERYMODE, SESSION_FILE, SILENT_MODE,
+    STDERR_ISATTY, STDIN_FD, STDIN_ISATTY, STDOUT_ISATTY, WIN_HOR, WIN_TABS, WIN_VER,
 };
 use crate::state::mode::EXMODE_ACTIVE;
 use crate::types::{Failed, LineNr, OptInt, ScriptId, Vv};
@@ -90,7 +90,7 @@ fn set_opt(idx: OptIndex, value: OptVal) {
 /// writing over the user's ShaDa.
 fn suppress_shada() {
     if p_shadafile(CStr::is_empty) {
-        set_opt(kOptShadafile, OptVal::from_cstr(c"NONE"));
+        set_opt(OPT_SHADAFILE, OptVal::from_cstr(c"NONE"));
     }
 }
 
@@ -273,7 +273,7 @@ impl<'a> Scan<'a> {
         } else if self.tail_starts_with(c"clean") {
             self.parm.vimrc = Some(c"NONE".to_owned());
             self.parm.clean = true;
-            set_opt(kOptShadafile, OptVal::from_cstr(c"NONE"));
+            set_opt(OPT_SHADAFILE, OptVal::from_cstr(c"NONE"));
         } else if self.tail_starts_with(c"luamod-dev") {
             NLUA_DISABLE_PRELOAD.set(true);
         } else if self.has_tail() {
@@ -318,7 +318,7 @@ impl<'a> Scan<'a> {
                 }
                 return want;
             }
-            b'A' => set_opt(kOptArabic, OptVal::Boolean(Some(true))),
+            b'A' => set_opt(OPT_ARABIC, OptVal::Boolean(Some(true))),
             b'b' => {
                 // Before the file names are expanded: on Windows this is
                 // what decides whether a shortcut is edited or followed.
@@ -340,8 +340,8 @@ impl<'a> Scan<'a> {
                 os_exit(0);
             }
             b'H' => {
-                set_opt(kOptKeymap, OptVal::from_cstr(c"hebrew"));
-                set_opt(kOptRightleft, OptVal::Boolean(Some(true)));
+                set_opt(OPT_KEYMAP, OptVal::from_cstr(c"hebrew"));
+                set_opt(OPT_RIGHTLEFT, OptVal::Boolean(Some(true)));
             }
             b'M' | b'm' => {
                 // `-M` is `-m` plus 'nomodifiable'.
@@ -413,7 +413,7 @@ impl<'a> Scan<'a> {
                 if self.has_tail() {
                     // `-V{N}{file}`: whatever follows the digits is
                     // 'verbosefile', and it uses up the whole word.
-                    set_opt(kOptVerbosefile, OptVal::from_cstr(self.tail()));
+                    set_opt(OPT_VERBOSEFILE, OptVal::from_cstr(self.tail()));
                     self.idx = Some(self.arg().count_bytes());
                 }
             }
@@ -427,7 +427,7 @@ impl<'a> Scan<'a> {
                     .is_some_and(u8::is_ascii_digit)
                 {
                     let n = self.number_arg(DEFAULT_WINDOW);
-                    set_opt(kOptWindow, OptVal::Number(OptInt::from(n)));
+                    set_opt(OPT_WINDOW, OptVal::Number(OptInt::from(n)));
                 } else {
                     return true;
                 }
@@ -503,7 +503,7 @@ impl<'a> Scan<'a> {
                 // `--startuptime <file>` was handled before the scan.
             }
             b'q' => self.parm.errorfile = Some(self.arg().to_owned()),
-            b'i' => set_opt(kOptShadafile, OptVal::from_cstr(self.arg())),
+            b'i' => set_opt(OPT_SHADAFILE, OptVal::from_cstr(self.arg())),
             b'l' => {
                 // `-l {script}`: a batch Lua run. Everything after the
                 // script name belongs to the script, not to us.
@@ -535,7 +535,7 @@ impl<'a> Scan<'a> {
                 let word = self.arg().to_bytes();
                 if c == b'w' && word.first().is_some_and(u8::is_ascii_digit) {
                     let n = get_number_arg(word, &mut 0, DEFAULT_WINDOW);
-                    set_opt(kOptWindow, OptVal::Number(OptInt::from(n)));
+                    set_opt(OPT_WINDOW, OptVal::Number(OptInt::from(n)));
                     return;
                 }
                 if self.parm.scriptout.is_some() {

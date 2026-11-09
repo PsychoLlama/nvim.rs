@@ -4,7 +4,7 @@
 //! carries it: a character is its codepoint (non-negative, `NUL` meaning
 //! "nothing"), a special key is the negative code [`SpecialKey`] names. The
 //! control characters are themselves (`CTRL-V` is 0x16), and the modifiers
-//! that did not fold into the key travel beside it in `mod_mask`.
+//! that did not fold into the key travel beside it in `MOD_MASK`.
 //!
 //! The newtype keeps that representation -- `#[repr(transparent)]` over the
 //! `c_int`, every constructor a `const fn` -- so the typeahead and the

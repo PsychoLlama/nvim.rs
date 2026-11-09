@@ -185,7 +185,7 @@ static INVALID_BOT: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
 /// With 'foldexpr' we sometimes ask for the level of the *next* line, which
 /// calls `foldlevel()` for the current one — which has not been stored yet.
 /// The previous line's level is parked here to break that cycle;
-/// `prev_lnum` is zero when there is nothing to offer.
+/// `PREV_LNUM` is zero when there is nothing to offer.
 static PREV_LNUM: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
 static PREV_LNUM_LVL: GlobalCell<c_int> = GlobalCell::new(-1);
 

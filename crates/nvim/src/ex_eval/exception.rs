@@ -4,8 +4,8 @@
 //! An exception is an [`Exception`] holding the value a `:catch` pattern is
 //! matched against, the throw point (`v:throwpoint`), a stack trace, and --
 //! for an error exception -- the message list it was built from. Exactly one
-//! can be *being thrown* at a time (`current_exception` plus `did_throw`);
-//! any number can be *caught*, stacked on `caught_stack` by nesting, since a
+//! can be *being thrown* at a time (`CURRENT_EXCEPTION` plus `DID_THROW`);
+//! any number can be *caught*, stacked on `CAUGHT_STACK` by nesting, since a
 //! catch clause may itself contain a try conditional.
 //!
 //! Three sources feed the same object:
@@ -17,7 +17,7 @@
 //!   is not reachable from there. [`do_errthrow`] runs after the command
 //!   returns and turns that list into the exception. That two-step is why
 //!   only the *first* of several errors in a row becomes the exception
-//!   value, and why `CAUSE_ABORT` exists: `force_abort` has to stay off
+//!   value, and why `CAUSE_ABORT` exists: `FORCE_ABORT` has to stay off
 //!   until the throw point is reached, so that `aborting()` answers the same
 //!   thing for every message of one command.
 //! - **An interrupt** is [`do_intthrow`], which replaces whatever is being
@@ -97,7 +97,7 @@ pub(crate) fn cause_errthrow(
         return false;
     }
 
-    // If `emsg` has not been called yet, hold `force_abort` off until the
+    // If `emsg` has not been called yet, hold `FORCE_ABORT` off until the
     // throw point is reached, so `aborting()` gives the same answer for
     // every error of one command. Parsing errors during an expression then
     // all get reported, even from a finally clause entered because of an
@@ -134,7 +134,7 @@ pub(crate) fn cause_errthrow(
     // noticing. So discard what is being thrown, run the finally clauses and
     // terminate.
     if DID_THROW.get() {
-        // Resetting `got_int` for an interrupt stops the same interrupt
+        // Resetting `GOT_INT` for an interrupt stops the same interrupt
         // becoming an exception again and discarding the error about to be
         // thrown here.
         if current_type() == Some(ET_INTERRUPT) {

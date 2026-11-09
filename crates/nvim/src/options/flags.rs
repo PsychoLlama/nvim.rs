@@ -11,8 +11,6 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// The names are upstream's, and each is looked up by that spelling.
-#![allow(non_upper_case_globals)]
 
 // A chunk may hold nothing that needs the parent's support code.
 #[allow(unused_imports)]
@@ -20,186 +18,186 @@ use super::*;
 
 /// The bits 'backupcopy' parses into.
 pub type OptBkcFlags = c_uint;
-pub const kOptBkcFlagYes: OptBkcFlags = 0x01;
-pub const kOptBkcFlagAuto: OptBkcFlags = 0x02;
-pub const kOptBkcFlagNo: OptBkcFlags = 0x04;
-pub const kOptBkcFlagBreaksymlink: OptBkcFlags = 0x08;
-pub const kOptBkcFlagBreakhardlink: OptBkcFlags = 0x10;
+pub const OPT_BKC_FLAG_YES: OptBkcFlags = 0x01;
+pub const OPT_BKC_FLAG_AUTO: OptBkcFlags = 0x02;
+pub const OPT_BKC_FLAG_NO: OptBkcFlags = 0x04;
+pub const OPT_BKC_FLAG_BREAKSYMLINK: OptBkcFlags = 0x08;
+pub const OPT_BKC_FLAG_BREAKHARDLINK: OptBkcFlags = 0x10;
 
 /// The bits 'belloff' parses into.
 pub type OptBoFlags = c_uint;
-pub const kOptBoFlagAll: OptBoFlags = 0x01;
-pub const kOptBoFlagBackspace: OptBoFlags = 0x02;
-pub const kOptBoFlagCursor: OptBoFlags = 0x04;
-pub const kOptBoFlagComplete: OptBoFlags = 0x08;
-pub const kOptBoFlagCopy: OptBoFlags = 0x10;
-pub const kOptBoFlagCtrlg: OptBoFlags = 0x20;
-pub const kOptBoFlagError: OptBoFlags = 0x40;
-pub const kOptBoFlagEsc: OptBoFlags = 0x80;
-pub const kOptBoFlagEx: OptBoFlags = 0x100;
-pub const kOptBoFlagHangul: OptBoFlags = 0x200;
-pub const kOptBoFlagInsertmode: OptBoFlags = 0x400;
-pub const kOptBoFlagLang: OptBoFlags = 0x800;
-pub const kOptBoFlagMess: OptBoFlags = 0x1000;
-pub const kOptBoFlagShowmatch: OptBoFlags = 0x2000;
-pub const kOptBoFlagOperator: OptBoFlags = 0x4000;
-pub const kOptBoFlagRegister: OptBoFlags = 0x8000;
-pub const kOptBoFlagShell: OptBoFlags = 0x10000;
-pub const kOptBoFlagSpell: OptBoFlags = 0x20000;
-pub const kOptBoFlagTerm: OptBoFlags = 0x40000;
-pub const kOptBoFlagWildmode: OptBoFlags = 0x80000;
+pub const OPT_BO_FLAG_ALL: OptBoFlags = 0x01;
+pub const OPT_BO_FLAG_BACKSPACE: OptBoFlags = 0x02;
+pub const OPT_BO_FLAG_CURSOR: OptBoFlags = 0x04;
+pub const OPT_BO_FLAG_COMPLETE: OptBoFlags = 0x08;
+pub const OPT_BO_FLAG_COPY: OptBoFlags = 0x10;
+pub const OPT_BO_FLAG_CTRLG: OptBoFlags = 0x20;
+pub const OPT_BO_FLAG_ERROR: OptBoFlags = 0x40;
+pub const OPT_BO_FLAG_ESC: OptBoFlags = 0x80;
+pub const OPT_BO_FLAG_EX: OptBoFlags = 0x100;
+pub const OPT_BO_FLAG_HANGUL: OptBoFlags = 0x200;
+pub const OPT_BO_FLAG_INSERTMODE: OptBoFlags = 0x400;
+pub const OPT_BO_FLAG_LANG: OptBoFlags = 0x800;
+pub const OPT_BO_FLAG_MESS: OptBoFlags = 0x1000;
+pub const OPT_BO_FLAG_SHOWMATCH: OptBoFlags = 0x2000;
+pub const OPT_BO_FLAG_OPERATOR: OptBoFlags = 0x4000;
+pub const OPT_BO_FLAG_REGISTER: OptBoFlags = 0x8000;
+pub const OPT_BO_FLAG_SHELL: OptBoFlags = 0x10000;
+pub const OPT_BO_FLAG_SPELL: OptBoFlags = 0x20000;
+pub const OPT_BO_FLAG_TERM: OptBoFlags = 0x40000;
+pub const OPT_BO_FLAG_WILDMODE: OptBoFlags = 0x80000;
 
 /// The bits 'casemap' parses into.
 pub type OptCmpFlags = c_uint;
-pub const kOptCmpFlagInternal: OptCmpFlags = 0x01;
-pub const kOptCmpFlagKeepascii: OptCmpFlags = 0x02;
+pub const OPT_CMP_FLAG_INTERNAL: OptCmpFlags = 0x01;
+pub const OPT_CMP_FLAG_KEEPASCII: OptCmpFlags = 0x02;
 
 /// The bits 'clipboard' parses into.
 pub type OptCbFlags = c_uint;
-pub const kOptCbFlagUnnamed: OptCbFlags = 0x01;
-pub const kOptCbFlagUnnamedplus: OptCbFlags = 0x02;
+pub const OPT_CB_FLAG_UNNAMED: OptCbFlags = 0x01;
+pub const OPT_CB_FLAG_UNNAMEDPLUS: OptCbFlags = 0x02;
 
 /// The bits 'completeopt' parses into.
 pub type OptCotFlags = c_uint;
-pub const kOptCotFlagMenu: OptCotFlags = 0x01;
-pub const kOptCotFlagMenuone: OptCotFlags = 0x02;
-pub const kOptCotFlagLongest: OptCotFlags = 0x04;
-pub const kOptCotFlagPreview: OptCotFlags = 0x08;
-pub const kOptCotFlagPopup: OptCotFlags = 0x10;
-pub const kOptCotFlagNoinsert: OptCotFlags = 0x20;
-pub const kOptCotFlagNoselect: OptCotFlags = 0x40;
-pub const kOptCotFlagFuzzy: OptCotFlags = 0x80;
-pub const kOptCotFlagNosort: OptCotFlags = 0x100;
-pub const kOptCotFlagPreinsert: OptCotFlags = 0x200;
-pub const kOptCotFlagNearest: OptCotFlags = 0x400;
+pub const OPT_COT_FLAG_MENU: OptCotFlags = 0x01;
+pub const OPT_COT_FLAG_MENUONE: OptCotFlags = 0x02;
+pub const OPT_COT_FLAG_LONGEST: OptCotFlags = 0x04;
+pub const OPT_COT_FLAG_PREVIEW: OptCotFlags = 0x08;
+pub const OPT_COT_FLAG_POPUP: OptCotFlags = 0x10;
+pub const OPT_COT_FLAG_NOINSERT: OptCotFlags = 0x20;
+pub const OPT_COT_FLAG_NOSELECT: OptCotFlags = 0x40;
+pub const OPT_COT_FLAG_FUZZY: OptCotFlags = 0x80;
+pub const OPT_COT_FLAG_NOSORT: OptCotFlags = 0x100;
+pub const OPT_COT_FLAG_PREINSERT: OptCotFlags = 0x200;
+pub const OPT_COT_FLAG_NEAREST: OptCotFlags = 0x400;
 
 /// The bits 'cursorlineopt' parses into.
 pub type OptCuloptFlags = c_uint;
-pub const kOptCuloptFlagLine: OptCuloptFlags = 0x01;
-pub const kOptCuloptFlagScreenline: OptCuloptFlags = 0x02;
-pub const kOptCuloptFlagNumber: OptCuloptFlags = 0x04;
+pub const OPT_CULOPT_FLAG_LINE: OptCuloptFlags = 0x01;
+pub const OPT_CULOPT_FLAG_SCREENLINE: OptCuloptFlags = 0x02;
+pub const OPT_CULOPT_FLAG_NUMBER: OptCuloptFlags = 0x04;
 
 /// The bits 'display' parses into.
 pub type OptDyFlags = c_uint;
-pub const kOptDyFlagLastline: OptDyFlags = 0x01;
-pub const kOptDyFlagTruncate: OptDyFlags = 0x02;
-pub const kOptDyFlagUhex: OptDyFlags = 0x04;
-pub const kOptDyFlagMsgsep: OptDyFlags = 0x08;
+pub const OPT_DY_FLAG_LASTLINE: OptDyFlags = 0x01;
+pub const OPT_DY_FLAG_TRUNCATE: OptDyFlags = 0x02;
+pub const OPT_DY_FLAG_UHEX: OptDyFlags = 0x04;
+pub const OPT_DY_FLAG_MSGSEP: OptDyFlags = 0x08;
 
 /// The bits 'foldopen' parses into.
 pub type OptFdoFlags = c_uint;
-pub const kOptFdoFlagAll: OptFdoFlags = 0x01;
-pub const kOptFdoFlagBlock: OptFdoFlags = 0x02;
-pub const kOptFdoFlagHor: OptFdoFlags = 0x04;
-pub const kOptFdoFlagMark: OptFdoFlags = 0x08;
-pub const kOptFdoFlagPercent: OptFdoFlags = 0x10;
-pub const kOptFdoFlagQuickfix: OptFdoFlags = 0x20;
-pub const kOptFdoFlagSearch: OptFdoFlags = 0x40;
-pub const kOptFdoFlagTag: OptFdoFlags = 0x80;
-pub const kOptFdoFlagInsert: OptFdoFlags = 0x100;
-pub const kOptFdoFlagUndo: OptFdoFlags = 0x200;
-pub const kOptFdoFlagJump: OptFdoFlags = 0x400;
+pub const OPT_FDO_FLAG_ALL: OptFdoFlags = 0x01;
+pub const OPT_FDO_FLAG_BLOCK: OptFdoFlags = 0x02;
+pub const OPT_FDO_FLAG_HOR: OptFdoFlags = 0x04;
+pub const OPT_FDO_FLAG_MARK: OptFdoFlags = 0x08;
+pub const OPT_FDO_FLAG_PERCENT: OptFdoFlags = 0x10;
+pub const OPT_FDO_FLAG_QUICKFIX: OptFdoFlags = 0x20;
+pub const OPT_FDO_FLAG_SEARCH: OptFdoFlags = 0x40;
+pub const OPT_FDO_FLAG_TAG: OptFdoFlags = 0x80;
+pub const OPT_FDO_FLAG_INSERT: OptFdoFlags = 0x100;
+pub const OPT_FDO_FLAG_UNDO: OptFdoFlags = 0x200;
+pub const OPT_FDO_FLAG_JUMP: OptFdoFlags = 0x400;
 
 /// The bits 'jumpoptions' parses into.
 pub type OptJopFlags = c_uint;
-pub const kOptJopFlagStack: OptJopFlags = 0x01;
-pub const kOptJopFlagView: OptJopFlags = 0x02;
-pub const kOptJopFlagClean: OptJopFlags = 0x04;
+pub const OPT_JOP_FLAG_STACK: OptJopFlags = 0x01;
+pub const OPT_JOP_FLAG_VIEW: OptJopFlags = 0x02;
+pub const OPT_JOP_FLAG_CLEAN: OptJopFlags = 0x04;
 
 /// The bits 'messagesopt' parses into.
 pub type OptMoptFlags = c_uint;
-pub const kOptMoptFlagHitEnter: OptMoptFlags = 0x01;
-pub const kOptMoptFlagWait: OptMoptFlags = 0x02;
-pub const kOptMoptFlagHistory: OptMoptFlags = 0x04;
-pub const kOptMoptFlagProgress: OptMoptFlags = 0x08;
+pub const OPT_MOPT_FLAG_HIT_ENTER: OptMoptFlags = 0x01;
+pub const OPT_MOPT_FLAG_WAIT: OptMoptFlags = 0x02;
+pub const OPT_MOPT_FLAG_HISTORY: OptMoptFlags = 0x04;
+pub const OPT_MOPT_FLAG_PROGRESS: OptMoptFlags = 0x08;
 
 /// The bits 'redrawdebug' parses into.
 pub type OptRdbFlags = c_uint;
-pub const kOptRdbFlagCompositor: OptRdbFlags = 0x01;
-pub const kOptRdbFlagNothrottle: OptRdbFlags = 0x02;
-pub const kOptRdbFlagInvalid: OptRdbFlags = 0x04;
-pub const kOptRdbFlagNodelta: OptRdbFlags = 0x08;
-pub const kOptRdbFlagLine: OptRdbFlags = 0x10;
-pub const kOptRdbFlagFlush: OptRdbFlags = 0x20;
+pub const OPT_RDB_FLAG_COMPOSITOR: OptRdbFlags = 0x01;
+pub const OPT_RDB_FLAG_NOTHROTTLE: OptRdbFlags = 0x02;
+pub const OPT_RDB_FLAG_INVALID: OptRdbFlags = 0x04;
+pub const OPT_RDB_FLAG_NODELTA: OptRdbFlags = 0x08;
+pub const OPT_RDB_FLAG_LINE: OptRdbFlags = 0x10;
+pub const OPT_RDB_FLAG_FLUSH: OptRdbFlags = 0x20;
 
 /// The bits 'sessionoptions' parses into.
 pub type OptSsopFlags = c_uint;
-pub const kOptSsopFlagBuffers: OptSsopFlags = 0x01;
-pub const kOptSsopFlagWinpos: OptSsopFlags = 0x02;
-pub const kOptSsopFlagResize: OptSsopFlags = 0x04;
-pub const kOptSsopFlagWinsize: OptSsopFlags = 0x08;
-pub const kOptSsopFlagLocaloptions: OptSsopFlags = 0x10;
-pub const kOptSsopFlagOptions: OptSsopFlags = 0x20;
-pub const kOptSsopFlagHelp: OptSsopFlags = 0x40;
-pub const kOptSsopFlagBlank: OptSsopFlags = 0x80;
-pub const kOptSsopFlagGlobals: OptSsopFlags = 0x100;
-pub const kOptSsopFlagSlash: OptSsopFlags = 0x200;
-pub const kOptSsopFlagUnix: OptSsopFlags = 0x400;
-pub const kOptSsopFlagSesdir: OptSsopFlags = 0x800;
-pub const kOptSsopFlagCurdir: OptSsopFlags = 0x1000;
-pub const kOptSsopFlagFolds: OptSsopFlags = 0x2000;
-pub const kOptSsopFlagCursor: OptSsopFlags = 0x4000;
-pub const kOptSsopFlagTabpages: OptSsopFlags = 0x8000;
-pub const kOptSsopFlagTerminal: OptSsopFlags = 0x10000;
-pub const kOptSsopFlagSkiprtp: OptSsopFlags = 0x20000;
+pub const OPT_SSOP_FLAG_BUFFERS: OptSsopFlags = 0x01;
+pub const OPT_SSOP_FLAG_WINPOS: OptSsopFlags = 0x02;
+pub const OPT_SSOP_FLAG_RESIZE: OptSsopFlags = 0x04;
+pub const OPT_SSOP_FLAG_WINSIZE: OptSsopFlags = 0x08;
+pub const OPT_SSOP_FLAG_LOCALOPTIONS: OptSsopFlags = 0x10;
+pub const OPT_SSOP_FLAG_OPTIONS: OptSsopFlags = 0x20;
+pub const OPT_SSOP_FLAG_HELP: OptSsopFlags = 0x40;
+pub const OPT_SSOP_FLAG_BLANK: OptSsopFlags = 0x80;
+pub const OPT_SSOP_FLAG_GLOBALS: OptSsopFlags = 0x100;
+pub const OPT_SSOP_FLAG_SLASH: OptSsopFlags = 0x200;
+pub const OPT_SSOP_FLAG_UNIX: OptSsopFlags = 0x400;
+pub const OPT_SSOP_FLAG_SESDIR: OptSsopFlags = 0x800;
+pub const OPT_SSOP_FLAG_CURDIR: OptSsopFlags = 0x1000;
+pub const OPT_SSOP_FLAG_FOLDS: OptSsopFlags = 0x2000;
+pub const OPT_SSOP_FLAG_CURSOR: OptSsopFlags = 0x4000;
+pub const OPT_SSOP_FLAG_TABPAGES: OptSsopFlags = 0x8000;
+pub const OPT_SSOP_FLAG_TERMINAL: OptSsopFlags = 0x10000;
+pub const OPT_SSOP_FLAG_SKIPRTP: OptSsopFlags = 0x20000;
 
 /// The bits 'spelloptions' parses into.
 pub type OptSpoFlags = c_uint;
-pub const kOptSpoFlagCamel: OptSpoFlags = 0x01;
-pub const kOptSpoFlagNoplainbuffer: OptSpoFlags = 0x02;
+pub const OPT_SPO_FLAG_CAMEL: OptSpoFlags = 0x01;
+pub const OPT_SPO_FLAG_NOPLAINBUFFER: OptSpoFlags = 0x02;
 
 /// The bits 'switchbuf' parses into.
 pub type OptSwbFlags = c_uint;
-pub const kOptSwbFlagUseopen: OptSwbFlags = 0x01;
-pub const kOptSwbFlagUsetab: OptSwbFlags = 0x02;
-pub const kOptSwbFlagSplit: OptSwbFlags = 0x04;
-pub const kOptSwbFlagNewtab: OptSwbFlags = 0x08;
-pub const kOptSwbFlagVsplit: OptSwbFlags = 0x10;
-pub const kOptSwbFlagUselast: OptSwbFlags = 0x20;
+pub const OPT_SWB_FLAG_USEOPEN: OptSwbFlags = 0x01;
+pub const OPT_SWB_FLAG_USETAB: OptSwbFlags = 0x02;
+pub const OPT_SWB_FLAG_SPLIT: OptSwbFlags = 0x04;
+pub const OPT_SWB_FLAG_NEWTAB: OptSwbFlags = 0x08;
+pub const OPT_SWB_FLAG_VSPLIT: OptSwbFlags = 0x10;
+pub const OPT_SWB_FLAG_USELAST: OptSwbFlags = 0x20;
 
 /// The bits 'tabclose' parses into.
 pub type OptTclFlags = c_uint;
-pub const kOptTclFlagLeft: OptTclFlags = 0x01;
-pub const kOptTclFlagUselast: OptTclFlags = 0x02;
+pub const OPT_TCL_FLAG_LEFT: OptTclFlags = 0x01;
+pub const OPT_TCL_FLAG_USELAST: OptTclFlags = 0x02;
 
 /// The bits 'tagcase' parses into.
 pub type OptTcFlags = c_uint;
-pub const kOptTcFlagFollowic: OptTcFlags = 0x01;
-pub const kOptTcFlagIgnore: OptTcFlags = 0x02;
-pub const kOptTcFlagMatch: OptTcFlags = 0x04;
-pub const kOptTcFlagFollowscs: OptTcFlags = 0x08;
-pub const kOptTcFlagSmart: OptTcFlags = 0x10;
+pub const OPT_TC_FLAG_FOLLOWIC: OptTcFlags = 0x01;
+pub const OPT_TC_FLAG_IGNORE: OptTcFlags = 0x02;
+pub const OPT_TC_FLAG_MATCH: OptTcFlags = 0x04;
+pub const OPT_TC_FLAG_FOLLOWSCS: OptTcFlags = 0x08;
+pub const OPT_TC_FLAG_SMART: OptTcFlags = 0x10;
 
 /// The bits 'termpastefilter' parses into.
 pub type OptTpfFlags = c_uint;
-pub const kOptTpfFlagBS: OptTpfFlags = 0x01;
-pub const kOptTpfFlagHT: OptTpfFlags = 0x02;
-pub const kOptTpfFlagFF: OptTpfFlags = 0x04;
-pub const kOptTpfFlagESC: OptTpfFlags = 0x08;
-pub const kOptTpfFlagDEL: OptTpfFlags = 0x10;
-pub const kOptTpfFlagC0: OptTpfFlags = 0x20;
-pub const kOptTpfFlagC1: OptTpfFlags = 0x40;
+pub const OPT_TPF_FLAG_BS: OptTpfFlags = 0x01;
+pub const OPT_TPF_FLAG_HT: OptTpfFlags = 0x02;
+pub const OPT_TPF_FLAG_FF: OptTpfFlags = 0x04;
+pub const OPT_TPF_FLAG_ESC: OptTpfFlags = 0x08;
+pub const OPT_TPF_FLAG_DEL: OptTpfFlags = 0x10;
+pub const OPT_TPF_FLAG_C0: OptTpfFlags = 0x20;
+pub const OPT_TPF_FLAG_C1: OptTpfFlags = 0x40;
 
 /// The bits 'virtualedit' parses into.
 pub type OptVeFlags = c_uint;
-pub const kOptVeFlagAll: OptVeFlags = 0x04;
-pub const kOptVeFlagBlock: OptVeFlags = 0x05;
-pub const kOptVeFlagInsert: OptVeFlags = 0x06;
-pub const kOptVeFlagOnemore: OptVeFlags = 0x08;
-pub const kOptVeFlagNone: OptVeFlags = 0x10;
-pub const kOptVeFlagNoneU: OptVeFlags = 0x20;
+pub const OPT_VE_FLAG_ALL: OptVeFlags = 0x04;
+pub const OPT_VE_FLAG_BLOCK: OptVeFlags = 0x05;
+pub const OPT_VE_FLAG_INSERT: OptVeFlags = 0x06;
+pub const OPT_VE_FLAG_ONEMORE: OptVeFlags = 0x08;
+pub const OPT_VE_FLAG_NONE: OptVeFlags = 0x10;
+pub const OPT_VE_FLAG_NONE_U: OptVeFlags = 0x20;
 
 /// The bits 'wildmode' parses into.
 pub type OptWimFlags = c_uint;
-pub const kOptWimFlagFull: OptWimFlags = 0x01;
-pub const kOptWimFlagLongest: OptWimFlags = 0x02;
-pub const kOptWimFlagList: OptWimFlags = 0x04;
-pub const kOptWimFlagLastused: OptWimFlags = 0x08;
-pub const kOptWimFlagNoselect: OptWimFlags = 0x10;
+pub const OPT_WIM_FLAG_FULL: OptWimFlags = 0x01;
+pub const OPT_WIM_FLAG_LONGEST: OptWimFlags = 0x02;
+pub const OPT_WIM_FLAG_LIST: OptWimFlags = 0x04;
+pub const OPT_WIM_FLAG_LASTUSED: OptWimFlags = 0x08;
+pub const OPT_WIM_FLAG_NOSELECT: OptWimFlags = 0x10;
 
 /// The bits 'wildoptions' parses into.
 pub type OptWopFlags = c_uint;
-pub const kOptWopFlagFuzzy: OptWopFlags = 0x01;
-pub const kOptWopFlagTagfile: OptWopFlags = 0x02;
-pub const kOptWopFlagPum: OptWopFlags = 0x04;
-pub const kOptWopFlagExacttext: OptWopFlags = 0x08;
+pub const OPT_WOP_FLAG_FUZZY: OptWopFlags = 0x01;
+pub const OPT_WOP_FLAG_TAGFILE: OptWopFlags = 0x02;
+pub const OPT_WOP_FLAG_PUM: OptWopFlags = 0x04;
+pub const OPT_WOP_FLAG_EXACTTEXT: OptWopFlags = 0x08;

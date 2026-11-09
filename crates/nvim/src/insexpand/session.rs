@@ -1,7 +1,7 @@
 //! Starting a completion: where it begins and what it is completing.
 //!
 //! [`ins_complete`] is the entry point every completion key reaches.
-//! [`ins_compl_start`] decides `compl_col`, `compl_length` and the pattern by
+//! [`ins_compl_start`] decides `COMPL_COL`, `COMPL_LENGTH` and the pattern by
 //! asking the per-mode `get_*_compl_info` function, then hands over to
 //! [`super::getexp::ins_compl_get_exp`].
 
@@ -32,7 +32,7 @@ use crate::types::Failed;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
-/// C's `compl_startpos.lnum = curwin->w_cursor.lnum; compl_startpos.col = col;`
+/// C's `COMPL_STARTPOS.lnum = curwin->w_cursor.lnum; COMPL_STARTPOS.col = col;`
 /// — the completion's anchor moved to `col` on the cursor's line.
 fn set_compl_startpos_here(col: ColNr) {
     let lnum = Win::current().w_cursor.lnum;
@@ -41,8 +41,8 @@ fn set_compl_startpos_here(col: ColNr) {
 
 /// The pattern, column and length for normal (CTRL-N / CTRL-P) completion.
 ///
-/// Sets `compl_col`, `compl_length` and `compl_pattern`; reads
-/// `compl_cont_status` and `ctrl_x_mode`.
+/// Sets `COMPL_COL`, `COMPL_LENGTH` and `compl_pattern`; reads
+/// `COMPL_CONT_STATUS` and `CTRL_X_MODE`.
 pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Result<(), Failed> {
     // A copy of the cursor line, taken here rather than handed in: the
     // `'complete'` functions called at the bottom run user code, and every
@@ -67,7 +67,7 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
     };
     let is_word = |col: usize| is_word_at(line.get(col..).unwrap_or_default(), buffer);
     // The pattern under construction: `prefix`, then `quote_meta` of the
-    // `len` bytes at `compl_col`, measured at the first NUL as upstream's
+    // `len` bytes at `COMPL_COL`, measured at the first NUL as upstream's
     // `strlen` measured it.
     let build_pattern = |prefix: &[u8], len: c_int| {
         let mut pattern = prefix.to_vec();
@@ -228,7 +228,7 @@ pub(crate) fn get_cmdline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
     Ok(())
 }
 
-/// Set `compl_col`, `compl_length`, `compl_pattern` and `cpt_compl_pattern`.
+/// Set `COMPL_COL`, `COMPL_LENGTH`, `compl_pattern` and `cpt_compl_pattern`.
 pub(crate) fn set_compl_globals(mut startcol: ColNr, curs_col: ColNr, is_cpt_compl: bool) {
     if is_cpt_compl {
         cpt_compl_pattern().clear();
@@ -344,7 +344,7 @@ pub(crate) enum Declined {
     Leave,
 }
 
-/// The pattern, column and length for spell completion; reads `spell_bad_len`.
+/// The pattern, column and length for spell completion; reads `SPELL_BAD_LEN`.
 pub(crate) fn get_spell_compl_info(startcol: c_int, curs_col: ColNr) -> Result<(), Failed> {
     if SPELL_BAD_LEN.get() > 0 {
         COMPL_COL.set(curs_col - len_as_int(SPELL_BAD_LEN.get()));
@@ -403,9 +403,9 @@ pub(crate) fn compl_get_info(startcol: c_int, curs_col: ColNr) -> Result<(), Fai
 
 /// Continue an interrupted completion-mode search in `line`.
 ///
-/// When this same `ctrl_x_mode` was interrupted, the text from `compl_startpos`
+/// When this same `CTRL_X_MODE` was interrupted, the text from `COMPL_STARTPOS`
 /// to the cursor becomes the pattern for adding a new word rather than
-/// expanding the one before the cursor. Word-wise, if `compl_startpos` is not
+/// expanding the one before the cursor. Word-wise, if `COMPL_STARTPOS` is not
 /// on the cursor's line it is fixed up first (the line was split because it
 /// was longer than 'tw'). With SOL set, the previous pattern is skipped: a
 /// word at the start of the line was inserted and that is what we look for.
@@ -601,7 +601,7 @@ pub fn ins_complete(c: Key, enable_pum: bool) -> Result<(), Failed> {
     }
     // The identities, taken while both are provably live: the completion
     // below runs user functions and Lua, and only the *identity* survives
-    // that (see `compl_curr_win`).
+    // that (see `COMPL_CURR_WIN`).
     COMPL_CURR_WIN.set(Some(Win::current().id()));
     COMPL_CURR_BUF.set(Win::current().buffer_or_none().map(Buf::id));
     COMPL_SHOWN_MATCH.set(COMPL_CURR_MATCH.get());
@@ -633,7 +633,7 @@ pub fn ins_complete(c: Key, enable_pum: bool) -> Result<(), Failed> {
     }
 
     // We found no match if the list has only the "compl_orig_text" entry.
-    // Upstream dereferences `compl_first_match` here without checking.
+    // Upstream dereferences `COMPL_FIRST_MATCH` here without checking.
     let head = first_match().expect("a completion has its original text");
     let no_matches_found = is_first_match(head.next());
     if no_matches_found {
@@ -699,7 +699,7 @@ pub fn ins_complete(c: Key, enable_pum: bool) -> Result<(), Failed> {
 }
 
 /// Move the cursor back to the start of the bad word, recording its length in
-/// `spell_bad_len`.
+/// `SPELL_BAD_LEN`.
 pub(crate) fn spell_back_to_badword() {
     let tpos = Win::current().w_cursor;
     let win = Win::current();
@@ -709,7 +709,7 @@ pub(crate) fn spell_back_to_badword() {
     }
 }
 
-/// The `compl_length` bytes of the cursor line at `compl_col`, case-folded
+/// The `COMPL_LENGTH` bytes of the cursor line at `COMPL_COL`, case-folded
 /// when `'ignorecase'` is on: what every caller here wants for
 /// `compl_pattern`.
 pub(crate) fn compl_pattern_from_line() -> ApiString {
@@ -729,7 +729,7 @@ pub(crate) fn compl_text_from_line() -> ApiString {
     ApiString::from_bytes(compl_range(lines.line(Win::current().w_cursor.lnum)))
 }
 
-/// `compl_col .. compl_col + compl_length` of `line`, clamped to it.
+/// `COMPL_COL .. COMPL_COL + COMPL_LENGTH` of `line`, clamped to it.
 fn compl_range(line: &[u8]) -> &[u8] {
     let at = usize::try_from(COMPL_COL.get())
         .unwrap_or(0)

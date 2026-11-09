@@ -44,7 +44,7 @@ use crate::ops::OpType;
 use crate::ops::adjust_cursor_eol;
 use crate::option::get_ve_flags;
 use crate::option::vars::{P_SEL, p_slm, p_smd};
-use crate::options::kOptVeFlagBlock;
+use crate::options::OPT_VE_FLAG_BLOCK;
 use crate::plines::{getvcol, getvcols};
 use crate::pos::{equalpos, lt};
 use crate::state::mode::{
@@ -90,7 +90,7 @@ impl VisualMode {
     pub(crate) const LINE: Self = Self(Key::ascii(b'V').code());
     /// Blockwise, entered with CTRL-V.
     pub(crate) const BLOCK: Self = Self(CTRL_V);
-    /// The `NUL` that `resel_VIsual_mode` and `V_ISUAL_MODE_ORIG` use to mean
+    /// The `NUL` that `RESEL_V_ISUAL_MODE` and `V_ISUAL_MODE_ORIG` use to mean
     /// "nothing remembered".
     pub(crate) const NONE: Self = Self(NUL);
 
@@ -656,7 +656,7 @@ pub(crate) fn n_start_visual_mode(c: Key) {
     // A block selection starting inside a TAB starts at the column the
     // cursor is displayed at, not at the TAB's first column.
     if c == Key::CTRL_V
-        && get_ve_flags(Win::current()) & kOptVeFlagBlock != 0
+        && get_ve_flags(Win::current()) & OPT_VE_FLAG_BLOCK != 0
         && gchar_cursor() == TAB
     {
         validate_virtcol(Win::current());

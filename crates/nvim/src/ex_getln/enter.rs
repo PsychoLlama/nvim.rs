@@ -449,7 +449,7 @@ pub(crate) fn command_line_enter(
         }
 
         set_option_direct(
-            kOptInccommand,
+            OPT_INCCOMMAND,
             OptVal::from_cstr(s.save_p_icm.as_cstr()),
             OptionSetFlags::NONE,
             SID_NONE,

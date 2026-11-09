@@ -49,7 +49,7 @@ use crate::highlight_group::{HLF_MSGSEP, syn_check_group, syn_id2attr};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::message::msg_grid_ref;
 use crate::option::vars::{RDB_FLAGS, p_wd};
-use crate::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
+use crate::options::{OPT_RDB_FLAG_COMPOSITOR, OPT_RDB_FLAG_INVALID};
 use crate::os::time::os_sleep;
 use crate::types::{ApiString, Boolean, Handle, Integer, ScreenAttr, ScreenChar};
 use crate::ui::state::{COLUMNS, ROWS};
@@ -558,7 +558,7 @@ fn compose_into(
         skipend = 0;
     }
 
-    let fatal = RDB_FLAGS.get() & kOptRdbFlagInvalid != 0;
+    let fatal = RDB_FLAGS.get() & OPT_RDB_FLAG_INVALID != 0;
     clear_invalid_attrs(attrbuf, skipstart..width - skipend, fatal);
     (top, skipstart, skipend)
 }
@@ -572,7 +572,7 @@ fn blend_attrs(back: ScreenAttr, front: ScreenAttr, thru: &mut bool) -> ScreenAt
 /// compositor did is visible on screen.
 fn compose_debug(rows: (Integer, Integer), cols: (Integer, Integer), syn_id: c_int, delay: bool) {
     let ((startrow, mut endrow), (startcol, mut endcol)) = (rows, cols);
-    if RDB_FLAGS.get() & kOptRdbFlagCompositor == 0 || startcol >= endcol {
+    if RDB_FLAGS.get() & OPT_RDB_FLAG_COMPOSITOR == 0 || startcol >= endcol {
         return;
     }
     let default = default_layer();
@@ -807,7 +807,7 @@ pub fn ui_comp_grid_scroll(
         }
     } else {
         ui_composed_call_grid_scroll(1, top, bot, left, right, rows, cols);
-        if RDB_FLAGS.get() & kOptRdbFlagCompositor != 0 {
+        if RDB_FLAGS.get() & OPT_RDB_FLAG_COMPOSITOR != 0 {
             debug_delay(2);
         }
     }

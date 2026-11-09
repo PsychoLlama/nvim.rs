@@ -11,27 +11,25 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// The names are upstream's, and each is looked up by that spelling.
-#![allow(non_upper_case_globals)]
 
 // A chunk may hold nothing that needs the parent's support code.
 #[allow(unused_imports)]
 use super::*;
 
 /// Valid values for 'ambiwidth'.
-pub static opt_ambw_values: [&CStr; 2] = [c"single", c"double"];
+pub static OPT_AMBW_VALUES: [&CStr; 2] = [c"single", c"double"];
 
 /// Valid values for 'background'.
-pub static opt_bg_values: [&CStr; 2] = [c"light", c"dark"];
+pub static OPT_BG_VALUES: [&CStr; 2] = [c"light", c"dark"];
 
 /// Valid values for 'backspace'.
-pub static opt_bs_values: [&CStr; 4] = [c"indent", c"eol", c"start", c"nostop"];
+pub static OPT_BS_VALUES: [&CStr; 4] = [c"indent", c"eol", c"start", c"nostop"];
 
 /// Valid values for 'backupcopy'.
-pub static opt_bkc_values: [&CStr; 5] = [c"yes", c"auto", c"no", c"breaksymlink", c"breakhardlink"];
+pub static OPT_BKC_VALUES: [&CStr; 5] = [c"yes", c"auto", c"no", c"breaksymlink", c"breakhardlink"];
 
 /// Valid values for 'belloff'.
-pub static opt_bo_values: [&CStr; 20] = [
+pub static OPT_BO_VALUES: [&CStr; 20] = [
     c"all",
     c"backspace",
     c"cursor",
@@ -55,13 +53,13 @@ pub static opt_bo_values: [&CStr; 20] = [
 ];
 
 /// Valid values for 'breakindentopt'.
-pub static opt_briopt_values: [&CStr; 5] = [c"shift:", c"min:", c"sbr", c"list:", c"column:"];
+pub static OPT_BRIOPT_VALUES: [&CStr; 5] = [c"shift:", c"min:", c"sbr", c"list:", c"column:"];
 
 /// Valid values for 'bufhidden'.
-pub static opt_bh_values: [&CStr; 5] = [c"", c"hide", c"unload", c"delete", c"wipe"];
+pub static OPT_BH_VALUES: [&CStr; 5] = [c"", c"hide", c"unload", c"delete", c"wipe"];
 
 /// Valid values for 'buftype'.
-pub static opt_bt_values: [&CStr; 8] = [
+pub static OPT_BT_VALUES: [&CStr; 8] = [
     c"",
     c"acwrite",
     c"help",
@@ -73,18 +71,18 @@ pub static opt_bt_values: [&CStr; 8] = [
 ];
 
 /// Valid values for 'casemap'.
-pub static opt_cmp_values: [&CStr; 2] = [c"internal", c"keepascii"];
+pub static OPT_CMP_VALUES: [&CStr; 2] = [c"internal", c"keepascii"];
 
 /// Valid values for 'clipboard'.
-pub static opt_cb_values: [&CStr; 2] = [c"unnamed", c"unnamedplus"];
+pub static OPT_CB_VALUES: [&CStr; 2] = [c"unnamed", c"unnamedplus"];
 
 /// Valid values for 'complete'.
-pub static opt_cpt_values: [&CStr; 15] = [
+pub static OPT_CPT_VALUES: [&CStr; 15] = [
     c".", c"w", c"b", c"u", c"k", c"kspell", c"s", c"i", c"d", c"]", c"t", c"U", c"f", c"F", c"o",
 ];
 
 /// Valid values for 'completeopt'.
-pub static opt_cot_values: [&CStr; 11] = [
+pub static OPT_COT_VALUES: [&CStr; 11] = [
     c"menu",
     c"menuone",
     c"longest",
@@ -99,16 +97,16 @@ pub static opt_cot_values: [&CStr; 11] = [
 ];
 
 /// Valid values for 'completeslash'.
-pub static opt_csl_values: [&CStr; 3] = [c"", c"slash", c"backslash"];
+pub static OPT_CSL_VALUES: [&CStr; 3] = [c"", c"slash", c"backslash"];
 
 /// Valid values for 'cursorlineopt'.
-pub static opt_culopt_values: [&CStr; 4] = [c"line", c"screenline", c"number", c"both"];
+pub static OPT_CULOPT_VALUES: [&CStr; 4] = [c"line", c"screenline", c"number", c"both"];
 
 /// Valid values for 'debug'.
-pub static opt_debug_values: [&CStr; 3] = [c"msg", c"throw", c"beep"];
+pub static OPT_DEBUG_VALUES: [&CStr; 3] = [c"msg", c"throw", c"beep"];
 
 /// Valid values for 'diffopt'.
-pub static opt_dip_values: [&CStr; 19] = [
+pub static OPT_DIP_VALUES: [&CStr; 19] = [
     c"filler",
     c"anchor",
     c"context:",
@@ -130,34 +128,34 @@ pub static opt_dip_values: [&CStr; 19] = [
     c"linematch:",
 ];
 
-pub static opt_dip_algorithm_values: [&CStr; 4] = [c"myers", c"minimal", c"patience", c"histogram"];
+pub static OPT_DIP_ALGORITHM_VALUES: [&CStr; 4] = [c"myers", c"minimal", c"patience", c"histogram"];
 
-pub static opt_dip_inline_values: [&CStr; 4] = [c"none", c"simple", c"char", c"word"];
+pub static OPT_DIP_INLINE_VALUES: [&CStr; 4] = [c"none", c"simple", c"char", c"word"];
 
 /// Valid values for 'display'.
-pub static opt_dy_values: [&CStr; 4] = [c"lastline", c"truncate", c"uhex", c"msgsep"];
+pub static OPT_DY_VALUES: [&CStr; 4] = [c"lastline", c"truncate", c"uhex", c"msgsep"];
 
 /// Valid values for 'eadirection'.
-pub static opt_ead_values: [&CStr; 3] = [c"both", c"ver", c"hor"];
+pub static OPT_EAD_VALUES: [&CStr; 3] = [c"both", c"ver", c"hor"];
 
 /// Valid values for 'fileformat'.
-pub static opt_ff_values: [&CStr; 3] = [c"unix", c"dos", c"mac"];
+pub static OPT_FF_VALUES: [&CStr; 3] = [c"unix", c"dos", c"mac"];
 
 /// Valid values for 'foldclose'.
-pub static opt_fcl_values: [&CStr; 1] = [c"all"];
+pub static OPT_FCL_VALUES: [&CStr; 1] = [c"all"];
 
 /// Valid values for 'foldcolumn'.
-pub static opt_fdc_values: [&CStr; 20] = [
+pub static OPT_FDC_VALUES: [&CStr; 20] = [
     c"auto", c"auto:1", c"auto:2", c"auto:3", c"auto:4", c"auto:5", c"auto:6", c"auto:7",
     c"auto:8", c"auto:9", c"0", c"1", c"2", c"3", c"4", c"5", c"6", c"7", c"8", c"9",
 ];
 
 /// Valid values for 'foldmethod'.
-pub static opt_fdm_values: [&CStr; 6] =
+pub static OPT_FDM_VALUES: [&CStr; 6] =
     [c"manual", c"expr", c"marker", c"indent", c"syntax", c"diff"];
 
 /// Valid values for 'foldopen'.
-pub static opt_fdo_values: [&CStr; 11] = [
+pub static OPT_FDO_VALUES: [&CStr; 11] = [
     c"all",
     c"block",
     c"hor",
@@ -172,36 +170,36 @@ pub static opt_fdo_values: [&CStr; 11] = [
 ];
 
 /// Valid values for 'inccommand'.
-pub static opt_icm_values: [&CStr; 3] = [c"nosplit", c"split", c""];
+pub static OPT_ICM_VALUES: [&CStr; 3] = [c"nosplit", c"split", c""];
 
 /// Valid values for 'jumpoptions'.
-pub static opt_jop_values: [&CStr; 3] = [c"stack", c"view", c"clean"];
+pub static OPT_JOP_VALUES: [&CStr; 3] = [c"stack", c"view", c"clean"];
 
 /// Valid values for 'keymodel'.
-pub static opt_km_values: [&CStr; 2] = [c"startsel", c"stopsel"];
+pub static OPT_KM_VALUES: [&CStr; 2] = [c"startsel", c"stopsel"];
 
 /// Valid values for 'lispoptions'.
-pub static opt_lop_values: [&CStr; 2] = [c"expr:0", c"expr:1"];
+pub static OPT_LOP_VALUES: [&CStr; 2] = [c"expr:0", c"expr:1"];
 
 /// Valid values for 'messagesopt'.
-pub static opt_mopt_values: [&CStr; 4] = [c"hit-enter", c"wait:", c"history:", c"progress:"];
+pub static OPT_MOPT_VALUES: [&CStr; 4] = [c"hit-enter", c"wait:", c"history:", c"progress:"];
 
 /// Valid values for 'mousemodel'.
-pub static opt_mousem_values: [&CStr; 3] = [c"extend", c"popup", c"popup_setpos"];
+pub static OPT_MOUSEM_VALUES: [&CStr; 3] = [c"extend", c"popup", c"popup_setpos"];
 
 /// Valid values for 'mousescroll'.
-pub static opt_mousescroll_values: [&CStr; 2] = [c"hor:", c"ver:"];
+pub static OPT_MOUSESCROLL_VALUES: [&CStr; 2] = [c"hor:", c"ver:"];
 
 /// Valid values for 'nrformats'.
-pub static opt_nf_values: [&CStr; 6] = [c"bin", c"octal", c"hex", c"alpha", c"unsigned", c"blank"];
+pub static OPT_NF_VALUES: [&CStr; 6] = [c"bin", c"octal", c"hex", c"alpha", c"unsigned", c"blank"];
 
 /// Valid values for 'pumborder'.
-pub static opt_pumborder_values: [&CStr; 8] = [
+pub static OPT_PUMBORDER_VALUES: [&CStr; 8] = [
     c"", c"double", c"single", c"shadow", c"rounded", c"solid", c"bold", c"none",
 ];
 
 /// Valid values for 'redrawdebug'.
-pub static opt_rdb_values: [&CStr; 6] = [
+pub static OPT_RDB_VALUES: [&CStr; 6] = [
     c"compositor",
     c"nothrottle",
     c"invalid",
@@ -211,19 +209,19 @@ pub static opt_rdb_values: [&CStr; 6] = [
 ];
 
 /// Valid values for 'rightleftcmd'.
-pub static opt_rlc_values: [&CStr; 1] = [c"search"];
+pub static OPT_RLC_VALUES: [&CStr; 1] = [c"search"];
 
 /// Valid values for 'scrollopt'.
-pub static opt_sbo_values: [&CStr; 3] = [c"ver", c"hor", c"jump"];
+pub static OPT_SBO_VALUES: [&CStr; 3] = [c"ver", c"hor", c"jump"];
 
 /// Valid values for 'selection'.
-pub static opt_sel_values: [&CStr; 3] = [c"inclusive", c"exclusive", c"old"];
+pub static OPT_SEL_VALUES: [&CStr; 3] = [c"inclusive", c"exclusive", c"old"];
 
 /// Valid values for 'selectmode'.
-pub static opt_slm_values: [&CStr; 3] = [c"mouse", c"key", c"cmd"];
+pub static OPT_SLM_VALUES: [&CStr; 3] = [c"mouse", c"key", c"cmd"];
 
 /// Valid values for 'sessionoptions'.
-pub static opt_ssop_values: [&CStr; 18] = [
+pub static OPT_SSOP_VALUES: [&CStr; 18] = [
     c"buffers",
     c"winpos",
     c"resize",
@@ -245,52 +243,52 @@ pub static opt_ssop_values: [&CStr; 18] = [
 ];
 
 /// Valid values for 'showcmdloc'.
-pub static opt_sloc_values: [&CStr; 3] = [c"last", c"statusline", c"tabline"];
+pub static OPT_SLOC_VALUES: [&CStr; 3] = [c"last", c"statusline", c"tabline"];
 
 /// Valid values for 'signcolumn'.
-pub static opt_scl_values: [&CStr; 22] = [
+pub static OPT_SCL_VALUES: [&CStr; 22] = [
     c"yes", c"no", c"auto", c"auto:1", c"auto:2", c"auto:3", c"auto:4", c"auto:5", c"auto:6",
     c"auto:7", c"auto:8", c"auto:9", c"yes:1", c"yes:2", c"yes:3", c"yes:4", c"yes:5", c"yes:6",
     c"yes:7", c"yes:8", c"yes:9", c"number",
 ];
 
 /// Valid values for 'spelloptions'.
-pub static opt_spo_values: [&CStr; 2] = [c"camel", c"noplainbuffer"];
+pub static OPT_SPO_VALUES: [&CStr; 2] = [c"camel", c"noplainbuffer"];
 
 /// Valid values for 'spellsuggest'.
-pub static opt_sps_values: [&CStr; 6] =
+pub static OPT_SPS_VALUES: [&CStr; 6] =
     [c"best", c"fast", c"double", c"expr:", c"file:", c"timeout:"];
 
 /// Valid values for 'splitkeep'.
-pub static opt_spk_values: [&CStr; 3] = [c"cursor", c"screen", c"topline"];
+pub static OPT_SPK_VALUES: [&CStr; 3] = [c"cursor", c"screen", c"topline"];
 
 /// Valid values for 'switchbuf'.
-pub static opt_swb_values: [&CStr; 6] = [
+pub static OPT_SWB_VALUES: [&CStr; 6] = [
     c"useopen", c"usetab", c"split", c"newtab", c"vsplit", c"uselast",
 ];
 
 /// Valid values for 'tabclose'.
-pub static opt_tcl_values: [&CStr; 2] = [c"left", c"uselast"];
+pub static OPT_TCL_VALUES: [&CStr; 2] = [c"left", c"uselast"];
 
 /// Valid values for 'tagcase'.
-pub static opt_tc_values: [&CStr; 5] = [c"followic", c"ignore", c"match", c"followscs", c"smart"];
+pub static OPT_TC_VALUES: [&CStr; 5] = [c"followic", c"ignore", c"match", c"followscs", c"smart"];
 
 /// Valid values for 'termpastefilter'.
-pub static opt_tpf_values: [&CStr; 7] = [c"BS", c"HT", c"FF", c"ESC", c"DEL", c"C0", c"C1"];
+pub static OPT_TPF_VALUES: [&CStr; 7] = [c"BS", c"HT", c"FF", c"ESC", c"DEL", c"C0", c"C1"];
 
 /// Valid values for 'virtualedit'.
-pub static opt_ve_values: [&CStr; 6] = [c"block", c"insert", c"all", c"onemore", c"none", c"NONE"];
+pub static OPT_VE_VALUES: [&CStr; 6] = [c"block", c"insert", c"all", c"onemore", c"none", c"NONE"];
 
 /// Valid values for 'wildmode'.
-pub static opt_wim_values: [&CStr; 5] = [c"full", c"longest", c"list", c"lastused", c"noselect"];
+pub static OPT_WIM_VALUES: [&CStr; 5] = [c"full", c"longest", c"list", c"lastused", c"noselect"];
 
 /// Valid values for 'wildoptions'.
-pub static opt_wop_values: [&CStr; 4] = [c"fuzzy", c"tagfile", c"pum", c"exacttext"];
+pub static OPT_WOP_VALUES: [&CStr; 4] = [c"fuzzy", c"tagfile", c"pum", c"exacttext"];
 
 /// Valid values for 'winaltkeys'.
-pub static opt_wak_values: [&CStr; 3] = [c"yes", c"menu", c"no"];
+pub static OPT_WAK_VALUES: [&CStr; 3] = [c"yes", c"menu", c"no"];
 
 /// Valid values for 'winborder'.
-pub static opt_winborder_values: [&CStr; 8] = [
+pub static OPT_WINBORDER_VALUES: [&CStr; 8] = [
     c"", c"double", c"single", c"shadow", c"rounded", c"solid", c"bold", c"none",
 ];

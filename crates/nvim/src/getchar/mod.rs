@@ -63,7 +63,7 @@ use crate::normal::{add_to_showcmd, normal_cmd, pop_showcmd, push_showcmd};
 use crate::option::vars::{
     p_fs, p_lrm, p_lz, p_mmd, p_paste, p_sc, p_smd, p_timeout, p_tm, p_ttimeout, p_ttm, p_uc,
 };
-use crate::options::kOptBoFlagError;
+use crate::options::OPT_BO_FLAG_ERROR;
 use crate::os::cshim::gettext;
 use crate::os::input::{input_available, input_get, line_breakcheck, os_breakcheck};
 use crate::os::libc::{ptrdiff_t, size_t, uint8_t, uint64_t};
@@ -141,7 +141,7 @@ pub const FLUSH_INPUT: FlushBuffers = 2;
 pub const FLUSH_MINIMAL: FlushBuffers = 0;
 pub const NSCRIPT: ::core::ffi::c_uint = 15;
 /// What each typeahead byte may still be remapped through (its `noremap`
-/// flags, and `KeyNoremap` for the key last read).
+/// flags, and `KEY_NOREMAP` for the key last read).
 pub const RM_YES: u8 = 0;
 pub const RM_NONE: u8 = 1;
 pub const RM_SCRIPT: u8 = 2;

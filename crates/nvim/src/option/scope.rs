@@ -140,7 +140,7 @@ pub(crate) fn option_var(opt_idx: OptIndex) -> OptSlot {
 /// Whether an option is hidden: immutable, and reading its own default in
 /// place, so a write through its variable could not be observed anyway.
 pub(crate) fn is_option_hidden(opt_idx: OptIndex) -> bool {
-    if opt_idx == kOptInvalid {
+    if opt_idx == OPT_INVALID {
         return false;
     }
     let opt = get_option(opt_idx);
@@ -149,7 +149,7 @@ pub(crate) fn is_option_hidden(opt_idx: OptIndex) -> bool {
 
 /// Whether the table declares `type_0` as the option's type.
 pub(crate) fn option_has_type(opt_idx: OptIndex, type_0: OptValType) -> bool {
-    opt_idx != kOptInvalid && get_option(opt_idx).type_0 == type_0
+    opt_idx != OPT_INVALID && get_option(opt_idx).type_0 == type_0
 }
 
 /// Whether the option exists in `scope`.
@@ -160,7 +160,7 @@ pub(crate) fn option_has_scope(opt_idx: OptIndex, scope: OptScope) -> bool {
 
 /// The option's scope mask, or 0 for "no such option".
 fn scope_flags(opt_idx: OptIndex) -> u32 {
-    if opt_idx == kOptInvalid {
+    if opt_idx == OPT_INVALID {
         return 0;
     }
     u32::from(get_option(opt_idx).scope_flags)
@@ -168,7 +168,7 @@ fn scope_flags(opt_idx: OptIndex) -> u32 {
 
 /// Whether the option has both a global value and a local one.
 pub(crate) fn option_is_global_local(opt_idx: OptIndex) -> bool {
-    opt_idx != kOptInvalid && scope_flags(opt_idx).count_ones() != 1
+    opt_idx != OPT_INVALID && scope_flags(opt_idx).count_ones() != 1
 }
 
 /// Whether the option's only scope is the global one.

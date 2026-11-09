@@ -22,7 +22,7 @@
 //! outcome cannot simply happen: the finally clause has to execute first.
 //! So [`ex_finally`] parks it in the level's `pending` (the `CSTP_*` values,
 //! with the value or exception beside it), the finally clause runs on a
-//! cleared `DID_EMSG`/`got_int`/`did_throw`, and [`ex_endtry`] resumes
+//! cleared `DID_EMSG`/`GOT_INT`/`DID_THROW`, and [`ex_endtry`] resumes
 //! whatever was parked -- unless the finally clause produced something new,
 //! which replaces it.
 //!

@@ -70,7 +70,7 @@ use crate::option::{
     default_fileformat, get_fileformat, set_fileformat, set_option_direct, set_options_bin,
     shortmess,
 };
-use crate::options::kOptFileencoding;
+use crate::options::OPT_FILEENCODING;
 use crate::optionstr::OptString;
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::fs::{Directory, FileInfo};
@@ -344,7 +344,7 @@ pub fn set_forced_fenc(excmd: &mut ExArg) {
     };
     let fenc = canonize(excmd.line.rest_of(excmd.line.cmd + force_enc));
     set_option_direct(
-        kOptFileencoding,
+        OPT_FILEENCODING,
         OptVal::from_cstr(fenc.as_cstr()),
         OptionSetFlags::LOCAL,
         0 as ScriptId,

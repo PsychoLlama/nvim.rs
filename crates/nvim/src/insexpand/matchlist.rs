@@ -1,7 +1,7 @@
 //! The `ComplItem` match list: adding, freeing and ordering the matches.
 //!
 //! [`ins_compl_add`] links a new match into the doubly linked list
-//! `compl_first_match` heads, rejecting duplicates unless the caller allows
+//! `COMPL_FIRST_MATCH` heads, rejecting duplicates unless the caller allows
 //! them; [`ins_compl_make_cyclic`] closes the ring and
 //! [`ins_compl_make_linear`] opens it again.  [`sort_compl_match_list`] is
 //! `'completeopt'`'s `fuzzy` and `nearest` orderings.
@@ -62,8 +62,8 @@ impl Added {
 /// `text` is the match (cut at a NUL, as every C reader of it would be),
 /// `fname` the file it came from, `extra` the `abbr`/`kind`/`menu`/`info`
 /// strings (an empty one is dropped), `user_data` taken over only when the
-/// match is added, `cdir` the side of `compl_curr_match` to link it on
-/// (`DIRECTION_NOT_SET` means `compl_direction`), `adup` whether a duplicate
+/// match is added, `cdir` the side of `COMPL_CURR_MATCH` to link it on
+/// (`DIRECTION_NOT_SET` means `COMPL_DIRECTION`), `adup` whether a duplicate
 /// is acceptable, and `user_hl` the `abbr` and `kind` highlight attributes.
 ///
 /// Answers [`Added::Duplicate`] when the text is already in the list and
@@ -108,7 +108,7 @@ pub(crate) fn ins_compl_add(
     // Remove any popup menu before changing the list of matches.
     ins_compl_del_pum();
 
-    // The match's file name is `compl_curr_match`'s when it is the same
+    // The match's file name is `COMPL_CURR_MATCH`'s when it is the same
     // name, else a copy of `fname`.  -- Acevedo
     let fname = fname.map(|name| {
         let current = curr_match().and_then(|curr| curr.with(|m| m.fname.clone()));
@@ -342,7 +342,7 @@ impl ComplMatches {
             if forward { m.next } else { m.prev }
         };
         let mut number = 0;
-        // Upstream dereferences `compl_curr_match` here without checking.
+        // Upstream dereferences `COMPL_CURR_MATCH` here without checking.
         let curr = self
             .COMPL_CURR_MATCH
             .expect("a running completion has a current match");
@@ -685,13 +685,13 @@ pub(crate) fn ins_compl_fuzzy_sort() {
     let cur_cot_flags = completeopt_flags();
 
     set_fuzzy_score();
-    if cur_cot_flags & kOptCotFlagNosort != 0 {
+    if cur_cot_flags & OPT_COT_FLAG_NOSORT != 0 {
         return;
     }
     sort_compl_match_list(MatchOrder::Fuzzy);
 
     // Sorting reorders the items, so the shown one has to be reset.
-    if cur_cot_flags & (kOptCotFlagNoinsert | kOptCotFlagNoselect) != kOptCotFlagNoinsert {
+    if cur_cot_flags & (OPT_COT_FLAG_NOINSERT | OPT_COT_FLAG_NOSELECT) != OPT_COT_FLAG_NOINSERT {
         return;
     }
     let first = first_match();
@@ -711,7 +711,7 @@ pub(crate) fn ins_compl_fuzzy_sort() {
     COMPL_SHOWN_MATCH.set(next);
 }
 
-/// Number the matches around `compl_curr_match`, in the direction the
+/// Number the matches around `COMPL_CURR_MATCH`, in the direction the
 /// completion is running.
 pub(crate) fn ins_compl_update_sequence_numbers() {
     let forward = compl_dir_forward();
@@ -722,7 +722,7 @@ pub(crate) fn ins_compl_update_sequence_numbers() {
 /// Drop every match the current `'complete'` source contributed, so it can be
 /// re-run (`refresh: 'always'`). The list is opened.
 pub(crate) fn remove_old_matches() {
-    // Upstream dereferences `compl_first_match` here without checking.
+    // Upstream dereferences `COMPL_FIRST_MATCH` here without checking.
     let head = first_match().expect("a refresh runs on a non-empty match list");
     let forward = head.with(|m| m.cpt_source_idx) < 0;
     let source = cpt_sources().index();

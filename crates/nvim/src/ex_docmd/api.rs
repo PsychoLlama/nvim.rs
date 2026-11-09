@@ -42,7 +42,7 @@ use crate::ex_docmd::scan::{parse_bang, parse_register, separate_nextcmd};
 use crate::ex_docmd::source::{do_cmdline_end, do_cmdline_start};
 use crate::ex_docmd::state::{CMDMOD, GLOBAL_BUSY};
 use crate::ex_docmd::{
-    E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND, E_NOT_AN_EDITOR_COMMAND, EX_PRESSEDRETURN, cmdnames,
+    CMDNAMES, E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND, E_NOT_AN_EDITOR_COMMAND, EX_PRESSEDRETURN,
 };
 use crate::ex_getln::{
     cmdpreview_get_bufnr, cmdpreview_get_ns, curbuf_locked, get_text_locked_msg, text_locked,
@@ -142,7 +142,7 @@ pub fn parse_cmdline(
 
         excmd.forceit = parse_bang(excmd, &mut p);
         if !is_user_cmd(excmd.cmdidx) {
-            excmd.argt = cmdnames[excmd.cmdidx.index()].cmd_argt;
+            excmd.argt = CMDNAMES[excmd.cmdidx.index()].cmd_argt;
         }
         // `:!` keeps the space: `:!! -l` needs it.
         excmd.line.arg = if excmd.cmdidx == CmdIdx::bang {
@@ -289,7 +289,7 @@ pub(crate) fn execute_cmd0(
     } else {
         excmd.errmsg = None;
         if preview {
-            *retv = cmdnames[excmd.cmdidx.index()]
+            *retv = CMDNAMES[excmd.cmdidx.index()]
                 .cmd_preview_func
                 .expect("a command with ExArgt::PREVIEW has a preview callback")(
                 excmd,
@@ -297,7 +297,7 @@ pub(crate) fn execute_cmd0(
                 cmdpreview_get_bufnr(),
             );
         } else {
-            cmdnames[excmd.cmdidx.index()]
+            CMDNAMES[excmd.cmdidx.index()]
                 .cmd_func
                 .expect("every command in the table has a handler")(excmd);
         }

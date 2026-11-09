@@ -145,7 +145,7 @@ impl WinLineVars {
 pub fn use_cursor_line_highlight(window: Win, lnum: LineNr) -> bool {
     window.w_onebuf_opt.wo_cul != 0
         && lnum == window.w_cursorline
-        && u32::from(window.w_p_culopt_flags) & kOptCuloptFlagNumber != 0
+        && u32::from(window.w_p_culopt_flags) & OPT_CULOPT_FLAG_NUMBER != 0
 }
 
 /// The glyph for a fold-column cell that is inside a fold but is neither the
@@ -387,10 +387,10 @@ impl WinLineVars {
         let culopt = u32::from(window.w_p_culopt_flags);
         window.w_onebuf_opt.wo_cul != 0
             && self.lnum == window.w_cursorline
-            && culopt & kOptCuloptFlagNumber != 0
+            && culopt & OPT_CULOPT_FLAG_NUMBER != 0
             && (self.row == self.startrow + self.filler_lines
                 || (self.row > self.startrow + self.filler_lines
-                    && culopt & kOptCuloptFlagLine != 0))
+                    && culopt & OPT_CULOPT_FLAG_LINE != 0))
     }
 
     /// The number-column attribute: the right `LineNr*` highlight with the

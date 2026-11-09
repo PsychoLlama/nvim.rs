@@ -45,8 +45,8 @@ use crate::option::{
     skip_option_separator,
 };
 use crate::options::{
-    kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes, kOptComments, kOptEncoding, kOptEventignorewin,
-    kOptFileencoding, kOptIskeyword, opt_bh_values, opt_bkc_values, opt_bt_values,
+    OPT_BH_VALUES, OPT_BKC_FLAG_AUTO, OPT_BKC_FLAG_NO, OPT_BKC_FLAG_YES, OPT_BKC_VALUES,
+    OPT_BT_VALUES, OPT_COMMENTS, OPT_ENCODING, OPT_EVENTIGNOREWIN, OPT_FILEENCODING, OPT_ISKEYWORD,
 };
 use crate::spell::spell_reload;
 use crate::types::{Buffer, OptInt, Pos};
@@ -98,10 +98,10 @@ pub fn did_set_backupcopy(args: &mut OptSet) -> Result<(), OptError> {
         store(0 as c_uint);
         return Ok(());
     }
-    let Some(mask) = opt_strings_mask(value, &opt_bkc_values, true) else {
+    let Some(mask) = opt_strings_mask(value, &OPT_BKC_VALUES, true) else {
         return invalid();
     };
-    let named = [kOptBkcFlagAuto, kOptBkcFlagYes, kOptBkcFlagNo]
+    let named = [OPT_BKC_FLAG_AUTO, OPT_BKC_FLAG_YES, OPT_BKC_FLAG_NO]
         .into_iter()
         .filter(|word| mask & *word as c_uint != 0)
         .count();
@@ -129,7 +129,7 @@ pub fn did_set_backupext_or_patchmode(_args: &mut OptSet) -> Result<(), OptError
 
 /// 'bufhidden' is checked as the buffer holds it, whichever copy was set.
 pub fn did_set_bufhidden(args: &mut OptSet) -> Result<(), OptError> {
-    did_set_opt_flags(args.os_buf.b_p_bh.bytes(), &opt_bh_values, false)
+    did_set_opt_flags(args.os_buf.b_p_bh.bytes(), &OPT_BH_VALUES, false)
 }
 
 /// 'buftype' cannot be changed into or out of "terminal": that is decided
@@ -141,7 +141,7 @@ pub fn did_set_buftype(args: &mut OptSet) -> Result<(), OptError> {
     let (first, listed) = {
         let value = buf.b_p_bt.bytes();
         let first = value.first().copied().unwrap_or(0);
-        (first, opt_strings_ok(value, &opt_bt_values, false))
+        (first, opt_strings_ok(value, &OPT_BT_VALUES, false))
     };
     let has_terminal = !buf.terminal.is_null();
     if has_terminal != (first == b't') || !listed {
@@ -152,7 +152,7 @@ pub fn did_set_buftype(args: &mut OptSet) -> Result<(), OptError> {
         // A prompt buffer has no comment leaders, and its prompt starts at
         // the end of what is there now.
         set_option_direct(
-            kOptComments,
+            OPT_COMMENTS,
             OptVal::static_string(c""),
             OptionSetFlags::LOCAL,
             SID_NONE,
@@ -258,7 +258,7 @@ pub fn did_set_encoding(args: &mut OptSet) -> Result<(), OptError> {
     let (buf, varp, opt_flags, idx) = (args.os_buf, varp(args), args.os_flags, args.os_idx);
     // 'fileencoding' is the buffer-local one of the three; the other two
     // ('encoding' and 'makeencoding') are global and skip this block.
-    if idx == kOptFileencoding {
+    if idx == OPT_FILEENCODING {
         if buf.b_p_ma == 0 && opt_flags != OptionSetFlags::GLOBAL {
             return Err((E_MODIFIABLE).into());
         }
@@ -271,7 +271,7 @@ pub fn did_set_encoding(args: &mut OptSet) -> Result<(), OptError> {
     }
 
     varp.set(canonize(new_bytes(args)));
-    if idx == kOptEncoding {
+    if idx == OPT_ENCODING {
         if p_enc(|value| value.to_bytes() != b"utf-8") {
             return Err((E_UNSUPPORTEDOPTION).into());
         }
@@ -281,7 +281,7 @@ pub fn did_set_encoding(args: &mut OptSet) -> Result<(), OptError> {
 }
 
 pub fn did_set_eventignore(args: &mut OptSet) -> Result<(), OptError> {
-    let window_local = args.os_idx == kOptEventignorewin;
+    let window_local = args.os_idx == OPT_EVENTIGNOREWIN;
     if check_ei(new_value(args).as_cstr(), window_local).is_err() {
         return invalid();
     }
@@ -374,7 +374,7 @@ pub fn did_set_formatoptions(args: &mut OptSet) -> Result<(), OptError> {
 /// it.
 pub fn did_set_iskeyword(args: &mut OptSet) -> Result<(), OptError> {
     let varp = varp(args);
-    if varp != option_var(kOptIskeyword).string_var() {
+    if varp != option_var(OPT_ISKEYWORD).string_var() {
         return did_set_isopt(args);
     }
     if check_isopt(new_bytes(args)).is_err() {

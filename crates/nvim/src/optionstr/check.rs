@@ -39,10 +39,10 @@ use crate::memory::XString;
 use crate::option::defs::OptError;
 use crate::option::{OPT_FLAG_N_DNAME, OPT_FLAG_N_FNAME, valid_name};
 use crate::options::{
-    kOptBackupcopy, kOptBelloff, kOptCasemap, kOptClipboard, kOptCompleteopt, kOptDisplay,
-    kOptFoldopen, kOptJumpoptions, kOptRedrawdebug, kOptSessionoptions, kOptSwitchbuf,
-    kOptTabclose, kOptTagcase, kOptTermpastefilter, kOptViewoptions, kOptVirtualedit,
-    kOptWildoptions, opt_scl_values,
+    OPT_BACKUPCOPY, OPT_BELLOFF, OPT_CASEMAP, OPT_CLIPBOARD, OPT_COMPLETEOPT, OPT_DISPLAY,
+    OPT_FOLDOPEN, OPT_JUMPOPTIONS, OPT_REDRAWDEBUG, OPT_SCL_VALUES, OPT_SESSIONOPTIONS,
+    OPT_SWITCHBUF, OPT_TABCLOSE, OPT_TAGCASE, OPT_TERMPASTEFILTER, OPT_VIEWOPTIONS,
+    OPT_VIRTUALEDIT, OPT_WILDOPTIONS,
 };
 use crate::os::cshim::gettext;
 use crate::os::libc::uint32_t;
@@ -62,23 +62,23 @@ use crate::winlayer::Buf;
 /// may have installed without going through `:set`.
 pub fn didset_string_options() {
     for idx in [
-        kOptCasemap,
-        kOptBackupcopy,
-        kOptBelloff,
-        kOptCompleteopt,
-        kOptSessionoptions,
-        kOptViewoptions,
-        kOptFoldopen,
-        kOptDisplay,
-        kOptJumpoptions,
-        kOptRedrawdebug,
-        kOptTagcase,
-        kOptTermpastefilter,
-        kOptVirtualedit,
-        kOptSwitchbuf,
-        kOptTabclose,
-        kOptWildoptions,
-        kOptClipboard,
+        OPT_CASEMAP,
+        OPT_BACKUPCOPY,
+        OPT_BELLOFF,
+        OPT_COMPLETEOPT,
+        OPT_SESSIONOPTIONS,
+        OPT_VIEWOPTIONS,
+        OPT_FOLDOPEN,
+        OPT_DISPLAY,
+        OPT_JUMPOPTIONS,
+        OPT_REDRAWDEBUG,
+        OPT_TAGCASE,
+        OPT_TERMPASTEFILTER,
+        OPT_VIRTUALEDIT,
+        OPT_SWITCHBUF,
+        OPT_TABCLOSE,
+        OPT_WILDOPTIONS,
+        OPT_CLIPBOARD,
     ] {
         let _ = check_str_opt(idx, None);
     }
@@ -215,7 +215,7 @@ pub fn check_signcolumn(scl: Option<&[u8]>, window: Option<Win>) -> Result<(), F
         if val.is_empty() {
             return None;
         }
-        if opt_strings_ok(val, &opt_scl_values, false) {
+        if opt_strings_ok(val, &OPT_SCL_VALUES, false) {
             let Some(w) = window else {
                 return Some(None);
             };

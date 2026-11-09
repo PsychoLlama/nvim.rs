@@ -48,8 +48,8 @@ use crate::ex_docmd::source::{ReadLines, SourceKind, ex_errmsg};
 
 use crate::ex_docmd::verify::verify_command;
 use crate::ex_docmd::{
-    DoCmdOpts, E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND, E_NOT_AN_EDITOR_COMMAND, ExFunc, PROF_YES,
-    QUITMORE, cmdnames,
+    CMDNAMES, DoCmdOpts, E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND, E_NOT_AN_EDITOR_COMMAND, ExFunc,
+    PROF_YES, QUITMORE,
 };
 use crate::ex_eval::CsFlags;
 
@@ -111,8 +111,8 @@ pub(crate) fn ex_func_is(func: ExFunc, f: fn(&mut ExArg)) -> bool {
 /// Is this a command the build knows the name of but cannot run?
 pub fn is_cmd_ni(cmdidx: CmdIdx) -> bool {
     !is_user_cmd(cmdidx)
-        && (ex_func_is(cmdnames[cmdidx.index()].cmd_func, ex_ni)
-            || ex_func_is(cmdnames[cmdidx.index()].cmd_func, ex_script_ni))
+        && (ex_func_is(CMDNAMES[cmdidx.index()].cmd_func, ex_ni)
+            || ex_func_is(CMDNAMES[cmdidx.index()].cmd_func, ex_script_ni))
 }
 
 /// Drop the first of an API-supplied argument list, and point `eap->arg` at
@@ -599,7 +599,7 @@ pub(crate) fn do_one_cmd(
         excmd.forceit = parse_bang(&mut excmd, &mut cursor);
         excmd.line.arg = cursor;
         if !is_user_cmd(excmd.cmdidx) {
-            excmd.argt = cmdnames[excmd.cmdidx.index()].cmd_argt;
+            excmd.argt = CMDNAMES[excmd.cmdidx.index()].cmd_argt;
         }
 
         excmd.check_may_run(ni, flags, &mut errormsg)?;

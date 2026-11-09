@@ -65,7 +65,7 @@ impl Default for Briopt {
 /// Parses one 'breakindentopt' value; `None` is a malformed one, which is
 /// what upstream reports as `FAIL`.
 ///
-/// Keep this in sync with `opt_briopt_values`, which is what completes it.
+/// Keep this in sync with `OPT_BRIOPT_VALUES`, which is what completes it.
 fn parse_briopt(bytes: &[u8]) -> Option<Briopt> {
     let mut opt = Briopt::default();
     let number = |at: &mut usize, strict: bool| -> c_int {
@@ -282,7 +282,7 @@ pub fn get_breakindent_win(window: Win, line: &[u8]) -> c_int {
         tick: buf_get_changedtick(buf),
         listopt: win.w_briopt_list,
         no_ts: win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == NUL as ScreenChar,
-        dy_uhex: DY_FLAGS.get() & kOptDyFlagUhex as c_uint,
+        dy_uhex: DY_FLAGS.get() & OPT_DY_FLAG_UHEX as c_uint,
     };
     let opt = Briopt {
         shift: win.w_briopt_shift,

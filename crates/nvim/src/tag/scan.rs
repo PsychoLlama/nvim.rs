@@ -25,7 +25,8 @@ use crate::mbyte::{CONV_NONE, CONV_NONE_INIT};
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::P_HLG;
 use crate::options::{
-    kOptTcFlagFollowic, kOptTcFlagFollowscs, kOptTcFlagIgnore, kOptTcFlagMatch, kOptTcFlagSmart,
+    OPT_TC_FLAG_FOLLOWIC, OPT_TC_FLAG_FOLLOWSCS, OPT_TC_FLAG_IGNORE, OPT_TC_FLAG_MATCH,
+    OPT_TC_FLAG_SMART,
 };
 use crate::optionstr::OptString;
 use crate::pos::MAXCOL;
@@ -686,17 +687,17 @@ fn search(
         0 => TC_FLAGS.get(),
         local => local,
     };
-    if tagcase == kOptTcFlagIgnore {
+    if tagcase == OPT_TC_FLAG_IGNORE {
         P_IC.set(true);
-    } else if tagcase == kOptTcFlagMatch {
+    } else if tagcase == OPT_TC_FLAG_MATCH {
         P_IC.set(false);
-    } else if tagcase == kOptTcFlagFollowscs {
+    } else if tagcase == OPT_TC_FLAG_FOLLOWSCS {
         P_IC.set(ignorecase_opt(&pattern, p_ic(), p_scs()));
-    } else if tagcase == kOptTcFlagSmart {
+    } else if tagcase == OPT_TC_FLAG_SMART {
         P_IC.set(ignorecase_opt(&pattern, true, true));
     } else {
         assert_eq!(
-            tagcase, kOptTcFlagFollowic,
+            tagcase, OPT_TC_FLAG_FOLLOWIC,
             "'tagcase' is one of its five values"
         );
     }

@@ -7,9 +7,9 @@
 //! saves and restores `w_cursor` around the whole block.
 //!
 //! Besides the answer, this sets three of 'smartindent''s globals:
-//! `did_si` ("indent the new line one level further"), `can_si_back` ("a `{`
+//! `DID_SI` ("indent the new line one level further"), `CAN_SI_BACK` ("a `{`
 //! typed on the new line may un-indent it") and, through the `no_si` half of
-//! the answer, whether `did_si` should be cleared again once the indent has
+//! the answer, whether `DID_SI` should be cleared again once the indent has
 //! been applied.
 
 #![forbid(unsafe_code)]
@@ -113,7 +113,7 @@ fn indent_of_comment_start(line: &XString) -> Option<c_int> {
 
 /// 'smartindent' looking *down* the file, for `o` and `<CR>`.
 ///
-/// Answers the new indent and whether `did_si` was set by a `{` -- which the
+/// Answers the new indent and whether `DID_SI` was set by a `{` -- which the
 /// caller has to undo after applying the indent, so that typing `{` on the
 /// new line does not un-indent it a second time.
 ///

@@ -388,7 +388,7 @@ pub(crate) fn cmdpreview_may_show() -> bool {
         } {
             // Failed to create the preview buffer, so disable the preview.
             set_option_direct(
-                kOptInccommand,
+                OPT_INCCOMMAND,
                 OptVal::static_string(c"nosplit"),
                 OptionSetFlags::NONE,
                 SID_NONE,

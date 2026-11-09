@@ -37,12 +37,12 @@ state_record! {
     /// Whether it was `t`/`T`, which stop short of the character.
     LAST_T_CMD: bool = true;
     /// The full (possibly multi-byte, possibly composed) sequence, which
-    /// `lastc_bytelen > 1` switches the comparison over to.
+    /// `LASTC_BYTELEN > 1` switches the comparison over to.
     LASTC_BYTES: [u8; SCHAR_BYTES] = [0; SCHAR_BYTES];
     LASTC_BYTELEN: c_int = 1;
 }
 
-/// One `ScreenChar`'s bytes plus its NUL — what `lastc_bytes` holds.
+/// One `ScreenChar`'s bytes plus its NUL — what `LASTC_BYTES` holds.
 const SCHAR_BYTES: usize = MAX_SCHAR_SIZE as usize + 1;
 
 /// The bytes `;` and `,` look for, NUL-terminated, by value: `getcharsearch()`
@@ -80,7 +80,7 @@ pub fn set_last_csearch(c: c_int, text: &[u8]) {
     LASTC.set(low_byte(c));
     LASTC_BYTELEN.set(c_int::try_from(len).expect("a cell's worth of bytes"));
     // Upstream writes over the front of the old value rather than replacing
-    // it, and `lastc_bytelen` is what says how much of it counts.
+    // it, and `LASTC_BYTELEN` is what says how much of it counts.
     let mut bytes = if len != 0 {
         LASTC_BYTES.get()
     } else {

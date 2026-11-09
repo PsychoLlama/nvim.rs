@@ -19,7 +19,7 @@ use crate::insexpand::set_cpt_callbacks;
 use crate::option::defs::{OptError, OptSet, OptionSetFlags};
 use crate::option::split_option_part;
 use crate::option::vars::{CIA_FLAGS, COT_FLAGS, P_CIA, P_HLG, SPO_FLAGS, TC_FLAGS};
-use crate::options::{opt_cot_values, opt_spo_values, opt_tc_values};
+use crate::options::{OPT_COT_VALUES, OPT_SPO_VALUES, OPT_TC_VALUES};
 use crate::os::env::vim_unsetenv_named;
 use crate::os::state::{DIDSET_VIM, DIDSET_VIMRUNTIME};
 use crate::spell::{compile_cap_prog, did_set_spell_option, valid_spellfile, valid_spelllang};
@@ -165,7 +165,7 @@ pub fn did_set_completeopt(args: &mut OptSet) -> Result<(), OptError> {
         // A plain `:set` drops the buffer's own answer.
         buf.b_cot_flags = 0 as c_uint;
     }
-    let Some(mask) = opt_strings_mask(new_bytes(args), &opt_cot_values, true) else {
+    let Some(mask) = opt_strings_mask(new_bytes(args), &OPT_COT_VALUES, true) else {
         return invalid();
     };
     if local {
@@ -257,7 +257,7 @@ pub fn did_set_spelloptions(args: &mut OptSet) -> Result<(), OptError> {
     let global = !opt_flags.has(OptionSetFlags::LOCAL);
     let local = !opt_flags.has(OptionSetFlags::GLOBAL);
     if global || local {
-        let Some(mask) = opt_strings_mask(new_bytes(args), &opt_spo_values, true) else {
+        let Some(mask) = opt_strings_mask(new_bytes(args), &OPT_SPO_VALUES, true) else {
             return invalid();
         };
         if global {
@@ -287,7 +287,7 @@ pub fn did_set_tagcase(args: &mut OptSet) -> Result<(), OptError> {
     let mask = if local && value.is_empty() {
         0 as c_uint
     } else {
-        match opt_strings_mask(value, &opt_tc_values, false) {
+        match opt_strings_mask(value, &OPT_TC_VALUES, false) {
             Some(mask) => mask,
             None => return invalid(),
         }

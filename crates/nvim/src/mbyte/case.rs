@@ -66,14 +66,14 @@ fn casemap_has(flag: c_uint) -> bool {
 
 /// The uppercase of `a`, honouring `'casemap'`.
 pub fn mb_toupper(a: c_int) -> c_int {
-    if a < 128 && casemap_has(kOptCmpFlagKeepascii as c_uint) {
+    if a < 128 && casemap_has(OPT_CMP_FLAG_KEEPASCII as c_uint) {
         return if u8::try_from(a).is_ok_and(|b| b.is_ascii_lowercase()) {
             a - 32
         } else {
             a
         };
     }
-    if !casemap_has(kOptCmpFlagInternal as c_uint) {
+    if !casemap_has(OPT_CMP_FLAG_INTERNAL as c_uint) {
         // `towupper` takes and answers the `wint_t` reinterpretation.
         return wide_toupper(a.cast_unsigned()).cast_signed();
     }
@@ -87,14 +87,14 @@ pub fn mb_toupper(a: c_int) -> c_int {
 
 /// The lowercase of `a`, honouring `'casemap'`. The mirror of [`mb_toupper`].
 pub fn mb_tolower(a: c_int) -> c_int {
-    if a < 128 && casemap_has(kOptCmpFlagKeepascii as c_uint) {
+    if a < 128 && casemap_has(OPT_CMP_FLAG_KEEPASCII as c_uint) {
         return if u8::try_from(a).is_ok_and(|b| b.is_ascii_uppercase()) {
             a + 32
         } else {
             a
         };
     }
-    if !casemap_has(kOptCmpFlagInternal as c_uint) {
+    if !casemap_has(OPT_CMP_FLAG_INTERNAL as c_uint) {
         return wide_tolower(a.cast_unsigned()).cast_signed();
     }
     if a < 128 {

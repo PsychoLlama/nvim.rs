@@ -37,7 +37,7 @@ use crate::mbyte::get_encoding_name;
 use crate::memory::XString;
 use crate::option::defs::OptExpand;
 use crate::options::{
-    kOptEventignore, kOptListchars, opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values,
+    OPT_DIP_ALGORITHM_VALUES, OPT_DIP_INLINE_VALUES, OPT_EVENTIGNORE, OPT_FF_VALUES, OPT_LISTCHARS,
 };
 
 use super::{
@@ -174,7 +174,7 @@ pub(crate) fn expand_set_opt_listflag(
 pub fn expand_set_chars_option(args: &mut OptExpand<'_>) -> Option<Vec<XString>> {
     // 'listchars' and 'fillchars' share this callback; which one is being
     // completed is the row, at either scope.
-    let names = if args.idx == kOptListchars {
+    let names = if args.idx == OPT_LISTCHARS {
         get_listchars_name
     } else {
         get_fillchars_name
@@ -220,10 +220,10 @@ pub fn expand_set_diffopt(args: &mut OptExpand<'_>) -> Option<Vec<XString>> {
         return expand_set_str_generic(args);
     }
     if before.ends_with(b"algorithm:") {
-        return expand_set_opt_string(args, &opt_dip_algorithm_values);
+        return expand_set_opt_string(args, &OPT_DIP_ALGORITHM_VALUES);
     }
     if before.ends_with(b"inline:") {
-        return expand_set_opt_string(args, &opt_dip_inline_values);
+        return expand_set_opt_string(args, &OPT_DIP_INLINE_VALUES);
     }
     None
 }
@@ -264,13 +264,13 @@ pub(crate) fn get_eventignore_name(expand: &Expand, idx: usize) -> Option<Candid
 pub fn expand_set_eventignore(args: &mut OptExpand<'_>) -> Option<Vec<XString>> {
     // 'eventignore' and 'eventignorewin' share this callback, and only the
     // second one completes the window events.
-    WINDOW_EVENTS.set(args.idx != kOptEventignore);
+    WINDOW_EVENTS.set(args.idx != OPT_EVENTIGNORE);
     expand_set_opt_generic(args, get_eventignore_name)
 }
 
 /// Enumerate the values 'fileformat' accepts.
 pub fn get_fileformat_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
-    opt_ff_values
+    OPT_FF_VALUES
         .get(idx)
         .map(|&value| Candidate::Borrowed(value))
 }

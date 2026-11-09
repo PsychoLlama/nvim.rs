@@ -59,7 +59,7 @@ use crate::normal::{
     add_to_showcmd, check_text_or_curbuf_locked, do_nv_ident, reset_visual_and_resel,
 };
 use crate::option::vars::{P_LANGMAP, SWB_FLAGS, p_lrm, p_pvh};
-use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
+use crate::options::{OPT_SWB_FLAG_USEOPEN, OPT_SWB_FLAG_USETAB};
 use crate::os::libc::int64_t;
 use crate::pos::MAXLNUM;
 use crate::quickfix::qf_view_result;
@@ -556,7 +556,7 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
 
     // If 'switchbuf' has "useopen" or "usetab" and the file is already open in
     // a window, jump to it.
-    let jump = kOptSwbFlagUseopen | kOptSwbFlagUsetab;
+    let jump = OPT_SWB_FLAG_USEOPEN | OPT_SWB_FLAG_USETAB;
     let mut wp = None;
     if SWB_FLAGS.get() & jump != 0 && CMDMOD.with(|m| m.cmod_tab) == 0 {
         wp = find_buffer_by_name(name.as_cstr()).and_then(swbuf_goto_win);

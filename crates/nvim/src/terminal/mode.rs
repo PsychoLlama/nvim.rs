@@ -49,7 +49,7 @@ use crate::guard::Allow;
 use crate::keycodes::{CTRL_BSL, CTRL_C, CTRL_N, CTRL_O, SpecialKey};
 use crate::memory::XString;
 use crate::r#move::{set_topline, validate_cursor};
-use crate::options::kOptCuloptFlagNumber;
+use crate::options::OPT_CULOPT_FLAG_NUMBER;
 use crate::os::libc::uint8_t;
 use crate::state::Step;
 use crate::state::mode::{RESTART_EDIT, STATE, STOP_INSERT_MODE};
@@ -159,14 +159,14 @@ fn set_terminal_winopts(s: &mut TerminalState) {
     s.save_w_p_so = wp.w_onebuf_opt.wo_so;
     s.save_w_p_siso = wp.w_onebuf_opt.wo_siso;
 
-    if wp.w_onebuf_opt.wo_cul != 0 && u32::from(wp.w_p_culopt_flags) & kOptCuloptFlagNumber != 0 {
+    if wp.w_onebuf_opt.wo_cul != 0 && u32::from(wp.w_p_culopt_flags) & OPT_CULOPT_FLAG_NUMBER != 0 {
         if wp.w_onebuf_opt.wo_culopt.bytes() != b"number" {
             s.save_w_p_culopt = wp
                 .w_onebuf_opt
                 .wo_culopt
                 .replace(XString::from_cstr(c"number"));
         }
-        wp.w_p_culopt_flags = kOptCuloptFlagNumber.to_le_bytes()[0];
+        wp.w_p_culopt_flags = OPT_CULOPT_FLAG_NUMBER.to_le_bytes()[0];
     } else {
         wp.w_onebuf_opt.wo_cul = 0;
     }

@@ -384,7 +384,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
                     }
                 }
             }
-            BELL => vim_beep(kOptBoFlagShell as c_uint),
+            BELL => vim_beep(OPT_BO_FLAG_SHELL as c_uint),
             _ => {}
         }
     }

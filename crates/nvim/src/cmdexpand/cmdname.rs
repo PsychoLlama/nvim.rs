@@ -32,7 +32,7 @@ use crate::option::defs::OptionSetFlags;
 use crate::option::get_findfunc;
 use crate::option::set_context_in_set_cmd;
 use crate::option::vars::{WOP_FLAGS, p_wic};
-use crate::options::kOptWopFlagTagfile;
+use crate::options::OPT_WOP_FLAG_TAGFILE;
 use crate::profile::set_context_in_profile_cmd;
 use crate::runtime::set_context_in_runtime_cmd;
 use crate::sign::set_context_in_sign_cmd;
@@ -191,7 +191,7 @@ pub(crate) fn set_context_by_cmdname(
         | CmdIdx::tjump
         | CmdIdx::stjump
         | CmdIdx::ptjump => {
-            let context = if WOP_FLAGS.get() & kOptWopFlagTagfile as c_uint != 0 {
+            let context = if WOP_FLAGS.get() & OPT_WOP_FLAG_TAGFILE as c_uint != 0 {
                 ExpandContext::TagsListFiles
             } else {
                 ExpandContext::Tags

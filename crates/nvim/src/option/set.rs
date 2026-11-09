@@ -54,9 +54,9 @@ use crate::ui::state::T_COLORS;
 
 use crate::option::defs::{OptError, OptIndex, OptSet, OptVal, OptionSetFlags, VimOption};
 use crate::options::{
-    find_option_index, kOptAutocomplete, kOptAutoread, kOptFiletype, kOptFormatlistpat, kOptFsync,
-    kOptInvalid, kOptMouse, kOptScrolloff, kOptSidescrolloff, kOptSpelllang, kOptSyntax,
-    kOptUndolevels, kOptWinbar, options,
+    OPT_AUTOCOMPLETE, OPT_AUTOREAD, OPT_FILETYPE, OPT_FORMATLISTPAT, OPT_FSYNC, OPT_INVALID,
+    OPT_MOUSE, OPT_SCROLLOFF, OPT_SIDESCROLLOFF, OPT_SPELLLANG, OPT_SYNTAX, OPT_UNDOLEVELS,
+    OPT_WINBAR, OPTION_TABLE, find_option_index,
 };
 use crate::optionstr::check_illegal_path_names;
 use crate::os::libc::uint32_t;
@@ -227,15 +227,15 @@ impl TtyName {
     }
 }
 
-/// The table index of an option name given as bytes, or `kOptInvalid`.
+/// The table index of an option name given as bytes, or `OPT_INVALID`.
 pub(crate) fn find_option_len(name: &[u8]) -> OptIndex {
     if name.is_empty() {
-        return kOptInvalid;
+        return OPT_INVALID;
     }
     find_option_index(name)
 }
 
-/// The table index of an option name, or `kOptInvalid`.
+/// The table index of an option name, or `OPT_INVALID`.
 pub(crate) fn find_option(name: &CStr) -> OptIndex {
     find_option_len(name.to_bytes())
 }
@@ -243,7 +243,7 @@ pub(crate) fn find_option(name: &CStr) -> OptIndex {
 /// A copy of the option's value in the scope the flags name. An unknown
 /// option answers nil rather than failing.
 pub(crate) fn get_option_value(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptVal {
-    if opt_idx == kOptInvalid {
+    if opt_idx == OPT_INVALID {
         return OptVal::Nil;
     }
     slot_value(opt_idx, get_varp_scope(opt_idx, opt_flags))
@@ -252,8 +252,8 @@ pub(crate) fn get_option_value(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> 
 /// The option table's row for an option: everything the option *is*, all
 /// of it immutable. What changes about it is `super::state`'s business.
 pub(crate) fn get_option(opt_idx: OptIndex) -> &'static VimOption {
-    debug_assert!(opt_idx != kOptInvalid);
-    &options[as_index(opt_idx)]
+    debug_assert!(opt_idx != OPT_INVALID);
+    &OPTION_TABLE[as_index(opt_idx)]
 }
 
 /// The value that stands for "this window or buffer has no local value".
@@ -263,7 +263,7 @@ pub(crate) fn get_option(opt_idx: OptIndex) -> &'static VimOption {
 /// global-local options actually use — a new global-local option has to
 /// choose one of them, which is what the final arm asserts.
 pub(crate) fn get_option_unset_value(opt_idx: OptIndex) -> OptVal {
-    debug_assert!(opt_idx != kOptInvalid);
+    debug_assert!(opt_idx != OPT_INVALID);
 
     if !option_is_global_local(opt_idx) {
         return slot_value(opt_idx, get_varp_scope(opt_idx, OptionSetFlags::GLOBAL));
@@ -273,9 +273,9 @@ pub(crate) fn get_option_unset_value(opt_idx: OptIndex) -> OptVal {
         return OptVal::static_string(c"");
     }
     match opt_idx {
-        kOptAutocomplete | kOptAutoread | kOptFsync => OptVal::Boolean(None),
-        kOptScrolloff | kOptSidescrolloff => OptVal::Number(-1),
-        kOptUndolevels => OptVal::Number(NO_LOCAL_UNDOLEVEL.into()),
+        OPT_AUTOCOMPLETE | OPT_AUTOREAD | OPT_FSYNC => OptVal::Boolean(None),
+        OPT_SCROLLOFF | OPT_SIDESCROLLOFF => OptVal::Number(-1),
+        OPT_UNDOLEVELS => OptVal::Number(NO_LOCAL_UNDOLEVEL.into()),
         _ => unreachable!("global-local option {opt_idx} has no unset value"),
     }
 }
@@ -411,13 +411,13 @@ pub(crate) fn did_set_option(
 
     // The autocommands go last, once every flag they might read is set.
     match opt_idx {
-        kOptSyntax => do_syntax_autocmd(Buf::current(), value_changed),
+        OPT_SYNTAX => do_syntax_autocmd(Buf::current(), value_changed),
         // A modeline only forces the FileType autocommand when the
         // filetype really changed.
-        kOptFiletype if !opt_flags.has(OptionSetFlags::MODELINE) || value_changed => {
+        OPT_FILETYPE if !opt_flags.has(OptionSetFlags::MODELINE) || value_changed => {
             do_filetype_autocmd(Buf::current(), value_changed);
         }
-        kOptSpelllang => do_spelllang_source(Win::current()),
+        OPT_SPELLLANG => do_spelllang_source(Win::current()),
         _ => {}
     }
 
@@ -425,12 +425,12 @@ pub(crate) fn did_set_option(
     comp_col();
 
     match opt_idx {
-        kOptMouse => setmouse(),
+        OPT_MOUSE => setmouse(),
         // 'formatlistpat' is what 'breakindentopt' list mode indents by.
-        kOptFormatlistpat if Win::current().w_briopt_list != 0 => {
+        OPT_FORMATLISTPAT if Win::current().w_briopt_list != 0 => {
             redraw_all_later(UPD_NOT_VALID);
         }
-        kOptWinbar => set_winbar(true),
+        OPT_WINBAR => set_winbar(true),
         _ => {}
     }
 
@@ -492,7 +492,7 @@ pub(crate) fn set_option(
     direct: bool,
     value_replaced: bool,
 ) -> Result<(), OptError> {
-    debug_assert!(opt_idx != kOptInvalid);
+    debug_assert!(opt_idx != OPT_INVALID);
 
     if !direct {
         validate_option_value(opt_idx, &mut value, opt_flags)?;
@@ -617,7 +617,7 @@ pub(crate) fn set_option_value(
     value: OptVal,
     opt_flags: OptionSetFlags,
 ) -> Result<(), OptError> {
-    debug_assert!(opt_idx != kOptInvalid);
+    debug_assert!(opt_idx != OPT_INVALID);
 
     if SANDBOX.get() > 0 && get_option(opt_idx).flags & OPT_FLAG_SECURE != 0 {
         return Err(OptError::Static(E_SANDBOX));
@@ -644,7 +644,7 @@ pub(crate) fn set_option_value_handle_tty(
     value: OptVal,
     opt_flags: OptionSetFlags,
 ) -> Result<(), OptError> {
-    if opt_idx != kOptInvalid {
+    if opt_idx != OPT_INVALID {
         return set_option_value(opt_idx, value, opt_flags);
     }
     if is_tty_option(name) {

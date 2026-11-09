@@ -67,7 +67,7 @@ use crate::option::vars::{
     FDO_FLAGS, P_WS, p_hls, p_ic, p_js, p_mat, p_msc, p_ri, p_scs, p_verbose, p_ws,
 };
 use crate::option::{magic_isset, shortmess};
-use crate::options::{kOptBoFlagShowmatch, kOptFdoFlagSearch};
+use crate::options::{OPT_BO_FLAG_SHOWMATCH, OPT_FDO_FLAG_SEARCH};
 use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::os::libc::{int64_t, size_t};

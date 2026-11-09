@@ -45,7 +45,7 @@ use crate::memory::XString;
 use crate::r#move::{WinValid, changed_cline_bef_curs, set_valid_virtcol};
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor};
 use crate::option::get_ve_flags;
-use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
+use crate::options::{OPT_VE_FLAG_ALL, OPT_VE_FLAG_ONEMORE};
 use crate::plines::CharsizeArg;
 use crate::plines::{getvcol, linetabsize, linetabsize_eol, win_charsize};
 use crate::state::mode::{RESTART_EDIT, STATE};
@@ -264,7 +264,7 @@ fn coladvance2(win: Win, pos: &mut Pos, addspaces: bool, finetune: bool, wcol_ar
         || STATE.get() & MODE_TERMINAL != 0
         || !RESTART_EDIT.get().is_nul()
         || (visual_active() && !selection_is_old())
-        || (win.ve_flags() & kOptVeFlagOnemore != 0 && wcol < ColNr::MAX);
+        || (win.ve_flags() & OPT_VE_FLAG_ONEMORE != 0 && wcol < ColNr::MAX);
     let buf = win.buffer();
     let lnum = pos.lnum;
 
@@ -539,7 +539,7 @@ pub fn check_cursor_col(win: Win) {
             || !RESTART_EDIT.get().is_nul()
             || STATE.get() & MODE_TERMINAL != 0
             || (visual_active() && !selection_is_old())
-            || cur_ve_flags & kOptVeFlagOnemore != 0
+            || cur_ve_flags & OPT_VE_FLAG_ONEMORE != 0
             || win.virtual_active()
     });
     cursor.set_col(col);
@@ -551,7 +551,7 @@ pub fn check_cursor_col(win: Win) {
         oldcol,
         oldcoladd.get(),
         cursor.col(),
-        cur_ve_flags == kOptVeFlagAll,
+        cur_ve_flags == OPT_VE_FLAG_ALL,
     ) {
         ColAdd::Keep => {}
         ColAdd::Zero => cursor.set_coladd(0),

@@ -1,7 +1,7 @@
 //! The Ex command dispatcher: the command table, and the shared
 //! vocabulary its twenty-one children are written against.
 //!
-//! `cmdnames` is the whole of `:` — 557 rows, in the order `ex_cmds.lua`
+//! `CMDNAMES` is the whole of `:` — 557 rows, in the order `ex_cmds.lua`
 //! lists them, with `CMD_*` as indices into it. Nothing else lives here:
 //! the parsing is under `scan`, `address`, `modifier` and `lookup`, the
 //! driving under `onecmd`, `cmdline` and `source`, and one file per family
@@ -166,7 +166,7 @@ crate::flag_set! {
     const NOWAIT = 2;
     /// Keep asking the line source until it runs out.
     const REPEAT = 4;
-    /// Leave `KeyTyped` alone.
+    /// Leave `KEY_TYPED` alone.
     const KEYTYPED = 8;
     /// Save and restore the exception environment (debugging).
     const EXCRESET = 16;

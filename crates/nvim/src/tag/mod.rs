@@ -54,8 +54,8 @@ use crate::option::vars::{
 };
 use crate::option::{callback_from_option, install_callback, magic_isset};
 use crate::options::{
-    kOptFdoFlagTag, kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagUseopen, kOptSwbFlagUsetab,
-    kOptSwbFlagVsplit,
+    OPT_FDO_FLAG_TAG, OPT_JOP_FLAG_VIEW, OPT_SWB_FLAG_NEWTAB, OPT_SWB_FLAG_USEOPEN,
+    OPT_SWB_FLAG_USETAB, OPT_SWB_FLAG_VSPLIT,
 };
 use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};

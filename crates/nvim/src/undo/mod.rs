@@ -56,7 +56,7 @@ use crate::message::{
     msg_str, msg_str_hl, verb_msg, verbose_enter, verbose_leave,
 };
 use crate::option::vars::{FDO_FLAGS, p_fs, p_ul, p_verbose};
-use crate::options::kOptFdoFlagUndo;
+use crate::options::OPT_FDO_FLAG_UNDO;
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::fs::{os_free_acl, os_get_acl, os_remove, os_set_acl};
 use crate::os::input::fast_breakcheck;

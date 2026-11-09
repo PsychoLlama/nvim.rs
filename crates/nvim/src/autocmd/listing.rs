@@ -83,7 +83,7 @@ fn shown_row(
 /// List the autocommands defined for `event`, restricted to `group` and to
 /// the comma-separated pattern list `pat` when either is given.
 ///
-/// `got_int` is checked between every write: a listing is interruptible,
+/// `GOT_INT` is checked between every write: a listing is interruptible,
 /// and each check is at the point where upstream put it.
 pub(crate) fn au_show_for_event(group: ::core::ffi::c_int, event: AutoEvent, pat: &[u8]) {
     if !has_event(event) {

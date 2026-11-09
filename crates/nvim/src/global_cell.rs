@@ -627,7 +627,7 @@ impl<T> SharedCell<T> {
 /// A global the editor only ever reads: a table the compiler built.
 ///
 /// `GlobalCell` earns its checks because the editor *writes* its globals.
-/// A table like `cmdnames` or `NV_CMD_TABLE` is finished the moment the compiler
+/// A table like `CMDNAMES` or `NV_CMD_TABLE` is finished the moment the compiler
 /// lays it out and no line of the editor writes to it again, so none of the
 /// cell's machinery applies — but a plain `static` demands `Sync`, and these
 /// tables hold raw pointers (a command's name), which are `!Sync` by
@@ -635,7 +635,7 @@ impl<T> SharedCell<T> {
 ///
 /// So the promise is made once here, for the whole family, instead of a
 /// `GlobalCell` per table handing out a `*mut` at every read. `Deref` gives
-/// the table back, so a row reads as `cmdnames[idx].cmd_name` — safe
+/// the table back, so a row reads as `CMDNAMES[idx].cmd_name` — safe
 /// indexing, bounds-checked — and a table handed to C as `TABLE.as_ptr()`.
 ///
 /// The one thing it does not give back is a `*mut`: the contents live in

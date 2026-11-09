@@ -361,7 +361,7 @@ pub fn getnextac(apc: &mut AutoPatCmd, data: Option<&Object>) -> Option<XString>
         verbose_leave_scroll();
     }
 
-    // `autocmd_nested` has to be set before any Lua runs, or a nested
+    // `AUTOCMD_NESTED` has to be set before any Lua runs, or a nested
     // event fired from the callback sees the wrong value.
     AUTOCMD_NESTED.set(row.nested);
     CURRENT_SCTX.set(row.script_ctx);

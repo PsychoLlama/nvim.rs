@@ -13,8 +13,8 @@
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::mbyte::CharInfo;
 use crate::option::defs::OptionSetFlags;
-use crate::options::kBufOptIndentexpr;
-use crate::options::kOptIndentexpr;
+use crate::options::BUF_OPT_INDENTEXPR;
+use crate::options::OPT_INDENTEXPR;
 use crate::os::libc::int32_t;
 use crate::plines::{CharsizeArg, CharsizeKind};
 use crate::strings::has_char;
@@ -50,7 +50,7 @@ use crate::winlayer::Win;
 pub fn get_expr_indent() -> c_int {
     let mut win = Win::current();
     let buf = Buf::current();
-    let use_sandbox = was_set_insecurely(win, kOptIndentexpr, OptionSetFlags::LOCAL);
+    let use_sandbox = was_set_insecurely(win, OPT_INDENTEXPR, OptionSetFlags::LOCAL);
     let save_sctx = CURRENT_SCTX.get();
     // Saved because the expression can move the cursor via `:normal`.
     let (save_pos, save_curswant, save_set_curswant) =
@@ -60,7 +60,7 @@ pub fn get_expr_indent() -> c_int {
     let mut indent = {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
         let _locked = Lock::text();
-        CURRENT_SCTX.set(buf.b_p_script_ctx[kBufOptIndentexpr as usize]);
+        CURRENT_SCTX.set(buf.b_p_script_ctx[BUF_OPT_INDENTEXPR as usize]);
         // The expression is evaluated from a copy, because 'indentexpr' can
         // be changed while it is running.
         let expression = buf.b_p_inde.get();
@@ -81,7 +81,7 @@ pub fn get_expr_indent() -> c_int {
     check_cursor(win);
     STATE.set(save_state);
 
-    // Reset `did_throw`, unless 'debug' has "throw" and we are inside a
+    // Reset `DID_THROW`, unless 'debug' has "throw" and we are inside a
     // try/catch.
     let debug_throw = p_debug(|value| has_char(value, c_int::from(b't')));
     if DID_THROW.get() && (!debug_throw || TRYLEVEL.get() == 0) {

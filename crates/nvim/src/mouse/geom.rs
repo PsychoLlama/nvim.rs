@@ -82,7 +82,7 @@ pub(crate) fn is_mouse_key(c: Key) -> bool {
     )
 }
 
-/// How many clicks in a row `mod_mask` records.
+/// How many clicks in a row `MOD_MASK` records.
 ///
 /// The bits are cumulative -- `ModMask::FOUR_CLICK` *is* 2CLICK|3CLICK -- so the
 /// wider counts have to be tested first.

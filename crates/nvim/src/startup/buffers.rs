@@ -60,7 +60,7 @@ use crate::quickfix::qf_init;
 use crate::runtime::state::SID_CARG;
 use crate::startup::exit::getout;
 use crate::startup::{
-    EDIT_QF, MainParams, RECOVERYMODE, WIN_HOR, WIN_TABS, WIN_VER, kOptErrorfile, kOptShortmess,
+    EDIT_QF, MainParams, OPT_ERRORFILE, OPT_SHORTMESS, RECOVERYMODE, WIN_HOR, WIN_TABS, WIN_VER,
 };
 use crate::types::{Handle, Integer, LIST_LEN_MAY_KNOW, LineNr, OptInt, VarLock, Vv};
 use crate::ui::ui_call_error_exit;
@@ -109,7 +109,7 @@ pub(crate) fn handle_quickfix(parm: &MainParams) {
     }
     if let Some(ef) = parm.errorfile.as_deref() {
         set_option_direct(
-            kOptErrorfile,
+            OPT_ERRORFILE,
             OptVal::from_cstr(ef),
             OptionSetFlags::NONE,
             SID_CARG,
@@ -437,7 +437,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
 /// Set 'shortmess' to `value`, reporting an error the way `:set` would.
 fn set_shortmess(value: &CStr) {
     set_option_value_give_err(
-        kOptShortmess,
+        OPT_SHORTMESS,
         OptVal::from_cstr(value),
         OptionSetFlags::NONE,
     );

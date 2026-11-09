@@ -3,7 +3,7 @@
 //! `just apigen` (`just apigen --check` fails on drift).
 //!
 //! Which Ex command a `:` line names, in enum order: each built-in variant's
-//! discriminant is its row in the `cmdnames` table generated from the same
+//! discriminant is its row in the `CMDNAMES` table generated from the same
 //! file, which is why the two are emitted together. c2rust rendered the C
 //! enumeration as a `typedef`ed `int` plus 560 `const`s, rendered each
 //! `switch (cmdidx)` arm as a bare integer comparison, and thirty-one modules
@@ -624,7 +624,7 @@ impl CmdIdx {
         self as c_int
     }
 
-    /// This command's row in `cmdnames`.
+    /// This command's row in `CMDNAMES`.
     ///
     /// # Panics
     ///
@@ -641,7 +641,7 @@ impl CmdIdx {
         usize::try_from(self.code()).expect("a built-in command's index is not negative")
     }
 
-    /// The command occupying row `index` of `cmdnames`, or `SIZE` past the
+    /// The command occupying row `index` of `CMDNAMES`, or `SIZE` past the
     /// end -- which is what a scan that found nothing wants to store.
     ///
     /// Not `at`: `:@` is a command, so `CmdIdx::at` is a variant.
@@ -651,7 +651,7 @@ impl CmdIdx {
     }
 }
 
-/// `cmdnames` in table order, indexed by [`CmdIdx::at_row`].
+/// `CMDNAMES` in table order, indexed by [`CmdIdx::at_row`].
 #[rustfmt::skip]
 static BUILTINS: [CmdIdx; 557] = [
     CmdIdx::append, CmdIdx::abbreviate, CmdIdx::abclear, CmdIdx::aboveleft, CmdIdx::all, CmdIdx::amenu,

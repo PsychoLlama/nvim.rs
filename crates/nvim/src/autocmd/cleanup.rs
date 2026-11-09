@@ -2,7 +2,7 @@
 //!
 //! The table itself lives here. An `AutoCmd` row never moves while a
 //! firing walk might be standing on it: [`aucmd_del`] marks it and sets
-//! `au_need_clean`, and [`au_cleanup`] does the actual removal once no walk
+//! `AU_NEED_CLEAN`, and [`au_cleanup`] does the actual removal once no walk
 //! is live.  The
 //! `aupat_*` half is the buffer-local pattern format -- `<buffer=N>` --
 //! which is a pattern in the same table but matched by buffer number, and
@@ -48,7 +48,7 @@ pub(super) fn with_event_cmds_mut<R>(event: AutoEvent, f: impl FnOnce(&mut Event
 ///
 /// The row itself stays in place. A walk may be standing on it, and the
 /// list it is walking is indexed, so the row may not move until
-/// `autocmd_busy` is clear.
+/// `AUTOCMD_BUSY` is clear.
 pub(crate) fn aucmd_del(event: AutoEvent, idx: usize) {
     with_event_cmds_mut(event, |cmds| cmds.delete(idx));
     AU_NEED_CLEAN.set(true);
@@ -82,7 +82,7 @@ pub fn aucmd_del_for_event_and_group(event: AutoEvent, group: ::core::ffi::c_int
 /// Compact the deleted rows out of every event's list.
 ///
 /// This is the deferred half of [`aucmd_del`] and it may only run while no
-/// walk is live: `autocmd_busy` says one is, and then the rows have to stay
+/// walk is live: `AUTOCMD_BUSY` says one is, and then the rows have to stay
 /// where a walk's index can still reach them. Safe to call anywhere,
 /// because that is the first thing it checks -- a call made during a walk
 /// returns having done nothing, and the compaction waits for the point

@@ -66,7 +66,7 @@ use crate::option::{
     OPT_FLAG_FUNC, find_option, get_option, get_winbuf_options, is_tty_option, option_has_type,
     option_last_set,
 };
-use crate::options::{kOptCharconvert, kOptDiffexpr, kOptInvalid, kOptPatchexpr, kOptSpellsuggest};
+use crate::options::{OPT_CHARCONVERT, OPT_DIFFEXPR, OPT_INVALID, OPT_PATCHEXPR, OPT_SPELLSUGGEST};
 use crate::os::cshim::gettext;
 use crate::os::libc::{int64_t, ptrdiff_t, size_t, uint32_t};
 use crate::pos::MAXCOL;

@@ -152,7 +152,7 @@ struct Opt {
 impl Opt {
     /// The `OptIndex` constant for this option.
     fn index_const(&self) -> String {
-        format!("kOpt{}", titlecase(&self.full_name))
+        screaming(&format!("kOpt{}", titlecase(&self.full_name)))
     }
 
     /// The prefix its `values` arrays are named with.
@@ -176,7 +176,7 @@ impl Opt {
 
     /// The constant naming one bit of its flag enum.
     fn flag_const(&self, suffix: &str) -> String {
-        format!("kOpt{}Flag{}", self.flags_name(), suffix)
+        screaming(&format!("kOpt{}Flag{}", self.flags_name(), suffix))
     }
 }
 
@@ -192,7 +192,37 @@ fn titlecase(s: &str) -> String {
 
 /// The index constant naming an option's row in one scope's enum.
 fn scope_const(scope: &str, name: &str) -> String {
-    format!("k{}Opt{}", titlecase(scope), titlecase(name))
+    screaming(&format!("k{}Opt{}", titlecase(scope), titlecase(name)))
+}
+
+/// Upstream's `kCamelCase` constant name in Rust's constant case, the `k`
+/// dropped: `OPT_BO_FLAG_ALL` -> `OPT_BO_FLAG_ALL`. A word break falls before
+/// an upper-case letter that follows a lower-case letter or a digit, and
+/// before the last capital of a run that a lower-case letter follows.
+fn screaming(name: &str) -> String {
+    let base = match name.strip_prefix('k') {
+        Some(rest) if rest.starts_with(|c: char| c.is_ascii_uppercase()) => rest,
+        _ => name,
+    };
+    let chars: Vec<char> = base.chars().collect();
+    let mut out = String::new();
+    for (i, &c) in chars.iter().enumerate() {
+        if i > 0 && c.is_ascii_uppercase() {
+            let prev = chars[i - 1];
+            let next_lower = chars.get(i + 1).is_some_and(char::is_ascii_lowercase);
+            if prev.is_ascii_lowercase()
+                || prev.is_ascii_digit()
+                || (prev.is_ascii_uppercase() && next_lower)
+            {
+                out.push('_');
+            }
+        }
+        if c == '_' && out.ends_with('_') {
+            continue;
+        }
+        out.push(c.to_ascii_uppercase());
+    }
+    out
 }
 
 /// Render a string as the body of a Rust `c"..."` literal.
@@ -623,8 +653,6 @@ const HEADER: &str = r#"//! The option table.
 //! own copy of the value.
 
 #![forbid(unsafe_code)]
-// The names are upstream's, and each is looked up by that spelling.
-#![allow(non_upper_case_globals)]
 "#;
 
 fn child_header(what: &str, body: &str) -> String {
@@ -640,13 +668,11 @@ fn child_header(what: &str, body: &str) -> String {
          //! run `just apigen`.\n\
          \n\
          {attr}\n\
-         {}\
          \n\
          // A chunk may hold nothing that needs the parent's support code.\n\
          #[allow(unused_imports)]\n\
          use super::*;\n\
-         \n",
-        crate::upper_case_globals_allow(body)
+         \n"
     )
 }
 
@@ -655,10 +681,10 @@ fn child_header(what: &str, body: &str) -> String {
 fn emit_index(out: &mut String, opts: &[Opt]) {
     writeln!(
         out,
-        "/// Every option, in `:set all` order. `kOptInvalid` is \"no such option\"."
+        "/// Every option, in `:set all` order. `OPT_INVALID` is \"no such option\"."
     )
     .unwrap();
-    writeln!(out, "pub const kOptInvalid: OptIndex = -1;").unwrap();
+    writeln!(out, "pub const OPT_INVALID: OptIndex = -1;").unwrap();
     for o in opts {
         writeln!(
             out,
@@ -668,7 +694,7 @@ fn emit_index(out: &mut String, opts: &[Opt]) {
         )
         .unwrap();
     }
-    writeln!(out, "pub const kOptCount: c_int = {};", opts.len()).unwrap();
+    writeln!(out, "pub const OPT_COUNT: c_int = {};", opts.len()).unwrap();
 
     for scope in SCOPE_IDX_ORDER {
         let title = titlecase(scope);
@@ -710,7 +736,7 @@ fn emit_index(out: &mut String, opts: &[Opt]) {
         "/// `BufOptIndex` -> `OptIndex`: which option a buffer-local row belongs to."
     )
     .unwrap();
-    writeln!(out, "pub static buf_opt_idx: [OptIndex; {}] = [", buf.len()).unwrap();
+    writeln!(out, "pub static BUF_OPT_IDX: [OptIndex; {}] = [", buf.len()).unwrap();
     for o in &buf {
         writeln!(out, "    {},", o.index_const()).unwrap();
     }
@@ -745,7 +771,8 @@ fn emit_values(out: &mut String, opts: &[Opt]) {
     fn walk(out: &mut String, prefix: &str, values: &[Choice]) {
         writeln!(
             out,
-            "pub static {prefix}_values: [&CStr; {}] = [",
+            "pub static {}_VALUES: [&CStr; {}] = [",
+            prefix.to_uppercase(),
             values.len()
         )
         .unwrap();
@@ -1359,7 +1386,12 @@ fn emit_row(out: &mut String, o: &Opt) {
         writeln!(out, "        immutable: true,").unwrap();
     }
     if !o.values.is_empty() {
-        writeln!(out, "        values: &{}_values,", o.values_prefix()).unwrap();
+        writeln!(
+            out,
+            "        values: &{}_VALUES,",
+            o.values_prefix().to_uppercase()
+        )
+        .unwrap();
     }
     if let Some(cb) = &o.did_set_cb {
         writeln!(out, "        opt_did_set_cb: Some({cb}),").unwrap();
@@ -1403,7 +1435,7 @@ fn emit_lookup(out: &mut String, opts: &[Opt]) -> Result<(), String> {
     for (name, o) in &names {
         writeln!(out, "        b\"{name}\" => {},", o.index_const()).unwrap();
     }
-    out.push_str("        _ => kOptInvalid,\n    }\n}\n");
+    out.push_str("        _ => OPT_INVALID,\n    }\n}\n");
     Ok(())
 }
 
@@ -1426,7 +1458,7 @@ const BLANK: VimOption = VimOption {
     scope_flags: 0,
     var: OptVar::NoGlobal,
     flags_var: None,
-    scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptInvalid),
+    scope_idx: scope_idx(GLOBAL_OPT_INVALID, WIN_OPT_INVALID, BUF_OPT_INVALID),
     immutable: false,
     values: &[],
     opt_did_set_cb: None,
@@ -1688,14 +1720,14 @@ pub fn generate(
          ///\n\
          /// Immutable, and in `.rodata`: what changes about an option while\n\
          /// the editor runs lives in `crate::option::state` instead.\n\
-         pub static options: ConstTable<[VimOption; kOptCount as usize]> =\n\
+         pub static OPTION_TABLE: ConstTable<[VimOption; OPT_COUNT as usize]> =\n\
          \x20   ConstTable::new(table());\n\
          \n\
          /// The table, spliced together from the generated parts. Public to\n\
          /// the crate because `crate::option::state` seeds each option's\n\
          /// starting default from the row that declares it.\n\
-         pub(crate) const fn table() -> [VimOption; kOptCount as usize] {\n\
-         \x20   let mut table = [BLANK; kOptCount as usize];\n\
+         pub(crate) const fn table() -> [VimOption; OPT_COUNT as usize] {\n\
+         \x20   let mut table = [BLANK; OPT_COUNT as usize];\n\
          \x20   let mut base = 0;\n",
     );
     for n in 0..parts.len() {
@@ -1707,7 +1739,7 @@ pub fn generate(
         .unwrap();
     }
     out.push_str(
-        "    assert!(base == kOptCount as usize);\n\
+        "    assert!(base == OPT_COUNT as usize);\n\
          \x20   let mut i = 0;\n\
          \x20   while i < table.len() {\n\
          \x20       assert!(\n\

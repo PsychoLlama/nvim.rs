@@ -1,7 +1,7 @@
 //! RAII guards over the editor's suppression counters and script context.
 //!
 //! `TEXTLOCK`, `sandbox`, `MSG_SILENT`, `EMSG_OFF`, `EMSG_SKIP`,
-//! `NO_WAIT_RETURN`, `no_mapping`, `allow_keys` and `REDRAWING_DISABLED` are
+//! `NO_WAIT_RETURN`, `NO_MAPPING`, `ALLOW_KEYS` and `REDRAWING_DISABLED` are
 //! the globals that say "for the duration of this operation, don't show
 //! errors / don't redraw / don't let anything touch the buffer". C bumps
 //! them by hand and unbumps them at every exit — which is fine until an
@@ -51,14 +51,14 @@
 //! behaviour:
 //!
 //! - **The restore is not the inverse of the bump.** `do_cmdline` raises
-//!   `ex_nesting_level` when the line came from a function and lowers it
+//!   `EX_NESTING_LEVEL` when the line came from a function and lowers it
 //!   again only if a *re-evaluated* test still says so; `open_scriptin`
 //!   and `openscript` raise `curscript` and lower it only on the failure
 //!   path, because on success the script stays on the stack past the
 //!   return.
 //! - **The scope is a state machine, not a block.** `REDRAWING_DISABLED`
-//!   under `disabled_redraw` spans Insert mode's entry and its exit;
-//!   `DEBUG_BACKTRACE_LEVEL` is what `:up` and `:down` move; `compl_pending`
+//!   under `DISABLED_REDRAW` spans Insert mode's entry and its exit;
+//!   `DEBUG_BACKTRACE_LEVEL` is what `:up` and `:down` move; `COMPL_PENDING`
 //!   and `PUM_SELECTED` are positions, not depths.
 //! - **The lifetime belongs to a caller several frames up.** The
 //!   `enter`/`leave` pairs — `try_enter`/`try_leave`,
@@ -442,18 +442,18 @@ impl Suppress {
         Bump::new(&NO_CHECK_TIMESTAMPS)
     }
 
-    /// `no_zero_mapping` — a `0` read in this scope is a count digit, not
+    /// `NO_ZERO_MAPPING` — a `0` read in this scope is a count digit, not
     /// the "go to column 0" command, so it must not resolve a mapping.
     pub(crate) fn zero_mapping() -> KeyBump {
         Bump::new(NO_ZERO_MAPPING)
     }
 
-    /// `autocmd_no_enter` — no `WinEnter`/`BufEnter` fires in this scope.
+    /// `AUTOCMD_NO_ENTER` — no `WinEnter`/`BufEnter` fires in this scope.
     pub(crate) fn win_enter_autocmds() -> AutocmdBump {
         Bump::new(AUTOCMD_NO_ENTER)
     }
 
-    /// `autocmd_no_leave` — no `WinLeave`/`BufLeave` fires in this scope.
+    /// `AUTOCMD_NO_LEAVE` — no `WinLeave`/`BufLeave` fires in this scope.
     pub(crate) fn win_leave_autocmds() -> AutocmdBump {
         Bump::new(AUTOCMD_NO_LEAVE)
     }
@@ -488,7 +488,7 @@ impl Suppress {
 /// The odd guard out: what it protects is not a suppression but a *count of
 /// how deep in this operation we are* — the `static RECURSE: GlobalCell<c_int>`
 /// a recursive parser keeps inside itself so that a self-referential
-/// expression cannot exhaust the C stack, the editor's `ex_nesting_level`,
+/// expression cannot exhaust the C stack, the editor's `EX_NESTING_LEVEL`,
 /// and the `..._busy` flags a callee reads to find out that it is being
 /// re-entered. The cell is usually the caller's own rather than one of the
 /// editor's globals, which is why this one constructor is generic where the
@@ -544,7 +544,7 @@ impl Allow {
         Saved::when(cond, &TEXTLOCK, 0)
     }
 
-    /// `expr_map_lock = 0` — [`Allow::text_changes`]'s companion; the two
+    /// `EXPR_MAP_LOCK = 0` — [`Allow::text_changes`]'s companion; the two
     /// sites that invite arbitrary Lua in lift both locks together.
     pub(crate) fn expr_map() -> Saved<GetcharField<c_int>> {
         Saved::new(EXPR_MAP_LOCK, 0)
@@ -556,13 +556,13 @@ impl Allow {
         Saved::when(cond, EXPR_MAP_LOCK, 0)
     }
 
-    /// `allow_keys = 0` — key codes are *not* recognised in this scope, so
+    /// `ALLOW_KEYS = 0` — key codes are *not* recognised in this scope, so
     /// a raw `<BS>` byte stays a byte.
     pub(crate) fn no_key_codes() -> Saved<GetcharField<c_int>> {
         Saved::new(ALLOW_KEYS, 0)
     }
 
-    /// `no_mapping -= 1` — the inverse of [`Keys::unmapped`], for the
+    /// `NO_MAPPING -= 1` — the inverse of [`Keys::unmapped`], for the
     /// callee that has to read a *mapped* key back out of a caller that
     /// had suppressed mapping (`'langmap'`, composing characters).
     pub(crate) fn mapping() -> KeyBump {
@@ -578,14 +578,14 @@ impl Allow {
         }
     }
 
-    /// `autocmd_no_enter -= 1` — the inverse of
+    /// `AUTOCMD_NO_ENTER -= 1` — the inverse of
     /// [`Suppress::win_enter_autocmds`], for the callee that has to let one
     /// `BufEnter` through a caller that had switched them off.
     pub(crate) fn win_enter_autocmds() -> AutocmdBump {
         Bump::by(AUTOCMD_NO_ENTER, -1)
     }
 
-    /// `autocmd_no_leave -= 1` — the inverse of
+    /// `AUTOCMD_NO_LEAVE -= 1` — the inverse of
     /// [`Suppress::win_leave_autocmds`].
     pub(crate) fn win_leave_autocmds() -> AutocmdBump {
         Bump::by(AUTOCMD_NO_LEAVE, -1)
@@ -618,7 +618,7 @@ impl Lock {
         Bump::new(&SANDBOX)
     }
 
-    /// `expr_map_lock` — [`Lock::text`]'s companion for the `<expr>`
+    /// `EXPR_MAP_LOCK` — [`Lock::text`]'s companion for the `<expr>`
     /// mapping and abbreviation expansions, which additionally must not
     /// change the mapping tables they are being read from.
     pub(crate) fn expr_map() -> KeyBump {
@@ -662,13 +662,13 @@ pub(crate) struct WinAutocmds {
 pub struct Keys;
 
 impl Keys {
-    /// `no_mapping` — the keys read in this scope do not go through
+    /// `NO_MAPPING` — the keys read in this scope do not go through
     /// mappings or abbreviations.
     pub(crate) fn unmapped() -> KeyBump {
         Bump::new(NO_MAPPING)
     }
 
-    /// `no_mapping` + `allow_keys`: the recurring pair. Read the next key
+    /// `NO_MAPPING` + `ALLOW_KEYS`: the recurring pair. Read the next key
     /// literally, but still decode the multi-byte key codes.
     pub(crate) fn unmapped_with_codes() -> RawKeys {
         RawKeys {
@@ -734,7 +734,7 @@ mod tests {
     /// They assert *absolute* values of process-wide counters, and `cargo
     /// test` runs a binary's tests in parallel threads, so two of them that
     /// touch the same cell -- `a_negative_bump_adds_back` and
-    /// `raw_keys_releases_both` both drive `no_mapping` -- interleave and one
+    /// `raw_keys_releases_both` both drive `NO_MAPPING` -- interleave and one
     /// of them sees the other's state.
     fn counters() -> crate::global_cell::editor_state::Held {
         crate::global_cell::editor_state_lock()

@@ -82,7 +82,7 @@ use crate::normal::defs::{MotionType, OpArg};
 use crate::ops::{adjust_cursor_eol, get_op_char};
 use crate::option::get_ve_flags;
 use crate::option::vars::{p_ch, p_report};
-use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
+use crate::options::{OPT_VE_FLAG_ALL, OPT_VE_FLAG_ONEMORE};
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::os_breakcheck;
 use crate::os::libc::{int64_t, ptrdiff_t, size_t};

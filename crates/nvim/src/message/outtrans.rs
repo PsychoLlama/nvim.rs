@@ -188,7 +188,7 @@ enum Shown<'a> {
 /// is empty.
 ///
 /// The walk stops at an interrupt, and then so does the message: a run left
-/// pending when `got_int` arrives is dropped rather than shown.
+/// pending when `GOT_INT` arrives is dropped rather than shown.
 fn walk_display(bytes: &[u8], emit: &mut impl FnMut(Shown<'_>)) -> c_int {
     let mut cells = 0;
     // Start of the run of printable bytes not yet emitted.

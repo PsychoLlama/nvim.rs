@@ -59,7 +59,7 @@ pub(crate) fn pum_compute_size() {
     PUM_EXTRA_WIDTH.set(extra);
 }
 
-/// Decide `pum_row` and `pum_height`.
+/// Decide `PUM_ROW` and `PUM_HEIGHT`.
 ///
 /// The menu goes below `pum_win_row` when there is room, and above it when
 /// there is not and there is more space up there. A few lines of context are
@@ -145,7 +145,7 @@ pub(crate) fn pum_compute_vertical_placement(
     PUM_HEIGHT.set(height);
 }
 
-/// Set `pum_width` to `width` bounded by `'pumwidth'` and `'pummaxwidth'`.
+/// Set `PUM_WIDTH` to `width` bounded by `'pumwidth'` and `'pummaxwidth'`.
 ///
 /// Answers whether the result fits in `available_width`. The extra cell is
 /// the padding after the last column, dropped as soon as either bound has had
@@ -167,9 +167,9 @@ fn set_pum_width_aligned_with_cursor(width: c_int, available_width: c_int) -> bo
     available_width >= PUM_WIDTH.get()
 }
 
-/// Decide `pum_col` and `pum_width`.
+/// Decide `PUM_COL` and `PUM_WIDTH`.
 ///
-/// The menu is aligned with `cursor_col` when the three columns fit there. If
+/// The menu is aligned with `CURSOR_COL` when the three columns fit there. If
 /// they do not it is shown truncated, still aligned, as long as that leaves
 /// at least `'pumwidth'` cells; failing that it is pushed against the far
 /// edge of the screen, and failing that it takes whatever the screen has.

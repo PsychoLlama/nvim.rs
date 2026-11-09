@@ -48,7 +48,7 @@ use crate::memory::XString;
 use crate::message::E_POSITIVE;
 use crate::message::emsg;
 use crate::message_fmt::{msg_bytes, msg_cstr};
-use crate::options::kOptDyFlagUhex;
+use crate::options::OPT_DY_FLAG_UHEX;
 use crate::os::cshim::gettext;
 use crate::plines::getvcol;
 use crate::state::mode::{SAVED_CURSOR, STATE};

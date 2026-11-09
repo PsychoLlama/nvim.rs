@@ -173,12 +173,12 @@ pub(crate) fn get_literal(no_simplify: bool) -> Key {
     key
 }
 
-/// Insert a character, taking care of special keys and `mod_mask`.
+/// Insert a character, taking care of special keys and `MOD_MASK`.
 ///
 /// A special key is inserted as its `<Key>` *name*: everything up to the last
 /// `>` goes in with `ins_str` (so Replace mode does not overwrite characters
 /// with it) and the `>` itself is inserted as an ordinary character below.
-/// `mod_mask` is only used for special keys -- otherwise `<S-Space>` and
+/// `MOD_MASK` is only used for special keys -- otherwise `<S-Space>` and
 /// friends would appear -- unless `allow_modmask` says otherwise, which the
 /// Command key always does.
 ///
@@ -292,7 +292,7 @@ pub(crate) fn ins_digraph() -> Key {
 /// line does not exist or is too short.
 pub(crate) fn ins_copychar(lnum: LineNr) -> Key {
     if lnum < LineNr::ONE || lnum > Buf::current().b_ml.ml_line_count {
-        vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint);
+        vim_beep(OPT_BO_FLAG_COPY as ::core::ffi::c_uint);
         return Key::NUL;
     }
 
@@ -321,7 +321,7 @@ pub(crate) fn ins_copychar(lnum: LineNr) -> Key {
         Key::from_code(chr.value)
     };
     if c.is_nul() {
-        vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint);
+        vim_beep(OPT_BO_FLAG_COPY as ::core::ffi::c_uint);
     }
     c
 }

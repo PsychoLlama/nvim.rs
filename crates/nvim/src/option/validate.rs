@@ -92,7 +92,7 @@ pub(crate) fn check_num_option_bounds(
 ) -> Result<(), OptError> {
     let mut errmsg = Ok(());
     match opt_idx {
-        kOptLines => {
+        OPT_LINES => {
             let least = min_rows_for_all_tabpages();
             if *newval < OptInt::from(least) && FULL_SCREEN.get() {
                 errmsg = Err(OptError::formatted(tr!(
@@ -102,7 +102,7 @@ pub(crate) fn check_num_option_bounds(
             }
             *newval = (*newval).min(OptInt::from(INT_MAX));
         }
-        kOptColumns => {
+        OPT_COLUMNS => {
             if *newval < OptInt::from(MIN_COLUMNS) && FULL_SCREEN.get() {
                 errmsg = Err(OptError::formatted(tr!(
                     "E594: Need at least {MIN_COLUMNS} columns"
@@ -112,14 +112,14 @@ pub(crate) fn check_num_option_bounds(
             *newval = (*newval).min(OptInt::from(INT_MAX));
         }
         // 'pumblend' saturates silently rather than reporting.
-        kOptPumblend => *newval = (*newval).clamp(0, 100),
-        kOptScrolljump => {
+        OPT_PUMBLEND => *newval = (*newval).clamp(0, 100),
+        OPT_SCROLLJUMP => {
             if (*newval < -100 || *newval >= OptInt::from(ROWS.get())) && FULL_SCREEN.get() {
                 errmsg = Err(E_SCROLL.into());
                 *newval = 1;
             }
         }
-        kOptScroll => {
+        OPT_SCROLL => {
             let height = Win::current().w_view_height;
             if (*newval <= 0 || (*newval > OptInt::from(height) && height > 0)) && FULL_SCREEN.get()
             {
@@ -147,25 +147,25 @@ pub(crate) fn validate_num_option(opt_idx: OptIndex, newval: &mut OptInt) -> Res
         return Err(invalid());
     }
     let errmsg = match opt_idx {
-        kOptHelpheight | kOptTitlelen | kOptUpdatecount | kOptReport | kOptUpdatetime
-        | kOptSidescroll | kOptFoldlevel | kOptShiftwidth | kOptTextwidth | kOptWritedelay
-        | kOptTimeoutlen | kOptCmdheight => bounded(value, 0, too_small(), OptInt::MAX, invalid()),
-        kOptCmdwinheight => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
+        OPT_HELPHEIGHT | OPT_TITLELEN | OPT_UPDATECOUNT | OPT_REPORT | OPT_UPDATETIME
+        | OPT_SIDESCROLL | OPT_FOLDLEVEL | OPT_SHIFTWIDTH | OPT_TEXTWIDTH | OPT_WRITEDELAY
+        | OPT_TIMEOUTLEN | OPT_CMDHEIGHT => bounded(value, 0, too_small(), OptInt::MAX, invalid()),
+        OPT_CMDWINHEIGHT => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
         // The four window-size options each cross-check their partner.
-        kOptWinheight if value >= 1 && p_wmh() > value => Err(E_WINHEIGHT.into()),
-        kOptWinheight => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
-        kOptWinminheight => bounded(value, 0, too_small(), p_wh(), E_WINHEIGHT.into()),
-        kOptWinwidth if value >= 1 && p_wmw() > value => Err(E_WINWIDTH.into()),
-        kOptWinwidth => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
-        kOptWinminwidth => bounded(value, 0, too_small(), p_wiw(), E_WINWIDTH.into()),
+        OPT_WINHEIGHT if value >= 1 && p_wmh() > value => Err(E_WINHEIGHT.into()),
+        OPT_WINHEIGHT => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
+        OPT_WINMINHEIGHT => bounded(value, 0, too_small(), p_wh(), E_WINHEIGHT.into()),
+        OPT_WINWIDTH if value >= 1 && p_wmw() > value => Err(E_WINWIDTH.into()),
+        OPT_WINWIDTH => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
+        OPT_WINMINWIDTH => bounded(value, 0, too_small(), p_wiw(), E_WINWIDTH.into()),
         // 'maxcombine' is fixed: whatever is asked for, this is the answer.
-        kOptMaxcombine => {
+        OPT_MAXCOMBINE => {
             *newval = OptInt::from(MAX_MCO);
             Ok(())
         }
-        kOptHistory => bounded(value, 0, too_small(), 10000, invalid()),
+        OPT_HISTORY => bounded(value, 0, too_small(), 10000, invalid()),
         // 'pyxversion' only ever means Python 3; 0 asks for the default.
-        kOptPyxversion => match value {
+        OPT_PYXVERSION => match value {
             0 => {
                 *newval = 3;
                 Ok(())
@@ -173,39 +173,39 @@ pub(crate) fn validate_num_option(opt_idx: OptIndex, newval: &mut OptInt) -> Res
             3 => Ok(()),
             _ => Err(invalid()),
         },
-        kOptRegexpengine => bounded(value, 0, invalid(), 2, invalid()),
+        OPT_REGEXPENGINE => bounded(value, 0, invalid(), 2, invalid()),
         // The two offsets may be negative before the screen exists: that is
         // how a window says it does not override the global value.
-        kOptScrolloff | kOptSidescrolloff => {
+        OPT_SCROLLOFF | OPT_SIDESCROLLOFF => {
             if value < 0 && FULL_SCREEN.get() {
                 Err(too_small())
             } else {
                 Ok(())
             }
         }
-        kOptConceallevel => bounded(value, 0, too_small(), 3, invalid()),
-        kOptNumberwidth => bounded(
+        OPT_CONCEALLEVEL => bounded(value, 0, too_small(), 3, invalid()),
+        OPT_NUMBERWIDTH => bounded(
             value,
             1,
             too_small(),
             OptInt::from(MAX_NUMBERWIDTH),
             invalid(),
         ),
-        kOptIminsert => bounded(value, 0, invalid(), OptInt::from(B_IMODE_LAST), invalid()),
+        OPT_IMINSERT => bounded(value, 0, invalid(), OptInt::from(B_IMODE_LAST), invalid()),
         // 'imsearch' has one value more than 'iminsert': -1 is "follow it".
-        kOptImsearch => bounded(value, -1, invalid(), OptInt::from(B_IMODE_LAST), invalid()),
+        OPT_IMSEARCH => bounded(value, -1, invalid(), OptInt::from(B_IMODE_LAST), invalid()),
         // 'channel' is read-only; every value is refused.
-        kOptChannel => Err(invalid()),
-        kOptScrollback => bounded(value, -1, invalid(), OptInt::from(SB_MAX), invalid()),
-        kOptTabstop => bounded(value, 1, too_small(), OptInt::from(TABSTOP_MAX), invalid()),
-        kOptChistory | kOptLhistory => bounded(
+        OPT_CHANNEL => Err(invalid()),
+        OPT_SCROLLBACK => bounded(value, -1, invalid(), OptInt::from(SB_MAX), invalid()),
+        OPT_TABSTOP => bounded(value, 1, too_small(), OptInt::from(TABSTOP_MAX), invalid()),
+        OPT_CHISTORY | OPT_LHISTORY => bounded(
             value,
             1,
             E_QUICKFIX_TOO_FEW.into(),
             100,
             E_QUICKFIX_TOO_MANY.into(),
         ),
-        kOptMaxsearchcount => bounded(
+        OPT_MAXSEARCHCOUNT => bounded(
             value,
             1,
             too_small(),

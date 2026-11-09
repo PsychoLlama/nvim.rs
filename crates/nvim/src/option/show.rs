@@ -52,9 +52,9 @@ use crate::message::{
 use crate::mouse::setmouse;
 use crate::option::defs::{OptIndex, OptVal, OptionSetFlags};
 use crate::options::{
-    kOptAleph, kOptCount, kOptFiletype, kOptFoldenable, kOptFoldexpr, kOptFoldignore,
-    kOptFoldlevel, kOptFoldmarker, kOptFoldmethod, kOptFoldminlines, kOptFoldnestmax, kOptPackpath,
-    kOptRuntimepath, kOptSyntax, kOptWildchar, kOptWildcharm,
+    OPT_ALEPH, OPT_COUNT, OPT_FILETYPE, OPT_FOLDENABLE, OPT_FOLDEXPR, OPT_FOLDIGNORE,
+    OPT_FOLDLEVEL, OPT_FOLDMARKER, OPT_FOLDMETHOD, OPT_FOLDMINLINES, OPT_FOLDNESTMAX, OPT_PACKPATH,
+    OPT_RUNTIMEPATH, OPT_SYNTAX, OPT_WILDCHAR, OPT_WILDCHARM,
 };
 use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
@@ -80,7 +80,7 @@ const GAP: c_int = 3;
 
 /// Every option, in table order.
 fn all_options() -> impl Iterator<Item = OptIndex> {
-    kOptAleph..kOptCount as OptIndex
+    OPT_ALEPH..OPT_COUNT as OptIndex
 }
 
 /// List the options: `all` includes the ones still at their default.
@@ -89,7 +89,7 @@ fn all_options() -> impl Iterator<Item = OptIndex> {
 /// ones get a line each; the first pass collects everything that fits in a
 /// column, the second everything that does not.
 pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
-    let mut items: Vec<OptIndex> = Vec::with_capacity(kOptCount as usize);
+    let mut items: Vec<OptIndex> = Vec::with_capacity(OPT_COUNT as usize);
 
     msg_ext_set_kind(c"list_cmd");
     let title = if opt_flags.has(OptionSetFlags::GLOBAL) {
@@ -285,7 +285,7 @@ pub(crate) fn makeset(
             // `:mksession` skips the runtime paths, which belong to the
             // installation rather than the session.
             if opt_flags.has(OptionSetFlags::SKIPRTP)
-                && matches!(opt_idx, kOptRuntimepath | kOptPackpath)
+                && matches!(opt_idx, OPT_RUNTIMEPATH | OPT_PACKPATH)
             {
                 continue;
             }
@@ -318,7 +318,7 @@ pub(crate) fn makeset(
                 // 'syntax' and 'filetype' fire autocommands that would
                 // undo the rest of the session, so they are only set
                 // when they are not already right.
-                let guarded = opt_idx == kOptSyntax || opt_idx == kOptFiletype;
+                let guarded = opt_idx == OPT_SYNTAX || opt_idx == OPT_FILETYPE;
                 if guarded {
                     let mut line = b"if &".to_vec();
                     line.extend_from_slice(get_option(opt_idx).fullname.to_bytes());
@@ -347,35 +347,35 @@ pub(crate) fn makefoldset(out: &mut dyn Write) -> Result<(), Failed> {
     let one = WinOptSet::One;
     let fields: [(OptIndex, OptSlot); 8] = [
         (
-            kOptFoldmethod,
+            OPT_FOLDMETHOD,
             Local::Win(win, one, field!(WinOpt, wo_fdm)).into(),
         ),
         (
-            kOptFoldexpr,
+            OPT_FOLDEXPR,
             Local::Win(win, one, field!(WinOpt, wo_fde)).into(),
         ),
         (
-            kOptFoldmarker,
+            OPT_FOLDMARKER,
             Local::Win(win, one, field!(WinOpt, wo_fmr)).into(),
         ),
         (
-            kOptFoldignore,
+            OPT_FOLDIGNORE,
             Local::Win(win, one, field!(WinOpt, wo_fdi)).into(),
         ),
         (
-            kOptFoldlevel,
+            OPT_FOLDLEVEL,
             Local::Win(win, one, field!(WinOpt, wo_fdl)).into(),
         ),
         (
-            kOptFoldminlines,
+            OPT_FOLDMINLINES,
             Local::Win(win, one, field!(WinOpt, wo_fml)).into(),
         ),
         (
-            kOptFoldnestmax,
+            OPT_FOLDNESTMAX,
             Local::Win(win, one, field!(WinOpt, wo_fdn)).into(),
         ),
         (
-            kOptFoldenable,
+            OPT_FOLDENABLE,
             Local::Win(win, one, field!(WinOpt, wo_fen)).into(),
         ),
     ];
@@ -571,7 +571,7 @@ pub(crate) fn option_value_text(opt_idx: OptIndex, opt_flags: OptionSetFlags) ->
 /// Whether the option is 'wildchar' or 'wildcharm' *and* holds a key that
 /// has a name; `*wcp` comes back with the value either way for those two.
 pub(crate) fn wc_use_keyname(opt_idx: OptIndex, slot: OptSlot, wcp: &mut OptInt) -> bool {
-    if !matches!(opt_idx, kOptWildchar | kOptWildcharm) {
+    if !matches!(opt_idx, OPT_WILDCHAR | OPT_WILDCHARM) {
         return false;
     }
     // Both options are numeric and global-only, so the slot is the number

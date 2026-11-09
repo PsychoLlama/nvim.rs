@@ -27,7 +27,7 @@ use crate::message::{verbose_open, verbose_stop};
 use crate::option::defs::{OptError, OptSet, OptionSetFlags, StlSyntax};
 use crate::option::vars::{P_SHADA, P_VFILE, SSOP_FLAGS, p_ruf};
 use crate::option::{did_set_title, get_option_default};
-use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt_ssop_values};
+use crate::options::{OPT_SSOP_FLAG_CURDIR, OPT_SSOP_FLAG_SESDIR, OPT_SSOP_VALUES, OPT_STATUSLINE};
 use crate::shada::get_shada_parameter;
 use crate::statusline::state::STL_SYNTAX;
 use crate::types::LineNr;
@@ -109,7 +109,7 @@ pub(crate) fn did_set_statustabline_rulerformat(
     }
 
     let (idx, flags) = (args.os_idx, args.os_flags);
-    let is_stl = idx as c_int == kOptStatusline as c_int;
+    let is_stl = idx as c_int == OPT_STATUSLINE as c_int;
     let global = flags.has(OptionSetFlags::GLOBAL) || !flags.has(OptionSetFlags::LOCAL);
     // What is checked is what the variable holds: the frame's copy of the
     // new value, or the default an empty global 'statusline' is given.
@@ -164,11 +164,11 @@ pub(crate) fn did_set_statustabline_rulerformat(
 /// the string but not anything derived from it.
 pub fn did_set_sessionoptions(args: &mut OptSet) -> Result<(), OptError> {
     did_set_str_generic(args)?;
-    let both = kOptSsopFlagCurdir as c_uint | kOptSsopFlagSesdir as c_uint;
+    let both = OPT_SSOP_FLAG_CURDIR as c_uint | OPT_SSOP_FLAG_SESDIR as c_uint;
     if SSOP_FLAGS.get() & both == both {
         // The caller only restores the string, so put the old value's mask
         // back here. A value that does not parse leaves the mask alone.
-        if let Some(mask) = opt_strings_mask(old_bytes(args), &opt_ssop_values, true) {
+        if let Some(mask) = opt_strings_mask(old_bytes(args), &OPT_SSOP_VALUES, true) {
             SSOP_FLAGS.set(mask);
         }
         return invalid();

@@ -116,7 +116,7 @@ pub fn set_ref_in_opfunc(copy_id: c_int) -> bool {
 ///
 /// The callback runs arbitrary Vimscript, so everything it might reasonably
 /// want to change is saved and restored around it: 'virtualedit' (through
-/// `virtual_op`, which would otherwise pin the old value) and `finish_op`, so
+/// `VIRTUAL_OP`, which would otherwise pin the old value) and `FINISH_OP`, so
 /// that `mode()` answers what the user sees rather than "an operator is
 /// pending". `:lockmarks` restores the marks afterwards.
 pub(crate) fn op_function(op: &OpArg) {

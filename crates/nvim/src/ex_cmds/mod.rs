@@ -59,7 +59,7 @@ use crate::message::{
 };
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_direct;
-use crate::options::kOptFoldcolumn;
+use crate::options::OPT_FOLDCOLUMN;
 use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
 use crate::pos::MAXLNUM;
@@ -287,7 +287,7 @@ pub fn prepare_tagpreview(undo_sync: bool) -> bool {
     Win::current().w_onebuf_opt.wo_crb = 0;
     Win::current().w_onebuf_opt.wo_diff = 0;
     set_option_direct(
-        kOptFoldcolumn,
+        OPT_FOLDCOLUMN,
         OptVal::static_string(c"0"),
         OptionSetFlags::NONE,
         SID_NONE,

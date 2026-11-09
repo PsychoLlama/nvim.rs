@@ -42,7 +42,7 @@ use crate::r#move::{
 };
 use crate::option::get_scrolloff_value;
 use crate::option::vars::{P_CH, P_SPK, P_WBR, p_ch, p_ls, p_stal, p_wbr};
-use crate::options::kWinOptScroll;
+use crate::options::WIN_OPT_SCROLL;
 use crate::optionstr::OptString;
 use crate::plines::{plines_win, plines_win_col, plines_win_nofill};
 use crate::startup::{EXITING, FULL_SCREEN};
@@ -438,7 +438,7 @@ pub(crate) fn comp_scroll(window: Win) {
     let old = window.w_onebuf_opt.wo_scr;
     window.w_onebuf_opt.wo_scr = default_scroll(window);
     if window.w_onebuf_opt.wo_scr != old {
-        let ctx = &mut window.w_onebuf_opt.wo_script_ctx[kWinOptScroll as usize];
+        let ctx = &mut window.w_onebuf_opt.wo_script_ctx[WIN_OPT_SCROLL as usize];
         ctx.sc_sid = SID_WINLAYOUT as ScriptId;
         ctx.sc_lnum = LineNr::ZERO;
     }

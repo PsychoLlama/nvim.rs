@@ -327,7 +327,7 @@ pub(crate) struct OptionVarName {
     pub(crate) start: usize,
     /// The offset of the first byte after it, `None` when there is no name.
     pub(crate) end: Option<usize>,
-    /// Which option, `kOptInvalid` for none or a terminal option.
+    /// Which option, `OPT_INVALID` for none or a terminal option.
     pub(crate) index: OptIndex,
     /// Which scope the `g:`/`l:` asked for.
     pub(crate) flags: OptionSetFlags,

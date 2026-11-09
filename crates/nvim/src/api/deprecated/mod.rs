@@ -36,7 +36,7 @@ use crate::option::{
     find_option, get_option_value_for, get_vimoption, object_as_optval, option_has_scope,
     set_option_value_for,
 };
-use crate::options::kOptInvalid;
+use crate::options::OPT_INVALID;
 use crate::os::libc::{int64_t, size_t, uint8_t, uint32_t, uint64_t};
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::types::{

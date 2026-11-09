@@ -1,8 +1,8 @@
 //! The text of the last insert, and repeating it.
 //!
-//! `last_insert` is a copy of the redo buffer taken when Insert mode was
+//! `LAST_INSERT` is a copy of the redo buffer taken when Insert mode was
 //! left, so it still has the command that *started* the insert on the front
-//! -- `last_insert_skip` is how many bytes that command took, and every
+//! -- `LAST_INSERT_SKIP` is how many bytes that command took, and every
 //! reader goes through [`get_last_insert`], which skips them.
 //!
 //! [`get_last_insert`] is `".` and `i_CTRL-A`; [`get_last_insert_save`]
@@ -111,7 +111,7 @@ pub(crate) fn stuff_inserted(c: Key, mut count: c_int, no_esc: bool) -> Result<(
 /// A copy: both callers shorten what they get, and the stored text is not
 /// theirs to shorten.
 pub(crate) fn get_last_insert() -> ApiString {
-    // `last_insert_skip` counts bytes this module put on the front, so it
+    // `LAST_INSERT_SKIP` counts bytes this module put on the front, so it
     // never runs past the buffer.
     let skip = size_t::try_from(LAST_INSERT_SKIP.get()).unwrap_or(0);
     LAST_INSERT.with(|all| {

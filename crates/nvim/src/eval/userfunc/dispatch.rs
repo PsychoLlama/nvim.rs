@@ -432,7 +432,7 @@ pub(crate) fn call_func_with(
             // been aborted by an error, an interrupt, or an uncaught
             // exception, which `aborting()` reports.  For an error inside an
             // internal function, or for E132 in `call_user_func`, the throw
-            // point where `force_abort` is normally updated has not been
+            // point where `FORCE_ABORT` is normally updated has not been
             // reached yet, so update it here to make `aborting()` reliable.
             update_force_abort();
         }

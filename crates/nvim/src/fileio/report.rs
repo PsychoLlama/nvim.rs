@@ -209,7 +209,7 @@ pub(crate) fn report_read(sfname: Option<&CStr>, how: &How, out: &Outcome) {
     }
 
     // The message has to be repeated after redrawing when reading from
-    // stdin (the screen is cleared next), when `restart_edit` is set
+    // stdin (the screen is cleared next), when `RESTART_EDIT` is set
     // (otherwise there is a delay before redrawing), and when the screen
     // scrolled but there is no wait-return prompt.
     if how.stdin

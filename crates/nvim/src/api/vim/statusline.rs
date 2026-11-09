@@ -9,7 +9,7 @@
 //! The expansion itself goes through [`StlJob`], the same wrapper the
 //! drawing side uses -- with one difference that is the whole reason this
 //! entry point exists as a separate arm of `build_stl_str_hl`: the option
-//! index is `kOptInvalid`, which makes `use_sandbox` unconditionally false
+//! index is `OPT_INVALID`, which makes `use_sandbox` unconditionally false
 //! here.
 
 #![forbid(unsafe_code)]
@@ -89,7 +89,7 @@ pub fn nvim_eval_statusline(
     let job = StlJob {
         win,
         fmt: str.as_bytes().to_vec(),
-        opt: (kOptInvalid, OptionSetFlags::NONE),
+        opt: (OPT_INVALID, OptionSetFlags::NONE),
         fillchar: ctx.fillchar,
         maxwidth: ctx.maxwidth,
         room: MAXPATHL as usize,
@@ -343,7 +343,7 @@ pub fn nvim__complete_set(
 ) -> Result<ApiDict, Error> {
     let mut rv = DictBuilder::with_capacity(2);
     let opts = &*opts;
-    if get_cot_flags() & kOptCotFlagPopup == 0 {
+    if get_cot_flags() & OPT_COT_FLAG_POPUP == 0 {
         return Err(Error::exception(
             c"completeopt option does not include popup",
         ));

@@ -57,7 +57,7 @@ use crate::ops::{
 use crate::option::defs::FoFlag;
 use crate::option::get_ve_flags;
 use crate::option::vars::{CB_FLAGS, P_SEL, p_sta, p_to, p_ww};
-use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptVeFlagAll};
+use crate::options::{OPT_CB_FLAG_UNNAMED, OPT_CB_FLAG_UNNAMEDPLUS, OPT_VE_FLAG_ALL};
 use crate::os::cshim::gettext;
 use crate::register::defs::{
     PUT_BLOCK_INNER, PUT_CURSEND, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT,
@@ -472,7 +472,7 @@ pub(crate) fn nv_tilde(cmd_arg: &mut CmdArg) {
 /// past the last *cell* when 'virtualedit' is "all".
 pub(crate) fn set_cursor_for_append_to_line() {
     Win::current().w_set_curswant = true;
-    if get_ve_flags(Win::current()) == kOptVeFlagAll as c_uint {
+    if get_ve_flags(Win::current()) == OPT_VE_FLAG_ALL as c_uint {
         // Insert mode is what makes `coladvance` allow the position one
         // past the end.
         let save_state = STATE.get();
@@ -675,7 +675,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         // Putting over a selection deletes it first, and that delete would
         // otherwise overwrite the very register being put.
         let clipoverwrite = (regname == b'+' || regname == b'*')
-            && CB_FLAGS.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0;
+            && CB_FLAGS.get() & (OPT_CB_FLAG_UNNAMED | OPT_CB_FLAG_UNNAMEDPLUS) != 0;
         if regname == 0
             || regname == b'"'
             || clipoverwrite

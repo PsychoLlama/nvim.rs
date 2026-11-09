@@ -354,7 +354,7 @@ fn leave_for_buffer(
     Switch::Ready
 }
 
-/// Is the buffer `au_new_curbuf` names still alive?
+/// Is the buffer `AU_NEW_CURBUF` names still alive?
 fn au_new_curbuf_valid() -> bool {
     BufRef::of_record(AU_NEW_CURBUF.get()).valid()
 }

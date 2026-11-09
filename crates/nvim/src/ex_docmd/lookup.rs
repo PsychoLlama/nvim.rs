@@ -1,6 +1,6 @@
-//! Resolving a command name to a row of `cmdnames`.
+//! Resolving a command name to a row of `CMDNAMES`.
 //!
-//! `find_ex_command` is the hot path: `cmdidxs1` and `cmdidxs2` — two
+//! `find_ex_command` is the hot path: `CMDIDXS1` and `CMDIDXS2` — two
 //! generated tables indexed by the first and second letter — let it start
 //! the linear scan at the first command that could match, rather than at
 //! the head of a 557-row table. Everything else here is a special case the
@@ -20,7 +20,7 @@ use core::ffi::{CStr, c_int};
 use crate::eval::typval::NumBuf;
 use crate::ex_docmd::address::skip_range;
 use crate::ex_docmd::modifier::{CMDMODS, shared_prefix};
-use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_PRINT, cmdidxs1, cmdidxs2, cmdnames, command_count};
+use crate::ex_docmd::{CMDIDXS1, CMDIDXS2, CMDNAMES, COMMAND_COUNT, EXFLAG_LIST, EXFLAG_PRINT};
 use crate::memory::ThinCString;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
@@ -31,21 +31,21 @@ use crate::eval::funcs::builtin::EvalFuncData;
 use crate::types::{CmdAddr, CmdLine, ExArg, ExArgt, TypVal};
 use crate::usercmd::{get_user_commands, user_command_name};
 
-/// Is this index a *user* command rather than a row of `cmdnames`?
+/// Is this index a *user* command rather than a row of `CMDNAMES`?
 ///
 /// `find_ucmd` answers a negative index, whose magnitude has nothing to do
-/// with `cmdnames` — `eap->useridx` says which user command it is. So a
+/// with `CMDNAMES` — `eap->useridx` says which user command it is. So a
 /// negative `cmdidx` is the signal that the table must not be indexed.
 pub fn is_user_cmd(cmdidx: CmdIdx) -> bool {
     matches!(cmdidx, CmdIdx::USER | CmdIdx::USER_BUF)
 }
 
-/// How many rows `cmdnames` has, as an index bound.
+/// How many rows `CMDNAMES` has, as an index bound.
 ///
 /// A `const` item rather than `CmdIdx::SIZE.code()` at each use: an
 /// enum-to-integer conversion is a call at `-O0`, and this one bounds a
 /// scan that runs per Ex command.
-const ROWS: usize = command_count as usize;
+const ROWS: usize = COMMAND_COUNT as usize;
 
 /// Whether the command line at `at` holds the word `name` (at least `min`
 /// bytes of it), answering where the word ended, past the blanks after it;
@@ -173,7 +173,7 @@ impl ExArg<'_> {
             // stopped at once: stepping an enum would be a conversion per row.
             let mut row = start_index(word);
             while row < ROWS {
-                let name = cmdnames[row].cmd_name;
+                let name = CMDNAMES[row].cmd_name;
                 if name_matches(name, word) {
                     if let Some(full) = full.as_deref_mut()
                         && name.count_bytes() == len
@@ -216,13 +216,13 @@ fn name_matches(name: &CStr, word: &[u8]) -> bool {
     word.len() <= name.len() && word.iter().zip(name).all(|(want, got)| want == got)
 }
 
-/// Where the linear scan over `cmdnames` starts for this name.
+/// Where the linear scan over `CMDNAMES` starts for this name.
 ///
-/// `cmdidxs1[c1]` is the first command starting with `c1`, and
-/// `cmdidxs2[c1][c2]` the offset from there to the first one starting with
+/// `CMDIDXS1[c1]` is the first command starting with `c1`, and
+/// `CMDIDXS2[c1][c2]` the offset from there to the first one starting with
 /// `c1c2`. Both are generated *from the table's row order*, so a table that
 /// has been reordered without regenerating them sends the scan to the wrong
-/// place — hence the `command_count` check, which is upstream's own guard
+/// place — hence the `COMMAND_COUNT` check, which is upstream's own guard
 /// against a stale generated header.
 fn start_index(word: &[u8]) -> usize {
     let c1 = word.first().copied().unwrap_or(0);
@@ -233,16 +233,16 @@ fn start_index(word: &[u8]) -> usize {
             CmdIdx::bang.index()
         };
     }
-    if command_count != CmdIdx::SIZE.code() {
+    if COMMAND_COUNT != CmdIdx::SIZE.code() {
         iemsg(gettext(
             c"E943: Command table needs to be updated, run 'make'",
         ));
         getout(1);
     }
     let c2 = word.get(1).copied().unwrap_or(0);
-    let mut idx = cmdidxs1[(c1 - b'a') as usize] as usize;
+    let mut idx = CMDIDXS1[(c1 - b'a') as usize] as usize;
     if c2.is_ascii_lowercase() {
-        idx += cmdidxs2[(c1 - b'a') as usize][(c2 - b'a') as usize] as usize;
+        idx += CMDIDXS2[(c1 - b'a') as usize][(c2 - b'a') as usize] as usize;
     }
     idx
 }
@@ -304,7 +304,7 @@ pub fn f_fullcommand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let full = if is_user_cmd(ea.cmdidx) {
         user_command_name(ea.useridx, ea.cmdidx)
     } else {
-        Some(ThinCString::from_cstr(cmdnames[ea.cmdidx.index()].cmd_name))
+        Some(ThinCString::from_cstr(CMDNAMES[ea.cmdidx.index()].cmd_name))
     };
     result.write_string(full);
 }
@@ -342,7 +342,7 @@ pub(crate) fn excmd_get_cmdidx_bytes(text: &[u8], len: usize) -> CmdIdx {
     // the shortcut's can share the name's first two letters, so the first
     // match is the same one.
     let mut row = start_index(name);
-    while row < ROWS && !name_matches(cmdnames[row].cmd_name, name) {
+    while row < ROWS && !name_matches(CMDNAMES[row].cmd_name, name) {
         row += 1;
     }
     CmdIdx::at_row(row)
@@ -350,19 +350,19 @@ pub(crate) fn excmd_get_cmdidx_bytes(text: &[u8], len: usize) -> CmdIdx {
 
 /// The `EX_*` flag set of a command.
 pub fn excmd_get_argt(idx: CmdIdx) -> ExArgt {
-    cmdnames[idx.index()].cmd_argt
+    CMDNAMES[idx.index()].cmd_argt
 }
 
 /// The `idx`'th command name, for command-line completion. Indices past
 /// the built-in table are user commands.
 pub(crate) fn get_command_name(expand: &Expand, idx: usize) -> Option<Candidate> {
-    match cmdnames.get(idx) {
+    match CMDNAMES.get(idx) {
         Some(row) => Some(Candidate::Borrowed(row.cmd_name)),
-        None => get_user_commands(expand, idx - cmdnames.len()),
+        None => get_user_commands(expand, idx - CMDNAMES.len()),
     }
 }
 
 /// The name of built-in command `idx`, borrowed from the table.
 pub(crate) fn builtin_command_cstr(idx: CmdIdx) -> &'static CStr {
-    cmdnames[idx.index()].cmd_name
+    CMDNAMES[idx.index()].cmd_name
 }

@@ -40,7 +40,7 @@ use crate::message::IOSIZE;
 use crate::message::{E_MARKINVAL, E_MARKNOTSET, E_UMARK};
 use crate::r#move::set_topline;
 use crate::normal::defs::MotionType;
-use crate::options::kOptJopFlagStack;
+use crate::options::OPT_JOP_FLAG_STACK;
 use crate::os::fs::dirname_within;
 use crate::path::MAXPATHL;
 use crate::path::{path_fnamecmp, path_shorten_fname, vim_ispathsep_nocolon};

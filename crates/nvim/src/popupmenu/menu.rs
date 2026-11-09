@@ -44,7 +44,7 @@ const PUM_POPUP_MIN_WIDTH: c_int = 20;
 ///
 /// Three cases: the mouse is over the menu's own grid (the row is the item,
 /// less the top border), it is over the grid the menu is anchored to (the row
-/// is an offset from `pum_row`), or it is somewhere else entirely.
+/// is an offset from `PUM_ROW`), or it is somewhere else entirely.
 pub(crate) fn pum_select_mouse_pos() {
     let mut pos = MousePos::current();
     if pos.grid == 0 {

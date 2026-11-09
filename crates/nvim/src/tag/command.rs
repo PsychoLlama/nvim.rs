@@ -378,11 +378,11 @@ impl DoTag {
         }
         Win::current().w_cursor.col = mark.mark.col;
         Win::current().w_set_curswant = true;
-        if JOP_FLAGS.get() & kOptJopFlagView as c_uint != 0 {
+        if JOP_FLAGS.get() & OPT_JOP_FLAG_VIEW as c_uint != 0 {
             mark_view_restore(Some(&self.saved_fmark));
         }
         check_cursor(Win::current());
-        if FDO_FLAGS.get() & kOptFdoFlagTag as c_uint != 0 && old_key_typed {
+        if FDO_FLAGS.get() & OPT_FDO_FLAG_TAG as c_uint != 0 && old_key_typed {
             fold_open_cursor();
         }
 

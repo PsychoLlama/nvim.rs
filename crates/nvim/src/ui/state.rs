@@ -101,7 +101,7 @@ pub struct UIClientHandler {
     pub fn_0: Option<fn(Array)>,
 }
 pub(crate) type UIExtension = ::core::ffi::c_uint;
-/// The `ext_*` UI capabilities, indexing `ui_ext` and the `ui_options`
+/// The `ext_*` UI capabilities, indexing `UI_EXT` and the `ui_options`
 /// dict. `UI_EXT_COUNT` is the number of them, not one of them.
 pub(crate) const UI_CMDLINE: UIExtension = 0;
 pub(crate) const UI_POPUPMENU: UIExtension = 1;

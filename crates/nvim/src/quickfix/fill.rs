@@ -302,7 +302,7 @@ fn finish_qf_buffer() {
     // when using autocommands.
     Buf::current().b_ro_locked += 1;
     set_option_value_give_err(
-        kOptFiletype,
+        OPT_FILETYPE,
         OptVal::static_string(c"qf"),
         OptionSetFlags::LOCAL,
     );

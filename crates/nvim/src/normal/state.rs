@@ -71,7 +71,7 @@ use crate::ops::OpType;
 use crate::option::defs::ShmFlag;
 use crate::option::shortmess;
 use crate::option::vars::{FDO_FLAGS, p_smd};
-use crate::options::kOptFdoFlagAll;
+use crate::options::OPT_FDO_FLAG_ALL;
 use crate::os::libc::int64_t;
 use crate::os::time::os_time_raw;
 use crate::pos::equalpos;
@@ -511,7 +511,7 @@ fn normal_check_folds() {
     fold_adjust_visual();
     if has_any_folding(Win::current()) != 0 && !char_avail() {
         fold_check_close();
-        if FDO_FLAGS.get() & kOptFdoFlagAll != 0 {
+        if FDO_FLAGS.get() & OPT_FDO_FLAG_ALL != 0 {
             fold_open_cursor();
         }
     }

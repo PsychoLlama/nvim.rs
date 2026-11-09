@@ -127,7 +127,7 @@ impl Put {
         let mut endcol2: ColNr = ColNr::ZERO;
 
         if self.dir == FORWARD && c != NUL {
-            if self.ve_flags == kOptVeFlagAll as ::core::ffi::c_uint {
+            if self.ve_flags == OPT_VE_FLAG_ALL as ::core::ffi::c_uint {
                 (col, endcol2) = Win::current().vcol_span(Win::current().cursor());
             } else {
                 col = Win::current().vcol_span(Win::current().cursor()).1;
@@ -141,7 +141,7 @@ impl Put {
         }
 
         col += Win::current().w_cursor.coladd;
-        if self.ve_flags == kOptVeFlagAll as ::core::ffi::c_uint
+        if self.ve_flags == OPT_VE_FLAG_ALL as ::core::ffi::c_uint
             && (Win::current().w_cursor.coladd > 0 || endcol2 == Win::current().w_cursor.col)
         {
             if self.dir == FORWARD && c == NUL {

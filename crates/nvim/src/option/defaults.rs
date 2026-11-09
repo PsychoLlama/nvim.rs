@@ -45,10 +45,10 @@ use crate::option::defs::{OptIndex, OptVal, OptionSetFlags};
 use crate::option::vars::{FENC_DEFAULT, P_CH, P_HLG, P_ICON, P_TITLE, P_WINDOW};
 use crate::option::vars::{mark_option_defaults_set, p_enc, p_rtp, p_sh};
 use crate::options::{
-    kOptAleph, kOptBackupdir, kOptBackupskip, kOptCdpath, kOptCmdheight, kOptCount, kOptDirectory,
-    kOptFileformats, kOptHelplang, kOptIcon, kOptModeline, kOptPackpath, kOptRuntimepath,
-    kOptScroll, kOptShell, kOptShellpipe, kOptShellredir, kOptTermbidi, kOptTitle, kOptTtyfast,
-    kOptUndodir, kOptViewdir, kOptWindow,
+    OPT_ALEPH, OPT_BACKUPDIR, OPT_BACKUPSKIP, OPT_CDPATH, OPT_CMDHEIGHT, OPT_COUNT, OPT_DIRECTORY,
+    OPT_FILEFORMATS, OPT_HELPLANG, OPT_ICON, OPT_MODELINE, OPT_PACKPATH, OPT_RUNTIMEPATH,
+    OPT_SCROLL, OPT_SHELL, OPT_SHELLPIPE, OPT_SHELLREDIR, OPT_TERMBIDI, OPT_TITLE, OPT_TTYFAST,
+    OPT_UNDODIR, OPT_VIEWDIR, OPT_WINDOW,
 };
 use crate::optionstr::check_buf_options;
 use crate::os::cshim::{bind_textdomain_codeset_of, gettext_owned};
@@ -75,7 +75,7 @@ use super::{
 
 /// Every option, in table order.
 fn all_options() -> impl Iterator<Item = OptIndex> {
-    kOptAleph..kOptCount as OptIndex
+    OPT_ALEPH..OPT_COUNT as OptIndex
 }
 
 /// The two boolean option values this module installs.
@@ -86,7 +86,7 @@ const ON: OptVal = OptVal::Boolean(Some(true));
 /// tab page it was opened from had.
 pub(crate) fn set_init_tablocal() {
     P_CH.set(
-        option_default(kOptCmdheight)
+        option_default(OPT_CMDHEIGHT)
             .as_number()
             .expect("'cmdheight' is a number option"),
     );
@@ -103,7 +103,7 @@ fn set_init_default_shell() {
     } else {
         shell
     };
-    change_option_default(kOptShell, OptVal::from_xstring(value));
+    change_option_default(OPT_SHELL, OptVal::from_xstring(value));
 }
 
 /// 'backupskip' defaults to a `*` pattern under each temporary directory the
@@ -114,7 +114,7 @@ fn set_init_default_backupskip() {
 
     // The value built so far; nothing until the first directory is found.
     let mut value: Option<Vec<u8>> = None;
-    let flags = get_option(kOptBackupskip).flags;
+    let flags = get_option(OPT_BACKUPSKIP).flags;
 
     for name in SOURCES {
         let dir = if name.is_empty() {
@@ -146,7 +146,7 @@ fn set_init_default_backupskip() {
 
     if let Some(value) = value {
         change_option_default(
-            kOptBackupskip,
+            OPT_BACKUPSKIP,
             OptVal::from_xstring(XString::from_vec(value)),
         );
     }
@@ -171,7 +171,7 @@ fn set_init_default_cdpath() {
             value.push(byte);
         }
     }
-    change_option_default(kOptCdpath, OptVal::from_xstring(XString::from_vec(value)));
+    change_option_default(OPT_CDPATH, OptVal::from_xstring(XString::from_vec(value)));
 }
 
 /// Expand the environment variables in every string default, in the option
@@ -228,12 +228,12 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     // "." in front of it so a backup lands next to the file when it can.
     let subpath = state_subpath(c"backup", 2, true);
     let backupdir = XString::from_vec([&b".,"[..], &subpath[..]].concat());
-    change_option_default(kOptBackupdir, OptVal::from_xstring(backupdir));
+    change_option_default(OPT_BACKUPDIR, OptVal::from_xstring(backupdir));
 
     for (opt_idx, name) in [
-        (kOptViewdir, c"view"),
-        (kOptDirectory, c"swap"),
-        (kOptUndodir, c"undo"),
+        (OPT_VIEWDIR, c"view"),
+        (OPT_DIRECTORY, c"swap"),
+        (OPT_UNDODIR, c"undo"),
     ] {
         let dir = state_subpath(name, 2, true);
         change_option_default(opt_idx, OptVal::from_xstring(dir));
@@ -241,8 +241,8 @@ pub(crate) fn set_init_1(clean_arg: bool) {
 
     if let Some(rtp) = runtimepath_default(clean_arg) {
         // 'packpath' gets its own copy.
-        change_option_default(kOptPackpath, OptVal::from_xstring(rtp.clone()));
-        change_option_default(kOptRuntimepath, OptVal::from_xstring(rtp));
+        change_option_default(OPT_PACKPATH, OptVal::from_xstring(rtp.clone()));
+        change_option_default(OPT_RUNTIMEPATH, OptVal::from_xstring(rtp));
     }
 
     set_options_default(OptionSetFlags::NONE);
@@ -264,11 +264,11 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     set_init_expand_env();
 
     if env_exists(c"NVIM_NOTTYFAST", false) {
-        set_option_value_give_err(kOptTtyfast, OFF, OptionSetFlags::NONE);
+        set_option_value_give_err(OPT_TTYFAST, OFF, OptionSetFlags::NONE);
     }
     save_file_ff(Buf::current());
     if env_exists(c"MLTERM", false) {
-        set_option_value_give_err(kOptTermbidi, ON, OptionSetFlags::NONE);
+        set_option_value_give_err(OPT_TERMBIDI, ON, OptionSetFlags::NONE);
     }
 
     didset_options2();
@@ -285,7 +285,7 @@ pub(crate) fn set_init_1(clean_arg: bool) {
 pub(crate) fn get_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptVal {
     // Running as root, 'modeline' defaults off: a modeline is arbitrary
     // code from whoever wrote the file.
-    if opt_idx == kOptModeline && os_getuid() == ROOT_UID as _ {
+    if opt_idx == OPT_MODELINE && os_getuid() == ROOT_UID as _ {
         return OFF;
     }
     if opt_flags.has(OptionSetFlags::LOCAL) && option_is_global_local(opt_idx) {
@@ -317,7 +317,7 @@ fn set_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     set_option_direct(opt_idx, def_val, opt_flags, CURRENT_SCTX.get().sc_sid);
     // 'scroll' is half the window height, which the option table cannot
     // know.
-    if opt_idx == kOptScroll {
+    if opt_idx == OPT_SCROLL {
         win_comp_scroll(Win::current());
     }
     insecure_flag(Win::current_or_none(), opt_idx, opt_flags).set(false);
@@ -352,15 +352,15 @@ pub(crate) fn set_init_2(_headless: bool) {
     );
     // 'scroll' is half the window height, so it could not be defaulted
     // before there was a window.
-    if !option_was_set(kOptScroll) {
-        set_option_default(kOptScroll, OptionSetFlags::LOCAL);
+    if !option_was_set(OPT_SCROLL) {
+        set_option_default(OPT_SCROLL, OptionSetFlags::LOCAL);
     }
     comp_col();
     // Same for 'window', which is one screen's worth of lines.
-    if !option_was_set(kOptWindow) {
+    if !option_was_set(OPT_WINDOW) {
         P_WINDOW.set(OptInt::from(ROWS.get() - 1));
     }
-    change_option_default(kOptWindow, OptVal::Number(OptInt::from(ROWS.get() - 1)));
+    change_option_default(OPT_WINDOW, OptVal::Number(OptInt::from(ROWS.get() - 1)));
 }
 
 /// The third startup pass: the defaults that depend on which shell 'shell'
@@ -383,8 +383,8 @@ pub(crate) fn set_init_3() {
 
     let _ = parse_shape_opt(SHAPE_CURSOR);
 
-    let do_srr = !option_was_set(kOptShellredir);
-    let do_sp = !option_was_set(kOptShellpipe);
+    let do_srr = !option_was_set(OPT_SHELLREDIR);
+    let do_sp = !option_was_set(OPT_SHELLPIPE);
 
     // The program's own name: its tail, without the arguments.
     let shell = p_sh(|value| {
@@ -403,29 +403,29 @@ pub(crate) fn set_init_3() {
         if do_sp {
             let sp = if is_csh { c"|& tee" } else { c"2>&1| tee" };
             set_option_direct(
-                kOptShellpipe,
+                OPT_SHELLPIPE,
                 OptVal::static_string(sp),
                 OptionSetFlags::NONE,
                 SID_NONE,
             );
-            change_option_default(kOptShellpipe, OptVal::static_string(sp));
+            change_option_default(OPT_SHELLPIPE, OptVal::static_string(sp));
         }
         if do_srr {
             let srr = if is_csh { c">&" } else { c">%s 2>&1" };
             set_option_direct(
-                kOptShellredir,
+                OPT_SHELLREDIR,
                 OptVal::static_string(srr),
                 OptionSetFlags::NONE,
                 SID_NONE,
             );
-            change_option_default(kOptShellredir, OptVal::static_string(srr));
+            change_option_default(OPT_SHELLREDIR, OptVal::static_string(srr));
         }
     }
 
     // An empty buffer has no line endings to have detected a format
     // from, so it takes the first of 'fileformats' — but only if the
     // user gave that option a value; otherwise its own default stands.
-    if buf_is_empty(Buf::current()) && option_was_set(kOptFileformats) {
+    if buf_is_empty(Buf::current()) && option_was_set(OPT_FILEFORMATS) {
         set_fileformat(default_fileformat(), OptionSetFlags::LOCAL);
     }
     set_title_defaults();
@@ -435,7 +435,7 @@ pub(crate) fn set_init_3() {
 pub(crate) fn set_helplang_default(lang: &[u8]) {
     // Two letters is what the option holds; anything shorter cannot be
     // a language code.
-    if lang.len() < 2 || option_was_set(kOptHelplang) {
+    if lang.len() < 2 || option_was_set(OPT_HELPLANG) {
         return;
     }
     let lower = |c: u8| c.to_ascii_lowercase();
@@ -454,7 +454,7 @@ pub(crate) fn set_helplang_default(lang: &[u8]) {
 /// 'title' and 'icon' default off unless the user asked for them, so that
 /// nvim does not have to ask the terminal what its title was.
 pub(crate) fn set_title_defaults() {
-    for (opt_idx, field) in [(kOptTitle, P_TITLE), (kOptIcon, P_ICON)] {
+    for (opt_idx, field) in [(OPT_TITLE, P_TITLE), (OPT_ICON, P_ICON)] {
         if !option_was_set(opt_idx) {
             change_option_default(opt_idx, OFF);
             field.set(false);

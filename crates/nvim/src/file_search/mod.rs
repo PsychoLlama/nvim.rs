@@ -36,7 +36,7 @@ use crate::message::state::LINE_MSG;
 use crate::normal::get_visual_text;
 use crate::option::vars::p_fic;
 use crate::option::{option_parts, was_set_insecurely};
-use crate::options::kOptIncludeexpr;
+use crate::options::OPT_INCLUDEEXPR;
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
 use crate::os::fs::FileID;

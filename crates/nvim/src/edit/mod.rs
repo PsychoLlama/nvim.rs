@@ -12,20 +12,20 @@
 //!
 //! | cell | what it means | written by |
 //! | --- | --- | --- |
-//! | `Insstart_textlen` | how wide the line was when the insert started | `prompt`, `state`, `undo` |
-//! | `Insstart_blank_vcol` | the column of the first blank inserted ('formatoptions' `b`) | `key`, `prompt`, `state`, `tab` |
-//! | `update_Insstart_orig` | whether `Insstart_orig` still tracks `Insstart` | `ctrl`, `state`, `undo` |
-//! | `arrow_used` / `ins_need_undo` | the undo-block pair; see `undo.rs` | `ctrl`, `key`, `chars`, `state`, `undo` |
-//! | `dont_sync_undo` | `i_CTRL-G_U`: the next motion keeps the block | `motion`, `ctrl`, `key`, `state` |
-//! | `last_insert` / `last_insert_skip` | the text `.` repeats, and the command on its front | `lastins`, `undo` |
-//! | `new_insert_skip` | the length of that command, measured at entry | `state`, `undo` |
-//! | `did_restart_edit` | `restart_edit` as it was when `edit()` was called | `state` |
-//! | `can_cindent` | whether the next key may trigger a 'cindent' re-indent | `bs`, `motion`, `ctrl`, `key`, `state`, `tab` |
-//! | `revins_on` / `revins_chars` / `revins_legal` / `revins_scol` | 'revins' and how far back it may go | `ctrl`, `state`, and every key that moves |
-//! | `o_lnum` / `ins_at_eol` | where `i_CTRL-O` left the cursor | `state` |
-//! | `replace_stack` | what Replace mode has to put back; see `replace.rs` | `replace`, `undo` |
-//! | `pc_status` / `pc_schar` / `pc_attr` / `pc_row` / `pc_col` | the cell `edit_putchar` wrote over | `redraw`, and the two keys that draw |
-//! | `compl_busy` | a completion is running, so `edit()` must not recurse | `state` |
+//! | `INSSTART_TEXTLEN` | how wide the line was when the insert started | `prompt`, `state`, `undo` |
+//! | `INSSTART_BLANK_VCOL` | the column of the first blank inserted ('formatoptions' `b`) | `key`, `prompt`, `state`, `tab` |
+//! | `UPDATE_INSSTART_ORIG` | whether `INSSTART_ORIG` still tracks `INSSTART` | `ctrl`, `state`, `undo` |
+//! | `ARROW_USED` / `INS_NEED_UNDO` | the undo-block pair; see `undo.rs` | `ctrl`, `key`, `chars`, `state`, `undo` |
+//! | `DONT_SYNC_UNDO` | `i_CTRL-G_U`: the next motion keeps the block | `motion`, `ctrl`, `key`, `state` |
+//! | `LAST_INSERT` / `LAST_INSERT_SKIP` | the text `.` repeats, and the command on its front | `lastins`, `undo` |
+//! | `NEW_INSERT_SKIP` | the length of that command, measured at entry | `state`, `undo` |
+//! | `DID_RESTART_EDIT` | `RESTART_EDIT` as it was when `edit()` was called | `state` |
+//! | `CAN_CINDENT` | whether the next key may trigger a 'cindent' re-indent | `bs`, `motion`, `ctrl`, `key`, `state`, `tab` |
+//! | `REVINS_ON` / `REVINS_CHARS` / `REVINS_LEGAL` / `REVINS_SCOL` | 'revins' and how far back it may go | `ctrl`, `state`, and every key that moves |
+//! | `O_LNUM` / `INS_AT_EOL` | where `i_CTRL-O` left the cursor | `state` |
+//! | `REPLACE_STACK` | what Replace mode has to put back; see `replace.rs` | `replace`, `undo` |
+//! | `PC_STATUS` / `PC_SCHAR` / `PC_ATTR` / `PC_ROW` / `PC_COL` | the cell `edit_putchar` wrote over | `redraw`, and the two keys that draw |
+//! | `COMPL_BUSY` | a completion is running, so `edit()` must not recurse | `state` |
 //!
 //! The children are seamed by **what a key does**: `state` and `key` are the
 //! machine and its dispatcher, `bs`/`tab`/`motion`/`ctrl`/`literal`/`chars`
@@ -142,8 +142,9 @@ use crate::option::vars::{
 };
 use crate::option::{can_bs, get_scrolloff_value, get_ve_flags, set_iminsert_global};
 use crate::options::{
-    kOptBoFlagBackspace, kOptBoFlagCopy, kOptBoFlagCtrlg, kOptBoFlagCursor, kOptBoFlagRegister,
-    kOptFdoFlagAll, kOptFdoFlagHor, kOptFdoFlagInsert, kOptVeFlagAll, kOptVeFlagOnemore,
+    OPT_BO_FLAG_BACKSPACE, OPT_BO_FLAG_COPY, OPT_BO_FLAG_CTRLG, OPT_BO_FLAG_CURSOR,
+    OPT_BO_FLAG_REGISTER, OPT_FDO_FLAG_ALL, OPT_FDO_FLAG_HOR, OPT_FDO_FLAG_INSERT, OPT_VE_FLAG_ALL,
+    OPT_VE_FLAG_ONEMORE,
 };
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
@@ -249,7 +250,7 @@ pub(crate) const NL_STR: &::core::ffi::CStr = c"\n";
 pub(crate) const ESC_STR: &::core::ffi::CStr = c"\x1B";
 pub(crate) const CTRL_V_STR: &::core::ffi::CStr = c"\x16";
 /// Whether `i_CTRL-G_U` is holding the undoable change open across the
-/// key being handled — upstream's `dont_sync_undo`.
+/// key being handled — upstream's `DONT_SYNC_UNDO`.
 ///
 /// A three-state latch, not a tri-state boolean: `Armed` is not "unknown",
 /// it is "the *next* real key is the covered one".
@@ -273,7 +274,7 @@ pub(crate) enum PutChar {
     Right,
     /// The left half of a double-width character was overwritten.
     Left,
-    /// A whole cell was overwritten and `pc_schar`/`pc_attr` hold it.
+    /// A whole cell was overwritten and `PC_SCHAR`/`PC_ATTR` hold it.
     Set,
 }
 state_record! {

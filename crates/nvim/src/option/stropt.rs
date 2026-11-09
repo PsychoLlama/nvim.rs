@@ -36,7 +36,7 @@ use crate::ascii::ascii_iswhite;
 use crate::mbyte::c_cluster_len;
 use crate::memory::XString;
 use crate::option::defs::OptIndex;
-use crate::options::kOptKeywordprg;
+use crate::options::OPT_KEYWORDPRG;
 use crate::os::libc::uint32_t;
 
 use super::{
@@ -327,7 +327,7 @@ pub(crate) fn stropt_get_newval(
     // A bare `:set keywordprg=` means ":help", not the empty string — but
     // only for the global value. `:setlocal keywordprg=` unsets the buffer's
     // copy, which is how it goes back to reading the global one.
-    let global_kp = opt_idx == kOptKeywordprg && varp == option_var(opt_idx);
+    let global_kp = opt_idx == OPT_KEYWORDPRG && varp == option_var(opt_idx);
     let bare = at(arg, 0) == 0 || at(arg, 0) == b' ';
     let (mut newval, taken) = if global_kp && bare {
         // The argument itself is left where it was.

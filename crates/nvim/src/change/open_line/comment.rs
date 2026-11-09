@@ -114,7 +114,7 @@ fn skip_flags(com: &[u8], p: &mut usize, require_blank: &mut bool) {
 ///
 /// The `x` flag means "closing this comment automatically is allowed": the
 /// answer says whether it was there, and the caller then records the last
-/// character of the end leader in `end_comment_pending`.
+/// character of the end leader in `END_COMMENT_PENDING`.
 fn skip_flags_noting_auto_end(com: &[u8], p: &mut usize) -> bool {
     let mut auto_end = false;
     while at(com, *p) != 0 && before(com, *p) != b':' {
@@ -249,7 +249,7 @@ fn plan_end(plan: &mut LeaderPlan, com: &[u8], mut p: usize, dir: c_int, saved_l
 /// remembered. `saved_line` is the old line, cut where text moves to the new
 /// one (`has_extra`).
 ///
-/// Sets `end_comment_pending`, the global that lets the *next* thing typed
+/// Sets `END_COMMENT_PENDING`, the global that lets the *next* thing typed
 /// close the comment automatically ('comments' `x`).
 pub(crate) fn plan_leader(
     dir: c_int,

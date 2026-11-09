@@ -36,7 +36,7 @@
 //! The four predicates at the top ([`aborting`] and friends) are what the
 //! rest of the editor asks: "did this fail in a way that should stop the
 //! script". They are deliberately delicate -- see [`exception`] for why
-//! `force_abort` is held off until the throw point.
+//! `FORCE_ABORT` is held off until the throw point.
 //!
 //! Original: `src/nvim/ex_eval.c`, Vim/Neovim, Vim license.
 
@@ -165,7 +165,7 @@ pub(crate) mod flag {
 const E_MULTIPLE_ELSE: &CStr = c"E583: Multiple :else";
 const E_MULTIPLE_FINALLY: &CStr = c"E607: Multiple :finally";
 
-/// Set while several errors appear in a row, delaying `force_abort` until
+/// Set while several errors appear in a row, delaying `FORCE_ABORT` until
 /// the failing command has returned. Aborting an expression evaluation
 /// produces no error messages of its own, but every parsing error inside it
 /// is still reported -- even under an active try conditional -- and this is
@@ -209,14 +209,14 @@ fn check_skip(cond: CondId) -> bool {
 /// Used by `:{range}call` to decide whether an aborted function that does
 /// not handle a range itself should be called again for the next line, and
 /// to cancel expression evaluation after a function call aborted. Note that
-/// the first `emsg` call temporarily resets `force_abort` until the throw
+/// the first `emsg` call temporarily resets `FORCE_ABORT` until the throw
 /// point is reached, so that during such a cancellation this keeps answering
-/// the same thing. `got_int` is also set by `interrupt()`.
+/// the same thing. `GOT_INT` is also set by `interrupt()`.
 pub(crate) fn aborting() -> bool {
     (DID_EMSG.get() != 0 && FORCE_ABORT.get()) || GOT_INT.get() || DID_THROW.get()
 }
 
-/// Put `force_abort` back, when it must be restored before the throw point
+/// Put `FORCE_ABORT` back, when it must be restored before the throw point
 /// for the error message has been reached. See [`aborting`].
 pub(crate) fn update_force_abort() {
     if CAUSE_ABORT.get() {
@@ -241,7 +241,7 @@ pub(crate) fn should_abort_err<T>(answer: Result<T, Failed>) -> bool {
 /// error -- parsing continues, to find finally clauses to execute, and some
 /// errors in skipped commands are still reported.
 pub(crate) fn aborted_in_try() -> bool {
-    // Only called after an error, where `force_abort` decides whether the
+    // Only called after an error, where `FORCE_ABORT` decides whether the
     // search for finally clauses is needed.
     FORCE_ABORT.get()
 }

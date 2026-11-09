@@ -50,7 +50,7 @@ use crate::r#move::validate_virtcol;
 use crate::option::defs::{OptIndex, OptionSetFlags, ShmFlag, StlSyntax};
 use crate::option::shortmess;
 use crate::option::vars::{P_ICONSTRING, P_TITLESTRING, p_icon, p_ru, p_title, p_titlelen};
-use crate::options::{kOptIconstring, kOptTitlestring};
+use crate::options::{OPT_ICONSTRING, OPT_TITLESTRING};
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::line_breakcheck;
 use crate::path::MAXPATHL;
@@ -437,14 +437,14 @@ pub fn maketitle() {
         }
         let title = if !titlestring.is_empty() {
             if STL_SYNTAX.get().has(StlSyntax::TITLE) {
-                build_stl(&titlestring, kOptTitlestring, maxlen)
+                build_stl(&titlestring, OPT_TITLESTRING, maxlen)
             } else {
                 titlestring.to_vec()
             }
         } else {
             // Format: "fname + (path) (1 of 2) - Nvim".
             let default = b"%t%( %M%)%( (%{expand('%:p:~:h')})%)%a - Nvim";
-            build_stl(default, kOptTitlestring, maxlen)
+            build_stl(default, OPT_TITLESTRING, maxlen)
         };
         mustset = value_change(Some(&title), &LASTTITLE);
     } else {
@@ -454,7 +454,7 @@ pub fn maketitle() {
     if p_icon() {
         let icon = if !iconstring.is_empty() {
             if STL_SYNTAX.get().has(StlSyntax::ICON) {
-                build_stl(&iconstring, kOptIconstring, 0)
+                build_stl(&iconstring, OPT_ICONSTRING, 0)
             } else {
                 iconstring.to_vec()
             }

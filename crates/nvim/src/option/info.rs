@@ -62,7 +62,7 @@ pub(crate) fn get_vimoption(
 ) -> Result<ApiDict, Error> {
     // SAFETY: the caller's pointers are live.
     let opt_idx: OptIndex = find_option_len(name.as_bytes());
-    if opt_idx == kOptInvalid {
+    if opt_idx == OPT_INVALID {
         // SAFETY: the keyset's name is NUL-terminated.
         let name = name.as_cstr();
         return Err(err_bad_value(c"option (not found)", name));
@@ -72,10 +72,10 @@ pub(crate) fn get_vimoption(
 
 /// Every option's info dictionary, keyed by full name.
 pub(crate) fn get_all_vimoptions() -> ApiDict {
-    // SAFETY: the arena is live, and it is asked for exactly `kOptCount`
+    // SAFETY: the arena is live, and it is asked for exactly `OPT_COUNT`
     // pairs before any is pushed.
-    let mut retval = DictBuilder::with_capacity(kOptCount as size_t);
-    for opt_idx in kOptAleph..kOptCount {
+    let mut retval = DictBuilder::with_capacity(OPT_COUNT as size_t);
+    for opt_idx in OPT_ALEPH..OPT_COUNT {
         let (scope, buf, win) = (OptionSetFlags::GLOBAL, Buf::current(), Win::current());
         let opt_dict = vimoption2dict(opt_idx, scope, buf, win);
         let key = get_option(opt_idx).fullname.to_bytes();

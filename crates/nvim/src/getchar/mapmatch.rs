@@ -607,7 +607,7 @@ pub(crate) fn handle_mapping(
     let tb_c1 = tb.byte(0);
 
     // Don't look for mappings when
-    // - `no_mapping` is set: mappings are disabled, e.g. for CTRL-V;
+    // - `NO_MAPPING` is set: mappings are disabled, e.g. for CTRL-V;
     // - this byte may not be remapped;
     // - 'paste' is set and we are in Insert or Cmdline mode;
     // - a hit-return prompt is up and CR or space was typed;
