@@ -370,7 +370,7 @@ pub fn write_reg_contents_lst(
             [line] => line,
             _ => {
                 emsg(gettext(
-                    e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines,
+                    E_SEARCH_PATTERN_AND_EXPRESSION_REGISTER_MAY_NOT_CONTAIN_TWO_OR_MORE_LINES,
                 ));
                 return;
             }

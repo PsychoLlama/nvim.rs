@@ -46,7 +46,7 @@ use crate::ex_docmd::file::do_exbuffer;
 use crate::ex_docmd::onecmd::fresh_exarg;
 use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::source::ex_errmsg;
-use crate::ex_docmd::state::cmdmod;
+use crate::ex_docmd::state::CMDMOD;
 use crate::ex_docmd::tags::ex_findpat;
 use crate::file_search::FileNameOpts;
 use crate::getchar::state::GOT_INT;
@@ -62,7 +62,7 @@ use crate::option::vars::p_pvh;
 use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
 use crate::popupmenu::pum_make_popup;
-use crate::tag::state::{g_do_tagpreview, postponed_split_flags, postponed_split_tab};
+use crate::tag::state::{G_DO_TAGPREVIEW, POSTPONED_SPLIT_FLAGS, POSTPONED_SPLIT_TAB};
 use crate::types::{CmdLine, CmdModFlags, ExArg};
 use crate::ui::state::{COLUMNS, ROWS};
 use crate::undo::buf_is_changed;
@@ -173,7 +173,7 @@ fn splitview(excmd: &mut ExArg) {
 
     // Splitting a quickfix window gives a plain window, not a second
     // quickfix one — unless `:tab` asked for a tab page.
-    if buf_is_quickfix(Some(Buf::current())) && cmdmod.with(|m| m.cmod_tab) == 0 {
+    if buf_is_quickfix(Some(Buf::current())) && CMDMOD.with(|m| m.cmod_tab) == 0 {
         if is(excmd, CmdIdx::split) {
             excmd.cmdidx = CmdIdx::new;
         }
@@ -235,8 +235,8 @@ fn find_file(arg: &[u8], count: c_int) -> Option<ThinCString> {
 /// Nothing happens at all when there was no room for a tab page: the file is
 /// not edited anywhere.
 fn open_tabpage(excmd: &mut ExArg, old_curwin: Win) {
-    let after = if cmdmod.with(|m| m.cmod_tab) != 0 {
-        cmdmod.with(|m| m.cmod_tab)
+    let after = if CMDMOD.with(|m| m.cmod_tab) != 0 {
+        CMDMOD.with(|m| m.cmod_tab)
     } else if excmd.addr_count == 0 {
         0
     } else {
@@ -464,7 +464,7 @@ fn resize(excmd: &mut ExArg) {
     // A non-number reads as zero, as `atol` does.
     let arg = excmd.line.arg;
     let mut n = number_as_int(getdigits_at(excmd.line.buffer_mut(), arg, false, 0).0);
-    if cmdmod.with(|m| m.cmod_split) & WSP_VERT != 0 {
+    if CMDMOD.with(|m| m.cmod_split) & WSP_VERT != 0 {
         if relative {
             n += wp.w_width;
         } else if n == 0 && empty {
@@ -536,15 +536,15 @@ fn wincmd(excmd: &mut ExArg) {
     } else if !excmd.skip {
         // A `:vertical`/`:tab` in front applies to the split the window
         // command is about to make.
-        postponed_split_flags.set(cmdmod.with(|m| m.cmod_split));
-        postponed_split_tab.set(cmdmod.with(|m| m.cmod_tab));
+        POSTPONED_SPLIT_FLAGS.set(CMDMOD.with(|m| m.cmod_split));
+        POSTPONED_SPLIT_TAB.set(CMDMOD.with(|m| m.cmod_tab));
         let (nchar, prenum) = (
             c_int::from(excmd.line.byte_at(excmd.line.arg)),
             count(excmd, 0),
         );
         do_window(nchar, prenum, xchar);
-        postponed_split_flags.set(0);
-        postponed_split_tab.set(0);
+        POSTPONED_SPLIT_FLAGS.set(0);
+        POSTPONED_SPLIT_TAB.set(0);
     }
 }
 
@@ -567,10 +567,10 @@ pub(crate) fn ex_popup(excmd: &mut ExArg) {
 
 /// `:psearch` — `:isearch` with the result shown in the preview window.
 pub(crate) fn ex_psearch(excmd: &mut ExArg) {
-    g_do_tagpreview.set(number_as_int(p_pvh()));
+    G_DO_TAGPREVIEW.set(number_as_int(p_pvh()));
     // SAFETY: the caller's promise -- a live command.
     ex_findpat(excmd);
-    g_do_tagpreview.set(0);
+    G_DO_TAGPREVIEW.set(0);
 }
 
 /// `:pedit`.
@@ -591,7 +591,7 @@ pub(crate) fn ex_pbuffer(excmd: &mut ExArg) {
 
 /// Open or reuse the preview window, and make it current.
 fn prepare_preview_window() {
-    g_do_tagpreview.set(number_as_int(p_pvh()));
+    G_DO_TAGPREVIEW.set(number_as_int(p_pvh()));
     prepare_tagpreview(true);
 }
 
@@ -608,5 +608,5 @@ fn back_to_current_window(curwin_save: WinId) {
         Win::current().redraw_later(UPD_VALID);
         enter(saved, true);
     }
-    g_do_tagpreview.set(0);
+    G_DO_TAGPREVIEW.set(0);
 }

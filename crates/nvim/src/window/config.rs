@@ -222,7 +222,7 @@ fn ext_win_position(window: Win, validate: bool) {
     let mut comp_row = float_as_int(row) - if south { wp.w_height_outer } else { 0 };
     let mut comp_col = float_as_int(col) - if east { wp.w_width_outer } else { 0 };
     // Don't cover the command line unless the float sits above the messages.
-    let above_ch = if wp.w_config.zindex < kZIndexMessages {
+    let above_ch = if wp.w_config.zindex < Z_INDEX_MESSAGES {
         number_as_int(p_ch())
     } else {
         0
@@ -434,13 +434,13 @@ pub fn check_split_disallowed(window: Win) -> Result<(), Failed> {
 }
 
 pub fn check_split_disallowed_err(window: Win) -> Result<(), Error> {
-    if split_disallowed.get() > 0 {
+    if SPLIT_DISALLOWED.get() > 0 {
         return Err(Error::exception(
             c"E242: Can't split a window while closing another",
         ));
     }
     if window.buffer().b_locked_split != 0 {
-        return Err(Error::exception(e_cannot_split_window_when_closing_buffer));
+        return Err(Error::exception(E_CANNOT_SPLIT_WINDOW_WHEN_CLOSING_BUFFER));
     }
     Ok(())
 }

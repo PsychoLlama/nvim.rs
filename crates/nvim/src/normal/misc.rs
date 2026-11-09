@@ -23,7 +23,7 @@ use crate::cursor::check_cursor_col;
 use crate::drawscreen::state::{CLEAR_CMDLINE, MODE_DISPLAYED, REDRAW_MODE};
 use crate::drawscreen::{UPD_CLEAR, UPD_INVERTED, redraw_curbuf_later, redraw_later, showmode};
 use crate::eval::gc::MAY_GARBAGE_COLLECT;
-use crate::ex_docmd::state::ex_normal_busy;
+use crate::ex_docmd::state::EX_NORMAL_BUSY;
 use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::compute_cmdrow;
 use crate::getchar::state::{GOT_INT, KEY_TYPED, TYPEBUF_WAS_EMPTY};
@@ -48,7 +48,7 @@ use crate::types::LineNr;
 use crate::ui::vim_beep;
 use crate::undo::any_buf_is_changed;
 use crate::window::do_window;
-use crate::winlayer::graph::{cmdwin_result, cmdwin_type};
+use crate::winlayer::graph::{CMDWIN_RESULT, CMDWIN_TYPE};
 use core::ffi::c_uint;
 
 /// A key the command loop must swallow without doing anything: it marks the
@@ -160,7 +160,7 @@ pub(crate) fn nv_clear(cmd_arg: &mut CmdArg) {
         return;
     }
     syn_stack_free_all(cur_syn_block());
-    // Upstream walks `firstwin` -- the *current* tab page's windows --
+    // Upstream walks `FIRSTWIN` -- the *current* tab page's windows --
     // even though the loop reads as if it might walk another one's.
     for wp in windows() {
         wp.syntax().b_syn_slow = false;
@@ -227,8 +227,8 @@ pub(crate) fn nv_normal(cmd_arg: &mut CmdArg) {
         CLEAR_CMDLINE.set(true);
     }
     RESTART_EDIT.set(Key::NUL);
-    if cmdwin_type.get() != 0 {
-        cmdwin_result.set(Key::CTRL_C);
+    if CMDWIN_TYPE.get() != 0 {
+        CMDWIN_RESULT.set(Key::CTRL_C);
     }
     if visual_active() {
         end_visual_mode();
@@ -246,7 +246,7 @@ pub(crate) fn nv_esc(cmd_arg: &mut CmdArg) {
         && cmd_arg.count0 == 0
         && cmd_arg.op().regname == 0;
     if cmd_arg.arg != 0 {
-        if RESTART_EDIT.get().is_nul() && cmdwin_type.get() == 0 && !visual_active() && no_reason {
+        if RESTART_EDIT.get().is_nul() && CMDWIN_TYPE.get() == 0 && !visual_active() && no_reason {
             let hint = if any_buf_is_changed() {
                 c"Type  :qa!  and press <Enter> to abandon all changes and exit Nvim"
             } else {
@@ -258,15 +258,15 @@ pub(crate) fn nv_esc(cmd_arg: &mut CmdArg) {
             REDRAW_MODE.set(true);
         }
         RESTART_EDIT.set(Key::NUL);
-        if cmdwin_type.get() != 0 {
-            cmdwin_result.set(Key::from(SpecialKey::Ignore));
+        if CMDWIN_TYPE.get() != 0 {
+            CMDWIN_RESULT.set(Key::from(SpecialKey::Ignore));
             GOT_INT.set(false);
             return;
         }
-    } else if cmdwin_type.get() != 0 && ex_normal_busy.get() != 0 && TYPEBUF_WAS_EMPTY.get() {
+    } else if CMDWIN_TYPE.get() != 0 && EX_NORMAL_BUSY.get() != 0 && TYPEBUF_WAS_EMPTY.get() {
         // `:normal` in the command-line window ran out of keys: leave the
         // window open rather than acting on the <Esc> it synthesised.
-        cmdwin_result.set(Key::from(SpecialKey::Ignore));
+        CMDWIN_RESULT.set(Key::from(SpecialKey::Ignore));
         return;
     }
     if visual_active() {

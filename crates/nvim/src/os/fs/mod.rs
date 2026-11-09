@@ -56,7 +56,7 @@ use crate::os::libc::FILE;
 use crate::os::libc::{ptrdiff_t, size_t};
 use crate::path::{append_path, gettail_dir, save_abs_path};
 use crate::smsg;
-use crate::startup::stdin_fd;
+use crate::startup::STDIN_FD;
 use crate::types::ApiString;
 use crate::types::OptInt;
 use crate::ui::ui_call_chdir;
@@ -666,7 +666,7 @@ pub fn dir_exists(path: &CStr) -> bool {
 /// The duplicate is close-on-exec, which upstream's `dup` was not: no child
 /// needs a second copy of the editor's stdin.
 pub(crate) fn stdin_file() -> Option<File> {
-    let saved = stdin_fd.get();
+    let saved = STDIN_FD.get();
     if saved > 0 {
         // SAFETY: the descriptor `--` saved, which this process owns and
         // hands over to the one reader that closes it.
@@ -683,7 +683,7 @@ pub(crate) fn stdin_file() -> Option<File> {
 /// or 0. Unlike [`stdin_file`]'s it is not a duplicate: closing it is
 /// what lets [`reopen_stdin_on_stderr`] put stderr in its place.
 fn stdin_read_fd() -> c_int {
-    stdin_fd.get().max(0)
+    STDIN_FD.get().max(0)
 }
 
 /// Standard input as the file `readfile` reads it from, owned: dropping it

@@ -17,7 +17,7 @@ use super::*;
 /// The Lua binding for `nvim_open_tabpage`: pop the arguments, call the API
 /// function, hand the result back.
 pub(super) fn convert_nvim_open_tabpage(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     let mut arg_3 = KeyDict_tabpage_config::default();

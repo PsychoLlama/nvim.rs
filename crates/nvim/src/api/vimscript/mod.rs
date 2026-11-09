@@ -12,7 +12,7 @@ use crate::api::private::helpers::api_set_sctx;
 use crate::eval::eval0;
 use crate::eval::typval::tv_clear;
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
+use crate::ex_eval::state::{DID_THROW, FORCE_ABORT, SUPPRESS_ERRTHROW};
 use crate::global_cell::GlobalCell;
 use crate::message::state::{DID_EMSG, MSG_COL, REDIR_OFF};
 use crate::message::{capture_finish, capture_start};

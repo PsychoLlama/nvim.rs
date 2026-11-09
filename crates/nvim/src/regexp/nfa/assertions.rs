@@ -14,7 +14,7 @@
 )]
 
 use super::program::NfaState;
-use crate::mark::kMarkBufLocal;
+use crate::mark::MARK_BUF_LOCAL;
 use crate::narrow::const_len_as_int;
 use crate::regexp::NfaOp;
 
@@ -109,7 +109,7 @@ pub(crate) fn at_mark(rex: Rex, state: &NfaState) -> bool {
     // `mark_get` computes a motion mark (`'{`, `'(`) on the spot.
     let fm = u8::try_from(state.val)
         .ok()
-        .and_then(|name| mark_get(rex.reg_buf(), Win::current(), kMarkBufLocal, name));
+        .and_then(|name| mark_get(rex.reg_buf(), Win::current(), MARK_BUF_LOCAL, name));
     // Looking a mark up can move the memline's buffer out from under
     // the match.
     if rex.multi() {

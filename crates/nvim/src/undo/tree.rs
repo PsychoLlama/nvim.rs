@@ -252,7 +252,7 @@ pub fn u_undoline() {
         ColNr::ZERO,
         ColNr::new(len_as_int(old_len)),
         ColNr::new(len_as_int(new_len)),
-        kExtmarkUndo,
+        EXTMARK_UNDO,
     );
     changed_bytes(lnum, ColNr::ZERO);
     let mut win = Win::current();

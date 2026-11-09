@@ -182,12 +182,12 @@ pub(crate) fn get_lambda_tv(
             if prof_def_func() {
                 func_do_profile(&func);
             }
-            if sandbox.get() != 0 {
+            if SANDBOX.get() != 0 {
                 flags |= FuncFlags::SANDBOX;
             }
             func.flags.set(flags);
             func.calls.set(0);
-            let mut sctx = current_sctx.get();
+            let mut sctx = CURRENT_SCTX.get();
             sctx.sc_lnum += (sourcing_lnum() - 1).get();
             func.script_ctx.set(sctx);
 
@@ -300,7 +300,7 @@ pub fn register_luafunc(luaref: LuaRef) -> ThinCString {
     });
     func.flags.set(FuncFlags::LUAREF);
     func.calls.set(0);
-    func.script_ctx.set(current_sctx.get());
+    func.script_ctx.set(CURRENT_SCTX.get());
     func.luaref.set(luaref);
 
     let name = func.name().clone();

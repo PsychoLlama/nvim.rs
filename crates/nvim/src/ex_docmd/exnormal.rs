@@ -30,7 +30,7 @@ use crate::ex_docmd::KS_SPECIAL;
 use crate::ex_docmd::modifier::expr_map_locked;
 use crate::getchar::{restore_typeahead, save_typeahead, stuff_empty, typeahead, vpeekc};
 
-use crate::ex_docmd::state::ex_normal_busy;
+use crate::ex_docmd::state::EX_NORMAL_BUSY;
 use crate::getchar::state::{GOT_INT, PENDING_END_REG_EXECUTING, REG_EXECUTING};
 use crate::keycodes::{CTRL_C, K_SPECIAL, KE_FILLER};
 use crate::message::E_SECURE;
@@ -104,7 +104,7 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
         emsg(gettext(E_SECURE));
         return;
     }
-    if crate::types::OptInt::from(ex_normal_busy.get()) >= p_mmd() {
+    if crate::types::OptInt::from(EX_NORMAL_BUSY.get()) >= p_mmd() {
         emsg(gettext(c"E192: Recursive use of :normal too deep"));
         return;
     }
@@ -116,7 +116,7 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
         .map(|keys| CString::new(keys).expect("a command line argument ends at its NUL"));
     let keys = escaped.as_deref().unwrap_or(arg);
     let remap = if excmd.forceit { Remap::No } else { Remap::Yes };
-    let busy = Depth::of(ex_normal_busy);
+    let busy = Depth::of(EX_NORMAL_BUSY);
     let mut save_state = SaveState::default();
     if save_current_state(&mut save_state) {
         loop {

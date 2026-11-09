@@ -25,7 +25,7 @@ use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::os::fs::os_strerror;
-use crate::startup::{stdin_isatty, ui_client_channel_id};
+use crate::startup::{STDIN_ISATTY, UI_CLIENT_CHANNEL_ID};
 use crate::tui::cursor::{
     CURSOR_STYLE_ENABLED, decode_cursor_entry, reset_style as cursor_reset_style,
     set_mode as cursor_set_mode,
@@ -115,7 +115,7 @@ pub fn tui_mode_info_set(tui: &mut TUIData, guicursor_enabled: bool, args: Array
 pub fn tui_mode_change(tui: &mut TUIData, _mode: ApiString, mode_idx: Integer) {
     // Reading from a pipe while writing to a tty leaves libuv's idea of the
     // terminal mode stale; setting it twice re-applies it.
-    if tui.out_isatty && tui.is_starting && !stdin_isatty.get() {
+    if tui.out_isatty && tui.is_starting && !STDIN_ISATTY.get() {
         for mode in [UV_TTY_MODE_NORMAL, UV_TTY_MODE_IO] {
             // SAFETY: the handle is the TUI's own and libuv owns its state.
             let ret = unsafe { uv_tty_set_mode(&raw mut tui.output_handle.tty, mode) };
@@ -272,12 +272,12 @@ pub fn tui_option_set(tui: &mut TUIData, name: ApiString, value: Object) {
         invalidate(tui, 0, height, 0, width);
         // The editor decides what colours to send by what the UI says it
         // wants, so tell it this changed.
-        if ui_client_channel_id.get() != 0 {
+        if UI_CLIENT_CHANNEL_ID.get() != 0 {
             let mut args = ArrayBuf::<2>::new();
             args.push(Object::literal("rgb"));
             args.push(Object::boolean(boolean()));
             rpc_send_event(
-                ui_client_channel_id.get(),
+                UI_CLIENT_CHANNEL_ID.get(),
                 c"nvim_ui_set_option",
                 args.array(),
             );
@@ -343,5 +343,5 @@ fn show_verbose_terminfo(tui: &TUIData) {
     args.push(Object::boolean(true));
     args.push(opts.object());
 
-    rpc_send_event(ui_client_channel_id.get(), c"nvim_echo", args.array());
+    rpc_send_event(UI_CLIENT_CHANNEL_ID.get(), c"nvim_echo", args.array());
 }

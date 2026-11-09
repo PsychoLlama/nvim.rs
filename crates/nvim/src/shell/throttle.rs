@@ -22,12 +22,11 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::event_queue::put_job_on_fast_events;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_SE, HLF_SO};
-use crate::mbyte::{cluster_len, utf8len_tab_zero};
+use crate::mbyte::{UTF8LEN_TAB_ZERO, cluster_len};
 use crate::message::{msg_ext_set_append, msg_ext_set_kind, msg_multiline, msg_putchar, msg_str};
 use crate::os::libc::uint64_t;
 use crate::os::libc::{STDERR_FILENO, STDOUT_FILENO};
@@ -44,11 +43,11 @@ const OUT_DATA_THRESHOLD: usize = 1024 * 10;
 const MAX_CHUNK_SIZE: usize = OUT_DATA_THRESHOLD / 2;
 
 /// Start of the current throttle.
-static started: GlobalCell<uint64_t> = GlobalCell::new(0);
+static STARTED: GlobalCell<uint64_t> = GlobalCell::new(0);
 /// Bytes seen since the last throttle.
-static received: GlobalCell<usize> = GlobalCell::new(0);
+static RECEIVED: GlobalCell<usize> = GlobalCell::new(0);
 /// "Pulse" count of the current throttle.
-static visit: GlobalCell<usize> = GlobalCell::new(0);
+static VISIT: GlobalCell<usize> = GlobalCell::new(0);
 
 /// Track output for the running shell command, and pulse a `...` while output
 /// is being skipped.
@@ -61,43 +60,43 @@ static visit: GlobalCell<usize> = GlobalCell::new(0);
 /// Answers whether this chunk should be skipped.
 pub(crate) fn out_data_decide_throttle(size: usize) -> bool {
     if size == 0 {
-        let previous_decision = visit.get() > 0;
-        started.set(0);
-        received.set(0);
-        visit.set(0);
+        let previous_decision = VISIT.get() > 0;
+        STARTED.set(0);
+        RECEIVED.set(0);
+        VISIT.set(0);
         return previous_decision;
     }
 
-    received.set(received.get() + size);
-    if received.get() < OUT_DATA_THRESHOLD
+    RECEIVED.set(RECEIVED.get() + size);
+    if RECEIVED.get() < OUT_DATA_THRESHOLD
         // Show at least the first chunk, however big it is.
-        || (started.get() == 0 && received.get() < size + 1000)
+        || (STARTED.get() == 0 && RECEIVED.get() < size + 1000)
     {
         return false;
-    } else if visit.get() == 0 {
-        started.set(os_hrtime());
+    } else if VISIT.get() == 0 {
+        STARTED.set(os_hrtime());
     } else {
-        let since = os_hrtime() - started.get();
-        if since < visit.get() as uint64_t * (NS_1_SECOND / 10) {
+        let since = os_hrtime() - STARTED.get();
+        if since < VISIT.get() as uint64_t * (NS_1_SECOND / 10) {
             return true;
         }
         if since > 3 * NS_1_SECOND {
-            received.set(0);
-            visit.set(0);
+            RECEIVED.set(0);
+            VISIT.set(0);
             return false;
         }
     }
 
-    visit.set(visit.get() + 1);
+    VISIT.set(VISIT.get() + 1);
     // Pulse "..." at the bottom of the screen.
-    let tick = visit.get() % 4;
+    let tick = VISIT.get() % 4;
     let pulse = match tick {
         0 => c"   ",
         1 => c".  ",
         2 => c".. ",
         _ => c"...",
     };
-    if visit.get() == 1 {
+    if VISIT.get() == 1 {
         msg_str(c"...\n");
     }
     // Put the cursor back at the start of the line either side.
@@ -110,8 +109,8 @@ pub(crate) fn out_data_decide_throttle(size: usize) -> bool {
 
 /// The tail of the output that was skipped, kept so the *end* of a throttled
 /// command is still shown.
-static last_skipped: GlobalCell<[u8; MAX_CHUNK_SIZE]> = GlobalCell::new([0; MAX_CHUNK_SIZE]);
-static last_skipped_len: GlobalCell<usize> = GlobalCell::new(0);
+static LAST_SKIPPED: GlobalCell<[u8; MAX_CHUNK_SIZE]> = GlobalCell::new([0; MAX_CHUNK_SIZE]);
+static LAST_SKIPPED_LEN: GlobalCell<usize> = GlobalCell::new(0);
 
 /// What [`out_data_ring`] is being asked to do. Upstream spells all three as
 /// one function taking a NULL pointer and a magic size.
@@ -128,10 +127,10 @@ pub(crate) enum Ring<'a> {
 /// The quasi-ring-buffer of skipped output.
 pub(crate) fn out_data_ring(what: Ring) {
     match what {
-        Ring::Reset => last_skipped_len.set(0),
+        Ring::Reset => LAST_SKIPPED_LEN.set(0),
         Ring::Print => {
-            let len = last_skipped_len.get();
-            last_skipped.with(|saved| {
+            let len = LAST_SKIPPED_LEN.get();
+            LAST_SKIPPED.with(|saved| {
                 let mut count = len;
                 out_data_append_to_screen(&saved[..len], &mut count, STDOUT_FILENO, true);
             });
@@ -139,19 +138,19 @@ pub(crate) fn out_data_ring(what: Ring) {
         Ring::Save(output) if output.len() >= MAX_CHUNK_SIZE => {
             // Only the tail fits, so only the tail is kept.
             let start = output.len() - MAX_CHUNK_SIZE;
-            last_skipped.with_mut(|saved| saved.copy_from_slice(&output[start..]));
-            last_skipped_len.set(MAX_CHUNK_SIZE);
+            LAST_SKIPPED.with_mut(|saved| saved.copy_from_slice(&output[start..]));
+            LAST_SKIPPED_LEN.set(MAX_CHUNK_SIZE);
         }
         Ring::Save(output) if !output.is_empty() => {
-            let len = last_skipped_len.get();
+            let len = LAST_SKIPPED_LEN.get();
             // How much of the old data still fits in front of the new.
             let keep_len = len.min(MAX_CHUNK_SIZE - output.len());
             let keep_start = len - keep_len;
-            last_skipped.with_mut(|saved| {
+            LAST_SKIPPED.with_mut(|saved| {
                 saved.copy_within(keep_start..keep_start + keep_len, 0);
                 saved[keep_len..keep_len + output.len()].copy_from_slice(output);
             });
-            last_skipped_len.set(keep_len + output.len());
+            LAST_SKIPPED_LEN.set(keep_len + output.len());
         }
         Ring::Save(_) => {}
     }
@@ -186,7 +185,7 @@ pub(crate) fn out_data_append_to_screen(output: &[u8], count: &mut usize, fd: c_
         } else {
             cluster_len(&output[at..*count])
         };
-        if !eof && step == 1 && utf8len_tab_zero[output[at] as usize] as usize > *count - at {
+        if !eof && step == 1 && UTF8LEN_TAB_ZERO[output[at] as usize] as usize > *count - at {
             // An incomplete sequence at the end: leave it for the next chunk.
             *count = at;
             break;

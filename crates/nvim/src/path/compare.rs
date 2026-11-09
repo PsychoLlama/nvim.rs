@@ -31,9 +31,9 @@ use crate::path::MAXPATHL;
 /// Compare two file names, by identity where the file system can say and by
 /// name where it cannot.
 ///
-/// Answers [`kEqualFiles`], [`kDifferentFiles`], [`kOneFileMissing`],
-/// [`kBothFilesMissing`], or — when neither file exists, `checkname` is set
-/// and their full paths agree — [`kEqualFileNames`]. With `expandenv`, `s1`
+/// Answers [`EQUAL_FILES`], [`DIFFERENT_FILES`], [`ONE_FILE_MISSING`],
+/// [`BOTH_FILES_MISSING`], or — when neither file exists, `checkname` is set
+/// and their full paths agree — [`EQUAL_FILE_NAMES`]. With `expandenv`, `s1`
 /// has its environment variables expanded first.
 pub fn path_full_compare(s1: &CStr, s2: &CStr, checkname: bool, expandenv: bool) -> FileComparison {
     let expanded1 = if expandenv {
@@ -55,14 +55,14 @@ pub fn path_full_compare(s1: &CStr, s2: &CStr, checkname: bool, expandenv: bool)
                     vim_full_name(name, MAXPATHL as usize, false).unwrap_or_else(|name| name)
                 };
                 if path_fnamecmp(&full(&expanded1), &full(s2)) == 0 {
-                    return kEqualFileNames;
+                    return EQUAL_FILE_NAMES;
                 }
             }
-            kBothFilesMissing
+            BOTH_FILES_MISSING
         }
-        (Some(id1), Some(id2)) if id1 == id2 => kEqualFiles,
-        (Some(_), Some(_)) => kDifferentFiles,
-        _ => kOneFileMissing,
+        (Some(id1), Some(id2)) if id1 == id2 => EQUAL_FILES,
+        (Some(_), Some(_)) => DIFFERENT_FILES,
+        _ => ONE_FILE_MISSING,
     }
 }
 

@@ -13,8 +13,8 @@ use crate::api::private::helpers::{dict_set_var, scope_vars};
 use crate::autocmd::apply_autocmds;
 use crate::autocmd::defs::AutoEvent;
 use crate::buffer::buf_close_terminal;
+use crate::channel::defs::{CHANNEL_STDIN_NULL, CHANNEL_STDIN_PIPE};
 use crate::channel::defs::{CallbackReader, ChannelStdinMode, JobProc};
-use crate::channel::defs::{kChannelStdinNull, kChannelStdinPipe};
 use crate::channel::open::JobOptions;
 use crate::channel::{
     ChannelRef, channel_close, channel_create_event, channel_decref, channel_exists,
@@ -413,7 +413,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut term = false;
     let mut clear_env = false;
     let mut overlapped = false;
-    let mut stdin_mode: ChannelStdinMode = kChannelStdinPipe;
+    let mut stdin_mode: ChannelStdinMode = CHANNEL_STDIN_PIPE;
     let mut on_stdout = NO_READER;
     let mut on_stderr = NO_READER;
     let mut on_exit = NO_CALLBACK;
@@ -437,7 +437,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // exact comparison.
         if let Some(s) = numbuf.dict_string(job_opts, b"stdin") {
             if s == c"null" {
-                stdin_mode = kChannelStdinNull;
+                stdin_mode = CHANNEL_STDIN_NULL;
             } else if s != c"pipe" {
                 let (arg0, s) = (msg_cstr(c"stdin"), msg_cstr(s));
                 semsg!("E475: Invalid value for argument {arg0}: {s}");
@@ -518,7 +518,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
         overlapped = false;
         detach = false;
-        stdin_mode = kChannelStdinPipe;
+        stdin_mode = CHANNEL_STDIN_PIPE;
         if width == 0 {
             width = number_as_u16(i64::from(
                 (Win::current().w_view_width - Win::current().col_off()).max(0),

@@ -41,12 +41,12 @@ use crate::ex_docmd::{
 use crate::fold::{fold_create, fold_manual_allowed, op_fold_range};
 use crate::getchar::{beep_flush, stuff_empty, typeahead, vpeekc};
 
-use crate::ex_docmd::state::{ex_no_reprint, exec_from_reg};
+use crate::ex_docmd::state::{EX_NO_REPRINT, EXEC_FROM_REG};
 use crate::getchar::state::GOT_INT;
 use crate::lua::executor::ex_lua;
 use crate::mark::{checkpcmark, setmark, setpcmark};
 use crate::message::{E_ARGREQ, E_EMPTY_BUFFER, E_INVRANGE, E_UNDOBANG_CANNOT_REDO_OR_MOVE_BRANCH};
-use crate::search::state::magic_overruled;
+use crate::search::state::MAGIC_OVERRULED;
 use crate::state::mode::{DID_SYNCBIND, VIRTUAL_OP};
 
 use crate::memline::{goto_byte, ml_clearmarked, ml_setmarked};
@@ -99,7 +99,7 @@ pub(crate) fn ex_print(excmd: &mut ExArg) {
     }
     // Ex mode has just printed the line itself; it must not print it
     // again.
-    ex_no_reprint.set(true);
+    EX_NO_REPRINT.set(true);
 }
 
 /// `:goto` — the range is a byte offset, not a line number.
@@ -332,7 +332,7 @@ pub fn ex_may_print(excmd: &mut ExArg) {
             excmd.flags & EXFLAG_LIST != 0,
             true,
         );
-        ex_no_reprint.set(true);
+        EX_NO_REPRINT.set(true);
     }
 }
 
@@ -341,7 +341,7 @@ pub fn ex_may_print(excmd: &mut ExArg) {
 pub(crate) fn ex_submagic(excmd: &mut ExArg) {
     let saved = force_magic(excmd);
     ex_substitute(excmd);
-    magic_overruled.set(saved);
+    MAGIC_OVERRULED.set(saved);
 }
 
 /// The 'inccommand' preview of the same.
@@ -352,14 +352,14 @@ pub(crate) fn ex_submagic_preview(
 ) -> c_int {
     let saved = force_magic(excmd);
     let retv = ex_substitute_preview(excmd, cmdpreview_ns, cmdpreview_bufnr);
-    magic_overruled.set(saved);
+    MAGIC_OVERRULED.set(saved);
     retv
 }
 
 /// Override 'magic' for this command, answering what it was.
 fn force_magic(excmd: &mut ExArg) -> OptMagic {
-    let saved = magic_overruled.get();
-    magic_overruled.set(if excmd.cmdidx == CmdIdx::smagic {
+    let saved = MAGIC_OVERRULED.get();
+    MAGIC_OVERRULED.set(if excmd.cmdidx == CmdIdx::smagic {
         OPTION_MAGIC_ON
     } else {
         OPTION_MAGIC_OFF
@@ -413,13 +413,13 @@ pub(crate) fn ex_at(excmd: &mut ExArg) {
         beep_flush();
         return;
     }
-    let save_efr = exec_from_reg.get();
-    exec_from_reg.set(true);
+    let save_efr = EXEC_FROM_REG.get();
+    EXEC_FROM_REG.set(true);
     while !stuff_empty() || typeahead().len() > prev_len {
         let flags = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE;
         let _ = do_cmdline(None, Some(&mut LineSource::Typed), flags);
     }
-    exec_from_reg.set(save_efr);
+    EXEC_FROM_REG.set(save_efr);
 }
 
 /// `:undo`, and `:undo N` which goes to a numbered state.

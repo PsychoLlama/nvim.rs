@@ -70,7 +70,7 @@ use crate::message_fmt::{emsg_text, msg_bytes, msg_cstr};
 use crate::option::vars::p_cpo;
 use crate::os::libc::int64_t;
 use crate::runtime::sourcing_lnum;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::semsg;
 use crate::tr;
 use crate::types::CmdIdx;
@@ -364,7 +364,7 @@ impl Drop for Definition {
 impl Definition {
     /// The entry this definition makes, the references moving into it.
     fn into_command(mut self, name: Rc<CStr>, replacement: Rc<CStr>) -> UserCmd {
-        let mut script_ctx = current_sctx.get();
+        let mut script_ctx = CURRENT_SCTX.get();
         script_ctx.sc_lnum += sourcing_lnum().get();
         nlua_set_sctx(&mut script_ctx);
         UserCmd {
@@ -459,8 +459,8 @@ pub(crate) fn uc_add_command(
         // sourcing (`sc_seq` differs), but two different scripts need the
         // bang.
         && !force
-        && (existing.sc_sid != current_sctx.get().sc_sid
-            || existing.sc_seq == current_sctx.get().sc_seq)
+        && (existing.sc_sid != CURRENT_SCTX.get().sc_sid
+            || existing.sc_seq == CURRENT_SCTX.get().sc_seq)
     {
         return Err(UserCmdError::Exists(text.into()));
     }

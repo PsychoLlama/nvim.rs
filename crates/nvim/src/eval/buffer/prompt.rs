@@ -15,7 +15,7 @@ use super::*;
 use crate::edit::{buf_prompt_text_owned, set_buf_prompt_text};
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, list_items, list_len, tv_copy};
-use crate::extmark::kExtmarkNoUndo;
+use crate::extmark::EXTMARK_NO_UNDO;
 use crate::memline::{Lines, ml_replace_buf_text};
 use crate::memory::ThinCString;
 use crate::narrow::len_as_int;
@@ -222,7 +222,7 @@ fn rewrite_prompt_line(mut buffer: Buf, new_prompt: &[u8]) {
             ColNr::ZERO,
             ColNr::new(old_len),
             ColNr::new(new_prompt_len),
-            kExtmarkNoUndo,
+            EXTMARK_NO_UNDO,
         );
     };
     if intact {

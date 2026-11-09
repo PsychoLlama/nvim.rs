@@ -19,7 +19,7 @@ use super::*;
 use crate::grid::{SCHAR_BUF_SIZE, default_grid_ref, default_gridview, schar_text};
 use crate::narrow::len_as_integer;
 use crate::narrow::number_as_int;
-use crate::window::kZIndexMessages;
+use crate::window::Z_INDEX_MESSAGES;
 use crate::winlayer::Win;
 use core::ffi::{c_int, c_uint};
 
@@ -108,7 +108,7 @@ pub fn msg_grid_validate() {
     {
         // Force a valid screen size.
         grid_alloc(&mut grid, ROWS.get(), COLUMNS.get(), false, true);
-        grid.zindex = kZIndexMessages;
+        grid.zindex = Z_INDEX_MESSAGES;
         grid.track_dirty_cols(ROWS.get());
 
         // Tell the compositor to put the grid at the bottom, or at the top

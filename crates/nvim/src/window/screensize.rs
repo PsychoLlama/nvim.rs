@@ -19,7 +19,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::autocmd::defs::AutoEvent;
 use crate::memory::XString;
@@ -42,7 +41,7 @@ use crate::optionstr::OptStringRef;
 use crate::os::libc::ptrdiff_t;
 use crate::types::{LineNr, OptInt, SaveVEvent, TypVal, VarNumber};
 use crate::ui::state::{COLUMNS, ROWS};
-use crate::window::state::skip_win_fix_scroll;
+use crate::window::state::SKIP_WIN_FIX_SCROLL;
 use crate::winfloat::win_reconfig_floats;
 use crate::winlayer::{Win, windows};
 
@@ -57,20 +56,20 @@ fn frame_rows() -> c_int {
 }
 
 pub fn win_new_screensize() {
-    static old_Rows: GlobalCell<c_int> = GlobalCell::new(0);
-    static old_Columns: GlobalCell<c_int> = GlobalCell::new(0);
-    if old_Rows.get() != ROWS.get() {
+    static OLD_ROWS: GlobalCell<c_int> = GlobalCell::new(0);
+    static OLD_COLUMNS: GlobalCell<c_int> = GlobalCell::new(0);
+    if OLD_ROWS.get() != ROWS.get() {
         // If 'window' uses the whole screen, keep it using the whole screen.
-        if p_window() == OptInt::from(old_Rows.get() - 1)
-            || (old_Rows.get() == 0 && !option_was_set(kOptWindow))
+        if p_window() == OptInt::from(OLD_ROWS.get() - 1)
+            || (OLD_ROWS.get() == 0 && !option_was_set(kOptWindow))
         {
             P_WINDOW.set(OptInt::from(ROWS.get() - 1));
         }
-        old_Rows.set(ROWS.get());
+        OLD_ROWS.set(ROWS.get());
         new_screen_rows();
     }
-    if old_Columns.get() != COLUMNS.get() {
-        old_Columns.set(COLUMNS.get());
+    if OLD_COLUMNS.get() != COLUMNS.get() {
+        OLD_COLUMNS.set(COLUMNS.get());
         new_screen_cols();
     }
 }
@@ -96,7 +95,7 @@ pub(crate) fn new_screen_rows() {
     win_reconfig_floats();
     compute_cmdrow();
     TabPage::current().tp_ch_used = p_ch();
-    if !skip_win_fix_scroll.get() {
+    if !SKIP_WIN_FIX_SCROLL.get() {
         fix_scroll(true);
     }
 }
@@ -142,8 +141,8 @@ fn snapshot_window(window: &mut Win) {
 }
 
 pub fn may_make_initial_scroll_size_snapshot() {
-    if !did_initial_scroll_size_snapshot.get() {
-        did_initial_scroll_size_snapshot.set(true);
+    if !DID_INITIAL_SCROLL_SIZE_SNAPSHOT.get() {
+        DID_INITIAL_SCROLL_SIZE_SNAPSHOT.set(true);
         snapshot_windows_scroll_size();
     }
 }
@@ -294,7 +293,7 @@ pub fn may_trigger_win_scrolled_resized() {
         has_event(AutoEvent::WinResized),
         has_event(AutoEvent::WinScrolled),
     );
-    if RECURSIVE.get() || !(do_scroll || do_resize) || !did_initial_scroll_size_snapshot.get() {
+    if RECURSIVE.get() || !(do_scroll || do_resize) || !DID_INITIAL_SCROLL_SIZE_SNAPSHOT.get() {
         return;
     }
 

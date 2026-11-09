@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The constants here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::arglist::expand_arglist;
 use crate::charset::getdigits_int_at;
@@ -31,8 +30,8 @@ use crate::path::{FileComparison, MAXPATHL};
 use crate::path::{path_tail, tail_index};
 use crate::runtime::defs::EStackType;
 use crate::spell::SpellBuf;
+use crate::spell::{DID_SET_SPELLTAB, SPELLTAB, spell_enc};
 use crate::spell::{RepItem, SpellAddType, SpellTab};
-use crate::spell::{did_set_spelltab, spell_enc, spelltab};
 use crate::strings::has_bytes;
 use crate::strings::has_char;
 use crate::tr;
@@ -71,7 +70,7 @@ use wordtree::{
 use write::write_vim_spell;
 pub const ETYPE_SPELL: EStackType = 9;
 pub const XDG_DATA_HOME: XDGVarType = 1;
-pub const kEqualFiles: FileComparison = 1;
+pub const EQUAL_FILES: FileComparison = 1;
 pub use crate::spell::MAXWLEN;
 pub const MAXREGIONS: ::core::ffi::c_uint = 8;
 pub const WFP_COMPFORBID: ::core::ffi::c_uint = 16;
@@ -341,9 +340,9 @@ pub const VIMSPELLMAGICL: usize =
 pub const VIMSPELLVERSION: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 pub const SNF_REQUIRED: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const COMPOUND_MAX_LEN: ::core::ffi::c_int = 100000 as ::core::ffi::c_int;
-static e_spell_trunc: &::core::ffi::CStr = c"E758: Truncated spell file";
-static e_duplicate_char_in_map_entry: &::core::ffi::CStr = c"E783: Duplicate char in MAP entry";
-static e_illegal_character_in_word: &::core::ffi::CStr = c"E1280: Illegal character in word";
+static E_SPELL_TRUNC: &::core::ffi::CStr = c"E758: Truncated spell file";
+static E_DUPLICATE_CHAR_IN_MAP_ENTRY: &::core::ffi::CStr = c"E783: Duplicate char in MAP entry";
+static E_ILLEGAL_CHARACTER_IN_WORD: &::core::ffi::CStr = c"E1280: Illegal character in word";
 pub const MAXLINELEN: ::core::ffi::c_int = 500 as ::core::ffi::c_int;
 pub const AFT_CHAR: ::core::ffi::c_int = 0;
 pub const AFT_LONG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -822,12 +821,12 @@ pub fn ex_spell(excmd: &mut ExArg) {
 /// The table is global, so two spell files that disagree about which bytes
 /// are word characters cannot be loaded together.
 fn set_spell_finish(new_st: &SpellTab) -> Result<(), Failed> {
-    if !did_set_spelltab.get() {
-        spelltab.set(*new_st);
-        did_set_spelltab.set(true);
+    if !DID_SET_SPELLTAB.get() {
+        SPELLTAB.set(*new_st);
+        DID_SET_SPELLTAB.set(true);
         return Ok(());
     }
-    let agrees = spelltab.with(|st| {
+    let agrees = SPELLTAB.with(|st| {
         (0..256).all(|i| {
             st.st_isw[i] == new_st.st_isw[i]
                 && st.st_isu[i] == new_st.st_isu[i]

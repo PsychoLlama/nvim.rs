@@ -278,7 +278,7 @@ pub fn apply_autocmds_group(
         }
         // While autocommands are running, a new one only fires when it
         // was asked for explicitly (`++nested`).
-        if autocmd_busy.get() && !(force || autocmd_nested.get()) {
+        if AUTOCMD_BUSY.get() && !(force || AUTOCMD_NESTED.get()) {
             break 'bypass;
         }
         // An error, interrupt or uncaught exception is pending.
@@ -286,7 +286,7 @@ pub fn apply_autocmds_group(
             break 'bypass;
         }
         // FileChangedShell never nests: it would loop forever.
-        if filechangeshell_busy.get()
+        if FILECHANGESHELL_BUSY.get()
             && (event == AutoEvent::FileChangedShell || event == AutoEvent::FileChangedShellPost)
         {
             break 'bypass;
@@ -300,14 +300,14 @@ pub fn apply_autocmds_group(
 
         // Nesting is allowed but bounded: it is easy to write an
         // endless loop.
-        if autocmd_nesting.get() == 10 {
+        if AUTOCMD_NESTING.get() == 10 {
             emsg(gettext(E_AUTOCOMMAND_NESTING_TOO_DEEP));
             break 'bypass;
         }
         // `:all` and `:ball` turn these off while they shuffle windows.
-        if (autocmd_no_enter.get() != 0
+        if (AUTOCMD_NO_ENTER.get() != 0
             && (event == AutoEvent::WinEnter || event == AutoEvent::BufEnter))
-            || (autocmd_no_leave.get() != 0
+            || (AUTOCMD_NO_LEAVE.get() != 0
                 && (event == AutoEvent::WinLeave || event == AutoEvent::BufLeave))
         {
             break 'bypass;
@@ -315,12 +315,12 @@ pub fn apply_autocmds_group(
 
         // Save the autocmd_* variables and what we know about the
         // current buffer.
-        let save_autocmd_fname = autocmd_fname.take();
-        let save_autocmd_fname_full = autocmd_fname_full.get();
-        let save_autocmd_bufnr = autocmd_bufnr.get();
-        let save_autocmd_match = autocmd_match.take();
-        let save_autocmd_busy = autocmd_busy.get();
-        let save_autocmd_nested = autocmd_nested.get();
+        let save_autocmd_fname = AUTOCMD_FNAME.take();
+        let save_autocmd_fname_full = AUTOCMD_FNAME_FULL.get();
+        let save_autocmd_bufnr = AUTOCMD_BUFNR.get();
+        let save_autocmd_match = AUTOCMD_MATCH.take();
+        let save_autocmd_busy = AUTOCMD_BUSY.get();
+        let save_autocmd_nested = AUTOCMD_NESTED.get();
         let save_changed = Buf::current().b_changed != 0;
         let old_curbuf = Buf::current_raw();
 
@@ -344,12 +344,12 @@ pub fn apply_autocmds_group(
         if let Some(afile) = &afile_orig {
             let mut copy = afile.clone();
             copy.truncate(MAXPATHL as usize);
-            autocmd_fname.set(Some(copy));
+            AUTOCMD_FNAME.set(Some(copy));
         }
-        autocmd_fname_full.set(false);
+        AUTOCMD_FNAME_FULL.set(false);
 
         // `<abuf>`.
-        autocmd_bufnr.set(buffer.map_or(0, |b| b.handle.get()));
+        AUTOCMD_BUFNR.set(buffer.map_or(0, |b| b.handle.get()));
 
         // The name to match the patterns against.  Always a full path,
         // in case a pattern has `allow_dirs` set.
@@ -367,7 +367,7 @@ pub fn apply_autocmds_group(
             Some(name) => {
                 let full = if afile_is_not_expanded(event) {
                     // Don't expand it later either.
-                    autocmd_fname_full.set(true);
+                    AUTOCMD_FNAME_FULL.set(true);
                     name.clone()
                 } else {
                     full_name_save(name.as_cstr(), false)
@@ -378,7 +378,7 @@ pub fn apply_autocmds_group(
         };
 
         // `<amatch>`.
-        autocmd_match.set(Some(fname.clone()));
+        AUTOCMD_MATCH.set(Some(fname.clone()));
 
         // Don't redraw while running autocommands.
         let redraw_off = Suppress::redraw();
@@ -395,7 +395,7 @@ pub fn apply_autocmds_group(
         let sctx = Script::saved();
 
         let mut wait_time: ProfTime = 0;
-        if do_profiling.get() == PROF_YES {
+        if DO_PROFILING.get() == PROF_YES {
             // Doesn't count for the caller itself.
             wait_time = prof_child_enter();
         }
@@ -405,7 +405,7 @@ pub fn apply_autocmds_group(
 
         // Only the outermost firing saves the search patterns and the
         // redo buffer.
-        if !autocmd_busy.get() {
+        if !AUTOCMD_BUSY.get() {
             save_search_patterns();
             if !ins_compl_active() {
                 save_redobuff(&mut save_redo);
@@ -415,9 +415,9 @@ pub fn apply_autocmds_group(
         }
 
         // Some commands need to know autocommands are running.
-        autocmd_busy.set(true);
-        filechangeshell_busy.set(event == AutoEvent::FileChangedShell);
-        let nested = Depth::of(autocmd_nesting);
+        AUTOCMD_BUSY.set(true);
+        FILECHANGESHELL_BUSY.set(event == AutoEvent::FileChangedShell);
+        let nested = Depth::of(AUTOCMD_NESTING);
 
         // Remembered for `did_filetype()` and `:setfiletype`, but only once
         // 'filetype' is set: a FileType for an empty one (`:set ft=`) must
@@ -445,7 +445,7 @@ pub fn apply_autocmds_group(
             event,
             // `getnextac` fills this in from the autocommand it runs.
             script_ctx: ScriptCtx::NONE,
-            arg_bufnr: autocmd_bufnr.get(),
+            arg_bufnr: AUTOCMD_BUFNR.get(),
             walk: None,
         };
         aucmd_next(&mut patcmd);
@@ -453,7 +453,7 @@ pub fn apply_autocmds_group(
         // Something matched: run the autocommands.
         if patcmd.lastpat.is_some() {
             let bufnr = patcmd.arg_bufnr;
-            let walk = active_walk_bufnrs.with_mut(|nrs| {
+            let walk = ACTIVE_WALK_BUFNRS.with_mut(|nrs| {
                 nrs.push(bufnr);
                 nrs.len() - 1
             });
@@ -474,7 +474,7 @@ pub fn apply_autocmds_group(
 
             // Make the cursor and topline valid.  The outermost firing
             // saves them for `reset_lnums`; a nested one only corrects.
-            if autocmd_nesting.get() == 1 {
+            if AUTOCMD_NESTING.get() == 1 {
                 check_lnums(true);
             } else {
                 check_lnums_nested(true);
@@ -494,7 +494,7 @@ pub fn apply_autocmds_group(
             DID_EMSG.set(DID_EMSG.get() + save_did_emsg);
             set_pressedreturn(save_ex_pressedreturn);
 
-            if autocmd_nesting.get() == 1 {
+            if AUTOCMD_NESTING.get() == 1 {
                 // Restore the cursor and topline unless they changed.
                 reset_lnums();
             }
@@ -506,22 +506,22 @@ pub fn apply_autocmds_group(
             // The walk is over. A nested one has popped its own number
             // already; anything above this one's would be a walk that did
             // not, and is gone with it.
-            active_walk_bufnrs.with_mut(|nrs| nrs.truncate(walk));
+            ACTIVE_WALK_BUFNRS.with_mut(|nrs| nrs.truncate(walk));
         }
 
         drop(redraw_off);
-        autocmd_busy.set(save_autocmd_busy);
-        filechangeshell_busy.set(false);
-        autocmd_nested.set(save_autocmd_nested);
+        AUTOCMD_BUSY.set(save_autocmd_busy);
+        FILECHANGESHELL_BUSY.set(false);
+        AUTOCMD_NESTED.set(save_autocmd_nested);
         // The frame takes the name `aucmd_next` left there with it.
         estack_pop();
-        autocmd_fname.set(save_autocmd_fname);
-        autocmd_fname_full.set(save_autocmd_fname_full);
-        autocmd_bufnr.set(save_autocmd_bufnr);
-        autocmd_match.set(save_autocmd_match);
+        AUTOCMD_FNAME.set(save_autocmd_fname);
+        AUTOCMD_FNAME_FULL.set(save_autocmd_fname_full);
+        AUTOCMD_BUFNR.set(save_autocmd_bufnr);
+        AUTOCMD_MATCH.set(save_autocmd_match);
         drop(sctx);
         drop(call_stack_aside);
-        if do_profiling.get() == PROF_YES {
+        if DO_PROFILING.get() == PROF_YES {
             prof_child_exit(wait_time);
         }
         KEY_TYPED.set(save_key_typed);
@@ -531,7 +531,7 @@ pub fn apply_autocmds_group(
 
         // The outermost firing puts the search patterns and the redo
         // buffer back, and frees what the handlers deferred.
-        if !autocmd_busy.get() {
+        if !AUTOCMD_BUSY.get() {
             restore_search_patterns();
             if did_save_redobuff {
                 restore_redobuff(&mut save_redo);

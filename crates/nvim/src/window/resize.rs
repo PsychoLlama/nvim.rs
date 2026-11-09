@@ -45,7 +45,7 @@ use crate::option::vars::{P_CH, P_SPK, P_WBR, p_ch, p_ls, p_stal, p_wbr};
 use crate::options::kWinOptScroll;
 use crate::optionstr::OptString;
 use crate::plines::{plines_win, plines_win_col, plines_win_nofill};
-use crate::startup::{exiting, full_screen};
+use crate::startup::{EXITING, FULL_SCREEN};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state};
 use crate::statusline::defs::ClickLine;
 use crate::terminal::buf_terminal_check_size;
@@ -53,7 +53,7 @@ use crate::types::{ColNr, Integer, LineNr, OptInt, ScriptId, WindowHandle};
 use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::state::{UI_MESSAGES, UI_MULTIGRID, UI_TABLINE};
 use crate::ui::{ui_call_win_viewport_margins, ui_has};
-use crate::window::state::{skip_update_topline, skip_win_fix_cursor};
+use crate::window::state::{SKIP_UPDATE_TOPLINE, SKIP_WIN_FIX_CURSOR};
 use crate::winfloat::{win_border_height, win_border_width, win_float_anchor_laststatus};
 use crate::winlayer::{FrameRef, TabPage, Win, tabs, windows};
 
@@ -137,7 +137,7 @@ pub(crate) fn fix_scroll(resize: bool) {
     if P_SPK.first_byte() == b'c' {
         return;
     }
-    skip_update_topline.set(true);
+    SKIP_UPDATE_TOPLINE.set(true);
     for mut wp in windows() {
         if !wp.w_floating && wp.w_height != wp.w_prev_height {
             wp.w_do_win_fix_cursor = true;
@@ -168,7 +168,7 @@ pub(crate) fn fix_scroll(resize: bool) {
         wp.w_prev_height = wp.w_height;
         wp.w_prev_winrow = wp.w_winrow;
     }
-    skip_update_topline.set(false);
+    SKIP_UPDATE_TOPLINE.set(false);
     let state = get_real_state();
     if state & (MODE_NORMAL | MODE_CMDLINE | MODE_TERMINAL) == 0 {
         fix_cursor(false);
@@ -181,7 +181,7 @@ pub(crate) fn fix_scroll(resize: bool) {
 /// outside `'scrolloff'`.
 pub(crate) fn fix_cursor(normal: bool) {
     let mut wp = Win::current();
-    if skip_win_fix_cursor.get()
+    if SKIP_WIN_FIX_CURSOR.get()
         || !wp.w_do_win_fix_cursor
         || wp.buffer().line_count() < LineNr::new(wp.w_view_height)
     {
@@ -359,7 +359,7 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
         }
         window.w_view_height = height;
         comp_scroll(window);
-        if valid_cursor && !exiting.get() && (keeps_cursor || window.w_floating) {
+        if valid_cursor && !EXITING.get() && (keeps_cursor || window.w_floating) {
             window.w_skipcol = ColNr::ZERO;
             to_fraction(window, prev_height);
         }
@@ -467,7 +467,7 @@ pub fn command_height() {
         frp = fr.prev();
     }
 
-    while p_ch() > OptInt::from(old_p_ch) && command_frame_height.get() {
+    while p_ch() > OptInt::from(old_p_ch) && COMMAND_FRAME_HEIGHT.get() {
         let Some(fr) = frp else {
             err(WinError::NoRoom);
             P_CH.set(OptInt::from(old_p_ch));
@@ -480,7 +480,7 @@ pub fn command_height() {
         frp = fr.prev();
     }
     if p_ch() < OptInt::from(old_p_ch)
-        && command_frame_height.get()
+        && COMMAND_FRAME_HEIGHT.get()
         && let Some(fr) = frp
     {
         fr.add_height(number_as_int(OptInt::from(old_p_ch) - p_ch()));
@@ -489,7 +489,7 @@ pub fn command_height() {
     comp_positions();
     CMDLINE_ROW.set(ROWS.get() - number_as_int(p_ch()));
     REDRAW_CMDLINE.set(true);
-    if MSG_SCROLLED.get() == 0 && full_screen.get() {
+    if MSG_SCROLLED.get() == 0 && FULL_SCREEN.get() {
         let mut grid = default_gridview();
         if !ui_has(UI_MESSAGES) {
             msg_grid_validate();
@@ -499,7 +499,7 @@ pub fn command_height() {
         MSG_ROW.set(CMDLINE_ROW.get());
     }
     TabPage::current().tp_ch_used = p_ch();
-    min_set_ch.set(p_ch());
+    MIN_SET_CH.set(p_ch());
 }
 
 impl FrameRef {

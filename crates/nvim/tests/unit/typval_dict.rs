@@ -18,7 +18,7 @@ use neovim::eval::typval::{
     dict_get_number, dict_get_string_alloc, dict_get_string_buf, dict_get_string_buf_chk, tv_clear,
     tv_dict_alloc,
 };
-use neovim::guard::{Suppress, sandbox};
+use neovim::guard::{SANDBOX, Suppress};
 use neovim::mbyte::CONV_NONE_INIT;
 use neovim::mbyte::VimConv;
 use neovim::memory::{ThinCString, xfree, xmalloc, xstrdup};
@@ -970,8 +970,8 @@ fn extending_a_dict_refuses_locked_and_read_only_items() {
         let di_ro_sbx = tv::di_of(d, "di_ro_sbx");
         (*di_ro_sbx).di_flags |= DI_FLAGS_RO_SBX;
 
-        let saved_sandbox = sandbox.get();
-        sandbox.set(1);
+        let saved_sandbox = SANDBOX.get();
+        SANDBOX.set(1);
         let sources: Vec<(*mut Dict, &str)> = vec![
             (
                 tv::new_dict(&[("tv_locked", f(41.0))]),
@@ -1005,11 +1005,11 @@ fn extending_a_dict_refuses_locked_and_read_only_items() {
         assert_eq!(tv::read_dict(d), as_tv(&target));
 
         // Out of the sandbox the `RO_SBX` item is writable again.
-        sandbox.set(0);
+        SANDBOX.set(0);
         extend(d, sources[3].0, None);
         target[3].1 = f(44.0);
         assert_eq!(tv::read_dict(d), as_tv(&target));
-        sandbox.set(saved_sandbox);
+        SANDBOX.set(saved_sandbox);
 
         log.clear();
         drop(DictRef::owning(d));

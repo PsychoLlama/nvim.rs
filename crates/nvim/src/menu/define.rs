@@ -38,7 +38,7 @@ const CTRL_G: u8 = 0x07;
 const CTRL_O: u8 = 0x0f;
 const CTRL_BSL: u8 = 0x1c;
 use crate::mbyte::cluster_len;
-use crate::menu::sys_menu;
+use crate::menu::SYS_MENU;
 use crate::option::vars::p_cpo;
 use crate::types::ExArg;
 use crate::ui::ui_call_update_menu;
@@ -393,7 +393,7 @@ fn add_into(
     call_data: Option<&[u8]>,
 ) -> Result<(), Option<MenuError>> {
     let quiet = |msg| {
-        if sys_menu.get() {
+        if SYS_MENU.get() {
             None
         } else {
             Some(MenuError::Msg(msg))
@@ -501,7 +501,7 @@ fn add_into(
     // prefix.
     let amenu =
         modes & (MENU_NORMAL_MODE | MENU_INSERT_MODE) == MENU_NORMAL_MODE | MENU_INSERT_MODE;
-    if sys_menu.get() {
+    if SYS_MENU.get() {
         // Only add system menu items that have not been defined yet.
         modes &= !old_modes;
     }

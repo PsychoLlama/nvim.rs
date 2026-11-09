@@ -36,7 +36,7 @@ pub(crate) fn cursor_line_part(from: ColNr, to: ColNr) -> ApiString {
 /// Insert `text` at the cursor.
 pub(crate) fn ins_compl_insert_text(text: &[u8]) {
     ins_bytes(text);
-    compl_ins_end_col.set(Win::current().w_cursor.col);
+    COMPL_INS_END_COL.set(Win::current().w_cursor.col);
 }
 
 /// `text` from where the typed part of it ends: the part a completion
@@ -72,7 +72,7 @@ fn shared_char_count(prefix: &[u8], text: &[u8], limit: usize) -> usize {
 
 /// Insert the longest common prefix of the best fuzzy matches as `'longest'`.
 pub(crate) fn fuzzy_longest_match() {
-    let num_bests = compl_num_bests.get();
+    let num_bests = COMPL_NUM_BESTS.get();
     if num_bests == 0 {
         return;
     }
@@ -92,7 +92,7 @@ pub(crate) fn fuzzy_longest_match() {
         if !more_candidates {
             ins_compl_longest_insert(&start.text_copy());
         }
-        compl_num_bests.set(0);
+        COMPL_NUM_BESTS.set(0);
         return;
     }
 
@@ -116,7 +116,7 @@ pub(crate) fn fuzzy_longest_match() {
     if leader.is_empty() || prefix.starts_with(&leader) {
         ins_compl_longest_insert(&prefix[..prefix_len.min(prefix.len())]);
     }
-    compl_num_bests.set(0);
+    COMPL_NUM_BESTS.set(0);
 }
 
 /// Move `compl_shown_match` onto the match actually shown: `compl_leader` may
@@ -129,7 +129,7 @@ pub(crate) fn ins_compl_update_shown_match() {
 
     while leader_hides(leader, shown, shown.next()) {
         shown = shown.next().expect("`leader_hides` checked the link");
-        compl_shown_match.set(Some(shown));
+        COMPL_SHOWN_MATCH.set(Some(shown));
         leader = get_leader_for_startcol(shown, true);
     }
 
@@ -139,7 +139,7 @@ pub(crate) fn ins_compl_update_shown_match() {
     if compl_shows_dir_backward() && !equal && shown.next().is_none_or(MatchId::is_first) {
         while leader_hides(leader, shown, shown.prev()) {
             shown = shown.prev().expect("`leader_hides` checked the link");
-            compl_shown_match.set(Some(shown));
+            COMPL_SHOWN_MATCH.set(Some(shown));
             leader = get_leader_for_startcol(shown, true);
         }
     }
@@ -170,26 +170,26 @@ pub fn ins_compl_delete(new_leader: bool) {
 
     // In insert mode: delete the typed part.
     // In replace mode: put the old characters back, if any.
-    let mut col = compl_col.get()
+    let mut col = COMPL_COL.get()
         + if compl_status_adding() {
-            compl_length.get()
+            COMPL_LENGTH.get()
         } else {
             orig_col
         };
     if ins_compl_preinsert_effect() {
         col += len_as_int(ins_compl_leader_len());
-        Win::current().w_cursor.col = compl_ins_end_col.get();
+        Win::current().w_cursor.col = COMPL_INS_END_COL.get();
     }
 
     // What follows the cursor on the last line, which the line deletion
     // below would take with it; re-inserted at the end.
     let mut remaining = None;
-    if Win::current().w_cursor.lnum > compl_lnum.get() {
+    if Win::current().w_cursor.lnum > COMPL_LNUM.get() {
         let line_len = get_cursor_line_len();
         if Win::current().w_cursor.col < line_len {
             remaining = Some(cursor_line_part(Win::current().w_cursor.col, line_len));
         }
-        while Win::current().w_cursor.lnum > compl_lnum.get() {
+        while Win::current().w_cursor.lnum > COMPL_LNUM.get() {
             if ml_delete(Win::current().w_cursor.lnum).is_err() {
                 return;
             }
@@ -205,7 +205,7 @@ pub fn ins_compl_delete(new_leader: bool) {
             return;
         }
         backspace_until_column(col.get());
-        compl_ins_end_col.set(Win::current().w_cursor.col);
+        COMPL_INS_END_COL.set(Win::current().w_cursor.col);
     }
 
     if let Some(remaining) = remaining {
@@ -234,7 +234,7 @@ pub(crate) fn ins_compl_expand_multiple(text: &[u8]) {
     }
     // Handle remaining text after the last newline (if any).
     insert_chars(line);
-    compl_ins_end_col.set(Win::current().w_cursor.col);
+    COMPL_INS_END_COL.set(Win::current().w_cursor.col);
 }
 
 /// `ins_char_bytes` over `text`, which C hands it whole whatever it holds.
@@ -273,11 +273,11 @@ pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
         // to the intended replacement range.
         let cpt_idx = shown.with(ComplItem::cpt_source);
         if let Some(cpt_idx) = cpt_idx
-            && compl_col.get() >= ColNr::ZERO
+            && COMPL_COL.get() >= ColNr::ZERO
         {
             let startcol = cpt_sources().row_at(cpt_idx).cs_startcol;
-            if let Some(startcol) = startcol.filter(|&start| start < compl_col.get()) {
-                let skip = usize::try_from(compl_col.get() - startcol).unwrap_or(0);
+            if let Some(startcol) = startcol.filter(|&start| start < COMPL_COL.get()) {
+                let skip = usize::try_from(COMPL_COL.get() - startcol).unwrap_or(0);
                 if skip <= len {
                     len -= skip;
                     start = skip;
@@ -313,10 +313,10 @@ pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
 
     // Upstream reads the shown match afresh: inserting ran buffer callbacks.
     if let Some(shown) = shown_match() {
-        compl_used_match.set(!(shown.is_original() || (preinsert && !insert_prefix)));
+        COMPL_USED_MATCH.set(!(shown.is_original() || (preinsert && !insert_prefix)));
         set_vim_var_dict(Vv::CompletedItem, Some(ins_compl_dict_alloc(shown)));
     }
-    compl_hi_on_autocompl_longest.set(insert_prefix && move_cursor);
+    COMPL_HI_ON_AUTOCOMPL_LONGEST.set(insert_prefix && move_cursor);
 }
 
 /// Step `compl_shown_match` on `todo` matches in the current direction,
@@ -339,7 +339,7 @@ pub(crate) fn find_next_completion_match(
     let mut found_compl: Option<MatchId> = None;
     let has_preinsert = ins_compl_has_preinsert();
     let compl_no_select = completeopt_flags() & kOptCotFlagNoselect as c_uint != 0
-        || compl_autocomplete.get() && !has_preinsert;
+        || COMPL_AUTOCOMPLETE.get() && !has_preinsert;
 
     loop {
         todo -= 1;
@@ -355,7 +355,7 @@ pub(crate) fn find_next_completion_match(
             } else {
                 next
             };
-            compl_shown_match.set(next);
+            COMPL_SHOWN_MATCH.set(next);
             let now = shown_match().expect("just set from a link");
             found_end = first_match().is_some() && (is_first_match(now.next()) || now.is_first());
         } else if compl_shows_dir_backward() && prev.is_some() {
@@ -365,15 +365,15 @@ pub(crate) fn find_next_completion_match(
             } else {
                 prev
             };
-            compl_shown_match.set(prev);
-            found_end |= is_first_match(compl_shown_match.get());
+            COMPL_SHOWN_MATCH.set(prev);
+            found_end |= is_first_match(COMPL_SHOWN_MATCH.get());
         } else {
             if !allow_get_expansion {
                 if advance {
                     if compl_shows_dir_backward() {
-                        compl_pending.set(compl_pending.get() - (todo + 1));
+                        COMPL_PENDING.set(COMPL_PENDING.get() - (todo + 1));
                     } else {
-                        compl_pending.set(compl_pending.get() + (todo + 1));
+                        COMPL_PENDING.set(COMPL_PENDING.get() + (todo + 1));
                     }
                 }
                 return false;
@@ -381,9 +381,9 @@ pub(crate) fn find_next_completion_match(
 
             if !compl_no_select && advance {
                 if compl_shows_dir_backward() {
-                    compl_pending.set(compl_pending.get() - 1);
+                    COMPL_PENDING.set(COMPL_PENDING.get() - 1);
                 } else {
-                    compl_pending.set(compl_pending.get() + 1);
+                    COMPL_PENDING.set(COMPL_PENDING.get() + 1);
                 }
             }
 
@@ -391,25 +391,25 @@ pub(crate) fn find_next_completion_match(
             // (`complete()` from a timer) and leave a remembered match
             // naming nothing.
             let list = match_list_generation();
-            *num_matches = ins_compl_get_exp(compl_startpos.get());
+            *num_matches = ins_compl_get_exp(COMPL_STARTPOS.get());
             if match_list_generation() != list {
                 found_compl = None;
             }
 
             // Handle any pending completions.
-            while compl_pending.get() != 0
-                && compl_direction.get() == compl_shows_dir.get()
+            while COMPL_PENDING.get() != 0
+                && COMPL_DIRECTION.get() == COMPL_SHOWS_DIR.get()
                 && advance
             {
                 // Upstream dereferences `compl_shown_match` here unchecked.
                 let shown = shown_match().expect("a running completion has a shown match");
                 let (next, prev) = shown.with(|m| (m.next, m.prev));
-                if compl_pending.get() > 0 && next.is_some() {
-                    compl_shown_match.set(next);
-                    compl_pending.set(compl_pending.get() - 1);
-                } else if compl_pending.get() < 0 && prev.is_some() {
-                    compl_shown_match.set(prev);
-                    compl_pending.set(compl_pending.get() + 1);
+                if COMPL_PENDING.get() > 0 && next.is_some() {
+                    COMPL_SHOWN_MATCH.set(next);
+                    COMPL_PENDING.set(COMPL_PENDING.get() - 1);
+                } else if COMPL_PENDING.get() < 0 && prev.is_some() {
+                    COMPL_SHOWN_MATCH.set(prev);
+                    COMPL_PENDING.set(COMPL_PENDING.get() + 1);
                 } else {
                     break;
                 }
@@ -433,7 +433,7 @@ pub(crate) fn find_next_completion_match(
         // Stop at the end of the list when we found a usable match.
         if found_end {
             if let Some(found) = found_compl {
-                compl_shown_match.set(Some(found));
+                COMPL_SHOWN_MATCH.set(Some(found));
                 break;
             }
             todo = 1; // use first usable match after wrapping around
@@ -457,7 +457,7 @@ pub(crate) fn ins_compl_next(
     insert_match: bool,
 ) -> Option<c_int> {
     let mut num_matches = None;
-    let started = compl_started.get();
+    let started = COMPL_STARTED.get();
     // Taken as an identity, not an address: a completion function can wipe
     // the buffer and the allocator can hand the same address back, so the
     // pointer comparison upstream does cannot tell "still here" from "gone
@@ -466,8 +466,8 @@ pub(crate) fn ins_compl_next(
     let cur_cot_flags = completeopt_flags();
     let compl_preinsert = ins_compl_has_preinsert();
     let compl_no_insert = cur_cot_flags & kOptCotFlagNoinsert as c_uint != 0
-        || compl_autocomplete.get() && !compl_preinsert;
-    let has_autocomplete_delay = compl_autocomplete.get() && p_acl() > 0;
+        || COMPL_AUTOCOMPLETE.get() && !compl_preinsert;
+    let has_autocomplete_delay = COMPL_AUTOCOMPLETE.get() && p_acl() > 0;
 
     // When a user completion function answers -1 for findstart, which is
     // the next time round with 'always', compl_shown_match becomes NULL.
@@ -477,19 +477,19 @@ pub(crate) fn ins_compl_next(
         ins_compl_update_shown_match();
     }
 
-    if allow_get_expansion && insert_match && (!compl_get_longest.get() || compl_used_match.get()) {
+    if allow_get_expansion && insert_match && (!COMPL_GET_LONGEST.get() || COMPL_USED_MATCH.get()) {
         // Delete old text to be replaced.
         ins_compl_delete(false);
     }
 
     // When finding the longest common text we stick at the original text,
     // don't let CTRL-N or CTRL-P move to the first match.
-    let mut advance = count != 1 || !allow_get_expansion || !compl_get_longest.get();
+    let mut advance = count != 1 || !allow_get_expansion || !COMPL_GET_LONGEST.get();
 
     // When restarting the search don't insert the first match either.
-    if compl_restarting.get() {
+    if COMPL_RESTARTING.get() {
         advance = false;
-        compl_restarting.set(false);
+        COMPL_RESTARTING.set(false);
     }
 
     // Repeat this for when <PageUp> or <PageDown> is typed.  But don't
@@ -512,10 +512,10 @@ pub(crate) fn ins_compl_next(
         }
     } else if compl_no_insert && !started && !compl_preinsert {
         ins_compl_insert_text(untyped_part(&compl_orig_text().to_vec()));
-        compl_used_match.set(false);
+        COMPL_USED_MATCH.set(false);
         compl_orig_extmarks().restore();
     } else if insert_match {
-        if !compl_get_longest.get() || compl_used_match.get() {
+        if !COMPL_GET_LONGEST.get() || COMPL_USED_MATCH.get() {
             // None selected.
             let preinsert_longest =
                 ins_compl_preinsert_longest() && shown_match().is_some_and(MatchId::is_original);
@@ -536,7 +536,7 @@ pub(crate) fn ins_compl_next(
             compl_orig_extmarks().restore();
         }
     } else {
-        compl_used_match.set(false);
+        COMPL_USED_MATCH.set(false);
     }
 
     if !allow_get_expansion {
@@ -555,9 +555,9 @@ pub(crate) fn ins_compl_next(
     // popup menu is visible.
     let shown_is_orig = shown_match().is_some_and(MatchId::is_original);
     if compl_no_insert && !started && !shown_is_orig {
-        compl_enter_selects.set(true);
+        COMPL_ENTER_SELECTS.set(true);
     } else {
-        compl_enter_selects.set(!insert_match && !compl_match_array().is_unset());
+        COMPL_ENTER_SELECTS.set(!insert_match && !compl_match_array().is_unset());
     }
 
     // Show the file name for the match (if any).

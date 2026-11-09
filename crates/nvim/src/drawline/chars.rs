@@ -416,7 +416,7 @@ impl Cells {
             && window.w_cursor.col < ColNr::new(self.word_end)
         {
             spell_hlf = HLF_COUNT;
-            spell_redraw_lnum.set(wlv.lnum);
+            SPELL_REDRAW_LNUM.set(wlv.lnum);
         }
 
         // Where in the look-ahead buffer the word starts, as a column of it.

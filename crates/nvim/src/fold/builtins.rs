@@ -14,7 +14,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::charset::skip;
 use crate::cstr;
@@ -141,13 +140,13 @@ pub fn f_foldtext(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_foldtextresult(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut buf = [0u8; FOLD_TEXT_LEN as usize];
     // 'foldtext' can call `foldtextresult()` again; one level is enough.
-    static entered: GlobalCell<bool> = GlobalCell::new(false);
+    static ENTERED: GlobalCell<bool> = GlobalCell::new(false);
     let rv = result;
     rv.write_string(None);
-    if entered.get() {
+    if ENTERED.get() {
         return;
     }
-    entered.set(true);
+    ENTERED.set(true);
     let lnum = tv_get_lnum(&args[0]).max(LineNr::ZERO);
     let win = Win::current();
     let info = fold_info(win, lnum);
@@ -162,5 +161,5 @@ pub fn f_foldtextresult(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
         };
         rv.write_string(Some(text.into()));
     }
-    entered.set(false);
+    ENTERED.set(false);
 }

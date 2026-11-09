@@ -99,9 +99,9 @@ fn start_arrow_common(end_insert_pos: Option<InsertEnd>, end_change: bool) {
 ///
 /// It may be skipped again, so the line number is cleared first.
 pub(crate) fn check_spell_redraw() {
-    if spell_redraw_lnum.get() != LineNr::ZERO {
-        let lnum = spell_redraw_lnum.get();
-        spell_redraw_lnum.set(LineNr::ZERO);
+    if SPELL_REDRAW_LNUM.get() != LineNr::ZERO {
+        let lnum = SPELL_REDRAW_LNUM.get();
+        SPELL_REDRAW_LNUM.set(LineNr::ZERO);
         redraw_win_line(Win::current(), lnum);
     }
 }
@@ -113,19 +113,19 @@ pub(crate) fn check_spell_redraw() {
 pub(crate) fn stop_arrow() -> Result<(), Failed> {
     if ARROW_USED.get() {
         INSSTART.set(Win::current().w_cursor); // new insertion starts here
-        if INSSTART.get().col > INSSTART_ORIG.get().col && !ins_need_undo.get() {
+        if INSSTART.get().col > INSSTART_ORIG.get().col && !INS_NEED_UNDO.get() {
             // Don't update the original insert position when moved to the
             // right, except when nothing was inserted yet.
-            update_Insstart_orig.set(false);
+            UPDATE_INSSTART_ORIG.set(false);
         }
         let mut lines = Lines::current();
-        Insstart_textlen.set(ColNr::new(linetabsize_str(
+        INSSTART_TEXTLEN.set(ColNr::new(linetabsize_str(
             lines.line(Win::current().w_cursor.lnum),
         )));
 
         if save_cursor_line().is_ok() {
             ARROW_USED.set(false);
-            ins_need_undo.set(false);
+            INS_NEED_UNDO.set(false);
         }
         AI_COL.set(ColNr::ZERO);
         if STATE.get() & VREPLACE_FLAG != 0 {
@@ -134,15 +134,15 @@ pub(crate) fn stop_arrow() -> Result<(), Failed> {
         }
         reset_redobuff();
         append_to_redobuff(b"1i"); // pretend we start an insertion
-        new_insert_skip.set(2);
-    } else if ins_need_undo.get() && save_cursor_line().is_ok() {
-        ins_need_undo.set(false);
+        NEW_INSERT_SKIP.set(2);
+    } else if INS_NEED_UNDO.get() && save_cursor_line().is_ok() {
+        INS_NEED_UNDO.set(false);
     }
 
     // Always open a fold at the cursor line when inserting something.
     fold_open_cursor();
 
-    if ARROW_USED.get() || ins_need_undo.get() {
+    if ARROW_USED.get() || INS_NEED_UNDO.get() {
         Err(Failed)
     } else {
         Ok(())
@@ -170,11 +170,11 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
         0
     } else {
         c_int::try_from(inserted.len()).expect("inserted text is never longer than an int")
-            - new_insert_skip.get()
+            - NEW_INSERT_SKIP.get()
     };
-    if did_restart_edit.get().is_nul() || added > 0 {
-        last_insert.set(inserted);
-        last_insert_skip.set(if added < 0 { 0 } else { new_insert_skip.get() });
+    if DID_RESTART_EDIT.get().is_nul() || added > 0 {
+        LAST_INSERT.set(inserted);
+        LAST_INSERT_SKIP.set(if added < 0 { 0 } else { NEW_INSERT_SKIP.get() });
     }
 
     if !ARROW_USED.get()
@@ -184,7 +184,7 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
         // insertion, but appending a line that ends in a space needs it.
         // Only when something was actually inserted, or undo breaks.
         let mut cc;
-        if !ins_need_undo.get() && has_format_option(FoFlag::AUTO) {
+        if !INS_NEED_UNDO.get() && has_format_option(FoFlag::AUTO) {
             let tpos = Win::current().w_cursor;
 
             // At the end of a line after a space, formatting would move

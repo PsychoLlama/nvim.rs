@@ -18,8 +18,8 @@ use std::path::Path;
 
 use neovim::option::vars::P_FIC;
 use neovim::path::{
-    append_path, invocation_path_tail, kBothFilesMissing, kDifferentFiles, kEqualFileNames,
-    kEqualFiles, kOneFileMissing, next_component_index, path_fix_case, path_fnamecmp,
+    BOTH_FILES_MISSING, DIFFERENT_FILES, EQUAL_FILE_NAMES, EQUAL_FILES, ONE_FILE_MISSING,
+    append_path, invocation_path_tail, next_component_index, path_fix_case, path_fnamecmp,
     path_fnamencmp, path_full_compare, path_full_dir_name, path_guess_exepath, path_is_absolute,
     path_shorten_fname, path_tail, path_try_shorten_fname, path_with_extension, path_with_url,
     pathcmp, shorten_dir_name, tail_with_sep_index, vim_full_name,
@@ -113,14 +113,14 @@ fn comparing_two_names_says_which_of_the_five_relations_holds() {
     let compare =
         |a: &str, b: &str, checkname: bool| path_full_compare(&cstr(a), &cstr(b), checkname, true);
 
-    assert_eq!(compare("f1.o", "f1.o", false), kEqualFiles);
-    assert_eq!(compare("f1.o", "f2.o", false), kDifferentFiles);
-    assert_eq!(compare("f2.o", "f1.o", false), kDifferentFiles);
-    assert_eq!(compare("f1.o", "null.txt", false), kOneFileMissing);
-    assert_eq!(compare("null.txt", "f1.o", false), kOneFileMissing);
-    assert_eq!(compare("null.txt", "null.txt", false), kBothFilesMissing);
+    assert_eq!(compare("f1.o", "f1.o", false), EQUAL_FILES);
+    assert_eq!(compare("f1.o", "f2.o", false), DIFFERENT_FILES);
+    assert_eq!(compare("f2.o", "f1.o", false), DIFFERENT_FILES);
+    assert_eq!(compare("f1.o", "null.txt", false), ONE_FILE_MISSING);
+    assert_eq!(compare("null.txt", "f1.o", false), ONE_FILE_MISSING);
+    assert_eq!(compare("null.txt", "null.txt", false), BOTH_FILES_MISSING);
     // `checkname` is what turns two missing files with one name into a match.
-    assert_eq!(compare("null.txt", "null.txt", true), kEqualFileNames);
+    assert_eq!(compare("null.txt", "null.txt", true), EQUAL_FILE_NAMES);
 }
 
 /// The three ways of splitting a name at its last separator, and what each

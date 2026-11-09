@@ -29,7 +29,7 @@ use core::ffi::c_void;
 use core::ptr;
 
 use crate::global_cell::GlobalCell;
-use crate::memory::arena_alloc_count;
+use crate::memory::ARENA_ALLOC_COUNT;
 use crate::memory::{xfree, xmalloc};
 
 /// The link a spent block on the block pool's reuse list carries in its own
@@ -81,7 +81,7 @@ pub unsafe fn alloc_block() -> *mut c_void {
     match pop_reuse_blk() {
         Some(blk) => blk.cast::<c_void>(),
         None => {
-            arena_alloc_count.set(arena_alloc_count.get().wrapping_add(1));
+            ARENA_ALLOC_COUNT.set(ARENA_ALLOC_COUNT.get().wrapping_add(1));
             // SAFETY: as `try_malloc`.
             unsafe { xmalloc(BLOCK_SIZE) }
         }

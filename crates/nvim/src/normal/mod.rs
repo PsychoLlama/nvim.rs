@@ -3,7 +3,7 @@
 //!
 //! The families are the modules below, grouped by what a command *does* to the
 //! editor rather than by which key runs it -- which is the seam
-//! [`nv_cmds`] already draws, because every row of it names a handler.
+//! [`NV_CMD_TABLE`] already draws, because every row of it names a handler.
 //!
 //! What is left in this file is the table, the two structures it is made of,
 //! and the constants at least one family imports by name. Nothing here is
@@ -18,7 +18,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::edit::BeginlineOpts;
 use crate::global_cell::GlobalCell;
@@ -61,9 +60,8 @@ use crate::search::{BACKWARD, FORWARD, SEARCH_REV};
 pub(crate) mod defs;
 mod misc;
 pub(crate) use self::misc::*;
-pub(crate) const _ISupper: c_uint = 256;
 pub(crate) const DIRECTION_NOT_SET: Direction = 0;
-pub(crate) const KMarkNoContext: MarkMove = 4;
+pub(crate) const K_MARK_NO_CONTEXT: MarkMove = 4;
 pub(crate) const MARK_ALL: MarkGet = 1;
 pub(crate) use crate::cmdhist::HIST_SEARCH;
 pub(crate) const VSE_NONE: c_uint = 0;
@@ -81,7 +79,7 @@ pub(crate) struct NvCmd {
     pub cmd_flags: NvFlags,
     pub cmd_arg: c_int,
 }
-/// What a row of [`nv_cmds`] runs.
+/// What a row of [`NV_CMD_TABLE`] runs.
 ///
 /// Nothing outside this crate reaches the table or its handlers -- neither the
 /// ABI ledger nor the unit-test cdefs name any of them -- so the handlers are
@@ -121,7 +119,7 @@ pub(crate) struct NormalState {
     pub ca: CmdArg,
     pub mapped_len: c_int,
     pub old_mapped_len: c_int,
-    /// The row of [`nv_cmds`] the command resolved to.
+    /// The row of [`NV_CMD_TABLE`] the command resolved to.
     pub idx: Option<usize>,
     pub c: Key,
     pub old_col: c_int,
@@ -130,11 +128,11 @@ pub(crate) struct NormalState {
 pub(crate) const TAB: c_int = 9;
 pub(crate) const B_IMODE_LMAP: c_int = 1 as c_int;
 pub(crate) const GRAPHEME_STATE_INIT: c_int = 0 as c_int;
-static VIsual_mode_orig: GlobalCell<VisualMode> = GlobalCell::new(VisualMode::NONE);
-const e_changelist_is_empty: &CStr = c"E664: Changelist is empty";
-const e_cmdline_window_already_open: &CStr = c"E1292: Command-line window is already open";
+static V_ISUAL_MODE_ORIG: GlobalCell<VisualMode> = GlobalCell::new(VisualMode::NONE);
+const E_CHANGELIST_IS_EMPTY: &CStr = c"E664: Changelist is empty";
+const E_CMDLINE_WINDOW_ALREADY_OPEN: &CStr = c"E1292: Command-line window is already open";
 crate::flag_set! {
-    /// What a row of [`nv_cmds`] asks the dispatcher to do around the
+    /// What a row of [`NV_CMD_TABLE`] asks the dispatcher to do around the
     /// handler: whether to read more characters, how the key behaves under
     /// 'keymodel' and 'rightleft', and what happens to the register.
     ///
@@ -169,7 +167,7 @@ crate::flag_set! {
     const NCW = 0x200;
 }
 
-/// One row of [`nv_cmds`].
+/// One row of [`NV_CMD_TABLE`].
 ///
 /// The argument is written as the `c_int` constant that names it, so a row
 /// reads as the four things it is rather than as a cast.
@@ -185,7 +183,7 @@ const fn cmd(cmd_char: Key, cmd_func: NvFunc, cmd_flags: NvFlags, cmd_arg: c_int
 /// The Normal-mode command table, in source order.
 ///
 /// A `const` so that [`NV_CMD_IDX`](crate::normal::NV_CMD_IDX) can be sorted
-/// at compile time; `nv_cmds` is the `static` everything indexes, so the rows
+/// at compile time; `NV_CMD_TABLE` is the `static` everything indexes, so the rows
 /// exist once.
 pub(crate) const NV_CMDS: [NvCmd; 188] = [
     cmd(Key::NUL, nv_error, NvFlags::NONE, 0),
@@ -722,9 +720,9 @@ pub(crate) const NV_CMDS: [NvCmd; 188] = [
         0,
     ),
 ];
-static nv_cmds: [NvCmd; 188] = NV_CMDS;
+static NV_CMD_TABLE: [NvCmd; 188] = NV_CMDS;
 pub(crate) const NV_CMDS_SIZE: usize = NV_CMDS.len();
-static showcmd_is_clear: GlobalCell<bool> = GlobalCell::new(true);
-static showcmd_visual: GlobalCell<bool> = GlobalCell::new(false);
+static SHOWCMD_IS_CLEAR: GlobalCell<bool> = GlobalCell::new(true);
+static SHOWCMD_VISUAL: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) const INT_MAX: c_int = __INT_MAX__;
 pub(crate) const __INT_MAX__: c_int = 2147483647 as c_int;

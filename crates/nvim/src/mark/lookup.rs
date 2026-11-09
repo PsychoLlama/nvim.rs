@@ -21,7 +21,7 @@ use crate::buffer::GETF_SETMARK;
 use crate::buffer::{buf_is_prompt, buflist_getfile};
 use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
-use crate::ex_docmd::state::listcmd_busy;
+use crate::ex_docmd::state::LISTCMD_BUSY;
 use crate::mark::defs::{MarkGet, MarkMove, MarkMoveRes};
 use crate::message::emsg;
 use crate::pos::lt;
@@ -46,11 +46,11 @@ use crate::search::{BACKWARD, FORWARD};
 pub fn mark_get(buffer: Buf, win: Win, flag: MarkGet, name: u8) -> Option<FileMark> {
     let handle = buffer.handle;
     if name.is_ascii_uppercase() || name.is_ascii_digit() {
-        let xfm = mark_get_global(flag as c_uint != kMarkAllNoResolve as c_uint, name);
+        let xfm = mark_get_global(flag as c_uint != MARK_ALL_NO_RESOLVE as c_uint, name);
         // A global mark that names another buffer is *not* this buffer's
-        // mark: `kMarkBufLocal` answers an unset record rather than a
+        // mark: `MARK_BUF_LOCAL` answers an unset record rather than a
         // position the caller would then apply to the wrong file.
-        if flag as c_uint == kMarkBufLocal as c_uint && !xfm.fmark.is_in(handle) {
+        if flag as c_uint == MARK_BUF_LOCAL as c_uint && !xfm.fmark.is_in(handle) {
             return Some(pos_to_mark(buffer, UNSET_POS));
         }
         return Some(xfm.fmark);
@@ -80,7 +80,7 @@ pub fn mark_get_global(resolve: bool, name: u8) -> XFileMark {
         usize::from(name - b'A')
     } else {
         // Deliberately a hard failure, not a `debug_assert!`: `idx` is the
-        // index into `namedfm` on the next line, and neither branch above has
+        // index into `NAMEDFM` on the next line, and neither branch above has
         // clamped it, so falling through reads out of bounds. Both callers
         // (`mark_get` and `nvim_get_mark`) reject anything that is not a
         // digit or an uppercase letter before they get here.
@@ -131,7 +131,7 @@ pub fn mark_get_local(buffer: Buf, win: Win, name: u8) -> Option<FileMark> {
         mark_get_visual(buffer, name)?
     } else if name == b'\'' || name == b'`' {
         // The context mark is the WINDOW's; its number is overwritten with
-        // `buffer`'s below, as upstream does after reading `curbuf`'s.
+        // `buffer`'s below, as upstream does after reading `CURBUF`'s.
         pos_to_mark(Buf::current(), win.w_pcmark)
     } else {
         mark_get_motion(buffer, win, name)?
@@ -155,8 +155,8 @@ pub fn mark_get_motion(buffer: Buf, win: Win, name: u8) -> Option<FileMark> {
     // landed, so the cursor is put back before answering. `listcmd_busy`
     // suppresses the jumplist entry the move would otherwise push.
     let saved = cur.w_cursor;
-    let was_busy = listcmd_busy.get();
-    listcmd_busy.set(true);
+    let was_busy = LISTCMD_BUSY.get();
+    LISTCMD_BUSY.set(true);
     let mut mark = None;
     if name == b'{' || name == b'}' {
         let dir = if name == b'}' { FORWARD } else { BACKWARD };
@@ -170,7 +170,7 @@ pub fn mark_get_motion(buffer: Buf, win: Win, name: u8) -> Option<FileMark> {
         }
     }
     cur.w_cursor = saved;
-    listcmd_busy.set(was_busy);
+    LISTCMD_BUSY.set(was_busy);
     mark
 }
 
@@ -273,16 +273,16 @@ pub fn mark_move_to(fm: Option<&FileMark>, flags: MarkMove) -> MarkMoveRes {
         if let Some(msg) = &errormsg {
             emsg(msg);
         }
-        return kMarkMoveFailed;
+        return MARK_MOVE_FAILED;
     }
     let Some(fm) = fm else {
-        return kMarkMoveFailed;
+        return MARK_MOVE_FAILED;
     };
 
-    let mut res: MarkMoveRes = kMarkMoveSuccess;
+    let mut res: MarkMoveRes = MARK_MOVE_SUCCESS;
     if fm.fnum() != Some(Buf::current().handle) {
-        res |= switch_to_mark_buf(fm, flags as c_uint & kMarkJumpList as c_uint == 0);
-        if res & kMarkMoveFailed != 0 {
+        res |= switch_to_mark_buf(fm, flags as c_uint & MARK_JUMP_LIST as c_uint == 0);
+        if res & MARK_MOVE_FAILED != 0 {
             return res;
         }
         // The mark's line was checked against the OLD buffer above; now that
@@ -291,9 +291,9 @@ pub fn mark_move_to(fm: Option<&FileMark>, flags: MarkMove) -> MarkMoveRes {
             if let Some(msg) = &errormsg {
                 emsg(msg);
             }
-            return res | kMarkMoveFailed;
+            return res | MARK_MOVE_FAILED;
         }
-    } else if flags as c_uint & kMarkContext as c_uint != 0 {
+    } else if flags as c_uint & MARK_CONTEXT as c_uint != 0 {
         setpcmark();
     }
 
@@ -301,19 +301,19 @@ pub fn mark_move_to(fm: Option<&FileMark>, flags: MarkMove) -> MarkMoveRes {
     let pos = fm.mark;
     let prev_pos = win.w_cursor;
     win.w_cursor = pos;
-    if flags as c_uint & kMarkBeginLine as c_uint != 0 {
+    if flags as c_uint & MARK_BEGIN_LINE as c_uint != 0 {
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
     if prev_pos.lnum != pos.lnum {
-        res |= kMarkChangedLine | kMarkChangedCursor;
+        res |= MARK_CHANGED_LINE | MARK_CHANGED_CURSOR;
     }
     if prev_pos.col != pos.col {
-        res |= kMarkChangedCol | kMarkChangedCursor;
+        res |= MARK_CHANGED_COL | MARK_CHANGED_CURSOR;
     }
-    if flags as c_uint & kMarkSetView as c_uint != 0 {
+    if flags as c_uint & MARK_SET_VIEW as c_uint != 0 {
         mark_view_restore(Some(fm));
     }
-    if res & (kMarkSwitchedBuf | kMarkChangedCursor) != 0 {
+    if res & (MARK_SWITCHED_BUF | MARK_CHANGED_CURSOR) != 0 {
         check_cursor(win);
     }
     res
@@ -332,9 +332,9 @@ fn switch_to_mark_buf(fm: &FileMark, pcmark_on_switch: bool) -> MarkMoveRes {
     // `buflist_getfile` loads the file.
     let ok = buflist_getfile(fm.fnum(), fm.mark.lnum, getfile_flag, 0).is_ok();
     if ok {
-        kMarkSwitchedBuf
+        MARK_SWITCHED_BUF
     } else {
-        kMarkMoveFailed
+        MARK_MOVE_FAILED
     }
 }
 

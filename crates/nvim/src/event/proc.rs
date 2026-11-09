@@ -42,7 +42,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::event::libuv::{
     uv_close, uv_pipe_init, uv_recv_buffer_size, uv_timer_start, uv_timer_stop, uv_unref,
@@ -70,7 +69,7 @@ use crate::os::pty_proc_unix::{pty_proc_close_master, pty_proc_flush_master, pty
 use crate::os::signal::{SIGHUP, SIGKILL, SIGTERM};
 use crate::os::time::os_hrtime;
 use crate::startup::{
-    exiting, main_loop, os_exit, preserve_exit, ui_client_channel_id, ui_client_exit_status,
+    EXITING, MAIN_LOOP, UI_CLIENT_CHANNEL_ID, UI_CLIENT_EXIT_STATUS, os_exit, preserve_exit,
 };
 use crate::types::Refcount;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -78,7 +77,7 @@ use core::ops::{Deref, DerefMut};
 use core::ptr;
 
 /// A child started through libuv's process API.
-pub const kProcTypeUv: ProcType = 0;
+pub const PROC_TYPE_UV: ProcType = 0;
 /// A child started through `forkpty`.
 pub const PROC_TYPE_PTY: ProcType = 1;
 
@@ -294,7 +293,7 @@ pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: 
                 unsafe { uv_close((&raw mut (*stream).uv.pipe).cast(), None) };
             }
         }
-        if child.type_0 == kProcTypeUv {
+        if child.type_0 == PROC_TYPE_UV {
             // The process handle was never started, so it is dropped
             // directly rather than through `proc_close`, which would run the
             // close callbacks of a child that does not exist.
@@ -650,7 +649,7 @@ fn proc_close(mut child: Child) {
     debug_assert!(!child.closed);
     child.closed = true;
 
-    if child.detach && child.type_0 == kProcTypeUv {
+    if child.detach && child.type_0 == PROC_TYPE_UV {
         // Let the loop exit without waiting for a child we no longer own.
         // SAFETY: a libuv child's process handle lives as long as it does.
         unsafe { uv_unref((&raw mut (*child.as_libuv()).uv).cast()) };
@@ -774,16 +773,16 @@ fn exit_with(status: u64, _: u64) {
         .cast_signed();
     if EXIT_NEED_DELAY.get() != 0 {
         DELAYED_EXIT_STATUS.set(status);
-        let main = main_loop.ptr();
+        let main = MAIN_LOOP.ptr();
         // SAFETY: the main loop's own timer, live for as long as the editor
         // is.
         unsafe { uv_timer_start(&raw mut (*main).exit_delay_timer, Some(exit_delay_cb), 0, 0) };
         return;
     }
 
-    if !exiting.get() {
-        if ui_client_channel_id.get() != 0 {
-            ui_client_exit_status.set(status);
+    if !EXITING.get() {
+        if UI_CLIENT_CHANNEL_ID.get() != 0 {
+            UI_CLIENT_EXIT_STATUS.set(status);
             os_exit(status);
         } else {
             // The only other caller is `rpc_close`, which passes 0.

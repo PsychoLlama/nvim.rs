@@ -113,7 +113,7 @@ impl FileStack {
     fn already_searched(&self, name: &CStr) -> Option<bool> {
         for file in self.open.iter().chain(self.done.iter().rev()) {
             let same = path_full_compare(name, file.name.as_cstr(), true, true) as c_uint
-                & kEqualFiles as c_uint
+                & EQUAL_FILES as c_uint
                 != 0;
             if same {
                 return Some(file.matched);
@@ -814,7 +814,7 @@ pub fn find_pattern_in_path(
 ) {
     let mut dir = dir;
     let mut count = count;
-    let tagpreview = g_do_tagpreview.get();
+    let tagpreview = G_DO_TAGPREVIEW.get();
     let Some(mut pats) = compile_patterns(pattern, whole, kind) else {
         return;
     };

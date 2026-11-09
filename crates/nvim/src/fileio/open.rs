@@ -126,7 +126,7 @@ pub(crate) fn open_source<'a>(
 
     // After reading a file the cursor line changes, but we don't want
     // to display the line.
-    ex_no_reprint.set(true);
+    EX_NO_REPRINT.set(true);
     // Don't display the file info for another buffer now.
     NEED_FILEINFO.set(false);
 
@@ -245,7 +245,7 @@ pub(crate) fn open_source<'a>(
     // The default is r/w and can be set to r/o below; don't reset it
     // in readonly mode, and only touch b_p_ro when BufFlags::CHECK_RO is set.
     let check_readonly = how.newfile && Buf::current().b_flags.has(BufFlags::CHECK_RO);
-    if check_readonly && !readonlymode.get() {
+    if check_readonly && !READONLYMODE.get() {
         Buf::current().b_p_ro = c_int::from(false);
     }
 
@@ -284,7 +284,7 @@ pub(crate) fn open_source<'a>(
     let mut file_readonly = false;
     if !how.buffer && !how.stdin {
         let name = fname.unwrap_or_default();
-        if !how.newfile || readonlymode.get() || perm & 0o222 == 0 || os_file_is_writable(name) == 0
+        if !how.newfile || READONLYMODE.get() || perm & 0o222 == 0 || os_file_is_writable(name) == 0
         {
             file_readonly = true;
         }
@@ -411,7 +411,7 @@ pub(crate) fn open_source<'a>(
     }
 
     // If "Quit" was selected at the ATTENTION dialog, don't load it.
-    if swap_exists_action.get() == SEA_QUIT {
+    if SWAP_EXISTS_ACTION.get() == SEA_QUIT {
         return Err(retval); // the file is closed with `input`
     }
 

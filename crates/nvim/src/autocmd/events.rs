@@ -211,7 +211,7 @@ fn has_cursorhold() -> bool {
 /// table, the typeahead, the recording register -- and takes no pointer
 /// from the caller.
 pub fn trigger_cursorhold() -> bool {
-    if did_cursorhold.get()
+    if DID_CURSORHOLD.get()
         || !has_cursorhold()
         || REG_RECORDING.get() != 0
         || !typeahead().is_empty()
@@ -231,12 +231,12 @@ pub fn expand_get_event_name(_expand: &Expand, idx: usize) -> Option<Candidate> 
     if let Some(name) = augroup_name(idx + 1) {
         // Skip the group, but keep it in the numbering: the caller
         // walks `idx` up until this answers `None`.
-        if !autocmd_include_groups.get() || augroup_is_deleted(idx + 1) {
+        if !AUTOCMD_INCLUDE_GROUPS.get() || augroup_is_deleted(idx + 1) {
             return Some(Candidate::Borrowed(c""));
         }
         return Some(Candidate::Owned(name.as_cstr().to_owned()));
     }
-    let row = usize::try_from(idx - next_augroup_id.get()).ok()?;
+    let row = usize::try_from(idx - NEXT_AUGROUP_ID.get()).ok()?;
     EVENT_NAMES
         .get(row)
         .map(|row| Candidate::Borrowed(row.name))

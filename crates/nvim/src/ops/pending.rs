@@ -253,7 +253,7 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
     } else if is_ex_cmdchar(cmd_arg) {
         // `do_cmdline` stored the first typed line in `repeat_cmdline`.
         // When several lines were typed, repeating is not possible.
-        match repeat_cmdline.take() {
+        match REPEAT_CMDLINE.take() {
             None => reset_redobuff(),
             Some(line) => {
                 if cmd_arg.cmdchar.is(':') {

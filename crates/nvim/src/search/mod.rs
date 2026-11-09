@@ -16,7 +16,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::ascii::TAB;
 use crate::autocmd::defs::AutoEvent;
@@ -82,14 +81,14 @@ use crate::regexp::{
     vim_regcomp_ext, vim_regexec, vim_regexec_multi,
 };
 use crate::regexp::{RegMMatch, RegMatch};
-use crate::search::state::{SearchItArg, SearchOffset};
 use crate::search::state::{
-    no_hlsearch, no_smartcase, search_match_endcol, search_match_lines, searchcmdlen,
+    NO_HLSEARCH, NO_SMARTCASE, SEARCH_MATCH_ENDCOL, SEARCH_MATCH_LINES, SEARCHCMDLEN,
 };
+use crate::search::state::{SearchItArg, SearchOffset};
 use crate::state::MODE_SHOWMATCH;
 use crate::state::mode::STATE;
 use crate::strings::reversed_text;
-use crate::tag::state::g_do_tagpreview;
+use crate::tag::state::G_DO_TAGPREVIEW;
 use crate::types::{ColNr, Dict, Direction, LPos, LineNr, Pos, ProfTime, TypVal, VarNumber};
 use crate::ui::state::UI_MESSAGES;
 use crate::ui::state::{COLUMNS, ROWS};
@@ -128,7 +127,7 @@ pub const BACKWARD: Direction = -1;
 pub const FORWARD: Direction = 1;
 pub(crate) use crate::cmdhist::HIST_SEARCH;
 pub const MT_LINE_WISE: MotionType = 1;
-pub const kEqualFiles: FileComparison = 1;
+pub const EQUAL_FILES: FileComparison = 1;
 pub const CHECK_PATH: ::core::ffi::c_int = 3;
 pub const FIND_DEFINE: ::core::ffi::c_int = 2;
 pub const ACTION_EXPAND: ::core::ffi::c_int = 5;

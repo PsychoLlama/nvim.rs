@@ -43,7 +43,7 @@ pub fn handle_nvim_open_win(channel_id: uint64_t, args: Array) -> Result<Object,
             return Err(wrong_type(3, c"nvim_open_win", c"Dict(win_config) *"));
         }
     };
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     let rv = nvim_open_win(arg_1, arg_2, &mut arg_3)?;

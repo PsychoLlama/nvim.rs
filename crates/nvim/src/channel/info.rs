@@ -19,7 +19,7 @@ use std::ffi::CString;
 
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{fire_autocmds, has_event};
-use crate::channel::channels;
+use crate::channel::CHANNELS;
 use crate::channel::defs::{ChannelStream, ChannelStreamType};
 use crate::eval::encode::encode_tv2json;
 use crate::eval::{eval_source_name_line, get_v_event, restore_v_event};
@@ -203,7 +203,7 @@ fn argv_array(args: &[&CStr]) -> Array {
 pub fn channel_all_info() -> Array {
     // The registry iterates in registration order; the API contract is
     // ascending id.
-    let mut ids = channels.with(SlotTable::snapshot_keys);
+    let mut ids = CHANNELS.with(SlotTable::snapshot_keys);
     ids.sort_unstable();
     ids.into_iter()
         .map(|id| Object::dict(channel_info(id)))

@@ -25,7 +25,7 @@ use crate::options::kOptWopFlagExacttext;
 use crate::pos::ltoreq;
 use crate::regexp::RegMatch;
 use crate::regexp::{RE_LAST, RE_MAGIC, RE_STRING, vim_regexec_nl};
-use crate::search::state::{search_first_line, search_last_line};
+use crate::search::state::{SEARCH_FIRST_LINE, SEARCH_LAST_LINE};
 use crate::search::{
     BACKWARD, FORWARD, SEARCH_NFMSG, SEARCH_NOOF, SEARCH_OPT, SEARCH_PEEK, SEARCH_START,
     pat_has_uppercase, searchit_buf,
@@ -181,7 +181,7 @@ pub(crate) fn concat_pattern_with_buffer_match(
 /// `dir` is `FORWARD` or `BACKWARD`.
 pub(crate) fn expand_pattern_in_buf(pat: &CStr, dir: Direction) -> Option<Vec<XString>> {
     let exacttext = exacttext();
-    let has_range = search_first_line.get() != LineNr::ZERO;
+    let has_range = SEARCH_FIRST_LINE.get() != LineNr::ZERO;
 
     if pat.is_empty() {
         return None;
@@ -189,12 +189,12 @@ pub(crate) fn expand_pattern_in_buf(pat: &CStr, dir: Direction) -> Option<Vec<XS
 
     let mut cur_match_pos = if has_range {
         Pos {
-            lnum: search_first_line.get(),
+            lnum: SEARCH_FIRST_LINE.get(),
             col: ColNr::ZERO,
             coladd: 0,
         }
     } else {
-        pre_incsearch_pos.get()
+        PRE_INCSEARCH_POS.get()
     };
     let mut prev_match_pos = Pos::default();
 
@@ -230,8 +230,8 @@ pub(crate) fn expand_pattern_in_buf(pat: &CStr, dir: Direction) -> Option<Vec<XS
 
         // If in range mode, check if match is within the range.
         if has_range
-            && (cur_match_pos.lnum < search_first_line.get()
-                || cur_match_pos.lnum > search_last_line.get())
+            && (cur_match_pos.lnum < SEARCH_FIRST_LINE.get()
+                || cur_match_pos.lnum > SEARCH_LAST_LINE.get())
         {
             break;
         }

@@ -36,7 +36,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_UNDO;
 use crate::narrow::len_as_int;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -157,7 +157,7 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
             startcol,
             ColNr::new(skipped),
             ColNr::new(splice),
-            kExtmarkUndo,
+            EXTMARK_UNDO,
         );
 
         if lnum == op.end.lnum {

@@ -15,12 +15,11 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::charset::{ptr2cells_at, transchar, transchar_byte};
 use crate::cmdexpand::defs::ExpandContext;
-use crate::cmdexpand::state::{saved_status_opts, wild_menu_showing};
+use crate::cmdexpand::state::{SAVED_STATUS_OPTS, WILD_MENU_SHOWING};
 use crate::cstr;
 use crate::drawscreen::state::CMDLINE_ROW;
 use crate::ex_getln::cmd_screencol;
@@ -42,7 +41,7 @@ use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::state::{UI_CMDLINE, UI_POPUPMENU, UI_WILDMENU};
 use crate::ui::ui_has;
 use crate::window::{global_stl_height, last_status};
-use crate::winlayer::graph::cmdline_win;
+use crate::winlayer::graph::CMDLINE_WIN;
 use crate::winlayer::{Cc, Win, current_topframe, last_window};
 use core::ffi::{CStr, c_int, c_uint};
 use std::rc::Rc;
@@ -89,7 +88,7 @@ pub(crate) fn cmdline_pum_create(
             pum_user_kind_hlattr: -1,
         })
         .collect();
-    compl_match_array.set(Some(CmdlinePum {
+    CMDLINE_PUM.set(Some(CmdlinePum {
         rows,
         orig: expand.orig.clone(),
         context: expand.context,
@@ -104,7 +103,7 @@ pub(crate) fn cmdline_pum_create(
         from
     };
     let col = as_count(endpos);
-    compl_startcol.set(if ui_has(UI_CMDLINE) && cmdline_win.get().is_none() {
+    COMPL_STARTCOL.set(if ui_has(UI_CMDLINE) && CMDLINE_WIN.get().is_none() {
         col
     } else {
         cmd_screencol(col)
@@ -113,25 +112,25 @@ pub(crate) fn cmdline_pum_create(
 
 pub fn cmdline_pum_display(changed_array: bool) {
     // A share: placing the menu can run autocommands that remove it.
-    let rows = compl_match_array.with(|pum| pum.as_ref().map(|pum| pum.rows.clone()));
+    let rows = CMDLINE_PUM.with(|pum| pum.as_ref().map(|pum| pum.rows.clone()));
     pum_display(
         rows.unwrap_or_else(|| Rc::from([])),
-        compl_selected.get(),
+        COMPL_SELECTED.get(),
         changed_array,
-        compl_startcol.get(),
+        COMPL_STARTCOL.get(),
     );
 }
 
 /// True if the cmdline completion popup menu is being displayed.
 pub fn cmdline_pum_active() -> bool {
-    pum_visible() && compl_match_array.with(Option::is_some)
+    pum_visible() && CMDLINE_PUM.with(Option::is_some)
 }
 
 /// Remove the cmdline completion popup menu (if present) and free the list of
 /// items.
 pub fn cmdline_pum_remove(defer_redraw: bool) {
     pum_undisplay(!defer_redraw);
-    compl_match_array.set(None);
+    CMDLINE_PUM.set(None);
 }
 
 pub(crate) fn cmdline_pum_cleanup(cclp: Cc) {
@@ -142,12 +141,12 @@ pub(crate) fn cmdline_pum_cleanup(cclp: Cc) {
 /// The text the cmdline completion's matches replaced, for the popup menu to
 /// highlight in each item; `None` when there is no cmdline menu.
 pub fn cmdline_compl_pattern() -> Option<XString> {
-    compl_match_array.with(|pum| pum.as_ref().and_then(|pum| pum.orig.clone()))
+    CMDLINE_PUM.with(|pum| pum.as_ref().and_then(|pum| pum.orig.clone()))
 }
 
 /// True if the cmdline completion popup menu's matches are fuzzy ones.
 pub fn cmdline_compl_is_fuzzy() -> bool {
-    compl_match_array.with(|pum| {
+    CMDLINE_PUM.with(|pum| {
         pum.as_ref().is_some_and(|pum| {
             let mut context = Expand::new();
             context.context = pum.context;
@@ -162,7 +161,7 @@ pub fn cmdline_compl_is_fuzzy() -> bool {
 pub(crate) fn cmdline_compl_use_pum(need_wildmenu: bool) -> bool {
     (need_wildmenu
         && WOP_FLAGS.get() & kOptWopFlagPum as c_uint != 0
-        && !(ui_has(UI_CMDLINE) && cmdline_win.get().is_none()))
+        && !(ui_has(UI_CMDLINE) && CMDLINE_WIN.get().is_none()))
         || ui_has(UI_WILDMENU)
         || (ui_has(UI_CMDLINE) && ui_has(UI_POPUPMENU))
 }
@@ -230,7 +229,7 @@ pub(crate) fn redraw_wildmenu(
 ) {
     // Where the listing starts, remembered across redraws so that paging
     // through the matches does not jump.
-    static first_match: GlobalCell<c_int> = GlobalCell::new(0);
+    static FIRST_MATCH: GlobalCell<c_int> = GlobalCell::new(0);
 
     let num_matches = as_count(matches.len());
     // C's SHOW_MATCH().
@@ -259,24 +258,24 @@ pub(crate) fn redraw_wildmenu(
     // Length in screen cells; count 1 for the ending ">".
     let mut clen = wildmenu_match_len(expand, show_match(match_idx)) + 3;
     if match_idx == 0 {
-        first_match.set(0);
-    } else if match_idx < first_match.get() {
+        FIRST_MATCH.set(0);
+    } else if match_idx < FIRST_MATCH.get() {
         // Jumping left, as far as we can go.
-        first_match.set(match_idx);
+        FIRST_MATCH.set(match_idx);
         add_left = true;
     } else {
         // Check if match fits on the screen.
-        i = first_match.get();
+        i = FIRST_MATCH.get();
         while i < match_idx {
             clen += wildmenu_match_len(expand, show_match(i)) + 2;
             i += 1;
         }
-        if first_match.get() > 0 {
+        if FIRST_MATCH.get() > 0 {
             clen += 2;
         }
         // Jumping right, put match at the left.
         if clen > COLUMNS.get() {
-            first_match.set(match_idx);
+            FIRST_MATCH.set(match_idx);
             // If showing the last match, we can add some on the left.
             clen = 2;
             i = match_idx;
@@ -293,12 +292,12 @@ pub(crate) fn redraw_wildmenu(
         }
     }
     if add_left {
-        while first_match.get() > 0 {
-            clen += wildmenu_match_len(expand, show_match(first_match.get() - 1)) + 2;
+        while FIRST_MATCH.get() > 0 {
+            clen += wildmenu_match_len(expand, show_match(FIRST_MATCH.get() - 1)) + 2;
             if clen >= COLUMNS.get() {
                 break;
             }
-            first_match.set(first_match.get() - 1);
+            FIRST_MATCH.set(FIRST_MATCH.get() - 1);
         }
     }
 
@@ -306,12 +305,12 @@ pub(crate) fn redraw_wildmenu(
     let attr = win_hl_attr(Win::current(), group as c_int);
 
     let mut buf = Vec::new();
-    if first_match.get() > 0 {
+    if FIRST_MATCH.get() > 0 {
         buf.extend_from_slice(b"< ");
     }
     clen = as_count(buf.len());
 
-    i = first_match.get();
+    i = FIRST_MATCH.get();
     while clen + wildmenu_match_len(expand, show_match(i)) + 2 < COLUMNS.get() {
         if i == match_idx {
             selection = Some((buf.len(), clen));
@@ -365,7 +364,7 @@ pub(crate) fn redraw_wildmenu(
 
     let mut row = CMDLINE_ROW.get() - 1;
     if row >= 0 {
-        if wild_menu_showing.get() == 0 {
+        if WILD_MENU_SHOWING.get() == 0 {
             if MSG_SCROLLED.get() > 0 {
                 // Put the wildmenu just above the command line.  If there
                 // is no room, scroll the screen one line up.
@@ -376,25 +375,25 @@ pub(crate) fn redraw_wildmenu(
                     CMDLINE_ROW.set(CMDLINE_ROW.get() + 1);
                     row += 1;
                 }
-                wild_menu_showing.set(WM_SCROLLED);
+                WILD_MENU_SHOWING.set(WM_SCROLLED);
             } else {
                 // Create status line if needed by setting 'laststatus' to
                 // 2.  Set 'winminheight' to zero to avoid that the window
                 // is resized.
                 if needs_status_line() {
-                    saved_status_opts.set(Some((p_ls(), p_wmh())));
+                    SAVED_STATUS_OPTS.set(Some((p_ls(), p_wmh())));
                     P_LS.set(2);
                     P_WMH.set(0);
                     last_status(false);
                 }
-                wild_menu_showing.set(WM_SHOWN);
+                WILD_MENU_SHOWING.set(WM_SHOWN);
             }
         }
 
         // Tricky: the wildmenu can be drawn either over a status line, or
         // at empty scrolled space in the message output.
         grid_line_start(
-            if wild_menu_showing.get() == WM_SCROLLED {
+            if WILD_MENU_SHOWING.get() == WM_SCROLLED {
                 msg_grid_view()
             } else {
                 default_gridview()

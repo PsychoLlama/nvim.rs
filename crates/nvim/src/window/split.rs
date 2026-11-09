@@ -28,7 +28,7 @@ use super::arith::NextCurwin;
 use super::*;
 use crate::drawscreen::state::SC_COL;
 use crate::drawscreen::{UPD_NOT_VALID, comp_col, status_redraw_all};
-use crate::ex_docmd::state::cmdmod;
+use crate::ex_docmd::state::CMDMOD;
 use crate::fold::copy_folding_state;
 use crate::mark::copy_jumplist;
 use crate::message::msg_clr_eos_force;
@@ -60,7 +60,7 @@ pub(crate) fn split(size: c_int, flags: c_int) -> Result<(), Failed> {
         return Ok(());
     }
     // Add flags from ":vertical", ":topleft" and ":botright".
-    let flags = flags | cmdmod.with(|m| m.cmod_split);
+    let flags = flags | CMDMOD.with(|m| m.cmod_split);
     if flags & WSP_TOP != 0 && flags & WSP_BOT != 0 {
         return Err(err(WinError::TopAndBottom).into());
     }

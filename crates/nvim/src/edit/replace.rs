@@ -42,7 +42,7 @@ use crate::ascii::NUL;
 /// `stop_insert`'s "this reinitialises it": the entries an insert built up
 /// mean nothing to the next one.
 pub(super) fn replace_stack_clear() {
-    replace_stack.set(Vec::new());
+    REPLACE_STACK.set(Vec::new());
 }
 
 /// Truncate the white space at the end of a line, keeping the replace stack
@@ -121,7 +121,7 @@ fn del_char_after_col(limit_col: c_int) -> bool {
 /// the stack lives behind a [`GlobalCell`](crate::guard::GlobalCell), so the
 /// borrow checker cannot say so for us.
 pub(crate) fn replace_push(bytes: &[u8]) {
-    replace_stack.with_mut(|stack| {
+    REPLACE_STACK.with_mut(|stack| {
         let above = size_t::try_from(REPLACE_OFFSET.get()).unwrap_or(0);
         if stack.len() < above {
             return; // nothing to do
@@ -142,7 +142,7 @@ pub(crate) fn replace_push_nul() {
 /// non-NUL answer means "an entry is open, take a whole character off it
 /// with [`mb_replace_pop_ins`]".
 pub(crate) fn replace_pop_if_nul() -> Option<u8> {
-    replace_stack.with_mut(|stack| {
+    REPLACE_STACK.with_mut(|stack| {
         let top = stack.last().copied();
         if top == Some(0) {
             stack.pop();
@@ -158,7 +158,7 @@ pub(crate) fn is_open(top: Option<u8>) -> bool {
 
 /// Join the top two entries by removing the `off`'th NUL from the top.
 pub(crate) fn replace_join(mut off: c_int) {
-    replace_stack.with_mut(|stack| {
+    REPLACE_STACK.with_mut(|stack| {
         for i in (0..stack.len()).rev() {
             if c_int::from(stack[i]) != NUL {
                 continue;
@@ -198,7 +198,7 @@ pub(crate) fn replace_pop_ins() {
 pub(crate) fn mb_replace_pop_ins() {
     // Taken off the stack *before* the insert: `ins_bytes` runs the whole
     // change machinery, and the borrow must not be open across it.
-    let character = replace_stack.with_mut(|stack| {
+    let character = REPLACE_STACK.with_mut(|stack| {
         // The caller promises the top entry is not empty, so its last byte
         // has a head byte inside the stack.
         let len = head_off(stack, stack.len() - 1) + 1;

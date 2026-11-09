@@ -82,8 +82,8 @@ pub(crate) fn set_buffer_lines(
                 break;
             }
             let text = text.as_cstr().to_bytes();
-            if u_sync_once.get() == 2 {
-                u_sync_once.set(1);
+            if U_SYNC_ONCE.get() == 2 {
+                U_SYNC_ONCE.set(1);
                 u_sync(true);
             }
             if !append && lnum <= Buf::current().line_count() {
@@ -271,8 +271,8 @@ pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     let cob = (!is_curbuf).then(|| SavedBufferState::prepare(buf));
     last = last.min(Buf::current().line_count());
     let count = last - first + 1;
-    if u_sync_once.get() == 2 {
-        u_sync_once.set(1);
+    if U_SYNC_ONCE.get() == 2 {
+        U_SYNC_ONCE.set(1);
         u_sync(true);
     }
     if u_save(first - 1, last + 1).is_ok() {

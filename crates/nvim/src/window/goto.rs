@@ -45,13 +45,13 @@ use crate::normal::{reset_visual_and_resel, visual_active};
 use crate::option::buf_copy_options;
 use crate::option::vars::{P_SPK, p_acd, p_wh, p_wiw};
 use crate::os::fs::{current_dir, os_chdir};
-use crate::os::state::{globaldir, last_chdir_reason};
+use crate::os::state::{GLOBALDIR, LAST_CHDIR_REASON};
 use crate::path::pathcmp;
 use crate::state::mode::RESTART_EDIT;
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state, virtual_active};
 use crate::types::{CD_SCOPE_GLOBAL, CD_SCOPE_TABPAGE, CD_SCOPE_WINDOW, CdScope, OptInt};
 use crate::undo::u_sync;
-use crate::winlayer::graph::prevwin;
+use crate::winlayer::graph::PREVWIN;
 use crate::winlayer::{first_window, frames, tabs, windows_in_tab};
 
 pub fn win_goto(window: Win) {
@@ -314,7 +314,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
         buf_copy_options(window.buffer(), flags);
     }
     if !curwin_invalid {
-        prevwin.set(Win::current_or_none().map(Win::id)); // remember for CTRL-W p
+        PREVWIN.set(Win::current_or_none().map(Win::id)); // remember for CTRL-W p
         Win::current().w_redr_status = true;
     }
     window.make_current();
@@ -411,7 +411,7 @@ pub(crate) fn own_dir(owner: DirOwner) -> Option<XString> {
     match owner {
         DirOwner::Window(window) => window.w_localdir.clone(),
         DirOwner::TabPage(tabpage) => tabpage.tp_localdir.clone(),
-        DirOwner::Global => globaldir.with(Clone::clone),
+        DirOwner::Global => GLOBALDIR.with(Clone::clone),
     }
 }
 
@@ -420,7 +420,7 @@ pub(crate) fn has_own_dir(owner: DirOwner) -> bool {
     match owner {
         DirOwner::Window(window) => window.w_localdir.is_some(),
         DirOwner::TabPage(tabpage) => tabpage.tp_localdir.is_some(),
-        DirOwner::Global => globaldir.with(Option::is_some),
+        DirOwner::Global => GLOBALDIR.with(Option::is_some),
     }
 }
 
@@ -429,7 +429,7 @@ pub(crate) fn set_own_dir(owner: DirOwner, dir: Option<XString>) {
     match owner {
         DirOwner::Window(mut window) => window.w_localdir = dir,
         DirOwner::TabPage(mut tabpage) => tabpage.tp_localdir = dir,
-        DirOwner::Global => globaldir.set(dir),
+        DirOwner::Global => GLOBALDIR.set(dir),
     }
 }
 
@@ -468,8 +468,8 @@ fn fix_current_dir() {
     if let Some(new_dir) = new_dir {
         // Window or tab page has a local directory: save the current one as
         // global (unless that was done already) and change to the local one.
-        if globaldir.with(Option::is_none) && !cwd.is_empty() {
-            globaldir.set(Some(cwd.clone()));
+        if GLOBALDIR.with(Option::is_none) && !cwd.is_empty() {
+            GLOBALDIR.set(Some(cwd.clone()));
         }
         let scope = if has_window_dir {
             CD_SCOPE_WINDOW
@@ -477,16 +477,16 @@ fn fix_current_dir() {
             CD_SCOPE_TABPAGE
         };
         chdir_to(new_dir.as_cstr(), scope as CdScope, cwd.as_cstr());
-    } else if let Some(global) = globaldir.with(Clone::clone) {
+    } else if let Some(global) = GLOBALDIR.with(Clone::clone) {
         // The window has no local directory and we are not in the global one:
         // change back to it. The global one is only forgotten afterwards, as
         // upstream frees it after the directory-change autocommands.
         chdir_to(global.as_cstr(), CD_SCOPE_GLOBAL, cwd.as_cstr());
-        globaldir.set(None);
+        GLOBALDIR.set(None);
     } else {
         return;
     }
-    last_chdir_reason.set(None);
+    LAST_CHDIR_REASON.set(None);
     shorten_fnames(true);
 }
 
@@ -496,10 +496,10 @@ fn chdir_to(dir: &CStr, scope: CdScope, cwd: &CStr) {
     let differs = pathcmp(dir.to_bytes(), cwd.to_bytes(), None) != 0;
     let announce = !p_acd() && differs;
     if announce {
-        do_autocmd_dirchanged(dir, scope, kCdCauseWindow, true);
+        do_autocmd_dirchanged(dir, scope, CD_CAUSE_WINDOW, true);
     }
     if os_chdir(dir) == 0 && announce {
-        do_autocmd_dirchanged(dir, scope, kCdCauseWindow, false);
+        do_autocmd_dirchanged(dir, scope, CD_CAUSE_WINDOW, false);
     }
 }
 

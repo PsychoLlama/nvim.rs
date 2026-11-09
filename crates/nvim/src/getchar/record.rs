@@ -149,7 +149,7 @@ pub(crate) fn gotchars(chars: &[u8]) {
     may_sync_undo();
 
     // Output the "debug mode" message again next time round.
-    debug_did_msg.set(false);
+    DEBUG_DID_MSG.set(false);
 
     // Characters have been typed, so whatever follows counts as another
     // mapping. A search string is kept in the history.

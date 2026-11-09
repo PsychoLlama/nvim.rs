@@ -31,9 +31,9 @@
 use crate::buffer::buf_is_prompt;
 use crate::diff::diff_mark_adjust;
 use crate::ex_docmd::cmdmod_has;
+use crate::extmark::EXTMARK_NOOP;
 use crate::extmark::ExtmarkOp;
 use crate::extmark::extmark_adjust;
-use crate::extmark::kExtmarkNOOP;
 use crate::fold::fold_mark_adjust;
 use crate::mark::defs::MarkAdjustMode;
 use crate::pos::{MAXLNUM, equalpos};
@@ -194,7 +194,7 @@ pub fn mark_adjust(line1: LineNr, line2: LineNr, amount: i32, amount_after: i32,
         amount,
         amount_after,
         true,
-        kMarkAdjustNormal,
+        MARK_ADJUST_NORMAL,
         op,
     );
 }
@@ -218,7 +218,7 @@ pub fn mark_adjust_nofold(
         amount,
         amount_after,
         false,
-        kMarkAdjustNormal,
+        MARK_ADJUST_NORMAL,
         op,
     );
 }
@@ -247,8 +247,8 @@ pub fn mark_adjust_buf(
         amount,
         amount_after,
     };
-    let by_api = mode as c_uint == kMarkAdjustApi as c_uint;
-    let by_term = mode as c_uint == kMarkAdjustTerm as c_uint;
+    let by_api = mode as c_uint == MARK_ADJUST_API as c_uint;
+    let by_term = mode as c_uint == MARK_ADJUST_TERM as c_uint;
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // `'a`-`'z` are invalidated when their line goes; the global table's
@@ -256,7 +256,7 @@ pub fn mark_adjust_buf(
         // global mark is the user's bookmark and losing it outright is worse
         // than moving it. Both halves of the table are walked, but only the
         // slots naming *this* buffer are touched.
-        namedfm.with_mut(|table| {
+        NAMEDFM.with_mut(|table| {
             for mark in table.iter_mut() {
                 shift.mark_nodel_in(&mut mark.fmark, fnum);
             }
@@ -303,7 +303,7 @@ pub fn mark_adjust_buf(
         }
     }
 
-    if op as c_uint != kExtmarkNOOP as c_uint {
+    if op as c_uint != EXTMARK_NOOP as c_uint {
         extmark_adjust(buffer, line1, line2, amount, amount_after, op);
     }
 
@@ -445,7 +445,7 @@ pub fn mark_col_adjust(
         spaces_removed,
     };
 
-    namedfm.with_mut(|table| {
+    NAMEDFM.with_mut(|table| {
         for mark in table.iter_mut() {
             shift.mark_in(&mut mark.fmark, fnum);
         }
@@ -473,8 +473,8 @@ pub fn mark_col_adjust(
     SAVED_CURSOR.set(saved);
 
     // The current tab page's windows only. Upstream spells the head
-    // `curtab == curtab ? firstwin : curtab->tp_firstwin`, a transpiler
-    // tautology that always takes `firstwin`.
+    // `CURTAB == CURTAB ? FIRSTWIN : CURTAB->tp_firstwin`, a transpiler
+    // tautology that always takes `FIRSTWIN`.
     for mut win in windows() {
         let len = slot(win.w_jumplistlen);
         for jump in &mut win.w_jumplist[..len] {

@@ -7,7 +7,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 //! The screen grid: allocating it, scrolling it, reading cells out of it.
 //!
@@ -58,7 +57,7 @@ use crate::option::vars::{RDB_FLAGS, p_arshape, p_tbidi};
 use crate::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
 use crate::optionstr::check_chars_options;
 use crate::os::libc::{size_t, uint32_t};
-use crate::startup::full_screen;
+use crate::startup::FULL_SCREEN;
 use crate::state::mode::EXMODE_ACTIVE;
 use crate::types::{AlignTextPos, ColNr, Handle, Integer, ScreenChar, WLine, WinConfig};
 use crate::ui::state::UI_MULTIGRID;

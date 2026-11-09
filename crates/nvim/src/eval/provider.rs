@@ -24,11 +24,11 @@ use crate::types::LineNr;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
+use crate::autocmd::state::{AUTOCMD_BUFNR, AUTOCMD_FNAME, AUTOCMD_FNAME_FULL, AUTOCMD_MATCH};
 use crate::buffer::buf_is_prompt;
 use crate::change::appended_lines_mark;
+use crate::channel::defs::CHANNEL_STREAM_PROC;
 use crate::channel::defs::CallbackReader;
-use crate::channel::defs::kChannelStreamProc;
 use crate::channel::{callback_reader_free, channel_job_running, channel_stream_type};
 use crate::eval::callback_call;
 use crate::eval::typval::{
@@ -48,7 +48,7 @@ use crate::os::libc::{ptrdiff_t, uint64_t};
 use crate::runtime::defs::EstackInfo;
 use crate::runtime::script_autoload_named;
 use crate::runtime::sourcing_name_copy;
-use crate::runtime::state::{ETYPE_TOP, current_sctx};
+use crate::runtime::state::{CURRENT_SCTX, ETYPE_TOP};
 use crate::types::{Callback, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber};
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Win};
@@ -134,7 +134,7 @@ pub fn find_job(id: uint64_t, show_error: bool) -> bool {
     }
     if show_error {
         // A channel that exists but is not a job gets its own message.
-        let wrong_kind = channel_stream_type(id).is_some_and(|kind| kind != kChannelStreamProc);
+        let wrong_kind = channel_stream_type(id).is_some_and(|kind| kind != CHANNEL_STREAM_PROC);
         emsg_static(if wrong_kind { E_INVCHANJOB } else { E_INVCHAN });
     }
     false
@@ -181,12 +181,12 @@ pub fn eval_call_provider(
     let func = provider_name(provider.to_bytes(), b"Call");
 
     let scope = CallerScope {
-        script_ctx: current_sctx.get(),
+        script_ctx: CURRENT_SCTX.get(),
         es_entry: top_estack(),
-        autocmd_fname: autocmd_fname.with(Clone::clone),
-        autocmd_match: autocmd_match.with(Clone::clone),
-        autocmd_fname_full: autocmd_fname_full.get(),
-        autocmd_bufnr: autocmd_bufnr.get(),
+        autocmd_fname: AUTOCMD_FNAME.with(Clone::clone),
+        autocmd_match: AUTOCMD_MATCH.with(Clone::clone),
+        autocmd_fname_full: AUTOCMD_FNAME_FULL.get(),
+        autocmd_bufnr: AUTOCMD_BUFNR.get(),
         funccalp: current_fc_id(),
     };
     let saved_provider_caller_scope =

@@ -76,11 +76,11 @@ pub(crate) fn prepare_line(
             && let Some(sel) = visual_selection()
         {
             s.visual_area(wlv, window, sel);
-        } else if highlight_match.get()
+        } else if HIGHLIGHT_MATCH.get()
             && window.raw() == Win::current_raw()
             && !s.has_foldtext
             && lnum >= Win::current().w_cursor.lnum
-            && lnum <= Win::current().w_cursor.lnum + search_match_lines.get()
+            && lnum <= Win::current().w_cursor.lnum + SEARCH_MATCH_LINES.get()
         {
             s.incsearch_area(wlv, window);
         }
@@ -324,7 +324,7 @@ impl LineSetup {
 
         // The character under the cursor is inverted only if the cursor is
         // drawn as a block inside the selection anyway.
-        if !highlight_match.get()
+        if !HIGHLIGHT_MATCH.get()
             && self.in_curline
             && cursor_is_block_during_visual(P_SEL.first_byte() == b'e')
         {
@@ -346,10 +346,10 @@ impl LineSetup {
         } else {
             ColNr::ZERO
         };
-        let mut to = if lnum == Win::current().w_cursor.lnum + search_match_lines.get() {
+        let mut to = if lnum == Win::current().w_cursor.lnum + SEARCH_MATCH_LINES.get() {
             let mut pos = Pos {
                 lnum,
-                col: search_match_endcol.get(),
+                col: SEARCH_MATCH_ENDCOL.get(),
                 coladd: 0,
             };
             getvcol(Win::current(), &mut pos).0
@@ -358,7 +358,7 @@ impl LineSetup {
         };
         // Do at least one character; the match can be past the end of the
         // line.
-        if from == to && search_match_endcol.get() != ColNr::ZERO {
+        if from == to && SEARCH_MATCH_ENDCOL.get() != ColNr::ZERO {
             to = from + 1;
         }
         wlv.inverted = Inversion::new(from, to);
@@ -461,7 +461,7 @@ impl LineSetup {
             self.statuscol.lnum = wlv.lnum;
             self.statuscol.foldinfo = wlv.foldinfo;
             self.statuscol.width =
-                window.col_off() - ::core::ffi::c_int::from(cmdwin_win.get() == Some(window.id()));
+                window.col_off() - ::core::ffi::c_int::from(CMDWIN_WIN.get() == Some(window.id()));
             self.statuscol.sign_cul_id = if use_cursor_line_highlight(window, wlv.lnum) {
                 wlv.sign_cul_attr
             } else {

@@ -34,7 +34,7 @@
 use super::flag::{FR_COL, FR_LEAF};
 use super::view::put_view;
 use super::{
-    SessionFile, SessionOpts, Written, did_lcd, ses_arglist, ses_do_win, ses_escape_fname,
+    DID_LCD, SessionFile, SessionOpts, Written, ses_arglist, ses_do_win, ses_escape_fname,
     ses_fname, ses_put_fname,
 };
 use crate::arglist::ArgListId;
@@ -59,7 +59,7 @@ use crate::types::{
 use crate::ui::state::{COLUMNS, ROWS};
 use crate::window::tab_index;
 use crate::window::{DirOwner, own_dir};
-use crate::winlayer::graph::firstwin;
+use crate::winlayer::graph::FIRSTWIN;
 use crate::winlayer::{
     FrameRef, TabPage, Win, WinId, buffers, current_topframe, first_tab, tabs, windows_in_tab,
 };
@@ -243,13 +243,13 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> Written {
         let (tab_firstwin, tab_topframe) = if with_tabs {
             need_tabnext = Some(tab) != first_tab();
             if tab.is_current() {
-                (firstwin.get(), current_topframe())
+                (FIRSTWIN.get(), current_topframe())
             } else {
                 (tab.tp_firstwin, tab.topframe())
             }
         } else {
             tab = TabPage::current();
-            (firstwin.get(), current_topframe())
+            (FIRSTWIN.get(), current_topframe())
         };
 
         // Before creating the layout, try loading one file: if that is
@@ -333,7 +333,7 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> Written {
             out.puts(c"tcd ")?;
             ses_put_fname(out, localdir.as_cstr())?;
             out.eol()?;
-            did_lcd.set(true);
+            DID_LCD.set(true);
         }
 
         // Each window's view.

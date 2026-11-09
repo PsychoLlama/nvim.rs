@@ -40,7 +40,7 @@ use crate::os::env::env_set;
 use crate::os::libc::{int64_t, uint8_t};
 use crate::path::{full_name_save, tail_index};
 use crate::regexp::state::{OPTION_MAGIC_OFF, OPTION_MAGIC_ON};
-use crate::search::state::magic_overruled;
+use crate::search::state::MAGIC_OVERRULED;
 use crate::state::mode::STATE;
 use crate::types::{Callback, ExArg, Failed, OptInt, ScriptId, TypVal};
 
@@ -137,7 +137,7 @@ pub(crate) fn fill_culopt_flags(val: Option<&CStr>, mut window: Win) -> Result<(
 /// Whether patterns are magic right now — `\v`/`\V` in the pattern override
 /// 'magic' for the pattern they appear in.
 pub(crate) fn magic_isset() -> bool {
-    match magic_overruled.get() {
+    match MAGIC_OVERRULED.get() {
         OPTION_MAGIC_ON => true,
         OPTION_MAGIC_OFF => false,
         _ => p_magic(),
@@ -313,7 +313,7 @@ pub(crate) fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
         EOL_DOS => Some(c"dos"),
         _ => None,
     };
-    // SAFETY: the names are static; `curbuf` is live.
+    // SAFETY: the names are static; `CURBUF` is live.
     if let Some(name) = name {
         set_option_direct(
             kOptFileformat,

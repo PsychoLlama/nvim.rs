@@ -97,7 +97,7 @@ fn may_open_fold_hor() {
 /// `i_CTRL-G_U` sets `dont_sync_undo` for exactly one motion, which is what
 /// lets an insert survive an arrow key as a single undo block.
 fn ends_change() -> bool {
-    dont_sync_undo.get() == KeepUndo::No
+    DONT_SYNC_UNDO.get() == KeepUndo::No
 }
 
 /// `<Left>` in Insert mode.
@@ -114,10 +114,10 @@ pub(crate) fn ins_left() {
         }
         // Only the characters 'revins' itself put there are legal to go
         // back over.
-        if revins_scol.get() != -1 && Win::current().w_cursor.col >= ColNr::new(revins_scol.get()) {
-            revins_legal.set(revins_legal.get() + 1);
+        if REVINS_SCOL.get() != -1 && Win::current().w_cursor.col >= ColNr::new(REVINS_SCOL.get()) {
+            REVINS_LEGAL.set(REVINS_LEGAL.get() + 1);
         }
-        revins_chars.set(revins_chars.get() + 1);
+        REVINS_CHARS.set(REVINS_CHARS.get() + 1);
     } else if p_ww(|value| value.to_bytes().contains(&b'['))
         && Win::current().w_cursor.lnum > LineNr::ONE
     {
@@ -129,7 +129,7 @@ pub(crate) fn ins_left() {
     } else {
         beep_cursor();
     }
-    dont_sync_undo.set(KeepUndo::No);
+    DONT_SYNC_UNDO.set(KeepUndo::No);
 }
 
 /// `<Home>`, and `<C-Home>` -- which goes to the first line first.
@@ -177,7 +177,7 @@ pub(crate) fn ins_s_left() {
     } else {
         beep_cursor();
     }
-    dont_sync_undo.set(KeepUndo::No);
+    DONT_SYNC_UNDO.set(KeepUndo::No);
 }
 
 /// `<Right>` in Insert mode.
@@ -208,9 +208,9 @@ pub(crate) fn ins_right() {
             Win::current().w_cursor.col += ColNr::try_from(step).unwrap_or(ColNr::MAX).get();
         }
 
-        revins_legal.set(revins_legal.get() + 1);
-        if revins_chars.get() != 0 {
-            revins_chars.set(revins_chars.get() - 1);
+        REVINS_LEGAL.set(REVINS_LEGAL.get() + 1);
+        if REVINS_CHARS.get() != 0 {
+            REVINS_CHARS.set(REVINS_CHARS.get() - 1);
         }
     } else if p_ww(|value| value.to_bytes().contains(&b']'))
         && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
@@ -223,7 +223,7 @@ pub(crate) fn ins_right() {
     } else {
         beep_cursor();
     }
-    dont_sync_undo.set(KeepUndo::No);
+    DONT_SYNC_UNDO.set(KeepUndo::No);
 }
 
 /// `<S-Right>`: one word forward.
@@ -244,7 +244,7 @@ pub(crate) fn ins_s_right() {
     } else {
         beep_cursor();
     }
-    dont_sync_undo.set(KeepUndo::No);
+    DONT_SYNC_UNDO.set(KeepUndo::No);
 }
 
 /// `<Up>` and `<Down>` in Insert mode.
@@ -274,7 +274,7 @@ pub(crate) fn ins_updown(up: bool, startcol: bool) {
             redraw_later(Win::current(), UPD_VALID);
         }
         start_arrow_at(InsertEnd::At(tpos));
-        can_cindent.set(true);
+        CAN_CINDENT.set(true);
     } else {
         beep_cursor();
     }
@@ -298,7 +298,7 @@ pub(crate) fn ins_page(back: bool) {
     let dir = if back { BACKWARD } else { FORWARD };
     if pagescroll(dir, 1, false) {
         start_arrow_at(InsertEnd::At(tpos));
-        can_cindent.set(true);
+        CAN_CINDENT.set(true);
     } else {
         beep_cursor();
     }

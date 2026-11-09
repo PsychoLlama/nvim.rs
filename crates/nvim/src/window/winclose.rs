@@ -42,7 +42,7 @@ use crate::types::Integer;
 use crate::ui::state::UI_MULTIGRID;
 use crate::ui::{ui_call_win_close, ui_has};
 use crate::winfloat::win_float_find_altwin;
-use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};
+use crate::winlayer::graph::{FIRST_TABPAGE, FIRSTWIN, LASTWIN};
 use crate::winlayer::{WinId, tabs};
 
 /// A window that is still open after [`win_close`] was asked to close it.
@@ -93,7 +93,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClos
     }
 
     // When closing the last window in a tab page first go to another tab page
-    // and then close the window and the tab page, so that `curwin` and `curtab`
+    // and then close the window and the tab page, so that `curwin` and `CURTAB`
     // are never invalid while memory is freed.
     if close_last_tabpage_window(win, free_buf, prev_curtab) {
         return Err(NotClosed);
@@ -168,7 +168,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClos
 
     // Now the window really is going to close. Disallow any autocommand from
     // splitting a window, to avoid trouble.
-    let no_split = Lock::held(&split_disallowed);
+    let no_split = Lock::held(&SPLIT_DISALLOWED);
     let was_floating = win.w_floating;
     if ui_has(UI_MULTIGRID) {
         ui_call_win_close(Integer::from(win.w_grid_alloc.handle));
@@ -209,7 +209,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClos
     }
 
     // Make sure `curwin` is not invalid: it causes severe trouble when printing
-    // an error message, and `win_equal()` needs `curbuf` to be valid too.
+    // an error message, and `win_equal()` needs `CURBUF` to be valid too.
     let close_curwin = was_current;
     if was_current {
         wp.make_current();
@@ -252,7 +252,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClos
         }
     }
 
-    if firstwin.get() == lastwin.get()
+    if FIRSTWIN.get() == LASTWIN.get()
         && Win::current().w_locked
         && Buf::current().b_locked_split != 0
         && first_tab().next().is_some()
@@ -562,8 +562,8 @@ pub(crate) fn close_othertab(
         if tabpage.tp_firstwin == tabpage.tp_lastwin {
             free_tp_idx = tab_index(tabpage);
             let h = tabline_rows();
-            if first_tabpage.get() == Some(tabpage.id()) {
-                first_tabpage.set(tabpage.tp_next);
+            if FIRST_TABPAGE.get() == Some(tabpage.id()) {
+                FIRST_TABPAGE.set(tabpage.tp_next);
             } else {
                 let Some(mut ptp) = tabs().find(|ptp| ptp.tp_next == Some(tabpage.id())) else {
                     internal_error(c"win_close_othertab()");

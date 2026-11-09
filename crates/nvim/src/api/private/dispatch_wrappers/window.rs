@@ -36,7 +36,7 @@ pub fn handle_nvim_win_close(channel_id: uint64_t, args: Array) -> Result<Object
     let Some(arg_2) = as_boolean(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_win_close", c"Boolean"));
     };
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     nvim_win_close(arg_1, arg_2)?;
@@ -274,7 +274,7 @@ pub fn handle_nvim_win_hide(channel_id: uint64_t, args: Array) -> Result<Object,
     let Some(arg_1) = as_handle(args[0].take(), OBJECT_TYPE_WINDOW) else {
         return Err(wrong_type(1, c"nvim_win_hide", c"Window"));
     };
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     nvim_win_hide(arg_1)?;
@@ -326,7 +326,7 @@ pub fn handle_nvim_win_set_buf(channel_id: uint64_t, args: Array) -> Result<Obje
     let Some(arg_2) = as_handle(args[1].take(), OBJECT_TYPE_BUFFER) else {
         return Err(wrong_type(2, c"nvim_win_set_buf", c"Buffer"));
     };
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     nvim_win_set_buf(arg_1, arg_2)?;

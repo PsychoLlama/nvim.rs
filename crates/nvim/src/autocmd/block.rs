@@ -20,16 +20,16 @@ use super::*;
 pub fn block_autocmds() {
     // Remember that we may need to fire `TermResponse` later.
     if !is_autocmd_blocked() {
-        termresponse_changed.set(false);
+        TERMRESPONSE_CHANGED.set(false);
     }
-    autocmd_blocked.set(autocmd_blocked.get() + 1);
+    AUTOCMD_BLOCKED.set(AUTOCMD_BLOCKED.get() + 1);
 }
 
 /// Undo one [`block_autocmds`], firing the `TermResponse` that arrived
 /// while they were off.
 pub fn unblock_autocmds() {
-    autocmd_blocked.set(autocmd_blocked.get() - 1);
-    if !is_autocmd_blocked() && termresponse_changed.get() && has_event(AutoEvent::TermResponse) {
+    AUTOCMD_BLOCKED.set(AUTOCMD_BLOCKED.get() - 1);
+    if !is_autocmd_blocked() && TERMRESPONSE_CHANGED.get() && has_event(AutoEvent::TermResponse) {
         // The autocommand takes the copy over.
         let sequence = ApiString::from_bytes(&vim_var_bytes(Vv::Termresponse));
         do_termresponse_autocmd(sequence);
@@ -38,5 +38,5 @@ pub fn unblock_autocmds() {
 
 /// Whether [`block_autocmds`] is in effect.
 pub fn is_autocmd_blocked() -> bool {
-    autocmd_blocked.get() != 0
+    AUTOCMD_BLOCKED.get() != 0
 }

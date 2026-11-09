@@ -52,7 +52,7 @@ pub fn do_dialog(
     _textfield: Option<&CStr>,
     ex_cmd: bool,
 ) -> c_int {
-    if silent_mode.get() {
+    if SILENT_MODE.get() {
         return dfltbutton;
     }
 

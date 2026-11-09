@@ -33,7 +33,7 @@ use crate::ascii::NUL;
 use crate::ascii::ascii_isdigit;
 use crate::charset::transchar;
 use crate::global_cell::{Field, field};
-use crate::guard::secure;
+use crate::guard::SECURE;
 use crate::indent_c::parse_cino;
 use crate::memory::XString;
 use crate::option::defs::OptError;
@@ -367,7 +367,7 @@ pub fn check_illegal_path_names(val: &CStr, flags: uint32_t) -> bool {
     let val = val.to_bytes();
     let holds = |set: &[u8]| val.iter().any(|b| set.contains(b));
     (flags & OPT_FLAG_N_FNAME as uint32_t != 0
-        && holds(if secure.get() != 0 {
+        && holds(if SECURE.get() != 0 {
             b"/\\*?[|;&<>\r\n"
         } else {
             b"/\\*?[<>\r\n"

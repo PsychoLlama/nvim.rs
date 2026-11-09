@@ -115,7 +115,7 @@ fn patch_into(excmd: &mut ExArg, tmp_orig: &CStr, tmp_new: &CStr) {
         newname = Some(patched);
     }
     cmdmod_set_tab(0);
-    let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
+    let vertical = DIFF_FLAGS.get() & DIFF_VERTICAL != 0;
     let flags = if vertical { WSP_VERT } else { 0 };
     if win_split(0, flags).is_err() {
         return;
@@ -177,7 +177,7 @@ pub fn ex_diffsplit(excmd: &mut ExArg) {
     validate_cursor(old_curwin);
     set_fraction(old_curwin);
     cmdmod_set_tab(0);
-    let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
+    let vertical = DIFF_FLAGS.get() & DIFF_VERTICAL != 0;
     let flags = if vertical { WSP_VERT } else { 0 };
     if win_split(0, flags).is_err() {
         return;
@@ -213,7 +213,7 @@ pub fn ex_diffthis(_excmd: &mut ExArg) {
 fn set_diff_option(window: Win, value: bool) {
     let saved = switch_to(window);
     Buf::current().b_ro_locked += 1;
-    // `curwin`/`curbuf` name `window` and its buffer, which is what the option
+    // `curwin`/`CURBUF` name `window` and its buffer, which is what the option
     // code reads; the buffer is locked against a `:set` side effect.
     let val = OptVal::Boolean(Some(value));
     set_option_value_give_err(kOptDiff, val, OptionSetFlags::LOCAL);
@@ -245,7 +245,7 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
         window.w_onebuf_opt.wo_crb_save = window.w_onebuf_opt.wo_crb;
     }
     window.w_onebuf_opt.wo_crb = 1;
-    if diff_flags.get() & DIFF_FOLLOWWRAP == 0 {
+    if DIFF_FLAGS.get() & DIFF_FOLLOWWRAP == 0 {
         if first_time {
             window.w_onebuf_opt.wo_wrap_save = window.w_onebuf_opt.wo_wrap;
         }
@@ -271,7 +271,7 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
     }
     // A single digit, because the option's buffer is one byte plus the
     // NUL. C's `assert()` is `debug_assert!`: it vanishes under NDEBUG.
-    let width = diff_foldcolumn.get();
+    let width = DIFF_FOLDCOLUMN.get();
     debug_assert!((0..=9).contains(&width));
     let digit = u8::try_from(width.clamp(0, 9)).unwrap_or(0);
     window.w_onebuf_opt.wo_fdc = Some(XString::from_bytes(&[b'0' + digit]));
@@ -298,7 +298,7 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
 /// in the meantime is left alone.
 pub fn ex_diffoff(excmd: &mut ExArg) {
     let mut diffwin = false;
-    // `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`: always the `firstwin` list.
+    // `FOR_ALL_WINDOWS_IN_TAB(wp, CURTAB)`: always the `FIRSTWIN` list.
     for mut wp in windows() {
         let wanted = if excmd.forceit {
             wp.w_onebuf_opt.wo_diff != 0
@@ -314,7 +314,7 @@ pub fn ex_diffoff(excmd: &mut ExArg) {
                 if wp.w_onebuf_opt.wo_crb != 0 {
                     wp.w_onebuf_opt.wo_crb = wp.w_onebuf_opt.wo_crb_save;
                 }
-                if diff_flags.get() & DIFF_FOLLOWWRAP == 0
+                if DIFF_FLAGS.get() & DIFF_FOLLOWWRAP == 0
                     && wp.w_onebuf_opt.wo_wrap == 0
                     && wp.w_onebuf_opt.wo_wrap_save != 0
                 {
@@ -347,7 +347,7 @@ pub fn ex_diffoff(excmd: &mut ExArg) {
     }
     let mut tp = TabPage::current();
     if !diffwin {
-        diff_need_update.set(false);
+        DIFF_NEED_UPDATE.set(false);
         tp.tp_diff_invalid = 0;
         tp.tp_diff_update = 0;
         diff_clear(tp);

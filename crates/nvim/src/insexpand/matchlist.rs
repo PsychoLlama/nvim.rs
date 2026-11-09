@@ -81,7 +81,7 @@ pub(crate) fn ins_compl_add(
     score: c_int,
 ) -> Added {
     let dir = if cdir == DIRECTION_NOT_SET {
-        compl_direction.get()
+        COMPL_DIRECTION.get()
     } else {
         cdir
     };
@@ -134,7 +134,7 @@ pub(crate) fn ins_compl_add(
     };
     // The direction is ignored under `longest` + `fuzzy`, because matches
     // are inserted sorted by score.
-    let by_score = cot_fuzzy() && score != FUZZY_SCORE_NONE && compl_get_longest.get();
+    let by_score = cot_fuzzy() && score != FUZZY_SCORE_NONE && COMPL_GET_LONGEST.get();
     let added = MATCHES.with_mut(|list| {
         let id = list.push(item);
         list.link(id, dir, by_score);
@@ -142,7 +142,7 @@ pub(crate) fn ins_compl_add(
     });
 
     // Find the longest common string if still doing that.
-    if compl_get_longest.get()
+    if COMPL_GET_LONGEST.get()
         && flags & CP_ORIGINAL_TEXT == 0
         && !cot_fuzzy()
         && !ins_compl_preinsert_longest()
@@ -157,7 +157,7 @@ impl ComplMatches {
     /// The first match in list order, the original text aside, whose text
     /// is `text`.
     fn find_text(&self, text: &[u8]) -> Option<MatchId> {
-        let first = self.compl_first_match?;
+        let first = self.COMPL_FIRST_MATCH?;
         let mut at = first;
         loop {
             let m = self.get(at);
@@ -172,7 +172,7 @@ impl ComplMatches {
     /// current one -- or, `by_score`, before the first match scoring lower
     /// -- and make it current.
     fn link(&mut self, id: MatchId, dir: Direction, by_score: bool) {
-        match self.compl_first_match {
+        match self.COMPL_FIRST_MATCH {
             // An empty list: the new match stands alone.
             None => {}
             Some(first) if by_score => {
@@ -207,7 +207,7 @@ impl ComplMatches {
                 // A non-empty list always has a current match, which upstream
                 // dereferences here without checking.
                 let curr = self
-                    .compl_curr_match
+                    .COMPL_CURR_MATCH
                     .expect("a non-empty match list has a current match");
                 let (after, before) = (self.get(curr).next, self.get(curr).prev);
                 let new = self.get_mut(id);
@@ -225,15 +225,15 @@ impl ComplMatches {
         match prev {
             Some(prev) => self.get_mut(prev).next = Some(id),
             // Nothing before it: it is the first match.
-            None => self.compl_first_match = Some(id),
+            None => self.COMPL_FIRST_MATCH = Some(id),
         }
-        self.compl_curr_match = Some(id);
+        self.COMPL_CURR_MATCH = Some(id);
     }
 
     /// Close the list into a ring; answers the number of matches after the
     /// first.
     fn make_cyclic(&mut self) -> c_int {
-        let Some(first) = self.compl_first_match else {
+        let Some(first) = self.COMPL_FIRST_MATCH else {
             return 0;
         };
         let mut last = first;
@@ -249,7 +249,7 @@ impl ComplMatches {
 
     /// Open the ring back into a list with an end.
     fn make_linear(&mut self) {
-        let Some(first) = self.compl_first_match else {
+        let Some(first) = self.COMPL_FIRST_MATCH else {
             return;
         };
         let Some(last) = self.get(first).prev else {
@@ -292,7 +292,7 @@ impl ComplMatches {
     /// Sort the ring by `order`, leaving the original text where it is: at
     /// the head when the shown matches run `forward`, else at the tail.
     fn sort(&mut self, order: MatchOrder, forward: bool) {
-        let Some(first) = self.compl_first_match else {
+        let Some(first) = self.COMPL_FIRST_MATCH else {
             return;
         };
         if self.is_first(self.get(first).next) {
@@ -319,7 +319,7 @@ impl ComplMatches {
                 .expect("the leader is not the only match");
             self.get_mut(before).next = None;
             let head = self.sort_chain(Some(first), order);
-            self.compl_first_match = head;
+            self.COMPL_FIRST_MATCH = head;
             let last = *self
                 .chain(head)
                 .last()
@@ -344,7 +344,7 @@ impl ComplMatches {
         let mut number = 0;
         // Upstream dereferences `compl_curr_match` here without checking.
         let curr = self
-            .compl_curr_match
+            .COMPL_CURR_MATCH
             .expect("a running completion has a current match");
         // Look away from the walk for the first match with a number...
         let mut at = away(self, curr);
@@ -376,19 +376,19 @@ impl ComplMatches {
         let mut removed = Vec::new();
         // Under `'completeopt'` `fuzzy` the items are not in source order, so
         // they have to be removed one by one rather than as a run.
-        let mut current = self.compl_first_match;
+        let mut current = self.COMPL_FIRST_MATCH;
         while let Some(cur) = current {
             let (next, prev) = (self.get(cur).next, self.get(cur).prev);
             current = next;
             if self.get(cur).cpt_source_idx != source {
                 continue;
             }
-            if self.compl_shown_match == Some(cur) {
+            if self.COMPL_SHOWN_MATCH == Some(cur) {
                 shown_match_removed = true;
             }
-            if Some(cur) == self.compl_first_match {
+            if Some(cur) == self.COMPL_FIRST_MATCH {
                 // Head.
-                self.compl_first_match = next;
+                self.COMPL_FIRST_MATCH = next;
                 if let Some(head) = next {
                     self.get_mut(head).prev = None;
                 }
@@ -404,22 +404,22 @@ impl ComplMatches {
 
         if shown_match_removed {
             if forward {
-                self.compl_shown_match = self.compl_first_match;
-            } else if let Some(first) = self.compl_first_match {
+                self.COMPL_SHOWN_MATCH = self.COMPL_FIRST_MATCH;
+            } else if let Some(first) = self.COMPL_FIRST_MATCH {
                 // The last node carries the prefix being completed.
-                self.compl_shown_match = self.chain(Some(first)).last().copied();
+                self.COMPL_SHOWN_MATCH = self.chain(Some(first)).last().copied();
             }
         }
 
-        self.compl_curr_match = self.compl_first_match;
-        let mut current = self.compl_first_match;
+        self.COMPL_CURR_MATCH = self.COMPL_FIRST_MATCH;
+        let mut current = self.COMPL_FIRST_MATCH;
         while let Some(cur) = current {
             let (idx, next) = (self.get(cur).cpt_source_idx, self.get(cur).next);
             let earlier = if forward { idx < source } else { idx > source };
             if !earlier {
                 break;
             }
-            self.compl_curr_match = if forward { Some(cur) } else { next };
+            self.COMPL_CURR_MATCH = if forward { Some(cur) } else { next };
             current = next;
         }
         removed
@@ -428,10 +428,10 @@ impl ComplMatches {
     /// Empty the list, answering what it held so the caller drops it
     /// outside the borrow.
     fn clear(&mut self) -> Vec<Option<ComplItem>> {
-        self.compl_first_match = None;
-        self.compl_curr_match = None;
-        self.compl_shown_match = None;
-        self.compl_old_match = None;
+        self.COMPL_FIRST_MATCH = None;
+        self.COMPL_CURR_MATCH = None;
+        self.COMPL_SHOWN_MATCH = None;
+        self.COMPL_OLD_MATCH = None;
         self.MATCH_GENERATION = self.MATCH_GENERATION.wrapping_add(1);
         core::mem::take(&mut self.MATCH_SLOTS)
     }
@@ -556,12 +556,12 @@ fn common_prefix_len(leader: &[u8], text: &[u8], icase: bool) -> usize {
 pub(crate) fn ins_compl_longest_match(m: MatchId) {
     if compl_leader().is_unset() {
         compl_leader().set_string(m.text_copy());
-        let had_match = Win::current().w_cursor.col > compl_col.get();
+        let had_match = Win::current().w_cursor.col > COMPL_COL.get();
         ins_compl_longest_insert(&compl_leader().to_vec());
         if !had_match {
             ins_compl_delete(false);
         }
-        compl_used_match.set(false);
+        COMPL_USED_MATCH.set(false);
         return;
     }
 
@@ -570,19 +570,19 @@ pub(crate) fn ins_compl_longest_match(m: MatchId) {
         .with_bytes(|leader| m.with(|item| common_prefix_len(leader, &item.text, icase)));
     if keep < compl_leader().len() {
         compl_leader().truncate(keep);
-        let had_match = Win::current().w_cursor.col > compl_col.get();
+        let had_match = Win::current().w_cursor.col > COMPL_COL.get();
         ins_compl_longest_insert(&compl_leader().to_vec());
         if !had_match {
             ins_compl_delete(false);
         }
     }
-    compl_used_match.set(false);
+    COMPL_USED_MATCH.set(false);
 }
 
 /// Add each of `matches` in turn, the first in the completion's direction
 /// and the rest forwards.
 pub(crate) fn ins_compl_add_match_list(matches: &[XString], icase: bool) {
-    let mut dir = compl_direction.get();
+    let mut dir = COMPL_DIRECTION.get();
     let flags = CP_FAST | if icase { CP_ICASE } else { 0 };
     for text in matches {
         let text = text.as_cstr().to_bytes();
@@ -660,23 +660,23 @@ pub(crate) fn ins_compl_free() {
 
 /// Reset everything a completion left behind, without freeing the list.
 pub fn ins_compl_clear() {
-    compl_cont_status.set(0);
-    compl_started.set(false);
-    compl_matches.set(0);
-    compl_selected_item.set(-1);
-    compl_ins_end_col.set(ColNr::ZERO);
-    compl_curr_win.set(None);
-    compl_curr_buf.set(None);
+    COMPL_CONT_STATUS.set(0);
+    COMPL_STARTED.set(false);
+    COMPL_MATCHES.set(0);
+    COMPL_SELECTED_ITEM.set(-1);
+    COMPL_INS_END_COL.set(ColNr::ZERO);
+    COMPL_CURR_WIN.set(None);
+    COMPL_CURR_BUF.set(None);
     compl_pattern().clear();
     compl_leader().clear();
     EDIT_SUBMODE_EXTRA.set(None);
     compl_orig_extmarks().clear();
     compl_orig_text().clear();
-    compl_enter_selects.set(false);
+    COMPL_ENTER_SELECTS.set(false);
     cpt_sources().clear();
-    compl_autocomplete.set(false);
-    compl_from_nonkeyword.set(false);
-    compl_num_bests.set(0);
+    COMPL_AUTOCOMPLETE.set(false);
+    COMPL_FROM_NONKEYWORD.set(false);
+    COMPL_NUM_BESTS.set(0);
     set_vim_var_dict(Vv::CompletedItem, Some(tv_dict_alloc_lock(VarLock::Fixed)));
 }
 
@@ -703,19 +703,19 @@ pub(crate) fn ins_compl_fuzzy_sort() {
     if shown_match() == unselected {
         return;
     }
-    let next = if !compl_autocomplete.get() && compl_shows_dir_forward() {
+    let next = if !COMPL_AUTOCOMPLETE.get() && compl_shows_dir_forward() {
         first.and_then(MatchId::next)
     } else {
         first
     };
-    compl_shown_match.set(next);
+    COMPL_SHOWN_MATCH.set(next);
 }
 
 /// Number the matches around `compl_curr_match`, in the direction the
 /// completion is running.
 pub(crate) fn ins_compl_update_sequence_numbers() {
     let forward = compl_dir_forward();
-    debug_assert!(forward || compl_direction.get() == BACKWARD);
+    debug_assert!(forward || COMPL_DIRECTION.get() == BACKWARD);
     MATCHES.with_mut(|list| list.number_from_current(forward));
 }
 
@@ -730,8 +730,8 @@ pub(crate) fn remove_old_matches() {
         return;
     }
 
-    compl_direction.set(if forward { FORWARD } else { BACKWARD });
-    compl_shows_dir.set(compl_direction.get());
+    COMPL_DIRECTION.set(if forward { FORWARD } else { BACKWARD });
+    COMPL_SHOWS_DIR.set(COMPL_DIRECTION.get());
 
     // Dropped after the borrow, as in `ins_compl_free`.
     let removed = MATCHES.with_mut(|list| list.remove_source(source, forward));

@@ -253,7 +253,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   screen grid handle `GridRef` and the terminal handle `Term` — each a
   `Copy` value over one pointer (`winlayer.rs` 22, `graph.rs` 17, `live.rs`
   5, `grid.rs` 4, `terminal.rs` 3). Building one from an address is the
-  unsafe step; dereferencing it is not. `curwin`/`curbuf`/`curtab` are cells
+  unsafe step; dereferencing it is not. `curwin`/`CURBUF`/`CURTAB` are cells
   holding a raw pointer (`curwin` is a C symbol a functional spec reads).
 - **Contract:** the constructor's caller promises the object is live for as
   long as the handle is used. The handle registries build handles from ids

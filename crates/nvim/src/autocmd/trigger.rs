@@ -176,7 +176,7 @@ pub fn aucmd_defer(
     let handle: BufferHandle = buffer.handle;
     let data = data.cloned();
     put_job_in(
-        &deferred_events,
+        &DEFERRED_EVENTS,
         Box::new(move || deferred_event(event, fname, fname_io, group, handle, data)),
     );
 }
@@ -242,7 +242,7 @@ pub fn do_termresponse_autocmd(sequence: ApiString) {
         None,
         Some(&event_data),
     );
-    termresponse_changed.set(true);
+    TERMRESPONSE_CHANGED.set(true);
 }
 
 /// Fire `VimSuspend`/`VimResume`, at most once per suspension.
@@ -250,25 +250,25 @@ pub fn do_termresponse_autocmd(sequence: ApiString) {
 /// [`SuspendLatch`] is what makes that true. `VimResume` fires from the
 /// event loop, not from the signal handler's caller.
 pub fn may_trigger_vim_suspend_resume(suspend: bool) {
-    if suspend && pending_vimresume.get() == SuspendLatch::Idle {
-        pending_vimresume.set(SuspendLatch::Firing);
+    if suspend && PENDING_VIMRESUME.get() == SuspendLatch::Idle {
+        PENDING_VIMRESUME.set(SuspendLatch::Firing);
         fire_autocmds(AutoEvent::VimSuspend, false, None);
-        pending_vimresume.set(SuspendLatch::ResumeOwed);
-    } else if !suspend && pending_vimresume.get() == SuspendLatch::ResumeOwed {
-        pending_vimresume.set(SuspendLatch::Firing);
+        PENDING_VIMRESUME.set(SuspendLatch::ResumeOwed);
+    } else if !suspend && PENDING_VIMRESUME.get() == SuspendLatch::ResumeOwed {
+        PENDING_VIMRESUME.set(SuspendLatch::Firing);
         put_job_on_main_loop(Box::new(|| {
             fire_autocmds(AutoEvent::VimResume, false, None);
-            pending_vimresume.set(SuspendLatch::Idle);
+            PENDING_VIMRESUME.set(SuspendLatch::Idle);
         }));
     }
 }
 
 /// Fire `UIEnter`/`UILeave` for the channel that attached or detached.
 pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
-    if starting.get() == NO_SCREEN || uienter_busy.get() {
+    if starting.get() == NO_SCREEN || UIENTER_BUSY.get() {
         return;
     }
-    uienter_busy.set(true);
+    UIENTER_BUSY.set(true);
 
     let mut save_v_event = SaveVEvent::default();
     let dict = get_v_event(&mut save_v_event);
@@ -287,16 +287,16 @@ pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
     );
     restore_v_event(dict, &mut save_v_event);
 
-    uienter_busy.set(false);
+    UIENTER_BUSY.set(false);
 }
 
 /// Fire `FocusGained`/`FocusLost`, and re-check file timestamps on a gain
 /// -- but not more often than every two seconds.
 pub fn do_autocmd_focusgained(gained: bool) {
-    if focusgained_busy.get() {
+    if FOCUSGAINED_BUSY.get() {
         return;
     }
-    focusgained_busy.set(true);
+    FOCUSGAINED_BUSY.set(true);
 
     fire_autocmds(
         if gained {
@@ -307,12 +307,12 @@ pub fn do_autocmd_focusgained(gained: bool) {
         false,
         Buf::current_or_none(),
     );
-    if gained && focusgained_last_time.get().wrapping_add(2000 as Timestamp) < os_now() {
+    if gained && FOCUSGAINED_LAST_TIME.get().wrapping_add(2000 as Timestamp) < os_now() {
         check_timestamps(true);
-        focusgained_last_time.set(os_now());
+        FOCUSGAINED_LAST_TIME.set(os_now());
     }
 
-    focusgained_busy.set(false);
+    FOCUSGAINED_BUSY.set(false);
 }
 
 /// Fire `FileType` for `buffer`, with `secure` cleared and recursion counted.
@@ -321,24 +321,24 @@ pub fn do_autocmd_focusgained(gained: bool) {
 /// then does not `force` the autocommands themselves, which is what the
 /// `ft_recursive == 1` test says.
 pub fn do_filetype_autocmd(mut buffer: Buf, force: bool) -> bool {
-    if ft_recursive.get() > 0 && !force {
+    if FT_RECURSIVE.get() > 0 && !force {
         return false;
     }
 
-    let secure_save = secure.get();
-    secure.set(0);
-    let ft_recursing = Depth::of(ft_recursive);
+    let secure_save = SECURE.get();
+    SECURE.set(0);
+    let ft_recursing = Depth::of(FT_RECURSIVE);
 
     buffer.b_did_filetype = true;
     let ret = apply_autocmds(
         AutoEvent::FileType,
         Some(buffer.b_p_ft.get()),
         buffer.name.shown().map(XString::from_cstr),
-        force || ft_recursive.get() == 1,
+        force || FT_RECURSIVE.get() == 1,
         Some(buffer),
     );
 
     drop(ft_recursing);
-    secure.set(secure_save);
+    SECURE.set(secure_save);
     ret
 }

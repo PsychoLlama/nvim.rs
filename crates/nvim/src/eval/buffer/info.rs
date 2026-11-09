@@ -49,7 +49,7 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
     );
     nr(
         c"command",
-        VarNumber::from(cmdwin_buf.get() == Some(buffer.id())),
+        VarNumber::from(CMDWIN_BUF.get() == Some(buffer.id())),
     );
     // The buffer's own `b:` scope; the answer takes a reference.
     let vars = buffer.b_bufvar.di_tv.dict_handle();

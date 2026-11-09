@@ -44,10 +44,10 @@ use crate::mbyte::{char_at, char_len};
 use crate::memline::Lines;
 use crate::message::internal_error;
 use crate::os::libc::int16_t;
-use crate::spell::{LangId, LangP, SpellLang};
 use crate::spell::{
-    WordFlags, WordHasher, allcap_copy, loaded_langs, make_case_word, spell_soundfold,
+    LOADED_LANGS, WordFlags, WordHasher, allcap_copy, make_case_word, spell_soundfold,
 };
+use crate::spell::{LangId, LangP, SpellLang};
 use crate::spellsuggest::collect::{List, add_suggestion};
 use crate::spellsuggest::score::{
     EMPTY_SOUND, score_wordcount_adj, spell_edit_score, spell_edit_score_limit, spell_isupper,
@@ -55,8 +55,8 @@ use crate::spellsuggest::score::{
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
 use crate::spellsuggest::{
-    MAXWLEN, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, SugInfo,
-    sps_flags, window_langs,
+    MAXWLEN, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, SPS_FLAGS,
+    SugInfo, window_langs,
 };
 use crate::types::LineNr;
 use core::ffi::c_int;
@@ -78,7 +78,7 @@ fn has_sound_tree(slang: &SpellLang) -> bool {
 /// Postponed prefixes are not supported here.
 pub(super) fn suggest_try_soundalike(su: &mut SugInfo) {
     for langp in window_langs() {
-        loaded_langs.with(|langs| {
+        LOADED_LANGS.with(|langs| {
             let Some(slang) = langs.get(langp.slang).filter(|slang| has_sound_tree(slang)) else {
                 return;
             };
@@ -297,7 +297,7 @@ fn emit_word(
             }
         };
 
-        if sps_flags.get() & SPS_DOUBLE != 0 {
+        if SPS_FLAGS.get() & SPS_DOUBLE != 0 {
             if score <= su.su_maxscore {
                 let badlen = su.su_badlen;
                 let id = Some(langp.slang);

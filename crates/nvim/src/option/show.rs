@@ -60,7 +60,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
 use crate::os::libc::uint32_t;
 use crate::path::MAXPATHL;
-use crate::startup::silent_mode;
+use crate::startup::SILENT_MODE;
 use crate::types::{ApiString, Failed, OptInt, WinOpt};
 use crate::ui::state::COLUMNS;
 use crate::ui::ui_call_option_set;
@@ -195,8 +195,8 @@ pub(crate) fn ui_refresh_options() {
 pub(crate) fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     // `:set` output is a message even under `-s`, which otherwise
     // suppresses everything.
-    let save_silent = silent_mode.get();
-    silent_mode.set(false);
+    let save_silent = SILENT_MODE.get();
+    SILENT_MODE.set(false);
     INFO_MESSAGE.set(true);
 
     let opt = get_option(opt_idx);
@@ -230,7 +230,7 @@ pub(crate) fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
         }
     }
 
-    silent_mode.set(save_silent);
+    SILENT_MODE.set(save_silent);
     INFO_MESSAGE.set(false);
 }
 

@@ -498,7 +498,7 @@ impl SynState {
         time: &mut SynTime,
         io: ExtMatchIo<'_>,
     ) -> bool {
-        let timing = syn_time_on.get();
+        let timing = SYN_TIME_ON.get();
         let start = if timing { profile_start() } else { 0 };
 
         if regmatch.regprog.is_none() {

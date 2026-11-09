@@ -78,7 +78,7 @@ use crate::types::{ColNr, LineNr, WLine};
 use crate::window::win_fdccol_count;
 use crate::winfloat::win_check_anchored_floats;
 use crate::winlayer::Win;
-use crate::winlayer::graph::cmdwin_win;
+use crate::winlayer::graph::CMDWIN_WIN;
 
 pub const MT_CHAR_WISE: MotionType = 0;
 
@@ -138,7 +138,7 @@ impl Win {
     #[inline(never)]
     pub(crate) fn col_off(self) -> c_int {
         self.number_col()
-            + c_int::from(cmdwin_win.get() == Some(self.id()))
+            + c_int::from(CMDWIN_WIN.get() == Some(self.id()))
             + self.fdccol_count()
             + self.w_scwidth * SIGN_WIDTH
     }

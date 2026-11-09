@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::api::private::validate::err_bad_value;
-use crate::mark::kMarkAllNoResolve;
+use crate::mark::MARK_ALL_NO_RESOLVE;
 use crate::winlayer::Win;
 
 pub fn nvim_buf_del_mark(buf: BufferHandle, name: ApiString) -> Result<Boolean, Error> {
@@ -29,7 +29,7 @@ pub fn nvim_buf_del_mark(buf: BufferHandle, name: ApiString) -> Result<Boolean, 
     }
     // A byte past ASCII names no mark, as upstream's negative `char` did.
     let mark = name.as_bytes()[0];
-    let Some(fm) = mark_get(b, Win::current(), kMarkAllNoResolve, mark) else {
+    let Some(fm) = mark_get(b, Win::current(), MARK_ALL_NO_RESOLVE, mark) else {
         return Err(err_bad_value(c"mark name", name.as_cstr()));
     };
     if fm.mark.lnum != LineNr::ZERO && fm.is_in(b.handle) {
@@ -74,7 +74,7 @@ pub fn nvim_buf_get_mark(buf: BufferHandle, name: ApiString) -> Result<Array, Er
         coladd: 0,
     };
     let mark = name.as_bytes()[0];
-    let Some(fm) = mark_get(b, Win::current(), kMarkAllNoResolve, mark) else {
+    let Some(fm) = mark_get(b, Win::current(), MARK_ALL_NO_RESOLVE, mark) else {
         return Err(err_bad_value(c"mark name", name.as_cstr()));
     };
     if !fm.is_in(b.handle) {

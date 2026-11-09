@@ -108,7 +108,7 @@ pub(crate) fn check_scrollbind(vtopline_diff: i32, leftcol_diff: c_int) {
     set_visual_active(false);
     set_visual_select(visual_active());
 
-    // Upstream asks `curtab == curtab`, so this always walks the current
+    // Upstream asks `CURTAB == CURTAB`, so this always walks the current
     // tab page's windows however it reads. Nothing in the body can free one.
     for mut win in windows() {
         win.make_current();

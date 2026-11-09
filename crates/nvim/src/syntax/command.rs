@@ -232,7 +232,7 @@ fn syn_cmd_onoff(args: &mut ExArg, name: &CStr) {
     if args.skip {
         return;
     }
-    did_syntax_onoff.set(true);
+    DID_SYNTAX_ONOFF.set(true);
     // `so $VIMRUNTIME/syntax/{name}.vim`, cut to the 100-byte buffer
     // upstream formats it into.
     let mut cmd = b"so ".to_vec();
@@ -250,7 +250,7 @@ const SYNTAX_CMD_MAX: usize = 99;
 /// Turn syntax highlighting on unless `:syntax` has already been used one way
 /// or the other.
 pub(crate) fn syn_maybe_enable() {
-    if !did_syntax_onoff.get() {
+    if !DID_SYNTAX_ONOFF.get() {
         let mut ea = ExArg {
             line: CmdLine::from_bytes(b""),
             skip: false,

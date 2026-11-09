@@ -22,8 +22,8 @@
 use super::do_sub_msg;
 use crate::cmdhist::add_to_history;
 use crate::ex_cmds::{
-    _ISalpha, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, HIST_SEARCH, SubFlags, kSubHonorOptions,
-    kSubIgnoreCase, kSubMatchCase,
+    EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, HIST_SEARCH, IS_ALPHA, SUB_HONOR_OPTIONS,
+    SUB_IGNORE_CASE, SUB_MATCH_CASE, SubFlags,
 };
 use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
 use crate::ex_docmd::ex_may_print;
@@ -72,7 +72,7 @@ pub(crate) static SUB_FLAGS: GlobalCell<SubFlags> = GlobalCell::new(SubFlags {
     do_print: false,
     do_list: false,
     do_number: false,
-    do_ic: kSubHonorOptions,
+    do_ic: SUB_HONOR_OPTIONS,
 });
 
 /// Set by `do_sub` when a `:global` is running, so that `global_exe` puts the
@@ -216,7 +216,7 @@ pub(crate) fn sub_parse_flags(text: &[u8], flags: &mut SubFlags, which_pat: &mut
         flags.do_list = false;
         flags.do_count = false;
         flags.do_number = false;
-        flags.do_ic = kSubHonorOptions;
+        flags.do_ic = SUB_HONOR_OPTIONS;
     }
     while i < text.len() {
         // Note that 'g' and 'c' are always inverted, and 'r' never is.
@@ -235,8 +235,8 @@ pub(crate) fn sub_parse_flags(text: &[u8], flags: &mut SubFlags, which_pat: &mut
                 flags.do_print = true;
                 flags.do_list = true;
             }
-            b'i' => flags.do_ic = kSubIgnoreCase, // ignore case
-            b'I' => flags.do_ic = kSubMatchCase,  // don't ignore case
+            b'i' => flags.do_ic = SUB_IGNORE_CASE, // ignore case
+            b'I' => flags.do_ic = SUB_MATCH_CASE,  // don't ignore case
             _ => break,
         }
         i += 1;
@@ -283,7 +283,7 @@ pub(crate) fn skip_substitute(
 /// line's byte, which is how the ctype table upstream indexes is read.
 pub(crate) fn check_regexp_delim(c: c_int) -> Result<(), Failed> {
     // The table is indexed by the `char`'s byte: its low eight bits.
-    let isalpha = c_int::from(ctype_bits(c.to_le_bytes()[0])) & _ISalpha.cast_signed();
+    let isalpha = c_int::from(ctype_bits(c.to_le_bytes()[0])) & IS_ALPHA.cast_signed();
     if isalpha != 0 {
         emsg(gettext(
             c"E146: Regular expressions can't be delimited by letters",

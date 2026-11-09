@@ -74,7 +74,7 @@ use crate::window::{
     win_get_tabwin, win_goto, win_horz_neighbor, win_new_height, win_new_width, win_valid,
     win_vert_neighbor,
 };
-use crate::winlayer::graph::{cmdwin_type, cmdwin_win, prevwin};
+use crate::winlayer::graph::{CMDWIN_TYPE, CMDWIN_WIN, PREVWIN};
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
 };
@@ -85,7 +85,7 @@ use core::ffi::{CStr, c_int};
 /// While a tab page is the current one its own `tp_curwin`/`tp_lastwin`/
 /// `tp_prevwin` are stale — the live values are in the globals, and the tab
 /// page's fields are only written back when it is left. The C spells the
-/// `tp == curtab ? global : tp->field` test out at every site; here it is
+/// `tp == CURTAB ? global : tp->field` test out at every site; here it is
 /// written once per field. (The window *list* has the same rule and is
 /// [`windows_in_tab`], which winlayer already provides.)
 impl TabPage {
@@ -114,7 +114,7 @@ impl TabPage {
     /// until something has been left, which is what `winnr("#")` reports as 0.
     fn prevwin(self) -> Option<Win> {
         if self.is_current() {
-            prevwin.get()
+            PREVWIN.get()
         } else {
             self.tp_prevwin
         }

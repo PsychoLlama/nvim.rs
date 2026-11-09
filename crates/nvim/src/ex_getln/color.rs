@@ -247,7 +247,7 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
                 let end = colored_ccline.len();
                 print_errmsg!("E5403: Chunk {i} start {start} not in range [{prev_end}, {end})");
                 break 'body Label::Error;
-            } else if utf8len_tab_zero[usize::from(colored_ccline.byte_at(number_as_int(start)))]
+            } else if UTF8LEN_TAB_ZERO[usize::from(colored_ccline.byte_at(number_as_int(start)))]
                 == 0
             {
                 print_errmsg!("E5405: Chunk {i} start {start} splits multibyte character");
@@ -271,7 +271,7 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
                 print_errmsg!("E5404: Chunk {i} end {end} not in range ({start}, {limit}]");
                 break 'body Label::Error;
             } else if end < VarNumber::from(colored_ccline.len())
-                && utf8len_tab_zero[usize::from(colored_ccline.byte_at(number_as_int(end)))] == 0
+                && UTF8LEN_TAB_ZERO[usize::from(colored_ccline.byte_at(number_as_int(end)))] == 0
             {
                 print_errmsg!("E5406: Chunk {i} end {end} splits multibyte character");
                 break 'body Label::Error;

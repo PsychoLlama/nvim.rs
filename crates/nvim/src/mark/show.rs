@@ -313,14 +313,14 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
                 mark.mark.lnum = LineNr::ZERO;
                 mark.timestamp = timestamp;
             } else {
-                // The fourth and fifth writings of the `namedfm` index
+                // The fourth and fifth writings of the `NAMEDFM` index
                 // formula; see `lookup::mark_global_index`.
                 let n = if digit {
                     usize::from(c - b'0') + slot(NMARKS)
                 } else {
                     usize::from(c - b'A')
                 };
-                let fnum = namedfm.with(|table| {
+                let fnum = NAMEDFM.with(|table| {
                     let mark = &table[n].fmark;
                     mark.is_set().then_some(mark.fnum())
                 });
@@ -331,7 +331,7 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
                     let owner = find_buf(fnum).unwrap_or(buf);
                     do_markset_autocmd(mark_name(c), gone, owner);
                 }
-                namedfm.with_mut(|table| {
+                NAMEDFM.with_mut(|table| {
                     let slot = &mut table[n];
                     slot.fmark.mark.lnum = LineNr::ZERO;
                     slot.fmark.set_fnum(None);

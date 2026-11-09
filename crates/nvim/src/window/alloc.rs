@@ -29,13 +29,13 @@ use crate::r#move::WinValid;
 use crate::statusline::defs::WinClickDefs;
 use crate::types::ColNr;
 use crate::types::{FcsChars, LcsChars, Pos, PosSave, Taggy, Window};
-use crate::winfloat::kWinStyleMinimal;
+use crate::winfloat::WIN_STYLE_MINIMAL;
 use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::arglist::alist_unlink;
 use crate::autocmd::set_aucmd_window;
-use crate::autocmd::state::autocmd_busy;
+use crate::autocmd::state::AUTOCMD_BUSY;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::buflist_new;
 use crate::eval::vars::{new_var_scope, release_var_scope, vars_clear};
@@ -55,7 +55,7 @@ use crate::ui::state::UI_MULTIGRID;
 use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
-use crate::winlayer::graph::{firstwin, lastwin, leave_curbuf, prevwin, topframe};
+use crate::winlayer::graph::{FIRSTWIN, LASTWIN, PREVWIN, TOPFRAME, leave_curbuf};
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, buffers, defer_free_window, forget_window, register_window,
     tabs,
@@ -287,8 +287,8 @@ fn zeroed_window() -> Win {
 #[cfg(test)]
 pub(crate) fn bare_window() -> Win {
     let mut win = zeroed_window();
-    last_win_id.set(last_win_id.get() + 1);
-    win.set_handle(Handle::new(last_win_id.get()));
+    LAST_WIN_ID.set(LAST_WIN_ID.get() + 1);
+    win.set_handle(Handle::new(LAST_WIN_ID.get()));
     register_window(win);
     win
 }
@@ -310,7 +310,7 @@ pub fn win_alloc_first() {
         std::process::abort();
     }
     let first = alloc_tabpage();
-    first_tabpage.set(Some(first.id()));
+    FIRST_TABPAGE.set(Some(first.id()));
     first.make_current();
     unuse_tabpage(first);
 }
@@ -360,7 +360,7 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
         }
     }
     let mut frame = attach_frame(win);
-    topframe.set(Some(frame.id()));
+    TOPFRAME.set(Some(frame.id()));
     frame.fr_width = COLUMNS.get();
     frame.fr_height =
         ROWS.get() - c_int::try_from(p_ch()).unwrap_or(c_int::MAX) - global_stl_rows();
@@ -408,8 +408,8 @@ fn first_win() -> Win {
 
 pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     let mut new_wp = zeroed_window();
-    last_win_id.set(last_win_id.get() + 1);
-    new_wp.set_handle(Handle::new(last_win_id.get()));
+    LAST_WIN_ID.set(LAST_WIN_ID.get() + 1);
+    new_wp.set_handle(Handle::new(LAST_WIN_ID.get()));
     register_window(new_wp);
     new_wp.w_grid_alloc.mouse_enabled = true;
     grid_assign_handle(&mut new_wp.w_grid_alloc);
@@ -479,8 +479,8 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
         vars_clear(&vars);
     }
     release_var_scope(&mut window.w_winvar);
-    if prevwin.get() == Some(window.id()) {
-        prevwin.set(None);
+    if PREVWIN.get() == Some(window.id()) {
+        PREVWIN.set(None);
     }
     for mut ttp in tabs() {
         if ttp.tp_prevwin == Some(window.id()) {
@@ -522,7 +522,7 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     let block = forget_window(window.handle());
     debug_assert!(block.is_some(), "a window being freed is registered");
     if let Some(block) = block {
-        if autocmd_busy.get() {
+        if AUTOCMD_BUSY.get() {
             defer_free_window(block);
         } else {
             drop(block);
@@ -553,7 +553,7 @@ fn forget_wininfo(buffer: Buf, window: Win) {
     let entry = &mut infos[pos_wip];
     entry.wi_win = None;
     // Discard saved options if the style is minimal.
-    if window.w_config.style == kWinStyleMinimal && entry.wi_optset {
+    if window.w_config.style == WIN_STYLE_MINIMAL && entry.wi_optset {
         clear_winopt(&mut entry.wi_opt);
         entry.wi_folds = Vec::new();
         entry.wi_optset = false;
@@ -642,19 +642,19 @@ fn list_first(tabpage: Option<TabPage>) -> Option<Win> {
     }
 }
 
-/// The current tab page's list head lives in the `firstwin` global; another
+/// The current tab page's list head lives in the `FIRSTWIN` global; another
 /// tab page's in its own `tp_firstwin`.
 fn set_first(tabpage: Option<TabPage>, window: Option<WinId>) {
     match tabpage {
         Some(mut tp) => tp.tp_firstwin = window,
-        None => firstwin.set(window),
+        None => FIRSTWIN.set(window),
     }
 }
 
 fn set_last(tabpage: Option<TabPage>, window: Option<WinId>) {
     match tabpage {
         Some(mut tp) => tp.tp_lastwin = window,
-        None => lastwin.set(window),
+        None => LASTWIN.set(window),
     }
 }
 

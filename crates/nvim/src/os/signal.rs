@@ -33,7 +33,7 @@ use crate::memline::ml_sync_all;
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_awa;
-use crate::startup::{main_loop, preserve_exit, v_dying};
+use crate::startup::{MAIN_LOOP, V_DYING, preserve_exit};
 use crate::types::Vv;
 use crate::winlayer::Buf;
 use ::libc::{pthread_sigmask, sigemptyset, sigset_t};
@@ -133,7 +133,7 @@ pub fn signal_init() {
             );
         }
         for i in 0..WATCHED.len() {
-            signal_watcher_init(main_loop.ptr(), watcher(i), ptr::null_mut());
+            signal_watcher_init(MAIN_LOOP.ptr(), watcher(i), ptr::null_mut());
         }
     }
     signal_start();
@@ -208,7 +208,7 @@ fn deadly_signal(signum: c_int) -> ! {
     );
     // Set the v:dying variable.
     set_vim_var_nr(Vv::Dying, 1);
-    v_dying.set(1);
+    V_DYING.set(1);
     logmsg!(
         LOGLVL_INF,
         c"deadly_signal",

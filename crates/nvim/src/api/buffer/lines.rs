@@ -18,10 +18,10 @@
 
 use super::*;
 use crate::api::private::helpers::api_try;
-use crate::extmark::kExtmarkNOOP;
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_NOOP;
+use crate::extmark::EXTMARK_UNDO;
 use crate::lua::stack::{At, Stack};
-use crate::mark::kMarkAdjustApi;
+use crate::mark::MARK_ADJUST_API;
 use crate::memory::memchr_in;
 use crate::narrow::{len_as_int, len_as_integer};
 use crate::normal::{visual_active, visual_anchor, with_visual_anchor};
@@ -193,8 +193,8 @@ pub fn nvim_buf_set_lines(
             adjust,
             extra,
             true,
-            kMarkAdjustApi,
-            kExtmarkNOOP,
+            MARK_ADJUST_API,
+            EXTMARK_NOOP,
         );
         if visual_active()
             && Some(buffer) == Buf::current_or_none()
@@ -215,7 +215,7 @@ pub fn nvim_buf_set_lines(
             len_as_int(new_len),
             ColNr::ZERO,
             inserted_bytes,
-            kExtmarkUndo,
+            EXTMARK_UNDO,
         );
         changed_lines(buffer, start, ColNr::ZERO, end, extra, true);
         for win in tab_windows() {

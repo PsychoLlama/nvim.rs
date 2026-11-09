@@ -200,7 +200,7 @@ fn is_word_char(c: ::core::ffi::c_int) -> bool {
 /// arm of `do_cmdline`'s line source; `None` when the line was abandoned.
 pub fn getexline(c: Option<u8>, indent: ::core::ffi::c_int, do_concat: bool) -> Option<XString> {
     // When executing a register, remove the ':' in front of each line.
-    if exec_from_reg.get() && vpeekc().is(':') {
+    if EXEC_FROM_REG.get() && vpeekc().is(':') {
         vgetc();
     }
     getcmdline(c, 1, indent, do_concat)
@@ -370,7 +370,7 @@ fn duplicate_word_len(arg: &[u8]) -> usize {
 /// register, `Some(None)` when it has nothing in it.
 ///
 /// Runs user code -- `'` and `=` evaluate an expression -- which is why the
-/// caller raises `textlock` around it and holds no command line across it.
+/// caller raises `TEXTLOCK` around it and holds no command line across it.
 fn special_reg(regname: RegName) -> Option<Option<XString>> {
     get_spec_reg(regname, true)
 }

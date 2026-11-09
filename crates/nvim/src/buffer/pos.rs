@@ -22,7 +22,7 @@
 )]
 
 use crate::types::Handle;
-use crate::winfloat::kWinStyleMinimal;
+use crate::winfloat::WIN_STYLE_MINIMAL;
 use crate::winlayer::WinId;
 
 use crate::fold::clear_folding;
@@ -158,7 +158,7 @@ pub fn get_winopts(buffer: Buf) {
         // The entry names another window still showing this buffer: copy
         // from the window itself, so that its current values are used.
         (Some(_), Some(wp))
-            if wp != cur && wp.w_buffer == buffer && wp.w_config.style != kWinStyleMinimal =>
+            if wp != cur && wp.w_buffer == buffer && wp.w_config.style != WIN_STYLE_MINIMAL =>
         {
             copy_winopt(&wp.w_onebuf_opt, &mut cur.w_onebuf_opt);
             cur.w_fold_manual = wp.w_fold_manual;
@@ -167,7 +167,7 @@ pub fn get_winopts(buffer: Buf) {
         }
         (Some(entry), win)
             if entry.wi_optset
-                && win.is_none_or(|wp| wp == cur || wp.w_config.style != kWinStyleMinimal) =>
+                && win.is_none_or(|wp| wp == cur || wp.w_config.style != WIN_STYLE_MINIMAL) =>
         {
             copy_winopt(&entry.wi_opt, &mut cur.w_onebuf_opt);
             cur.w_fold_manual = entry.wi_fold_manual;
@@ -183,7 +183,7 @@ pub fn get_winopts(buffer: Buf) {
         cur.w_changelistidx = entry.wi_changelistidx;
     }
 
-    if cur.w_config.style == kWinStyleMinimal {
+    if cur.w_config.style == WIN_STYLE_MINIMAL {
         didset_window_options(cur, false);
         win_set_minimal_style(cur);
     }

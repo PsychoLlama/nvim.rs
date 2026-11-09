@@ -28,7 +28,7 @@ use core::num::NonZero;
 use crate::allocator::Owned;
 use crate::global_cell::GlobalCell;
 use crate::types::{Frame, Handle};
-use crate::winlayer::graph::topframe;
+use crate::winlayer::graph::TOPFRAME;
 use crate::winlayer::{FrameId, FrameRef, Win, WinId, forget_frame, frames, register_frame};
 
 /// A fresh frame, zeroed and registered, with nothing linked to it yet.
@@ -45,7 +45,7 @@ use crate::winlayer::{FrameId, FrameRef, Win, WinId, forget_frame, frames, regis
 /// rather than as zeroed bytes, it needs no `unsafe` at all.
 pub(crate) fn new_frame() -> FrameRef {
     /// The frame handles issued so far. Incremented before it is read, as
-    /// `last_win_id` is, so no frame carries handle zero.
+    /// `LAST_WIN_ID` is, so no frame carries handle zero.
     static LAST_FRAME_ID: GlobalCell<Handle> = GlobalCell::new(Handle::NONE);
     LAST_FRAME_ID.set(LAST_FRAME_ID.get().next());
     let handle = LAST_FRAME_ID.get();
@@ -72,7 +72,7 @@ pub(crate) fn new_frame() -> FrameRef {
 /// nothing — a `None` here would mean the mirror named a freed frame.
 #[inline]
 pub(crate) fn current_topframe() -> FrameRef {
-    topframe
+    TOPFRAME
         .get()
         .and_then(FrameId::get)
         .expect("the editor always has a layout tree")

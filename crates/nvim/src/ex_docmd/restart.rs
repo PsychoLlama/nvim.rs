@@ -38,7 +38,7 @@ use crate::eval::vars::{get_vim_var_list_handle, set_vim_var_string, vim_var_byt
 use crate::ex_docmd::{CHANNEL_PART_ALL, cmdmod_has};
 use crate::log::{LOGLVL_INF, logmsg};
 use crate::message::E_INVCHAN;
-use crate::startup::{exiting, getout};
+use crate::startup::{EXITING, getout};
 use crate::ui::state::CURRENT_UI;
 
 use crate::msgpack_rpc::server::{server_start, server_stop};
@@ -227,7 +227,7 @@ fn restart_server(excmd: &mut ExArg) {
             if err.is_set() {
                 emsg(err.message_or_empty());
                 err.clear();
-            } else if !exiting.get() {
+            } else if !EXITING.get() {
                 report_quit_failed(&quit_cmd);
             }
         }
@@ -448,7 +448,7 @@ pub(crate) fn ex_connect(excmd: &mut ExArg) {
     }
     detach_ui();
     if stop_server {
-        exiting.set(true);
+        EXITING.set(true);
         getout(0);
     }
 }

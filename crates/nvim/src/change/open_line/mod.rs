@@ -37,8 +37,8 @@
 )]
 
 use crate::cstr::byte_at;
-use crate::extmark::kExtmarkNOOP;
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_NOOP;
+use crate::extmark::EXTMARK_UNDO;
 use crate::guard::Suppress;
 use crate::indent::Indenter;
 use crate::indent::SIN_INSERT;
@@ -123,7 +123,7 @@ fn append_new_line(text: &XString, old_cursor: Pos) -> Option<bool> {
         // marker folding.
         let below = Win::current().w_cursor.lnum + 1;
         let max = MAXLNUM;
-        mark_adjust(below, max, 1, 0, kExtmarkNOOP);
+        mark_adjust(below, max, 1, 0, EXTMARK_NOOP);
         return Some(true);
     }
 
@@ -230,7 +230,7 @@ fn truncate_old_line(
             new_len,
             ColNr::new(gone),
             ColNr::ZERO,
-            kExtmarkUndo,
+            EXTMARK_UNDO,
         );
         cols_spliced = gone;
     }
@@ -251,7 +251,7 @@ fn truncate_old_line(
         let off = less_cols_off;
         let old_b = off as BCount;
         let new_b = (added.get() + 1) as BCount;
-        let undo = kExtmarkUndo;
+        let undo = EXTMARK_UNDO;
         let (cur_lnum, cur_col) = (Win::current().w_cursor.lnum, Win::current().w_cursor.col);
         extmark_splice(
             cb,
@@ -601,7 +601,7 @@ pub fn open_line(
                 1,
                 ColNr::ZERO,
                 1 + extra,
-                kExtmarkUndo,
+                EXTMARK_UNDO,
             );
             changed_lines(cb, at, ColNr::ZERO, at, 1, true);
         }

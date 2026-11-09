@@ -32,7 +32,7 @@ use crate::message::{emsg, iemsg};
 use crate::normal::{reset_visual_and_resel, visual_active};
 use crate::option::vars::{p_ea, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::types::{Failed, OptInt};
-use crate::winlayer::graph::lastwin;
+use crate::winlayer::graph::LASTWIN;
 use crate::winlayer::{FrameId, FrameRef, Win, frames};
 
 pub fn make_windows(count: c_int, vertical: bool) -> c_int {
@@ -57,7 +57,7 @@ pub fn make_windows(count: c_int, vertical: bool) -> c_int {
     }
 
     // Don't execute autocommands while creating the windows: `curwin` and
-    // `curbuf` are not set up yet.
+    // `CURBUF` are not set up yet.
     block_autocmds();
     let mut todo = count - 1;
     while todo > 0 {
@@ -324,7 +324,7 @@ fn move_after(win1: Win, win2: Win) {
         }
         // The last window has no separator or status line: exchange the chrome
         // with whichever window is about to become last.
-        if lastwin.get() == Some(win1.id()) {
+        if LASTWIN.get() == Some(win1.id()) {
             let mut prev = win1.prev().expect("`win1` is not the first window");
             core::mem::swap(&mut prev.w_status_height, &mut win1.w_status_height);
             core::mem::swap(&mut prev.w_hsep_height, &mut win1.w_hsep_height);
@@ -335,7 +335,7 @@ fn move_after(win1: Win, win2: Win) {
                 win1.w_vsep_width = 1;
                 win1.frame().fr_width += 1;
             }
-        } else if lastwin.get() == Some(win2.id()) {
+        } else if LASTWIN.get() == Some(win2.id()) {
             core::mem::swap(&mut win1.w_status_height, &mut win2.w_status_height);
             core::mem::swap(&mut win1.w_hsep_height, &mut win2.w_hsep_height);
             if win1.w_vsep_width == 1 {

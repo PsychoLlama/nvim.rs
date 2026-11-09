@@ -385,7 +385,7 @@ pub fn ex_call(excmd: &mut ExArg) {
     // When inside a `:try` the trailing text is still checked, so that an
     // error is reported for it rather than swallowed.
     let in_try = cond_stack_of(excmd).with(|cs| cs.try_level > 0);
-    if (!aborting() || did_throw.get()) && (!failed || in_try) {
+    if (!aborting() || DID_THROW.get()) && (!failed || in_try) {
         if ends_excmd(c_int::from(excmd.line.byte_at(stop))) == 0 {
             if !failed && !aborting() {
                 EMSG_SEVERE.set(true);
@@ -423,13 +423,13 @@ pub(crate) fn get_func_line(frame: &FuncCall) -> Option<XString> {
     let name = func.name().as_cstr();
 
     // Check for a breakpoint set after the sourcing started.
-    if frame.dbg_tick.get() != debug_tick.get() {
+    if frame.dbg_tick.get() != DEBUG_TICK.get() {
         frame
             .breakpoint
             .set(dbg_find_breakpoint_named(false, name, sourcing_lnum()));
-        frame.dbg_tick.set(debug_tick.get());
+        frame.dbg_tick.set(DEBUG_TICK.get());
     }
-    if do_profiling.get() == PROF_YES {
+    if DO_PROFILING.get() == PROF_YES {
         func_line_end(frame);
     }
     let retval = if frame.has_ended() {
@@ -449,7 +449,7 @@ pub(crate) fn get_func_line(frame: &FuncCall) -> Option<XString> {
                     .set(c_int::try_from(linenr).unwrap_or(c_int::MAX));
                 let dup = XString::from_bytes(line);
                 crate::runtime::set_sourcing_lnum(LineNr::new(frame.linenr.get()));
-                if do_profiling.get() == PROF_YES {
+                if DO_PROFILING.get() == PROF_YES {
                     func_line_start(frame);
                 }
                 Some(dup)
@@ -472,7 +472,7 @@ pub(crate) fn get_func_line(frame: &FuncCall) -> Option<XString> {
         frame
             .breakpoint
             .set(dbg_find_breakpoint_named(false, name, at));
-        frame.dbg_tick.set(debug_tick.get());
+        frame.dbg_tick.set(DEBUG_TICK.get());
     }
 
     retval

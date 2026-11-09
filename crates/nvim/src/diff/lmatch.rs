@@ -22,7 +22,7 @@ use core::ffi::c_int;
 /// `linematch:N` is a budget on the block's *total* size across every buffer,
 /// because the algorithm is exponential in the number of buffers.
 pub fn diff_linematch(dp: &DiffBlock, slots: &DiffSlots) -> bool {
-    if diff_flags.get() & DIFF_LINEMATCH == 0 {
+    if DIFF_FLAGS.get() & DIFF_LINEMATCH == 0 {
         return false;
     }
     let mut total = 0;
@@ -32,7 +32,7 @@ pub fn diff_linematch(dp: &DiffBlock, slots: &DiffSlots) -> bool {
         }
         total += dp.df_count[i];
     }
-    total <= linematch_lines.get()
+    total <= LINEMATCH_LINES.get()
 }
 
 /// Split `blocks[at]` into one block per run of equal decisions.
@@ -106,7 +106,7 @@ pub(crate) fn run_linematch_algorithm(blocks: &mut Vec<DiffBlock>, at: usize, sl
         ndiffs += 1;
     }
 
-    let iwhite = diff_flags.get() & (DIFF_IWHITEALL | DIFF_IWHITE) != 0;
+    let iwhite = DIFF_FLAGS.get() & (DIFF_IWHITEALL | DIFF_IWHITE) != 0;
     let images_in: [&[u8]; DB_COUNT as usize] = ::core::array::from_fn(|i| images[i].as_slice());
     let decisions = linematch_nbuffers(&images_in[..ndiffs], &lengths[..ndiffs], iwhite);
     drop(images);

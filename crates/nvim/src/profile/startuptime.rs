@@ -20,7 +20,7 @@ use super::{profile_start, profile_sub};
 use crate::global_cell::GlobalCell;
 use crate::message_fmt::{msg_cstr, to_bytes};
 use crate::os::fs::{CFile, os_err_name};
-use crate::profile::{startup_timing, time_fd};
+use crate::profile::{TIME_FD, startup_timing};
 use crate::tr;
 use crate::types::ProfTime;
 use core::ffi::CStr;
@@ -61,7 +61,7 @@ fn write_startup(bytes: &[u8]) {
     if bytes.contains(&0) {
         return;
     }
-    time_fd.with(|log| {
+    TIME_FD.with(|log| {
         if let Some(log) = log {
             log.write(bytes);
         }
@@ -141,7 +141,7 @@ pub fn time_init(file_name: &CStr, process_name: &CStr) {
         report_to_stderr(&text);
         return;
     }
-    time_fd.set(Some(log));
+    TIME_FD.set(Some(log));
     let mut header = b"--- Startup times for process: ".to_vec();
     header.extend_from_slice(process_name.to_bytes());
     header.extend_from_slice(b" ---\n");
@@ -154,7 +154,7 @@ pub fn time_finish() {
         return;
     }
     time_msg_at(c"--- NVIM STARTED ---\n");
-    if let Some(log) = time_fd.take() {
+    if let Some(log) = TIME_FD.take() {
         log.close();
     }
 }

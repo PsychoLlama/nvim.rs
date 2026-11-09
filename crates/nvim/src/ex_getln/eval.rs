@@ -257,7 +257,7 @@ pub fn get_cmdline_firstc() -> u8 {
 pub fn f_wildtrigger(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     if STATE.get() & MODE_CMDLINE == 0
         || char_avail()
-        || wild_menu_showing.get() != 0
+        || WILD_MENU_SHOWING.get() != 0
         || cmdline_pum_active()
     {
         return;

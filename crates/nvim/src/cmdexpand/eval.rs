@@ -147,7 +147,7 @@ pub fn f_getcompletion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
                 );
                 xpc.pattern_len -= xpc.pattern - pattern_start;
             }
-            ExpandContext::FiletypeCmd => filetype_expand_what.set(FiletypeWhat::All),
+            ExpandContext::FiletypeCmd => FILETYPE_EXPAND_WHAT.set(FiletypeWhat::All),
             _ => {}
         }
     }
@@ -219,7 +219,7 @@ pub fn f_cmdcomplete_info(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
 
     // Upstream's null pointer -- nothing expanded yet -- is a null entry,
     // not an empty string, so the `None` case is spelled out.
-    let orig = cmdline_orig.with(|line| {
+    let orig = CMDLINE_ORIG.with(|line| {
         line.as_ref()
             .map_or(TypVal::string(None), |line| string_tv(line))
     });

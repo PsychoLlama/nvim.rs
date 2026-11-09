@@ -45,9 +45,9 @@ impl Cells {
         }
         debug_assert!(wlv.off == 0);
 
-        if cmdwin_win.get() == Some(window.id()) {
+        if CMDWIN_WIN.get() == Some(window.id()) {
             wlv.draw_col_fill(
-                schar_from_ascii(cmdwin_type.get()),
+                schar_from_ascii(CMDWIN_TYPE.get()),
                 1,
                 win_hl_attr(window, HLF_AT),
             );

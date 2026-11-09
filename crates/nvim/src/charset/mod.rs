@@ -2,7 +2,7 @@
 //!
 //! Three tables decide everything here:
 //!
-//! - `g_chartab`, one byte per 8-bit character, holding its display width in
+//! - `G_CHARTAB`, one byte per 8-bit character, holding its display width in
 //!   the low three bits plus the 'isident' / 'isprint' / 'isfname' flags.
 //! - each buffer's `b_chartab`, a 256-bit set built from 'iskeyword'.
 //! - `utf8len_tab` and the `utf_*` classifiers in `mbyte.rs`, for anything
@@ -22,7 +22,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::cstr;
 use crate::winlayer::Buf;
@@ -66,7 +65,7 @@ pub(crate) fn getwhitecols_curline() -> crate::types::ColNr {
 pub(crate) use digits::try_getdigits_at;
 pub use digits::{getdigits_at, getdigits_int_at};
 
-/// Bits of a `g_chartab` entry.
+/// Bits of a `G_CHARTAB` entry.
 const CT_CELL_MASK: uint8_t = 0x7;
 const CT_PRINT_CHAR: uint8_t = 0x10;
 const CT_ID_CHAR: uint8_t = 0x20;
@@ -76,22 +75,22 @@ const TAB: c_int = 9;
 const NL: c_int = 10;
 const EOL_MAC: c_int = 2;
 
-static chartab_initialized: GlobalCell<bool> = GlobalCell::new(false);
-static g_chartab: GlobalCell<[uint8_t; 256]> = GlobalCell::new([0; 256]);
+static CHARTAB_INITIALIZED: GlobalCell<bool> = GlobalCell::new(false);
+static G_CHARTAB: GlobalCell<[uint8_t; 256]> = GlobalCell::new([0; 256]);
 
-/// The `g_chartab` entry for byte `c`.
+/// The `G_CHARTAB` entry for byte `c`.
 ///
 /// It is asked about once per byte on every draw and edit path, so it reads
 /// the one entry rather than copying 256 bytes or taking a tracked borrow.
 #[inline(always)]
 fn chartab(c: uint8_t) -> uint8_t {
-    g_chartab.get_field(|table| &table[usize::from(c)])
+    G_CHARTAB.get_field(|table| &table[usize::from(c)])
 }
 
-/// Overwrite the `g_chartab` entry for byte `c`.
+/// Overwrite the `G_CHARTAB` entry for byte `c`.
 #[inline(always)]
 fn set_chartab(c: uint8_t, value: uint8_t) {
-    g_chartab.set_field(|table| &table[usize::from(c)], value);
+    G_CHARTAB.set_field(|table| &table[usize::from(c)], value);
 }
 
 /// Add or remove one of the flag bits of `c`'s entry.
@@ -193,7 +192,7 @@ pub fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
     if parse_isopt(&keywords, IsoptTable::Keyword, Some(buffer), false).is_err() {
         return false;
     }
-    chartab_initialized.set(true);
+    CHARTAB_INITIALIZED.set(true);
     true
 }
 
@@ -364,7 +363,7 @@ pub fn vim_iswordc(c: c_int) -> bool {
 /// [`vim_iswordc`] as a safe call, for a module that holds no pointer of its
 /// own to state a precondition about.
 ///
-/// `curbuf` is a live buffer from the first `buflist_new` onwards, which is
+/// `CURBUF` is a live buffer from the first `buflist_new` onwards, which is
 /// before anything that can ask this question runs — the null it starts out
 /// as exists only for the span of `early_init`. So the pointer form's
 /// precondition is not one a caller here could get wrong, and spelling it as
@@ -632,7 +631,7 @@ pub fn vim_isbreak(c: c_int) -> bool {
     BREAKAT_FLAGS.get().has(c.to_le_bytes()[0])
 }
 
-/// Fill `g_chartab` with the classification a freshly started editor has, for
+/// Fill `G_CHARTAB` with the classification a freshly started editor has, for
 /// in-crate tests.
 ///
 /// [`buf_init_chartab`] is the real thing and needs a buffer and four option

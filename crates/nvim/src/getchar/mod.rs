@@ -11,7 +11,7 @@
 pub mod state;
 use crate::api::vim::nvim_paste;
 use crate::ascii::ascii_iswhite;
-use crate::debugger::state::debug_did_msg;
+use crate::debugger::state::DEBUG_DID_MSG;
 use crate::drawscreen::state::{CMDLINE_ROW, MODE_DISPLAYED, MUST_REDRAW, REDRAW_CMDLINE};
 use crate::drawscreen::{setcursor, showmode, unshowmode, update_screen};
 use crate::edit::{edit_putchar, edit_unputchar};
@@ -23,7 +23,7 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::set_vim_var_nr;
 use crate::ex_cmds::check_secure;
-use crate::ex_docmd::state::ex_normal_busy;
+use crate::ex_docmd::state::EX_NORMAL_BUSY;
 use crate::ex_docmd::update_topline_cursor;
 use crate::ex_getln::state::CMDLINE_STAR;
 use crate::ex_getln::{cmdline_in_use, putcmdline, redrawcmd, redrawcmdline, unputcmdline};
@@ -46,9 +46,9 @@ use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_execute_on_key;
 use crate::mapping::{MapAt, MapExpr, eval_map_expr, with_maphash_lists};
 use crate::mbyte::utf8len_tab;
-use crate::memfile::did_swapwrite_msg;
+use crate::memfile::DID_SWAPWRITE_MSG;
 use crate::memline::ml_sync_all;
-use crate::memory::did_outofmem_msg;
+use crate::memory::DID_OUTOFMEM_MSG;
 use crate::message::state::{
     CALLED_EMSG, CMD_SILENT, DID_EMSG, EMSG_SILENT, MSG_COL, MSG_DIDOUT, MSG_ROW, MSG_SCROLL,
     MSG_SILENT, NEED_WAIT_RETURN,
@@ -81,7 +81,7 @@ use crate::types::{
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;
-use crate::winlayer::graph::cmdwin_type;
+use crate::winlayer::graph::CMDWIN_TYPE;
 
 // The carve of the transpiled module; see each child's docs.
 mod buffers;

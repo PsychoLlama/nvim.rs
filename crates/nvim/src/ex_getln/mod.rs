@@ -28,7 +28,7 @@ use crate::buffer::{
 };
 use crate::charset::{ptr2cells_at, vim_is_ident_char, vim_isprintc, vim_iswordc};
 use crate::cmdexpand::defs::{Expand, ExpandContext};
-use crate::cmdexpand::state::wild_menu_showing;
+use crate::cmdexpand::state::WILD_MENU_SHOWING;
 use crate::cmdexpand::{
     clear_cmdline_orig, cmdline_pum_active, cmdline_pum_cleanup, cmdline_pum_remove,
     expand_cleanup, expand_one, nextwild, set_expand_context, showmatches, wildmenu_cleanup,
@@ -56,7 +56,7 @@ use crate::eval::vars::{globvar_dict, heredoc_get, set_vim_var_char};
 use crate::eval::{callback_call, eval_has_provider, get_echo_hl_id, get_v_event, restore_v_event};
 use crate::ex_cmds::rename_buffer;
 use crate::ex_docmd::state::{
-    cmdmod, ex_normal_busy, exec_from_reg, global_busy, new_last_cmdline,
+    CMDMOD, EX_NORMAL_BUSY, EXEC_FROM_REG, GLOBAL_BUSY, NEW_LAST_CMDLINE,
 };
 use crate::ex_docmd::{
     execute_cmd, expr_map_locked, parse_cmd_address, parse_cmdline, set_no_hlsearch, skip_range,
@@ -72,7 +72,7 @@ use crate::getchar::{
     stuff_readbuf_char, stuff_readbuf_one_line, vgetc, vpeekc, vpeekc_any, vungetc,
 };
 use crate::global_cell::GlobalCell;
-use crate::guard::{allbuf_lock, textlock};
+use crate::guard::{ALLBUF_LOCK, TEXTLOCK};
 use crate::hashtab::HashTab;
 use crate::highlight_group::{HLF_E, syn_id2attr, syn_name2id};
 use crate::keycodes::KS_EXTRA;
@@ -80,8 +80,8 @@ use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;
 use crate::mbyte::{
-    c_cells_at, c_char_info, c_cluster_len, class_in, encode_char, head_off, mb_tolower,
-    utf_char2len, utf_iscomposing_first, utf8len_tab_zero,
+    UTF8LEN_TAB_ZERO, c_cells_at, c_char_info, c_cluster_len, class_in, encode_char, head_off,
+    mb_tolower, utf_char2len, utf_iscomposing_first,
 };
 use crate::memline::ml_replace_buf_text;
 use crate::memline::{decl, incl, ml_append_cstr};
@@ -137,11 +137,11 @@ use crate::register::{
     valid_yank_reg,
 };
 use crate::registry::{IdSet, id_set};
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::search::state::SearchItArg;
 use crate::search::state::{
-    highlight_match, magic_overruled, no_hlsearch, search_first_line, search_last_line,
-    search_match_endcol, search_match_lines,
+    HIGHLIGHT_MATCH, MAGIC_OVERRULED, NO_HLSEARCH, SEARCH_FIRST_LINE, SEARCH_LAST_LINE,
+    SEARCH_MATCH_ENDCOL, SEARCH_MATCH_LINES,
 };
 use crate::search::{
     BACKWARD, FORWARD, SEARCH_COL, SEARCH_KEEP, SEARCH_NOOF, SEARCH_OPT, SEARCH_PEEK, SEARCH_START,
@@ -174,14 +174,14 @@ use crate::undo::{u_blockfree, u_clearall, u_sync, u_undo_and_forget};
 use crate::usercmd::{cmdcomplete_type_to_str, parse_compl_arg};
 use crate::viml::parser::expressions::viml_pexpr_parse;
 use crate::viml::parser::parser::ParserState;
-use crate::window::state::skip_win_fix_cursor;
+use crate::window::state::SKIP_WIN_FIX_CURSOR;
 use crate::window::{
     WSP_BOT, close_windows, global_stl_height, last_window, lastwin_nofloating, win_close,
     win_enter, win_goto, win_size_restore, win_size_save, win_split, win_valid,
 };
 use crate::winlayer::Cc;
 use crate::winlayer::graph::{
-    cmdwin_buf, cmdwin_level, cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win,
+    CMDWIN_BUF, CMDWIN_LEVEL, CMDWIN_OLD_CURWIN, CMDWIN_RESULT, CMDWIN_TYPE, CMDWIN_WIN,
 };
 use crate::winlayer::{BufId, WinId};
 

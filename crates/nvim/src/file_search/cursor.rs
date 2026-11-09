@@ -265,7 +265,7 @@ pub(crate) fn file_name_in_line(
 pub(crate) fn eval_includeexpr(name: &[u8]) -> Option<XString> {
     set_vim_var_string(Vv::Fname, Some(name));
     // Errors go against the script that set `'includeexpr'`.
-    let script_ctx = Script::context(Buf::current().b_p_script_ctx[kBufOptIncludeexpr as usize]);
+    let script_ctx = Script::context(Buf::current().b_p_script_ctx[BUF_OPT_INCLUDEEXPR as usize]);
 
     // A copy: the expression may set the option and free its text.
     let expr = Buf::current().b_p_inex.get();

@@ -28,11 +28,11 @@ use crate::os::cshim::cstr_ncasecmp;
 use crate::types::ColNr;
 use crate::types::Handle;
 use crate::types::LineNr;
+use crate::winfloat::ALIGN_LEFT;
 use crate::winfloat::WIN_CONFIG_INIT;
-use crate::winfloat::kAlignLeft;
-use crate::winfloat::kWinSplitLeft;
-use crate::winfloat::kWinStyleMinimal;
-use crate::winfloat::kWinStyleUnused;
+use crate::winfloat::WIN_SPLIT_LEFT;
+use crate::winfloat::WIN_STYLE_MINIMAL;
+use crate::winfloat::WIN_STYLE_UNUSED;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
@@ -126,7 +126,7 @@ fn float_relative(spelling: &CStr) -> Option<FloatRelative> {
 fn config_split(spelling: &CStr) -> Option<WinSplit> {
     const NAMES: [&CStr; 4] = [c"left", c"right", c"above", c"below"];
     const SIDES: [WinSplit; 4] = [
-        kWinSplitLeft,
+        WIN_SPLIT_LEFT,
         WIN_SPLIT_RIGHT,
         WIN_SPLIT_ABOVE,
         WIN_SPLIT_BELOW,
@@ -138,7 +138,7 @@ fn config_split(spelling: &CStr) -> Option<WinSplit> {
 /// at. Case-sensitive, unlike every other name here.
 fn align_pos(spelling: &CStr) -> Option<AlignTextPos> {
     const NAMES: [&CStr; 3] = [c"left", c"center", c"right"];
-    const ENDS: [AlignTextPos; 3] = [kAlignLeft, ALIGN_CENTER, ALIGN_RIGHT];
+    const ENDS: [AlignTextPos; 3] = [ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT];
     Some(ENDS[NAMES.iter().position(|name| *name == spelling)?])
 }
 
@@ -584,7 +584,7 @@ impl Decode<'_> {
             // A new window starts left-aligned; an existing one keeps what
             // it had.
             if self.window.is_none() {
-                set_align(self.fconfig, which, kAlignLeft);
+                set_align(self.fconfig, which, ALIGN_LEFT);
             }
             return Ok(());
         };
@@ -635,9 +635,9 @@ impl Decode<'_> {
         };
         let spelling = style.as_cstr();
         self.fconfig.style = if spelling.is_empty() {
-            kWinStyleUnused
+            WIN_STYLE_UNUSED
         } else if imatch(spelling, &[c"minimal"]).is_some() {
-            kWinStyleMinimal
+            WIN_STYLE_MINIMAL
         } else {
             return Err(err_invalid_str(c"style", style));
         };
@@ -720,7 +720,7 @@ mod tests {
     /// it with `strequal`.
     #[test]
     fn the_border_text_position_is_case_sensitive() {
-        assert_eq!(align_pos(c"left"), Some(kAlignLeft));
+        assert_eq!(align_pos(c"left"), Some(ALIGN_LEFT));
         assert_eq!(align_pos(c"center"), Some(ALIGN_CENTER));
         assert_eq!(align_pos(c"right"), Some(ALIGN_RIGHT));
         assert_eq!(align_pos(c"Left"), None);
@@ -730,7 +730,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore = "strcasecmp is a foreign function")]
     fn split_names_its_four_sides() {
-        assert_eq!(config_split(c"left"), Some(kWinSplitLeft));
+        assert_eq!(config_split(c"left"), Some(WIN_SPLIT_LEFT));
         assert_eq!(config_split(c"right"), Some(WIN_SPLIT_RIGHT));
         assert_eq!(config_split(c"above"), Some(WIN_SPLIT_ABOVE));
         assert_eq!(config_split(c"below"), Some(WIN_SPLIT_BELOW));

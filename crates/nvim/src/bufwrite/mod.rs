@@ -37,7 +37,7 @@ use crate::drawscreen::status_redraw_all;
 use crate::eval::vars::eval_charconvert;
 use crate::event::uv::{uv_gid_t, uv_uid_t};
 use crate::ex_cmds::check_secure;
-use crate::ex_docmd::state::ex_no_reprint;
+use crate::ex_docmd::state::EX_NO_REPRINT;
 use crate::ex_eval::{aborting, should_abort_err};
 use crate::fileio::FileOffset;
 use crate::fileio::{
@@ -74,7 +74,7 @@ use crate::os::libc::uint64_t;
 use crate::path::MAXPATHL;
 use crate::path::{after_pathsep, path_fnamecmp, tail_index};
 use crate::sha256::Sha256;
-use crate::startup::exiting;
+use crate::startup::EXITING;
 use crate::strings::{FmtArg, format_into};
 use crate::types::{CmdModFlags, ExArg, Failed, LineNr, Pos};
 use crate::ui::ui_flush;
@@ -319,7 +319,7 @@ impl Buf {
         }
 
         // After writing, changedtick changes; don't display the line.
-        ex_no_reprint.set(true);
+        EX_NO_REPRINT.set(true);
 
         // With no file name yet, take the one being written to. BufFlags::NOTEDITED
         // records that, in case the write fails. Not for a filter command,
@@ -397,7 +397,7 @@ impl Buf {
             b.b_op_end = orig.end;
         }
         // Overwrite the previous file message, or don't.
-        MSG_SCROLL.set(if shortmess(ShmFlag::OVER) && !exiting.get() {
+        MSG_SCROLL.set(if shortmess(ShmFlag::OVER) && !EXITING.get() {
             0
         } else {
             1
@@ -528,7 +528,7 @@ impl Buf {
                     if req.reset_changed
                         && !target.newfile
                         && overwriting
-                        && !(exiting.get() && backup.path.is_some())
+                        && !(EXITING.get() && backup.path.is_some())
                     {
                         let fsync = if b.b_p_fs >= 0 { b.b_p_fs != 0 } else { p_fs() };
                         ml_preserve(buf, false, fsync);

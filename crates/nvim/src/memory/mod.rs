@@ -33,7 +33,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::memory::alloc_log::AllocEvent;
@@ -61,25 +60,25 @@ use ::libc::{calloc, free, malloc, realloc};
 /// across the call; the allocation paths that call it hold none. Main thread
 /// only: those are main-thread state.
 unsafe fn try_to_free_memory() {
-    static trying_to_free: SharedCell<bool> = SharedCell::new(false);
-    if trying_to_free.get() {
+    static TRYING_TO_FREE: SharedCell<bool> = SharedCell::new(false);
+    if TRYING_TO_FREE.get() {
         return;
     }
-    trying_to_free.set(true);
+    TRYING_TO_FREE.set(true);
     clear_sb_text(true);
     mf_release_all();
     free_reuse_blks();
-    trying_to_free.set(false);
+    TRYING_TO_FREE.set(false);
 }
 
 /// Report an allocation failure, once per process.
 fn do_outofmem_msg(size: usize) {
-    if did_outofmem_msg.get() {
+    if DID_OUTOFMEM_MSG.get() {
         return;
     }
     // Message queueing would fail the allocation again; report loudly, once.
     EMSG_SILENT.set(0);
-    did_outofmem_msg.set(true);
+    DID_OUTOFMEM_MSG.set(true);
     // A `size_t` that would not fit a `%lu` is not a size any allocator was
     // ever going to serve, so saturating beats panicking on the OOM path.
     let size = c_ulong::try_from(size).unwrap_or(c_ulong::MAX);
@@ -731,8 +730,8 @@ pub use blocks::*;
 pub use thin_cstring::ThinCString;
 pub use xstring::XString;
 
-pub(crate) static arena_alloc_count: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-pub(crate) static did_outofmem_msg: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static ARENA_ALLOC_COUNT: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
+pub(crate) static DID_OUTOFMEM_MSG: GlobalCell<bool> = GlobalCell::new(false);
 
 #[cfg(test)]
 mod tests {

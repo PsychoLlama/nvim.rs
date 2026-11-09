@@ -31,7 +31,6 @@
 
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -75,14 +74,14 @@ pub use self::del::*;
 pub use self::get::*;
 pub use self::undo::*;
 
-pub(crate) static curbuf_splice_pending: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static CURBUF_SPLICE_PENDING: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
-pub const kExtmarkSavePos: UndoObjectType = 3;
-pub const kExtmarkMove: UndoObjectType = 1;
-pub const kExtmarkSplice: UndoObjectType = 0;
-pub const kExtmarkNoUndo: ExtmarkOp = 2;
-pub const kExtmarkUndo: ExtmarkOp = 1;
-pub const kExtmarkNOOP: ExtmarkOp = 0;
+pub const EXTMARK_SAVE_POS: UndoObjectType = 3;
+pub const EXTMARK_MOVE: UndoObjectType = 1;
+pub const EXTMARK_SPLICE: UndoObjectType = 0;
+pub const EXTMARK_NO_UNDO: ExtmarkOp = 2;
+pub const EXTMARK_UNDO: ExtmarkOp = 1;
+pub const EXTMARK_NOOP: ExtmarkOp = 0;
 pub const EXTMARK_NONE: ExtmarkType = 1;
 // ---------------------------------------------------------------------------
 // The two containers hanging off a buffer
@@ -100,7 +99,7 @@ impl Buf {
     }
 }
 
-/// The buffer the editor is working in -- `curbuf`.
+/// The buffer the editor is working in -- `CURBUF`.
 fn current_buf() -> Buf {
     Buf::current()
 }
@@ -319,10 +318,10 @@ impl Buf {
     }
 }
 
-/// `curbuf_splice_pending`: a `:global` or similar is batching its own
+/// `CURBUF_SPLICE_PENDING`: a `:global` or similar is batching its own
 /// splices and [`extmark_adjust`] must stay out of the way.
 fn splice_pending() -> bool {
-    curbuf_splice_pending.get() != 0
+    CURBUF_SPLICE_PENDING.get() != 0
 }
 
 /// One (row, col, byte) triple of a splice -- its start, the extent removed
@@ -509,7 +508,7 @@ pub enum ExtmarkUndoObject {
 
 impl ExtmarkUndoObject {
     /// The number the undo file writes for this kind of record --
-    /// upstream's `kExtmarkSplice`, `kExtmarkMove` and `kExtmarkSavePos`.
+    /// upstream's `EXTMARK_SPLICE`, `EXTMARK_MOVE` and `EXTMARK_SAVE_POS`.
     /// These are a file format, so they are literals here rather than a
     /// name that could be renumbered.
     pub fn wire_type(&self) -> UndoObjectType {

@@ -17,12 +17,12 @@
 
 use super::*;
 use crate::api::private::validate::err_bad_value;
-use crate::context::kCtxBufs;
-use crate::context::kCtxFuncs;
-use crate::context::kCtxGVars;
-use crate::context::kCtxJumps;
-use crate::context::kCtxRegs;
-use crate::context::kCtxSFuncs;
+use crate::context::CTX_BUFS;
+use crate::context::CTX_FUNCS;
+use crate::context::CTX_G_VARS;
+use crate::context::CTX_JUMPS;
+use crate::context::CTX_REGS;
+use crate::context::CTX_S_FUNCS;
 use crate::types::DictBuilder;
 
 /// The `types` key's spellings, and the `kCtx*` bit each one names.
@@ -30,7 +30,12 @@ const NAMES: [&::core::ffi::CStr; 6] = [c"regs", c"jumps", c"bufs", c"gvars", c"
 
 /// [`NAMES`]' bits, in the same order.
 const FLAGS: [::core::ffi::c_int; 6] = [
-    kCtxRegs, kCtxJumps, kCtxBufs, kCtxGVars, kCtxSFuncs, kCtxFuncs,
+    CTX_REGS,
+    CTX_JUMPS,
+    CTX_BUFS,
+    CTX_G_VARS,
+    CTX_S_FUNCS,
+    CTX_FUNCS,
 ];
 
 pub fn nvim_get_context(opts: &mut KeyDict_context) -> Result<ApiDict, Error> {

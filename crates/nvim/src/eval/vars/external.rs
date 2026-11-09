@@ -62,21 +62,21 @@ pub(crate) fn eval_charconvert(
         Vv::FnameIn,
         Vv::FnameOut,
     ];
-    let saved_sctx = current_sctx.get();
+    let saved_sctx = CURRENT_SCTX.get();
     set_vim_var_strings(&[
         (Vv::CharconvertFrom, enc_from),
         (Vv::CharconvertTo, enc_to),
         (Vv::FnameIn, fname_from),
         (Vv::FnameOut, fname_to),
     ]);
-    current_sctx.set(option_last_set(kOptCharconvert));
+    CURRENT_SCTX.set(option_last_set(kOptCharconvert));
 
     // A copy: the expression may set the option and free its text.
     let expr = p_ccv(XString::from_cstr);
     let err = eval_to_bool(&expr, true) != Ok(false);
 
     clear_vim_var_strings(&VARS);
-    current_sctx.set(saved_sctx);
+    CURRENT_SCTX.set(saved_sctx);
 
     if err { Err(NotConverted) } else { Ok(()) }
 }
@@ -86,38 +86,38 @@ pub(crate) fn eval_charconvert(
 /// finding no usable output.
 pub fn eval_diff(origfile: &CStr, newfile: &CStr, outfile: &CStr) {
     const VARS: [Vv; 3] = [Vv::FnameIn, Vv::FnameNew, Vv::FnameOut];
-    let saved_sctx = current_sctx.get();
+    let saved_sctx = CURRENT_SCTX.get();
     set_vim_var_strings(&[
         (Vv::FnameIn, origfile),
         (Vv::FnameNew, newfile),
         (Vv::FnameOut, outfile),
     ]);
-    current_sctx.set(option_last_set(kOptDiffexpr));
+    CURRENT_SCTX.set(option_last_set(kOptDiffexpr));
 
     // A copy: the expression may set the option and free its text.
     drop(eval_expr_ext(&p_dex(XString::from_cstr), true));
 
     clear_vim_var_strings(&VARS);
-    current_sctx.set(saved_sctx);
+    CURRENT_SCTX.set(saved_sctx);
 }
 
 /// Evaluate `'patchexpr'` to apply `difffile` to `origfile`, writing the
 /// result to `outfile`.  Errors are ignored, as in [`eval_diff`].
 pub fn eval_patch(origfile: &CStr, difffile: &CStr, outfile: &CStr) {
     const VARS: [Vv; 3] = [Vv::FnameIn, Vv::FnameDiff, Vv::FnameOut];
-    let saved_sctx = current_sctx.get();
+    let saved_sctx = CURRENT_SCTX.get();
     set_vim_var_strings(&[
         (Vv::FnameIn, origfile),
         (Vv::FnameDiff, difffile),
         (Vv::FnameOut, outfile),
     ]);
-    current_sctx.set(option_last_set(kOptPatchexpr));
+    CURRENT_SCTX.set(option_last_set(kOptPatchexpr));
 
     // A copy: the expression may set the option and free its text.
     drop(eval_expr_ext(&p_pex(XString::from_cstr), true));
 
     clear_vim_var_strings(&VARS);
-    current_sctx.set(saved_sctx);
+    CURRENT_SCTX.set(saved_sctx);
 }
 
 /// Evaluate the `expr:` part of `'spellsuggest'` over `badword`, which the
@@ -127,7 +127,7 @@ pub fn eval_patch(origfile: &CStr, difffile: &CStr, outfile: &CStr) {
 /// not answer a List.  Errors are suppressed unless `'verbose'` is on.
 pub fn eval_spell_expr(badword: &[u8], expr: &[u8]) -> Option<ListRef> {
     let text = &expr[skip::white(expr)..];
-    let saved_sctx = current_sctx.get();
+    let saved_sctx = CURRENT_SCTX.get();
 
     // `v:val` is the bad word; it has no type of its own, so it has to
     // be added to the `v:` dictionary and taken out again.
@@ -135,7 +135,7 @@ pub fn eval_spell_expr(badword: &[u8], expr: &[u8]) -> Option<ListRef> {
     prepare_vimvar(Vv::Val, &mut save_val);
     set_vim_var_string(Vv::Val, Some(badword));
     let no_emsg = (p_verbose() == 0).then(Suppress::emsg);
-    current_sctx.set(option_last_set(kOptSpellsuggest));
+    CURRENT_SCTX.set(option_last_set(kOptSpellsuggest));
 
     let mut rettv = TV_INITIAL_VALUE;
     // A bare `Func(v:val)` call is evaluated without the expression
@@ -157,7 +157,7 @@ pub fn eval_spell_expr(badword: &[u8], expr: &[u8]) -> Option<ListRef> {
     drop(no_emsg);
     clear_vimvar(Vv::Val);
     restore_vimvar(Vv::Val, &mut save_val);
-    current_sctx.set(saved_sctx);
+    CURRENT_SCTX.set(saved_sctx);
 
     list
 }

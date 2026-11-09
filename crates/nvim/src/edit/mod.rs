@@ -41,12 +41,11 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::ascii::{ascii_isspace, ascii_iswhite, ascii_iswhite_nl_or_nul, ascii_isxdigit};
 use crate::autocmd::defs::AcoSave;
 use crate::autocmd::defs::AutoEvent;
-use crate::autocmd::state::{did_cursorhold, last_cursormoved, last_cursormoved_win};
+use crate::autocmd::state::{DID_CURSORHOLD, LAST_CURSORMOVED, LAST_CURSORMOVED_WIN};
 use crate::autocmd::{apply_autocmds, aucmd_prepbuf, aucmd_restbuf, has_event};
 use crate::buffer::{
     buf_get_changedtick, buf_is_empty, buf_is_prompt, buf_is_quickfix, buf_meta_total, current_buf,
@@ -74,10 +73,10 @@ use crate::drawscreen::{
 };
 use crate::eval::vars::{set_vim_var_string, vim_var_bytes, with_vim_var_str};
 use crate::eval::{invoke_prompt_interrupt, prompt_invoke_callback};
-use crate::ex_docmd::state::ex_normal_busy;
+use crate::ex_docmd::state::EX_NORMAL_BUSY;
 use crate::ex_docmd::{do_cmdline_cmd, expr_map_locked};
 use crate::fileio::check_timestamps;
-use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
+use crate::fileio::state::{DID_CHECK_TIMESTAMPS, NEED_CHECK_TIMESTAMPS};
 use crate::fold::{fold_check_close, fold_open_cursor, fold_update_after_insert};
 use crate::getchar::state::{
     GOT_INT, KEY_STUFFED, KEY_TYPED, LANGMAP_MAPCHAR, MOD_MASK, REG_RECORDING, VGETC_BUSY,
@@ -93,7 +92,7 @@ use crate::global_cell::state_record;
 use crate::grid::{
     grid_line_flush, grid_line_getchar, grid_line_put_schar, grid_line_puts, grid_line_start,
 };
-use crate::guard::{sandbox, textlock};
+use crate::guard::{SANDBOX, TEXTLOCK};
 use crate::highlight::state::NEED_HIGHLIGHT_CHANGED;
 use crate::highlight_group::{HLF_8, highlight_changed};
 use crate::indent::{
@@ -163,7 +162,7 @@ use crate::register::{
     register_name, valid_yank_reg,
 };
 use crate::search::{BACKWARD, FORWARD};
-use crate::spell::spell_redraw_lnum;
+use crate::spell::SPELL_REDRAW_LNUM;
 use crate::state::mode::{
     AI_COL, ARROW_USED, CAN_SI, CAN_SI_BACK, DID_AI, DID_SI, EDIT_SUBMODE_EXTRA,
     END_COMMENT_PENDING, FORCE_RESTART_EDIT, INS_AT_EOL, INSSTART, INSSTART_ORIG, KM_STARTSEL,
@@ -185,10 +184,10 @@ use crate::types::Key;
 use crate::types::{ApiString, CmdModFlags, ColNr, LineNr, OptInt, Pos, ScreenChar, Vv};
 use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
-use crate::undo::u_sync_once;
+use crate::undo::U_SYNC_ONCE;
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
 use crate::window::{goto_tabpage, may_trigger_win_scrolled_resized};
-use crate::winlayer::graph::{cmdwin_result, cmdwin_type};
+use crate::winlayer::graph::{CMDWIN_RESULT, CMDWIN_TYPE};
 
 // The carve of the transpiled module; see each child's docs.
 mod bs;
@@ -283,38 +282,38 @@ state_record! {
     /// call: an insert runs autocommands, mappings and Lua.
     pub(crate) struct EditState in EDIT as EditField;
 
-    compl_busy: bool = false;
-    Insstart_textlen: ColNr = ColNr::ZERO;
-    Insstart_blank_vcol: ColNr = ColNr::ZERO;
-    update_Insstart_orig: bool = true;
+    COMPL_BUSY: bool = false;
+    INSSTART_TEXTLEN: ColNr = ColNr::ZERO;
+    INSSTART_BLANK_VCOL: ColNr = ColNr::ZERO;
+    UPDATE_INSSTART_ORIG: bool = true;
     /// The text of the last insert, the redo-buffer spelling, with the
     /// command that started it on the front -- see [`lastins`].
-    last_insert: ApiString = ApiString::NULL;
-    last_insert_skip: ::core::ffi::c_int = 0;
-    new_insert_skip: ::core::ffi::c_int = 0;
-    did_restart_edit: Key = Key::NUL;
-    can_cindent: bool = false;
-    revins_on: bool = false;
-    revins_chars: ::core::ffi::c_int = 0;
-    revins_legal: ::core::ffi::c_int = 0;
-    revins_scol: ::core::ffi::c_int = 0;
-    ins_need_undo: bool = false;
-    dont_sync_undo: KeepUndo = KeepUndo::No;
-    o_lnum: LineNr = LineNr::ZERO;
+    LAST_INSERT: ApiString = ApiString::NULL;
+    LAST_INSERT_SKIP: ::core::ffi::c_int = 0;
+    NEW_INSERT_SKIP: ::core::ffi::c_int = 0;
+    DID_RESTART_EDIT: Key = Key::NUL;
+    CAN_CINDENT: bool = false;
+    REVINS_ON: bool = false;
+    REVINS_CHARS: ::core::ffi::c_int = 0;
+    REVINS_LEGAL: ::core::ffi::c_int = 0;
+    REVINS_SCOL: ::core::ffi::c_int = 0;
+    INS_NEED_UNDO: bool = false;
+    DONT_SYNC_UNDO: KeepUndo = KeepUndo::No;
+    O_LNUM: LineNr = LineNr::ZERO;
     /// The Replace-mode stack of overwritten bytes -- see [`replace`].
     ///
     /// A `Vec`, not klib's `kvec_t(char)`: the growth policy was the only
     /// thing the kvec provided, every operation on it is an insert or a
     /// removal in the middle, and nothing outside [`replace`] may touch it.
-    replace_stack: Vec<u8> = Vec::new();
-    pc_status: PutChar = PutChar::Unset;
-    pc_schar: ScreenChar = 0;
-    pc_attr: ::core::ffi::c_int = 0;
-    pc_row: ::core::ffi::c_int = 0;
-    pc_col: ::core::ffi::c_int = 0;
+    REPLACE_STACK: Vec<u8> = Vec::new();
+    PC_STATUS: PutChar = PutChar::Unset;
+    PC_SCHAR: ScreenChar = 0;
+    PC_ATTR: ::core::ffi::c_int = 0;
+    PC_ROW: ::core::ffi::c_int = 0;
+    PC_COL: ::core::ffi::c_int = 0;
     /// `ins_esc` took one `REDRAWING_DISABLED` level it still has to give
     /// back.
-    disabled_redraw: bool = false;
+    DISABLED_REDRAW: bool = false;
 }
 pub(crate) const INPUT_BUFLEN: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 

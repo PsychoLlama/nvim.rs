@@ -53,7 +53,7 @@ use std::fs::File;
 use std::io::{BufWriter, Read, Write};
 use std::os::unix::ffi::OsStrExt;
 
-use super::flag::kEqualFiles;
+use super::flag::EQUAL_FILES;
 
 /// The room upstream's `NameBuff` had, terminator included.
 const NAME_ROOM: usize = MAXPATHL as usize;
@@ -249,7 +249,7 @@ fn helptags_one(
     let mut tags: Vec<Vec<u8>> = Vec::new();
     let dir_name = XString::from_bytes(dir);
     if add_help_tags
-        || path_full_compare(c"$VIMRUNTIME/doc", dir_name.as_cstr(), false, true) == kEqualFiles
+        || path_full_compare(c"$VIMRUNTIME/doc", dir_name.as_cstr(), false, true) == EQUAL_FILES
     {
         tags.push([b"help-tags\t", tagfname, b"\t1\n"].concat());
     }

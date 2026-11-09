@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::event::libuv_proc::LibuvProc;
 use crate::event::objects::{Proc, RStream, Stream};
@@ -173,11 +172,11 @@ impl ChannelStream {
     /// The transport's kind, as the C enum numbers it.
     pub fn kind(&self) -> ChannelStreamType {
         match self {
-            ChannelStream::Job(_) => kChannelStreamProc,
-            ChannelStream::Socket(_) => kChannelStreamSocket,
-            ChannelStream::Stdio(_) => kChannelStreamStdio,
-            ChannelStream::Stderr(_) => kChannelStreamStderr,
-            ChannelStream::Internal(_) => kChannelStreamInternal,
+            ChannelStream::Job(_) => CHANNEL_STREAM_PROC,
+            ChannelStream::Socket(_) => CHANNEL_STREAM_SOCKET,
+            ChannelStream::Stdio(_) => CHANNEL_STREAM_STDIO,
+            ChannelStream::Stderr(_) => CHANNEL_STREAM_STDERR,
+            ChannelStream::Internal(_) => CHANNEL_STREAM_INTERNAL,
         }
     }
 }
@@ -210,11 +209,11 @@ impl JobProc {
 }
 
 /// The kinds of transport, as the C enum numbers them.
-pub const kChannelStreamProc: ChannelStreamType = 0;
-pub const kChannelStreamSocket: ChannelStreamType = 1;
-pub const kChannelStreamStdio: ChannelStreamType = 2;
-pub const kChannelStreamStderr: ChannelStreamType = 3;
-pub const kChannelStreamInternal: ChannelStreamType = 4;
+pub const CHANNEL_STREAM_PROC: ChannelStreamType = 0;
+pub const CHANNEL_STREAM_SOCKET: ChannelStreamType = 1;
+pub const CHANNEL_STREAM_STDIO: ChannelStreamType = 2;
+pub const CHANNEL_STREAM_STDERR: ChannelStreamType = 3;
+pub const CHANNEL_STREAM_INTERNAL: ChannelStreamType = 4;
 
 #[derive(Debug)]
 pub struct ChannelCallFrame {
@@ -226,8 +225,8 @@ pub struct ChannelCallFrame {
 pub type ChannelPart = ::core::ffi::c_uint;
 pub type ChannelStdinMode = ::core::ffi::c_uint;
 /// What a channel does with the job's stdin.
-pub const kChannelStdinPipe: ChannelStdinMode = 0;
-pub const kChannelStdinNull: ChannelStdinMode = 1;
+pub const CHANNEL_STDIN_PIPE: ChannelStdinMode = 0;
+pub const CHANNEL_STDIN_NULL: ChannelStdinMode = 1;
 pub type ChannelStreamType = ::core::ffi::c_uint;
 pub type ClientType = ::core::ffi::c_int;
 #[derive(Copy, Clone, Debug)]

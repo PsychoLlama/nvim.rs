@@ -17,10 +17,10 @@ use crate::memory::XString;
 use crate::option::HIGHLIGHT_INIT;
 use crate::strings::has_char;
 use crate::types::Handle;
-use crate::window::kZIndexFloatDefault;
-use crate::winfloat::kAlignLeft;
-use crate::winfloat::kWinSplitLeft;
-use crate::winfloat::kWinStyleUnused;
+use crate::window::Z_INDEX_FLOAT_DEFAULT;
+use crate::winfloat::ALIGN_LEFT;
+use crate::winfloat::WIN_SPLIT_LEFT;
+use crate::winfloat::WIN_STYLE_UNUSED;
 use core::ffi::{CStr, c_int, c_uint};
 
 use crate::api::win_config::parse_winborder;
@@ -387,20 +387,20 @@ pub(crate) fn parse_border_opt(border_opt: &CStr) -> bool {
         external: false,
         focusable: true,
         mouse: true,
-        split: kWinSplitLeft,
-        zindex: c_int::try_from(kZIndexFloatDefault).expect("the default z-index is small"),
-        style: kWinStyleUnused,
+        split: WIN_SPLIT_LEFT,
+        zindex: c_int::try_from(Z_INDEX_FLOAT_DEFAULT).expect("the default z-index is small"),
+        style: WIN_STYLE_UNUSED,
         border: false,
         shadow: false,
         border_chars: [[0; 32]; 8],
         border_hl_ids: [0; 8],
         border_attr: [0; 8],
         title: false,
-        title_pos: kAlignLeft,
+        title_pos: ALIGN_LEFT,
         title_chunks: VirtText::new(),
         title_width: 0,
         footer: false,
-        footer_pos: kAlignLeft,
+        footer_pos: ALIGN_LEFT,
         footer_chunks: VirtText::new(),
         footer_width: 0,
         noautocmd: false,

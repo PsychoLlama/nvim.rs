@@ -27,7 +27,7 @@ use crate::event::libuv::{
     uv_fs_access, uv_fs_chmod, uv_fs_chown, uv_fs_close, uv_fs_lstat, uv_fs_stat, uv_fs_utime,
 };
 use crate::event::uv::{uv_gid_t, uv_stat_t, uv_uid_t};
-use crate::log::g_stats;
+use crate::log::G_STATS;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::fs::{FileID, FileInfo};
@@ -212,7 +212,7 @@ pub fn os_chown(path: &CStr, owner: uv_uid_t, group: uv_gid_t) -> c_int {
 /// is the libuv error code.
 pub(crate) fn fsync_file(file: &File) -> Result<(), c_int> {
     let synced = file.sync_all().map_err(|error| uv_code(&error));
-    g_stats.with_mut(|stats| stats.fsync += 1);
+    G_STATS.with_mut(|stats| stats.fsync += 1);
     synced
 }
 

@@ -27,15 +27,15 @@ binary as well as the default one.
 
 ## `buffer`
 
-- `neovim::buffer::top_file_num`
+- `neovim::buffer::TOP_FILE_NUM`
 
 ## `charset`
 
-- `neovim::charset::g_chartab`
+- `neovim::charset::G_CHARTAB`
 
 ## `cmdexpand`
 
-- `neovim::cmdexpand::compl_match_array`
+- `neovim::cmdexpand::CMDLINE_PUM`
 
 ## `cmdhist`
 
@@ -43,7 +43,7 @@ binary as well as the default one.
 
 ## `diff`
 
-- `neovim::diff::diff_flags`
+- `neovim::diff::DIFF_FLAGS`
 
 ## `drawscreen`
 
@@ -52,7 +52,7 @@ binary as well as the default one.
 
 ## `ex_docmd`
 
-- `neovim::ex_docmd::ex_pressedreturn`
+- `neovim::ex_docmd::EX_PRESSEDRETURN`
 
 ## `ex_getln`
 
@@ -75,7 +75,7 @@ binary as well as the default one.
 
 ## `guard`
 
-- `neovim::guard::sandbox`
+- `neovim::guard::SANDBOX`
 
 ## `highlight`
 
@@ -85,8 +85,8 @@ binary as well as the default one.
 
 - `neovim::log::DID_LOG_INIT`
 - `neovim::log::DID_RECURSION_MSG`
-- `neovim::log::g_min_log_level`
-- `neovim::log::g_stats`
+- `neovim::log::G_MIN_LOG_LEVEL`
+- `neovim::log::G_STATS`
 
 ## `lua`
 
@@ -119,9 +119,9 @@ binary as well as the default one.
 
 ## `os`
 
-- `neovim::os::input::blocking`
-- `neovim::os::input::input_read_pos`
-- `neovim::os::input::input_write_pos`
+- `neovim::os::input::BLOCKING`
+- `neovim::os::input::INPUT_READ_POS`
+- `neovim::os::input::INPUT_WRITE_POS`
 - `neovim::os::signal::REJECTING_DEADLY`
 
 ## `popupmenu`
@@ -135,42 +135,42 @@ binary as well as the default one.
 
 ## `runtime`
 
-- `neovim::runtime::state::current_sctx`
+- `neovim::runtime::state::CURRENT_SCTX`
 
 ## `search`
 
-- `neovim::search::pattern::last_idx`
+- `neovim::search::pattern::LAST_IDX`
 
 ## `spell`
 
-- `neovim::spell::did_set_spelltab`
-- `neovim::spell::int_wordlist`
-- `neovim::spell::spelltab`
+- `neovim::spell::DID_SET_SPELLTAB`
+- `neovim::spell::INT_WORDLIST`
+- `neovim::spell::SPELLTAB`
 
 ## `startup`
 
-- `neovim::startup::embedded_mode`
-- `neovim::startup::eventloop::main_loop`
-- `neovim::startup::ex_exitval`
-- `neovim::startup::exiting`
-- `neovim::startup::full_screen`
-- `neovim::startup::headless_mode`
-- `neovim::startup::nvim_testing`
-- `neovim::startup::readonlymode`
-- `neovim::startup::recoverymode`
-- `neovim::startup::silent_mode`
-- `neovim::startup::stderr_isatty`
-- `neovim::startup::stdin_fd`
-- `neovim::startup::stdin_isatty`
-- `neovim::startup::stdout_isatty`
-- `neovim::startup::ui_client_attached`
-- `neovim::startup::ui_client_channel_id`
-- `neovim::startup::ui_client_error_exit`
-- `neovim::startup::ui_client_exit_status`
-- `neovim::startup::ui_client_forward_stdin`
-- `neovim::startup::used_stdin`
-- `neovim::startup::v_dying`
-- `neovim::startup::vim_ignored`
+- `neovim::startup::EMBEDDED_MODE`
+- `neovim::startup::eventloop::MAIN_LOOP`
+- `neovim::startup::EX_EXITVAL`
+- `neovim::startup::EXITING`
+- `neovim::startup::FULL_SCREEN`
+- `neovim::startup::HEADLESS_MODE`
+- `neovim::startup::NVIM_TESTING`
+- `neovim::startup::READONLYMODE`
+- `neovim::startup::RECOVERYMODE`
+- `neovim::startup::SILENT_MODE`
+- `neovim::startup::STDERR_ISATTY`
+- `neovim::startup::STDIN_FD`
+- `neovim::startup::STDIN_ISATTY`
+- `neovim::startup::STDOUT_ISATTY`
+- `neovim::startup::UI_CLIENT_ATTACHED`
+- `neovim::startup::UI_CLIENT_CHANNEL_ID`
+- `neovim::startup::UI_CLIENT_ERROR_EXIT`
+- `neovim::startup::UI_CLIENT_EXIT_STATUS`
+- `neovim::startup::UI_CLIENT_FORWARD_STDIN`
+- `neovim::startup::USED_STDIN`
+- `neovim::startup::V_DYING`
+- `neovim::startup::VIM_IGNORED`
 
 ## `state`
 
@@ -198,17 +198,17 @@ binary as well as the default one.
 
 ## `window`
 
-- `neovim::window::frame_locked`
-- `neovim::window::last_win_id`
+- `neovim::window::FRAME_LOCKED`
+- `neovim::window::LAST_WIN_ID`
 
 ## `winlayer`
 
 - `neovim::winlayer::graph::CURRENT_BUF`
 - `neovim::winlayer::graph::CURRENT_TAB`
 - `neovim::winlayer::graph::CURRENT_WIN`
-- `neovim::winlayer::graph::cmdwin_type`
-- `neovim::winlayer::graph::curbuf`
-- `neovim::winlayer::graph::curtab`
+- `neovim::winlayer::graph::CMDWIN_TYPE`
+- `neovim::winlayer::graph::CURBUF`
+- `neovim::winlayer::graph::CURTAB`
 - `neovim::winlayer::handles::BUFFERS`
 - `neovim::winlayer::handles::FRAMES`
 - `neovim::winlayer::handles::TABPAGES`

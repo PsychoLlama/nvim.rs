@@ -3,7 +3,7 @@
 //! [`diff_file`] picks between the three: `'diffexpr'`, the external
 //! `diff(1)` and the built-in xdiff engine.  [`check_external_diff`] is the
 //! probe that decides whether the host's `diff` is usable at all (and caches
-//! the answer in `diff_a_works`); [`diff_file_internal`] runs the engine
+//! the answer in `DIFF_A_WORKS`); [`diff_file_internal`] runs the engine
 //! over two memory images and collects its hunks.
 
 #![forbid(unsafe_code)]
@@ -33,7 +33,7 @@ use std::path::Path;
 
 /// Diff two one-line files and see whether the answer is recognisable.
 ///
-/// Answers `Ok` if the host has a usable `diff`, and leaves `diff_a_works`
+/// Answers `Ok` if the host has a usable `diff`, and leaves `DIFF_A_WORKS`
 /// saying whether it accepts `-a`.  The probe runs at most twice: the first
 /// attempt passes `-a`, and if that produces nothing recognisable the flag is
 /// remembered as unsupported and the whole thing is tried again without it.
@@ -85,10 +85,10 @@ pub(crate) fn check_external_diff(names: TempNames<'_>) -> Result<(), Failed> {
             }
         }
         // With `'diffexpr'` set there is no `-a` to retry without.
-        if P_DEX.first_byte() != 0 || diff_a_works.get().is_some() {
+        if P_DEX.first_byte() != 0 || DIFF_A_WORKS.get().is_some() {
             break;
         }
-        diff_a_works.set(Some(ok));
+        DIFF_A_WORKS.set(Some(ok));
         if ok {
             break;
         }
@@ -100,7 +100,7 @@ pub(crate) fn check_external_diff(names: TempNames<'_>) -> Result<(), Failed> {
         emsg(gettext(c"E810: Cannot read or write temp files"));
     }
     emsg(gettext(c"E97: Cannot create diffs"));
-    diff_a_works.set(None);
+    DIFF_A_WORKS.set(None);
     Err(Failed)
 }
 
@@ -111,11 +111,11 @@ pub(crate) fn diff_file_internal(
     new: &[u8],
     hunks: &mut Vec<DiffHunk>,
 ) -> Result<(), Failed> {
-    let flags = diff_flags.get();
+    let flags = DIFF_FLAGS.get();
     // `'diffopt'`'s ignore flags map onto xdiff's own; `icase` does not, and
     // is applied while writing the buffers out instead. `'diffanchors'` is
     // implemented by splitting the buffers, not by xdiff's anchor list.
-    let xdiff_flags = diff_algorithm.get()
+    let xdiff_flags = DIFF_ALGORITHM.get()
         | [
             (DIFF_IWHITE, XDF_IGNORE_WHITESPACE_CHANGE),
             (DIFF_IWHITEALL, XDF_IGNORE_WHITESPACE),
@@ -174,9 +174,9 @@ fn diff_file_external(names: TempNames<'_>) -> Result<(), Failed> {
     // Upstream spells this as one `vim_snprintf` of nine `%s`, seven of them
     // a flag or the empty string.
     let mut cmd: Vec<u8> = b"diff ".to_vec();
-    let flags = diff_flags.get();
+    let flags = DIFF_FLAGS.get();
     for (on, text) in [
-        (diff_a_works.get() != Some(false), &b"-a "[..]),
+        (DIFF_A_WORKS.get() != Some(false), &b"-a "[..]),
         (flags & DIFF_IWHITE != 0, b"-b "),
         (flags & DIFF_IWHITEALL != 0, b"-w "),
         (flags & DIFF_IWHITEEOL != 0, b"-Z "),

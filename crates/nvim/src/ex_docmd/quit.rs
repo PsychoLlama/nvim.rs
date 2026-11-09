@@ -49,9 +49,9 @@ use crate::getchar::beep_flush;
 use crate::keycodes::SpecialKey;
 use crate::message::E_AUTOCMD_CLOSE;
 use crate::option::vars::{p_awa, p_confirm, p_write};
-use crate::startup::exiting;
+use crate::startup::EXITING;
 use crate::types::Key;
-use crate::winlayer::graph::{cmdwin_result, cmdwin_type, firstwin, lastwin, topframe};
+use crate::winlayer::graph::{CMDWIN_RESULT, CMDWIN_TYPE, FIRSTWIN, LASTWIN, TOPFRAME};
 
 use crate::message::msg;
 
@@ -136,9 +136,9 @@ fn quit_was_cancelled(window: WinId, buf: impl FnOnce() -> Buf) -> bool {
 
 /// `:quit`.
 pub(crate) fn ex_quit(excmd: &mut ExArg) {
-    if cmdwin_type.get() != 0 {
+    if CMDWIN_TYPE.get() != 0 {
         // In the command-line window, `:q` closes that instead.
-        cmdwin_result.set(Key::CTRL_C);
+        CMDWIN_RESULT.set(Key::CTRL_C);
         return;
     }
     if text_locked() {
@@ -158,9 +158,9 @@ pub(crate) fn ex_quit(excmd: &mut ExArg) {
         return;
     }
 
-    let save_exiting = exiting.get();
+    let save_exiting = EXITING.get();
     if may_leave(excmd.forceit) && only_one_window() {
-        exiting.set(true);
+        EXITING.set(true);
     }
     // The three refusals: unsaved changes in this buffer, files left in
     // the argument list, unsaved changes anywhere else.
@@ -179,7 +179,7 @@ pub(crate) fn ex_quit(excmd: &mut ExArg) {
     }
     // `:1quit` with one window open closes the window rather than
     // exiting; a bare `:quit` exits.
-    if only_one_window() && (firstwin.get() == lastwin.get() || excmd.addr_count == 0) {
+    if only_one_window() && (FIRSTWIN.get() == LASTWIN.get() || excmd.addr_count == 0) {
         getout(0);
     }
     not_exiting(save_exiting);
@@ -202,7 +202,7 @@ fn window_at(nr: i32) -> Option<Win> {
 }
 
 /// The head of the current tab page's window list, which exists from
-/// startup to exit — upstream dereferences `firstwin` here unguarded.
+/// startup to exit — upstream dereferences `FIRSTWIN` here unguarded.
 fn first_win() -> Win {
     first_window().expect("the editor always has a window")
 }
@@ -225,8 +225,8 @@ pub(crate) fn ex_cquit(excmd: &mut ExArg) {
 /// The checks `:qall`, `:xall` and `:wqall` share before any of them
 /// starts writing.
 pub fn before_quit_all(excmd: &mut ExArg) -> Result<(), Failed> {
-    if cmdwin_type.get() != 0 {
-        cmdwin_result.set(Key::from(if excmd.forceit {
+    if CMDWIN_TYPE.get() != 0 {
+        CMDWIN_RESULT.set(Key::from(if excmd.forceit {
             SpecialKey::Xf1
         } else {
             SpecialKey::Xf2
@@ -248,8 +248,8 @@ pub(crate) fn ex_quitall(excmd: &mut ExArg) {
     if before_quit_all(excmd).is_err() {
         return;
     }
-    let save_exiting = exiting.get();
-    exiting.set(true);
+    let save_exiting = EXITING.get();
+    EXITING.set(true);
     if excmd.forceit || !check_changed_any(false, false) {
         getout(0);
     }
@@ -258,8 +258,8 @@ pub(crate) fn ex_quitall(excmd: &mut ExArg) {
 
 /// `:close`.
 pub(crate) fn ex_close(excmd: &mut ExArg) {
-    if cmdwin_type.get() != 0 {
-        cmdwin_result.set(Key::CTRL_C);
+    if CMDWIN_TYPE.get() != 0 {
+        CMDWIN_RESULT.set(Key::CTRL_C);
         return;
     }
     if text_locked() || curbuf_locked() {
@@ -351,8 +351,8 @@ pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
 
 /// `:tabclose`.
 pub(crate) fn ex_tabclose(excmd: &mut ExArg) {
-    if cmdwin_type.get() != 0 {
-        cmdwin_result.set(Key::from(SpecialKey::Ignore));
+    if CMDWIN_TYPE.get() != 0 {
+        CMDWIN_RESULT.set(Key::from(SpecialKey::Ignore));
         return;
     }
     if only_tab() {
@@ -380,8 +380,8 @@ pub(crate) fn ex_tabclose(excmd: &mut ExArg) {
 
 /// `:tabonly`.
 pub(crate) fn ex_tabonly(excmd: &mut ExArg) {
-    if cmdwin_type.get() != 0 {
-        cmdwin_result.set(Key::from(SpecialKey::Ignore));
+    if CMDWIN_TYPE.get() != 0 {
+        CMDWIN_RESULT.set(Key::from(SpecialKey::Ignore));
         return;
     }
     if only_tab() {
@@ -404,7 +404,7 @@ pub(crate) fn ex_tabonly(excmd: &mut ExArg) {
     let mut done = 0;
     while done < 1000 {
         for tp in tabs() {
-            if tp.tp_topframe != topframe.get() {
+            if tp.tp_topframe != TOPFRAME.get() {
                 tabpage_close_other(tp, c_int::from(excmd.forceit));
                 if valid_tabpage(tp.id()) {
                     done = 1000;
@@ -435,10 +435,10 @@ pub fn tabpage_close(forceit: c_int) {
     while Win::current().w_floating {
         ex_win_close(forceit, Win::current(), None);
     }
-    if firstwin.get() != lastwin.get() {
+    if FIRSTWIN.get() != LASTWIN.get() {
         close_others(1, forceit);
     }
-    if firstwin.get() == lastwin.get() {
+    if FIRSTWIN.get() == LASTWIN.get() {
         ex_win_close(forceit, Win::current(), None);
     }
     if TabPage::current_raw() == save_curtab {
@@ -540,17 +540,17 @@ pub(crate) fn ex_stop(excmd: &mut ExArg) {
 
 /// `:xit` and `:wq` — write, then quit.
 pub(crate) fn ex_exit(excmd: &mut ExArg) {
-    if cmdwin_type.get() != 0 {
-        cmdwin_result.set(Key::CTRL_C);
+    if CMDWIN_TYPE.get() != 0 {
+        CMDWIN_RESULT.set(Key::CTRL_C);
         return;
     }
     if text_locked() {
         text_locked_msg();
         return;
     }
-    let save_exiting = exiting.get();
+    let save_exiting = EXITING.get();
     if may_leave(excmd.forceit) && only_one_window() {
-        exiting.set(true);
+        EXITING.set(true);
     }
     // `:wq` always writes; `:x` only writes a changed buffer.
     if (excmd.cmdidx == CmdIdx::wq || curbuf_is_changed()) && do_write(excmd).is_err()
@@ -573,7 +573,7 @@ pub(crate) fn ex_exit(excmd: &mut ExArg) {
 }
 
 /// Whether the editor has exactly one tab page. Upstream's
-/// `first_tabpage->tp_next == NULL`, which it writes out four times here.
+/// `FIRST_TABPAGE->tp_next == NULL`, which it writes out four times here.
 fn only_tab() -> bool {
     first_tab().is_none_or(|tp| tp.next().is_none())
 }

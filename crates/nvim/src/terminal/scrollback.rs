@@ -22,9 +22,9 @@
 #![forbid(unsafe_code)]
 
 use crate::change::{appended_lines_buf, deleted_lines_buf};
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_UNDO;
 use crate::grid::{MAX_SCHAR_SIZE, schar_put_scratch};
-use crate::mark::kMarkAdjustTerm;
+use crate::mark::MARK_ADJUST_TERM;
 use crate::mark::mark_adjust_buf;
 use crate::memline::{ml_append_buf_terminated, ml_delete_buf};
 use crate::narrow::as_index;
@@ -231,7 +231,7 @@ pub(crate) fn adjust_scrollback(mut term: Term, buffer: Buf) {
 /// of a terminal buffer, running to the end of it.
 fn mark_adjust_term(buffer: Buf, line2: LineNr, amount: i32) {
     let (end, after) = (MAXLNUM.get(), true);
-    let (mode, op) = (kMarkAdjustTerm, kExtmarkUndo);
+    let (mode, op) = (MARK_ADJUST_TERM, EXTMARK_UNDO);
     mark_adjust_buf(buffer, LineNr::ONE, line2, end, amount, after, mode, op);
 }
 

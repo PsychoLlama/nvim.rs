@@ -48,16 +48,16 @@ use crate::path::MAXPATHL;
 use crate::path::{concat_fnames, path_guess_exepath, path_tail};
 use crate::profile::time_msg_at;
 use crate::profile::{time_init, time_start};
-use crate::runtime::state::{ETYPE_ENV, SID_ENV, current_sctx};
+use crate::runtime::state::{CURRENT_SCTX, ETYPE_ENV, SID_ENV};
 use crate::runtime::{estack_pop, estack_push};
 use crate::startup::exit::os_exit;
 use crate::startup::usage::{fill_template, mainerr, usage, version};
 use crate::startup::{
-    EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, MAX_ARG_CMDS, MainParams, SESSION_FILE,
-    WIN_HOR, WIN_TABS, WIN_VER, embedded_mode, err_arg_missing, err_extra_cmd, err_opt_garbage,
-    err_opt_unknown, err_too_many_args, headless_mode, kOptArabic, kOptKeymap, kOptRightleft,
-    kOptShadafile, kOptVerbosefile, kOptWindow, readonlymode, recoverymode, silent_mode,
-    stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty,
+    EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, EMBEDDED_MODE, ERR_ARG_MISSING,
+    ERR_EXTRA_CMD, ERR_OPT_GARBAGE, ERR_OPT_UNKNOWN, ERR_TOO_MANY_ARGS, HEADLESS_MODE,
+    MAX_ARG_CMDS, MainParams, READONLYMODE, RECOVERYMODE, SESSION_FILE, SILENT_MODE, STDERR_ISATTY,
+    STDIN_FD, STDIN_ISATTY, STDOUT_ISATTY, WIN_HOR, WIN_TABS, WIN_VER, kOptArabic, kOptKeymap,
+    kOptRightleft, kOptShadafile, kOptVerbosefile, kOptWindow,
 };
 use crate::state::mode::EXMODE_ACTIVE;
 use crate::types::{Failed, LineNr, OptInt, ScriptId, Vv};
@@ -121,10 +121,10 @@ pub(crate) fn get_number_arg(word: &[u8], idx: &mut usize, def: c_int) -> c_int 
 /// server without a stdin, not Ex mode reading commands from it, and `-s -`
 /// did not already take it.
 pub(crate) fn edit_stdin(parm: &MainParams) -> bool {
-    let implicit = !headless_mode.get()
-        && !(embedded_mode.get() && stdin_fd.get() <= 0)
+    let implicit = !HEADLESS_MODE.get()
+        && !(EMBEDDED_MODE.get() && STDIN_FD.get() <= 0)
         && (!EXMODE_ACTIVE.get() || parm.input_is_text)
-        && !stdin_isatty.get()
+        && !STDIN_ISATTY.get()
         && parm.edit_type <= EDIT_STDIN.cast_signed()
         && parm.scriptin.is_none();
     parm.dash_for_stdin || implicit
@@ -196,7 +196,7 @@ impl<'a> Scan<'a> {
     /// Queue a `-c`/`+cmd`/`-S` command for after the first file is loaded.
     fn push_command(&mut self, cmd: CString) {
         if self.parm.commands.len() >= MAX_ARG_CMDS {
-            mainerr(err_extra_cmd, None, None);
+            mainerr(ERR_EXTRA_CMD, None, None);
         }
         self.parm.commands.push(cmd);
     }
@@ -204,7 +204,7 @@ impl<'a> Scan<'a> {
     /// Queue a `--cmd` command for before any config is read.
     fn push_pre_command(&mut self, cmd: CString) {
         if self.parm.pre_commands.len() >= MAX_ARG_CMDS {
-            mainerr(err_extra_cmd, None, None);
+            mainerr(ERR_EXTRA_CMD, None, None);
         }
         self.parm.pre_commands.push(cmd);
     }
@@ -212,7 +212,7 @@ impl<'a> Scan<'a> {
     /// Claim the one "what is this process editing" slot for `-t` or `-q`.
     fn claim_edit_type(&mut self, kind: c_int) {
         if self.parm.edit_type != EDIT_NONE.cast_signed() {
-            mainerr(err_too_many_args, Some(self.arg()), None);
+            mainerr(ERR_TOO_MANY_ARGS, Some(self.arg()), None);
         }
         self.parm.edit_type = kind;
     }
@@ -245,9 +245,9 @@ impl<'a> Scan<'a> {
             }
             os_exit(0);
         } else if self.tail_is(c"headless") {
-            headless_mode.set(true);
+            HEADLESS_MODE.set(true);
         } else if self.tail_is(c"embed") {
-            embedded_mode.set(true);
+            EMBEDDED_MODE.set(true);
         } else if self.tail_starts_with(c"listen") {
             self.skip(6);
             return true;
@@ -277,7 +277,7 @@ impl<'a> Scan<'a> {
         } else if self.tail_starts_with(c"luamod-dev") {
             NLUA_DISABLE_PRELOAD.set(true);
         } else if self.has_tail() {
-            mainerr(err_opt_unknown, Some(self.arg()), None);
+            mainerr(ERR_OPT_UNKNOWN, Some(self.arg()), None);
         } else {
             // A bare `--`: only file names from here on.
             self.had_minmin = true;
@@ -300,11 +300,11 @@ impl<'a> Scan<'a> {
                 // A bare `-`: read the buffer from standard input, unless
                 // Ex mode already claimed it, where it means "silent".
                 if EXMODE_ACTIVE.get() {
-                    silent_mode.set(true);
+                    SILENT_MODE.set(true);
                     self.parm.no_swap_file = true;
                 } else {
                     if self.parm.edit_type > EDIT_STDIN.cast_signed() {
-                        mainerr(err_too_many_args, Some(self.arg()), None);
+                        mainerr(ERR_TOO_MANY_ARGS, Some(self.arg()), None);
                     }
                     self.parm.dash_for_stdin = true;
                     self.parm.edit_type = EDIT_STDIN.cast_signed();
@@ -375,16 +375,16 @@ impl<'a> Scan<'a> {
                 }
             }
             b'R' => {
-                readonlymode.set(true);
+                READONLYMODE.set(true);
                 Buf::current().b_p_ro = 1;
                 P_UC.set(READONLY_UPDATECOUNT);
             }
             // `-L` is the historical spelling of `-r`.
-            b'r' | b'L' => recoverymode.set(true),
+            b'r' | b'L' => RECOVERYMODE.set(true),
             b's' => {
                 if EXMODE_ACTIVE.get() {
                     // `-es`: silent (batch) Ex mode.
-                    silent_mode.set(true);
+                    SILENT_MODE.set(true);
                     self.parm.no_swap_file = true;
                     suppress_shada();
                 } else {
@@ -445,7 +445,7 @@ impl<'a> Scan<'a> {
             }
             // Each of these takes the next word and nothing else.
             b'S' | b'i' | b'l' | b'u' | b'U' | b'W' => return true,
-            _ => mainerr(err_opt_unknown, Some(self.arg()), None),
+            _ => mainerr(ERR_OPT_UNKNOWN, Some(self.arg()), None),
         }
         false
     }
@@ -456,10 +456,10 @@ impl<'a> Scan<'a> {
         // `-S`, whose argument is optional.
         // Nothing may follow an option that takes a separate word.
         if self.has_tail() {
-            mainerr(err_opt_garbage, Some(self.arg()), None);
+            mainerr(ERR_OPT_GARBAGE, Some(self.arg()), None);
         }
         if self.left() <= 1 && c != b'S' {
-            mainerr(err_arg_missing, Some(self.arg()), None);
+            mainerr(ERR_ARG_MISSING, Some(self.arg()), None);
         }
         self.at += 1;
         self.idx = None;
@@ -467,7 +467,7 @@ impl<'a> Scan<'a> {
         match c {
             b'c' | b'S' => {
                 if self.parm.commands.len() >= MAX_ARG_CMDS {
-                    mainerr(err_extra_cmd, None, None);
+                    mainerr(ERR_EXTRA_CMD, None, None);
                 }
                 if c == b'S' {
                     // `-S` with nothing after it, or with another option
@@ -507,8 +507,8 @@ impl<'a> Scan<'a> {
             b'l' => {
                 // `-l {script}`: a batch Lua run. Everything after the
                 // script name belongs to the script, not to us.
-                headless_mode.set(true);
-                silent_mode.set(true);
+                HEADLESS_MODE.set(true);
+                SILENT_MODE.set(true);
                 P_VERBOSE.set(1);
                 self.parm.no_swap_file = true;
                 if self.parm.vimrc.is_none() {
@@ -555,7 +555,7 @@ impl<'a> Scan<'a> {
 
         // Only one kind of editing at a time.
         if self.parm.edit_type > EDIT_STDIN.cast_signed() {
-            mainerr(err_too_many_args, Some(self.arg()), None);
+            mainerr(ERR_TOO_MANY_ARGS, Some(self.arg()), None);
         }
         self.parm.edit_type = EDIT_FILE.cast_signed();
 
@@ -630,7 +630,7 @@ pub(crate) fn command_line_scan(parm: &mut MainParams) {
     }
     parm.argv = argv;
 
-    if embedded_mode.get() && (silent_mode.get() || parm.lua_script.is_some()) {
+    if EMBEDDED_MODE.get() && (SILENT_MODE.get() || parm.lua_script.is_some()) {
         mainerr(gettext(c"--embed conflicts with -es/-Es/-l"), None, None);
     }
 
@@ -671,9 +671,9 @@ pub(crate) fn init_startuptime(parm: &MainParams) {
 
 /// Remember which of the three standard streams are terminals.
 pub(crate) fn check_and_set_isatty() {
-    stdin_isatty.set(os_isatty(STDIN_FILENO));
-    stdout_isatty.set(os_isatty(STDOUT_FILENO));
-    stderr_isatty.set(os_isatty(STDERR_FILENO));
+    STDIN_ISATTY.set(os_isatty(STDIN_FILENO));
+    STDOUT_ISATTY.set(os_isatty(STDOUT_FILENO));
+    STDERR_ISATTY.set(os_isatty(STDERR_FILENO));
     time_msg_at(c"window checked");
 }
 
@@ -702,7 +702,7 @@ pub(crate) fn set_window_layout(parm: &mut MainParams) {
 /// The pseudo-script `$VIMINIT`/`$EXINIT` runs as, held for the scope.
 fn env_script() -> SavedSctx {
     Script::context(
-        current_sctx
+        CURRENT_SCTX
             .get()
             .with_sid(SID_ENV as ScriptId)
             .with_seq(0)

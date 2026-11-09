@@ -19,12 +19,12 @@ pub mod buffered;
 pub(crate) mod state;
 use crate::autocmd::defs::AcoSave;
 use crate::autocmd::defs::AutoEvent;
-use crate::autocmd::state::autocmd_busy;
+use crate::autocmd::state::AUTOCMD_BUSY;
 use crate::autocmd::{
     apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf, augroup_exists_of, do_doautocmd,
     fire_autocmds, fire_autocmds_for,
 };
-use crate::buffer::state::swap_exists_action;
+use crate::buffer::state::SWAP_EXISTS_ACTION;
 use crate::buffer::{
     BufFlags, buf_contents_changed, buf_is_dontwrite, buf_is_empty, buf_is_nofilename,
     buf_is_normal, buflist_new, current_buf, do_modelines, wipe_buffer,
@@ -39,14 +39,14 @@ use crate::edit::beginline;
 use crate::env::home_to_tilde;
 use crate::eval::vars::{eval_charconvert, set_vim_var_string, vim_var_bytes};
 use crate::event::uv::uv_gid_t;
-use crate::ex_docmd::state::{ex_no_reprint, global_busy};
+use crate::ex_docmd::state::{EX_NO_REPRINT, GLOBAL_BUSY};
 use crate::ex_eval::aborting;
-use crate::fileio::state::{did_check_timestamps, need_check_timestamps, no_check_timestamps};
+use crate::fileio::state::{DID_CHECK_TIMESTAMPS, NEED_CHECK_TIMESTAMPS, NO_CHECK_TIMESTAMPS};
 use crate::fold::{fold_update_all, foldmethod_is_manual};
 use crate::getchar::state::GOT_INT;
 use crate::getchar::stuff_empty;
 use crate::global_cell::GlobalCell;
-use crate::guard::allbuf_lock;
+use crate::guard::ALLBUF_LOCK;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::mbyte::{canon_props, canonize, utf_byte2len};
 use crate::memline::{check_need_swap, ml_append_terminated, ml_delete, ml_open};
@@ -91,7 +91,7 @@ use crate::regexp::RegMatch;
 use crate::regexp::vim_regexec;
 use crate::sha256::Sha256;
 use crate::shada::check_marks_read;
-use crate::startup::{exiting, readonlymode, recoverymode, stdin_fd, vim_ignored};
+use crate::startup::{EXITING, READONLYMODE, RECOVERYMODE, STDIN_FD, VIM_IGNORED};
 use crate::state::mode::{EXMODE_ACTIVE, RESTART_EDIT, STATE};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{FmtArg, formatted};
@@ -153,7 +153,7 @@ crate::flag_set! {
     const FILTER = 0x02;
     /// Read from stdin.
     const STDIN = 0x04;
-    /// Read from `curbuf`, to convert what stdin gave us.
+    /// Read from `CURBUF`, to convert what stdin gave us.
     const BUFFER = 0x08;
     /// Read into a dummy buffer, to see whether the file changed.
     const DUMMY = 0x10;
@@ -185,7 +185,7 @@ pub enum Loaded {
 }
 
 /// One of the buffer-lifecycle autocommands this file fires about the current
-/// buffer: `apply_autocmds(event, NULL, NULL, false, curbuf)`.
+/// buffer: `apply_autocmds(event, NULL, NULL, false, CURBUF)`.
 fn autocmd_for_curbuf(event: AutoEvent) {
     fire_autocmds(event, false, Buf::current_or_none());
 }
@@ -214,7 +214,7 @@ impl Buf {
         let msg_scroll_save = MSG_SCROLL.get();
         if shortmess(ShmFlag::OVERALL)
             && MSG_LISTDO_OVERWRITE.get() == 0
-            && !exiting.get()
+            && !EXITING.get()
             && p_verbose() == 0
         {
             MSG_SCROLL.set(c_int::from(false));

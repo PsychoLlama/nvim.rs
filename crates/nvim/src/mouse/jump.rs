@@ -46,7 +46,7 @@ use crate::normal::{
 use crate::option::vars::p_smd;
 use crate::state::mode::V_ISUAL_RESELECT;
 use crate::types::Pos;
-use crate::winlayer::graph::{cmdwin_type, cmdwin_win};
+use crate::winlayer::graph::{CMDWIN_TYPE, CMDWIN_WIN};
 
 // What the last event that could move focus landed on.  A drag or a release
 // must act on the *same* status line or separator the press did, so these
@@ -284,7 +284,7 @@ fn enter_window(
     let past_columns = if win.w_onebuf_opt.wo_rl != 0 {
         pos.col < win.w_view_width - fdc
     } else {
-        pos.col >= fdc + c_int::from(cmdwin_win.get() == Some(win.id()))
+        pos.col >= fdc + c_int::from(CMDWIN_WIN.get() == Some(win.id()))
     };
     if visual_active()
         && (win.buffer() != old_curwin.buffer()
@@ -296,7 +296,7 @@ fn enter_window(
         stop_visual();
     }
 
-    if cmdwin_type.get() != 0 && cmdwin_win.get() != Some(win.id()) {
+    if CMDWIN_TYPE.get() != 0 && CMDWIN_WIN.get() != Some(win.id()) {
         // A click outside the command-line window: Use modeless selection if
         // possible.  Allow dragging the status lines.
         SEP_LINE_OFFSET.set(0);

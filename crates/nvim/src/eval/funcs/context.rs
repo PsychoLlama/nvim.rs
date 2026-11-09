@@ -8,13 +8,13 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::context::CTX_BUFS;
+use crate::context::CTX_FUNCS;
+use crate::context::CTX_G_VARS;
+use crate::context::CTX_JUMPS;
+use crate::context::CTX_REGS;
+use crate::context::CTX_S_FUNCS;
 use crate::context::Context;
-use crate::context::kCtxBufs;
-use crate::context::kCtxFuncs;
-use crate::context::kCtxGVars;
-use crate::context::kCtxJumps;
-use crate::context::kCtxRegs;
-use crate::context::kCtxSFuncs;
 use crate::context::{
     CTX_ALL, ctx_from_dict, ctx_restore, ctx_save, ctx_size, ctx_to_dict, with_ctx,
 };
@@ -86,12 +86,12 @@ pub fn f_ctxpush(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
                 // no name; `strequal` answered the same for it.
                 if let Some(name) = tv.string_ref() {
                     types |= match name.as_bytes() {
-                        b"regs" => kCtxRegs,
-                        b"jumps" => kCtxJumps,
-                        b"bufs" => kCtxBufs,
-                        b"gvars" => kCtxGVars,
-                        b"sfuncs" => kCtxSFuncs,
-                        b"funcs" => kCtxFuncs,
+                        b"regs" => CTX_REGS,
+                        b"jumps" => CTX_JUMPS,
+                        b"bufs" => CTX_BUFS,
+                        b"gvars" => CTX_G_VARS,
+                        b"sfuncs" => CTX_S_FUNCS,
+                        b"funcs" => CTX_FUNCS,
                         _ => 0,
                     };
                 }

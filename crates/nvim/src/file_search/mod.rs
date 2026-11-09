@@ -20,7 +20,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{fire_autocmds_for, has_event};
@@ -66,10 +65,10 @@ pub(crate) use self::init::*;
 pub(crate) use self::resolve::*;
 pub(crate) use self::visited::*;
 
-pub(crate) const kCdCauseAuto: CdCause = 2;
-pub(crate) const kCdCauseWindow: CdCause = 1;
-pub(crate) const kCdCauseOther: CdCause = -1;
-pub(crate) const kBufOptIncludeexpr: c_int = 46;
+pub(crate) const CD_CAUSE_AUTO: CdCause = 2;
+pub(crate) const CD_CAUSE_WINDOW: CdCause = 1;
+pub(crate) const CD_CAUSE_OTHER: CdCause = -1;
+pub(crate) const BUF_OPT_INCLUDEEXPR: c_int = 46;
 
 /// What a search should accept as a match.
 pub(crate) const FINDFILE_DIR: c_int = 1;

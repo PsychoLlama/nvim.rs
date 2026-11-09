@@ -21,7 +21,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::cstr;
 use crate::memory::XString;
@@ -105,11 +104,11 @@ crate::flag_set! {
     /// Do not let CTRL-C out of the `**` walk.
     const NOBREAK = 262144;
 }
-pub const kEqualFileNames: FileComparison = 7;
-pub const kOneFileMissing: FileComparison = 6;
-pub const kBothFilesMissing: FileComparison = 4;
-pub const kDifferentFiles: FileComparison = 2;
-pub const kEqualFiles: FileComparison = 1;
+pub const EQUAL_FILE_NAMES: FileComparison = 7;
+pub const ONE_FILE_MISSING: FileComparison = 6;
+pub const BOTH_FILES_MISSING: FileComparison = 4;
+pub const DIFFERENT_FILES: FileComparison = 2;
+pub const EQUAL_FILES: FileComparison = 1;
 pub const URL_BACKSLASH: c_int = 2;
 pub const URL_SLASH: c_int = 1;
 pub const PATHSEP: c_int = '/' as c_int;

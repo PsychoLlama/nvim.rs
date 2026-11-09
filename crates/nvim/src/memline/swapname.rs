@@ -393,30 +393,30 @@ fn resolve_swapfile_clash(mut buffer: Buf, fname: &CStr, buf_fname: &CStr) -> bo
     // position to honour what it says. It may still decline (0) and leave
     // the question to the user.
     if choice == SEA_CHOICE_NONE
-        && swap_exists_action.get() != SEA_NONE
+        && SWAP_EXISTS_ACTION.get() != SEA_NONE
         && has_autocmd(AutoEvent::SwapExists, buf_fname, Some(buffer))
     {
         choice = do_swapexists(buffer, fname);
     }
-    if choice == SEA_CHOICE_NONE && swap_exists_action.get() == SEA_READONLY {
+    if choice == SEA_CHOICE_NONE && SWAP_EXISTS_ACTION.get() == SEA_READONLY {
         choice = SEA_CHOICE_READONLY;
     }
 
     // Set by attention_message -> swapfile_info, below.
-    proc_running.set(0);
+    PROC_RUNNING.set(0);
     if choice == SEA_CHOICE_NONE {
         choice = ask_about_swapfile(buffer, fname);
     }
 
     match choice {
         SEA_CHOICE_READONLY => buffer.b_p_ro = 1,
-        SEA_CHOICE_RECOVER => swap_exists_action.set(SEA_RECOVER),
+        SEA_CHOICE_RECOVER => SWAP_EXISTS_ACTION.set(SEA_RECOVER),
         SEA_CHOICE_DELETE => {
             os_remove(fname);
         }
-        SEA_CHOICE_QUIT => swap_exists_action.set(SEA_QUIT),
+        SEA_CHOICE_QUIT => SWAP_EXISTS_ACTION.set(SEA_QUIT),
         SEA_CHOICE_ABORT => {
-            swap_exists_action.set(SEA_QUIT);
+            SWAP_EXISTS_ACTION.set(SEA_QUIT);
             GOT_INT.set(true);
         }
         SEA_CHOICE_NONE => {
@@ -455,14 +455,14 @@ fn ask_about_swapfile(buffer: Buf, fname: &CStr) -> SwapExistsChoice {
     GOT_INT.set(false);
     flush_buffers(FLUSH_TYPEAHEAD);
 
-    if swap_exists_action.get() != SEA_NONE {
+    if SWAP_EXISTS_ACTION.get() != SEA_NONE {
         push_tr(&mut msg, c"Swap file \"");
         msg.extend_from_slice(&fhname);
         push_tr(&mut msg, c"\" already exists!");
         // "Delete it" is not offered while the owning process is alive.
         let run_but = gettext(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Quit\n&Abort");
         let but = gettext(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Delete it\n&Quit\n&Abort");
-        let running = proc_running.get() != 0;
+        let running = PROC_RUNNING.get() != 0;
         let buttons = if running { run_but } else { but };
         let (title, warn) = (gettext(c"VIM - ATTENTION"), VIM_WARNING);
         // `do_dialog` reads the message as a C string, which ends at the
@@ -541,7 +541,7 @@ impl Buf {
             // unless we are recovering, have no file name, are in a help file
             // or in a dummy buffer.
             if &ext == b"wp"
-                && !recoverymode.get()
+                && !RECOVERYMODE.get()
                 && let Some(buf_fname) = buf_fname.as_deref()
                 && !self.b_help
                 && !self.b_flags.has(BufFlags::DUMMY)
@@ -710,7 +710,7 @@ pub fn recover_names(
             // the *first* match is dropped, which is all there can be.
             let hit = found.iter().position(|name| {
                 let how = path_full_compare(&mine, name.as_cstr(), true, false);
-                how as c_uint & kEqualFiles as c_uint != 0
+                how as c_uint & EQUAL_FILES as c_uint != 0
             });
             if let Some(hit) = hit {
                 found.remove(hit);

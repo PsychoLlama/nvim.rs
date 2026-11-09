@@ -114,7 +114,7 @@ pub(crate) fn find_tagfunc_tags(
     // completion) and "r" (the pattern is a regexp) apply.
     let mut flag_string = Vec::with_capacity(3);
     for (wanted, flag) in [
-        (g_tag_at_cursor.get(), b'c'),
+        (G_TAG_AT_CURSOR.get(), b'c'),
         (flags & TAG_INS_COMP != 0, b'i'),
         (flags & TAG_REGEXP != 0, b'r'),
     ] {

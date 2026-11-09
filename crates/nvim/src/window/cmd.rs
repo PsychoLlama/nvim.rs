@@ -45,7 +45,7 @@ use crate::buffer::{buflist_getfile, find_buf, set_pcmark};
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::do_ecmd;
-use crate::ex_docmd::state::cmdmod;
+use crate::ex_docmd::state::CMDMOD;
 use crate::ex_getln::curbuf_locked;
 use crate::file_search::grab_file_name;
 use crate::getchar::state::{KEY_STUFFED, KEY_TYPED, LANGMAP_MAPCHAR, VGETC_BUSY};
@@ -64,14 +64,14 @@ use crate::os::libc::int64_t;
 use crate::pos::MAXLNUM;
 use crate::quickfix::qf_view_result;
 use crate::search::find_pattern_in_path;
-use crate::tag::state::{g_do_tagpreview, postponed_split};
+use crate::tag::state::{G_DO_TAGPREVIEW, POSTPONED_SPLIT};
 use crate::tr_c;
 use crate::types::{Failed, LineNr, WinConfig};
 use crate::ui::state::UI_MULTIGRID;
 use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::ui_has;
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
-use crate::winlayer::graph::{cmdwin_type, firstwin, lastwin};
+use crate::winlayer::graph::{CMDWIN_TYPE, FIRSTWIN, LASTWIN};
 
 // The keys CTRL-W dispatches on, as the codes `SpecialKey::try_from` hands
 // back for a plain character: a `match` pattern needs a constant.
@@ -130,7 +130,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
     // The cmdline window forbids most of these; the few it allows simply do
     // not ask.
     let in_cmdwin = || {
-        let locked = cmdwin_type.get() != 0;
+        let locked = CMDWIN_TYPE.get() != 0;
         if locked {
             err(WinError::CmdWin);
         }
@@ -278,7 +278,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
         }
         // make all windows the same width and/or height
         Err(NotAKey(EQUALISE)) => {
-            let split = cmdmod.with(|m| m.cmod_split) & (WSP_VERT | WSP_HOR);
+            let split = CMDMOD.with(|m| m.cmod_split) & (WSP_VERT | WSP_HOR);
             let dir = if split == WSP_VERT {
                 b'v'
             } else if split == WSP_HOR {
@@ -295,7 +295,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             let height = if prenum != 0 {
                 prenum
             } else {
-                ROWS.get() - number_as_int(min_set_ch.get())
+                ROWS.get() - number_as_int(MIN_SET_CH.get())
             };
             setheight_win(height, Win::current());
         }
@@ -312,7 +312,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             if in_cmdwin() {
                 return;
             }
-            g_do_tagpreview.set(tagpreview_height(prenum));
+            G_DO_TAGPREVIEW.set(tagpreview_height(prenum));
             jump_to_tag(nchar, prenum);
         }
         Err(NotAKey(TAG_SPLIT | CTRL_RSB)) => {
@@ -415,7 +415,7 @@ fn run_with_count(cmd: &CStr, prenum: c_int) {
 /// wrapping around the list.
 fn cycle_windows(nchar: c_int, prenum: c_int) {
     // `ONE_WINDOW`, which counts floats, and not `one_window()`, which does not.
-    if firstwin.get() == lastwin.get() && prenum != 1 {
+    if FIRSTWIN.get() == LASTWIN.get() && prenum != 1 {
         beep(); // just one window
         return;
     }
@@ -531,13 +531,13 @@ fn tagpreview_height(prenum: c_int) -> c_int {
 /// in the preview window. Keeps Visual mode, so words can be selected as a
 /// tag.
 fn jump_to_tag(nchar: c_int, prenum: c_int) {
-    postponed_split.set(if prenum != 0 { prenum } else { -1 });
+    POSTPONED_SPLIT.set(if prenum != 0 { prenum } else { -1 });
     if nchar != c_int::from(b'}') {
-        g_do_tagpreview.set(0);
+        G_DO_TAGPREVIEW.set(0);
     }
     // Execute the command right here, which "wincmd ]" in a function needs.
     do_ident(CTRL_RSB, NUL);
-    postponed_split.set(0);
+    POSTPONED_SPLIT.set(0);
 }
 
 /// CTRL-W f / F / CTRL-W CTRL-F -- edit the file named under the cursor in a
@@ -558,7 +558,7 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
     // a window, jump to it.
     let jump = kOptSwbFlagUseopen | kOptSwbFlagUsetab;
     let mut wp = None;
-    if SWB_FLAGS.get() & jump != 0 && cmdmod.with(|m| m.cmod_tab) == 0 {
+    if SWB_FLAGS.get() & jump != 0 && CMDMOD.with(|m| m.cmod_tab) == 0 {
         wp = find_buffer_by_name(name.as_cstr()).and_then(swbuf_goto_win);
     }
     if wp.is_none() && split(0, 0).is_ok() {
@@ -605,13 +605,13 @@ fn window_g_command(prenum: c_int, prenum1: c_int, xchar: c_int) {
     match xchar {
         // CTRL-W g}: jump to the tag in the preview window
         TAG_PREVIEW => {
-            g_do_tagpreview.set(tagpreview_height(prenum));
+            G_DO_TAGPREVIEW.set(tagpreview_height(prenum));
             g_jump_to_tag(prenum, CTRL_RSB);
         }
         TAG_SPLIT | CTRL_RSB => g_jump_to_tag(prenum, xchar),
         // CTRL-W gf / gF: "gf" or "gF" in a new tab page
         FILE | FILE_LINE => {
-            cmdmod.with_mut(|m| m.cmod_tab = tab_index(TabPage::current()) + 1);
+            CMDMOD.with_mut(|m| m.cmod_tab = tab_index(TabPage::current()) + 1);
             goto_file(xchar, prenum1);
         }
         // CTRL-W gt / gT / g<Tab>: the next, previous or last used tab page
@@ -628,12 +628,12 @@ fn window_g_command(prenum: c_int, prenum1: c_int, xchar: c_int) {
     }
 }
 
-/// The CTRL-W g form of [`jump_to_tag`], which leaves `g_do_tagpreview` alone.
+/// The CTRL-W g form of [`jump_to_tag`], which leaves `G_DO_TAGPREVIEW` alone.
 fn g_jump_to_tag(prenum: c_int, xchar: c_int) {
-    postponed_split.set(if prenum != 0 { prenum } else { -1 });
+    POSTPONED_SPLIT.set(if prenum != 0 { prenum } else { -1 });
     // Execute the command right here, which "wincmd g}" in a function needs.
     do_ident(c_int::from(b'g'), xchar);
-    postponed_split.set(0);
+    POSTPONED_SPLIT.set(0);
 }
 
 /// CTRL-W ge -- hand the current window to the UI as an external window.

@@ -38,7 +38,6 @@
 
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -61,7 +60,7 @@ use crate::os::libc::int32_t;
 use crate::os::libc::{int16_t, int64_t};
 use crate::os::time::{os_localtime, tm_zeroed};
 use crate::path::tail_index;
-use crate::startup::ui_client_channel_id;
+use crate::startup::UI_CLIENT_CHANNEL_ID;
 use crate::types::Vv;
 /// `#[macro_export]` publishes at the crate root; this re-export lets callers
 /// name the macro where the rest of the logging API lives, and brings it into
@@ -88,16 +87,16 @@ pub(crate) const LOG_DEBUG: bool = cfg!(debug_assertions);
 /// in. Every call site names its level as a constant, so this folds and the
 /// line, its payload and whatever it formats vanish from a release build.
 /// A level only known at run time (upstream's `LOG(level, …)`) goes to
-/// [`logmsg_line`] directly instead, which filters by [`g_min_log_level`].
+/// [`logmsg_line`] directly instead, which filters by [`G_MIN_LOG_LEVEL`].
 #[inline(always)]
 pub(crate) const fn compiled_in(log_level: c_int) -> bool {
     LOG_DEBUG || log_level >= LOGLVL_WRN
 }
 
 /// The lowest level written. Lowered at run time only by `vim._with`.
-pub static g_min_log_level: GlobalCell<c_int> =
+pub static G_MIN_LOG_LEVEL: GlobalCell<c_int> =
     GlobalCell::new(if LOG_DEBUG { 0 } else { LOGLVL_WRN });
-pub(crate) static g_stats: GlobalCell<NvimStats> = GlobalCell::new(NvimStats {
+pub(crate) static G_STATS: GlobalCell<NvimStats> = GlobalCell::new(NvimStats {
     fsync: 0 as int64_t,
     redraw: 0 as int64_t,
     log_skip: 0 as int16_t,
@@ -393,10 +392,10 @@ pub fn logmsg_line(
         // set_init_1 may try logging before we are ready (#10183). A
         // process that never brings the log up (a lib test) counts past
         // the 16 bits upstream gives the counter, which wraps there.
-        g_stats.with_mut(|s| s.log_skip = s.log_skip.wrapping_add(1));
+        G_STATS.with_mut(|s| s.log_skip = s.log_skip.wrapping_add(1));
         return false;
     }
-    if log_level < g_min_log_level.get() {
+    if log_level < G_MIN_LOG_LEVEL.get() {
         return false;
     }
     let Some(_writing) = begin_line() else {
@@ -406,7 +405,7 @@ pub fn logmsg_line(
             let line = line_num.map_or(-1, i64::from);
             msg_schedule_semsg!("E5430: {who}:{line}: recursive log!");
         }
-        g_stats.with_mut(|s| s.log_skip = s.log_skip.wrapping_add(1));
+        G_STATS.with_mut(|s| s.log_skip = s.log_skip.wrapping_add(1));
         return false;
     };
 
@@ -571,7 +570,7 @@ fn line_prefix(
     let (date_time, millis) = log_timestamp()?;
 
     // Running as a UI client (--remote-ui).
-    let ui = ui_client_channel_id.get() != 0;
+    let ui = UI_CLIENT_CHANNEL_ID.get() != 0;
     if name_is_stale(ui) {
         regen_name(ui);
     }

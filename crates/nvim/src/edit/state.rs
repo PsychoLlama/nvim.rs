@@ -54,12 +54,12 @@ fn insert_enter(s: &mut InsertState) {
     s.cmdchar_todo = s.cmdchar;
     s.ins_just_started = true;
     // Remember whether editing was restarted after CTRL-O.
-    did_restart_edit.set(RESTART_EDIT.get());
+    DID_RESTART_EDIT.set(RESTART_EDIT.get());
     // Sleep before redrawing; needed for `CTRL-O :` that ends in an error
     // message.
     msg_check_for_delay(true);
     // Set Insstart_orig to Insstart.
-    update_Insstart_orig.set(true);
+    UPDATE_INSSTART_ORIG.set(true);
 
     ins_compl_clear(); // clear stuff for CTRL-X mode
 
@@ -77,10 +77,10 @@ fn insert_enter(s: &mut InsertState) {
         }
     }
     let mut lines = Lines::current();
-    Insstart_textlen.set(ColNr::new(linetabsize_str(
+    INSSTART_TEXTLEN.set(ColNr::new(linetabsize_str(
         lines.line(Win::current().w_cursor.lnum),
     )));
-    Insstart_blank_vcol.set(ColNr::MAX);
+    INSSTART_BLANK_VCOL.set(ColNr::MAX);
     if !DID_AI.get() {
         AI_COL.set(ColNr::ZERO);
     }
@@ -133,13 +133,13 @@ fn insert_enter(s: &mut InsertState) {
 
     setmouse();
     clear_showcmd();
-    revins_on.set(STATE.get() == MODE_INSERT && p_ri());
-    if revins_on.get() {
+    REVINS_ON.set(STATE.get() == MODE_INSERT && p_ri());
+    if REVINS_ON.get() {
         undisplay_dollar();
     }
-    revins_chars.set(0);
-    revins_legal.set(0);
-    revins_scol.set(-1);
+    REVINS_CHARS.set(0);
+    REVINS_LEGAL.set(0);
+    REVINS_SCOL.set(-1);
 
     // Handle restarting Insert mode: put the cursor back where CTRL-O
     // took it from.
@@ -155,10 +155,10 @@ fn insert_enter(s: &mut InsertState) {
     }
 
     NEED_START_INSERTMODE.set(false);
-    ins_need_undo.set(true);
+    INS_NEED_UNDO.set(true);
     WHERE_PASTE_STARTED.set(WHERE_PASTE_STARTED.get().with_lnum(LineNr::ZERO));
-    can_cindent.set(true);
-    if did_restart_edit.get().is_nul() {
+    CAN_CINDENT.set(true);
+    if DID_RESTART_EDIT.get().is_nul() {
         // Open a fold at the cursor line, unless it was already open when
         // CTRL-O left.
         fold_open_cursor();
@@ -170,7 +170,7 @@ fn insert_enter(s: &mut InsertState) {
     if p_smd() && MSG_SILENT.get() == 0 {
         s.i = showmode();
     }
-    if did_restart_edit.get().is_nul() {
+    if DID_RESTART_EDIT.get().is_nul() {
         change_warning(Buf::current(), if s.i == 0 { 0 } else { s.i + 1 });
     }
 
@@ -180,7 +180,7 @@ fn insert_enter(s: &mut InsertState) {
     // Everything in the redo buffer up to here belongs to the command,
     // not to the text that was typed.
     let inserted = get_inserted();
-    new_insert_skip.set(len_as_int(inserted.len()));
+    NEW_INSERT_SKIP.set(len_as_int(inserted.len()));
     OLD_INDENT.set(0);
 
     // The mode ends when `ins_esc` says so: a count means the whole
@@ -193,14 +193,14 @@ fn insert_enter(s: &mut InsertState) {
     }
 
     if INS_AT_EOL.get() {
-        o_lnum.set(Win::current().w_cursor.lnum);
+        O_LNUM.set(Win::current().w_cursor.lnum);
     }
     pum_check_clear();
     fold_update_after_insert();
     if !s.cmdchar.is('r') && !s.cmdchar.is('v') && s.c != Key::CTRL_C {
         ins_apply_autocmds(AutoEvent::InsertLeave);
     }
-    did_cursorhold.set(false);
+    DID_CURSORHOLD.set(false);
 
     // `ins_redraw` triggers TextChangedI only when the typeahead buffer
     // is empty, so `b_last_changedtick` is reset here when the event was
@@ -256,7 +256,7 @@ fn trigger_insert_enter(cmdchar: Key) {
 /// Only when the insert *was* at the end of the line (`ins_at_eol` on the
 /// same line) or the wanted column is past the last character.
 fn restore_ctrl_o_column() {
-    let at_eol = INS_AT_EOL.get() && Win::current().w_cursor.lnum == o_lnum.get();
+    let at_eol = INS_AT_EOL.get() && Win::current().w_cursor.lnum == O_LNUM.get();
     if !at_eol && Win::current().w_curswant <= Win::current().w_virtcol {
         return;
     }
@@ -283,16 +283,16 @@ fn restore_ctrl_o_column() {
 ///
 /// Answers [`Step::Leave`] to leave Insert mode, and [`Step::Go`] to go on.
 pub(crate) fn insert_check(s: &mut InsertState) -> Step {
-    if revins_legal.get() == 0 {
-        revins_scol.set(-1); // reset on an illegal motion
+    if REVINS_LEGAL.get() == 0 {
+        REVINS_SCOL.set(-1); // reset on an illegal motion
     } else {
-        revins_legal.set(0);
+        REVINS_LEGAL.set(0);
     }
     if ARROW_USED.get() {
         // Don't repeat the insert when an arrow key was used.
         s.count = 0;
     }
-    if update_Insstart_orig.get() {
+    if UPDATE_INSSTART_ORIG.get() {
         INSSTART_ORIG.set(INSSTART.get());
     }
 
@@ -313,8 +313,8 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
         Win::current().w_set_curswant = true;
     }
     if stuff_empty() {
-        did_check_timestamps.set(false);
-        if need_check_timestamps.get() {
+        DID_CHECK_TIMESTAMPS.set(false);
+        if NEED_CHECK_TIMESTAMPS.get() {
             check_timestamps(false);
         }
     }
@@ -362,10 +362,10 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
     }
 
     // `i_CTRL-G_U` armed the latch; this is the one key it covers.
-    if dont_sync_undo.get() == KeepUndo::Armed {
-        dont_sync_undo.set(KeepUndo::Now);
+    if DONT_SYNC_UNDO.get() == KeepUndo::Armed {
+        DONT_SYNC_UNDO.set(KeepUndo::Now);
     } else {
-        dont_sync_undo.set(KeepUndo::No);
+        DONT_SYNC_UNDO.set(KeepUndo::No);
     }
 
     if s.ins_just_started {
@@ -456,7 +456,7 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: Key) -> Step {
 
     // Any key but a K_EVENT resets the CursorHold timer.
     if key != SpecialKey::Event {
-        did_cursorhold.set(true);
+        DID_CURSORHOLD.set(true);
     }
 
     if compl_takes_key(s) {
@@ -514,7 +514,7 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: Key) -> Step {
             c_expr_indent();
             return Step::Go; // don't insert the key
         }
-        if can_cindent.get() && cinkeys(s.c, b'*', s.line_is_white) && stop_arrow_ok() {
+        if CAN_CINDENT.get() && cinkeys(s.c, b'*', s.line_is_white) && stop_arrow_ok() {
             c_expr_indent();
         }
     }
@@ -619,21 +619,21 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
 
 /// Run one round of completion for the key in `s->c`.
 pub(crate) fn insert_do_complete(s: &mut InsertState) {
-    compl_busy.set(true);
+    COMPL_BUSY.set(true);
     // Folds must not be updated while the popup menu is being built.
     let folds_frozen = Suppress::fold_update();
     if ins_complete(s.c, true).is_err() {
         compl_status_clear();
     }
     drop(folds_frozen);
-    compl_busy.set(false);
+    COMPL_BUSY.set(false);
     CAN_SI.set(may_do_si());
 }
 
 /// The tail every key runs after [`insert_handle_key`].
 pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
     if s.c != SpecialKey::Event && ctrl_x_mode_normal() {
-        did_cursorhold.set(false);
+        DID_CURSORHOLD.set(false);
     }
     // The completion popup belongs to the window it was started in.
     if ins_compl_active() && !ins_compl_win_active(Win::current()) {
@@ -643,7 +643,7 @@ pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
         s.inserted_space = false;
     }
     // 'cindent': re-indent now that the character is in.
-    if can_cindent.get()
+    if CAN_CINDENT.get()
         && cindent_on()
         && ctrl_x_mode_normal()
         && cinkeys(s.c, b' ', s.line_is_white)
@@ -667,7 +667,7 @@ pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
 /// been reported.
 pub(crate) fn edit(cmdchar: Key, startln: bool, count: c_int) -> Result<bool, Failed> {
     if !Buf::current().terminal.is_null() {
-        if ex_normal_busy.get() != 0 {
+        if EX_NORMAL_BUSY.get() != 0 {
             // Do not enter terminal mode from `:normal`; ask for Insert
             // mode again after it finishes.
             RESTART_EDIT.set(Key::ascii(b'i'));
@@ -678,13 +678,13 @@ pub(crate) fn edit(cmdchar: Key, startln: bool, count: c_int) -> Result<bool, Fa
     }
 
     // Don't allow inserting in the sandbox, or while textlock is set.
-    if sandbox.get() != 0 {
+    if SANDBOX.get() != 0 {
         emsg(gettext(E_SANDBOX));
         return Err(Failed);
     }
-    if textlock.get() != 0
+    if TEXTLOCK.get() != 0
         || ins_compl_active()
-        || compl_busy.get()
+        || COMPL_BUSY.get()
         || pum_visible()
         || expr_map_locked()
     {
@@ -716,7 +716,7 @@ pub(crate) fn edit(cmdchar: Key, startln: bool, count: c_int) -> Result<bool, Fa
 
 /// Does the next change still owe a `u_save`?
 pub(crate) fn ins_need_undo_get() -> bool {
-    ins_need_undo.get()
+    INS_NEED_UNDO.get()
 }
 
 /// Is a character available to be read without waiting?

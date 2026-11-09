@@ -28,7 +28,7 @@ use super::{SUB_FLAGS, check_regexp_delim, skip_substitute, sub_parse_flags, sub
 use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int_at;
-use crate::ex_cmds::{INT_MAX, kSubIgnoreCase, kSubMatchCase};
+use crate::ex_cmds::{INT_MAX, SUB_IGNORE_CASE, SUB_MATCH_CASE};
 use crate::memory::{ThinCString, XString};
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::option::magic_isset;
@@ -343,8 +343,8 @@ pub(super) fn parse_sub(
 
     // The 'i' or 'I' flag overrules 'ignorecase' and 'smartcase'.
     match SUB_FLAGS.with(|flags| flags.do_ic) {
-        kSubIgnoreCase => regmatch.set_ignore_case(true),
-        kSubMatchCase => regmatch.set_ignore_case(false),
+        SUB_IGNORE_CASE => regmatch.set_ignore_case(true),
+        SUB_MATCH_CASE => regmatch.set_ignore_case(false),
         _ => {}
     }
 

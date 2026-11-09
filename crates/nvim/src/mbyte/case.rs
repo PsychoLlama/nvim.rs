@@ -131,7 +131,7 @@ fn read_char(text: &mut &[u8]) -> c_int {
     let Some(&first) = text.first() else {
         return 0;
     };
-    let len = usize::from(utf8len_tab_zero[usize::from(first)]);
+    let len = usize::from(UTF8LEN_TAB_ZERO[usize::from(first)]);
     if len == 1 {
         *text = &text[1..];
         return c_int::from(first);

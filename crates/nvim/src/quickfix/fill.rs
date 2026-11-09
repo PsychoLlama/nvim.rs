@@ -233,7 +233,7 @@ fn call_qftf_func(qfl: Qfl, qf_winid: c_int, start_idx: c_int, end_idx: c_int) -
     let mut cb = if qfl.text_func.is_set() {
         qfl.text_func.duplicate()
     } else {
-        qftf_cb.with(Callback::duplicate)
+        QFTF_CB.with(Callback::duplicate)
     };
     if !cb.is_set() {
         return None;
@@ -348,7 +348,7 @@ fn splice(buffer: Buf, at: &Splice) {
     let (srow, scol) = at.start;
     let (orow, ocol, obytes) = at.old;
     let (nrow, ncol, nbytes) = at.new;
-    let undo = kExtmarkNoUndo;
+    let undo = EXTMARK_NO_UNDO;
     extmark_splice(
         buffer,
         srow.get(),
@@ -367,7 +367,7 @@ fn splice(buffer: Buf, at: &Splice) {
 ///
 /// With `old_last` the entries after that one are appended instead, and
 /// `buffer` need not be the current buffer; without it `buffer` must be
-/// `curbuf`, because lines are deleted and autocommands are triggered.
+/// `CURBUF`, because lines are deleted and autocommands are triggered.
 pub(crate) fn qf_fill_buffer(qfl: Qfl, buffer: Buf, old_last: Option<usize>, qf_winid: c_int) {
     let mut numbuf = NumBuf::new();
     let old_key_typed = KEY_TYPED.get();

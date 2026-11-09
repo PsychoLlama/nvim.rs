@@ -15,7 +15,7 @@ use core::ffi::{CStr, c_int};
 use crate::ascii::{ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul};
 use crate::charset::skip;
 use crate::cmdexpand::defs::Expand;
-use crate::debugger::state::{debug_backtrace_level, debug_tick};
+use crate::debugger::state::{DEBUG_BACKTRACE_LEVEL, DEBUG_TICK};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, has_profiling_named};
 use crate::drawscreen::state::CMDLINE_ROW;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
@@ -29,9 +29,9 @@ use crate::eval::{
     eval0_in_cmd, eval1, garbage_collect, get_lval, handle_subscript, id_len, is_luafunc,
     last_set_msg, mark_root, name_end, set_ref_in_dict_items, set_ref_in_list_items,
 };
-use crate::ex_docmd::state::ex_nesting_level;
+use crate::ex_docmd::state::EX_NESTING_LEVEL;
 use crate::ex_docmd::{ends_excmd, skip_range};
-use crate::ex_eval::state::{did_throw, trylevel};
+use crate::ex_eval::state::{DID_THROW, TRYLEVEL};
 use crate::ex_eval::{
     PendingAction, aborted_in_try, aborting, cleanup_conditionals, exception_state_clear,
     exception_state_restore, exception_state_save, report_pending, update_force_abort,
@@ -41,7 +41,7 @@ use crate::getchar::state::SaveRedo;
 use crate::getchar::state::{GOT_INT, KEY_TYPED};
 use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
-use crate::guard::sandbox;
+use crate::guard::SANDBOX;
 use crate::insexpand::ins_compl_active;
 use crate::keycodes::K_SPECIAL;
 use crate::lua::executor::{release_luaref, typval_exec_lua_callable};
@@ -61,14 +61,14 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::os::libc::size_t;
 use crate::path::path_fnamecmp;
-use crate::profile::do_profiling;
+use crate::profile::DO_PROFILING;
 use crate::profile::{
     func_do_profile, func_line_end, func_line_start, prof_def_func, profile_add, profile_end,
     profile_self, profile_start, profile_sub_wait, profile_zero, script_prof_restore,
     script_prof_save,
 };
 use crate::regexp::{RE_MAGIC, skip_regexp_at};
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::runtime::{estack_pop, estack_push_ufunc, script_id_valid};
 use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::types::{

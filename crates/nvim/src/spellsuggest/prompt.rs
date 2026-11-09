@@ -23,7 +23,7 @@
 //!
 //! # What the replacement leaves behind
 //!
-//! Besides the changed line, an accepted suggestion sets `last_replacement`
+//! Besides the changed line, an accepted suggestion sets `LAST_REPLACEMENT`
 //! so that `:spellrepall` can repeat it over the whole buffer,
 //! and fills the redo buffer with `ciw{word}<Esc>` so that `.` can.
 
@@ -67,11 +67,11 @@ use crate::os::libc::int64_t;
 use crate::search::FORWARD;
 use crate::spell::MAXWLEN_INT;
 use crate::spell::{
-    SMT_ALL, SpellReplacement, check_need_cap, last_replacement, parse_spelllang, spell_iswordp_nmw,
+    LAST_REPLACEMENT, SMT_ALL, SpellReplacement, check_need_cap, parse_spelllang, spell_iswordp_nmw,
 };
 use crate::spellsuggest::{
-    MAXWLEN, SPS_BEST, SPS_DOUBLE, SugInfo, Suggest, spell_find_suggest, spell_suggest_timeout,
-    sps_flags, sps_limit,
+    MAXWLEN, SPELL_SUGGEST_TIMEOUT, SPS_BEST, SPS_DOUBLE, SPS_FLAGS, SPS_LIMIT, SugInfo, Suggest,
+    spell_find_suggest,
 };
 use crate::types::Key;
 use crate::types::{ColNr, Pos};
@@ -126,11 +126,11 @@ fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
 
     // Autocommands may free the line, so work from a copy.
     let line = Lines::current().line(lnum).to_vec();
-    spell_suggest_timeout.set(5000);
+    SPELL_SUGGEST_TIMEOUT.set(5000);
 
     // List at most as many as fit on the screen, or as `'spellsuggest'`
     // allows, whichever is smaller.
-    let limit = sps_limit.get().min(ROWS.get() - 2);
+    let limit = SPS_LIMIT.get().min(ROWS.get() - 2);
     let mut sug = SugInfo::new();
     let col = Win::current()
         .w_cursor
@@ -311,7 +311,7 @@ fn show_suggestion(i: c_int, stp: &Suggest, sug: &SugInfo) {
 
 /// Append a suggestion's score, which `'verbose'` asks for.
 fn show_score(stp: &Suggest) {
-    let mut shown = if sps_flags.get() & (SPS_DOUBLE | SPS_BEST) != 0 {
+    let mut shown = if SPS_FLAGS.get() & (SPS_DOUBLE | SPS_BEST) != 0 {
         let salscore = if stp.st_salscore { "s " } else { "" };
         format!(" ({}{} - {})", salscore, stp.st_score, stp.st_altscore)
     } else {
@@ -356,7 +356,7 @@ fn apply_suggestion(sug: &SugInfo, stp: &Suggest, line: &[u8], col: usize) {
             to: XString::from_bytes(stp.word_bytes()),
         }
     };
-    last_replacement.set(Some(replacement));
+    LAST_REPLACEMENT.set(Some(replacement));
 
     // Build the new line: what came before the bad word, the
     // suggestion, and what came after what it replaces.

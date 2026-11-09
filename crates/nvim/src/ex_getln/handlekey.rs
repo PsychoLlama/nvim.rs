@@ -135,7 +135,7 @@ pub(crate) fn command_line_toggle_langmap(s: &CommandLineState) {
     }
 
     if let Some((which, buffer)) = b_im {
-        // C compared `b_im_ptr` with `&curbuf->b_p_iminsert`: the global
+        // C compared `b_im_ptr` with `&CURBUF->b_p_iminsert`: the global
         // follows `'iminsert'` only when the option is the current buffer's.
         if which == ImOption::Insert && buffer == Buf::current() {
             set_iminsert_global(Buf::current());
@@ -293,7 +293,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             // In exmode it doesn't make sense to return, except when
             // ":normal" runs out of characters. Also, when the highlight
             // callback is active <C-c> should interrupt only that.
-            if (EXMODE_ACTIVE.get() && (ex_normal_busy.get() == 0 || !typeahead().is_empty()))
+            if (EXMODE_ACTIVE.get() && (EX_NORMAL_BUSY.get() == 0 || !typeahead().is_empty()))
                 || (GETLN_INTERRUPTED_HIGHLIGHT.get() && s.c == Key::CTRL_C)
             {
                 GETLN_INTERRUPTED_HIGHLIGHT.set(false);

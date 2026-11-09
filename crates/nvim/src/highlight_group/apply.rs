@@ -26,7 +26,7 @@ use crate::highlight::state::{
 };
 use crate::highlight::{HlAttrFlags, hl_get_syn_attr};
 use crate::lua::executor::nlua_set_sctx;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::types::Object;
 use crate::ui::{ui_default_colors_set, ui_mode_info_set};
 
@@ -56,13 +56,13 @@ pub(crate) fn set_hl_group(id: c_int, attrs: HlAttrs, dict: &KeyDict_highlight, 
         entry.cleared = false;
         if link_id > 0 {
             entry.link = link_id;
-            entry.script_ctx = current_sctx.get();
+            entry.script_ctx = CURRENT_SCTX.get();
             entry.script_ctx.sc_lnum += sourcing_lnum();
             nlua_set_sctx(&mut entry.script_ctx);
             entry.set |= SG_LINK.cast_signed();
             if is_default {
                 entry.deflink = link_id;
-                entry.deflink_sctx = current_sctx.get();
+                entry.deflink_sctx = CURRENT_SCTX.get();
                 entry.deflink_sctx.sc_lnum += sourcing_lnum();
                 nlua_set_sctx(&mut entry.deflink_sctx);
             }
@@ -155,7 +155,7 @@ pub(crate) fn set_hl_group(id: c_int, attrs: HlAttrs, dict: &KeyDict_highlight, 
             entry.blend = -1;
         }
 
-        entry.script_ctx = current_sctx.get();
+        entry.script_ctx = CURRENT_SCTX.get();
         entry.script_ctx.sc_lnum += sourcing_lnum();
         nlua_set_sctx(&mut entry.script_ctx);
     });

@@ -41,7 +41,7 @@ use crate::eval::typval::{tv_get_number, tv_get_number_chk, tv_list_alloc_ret};
 use crate::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::ex_cmds::do_ecmd;
 use crate::ex_cmds2::{autowrite, check_changed};
-use crate::ex_docmd::state::cmdmod;
+use crate::ex_docmd::state::CMDMOD;
 use crate::ex_getln::gotocmdline;
 use crate::fileio::file_pat_to_regpat;
 use crate::getchar::state::GOT_INT;
@@ -67,7 +67,7 @@ use crate::window::{
     check_can_set_curbuf_forceit, goto_tabpage_tp, lastwin_nofloating, tabpage_index,
     valid_tabpage, win_close, win_enter, win_move_after, win_split, win_valid,
 };
-use crate::winlayer::graph::{cmdwin_type, firstwin, lastused_tabpage, lastwin};
+use crate::winlayer::graph::{CMDWIN_TYPE, FIRSTWIN, LASTUSED_TABPAGE, LASTWIN};
 use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::{CStr, c_int};
 

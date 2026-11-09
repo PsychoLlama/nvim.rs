@@ -441,7 +441,7 @@ fn add_pack_start_dir(fnames: &[&CStr], all: bool) -> bool {
 
 /// Load the plugins of every package in the `start` directories.
 pub fn load_start_packages() {
-    did_source_packages.set(true);
+    DID_SOURCE_PACKAGES.set(true);
     for name in [c"pack/*/start/*", c"start/*"] {
         do_in_path_visit(
             P_PP.get(),
@@ -457,7 +457,7 @@ pub fn load_start_packages() {
 
 /// `:packloadall[!]`.
 pub fn ex_packloadall(excmd: &mut ExArg) {
-    if did_source_packages.get() && !excmd.forceit {
+    if DID_SOURCE_PACKAGES.get() && !excmd.forceit {
         return;
     }
     // One round to add every directory to 'runtimepath', then a second to
@@ -476,7 +476,7 @@ pub fn load_plugins() {
     // A copy of 'runtimepath' taken *before* the `start` packages are
     // spliced in, which is what upstream's `rtp_copy` was for.
     let rtp_copy = P_RTP.get();
-    if !did_source_packages.get() {
+    if !DID_SOURCE_PACKAGES.get() {
         add_pack_start_dirs();
     }
 
@@ -490,7 +490,7 @@ pub fn load_plugins() {
     time_msg_at(c"loading rtp plugins");
 
     // Only source "start" packages when a `:packloadall` has not already.
-    if !did_source_packages.get() {
+    if !DID_SOURCE_PACKAGES.get() {
         load_start_packages();
     }
     time_msg_at(c"loading packages");
@@ -512,7 +512,7 @@ pub fn ex_packadd(excmd: &mut ExArg) {
 
     // Only look under "start" when loading packages was not done yet.
     let mut found_start = false;
-    if !did_source_packages.get() {
+    if !DID_SOURCE_PACKAGES.get() {
         let pat = under(b"start");
         found_start = do_in_path_visit(
             P_PP.get(),

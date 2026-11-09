@@ -18,13 +18,12 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
 
 use crate::autocmd::has_autocmd;
-use crate::buffer::state::swap_exists_action;
+use crate::buffer::state::SWAP_EXISTS_ACTION;
 use crate::buffer::{BufFlags, buf_inc_changedtick, buf_spname, open_buffer};
 use crate::change::{changed_internal, unchanged};
 use crate::cursor::{check_cursor, coladvance};
@@ -33,7 +32,7 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::eval::vars::{set_vim_var_string, with_vim_var_str};
 use crate::ex_docmd::cmdmod_has;
 use crate::fileio::FileOffset;
-use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
+use crate::fileio::state::{DID_CHECK_TIMESTAMPS, NEED_CHECK_TIMESTAMPS};
 use crate::fileio::{
     buf_store_file_info, modname, readfile_named, rename_file, temp_name, vim_deltempdir,
 };
@@ -77,7 +76,7 @@ use crate::path::{
 use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::spell::spell_delete_wordlist;
-use crate::startup::{getout, recoverymode};
+use crate::startup::{RECOVERYMODE, getout};
 use crate::types::{
     Buffer, CmdModFlags, ColNr, Dict, Failed, LineNr, List, Pos, Timestamp, VarNumber,
 };
@@ -110,7 +109,7 @@ mod lines;
 pub mod state;
 pub use self::lines::*;
 
-pub(crate) static inhibit_delete_count: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static INHIBIT_DELETE_COUNT: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
 pub const READ_NEW: ::core::ffi::c_uint = 1;
 pub const FLUSH_TYPEAHEAD: FlushBuffers = 1;
@@ -149,7 +148,7 @@ pub const ML_APPEND_NEW: ::core::ffi::c_int = 1;
 /// `flags` for `ml_delete_int`: say "--No lines in buffer--" if the buffer
 /// ends up empty.
 pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
-pub const kEqualFiles: FileComparison = 1;
+pub const EQUAL_FILES: FileComparison = 1;
 pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const ML_CHNK_ADDLINE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const ML_CHNK_DELLINE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -202,11 +201,11 @@ fn tell(text: &'static ::core::ffi::CStr, hl_id: ::core::ffi::c_int) {
 
 /// The lowest line number that may still carry a [`DB_MARKED`] bit, so
 /// `ml_firstmarked` need not start its search at line one.
-static lowest_marked: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
+static LOWEST_MARKED: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
 
 /// Published by `swapfile_info` for the ATTENTION dialog: whether the process
 /// that owns the swap file it just described is still alive.
-static proc_running: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static PROC_RUNNING: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
 /// Open a new memline for `buffer`: an in-memory memfile with block zero, a root
 /// pointer block and one data block holding a single empty line.

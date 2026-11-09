@@ -73,7 +73,7 @@ use crate::ui::MOUSE_VISUAL;
 use crate::ui::state::COLUMNS;
 use crate::ui::ui_mouse_has;
 use crate::window::{goto_tabpage, tabpage_move};
-use crate::winlayer::graph::cmdwin_type;
+use crate::winlayer::graph::CMDWIN_TYPE;
 
 /// Whether the last click was in the tab page line, so that its release is
 /// ignored rather than treated as a click in a window.
@@ -527,7 +527,7 @@ fn tab_line_click(
     }
 
     // A click in a tab selects that tab page.
-    if is_click && cmdwin_type.get() == 0 && MOUSE_COL.get() < COLUMNS.get() {
+    if is_click && CMDWIN_TYPE.get() == 0 && MOUSE_COL.get() < COLUMNS.get() {
         let def = defs.at(MOUSE_COL.get());
         IN_TAB_LINE.set(true);
 

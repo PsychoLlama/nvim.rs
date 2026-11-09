@@ -42,7 +42,7 @@ use std::os::unix::ffi::OsStrExt;
 /// was.
 pub(crate) fn ins_compl_dictionaries(dict_start: &[u8], pat: &CStr, flags: c_int, thesaurus: bool) {
     let mut dict: &[u8] = cstr::until_nul(dict_start);
-    let mut dir = compl_direction.get();
+    let mut dir = COMPL_DIRECTION.get();
 
     if dict.is_empty() {
         // When 'dictionary' is empty and spell checking is enabled use
@@ -82,7 +82,7 @@ pub(crate) fn ins_compl_dictionaries(dict_start: &[u8], pat: &CStr, flags: c_int
 
         // Ignore case depends on 'ignorecase', 'smartcase' and "pat".
         regmatch.rm_ic = ignorecase(pat.to_bytes());
-        while !dict.is_empty() && !GOT_INT.get() && !compl_interrupted.get() {
+        while !dict.is_empty() && !GOT_INT.get() && !COMPL_INTERRUPTED.get() {
             // The files to scan; `None` is "complete from active spelling".
             let files: Option<Vec<XString>> = if flags == DICT_EXACT {
                 // The whole rest of the list is one name.
@@ -198,7 +198,7 @@ pub(crate) fn ins_compl_files(
         // Open the dictionary file.
         let fp = File::open(OsStr::from_bytes(fname.to_bytes()));
         let quiet = shortmess(ShmFlag::COMPLETIONSCAN);
-        if flags != DICT_EXACT && !quiet && !compl_autocomplete.get() {
+        if flags != DICT_EXACT && !quiet && !COMPL_AUTOCOMPLETE.get() {
             // Upstream formats into `IObuff`, which cuts it there.
             let fmt = gettext(c"Scanning dictionary: %s");
             let message = formatted!(IOSIZE as usize, fmt.to_bytes(), fname);
@@ -239,8 +239,8 @@ pub(crate) fn ins_compl_files(
                         break;
                     }
                     at = word_end; // start from the next word
-                    if compl_get_longest.get() && ctrl_x_mode_normal() && best_score_is(score) {
-                        compl_num_bests.set(compl_num_bests.get() + 1);
+                    if COMPL_GET_LONGEST.get() && ctrl_x_mode_normal() && best_score_is(score) {
+                        COMPL_NUM_BESTS.set(COMPL_NUM_BESTS.get() + 1);
                     }
                 }
             } else {
@@ -278,9 +278,9 @@ pub(crate) fn ins_compl_files(
 }
 
 /// The next window, loaded buffer or non-loaded buffer (depending on `flag`)
-/// after `buffer` that has not been scanned; `curbuf` when there is none.
+/// after `buffer` that has not been scanned; `CURBUF` when there is none.
 ///
-/// `curbuf` is special: called with `buf == curbuf` this has to be the first
+/// `CURBUF` is special: called with `buf == CURBUF` this has to be the first
 /// call for a given flag/expansion. -- Acevedo
 ///
 /// Safe: [`Buf`] is the live buffer the walk starts from, and the window it
@@ -289,7 +289,7 @@ pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: u8) -> Buf {
     // `next_buf_window` outlives the call, and a completion runs user
     // functions and Lua in between, so it stays a handle that `win_valid`
     // vets -- a `Win` would be promising a liveness nothing here can keep.
-    let wp = next_buf_window;
+    let wp = NEXT_BUF_WINDOW;
     if flag == b'w' {
         // Just windows.
         if buffer.raw() == Buf::current_raw() || !wp.get().is_some_and(win_valid) {
@@ -356,7 +356,7 @@ impl Buf {
         let mut lines = Lines::in_buffer(self);
         let (lnum, col) = (pos.lnum, usize::try_from(pos.col).unwrap_or(usize::MAX));
         let line_count = self.b_ml.ml_line_count;
-        let typed_len = usize::try_from(compl_length.get()).unwrap_or(usize::MAX);
+        let typed_len = usize::try_from(COMPL_LENGTH.get()).unwrap_or(usize::MAX);
         out.clear();
 
         if ctrl_x_mode_line_or_eval() {
@@ -536,7 +536,7 @@ pub(crate) fn get_next_default_completion(st: &mut InsComplNextState, start_pos:
     // upstream points into the line, or into `IObuff` for a joined line.
     let mut found = ::core::mem::take(&mut st.found);
     let mut len = 0;
-    let in_fuzzy_collect = !compl_status_adding() && cot_fuzzy() && compl_length.get() > 0;
+    let in_fuzzy_collect = !compl_status_adding() && cot_fuzzy() && COMPL_LENGTH.get() > 0;
     // A copy: the add below can run code that changes it.
     let leader = ins_compl_leader_str().to_owned();
     let mut score = FUZZY_SCORE_NONE;
@@ -576,7 +576,7 @@ pub(crate) fn get_next_default_completion(st: &mut InsComplNextState, start_pos:
 
         // Don't want messages for wrapscan.
         let silenced = Suppress::messages();
-        let dir = compl_direction.get();
+        let dir = COMPL_DIRECTION.get();
         if in_fuzzy_collect {
             let pattern = leader.as_cstr();
             let hit = ins_buf.search_for_fuzzy_match(&mut pos, pattern, dir, start_pos, &mut found);
@@ -588,7 +588,7 @@ pub(crate) fn get_next_default_completion(st: &mut InsComplNextState, start_pos:
             }
         } else if ctrl_x_mode_whole_line()
             || ctrl_x_mode_eval()
-            || compl_cont_status.get() & CONT_SOL != 0
+            || COMPL_CONT_STATUS.get() & CONT_SOL != 0
         {
             // ctrl_x_mode_line_or_eval(), or a word-wise search that has
             // added a word that was at the beginning of the line.
@@ -606,9 +606,9 @@ pub(crate) fn get_next_default_completion(st: &mut InsComplNextState, start_pos:
         drop(silenced);
         *st.cur_match_pos() = pos;
 
-        if !compl_started.get() || st.set_match_pos {
+        if !COMPL_STARTED.get() || st.set_match_pos {
             // Set "compl_started" even on failure.
-            compl_started.set(true);
+            COMPL_STARTED.set(true);
             st.first_match_pos = pos;
             st.last_match_pos = pos;
             st.set_match_pos = false;
@@ -673,7 +673,7 @@ pub(crate) fn get_next_default_completion(st: &mut InsComplNextState, start_pos:
         let add_r = ins_compl_add_infercase(&found, len, ic, fname, dir, cont_s_ipos, score);
         if add_r != Added::Duplicate {
             if in_fuzzy_collect && best_score_is(score) {
-                compl_num_bests.set(compl_num_bests.get() + 1);
+                COMPL_NUM_BESTS.set(COMPL_NUM_BESTS.get() + 1);
             }
             found_new_match = true;
             break;
@@ -707,7 +707,7 @@ pub(crate) fn get_register_completion() {
         }
     };
 
-    let mut dir = compl_direction.get();
+    let mut dir = COMPL_DIRECTION.get();
     let adding_mode = compl_status_adding();
 
     for i in 0..NUM_REGISTERS {

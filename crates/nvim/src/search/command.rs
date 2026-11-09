@@ -405,7 +405,7 @@ pub(crate) fn do_search_in(
 /// search. An empty `pat` reuses the previous pattern. `options` is a mask
 /// of the `SEARCH_*` flags.
 ///
-/// Careful: with a line offset of 0 (`spats[0].off.line` set and
+/// Careful: with a line offset of 0 (`SPATS[0].off.line` set and
 /// `off.off == 0`) this makes the motion linewise without moving the
 /// match position.
 ///
@@ -420,7 +420,7 @@ pub(crate) fn do_search(
     options: c_int,
     mut sia: Option<&mut SearchItArg>,
 ) -> Option<Hit> {
-    searchcmdlen.set(0);
+    SEARCHCMDLEN.set(0);
     // A line offset is not remembered; this is vi compatible.
     let mut off = search_offset();
     if off.line && cpo_has(CpoFlag::LINEOFF) {
@@ -478,7 +478,7 @@ pub(crate) fn do_search(
     }
 
     // Turn 'hlsearch' highlighting back on.
-    if no_hlsearch.get() && options & SEARCH_KEEP == 0 {
+    if NO_HLSEARCH.get() && options & SEARCH_KEEP == 0 {
         redraw_all_later(UPD_SOME_VALID);
         set_no_hlsearch(false);
     }
@@ -520,7 +520,7 @@ pub(crate) fn do_search(
                         // be longer, and C's size_t difference is then
                         // the negative number this wants.
                         let extra = number_as_int(patlen.wrapping_sub(len).cast_signed() as i64);
-                        searchcmdlen.set(searchcmdlen.get() + extra);
+                        SEARCHCMDLEN.set(SEARCHCMDLEN.get() + extra);
                         text = copy;
                         at = 0;
                         patlen = len;
@@ -544,7 +544,7 @@ pub(crate) fn do_search(
                 // Compute the length of the search command, for
                 // get_address().
                 let consumed = p - at;
-                searchcmdlen.set(searchcmdlen.get() + len_as_int(consumed));
+                SEARCHCMDLEN.set(SEARCHCMDLEN.get() + len_as_int(consumed));
                 patlen = patlen.wrapping_sub(consumed);
                 at = p; // put pat after the search command
             }

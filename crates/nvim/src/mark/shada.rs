@@ -148,7 +148,7 @@ pub(crate) fn shada_set_global_mark(name: c_char, fm: ShadaMark, update: bool) -
     let idx = slot(idx);
     // A merge never overwrites a record the editor made more recently than
     // the one the shada file carries; a plain set (`update` false) always does.
-    if update && fm.timestamp <= namedfm.with(|table| table[idx].fmark.timestamp) {
+    if update && fm.timestamp <= NAMEDFM.with(|table| table[idx].fmark.timestamp) {
         return false;
     }
     store::set_global_mark(idx, fm.into_xfmark());
@@ -173,7 +173,7 @@ pub(crate) fn shada_set_local_mark(name: c_char, buffer: Buf, fm: ShadaMark, upd
 /// When `buffer`'s mark `name` was set, as [`mark_get`] resolves it; 0 for
 /// one it does not.
 pub(crate) fn shada_local_mark_timestamp(buffer: Buf, win: Win, name: u8) -> Timestamp {
-    mark_get(buffer, win, kMarkBufLocal, name).map_or(0, |fm| fm.timestamp)
+    mark_get(buffer, win, MARK_BUF_LOCAL, name).map_or(0, |fm| fm.timestamp)
 }
 
 /// The `"` mark the buffer list restores: `pos`, stamped now, releasing
@@ -272,5 +272,5 @@ fn marks_equal(a: Pos, b: Pos) -> bool {
 /// that reads the global table directly.
 pub(crate) fn global_mark_timestamp(idx: c_int) -> Timestamp {
     let idx = slot(idx);
-    namedfm.with(|table| table[idx].fmark.timestamp)
+    NAMEDFM.with(|table| table[idx].fmark.timestamp)
 }

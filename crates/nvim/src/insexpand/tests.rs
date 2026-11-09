@@ -58,12 +58,12 @@ fn reset() {
     ins_compl_free();
     compl_orig_text().clear();
     cpt_sources().clear();
-    compl_direction.set(FORWARD);
-    compl_shows_dir.set(FORWARD);
-    compl_get_longest.set(false);
-    compl_autocomplete.set(false);
-    compl_pending.set(0);
-    compl_matches.set(0);
+    COMPL_DIRECTION.set(FORWARD);
+    COMPL_SHOWS_DIR.set(FORWARD);
+    COMPL_GET_LONGEST.set(false);
+    COMPL_AUTOCOMPLETE.set(false);
+    COMPL_PENDING.set(0);
+    COMPL_MATCHES.set(0);
 }
 
 /// Add `text` as a match: `dir` side of the current one, `adup` allowing a
@@ -105,7 +105,7 @@ fn ring(orig: &str, words: &[&str]) {
     for word in words {
         assert_eq!(add(word), Added::Linked);
     }
-    compl_matches.set(ins_compl_make_cyclic());
+    COMPL_MATCHES.set(ins_compl_make_cyclic());
 }
 
 fn text_of(m: MatchId) -> String {
@@ -210,7 +210,7 @@ fn forward_adds_follow_the_current_match() {
 #[test]
 fn backward_adds_go_before_the_current_match() {
     let _f = Fixture::new(0);
-    compl_direction.set(BACKWARD);
+    COMPL_DIRECTION.set(BACKWARD);
     start("x");
     for word in ["x1", "x2", "x3"] {
         assert_eq!(add(word), Added::Linked);
@@ -253,12 +253,12 @@ fn add_full(text: &str, fname: Option<&str>, extra: [&str; 4], user_data: Option
 
 /// Point `compl_shown_match` at list position `at`.
 fn set_shown(at: usize) {
-    compl_shown_match.set(Some(nth(at)));
+    COMPL_SHOWN_MATCH.set(Some(nth(at)));
 }
 
 /// Point `compl_curr_match` at list position `at`.
 fn set_curr(at: usize) {
-    compl_curr_match.set(Some(nth(at)));
+    COMPL_CURR_MATCH.set(Some(nth(at)));
 }
 
 /// `m`'s file name: its address (shared or not) and its text.
@@ -292,7 +292,7 @@ fn numbers() -> Vec<c_int> {
 #[test]
 fn an_expansion_takes_its_direction_once() {
     let _f = Fixture::new(0);
-    compl_direction.set(BACKWARD);
+    COMPL_DIRECTION.set(BACKWARD);
     start("y");
     let words = ["y1", "y2", "y3"].map(|word| XString::from_bytes(word.as_bytes()));
     ins_compl_add_match_list(&words, false);
@@ -344,7 +344,7 @@ fn a_nearer_duplicate_lowers_the_score() {
 #[test]
 fn fuzzy_longest_inserts_by_score() {
     let _f = Fixture::new(kOptCotFlagFuzzy);
-    compl_get_longest.set(true);
+    COMPL_GET_LONGEST.set(true);
     start("w");
     for (word, score) in [("a", 10), ("b", 30), ("c", 20), ("d", 30)] {
         assert_eq!(add_scored(word, score), Added::Linked);
@@ -359,7 +359,7 @@ fn fuzzy_longest_inserts_by_score() {
 fn ctrl_n_walks_the_ring_and_back_to_the_original() {
     let _f = Fixture::new(0);
     ring("", &["a", "b", "c"]);
-    assert_eq!(compl_matches.get(), 3);
+    assert_eq!(COMPL_MATCHES.get(), 3);
     set_shown(0);
     let mut seen = Vec::new();
     for _ in 0..5 {
@@ -372,14 +372,14 @@ fn ctrl_n_walks_the_ring_and_back_to_the_original() {
     assert_eq!(shown_at(), Some(3));
     step(2);
     assert_eq!(shown_at(), Some(0));
-    assert_eq!(compl_pending.get(), 0);
+    assert_eq!(COMPL_PENDING.get(), 0);
 }
 
 #[test]
 fn ctrl_p_walks_the_ring_the_other_way() {
     let _f = Fixture::new(0);
     ring("", &["a", "b", "c"]);
-    compl_shows_dir.set(BACKWARD);
+    COMPL_SHOWS_DIR.set(BACKWARD);
     set_shown(1);
     let mut seen = Vec::new();
     for _ in 0..4 {
@@ -418,7 +418,7 @@ fn the_menu_walk_skips_what_the_menu_left_out() {
     assert_eq!(position(Some(find_next_match_in_menu())), Some(4));
     set_shown(4);
     assert_eq!(position(Some(find_next_match_in_menu())), Some(0));
-    compl_shows_dir.set(BACKWARD);
+    COMPL_SHOWS_DIR.set(BACKWARD);
     assert_eq!(position(Some(find_next_match_in_menu())), Some(1));
 }
 
@@ -436,7 +436,7 @@ fn numbers_count_out_from_the_original_in_the_running_direction() {
     assert!(!compl_match_curr_select(-1));
     reset();
 
-    compl_direction.set(BACKWARD);
+    COMPL_DIRECTION.set(BACKWARD);
     ring("", &["a", "b", "c"]);
     assert_eq!(texts(), ["c", "b", "a", "<o>"]);
     set_curr(1);
@@ -478,8 +478,8 @@ fn fuzzy_scores_sort_the_matches_and_leave_the_original() {
     reset();
 
     // Backward: the original text is the tail and stays there.
-    compl_direction.set(BACKWARD);
-    compl_shows_dir.set(BACKWARD);
+    COMPL_DIRECTION.set(BACKWARD);
+    COMPL_SHOWS_DIR.set(BACKWARD);
     ring("ap", &words);
     set_fuzzy_score();
     let n = words.len();
@@ -551,7 +551,7 @@ fn a_refresh_drops_one_source_and_keeps_the_rest_in_place() {
     // and the current match is the last one from an earlier source.
     assert_eq!(shown_at(), Some(0));
     assert_eq!(position(curr_match()), Some(2));
-    assert_eq!(compl_direction.get(), FORWARD);
+    assert_eq!(COMPL_DIRECTION.get(), FORWARD);
 }
 
 #[test]
@@ -620,7 +620,7 @@ fn the_free_takes_every_match_and_what_it_owns() {
     assert_eq!(add("fig"), Added::Linked);
     ins_compl_make_cyclic();
     set_shown(2);
-    compl_old_match.set(Some(nth(1)));
+    COMPL_OLD_MATCH.set(Some(nth(1)));
     compl_leader().set(ApiString::from_bytes(b"fo"));
     compl_pattern().set(ApiString::from_bytes(b"\\<fo"));
     ins_compl_free();

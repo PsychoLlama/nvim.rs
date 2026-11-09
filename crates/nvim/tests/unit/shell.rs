@@ -7,7 +7,7 @@
 //! `before_each` and threw the whole child away afterwards.
 //!
 //! `os_system_capture` additionally needs the event loop, not just `early_init`:
-//! it spawns through libuv and pumps `main_loop` until the child exits. That
+//! it spawns through libuv and pumps `MAIN_LOOP` until the child exits. That
 //! is why `support::init_editor` runs `event_init` first, exactly as
 //! `test/unit/testutil.lua` did.
 

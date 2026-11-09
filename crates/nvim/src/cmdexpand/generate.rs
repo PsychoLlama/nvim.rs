@@ -15,7 +15,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::arglist::get_arglist_name;
@@ -129,10 +128,10 @@ fn nth_option(list: &[&'static CStr], idx: usize) -> Option<Candidate> {
 /// The possible arguments of the `":filetype {plugin,indent}"` command.
 ///
 /// Which of them apply depends on how much of the command has been typed,
-/// which `set_context_in_filetype_cmd` recorded in `filetype_expand_what`.
+/// which `set_context_in_filetype_cmd` recorded in `FILETYPE_EXPAND_WHAT`.
 pub(crate) fn get_filetypecmd_arg(_expand: &Expand, idx: usize) -> Option<Candidate> {
     nth_option(
-        match filetype_expand_what.get() {
+        match FILETYPE_EXPAND_WHAT.get() {
             FiletypeWhat::All => &[c"indent", c"plugin", c"on", c"off"],
             FiletypeWhat::Plugin => &[c"plugin", c"on", c"off"],
             FiletypeWhat::Indent => &[c"indent", c"on", c"off"],
@@ -150,7 +149,7 @@ pub(crate) fn get_filetypecmd_arg(_expand: &Expand, idx: usize) -> Option<Candid
 pub(crate) fn get_breakadd_arg(_expand: &Expand, idx: usize) -> Option<Candidate> {
     const OPTS: [&CStr; 4] = [c"expr", c"file", c"func", c"here"];
     nth_option(
-        match breakpt_expand_what.get() {
+        match BREAKPT_EXPAND_WHAT.get() {
             BreakptWhat::Add => &OPTS,
             BreakptWhat::Del => &OPTS[1..4],
             BreakptWhat::ProfDel => &OPTS[1..3],
@@ -212,13 +211,13 @@ fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, args: Arr
 /// Asked of Lua once per command line — `get_cmdline_last_prompt_id` changes
 /// when a new one is opened — and cached for the rest of it.
 pub(crate) fn get_healthcheck_names(_expand: &Expand, idx: usize) -> Option<Candidate> {
-    static names: GlobalCell<Object> = GlobalCell::new(Object::Nil);
-    static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
-    if last_gen.get() != get_cmdline_last_prompt_id() || last_gen.get() == 0 {
-        cache_lua_answer(&names, c"return vim.health._complete()", Array::new());
-        last_gen.set(get_cmdline_last_prompt_id());
+    static NAMES: GlobalCell<Object> = GlobalCell::new(Object::Nil);
+    static LAST_GEN: GlobalCell<c_uint> = GlobalCell::new(0);
+    if LAST_GEN.get() != get_cmdline_last_prompt_id() || LAST_GEN.get() == 0 {
+        cache_lua_answer(&NAMES, c"return vim.health._complete()", Array::new());
+        LAST_GEN.set(get_cmdline_last_prompt_id());
     }
-    nth_lua_string(&names, idx)
+    nth_lua_string(&NAMES, idx)
 }
 
 /// Completion for `:lsp`.
@@ -226,25 +225,25 @@ pub(crate) fn get_healthcheck_names(_expand: &Expand, idx: usize) -> Option<Cand
 /// Unlike `:checkhealth` the answer depends on the whole command line, so the
 /// cache is keyed on that as well as on the prompt id.
 pub(crate) fn get_lsp_arg(expand: &Expand, idx: usize) -> Option<Candidate> {
-    static names: GlobalCell<Object> = GlobalCell::new(Object::Nil);
-    static last_xp_line: GlobalCell<Option<XString>> = GlobalCell::new(None);
-    static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
+    static NAMES: GlobalCell<Object> = GlobalCell::new(Object::Nil);
+    static LAST_XP_LINE: GlobalCell<Option<XString>> = GlobalCell::new(None);
+    static LAST_GEN: GlobalCell<c_uint> = GlobalCell::new(0);
     let line = expand.line_cstr();
-    if last_xp_line.with(|last| last.as_ref().is_none_or(|last| last.as_cstr() != line))
-        || last_gen.get() != get_cmdline_last_prompt_id()
+    if LAST_XP_LINE.with(|last| last.as_ref().is_none_or(|last| last.as_cstr() != line))
+        || LAST_GEN.get() != get_cmdline_last_prompt_id()
     {
-        last_xp_line.set(Some(XString::from_cstr(line)));
+        LAST_XP_LINE.set(Some(XString::from_cstr(line)));
         // The current command line, as the Lua function's one argument.
         let mut args = ArrayBuf::<1>::new();
         args.push(Object::string(ApiString::from_bytes(line.to_bytes())));
         cache_lua_answer(
-            &names,
+            &NAMES,
             c"return require'vim._core.ex_cmd'.lsp_complete(...)",
             args.array(),
         );
-        last_gen.set(get_cmdline_last_prompt_id());
+        LAST_GEN.set(get_cmdline_last_prompt_id());
     }
-    nth_lua_string(&names, idx)
+    nth_lua_string(&NAMES, idx)
 }
 
 /// `(context, generator, match case-insensitively, escape the matches)`.

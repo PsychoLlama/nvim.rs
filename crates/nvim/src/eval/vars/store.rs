@@ -241,7 +241,7 @@ fn store_value(tv: &mut TypVal, copy: bool) -> TypVal {
 pub(crate) fn var_check_ro_named(flags: c_int, name: &[u8]) -> bool {
     let error_message = if flags & c_int::from(DI_FLAGS_RO) != 0 {
         E_CANNOT_CHANGE_READONLY_VARIABLE_STR
-    } else if flags & c_int::from(DI_FLAGS_RO_SBX) != 0 && sandbox.get() != 0 {
+    } else if flags & c_int::from(DI_FLAGS_RO_SBX) != 0 && SANDBOX.get() != 0 {
         E_CANNOT_SET_VARIABLE_IN_SANDBOX_STR
     } else {
         return false;

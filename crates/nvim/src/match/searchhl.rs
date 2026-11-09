@@ -418,7 +418,7 @@ fn next_search_hl(window: Win, which: Which, lnum: LineNr, mincol: ColNr) {
     let set_lnum = |lnum: LineNr| window.with_search_hl(which, |shl| shl.lnum = lnum);
 
     // `:{range}s/pat` only highlights inside the range.
-    if (lnum < search_first_line.get() || lnum > search_last_line.get()) && which == Which::Search {
+    if (lnum < SEARCH_FIRST_LINE.get() || lnum > SEARCH_LAST_LINE.get()) && which == Which::Search {
         set_lnum(LineNr::ZERO);
         return;
     }

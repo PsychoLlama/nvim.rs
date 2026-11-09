@@ -44,7 +44,7 @@ use crate::search::FORWARD;
 use crate::state::mode::RESTART_EDIT;
 use crate::types::{ColNr, Direction, LineNr, OptInt, Pos};
 use crate::ui::state::ROWS;
-use crate::winlayer::graph::{firstwin, lastwin};
+use crate::winlayer::graph::{FIRSTWIN, LASTWIN};
 use crate::winlayer::{Buf, Win, windows};
 
 /// What `pagescroll` measured before it scrolled: the buffer's length, and
@@ -161,7 +161,7 @@ fn half_page(mut win: Win, dir: Direction, count: c_int, saved: Saved, op: Op) -
 fn whole_page(mut win: Win, dir: Direction, count: c_int) -> bool {
     // With a single window and a 'window' smaller than the screen, that is
     // the page; otherwise a page is the window less its overlap.
-    let page = if firstwin.get() == lastwin.get()
+    let page = if FIRSTWIN.get() == LASTWIN.get()
         && p_window() > 0
         && p_window() < OptInt::from(ROWS.get() - 1)
     {
@@ -219,7 +219,7 @@ pub fn do_check_cursorbind() {
     set_visual_active(false);
     set_visual_select(false);
     // Upstream asks the tab page for its window list, but the *current* tab
-    // page's windows always hang off `firstwin` -- `tp_firstwin` is only
+    // page's windows always hang off `FIRSTWIN` -- `tp_firstwin` is only
     // filled in when a tab page is left.
     for mut win in windows() {
         win.make_current();

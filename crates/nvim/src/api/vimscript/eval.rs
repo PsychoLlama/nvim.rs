@@ -36,9 +36,9 @@ use core::ffi::c_int;
 /// another one. The returned guard counts the nesting back down.
 fn enter_recursive(recursive: &'static GlobalCell<c_int>) -> RecursionGuard {
     if recursive.get() == 0 {
-        force_abort.set(false);
-        suppress_errthrow.set(false);
-        did_throw.set(false);
+        FORCE_ABORT.set(false);
+        SUPPRESS_ERRTHROW.set(false);
+        DID_THROW.set(false);
         DID_EMSG.set(0);
     }
     recursive.set(recursive.get() + 1);

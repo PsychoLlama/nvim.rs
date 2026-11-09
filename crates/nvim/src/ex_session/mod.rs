@@ -42,7 +42,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 mod session;
 mod view;
@@ -77,7 +76,7 @@ use crate::os::fs::{dir_exists, dirname_within, os_chdir};
 use crate::path::MAXPATHL;
 use crate::path::{after_pathsep, vim_full_name, vim_ispathsep};
 use crate::runtime::do_source;
-use crate::search::state::no_hlsearch;
+use crate::search::state::NO_HLSEARCH;
 use crate::tr;
 use crate::types::CmdIdx;
 use crate::types::{CdCause, ExArg, Vv};
@@ -97,7 +96,7 @@ mod flag {
     use super::{CdCause, c_int};
 
     /// `vim_chdirfile`'s reason code: not a `:cd`, so no autocommand.
-    pub(super) const kCdCauseOther: CdCause = -1;
+    pub(super) const CD_CAUSE_OTHER: CdCause = -1;
     /// `vim_strsave_fnameescape`: escape for an Ex command line.
     pub(super) const VSE_NONE: c_int = 0;
 
@@ -116,7 +115,7 @@ const EXRC_FILE: &CStr = c".exrc";
 /// Whether a `:lcd` or `:tcd` has been written for this session. Once one
 /// has, short file names are no longer safe: the script's working directory
 /// at the point a later name is read back is no longer known.
-static did_lcd: GlobalCell<bool> = GlobalCell::new(false);
+static DID_LCD: GlobalCell<bool> = GlobalCell::new(false);
 
 // -- The two option sets ---------------------------------------------------
 
@@ -234,7 +233,7 @@ fn ses_get_fname(buffer: Buf, opts: SessionOpts) -> Option<XString> {
         && opts.is_session()
         && opts.has(kOptSsopFlagCurdir | kOptSsopFlagSesdir)
         && !p_acd()
-        && !did_lcd.get()
+        && !DID_LCD.get()
     {
         short
     } else {
@@ -414,7 +413,7 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
 
     // Short file names are usable until a ":lcd" is written. They are also
     // not used when 'acd' is set, which is checked separately.
-    did_lcd.set(false);
+    DID_LCD.set(false);
 
     // A copy of the name: the command is lent on to the writer with it.
     let arg = excmd.line.arg().to_vec();
@@ -516,7 +515,7 @@ fn write_rc(
         if p_hls() {
             failed |= out.line(c"set hlsearch").is_err();
         }
-        if no_hlsearch.get() {
+        if NO_HLSEARCH.get() {
             failed |= out.line(c"nohlsearch").is_err();
         }
         failed |= out.line(c"doautoall SessionLoadPost").is_err();
@@ -542,7 +541,7 @@ fn write_session(out: &mut SessionFile, fname: &CStr) -> Written {
     let to_sesdir = known && SSOP_FLAGS.get() & kOptSsopFlagSesdir != 0;
     let to_globaldir = known && SSOP_FLAGS.get() & kOptSsopFlagCurdir != 0 && globaldir.is_some();
     if to_sesdir {
-        if vim_chdirfile(fname, flag::kCdCauseOther).is_ok() {
+        if vim_chdirfile(fname, flag::CD_CAUSE_OTHER).is_ok() {
             shorten_fnames(true);
         }
     } else if to_globaldir

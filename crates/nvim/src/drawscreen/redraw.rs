@@ -109,7 +109,7 @@ pub fn show_cursor_info_later(force: bool) {
 /// `MUST_REDRAW` is the maximum over all windows, so it only ever rises here;
 /// [`update_screen`] resets it.
 pub fn redraw_later(mut window: Win, redr_type: c_int) {
-    if exiting.get() || REDRAW_NOT_ALLOWED.get() {
+    if EXITING.get() || REDRAW_NOT_ALLOWED.get() {
         return;
     }
     if window.w_redr_type < redr_type {
@@ -155,7 +155,7 @@ pub fn screen_invalidate_highlights() {
 
 /// Mark every window showing the current buffer.
 ///
-/// Safe: the only promise is that the editor exists, which `curbuf` carries
+/// Safe: the only promise is that the editor exists, which `CURBUF` carries
 /// from startup to exit.
 pub fn redraw_curbuf_later(redr_type: c_int) {
     redraw_buf_later(Buf::current(), redr_type)
@@ -360,7 +360,7 @@ mod tests {
         fn drop(&mut self) {
             MUST_REDRAW.set(self.saved_must_redraw);
             REDRAW_NOT_ALLOWED.set(false);
-            exiting.set(false);
+            EXITING.set(false);
         }
     }
 
@@ -422,7 +422,7 @@ mod tests {
         set_must_redraw(UPD_CLEAR);
         assert_eq!((t.win().w_redr_type, MUST_REDRAW.get()), (0, 0));
         REDRAW_NOT_ALLOWED.set(false);
-        exiting.set(true);
+        EXITING.set(true);
         redraw_later(t.win(), UPD_CLEAR);
         assert_eq!(t.win().w_redr_type, 0);
         // `set_must_redraw` asks only about `REDRAW_NOT_ALLOWED`.

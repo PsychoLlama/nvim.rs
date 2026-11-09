@@ -19,11 +19,10 @@
 // Unsafe perimeter: the `os/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::fire_autocmds;
-use crate::autocmd::state::did_cursorhold;
+use crate::autocmd::state::DID_CURSORHOLD;
 use crate::autocmd::trigger_cursorhold;
 use crate::event::libuv::uv_guess_handle;
 use crate::event::r#loop::{Drain, loop_poll_events, wait_on_main_loop};
@@ -43,15 +42,15 @@ use crate::keycodes::{
 use crate::keycodes::{ModMask, special_key_at, special_key_bytes};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::mouse::state::{MOUSE_COL, MOUSE_GRID, MOUSE_ROW};
-use crate::msgpack_rpc::channel::ch_before_blocking_events;
+use crate::msgpack_rpc::channel::CH_BEFORE_BLOCKING_EVENTS;
 use crate::option::vars::{p_mouset, p_ut};
 use crate::os::cshim::gettext;
 use crate::os::libc::STDIN_FILENO;
 use crate::os::libc::{size_t, uint8_t, uint64_t};
 use crate::os::time::os_hrtime;
-use crate::profile::do_profiling;
+use crate::profile::DO_PROFILING;
 use crate::profile::{prof_input_end, prof_input_start};
-use crate::startup::{getout, main_loop, preserve_exit, silent_mode, used_stdin};
+use crate::startup::{MAIN_LOOP, SILENT_MODE, USED_STDIN, getout, preserve_exit};
 use crate::state::mode::STATE;
 use crate::state::{MODE_INSERT, get_real_state};
 use crate::types::ApiString;
@@ -79,7 +78,7 @@ const INPUT_BUFFER_SIZE: usize = READ_BUFFER_SIZE * 4 + MAX_KEY_CODE_LEN;
 const ZEROED_RSTREAM: RStream = unsafe { MaybeUninit::zeroed().assume_init() };
 
 /// stdin. Starts closed, because nothing is read until a UI attaches.
-static read_stream: GlobalCell<RStream> = GlobalCell::new(RStream {
+static READ_STREAM: GlobalCell<RStream> = GlobalCell::new(RStream {
     s: Stream {
         closed: true,
         ..ZEROED_RSTREAM.s
@@ -89,31 +88,31 @@ static read_stream: GlobalCell<RStream> = GlobalCell::new(RStream {
 
 /// Bytes read from the OS and not yet handed to the typeahead.
 ///
-/// `input_buffer[read_pos..write_pos]` is the unread run; see the module docs
+/// `INPUT_BUFFER[read_pos..write_pos]` is the unread run; see the module docs
 /// for why those are offsets and not pointers.
-static input_buffer: GlobalCell<[u8; INPUT_BUFFER_SIZE]> = GlobalCell::new([0; INPUT_BUFFER_SIZE]);
-static input_read_pos: GlobalCell<usize> = GlobalCell::new(0);
-static input_write_pos: GlobalCell<usize> = GlobalCell::new(0);
+static INPUT_BUFFER: GlobalCell<[u8; INPUT_BUFFER_SIZE]> = GlobalCell::new([0; INPUT_BUFFER_SIZE]);
+static INPUT_READ_POS: GlobalCell<usize> = GlobalCell::new(0);
+static INPUT_WRITE_POS: GlobalCell<usize> = GlobalCell::new(0);
 
-static input_eof: GlobalCell<bool> = GlobalCell::new(false);
-static blocking: GlobalCell<bool> = GlobalCell::new(false);
+static INPUT_EOF: GlobalCell<bool> = GlobalCell::new(false);
+static BLOCKING: GlobalCell<bool> = GlobalCell::new(false);
 /// Time already spent waiting for a CursorHold, and the `tb_change_cnt` that
 /// wait started under — a change to the typeahead restarts the clock.
-static cursorhold_time: GlobalCell<c_int> = GlobalCell::new(0);
-static cursorhold_tb_change_cnt: GlobalCell<c_int> = GlobalCell::new(0);
+static CURSORHOLD_TIME: GlobalCell<c_int> = GlobalCell::new(0);
+static CURSORHOLD_TB_CHANGE_CNT: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Start reading stdin.
 pub fn input_start() {
     if !stdin_closed() {
         return;
     }
-    used_stdin.set(true);
+    USED_STDIN.set(true);
     // SAFETY: `read_stream` is this module's own static, at a fixed address,
     // and libuv only ever touches it from the main thread; `input_read_cb`
     // has the signature `rstream_start` demands and takes no data pointer.
     unsafe {
-        rstream_init_fd(main_loop.ptr(), read_stream.ptr(), STDIN_FILENO);
-        rstream_start(read_stream.ptr(), Some(input_read_cb), ptr::null_mut());
+        rstream_init_fd(MAIN_LOOP.ptr(), READ_STREAM.ptr(), STDIN_FILENO);
+        rstream_start(READ_STREAM.ptr(), Some(input_read_cb), ptr::null_mut());
     }
 }
 
@@ -124,14 +123,14 @@ pub fn input_stop() {
     }
     // SAFETY: as `input_start`.
     unsafe {
-        rstream_stop(read_stream.ptr());
-        rstream_may_close(read_stream.ptr());
+        rstream_stop(READ_STREAM.ptr());
+        rstream_may_close(READ_STREAM.ptr());
     }
 }
 
 /// Whether stdin is not being read.
 fn stdin_closed() -> bool {
-    read_stream.with(|stream| stream.s.closed)
+    READ_STREAM.with(|stream| stream.s.closed)
 }
 
 /// The queued CursorHold, fired once the event loop gets to it.
@@ -142,7 +141,7 @@ fn cursorhold_event() {
         AutoEvent::CursorHold
     } as AutoEvent;
     fire_autocmds(event, false, Buf::current_or_none());
-    did_cursorhold.set(true);
+    DID_CURSORHOLD.set(true);
 }
 
 fn create_cursorhold_event(events_enabled: bool) {
@@ -153,8 +152,8 @@ fn create_cursorhold_event(events_enabled: bool) {
 }
 
 fn reset_cursorhold_wait(tb_change_cnt: c_int) {
-    cursorhold_time.set(0);
-    cursorhold_tb_change_cnt.set(tb_change_cnt);
+    CURSORHOLD_TIME.set(0);
+    CURSORHOLD_TB_CHANGE_CNT.set(tb_change_cnt);
 }
 
 /// Move as many buffered bytes into `buf` as fit, or `None` if there are
@@ -165,9 +164,9 @@ fn try_read(buf: &mut [u8], tb_change_cnt: c_int) -> Option<usize> {
     }
     reset_cursorhold_wait(tb_change_cnt);
     let to_read = buf.len().min(input_available());
-    let from = input_read_pos.get();
-    input_buffer.with(|input| buf[..to_read].copy_from_slice(&input[from..from + to_read]));
-    input_read_pos.set(from + to_read);
+    let from = INPUT_READ_POS.get();
+    INPUT_BUFFER.with(|input| buf[..to_read].copy_from_slice(&input[from..from + to_read]));
+    INPUT_READ_POS.set(from + to_read);
     Some(to_read)
 }
 
@@ -226,7 +225,7 @@ pub(crate) fn input_get(
     events: InputEvents,
 ) -> usize {
     // Needed so that feeding typeahead over RPC can prevent CursorHold.
-    if tb_change_cnt != cursorhold_tb_change_cnt.get() {
+    if tb_change_cnt != CURSORHOLD_TB_CHANGE_CNT.get() {
         reset_cursorhold_wait(tb_change_cnt);
     }
 
@@ -248,10 +247,10 @@ pub(crate) fn input_get(
         }
     } else {
         let wait_start = os_hrtime();
-        cursorhold_time.set(cursorhold_time.get().min(p_ut() as c_int));
-        result = inbuf_poll(p_ut() as c_int - cursorhold_time.get(), events);
+        CURSORHOLD_TIME.set(CURSORHOLD_TIME.get().min(p_ut() as c_int));
+        result = inbuf_poll(p_ut() as c_int - CURSORHOLD_TIME.get(), events);
         if result == InputAvail::Empty {
-            if stdin_closed() && silent_mode.get() {
+            if stdin_closed() && SILENT_MODE.get() {
                 // Drained event loop and initial input; exit `-es`/`-Es`.
                 read_error_exit();
             }
@@ -264,7 +263,7 @@ pub(crate) fn input_get(
             }
         } else {
             let waited = os_hrtime().wrapping_sub(wait_start) / 1_000_000;
-            cursorhold_time.set(cursorhold_time.get().wrapping_add(waited as c_int));
+            CURSORHOLD_TIME.set(CURSORHOLD_TIME.get().wrapping_add(waited as c_int));
         }
     }
 
@@ -305,12 +304,12 @@ pub(crate) fn os_breakcheck() {
     if GOT_INT.get() {
         return;
     }
-    let uv_loop = main_loop.ptr();
+    let uv_loop = MAIN_LOOP.ptr();
     #[cfg(test)]
     if !test_loop_up(uv_loop) {
         return;
     }
-    // SAFETY: `main_loop` is the process's event loop, always live.
+    // SAFETY: `MAIN_LOOP` is the process's event loop, always live.
     unsafe { loop_poll_events(uv_loop, 0) };
 }
 
@@ -330,23 +329,23 @@ fn test_loop_up(uv_loop: *mut crate::event::objects::Loop) -> bool {
 }
 
 const BREAKCHECK_SKIP: c_int = 1000;
-static breakcheck_count: GlobalCell<c_int> = GlobalCell::new(0);
+static BREAKCHECK_COUNT: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Start the [`fast_breakcheck`] count over, so a lib test that adds matches
 /// never reaches the event loop it has not got.
 #[cfg(test)]
 pub(crate) fn reset_breakcheck_count() {
-    breakcheck_count.set(0);
+    BREAKCHECK_COUNT.set(0);
 }
 
 /// [`os_breakcheck`], but only once every `every` calls.
 fn breakcheck_every(every: c_int) {
-    let count = breakcheck_count.get() + 1;
+    let count = BREAKCHECK_COUNT.get() + 1;
     if count >= every {
-        breakcheck_count.set(0);
+        BREAKCHECK_COUNT.set(0);
         os_breakcheck();
     } else {
-        breakcheck_count.set(count);
+        BREAKCHECK_COUNT.set(count);
     }
 }
 
@@ -384,30 +383,30 @@ pub(crate) fn tty_drain(fd: c_int) {
 
 /// How many bytes are buffered and unread.
 pub fn input_available() -> usize {
-    input_write_pos.get() - input_read_pos.get()
+    INPUT_WRITE_POS.get() - INPUT_READ_POS.get()
 }
 
 /// How much room is left at the end of the buffer.
 fn input_space() -> usize {
-    INPUT_BUFFER_SIZE - input_write_pos.get()
+    INPUT_BUFFER_SIZE - INPUT_WRITE_POS.get()
 }
 
 /// Append `data` to the input buffer, dropping whatever does not fit.
 pub fn input_enqueue_raw(data: &[u8]) {
-    input_buffer.with_mut(|input| {
-        let (read, write) = (input_read_pos.get(), input_write_pos.get());
+    INPUT_BUFFER.with_mut(|input| {
+        let (read, write) = (INPUT_READ_POS.get(), INPUT_WRITE_POS.get());
         // Reclaim the room already consumed by moving the unread run to the
         // front. The buffer is a window, not a ring.
         let write = if read > 0 {
             input.copy_within(read..write, 0);
-            input_read_pos.set(0);
+            INPUT_READ_POS.set(0);
             write - read
         } else {
             write
         };
         let to_write = data.len().min(INPUT_BUFFER_SIZE - write);
         input[write..write + to_write].copy_from_slice(&data[..to_write]);
-        input_write_pos.set(write + to_write);
+        INPUT_WRITE_POS.set(write + to_write);
     });
 }
 
@@ -470,13 +469,13 @@ pub fn input_enqueue(chan_id: uint64_t, keys: ApiString) -> size_t {
 }
 
 /// How many clicks in a row, and where the last one was.
-static orig_num_clicks: GlobalCell<c_int> = GlobalCell::new(0);
-static orig_mouse_code: GlobalCell<c_int> = GlobalCell::new(0);
-static orig_mouse_grid: GlobalCell<c_int> = GlobalCell::new(0);
-static orig_mouse_col: GlobalCell<c_int> = GlobalCell::new(0);
-static orig_mouse_row: GlobalCell<c_int> = GlobalCell::new(0);
+static ORIG_NUM_CLICKS: GlobalCell<c_int> = GlobalCell::new(0);
+static ORIG_MOUSE_CODE: GlobalCell<c_int> = GlobalCell::new(0);
+static ORIG_MOUSE_GRID: GlobalCell<c_int> = GlobalCell::new(0);
+static ORIG_MOUSE_COL: GlobalCell<c_int> = GlobalCell::new(0);
+static ORIG_MOUSE_ROW: GlobalCell<c_int> = GlobalCell::new(0);
 /// When the previous click was, in nanoseconds.
-static orig_mouse_time: GlobalCell<uint64_t> = GlobalCell::new(0);
+static ORIG_MOUSE_TIME: GlobalCell<uint64_t> = GlobalCell::new(0);
 
 /// The `MOD_MASK_*CLICK` modifier this mouse event carries, or `None` when the
 /// event should be dropped entirely — which happens for a mouse *move* that
@@ -487,7 +486,7 @@ fn check_multiclick(code: c_int, grid: c_int, row: c_int, col: c_int) -> Option<
     }
 
     let no_move =
-        orig_mouse_grid.get() == grid && orig_mouse_col.get() == col && orig_mouse_row.get() == row;
+        ORIG_MOUSE_GRID.get() == grid && ORIG_MOUSE_COL.get() == col && ORIG_MOUSE_ROW.get() == row;
 
     if code == KE_MOUSEMOVE as c_int {
         if no_move {
@@ -505,30 +504,30 @@ fn check_multiclick(code: c_int, grid: c_int, row: c_int, col: c_int) -> Option<
         // For a click event the run length is updated; a drag or a release
         // keeps whatever the click before it established.
         let mouse_time = os_hrtime();
-        let timediff = mouse_time.wrapping_sub(orig_mouse_time.get());
+        let timediff = mouse_time.wrapping_sub(ORIG_MOUSE_TIME.get());
         // 'mousetime' is in milliseconds, `os_hrtime` in nanoseconds.
         let mouset = (p_mouset() as uint64_t).wrapping_mul(1_000_000);
-        let same_click = code == orig_mouse_code.get()
+        let same_click = code == ORIG_MOUSE_CODE.get()
             && no_move
             && timediff < mouset
-            && orig_num_clicks.get() != 4;
-        orig_num_clicks.set(if same_click {
-            orig_num_clicks.get() + 1
+            && ORIG_NUM_CLICKS.get() != 4;
+        ORIG_NUM_CLICKS.set(if same_click {
+            ORIG_NUM_CLICKS.get() + 1
         } else {
             1
         });
-        orig_mouse_code.set(code);
-        orig_mouse_time.set(mouse_time);
+        ORIG_MOUSE_CODE.set(code);
+        ORIG_MOUSE_TIME.set(mouse_time);
     }
 
-    orig_mouse_grid.set(grid);
-    orig_mouse_col.set(col);
-    orig_mouse_row.set(row);
+    ORIG_MOUSE_GRID.set(grid);
+    ORIG_MOUSE_COL.set(col);
+    ORIG_MOUSE_ROW.set(row);
 
     if code == KE_MOUSEMOVE as c_int {
         return Some(0);
     }
-    Some(match orig_num_clicks.get() {
+    Some(match ORIG_NUM_CLICKS.get() {
         2 => ModMask::TWO_CLICK.bits() as uint8_t,
         3 => ModMask::THREE_CLICK.bits() as uint8_t,
         4 => ModMask::FOUR_CLICK.bits() as uint8_t,
@@ -692,10 +691,10 @@ enum InputAvail {
 
 /// Whether the main loop is blocked waiting for input.
 pub fn input_blocking() -> bool {
-    blocking.get()
+    BLOCKING.get()
 }
 
-/// Check for (but do not read) available input, consuming `main_loop.events`
+/// Check for (but do not read) available input, consuming `MAIN_LOOP.events`
 /// while waiting.
 ///
 /// `ms` is a timeout in milliseconds; -1 waits indefinitely and 0 does not
@@ -705,15 +704,15 @@ fn inbuf_poll(ms: c_int, events: InputEvents) -> InputAvail {
         return InputAvail::Ready;
     }
 
-    if do_profiling.get() == PROF_YES && ms != 0 {
+    if DO_PROFILING.get() == PROF_YES && ms != 0 {
         prof_input_start();
     }
 
-    if (ms == -1 || ms > 0) && !events.is_main_loop() && !input_eof.get() {
+    if (ms == -1 || ms > 0) && !events.is_main_loop() && !INPUT_EOF.get() {
         // The pending input provoked a blocking wait. Do special events
         // now. #6247
-        blocking.set(true);
-        event_queue::process_events_in(&ch_before_blocking_events);
+        BLOCKING.set(true);
+        event_queue::process_events_in(&CH_BEFORE_BLOCKING_EVENTS);
     }
     let has_events = if events.queue().is_none() {
         "false"
@@ -730,17 +729,17 @@ fn inbuf_poll(ms: c_int, events: InputEvents) -> InputAvail {
     // queue instead" branch is dead: `events` is only read by
     // `input_ready`.
     wait_on_main_loop(Drain::Nothing, i64::from(ms), || {
-        input_ready(events) || input_eof.get()
+        input_ready(events) || INPUT_EOF.get()
     });
-    blocking.set(false);
+    BLOCKING.set(false);
 
-    if do_profiling.get() == PROF_YES && ms != 0 {
+    if DO_PROFILING.get() == PROF_YES && ms != 0 {
         prof_input_end();
     }
 
     if input_ready(events) {
         InputAvail::Ready
-    } else if input_eof.get() {
+    } else if INPUT_EOF.get() {
         InputAvail::Eof
     } else {
         InputAvail::Empty
@@ -759,7 +758,7 @@ unsafe fn input_read_cb(
     at_eof: bool,
 ) -> size_t {
     if at_eof {
-        input_eof.set(true);
+        INPUT_EOF.set(true);
     }
     // The stream's own buffer is smaller than ours, so a read always fits.
     debug_assert!(input_space() >= count);
@@ -774,9 +773,9 @@ fn process_ctrl_c() {
     if !CTRL_C_INTERRUPTS.get() {
         return;
     }
-    let read = input_read_pos.get();
-    let write = input_write_pos.get();
-    let Some(at) = input_buffer.with_mut(|input| {
+    let read = INPUT_READ_POS.get();
+    let write = INPUT_WRITE_POS.get();
+    let Some(at) = INPUT_BUFFER.with_mut(|input| {
         let unread = &mut input[read..write];
         let at = (0..unread.len()).rev().find(|&i| {
             unread[i] == CTRL_C as u8
@@ -794,7 +793,7 @@ fn process_ctrl_c() {
     GOT_INT.set(true);
     if at > 0 {
         // Drop the unprocessed typeahead in front of the CTRL-C.
-        input_read_pos.set(read + at);
+        INPUT_READ_POS.set(read + at);
     }
 }
 
@@ -802,14 +801,14 @@ fn process_ctrl_c() {
 /// `buf` holds fewer than three. `buf` must not be empty.
 fn push_event_key(buf: &mut [u8]) -> usize {
     const KEY: [uint8_t; 3] = [K_SPECIAL, KS_EXTRA, KE_EVENT];
-    static key_idx: GlobalCell<usize> = GlobalCell::new(0);
+    static KEY_IDX: GlobalCell<usize> = GlobalCell::new(0);
 
     let mut buf_idx = 0;
     loop {
-        buf[buf_idx] = KEY[key_idx.get()];
-        key_idx.set((key_idx.get() + 1) % KEY.len());
+        buf[buf_idx] = KEY[KEY_IDX.get()];
+        KEY_IDX.set((KEY_IDX.get() + 1) % KEY.len());
         buf_idx += 1;
-        if key_idx.get() == 0 || buf_idx >= buf.len() {
+        if KEY_IDX.get() == 0 || buf_idx >= buf.len() {
             break;
         }
     }
@@ -826,7 +825,7 @@ pub(crate) fn input_ready(events: InputEvents) -> bool {
 
 /// Exit because of an input read error.
 fn read_error_exit() -> ! {
-    if silent_mode.get() {
+    if SILENT_MODE.get() {
         // The normal way out for `nvim -es`.
         getout(0);
     }

@@ -27,7 +27,7 @@
 //!
 //! # The links are handles
 //!
-//! `b_next`/`b_prev` are `Option<BufId>`, and `firstbuf`/`lastbuf` with them:
+//! `b_next`/`b_prev` are `Option<BufId>`, and `FIRSTBUF`/`LASTBUF` with them:
 //! a step is a registry lookup, not a load. That is what makes the object
 //! graph index-shaped rather than pointer-shaped — a buffer can move, and a
 //! link can never name one that has been freed, because the free path takes
@@ -52,8 +52,8 @@
 use core::iter;
 
 use super::graph::{
-    cmdline_win, cmdwin_win, first_tabpage, firstbuf, firstwin, lastbuf, lastused_tabpage, lastwin,
-    prevwin,
+    CMDLINE_WIN, CMDWIN_WIN, FIRST_TABPAGE, FIRSTBUF, FIRSTWIN, LASTBUF, LASTUSED_TABPAGE, LASTWIN,
+    PREVWIN,
 };
 use super::{Buf, BufId, FrameId, FrameRef, TabId, TabPage, Win, WinId};
 use crate::types::Window;
@@ -133,13 +133,13 @@ pub(crate) fn windows_from(first: Option<Win>) -> impl Iterator<Item = Win> {
 /// first window exists and while the editor is tearing the last one down.
 #[inline]
 pub(crate) fn first_window() -> Option<Win> {
-    firstwin.get().and_then(WinId::get)
+    FIRSTWIN.get().and_then(WinId::get)
 }
 
 /// The tail of the current tab page's window list. [`first_window`].
 #[inline]
 pub(crate) fn last_window() -> Option<Win> {
-    lastwin.get().and_then(WinId::get)
+    LASTWIN.get().and_then(WinId::get)
 }
 
 /// The window `CTRL-W p` goes back to -- the C's `prevwin` -- `None` when
@@ -150,38 +150,38 @@ pub(crate) fn last_window() -> Option<Win> {
 /// rather than a dangling address when it did.
 #[inline]
 pub(crate) fn prev_window() -> Option<Win> {
-    prevwin.get().and_then(WinId::get)
+    PREVWIN.get().and_then(WinId::get)
 }
 
-/// The tab page `:tab` and `g<Tab>` go back to -- `lastused_tabpage`.
+/// The tab page `:tab` and `g<Tab>` go back to -- `LASTUSED_TABPAGE`.
 #[inline]
 pub(crate) fn last_used_tab() -> Option<TabPage> {
-    lastused_tabpage.get().and_then(TabId::get)
+    LASTUSED_TABPAGE.get().and_then(TabId::get)
 }
 
-/// The command-line window, while one is open -- `cmdwin_win`.
+/// The command-line window, while one is open -- `CMDWIN_WIN`.
 #[inline]
 pub(crate) fn cmdwin_window() -> Option<Win> {
-    cmdwin_win.get().and_then(WinId::get)
+    CMDWIN_WIN.get().and_then(WinId::get)
 }
 
 /// The window the cmdline is drawn in when `'cmdheight'` is zero and a float
-/// stands in for the message area -- `cmdline_win`.
+/// stands in for the message area -- `CMDLINE_WIN`.
 #[inline]
 pub(crate) fn cmdline_window() -> Option<Win> {
-    cmdline_win.get().and_then(WinId::get)
+    CMDLINE_WIN.get().and_then(WinId::get)
 }
 
 /// Every window of the current tab page, in list order: the C's
-/// `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`, whose `curtab == curtab` test always
-/// picks `firstwin`.
+/// `FOR_ALL_WINDOWS_IN_TAB(wp, CURTAB)`, whose `CURTAB == CURTAB` test always
+/// picks `FIRSTWIN`.
 pub(crate) fn windows() -> impl Iterator<Item = Win> {
     windows_from(first_window())
 }
 
 /// Every window of tab page `tabpage`, in list order: `FOR_ALL_WINDOWS_IN_TAB`.
 ///
-/// The current tab page's windows hang off the `firstwin` global rather than
+/// The current tab page's windows hang off the `FIRSTWIN` global rather than
 /// off its own `tp_firstwin`, which is stale while it is current — that is
 /// what the macro's first arm reads.
 pub(crate) fn windows_in_tab(tabpage: TabPage) -> impl Iterator<Item = Win> {
@@ -214,7 +214,7 @@ pub(crate) fn tabs() -> impl Iterator<Item = TabPage> {
 /// is made. [`first_buffer`].
 #[inline]
 pub(crate) fn first_tab() -> Option<TabPage> {
-    first_tabpage.get().and_then(TabId::get)
+    FIRST_TABPAGE.get().and_then(TabId::get)
 }
 
 /// Every window of every tab page: `FOR_ALL_TAB_WINDOWS`, which is exactly
@@ -245,13 +245,13 @@ pub(crate) fn buffers() -> impl Iterator<Item = Buf> {
 /// created and again once the last one is gone.
 #[inline]
 pub(crate) fn first_buffer() -> Option<Buf> {
-    firstbuf.get().and_then(BufId::get)
+    FIRSTBUF.get().and_then(BufId::get)
 }
 
 /// The tail of the editor's buffer list. [`first_buffer`].
 #[inline]
 pub(crate) fn last_buffer() -> Option<Buf> {
-    lastbuf.get().and_then(BufId::get)
+    LASTBUF.get().and_then(BufId::get)
 }
 
 /// Every buffer, last to first: the C's `FOR_ALL_BUFFERS_BACKWARDS`.

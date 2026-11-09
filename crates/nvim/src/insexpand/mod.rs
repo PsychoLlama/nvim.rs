@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::ascii::TAB;
 use crate::autocmd::defs::AutoEvent;
@@ -43,7 +42,7 @@ use crate::eval::typval::{
 use crate::eval::userfunc::callback_call_retnr;
 use crate::eval::vars::set_vim_var_dict;
 use crate::eval::{callback_call, get_v_event, restore_v_event, set_ref_in_callback};
-use crate::ex_docmd::state::{ex_normal_busy, global_busy};
+use crate::ex_docmd::state::{EX_NORMAL_BUSY, GLOBAL_BUSY};
 use crate::ex_eval::aborting;
 use crate::extmark::ExtmarkUndoObject;
 use crate::extmark::extmark_apply_undo;
@@ -106,7 +105,7 @@ use crate::state::mode::{
 };
 use crate::state::{MODE_INSERT, REPLACE_FLAG, may_trigger_modechanged};
 use crate::tag::find_tag_names;
-use crate::tag::state::g_tag_at_cursor;
+use crate::tag::state::G_TAG_AT_CURSOR;
 use crate::textformat::auto_format;
 use crate::types::{
     ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, LineNr, List, OptInt, Pos,
@@ -116,7 +115,7 @@ use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
 use crate::window::win_valid;
 use crate::winfloat::win_float_find_preview;
-use crate::winlayer::graph::cmdwin_type;
+use crate::winlayer::graph::CMDWIN_TYPE;
 use crate::winlayer::{BufId, WinId};
 
 // The carve of the transpiled module; see each child's docs.
@@ -545,14 +544,14 @@ state_record! {
     #[allow(dead_code, reason = "the slots are reached through the whole list, not by selector")]
     MATCH_SLOTS: Vec<Option<ComplItem>> = Vec::new();
     /// The head of the list, `None` while there is no completion.
-    compl_first_match: Option<MatchId> = None;
+    COMPL_FIRST_MATCH: Option<MatchId> = None;
     /// The match a CTRL-N/CTRL-P walk has reached; while collecting, where
     /// the next match is linked.
-    compl_curr_match: Option<MatchId> = None;
+    COMPL_CURR_MATCH: Option<MatchId> = None;
     /// The match the popup menu highlights.
-    compl_shown_match: Option<MatchId> = None;
+    COMPL_SHOWN_MATCH: Option<MatchId> = None;
     /// The current match before the collection that is running.
-    compl_old_match: Option<MatchId> = None;
+    COMPL_OLD_MATCH: Option<MatchId> = None;
     /// How many times the list has been freed: a [`MatchId`] taken before
     /// a call that ran user code is stale when this moved.
     MATCH_GENERATION: u32 = 0;
@@ -595,7 +594,7 @@ impl ComplMatches {
     /// Whether `id` is the head — C's `is_first_match`, which compares
     /// addresses, so `None` is the head of an empty list.
     pub(crate) fn is_first(&self, id: Option<MatchId>) -> bool {
-        id == self.compl_first_match
+        id == self.COMPL_FIRST_MATCH
     }
 }
 
@@ -628,7 +627,7 @@ impl MatchId {
 
     /// Whether this is the head of the list — C's `is_first_match`.
     pub(crate) fn is_first(self) -> bool {
-        compl_first_match.get() == Some(self)
+        COMPL_FIRST_MATCH.get() == Some(self)
     }
 
     /// Whether this is the original text the completion began with.
@@ -654,22 +653,22 @@ impl MatchId {
 
 /// The head of the match list, `None` while there is no completion.
 pub(crate) fn first_match() -> Option<MatchId> {
-    compl_first_match.get()
+    COMPL_FIRST_MATCH.get()
 }
 
 /// The match a CTRL-N/CTRL-P walk has reached.
 pub(crate) fn curr_match() -> Option<MatchId> {
-    compl_curr_match.get()
+    COMPL_CURR_MATCH.get()
 }
 
 /// The match the popup menu highlights.
 pub(crate) fn shown_match() -> Option<MatchId> {
-    compl_shown_match.get()
+    COMPL_SHOWN_MATCH.get()
 }
 
 /// The match that was current before the collection that is running.
 pub(crate) fn old_match() -> Option<MatchId> {
-    compl_old_match.get()
+    COMPL_OLD_MATCH.get()
 }
 
 /// The list from `start` onwards, stopping at the end of an opened list or
@@ -706,86 +705,86 @@ state_record! {
     pub(crate) struct ComplState in COMPL as ComplField;
     /// How many of the best fuzzy matches `'completeopt'` `longest` shares a
     /// prefix over.
-    compl_num_bests: c_int = 0;
+    COMPL_NUM_BESTS: c_int = 0;
     /// Enter selects the shown match rather than inserting a line break.
-    compl_enter_selects: bool = false;
+    COMPL_ENTER_SELECTS: bool = false;
     /// See [`compl_leader`].
     COMPL_LEADER: ApiString = ApiString::NULL;
     /// See [`adjusted_leader`].
     ADJUSTED_LEADER: ApiString = ApiString::NULL;
     /// Still finding the longest common text (`'completeopt'` `longest`).
-    compl_get_longest: bool = false;
+    COMPL_GET_LONGEST: bool = false;
     /// The selected match is in the buffer.
-    compl_used_match: bool = false;
+    COMPL_USED_MATCH: bool = false;
     /// The last collection was interrupted by a typed key.
-    compl_was_interrupted: bool = false;
+    COMPL_WAS_INTERRUPTED: bool = false;
     /// The collection running now was interrupted.
-    compl_interrupted: bool = false;
+    COMPL_INTERRUPTED: bool = false;
     /// Searching again without leaving CTRL-X mode: don't insert the first
     /// match.
-    compl_restarting: bool = false;
+    COMPL_RESTARTING: bool = false;
     /// The match list has been started.
-    compl_started: bool = false;
+    COMPL_STARTED: bool = false;
     /// Which CTRL-X mode is running; `CTRL_X_*`.
-    ctrl_x_mode: c_int = CTRL_X_NORMAL;
+    CTRL_X_MODE: c_int = CTRL_X_NORMAL;
     /// The number of matches, once known.
-    compl_matches: c_int = 0;
+    COMPL_MATCHES: c_int = 0;
     /// See [`compl_pattern`].
     COMPL_PATTERN: ApiString = ApiString::NULL;
     /// See [`cpt_compl_pattern`].
     CPT_COMPL_PATTERN: ApiString = ApiString::NULL;
     /// The direction matches are collected in.
-    compl_direction: Direction = FORWARD;
+    COMPL_DIRECTION: Direction = FORWARD;
     /// The direction the shown matches run in.
-    compl_shows_dir: Direction = FORWARD;
+    COMPL_SHOWS_DIR: Direction = FORWARD;
     /// CTRL-N/CTRL-P presses not yet acted on, while still collecting.
-    compl_pending: c_int = 0;
+    COMPL_PENDING: c_int = 0;
     /// Where the completion started.
-    compl_startpos: Pos = POS_T_INIT;
+    COMPL_STARTPOS: Pos = POS_T_INIT;
     /// The length of the text being completed.
-    compl_length: c_int = 0;
+    COMPL_LENGTH: c_int = 0;
     /// The line the completion started on.
-    compl_lnum: LineNr = LineNr::ZERO;
+    COMPL_LNUM: LineNr = LineNr::ZERO;
     /// The column the completed text starts at.
-    compl_col: ColNr = ColNr::ZERO;
+    COMPL_COL: ColNr = ColNr::ZERO;
     /// Where the inserted completion text ends.
-    compl_ins_end_col: ColNr = ColNr::ZERO;
+    COMPL_INS_END_COL: ColNr = ColNr::ZERO;
     /// See [`compl_orig_text`].
     COMPL_ORIG_TEXT: ApiString = ApiString::NULL;
     /// See [`ComplOrigExtmarks`].
     COMPL_ORIG_EXTMARKS: Vec<ExtmarkUndoObject> = Vec::new();
     /// The CTRL-X mode a continued completion continues.
-    compl_cont_mode: c_int = 0;
+    COMPL_CONT_MODE: c_int = 0;
     /// CTRL-X CTRL-V's expansion context, kept between working out the
     /// pattern and expanding it. Moved out for each use: the expansion runs
     /// Lua and user completion functions.
-    compl_xp: Option<Box<Expand>> = None;
+    COMPL_XP: Option<Box<Expand>> = None;
     /// The window the running completion started in. See
     /// [`ins_compl_win_active`]: an identity, not an address, because a
     /// completion runs user functions, autocommands and Lua, any of which
     /// can close the window or wipe the buffer, and comparison is all that
     /// is ever done with it.
-    compl_curr_win: Option<WinId> = None;
+    COMPL_CURR_WIN: Option<WinId> = None;
     /// The buffer it started in; see `compl_curr_win`.
-    compl_curr_buf: Option<BufId> = None;
+    COMPL_CURR_BUF: Option<BufId> = None;
     /// The completion is `'autocomplete'`'s.
-    compl_autocomplete: bool = false;
+    COMPL_AUTOCOMPLETE: bool = false;
     /// The time budget of one `'complete'` source.
-    compl_timeout_ms: uint64_t = COMPL_INITIAL_TIMEOUT_MS.cast_unsigned();
+    COMPL_TIMEOUT_MS: uint64_t = COMPL_INITIAL_TIMEOUT_MS.cast_unsigned();
     /// The current source ran out of time.
-    compl_time_slice_expired: bool = false;
+    COMPL_TIME_SLICE_EXPIRED: bool = false;
     /// The completion started after a non-keyword character.
-    compl_from_nonkeyword: bool = false;
+    COMPL_FROM_NONKEYWORD: bool = false;
     /// Highlight the text `'autocomplete'`'s `longest` inserted.
-    compl_hi_on_autocompl_longest: bool = false;
+    COMPL_HI_ON_AUTOCOMPL_LONGEST: bool = false;
     /// `CONT_*` flags: how a CTRL-X continuation proceeds.
-    compl_cont_status: c_int = 0;
+    COMPL_CONT_STATUS: c_int = 0;
     /// The completion function answered `refresh: 'always'`.
-    compl_opt_refresh_always: bool = false;
+    COMPL_OPT_REFRESH_ALWAYS: bool = false;
     /// The length of the bad word spell completion started on.
-    spell_bad_len: size_t = 0;
+    SPELL_BAD_LEN: size_t = 0;
     /// The menu entry selected, `-1` for none.
-    compl_selected_item: c_int = -1;
+    COMPL_SELECTED_ITEM: c_int = -1;
     /// See [`CptSources`].
     CPT_SOURCES: Vec<CptSource> = Vec::new();
     /// The `'complete'` entry being collected from, `-1` between scans.
@@ -799,13 +798,13 @@ state_record! {
     /// See [`CptCallbacks`].
     CPT_CB: Vec<Callback> = Vec::new();
     /// `CompleteChanged` is running: it does not fire again from inside.
-    complete_changed_busy: bool = false;
+    COMPLETE_CHANGED_BUSY: bool = false;
     /// [`ins_compl_check_keys`]'s call count, which it only acts on every
     /// `frequency` calls.
-    check_keys_count: c_int = 0;
+    CHECK_KEYS_COUNT: c_int = 0;
     /// The window [`ins_compl_next_buf`]'s `w` walk is at: a handle that
     /// `win_valid` vets, because it outlives the call.
-    next_buf_window: Option<WinId> = None;
+    NEXT_BUF_WINDOW: Option<WinId> = None;
     /// [`ins_compl_get_exp`]'s scan through `'complete'`, which upstream
     /// keeps in a function-scope static: collected over many calls.
     SCAN: InsComplNextState = INS_COMPL_NEXT_STATE_INIT;

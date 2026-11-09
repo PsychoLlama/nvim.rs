@@ -429,7 +429,7 @@ pub(crate) fn func_clear_free(func: &UserFunc, force: bool) {
 /// lives.
 pub(crate) fn create_funccal(func: &Rc<UserFunc>) -> Rc<FuncCall> {
     let spare = take_spare_funccal();
-    let level = ex_nesting_level.get();
+    let level = EX_NESTING_LEVEL.get();
     let frame = adopt_funccal(current_fc_id(), |id| match spare {
         Some(mut frame) => {
             // Built in place: the funccall's fields are reset, its emptied
@@ -595,12 +595,12 @@ pub fn get_funccal() -> Option<Rc<FuncCall>> {
     // The bound is re-read every step on purpose: the overflow arm below
     // lowers it, and that is what ends the walk.
     let mut i = 0;
-    while i < debug_backtrace_level.get() {
+    while i < DEBUG_BACKTRACE_LEVEL.get() {
         if let Some(caller) = funccal.caller() {
             funccal = caller;
         } else {
             // Backtrace level overflow; reset it to the maximum.
-            debug_backtrace_level.set(i);
+            DEBUG_BACKTRACE_LEVEL.set(i);
         }
         i += 1;
     }
@@ -617,7 +617,7 @@ fn with_scope_funccal<R>(f: impl FnOnce(&FuncCall) -> R) -> Option<R> {
     }
     // Every variable lookup lands here; without a backtrace level it is the
     // call in progress, read without a reference.
-    if debug_backtrace_level.get() == 0 {
+    if DEBUG_BACKTRACE_LEVEL.get() == 0 {
         with_current_fc(|frame| frame.map(f))
     } else {
         current_fc_id()?;

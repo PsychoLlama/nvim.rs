@@ -16,9 +16,9 @@
 
 use super::*;
 use crate::api::private::validate::err_out_of_range;
-use crate::extmark::kExtmarkNOOP;
-use crate::extmark::kExtmarkUndo;
-use crate::mark::kMarkAdjustApi;
+use crate::extmark::EXTMARK_NOOP;
+use crate::extmark::EXTMARK_UNDO;
+use crate::mark::MARK_ADJUST_API;
 use crate::memline::Lines;
 use crate::r#move::WinValid;
 use crate::narrow::{len_as_int, len_as_integer};
@@ -192,8 +192,8 @@ impl Replacement {
             adjust,
             extra,
             true,
-            kMarkAdjustApi,
-            kExtmarkNOOP,
+            MARK_ADJUST_API,
+            EXTMARK_NOOP,
         );
         if visual_active() && b.raw() == Buf::current_raw() && !visual_mode().is_block() {
             let mut anchor = visual_anchor();
@@ -221,7 +221,7 @@ impl Replacement {
             new_rows - 1,
             self.last_len,
             self.new_byte,
-            kExtmarkUndo,
+            EXTMARK_UNDO,
         );
         changed_lines(b, start_row, self.start_col, end_row + 1, extra, true);
         for win in tab_windows() {

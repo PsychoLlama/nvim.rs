@@ -90,16 +90,16 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
         }
     }
 
-    if running_syn_inc_tag.get() >= MAX_SYN_INC_TAG {
+    if RUNNING_SYN_INC_TAG.get() >= MAX_SYN_INC_TAG {
         emsg(gettext(c"E847: Too many syntax includes"));
         return;
     }
 
     // Save and restore the top-level group and the `:syntax include` tag
     // around the inclusion itself.
-    let prev_syn_inc_tag = current_syn_inc_tag.get();
-    running_syn_inc_tag.set(running_syn_inc_tag.get() + 1);
-    current_syn_inc_tag.set(running_syn_inc_tag.get());
+    let prev_syn_inc_tag = CURRENT_SYN_INC_TAG.get();
+    RUNNING_SYN_INC_TAG.set(RUNNING_SYN_INC_TAG.get() + 1);
+    CURRENT_SYN_INC_TAG.set(RUNNING_SYN_INC_TAG.get());
     let prev_toplvl_grp = cur_syn_block().b_syn_topgrp;
     cur_syn_block().b_syn_topgrp = sgl_id;
 
@@ -116,7 +116,7 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
     }
 
     cur_syn_block().b_syn_topgrp = prev_toplvl_grp;
-    current_syn_inc_tag.set(prev_syn_inc_tag);
+    CURRENT_SYN_INC_TAG.set(prev_syn_inc_tag);
 }
 
 /// The default options for `:syntax match` and `:syntax region`, both of which
@@ -180,7 +180,7 @@ pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
                 item.sp_syncing = syncing != 0;
                 item.sp_type = sp_type_char(SPTYPE_MATCH);
                 item.sp_syn.id = id16(syn_id);
-                item.sp_syn.inc_tag = current_syn_inc_tag.get();
+                item.sp_syn.inc_tag = CURRENT_SYN_INC_TAG.get();
                 item.sp_flags = opt.flags;
                 item.sp_sync_idx = opt.sync_idx;
                 item.sp_cchar = conceal_char;
@@ -428,7 +428,7 @@ fn store_region(args: RegionArgs, syn_id: c_int, syncing: bool) {
             });
             spp.sp_flags |= opt.flags;
             spp.sp_syn.id = id16(syn_id);
-            spp.sp_syn.inc_tag = current_syn_inc_tag.get();
+            spp.sp_syn.inc_tag = CURRENT_SYN_INC_TAG.get();
             spp.sp_syn_match_id = id16(entry.matchgroup_id);
             spp.sp_cchar = conceal_char;
             if item == ITEM_START {

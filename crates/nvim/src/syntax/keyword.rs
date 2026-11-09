@@ -241,7 +241,7 @@ fn add_keyword(name: &[u8], def: &KeywordDef) {
     };
     let entry = KeyEntry {
         syn: SynGroup {
-            inc_tag: current_syn_inc_tag.get(),
+            inc_tag: CURRENT_SYN_INC_TAG.get(),
             id: id16(def.id),
         },
         // Each entry gets its own copy, as upstream's did: `:syntax list`

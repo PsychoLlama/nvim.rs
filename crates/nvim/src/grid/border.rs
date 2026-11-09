@@ -19,7 +19,7 @@ use crate::cstr;
 use crate::highlight_group::{HLF_BFOOTER, HLF_BTITLE};
 use crate::mbyte::{c_cells_at, c_cluster_len, c_string_cells};
 use crate::statusline::hl_attr;
-use crate::winfloat::kAlignLeft;
+use crate::winfloat::ALIGN_LEFT;
 
 /// Draw one of the two border texts into the batch in progress.
 ///
@@ -77,7 +77,7 @@ fn grid_draw_bordertext(
 /// cells of edge.
 fn get_bordertext_col(total_col: c_int, text_width: c_int, align: AlignTextPos) -> c_int {
     match align {
-        kAlignLeft => 1,
+        ALIGN_LEFT => 1,
         ALIGN_CENTER => ((total_col - text_width) / 2 + 1).max(1),
         ALIGN_RIGHT => (total_col - text_width + 1).max(1),
         _ => unreachable!(),

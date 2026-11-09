@@ -32,11 +32,11 @@ use crate::types::LineNr;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
 
-use crate::autocmd::state::{last_cursormoved, last_cursormoved_win};
+use crate::autocmd::state::{LAST_CURSORMOVED, LAST_CURSORMOVED_WIN};
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::buffer::{buf_get_changedtick, fileinfo};
 use crate::diff::diff_update;
-use crate::diff::state::diff_need_scrollbind;
+use crate::diff::state::DIFF_NEED_SCROLLBIND;
 use crate::drawscreen::state::{
     CLEAR_CMDLINE, DO_REDRAW, MUST_REDRAW, REDRAW_CMDLINE, REDRAW_MODE, SKIP_REDRAW,
 };
@@ -47,12 +47,12 @@ use crate::drawscreen::{
 use crate::eval::gc::MAY_GARBAGE_COLLECT;
 use crate::eval::vars::set_vcount;
 use crate::ex_docmd::do_exmode;
-use crate::ex_docmd::state::{ex_normal_busy, global_busy};
+use crate::ex_docmd::state::{EX_NORMAL_BUSY, GLOBAL_BUSY};
 use crate::ex_eval::discard_current_exception;
-use crate::ex_eval::state::did_throw;
+use crate::ex_eval::state::DID_THROW;
 use crate::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
 use crate::fileio::check_timestamps;
-use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
+use crate::fileio::state::{DID_CHECK_TIMESTAMPS, NEED_CHECK_TIMESTAMPS};
 use crate::fold::{fold_adjust_visual, fold_check_close, fold_open_cursor, has_any_folding};
 use crate::getchar::state::{GOT_INT, KEY_TYPED, MOD_MASK, REG_EXECUTING, REG_RECORDING};
 use crate::getchar::{char_avail, readbuf1_empty, safe_vgetc, stuff_empty, typeahead, vgetc};
@@ -64,8 +64,8 @@ use crate::message::state::{
 use crate::message::{has_keep_msg, may_clear_sb_text, msg, msg_delay, wait_return};
 use crate::normal::defs::{CmdArg, OpArg, Outcome};
 use crate::normal::{
-    NormalState, NvCmd, NvFlags, check_scrollbind, clear_op, clear_op_beep, end_visual_mode,
-    find_command, normal_execute, nv_cmds, unshift_special, visual_active,
+    NV_CMD_TABLE, NormalState, NvCmd, NvFlags, check_scrollbind, clear_op, clear_op_beep,
+    end_visual_mode, find_command, normal_execute, unshift_special, visual_active,
 };
 use crate::ops::OpType;
 use crate::option::defs::ShmFlag;
@@ -88,7 +88,7 @@ use crate::terminal::terminal_check_refresh;
 use crate::types::Pos;
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
-use crate::winlayer::graph::cmdwin_result;
+use crate::winlayer::graph::CMDWIN_RESULT;
 
 use crate::r#move::{update_curswant, update_topline, validate_cursor};
 
@@ -206,11 +206,11 @@ impl NormalState {
         self.oa
     }
 
-    /// The row of [`nv_cmds`] the command resolved to; only asked once it
+    /// The row of [`NV_CMD_TABLE`] the command resolved to; only asked once it
     /// has resolved to one.
     #[inline(always)]
     pub(crate) fn row(&self) -> &'static NvCmd {
-        &nv_cmds[self.idx.expect("the command has a row")]
+        &NV_CMD_TABLE[self.idx.expect("the command has a row")]
     }
 }
 
@@ -271,7 +271,7 @@ pub(crate) fn normal_enter(cmdwin: bool, noexmode: bool) {
     let mut state = new_state(op);
     state.cmdwin = cmdwin;
     state.noexmode = noexmode;
-    state.toplevel = (!cmdwin || cmdwin_result.get().is_nul()) && !noexmode;
+    state.toplevel = (!cmdwin || CMDWIN_RESULT.get().is_nul()) && !noexmode;
     // The innermost operator is the one `op_pending` reports on; the outer
     // one is put back on the way out.
     let outer = frame_make_current(Some(id));
@@ -435,8 +435,8 @@ pub(crate) fn normal_redraw_mode_message() {
 /// dry.
 fn normal_check_stuff_buffer() {
     if stuff_empty() {
-        did_check_timestamps.set(false);
-        if need_check_timestamps.get() {
+        DID_CHECK_TIMESTAMPS.set(false);
+        if NEED_CHECK_TIMESTAMPS.get() {
             check_timestamps(false);
         }
         if NEED_WAIT_RETURN.get() {
@@ -455,10 +455,10 @@ fn normal_check_interrupt(ns: &mut NormalState) {
         ns.previous_got_int = false;
         return;
     }
-    if ns.noexmode && global_busy.get() != 0 && !EXMODE_ACTIVE.get() && ns.previous_got_int {
+    if ns.noexmode && GLOBAL_BUSY.get() != 0 && !EXMODE_ACTIVE.get() && ns.previous_got_int {
         EXMODE_ACTIVE.set(true);
         STATE.set(MODE_NORMAL);
-    } else if global_busy.get() == 0 || !EXMODE_ACTIVE.get() {
+    } else if GLOBAL_BUSY.get() == 0 || !EXMODE_ACTIVE.get() {
         if !QUIT_MORE.get() {
             vgetc();
         }
@@ -476,12 +476,12 @@ fn normal_check_window_scrolled() {
 fn normal_check_cursor_moved() {
     if !FINISH_OP.get()
         && has_event(AutoEvent::CursorMoved)
-        && (last_cursormoved_win.get() != Win::current_or_none().map(Win::id)
-            || !equalpos(last_cursormoved.get(), Win::current().w_cursor))
+        && (LAST_CURSORMOVED_WIN.get() != Win::current_or_none().map(Win::id)
+            || !equalpos(LAST_CURSORMOVED.get(), Win::current().w_cursor))
     {
         fire_on_curbuf(AutoEvent::CursorMoved);
-        last_cursormoved_win.set(Win::current_or_none().map(Win::id));
-        last_cursormoved.set(Win::current().w_cursor);
+        LAST_CURSORMOVED_WIN.set(Win::current_or_none().map(Win::id));
+        LAST_CURSORMOVED.set(Win::current().w_cursor);
     }
 }
 
@@ -558,7 +558,7 @@ fn normal_redraw() {
 pub(crate) fn normal_check(ns: &mut NormalState) -> Step {
     normal_check_stuff_buffer();
     normal_check_interrupt(ns);
-    if did_throw.get() && ex_normal_busy.get() == 0 {
+    if DID_THROW.get() && EX_NORMAL_BUSY.get() == 0 {
         discard_current_exception();
     }
     if !EXMODE_ACTIVE.get() {
@@ -583,9 +583,9 @@ pub(crate) fn normal_check(ns: &mut NormalState) -> Step {
             diff_update(None);
             TabPage::current().tp_diff_update = 0;
         }
-        if diff_need_scrollbind.get() {
+        if DIFF_NEED_SCROLLBIND.get() {
             check_scrollbind(0, 0);
-            diff_need_scrollbind.set(false);
+            DIFF_NEED_SCROLLBIND.set(false);
         }
         normal_check_folds();
         normal_redraw();
@@ -610,7 +610,7 @@ pub(crate) fn normal_check(ns: &mut NormalState) -> Step {
         do_exmode();
         return Step::Again;
     }
-    if ns.cmdwin && !cmdwin_result.get().is_nul() {
+    if ns.cmdwin && !CMDWIN_RESULT.get().is_nul() {
         return Step::Leave;
     }
     normal_prepare(ns);

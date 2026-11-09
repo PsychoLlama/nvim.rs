@@ -354,7 +354,7 @@ pub(super) fn fold_split(folds: &mut Vec<Fold>, i: usize, top: LineNr, bot: Line
     fold.small = None;
     fold.len = top - fold.top;
     folds.insert(i + 1, below);
-    fold_changed.set(true);
+    FOLD_CHANGED.set(true);
 }
 
 /// Remove folds within the range "top" to and including "bot".
@@ -397,7 +397,7 @@ pub(super) fn fold_remove(folds: &mut Vec<Fold>, top: LineNr, bot: LineNr) {
                 // 2: truncate to stop above "top".
                 fold.len = top - ft;
             }
-            fold_changed.set(true);
+            FOLD_CHANGED.set(true);
             continue;
         }
         let i = match found {
@@ -414,7 +414,7 @@ pub(super) fn fold_remove(folds: &mut Vec<Fold>, top: LineNr, bot: LineNr) {
             // would spin this loop if the search and the walk disagreed.
             continue;
         }
-        fold_changed.set(true);
+        FOLD_CHANGED.set(true);
         if fold.last() > bot {
             // 5: made to start below "bot".
             let ft = fold.top;
@@ -579,7 +579,7 @@ pub fn fold_move_range(folds: &mut [Fold], line1: LineNr, line2: LineNr, dest: L
 pub(super) fn fold_merge(folds: &mut Vec<Fold>, i: usize) {
     let mut second = folds.remove(i + 1);
     merge_into(&mut folds[i], &mut second);
-    fold_changed.set(true);
+    FOLD_CHANGED.set(true);
 }
 
 /// The body of [`fold_merge`]: fold `second`, which starts just below `first`,
@@ -593,7 +593,7 @@ fn merge_into(first: &mut Fold, second: &mut Fold) {
     ) {
         let mut touching = second.nested.remove(b);
         merge_into(&mut first.nested[a], &mut touching);
-        fold_changed.set(true);
+        FOLD_CHANGED.set(true);
     }
     let shift = first.len;
     first

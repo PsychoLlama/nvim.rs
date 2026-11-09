@@ -23,12 +23,12 @@
 use super::say;
 use super::{buf_autocmd, check_secure};
 use crate::autocmd::defs::AutoEvent;
-use crate::extmark::kExtmarkNOOP;
+use crate::extmark::EXTMARK_NOOP;
 use crate::memline::Lines;
 use crate::types::ColNr;
 use crate::winlayer::{Buf, Win};
 
-use crate::autocmd::state::autocmd_busy;
+use crate::autocmd::state::AUTOCMD_BUSY;
 use crate::bufwrite::{WriteName, WriteRequest};
 use crate::change::{appended_lines_mark, del_lines};
 use crate::cstr;
@@ -36,9 +36,9 @@ use crate::drawscreen::{UPD_VALID, number_width, redraw_curbuf_later};
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds2::autowrite_all;
 use crate::ex_docmd::cmdmod_has;
-use crate::ex_docmd::state::{cmdmod, global_busy};
+use crate::ex_docmd::state::{CMDMOD, GLOBAL_BUSY};
 use crate::ex_eval::aborting;
-use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
+use crate::fileio::state::{DID_CHECK_TIMESTAMPS, NEED_CHECK_TIMESTAMPS};
 use crate::fileio::{ReadFlags, readfile_named, temp_name, write_lnum_adjust};
 use crate::fold::fold_update;
 use crate::getchar::state::{BANGREDO, GOT_INT};
@@ -66,7 +66,7 @@ use crate::path::invocation_path_tail;
 use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::shell::{ShellOpts, call_shell_text};
-use crate::startup::silent_mode;
+use crate::startup::SILENT_MODE;
 use crate::strings::escaped_bytes;
 use crate::tr;
 use crate::types::{CmdModFlags, ExArg, Failed, LineNr, OptInt};
@@ -270,8 +270,8 @@ fn do_filter(
     // Released at four different exits, one of them past the end of the
     // block below, so the guard is held in an `Option` rather than by scope.
     let mut no_prompt = None;
-    let save_cmod_flags = cmdmod.with(|mods| mods.cmod_flags);
-    cmdmod.with_mut(|mods| mods.cmod_flags.clear(CmdModFlags::LOCKMARKS));
+    let save_cmod_flags = CMDMOD.with(|mods| mods.cmod_flags);
+    CMDMOD.with_mut(|mods| mods.cmod_flags.clear(CmdModFlags::LOCKMARKS));
 
     let mut linecount = line2 - line1 + 1;
     Win::current().w_cursor.lnum = line1;
@@ -376,8 +376,8 @@ fn do_filter(
             call_shell_text(&cmd_buf, ShellOpts::FILTER | shell_flags);
             drop(cmd_buf);
 
-            did_check_timestamps.set(false);
-            need_check_timestamps.set(true);
+            DID_CHECK_TIMESTAMPS.set(false);
+            NEED_CHECK_TIMESTAMPS.set(true);
 
             // When interrupting the shell command, it may still have produced
             // some useful output.  Reset got_int here, so that readfile()
@@ -428,7 +428,7 @@ fn do_filter(
                     // bytes at the end of each line?
                     if read_linecount >= LineNr::new(linecount) {
                         // move all marks from old lines to new lines
-                        mark_adjust(line1, line2, linecount, 0, kExtmarkNOOP);
+                        mark_adjust(line1, line2, linecount, 0, EXTMARK_NOOP);
                     } else {
                         // move marks from old lines to new lines, delete
                         // marks that are in deleted lines
@@ -437,14 +437,14 @@ fn do_filter(
                             line1 + read_linecount.get() - 1,
                             linecount,
                             0,
-                            kExtmarkNOOP,
+                            EXTMARK_NOOP,
                         );
                         mark_adjust(
                             line1 + read_linecount.get(),
                             line2,
                             MAXLNUM.get(),
                             0,
-                            kExtmarkNOOP,
+                            EXTMARK_NOOP,
                         );
                     }
                 }
@@ -487,7 +487,7 @@ fn do_filter(
         wait_return(0);
     }
 
-    cmdmod.with_mut(|mods| mods.cmod_flags = save_cmod_flags);
+    CMDMOD.with_mut(|mods| mods.cmod_flags = save_cmod_flags);
     if Buf::current_raw() != old_curbuf {
         // The C decrements here even on the ":w !cmd" path that already
         // did, which would take the counter below where it started; the
@@ -527,7 +527,7 @@ pub(crate) fn do_shell(cmd: &CStr, flags: ShellOpts) {
     say::putchar('\r' as c_int);
     say::putchar('\n' as c_int);
 
-    if p_warn() && !autocmd_busy.get() && MSG_SILENT.get() == 0 && buffers().any(buf_is_changed) {
+    if p_warn() && !AUTOCMD_BUSY.get() && MSG_SILENT.get() == 0 && buffers().any(buf_is_changed) {
         say::puts(gettext(c"[No write since last change]\n"));
     }
 
@@ -537,8 +537,8 @@ pub(crate) fn do_shell(cmd: &CStr, flags: ShellOpts) {
     if MSG_SILENT.get() == 0 {
         MSG_DIDOUT.set(true);
     }
-    did_check_timestamps.set(false);
-    need_check_timestamps.set(true);
+    DID_CHECK_TIMESTAMPS.set(false);
+    NEED_CHECK_TIMESTAMPS.set(true);
 
     // Put the cursor back where it was: the shell wrote over the screen.
     MSG_ROW.set(ROWS.get() - 1);
@@ -717,7 +717,7 @@ pub(crate) static GLOBAL_NEED_MSG_KIND: GlobalCell<bool> = GlobalCell::new(false
 
 /// Print a text line.  Also in silent mode (`ex -s`).
 pub fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
-    let save_silent = silent_mode.get();
+    let save_silent = SILENT_MODE.get();
 
     // apply :filter /pat/
     let line = Lines::current().line_copy(lnum);
@@ -725,9 +725,9 @@ pub fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
         return;
     }
 
-    silent_mode.set(false);
+    SILENT_MODE.set(false);
     INFO_MESSAGE.set(true); // use stdout, not stderr
-    if (global_busy.get() == 0 || GLOBAL_NEED_MSG_KIND.get()) && first {
+    if (GLOBAL_BUSY.get() == 0 || GLOBAL_NEED_MSG_KIND.get()) && first {
         say::start();
         msg_ext_set_kind(c"list_cmd");
         GLOBAL_NEED_MSG_KIND.set(false);
@@ -739,7 +739,7 @@ pub fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
     print_line_no_prefix(lnum, use_number, list);
     if save_silent {
         say::putchar('\n' as c_int);
-        silent_mode.set(save_silent);
+        SILENT_MODE.set(save_silent);
     }
     INFO_MESSAGE.set(false);
 }

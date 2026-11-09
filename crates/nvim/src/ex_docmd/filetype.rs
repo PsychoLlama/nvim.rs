@@ -28,13 +28,12 @@ use crate::autocmd::{check_nomodeline, do_augroup, do_autocmd};
 
 use crate::buffer::do_modelines;
 
-use crate::ex_docmd::state::cmdmod;
+use crate::ex_docmd::state::CMDMOD;
 use crate::ex_docmd::{
-    FILETYPE_FILE, FTOFF_FILE, FTPLUGIN_FILE, FTPLUGOF_FILE, INDENT_FILE, INDOFF_FILE,
-    RET_NIL_BOOL, cmdmod_split, cmdmod_tab, ex_msg, filetype_detect, filetype_indent,
-    filetype_plugin,
+    FILETYPE_DETECT, FILETYPE_FILE, FILETYPE_INDENT, FILETYPE_PLUGIN, FTOFF_FILE, FTPLUGIN_FILE,
+    FTPLUGOF_FILE, INDENT_FILE, INDOFF_FILE, RET_NIL_BOOL, cmdmod_split, cmdmod_tab, ex_msg,
 };
-use crate::guard::secure;
+use crate::guard::SECURE;
 use crate::message::E_CURDIR;
 use crate::option::vars::p_rtp;
 
@@ -52,9 +51,9 @@ use crate::winlayer::Buf;
 /// Both are refused in a 'secure' context — a modeline or an untrusted
 /// config — because an autocommand can run anything later.
 pub(crate) fn ex_autocmd(excmd: &mut ExArg) {
-    if secure.get() != 0 {
+    if SECURE.get() != 0 {
         // 2 means "an error was already reported for this".
-        secure.set(2);
+        SECURE.set(2);
         excmd.errmsg = Some(ex_msg(E_CURDIR));
     } else if excmd.cmdidx == CmdIdx::autocmd {
         let forceit = c_int::from(excmd.forceit);
@@ -102,16 +101,16 @@ pub(crate) fn ex_filetype(excmd: &mut ExArg) {
     if arg == b"on" || arg == b"detect" {
         // `:filetype detect` only re-sources the scripts when detection
         // was off; `:filetype on` always does.
-        if arg[0] == b'o' || filetype_detect.get() != Some(true) {
+        if arg[0] == b'o' || FILETYPE_DETECT.get() != Some(true) {
             source_runtime(FILETYPE_FILE, RuntimeOpts::ALL);
-            filetype_detect.set(Some(true));
+            FILETYPE_DETECT.set(Some(true));
             if plugin {
                 source_runtime(FTPLUGIN_FILE, RuntimeOpts::ALL);
-                filetype_plugin.set(Some(true));
+                FILETYPE_PLUGIN.set(Some(true));
             }
             if indent {
                 source_runtime(INDENT_FILE, RuntimeOpts::ALL);
-                filetype_indent.set(Some(true));
+                FILETYPE_INDENT.set(Some(true));
             }
         }
         if arg[0] == b'd' {
@@ -125,15 +124,15 @@ pub(crate) fn ex_filetype(excmd: &mut ExArg) {
             // Only what was named is turned off; detection stays on.
             if plugin {
                 source_runtime(FTPLUGOF_FILE, RuntimeOpts::ALL);
-                filetype_plugin.set(Some(false));
+                FILETYPE_PLUGIN.set(Some(false));
             }
             if indent {
                 source_runtime(INDOFF_FILE, RuntimeOpts::ALL);
-                filetype_indent.set(Some(false));
+                FILETYPE_INDENT.set(Some(false));
             }
         } else {
             source_runtime(FTOFF_FILE, RuntimeOpts::ALL);
-            filetype_detect.set(Some(false));
+            FILETYPE_DETECT.set(Some(false));
         }
     } else {
         let arg = msg_bytes(arg);
@@ -146,7 +145,7 @@ pub(crate) fn ex_filetype(excmd: &mut ExArg) {
 /// Plugin and indent report `(on)` rather than `ON` when detection itself
 /// is off, because nothing will ever ask them to run.
 fn report_filetype_state() {
-    let detecting = filetype_detect.get() == Some(true);
+    let detecting = FILETYPE_DETECT.get() == Some(true);
     let state = |on: bool| -> &'static str {
         if !on {
             "OFF"
@@ -157,29 +156,29 @@ fn report_filetype_state() {
         }
     };
     let arg0 = if detecting { "ON" } else { "OFF" };
-    let arg1 = state(filetype_plugin.get() == Some(true));
-    let arg2 = state(filetype_indent.get() == Some(true));
+    let arg1 = state(FILETYPE_PLUGIN.get() == Some(true));
+    let arg2 = state(FILETYPE_INDENT.get() == Some(true));
     smsg!(0, "filetype detection:{arg0}  plugin:{arg1}  indent:{arg2}");
 }
 
 /// Turn the filetype plugin and indent scripts on, unless they were
 /// explicitly turned off.
 pub fn filetype_plugin_enable() {
-    if filetype_plugin.get().is_none() {
+    if FILETYPE_PLUGIN.get().is_none() {
         source_runtime(FTPLUGIN_FILE, RuntimeOpts::ALL);
-        filetype_plugin.set(Some(true));
+        FILETYPE_PLUGIN.set(Some(true));
     }
-    if filetype_indent.get().is_none() {
+    if FILETYPE_INDENT.get().is_none() {
         source_runtime(INDENT_FILE, RuntimeOpts::ALL);
-        filetype_indent.set(Some(true));
+        FILETYPE_INDENT.set(Some(true));
     }
 }
 
 /// The same for detection.
 pub fn filetype_maybe_enable() {
-    if filetype_detect.get().is_none() {
+    if FILETYPE_DETECT.get().is_none() {
         source_runtime(FILETYPE_FILE, RuntimeOpts::ALL);
-        filetype_detect.set(Some(true));
+        FILETYPE_DETECT.set(Some(true));
     }
 }
 
@@ -211,7 +210,7 @@ pub(crate) fn ex_checkhealth(excmd: &mut ExArg) {
     // its own window and has to reproduce `:vertical`, `:tab` and the
     // rest itself.
     let mods = if cmdmod_tab() > 0 || cmdmod_split() != 0 {
-        cmdmod.with(win_cmd_modifiers)
+        CMDMOD.with(win_cmd_modifiers)
     } else {
         Vec::new()
     };

@@ -22,8 +22,8 @@ use crate::mbyte::GraphemeState;
 use crate::mbyte::utf_iscomposing_legacy;
 use crate::regexp::mbyte::{char_at_nul, char_len_at, composes_at};
 use crate::regexp::{
-    CompileError, Compiled, GRAPHEME_STATE_INIT, HASWIDTH, NOT_MULTI, SIMPLE, getchr, magic,
-    peekchr, re_multi_type, reg_prev_sub, skipchr, ungetchr, unmagic,
+    CompileError, Compiled, GRAPHEME_STATE_INIT, HASWIDTH, NOT_MULTI, REG_PREV_SUB, SIMPLE, getchr,
+    magic, peekchr, re_multi_type, skipchr, ungetchr, unmagic,
 };
 
 /// The `\x` class shorthands, in the order upstream's two parallel tables
@@ -156,7 +156,7 @@ fn emit_combining_marks(rc: &mut RegCompiler) {
 /// `\~`: the text of the last `:substitute` replacement, as literal
 /// characters.
 pub(crate) fn previous_substitute(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node> {
-    let Some(sub) = reg_prev_sub.with(Clone::clone) else {
+    let Some(sub) = REG_PREV_SUB.with(Clone::clone) else {
         return Err(CompileError::NoPreviousSubstitute);
     };
     let ret = rc.code.node(BtOp::Exactly);

@@ -19,7 +19,7 @@ use crate::message::state::{INFO_MESSAGE, MSG_DIDOUT};
 use crate::os::cshim::{gettext, gettext_owned, write_c_stderr, write_c_stdout};
 use crate::os::signal::signal_stop;
 use crate::path::path_tail;
-use crate::startup::argv0;
+use crate::startup::ARGV0;
 use crate::startup::exit::os_exit;
 use crate::version::list_version;
 
@@ -91,7 +91,7 @@ pub(crate) fn version() {
 ///
 /// `msg1` is a msgid; `msg2` and `msg3` are optional and quoted when present.
 pub(crate) fn print_mainerr(msg1: &CStr, msg2: Option<&CStr>, msg3: Option<&CStr>) {
-    let prgname = argv0.get().map_or(c"", path_tail).to_bytes();
+    let prgname = ARGV0.get().map_or(c"", path_tail).to_bytes();
     let text = gettext_owned(msg1);
     // Nothing beyond this point should be interrupted by a handler that
     // expects a running editor.

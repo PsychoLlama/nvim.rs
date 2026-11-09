@@ -213,7 +213,7 @@ pub(crate) fn extmark_setraw(
     }
 }
 
-/// `curbuf->b_ml.ml_line_count - 1`, the last row of the *current* buffer --
+/// `CURBUF->b_ml.ml_line_count - 1`, the last row of the *current* buffer --
 /// which upstream reads here even though every other line in
 /// [`extmark_setraw`] is about `buffer`.
 fn last_line() -> c_int {

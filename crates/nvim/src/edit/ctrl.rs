@@ -62,7 +62,7 @@ pub(crate) fn ins_reg() {
     let vis_active = visual_active();
 
     // A character is about to be waited for: show a `"`.
-    pc_status.set(PutChar::Unset);
+    PC_STATUS.set(PutChar::Unset);
     if redrawing() && !char_avail() {
         // May need to redraw now that no more characters are available.
         ins_redraw(false);
@@ -116,7 +116,7 @@ pub(crate) fn ins_reg() {
         let curpos = Win::current().w_cursor;
         // Sync undo if the expression calls setline() or append(), so
         // that can be undone separately.
-        u_sync_once.set(2);
+        U_SYNC_ONCE.set(2);
         regname = get_expr_register().then_some(b'=');
         // The cursor may have been moved back a column.
         Win::current().w_cursor = curpos;
@@ -157,10 +157,10 @@ pub(crate) fn ins_reg() {
     }
 
     drop(no_sync);
-    if u_sync_once.get() == 1 {
-        ins_need_undo.set(true);
+    if U_SYNC_ONCE.get() == 1 {
+        INS_NEED_UNDO.set(true);
     }
-    u_sync_once.set(0);
+    U_SYNC_ONCE.set(0);
 
     // Remove the `"` if the register was empty.  Before `clear_showcmd`,
     // which emits an event that can also update the screen.
@@ -197,15 +197,15 @@ pub(crate) fn ins_ctrl_g() {
         // CTRL-G u: start a new undoable edit.
         CTRL_G_UNDO => {
             u_sync(true);
-            ins_need_undo.set(true);
+            INS_NEED_UNDO.set(true);
             // Insstart has to be reset too, because a BS that joins this
             // line to the previous one must save for undo.
-            update_Insstart_orig.set(false);
+            UPDATE_INSSTART_ORIG.set(false);
             INSSTART.set(Win::current().w_cursor);
         }
         // CTRL-G U: allow one left/right cursor movement with the next
         // key without breaking undo.
-        CTRL_G_KEEP_UNDO => dont_sync_undo.set(KeepUndo::Armed),
+        CTRL_G_KEEP_UNDO => DONT_SYNC_UNDO.set(KeepUndo::Armed),
         // Esc after CTRL-G cancels it.
         Key::ESC => {}
         // Unknown; reserved for future expansion.
@@ -243,9 +243,9 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
     check_spell_redraw();
 
     let temp = Win::current().w_cursor.col;
-    if disabled_redraw.get() {
+    if DISABLED_REDRAW.get() {
         REDRAWING_DISABLED.set(REDRAWING_DISABLED.get() - 1);
-        disabled_redraw.set(false);
+        DISABLED_REDRAW.set(false);
     }
 
     let single_char_insert = cmdchar.is('r') || cmdchar.is('v');
@@ -276,7 +276,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
                 stuff_redo_readbuf(ESC_STR.to_bytes()); // no ESC in the redo buffer
             }
             REDRAWING_DISABLED.set(REDRAWING_DISABLED.get() + 1);
-            disabled_redraw.set(true);
+            DISABLED_REDRAW.set(true);
             return false;
         }
         stop_insert(Some(InsertEnd::cursor()), true, nomove);
@@ -304,7 +304,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
     if !nomove
         && (Win::current().w_cursor.col != ColNr::ZERO || Win::current().w_cursor.coladd > 0)
         && (RESTART_EDIT.get().is_nul() || (char_at_cursor() == NUL && !visual_active()))
-        && !revins_on.get()
+        && !REVINS_ON.get()
     {
         if Win::current().w_cursor.coladd > 0
             || get_ve_flags(Win::current()) == kOptVeFlagAll as ::core::ffi::c_uint
@@ -354,13 +354,13 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
 /// CTRL-_ : toggle 'revins', and move to the end of the reverse-inserted
 /// text.
 pub(crate) fn ins_ctrl_() {
-    if revins_on.get() && revins_chars.get() != 0 && revins_scol.get() >= 0 {
+    if REVINS_ON.get() && REVINS_CHARS.get() != 0 && REVINS_SCOL.get() >= 0 {
         // Upstream's `while (gchar_cursor() != NUL && revins_chars--)`:
         // the decrement runs on the iteration that ends the loop too, so
         // exhausting the count leaves `revins_chars` at -1.
         while char_at_cursor() != NUL {
-            let n = revins_chars.get();
-            revins_chars.set(n - 1);
+            let n = REVINS_CHARS.get();
+            REVINS_CHARS.set(n - 1);
             if n == 0 {
                 break;
             }
@@ -369,14 +369,14 @@ pub(crate) fn ins_ctrl_() {
     }
 
     P_RI.set(!p_ri());
-    revins_on.set(STATE.get() == MODE_INSERT && p_ri());
-    if revins_on.get() {
-        revins_scol.set(Win::current().w_cursor.col.get());
-        revins_legal.set(revins_legal.get() + 1);
-        revins_chars.set(0);
+    REVINS_ON.set(STATE.get() == MODE_INSERT && p_ri());
+    if REVINS_ON.get() {
+        REVINS_SCOL.set(Win::current().w_cursor.col.get());
+        REVINS_LEGAL.set(REVINS_LEGAL.get() + 1);
+        REVINS_CHARS.set(0);
         undisplay_dollar();
     } else {
-        revins_scol.set(-1);
+        REVINS_SCOL.set(-1);
     }
     show_mode();
 }
@@ -430,12 +430,12 @@ pub(crate) fn ins_ctrl_o() {
 
 /// Whether the next character may trigger a 'cindent' re-indent.
 pub(crate) fn get_can_cindent() -> bool {
-    can_cindent.get()
+    CAN_CINDENT.get()
 }
 
 /// Say whether the next character may trigger a 'cindent' re-indent.
 pub(crate) fn set_can_cindent(val: bool) {
-    can_cindent.set(val);
+    CAN_CINDENT.set(val);
 }
 
 /// Show the mode message, if 'showmode' asks for one.

@@ -8,12 +8,12 @@
 //!
 //! | cell | written by | meaning |
 //! | --- | --- | --- |
-//! | `diff_flags` | `diffopt_changed` | the parsed `'diffopt'` bit set |
-//! | `diff_algorithm` | `diffopt_changed` | the `XDF_*` bits for `algorithm:` |
-//! | `linematch_lines` | `diffopt_changed` | `linematch:`, 0 when off |
-//! | `diff_a_works` | `check_external_diff` | does the host's `diff(1)` take `-a`? |
-//! | `diff_busy` | `diff_try_update` | a recompute is on the stack |
-//! | `diff_need_update` | `diff_buf_*`, `ex_diffupdate` | one was asked for while busy |
+//! | `DIFF_FLAGS` | `diffopt_changed` | the parsed `'diffopt'` bit set |
+//! | `DIFF_ALGORITHM` | `diffopt_changed` | the `XDF_*` bits for `algorithm:` |
+//! | `LINEMATCH_LINES` | `diffopt_changed` | `linematch:`, 0 when off |
+//! | `DIFF_A_WORKS` | `check_external_diff` | does the host's `diff(1)` take `-a`? |
+//! | `DIFF_BUSY` | `diff_try_update` | a recompute is on the stack |
+//! | `DIFF_NEED_UPDATE` | `diff_buf_*`, `ex_diffupdate` | one was asked for while busy |
 //!
 //! The first four are option state and are only interesting because
 //! `'diffopt'` is global; the last two are the ones that carry state
@@ -38,7 +38,6 @@
 #![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
 use crate::ascii::ascii_iswhite;
@@ -63,7 +62,7 @@ use crate::fold::{
 
 use crate::autocmd::defs::AcoSave;
 use crate::autocmd::defs::AutoEvent;
-use crate::diff::state::{diff_context, diff_foldcolumn, diff_need_scrollbind, need_diff_redraw};
+use crate::diff::state::{DIFF_CONTEXT, DIFF_FOLDCOLUMN, DIFF_NEED_SCROLLBIND, NEED_DIFF_REDRAW};
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::getchar::state::KEY_TYPED;
 use crate::global_cell::GlobalCell;
@@ -138,7 +137,7 @@ pub use self::opts::*;
 pub(crate) use self::refine::*;
 pub use self::scroll::*;
 pub use self::update::*;
-pub const _ISdigit: ::core::ffi::c_uint = 2048;
+pub const IS_DIGIT: ::core::ffi::c_uint = 2048;
 /// One diff run: the two sides and the answer.
 ///
 /// `internal` picks the engine: the built-in one reads each side's `text`
@@ -196,8 +195,8 @@ pub struct LinemapEntry {
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DB_COUNT: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
-static diff_busy: GlobalCell<bool> = GlobalCell::new(false);
-static diff_need_update: GlobalCell<bool> = GlobalCell::new(false);
+static DIFF_BUSY: GlobalCell<bool> = GlobalCell::new(false);
+static DIFF_NEED_UPDATE: GlobalCell<bool> = GlobalCell::new(false);
 pub const DIFF_FILLER: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const DIFF_IBLANK: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const DIFF_ICASE: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
@@ -220,20 +219,20 @@ pub const ALL_WHITE_DIFF: ::core::ffi::c_int = DIFF_IWHITE | DIFF_IWHITEALL | DI
 pub const ALL_INLINE: ::core::ffi::c_int =
     DIFF_INLINE_NONE | DIFF_INLINE_SIMPLE | DIFF_INLINE_CHAR | DIFF_INLINE_WORD;
 pub const ALL_INLINE_DIFF: ::core::ffi::c_int = DIFF_INLINE_CHAR | DIFF_INLINE_WORD;
-static diff_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(
+static DIFF_FLAGS: GlobalCell<::core::ffi::c_int> = GlobalCell::new(
     DIFF_INTERNAL | DIFF_FILLER | DIFF_CLOSE_OFF | DIFF_LINEMATCH | DIFF_INLINE_CHAR,
 );
-static diff_algorithm: GlobalCell<u64> = GlobalCell::new(XDF_INDENT_HEURISTIC);
+static DIFF_ALGORITHM: GlobalCell<u64> = GlobalCell::new(XDF_INDENT_HEURISTIC);
 /// `inline:word`'s gap threshold, in bytes.
 ///
 /// A `static int` upstream, with no setter: `'diffopt'` has no spelling that
 /// reaches it, so it is a tuning constant rather than option state and does
 /// not belong in a cell.
 const DIFF_WORD_GAP: ::core::ffi::c_int = 5;
-static linematch_lines: GlobalCell<::core::ffi::c_int> = GlobalCell::new(40 as ::core::ffi::c_int);
+static LINEMATCH_LINES: GlobalCell<::core::ffi::c_int> = GlobalCell::new(40 as ::core::ffi::c_int);
 pub const LBUFLEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 pub const MAX_XDIFF_SIZE: ::core::ffi::c_long =
     1024 as ::core::ffi::c_long * 1024 as ::core::ffi::c_long * 1023 as ::core::ffi::c_long;
-static diff_a_works: GlobalCell<Option<bool>> = GlobalCell::new(None);
+static DIFF_A_WORKS: GlobalCell<Option<bool>> = GlobalCell::new(None);
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

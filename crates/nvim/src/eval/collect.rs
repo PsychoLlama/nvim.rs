@@ -38,7 +38,7 @@ use crate::guard::Depth;
 use core::ffi::c_int;
 
 use crate::autocmd::{aucmd_win_count, aucmd_window};
-use crate::channel::channels;
+use crate::channel::CHANNELS;
 use crate::eval::gc::{GARBAGE_COLLECT_AT_EXIT, MAY_GARBAGE_COLLECT, WANT_GARBAGE_COLLECT};
 use crate::eval::gc::{dict_slots, list_slots};
 use crate::eval::typval::{
@@ -190,7 +190,7 @@ pub fn garbage_collect(testing: bool) -> bool {
     // answers, and doing otherwise would change when a collection is
     // abandoned.
     // Marking runs no user code, so the table is walked in place.
-    channels.with(|table| {
+    CHANNELS.with(|table| {
         for channel in table.values() {
             mark_reader(&channel.on_data, copy_id);
             mark_reader(&channel.on_stderr, copy_id);

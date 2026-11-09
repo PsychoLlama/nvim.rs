@@ -192,11 +192,11 @@ that needs `unsafe` — so a few appear there; they are listed too.
   `memory/handoff.rs`, `types/api_string.rs`): `into_raw` is safe, and each
   hands its box to a perimeter file that takes it back.
 - `GlobalCell`s holding a raw pointer (`cell_raw_ptr`, 4), all on the
-  perimeter: `curwin`/`curbuf`/`curtab` (`winlayer/graph.rs`; `curwin` is a C
+  perimeter: `curwin`/`CURBUF`/`CURTAB` (`winlayer/graph.rs`; `curwin` is a C
   symbol the unit suite reads) and the block pool's reuse-list head
   (`memory/blocks.rs`). The raw escape hatches `.ptr()`/`.as_raw()`
   (`cell_ptr`, 22) are all on the perimeter too: the globals libuv holds by
-  address (`main_loop`, `read_stream`, the signal watchers, the refresh timer,
+  address (`MAIN_LOOP`, `READ_STREAM`, the signal watchers, the refresh timer,
   `MAIN_THREAD`, the saved termios) and `global_cell.rs`'s own tests.
 
 **Pointer arithmetic** (`ptr_arith`, 100: `.add`/`.offset`/`.sub`/

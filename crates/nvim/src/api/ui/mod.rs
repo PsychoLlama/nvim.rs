@@ -47,7 +47,7 @@ use crate::event::r#loop::{Drain, wait_on_main_loop};
 use crate::memory::XString;
 use crate::narrow::number_as_int;
 use crate::option::set_tty_option;
-use crate::startup::{starting, stdin_fd, stdin_isatty, stdout_isatty};
+use crate::startup::{STDIN_FD, STDIN_ISATTY, STDOUT_ISATTY, starting};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     ApiDict, ApiString, Boolean, ERROR_TYPE_EXCEPTION, Error, Float, Integer, OBJECT_TYPE_BOOLEAN,
@@ -339,7 +339,7 @@ fn ui_set_option(
             let why = c"stdin_fd can only be used with first attached UI";
             return Err(Error::validation(why));
         }
-        stdin_fd.set(number_as_int(fd));
+        STDIN_FD.set(number_as_int(fd));
         return Ok(Publish::Nothing);
     }
 
@@ -348,7 +348,7 @@ fn ui_set_option(
         // Only the stdio channel is talking about the editor's own
         // standard streams.
         if ui.channel_id == CHAN_STDIO {
-            stdin_isatty.set(tty);
+            STDIN_ISATTY.set(tty);
         }
         ui.stdin_tty = tty;
         return Ok(Publish::Nothing);
@@ -357,7 +357,7 @@ fn ui_set_option(
     if named(c"stdout_tty") {
         let tty = want_boolean(c"stdout_tty", value)?;
         if ui.channel_id == CHAN_STDIO {
-            stdout_isatty.set(tty);
+            STDOUT_ISATTY.set(tty);
         }
         ui.stdout_tty = tty;
         return Ok(Publish::Nothing);

@@ -29,7 +29,7 @@ use crate::highlight::hl_combine_attr;
 use crate::highlight_group::syn_id2attr;
 use crate::marktree::MarkTreeIter;
 use crate::marktree::cursor::Cursor;
-use crate::marktree::key::{kMTFilterSelect, mt_conceal_lines, mt_invalid};
+use crate::marktree::key::{MT_FILTER_SELECT, mt_conceal_lines, mt_invalid};
 use crate::marktree::meta::MetaCount;
 use crate::memory::XString;
 use crate::narrow::len_as_int;
@@ -40,8 +40,8 @@ use core::ffi::{CStr, c_int};
 
 /// Marktree filters, indexed by `MetaIndex`: `MT_META_LINES` is 1 and
 /// `MT_META_CONCEAL_LINES` 4.
-static LINES_FILTER: MetaCount = [0, kMTFilterSelect, 0, 0, 0];
-static CONCEAL_FILTER: MetaCount = [0, 0, 0, 0, kMTFilterSelect];
+static LINES_FILTER: MetaCount = [0, MT_FILTER_SELECT, 0, 0, 0];
+static CONCEAL_FILTER: MetaCount = [0, 0, 0, 0, MT_FILTER_SELECT];
 
 impl Win {
     /// Whether `'concealcursor'` says the cursor line conceals too.

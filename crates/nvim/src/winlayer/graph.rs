@@ -3,16 +3,16 @@
 //!
 //! The transpiler parked these beside `main()` because upstream declares them
 //! in `globals.h`, but every one of them is a node of the tree [`winlayer`]
-//! wraps: the doubly-linked window list (`firstwin`/`lastwin`), the buffer
-//! list (`firstbuf`/`lastbuf`), the tabpage list (`first_tabpage`), the frame
+//! wraps: the doubly-linked window list (`FIRSTWIN`/`lastwin`), the buffer
+//! list (`FIRSTBUF`/`LASTBUF`), the tabpage list (`FIRST_TABPAGE`), the frame
 //! tree's root (`topframe`), and the `cur*` cursors into all three. The
 //! command-line window's saved graph (`cmdwin_*`) belongs with them: it is a
 //! second, temporary editor tree that the first one is swapped out for.
 //!
 //! Which one is current is a [`WinId`]/[`BufId`]/[`TabId`], like the list
 //! heads: [`CURRENT_WIN`] and its two siblings are the truth, and the raw
-//! `curwin`/`curbuf`/`curtab` beside them are mirrors the same setters
-//! `prevwin`, `lastused_tabpage` and the `cmdwin_*` block are ids too, and
+//! `curwin`/`CURBUF`/`CURTAB` beside them are mirrors the same setters
+//! `prevwin`, `LASTUSED_TABPAGE` and the `cmdwin_*` block are ids too, and
 //! for the same reason the list heads are: each one is read *after* a call
 //! that may have freed what it names, and a stale id answers `None` where a
 //! stale address answers with whatever the allocator has put there since.
@@ -33,7 +33,6 @@
 // `#[unsafe(no_mangle)]` is itself an unsafe attribute.
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::{Buf, BufId, FrameId, TabId, TabPage, Win, WinId};
 use crate::allocator::Owned;
@@ -47,9 +46,9 @@ use crate::types::{BufName, Buffer, Handle, Key, Tabpage, Window};
 use core::ffi::c_int;
 use core::mem::MaybeUninit;
 
-pub(crate) static firstwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
-pub(crate) static lastwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
-pub(crate) static prevwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+pub(crate) static FIRSTWIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+pub(crate) static LASTWIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+pub(crate) static PREVWIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 /// The current window's address, mirroring [`CURRENT_WIN`].
 ///
 /// `pub` and unmangled because it is read as a **data symbol** from outside
@@ -61,28 +60,28 @@ pub(crate) static prevwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 pub static curwin: GlobalCell<*mut Window> = GlobalCell::new(::core::ptr::null_mut::<Window>());
 /// The root of the current tab page's layout tree, mirroring
 /// `tp_topframe`. An identity, as the tree's own links are.
-pub(crate) static topframe: GlobalCell<Option<FrameId>> = GlobalCell::new(None);
-pub(crate) static first_tabpage: GlobalCell<Option<TabId>> = GlobalCell::new(None);
+pub(crate) static TOPFRAME: GlobalCell<Option<FrameId>> = GlobalCell::new(None);
+pub(crate) static FIRST_TABPAGE: GlobalCell<Option<TabId>> = GlobalCell::new(None);
 /// The current tab page's address, mirroring [`CURRENT_TAB`]. [`curwin`],
 /// minus the symbol: only [`TabPage::is_current`] reads it.
-pub(super) static curtab: GlobalCell<*mut Tabpage> =
+pub(super) static CURTAB: GlobalCell<*mut Tabpage> =
     GlobalCell::new(::core::ptr::null_mut::<Tabpage>());
-pub(crate) static lastused_tabpage: GlobalCell<Option<TabId>> = GlobalCell::new(None);
-pub(crate) static firstbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
-pub(crate) static lastbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
-/// The current buffer's address, mirroring [`CURRENT_BUF`]. [`curtab`]'s
+pub(crate) static LASTUSED_TABPAGE: GlobalCell<Option<TabId>> = GlobalCell::new(None);
+pub(crate) static FIRSTBUF: GlobalCell<Option<BufId>> = GlobalCell::new(None);
+pub(crate) static LASTBUF: GlobalCell<Option<BufId>> = GlobalCell::new(None);
+/// The current buffer's address, mirroring [`CURRENT_BUF`]. [`CURTAB`]'s
 /// shape: only `Buf::is_current` and [`switch_buffer`] read it.
-pub(super) static curbuf: GlobalCell<*mut Buffer> =
+pub(super) static CURBUF: GlobalCell<*mut Buffer> =
     GlobalCell::new(::core::ptr::null_mut::<Buffer>());
 /// The command-line window's type: the first character of the line it
 /// edits (`:`, `/`, `?`, ...), 0 when there is no such window.
-pub(crate) static cmdwin_type: GlobalCell<u8> = GlobalCell::new(0);
-pub(crate) static cmdwin_result: GlobalCell<Key> = GlobalCell::new(Key::NUL);
-pub(crate) static cmdwin_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static cmdwin_buf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
-pub(crate) static cmdwin_win: GlobalCell<Option<WinId>> = GlobalCell::new(None);
-pub(crate) static cmdwin_old_curwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
-pub(crate) static cmdline_win: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+pub(crate) static CMDWIN_TYPE: GlobalCell<u8> = GlobalCell::new(0);
+pub(crate) static CMDWIN_RESULT: GlobalCell<Key> = GlobalCell::new(Key::NUL);
+pub(crate) static CMDWIN_LEVEL: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static CMDWIN_BUF: GlobalCell<Option<BufId>> = GlobalCell::new(None);
+pub(crate) static CMDWIN_WIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+pub(crate) static CMDWIN_OLD_CURWIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+pub(crate) static CMDLINE_WIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 
 /// Columns of window `window` that are not text -- the 'number' /
 /// 'statuscolumn' column, the command-line window's marker, the fold column
@@ -152,7 +151,7 @@ pub(super) static CURRENT_TAB: GlobalCell<Option<TabId>> = GlobalCell::new(None)
 impl Win {
     /// Make this the window the editor is working in.
     ///
-    /// `curbuf` is left alone: a window and its buffer move together often
+    /// `CURBUF` is left alone: a window and its buffer move together often
     /// enough to have their own spelling ([`switch_to`]), and the callers
     /// that move only one half mean it.
     #[inline]
@@ -167,7 +166,7 @@ impl Buf {
     #[inline]
     pub fn make_current(self) {
         CURRENT_BUF.set(Some(self.id()));
-        curbuf.set(self.raw());
+        CURBUF.set(self.raw());
     }
 }
 
@@ -176,7 +175,7 @@ impl TabPage {
     #[inline]
     pub(crate) fn make_current(self) {
         CURRENT_TAB.set(Some(self.id()));
-        curtab.set(self.raw());
+        CURTAB.set(self.raw());
     }
 }
 
@@ -185,13 +184,13 @@ impl TabPage {
 /// Three callers, all of them a moment the editor really has none:
 /// `close_windows` after the last buffer went, `no_memfile` between
 /// abandoning a buffer and finding another, and `free_buffer` freeing the
-/// one that was current. Everything in between reads `curbuf` as null and is
+/// one that was current. Everything in between reads `CURBUF` as null and is
 /// expected to — which is why this is a name of its own rather than an
 /// `Option` argument that would read as ordinary.
 #[inline]
 pub(crate) fn leave_curbuf() {
     CURRENT_BUF.set(None);
-    curbuf.set(::core::ptr::null_mut::<Buffer>());
+    CURBUF.set(::core::ptr::null_mut::<Buffer>());
 }
 
 /// Leave the editor with no current window: what a lib test that made a
@@ -241,7 +240,7 @@ pub(super) fn current_win() -> Option<Win> {
 pub(super) fn current_buf() -> Option<Buf> {
     CURRENT_BUF
         .get()
-        .map(|id| Buf::at(curbuf.get(), Handle::new(id.0.get())))
+        .map(|id| Buf::at(CURBUF.get(), Handle::new(id.0.get())))
 }
 
 /// [`current_win`] for the tab page.
@@ -249,7 +248,7 @@ pub(super) fn current_buf() -> Option<Buf> {
 pub(super) fn current_tab() -> Option<TabPage> {
     CURRENT_TAB
         .get()
-        .map(|id| TabPage::at(curtab.get(), Handle::new(id.0.get())))
+        .map(|id| TabPage::at(CURTAB.get(), Handle::new(id.0.get())))
 }
 
 /// The window the mirror names, whatever its identity.
@@ -272,7 +271,7 @@ fn current_buffer() -> Buf {
 /// Stand in `win` and the buffer it shows, until [`Saved::restore`].
 ///
 /// This is the editor's most common shape by far: some piece of code has to
-/// run against another window because what it calls reads `curwin`/`curbuf`
+/// run against another window because what it calls reads `curwin`/`CURBUF`
 /// rather than taking them as arguments. It is *not* `win_enter` — no
 /// autocommand fires, no option is copied, nothing is redrawn — so the pair
 /// must bracket a stretch that does none of those things either.
@@ -286,7 +285,7 @@ pub(crate) fn switch_to(win: Win) -> Saved {
     saved
 }
 
-/// [`switch_to`] for `curwin` alone, leaving `curbuf` where it is.
+/// [`switch_to`] for `curwin` alone, leaving `CURBUF` where it is.
 #[inline]
 #[must_use = "the switch is undone by Saved::restore"]
 pub(crate) fn switch_window(win: Win) -> Saved {
@@ -295,7 +294,7 @@ pub(crate) fn switch_window(win: Win) -> Saved {
     saved
 }
 
-/// [`switch_to`] for `curbuf` alone, leaving `curwin` where it is.
+/// [`switch_to`] for `CURBUF` alone, leaving `curwin` where it is.
 #[inline]
 #[must_use = "the switch is undone by Saved::restore"]
 pub(crate) fn switch_buffer(buffer: Buf) -> Saved {
@@ -324,7 +323,7 @@ pub(crate) struct Saved(Displaced);
 /// Which halves a switch took, and what they held.
 #[derive(Debug)]
 enum Displaced {
-    /// [`switch_to`]: the window, with `curbuf` following it back.
+    /// [`switch_to`]: the window, with `CURBUF` following it back.
     WindowAndBuffer(Win),
     /// [`switch_window`]: the window alone.
     Window(Win),
@@ -335,7 +334,7 @@ enum Displaced {
 impl Saved {
     /// Put back exactly the halves the switch took.
     ///
-    /// A window brings its buffer with it: `curbuf` is re-read from the
+    /// A window brings its buffer with it: `CURBUF` is re-read from the
     /// window being returned to rather than restored from a second saved
     /// value, which is what the hand-written pairs this replaces did and is
     /// the answer that stays right when the buffer behind that window

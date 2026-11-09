@@ -1,10 +1,10 @@
 //! What the last search left behind.
 //!
-//! `highlight_match` and the `search_match_*` pair are the range `:s` and
-//! incsearch ask the drawing code to light up; `search_first_line` and
-//! `search_last_line` bound the incsearch preview. `no_hlsearch` is
+//! `HIGHLIGHT_MATCH` and the `search_match_*` pair are the range `:s` and
+//! incsearch ask the drawing code to light up; `SEARCH_FIRST_LINE` and
+//! `SEARCH_LAST_LINE` bound the incsearch preview. `NO_HLSEARCH` is
 //! `'hlsearch'` switched off for this search only (what `:nohlsearch` sets),
-//! `no_smartcase` the same for `'smartcase'`, and `magic_overruled` records
+//! `NO_SMARTCASE` the same for `'smartcase'`, and `MAGIC_OVERRULED` records
 //! that the pattern itself said `\v` or `\V`.
 #![forbid(unsafe_code)]
 #![deny(
@@ -15,7 +15,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
 use crate::os::libc::int64_t;
@@ -25,17 +24,17 @@ use crate::types::ProfTime;
 use crate::types::{ColNr, LineNr};
 use core::ffi::c_int;
 
-pub(crate) static highlight_match: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static search_match_lines: GlobalCell<i32> = GlobalCell::new(0);
-pub(crate) static search_match_endcol: GlobalCell<ColNr> = GlobalCell::new(ColNr::ZERO);
-pub(crate) static search_first_line: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
+pub(crate) static HIGHLIGHT_MATCH: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static SEARCH_MATCH_LINES: GlobalCell<i32> = GlobalCell::new(0);
+pub(crate) static SEARCH_MATCH_ENDCOL: GlobalCell<ColNr> = GlobalCell::new(ColNr::ZERO);
+pub(crate) static SEARCH_FIRST_LINE: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
 /// `MAXLNUM`, spelled as the type's own maximum: the two are the same
 /// number, and saying it this way needs no cast.
-pub(crate) static search_last_line: GlobalCell<LineNr> = GlobalCell::new(LineNr::MAX);
-pub(crate) static no_smartcase: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static searchcmdlen: GlobalCell<c_int> = GlobalCell::new(0);
-pub(crate) static no_hlsearch: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static magic_overruled: GlobalCell<OptMagic> = GlobalCell::new(OPTION_MAGIC_NOT_SET);
+pub(crate) static SEARCH_LAST_LINE: GlobalCell<LineNr> = GlobalCell::new(LineNr::MAX);
+pub(crate) static NO_SMARTCASE: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static SEARCHCMDLEN: GlobalCell<c_int> = GlobalCell::new(0);
+pub(crate) static NO_HLSEARCH: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static MAGIC_OVERRULED: GlobalCell<OptMagic> = GlobalCell::new(OPTION_MAGIC_NOT_SET);
 
 #[derive(Copy, Clone, Debug)]
 pub(crate) struct SearchOffset {

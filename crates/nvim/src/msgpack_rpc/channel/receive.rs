@@ -28,12 +28,12 @@ use crate::event_queue::{put_job, put_job_in, put_job_on_either};
 use crate::grid::defs::GridLineEvent;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::message_fmt::{msg_addr, msg_bytes};
-use crate::msgpack_rpc::channel::ch_before_blocking_events;
+use crate::msgpack_rpc::channel::CH_BEFORE_BLOCKING_EVENTS;
 use crate::msgpack_rpc::handler::ApiDispatchFn;
 use crate::msgpack_rpc::handler::MsgpackRpcRequestHandler;
 use crate::os::input::input_blocking;
 use crate::os::libc::{uint32_t, uint64_t};
-use crate::startup::ui_client_attached;
+use crate::startup::UI_CLIENT_ATTACHED;
 use crate::types::{Array, ERROR_TYPE_EXCEPTION, Error, MessageType, Object};
 use crate::ui::state::RESIZE_EVENTS;
 use crate::ui_client::ui_client_event_raw_line;
@@ -177,15 +177,15 @@ fn next_message(chan: &mut Channel, input: &mut &[u8]) -> Step {
         return Step::Wait;
     }
     match p.type_0 {
-        kMessageTypeRedrawEvent => Step::Redraw(if p.has_grid_line_event {
+        MESSAGE_TYPE_REDRAW_EVENT => Step::Redraw(if p.has_grid_line_event {
             p.has_grid_line_event = false;
             Redraw::Line(core::mem::take(&mut p.grid_line_event))
         } else {
             Redraw::Event(p.ui_handler.fn_0, p.result.take())
         }),
-        kMessageTypeResponse => {
+        MESSAGE_TYPE_RESPONSE => {
             // Hand the response to the call that is waiting for it.
-            let frame = if *client_type == kClientTypeMsgpackRpc {
+            let frame = if *client_type == CLIENT_TYPE_MSGPACK_RPC {
                 call_stack.find(p.request_id)
             } else {
                 call_stack.top_matching(p.request_id)
@@ -238,7 +238,7 @@ fn next_message(chan: &mut Channel, input: &mut &[u8]) -> Step {
 /// request takes a reference to the channel, whichever it is.
 fn schedule(chan: &mut Channel, request: Request, method_name_len: usize) -> Step {
     debug_assert!(
-        request.type_0 == kMessageTypeRequest || request.type_0 == MESSAGE_TYPE_NOTIFICATION
+        request.type_0 == MESSAGE_TYPE_REQUEST || request.type_0 == MESSAGE_TYPE_NOTIFICATION
     );
     let handler = request.handler;
     let handler_fn = handler.fn_0.expect("a resolved handler");
@@ -249,7 +249,7 @@ fn schedule(chan: &mut Channel, request: Request, method_name_len: usize) -> Ste
         // about to wait for input.
         let is_get_mode = core::ptr::fn_addr_eq(handler_fn, handle_nvim_get_mode as ApiDispatchFn);
         if is_get_mode && !input_blocking() {
-            put_job_in(&ch_before_blocking_events, job(request));
+            put_job_in(&CH_BEFORE_BLOCKING_EVENTS, job(request));
             return Step::Routed;
         }
         return Step::Run(request);
@@ -278,7 +278,7 @@ fn job(request: Request) -> impl FnOnce() + 'static {
 
 /// Applies a `redraw` event from the server this UI client is attached to.
 fn dispatch_redraw(redraw: Redraw) {
-    if !ui_client_attached.get() {
+    if !UI_CLIENT_ATTACHED.get() {
         return;
     }
     match redraw {
@@ -319,7 +319,7 @@ fn request_event(request: Request) {
         };
         // A notification is only answered when it failed, and then with
         // `nvim_error_event` rather than a response.
-        if type_0 == kMessageTypeRequest || error.is_set() {
+        if type_0 == MESSAGE_TYPE_REQUEST || error.is_set() {
             serialize_response(id, handler, type_0, request_id, &error, &mut answer);
         }
     }

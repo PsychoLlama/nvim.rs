@@ -16,7 +16,7 @@
 
 use super::*;
 use crate::cmdexpand::defs::ExpandContext;
-use crate::cmdexpand::state::{saved_status_opts, wild_menu_showing};
+use crate::cmdexpand::state::{SAVED_STATUS_OPTS, WILD_MENU_SHOWING};
 use crate::drawscreen::state::CMDLINE_ROW;
 use crate::drawscreen::{redraw_statuslines, update_screen};
 use crate::ex_docmd::set_no_hlsearch;
@@ -61,7 +61,7 @@ pub(crate) fn wildmenu_translate_key(
     did_wild_list: bool,
 ) -> Key {
     let mut c = key;
-    if cmdline_pum_active() || did_wild_list || wild_menu_showing.get() != 0 {
+    if cmdline_pum_active() || did_wild_list || WILD_MENU_SHOWING.get() != 0 {
         if c == SpecialKey::Left {
             c = Key::CTRL_P;
         } else if c == SpecialKey::Right {
@@ -264,7 +264,7 @@ pub(crate) fn wildmenu_process_key(cclp: Cc, key: Key, expand: &mut Expand) -> K
 /// scrolled the command line, borrowed the status line by forcing
 /// `'laststatus'`, or drew over the last window's existing status line.
 pub(crate) fn wildmenu_cleanup(cclp: Cc) {
-    if !p_wmnu() || wild_menu_showing.get() == 0 {
+    if !p_wmnu() || WILD_MENU_SHOWING.get() == 0 {
         return;
     }
 
@@ -274,25 +274,25 @@ pub(crate) fn wildmenu_cleanup(cclp: Cc) {
     // Clear highlighting applied during wildmenu activity.
     set_no_hlsearch(true);
 
-    if wild_menu_showing.get() == WM_SCROLLED {
+    if WILD_MENU_SHOWING.get() == WM_SCROLLED {
         // Entered the command line, move it up.
         CMDLINE_ROW.set(CMDLINE_ROW.get() - 1);
         redrawcmd();
-    } else if let Some((laststatus, winminheight)) = saved_status_opts.get() {
+    } else if let Some((laststatus, winminheight)) = SAVED_STATUS_OPTS.get() {
         P_LS.set(laststatus);
         P_WMH.set(winminheight);
         last_status(false);
         let _ = update_screen(); // redraw the screen NOW
         redrawcmd();
-        saved_status_opts.set(None);
+        SAVED_STATUS_OPTS.set(None);
     } else {
         current_topframe().redraw_last_status();
         // Must be cleared before redraw_statuslines (#8385), which is why
         // this arm clears it itself rather than after the `if`.
-        wild_menu_showing.set(0);
+        WILD_MENU_SHOWING.set(0);
         redraw_statuslines();
     }
-    wild_menu_showing.set(0);
+    WILD_MENU_SHOWING.set(0);
 
     KEY_TYPED.set(skt);
     drop(redraw);

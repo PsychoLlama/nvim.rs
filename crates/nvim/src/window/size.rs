@@ -476,7 +476,7 @@ fn drag_status_line(dragwin: Win, offset: c_int) {
         let mut sum = ROWS.get() - CMDLINE_ROW.get();
         if curfr.next().is_some() {
             sum -= number_as_int(p_ch()) + global_stl_rows();
-        } else if min_set_ch.get() > 0 as OptInt {
+        } else if MIN_SET_CH.get() > 0 as OptInt {
             sum -= 1;
         }
         sum = sum.max(0);

@@ -460,7 +460,7 @@ impl FileMarks {
 /// keyed by address, as the khash set it replaced was.
 pub(crate) type RemovableBufs = IdSet<*const Buffer>;
 
-/// Where a global mark's letter lives in `namedfm`: `A`-`Z` first, then the
+/// Where a global mark's letter lives in `NAMEDFM`: `A`-`Z` first, then the
 /// ten numbered marks. `None` for a name that is neither.
 fn mark_global_index(name: c_char) -> Option<usize> {
     match name.cast_unsigned() {

@@ -29,7 +29,7 @@
 //! run autocommands -- a write, a buffer switch, the command `:argdo` was
 //! given -- and an autocommand can delete the very buffer under examination.
 //! So the `BufferRef` re-checks that follow such a call are load-bearing, and
-//! a walk that a callee can invalidate restarts from `firstbuf` instead of
+//! a walk that a callee can invalidate restarts from `FIRSTBUF` instead of
 //! trusting the `b_next` it read before. [`buffers`] and its two siblings
 //! are only for the walks where that cannot happen.
 //!
@@ -59,7 +59,7 @@ use crate::eval::eval_call_provider;
 use crate::eval::typval::tv_list_alloc;
 use crate::eval::vars::{do_unlet, set_internal_string_var, set_vim_var_string, var_string_value};
 use crate::ex_cmds::{check_overwrite_own, set_swapcommand};
-use crate::ex_docmd::state::cmdmod;
+use crate::ex_docmd::state::CMDMOD;
 use crate::ex_docmd::{DoCmdOpts, cmdmod_has, dialog_msg, do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::script_get;
 use crate::fileio::{buf_check_timestamp, check_timestamps};
@@ -83,7 +83,7 @@ use crate::path::MAXPATHL;
 use crate::path::vim_full_name;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg;
-use crate::startup::exiting;
+use crate::startup::EXITING;
 use crate::types::CmdIdx;
 use crate::types::Handle;
 use crate::types::{CmdModFlags, ExArg, Failed, LineNr, VarNumber, Vv};
@@ -459,7 +459,7 @@ pub(crate) fn check_changed_any(hidden: bool, unload: bool) -> bool {
         return false;
     };
 
-    exiting.set(false);
+    EXITING.set(false);
     // With ":confirm" the dialog was the message; do not add an error.
     if !(p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)) {
         report_unwritten(culprit);
@@ -659,12 +659,12 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
         return;
     }
 
-    if cmdmod.with(|m| m.cmod_tab) != 0 {
+    if CMDMOD.with(|m| m.cmod_tab) != 0 {
         // ":tab drop file ...": open a tab for each argument not yet
         // edited in a window. Like ":tab all" but without closing
         // windows or tabs.
         ex_all(excmd);
-        cmdmod.with_mut(|m| m.cmod_tab = 0);
+        CMDMOD.with_mut(|m| m.cmod_tab = 0);
         ex_rewind(excmd);
         return;
     }

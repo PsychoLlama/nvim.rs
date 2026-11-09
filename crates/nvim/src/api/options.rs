@@ -48,7 +48,7 @@ use crate::types::{ApiDict, ApiString, ERROR_TYPE_VALIDATION, Error, LineNr, Obj
 use crate::window::close_windows;
 use crate::winlayer::Buf;
 
-/// `current_sctx.sc_sid` for a `:set` that came from nowhere in particular,
+/// `CURRENT_SCTX.sc_sid` for a `:set` that came from nowhere in particular,
 /// which is what the scratch buffer's two option writes are.
 const SID_NONE: c_int = -6;
 

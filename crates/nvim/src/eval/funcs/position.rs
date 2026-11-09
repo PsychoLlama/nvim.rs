@@ -40,7 +40,7 @@ use crate::types::LineNr;
 use crate::types::{
     ColNr, Direction, List, Pos, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber,
 };
-use crate::window::state::skip_update_topline;
+use crate::window::state::SKIP_UPDATE_TOPLINE;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -207,11 +207,11 @@ pub fn f_line(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 let both_diff =
                     wp.w_onebuf_opt.wo_diff != 0 && Win::current().w_onebuf_opt.wo_diff != 0;
                 if P_SPK.first_byte() != b'c' || both_diff {
-                    skip_update_topline.set(true);
+                    SKIP_UPDATE_TOPLINE.set(true);
                 }
                 check_cursor(wp);
                 let fp = var2fpos(&args[0], true, &mut fnum, false, wp);
-                skip_update_topline.set(false);
+                SKIP_UPDATE_TOPLINE.set(false);
                 fp
             }
         }

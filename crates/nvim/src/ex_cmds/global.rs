@@ -23,7 +23,7 @@ use super::{GLOBAL_NEED_BEGINLINE, GLOBAL_NEED_MSG_KIND, check_regexp_delim, do_
 use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
-use crate::ex_docmd::state::global_busy;
+use crate::ex_docmd::state::GLOBAL_BUSY;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::getchar::state::GOT_INT;
 use crate::mark::setpcmark;
@@ -204,7 +204,7 @@ fn global_mark(args: &ExArg, regmatch: &mut RegMMatch, kind: u8) -> c_int {
 pub fn ex_global(excmd: &mut ExArg) {
     // When nesting, the command works on one line.  That allows for
     // ":g/found/v/notfound/command".
-    if global_busy.get() != 0
+    if GLOBAL_BUSY.get() != 0
         && (excmd.line1 != LineNr::ONE || excmd.line2 != Buf::current().b_ml.ml_line_count)
     {
         // Will increment global_busy to break out of the loop.
@@ -240,7 +240,7 @@ pub fn ex_global(excmd: &mut ExArg) {
 
     // The command is read in place: nothing the walk runs can reach this
     // command's own line, and `do_cmdline` copies what it is handed.
-    if global_busy.get() != 0 {
+    if GLOBAL_BUSY.get() != 0 {
         let lnum = Win::current().w_cursor.lnum;
         if selects(kind, matches_line(&mut regmatch, lnum)) {
             global_exe_one(excmd.line.rest_of(parsed.cmd_at), lnum);
@@ -284,19 +284,19 @@ pub fn global_exe(cmd: &[u8]) {
     SUB_NLINES.set(0);
     GLOBAL_NEED_MSG_KIND.set(true);
     GLOBAL_NEED_BEGINLINE.set(false);
-    global_busy.set(1 as c_int);
+    GLOBAL_BUSY.set(1 as c_int);
     let old_lcount = Buf::current().b_ml.ml_line_count;
 
     while !GOT_INT.get() {
         let lnum = ml_firstmarked();
-        if lnum == LineNr::ZERO || global_busy.get() != 1 as c_int {
+        if lnum == LineNr::ZERO || GLOBAL_BUSY.get() != 1 as c_int {
             break;
         }
         global_exe_one(cmd, lnum);
         os_breakcheck();
     }
 
-    global_busy.set(0 as c_int);
+    GLOBAL_BUSY.set(0 as c_int);
     if GLOBAL_NEED_BEGINLINE.get() {
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     } else {

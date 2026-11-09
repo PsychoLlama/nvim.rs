@@ -54,7 +54,7 @@ pub fn nvim__id_float(flt: Float) -> Float {
 // `nvim__stats` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__stats() -> ApiDict {
-    let stats = g_stats.get();
+    let stats = G_STATS.get();
     let lua_refcount = nlua_get_global_ref_count();
     let entries = [
         (c"fsync", Object::integer(stats.fsync)),
@@ -66,7 +66,7 @@ pub fn nvim__stats() -> ApiDict {
         (c"redraw", Object::integer(stats.redraw)),
         (
             c"arena_alloc_count",
-            Object::integer(len_as_integer(arena_alloc_count.get())),
+            Object::integer(len_as_integer(ARENA_ALLOC_COUNT.get())),
         ),
         (
             c"ts_query_parse_count",

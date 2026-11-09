@@ -32,7 +32,7 @@ use crate::narrow::len_as_integer;
 use crate::option::vars::{p_enc, p_hi};
 use crate::os::env::process_id;
 use crate::os::time::os_time;
-use crate::search::{search_was_last_used, state::no_hlsearch};
+use crate::search::{search_was_last_used, state::NO_HLSEARCH};
 use crate::types::Handle;
 use crate::types::LineNr;
 use crate::types::builders::DictBuf;
@@ -344,7 +344,7 @@ impl Writing<'_> {
         if !self.histories[usize::from(HIST_SEARCH)] {
             return;
         }
-        let highlighted = !(no_hlsearch.get() || find_shada_parameter(c_int::from(b'h')).is_some());
+        let highlighted = !(NO_HLSEARCH.get() || find_shada_parameter(c_int::from(b'h')).is_some());
         let last_used = search_was_last_used();
 
         if let Some(entry) = search_pattern_entry(false, last_used, highlighted) {

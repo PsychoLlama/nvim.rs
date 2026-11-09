@@ -24,11 +24,11 @@
 //!
 //! What stays here is the constant alphabet the sixteen share (`WSP_*`,
 //! `FR_*`, `WEE_*`, `SNAP_*`), the layout locks (`window_layout_lock` and the
-//! `split_disallowed`/`close_disallowed`/`frame_locked` counters that back
+//! `SPLIT_DISALLOWED`/`CLOSE_DISALLOWED`/`FRAME_LOCKED` counters that back
 //! them), the window-handle lookups every caller starts from (`win_valid`,
 //! `win_valid_any_tab`, `win_find_by_handle`, `win_count`), and the small
-//! globals the children read (`last_win_id`, `min_set_ch`,
-//! `command_frame_height`).
+//! globals the children read (`LAST_WIN_ID`, `MIN_SET_CH`,
+//! `COMMAND_FRAME_HEIGHT`).
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
@@ -41,7 +41,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
 use crate::ascii::CAR;
@@ -77,7 +76,7 @@ use crate::types::{
     CdCause, Direction, DoBufStart, ERROR_TYPE_EXCEPTION, Error, Handle, OptInt, Window,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
-use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};
+use crate::winlayer::graph::{FIRST_TABPAGE, FIRSTWIN, LASTWIN};
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, current_topframe, new_frame, tab_windows, windows, windows_in_tab,
 };
@@ -118,11 +117,11 @@ pub use self::split::*;
 pub use self::tabpage::*;
 pub use self::winclose::*;
 
-pub const kZIndexMessages: c_int = 200;
-pub const kZIndexFloatDefault: c_int = 50;
+pub const Z_INDEX_MESSAGES: c_int = 200;
+pub const Z_INDEX_FLOAT_DEFAULT: c_int = 50;
 pub const DIRECTION_NOT_SET: Direction = 0;
-pub const kCdCauseWindow: CdCause = 1;
-pub const kCdCauseManual: CdCause = 0;
+pub const CD_CAUSE_WINDOW: CdCause = 1;
+pub const CD_CAUSE_MANUAL: CdCause = 0;
 pub const DOBUF_LAST: DoBufStart = 2;
 pub const MT_LINE_WISE: MotionType = 1;
 pub const MT_CHAR_WISE: MotionType = 0;
@@ -156,13 +155,13 @@ pub const FR_ROW: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const SID_WINLAYOUT: ::core::ffi::c_int = -7 as ::core::ffi::c_int;
 pub const NOWIN: *mut Window = -1 as ::core::ffi::c_int as *mut Window;
-static e_cannot_close_last_window: &::core::ffi::CStr = c"E444: Cannot close last window";
-static e_cannot_split_window_when_closing_buffer: &::core::ffi::CStr =
+static E_CANNOT_CLOSE_LAST_WINDOW: &::core::ffi::CStr = c"E444: Cannot close last window";
+static E_CANNOT_SPLIT_WINDOW_WHEN_CLOSING_BUFFER: &::core::ffi::CStr =
     c"E1159: Cannot split a window when closing the buffer";
-const m_onlyone: &::core::ffi::CStr = c"Already only one window";
-static split_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static close_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static frame_locked: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+const M_ONLYONE: &::core::ffi::CStr = c"Already only one window";
+static SPLIT_DISALLOWED: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static CLOSE_DISALLOWED: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static FRAME_LOCKED: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub fn window_layout_lock() {
     window_lock();
 }
@@ -173,18 +172,18 @@ pub fn window_layout_unlock() {
 
 /// Forbid splitting and closing windows until [`window_unlock`].
 fn window_lock() {
-    split_disallowed.set(split_disallowed.get() + 1);
-    close_disallowed.set(close_disallowed.get() + 1);
+    SPLIT_DISALLOWED.set(SPLIT_DISALLOWED.get() + 1);
+    CLOSE_DISALLOWED.set(CLOSE_DISALLOWED.get() + 1);
 }
 
 /// Undo one [`window_lock`].
 fn window_unlock() {
-    split_disallowed.set(split_disallowed.get() - 1);
-    close_disallowed.set(close_disallowed.get() - 1);
+    SPLIT_DISALLOWED.set(SPLIT_DISALLOWED.get() - 1);
+    CLOSE_DISALLOWED.set(CLOSE_DISALLOWED.get() - 1);
 }
 
 pub fn frames_locked() -> bool {
-    frame_locked.get() != 0
+    FRAME_LOCKED.get() != 0
 }
 
 pub fn window_layout_locked(cmd: CmdIdx) -> bool {
@@ -211,11 +210,11 @@ pub fn window_layout_locked_err(cmd: CmdIdx) -> Result<(), Error> {
 /// [`layout_locked`], answering the reason instead of putting it in the
 /// message area.
 fn locked_err(cmd: CmdIdx) -> Result<(), Error> {
-    if split_disallowed.get() <= 0 && close_disallowed.get() <= 0 {
+    if SPLIT_DISALLOWED.get() <= 0 && CLOSE_DISALLOWED.get() <= 0 {
         return Ok(());
     }
-    let msg = if close_disallowed.get() == 0 && cmd == CmdIdx::tabnew {
-        e_cannot_split_window_when_closing_buffer
+    let msg = if CLOSE_DISALLOWED.get() == 0 && cmd == CmdIdx::tabnew {
+        E_CANNOT_SPLIT_WINDOW_WHEN_CLOSING_BUFFER
     } else {
         E_NOT_ALLOWED_TO_CHANGE_WINDOW_LAYOUT_IN_THIS_AUTOCMD
     };
@@ -265,7 +264,7 @@ fn swbuf_goto_win(buffer: Buf) -> Option<Win> {
     }
     wp
 }
-static min_set_ch: GlobalCell<OptInt> = GlobalCell::new(1 as OptInt);
+static MIN_SET_CH: GlobalCell<OptInt> = GlobalCell::new(1 as OptInt);
 
 // ---------------------------------------------------------------------------
 // Is this window still there?
@@ -380,7 +379,7 @@ impl WinError {
             Self::OnlyAutocmdWindow => {
                 c"E814: Cannot close window, only autocmd window would remain"
             }
-            Self::LastWindow => e_cannot_close_last_window,
+            Self::LastWindow => E_CANNOT_CLOSE_LAST_WINDOW,
             Self::CmdWin => E_CMDWIN,
             Self::NoAlternate => E_NOALT,
             Self::NoPreviewWindow => c"E441: There is no preview window",
@@ -433,7 +432,7 @@ fn err_raw(msg: &::core::ffi::CStr) {
 /// nothing to do.
 fn only_one_message() {
     // Zero means "no highlight attribute".
-    msg(gettext(m_onlyone), 0);
+    msg(gettext(M_ONLYONE), 0);
 }
 
 /// Whether `win` is one of the hidden windows autocommands are executed in.
@@ -512,10 +511,10 @@ fn drop_grid(win: Win) {
     ui_comp_remove_grid(win.grid_alloc());
 }
 
-static command_frame_height: GlobalCell<bool> = GlobalCell::new(true);
-static last_win_id: GlobalCell<::core::ffi::c_int> =
+static COMMAND_FRAME_HEIGHT: GlobalCell<bool> = GlobalCell::new(true);
+static LAST_WIN_ID: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(LOWEST_WIN_ID - 1 as ::core::ffi::c_int);
-static did_initial_scroll_size_snapshot: GlobalCell<bool> = GlobalCell::new(false);
+static DID_INITIAL_SCROLL_SIZE_SNAPSHOT: GlobalCell<bool> = GlobalCell::new(false);
 pub const FRACTION_MULT: ::core::ffi::c_int = 16384 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

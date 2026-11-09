@@ -60,7 +60,7 @@ use crate::types::{
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
 pub(crate) use crate::winlayer::graph::alloc_unregistered_buffer;
-use crate::winlayer::graph::{firstbuf, lastbuf};
+use crate::winlayer::graph::{FIRSTBUF, LASTBUF};
 use crate::winlayer::{Buf, Win, buffers_back, register_buffer, windows};
 
 use super::expand::buflist_match;
@@ -164,7 +164,7 @@ pub fn buflist_new(
         // When the buffer was deleted, allocate a new one instead.
         reusable = bufref.get();
     }
-    // Upstream re-reads `curbuf` here: `buf_freeall`'s autocommands may have
+    // Upstream re-reads `CURBUF` here: `buf_freeall`'s autocommands may have
     // made another buffer current, and then this one is not reusable after
     // all.
     let reused_curbuf = reusable.is_some() && reusable == current_buf();
@@ -193,7 +193,7 @@ pub fn buflist_new(
 
     if reused_curbuf {
         // Delete the local variables and the rest.
-        free_buffer_stuff(buf, kBffInitChangedtick);
+        free_buffer_stuff(buf, BFF_INIT_CHANGEDTICK);
         // Init the options.
         buf.b_p_initialized = false;
         copy_options_into(buf, BCO_ENTER);
@@ -322,8 +322,8 @@ impl Buf {
         // The number and the registry entry come first, ahead of upstream's
         // order: from here on `buffer.id()` names the buffer, and the list links
         // are made of exactly that. Nothing between the two reads either.
-        self.set_handle(Handle::new(top_file_num.get()));
-        top_file_num.set(top_file_num.get() + 1);
+        self.set_handle(Handle::new(TOP_FILE_NUM.get()));
+        TOP_FILE_NUM.set(TOP_FILE_NUM.get() + 1);
         register_buffer(self.handle(), owned);
 
         self.b_next = None;
@@ -331,7 +331,7 @@ impl Buf {
             // The buffer list is empty.
             None => {
                 self.b_prev = None;
-                firstbuf.set(Some(self.id()));
+                FIRSTBUF.set(Some(self.id()));
             }
             // Append the new buffer at the end of the list.
             Some(mut last) => {
@@ -339,15 +339,15 @@ impl Buf {
                 self.b_prev = Some(last.id());
             }
         }
-        lastbuf.set(Some(self.id()));
-        if top_file_num.get() < 0 {
+        LASTBUF.set(Some(self.id()));
+        if TOP_FILE_NUM.get() < 0 {
             // Wrap around; this may cause duplicates.
             emsg(gettext(c"W14: Warning: List of file names overflow"));
             if EMSG_SILENT.get() == 0 && !IN_ASSERT_FAILS.get() {
                 // Make sure it is noticed.
                 msg_delay(3001 as uint64_t, true);
             }
-            top_file_num.set(1);
+            TOP_FILE_NUM.set(1);
         }
         self
     }

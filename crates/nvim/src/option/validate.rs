@@ -31,7 +31,7 @@ use crate::option::defs::{MAX_MCO, OptError, OptIndex, OptVal, OptionSetFlags};
 use crate::option::vars::{p_wh, p_wiw, p_wmh, p_wmw};
 use crate::options::*;
 use crate::os::cshim::gettext;
-use crate::startup::full_screen;
+use crate::startup::FULL_SCREEN;
 use crate::types::OptInt;
 use crate::ui::state::ROWS;
 use crate::window::{min_rows_for_all_tabpages, win_default_scroll};
@@ -94,7 +94,7 @@ pub(crate) fn check_num_option_bounds(
     match opt_idx {
         kOptLines => {
             let least = min_rows_for_all_tabpages();
-            if *newval < OptInt::from(least) && full_screen.get() {
+            if *newval < OptInt::from(least) && FULL_SCREEN.get() {
                 errmsg = Err(OptError::formatted(tr!(
                     "E593: Need at least {least} lines"
                 )));
@@ -103,7 +103,7 @@ pub(crate) fn check_num_option_bounds(
             *newval = (*newval).min(OptInt::from(INT_MAX));
         }
         kOptColumns => {
-            if *newval < OptInt::from(MIN_COLUMNS) && full_screen.get() {
+            if *newval < OptInt::from(MIN_COLUMNS) && FULL_SCREEN.get() {
                 errmsg = Err(OptError::formatted(tr!(
                     "E594: Need at least {MIN_COLUMNS} columns"
                 )));
@@ -114,14 +114,14 @@ pub(crate) fn check_num_option_bounds(
         // 'pumblend' saturates silently rather than reporting.
         kOptPumblend => *newval = (*newval).clamp(0, 100),
         kOptScrolljump => {
-            if (*newval < -100 || *newval >= OptInt::from(ROWS.get())) && full_screen.get() {
+            if (*newval < -100 || *newval >= OptInt::from(ROWS.get())) && FULL_SCREEN.get() {
                 errmsg = Err(E_SCROLL.into());
                 *newval = 1;
             }
         }
         kOptScroll => {
             let height = Win::current().w_view_height;
-            if (*newval <= 0 || (*newval > OptInt::from(height) && height > 0)) && full_screen.get()
+            if (*newval <= 0 || (*newval > OptInt::from(height) && height > 0)) && FULL_SCREEN.get()
             {
                 // Zero is how `:set scroll=0` asks for the default, so
                 // it is corrected without a message.
@@ -177,7 +177,7 @@ pub(crate) fn validate_num_option(opt_idx: OptIndex, newval: &mut OptInt) -> Res
         // The two offsets may be negative before the screen exists: that is
         // how a window says it does not override the global value.
         kOptScrolloff | kOptSidescrolloff => {
-            if value < 0 && full_screen.get() {
+            if value < 0 && FULL_SCREEN.get() {
                 Err(too_small())
             } else {
                 Ok(())

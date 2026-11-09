@@ -36,7 +36,7 @@ use core::ffi::CStr;
 /// `'runtimepath'` — a completely different list — so which half of this
 /// runs is decided once, when the walk starts.
 ///
-/// (Upstream re-reads `curbuf->b_help` on every call but only initialises
+/// (Upstream re-reads `CURBUF->b_help` on every call but only initialises
 /// on the first, so a buffer that stopped being a help buffer part-way
 /// through a walk would dereference a NULL `'tags'` copy. Deciding once
 /// is the same behaviour without the crash.)
@@ -78,7 +78,7 @@ struct Search {
 impl TagFiles {
     /// Start a walk over the tags files for the current buffer.
     pub(crate) fn new() -> Self {
-        // SAFETY: `curbuf` is live, and the buffer-local and global
+        // SAFETY: `CURBUF` is live, and the buffer-local and global
         // `'tags'` are NUL-terminated option strings.
         let help = Buf::current().b_help;
         let tags = (!help).then(|| local_or_global(&Buf::current().b_p_tags, P_TAGS).get());

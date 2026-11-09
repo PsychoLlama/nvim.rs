@@ -21,7 +21,7 @@ use crate::option::split_option_part;
 use crate::option::vars::{CIA_FLAGS, COT_FLAGS, P_CIA, P_HLG, SPO_FLAGS, TC_FLAGS};
 use crate::options::{opt_cot_values, opt_spo_values, opt_tc_values};
 use crate::os::env::vim_unsetenv_named;
-use crate::os::state::{didset_vim, didset_vimruntime};
+use crate::os::state::{DIDSET_VIM, DIDSET_VIMRUNTIME};
 use crate::spell::{compile_cap_prog, did_set_spell_option, valid_spellfile, valid_spelllang};
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
@@ -179,10 +179,10 @@ pub fn did_set_completeopt(args: &mut OptSet) -> Result<(), OptError> {
 /// A 'helpfile' the user chose overrides `$VIM`/`$VIMRUNTIME`, so the ones
 /// nvim derived for itself are dropped and re-derived from it.
 pub fn did_set_helpfile(_args: &mut OptSet) -> Result<(), OptError> {
-    if didset_vim.get() {
+    if DIDSET_VIM.get() {
         vim_unsetenv_named(c"VIM");
     }
-    if didset_vimruntime.get() {
+    if DIDSET_VIMRUNTIME.get() {
         vim_unsetenv_named(c"VIMRUNTIME");
     }
     Ok(())

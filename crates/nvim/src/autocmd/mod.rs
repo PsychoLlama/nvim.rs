@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
 use crate::autocmd::defs::AutoEvent;
@@ -19,12 +18,12 @@ use crate::api::private::helpers::find_buffer_by_handle;
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::defs::{AcoSave, AutoCmd, AutoPat, AutoPatCmd, EventCmds};
 use crate::autocmd::state::{
-    active_walk_bufnrs, au_need_clean, autocmd_blocked, autocmd_bufnr, autocmd_busy, autocmd_fname,
-    autocmd_fname_full, autocmd_include_groups, autocmd_match, autocmd_nested, autocmd_nesting,
-    autocmd_no_enter, autocmd_no_leave, current_augroup, deferred_events, did_cursorhold,
-    filechangeshell_busy, focusgained_busy, focusgained_last_time, ft_recursive, last_cursormoved,
-    last_cursormoved_win, map_augroup_id_to_name, map_augroup_name_to_id, next_augroup_id,
-    pending_vimresume, termresponse_changed, uienter_busy,
+    ACTIVE_WALK_BUFNRS, AU_NEED_CLEAN, AUTOCMD_BLOCKED, AUTOCMD_BUFNR, AUTOCMD_BUSY, AUTOCMD_FNAME,
+    AUTOCMD_FNAME_FULL, AUTOCMD_INCLUDE_GROUPS, AUTOCMD_MATCH, AUTOCMD_NESTED, AUTOCMD_NESTING,
+    AUTOCMD_NO_ENTER, AUTOCMD_NO_LEAVE, CURRENT_AUGROUP, DEFERRED_EVENTS, DID_CURSORHOLD,
+    FILECHANGESHELL_BUSY, FOCUSGAINED_BUSY, FOCUSGAINED_LAST_TIME, FT_RECURSIVE, LAST_CURSORMOVED,
+    LAST_CURSORMOVED_WIN, MAP_AUGROUP_ID_TO_NAME, MAP_AUGROUP_NAME_TO_ID, NEXT_AUGROUP_ID,
+    PENDING_VIMRESUME, TERMRESPONSE_CHANGED, UIENTER_BUSY,
 };
 use crate::buffer::{buf_is_prompt, current_buf, do_modelines, find_buf};
 use crate::cmdexpand::defs::Expand;
@@ -41,7 +40,7 @@ use crate::getchar::state::SaveRedo;
 use crate::getchar::state::{GOT_INT, KEY_TYPED, REG_RECORDING};
 use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
-use crate::guard::secure;
+use crate::guard::SECURE;
 use crate::highlight_group::{HLF_8, HLF_E, HLF_T};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::LuaRetMode;
@@ -59,14 +58,14 @@ use crate::options::kOptEventignore;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::os::libc::{int64_t, uint64_t};
-use crate::os::state::globaldir;
+use crate::os::state::GLOBALDIR;
 use crate::os::time::os_now;
 use crate::path::{full_name_save, path_fnamecmp, path_tail};
-use crate::profile::do_profiling;
+use crate::profile::DO_PROFILING;
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::runtime::defs::EStackType;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::runtime::{estack_pop, estack_push};
 use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::startup::starting;
@@ -86,7 +85,7 @@ use crate::window::{
     win_init_empty, win_remove,
 };
 use crate::winfloat::win_config_float;
-use crate::winlayer::graph::prevwin;
+use crate::winlayer::graph::PREVWIN;
 use crate::winlayer::{free_deferred, hide_window, register_window};
 
 // The carve of the transpiled module; see each child's docs.
@@ -124,7 +123,7 @@ pub const RET_NIL_BOOL: LuaRetMode = 1;
 const E_AUTOCOMMAND_NESTING_TOO_DEEP: &CStr = c"E218: Autocommand nesting too deep";
 /// Give the deferred events their queue, a child of the main loop's.
 pub fn autocmd_init() {
-    deferred_events.set(Some(ChildQueue::of_main_loop()));
+    DEFERRED_EVENTS.set(Some(ChildQueue::of_main_loop()));
 }
 /// Where the `VimSuspend`/`VimResume` pair has got to.
 ///

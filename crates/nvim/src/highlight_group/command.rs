@@ -37,7 +37,7 @@ use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
 use crate::options::kOptBackground;
 use crate::os::cshim::gettext;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::startup::starting;
 use crate::ui::state::T_COLORS;
 use crate::ui::state::UI_LINEGRID;
@@ -232,7 +232,7 @@ pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
         set_hl_attr(id);
     }
     with_group(id, |entry| {
-        entry.script_ctx = current_sctx.get();
+        entry.script_ctx = CURRENT_SCTX.get();
         entry.script_ctx.sc_lnum += sourcing_lnum();
         nlua_set_sctx(&mut entry.script_ctx);
     });
@@ -284,7 +284,7 @@ fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
     if dodefault && (forceit || group(from_id).deflink == 0) {
         with_group(from_id, |entry| {
             entry.deflink = to_id;
-            entry.deflink_sctx = current_sctx.get();
+            entry.deflink_sctx = CURRENT_SCTX.get();
             entry.deflink_sctx.sc_lnum += sourcing_lnum();
             nlua_set_sctx(&mut entry.deflink_sctx);
         });
@@ -301,7 +301,7 @@ fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
             emsg(gettext(E_GROUP_HAS_SETTINGS_HIGHLIGHT_LINK_IGNORED));
         }
     } else if entry.link != to_id
-        || entry.script_ctx.sc_sid != current_sctx.get().sc_sid
+        || entry.script_ctx.sc_sid != CURRENT_SCTX.get().sc_sid
         || entry.cleared
     {
         with_group(from_id, |entry| {
@@ -309,7 +309,7 @@ fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
                 entry.set |= SG_LINK.cast_signed();
             }
             entry.link = to_id;
-            entry.script_ctx = current_sctx.get();
+            entry.script_ctx = CURRENT_SCTX.get();
             entry.script_ctx.sc_lnum += sourcing_lnum();
             nlua_set_sctx(&mut entry.script_ctx);
             entry.cleared = false;

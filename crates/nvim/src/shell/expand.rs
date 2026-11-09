@@ -14,7 +14,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::{SHELL_SPECIAL, ShellOpts, call_shell};
 use crate::ascii::ascii_iswhite;
@@ -24,7 +23,7 @@ use crate::drawscreen::state::CMDLINE_ROW;
 use crate::ex_cmds::check_secure;
 use crate::fileio::temp_name;
 use crate::global_cell::GlobalCell;
-use crate::guard::{sandbox, secure};
+use crate::guard::{SANDBOX, SECURE};
 use crate::memory::XString;
 use crate::message::{E_NOTMP, E_WILDEXPAND};
 use crate::message::{emsg, msg, msg_putchar, msg_start};
@@ -311,7 +310,7 @@ fn split_entries(buffer: &[u8], sep: &Separator, check_spaces: bool) -> Vec<Rang
 /// Some zsh builds separate with spaces rather than NULs. Only believe that
 /// while no NUL has ever been seen, because once one has, embedded spaces in
 /// file names have to keep working.
-static did_find_nul: GlobalCell<bool> = GlobalCell::new(false);
+static DID_FIND_NUL: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Expand `patterns` through the shell, into the names it answers.
 ///
@@ -333,10 +332,10 @@ pub(crate) fn shell_expand_wildcards(
     }
 
     // No shell command inside the sandbox, and no backticks in `secure`.
-    if sandbox.get() != 0 && check_secure() {
+    if SANDBOX.get() != 0 && check_secure() {
         return Err(Failed);
     }
-    if secure.get() != 0 && patterns.iter().any(|pat| pat.contains(&b'`')) && check_secure() {
+    if SECURE.get() != 0 && patterns.iter().any(|pat| pat.contains(&b'`')) && check_secure() {
         return Err(Failed);
     }
 
@@ -404,12 +403,12 @@ pub(crate) fn shell_expand_wildcards(
         Separator::Space => buffer[len] = b'\n',
         Separator::Newline => buffer[len] = 0,
         Separator::Nul => {
-            if style == ShellStyle::Print && !did_find_nul.get() {
+            if style == ShellStyle::Print && !DID_FIND_NUL.get() {
                 // A NUL anywhere in the output proves this zsh uses them.
                 if len != 0
                     && CStr::from_bytes_until_nul(&buffer).is_ok_and(|s| s.count_bytes() < len)
                 {
-                    did_find_nul.set(true);
+                    DID_FIND_NUL.set(true);
                 } else {
                     check_spaces = true;
                 }

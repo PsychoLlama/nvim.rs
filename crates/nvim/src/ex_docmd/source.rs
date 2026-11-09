@@ -41,14 +41,14 @@ use crate::ex_docmd::cmdline::do_cmdline;
 use crate::ex_docmd::sourcing_lnum;
 
 use crate::drawscreen::state::CMDLINE_ROW;
-use crate::ex_docmd::state::{ex_no_reprint, ex_normal_busy, global_busy};
+use crate::ex_docmd::state::{EX_NO_REPRINT, EX_NORMAL_BUSY, GLOBAL_BUSY};
 use crate::ex_docmd::{
-    DoCmdOpts, ETYPE_EXCEPT, SavedDebugState, cmdline_call_depth, ex_pressedreturn,
+    CMDLINE_CALL_DEPTH, DoCmdOpts, ETYPE_EXCEPT, EX_PRESSEDRETURN, SavedDebugState,
 };
 use crate::ex_eval::discard_current_exception;
 use crate::ex_eval::state::{
-    caught_stack, check_cstack, current_exception, did_throw, force_abort, need_rethrow,
-    suppress_errthrow, trylevel,
+    CAUGHT_STACK, CHECK_CSTACK, CURRENT_EXCEPTION, DID_THROW, FORCE_ABORT, NEED_RETHROW,
+    SUPPRESS_ERRTHROW, TRYLEVEL,
 };
 use crate::ex_getln::{cmdline_input, getexline};
 use crate::getchar::state::{GOT_INT, KEY_TYPED};
@@ -58,7 +58,7 @@ use crate::message::state::{
     DID_EMSG, EMSG_SILENT, LINES_LEFT, MSG_COL, MSG_ROW, MSG_SCROLL, MSG_SILENT, NEED_WAIT_RETURN,
 };
 use crate::option::vars::p_mfd;
-use crate::startup::exiting;
+use crate::startup::EXITING;
 use crate::state::mode::{EXMODE_ACTIVE, STATE};
 use crate::ui::state::ROWS;
 
@@ -82,9 +82,9 @@ use crate::winlayer::{Buf, Win};
 /// swallowed by whatever `:try` the script had open.
 pub(crate) fn save_dbg_stuff() -> SavedDebugState {
     SavedDebugState {
-        trylevel: trylevel.replace(0),
-        force_abort: c_int::from(force_abort.replace(false)),
-        caught_stack: caught_stack.take(),
+        trylevel: TRYLEVEL.replace(0),
+        force_abort: c_int::from(FORCE_ABORT.replace(false)),
+        caught_stack: CAUGHT_STACK.take(),
         // Copies, which leave the variables as they are: a `:catch` or a
         // discarded exception in the debugger may replace them, and a
         // pointer to the variable's own string would not survive that.
@@ -92,19 +92,19 @@ pub(crate) fn save_dbg_stuff() -> SavedDebugState {
         vv_throwpoint: vim_var_string(Vv::Throwpoint),
         did_emsg: DID_EMSG.replace(0),
         got_int: c_int::from(GOT_INT.replace(false)),
-        did_throw: did_throw.replace(false),
-        need_rethrow: c_int::from(need_rethrow.replace(false)),
-        check_cstack: c_int::from(check_cstack.replace(false)),
-        current_exception: current_exception.take(),
+        did_throw: DID_THROW.replace(false),
+        need_rethrow: c_int::from(NEED_RETHROW.replace(false)),
+        check_cstack: c_int::from(CHECK_CSTACK.replace(false)),
+        current_exception: CURRENT_EXCEPTION.take(),
     }
 }
 
 /// Put it all back.
 pub(crate) fn restore_dbg_stuff(saved: SavedDebugState) {
-    suppress_errthrow.set(false);
-    trylevel.set(saved.trylevel);
-    force_abort.set(saved.force_abort != 0);
-    caught_stack.set(saved.caught_stack);
+    SUPPRESS_ERRTHROW.set(false);
+    TRYLEVEL.set(saved.trylevel);
+    FORCE_ABORT.set(saved.force_abort != 0);
+    CAUGHT_STACK.set(saved.caught_stack);
     // A null saved value puts nothing back, as upstream's `v_exception(NULL)`
     // is the read half.
     if let Some(exception) = saved.vv_exception {
@@ -115,10 +115,10 @@ pub(crate) fn restore_dbg_stuff(saved: SavedDebugState) {
     }
     DID_EMSG.set(saved.did_emsg);
     GOT_INT.set(saved.got_int != 0);
-    did_throw.set(saved.did_throw);
-    need_rethrow.set(saved.need_rethrow != 0);
-    check_cstack.set(saved.check_cstack != 0);
-    current_exception.set(saved.current_exception);
+    DID_THROW.set(saved.did_throw);
+    NEED_RETHROW.set(saved.need_rethrow != 0);
+    CHECK_CSTACK.set(saved.check_cstack != 0);
+    CURRENT_EXCEPTION.set(saved.current_exception);
 }
 
 /// Ex mode: read and run one command line at a time, printing the current
@@ -130,7 +130,7 @@ pub fn do_exmode() {
 
     // `:global` runs Ex mode for each line itself; there is no prompt
     // to give.
-    if global_busy.get() != 0 {
+    if GLOBAL_BUSY.get() != 0 {
         return;
     }
 
@@ -145,15 +145,15 @@ pub fn do_exmode() {
     while EXMODE_ACTIVE.get() {
         // `:normal` that ran out of keys leaves Ex mode rather than
         // waiting for more.
-        if ex_normal_busy.get() > 0 && typeahead().is_empty() {
+        if EX_NORMAL_BUSY.get() > 0 && typeahead().is_empty() {
             EXMODE_ACTIVE.set(false);
             break;
         }
 
         MSG_SCROLL.set(1);
         NEED_WAIT_RETURN.set(false);
-        ex_pressedreturn.set(false);
-        ex_no_reprint.set(false);
+        EX_PRESSEDRETURN.set(false);
+        EX_NO_REPRINT.set(false);
         let changedtick = buf_get_changedtick(Buf::current());
         let prev_msg_row = MSG_ROW.get();
         let prev_line = Win::current().w_cursor.lnum;
@@ -164,13 +164,13 @@ pub fn do_exmode() {
 
         let moved = prev_line != Win::current().w_cursor.lnum
             || changedtick != buf_get_changedtick(Buf::current());
-        if moved && !ex_no_reprint.get() {
+        if moved && !EX_NO_REPRINT.get() {
             if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
                 emsg(gettext(E_EMPTY_BUFFER));
             } else {
                 // A bare Return already scrolled; print over that line
                 // rather than under it.
-                if ex_pressedreturn.get() {
+                if EX_PRESSEDRETURN.get() {
                     msg_scroll_flush();
                     MSG_ROW.set(prev_msg_row);
                     if prev_msg_row == ROWS.get() - 1 {
@@ -181,7 +181,7 @@ pub fn do_exmode() {
                 print_line_no_prefix(Win::current().w_cursor.lnum, false, false);
                 msg_clr_eos();
             }
-        } else if ex_pressedreturn.get() && !ex_no_reprint.get() {
+        } else if EX_PRESSEDRETURN.get() && !EX_NO_REPRINT.get() {
             // Return on the last line: there is nothing to print.
             if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
                 emsg(gettext(E_EMPTY_BUFFER));
@@ -221,11 +221,11 @@ pub(crate) fn msg_verbose_cmd(lnum: LineNr, cmd: &[u8]) {
 /// The limit only bites above a floor of 200: a low 'maxfuncdepth' must
 /// still leave room for the editor's own nesting.
 pub(crate) fn do_cmdline_start() -> Result<(), Failed> {
-    debug_assert!(cmdline_call_depth.get() >= 0);
-    if cmdline_call_depth.get() >= 200 && OptInt::from(cmdline_call_depth.get()) >= p_mfd() {
+    debug_assert!(CMDLINE_CALL_DEPTH.get() >= 0);
+    if CMDLINE_CALL_DEPTH.get() >= 200 && OptInt::from(CMDLINE_CALL_DEPTH.get()) >= p_mfd() {
         return Err(Failed);
     }
-    cmdline_call_depth.set(cmdline_call_depth.get() + 1);
+    CMDLINE_CALL_DEPTH.set(CMDLINE_CALL_DEPTH.get() + 1);
     // Clipboard writes are batched across the whole command line, so
     // that a `:while` that yanks repeatedly sets the selection once.
     start_batch_changes();
@@ -234,8 +234,8 @@ pub(crate) fn do_cmdline_start() -> Result<(), Failed> {
 
 /// Leave it.
 pub(crate) fn do_cmdline_end() {
-    cmdline_call_depth.set(cmdline_call_depth.get() - 1);
-    debug_assert!(cmdline_call_depth.get() >= 0);
+    CMDLINE_CALL_DEPTH.set(CMDLINE_CALL_DEPTH.get() - 1);
+    debug_assert!(CMDLINE_CALL_DEPTH.get() >= 0);
     end_batch_changes();
 }
 
@@ -246,7 +246,7 @@ pub(crate) fn do_cmdline_end() {
 /// is what the user sees; an interrupt says nothing, because the interrupt
 /// message is given elsewhere.
 pub fn handle_did_throw() {
-    let id = current_exception.get().expect("an exception being thrown");
+    let id = CURRENT_EXCEPTION.get().expect("an exception being thrown");
     // The messages are taken so that discarding the exception does not drop
     // them, and the name goes to the frame pushed below.
     let (kind, value, messages, throw_name, throw_lnum) = id.with(|exception| {
@@ -285,8 +285,8 @@ pub fn handle_did_throw() {
 
     // `:silent!` makes even an uncaught exception non-fatal.
     if EMSG_SILENT.get() == 0 {
-        suppress_errthrow.set(true);
-        force_abort.set(true);
+        SUPPRESS_ERRTHROW.set(true);
+        FORCE_ABORT.set(true);
     }
 
     if !messages.entries.is_empty() {
@@ -591,7 +591,7 @@ pub(crate) fn ex_errmsg(msg: &'static CStr, arg: &CStr) -> CString {
 
 /// Cancel an exit that a QuitPre or ExitPre autocommand called off.
 pub fn not_exiting(save_exiting: bool) {
-    exiting.set(save_exiting);
+    EXITING.set(save_exiting);
     set_vim_var_string(Vv::Exitreason, None);
 }
 

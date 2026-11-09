@@ -38,7 +38,7 @@ use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::{LineData, PreviewLines, SID_NONE, SubResult, print_line};
 use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
 use crate::ex_docmd::cmdmod_has;
-use crate::ex_docmd::state::global_busy;
+use crate::ex_docmd::state::GLOBAL_BUSY;
 use crate::ex_eval::aborting;
 use crate::fold::has_any_folding;
 use crate::getchar::state::GOT_INT;
@@ -565,7 +565,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             Buf::current().b_op_start.col = Buf::current().b_op_end.col;
         }
 
-        if global_busy.get() == 0 {
+        if GLOBAL_BUSY.get() == 0 {
             // When interactive, leave the cursor on the match.
             if !SUB_FLAGS.with(|flags| flags.do_ask) {
                 if args.endcolumn {
@@ -595,7 +595,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
                 true,
             );
         }
-    } else if global_busy.get() == 0 {
+    } else if GLOBAL_BUSY.get() == 0 {
         if GOT_INT.get() {
             // Interrupted.
             emsg(gettext(E_INTERR));
@@ -667,7 +667,7 @@ pub(crate) fn do_sub(
     cmdpreview_ns: c_int,
     cmdpreview_bufnr: Handle,
 ) -> c_int {
-    if global_busy.get() == 0 {
+    if GLOBAL_BUSY.get() == 0 {
         SUB_NSUBS.set(0 as c_int);
         SUB_NLINES.set(0);
     }

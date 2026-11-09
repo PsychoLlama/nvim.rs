@@ -438,7 +438,7 @@ fn bump_alpha_char(firstdigit: u8, op_type: OpType, prenum1: i32, col: ColNr) ->
     let base = if firstdigit < b'a' { b'A' } else { b'a' };
     let ord = i32::from(firstdigit - base);
     // The C library's own locale table: `firstdigit` is an ASCII letter.
-    let upper = ctype_bits(firstdigit) & _ISupper != 0;
+    let upper = ctype_bits(firstdigit) & IS_UPPER != 0;
     // A letter `ord` places from `base`, which the clamps keep in 0..=25.
     let letter = |ord: i32| base + u8::try_from(ord).expect("a letter's ordinal");
     let bumped = if op_type == OpType::NrSub {
@@ -582,8 +582,8 @@ fn replace_number(
         todel -= 1;
         // The C library's own locale table, indexed by a byte value.
         let class = u8::try_from(c).map_or(0, ctype_bits);
-        if class & _ISalpha != 0 {
-            HEX_UPPER.set(class & _ISupper != 0);
+        if class & IS_ALPHA != 0 {
+            HEX_UPPER.set(class & IS_UPPER != 0);
         }
         let _ = del_char(false);
         c = gchar_cursor();

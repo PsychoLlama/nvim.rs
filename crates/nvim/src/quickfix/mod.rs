@@ -26,7 +26,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::ascii::TAB;
 use crate::ascii::ascii_iswhite;
@@ -58,10 +57,10 @@ use crate::eval::typval::{
 use crate::eval::window::{find_win_by_nr_or_id, win_by_id};
 use crate::ex_cmds::{VGR_FUZZY, VGR_GLOBAL, VGR_NOJUMP, append_redir, check_secure};
 use crate::ex_cmds2::{autowrite_all, can_abandon};
-use crate::ex_docmd::state::cmdmod;
+use crate::ex_docmd::state::CMDMOD;
 use crate::ex_docmd::{do_cmdline_cmd, ex_cd, is_loclist_cmd};
 use crate::ex_eval::aborting;
-use crate::extmark::{extmark_splice, kExtmarkNoUndo};
+use crate::extmark::{EXTMARK_NO_UNDO, extmark_splice};
 use crate::fileio::shorten_fnames;
 use crate::fold::{fold_open_cursor, fold_update_all};
 use crate::fuzzy::{FUZZY_MATCH_MAX_LEN, fuzzy_match};
@@ -120,7 +119,7 @@ use crate::window::{
     check_can_set_curbuf_forceit, check_lnums, goto_tabpage_win, win_close, win_enter, win_goto,
     win_setheight, win_split, win_valid,
 };
-use crate::winlayer::graph::{firstwin, lastwin, prevwin};
+use crate::winlayer::graph::{FIRSTWIN, LASTWIN, PREVWIN};
 use core::ffi::{CStr, c_int, c_uint};
 
 // The carve of the transpiled module; see each child's docs.
@@ -172,8 +171,8 @@ mod tests;
 
 /// The names `:ls` and the status line give the two list buffers. Upstream
 /// keeps them in `char *` globals; nothing has ever written to either.
-pub(crate) static msg_loclist: &CStr = c"[Location List]";
-pub(crate) static msg_qflist: &CStr = c"[Quickfix List]";
+pub(crate) static MSG_LOCLIST: &CStr = c"[Location List]";
+pub(crate) static MSG_QFLIST: &CStr = c"[Quickfix List]";
 
 /// Why a quickfix list could not be read, or a `getqflist()`/`setqflist()`
 /// request carried out.
@@ -285,10 +284,10 @@ pub(crate) const E_QUICKFIX_LIST_CHANGED: &CStr = c"E925: Current quickfix list 
 pub(crate) const E_LOCATION_LIST_CHANGED: &CStr = c"E926: Current location list was changed";
 /// The parsed global `'quickfixtextfunc'`. A list-local one lives in
 /// [`QfList::text_func`].
-static qftf_cb: GlobalCell<Callback> = GlobalCell::new(Callback::None);
-static qfFile_hl_id: GlobalCell<c_int> = GlobalCell::new(0);
-static qfSep_hl_id: GlobalCell<c_int> = GlobalCell::new(0);
-static qfLine_hl_id: GlobalCell<c_int> = GlobalCell::new(0);
+static QFTF_CB: GlobalCell<Callback> = GlobalCell::new(Callback::None);
+static QF_FILE_HL_ID: GlobalCell<c_int> = GlobalCell::new(0);
+static QF_SEP_HL_ID: GlobalCell<c_int> = GlobalCell::new(0);
+static QF_LINE_HL_ID: GlobalCell<c_int> = GlobalCell::new(0);
 /// Which of a buffer's `b_has_qf_entry` bits an entry sets: one for the
 /// quickfix stack, one for any location list.
 pub const BUF_HAS_QF_ENTRY: c_int = 1;

@@ -33,14 +33,13 @@
     clippy::ptr_as_ptr
 )]
 // The constants here keep upstream's spelling (`kXDG*`, `kRet*`).
-#![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::has_autocmd;
 use crate::cmdexpand::defs::Expand;
 use crate::cmdexpand::globpath;
-use crate::debugger::state::{debug_break_level, debug_tick};
+use crate::debugger::state::{DEBUG_BREAK_LEVEL, DEBUG_TICK};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, profiling_forced};
 use crate::env::XDGVarType;
 use crate::env::{get_appname, install_prefix};
@@ -52,7 +51,7 @@ use crate::eval::typval::{
 use crate::eval::userfunc::{CallStackAside, all_funcs};
 use crate::eval::vars::new_script_vars;
 use crate::eval::{eval_to_number, get_copy_id};
-use crate::ex_docmd::state::{cmdmod, ex_nesting_level, global_busy, listcmd_busy};
+use crate::ex_docmd::state::{CMDMOD, EX_NESTING_LEVEL, GLOBAL_BUSY, LISTCMD_BUSY};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd};
 use crate::ex_eval::{
     PendingAction, PendingValue, aborting, cleanup_conditionals, cond_stack_of, report_pending,
@@ -84,7 +83,7 @@ use crate::path::{
     append_path, concat_fnames, fix_fname, gen_expand_wildcards, past_head_index, path_fnamecmp,
     path_fnamencmp, path_with_extension, tail_index, vim_ispathsep, vim_ispathsep_nocolon,
 };
-use crate::profile::{do_profiling, startup_timing};
+use crate::profile::{DO_PROFILING, startup_timing};
 use crate::profile::{
     prof_child_enter, prof_child_exit, profile_add, profile_end, profile_init, profile_self,
     profile_start, profile_sub_wait, profile_zero, script_line_end, script_line_start, time_msg,
@@ -93,7 +92,7 @@ use crate::profile::{
 use crate::regexp::{RE_MAGIC, RE_STRING};
 use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::runtime::defs::{EStack, EStackArg, EStackType, EstackInfo, FrameName, ScriptItem};
-use crate::runtime::state::{current_sctx, did_source_packages};
+use crate::runtime::state::{CURRENT_SCTX, DID_SOURCE_PACKAGES};
 use crate::types::{
     ApiDict, ApiString, Array, BOOL_VAR_FALSE, ExArg, Integer, LineNr, Object, ProfTime, ScriptCtx,
     ScriptId, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber,
@@ -136,7 +135,7 @@ pub const XDG_STATE_HOME: XDGVarType = 3;
 pub const XDG_CACHE_HOME: XDGVarType = 2;
 pub const XDG_DATA_HOME: XDGVarType = 1;
 pub const XDG_CONFIG_HOME: XDGVarType = 0;
-pub const kXDGNone: XDGVarType = -1;
+pub const XDG_NONE: XDGVarType = -1;
 /// `do_cmdline` flags.
 pub const ETYPE_AUCMD: EStackType = 3;
 pub const ETYPE_UFUNC: EStackType = 2;

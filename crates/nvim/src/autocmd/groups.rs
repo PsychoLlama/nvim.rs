@@ -44,10 +44,10 @@ fn group_key(name: &[u8]) -> Box<[u8]> {
 fn augroup_map_del(id: ::core::ffi::c_int, name: Option<&[u8]>) {
     if let Some(name) = name {
         let key = group_key(name);
-        map_augroup_name_to_id.with_mut(|groups| groups.remove(&key[..]));
+        MAP_AUGROUP_NAME_TO_ID.with_mut(|groups| groups.remove(&key[..]));
     }
     if id > 0 {
-        map_augroup_id_to_name.with_mut(|names| names.remove(&id));
+        MAP_AUGROUP_ID_TO_NAME.with_mut(|names| names.remove(&id));
     }
 }
 
@@ -82,12 +82,12 @@ pub fn augroup_add(name: &[u8]) -> ::core::ffi::c_int {
         augroup_map_del(existing_id, Some(name));
     }
 
-    let next_id = next_augroup_id.get();
-    next_augroup_id.set(next_id + 1);
+    let next_id = NEXT_AUGROUP_ID.get();
+    NEXT_AUGROUP_ID.set(next_id + 1);
     // The two tables each own their copy of the name.
     let key = group_key(name);
-    map_augroup_name_to_id.with_mut(|groups| groups.insert(key.clone(), next_id));
-    map_augroup_id_to_name.with_mut(|names| names.insert(next_id, key));
+    MAP_AUGROUP_NAME_TO_ID.with_mut(|groups| groups.insert(key.clone(), next_id));
+    MAP_AUGROUP_ID_TO_NAME.with_mut(|names| names.insert(next_id, key));
     next_id
 }
 
@@ -109,7 +109,7 @@ pub fn augroup_del(name: Option<&[u8]>, stupid_legacy_mode: bool) {
         let name = msg_bytes(shown.unwrap_or(b"[NULL]"));
         semsg!("E367: No such group: \"{name}\"");
         return;
-    } else if group == current_augroup.get() {
+    } else if group == CURRENT_AUGROUP.get() {
         emsg(gettext(c"E936: Cannot delete the current group"));
         return;
     }
@@ -124,7 +124,7 @@ pub fn augroup_del(name: Option<&[u8]>, stupid_legacy_mode: bool) {
         // the listing, which is what khash's `map_put_ref` over an existing
         // key did.
         let key = group_key(name);
-        map_augroup_name_to_id.with_mut(|groups| groups.insert(key, AUGROUP_DELETED));
+        MAP_AUGROUP_NAME_TO_ID.with_mut(|groups| groups.insert(key, AUGROUP_DELETED));
         augroup_map_del(group, None);
         return;
     }
@@ -144,7 +144,7 @@ pub fn augroup_del(name: Option<&[u8]>, stupid_legacy_mode: bool) {
 /// belongs to a group `:augroup!` renamed.
 pub fn augroup_find(name: &[u8]) -> ::core::ffi::c_int {
     let key = group_key(name);
-    let existing_id = map_augroup_name_to_id
+    let existing_id = MAP_AUGROUP_NAME_TO_ID
         .with(|groups| groups.get(&key[..]))
         .unwrap_or(0);
     if existing_id == AUGROUP_DELETED || existing_id > 0 {
@@ -169,16 +169,16 @@ pub fn augroup_name(mut group: ::core::ffi::c_int) -> Option<XString> {
         return Some(XString::from_cstr(get_deleted_augroup()));
     }
     if group == AUGROUP_ALL {
-        group = current_augroup.get();
+        group = CURRENT_AUGROUP.get();
     }
-    if group == next_augroup_id.get() {
+    if group == NEXT_AUGROUP_ID.get() {
         return Some(XString::from_cstr(c"END"));
     }
-    if group > next_augroup_id.get() {
+    if group > NEXT_AUGROUP_ID.get() {
         return None;
     }
 
-    let name = map_augroup_id_to_name.with(|names| {
+    let name = MAP_AUGROUP_ID_TO_NAME.with(|names| {
         names
             .get(&group)
             .map(|name| XString::from_bytes(&name[..name.len() - 1]))
@@ -194,12 +194,12 @@ pub(crate) fn augroup_is_deleted(group: ::core::ffi::c_int) -> bool {
         return true;
     }
     let group = if group == AUGROUP_ALL {
-        current_augroup.get()
+        CURRENT_AUGROUP.get()
     } else {
         group
     };
-    group < next_augroup_id.get()
-        && !map_augroup_id_to_name.with(|names| names.get(&group).is_some())
+    group < NEXT_AUGROUP_ID.get()
+        && !MAP_AUGROUP_ID_TO_NAME.with(|names| names.get(&group).is_some())
 }
 
 /// Whether a group called `name` exists.
@@ -222,16 +222,16 @@ pub fn do_augroup(arg: &CStr, del_group: bool) {
             augroup_del(Some(arg), true);
         }
     } else if arg.eq_ignore_ascii_case(b"end") {
-        current_augroup.set(AUGROUP_DEFAULT);
+        CURRENT_AUGROUP.set(AUGROUP_DEFAULT);
     } else if !arg.is_empty() {
-        current_augroup.set(augroup_add(arg));
+        CURRENT_AUGROUP.set(augroup_add(arg));
     } else {
         msg_start();
         msg_ext_set_kind(c"list_cmd");
         // The listing is the table's own order, which is creation order.
         // The names are copied out first: a message can run a redraw, and
         // nothing may hold the table across that.
-        let entries: Vec<(Box<[u8]>, ::core::ffi::c_int)> = map_augroup_name_to_id.with(|groups| {
+        let entries: Vec<(Box<[u8]>, ::core::ffi::c_int)> = MAP_AUGROUP_NAME_TO_ID.with(|groups| {
             groups
                 .entries()
                 .iter()

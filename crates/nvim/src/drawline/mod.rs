@@ -73,9 +73,9 @@ use crate::plines::{CharSize, CharsizeArg};
 use crate::plines::{getvcol, getvvcol, win_charsize};
 use crate::pos::ltoreq;
 use crate::search::FORWARD;
-use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
+use crate::search::state::{HIGHLIGHT_MATCH, SEARCH_MATCH_ENDCOL, SEARCH_MATCH_LINES};
 use crate::sign::SignTextAttrs;
-use crate::spell::spell_redraw_lnum;
+use crate::spell::SPELL_REDRAW_LNUM;
 use crate::spell::{check_need_cap, spell_cat_line, spell_to_word_end};
 use crate::state::mode::STATE;
 use crate::state::{MODE_INSERT, virtual_active};
@@ -87,7 +87,7 @@ use crate::types::NS;
 use crate::types::{ColNr, DiffLine, LineNr, Pos, ScreenAttr, ScreenChar, VarNumber};
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;
-use crate::winlayer::graph::{cmdwin_type, cmdwin_win};
+use crate::winlayer::graph::{CMDWIN_TYPE, CMDWIN_WIN};
 use core::mem::ManuallyDrop;
 
 // The carve of the transpiled module; see each child's docs.

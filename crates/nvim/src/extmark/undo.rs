@@ -3,7 +3,7 @@
 //! A change records what it did to the marks in an
 //! `ExtmarkUndoObject`, and [`extmark_apply_undo`] plays that back in either
 //! direction: a splice is inverted, a region move is moved back, and a
-//! `kExtmarkSavePos` entry restores a mark that the change deleted outright.
+//! `EXTMARK_SAVE_POS` entry restores a mark that the change deleted outright.
 //! [`Buf::splice_delete_extmarks`] is the recording side -- it walks the marks
 //! inside a range being deleted and decides, per mark, whether it is
 //! invalidated, moved to the edge or saved for restoration.
@@ -25,8 +25,8 @@ use super::del::del;
 use super::set::extmark_setraw;
 use super::splice::{move_region, splice_impl};
 use super::{
-    Buf, Extent, current_buf, decor_remove, itr_current, itr_get, itr_next, itr_rawkey,
-    kExtmarkNoUndo, kExtmarkUndo, tree_get_altpos, tree_revise_meta,
+    Buf, EXTMARK_NO_UNDO, EXTMARK_UNDO, Extent, current_buf, decor_remove, itr_current, itr_get,
+    itr_next, itr_rawkey, tree_get_altpos, tree_revise_meta,
 };
 use crate::extmark::{ExtmarkOp, ExtmarkSavePos, ExtmarkUndoObject};
 use crate::marktree::key::{
@@ -131,7 +131,7 @@ impl Buf {
             // passes `only_copy` (`save_orig_extmarks`) always passes its own
             // list, so the missing case is unreachable rather than guarded.
             if copy
-                && (only_copy || (op == kExtmarkUndo && !mt_no_undo(mark)))
+                && (only_copy || (op == EXTMARK_UNDO && !mt_no_undo(mark)))
                 && let Some(saved) = saved.as_deref_mut()
             {
                 let pos = ExtmarkSavePos {
@@ -169,15 +169,15 @@ pub fn extmark_apply_undo(undo_info: &ExtmarkUndoObject, undo: bool) {
             byte: splice.new_byte,
         };
         if undo {
-            splice_impl(buf, start, new, old, kExtmarkNoUndo);
+            splice_impl(buf, start, new, old, EXTMARK_NO_UNDO);
         } else {
-            splice_impl(buf, start, old, new, kExtmarkNoUndo);
+            splice_impl(buf, start, old, new, EXTMARK_NO_UNDO);
         }
     } else if let ExtmarkUndoObject::SavePos(pos) = undo_info {
         if undo && pos.old_row >= 0 {
             extmark_setraw(buf, pos.mark, pos.old_row, pos.old_col, pos.invalidated);
         }
-        // No redo: the `kExtmarkSplice` entry moves the marks back.
+        // No redo: the `EXTMARK_SPLICE` entry moves the marks back.
     } else if let ExtmarkUndoObject::Move(move_0) = undo_info {
         let start = Extent {
             row: move_0.start_row,
@@ -195,9 +195,9 @@ pub fn extmark_apply_undo(undo_info: &ExtmarkUndoObject, undo: bool) {
             byte: move_0.new_byte,
         };
         if undo {
-            move_region(buf, new, extent, start, kExtmarkNoUndo);
+            move_region(buf, new, extent, start, EXTMARK_NO_UNDO);
         } else {
-            move_region(buf, start, extent, new, kExtmarkNoUndo);
+            move_region(buf, start, extent, new, EXTMARK_NO_UNDO);
         }
     }
 }

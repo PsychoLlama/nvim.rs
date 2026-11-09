@@ -181,7 +181,7 @@ plus these whole-tree metrics, which are not per-file:
                         receiver** (see `check_cell_ptr`).
 
                     Both lists are keyed by *name*, not by file,
-                    deliberately: `main_loop` alone is read from 29 files
+                    deliberately: `MAIN_LOOP` alone is read from 29 files
                     that also hold unrelated `.ptr()` sites, so a file-keyed
                     list would exempt those too. A rename cannot silently
                     widen CELL_PTR_ALLOW — `check_names` fails the run if a
@@ -1013,8 +1013,8 @@ COUNTED_RE = {
 # them. Keyed by name because a file-keyed list would exempt every unrelated
 # site in the 29 files `main_loop` reaches.
 CELL_PTR_ALLOW = {
-    "main_loop": "uv_loop_t plus self-referential multiqueues; libuv owns the address",
-    "read_stream": "RStream — a uv stream handle registered with the loop",
+    "MAIN_LOOP": "uv_loop_t plus self-referential multiqueues; libuv owns the address",
+    "READ_STREAM": "RStream — a uv stream handle registered with the loop",
     # NB. `msgpack_rpc/server.rs` declares a second, unrelated `WATCHERS`;
     # the list is name-keyed, so a `.ptr()` there would be exempted too. It
     # has none today, and `cell_ptr` still counts it.
@@ -1075,7 +1075,7 @@ CELL_COPY_OWNER = (
     "CLIPBOARD",
     "EXPAND_WHAT",
     "PROVIDER_CALLER_SCOPE",
-    "counted",
+    "COUNTED",
     # The `Object` cells, from phase 22's F-P22-53 audit at the close: every
     # `GlobalCell<ApiString>` and `GlobalCell<Object>` in the tree, listed
     # whether or not the value it happens to hold owns anything today, so the
@@ -1086,7 +1086,7 @@ CELL_COPY_OWNER = (
     "METADATA",  # the API description; its arena is leaked, the tree shared
     # `msg_ext_id` left in phase 33: it is a field of the message state's
     # record now, whose `get` needs `Copy`, which `Object` is not.
-    "names",  # the two cached Lua completion answers in cmdexpand/generate
+    "NAMES",  # the two cached Lua completion answers in cmdexpand/generate
 )
 # Whitespace *is* tolerated here, unlike CELL_PTR_ALLOW_RE: this count is
 # not a subtraction from a substring total, and rustfmt wraps a long chain
@@ -4688,18 +4688,18 @@ SELF_TEST_PUB_ITEMS = [
 # and subtracts from `cell_ptr`, so it must match exactly what `cell_ptr`
 # matched — receiver-blind `.ptr()`/`.as_raw()`, with the receiver pinned.
 SELF_TEST_CELL_PTR_ALLOW = [
-    ("fn f() {\n    main_loop.ptr();\n}\n", 1),
+    ("fn f() {\n    MAIN_LOOP.ptr();\n}\n", 1),
     ("fn f() {\n    REFRESH_TIMER.as_raw();\n}\n", 1),
     # Spacing rustfmt never writes is not matched either — the subtraction
     # has to stay a subset of what `cell_ptr`'s substring needle counted.
-    ("fn f() {\n    main_loop . ptr();\n}\n", 0),
+    ("fn f() {\n    MAIN_LOOP . ptr();\n}\n", 0),
     # A field or a method of the same name is not the global.
-    ("fn f() {\n    loop_.main_loop.ptr();\n}\n", 1),
+    ("fn f() {\n    loop_.MAIN_LOOP.ptr();\n}\n", 1),
     ("fn f() {\n    x.not_main_loop.ptr();\n}\n", 0),
     # Another global's site is exactly what the metric is left holding.
     ("fn f() {\n    curbuf.ptr();\n}\n", 0),
     # Prose about one costs nothing.
-    ("// main_loop.ptr()\nfn f() {}\n", 0),
+    ("// MAIN_LOOP.ptr()\nfn f() {}\n", 0),
 ]
 # (source, expected sites classified by receiver). `CELL_PTR_SITE` drives the
 # partition and the accessor cap, so it has to see exactly the receivers
@@ -4728,7 +4728,7 @@ SELF_TEST_CELL_PTR_SITE = [
 SELF_TEST_CELL_PTR_PARTITION = [
     (
         {
-            "a.rs": "fn f() {\n    main_loop.ptr();\n    curwin.ptr();\n}\n",
+            "a.rs": "fn f() {\n    MAIN_LOOP.ptr();\n    curwin.ptr();\n}\n",
             "b.rs": "fn g() {\n    cell.ptr();\n    cell.ptr();\n"
             "    curbuf.ptr();\n    self.0.ptr();\n}\n",
         },
@@ -4750,7 +4750,7 @@ SELF_TEST_CELL_PTR_CHECK = [
         True,
     ),
     # A listed name may hold as many as its ruling allows.
-    ({"a.rs": "fn f() {\n    main_loop.ptr();\n    main_loop.ptr();\n}\n"}, False),
+    ({"a.rs": "fn f() {\n    MAIN_LOOP.ptr();\n    MAIN_LOOP.ptr();\n}\n"}, False),
     (
         {"a.rs": "fn f() {\n    cell.ptr();\n    cell.ptr();\n}\n"},
         False,

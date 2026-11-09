@@ -57,7 +57,7 @@ use crate::ex_getln::cmdline_ui_flush;
 use crate::getchar::state::EXPR_MAP_LOCK;
 use crate::global_cell::GlobalCell;
 use crate::grid::{GridRef, default_grid_ref, get_win_by_grid_handle};
-use crate::guard::textlock;
+use crate::guard::TEXTLOCK;
 use crate::highlight::state::{
     CTERM_NORMAL_BG_COLOR, CTERM_NORMAL_FG_COLOR, NORMAL_BG, NORMAL_FG, NORMAL_SP,
 };
@@ -75,7 +75,7 @@ use crate::options::{kOptBoFlagAll, kOptCmdheight, kOptRdbFlagFlush, kOptRdbFlag
 use crate::os::cshim::gettext;
 use crate::os::fs::current_dir;
 use crate::os::time::{os_hrtime, os_sleep};
-use crate::startup::{exiting, full_screen, starting, ui_client_channel_id};
+use crate::startup::{EXITING, FULL_SCREEN, UI_CLIENT_CHANNEL_ID, starting};
 use crate::state::MODE_CMDLINE;
 use crate::state::mode::STATE;
 use crate::types::DictBuilder;
@@ -272,7 +272,7 @@ fn is_tui(ui: &RemoteUI) -> bool {
 /// different screen. [`ui_override`] opts out of the intersection.
 pub fn ui_refresh() {
     assert!(
-        ui_client_channel_id.get() == 0,
+        UI_CLIENT_CHANNEL_ID.get() == 0,
         "the UI client has no UIs of its own"
     );
 
@@ -462,7 +462,7 @@ pub fn ui_attach_impl(mut ui: RemoteUI) {
     // flattened one. `_debug_float` is the same thing for debugging.
     let multigrid = ui.ui_ext[UI_MULTIGRID as usize];
     let float_debug = ui.ui_ext[UI_FLOAT_DEBUG as usize];
-    if !multigrid && !float_debug && ui_client_channel_id.get() == 0 {
+    if !multigrid && !float_debug && UI_CLIENT_CHANNEL_ID.get() == 0 {
         ui_comp_attach(&mut ui);
     }
     UIS.with_mut(|table| table.push(ui));
@@ -517,7 +517,7 @@ pub fn ui_detach_impl(chanid: u64) -> Option<RemoteUI> {
         Some(table.remove(index))
     })?;
 
-    if ui_count() != 0 && !exiting.get() {
+    if ui_count() != 0 && !EXITING.get() {
         // The screen size is the smallest attached UI's, so losing one can
         // make the screen bigger.
         ui_schedule_refresh();
@@ -649,7 +649,7 @@ pub fn ui_current_col() -> c_int {
 /// so this is what makes a redraw visible.
 pub fn ui_flush() {
     assert!(
-        ui_client_channel_id.get() == 0,
+        UI_CLIENT_CHANNEL_ID.get() == 0,
         "the UI client has no UIs of its own"
     );
     if ui_active() == 0 {
@@ -673,7 +673,7 @@ pub fn ui_flush() {
     }
 
     win_ui_flush(false);
-    if textlock.get() == 0 && EXPR_MAP_LOCK.get() == 0 {
+    if TEXTLOCK.get() == 0 && EXPR_MAP_LOCK.get() == 0 {
         // Both can run Lua handlers, which the locks exist to keep out.
         cmdline_ui_flush();
         msg_ext_ui_flush();
@@ -735,7 +735,7 @@ pub fn ui_flush() {
 /// Recomputes the cursor shape for the current mode, without disturbing
 /// `'conceallevel'`. For the paths that are about to redraw anyway.
 pub fn ui_cursor_shape_no_check_conceal() {
-    if !full_screen.get() {
+    if !FULL_SCREEN.get() {
         return;
     }
     let new_mode_idx = cursor_get_mode_idx();

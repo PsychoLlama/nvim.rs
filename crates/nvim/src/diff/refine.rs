@@ -239,7 +239,7 @@ fn tokenize_line(
     out: &mut Vec<u8>,
     map: &mut Vec<LinemapEntry>,
 ) {
-    let flags = diff_flags.get();
+    let flags = DIFF_FLAGS.get();
     let trim_eol = flags & (DIFF_IWHITEEOL | DIFF_IWHITE) != 0;
     let mut in_keyword = false;
     // Where to rewind to if the line ends in white space: the state as of
@@ -398,7 +398,7 @@ fn change_for(new_diff: &DiffBlock, linemap: &LineMap) -> DiffLineChange {
 /// the tab page's buffer table -- copied so that a buffer with no text in
 /// the block can be left out of it.
 pub(crate) fn diff_find_change_inline_diff(dp: &mut DiffBlock, slots: &DiffSlots) {
-    let save_diff_algorithm = diff_algorithm.get();
+    let save_diff_algorithm = DIFF_ALGORITHM.get();
     // The inline diff only supports the internal algorithm; its two sides
     // are `file1`/`file2` below rather than the run's own images.
     let mut dio = DiffIo {
@@ -406,7 +406,7 @@ pub(crate) fn diff_find_change_inline_diff(dp: &mut DiffBlock, slots: &DiffSlots
         ..DiffIo::default()
     };
     // Always slide diff splits along whitespace.
-    diff_algorithm.set(save_diff_algorithm | XDF_INDENT_HEURISTIC);
+    DIFF_ALGORITHM.set(save_diff_algorithm | XDF_INDENT_HEURISTIC);
 
     // The table `diff_read` and the refinement read: which buffers take part.
     let mut slots = *slots;
@@ -442,7 +442,7 @@ pub(crate) fn diff_find_change_inline_diff(dp: &mut DiffBlock, slots: &DiffSlots
             let mut lines = buf.lines();
             for off in 0..dp.df_count[i] {
                 let line = lines.line(dp.df_lnum[i] + off);
-                let word = diff_flags.get() & DIFF_INLINE_WORD != 0;
+                let word = DIFF_FLAGS.get() & DIFF_INLINE_WORD != 0;
                 tokenize_line(line, off, &chartab, word, out, map);
             }
             if first {
@@ -457,10 +457,10 @@ pub(crate) fn diff_find_change_inline_diff(dp: &mut DiffBlock, slots: &DiffSlots
         }
 
         if file1_idx != usize::MAX {
-            if diff_flags.get() & DIFF_INLINE_WORD != 0 {
+            if DIFF_FLAGS.get() & DIFF_INLINE_WORD != 0 {
                 let start = dp.df_lnum[file1_idx];
                 refine_inline_word(&mut blocks, &slots, &linemap, file1_idx, start);
-            } else if diff_flags.get() & DIFF_INLINE_CHAR != 0 {
+            } else if DIFF_FLAGS.get() & DIFF_INLINE_CHAR != 0 {
                 refine_inline_char(&mut blocks, &linemap, file1_idx);
             }
         }
@@ -470,6 +470,6 @@ pub(crate) fn diff_find_change_inline_diff(dp: &mut DiffBlock, slots: &DiffSlots
             .extend(blocks.iter().map(|new_diff| change_for(new_diff, &linemap)));
     }
 
-    diff_algorithm.set(save_diff_algorithm);
+    DIFF_ALGORITHM.set(save_diff_algorithm);
     dp.has_changes = true;
 }

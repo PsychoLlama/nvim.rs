@@ -283,11 +283,11 @@ pub fn do_execreg(regname: RegName, colon: bool, addcr: bool, silent: bool) -> R
     if regname == b':' {
         // The last command line, re-run. Control characters have to be
         // escaped with CTRL-V or the typeahead buffer would act on them.
-        let Some(last) = last_cmdline.with(Clone::clone) else {
+        let Some(last) = LAST_CMDLINE.with(Clone::clone) else {
             emsg(gettext(E_NOLASTCMD));
             return Err(Failed);
         };
-        new_last_cmdline.set(None);
+        NEW_LAST_CMDLINE.set(None);
         let p = escaped_with(
             &last,
             b"\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0B\x0C\r\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F",

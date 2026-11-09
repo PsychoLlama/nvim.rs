@@ -1,6 +1,6 @@
 //! Which script the running code belongs to.
 //!
-//! `current_sctx` is what `<sfile>`, `:verbose` and every `sourcing` message
+//! `CURRENT_SCTX` is what `<sfile>`, `:verbose` and every `sourcing` message
 //! read, and what `guard::Script` saves and restores around anything that
 //! runs code from elsewhere. The `SID_*` triple names the three contexts
 //! that are not a file (a `-c` command, a `--cmd` command, an environment
@@ -15,7 +15,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
 use crate::runtime::defs::EStackType;
@@ -28,5 +27,5 @@ pub(crate) const ETYPE_TOP: EStackType = 0;
 pub(crate) const SID_CMDARG: c_int = -2 as c_int;
 pub(crate) const SID_CARG: c_int = -3 as c_int;
 pub(crate) const SID_ENV: c_int = -4 as c_int;
-pub(crate) static current_sctx: GlobalCell<ScriptCtx> = GlobalCell::new(ScriptCtx::NONE);
-pub(crate) static did_source_packages: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static CURRENT_SCTX: GlobalCell<ScriptCtx> = GlobalCell::new(ScriptCtx::NONE);
+pub(crate) static DID_SOURCE_PACKAGES: GlobalCell<bool> = GlobalCell::new(false);

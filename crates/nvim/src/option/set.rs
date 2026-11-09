@@ -43,12 +43,12 @@ use crate::eval::vars::{
     reset_v_option_vars, set_vim_var_string, set_vim_var_tv, with_vim_var_str,
 };
 use crate::global_cell::GlobalCell;
-use crate::guard::{sandbox, secure};
+use crate::guard::{SANDBOX, SECURE};
 use crate::lua::executor::nlua_set_sctx;
 use crate::memory::XString;
 use crate::message::{E_INVARG, E_SANDBOX, E_SECURE, E_UNSUPPORTEDOPTION};
 use crate::mouse::setmouse;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::startup::starting;
 use crate::ui::state::T_COLORS;
 
@@ -337,7 +337,7 @@ pub(crate) fn did_set_option(
         // Nothing to vet: the caller is putting a value back.
     } else if opt.immutable && args.os_oldval != args.os_newval {
         errmsg = Err(E_UNSUPPORTEDOPTION.into());
-    } else if (secure.get() != 0 || sandbox.get() != 0)
+    } else if (SECURE.get() != 0 || SANDBOX.get() != 0)
         && opt.flags & OPT_FLAG_SECURE as uint32_t != 0
     {
         errmsg = Err(E_SECURE.into());
@@ -378,7 +378,7 @@ pub(crate) fn did_set_option(
 
     if set_sid != SID_NONE {
         let script_ctx = if set_sid == 0 {
-            current_sctx.get()
+            CURRENT_SCTX.get()
         } else {
             ScriptCtx {
                 sc_sid: set_sid,
@@ -452,7 +452,7 @@ pub(crate) fn did_set_option(
     let flagsp_local =
         scope_both.then(|| insecure_flag(Win::current_or_none(), opt_idx, OptionSetFlags::LOCAL));
     if !value_checked
-        && (secure.get() != 0 || sandbox.get() != 0 || opt_flags.has(OptionSetFlags::MODELINE))
+        && (SECURE.get() != 0 || SANDBOX.get() != 0 || opt_flags.has(OptionSetFlags::MODELINE))
     {
         flagsp.set(true);
         if let Some(local) = flagsp_local {
@@ -539,14 +539,14 @@ pub(crate) fn set_option(
     let new_value = if direct { OptVal::Nil } else { value.clone() };
 
     let insecure = insecure_flag(Win::current_or_none(), opt_idx, opt_flags).is_set();
-    let secure_saved = secure.get();
+    let secure_saved = SECURE.get();
     // Deal with the side effects of a modeline, of the sandbox, or of a
     // value amended rather than replaced, in secure mode.
     if opt_flags.has(OptionSetFlags::MODELINE)
-        || sandbox.get() != 0
+        || SANDBOX.get() != 0
         || (!value_replaced && insecure)
     {
-        secure.set(1);
+        SECURE.set(1);
     }
 
     let old = replace_slot(opt_idx, varp, value);
@@ -561,7 +561,7 @@ pub(crate) fn set_option(
         value_replaced,
     );
 
-    secure.set(secure_saved);
+    SECURE.set(secure_saved);
 
     if errmsg.is_ok()
         && let Some(old_values) = old_values
@@ -619,7 +619,7 @@ pub(crate) fn set_option_value(
 ) -> Result<(), OptError> {
     debug_assert!(opt_idx != kOptInvalid);
 
-    if sandbox.get() > 0 && get_option(opt_idx).flags & OPT_FLAG_SECURE != 0 {
+    if SANDBOX.get() > 0 && get_option(opt_idx).flags & OPT_FLAG_SECURE != 0 {
         return Err(OptError::Static(E_SANDBOX));
     }
     set_option(opt_idx, value, opt_flags, 0, false, true)
@@ -669,6 +669,6 @@ pub(crate) fn set_option_value_give_err(
 /// options another option's callback has just overridden on its behalf.
 pub(crate) fn didset_options_sctx(opt_flags: OptionSetFlags, opts: &[OptIndex]) {
     for &opt_idx in opts {
-        set_option_sctx(opt_idx, opt_flags, current_sctx.get());
+        set_option_sctx(opt_idx, opt_flags, CURRENT_SCTX.get());
     }
 }

@@ -21,7 +21,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::api::keysets::KeyDict_exec_opts;
 use crate::api::private::helpers::string_to_array;
@@ -46,25 +45,25 @@ use crate::types::{ApiDict, ApiString, Array, Error, KeyValuePair, Object, VAR_L
 use core::ffi::{CStr, c_int};
 
 /// The `ContextTypeFlags` a `Context` can carry, one bit per section.
-pub const kCtxFuncs: c_int = 32;
-pub const kCtxSFuncs: c_int = 16;
-pub const kCtxGVars: c_int = 8;
-pub const kCtxBufs: c_int = 4;
-pub const kCtxJumps: c_int = 2;
-pub const kCtxRegs: c_int = 1;
-pub const kShaDaForceit: c_int = 4;
-pub const kShaDaWantInfo: c_int = 1;
+pub const CTX_FUNCS: c_int = 32;
+pub const CTX_S_FUNCS: c_int = 16;
+pub const CTX_G_VARS: c_int = 8;
+pub const CTX_BUFS: c_int = 4;
+pub const CTX_JUMPS: c_int = 2;
+pub const CTX_REGS: c_int = 1;
+pub const SHA_DA_FORCEIT: c_int = 4;
+pub const SHA_DA_WANT_INFO: c_int = 1;
 
 /// `shada_read_string` flags for every restore: read the info sections, and
 /// overwrite what is already there.
-const SHADA_RESTORE: c_int = kShaDaWantInfo | kShaDaForceit;
+const SHADA_RESTORE: c_int = SHA_DA_WANT_INFO | SHA_DA_FORCEIT;
 
 /// `'shada'` while a context is being restored: no history, 100 marks, and
 /// the buffer list.
 const SHADA_WHILE_RESTORING: &CStr = c"!,'100,%";
 
 /// Every part a context can save: what `ctxpush()` with no argument takes.
-pub const CTX_ALL: c_int = kCtxRegs | kCtxJumps | kCtxBufs | kCtxGVars | kCtxSFuncs | kCtxFuncs;
+pub const CTX_ALL: c_int = CTX_REGS | CTX_JUMPS | CTX_BUFS | CTX_G_VARS | CTX_S_FUNCS | CTX_FUNCS;
 
 /// The `ctxpush`/`ctxpop` stack. Contexts are pushed and popped at the end,
 /// but [`ctx_get`] indexes from the *top*, which is what `ctxget()` takes.
@@ -108,21 +107,21 @@ pub fn ctx_save(ctx: Option<&mut Context>, flags: c_int) {
 
 /// [`ctx_save`] into a context of the caller's own.
 fn ctx_save_into(ctx: &mut Context, flags: c_int) {
-    if flags & kCtxRegs != 0 {
+    if flags & CTX_REGS != 0 {
         ctx.regs = shada_encode_regs();
     }
-    if flags & kCtxJumps != 0 {
+    if flags & CTX_JUMPS != 0 {
         ctx.jumps = shada_encode_jumps();
     }
-    if flags & kCtxBufs != 0 {
+    if flags & CTX_BUFS != 0 {
         ctx.bufs = shada_encode_buflist();
     }
-    if flags & kCtxGVars != 0 {
+    if flags & CTX_G_VARS != 0 {
         ctx.gvars = shada_encode_gvars();
     }
-    if flags & kCtxFuncs != 0 {
+    if flags & CTX_FUNCS != 0 {
         ctx_save_funcs(ctx, false);
-    } else if flags & kCtxSFuncs != 0 {
+    } else if flags & CTX_S_FUNCS != 0 {
         ctx_save_funcs(ctx, true);
     }
 }
@@ -150,19 +149,19 @@ pub fn ctx_restore(ctx: Option<&Context>, flags: c_int) -> bool {
     let _ = set_option_value(kOptShada, shada_while_restoring(), OptionSetFlags::GLOBAL);
 
     // Each blob is read as a copy.
-    if flags & kCtxRegs != 0 {
+    if flags & CTX_REGS != 0 {
         shada_read_string(ctx.regs.clone(), SHADA_RESTORE);
     }
-    if flags & kCtxJumps != 0 {
+    if flags & CTX_JUMPS != 0 {
         shada_read_string(ctx.jumps.clone(), SHADA_RESTORE);
     }
-    if flags & kCtxBufs != 0 {
+    if flags & CTX_BUFS != 0 {
         shada_read_string(ctx.bufs.clone(), SHADA_RESTORE);
     }
-    if flags & kCtxGVars != 0 {
+    if flags & CTX_G_VARS != 0 {
         shada_read_string(ctx.gvars.clone(), SHADA_RESTORE);
     }
-    if flags & kCtxFuncs != 0 {
+    if flags & CTX_FUNCS != 0 {
         ctx_restore_funcs(ctx);
     }
 
@@ -267,23 +266,23 @@ pub fn ctx_from_dict(dict: ApiDict, ctx: &mut Context) -> Result<c_int, Error> {
         };
         match key.bytes() {
             b"regs" => {
-                types |= kCtxRegs;
+                types |= CTX_REGS;
                 ctx.regs = array_to_string(array)?;
             }
             b"jumps" => {
-                types |= kCtxJumps;
+                types |= CTX_JUMPS;
                 ctx.jumps = array_to_string(array)?;
             }
             b"bufs" => {
-                types |= kCtxBufs;
+                types |= CTX_BUFS;
                 ctx.bufs = array_to_string(array)?;
             }
             b"gvars" => {
-                types |= kCtxGVars;
+                types |= CTX_G_VARS;
                 ctx.gvars = array_to_string(array)?;
             }
             b"funcs" => {
-                types |= kCtxFuncs;
+                types |= CTX_FUNCS;
                 ctx.funcs = array;
             }
             _ => {}

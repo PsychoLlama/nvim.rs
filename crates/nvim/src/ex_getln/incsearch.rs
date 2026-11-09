@@ -35,7 +35,7 @@ pub(crate) fn trigger_cmd_autocmd(typechar: u8, evt: AutoEvent) {
     cmdline_autocmd(evt, cstr::in_bytes(&typestr));
 }
 
-/// C's `apply_autocmds(evt, fname, fname, false, curbuf)`: the one shape
+/// C's `apply_autocmds(evt, fname, fname, false, CURBUF)`: the one shape
 /// every `Cmdline*`/`Cmdwin*` event is fired with, where `<afile>` and
 /// `<amatch>` are the same string.
 ///
@@ -88,7 +88,7 @@ pub(crate) fn init_incsearch_state(s: &mut IncsearchState) {
     s.match_start = Win::current().w_cursor;
     s.did_incsearch = false;
     s.incsearch_postponed = false;
-    s.magic_overruled_save = magic_overruled.get();
+    s.magic_overruled_save = MAGIC_OVERRULED.get();
     clearpos(&mut s.match_end);
     s.save_cursor = Win::current().w_cursor;
     s.search_start = Win::current().w_cursor;
@@ -99,8 +99,8 @@ pub(crate) fn init_incsearch_state(s: &mut IncsearchState) {
 /// Move `t` to the end of the match the last search found, clamped to the
 /// last line of the buffer.
 pub(crate) fn set_search_match(t: &mut Pos) {
-    t.lnum += search_match_lines.get();
-    t.col = search_match_endcol.get();
+    t.lnum += SEARCH_MATCH_LINES.get();
+    t.col = SEARCH_MATCH_ENDCOL.get();
     if t.lnum > Buf::current().b_ml.ml_line_count {
         t.lnum = Buf::current().b_ml.ml_line_count;
         coladvance(Win::current(), ColNr::MAX);
@@ -120,7 +120,7 @@ pub(crate) struct PatternSpan {
 /// and wildmenu completion need.
 ///
 /// Answers where the pattern is when the line holds a valid one, having set
-/// `search_first_line` and `search_last_line`.
+/// `SEARCH_FIRST_LINE` and `SEARCH_LAST_LINE`.
 pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpan> {
     let mut delim_optional = false;
     let mut dummy = None;
@@ -131,8 +131,8 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
     let line = CmdLine::from_bytes(cstr::until_nul(Cc::current().bytes()));
 
     // Default range: all lines.
-    search_first_line.set(LineNr::ZERO);
-    search_last_line.set(MAXLNUM);
+    SEARCH_FIRST_LINE.set(LineNr::ZERO);
+    SEARCH_LAST_LINE.set(MAXLNUM);
 
     let mut ea = ExArg {
         line1: LineNr::ONE,
@@ -185,9 +185,9 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
             || abbreviates(c"vglobal", 0)
         {
             if at(cmd) == b's' && at(cmd + 1) == b'm' {
-                magic_overruled.set(OPTION_MAGIC_ON);
+                MAGIC_OVERRULED.set(OPTION_MAGIC_ON);
             } else if at(cmd) == b's' && at(cmd + 1) == b'n' {
-                magic_overruled.set(OPTION_MAGIC_OFF);
+                MAGIC_OVERRULED.set(OPTION_MAGIC_OFF);
             }
         } else if abbreviates(c"sort", 3) || abbreviates(c"uniq", 3) {
             // Skip over "!" and the flags.
@@ -264,12 +264,12 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
 
     if ea.addr_count > 0 {
         // Allow for a reverse match.
-        search_first_line.set(ea.line2.min(ea.line1));
-        search_last_line.set(ea.line2.max(ea.line1));
+        SEARCH_FIRST_LINE.set(ea.line2.min(ea.line1));
+        SEARCH_LAST_LINE.set(ea.line2.max(ea.line1));
     } else if ea.line.byte_at(cmd) == b's' && ea.line.byte_at(cmd + 1) != b'o' {
         // :s defaults to the current line.
-        search_last_line.set(Win::current().w_cursor.lnum);
-        search_first_line.set(search_last_line.get());
+        SEARCH_LAST_LINE.set(Win::current().w_cursor.lnum);
+        SEARCH_FIRST_LINE.set(SEARCH_LAST_LINE.get());
     }
 
     Win::current().w_cursor = save_cursor;
@@ -298,8 +298,8 @@ pub(crate) fn do_incsearch_highlighting(
     }
 
     // By default search all lines.
-    search_first_line.set(LineNr::ZERO);
-    search_last_line.set(MAXLNUM);
+    SEARCH_FIRST_LINE.set(LineNr::ZERO);
+    SEARCH_LAST_LINE.set(MAXLNUM);
 
     if firstc == b'/' || firstc == b'?' {
         return Some(PatternSpan {
@@ -357,16 +357,16 @@ pub(crate) fn may_do_incsearch_highlighting(
         ui_flush();
     }
 
-    if search_first_line.get() == LineNr::ZERO {
+    if SEARCH_FIRST_LINE.get() == LineNr::ZERO {
         // Start at the original cursor position.
         Win::current().w_cursor = s.search_start;
-    } else if search_first_line.get() > Buf::current().b_ml.ml_line_count {
+    } else if SEARCH_FIRST_LINE.get() > Buf::current().b_ml.ml_line_count {
         // Start after the last line.
         Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
         Win::current().w_cursor.col = ColNr::MAX;
     } else {
         // Start at the first line in the range.
-        Win::current().w_cursor.lnum = search_first_line.get();
+        Win::current().w_cursor.lnum = SEARCH_FIRST_LINE.get();
         Win::current().w_cursor.col = ColNr::ZERO;
     }
 
@@ -378,7 +378,7 @@ pub(crate) fn may_do_incsearch_highlighting(
         if !p_hls() {
             search_flags += SEARCH_KEEP;
         }
-        if search_first_line.get() != LineNr::ZERO {
+        if SEARCH_FIRST_LINE.get() != LineNr::ZERO {
             search_flags += SEARCH_START;
         }
         // Half a second of search time.
@@ -397,8 +397,8 @@ pub(crate) fn may_do_incsearch_highlighting(
         found = do_search(None, dir, search_delim, &pat, count, flags, Some(&mut sia)).is_some();
         drop(no_emsg);
 
-        if Win::current().w_cursor.lnum < search_first_line.get()
-            || Win::current().w_cursor.lnum > search_last_line.get()
+        if Win::current().w_cursor.lnum < SEARCH_FIRST_LINE.get()
+            || Win::current().w_cursor.lnum > SEARCH_LAST_LINE.get()
         {
             // The match is outside the address range.
             found = false;
@@ -424,7 +424,7 @@ pub(crate) fn may_do_incsearch_highlighting(
     }
 
     // Add or remove the search match position.
-    highlight_match.set(found);
+    HIGHLIGHT_MATCH.set(found);
 
     // First restore the old curwin values, so the screen is positioned the
     // same way the real search command would leave it.
@@ -445,7 +445,7 @@ pub(crate) fn may_do_incsearch_highlighting(
     // Avoids a flash when typing "foo\|".
     if !use_last_pat
         && empty_pattern(&pattern_of(cc, skiplen, patlen), search_delim)
-        && !no_hlsearch.get()
+        && !NO_HLSEARCH.get()
     {
         redraw_all_later(UPD_SOME_VALID);
         set_no_hlsearch(true);
@@ -460,7 +460,7 @@ pub(crate) fn may_do_incsearch_highlighting(
 
     redraw_later(Win::current(), UPD_SOME_VALID);
     let _ = update_screen();
-    highlight_match.set(false);
+    HIGHLIGHT_MATCH.set(false);
     restore_last_search_pattern();
 
     // Leave the cursor at the end so CTRL-R CTRL-W works — but not when
@@ -565,13 +565,13 @@ pub(crate) fn finish_incsearch_highlighting(
         Win::current().w_cursor = s.search_start;
     }
     restore_viewstate(Win::current(), &s.old_viewstate);
-    highlight_match.set(false);
+    HIGHLIGHT_MATCH.set(false);
 
     // By default search all lines.
-    search_first_line.set(LineNr::ZERO);
-    search_last_line.set(MAXLNUM);
+    SEARCH_FIRST_LINE.set(LineNr::ZERO);
+    SEARCH_LAST_LINE.set(MAXLNUM);
 
-    magic_overruled.set(s.magic_overruled_save);
+    MAGIC_OVERRULED.set(s.magic_overruled_save);
 
     // Needed for TAB.
     validate_curwin_cursor();
@@ -692,11 +692,11 @@ pub(crate) fn may_do_command_line_next_incsearch(
         Win::current().w_cursor = s.match_start;
         curwin_cursor_moved();
         validate_curwin_cursor();
-        highlight_match.set(true);
+        HIGHLIGHT_MATCH.set(true);
         s.old_viewstate = save_viewstate(Win::current());
         redraw_later(Win::current(), UPD_NOT_VALID);
         let _ = update_screen();
-        highlight_match.set(false);
+        HIGHLIGHT_MATCH.set(false);
         redrawcmdline();
         Win::current().w_cursor = s.match_end;
     } else {
@@ -771,8 +771,8 @@ fn pattern_of(cc: Cc, start: ::core::ffi::c_int, len: ::core::ffi::c_int) -> Vec
 /// the match, clamping it to the last line with the column advanced there.
 fn set_cursor_to_search_match() {
     let mut t = Win::current().w_cursor;
-    t.lnum += search_match_lines.get();
-    t.col = search_match_endcol.get();
+    t.lnum += SEARCH_MATCH_LINES.get();
+    t.col = SEARCH_MATCH_ENDCOL.get();
     let past_end = t.lnum > Buf::current().b_ml.ml_line_count;
     if past_end {
         t.lnum = Buf::current().b_ml.ml_line_count;

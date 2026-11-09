@@ -84,7 +84,7 @@ struct Region {
     op: OpArg,
 }
 
-/// Restores `curbuf` and 'virtualedit' when the builtin returns.
+/// Restores `CURBUF` and 'virtualedit' when the builtin returns.
 ///
 /// Both entry points move the current buffer to the one the positions name
 /// so that the line accessors answer for it, and both must put it back
@@ -499,7 +499,7 @@ fn clamp_corners(p1: &mut Pos, p2: &mut Pos, line_len: ColNr, allow_eol: bool) {
 }
 
 /// Append one line's `[[bufnr, lnum, col, off], [bufnr, lnum, col, off]]`.
-/// `result` holds the list being built, and `curbuf` is the region's own
+/// `result` holds the list being built, and `CURBUF` is the region's own
 /// buffer -- the caller's `BufferSwap` has already put it there.
 fn add_regionpos_range(result: &mut TypVal, p1: Pos, p2: Pos) {
     let pair = tv_list_alloc(2);

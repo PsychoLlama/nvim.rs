@@ -14,7 +14,7 @@
 //!
 //! Of the three arms [`delete_chars`] is the delicate one: a charwise region
 //! that spans lines is deleted as a truncate, a line delete, a byte delete and
-//! a join, with `curbuf_splice_pending` held over the lot so that the four
+//! a join, with `CURBUF_SPLICE_PENDING` held over the lot so that the four
 //! edits reach extmarks and the buffer-update RPC as the single splice
 //! [`get_region_bytecount`] measured up front.
 
@@ -27,7 +27,7 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_UNDO;
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
@@ -283,7 +283,7 @@ fn delete_block(op: &mut OpArg) -> Result<(), UndoFailed> {
                 bd.textcol,
                 ColNr::new(bd.textlen),
                 ColNr::new(pad),
-                kExtmarkUndo,
+                EXTMARK_UNDO,
             );
         }
         lnum += 1;
@@ -450,7 +450,7 @@ fn delete_chars_one_line(op: &OpArg) -> Result<(), UndoFailed> {
 ///
 /// Four edits -- truncate the first line, delete the whole lines between,
 /// delete the head of the last, join what is left -- bracketed by
-/// `curbuf_splice_pending` so that extmarks and the buffer-update RPC see the
+/// `CURBUF_SPLICE_PENDING` so that extmarks and the buffer-update RPC see the
 /// one splice measured up front rather than four.
 ///
 /// `op` must be charwise and span at least two lines.
@@ -499,7 +499,7 @@ fn delete_chars_across_lines(op: &OpArg) -> Result<(), UndoFailed> {
         0,
         ColNr::ZERO,
         0,
-        kExtmarkUndo,
+        EXTMARK_UNDO,
     );
     Ok(())
 }

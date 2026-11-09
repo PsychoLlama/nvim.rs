@@ -234,7 +234,7 @@ pub(crate) fn qf_jump_to_usable_window(
     }
 
     let only_the_quickfix_window =
-        firstwin.get() == lastwin.get() && buf_is_quickfix(current_buf());
+        FIRSTWIN.get() == LASTWIN.get() && buf_is_quickfix(current_buf());
     if only_the_quickfix_window || !usable_win || newwin {
         qf_open_new_file_win(ll_ref)?;
         // Close it again if the jump fails.

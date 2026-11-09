@@ -26,15 +26,15 @@ use crate::drawscreen::{
 use crate::drawscreen::state::{NEED_MAKETITLE, REDRAW_CMDLINE};
 use crate::eval::eval_to_string;
 use crate::eval::vars::{set_vim_var_nr, var_redir_start, var_redir_stop};
+use crate::ex_docmd::EX_PRESSEDRETURN;
 use crate::ex_docmd::argopt::open_exfile;
-use crate::ex_docmd::ex_pressedreturn;
 use crate::ex_getln::state::CMDPREVIEW;
 use crate::highlight_group::{do_highlight, load_colors};
 use crate::message::state::{
     MSG_COL, MSG_DIDOUT, NEED_WAIT_RETURN, REDIR_FD, REDIR_OFF, REDIR_REG, REDIR_VNAME,
 };
 use crate::option::vars::{P_LZ, p_hls, p_lz};
-use crate::search::state::no_hlsearch;
+use crate::search::state::NO_HLSEARCH;
 use crate::state::mode::STATE;
 
 use crate::message::{msg, msg_ext_set_kind};
@@ -256,8 +256,8 @@ pub(crate) fn ex_digraphs(excmd: &mut ExArg) {
 
 /// Set 'no_hlsearch', keeping `v:hlsearch` in step.
 pub fn set_no_hlsearch(flag: bool) {
-    no_hlsearch.set(flag);
-    set_vim_var_nr(Vv::Hlsearch, VarNumber::from(!no_hlsearch.get() && p_hls()));
+    NO_HLSEARCH.set(flag);
+    set_vim_var_nr(Vv::Hlsearch, VarNumber::from(!NO_HLSEARCH.get() && p_hls()));
 }
 
 /// `:nohlsearch`.
@@ -268,12 +268,12 @@ pub(crate) fn ex_nohlsearch(_excmd: &mut ExArg) {
 
 /// Did the last Ex-mode line end with a bare Return?
 pub fn get_pressedreturn() -> bool {
-    ex_pressedreturn.get()
+    EX_PRESSEDRETURN.get()
 }
 
 /// Record whether it did.
 pub fn set_pressedreturn(val: bool) {
-    ex_pressedreturn.set(val);
+    EX_PRESSEDRETURN.set(val);
 }
 
 /// `redraw_all_later()` as checked code.

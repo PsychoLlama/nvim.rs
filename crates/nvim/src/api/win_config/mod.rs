@@ -22,7 +22,7 @@ use crate::decoration::defs::VirtTextChunk;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later, set_must_redraw};
 use crate::eval::window::{restore_win, restore_win_noblock, switch_win, switch_win_noblock};
 use crate::ex_docmd::expr_map_locked;
-use crate::guard::textlock;
+use crate::guard::TEXTLOCK;
 use crate::highlight_group::{syn_check_group, syn_id2name};
 use crate::mbyte::{c_string_cells, c_string_cells_len};
 use crate::message::{E_CMDWIN, E_TEXTLOCK};
@@ -50,7 +50,7 @@ use crate::window::{
 use crate::winfloat::{
     win_config_float, win_float_find_altwin, win_new_float, win_set_minimal_style,
 };
-use crate::winlayer::graph::{cmdline_win, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win};
+use crate::winlayer::graph::{CMDLINE_WIN, CMDWIN_BUF, CMDWIN_OLD_CURWIN, CMDWIN_TYPE, CMDWIN_WIN};
 
 // The carve of the transpiled module; see each child's docs.
 mod apply;

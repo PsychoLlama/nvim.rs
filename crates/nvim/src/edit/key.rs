@@ -63,7 +63,7 @@ enum Next {
 /// which is the state loop's contract.
 pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
     // TODO(tarruda, upstream): this could look better with a lookup
-    // table, the way Normal mode's `nv_cmds[]` does it.
+    // table, the way Normal mode's `NV_CMD_TABLE[]` does it.
     let mut next = match s.c.special().ok_or(s.c) {
         // End input mode.
         Err(Key::ESC) => {
@@ -241,8 +241,8 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
         Ok(SpecialKey::Event) => {
             state_handle_k_event();
             // If CTRL-G U was used, apply it to the next typed key.
-            if dont_sync_undo.get() == KeepUndo::Now {
-                dont_sync_undo.set(KeepUndo::Armed);
+            if DONT_SYNC_UNDO.get() == KeepUndo::Now {
+                DONT_SYNC_UNDO.set(KeepUndo::Armed);
             }
             Next::CheckPum
         }
@@ -405,9 +405,9 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
 
 /// `<Esc>` and CTRL-C: end input mode -- unless a window here wants them.
 fn key_end_insert(s: &mut InsertState) -> Next {
-    if s.c == Key::CTRL_C && cmdwin_type.get() != 0 {
+    if s.c == Key::CTRL_C && CMDWIN_TYPE.get() != 0 {
         // Close the command-line window.
-        cmdwin_result.set(Key::from(SpecialKey::Ignore));
+        CMDWIN_RESULT.set(Key::from(SpecialKey::Ignore));
         GOT_INT.set(false); // don't stop executing autocommands et al
         s.nomove = true;
         return Next::Leave;
@@ -478,8 +478,8 @@ fn key_eol(s: &mut InsertState) -> Next {
         return Next::Continue;
     }
     // In the command-line window it accepts the line.
-    if cmdwin_type.get() != 0 {
-        cmdwin_result.set(Key::CAR);
+    if CMDWIN_TYPE.get() != 0 {
+        CMDWIN_RESULT.set(Key::CAR);
         return Next::Leave;
     }
     // In a prompt buffer it submits, unless Shift is held.
@@ -563,7 +563,7 @@ fn check_pum(s: &mut InsertState) {
     }
 
     if Buf::current().b_u_synced {
-        ins_need_undo.set(true);
+        INS_NEED_UNDO.set(true);
     }
 }
 
@@ -605,12 +605,12 @@ fn insert_normal_char(s: &mut InsertState) {
     if s.c.is(' ') {
         s.inserted_space = true;
         if inindent(0) {
-            can_cindent.set(false);
+            CAN_CINDENT.set(false);
         }
-        if Insstart_blank_vcol.get() == ColNr::MAX
+        if INSSTART_BLANK_VCOL.get() == ColNr::MAX
             && Win::current().w_cursor.lnum == INSSTART.get().lnum
         {
-            Insstart_blank_vcol.set(get_nolist_virtcol());
+            INSSTART_BLANK_VCOL.set(get_nolist_virtcol());
         }
     }
 
@@ -619,8 +619,8 @@ fn insert_normal_char(s: &mut InsertState) {
     // itself.  A character above 0x100 needs no CTRL-V in front of it.
     if vim_iswordc(s.c.code()) || (!check_abbr(s.c, s.c.code() >= 0x100) && s.c != Key::CTRL_RSB) {
         insert_special(s.c, false, false);
-        revins_legal.set(revins_legal.get() + 1);
-        revins_chars.set(revins_chars.get() + 1);
+        REVINS_LEGAL.set(REVINS_LEGAL.get() + 1);
+        REVINS_CHARS.set(REVINS_CHARS.get() + 1);
     }
 
     autoformat(true);

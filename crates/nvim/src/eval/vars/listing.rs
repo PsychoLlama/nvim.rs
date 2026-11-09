@@ -97,7 +97,7 @@ pub(crate) fn list_vim_vars(first: &mut bool) {
 
 /// The current script's `s:` scope, if there is one.
 pub(crate) fn list_script_vars(first: &mut bool) {
-    let sid = current_sctx.get().sc_sid;
+    let sid = CURRENT_SCTX.get().sc_sid;
     if let Some(dict) = script_scope_dict(sid) {
         list_dict_vars(&dict, c"s:", false, first);
     }

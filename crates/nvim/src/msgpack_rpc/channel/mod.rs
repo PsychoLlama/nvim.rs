@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 //! msgpack-rpc over a channel.
 //!
@@ -32,7 +31,7 @@ use crate::os::uv_error::UV_EPIPE;
 use core::ffi::{CStr, c_int};
 
 use crate::api::ui::remote_ui_disconnect;
-use crate::channel::channels;
+use crate::channel::CHANNELS;
 use crate::channel::defs::{Channel, ChannelCallFrame, ChannelPart, ClientType};
 use crate::channel::{
     channel_close, channel_decref, channel_free_later, channel_incref, channel_info_changed,
@@ -47,7 +46,7 @@ use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg, logmsg_line};
 use crate::msgpack_rpc::packer::Addressees;
 use crate::msgpack_rpc::unpacker::Unpacker;
 use crate::os::libc::uint64_t;
-use crate::startup::{ui_client_channel_id, ui_client_error_exit};
+use crate::startup::{UI_CLIENT_CHANNEL_ID, UI_CLIENT_ERROR_EXIT};
 use crate::types::{
     ApiDict, ApiString, Array, ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, Error, Integer,
     MessageType, Object,
@@ -70,27 +69,27 @@ use receive::parse_msgpack;
 mod known {
     use super::{ChannelPart, ClientType, MessageType};
 
-    pub(super) const kMessageTypeRequest: MessageType = 0;
-    pub(super) const kMessageTypeResponse: MessageType = 1;
+    pub(super) const MESSAGE_TYPE_REQUEST: MessageType = 0;
+    pub(super) const MESSAGE_TYPE_RESPONSE: MessageType = 1;
     pub(super) const MESSAGE_TYPE_NOTIFICATION: MessageType = 2;
-    pub(super) const kMessageTypeRedrawEvent: MessageType = 3;
+    pub(super) const MESSAGE_TYPE_REDRAW_EVENT: MessageType = 3;
 
     pub(super) const CHANNEL_PART_RPC: ChannelPart = 3;
 
-    pub(super) const kClientTypeMsgpackRpc: ClientType = 5;
+    pub(super) const CLIENT_TYPE_MSGPACK_RPC: ClientType = 5;
 
     /// The widest message any of the close paths formats, matching the
     /// `char buf[256]` upstream declares at each of them.
     pub(super) const CLOSE_MSG_MAX: usize = 256;
 }
 
-use crate::channel::defs::{kChannelStreamInternal, kChannelStreamProc, kChannelStreamStdio};
+use crate::channel::defs::{CHANNEL_STREAM_INTERNAL, CHANNEL_STREAM_PROC, CHANNEL_STREAM_STDIO};
 use known::*;
 
 use crate::api_error;
 use crate::global_cell::GlobalCell;
 
-pub(crate) static ch_before_blocking_events: GlobalCell<Option<ChildQueue>> = GlobalCell::new(None);
+pub(crate) static CH_BEFORE_BLOCKING_EVENTS: GlobalCell<Option<ChildQueue>> = GlobalCell::new(None);
 
 // ---------------------------------------------------------------------------
 // Opening and closing
@@ -98,7 +97,7 @@ pub(crate) static ch_before_blocking_events: GlobalCell<Option<ChildQueue>> = Gl
 
 /// Creates the queue that `nvim_get_mode` replies are answered from.
 pub fn rpc_init() {
-    ch_before_blocking_events.set(Some(ChildQueue::of_main_loop()));
+    CH_BEFORE_BLOCKING_EVENTS.set(Some(ChildQueue::of_main_loop()));
 }
 
 /// Turns channel `id` into an RPC endpoint and starts reading from it.
@@ -115,7 +114,7 @@ pub fn rpc_start(id: uint64_t) {
         rpc.next_request_id = 1;
         rpc.info = ApiDict::new();
         rpc.call_stack = CallStack::new();
-        chan.streamtype() == kChannelStreamInternal
+        chan.streamtype() == CHANNEL_STREAM_INTERNAL
     })
     .expect("rpc_start on a live channel");
 
@@ -159,20 +158,20 @@ fn rpc_close_event(id: uint64_t, _: uint64_t) {
     // Nothing reads the reason a closing channel's UI could not be found.
     drop(remote_ui_disconnect(id, false));
 
-    if ui_client_channel_id.get() != 0 && id == ui_client_channel_id.get() {
+    if UI_CLIENT_CHANNEL_ID.get() != 0 && id == UI_CLIENT_CHANNEL_ID.get() {
         // A `--remote-ui` client whose server went away: try to reconnect
         // before giving up.
         ui_client_attach_to_restarted_server();
-        if ui_client_channel_id.get() != id {
+        if UI_CLIENT_CHANNEL_ID.get() != id {
             return;
         }
         // An embedded server exits through its process-exit callback instead,
         // which is what carries the exit status.
-        if streamtype == kChannelStreamProc && ui_client_error_exit.get() < 0 {
+        if streamtype == CHANNEL_STREAM_PROC && UI_CLIENT_ERROR_EXIT.get() < 0 {
             return;
         }
         exit_on_closed_chan(0);
-    } else if streamtype == kChannelStreamStdio && !detach {
+    } else if streamtype == CHANNEL_STREAM_STDIO && !detach {
         exit_on_closed_chan(0);
     }
 }
@@ -350,7 +349,7 @@ pub(crate) fn rpc_write_raw(id: uint64_t, buffer: SharedBuffer) -> bool {
 /// One pass over the packer serves all of them: the packer's flush hands the
 /// same buffer to each.
 fn broadcast_event(name: &CStr, args: Array) {
-    let chans: Vec<uint64_t> = channels.with(|table| {
+    let chans: Vec<uint64_t> = CHANNELS.with(|table| {
         let rpc = table.values().filter(|channel| channel.is_rpc);
         rpc.map(|channel| channel.id).collect()
     });
@@ -385,7 +384,7 @@ fn write_to(id: uint64_t, buffer: SharedBuffer, rpc_only: bool) -> bool {
         if chan.rpc.closed || (rpc_only && !chan.is_rpc) {
             return Written::Refused;
         }
-        if chan.streamtype() == kChannelStreamInternal {
+        if chan.streamtype() == CHANNEL_STREAM_INTERNAL {
             // The reference is dropped by `internal_read`.
             chan.refcount.retain();
             put_job(&chan.events, Box::new(move || internal_read(id, &buffer)));

@@ -146,7 +146,7 @@ pub fn pum_set_info(selected: c_int, info: &[u8]) -> Option<Win> {
     }
     block_autocmds();
     REDRAWING_DISABLED.set(REDRAWING_DISABLED.get() + 1);
-    no_u_sync.set(no_u_sync.get() + 1);
+    NO_U_SYNC.set(NO_U_SYNC.get() + 1);
 
     let wp = match win_float_find_preview() {
         Some(wp) => wp,
@@ -161,7 +161,7 @@ pub fn pum_set_info(selected: c_int, info: &[u8]) -> Option<Win> {
     };
 
     let (_lnum, max_info_width) = pum_preview_set_text(wp, info);
-    no_u_sync.set(no_u_sync.get() - 1);
+    NO_U_SYNC.set(NO_U_SYNC.get() - 1);
     REDRAWING_DISABLED.set(REDRAWING_DISABLED.get() - 1);
     redraw_later(wp, UPD_NOT_VALID);
 
@@ -221,7 +221,7 @@ fn wants_info_window(cot_flags: c_uint, repeat: c_int) -> bool {
     ROWS.get() > 10
         && repeat <= 1
         && cot_flags & (kOptCotFlagPreview | kOptCotFlagPopup) != 0
-        && !(cot_flags & kOptCotFlagPreview != 0 && cmdwin_type.get() != 0)
+        && !(cot_flags & kOptCotFlagPreview != 0 && CMDWIN_TYPE.get() != 0)
 }
 
 /// Open (or reuse) the preview window and put the item's `info` in it.
@@ -242,9 +242,9 @@ fn pum_show_info(info: &[u8], repeat: c_int, use_float: bool, prev_selected: c_i
     }
 
     // A preview split is 3 lines by default, less if 'previewheight' is.
-    g_do_tagpreview.set(PUM_PREVIEW_HEIGHT);
-    if p_pvh() > 0 && p_pvh() < OptInt::from(g_do_tagpreview.get()) {
-        g_do_tagpreview.set(c_int::try_from(p_pvh()).unwrap_or(c_int::MAX));
+    G_DO_TAGPREVIEW.set(PUM_PREVIEW_HEIGHT);
+    if p_pvh() > 0 && p_pvh() < OptInt::from(G_DO_TAGPREVIEW.get()) {
+        G_DO_TAGPREVIEW.set(c_int::try_from(p_pvh()).unwrap_or(c_int::MAX));
     }
     let redraw_off = Suppress::redraw();
     // An autocommand that syncs undo here does weird things to the tree.
@@ -262,7 +262,7 @@ fn pum_show_info(info: &[u8], repeat: c_int, use_float: bool, prev_selected: c_i
 
     drop(no_sync);
     drop(redraw_off);
-    g_do_tagpreview.set(0);
+    G_DO_TAGPREVIEW.set(0);
 
     if Win::current().w_onebuf_opt.wo_pvw != 0 || Win::current().w_float_is_info {
         let mut res = Ok(());

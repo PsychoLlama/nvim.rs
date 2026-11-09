@@ -34,7 +34,7 @@ use crate::ex_docmd::lookup::check_for_word;
 
 use crate::arglist::state::ARG_HAD_LAST;
 use crate::ex_docmd::window::current_tab_nr;
-use crate::ex_docmd::{BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, cmdmod_has, quitmore};
+use crate::ex_docmd::{BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, QUITMORE, cmdmod_has};
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::message::vim_dialog_yesno;
 use crate::message::{E_INVARG2, E_INVARGVAL, E_INVRANGE};
@@ -400,7 +400,7 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
 /// How many files of the argument list nobody has edited yet, when leaving
 /// now would abandon them -- `None` when quitting is allowed.
 ///
-/// `quitmore` is what makes the second `:q` work: [`check_more`]'s refusal
+/// `QUITMORE` is what makes the second `:q` work: [`check_more`]'s refusal
 /// sets it, and `do_one_cmd` counts it down.
 pub(crate) fn unedited_files(forceit: bool) -> Option<c_int> {
     let n = crate::arglist::argcount() - Win::current().w_arg_idx - 1;
@@ -409,12 +409,12 @@ pub(crate) fn unedited_files(forceit: bool) -> Option<c_int> {
         || crate::arglist::argcount() <= 1
         || ARG_HAD_LAST.get()
         || n <= 0
-        || quitmore.get() != 0;
+        || QUITMORE.get() != 0;
     (!allowed).then_some(n)
 }
 
 /// Refuse to leave when the argument list has files nobody has edited yet:
-/// E173 (and `quitmore` set, so a second `:q` goes through), or -- with
+/// E173 (and `QUITMORE` set, so a second `:q` goes through), or -- with
 /// 'confirm' -- the dialog's "No".
 pub(crate) fn check_more(forceit: bool) -> Result<(), Failed> {
     let Some(n) = unedited_files(forceit) else {
@@ -442,7 +442,7 @@ pub(crate) fn check_more(forceit: bool) -> Result<(), Failed> {
         plural,
     );
     emsg_text(tr_plural!(fmt, n));
-    quitmore.set(2);
+    QUITMORE.set(2);
     Err(Failed)
 }
 

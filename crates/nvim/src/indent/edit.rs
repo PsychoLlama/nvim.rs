@@ -10,7 +10,7 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_UNDO;
 use crate::memory::XString;
 use crate::message::IOSIZE;
 use crate::narrow::as_index;
@@ -36,7 +36,7 @@ use crate::edit::{
     BeginlineOpts, backspace_until_column, beginline, replace_join, replace_push_nul,
 };
 use crate::ex_docmd::cmdmod_has;
-use crate::ex_eval::state::trylevel;
+use crate::ex_eval::state::TRYLEVEL;
 use crate::extmark::extmark_splice_cols;
 use crate::getchar::state::GOT_INT;
 use crate::guard::Suppress;
@@ -402,7 +402,7 @@ fn vreplace_restore(orig_line: XString, orig_col: ColNr) {
         } else {
             ColNr::ZERO
         },
-        kExtmarkUndo,
+        EXTMARK_UNDO,
     );
 }
 
@@ -552,7 +552,7 @@ pub fn copy_indent(size: c_int, src: &[u8]) -> bool {
 /// there is no `:try` to catch it.
 fn emsg_text_too_long() {
     emsg(gettext(E_RESULTING_TEXT_TOO_LONG));
-    if trylevel.get() == 0 {
+    if TRYLEVEL.get() == 0 {
         GOT_INT.set(true);
     }
 }
@@ -692,7 +692,7 @@ impl Retab {
                 ColNr::ZERO,
                 ColNr::new(old),
                 ColNr::new(new),
-                kExtmarkUndo,
+                EXTMARK_UNDO,
             );
         }
         if self.first_line == LineNr::ZERO {

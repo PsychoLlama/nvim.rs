@@ -28,7 +28,7 @@ use crate::os::cshim::{write_c_stderr, write_c_stdout};
 use crate::os::env::{ENV_NVIM, env_get_bounded};
 use crate::os::libc::{size_t, uint64_t};
 use crate::startup::exit::os_exit;
-use crate::startup::{MainParams, WIN_TABS, ui_client_channel_id};
+use crate::startup::{MainParams, UI_CLIENT_CHANNEL_ID, WIN_TABS};
 use crate::types::{ApiDict, ApiString, Array, Integer, Object};
 
 /// How long to wait for the server to answer the connection, in ms.
@@ -101,7 +101,7 @@ pub(crate) fn remote_request(parm: &mut MainParams, remote_args: usize, ui_only:
                     let why = b"Cannot attach UI of :terminal child to its parent. ";
                     fail(&[why, b"(Unset $NVIM to skip this check)\n"], 1);
                 }
-                ui_client_channel_id.set(chan);
+                UI_CLIENT_CHANNEL_ID.set(chan);
                 return;
             }
         }

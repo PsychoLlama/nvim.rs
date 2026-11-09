@@ -26,7 +26,7 @@ use crate::autocmd::defs::AcoSave;
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{win_execute_after, win_execute_before};
 use crate::ex_docmd::CmdModScope;
-use crate::log::g_min_log_level;
+use crate::log::G_MIN_LOG_LEVEL;
 use crate::lua::ffi::LUA_MULTRET;
 use crate::lua::stack::{At, Kind, Raise, Stack};
 use crate::narrow::number_as_int;
@@ -117,9 +117,9 @@ pub(crate) fn with(stack: &mut Stack) -> Result<c_int, Raise> {
         flags |= CmdModFlags::SILENT;
     }
 
-    let save_min_log_level = g_min_log_level.get();
+    let save_min_log_level = G_MIN_LOG_LEVEL.get();
     if log_level >= 0 {
-        g_min_log_level.set(log_level);
+        G_MIN_LOG_LEVEL.set(log_level);
     }
     let mods = CmdModScope::enter(CmdMod {
         cmod_flags: flags,
@@ -162,7 +162,7 @@ pub(crate) fn with(stack: &mut Stack) -> Result<c_int, Raise> {
 
     drop(mods);
     if log_level >= 0 {
-        g_min_log_level.set(save_min_log_level);
+        G_MIN_LOG_LEVEL.set(save_min_log_level);
     }
 
     if failed {

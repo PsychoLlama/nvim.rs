@@ -146,7 +146,7 @@ pub fn f_screenstring(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     }
 }
 
-/// `hlID({name})` — the highlight group's id, or 0.
+/// `HL_ID({name})` — the highlight group's id, or 0.
 pub fn f_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let name = numbuf.string(&args[0]);

@@ -30,7 +30,6 @@
 )]
 #![forbid(unsafe_code)]
 // The constants here keep upstream's spelling.
-#![allow(non_upper_case_globals)]
 
 mod tags;
 
@@ -40,7 +39,7 @@ use crate::charset::buf_init_chartab;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_cmds::newlnum;
-use crate::ex_docmd::state::cmdmod;
+use crate::ex_docmd::state::CMDMOD;
 use crate::ex_docmd::{cmdmod_has, do_cmdline_cmd};
 use crate::getchar::state::KEY_TYPED;
 use crate::highlight_group::HLF_E;
@@ -99,7 +98,7 @@ mod flag {
     pub(super) const TAG_MANY: c_uint = 300;
 
     /// `path_full_compare`'s "same file" answer.
-    pub(super) const kEqualFiles: FileComparison = 1;
+    pub(super) const EQUAL_FILES: FileComparison = 1;
     /// `nlua_exec` return modes.
     pub(super) const RET_OBJECT: LuaRetMode = 0;
     pub(super) const RET_NIL_BOOL: LuaRetMode = 1;
@@ -272,7 +271,7 @@ fn enter_help_window() -> Result<HelpWindow, Failed> {
     };
     // Re-use an existing help window; always open a new one for
     // `:tab help`.
-    let same_tab = cmdmod.with(|m| m.cmod_tab) == 0;
+    let same_tab = CMDMOD.with(|m| m.cmod_tab) == 0;
     if buf_is_help(Win::current().buffer_or_none()) && same_tab {
         return Ok(opened);
     }
@@ -300,7 +299,7 @@ fn enter_help_window() -> Result<HelpWindow, Failed> {
     // Split off a help window; put it at the far top when no position
     // was given and the current window is vertically split and narrow.
     let mut split = WSP_HELP;
-    if cmdmod.with(|m| m.cmod_split) == 0
+    if CMDMOD.with(|m| m.cmod_split) == 0
         && Win::current().w_width != COLUMNS.get()
         && Win::current().w_width < 80
     {

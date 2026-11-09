@@ -37,13 +37,13 @@ use crate::ex_docmd::address::{get_address, skip_range};
 use crate::ex_docmd::onecmd::ex_func_is;
 
 use crate::ex_docmd::source::SourceKind;
-use crate::ex_docmd::state::cmdmod;
+use crate::ex_docmd::state::CMDMOD;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
-    E_INVRANGE, ExFunc, SID_NONE, builtin_command_cstr, cmdnames, ex_msg, ex_pressedreturn,
+    E_INVRANGE, EX_PRESSEDRETURN, ExFunc, SID_NONE, builtin_command_cstr, cmdnames, ex_msg,
 };
 use crate::getchar::state::EXPR_MAP_LOCK;
-use crate::guard::sandbox;
+use crate::guard::SANDBOX;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::message::state::{DID_EMSG, EMSG_SILENT, MSG_COL, MSG_SCROLL, MSG_SILENT};
 use crate::option::vars::{P_EI, P_VERBOSE, p_verbose};
@@ -169,7 +169,7 @@ impl ExArg<'_> {
                 self.line.substituted = true;
                 use_plus_cmd = true;
                 if !skip_only {
-                    ex_pressedreturn.set(true);
+                    EX_PRESSEDRETURN.set(true);
                 }
                 break;
             }
@@ -186,7 +186,7 @@ impl ExArg<'_> {
             }
             if first == 0 {
                 if !skip_only {
-                    ex_pressedreturn.set(true);
+                    EX_PRESSEDRETURN.set(true);
                 }
                 return Err(Failed);
             }
@@ -477,52 +477,52 @@ pub(crate) fn cmdmod_has(flags: CmdModFlags) -> bool {
 
 /// The whole flag set the running command carries.
 pub(crate) fn cmdmod_flags() -> CmdModFlags {
-    cmdmod.with(|mods| mods.cmod_flags)
+    CMDMOD.with(|mods| mods.cmod_flags)
 }
 
 /// Replace the flag set — for the two scopes that save it, force a flag on
 /// for a stretch of their own, and put the old set back by hand.
 pub(crate) fn cmdmod_set_flags(flags: CmdModFlags) {
-    cmdmod.with_mut(|mods| mods.cmod_flags = flags);
+    CMDMOD.with_mut(|mods| mods.cmod_flags = flags);
 }
 
 /// Force `flags` on for the rest of the command, as `:lockmarks` in front
 /// of it would have.
 pub(crate) fn cmdmod_add_flags(flags: CmdModFlags) {
-    cmdmod.with_mut(|mods| mods.cmod_flags |= flags);
+    CMDMOD.with_mut(|mods| mods.cmod_flags |= flags);
 }
 
 /// `:tab`'s argument: the 1-based tab page a new window goes to, or 0 for
 /// "no `:tab` was used".
 pub(crate) fn cmdmod_tab() -> c_int {
-    cmdmod.with(|mods| mods.cmod_tab)
+    CMDMOD.with(|mods| mods.cmod_tab)
 }
 
 /// See [`cmdmod_tab`].
 pub(crate) fn cmdmod_set_tab(tab: c_int) {
-    cmdmod.with_mut(|mods| mods.cmod_tab = tab);
+    CMDMOD.with_mut(|mods| mods.cmod_tab = tab);
 }
 
 /// The `WSP_*` bits `:aboveleft`, `:vertical` and friends asked for.
 pub(crate) fn cmdmod_split() -> c_int {
-    cmdmod.with(|mods| mods.cmod_split)
+    CMDMOD.with(|mods| mods.cmod_split)
 }
 
 /// Force `bits` on in the split direction, as a `:vertical` in front of the
 /// command would have.
 pub(crate) fn cmdmod_add_split(bits: c_int) {
-    cmdmod.with_mut(|mods| mods.cmod_split |= bits);
+    CMDMOD.with_mut(|mods| mods.cmod_split |= bits);
 }
 
 /// See [`cmdmod_split`].
 pub(crate) fn cmdmod_set_split(split: c_int) {
-    cmdmod.with_mut(|mods| mods.cmod_split = split);
+    CMDMOD.with_mut(|mods| mods.cmod_split = split);
 }
 
 /// Everything `<mods>` and `smods` report, read out in one go: the four
 /// scalars a caller rendering the modifier set needs.
 pub(crate) fn cmdmod_report() -> (c_int, c_int, c_int, CmdModFlags) {
-    cmdmod.with(|mods| {
+    CMDMOD.with(|mods| {
         (
             mods.cmod_tab,
             mods.cmod_verbose,
@@ -539,7 +539,7 @@ pub(crate) fn cmdmod_report() -> (c_int, c_int, c_int, CmdModFlags) {
 /// backtracking one and frees what it had), and a `\=` inside the pattern
 /// re-enters the editor, so no borrow may be held across the match.
 pub(crate) fn cmdmod_filters_out(msg: &CStr) -> bool {
-    let Some(filter) = cmdmod.with(|mods| mods.cmod_filter.clone()) else {
+    let Some(filter) = CMDMOD.with(|mods| mods.cmod_filter.clone()) else {
         return false;
     };
     let Some(mut prog) = filter.prog.take() else {
@@ -547,7 +547,7 @@ pub(crate) fn cmdmod_filters_out(msg: &CStr) -> bool {
     };
     let matched = prog.exec(msg, 0, false).is_some();
     filter.prog.set(Some(prog));
-    if cmdmod.with(|mods| mods.cmod_filter_force) {
+    if CMDMOD.with(|mods| mods.cmod_filter_force) {
         matched
     } else {
         !matched
@@ -563,24 +563,24 @@ pub(crate) fn cmdmod_filters_out(msg: &CStr) -> bool {
 /// `set_option_direct`) re-enter the editor, and `set_option_direct` runs
 /// with the new modifiers already in force, exactly as the C leaves them.
 fn apply_cmdmod() {
-    let mods = cmdmod.with(|cm| cm.cmod_flags);
-    if mods.has(CmdModFlags::SANDBOX) && cmdmod.with(|cm| cm.cmod_did_sandbox) == 0 {
-        sandbox.set(sandbox.get() + 1);
-        cmdmod.with_mut(|cm| cm.cmod_did_sandbox = 1);
+    let mods = CMDMOD.with(|cm| cm.cmod_flags);
+    if mods.has(CmdModFlags::SANDBOX) && CMDMOD.with(|cm| cm.cmod_did_sandbox) == 0 {
+        SANDBOX.set(SANDBOX.get() + 1);
+        CMDMOD.with_mut(|cm| cm.cmod_did_sandbox = 1);
     }
-    let verbose = cmdmod.with(|cm| cm.cmod_verbose);
+    let verbose = CMDMOD.with(|cm| cm.cmod_verbose);
     if verbose > 0 {
-        if cmdmod.with(|cm| cm.cmod_verbose_save) == 0 {
+        if CMDMOD.with(|cm| cm.cmod_verbose_save) == 0 {
             let save = p_verbose() + 1;
-            cmdmod.with_mut(|cm| cm.cmod_verbose_save = save);
+            CMDMOD.with_mut(|cm| cm.cmod_verbose_save = save);
         }
         P_VERBOSE.set(OptInt::from(verbose - 1));
     }
     if mods.has(CmdModFlags::SILENT | CmdModFlags::UNSILENT)
-        && cmdmod.with(|cm| cm.cmod_save_msg_silent) == 0
+        && CMDMOD.with(|cm| cm.cmod_save_msg_silent) == 0
     {
         let (silent, scroll) = (MSG_SILENT.get() + 1, MSG_SCROLL.get());
-        cmdmod.with_mut(|cm| {
+        CMDMOD.with_mut(|cm| {
             cm.cmod_save_msg_silent = silent;
             cm.cmod_save_msg_scroll = scroll;
         });
@@ -593,11 +593,11 @@ fn apply_cmdmod() {
     }
     if mods.has(CmdModFlags::ERRSILENT) {
         EMSG_SILENT.set(EMSG_SILENT.get() + 1);
-        cmdmod.with_mut(|cm| cm.cmod_did_esilent += 1);
+        CMDMOD.with_mut(|cm| cm.cmod_did_esilent += 1);
     }
-    if mods.has(CmdModFlags::NOAUTOCMD) && cmdmod.with(|cm| cm.cmod_save_ei.is_none()) {
+    if mods.has(CmdModFlags::NOAUTOCMD) && CMDMOD.with(|cm| cm.cmod_save_ei.is_none()) {
         let save_ei = P_EI.get();
-        cmdmod.with_mut(|cm| cm.cmod_save_ei = Some(save_ei));
+        CMDMOD.with_mut(|cm| cm.cmod_save_ei = Some(save_ei));
         set_option_direct(
             kOptEventignore,
             eventignore_all(),
@@ -620,7 +620,7 @@ pub(crate) fn undo_cmdmod(cm: &mut CmdMod) {
         cm.cmod_verbose_save = 0;
     }
     if cm.cmod_did_sandbox != 0 {
-        sandbox.set(sandbox.get() - 1);
+        SANDBOX.set(SANDBOX.get() - 1);
         cm.cmod_did_sandbox = 0;
     }
     if let Some(saved) = cm.cmod_save_ei.take() {
@@ -682,16 +682,16 @@ impl CmdModScope {
     /// See `1786212071-upstream-neovim-bugs`.
     pub(crate) fn cleared() -> Self {
         CmdModScope {
-            saved: cmdmod.take(),
+            saved: CMDMOD.take(),
         }
     }
 
     /// Save the modifiers in force and put `mods` in force instead.
     pub(crate) fn enter(mods: CmdMod) -> Self {
         let scope = CmdModScope {
-            saved: cmdmod.take(),
+            saved: CMDMOD.take(),
         };
-        cmdmod.set(mods);
+        CMDMOD.set(mods);
         apply_cmdmod();
         scope
     }
@@ -709,7 +709,7 @@ impl CmdModScope {
         let mut parsed = CmdMod::default();
         // SAFETY: the caller's contract.
         let read = excmd.parse_modifiers(errormsg, &mut parsed, false);
-        cmdmod.set(parsed);
+        CMDMOD.set(parsed);
         read
     }
 
@@ -725,9 +725,9 @@ impl Drop for CmdModScope {
         // The clone shares the `:filter` pattern and program with the cell,
         // which is what lets `undo_cmdmod` free them while the cell still
         // answers `message_filtered` for anything it says on the way out.
-        let mut live = cmdmod.with(Clone::clone);
+        let mut live = CMDMOD.with(Clone::clone);
         undo_cmdmod(&mut live);
-        cmdmod.set(core::mem::take(&mut self.saved));
+        CMDMOD.set(core::mem::take(&mut self.saved));
     }
 }
 
@@ -776,7 +776,7 @@ pub(crate) fn shared_prefix(p: &[u8], name: &CStr) -> usize {
 /// The dummy buffer an expression mapping is evaluated in is exempt: the
 /// lock is about the *user's* text.
 pub fn expr_map_locked() -> bool {
-    // SAFETY: `curbuf` is a live buffer whenever a mapping can be running.
+    // SAFETY: `CURBUF` is a live buffer whenever a mapping can be running.
     EXPR_MAP_LOCK.get() > 0 && !Buf::current().b_flags.has(BufFlags::DUMMY)
 }
 

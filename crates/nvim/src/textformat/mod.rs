@@ -23,7 +23,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
@@ -36,7 +35,7 @@ use crate::option::defs::FoFlag;
 use crate::option::vars::p_paste;
 use crate::optionstr::OptStringRef;
 use crate::window::win_fdccol_count;
-use crate::winlayer::graph::cmdwin_buf;
+use crate::winlayer::graph::CMDWIN_BUF;
 
 mod auto;
 mod lines;
@@ -48,7 +47,7 @@ pub(crate) use self::lines::*;
 pub(crate) use self::para::*;
 pub use self::wrap::*;
 
-pub const kBufOptFormatexpr: c_int = 36;
+pub const BUF_OPT_FORMATEXPR: c_int = 36;
 
 // The 'formatoptions' flag letters this family reads. Each is the option's
 // own spelling, so a flag test is `has_format_option(FoFlag::WRAP)`.
@@ -100,7 +99,7 @@ pub fn comp_textwidth(ff: bool) -> c_int {
     if textwidth == 0 && Buf::current().b_p_wm != 0 {
         let margin = c_int::try_from(Buf::current().b_p_wm).unwrap_or(c_int::MAX);
         textwidth = win.w_view_width - margin;
-        if cmdwin_buf.get() == Buf::current_or_none().map(Buf::id) {
+        if CMDWIN_BUF.get() == Buf::current_or_none().map(Buf::id) {
             textwidth -= 1;
         }
         textwidth -= win_fdccol_count(win);

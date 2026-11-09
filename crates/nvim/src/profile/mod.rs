@@ -22,7 +22,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub mod report;
 pub mod startuptime;
@@ -47,22 +46,22 @@ use crate::os::fs::CFile;
 use crate::os::libc::int64_t;
 use crate::os::time::os_hrtime;
 use crate::runtime::defs::{ScriptItem, SnPrl};
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::runtime::{script_count, script_id_valid, with_script_item};
 use crate::types::{ExArg, FuncCall, LineNr, ProfTime, UserFunc, VarNumber, Vv};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 use std::rc::Rc;
-pub(crate) static do_profiling: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static DO_PROFILING: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 /// The `--startuptime` log, open from `time_init` to `time_finish`.
-pub(crate) static time_fd: GlobalCell<Option<CFile>> = GlobalCell::new(None);
+pub(crate) static TIME_FD: GlobalCell<Option<CFile>> = GlobalCell::new(None);
 
 /// Whether `--startuptime` is logging.
 pub(crate) fn startup_timing() -> bool {
-    time_fd.with(Option::is_some)
+    TIME_FD.with(Option::is_some)
 }
 
-/// `do_profiling` states (a `GlobalCell<c_int>` in main).
+/// `DO_PROFILING` states (a `GlobalCell<c_int>` in main).
 pub const PROF_NONE: c_int = 0;
 pub const PROF_YES: c_int = 1;
 pub const PROF_PAUSED: c_int = 2;
@@ -202,27 +201,27 @@ pub fn ex_profile(excmd: &mut ExArg) {
     if subcmd == b"start" && excmd.line.byte_at(e) != 0 {
         let fname = expand_env(excmd.line.cstr_from(e), true);
         PROFILE_FNAME.set(Some(fname.as_cstr().to_owned()));
-        do_profiling.set(PROF_YES);
+        DO_PROFILING.set(PROF_YES);
         PROF_WAIT_TIME.set(profile_zero());
         set_vim_var_nr(Vv::Profiling, 1 as VarNumber);
-    } else if do_profiling.get() == PROF_NONE {
+    } else if DO_PROFILING.get() == PROF_NONE {
         emsg(gettext(c"E750: First use \":profile start {fname}\""));
     } else if full == b"stop" {
         profile_dump();
-        do_profiling.set(PROF_NONE);
+        DO_PROFILING.set(PROF_NONE);
         set_vim_var_nr(Vv::Profiling, 0 as VarNumber);
         profile_reset();
     } else if full == b"pause" {
-        if do_profiling.get() == PROF_YES {
+        if DO_PROFILING.get() == PROF_YES {
             PAUSE_TIME.set(profile_start());
         }
-        do_profiling.set(PROF_PAUSED);
+        DO_PROFILING.set(PROF_PAUSED);
     } else if full == b"continue" {
-        if do_profiling.get() == PROF_PAUSED {
+        if DO_PROFILING.get() == PROF_PAUSED {
             let paused = profile_end(PAUSE_TIME.get());
             PROF_WAIT_TIME.set(profile_add(PROF_WAIT_TIME.get(), paused));
         }
-        do_profiling.set(PROF_YES);
+        DO_PROFILING.set(PROF_YES);
     } else if full == b"dump" {
         profile_dump();
     } else {
@@ -342,7 +341,7 @@ pub fn prof_input_end() {
 /// Whether a function defined in the current script should be profiled
 /// (the script was targeted by `:profile file` with `!`-forcing).
 pub fn prof_def_func() -> bool {
-    let sid = current_sctx.get().sc_sid;
+    let sid = CURRENT_SCTX.get().sc_sid;
     sid > 0 && with_script_item(sid, |si| si.sn_pr_force)
 }
 
@@ -564,10 +563,10 @@ fn script_line_done(si: &mut ScriptItem) {
 // ---------------------------------------------------------------------------
 // Shared accessors for the editor's script/function tables.
 
-/// Run `f` on the current script's item, if `current_sctx` points at a
+/// Run `f` on the current script's item, if `CURRENT_SCTX` points at a
 /// valid one.
 fn with_current_script(f: impl FnOnce(&mut ScriptItem)) {
-    let sid = current_sctx.get().sc_sid;
+    let sid = CURRENT_SCTX.get().sc_sid;
     if script_id_valid(sid) {
         with_script_item(sid, f);
     }

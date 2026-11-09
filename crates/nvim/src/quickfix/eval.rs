@@ -79,7 +79,7 @@ fn mark_stack(stack: &QfStack, copy_id: c_int) -> bool {
 /// Mark everything the quickfix stack and every location list stack hold,
 /// so that the garbage collector does not free it.
 pub fn set_ref_in_quickfix(copy_id: c_int) -> bool {
-    if mark_stack(&Qi::global(), copy_id) || qftf_cb.with(|cb| cb.mark(copy_id)) {
+    if mark_stack(&Qi::global(), copy_id) || QFTF_CB.with(|cb| cb.mark(copy_id)) {
         return true;
     }
 

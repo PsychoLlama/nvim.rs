@@ -45,7 +45,7 @@ use crate::window::{
     win_set_buf, win_setheight_win, win_setwidth_win,
 };
 use crate::winlayer::Win;
-use crate::winlayer::graph::{cmdwin_buf, cmdwin_old_curwin, cmdwin_win};
+use crate::winlayer::graph::{CMDWIN_BUF, CMDWIN_OLD_CURWIN, CMDWIN_WIN};
 
 /// The buffer `win` is showing.
 pub fn nvim_win_get_buf(win: WindowHandle) -> Result<BufferHandle, Error> {
@@ -62,9 +62,9 @@ pub fn nvim_win_set_buf(win: WindowHandle, buf: BufferHandle) -> Result<(), Erro
     let (Some(w), Some(b)) = (w, b) else {
         return Ok(());
     };
-    if cmdwin_win.get() == Some(w.id())
-        || cmdwin_old_curwin.get() == Some(w.id())
-        || cmdwin_buf.get() == Some(b.id())
+    if CMDWIN_WIN.get() == Some(w.id())
+        || CMDWIN_OLD_CURWIN.get() == Some(w.id())
+        || CMDWIN_BUF.get() == Some(b.id())
     {
         return Err(Error::exception(E_CMDWIN));
     }

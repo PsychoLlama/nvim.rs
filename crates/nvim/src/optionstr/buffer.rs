@@ -29,7 +29,7 @@ use crate::fold::{
     fold_update_all, foldmethod_is_diff, foldmethod_is_expr, foldmethod_is_indent,
     foldmethod_is_marker, new_fold_level,
 };
-use crate::guard::secure;
+use crate::guard::SECURE;
 use crate::indent::{TabStopArray, replace_tabstop_array, tabstop_set};
 use crate::indent_c::parse_cino;
 use crate::mark::defs::{FileMark, FileMarkView};
@@ -404,11 +404,11 @@ pub fn did_set_keymap(args: &mut OptSet) -> Result<(), OptError> {
         return invalid();
     }
 
-    let secure_save = secure.get();
-    secure.set(0);
+    let secure_save = SECURE.get();
+    SECURE.set(0);
     // Sources the keymap file named by the option.
     let errmsg = keymap_init();
-    secure.set(secure_save);
+    SECURE.set(secure_save);
     args.os_value_checked = true;
     errmsg?;
 

@@ -52,18 +52,18 @@ use crate::ex_cmds2::{check_changed, check_fname};
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
 use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::source::ex_errmsg;
-use crate::ex_docmd::{DIRECTION_NOT_SET, DOBUF_LAST, cmdmod_has, ex_pressedreturn};
+use crate::ex_docmd::{DIRECTION_NOT_SET, DOBUF_LAST, EX_PRESSEDRETURN, cmdmod_has};
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
 use crate::file_search::FileNameOpts;
 
-use crate::ex_docmd::state::{ex_no_reprint, global_busy};
+use crate::ex_docmd::state::{EX_NO_REPRINT, GLOBAL_BUSY};
 use crate::getchar::stuff_readbuf;
 use crate::mark::setpcmark;
 use crate::message::E_TRAILING_ARG;
 use crate::message::state::{MSG_SCROLL, NEED_WAIT_RETURN};
 use crate::option::vars::{P_SHADA, p_awa, p_shada};
-use crate::startup::{readonlymode, recoverymode};
+use crate::startup::{READONLYMODE, RECOVERYMODE};
 use crate::state::mode::{EXMODE_ACTIVE, PENDING_EXMODE_ACTIVE};
 
 use crate::memline::{ml_delete, ml_preserve, ml_recover};
@@ -183,7 +183,7 @@ pub(crate) fn ex_preserve(_excmd: &mut ExArg) {
 pub(crate) fn ex_recover(excmd: &mut ExArg) {
     // The flag changes what the swap-file machinery does with what it
     // finds, and is read from several modules.
-    recoverymode.set(true);
+    RECOVERYMODE.set(true);
     let unsaved = check_changed(
         Buf::current(),
         (if p_awa() { CCGD_AW } else { 0 })
@@ -199,7 +199,7 @@ pub(crate) fn ex_recover(excmd: &mut ExArg) {
     {
         ml_recover(true);
     }
-    recoverymode.set(false);
+    RECOVERYMODE.set(false);
 }
 
 /// `:find` — edit the first file of that name on 'path', or the `count`'th.
@@ -257,14 +257,14 @@ impl ExArg<'_> {
         // `:visual` and `:view` with no argument leave Ex mode.
         if EXMODE_ACTIVE.get() && (self.cmdidx == CmdIdx::visual || self.cmdidx == CmdIdx::view) {
             EXMODE_ACTIVE.set(false);
-            ex_pressedreturn.set(false);
+            EX_PRESSEDRETURN.set(false);
             if ui_has(UI_CMDLINE) {
                 ui_ext_cmdline_block_leave();
             }
             if self.line.byte_at(self.line.arg) == 0 {
                 // Inside `:global`, normal mode is entered for the rest of
                 // the line and Ex mode resumes afterwards.
-                if global_busy.get() != 0 {
+                if GLOBAL_BUSY.get() != 0 {
                     if let Some(next) = self.line.next {
                         stuff_readbuf(self.line.cstr_from(next).to_bytes());
                         self.line.next = None;
@@ -309,11 +309,11 @@ impl ExArg<'_> {
             if self.line.byte_at(self.line.arg) != 0 && text_or_buf_locked() {
                 return;
             }
-            let saved_readonly = readonlymode.get();
+            let saved_readonly = READONLYMODE.get();
             if idx == CmdIdx::view || idx == CmdIdx::sview {
-                readonlymode.set(true);
+                READONLYMODE.set(true);
             } else if idx == CmdIdx::enew {
-                readonlymode.set(false);
+                READONLYMODE.set(false);
             }
             if idx != CmdIdx::balt && idx != CmdIdx::badd {
                 setpcmark();
@@ -358,10 +358,10 @@ impl ExArg<'_> {
                         leave_cleanup(&mut cs);
                     }
                 }
-            } else if readonlymode.get() && Buf::current().b_nwindows == 1 {
+            } else if READONLYMODE.get() && Buf::current().b_nwindows == 1 {
                 Buf::current().b_p_ro = 1;
             }
-            readonlymode.set(saved_readonly);
+            READONLYMODE.set(saved_readonly);
         } else {
             // A `:split` with no file name: the window is already there.
             run_ecmd_cmd(self);
@@ -380,7 +380,7 @@ impl ExArg<'_> {
         {
             old.w_alt_fnum = Some(Buf::current().handle);
         }
-        ex_no_reprint.set(true);
+        EX_NO_REPRINT.set(true);
     }
 }
 

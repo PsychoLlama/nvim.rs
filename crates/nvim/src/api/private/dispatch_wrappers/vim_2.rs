@@ -361,7 +361,7 @@ pub fn handle_nvim_open_term(channel_id: uint64_t, args: Array) -> Result<Object
             return Err(wrong_type(2, c"nvim_open_term", c"Dict(open_term) *"));
         }
     };
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     let rv = nvim_open_term(arg_1, &mut arg_2)?;
@@ -388,7 +388,7 @@ pub fn handle_nvim_paste(channel_id: uint64_t, args: Array) -> Result<Object, Er
     let Some(arg_3) = as_integer(args[2].take()) else {
         return Err(wrong_type(3, c"nvim_paste", c"Integer"));
     };
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     let rv = nvim_paste(channel_id, arg_1, arg_2, arg_3)?;
@@ -418,7 +418,7 @@ pub fn handle_nvim_put(channel_id: uint64_t, args: Array) -> Result<Object, Erro
     let Some(arg_4) = as_boolean(args[3].take()) else {
         return Err(wrong_type(4, c"nvim_put", c"Boolean"));
     };
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     nvim_put(arg_1, arg_2, arg_3, arg_4)?;
@@ -603,7 +603,7 @@ pub fn handle_nvim_set_current_line(channel_id: uint64_t, args: Array) -> Result
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_set_current_line", c"String"));
     };
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     nvim_set_current_line(arg_1)?;

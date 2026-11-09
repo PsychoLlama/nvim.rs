@@ -23,7 +23,7 @@
 use super::*;
 use crate::eval::typval::ListRef;
 use crate::eval::typval::{DictRef, NumBuf, dict_get_string_buf, list_iter};
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_UNDO;
 use crate::guard::Allow;
 use crate::keycodes::SpecialKey;
 use crate::memline::Lines;
@@ -132,7 +132,7 @@ pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> Added
 
 /// Add every entry of `list` as a match.
 pub(crate) fn ins_compl_add_list(list: &ListRef) {
-    let mut dir = compl_direction.get();
+    let mut dir = COMPL_DIRECTION.get();
     // By index, each entry a copy of its own: `ins_compl_add_tv` runs user
     // code (an autocommand, a `'completefunc'`), which may edit the very
     // list it is reading. The handle keeps the list itself alive.
@@ -154,12 +154,12 @@ pub(crate) fn ins_compl_add_dict(dict: &DictRef) {
     let find = |key: &[u8]| dict_find(Some(dict), key);
 
     // Check for the optional "refresh" item.
-    compl_opt_refresh_always.set(false);
+    COMPL_OPT_REFRESH_ALWAYS.set(false);
     if let Some(di) = find(b"refresh")
         && di.di_tv.v_type() == VAR_STRING
         && di.di_tv.string_bytes() == b"always"
     {
-        compl_opt_refresh_always.set(true);
+        COMPL_OPT_REFRESH_ALWAYS.set(true);
     }
 
     // Add completions from a "words" list.
@@ -196,9 +196,9 @@ impl ComplOrigExtmarks {
     pub(crate) fn save(self) {
         let lnum = Win::current().w_cursor.lnum.get() - 1;
         let buf = Buf::current();
-        let (start, end) = (compl_col.get(), compl_col.get() + compl_length.get());
+        let (start, end) = (COMPL_COL.get(), COMPL_COL.get() + COMPL_LENGTH.get());
         COMPL_ORIG_EXTMARKS.update(|saved| {
-            buf.splice_delete_extmarks(lnum, start, lnum, end, Some(saved), true, kExtmarkUndo);
+            buf.splice_delete_extmarks(lnum, start, lnum, end, Some(saved), true, EXTMARK_UNDO);
         });
     }
 
@@ -237,15 +237,15 @@ pub(crate) fn set_completion(mut startcol: ColNr, list: Option<&ListRef>) {
     }
     ins_compl_clear();
     ins_compl_free();
-    compl_get_longest.set(compl_longest);
+    COMPL_GET_LONGEST.set(compl_longest);
 
-    compl_direction.set(FORWARD);
+    COMPL_DIRECTION.set(FORWARD);
     if startcol > Win::current().w_cursor.col {
         startcol = Win::current().w_cursor.col;
     }
-    compl_col.set(startcol);
-    compl_lnum.set(Win::current().w_cursor.lnum);
-    compl_length.set(Win::current().w_cursor.col - startcol);
+    COMPL_COL.set(startcol);
+    COMPL_LNUM.set(Win::current().w_cursor.lnum);
+    COMPL_LENGTH.set(Win::current().w_cursor.col - startcol);
     // compl_pattern doesn't need to be set.
     compl_orig_text().set(compl_text_from_line());
     compl_orig_extmarks().save();
@@ -258,19 +258,19 @@ pub(crate) fn set_completion(mut startcol: ColNr, list: Option<&ListRef>) {
         return;
     }
 
-    ctrl_x_mode.set(CTRL_X_EVAL);
+    CTRL_X_MODE.set(CTRL_X_EVAL);
 
     if let Some(list) = list {
         ins_compl_add_list(list);
     }
-    compl_matches.set(ins_compl_make_cyclic());
-    compl_started.set(true);
-    compl_used_match.set(true);
-    compl_cont_status.set(0);
+    COMPL_MATCHES.set(ins_compl_make_cyclic());
+    COMPL_STARTED.set(true);
+    COMPL_USED_MATCH.set(true);
+    COMPL_CONT_STATUS.set(0);
     let save_w_wrow = Win::current().w_wrow;
     let save_w_leftcol = Win::current().w_leftcol;
 
-    compl_curr_match.set(compl_first_match.get());
+    COMPL_CURR_MATCH.set(COMPL_FIRST_MATCH.get());
     let no_select = compl_no_select || compl_longest;
     if compl_no_insert || no_select {
         let _ = ins_complete(Key::from(SpecialKey::Down), false);
@@ -280,10 +280,10 @@ pub(crate) fn set_completion(mut startcol: ColNr, list: Option<&ListRef>) {
     } else {
         let _ = ins_complete(Key::CTRL_N, false);
     }
-    compl_enter_selects.set(compl_no_insert);
+    COMPL_ENTER_SELECTS.set(compl_no_insert);
 
     // Lazily show the popup menu, unless we got interrupted.
-    if !compl_interrupted.get() {
+    if !COMPL_INTERRUPTED.get() {
         show_pum(save_w_wrow, save_w_leftcol.get());
     }
 
@@ -391,7 +391,7 @@ pub(crate) fn get_complete_info(what_list: Option<&List>, retdict: &mut Dict) {
 
     if ret.is_ok() && what_flag & CI_WHAT_PREINSERTED_TEXT != 0 {
         let cursor = Win::current().w_cursor;
-        let len = usize::try_from(compl_ins_end_col.get() - cursor.col).unwrap_or(0);
+        let len = usize::try_from(COMPL_INS_END_COL.get() - cursor.col).unwrap_or(0);
         let text = if len > 0 {
             let mut lines = Lines::current();
             let line = lines.line(cursor.lnum);

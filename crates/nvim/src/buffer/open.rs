@@ -10,7 +10,7 @@
 //!
 //! `readfile()` fires autocommands and so may change the current buffer under
 //! us -- which is why [`open_buffer`] takes a [`BufRef`] before it reads and
-//! re-`get`s it afterwards, and why every stage below re-reads `curbuf`
+//! re-`get`s it afterwards, and why every stage below re-reads `CURBUF`
 //! rather than holding one across a call.  [`Buf::run_in`] is the
 //! `aucmd_prepbuf`/`aucmd_restbuf` pair, which must always be matched.
 //!
@@ -51,7 +51,7 @@ use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
 use crate::os::fs::getperm;
 use crate::os::libc::int64_t;
 use crate::pos::MAXLNUM;
-use crate::startup::{getout, readonlymode, v_dying};
+use crate::startup::{READONLYMODE, V_DYING, getout};
 use crate::types::{ColNr, ExArg, Failed, Handle, LineNr, OptInt, VarNumber};
 use crate::winlayer::buffers;
 
@@ -216,7 +216,7 @@ pub fn calc_percentage(part: int64_t, whole: int64_t) -> c_int {
 
 /// The highest buffer number handed out so far.
 pub fn get_highest_fnum() -> c_int {
-    top_file_num.get() - 1
+    TOP_FILE_NUM.get() - 1
 }
 
 // ---------------------------------------------------------------------------
@@ -271,7 +271,7 @@ fn read_buffer(
         // Set or reset 'modified' before executing autocommands, so that it
         // can be changed there.
         let buf = Buf::current();
-        if !readonlymode.get() && !empty_buffer(buf) {
+        if !READONLYMODE.get() && !empty_buffer(buf) {
             set_changed(buf);
         } else if retval.is_ok() {
             unchanged_now(buf, false, true);
@@ -322,7 +322,7 @@ fn open_buffer_inner(
     // When re-entering the same buffer, it should not change, because the
     // user may have reset the flag by hand.
     let mut buf = Buf::current();
-    if readonlymode.get() && !buf.name.full().is_none() && buf.b_flags.has(BufFlags::NEVERLOADED) {
+    if READONLYMODE.get() && !buf.name.full().is_none() && buf.b_flags.has(BufFlags::NEVERLOADED) {
         buf.b_p_ro = 1;
     }
 
@@ -436,7 +436,7 @@ fn open_buffer_inner(
         unchanged_now(buf, false, true);
     }
     // `changed()` notifies the `b:changedtick` watchers, which can re-enter
-    // Lua and leave another buffer current -- so from here on `curbuf` and
+    // Lua and leave another buffer current -- so from here on `CURBUF` and
     // `curwin` are re-read at each step, exactly as upstream reads the globals.
     save_fileformat(Buf::current()); // keep this fileformat
 
@@ -501,7 +501,7 @@ fn no_memfile(old_tw: OptInt) -> Result<(), Failed> {
         err(c"E82: Cannot allocate any buffer, exiting...");
         // Don't try to do any saving, with "curbuf" NULL almost nothing will
         // work.
-        v_dying.set(2);
+        V_DYING.set(2);
         bail_out(2);
     }
 

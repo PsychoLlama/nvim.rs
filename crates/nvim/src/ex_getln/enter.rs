@@ -414,7 +414,7 @@ pub(crate) fn command_line_enter(
                     },
                 );
                 if s.firstc == b':' {
-                    new_last_cmdline.set(Some(XString::from_bytes(cstr::until_nul(cc.bytes()))));
+                    NEW_LAST_CMDLINE.set(Some(XString::from_bytes(cstr::until_nul(cc.bytes()))));
                 }
             }
 
@@ -511,7 +511,7 @@ pub(crate) fn command_line_check(s: &mut CommandLineState) -> Step {
     // typing a command should cause the command not to be executed.
     DID_EMSG.set(0);
 
-    if ex_normal_busy.get() == 0 && stuff_empty() && typeahead().is_empty() {
+    if EX_NORMAL_BUSY.get() == 0 && stuff_empty() && typeahead().is_empty() {
         // There is no pending input from sources other than user input,
         // so Vim is going to wait for the user to type a key. Consider
         // the command line typed even if the next key triggers a mapping.

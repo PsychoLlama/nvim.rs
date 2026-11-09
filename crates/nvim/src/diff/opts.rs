@@ -1,8 +1,8 @@
 //! Parsing `'diffopt'` and `'diffanchors'`.
 //!
 //! [`diffopt_changed`] is the option's validator *and* its effect: it parses
-//! the whole comma-separated value into the `diff_flags`, `diff_algorithm`,
-//! `linematch_lines` and `diff_context` cells, rejecting the value whole if
+//! the whole comma-separated value into the `DIFF_FLAGS`, `DIFF_ALGORITHM`,
+//! `LINEMATCH_LINES` and `DIFF_CONTEXT` cells, rejecting the value whole if
 //! any item is unknown.  [`parse_diffanchors`] is the separate
 //! `'diffanchors'` grammar, which names line ranges the diff must be split
 //! at.
@@ -188,7 +188,7 @@ pub(crate) fn parse_diffanchors(
 /// so only tabpages showing the current buffer need recomputing.
 pub fn diffanchors_changed(buflocal: bool) -> Result<(), Failed> {
     let result = parse_diffanchors(true, Buf::current(), None).map(drop);
-    if result.is_err() || diff_flags.get() & DIFF_ANCHOR == 0 {
+    if result.is_err() || DIFF_FLAGS.get() & DIFF_ANCHOR == 0 {
         return result;
     }
     for mut tp in tabs() {
@@ -260,35 +260,35 @@ pub fn diffopt_changed() -> Result<(), Failed> {
         return Err(Failed);
     }
 
-    if diff_flags.get() != flags_new || diff_algorithm.get() != algorithm_new {
+    if DIFF_FLAGS.get() != flags_new || DIFF_ALGORITHM.get() != algorithm_new {
         for mut tp in tabs() {
             tp.tp_diff_invalid = 1;
         }
     }
-    diff_flags.set(flags_new);
+    DIFF_FLAGS.set(flags_new);
     // `context:0` would fold every unchanged line, including the ones
     // either side of a change; one is the floor.
-    diff_context.set(if context_new == 0 { 1 } else { context_new });
-    linematch_lines.set(linematch_new);
-    diff_foldcolumn.set(foldcolumn_new);
-    diff_algorithm.set(algorithm_new);
+    DIFF_CONTEXT.set(if context_new == 0 { 1 } else { context_new });
+    LINEMATCH_LINES.set(linematch_new);
+    DIFF_FOLDCOLUMN.set(foldcolumn_new);
+    DIFF_ALGORITHM.set(algorithm_new);
     diff_redraw(true);
     check_scrollbind(0, 0);
     Ok(())
 }
 
 pub fn diffopt_horizontal() -> bool {
-    diff_flags.get() & DIFF_HORIZONTAL != 0
+    DIFF_FLAGS.get() & DIFF_HORIZONTAL != 0
 }
 
 pub fn diffopt_hiddenoff() -> bool {
-    diff_flags.get() & DIFF_HIDDEN_OFF != 0
+    DIFF_FLAGS.get() & DIFF_HIDDEN_OFF != 0
 }
 
 pub fn diffopt_closeoff() -> bool {
-    diff_flags.get() & DIFF_CLOSE_OFF != 0
+    DIFF_FLAGS.get() & DIFF_CLOSE_OFF != 0
 }
 
 pub fn diffopt_filler() -> bool {
-    diff_flags.get() & DIFF_FILLER != 0
+    DIFF_FLAGS.get() & DIFF_FILLER != 0
 }

@@ -27,14 +27,14 @@ use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
 use crate::autocmd::{apply_autocmds, has_event};
-use crate::debugger::state::debug_mode;
+use crate::debugger::state::DEBUG_MODE;
 use crate::drawscreen::state::MUST_REDRAW;
 use crate::drawscreen::{setcursor, update_screen};
 use crate::edit::{InsertState, insert_check, insert_execute};
 use crate::eval::{get_v_event, restore_v_event};
 use crate::event::r#loop::run_next_main_event;
 use crate::event::objects::ProcType;
-use crate::ex_docmd::state::global_busy;
+use crate::ex_docmd::state::GLOBAL_BUSY;
 use crate::ex_getln::cmdline_overstrike;
 use crate::ex_getln::{CommandLineState, command_line_check, command_line_execute};
 use crate::getchar::state::{GOT_INT, MOD_MASK};
@@ -551,8 +551,8 @@ fn is_safe_now() -> bool {
     stuff_empty()
         && typeahead().is_empty()
         && using_script() == 0
-        && global_busy.get() == 0
-        && !debug_mode.get()
+        && GLOBAL_BUSY.get() == 0
+        && !DEBUG_MODE.get()
 }
 
 /// Fire `SafeState` when the editor has come to rest. `safe` is the caller's
@@ -569,7 +569,7 @@ pub fn may_trigger_safestate(safe: bool) {
         logmsg!(LOGLVL_DBG, c"may_trigger_safestate", 305, "{what}");
     }
     if is_safe {
-        // SAFETY: the editor is initialized, so `curbuf` is live.
+        // SAFETY: the editor is initialized, so `CURBUF` is live.
         let buf = Buf::current_or_none();
         apply_autocmds(AutoEvent::SafeState, None, None, false, buf);
     }

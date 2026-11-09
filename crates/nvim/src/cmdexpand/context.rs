@@ -34,7 +34,7 @@ use crate::option::magic_isset;
 use crate::option::vars::p_ic;
 use crate::os::users::{UserMatch, match_user};
 use crate::regexp::skip_regexp_at;
-use crate::search::state::search_first_line;
+use crate::search::state::SEARCH_FIRST_LINE;
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::has_char;
 use crate::syntax::set_context_in_echohl_cmd;
@@ -112,7 +112,7 @@ pub fn set_expand_context(expand: &mut Expand) {
     let ccline = Cc::current();
 
     // Handle search commands: '/' or '?'.
-    if (ccline.cmdfirstc == b'/' || ccline.cmdfirstc == b'?') && may_expand_pattern.get() {
+    if (ccline.cmdfirstc == b'/' || ccline.cmdfirstc == b'?') && MAY_EXPAND_PATTERN.get() {
         expand.context = ExpandContext::PatternInBuf;
         expand.search_dir = if ccline.cmdfirstc == b'/' {
             FORWARD
@@ -123,7 +123,7 @@ pub fn set_expand_context(expand: &mut Expand) {
         expand.pattern = 0;
         expand.has_pattern = true;
         expand.pattern_len = usize::try_from(ccline.cmdpos).unwrap_or(0);
-        search_first_line.set(LineNr::ZERO); // Search entire buffer
+        SEARCH_FIRST_LINE.set(LineNr::ZERO); // Search entire buffer
         return;
     }
 
@@ -568,7 +568,7 @@ pub(crate) fn set_context_in_breakadd_cmd(
     expand.context = ExpandContext::Breakpoint;
     expand.pattern = arg;
 
-    breakpt_expand_what.set(if cmdidx == CmdIdx::breakadd {
+    BREAKPT_EXPAND_WHAT.set(if cmdidx == CmdIdx::breakadd {
         BreakptWhat::Add
     } else if cmdidx == CmdIdx::breakdel {
         BreakptWhat::Del
@@ -644,7 +644,7 @@ pub(crate) fn set_context_in_filetype_cmd(
     let t = text.to_bytes();
     expand.context = ExpandContext::FiletypeCmd;
     expand.pattern = arg;
-    filetype_expand_what.set(FiletypeWhat::All);
+    FILETYPE_EXPAND_WHAT.set(FiletypeWhat::All);
 
     let mut p = skipwhite(t, arg);
     if byte(t, p) == 0 {
@@ -670,7 +670,7 @@ pub(crate) fn set_context_in_filetype_cmd(
 
     // Whichever half is already spelled out is the half not to offer
     // again; naming both leaves only "on"/"off".
-    filetype_expand_what.set(match (saw_plugin, saw_indent) {
+    FILETYPE_EXPAND_WHAT.set(match (saw_plugin, saw_indent) {
         (true, true) => FiletypeWhat::OnOff,
         (true, false) => FiletypeWhat::Indent,
         (false, true) => FiletypeWhat::Plugin,
@@ -688,7 +688,7 @@ pub(crate) fn set_context_with_pattern(expand: &mut Expand) {
     let ccline = Cc::current();
 
     let no_emsg = Suppress::emsg();
-    let parsed = parse_pattern_and_range_of(pre_incsearch_pos.get());
+    let parsed = parse_pattern_and_range_of(PRE_INCSEARCH_POS.get());
     drop(no_emsg);
 
     // Check if cursor is within search pattern.

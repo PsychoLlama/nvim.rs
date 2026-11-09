@@ -47,7 +47,7 @@ pub fn handle_nvim_open_tabpage(channel_id: uint64_t, args: Array) -> Result<Obj
             ));
         }
     };
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     let rv = nvim_open_tabpage(arg_1, arg_2, &mut arg_3)?;

@@ -15,15 +15,15 @@
 #![forbid(unsafe_code)]
 
 use crate::keycodes::ModMask;
-use crate::mark::kMarkBeginLine;
-use crate::mark::kMarkChangedCursor;
-use crate::mark::kMarkChangedLine;
-use crate::mark::kMarkContext;
-use crate::mark::kMarkJumpList;
-use crate::mark::kMarkMoveFailed;
-use crate::mark::kMarkMoveSuccess;
-use crate::mark::kMarkSetView;
-use crate::mark::kMarkSwitchedBuf;
+use crate::mark::MARK_BEGIN_LINE;
+use crate::mark::MARK_CHANGED_CURSOR;
+use crate::mark::MARK_CHANGED_LINE;
+use crate::mark::MARK_CONTEXT;
+use crate::mark::MARK_JUMP_LIST;
+use crate::mark::MARK_MOVE_FAILED;
+use crate::mark::MARK_MOVE_SUCCESS;
+use crate::mark::MARK_SET_VIEW;
+use crate::mark::MARK_SWITCHED_BUF;
 use crate::types::Failed;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
@@ -40,16 +40,16 @@ use crate::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark}
 use crate::message::emsg;
 use crate::normal::defs::CmdArg;
 use crate::normal::{
-    KMarkNoContext, MARK_ALL, MT_CHAR_WISE, MT_LINE_WISE, check_clear_op, check_clear_op_quit,
-    clear_op, clear_op_beep, e_changelist_is_empty, nv_operator,
+    E_CHANGELIST_IS_EMPTY, K_MARK_NO_CONTEXT, MARK_ALL, MT_CHAR_WISE, MT_LINE_WISE, check_clear_op,
+    check_clear_op_quit, clear_op, clear_op_beep, nv_operator,
 };
 use crate::ops::OpType;
 use crate::option::vars::{FDO_FLAGS, JOP_FLAGS, p_hls};
 use crate::options::{kOptFdoFlagMark, kOptFdoFlagSearch, kOptJopFlagView};
 use crate::os::cshim::gettext;
 use crate::pos::equalpos;
+use crate::search::state::NO_HLSEARCH;
 use crate::search::state::SearchItArg;
-use crate::search::state::no_hlsearch;
 use crate::search::{Hit, SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search};
 use crate::state::virtual_active;
 use crate::window::goto_tabpage_lastused;
@@ -62,7 +62,7 @@ use core::ffi::c_int;
 /// otherwise nothing on screen would change.
 fn current_match_is_distinct() -> bool {
     p_hls()
-        && !no_hlsearch.get()
+        && !NO_HLSEARCH.get()
         && win_hl_attr(Win::current(), HLF_LC) != win_hl_attr(Win::current(), HLF_L)
 }
 
@@ -196,12 +196,12 @@ pub(crate) fn nv_mark_move_to(
     fm: Option<&FileMark>,
 ) -> MarkMoveRes {
     let res = mark_move_to(fm, flags);
-    if res & kMarkMoveFailed as MarkMoveRes != 0 {
+    if res & MARK_MOVE_FAILED as MarkMoveRes != 0 {
         clear_op(cmd_arg.op());
     }
     // `'a` is linewise, `` `a `` is charwise -- and only the charwise form
     // fills the "1 last change" register.
-    cmd_arg.op().motion_type = if flags & kMarkBeginLine as MarkMove != 0 {
+    cmd_arg.op().motion_type = if flags & MARK_BEGIN_LINE as MarkMove != 0 {
         MT_LINE_WISE
     } else {
         MT_CHAR_WISE
@@ -218,7 +218,7 @@ pub(crate) fn nv_mark_move_to(
 /// restored along with the position.
 fn view_flag() -> MarkMove {
     if JOP_FLAGS.get() & kOptJopFlagView != 0 {
-        kMarkSetView as MarkMove
+        MARK_SET_VIEW as MarkMove
     } else {
         0
     }
@@ -250,18 +250,18 @@ pub(crate) fn nv_gomark(cmd_arg: &mut CmdArg) {
 
     // `g'` and ``g` `` jump without touching the previous-context mark.
     let name = if cmd_arg.cmdchar.is('g') {
-        flags |= KMarkNoContext as MarkMove;
+        flags |= K_MARK_NO_CONTEXT as MarkMove;
         cmd_arg.extra_char
     } else {
-        flags |= kMarkContext as MarkMove;
+        flags |= MARK_CONTEXT as MarkMove;
         cmd_arg.nchar
     };
     if cmd_arg.arg != 0 {
-        flags |= kMarkBeginLine as MarkMove;
+        flags |= MARK_BEGIN_LINE as MarkMove;
     }
     // An explicit count means "restore the view too".
     if cmd_arg.count0 != 0 {
-        flags |= kMarkSetView as MarkMove;
+        flags |= MARK_SET_VIEW as MarkMove;
     }
 
     // A copy of the mark, which outlives the jump below.
@@ -272,9 +272,9 @@ pub(crate) fn nv_gomark(cmd_arg: &mut CmdArg) {
     if !virtual_active(Win::current()) {
         Win::current().w_cursor.coladd = 0;
     }
-    let moved = move_res & kMarkMoveSuccess as MarkMoveRes != 0
-        && (move_res & kMarkSwitchedBuf as MarkMoveRes != 0
-            || move_res & kMarkChangedCursor as MarkMoveRes != 0);
+    let moved = move_res & MARK_MOVE_SUCCESS as MarkMoveRes != 0
+        && (move_res & MARK_SWITCHED_BUF as MarkMoveRes != 0
+            || move_res & MARK_CHANGED_CURSOR as MarkMoveRes != 0);
     may_open_fold(cmd_arg, moved, old_key_typed);
 }
 
@@ -298,7 +298,7 @@ pub(crate) fn nv_pcmark(cmd_arg: &mut CmdArg) {
     let fm = if cmd_arg.cmdchar.is('g') {
         get_changelist(Buf::current(), Win::current(), cmd_arg.count1)
     } else {
-        flags |= KMarkNoContext | kMarkJumpList;
+        flags |= K_MARK_NO_CONTEXT | MARK_JUMP_LIST;
         get_jumplist(Win::current(), cmd_arg.count1)
     };
 
@@ -307,7 +307,7 @@ pub(crate) fn nv_pcmark(cmd_arg: &mut CmdArg) {
     } else if cmd_arg.cmdchar.is('g') {
         // Three different reasons the change list had nothing.
         if Buf::current().b_changelistlen == 0 {
-            emsg(gettext(e_changelist_is_empty));
+            emsg(gettext(E_CHANGELIST_IS_EMPTY));
         } else if cmd_arg.count1 < 0 {
             emsg(gettext(c"E662: At start of changelist"));
         } else {
@@ -317,7 +317,7 @@ pub(crate) fn nv_pcmark(cmd_arg: &mut CmdArg) {
         clear_op_beep(cmd_arg.op());
     }
 
-    let moved = move_res & kMarkSwitchedBuf as MarkMoveRes != 0
-        || move_res & kMarkChangedLine as MarkMoveRes != 0;
+    let moved = move_res & MARK_SWITCHED_BUF as MarkMoveRes != 0
+        || move_res & MARK_CHANGED_LINE as MarkMoveRes != 0;
     may_open_fold(cmd_arg, moved, old_key_typed);
 }

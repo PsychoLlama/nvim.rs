@@ -42,7 +42,7 @@ use crate::winlayer::{
 // ---------------------------------------------------------------------------
 // Revalidating cursors against a buffer that changed length
 
-/// Clamp every window's cursor and topline into `curbuf`, remembering where
+/// Clamp every window's cursor and topline into `CURBUF`, remembering where
 /// they were so [`reset_lnums`] can put them back.
 ///
 /// `nested` means an outer call has already saved them, so only the
@@ -365,7 +365,7 @@ fn parse_colorcolumn(text: &[u8], tw: OptInt) -> Result<Vec<c_int>, OptError> {
 // Odds and ends
 
 pub fn get_last_winid() -> c_int {
-    last_win_id.get()
+    LAST_WIN_ID.get()
 }
 
 pub fn win_locked(window: Win) -> c_int {

@@ -48,7 +48,7 @@ pub fn ins_compl_bs() -> Key {
         let to_c = |n: usize| c_int::try_from(n).unwrap_or(c_int::MAX);
         to_c(col) - to_c(back)
     };
-    let from_start = p_off - compl_col.get().get();
+    let from_start = p_off - COMPL_COL.get().get();
 
     // Stop completion when the whole word was deleted.  For Omni
     // completion allow the word to be deleted, we won't match everything.
@@ -56,14 +56,14 @@ pub fn ins_compl_bs() -> Key {
     if from_start < 0
         || (from_start == 0 && !ctrl_x_mode_omni())
         || ctrl_x_mode_eval()
-        || (!can_bs(BsFlag::START) && from_start - compl_length.get() < 0)
+        || (!can_bs(BsFlag::START) && from_start - COMPL_LENGTH.get() < 0)
     {
         return Key::from(SpecialKey::Bs);
     }
 
     // Deleted more than what was used to find matches, or didn't finish
     // finding all matches: look for matches all over again.
-    if Win::current().w_cursor.col <= compl_col.get() + compl_length.get()
+    if Win::current().w_cursor.col <= COMPL_COL.get() + COMPL_LENGTH.get()
         || ins_compl_need_restart()
     {
         ins_compl_restart();
@@ -73,18 +73,18 @@ pub fn ins_compl_bs() -> Key {
     // afresh.
     // TODO(bfredl): get rid of random update_screen() calls deep inside
     // completion logic
-    compl_leader().set(cursor_line_part(compl_col.get(), ColNr::new(p_off)));
+    compl_leader().set(cursor_line_part(COMPL_COL.get(), ColNr::new(p_off)));
 
     // Clear the selection if a menu item is currently selected in
     // autocompletion.
-    if compl_autocomplete.get() && compl_first_match.get().is_some() && !ins_compl_has_preinsert() {
-        compl_shown_match.set(compl_first_match.get());
+    if COMPL_AUTOCOMPLETE.get() && COMPL_FIRST_MATCH.get().is_some() && !ins_compl_has_preinsert() {
+        COMPL_SHOWN_MATCH.set(COMPL_FIRST_MATCH.get());
     }
 
     ins_compl_new_leader();
-    if compl_shown_match.get().is_some() {
+    if COMPL_SHOWN_MATCH.get().is_some() {
         // Make sure the current match is not a hidden item.
-        compl_curr_match.set(compl_shown_match.get());
+        COMPL_CURR_MATCH.set(COMPL_SHOWN_MATCH.get());
     }
     Key::NUL
 }
@@ -95,7 +95,7 @@ pub(crate) fn ins_compl_new_leader() {
     ins_compl_del_pum();
     ins_compl_delete(true);
     ins_compl_insert_text(untyped_part(&compl_leader().to_vec()));
-    compl_used_match.set(false);
+    COMPL_USED_MATCH.set(false);
 
     if p_acl() > 0 {
         pum_undisplay(true);
@@ -104,7 +104,7 @@ pub(crate) fn ins_compl_new_leader() {
         ui_flush();
     }
 
-    if compl_started.get() {
+    if COMPL_STARTED.get() {
         ins_compl_set_original_text(&compl_leader().to_vec());
         if is_cpt_func_refresh_always() {
             cpt_compl_refresh();
@@ -113,32 +113,32 @@ pub(crate) fn ins_compl_new_leader() {
             ins_compl_fuzzy_sort();
         }
     } else {
-        spell_bad_len.set(0); // need to redetect bad word
+        SPELL_BAD_LEN.set(0); // need to redetect bad word
         // Matches were cleared, need to search for them now. Set
         // "compl_restarting" to avoid that the first match is inserted.
-        compl_restarting.set(true);
+        COMPL_RESTARTING.set(true);
         if ins_compl_has_autocomplete() {
             ins_compl_enable_autocomplete();
         } else {
-            compl_autocomplete.set(false);
+            COMPL_AUTOCOMPLETE.set(false);
         }
         if ins_complete(Key::CTRL_N, true).is_err() {
-            compl_cont_status.set(0);
+            COMPL_CONT_STATUS.set(0);
         }
-        compl_restarting.set(false);
+        COMPL_RESTARTING.set(false);
     }
 
-    compl_enter_selects.set(!compl_used_match.get() && compl_selected_item.get() != -1);
+    COMPL_ENTER_SELECTS.set(!COMPL_USED_MATCH.get() && COMPL_SELECTED_ITEM.get() != -1);
 
     // Show the popup menu with a different set of matches.
     ins_compl_show_pum();
 
     // Don't let Enter select the original text when there is no popup menu.
     if compl_match_array().is_unset() {
-        compl_enter_selects.set(false);
+        COMPL_ENTER_SELECTS.set(false);
     } else if ins_compl_has_preinsert() && !compl_leader().is_empty() {
         ins_compl_insert(true, false);
-    } else if compl_started.get()
+    } else if COMPL_STARTED.get()
         && ins_compl_preinsert_longest()
         && !compl_leader().is_empty()
         && !ins_compl_preinsert_effect()
@@ -147,7 +147,7 @@ pub(crate) fn ins_compl_new_leader() {
     }
     // Don't let Enter select when a user function with refresh_always is used.
     if ins_compl_refresh_always() {
-        compl_enter_selects.set(false);
+        COMPL_ENTER_SELECTS.set(false);
     }
 }
 
@@ -174,7 +174,7 @@ pub fn ins_compl_addleader(c: Key) {
     }
 
     compl_leader().set(cursor_line_part(
-        compl_col.get(),
+        COMPL_COL.get(),
         Win::current().w_cursor.col,
     ));
     ins_compl_new_leader();
@@ -187,14 +187,14 @@ pub(crate) fn ins_compl_restart() {
     // blocked we stay at the last popup menu and reduce flicker.
     let _ = update_screen(); // TODO(bfredl): no.
     ins_compl_free();
-    compl_started.set(false);
-    compl_matches.set(0);
-    compl_cont_status.set(0);
-    compl_cont_mode.set(0);
+    COMPL_STARTED.set(false);
+    COMPL_MATCHES.set(0);
+    COMPL_CONT_STATUS.set(0);
+    COMPL_CONT_MODE.set(0);
     cpt_sources().clear();
-    compl_autocomplete.set(false);
-    compl_from_nonkeyword.set(false);
-    compl_num_bests.set(0);
+    COMPL_AUTOCOMPLETE.set(false);
+    COMPL_FROM_NONKEYWORD.set(false);
+    COMPL_NUM_BESTS.set(0);
 }
 
 /// Replace the first match — the original text — with `text`.
@@ -218,7 +218,7 @@ pub(crate) fn ins_compl_set_original_text(text: &[u8]) {
 /// Append the next character of the shown match to the leader.
 pub fn ins_compl_addfrommatch() {
     let shown = shown_match().expect("a running completion has a shown match");
-    let len = usize::try_from(Win::current().w_cursor.col - compl_col.get()).unwrap_or(usize::MAX);
+    let len = usize::try_from(Win::current().w_cursor.col - COMPL_COL.get()).unwrap_or(usize::MAX);
     let text = if shown.text_len() <= len {
         // The match is too short. When still at the original match use the
         // first entry that matches the leader.
@@ -255,7 +255,7 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: c_int, mut retval: bool) -> bool
     // Get here when we have finished typing a sequence of ^N and ^P or
     // other completion characters in CTRL-X mode.  Free up memory that was
     // used, and make sure we can redo the insert.
-    if compl_curr_match.get().is_some() || !compl_leader().is_unset() || c == Key::CTRL_E {
+    if COMPL_CURR_MATCH.get().is_some() || !compl_leader().is_unset() || c == Key::CTRL_E {
         // If any of the original typed text has been changed, e.g. when
         // 'ignorecase' is set, we must add back-spaces to the redo buffer.
         // We add as few as necessary to delete just the part of the
@@ -263,7 +263,7 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: c_int, mut retval: bool) -> bool
         // when the match was edited or when CTRL-E was used, don't use the
         // current match.
         let used = curr_match()
-            .filter(|_| compl_used_match.get() && c != Key::CTRL_E)
+            .filter(|_| COMPL_USED_MATCH.get() && c != Key::CTRL_E)
             .map(MatchId::text_copy);
         ins_compl_fix_redo_buf_for_leader(used.as_ref().map(XString::as_cstr));
     }
@@ -272,13 +272,13 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: c_int, mut retval: bool) -> bool
 
     // When completing whole lines: fix indent for 'cindent'.
     // Otherwise, break the line if it's too long.
-    if compl_cont_mode.get() == CTRL_X_WHOLE_LINE {
+    if COMPL_CONT_MODE.get() == CTRL_X_WHOLE_LINE {
         // Re-indent the current line.
         if want_cindent {
             do_c_expr_indent();
             want_cindent = false; // don't do it again
         }
-    } else if !compl_autocomplete.get() || compl_used_match.get() {
+    } else if !COMPL_AUTOCOMPLETE.get() || COMPL_USED_MATCH.get() {
         let prev_col = Win::current().w_cursor.col;
 
         // Put the cursor on the last char, for 'tw' formatting.
@@ -299,7 +299,7 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: c_int, mut retval: bool) -> bool
     // set the Enter key does the same.
     let mut word: Option<XString> = None;
     if (c == Key::CTRL_Y
-        || (compl_enter_selects.get()
+        || (COMPL_ENTER_SELECTS.get()
             && (c == Key::CAR || c == SpecialKey::Kenter || c == Key::NL)))
         && pum_visible()
     {
@@ -315,7 +315,7 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: c_int, mut retval: bool) -> bool
     // an implicit accept (#38160).
     if word.is_none()
         && c != Key::CTRL_E
-        && compl_used_match.get()
+        && COMPL_USED_MATCH.get()
         && compl_match_array().is_unset()
     {
         word = curr_match().map(MatchId::text_copy);
@@ -327,7 +327,7 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: c_int, mut retval: bool) -> bool
         ins_compl_delete(false);
         let text = if !compl_leader().is_unset() {
             Some(compl_leader())
-        } else if compl_first_match.get().is_some() && !compl_orig_text().is_unset() {
+        } else if COMPL_FIRST_MATCH.get().is_some() && !compl_orig_text().is_unset() {
             Some(compl_orig_text())
         } else {
             None
@@ -347,27 +347,27 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: c_int, mut retval: bool) -> bool
     // Trigger the CompleteDonePre event to give scripts a chance to act
     // upon the completion before clearing the info, and restore
     // ctrl_x_mode so that complete_info() can be used.
-    ctrl_x_mode.set(prev_mode);
+    CTRL_X_MODE.set(prev_mode);
     ins_apply_autocmds(AutoEvent::CompleteDonePre);
 
     ins_compl_free();
-    compl_started.set(false);
-    compl_matches.set(0);
+    COMPL_STARTED.set(false);
+    COMPL_MATCHES.set(0);
     if !shortmess(ShmFlag::COMPLETIONMENU) {
         msg_clr_cmdline(); // necessary for "noshowmode"
     }
-    ctrl_x_mode.set(CTRL_X_NORMAL);
-    compl_enter_selects.set(false);
+    CTRL_X_MODE.set(CTRL_X_NORMAL);
+    COMPL_ENTER_SELECTS.set(false);
     if EDIT_SUBMODE.get().is_some() {
         EDIT_SUBMODE.set(None);
         REDRAW_MODE.set(true);
     }
-    compl_autocomplete.set(false);
-    compl_from_nonkeyword.set(false);
-    compl_num_bests.set(0);
-    compl_ins_end_col.set(ColNr::ZERO);
+    COMPL_AUTOCOMPLETE.set(false);
+    COMPL_FROM_NONKEYWORD.set(false);
+    COMPL_NUM_BESTS.set(0);
+    COMPL_INS_END_COL.set(ColNr::ZERO);
 
-    if c == Key::CTRL_C && cmdwin_type.get() != 0 {
+    if c == Key::CTRL_C && CMDWIN_TYPE.get() != 0 {
         // Avoid the popup menu remaining displayed when leaving the
         // command line window.
         let _ = update_screen();
@@ -386,7 +386,7 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: c_int, mut retval: bool) -> bool
 
 /// Cancel completion.
 pub fn ins_compl_cancel() -> bool {
-    ins_compl_stop(Key::SPACE, ctrl_x_mode.get(), true)
+    ins_compl_stop(Key::SPACE, CTRL_X_MODE.get(), true)
 }
 
 /// Prepare for Insert mode completion, or stop it; called just after typing a
@@ -395,7 +395,7 @@ pub fn ins_compl_cancel() -> bool {
 /// Answers true when `c` is not to be inserted.
 pub fn ins_compl_prep(c: Key) -> bool {
     let mut retval = false;
-    let prev_mode = ctrl_x_mode.get();
+    let prev_mode = CTRL_X_MODE.get();
 
     // Forget any previous 'special' messages if this is actually a ^X mode
     // key — bar ^R, in which case we wait to see what it gives us.
@@ -421,7 +421,7 @@ pub fn ins_compl_prep(c: Key) -> bool {
         return retval;
     }
 
-    if ctrl_x_mode.get() == CTRL_X_CMDLINE_CTRL_X && c != Key::CTRL_X {
+    if CTRL_X_MODE.get() == CTRL_X_CMDLINE_CTRL_X && c != Key::CTRL_X {
         if c == Key::CTRL_V
             || c == Key::CTRL_Q
             || c == Key::CTRL_Z
@@ -429,24 +429,24 @@ pub fn ins_compl_prep(c: Key) -> bool {
             || !vim_is_ctrl_x_key(c)
         {
             // Not starting another completion mode.
-            ctrl_x_mode.set(CTRL_X_CMDLINE);
+            CTRL_X_MODE.set(CTRL_X_CMDLINE);
             // CTRL-X CTRL-Z should stop completion without inserting anything.
             if c == Key::CTRL_Z {
                 retval = true;
             }
         } else {
-            ctrl_x_mode.set(CTRL_X_CMDLINE);
+            CTRL_X_MODE.set(CTRL_X_CMDLINE);
             // Other CTRL-X keys first stop completion, then start another
             // completion mode.
             ins_compl_prep(Key::SPACE);
-            ctrl_x_mode.set(CTRL_X_NOT_DEFINED_YET);
+            CTRL_X_MODE.set(CTRL_X_NOT_DEFINED_YET);
         }
     }
 
     // Set "compl_get_longest" when finding the first matches.
-    if ctrl_x_mode_not_defined_yet() || (ctrl_x_mode_normal() && !compl_started.get()) {
-        compl_get_longest.set(get_cot_flags() & kOptCotFlagLongest as c_uint != 0);
-        compl_used_match.set(true);
+    if ctrl_x_mode_not_defined_yet() || (ctrl_x_mode_normal() && !COMPL_STARTED.get()) {
+        COMPL_GET_LONGEST.set(get_cot_flags() & kOptCotFlagLongest as c_uint != 0);
+        COMPL_USED_MATCH.set(true);
     }
 
     if ctrl_x_mode_not_defined_yet() {
@@ -456,7 +456,7 @@ pub fn ins_compl_prep(c: Key) -> bool {
     } else if ctrl_x_mode_not_default() {
         // We're already in CTRL-X mode, do we stay in it?
         if !vim_is_ctrl_x_key(c) {
-            ctrl_x_mode.set(if ctrl_x_mode_scroll() {
+            CTRL_X_MODE.set(if ctrl_x_mode_scroll() {
                 CTRL_X_NORMAL
             } else {
                 CTRL_X_FINISHED
@@ -466,7 +466,7 @@ pub fn ins_compl_prep(c: Key) -> bool {
         REDRAW_MODE.set(true);
     }
 
-    if compl_started.get() || ctrl_x_mode.get() == CTRL_X_FINISHED {
+    if COMPL_STARTED.get() || CTRL_X_MODE.get() == CTRL_X_FINISHED {
         // Show the error message from an attempted keyword completion
         // (probably 'Pattern not found') until another key is hit, then go
         // back to showing what mode we are in.
@@ -476,14 +476,14 @@ pub fn ins_compl_prep(c: Key) -> bool {
             && c != Key::CTRL_P
             && c != Key::CTRL_R
             && !ins_compl_pum_key(c))
-            || ctrl_x_mode.get() == CTRL_X_FINISHED
+            || CTRL_X_MODE.get() == CTRL_X_FINISHED
         {
             retval = ins_compl_stop(c, prev_mode, retval);
         }
-    } else if ctrl_x_mode.get() == CTRL_X_LOCAL_MSG {
+    } else if CTRL_X_MODE.get() == CTRL_X_LOCAL_MSG {
         // Trigger the CompleteDone event to give scripts a chance to act
         // upon the (possibly failed) completion.
-        do_autocmd_completedone(c, ctrl_x_mode.get(), None);
+        do_autocmd_completedone(c, CTRL_X_MODE.get(), None);
     }
 
     may_trigger_modechanged();
@@ -491,8 +491,8 @@ pub fn ins_compl_prep(c: Key) -> bool {
     // Reset continue_* if we left expansion mode; if we stay they'll be
     // (re)set properly in ins_complete().
     if !vim_is_ctrl_x_key(c) {
-        compl_cont_status.set(0);
-        compl_cont_mode.set(0);
+        COMPL_CONT_STATUS.set(0);
+        COMPL_CONT_MODE.set(0);
     }
 
     retval
@@ -552,16 +552,16 @@ pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
     // Don't check when reading keys from a script, :normal or feedkeys().
     // That would break the test scripts.  But do check for keys when
     // called from complete_check().
-    if !in_compl_func && (using_script() != 0 || ex_normal_busy.get() != 0) {
+    if !in_compl_func && (using_script() != 0 || EX_NORMAL_BUSY.get() != 0) {
         return;
     }
 
     // Only do this at regular intervals.
-    check_keys_count.set(check_keys_count.get() + 1);
-    if check_keys_count.get() < frequency {
+    CHECK_KEYS_COUNT.set(CHECK_KEYS_COUNT.get() + 1);
+    if CHECK_KEYS_COUNT.get() < frequency {
         return;
     }
-    check_keys_count.set(0);
+    CHECK_KEYS_COUNT.set(0);
 
     // Check for a typed key.  Do use mappings, otherwise
     // vim_is_ctrl_x_key() can't do its work correctly.
@@ -569,7 +569,7 @@ pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
     if !c.is_nul() && !test_disable_char_avail.get() {
         if vim_is_ctrl_x_key(c) && c != Key::CTRL_X && c != Key::CTRL_R {
             c = safe_vgetc(); // Eat the character
-            compl_shows_dir.set(ins_compl_key2dir(c));
+            COMPL_SHOWS_DIR.set(ins_compl_key2dir(c));
             let (repeat, allow_get) = (
                 ins_compl_key2count(c),
                 !matches!(c.special(), Some(SpecialKey::Up | SpecialKey::Down)),
@@ -583,7 +583,7 @@ pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
                 // Don't interrupt completion when the character wasn't
                 // typed, e.g. when doing @q to replay keys.
                 if c != Key::CTRL_R && KEY_TYPED.get() {
-                    compl_interrupted.set(true);
+                    COMPL_INTERRUPTED.set(true);
                 }
                 vungetc(c);
             }
@@ -591,23 +591,23 @@ pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
     } else {
         let normal_mode_strict = ctrl_x_mode_normal()
             && !ctrl_x_mode_line_or_eval()
-            && compl_cont_status.get() & CONT_LOCAL == 0
+            && COMPL_CONT_STATUS.get() & CONT_LOCAL == 0
             && !cpt_sources().is_unset()
             && cpt_sources().index() >= 0;
-        if normal_mode_strict && (compl_autocomplete.get() || p_cto() > 0) {
+        if normal_mode_strict && (COMPL_AUTOCOMPLETE.get() || p_cto() > 0) {
             check_elapsed_time();
         }
     }
 
-    if compl_pending.get() != 0
+    if COMPL_PENDING.get() != 0
         && !GOT_INT.get()
         && COT_FLAGS.get() & (kOptCotFlagNoinsert as c_uint | kOptCotFlagFuzzy as c_uint) == 0
-        && (!compl_autocomplete.get() || ins_compl_has_preinsert())
+        && (!COMPL_AUTOCOMPLETE.get() || ins_compl_has_preinsert())
     {
         // Insert the first match immediately and advance
         // compl_shown_match, before finding other matches.
-        let todo = compl_pending.get().abs();
-        compl_pending.set(0);
+        let todo = COMPL_PENDING.get().abs();
+        COMPL_PENDING.set(0);
         ins_compl_next(false, todo, true);
     }
 }

@@ -24,8 +24,8 @@ use crate::types::CmdIdx;
 use crate::types::Handle;
 use crate::window::FR_COL;
 use crate::winfloat::WIN_CONFIG_INIT;
-use crate::winfloat::kWinSplitLeft;
-use crate::winfloat::kWinStyleMinimal;
+use crate::winfloat::WIN_SPLIT_LEFT;
+use crate::winfloat::WIN_STYLE_MINIMAL;
 use crate::winlayer::Buf;
 use crate::winlayer::{TabPage, Win, WinId};
 use core::ffi::c_int;
@@ -83,7 +83,7 @@ impl Opening {
         // current by then.
         let window_id = window.id();
         if self.cmdline_offset < INT_MAX {
-            cmdline_win.set(Some(window_id));
+            CMDLINE_WIN.set(Some(window_id));
         }
         self.bufref = Some(BufRef::of(self.buffer));
         if !self.noautocmd {
@@ -104,7 +104,7 @@ impl Opening {
             *raised = None;
             return Err(Error::exception(c"Window was closed immediately"));
         }
-        if self.style == kWinStyleMinimal {
+        if self.style == WIN_STYLE_MINIMAL {
             win_set_minimal_style(window);
             didset_window_options(window, true);
             changed_window_setting(window);
@@ -157,7 +157,7 @@ impl Opening {
                 if p_spr() {
                     WIN_SPLIT_RIGHT
                 } else {
-                    kWinSplitLeft
+                    WIN_SPLIT_LEFT
                 }
             } else if p_sb() {
                 WIN_SPLIT_BELOW
@@ -251,7 +251,7 @@ pub fn nvim_open_win(
     let Some(buffer) = find_buffer_by_handle(buf)? else {
         return Ok(Handle::NONE);
     };
-    if cmdwin_type.get() != 0 && enter || cmdwin_buf.get() == Some(buffer.id()) {
+    if CMDWIN_TYPE.get() != 0 && enter || CMDWIN_BUF.get() == Some(buffer.id()) {
         return Err(Error::exception(E_CMDWIN));
     }
     let mut fconfig = WIN_CONFIG_INIT;
@@ -309,10 +309,10 @@ fn split_ins(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> Option<Win>
 /// answers the default rather than naming a side.
 pub(crate) fn win_split_dir(win: Win) -> WinSplit {
     let Some(frame) = win.frame_or_none() else {
-        return kWinSplitLeft;
+        return WIN_SPLIT_LEFT;
     };
     let Some(parent) = frame.parent() else {
-        return kWinSplitLeft;
+        return WIN_SPLIT_LEFT;
     };
     // A window in a column was split off the one below it when it still has a
     // sibling ahead of it, and off the one above it otherwise; in a row the
@@ -321,7 +321,7 @@ pub(crate) fn win_split_dir(win: Win) -> WinSplit {
     match (frame.next().is_none(), column) {
         (false, true) => WIN_SPLIT_ABOVE,
         (true, true) => WIN_SPLIT_BELOW,
-        (false, false) => kWinSplitLeft,
+        (false, false) => WIN_SPLIT_LEFT,
         (true, false) => WIN_SPLIT_RIGHT,
     }
 }
@@ -333,7 +333,7 @@ pub(crate) fn win_split_flags(split: WinSplit, toplevel: bool) -> ::core::ffi::c
     } else {
         flags |= WSP_VERT;
     }
-    if split == WIN_SPLIT_ABOVE || split == kWinSplitLeft {
+    if split == WIN_SPLIT_ABOVE || split == WIN_SPLIT_LEFT {
         flags |= if ::core::ffi::c_int::from(toplevel) != 0 {
             WSP_TOP
         } else {
@@ -362,7 +362,7 @@ pub(crate) fn win_can_move_tp(window: Win, tabpage: TabPage) -> Result<(), Error
         ));
     }
     window_layout_locked_err(CmdIdx::SIZE)?;
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(Error::exception(E_TEXTLOCK));
     }
     if is_aucmd_win(window) {
@@ -370,7 +370,7 @@ pub(crate) fn win_can_move_tp(window: Win, tabpage: TabPage) -> Result<(), Error
             c"Cannot move autocmd window to another tabpage",
         ));
     }
-    if cmdwin_win.get() == Some(window.id()) || cmdwin_old_curwin.get() == Some(window.id()) {
+    if CMDWIN_WIN.get() == Some(window.id()) || CMDWIN_OLD_CURWIN.get() == Some(window.id()) {
         return Err(Error::exception(E_CMDWIN));
     }
     Ok(())

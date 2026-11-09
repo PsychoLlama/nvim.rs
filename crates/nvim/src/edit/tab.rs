@@ -89,7 +89,7 @@ pub(crate) fn ins_shift(c: Key, lastc: Key) {
     DID_SI.set(false);
     CAN_SI.set(false);
     CAN_SI_BACK.set(false);
-    can_cindent.set(false);
+    CAN_CINDENT.set(false);
 }
 
 /// Handle TAB in Insert or Replace mode.
@@ -98,10 +98,10 @@ pub(crate) fn ins_shift(c: Key, lastc: Key) {
 /// which is the common case: 'expandtab' off, 'softtabstop' unset, and either
 /// 'smarttab' off or 'tabstop' equal to 'shiftwidth' anyway.
 pub(crate) fn ins_tab() -> bool {
-    if Insstart_blank_vcol.get() == ColNr::MAX
+    if INSSTART_BLANK_VCOL.get() == ColNr::MAX
         && Win::current().w_cursor.lnum == INSSTART.get().lnum
     {
-        Insstart_blank_vcol.set(nolist_virtcol());
+        INSSTART_BLANK_VCOL.set(nolist_virtcol());
     }
     if echeck_abbr(Key::TAB, true) {
         return false;
@@ -109,7 +109,7 @@ pub(crate) fn ins_tab() -> bool {
 
     let ind = inindent(0);
     if ind {
-        can_cindent.set(false);
+        CAN_CINDENT.set(false);
     }
 
     // 'smarttab' only does something in the indent, and only when
@@ -365,7 +365,7 @@ pub(crate) fn ins_eol(c: Key) -> Result<(), Failed> {
 
     // In 'revins' the cursor is at the start of what was typed, and the
     // line is broken at its end.
-    if revins_on.get() {
+    if REVINS_ON.get() {
         Win::current().w_cursor.col += get_cursor_pos_len();
     }
 
@@ -378,7 +378,7 @@ pub(crate) fn ins_eol(c: Key) -> Result<(), Failed> {
     let indent = OLD_INDENT.get();
     let opened = open_line(FORWARD, comments, indent, None);
     OLD_INDENT.set(0);
-    can_cindent.set(true);
+    CAN_CINDENT.set(true);
     // The new line may be in a closed fold.
     fold_open_cursor();
     opened

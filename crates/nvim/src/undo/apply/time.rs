@@ -168,8 +168,8 @@ pub fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
         u_sync(true);
         buf = Buf::current();
     }
-    u_newcount.set(0);
-    u_oldcount.set(if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
+    U_NEWCOUNT.set(0);
+    U_OLDCOUNT.set(if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
         -1
     } else {
         0
@@ -311,7 +311,7 @@ fn undo_search(
         return Ok(UndoDest {
             target: 0,
             marks: Marks {
-                mark: lastmark.get(),
+                mark: LASTMARK.get(),
                 nomark: 0,
             },
             above: false,

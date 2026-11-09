@@ -2,7 +2,7 @@
 //!
 //! Spell checking cannot use the locale's idea of a letter: a `.spl` file
 //! has to mean the same thing wherever it is loaded. So every language
-//! carries its own answer, and [`spelltab`] holds the one currently in
+//! carries its own answer, and [`SPELLTAB`] holds the one currently in
 //! force — a byte-indexed table of "is a word character", "is upper case",
 //! and the folded and upper-cased forms.
 //!
@@ -12,7 +12,7 @@
 //!
 //! [`init_spell_chartab`] fills the table from the current encoding at
 //! startup; a `.spl` file's `FOL`/`LOW`/`UPP` section replaces it wholesale
-//! and sets [`did_set_spelltab`].
+//! and sets [`DID_SET_SPELLTAB`].
 //!
 //! On top of that sit the case helpers the rest of the subsystem uses:
 //! [`captype`] classifies a word's capitalisation into the `WF_*` flags the
@@ -43,7 +43,7 @@ use crate::os::libc::uint8_t;
 use crate::spell::SpellTab;
 use crate::types::Failed;
 
-use super::{MAXWLEN, did_set_spelltab, spelltab};
+use super::{DID_SET_SPELLTAB, MAXWLEN, SPELLTAB};
 
 /// A table holding the ASCII answers: digits and letters are word
 /// characters, `A`-`Z` are upper case, and everything else maps to itself.
@@ -85,25 +85,25 @@ pub fn ascii_spell_chartab() -> SpellTab {
 /// above 255.
 #[inline]
 pub(crate) fn spelltab_isw(c: usize) -> bool {
-    spelltab.get_field(|tab| &tab.st_isw[c])
+    SPELLTAB.get_field(|tab| &tab.st_isw[c])
 }
 
 /// Whether byte `c` is upper case. See [`spelltab_isw`].
 #[inline]
 pub(crate) fn spelltab_isu(c: usize) -> bool {
-    spelltab.get_field(|tab| &tab.st_isu[c])
+    SPELLTAB.get_field(|tab| &tab.st_isu[c])
 }
 
 /// Byte `c` folded to lower case. See [`spelltab_isw`].
 #[inline]
 pub(crate) fn spelltab_fold(c: usize) -> uint8_t {
-    spelltab.get_field(|tab| &tab.st_fold[c])
+    SPELLTAB.get_field(|tab| &tab.st_fold[c])
 }
 
 /// Byte `c` raised to upper case. See [`spelltab_isw`].
 #[inline]
 pub(crate) fn spelltab_upper(c: usize) -> uint8_t {
-    spelltab.get_field(|tab| &tab.st_upper[c])
+    SPELLTAB.get_field(|tab| &tab.st_upper[c])
 }
 
 /// A character the caller has tested below 256 (or 128), as the index of a
@@ -114,11 +114,11 @@ fn tab_index(c: c_int) -> usize {
     c.cast_unsigned() as usize
 }
 
-/// Reset [`spelltab`] to what the current encoding says, discarding
+/// Reset [`SPELLTAB`] to what the current encoding says, discarding
 /// anything a `.spl` file installed. Called once at startup and again
 /// whenever the spell files are reloaded.
 pub fn init_spell_chartab() {
-    did_set_spelltab.set(false);
+    DID_SET_SPELLTAB.set(false);
     let mut tab = ascii_spell_chartab();
     for b in 128..=u8::MAX {
         let (i, at) = (c_int::from(b), usize::from(b));
@@ -133,7 +133,7 @@ pub fn init_spell_chartab() {
         tab.st_fold[at] = u8::try_from(f).unwrap_or(b);
         tab.st_upper[at] = u8::try_from(u).unwrap_or(b);
     }
-    spelltab.set(tab);
+    SPELLTAB.set(tab);
 }
 
 /// `text` from byte `at` on, or nothing when `at` is at or past its end:

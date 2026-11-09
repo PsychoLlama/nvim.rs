@@ -19,7 +19,7 @@ use crate::memory::{ThinCString, XString};
 use crate::option::vars::{P_HF, p_hf};
 use crate::os::env::{env_set, getenv_owned};
 use crate::os::fs::dir_exists;
-use crate::os::state::{didset_vim, didset_vimruntime};
+use crate::os::state::{DIDSET_VIM, DIDSET_VIMRUNTIME};
 use crate::path::MAXPATHL;
 use crate::path::{
     after_pathsep, append_path, concat_fnames, path_fnamencmp, tail_index, tail_with_sep_index,
@@ -165,10 +165,10 @@ pub(crate) fn getenv_resolved(name: &CStr) -> Option<XString> {
     let vim_path = XString::from_vec(vim_path?);
     if vimruntime {
         env_set(c"VIMRUNTIME", vim_path.as_cstr());
-        didset_vimruntime.set(true);
+        DIDSET_VIMRUNTIME.set(true);
     } else {
         env_set(c"VIM", vim_path.as_cstr());
-        didset_vim.set(true);
+        DIDSET_VIM.set(true);
     }
     Some(vim_path)
 }

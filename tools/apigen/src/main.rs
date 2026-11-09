@@ -1139,7 +1139,7 @@ fn emit_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         writeln!(out, "        return Err(text_locked_error());").unwrap();
         writeln!(out, "    }}").unwrap();
     } else if spec.textlock_allow_cmdwin {
-        writeln!(out, "    if textlock.get() != 0 || expr_map_locked() {{").unwrap();
+        writeln!(out, "    if TEXTLOCK.get() != 0 || expr_map_locked() {{").unwrap();
         writeln!(out, "        return Err(expr_map_locked_error());").unwrap();
         writeln!(out, "    }}").unwrap();
     }
@@ -1738,7 +1738,7 @@ fn generate(
     uses.push("use crate::api_error;".into());
     if referenced.contains("expr_map_locked") {
         uses.push("use crate::ex_docmd::expr_map_locked;".into());
-        uses.push("use crate::guard::textlock;".into());
+        uses.push("use crate::guard::TEXTLOCK;".into());
         uses.push("use crate::message::E_TEXTLOCK;".into());
     }
     if referenced.contains("text_locked") {
@@ -2351,7 +2351,7 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         writeln!(out, "        return Err(text_locked_error());").unwrap();
         writeln!(out, "    }}").unwrap();
     } else if spec.textlock_allow_cmdwin {
-        writeln!(out, "    if textlock.get() != 0 || expr_map_locked() {{").unwrap();
+        writeln!(out, "    if TEXTLOCK.get() != 0 || expr_map_locked() {{").unwrap();
         writeln!(out, "        return Err(expr_map_locked_error());").unwrap();
         writeln!(out, "    }}").unwrap();
     }
@@ -2619,7 +2619,7 @@ fn generate_lua(
     };
     use_from("ex_docmd", &["expr_map_locked"]);
     use_from("ex_getln", &["text_locked"]);
-    use_from("guard", &["Restore", "textlock"]);
+    use_from("guard", &["Restore", "TEXTLOCK"]);
     use_from(
         "lua::converter::binding",
         &[

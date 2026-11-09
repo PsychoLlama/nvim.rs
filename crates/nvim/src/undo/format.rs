@@ -137,7 +137,7 @@ fn payload_image(ints: [c_int; PAYLOAD_INTS], bytes: [BCount; 3]) -> [u8; EXTMAR
     image
 }
 
-/// Reads a `kExtmarkSplice` payload, or refuses one whose coordinates no
+/// Reads a `EXTMARK_SPLICE` payload, or refuses one whose coordinates no
 /// change to a buffer could have produced.
 pub fn decode_splice(image: &[u8; EXTMARK_PAYLOAD_LEN]) -> Option<ExtmarkSplice> {
     let (ints, bytes) = payload_fields(image);
@@ -154,7 +154,7 @@ pub fn decode_splice(image: &[u8; EXTMARK_PAYLOAD_LEN]) -> Option<ExtmarkSplice>
     })
 }
 
-/// [`decode_splice`] for a `kExtmarkMove` payload.
+/// [`decode_splice`] for a `EXTMARK_MOVE` payload.
 pub fn decode_move(image: &[u8; EXTMARK_PAYLOAD_LEN]) -> Option<ExtmarkMove> {
     let (ints, bytes) = payload_fields(image);
     in_range(ints, bytes).then(|| ExtmarkMove {

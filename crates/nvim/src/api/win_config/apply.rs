@@ -18,8 +18,8 @@
 use super::*;
 use crate::api_error;
 use crate::types::Handle;
-use crate::winfloat::kWinSplitLeft;
-use crate::winfloat::kWinStyleMinimal;
+use crate::winfloat::WIN_SPLIT_LEFT;
+use crate::winfloat::WIN_STYLE_MINIMAL;
 use crate::winlayer::{FrameId, FrameRef, TabPage, Win, WinId};
 use core::ffi::c_int;
 
@@ -251,7 +251,7 @@ impl Relayout {
         let neighbour = if n_frames > 2 {
             // Only a nested row or column has a neighbour on the side the
             // split is going.
-            let ahead = self.split == WIN_SPLIT_ABOVE || self.split == kWinSplitLeft;
+            let ahead = self.split == WIN_SPLIT_ABOVE || self.split == WIN_SPLIT_LEFT;
             let nested = parent_frame.parent().is_some();
             let found = nested.then(|| {
                 if ahead {
@@ -370,7 +370,7 @@ fn apply_split(
             if old_split == WIN_SPLIT_RIGHT || p_spr() {
                 WIN_SPLIT_RIGHT
             } else {
-                kWinSplitLeft
+                WIN_SPLIT_LEFT
             }
         } else if old_split == WIN_SPLIT_BELOW || p_sb() {
             WIN_SPLIT_BELOW
@@ -590,15 +590,15 @@ pub fn nvim_win_set_config(
         Applied::Done => None,
     };
 
-    if fconfig.style == kWinStyleMinimal && old_style != fconfig.style {
+    if fconfig.style == WIN_STYLE_MINIMAL && old_style != fconfig.style {
         win_set_minimal_style(w);
         didset_window_options(w, true);
         changed_window_setting(w);
     }
     if fconfig._cmdline_offset < INT_MAX {
-        cmdline_win.set(Some(w.id()));
-    } else if cmdline_win.get() == Some(w.id()) && fconfig._cmdline_offset == INT_MAX {
-        cmdline_win.set(None);
+        CMDLINE_WIN.set(Some(w.id()));
+    } else if CMDLINE_WIN.get() == Some(w.id()) && fconfig._cmdline_offset == INT_MAX {
+        CMDLINE_WIN.set(None);
     }
     raised.map_or(Ok(()), Err)
 }

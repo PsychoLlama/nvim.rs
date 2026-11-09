@@ -120,7 +120,7 @@ fn bs_blocked() -> bool {
     if buf_is_empty(Buf::current()) {
         return true;
     }
-    if revins_on.get() {
+    if REVINS_ON.get() {
         return false;
     }
     let cursor = Win::current().w_cursor;
@@ -155,10 +155,10 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
 
     let in_indent = inindent(0);
     if in_indent {
-        can_cindent.set(false);
+        CAN_CINDENT.set(false);
     }
     END_COMMENT_PENDING.set(None); // after BS, don't auto-end a comment
-    if revins_on.get() {
+    if REVINS_ON.get() {
         cursor_forward(); // put the cursor after the last inserted character
     }
 
@@ -186,7 +186,7 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
         }
         DID_AI.set(false);
     } else {
-        if revins_on.get() {
+        if REVINS_ON.get() {
             cursor_back(); // put the cursor on the last inserted character
         }
 
@@ -195,7 +195,7 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
         let mut mincol: ColNr = ColNr::ZERO;
         if mode == Backspace::Line
             && (Buf::current().b_p_ai != 0 || cindent_on())
-            && !revins_on.get()
+            && !REVINS_ON.get()
         {
             let save_col = Win::current().w_cursor.col;
             beginline(BeginlineOpts::WHITE);
@@ -277,7 +277,7 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
 /// the cursor, then the characters the NL itself replaced.
 fn bs_join_line() -> bool {
     let lnum = INSSTART.get().lnum;
-    if Win::current().w_cursor.lnum == lnum || revins_on.get() {
+    if Win::current().w_cursor.lnum == lnum || REVINS_ON.get() {
         if u_save(
             Win::current().w_cursor.lnum - 2,
             Win::current().w_cursor.lnum + 1,
@@ -459,7 +459,7 @@ fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
     // only read once `mode` is `WordNotSpace`.
     let mut is_word = 0;
     loop {
-        if !revins_on.get() {
+        if !REVINS_ON.get() {
             cursor_back(); // put the cursor on the character to delete
         }
         let cc = char_at_cursor();
@@ -476,7 +476,7 @@ fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
                 || prev_cclass != cclass)
         {
             // The end of the word.
-            if !revins_on.get() {
+            if !REVINS_ON.get() {
                 cursor_forward();
             } else if STATE.get() & REPLACE_FLAG != 0 {
                 cursor_back();
@@ -502,11 +502,11 @@ fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
             if has_composing {
                 cursor_forward();
             }
-            if revins_chars.get() != 0 {
-                revins_chars.set(revins_chars.get() - 1);
-                revins_legal.set(revins_legal.get() + 1);
+            if REVINS_CHARS.get() != 0 {
+                REVINS_CHARS.set(REVINS_CHARS.get() - 1);
+                REVINS_LEGAL.set(REVINS_LEGAL.get() + 1);
             }
-            if revins_on.get() && char_at_cursor() == NUL {
+            if REVINS_ON.get() && char_at_cursor() == NUL {
                 break;
             }
         }
@@ -517,7 +517,7 @@ fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
         }
         // The `do`-`while` condition: keep going while there is
         // something left this key is allowed to take.
-        let more = revins_on.get()
+        let more = REVINS_ON.get()
             || (Win::current().w_cursor.col > mincol
                 && (can_bs(BsFlag::NOSTOP)
                     || (Win::current().w_cursor.lnum != INSSTART_ORIG.get().lnum

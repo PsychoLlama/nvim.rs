@@ -3,7 +3,7 @@
 //! Three things live here, and they share one data structure:
 //!
 //! - **Debug mode.** [`do_debug`] takes over the screen, reads `>` commands
-//!   until one of them says to resume, and leaves `debug_break_level` set to
+//!   until one of them says to resume, and leaves `DEBUG_BREAK_LEVEL` set to
 //!   whichever nesting depth should stop next. `do_one_cmd` calls
 //!   [`dbg_check_breakpoint`] before every command to find out whether to
 //!   enter.
@@ -15,8 +15,8 @@
 //!   profiling point cannot be `here`, `expr`, or line-numbered.
 //!
 //! Those last two are why almost everything here is parameterised by
-//! [`BreakList`]. Upstream passes `&dbg_breakp` or `&prof_ga` and then
-//! compares the pointer back against `&prof_ga` to decide what the parser may
+//! [`BreakList`]. Upstream passes `&DBG_BREAKP` or `&PROF_GA` and then
+//! compares the pointer back against `&PROF_GA` to decide what the parser may
 //! accept; naming the choice says the same thing without the identity test.
 //!
 //! A list is borrowed an entry at a time and never across user code: a watch
@@ -38,21 +38,20 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
 #[cfg(test)]
 mod tests;
 use crate::charset::atoi;
 use crate::debugger::state::{
-    debug_backtrace_level, debug_break_level, debug_did_msg, debug_mode, debug_tick,
+    DEBUG_BACKTRACE_LEVEL, DEBUG_BREAK_LEVEL, DEBUG_DID_MSG, DEBUG_MODE, DEBUG_TICK,
 };
 use crate::drawscreen::state::CMDLINE_ROW;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::env::{expand_env, home_to_tilde};
 use crate::eval::{eval_expr, typval_compare, typval_tostring};
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::ex_docmd::state::{ex_nesting_level, ex_normal_busy};
+use crate::ex_docmd::state::{EX_NESTING_LEVEL, EX_NORMAL_BUSY};
 use crate::ex_getln::getcmdline_bare;
 use crate::fileio::file_pat_to_regpat;
 use crate::getchar::state::TypeaheadSave;
@@ -117,19 +116,19 @@ pub const DBG_FILE: c_int = 2;
 pub const DBG_EXPR: c_int = 3;
 
 /// Batch-mode debugging: do not save and restore the typeahead.
-static debug_greedy: GlobalCell<bool> = GlobalCell::new(false);
+static DEBUG_GREEDY: GlobalCell<bool> = GlobalCell::new(false);
 /// The two values a watch expression moved between, waiting to be printed
 /// in the debug banner. Each is owned, and the banner takes it.
-static debug_oldval: GlobalCell<Option<XString>> = GlobalCell::new(None);
-static debug_newval: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static DEBUG_OLDVAL: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static DEBUG_NEWVAL: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
-static dbg_breakp: GlobalCell<Vec<Breakpoint>> = GlobalCell::new(Vec::new());
-static prof_ga: GlobalCell<Vec<Breakpoint>> = GlobalCell::new(Vec::new());
+static DBG_BREAKP: GlobalCell<Vec<Breakpoint>> = GlobalCell::new(Vec::new());
+static PROF_GA: GlobalCell<Vec<Breakpoint>> = GlobalCell::new(Vec::new());
 /// Number of the last breakpoint defined; `:breakadd` hands out the next.
-static last_breakp: GlobalCell<c_int> = GlobalCell::new(0);
-/// Whether any `dbg_breakp` entry is a `DBG_EXPR`, so that `do_one_cmd` can
+static LAST_BREAKP: GlobalCell<c_int> = GlobalCell::new(0);
+/// Whether any `DBG_BREAKP` entry is a `DBG_EXPR`, so that `do_one_cmd` can
 /// skip the per-command expression evaluation when none is.
-static has_expr_breakpoint: GlobalCell<bool> = GlobalCell::new(false);
+static HAS_EXPR_BREAKPOINT: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Which of the two lists of [`Breakpoint`] entries a command works on.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -156,8 +155,8 @@ impl BreakList {
 
     fn cell(self) -> &'static GlobalCell<Vec<Breakpoint>> {
         match self {
-            Self::Debug => &dbg_breakp,
-            Self::Profiling => &prof_ga,
+            Self::Debug => &DBG_BREAKP,
+            Self::Profiling => &PROF_GA,
         }
     }
 
@@ -194,13 +193,13 @@ impl BreakList {
 
 /// The breakpoint `dbg_breakpoint` recorded, waiting for `do_one_cmd` to
 /// reach a command that is actually executed.
-static debug_breakpoint_name: GlobalCell<Option<XString>> = GlobalCell::new(None);
-static debug_breakpoint_lnum: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
+static DEBUG_BREAKPOINT_NAME: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static DEBUG_BREAKPOINT_LNUM: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
 /// A prompt that was owed but not shown, because the command it belonged to
 /// was skipped (an untaken `:if` branch, say). A skipped command that decides
 /// to run something itself calls [`dbg_check_skipped`] to collect it.
-static debug_skipped: GlobalCell<bool> = GlobalCell::new(false);
-static debug_skipped_name: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static DEBUG_SKIPPED: GlobalCell<bool> = GlobalCell::new(false);
+static DEBUG_SKIPPED_NAME: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
 /// Enter debug mode if a breakpoint was hit, or if `ex_nesting_level` is at
 /// or below the level the last `>` command asked to stop at -- but only if
@@ -208,15 +207,15 @@ static debug_skipped_name: GlobalCell<Option<XString>> = GlobalCell::new(None);
 ///
 /// Called from `do_one_cmd` before every command.
 pub fn dbg_check_breakpoint(excmd: &mut ExArg) {
-    debug_skipped.set(false);
+    DEBUG_SKIPPED.set(false);
     let skip = excmd.skip;
-    let Some(name) = debug_breakpoint_name.take() else {
-        if ex_nesting_level.get() > debug_break_level.get() {
+    let Some(name) = DEBUG_BREAKPOINT_NAME.take() else {
+        if EX_NESTING_LEVEL.get() > DEBUG_BREAK_LEVEL.get() {
             return;
         }
         if skip {
-            debug_skipped.set(true);
-            debug_skipped_name.set(None);
+            DEBUG_SKIPPED.set(true);
+            DEBUG_SKIPPED_NAME.set(None);
             return;
         }
         do_debug(excmd.line.cstr_from(excmd.line.cmd));
@@ -224,8 +223,8 @@ pub fn dbg_check_breakpoint(excmd: &mut ExArg) {
     };
 
     if skip {
-        debug_skipped.set(true);
-        debug_skipped_name.set(Some(name));
+        DEBUG_SKIPPED.set(true);
+        DEBUG_SKIPPED_NAME.set(Some(name));
         return;
     }
 
@@ -245,7 +244,7 @@ pub fn dbg_check_breakpoint(excmd: &mut ExArg) {
     smsg!(
         0,
         "Breakpoint in \"{prefix}{rest}\" line {}",
-        i64::from(debug_breakpoint_lnum.get())
+        i64::from(DEBUG_BREAKPOINT_LNUM.get())
     );
     do_debug(excmd.line.cstr_from(excmd.line.cmd));
 }
@@ -253,14 +252,14 @@ pub fn dbg_check_breakpoint(excmd: &mut ExArg) {
 /// Enter debug mode after all, for a command that [`dbg_check_breakpoint`]
 /// skipped because `args.skip` was set. True when the prompt was shown.
 pub fn dbg_check_skipped(excmd: &mut ExArg) -> bool {
-    if !debug_skipped.get() {
+    if !DEBUG_SKIPPED.get() {
         return false;
     }
     // A previous interruption must not flush this prompt's input; only a
     // `CTRL-C` typed at it counts.
     let prev_got_int = GOT_INT.get();
     GOT_INT.set(false);
-    debug_breakpoint_name.set(debug_skipped_name.take());
+    DEBUG_BREAKPOINT_NAME.set(DEBUG_SKIPPED_NAME.take());
     // `skip` is true on entry, and is put back.
     excmd.skip = false;
     dbg_check_breakpoint(excmd);
@@ -272,8 +271,8 @@ pub fn dbg_check_skipped(excmd: &mut ExArg) -> bool {
 /// Record that `name` has a breakpoint on `lnum`. Whether it is announced is
 /// [`dbg_check_breakpoint`]'s decision, since the line may not be executed.
 pub fn dbg_breakpoint(name: &CStr, lnum: LineNr) {
-    debug_breakpoint_name.set(Some(XString::from_cstr(name)));
-    debug_breakpoint_lnum.set(lnum);
+    DEBUG_BREAKPOINT_NAME.set(Some(XString::from_cstr(name)));
+    DEBUG_BREAKPOINT_LNUM.set(lnum);
 }
 
 // -- Defining and deleting -------------------------------------------------
@@ -402,12 +401,12 @@ pub fn ex_breakadd(excmd: &mut ExArg) {
     breakpoint.forceit = forceit;
 
     if breakpoint.kind == DBG_EXPR {
-        last_breakp.set(last_breakp.get() + 1);
-        breakpoint.nr = last_breakp.get();
+        LAST_BREAKP.set(LAST_BREAKP.get() + 1);
+        breakpoint.nr = LAST_BREAKP.get();
         list.push(breakpoint);
-        debug_tick.set(debug_tick.get() + 1);
+        DEBUG_TICK.set(DEBUG_TICK.get() + 1);
         if list == BreakList::Debug {
-            has_expr_breakpoint.set(true);
+            HAS_EXPR_BREAKPOINT.set(true);
         }
         return;
     }
@@ -427,20 +426,20 @@ pub fn ex_breakadd(excmd: &mut ExArg) {
         // The default line number is the first.
         breakpoint.lnum = LineNr::ONE;
     }
-    // A profiling point is not numbered and does not bump `debug_tick`:
+    // A profiling point is not numbered and does not bump `DEBUG_TICK`:
     // nothing lists or deletes it by number.
     if list == BreakList::Debug {
-        last_breakp.set(last_breakp.get() + 1);
-        breakpoint.nr = last_breakp.get();
-        debug_tick.set(debug_tick.get() + 1);
+        LAST_BREAKP.set(LAST_BREAKP.get() + 1);
+        breakpoint.nr = LAST_BREAKP.get();
+        DEBUG_TICK.set(DEBUG_TICK.get() + 1);
     }
     list.push(breakpoint);
 }
 
-/// Recompute [`has_expr_breakpoint`] after the list changed.
+/// Recompute [`HAS_EXPR_BREAKPOINT`] after the list changed.
 fn update_has_expr_breakpoint() {
-    let any = dbg_breakp.with(|entries| entries.iter().any(|entry| entry.kind == DBG_EXPR));
-    has_expr_breakpoint.set(any);
+    let any = DBG_BREAKP.with(|entries| entries.iter().any(|entry| entry.kind == DBG_EXPR));
+    HAS_EXPR_BREAKPOINT.set(any);
 }
 
 /// `:breakdel` and `:profdel`.
@@ -494,7 +493,7 @@ pub fn ex_breakdel(excmd: &mut ExArg) {
         // `:profdel` is not something `:breaklist` shows, so it does not
         // invalidate anybody's cached view.
         if cmdidx == CmdIdx::breakdel {
-            debug_tick.set(debug_tick.get() + 1);
+            DEBUG_TICK.set(DEBUG_TICK.get() + 1);
         }
         if !del_all {
             break;
@@ -686,10 +685,10 @@ fn watch_changed(list: BreakList, idx: usize) -> bool {
 /// Record the "before" value the prompt banner prints, freeing whatever an
 /// earlier change left. A missing value renders as such.
 fn set_oldval(tv: Option<&TypVal>) {
-    debug_oldval.set(Some(typval_tostring(tv, true)));
+    DEBUG_OLDVAL.set(Some(typval_tostring(tv, true)));
 }
 
 /// [`set_oldval`] for the "after" value.
 fn set_newval(tv: Option<&TypVal>) {
-    debug_newval.set(Some(typval_tostring(tv, true)));
+    DEBUG_NEWVAL.set(Some(typval_tostring(tv, true)));
 }

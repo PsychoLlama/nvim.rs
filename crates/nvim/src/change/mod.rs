@@ -28,7 +28,7 @@
 use crate::ascii::TAB;
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::defs::AutoEvent;
-use crate::autocmd::state::{autocmd_busy, last_cursormoved, last_cursormoved_win};
+use crate::autocmd::state::{AUTOCMD_BUSY, LAST_CURSORMOVED, LAST_CURSORMOVED_WIN};
 use crate::buffer::{
     buf_inc_changedtick, buf_is_dontwrite, buf_is_prompt, buf_meta_total, current_buf,
 };
@@ -47,7 +47,7 @@ use crate::drawscreen::{
 use crate::edit::{replace_push, replace_push_nul, truncate_spaces};
 use crate::eval::vars::set_vim_var_string;
 use crate::extmark::BCount;
-use crate::extmark::curbuf_splice_pending;
+use crate::extmark::CURBUF_SPLICE_PENDING;
 use crate::extmark::{extmark_adjust, extmark_splice, extmark_splice_cols};
 use crate::fold::fold_update;
 use crate::highlight_group::HLF_W;
@@ -82,10 +82,10 @@ use crate::options::kOptVeFlagOnemore;
 use crate::os::libc::int64_t;
 use crate::plines::{linetabsize_eol, win_chartabsize};
 use crate::pos::MAXLNUM;
-use crate::search::state::highlight_match;
+use crate::search::state::HIGHLIGHT_MATCH;
 use crate::search::{BACKWARD, FORWARD, check_linecomment, findmatch, linewhite, showmatch};
 use crate::spell::spell_check_window;
-use crate::startup::silent_mode;
+use crate::startup::SILENT_MODE;
 use crate::state::mode::{
     AI_COL, CAN_SI, CAN_SI_BACK, DID_AI, DID_SI, END_COMMENT_PENDING, INSSTART, ORIG_LINE_COUNT,
     RESTART_EDIT, STATE, VR_LINES_CHANGED,

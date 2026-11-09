@@ -247,7 +247,7 @@ pub(crate) fn with_scope_entry<R>(
         ScopeKind::Window => Some(f(&mut Win::current().w_winvar)),
         ScopeKind::Tab => Some(f(&mut TabPage::current().tp_winvar)),
         ScopeKind::Script => {
-            let sid = current_sctx.get().sc_sid;
+            let sid = CURRENT_SCTX.get().sc_sid;
             if !script_id_valid(sid) {
                 return None;
             }
@@ -268,7 +268,7 @@ pub(crate) fn scope_dict(kind: ScopeKind) -> Option<DictRef> {
         ScopeKind::Buffer => Buf::current().b_bufvar.di_tv.dict_handle(),
         ScopeKind::Window => Win::current().w_winvar.di_tv.dict_handle(),
         ScopeKind::Tab => TabPage::current().tp_winvar.di_tv.dict_handle(),
-        ScopeKind::Script => script_scope_dict(current_sctx.get().sc_sid),
+        ScopeKind::Script => script_scope_dict(CURRENT_SCTX.get().sc_sid),
         ScopeKind::Local => funccal_scope(true),
         ScopeKind::Args => funccal_scope(false),
     }
@@ -425,7 +425,7 @@ fn script_scope_for_lookup() -> Option<DictRef> {
     // Both calls below fill `sctx` in, and neither reads the cell, so the
     // round trip through a local is what the C's write-through-the-pointer
     // amounts to.
-    let mut sctx = current_sctx.get();
+    let mut sctx = CURRENT_SCTX.get();
     if !((sctx.sc_sid > 0 || sctx.sc_sid == SID_STR || sctx.sc_sid == SID_LUA)
         && sctx.sc_sid <= script_count())
     {
@@ -438,7 +438,7 @@ fn script_scope_for_lookup() -> Option<DictRef> {
         // An anonymous chunk has no script item yet.
         sctx.sc_sid = new_script_item(None);
     }
-    current_sctx.set(sctx);
+    CURRENT_SCTX.set(sctx);
     script_scope_dict(sctx.sc_sid)
 }
 

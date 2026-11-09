@@ -57,7 +57,7 @@ use crate::fuzzy::fuzzy_match_str;
 use crate::getchar::noremap_keys;
 use crate::getchar::state::{GOT_INT, LANGMAP_MAPCHAR, MAPPED_CTRL_C};
 use crate::global_cell::GlobalCell;
-use crate::guard::secure;
+use crate::guard::SECURE;
 use crate::highlight_group::HLF_8;
 use crate::keycodes::{
     K_SPECIAL, escape_ks_bytes, get_special_key_name, push_char_escaped, replace_termcodes,
@@ -78,7 +78,7 @@ use crate::os::cshim::gettext;
 use crate::os::libc::{ptrdiff_t, size_t, uint64_t};
 use crate::regexp::RegMatch;
 use crate::regexp::vim_regexec;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::state::mode::{NO_ABBR, STATE};
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_OP_PENDING, MODE_SELECT,

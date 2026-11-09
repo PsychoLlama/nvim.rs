@@ -410,7 +410,7 @@ impl BufName {
 pub struct Buffer {
     pub handle: Handle,
     pub b_ml: MemLine,
-    /// The buffer list, `firstbuf`..`lastbuf`. A handle rather than an
+    /// The buffer list, `FIRSTBUF`..`LASTBUF`. A handle rather than an
     /// address: the registry resolves it, so a link can never outlive what
     /// it names, and the buffer stays movable. `winlayer::Buf::next`/`prev`
     /// and `winlayer::buffers`/`buffers_back` are how it is walked.

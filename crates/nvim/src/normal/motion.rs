@@ -52,7 +52,7 @@ use crate::state::mode::{INS_AT_EOL, RESTART_EDIT, V_ISUAL_SELECT_EXCLU_ADJ};
 use crate::state::virtual_active;
 use crate::textobject::{bck_word, end_word, findpar, findsent, fwd_word};
 use crate::types::{ColNr, Direction, LineNr};
-use crate::winlayer::graph::{cmdwin_result, cmdwin_type};
+use crate::winlayer::graph::{CMDWIN_RESULT, CMDWIN_TYPE};
 use core::ffi::{c_int, c_uint};
 
 use crate::r#move::{
@@ -461,8 +461,8 @@ pub(crate) fn nv_down(cmd_arg: &mut CmdArg) {
             qf_view_result(false);
             return;
         }
-        if cmdwin_type.get() != 0 {
-            cmdwin_result.set(Key::CAR);
+        if CMDWIN_TYPE.get() != 0 {
+            CMDWIN_RESULT.set(Key::CAR);
             return;
         }
         if buf_is_prompt(current_buf())

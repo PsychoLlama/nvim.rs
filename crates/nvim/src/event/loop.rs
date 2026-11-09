@@ -177,7 +177,7 @@ pub unsafe fn loop_init(uv_loop: *mut Loop) {
 /// The editor's own loop, as the functions here take it. It is a static, so
 /// it lives for the process and never moves.
 pub(crate) fn main_loop_raw() -> *mut Loop {
-    crate::startup::main_loop.ptr()
+    crate::startup::MAIN_LOOP.ptr()
 }
 
 /// Run the next event on the editor's main queue, if it holds one, and

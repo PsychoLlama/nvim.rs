@@ -448,8 +448,8 @@ impl Searcher<'_, '_> {
                         submatch = m.submatch;
 
                         // Variables used for 'incsearch' highlighting.
-                        search_match_lines.set(m.end.lnum - m.start.lnum);
-                        search_match_endcol.set(m.end.col);
+                        SEARCH_MATCH_LINES.set(m.end.lnum - m.start.lnum);
+                        SEARCH_MATCH_ENDCOL.set(m.end.col);
                         break 'lines;
                     }
                     lnum += dir;

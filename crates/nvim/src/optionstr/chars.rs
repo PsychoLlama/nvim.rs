@@ -682,7 +682,7 @@ pub fn check_chars_options() -> Result<(), OptError> {
 /// visit returns.
 ///
 /// `FOR_ALL_TAB_WINDOWS`, i.e. [`winlayer::tab_windows`] -- which already
-/// knows that the current tab page's windows hang off `firstwin` rather than
+/// knows that the current tab page's windows hang off `FIRSTWIN` rather than
 /// off its own stale list.
 fn for_each_window(mut visit: impl FnMut(Win) -> Option<&'static CStr>) -> Option<&'static CStr> {
     for wp in winlayer::tab_windows() {

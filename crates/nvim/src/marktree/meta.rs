@@ -88,7 +88,7 @@ pub fn meta_apply_delta(dst: &mut MetaCount, new: &MetaCount, old: &MetaCount) {
 
 /// Does this count hold anything the filter selects?
 ///
-/// A filter slot is [`kMTFilterSelect`](super::key::kMTFilterSelect) for a
+/// A filter slot is [`MT_FILTER_SELECT`](super::key::kMTFilterSelect) for a
 /// selected kind and zero otherwise, so the mask-and-sum is exact rather than
 /// a heuristic.
 pub fn meta_has(count: &MetaCount, filter: &MetaCount) -> bool {
@@ -118,7 +118,7 @@ mod tests {
         MT_META_CONCEAL_LINES, MT_META_INLINE, MT_META_LINES, MT_META_SIGN_HL, MT_META_SIGN_TEXT,
     };
     use crate::marktree::MTPos;
-    use crate::marktree::key::kMTFilterSelect;
+    use crate::marktree::key::MT_FILTER_SELECT;
 
     fn key(flags: MtFlags) -> MTKey {
         MTKey {
@@ -158,7 +158,7 @@ mod tests {
     #[test]
     fn a_filter_selects_only_its_own_kinds() {
         let mut filter = [0; META_COUNT];
-        filter[MT_META_SIGN_TEXT as usize] = kMTFilterSelect;
+        filter[MT_META_SIGN_TEXT as usize] = MT_FILTER_SELECT;
         assert!(meta_has(
             &meta_describe_key(key(MtFlags::DECOR_SIGNTEXT)),
             &filter

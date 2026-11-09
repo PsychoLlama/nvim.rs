@@ -11,7 +11,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::mark::kMarkBufLocal;
+use crate::mark::MARK_BUF_LOCAL;
 use crate::regexp::{byte_count, low_byte};
 use crate::types::ColNr;
 use core::ffi::c_int;
@@ -252,7 +252,7 @@ fn at_mark(rex: Rex, prog: BtProg<'_>, scan: usize) -> c_int {
     let (mark, cmp) = (prog.byte(scan, 3), c_int::from(prog.byte(scan, 4)));
     let col = if rex.multi() { rex.col() } else { ColNr::ZERO };
     // `mark_get` computes a motion mark (`'{`, `'(`) on the spot.
-    let fm = mark_get(rex.reg_buf(), Win::current(), kMarkBufLocal, mark);
+    let fm = mark_get(rex.reg_buf(), Win::current(), MARK_BUF_LOCAL, mark);
     // Looking the mark up can move the buffer's line, so fetch it again.
     if rex.multi() {
         rex.seek(reg_getline(rex, rex.lnum()).unwrap_or(b"\0"), col);

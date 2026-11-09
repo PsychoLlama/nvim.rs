@@ -82,20 +82,20 @@ pub(crate) fn nextwild(
     let wild_navigate = mode.navigates();
 
     if expand.matches.is_none() {
-        pre_incsearch_pos.set(expand.pre_incsearch_pos);
+        PRE_INCSEARCH_POS.set(expand.pre_incsearch_pos);
         if ccline.input_fn && ccline.xp_context == ExpandContext::Commands {
             // Expand commands typed in the input() function.
             let line = ccline.text_bytes().to_vec();
             set_cmd_context(expand, &line, ccline.cmdpos, false);
         } else {
-            may_expand_pattern.set(options.has(WildOpts::MAY_EXPAND_PATTERN));
+            MAY_EXPAND_PATTERN.set(options.has(WildOpts::MAY_EXPAND_PATTERN));
             set_expand_context(expand);
-            may_expand_pattern.set(false);
+            MAY_EXPAND_PATTERN.set(false);
         }
         if expand.context == ExpandContext::Lua {
             nlua_expand_pat(expand);
         }
-        cmd_showtail.set(expand_showtail(expand));
+        CMD_SHOWTAIL.set(expand_showtail(expand));
     }
 
     match expand.context {
@@ -182,7 +182,7 @@ pub(crate) fn nextwild(
 
     // Save the command line before inserting the selected item.
     if !wild_navigate && ccline.in_use() {
-        cmdline_orig.set(Some(owned(ccline.text_bytes())));
+        CMDLINE_ORIG.set(Some(owned(ccline.text_bytes())));
     }
 
     if let Some(text) = &p
@@ -281,16 +281,16 @@ fn next_match(mode: WildMode, expand: &mut Expand) -> Option<XString> {
 
     // Display the matches on screen.
     if p_wmnu() {
-        if compl_match_array.with(Option::is_some) {
-            compl_selected.set(findex);
+        if CMDLINE_PUM.with(Option::is_some) {
+            COMPL_SELECTED.set(findex);
             cmdline_pum_display(false);
         } else if cmdline_compl_use_pum(true) {
-            cmdline_pum_create(Cc::current(), expand, None, cmd_showtail.get(), false);
-            compl_selected.set(findex);
+            cmdline_pum_create(Cc::current(), expand, None, CMD_SHOWTAIL.get(), false);
+            COMPL_SELECTED.set(findex);
             pum_clear();
             cmdline_pum_display(true);
         } else {
-            redraw_wildmenu(expand, expand.matches(), findex, cmd_showtail.get());
+            redraw_wildmenu(expand, expand.matches(), findex, CMD_SHOWTAIL.get());
         }
     }
 
@@ -467,7 +467,7 @@ pub fn expand_one(
     // Free the old names.
     if expand.matches.is_some() && mode != WildMode::All && mode != WildMode::Longest {
         // The entries may be in the popup menu; remove it before they go.
-        if compl_match_array.with(Option::is_some) {
+        if CMDLINE_PUM.with(Option::is_some) {
             cmdline_pum_remove(false);
         }
         expand.matches = None;
@@ -536,7 +536,7 @@ pub fn expand_cleanup(expand: &mut Expand) {
 
 /// Drop the saved copy of the command line taken before the last expansion.
 pub fn clear_cmdline_orig() {
-    cmdline_orig.set(None);
+    CMDLINE_ORIG.set(None);
 }
 
 /// One expansion of `pattern` in `context` with `first`, then each of `then`

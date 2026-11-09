@@ -27,7 +27,7 @@ use crate::event::r#loop::{loop_poll_events, main_loop_raw};
 use crate::event::objects::Loop;
 use crate::event::objects::{Proc, RStream, Stream, stream_read_cb};
 use crate::event::proc::{
-    kProcTypeUv, proc_get_exepath, proc_init, proc_spawn, proc_stop, proc_wait,
+    PROC_TYPE_UV, proc_get_exepath, proc_init, proc_spawn, proc_stop, proc_wait,
 };
 use crate::event::rstream::{rstream_init, rstream_start};
 use crate::event::stream::stream_may_close;
@@ -46,7 +46,7 @@ use crate::os::fs::os_strerror;
 use crate::os::libc::STDERR_FILENO;
 use crate::os::libc::size_t;
 use crate::shell::Argv;
-use crate::startup::ui_client_forward_stdin;
+use crate::startup::UI_CLIENT_FORWARD_STDIN;
 use ::libc::close;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
@@ -149,7 +149,7 @@ pub fn libuv_proc_init(uv_loop: *mut Loop, data: *mut c_void) -> LibuvProc {
     // all of which the all-zero pattern is the "unset" value; the spawn path
     // below fills in the ones it needs.
     let mut rv: LibuvProc = unsafe { core::mem::zeroed() };
-    rv.proc = proc_init(uv_loop, kProcTypeUv, data);
+    rv.proc = proc_init(uv_loop, PROC_TYPE_UV, data);
     rv
 }
 
@@ -208,7 +208,7 @@ pub unsafe fn libuv_proc_spawn(uvproc: *mut LibuvProc) -> c_int {
         slot.flags = UV_IGNORE;
     }
 
-    if ui_client_forward_stdin.get() {
+    if UI_CLIENT_FORWARD_STDIN.get() {
         // A UI client reads the editor's own stdin, on the descriptor the
         // remote side knows as UI_CLIENT_STDIN_FD.
         uvproc.uvopts.stdio_count = 4;

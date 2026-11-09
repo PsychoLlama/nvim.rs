@@ -24,7 +24,7 @@ use super::addrtype::{arglist_len, get_cmd_default_range, loaded_buffer_range};
 use crate::cstr::byte_at;
 use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::is_user_cmd;
-use crate::mark::kMarkBufLocal;
+use crate::mark::MARK_BUF_LOCAL;
 use crate::mark::{mark_check, mark_get, mark_get_visual, mark_move_to};
 use crate::message::emsg;
 use crate::narrow::len_as_int;
@@ -46,7 +46,7 @@ use crate::cursor::{check_cursor, check_cursor_col};
 use crate::ex_docmd::window::{current_tab_nr, current_win_nr};
 use crate::ex_docmd::{
     E_BACKSLASH, E_INVRANGE, E_LINE_NUMBER_OUT_OF_RANGE, E_NO_ERRORS, E_NORANGE, INT32_MAX,
-    MARK_ALL, searchcmdlen,
+    MARK_ALL, SEARCHCMDLEN,
 };
 
 use crate::option::magic_isset;
@@ -466,7 +466,7 @@ pub(crate) fn get_address(
                     let flag: MarkGet = if to_other_file && byte_at(text, cmd + 1) == 0 {
                         MARK_ALL
                     } else {
-                        kMarkBufLocal
+                        MARK_BUF_LOCAL
                     };
                     // The mark's name. A high byte matches nothing, as the
                     // C's signed `*cmd` did.
@@ -509,7 +509,7 @@ pub(crate) fn get_address(
                         } else {
                             ColNr::ZERO
                         };
-                    searchcmdlen.set(0);
+                    SEARCHCMDLEN.set(0);
                     let flags = if silent {
                         SEARCH_KEEP as c_int
                     } else {
@@ -525,7 +525,7 @@ pub(crate) fn get_address(
                     // pointer arithmetic: the unescaping copy can leave
                     // this negative.
                     cmd = cmd.wrapping_add_signed(
-                        isize::try_from(searchcmdlen.get()).expect("an int is an isize"),
+                        isize::try_from(SEARCHCMDLEN.get()).expect("an int is an isize"),
                     );
                 }
             }

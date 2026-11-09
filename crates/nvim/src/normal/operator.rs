@@ -28,8 +28,8 @@ use crate::keycodes::SpecialKey;
 use crate::message::{emsg, emsg_invreg};
 use crate::normal::defs::CmdArg;
 use crate::normal::{
-    MT_LINE_WISE, check_clear_op, check_clear_op_quit, clear_op_beep,
-    e_cmdline_window_already_open, langmap_adjust, visual_active, visual_select,
+    E_CMDLINE_WINDOW_ALREADY_OPEN, MT_LINE_WISE, check_clear_op, check_clear_op_quit,
+    clear_op_beep, langmap_adjust, visual_active, visual_select,
 };
 use crate::ops::OpType;
 use crate::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};
@@ -41,7 +41,7 @@ use crate::register::{
 use crate::state::mode::{ARROW_USED, RESTART_EDIT, V_ISUAL_SELECT_REG};
 use crate::types::Vv;
 use crate::undo::{u_redo, u_undo, u_undoline};
-use crate::winlayer::graph::cmdwin_type;
+use crate::winlayer::graph::CMDWIN_TYPE;
 
 /// Re-run this command as the two-character `g<nchar>` operator instead.
 fn as_g_operator(cmd_arg: &mut CmdArg, nchar: u8) {
@@ -246,8 +246,8 @@ pub(crate) fn nv_record(cmd_arg: &mut CmdArg) {
     }
     // `q:`, `q/` and `q?` open the command-line window instead.
     if cmd_arg.nchar.is(':') || cmd_arg.nchar.is('/') || cmd_arg.nchar.is('?') {
-        if cmdwin_type.get() != 0 {
-            emsg(gettext(e_cmdline_window_already_open));
+        if CMDWIN_TYPE.get() != 0 {
+            emsg(gettext(E_CMDLINE_WINDOW_ALREADY_OPEN));
             return;
         }
         stuff_readbuf_char(cmd_arg.nchar);

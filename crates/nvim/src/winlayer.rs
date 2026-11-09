@@ -3,7 +3,7 @@
 //!
 //! The transpiled editor passes `*mut Window` / `*mut Buffer` / `*mut Pos`
 //! everywhere, and the pointers have to stay raw: callers interleave these
-//! calls with reads of the `curwin`/`curbuf` globals — which alias the same
+//! calls with reads of the `curwin`/`CURBUF` globals — which alias the same
 //! objects — and many of them re-enter through autocommands, so a long-lived
 //! `&mut` would invalidate a pointer the caller still holds.
 //!
@@ -37,8 +37,8 @@
 //! `Window`. `registry`'s two types say which is which.
 //!
 //! **The list links are handles all the same.** `b_next`/`b_prev`,
-//! `w_next`/`w_prev` and `tp_next`, and the anchors `firstbuf`/`lastbuf`,
-//! `firstwin`/`lastwin`, `tp_firstwin`/`tp_lastwin` and `first_tabpage`, hold
+//! `w_next`/`w_prev` and `tp_next`, and the anchors `FIRSTBUF`/`LASTBUF`,
+//! `FIRSTWIN`/`lastwin`, `tp_firstwin`/`tp_lastwin` and `FIRST_TABPAGE`, hold
 //! a [`BufId`]/[`WinId`]/[`TabId`] rather than an address, so a stale link
 //! answers `None` instead of pointing into freed memory and the window list
 //! is safe to walk even though nobody owns a `Window` yet. The one thing that
@@ -49,7 +49,7 @@
 //!
 //! None of that moves a [`Buf`] or a [`Win`]: `Owned::address` hands back the
 //! pointer it was born with rather than borrowing the table, so the
-//! registry's copy, `curbuf` and every `w_buffer` are the same pointer. That
+//! registry's copy, `CURBUF` and every `w_buffer` are the same pointer. That
 //! is why the table holds an `Owned` rather than a `Box` — see its docs.
 //!
 //! # The re-entry rule
@@ -174,7 +174,7 @@ use crate::drawscreen::redraw_later;
 use crate::mark::mark_mb_adjustpos;
 use crate::memline::ml_get_buf_len;
 use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, Pos, SynBlock, Tabpage, Window};
-use crate::winlayer::graph::{curbuf, curtab, curwin};
+use crate::winlayer::graph::{CURBUF, CURTAB, curwin};
 
 // ---------------------------------------------------------------------------
 // The pointers, wrapped
@@ -469,7 +469,7 @@ impl Win {
     /// an identity to hold.
     #[inline(always)]
     pub(crate) fn id(self) -> WinId {
-        // A live window's handle is `last_win_id`, which is incremented
+        // A live window's handle is `LAST_WIN_ID`, which is incremented
         // before it is read, so it is never zero.
         WinId(NonZero::new(self.id.get()).expect("a live window has a handle"))
     }
@@ -685,10 +685,10 @@ impl Buf {
 
     /// Whether this is the buffer the editor is working in. [`Win::is_current`]:
     /// an address compare, so a null `Buf` against no current buffer answers
-    /// `true`, as the C's `wp->w_buffer == curbuf` did.
+    /// `true`, as the C's `wp->w_buffer == CURBUF` did.
     #[inline(always)]
     pub fn is_current(self) -> bool {
-        self.ptr == curbuf.get()
+        self.ptr == CURBUF.get()
     }
 
     /// This buffer's number: the handle the API and `:ls` show, and what the
@@ -701,7 +701,7 @@ impl Buf {
     /// This buffer's identity. [`Win::id`], panic included.
     #[inline(always)]
     pub fn id(self) -> BufId {
-        // A live buffer's number is `top_file_num`, which is incremented
+        // A live buffer's number is `TOP_FILE_NUM`, which is incremented
         // before it is read, so it is never zero.
         BufId(NonZero::new(self.id.get()).expect("a live buffer has a number"))
     }
@@ -860,7 +860,7 @@ impl TabPage {
     /// reads neither of them.
     #[inline(always)]
     pub fn is_current(self) -> bool {
-        self.ptr == curtab.get()
+        self.ptr == CURTAB.get()
     }
 
     /// This tab page as the window family takes it in an argument: `None` when
@@ -875,7 +875,7 @@ impl TabPage {
     ///
     /// Unlike `tp_firstwin`, upstream reads this field for the current tab page
     /// too (`min_rows`, `win_vert_neighbor`), so this does not switch to the
-    /// `topframe` global the way [`windows_in_tab`] switches to `firstwin`.
+    /// `topframe` global the way [`windows_in_tab`] switches to `FIRSTWIN`.
     #[inline(always)]
     pub fn topframe(self) -> FrameRef {
         self.tp_topframe

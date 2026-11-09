@@ -47,7 +47,7 @@ use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::{GlobalCell, state_record};
-use crate::guard::sandbox;
+use crate::guard::SANDBOX;
 use crate::hashtab::hash_reset;
 use crate::lua::executor::nlua_set_sctx;
 use crate::memory::XString;
@@ -72,12 +72,12 @@ use crate::os::libc::{int64_t, ptrdiff_t, size_t, uint32_t};
 use crate::pos::MAXCOL;
 use crate::register::defs::GRegFlags;
 use crate::runtime::defs::ScriptVar;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::runtime::{
     new_script_item, script_autoload_named, script_count, script_id_valid, with_script_item,
 };
 use crate::search::set_search_direction;
-use crate::search::state::no_hlsearch;
+use crate::search::state::NO_HLSEARCH;
 use crate::types::{
     BOOL_VAR_FALSE, BOOL_VAR_TRUE, BoolVarValue, Dict, ExArg, LIST_LEN_UNKNOWN, List, Partial,
     SPECIAL_VAR_NULL, ScopeType, ScriptId, SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL,
@@ -88,7 +88,7 @@ use crate::types::{
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
-use crate::winlayer::graph::lastused_tabpage;
+use crate::winlayer::graph::LASTUSED_TABPAGE;
 
 // The carve of the transpiled module; see each child's docs.
 mod assign;

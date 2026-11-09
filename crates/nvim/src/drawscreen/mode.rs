@@ -35,7 +35,7 @@ use crate::types::Vv;
 ///
 /// Answering true also sets `REDRAW_MODE`, so it is shown on the next redraw.
 pub fn skip_showmode() -> bool {
-    if global_busy.get() != 0
+    if GLOBAL_BUSY.get() != 0
         || MSG_SILENT.get() != 0
         || !redrawing()
         || (char_avail() && !KEY_TYPED.get())

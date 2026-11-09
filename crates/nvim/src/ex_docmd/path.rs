@@ -44,7 +44,7 @@ use crate::eval::typval::{
 };
 
 use crate::eval::{callback_call, get_copy_id, set_ref_in_callback};
-use crate::ex_docmd::{ffu_cb, kCdCauseManual, prev_dir};
+use crate::ex_docmd::{CD_CAUSE_MANUAL, FFU_CB, PREV_DIR};
 use crate::ex_getln::allbuf_locked;
 use crate::file_search::vim_chdir;
 
@@ -52,8 +52,8 @@ use crate::fileio::shorten_fnames;
 use crate::getchar::state::KEY_TYPED;
 use crate::message::{E_FAILED, E_INVALID_RETURN_TYPE_FROM_FINDFUNC, E_INVARG};
 use crate::option::vars::{p_cdh, p_ffu, p_verbose};
-use crate::os::state::last_chdir_reason;
-use crate::runtime::state::current_sctx;
+use crate::os::state::LAST_CHDIR_REASON;
+use crate::runtime::state::CURRENT_SCTX;
 
 use crate::message::msg;
 use crate::message_fmt::msg_cstr;
@@ -79,7 +79,7 @@ fn findfunc_callback() -> Callback {
     if buf.b_p_ffu.first_byte() != 0 {
         callback_copy(&mut cb, &buf.b_ffu_cb);
     } else {
-        ffu_cb.with(|global| callback_copy(&mut cb, global));
+        FFU_CB.with(|global| callback_copy(&mut cb, global));
     }
     cb
 }
@@ -99,20 +99,20 @@ fn set_callback_from_option(slot: &mut Callback, value: Option<Callback>) {
 /// answer many names) or a real `:find` (which wants the one at `count`).
 /// The text lock is held across the call: the callback must not edit.
 pub(crate) fn call_findfunc(pat: &[u8], cmdcomplete: BoolVarValue) -> Option<ListRef> {
-    let saved_sctx: ScriptCtx = current_sctx.get();
+    let saved_sctx: ScriptCtx = CURRENT_SCTX.get();
     // The arguments own a copy of the pattern, released when they drop.
     let args = [TypVal::string_from(pat), TypVal::Bool(cmdcomplete)];
 
     let locked = Lock::text();
     // Errors are reported against the script that *set* the option, not
     // against whatever is running now.
-    current_sctx.set(option_last_set(kOptFindfunc));
+    CURRENT_SCTX.set(option_last_set(kOptFindfunc));
     let mut cb = findfunc_callback();
     let mut rettv = TV_INITIAL_VALUE;
     rettv.write_empty(VAR_UNKNOWN);
     let called = callback_call(&cb, &args, &mut rettv) == Ok(true);
     callback_free(&mut cb);
-    current_sctx.set(saved_sctx);
+    CURRENT_SCTX.set(saved_sctx);
     drop(locked);
 
     let mut retlist = None;
@@ -188,7 +188,7 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Result<(), OptError> {
         // expression, which may read the option's callback.
         let parsed = p_ffu(callback_from_option);
         parsed.map(|cb| {
-            ffu_cb.with_mut(|slot| set_callback_from_option(slot, cb));
+            FFU_CB.with_mut(|slot| set_callback_from_option(slot, cb));
             // Setting it globally without `:setglobal` clears the local
             // one.
             if !args.os_flags.has(OptionSetFlags::GLOBAL) {
@@ -207,17 +207,17 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Result<(), OptError> {
 /// Mark what the global 'findfunc' callback holds, for the garbage
 /// collector.
 pub fn set_ref_in_findfunc(copy_id: c_int) -> bool {
-    ffu_cb.with(|cb| set_ref_in_callback(cb, copy_id, None, None))
+    FFU_CB.with(|cb| set_ref_in_callback(cb, copy_id, None, None))
 }
 
 /// A copy of the directory a global `:cd -` goes back to.
 pub(crate) fn global_prev_dir() -> Option<XString> {
-    prev_dir.with(Clone::clone)
+    PREV_DIR.with(Clone::clone)
 }
 
 /// Replace the directory a global `:cd -` goes back to.
 pub(crate) fn set_global_prev_dir(dir: Option<XString>) {
-    prev_dir.set(dir);
+    PREV_DIR.set(dir);
 }
 
 /// Who keeps the directory at `scope`.
@@ -266,10 +266,10 @@ pub(crate) fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
         // `CD_SCOPE_INVALID`. Upstream aborts here; so does this.
         _ => unreachable!("post_chdir with an invalid scope"),
     }
-    last_chdir_reason.set(None);
+    LAST_CHDIR_REASON.set(None);
     shorten_fnames(!cpo_has(CpoFlag::NOSYMLINKS));
     if trigger_dirchanged {
-        do_autocmd_dirchanged(cwd.as_cstr(), scope, kCdCauseManual, false);
+        do_autocmd_dirchanged(cwd.as_cstr(), scope, CD_CAUSE_MANUAL, false);
     }
 }
 
@@ -303,7 +303,7 @@ pub(crate) fn change_dir(new_dir: &CStr, scope: CdScope) -> Result<(), Failed> {
         .as_ref()
         .is_none_or(|pdir| pathcmp(pdir, &new_dir, None) != 0);
     if dir_differs {
-        do_autocmd_dirchanged(new_dir.as_cstr(), scope, kCdCauseManual, true);
+        do_autocmd_dirchanged(new_dir.as_cstr(), scope, CD_CAUSE_MANUAL, true);
         if vim_chdir(new_dir.as_cstr()).is_err() {
             emsg(gettext(E_FAILED));
             return Err(Failed);
@@ -354,7 +354,7 @@ fn report_working_dir() {
         return;
     };
     if p_verbose() > 0 as OptInt {
-        let context = if let Some(reason) = last_chdir_reason.get() {
+        let context = if let Some(reason) = LAST_CHDIR_REASON.get() {
             reason
         } else if has_own_dir(DirOwner::Window(Win::current())) {
             c"window"

@@ -107,8 +107,8 @@ pub(crate) fn op_format(op: &OpArg, keep_cursor: bool) {
         check_cursor(Win::current());
     }
     if op.is_visual {
-        // `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`. The macro's tab page test is
-        // `curtab == curtab` here, so it always takes the `firstwin` arm --
+        // `FOR_ALL_WINDOWS_IN_TAB(wp, CURTAB)`. The macro's tab page test is
+        // `CURTAB == CURTAB` here, so it always takes the `FIRSTWIN` arm --
         // which is what [`windows`] walks.
         for mut wp in windows() {
             if wp.w_old_cursor_lnum != LineNr::ZERO {
@@ -148,7 +148,7 @@ pub(crate) fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
     // Copy it: the option can be changed while it is running.
     let fex = Buf::current().b_p_fex.get();
     // Errors go against the script that set `'formatexpr'`.
-    let script_ctx = Script::context(Buf::current().b_p_script_ctx[kBufOptFormatexpr as usize]);
+    let script_ctx = Script::context(Buf::current().b_p_script_ctx[BUF_OPT_FORMATEXPR as usize]);
     let r = {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
         number_as_int(eval_to_number(&fex, true))

@@ -22,7 +22,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::narrow::number_as_int;
 use core::ffi::c_int;
@@ -32,12 +31,12 @@ use crate::ascii::ascii_isspace;
 use crate::charset::try_getdigits_at;
 use crate::global_cell::GlobalCell;
 use crate::guard::Depth;
-use crate::guard::secure;
+use crate::guard::SECURE;
 use crate::option::defs::OptionSetFlags;
 use crate::option::do_set;
 use crate::option::vars::p_mls;
 use crate::os::libc::intmax_t;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::runtime::{estack_pop, estack_push};
 use crate::types::{Failed, LineNr, ScriptId};
 use crate::version::min_vim_version;
@@ -111,7 +110,7 @@ fn at(line: &[u8], i: usize) -> u8 {
 ///
 /// `flags` is `OptionSetFlags::WINONLY` or `OptionSetFlags::NOWIN`.
 pub fn do_modelines(flags: OptionSetFlags) {
-    static entered: GlobalCell<c_int> = GlobalCell::new(0);
+    static ENTERED: GlobalCell<c_int> = GlobalCell::new(0);
 
     if current_buf().b_p_ml == 0 {
         return;
@@ -123,10 +122,10 @@ pub fn do_modelines(flags: OptionSetFlags) {
 
     // Disallow recursive entry here. That can happen when executing a
     // modeline triggers an autocommand which reloads modelines with a ":do".
-    if entered.get() != 0 {
+    if ENTERED.get() != 0 {
         return;
     }
-    let _entered = Depth::of(&entered);
+    let _entered = Depth::of(&ENTERED);
 
     let mut lnum: LineNr = LineNr::ONE;
     while current_buf().b_p_ml != 0
@@ -306,15 +305,15 @@ fn apply_modeline(text: &mut [u8], lnum: LineNr, flags: OptionSetFlags) -> Resul
 /// One `:`-separated part of a modeline, executed with `sandbox` on and the
 /// script context pointing at the modeline.
 fn set_one(text: &mut [u8], s: usize, lnum: LineNr, flags: OptionSetFlags) -> Result<(), Failed> {
-    let secure_save = secure.get();
-    let save_current_sctx = current_sctx.get();
-    current_sctx.with_mut(|sctx| {
+    let secure_save = SECURE.get();
+    let save_current_sctx = CURRENT_SCTX.get();
+    CURRENT_SCTX.with_mut(|sctx| {
         sctx.sc_sid = SID_MODELINE as ScriptId;
         sctx.sc_seq = 0;
         sctx.sc_lnum = lnum;
     });
     // Make sure no risky things are executed as a side effect.
-    secure.set(1);
+    SECURE.set(1);
 
     let retval = set_options(
         text,
@@ -322,7 +321,7 @@ fn set_one(text: &mut [u8], s: usize, lnum: LineNr, flags: OptionSetFlags) -> Re
         OptionSetFlags::MODELINE | OptionSetFlags::LOCAL | flags,
     );
 
-    secure.set(secure_save);
-    current_sctx.set(save_current_sctx);
+    SECURE.set(secure_save);
+    CURRENT_SCTX.set(save_current_sctx);
     retval
 }

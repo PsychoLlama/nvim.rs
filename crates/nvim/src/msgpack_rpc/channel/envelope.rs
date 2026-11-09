@@ -41,7 +41,7 @@ pub(crate) fn serialize_request(
     let is_request = request_id != 0;
     mpack_array(&mut packer, if is_request { 4 } else { 3 });
     let kind = if is_request {
-        kMessageTypeRequest
+        MESSAGE_TYPE_REQUEST
     } else {
         MESSAGE_TYPE_NOTIFICATION
     };
@@ -81,7 +81,7 @@ pub fn serialize_response(
 
     let mut packer = packer_buffer_init(Addressees::One(channel_id));
     mpack_array(&mut packer, 4);
-    packer.push_byte(kMessageTypeResponse.to_le_bytes()[0]);
+    packer.push_byte(MESSAGE_TYPE_RESPONSE.to_le_bytes()[0]);
     mpack_uint(&mut packer, response_id);
     if errored {
         mpack_array(&mut packer, 2);

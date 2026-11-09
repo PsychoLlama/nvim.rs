@@ -30,7 +30,7 @@ use crate::fileio::FileOffset;
 use crate::fold::fold_open_cursor;
 use crate::getchar::state::{GOT_INT, KEY_TYPED};
 use crate::global_cell::GlobalCell;
-use crate::guard::secure;
+use crate::guard::SECURE;
 use crate::help::help_heuristic;
 use crate::input::prompt_for_input;
 use crate::insexpand::{ins_compl_check_keys, ins_compl_interrupted};
@@ -64,11 +64,11 @@ use crate::pos::MAXLNUM;
 use crate::quickfix::set_errorlist;
 use crate::regexp::OptMagic;
 use crate::regexp::vim_regexec;
-use crate::search::state::{magic_overruled, no_hlsearch};
+use crate::search::state::{MAGIC_OVERRULED, NO_HLSEARCH};
 use crate::state::MODE_INSERT;
 use crate::state::mode::STATE;
 use crate::tag::state::{
-    g_do_tagpreview, g_tag_at_cursor, keep_help_flag, postponed_split, postponed_split_flags,
+    G_DO_TAGPREVIEW, G_TAG_AT_CURSOR, KEEP_HELP_FLAG, POSTPONED_SPLIT, POSTPONED_SPLIT_FLAGS,
 };
 use crate::tr;
 use crate::types::Handle;

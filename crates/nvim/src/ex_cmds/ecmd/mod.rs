@@ -12,7 +12,7 @@
 //!
 //! The stages below are upstream's, in upstream's order, and the order is the
 //! contract: every one of them can run Vimscript, so hoisting a read past an
-//! `apply_autocmds` or past a `curbuf`/`curwin` assignment changes behaviour
+//! `apply_autocmds` or past a `CURBUF`/`curwin` assignment changes behaviour
 //! even where it looks pure.
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
@@ -51,7 +51,7 @@ use std::ffi::CString;
 use crate::ascii::NUL;
 use crate::autocmd::fire_autocmds_retval;
 use crate::buffer::current_buf;
-use crate::buffer::state::swap_exists_action;
+use crate::buffer::state::SWAP_EXISTS_ACTION;
 use crate::buffer::{
     BufFlags, BufRef, buf_clear_file, buf_freeall, do_autochdir, do_modelines, fileinfo,
     handle_swap_exists, maketitle, open_buffer, otherfile, set_buflisted, setaltfname,
@@ -85,9 +85,9 @@ use crate::path::fix_fname;
 use crate::plines::plines_m_win_fill;
 use crate::pos::equalpos;
 use crate::spell::parse_spelllang;
-use crate::startup::exiting;
+use crate::startup::EXITING;
 use crate::state::mode::EXMODE_ACTIVE;
-use crate::tag::state::keep_help_flag;
+use crate::tag::state::KEEP_HELP_FLAG;
 use crate::terminal::buf_terminal_check_size;
 use crate::types::{ExArg, Failed, LineNr, Vv};
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
@@ -360,7 +360,7 @@ pub(crate) fn do_ecmd(
         redraw_off = Some(Suppress::redraw());
 
         let buf = Buf::current_raw();
-        if flags.has(EcmdFlags::SET_HELP) || keep_help_flag.get() {
+        if flags.has(EcmdFlags::SET_HELP) || KEEP_HELP_FLAG.get() {
             prepare_help_buffer();
         } else if !Buf::current().b_help {
             // Don't make a buffer listed if it's a help buffer.  Useful when
@@ -605,7 +605,7 @@ fn enter_new_buffer(
     state.topline = Win::current().w_topline;
     if !state.oldbuf {
         // need to read the file
-        swap_exists_action.set(SEA_DIALOG);
+        SWAP_EXISTS_ACTION.set(SEA_DIALOG);
         // set/reset 'ro' flag
         Buf::current().b_flags |= BufFlags::CHECK_RO;
         // Open the buffer and read the file.
@@ -620,7 +620,7 @@ fn enter_new_buffer(
         if should_abort_err(opened) {
             *retval = Err(Failed);
         }
-        if swap_exists_action.get() == SEA_QUIT {
+        if SWAP_EXISTS_ACTION.get() == SEA_QUIT {
             *retval = Err(Failed);
         }
         handle_swap_exists(Some(*old_curbuf));
@@ -692,7 +692,7 @@ fn report_file_info() {
     // Obey the 'O' flag in 'cpoptions': overwrite any previous file message.
     if shortmess(ShmFlag::OVERALL)
         && MSG_LISTDO_OVERWRITE.get() == 0
-        && !exiting.get()
+        && !EXITING.get()
         && p_verbose() == 0
     {
         MSG_SCROLL.set(0);

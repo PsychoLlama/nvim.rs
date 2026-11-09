@@ -71,7 +71,7 @@ use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::set_option_value;
 use crate::options::kOptBuftype;
 use crate::os::libc::int16_t;
-use crate::startup::exiting;
+use crate::startup::EXITING;
 use crate::state::mode::STATE;
 use crate::terminal::state::SELECTIONBUF_SIZE;
 use crate::terminal::state::Terminal;
@@ -318,7 +318,7 @@ pub(crate) fn terminal_close(mut term: Term, status: c_int) {
     // Closing an already-closed terminal leaves only the freeing half.
     let only_destroy = term.closed;
     if !only_destroy {
-        if !exiting.get() {
+        if !EXITING.get() {
             // Show the child's last output before announcing its death.
             //
             block_autocmds();
@@ -331,7 +331,7 @@ pub(crate) fn terminal_close(mut term: Term, status: c_int) {
     // Where the child left off, reported to `TermClose` as `v:event`-adjacent
     // data.
     let mut pos = buf.map_or(0, |buf| buf.line_count().get() - 1);
-    if status == -1 || exiting.get() {
+    if status == -1 || EXITING.get() {
         // Nothing to report on: detach from the buffer straight away.
         term.buf_handle = Handle::NONE;
         if let Some(mut buf) = buf {
@@ -519,7 +519,7 @@ fn terminal_send(term: Term, data: &[u8]) {
 /// The child finished a synchronized frame in buffer `handle`'s terminal:
 /// redraw it, from the main loop.
 fn on_sync_flush(handle: u64, _: u64) {
-    if exiting.get() {
+    if EXITING.get() {
         return;
     }
     let Some(term) = buf_for_handle(handle_of(handle)).and_then(Buf::terminal_handle) else {

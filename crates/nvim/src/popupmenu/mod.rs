@@ -67,7 +67,7 @@ use crate::state::MODE_CMDLINE;
 use crate::state::mode::STATE;
 use crate::statusline::hl_attr;
 use crate::strings::reversed_text;
-use crate::tag::state::g_do_tagpreview;
+use crate::tag::state::G_DO_TAGPREVIEW;
 use crate::types::{
     ApiString, Array, BOOL_VAR_FALSE, BOOL_VAR_TRUE, BufferHandle, Dict, Float, Handle, Integer,
     LineNr, Object, OptInt, ScreenAttr, ScreenChar, VarNumber, WinConfig,
@@ -80,10 +80,10 @@ use crate::ui::{
     ui_has, ui_pum_get_height, ui_pum_get_pos,
 };
 use crate::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
-use crate::undo::no_u_sync;
+use crate::undo::NO_U_SYNC;
 use crate::window::{goto_tabpage_tp, valid_tab, valid_win, win_close, win_enter, win_setheight};
 use crate::winfloat::{win_config_float, win_float_create_preview, win_float_find_preview};
-use crate::winlayer::graph::cmdwin_type;
+use crate::winlayer::graph::CMDWIN_TYPE;
 use crate::winlayer::{Win, windows};
 
 // The carve of the transpiled module; see each child's docs.

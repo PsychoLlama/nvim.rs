@@ -351,7 +351,7 @@ fn unserialize_extmarks(bi: &mut BufInfo, uh: &mut UndoHeader) -> Result<(), Und
 
 /// Writes one extmark record: its type, then its payload.
 ///
-/// Only splices and moves are written; a `kExtmarkSavePos` record describes
+/// Only splices and moves are written; a `EXTMARK_SAVE_POS` record describes
 /// marks in a buffer this file will be read into fresh, and is dropped.
 pub(crate) fn serialize_extmark(bi: &mut BufInfo, extup: &ExtmarkUndoObject) -> bool {
     let image = match extup {
@@ -378,14 +378,14 @@ pub(crate) fn serialize_extmark(bi: &mut BufInfo, extup: &ExtmarkUndoObject) -> 
 pub(crate) fn unserialize_extmark(bi: &mut BufInfo) -> Result<ExtmarkUndoObject, UndoFileError> {
     let kind: UndoObjectType = bi.read_4c().cast_unsigned();
     let mut image = [0u8; EXTMARK_PAYLOAD_LEN];
-    let decoded = if kind == kExtmarkSplice {
+    let decoded = if kind == EXTMARK_SPLICE {
         if !bi.read(&mut image) {
             return Err(UndoFileError::Corrupt(Corruption::ExtmarkTruncated));
         }
         decode_splice(&image)
             .map(ExtmarkUndoObject::Splice)
             .ok_or(Corruption::ExtmarkSplice)
-    } else if kind == kExtmarkMove {
+    } else if kind == EXTMARK_MOVE {
         if !bi.read(&mut image) {
             return Err(UndoFileError::Corrupt(Corruption::ExtmarkTruncated));
         }
@@ -648,7 +648,7 @@ mod tests {
             .iter()
             .map(ExtmarkUndoObject::wire_type)
             .collect();
-        assert_eq!(kinds, vec![kExtmarkSplice, kExtmarkMove, kExtmarkSplice]);
+        assert_eq!(kinds, vec![EXTMARK_SPLICE, EXTMARK_MOVE, EXTMARK_SPLICE]);
         match &back.extmarks[2] {
             ExtmarkUndoObject::Splice(s) => assert_eq!(s.start_row, 2),
             _ => panic!("the last record is the second splice"),

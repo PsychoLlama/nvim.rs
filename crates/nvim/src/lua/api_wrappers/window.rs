@@ -28,7 +28,7 @@ pub(super) fn convert_nvim_win_call(stack: &mut Stack, blame: &mut Blame) -> Res
 /// The Lua binding for `nvim_win_close`: pop the arguments, call the API
 /// function, hand the result back.
 pub(super) fn convert_nvim_win_close(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     let arg_2 = pop_boolean(stack).inspect_err(|_| *blame = Some(c"force"))?;
@@ -150,7 +150,7 @@ pub(super) fn convert_nvim_win_get_width(
 /// The Lua binding for `nvim_win_hide`: pop the arguments, call the API
 /// function, hand the result back.
 pub(super) fn convert_nvim_win_hide(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
@@ -172,7 +172,7 @@ pub(super) fn convert_nvim_win_is_valid(stack: &mut Stack, blame: &mut Blame) ->
 /// The Lua binding for `nvim_win_set_buf`: pop the arguments, call the API
 /// function, hand the result back.
 pub(super) fn convert_nvim_win_set_buf(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     let arg_2 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;

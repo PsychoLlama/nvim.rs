@@ -15,7 +15,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{fire_autocmds, fire_autocmds_for};
@@ -45,8 +44,8 @@ use crate::profile::{profile_dump, time_finish};
 use crate::shada::shada_write_file;
 use crate::startup::entry::event_teardown;
 use crate::startup::{
-    ex_exitval, exiting, stderr_isatty, stdout_isatty, ui_client_channel_id, ui_client_exit_status,
-    used_stdin, v_dying,
+    EX_EXITVAL, EXITING, STDERR_ISATTY, STDOUT_ISATTY, UI_CLIENT_CHANNEL_ID, UI_CLIENT_EXIT_STATUS,
+    USED_STDIN, V_DYING,
 };
 use crate::state::mode::EXMODE_ACTIVE;
 use crate::types::{VAR_NUMBER, VarNumber, Vv};
@@ -60,12 +59,12 @@ use crate::winlayer::{Buf, WinId, buffers, first_tab, first_window};
 /// `r` is the status, except that a UI client with a status of its own wins
 /// and a botched event-loop teardown turns a success into a failure.
 pub fn os_exit(mut r: c_int) -> ! {
-    exiting.set(true);
+    EXITING.set(true);
 
-    if ui_client_channel_id.get() != 0 {
+    if UI_CLIENT_CHANNEL_ID.get() != 0 {
         ui_client_stop();
         if r == 0 {
-            r = ui_client_exit_status.get();
+            r = UI_CLIENT_EXIT_STATUS.get();
         }
     } else {
         ui_flush();
@@ -77,21 +76,21 @@ pub fn os_exit(mut r: c_int) -> ! {
         r = 1;
     }
 
-    if ui_client_channel_id.get() != 0 {
+    if UI_CLIENT_CHANNEL_ID.get() != 0 {
         // The last output to a TTY is sometimes lost (at least on
         // FreeBSD). Drain it, after `event_teardown`, since libuv events
         // may still have written to stderr.
-        if stdout_isatty.get() {
+        if STDOUT_ISATTY.get() {
             tty_drain(STDOUT_FILENO);
         }
-        if stderr_isatty.get() {
+        if STDERR_ISATTY.get() {
             tty_drain(STDERR_FILENO);
         }
     } else {
         ml_close_all(true);
     }
 
-    if used_stdin.get() {
+    if USED_STDIN.get() {
         // Put the stream back the way we found it (#2598).
         stream_set_blocking(STDIN_FILENO, true);
     }
@@ -106,14 +105,14 @@ pub fn os_exit(mut r: c_int) -> ! {
 ///
 /// Runs `BufWinLeave`, `BufUnload`, `VimLeavePre` and `VimLeave`, writes the
 /// ShaDa file and then hands over to [`os_exit`]. A deadly signal has raised
-/// `v_dying` by the time it gets here, and the autocommands are skipped --
+/// `V_DYING` by the time it gets here, and the autocommands are skipped --
 /// running user code inside a signal handler is how one crash becomes two.
 pub fn getout(mut exitval: c_int) -> ! {
     debug_assert!(
-        ui_client_channel_id.get() == 0,
+        UI_CLIENT_CHANNEL_ID.get() == 0,
         "getout() in a UI client, which has no editor state to shut down"
     );
-    exiting.set(true);
+    EXITING.set(true);
 
     // Make sure the startup times have been flushed.
     time_finish();
@@ -121,7 +120,7 @@ pub fn getout(mut exitval: c_int) -> ! {
     // POSIX asks for a non-zero status after an error in Ex mode. The
     // standard is not 100% clear about it, but every other vi does this.
     if EXMODE_ACTIVE.get() {
-        exitval += ex_exitval.get();
+        exitval += EX_EXITVAL.get();
     }
 
     set_vim_var_type(Vv::Exiting, VAR_NUMBER);
@@ -135,7 +134,7 @@ pub fn getout(mut exitval: c_int) -> ! {
     // Every `:defer`red function still on the stack.
     invoke_all_defer();
 
-    if v_dying.get() <= 1 {
+    if V_DYING.get() <= 1 {
         // `BufWinLeave` for every window, but only once per buffer: the
         // changedtick is set to -1 to mark a buffer as already done.
         let mut tab = first_tab();
@@ -191,7 +190,7 @@ pub fn getout(mut exitval: c_int) -> ! {
         shada_write_file(None, false);
     }
 
-    if v_dying.get() <= 1 {
+    if V_DYING.get() <= 1 {
         with_autocmds_unblocked(AutoEvent::VimLeave);
     }
 
@@ -242,21 +241,21 @@ fn with_autocmds_unblocked(event: AutoEvent) {
 /// reaches it.
 pub fn preserve_exit(errmsg: Option<&CStr>) -> ! {
     /// Set once we are certain we are going down, e.g. after a deadly signal.
-    static really_exiting: GlobalCell<bool> = GlobalCell::new(false);
+    static REALLY_EXITING: GlobalCell<bool> = GlobalCell::new(false);
 
-    if really_exiting.get() {
-        if used_stdin.get() {
+    if REALLY_EXITING.get() {
+        if USED_STDIN.get() {
             // Put the stream back the way we found it (#2598).
             stream_set_blocking(STDIN_FILENO, true);
         }
         std::process::exit(2);
     }
-    really_exiting.set(true);
+    REALLY_EXITING.set(true);
 
     // Ignore SIGHUP now that we are already on the way out (#9274).
     signal_reject_deadly();
 
-    if ui_client_channel_id.get() != 0 {
+    if UI_CLIENT_CHANNEL_ID.get() != 0 {
         // Leave the alternate screen so the message below can be read.
         ui_client_stop();
     }
@@ -268,7 +267,7 @@ pub fn preserve_exit(errmsg: Option<&CStr>) -> ! {
         }
     }
 
-    if ui_client_channel_id.get() != 0 {
+    if UI_CLIENT_CHANNEL_ID.get() != 0 {
         // A UI client has no buffers to preserve.
         os_exit(1);
     }

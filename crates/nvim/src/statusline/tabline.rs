@@ -35,7 +35,7 @@ use crate::drawscreen::state::REDRAW_TABLINE;
 use crate::grid::{default_grid_ref, default_gridview, schar_from_ascii};
 use crate::highlight_group::{HLF_T, HLF_TP, HLF_TPF, HLF_TPS};
 use crate::mbyte::c_cluster_len;
-use crate::normal::showcmd_buf;
+use crate::normal::SHOWCMD_BUF;
 use crate::path::shorten_dir;
 use crate::statusline::defs::StlClickDefinition_type_0;
 use crate::statusline::state::TAB_PAGE_CLICK_DEFS;
@@ -45,7 +45,7 @@ use crate::ui::state::{COLUMNS, T_COLORS};
 use crate::ui::{ui_call_tabline_update, ui_has};
 use crate::undo::buf_is_changed;
 use crate::window::tabline_height;
-use crate::winlayer::graph::topframe;
+use crate::winlayer::graph::TOPFRAME;
 use crate::winlayer::{TabPage, buffers, tabs, windows_in_tab};
 
 /// The window whose buffer names tab page `tabpage`.
@@ -162,7 +162,7 @@ fn draw_default_tabline() {
             break;
         }
         let scol = col;
-        let (cwp, current) = (current_window_of(tp), tp.tp_topframe == topframe.get());
+        let (cwp, current) = (current_window_of(tp), tp.tp_topframe == TOPFRAME.get());
         if current {
             attr = win_hl(cwp, HLF_TPS);
         }
@@ -277,7 +277,7 @@ fn paint_showcmd(col: c_int, tabcount: c_int, attr: c_int) {
     if width <= 0 {
         return;
     }
-    let sc = showcmd_buf.get();
+    let sc = SHOWCMD_BUF.get();
     paint_text(
         COLUMNS.get() - width - c_int::from(tabcount > 1) * 2,
         sc.cells(usize::try_from(width).unwrap_or(0)),

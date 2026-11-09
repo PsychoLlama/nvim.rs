@@ -31,7 +31,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::cstr::byte_at;
 use crate::memline::Lines;
@@ -59,8 +58,8 @@ use super::chartab::{casefold_len, spell_iswordp, spell_iswordp_nmw, step, tail}
 use super::lookup::{find_prefix, find_word};
 use super::slang::LoadedLangs;
 use super::{
-    CHAR_DIGIT, CHAR_OTHER, CHAR_UPPER, FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPWORD, MAXWLEN,
-    MatchInf, SP_BAD, SP_BANNED, SP_OK, SP_RARE, WordEnd, c_text, count_common_word, loaded_langs,
+    CHAR_DIGIT, CHAR_OTHER, CHAR_UPPER, FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPWORD, LOADED_LANGS,
+    MAXWLEN, MatchInf, SP_BAD, SP_BANNED, SP_OK, SP_RARE, WordEnd, c_text, count_common_word,
     spelltab_isu,
 };
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
@@ -107,7 +106,7 @@ impl Win {
 
         // The languages are resolved once for the whole lookup.
         let mut counted = None;
-        let checked = loaded_langs.with(|langs| {
+        let checked = LOADED_LANGS.with(|langs| {
             langs.with_word_ends(|ends| {
                 self.look_up_word(
                     text,
@@ -121,7 +120,7 @@ impl Win {
         });
         if let Some((id, len)) = counted {
             // Counted once the lookup is over, which only reads the language.
-            loaded_langs.with_mut(|langs| {
+            LOADED_LANGS.with_mut(|langs| {
                 if let Some(slang) = langs.get_mut(id) {
                     count_common_word(slang, &text[..len.min(text.len())], 1);
                 }
@@ -553,12 +552,12 @@ pub fn spell_word_start(startcol: c_int) -> c_int {
 ///
 /// The word is deleted from the buffer before [`expand_spelling`] runs, so
 /// the answer has to be taken beforehand and parked here.
-static spell_expand_need_cap: GlobalCell<bool> = GlobalCell::new(false);
+static SPELL_EXPAND_NEED_CAP: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Record, before the word is removed, whether its replacement will need a
 /// capital.
 pub fn spell_expand_check_cap(col: ColNr) {
-    spell_expand_need_cap.set(check_need_cap(
+    SPELL_EXPAND_NEED_CAP.set(check_need_cap(
         Win::current(),
         Win::current().w_cursor.lnum,
         col,
@@ -567,7 +566,7 @@ pub fn spell_expand_check_cap(col: ColNr) {
 
 /// Insert-mode completion `CTRL-X ?`: the suggestions for `pat`.
 pub fn expand_spelling(_lnum: LineNr, pat: &CStr) -> Vec<XString> {
-    spell_suggest_list(pat, 100, spell_expand_need_cap.get(), true)
+    spell_suggest_list(pat, 100, SPELL_EXPAND_NEED_CAP.get(), true)
 }
 
 #[cfg(test)]

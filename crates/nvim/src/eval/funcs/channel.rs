@@ -13,7 +13,7 @@ use super::{
     CHANNEL_PART_ALL, CHANNEL_PART_RPC, CHANNEL_PART_STDERR, CHANNEL_PART_STDIN,
     CHANNEL_PART_STDOUT, RET_OBJECT,
 };
-use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
+use crate::autocmd::state::{AUTOCMD_BUFNR, AUTOCMD_FNAME, AUTOCMD_FNAME_FULL, AUTOCMD_MATCH};
 use crate::channel::defs::{CallbackReader, ChannelPart};
 use crate::channel::{channel_close, channel_connect, channel_from_stdio, channel_send};
 use crate::eval::funcs::builtin::EvalFuncData;
@@ -39,7 +39,7 @@ use crate::narrow::len_as_integer;
 use crate::os::cshim::gettext;
 use crate::os::fs::os_strerror;
 use crate::runtime::EXESTACK;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
@@ -190,11 +190,11 @@ struct ProviderScope {
 impl ProviderScope {
     fn enter() -> Self {
         let saved = ProviderScope {
-            sctx: current_sctx.get(),
-            autocmd_fname: autocmd_fname.take(),
-            autocmd_match: autocmd_match.take(),
-            autocmd_fname_full: autocmd_fname_full.get(),
-            autocmd_bufnr: autocmd_bufnr.get(),
+            sctx: CURRENT_SCTX.get(),
+            autocmd_fname: AUTOCMD_FNAME.take(),
+            autocmd_match: AUTOCMD_MATCH.take(),
+            autocmd_fname_full: AUTOCMD_FNAME_FULL.get(),
+            autocmd_bufnr: AUTOCMD_BUFNR.get(),
             _funccal: CallStackAside::new(),
         };
 
@@ -203,15 +203,15 @@ impl ProviderScope {
         // touches neither -- so a shared borrow reaches every field and the
         // cell's address is not needed.
         PROVIDER_CALLER_SCOPE.with(|scope| {
-            current_sctx.set(scope.script_ctx);
+            CURRENT_SCTX.set(scope.script_ctx);
             // Push the caller's execution-stack entry so that any message
             // names the caller's script, not the provider's.
             let entry = scope.es_entry.clone();
             EXESTACK.with_mut(|stack| stack.push(entry));
-            autocmd_fname.set(scope.autocmd_fname.clone());
-            autocmd_match.set(scope.autocmd_match.clone());
-            autocmd_fname_full.set(scope.autocmd_fname_full);
-            autocmd_bufnr.set(scope.autocmd_bufnr);
+            AUTOCMD_FNAME.set(scope.autocmd_fname.clone());
+            AUTOCMD_MATCH.set(scope.autocmd_match.clone());
+            AUTOCMD_FNAME_FULL.set(scope.autocmd_fname_full);
+            AUTOCMD_BUFNR.set(scope.autocmd_bufnr);
             set_current_fc(scope.funccalp);
         });
         saved
@@ -220,14 +220,14 @@ impl ProviderScope {
     /// Put back what [`enter`](Self::enter) saved, popping the execution
     /// stack entry it pushed.
     fn leave(self) {
-        current_sctx.set(self.sctx);
+        CURRENT_SCTX.set(self.sctx);
         EXESTACK.with_mut(|stack| {
             stack.pop();
         });
-        autocmd_fname.set(self.autocmd_fname);
-        autocmd_match.set(self.autocmd_match);
-        autocmd_fname_full.set(self.autocmd_fname_full);
-        autocmd_bufnr.set(self.autocmd_bufnr);
+        AUTOCMD_FNAME.set(self.autocmd_fname);
+        AUTOCMD_MATCH.set(self.autocmd_match);
+        AUTOCMD_FNAME_FULL.set(self.autocmd_fname_full);
+        AUTOCMD_BUFNR.set(self.autocmd_bufnr);
         // Dropping `self._funccal` last puts the call stack back.
     }
 }

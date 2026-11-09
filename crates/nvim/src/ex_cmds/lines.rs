@@ -23,11 +23,11 @@ use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::{appended_lines_mark, changed_lines};
 use crate::cursor::check_pos;
 use crate::ex_docmd::cmdmod_has;
-use crate::ex_docmd::state::global_busy;
+use crate::ex_docmd::state::GLOBAL_BUSY;
 use crate::extmark::BCount;
+use crate::extmark::EXTMARK_NOOP;
+use crate::extmark::EXTMARK_UNDO;
 use crate::extmark::extmark_move_region;
-use crate::extmark::kExtmarkNOOP;
-use crate::extmark::kExtmarkUndo;
 use crate::fold::fold_move_range;
 use crate::guard::Suppress;
 use crate::mark::mark_adjust_nofold;
@@ -105,7 +105,7 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
 
     // The last line in the file now that the copies are in.
     let last_line = Buf::current().b_ml.ml_line_count;
-    mark_adjust_nofold(line1, line2, last_line - line2, 0, kExtmarkNOOP);
+    mark_adjust_nofold(line1, line2, last_line - line2, 0, EXTMARK_NOOP);
     folds_frozen(|| {
         changed_lines(
             Buf::current(),
@@ -118,12 +118,12 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     });
 
     let (line_off, byte_off) = if dest >= line2 {
-        mark_adjust_nofold(line2 + 1, dest, -num_lines, 0, kExtmarkNOOP);
+        mark_adjust_nofold(line2 + 1, dest, -num_lines, 0, EXTMARK_NOOP);
         move_folds_in_windows(line1, line2, dest);
         set_op_range(dest - num_lines + 1, dest);
         (-num_lines, -extent_byte)
     } else {
-        mark_adjust_nofold(dest + 1, line1 - 1, num_lines, 0, kExtmarkNOOP);
+        mark_adjust_nofold(dest + 1, line1 - 1, num_lines, 0, EXTMARK_NOOP);
         move_folds_in_windows(dest + 1, line1 - 1, line2);
         set_op_range(dest + 1, dest + num_lines);
         (0, 0)
@@ -134,7 +134,7 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
         last_line,
         -(last_line - dest - extra),
         0,
-        kExtmarkNOOP,
+        EXTMARK_NOOP,
     );
     folds_frozen(|| {
         changed_lines(
@@ -156,7 +156,7 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
         let _ = ml_delete_flags(line1 + extra, ML_DEL_MESSAGE.cast_signed());
     }
 
-    if global_busy.get() == 0 && OptInt::from(num_lines) > p_report() {
+    if GLOBAL_BUSY.get() == 0 && OptInt::from(num_lines) > p_report() {
         let moved = ngettext(
             c"%ld line moved",
             c"%ld lines moved",
@@ -176,7 +176,7 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
         (dest + line_off).get(),
         ColNr::ZERO,
         dest_byte + byte_off,
-        kExtmarkUndo,
+        EXTMARK_UNDO,
     );
 
     // Leave the cursor on the last of the moved lines.

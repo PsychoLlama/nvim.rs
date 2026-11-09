@@ -113,7 +113,7 @@ impl CompleteFuncCb {
 ///
 /// This is the cached copy `:set complete=` leaves behind so a buffer that
 /// has never had `:setlocal complete=` can be given the same array; the
-/// live one a completion reads is always `curbuf`'s `b_p_cpt_cb`. Upstream
+/// live one a completion reads is always `CURBUF`'s `b_p_cpt_cb`. Upstream
 /// keeps both as a `Callback *` with a count beside it; here both are a
 /// `Vec`, and a `Callback` owns what it names without a destructor, so
 /// replacing either frees the old slots by hand.
@@ -729,9 +729,9 @@ pub(crate) fn get_cpt_func_completion_matches(cb: &Callback) {
         ins_compl_delete(false);
     }
 
-    let refresh_always = compl_opt_refresh_always.get();
+    let refresh_always = COMPL_OPT_REFRESH_ALWAYS.get();
     cpt_sources().update(idx, |source| source.cs_refresh_always = refresh_always);
-    compl_opt_refresh_always.set(false);
+    COMPL_OPT_REFRESH_ALWAYS.set(false);
 }
 
 /// Re-collect matches from the `'complete'` functions that set
@@ -767,5 +767,5 @@ pub(crate) fn cpt_compl_refresh() {
     cpt_sources().set_index(-1);
 
     // Make the list cyclic.
-    compl_matches.set(ins_compl_make_cyclic());
+    COMPL_MATCHES.set(ins_compl_make_cyclic());
 }

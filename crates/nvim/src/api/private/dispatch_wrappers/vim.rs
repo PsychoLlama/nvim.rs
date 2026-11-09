@@ -477,7 +477,7 @@ pub fn handle_nvim_del_current_line(channel_id: uint64_t, args: Array) -> Result
     if !args.is_empty() {
         return Err(wrong_arity(0, args.len()));
     }
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     nvim_del_current_line()?;

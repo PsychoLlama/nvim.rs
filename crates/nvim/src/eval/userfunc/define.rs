@@ -382,7 +382,7 @@ impl Definition<'_, '_> {
         // A function can be replaced with "function!" and when sourcing the
         // same script again, but only once.
         let defined = func.script_ctx.get();
-        let sctx = current_sctx.get();
+        let sctx = CURRENT_SCTX.get();
         let name = self.name_bytes();
         if !self.excmd.forceit && (defined.sc_sid != sctx.sc_sid || defined.sc_seq == sctx.sc_seq) {
             emsg_funcname(E_FUNCEXTS, name);
@@ -528,12 +528,12 @@ impl Definition<'_, '_> {
         if prof_def_func() {
             func_do_profile(&func);
         }
-        if sandbox.get() != 0 {
+        if SANDBOX.get() != 0 {
             self.flags |= FuncFlags::SANDBOX;
         }
         func.flags.set(self.flags);
         func.calls.set(0);
-        let mut sctx = current_sctx.get();
+        let mut sctx = CURRENT_SCTX.get();
         sctx.sc_lnum += sourcing_lnum_top.get();
         nlua_set_sctx(&mut sctx);
         func.script_ctx.set(sctx);

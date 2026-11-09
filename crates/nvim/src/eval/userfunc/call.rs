@@ -119,7 +119,7 @@ pub(crate) fn call_user_func(
         func.name().as_cstr(),
         LineNr::ZERO,
     ));
-    frame.dbg_tick.set(debug_tick.get());
+    frame.dbg_tick.set(DEBUG_TICK.get());
 
     let body = func.body();
     let islambda = func.name().as_bytes().starts_with(b"<lambda>");
@@ -283,7 +283,7 @@ pub(crate) fn call_user_func(
         });
     }
 
-    let do_profiling_yes = do_profiling.get() == PROF_YES;
+    let do_profiling_yes = DO_PROFILING.get() == PROF_YES;
     let mut started_profiling = false;
     if do_profiling_yes
         && !func.prof.borrow().profiling
@@ -307,12 +307,12 @@ pub(crate) fn call_user_func(
         wait_start = script_prof_save();
     }
 
-    let save_current_sctx = current_sctx.get();
-    current_sctx.set(func.script_ctx.get());
+    let save_current_sctx = CURRENT_SCTX.get();
+    CURRENT_SCTX.set(func.script_ctx.get());
     let save_did_emsg = DID_EMSG.get();
     DID_EMSG.set(0);
 
-    if default_arg_err && (func.has_flag(FuncFlags::ABORT) || trylevel.get() > 0) {
+    if default_arg_err && (func.has_flag(FuncFlags::ABORT) || TRYLEVEL.get() > 0) {
         DID_EMSG.set(1);
     } else if islambda {
         // A lambda's body is one line, "return <expr>"; evaluate the
@@ -323,7 +323,7 @@ pub(crate) fn call_user_func(
             .and_then(Option::as_deref)
             .unwrap_or_default();
         let expr = line.get(c"return ".count_bytes()..).unwrap_or_default();
-        let _nesting = Depth::of(ex_nesting_level);
+        let _nesting = Depth::of(EX_NESTING_LEVEL);
         // Into what the caller left there, as upstream evaluates into the
         // caller's own value.
         let mut value = frame.rettv.replace(TypVal::Unknown);
@@ -393,7 +393,7 @@ pub(crate) fn call_user_func(
     }
 
     estack_pop();
-    current_sctx.set(save_current_sctx);
+    CURRENT_SCTX.set(save_current_sctx);
     if do_profiling_yes {
         script_prof_restore(wait_start);
     }

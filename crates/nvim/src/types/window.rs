@@ -83,7 +83,7 @@ pub struct Frame {
 #[derive(Debug)]
 pub struct Tabpage {
     pub handle: Handle,
-    /// The tab page list off `first_tabpage`. A handle, as the buffer
+    /// The tab page list off `FIRST_TABPAGE`. A handle, as the buffer
     /// list's links are — `winlayer::TabPage::next` and `winlayer::tabs`
     /// are how it is walked.
     pub(crate) tp_next: Option<TabId>,
@@ -96,7 +96,7 @@ pub struct Tabpage {
     pub(crate) tp_prevwin: Option<WinId>,
     /// This tab page's window list, its two ends. Handles, as the links
     /// between them are. **Stale while the tab page is the current one** —
-    /// the `firstwin`/`lastwin` globals are then the truth, which is what
+    /// the `FIRSTWIN`/`lastwin` globals are then the truth, which is what
     /// `winlayer::windows_in_tab` encodes.
     ///
     pub(crate) tp_firstwin: Option<WinId>,

@@ -15,12 +15,11 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use crate::channel::defs::kChannelStdinPipe;
+use crate::channel::defs::CHANNEL_STDIN_PIPE;
 use crate::channel::defs::{
     CallbackReader, ChannelStdinMode, ChannelStream, InternalState, JobProc,
 };
@@ -46,7 +45,7 @@ use crate::os::proc::{os_dup_above, os_dup2};
 use crate::os::pty_proc_unix::pty_proc_init;
 use crate::semsg;
 use crate::shell::Argv;
-use crate::startup::{embedded_mode, exiting, headless_mode, ui_client_channel_id};
+use crate::startup::{EMBEDDED_MODE, EXITING, HEADLESS_MODE, UI_CLIENT_CHANNEL_ID};
 use crate::terminal::{terminal_close, terminal_set_state};
 use crate::types::{Callback, LuaRef, VarNumber};
 use crate::ui_client::ui_client_attach_to_restarted_server;
@@ -58,7 +57,7 @@ use super::{
 };
 
 /// Whether stdio has already been claimed. Only one channel may own it.
-static did_stdio: GlobalCell<bool> = GlobalCell::new(false);
+static DID_STDIO: GlobalCell<bool> = GlobalCell::new(false);
 
 /// What a job is started with: [`channel_job_start`]'s arguments.
 #[derive(Debug)]
@@ -96,7 +95,7 @@ impl<'a> JobOptions<'a> {
             rpc: false,
             overlapped: false,
             detach: false,
-            stdin_mode: kChannelStdinPipe,
+            stdin_mode: CHANNEL_STDIN_PIPE,
             cwd: None,
             pty_width: 0,
             pty_height: 0,
@@ -187,7 +186,7 @@ pub fn channel_job_start(opts: JobOptions<'_>) -> Result<uint64_t, VarNumber> {
         channel_destroy_early(id);
         return Err(0);
     }
-    let has_in = stdin_mode == kChannelStdinPipe;
+    let has_in = stdin_mode == CHANNEL_STDIN_PIPE;
 
     // The name is copied because the failure message is formatted after
     // the spawn has taken ownership of `argv`.
@@ -308,9 +307,9 @@ pub fn channel_from_connection(watcher: &mut SocketWatcher) {
 /// answers the channel id, or why not. The event loop must be up, which it
 /// is from `main()` on.
 pub fn channel_from_stdio(rpc: bool, on_output: CallbackReader) -> Result<uint64_t, &'static CStr> {
-    let refusal = if !headless_mode.get() && !embedded_mode.get() {
+    let refusal = if !HEADLESS_MODE.get() && !EMBEDDED_MODE.get() {
         Some(c"can only be opened in headless mode")
-    } else if did_stdio.get() {
+    } else if DID_STDIO.get() {
         Some(c"channel was already open")
     } else {
         None
@@ -318,10 +317,10 @@ pub fn channel_from_stdio(rpc: bool, on_output: CallbackReader) -> Result<uint64
     if let Some(msg) = refusal {
         return Err(gettext(msg));
     }
-    did_stdio.set(true);
+    DID_STDIO.set(true);
 
     let id = alloc_channel(Some(CHAN_STDIO), |_| ChannelStream::Stdio(unopened_stdio()));
-    let (stdin_fd, stdout_fd) = if embedded_mode.get() {
+    let (stdin_fd, stdout_fd) = if EMBEDDED_MODE.get() {
         // The embedder owns fds 0 and 1; move them aside and point what is
         // left at stderr, so a stray `print` cannot corrupt the protocol.
         let stdin_fd = os_dup_above(STDIN_FILENO, STDERR_FILENO + 1);
@@ -358,9 +357,9 @@ pub(crate) fn job_exited(id: uint64_t, status: c_int) {
         terminal_close(term, status);
     }
     // A UI client whose server died: try to reconnect before following it.
-    if !exiting.get() && ui_client_channel_id.get() == id {
+    if !EXITING.get() && UI_CLIENT_CHANNEL_ID.get() == id {
         ui_client_attach_to_restarted_server();
-        if ui_client_channel_id.get() == id {
+        if UI_CLIENT_CHANNEL_ID.get() == id {
             exit_on_closed_chan(status);
         }
     }

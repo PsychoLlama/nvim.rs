@@ -184,7 +184,7 @@ pub fn ex_display(excmd: &mut ExArg) {
         true,
     );
     // A copy: listing it runs the message machinery.
-    let last = last_cmdline.with(Clone::clone);
+    let last = LAST_CMDLINE.with(Clone::clone);
     special(
         b':',
         c"\n  c  \":   ",

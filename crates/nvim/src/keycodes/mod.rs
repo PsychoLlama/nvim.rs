@@ -42,7 +42,7 @@ use crate::message::emsg;
 use crate::message::{E_INVARG, E_USINGSID};
 use crate::option::defs::CpoFlag;
 use crate::os::cshim::gettext;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::types::ScriptId;
 
 mod codes;
@@ -585,13 +585,13 @@ pub fn replace_termcodes(
             // <SID>Func becomes K_SNR <script-nr> _Func, which is how a
             // script-local function's name is spelled.
             if gap(src) >= 4 && opens(src, b"<SID>") {
-                if sid_arg < 0 || (sid_arg == 0 && current_sctx.get().sc_sid <= 0) {
+                if sid_arg < 0 || (sid_arg == 0 && CURRENT_SCTX.get().sc_sid <= 0) {
                     emsg(gettext(E_USINGSID));
                 } else {
                     let sid = if sid_arg != 0 {
                         sid_arg
                     } else {
-                        current_sctx.get().sc_sid
+                        CURRENT_SCTX.get().sc_sid
                     };
                     src += 5;
                     out.extend_from_slice(&[K_SPECIAL, KS_EXTRA, KE_SNR]);

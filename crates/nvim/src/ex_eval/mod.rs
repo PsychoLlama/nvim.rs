@@ -49,7 +49,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub(crate) mod defs;
 mod exception;
@@ -65,7 +64,7 @@ use crate::eval::typval::tv_clear;
 use crate::eval::{eval_cmd_bool, eval_for_line, eval0_in_cmd, next_for_item};
 use crate::ex_docmd::{ends_excmd, modifier_len};
 use crate::ex_eval::defs::{CondId, CondStack, Pend};
-use crate::ex_eval::state::{did_endif, did_throw, force_abort, trylevel};
+use crate::ex_eval::state::{DID_ENDIF, DID_THROW, FORCE_ABORT, TRYLEVEL};
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::message::state::{DID_EMSG, EMSG_SILENT};
@@ -171,7 +170,7 @@ const E_MULTIPLE_FINALLY: &CStr = c"E607: Multiple :finally";
 /// produces no error messages of its own, but every parsing error inside it
 /// is still reported -- even under an active try conditional -- and this is
 /// what keeps [`aborting`] answering the same thing throughout.
-static cause_abort: GlobalCell<bool> = GlobalCell::new(false);
+static CAUSE_ABORT: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The address of a message constant, for the identity test in
 /// [`cause_errthrow`](exception::cause_errthrow).
@@ -200,7 +199,7 @@ pub(crate) fn cond_stack_of(excmd: &ExArg) -> CondId {
 fn check_skip(cond: CondId) -> bool {
     DID_EMSG.get() != 0
         || GOT_INT.get()
-        || did_throw.get()
+        || DID_THROW.get()
         || cond.with(|cs| cs.idx > 0 && !cs.flags[cs.top().expect("open") - 1].has(CsFlags::ACTIVE))
 }
 
@@ -214,14 +213,14 @@ fn check_skip(cond: CondId) -> bool {
 /// point is reached, so that during such a cancellation this keeps answering
 /// the same thing. `got_int` is also set by `interrupt()`.
 pub(crate) fn aborting() -> bool {
-    (DID_EMSG.get() != 0 && force_abort.get()) || GOT_INT.get() || did_throw.get()
+    (DID_EMSG.get() != 0 && FORCE_ABORT.get()) || GOT_INT.get() || DID_THROW.get()
 }
 
 /// Put `force_abort` back, when it must be restored before the throw point
 /// for the error message has been reached. See [`aborting`].
 pub(crate) fn update_force_abort() {
-    if cause_abort.get() {
-        force_abort.set(true);
+    if CAUSE_ABORT.get() {
+        FORCE_ABORT.set(true);
     }
 }
 
@@ -230,7 +229,7 @@ pub(crate) fn update_force_abort() {
 /// the error message has not been shown and so has not itself caused the
 /// abort.
 pub(crate) fn should_abort(failed: bool) -> bool {
-    (failed && trylevel.get() != 0 && EMSG_SILENT.get() == 0) || aborting()
+    (failed && TRYLEVEL.get() != 0 && EMSG_SILENT.get() == 0) || aborting()
 }
 
 /// [`should_abort`] over an answer that has already become a `Result`.
@@ -244,7 +243,7 @@ pub(crate) fn should_abort_err<T>(answer: Result<T, Failed>) -> bool {
 pub(crate) fn aborted_in_try() -> bool {
     // Only called after an error, where `force_abort` decides whether the
     // search for finally clauses is needed.
-    force_abort.get()
+    FORCE_ABORT.get()
 }
 
 /// `:eval {expr}`
@@ -287,7 +286,7 @@ pub(crate) fn ex_if(excmd: &mut ExArg) {
 
 /// `:endif`
 pub(crate) fn ex_endif(excmd: &mut ExArg) {
-    did_endif.set(true);
+    DID_ENDIF.set(true);
     let cond = cond_stack_of(excmd);
     let Some(flags) = cond.with(|cs| cs.top().map(|at| cs.flags[at])) else {
         excmd.errmsg = Some(c"E580: :endif without :if".to_owned());
@@ -444,7 +443,7 @@ pub(crate) fn ex_while(excmd: &mut ExArg) {
         return;
     };
 
-    let skip = DID_EMSG.get() != 0 || GOT_INT.get() || did_throw.get() || outer_inactive;
+    let skip = DID_EMSG.get() != 0 || GOT_INT.get() || DID_THROW.get() || outer_inactive;
     let (result, error) = if is_while {
         let answer = eval_cmd_bool(excmd, skip);
         (answer == Ok(true), answer.is_err())

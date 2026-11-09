@@ -140,7 +140,7 @@ pub(crate) fn fname_trans_sid(name: &[u8]) -> (Cow<'_, [u8]>, c_int) {
     let mut fname = Vec::with_capacity(SNR.len() + 12 + script_name.len() + 1);
     fname.extend_from_slice(&SNR);
     if fname_is_sid(name) {
-        let sid = current_sctx.get().sc_sid;
+        let sid = CURRENT_SCTX.get().sc_sid;
         if sid <= 0 {
             error = FCERR_SCRIPT;
         } else {
@@ -262,7 +262,7 @@ fn mangle_function_name(
         lead = SNR.len();
         if expanded.is_some_and(fname_is_sid) || fname_is_sid(text) {
             // It's "s:" or "<SID>".
-            let sc_sid = current_sctx.get().sc_sid;
+            let sc_sid = CURRENT_SCTX.get().sc_sid;
             if sc_sid <= 0 {
                 emsg(gettext(E_USINGSID));
                 return Err(Failed);
@@ -508,7 +508,7 @@ pub(crate) fn scriptlocal_funcname(name: &[u8]) -> Result<Option<XString>, Faile
         // The function name does not have a script-local prefix.
         return Ok(None);
     };
-    let sid = current_sctx.get().sc_sid;
+    let sid = CURRENT_SCTX.get().sc_sid;
     if !script_id_valid(sid) {
         emsg(gettext(E_USINGSID));
         return Err(Failed);

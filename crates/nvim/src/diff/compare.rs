@@ -59,7 +59,7 @@ pub(crate) fn char_len(p1: &[u8], p2: &[u8]) -> Option<usize> {
     }
     if l > 1 {
         if p1[..l] != p2[..l]
-            && (diff_flags.get() & DIFF_ICASE == 0
+            && (DIFF_FLAGS.get() & DIFF_ICASE == 0
                 || utf_fold(char_at(p1)) != utf_fold(char_at(p2)))
         {
             return None;
@@ -68,7 +68,7 @@ pub(crate) fn char_len(p1: &[u8], p2: &[u8]) -> Option<usize> {
     } else {
         let (b1, b2) = (byte_at(p1, 0), byte_at(p2, 0));
         if b1 != b2
-            && (diff_flags.get() & DIFF_ICASE == 0
+            && (DIFF_FLAGS.get() & DIFF_ICASE == 0
                 || byte_tolower(c_int::from(b1)) != byte_tolower(c_int::from(b2)))
         {
             return None;
@@ -82,7 +82,7 @@ pub(crate) fn char_len(p1: &[u8], p2: &[u8]) -> Option<usize> {
 /// Upstream's `diff_cmp`, which answers `strcmp`'s convention; nothing reads
 /// the sign, so this answers the question instead.
 pub(crate) fn lines_equal(b1: &[u8], b2: &[u8]) -> bool {
-    let flags = diff_flags.get();
+    let flags = DIFF_FLAGS.get();
 
     // `iblank`: a line that is blank once its indent is skipped matches
     // anything at all, including a non-blank line.

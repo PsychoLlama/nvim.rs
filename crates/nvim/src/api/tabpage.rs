@@ -30,7 +30,7 @@ use crate::types::{
 use crate::window::{
     tabpage_win_valid, valid_tab, valid_tabpage, win_goto, win_new_tabpage, win_set_buf,
 };
-use crate::winlayer::graph::{cmdwin_buf, cmdwin_type};
+use crate::winlayer::graph::{CMDWIN_BUF, CMDWIN_TYPE};
 use crate::winlayer::{Win, windows_in_tab};
 
 /// The windows of `tabpage`, oldest first.
@@ -144,7 +144,7 @@ pub fn nvim_open_tabpage(
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(Handle::NONE);
     };
-    if cmdwin_type.get() != 0 && enter || cmdwin_buf.get() == Some(b.id()) {
+    if CMDWIN_TYPE.get() != 0 && enter || CMDWIN_BUF.get() == Some(b.id()) {
         return Err(Error::exception(E_CMDWIN));
     }
     let after = config.after.map_or(-1, number_as_int);

@@ -31,7 +31,7 @@ use crate::autocmd::{autocmd_init, fire_autocmds};
 use crate::buffer::do_autochdir;
 use crate::channel::defs::CallbackReader;
 use crate::channel::{channel_from_stdio, channel_init, channel_teardown};
-use crate::debugger::state::debug_break_level;
+use crate::debugger::state::DEBUG_BREAK_LEVEL;
 use crate::diff::diff_win_options;
 use crate::drawscreen::state::{CMDLINE_ROW, REDRAWING_DISABLED};
 use crate::drawscreen::{
@@ -89,10 +89,10 @@ use crate::startup::exit::{getout, os_exit};
 use crate::startup::remote::remote_request;
 use crate::startup::usage::{mainerr, print_mainerr};
 use crate::startup::{
-    APPENDBIN, EDIT_QF, EDIT_STDIN, MainParams, NO_BUFFERS, WRITEBIN, argv0, embedded_mode,
-    err_arg_missing, full_screen, headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus,
-    recoverymode, silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty,
-    ui_client_channel_id, ui_client_forward_stdin,
+    APPENDBIN, ARGV0, EDIT_QF, EDIT_STDIN, EMBEDDED_MODE, ERR_ARG_MISSING, FULL_SCREEN,
+    HEADLESS_MODE, MainParams, NO_BUFFERS, RECOVERYMODE, SILENT_MODE, STDERR_ISATTY, STDIN_ISATTY,
+    STDOUT_ISATTY, UI_CLIENT_CHANNEL_ID, UI_CLIENT_FORWARD_STDIN, WRITEBIN, kOptCbFlagUnnamed,
+    kOptCbFlagUnnamedplus, starting,
 };
 use crate::state::mode::{EXMODE_ACTIVE, RESTART_EDIT};
 use crate::syntax::syn_maybe_enable;
@@ -154,7 +154,7 @@ pub fn early_init(clean: bool) {
     eval_init();
     set_vim_var_nr(Vv::Starttime, os_realtime());
 
-    init_path(argv0.get().unwrap_or(c"nvim"));
+    init_path(ARGV0.get().unwrap_or(c"nvim"));
     highlight_init();
     time_msg_at(c"early init");
 
@@ -181,7 +181,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     let name = argv
         .first()
         .map(|name| &*Box::leak(name.clone().into_boxed_c_str()));
-    argv0.set(name);
+    ARGV0.set(name);
     if !appname_is_valid() {
         write_c_stderr(b"$NVIM_APPNAME must be a name or relative path.\n");
         std::process::exit(1);
@@ -194,7 +194,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         .is_some_and(|arg| arg.to_bytes().eq_ignore_ascii_case(b"-ll"))
     {
         if argv.len() == 2 {
-            print_mainerr(err_arg_missing, Some(&argv[1]), None);
+            print_mainerr(ERR_ARG_MISSING, Some(&argv[1]), None);
             std::process::exit(1);
         }
         nlua_run_script(&argv, 3);
@@ -218,7 +218,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     nlua_init(&params.argv, params.script_args_at);
     time_msg_at(c"init lua interpreter");
 
-    if embedded_mode.get() && channel_from_stdio(true, CallbackReader::none()).is_err() {
+    if EMBEDDED_MODE.get() && channel_from_stdio(true, CallbackReader::none()).is_err() {
         // stdin/stdout were to become the RPC channel.
         std::process::abort();
     }
@@ -226,14 +226,14 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     // The first file argument decides whether `-r` lists the swap files or
     // recovers one.
     let has_fname = alist_count(ArgListId::GLOBAL) > 0;
-    if recoverymode.get() && !has_fname {
+    if RECOVERYMODE.get() && !has_fname {
         // `-r` with no file only lists the swap files.
-        headless_mode.set(true);
+        HEADLESS_MODE.set(true);
     }
 
-    let has_term = stdin_isatty.get() || stdout_isatty.get() || stderr_isatty.get();
+    let has_term = STDIN_ISATTY.get() || STDOUT_ISATTY.get() || STDERR_ISATTY.get();
     let use_builtin_ui =
-        has_term && !headless_mode.get() && !embedded_mode.get() && !silent_mode.get();
+        has_term && !HEADLESS_MODE.get() && !EMBEDDED_MODE.get() && !SILENT_MODE.get();
 
     if params.remote_at != 0 {
         let at = params.remote_at;
@@ -242,23 +242,23 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
 
     // A `--remote-ui` handled above already has a channel; otherwise the
     // built-in UI starts a server of its own and re-executes into it.
-    let remote_ui = ui_client_channel_id.get() != 0;
+    let remote_ui = UI_CLIENT_CHANNEL_ID.get() != 0;
     if use_builtin_ui && !remote_ui {
-        ui_client_forward_stdin.set(!stdin_isatty.get());
+        UI_CLIENT_FORWARD_STDIN.set(!STDIN_ISATTY.get());
         let progpath = vim_var_string(Vv::Progpath).unwrap_or_else(ThinCString::empty);
         let chan = ui_client_start_server(progpath.as_cstr(), &params.argv);
         if chan == 0 {
             write_c_stderr(b"Failed to start Nvim server!\n");
             os_exit(1);
         }
-        ui_client_channel_id.set(chan);
+        UI_CLIENT_CHANNEL_ID.set(chan);
     }
-    if ui_client_channel_id.get() != 0 {
+    if UI_CLIENT_CHANNEL_ID.get() != 0 {
         // This process is now a UI, not an editor; it does not return.
         ui_client_run();
     }
     debug_assert!(
-        ui_client_channel_id.get() == 0 && !use_builtin_ui,
+        UI_CLIENT_CHANNEL_ID.get() == 0 && !use_builtin_ui,
         "a UI client reached the editor startup"
     );
 
@@ -274,7 +274,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
 
     REDRAWING_DISABLED.set(REDRAWING_DISABLED.get() + 1);
     unbuffer_c_stdout();
-    full_screen.set(!silent_mode.get());
+    FULL_SCREEN.set(!SILENT_MODE.get());
 
     win_init_size();
     if params.diff_mode {
@@ -291,7 +291,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     MSG_ROW.set(CMDLINE_ROW.get());
     default_grid_alloc();
 
-    set_init_2(headless_mode.get());
+    set_init_2(HEADLESS_MODE.get());
     time_msg_at(c"inits 2");
 
     MSG_SCROLL.set(1);
@@ -300,17 +300,17 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     ui_comp_syn_init();
     time_msg_at(c"init highlight");
 
-    debug_break_level.set(params.debug_break_at);
+    DEBUG_BREAK_LEVEL.set(params.debug_break_at);
 
     // `-es` with a pipe: start reading it now, so the Ex commands are
     // there when the loop asks.
-    if !stdin_isatty.get() && !params.input_is_text && silent_mode.get() && EXMODE_ACTIVE.get() {
+    if !STDIN_ISATTY.get() && !params.input_is_text && SILENT_MODE.get() && EXMODE_ACTIVE.get() {
         input_start();
     }
 
     // `--embed` without `--headless`: the client attaches a UI, and the
     // startup waits for it so the first redraw has somewhere to go.
-    let use_remote_ui = embedded_mode.get() && !headless_mode.get();
+    let use_remote_ui = EMBEDDED_MODE.get() && !HEADLESS_MODE.get();
     if use_remote_ui {
         time_msg_at(c"waiting for UI");
         remote_ui_wait_for_attach();
@@ -369,7 +369,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     load_plugins();
     set_window_layout(&mut params);
 
-    if recoverymode.get() && !has_fname {
+    if RECOVERYMODE.get() && !has_fname {
         // `-r` with no file: list the swap files and leave.
         list_swap_files(None);
         os_exit(0);
@@ -381,7 +381,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     if params.no_swap_file {
         P_UC.set(0 as OptInt);
     }
-    if silent_mode.get() {
+    if SILENT_MODE.get() {
         P_UT.set(1 as OptInt);
     }
 
@@ -401,7 +401,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         MSG_SCROLL.set(0);
     }
 
-    if params.edit_type == EDIT_STDIN.cast_signed() && !recoverymode.get() {
+    if params.edit_type == EDIT_STDIN.cast_signed() && !RECOVERYMODE.get() {
         read_stdin();
     }
 

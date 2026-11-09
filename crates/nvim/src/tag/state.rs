@@ -2,9 +2,9 @@
 //!
 //! `:stag` and friends decide to split before they know whether the tag
 //! exists, so the split is *postponed*: the size and flags wait here and
-//! `jumpto_tag` performs it once the match is in hand. `g_do_tagpreview`
-//! is the same for the preview window, `g_tag_at_cursor` says the tag came
-//! from CTRL-] rather than a typed name, and `keep_help_flag` keeps the new
+//! `jumpto_tag` performs it once the match is in hand. `G_DO_TAGPREVIEW`
+//! is the same for the preview window, `G_TAG_AT_CURSOR` says the tag came
+//! from CTRL-] rather than a typed name, and `KEEP_HELP_FLAG` keeps the new
 //! window a help window.
 #![forbid(unsafe_code)]
 #![deny(
@@ -15,14 +15,13 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
 use core::ffi::c_int;
 
-pub(crate) static postponed_split: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static postponed_split_flags: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static postponed_split_tab: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static g_do_tagpreview: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static g_tag_at_cursor: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static keep_help_flag: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static POSTPONED_SPLIT: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static POSTPONED_SPLIT_FLAGS: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static POSTPONED_SPLIT_TAB: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static G_DO_TAGPREVIEW: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static G_TAG_AT_CURSOR: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static KEEP_HELP_FLAG: GlobalCell<bool> = GlobalCell::new(false);

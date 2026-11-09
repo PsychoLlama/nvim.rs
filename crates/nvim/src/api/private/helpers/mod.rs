@@ -35,7 +35,7 @@ use crate::types::LineNr;
 use core::ffi::{CStr, c_int};
 
 use crate::ex_eval::state::{
-    current_exception, did_throw, force_abort, msg_lists, need_rethrow, trylevel,
+    CURRENT_EXCEPTION, DID_THROW, FORCE_ABORT, MSG_LISTS, NEED_RETHROW, TRYLEVEL,
 };
 use crate::ex_eval::{
     discard_current_exception, error_exception_string, pop_msg_list, push_msg_list, take_msg_list,
@@ -48,7 +48,7 @@ use crate::message::state::DID_EMSG;
 use crate::os::libc::uint64_t;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::types::{
     ApiString, BufferHandle, ERROR_TYPE_EXCEPTION, Error, Integer, Pos, ScriptId, TabpageHandle,
     WindowHandle,
@@ -70,7 +70,7 @@ pub(crate) use self::vimdict::*;
 const NL: u8 = b'\n';
 const CAR: u8 = b'\r';
 
-/// `current_sctx.sc_sid` for a call that came from Lua, and for one that came
+/// `CURRENT_SCTX.sc_sid` for a call that came from Lua, and for one that came
 /// from an RPC client.
 const SID_LUA: ScriptId = -8;
 const SID_API_CLIENT: ScriptId = -9;
@@ -137,41 +137,41 @@ pub(crate) fn find_tab_by_handle(tabpage: TabpageHandle) -> Result<Option<TabPag
 /// `tstate`. Pairs with [`try_leave`].
 pub(crate) fn try_enter(tstate: &mut TryState) {
     let saved = TryState {
-        current_exception: current_exception.get(),
+        current_exception: CURRENT_EXCEPTION.get(),
         got_int: c_int::from(GOT_INT.get()),
-        did_throw: did_throw.get(),
-        need_rethrow: c_int::from(need_rethrow.get()),
+        did_throw: DID_THROW.get(),
+        need_rethrow: c_int::from(NEED_RETHROW.get()),
         did_emsg: DID_EMSG.get(),
     };
     *tstate = saved;
     // Errors go to a list of the call's own from here on, so that an
     // `:echoerr` inside the call does not reach an enclosing `:try`.
     push_msg_list();
-    current_exception.set(None);
+    CURRENT_EXCEPTION.set(None);
     GOT_INT.set(false);
-    did_throw.set(false);
-    need_rethrow.set(false);
+    DID_THROW.set(false);
+    NEED_RETHROW.set(false);
     DID_EMSG.set(0);
-    trylevel.set(trylevel.get() + 1);
+    TRYLEVEL.set(TRYLEVEL.get() + 1);
 }
 
 /// Stop catching, answer whatever was caught, and restore what
 /// [`try_enter`] saved into `tstate`.
 pub(crate) fn try_leave(tstate: &TryState) -> Result<(), Error> {
-    debug_assert!(trylevel.get() > 0);
-    trylevel.set(trylevel.get() - 1);
+    debug_assert!(TRYLEVEL.get() > 0);
+    TRYLEVEL.set(TRYLEVEL.get() - 1);
     DID_EMSG.set(0);
-    force_abort.set(false);
+    FORCE_ABORT.set(false);
 
     // The call's own list, which `try_enter` started and which stays the
     // innermost until the state is put back below.
     let has_messages =
-        msg_lists.with(|lists| lists.innermost().is_some_and(|l| !l.entries.is_empty()));
+        MSG_LISTS.with(|lists| lists.innermost().is_some_and(|l| !l.entries.is_empty()));
 
     let mut caught = None;
     if GOT_INT.get() {
         // An interrupt outranks anything that was thrown along the way.
-        if did_throw.get() {
+        if DID_THROW.get() {
             discard_current_exception();
         }
         caught = Some(Error::exception(c"Keyboard interrupt"));
@@ -180,9 +180,9 @@ pub(crate) fn try_leave(tstate: &TryState) -> Result<(), Error> {
         let messages = take_msg_list();
         let msg = error_exception_string(&messages, b"");
         caught = Some(Error::from_message(ERROR_TYPE_EXCEPTION, msg.as_cstr()));
-    } else if did_throw.get() || need_rethrow.get() {
+    } else if DID_THROW.get() || NEED_RETHROW.get() {
         // Either flag says there is an exception being unwound.
-        let (name, lnum, value) = current_exception
+        let (name, lnum, value) = CURRENT_EXCEPTION
             .get()
             .expect("an exception being thrown")
             .with(|ex| (ex.throw_name.clone(), ex.throw_lnum, ex.value.clone()));
@@ -203,10 +203,10 @@ pub(crate) fn try_leave(tstate: &TryState) -> Result<(), Error> {
     // What the matching `try_enter` filled in.
     let saved = *tstate;
     pop_msg_list();
-    current_exception.set(saved.current_exception);
+    CURRENT_EXCEPTION.set(saved.current_exception);
     GOT_INT.set(saved.got_int != 0);
-    did_throw.set(saved.did_throw);
-    need_rethrow.set(saved.need_rethrow != 0);
+    DID_THROW.set(saved.did_throw);
+    NEED_RETHROW.set(saved.need_rethrow != 0);
     DID_EMSG.set(saved.did_emsg);
 
     match caught {
@@ -312,7 +312,7 @@ pub(crate) fn get_default_stl_hl(
     }
 }
 
-/// Point `current_sctx` at whoever made this API call, so that `:verbose`
+/// Point `CURRENT_SCTX` at whoever made this API call, so that `:verbose`
 /// and `<sfile>` name them, for as long as the returned guard lives.
 ///
 /// This is the C's `WITH_SCRIPT_CONTEXT`, whose trailing `current_sctx =
@@ -323,7 +323,7 @@ pub(crate) fn get_default_stl_hl(
 /// group name and upstream leaks the client's context out of the call that
 /// way; here it cannot.
 pub(crate) fn api_set_sctx(channel_id: uint64_t) -> SavedSctx {
-    let caller = current_sctx.get();
+    let caller = CURRENT_SCTX.get();
     // A call from Vimscript is already running in the right context.
     if channel_id == VIML_INTERNAL_CALL {
         return Script::saved();

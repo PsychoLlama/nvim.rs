@@ -19,7 +19,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 pub(crate) mod state;
 
 use crate::cmdexpand::defs::Expand;
@@ -173,9 +172,9 @@ pub(crate) const WM_SCROLLED: c_int = 2;
 /// The wildmenu was drawn over a status line.
 pub(crate) const WM_SHOWN: c_int = 1;
 
-static cmd_showtail: GlobalCell<bool> = GlobalCell::new(false);
-static may_expand_pattern: GlobalCell<bool> = GlobalCell::new(false);
-static pre_incsearch_pos: GlobalCell<Pos> = GlobalCell::new(Pos {
+static CMD_SHOWTAIL: GlobalCell<bool> = GlobalCell::new(false);
+static MAY_EXPAND_PATTERN: GlobalCell<bool> = GlobalCell::new(false);
+static PRE_INCSEARCH_POS: GlobalCell<Pos> = GlobalCell::new(Pos {
     lnum: LineNr::ZERO,
     col: ColNr::ZERO,
     coladd: 0,
@@ -185,14 +184,14 @@ static pre_incsearch_pos: GlobalCell<Pos> = GlobalCell::new(Pos {
 /// Each row's text points into the matches of the command line's
 /// [`Expand`], which keeps them until [`cmdline_pum_remove`] drops the rows:
 /// every path that frees the matches removes the menu first.
-static compl_match_array: GlobalCell<Option<CmdlinePum>> = GlobalCell::new(None);
-static compl_startcol: GlobalCell<c_int> = GlobalCell::new(0);
-static compl_selected: GlobalCell<c_int> = GlobalCell::new(0);
+static CMDLINE_PUM: GlobalCell<Option<CmdlinePum>> = GlobalCell::new(None);
+static COMPL_STARTCOL: GlobalCell<c_int> = GlobalCell::new(0);
+static COMPL_SELECTED: GlobalCell<c_int> = GlobalCell::new(0);
 /// The command line as it stood before the last expansion inserted a
-/// match, for `:h getcompletion()`'s `cmdline_orig`. Owned: the cell frees
+/// match, for `:h getcompletion()`'s `CMDLINE_ORIG`. Owned: the cell frees
 /// the previous copy when it takes a new one, and `None` is upstream's
 /// null -- nothing has been expanded yet.
-static cmdline_orig: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static CMDLINE_ORIG: GlobalCell<Option<XString>> = GlobalCell::new(None);
 /// How much of `:filetype` has already been typed, and so which of its
 /// arguments are still worth offering -- upstream's `EXP_FILETYPECMD_*`.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -207,8 +206,8 @@ pub(crate) enum FiletypeWhat {
     OnOff,
 }
 
-static filetype_expand_what: GlobalCell<FiletypeWhat> = GlobalCell::new(FiletypeWhat::All);
-static breakpt_expand_what: GlobalCell<BreakptWhat> = GlobalCell::new(BreakptWhat::Add);
+static FILETYPE_EXPAND_WHAT: GlobalCell<FiletypeWhat> = GlobalCell::new(FiletypeWhat::All);
+static BREAKPT_EXPAND_WHAT: GlobalCell<BreakptWhat> = GlobalCell::new(BreakptWhat::Add);
 
 /// A match `fuzzy_match_str` scored, numbered in the order it was found.
 #[derive(Debug)]

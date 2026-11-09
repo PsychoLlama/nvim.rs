@@ -11,8 +11,8 @@
 #![forbid(unsafe_code)]
 
 use crate::keycodes::SpecialKey;
-use crate::mark::kMarkBeginLine;
-use crate::mark::kMarkContext;
+use crate::mark::MARK_BEGIN_LINE;
+use crate::mark::MARK_CONTEXT;
 use crate::search::ACTION_GOTO;
 use crate::search::ACTION_SHOW;
 use crate::search::ACTION_SHOW_ALL;
@@ -261,9 +261,9 @@ fn nv_bracket_mark(cmd_arg: &mut CmdArg) {
             None => break,
         }
     }
-    let mut flags = kMarkContext as MarkMove;
+    let mut flags = MARK_CONTEXT as MarkMove;
     if linewise {
-        flags |= kMarkBeginLine as MarkMove;
+        flags |= MARK_BEGIN_LINE as MarkMove;
     }
     nv_mark_move_to(cmd_arg, flags, Some(&fm));
 }

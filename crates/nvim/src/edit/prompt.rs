@@ -110,8 +110,8 @@ pub(crate) fn init_prompt(cmdchar_todo: Key) {
         insstart.col = start().col;
         INSSTART.set(insstart);
         INSSTART_ORIG.set(insstart);
-        Insstart_textlen.set(insstart.col);
-        Insstart_blank_vcol.set(ColNr::MAX);
+        INSSTART_TEXTLEN.set(insstart.col);
+        INSSTART_BLANK_VCOL.set(ColNr::MAX);
         ARROW_USED.set(false);
     }
 

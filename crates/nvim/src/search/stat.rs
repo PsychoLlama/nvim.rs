@@ -16,7 +16,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::eval::typval::{NumBuf, list_items};
@@ -116,9 +115,9 @@ impl Counted {
     }
 }
 
-static counted: GlobalCell<Counted> = GlobalCell::new(Counted::NONE);
+static COUNTED: GlobalCell<Counted> = GlobalCell::new(Counted::NONE);
 /// The `maxcount` [`update_search_stat`] was last asked for.
-static last_maxcount: GlobalCell<c_int> = GlobalCell::new(0);
+static LAST_MAXCOUNT: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Add the search count `[3/19]` to the right-hand end of `msgbuf`, the
 /// echoed search command with its terminator.
@@ -199,19 +198,19 @@ fn update_search_stat(
     maxcount: c_int,
     timeout: c_int,
 ) -> Stat {
-    let mut c = counted.take();
+    let mut c = COUNTED.take();
     if dirc == 0 && !recompute && !equalpos(c.at, Pos::default()) {
         let stat = Stat {
             cur: c.cur,
             cnt: c.cnt,
             exact_match: c.exact_match,
             incomplete: c.incomplete,
-            last_maxcount: last_maxcount.get(),
+            last_maxcount: LAST_MAXCOUNT.get(),
         };
-        counted.set(c);
+        COUNTED.set(c);
         return stat;
     }
-    last_maxcount.set(maxcount);
+    LAST_MAXCOUNT.set(maxcount);
 
     // Having moved past the remembered position in the direction
     // opposite to the search means the count wrapped around.
@@ -304,9 +303,9 @@ fn update_search_stat(
         cnt: c.cnt,
         exact_match: c.exact_match,
         incomplete: c.incomplete,
-        last_maxcount: last_maxcount.get(),
+        last_maxcount: LAST_MAXCOUNT.get(),
     };
-    counted.set(c);
+    COUNTED.set(c);
     stat
 }
 

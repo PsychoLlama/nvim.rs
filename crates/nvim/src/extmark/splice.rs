@@ -28,7 +28,7 @@
 use core::ffi::c_int;
 
 use super::{
-    Buf, Extent, kExtmarkUndo, last_splice, line_offset, send_splice, signcols_count_range,
+    Buf, EXTMARK_UNDO, Extent, last_splice, line_offset, send_splice, signcols_count_range,
     splice_pending, tree_move_region, tree_splice, undo_header,
 };
 use crate::decoration::SignCountHalf;
@@ -191,7 +191,7 @@ pub(crate) fn splice_impl(
         signcols_count_range(buffer, start.row, row2.get(), 0, SignCountHalf::Add);
     }
 
-    if undo == kExtmarkUndo {
+    if undo == EXTMARK_UNDO {
         let Some(link) = undo_header(buffer) else {
             return;
         };
@@ -290,7 +290,7 @@ pub(crate) fn move_region(
 
     send_splice(buffer, new, Extent::default(), extent);
 
-    if undo == kExtmarkUndo {
+    if undo == EXTMARK_UNDO {
         let Some(link) = undo_header(buffer) else {
             return;
         };

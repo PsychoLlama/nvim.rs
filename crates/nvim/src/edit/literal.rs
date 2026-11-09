@@ -59,8 +59,8 @@ pub(crate) fn ins_ctrl_v() {
     }
     clear_showcmd();
     insert_special(c, true, true);
-    revins_chars.set(revins_chars.get() + 1);
-    revins_legal.set(revins_legal.get() + 1);
+    REVINS_CHARS.set(REVINS_CHARS.get() + 1);
+    REVINS_LEGAL.set(REVINS_LEGAL.get() + 1);
 }
 
 /// Read the next character literally.
@@ -228,7 +228,7 @@ pub(crate) fn redo_literal(c: Key) {
 /// inserted).
 pub(crate) fn ins_digraph() -> Key {
     let mut did_putchar = false;
-    pc_status.set(PutChar::Unset);
+    PC_STATUS.set(PutChar::Unset);
     if redrawing() && !char_avail() {
         ins_redraw(false);
         edit_putchar(Key::ascii(b'?'), true);
@@ -360,8 +360,8 @@ pub(crate) fn ins_ctrl_ey(tc: Key) -> Key {
     Buf::current().b_p_tw = -1;
     insert_special(c, true, false);
     Buf::current().b_p_tw = tw_save;
-    revins_chars.set(revins_chars.get() + 1);
-    revins_legal.set(revins_legal.get() + 1);
+    REVINS_CHARS.set(REVINS_CHARS.get() + 1);
+    REVINS_LEGAL.set(REVINS_LEGAL.get() + 1);
     auto_format(false, true);
     Key::CTRL_V
 }

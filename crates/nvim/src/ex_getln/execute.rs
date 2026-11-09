@@ -240,7 +240,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
         && s.firstc != b'@'
         // do clear got_int in Ex mode, to avoid an infinite Ctrl-C loop
         && (!s.break_ctrl_c || EXMODE_ACTIVE.get())
-        && global_busy.get() == 0
+        && GLOBAL_BUSY.get() == 0
     {
         GOT_INT.set(false);
     }
@@ -277,7 +277,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
     // Which wildmenu gesture, if any, the key was already used for.
     let mut wild_type = None;
     let key_is_wc = (s.c == wildchar() && KEY_TYPED.get()) || is_wildcharm(s.c);
-    if (cmdline_pum_active() || wild_menu_showing.get() != 0 || s.did_wild_list)
+    if (cmdline_pum_active() || WILD_MENU_SHOWING.get() != 0 || s.did_wild_list)
         && !key_is_wc
         && match_count() > 0
         && let Some(mode) = wildmenu_gesture(s.c)
@@ -340,7 +340,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
 
     if CEDIT_KEY.get() == Some(s.c) || s.c == SpecialKey::Cmdwin {
         // TODO(vim): why is ex_normal_busy checked here?
-        if (s.c == SpecialKey::Cmdwin || ex_normal_busy.get() == 0) && !GOT_INT.get() {
+        if (s.c == SpecialKey::Cmdwin || EX_NORMAL_BUSY.get() == 0) && !GOT_INT.get() {
             // Open a window to edit the command line (and history).
             s.c = open_cmdwin();
             s.some_key_typed = true;
@@ -501,7 +501,7 @@ pub(crate) fn command_line_changed(s: &mut CommandLineState) -> Step {
     let cc = Cc::current();
     let prev_cmdpreview = CMDPREVIEW.get();
     let preview_shown = s.firstc == b':'
-        && current_sctx.get().sc_sid == 0 // only if interactive
+        && CURRENT_SCTX.get().sc_sid == 0 // only if interactive
         && P_ICM.first_byte() != 0 // 'inccommand' is set
         && !EXMODE_ACTIVE.get() // not in ex mode
         && CMDLINE_STAR.get() == 0 // not typing a password

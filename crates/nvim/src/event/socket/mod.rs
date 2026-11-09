@@ -55,7 +55,7 @@ use crate::os::cshim::gettext;
 use crate::os::fs::{os_remove, os_strerror, path_exists};
 use crate::os::libc::{intmax_t, sa_family_t};
 use crate::path::tail_index;
-use crate::startup::main_loop;
+use crate::startup::MAIN_LOOP;
 use ::libc::ntohs;
 
 const UV_TCP: uv_handle_type = 12;
@@ -441,7 +441,7 @@ fn rebind_stale_socket(mut watcher: Watcher, failure: c_int) -> c_int {
     // SAFETY: as above.
     unsafe { uv_close(handle.cast(), Some(early_server_close_cb)) };
     // SAFETY: the main loop is live for as long as the editor is.
-    unsafe { process_events_until(main_loop.ptr(), None, -1, || closed) };
+    unsafe { process_events_until(MAIN_LOOP.ptr(), None, -1, || closed) };
 
     // SAFETY: a fresh handle, on the loop the closed one used.
     unsafe { uv_pipe_init(handle_loop, handle, 0) };
@@ -475,7 +475,7 @@ unsafe fn socket_alive(uv_loop: *mut Loop, addr: *const c_char) -> bool {
     // SAFETY: the probe stream, still on this frame.
     unsafe { stream_may_close(&raw mut stream.s) };
     // SAFETY: the main loop is live for as long as the editor is.
-    unsafe { process_events_until(main_loop.ptr(), None, -1, || closed) };
+    unsafe { process_events_until(MAIN_LOOP.ptr(), None, -1, || closed) };
     true
 }
 
@@ -702,7 +702,7 @@ pub unsafe fn socket_connect(
 
             let ms = i64::from(timeout);
             // SAFETY: the main loop is live for as long as the editor is.
-            unsafe { process_events_until(main_loop.ptr(), None, ms, || status != 1) };
+            unsafe { process_events_until(MAIN_LOOP.ptr(), None, ms, || status != 1) };
             if status == 0 {
                 success = true;
                 break 'settled;
@@ -712,7 +712,7 @@ pub unsafe fn socket_connect(
             // Wait for the close callback before retrying or returning:
             // `stream` may be on the caller's stack.
             // SAFETY: the main loop is live for as long as the editor is.
-            unsafe { process_events_until(main_loop.ptr(), None, -1, || closed) };
+            unsafe { process_events_until(MAIN_LOOP.ptr(), None, -1, || closed) };
 
             // The short circuit is load-bearing: a pipe connect never looked
             // an address up, so `candidate` is still null here.

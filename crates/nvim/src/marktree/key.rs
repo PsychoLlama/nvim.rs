@@ -7,7 +7,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 //! Key and position vocabulary for the extmark B-tree.
 //!
@@ -32,7 +31,7 @@ pub const MT_BRANCH_FACTOR: ::core::ffi::c_uint = 10;
 pub const MT_LOG2_BRANCH: ::core::ffi::c_uint = 5;
 
 /// A filter slot set to this selects that meta kind; zero skips it.
-pub const kMTFilterSelect: uint32_t = 4294967295;
+pub const MT_FILTER_SELECT: uint32_t = 4294967295;
 
 crate::flag_set! {
     /// What an [`MTKey`] is and what decoration it carries -- upstream's

@@ -62,11 +62,11 @@ use crate::os::input::fast_breakcheck;
 use crate::os::libc::{time_t, uint8_t};
 use crate::path::{path_fnamecmp, path_full_compare, path_tail};
 use crate::runtime::{estack_pop, estack_push};
-use crate::spell::{LangId, SpellIdx, SpellLang};
 use crate::spell::{
-    e_format, init_syl_tab, languages, open_spellbuf, parse_spelllang, put_lang, slang_clear,
+    E_FORMAT, init_syl_tab, languages, open_spellbuf, parse_spelllang, put_lang, slang_clear,
     slang_clear_sug, take_lang, with_lang,
 };
+use crate::spell::{LangId, SpellIdx, SpellLang};
 use crate::types::{LineNr, OptInt};
 
 use super::sections::{
@@ -75,11 +75,11 @@ use super::sections::{
 };
 use super::spl::{SpellReadError, Spl, SplResult, trim_nul};
 use super::{
-    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, BY_SPECIAL, ETYPE_SPELL, MAXWLEN, SN_CHARFLAGS,
-    SN_COMPOUND, SN_END, SN_INFO, SN_MAP, SN_MIDWORD, SN_NOBREAK, SN_NOCOMPOUNDSUGS,
-    SN_NOSPLITSUGS, SN_PREFCOND, SN_REGION, SN_REP, SN_REPSAL, SN_SAL, SN_SOFO, SN_SUGFILE,
-    SN_SYLLABLE, SN_WORDS, SNF_REQUIRED, SPL_FNAME_ADD, VIMSPELLMAGIC, VIMSPELLMAGICL,
-    VIMSPELLVERSION, VIMSUGMAGIC, VIMSUGMAGICL, VIMSUGVERSION, e_spell_trunc, kEqualFiles,
+    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, BY_SPECIAL, E_SPELL_TRUNC, EQUAL_FILES, ETYPE_SPELL,
+    MAXWLEN, SN_CHARFLAGS, SN_COMPOUND, SN_END, SN_INFO, SN_MAP, SN_MIDWORD, SN_NOBREAK,
+    SN_NOCOMPOUNDSUGS, SN_NOSPLITSUGS, SN_PREFCOND, SN_REGION, SN_REP, SN_REPSAL, SN_SAL, SN_SOFO,
+    SN_SUGFILE, SN_SYLLABLE, SN_WORDS, SNF_REQUIRED, SPL_FNAME_ADD, VIMSPELLMAGIC, VIMSPELLMAGICL,
+    VIMSPELLVERSION, VIMSUGMAGIC, VIMSUGMAGICL, VIMSUGVERSION,
 };
 
 /// Marks a tree index that already points at a shared sub-tree, so the
@@ -111,10 +111,10 @@ enum SpellLoadError {
     )]
     TooNew,
     /// A section says something it cannot.
-    #[error("{}", msg_cstr(gettext(e_format)))]
+    #[error("{}", msg_cstr(gettext(E_FORMAT)))]
     Format,
     /// The file ended early.
-    #[error("{}", msg_cstr(gettext(e_spell_trunc)))]
+    #[error("{}", msg_cstr(gettext(E_SPELL_TRUNC)))]
     Truncated,
     /// A section the file says is required, which this build cannot read.
     #[error("{}", msg_cstr(gettext(c"E770: Unsupported section in spell file")))]
@@ -730,7 +730,7 @@ pub(super) fn spell_reload_one(fname: &CStr, added_word: bool) {
     for id in languages() {
         let same = with_lang(id, |slang| {
             path_full_compare(fname, slang.sl_fname.as_cstr(), false, true) as c_uint
-                == kEqualFiles as c_uint
+                == EQUAL_FILES as c_uint
         });
         if same != Some(true) {
             continue;

@@ -125,7 +125,7 @@ fn calculate_topfill_and_topline(
             break;
         }
     }
-    let filler = diff_flags.get() & DIFF_FILLER != 0;
+    let filler = DIFF_FLAGS.get() & DIFF_FILLER != 0;
     (
         filler.then_some(max_virt_lines - passed),
         LineNr::new(to_lnum),

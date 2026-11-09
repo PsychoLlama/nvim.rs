@@ -126,32 +126,32 @@ pub fn time_differs(file_info: &FileInfo, mtime: i64, mtime_ns: i64) -> bool {
 pub fn check_timestamps(focus: bool) {
     // Don't check timestamps while system() or another low-level function
     // may cause us to lose and gain focus.
-    if no_check_timestamps.get() > 0 {
+    if NO_CHECK_TIMESTAMPS.get() > 0 {
         return;
     }
 
     // Avoid doing a check twice. The OK/Reload dialog can cause a focus
     // event, and we would keep on checking if the file were steadily
     // growing. Do check again after typing something.
-    if focus && did_check_timestamps.get() {
-        need_check_timestamps.set(true);
+    if focus && DID_CHECK_TIMESTAMPS.get() {
+        NEED_CHECK_TIMESTAMPS.set(true);
         return;
     }
 
     if !stuff_empty()
-        || global_busy.get() != 0
+        || GLOBAL_BUSY.get() != 0
         || typeahead().maplen() != 0
-        || autocmd_busy.get()
+        || AUTOCMD_BUSY.get()
         || Buf::current().b_ro_locked > 0
-        || allbuf_lock.get() > 0
+        || ALLBUF_LOCK.get() > 0
     {
-        need_check_timestamps.set(true); // check later
+        NEED_CHECK_TIMESTAMPS.set(true); // check later
         return;
     }
 
     let mut didit = TimestampCheck::Unchanged;
     let no_prompt = Suppress::wait_return();
-    did_check_timestamps.set(true);
+    DID_CHECK_TIMESTAMPS.set(true);
     ALREADY_WARNED.set(false);
 
     let mut cur = first_buffer();
@@ -163,7 +163,7 @@ pub fn check_timestamps(focus: bool) {
             didit = didit.max(n);
             if n != TimestampCheck::Unchanged && !bufref.valid() {
                 // Autocommands have removed the buffer. Upstream's
-                // `buf = firstbuf; continue;` still runs the loop's own
+                // `buf = FIRSTBUF; continue;` still runs the loop's own
                 // step, so this restarts at the *second* buffer.
                 cur = first_buffer().and_then(Buf::next);
                 continue;
@@ -173,7 +173,7 @@ pub fn check_timestamps(focus: bool) {
     }
 
     drop(no_prompt);
-    need_check_timestamps.set(false);
+    NEED_CHECK_TIMESTAMPS.set(false);
     if NEED_WAIT_RETURN.get() && didit == TimestampCheck::Said {
         // Make sure the message isn't overwritten.
         msg_str(c"\n");
@@ -323,7 +323,7 @@ fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Re
         return (Reload::No, true);
     }
 
-    if !autocmd_busy.get() {
+    if !AUTOCMD_BUSY.get() {
         msg_start();
         msg_str_hl(&cstr::owned(&tbuf), HLF_E, true);
         if !mesg2.is_empty() {

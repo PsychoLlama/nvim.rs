@@ -310,7 +310,7 @@ pub(crate) fn with_maphash_lists<R>(
 /// name it.
 ///
 /// `args` supplies the right-hand side and the flags; the RHS bundle is
-/// copied, its callback shared.  `sid` of 0 means "use `current_sctx`".
+/// copied, its callback shared.  `sid` of 0 means "use `CURRENT_SCTX`".
 #[allow(clippy::too_many_arguments)] // upstream's; the caller has no struct to pass
 pub(crate) fn map_add(
     table: MapTable,
@@ -324,7 +324,7 @@ pub(crate) fn map_add(
     simplified: bool,
 ) -> MapTwin {
     // A given `sid` is upstream's "the block was `xcalloc`ed and only these
-    // two fields were filled in", not a tweak of `current_sctx`.
+    // two fields were filled in", not a tweak of `CURRENT_SCTX`.
     let script_ctx = if sid != 0 {
         ScriptCtx {
             sc_sid: sid,
@@ -332,7 +332,7 @@ pub(crate) fn map_add(
             ..ScriptCtx::NONE
         }
     } else {
-        let mut ctx = current_sctx.get();
+        let mut ctx = CURRENT_SCTX.get();
         ctx.sc_lnum += sourcing_lnum().get();
         nlua_set_sctx(&mut ctx);
         ctx

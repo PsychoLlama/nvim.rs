@@ -26,7 +26,6 @@
 
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -70,12 +69,12 @@ static QF_STACKS: GlobalCell<QfStacks> = GlobalCell::new(QfStacks {
 
 /// The id the next list created is given. Ids are never reused, so a caller
 /// that saved one can tell whether the list it saw is still there.
-static last_qf_id: GlobalCell<c_uint> = GlobalCell::new(0);
+static LAST_QF_ID: GlobalCell<c_uint> = GlobalCell::new(0);
 
 /// A fresh list id.
 pub(crate) fn next_list_id() -> c_uint {
-    let id = last_qf_id.get().wrapping_add(1);
-    last_qf_id.set(id);
+    let id = LAST_QF_ID.get().wrapping_add(1);
+    LAST_QF_ID.set(id);
     id
 }
 
@@ -509,7 +508,7 @@ fn wipe_qf_buffer(mut qi: Qi) {
     let Some(qfbuf) = find_buf(qi.bufnr).filter(|b| b.b_nwindows == 0) else {
         return;
     };
-    // `close_buffer` insists that `curwin->w_buffer == curbuf`, and it
+    // `close_buffer` insists that `curwin->w_buffer == CURBUF`, and it
     // may not: this is reachable from `win_free_mem` after `win_close`
     // already released the current window's buffer.
     let buf_was_null = Win::current().w_buffer.is_null();

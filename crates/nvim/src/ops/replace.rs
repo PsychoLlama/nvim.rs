@@ -22,7 +22,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_UNDO;
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
 use crate::narrow::len_as_int;
@@ -55,7 +55,7 @@ pub(crate) fn pbyte(mut pos: Pos, c: u8) {
     if let Some(byte) = line.get_mut(pos.col.as_usize()) {
         *byte = c;
     }
-    if curbuf_splice_pending.get() == 0 {
+    if CURBUF_SPLICE_PENDING.get() == 0 {
         let row = pos.lnum.get() - 1;
         extmark_splice_cols(
             Buf::current(),
@@ -63,7 +63,7 @@ pub(crate) fn pbyte(mut pos: Pos, c: u8) {
             pos.col,
             ColNr::new(1),
             ColNr::new(1),
-            kExtmarkUndo,
+            EXTMARK_UNDO,
         );
     }
 }
@@ -241,7 +241,7 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: 
     let new_bytes = (newrows + newcols) as BCount;
     let row = baselnum.get() - 1;
     let (col, len) = (bd.textcol, bd.textlen);
-    let op = kExtmarkUndo;
+    let op = EXTMARK_UNDO;
     extmark_splice(
         Buf::current(),
         row,

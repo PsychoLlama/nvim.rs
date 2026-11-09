@@ -299,7 +299,7 @@ impl<V> HandleMap<V> {
         } else if handle.get() < self.base {
             // A handle below the window the vector covers. The three
             // counters are monotone, so this is the wrap-around
-            // `top_file_num` warns about with `W14`; rebuild rather than
+            // `TOP_FILE_NUM` warns about with `W14`; rebuild rather than
             // grow downwards without bound.
             let old = core::mem::take(&mut self.slots);
             let old_base = self.base;
@@ -416,8 +416,8 @@ impl<T> HandleRegistry<T> {
 ///
 /// **Why the value is not a `Box<T>`.** A `Box` retags every time it moves,
 /// which invalidates every raw pointer derived from it — and the editor's
-/// whole point is that those pointers escape (`curbuf`, `w_buffer`, the
-/// `firstbuf` list, whatever an autocommand kept). [`Owned`] is the `Box`
+/// whole point is that those pointers escape (`CURBUF`, `w_buffer`, the
+/// `FIRSTBUF` list, whatever an autocommand kept). [`Owned`] is the `Box`
 /// with its address taken once; see its own docs.
 ///
 /// The free paths still call [`forget`](Self::forget) *first* and hold the
@@ -981,7 +981,7 @@ mod tests {
         assert_eq!(map.slots.len(), 1);
     }
 
-    /// `top_file_num` wraps to 1 after 2^31 buffers (upstream warns `W14`),
+    /// `TOP_FILE_NUM` wraps to 1 after 2^31 buffers (upstream warns `W14`),
     /// so a handle below the window the vector covers is possible. It has to
     /// rebuild rather than index out of bounds or grow downwards.
     #[test]

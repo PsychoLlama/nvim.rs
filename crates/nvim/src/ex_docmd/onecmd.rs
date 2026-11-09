@@ -48,19 +48,19 @@ use crate::ex_docmd::source::{ReadLines, SourceKind, ex_errmsg};
 
 use crate::ex_docmd::verify::verify_command;
 use crate::ex_docmd::{
-    DoCmdOpts, ExFunc, PROF_YES, cmdnames, e_ambiguous_use_of_user_defined_command,
-    e_not_an_editor_command, quitmore,
+    DoCmdOpts, E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND, E_NOT_AN_EDITOR_COMMAND, ExFunc, PROF_YES,
+    QUITMORE, cmdnames,
 };
 use crate::ex_eval::CsFlags;
 
 use crate::ex_eval::{aborting, cond_stack_of, do_errthrow, do_intthrow, do_throw};
 use crate::ex_getln::{get_text_locked_msg, script_get, text_locked};
 
-use crate::ex_docmd::state::{did_emsg_syntax, ex_nesting_level, global_busy};
-use crate::ex_eval::state::{check_cstack, did_throw, need_rethrow};
+use crate::ex_docmd::state::{DID_EMSG_SYNTAX, EX_NESTING_LEVEL, GLOBAL_BUSY};
+use crate::ex_eval::state::{CHECK_CSTACK, DID_THROW, NEED_RETHROW};
 use crate::getchar::state::{GOT_INT, PENDING_END_REG_EXECUTING, REG_EXECUTING};
 use crate::guard::Depth;
-use crate::guard::sandbox;
+use crate::guard::SANDBOX;
 use crate::input::ask_yesno;
 use crate::mbyte::{cluster_len, head_off};
 use crate::message::state::{DID_EMSG, MSG_SILENT};
@@ -68,10 +68,10 @@ use crate::message::{
     E_ARGREQ, E_CMDWIN, E_INVARG, E_INVRANGE, E_MODIFIABLE, E_NOBANG, E_NORANGE, E_SANDBOX,
     E_TRAILING_ARG,
 };
-use crate::profile::do_profiling;
-use crate::startup::exiting;
+use crate::profile::DO_PROFILING;
+use crate::startup::EXITING;
 use crate::state::mode::EXMODE_ACTIVE;
-use crate::winlayer::graph::cmdwin_type;
+use crate::winlayer::graph::CMDWIN_TYPE;
 
 use crate::ex_eval::defs::CondId;
 use crate::message::IOSIZE;
@@ -202,12 +202,12 @@ impl ExArg<'_> {
         let after_modifier = self.line.cmd;
 
         let cond = cond_stack_of(self);
-        self.skip = DID_EMSG.get() != 0 || GOT_INT.get() || did_throw.get() || in_inactive;
+        self.skip = DID_EMSG.get() != 0 || GOT_INT.get() || DID_THROW.get() || in_inactive;
 
         let mut p = find_excmd_after_range(self);
         profile_cmd(self, cond);
 
-        if !exiting.get() {
+        if !EXITING.get() {
             // May go to debug mode. If the `>quit` debug command is used there,
             // an interrupt exception is thrown and this command is skipped.
             dbg_check_breakpoint(self);
@@ -273,7 +273,7 @@ impl ExArg<'_> {
 
         let Some(p) = p else {
             if !self.skip {
-                *errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command));
+                *errormsg = Some(ex_msg(E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND));
             }
             return Err(Refused);
         };
@@ -281,14 +281,14 @@ impl ExArg<'_> {
         if self.cmdidx == CmdIdx::SIZE {
             if !self.skip {
                 // The modifiers parsed, so the error is in what follows them.
-                let msg = ex_msg(e_not_an_editor_command);
+                let msg = ex_msg(E_NOT_AN_EDITOR_COMMAND);
                 *errormsg = Some(if flags.has(DoCmdOpts::VERBOSE) {
                     // The whole line is appended by `do_one_cmd` instead.
                     msg
                 } else {
                     append_command(&msg, self.line.rest_of(after_modifier))
                 });
-                did_emsg_syntax.set(true);
+                DID_EMSG_SYNTAX.set(true);
                 verify_command(self.line.rest_of(after_modifier));
             }
             return Err(Refused);
@@ -313,7 +313,7 @@ impl ExArg<'_> {
                 *errormsg = Some(msg);
                 return Err(Refused);
             }
-            // `curbuf->b_ro_locked` forbids editing another buffer.
+            // `CURBUF->b_ro_locked` forbids editing another buffer.
             // `:checktime` is postponed rather than refused, and `:edit` and
             // `:file` are checked again once their argument is known.
             if !self.argt.has(ExArgt::CMDWIN)
@@ -343,7 +343,7 @@ impl ExArg<'_> {
             // running a command per line and would fail below anyway, so it is
             // not asked.
             let (first, last) = self.range_numbers();
-            if global_busy.get() == 0 && first > last {
+            if GLOBAL_BUSY.get() == 0 && first > last {
                 if MSG_SILENT.get() == 0 {
                     if flags.has(DoCmdOpts::VERBOSE) || EXMODE_ACTIVE.get() {
                         *errormsg = Some(ex_msg(c"E493: Backwards range given"));
@@ -371,7 +371,7 @@ impl ExArg<'_> {
         // Put the first line at the start of a closed fold and the last line at
         // its end.
         if (self.argt.has(ExArgt::WHOLEFOLD) || self.addr_count >= 2)
-            && global_busy.get() == 0
+            && GLOBAL_BUSY.get() == 0
             && self.addr_type == CmdAddr::Lines
         {
             Win::current().has_folding(self.line1, Some(&mut self.line1), None);
@@ -520,9 +520,9 @@ fn separate_at_newline(excmd: &mut ExArg) {
 ///
 fn rethrow_from_nested(excmd: &mut ExArg) {
     let cond = cond_stack_of(excmd);
-    if need_rethrow.get() {
+    if NEED_RETHROW.get() {
         do_throw(cond);
-    } else if check_cstack.get() {
+    } else if CHECK_CSTACK.get() {
         let finished = excmd
             .source
             .as_ref()
@@ -534,8 +534,8 @@ fn rethrow_from_nested(excmd: &mut ExArg) {
             excmd.return_from_function(true, None);
         }
     }
-    check_cstack.set(false);
-    need_rethrow.set(false);
+    CHECK_CSTACK.set(false);
+    NEED_RETHROW.set(false);
 }
 
 /// Parse and execute one Ex command, and answer where the next one starts.
@@ -562,7 +562,7 @@ pub(crate) fn do_one_cmd(
     let save_reg_executing = REG_EXECUTING.get();
     let save_pending_end_reg_executing = PENDING_END_REG_EXECUTING.get();
     let mut excmd = fresh_exarg();
-    let nesting = Depth::of(ex_nesting_level);
+    let nesting = Depth::of(EX_NESTING_LEVEL);
 
     // When the last file has not been edited `:q` has to be typed twice.
     // A `'statusline'` function call and an autocommand (QuitPre) both
@@ -571,8 +571,8 @@ pub(crate) fn do_one_cmd(
     let kind = source
         .as_ref()
         .map_or(SourceKind::None, |source| source.kind());
-    if quitmore.get() != 0 && kind != SourceKind::Function && kind != SourceKind::Autocmd {
-        quitmore.set(quitmore.get() - 1);
+    if QUITMORE.get() != 0 && kind != SourceKind::Function && kind != SourceKind::Autocmd {
+        QUITMORE.set(QUITMORE.get() - 1);
     }
 
     // Modifiers are restored on the way out, for recursive calls. The
@@ -663,7 +663,7 @@ pub(crate) fn do_one_cmd(
 /// `:finally` all execute even though the surrounding construct is
 /// inactive, and each is worth a profile sample.
 pub(crate) fn profile_cmd(excmd: &ExArg, cond: CondId) {
-    if do_profiling.get() != PROF_YES {
+    if DO_PROFILING.get() != PROF_YES {
         return;
     }
     let (idx, top, below) = cond.with(|cs| {
@@ -677,7 +677,7 @@ pub(crate) fn profile_cmd(excmd: &ExArg, cond: CondId) {
     if !(!excmd.skip || idx == 0 || below.is_some_and(|flags| flags.has(CsFlags::ACTIVE))) {
         return;
     }
-    let mut skip = DID_EMSG.get() != 0 || GOT_INT.get() || did_throw.get();
+    let mut skip = DID_EMSG.get() != 0 || GOT_INT.get() || DID_THROW.get();
     match excmd.cmdidx {
         CmdIdx::catch => {
             skip = !skip
@@ -711,7 +711,7 @@ pub(crate) fn profile_cmd(excmd: &ExArg, cond: CondId) {
 ///
 /// Answers the message to report, or `None` when the command may run.
 fn refuses_here(excmd: &ExArg) -> Option<CString> {
-    if sandbox.get() != 0 && !excmd.argt.has(ExArgt::SBOXOK) {
+    if SANDBOX.get() != 0 && !excmd.argt.has(ExArgt::SBOXOK) {
         return Some(ex_msg(E_SANDBOX));
     }
     // `:put` is allowed in a terminal buffer, which is not 'modifiable'.
@@ -723,7 +723,7 @@ fn refuses_here(excmd: &ExArg) -> Option<CString> {
         return Some(ex_msg(E_MODIFIABLE));
     }
     if !is_user_cmd(excmd.cmdidx) {
-        if cmdwin_type.get() != 0 && !excmd.argt.has(ExArgt::CMDWIN) {
+        if CMDWIN_TYPE.get() != 0 && !excmd.argt.has(ExArgt::CMDWIN) {
             return Some(ex_msg(E_CMDWIN));
         }
         if text_locked() && !excmd.argt.has(ExArgt::LOCK_OK) {

@@ -22,8 +22,8 @@
 )]
 
 use crate::cursor::getvpos;
-use crate::extmark::kExtmarkNOOP;
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_NOOP;
+use crate::extmark::EXTMARK_UNDO;
 use crate::indent::SIN_NOMARK;
 use crate::mbyte::head_off;
 use crate::memory::XString;
@@ -134,7 +134,7 @@ impl Put {
                     col,
                     ColNr::ZERO,
                     ColNr::new(inserted),
-                    kExtmarkUndo,
+                    EXTMARK_UNDO,
                 );
                 if visual_active() {
                     lnum += 1;
@@ -221,9 +221,9 @@ impl Put {
         // Only a plain linewise put moves the marks itself; a split put
         // has already spliced them.
         let kind = if self.kind == MT_LINE_WISE && self.flags & PUT_LINE_SPLIT == 0 {
-            kExtmarkUndo
+            EXTMARK_UNDO
         } else {
-            kExtmarkNOOP
+            EXTMARK_NOOP
         };
         let from = Buf::current().b_op_start.lnum + i32::from(self.kind == MT_CHAR_WISE);
         mark_adjust(from, MAXLNUM, self.nr_lines, 0, kind);
@@ -376,7 +376,7 @@ impl Put {
                         rows,
                         ColNr::new(cols),
                         bytes,
-                        kExtmarkUndo,
+                        EXTMARK_UNDO,
                     );
                 }
 

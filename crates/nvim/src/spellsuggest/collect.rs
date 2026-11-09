@@ -38,8 +38,8 @@ use crate::winlayer::Win;
 
 use crate::highlight_group::HLF_COUNT;
 use crate::mbyte::{char_at, head_off};
+use crate::spell::{LOADED_LANGS, spell_soundfold};
 use crate::spell::{LangId, SpellLang};
-use crate::spell::{loaded_langs, spell_soundfold};
 use crate::spellsuggest::score::{EMPTY_SOUND, spell_edit_score, stp_sal_score};
 use crate::spellsuggest::{MAXWLEN, SCORE_INS, SCORE_MAXMAX, SugInfo, Suggest, window_langs};
 use core::cmp::Ordering;
@@ -177,7 +177,7 @@ pub(super) fn add_suggestion(
                 new_altscore = stp.st_altscore;
                 new_had_bonus = stp.st_had_bonus;
             } else if let Some(id) = slang {
-                let rescored = loaded_langs.with(|langs| {
+                let rescored = LOADED_LANGS.with(|langs| {
                     let lang = langs.get(id).filter(|lang| lang.has_soundfold())?;
                     Some(sal_rescore(su, id, lang, good, badlen, score))
                 });
@@ -280,7 +280,7 @@ pub(super) fn rescore_one(su: &mut SugInfo, list: List, at: usize) {
     let Some(id) = stp.st_slang.filter(|_| !stp.st_had_bonus) else {
         return;
     };
-    let rescored = loaded_langs.with(|langs| {
+    let rescored = LOADED_LANGS.with(|langs| {
         let lang = langs.get(id).filter(|lang| lang.has_soundfold())?;
         let stp = &su.list(list)[at];
         Some(sal_rescore(
@@ -381,7 +381,7 @@ fn with_first_soundfold<R>(
     f: impl FnOnce(&SpellLang, &[u8; MAXWLEN]) -> R,
 ) -> Option<R> {
     let langs = window_langs();
-    loaded_langs.with(|table| {
+    LOADED_LANGS.with(|table| {
         let lang = langs
             .iter()
             .filter_map(|lp| table.get(lp.slang))

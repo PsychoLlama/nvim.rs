@@ -54,9 +54,9 @@ pub(crate) fn do_autocmd_dirchanged(new_dir: &CStr, scope: CdScope, cause: CdCau
         _ => c"",
     };
     let pattern: &CStr = match cause {
-        kCdCauseAuto => c"auto",
-        kCdCauseOther => std::process::abort(), // "Should never happen."
-        _ => scope_name,                        // manual, or following a window change
+        CD_CAUSE_AUTO => c"auto",
+        CD_CAUSE_OTHER => std::process::abort(), // "Should never happen."
+        _ => scope_name,                         // manual, or following a window change
     };
 
     let mut saved = SaveVEvent::default();
@@ -66,7 +66,7 @@ pub(crate) fn do_autocmd_dirchanged(new_dir: &CStr, scope: CdScope, cause: CdCau
     let _ = dict.edit().add_str(b"scope", Some(scope_name));
     let _ = dict.edit().add_bool(
         b"changed_window",
-        BoolVarValue::from(cause == kCdCauseWindow),
+        BoolVarValue::from(cause == CD_CAUSE_WINDOW),
     );
     dict.edit().set_keys_readonly();
 
@@ -98,7 +98,7 @@ pub(crate) fn vim_chdirfile(fname: &CStr, cause: CdCause) -> Result<(), IoFailed
         return Ok(()); // nothing to do
     }
 
-    let announce = cause != kCdCauseOther;
+    let announce = cause != CD_CAUSE_OTHER;
     if announce {
         do_autocmd_dirchanged(&dir, CD_SCOPE_WINDOW, cause, true);
     }

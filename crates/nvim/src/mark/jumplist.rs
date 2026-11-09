@@ -22,7 +22,7 @@
 
 use crate::buffer::find_buf;
 use crate::ex_docmd::cmdmod_has;
-use crate::ex_docmd::state::{global_busy, listcmd_busy};
+use crate::ex_docmd::state::{GLOBAL_BUSY, LISTCMD_BUSY};
 use crate::getchar::state::GOT_INT;
 use crate::memory::XString;
 use crate::message::{
@@ -52,7 +52,7 @@ pub fn setpcmark() {
     // `:keepjumps` and the two "the editor is driving itself" flags suppress
     // the push entirely — a `:global` that visits three hundred lines must
     // not fill the jump list with them.
-    if global_busy.get() != 0 || listcmd_busy.get() || cmdmod_has(CmdModFlags::KEEPJUMPS) {
+    if GLOBAL_BUSY.get() != 0 || LISTCMD_BUSY.get() || cmdmod_has(CmdModFlags::KEEPJUMPS) {
         return;
     }
     let (mut win, buf) = (Win::current(), Buf::current());

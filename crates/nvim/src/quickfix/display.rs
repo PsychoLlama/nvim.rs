@@ -161,23 +161,23 @@ fn qf_list_entry(entry: &Listed, qf_idx: c_int, cursel: bool) {
     if MSG_COL.get() > 0 {
         msg_putchar(c_int::from(b'\n'));
     }
-    let cursel = if cursel { HLF_QFL } else { qfFile_hl_id.get() };
+    let cursel = if cursel { HLF_QFL } else { QF_FILE_HL_ID.get() };
     msg_display(&owned_cstr(&heading), cursel, false);
 
     // The position: "<lnum>[-<end>][ col <col>[-<end>]][ <type> <nr>]".
     if entry.has_lnum {
-        msg_str_hl(c":", qfSep_hl_id.get(), false);
+        msg_str_hl(c":", QF_SEP_HL_ID.get(), false);
     }
     if !entry.position.is_empty() {
-        msg_str_hl(&owned_cstr(&entry.position), qfLine_hl_id.get(), false);
+        msg_str_hl(&owned_cstr(&entry.position), QF_LINE_HL_ID.get(), false);
     }
-    msg_str_hl(c":", qfSep_hl_id.get(), false);
+    msg_str_hl(c":", QF_SEP_HL_ID.get(), false);
 
     if let Some(pattern) = &entry.pattern {
         let mut out = Vec::new();
         qf_fmt_text(&mut out, pattern);
         msg_str(&owned_cstr(&out));
-        msg_str_hl(c":", qfSep_hl_id.get(), false);
+        msg_str_hl(c":", QF_SEP_HL_ID.get(), false);
     }
     msg_str(c" ");
 
@@ -231,17 +231,17 @@ pub fn qf_list(excmd: &mut ExArg) {
     shorten_fnames(false);
 
     // The highlighting comes from the qf.vim syntax file.
-    qfFile_hl_id.set(syn_name2id(c"qfFileName"));
-    if qfFile_hl_id.get() == 0 {
-        qfFile_hl_id.set(HLF_D);
+    QF_FILE_HL_ID.set(syn_name2id(c"qfFileName"));
+    if QF_FILE_HL_ID.get() == 0 {
+        QF_FILE_HL_ID.set(HLF_D);
     }
-    qfSep_hl_id.set(syn_name2id(c"qfSeparator"));
-    if qfSep_hl_id.get() == 0 {
-        qfSep_hl_id.set(HLF_D);
+    QF_SEP_HL_ID.set(syn_name2id(c"qfSeparator"));
+    if QF_SEP_HL_ID.get() == 0 {
+        QF_SEP_HL_ID.set(HLF_D);
     }
-    qfLine_hl_id.set(syn_name2id(c"qfLineNr"));
-    if qfLine_hl_id.get() == 0 {
-        qfLine_hl_id.set(HLF_N);
+    QF_LINE_HL_ID.set(syn_name2id(c"qfLineNr"));
+    if QF_LINE_HL_ID.get() == 0 {
+        QF_LINE_HL_ID.set(HLF_N);
     }
 
     // Without "!" only recognised entries are listed — unless none of

@@ -49,7 +49,7 @@ pub(crate) struct How {
     pub filtering: bool,
     /// Read from stdin instead of a file.
     pub stdin: bool,
-    /// Read from `curbuf` instead of a file, to convert what stdin gave us.
+    /// Read from `CURBUF` instead of a file, to convert what stdin gave us.
     pub buffer: bool,
     /// Read from a fifo or socket instead of a file.
     pub fifo: bool,
@@ -203,7 +203,7 @@ pub(crate) fn readfile_named(
         // is empty now.
         wasempty = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
 
-        if !recoverymode.get()
+        if !RECOVERYMODE.get()
             && !how.filtering
             && !how.dummy
             && !silent
@@ -730,8 +730,8 @@ pub(crate) fn readfile_named(
             // Closed; stderr takes its place, which makes shell commands
             // work.
             drop(input);
-            if stdin_fd.get() < 0 {
-                vim_ignored.set(reopen_stdin_on_stderr());
+            if STDIN_FD.get() < 0 {
+                VIM_IGNORED.set(reopen_stdin_on_stderr());
             }
         } else if how.buffer {
             mark_stdin_cloexec();
@@ -746,7 +746,7 @@ pub(crate) fn readfile_named(
         NO_WAIT_RETURN.set(NO_WAIT_RETURN.get() - 1); // may wait for return now
 
         // In recovery mode everything but autocommands is skipped.
-        if !recoverymode.get() {
+        if !RECOVERYMODE.get() {
             // The last line, which came from the empty buffer, has to go.
             if how.newfile && wasempty && !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
                 let _ = ml_delete(Buf::current().b_ml.ml_line_count);
@@ -834,7 +834,7 @@ pub(crate) fn readfile_named(
             return Err(Failed);
         }
 
-        if !(recoverymode.get() && error) {
+        if !(RECOVERYMODE.get() && error) {
             retval = Ok(Loaded::Read);
         }
     }

@@ -10,7 +10,7 @@
 //! source of suggestions or a knob on the internal one:
 //!
 //! - `best`, `fast` and `double` choose how the internal search scores
-//!   what it finds. [`spell_check_sps`] turns them into [`sps_flags`],
+//!   what it finds. [`spell_check_sps`] turns them into [`SPS_FLAGS`],
 //!   which [`spell_suggest_intern`] then reads.
 //! - `expr:{expr}` and `file:{fname}` are outside sources, handled by
 //!   [`spell_suggest_expr`] and [`spell_suggest_file`].
@@ -45,7 +45,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 mod collect;
 mod prompt;
@@ -78,8 +77,8 @@ use crate::option::split_option_part;
 use crate::option::vars::P_SPS;
 use crate::os::input::os_breakcheck;
 use crate::path::MAXPATHL;
+use crate::spell::{LOADED_LANGS, captype, make_case_word, spell_casefold, spell_soundfold};
 use crate::spell::{LangId, LangP};
-use crate::spell::{captype, loaded_langs, make_case_word, spell_casefold, spell_soundfold};
 use crate::spellfile::suggest_load_files;
 use crate::spellsuggest::collect::{
     List, add_banned, add_suggestion, check_suggestions, clean_count, cleanup_suggestions,
@@ -166,7 +165,7 @@ pub(crate) const SCORE_MAXMAX: c_int = 999999;
 /// than the full table would.
 pub(crate) const SCORE_LIMITMAX: c_int = 350;
 
-// Values for `sps_flags`, one per `'spellsuggest'` method.
+// Values for `SPS_FLAGS`, one per `'spellsuggest'` method.
 /// Weigh the sound-a-like score into the final order.
 pub(crate) const SPS_BEST: c_int = 1;
 /// Skip the sound-a-like search entirely.
@@ -290,12 +289,12 @@ impl Suggest {
 
 /// How long the trie walk may run for, in milliseconds; `timeout:` in
 /// `'spellsuggest'` sets it, and a fresh `z=` resets it.
-pub(crate) static spell_suggest_timeout: GlobalCell<c_int> = GlobalCell::new(5000);
+pub(crate) static SPELL_SUGGEST_TIMEOUT: GlobalCell<c_int> = GlobalCell::new(5000);
 
 /// Which internal method `'spellsuggest'` asks for, as `SPS_` bits.
-pub(crate) static sps_flags: GlobalCell<c_int> = GlobalCell::new(SPS_BEST);
+pub(crate) static SPS_FLAGS: GlobalCell<c_int> = GlobalCell::new(SPS_BEST);
 /// How many suggestions `z=` may list; the number in `'spellsuggest'`.
-static sps_limit: GlobalCell<c_int> = GlobalCell::new(9999);
+static SPS_LIMIT: GlobalCell<c_int> = GlobalCell::new(9999);
 
 /// The spell languages the current window has loaded, in the order
 /// `'spelllang'` put them in: a copy, because a search reaches back into
@@ -460,7 +459,7 @@ fn spell_find_suggest(
             su_sal_badword,
             ..
         } = su;
-        loaded_langs.with(|langs| {
+        LOADED_LANGS.with(|langs| {
             if let Some(lang) = langs.get(id) {
                 spell_soundfold(lang, &su_fbadword[..], true, su_sal_badword);
             }
@@ -511,11 +510,11 @@ fn spell_find_suggest(
         } else if let Some(fname) = part.strip_prefix(b"file:") {
             spell_suggest_file(su, fname);
         } else if let Some(ms) = part.strip_prefix(b"timeout:") {
-            spell_suggest_timeout.set(atoi(ms));
+            SPELL_SUGGEST_TIMEOUT.set(atoi(ms));
         } else if !did_intern {
             // The internal method runs at most once.
             spell_suggest_intern(su, interactive);
-            do_combine = sps_flags.get() & SPS_DOUBLE != 0;
+            do_combine = SPS_FLAGS.get() & SPS_DOUBLE != 0;
             did_intern = true;
         }
     }
@@ -526,7 +525,7 @@ fn spell_find_suggest(
     }
 }
 
-/// Run the internal search, in whichever form [`sps_flags`] asks for.
+/// Run the internal search, in whichever form [`SPS_FLAGS`] asks for.
 fn spell_suggest_intern(su: &mut SugInfo, interactive: bool) {
     suggest_load_files();
 
@@ -538,13 +537,13 @@ fn spell_suggest_intern(su: &mut SugInfo, interactive: bool) {
     suggest_try_change(su);
 
     // Give the top scorers a sound-a-like score to interleave on.
-    if sps_flags.get() & SPS_DOUBLE != 0 {
+    if SPS_FLAGS.get() & SPS_DOUBLE != 0 {
         score_comp_sal(su);
     }
 
     // 3. Words that sound alike.
-    if sps_flags.get() & SPS_FAST == 0 {
-        if sps_flags.get() & SPS_BEST != 0 {
+    if SPS_FLAGS.get() & SPS_FAST == 0 {
+        if SPS_FLAGS.get() & SPS_BEST != 0 {
             rescore_suggestions(su);
         }
 
@@ -577,8 +576,8 @@ fn spell_suggest_intern(su: &mut SugInfo, interactive: bool) {
         GOT_INT.set(false);
     }
 
-    if sps_flags.get() & SPS_DOUBLE == 0 && !su.su_ga.is_empty() {
-        if sps_flags.get() & SPS_BEST != 0 {
+    if SPS_FLAGS.get() & SPS_DOUBLE == 0 && !su.su_ga.is_empty() {
+        if SPS_FLAGS.get() & SPS_BEST != 0 {
             rescore_suggestions(su);
         }
         check_suggestions(su, List::Main);
@@ -636,7 +635,7 @@ fn suggest_try_change(su: &mut SugInfo) {
     }
 
     for lp in window_langs() {
-        loaded_langs.with(|langs| {
+        LOADED_LANGS.with(|langs| {
             // A spell file that failed to reload is still in the list, but
             // everything in it has been cleared.
             if langs

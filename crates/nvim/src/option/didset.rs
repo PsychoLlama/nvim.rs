@@ -68,7 +68,7 @@ use crate::popupmenu::{pum_drawn, pum_redraw};
 use crate::quickfix::qf_resize_stack;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::spell::parse_spelllang;
-use crate::startup::{full_screen, readonlymode, starting};
+use crate::startup::{FULL_SCREEN, READONLYMODE, starting};
 use crate::terminal::on_scrollback_changed_in;
 use crate::types::{Buffer, ColNr, LineNr, OptInt, Vv};
 use crate::ui::state::{COLUMNS, ROWS};
@@ -80,7 +80,7 @@ use crate::window::{
 };
 use crate::winfloat::win_float_update_statusline;
 use crate::winlayer::current_topframe;
-use crate::winlayer::graph::{firstwin, lastwin};
+use crate::winlayer::graph::{FIRSTWIN, LASTWIN};
 
 use super::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, OptSlot, check_blending, did_set_title, option_key,
@@ -123,7 +123,7 @@ struct Frame {
 impl Frame {
     /// The frame's fields, copied out. The window and buffer are the ones
     /// the set is happening in -- `set_option` fills them from
-    /// `curwin`/`curbuf` -- and the handles carry that promise.
+    /// `curwin`/`CURBUF` -- and the handles carry that promise.
     fn read(args: &OptSet) -> Self {
         Frame {
             varp: args.os_varp,
@@ -236,7 +236,7 @@ pub(crate) fn did_set_cmdheight(args: &mut OptSet) -> Result<(), OptError> {
     }
     let laid_out =
         OptInt::from(tabline_height() + global_stl_height() + current_topframe().fr_height);
-    if (p_ch() != old_value || laid_out != OptInt::from(ROWS.get()) - p_ch()) && full_screen.get() {
+    if (p_ch() != old_value || laid_out != OptInt::from(ROWS.get()) - p_ch()) && FULL_SCREEN.get() {
         command_height();
     }
     Ok(())
@@ -292,7 +292,7 @@ pub(crate) fn did_set_foldnestmax(args: &mut OptSet) -> Result<(), OptError> {
 /// 'helpheight': grow the current window if it is a help window and now too
 /// short.
 pub(crate) fn did_set_helpheight(_args: &mut OptSet) -> Result<(), OptError> {
-    if firstwin.get() != lastwin.get()
+    if FIRSTWIN.get() != LASTWIN.get()
         && Buf::current().b_help
         && OptInt::from(Win::current().w_height) < p_hh()
     {
@@ -365,7 +365,7 @@ pub(crate) fn did_set_lines_or_columns(args: &mut OptSet) -> Result<(), OptError
     if p_lines() != OptInt::from(ROWS.get()) || p_columns() != OptInt::from(COLUMNS.get()) {
         if UPDATING_SCREEN.get() {
             write_slot(f.idx, f.varp, OptVal::Number(f.old_number()));
-        } else if full_screen.get() {
+        } else if FULL_SCREEN.get() {
             screen_resize(number_as_int(p_columns()), number_as_int(p_lines()));
         } else {
             // Before the screen exists there is nothing to resize; just
@@ -383,7 +383,7 @@ pub(crate) fn did_set_lines_or_columns(args: &mut OptSet) -> Result<(), OptError
             P_WINDOW.set(OptInt::from(ROWS.get() - 1));
         }
     }
-    if p_sj() >= OptInt::from(ROWS.get()) && full_screen.get() {
+    if p_sj() >= OptInt::from(ROWS.get()) && FULL_SCREEN.get() {
         P_SJ.set(OptInt::from(ROWS.get() / 2));
     }
     Ok(())
@@ -461,7 +461,7 @@ pub(crate) fn did_set_pumblend(_args: &mut OptSet) -> Result<(), OptError> {
 pub(crate) fn did_set_readonly(args: &mut OptSet) -> Result<(), OptError> {
     let mut f = Frame::read(args);
     if f.buf.b_p_ro == 0 && !f.flags.has(OptionSetFlags::LOCAL) {
-        readonlymode.set(false);
+        READONLYMODE.set(false);
     }
     if f.buf.b_p_ro != 0 {
         f.buf.b_did_warn = false;
@@ -648,7 +648,7 @@ pub(crate) fn did_set_window(_args: &mut OptSet) -> Result<(), OptError> {
 
 /// 'winheight': grow the current window if it is now too short.
 pub(crate) fn did_set_winheight(_args: &mut OptSet) -> Result<(), OptError> {
-    if firstwin.get() != lastwin.get() && OptInt::from(Win::current().w_height) < p_wh() {
+    if FIRSTWIN.get() != LASTWIN.get() && OptInt::from(Win::current().w_height) < p_wh() {
         win_setheight(number_as_int(p_wh()));
     }
     Ok(())
@@ -656,7 +656,7 @@ pub(crate) fn did_set_winheight(_args: &mut OptSet) -> Result<(), OptError> {
 
 /// 'winwidth': widen the current window if it is now too narrow.
 pub(crate) fn did_set_winwidth(_args: &mut OptSet) -> Result<(), OptError> {
-    if firstwin.get() != lastwin.get() && OptInt::from(Win::current().w_width) < p_wiw() {
+    if FIRSTWIN.get() != LASTWIN.get() && OptInt::from(Win::current().w_width) < p_wiw() {
         win_setwidth(number_as_int(p_wiw()));
     }
     Ok(())

@@ -21,7 +21,7 @@
 use std::ffi::c_int;
 use std::path::{Path, PathBuf};
 
-use neovim::log::g_min_log_level;
+use neovim::log::G_MIN_LOG_LEVEL;
 use neovim::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, log_init, logmsg_line};
 
 use crate::support::Sandbox;
@@ -46,15 +46,15 @@ impl Logging {
         sandbox.set_env("NVIM_LOG_FILE", path.to_str().expect("a temp path is text"));
         sandbox.remember_env("__NVIM_LOG_FILE_WANT");
         log_init();
-        let min_level = g_min_log_level.get();
-        g_min_log_level.set(0);
+        let min_level = G_MIN_LOG_LEVEL.get();
+        G_MIN_LOG_LEVEL.set(0);
         Logging { min_level }
     }
 }
 
 impl Drop for Logging {
     fn drop(&mut self) {
-        g_min_log_level.set(self.min_level);
+        G_MIN_LOG_LEVEL.set(self.min_level);
         let parking = std::env::temp_dir().join("nvim-unit-log-parking.log");
         // SAFETY-free: this is the test's own process environment, and the
         // editor lock is still held by the case's sandbox.
@@ -295,8 +295,8 @@ fn a_line_below_the_minimum_level_is_not_written() {
     let at = sandbox.path("nvim.log");
     let _logging = Logging::to(&mut sandbox, &at);
 
-    let saved = g_min_log_level.get();
-    g_min_log_level.set(LOGLVL_WRN);
+    let saved = G_MIN_LOG_LEVEL.get();
+    G_MIN_LOG_LEVEL.set(LOGLVL_WRN);
     let text = logged(&at, || {
         assert!(!logmsg_line(
             LOGLVL_INF,
@@ -315,7 +315,7 @@ fn a_line_below_the_minimum_level_is_not_written() {
             || { "kept".into() }
         ));
     });
-    g_min_log_level.set(saved);
+    G_MIN_LOG_LEVEL.set(saved);
     assert_eq!(Line::parse(text.trim_end_matches('\n')).rest, "f:1: kept");
 }
 
@@ -334,7 +334,7 @@ fn resolve(_sandbox: &mut Sandbox) -> (Option<PathBuf>, Option<PathBuf>) {
 fn the_log_file_falls_back_one_step_at_a_time() {
     let mut sandbox = Sandbox::dir("log-fallback");
     let _logging = Logging {
-        min_level: g_min_log_level.get(),
+        min_level: G_MIN_LOG_LEVEL.get(),
     };
     let root = sandbox.root().to_path_buf();
     sandbox.remember_env("NVIM_LOG_FILE");

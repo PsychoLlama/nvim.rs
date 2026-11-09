@@ -45,7 +45,7 @@ use crate::registry::{IdMap, id_map};
 use crate::undo::node::{UndoHeader, UndoLink};
 use crate::winlayer::Buf;
 
-use super::lastmark;
+use super::LASTMARK;
 
 /// Every undo header one buffer owns, keyed by `seq`.
 ///
@@ -235,8 +235,8 @@ impl Marks {
 
 /// The next unused tree-walk mark.
 fn next_mark() -> c_int {
-    let mark = lastmark.get() + 1;
-    lastmark.set(mark);
+    let mark = LASTMARK.get() + 1;
+    LASTMARK.set(mark);
     mark
 }
 

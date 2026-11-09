@@ -39,7 +39,7 @@ use crate::eval::typval::{
 use crate::eval::vars::{testing_enabled, vim_var_string, with_vim_var};
 use crate::eval::{garbage_collect, pattern_match};
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::ex_eval::state::suppress_errthrow;
+use crate::ex_eval::state::SUPPRESS_ERRTHROW;
 use crate::message::E_CANT_READ_FILE_STR;
 use crate::message::emsg;
 use crate::message::state::{EMSG_ON_DISPLAY, EMSG_SILENT};
@@ -168,7 +168,7 @@ fn assert_beeps(args: &[TypVal], no_beep: bool) -> bool {
     // argument's own, which the call holds for its whole length.
     let cmd = numbuf.string_chk(&args[0]).unwrap_or(c"");
     CALLED_VIM_BEEP.set(false);
-    suppress_errthrow.set(true);
+    SUPPRESS_ERRTHROW.set(true);
     EMSG_SILENT.set(0);
     let _ = do_cmdline_cmd(cmd);
 
@@ -188,7 +188,7 @@ fn assert_beeps(args: &[TypVal], no_beep: bool) -> bool {
         held = false;
     }
 
-    suppress_errthrow.set(false);
+    SUPPRESS_ERRTHROW.set(false);
     EMSG_ON_DISPLAY.set(false);
     held
 }

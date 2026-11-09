@@ -146,7 +146,7 @@ pub(crate) fn process_next_cpt_value(
     let mut compl_type = -1;
     let mut status = INS_COMPL_CPT_OK;
     let mut advance = false;
-    let skip_source = compl_autocomplete.get() && compl_from_nonkeyword.get();
+    let skip_source = COMPL_AUTOCOMPLETE.get() && COMPL_FROM_NONKEYWORD.get();
 
     st.found_all = false;
     st.cpt.skip_separators();
@@ -156,7 +156,7 @@ pub(crate) fn process_next_cpt_value(
         if flag == b'.'
             && !Buf::current().b_scanned
             && !skip_source
-            && !compl_time_slice_expired.get()
+            && !COMPL_TIME_SLICE_EXPIRED.get()
         {
             st.ins_buf = Some(Buf::current().id());
             st.first_match_pos = start_match_pos;
@@ -175,7 +175,7 @@ pub(crate) fn process_next_cpt_value(
             // wraps and comes back to it a second time.
             st.set_match_pos = true;
         } else if !skip_source
-            && !compl_time_slice_expired.get()
+            && !COMPL_TIME_SLICE_EXPIRED.get()
             && has_char(c"buwU", c_int::from(flag))
             && {
                 // The scan's buffer outlives every autocommand and user
@@ -197,7 +197,7 @@ pub(crate) fn process_next_cpt_value(
                 .expect("ins_compl_next_buf answered a live buffer");
             if buf.b_ml.ml_mfp.is_some() {
                 // Loaded buffer.
-                compl_started.set(true);
+                COMPL_STARTED.set(true);
                 st.first_match_pos.col = ColNr::ZERO;
                 st.last_match_pos.col = ColNr::ZERO;
                 st.first_match_pos.lnum = buf.line_count() + 1;
@@ -216,7 +216,7 @@ pub(crate) fn process_next_cpt_value(
                 st.dict = Some(XString::from_cstr(name));
                 st.dict_f = DICT_EXACT;
             }
-            if !shortmess(ShmFlag::COMPLETIONSCAN) && !compl_autocomplete.get() {
+            if !shortmess(ShmFlag::COMPLETIONSCAN) && !COMPL_AUTOCOMPLETE.get() {
                 let name = if buf.name.is_unnamed() {
                     buf_spname(&buf)
                 } else if buf.name.short().is_none() {
@@ -262,7 +262,7 @@ pub(crate) fn process_next_cpt_value(
                     compl_type = CTRL_X_BUFNAMES;
                 } else if flag == b']' || flag == b't' {
                     compl_type = CTRL_X_TAGS;
-                    if !shortmess(ShmFlag::COMPLETIONSCAN) && !compl_autocomplete.get() {
+                    if !shortmess(ShmFlag::COMPLETIONSCAN) && !COMPL_AUTOCOMPLETE.get() {
                         // Upstream copies it through `IObuff`, which cuts it there.
                         let text = gettext(c"Scanning tags.").to_bytes();
                         let text = &text[..text.len().min(IOSIZE as usize - 1)];
@@ -294,15 +294,15 @@ pub(crate) fn get_next_include_file_completion(compl_type: c_int) {
     // A copy: the search checks for typed keys, and what that runs can
     // reset the completion's pattern.
     let pattern = compl_pattern().to_vec();
-    let what = if compl_type == CTRL_X_PATH_DEFINES && compl_cont_status.get() & CONT_SOL == 0 {
+    let what = if compl_type == CTRL_X_PATH_DEFINES && COMPL_CONT_STATUS.get() & CONT_SOL == 0 {
         FIND_DEFINE
     } else {
         FIND_ANY
     };
     let pat: &[u8] = &pattern;
-    let dir = compl_direction.get();
+    let dir = COMPL_DIRECTION.get();
     let end = MAXLNUM;
-    let auto = compl_autocomplete.get();
+    let auto = COMPL_AUTOCOMPLETE.get();
     {
         let action = ACTION_EXPAND;
         find_pattern_in_path(
@@ -353,7 +353,7 @@ pub(crate) fn get_next_tag_completion() {
     // Set `p_ic` from `p_ic`, `p_scs` and the pattern, for `find_tags`.
     let save_p_ic = p_ic();
     P_IC.set(compl_pattern().with_bytes(ignorecase));
-    g_tag_at_cursor.set(true);
+    G_TAG_AT_CURSOR.set(true);
 
     // Bounded to TAG_MANY, which is what stops an empty pattern finding
     // an enormous number of matches.
@@ -369,7 +369,7 @@ pub(crate) fn get_next_tag_completion() {
         ins_compl_add_match_list(&matches, p_ic());
     }
 
-    g_tag_at_cursor.set(false);
+    G_TAG_AT_CURSOR.set(false);
     P_IC.set(save_p_ic);
 }
 
@@ -379,9 +379,9 @@ pub(crate) fn get_next_filename_completion() {
     let full_leader = ins_compl_leader_str().to_vec();
     let mut leader: &[u8] = cstr::until_nul(&full_leader);
     let mut in_fuzzy_collect = cot_fuzzy() && ins_compl_leader_len() > 0;
-    let need_collect_bests = in_fuzzy_collect && compl_get_longest.get();
+    let need_collect_bests = in_fuzzy_collect && COMPL_GET_LONGEST.get();
     let mut max_score = 0;
-    let mut dir = compl_direction.get();
+    let mut dir = COMPL_DIRECTION.get();
 
     // Fuzzy matching is done over the whole directory, so the pattern is
     // widened to a wildcard and the leader keeps only the last component.
@@ -439,13 +439,13 @@ pub(crate) fn get_next_filename_completion() {
                     dir = FORWARD;
                 }
                 if need_collect_bests && (i == 0 || current_score == max_score) {
-                    compl_num_bests.set(compl_num_bests.get() + 1);
+                    COMPL_NUM_BESTS.set(COMPL_NUM_BESTS.get() + 1);
                     max_score = current_score;
                 }
             }
         }
 
-        if compl_num_bests.get() > 0 && compl_get_longest.get() {
+        if COMPL_NUM_BESTS.get() > 0 && COMPL_GET_LONGEST.get() {
             fuzzy_longest_match();
         }
         return;
@@ -468,9 +468,9 @@ pub(crate) fn sort_by_fuzzy_score(scores: &[c_int], indices: &mut [usize]) {
 pub(crate) fn get_next_cmdline_completion() {
     let col = len_as_int(compl_pattern().len());
     // Moved out for the expansion, which can run a user completion function.
-    let mut xp = compl_xp.take().unwrap_or_default();
+    let mut xp = COMPL_XP.take().unwrap_or_default();
     let (expanded, matches) = expand_cmdline(&mut xp, col);
-    compl_xp.set(Some(xp));
+    COMPL_XP.set(Some(xp));
     if expanded == Expanded::Ok {
         ins_compl_add_match_list(&matches, false);
     }
@@ -531,7 +531,7 @@ pub(crate) fn get_next_completion_match(
             }
         }
     }
-    if type_0 != 0 && compl_curr_match.get() != compl_old_match.get() {
+    if type_0 != 0 && COMPL_CURR_MATCH.get() != COMPL_OLD_MATCH.get() {
         found_new_match = true;
     }
     found_new_match
@@ -539,10 +539,10 @@ pub(crate) fn get_next_completion_match(
 
 /// Start the per-source time slice, where a timeout is configured at all.
 pub(crate) fn compl_source_start_timer(source_idx: c_int) {
-    if compl_autocomplete.get() || p_cto() > 0 {
+    if COMPL_AUTOCOMPLETE.get() || p_cto() > 0 {
         let now = os_hrtime();
         cpt_sources().update(source_idx, |source| source.compl_start_tv = now);
-        compl_time_slice_expired.set(false);
+        COMPL_TIME_SLICE_EXPIRED.set(false);
     }
 }
 
@@ -579,26 +579,26 @@ impl InsComplNextState {
 /// [`ins_compl_get_exp`] over its scan state.
 fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
     let mut found_new_match;
-    let mut type_0 = ctrl_x_mode.get();
+    let mut type_0 = CTRL_X_MODE.get();
     let mut may_advance_cpt_idx = false;
     let mut start_pos = ini;
 
     debug_assert!(Buf::current_or_none().is_some());
 
-    if !compl_started.get() {
+    if !COMPL_STARTED.get() {
         for mut buf in buffers() {
             buf.b_scanned = false;
         }
         st.found_all = false;
         st.ins_buf = Some(Buf::current().id());
         // Copy 'complete', in case the buffer is wiped out.
-        if compl_cont_status.get() & CONT_LOCAL != 0 {
+        if COMPL_CONT_STATUS.get() & CONT_LOCAL != 0 {
             st.cpt.restart(b".");
         } else {
             st.cpt.restart(Buf::current().b_p_cpt.bytes());
         }
 
-        if compl_autocomplete.get() && is_nearest_active() {
+        if COMPL_AUTOCOMPLETE.get() && is_nearest_active() {
             start_pos.lnum = (start_pos.lnum - LOOKBACK_LINE_COUNT).max(LineNr::ONE);
             start_pos.col = ColNr::ZERO;
         }
@@ -611,19 +611,19 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
     debug_assert!(st.ins_buf.is_some());
 
     // Remember the last current match.
-    compl_old_match.set(compl_curr_match.get());
+    COMPL_OLD_MATCH.set(COMPL_CURR_MATCH.get());
     st.cur_is_last = compl_dir_forward();
 
     let normal_mode_strict = ctrl_x_mode_normal()
         && !ctrl_x_mode_line_or_eval()
-        && compl_cont_status.get() & CONT_LOCAL == 0
+        && COMPL_CONT_STATUS.get() & CONT_LOCAL == 0
         && !cpt_sources().is_unset();
     if normal_mode_strict {
         cpt_sources().set_index(0);
-        if compl_autocomplete.get() || p_cto() > 0 {
+        if COMPL_AUTOCOMPLETE.get() || p_cto() > 0 {
             compl_source_start_timer(0);
-            compl_time_slice_expired.set(false);
-            compl_timeout_ms.set(if compl_autocomplete.get() {
+            COMPL_TIME_SLICE_EXPIRED.set(false);
+            COMPL_TIMEOUT_MS.set(if COMPL_AUTOCOMPLETE.get() {
                 COMPL_INITIAL_TIMEOUT_MS.max(p_act()).cast_unsigned()
             } else {
                 p_cto().cast_unsigned()
@@ -642,7 +642,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
         // done. For CTRL-X CTRL-L only the entries that look in loaded
         // buffers are used.
         if (ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval())
-            && (!compl_started.get() || st.found_all)
+            && (!COMPL_STARTED.get() || st.found_all)
         {
             let value = process_next_cpt_value(st, start_pos, cot_fuzzy());
             let status = value.status;
@@ -669,10 +669,10 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
         let mut compl_timeout_save = 0;
         if normal_mode_strict
             && type_0 == CTRL_X_FUNCTION
-            && (compl_autocomplete.get() || p_cto() > 0)
+            && (COMPL_AUTOCOMPLETE.get() || p_cto() > 0)
         {
-            compl_timeout_save = compl_timeout_ms.get();
-            compl_timeout_ms.set(if compl_from_nonkeyword.get() {
+            compl_timeout_save = COMPL_TIMEOUT_MS.get();
+            COMPL_TIMEOUT_MS.set(if COMPL_FROM_NONKEYWORD.get() {
                 COMPL_FUNC_TIMEOUT_NON_KW_MS as uint64_t
             } else {
                 COMPL_FUNC_TIMEOUT_MS as uint64_t
@@ -704,11 +704,11 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
             if type_0 != -1 {
                 ins_compl_check_keys(0, false);
             }
-            if (ctrl_x_mode_not_default() && !ctrl_x_mode_line_or_eval()) || compl_interrupted.get()
+            if (ctrl_x_mode_not_default() && !ctrl_x_mode_line_or_eval()) || COMPL_INTERRUPTED.get()
             {
                 break;
             }
-            compl_started.set(!compl_time_slice_expired.get());
+            COMPL_STARTED.set(!COMPL_TIME_SLICE_EXPIRED.get());
         } else {
             // Mark a buffer scanned when it has been scanned completely.
             if type_0 == 0 || type_0 == CTRL_X_PATH_PATTERNS {
@@ -716,7 +716,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
                     buf.b_scanned = true;
                 }
             }
-            compl_started.set(false);
+            COMPL_STARTED.set(false);
         }
 
         // Restore the timeout after collecting from a function source.
@@ -724,9 +724,9 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
         // user function, and that can have changed either operand.
         if normal_mode_strict
             && type_0 == CTRL_X_FUNCTION
-            && (compl_autocomplete.get() || p_cto() > 0)
+            && (COMPL_AUTOCOMPLETE.get() || p_cto() > 0)
         {
-            compl_timeout_ms.set(compl_timeout_save);
+            COMPL_TIMEOUT_MS.set(compl_timeout_save);
         }
 
         // For CTRL-P completion, reset `compl_curr_match` to the head, to
@@ -737,12 +737,12 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
             while let Some(prev) = curr.prev().filter(|prev| !prev.is_original()) {
                 curr = prev;
             }
-            compl_curr_match.set(Some(curr));
+            COMPL_CURR_MATCH.set(Some(curr));
         }
     }
 
     cpt_sources().set_index(-1);
-    compl_started.set(true);
+    COMPL_STARTED.set(true);
 
     if (ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval()) && st.cpt.at() == 0 {
         // Got to the end of 'complete'.
@@ -755,7 +755,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
         match_count = Some(ins_compl_make_cyclic());
     }
 
-    if cot_fuzzy() && compl_get_longest.get() && compl_num_bests.get() > 0 {
+    if cot_fuzzy() && COMPL_GET_LONGEST.get() && COMPL_NUM_BESTS.get() > 0 {
         fuzzy_longest_match();
     }
 
@@ -768,7 +768,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
         } else {
             old.prev()
         };
-        compl_curr_match.set(Some(next.unwrap_or(old)));
+        COMPL_CURR_MATCH.set(Some(next.unwrap_or(old)));
     }
     may_trigger_modechanged();
 
@@ -789,10 +789,10 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
 pub(crate) fn check_elapsed_time() {
     let start_tv = cpt_sources().current().compl_start_tv;
     let elapsed_ms = (os_hrtime() - start_tv) / 1_000_000;
-    if elapsed_ms > compl_timeout_ms.get() {
-        compl_time_slice_expired.set(true);
-        if compl_timeout_ms.get() > COMPL_MIN_TIMEOUT_MS as uint64_t {
-            compl_timeout_ms.set(compl_timeout_ms.get() / 2);
+    if elapsed_ms > COMPL_TIMEOUT_MS.get() {
+        COMPL_TIME_SLICE_EXPIRED.set(true);
+        if COMPL_TIMEOUT_MS.get() > COMPL_MIN_TIMEOUT_MS as uint64_t {
+            COMPL_TIMEOUT_MS.set(COMPL_TIMEOUT_MS.get() / 2);
         }
     }
 }

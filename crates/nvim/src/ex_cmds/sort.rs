@@ -31,9 +31,9 @@ use crate::change::changed_lines;
 use crate::charset::Str2NrBases;
 use crate::charset::{skip, str2nr_scan};
 use crate::edit::{BeginlineOpts, beginline};
+use crate::extmark::EXTMARK_NOOP;
+use crate::extmark::EXTMARK_UNDO;
 use crate::extmark::extmark_splice;
-use crate::extmark::kExtmarkNOOP;
-use crate::extmark::kExtmarkUndo;
 use crate::extmark::{BCount, ExtmarkOp};
 use crate::getchar::state::GOT_INT;
 use crate::mark::mark_adjust;
@@ -667,11 +667,11 @@ fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Placed) {
             line2,
             MAXLNUM.get(),
             -deleted,
-            kExtmarkNOOP,
+            EXTMARK_NOOP,
         );
         say::more(-deleted);
     } else if deleted < 0 {
-        mark_adjust(line2, MAXLNUM, -deleted, 0, kExtmarkNOOP);
+        mark_adjust(line2, MAXLNUM, -deleted, 0, EXTMARK_NOOP);
     }
 
     if placed.moved || deleted != 0 {
@@ -685,7 +685,7 @@ fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Placed) {
             lnum - line2,
             ColNr::ZERO,
             placed.new_bytes,
-            kExtmarkUndo,
+            EXTMARK_UNDO,
         );
         changed_lines(
             Buf::current(),
@@ -877,9 +877,9 @@ fn uniq_range(args: &mut ExArg) {
             MAXLNUM.get(),
             -deleted,
             if change_occurred {
-                kExtmarkUndo
+                EXTMARK_UNDO
             } else {
-                kExtmarkNOOP
+                EXTMARK_NOOP
             } as ExtmarkOp,
         );
         say::more(-deleted);

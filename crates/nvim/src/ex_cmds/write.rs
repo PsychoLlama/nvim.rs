@@ -65,7 +65,7 @@ use crate::os::libc::int32_t;
 use crate::path::MAXPATHL;
 use crate::path::fix_fname;
 use crate::semsg;
-use crate::startup::{exiting, getout};
+use crate::startup::{EXITING, getout};
 use crate::types::CmdIdx;
 use crate::types::Handle;
 use crate::types::{CmdModFlags, ExArg, Failed, LineNr};
@@ -526,13 +526,13 @@ pub fn ex_wnext(excmd: &mut ExArg) {
 pub fn do_wqall(excmd: &mut ExArg) {
     let mut error = 0;
     let save_forceit = excmd.forceit;
-    let save_exiting = exiting.get();
+    let save_exiting = EXITING.get();
 
     if excmd.cmdidx == CmdIdx::xall || excmd.cmdidx == CmdIdx::wqall {
         if before_quit_all(excmd).is_err() {
             return;
         }
-        exiting.set(true);
+        EXITING.set(true);
     }
 
     // Not `winlayer::buffers()`: an autocommand fired while writing can delete
@@ -543,7 +543,7 @@ pub fn do_wqall(excmd: &mut ExArg) {
         match write_one_buffer(excmd, buf, save_forceit, &mut error) {
             WriteAll::Stop => break,
             // The buffer was deleted under us.  Upstream restarts from
-            // `firstbuf` and then takes the step below, so the first buffer
+            // `FIRSTBUF` and then takes the step below, so the first buffer
             // is not looked at a second time.
             WriteAll::Restart => cur = first_buffer(),
             WriteAll::Next => {}
@@ -551,7 +551,7 @@ pub fn do_wqall(excmd: &mut ExArg) {
         cur = cur.and_then(Buf::next);
     }
 
-    if exiting.get() {
+    if EXITING.get() {
         if error == 0 {
             // exit Vim
             getout(0);
@@ -579,7 +579,7 @@ fn write_one_buffer(
     save_forceit: bool,
     error: &mut c_int,
 ) -> WriteAll {
-    if exiting.get()
+    if EXITING.get()
         && !args.forceit
         && !buffer.terminal.is_null()
         && channel_job_running(buffer.b_p_channel.cast_unsigned())

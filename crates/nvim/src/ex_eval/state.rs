@@ -30,25 +30,25 @@ state_record! {
     /// The exception machinery's state: upstream's `ex_eval.c` globals.
     pub(crate) struct ExEvalState in EX_EVAL as ExEvalField;
 
-    pub(crate) did_endif: bool = false;
+    pub(crate) DID_ENDIF: bool = false;
     /// Every exception alive: being thrown, pending in a `:finally`,
     /// caught, or set aside by a nested command line. Everything else names
     /// one by id.
     pub(crate) EXCEPTIONS: IdTable<Exception> = IdTable::new();
     /// The exception being thrown.
-    pub(crate) current_exception: Option<ExcId> = None;
-    pub(crate) did_throw: bool = false;
-    pub(crate) need_rethrow: bool = false;
-    pub(crate) check_cstack: bool = false;
-    pub(crate) trylevel: c_int = 0;
-    pub(crate) force_abort: bool = false;
+    pub(crate) CURRENT_EXCEPTION: Option<ExcId> = None;
+    pub(crate) DID_THROW: bool = false;
+    pub(crate) NEED_RETHROW: bool = false;
+    pub(crate) CHECK_CSTACK: bool = false;
+    pub(crate) TRYLEVEL: c_int = 0;
+    pub(crate) FORCE_ABORT: bool = false;
     /// The error messages of each running `do_cmdline` and API try bracket;
     /// errors go to the innermost. Upstream's `msg_list`, a pointer to the
     /// innermost one's list head in its own frame, null when there is none.
-    pub(crate) msg_lists: MsgLists = MsgLists::new();
-    pub(crate) suppress_errthrow: bool = false;
+    pub(crate) MSG_LISTS: MsgLists = MsgLists::new();
+    pub(crate) SUPPRESS_ERRTHROW: bool = false;
     /// The exceptions caught by the active catch clauses, innermost last.
-    pub(crate) caught_stack: Vec<ExcId> = Vec::new();
+    pub(crate) CAUGHT_STACK: Vec<ExcId> = Vec::new();
 }
 
 /// One error-message list per running command line or API try bracket,

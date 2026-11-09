@@ -225,7 +225,7 @@ pub(super) fn convert_nvim_del_current_line(
     stack: &mut Stack,
     _blame: &mut Blame,
 ) -> Result<(), Error> {
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     let _active = ActiveState::enter(stack);
@@ -619,7 +619,7 @@ pub(super) fn convert_nvim_load_context(stack: &mut Stack, blame: &mut Blame) ->
 /// The Lua binding for `nvim_open_term`: pop the arguments, call the API
 /// function, hand the result back.
 pub(super) fn convert_nvim_open_term(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     let mut arg_2 = KeyDict_open_term::default();
@@ -634,7 +634,7 @@ pub(super) fn convert_nvim_open_term(stack: &mut Stack, blame: &mut Blame) -> Re
 /// The Lua binding for `nvim_paste`: pop the arguments, call the API
 /// function, hand the result back.
 pub(super) fn convert_nvim_paste(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     let arg_3 = pop_integer(stack).inspect_err(|_| *blame = Some(c"phase"))?;
@@ -649,7 +649,7 @@ pub(super) fn convert_nvim_paste(stack: &mut Stack, blame: &mut Blame) -> Result
 /// The Lua binding for `nvim_put`: pop the arguments, call the API
 /// function, hand the result back.
 pub(super) fn convert_nvim_put(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     let arg_4 = pop_boolean(stack).inspect_err(|_| *blame = Some(c"follow"))?;
@@ -726,7 +726,7 @@ pub(super) fn convert_nvim_set_current_line(
     stack: &mut Stack,
     blame: &mut Blame,
 ) -> Result<(), Error> {
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"line"))?;

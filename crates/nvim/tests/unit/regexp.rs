@@ -1623,7 +1623,7 @@ fn substitute_remembers_its_last_replacement_for_tilde_and_evaluates_a_backslash
     put(r"1substitute/one/\=toupper(submatch(0))/g");
     assert_eq!(read("getline(1)"), "ONE ONE");
 
-    // `~` in a replacement stands for the previous one (`reg_prev_sub`), so
+    // `~` in a replacement stands for the previous one (`REG_PREV_SUB`), so
     // the second `:s` writes what the first one did.
     put("2substitute/two/X/");
     assert_eq!(read("getline(2)"), "X two");

@@ -146,7 +146,7 @@ pub(crate) fn set_context_by_cmdname(
 
         CmdIdx::global | CmdIdx::vglobal => {
             let nextcmd = find_cmd_after_global_cmd(text, arg);
-            if nextcmd.is_none() && may_expand_pattern.get() {
+            if nextcmd.is_none() && MAY_EXPAND_PATTERN.get() {
                 set_context_with_pattern(expand);
             }
             return nextcmd;
@@ -154,7 +154,7 @@ pub(crate) fn set_context_by_cmdname(
 
         CmdIdx::and | CmdIdx::substitute => {
             let nextcmd = find_cmd_after_substitute_cmd(text, arg);
-            if nextcmd.is_none() && may_expand_pattern.get() {
+            if nextcmd.is_none() && MAY_EXPAND_PATTERN.get() {
                 set_context_with_pattern(expand);
             }
             return nextcmd;

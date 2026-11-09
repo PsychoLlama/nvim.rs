@@ -28,12 +28,12 @@ use std::rc::Rc;
 
 use super::*;
 use crate::cursor::{check_cursor, gchar_cursor};
+use crate::ex_docmd::state::EX_NORMAL_BUSY;
 use crate::ex_docmd::state::SaveState;
-use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{exec_normal_cmd, restore_current_state, save_current_state};
 use crate::getchar::ins_typebuf;
 use crate::normal::{VisualMode, set_visual_active, set_visual_anchor, set_visual_mode};
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::state::mode::{RESTART_EDIT, STATE, V_ISUAL_RESELECT};
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_TERMINAL, MODE_VISUAL, get_real_state};
 use crate::types::{Buffer, ColNr, ExArg, Failed, LineNr, Pos};
@@ -158,7 +158,7 @@ fn select_range(line1: LineNr, line2: LineNr) {
 /// Run the rhs immediately, inside a saved editor state.
 fn run_now(rhs: &Rc<CStr>, noremap: Remap, silent: bool) {
     let mut state = SaveState::default();
-    let _busy = Depth::of(ex_normal_busy);
+    let _busy = Depth::of(EX_NORMAL_BUSY);
     if save_current_state(&mut state) {
         exec_normal_cmd(rhs, noremap, silent);
     }
@@ -292,7 +292,7 @@ fn with_curbuf<R>(f: impl FnOnce(&Buffer) -> R) -> R {
 
 /// The script id of whatever is running, 0 for the user's own typing.
 fn script_id() -> c_int {
-    current_sctx.get().sc_sid
+    CURRENT_SCTX.get().sc_sid
 }
 
 fn real_state() -> c_int {

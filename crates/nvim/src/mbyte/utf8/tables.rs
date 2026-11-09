@@ -4,7 +4,7 @@
 //! occupies. They differ only in what they say about a byte that introduces
 //! nothing — a continuation byte (`0x80`–`0xBF`) or `0xFE`/`0xFF`, which are
 //! not valid anywhere in UTF-8. [`utf8len_tab`] answers 1 there, so a caller
-//! stepping through a string always advances and never loops; [`utf8len_tab_zero`]
+//! stepping through a string always advances and never loops; [`UTF8LEN_TAB_ZERO`]
 //! answers 0, for the callers whose job is to *detect* the invalid sequence.
 //!
 //! Neither table restricts itself to the four sequence lengths Unicode
@@ -20,7 +20,6 @@
 
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -52,7 +51,7 @@ pub use crate::harness::utf8len_tab;
 
 /// Sequence length per lead byte, answering **0** for a byte that introduces
 /// nothing — so a caller can tell a valid lead byte from any other.
-pub static utf8len_tab_zero: [u8; 256] = lead_byte_lengths(0);
+pub static UTF8LEN_TAB_ZERO: [u8; 256] = lead_byte_lengths(0);
 
 #[cfg(test)]
 mod tests {
@@ -85,7 +84,7 @@ mod tests {
     fn matches_upstream() {
         for b in 0..256 {
             let zero = UPSTREAM[b >> 4][b & 0xf];
-            assert_eq!(utf8len_tab_zero[b], zero, "utf8len_tab_zero[{b:#04x}]");
+            assert_eq!(UTF8LEN_TAB_ZERO[b], zero, "utf8len_tab_zero[{b:#04x}]");
             let one = if zero == 0 { 1 } else { zero };
             assert_eq!(utf8len_tab[b], one, "utf8len_tab[{b:#04x}]");
         }
@@ -95,11 +94,11 @@ mod tests {
     #[test]
     fn tables_differ_only_where_nothing_is_introduced() {
         for b in 0..256 {
-            if utf8len_tab_zero[b] == 0 {
+            if UTF8LEN_TAB_ZERO[b] == 0 {
                 assert_eq!(utf8len_tab[b], 1);
                 assert!(matches!(b, 0x80..=0xbf | 0xfe | 0xff));
             } else {
-                assert_eq!(utf8len_tab[b], utf8len_tab_zero[b]);
+                assert_eq!(utf8len_tab[b], UTF8LEN_TAB_ZERO[b]);
             }
         }
     }

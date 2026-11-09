@@ -3,7 +3,7 @@
 //! [`do_debug`] is entered from [`super::dbg_check_breakpoint`] when a
 //! breakpoint was hit or when the last `>` command asked to stop at this
 //! nesting level. It takes the screen over, reads `>` commands until one of
-//! them resumes execution, and leaves `debug_break_level` set to whichever
+//! them resumes execution, and leaves `DEBUG_BREAK_LEVEL` set to whichever
 //! depth should stop next.
 //!
 //! Anything typed at the prompt that is not one of the dozen `>` commands is
@@ -19,7 +19,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
@@ -73,7 +72,7 @@ impl SavedState {
         // Debug commands are not part of the redirected output.
         REDIR_OFF.set(true);
         STATE.set(MODE_NORMAL);
-        debug_mode.set(true);
+        DEBUG_MODE.set(true);
         saved
     }
 
@@ -85,14 +84,14 @@ impl SavedState {
         MSG_SCROLL.set(self.msg_scroll);
         LINES_LEFT.set(ROWS.get() - 1);
         STATE.set(self.state);
-        debug_mode.set(false);
+        DEBUG_MODE.set(false);
         DID_EMSG.set(self.did_emsg);
         CMD_SILENT.set(self.cmd_silent);
         drop(self.loud);
         EMSG_SILENT.set(self.emsg_silent);
         REDIR_OFF.set(self.redir_off);
         // Print the banner again only after something else has been typed.
-        debug_did_msg.set(true);
+        DEBUG_DID_MSG.set(true);
     }
 }
 
@@ -107,15 +106,15 @@ pub fn do_debug(cmd: &CStr) {
 
 /// What is printed on the way in: why we stopped, where, and on which line.
 fn show_debug_banner(cmd: &CStr) {
-    if !debug_did_msg.get() {
+    if !DEBUG_DID_MSG.get() {
         smsg!(0, "Entering Debug mode.  Type \"cont\" to continue.");
     }
     // A watch expression that just changed left both of its values here.
     // They are `typval_tostring` output -- bytes, not necessarily UTF-8 -- so
     // they go through vim's own printf rather than through `format_args!`.
     for (label, cell) in [
-        (c"Oldval = \"%s\"", &debug_oldval),
-        (c"Newval = \"%s\"", &debug_newval),
+        (c"Oldval = \"%s\"", &DEBUG_OLDVAL),
+        (c"Newval = \"%s\"", &DEBUG_NEWVAL),
     ] {
         let Some(text) = cell.take() else {
             continue;
@@ -212,7 +211,7 @@ fn parse_debug_cmd(line: &[u8]) -> Option<(DebugCmd, usize)> {
 fn debug_prompt(cmd: &CStr) {
     /// The command last given, reused for a blank line. Static, so `>step`
     /// followed by three empty lines steps four times.
-    static last_cmd: GlobalCell<Option<DebugCmd>> = GlobalCell::new(None);
+    static LAST_CMD: GlobalCell<Option<DebugCmd>> = GlobalCell::new(None);
 
     // These three outlive the iteration that sets them, exactly as upstream's
     // do: `:debuggreedy` can be typed at this very prompt, so a pass that
@@ -228,9 +227,9 @@ fn debug_prompt(cmd: &CStr) {
         // Read from the user, not from whatever a mapping or a script had
         // queued: swap in an empty typeahead buffer, drop `:normal`'s side
         // effects, and stop reading script input.
-        let save_ex_normal_busy = ex_normal_busy.get();
-        ex_normal_busy.set(0);
-        if !debug_greedy.get() {
+        let save_ex_normal_busy = EX_NORMAL_BUSY.get();
+        EX_NORMAL_BUSY.set(0);
+        if !DEBUG_GREEDY.get() {
             save_typeahead(&mut typeaheadbuf);
             typeahead_saved = true;
             save_ignore_script = IGNORE_SCRIPT.get();
@@ -239,9 +238,9 @@ fn debug_prompt(cmd: &CStr) {
 
         // Do not debug whatever reading the line itself runs -- an expression
         // mapping, for instance.
-        let outer_level = debug_break_level.replace(-1);
+        let outer_level = DEBUG_BREAK_LEVEL.replace(-1);
         let cmdline = getcmdline_bare(b'>');
-        debug_break_level.set(outer_level);
+        DEBUG_BREAK_LEVEL.set(outer_level);
 
         if typeahead_saved {
             // Paired with the `save_typeahead` above (or an earlier pass's,
@@ -249,7 +248,7 @@ fn debug_prompt(cmd: &CStr) {
             restore_typeahead(&mut typeaheadbuf);
             IGNORE_SCRIPT.set(save_ignore_script);
         }
-        ex_normal_busy.set(save_ex_normal_busy);
+        EX_NORMAL_BUSY.set(save_ex_normal_busy);
 
         CMDLINE_ROW.set(MSG_ROW.get());
         msg_starthere();
@@ -263,27 +262,27 @@ fn debug_prompt(cmd: &CStr) {
             if !line.is_empty() {
                 match parse_debug_cmd(line) {
                     Some((parsed, end)) => {
-                        last_cmd.set(Some(parsed));
+                        LAST_CMD.set(Some(parsed));
                         arg = &line[end..];
                     }
-                    None => last_cmd.set(None),
+                    None => LAST_CMD.set(None),
                 }
             }
 
-            if let Some(parsed) = last_cmd.get() {
-                if run_debug_cmd(parsed, cmd, arg, &last_cmd) {
+            if let Some(parsed) = LAST_CMD.get() {
+                if run_debug_cmd(parsed, cmd, arg, &LAST_CMD) {
                     continue;
                 }
                 // On the way out, the backtrace is back at the bottom.
-                debug_backtrace_level.set(0);
+                DEBUG_BACKTRACE_LEVEL.set(0);
                 break;
             }
 
             // Not a debug command, so run it -- but do not debug it.
-            let outer_level = debug_break_level.replace(-1);
+            let outer_level = DEBUG_BREAK_LEVEL.replace(-1);
             let flags = DoCmdOpts::VERBOSE | DoCmdOpts::EXCRESET;
             let _ = do_cmdline(Some(&cmdline[..]), Some(&mut LineSource::Typed), flags);
-            debug_break_level.set(outer_level);
+            DEBUG_BREAK_LEVEL.set(outer_level);
         }
         LINES_LEFT.set(ROWS.get() - 1);
     }
@@ -299,17 +298,17 @@ fn run_debug_cmd(
     last_cmd: &GlobalCell<Option<DebugCmd>>,
 ) -> bool {
     match parsed {
-        DebugCmd::Cont => debug_break_level.set(-1),
-        DebugCmd::Next => debug_break_level.set(ex_nesting_level.get()),
-        DebugCmd::Step => debug_break_level.set(9999),
-        DebugCmd::Finish => debug_break_level.set(ex_nesting_level.get() - 1),
+        DebugCmd::Cont => DEBUG_BREAK_LEVEL.set(-1),
+        DebugCmd::Next => DEBUG_BREAK_LEVEL.set(EX_NESTING_LEVEL.get()),
+        DebugCmd::Step => DEBUG_BREAK_LEVEL.set(9999),
+        DebugCmd::Finish => DEBUG_BREAK_LEVEL.set(EX_NESTING_LEVEL.get() - 1),
         DebugCmd::Quit => {
             GOT_INT.set(true);
-            debug_break_level.set(-1);
+            DEBUG_BREAK_LEVEL.set(-1);
         }
         DebugCmd::Interrupt => {
             GOT_INT.set(true);
-            debug_break_level.set(9999);
+            DEBUG_BREAK_LEVEL.set(9999);
             // `>interrupt` does not repeat on a blank line; keep stepping.
             last_cmd.set(Some(DebugCmd::Step));
         }
@@ -326,12 +325,12 @@ fn run_debug_cmd(
             return true;
         }
         DebugCmd::Up => {
-            debug_backtrace_level.set(debug_backtrace_level.get() + 1);
+            DEBUG_BACKTRACE_LEVEL.set(DEBUG_BACKTRACE_LEVEL.get() + 1);
             do_checkbacktracelevel();
             return true;
         }
         DebugCmd::Down => {
-            debug_backtrace_level.set(debug_backtrace_level.get() - 1);
+            DEBUG_BACKTRACE_LEVEL.set(DEBUG_BACKTRACE_LEVEL.get() - 1);
             do_checkbacktracelevel();
             return true;
         }
@@ -364,24 +363,24 @@ fn get_maxbacktrace_level(sname: Option<&[u8]>) -> c_int {
 fn do_setdebugtracelevel(arg: &[u8]) {
     let (level, relative) = (atoi(arg), arg.first() == Some(&b'+'));
     if relative || level < 0 {
-        debug_backtrace_level.set(debug_backtrace_level.get() + level);
+        DEBUG_BACKTRACE_LEVEL.set(DEBUG_BACKTRACE_LEVEL.get() + level);
     } else {
-        debug_backtrace_level.set(level);
+        DEBUG_BACKTRACE_LEVEL.set(level);
     }
     do_checkbacktracelevel();
 }
 
 /// Clamp the requested frame to one that exists, saying so when it moved.
 fn do_checkbacktracelevel() {
-    if debug_backtrace_level.get() < 0 {
-        debug_backtrace_level.set(0);
+    if DEBUG_BACKTRACE_LEVEL.get() < 0 {
+        DEBUG_BACKTRACE_LEVEL.set(0);
         smsg!(0, "frame is zero");
         return;
     }
     let sname = estack_sfile(ESTACK_NONE);
     let max = get_maxbacktrace_level(sname.as_deref());
-    if debug_backtrace_level.get() > max {
-        debug_backtrace_level.set(max);
+    if DEBUG_BACKTRACE_LEVEL.get() > max {
+        DEBUG_BACKTRACE_LEVEL.set(max);
         smsg!(0, "frame at highest level: {max}");
     }
 }
@@ -400,7 +399,7 @@ fn do_showbacktrace(cmd: &CStr) {
             let next = rest.windows(2).position(|pair| pair == b"..");
             let frame = msg_bytes(&rest[..next.unwrap_or(rest.len())]);
             let at = max - i;
-            if i == max - debug_backtrace_level.get() {
+            if i == max - DEBUG_BACKTRACE_LEVEL.get() {
                 smsg!(0, "->{at} {frame}");
             } else {
                 smsg!(0, "  {at} {frame}");
@@ -417,12 +416,12 @@ fn do_showbacktrace(cmd: &CStr) {
 
 /// `:debug {cmd}`: run one command with the debugger stopping at everything.
 pub fn ex_debug(excmd: &mut ExArg) {
-    let outer_level = debug_break_level.replace(9999);
+    let outer_level = DEBUG_BREAK_LEVEL.replace(9999);
     let _ = do_cmdline_cmd(excmd.line.cstr_from(excmd.line.arg));
-    debug_break_level.set(outer_level);
+    DEBUG_BREAK_LEVEL.set(outer_level);
 }
 
 /// `:debuggreedy`, whose `0` argument turns it back off.
 pub(crate) fn ex_debuggreedy(excmd: &mut ExArg) {
-    debug_greedy.set(excmd.addr_count == 0 || excmd.number2 != 0);
+    DEBUG_GREEDY.set(excmd.addr_count == 0 || excmd.number2 != 0);
 }

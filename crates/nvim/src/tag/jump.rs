@@ -203,7 +203,7 @@ pub(crate) fn test_for_current(fname: &[u8], tag_fname: &[u8], buf_ffname: Optio
     };
     let fullname = expand_tag_fname(fname, tag_fname, true);
     path_full_compare(fullname.as_cstr(), buf_ffname, true, true) as c_uint
-        & crate::path::kEqualFiles as c_uint
+        & crate::path::EQUAL_FILES as c_uint
         != 0
 }
 
@@ -261,7 +261,7 @@ pub(crate) fn jumpto_tag(
     forceit: c_int,
     keep_help: bool,
 ) -> Result<Jumped, Failed> {
-    if postponed_split.get() == 0 && check_can_set_curbuf_forceit(forceit != 0).is_err() {
+    if POSTPONED_SPLIT.get() == 0 && check_can_set_curbuf_forceit(forceit != 0).is_err() {
         return Err(Failed);
     }
 
@@ -272,7 +272,7 @@ pub(crate) fn jumpto_tag(
                 pattern: Pattern::of_command(line, &tagp),
                 expanded: expand_tag_fname(tagp.fname.of(line), found.tag_fname(), true),
                 full_fname: None,
-                preview: g_do_tagpreview.get() != 0,
+                preview: G_DO_TAGPREVIEW.get() != 0,
                 saved_win: None,
                 reused_window: false,
                 // Opening the file may reset it.
@@ -284,7 +284,7 @@ pub(crate) fn jumpto_tag(
     };
 
     // For next time.
-    g_do_tagpreview.set(0);
+    G_DO_TAGPREVIEW.set(0);
     retval
 }
 
@@ -345,7 +345,7 @@ impl Jump {
         if keep_help {
             // A `:ta` from a help file keeps the help flag set. For
             // `:ptag` it is the flag of the window we came from.
-            keep_help_flag.set(if self.preview {
+            KEEP_HELP_FLAG.set(if self.preview {
                 // `open_preview` took the id a moment ago and nothing since
                 // can have closed the window, but ask rather than assume.
                 buf_is_help(
@@ -371,20 +371,20 @@ impl Jump {
                 forceit != 0,
             )
         };
-        keep_help_flag.set(false);
+        KEEP_HELP_FLAG.set(false);
 
         // Anything above zero means the file could not be opened.
         if opened > 0 {
             drop(redraw_off);
-            if postponed_split.get() != 0 {
+            if POSTPONED_SPLIT.get() != 0 {
                 let _ = win_close(Win::current(), false, false);
-                postponed_split.set(0);
+                POSTPONED_SPLIT.set(0);
             }
             return Err(Failed);
         }
 
         Win::current().w_set_curswant = true;
-        postponed_split.set(0);
+        POSTPONED_SPLIT.set(0);
         let mut retval = self.run_command(line, tagp).map(|()| Jumped::Done);
         // Jumping to another file counts as success: at least the file
         // was found.
@@ -426,7 +426,7 @@ impl Jump {
             return;
         }
         // Don't split again below.
-        postponed_split.set(0);
+        POSTPONED_SPLIT.set(0);
         self.saved_win = Some(Win::current().id());
         if Win::current().w_onebuf_opt.wo_pvw == 0 {
             // Entering a reused window may change directory
@@ -443,14 +443,14 @@ impl Jump {
     /// Answers `false` when a split was wanted and failed.
     fn open_window(&mut self) -> bool {
         let switchbuf = SWB_FLAGS.get();
-        if postponed_split.get() != 0
+        if POSTPONED_SPLIT.get() != 0
             && switchbuf & (kOptSwbFlagUseopen | kOptSwbFlagUsetab) as c_uint != 0
             && let Some(existing) = find_buffer_by_name(self.fname())
             && !swbuf_goto_win_with_buf(Some(existing)).is_none()
         {
             self.reused_window = true;
         }
-        if self.reused_window || (postponed_split.get() == 0 && cmdmod_tab() == 0) {
+        if self.reused_window || (POSTPONED_SPLIT.get() == 0 && cmdmod_tab() == 0) {
             return true;
         }
 
@@ -462,7 +462,7 @@ impl Jump {
         if switchbuf & kOptSwbFlagNewtab as c_uint != 0 && cmdmod_tab() == 0 {
             cmdmod_set_tab(tab_index(TabPage::current()) + 1);
         }
-        if win_split(postponed_split.get().max(0), postponed_split_flags.get()).is_err() {
+        if win_split(POSTPONED_SPLIT.get().max(0), POSTPONED_SPLIT_FLAGS.get()).is_err() {
             return false;
         }
         // A fresh window does not inherit the scroll and cursor binding.
@@ -474,11 +474,11 @@ impl Jump {
     /// Run the tag's command: a search, or an ex command in the sandbox.
     fn run_command(&mut self, line: &[u8], tagp: &TagParts) -> Result<(), Failed> {
         // Tag commands always run with 'nomagic'.
-        let save_magic = magic_overruled.get();
-        magic_overruled.set(OPTION_MAGIC_OFF);
+        let save_magic = MAGIC_OVERRULED.get();
+        MAGIC_OVERRULED.set(OPTION_MAGIC_OFF);
         // Jumping to a tag is not a real search, so 'hlsearch' must
         // not light up because of it.
-        let save_no_hlsearch = no_hlsearch.get();
+        let save_no_hlsearch = NO_HLSEARCH.get();
         // With 't' in 'cpoptions' the tag's pattern becomes the one
         // "n" repeats; without it, the pattern is not stored.
         let search_options = if !cpo_has(CpoFlag::TAGPAT) {
@@ -494,7 +494,7 @@ impl Jump {
             Ok(())
         };
 
-        magic_overruled.set(save_magic);
+        MAGIC_OVERRULED.set(save_magic);
         if search_options != 0 {
             set_no_hlsearch(save_no_hlsearch);
         }
@@ -665,8 +665,8 @@ impl Pattern {
         // and inside the sandbox -- and `secure` is *restored*, not cleared:
         // the editor may already have been in secure mode when the tag was
         // followed, and clearing it would hand the tags file a way out.
-        let save_secure = secure.get();
-        secure.set(1);
+        let save_secure = SECURE.get();
+        SECURE.set(1);
         let _sandboxed = Lock::sandbox();
 
         // Start the command in line 1.
@@ -679,9 +679,9 @@ impl Pattern {
 
         // When the command did something that is not allowed, make
         // sure the error message can be seen.
-        if secure.get() == 2 {
+        if SECURE.get() == 2 {
             wait_return(1);
         }
-        secure.set(save_secure);
+        SECURE.set(save_secure);
     }
 }

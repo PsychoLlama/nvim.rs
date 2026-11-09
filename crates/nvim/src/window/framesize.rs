@@ -248,11 +248,11 @@ pub(crate) fn new_height(
         // The top frame's height is the screen's minus the command line, so
         // giving it a new one means giving 'cmdheight' the difference.
         let want_ch = p_ch() + OptInt::from(topfrp.fr_height) - OptInt::from(height);
-        let new_ch = min_set_ch.get().max(want_ch);
+        let new_ch = MIN_SET_CH.get().max(want_ch);
         if new_ch != p_ch() {
-            let save_ch = min_set_ch.get();
+            let save_ch = MIN_SET_CH.get();
             let _ = set_option_value(kOptCmdheight, OptVal::Number(new_ch), OptionSetFlags::NONE);
-            min_set_ch.set(save_ch);
+            MIN_SET_CH.set(save_ch);
         }
         let room = OptInt::from(ROWS.get())
             - p_ch()

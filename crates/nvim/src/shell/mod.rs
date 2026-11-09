@@ -45,7 +45,7 @@ use crate::option::vars::{P_SH, P_SHCF, P_SXE, P_SXQ, p_sh, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::fs::os_remove;
 use crate::os::signal::{signal_accept_deadly, signal_reject_deadly};
-use crate::profile::do_profiling;
+use crate::profile::DO_PROFILING;
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::shell::system::do_os_system;
 use crate::smsg;
@@ -293,7 +293,7 @@ pub(crate) fn call_shell(
         verbose_leave();
     }
 
-    if do_profiling.get() == PROF_YES {
+    if DO_PROFILING.get() == PROF_YES {
         wait_time = prof_child_enter();
     }
 
@@ -309,7 +309,7 @@ pub(crate) fn call_shell(
         Vv::ShellError,
         VarNumber::from(*retval.as_ref().unwrap_or(&-1)),
     );
-    if do_profiling.get() == PROF_YES {
+    if DO_PROFILING.get() == PROF_YES {
         prof_child_exit(wait_time);
     }
     retval

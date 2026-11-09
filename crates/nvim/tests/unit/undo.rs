@@ -182,7 +182,7 @@ mod write {
             // the editor can stand in: it is in no registry, and "current"
             // is the identity of a registered buffer. So the editor's own
             // buffer stays current and is only marked synced, which is all
-            // that pointing `curbuf` at an already-synced fixture bought --
+            // that pointing `CURBUF` at an already-synced fixture bought --
             // `u_sync` returns at its first test either way.
             let mut current = Buf::current();
             let old_synced = current.b_u_synced;

@@ -54,8 +54,8 @@ use crate::os::proc::os_dup2;
 use crate::profile::{time_finish, time_msg_at};
 use crate::shell::Argv;
 use crate::startup::{
-    os_exit, stderr_isatty, stdin_isatty, stdout_isatty, ui_client_attached, ui_client_channel_id,
-    ui_client_error_exit, ui_client_exit_status, ui_client_forward_stdin,
+    STDERR_ISATTY, STDIN_ISATTY, STDOUT_ISATTY, UI_CLIENT_ATTACHED, UI_CLIENT_CHANNEL_ID,
+    UI_CLIENT_ERROR_EXIT, UI_CLIENT_EXIT_STATUS, UI_CLIENT_FORWARD_STDIN, os_exit,
 };
 use crate::tui::attrs::{tui_add_url, tui_default_colors_set, tui_hl_attr_define};
 use crate::tui::events::{
@@ -145,11 +145,11 @@ pub(crate) fn ui_client_start_server(exepath: &CStr, argv: &[CString]) -> u64 {
     let Ok(channel) = channel_job_start(options) else {
         return 0;
     };
-    if ui_client_forward_stdin.get() {
+    if UI_CLIENT_FORWARD_STDIN.get() {
         // The user piped something in, which the server will read from
         // the descriptor `dup` lands on; this process needs slot 0 for
         // the terminal.
-        let keep = if stderr_isatty.get() {
+        let keep = if STDERR_ISATTY.get() {
             STDERR_FILENO
         } else {
             STDOUT_FILENO
@@ -192,21 +192,21 @@ pub(crate) fn ui_client_reattach() {
         c"term_colors",
         Object::integer(Integer::from(T_COLORS.get())),
     );
-    opts.insert(c"stdin_tty", Object::boolean(stdin_isatty.get()));
-    opts.insert(c"stdout_tty", Object::boolean(stdout_isatty.get()));
-    if ui_client_forward_stdin.get() {
+    opts.insert(c"stdin_tty", Object::boolean(STDIN_ISATTY.get()));
+    opts.insert(c"stdout_tty", Object::boolean(STDOUT_ISATTY.get()));
+    if UI_CLIENT_FORWARD_STDIN.get() {
         opts.insert(c"stdin_fd", Object::integer(FORWARDED_STDIN_FD));
         // Only the first attach forwards it; a re-attach after
         // `:restart` has nothing left to hand over.
-        ui_client_forward_stdin.set(false);
+        UI_CLIENT_FORWARD_STDIN.set(false);
     }
 
     let mut args = ArrayBuf::<3>::new();
     args.push(Object::integer(Integer::from(width)));
     args.push(Object::integer(Integer::from(height)));
     args.push(opts.object());
-    rpc_send_event(ui_client_channel_id.get(), c"nvim_ui_attach", args.array());
-    ui_client_attached.set(true);
+    rpc_send_event(UI_CLIENT_CHANNEL_ID.get(), c"nvim_ui_attach", args.array());
+    UI_CLIENT_ATTACHED.set(true);
     log_startup_step(c"nvim_ui_attach");
 
     // Tell the server who is drawing for it, which is what
@@ -230,7 +230,7 @@ pub(crate) fn ui_client_reattach() {
     client.push(Object::array(Array::new()));
     client.push(info.object());
     rpc_send_event(
-        ui_client_channel_id.get(),
+        UI_CLIENT_CHANNEL_ID.get(),
         c"nvim_set_client_info",
         client.array(),
     );
@@ -262,8 +262,8 @@ fn log_startup_step(step: &'static CStr) {
 
 /// Detaches from the server without stopping this process.
 pub(crate) fn ui_client_detach() {
-    rpc_send_event(ui_client_channel_id.get(), c"nvim_ui_detach", Array::new());
-    ui_client_attached.set(false);
+    rpc_send_event(UI_CLIENT_CHANNEL_ID.get(), c"nvim_ui_detach", Array::new());
+    UI_CLIENT_ATTACHED.set(false);
 }
 
 /// Starts the TUI, attaches, and runs until the process exits.
@@ -291,7 +291,7 @@ pub(crate) fn ui_client_run() -> ! {
 
 /// Stops drawing, on the way out.
 pub(crate) fn ui_client_stop() {
-    ui_client_attached.set(false);
+    UI_CLIENT_ATTACHED.set(false);
     TUI.with(|started| {
         if let Some(started) = started
             && !started.is_stopped()
@@ -304,12 +304,12 @@ pub(crate) fn ui_client_stop() {
 /// Reports a new terminal size to the server, and remembers it for a
 /// re-attach.
 pub(crate) fn ui_client_set_size(width: c_int, height: c_int) {
-    if ui_client_attached.get() {
+    if UI_CLIENT_ATTACHED.get() {
         let mut args = ArrayBuf::<2>::new();
         args.push(Object::integer(Integer::from(width)));
         args.push(Object::integer(Integer::from(height)));
         rpc_send_event(
-            ui_client_channel_id.get(),
+            UI_CLIENT_CHANNEL_ID.get(),
             c"nvim_ui_try_resize",
             args.array(),
         );
@@ -674,7 +674,7 @@ pub(crate) fn ui_client_event_error_exit(mut args: Array) {
         return bad_event(c"error_exit", c"ui_client_event_error_exit");
     };
     let status = status.as_integer().expect("`arg` checked the tag");
-    ui_client_error_exit.set(number_as_int(status));
+    UI_CLIENT_ERROR_EXIT.set(number_as_int(status));
 }
 
 /// Moves this client to the server listening at the given address.
@@ -691,7 +691,7 @@ pub(crate) fn ui_client_event_connect(mut args: Array) {
     put_job_on_fast_events(Box::new(move || connect_and_reattach(&address)));
     // No channel until the queued connect runs; anything sent meanwhile
     // would go to the server that is going away.
-    ui_client_channel_id.set(u64::MAX);
+    UI_CLIENT_CHANNEL_ID.set(u64::MAX);
 }
 
 /// Connects to the address `ui_client_event_connect` queued, and re-attaches.
@@ -716,11 +716,11 @@ fn connect_and_reattach(address: &CStr) {
                 msg_cstr(address),
                 msg_cstr(err)
             );
-            ui_client_exit_status.set(1);
+            UI_CLIENT_EXIT_STATUS.set(1);
             os_exit(1);
         }
     };
-    ui_client_channel_id.set(chan);
+    UI_CLIENT_CHANNEL_ID.set(chan);
     ui_client_reattach();
     let line = line!();
     logmsg!(
@@ -805,7 +805,7 @@ pub(crate) fn ui_client_attach_to_restarted_server() {
                     );
                 }
                 Ok(chan_id) => {
-                    ui_client_channel_id.set(chan_id);
+                    UI_CLIENT_CHANNEL_ID.set(chan_id);
                     ui_client_reattach();
                     let line = line!();
                     logmsg!(

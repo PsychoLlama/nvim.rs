@@ -184,7 +184,7 @@ fn close_unused_window(
         }
     }
     // Don't close the last window.
-    if firstwin.get() == lastwin.get() {
+    if FIRSTWIN.get() == LASTWIN.get() {
         let only_tab = first_tab().is_none_or(|tp| tp.next().is_none());
         if only_tab || aall.had_tab == 0 {
             aall.use_firstwin = true;
@@ -374,7 +374,7 @@ fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
             // With ":tab", open a new tab page for each new window.
             let room = OptInt::from(tabpage_index(None)) <= p_tpm();
             if aall.had_tab > 0 && room {
-                cmdmod.with_mut(|m| m.cmod_tab = 9999);
+                CMDMOD.with_mut(|m| m.cmod_tab = 9999);
             }
         }
         i += 1;
@@ -385,7 +385,7 @@ fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
 /// `:tab drop`'s "leave the existing layout alone".
 fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     debug_assert!(first_window().is_some(), "firstwin != NULL");
-    if cmdwin_type.get() != 0 {
+    if CMDWIN_TYPE.get() != 0 {
         crate::semsg!("E11: Invalid in command-line window; <CR> executes, CTRL-C quits");
         return;
     }
@@ -402,7 +402,7 @@ fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     let opened_len = argcount();
     let mut aall = ArgAllState {
         alist,
-        had_tab: cmdmod.with(|m| m.cmod_tab),
+        had_tab: CMDMOD.with(|m| m.cmod_tab),
         keep_tabs,
         forceit,
         use_firstwin: false,
@@ -452,7 +452,7 @@ fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     }
     // Set the last used tab page to where we started.
     if valid_tabpage(new_lu_tp) {
-        lastused_tabpage.set(Some(new_lu_tp));
+        LASTUSED_TABPAGE.set(Some(new_lu_tp));
     }
     if let Some(win) = aall.new_curwin.and_then(valid_win) {
         win_enter(win, false);

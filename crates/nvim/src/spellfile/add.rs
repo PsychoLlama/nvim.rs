@@ -66,12 +66,12 @@ use crate::os::fs::{mkdir_recurse, os_mkdir};
 use crate::path::MAXPATHL;
 use crate::path::{dir_of_file_exists, path_tail, tail_with_sep_index, vim_ispathsep};
 use crate::spell::SpellAddType;
-use crate::spell::{int_wordlist, spell_enc, with_lang};
+use crate::spell::{INT_WORDLIST, spell_enc, with_lang};
 use crate::undo::buf_is_changed;
 
 use super::wordtree::valid_spell_word;
 use super::{
-    MAXWLEN, SPELL_ADD_BAD, SPELL_ADD_RARE, XDG_DATA_HOME, e_illegal_character_in_word, mkspell,
+    E_ILLEGAL_CHARACTER_IN_WORD, MAXWLEN, SPELL_ADD_BAD, SPELL_ADD_RARE, XDG_DATA_HOME, mkspell,
 };
 use crate::optionstr::OptString;
 
@@ -83,7 +83,7 @@ use crate::optionstr::OptString;
 /// n-th entry of `'spellfile'`.
 pub fn spell_add_word(word: &[u8], what: SpellAddType, idx: c_int, undo: bool) {
     if !valid_spell_word(word) {
-        emsg(gettext(e_illegal_character_in_word));
+        emsg(gettext(E_ILLEGAL_CHARACTER_IN_WORD));
         return;
     }
 
@@ -95,13 +95,13 @@ pub fn spell_add_word(word: &[u8], what: SpellAddType, idx: c_int, undo: bool) {
     // The file's name, held for the call: `mkspell` below may reload the
     // spelling state, and 'spellfile' may change under it.
     let fname: XString = if idx == 0 {
-        if int_wordlist.with(Option::is_none) {
+        if INT_WORDLIST.with(Option::is_none) {
             let Some(name) = temp_name() else {
                 return;
             };
-            int_wordlist.set(Some(name));
+            INT_WORDLIST.set(Some(name));
         }
-        int_wordlist.with(Clone::clone).expect("just set")
+        INT_WORDLIST.with(Clone::clone).expect("just set")
     } else {
         // Give 'spellfile' a sensible default if it has none.
         if Win::current().syn_block().b_p_spf.first_byte() == 0 {

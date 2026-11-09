@@ -66,7 +66,7 @@ fn get_var_from(
     {
         // Make `win` current, and its tab page with it, or the window is
         // not valid. Only when needed, since it blocks autocommands --
-        // and not at all with a buffer in hand, where `curbuf` is saved
+        // and not at all with a buffer in hand, where `CURBUF` is saved
         // and restored directly instead.
         let need_switch_win = !(tabpage == TabPage::current_or_none()
             && win == Win::current_or_none())
@@ -314,7 +314,7 @@ pub fn f_settabvar(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     // The identity, taken while it is live: `set_scoped_var` below can run
     // autocommands that close this tab page.
     let save_curtab = TabPage::current().id();
-    let save_lu_tp = lastused_tabpage.get();
+    let save_lu_tp = LASTUSED_TABPAGE.get();
     goto_tabpage_tp(tp, false, false);
 
     set_scoped_var(b"t:", varname, varp);
@@ -323,7 +323,7 @@ pub fn f_settabvar(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         goto_tabpage_tp(save_curtab, false, false);
         // Going back must not count as a use of the previous tab page.
         if save_lu_tp.is_some_and(valid_tabpage) {
-            lastused_tabpage.set(save_lu_tp);
+            LASTUSED_TABPAGE.set(save_lu_tp);
         }
     }
 }
@@ -368,7 +368,7 @@ pub fn f_setbufvar(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
 }
 
 /// Any window of `tab`, for the sake of its `t:` scope; a null when there is
-/// no such tab page. The current tab page's list hangs off `firstwin`, which
+/// no such tab page. The current tab page's list hangs off `FIRSTWIN`, which
 /// upstream spells out here rather than reaching for the macro.
 fn any_window_of(tab: Option<TabPage>) -> Option<Win> {
     let tab = tab?;

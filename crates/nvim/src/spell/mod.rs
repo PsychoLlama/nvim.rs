@@ -37,7 +37,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::memline::Lines;
 use crate::memory::XString;
@@ -92,7 +91,7 @@ pub(crate) use lookup::compound_flag;
 pub use lookup::{can_compound, match_checkcompoundpattern, match_compoundrule, valid_word_prefix};
 pub use navigate::spell_cat_line;
 use slang::count_syllables;
-pub(crate) use slang::{LoadedLangs, init_syl_tab, languages, loaded_langs, put_lang, with_lang};
+pub(crate) use slang::{LOADED_LANGS, LoadedLangs, init_syl_tab, languages, put_lang, with_lang};
 pub use slang::{
     SpellBuf, WordCounts, WordHasher, count_common_word, open_spellbuf, register_lang, slang_clear,
     slang_clear_sug, take_lang,
@@ -101,9 +100,9 @@ pub use soundfold::{eval_soundfold, spell_soundfold};
 pub(crate) use wordtree::Tree;
 pub use wordtree::WordTree;
 
-pub(crate) static spell_redraw_lnum: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
+pub(crate) static SPELL_REDRAW_LNUM: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
 
-pub const kEqualFiles: FileComparison = 1;
+pub const EQUAL_FILES: FileComparison = 1;
 
 /// The longest word, in bytes, that any of this can handle. Every word
 /// buffer in the subsystem is this size.
@@ -364,19 +363,19 @@ pub struct SpellLoad {
 }
 
 /// The word list `zg` appends to when `'spellfile'` is empty.
-pub static int_wordlist: GlobalCell<Option<XString>> = GlobalCell::new(None);
+pub static INT_WORDLIST: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
 /// The character table currently in force.
-pub static spelltab: GlobalCell<SpellTab> = GlobalCell::new(SpellTab {
+pub static SPELLTAB: GlobalCell<SpellTab> = GlobalCell::new(SpellTab {
     st_isw: [false; 256],
     st_isu: [false; 256],
     st_fold: [0; 256],
     st_upper: [0; 256],
 });
-/// Whether a `.spl` file replaced [`spelltab`], rather than the encoding.
-pub static did_set_spelltab: GlobalCell<bool> = GlobalCell::new(false);
+/// Whether a `.spl` file replaced [`SPELLTAB`], rather than the encoding.
+pub static DID_SET_SPELLTAB: GlobalCell<bool> = GlobalCell::new(false);
 
-pub const e_format: &CStr = c"E759: Format error in spell file";
+pub const E_FORMAT: &CStr = c"E759: Format error in spell file";
 
 /// What `z=` last replaced, and with what, for [`ex_spellrepall`].
 #[derive(Clone, Debug)]
@@ -386,7 +385,7 @@ pub(crate) struct SpellReplacement {
 }
 
 /// The replacement [`ex_spellrepall`] repeats; `None` until `z=` makes one.
-pub(crate) static last_replacement: GlobalCell<Option<SpellReplacement>> = GlobalCell::new(None);
+pub(crate) static LAST_REPLACEMENT: GlobalCell<Option<SpellReplacement>> = GlobalCell::new(None);
 
 /// `:spellrepall` — repeat the last `z=` replacement everywhere else in
 /// the buffer.
@@ -401,7 +400,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
     let Some(SpellReplacement {
         from: repl_from,
         to: repl_to,
-    }) = last_replacement.with(Clone::clone)
+    }) = LAST_REPLACEMENT.with(Clone::clone)
     else {
         emsg(gettext(c"E752: No previous spell replacement"));
         return;

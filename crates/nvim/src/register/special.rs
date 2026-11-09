@@ -125,7 +125,7 @@ pub fn get_spec_reg(regname: RegName, errmsg: bool) -> Option<Option<XString>> {
         // `":` -- the last command line.
         b':' => {
             // A copy: the caller may run commands while it holds it.
-            let line = last_cmdline.with(Clone::clone);
+            let line = LAST_CMDLINE.with(Clone::clone);
             if line.is_none() && errmsg {
                 emsg(gettext(E_NOLASTCMD));
             }

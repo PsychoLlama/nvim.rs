@@ -31,15 +31,15 @@ state_record! {
     /// The character `f`/`t` last looked for, as a byte: the first byte
     /// only, which the single-byte fast path compares against and
     /// `last_csearch_*` reports.
-    lastc: u8 = b'\0';
+    LASTC: u8 = b'\0';
     /// Its direction.
-    lastcdir: Direction = FORWARD;
+    LASTCDIR: Direction = FORWARD;
     /// Whether it was `t`/`T`, which stop short of the character.
-    last_t_cmd: bool = true;
+    LAST_T_CMD: bool = true;
     /// The full (possibly multi-byte, possibly composed) sequence, which
     /// `lastc_bytelen > 1` switches the comparison over to.
-    lastc_bytes: [u8; SCHAR_BYTES] = [0; SCHAR_BYTES];
-    lastc_bytelen: c_int = 1;
+    LASTC_BYTES: [u8; SCHAR_BYTES] = [0; SCHAR_BYTES];
+    LASTC_BYTELEN: c_int = 1;
 }
 
 /// One `ScreenChar`'s bytes plus its NUL — what `lastc_bytes` holds.
@@ -48,17 +48,17 @@ const SCHAR_BYTES: usize = MAX_SCHAR_SIZE as usize + 1;
 /// The bytes `;` and `,` look for, NUL-terminated, by value: `getcharsearch()`
 /// reads them while the very dictionary it is building can run code.
 pub fn last_csearch() -> [u8; SCHAR_BYTES] {
-    lastc_bytes.get()
+    LASTC_BYTES.get()
 }
 
 /// Whether the last character search went forward.
 pub fn last_csearch_forward() -> bool {
-    lastcdir.get() == FORWARD
+    LASTCDIR.get() == FORWARD
 }
 
 /// Whether the last character search stopped short of the character (`t`).
 pub fn last_csearch_until() -> bool {
-    last_t_cmd.get()
+    LAST_T_CMD.get()
 }
 
 /// Remember a character search, for `setcharsearch()`: `c` is its first
@@ -77,25 +77,25 @@ pub fn set_last_csearch(c: c_int, text: &[u8]) {
         }
         len += step;
     }
-    lastc.set(low_byte(c));
-    lastc_bytelen.set(c_int::try_from(len).expect("a cell's worth of bytes"));
+    LASTC.set(low_byte(c));
+    LASTC_BYTELEN.set(c_int::try_from(len).expect("a cell's worth of bytes"));
     // Upstream writes over the front of the old value rather than replacing
     // it, and `lastc_bytelen` is what says how much of it counts.
     let mut bytes = if len != 0 {
-        lastc_bytes.get()
+        LASTC_BYTES.get()
     } else {
         [0; SCHAR_BYTES]
     };
     bytes[..len].copy_from_slice(&text[..len]);
-    lastc_bytes.set(bytes);
+    LASTC_BYTES.set(bytes);
 }
 
 pub fn set_csearch_direction(cdir: Direction) {
-    lastcdir.set(cdir);
+    LASTCDIR.set(cdir);
 }
 
 pub fn set_csearch_until(t_cmd: c_int) {
-    last_t_cmd.set(t_cmd != 0);
+    LAST_T_CMD.set(t_cmd != 0);
 }
 
 /// Search for a character in the current line, `cmd_arg.count1` times.
@@ -114,12 +114,12 @@ pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> 
         // Normal search: remember the arguments for a later repeat,
         // but not while redoing (the remembered ones are in play).
         if !KEY_STUFFED.get() {
-            lastc.set(low_byte(c));
+            LASTC.set(low_byte(c));
             set_csearch_direction(dir as Direction);
             set_csearch_until(c_int::from(t_cmd));
-            let mut bytes = lastc_bytes.get();
+            let mut bytes = LASTC_BYTES.get();
             if cmd_arg.nchar_len != 0 {
-                lastc_bytelen.set(len_as_int(cmd_arg.nchar_len));
+                LASTC_BYTELEN.set(len_as_int(cmd_arg.nchar_len));
                 // `nchar_composing` holds `nchar_len` bytes; the store holds
                 // one cell's worth, and upstream copies them all.
                 let len = cmd_arg.nchar_len;
@@ -128,22 +128,22 @@ pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> 
                 }
             } else {
                 let len = encode_char(c, &mut bytes);
-                lastc_bytelen.set(c_int::try_from(len).expect("a character's bytes"));
+                LASTC_BYTELEN.set(c_int::try_from(len).expect("a character's bytes"));
             }
-            lastc_bytes.set(bytes);
+            LASTC_BYTES.set(bytes);
         }
     } else {
         // Repeat the previous search.
-        if c_int::from(lastc.get()) == NUL && lastc_bytelen.get() <= 1 {
+        if c_int::from(LASTC.get()) == NUL && LASTC_BYTELEN.get() <= 1 {
             return Err(NoMatch);
         }
         dir = if dir != 0 {
-            -(lastcdir.get() as c_int) // repeat in the opposite direction
+            -(LASTCDIR.get() as c_int) // repeat in the opposite direction
         } else {
-            lastcdir.get() as c_int
+            LASTCDIR.get() as c_int
         };
-        t_cmd = last_t_cmd.get();
-        c = c_int::from(lastc.get());
+        t_cmd = LAST_T_CMD.get();
+        c = c_int::from(LASTC.get());
         // For multi-byte re-use lastc_bytes[] and lastc_bytelen.
 
         // Force a move of at least one character, so that ";" and ","
@@ -159,8 +159,8 @@ pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> 
     let mut lines = Lines::current();
     let line = lines.line(Win::current().w_cursor.lnum);
     let len = line.len();
-    let bytelen = usize::try_from(lastc_bytelen.get()).unwrap_or(0);
-    let bytes = lastc_bytes.get();
+    let bytelen = usize::try_from(LASTC_BYTELEN.get()).unwrap_or(0);
+    let bytes = LASTC_BYTES.get();
     let mut col = Win::current().w_cursor.col.as_usize();
     // The first `n` bytes of `text`, or up to its NUL: what `strncmp` reads.
     let prefix = |text: &[u8], n: usize| cstr::until_nul(&text[..n.min(text.len())]).to_vec();

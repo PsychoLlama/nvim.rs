@@ -59,7 +59,7 @@ use crate::option::buf_copy_options;
 use crate::option::defs::ShmFlag;
 use crate::option::vars::p_acd;
 use crate::optionstr::OptString;
-use crate::os::state::last_chdir_reason;
+use crate::os::state::LAST_CHDIR_REASON;
 use crate::spell::parse_spelllang;
 use crate::startup::starting;
 use crate::state::MODE_INSERT;
@@ -112,7 +112,7 @@ fn diff_add(buffer: Buf) {
 
 /// Load the buffer that has just been made current.
 fn load_current_buffer() {
-    // SAFETY: `curbuf` and `curwin` are set; a null `eap` is the no-command form.
+    // SAFETY: `CURBUF` and `curwin` are set; a null `eap` is the no-command form.
     let _ = open_buffer(false, None, ReadFlags::NONE);
 }
 
@@ -309,7 +309,7 @@ fn leave_prevbuf(
 
 /// Enter a new current buffer.
 ///
-/// The old `curbuf` must have been abandoned already -- which also means it
+/// The old `CURBUF` must have been abandoned already -- which also means it
 /// may be pointing at freed memory, so nothing here reads it.
 pub(crate) fn enter_buffer(mut buffer: Buf) {
     // when closing the current buffer stop Visual mode
@@ -420,9 +420,9 @@ fn do_autochdir_now() {
     let fname = Buf::current().name.full().map(XString::from_cstr);
     if starting.get() == 0
         && let Some(fname) = fname
-        && vim_chdirfile(fname.as_cstr(), kCdCauseAuto).is_ok()
+        && vim_chdirfile(fname.as_cstr(), CD_CAUSE_AUTO).is_ok()
     {
-        last_chdir_reason.set(Some(c"autochdir"));
+        LAST_CHDIR_REASON.set(Some(c"autochdir"));
         reshorten_fnames();
     }
 }

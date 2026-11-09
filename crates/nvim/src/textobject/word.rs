@@ -14,7 +14,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::option::vars::P_SEL;
 use crate::types::ColNr;
@@ -46,22 +45,22 @@ use crate::types::Pos;
 ///
 /// Upstream's `cls()` takes no argument because it is called from inside
 /// loops that would otherwise have to thread the flag; this is that flag.
-static cls_bigword: GlobalCell<bool> = GlobalCell::new(false);
+static CLS_BIGWORD: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The character class at the cursor: 0 for white space and end of line, 1
 /// for punctuation, 2 and up for the 'iskeyword' and multibyte classes.
 ///
-/// With `cls_bigword` set every non-blank answers 1, which is what makes
+/// With `CLS_BIGWORD` set every non-blank answers 1, which is what makes
 /// `W`/`B`/`E` treat a run of anything as one word.
 fn cls() -> c_int {
-    // `curwin` and `curbuf` are set from startup to exit, which is all
+    // `curwin` and `CURBUF` are set from startup to exit, which is all
     // `gchar_cursor` asks for; it answers NUL past the end of the line.
     let c = gchar_cursor();
     if c == ' ' as c_int || c == '\t' as c_int || c == NUL {
         return 0;
     }
     let c = utf_class(c);
-    if c != 0 && cls_bigword.get() { 1 } else { c }
+    if c != 0 && CLS_BIGWORD.get() { 1 } else { c }
 }
 
 /// Step over a run of characters of class `cclass`. Answers true when the
@@ -100,7 +99,7 @@ fn back_in_line() {
 /// wants: `dw` on the last word of a line must not eat the newline.
 pub(crate) fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), NoObject> {
     Win::current().w_cursor.coladd = 0;
-    cls_bigword.set(bigword);
+    CLS_BIGWORD.set(bigword);
     loop {
         count -= 1;
         if count < 0 {
@@ -156,7 +155,7 @@ pub(crate) fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(),
 /// which is what makes `cb` from mid-word do the right thing.
 pub(crate) fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Result<(), NoObject> {
     Win::current().w_cursor.coladd = 0;
-    cls_bigword.set(bigword);
+    CLS_BIGWORD.set(bigword);
     loop {
         count -= 1;
         if count < 0 {
@@ -216,7 +215,7 @@ pub(crate) fn end_word(
     empty: bool,
 ) -> Result<(), NoObject> {
     Win::current().w_cursor.coladd = 0;
-    cls_bigword.set(bigword);
+    CLS_BIGWORD.set(bigword);
 
     // Undo a cursor position adjusted for exclusive 'selection'.
     if P_SEL.first_byte() == b'e'
@@ -282,7 +281,7 @@ pub(crate) fn end_word(
 /// With `eol`, an end of line stops the motion.
 pub(crate) fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), NoObject> {
     Win::current().w_cursor.coladd = 0;
-    cls_bigword.set(bigword);
+    CLS_BIGWORD.set(bigword);
     loop {
         count -= 1;
         if count < 0 {
@@ -344,7 +343,7 @@ pub(crate) fn current_word(
     let mut inclusive = true;
     let mut include_white = false;
 
-    cls_bigword.set(bigword);
+    CLS_BIGWORD.set(bigword);
     clearpos(&mut start_pos);
 
     // Correct the cursor when 'selection' is exclusive.

@@ -204,7 +204,7 @@ pub(crate) fn buf_do_map(
     // The script context a replaced entry takes, worked out once and outside
     // the table's borrow: it asks Lua where the definition came from.
     let sctx = (has_rhs && !is_unmap).then(|| {
-        let mut ctx = current_sctx.get();
+        let mut ctx = CURRENT_SCTX.get();
         ctx.sc_lnum += sourcing_lnum().get();
         nlua_set_sctx(&mut ctx);
         ctx
@@ -644,8 +644,8 @@ pub fn ex_abbreviate(excmd: &mut ExArg) {
 /// `:map` and friends.
 pub fn ex_map(excmd: &mut ExArg) {
     // In a secure mode we print the mappings, for security reasons.
-    if secure.get() != 0 {
-        secure.set(2);
+    if SECURE.get() != 0 {
+        SECURE.set(2);
         msg_display(excmd.line.cstr_from(excmd.line.cmd), 0, false);
         msg_putchar(c_int::from(b'\n'));
     }

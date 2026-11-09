@@ -23,7 +23,6 @@
     clippy::ptr_as_ptr
 )]
 // The selectors keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::{AUGROUP_DEFAULT, SuspendLatch};
 use crate::event_queue::ChildQueue;
@@ -41,60 +40,60 @@ state_record! {
 
     /// The window `CursorMoved` last fired in, with [`last_cursormoved`]
     /// its cursor then.
-    pub(crate) last_cursormoved_win: Option<WinId> = None;
-    pub(crate) last_cursormoved: Pos = Pos {
+    pub(crate) LAST_CURSORMOVED_WIN: Option<WinId> = None;
+    pub(crate) LAST_CURSORMOVED: Pos = Pos {
         lnum: LineNr::ZERO,
         col: ColNr::ZERO,
         coladd: 0,
     };
-    pub(crate) autocmd_busy: bool = false;
-    pub(crate) autocmd_no_enter: c_int = 0;
-    pub(crate) autocmd_no_leave: c_int = 0;
-    pub(crate) au_new_curbuf: BufferRef = BufferRef::new();
+    pub(crate) AUTOCMD_BUSY: bool = false;
+    pub(crate) AUTOCMD_NO_ENTER: c_int = 0;
+    pub(crate) AUTOCMD_NO_LEAVE: c_int = 0;
+    pub(crate) AU_NEW_CURBUF: BufferRef = BufferRef::new();
     /// `<afile>`, room for a full path: the expansion resolves it in place.
-    pub(crate) autocmd_fname: Option<XString> = None;
-    pub(crate) autocmd_fname_full: bool = false;
-    pub(crate) autocmd_bufnr: c_int = 0;
+    pub(crate) AUTOCMD_FNAME: Option<XString> = None;
+    pub(crate) AUTOCMD_FNAME_FULL: bool = false;
+    pub(crate) AUTOCMD_BUFNR: c_int = 0;
     /// `<amatch>`.
-    pub(crate) autocmd_match: Option<XString> = None;
-    pub(crate) did_cursorhold: bool = true;
+    pub(crate) AUTOCMD_MATCH: Option<XString> = None;
+    pub(crate) DID_CURSORHOLD: bool = true;
     /// The buffer number each running autocommand walk matches
     /// `<buffer=N>` patterns against, innermost last; the walk keeps its
     /// index. Upstream threads the walks' own `AutoPatCmd`s into
     /// `active_apc_list` so that freeing a buffer can clear the number.
-    pub(super) active_walk_bufnrs: Vec<c_int> = Vec::new();
-    pub(super) next_augroup_id: c_int = 1;
-    pub(super) current_augroup: c_int = AUGROUP_DEFAULT;
-    pub(super) au_need_clean: bool = false;
-    pub(super) autocmd_blocked: c_int = 0;
-    pub(super) autocmd_nested: bool = false;
-    pub(super) autocmd_include_groups: bool = false;
-    pub(super) termresponse_changed: bool = false;
+    pub(super) ACTIVE_WALK_BUFNRS: Vec<c_int> = Vec::new();
+    pub(super) NEXT_AUGROUP_ID: c_int = 1;
+    pub(super) CURRENT_AUGROUP: c_int = AUGROUP_DEFAULT;
+    pub(super) AU_NEED_CLEAN: bool = false;
+    pub(super) AUTOCMD_BLOCKED: c_int = 0;
+    pub(super) AUTOCMD_NESTED: bool = false;
+    pub(super) AUTOCMD_INCLUDE_GROUPS: bool = false;
+    pub(super) TERMRESPONSE_CHANGED: bool = false;
     /// Group name -> id, in creation order.
     ///
     /// khash, which this was, is insertion-ordered with a swap-remove, and
     /// `:augroup`'s listing walks it directly (F-P21-9). A [`SlotTable`] is
     /// that order; a key is the name plus a NUL, because the listing prints
     /// one as a C string (`groups::group_key`).
-    pub(super) map_augroup_name_to_id: SlotTable<Box<[u8]>, c_int> = SlotTable::new();
+    pub(super) MAP_AUGROUP_NAME_TO_ID: SlotTable<Box<[u8]>, c_int> = SlotTable::new();
     /// Id -> group name. Point lookups only, so a plain map will do; the
     /// name is NUL-terminated because `augroup_name` answers a `*mut c_char`
     /// into it.
-    pub(super) map_augroup_id_to_name: IdMap<c_int, Box<[u8]>> = id_map();
-    pub(super) pending_vimresume: SuspendLatch = SuspendLatch::Idle;
+    pub(super) MAP_AUGROUP_ID_TO_NAME: IdMap<c_int, Box<[u8]>> = id_map();
+    pub(super) PENDING_VIMRESUME: SuspendLatch = SuspendLatch::Idle;
     /// `UIEnter`/`UILeave` is being fired.
-    pub(super) uienter_busy: bool = false;
+    pub(super) UIENTER_BUSY: bool = false;
     /// `FocusGained`/`FocusLost` is being fired.
-    pub(super) focusgained_busy: bool = false;
+    pub(super) FOCUSGAINED_BUSY: bool = false;
     /// When a `FocusGained` last checked file timestamps.
-    pub(super) focusgained_last_time: Timestamp = 0;
+    pub(super) FOCUSGAINED_LAST_TIME: Timestamp = 0;
     /// How deep `FileType` firings nest.
-    pub(super) ft_recursive: c_int = 0;
+    pub(super) FT_RECURSIVE: c_int = 0;
     /// How deep autocommand firings nest.
-    pub(super) autocmd_nesting: c_int = 0;
+    pub(super) AUTOCMD_NESTING: c_int = 0;
     /// `FileChangedShell` is being fired.
-    pub(super) filechangeshell_busy: bool = false;
+    pub(super) FILECHANGESHELL_BUSY: bool = false;
 }
 
 /// Events deferred out of a context that could not fire them.
-pub(crate) static deferred_events: GlobalCell<Option<ChildQueue>> = GlobalCell::new(None);
+pub(crate) static DEFERRED_EVENTS: GlobalCell<Option<ChildQueue>> = GlobalCell::new(None);

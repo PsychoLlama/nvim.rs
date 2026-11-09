@@ -40,7 +40,7 @@ use crate::regexp::low_byte;
 use crate::spell::SpellLang;
 
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
-use super::{MAXWLEN, loaded_langs};
+use super::{LOADED_LANGS, MAXWLEN};
 use crate::optionstr::OptString;
 
 /// `soundfold()`: the sound-fold of `word` in the first of the window's
@@ -49,7 +49,7 @@ use crate::optionstr::OptString;
 pub fn eval_soundfold(word: &CStr) -> XString {
     let win = Win::current();
     if win.w_onebuf_opt.wo_spell != 0 && win.syn_block().b_p_spl.first_byte() != 0 {
-        let folded = loaded_langs.with(|langs| {
+        let folded = LOADED_LANGS.with(|langs| {
             win.syn_block().b_langp.iter().find_map(|lp| {
                 let slang = langs.get(lp.slang)?;
                 slang.has_soundfold().then(|| {

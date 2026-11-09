@@ -38,7 +38,7 @@ use crate::types::Handle;
 /// goes.
 fn walk_bufnr(apc: &AutoPatCmd) -> BufferHandle {
     match apc.walk {
-        Some(at) => Handle::new(active_walk_bufnrs.with(|nrs| nrs.get(at).copied().unwrap_or(0))),
+        Some(at) => Handle::new(ACTIVE_WALK_BUFNRS.with(|nrs| nrs.get(at).copied().unwrap_or(0))),
         None => Handle::new(apc.arg_bufnr),
     }
 }
@@ -273,12 +273,12 @@ fn au_callback(
     );
     data.insert(
         c"match",
-        Object::string(autocmd_match.with(|name| {
+        Object::string(AUTOCMD_MATCH.with(|name| {
             name.as_ref()
                 .map_or(ApiString::NULL, |name| ApiString::from_bytes(name))
         })),
     );
-    data.insert(c"buf", Object::integer(Integer::from(autocmd_bufnr.get())));
+    data.insert(c"buf", Object::integer(Integer::from(AUTOCMD_BUFNR.get())));
     if let Some(event_data) = event_data {
         // The publisher's object stays the publisher's: the entry gets a
         // copy.
@@ -363,8 +363,8 @@ pub fn getnextac(apc: &mut AutoPatCmd, data: Option<&Object>) -> Option<XString>
 
     // `autocmd_nested` has to be set before any Lua runs, or a nested
     // event fired from the callback sees the wrong value.
-    autocmd_nested.set(row.nested);
-    current_sctx.set(row.script_ctx);
+    AUTOCMD_NESTED.set(row.nested);
+    CURRENT_SCTX.set(row.script_ctx);
     apc.script_ctx = row.script_ctx;
     // The stack frame carries the context of the command now running.
     let sctx = row.script_ctx;

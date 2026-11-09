@@ -31,7 +31,7 @@ use std::ffi::CString;
 use crate::arglist::state::ARG_HAD_LAST;
 use crate::arglist::{alist_count, arg_name, with_arg_names};
 use crate::buffer::state::{
-    SEA_DIALOG, SEA_NONE, SEA_QUIT, swap_exists_action, swap_exists_did_quit,
+    SEA_DIALOG, SEA_NONE, SEA_QUIT, SWAP_EXISTS_ACTION, SWAP_EXISTS_DID_QUIT,
 };
 use crate::buffer::{
     buf_is_empty, buflist_add_name, do_modelines, handle_swap_exists, open_buffer, set_buflisted,
@@ -60,7 +60,7 @@ use crate::quickfix::qf_init;
 use crate::runtime::state::SID_CARG;
 use crate::startup::exit::getout;
 use crate::startup::{
-    EDIT_QF, MainParams, WIN_HOR, WIN_TABS, WIN_VER, kOptErrorfile, kOptShortmess, recoverymode,
+    EDIT_QF, MainParams, RECOVERYMODE, WIN_HOR, WIN_TABS, WIN_VER, kOptErrorfile, kOptShortmess,
 };
 use crate::types::{Handle, Integer, LIST_LEN_MAY_KNOW, LineNr, OptInt, VarLock, Vv};
 use crate::ui::ui_call_error_exit;
@@ -134,13 +134,13 @@ pub(crate) fn handle_tag(tag: Option<&CStr>) {
     let Some(tag) = tag else {
         return;
     };
-    swap_exists_did_quit.set(false);
+    SWAP_EXISTS_DID_QUIT.set(false);
     let mut cmd = [&b"ta "[..], tag.to_bytes()].concat();
     // Upstream formats it into an `IOSIZE` buffer.
     cmd.truncate(IOSIZE as usize - 1);
     let _ = do_cmdline_cmd(&cstr::owned(&cmd));
     time_msg_at(c"jumping to tag");
-    if swap_exists_did_quit.get() {
+    if SWAP_EXISTS_DID_QUIT.get() {
         quit_on_swap_exists(false);
     }
 }
@@ -152,7 +152,7 @@ pub(crate) fn handle_tag(tag: Option<&CStr>) {
 /// the stdin buffer is wiped again if nothing came down the pipe (#8561).
 pub(crate) fn read_stdin() {
     // Use a dialog for the ATTENTION prompt, not a message.
-    swap_exists_action.set(SEA_DIALOG);
+    SWAP_EXISTS_ACTION.set(SEA_DIALOG);
     NO_WAIT_RETURN.set(1);
     let save_msg_didany = MSG_DIDANY.get();
 
@@ -241,7 +241,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
         parm.window_count = 1;
     }
 
-    if recoverymode.get() {
+    if RECOVERYMODE.get() {
         MSG_SCROLL.set(1);
         ml_recover(true);
         if Buf::current().b_ml.ml_mfp.is_none() {
@@ -286,11 +286,11 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
                 Win::current().w_onebuf_opt.wo_fdl = p_fdls();
             }
             // Ask, rather than print, if the swap file is in the way.
-            swap_exists_action.set(SEA_DIALOG);
+            SWAP_EXISTS_ACTION.set(SEA_DIALOG);
             set_buflisted(1);
             let _ = open_buffer(false, None, ReadFlags::NONE);
 
-            if swap_exists_action.get() == SEA_QUIT {
+            if SWAP_EXISTS_ACTION.get() == SEA_QUIT {
                 if GOT_INT.get() || only_one_window() {
                     quit_on_swap_exists(true);
                 }
@@ -299,7 +299,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
                 // index so it is deleted later.
                 let _ = Buf::current().set_name(None, None, false);
                 Win::current().w_arg_idx = -1;
-                swap_exists_action.set(SEA_NONE);
+                SWAP_EXISTS_ACTION.set(SEA_NONE);
             } else {
                 handle_swap_exists(None);
             }
@@ -378,14 +378,14 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
         // window's buffer, or an unnamed one.
         if first_win().w_buffer.is_current() || Buf::current().name.full().is_none() {
             Win::current().w_arg_idx = arg_idx;
-            swap_exists_did_quit.set(false);
+            SWAP_EXISTS_DID_QUIT.set(false);
             // A copy: the edit's autocommands may change the argument list.
             let name = arg_name(ArgListId::GLOBAL, arg_idx);
             let (last, hide) = (newlnum::LASTL as LineNr, EcmdFlags::HIDE);
             let win = Win::current().id();
             let name = name.as_ref().map(XString::as_cstr);
             let _ = do_ecmd(None, name, None, None, last, hide, Some(win));
-            if swap_exists_did_quit.get() {
+            if SWAP_EXISTS_DID_QUIT.get() {
                 if GOT_INT.get() || only_one_window() {
                     quit_on_swap_exists(true);
                 }
@@ -445,7 +445,7 @@ fn set_shortmess(value: &CStr) {
 
 /// Act on the ATTENTION prompt's answer after a buffer was loaded.
 pub(crate) fn check_swap_exists_action() {
-    if swap_exists_action.get() == SEA_QUIT {
+    if SWAP_EXISTS_ACTION.get() == SEA_QUIT {
         quit_on_swap_exists(false);
     }
     handle_swap_exists(None);

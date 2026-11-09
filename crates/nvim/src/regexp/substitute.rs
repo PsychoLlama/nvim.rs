@@ -34,8 +34,8 @@ use core::ffi::{CStr, c_int};
 use super::api::in_match_scope;
 use super::submatch::call_replacement;
 use super::{
-    CAR, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC,
-    RegSubMatch, TAB, can_f_submatch, reg_prev_sub, rsm,
+    CAN_F_SUBMATCH, CAR, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, REG_PREV_SUB, REGSUB_BACKSLASH,
+    REGSUB_COPY, REGSUB_MAGIC, RSM, RegSubMatch, TAB,
 };
 use crate::ascii::NUL;
 use crate::eval::eval_to_string;
@@ -229,7 +229,7 @@ enum Outcome {
 fn regtilde(mut source: Vec<u8>, magic: bool, preview: bool) -> (Vec<u8>, bool) {
     // What a `~` expands into is a copy, so storing the new text below
     // cannot pull it out from under the expansion.
-    let prev: Option<XString> = reg_prev_sub.with(Clone::clone);
+    let prev: Option<XString> = REG_PREV_SUB.with(Clone::clone);
     let tilde: &[u8] = if magic { b"~" } else { b"\\~" };
 
     // The fresh string the first expansion makes; until then `source`
@@ -289,7 +289,7 @@ fn regtilde(mut source: Vec<u8>, magic: bool, preview: bool) -> (Vec<u8>, bool) 
     // means. Otherwise store a *copy*: a recursive call could replace the
     // text `newsub` came from.
     if !preview {
-        reg_prev_sub.set((!newsub.is_empty()).then(|| XString::from_bytes(&newsub)));
+        REG_PREV_SUB.set((!newsub.is_empty()).then(|| XString::from_bytes(&newsub)));
     }
     (newsub, is_fresh)
 }
@@ -376,7 +376,7 @@ fn regsub_buffer(
     dest: Option<&mut [u8]>,
     flags: c_int,
 ) -> Result<usize, RegsubError> {
-    // A buffer match always works on `curbuf`.
+    // A buffer match always works on `CURBUF`.
     let buf = Buf::current();
     let rex = Expanding {
         matched: Matched::Buffer {
@@ -518,8 +518,8 @@ fn eval_replacement(
     // The expression may itself run a substitution. `submatch()` has to
     // keep answering about the outermost match, so hand it this one and
     // put back whatever the caller above was showing.
-    let outer_can_f_submatch = can_f_submatch.get();
-    can_f_submatch.set(true);
+    let outer_can_f_submatch = CAN_F_SUBMATCH.get();
+    CAN_F_SUBMATCH.set(true);
     let snapshot = match rex.matched {
         Matched::Buffer {
             matches,
@@ -529,7 +529,7 @@ fn eval_replacement(
         } => RegSubMatch::of_buffer(buf, firstlnum, maxline, matches),
         Matched::Str { matches, line } => RegSubMatch::of_string(matches, line),
     };
-    let outer_rsm = rsm.with_mut(|cell| core::mem::replace(cell, snapshot));
+    let outer_rsm = RSM.with_mut(|cell| core::mem::replace(cell, snapshot));
 
     NESTING.set(nested + 1);
     let text = match expr {
@@ -556,9 +556,9 @@ fn eval_replacement(
     });
     EVAL_RESULT.with_mut(|slots| slots[nested] = text);
 
-    can_f_submatch.set(outer_can_f_submatch);
+    CAN_F_SUBMATCH.set(outer_can_f_submatch);
     if outer_can_f_submatch {
-        rsm.set(outer_rsm);
+        RSM.set(outer_rsm);
     }
 }
 

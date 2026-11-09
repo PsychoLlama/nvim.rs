@@ -2,11 +2,11 @@
 //! substitution: `submatch()` and `submatch(n, 1)`, and the list a `\=`
 //! expression's function is handed as its argument.
 //!
-//! These read `rsm`, the snapshot [`super::substitute`] takes of the match
+//! These read `RSM`, the snapshot [`super::substitute`] takes of the match
 //! it is expanding before evaluating the expression. A `\=` expression may
 //! run a search or a substitution of its own; the snapshot is what lets
 //! `submatch()` keep answering about the substitution the user wrote.
-//! `can_f_submatch` is what says the snapshot is live.
+//! `CAN_F_SUBMATCH` is what says the snapshot is live.
 //!
 //! A string match's snapshot holds the text of each group, so nothing here
 //! borrows the string the match ran over; a buffer match's holds positions,
@@ -31,7 +31,7 @@ use crate::os::libc::ptrdiff_t;
 use crate::types::{VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN};
 use core::ffi::c_int;
 
-use super::{RegSubMatch, can_f_submatch, rsm};
+use super::{CAN_F_SUBMATCH, RSM, RegSubMatch};
 use crate::eval::typval::{ListRef, SL_SIZE, tv_list_alloc};
 use crate::memline::Lines;
 use crate::regexp::{RegMMatch, RegMatch};
@@ -84,7 +84,7 @@ enum Group {
 }
 
 fn group(no: usize) -> Option<Group> {
-    rsm.with(|snapshot| match snapshot {
+    RSM.with(|snapshot| match snapshot {
         RegSubMatch::None => None,
         RegSubMatch::Str(groups) => Some(Group::Str(groups.get(no)?.clone())),
         RegSubMatch::Buf {
@@ -189,7 +189,7 @@ pub(crate) fn fill_submatch_list(argv: &[TypVal], argskip: usize, func: &UserFun
 /// A buffer match's capture can span lines, in which case the breaks come
 /// back as newlines.
 pub(crate) fn reg_submatch(no: c_int) -> Option<XString> {
-    if !can_f_submatch.get() {
+    if !CAN_F_SUBMATCH.get() {
         return None;
     }
     let no = usize::try_from(no).ok()?;
@@ -234,7 +234,7 @@ pub(crate) fn reg_submatch(no: c_int) -> Option<XString> {
 /// [`reg_submatch`] as one list item per line, which is what
 /// `submatch(no, 1)` returns.
 pub(crate) fn reg_submatch_list(no: c_int) -> Option<ListRef> {
-    if !can_f_submatch.get() {
+    if !CAN_F_SUBMATCH.get() {
         return None;
     }
     let no = usize::try_from(no).ok()?;

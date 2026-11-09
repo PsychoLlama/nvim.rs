@@ -225,15 +225,15 @@ pub fn emsg_multiline(s: &CStr, kind: Option<&CStr>, hl_id: c_int, multiline: bo
             });
         }
 
-        ex_exitval.set(1);
+        EX_EXITVAL.set(1);
 
         // Reset msg_silent, an error causes messages to be visible again.
         MSG_SILENT.set(0);
         CMD_SILENT.set(false);
 
-        if global_busy.get() != 0 {
+        if GLOBAL_BUSY.get() != 0 {
             // Break out of the :global command.
-            global_busy.set(global_busy.get() + 1);
+            GLOBAL_BUSY.set(GLOBAL_BUSY.get() + 1);
         }
 
         // Now that we have a message, flush the input buffer or beep.

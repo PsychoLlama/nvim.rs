@@ -84,7 +84,7 @@ impl Cells {
         // Decide which of the highlight attributes to use.
         self.attr_pri = if self.area_attr != 0 {
             let pri = hl_combine_attr(wlv.line_attr, self.area_attr);
-            if highlight_match.get() {
+            if HIGHLIGHT_MATCH.get() {
                 pri
             } else {
                 // Let search highlighting show through the Visual area.

@@ -30,14 +30,14 @@ use crate::message::state::MSG_SCROLL;
 use crate::option::vars::p_exrc;
 use crate::os::cshim::{gettext, write_c_stderr};
 use crate::os::fs::path_exists;
-use crate::os::state::{XDG_CONFIG_DIRS, kEqualFiles};
+use crate::os::state::{EQUAL_FILES, XDG_CONFIG_DIRS};
 use crate::path::path_full_compare;
 use crate::profile::time_msg_at;
 use crate::quickfix::qf_jump_to_current;
-use crate::runtime::state::{ETYPE_ARGS, SID_CARG, SID_CMDARG, current_sctx};
+use crate::runtime::state::{CURRENT_SCTX, ETYPE_ARGS, SID_CARG, SID_CMDARG};
 use crate::runtime::{do_source, estack_pop, estack_push, source_init_file};
 use crate::startup::args::execute_env;
-use crate::startup::{EDIT_QF, MainParams, SYS_VIMRC_FILE, VIMRC_FILE, silent_mode};
+use crate::startup::{EDIT_QF, MainParams, SILENT_MODE, SYS_VIMRC_FILE, VIMRC_FILE};
 use crate::state::mode::EXMODE_ACTIVE;
 use crate::types::ScriptId;
 
@@ -55,12 +55,12 @@ pub(crate) fn exe_pre_commands(parm: &MainParams) {
         crate::runtime::defs::FrameName::Static(gettext(c"pre-vimrc command line")),
         LineNr::ZERO,
     );
-    current_sctx.set(current_sctx.get().with_sid(SID_CMDARG as ScriptId));
+    CURRENT_SCTX.set(CURRENT_SCTX.get().with_sid(SID_CMDARG as ScriptId));
     for cmd in &parm.pre_commands {
         let _ = do_cmdline_cmd(cmd);
     }
     estack_pop();
-    current_sctx.set(current_sctx.get().with_sid(0));
+    CURRENT_SCTX.set(CURRENT_SCTX.get().with_sid(0));
 
     time_msg_at(c"--cmd commands");
 }
@@ -80,8 +80,8 @@ pub(crate) fn exe_commands(parm: &MainParams) {
         crate::runtime::defs::FrameName::Static(c"command line"),
         LineNr::ZERO,
     );
-    current_sctx.set(
-        current_sctx
+    CURRENT_SCTX.set(
+        CURRENT_SCTX
             .get()
             .with_sid(SID_CARG as ScriptId)
             .with_seq(0),
@@ -90,7 +90,7 @@ pub(crate) fn exe_commands(parm: &MainParams) {
         let _ = do_cmdline_cmd(cmd);
     }
     estack_pop();
-    current_sctx.set(current_sctx.get().with_sid(0));
+    CURRENT_SCTX.set(CURRENT_SCTX.get().with_sid(0));
 
     if Win::current().w_cursor.lnum == LineNr::ZERO {
         Win::current().w_cursor.lnum = LineNr::ONE;
@@ -173,7 +173,7 @@ fn source_init_pair(init_lua: &CStr, init_vim: &CStr, check_exrc_is_same: bool) 
         let mut do_exrc = p_exrc();
         if do_exrc && check_exrc_is_same {
             let same = path_full_compare(VIMRC_FILE, init_vim, false, true);
-            do_exrc = same != kEqualFiles;
+            do_exrc = same != EQUAL_FILES;
         }
         return Some(do_exrc);
     }
@@ -242,7 +242,7 @@ pub(crate) fn source_startup_scripts(parm: &MainParams) {
             let vimrc = msg_cstr(vimrc);
             semsg!("E282: Cannot read from \"{vimrc}\"");
         }
-    } else if !silent_mode.get() {
+    } else if !SILENT_MODE.get() {
         do_system_initialization();
         if do_user_initialization() {
             do_exrc_initialization();

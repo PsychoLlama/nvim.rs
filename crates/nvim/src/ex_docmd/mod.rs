@@ -15,7 +15,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub mod state;
 use crate::arglist::{
@@ -82,7 +81,7 @@ use crate::runtime::{
     ex_finish, ex_options, ex_packadd, ex_packloadall, ex_runtime, ex_scriptencoding,
     ex_scriptnames, ex_source,
 };
-use crate::search::state::searchcmdlen;
+use crate::search::state::SEARCHCMDLEN;
 use crate::sign::ex_sign;
 use crate::spell::{ex_spelldump, ex_spellinfo, ex_spellrepall};
 use crate::spellfile::{ex_mkspell, ex_spell};
@@ -149,7 +148,7 @@ mod childproc;
 mod tests;
 pub(crate) use self::childproc::*;
 pub const DIRECTION_NOT_SET: Direction = 0;
-pub const kCdCauseManual: CdCause = 0;
+pub const CD_CAUSE_MANUAL: CdCause = 0;
 pub const OPTION_MAGIC_OFF: OptMagic = 2;
 pub const OPTION_MAGIC_ON: OptMagic = 1;
 pub const MARK_ALL: MarkGet = 1;
@@ -243,31 +242,31 @@ pub const BAD_DROP: c_int = -2 as c_int;
 pub const EXFLAG_LIST: c_int = 0x1 as c_int;
 pub const EXFLAG_NR: c_int = 0x2 as c_int;
 pub const EXFLAG_PRINT: c_int = 0x4 as c_int;
-static e_ambiguous_use_of_user_defined_command: &CStr =
+static E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND: &CStr =
     c"E464: Ambiguous use of user-defined command";
-static e_no_call_stack_to_substitute_for_stack: &CStr =
+static E_NO_CALL_STACK_TO_SUBSTITUTE_FOR_STACK: &CStr =
     c"E489: No call stack to substitute for \"<stack>\"";
-static e_not_an_editor_command: &CStr = c"E492: Not an editor command";
-static e_no_autocommand_file_name_to_substitute_for_afile: &CStr =
+static E_NOT_AN_EDITOR_COMMAND: &CStr = c"E492: Not an editor command";
+static E_NO_AUTOCOMMAND_FILE_NAME_TO_SUBSTITUTE_FOR_AFILE: &CStr =
     c"E495: No autocommand file name to substitute for \"<afile>\"";
-static e_no_autocommand_buffer_number_to_substitute_for_abuf: &CStr =
+static E_NO_AUTOCOMMAND_BUFFER_NUMBER_TO_SUBSTITUTE_FOR_ABUF: &CStr =
     c"E496: No autocommand buffer number to substitute for \"<abuf>\"";
-static e_no_autocommand_match_name_to_substitute_for_amatch: &CStr =
+static E_NO_AUTOCOMMAND_MATCH_NAME_TO_SUBSTITUTE_FOR_AMATCH: &CStr =
     c"E497: No autocommand match name to substitute for \"<amatch>\"";
-static e_no_source_file_name_to_substitute_for_sfile: &CStr =
+static E_NO_SOURCE_FILE_NAME_TO_SUBSTITUTE_FOR_SFILE: &CStr =
     c"E498: No :source file name to substitute for \"<sfile>\"";
-static e_no_line_number_to_use_for_slnum: &CStr = c"E842: No line number to use for \"<slnum>\"";
-static e_no_line_number_to_use_for_sflnum: &CStr = c"E961: No line number to use for \"<sflnum>\"";
-static e_no_script_file_name_to_substitute_for_script: &CStr =
+static E_NO_LINE_NUMBER_TO_USE_FOR_SLNUM: &CStr = c"E842: No line number to use for \"<slnum>\"";
+static E_NO_LINE_NUMBER_TO_USE_FOR_SFLNUM: &CStr = c"E961: No line number to use for \"<sflnum>\"";
+static E_NO_SCRIPT_FILE_NAME_TO_SUBSTITUTE_FOR_SCRIPT: &CStr =
     c"E1274: No script file name to substitute for \"<script>\"";
-static quitmore: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-static ex_pressedreturn: GlobalCell<bool> = GlobalCell::new(false);
-static cmdline_call_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-static ffu_cb: GlobalCell<Callback> = GlobalCell::new(Callback::None);
-static prev_dir: GlobalCell<Option<XString>> = GlobalCell::new(None);
-static filetype_detect: GlobalCell<Option<bool>> = GlobalCell::new(None);
-static filetype_plugin: GlobalCell<Option<bool>> = GlobalCell::new(None);
-static filetype_indent: GlobalCell<Option<bool>> = GlobalCell::new(None);
+static QUITMORE: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+static EX_PRESSEDRETURN: GlobalCell<bool> = GlobalCell::new(false);
+static CMDLINE_CALL_DEPTH: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+static FFU_CB: GlobalCell<Callback> = GlobalCell::new(Callback::None);
+static PREV_DIR: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static FILETYPE_DETECT: GlobalCell<Option<bool>> = GlobalCell::new(None);
+static FILETYPE_PLUGIN: GlobalCell<Option<bool>> = GlobalCell::new(None);
+static FILETYPE_INDENT: GlobalCell<Option<bool>> = GlobalCell::new(None);
 pub const FILETYPE_FILE: &CStr = c"filetype.lua filetype.vim";
 pub const FTPLUGIN_FILE: &CStr = c"ftplugin.vim";
 pub const INDENT_FILE: &CStr = c"indent.vim";

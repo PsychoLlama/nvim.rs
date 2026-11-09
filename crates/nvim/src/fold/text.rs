@@ -29,7 +29,7 @@ use crate::mbyte::{c_cluster_len, char_at};
 use crate::memory::XString;
 use crate::message::state::DID_EMSG;
 use crate::os::cshim::ngettext;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::strings::{FmtArg, format_into};
 use crate::types::Vv;
 use crate::winlayer::graph::switch_to;
@@ -92,8 +92,8 @@ pub(crate) fn get_foldtext(
         set_vim_var_nr(Vv::Foldlevel, VarNumber::from(level));
         if !GOT_FDT_ERROR.get() {
             let saved = switch_to(window);
-            let saved_sctx = current_sctx.get();
-            current_sctx.set(win.w_onebuf_opt.wo_script_ctx[kWinOptFoldtext as usize]);
+            let saved_sctx = CURRENT_SCTX.get();
+            CURRENT_SCTX.set(win.w_onebuf_opt.wo_script_ctx[kWinOptFoldtext as usize]);
             let no_emsg = Suppress::emsg();
             let obj: Object = eval_foldtext(window);
             match obj.kind() {
@@ -123,7 +123,7 @@ pub(crate) fn get_foldtext(
                 GOT_FDT_ERROR.set(true);
             }
             saved.restore();
-            current_sctx.set(saved_sctx);
+            CURRENT_SCTX.set(saved_sctx);
         }
         LAST_LNUM.set(lnum);
         LAST_WIN.set(Some(window.id()));

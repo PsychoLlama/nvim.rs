@@ -35,7 +35,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::apply_autocmds_exarg;
@@ -366,10 +365,10 @@ pub(crate) const SST_MAX_ENTRIES: ::core::ffi::c_int = 1000 as ::core::ffi::c_in
 pub(crate) const SST_DIST: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
 /// Whether `:syntax on|off|enable|manual` has been used, which is what stops
 /// [`syn_maybe_enable`] from overriding a deliberate choice.
-static did_syntax_onoff: GlobalCell<bool> = GlobalCell::new(false);
+static DID_SYNTAX_ONOFF: GlobalCell<bool> = GlobalCell::new(false);
 /// Whether `:syntime on` is in effect. A setting rather than parser state:
 /// a parse that re-enters must not lose it.
-static syn_time_on: GlobalCell<bool> = GlobalCell::new(false);
+static SYN_TIME_ON: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) const SPO_MS_OFF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub(crate) const SPO_ME_OFF: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub(crate) const SPO_HS_OFF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -396,9 +395,9 @@ pub(crate) const MAX_SYN_INC_TAG: ::core::ffi::c_int = 999 as ::core::ffi::c_int
 pub(crate) const MAX_CLUSTER_ID: ::core::ffi::c_int = 32767 as ::core::ffi::c_int - SYNID_CLUSTER;
 /// The `:syntax include` nesting tag items are being defined under; 0 outside
 /// an inclusion.
-static current_syn_inc_tag: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static CURRENT_SYN_INC_TAG: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 /// The highest tag handed out so far, capped at [`MAX_SYN_INC_TAG`].
-static running_syn_inc_tag: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static RUNNING_SYN_INC_TAG: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 /// What every `:syntax`/`:syntime` listing answers when there is nothing to
 /// list.
 pub(crate) const MSG_NO_ITEMS: &::core::ffi::CStr = c"No Syntax items defined for this buffer";

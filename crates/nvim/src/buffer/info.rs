@@ -420,7 +420,7 @@ pub fn maketitle() {
         return;
     }
     NEED_MAKETITLE.set(false);
-    if !p_title() && !p_icon() && lasttitle.with(Option::is_none) && lasticon.with(Option::is_none)
+    if !p_title() && !p_icon() && LASTTITLE.with(Option::is_none) && LASTICON.with(Option::is_none)
     {
         // Nothing to do.
         return;
@@ -446,9 +446,9 @@ pub fn maketitle() {
             let default = b"%t%( %M%)%( (%{expand('%:p:~:h')})%)%a - Nvim";
             build_stl(default, kOptTitlestring, maxlen)
         };
-        mustset = value_change(Some(&title), &lasttitle);
+        mustset = value_change(Some(&title), &LASTTITLE);
     } else {
-        value_change(None, &lasttitle);
+        value_change(None, &LASTTITLE);
     }
 
     if p_icon() {
@@ -461,9 +461,9 @@ pub fn maketitle() {
         } else {
             default_icon()
         };
-        mustset |= value_change(Some(&icon), &lasticon);
+        mustset |= value_change(Some(&icon), &LASTICON);
     } else {
-        mustset |= value_change(None, &lasticon);
+        mustset |= value_change(None, &LASTICON);
     }
 
     if mustset {
@@ -521,9 +521,9 @@ fn value_change(now: Option<&[u8]>, last: &GlobalCell<Option<XString>>) -> bool 
 pub fn resettitle() {
     // A title the UI has never been told is upstream's null pointer, which
     // `cstr_to_string` answered the empty string for.
-    let icon = lasticon.with(|value| ApiString::from_bytes(value.as_deref().unwrap_or_default()));
+    let icon = LASTICON.with(|value| ApiString::from_bytes(value.as_deref().unwrap_or_default()));
     ui_call_set_icon(icon);
-    let title = lasttitle.with(|value| ApiString::from_bytes(value.as_deref().unwrap_or_default()));
+    let title = LASTTITLE.with(|value| ApiString::from_bytes(value.as_deref().unwrap_or_default()));
     ui_call_set_title(title);
 }
 

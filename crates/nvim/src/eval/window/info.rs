@@ -206,7 +206,7 @@ pub fn f_win_gettype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         c"preview"
     } else if wp.w_floating {
         c"popup"
-    } else if cmdwin_win.get() == Some(wp.id()) {
+    } else if CMDWIN_WIN.get() == Some(wp.id()) {
         c"command"
     } else if buf_is_quickfix(wp.buffer_or_none()) {
         if wp.w_llist_ref.is_none() {
@@ -224,6 +224,6 @@ pub fn f_win_gettype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// the empty string when it is not open.
 pub fn f_getcmdwintype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_empty(VAR_STRING);
-    let kind = cmdwin_type.get();
+    let kind = CMDWIN_TYPE.get();
     result.write_string(Some(ThinCString::from_bytes(&[kind])));
 }

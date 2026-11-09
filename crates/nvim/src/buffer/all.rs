@@ -21,9 +21,9 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::autocmd::is_aucmd_win;
-use crate::buffer::state::{swap_exists_action, swap_exists_did_quit};
+use crate::buffer::state::{SWAP_EXISTS_ACTION, SWAP_EXISTS_DID_QUIT};
 use crate::ex_cmds2::autowrite;
-use crate::ex_docmd::state::cmdmod;
+use crate::ex_docmd::state::CMDMOD;
 use crate::ex_eval::defs::Cleanup;
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::getchar::state::GOT_INT;
@@ -183,7 +183,7 @@ pub fn ex_buffer_all(excmd: &mut ExArg) {
     let excmd = &*excmd;
     let mut split_ret = Ok(());
     let mut open_wins = 0;
-    let had_tab = cmdmod.with(|m| m.cmod_tab);
+    let had_tab = CMDMOD.with(|m| m.cmod_tab);
 
     // The maximum number of windows to open: as many as possible, or as many
     // as the count asked for.
@@ -279,7 +279,7 @@ fn close_superfluous_windows(had_tab: c_int, open_wins: &mut c_int) {
 
 /// Whether `win` is one of the superfluous windows the first stage closes.
 fn should_close(win: Win, had_tab: c_int) -> bool {
-    let too_small = if cmdmod.with(|m| m.cmod_split) & WSP_VERT != 0 {
+    let too_small = if CMDMOD.with(|m| m.cmod_split) & WSP_VERT != 0 {
         OptInt::from(win.w_height + win.w_hsep_height + win.w_status_height)
             < OptInt::from(ROWS.get())
                 - p_ch()
@@ -336,21 +336,21 @@ impl Buf {
             }
 
             // Open the buffer in this window.
-            swap_exists_action.set(SEA_DIALOG);
+            SWAP_EXISTS_ACTION.set(SEA_DIALOG);
             goto_buf(self);
             if !bufref.valid() {
                 // Autocommands deleted the buffer.
-                swap_exists_action.set(SEA_NONE);
+                SWAP_EXISTS_ACTION.set(SEA_NONE);
                 return false;
             }
-            if swap_exists_action.get() == SEA_QUIT {
+            if SWAP_EXISTS_ACTION.get() == SEA_QUIT {
                 // The user selected Quit at the ATTENTION prompt; close this
                 // window.
                 with_clean_error_state(|| {
                     let _ = close_win(current_win(), true);
                     *open_wins -= 1;
-                    swap_exists_action.set(SEA_NONE);
-                    swap_exists_did_quit.set(true);
+                    SWAP_EXISTS_ACTION.set(SEA_NONE);
+                    SWAP_EXISTS_DID_QUIT.set(true);
                 });
             } else {
                 handled_swap_exists();
@@ -369,7 +369,7 @@ impl Buf {
         }
         // When ":tab" was used open a new tab for a new window repeatedly.
         if had_tab > 0 && OptInt::from(tab_index()) <= p_tpm() {
-            cmdmod.with_mut(|m| m.cmod_tab = 9999);
+            CMDMOD.with_mut(|m| m.cmod_tab = 9999);
         }
         true
     }

@@ -569,7 +569,7 @@ pub(crate) fn before_set_vvar(key: &[u8], tv: &mut TypVal, copy: bool, watched: 
                 c_int::from(b'?')
             });
         } else if key == b"hlsearch" {
-            no_hlsearch.set(n == 0);
+            NO_HLSEARCH.set(n == 0);
             redraw_all_later(UPD_SOME_VALID);
         } else if key == b"testing" {
             VIM_TESTING.set(n != 0);

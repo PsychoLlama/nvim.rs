@@ -62,7 +62,7 @@ use crate::types::{Direction, ExArg, LineNr};
 use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
 use super::check::no_spell_checking;
 use super::lookup::valid_word_prefix;
-use super::{MAXWLEN, loaded_langs};
+use super::{LOADED_LANGS, MAXWLEN};
 
 /// Round 2 of the walk: the keep-case tree.
 const DUMPFLAG_KEEPCASE: c_int = 1;
@@ -95,7 +95,7 @@ pub fn ex_spellinfo(_excmd: &mut ExArg) {
     }
 
     // Copied out first: the messages may scroll and redraw.
-    let entries: Vec<(XString, Option<XString>)> = loaded_langs.with(|langs| {
+    let entries: Vec<(XString, Option<XString>)> = LOADED_LANGS.with(|langs| {
         Win::current()
             .syn_block()
             .b_langp
@@ -210,7 +210,7 @@ pub fn spell_dump_compl(
     let mut region_names: Option<Vec<u8>> = None;
     let mut do_region = true;
     for lp in &langp {
-        let Some(regions) = loaded_langs.with(|langs| langs.get(lp.slang).map(|sl| sl.sl_regions))
+        let Some(regions) = LOADED_LANGS.with(|langs| langs.get(lp.slang).map(|sl| sl.sl_regions))
         else {
             continue;
         };
@@ -241,7 +241,7 @@ pub fn spell_dump_compl(
         dumpflags,
     };
     for lp in &langp {
-        loaded_langs.with(|langs| {
+        LOADED_LANGS.with(|langs| {
             let Some(slang) = langs.get(lp.slang) else {
                 return;
             };

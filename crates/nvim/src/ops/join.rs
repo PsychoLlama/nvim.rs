@@ -23,7 +23,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_UNDO;
 use crate::guard::Suppress;
 use crate::narrow::len_as_int;
 use crate::winlayer::{Buf, Win};
@@ -209,11 +209,11 @@ fn measure_join(
         }
 
         let added = spaces;
-        if t > 0 && curbuf_splice_pending.get() == 0 {
+        if t > 0 && CURBUF_SPLICE_PENDING.get() == 0 {
             let removed = ColNr::from_index(curr);
             let row = Win::current().w_cursor.lnum.get() - 1;
             let (old, new) = ((removed + 1).get() as isize, added as BCount);
-            let op = kExtmarkUndo;
+            let op = EXTMARK_UNDO;
             extmark_splice(
                 Buf::current(),
                 row,

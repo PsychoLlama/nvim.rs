@@ -5,7 +5,7 @@
 //! runs `eval0`, converts the result to whatever the caller wanted, and
 //! clears the typval on both the success and the error path. What differs
 //! is what is counted up around it (`EMSG_SKIP`, `EMSG_OFF`, `sandbox`,
-//! `textlock`, the funccal stack) and what the answer is converted to.
+//! `TEXTLOCK`, the funccal stack) and what the answer is converted to.
 //!
 //! The text is the caller's, borrowed for the evaluation. A caller whose
 //! text lives where the expression can reach it -- an option value, a
@@ -51,7 +51,7 @@ use crate::option::defs::OptionSetFlags;
 use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::optionstr::OptString;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::types::{
     ApiString, ExArg, Failed, Object, ScriptCtx, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
     VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv,
@@ -422,12 +422,12 @@ fn leading_long(text: &[u8]) -> VarNumber {
 /// Run 'foldexpr' for the window's current line: the level, and the leading
 /// marker character (`>`, `<`, `=`, `a`, `s`) when there was one, else NUL.
 pub(crate) fn eval_foldexpr(window: Win) -> (c_int, c_int) {
-    let saved_sctx: ScriptCtx = current_sctx.get();
+    let saved_sctx: ScriptCtx = CURRENT_SCTX.get();
     let use_sandbox = was_set_insecurely(window, kOptFoldexpr, OptionSetFlags::LOCAL);
     // A copy: the expression may set 'foldexpr' and free the option's text.
     let expr = window.w_onebuf_opt.wo_fde.get();
     let text = &expr[skip::white(&expr)..];
-    current_sctx.set(window.w_onebuf_opt.wo_script_ctx[kWinOptFoldexpr as usize]);
+    CURRENT_SCTX.set(window.w_onebuf_opt.wo_script_ctx[kWinOptFoldexpr as usize]);
     let mut marker = NUL;
     let retval: VarNumber = {
         let _no_emsg = Suppress::emsg();
@@ -456,7 +456,7 @@ pub(crate) fn eval_foldexpr(window: Win) -> (c_int, c_int) {
         }
         retval
     };
-    current_sctx.set(saved_sctx);
+    CURRENT_SCTX.set(saved_sctx);
     (number_as_int(retval), marker)
 }
 

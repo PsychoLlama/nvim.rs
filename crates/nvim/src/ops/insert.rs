@@ -33,7 +33,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_UNDO;
 use crate::memline::MlFlags;
 use crate::narrow::len_as_int;
 use crate::types::Key;
@@ -443,7 +443,7 @@ fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_inde
                 bd.textcol,
                 ColNr::ZERO,
                 ColNr::new(splice),
-                kExtmarkUndo,
+                EXTMARK_UNDO,
             );
         }
         linenr += 1;

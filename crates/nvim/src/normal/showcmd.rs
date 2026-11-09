@@ -16,7 +16,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::keycodes::SpecialKey;
 use crate::types::Key;
@@ -26,7 +25,7 @@ use crate::charset::{transchar, vim_isprintc};
 use crate::cstr;
 use crate::drawscreen::setcursor;
 use crate::drawscreen::state::{REDRAW_TABLINE, SC_COL};
-use crate::ex_docmd::state::ex_normal_busy;
+use crate::ex_docmd::state::EX_NORMAL_BUSY;
 use crate::getchar::char_avail;
 use crate::global_cell::GlobalCell;
 use crate::grid::{grid_line_flush, grid_line_puts, grid_line_start};
@@ -34,7 +33,7 @@ use crate::mbyte::{cluster_len, encode_char};
 use crate::message::state::MSG_SILENT;
 use crate::message::{msg_grid_validate, msg_grid_view};
 use crate::normal::{
-    SHOWCMD_BUFLEN, SHOWCMD_COLS, VisualSelection, showcmd_is_clear, showcmd_visual,
+    SHOWCMD_BUFLEN, SHOWCMD_COLS, SHOWCMD_IS_CLEAR, SHOWCMD_VISUAL, VisualSelection,
     visual_selection,
 };
 use crate::option::vars::{P_SBR, P_SEL, p_ch, p_sc, p_sloc};
@@ -124,10 +123,10 @@ impl ShowCmd {
 }
 
 /// The 'showcmd' area's text.
-pub(crate) static showcmd_buf: GlobalCell<ShowCmd> = GlobalCell::new(ShowCmd::new());
+pub(crate) static SHOWCMD_BUF: GlobalCell<ShowCmd> = GlobalCell::new(ShowCmd::new());
 
 /// What [`push_showcmd`] parked, for [`pop_showcmd`] to put back.
-static old_showcmd_buf: GlobalCell<ShowCmd> = GlobalCell::new(ShowCmd::new());
+static OLD_SHOWCMD_BUF: GlobalCell<ShowCmd> = GlobalCell::new(ShowCmd::new());
 
 /// How many bytes of command may be shown. The message UI gets the whole
 /// buffer; the last screen line gets the ten columns reserved for it.
@@ -264,11 +263,11 @@ fn show_visual_size(sel: VisualSelection) {
         }
     };
 
-    let mut sc = showcmd_buf.get();
+    let mut sc = SHOWCMD_BUF.get();
     sc.set_text(text.as_bytes());
     sc.truncate(showcmd_limit());
-    showcmd_buf.set(sc);
-    showcmd_visual.set(true);
+    SHOWCMD_BUF.set(sc);
+    SHOWCMD_VISUAL.set(true);
 }
 
 /// Throw away the partial command, or replace it with the size of the
@@ -280,9 +279,9 @@ pub(crate) fn clear_showcmd() {
     if let Some(sel) = visual_selection().filter(|_| !char_avail()) {
         show_visual_size(sel);
     } else {
-        showcmd_buf.set(ShowCmd::new());
-        showcmd_visual.set(false);
-        if showcmd_is_clear.get() {
+        SHOWCMD_BUF.set(ShowCmd::new());
+        SHOWCMD_VISUAL.set(false);
+        if SHOWCMD_IS_CLEAR.get() {
             return;
         }
     }
@@ -294,13 +293,13 @@ pub(crate) fn clear_showcmd() {
 /// Answers whether the area was redrawn: the caller uses that to decide
 /// whether it must put the cursor back.
 pub(crate) fn add_to_showcmd(c: Key) -> bool {
-    if !p_sc() || MSG_SILENT.get() != 0 || ex_normal_busy.get() != 0 {
+    if !p_sc() || MSG_SILENT.get() != 0 || EX_NORMAL_BUSY.get() != 0 {
         return false;
     }
     // A Visual size sitting in the area is replaced, not appended to.
-    if showcmd_visual.get() {
-        showcmd_buf.set(ShowCmd::new());
-        showcmd_visual.set(false);
+    if SHOWCMD_VISUAL.get() {
+        SHOWCMD_BUF.set(ShowCmd::new());
+        SHOWCMD_VISUAL.set(false);
     }
     if c.special().is_some_and(|key| IGNORED.contains(&key)) {
         return false;
@@ -322,9 +321,9 @@ pub(crate) fn add_to_showcmd(c: Key) -> bool {
         &mbyte_buf[..n]
     };
 
-    let mut sc = showcmd_buf.get();
+    let mut sc = SHOWCMD_BUF.get();
     sc.append(extra, showcmd_limit());
-    showcmd_buf.set(sc);
+    SHOWCMD_BUF.set(sc);
 
     if char_avail() {
         return false;
@@ -344,9 +343,9 @@ pub(crate) fn del_from_showcmd(len: usize) {
     if !p_sc() {
         return;
     }
-    let mut sc = showcmd_buf.get();
+    let mut sc = SHOWCMD_BUF.get();
     sc.truncate(sc.len.saturating_sub(len));
-    showcmd_buf.set(sc);
+    SHOWCMD_BUF.set(sc);
     if !char_avail() {
         display_showcmd();
     }
@@ -355,7 +354,7 @@ pub(crate) fn del_from_showcmd(len: usize) {
 /// Save the partial command across something that shows its own.
 pub(crate) fn push_showcmd() {
     if p_sc() {
-        old_showcmd_buf.set(showcmd_buf.get());
+        OLD_SHOWCMD_BUF.set(SHOWCMD_BUF.get());
     }
 }
 
@@ -364,15 +363,15 @@ pub(crate) fn pop_showcmd() {
     if !p_sc() {
         return;
     }
-    showcmd_buf.set(old_showcmd_buf.get());
+    SHOWCMD_BUF.set(OLD_SHOWCMD_BUF.get());
     display_showcmd();
 }
 
 /// Hand the area's current contents to whichever of the four places
 /// 'showcmdloc' names is showing it.
 pub(crate) fn display_showcmd() {
-    let clear = showcmd_buf.get().is_empty();
-    showcmd_is_clear.set(clear);
+    let clear = SHOWCMD_BUF.get().is_empty();
+    SHOWCMD_IS_CLEAR.set(clear);
 
     let loc = p_sloc(cstr::first);
     if loc == b's' {
@@ -411,7 +410,7 @@ pub(crate) fn display_showcmd() {
 fn show_through_ui(clear: bool) {
     let mut content = Vec::with_capacity(usize::from(!clear));
     if !clear {
-        let sc = showcmd_buf.get();
+        let sc = SHOWCMD_BUF.get();
         let chunk = vec![
             Object::integer(0),
             Object::string(ApiString::from_cstr(sc.as_cstr())),
@@ -425,7 +424,7 @@ fn show_through_ui(clear: bool) {
 /// The built-in form: write the text into the reserved columns of the last
 /// screen line, then blank the rest of them.
 fn draw_on_last_line(clear: bool) {
-    let sc = showcmd_buf.get();
+    let sc = SHOWCMD_BUF.get();
     msg_grid_validate();
     let showcmd_row = ROWS.get() - 1;
     grid_line_start(msg_grid_view(), showcmd_row);

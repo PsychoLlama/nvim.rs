@@ -31,13 +31,13 @@ use core::ffi::c_int;
 use super::*;
 use crate::allocator::Owned;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
-use crate::diff::state::diff_need_scrollbind;
+use crate::diff::state::DIFF_NEED_SCROLLBIND;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::drawscreen::state::REDRAW_TABLINE;
 use crate::eval::typval::ScopeDictItem;
 use crate::eval::vars::{new_var_scope, release_var_scope, vars_clear};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
-use crate::ex_docmd::state::cmdmod;
+use crate::ex_docmd::state::CMDMOD;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::global_cell::GlobalCell;
 use crate::message::set_keep_msg;
@@ -49,13 +49,13 @@ use crate::option::vars::{p_ch, p_tpm};
 use crate::options::kOptCmdheight;
 use crate::os::libc::int64_t;
 use crate::startup::starting;
-use crate::tag::state::postponed_split_tab;
+use crate::tag::state::POSTPONED_SPLIT_TAB;
 use crate::types::{Failed, Handle, OptInt, SwitchWin, Tabpage, VAR_SCOPE};
 use crate::ui::state::{COLUMNS, ROWS};
-use crate::window::state::{skip_win_fix_scroll, tabpage_move_disallowed};
+use crate::window::state::{SKIP_WIN_FIX_SCROLL, TABPAGE_MOVE_DISALLOWED};
 use crate::winfloat::{win_config_float, win_float_update_statusline};
 use crate::winlayer::graph::{
-    cmdwin_type, first_tabpage, firstwin, lastused_tabpage, lastwin, prevwin, topframe,
+    CMDWIN_TYPE, FIRST_TABPAGE, FIRSTWIN, LASTUSED_TABPAGE, LASTWIN, PREVWIN, TOPFRAME,
 };
 use crate::winlayer::{WinId, forget_tabpage, register_tabpage, tabs};
 
@@ -67,9 +67,9 @@ pub fn unuse_tabpage(tabpage: TabPage) {
 /// [`adopt_tabpage`].
 pub(crate) fn stash_tabpage(tabpage: TabPage) {
     let mut tabpage = tabpage;
-    tabpage.tp_topframe = topframe.get();
-    tabpage.tp_firstwin = firstwin.get();
-    tabpage.tp_lastwin = lastwin.get();
+    tabpage.tp_topframe = TOPFRAME.get();
+    tabpage.tp_firstwin = FIRSTWIN.get();
+    tabpage.tp_lastwin = LASTWIN.get();
     tabpage.tp_curwin = Win::current_or_none().map(Win::id);
 }
 
@@ -80,9 +80,9 @@ pub fn use_tabpage(tabpage: TabPage) {
 /// Point the layout globals at `tabpage`. May want to call [`stash_tabpage`] first.
 pub(crate) fn adopt_tabpage(tabpage: TabPage) {
     tabpage.make_current();
-    topframe.set(tabpage.tp_topframe);
-    firstwin.set(tabpage.tp_firstwin);
-    lastwin.set(tabpage.tp_lastwin);
+    TOPFRAME.set(tabpage.tp_topframe);
+    FIRSTWIN.set(tabpage.tp_firstwin);
+    LASTWIN.set(tabpage.tp_lastwin);
     tabpage
         .current_window()
         .expect("a live tab page has a current window")
@@ -149,8 +149,8 @@ pub(crate) fn free_tab(tabpage: TabPage) {
     }
     let mut tabpage = tabpage;
     release_var_scope(&mut tabpage.tp_winvar);
-    if lastused_tabpage.get() == Some(tabpage.id()) {
-        lastused_tabpage.set(None);
+    if LASTUSED_TABPAGE.get() == Some(tabpage.id()) {
+        LASTUSED_TABPAGE.set(None);
     }
     // The free: `tabpage_S`'s destructor runs -- the diff blocks go with it
     // -- and the memory goes back.
@@ -205,7 +205,7 @@ pub(crate) fn new_tabpage(
     enter: bool,
 ) -> Result<(TabPage, Win), NoTabPage> {
     let old_curtab = TabPage::current();
-    if enter && cmdwin_type.get() != 0 {
+    if enter && CMDWIN_TYPE.get() != 0 {
         return Err(err(WinError::CmdWin).into());
     }
     if layout_locked(CmdIdx::tabnew) {
@@ -227,8 +227,8 @@ pub(crate) fn new_tabpage(
         stash_tabpage(cur);
         // Save this to tell whether room must be made for the tabline.
         cur.tp_old_rows_avail = rows_avail();
-        firstwin.set(None);
-        lastwin.set(None);
+        FIRSTWIN.set(None);
+        LASTWIN.set(None);
     }
 
     newtp.tp_localdir = old_curtab.tp_localdir.clone();
@@ -242,8 +242,8 @@ pub(crate) fn new_tabpage(
     // Make the new tab page the new topframe.
     if after == 1 {
         // New tab page becomes the first one.
-        newtp.tp_next = first_tabpage.get();
-        first_tabpage.set(Some(newtp.id()));
+        newtp.tp_next = FIRST_TABPAGE.get();
+        FIRST_TABPAGE.set(Some(newtp.id()));
     } else {
         let mut tp = old_curtab;
         if after > 0 {
@@ -267,7 +267,7 @@ pub(crate) fn new_tabpage(
     firstw.w_winrow = tabline_rows();
     firstw.w_prev_winrow = firstw.w_winrow;
     comp_scroll(Win::current());
-    newtp.tp_topframe = topframe.get();
+    newtp.tp_topframe = TOPFRAME.get();
     update_last_status(false);
     resize_terminal(Buf::current());
 
@@ -275,7 +275,7 @@ pub(crate) fn new_tabpage(
     if enter {
         redraw_all(UPD_NOT_VALID);
         check_tabpage_windows(old_curtab);
-        lastused_tabpage.set(Some(old_curtab.id()));
+        LASTUSED_TABPAGE.set(Some(old_curtab.id()));
         enter_window(Win::current());
         fire(AutoEvent::WinNew, Buf::current());
         fire(AutoEvent::WinEnter, Buf::current());
@@ -325,15 +325,15 @@ fn rows_avail() -> int64_t {
 /// with `:split`. `None` when no `:tab` asked for one; otherwise whether it
 /// was created.
 pub(crate) fn may_open_tabpage() -> Option<Result<(), NoTabPage>> {
-    let n = match cmdmod.with(|m| m.cmod_tab) {
-        0 => postponed_split_tab.get(),
+    let n = match CMDMOD.with(|m| m.cmod_tab) {
+        0 => POSTPONED_SPLIT_TAB.get(),
         tab => tab,
     };
     if n == 0 {
         return None;
     }
-    cmdmod.with_mut(|m| m.cmod_tab = 0);
-    postponed_split_tab.set(0);
+    CMDMOD.with_mut(|m| m.cmod_tab = 0);
+    POSTPONED_SPLIT_TAB.set(0);
     let status = new_tabpage(n, None, true).map(drop);
     if status.is_ok() {
         fire(AutoEvent::TabNewEntered, Buf::current());
@@ -345,7 +345,7 @@ pub fn make_tabpages(maxcount: c_int) -> c_int {
     let count = maxcount.min(number_as_int(p_tpm()));
 
     // Don't execute autocommands while creating the tab pages: `curwin` and
-    // `curbuf` are not set up yet.
+    // `CURBUF` are not set up yet.
     block_autocmds();
     let mut todo = count - 1;
     while todo > 0 {
@@ -386,8 +386,8 @@ pub fn close_tabpage(tab: TabPage) {
 /// another tab page or this will crash.
 fn close_tab(tab: TabPage) {
     let id = tab.id();
-    let ptp = if first_tabpage.get() == Some(id) {
-        first_tabpage.set(tab.tp_next);
+    let ptp = if FIRST_TABPAGE.get() == Some(id) {
+        FIRST_TABPAGE.set(tab.tp_next);
         first_tab()
     } else {
         let found = tabs().find(|ptp| ptp.tp_next == Some(id));
@@ -434,9 +434,9 @@ pub(crate) fn tab_index(tabpage: TabPage) -> c_int {
 }
 
 /// Prepare for leaving the current tab page, `new_curbuf` being what is going
-/// to be the new `curbuf` (`None` when that is not known yet).
+/// to be the new `CURBUF` (`None` when that is not known yet).
 ///
-/// [`Abandoned`] when autocommands changed `curtab`, in which case the tab
+/// [`Abandoned`] when autocommands changed `CURTAB`, in which case the tab
 /// page is not left. Careful: after `Ok` a new tab page must be entered very
 /// soon.
 fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<(), Abandoned> {
@@ -461,15 +461,15 @@ fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<()
     }
     reset_dragwin();
     tp.tp_curwin = Win::current_or_none().map(Win::id);
-    tp.tp_prevwin = prevwin.get();
-    tp.tp_firstwin = firstwin.get();
-    tp.tp_lastwin = lastwin.get();
+    tp.tp_prevwin = PREVWIN.get();
+    tp.tp_firstwin = FIRSTWIN.get();
+    tp.tp_lastwin = LASTWIN.get();
     tp.tp_old_rows_avail = rows_avail();
     if tp.tp_old_columns != -1 as int64_t {
         tp.tp_old_columns = int64_t::from(COLUMNS.get());
     }
-    firstwin.set(None);
-    lastwin.set(None);
+    FIRSTWIN.set(None);
+    LASTWIN.set(None);
     Ok(())
 }
 
@@ -498,9 +498,9 @@ fn enter_tab(
             // sizes, which are still correct.
             let new_ch = TabPage::current().tp_ch_used;
             TabPage::current().tp_ch_used = p_ch();
-            command_frame_height.set(false);
+            COMMAND_FRAME_HEIGHT.set(false);
             set_cmdheight(new_ch);
-            command_frame_height.set(true);
+            COMMAND_FRAME_HEIGHT.set(true);
         }
     }
 
@@ -526,12 +526,12 @@ fn enter_tab(
             .expect("a live tab page has a current window"),
         flags,
     );
-    prevwin.set(next_prevwin);
+    PREVWIN.set(next_prevwin);
 
     update_last_status(false); // a status line may appear or disappear
     win_float_update_statusline();
     comp_positions(); // recompute `w_winrow` for all windows
-    diff_need_scrollbind.set(true);
+    DIFF_NEED_SCROLLBIND.set(true);
     // A click in a window is not usable for a following drag.
     reset_dragwin();
 
@@ -548,7 +548,7 @@ fn enter_tab(
             TabPage::current().tp_old_columns = -1 as int64_t; // update window widths later
         }
     }
-    lastused_tabpage.set(Some(old_curtab.id()));
+    LASTUSED_TABPAGE.set(Some(old_curtab.id()));
 
     // Apply autocommands after updating the display, once 'lines' and 'columns'
     // have been set correctly.
@@ -567,10 +567,10 @@ fn set_cmdheight(n: OptInt) {
 }
 
 /// Tell an external UI that the windows and inline floats of `old_curtab` are
-/// invisible now and the floats of `curtab` visible.
+/// invisible now and the floats of `CURTAB` visible.
 ///
 /// External floats are independent of tab pages, which is implemented by
-/// always moving them to `curtab`.
+/// always moving them to `CURTAB`.
 fn check_tabpage_windows(old_curtab: TabPage) {
     let mut cur = old_curtab.tp_firstwin.and_then(WinId::get);
     while let Some(mut wp) = cur {
@@ -665,14 +665,14 @@ pub(crate) fn goto_tab(
     trigger_enter_autocmds: bool,
     trigger_leave_autocmds: bool,
 ) {
-    if (trigger_enter_autocmds || trigger_leave_autocmds) && cmdwin_type.get() != 0 {
+    if (trigger_enter_autocmds || trigger_leave_autocmds) && CMDWIN_TYPE.get() != 0 {
         err(WinError::CmdWin);
         return;
     }
     // Don't repeat a message in another tab page.
     set_keep_msg(None, 0);
 
-    skip_win_fix_scroll.set(true);
+    SKIP_WIN_FIX_SCROLL.set(true);
     let new_curbuf = tabpage.current_window().and_then(Win::buffer_or_none);
     if !tabpage.is_current() && leave_tab(new_curbuf, trigger_leave_autocmds).is_ok() {
         let target = valid_tab(tabpage.id()).unwrap_or_else(TabPage::current);
@@ -683,7 +683,7 @@ pub(crate) fn goto_tab(
             trigger_leave_autocmds,
         );
     }
-    skip_win_fix_scroll.set(false);
+    SKIP_WIN_FIX_SCROLL.set(false);
 }
 
 pub fn goto_tabpage_lastused() -> bool {
@@ -716,7 +716,7 @@ pub(crate) fn goto_tab_win(tabpage: TabPage, window: Win) {
 
 pub fn tabpage_move(nr: c_int) {
     debug_assert!(TabPage::current_or_none().is_some(), "curtab != NULL");
-    if first_tab().next().is_none() || tabpage_move_disallowed.get() != 0 {
+    if first_tab().next().is_none() || TABPAGE_MOVE_DISALLOWED.get() != 0 {
         return;
     }
 
@@ -734,8 +734,8 @@ pub fn tabpage_move(nr: c_int) {
     let mut tp_dst = tp;
 
     // Remove the current tab page from the list of tab pages.
-    if first_tabpage.get() == Some(id) {
-        first_tabpage.set(cur.tp_next);
+    if FIRST_TABPAGE.get() == Some(id) {
+        FIRST_TABPAGE.set(cur.tp_next);
     } else {
         let Some(mut prev) = tabs().find(|tp2| tp2.tp_next == Some(id)) else {
             return; // "cannot happen"
@@ -745,8 +745,8 @@ pub fn tabpage_move(nr: c_int) {
 
     // Re-insert it at the position asked for.
     if nr <= 0 {
-        cur.tp_next = first_tabpage.get();
-        first_tabpage.set(Some(id));
+        cur.tp_next = FIRST_TABPAGE.get();
+        FIRST_TABPAGE.set(Some(id));
     } else {
         cur.tp_next = tp_dst.tp_next;
         tp_dst.tp_next = Some(id);

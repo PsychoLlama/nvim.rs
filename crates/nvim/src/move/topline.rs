@@ -31,7 +31,7 @@ use crate::option::vars::p_sj;
 use crate::option::{ScrollMargin, ScrollOff};
 use crate::os::libc::int64_t;
 use crate::types::{LineNr, OptInt};
-use crate::window::state::skip_update_topline;
+use crate::window::state::SKIP_UPDATE_TOPLINE;
 use crate::winlayer::{Win, tab_windows};
 
 /// [`Win::update_topline`], for the callers still holding a raw window.
@@ -53,7 +53,7 @@ fn update_topline_win(mut win: Win) {
     let save_so = so.get();
 
     // With 'splitkeep' the cursor is moved instead.
-    if skip_update_topline.get() {
+    if SKIP_UPDATE_TOPLINE.get() {
         return;
     }
 

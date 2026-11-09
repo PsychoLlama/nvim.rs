@@ -229,7 +229,7 @@ pub(crate) fn cmdpreview_prepare(cpinfo: &mut CpInfo) {
     drop(saved_bufs);
 
     cpinfo.save_hls = p_hls();
-    cpinfo.save_cmdmod = cmdmod.with(Clone::clone);
+    cpinfo.save_cmdmod = CMDMOD.with(Clone::clone);
     cpinfo.save_view = win_size_save();
     save_search_patterns();
 
@@ -317,7 +317,7 @@ pub(crate) fn cmdpreview_restore_state(cpinfo: &mut CpInfo) {
         update_topline(win);
     }
 
-    cmdmod.set(cpinfo.save_cmdmod.clone());
+    CMDMOD.set(cpinfo.save_cmdmod.clone());
     P_HLS.set(cpinfo.save_hls);
     restore_search_patterns();
     win_size_restore(&cpinfo.save_view);

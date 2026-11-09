@@ -143,7 +143,7 @@ pub fn grid_line_start(view: GridView, mut row: c_int) {
 /// have no `GridView` (float borders, the popup menu, the statusline).
 pub fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
     debug_assert!(BATCH.with(|b| b.grid.is_none()), "grid_line_grid == NULL");
-    let poison = full_screen.get() && RDB_FLAGS.get() & kOptRdbFlagInvalid != 0;
+    let poison = FULL_SCREEN.get() && RDB_FLAGS.get() & kOptRdbFlagInvalid != 0;
     let width = with_linebuf(|buf| {
         if poison {
             // This batch must not depend on the previous line's contents.

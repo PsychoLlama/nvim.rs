@@ -57,7 +57,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 mod swapfile;
 mod table;
@@ -90,7 +89,7 @@ use crate::os::fs::{close_file, fsync_file, open_file, os_remove};
 use crate::os::input::{os_breakcheck, os_char_avail};
 use crate::winlayer::buffers;
 
-pub(crate) static did_swapwrite_msg: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static DID_SWAPWRITE_MSG: GlobalCell<bool> = GlobalCell::new(false);
 
 /// A swap-file operation that did not complete.
 ///
@@ -684,15 +683,15 @@ impl MemFile {
                     // Usually a full disk. Keep trying in case space turns
                     // up, but say so only once, until a write succeeds or
                     // the user hits a key.
-                    if !did_swapwrite_msg.get() {
+                    if !DID_SWAPWRITE_MSG.get() {
                         emsg(gettext(c"E297: Write error in swap file"));
                     }
-                    did_swapwrite_msg.set(true);
+                    DID_SWAPWRITE_MSG.set(true);
                     return Err(SwapFailed);
                 }
             }
 
-            did_swapwrite_msg.set(false);
+            DID_SWAPWRITE_MSG.set(false);
             if let Some(at) = at {
                 self.used.block_mut(at).flags &= !BH_DIRTY; // a real block, not filler
             }

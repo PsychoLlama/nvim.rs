@@ -46,7 +46,7 @@ use crate::message::emsg;
 use crate::r#move::WinValid;
 use crate::normal::defs::{CmdArg, Outcome};
 use crate::normal::{
-    TAB, VIsual_mode_orig, VisualMode, check_clear_op, check_clear_op_quit, clear_op,
+    TAB, V_ISUAL_MODE_ORIG, VisualMode, check_clear_op, check_clear_op_quit, clear_op,
     clear_op_beep, nv_object, nv_operator, prep_redo, prep_redo_cmd, set_visual_active,
     set_visual_mode, v_swap_corners, v_visop, visual_active, visual_mode,
 };
@@ -241,7 +241,7 @@ pub(crate) fn nv_replace_mode(cmd_arg: &mut CmdArg) {
         // A selection is replaced linewise, which is `c` over whole lines.
         cmd_arg.cmdchar = Key::ascii(b'c');
         cmd_arg.nchar = Key::NUL;
-        VIsual_mode_orig.set(visual_mode());
+        V_ISUAL_MODE_ORIG.set(visual_mode());
         set_visual_mode(VisualMode::LINE);
         nv_operator(cmd_arg);
         return;
@@ -361,7 +361,7 @@ pub(crate) fn nv_subst(cmd_arg: &mut CmdArg) {
         if cmd_arg.cmdchar.is('S') {
             // `S` on a selection is linewise however the selection was
             // made; the original kind is remembered for the redo.
-            VIsual_mode_orig.set(visual_mode());
+            V_ISUAL_MODE_ORIG.set(visual_mode());
             set_visual_mode(VisualMode::LINE);
         }
         cmd_arg.cmdchar = Key::ascii(b'c');

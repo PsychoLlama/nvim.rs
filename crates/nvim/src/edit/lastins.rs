@@ -41,8 +41,8 @@ pub(crate) fn set_last_insert(c: Key) {
     }
     push_char_escaped(c, &mut text);
     text.push(0x1b); // ESC
-    last_insert.set(ApiString::from_bytes(&text));
-    last_insert_skip.set(0);
+    LAST_INSERT.set(ApiString::from_bytes(&text));
+    LAST_INSERT_SKIP.set(0);
 }
 
 /// `.`, `i_CTRL-A` and `i_CTRL-@`: stuff the last inserted text into the read
@@ -113,8 +113,8 @@ pub(crate) fn stuff_inserted(c: Key, mut count: c_int, no_esc: bool) -> Result<(
 pub(crate) fn get_last_insert() -> ApiString {
     // `last_insert_skip` counts bytes this module put on the front, so it
     // never runs past the buffer.
-    let skip = size_t::try_from(last_insert_skip.get()).unwrap_or(0);
-    last_insert.with(|all| {
+    let skip = size_t::try_from(LAST_INSERT_SKIP.get()).unwrap_or(0);
+    LAST_INSERT.with(|all| {
         if all.is_null() {
             ApiString::NULL
         } else {

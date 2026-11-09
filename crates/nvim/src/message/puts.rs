@@ -64,7 +64,7 @@ pub fn msg_start() {
         CMDLINE_ROW.set(ROWS.get() - 1);
     }
 
-    if MSG_SCROLL.get() == 0 && full_screen.get() {
+    if MSG_SCROLL.get() == 0 && FULL_SCREEN.get() {
         // Overwrite the last message.
         MSG_ROW.set(CMDLINE_ROW.get());
         MSG_COL.set(0);
@@ -189,11 +189,11 @@ fn put_bytes(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) {
     if msg_use_printf() != 0 {
         let saved_msg_col = MSG_COL.get();
         msg_bytes_to_stdio(bytes);
-        if headless_mode.get() {
+        if HEADLESS_MODE.get() {
             MSG_COL.set(saved_msg_col);
         }
     }
-    if msg_use_printf() == 0 || (headless_mode.get() && default_grid_ref().is_allocated()) {
+    if msg_use_printf() == 0 || (HEADLESS_MODE.get() && default_grid_ref().is_allocated()) {
         msg_bytes_to_grid(bytes, hl_id, false);
     }
 
@@ -405,7 +405,7 @@ pub(crate) fn message_filtered(msg: &CStr) -> bool {
 /// Whether messages should be printed to stdout/stderr rather than drawn:
 /// batch mode (`-es`/`-Es`/`-l`), or no UI and not embedded.
 pub fn msg_use_printf() -> c_int {
-    c_int::from(!embedded_mode.get() && ui_active() == 0 && !ui_has(UI_MESSAGES))
+    c_int::from(!EMBEDDED_MODE.get() && ui_active() == 0 && !ui_has(UI_MESSAGES))
 }
 
 /// Print a message when there is no valid screen.
@@ -433,11 +433,11 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
     while at < bytes.len() && bytes[at] != 0 {
         let rest = &bytes[at..];
         let len = char_len(rest);
-        if !(silent_mode.get() && p_verbose() == 0) {
+        if !(SILENT_MODE.get() && p_verbose() == 0) {
             // One character, with NL translated to CR NL.
             let mut buf = [0u8; 7];
             let mut used = 0;
-            if rest[0] == b'\n' && !INFO_MESSAGE.get() && !silent_mode.get() && !headless_mode.get()
+            if rest[0] == b'\n' && !INFO_MESSAGE.get() && !SILENT_MODE.get() && !HEADLESS_MODE.get()
             {
                 buf[used] = b'\r';
                 used += 1;
@@ -472,7 +472,7 @@ pub(crate) fn msg_end() -> bool {
     // A message larger than the window, or one that ran into the ruler,
     // means the window has to be redrawn -- but not while abandoning the
     // file or editing the command line.
-    if !exiting.get() && NEED_WAIT_RETURN.get() && STATE.get() & MODE_CMDLINE == 0 {
+    if !EXITING.get() && NEED_WAIT_RETURN.get() && STATE.get() & MODE_CMDLINE == 0 {
         wait_return(0);
         return false;
     }

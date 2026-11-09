@@ -85,11 +85,11 @@ use crate::eval::callback_call;
 use crate::eval::typval::tv_clear;
 use crate::eval::vars::{set_vim_var_string, var_redir_str, with_vim_var_str};
 use crate::ex_docmd::do_sleep;
-use crate::ex_docmd::state::global_busy;
+use crate::ex_docmd::state::GLOBAL_BUSY;
 use crate::ex_eval::cause_errthrow;
 use crate::ex_getln::state::{CMDLINE_WAS_LAST_DRAWN, REDRAWING_CMDLINE};
 use crate::fileio::check_timestamps;
-use crate::fileio::state::need_check_timestamps;
+use crate::fileio::state::NEED_CHECK_TIMESTAMPS;
 use crate::getchar::state::FlushBuffers;
 use crate::getchar::state::{
     GOT_INT, KEY_TYPED, REG_RECORDING, SCRIPTOUT, VGETC_BUSY, VGETC_CHAR, VGETC_MOD_MASK,
@@ -156,7 +156,7 @@ use crate::pos::MAXCOL;
 use crate::register::write_reg_contents;
 use crate::runtime::defs::EStackArg;
 use crate::startup::{
-    embedded_mode, ex_exitval, exiting, full_screen, headless_mode, nvim_testing, silent_mode,
+    EMBEDDED_MODE, EX_EXITVAL, EXITING, FULL_SCREEN, HEADLESS_MODE, NVIM_TESTING, SILENT_MODE,
 };
 use crate::state::mode::{EXMODE_ACTIVE, STATE};
 use crate::state::{MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE};
@@ -695,7 +695,7 @@ pub fn messaging() -> bool {
 /// Report "N more lines" / "N fewer lines" after an edit, if `'report'`
 /// allows it.
 pub fn msgmore(n: c_int) {
-    if global_busy.get() != 0 || !messaging() {
+    if GLOBAL_BUSY.get() != 0 || !messaging() {
         // Don't report when :global is executing.
         return;
     }

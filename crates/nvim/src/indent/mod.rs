@@ -24,7 +24,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_UNDO;
 use crate::narrow::as_index;
 use crate::narrow::len_as_int;
 use crate::narrow::number_as_int;
@@ -734,7 +734,7 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
                 ColNr::new(skipcols),
                 old_offset - skipcols,
                 new_offset - skipcols,
-                kExtmarkUndo,
+                EXTMARK_UNDO,
             );
         }
         if flags & SIN_CHANGED != 0 {

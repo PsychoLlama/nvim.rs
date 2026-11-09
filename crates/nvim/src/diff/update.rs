@@ -79,7 +79,7 @@ impl Buf {
         let mut at = 0;
         for lnum in start.through(end) {
             let line = lines.line(lnum);
-            if diff_flags.get() & DIFF_ICASE == 0 {
+            if DIFF_FLAGS.get() & DIFF_ICASE == 0 {
                 let copy = &mut out[at..at + line.len()];
                 copy.copy_from_slice(line);
                 for byte in copy.iter_mut().filter(|byte| **byte == b'\n') {
@@ -232,7 +232,7 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
         // segments would not line up; the smallest count wins, and a
         // buffer whose `'diffanchors'` does not resolve cancels them all.
         let mut num_anchors = c_int::MAX;
-        if diff_flags.get() & DIFF_ANCHOR != 0 {
+        if DIFF_FLAGS.get() & DIFF_ANCHOR != 0 {
             for idx in 0..DB_COUNT as usize {
                 if tp.tp_diffbuf[idx].is_none() {
                     continue;
@@ -346,7 +346,7 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
 /// `'diffexpr'` overrides `'diffopt'`'s `internal`.
 pub fn diff_internal() -> c_int {
     let no_diffexpr = p_dex(CStr::is_empty);
-    c_int::from(diff_flags.get() & DIFF_INTERNAL != 0 && no_diffexpr)
+    c_int::from(DIFF_FLAGS.get() & DIFF_INTERNAL != 0 && no_diffexpr)
 }
 
 /// `:diffupdate`.
@@ -361,9 +361,9 @@ pub fn ex_diffupdate(excmd: &mut ExArg) {
 /// hand down to 'diffexpr'.
 pub(crate) fn diff_update(excmd: Option<&mut ExArg>) {
     // A recompute asked for from inside `:diffget`/`:diffput` is deferred
-    // to that command's tail, where `diff_need_update` is read.
-    if diff_busy.get() {
-        diff_need_update.set(true);
+    // to that command's tail, where `DIFF_NEED_UPDATE` is read.
+    if DIFF_BUSY.get() {
+        DIFF_NEED_UPDATE.set(true);
         return;
     }
     let mut tp = TabPage::current();

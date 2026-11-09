@@ -3,7 +3,7 @@
 //! [`auto_format`] runs after nearly every change in Insert mode, decides
 //! whether the paragraph wants reflowing at all, and hands the work to
 //! `format_lines`. The space it may add under the cursor so that a
-//! part-typed word still ends a paragraph is `did_add_space`, and
+//! part-typed word still ends a paragraph is `DID_ADD_SPACE`, and
 //! [`check_auto_format`] is what takes it away again.
 
 #![forbid(unsafe_code)]
@@ -15,7 +15,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::types::ColNr;
 use crate::types::LineNr;
@@ -39,7 +38,7 @@ use crate::undo::u_save_cursor;
 
 /// `auto_format` added an extra space under the cursor, and it has to come
 /// back off.
-static did_add_space: GlobalCell<bool> = GlobalCell::new(false);
+static DID_ADD_SPACE: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Reformat from the current line to the end of the paragraph, keeping the
 /// cursor where it is relative to the text. Called after nearly every insert
@@ -156,7 +155,7 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
             spaced.push_byte(b' ');
             let _ = ml_replace_owned(lnum, spaced);
             // Remove the space later.
-            did_add_space.set(true);
+            DID_ADD_SPACE.set(true);
         } else {
             // May remove an added space.
             check_auto_format(false);
@@ -172,13 +171,13 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
 /// `end_insert` says Insert mode is ending, in which case the space counts as
 /// trailing and goes whatever follows it.
 pub fn check_auto_format(end_insert: bool) {
-    if !did_add_space.get() {
+    if !DID_ADD_SPACE.get() {
         return;
     }
     let cc = gchar_cursor();
     if !whitechar(cc) {
         // Somehow the space was removed already.
-        did_add_space.set(false);
+        DID_ADD_SPACE.set(false);
         return;
     }
     let mut c = c_int::from(b' ');
@@ -190,6 +189,6 @@ pub fn check_auto_format(end_insert: bool) {
     if c != NUL {
         // The space is no longer at the end of the line: delete it.
         let _ = del_char(false);
-        did_add_space.set(false);
+        DID_ADD_SPACE.set(false);
     }
 }

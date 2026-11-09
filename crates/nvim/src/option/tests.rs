@@ -19,7 +19,7 @@
 
 use crate::eval::test_fixture::Fixture;
 use crate::winlayer::Win;
-use crate::winlayer::graph::{firstwin, lastwin};
+use crate::winlayer::graph::{FIRSTWIN, LASTWIN};
 
 /// The fixture's window as the whole of the current tab page's list: a
 /// set reaches `comp_col`, which asks the first window for its status line.
@@ -29,16 +29,16 @@ struct Listed;
 impl Listed {
     fn new() -> Listed {
         let id = Win::current().id();
-        firstwin.set(Some(id));
-        lastwin.set(Some(id));
+        FIRSTWIN.set(Some(id));
+        LASTWIN.set(Some(id));
         Listed
     }
 }
 
 impl Drop for Listed {
     fn drop(&mut self) {
-        firstwin.set(None);
-        lastwin.set(None);
+        FIRSTWIN.set(None);
+        LASTWIN.set(None);
     }
 }
 

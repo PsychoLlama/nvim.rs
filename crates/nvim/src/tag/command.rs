@@ -93,7 +93,7 @@ pub(crate) fn do_tag(tag: &CStr, kind: TagCmd, count: c_int, forceit: c_int, ver
         tag_emsg(c"E986: Cannot modify the tag stack within tagfunc");
         return;
     }
-    if postponed_split.get() == 0 && check_can_set_curbuf_forceit(forceit != 0).is_err() {
+    if POSTPONED_SPLIT.get() == 0 && check_can_set_curbuf_forceit(forceit != 0).is_err() {
         return;
     }
 
@@ -227,14 +227,14 @@ impl DoTag {
             // 'tagstack' is off: jump without recording anything.
             self.use_tagstack = false;
             self.new_tag = true;
-            if g_do_tagpreview.get() != 0 {
+            if G_DO_TAGPREVIEW.get() != 0 {
                 restart_ptag(&self.tag);
             }
             return true;
         }
 
         // A preview tag has its own one-entry stack.
-        self.use_tagstack = g_do_tagpreview.get() == 0;
+        self.use_tagstack = G_DO_TAGPREVIEW.get() == 0;
 
         let named = matches!(
             self.kind,
@@ -247,7 +247,7 @@ impl DoTag {
             return false;
         }
 
-        if g_do_tagpreview.get() != 0 {
+        if G_DO_TAGPREVIEW.get() != 0 {
             if !self.selecting() {
                 set_ptag_position(self.cur_match, self.cur_fnum);
             }
@@ -264,7 +264,7 @@ impl DoTag {
 
     /// A new tag was named: put it on the stack (or on the preview entry).
     fn push_new_tag(&mut self) {
-        if g_do_tagpreview.get() != 0 {
+        if G_DO_TAGPREVIEW.get() != 0 {
             let same = PREVIEW_ENTRY.with(|entry| {
                 entry
                     .tagname
@@ -310,7 +310,7 @@ impl DoTag {
     /// Answers `false` when the command is finished — the stack was empty,
     /// or a `:pop` has already done the jump.
     fn walk_stack(&mut self) -> bool {
-        let empty = if g_do_tagpreview.get() != 0 {
+        let empty = if G_DO_TAGPREVIEW.get() != 0 {
             PREVIEW_ENTRY.with(|entry| entry.tagname.is_none())
         } else {
             self.len == 0
@@ -396,7 +396,7 @@ impl DoTag {
     ///
     /// Answers `false` when the command is finished.
     fn go_newer(&mut self) -> bool {
-        if g_do_tagpreview.get() != 0 {
+        if G_DO_TAGPREVIEW.get() != 0 {
             (self.cur_match, self.cur_fnum) = ptag_position();
             return true;
         }
@@ -426,7 +426,7 @@ impl DoTag {
         // Where to go back to if the selection is cancelled.
         self.prev_idx = self.idx;
 
-        if g_do_tagpreview.get() != 0 {
+        if G_DO_TAGPREVIEW.get() != 0 {
             (self.cur_match, self.cur_fnum) = ptag_position();
         } else {
             self.idx = (self.idx - 1).max(0);
@@ -520,7 +520,7 @@ impl DoTag {
                     let name = msg_cstr(name.as_cstr());
                     semsg!("E426: Tag not found: {name}");
                 }
-                g_do_tagpreview.set(0);
+                G_DO_TAGPREVIEW.set(0);
                 return;
             }
             if !self.choose() {
@@ -550,7 +550,7 @@ impl DoTag {
         if self.use_tagstack {
             self.with_current(|entry| from_entry(entry))
                 .unwrap_or_default()
-        } else if g_do_tagpreview.get() != 0 {
+        } else if G_DO_TAGPREVIEW.get() != 0 {
             PREVIEW_ENTRY.with(from_entry)
         } else {
             self.tag.clone()
@@ -675,7 +675,7 @@ impl DoTag {
         if self.use_tagstack {
             self.record_choice();
             self.idx += 1;
-        } else if g_do_tagpreview.get() != 0 {
+        } else if G_DO_TAGPREVIEW.get() != 0 {
             set_ptag_position(self.cur_match, self.cur_fnum);
         }
         true
@@ -802,8 +802,8 @@ impl DoTag {
             Win::current().w_tagstackidx = self.idx;
         }
         // Don't split, or preview, next time.
-        postponed_split.set(0);
-        g_do_tagpreview.set(0);
+        POSTPONED_SPLIT.set(0);
+        G_DO_TAGPREVIEW.set(0);
     }
 }
 

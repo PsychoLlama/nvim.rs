@@ -28,7 +28,7 @@ use core::ffi::c_int;
 
 use super::*;
 
-use crate::autocmd::state::autocmd_busy;
+use crate::autocmd::state::AUTOCMD_BUSY;
 use crate::buffer::{BufRef, buf_is_prompt, close_buffer, is_changed, reset_syntax};
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::drawscreen::state::{CLEAR_CMDLINE, MODE_DISPLAYED};
@@ -42,7 +42,7 @@ use crate::state::MODE_INSERT;
 use crate::state::mode::{RESTART_EDIT, STATE, STOP_INSERT_MODE};
 use crate::types::{CmdModFlags, Error, LineNr};
 use crate::winlayer::graph::{
-    cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, leave_curbuf,
+    CMDWIN_OLD_CURWIN, CMDWIN_RESULT, CMDWIN_TYPE, CMDWIN_WIN, leave_curbuf,
 };
 use crate::winlayer::{Win, WinId, first_buffer, first_window, tabs};
 
@@ -208,7 +208,7 @@ pub(crate) fn one_window(win: Win, tabpage: Option<TabPage>) -> bool {
 /// Whether `win` is the only non-floating window of `tabpage`, or of the current
 /// tab page when `tabpage` is `None`.
 ///
-/// This is what to ask in place of `ONE_WINDOW`, with `firstwin` or the
+/// This is what to ask in place of `ONE_WINDOW`, with `FIRSTWIN` or the
 /// affected window as the argument depending on the situation.
 pub(crate) fn only_window(win: Win, tabpage: Option<TabPage>) -> bool {
     let first = match tabpage {
@@ -255,11 +255,11 @@ pub fn can_close_in_cmdwin(win: Win) -> Result<bool, Error> {
 /// is the case where `win` *is* the cmdline window: that window is closed and
 /// there is nothing to report.
 fn cmdwin_allows(win: Win) -> Result<bool, Error> {
-    if cmdwin_type.get() != 0 {
-        if cmdwin_win.get() == Some(win.id()) {
-            cmdwin_result.set(Key::CTRL_C);
+    if CMDWIN_TYPE.get() != 0 {
+        if CMDWIN_WIN.get() == Some(win.id()) {
+            CMDWIN_RESULT.set(Key::CTRL_C);
             return Ok(false);
-        } else if cmdwin_old_curwin.get() == Some(win.id()) {
+        } else if CMDWIN_OLD_CURWIN.get() == Some(win.id()) {
             return Err(make_err(E_CMDWIN));
         }
     }
@@ -272,7 +272,7 @@ fn cmdwin_allows(win: Win) -> Result<bool, Error> {
 /// `false` when there are other windows and nothing was done.
 pub(crate) fn close_last_tabpage_window(win: Win, free_buf: bool, prev_curtab: TabPage) -> bool {
     let mut free_buf = free_buf;
-    if firstwin.get() != lastwin.get() {
+    if FIRSTWIN.get() != LASTWIN.get() {
         return false;
     }
     let old_curbuf = Buf::current_raw();
@@ -284,7 +284,7 @@ pub(crate) fn close_last_tabpage_window(win: Win, free_buf: bool, prev_curtab: T
     }
 
     // Closing the last window in a tab page: first go to another tab page and
-    // then close the window and the tab page. That avoids `curwin` and `curtab`
+    // then close the window and the tab page. That avoids `curwin` and `CURTAB`
     // being invalid while memory is freed, since they may be used in UI events.
     // Don't trigger *Enter autocommands yet -- they would use the wrong values,
     // so that happens below. Do trigger *Leave autocommands unless the window
@@ -334,7 +334,7 @@ pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> 
     if valid_win_any_tab(win.id()) {
         win.w_locked = false;
     }
-    // Make sure `curbuf` is valid: it can become invalid if 'bufhidden' is
+    // Make sure `CURBUF` is valid: it can become invalid if 'bufhidden' is
     // "wipe".
     if !bufref.valid() {
         match first_buffer() {
@@ -378,7 +378,7 @@ pub fn close_others(message: c_int, forceit: c_int) {
 /// 'hidden' is set or `forceit` and the buffer was changed. `:only`, `:bdel`.
 fn close_all_others(message: bool, forceit: bool) {
     let old_curwin = Win::current();
-    let announce = message && !autocmd_busy.get();
+    let announce = message && !AUTOCMD_BUSY.get();
     if old_curwin.w_floating {
         if announce {
             err_raw(E_FLOATONLY);
@@ -436,7 +436,7 @@ fn close_all_others(message: bool, forceit: bool) {
         next = nextwp;
     }
 
-    if message && firstwin.get() != lastwin.get() {
+    if message && FIRSTWIN.get() != LASTWIN.get() {
         err(WinError::OtherWindowChanged);
     }
 }

@@ -11,7 +11,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
 use crate::types::OptInt;
@@ -19,5 +18,5 @@ use core::ffi::c_int;
 
 /// `'laststatus'` and `'winminheight'` as they were before the wildmenu forced
 /// a status line open, while it holds one open; `None` otherwise.
-pub(crate) static saved_status_opts: GlobalCell<Option<(OptInt, OptInt)>> = GlobalCell::new(None);
-pub(crate) static wild_menu_showing: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static SAVED_STATUS_OPTS: GlobalCell<Option<(OptInt, OptInt)>> = GlobalCell::new(None);
+pub(crate) static WILD_MENU_SHOWING: GlobalCell<c_int> = GlobalCell::new(0 as c_int);

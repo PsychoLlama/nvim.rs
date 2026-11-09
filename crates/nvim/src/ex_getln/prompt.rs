@@ -177,8 +177,8 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
 
     stuff_readbuf_one_line(defstr.to_bytes());
 
-    let save_ex_normal_busy = ex_normal_busy.get();
-    ex_normal_busy.set(0);
+    let save_ex_normal_busy = EX_NORMAL_BUSY.get();
+    EX_NORMAL_BUSY.set(0);
     let line = getcmdline_prompt(
         Some(if secret { 0 } else { b'@' }),
         Some(p),
@@ -192,7 +192,7 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
         None,
     );
     result.write_string(line.map(|line| ThinCString::from_cstr(line.as_cstr())));
-    ex_normal_busy.set(save_ex_normal_busy);
+    EX_NORMAL_BUSY.set(save_ex_normal_busy);
 
     if result.string_ref().is_none() {
         if let Some(value) = &cancelreturn {

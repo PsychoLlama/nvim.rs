@@ -153,12 +153,12 @@ static GLOBAL: LibcAllocator = LibcAllocator;
 ///
 /// [`Box`] is the right owner for a value nothing else points at. It is the
 /// wrong one for the editor's long-lived objects. A `Buffer`'s *address* is
-/// what the editor passes around: it sits in `curbuf`, in every `Window`'s
-/// `w_buffer`, on the `firstbuf` list and in whatever an autocommand kept —
+/// what the editor passes around: it sits in `CURBUF`, in every `Window`'s
+/// `w_buffer`, on the `FIRSTBUF` list and in whatever an autocommand kept —
 /// and a `Box` **retags** every time it is moved (into a container, out of
 /// one, across a call), which under Stacked and Tree Borrows invalidates
 /// every raw pointer previously derived from it. A registry holding
-/// `Box<Buffer>` would therefore break `curbuf` the first time a buffer was
+/// `Box<Buffer>` would therefore break `CURBUF` the first time a buffer was
 /// filed or taken out.
 ///
 /// `Owned<T>` is that `Box` turned into its address once, at birth. Moving
@@ -190,7 +190,7 @@ impl<T> Owned<T> {
     /// Reading it disturbs nothing: this hands back the pointer
     /// [`Owned::new`] was given, not a fresh borrow of `self`, so every
     /// address taken from the same `Owned` is usable at once — which is what
-    /// the editor does with `curbuf`.
+    /// the editor does with `CURBUF`.
     pub(crate) fn address(&self) -> *mut T {
         self.addr
     }
@@ -231,7 +231,7 @@ mod tests {
 
     /// Every address taken out is the same one and they are usable together
     /// — the property a `Box` in a container could not give, and the reason
-    /// `curbuf` may sit beside the registry's own copy.
+    /// `CURBUF` may sit beside the registry's own copy.
     #[test]
     fn the_address_is_stable_and_may_be_taken_twice() {
         let drops = Cell::new(0);
@@ -251,7 +251,7 @@ mod tests {
     /// **The shape `free_buffer` has, and the reason a registry holds an
     /// `Owned` rather than a `Box`.**
     ///
-    /// An address is taken out while the object is filed (that is `curbuf`),
+    /// An address is taken out while the object is filed (that is `CURBUF`),
     /// the table then changes under it, the free path takes the object out of
     /// the table, keeps working through the *address*, and drops at the end.
     /// Written with `Vec<Box<T>>` — `memfile::BlockTable`'s shape — this is

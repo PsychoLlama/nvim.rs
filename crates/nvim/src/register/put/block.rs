@@ -18,7 +18,7 @@
 )]
 
 use crate::cstr;
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_UNDO;
 use crate::mbyte::{c_char_info, c_next_cluster, head_off};
 use crate::narrow::len_as_int;
 use crate::winlayer::{Buf, Win};
@@ -249,7 +249,7 @@ impl Put {
             land.textcol,
             ColNr::new(land.delcount),
             ColNr::new(inserted),
-            kExtmarkUndo,
+            EXTMARK_UNDO,
         );
 
         Win::current().w_cursor.lnum += 1;

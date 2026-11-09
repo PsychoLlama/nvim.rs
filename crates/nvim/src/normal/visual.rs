@@ -37,7 +37,7 @@ use crate::mouse::setmouse;
 use crate::mouse::state::MOUSE_DRAGGING;
 use crate::normal::defs::{CmdArg, Outcome};
 use crate::normal::{
-    TAB, VIsual_mode_orig, clear_op_beep, may_clear_cmdline, nv_down, nv_g_cmd, nv_operator,
+    TAB, V_ISUAL_MODE_ORIG, clear_op_beep, may_clear_cmdline, nv_down, nv_g_cmd, nv_operator,
     nv_right,
 };
 use crate::ops::OpType;
@@ -90,7 +90,7 @@ impl VisualMode {
     pub(crate) const LINE: Self = Self(Key::ascii(b'V').code());
     /// Blockwise, entered with CTRL-V.
     pub(crate) const BLOCK: Self = Self(CTRL_V);
-    /// The `NUL` that `resel_VIsual_mode` and `VIsual_mode_orig` use to mean
+    /// The `NUL` that `resel_VIsual_mode` and `V_ISUAL_MODE_ORIG` use to mean
     /// "nothing remembered".
     pub(crate) const NONE: Self = Self(NUL);
 
@@ -296,9 +296,9 @@ pub(crate) fn reset_visual() {
 /// Put back the Visual mode `v_visop` forced to linewise for an uppercase
 /// operator.
 pub(crate) fn restore_visual_mode() {
-    if VIsual_mode_orig.get() != VisualMode::NONE {
-        Buf::current().b_visual.vi_mode = VIsual_mode_orig.get().raw();
-        VIsual_mode_orig.set(VisualMode::NONE);
+    if V_ISUAL_MODE_ORIG.get() != VisualMode::NONE {
+        Buf::current().b_visual.vi_mode = V_ISUAL_MODE_ORIG.get().raw();
+        V_ISUAL_MODE_ORIG.set(VisualMode::NONE);
     }
 }
 
@@ -477,7 +477,7 @@ pub(crate) fn v_visop(cmd_arg: &mut CmdArg) {
         .is_some_and(|b| b.is_ascii_uppercase())
     {
         if !visual_mode().is_block() {
-            VIsual_mode_orig.set(visual_mode());
+            V_ISUAL_MODE_ORIG.set(visual_mode());
             set_visual_mode(VisualMode::LINE);
         } else if cmd_arg.cmdchar.is('C') || cmd_arg.cmdchar.is('D') {
             Win::current().w_curswant = ColNr::MAX;
@@ -576,7 +576,7 @@ fn reselect_scaled(cmd_arg: &mut CmdArg) {
 
 /// `v`, `V`, `CTRL-V` and their Select-mode twins.
 ///
-/// Keeps the raw signature: this is an `nv_cmds` row's handler, so `NvFunc`
+/// Keeps the raw signature: this is an `NV_CMD_TABLE` row's handler, so `NvFunc`
 /// fixes it.
 pub(crate) fn nv_visual(cmd_arg: &mut CmdArg) {
     if cmd_arg.cmdchar == Key::CTRL_Q {

@@ -22,7 +22,7 @@ use crate::api::private::helpers::{api_set_sctx, try_enter, try_leave};
 use crate::api_error;
 use crate::eval::typval::{CallFrame, TV_INITIAL_VALUE, tv_clear};
 use crate::eval::userfunc::{CallWith, call_func_with};
-use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
+use crate::ex_eval::state::{DID_THROW, FORCE_ABORT, SUPPRESS_ERRTHROW};
 use crate::ex_getln::TRY_STATE_INIT;
 use crate::lua::converter::{pop_object, pop_typval, push_object, push_typval};
 use crate::lua::stack::{At, Raise, Stack};
@@ -126,9 +126,9 @@ fn convert_and_call(
 
     // Start the call from a clean exception state: a Lua caller has no
     // `:try` around it and must not inherit one.
-    force_abort.set(false);
-    suppress_errthrow.set(false);
-    did_throw.set(false);
+    FORCE_ABORT.set(false);
+    SUPPRESS_ERRTHROW.set(false);
+    DID_THROW.set(false);
     DID_EMSG.set(0);
 
     let mut rettv = TV_INITIAL_VALUE;

@@ -182,7 +182,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
     }
     Win::current().w_onebuf_opt.wo_wfh = c_int::from(true); // 'winfixheight'
     if let Some(win) = valid_win(win) {
-        prevwin.set(Some(win.id()));
+        PREVWIN.set(Some(win.id()));
     }
     true
 }
@@ -194,7 +194,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
 /// location list one — also snapshots the layout, so closing it can restore
 /// what it covered.
 fn split_flags(qi: Qi) -> c_int {
-    let mut flags = if cmdmod.with(|m| m.cmod_split) != 0 {
+    let mut flags = if CMDMOD.with(|m| m.cmod_split) != 0 {
         0
     } else if qi.is_quickfix() {
         WSP_BOT
@@ -251,9 +251,9 @@ pub fn ex_copen(excmd: &mut ExArg) {
     reset_visual_and_resel(); // stop Visual mode
 
     // Find an existing quickfix window, or open a new one.
-    let vertical = cmdmod.with(|m| m.cmod_split) & WSP_VERT != 0;
+    let vertical = CMDMOD.with(|m| m.cmod_split) & WSP_VERT != 0;
     let found =
-        cmdmod.with(|m| m.cmod_tab) == 0 && goto_cwindow(qi, addr_count != 0, height, vertical);
+        CMDMOD.with(|m| m.cmod_tab) == 0 && goto_cwindow(qi, addr_count != 0, height, vertical);
     if !found && !open_new_cwindow(qi, height) {
         drop(busy);
         return;
@@ -378,7 +378,7 @@ pub fn did_set_quickfixtextfunc(_args: &mut OptSet) -> Result<(), OptError> {
     let Ok(cb) = callback_from_option(value.as_cstr()) else {
         return Err((E_INVARG).into());
     };
-    let mut old = qftf_cb.with_mut(|slot| core::mem::replace(slot, cb.unwrap_or(Callback::None)));
+    let mut old = QFTF_CB.with_mut(|slot| core::mem::replace(slot, cb.unwrap_or(Callback::None)));
     old.clear();
     Ok(())
 }

@@ -16,7 +16,7 @@
 //!   and the loop spins. Upstream v0.12.4 has the identical structure
 //!   (getchar.c:2812-2841, api/vim.c:323-350, ex_docmd.c:7451-7468); the
 //!   comment on `exec_normal`'s loop shows the author expected CTRL-C here.
-//! - In `--headless -l` (which sets `silent_mode`) a blocking [`inchar`]
+//! - In `--headless -l` (which sets `SILENT_MODE`) a blocking [`inchar`]
 //!   reaches `input_get`, which drains the event loop and then calls
 //!   `read_error_exit()` -> `getout(0)`. That is upstream's designed exit for
 //!   batch mode, not a tty-dependent accident.
@@ -362,7 +362,7 @@ fn read_from_typeahead(
             && tb.len() == 1
             && tb.byte(0) == ESC_BYTE
             && NO_MAPPING.get() == 0
-            && ex_normal_busy.get() == 0
+            && EX_NORMAL_BUSY.get() == 0
             && tb.maplen() == 0
             && STATE.get() & MODE_INSERT != 0
             && (p_timeout() || (keylen == KEYLEN_PART_KEY && p_ttimeout()))
@@ -390,7 +390,7 @@ fn read_from_typeahead(
             continue;
         }
 
-        if ex_normal_busy.get() > 0 {
+        if EX_NORMAL_BUSY.get() > 0 {
             // No typeahead left and inside `:normal`: something has to be
             // answered to avoid getting stuck. With an incomplete mapping
             // present, behave as if it timed out.
@@ -403,7 +403,7 @@ fn read_from_typeahead(
             // window alternate between ESC (for most situations) and
             // CTRL-C (which closes the window).
             let c = if STATE.get() & MODE_CMDLINE != 0
-                || (cmdwin_type.get() > 0 && NORMAL_BUSY_LAST_KEY.get() == ESC_BYTE)
+                || (CMDWIN_TYPE.get() > 0 && NORMAL_BUSY_LAST_KEY.get() == ESC_BYTE)
             {
                 CTRL_C_BYTE
             } else {
@@ -507,7 +507,7 @@ pub(crate) fn vgetorpeek(advance: bool) -> u8 {
     // callback that writes to the screen can raise a `wait_return`. Using
     // `:normal` can do it too, but that saves the typeahead buffer, so it
     // is allowed -- it just must not read a key from the user.
-    if VGETC_BUSY.get() > 0 && ex_normal_busy.get() == 0 {
+    if VGETC_BUSY.get() > 0 && EX_NORMAL_BUSY.get() == 0 {
         return 0;
     }
     let _busy = Depth::of(VGETC_BUSY);
@@ -614,8 +614,8 @@ pub(crate) fn inchar(buf: &mut [u8], wait_time: c_long) -> Option<usize> {
     // can result: write error in swapfile, hit-return, timeout on the
     // character wait, flush swapfile, write error, ...
     if STATE.get() != MODE_HITRETURN {
-        did_outofmem_msg.set(false); // display the out-of-memory message again
-        did_swapwrite_msg.set(false); // display the swap-write error again
+        DID_OUTOFMEM_MSG.set(false); // display the out-of-memory message again
+        DID_SWAPWRITE_MSG.set(false); // display the swap-write error again
     }
 
     // Get a character from a script file if there is one. On an

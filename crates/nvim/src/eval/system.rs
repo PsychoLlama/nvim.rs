@@ -35,7 +35,7 @@ use crate::narrow::as_index;
 use crate::narrow::number_as_int;
 use crate::option::vars::p_verbose;
 use crate::os::fs::executable_path;
-use crate::profile::do_profiling;
+use crate::profile::DO_PROFILING;
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::semsg;
 use crate::shell::Argv;
@@ -129,7 +129,7 @@ fn string_to_list(output: &[u8], keepempty: bool) -> ListRef {
 
 /// The shared body of `system()` and `systemlist()`.
 pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, retlist: bool) {
-    let profiling = do_profiling.get() == PROF_YES;
+    let profiling = DO_PROFILING.get() == PROF_YES;
     result.write_string(None);
     if check_secure() {
         return;

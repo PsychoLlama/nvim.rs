@@ -269,7 +269,7 @@ pub fn utf_find_illegal() {
 pub fn valid_utf8(bytes: &[u8]) -> bool {
     let mut at = 0;
     while at < bytes.len() {
-        let len = usize::from(utf8len_tab_zero[usize::from(bytes[at])]);
+        let len = usize::from(UTF8LEN_TAB_ZERO[usize::from(bytes[at])]);
         if len == 0 {
             return false; // not a lead byte
         }

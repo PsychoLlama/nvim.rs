@@ -30,8 +30,8 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::extmark::kExtmarkNOOP;
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_NOOP;
+use crate::extmark::EXTMARK_UNDO;
 use crate::mark::JUMPLISTSIZE;
 use crate::mark::defs::FileMark;
 use core::ffi::c_int;
@@ -320,12 +320,12 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: i3
 
     // A change on the cursor line always triggers CursorMoved.
     let win = Win::current();
-    if last_cursormoved_win.get() == Some(win.id())
+    if LAST_CURSORMOVED_WIN.get() == Some(win.id())
         && win.w_buffer == buffer
         && lnum <= win.w_cursor.lnum
         && lnume + xtra.abs() > win.w_cursor.lnum
     {
-        last_cursormoved.set(last_cursormoved.get().with_lnum(LineNr::ZERO));
+        LAST_CURSORMOVED.set(LAST_CURSORMOVED.get().with_lnum(LineNr::ZERO));
     }
 }
 
@@ -363,7 +363,7 @@ pub fn changed_bytes(lnum: LineNr, col: ColNr) {
 
 /// [`changed_bytes`], plus the extmark splice for the bytes that came and went.
 pub fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new_col: c_int) {
-    if curbuf_splice_pending.get() == 0 {
+    if CURBUF_SPLICE_PENDING.get() == 0 {
         let cb = Buf::current();
         extmark_splice_cols(
             cb,
@@ -371,7 +371,7 @@ pub fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new_col: c
             start_col,
             ColNr::new(old_col),
             ColNr::new(new_col),
-            kExtmarkUndo,
+            EXTMARK_UNDO,
         );
     }
     changed_bytes(lnum, start_col);
@@ -393,7 +393,7 @@ pub fn appended_lines(lnum: LineNr, count: i32) {
 pub fn appended_lines_mark(lnum: LineNr, count: c_int) {
     let max = MAXLNUM;
     let cb = Buf::current();
-    mark_adjust(lnum + 1, max, count, 0, kExtmarkUndo);
+    mark_adjust(lnum + 1, max, count, 0, EXTMARK_UNDO);
     changed_lines(cb, lnum + 1, ColNr::ZERO, lnum + 1, count, true);
 }
 
@@ -420,8 +420,8 @@ pub fn deleted_lines_mark(lnum: LineNr, count: c_int) {
     let max = MAXLNUM;
     // Deleting the whole buffer implicitly adds one empty line back.
     let back = -count + i32::from(made_empty);
-    mark_adjust(lnum, last, max.get(), -count, kExtmarkNOOP);
-    extmark_adjust(cb, lnum, last, max.get(), back, kExtmarkUndo);
+    mark_adjust(lnum, last, max.get(), -count, EXTMARK_NOOP);
+    extmark_adjust(cb, lnum, last, max.get(), back, EXTMARK_UNDO);
     changed_lines(cb, lnum, ColNr::ZERO, lnum + count, -count, true);
 }
 

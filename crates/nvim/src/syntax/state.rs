@@ -28,7 +28,7 @@ impl Win {
     /// Normally called from the screen update, once per displayed line. The
     /// window and buffer are remembered in the parser, because
     /// [`Buf::syntax_attr`] is not given the window -- and careful: `curwin`
-    /// and `curbuf` are likely to point somewhere else entirely.
+    /// and `CURBUF` are likely to point somewhere else entirely.
     pub(crate) fn syntax_start(self, lnum: LineNr) {
         with_parser(|parser| parser.start(self, lnum));
     }

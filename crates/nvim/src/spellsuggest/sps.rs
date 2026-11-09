@@ -1,8 +1,8 @@
 //! The `'spellsuggest'` option: what its items mean, and the outside
 //! sources two of them name.
 //!
-//! [`spell_check_sps`] parses the option into [`sps_flags`](super::sps_flags)
-//! and `sps_limit`, which the internal search then reads. The `expr:` and
+//! [`spell_check_sps`] parses the option into [`SPS_FLAGS`](super::sps_flags)
+//! and `SPS_LIMIT`, which the internal search then reads. The `expr:` and
 //! `file:` items instead name a source of suggestions outside the editor's
 //! own word trees, and [`spell_suggest_expr`] and [`spell_suggest_file`]
 //! are those two.
@@ -17,7 +17,7 @@
 )]
 
 use super::{
-    MAXPATHL, MAXWLEN, SCORE_FILE, SPS_BEST, SPS_DOUBLE, SPS_FAST, SugInfo, sps_flags, sps_limit,
+    MAXPATHL, MAXWLEN, SCORE_FILE, SPS_BEST, SPS_DOUBLE, SPS_FAST, SPS_FLAGS, SPS_LIMIT, SugInfo,
 };
 use crate::charset::getdigits_int_at;
 use crate::eval::typval::list_iter;
@@ -47,13 +47,13 @@ fn is_timeout_value(value: &[u8]) -> bool {
     digits.first().is_some_and(u8::is_ascii_digit)
 }
 
-/// Check `'spellsuggest'` and set [`sps_flags`] and [`sps_limit`] from it.
+/// Check `'spellsuggest'` and set [`SPS_FLAGS`] and [`SPS_LIMIT`] from it.
 ///
 /// Answers `Err` for a value the option should not take, having put both
 /// back to their defaults.
 pub(crate) fn spell_check_sps() -> Result<(), Failed> {
-    sps_flags.set(0);
-    sps_limit.set(9999);
+    SPS_FLAGS.set(0);
+    SPS_LIMIT.set(9999);
 
     let sps = P_SPS.get();
     let mut rest: &[u8] = crate::cstr::until_nul(&sps);
@@ -66,7 +66,7 @@ pub(crate) fn spell_check_sps() -> Result<(), Failed> {
         let mut f = 0;
         if part.first().is_some_and(u8::is_ascii_digit) {
             let (limit, past) = getdigits_int_at(&part, 0, true, 0);
-            sps_limit.set(limit);
+            SPS_LIMIT.set(limit);
             if part
                 .get(past)
                 .is_some_and(|&b| b != 0 && !b.is_ascii_digit())
@@ -90,18 +90,18 @@ pub(crate) fn spell_check_sps() -> Result<(), Failed> {
         }
 
         // Only one method may be named.
-        if f == -1 || (sps_flags.get() != 0 && f != 0) {
-            sps_flags.set(SPS_BEST);
-            sps_limit.set(9999);
+        if f == -1 || (SPS_FLAGS.get() != 0 && f != 0) {
+            SPS_FLAGS.set(SPS_BEST);
+            SPS_LIMIT.set(9999);
             return Err(Failed);
         }
         if f != 0 {
-            sps_flags.set(f);
+            SPS_FLAGS.set(f);
         }
     }
 
-    if sps_flags.get() == 0 {
-        sps_flags.set(SPS_BEST);
+    if SPS_FLAGS.get() == 0 {
+        SPS_FLAGS.set(SPS_BEST);
     }
     Ok(())
 }

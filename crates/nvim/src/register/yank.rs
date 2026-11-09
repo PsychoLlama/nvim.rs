@@ -249,7 +249,7 @@ pub fn format_reg_type(reg_type: MotionType, reg_width: i32) -> ThinCString {
 /// `op` into `reg`.
 ///
 /// Guarded against recursion: an autocommand that yanks would otherwise fire
-/// this again. Runs arbitrary autocommands, under `textlock`.
+/// this again. Runs arbitrary autocommands, under `TEXTLOCK`.
 pub fn do_autocmd_textyankpost(op: &OpArg, reg: Reg) {
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 

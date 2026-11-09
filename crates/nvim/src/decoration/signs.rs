@@ -29,7 +29,9 @@ use crate::decoration::defs::{DecorInline, DecorPriority, DecorSignHighlight};
 use crate::decoration::{MT_META_SIGN_TEXT, SCL_NUM, SIGN_WIDTH};
 use crate::global_cell::GlobalCell;
 use crate::marktree::cursor::Cursor;
-use crate::marktree::key::{MtFlags, kMTFilterSelect, mt_decor, mt_decor_sign, mt_end, mt_invalid};
+use crate::marktree::key::{
+    MT_FILTER_SELECT, MtFlags, mt_decor, mt_decor_sign, mt_end, mt_invalid,
+};
 use crate::marktree::meta::MetaCount;
 use crate::marktree::{MTKey, MTPos, MarkTreeIter};
 use crate::os::libc::uint32_t;
@@ -42,8 +44,8 @@ use core::ffi::{CStr, c_int};
 
 /// Marktree filters: which meta counts a walk is allowed to descend into.
 /// The index is a `MetaIndex`; `MT_META_SIGN_TEXT` is 3 and `MT_META_SIGN_HL` 2.
-static SIGN_FILTER: MetaCount = [0, 0, kMTFilterSelect, kMTFilterSelect, 0];
-static SIGNTEXT_FILTER: MetaCount = [0, 0, 0, kMTFilterSelect, 0];
+static SIGN_FILTER: MetaCount = [0, 0, MT_FILTER_SELECT, MT_FILTER_SELECT, 0];
+static SIGNTEXT_FILTER: MetaCount = [0, 0, 0, MT_FILTER_SELECT, 0];
 
 impl DecorSignHighlight {
     /// Whether this item is a sign rather than a bare highlight.

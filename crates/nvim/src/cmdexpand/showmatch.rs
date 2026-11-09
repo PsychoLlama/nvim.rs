@@ -166,12 +166,12 @@ pub fn showmatches(
         found = Some(matches);
         showtail = expand_showtail(expand);
     } else {
-        showtail = cmd_showtail.get();
+        showtail = CMD_SHOWTAIL.get();
     }
 
     if cmdline_compl_use_pum(display_wildmenu && !display_list) {
         cmdline_pum_create(Cc::current(), expand, found, showtail, noselect);
-        compl_selected.set(if noselect { -1 } else { 0 });
+        COMPL_SELECTED.set(if noselect { -1 } else { 0 });
         pum_clear();
         cmdline_pum_display(true);
         return Expanded::Ok;

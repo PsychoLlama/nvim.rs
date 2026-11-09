@@ -60,7 +60,7 @@ use crate::debugger::dbg_check_skipped;
 use crate::eval::eval_cmd_string;
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::defs::{Cleanup, CondId, Pend};
-use crate::ex_eval::state::{current_exception, did_throw, force_abort, need_rethrow};
+use crate::ex_eval::state::{CURRENT_EXCEPTION, DID_THROW, FORCE_ABORT, NEED_RETHROW};
 use crate::getchar::state::GOT_INT;
 use crate::guard::Suppress;
 use crate::message::E_ARGREQ;
@@ -122,10 +122,10 @@ pub(crate) fn do_throw(cond: CondId) {
                 }
             }
             flags.clear(CsFlags::ACTIVE);
-            cs.set_pending_exception(at, current_exception.get());
+            cs.set_pending_exception(at, CURRENT_EXCEPTION.get());
         });
     }
-    did_throw.set(true);
+    DID_THROW.set(true);
 }
 
 /// `:try`
@@ -230,7 +230,7 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
         // try block never got active -- because of an inactive
         // surrounding conditional, or after an error, interrupt or
         // throw.
-        if !did_throw.get() || !flags.has(CsFlags::TRUE) {
+        if !DID_THROW.get() || !flags.has(CsFlags::TRUE) {
             skip = true;
         }
 
@@ -272,7 +272,7 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
             });
             DID_EMSG.set(0);
             GOT_INT.set(false);
-            did_throw.set(false);
+            DID_THROW.set(false);
             catch_exception(caught.expect("a thrown exception at the level that catches it"));
             // The current exception must be the one in the stack, so that
             // it can be discarded at the next ":catch", ":finally" or
@@ -280,7 +280,7 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
             // ":continue", ":break", ":return", ":finish", error,
             // interrupt or another exception.
             let top = cond.with(|cs| cs.pending_exception(cs.top().expect("a level is open")));
-            if top != current_exception.get() {
+            if top != CURRENT_EXCEPTION.get() {
                 internal_error(c"ex_catch()");
             }
         } else {
@@ -323,7 +323,7 @@ fn pattern_catches(pat: &[u8]) -> Result<bool, Failed> {
     // the match, only a CTRL-C hit during it.
     let prev_got_int = GOT_INT.get();
     GOT_INT.set(false);
-    let thrown = current_exception.get().expect("an exception being thrown");
+    let thrown = CURRENT_EXCEPTION.get().expect("an exception being thrown");
     // A copy: the match cannot run user code, but the exception table is
     // not borrowed across a call into another module.
     let value = thrown.with(|exception| exception.value.clone());
@@ -401,7 +401,7 @@ pub(crate) fn ex_finally(excmd: &mut ExArg) {
     // ":endfor" or ":endif" detected above counts as did_emsg and
     // did_throw respectively. did_emsg must not be set here: that would
     // suppress the error message.
-    if pending == CSTP_ERROR || DID_EMSG.get() != 0 || GOT_INT.get() || did_throw.get() {
+    if pending == CSTP_ERROR || DID_EMSG.get() != 0 || GOT_INT.get() || DID_THROW.get() {
         let top = cond.with(|cs| cs.top().expect("the :try is open"));
         let returning = cond.with(|cs| (cs.pending[top] == CSTP_RETURN).then(|| cs.take_pend(top)));
         if let Some(pend) = returning {
@@ -419,7 +419,7 @@ pub(crate) fn ex_finally(excmd: &mut ExArg) {
         if pending == CSTP_ERROR && DID_EMSG.get() == 0 {
             pending |= if THROW_ON_ERROR { CSTP_THROW } else { 0 };
         } else {
-            pending |= if did_throw.get() { CSTP_THROW } else { 0 };
+            pending |= if DID_THROW.get() { CSTP_THROW } else { 0 };
         }
         pending |= if DID_EMSG.get() != 0 { CSTP_ERROR } else { 0 };
         pending |= if GOT_INT.get() { CSTP_INTERRUPT } else { 0 };
@@ -434,7 +434,7 @@ pub(crate) fn ex_finally(excmd: &mut ExArg) {
         // error, interrupt or another exception. When `emsg` was called
         // for a missing ":endif"/":endwhile"/":endfor" detected here, the
         // exception will be discarded.
-        if did_throw.get() && parked != current_exception.get() {
+        if DID_THROW.get() && parked != CURRENT_EXCEPTION.get() {
             internal_error(c"ex_finally()");
         }
     }
@@ -476,14 +476,14 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
     // not be tested: anything pending has already been discarded then.
     let top_flags = cond.with(|cs| cs.top_flags());
     let mut skip =
-        DID_EMSG.get() != 0 || GOT_INT.get() || did_throw.get() || !top_flags.has(CsFlags::TRUE);
+        DID_EMSG.get() != 0 || GOT_INT.get() || DID_THROW.get() || !top_flags.has(CsFlags::TRUE);
 
     if top_flags.has(CsFlags::TRY) {
         idx = cond.with(|cs| cs.idx);
         // If we stopped here with the exception still being thrown,
         // because we did not yet know this conditional has no finally
         // clause, it has to be rethrown once the conditional is closed.
-        if did_throw.get() && top_flags.has(CsFlags::TRUE) && !top_flags.has(CsFlags::FINALLY) {
+        if DID_THROW.get() && top_flags.has(CsFlags::TRUE) && !top_flags.has(CsFlags::FINALLY) {
             rethrow = true;
         }
     } else {
@@ -496,7 +496,7 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
         // of this function; the error message would discard it anyway.
         // Script termination is unaffected, since "trylevel" is
         // decremented only after `emsg` has been called.
-        if did_throw.get() {
+        if DID_THROW.get() {
             discard_current_exception();
         }
         // Report eap->errmsg even if there already was an error.
@@ -519,7 +519,7 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
         skip = true;
         do_intthrow(cond);
         // `do_intthrow` may have reset did_throw or the level's pending.
-        rethrow = did_throw.get() && !cond.with(|cs| cs.flags[at].has(CsFlags::FINALLY));
+        rethrow = DID_THROW.get() && !cond.with(|cs| cs.flags[at].has(CsFlags::FINALLY));
     }
 
     // A pending ":return" resumes after the conditional is closed, so
@@ -535,7 +535,7 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
         if let Some(Pend::Return(value)) = pend {
             returned = value;
         } else if pending & CSTP_THROW != 0 {
-            current_exception.set(exception);
+            CURRENT_EXCEPTION.set(exception);
         }
     }
 
@@ -558,7 +558,7 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
         let value = if pending == CSTP_RETURN {
             PendingValue::Return(returned.as_ref())
         } else if pending & CSTP_THROW != 0 {
-            current_exception
+            CURRENT_EXCEPTION
                 .get()
                 .map_or(PendingValue::None, PendingValue::Exception)
         } else {
@@ -618,7 +618,7 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
 pub(crate) fn enter_cleanup(parked: &mut Cleanup) {
     // The pending values are restored by `leave_cleanup`, unless an aborting
     // error, an interrupt or an uncaught exception happens in between.
-    if !(DID_EMSG.get() != 0 || GOT_INT.get() || did_throw.get() || need_rethrow.get()) {
+    if !(DID_EMSG.get() != 0 || GOT_INT.get() || DID_THROW.get() || NEED_RETHROW.get()) {
         parked.pending = CSTP_NONE;
         parked.exception = None;
         return;
@@ -626,27 +626,27 @@ pub(crate) fn enter_cleanup(parked: &mut Cleanup) {
 
     parked.pending = if DID_EMSG.get() != 0 { CSTP_ERROR } else { 0 }
         | if GOT_INT.get() { CSTP_INTERRUPT } else { 0 }
-        | if did_throw.get() { CSTP_THROW } else { 0 }
-        | if need_rethrow.get() { CSTP_THROW } else { 0 };
+        | if DID_THROW.get() { CSTP_THROW } else { 0 }
+        | if NEED_RETHROW.get() { CSTP_THROW } else { 0 };
 
     // Save the exception being thrown, if there is one. On an error not
     // yet converted, update "force_abort" and reset "cause_abort" as
     // `do_errthrow` would; the `do_cmdline` call about to be made for
     // the autocommands needs that. `*msg_list` need not be saved: every
     // `do_cmdline` has its own.
-    if did_throw.get() || need_rethrow.get() {
-        parked.exception = current_exception.take();
+    if DID_THROW.get() || NEED_RETHROW.get() {
+        parked.exception = CURRENT_EXCEPTION.take();
     } else {
         parked.exception = None;
         if DID_EMSG.get() != 0 {
-            force_abort.set(force_abort.get() | super::cause_abort.get());
-            super::cause_abort.set(false);
+            FORCE_ABORT.set(FORCE_ABORT.get() | super::CAUSE_ABORT.get());
+            super::CAUSE_ABORT.set(false);
         }
     }
     DID_EMSG.set(0);
     GOT_INT.set(false);
-    did_throw.set(false);
-    need_rethrow.set(false);
+    DID_THROW.set(false);
+    NEED_RETHROW.set(false);
 
     // Upstream passes its own uninitialised-by-intent `pending` local
     // here, which is still `CSTP_NONE` -- so this report never fires.
@@ -672,7 +672,7 @@ pub(crate) fn leave_cleanup(parked: &mut Cleanup) {
 
     // An aborting error, an interrupt or an uncaught exception since
     // `enter_cleanup` discards what it made pending.
-    if aborting() || need_rethrow.get() {
+    if aborting() || NEED_RETHROW.get() {
         if pending & CSTP_THROW != 0 {
             // Cancel the pending exception; this reports it too.
             match parked.exception {
@@ -691,12 +691,12 @@ pub(crate) fn leave_cleanup(parked: &mut Cleanup) {
     // Nothing new happened in between: restore the pending state.
     if pending & CSTP_THROW != 0 {
         // Make the parked exception the one being thrown again.
-        current_exception.set(parked.exception);
+        CURRENT_EXCEPTION.set(parked.exception);
     } else if pending & CSTP_ERROR != 0 {
         // An error was about to become an exception: let "cause_abort"
         // take the part of "force_abort", as `cause_errthrow` does.
-        super::cause_abort.set(force_abort.get());
-        force_abort.set(false);
+        super::CAUSE_ABORT.set(FORCE_ABORT.get());
+        FORCE_ABORT.set(false);
     }
 
     if pending & CSTP_ERROR != 0 {
@@ -707,10 +707,10 @@ pub(crate) fn leave_cleanup(parked: &mut Cleanup) {
     }
     if pending & CSTP_THROW != 0 {
         // `do_one_cmd` will set did_throw.
-        need_rethrow.set(true);
+        NEED_RETHROW.set(true);
     }
 
-    let value = match current_exception.get() {
+    let value = match CURRENT_EXCEPTION.get() {
         Some(id) if pending & CSTP_THROW != 0 => PendingValue::Exception(id),
         _ => PendingValue::None,
     };

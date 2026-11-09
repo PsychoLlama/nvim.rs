@@ -21,7 +21,7 @@ use std::ffi::CString;
 
 use super::{nlua_error, nlua_pcall, until_nul, with_active_stack, with_main_stack};
 use crate::ex_docmd::cmdmod_report;
-use crate::ex_docmd::state::cmdmod;
+use crate::ex_docmd::state::CMDMOD;
 use crate::ex_getln::{cmdpreview_get_bufnr, cmdpreview_get_ns};
 use crate::lua::abi::lua_Integer;
 use crate::lua::stack::{At, Stack};
@@ -177,7 +177,7 @@ pub(crate) fn nlua_do_ucmd(
         stack.push_bytes(&[nargs_char(cmd.argt)]);
         set(stack, c"nargs");
 
-        let mods = cmdmod.with(|cmod| uc_mods(cmod, false));
+        let mods = CMDMOD.with(|cmod| uc_mods(cmod, false));
         stack.push_bytes(&mods);
         set(stack, c"mods");
 

@@ -691,12 +691,6 @@ fn a_parse_reports_how_much_it_consumed() {
 /// was left. The six `#[test]`s at the bottom are the spec's six flag
 /// spellings; they share one body because the token stream is
 /// flag-independent except where each of them says otherwise.
-///
-/// The enum constants keep the C's spelling, and matching on one is what
-/// makes a forgotten import a compile error (an unimported name would bind
-/// instead, and every arm after it become unreachable) — so the casing lint
-/// is off here rather than the constants renamed.
-#[allow(non_upper_case_globals)]
 mod lexer {
     use std::ffi::{CStr, c_int};
     use std::fmt;

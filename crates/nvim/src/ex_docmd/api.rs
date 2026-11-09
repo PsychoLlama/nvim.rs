@@ -40,9 +40,9 @@ use crate::ex_docmd::onecmd::{
 use crate::ex_docmd::scan::{parse_bang, parse_register, separate_nextcmd};
 
 use crate::ex_docmd::source::{do_cmdline_end, do_cmdline_start};
-use crate::ex_docmd::state::{cmdmod, global_busy};
+use crate::ex_docmd::state::{CMDMOD, GLOBAL_BUSY};
 use crate::ex_docmd::{
-    cmdnames, e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_pressedreturn,
+    E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND, E_NOT_AN_EDITOR_COMMAND, EX_PRESSEDRETURN, cmdnames,
 };
 use crate::ex_getln::{
     cmdpreview_get_bufnr, cmdpreview_get_ns, curbuf_locked, get_text_locked_msg, text_locked,
@@ -50,7 +50,7 @@ use crate::ex_getln::{
 use crate::guard::Suppress;
 use crate::message::state::EMSG_SILENT;
 use crate::message::{E_CMDWIN, E_COMMAND_TOO_RECURSIVE, E_MODIFIABLE, E_NOBANG, E_NORANGE};
-use crate::winlayer::graph::cmdwin_type;
+use crate::winlayer::graph::CMDWIN_TYPE;
 
 use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
@@ -77,7 +77,7 @@ pub fn parse_cmdline(
     cmdinfo: &mut CmdParseInfo,
     errormsg: &mut Option<CString>,
 ) -> bool {
-    let save_ex_pressedreturn = ex_pressedreturn.get();
+    let save_ex_pressedreturn = EX_PRESSEDRETURN.get();
     let save_cursor: Pos = Win::current().w_cursor;
     save_last_search_pattern();
 
@@ -100,7 +100,7 @@ pub fn parse_cmdline(
 
         // The command name says what kind of address the range counts in.
         let Some(mut p) = find_excmd_after_range(excmd) else {
-            *errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command));
+            *errormsg = Some(ex_msg(E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND));
             break 'end;
         };
 
@@ -135,7 +135,7 @@ pub fn parse_cmdline(
 
         if excmd.cmdidx == CmdIdx::SIZE {
             // The modifiers parsed, so the error is in what follows them.
-            let msg = ex_msg(e_not_an_editor_command);
+            let msg = ex_msg(E_NOT_AN_EDITOR_COMMAND);
             *errormsg = Some(append_command(&msg, excmd.line.rest_of(after_modifier)));
             break 'end;
         }
@@ -212,7 +212,7 @@ pub fn parse_cmdline(
     if !retval {
         undo_cmdmod(&mut cmdinfo.cmdmod);
     }
-    ex_pressedreturn.set(save_ex_pressedreturn);
+    EX_PRESSEDRETURN.set(save_ex_pressedreturn);
     Win::current().w_cursor = save_cursor;
     restore_last_search_pattern();
     retval
@@ -278,10 +278,10 @@ pub(crate) fn execute_cmd0(
 
     // `:try` saves 'emsg_silent' itself, so `:silent! try` must not
     // still be silencing by the time the body runs.
-    let did_esilent = cmdmod.with(|mods| mods.cmod_did_esilent);
+    let did_esilent = CMDMOD.with(|mods| mods.cmod_did_esilent);
     if excmd.cmdidx == CmdIdx::r#try && did_esilent > 0 {
         EMSG_SILENT.set((EMSG_SILENT.get() - did_esilent).max(0));
-        cmdmod.with_mut(|mods| mods.cmod_did_esilent = 0);
+        CMDMOD.with_mut(|mods| mods.cmod_did_esilent = 0);
     }
 
     if is_user_cmd(excmd.cmdidx) {
@@ -341,7 +341,7 @@ pub fn execute_cmd(excmd: &mut ExArg, cmdinfo: &CmdParseInfo, preview: bool) -> 
             break 'end;
         }
         if !is_user_cmd(excmd.cmdidx) {
-            if cmdwin_type.get() != 0 && !excmd.argt.has(ExArgt::CMDWIN) {
+            if CMDWIN_TYPE.get() != 0 && !excmd.argt.has(ExArgt::CMDWIN) {
                 errormsg = Some(ex_msg(E_CMDWIN));
                 break 'end;
             }
@@ -350,7 +350,7 @@ pub fn execute_cmd(excmd: &mut ExArg, cmdinfo: &CmdParseInfo, preview: bool) -> 
                 break 'end;
             }
         }
-        // `curbuf->b_ro_locked` forbids editing another buffer.
+        // `CURBUF->b_ro_locked` forbids editing another buffer.
         // `:checktime` is postponed, `:edit` is checked later, and
         // `:file` with no argument only reports.
         if !excmd.argt.has(ExArgt::CMDWIN)
@@ -372,7 +372,7 @@ pub fn execute_cmd(excmd: &mut ExArg, cmdinfo: &CmdParseInfo, preview: bool) -> 
         // Put the first line at the start of a closed fold and the last
         // line at its end.
         if (excmd.argt.has(ExArgt::WHOLEFOLD) || excmd.addr_count >= 2)
-            && global_busy.get() == 0
+            && GLOBAL_BUSY.get() == 0
             && excmd.addr_type == CmdAddr::Lines
         {
             Win::current().has_folding(excmd.line1, Some(&mut excmd.line1), None);

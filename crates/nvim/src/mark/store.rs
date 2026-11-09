@@ -5,7 +5,7 @@
 //!
 //! | container | record | lives on |
 //! | --- | --- | --- |
-//! | `namedfm` | `XFileMark` | a global, `'A`-`'Z` then `'0`-`'9` |
+//! | `NAMEDFM` | `XFileMark` | a global, `'A`-`'Z` then `'0`-`'9` |
 //! | `b_namedm` | `FileMark` | a buffer, `'a`-`'z` |
 //! | `b_last_cursor` / `b_last_insert` / `b_last_change` / `b_prompt_start` | `FileMark` | a buffer |
 //! | `b_changelist` | `FileMark` | a buffer |
@@ -24,7 +24,7 @@
 //!
 //! [`LocalMark`] names one of a buffer's stores by the mark's name, for the
 //! four places that choose a store that way. The global table is
-//! [`namedfm`], reached through `GlobalCell`'s closures; the index
+//! [`NAMEDFM`], reached through `GlobalCell`'s closures; the index
 //! arithmetic that names a slot stays with its callers (see
 //! `mark/lookup.rs`'s `mark_global_index`) because turning the fixed array
 //! into a keyed map is a later change, not this module's.
@@ -172,13 +172,13 @@ pub(super) fn global_mark_names() -> impl Iterator<Item = (usize, u8)> {
 /// A copy of global mark slot `idx`.
 #[inline(never)]
 pub(super) fn global_mark(idx: usize) -> XFileMark {
-    super::namedfm.with(|table| table[idx].clone())
+    super::NAMEDFM.with(|table| table[idx].clone())
 }
 
 /// Replace global mark slot `idx` with `mark`, releasing what it held.
 #[inline(never)]
 pub(super) fn set_global_mark(idx: usize, mark: XFileMark) {
-    super::namedfm.with_mut(|table| table[idx] = mark);
+    super::NAMEDFM.with_mut(|table| table[idx] = mark);
 }
 
 #[cfg(test)]

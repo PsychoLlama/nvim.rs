@@ -26,7 +26,7 @@
 //!   *dereferencing* the `data` pointer needs a block, and the note there
 //!   names which key the byte belongs to.
 //! - **This runs on the main thread inside the API dispatcher**, so the
-//!   editor globals the `ex_docmd` entry points consult (`curbuf`, the
+//!   editor globals the `ex_docmd` entry points consult (`CURBUF`, the
 //!   command table, the register table) are live for the whole call.
 //!
 

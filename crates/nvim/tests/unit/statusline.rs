@@ -14,7 +14,7 @@
 //! it differs, the cell count the call should answer.
 //!
 //! The editor is needed throughout: the format may be an expression (`%!`),
-//! the items read `curwin` and `curbuf`, and the fill character is interned
+//! the items read `curwin` and `CURBUF`, and the fill character is interned
 //! in the process-wide glyph cache.
 
 #![cfg(not(miri))]
@@ -77,7 +77,7 @@ const ALIGNED: Case = Case {
 /// single-byte one, and a multibyte one.
 const FILLS: [&str; 3] = [" ", "!", "━"];
 
-/// The editor, plus the promise that `curbuf`'s file name is put back.
+/// The editor, plus the promise that `CURBUF`'s file name is put back.
 ///
 /// The spec's `itp` forked a child per case, so naming the current buffer
 /// was free; here every case in the process shares it.
@@ -92,7 +92,7 @@ impl Statusline {
         }
     }
 
-    /// Name `curbuf`, or clear its name when `file` is empty.
+    /// Name `CURBUF`, or clear its name when `file` is empty.
     fn name(&self, file: &str) {
         let name = cstr(file);
         let name = (!file.is_empty()).then_some(name.as_c_str());

@@ -4,7 +4,7 @@
 //! `regsub_multi_len`, purely to learn how long the result will be, then
 //! `regsub_multi_into` to write it -- the "measure or write" shape. A `\=`
 //! expression is evaluated once, by the measuring pass, which keeps its
-//! value for the writing one.  Both passes run under `textlock`, so the
+//! value for the writing one.  Both passes run under `TEXTLOCK`, so the
 //! expression cannot change the text under the match.
 //!
 //! [`commit_line`] is the other half: the rebuilt line only reaches the
@@ -31,9 +31,9 @@ use crate::ex_cmds::SUB_NSUBS;
 use crate::ex_cmds::{CAR, LineData, REGSUB_BACKSLASH, REGSUB_MAGIC};
 use crate::ex_eval::aborting;
 use crate::extmark::BCount;
+use crate::extmark::EXTMARK_NOOP;
+use crate::extmark::EXTMARK_UNDO;
 use crate::extmark::extmark_splice;
-use crate::extmark::kExtmarkNOOP;
-use crate::extmark::kExtmarkUndo;
 use crate::guard::Lock;
 use crate::mark::mark_adjust;
 use crate::mbyte::cluster_len;
@@ -193,7 +193,7 @@ fn split_carriage_returns(st: &mut Sub, at: usize) {
                 // `ml_append` copies the `at + 1` bytes just terminated.
                 let _ = ml_append_cstr(st.lnum - 1, line.head_cstr());
                 line.drop_head(at + 1);
-                mark_adjust(st.lnum + 1, MAXLNUM, 1, 0, kExtmarkNOOP);
+                mark_adjust(st.lnum + 1, MAXLNUM, 1, 0, EXTMARK_NOOP);
                 if SUB_FLAGS.with(|flags| flags.do_ask) {
                     appended_lines(st.lnum - 1, 1);
                 } else {
@@ -377,7 +377,7 @@ fn delete_matched_lines(st: &mut Sub) -> bool {
         st.lnum + st.nmatch_tl - 1,
         MAXLNUM.get(),
         -st.nmatch_tl,
-        kExtmarkNOOP,
+        EXTMARK_NOOP,
     );
     if SUB_FLAGS.with(|flags| flags.do_ask) {
         deleted_lines(st.lnum, st.nmatch_tl);
@@ -425,7 +425,7 @@ pub(super) fn commit_line(st: &mut Sub) -> bool {
             m.lnum_after.get() - m.lnum_before.get(),
             ColNr::new(m.subcols),
             m.subbytes,
-            kExtmarkUndo,
+            EXTMARK_UNDO,
         );
     }
     // Reset the match data for the next line.

@@ -1,6 +1,6 @@
 //! RAII guards over the editor's suppression counters and script context.
 //!
-//! `textlock`, `sandbox`, `MSG_SILENT`, `EMSG_OFF`, `EMSG_SKIP`,
+//! `TEXTLOCK`, `sandbox`, `MSG_SILENT`, `EMSG_OFF`, `EMSG_SKIP`,
 //! `NO_WAIT_RETURN`, `no_mapping`, `allow_keys` and `REDRAWING_DISABLED` are
 //! the globals that say "for the duration of this operation, don't show
 //! errors / don't redraw / don't let anything touch the buffer". C bumps
@@ -58,7 +58,7 @@
 //!   return.
 //! - **The scope is a state machine, not a block.** `REDRAWING_DISABLED`
 //!   under `disabled_redraw` spans Insert mode's entry and its exit;
-//!   `debug_backtrace_level` is what `:up` and `:down` move; `compl_pending`
+//!   `DEBUG_BACKTRACE_LEVEL` is what `:up` and `:down` move; `compl_pending`
 //!   and `PUM_SELECTED` are positions, not depths.
 //! - **The lifetime belongs to a caller several frames up.** The
 //!   `enter`/`leave` pairs — `try_enter`/`try_leave`,
@@ -73,7 +73,7 @@
 //!   contract is written on `buf_write_do_autocmds`; a guard here would
 //!   have to be handed across the call.
 //! - **Upstream leaks it on purpose.** `win_float_setup_preview` returns
-//!   with `REDRAWING_DISABLED` and `no_u_sync` still raised and says so.
+//!   with `REDRAWING_DISABLED` and `NO_U_SYNC` still raised and says so.
 //!
 //! Everything else — every counter whose release is the arithmetic inverse
 //! of its bump, taken and released inside one body — is a guard, and the
@@ -112,24 +112,23 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
-use crate::autocmd::state::{AutocmdField, autocmd_no_enter, autocmd_no_leave};
+use crate::autocmd::state::{AUTOCMD_NO_ENTER, AUTOCMD_NO_LEAVE, AutocmdField};
 use crate::drawscreen::state::REDRAWING_DISABLED;
 use crate::ex_getln::state::CMDLINE_STAR;
-use crate::extmark::curbuf_splice_pending;
-use crate::fileio::state::no_check_timestamps;
-use crate::fold::disable_fold_update;
+use crate::extmark::CURBUF_SPLICE_PENDING;
+use crate::fileio::state::NO_CHECK_TIMESTAMPS;
+use crate::fold::DISABLE_FOLD_UPDATE;
 use crate::getchar::state::{ALLOW_KEYS, EXPR_MAP_LOCK, GetcharField, NO_MAPPING, NO_ZERO_MAPPING};
 use crate::global_cell::{GlobalCell, Level};
-use crate::memline::inhibit_delete_count;
+use crate::memline::INHIBIT_DELETE_COUNT;
 use crate::message::state::{
     EMSG_OFF, EMSG_SILENT, EMSG_SKIP, MSG_LISTDO_OVERWRITE, MSG_SILENT, MsgField, NO_WAIT_RETURN,
 };
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::types::{ScriptCtx, ScriptId};
-use crate::undo::no_u_sync;
-use crate::window::state::tabpage_move_disallowed;
+use crate::undo::NO_U_SYNC;
+use crate::window::state::TABPAGE_MOVE_DISALLOWED;
 use core::ffi::c_int;
 
 /// The four "for the duration of this, don't let anything touch the editor"
@@ -137,10 +136,10 @@ use core::ffi::c_int;
 /// what raises and lowers three of them — [`Lock::text`], [`Lock::sandbox`],
 /// [`Lock::all_buffers`] — and `secure` is the same vocabulary one step out:
 /// the flag those callers test before deciding to take a lock at all.
-pub(crate) static secure: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static textlock: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static allbuf_lock: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static sandbox: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static SECURE: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static TEXTLOCK: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static ALLBUF_LOCK: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub static SANDBOX: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
 /// A guard that holds a counter one higher for its lifetime.
 ///
@@ -387,38 +386,38 @@ impl Suppress {
         f();
     }
 
-    /// `no_u_sync` — undo does not start a new change while this is held.
+    /// `NO_U_SYNC` — undo does not start a new change while this is held.
     ///
     /// Everything typed inside the scope joins the change that was already
     /// open, which is what makes an expression register, a `CTRL-V` and a
     /// `:s///c` prompt one undoable edit rather than several.
     pub(crate) fn undo_sync() -> Bump {
-        Bump::new(&no_u_sync)
+        Bump::new(&NO_U_SYNC)
     }
 
-    /// `curbuf_splice_pending` — the individual line edits in this scope do
+    /// `CURBUF_SPLICE_PENDING` — the individual line edits in this scope do
     /// not each announce themselves.
     ///
     /// The scope's caller sends one `extmark_splice` for the whole thing
     /// afterwards, so extmarks and the buffer-update RPC see one change
     /// where the code made three or four.
     pub(crate) fn splice() -> Bump {
-        Bump::new(&curbuf_splice_pending)
+        Bump::new(&CURBUF_SPLICE_PENDING)
     }
 
-    /// `disable_fold_update` — folds are not recomputed in this scope.
+    /// `DISABLE_FOLD_UPDATE` — folds are not recomputed in this scope.
     ///
     /// For the operation that leaves the buffer half-moved part way
     /// through, where a `'foldexpr'` re-evaluated on it would see lines
     /// that are about to move again.
     pub(crate) fn fold_update() -> Bump {
-        Bump::new(&disable_fold_update)
+        Bump::new(&DISABLE_FOLD_UPDATE)
     }
 
-    /// `inhibit_delete_count` — a line deleted in this scope does not count
+    /// `INHIBIT_DELETE_COUNT` — a line deleted in this scope does not count
     /// towards the "N fewer lines" report.
     pub(crate) fn delete_count() -> Bump {
-        Bump::new(&inhibit_delete_count)
+        Bump::new(&INHIBIT_DELETE_COUNT)
     }
 
     /// `MSG_LISTDO_OVERWRITE` — a file message in this scope does not
@@ -437,10 +436,10 @@ impl Suppress {
         Bump::new(&CMDLINE_STAR)
     }
 
-    /// `no_check_timestamps` — a file whose timestamp changed under the
+    /// `NO_CHECK_TIMESTAMPS` — a file whose timestamp changed under the
     /// editor during this scope raises no warning.
     pub(crate) fn timestamp_checks() -> Bump {
-        Bump::new(&no_check_timestamps)
+        Bump::new(&NO_CHECK_TIMESTAMPS)
     }
 
     /// `no_zero_mapping` — a `0` read in this scope is a count digit, not
@@ -451,12 +450,12 @@ impl Suppress {
 
     /// `autocmd_no_enter` — no `WinEnter`/`BufEnter` fires in this scope.
     pub(crate) fn win_enter_autocmds() -> AutocmdBump {
-        Bump::new(autocmd_no_enter)
+        Bump::new(AUTOCMD_NO_ENTER)
     }
 
     /// `autocmd_no_leave` — no `WinLeave`/`BufLeave` fires in this scope.
     pub(crate) fn win_leave_autocmds() -> AutocmdBump {
-        Bump::new(autocmd_no_leave)
+        Bump::new(AUTOCMD_NO_LEAVE)
     }
 
     /// Both of the above: the scope walks the window list and enters
@@ -533,16 +532,16 @@ impl Allow {
         Saved::new(NO_WAIT_RETURN, 0)
     }
 
-    /// `textlock = 0` — the callback about to run is allowed to change
+    /// `TEXTLOCK = 0` — the callback about to run is allowed to change
     /// text even though the caller was inside a text-locked operation.
     pub(crate) fn text_changes() -> Saved {
-        Saved::new(&textlock, 0)
+        Saved::new(&TEXTLOCK, 0)
     }
 
     /// [`Allow::text_changes`], lifting the lock only when `cond`, but
     /// restoring it either way.
     pub(crate) fn text_changes_when(cond: bool) -> Saved {
-        Saved::when(cond, &textlock, 0)
+        Saved::when(cond, &TEXTLOCK, 0)
     }
 
     /// `expr_map_lock = 0` — [`Allow::text_changes`]'s companion; the two
@@ -583,20 +582,20 @@ impl Allow {
     /// [`Suppress::win_enter_autocmds`], for the callee that has to let one
     /// `BufEnter` through a caller that had switched them off.
     pub(crate) fn win_enter_autocmds() -> AutocmdBump {
-        Bump::by(autocmd_no_enter, -1)
+        Bump::by(AUTOCMD_NO_ENTER, -1)
     }
 
     /// `autocmd_no_leave -= 1` — the inverse of
     /// [`Suppress::win_leave_autocmds`].
     pub(crate) fn win_leave_autocmds() -> AutocmdBump {
-        Bump::by(autocmd_no_leave, -1)
+        Bump::by(AUTOCMD_NO_LEAVE, -1)
     }
 
-    /// `no_check_timestamps = 0` — this scope checks file timestamps even
+    /// `NO_CHECK_TIMESTAMPS = 0` — this scope checks file timestamps even
     /// inside an operation that had switched the check off, restoring the
     /// level afterwards.
     pub(crate) fn timestamp_checks() -> Saved {
-        Saved::new(&no_check_timestamps, 0)
+        Saved::new(&NO_CHECK_TIMESTAMPS, 0)
     }
 }
 
@@ -606,17 +605,17 @@ impl Allow {
 pub struct Lock;
 
 impl Lock {
-    /// `textlock` — buffer text, window layout and the current
+    /// `TEXTLOCK` — buffer text, window layout and the current
     /// buffer/window must not change while this is held.
     pub(crate) fn text() -> Bump {
-        Bump::new(&textlock)
+        Bump::new(&TEXTLOCK)
     }
 
     /// `sandbox` — the code about to run came from somewhere untrusted
     /// (a modeline, a `'foldexpr'`, a tag command) and the operations
     /// marked unsafe-in-sandbox are refused.
     pub(crate) fn sandbox() -> Bump {
-        Bump::new(&sandbox)
+        Bump::new(&SANDBOX)
     }
 
     /// `expr_map_lock` — [`Lock::text`]'s companion for the `<expr>`
@@ -626,19 +625,19 @@ impl Lock {
         Bump::new(EXPR_MAP_LOCK)
     }
 
-    /// `allbuf_lock` — no buffer may be added, removed or renamed while
+    /// `ALLBUF_LOCK` — no buffer may be added, removed or renamed while
     /// this is held, and `:cd` is refused.
     ///
     /// The scopes that take it hand control to an autocommand while
     /// holding a raw `Buffer *`.
     pub(crate) fn all_buffers() -> Bump {
-        Bump::new(&allbuf_lock)
+        Bump::new(&ALLBUF_LOCK)
     }
 
-    /// `tabpage_move_disallowed` — an autocommand fired in this scope may
+    /// `TABPAGE_MOVE_DISALLOWED` — an autocommand fired in this scope may
     /// not reorder the tab pages the scope is walking.
     pub(crate) fn tabpage_move() -> Bump {
-        Bump::new(&tabpage_move_disallowed)
+        Bump::new(&TABPAGE_MOVE_DISALLOWED)
     }
 
     /// A lock counter that belongs to one module rather than to the editor
@@ -688,16 +687,16 @@ pub(crate) struct SavedSctx {
 
 impl Drop for SavedSctx {
     fn drop(&mut self) {
-        current_sctx.set(self.saved);
+        CURRENT_SCTX.set(self.saved);
     }
 }
 
-/// Guards over `current_sctx` — which script the code running now belongs
+/// Guards over `CURRENT_SCTX` — which script the code running now belongs
 /// to.
 ///
 /// Every site that hands control to code written somewhere else — an
 /// autocommand, a mapping, an option's expression, a sourced file, an API
-/// call — points `current_sctx` at whoever *wrote* that code, so that
+/// call — points `CURRENT_SCTX` at whoever *wrote* that code, so that
 /// `:verbose`, `<SID>`, `<sfile>` and the error messages name the script
 /// rather than whatever happened to be running when it fired.
 #[derive(Debug)]
@@ -707,21 +706,21 @@ impl Script {
     /// Run this scope as `sctx`.
     pub(crate) fn context(sctx: ScriptCtx) -> SavedSctx {
         SavedSctx {
-            saved: current_sctx.replace(sctx),
+            saved: CURRENT_SCTX.replace(sctx),
         }
     }
 
     /// [`Script::context`] changing only the script id, leaving the
     /// sequence number and the line where they were.
     pub(crate) fn sid(sid: ScriptId) -> SavedSctx {
-        Self::context(current_sctx.get().with_sid(sid))
+        Self::context(CURRENT_SCTX.get().with_sid(sid))
     }
 
     /// Save the context and leave it alone, for the scope that fills it in
     /// itself or only sometimes.
     pub(crate) fn saved() -> SavedSctx {
         SavedSctx {
-            saved: current_sctx.get(),
+            saved: CURRENT_SCTX.get(),
         }
     }
 }
@@ -779,11 +778,11 @@ mod tests {
         // The whole point: no path out of the scope can leak the counter.
         let caught = std::panic::catch_unwind(|| {
             let _guard = Lock::text();
-            assert_eq!(textlock.get(), 1);
+            assert_eq!(TEXTLOCK.get(), 1);
             panic!("the callee failed");
         });
         assert!(caught.is_err());
-        assert_eq!(textlock.get(), 0);
+        assert_eq!(TEXTLOCK.get(), 0);
     }
 
     #[test]
@@ -803,21 +802,21 @@ mod tests {
         let _serial = counters();
         {
             let _guard = Suppress::win_enter_leave_autocmds();
-            assert_eq!((autocmd_no_enter.get(), autocmd_no_leave.get()), (1, 1));
+            assert_eq!((AUTOCMD_NO_ENTER.get(), AUTOCMD_NO_LEAVE.get()), (1, 1));
         }
-        assert_eq!((autocmd_no_enter.get(), autocmd_no_leave.get()), (0, 0));
+        assert_eq!((AUTOCMD_NO_ENTER.get(), AUTOCMD_NO_LEAVE.get()), (0, 0));
     }
 
     #[test]
     fn allow_is_the_inverse_of_suppress() {
         let _serial = counters();
         let _outer = Suppress::win_enter_autocmds();
-        assert_eq!(autocmd_no_enter.get(), 1);
+        assert_eq!(AUTOCMD_NO_ENTER.get(), 1);
         {
             let _lifted = Allow::win_enter_autocmds();
-            assert_eq!(autocmd_no_enter.get(), 0);
+            assert_eq!(AUTOCMD_NO_ENTER.get(), 0);
         }
-        assert_eq!(autocmd_no_enter.get(), 1);
+        assert_eq!(AUTOCMD_NO_ENTER.get(), 1);
     }
 
     #[test]

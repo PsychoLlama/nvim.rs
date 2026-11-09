@@ -106,7 +106,7 @@ pub(crate) fn run_read_autocmds(
     );
     apply_autocmds_exarg(ev, iofile, afile, false, buf, excmd);
     if buf_read && !Buf::current().b_au_did_filetype && Buf::current().b_p_ft.first_byte() != 0 {
-        // `curbuf` is re-read because `BufReadPost` may have moved us.
+        // `CURBUF` is re-read because `BufReadPost` may have moved us.
         let ft = Buf::current().b_p_ft.get();
         let fname = Buf::current().name.shown().map(XString::from_cstr);
         fire_autocmds_for(

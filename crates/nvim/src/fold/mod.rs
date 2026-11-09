@@ -38,11 +38,10 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::ascii::TAB;
 use crate::decoration::defs::VirtText;
-use crate::diff::state::need_diff_redraw;
+use crate::diff::state::NEED_DIFF_REDRAW;
 use crate::drawscreen::{UPD_NOT_VALID, find_wl_entry};
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
@@ -82,7 +81,7 @@ use level::fold_update_computed;
 use list::{find, find_at_or_below, fold_on_line};
 use open_close::check_closed;
 
-pub(crate) static disable_fold_update: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static DISABLE_FOLD_UPDATE: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
 pub const VIRTTEXT_EMPTY: VirtText = VirtText::new();
 
@@ -174,25 +173,25 @@ pub struct FoldLine {
 }
 
 /// Set when the folds changed and the window needs redrawing.
-static fold_changed: GlobalCell<bool> = GlobalCell::new(false);
-static e_nofold: &::core::ffi::CStr = c"E490: No fold found";
+static FOLD_CHANGED: GlobalCell<bool> = GlobalCell::new(false);
+static E_NOFOLD: &::core::ffi::CStr = c"E490: No fold found";
 
-/// While the folds are being updated, the lines between `invalid_top` and
-/// `invalid_bot` have an undefined fold level. Only meaningful for the window
+/// While the folds are being updated, the lines between `INVALID_TOP` and
+/// `INVALID_BOT` have an undefined fold level. Only meaningful for the window
 /// currently being updated.
-static invalid_top: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
-static invalid_bot: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
+static INVALID_TOP: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
+static INVALID_BOT: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
 
 /// With 'foldexpr' we sometimes ask for the level of the *next* line, which
 /// calls `foldlevel()` for the current one — which has not been stored yet.
 /// The previous line's level is parked here to break that cycle;
 /// `prev_lnum` is zero when there is nothing to offer.
-static prev_lnum: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
-static prev_lnum_lvl: GlobalCell<c_int> = GlobalCell::new(-1);
+static PREV_LNUM: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
+static PREV_LNUM_LVL: GlobalCell<c_int> = GlobalCell::new(-1);
 
 /// 'foldmarker' split into its two halves, refreshed by `parse_marker`.
-static foldstartmarkerlen: GlobalCell<usize> = GlobalCell::new(0);
-static foldendmarkerlen: GlobalCell<usize> = GlobalCell::new(0);
+static FOLDSTARTMARKERLEN: GlobalCell<usize> = GlobalCell::new(0);
+static FOLDENDMARKERLEN: GlobalCell<usize> = GlobalCell::new(0);
 
 /// Copy the folding state from window `wp_from` to window `wp_to`.
 pub fn copy_folding_state(wp_from: Win, mut wp_to: Win) {
@@ -485,11 +484,11 @@ impl ClosedWalk {
 /// Returns fold level at line number "lnum" in the current window.
 fn fold_level(lnum: LineNr) -> c_int {
     let win = Win::current();
-    if invalid_top.get() == LineNr::ZERO {
+    if INVALID_TOP.get() == LineNr::ZERO {
         checkupdate(win);
-    } else if lnum == prev_lnum.get() && prev_lnum_lvl.get() >= 0 {
-        return prev_lnum_lvl.get();
-    } else if lnum >= invalid_top.get() && lnum <= invalid_bot.get() {
+    } else if lnum == PREV_LNUM.get() && PREV_LNUM_LVL.get() >= 0 {
+        return PREV_LNUM_LVL.get();
+    } else if lnum >= INVALID_TOP.get() && lnum <= INVALID_BOT.get() {
         return -1;
     }
     if has_any_folding(win) == 0 {
@@ -579,12 +578,12 @@ pub fn clear_folding(mut win: Win) {
 /// The changes in lines from top to bot (inclusive).
 ///
 pub fn fold_update(window: Win, top: LineNr, bot: LineNr) {
-    if disable_fold_update.get() != 0
+    if DISABLE_FOLD_UPDATE.get() != 0
         || STATE.get() & MODE_INSERT != 0 && !foldmethod_is_indent(window)
     {
         return;
     }
-    if need_diff_redraw.get() {
+    if NEED_DIFF_REDRAW.get() {
         return;
     }
     window.with_folds(|folds| {

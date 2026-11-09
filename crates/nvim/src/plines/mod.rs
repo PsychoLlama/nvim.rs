@@ -34,7 +34,7 @@ use crate::diff::{diff_check_fill, diffopt_filler};
 use crate::fold::line_folded;
 use crate::indent::get_breakindent_win;
 use crate::marktree::cursor::Cursor;
-use crate::marktree::key::{kMTFilterSelect, mt_invalid, mt_right};
+use crate::marktree::key::{MT_FILTER_SELECT, mt_invalid, mt_right};
 use crate::marktree::meta::MetaCount;
 use crate::marktree::{MarkTreeIter, MetaIndex};
 use crate::mbyte::{CharInfo, MB_MAXCHAR};
@@ -69,7 +69,7 @@ const TAB: int32_t = b'\t' as int32_t;
 pub(crate) const CHAR_CELLS_SPAN: usize = 2 * MB_MAXCHAR;
 
 /// The marktree filter that selects inline virtual text and nothing else.
-static INLINE_FILTER: MetaCount = [kMTFilterSelect, 0, 0, 0, 0];
+static INLINE_FILTER: MetaCount = [MT_FILTER_SELECT, 0, 0, 0, 0];
 
 impl Win {
     /// Whether a tab is expanded to a tabstop rather than shown as a

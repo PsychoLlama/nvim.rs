@@ -26,7 +26,7 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::buffer::buf_spname;
-use crate::cmdexpand::state::wild_menu_showing;
+use crate::cmdexpand::state::WILD_MENU_SHOWING;
 use crate::drawscreen::state::REDRAW_CMDLINE;
 use crate::global_cell::GlobalCell;
 use crate::grid::default_gridview;
@@ -45,7 +45,7 @@ pub fn win_redr_status(window: Win) {
     // Reached recursively when 'statusline' (indirectly) invokes
     // ":redrawstatus"; ignore the call then. Also ignore it while the
     // wildmenu is showing, which may be drawn over the status line.
-    if BUSY.get() || (wild_menu_showing.get() != 0 && !ui_has(UI_WILDMENU)) {
+    if BUSY.get() || (WILD_MENU_SHOWING.get() != 0 && !ui_has(UI_WILDMENU)) {
         return;
     }
     BUSY.set(true);

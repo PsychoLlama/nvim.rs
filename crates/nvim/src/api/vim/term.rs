@@ -27,7 +27,7 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
     let Some(buffer) = api_buf_ensure_loaded(buf)? else {
         return Ok(0 as Integer);
     };
-    if cmdwin_buf.get() == Some(buffer.id()) {
+    if CMDWIN_BUF.get() == Some(buffer.id()) {
         return Err(Error::exception(E_CMDWIN));
     }
     let mut may_read_buffer: bool = true;

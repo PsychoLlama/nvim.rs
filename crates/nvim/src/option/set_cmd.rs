@@ -44,8 +44,8 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::drawscreen::{UPD_CLEAR, redraw_all_later};
 use crate::eval::last_set_msg;
 use crate::ex_getln::gotocmdline;
+use crate::guard::SANDBOX;
 use crate::guard::Suppress;
-use crate::guard::sandbox;
 use crate::message::IOSIZE;
 use crate::message::state::INFO_MESSAGE;
 use crate::message::{E_INVARG, E_SANDBOX, E_TRAILING};
@@ -54,7 +54,7 @@ use crate::option::defs::{OptError, OptIndex, OptVal, OptionSetFlags};
 use crate::option::vars::{p_mle, p_verbose};
 use crate::options::{kOptFoldmethod, kOptInvalid, kOptWildchar, kOptWildcharm, kOptWrap};
 use crate::os::libc::uint32_t;
-use crate::startup::silent_mode;
+use crate::startup::SILENT_MODE;
 use crate::types::{ExArg, Failed, OptInt, ScriptId};
 
 use super::{
@@ -172,7 +172,7 @@ impl Win {
                 return Err(Failed);
             }
         }
-        if sandbox.get() != 0 && flags & OPT_FLAG_SECURE as uint32_t != 0 {
+        if SANDBOX.get() != 0 && flags & OPT_FLAG_SECURE as uint32_t != 0 {
             *errmsg = Some(E_SANDBOX.into());
             return Err(Failed);
         }
@@ -534,11 +534,11 @@ pub(crate) fn do_set(arg: &[u8], opt_flags: OptionSetFlags) -> Result<(), Failed
 
     // `-s` suppresses messages, but a `:set` that was asked to show
     // something still ends its listing with a newline.
-    if silent_mode.get() && did_show {
-        silent_mode.set(false);
+    if SILENT_MODE.get() && did_show {
+        SILENT_MODE.set(false);
         INFO_MESSAGE.set(true);
         msg_putchar(c_int::from(b'\n'));
-        silent_mode.set(true);
+        SILENT_MODE.set(true);
         INFO_MESSAGE.set(false);
     }
     Ok(())

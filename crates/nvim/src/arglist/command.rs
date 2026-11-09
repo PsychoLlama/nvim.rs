@@ -168,7 +168,7 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
         return;
     }
     setpcmark();
-    if is_split_cmd || cmdmod.with(|m| m.cmod_tab) != 0 {
+    if is_split_cmd || CMDMOD.with(|m| m.cmod_tab) != 0 {
         // Split the window, or create a new tab page, first.
         if win_split(0, 0).is_err() {
             return;

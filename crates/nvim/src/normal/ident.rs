@@ -46,11 +46,11 @@ use crate::option::magic_isset;
 use crate::optionstr::{OptString, OptStringRef, local_or_global};
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
-use crate::search::state::no_smartcase;
+use crate::search::state::NO_SMARTCASE;
 use crate::state::MODE_TERMINAL;
 use crate::state::mode::RESTART_EDIT;
 use crate::strings::shellescape;
-use crate::tag::state::g_tag_at_cursor;
+use crate::tag::state::G_TAG_AT_CURSOR;
 use crate::tag::{TagCmd, do_tag};
 use crate::types::{ColNr, Failed, LineNr};
 use crate::undo::curbuf_is_changed;
@@ -269,7 +269,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
                 // The plain forms anchor at a word boundary.
                 out.extend_from_slice(b"\\<");
             }
-            no_smartcase.set(true);
+            NO_SMARTCASE.set(true);
         }
         Some(b'K') => {
             let count0 = cmd_arg.count0;
@@ -339,9 +339,9 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
     } else {
         // `taglist()` and friends need to know the tag came from under
         // the cursor rather than from a command line.
-        g_tag_at_cursor.set(true);
+        G_TAG_AT_CURSOR.set(true);
         let _ = do_cmdline_cmd(&cstr::owned(&out));
-        g_tag_at_cursor.set(false);
+        G_TAG_AT_CURSOR.set(false);
         if cmdchar.is('K') && !kp_ex && !kp_help {
             // The terminal 'keywordprg' opened above: let <Esc> close it.
             RESTART_EDIT.set(Key::ascii(b'i'));

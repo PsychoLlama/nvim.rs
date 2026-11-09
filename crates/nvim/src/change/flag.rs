@@ -39,10 +39,10 @@ const W_READONLY: &CStr = c"W10: Warning: Changing a readonly file";
 /// that it lands after the mode message.
 ///
 /// FileChangedRO may run arbitrary autocommands, which can reload the buffer,
-/// change `curbuf` or wipe the buffer: one wiped is not warned about (upstream
+/// change `CURBUF` or wipe the buffer: one wiped is not warned about (upstream
 /// read it after it was freed).
 pub fn change_warning(mut buffer: Buf, col: c_int) {
-    if buffer.b_did_warn || curbuf_is_changed() || autocmd_busy.get() || buffer.b_p_ro == 0 {
+    if buffer.b_did_warn || curbuf_is_changed() || AUTOCMD_BUSY.get() || buffer.b_p_ro == 0 {
         return;
     }
     let bufref = BufRef::of(buffer);
@@ -68,7 +68,7 @@ pub fn change_warning(mut buffer: Buf, col: c_int) {
     set_vim_var_string(Vv::Warningmsg, Some(gettext(W_READONLY).to_bytes()));
     msg_clr_eos();
     msg_end();
-    if MSG_SILENT.get() == 0 && !silent_mode.get() && ui_active() != 0 {
+    if MSG_SILENT.get() == 0 && !SILENT_MODE.get() && ui_active() != 0 {
         // Give the user time to think about it.
         msg_delay(1002, true);
     }
@@ -95,7 +95,7 @@ pub fn changed(buffer: Buf) {
     if buffer.b_changed == 0 {
         let save_msg_scroll = MSG_SCROLL.get();
 
-        // May check the file out, and so change `curbuf`.
+        // May check the file out, and so change `CURBUF`.
         change_warning(buffer, 0);
         let Some(buffer) = bufref.get() else {
             return;
@@ -130,7 +130,7 @@ pub fn changed(buffer: Buf) {
         changed_internal(buffer);
     }
     buf_inc_changedtick(buffer);
-    highlight_match.set(false);
+    HIGHLIGHT_MATCH.set(false);
 }
 
 /// Set `b_changed` and everything that displays it, without the warning, the

@@ -30,7 +30,7 @@ use crate::guard::Lock;
 use crate::option::vars::{TCL_FLAGS, p_sb, p_spr};
 use crate::options::{kOptTclFlagLeft, kOptTclFlagUselast};
 use crate::winfloat::win_float_find_altwin;
-use crate::winlayer::graph::{cmdline_win, first_tabpage};
+use crate::winlayer::graph::{CMDLINE_WIN, FIRST_TABPAGE};
 use crate::winlayer::{FrameId, FrameRef, TabPage, Win, tabs};
 
 /// Which neighbour inherits a closing window's room, and along which axis --
@@ -63,8 +63,8 @@ pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, u8) 
     if win_tp.tp_curwin == Some(win.id()) {
         win_tp.tp_curwin = wp.map(Win::id);
     }
-    if cmdline_win.get() == Some(win.id()) {
-        cmdline_win.set(None);
+    if CMDLINE_WIN.get() == Some(win.id()) {
+        CMDLINE_WIN.set(None);
     }
     (wp, dir)
 }
@@ -98,7 +98,7 @@ pub(crate) fn winframe_remove(win: Win, tabpage: Option<TabPage>, keep_unflat: b
         };
     };
     let frp_close = win.frame();
-    let _locked = Lock::held(&frame_locked);
+    let _locked = Lock::held(&FRAME_LOCKED);
 
     // Save the position of the containing frame (which will also contain the
     // altframe) before we remove anything, to recompute window positions later.
@@ -400,7 +400,7 @@ pub(crate) fn alt_tab_page() -> TabPage {
     }
     let cur = TabPage::current();
     let forward = cur.next().is_some()
-        && (TCL_FLAGS.get() & kOptTclFlagLeft == 0 || first_tabpage.get() == Some(cur.id()));
+        && (TCL_FLAGS.get() & kOptTclFlagLeft == 0 || FIRST_TABPAGE.get() == Some(cur.id()));
     match cur.next() {
         Some(next) if forward => next,
         _ => tabs()

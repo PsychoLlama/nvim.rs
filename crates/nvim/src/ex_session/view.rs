@@ -27,7 +27,7 @@
 )]
 
 use super::{
-    SessionFile, SessionOpts, Written, did_lcd, ses_arglist, ses_escape_fname, ses_fname,
+    DID_LCD, SessionFile, SessionOpts, Written, ses_arglist, ses_escape_fname, ses_fname,
     ses_get_fname, ses_put_fname,
 };
 use crate::arglist::ArgListId;
@@ -136,7 +136,7 @@ pub(crate) fn put_view(
         out.puts(c"lcd ")?;
         ses_put_fname(out, localdir.as_cstr())?;
         out.eol()?;
-        did_lcd.set(true);
+        DID_LCD.set(true);
     }
     Ok(())
 }
@@ -219,10 +219,10 @@ fn put_alternate(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Writt
 /// Write the window's local options or, when options are not wanted at all,
 /// just the fold options that folds could not be restored without.
 ///
-/// The writers read `curwin`/`curbuf`, so the window has to be made current
+/// The writers read `curwin`/`CURBUF`, so the window has to be made current
 /// for the duration. Nothing between the two assignments runs Vimscript.
 fn put_local_options(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Written {
-    // `curwin`/`curbuf` are restored before returning either way.
+    // `curwin`/`CURBUF` are restored before returning either way.
     let saved = switch_to(window);
     let f = if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions) {
         // Store only the local values for a view, and for a session

@@ -41,10 +41,10 @@ use crate::option::vars::p_hid;
 use crate::optionstr::{OptString, OptStringRef};
 use crate::os::cshim::gettext;
 use crate::quickfix::qf_stack_get_bufnr;
-use crate::quickfix::{msg_loclist, msg_qflist};
+use crate::quickfix::{MSG_LOCLIST, MSG_QFLIST};
 use crate::types::{CmdModFlags, LineNr, TypVal, VAR_NUMBER, VarLock, VarNumber};
 use crate::winlayer::Buf;
-use crate::winlayer::graph::cmdwin_buf;
+use crate::winlayer::graph::CMDWIN_BUF;
 
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped
@@ -174,15 +174,15 @@ pub fn buf_spname(buffer: &Buf) -> Option<&CStr> {
     let b = buffer;
     if buf_is_quickfix(Some(*b)) {
         if b.handle == Handle::new(qf_stack_get_bufnr()) {
-            return Some(gettext(msg_qflist));
+            return Some(gettext(MSG_QFLIST));
         }
-        return Some(gettext(msg_loclist));
+        return Some(gettext(MSG_LOCLIST));
     }
     if buf_is_nofilename(Some(*b)) {
         if let Some(name) = b.name.shown() {
             return Some(name);
         }
-        if cmdwin_buf.get() == Some(b.id()) {
+        if CMDWIN_BUF.get() == Some(b.id()) {
             return Some(gettext(c"[Command Line]"));
         }
         if buf_is_prompt(Some(*b)) {

@@ -37,8 +37,8 @@ use std::ffi::CString;
 
 use super::*;
 use crate::autocmd::is_aucmd_win;
-use crate::autocmd::state::au_new_curbuf;
-use crate::buffer::state::{swap_exists_action, swap_exists_did_quit};
+use crate::autocmd::state::AU_NEW_CURBUF;
+use crate::buffer::state::{SWAP_EXISTS_ACTION, SWAP_EXISTS_DID_QUIT};
 use crate::charset::{getdigits_int_at, skip};
 use crate::drawscreen::state::CMDLINE_ROW;
 use crate::ex_cmds2::{can_abandon, dialog_changed, dialog_close_terminal};
@@ -167,7 +167,7 @@ fn confirming() -> bool {
 
 /// Go to another buffer, handling the result of the ATTENTION dialog.
 pub fn goto_buffer(excmd: &mut ExArg, start: c_int, dir: c_int, count: c_int) {
-    let save_sea = swap_exists_action.get();
+    let save_sea = SWAP_EXISTS_ACTION.get();
     // SAFETY: the caller's promise -- a live command, whose `cmd` is a
     // NUL-terminated pointer into the command line.
     let (cmdidx, split) = (excmd.cmdidx, excmd.line.byte_at(excmd.line.cmd) == b's');
@@ -186,8 +186,8 @@ pub fn goto_buffer(excmd: &mut ExArg, start: c_int, dir: c_int, count: c_int) {
 
     let old_curbuf = BufRef::of(Buf::current());
 
-    if swap_exists_action.get() == SEA_NONE {
-        swap_exists_action.set(SEA_DIALOG);
+    if SWAP_EXISTS_ACTION.get() == SEA_NONE {
+        SWAP_EXISTS_ACTION.set(SEA_DIALOG);
     }
     let action = if split { DOBUF_SPLIT } else { DOBUF_GOTO };
     let skip = if skip_help_buf { DOBUF_SKIPHELP } else { 0 };
@@ -199,28 +199,28 @@ pub fn goto_buffer(excmd: &mut ExArg, start: c_int, dir: c_int, count: c_int) {
         forceit_flag(c_int::from(forceit)) | skip,
     );
 
-    if swap_exists_action.get() == SEA_QUIT && split {
+    if SWAP_EXISTS_ACTION.get() == SEA_QUIT && split {
         // Reset the error state, so aborting() is false while the window
         // closes; `leave_cleanup_now` restores it.
         let mut cs = NO_CLEANUP;
         enter_cleanup_now(&mut cs);
         // Quitting means closing the split window, nothing else.
         let _ = close_win(Win::current(), true, false);
-        swap_exists_action.set(save_sea);
-        swap_exists_did_quit.set(true);
+        SWAP_EXISTS_ACTION.set(save_sea);
+        SWAP_EXISTS_DID_QUIT.set(true);
         leave_cleanup_now(&mut cs);
     } else {
         handle_swap_exists(Some(old_curbuf));
     }
 }
 
-/// Handle the situation of `swap_exists_action` being set.  `old_curbuf` is
+/// Handle the situation of `SWAP_EXISTS_ACTION` being set.  `old_curbuf` is
 /// the buffer to go back to, `None` where the C passed a NULL `BufferRef *`;
 /// it is only ever re-validated, never trusted.
 pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
     let old_tw: OptInt = Buf::current().b_p_tw;
 
-    if swap_exists_action.get() == SEA_QUIT {
+    if SWAP_EXISTS_ACTION.get() == SEA_QUIT {
         // Reset the error state, so aborting() is false while the buffer
         // closes; `leave_cleanup_now` restores it.
         let mut cs = NO_CLEANUP;
@@ -228,8 +228,8 @@ pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
         // User selected Quit at ATTENTION prompt.  Go back to previous buffer.
         // If that buffer is gone or the same as the current one, open a new,
         // empty buffer.
-        swap_exists_action.set(SEA_NONE); // don't want it again
-        swap_exists_did_quit.set(true);
+        SWAP_EXISTS_ACTION.set(SEA_NONE); // don't want it again
+        SWAP_EXISTS_DID_QUIT.set(true);
         let unload = DOBUF_UNLOAD;
         close_buffer(Some(Win::current()), Buf::current(), unload, false, false);
 
@@ -255,7 +255,7 @@ pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
         }
         // If "old_curbuf" is NULL we are in big trouble here...
         leave_cleanup_now(&mut cs);
-    } else if swap_exists_action.get() == SEA_RECOVER {
+    } else if SWAP_EXISTS_ACTION.get() == SEA_RECOVER {
         let mut cs = NO_CLEANUP;
         enter_cleanup_now(&mut cs);
         // User selected Recover at ATTENTION prompt.
@@ -266,7 +266,7 @@ pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
         do_modelines(OptionSetFlags::NONE);
         leave_cleanup_now(&mut cs);
     }
-    swap_exists_action.set(SEA_NONE);
+    SWAP_EXISTS_ACTION.set(SEA_NONE);
 }
 
 /// Delete or unload buffers -- the `:bdelete`/`:bunload`/`:bwipeout` range
@@ -775,7 +775,7 @@ fn pick_replacement(buf_fnum: c_int, update_jumplist: &mut bool) -> Option<Buf> 
     let mut unloaded: Option<Buf> = None;
 
     // First use au_new_curbuf.br_buf, if it is valid and not closing.
-    let mut buf = BufRef::of_record(au_new_curbuf.get())
+    let mut buf = BufRef::of_record(AU_NEW_CURBUF.get())
         .get()
         .filter(|b| b.b_locked_split == 0);
     if buf.is_none() && Win::current().w_jumplistlen > 0 {

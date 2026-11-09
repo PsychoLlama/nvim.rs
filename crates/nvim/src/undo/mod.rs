@@ -18,7 +18,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::{buf_is_dontwrite, buf_is_empty, buf_is_prompt};
@@ -34,7 +33,7 @@ use crate::edit::beginline;
 use crate::eval::funcs::get_buf_arg;
 use crate::eval::typval::{tv_dict_alloc, tv_dict_alloc_ret, tv_list_alloc};
 use crate::ex_docmd::expr_map_locked;
-use crate::ex_docmd::state::global_busy;
+use crate::ex_docmd::state::GLOBAL_BUSY;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::extmark::ExtmarkOp;
 use crate::extmark::UndoObjectType;
@@ -44,7 +43,7 @@ use crate::formatted;
 use crate::getchar::beep_flush;
 use crate::getchar::state::{GOT_INT, KEY_TYPED};
 use crate::global_cell::GlobalCell;
-use crate::guard::{sandbox, textlock};
+use crate::guard::{SANDBOX, TEXTLOCK};
 use crate::mark::NMARKS;
 use crate::mark::defs::{FileMark, SavedMark};
 use crate::mark::{mark_adjust, setpcmark};
@@ -87,10 +86,10 @@ mod header {
     pub(super) const UH_EMPTYBUF: c_int = 2;
     pub(super) const UH_RELOAD: c_int = 4;
 
-    pub(super) const kExtmarkNOOP: ExtmarkOp = 0;
-    pub(super) const kExtmarkUndo: ExtmarkOp = 1;
-    pub(super) const kExtmarkSplice: UndoObjectType = 0;
-    pub(super) const kExtmarkMove: UndoObjectType = 1;
+    pub(super) const EXTMARK_NOOP: ExtmarkOp = 0;
+    pub(super) const EXTMARK_UNDO: ExtmarkOp = 1;
+    pub(super) const EXTMARK_SPLICE: UndoObjectType = 0;
+    pub(super) const EXTMARK_MOVE: UndoObjectType = 1;
 }
 use header::*;
 
@@ -118,8 +117,8 @@ pub use read::u_read_undo;
 pub use tree::{u_blockfree, u_clearall, u_clearallandblockfree, u_clearline, u_undoline};
 pub use write::u_write_undo;
 
-pub(crate) static no_u_sync: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static u_sync_once: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static NO_U_SYNC: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static U_SYNC_ONCE: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
 /// The length of an undo file's buffer hash, in bytes: a SHA-256 digest.
 pub const UNDO_HASH_SIZE: c_int = 32;
@@ -143,10 +142,10 @@ pub(crate) fn verbosely(automatic: bool, say: impl FnOnce()) {
 }
 
 pub const NO_LOCAL_UNDOLEVEL: c_int = -123456;
-static u_newcount: GlobalCell<c_int> = GlobalCell::new(0);
-static u_oldcount: GlobalCell<c_int> = GlobalCell::new(0);
-static undo_undoes: GlobalCell<bool> = GlobalCell::new(false);
-static lastmark: GlobalCell<c_int> = GlobalCell::new(0);
+static U_NEWCOUNT: GlobalCell<c_int> = GlobalCell::new(0);
+static U_OLDCOUNT: GlobalCell<c_int> = GlobalCell::new(0);
+static UNDO_UNDOES: GlobalCell<bool> = GlobalCell::new(false);
+static LASTMARK: GlobalCell<c_int> = GlobalCell::new(0);
 /// Undo could not record the lines a change is about to touch, so the change
 /// must not be made.
 ///
@@ -231,10 +230,10 @@ pub(crate) fn undo_allowed(buffer: Buf) -> Result<(), UndoError> {
     if buffer.b_p_ma == 0 {
         return Err(UndoError::NotModifiable);
     }
-    if sandbox.get() != 0 {
+    if SANDBOX.get() != 0 {
         return Err(UndoError::Sandbox);
     }
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(UndoError::Textlock);
     }
     Ok(())
@@ -558,7 +557,7 @@ fn record_entry(
     let at = uh.entries.len() - 1;
     set_entry_bottom(uh, at, line_count, bot, newbot);
     b.b_u_synced = false;
-    undo_undoes.set(false);
+    UNDO_UNDOES.set(false);
     Ok(())
 }
 
@@ -592,13 +591,13 @@ pub(crate) fn undo_time_text(tt: time_t, room: usize) -> XString {
 
 /// Closes the current undo header, so that the next change starts a new one.
 ///
-/// `force` overrides the `no_u_sync` block that a mapping or a script sets
+/// `force` overrides the `NO_U_SYNC` block that a mapping or a script sets
 /// while it is running.
 ///
-/// Safe: `curbuf` is set from startup to exit.
+/// Safe: `CURBUF` is set from startup to exit.
 pub fn u_sync(force: bool) {
     let mut b = Buf::current();
-    if b.b_u_synced || (!force && no_u_sync.get() > 0) {
+    if b.b_u_synced || (!force && NO_U_SYNC.get() > 0) {
         return;
     }
     if get_undolevel(b) < 0 {

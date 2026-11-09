@@ -23,7 +23,7 @@ use crate::message_fmt::msg_bytes;
 use crate::narrow::as_index;
 use crate::narrow::number_as_int;
 use crate::semsg;
-use crate::startup::vim_ignored;
+use crate::startup::VIM_IGNORED;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::types::Handle;
 use crate::types::LineNr;
@@ -55,7 +55,7 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         // The value is coerced to a Number purely so that a bad type
         // reports; the result is thrown away and the argument is
         // resolved as a buffer instead.
-        vim_ignored.set(number_as_int(arg_number(&args[0])));
+        VIM_IGNORED.set(number_as_int(arg_number(&args[0])));
         let _no_emsg = Suppress::emsg();
         tv_get_buf(&args[0], 0)
     };

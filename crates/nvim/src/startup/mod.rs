@@ -7,12 +7,12 @@
 //! [`message`], and so on — and what is left is the process itself:
 //!
 //! - **What phase the process is in**: `starting` counts down through the
-//!   startup stages and `exiting`/`v_dying`/`ex_exitval` describe the way
+//!   startup stages and `exiting`/`V_DYING`/`EX_EXITVAL` describe the way
 //!   out. These are the two flags the rest of the tree tests to know whether
 //!   there is an editor yet, or still.
 //! - **What it was started as**: the three `*_isatty` answers, `stdin_fd`,
-//!   `full_screen`, `silent_mode`, `readonlymode`, `recoverymode`,
-//!   `embedded_mode`, `headless_mode` and the `ui_client_*` set, which say
+//!   `full_screen`, `SILENT_MODE`, `READONLYMODE`, `RECOVERYMODE`,
+//!   `EMBEDDED_MODE`, `HEADLESS_MODE` and the `ui_client_*` set, which say
 //!   this process is a UI attached to another one rather than an editor.
 //! - **[`MainParams`]**, the parsed command line, and the `EDIT_*`/`WIN_*`
 //!   answers it records.
@@ -35,7 +35,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
 use crate::options::{
@@ -56,7 +55,7 @@ mod remote;
 mod usage;
 
 pub use self::entry::*;
-pub use self::eventloop::main_loop;
+pub use self::eventloop::MAIN_LOOP;
 pub use self::exit::*;
 
 /// The parsed command line: what `main` was asked to do.
@@ -159,41 +158,41 @@ pub(crate) const SESSION_FILE: &CStr = c"Session.vim";
 pub(crate) const SYS_VIMRC_FILE: &CStr = c"$VIM/sysinit.vim";
 pub(crate) const VIMRC_FILE: &CStr = c".nvimrc";
 pub(crate) const NO_BUFFERS: c_int = 1 as c_int;
-pub static ex_exitval: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub static EX_EXITVAL: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub use crate::harness::starting;
-pub static exiting: GlobalCell<bool> = GlobalCell::new(false);
-pub static v_dying: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static stdin_isatty: GlobalCell<bool> = GlobalCell::new(true);
-pub static stdout_isatty: GlobalCell<bool> = GlobalCell::new(true);
-pub static stderr_isatty: GlobalCell<bool> = GlobalCell::new(true);
-pub static stdin_fd: GlobalCell<c_int> = GlobalCell::new(-1 as c_int);
-pub static full_screen: GlobalCell<bool> = GlobalCell::new(false);
-pub static silent_mode: GlobalCell<bool> = GlobalCell::new(false);
-pub static readonlymode: GlobalCell<bool> = GlobalCell::new(false);
-pub static recoverymode: GlobalCell<bool> = GlobalCell::new(false);
-pub static vim_ignored: GlobalCell<c_int> = GlobalCell::new(0);
-pub static embedded_mode: GlobalCell<bool> = GlobalCell::new(false);
-pub static headless_mode: GlobalCell<bool> = GlobalCell::new(false);
+pub static EXITING: GlobalCell<bool> = GlobalCell::new(false);
+pub static V_DYING: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub static STDIN_ISATTY: GlobalCell<bool> = GlobalCell::new(true);
+pub static STDOUT_ISATTY: GlobalCell<bool> = GlobalCell::new(true);
+pub static STDERR_ISATTY: GlobalCell<bool> = GlobalCell::new(true);
+pub static STDIN_FD: GlobalCell<c_int> = GlobalCell::new(-1 as c_int);
+pub static FULL_SCREEN: GlobalCell<bool> = GlobalCell::new(false);
+pub static SILENT_MODE: GlobalCell<bool> = GlobalCell::new(false);
+pub static READONLYMODE: GlobalCell<bool> = GlobalCell::new(false);
+pub static RECOVERYMODE: GlobalCell<bool> = GlobalCell::new(false);
+pub static VIM_IGNORED: GlobalCell<c_int> = GlobalCell::new(0);
+pub static EMBEDDED_MODE: GlobalCell<bool> = GlobalCell::new(false);
+pub static HEADLESS_MODE: GlobalCell<bool> = GlobalCell::new(false);
 /// The name the process was started by: a copy of `argv[0]`, kept for the
 /// life of the process.
-static argv0: GlobalCell<Option<&'static CStr>> = GlobalCell::new(None);
+static ARGV0: GlobalCell<Option<&'static CStr>> = GlobalCell::new(None);
 // The five wordings `mainerr` prints when the command line does not parse.
 // Nothing writes them, so they are constants rather than cells; they are
 // module-private because argument parsing is the only thing that can fail
 // this early.
-const err_arg_missing: &CStr = c"Argument missing after";
-const err_opt_garbage: &CStr = c"Garbage after option argument";
-const err_opt_unknown: &CStr = c"Unknown option argument";
-const err_too_many_args: &CStr = c"Too many edit arguments";
-const err_extra_cmd: &CStr =
+const ERR_ARG_MISSING: &CStr = c"Argument missing after";
+const ERR_OPT_GARBAGE: &CStr = c"Garbage after option argument";
+const ERR_OPT_UNKNOWN: &CStr = c"Unknown option argument";
+const ERR_TOO_MANY_ARGS: &CStr = c"Too many edit arguments";
+const ERR_EXTRA_CMD: &CStr =
     c"Too many \"+command\", \"-c command\" or \"--cmd command\" arguments";
 pub(crate) const MAX_ARG_CMDS: usize = 10;
-pub static used_stdin: GlobalCell<bool> = GlobalCell::new(false);
-pub static nvim_testing: GlobalCell<bool> = GlobalCell::new(false);
-pub static ui_client_channel_id: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
-pub static ui_client_error_exit: GlobalCell<c_int> = GlobalCell::new(-1 as c_int);
-pub static ui_client_exit_status: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static ui_client_attached: GlobalCell<bool> = GlobalCell::new(false);
-pub static ui_client_forward_stdin: GlobalCell<bool> = GlobalCell::new(false);
+pub static USED_STDIN: GlobalCell<bool> = GlobalCell::new(false);
+pub static NVIM_TESTING: GlobalCell<bool> = GlobalCell::new(false);
+pub static UI_CLIENT_CHANNEL_ID: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
+pub static UI_CLIENT_ERROR_EXIT: GlobalCell<c_int> = GlobalCell::new(-1 as c_int);
+pub static UI_CLIENT_EXIT_STATUS: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub static UI_CLIENT_ATTACHED: GlobalCell<bool> = GlobalCell::new(false);
+pub static UI_CLIENT_FORWARD_STDIN: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) const WRITEBIN: &CStr = c"wb";
 pub(crate) const APPENDBIN: &CStr = c"ab";

@@ -48,7 +48,7 @@ use crate::option::vars::{p_ttimeout, p_ttm};
 use crate::os::libc::STDIN_FILENO;
 use crate::os::libc::size_t;
 use crate::os::libc::termios;
-use crate::startup::{os_exit, ui_client_channel_id};
+use crate::startup::{UI_CLIENT_CHANNEL_ID, os_exit};
 use crate::tui::keys::{KEYMOD_RECOGNIZED, modified_utf8, mouse_event, simple_utf8};
 use crate::tui::negotiate::{
     tui_enable_extended_underline, tui_handle_term_mode, tui_query_bg_color, tui_tk_ti_getstr,
@@ -282,7 +282,7 @@ fn tinput_enqueue(input: &mut TermInput, keys: &[u8]) {
 
 /// Send an event to the editor over the UI client's channel.
 fn send(name: &CStr, args: Array) {
-    rpc_send_event(ui_client_channel_id.get(), name, args);
+    rpc_send_event(UI_CLIENT_CHANNEL_ID.get(), name, args);
 }
 
 /// Tell the editor what the terminal said, verbatim.

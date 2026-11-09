@@ -26,7 +26,7 @@ use core::ffi::CStr;
 use std::ffi::CString;
 
 use crate::arglist::arg_all_bytes;
-use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
+use crate::autocmd::state::{AUTOCMD_BUFNR, AUTOCMD_FNAME, AUTOCMD_FNAME_FULL, AUTOCMD_MATCH};
 use crate::buffer::find_buf;
 use crate::charset::{backslash_halved, getdigits_int_at};
 use crate::cmdexpand::defs::{Expand, ExpandContext};
@@ -37,12 +37,12 @@ use crate::eval::vars::get_vim_var_list_handle;
 use crate::ex_docmd::scan::skip_grep_pat;
 use crate::ex_docmd::state::ESCAPE_CHARS;
 use crate::ex_docmd::{
+    E_NO_AUTOCOMMAND_BUFFER_NUMBER_TO_SUBSTITUTE_FOR_ABUF,
+    E_NO_AUTOCOMMAND_FILE_NAME_TO_SUBSTITUTE_FOR_AFILE,
+    E_NO_AUTOCOMMAND_MATCH_NAME_TO_SUBSTITUTE_FOR_AMATCH, E_NO_CALL_STACK_TO_SUBSTITUTE_FOR_STACK,
+    E_NO_LINE_NUMBER_TO_USE_FOR_SFLNUM, E_NO_LINE_NUMBER_TO_USE_FOR_SLNUM,
+    E_NO_SCRIPT_FILE_NAME_TO_SUBSTITUTE_FOR_SCRIPT, E_NO_SOURCE_FILE_NAME_TO_SUBSTITUTE_FOR_SFILE,
     ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, VALID_HEAD, VALID_PATH,
-    e_no_autocommand_buffer_number_to_substitute_for_abuf,
-    e_no_autocommand_file_name_to_substitute_for_afile,
-    e_no_autocommand_match_name_to_substitute_for_amatch, e_no_call_stack_to_substitute_for_stack,
-    e_no_line_number_to_use_for_sflnum, e_no_line_number_to_use_for_slnum,
-    e_no_script_file_name_to_substitute_for_script, e_no_source_file_name_to_substitute_for_sfile,
 };
 use crate::file_search::{FileNameOpts, file_name_at_cursor};
 use crate::message::{E_USINGSID, emsg, msg_make};
@@ -53,7 +53,7 @@ use crate::path::MAXPATHL;
 use crate::path::{full_name_save, has_wildcard, path_try_shorten_fname, tail_index};
 use crate::quickfix::grep_internal;
 use crate::runtime::estack_sfile;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::strings::{escaped_bytes, replaced_all};
 use crate::types::{CmdLine, ExArg, ExArgt, Failed, LineNr, Vv};
 use crate::winlayer::Buf;
@@ -458,36 +458,36 @@ pub(crate) fn eval_vars(
         SPEC_AFILE => {
             // The autocommand's file name is shortened on first use and the
             // shortened form is kept.
-            if autocmd_fname.with(Option::is_some) && !autocmd_fname_full.get() {
-                autocmd_fname_full.set(true);
-                let short = autocmd_fname.with(|name| name.clone().unwrap_or_default());
+            if AUTOCMD_FNAME.with(Option::is_some) && !AUTOCMD_FNAME_FULL.get() {
+                AUTOCMD_FNAME_FULL.set(true);
+                let short = AUTOCMD_FNAME.with(|name| name.clone().unwrap_or_default());
                 let mut name = full_name_save(short.as_cstr(), false);
                 // Cut as upstream's `xstrlcpy` into the MAXPATHL buffer.
                 name.truncate(MAXPATHL as usize - 1);
-                autocmd_fname.set(Some(name));
+                AUTOCMD_FNAME.set(Some(name));
             }
             let Some(name) =
-                autocmd_fname.with(|name| name.as_ref().map(|n| n.as_cstr().to_owned()))
+                AUTOCMD_FNAME.with(|name| name.as_ref().map(|n| n.as_cstr().to_owned()))
             else {
                 return Expansion::Refused(gettext(
-                    e_no_autocommand_file_name_to_substitute_for_afile,
+                    E_NO_AUTOCOMMAND_FILE_NAME_TO_SUBSTITUTE_FOR_AFILE,
                 ));
             };
             path_try_shorten_fname(&name).to_owned()
         }
         SPEC_ABUF => {
-            if autocmd_bufnr.get() <= 0 {
+            if AUTOCMD_BUFNR.get() <= 0 {
                 return Expansion::Refused(gettext(
-                    e_no_autocommand_buffer_number_to_substitute_for_abuf,
+                    E_NO_AUTOCOMMAND_BUFFER_NUMBER_TO_SUBSTITUTE_FOR_ABUF,
                 ));
             }
-            number(autocmd_bufnr.get())
+            number(AUTOCMD_BUFNR.get())
         }
         SPEC_AMATCH => {
-            match autocmd_match.with(|name| name.as_ref().map(|n| n.as_cstr().to_owned())) {
+            match AUTOCMD_MATCH.with(|name| name.as_ref().map(|n| n.as_cstr().to_owned())) {
                 None => {
                     return Expansion::Refused(gettext(
-                        e_no_autocommand_match_name_to_substitute_for_amatch,
+                        E_NO_AUTOCOMMAND_MATCH_NAME_TO_SUBSTITUTE_FOR_AMATCH,
                     ));
                 }
                 Some(name) => name,
@@ -495,11 +495,11 @@ pub(crate) fn eval_vars(
         }
         SPEC_SFILE | SPEC_STACK | SPEC_SCRIPT => {
             let (which, msg) = match spec_idx {
-                SPEC_SFILE => (ESTACK_SFILE, e_no_source_file_name_to_substitute_for_sfile),
-                SPEC_STACK => (ESTACK_STACK, e_no_call_stack_to_substitute_for_stack),
+                SPEC_SFILE => (ESTACK_SFILE, E_NO_SOURCE_FILE_NAME_TO_SUBSTITUTE_FOR_SFILE),
+                SPEC_STACK => (ESTACK_STACK, E_NO_CALL_STACK_TO_SUBSTITUTE_FOR_STACK),
                 _ => (
                     ESTACK_SCRIPT,
-                    e_no_script_file_name_to_substitute_for_script,
+                    E_NO_SCRIPT_FILE_NAME_TO_SUBSTITUTE_FOR_SCRIPT,
                 ),
             };
             match estack_sfile(which) {
@@ -510,21 +510,21 @@ pub(crate) fn eval_vars(
         SPEC_SLNUM => {
             let lnum = crate::runtime::sourcing_lnum();
             if !crate::runtime::has_sourcing_name() || lnum == LineNr::ZERO {
-                return Expansion::Refused(gettext(e_no_line_number_to_use_for_slnum));
+                return Expansion::Refused(gettext(E_NO_LINE_NUMBER_TO_USE_FOR_SLNUM));
             }
             number(lnum)
         }
         SPEC_SFLNUM => {
             // The line the *script* is on, which is the script's own
             // offset plus the line inside it.
-            let lnum = current_sctx.get().sc_lnum + crate::runtime::sourcing_lnum().get();
+            let lnum = CURRENT_SCTX.get().sc_lnum + crate::runtime::sourcing_lnum().get();
             if lnum == LineNr::ZERO {
-                return Expansion::Refused(gettext(e_no_line_number_to_use_for_sflnum));
+                return Expansion::Refused(gettext(E_NO_LINE_NUMBER_TO_USE_FOR_SFLNUM));
             }
             number(lnum)
         }
         SPEC_SID => {
-            let sid = current_sctx.get().sc_sid;
+            let sid = CURRENT_SCTX.get().sc_sid;
             if sid <= 0 {
                 return Expansion::Refused(gettext(E_USINGSID));
             }

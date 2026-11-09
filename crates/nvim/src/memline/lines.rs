@@ -382,7 +382,7 @@ pub fn ml_add_deleted_len(text: &[u8], len: usize) {
 
 /// [`ml_add_deleted_len`] for an arbitrary buffer.
 pub fn ml_add_deleted_len_buf(mut buffer: Buf, text: &[u8], len: usize) {
-    if inhibit_delete_count.get() != 0 {
+    if INHIBIT_DELETE_COUNT.get() != 0 {
         return;
     }
     let text = &text[..len.min(text.len())];
@@ -493,8 +493,8 @@ pub fn ml_setmarked(lnum: LineNr) {
     if lnum < LineNr::ONE || lnum > buffer.b_ml.ml_line_count || !buffer.b_ml.is_open() {
         return; // invalid line number
     }
-    if lowest_marked.get() == LineNr::ZERO || lowest_marked.get() > lnum {
-        lowest_marked.set(lnum);
+    if LOWEST_MARKED.get() == LineNr::ZERO || LOWEST_MARKED.get() > lnum {
+        LOWEST_MARKED.set(lnum);
     }
     let Some(id) = ml_find_line(buffer, lnum, ML_FIND) else {
         return;
@@ -504,16 +504,16 @@ pub fn ml_setmarked(lnum: LineNr) {
     buffer.b_ml.locked_is_dirty();
 }
 
-/// Walk the lines from `lowest_marked` on, clearing every [`DB_MARKED`] bit
+/// Walk the lines from `LOWEST_MARKED` on, clearing every [`DB_MARKED`] bit
 /// found. With `first`, stop at the first one and answer its line; otherwise
 /// answer 0 once all are clear.
 fn clear_marks(first: bool) -> LineNr {
     let mut buffer = Buf::current();
-    // Nothing marked yet leaves `lowest_marked` at 0, and line 0 is line
+    // Nothing marked yet leaves `LOWEST_MARKED` at 0, and line 0 is line
     // 1's block. Upstream starts there anyway and reads index entry -1 --
     // the top half of the block's line count, which is never marked -- so
     // starting at line 1 skips only a read that could find nothing.
-    let mut lnum = lowest_marked.get().max(LineNr::ONE);
+    let mut lnum = LOWEST_MARKED.get().max(LineNr::ONE);
     while lnum <= buffer.b_ml.ml_line_count {
         let Some(id) = ml_find_line(buffer, lnum, ML_FIND) else {
             return LineNr::ZERO;
@@ -536,7 +536,7 @@ fn clear_marks(first: bool) -> LineNr {
             buffer.b_ml.locked_is_dirty();
         }
         if first && let Some(found) = found {
-            lowest_marked.set(found + 1);
+            LOWEST_MARKED.set(found + 1);
             return found;
         }
     }
@@ -560,7 +560,7 @@ pub fn ml_clearmarked() {
         return; // nothing to do
     }
     let _ = clear_marks(false);
-    lowest_marked.set(LineNr::ZERO);
+    LOWEST_MARKED.set(LineNr::ZERO);
 }
 
 /// Take and reset the deleted-byte counters the buffer-update callbacks

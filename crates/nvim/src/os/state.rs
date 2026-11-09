@@ -3,7 +3,7 @@
 //! `$VIM` and `$VIMRUNTIME` are derived the first time something needs
 //! them and the two `didset_*` flags record that (so a later `:let $VIM`
 //! is not overwritten); `globaldir` is the directory a window-local `:lcd`
-//! must return to, with `last_chdir_reason` naming who changed it for
+//! must return to, with `LAST_CHDIR_REASON` naming who changed it for
 //! `DirChanged`.
 #![forbid(unsafe_code)]
 #![deny(
@@ -14,7 +14,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::env::XDGVarType;
 use crate::global_cell::GlobalCell;
@@ -22,14 +21,14 @@ use crate::path::FileComparison;
 use core::ffi::c_char;
 
 pub(crate) const XDG_CONFIG_DIRS: XDGVarType = 5;
-pub(crate) const kEqualFiles: FileComparison = 1;
-pub(crate) static didset_vim: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static didset_vimruntime: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) const EQUAL_FILES: FileComparison = 1;
+pub(crate) static DIDSET_VIM: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static DIDSET_VIMRUNTIME: GlobalCell<bool> = GlobalCell::new(false);
 /// The directory to go back to when no window or tab page has one of its
 /// own: saved when the first local directory is entered.
-pub(crate) static globaldir: GlobalCell<Option<crate::memory::XString>> = GlobalCell::new(None);
-pub(crate) static last_chdir_reason: GlobalCell<Option<&'static ::core::ffi::CStr>> =
+pub(crate) static GLOBALDIR: GlobalCell<Option<crate::memory::XString>> = GlobalCell::new(None);
+pub(crate) static LAST_CHDIR_REASON: GlobalCell<Option<&'static ::core::ffi::CStr>> =
     GlobalCell::new(None);
 /// The Windows release `windowsversion()` reports. Nothing here writes it,
 /// so it stays the empty string a non-Windows build always answered.
-pub(crate) static windowsVersion: [c_char; 20] = [0 as c_char; 20];
+pub(crate) static WINDOWS_VERSION: [c_char; 20] = [0 as c_char; 20];

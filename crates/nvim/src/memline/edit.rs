@@ -103,8 +103,8 @@ pub(crate) fn ml_append_int(
         return Err(LineError::NoSuchLine);
     }
 
-    if lowest_marked.get() != LineNr::ZERO && lowest_marked.get() > lnum {
-        lowest_marked.set(lnum + 1);
+    if LOWEST_MARKED.get() != LineNr::ZERO && LOWEST_MARKED.get() > lnum {
+        LOWEST_MARKED.set(lnum + 1);
     }
 
     let new = NewLine::new(line, flags);
@@ -646,8 +646,8 @@ fn ml_split_pointer_block(mut buffer: Buf, id: &mut BlockId, stack_idx: &mut c_i
 /// `flags` is [`ML_DEL_MESSAGE`], which asks for "--No lines in buffer--" if
 /// the buffer ends up empty.
 pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Result<(), LineError> {
-    if lowest_marked.get() != LineNr::ZERO && lowest_marked.get() > lnum {
-        lowest_marked.set(lowest_marked.get() - 1);
+    if LOWEST_MARKED.get() != LineNr::ZERO && LOWEST_MARKED.get() > lnum {
+        LOWEST_MARKED.set(LOWEST_MARKED.get() - 1);
     }
 
     // If the file becomes empty the last line is replaced by an empty one.

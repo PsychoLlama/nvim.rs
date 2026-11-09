@@ -50,8 +50,8 @@ use crate::spell::{ascii_spell_chartab, count_common_word};
 
 use super::spl::{SpellReadError, Spl, SplResult, trim_nul};
 use super::{
-    COMPOUND_MAX_LEN, MAXREGIONS, MAXWLEN, SAL_COLLAPSE, SAL_F0LLOWUP, SAL_REM_ACCENTS,
-    e_duplicate_char_in_map_entry, set_spell_finish, vim_regcomp,
+    COMPOUND_MAX_LEN, E_DUPLICATE_CHAR_IN_MAP_ENTRY, MAXREGIONS, MAXWLEN, SAL_COLLAPSE,
+    SAL_F0LLOWUP, SAL_REM_ACCENTS, set_spell_finish, vim_regcomp,
 };
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRICT, RE_STRING};
 
@@ -584,7 +584,7 @@ pub(super) fn set_map_str(slang: &mut SpellLang, map: &[u8]) {
 
         match slang.sl_map_hash.entry(c) {
             Entry::Occupied(_) => {
-                emsg(gettext(e_duplicate_char_in_map_entry));
+                emsg(gettext(E_DUPLICATE_CHAR_IN_MAP_ENTRY));
             }
             Entry::Vacant(slot) => {
                 slot.insert(headc);

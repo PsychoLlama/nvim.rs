@@ -99,7 +99,7 @@ use crate::os::libc::int64_t;
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::spell::{LangP, SpellIdx, SpellLang};
 use crate::spell::{LoadedLangs, Tree, WordFlags};
-use crate::spellsuggest::{MAXWLEN, SugInfo, spell_suggest_timeout};
+use crate::spellsuggest::{MAXWLEN, SPELL_SUGGEST_TIMEOUT, SugInfo};
 use crate::types::ProfTime;
 use core::ffi::c_int;
 
@@ -404,7 +404,7 @@ impl<'a> Walk<'a> {
             walk.stack[0].state = State::NoPrefix; // without a prefix first
         }
 
-        let timeout = spell_suggest_timeout.get();
+        let timeout = SPELL_SUGGEST_TIMEOUT.get();
         if timeout > 0 {
             walk.time_limit = profile_setlimit(int64_t::from(timeout));
         }
@@ -462,7 +462,7 @@ impl<'a> Walk<'a> {
         if self.breakcheckcount == 0 {
             os_breakcheck();
             self.breakcheckcount = 1000;
-            if spell_suggest_timeout.get() > 0 && profile_passed_limit(self.time_limit) {
+            if SPELL_SUGGEST_TIMEOUT.get() > 0 && profile_passed_limit(self.time_limit) {
                 GOT_INT.set(true);
             }
         }

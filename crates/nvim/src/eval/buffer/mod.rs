@@ -58,7 +58,7 @@ use crate::narrow::number_as_int;
 use crate::types::{LineNr, TypVal};
 use core::ffi::{CStr, c_int};
 
-use crate::buffer::state::swap_exists_action;
+use crate::buffer::state::SWAP_EXISTS_ACTION;
 use crate::memline::ML_DEL_MESSAGE;
 use crate::memline::ml_delete_flags;
 use crate::message::state::DID_EMSG;
@@ -66,9 +66,9 @@ use crate::r#move::update_topline;
 use crate::normal::{set_visual_active, visual_active};
 use crate::path::path_with_url;
 use crate::sign::{buf_has_signs, get_buffer_signs};
-use crate::undo::u_sync_once;
+use crate::undo::U_SYNC_ONCE;
 use crate::undo::{buf_is_changed, u_clearallandblockfree, u_save, u_savesub, u_sync};
-use crate::winlayer::graph::cmdwin_buf;
+use crate::winlayer::graph::CMDWIN_BUF;
 use crate::winlayer::{Buf, TabPage, Win, buffers, tab_windows, windows_in_tab};
 
 /// Argument `i` as a Number.
@@ -120,7 +120,7 @@ impl SavedBufferState {
         let current = Win::current();
         let aco = (current.w_buffer != buffer).then(|| {
             // No existing window for this buffer. It is dangerous to have
-            // `curwin->w_buffer` differ from `curbuf`, so use the autocmd
+            // `curwin->w_buffer` differ from `CURBUF`, so use the autocmd
             // window.
             current.buffer().make_current();
             AucmdBuf::enter(buffer)
@@ -145,7 +145,7 @@ impl SavedBufferState {
     }
 }
 
-/// If there is a window for `curbuf`, make it the current window.
+/// If there is a window for `CURBUF`, make it the current window.
 fn find_win_for_curbuf() {
     // The b_wininfo list holds the windows that recently contained the
     // buffer, so walking it is cheaper than walking every window. It can name

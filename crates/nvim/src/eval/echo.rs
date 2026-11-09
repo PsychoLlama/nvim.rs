@@ -23,7 +23,7 @@ use crate::eval::vars::{clear_local, set_var};
 use crate::eval::{Cursor, ECHO_HL_ID, eval1, eval1_emsg};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::ex_eval::aborting;
-use crate::ex_eval::state::force_abort;
+use crate::ex_eval::state::FORCE_ABORT;
 use crate::getchar::state::GOT_INT;
 use crate::highlight_group::syn_name2id;
 use crate::message::state::{
@@ -184,7 +184,7 @@ pub fn ex_execute(excmd: &mut ExArg) {
             // something is already unwinding.
             let save_did_emsg = DID_EMSG.get();
             emsg_multiline_text(cstr::in_bytes(&text), c"echoerr");
-            if !force_abort.get() {
+            if !FORCE_ABORT.get() {
                 DID_EMSG.set(save_did_emsg);
             }
         } else if excmd.cmdidx == CmdIdx::execute {

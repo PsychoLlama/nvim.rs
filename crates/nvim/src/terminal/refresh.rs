@@ -34,7 +34,7 @@ use crate::memline::{ml_append_buf_terminated, ml_replace_buf_text};
 use crate::r#move::{curs_columns, set_topline};
 use crate::narrow::number_as_u16;
 use crate::os::libc::uint64_t;
-use crate::startup::exiting;
+use crate::startup::EXITING;
 use crate::types::{ColNr, LineNr};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_mode_info_set};
 use crate::winlayer::{Buf, Win, tab_windows};
@@ -117,7 +117,7 @@ pub(crate) fn terminal_check_refresh() {
 
 fn refresh_timer_cb(_owner: uint64_t) {
     REFRESH_PENDING.set(false);
-    if exiting.get() {
+    if EXITING.get() {
         return;
     }
     block_autocmds();

@@ -32,7 +32,7 @@ use crate::path::MAXPATHL;
 use crate::path::{ExpandFlags, expand_wildcards, path_is_absolute, vim_ispathsep};
 use crate::regexp::RegMatch;
 use crate::regexp::vim_regexec;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::types::{TypVal, VarNumber};
 use core::ffi::CStr;
 use std::collections::HashSet;
@@ -192,10 +192,10 @@ fn call_user_expand_func<R>(
     let name = c_string(name);
     let args = user_expand_args(expand);
 
-    let save_current_sctx = current_sctx.get();
-    current_sctx.set(expand.script_ctx);
+    let save_current_sctx = CURRENT_SCTX.get();
+    CURRENT_SCTX.set(expand.script_ctx);
     let ret = call(&name, &args);
-    current_sctx.set(save_current_sctx);
+    CURRENT_SCTX.set(save_current_sctx);
     ret
 }
 

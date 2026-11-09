@@ -51,7 +51,7 @@ use crate::env::home_to_tilde;
 use crate::narrow::as_index;
 use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
-use crate::normal::{set_visual_active, showcmd_buf, visual_active};
+use crate::normal::{SHOWCMD_BUF, set_visual_active, visual_active};
 use core::cell::Cell;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -81,7 +81,7 @@ use crate::options::kOptInvalid;
 use crate::os::cshim::{byte_toupper, gettext};
 use crate::path::MAXPATHL;
 use crate::path::tail_index;
-use crate::quickfix::{msg_loclist, msg_qflist};
+use crate::quickfix::{MSG_LOCLIST, MSG_QFLIST};
 use crate::sign::SignTextAttrs;
 use crate::sign::push_sign_text;
 use crate::state::MODE_INSERT;
@@ -273,9 +273,9 @@ impl Env<'_> {
             return;
         }
         let msg = if self.win.w_llist_ref.is_none() {
-            msg_qflist
+            MSG_QFLIST
         } else {
-            msg_loclist
+            MSG_LOCLIST
         };
         text.extend_from_slice(gettext(msg).to_bytes());
     }
@@ -315,7 +315,7 @@ impl Env<'_> {
                 return;
             }
         }
-        text.extend_from_slice(showcmd_buf.get().as_cstr().to_bytes());
+        text.extend_from_slice(SHOWCMD_BUF.get().as_cstr().to_bytes());
     }
 
     /// How wide the fold column is here, which is what `%C` draws.

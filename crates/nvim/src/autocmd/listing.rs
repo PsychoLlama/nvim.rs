@@ -251,7 +251,7 @@ pub fn set_context_in_autocmd(expand: &mut Expand, arg: usize, doautocmd: bool) 
     let white = |c: u8| ascii_iswhite(::core::ffi::c_int::from(c));
 
     // Skip a group name if there is one.
-    autocmd_include_groups.set(false);
+    AUTOCMD_INCLUDE_GROUPS.set(false);
     let start = arg;
     let (mut group, skipped) = arg_augroup_get(&line[arg.min(line.len())..]);
     let mut arg = arg + skipped;
@@ -275,7 +275,7 @@ pub fn set_context_in_autocmd(expand: &mut Expand, arg: usize, doautocmd: bool) 
     }
     if at(p) == 0 {
         if group == AUGROUP_ALL {
-            autocmd_include_groups.set(true);
+            AUTOCMD_INCLUDE_GROUPS.set(true);
         }
         expand.context = ExpandContext::Events;
         expand.pattern = arg;

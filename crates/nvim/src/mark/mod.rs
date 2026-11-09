@@ -2,7 +2,7 @@
 //!
 //! A named file mark is valid when its `lnum` is non-zero. A non-zero `fnum`
 //! means it names a live buffer; otherwise it came from the shada file and
-//! `namedfm[n].fname` is the file name. The global set is `'A`-`'Z`, which
+//! `NAMEDFM[n].fname` is the file name. The global set is `'A`-`'Z`, which
 //! the user sets, plus `'0`-`'9`, which are written when shada is saved.
 //!
 //! The stores split by concern: [`store`] names the stores and builds their
@@ -22,7 +22,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::ascii::NUL;
 use crate::ascii::TAB;
@@ -89,27 +88,27 @@ pub const AUGROUP_ALL: c_int = -3;
 pub const MT_CHAR_WISE: MotionType = 0;
 
 /// How `mark_get` is allowed to resolve a mark's name.
-pub const kMarkBufLocal: MarkGet = 0;
-pub const kMarkAllNoResolve: MarkGet = 2;
+pub const MARK_BUF_LOCAL: MarkGet = 0;
+pub const MARK_ALL_NO_RESOLVE: MarkGet = 2;
 
 /// What `mark_move_to` should do beyond putting the cursor there.
-pub const kMarkBeginLine: MarkMove = 1;
-pub const kMarkContext: MarkMove = 2;
-pub const kMarkSetView: MarkMove = 8;
-pub const kMarkJumpList: MarkMove = 16;
+pub const MARK_BEGIN_LINE: MarkMove = 1;
+pub const MARK_CONTEXT: MarkMove = 2;
+pub const MARK_SET_VIEW: MarkMove = 8;
+pub const MARK_JUMP_LIST: MarkMove = 16;
 
 /// What `mark_move_to` did.
-pub const kMarkMoveSuccess: MarkMoveRes = 1;
-pub const kMarkMoveFailed: MarkMoveRes = 2;
-pub const kMarkSwitchedBuf: MarkMoveRes = 4;
-pub const kMarkChangedCol: MarkMoveRes = 8;
-pub const kMarkChangedLine: MarkMoveRes = 16;
-pub const kMarkChangedCursor: MarkMoveRes = 32;
+pub const MARK_MOVE_SUCCESS: MarkMoveRes = 1;
+pub const MARK_MOVE_FAILED: MarkMoveRes = 2;
+pub const MARK_SWITCHED_BUF: MarkMoveRes = 4;
+pub const MARK_CHANGED_COL: MarkMoveRes = 8;
+pub const MARK_CHANGED_LINE: MarkMoveRes = 16;
+pub const MARK_CHANGED_CURSOR: MarkMoveRes = 32;
 
 /// Which of the mark stores `mark_adjust_buf` should touch.
-pub const kMarkAdjustNormal: MarkAdjustMode = 0;
-pub const kMarkAdjustApi: MarkAdjustMode = 1;
-pub const kMarkAdjustTerm: MarkAdjustMode = 2;
+pub const MARK_ADJUST_NORMAL: MarkAdjustMode = 0;
+pub const MARK_ADJUST_API: MarkAdjustMode = 1;
+pub const MARK_ADJUST_TERM: MarkAdjustMode = 2;
 
 /// `'a`..`'z` are the buffer-local marks; `'0`..`'9` extend the global set
 /// with the shada file's previously-edited-file marks.
@@ -127,7 +126,7 @@ use crate::global_cell::GlobalCell;
 use crate::quickfix::{BUF_HAS_LL_ENTRY, BUF_HAS_QF_ENTRY};
 
 /// The global marks: `'A`-`'Z` at `0..NMARKS`, then `'0`-`'9`.
-pub(crate) static namedfm: GlobalCell<[XFileMark; 36]> = GlobalCell::new([XFileMark::UNSET; 36]);
+pub(crate) static NAMEDFM: GlobalCell<[XFileMark; 36]> = GlobalCell::new([XFileMark::UNSET; 36]);
 
 /// Set named mark "c" at current cursor position.
 /// Answers `Ok` on success, `Err` if bad name given.
@@ -390,7 +389,7 @@ pub fn fmarks_check_names(buffer: Buf) {
         return;
     };
     let (name, handle) = (name.to_bytes(), buffer.handle);
-    namedfm.with_mut(|table| {
+    NAMEDFM.with_mut(|table| {
         for mark in table.iter_mut() {
             fmarks_check_one(mark, name, handle);
         }

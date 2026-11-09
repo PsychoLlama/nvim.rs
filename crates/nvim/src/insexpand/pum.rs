@@ -111,7 +111,7 @@ impl ComplMatchArray {
 /// `lnum`/`col`, where there is one.
 pub fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> Option<c_int> {
     let (preinsert, longest) = (ins_compl_has_preinsert(), ins_compl_preinsert_longest());
-    if cot_fuzzy() || (!compl_hi_on_autocompl_longest.get() && longest) {
+    if cot_fuzzy() || (!COMPL_HI_ON_AUTOCOMPL_LONGEST.get() && longest) {
         return None;
     }
     // Either kind of preview takes `PreInsert`; only an accepted match that
@@ -126,15 +126,15 @@ pub fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> Option<c_int> {
         return None;
     }
 
-    let start_col = compl_col.get() + len_as_int(ins_compl_leader_len());
+    let start_col = COMPL_COL.get() + len_as_int(ins_compl_leader_len());
     if !ins_compl_has_multiple() {
-        let inside = col >= start_col.get() && col < compl_ins_end_col.get().get();
+        let inside = col >= start_col.get() && col < COMPL_INS_END_COL.get().get();
         return inside.then_some(attr);
     }
     let cursor_lnum = Win::current().w_cursor.lnum;
-    let inside = (lnum == compl_lnum.get() && col >= start_col.get() && col < MAXCOL)
-        || (lnum > compl_lnum.get() && lnum < cursor_lnum)
-        || (lnum == cursor_lnum && col <= compl_ins_end_col.get().get());
+    let inside = (lnum == COMPL_LNUM.get() && col >= start_col.get() && col < MAXCOL)
+        || (lnum > COMPL_LNUM.get() && lnum < cursor_lnum)
+        || (lnum == cursor_lnum && col <= COMPL_INS_END_COL.get().get());
     inside.then_some(attr)
 }
 
@@ -150,7 +150,7 @@ pub(crate) fn ins_compl_del_pum() {
 /// Whether a popup menu is wanted at all: `'completeopt'` has `menu` or
 /// `menuone`, or autocompletion is on.
 pub fn pum_wanted() -> bool {
-    completeopt_flags() & (kOptCotFlagMenu | kOptCotFlagMenuone) != 0 || compl_autocomplete.get()
+    completeopt_flags() & (kOptCotFlagMenu | kOptCotFlagMenuone) != 0 || COMPL_AUTOCOMPLETE.get()
 }
 
 /// Whether there are enough matches to show one: two, or one under
@@ -166,7 +166,7 @@ pub(crate) fn pum_enough_matches() -> bool {
             }
         }
     }
-    if completeopt_flags() & kOptCotFlagMenuone != 0 || compl_autocomplete.get() {
+    if completeopt_flags() & kOptCotFlagMenuone != 0 || COMPL_AUTOCOMPLETE.get() {
         return i >= 1;
     }
     i >= 2
@@ -175,7 +175,7 @@ pub(crate) fn pum_enough_matches() -> bool {
 /// Fire `CompleteChanged` with `v:event.completed_item` set to match `cur`
 /// (or to an empty dict when nothing is selected).
 pub(crate) fn trigger_complete_changed_event(cur: c_int) {
-    if complete_changed_busy.get() {
+    if COMPLETE_CHANGED_BUSY.get() {
         return;
     }
 
@@ -192,12 +192,12 @@ pub(crate) fn trigger_complete_changed_event(cur: c_int) {
     pum_set_event_info(&mut v_event.edit());
     v_event.edit().set_keys_readonly();
 
-    complete_changed_busy.set(true);
+    COMPLETE_CHANGED_BUSY.set(true);
     let locked = Lock::text();
 
     fire_autocmds(AutoEvent::CompleteChanged, false, Some(buffer));
     drop(locked);
-    complete_changed_busy.set(false);
+    COMPLETE_CHANGED_BUSY.set(false);
 
     restore_v_event(v_event, &mut save_v_event);
 }
@@ -216,7 +216,7 @@ fn match_position_message(number: c_int, total: c_int) -> XString {
 /// Build `dest` by prepending the buffer text from `startcol` to `compl_col`
 /// to `src`.
 pub(crate) fn prepend_startcol_text(dest: ComplStr, src: ComplStr, startcol: ColNr) {
-    let prepend_len = usize::try_from(compl_col.get() - startcol).unwrap_or(0);
+    let prepend_len = usize::try_from(COMPL_COL.get() - startcol).unwrap_or(0);
     let new_length = prepend_len + src.len();
 
     let mut text = XString::with_capacity(new_length);
@@ -260,17 +260,17 @@ pub(crate) fn get_leader_for_startcol(match_0: MatchId, cached: bool) -> ComplSt
             // *before* it carry pre-`compl_col` text that must not be
             // compared with the original text, so the empty
             // `compl_leader` is returned to mean "no prefix filter".
-            if startcol.is_none_or(|start| start >= compl_col.get()) {
+            if startcol.is_none_or(|start| start >= COMPL_COL.get()) {
                 return compl_orig_text();
             }
             return compl_leader();
         }
 
-        if compl_col.get() <= ColNr::ZERO {
+        if COMPL_COL.get() <= ColNr::ZERO {
             break 'theend;
         }
-        if let Some(startcol) = startcol.filter(|&start| start < compl_col.get()) {
-            let prepend_len = usize::try_from(compl_col.get() - startcol).unwrap_or(0);
+        if let Some(startcol) = startcol.filter(|&start| start < COMPL_COL.get()) {
+            let prepend_len = usize::try_from(COMPL_COL.get() - startcol).unwrap_or(0);
             let new_length = prepend_len + compl_leader().len();
             if cached && new_length == adjusted_leader().len() && !adjusted_leader().is_unset() {
                 return adjusted_leader();
@@ -300,7 +300,7 @@ pub(crate) fn ins_compl_build_pum() -> Option<c_int> {
 
     let has_preinsert = ins_compl_has_preinsert();
     let compl_no_select = completeopt_flags() & kOptCotFlagNoselect != 0
-        || (compl_autocomplete.get() && !has_preinsert);
+        || (COMPL_AUTOCOMPLETE.get() && !has_preinsert);
 
     // The matches the menu shows, in list order.
     let mut shown_in_menu: Vec<MatchId> = Vec::new();
@@ -322,7 +322,7 @@ pub(crate) fn ins_compl_build_pum() -> Option<c_int> {
     if leader_is_orig && !shown_match_ok {
         // Upstream dereferences `compl_first_match` here without checking.
         let head = first_match().expect("a menu is built from a non-empty list");
-        compl_shown_match.set(if compl_no_select {
+        COMPL_SHOWN_MATCH.set(if compl_no_select {
             Some(head)
         } else {
             head.next()
@@ -388,7 +388,7 @@ pub(crate) fn ins_compl_build_pum() -> Option<c_int> {
                     if shown_match() == Some(comp) || did_find_shown_match {
                         // This item is the shown match, or the first
                         // displayed item after it.
-                        compl_shown_match.set(Some(comp));
+                        COMPL_SHOWN_MATCH.set(Some(comp));
                         did_find_shown_match = true;
                         shown_match_ok = true;
                     } else {
@@ -420,7 +420,7 @@ pub(crate) fn ins_compl_build_pum() -> Option<c_int> {
             if !shown_match_ok && let Some(prev) = shown_compl {
                 // The shown match isn't displayed; use the previously
                 // displayed match instead.
-                compl_shown_match.set(Some(prev));
+                COMPL_SHOWN_MATCH.set(Some(prev));
                 shown_match_ok = true;
             }
         }
@@ -432,7 +432,7 @@ pub(crate) fn ins_compl_build_pum() -> Option<c_int> {
     }
 
     if cot_fuzzy() && !compl_no_select && !shown_match_ok {
-        compl_shown_match.set(shown_compl);
+        COMPL_SHOWN_MATCH.set(shown_compl);
         shown_match_ok = true;
         cur = Some(0);
     }
@@ -490,7 +490,7 @@ pub fn ins_compl_show_pum() {
     .unwrap_or(-1);
 
     if compl_match_array().is_unset() {
-        if compl_started.get() && has_event(AutoEvent::CompleteChanged) {
+        if COMPL_STARTED.get() && has_event(AutoEvent::CompleteChanged) {
             trigger_complete_changed_event(cur);
         }
         return;
@@ -502,13 +502,13 @@ pub fn ins_compl_show_pum() {
     // Move the cursor to the start of the match for the popup menu's sake,
     // then put it back.
     let col = Win::current().w_cursor.col;
-    Win::current().w_cursor.col = compl_col.get();
-    compl_selected_item.set(cur);
+    Win::current().w_cursor.col = COMPL_COL.get();
+    COMPL_SELECTED_ITEM.set(cur);
     pum_display(compl_match_array().rows(), cur, array_changed, 0);
     Win::current().w_cursor.col = col;
 
-    if compl_started.get() && compl_curr_match.get() != compl_shown_match.get() {
-        compl_curr_match.set(compl_shown_match.get());
+    if COMPL_STARTED.get() && COMPL_CURR_MATCH.get() != COMPL_SHOWN_MATCH.get() {
+        COMPL_CURR_MATCH.set(COMPL_SHOWN_MATCH.get());
     }
 
     if has_event(AutoEvent::CompleteChanged) {
@@ -562,7 +562,7 @@ pub(crate) fn ins_compl_show_filename() {
         e += c_cluster_len(&fname[e..]);
     }
 
-    if compl_autocomplete.get() {
+    if COMPL_AUTOCOMPLETE.get() {
         return;
     }
     MSG_HIST_OFF.set(true);
@@ -598,7 +598,7 @@ pub(crate) fn ins_compl_show_statusmsg() {
     // Upstream dereferences `compl_first_match` here without checking.
     let head = first_match().expect("a completion showing a message has matches");
     if is_first_match(head.next()) {
-        let text = if compl_status_adding() && compl_length.get() > 1 {
+        let text = if compl_status_adding() && COMPL_LENGTH.get() > 1 {
             E_HITEND
         } else {
             E_PATNOTF
@@ -612,7 +612,7 @@ pub(crate) fn ins_compl_show_statusmsg() {
         if curr.is_original() {
             EDIT_SUBMODE_EXTRA.set(Some(XString::from_cstr(gettext(c"Back at original"))));
             EDIT_SUBMODE_HIGHL.set(HLF_W);
-        } else if compl_cont_status.get() & CONT_S_IPOS != 0 {
+        } else if COMPL_CONT_STATUS.get() & CONT_S_IPOS != 0 {
             EDIT_SUBMODE_EXTRA.set(Some(XString::from_cstr(gettext(c"Word from other line"))));
             EDIT_SUBMODE_HIGHL.set(HLF_COUNT);
         } else if curr.next() == curr.prev() {
@@ -626,7 +626,7 @@ pub(crate) fn ins_compl_show_statusmsg() {
             }
             let number = curr.with(|m| m.number);
             if number != -1 {
-                let msg = match_position_message(number, compl_matches.get());
+                let msg = match_position_message(number, COMPL_MATCHES.get());
                 EDIT_SUBMODE_EXTRA.set(Some(msg));
                 EDIT_SUBMODE_HIGHL.set(HLF_R);
                 if DOLLAR_VCOL.get() >= ColNr::ZERO {

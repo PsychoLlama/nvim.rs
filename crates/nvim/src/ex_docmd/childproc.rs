@@ -15,7 +15,7 @@ use crate::strings::escaped_bytes;
 use crate::usercmd::win_cmd_modifiers;
 use core::ffi::CStr;
 
-use crate::ex_docmd::state::cmdmod;
+use crate::ex_docmd::state::CMDMOD;
 use crate::ex_docmd::{RET_NIL_BOOL, cmdmod_split, cmdmod_tab};
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec_cstr;
@@ -38,7 +38,7 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
     // With a window modifier, the modifier plus `new` makes the window;
     // without one, `enew` reuses the current window.
     let mut ex_cmd = if cmdmod_tab() > 0 || cmdmod_split() != 0 {
-        let mut text = cmdmod.with(win_cmd_modifiers);
+        let mut text = CMDMOD.with(win_cmd_modifiers);
         text.extend_from_slice(b" new");
         text
     } else if excmd.forceit {

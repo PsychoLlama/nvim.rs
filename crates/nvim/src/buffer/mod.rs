@@ -37,7 +37,7 @@
 //! re-validates and only then hands a [`Buf`] back, so a stale pointer cannot
 //! be dereferenced by accident.  The discipline the whole family follows is
 //! **hold no [`Buf`], [`Win`] or borrow across a call that can fire an
-//! autocommand**: take one from a `BufRef` or from the `curbuf`/`curwin`
+//! autocommand**: take one from a `BufRef` or from the `CURBUF`/`curwin`
 //! cells on each side of it instead.
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
@@ -51,7 +51,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
 use crate::autocmd::defs::AutoEvent;
@@ -117,8 +116,8 @@ pub use self::open::*;
 pub use self::pos::*;
 pub use self::switch::*;
 pub use self::r#type::*;
-pub const _ISdigit: ::core::ffi::c_uint = 2048;
-pub const kCdCauseAuto: CdCause = 2;
+pub const IS_DIGIT: ::core::ffi::c_uint = 2048;
+pub const CD_CAUSE_AUTO: CdCause = 2;
 pub const GETF_SWITCH: GetFileFlags = 4;
 pub const GETF_ALT: GetFileFlags = 2;
 pub const GETF_SETMARK: GetFileFlags = 1;
@@ -152,8 +151,8 @@ pub const READ_FIFO: ::core::ffi::c_uint = 64;
 pub const READ_NOFILE: ::core::ffi::c_uint = 256;
 pub const BCO_NOHELP: ::core::ffi::c_int = 4;
 pub const BCO_ENTER: ::core::ffi::c_int = 1;
-pub const kBffInitChangedtick: ::core::ffi::c_int = 2;
-pub const kBffClearWinInfo: ::core::ffi::c_int = 1;
+pub const BFF_INIT_CHANGEDTICK: ::core::ffi::c_int = 2;
+pub const BFF_CLEAR_WIN_INFO: ::core::ffi::c_int = 1;
 pub const BCO_ALWAYS: ::core::ffi::c_int = 2;
 #[derive(Debug)]
 pub struct BufMatch {
@@ -207,8 +206,8 @@ pub fn buf_get_changedtick(buffer: Buf) -> VarNumber {
     // inside the accessor never answers the zero.
     buffer.changedtick_di.di_tv.number_or_zero()
 }
-static buf_free_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static top_file_num: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
+static BUF_FREE_COUNT: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static TOP_FILE_NUM: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
 
 /// Run `b:undo_ftplugin` with the buffer and the window pinned, so that what
 /// it does cannot close either out from under the caller.
@@ -251,7 +250,7 @@ impl BufRef {
     pub(crate) fn of_opt(buffer: Option<Buf>) -> Self {
         BufRef(BufferRef {
             br_buf: buffer.unwrap_or(Buf::NULL),
-            br_buf_free_count: buf_free_count.get(),
+            br_buf_free_count: BUF_FREE_COUNT.get(),
         })
     }
 
@@ -263,7 +262,7 @@ impl BufRef {
     /// `bufref_valid()`: whether the remembered buffer is still the buffer it
     /// was. Only walks the list when the free counter has moved.
     pub(crate) fn valid(self) -> bool {
-        self.0.br_buf_free_count == buf_free_count.get()
+        self.0.br_buf_free_count == BUF_FREE_COUNT.get()
             || buffers_back().any(|b| b == self.0.br_buf && b.handle == self.0.br_buf.handle())
     }
 
@@ -309,8 +308,8 @@ pub fn buf_valid(buffer: BufId) -> bool {
 /// The window title and icon text last sent to the UI. Owned: the cell
 /// releases the old value when the title changes, and `None` is upstream's
 /// null -- "the UI has never been told one".
-static lasttitle: GlobalCell<Option<XString>> = GlobalCell::new(None);
-static lasticon: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static LASTTITLE: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static LASTICON: GlobalCell<Option<XString>> = GlobalCell::new(None);
 pub const NO_LOCAL_UNDOLEVEL: ::core::ffi::c_int = -123456 as ::core::ffi::c_int;
 pub const SID_MODELINE: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const SEA_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -340,7 +339,7 @@ pub(crate) fn err(msg: &'static CStr) {
     emsg(gettext(msg));
 }
 
-/// The current buffer, or `None` where the C tests `curbuf != NULL`.
+/// The current buffer, or `None` where the C tests `CURBUF != NULL`.
 pub(crate) fn current_buf() -> Option<Buf> {
     Buf::current_or_none()
 }
@@ -472,8 +471,8 @@ fn run_cmdline(cmd: &CStr) {
     let _ = do_cmdline_cmd(cmd);
 }
 
-/// `buf_free_count++`: one more buffer has been freed, so every [`BufRef`]
+/// `BUF_FREE_COUNT++`: one more buffer has been freed, so every [`BufRef`]
 /// taken before now has to walk the list to answer.
 pub(crate) fn note_buffer_freed() {
-    buf_free_count.set(buf_free_count.get() + 1);
+    BUF_FREE_COUNT.set(BUF_FREE_COUNT.get() + 1);
 }

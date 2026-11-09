@@ -3,7 +3,7 @@
 //! and the bookkeeping that follows the handler.
 //!
 //! [`normal_execute`] is the whole of it, once per key. `find_command`
-//! resolves a character to a row of `nv_cmds`, `normal_get_command_count`
+//! resolves a character to a row of `NV_CMD_TABLE`, `normal_get_command_count`
 //! stacks the digits before it, and `normal_get_additional_char` reads the
 //! second character a row asks for.
 //!
@@ -20,7 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::autocmd::state::did_cursorhold;
+use crate::autocmd::state::DID_CURSORHOLD;
 use crate::charset::vim_isprintc;
 use crate::cstr;
 use crate::digraph::get_digraph;
@@ -47,11 +47,11 @@ use crate::mbyte::{encode_char, iscomposing, utf8len_tab};
 use crate::message::state::{MSG_COL, MSG_DIDOUT, MSG_NOWAIT};
 use crate::normal::defs::{CmdArg, Outcome};
 use crate::normal::{
-    B_IMODE_LMAP, GRAPHEME_STATE_INIT, NV_CMDS, NV_CMDS_SIZE, NormalState, NvFlags, add_to_showcmd,
-    check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd, do_check_scrollbind,
-    normal_handle_special_visual_command, normal_need_additional_char,
-    normal_need_redraw_mode_message, normal_redraw_mode_message, nv_cmds, set_vcount_ca,
-    set_visual_select, start_selection, visual_active, visual_select,
+    B_IMODE_LMAP, GRAPHEME_STATE_INIT, NV_CMD_TABLE, NV_CMDS, NV_CMDS_SIZE, NormalState, NvFlags,
+    add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd,
+    do_check_scrollbind, normal_handle_special_visual_command, normal_need_additional_char,
+    normal_need_redraw_mode_message, normal_redraw_mode_message, set_vcount_ca, set_visual_select,
+    start_selection, visual_active, visual_select,
 };
 use crate::ops::OpType;
 use crate::ops::{Op, do_pending_operator, get_op_type};
@@ -87,7 +87,7 @@ const fn rank(key: Key) -> usize {
     key.code().unsigned_abs() as usize
 }
 
-/// `nv_cmds` in ascending `|cmd_char|` order, and how far a direct index
+/// `NV_CMD_TABLE` in ascending `|cmd_char|` order, and how far a direct index
 /// works.
 ///
 /// Upstream builds this with `qsort` at startup, and then measures the
@@ -148,7 +148,7 @@ const _: () = {
     }
 };
 
-/// The row of `nv_cmds` that answers to `cmdchar`, if there is one.
+/// The row of `NV_CMD_TABLE` that answers to `cmdchar`, if there is one.
 pub(crate) fn find_command(cmdchar: Key) -> Option<usize> {
     if cmdchar.code() >= 0x100 {
         return None;
@@ -317,7 +317,7 @@ fn read_composing_tail(ns: &mut NormalState) {
 /// Read the second (and sometimes third) character of a command.
 pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
     let _raw_key = Keys::unmapped_with_codes();
-    did_cursorhold.set(true);
+    DID_CURSORHOLD.set(true);
 
     let (slot, lit, repl) = additional_char_slot(ns);
     let lang = repl || ns.row().cmd_flags.has(NvFlags::LANG);
@@ -470,7 +470,7 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
             && ns.oa.op_type == OpType::Nop
             && ns
                 .idx
-                .is_none_or(|i| !nv_cmds[i].cmd_flags.has(NvFlags::KEEPREG))
+                .is_none_or(|i| !NV_CMD_TABLE[i].cmd_flags.has(NvFlags::KEEPREG))
         {
             clear_op(ns.op());
             set_reg_var(get_default_register_name());
@@ -645,7 +645,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
             ui_flush();
         }
         if ns.ca.cmdchar != SpecialKey::Ignore && ns.ca.cmdchar != SpecialKey::Event {
-            did_cursorhold.set(false);
+            DID_CURSORHOLD.set(false);
         }
         STATE.set(MODE_NORMAL);
 

@@ -26,7 +26,7 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::{set_vim_var_string, vim_var_bytes};
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::ex_eval::state::{suppress_errthrow, trylevel};
+use crate::ex_eval::state::{SUPPRESS_ERRTHROW, TRYLEVEL};
 use crate::getchar::state::GOT_INT;
 use crate::guard::{MsgBump, Suppress};
 use crate::memory::{ThinCString, XString};
@@ -219,8 +219,8 @@ fn report_fails_mismatch(args: &[TypVal], cmd: &[u8], context: &CStr, mismatch: 
 /// behind — the error flags, the pending `hit-enter`, `v:errmsg` — is this
 /// function's to undo.
 fn finish_assert_fails(save_trylevel: c_int, no_prompt: MsgBump) {
-    trylevel.set(save_trylevel);
-    suppress_errthrow.set(false);
+    TRYLEVEL.set(save_trylevel);
+    SUPPRESS_ERRTHROW.set(false);
     IN_ASSERT_FAILS.set(false);
     DID_EMSG.set(0);
     GOT_INT.set(false);
@@ -241,13 +241,13 @@ pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
         return;
     }
 
-    let save_trylevel = trylevel.get();
+    let save_trylevel = TRYLEVEL.get();
     let called_emsg_before = CALLED_EMSG.get();
     let mut wrong_arg_msg: Option<&'static CStr> = None;
 
     // trylevel must be zero for a ":throw" command to be considered failed.
-    trylevel.set(0);
-    suppress_errthrow.set(true);
+    TRYLEVEL.set(0);
+    SUPPRESS_ERRTHROW.set(true);
     IN_ASSERT_FAILS.set(true);
     // Threaded into `finish_assert_fails`, which is where the C released
     // it — before the wrong-argument message below, which *does* want the
@@ -261,8 +261,8 @@ pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     let _ = do_cmdline_cmd(cmd);
 
     // Reset here for any errors reported below.
-    trylevel.set(save_trylevel);
-    suppress_errthrow.set(false);
+    TRYLEVEL.set(save_trylevel);
+    SUPPRESS_ERRTHROW.set(false);
 
     if CALLED_EMSG.get() == called_emsg_before {
         let mut message = prepare_assert_error();

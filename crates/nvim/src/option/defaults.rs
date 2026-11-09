@@ -58,7 +58,7 @@ use crate::os::libc::uint32_t;
 use crate::os::users::os_getuid;
 use crate::path::{invocation_path_tail, path_fnamecmp, vim_ispathlistsep};
 use crate::runtime::runtimepath_default;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::spell::init_spell_chartab;
 use crate::types::OptInt;
 use crate::ui::state::ROWS;
@@ -314,7 +314,7 @@ pub(crate) fn change_option_default(opt_idx: OptIndex, value: OptVal) {
 fn set_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     let both = !opt_flags.has(OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL);
     let def_val = get_option_default(opt_idx, opt_flags);
-    set_option_direct(opt_idx, def_val, opt_flags, current_sctx.get().sc_sid);
+    set_option_direct(opt_idx, def_val, opt_flags, CURRENT_SCTX.get().sc_sid);
     // 'scroll' is half the window height, which the option table cannot
     // know.
     if opt_idx == kOptScroll {

@@ -35,7 +35,7 @@ use crate::winlayer::WinId;
 use core::ffi::CStr;
 use std::ffi::CString;
 
-use crate::autocmd::state::au_new_curbuf;
+use crate::autocmd::state::AU_NEW_CURBUF;
 use crate::buffer::current_buf;
 use crate::buffer::{
     BufRef, buf_valid, buflist_altfpos, buflist_findfmark_pos, buflist_new, close_buffer, find_buf,
@@ -54,7 +54,7 @@ use crate::terminal::buf_terminal_running;
 use crate::types::{CmdModFlags, LineNr};
 use crate::undo::u_sync;
 use crate::window::win_valid_any_tab;
-use crate::winlayer::graph::{cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win};
+use crate::winlayer::graph::{CMDWIN_BUF, CMDWIN_OLD_CURWIN, CMDWIN_TYPE, CMDWIN_WIN};
 use crate::winlayer::{Buf, Win};
 
 /// What the "edit another file" stage decided.
@@ -209,16 +209,16 @@ fn leave_for_buffer(
     let flags = args.flags;
     // Should only be possible to get here if the cmdwin is closed, or if it's
     // opening and its buffer hasn't been set yet (the new buffer is for it).
-    debug_assert!(cmdwin_buf.get().is_none(), "cmdwin_buf == NULL");
+    debug_assert!(CMDWIN_BUF.get().is_none(), "cmdwin_buf == NULL");
 
-    let save_cmdwin_type = cmdwin_type.get();
-    let save_cmdwin_win = cmdwin_win.get();
-    let save_cmdwin_old_curwin = cmdwin_old_curwin.get();
+    let save_cmdwin_type = CMDWIN_TYPE.get();
+    let save_cmdwin_win = CMDWIN_WIN.get();
+    let save_cmdwin_old_curwin = CMDWIN_OLD_CURWIN.get();
 
     // BufLeave applies to the old buffer.
-    cmdwin_type.set(0);
-    cmdwin_win.set(None);
-    cmdwin_old_curwin.set(None);
+    CMDWIN_TYPE.set(0);
+    CMDWIN_WIN.set(None);
+    CMDWIN_OLD_CURWIN.set(None);
 
     // Be careful: the autocommands may delete any buffer and change the
     // current buffer.
@@ -232,30 +232,30 @@ fn leave_for_buffer(
     // earns.  Upstream `xstrdup`s it and frees it at five exits and inside
     // `delbuf_msg`; owning it is one `Drop`.
     let new_name: Option<CString> = buffer.name.shown().map(CStr::to_owned);
-    let save_au_new_curbuf = au_new_curbuf.get();
-    au_new_curbuf.set(BufRef::of(buffer).record());
+    let save_au_new_curbuf = AU_NEW_CURBUF.get();
+    AU_NEW_CURBUF.set(BufRef::of(buffer).record());
     buf_autocmd(AutoEvent::BufLeave, Buf::current());
 
-    cmdwin_type.set(save_cmdwin_type);
-    cmdwin_win.set(save_cmdwin_win);
-    cmdwin_old_curwin.set(save_cmdwin_old_curwin);
+    CMDWIN_TYPE.set(save_cmdwin_type);
+    CMDWIN_WIN.set(save_cmdwin_win);
+    CMDWIN_OLD_CURWIN.set(save_cmdwin_old_curwin);
 
     if !au_new_curbuf_valid() {
         // New buffer has been deleted.
         delbuf_msg(new_name.as_deref());
-        au_new_curbuf.set(save_au_new_curbuf);
+        AU_NEW_CURBUF.set(save_au_new_curbuf);
         return Switch::Abandon;
     }
     if aborting() {
         // autocmds may abort script processing
-        au_new_curbuf.set(save_au_new_curbuf);
+        AU_NEW_CURBUF.set(save_au_new_curbuf);
         return Switch::Abandon;
     }
 
     if buffer.raw() == Buf::current_raw() {
         // already in new buffer
         state.auto_buf = true;
-        au_new_curbuf.set(save_au_new_curbuf);
+        AU_NEW_CURBUF.set(save_au_new_curbuf);
         return Switch::Ready;
     }
 
@@ -289,19 +289,19 @@ fn leave_for_buffer(
 
     // autocmds may abort script processing
     if aborting() && !Win::current().w_buffer.is_null() {
-        au_new_curbuf.set(save_au_new_curbuf);
+        AU_NEW_CURBUF.set(save_au_new_curbuf);
         return Switch::Abandon;
     }
     // Be careful again, like above.
     if !au_new_curbuf_valid() {
         // New buffer has been deleted.
         delbuf_msg(new_name.as_deref());
-        au_new_curbuf.set(save_au_new_curbuf);
+        AU_NEW_CURBUF.set(save_au_new_curbuf);
         return Switch::Abandon;
     }
 
     // `close_buffer` may have left the editor with no buffer at all --
-    // upstream compares a non-NULL `buf` against a NULL `curbuf` here and
+    // upstream compares a non-NULL `buf` against a NULL `CURBUF` here and
     // finds them unequal, which is what the `Option` says.
     if Some(buffer) == Buf::current_or_none() {
         // already in new buffer -- close_buffer() has decremented the
@@ -350,13 +350,13 @@ fn leave_for_buffer(
     get_winopts(Buf::current());
     state.did_get_winopts = true;
 
-    au_new_curbuf.set(save_au_new_curbuf);
+    AU_NEW_CURBUF.set(save_au_new_curbuf);
     Switch::Ready
 }
 
 /// Is the buffer `au_new_curbuf` names still alive?
 fn au_new_curbuf_valid() -> bool {
-    BufRef::of_record(au_new_curbuf.get()).valid()
+    BufRef::of_record(AU_NEW_CURBUF.get()).valid()
 }
 /// An autocommand deleted the buffer that was about to be edited.
 ///
@@ -366,7 +366,7 @@ fn au_new_curbuf_valid() -> bool {
 pub(super) fn delbuf_msg(name: Option<&CStr>) {
     let arg0 = msg_cstr(name.unwrap_or(c""));
     semsg!("E143: Autocommands unexpectedly deleted new buffer {arg0}");
-    au_new_curbuf.with_mut(|r| {
+    AU_NEW_CURBUF.with_mut(|r| {
         r.br_buf = Buf::NULL;
         r.br_buf_free_count = 0;
     });

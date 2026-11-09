@@ -34,7 +34,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::ascii::CAR;
 use crate::ascii::ESC;
@@ -47,10 +46,10 @@ use crate::env::expand_env;
 use crate::eval::typval::{NumBuf, list_find_str, list_iter, list_len};
 use crate::eval::vars::get_vim_var_list_handle;
 use crate::ex_docmd::cmdmod_has;
-use crate::ex_docmd::state::cmdmod;
+use crate::ex_docmd::state::CMDMOD;
 use crate::extmark::BCount;
 use crate::getchar::state::GOT_INT;
-use crate::guard::{sandbox, secure};
+use crate::guard::{SANDBOX, SECURE};
 use crate::input::prompt_for_input;
 use crate::message::state::{MSG_SCROLL, QUIT_MORE};
 use crate::message::{E_CURDIR, E_INTERR, E_SANDBOX};
@@ -65,7 +64,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp_at};
-use crate::tag::state::g_do_tagpreview;
+use crate::tag::state::G_DO_TAGPREVIEW;
 use crate::types::CmdIdx;
 use crate::types::{CmdModFlags, ExArg, GetFileRet, LPos, LineNr, List, Vv};
 use crate::window::{win_enter, win_split};
@@ -168,7 +167,7 @@ pub(crate) fn split_vimgrep_pat(arg: &[u8]) -> Option<(Vec<u8>, ::core::ffi::c_i
     Some((pat.pattern.to_vec(), pat.flags, pat.rest))
 }
 
-pub const _ISalpha: ::core::ffi::c_uint = 1024;
+pub const IS_ALPHA: ::core::ffi::c_uint = 1024;
 pub const REGSUB_BACKSLASH: ::core::ffi::c_uint = 4;
 pub const REGSUB_MAGIC: ::core::ffi::c_uint = 2;
 pub const REGSUB_COPY: ::core::ffi::c_uint = 1;
@@ -207,9 +206,9 @@ pub struct SubFlags {
     pub do_ic: SubIgnoreType,
 }
 pub type SubIgnoreType = ::core::ffi::c_uint;
-pub const kSubMatchCase: SubIgnoreType = 2;
-pub const kSubIgnoreCase: SubIgnoreType = 1;
-pub const kSubHonorOptions: SubIgnoreType = 0;
+pub const SUB_MATCH_CASE: SubIgnoreType = 2;
+pub const SUB_IGNORE_CASE: SubIgnoreType = 1;
+pub const SUB_HONOR_OPTIONS: SubIgnoreType = 0;
 #[derive(Debug)]
 pub struct LineData {
     pub start_col: ::core::ffi::c_int,
@@ -249,12 +248,12 @@ pub(super) fn buf_autocmd(event: AutoEvent, buffer: Buf) -> bool {
 /// Safe: the only promise is that the editor exists; the two messages are
 /// static strings.
 pub fn check_secure() -> bool {
-    if secure.get() != 0 {
-        secure.set(2);
+    if SECURE.get() != 0 {
+        SECURE.set(2);
         emsg(gettext(E_CURDIR));
         return true;
     }
-    if sandbox.get() != 0 {
+    if SANDBOX.get() != 0 {
         emsg(gettext(E_SANDBOX));
         return true;
     }
@@ -271,8 +270,8 @@ pub fn prepare_tagpreview(undo_sync: bool) -> bool {
         }
     }
     if win_split(
-        if g_do_tagpreview.get() > 0 as ::core::ffi::c_int {
-            g_do_tagpreview.get()
+        if G_DO_TAGPREVIEW.get() > 0 as ::core::ffi::c_int {
+            G_DO_TAGPREVIEW.get()
         } else {
             0 as ::core::ffi::c_int
         },
@@ -332,7 +331,7 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
     let expanded = expand_env(picked, false);
     excmd.set_arg_text(&expanded);
     excmd.cmdidx = CmdIdx::edit;
-    cmdmod.with_mut(|m| m.cmod_flags.clear(CmdModFlags::BROWSE));
+    CMDMOD.with_mut(|m| m.cmod_flags.clear(CmdModFlags::BROWSE));
     excmd.exedit(None);
 }
 

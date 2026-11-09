@@ -14,7 +14,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::event::objects::Loop;
 use crate::event::objects::Proc;
@@ -28,7 +27,7 @@ use core::ffi::c_void;
 
 pub(crate) const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
 
-pub static main_loop: SharedCell<Loop> = SharedCell::new(Loop {
+pub static MAIN_LOOP: SharedCell<Loop> = SharedCell::new(Loop {
     uv: uv_loop_t {
         data: ::core::ptr::null_mut::<c_void>(),
         active_handles: 0,

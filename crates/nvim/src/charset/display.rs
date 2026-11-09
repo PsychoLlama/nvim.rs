@@ -33,7 +33,7 @@ use crate::os::libc::uint8_t;
 use crate::winlayer::Buf;
 
 use super::{
-    CT_CELL_MASK, EOL_MAC, NL, TAB, chartab, chartab_initialized, kOptDyFlagUhex,
+    CHARTAB_INITIALIZED, CT_CELL_MASK, EOL_MAC, NL, TAB, chartab, kOptDyFlagUhex,
     transchar as render, vim_isprintc,
 };
 use crate::pos::MAXCOL;
@@ -375,7 +375,7 @@ fn render_char(buffer: Option<Buf>, c: c_int) -> render::Rendered {
     // Before the tables exist, printable ASCII is all that can be trusted.
     let byte = u8::try_from(c).ok();
     let body = if let Some(byte) = byte.filter(|&b| {
-        (!chartab_initialized.get() && (b' '..=b'~').contains(&b)) || vim_isprintc(c_int::from(b))
+        (!CHARTAB_INITIALIZED.get() && (b' '..=b'~').contains(&b)) || vim_isprintc(c_int::from(b))
     }) {
         render::Rendered::literal(byte)
     } else if c <= 0xff {

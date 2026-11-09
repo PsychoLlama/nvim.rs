@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 //! Incremental msgpack-rpc decoding.
 //!
@@ -49,10 +48,10 @@ use protocol::{
     STR as TOKEN_STR, UINT as TOKEN_UINT,
 };
 
-pub const kMessageTypeRedrawEvent: MessageType = 3;
+pub const MESSAGE_TYPE_REDRAW_EVENT: MessageType = 3;
 pub const MESSAGE_TYPE_NOTIFICATION: MessageType = 2;
-pub const kMessageTypeResponse: MessageType = 1;
-pub const kUnpackTypeStringArray: c_int = -1;
+pub const MESSAGE_TYPE_RESPONSE: MessageType = 1;
+pub const UNPACK_TYPE_STRING_ARRAY: c_int = -1;
 
 /// The most bytes an extension object's payload may take before it is
 /// rejected: a msgpack uint is at most a tag plus eight bytes.
@@ -135,10 +134,10 @@ impl Unpacker {
                 core::ptr::fn_addr_eq(f, handle_ui_client_redraw as ApiDispatchFn)
             });
             if self.type_0 == MESSAGE_TYPE_NOTIFICATION && is_redraw {
-                self.type_0 = kMessageTypeRedrawEvent;
+                self.type_0 = MESSAGE_TYPE_REDRAW_EVENT;
                 self.state = protocol::REDRAW_EVENTS;
             } else {
-                self.state = if self.type_0 == kMessageTypeResponse {
+                self.state = if self.type_0 == MESSAGE_TYPE_RESPONSE {
                     protocol::RESPONSE_ERROR
                 } else {
                     protocol::BODY
@@ -253,7 +252,7 @@ impl Unpacker {
             self.request_id = msgpack_uint_as_u32(token::unpack_uint(&tok));
         }
 
-        if self.type_0 != kMessageTypeResponse {
+        if self.type_0 != MESSAGE_TYPE_RESPONSE {
             let tok = next_header_token(reader, data)?.0;
             if !matches!(tok.kind, Some(Kind::Str | Kind::Bin))
                 || tok.len > protocol::METHOD_NAME_MAX

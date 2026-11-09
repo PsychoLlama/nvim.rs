@@ -53,9 +53,9 @@ pub use time::undo_time;
 pub fn u_undo(count: c_int) {
     let count = count_after_sync(count);
     if cpo_has(CpoFlag::UNDO) {
-        undo_undoes.set(!undo_undoes.get());
+        UNDO_UNDOES.set(!UNDO_UNDOES.get());
     } else {
-        undo_undoes.set(true);
+        UNDO_UNDOES.set(true);
     }
     u_doit(count, false, true);
 }
@@ -64,7 +64,7 @@ pub fn u_undo(count: c_int) {
 /// undo-or-redo.
 pub fn u_redo(count: c_int) {
     if !cpo_has(CpoFlag::UNDO) {
-        undo_undoes.set(false);
+        UNDO_UNDOES.set(false);
     }
     u_doit(count, false, true);
 }
@@ -74,7 +74,7 @@ pub fn u_redo(count: c_int) {
 /// would. Answers whether anything was undone.
 pub fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool {
     let count = count_after_sync(count);
-    undo_undoes.set(true);
+    UNDO_UNDOES.set(true);
     u_doit(count, true, do_buf_event);
 
     let mut buf = Buf::current();
@@ -132,15 +132,15 @@ fn count_after_sync(count: c_int) -> c_int {
     1
 }
 
-/// Undoes or redoes — whichever `undo_undoes` says — `startcount` times.
+/// Undoes or redoes — whichever `UNDO_UNDOES` says — `startcount` times.
 pub(crate) fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) {
     if let Err(err) = undo_allowed(Buf::current()) {
         err.report();
         return;
     }
-    u_newcount.set(0);
+    U_NEWCOUNT.set(0);
     let empty = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
-    u_oldcount.set(if empty { -1 } else { 0 });
+    U_OLDCOUNT.set(if empty { -1 } else { 0 });
     msg_ext_set_kind(c"undo");
 
     let mut count = startcount;
@@ -152,7 +152,7 @@ pub(crate) fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) {
         // `b_u_curhead` and more.
         change_warning(Buf::current(), 0);
         let mut buf = Buf::current();
-        if undo_undoes.get() {
+        if UNDO_UNDOES.get() {
             if buf.b_u_curhead.is_none() {
                 buf.b_u_curhead = buf.b_u_newhead; // the first undo
             } else if get_undolevel(buf) > 0 {
@@ -191,7 +191,7 @@ pub(crate) fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) {
         }
         first = false;
     }
-    u_undo_end(undo_undoes.get(), false, quiet);
+    u_undo_end(UNDO_UNDOES.get(), false, quiet);
 }
 
 // ---------------------------------------------------------------------------
@@ -218,17 +218,17 @@ pub(crate) fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
     }
     // No messages until :global has finished, and none while 'lazyredraw'
     // holds them back.
-    if quiet || global_busy.get() != 0 || !messaging() {
+    if quiet || GLOBAL_BUSY.get() != 0 || !messaging() {
         return;
     }
 
     let buf = Buf::current();
     if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
-        u_newcount.set(u_newcount.get() - 1);
+        U_NEWCOUNT.set(U_NEWCOUNT.get() - 1);
     }
-    u_oldcount.set(u_oldcount.get() - u_newcount.get());
-    let (count, what) = undo_report(u_oldcount.get(), u_newcount.get());
-    u_oldcount.set(count);
+    U_OLDCOUNT.set(U_OLDCOUNT.get() - U_NEWCOUNT.get());
+    let (count, what) = undo_report(U_OLDCOUNT.get(), U_NEWCOUNT.get());
+    U_OLDCOUNT.set(count);
 
     // Which header's timestamp and sequence number to name. For ":undo N" an
     // "after #N" message reads better than a "before" one.

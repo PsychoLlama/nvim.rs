@@ -446,7 +446,7 @@ fn parse_id_name(
             b'T' => SYNID_TOP,
             _ => SYNID_CONTAINED,
         };
-        return Ok(Some(base + current_syn_inc_tag.get()));
+        return Ok(Some(base + CURRENT_SYN_INC_TAG.get()));
     }
 
     if text.first() == Some(&b'@') {

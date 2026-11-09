@@ -28,15 +28,14 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::narrow::float_as_int;
 use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
 use crate::types::ColNr;
 use crate::types::Handle;
-use crate::window::kZIndexFloatDefault;
-use crate::window::kZIndexMessages;
+use crate::window::Z_INDEX_FLOAT_DEFAULT;
+use crate::window::Z_INDEX_MESSAGES;
 use crate::winlayer::cmdwin_window;
 use crate::winlayer::prev_window;
 use core::ffi::{CStr, c_int};
@@ -71,15 +70,15 @@ use crate::window::{
     win_append, win_close, win_comp_pos, win_enter, win_find_tabpage, win_free, win_init,
     win_remove, win_remove_status_line, win_set_buf, win_set_inner_size, winframe_remove,
 };
-use crate::winlayer::graph::cmdwin_win;
+use crate::winlayer::graph::CMDWIN_WIN;
 use crate::winlayer::{
     Buf, TabPage, Win, WinId, first_window, last_window, windows, windows_back, windows_in_tab,
 };
 
-pub(crate) const kAlignLeft: AlignTextPos = 0;
-pub(crate) const kWinSplitLeft: WinSplit = 0;
-pub(crate) const kWinStyleUnused: WinStyle = 0;
-pub(crate) const kWinStyleMinimal: WinStyle = 1;
+pub(crate) const ALIGN_LEFT: AlignTextPos = 0;
+pub(crate) const WIN_SPLIT_LEFT: WinSplit = 0;
+pub(crate) const WIN_STYLE_UNUSED: WinStyle = 0;
+pub(crate) const WIN_STYLE_MINIMAL: WinStyle = 1;
 
 /// An unset title/footer.
 const NO_VIRT_TEXT: VirtText = VirtText::new();
@@ -102,20 +101,20 @@ pub(crate) const WIN_CONFIG_INIT: WinConfig = WinConfig {
     external: false,
     focusable: true,
     mouse: true,
-    split: kWinSplitLeft,
-    zindex: kZIndexFloatDefault,
-    style: kWinStyleUnused,
+    split: WIN_SPLIT_LEFT,
+    zindex: Z_INDEX_FLOAT_DEFAULT,
+    style: WIN_STYLE_UNUSED,
     border: false,
     shadow: false,
     border_chars: [[0; 32]; 8],
     border_hl_ids: [0; 8],
     border_attr: [0; 8],
     title: false,
-    title_pos: kAlignLeft,
+    title_pos: ALIGN_LEFT,
     title_chunks: NO_VIRT_TEXT,
     title_width: 0,
     footer: false,
-    footer_pos: kAlignLeft,
+    footer_pos: ALIGN_LEFT,
     footer_chunks: NO_VIRT_TEXT,
     footer_width: 0,
     noautocmd: false,
@@ -356,7 +355,7 @@ fn unfloat_to_float(win: Win) -> Result<Win, Error> {
     };
     if first_in_tab == Some(win) && last_nofloat(win_tp.into_other()) == win {
         return Err(make_error(c"Cannot change last window into float"));
-    } else if cmdwin_win.get().is_some() && !cmdwin_is_float() {
+    } else if CMDWIN_WIN.get().is_some() && !cmdwin_is_float() {
         // The command-line window can't become the only non-float. Check for
         // others.
         let mut other_nonfloat = false;
@@ -364,7 +363,7 @@ fn unfloat_to_float(win: Win) -> Result<Win, Error> {
             if wp2.w_floating {
                 break;
             }
-            if wp2 != win && cmdwin_win.get() != Some(wp2.id()) {
+            if wp2 != win && CMDWIN_WIN.get() != Some(wp2.id()) {
                 other_nonfloat = true;
                 break;
             }
@@ -528,7 +527,7 @@ pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
     }
 
     if !ui_has(UI_MULTIGRID) {
-        let above_ch = if win.w_config.zindex < kZIndexMessages {
+        let above_ch = if win.w_config.zindex < Z_INDEX_MESSAGES {
             number_as_int(p_ch())
         } else {
             0
@@ -725,7 +724,7 @@ pub(crate) fn win_float_create_preview(enter: bool, new_buf: bool) -> Option<Win
     config.anchor = 0 as FloatAnchor; // NW
     config.noautocmd = true;
     config.hide = true;
-    config.style = kWinStyleMinimal;
+    config.style = WIN_STYLE_MINIMAL;
     suppress_autocmds();
     let mut win = match new_float(None, false, config) {
         Ok(Some(win)) => win,

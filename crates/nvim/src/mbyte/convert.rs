@@ -316,7 +316,7 @@ fn utf8_to_latin(src: &[u8], to_latin9: bool, fail: bool) -> Option<Vec<u8>> {
             continue;
         }
         if l == 1 {
-            if utf8len_tab_zero[usize::from(rest[0])] == 0 {
+            if UTF8LEN_TAB_ZERO[usize::from(rest[0])] == 0 {
                 return None; // not a lead byte: the input is not UTF-8
             }
             out.push(rest[0]);

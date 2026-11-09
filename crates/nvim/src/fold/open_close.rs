@@ -695,7 +695,7 @@ pub(super) fn closed_at(
     }
 }
 
-/// C's `emsg(_(e_nofold))`, which every command that found no fold gives.
+/// C's `emsg(_(E_NOFOLD))`, which every command that found no fold gives.
 fn emsg_nofold() {
-    emsg(gettext(e_nofold));
+    emsg(gettext(E_NOFOLD));
 }

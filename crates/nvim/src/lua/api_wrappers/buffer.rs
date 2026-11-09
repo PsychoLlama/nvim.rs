@@ -283,7 +283,7 @@ pub(super) fn convert_nvim_buf_set_lines(
     stack: &mut Stack,
     blame: &mut Blame,
 ) -> Result<(), Error> {
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     let arg_5 = pop_array(stack).inspect_err(|_| *blame = Some(c"replacement"))?;
@@ -324,7 +324,7 @@ pub(super) fn convert_nvim_buf_set_name(stack: &mut Stack, blame: &mut Blame) ->
 /// The Lua binding for `nvim_buf_set_text`: pop the arguments, call the API
 /// function, hand the result back.
 pub(super) fn convert_nvim_buf_set_text(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     let arg_6 = pop_array(stack).inspect_err(|_| *blame = Some(c"replacement"))?;

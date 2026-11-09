@@ -42,9 +42,9 @@ use crate::path::MAXPATHL;
 use crate::types::Failed;
 use crate::winlayer::{Buf, Win};
 
-/// Read the original file into `curbuf`, starting after line `from`.
+/// Read the original file into `CURBUF`, starting after line `from`.
 ///
-/// Both callers name `curbuf`'s own full path and pass no `:read` command,
+/// Both callers name `CURBUF`'s own full path and pass no `:read` command,
 /// which is the whole of `readfile`'s precondition; they differ only in the
 /// range and in whether the buffer is new.
 fn read_original(from: LineNr, skip: i32, lines: i32, flags: c_int) -> Result<Loaded, Failed> {
@@ -77,12 +77,12 @@ struct Recorded {
     block: Vec<u8>,
 }
 
-/// Try to recover `curbuf` from its swap file.
+/// Try to recover `CURBUF` from its swap file.
 ///
 /// `checkext`: whether the buffer's own name may itself be a swap file name,
 /// as it is for `nvim -r file.swp`.
 pub fn ml_recover(checkext: bool) {
-    recoverymode.set(true);
+    RECOVERYMODE.set(true);
     let called_from_main = !Buf::current().b_ml.is_open();
 
     // Who owns what `buf` names. The recovery buffer is not in the
@@ -256,7 +256,7 @@ pub fn ml_recover(checkext: bool) {
         check_cursor(Win::current());
 
         MSG_EXT_SKIP_FLUSH.set(!GOT_INT.get());
-        recoverymode.set(false);
+        RECOVERYMODE.set(false);
         report_recovery(error, &recorded, &fname_used);
         redraw_curbuf_later(UPD_NOT_VALID);
         Ok(())
@@ -268,7 +268,7 @@ pub fn ml_recover(checkext: bool) {
     }
 
     MSG_EXT_SKIP_FLUSH.set(false);
-    recoverymode.set(false);
+    RECOVERYMODE.set(false);
     if let Some(mut buf) = recovery {
         // Whatever block the walk still held goes back, and the memfile
         // closes; the swap file stays.
@@ -285,7 +285,7 @@ pub fn ml_recover(checkext: bool) {
     if serious_error && called_from_main {
         ml_close(Buf::current(), 1);
     } else {
-        // `curbuf` and its name are read afresh for each event: the
+        // `CURBUF` and its name are read afresh for each event: the
         // first one's autocommands may have changed either.
         for event in [AutoEvent::BufReadPost, AutoEvent::BufWinEnter] {
             let current = Buf::current();
@@ -431,7 +431,7 @@ fn choose_swapfile(fname: &CStr) -> Result<XString, MemlineError> {
 }
 
 /// Walk the swap file's block tree and append every line it can find to
-/// `curbuf`, after line 0.
+/// `CURBUF`, after line 0.
 ///
 /// `buffer` is the scratch buffer whose memline is open on the swap file and
 /// whose `ml_stack` records the descent. Nothing in the file is trusted: a
@@ -764,8 +764,8 @@ pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
             });
             if changed {
                 ml_preserve(buf, false, do_fsync);
-                did_check_timestamps.set(false);
-                need_check_timestamps.set(true); // give the message later
+                DID_CHECK_TIMESTAMPS.set(false);
+                NEED_CHECK_TIMESTAMPS.set(true); // give the message later
             }
         }
 

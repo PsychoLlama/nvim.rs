@@ -72,8 +72,8 @@ fn cmd_source(fname: &CStr, excmd: Option<&mut ExArg>) {
             true
         } else if forceit {
             // `:source!` feeds the file to the editor as typed keys.
-            let busy = global_busy.get() != 0
-                || listcmd_busy.get()
+            let busy = GLOBAL_BUSY.get() != 0
+                || LISTCMD_BUSY.get()
                 || !command.line.next.is_none()
                 || command
                     .cond_stack
@@ -103,7 +103,7 @@ pub fn ex_source(excmd: &mut ExArg) {
 /// `:options`, which is `:source` of the option window script with the
 /// command modifiers passed along in the environment.
 pub fn ex_options(_excmd: &mut ExArg) {
-    let mods = CString::new(cmdmod.with(win_cmd_modifiers)).expect("no NUL in a word");
+    let mods = CString::new(CMDMOD.with(win_cmd_modifiers)).expect("no NUL in a word");
     let _ = env_set(c"OPTWIN_CMD", &mods);
     cmd_source(SYS_OPTWIN_FILE, None);
 }
@@ -407,7 +407,7 @@ fn profile_script_start(sid: ScriptId, fname_exp: &CStr) {
 /// The script is the current one, looked up again rather than carried across
 /// the run.
 fn profile_script_stop(wait_start: ProfTime) {
-    with_script_item(current_sctx.get().sc_sid, |si| {
+    with_script_item(CURRENT_SCTX.get().sc_sid, |si| {
         if si.sn_prof_on {
             si.sn_pr_start = profile_end(si.sn_pr_start);
             si.sn_pr_start = profile_sub_wait(wait_start, si.sn_pr_start);
@@ -484,7 +484,7 @@ fn execute_source(
 }
 
 /// Everything from opening the script to closing it, in the order it has to
-/// come back down: the profile timers, the funccal stack, `current_sctx` and
+/// come back down: the profile timers, the funccal stack, `CURRENT_SCTX` and
 /// the execution stack all outlive the run and are restored here.
 ///
 /// `save_debug_break_level` was read before any of this ran.
@@ -530,13 +530,13 @@ fn source_bracket(
 
     cookie.breakpoint = dbg_find_breakpoint_named(true, fname_exp.as_cstr(), LineNr::ZERO);
     cookie.fname = fname_exp.clone();
-    cookie.dbg_tick = debug_tick.get();
-    cookie.level = ex_nesting_level.get();
+    cookie.dbg_tick = DEBUG_TICK.get();
+    cookie.level = EX_NESTING_LEVEL.get();
 
     // Start measuring load time, if --startuptime opened the log.
     let time_log = startup_timing();
     let (rel_time, start_time) = if !time_log { (0, 0) } else { time_push() };
-    let profiling = do_profiling.get() == PROF_YES;
+    let profiling = DO_PROFILING.get() == PROF_YES;
     let wait_start = if profiling { prof_child_enter() } else { 0 };
 
     // Don't use the calling function's local variables.
@@ -546,7 +546,7 @@ fn source_bracket(
     // Always use a new sequence number.
     let seq = LAST_SCRIPT_SEQ.get() + 1;
     LAST_SCRIPT_SEQ.set(seq);
-    current_sctx.with_mut(|sctx| sctx.sc_seq = seq);
+    CURRENT_SCTX.with_mut(|sctx| sctx.sc_seq = seq);
 
     let item = register_script(req, &mut sid, &fname_exp);
     debug_assert!(
@@ -556,8 +556,8 @@ fn source_bracket(
 
     // Sourcing a string from a Lua script keeps the Lua script's SID, so
     // `:verbose` still names something useful.
-    if !req.is_str() || !script_is_lua(current_sctx.get().sc_sid) {
-        current_sctx.with_mut(|sctx| {
+    if !req.is_str() || !script_is_lua(CURRENT_SCTX.get().sc_sid) {
+        CURRENT_SCTX.with_mut(|sctx| {
             sctx.sc_sid = sid;
             sctx.sc_lnum = LineNr::ZERO;
         });
@@ -608,10 +608,10 @@ fn source_bracket(
 
     // After a `:finish` in debug mode, break at the first command of the next
     // sourced file.
-    if save_debug_break_level > ex_nesting_level.get()
-        && debug_break_level.get() == ex_nesting_level.get()
+    if save_debug_break_level > EX_NESTING_LEVEL.get()
+        && DEBUG_BREAK_LEVEL.get() == EX_NESTING_LEVEL.get()
     {
-        debug_break_level.set(debug_break_level.get() + 1);
+        DEBUG_BREAK_LEVEL.set(DEBUG_BREAK_LEVEL.get() + 1);
     }
     drop(script_ctx);
     drop(call_stack_aside);
@@ -632,7 +632,7 @@ fn source_bracket(
 /// `Err` when nothing ran (see [`SourceError`]). A script that has a
 /// `ScriptItem` already is run again unless the request is `once`.
 fn do_source_ext(req: &SourceRequest) -> Result<(), SourceError> {
-    let save_debug_break_level = debug_break_level.get();
+    let save_debug_break_level = DEBUG_BREAK_LEVEL.get();
     let (mut cookie, fname_exp) = source_name(req)?;
     source_bracket(req, &mut cookie, fname_exp, save_debug_break_level)
 }

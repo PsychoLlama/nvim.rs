@@ -26,8 +26,8 @@
 
 use crate::autocmd::defs::AutoEvent;
 use crate::eval::typval::DO_NOT_FREE_CNT;
-use crate::extmark::kExtmarkNoUndo;
-use crate::mark::kMarkAdjustNormal;
+use crate::extmark::EXTMARK_NO_UNDO;
+use crate::mark::MARK_ADJUST_NORMAL;
 use crate::memline::MlFlags;
 use crate::message_fmt::msg_cstr_opt;
 use crate::narrow::as_index;
@@ -37,7 +37,7 @@ use core::ffi::c_int;
 use super::*;
 use crate::allocator::Owned;
 use crate::autocmd::aubuflocal_remove;
-use crate::autocmd::state::autocmd_busy;
+use crate::autocmd::state::AUTOCMD_BUSY;
 use crate::buffer_updates::{buf_free_callbacks, buf_updates_unload};
 use crate::change::deleted_lines_mark;
 use crate::diff::{diff_buf_delete, diffopt_hiddenoff};
@@ -54,7 +54,7 @@ use crate::normal::visual_active;
 use crate::optionstr::OptString;
 use crate::pos::MAXLNUM;
 use crate::semsg;
-use crate::startup::exiting;
+use crate::startup::EXITING;
 use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::close_buf_terminal;
@@ -62,7 +62,7 @@ use crate::types::{Callback, ColNr, Handle, LineNr, Pos, Timestamp};
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
 use crate::window::{free_wininfo, goto_tabpage_win, one_window};
-use crate::winlayer::graph::{firstbuf, lastbuf, leave_curbuf};
+use crate::winlayer::graph::{FIRSTBUF, LASTBUF, leave_curbuf};
 use crate::winlayer::{Buf, TabPage, Win, defer_free_buffer, forget_buffer, tab_windows, windows};
 
 /// A mark that has never been set, as `CLEAR_FIELD()` leaves one: all zero,
@@ -165,8 +165,8 @@ fn forget_lines(buffer: Buf, count: i32) {
         last.get(),
         -count,
         false,
-        kMarkAdjustNormal,
-        kExtmarkNoUndo,
+        MARK_ADJUST_NORMAL,
+        EXTMARK_NO_UNDO,
     );
 }
 
@@ -475,7 +475,7 @@ fn close_buffer_inner(
         if how.del {
             // Free all internal variables and reset option values, to make
             // ":bdel" compatible with Vim 5.7.
-            free_buffer_stuff(buf, kBffClearWinInfo | kBffInitChangedtick);
+            free_buffer_stuff(buf, BFF_CLEAR_WIN_INFO | BFF_INIT_CHANGEDTICK);
 
             // Make it look like a new buffer.
             buf.b_flags = BufFlags::CHECK_RO | BufFlags::NEVERLOADED;
@@ -568,11 +568,11 @@ fn unlink_and_free(mut buffer: Buf, clear_w_buf: Option<Win>) {
     }
     buffer.name.clear();
     match buffer.prev() {
-        None => firstbuf.set(buffer.b_next),
+        None => FIRSTBUF.set(buffer.b_next),
         Some(mut prev) => prev.b_next = buffer.b_next,
     }
     match buffer.next() {
-        None => lastbuf.set(buffer.b_prev),
+        None => LASTBUF.set(buffer.b_prev),
         Some(mut next) => next.b_prev = buffer.b_prev,
     }
     free_buffer(buffer);
@@ -683,7 +683,7 @@ pub fn buf_freeall(buffer: Buf, flags: c_int) {
 
     // Ensure marks are adjusted for cleared buffer in case buffer not on
     // disk: if it is reloaded the buffer will be empty.
-    if buf_is_nofilename(Some(buf)) && !exiting.get() {
+    if buf_is_nofilename(Some(buf)) && !EXITING.get() {
         forget_lines(buf, count.get());
     }
 
@@ -746,7 +746,7 @@ fn free_buffer(mut buffer: Buf) {
     let owned = forget_handle(buffer.handle());
     note_buffer_freed();
     // b:changedtick uses an item in Buffer.
-    free_buffer_stuff(buffer, kBffClearWinInfo);
+    free_buffer_stuff(buffer, BFF_CLEAR_WIN_INFO);
     let shared = buffer
         .b_bufvar
         .di_tv
@@ -772,7 +772,7 @@ fn free_buffer(mut buffer: Buf) {
     for i in 0..as_index(buffer.b_changelistlen) {
         buffer.b_changelist[i].clear(0);
     }
-    if autocmd_busy.get() {
+    if AUTOCMD_BUSY.get() {
         // Do not free the buffer structure while autocommands are executing,
         // it's still needed. Free it when autocmd_busy is reset.
         buffer.b_namedm = [ZERO_FMARK; NMARKS as usize];
@@ -797,13 +797,13 @@ pub(crate) fn clear_wininfo(mut buffer: Buf) {
 /// Free what `:bdel` and a wipe-out drop: the window memory, the local
 /// options, the variables, the user commands, the extmarks and the mappings.
 pub(crate) fn free_buffer_stuff(mut buffer: Buf, free_flags: c_int) {
-    if free_flags & kBffClearWinInfo != 0 {
+    if free_flags & BFF_CLEAR_WIN_INFO != 0 {
         clear_wininfo(buffer); // including window-local options
         free_buf_options(buffer, true);
         buffer.b_s.b_langp = Vec::new();
     }
     clear_buf_vars(buffer); // free all internal variables
-    if free_flags & kBffInitChangedtick != 0 {
+    if free_flags & BFF_INIT_CHANGEDTICK != 0 {
         buf_init_changedtick(buffer);
     }
     free_user_commands(buffer); // clear local user commands

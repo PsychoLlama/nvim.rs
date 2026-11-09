@@ -17,7 +17,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::cstr::byte_at;
@@ -33,7 +32,7 @@ use core::ffi::c_int;
 /// Only the `inline:char`/`inline:word` modes cache anything; the simple rule
 /// is recomputed per line.
 pub fn diff_update_line(lnum: LineNr) {
-    if diff_flags.get() & ALL_INLINE_DIFF == 0 {
+    if DIFF_FLAGS.get() & ALL_INLINE_DIFF == 0 {
         return;
     }
     let tp = TabPage::current();
@@ -140,7 +139,7 @@ impl DiffLine {
 /// them, which need not be the same distance on each side ("nn^" against
 /// "n^").
 fn common_prefix(org: &[u8], new: &[u8]) -> (usize, usize) {
-    let flags = diff_flags.get();
+    let flags = DIFF_FLAGS.get();
     let (mut si_org, mut si_new) = (0usize, 0usize);
     while si_org < org.len() {
         let w_org = ascii_iswhite(c_int::from(byte_at(org, si_org)));
@@ -170,7 +169,7 @@ fn common_prefix(org: &[u8], new: &[u8]) -> (usize, usize) {
 /// upstream's `ei_org`, an *inclusive* end which [`diff_find_change`] then
 /// turns into an exclusive one.
 fn common_suffix(org: &[u8], new: &[u8], start: c_int, si_new: c_int) -> c_int {
-    let flags = diff_flags.get();
+    let flags = DIFF_FLAGS.get();
     let (mut ei_org, mut ei_new) = (len_as_int(org.len()), len_as_int(new.len()));
     while ei_org >= start && ei_new >= si_new && ei_org >= 0 && ei_new >= 0 {
         let w_org = ascii_iswhite(c_int::from(byte_at(org, as_index(ei_org))));
@@ -222,7 +221,7 @@ fn diff_find_change_simple(
     // A copy: the loop below reads every other buffer of the diff, and it
     // is this window's own on the turn that skips it.
     let line_org =
-        (diff_flags.get() & DIFF_INLINE_NONE == 0).then(|| window.buffer().lines().line_copy(lnum));
+        (DIFF_FLAGS.get() & DIFF_INLINE_NONE == 0).then(|| window.buffer().lines().line_copy(lnum));
     let off = lnum - dp.df_lnum[as_index(idx)];
     let mut added = true;
     for (i, slot) in slots.iter().enumerate() {
@@ -281,7 +280,7 @@ pub(crate) fn diff_find_change(window: Win, lnum: LineNr, diffline: &mut DiffLin
         diffline.bufidx = idx;
         diffline.lineoff = off;
 
-        if diff_flags.get() & ALL_INLINE_DIFF == 0 {
+        if DIFF_FLAGS.get() & ALL_INLINE_DIFF == 0 {
             let mut change_start = MAXCOL;
             let mut change_end = -1;
             let start = &mut change_start;
@@ -343,29 +342,29 @@ pub(crate) fn diff_find_change(window: Win, lnum: LineNr, diffline: &mut DiffLin
 /// one line has one range.  With `inline:char`/`inline:word` a line can carry
 /// several, so the cache is bypassed and `diffline` is walked per column.
 pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    static prev_lnum: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
-    static changedtick: GlobalCell<VarNumber> = GlobalCell::new(0);
-    static fnum: GlobalCell<c_int> = GlobalCell::new(0);
-    static prev_diff_flags: GlobalCell<c_int> = GlobalCell::new(0);
-    static change_start: GlobalCell<c_int> = GlobalCell::new(0);
-    static change_end: GlobalCell<c_int> = GlobalCell::new(0);
-    static hlID: GlobalCell<Hlf> = GlobalCell::new(HLF_NONE);
+    static PREV_LNUM: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
+    static CHANGEDTICK: GlobalCell<VarNumber> = GlobalCell::new(0);
+    static FNUM: GlobalCell<c_int> = GlobalCell::new(0);
+    static PREV_DIFF_FLAGS: GlobalCell<c_int> = GlobalCell::new(0);
+    static CHANGE_START: GlobalCell<c_int> = GlobalCell::new(0);
+    static CHANGE_END: GlobalCell<c_int> = GlobalCell::new(0);
+    static HL_ID: GlobalCell<Hlf> = GlobalCell::new(HLF_NONE);
 
     let mut diffline = DiffLine::default();
-    let cache_results = diff_flags.get() & ALL_INLINE_DIFF == 0;
+    let cache_results = DIFF_FLAGS.get() & ALL_INLINE_DIFF == 0;
     let lnum = tv_get_lnum(&args[0]).max(LineNr::ZERO);
 
     let stale = !cache_results
-        || lnum != prev_lnum.get()
-        || changedtick.get() != buf_get_changedtick(Buf::current())
-        || fnum.get() != Buf::current().handle.get()
-        || diff_flags.get() != prev_diff_flags.get();
+        || lnum != PREV_LNUM.get()
+        || CHANGEDTICK.get() != buf_get_changedtick(Buf::current())
+        || FNUM.get() != Buf::current().handle.get()
+        || DIFF_FLAGS.get() != PREV_DIFF_FLAGS.get();
     if stale {
         let (_, linestatus) = diff_check_with_linestatus(Win::current(), lnum);
-        hlID.set(match linestatus {
+        HL_ID.set(match linestatus {
             LINE_CHANGED => {
-                change_start.set(MAXCOL);
-                change_end.set(-1);
+                CHANGE_START.set(MAXCOL);
+                CHANGE_END.set(-1);
                 let added = diff_find_change(Win::current(), lnum, &mut diffline);
                 if added {
                     HLF_ADD
@@ -375,8 +374,8 @@ pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                     if let DiffLineChanges::Simple { start, end } = diffline.changes
                         && cache_results
                     {
-                        change_start.set(start.get());
-                        change_end.set(end.get());
+                        CHANGE_START.set(start.get());
+                        CHANGE_END.set(end.get());
                     }
                     HLF_CHD
                 }
@@ -386,27 +385,27 @@ pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             _ => HLF_NONE,
         });
         if cache_results {
-            prev_lnum.set(lnum);
-            changedtick.set(buf_get_changedtick(Buf::current()));
-            fnum.set(Buf::current().handle.get());
-            prev_diff_flags.set(diff_flags.get());
+            PREV_LNUM.set(lnum);
+            CHANGEDTICK.set(buf_get_changedtick(Buf::current()));
+            FNUM.set(Buf::current().handle.get());
+            PREV_DIFF_FLAGS.set(DIFF_FLAGS.get());
         }
     }
 
-    if hlID.get() == HLF_CHD || hlID.get() == HLF_TXD {
+    if HL_ID.get() == HLF_CHD || HL_ID.get() == HLF_TXD {
         let col = number_as_int(tv_get_number(&args[1])) - 1;
         if cache_results {
-            hlID.set(if col >= change_start.get() && col < change_end.get() {
+            HL_ID.set(if col >= CHANGE_START.get() && col < CHANGE_END.get() {
                 HLF_TXD
             } else {
                 HLF_CHD
             });
         } else {
-            hlID.set(HLF_CHD);
+            HL_ID.set(HLF_CHD);
             for i in 0..diffline.num_changes() {
                 let (start, end, added) = diffline.change(i);
                 if col >= start && col < end {
-                    hlID.set(if added { HLF_TXA } else { HLF_TXD });
+                    HL_ID.set(if added { HLF_TXA } else { HLF_TXD });
                     break;
                 }
                 // The ranges are in column order, so a column left of
@@ -417,6 +416,6 @@ pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
         }
     }
-    let id = VarNumber::from(hlID.get());
+    let id = VarNumber::from(HL_ID.get());
     result.write_number(id);
 }

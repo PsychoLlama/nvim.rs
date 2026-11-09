@@ -57,7 +57,7 @@ pub(crate) fn syntax_clear(mut block: SynBlockRef) {
     invalidate_current_state();
 
     // Reset the counter for ":syntax include".
-    running_syn_inc_tag.set(0);
+    RUNNING_SYN_INC_TAG.set(0);
 }
 
 impl SynBlock {

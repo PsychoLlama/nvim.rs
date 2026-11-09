@@ -8,7 +8,7 @@
 //! here, the same readers over the bytes of a C string -- which is where
 //! every sequence below is aimed.
 //!
-//! `vim_iswordc` reads `curbuf` and the cluster walk reads `'arabicshape'`,
+//! `vim_iswordc` reads `CURBUF` and the cluster walk reads `'arabicshape'`,
 //! so every case here holds the editor lock.
 
 #![cfg(not(miri))]
@@ -474,7 +474,7 @@ fn every_byte_points_back_at_the_start_of_its_grapheme_cluster() {
 
     // `'arabicshape'` joins lam-alef into one cluster; with it off they stay
     // two. This is the only fixture whose clustering an option decides, and
-    // the only reason this file needs the editor lock for more than `curbuf`.
+    // the only reason this file needs the editor lock for more than `CURBUF`.
     let saved = P_ARSHAPE.get();
     P_ARSHAPE.set(true);
     check(

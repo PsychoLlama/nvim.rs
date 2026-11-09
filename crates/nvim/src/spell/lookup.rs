@@ -65,8 +65,8 @@ use super::chartab::{
     spell_iswordp_nmw, step, tail,
 };
 use super::{
-    FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPCOMPOUND, FIND_KEEPWORD, FIND_PREFIX, MAXWLEN, MatchInf,
-    SP_BAD, SP_BANNED, SP_LOCAL, SP_OK, SP_RARE, WordEnd, c_text, count_syllables, e_format,
+    E_FORMAT, FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPCOMPOUND, FIND_KEEPWORD, FIND_PREFIX, MAXWLEN,
+    MatchInf, SP_BAD, SP_BANNED, SP_LOCAL, SP_OK, SP_RARE, WordEnd, c_text, count_syllables,
     spell_valid_case, strn_eq,
 };
 
@@ -171,7 +171,7 @@ pub(super) fn find_word(mip: &mut MatchInf<'_>, mode: c_int) {
         if children.first() == Some(&0) {
             if mip.ends.len() - base == MAXWLEN {
                 // Only a corrupted spell file can nest this deep.
-                emsg(gettext(e_format));
+                emsg(gettext(E_FORMAT));
                 mip.ends.truncate(base);
                 return;
             }

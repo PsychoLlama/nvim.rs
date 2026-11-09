@@ -20,7 +20,7 @@ use core::ffi::c_int;
 use super::{Parsed, cursor};
 use crate::mbyte::{char_at, char_len, utf_char2len};
 use crate::regexp::{
-    CompileError, RF_HASNL, getchr, magic, peekchr, reg_prev_sub, seen_endbrace, unmagic,
+    CompileError, REG_PREV_SUB, RF_HASNL, getchr, magic, peekchr, seen_endbrace, unmagic,
 };
 
 /// The `\x` class shorthands, in the order upstream's two parallel tables
@@ -114,7 +114,7 @@ pub(crate) fn back_reference(rc: &mut RegCompiler, c: c_int) -> Parsed {
 /// characters wrapped in a group so that a repeat after it applies to the
 /// whole run.
 pub(crate) fn previous_substitute(rc: &mut RegCompiler) -> Parsed {
-    let Some(sub) = reg_prev_sub.with(Clone::clone) else {
+    let Some(sub) = REG_PREV_SUB.with(Clone::clone) else {
         return Err(CompileError::NoPreviousSubstitute);
     };
     let mut rest: &[u8] = &sub;

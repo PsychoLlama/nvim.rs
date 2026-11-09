@@ -17,7 +17,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::winlayer::Buf;
 use crate::winlayer::BufId;
@@ -30,13 +29,13 @@ use crate::winlayer::Win;
 /// order, so the next call almost always wants the same chunk or the next
 /// one, and the search from chunk zero can be skipped.
 ///
-/// Setting `ml_upd_lastbuf` to `None` invalidates the lot. An id, not an
+/// Setting `ML_UPD_LASTBUF` to `None` invalidates the lot. An id, not an
 /// address: a buffer allocated where a wiped one was must not inherit its
 /// cached position.
-static ml_upd_lastbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
-static ml_upd_lastline: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
-static ml_upd_lastcurline: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
-static ml_upd_lastcurix: GlobalCell<usize> = GlobalCell::new(0);
+static ML_UPD_LASTBUF: GlobalCell<Option<BufId>> = GlobalCell::new(None);
+static ML_UPD_LASTLINE: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
+static ML_UPD_LASTCURLINE: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
+static ML_UPD_LASTCURIX: GlobalCell<usize> = GlobalCell::new(0);
 
 impl Buf {
     /// Keep the chunk table up to date for a line that was added, removed or
@@ -50,8 +49,8 @@ impl Buf {
         // SAFETY: the caller's buffer, reached through a handle that
         // borrows it for the one access that asked and no longer.
         let mut b = self;
-        let mut curline = ml_upd_lastcurline.get();
-        let mut curix = ml_upd_lastcurix.get();
+        let mut curline = ML_UPD_LASTCURLINE.get();
+        let mut curix = ML_UPD_LASTCURIX.get();
 
         if b.b_ml.ml_chunks.is_off() || len_arg == 0 {
             return;
@@ -71,8 +70,8 @@ impl Buf {
         // of it.
         let key = self.try_id();
         if key.is_none()
-            || ml_upd_lastbuf.get() != key
-            || line != ml_upd_lastline.get() + 1
+            || ML_UPD_LASTBUF.get() != key
+            || line != ML_UPD_LASTLINE.get() + 1
             || updtype != ML_CHNK_ADDLINE
         {
             curline = LineNr::ONE;
@@ -103,15 +102,15 @@ impl Buf {
                 return;
             }
         } else if updtype == ML_CHNK_DELLINE {
-            ml_upd_lastbuf.set(None); // force a recalc
+            ML_UPD_LASTBUF.set(None); // force a recalc
             b.b_ml.ml_chunks.delete_line(curix, MLCS_MINL);
             return;
         }
 
-        ml_upd_lastbuf.set(key);
-        ml_upd_lastline.set(line);
-        ml_upd_lastcurline.set(curline);
-        ml_upd_lastcurix.set(curix);
+        ML_UPD_LASTBUF.set(key);
+        ML_UPD_LASTLINE.set(line);
+        ML_UPD_LASTCURLINE.set(curline);
+        ML_UPD_LASTCURIX.set(curix);
     }
 }
 
@@ -207,7 +206,7 @@ fn ml_chunk_split(mut b: Buf, curix: usize, curline_arg: LineNr) -> bool {
     b.b_ml.ml_chunks.add_lines(curix + 1, -linecnt);
     b.b_ml.ml_chunks.add_size(curix + 1, -size);
     b.b_ml.ml_chunks.set(curix, linecnt, size);
-    ml_upd_lastbuf.set(None); // force a recalc
+    ML_UPD_LASTBUF.set(None); // force a recalc
     false
 }
 

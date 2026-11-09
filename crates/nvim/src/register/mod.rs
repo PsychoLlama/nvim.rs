@@ -30,7 +30,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::ascii::CAR;
 use crate::ascii::ESC;
@@ -51,7 +50,7 @@ use crate::edit::{beginline, get_last_insert, get_last_insert_save, oneright, st
 use crate::eval::typval::{list_set_lock, tv_list_alloc};
 use crate::eval::{eval_to_string, get_v_event, restore_v_event};
 use crate::ex_cmds2::check_fname;
-use crate::ex_docmd::state::{last_cmdline, new_last_cmdline};
+use crate::ex_docmd::state::{LAST_CMDLINE, NEW_LAST_CMDLINE};
 use crate::ex_getln::cmdline_paste_str;
 use crate::extmark::BCount;
 use crate::extmark::{extmark_splice, extmark_splice_cols};
@@ -165,7 +164,7 @@ static Y_REGS: GlobalCell<[YankReg; NUM_REGISTERS]> =
     GlobalCell::new([YankReg::EMPTY; NUM_REGISTERS]);
 /// The slot of `Y_REGS` that `""` reads: the last register written.
 static Y_PREVIOUS: GlobalCell<Option<usize>> = GlobalCell::new(None);
-static e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines:
+static E_SEARCH_PATTERN_AND_EXPRESSION_REGISTER_MAY_NOT_CONTAIN_TWO_OR_MORE_LINES:
     &::core::ffi::CStr =
     c"E883: Search pattern and expression register may not contain two or more lines";
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;

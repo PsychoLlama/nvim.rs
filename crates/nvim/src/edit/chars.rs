@@ -188,8 +188,8 @@ fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_i
                 && STATE.get() & VREPLACE_FLAG == 0
                 && cursor_byte() != 0)
             && (Win::current().w_cursor.lnum != INSSTART.get().lnum
-                || ((!fo_ins_long || Insstart_textlen.get() <= ColNr::new(textwidth))
-                    && (!fo_ins_blank || Insstart_blank_vcol.get() <= ColNr::new(textwidth)))));
+                || ((!fo_ins_long || INSSTART_TEXTLEN.get() <= ColNr::new(textwidth))
+                    && (!fo_ins_blank || INSSTART_BLANK_VCOL.get() <= ColNr::new(textwidth)))));
     if !wanted {
         return;
     }
@@ -207,7 +207,7 @@ fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_i
         do_internal = fex_format(Win::current().w_cursor.lnum, 1, c.code()) != 0;
         // Saving for undo may be needed again, e.g. when the expression
         // called setline().
-        ins_need_undo.set(true);
+        INS_NEED_UNDO.set(true);
     }
     if do_internal {
         internal_format(textwidth, second_indent, flags, c.is_nul(), c.code());

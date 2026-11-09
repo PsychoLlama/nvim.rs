@@ -573,7 +573,7 @@ pub fn handle_nvim_buf_set_lines(channel_id: uint64_t, args: Array) -> Result<Ob
     let Some(arg_5) = as_array(args[4].take()) else {
         return Err(wrong_type(5, c"nvim_buf_set_lines", c"ArrayOf(String)"));
     };
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     nvim_buf_set_lines(channel_id, arg_1, arg_2, arg_3, arg_4, arg_5)?;
@@ -679,7 +679,7 @@ pub fn handle_nvim_buf_set_text(channel_id: uint64_t, args: Array) -> Result<Obj
     let Some(arg_6) = as_array(args[5].take()) else {
         return Err(wrong_type(6, c"nvim_buf_set_text", c"ArrayOf(String)"));
     };
-    if textlock.get() != 0 || expr_map_locked() {
+    if TEXTLOCK.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
     nvim_buf_set_text(channel_id, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6)?;

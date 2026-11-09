@@ -179,7 +179,7 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
 
     // Undo replays the header's extmark moves backwards; redo replays them in
     // the order they were recorded. The list is taken out for the replay,
-    // which records nothing (`kExtmarkNoUndo`), and put back after it.
+    // which records nothing (`EXTMARK_NO_UNDO`), and put back after it.
     let marks = buf
         .header_mut(link)
         .map(|uh| core::mem::take(&mut uh.extmarks))
@@ -315,7 +315,7 @@ fn apply_entry(
 
     if oldsize != newsize {
         let delta = newsize - oldsize;
-        mark_adjust(top + 1, top + oldsize, MAXLNUM.get(), delta, kExtmarkNOOP);
+        mark_adjust(top + 1, top + oldsize, MAXLNUM.get(), delta, EXTMARK_NOOP);
         if buffer.b_op_start.lnum > top + oldsize {
             buffer.b_op_start.lnum += delta;
         }
@@ -346,8 +346,8 @@ fn apply_entry(
     } else if top + newsize > buffer.b_op_end.lnum {
         buffer.b_op_end.lnum = top + newsize;
     }
-    u_newcount.set(u_newcount.get() + newsize);
-    u_oldcount.set(u_oldcount.get() + oldsize);
+    U_NEWCOUNT.set(U_NEWCOUNT.get() + newsize);
+    U_OLDCOUNT.set(U_OLDCOUNT.get() + oldsize);
 
     // The entry now describes the lines it displaced, ready to put them back.
     entry.lines = taken;

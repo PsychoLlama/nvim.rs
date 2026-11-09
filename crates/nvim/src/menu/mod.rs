@@ -32,7 +32,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::autocmd::defs::AutoEvent;
 use crate::memory::XString;
@@ -153,7 +152,7 @@ impl MenuError {
     }
 }
 
-pub(crate) static sys_menu: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static SYS_MENU: GlobalCell<bool> = GlobalCell::new(false);
 
 /// How deep a menu path may go, and so how many priority components
 /// `:menu 10.20.30 …` can carry.

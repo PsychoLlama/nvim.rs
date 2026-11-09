@@ -41,7 +41,7 @@ use crate::drawscreen::{
     redraw_buf_range_later, redraw_later, setcursor_mayforce, update_screen, win_update_cursorline,
 };
 use crate::eval::vars::{globvar_dict, set_vim_var_nr, vimvar_dict};
-use crate::ex_docmd::state::ex_normal_busy;
+use crate::ex_docmd::state::EX_NORMAL_BUSY;
 use crate::ex_docmd::{change_dir, exec_normal};
 use crate::ex_eval::aborting;
 use crate::ex_getln::state::CMDPREVIEW;
@@ -66,8 +66,8 @@ use crate::highlight_group::{
 };
 use crate::insexpand::get_cot_flags;
 use crate::keycodes::{name_to_mod_mask, replace_termcodes};
+use crate::log::G_STATS;
 use crate::log::LOGLVL_DBG;
-use crate::log::g_stats;
 use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::{nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe};
 use crate::lua::state::TSLUA_QUERY_PARSE_COUNT;
@@ -75,7 +75,7 @@ use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::mark_get_global;
 use crate::mbyte::{c_cluster_len, c_cluster_schar, c_string_cells};
 use crate::memline::ml_open;
-use crate::memory::arena_alloc_count;
+use crate::memory::ARENA_ALLOC_COUNT;
 use crate::message::MessageData;
 use crate::message::state::{
     DID_EMSG, LINES_LEFT, MSG_DIDANY, MSG_NO_MORE, MSG_SCROLL, NEED_WAIT_RETURN,
@@ -123,7 +123,7 @@ use crate::types::{
 use crate::ui::state::COLUMNS;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};
-use crate::winlayer::graph::cmdwin_buf;
+use crate::winlayer::graph::CMDWIN_BUF;
 
 // The carve of the transpiled module; see each child's docs.
 mod client;

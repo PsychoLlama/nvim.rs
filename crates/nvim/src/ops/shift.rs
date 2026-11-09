@@ -24,7 +24,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_UNDO;
 use crate::indent::INDENT_SET;
 use crate::indent::SIN_CHANGED;
 use crate::memory::XString;
@@ -345,7 +345,7 @@ fn shift_block(op: &OpArg, amount: c_int) {
         ColNr::new(at),
         ColNr::new(old),
         ColNr::new(new),
-        kExtmarkUndo,
+        EXTMARK_UNDO,
     );
 
     STATE.set(old_state);

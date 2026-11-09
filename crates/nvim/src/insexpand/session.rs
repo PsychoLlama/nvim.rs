@@ -36,7 +36,7 @@ use crate::winlayer::{Buf, Win};
 /// — the completion's anchor moved to `col` on the cursor's line.
 fn set_compl_startpos_here(col: ColNr) {
     let lnum = Win::current().w_cursor.lnum;
-    compl_startpos.set(compl_startpos.get().with_lnum(lnum).with_col(col));
+    COMPL_STARTPOS.set(COMPL_STARTPOS.get().with_lnum(lnum).with_col(col));
 }
 
 /// The pattern, column and length for normal (CTRL-N / CTRL-P) completion.
@@ -71,25 +71,25 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
     // `strlen` measured it.
     let build_pattern = |prefix: &[u8], len: c_int| {
         let mut pattern = prefix.to_vec();
-        quote_meta(&mut pattern, from(compl_col.get().get()), len);
+        quote_meta(&mut pattern, from(COMPL_COL.get().get()), len);
         pattern.truncate(cstr::until_nul(&pattern).len());
         pattern
     };
 
-    if compl_cont_status.get() & CONT_SOL != 0 || ctrl_x_mode_path_defines() {
+    if COMPL_CONT_STATUS.get() & CONT_SOL != 0 || ctrl_x_mode_path_defines() {
         if !compl_status_adding() {
             while {
                 startcol -= 1;
                 startcol >= 0 && vim_is_ident_char(c_int::from(byte_at(line, at(startcol))))
             } {}
             startcol += 1;
-            compl_col.set(compl_col.get() + startcol);
-            compl_length.set((curs_col - startcol).get());
+            COMPL_COL.set(COMPL_COL.get() + startcol);
+            COMPL_LENGTH.set((curs_col - startcol).get());
         }
         compl_pattern().set(compl_pattern_from_line());
     } else if compl_status_adding() {
         // We need up to 2 extra chars for the prefix.
-        let word_start = compl_col.get();
+        let word_start = COMPL_COL.get();
         let prefix: &[u8] = if !is_word(word_start.as_usize())
             || (word_start > ColNr::ZERO && is_word(prev(word_start.get())))
         {
@@ -97,7 +97,7 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
         } else {
             b"\\<"
         };
-        let pattern = build_pattern(prefix, compl_length.get());
+        let pattern = build_pattern(prefix, COMPL_LENGTH.get());
         compl_pattern().set_string(XString::from_vec(pattern));
     } else {
         // Upstream decrements in the `else if` test itself, so only these
@@ -106,9 +106,9 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
         if startcol < 0 || !is_word(prev(startcol + 1)) {
             // Match any word of at least two chars.
             compl_pattern().set(ApiString::from_bytes(b"\\<\\k\\k"));
-            compl_col.set(compl_col.get() + curs_col.get());
-            compl_length.set(0);
-            compl_from_nonkeyword.set(true);
+            COMPL_COL.set(COMPL_COL.get() + curs_col.get());
+            COMPL_LENGTH.set(0);
+            COMPL_FROM_NONKEYWORD.set(true);
         } else {
             // Search backwards for the point where the character class
             // changes, or for a single-byte character that is not a word
@@ -127,15 +127,15 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
                 startcol -= head_off;
             }
             startcol += 1;
-            compl_col.set(compl_col.get() + startcol);
-            compl_length.set((curs_col - startcol).get());
-            let mut pattern = if compl_length.get() == 1 {
+            COMPL_COL.set(COMPL_COL.get() + startcol);
+            COMPL_LENGTH.set((curs_col - startcol).get());
+            let mut pattern = if COMPL_LENGTH.get() == 1 {
                 // Only match a word with at least two chars -- webb.
                 build_pattern(b"\\<", 1)
             } else {
-                build_pattern(b"\\<", compl_length.get())
+                build_pattern(b"\\<", COMPL_LENGTH.get())
             };
-            if compl_length.get() == 1 {
+            if COMPL_LENGTH.get() == 1 {
                 pattern.extend_from_slice(b"\\k");
             }
             compl_pattern().set_string(XString::from_vec(pattern));
@@ -144,7 +144,7 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
 
     // Call the functions in 'complete' with 'findstart=1'; ^N completion,
     // not complete() or ^X^N.
-    if ctrl_x_mode_normal() && compl_cont_status.get() & CONT_LOCAL == 0 {
+    if ctrl_x_mode_normal() && COMPL_CONT_STATUS.get() & CONT_LOCAL == 0 {
         setup_cpt_sources();
         prepare_cpt_compl_funcs();
     }
@@ -156,11 +156,11 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
 pub(crate) fn get_wholeline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
     let mut lines = Lines::current();
     let line = lines.line(Win::current().w_cursor.lnum);
-    compl_col.set(ColNr::try_from(skip::white(line)).unwrap_or(ColNr::ZERO));
-    compl_length.set(curs_col - compl_col.get());
-    if compl_length.get() < 0 {
+    COMPL_COL.set(ColNr::try_from(skip::white(line)).unwrap_or(ColNr::ZERO));
+    COMPL_LENGTH.set(curs_col - COMPL_COL.get());
+    if COMPL_LENGTH.get() < 0 {
         // Cursor in indent: empty pattern.
-        compl_length.set(0);
+        COMPL_LENGTH.set(0);
     }
     compl_pattern().set(compl_pattern_from_line());
     Ok(())
@@ -188,10 +188,10 @@ pub(crate) fn get_filename_compl_info(mut startcol: c_int, curs_col: ColNr) -> R
         };
     }
 
-    compl_col.set(compl_col.get() + startcol);
-    compl_length.set((curs_col - startcol).get());
-    let start = compl_col.get().as_usize().min(line.len());
-    let end = (start + usize::try_from(compl_length.get()).unwrap_or(0)).min(line.len());
+    COMPL_COL.set(COMPL_COL.get() + startcol);
+    COMPL_LENGTH.set((curs_col - startcol).get());
+    let start = COMPL_COL.get().as_usize().min(line.len());
+    let end = (start + usize::try_from(COMPL_LENGTH.get()).unwrap_or(0)).min(line.len());
     let typed = &line[start..end];
     compl_pattern().set(ApiString::from_bytes(&addstar(typed, ExpandContext::Files)));
     Ok(())
@@ -201,7 +201,7 @@ pub(crate) fn get_filename_compl_info(mut startcol: c_int, curs_col: ColNr) -> R
 pub(crate) fn get_cmdline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
     // The expansion context is kept for `get_next_cmdline_completion`, and
     // moved out for the length of this call: `nlua_expand_pat` runs Lua.
-    let mut xp = compl_xp.take().unwrap_or_default();
+    let mut xp = COMPL_XP.take().unwrap_or_default();
     let pattern = {
         let mut lines = Lines::current();
         let line = lines.line(Win::current().w_cursor.lnum);
@@ -217,14 +217,14 @@ pub(crate) fn get_cmdline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
     if xp.context == ExpandContext::Unsuccessful || xp.context == ExpandContext::Nothing {
         // No completion possible: use an empty pattern to get a
         // "pattern not found" message.
-        compl_col.set(curs_col);
+        COMPL_COL.set(curs_col);
     } else {
         // The pattern is an offset into the context's copy of
         // `compl_pattern`, which is the same offset into it.
-        compl_col.set(ColNr::from_index(xp.pattern));
+        COMPL_COL.set(ColNr::from_index(xp.pattern));
     }
-    compl_length.set(curs_col - compl_col.get());
-    compl_xp.set(Some(xp));
+    COMPL_LENGTH.set(curs_col - COMPL_COL.get());
+    COMPL_XP.set(Some(xp));
     Ok(())
 }
 
@@ -232,7 +232,7 @@ pub(crate) fn get_cmdline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
 pub(crate) fn set_compl_globals(mut startcol: ColNr, curs_col: ColNr, is_cpt_compl: bool) {
     if is_cpt_compl {
         cpt_compl_pattern().clear();
-        if startcol < compl_col.get() {
+        if startcol < COMPL_COL.get() {
             prepend_startcol_text(cpt_compl_pattern(), compl_orig_text(), startcol);
         } else {
             cpt_compl_pattern().set(compl_orig_text().to_owned());
@@ -241,8 +241,8 @@ pub(crate) fn set_compl_globals(mut startcol: ColNr, curs_col: ColNr, is_cpt_com
         if startcol < ColNr::ZERO || startcol > curs_col {
             startcol = curs_col;
         }
-        compl_col.set(startcol);
-        compl_length.set(curs_col - startcol);
+        COMPL_COL.set(startcol);
+        COMPL_LENGTH.set(curs_col - startcol);
         // The line is read afresh inside: the user function that got here may
         // have changed it.
         compl_pattern().set(compl_text_from_line());
@@ -268,7 +268,7 @@ pub(crate) fn get_userdefined_compl_info(
     let cb = match cb {
         Some(cb) => cb,
         None => {
-            if get_complete_funcname(ctrl_x_mode.get()).is_empty() {
+            if get_complete_funcname(CTRL_X_MODE.get()).is_empty() {
                 let arg0 = if ctrl_x_mode_function() {
                     "completefunc"
                 } else {
@@ -278,7 +278,7 @@ pub(crate) fn get_userdefined_compl_info(
                 return Err(Declined::Cancel);
             }
             // A second reference: the function may reset the option.
-            held = get_insert_callback(ctrl_x_mode.get());
+            held = get_insert_callback(CTRL_X_MODE.get());
             &*held
         }
     };
@@ -316,7 +316,7 @@ pub(crate) fn get_userdefined_compl_info(
         if is_cpt_function {
             return Err(Declined::Leave);
         }
-        ctrl_x_mode.set(CTRL_X_NORMAL);
+        CTRL_X_MODE.set(CTRL_X_NORMAL);
         EDIT_SUBMODE.set(None);
         if !shortmess(ShmFlag::COMPLETIONMENU) {
             msg_clr_cmdline();
@@ -325,7 +325,7 @@ pub(crate) fn get_userdefined_compl_info(
     }
 
     // Reset the extended parameters of completion when starting a new one.
-    compl_opt_refresh_always.set(false);
+    COMPL_OPT_REFRESH_ALWAYS.set(false);
 
     if !is_cpt_function {
         set_compl_globals(col, curs_col, false);
@@ -346,17 +346,17 @@ pub(crate) enum Declined {
 
 /// The pattern, column and length for spell completion; reads `spell_bad_len`.
 pub(crate) fn get_spell_compl_info(startcol: c_int, curs_col: ColNr) -> Result<(), Failed> {
-    if spell_bad_len.get() > 0 {
-        compl_col.set(curs_col - len_as_int(spell_bad_len.get()));
+    if SPELL_BAD_LEN.get() > 0 {
+        COMPL_COL.set(curs_col - len_as_int(SPELL_BAD_LEN.get()));
     } else {
-        compl_col.set(ColNr::new(spell_word_start(startcol)));
+        COMPL_COL.set(ColNr::new(spell_word_start(startcol)));
     }
-    if compl_col.get() >= ColNr::new(startcol) {
-        compl_length.set(0);
-        compl_col.set(curs_col);
+    if COMPL_COL.get() >= ColNr::new(startcol) {
+        COMPL_LENGTH.set(0);
+        COMPL_COL.set(curs_col);
     } else {
-        spell_expand_check_cap(compl_col.get());
-        compl_length.set(curs_col - compl_col.get());
+        spell_expand_check_cap(COMPL_COL.get());
+        COMPL_LENGTH.set(curs_col - COMPL_COL.get());
     }
     // The line is read afresh inside: `spell_expand_check_cap` above may
     // have moved it.
@@ -374,19 +374,19 @@ pub(crate) fn get_spell_compl_info(startcol: c_int, curs_col: ColNr) -> Result<(
 pub(crate) fn compl_get_info(startcol: c_int, curs_col: ColNr) -> Result<(), Failed> {
     if ctrl_x_mode_normal()
         || ctrl_x_mode_register()
-        || (ctrl_x_mode.get() & CTRL_X_WANT_IDENT != 0
-            && !thesaurus_func_complete(ctrl_x_mode.get()))
+        || (CTRL_X_MODE.get() & CTRL_X_WANT_IDENT != 0
+            && !thesaurus_func_complete(CTRL_X_MODE.get()))
     {
         get_normal_compl_info(startcol, curs_col)
     } else if ctrl_x_mode_line_or_eval() {
         get_wholeline_compl_info(curs_col)
     } else if ctrl_x_mode_files() {
         get_filename_compl_info(startcol, curs_col)
-    } else if ctrl_x_mode.get() == CTRL_X_CMDLINE {
+    } else if CTRL_X_MODE.get() == CTRL_X_CMDLINE {
         get_cmdline_compl_info(curs_col)
     } else if ctrl_x_mode_function()
         || ctrl_x_mode_omni()
-        || thesaurus_func_complete(ctrl_x_mode.get())
+        || thesaurus_func_complete(CTRL_X_MODE.get())
     {
         // No 'complete' function asked for this, and the column is not
         // wanted.
@@ -412,50 +412,50 @@ pub(crate) fn compl_get_info(startcol: c_int, curs_col: ColNr) -> Result<(), Fai
 ///
 pub(crate) fn ins_compl_continue_search() {
     // It is a continued search.
-    compl_cont_status.set(compl_cont_status.get() & !CONT_INTRPT); // remove INTRPT
+    COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() & !CONT_INTRPT); // remove INTRPT
     if ctrl_x_mode_normal() || ctrl_x_mode_path_patterns() || ctrl_x_mode_path_defines() {
-        if compl_startpos.get().lnum != Win::current().w_cursor.lnum {
+        if COMPL_STARTPOS.get().lnum != Win::current().w_cursor.lnum {
             // The line (probably) wrapped: set compl_startpos to the first
             // non-blank in the line. If that is not a word character we
             // include it to get a better pattern, but then we don't want
             // the "\\<" prefix — checked below.
             let mut lines = Lines::current();
             let line = lines.line(Win::current().w_cursor.lnum);
-            compl_col.set(ColNr::try_from(skip::white(line)).unwrap_or(ColNr::ZERO));
-            set_compl_startpos_here(compl_col.get());
-            compl_cont_status.set(compl_cont_status.get() & !CONT_SOL); // clear SOL if present
+            COMPL_COL.set(ColNr::try_from(skip::white(line)).unwrap_or(ColNr::ZERO));
+            set_compl_startpos_here(COMPL_COL.get());
+            COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() & !CONT_SOL); // clear SOL if present
         } else {
             // S_IPOS was set when we inserted a word that was at the
             // beginning of the line, which means that we'll go to SOL
             // mode, but first we need to redefine compl_startpos.
-            if compl_cont_status.get() & CONT_S_IPOS != 0 {
-                compl_cont_status.set(compl_cont_status.get() | CONT_SOL);
-                let skip = usize::try_from((compl_startpos.get().col + compl_length.get()).get())
+            if COMPL_CONT_STATUS.get() & CONT_S_IPOS != 0 {
+                COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() | CONT_SOL);
+                let skip = usize::try_from((COMPL_STARTPOS.get().col + COMPL_LENGTH.get()).get())
                     .unwrap_or(0);
                 let mut lines = Lines::current();
                 let line = lines.line(Win::current().w_cursor.lnum);
                 let from = skip.min(line.len());
                 let col = ColNr::try_from(from + skip::white(&line[from..])).unwrap_or(ColNr::ZERO);
-                compl_startpos.set(compl_startpos.get().with_col(col));
+                COMPL_STARTPOS.set(COMPL_STARTPOS.get().with_col(col));
             }
-            compl_col.set(compl_startpos.get().col);
+            COMPL_COL.set(COMPL_STARTPOS.get().col);
         }
-        compl_length.set(Win::current().w_cursor.col - compl_col.get());
+        COMPL_LENGTH.set(Win::current().w_cursor.col - COMPL_COL.get());
         // An `IOSIZE` buffer is used to add a "word from the next
         // line"; would we have enough space?  Just being paranoid.
-        if compl_length.get() > IOSIZE - MIN_SPACE {
-            compl_cont_status.set(compl_cont_status.get() & !CONT_SOL);
-            compl_length.set(IOSIZE - MIN_SPACE);
-            compl_col.set(Win::current().w_cursor.col - compl_length.get());
+        if COMPL_LENGTH.get() > IOSIZE - MIN_SPACE {
+            COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() & !CONT_SOL);
+            COMPL_LENGTH.set(IOSIZE - MIN_SPACE);
+            COMPL_COL.set(Win::current().w_cursor.col - COMPL_LENGTH.get());
         }
-        compl_cont_status.set(compl_cont_status.get() | CONT_ADDING | CONT_N_ADDS);
-        if compl_length.get() < 1 {
-            compl_cont_status.set(compl_cont_status.get() & CONT_LOCAL);
+        COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() | CONT_ADDING | CONT_N_ADDS);
+        if COMPL_LENGTH.get() < 1 {
+            COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() & CONT_LOCAL);
         }
     } else if ctrl_x_mode_line_or_eval() || ctrl_x_mode_register() {
-        compl_cont_status.set(CONT_ADDING | CONT_N_ADDS);
+        COMPL_CONT_STATUS.set(CONT_ADDING | CONT_N_ADDS);
     } else {
-        compl_cont_status.set(0);
+        COMPL_CONT_STATUS.set(0);
     }
 }
 
@@ -473,38 +473,38 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
     }
 
     let curs_col = Win::current().w_cursor.col;
-    compl_pending.set(0);
-    compl_lnum.set(Win::current().w_cursor.lnum);
+    COMPL_PENDING.set(0);
+    COMPL_LNUM.set(Win::current().w_cursor.lnum);
 
-    if compl_cont_status.get() & CONT_INTRPT == CONT_INTRPT
-        && compl_cont_mode.get() == ctrl_x_mode.get()
+    if COMPL_CONT_STATUS.get() & CONT_INTRPT == CONT_INTRPT
+        && COMPL_CONT_MODE.get() == CTRL_X_MODE.get()
     {
         // This same ctrl-x mode was interrupted previously: continue the
         // completion.
         ins_compl_continue_search();
     } else {
-        compl_cont_status.set(compl_cont_status.get() & CONT_LOCAL);
+        COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() & CONT_LOCAL);
     }
 
     let mut startcol = 0; // column where the searched text starts
     if !compl_status_adding() {
         // Normal expansion.
-        compl_cont_mode.set(ctrl_x_mode.get());
+        COMPL_CONT_MODE.set(CTRL_X_MODE.get());
         if ctrl_x_mode_not_default() {
             // Remove LOCAL if ctrl_x_mode != CTRL_X_NORMAL.
-            compl_cont_status.set(0);
+            COMPL_CONT_STATUS.set(0);
         }
-        compl_cont_status.set(compl_cont_status.get() | CONT_N_ADDS);
-        compl_startpos.set(Win::current().w_cursor);
+        COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() | CONT_N_ADDS);
+        COMPL_STARTPOS.set(Win::current().w_cursor);
         startcol = curs_col.get();
-        compl_col.set(ColNr::ZERO);
+        COMPL_COL.set(ColNr::ZERO);
     }
 
     // Work out the completion pattern and original text -- webb.
     if compl_get_info(startcol, curs_col).is_err() {
         if ctrl_x_mode_function()
             || ctrl_x_mode_omni()
-            || thesaurus_func_complete(ctrl_x_mode.get())
+            || thesaurus_func_complete(CTRL_X_MODE.get())
         {
             // Restore did_ai, so that adding a comment leader works.
             DID_AI.set(save_did_ai);
@@ -519,23 +519,23 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
         if ctrl_x_mode_line_or_eval() {
             // Insert a new line, keep indentation but ignore 'comments'.
             let old = Buf::current().b_p_com.replace(XString::new());
-            set_compl_startpos_here(compl_col.get());
+            set_compl_startpos_here(COMPL_COL.get());
             let _ = ins_eol(Key::CAR);
             Buf::current().b_p_com = old;
-            compl_length.set(0);
-            compl_col.set(Win::current().w_cursor.col);
-            compl_lnum.set(Win::current().w_cursor.lnum);
+            COMPL_LENGTH.set(0);
+            COMPL_COL.set(Win::current().w_cursor.col);
+            COMPL_LNUM.set(Win::current().w_cursor.lnum);
         }
     } else {
         EDIT_SUBMODE_PRE.set(None);
-        compl_startpos.set(compl_startpos.get().with_col(compl_col.get()));
+        COMPL_STARTPOS.set(COMPL_STARTPOS.get().with_col(COMPL_COL.get()));
     }
 
-    if !shortmess(ShmFlag::COMPLETIONMENU) && !compl_autocomplete.get() {
-        if compl_cont_status.get() & CONT_LOCAL != 0 {
+    if !shortmess(ShmFlag::COMPLETIONMENU) && !COMPL_AUTOCOMPLETE.get() {
+        if COMPL_CONT_STATUS.get() & CONT_LOCAL != 0 {
             EDIT_SUBMODE.set(ctrl_x_msg(CTRL_X_LOCAL_MSG));
         } else {
-            EDIT_SUBMODE.set(ctrl_x_msg(ctrl_x_mode.get()));
+            EDIT_SUBMODE.set(ctrl_x_msg(CTRL_X_MODE.get()));
         }
     }
 
@@ -563,7 +563,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
     // Upstream held the line here and warned that showmode() resets the
     // memline's pointers, so this had to come after the last use of it
     // (-- Acevedo). Nothing holds a line across it now.
-    if !shortmess(ShmFlag::COMPLETIONMENU) && !compl_autocomplete.get() {
+    if !shortmess(ShmFlag::COMPLETIONMENU) && !COMPL_AUTOCOMPLETE.get() {
         EDIT_SUBMODE_EXTRA.set(Some(XString::from_cstr(gettext(c"-- Searching..."))));
         EDIT_SUBMODE_HIGHL.set(HLF_COUNT);
         showmode();
@@ -581,14 +581,14 @@ pub fn ins_complete(c: Key, enable_pum: bool) -> Result<(), Failed> {
     // Milliseconds of `'autocompletelinger'` elapsed since collection began.
     let elapsed_ms = |start: uint64_t| os_hrtime().wrapping_sub(start) / 1_000_000;
 
-    let disable_ac_delay = compl_started.get()
+    let disable_ac_delay = COMPL_STARTED.get()
         && ctrl_x_mode_normal()
         && (c == Key::CTRL_N || c == Key::CTRL_P || c == Key::CTRL_R || ins_compl_pum_key(c));
 
-    compl_direction.set(ins_compl_key2dir(c));
+    COMPL_DIRECTION.set(ins_compl_key2dir(c));
     let insert_match = ins_compl_use_match(c);
 
-    if !compl_started.get() {
+    if !COMPL_STARTED.get() {
         ins_compl_start()?;
     } else if insert_match && stop_arrow().is_err() {
         return Err(Failed);
@@ -596,17 +596,17 @@ pub fn ins_complete(c: Key, enable_pum: bool) -> Result<(), Failed> {
 
     // Time when match collection starts.
     let mut compl_start_tv: uint64_t = 0;
-    if compl_autocomplete.get() && p_acl() > 0 && !disable_ac_delay {
+    if COMPL_AUTOCOMPLETE.get() && p_acl() > 0 && !disable_ac_delay {
         compl_start_tv = os_hrtime();
     }
     // The identities, taken while both are provably live: the completion
     // below runs user functions and Lua, and only the *identity* survives
     // that (see `compl_curr_win`).
-    compl_curr_win.set(Some(Win::current().id()));
-    compl_curr_buf.set(Win::current().buffer_or_none().map(Buf::id));
-    compl_shown_match.set(compl_curr_match.get());
-    compl_shows_dir.set(compl_direction.get());
-    compl_num_bests.set(0);
+    COMPL_CURR_WIN.set(Some(Win::current().id()));
+    COMPL_CURR_BUF.set(Win::current().buffer_or_none().map(Buf::id));
+    COMPL_SHOWN_MATCH.set(COMPL_CURR_MATCH.get());
+    COMPL_SHOWS_DIR.set(COMPL_DIRECTION.get());
+    COMPL_NUM_BESTS.set(0);
 
     // Find the next match (and the following matches).
     let save_w_wrow = Win::current().w_wrow;
@@ -614,20 +614,20 @@ pub fn ins_complete(c: Key, enable_pum: bool) -> Result<(), Failed> {
     let n = ins_compl_next(true, ins_compl_key2count(c), insert_match);
 
     // Reset the autocompletion timer expiry flag.
-    if compl_autocomplete.get() {
-        compl_time_slice_expired.set(false);
+    if COMPL_AUTOCOMPLETE.get() {
+        COMPL_TIME_SLICE_EXPIRED.set(false);
     }
 
     if let Some(n) = n.filter(|&n| n > 1) {
         // All matches have been found.
-        compl_matches.set(n);
+        COMPL_MATCHES.set(n);
     }
-    compl_curr_match.set(compl_shown_match.get());
-    compl_direction.set(compl_shows_dir.get());
+    COMPL_CURR_MATCH.set(COMPL_SHOWN_MATCH.get());
+    COMPL_DIRECTION.set(COMPL_SHOWS_DIR.get());
 
     // Eat the ESC that vgetc() returns after a CTRL-C, to avoid leaving
     // Insert mode.
-    if GOT_INT.get() && global_busy.get() == 0 {
+    if GOT_INT.get() && GLOBAL_BUSY.get() == 0 {
         vgetc();
         GOT_INT.set(false);
     }
@@ -642,29 +642,29 @@ pub fn ins_complete(c: Key, enable_pum: bool) -> Result<(), Failed> {
         // place; but if we used ^P, ^N, ^X^I or ^X^D we might want to
         // add-expand a single-char word (such as M in M'exico) if not
         // tried already. -- Acevedo
-        if compl_length.get() > 1
+        if COMPL_LENGTH.get() > 1
             || compl_status_adding()
             || (ctrl_x_mode_not_default()
                 && !ctrl_x_mode_path_patterns()
                 && !ctrl_x_mode_path_defines())
         {
-            compl_cont_status.set(compl_cont_status.get() & !CONT_N_ADDS);
+            COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() & !CONT_N_ADDS);
         }
     }
 
     let curr = curr_match().expect("a running completion has a current match");
     if curr.with(|m| m.flags) & CP_CONT_S_IPOS != 0 {
-        compl_cont_status.set(compl_cont_status.get() | CONT_S_IPOS);
+        COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() | CONT_S_IPOS);
     } else {
-        compl_cont_status.set(compl_cont_status.get() & !CONT_S_IPOS);
+        COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() & !CONT_S_IPOS);
     }
 
-    if !shortmess(ShmFlag::COMPLETIONMENU) && !compl_autocomplete.get() {
+    if !shortmess(ShmFlag::COMPLETIONMENU) && !COMPL_AUTOCOMPLETE.get() {
         ins_compl_show_statusmsg();
     }
 
     // Wait for the autocompletion delay to expire.
-    if compl_autocomplete.get()
+    if COMPL_AUTOCOMPLETE.get()
         && p_acl() > 0
         && !disable_ac_delay
         && !no_matches_found
@@ -676,10 +676,10 @@ pub fn ins_complete(c: Key, enable_pum: bool) -> Result<(), Failed> {
             if char_avail() {
                 if ins_compl_preinsert_effect() && ins_compl_win_active(Win::current()) {
                     ins_compl_delete(false); // Remove pre-inserted text
-                    compl_ins_end_col.set(compl_col.get());
+                    COMPL_INS_END_COL.set(COMPL_COL.get());
                 }
                 ins_compl_restart();
-                compl_interrupted.set(true);
+                COMPL_INTERRUPTED.set(true);
                 break;
             }
             os_delay(2, true);
@@ -690,11 +690,11 @@ pub fn ins_complete(c: Key, enable_pum: bool) -> Result<(), Failed> {
     }
 
     // Show the popup menu, unless we got interrupted.
-    if enable_pum && !compl_interrupted.get() {
+    if enable_pum && !COMPL_INTERRUPTED.get() {
         show_pum(save_w_wrow, save_w_leftcol.get());
     }
-    compl_was_interrupted.set(compl_interrupted.get());
-    compl_interrupted.set(false);
+    COMPL_WAS_INTERRUPTED.set(COMPL_INTERRUPTED.get());
+    COMPL_INTERRUPTED.set(false);
     Ok(())
 }
 
@@ -703,7 +703,7 @@ pub fn ins_complete(c: Key, enable_pum: bool) -> Result<(), Failed> {
 pub(crate) fn spell_back_to_badword() {
     let tpos = Win::current().w_cursor;
     let win = Win::current();
-    spell_bad_len.set(win.spell_move_to(BACKWARD, SMT_ALL, true, None));
+    SPELL_BAD_LEN.set(win.spell_move_to(BACKWARD, SMT_ALL, true, None));
     if Win::current().w_cursor.col != tpos.col {
         start_arrow(Some(InsertEnd::At(tpos)));
     }
@@ -731,9 +731,9 @@ pub(crate) fn compl_text_from_line() -> ApiString {
 
 /// `compl_col .. compl_col + compl_length` of `line`, clamped to it.
 fn compl_range(line: &[u8]) -> &[u8] {
-    let at = usize::try_from(compl_col.get())
+    let at = usize::try_from(COMPL_COL.get())
         .unwrap_or(0)
         .min(line.len());
-    let len = usize::try_from(compl_length.get()).unwrap_or(0);
+    let len = usize::try_from(COMPL_LENGTH.get()).unwrap_or(0);
     &line[at..at.saturating_add(len).min(line.len())]
 }

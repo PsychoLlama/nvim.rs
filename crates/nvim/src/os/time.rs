@@ -27,7 +27,7 @@ use crate::os::env::env_get_bounded;
 use crate::os::input::{InputEvents, input_ready};
 use crate::os::libc::time_t;
 use crate::os::libc::tm;
-use crate::startup::main_loop;
+use crate::startup::MAIN_LOOP;
 use crate::types::Timestamp;
 use ::libc::{localtime_r, strftime, strptime};
 use core::ffi::{CStr, c_int};
@@ -97,7 +97,7 @@ pub fn os_realtime() -> i64 {
 /// The loop caches this: it does not change until the next loop tick.
 pub fn os_now() -> u64 {
     // SAFETY: the main loop's uv handle is live for the editor's lifetime.
-    unsafe { uv_now(&raw mut (*main_loop.ptr()).uv) }
+    unsafe { uv_now(&raw mut (*MAIN_LOOP.ptr()).uv) }
 }
 
 /// Sleep for `ms` milliseconds, polling the loop meanwhile.

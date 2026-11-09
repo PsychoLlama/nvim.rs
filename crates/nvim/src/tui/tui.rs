@@ -54,7 +54,7 @@ use crate::os::fs::os_strerror;
 use crate::os::input::os_isatty;
 use crate::os::libc::STDOUT_FILENO;
 use crate::os::uv_error::UV_EINTR;
-use crate::startup::{ui_client_error_exit, ui_client_exit_status};
+use crate::startup::{UI_CLIENT_ERROR_EXIT, UI_CLIENT_EXIT_STATUS};
 use crate::tui::events::{tui_mode_change, tui_mouse_off, tui_mouse_on, tui_set_title};
 use crate::tui::input::{tinput_destroy, tinput_init, tinput_start, tinput_stop};
 use crate::tui::negotiate::{
@@ -495,10 +495,10 @@ fn terminfo_stop(tui: &mut TUIData) {
     // On a clean exit the cursor is left on the last line, so whatever the
     // shell prints next starts below the editor's output rather than over
     // it. After an error the screen is left as it is.
-    if ui_client_exit_status.get() == 0 && ui_client_error_exit.get() > 0 {
-        ui_client_exit_status.set(ui_client_error_exit.get());
+    if UI_CLIENT_EXIT_STATUS.get() == 0 && UI_CLIENT_ERROR_EXIT.get() > 0 {
+        UI_CLIENT_EXIT_STATUS.set(UI_CLIENT_ERROR_EXIT.get());
     }
-    if ui_client_exit_status.get() == ui_client_error_exit.get().max(0) {
+    if UI_CLIENT_EXIT_STATUS.get() == UI_CLIENT_ERROR_EXIT.get().max(0) {
         cursor_goto(tui, tui.height - 1, 0);
         terminfo_out(tui, TERM_EXIT_CA_MODE);
     }

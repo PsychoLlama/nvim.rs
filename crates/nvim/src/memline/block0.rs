@@ -170,7 +170,7 @@ pub(crate) fn set_b0_fname(mut buffer: Buf, id: BlockId) {
         ZeroBlock(buffer.b_ml.page_mut(id)).fname_mut()[0] = 0;
     }
 
-    // Upstream passes `curbuf` here, not `buffer`. Preserved: the two are
+    // Upstream passes `CURBUF` here, not `buffer`. Preserved: the two are
     // the same for every reachable caller.
     let fenc = Buf::current().b_p_fenc.bytes().to_vec();
     add_b0_fenc(&mut ZeroBlock(buffer.b_ml.page_mut(id)), &fenc);
@@ -328,8 +328,8 @@ pub(crate) fn swapfile_info(fname: &CStr, msg: &mut Vec<u8>) -> time_t {
                 msg.extend_from_slice(pid.to_string().as_bytes());
                 // Read back by `findswapname` to decide whether this
                 // is a crash to recover from or a live second editor.
-                proc_running.set(swapfile_proc_running(&b0, fname));
-                if proc_running.get() != 0 {
+                PROC_RUNNING.set(swapfile_proc_running(&b0, fname));
+                if PROC_RUNNING.get() != 0 {
                     push_tr(msg, c" (STILL RUNNING)");
                 }
             }
@@ -398,12 +398,12 @@ pub(crate) fn swapfile_unchanged(fname: &CStr) -> bool {
 /// one `buffer` is editing — the common case when `'directory'` gathers every
 /// swap file into one place.
 ///
-/// Also publishes [`proc_running`], which the dialog below reads.
+/// Also publishes [`PROC_RUNNING`], which the dialog below reads.
 pub(crate) fn swapfile_is_for_other_file(buffer: Buf, fname: &CStr) -> bool {
     let Ok(b0) = read_block_zero(fname) else {
         return false;
     };
-    proc_running.set(swapfile_proc_running(&b0, fname));
+    PROC_RUNNING.set(swapfile_proc_running(&b0, fname));
 
     // When the swap file sits in the same directory as the file, the
     // directory names need not agree — they can be reached through

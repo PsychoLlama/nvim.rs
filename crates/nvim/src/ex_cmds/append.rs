@@ -23,7 +23,7 @@ use super::{B_IMODE_LMAP, EXFLAG_LIST, EXFLAG_NR, NL, print_line};
 use crate::change::{appended_lines, appended_lines_mark, deleted_lines_mark};
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
-use crate::ex_docmd::state::ex_no_reprint;
+use crate::ex_docmd::state::EX_NO_REPRINT;
 use crate::global_cell::GlobalCell;
 use crate::indent::get_indent_lnum;
 use crate::memline::MlFlags;
@@ -44,7 +44,7 @@ use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use crate::winlayer::graph::{firstwin, lastwin};
+use crate::winlayer::graph::{FIRSTWIN, LASTWIN};
 use core::ffi::{CStr, c_int};
 
 /// The indent `:append`/`:insert`/`:change` gives the first line it reads,
@@ -171,7 +171,7 @@ pub fn ex_append(excmd: &mut ExArg) {
 
     // Don't use wait_return() now.
     NEED_WAIT_RETURN.set(false);
-    ex_no_reprint.set(true);
+    EX_NO_REPRINT.set(true);
 }
 
 /// Flip 'autoindent' for the duration of a `!` command.
@@ -353,7 +353,7 @@ pub fn ex_z(excmd: &mut ExArg) {
         Win::current().w_cursor.lnum = curs;
         Win::current().w_cursor.col = ColNr::ZERO;
     }
-    ex_no_reprint.set(true);
+    EX_NO_REPRINT.set(true);
 }
 
 /// How many lines `:z` shows: the display height for `:z!`, twice 'scroll' in
@@ -361,7 +361,7 @@ pub fn ex_z(excmd: &mut ExArg) {
 fn default_bigness(forceit: c_int) -> int64_t {
     if forceit != 0 {
         int64_t::from(ROWS.get() - 1)
-    } else if firstwin.get() == lastwin.get() {
+    } else if FIRSTWIN.get() == LASTWIN.get() {
         Win::current().w_onebuf_opt.wo_scr * 2
     } else {
         int64_t::from(Win::current().w_view_height - 3)

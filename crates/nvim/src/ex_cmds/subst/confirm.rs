@@ -27,7 +27,7 @@ use crate::drawscreen::{
 };
 use crate::ex_cmds::say;
 use crate::ex_cmds::{ESC, print_line_no_prefix};
-use crate::ex_docmd::state::ex_normal_busy;
+use crate::ex_docmd::state::EX_NORMAL_BUSY;
 use crate::ex_getln::{getcmdline_prompt_text, gotocmdline};
 use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_R;
@@ -47,7 +47,7 @@ use crate::option::defs::CpoFlag;
 use crate::option::vars::{P_LZ, p_lz};
 use crate::os::cshim::gettext;
 use crate::plines::getvcol;
-use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
+use crate::search::state::{HIGHLIGHT_MATCH, SEARCH_MATCH_ENDCOL, SEARCH_MATCH_LINES};
 use crate::state::mode::{EXMODE_ACTIVE, STATE};
 use crate::types::{Callback, ColNr};
 use crate::ui::state::UI_MESSAGES;
@@ -129,7 +129,7 @@ fn prompt_exmode(st: &Sub) -> c_int {
 
     // When ":normal" runs out of characters we get an empty line.  Use "q" to
     // get out of the loop.
-    if ex_normal_busy.get() != 0 && typed == NUL {
+    if EX_NORMAL_BUSY.get() != 0 && typed == NUL {
         'q' as c_int
     } else {
         typed
@@ -167,13 +167,13 @@ fn prompt_visual(st: &Sub) -> c_int {
         orig_line = Some(saved);
     }
 
-    search_match_lines.set(st.regmatch.endpos[0].lnum - st.regmatch.startpos[0].lnum);
-    search_match_endcol.set(st.regmatch.endpos[0].col + len_change);
-    if search_match_lines.get() == 0 && search_match_endcol.get() == ColNr::ZERO {
+    SEARCH_MATCH_LINES.set(st.regmatch.endpos[0].lnum - st.regmatch.startpos[0].lnum);
+    SEARCH_MATCH_ENDCOL.set(st.regmatch.endpos[0].col + len_change);
+    if SEARCH_MATCH_LINES.get() == 0 && SEARCH_MATCH_ENDCOL.get() == ColNr::ZERO {
         // Highlight at least one character for /^/.
-        search_match_endcol.set(ColNr::new(1));
+        SEARCH_MATCH_ENDCOL.set(ColNr::new(1));
     }
-    highlight_match.set(true);
+    HIGHLIGHT_MATCH.set(true);
 
     update_topline(Win::current());
     validate_cursor(Win::current());
@@ -189,7 +189,7 @@ fn prompt_visual(st: &Sub) -> c_int {
     let prompt = crate::formatted!(IOSIZE as usize, fmt.to_bytes(), replacement);
     let prompt = XString::from_bytes(&prompt);
     let typed = prompt_for_input(Some(prompt.as_cstr()), HLF_R, true, None);
-    highlight_match.set(false);
+    HIGHLIGHT_MATCH.set(false);
 
     MSG_DIDOUT.set(false); // don't scroll up
     gotocmdline(true);

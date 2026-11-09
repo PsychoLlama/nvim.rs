@@ -26,7 +26,7 @@ use crate::decoration_provider::{
     decor_providers_start,
 };
 use crate::diff::diff_redraw;
-use crate::diff::state::need_diff_redraw;
+use crate::diff::state::NEED_DIFF_REDRAW;
 use crate::digraph::keymap_str;
 use crate::drawline::SpellVars;
 use crate::drawline::win_line;
@@ -37,7 +37,7 @@ use crate::drawscreen::state::{
     SEARCH_HL_HAS_CURSOR_LNUM, UPDATING_SCREEN, WIN_EXTMARK_ARR, display_tick,
 };
 use crate::eval::vars::set_vim_var_nr;
-use crate::ex_docmd::state::global_busy;
+use crate::ex_docmd::state::GLOBAL_BUSY;
 use crate::ex_getln::state::CMDLINE_WAS_LAST_DRAWN;
 use crate::ex_getln::{cmdline_screen_cleared, compute_cmdrow, redrawcmdline};
 use crate::fold::FoldInfo;
@@ -91,9 +91,9 @@ use crate::popupmenu::{pum_check_clear, pum_drawn, pum_invalidate, pum_redraw};
 use crate::pos::MAXLNUM;
 use crate::profile::profile_setlimit;
 use crate::search::last_pat_prog;
-use crate::search::state::no_hlsearch;
+use crate::search::state::NO_HLSEARCH;
 use crate::spell::spell_check_window;
-use crate::startup::{exiting, starting};
+use crate::startup::{EXITING, starting};
 use crate::state::mode::{
     EDIT_SUBMODE, EDIT_SUBMODE_EXTRA, EDIT_SUBMODE_HIGHL, EDIT_SUBMODE_PRE, EXMODE_ACTIVE,
     RESTART_EDIT, STATE,
@@ -324,7 +324,7 @@ pub fn update_screen() -> Result<(), Failed> {
     }
 
     // May have postponed updating diffs.
-    if need_diff_redraw.get() {
+    if NEED_DIFF_REDRAW.get() {
         diff_redraw(true);
     }
 
@@ -577,7 +577,7 @@ impl SearchHl {
 
 /// Compile the `'hlsearch'` pattern for the redraw that is starting.
 pub fn start_search_hl() {
-    if !p_hls() || no_hlsearch.get() {
+    if !p_hls() || NO_HLSEARCH.get() {
         return;
     }
     end_search_hl(); // just in case it was not called before

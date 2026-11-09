@@ -71,8 +71,8 @@ pub fn f_bufload(args: &[TypVal], _unused: &mut TypVal, _fptr: EvalFuncData) {
     }
     // A swap file found while loading must not leave the standing
     // "read-only" answer behind unless that is what it already was.
-    if swap_exists_action.get() != SEA_READONLY {
-        swap_exists_action.set(SEA_NONE);
+    if SWAP_EXISTS_ACTION.get() != SEA_READONLY {
+        SWAP_EXISTS_ACTION.set(SEA_NONE);
     }
     buf_ensure_loaded(buf.expect("a live handle"));
 }

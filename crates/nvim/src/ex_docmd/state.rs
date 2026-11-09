@@ -21,7 +21,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::getchar::state::TypeaheadSave;
 use crate::global_cell::{GlobalCell, state_record};
@@ -30,7 +29,7 @@ use crate::types::Key;
 use crate::types::{CmdMod, CmdModFlags};
 use core::ffi::{CStr, c_int};
 
-pub(crate) static cmdmod: GlobalCell<CmdMod> = GlobalCell::new(CmdMod {
+pub(crate) static CMDMOD: GlobalCell<CmdMod> = GlobalCell::new(CmdMod {
     cmod_flags: CmdModFlags::NONE,
     cmod_split: 0,
     cmod_tab: 0,
@@ -50,28 +49,28 @@ state_record! {
     pub(crate) struct ExState in EX as ExField;
 
     /// The command line being run came from a register (`@:`, `:@r`).
-    pub(crate) exec_from_reg: bool = false;
+    pub(crate) EXEC_FROM_REG: bool = false;
     /// An error was given for the command's syntax: no further message.
-    pub(crate) did_emsg_syntax: bool = false;
+    pub(crate) DID_EMSG_SYNTAX: bool = false;
     /// How deep `do_cmdline` is nested.
-    pub(crate) ex_nesting_level: c_int = 0;
+    pub(crate) EX_NESTING_LEVEL: c_int = 0;
     /// The command printed the line itself (`:z`, `:p`): don't print it
     /// again.
-    pub(crate) ex_no_reprint: bool = false;
+    pub(crate) EX_NO_REPRINT: bool = false;
     /// Nonzero while `:normal` (or a menu, or `nvim_input`) runs keys.
-    pub(crate) ex_normal_busy: c_int = 0;
+    pub(crate) EX_NORMAL_BUSY: c_int = 0;
     /// Nonzero while `:global` runs its command on each line.
-    pub(crate) global_busy: c_int = 0;
+    pub(crate) GLOBAL_BUSY: c_int = 0;
     /// `:argdo`/`:bufdo`/... is running its command.
-    pub(crate) listcmd_busy: bool = false;
+    pub(crate) LISTCMD_BUSY: bool = false;
     /// The last command line typed, which `@:` replays and `":` reads.
-    pub(crate) last_cmdline: Option<XString> = None;
+    pub(crate) LAST_CMDLINE: Option<XString> = None;
     /// The first line of the command being typed, which `.` repeats when
     /// the command was a single line.
-    pub(crate) repeat_cmdline: Option<XString> = None;
+    pub(crate) REPEAT_CMDLINE: Option<XString> = None;
     /// The command line just typed; it becomes `last_cmdline` once it has
     /// run, so that `:@:` inside it still sees the one before.
-    pub(crate) new_last_cmdline: Option<XString> = None;
+    pub(crate) NEW_LAST_CMDLINE: Option<XString> = None;
 }
 
 /// The characters a file name inserted into a command line is escaped for.

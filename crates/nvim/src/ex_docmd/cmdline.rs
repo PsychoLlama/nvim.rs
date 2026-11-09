@@ -45,20 +45,20 @@ use crate::ex_eval::{
 
 use crate::ex_getln::ui_ext_cmdline_block_leave;
 
-use crate::debugger::state::{debug_break_level, debug_tick};
+use crate::debugger::state::{DEBUG_BREAK_LEVEL, DEBUG_TICK};
 use crate::ex_docmd::state::{
-    did_emsg_syntax, ex_nesting_level, last_cmdline, new_last_cmdline, repeat_cmdline,
+    DID_EMSG_SYNTAX, EX_NESTING_LEVEL, LAST_CMDLINE, NEW_LAST_CMDLINE, REPEAT_CMDLINE,
 };
 use crate::ex_eval::state::{
-    check_cstack, current_exception, did_endif, did_throw, force_abort, need_rethrow,
-    suppress_errthrow, trylevel,
+    CHECK_CSTACK, CURRENT_EXCEPTION, DID_ENDIF, DID_THROW, FORCE_ABORT, NEED_RETHROW,
+    SUPPRESS_ERRTHROW, TRYLEVEL,
 };
 use crate::getchar::state::{GOT_INT, KEY_TYPED};
 use crate::guard::{Bump, Depth, MsgBump, Suppress};
 use crate::message::state::{DID_EMSG, MSG_DIDANY, MSG_DIDOUT, MSG_SCROLL, NEED_WAIT_RETURN};
 use crate::message::{E_COMMAND_TOO_RECURSIVE, E_ENDFOR, E_ENDIF, E_ENDTRY, E_ENDWHILE};
 use crate::option::vars::p_verbose;
-use crate::profile::{do_profiling, func_line_end, func_line_start};
+use crate::profile::{DO_PROFILING, func_line_end, func_line_start};
 
 use crate::message::{msg_start, wait_return};
 
@@ -134,7 +134,7 @@ impl Source<'_, '_> {
     fn stale_breakpoint(&mut self) -> bool {
         self.lines
             .debug()
-            .is_some_and(|pos| pos.tick.get() != debug_tick.get())
+            .is_some_and(|pos| pos.tick.get() != DEBUG_TICK.get())
     }
 
     /// Is the breakpoint due at or before `lnum`?
@@ -155,7 +155,7 @@ impl Source<'_, '_> {
                 pos.name.as_cstr(),
                 after,
             ));
-            pos.tick.set(debug_tick.get());
+            pos.tick.set(DEBUG_TICK.get());
         }
     }
 
@@ -181,7 +181,7 @@ fn replay_stored_line(source: &mut Source, stored: &StoredLine) -> Option<CmdLin
     // Has the function returned, or (with no try conditional still open)
     // aborted?
     if source.is_func() {
-        if do_profiling.get() == PROF_YES
+        if DO_PROFILING.get() == PROF_YES
             && let Some(frame) = source.lines.function()
         {
             func_line_end(frame);
@@ -189,7 +189,7 @@ fn replay_stored_line(source: &mut Source, stored: &StoredLine) -> Option<CmdLin
         if source.func_ended() {
             return None;
         }
-    } else if do_profiling.get() == PROF_YES && source.is_script() {
+    } else if DO_PROFILING.get() == PROF_YES && source.is_script() {
         script_line_end();
     }
 
@@ -208,7 +208,7 @@ fn replay_stored_line(source: &mut Source, stored: &StoredLine) -> Option<CmdLin
     if source.breakpoint_due(sourcing_lnum()) {
         source.stop_at_breakpoint(sourcing_lnum());
     }
-    if do_profiling.get() == PROF_YES {
+    if DO_PROFILING.get() == PROF_YES {
         if source.is_func() {
             if let Some(frame) = source.lines.function() {
                 func_line_start(frame);
@@ -232,7 +232,7 @@ fn ask_for_line(
 ) -> Option<CmdLine> {
     if count == 1 && source.is_typed() {
         if ui_has(UI_CMDLINE) {
-            let last = last_cmdline.with(Clone::clone).unwrap_or_default();
+            let last = LAST_CMDLINE.with(Clone::clone).unwrap_or_default();
             ui_ext_cmdline_block_append(0, &last);
             *did_block = true;
         }
@@ -267,7 +267,7 @@ fn ask_for_line(
     // Keep the first typed line for `.` to repeat; forget it as soon as a
     // second one is typed.
     if flags.has(DoCmdOpts::KEEPLINE) {
-        repeat_cmdline.set((count == 0).then(|| XString::from_cstr(line.as_cstr())));
+        REPEAT_CMDLINE.set((count == 0).then(|| XString::from_cstr(line.as_cstr())));
     }
     // Taken over: the source answers a block of its own.
     Some(CmdLine::from_vec(line.into_vec()))
@@ -317,7 +317,7 @@ fn advance_loop(
         let flags = cs.flags[top];
         if DID_EMSG.get() == 0
             && !GOT_INT.get()
-            && !did_throw.get()
+            && !DID_THROW.get()
             && flags.has(CsFlags::LOOP)
             && cs.line[top] >= 0
             && flags.has(CsFlags::ACTIVE)
@@ -359,7 +359,7 @@ fn advance_loop(
 /// one in a catch clause finishes what it caught. Frees the `cs_forinfo`s.
 fn unwind_conditionals(source: &Source, cond: CondId, initial_trylevel: c_int) {
     if !GOT_INT.get()
-        && !did_throw.get()
+        && !DID_THROW.get()
         && !aborting()
         && (source.is_script() && !source.finished() || source.is_func() && !source.func_ended())
     {
@@ -384,7 +384,7 @@ fn unwind_conditionals(source: &Source, cond: CondId, initial_trylevel: c_int) {
             break;
         }
     }
-    trylevel.set(initial_trylevel);
+    TRYLEVEL.set(initial_trylevel);
 }
 
 /// Hand what this run left back to the caller's conditional stack, and drop
@@ -393,23 +393,23 @@ fn unwind_conditionals(source: &Source, cond: CondId, initial_trylevel: c_int) {
 /// finished function or script may leave the caller's stack with finally
 /// clauses to run -- `do_one_cmd` does both once it sees these flags.
 fn leave_nesting(source: &Source) {
-    if did_throw.get() {
-        need_rethrow.set(true);
+    if DID_THROW.get() {
+        NEED_RETHROW.set(true);
     }
     let deeper = source
         .level()
-        .is_some_and(|level| ex_nesting_level.get() > level);
+        .is_some_and(|level| EX_NESTING_LEVEL.get() > level);
     if deeper {
-        if !did_throw.get() {
-            check_cstack.set(true);
+        if !DID_THROW.get() {
+            CHECK_CSTACK.set(true);
         }
         return;
     }
     if source.is_func() {
-        ex_nesting_level.set(ex_nesting_level.get() - 1);
+        EX_NESTING_LEVEL.set(EX_NESTING_LEVEL.get() - 1);
     }
     // Single-stepping out of a function drops back into the debugger.
-    if (source.is_script() || source.is_func()) && ex_nesting_level.get() < debug_break_level.get()
+    if (source.is_script() || source.is_func()) && EX_NESTING_LEVEL.get() < DEBUG_BREAK_LEVEL.get()
     {
         let what = if source.is_script() {
             c"End of sourced file"
@@ -487,7 +487,7 @@ impl Run {
             did_block: false,
             msg_didout_before: false,
             quiet_output: None,
-            initial_trylevel: trylevel.get(),
+            initial_trylevel: TRYLEVEL.get(),
             retval: Ok(()),
         }
     }
@@ -587,9 +587,9 @@ impl Run {
             // Remember a typed command for the `:` register -- after
             // running it, so that `:@:` works.
             if source.is_typed()
-                && let Some(line) = new_last_cmdline.take()
+                && let Some(line) = NEW_LAST_CMDLINE.take()
             {
-                last_cmdline.set(Some(line));
+                LAST_CMDLINE.set(Some(line));
             }
         }
     }
@@ -624,8 +624,8 @@ impl Run {
         // clause runs at all -- which includes the case where the
         // `:finally` itself noticed a missing `:endif`/`:endwhile`/`:endfor`.
         if let Some(pending) = finally {
-            let carried = match current_exception.get() {
-                Some(id) if did_throw.get() => PendingValue::Exception(id),
+            let carried = match CURRENT_EXCEPTION.get() {
+                Some(id) if DID_THROW.get() => PendingValue::Exception(id),
                 _ => PendingValue::None,
             };
             report_pending(
@@ -635,7 +635,7 @@ impl Run {
             );
             DID_EMSG.set(0);
             GOT_INT.set(false);
-            did_throw.set(false);
+            DID_THROW.set(false);
             self.seen.in_inactive = cond.with(|cs| {
                 let top = cs.top().expect("the :try is open");
                 cs.flags[top] |= CsFlags::ACTIVE | CsFlags::FINALLY;
@@ -644,14 +644,14 @@ impl Run {
         }
 
         // The global `trylevel` is what a *nested* `do_cmdline` reads.
-        trylevel.set(self.initial_trylevel + try_level);
+        TRYLEVEL.set(self.initial_trylevel + try_level);
 
         // The outermost try conditional -- across function calls and
         // sourced files -- aborting cancels everything. Leaving it normally
         // puts the non-exception abort behaviour back for the rest of the
         // script.
-        if trylevel.get() == 0 && DID_EMSG.get() == 0 && !GOT_INT.get() && !did_throw.get() {
-            force_abort.set(false);
+        if TRYLEVEL.get() == 0 && DID_EMSG.get() == 0 && !GOT_INT.get() && !DID_THROW.get() {
+            FORCE_ABORT.set(false);
         }
 
         // A throw deactivates conditionals.
@@ -666,13 +666,13 @@ impl Run {
     fn keep_going(&self, source: &Source, flags: DoCmdOpts) -> Pass {
         let CondSummary { try_level, idx, .. } = self.seen;
         let aborting_now =
-            (GOT_INT.get() || DID_EMSG.get() != 0 && force_abort.get() || did_throw.get())
+            (GOT_INT.get() || DID_EMSG.get() != 0 && FORCE_ABORT.get() || DID_THROW.get())
                 && try_level == 0;
         // Inside try/catch an error keeps going, so that it can be dealt
         // with -- unless it is a syntax error, which may make the `:endtry`
         // itself be missed.
         let typed_error = DID_EMSG.get() != 0
-            && (try_level == 0 || did_emsg_syntax.get())
+            && (try_level == 0 || DID_EMSG_SYNTAX.get())
             && self.read_from_source
             && source.is_typed();
         let more_to_run = self.pending.is_some() || idx >= 0 || flags.has(DoCmdOpts::REPEAT);
@@ -688,7 +688,7 @@ impl Run {
         // Stop skipping commands after an error once every `:endif`,
         // `:endwhile` and `:endfor` has been passed.
         if self.pending.is_none()
-            && !force_abort.get()
+            && !FORCE_ABORT.get()
             && self.seen.idx < 0
             && !source.func_aborted()
         {
@@ -700,7 +700,7 @@ impl Run {
         }
 
         self.command_source();
-        did_endif.set(false);
+        DID_ENDIF.set(false);
 
         // Put all the output below each other without waiting for a return.
         // Not for commands from a script, and not for a recursive call
@@ -725,7 +725,7 @@ impl Run {
         self.run_one(source, flags);
 
         // A function that an error did not abort keeps going.
-        if DID_EMSG.get() != 0 && !force_abort.get() && source.is_func() && !source.func_aborted() {
+        if DID_EMSG.get() != 0 && !FORCE_ABORT.get() && source.is_func() && !source.func_aborted() {
             DID_EMSG.set(0);
         }
 
@@ -741,7 +741,7 @@ impl Run {
         if self.quiet_output.take().is_some() {
             MSG_SCROLL.set(0);
 
-            if self.retval.is_err() || did_endif.get() && KEY_TYPED.get() && DID_EMSG.get() == 0 {
+            if self.retval.is_err() || DID_ENDIF.get() && KEY_TYPED.get() && DID_EMSG.get() == 0 {
                 // A typed `:if`/`:else` that has just finished, or an error.
                 NEED_WAIT_RETURN.set(false);
                 MSG_DIDANY.set(false);
@@ -761,7 +761,7 @@ impl Run {
     /// What the run puts back once its last command has run.
     fn close(&mut self, source: &Source, debug_saved: Option<SavedDebugState>) {
         self.pending = None;
-        did_emsg_syntax.set(false);
+        DID_EMSG_SYNTAX.set(false);
         self.lines.clear();
 
         let cond = self.cond_stack.id();
@@ -773,19 +773,19 @@ impl Run {
         // becomes an exception now, after the stack has been rewound.
         do_errthrow(Some(cond), || source.is_func().then_some(c"endfunction"));
 
-        if trylevel.get() == 0 {
-            if did_throw.get() {
+        if TRYLEVEL.get() == 0 {
+            if DID_THROW.get() {
                 // An exception thrown out of the outermost try conditional:
                 // discard it, stop converting errors and interrupts to
                 // exceptions, and run nothing more.
                 handle_did_throw();
-            } else if GOT_INT.get() || DID_EMSG.get() != 0 && force_abort.get() {
+            } else if GOT_INT.get() || DID_EMSG.get() != 0 && FORCE_ABORT.get() {
                 // An interrupt, or an aborting error that did not become an
                 // exception. Errors stop being converted -- which is also
                 // what lets the interrupt message through when 'force_abort'
                 // is set and 'did_emsg' is not, after an error in a finally
                 // clause.
-                suppress_errthrow.set(true);
+                SUPPRESS_ERRTHROW.set(true);
             }
         }
 
@@ -839,19 +839,19 @@ pub(crate) fn do_cmdline(
     // Inside a function, use a higher nesting level.
     if let Some(frame) = source.lines.function()
         && source.is_func()
-        && ex_nesting_level.get() == frame.level
+        && EX_NESTING_LEVEL.get() == frame.level
     {
-        ex_nesting_level.set(ex_nesting_level.get() + 1);
+        EX_NESTING_LEVEL.set(EX_NESTING_LEVEL.get() + 1);
     }
 
     if RECURSIVE.get() == 0 {
-        force_abort.set(false);
-        suppress_errthrow.set(false);
+        FORCE_ABORT.set(false);
+        SUPPRESS_ERRTHROW.set(false);
     }
 
     let debug_saved = flags.has(DoCmdOpts::EXCRESET).then(save_dbg_stuff);
 
-    did_throw.set(false);
+    DID_THROW.set(false);
     // An `emsg` cancels the whole command line and any conditional or
     // loop around it. With 'force_abort' set, everything is cancelled.
     DID_EMSG.set(0);
@@ -876,7 +876,7 @@ pub(crate) fn do_cmdline(
     run.report();
 
     // In case `do_cmdline` was used recursively.
-    did_endif.set(false);
+    DID_ENDIF.set(false);
     do_cmdline_end();
     run.retval
 }

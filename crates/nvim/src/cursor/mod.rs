@@ -2,7 +2,7 @@
 //!
 //! Everything here speaks in [`Win`], [`Buf`] and [`PosRef`] handles and
 //! reads lines through [`Lines`]. Callers interleave these calls with reads
-//! of the `curwin`/`curbuf` globals — which alias the same windows — and
+//! of the `curwin`/`CURBUF` globals — which alias the same windows — and
 //! several of them re-enter through `ml_replace` and the extmark bookkeeping,
 //! so a walk that moves the window's own cursor runs on a copy and writes it
 //! back ([`coladvance`], [`inc_cursor`]) rather than lending the window out.

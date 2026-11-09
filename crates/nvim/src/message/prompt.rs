@@ -76,7 +76,7 @@ pub fn wait_return(redraw: c_int) {
     if MSG_SILENT.get() != 0 {
         return;
     }
-    if headless_mode.get() && ui_active() == 0 {
+    if HEADLESS_MODE.get() && ui_active() == 0 {
         return;
     }
     // Inside vgetc().code() we can't wait for a typed character at all.
@@ -116,7 +116,7 @@ pub fn wait_return(redraw: c_int) {
         // Avoid the sequence where the user types ":" at the hit-return
         // prompt to start an Ex command but the file-changed dialog gets
         // in the way.
-        if need_check_timestamps.get() {
+        if NEED_CHECK_TIMESTAMPS.get() {
             check_timestamps(false);
         }
 
@@ -145,7 +145,7 @@ pub fn wait_return(redraw: c_int) {
                 let save_scriptout = SCRIPTOUT.take();
                 REG_RECORDING.set(0);
                 c = safe_vgetc().code();
-                if had_got_int && global_busy.get() == 0 {
+                if had_got_int && GLOBAL_BUSY.get() == 0 {
                     GOT_INT.set(false);
                 }
                 drop(raw_key);
@@ -314,7 +314,7 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
     // We get called recursively when a timer callback outputs a message.
     // In that case don't show another prompt. Also don't take over a
     // hit-return prompt nobody asked us to.
-    let no_need_more = headless_mode.get() && !embedded_mode.get() && ui_active() == 0;
+    let no_need_more = HEADLESS_MODE.get() && !EMBEDDED_MODE.get() && ui_active() == 0;
     if no_need_more || MORE_PROMPT_BUSY.get() || (STATE.get() == MODE_HITRETURN && typed_char == 0)
     {
         return false;
@@ -573,8 +573,8 @@ pub fn msg_delay(ms: uint64_t, ignoreinput: bool) {
         return;
     }
     // Under the test harness a real delay would just be slow.
-    let ms = if nvim_testing.get() { 100 } else { ms };
-    let note = if nvim_testing.get() {
+    let ms = if NVIM_TESTING.get() { 100 } else { ms };
+    let note = if NVIM_TESTING.get() {
         " (skipped by NVIM_TEST)"
     } else {
         ""

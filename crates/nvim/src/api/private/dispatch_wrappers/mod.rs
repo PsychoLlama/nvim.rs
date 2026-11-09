@@ -144,7 +144,7 @@ use crate::api::window::{
 use crate::api_error;
 use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::{get_text_locked_msg, text_locked};
-use crate::guard::textlock;
+use crate::guard::TEXTLOCK;
 use crate::log::logmsg;
 use crate::message::E_TEXTLOCK;
 use crate::message_fmt::msg_cstr;

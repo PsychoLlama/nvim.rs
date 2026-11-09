@@ -40,7 +40,7 @@ use crate::os::cshim::gettext;
 use crate::os::fs::os_strerror;
 use crate::path::full_name_save;
 use crate::runtime::script_is_lua;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::types::Failed;
 use crate::types::{Blob, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber};
 use crate::{semsg, tr};
@@ -169,7 +169,7 @@ fn can_defer() -> bool {
 /// Whether the running script is Lua, which is what makes a String argument
 /// mean blob data rather than a mistake.
 fn in_lua_script() -> bool {
-    script_is_lua(current_sctx.get().sc_sid)
+    script_is_lua(CURRENT_SCTX.get().sc_sid)
 }
 
 /// Register `delete({fname})` to run when the calling function returns --

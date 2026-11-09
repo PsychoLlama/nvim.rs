@@ -37,15 +37,14 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use core::ffi::{CStr, c_int};
 
-use crate::channel::defs::{Channel, ChannelPart, ChannelStream, StderrState};
 use crate::channel::defs::{
-    kChannelStreamInternal, kChannelStreamProc, kChannelStreamSocket, kChannelStreamStderr,
-    kChannelStreamStdio,
+    CHANNEL_STREAM_INTERNAL, CHANNEL_STREAM_PROC, CHANNEL_STREAM_SOCKET, CHANNEL_STREAM_STDERR,
+    CHANNEL_STREAM_STDIO,
 };
+use crate::channel::defs::{Channel, ChannelPart, ChannelStream, StderrState};
 use crate::eval::typval::callback_free;
 use crate::event::channel::TransportMut;
 use crate::event::channel::{process_channel_events, wait_job};
@@ -59,7 +58,7 @@ use crate::os::fs::write_bytes;
 use crate::os::libc::uint64_t;
 use crate::os::proc::os_stderr_to_null;
 use crate::registry::SlotTable;
-use crate::startup::exiting;
+use crate::startup::EXITING;
 use crate::terminal::{terminal_close, terminal_receive};
 use crate::types::{Failed, LuaRef};
 use std::os::fd::AsFd as _;
@@ -104,11 +103,11 @@ pub use term::channel_terminal_alloc;
 /// Every open channel, by id, boxed: libuv keeps the addresses of the
 /// handles inside one, so a channel never moves while it is registered.
 /// See [`crate::registry`] for the order this keeps.
-pub(crate) static channels: GlobalCell<SlotTable<uint64_t, Box<Channel>>> =
+pub(crate) static CHANNELS: GlobalCell<SlotTable<uint64_t, Box<Channel>>> =
     GlobalCell::new(SlotTable::new());
 
 /// The next dynamically allocated channel id. The first two are reserved.
-static next_chan_id: GlobalCell<uint64_t> = GlobalCell::new(CHAN_STDERR + 1);
+static NEXT_CHAN_ID: GlobalCell<uint64_t> = GlobalCell::new(CHAN_STDERR + 1);
 
 // ---------------------------------------------------------------------------
 // The registry
@@ -120,7 +119,7 @@ static next_chan_id: GlobalCell<uint64_t> = GlobalCell::new(CHAN_STDERR + 1);
 /// no autocommand, no event loop, no RPC -- and must not reach the table
 /// again.
 pub(crate) fn with_channel<R>(id: uint64_t, f: impl FnOnce(&mut Channel) -> R) -> Option<R> {
-    channels.with_mut(|table| table.get_mut(&id).map(|channel| f(channel)))
+    CHANNELS.with_mut(|table| table.get_mut(&id).map(|channel| f(channel)))
 }
 
 /// Whether channel `id` is registered.
@@ -144,14 +143,14 @@ pub(crate) fn alloc_channel(
     stream: impl FnOnce(uint64_t) -> ChannelStream,
 ) -> uint64_t {
     let id = fixed.unwrap_or_else(|| {
-        let id = next_chan_id.get();
-        next_chan_id.set(id.wrapping_add(1));
+        let id = NEXT_CHAN_ID.get();
+        NEXT_CHAN_ID.set(id.wrapping_add(1));
         id
     });
     // Channel ids are handed to Vimscript as Numbers.
     debug_assert!(i64::try_from(id).is_ok());
     let channel = Box::new(Channel::new(id, ChildQueue::of_main_loop(), stream(id)));
-    channels.with_mut(|table| table.insert(id, channel));
+    CHANNELS.with_mut(|table| table.insert(id, channel));
     id
 }
 
@@ -159,7 +158,7 @@ pub(crate) fn alloc_channel(
 pub fn channel_teardown() {
     // The ids are snapshotted rather than walked live because closing a
     // channel queues a free against the same table.
-    for id in channels.with(SlotTable::snapshot_keys) {
+    for id in CHANNELS.with(SlotTable::snapshot_keys) {
         let _ = channel_close(id, CHANNEL_PART_ALL);
     }
 }
@@ -218,7 +217,7 @@ pub fn channel_decref(id: uint64_t) {
 /// (`msgpack_rpc/`'s `Chan`).
 pub(crate) fn channel_free_later(id: uint64_t) {
     put_job_on_main_loop(Box::new(move || {
-        if let Some(channel) = channels.with_mut(|table| table.remove(&id)) {
+        if let Some(channel) = CHANNELS.with_mut(|table| table.remove(&id)) {
             channel_destroy(channel);
         }
     }));
@@ -246,9 +245,9 @@ fn channel_destroy(mut channel: Box<Channel>) {
 /// say. Giving the id back keeps `job_spec`'s expectations about
 /// consecutive ids.
 pub(super) fn channel_destroy_early(id: uint64_t) {
-    next_chan_id.set(next_chan_id.get().wrapping_sub(1));
-    assert!(id == next_chan_id.get(), "channel id was not the last");
-    let mut channel = channels
+    NEXT_CHAN_ID.set(NEXT_CHAN_ID.get().wrapping_sub(1));
+    assert!(id == NEXT_CHAN_ID.get(), "channel id was not the last");
+    let mut channel = CHANNELS
         .with_mut(|table| table.remove(&id))
         .expect("the channel being unwound is registered");
     channel.id = 0;
@@ -279,7 +278,7 @@ pub fn channel_close(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> 
     let Some((kind, is_rpc)) = with_channel(id, |channel| (channel.streamtype(), channel.is_rpc))
     else {
         // An id below the watermark named a channel that has already gone.
-        return if id < next_chan_id.get() {
+        return if id < NEXT_CHAN_ID.get() {
             Ok(())
         } else {
             Err(E_INVCHAN)
@@ -298,7 +297,7 @@ pub fn channel_close(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> 
     }
 
     match kind {
-        kChannelStreamSocket => {
+        CHANNEL_STREAM_SOCKET => {
             if !close_main {
                 return Err(E_INVSTREAM);
             }
@@ -308,10 +307,10 @@ pub fn channel_close(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> 
                 }
             });
         }
-        kChannelStreamProc => close_job_parts(id, part, close_main),
-        kChannelStreamStdio => close_stdio_parts(id, part, close_main)?,
-        kChannelStreamStderr => close_stderr(id, part)?,
-        kChannelStreamInternal => {
+        CHANNEL_STREAM_PROC => close_job_parts(id, part, close_main),
+        CHANNEL_STREAM_STDIO => close_stdio_parts(id, part, close_main)?,
+        CHANNEL_STREAM_STDERR => close_stderr(id, part)?,
+        CHANNEL_STREAM_INTERNAL => {
             if !close_main {
                 return Err(E_INVSTREAM);
             }
@@ -380,7 +379,7 @@ fn close_stderr(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> {
     }
     // On the way out the descriptor is about to go anyway, and reopening
     // it would swallow anything still being written.
-    if !exiting.get() {
+    if !EXITING.get() {
         os_stderr_to_null();
     }
     channel_decref(id);

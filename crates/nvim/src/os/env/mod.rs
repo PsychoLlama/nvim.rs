@@ -24,7 +24,6 @@
 // Unsafe perimeter: the `os/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::cmdexpand::defs::{Candidate, Expand};
 use crate::cstr;
@@ -38,10 +37,10 @@ use crate::message_fmt::msg_cstr;
 use crate::os::cshim::environ;
 use crate::os::fs::{dirname_within, os_err_name, os_strerror, realpath};
 use crate::os::libc::{int64_t, size_t};
-use crate::os::state::{didset_vim, didset_vimruntime};
+use crate::os::state::{DIDSET_VIM, DIDSET_VIMRUNTIME};
 use crate::path::MAXPATHL;
 use crate::path::{path_is_absolute, tail_with_sep_index};
-use crate::startup::nvim_testing;
+use crate::startup::NVIM_TESTING;
 use crate::types::Failed;
 use ::libc::{uname, utsname};
 use core::ffi::{CStr, c_int};
@@ -78,7 +77,7 @@ pub(crate) const DEFAULT_LIB_DIR: &CStr =
     };
 
 pub fn env_init() {
-    nvim_testing.set(env_exists(c"NVIM_TEST", false));
+    NVIM_TESTING.set(env_exists(c"NVIM_TEST", false));
 }
 
 /// `ELOG("uv_os_*(%s) failed: %d %s")`, for a write of the environment that
@@ -253,15 +252,15 @@ pub fn hostname_into(hostname: &mut [u8]) {
 
 /// The "real", resolved user home directory, as [`init_homedir`] worked it
 /// out.
-static homedir: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static HOMEDIR: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
 /// `f` of the resolved home directory, or of `None` before
 /// [`init_homedir`] found one.
 pub(crate) fn with_home_dir<R>(f: impl FnOnce(Option<&[u8]>) -> R) -> R {
-    homedir.with(|home| f(home.as_deref()))
+    HOMEDIR.with(|home| f(home.as_deref()))
 }
 
-/// Resolve the user's home directory into [`homedir`]:
+/// Resolve the user's home directory into [`HOMEDIR`]:
 ///
 /// 1. `$HOME`,
 /// 2. libuv's idea of it,
@@ -269,7 +268,7 @@ pub(crate) fn with_home_dir<R>(f: impl FnOnce(Option<&[u8]>) -> R) -> R {
 /// 4. and, failing all of that, the current working directory.
 pub fn init_homedir() {
     // In case this is a second call.
-    homedir.set(None);
+    HOMEDIR.set(None);
 
     let home = getenv_owned(c"HOME")
         .map(|home| home.to_vec())
@@ -289,7 +288,7 @@ pub fn init_homedir() {
         other => dirname_within(MAXPATHL as usize).ok().or(other),
     };
     if let Some(home) = home {
-        homedir.set(Some(XString::from_vec(home)));
+        HOMEDIR.set(Some(XString::from_vec(home)));
     }
 }
 
@@ -385,22 +384,22 @@ pub(crate) fn vim_setenv_named(name: &CStr, value: &CStr) {
     let name = name.to_bytes();
     if name.eq_ignore_ascii_case(b"HOME") {
         init_homedir();
-    } else if didset_vim.get() && name.eq_ignore_ascii_case(b"VIM") {
-        didset_vim.set(false);
-    } else if didset_vimruntime.get() && name.eq_ignore_ascii_case(b"VIMRUNTIME") {
-        didset_vimruntime.set(false);
+    } else if DIDSET_VIM.get() && name.eq_ignore_ascii_case(b"VIM") {
+        DIDSET_VIM.set(false);
+    } else if DIDSET_VIMRUNTIME.get() && name.eq_ignore_ascii_case(b"VIMRUNTIME") {
+        DIDSET_VIMRUNTIME.set(false);
     }
 }
 
 /// [`env_unset`] plus the side effects: `$VIM`/`$VIMRUNTIME` have to be
-/// looked up again. `homedir` deliberately keeps its old value until `$HOME`
+/// looked up again. `HOMEDIR` deliberately keeps its old value until `$HOME`
 /// is set again.
 pub(crate) fn vim_unsetenv_named(name: &CStr) {
     env_unset(name);
     let name = name.to_bytes();
     if name.eq_ignore_ascii_case(b"VIM") {
-        didset_vim.set(false);
+        DIDSET_VIM.set(false);
     } else if name.eq_ignore_ascii_case(b"VIMRUNTIME") {
-        didset_vimruntime.set(false);
+        DIDSET_VIMRUNTIME.set(false);
     }
 }

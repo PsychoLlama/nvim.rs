@@ -28,7 +28,7 @@ use crate::eval::eval_to_number;
 use crate::eval::typval::tv_get_lnum;
 use crate::eval::vars::set_vim_var_nr;
 use crate::ex_docmd::handle_did_throw;
-use crate::ex_eval::state::{did_throw, trylevel};
+use crate::ex_eval::state::{DID_THROW, TRYLEVEL};
 use crate::guard::Lock;
 use crate::indent_c::{cindent_on, do_c_expr_indent};
 use crate::mbyte::{c_char_info, c_next_cluster};
@@ -39,7 +39,7 @@ use crate::option::was_set_insecurely;
 use crate::optionstr::{OptString, OptStringRef};
 use crate::plines::win_charsize;
 use crate::pos::lt;
-use crate::runtime::state::current_sctx;
+use crate::runtime::state::CURRENT_SCTX;
 use crate::search::{findmatch, linewhite};
 use crate::state::MODE_INSERT;
 use crate::state::mode::{DID_AI, STATE};
@@ -51,7 +51,7 @@ pub fn get_expr_indent() -> c_int {
     let mut win = Win::current();
     let buf = Buf::current();
     let use_sandbox = was_set_insecurely(win, kOptIndentexpr, OptionSetFlags::LOCAL);
-    let save_sctx = current_sctx.get();
+    let save_sctx = CURRENT_SCTX.get();
     // Saved because the expression can move the cursor via `:normal`.
     let (save_pos, save_curswant, save_set_curswant) =
         (win.w_cursor, win.w_curswant, win.w_set_curswant);
@@ -60,7 +60,7 @@ pub fn get_expr_indent() -> c_int {
     let mut indent = {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
         let _locked = Lock::text();
-        current_sctx.set(buf.b_p_script_ctx[kBufOptIndentexpr as usize]);
+        CURRENT_SCTX.set(buf.b_p_script_ctx[kBufOptIndentexpr as usize]);
         // The expression is evaluated from a copy, because 'indentexpr' can
         // be changed while it is running.
         let expression = buf.b_p_inde.get();
@@ -68,7 +68,7 @@ pub fn get_expr_indent() -> c_int {
         let indent = eval_to_number(&expression, true) as c_int;
         indent
     };
-    current_sctx.set(save_sctx);
+    CURRENT_SCTX.set(save_sctx);
 
     // Restore the cursor so that 'indentexpr' does not have to. Pretend to
     // be in Insert mode, which allows the cursor past end of line for the
@@ -84,9 +84,9 @@ pub fn get_expr_indent() -> c_int {
     // Reset `did_throw`, unless 'debug' has "throw" and we are inside a
     // try/catch.
     let debug_throw = p_debug(|value| has_char(value, c_int::from(b't')));
-    if did_throw.get() && (!debug_throw || trylevel.get() == 0) {
+    if DID_THROW.get() && (!debug_throw || TRYLEVEL.get() == 0) {
         handle_did_throw();
-        did_throw.set(false);
+        DID_THROW.set(false);
     }
     if indent < 0 {
         // The expression failed; keep the indent the line already has.

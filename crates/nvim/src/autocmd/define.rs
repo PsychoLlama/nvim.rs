@@ -185,7 +185,7 @@ pub fn do_autocmd_event(
 
     let is_adding_cmd = !cmd.is_empty();
     let findgroup = if group == AUGROUP_ALL {
-        current_augroup.get()
+        CURRENT_AUGROUP.get()
     } else {
         group
     };
@@ -259,7 +259,7 @@ pub fn autocmd_register(
     }
 
     let findgroup = if group == AUGROUP_ALL {
-        current_augroup.get()
+        CURRENT_AUGROUP.get()
     } else {
         group
     };
@@ -328,7 +328,7 @@ pub fn autocmd_register(
             // same value (nothing above can change `current_augroup`), but
             // upstream asks the question twice.
             new_pat.group = if group == AUGROUP_ALL {
-                current_augroup.get()
+                CURRENT_AUGROUP.get()
             } else {
                 group
             };
@@ -340,7 +340,7 @@ pub fn autocmd_register(
         Some(cmd) => AutoHandler::Cmd(XString::from_bytes(cstr::until_nul(cmd))),
         None => AutoHandler::Fn(handler_fn.duplicate()),
     };
-    let mut script_ctx = current_sctx.get();
+    let mut script_ctx = CURRENT_SCTX.get();
     // `SOURCING_LNUM`: the line of the innermost execution-stack frame.
     script_ctx.sc_lnum += crate::runtime::sourcing_lnum().get();
     nlua_set_sctx(&mut script_ctx);
@@ -369,8 +369,8 @@ fn seed_first_autocmd(event: AutoEvent) {
     if (event == AutoEvent::CursorMoved && !has_event(AutoEvent::CursorMoved))
         || (event == AutoEvent::CursorMovedI && !has_event(AutoEvent::CursorMovedI))
     {
-        last_cursormoved_win.set(Win::current_or_none().map(Win::id));
-        last_cursormoved.set(Win::current().w_cursor);
+        LAST_CURSORMOVED_WIN.set(Win::current_or_none().map(Win::id));
+        LAST_CURSORMOVED.set(Win::current().w_cursor);
     }
     if (event == AutoEvent::WinScrolled || event == AutoEvent::WinResized)
         && !(has_event(AutoEvent::WinScrolled) || has_event(AutoEvent::WinResized))
@@ -436,7 +436,7 @@ pub fn autocmd_delete_id(id: int64_t) -> bool {
         });
     }
     if success {
-        au_need_clean.set(true);
+        AU_NEED_CLEAN.set(true);
     }
     success
 }

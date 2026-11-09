@@ -32,7 +32,7 @@
 use super::Scope;
 use crate::ascii::ascii_iswhite;
 use crate::cstr;
-use crate::ex_docmd::state::cmdmod;
+use crate::ex_docmd::state::CMDMOD;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::guard::Script;
 use crate::keycodes::{K_SPECIAL, KE_FILLER};
@@ -400,7 +400,7 @@ fn uc_check_code(
             };
             put_quoted(out, quotes(b'"'), num.to_string().as_bytes());
         }
-        Code::Mods => cmdmod.with(|cmod| uc_mods_into(out, cmod, quote != Quote::None)),
+        Code::Mods => CMDMOD.with(|cmod| uc_mods_into(out, cmod, quote != Quote::None)),
         Code::Register => {
             let register = [args.regname];
             let body: &[u8] = if args.regname != 0 { &register } else { b"" };

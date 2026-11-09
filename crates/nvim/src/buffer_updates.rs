@@ -187,7 +187,7 @@ fn send_event(channel_id: uint64_t, name: &'static CStr, args: Array) -> bool {
 }
 
 /// C's `TEXTLOCK_WRAP`: run `f` with the cursor saved and restored and
-/// `textlock` held.
+/// `TEXTLOCK` held.
 ///
 /// `curwin` is read twice on purpose. Upstream's macro expands
 /// `curwin->w_cursor = save_cursor` *after* `code`, so a callback that

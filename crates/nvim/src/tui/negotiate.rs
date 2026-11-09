@@ -21,7 +21,7 @@
 
 use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
 use crate::message_fmt::msg_bytes_opt;
-use crate::startup::nvim_testing;
+use crate::startup::NVIM_TESTING;
 use crate::tui::output::{flush, out, out_fmt};
 use crate::tui::state::{KeyEncoding, TUIData, TermMode, TermModeState};
 use crate::tui::terminfo::caps::TERM_SET_UNDERLINE_STYLE;
@@ -101,7 +101,7 @@ pub fn tui_handle_term_mode(tui: &mut TUIData, mode: TermMode, state: TermModeSt
 
 /// Log a mode query's outcome, unless a test is watching the messages.
 fn log_mode(what: &str, mode: TermMode, state: TermModeState) {
-    if nvim_testing.get() {
+    if NVIM_TESTING.get() {
         return;
     }
     logmsg!(

@@ -18,7 +18,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::ascii::TAB;
 use crate::ascii::{
@@ -39,9 +38,9 @@ use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, update_screen};
 use crate::edit::{beginline, display_dollar, edit};
 use crate::eval::typval::tv_clear;
 use crate::eval::{callback_call, set_ref_in_callback};
-use crate::ex_docmd::state::repeat_cmdline;
+use crate::ex_docmd::state::REPEAT_CMDLINE;
 use crate::extmark::BCount;
-use crate::extmark::curbuf_splice_pending;
+use crate::extmark::CURBUF_SPLICE_PENDING;
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::fold::{delete_fold, fold_create, fold_open_cursor, op_fold_range};
 use crate::getchar::state::{BANGREDO, GOT_INT, KEY_TYPED, REPEAT_LUAREF};
@@ -136,13 +135,13 @@ pub use self::pending::*;
 pub(crate) use self::replace::*;
 pub use self::shift::*;
 
-/// `_ISalpha` and `_ISupper` from the C library's `__ctype_b_loc` table.
+/// `IS_ALPHA` and `IS_UPPER` from the C library's `__ctype_b_loc` table.
 ///
 /// `isalpha`/`isupper` are locale-dependent, which is why `do_addsub` uses
 /// them rather than `ascii_isalpha`: the case of a hex digit follows the
 /// user's locale.
-pub const _ISalpha: ::core::ffi::c_ushort = 1024;
-pub const _ISupper: ::core::ffi::c_ushort = 256;
+pub const IS_ALPHA: ::core::ffi::c_ushort = 1024;
+pub const IS_UPPER: ::core::ffi::c_ushort = 256;
 
 /// Enough for any number this module formats, plus its NUL.
 pub const NUMBUFLEN: usize = 65;

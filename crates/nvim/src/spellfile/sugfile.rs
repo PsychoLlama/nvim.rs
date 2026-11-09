@@ -64,7 +64,7 @@ use crate::types::{Failed, LineNr};
 use super::wordtree::{NodeId, tree_add_word, wordtree_alloc, wordtree_compress};
 use super::write::{SplWriter, clear_node, put_node};
 use super::{
-    MAXWLEN, SpellInfo, VIMSUGMAGIC, VIMSUGVERSION, kEqualFiles, spell_load_file, spell_message,
+    EQUAL_FILES, MAXWLEN, SpellInfo, VIMSUGMAGIC, VIMSUGVERSION, spell_load_file, spell_message,
     spell_message_fmt,
 };
 
@@ -79,7 +79,7 @@ pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
     let loaded = languages().into_iter().find(|&id| {
         with_lang(id, |slang| {
             path_full_compare(wfname, slang.sl_fname.as_cstr(), false, true) as c_uint
-                == kEqualFiles as c_uint
+                == EQUAL_FILES as c_uint
         }) == Some(true)
     });
     let (mut slang, slot) = match loaded.and_then(|id| take_lang(id).map(|slang| (slang, id))) {

@@ -17,7 +17,7 @@
 //!   is not reachable from there. [`do_errthrow`] runs after the command
 //!   returns and turns that list into the exception. That two-step is why
 //!   only the *first* of several errors in a row becomes the exception
-//!   value, and why `cause_abort` exists: `force_abort` has to stay off
+//!   value, and why `CAUSE_ABORT` exists: `force_abort` has to stay off
 //!   until the throw point is reached, so that `aborting()` answers the same
 //!   thing for every message of one command.
 //! - **An interrupt** is [`do_intthrow`], which replaces whatever is being
@@ -46,8 +46,8 @@ use super::flag::{
     CSTP_BREAK, CSTP_CONTINUE, CSTP_ERROR, CSTP_FINISH, CSTP_INTERRUPT, CSTP_NONE, CSTP_RETURN,
     CSTP_THROW, ESTACK_NONE, ET_ERROR, ET_INTERRUPT, ET_USER,
 };
-use super::{cause_abort, message};
-use crate::debugger::state::debug_break_level;
+use super::{CAUSE_ABORT, message};
+use crate::debugger::state::DEBUG_BREAK_LEVEL;
 use crate::drawscreen::state::CMDLINE_ROW;
 use crate::eval::userfunc::get_return_cmd;
 use crate::eval::vars::{set_vim_var_list, set_vim_var_string};
@@ -56,8 +56,8 @@ use crate::ex_eval::defs::{
     CondId, ErrorMsg, ErrorMsgs, ExcId, ExceptType, Exception, ExceptionState,
 };
 use crate::ex_eval::state::{
-    EXCEPTIONS, MsgLists, caught_stack, current_exception, did_throw, force_abort, msg_lists,
-    need_rethrow, suppress_errthrow, trylevel,
+    CAUGHT_STACK, CURRENT_EXCEPTION, DID_THROW, EXCEPTIONS, FORCE_ABORT, MSG_LISTS, MsgLists,
+    NEED_RETHROW, SUPPRESS_ERRTHROW, TRYLEVEL,
 };
 use crate::getchar::state::GOT_INT;
 use crate::guard::{Allow, Suppress};
@@ -93,7 +93,7 @@ pub(crate) fn cause_errthrow(
     // Nothing to do while displaying the interrupt message or reporting an
     // uncaught exception (already discarded by then) at the top level, nor
     // when no exception can be thrown: `emsg` displays the message itself.
-    if suppress_errthrow.get() {
+    if SUPPRESS_ERRTHROW.get() {
         return false;
     }
 
@@ -103,15 +103,15 @@ pub(crate) fn cause_errthrow(
     // all get reported, even from a finally clause entered because of an
     // aborting error.
     if DID_EMSG.get() == 0 {
-        cause_abort.set(force_abort.get());
-        force_abort.set(false);
+        CAUSE_ABORT.set(FORCE_ABORT.get());
+        FORCE_ABORT.set(false);
     }
 
     // No try conditional active, nothing being thrown and no error inside a
     // try conditional so far: do nothing, for the sake of non-EH scripts.
     // Under ":silent!" and outside a throw, likewise -- `emsg` will store
     // the text in v:errmsg without displaying it.
-    if (trylevel.get() == 0 && !cause_abort.get() || EMSG_SILENT.get() != 0) && !did_throw.get() {
+    if (TRYLEVEL.get() == 0 && !CAUSE_ABORT.get() || EMSG_SILENT.get() != 0) && !DID_THROW.get() {
         return false;
     }
 
@@ -125,7 +125,7 @@ pub(crate) fn cause_errthrow(
     }
 
     // Abort every command in nested calls and sourced files immediately.
-    cause_abort.set(true);
+    CAUSE_ABORT.set(true);
 
     // Some commands (the conditionals) are not skipped while an exception is
     // being thrown, and an error in one of those changes which of the
@@ -133,7 +133,7 @@ pub(crate) fn cause_errthrow(
     // exception would then run commands the user never wrote, without them
     // noticing. So discard what is being thrown, run the finally clauses and
     // terminate.
-    if did_throw.get() {
+    if DID_THROW.get() {
         // Resetting `got_int` for an interrupt stops the same interrupt
         // becoming an exception again and discarding the error about to be
         // thrown here.
@@ -149,7 +149,7 @@ pub(crate) fn cause_errthrow(
     // to the conditional stack here, so the actual throw waits until the
     // failing command has returned. Only the first of several errors in a
     // row is thrown, unless a severe one follows.
-    if msg_lists.with(MsgLists::is_empty) {
+    if MSG_LISTS.with(MsgLists::is_empty) {
         return true;
     }
     append_msg(mesg.to_bytes(), multiline, concat, severe);
@@ -160,9 +160,9 @@ pub(crate) fn cause_errthrow(
 /// will be built from, or concatenate it onto the last entry. There is one.
 fn append_msg(mesg: &[u8], multiline: bool, concat: bool, severe: bool) {
     let concatenates =
-        concat && msg_lists.with(|lists| lists.innermost().is_some_and(|l| !l.entries.is_empty()));
+        concat && MSG_LISTS.with(|lists| lists.innermost().is_some_and(|l| !l.entries.is_empty()));
     if concatenates {
-        msg_lists.with_mut(|lists| {
+        MSG_LISTS.with_mut(|lists| {
             let list = lists.innermost_mut().expect("a message list");
             let last = list.entries.len() - 1;
             list.entries[last].msg.push_bytes(mesg);
@@ -183,7 +183,7 @@ fn append_msg(mesg: &[u8], multiline: bool, concat: bool, severe: bool) {
         slnum: sourcing_lnum(),
         multiline,
     };
-    msg_lists.with_mut(|lists| {
+    MSG_LISTS.with_mut(|lists| {
         let list = lists.innermost_mut().expect("a message list");
         list.entries.push(entry);
         let at = list.entries.len() - 1;
@@ -202,7 +202,7 @@ fn append_msg(mesg: &[u8], multiline: bool, concat: bool, severe: bool) {
 
 /// Take the innermost message list's messages, leaving it empty.
 pub(crate) fn take_msg_list() -> ErrorMsgs {
-    msg_lists
+    MSG_LISTS
         .with_mut(|lists| {
             let filed = lists.innermost().is_some();
             filed
@@ -221,12 +221,12 @@ pub(crate) fn free_global_msglist() {
 /// its errors in, until [`pop_msg_list`]: upstream pointing `msg_list` at
 /// its own frame's list head.
 pub(crate) fn push_msg_list() {
-    msg_lists.with_mut(MsgLists::push);
+    MSG_LISTS.with_mut(MsgLists::push);
 }
 
 /// End the innermost message list, dropping what is left in it.
 pub(crate) fn pop_msg_list() {
-    msg_lists.with_mut(MsgLists::pop);
+    MSG_LISTS.with_mut(MsgLists::pop);
 }
 
 /// Throw what [`cause_errthrow`] collected as an error exception, through
@@ -236,14 +236,14 @@ pub(crate) fn pop_msg_list() {
 /// which after nearly every command there is not.
 pub(crate) fn do_errthrow(cond: Option<CondId>, cmdname: impl FnOnce() -> Option<&'static CStr>) {
     // Abort every command in nested calls and sourced files immediately.
-    if cause_abort.get() {
-        cause_abort.set(false);
-        force_abort.set(true);
+    if CAUSE_ABORT.get() {
+        CAUSE_ABORT.set(false);
+        FORCE_ABORT.set(true);
     }
 
     // Nothing to throw, or the conversion belongs to an outer
     // `do_one_cmd`.
-    let messages = msg_lists.with_mut(|lists| {
+    let messages = MSG_LISTS.with_mut(|lists| {
         let filed = lists
             .innermost()
             .is_some_and(|list| !list.entries.is_empty());
@@ -259,7 +259,7 @@ pub(crate) fn do_errthrow(cond: Option<CondId>, cmdname: impl FnOnce() -> Option
     } else if let Some(cond) = cond {
         super::trycmd::do_throw(cond);
     } else {
-        need_rethrow.set(true);
+        NEED_RETHROW.set(true);
     }
 }
 
@@ -271,7 +271,7 @@ pub(crate) fn do_intthrow(cond: CondId) -> bool {
     // No interrupt, or no try conditional active and nothing being thrown:
     // do nothing, for the sake of non-EH scripts. Asked after every
     // command, so the answer is inline and the throw is not.
-    if !GOT_INT.get() || (trylevel.get() == 0 && !did_throw.get()) {
+    if !GOT_INT.get() || (TRYLEVEL.get() == 0 && !DID_THROW.get()) {
         return false;
     }
     throw_interrupt(cond)
@@ -280,7 +280,7 @@ pub(crate) fn do_intthrow(cond: CondId) -> bool {
 /// [`do_intthrow`] once an interrupt is to be thrown.
 #[cold]
 fn throw_interrupt(cond: CondId) -> bool {
-    if did_throw.get() {
+    if DID_THROW.get() {
         // An interrupt exception already being thrown stands.
         if current_type() == Some(ET_INTERRUPT) {
             return false;
@@ -377,7 +377,7 @@ impl ExcId {
 
 /// The kind of exception being thrown, if one is.
 fn current_type() -> Option<ExceptType> {
-    current_exception
+    CURRENT_EXCEPTION
         .get()
         .map(|id| id.with(|exception| exception.type_0))
 }
@@ -395,7 +395,7 @@ pub(super) fn throw_exception(thrown: Thrown, cmdname: Option<&CStr>) -> Result<
             // active try block is found.
             if value.starts_with(b"Vim") && matches!(value.get(3), None | Some(b':' | b'(')) {
                 emsg(c"E608: Cannot :throw exceptions with 'Vim' prefix");
-                current_exception.set(None);
+                CURRENT_EXCEPTION.set(None);
                 return Err(Failed);
             }
             (ET_USER, value, ErrorMsgs::default())
@@ -438,14 +438,14 @@ pub(super) fn throw_exception(thrown: Thrown, cmdname: Option<&CStr>) -> Result<
 
     verbose_exception(Fate::Thrown, id);
 
-    current_exception.set(Some(id));
+    CURRENT_EXCEPTION.set(Some(id));
     Ok(())
 }
 
 /// Whether the exception reports below are given: under 'verbose' >= 13, or
 /// while debugging.
 fn reporting_exceptions() -> bool {
-    p_verbose() >= 13 || debug_break_level.get() > 0
+    p_verbose() >= 13 || DEBUG_BREAK_LEVEL.get() > 0
 }
 
 /// What became of an exception, as 'verbose' reports it.
@@ -476,14 +476,14 @@ fn verbose_exception(fate: Fate, id: ExcId) {
         return;
     }
     let value = id.with(|exception| exception.value.clone());
-    let debugging = debug_break_level.get() > 0;
+    let debugging = DEBUG_BREAK_LEVEL.get() > 0;
     // While debugging the messages have to be displayed.
     let loud = debugging.then(Allow::messages);
     if !debugging {
         verbose_enter();
     }
     let no_prompt = Suppress::wait_return();
-    if debug_break_level.get() > 0 || p_vfile(CStr::is_empty) {
+    if DEBUG_BREAK_LEVEL.get() > 0 || p_vfile(CStr::is_empty) {
         // Always scroll up, don't overwrite.
         MSG_SCROLL.set(1);
     }
@@ -491,7 +491,7 @@ fn verbose_exception(fate: Fate, id: ExcId) {
     let _: bool = report_msg(0, || fate.say(shown));
     // Don't overwrite this either.
     msg_str(c"\n");
-    if debug_break_level.get() > 0 || p_vfile(CStr::is_empty) {
+    if DEBUG_BREAK_LEVEL.get() > 0 || p_vfile(CStr::is_empty) {
         CMDLINE_ROW.set(MSG_ROW.get());
     }
     drop(no_prompt);
@@ -507,8 +507,8 @@ fn verbose_exception(fate: Fate, id: ExcId) {
 ///
 /// The caller has taken it off the caught stack, if it was there.
 pub(super) fn discard_exception(id: ExcId, was_finished: bool) {
-    if current_exception.get() == Some(id) {
-        current_exception.set(None);
+    if CURRENT_EXCEPTION.get() == Some(id) {
+        CURRENT_EXCEPTION.set(None);
     }
 
     if reporting_exceptions() {
@@ -525,13 +525,13 @@ pub(super) fn discard_exception(id: ExcId, was_finished: bool) {
 
 /// Discard the exception currently being thrown.
 pub(crate) fn discard_current_exception() {
-    if let Some(id) = current_exception.get() {
+    if let Some(id) = CURRENT_EXCEPTION.get() {
         discard_exception(id, false);
     }
     // Everything reset here is saved and restored by
     // `exception_state_save`/`_restore`.
-    did_throw.set(false);
-    need_rethrow.set(false);
+    DID_THROW.set(false);
+    NEED_RETHROW.set(false);
 }
 
 /// Point `v:exception`, `v:throwpoint` and `v:stacktrace` at `excp`, or
@@ -568,7 +568,7 @@ fn set_exception_vars(excp: Option<ExcId>) {
 
 /// Push an exception onto the caught stack.
 pub(super) fn catch_exception(id: ExcId) {
-    caught_stack.with_mut(|stack| stack.push(id));
+    CAUGHT_STACK.with_mut(|stack| stack.push(id));
     set_exception_vars(Some(id));
     verbose_exception(Fate::Caught, id);
 }
@@ -576,11 +576,11 @@ pub(super) fn catch_exception(id: ExcId) {
 /// Pop `excp` off the caught stack and free it, restoring `v:exception` and
 /// friends to the exception below it.
 pub(super) fn finish_exception(excp: Option<ExcId>) {
-    let top = caught_stack.with_mut(Vec::pop);
+    let top = CAUGHT_STACK.with_mut(Vec::pop);
     if excp != top {
         internal_error(c"finish_exception()");
     }
-    set_exception_vars(caught_stack.with(|stack| stack.last().copied()));
+    set_exception_vars(CAUGHT_STACK.with(|stack| stack.last().copied()));
     // Discard it, but use the "finished" wording for 'verbose'.
     match excp {
         Some(id) => discard_exception(id, true),
@@ -591,10 +591,10 @@ pub(super) fn finish_exception(excp: Option<ExcId>) {
 /// Save the exception state, for a nested `do_cmdline` that must not see it.
 pub(crate) fn exception_state_save() -> ExceptionState {
     ExceptionState {
-        estate_current_exception: current_exception.get(),
-        estate_did_throw: did_throw.get(),
-        estate_need_rethrow: need_rethrow.get(),
-        estate_trylevel: trylevel.get(),
+        estate_current_exception: CURRENT_EXCEPTION.get(),
+        estate_did_throw: DID_THROW.get(),
+        estate_need_rethrow: NEED_RETHROW.get(),
+        estate_trylevel: TRYLEVEL.get(),
         estate_did_emsg: DID_EMSG.get(),
     }
 }
@@ -602,22 +602,22 @@ pub(crate) fn exception_state_save() -> ExceptionState {
 /// Restore what [`exception_state_save`] answered, after handling anything
 /// thrown meanwhile.
 pub(crate) fn exception_state_restore(estate: &ExceptionState) {
-    if did_throw.get() {
+    if DID_THROW.get() {
         handle_did_throw();
     }
-    current_exception.set(estate.estate_current_exception);
-    did_throw.set(estate.estate_did_throw);
-    need_rethrow.set(estate.estate_need_rethrow);
-    trylevel.set(estate.estate_trylevel);
+    CURRENT_EXCEPTION.set(estate.estate_current_exception);
+    DID_THROW.set(estate.estate_did_throw);
+    NEED_RETHROW.set(estate.estate_need_rethrow);
+    TRYLEVEL.set(estate.estate_trylevel);
     DID_EMSG.set(estate.estate_did_emsg);
 }
 
 /// Forget the exception state entirely.
 pub(crate) fn exception_state_clear() {
-    current_exception.set(None);
-    did_throw.set(false);
-    need_rethrow.set(false);
-    trylevel.set(0);
+    CURRENT_EXCEPTION.set(None);
+    DID_THROW.set(false);
+    NEED_RETHROW.set(false);
+    TRYLEVEL.set(0);
     DID_EMSG.set(0);
 }
 
@@ -657,7 +657,7 @@ pub(crate) enum PendingValue<'a> {
 /// return value for a pending `:return` and the exception for a pending
 /// throw.
 pub(crate) fn report_pending(action: PendingAction, pending: c_int, value: PendingValue<'_>) {
-    if p_verbose() < 14 && debug_break_level.get() <= 0 {
+    if p_verbose() < 14 && DEBUG_BREAK_LEVEL.get() <= 0 {
         return;
     }
     debug_assert!(
@@ -695,7 +695,7 @@ pub(crate) fn report_pending(action: PendingAction, pending: c_int, value: Pendi
         _ => action.say(msg_cstr(gettext(c"Interrupt"))),
     };
 
-    let quiet = debug_break_level.get() <= 0;
+    let quiet = DEBUG_BREAK_LEVEL.get() <= 0;
     if quiet {
         verbose_enter();
     }

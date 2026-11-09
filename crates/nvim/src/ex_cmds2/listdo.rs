@@ -34,7 +34,7 @@ use crate::arglist::{do_argfile, editing_arg_idx, wargcount};
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{AucmdBuf, au_event_disable, au_event_restore, fire_autocmds_for};
 use crate::buffer::{BufFlags, buf_hide, goto_buffer};
-use crate::ex_docmd::state::listcmd_busy;
+use crate::ex_docmd::state::LISTCMD_BUSY;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::getchar::state::GOT_INT;
 use crate::guard::Suppress;
@@ -234,7 +234,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
     }
 
     // Avoids setting the previous-context mark for every step below.
-    listcmd_busy.set(true);
+    LISTCMD_BUSY.set(true);
     let mut next_fnum: c_int = 0;
     while !GOT_INT.get() && buf.is_some() {
         let mut execute = true;
@@ -346,7 +346,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
             }
         }
     }
-    listcmd_busy.set(false);
+    LISTCMD_BUSY.set(false);
 }
 
 /// Put the Syntax event back and fire it for the buffers that were opened

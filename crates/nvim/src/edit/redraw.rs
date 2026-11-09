@@ -52,8 +52,8 @@ pub(crate) fn ins_redraw(ready: bool) {
     // the command might delete it.
     if ready
         && has_event(AutoEvent::CursorMovedI)
-        && (last_cursormoved_win.get() != Win::current_or_none().map(Win::id)
-            || !equalpos(last_cursormoved.get(), Win::current().w_cursor))
+        && (LAST_CURSORMOVED_WIN.get() != Win::current_or_none().map(Win::id)
+            || !equalpos(LAST_CURSORMOVED.get(), Win::current().w_cursor))
         && !pum_visible()
     {
         // Update the screen first so syntax highlighting is right after a
@@ -66,15 +66,15 @@ pub(crate) fn ins_redraw(ready: bool) {
         // correct first.
         update_curswant();
         ins_apply_autocmds(AutoEvent::CursorMovedI);
-        last_cursormoved_win.set(Win::current_or_none().map(Win::id));
-        last_cursormoved.set(Win::current().w_cursor);
+        LAST_CURSORMOVED_WIN.set(Win::current_or_none().map(Win::id));
+        LAST_CURSORMOVED.set(Win::current().w_cursor);
     }
 
     // TextChangedI when changedtick_i differs, and TextChangedP when
     // changedtick_pum does.  They keep separate ticks because closing the
     // popup menu still has to fire TextChangedI, for compatibility.
     //
-    // The autocommand may change the buffer *and* the window, so `curbuf`
+    // The autocommand may change the buffer *and* the window, so `CURBUF`
     // is saved around it; and if it changed the text, the insert's undo
     // block has to be closed the way `ins_apply_autocmds` does it.
     let buf = Buf::current();
@@ -170,44 +170,44 @@ pub(crate) fn edit_putchar(c: Key, highlight: bool) {
     validate_cursor(win);
     let attr = if highlight { hl_attr(HLF_8) } else { 0 };
 
-    pc_row.set(win.w_wrow);
-    pc_status.set(PutChar::Unset);
-    grid_line_start(win.w_grid, pc_row.get());
+    PC_ROW.set(win.w_wrow);
+    PC_STATUS.set(PutChar::Unset);
+    grid_line_start(win.w_grid, PC_ROW.get());
     if win.w_onebuf_opt.wo_rl != 0 {
-        pc_col.set(win.w_view_width - 1 - win.w_wcol);
-        if grid_line_getchar(pc_col.get()).0 == NUL as ScreenChar {
-            grid_line_put_schar(pc_col.get() - 1, ' ' as ScreenChar, attr);
+        PC_COL.set(win.w_view_width - 1 - win.w_wcol);
+        if grid_line_getchar(PC_COL.get()).0 == NUL as ScreenChar {
+            grid_line_put_schar(PC_COL.get() - 1, ' ' as ScreenChar, attr);
             win.w_wcol -= 1;
-            pc_status.set(PutChar::Right);
+            PC_STATUS.set(PutChar::Right);
         }
     } else {
-        pc_col.set(win.w_wcol);
-        if grid_line_getchar(pc_col.get() + 1).0 == NUL as ScreenChar {
+        PC_COL.set(win.w_wcol);
+        if grid_line_getchar(PC_COL.get() + 1).0 == NUL as ScreenChar {
             // pc_col is the left half of a double-width character.
-            pc_status.set(PutChar::Left);
+            PC_STATUS.set(PutChar::Left);
         }
     }
 
     // Save the character, so it can be put back.
-    if pc_status.get() == PutChar::Unset {
-        let (schar, attr) = grid_line_getchar(pc_col.get());
-        pc_schar.set(schar);
+    if PC_STATUS.get() == PutChar::Unset {
+        let (schar, attr) = grid_line_getchar(PC_COL.get());
+        PC_SCHAR.set(schar);
         if let Some(attr) = attr {
-            pc_attr.set(attr);
+            PC_ATTR.set(attr);
         }
-        pc_status.set(PutChar::Set);
+        PC_STATUS.set(PutChar::Set);
     }
 
     let mut buf = [0u8; MB_MAXCHAR + 1];
     let len = encode_char(c.code(), &mut buf);
-    grid_line_puts(pc_col.get(), &buf[..len], attr);
+    grid_line_puts(PC_COL.get(), &buf[..len], attr);
     grid_line_flush();
 }
 
 /// Undo the previous [`edit_putchar`].
 pub(crate) fn edit_unputchar() {
     let mut win = Win::current();
-    match pc_status.get() {
+    match PC_STATUS.get() {
         PutChar::Unset => {}
         // Half of a double-width character was overwritten and cannot be
         // restored a cell at a time; redraw the whole line instead.
@@ -217,8 +217,8 @@ pub(crate) fn edit_unputchar() {
         }
         PutChar::Left => redraw_win_line(win, win.w_cursor.lnum),
         PutChar::Set => {
-            grid_line_start(win.w_grid, pc_row.get());
-            grid_line_put_schar(pc_col.get(), pc_schar.get(), pc_attr.get());
+            grid_line_start(win.w_grid, PC_ROW.get());
+            grid_line_put_schar(PC_COL.get(), PC_SCHAR.get(), PC_ATTR.get());
             grid_line_flush();
         }
     }

@@ -185,7 +185,7 @@ pub fn cmdline_screen_cleared() {
         };
         if line.level == prev_level {
             // Don't redraw a command line already shown in the cmdline window.
-            if prev_level != cmdwin_level.get() {
+            if prev_level != CMDWIN_LEVEL.get() {
                 line.redraw_state = CMD_REDRAW_ALL;
             }
             prev_level -= 1;

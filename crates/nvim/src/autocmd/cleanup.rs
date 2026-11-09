@@ -30,17 +30,17 @@ use crate::winlayer::Buf;
 /// one closure at a time: a handler run by a walk can define and delete
 /// autocommands, so nothing holds a borrow of the table across user code --
 /// a walk holds row indices and a [`PatId`](crate::autocmd::defs::PatId) instead.
-static autocmds: GlobalCell<[EventCmds; AutoEvent::COUNT]> =
+static AUTOCMDS: GlobalCell<[EventCmds; AutoEvent::COUNT]> =
     GlobalCell::new([EventCmds::EMPTY; AutoEvent::COUNT]);
 
 /// Run `f` over `event`'s autocommands.
 pub(crate) fn with_event_cmds<R>(event: AutoEvent, f: impl FnOnce(&EventCmds) -> R) -> R {
-    autocmds.with(|table| f(&table[event.index()]))
+    AUTOCMDS.with(|table| f(&table[event.index()]))
 }
 
 /// [`with_event_cmds`], to edit them.
 pub(super) fn with_event_cmds_mut<R>(event: AutoEvent, f: impl FnOnce(&mut EventCmds) -> R) -> R {
-    autocmds.with_mut(|table| f(&mut table[event.index()]))
+    AUTOCMDS.with_mut(|table| f(&mut table[event.index()]))
 }
 
 /// Mark row `idx` of `event` deleted: release everything it owns and clear
@@ -51,7 +51,7 @@ pub(super) fn with_event_cmds_mut<R>(event: AutoEvent, f: impl FnOnce(&mut Event
 /// `autocmd_busy` is clear.
 pub(crate) fn aucmd_del(event: AutoEvent, idx: usize) {
     with_event_cmds_mut(event, |cmds| cmds.delete(idx));
-    au_need_clean.set(true);
+    AU_NEED_CLEAN.set(true);
 }
 
 /// Delete every live autocommand of `event` whose pattern `doomed` picks,
@@ -68,7 +68,7 @@ pub(crate) fn aucmd_del_where(event: AutoEvent, doomed: impl Fn(&AutoPat) -> boo
         deleted
     });
     if deleted > 0 {
-        au_need_clean.set(true);
+        AU_NEED_CLEAN.set(true);
     }
     deleted
 }
@@ -88,11 +88,11 @@ pub fn aucmd_del_for_event_and_group(event: AutoEvent, group: ::core::ffi::c_int
 /// returns having done nothing, and the compaction waits for the point
 /// where the editor is between autocommands.
 pub(crate) fn au_cleanup() {
-    if autocmd_busy.get() || !au_need_clean.get() {
+    if AUTOCMD_BUSY.get() || !AU_NEED_CLEAN.get() {
         return;
     }
-    autocmds.with_mut(|table| table.iter_mut().for_each(EventCmds::compact));
-    au_need_clean.set(false);
+    AUTOCMDS.with_mut(|table| table.iter_mut().for_each(EventCmds::compact));
+    AU_NEED_CLEAN.set(false);
 }
 
 /// Run `f` over the autocommand list for `event`, for the API's readers.
@@ -105,7 +105,7 @@ pub(crate) fn with_autocmds_for_event<R>(event: AutoEvent, f: impl FnOnce(&Event
 pub fn aubuflocal_remove(buffer: Buf) {
     // A walk in progress may be about to match on this buffer number;
     // clear it rather than let it match a freed buffer.
-    active_walk_bufnrs.with_mut(|nrs| {
+    ACTIVE_WALK_BUFNRS.with_mut(|nrs| {
         for nr in nrs.iter_mut().filter(|nr| **nr == buffer.handle.get()) {
             *nr = 0;
         }
@@ -114,7 +114,7 @@ pub fn aubuflocal_remove(buffer: Buf) {
     // One pass over the whole table: a buffer is wiped far more often than
     // it has autocommands of its own. The messages wait for the table.
     let mut deleted: Vec<(AutoEvent, usize)> = Vec::new();
-    autocmds.with_mut(|table| {
+    AUTOCMDS.with_mut(|table| {
         for (event, cmds) in AutoEvent::all().zip(table.iter_mut()) {
             let mut count = 0;
             for idx in 0..cmds.len() {
@@ -132,7 +132,7 @@ pub fn aubuflocal_remove(buffer: Buf) {
         }
     });
     if !deleted.is_empty() {
-        au_need_clean.set(true);
+        AU_NEED_CLEAN.set(true);
     }
     for (event, count) in deleted {
         if p_verbose() >= 6 {
@@ -170,7 +170,7 @@ pub fn aupat_get_buflocal_nr(pat: &[u8]) -> ::core::ffi::c_int {
     if pat.len() > 9 && pat[7] == b'=' {
         // "<buffer=abuf>"
         if pat.len() == 13 && pat.eq_ignore_ascii_case(b"<buffer=abuf>") {
-            return autocmd_bufnr.get();
+            return AUTOCMD_BUFNR.get();
         }
         // "<buffer=123>": digits, and nothing but digits, up to the '>'.
         let digits = &pat[8..pat.len() - 1];

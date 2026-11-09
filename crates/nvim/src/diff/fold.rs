@@ -33,13 +33,13 @@ pub(crate) const LINE_INSERTED: c_int = -2;
 /// `dofold` also rebuilds the folds, which is what a block-list change needs
 /// and a mere scroll does not.
 pub fn diff_redraw(dofold: bool) {
-    need_diff_redraw.set(false);
+    NEED_DIFF_REDRAW.set(false);
     let mut wp_other: Option<Win> = None;
     let mut used_max_fill_curwin = false;
     let mut used_max_fill_other = false;
 
-    // `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`: the current tabpage's windows
-    // are always the `firstwin` list.
+    // `FOR_ALL_WINDOWS_IN_TAB(wp, CURTAB)`: the current tabpage's windows
+    // are always the `FIRSTWIN` list.
     for mut wp in windows() {
         // The window is live but its buffer may already have been wiped, so
         // the pointer is compared, never read. The short circuit is upstream's.
@@ -158,7 +158,7 @@ fn line_status(
     let mut num_fill = 0;
     while lnum == blocks[at].end(idx) {
         let dp = &blocks[at];
-        if diff_flags.get() & DIFF_FILLER != 0 {
+        if DIFF_FLAGS.get() & DIFF_FILLER != 0 {
             num_fill += dp.max_len(slots) - dp.df_count[idx];
         }
         let Some(next) = blocks.get(at + 1) else {
@@ -205,7 +205,7 @@ fn line_status(
 /// The number of filler lines above `lnum`, or 0 when `'diffopt'` has no
 /// `filler`.
 pub fn diff_check_fill(window: Win, lnum: LineNr) -> c_int {
-    if diff_flags.get() & DIFF_FILLER == 0 {
+    if DIFF_FLAGS.get() & DIFF_FILLER == 0 {
         return 0;
     }
     diff_check_with_linestatus(window, lnum).0.max(0)
@@ -236,7 +236,7 @@ pub fn diff_infold(window: Win, lnum: LineNr) -> bool {
     if tp.tp_diff_invalid != 0 {
         diff_update(None);
     }
-    let context = LineNr::new(diff_context.get());
+    let context = LineNr::new(DIFF_CONTEXT.get());
     // The blocks are in line order, so the first one starting below the
     // context window ends the search. No blocks at all folds everything.
     for dp in &tp.tp_diff {

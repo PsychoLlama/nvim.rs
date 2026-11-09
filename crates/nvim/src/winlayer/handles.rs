@@ -251,7 +251,7 @@ pub(crate) fn free_deferred() {
 /// # Why the handle is a [`NonZero`]
 ///
 /// Zero names no window, no buffer and no tab page: all three counters
-/// (`last_win_id`, `top_file_num`, `LAST_TP_HANDLE`) are incremented before
+/// (`LAST_WIN_ID`, `TOP_FILE_NUM`, `LAST_TP_HANDLE`) are incremented before
 /// they are read, and the editor already spells "no window" as handle `0`
 /// (`AcoSave::save_prevwin_handle`). Excluding it buys the niche, so an
 /// `Option<WinId>` is four bytes and **all-zero bytes are `None`** — which

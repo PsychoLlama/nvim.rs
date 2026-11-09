@@ -627,7 +627,7 @@ impl<T> SharedCell<T> {
 /// A global the editor only ever reads: a table the compiler built.
 ///
 /// `GlobalCell` earns its checks because the editor *writes* its globals.
-/// A table like `cmdnames` or `nv_cmds` is finished the moment the compiler
+/// A table like `cmdnames` or `NV_CMD_TABLE` is finished the moment the compiler
 /// lays it out and no line of the editor writes to it again, so none of the
 /// cell's machinery applies — but a plain `static` demands `Sync`, and these
 /// tables hold raw pointers (a command's name), which are `!Sync` by

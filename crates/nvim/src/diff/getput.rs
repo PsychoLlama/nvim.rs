@@ -19,8 +19,8 @@ use super::*;
 use crate::ascii::NUL;
 use crate::buffer::buflist_findpat_prefix;
 use crate::charset::skip;
-use crate::extmark::kExtmarkNOOP;
-use crate::extmark::kExtmarkUndo;
+use crate::extmark::EXTMARK_NOOP;
+use crate::extmark::EXTMARK_UNDO;
 use crate::message_fmt::msg_bytes;
 use crate::narrow::as_index;
 use crate::narrow::len_as_int;
@@ -182,7 +182,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         }
     }
 
-    diff_busy.set(true);
+    DIFF_BUSY.set(true);
     if excmd.addr_count == 0 {
         // Without a range the block *above* the cursor is meant, except at
         // the very end of the buffer where the filler below it is.
@@ -231,8 +231,8 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
             aucmd_restbuf(&mut aco);
         }
     }
-    diff_busy.set(false);
-    if diff_need_update.get() {
+    DIFF_BUSY.set(false);
+    if DIFF_NEED_UPDATE.get() {
         diff_update(None);
     }
     check_cursor(Win::current());
@@ -247,8 +247,8 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
             }
         }
     }
-    if diff_need_update.get() {
-        diff_need_update.set(false);
+    if DIFF_NEED_UPDATE.get() {
+        DIFF_NEED_UPDATE.set(false);
     } else {
         diff_redraw(false);
         let here = Buf::current_or_none();
@@ -259,7 +259,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
 /// Copy the lines of the blocks between `line1` and `line2` from one buffer
 /// to the other.
 ///
-/// The walk runs with `diff_busy` set, so `diff_mark_adjust_tp` only shifts
+/// The walk runs with `DIFF_BUSY` set, so `diff_mark_adjust_tp` only shifts
 /// line numbers instead of rebuilding the block list underneath it; the
 /// blocks are then patched up here as each one is copied. `start_skip` and
 /// `end_skip` are how much of the first and last block the range cuts off.
@@ -392,7 +392,7 @@ fn diffgetput(
             let max = MAXLNUM.get();
             let amount = added;
             if added != 0 {
-                mark_adjust(lnum, last, max, amount, kExtmarkNOOP);
+                mark_adjust(lnum, last, max, amount, EXTMARK_NOOP);
                 if Win::current().w_cursor.lnum >= lnum {
                     if Win::current().w_cursor.lnum >= lnum + count {
                         let moved = Win::current().w_cursor.lnum + amount;
@@ -403,7 +403,7 @@ fn diffgetput(
                 }
             }
             let cb = Buf::current();
-            extmark_adjust(cb, lnum, last, max, amount, kExtmarkUndo);
+            extmark_adjust(cb, lnum, last, max, amount, EXTMARK_UNDO);
             changed_lines(cb, lnum, ColNr::ZERO, lnum + count, amount, true);
             if let Some((lnum, count)) = &freed_ranges {
                 diff_fold_update(lnum, count, len_as_int(idx_to));

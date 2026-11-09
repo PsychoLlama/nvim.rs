@@ -2,7 +2,7 @@
 //!
 //! Two patterns are live at any time — the last one searched for and the
 //! last one substituted with — and both are kept in the module-private
-//! [`spats`] pair. [`search_regcomp`] is the compiler every caller goes
+//! [`SPATS`] pair. [`search_regcomp`] is the compiler every caller goes
 //! through: it fills in the remembered pattern when handed an empty one,
 //! records the new one, and applies the `'ignorecase'`/`'smartcase'` rule
 //! ([`pat_has_uppercase`]). The save/restore families exist because
@@ -18,7 +18,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::ascii::NUL;
@@ -68,7 +67,7 @@ pub(crate) struct SearchPattern {
 /// An empty pattern slot.
 ///
 /// `magic` and `dir` are the only fields whose "nothing remembered yet"
-/// value is not zero: [`spats`] starts out magic and searching forwards,
+/// value is not zero: [`SPATS`] starts out magic and searching forwards,
 /// while the saved copies start out as C's zero-initialised statics.
 const fn no_pattern(magic: bool, dir: c_char) -> SearchPattern {
     SearchPattern {
@@ -85,44 +84,44 @@ const fn no_pattern(magic: bool, dir: c_char) -> SearchPattern {
 ///
 /// The pair is also the interchange with ShaDa, which hands a slot over
 /// wholesale ([`shada_set_pattern`]).
-pub(crate) static spats: GlobalCell<[SearchPattern; 2]> = GlobalCell::new([
+pub(crate) static SPATS: GlobalCell<[SearchPattern; 2]> = GlobalCell::new([
     no_pattern(true, b'/'.cast_signed()),
     no_pattern(true, b'/'.cast_signed()),
 ]);
 
-/// Which of [`spats`] was used most recently — the one `RE_LAST` means.
-pub(crate) static last_idx: GlobalCell<c_int> = GlobalCell::new(RE_SEARCH);
+/// Which of [`SPATS`] was used most recently — the one `RE_LAST` means.
+pub(crate) static LAST_IDX: GlobalCell<c_int> = GlobalCell::new(RE_SEARCH);
 
 /// The pattern [`search_regcomp`] last compiled, as the user wrote it.
 ///
-/// Kept separately from [`spats`] because `'rightleft'` reverses it and
+/// Kept separately from [`SPATS`] because `'rightleft'` reverses it and
 /// because `SEARCH_KEEP` compiles patterns that are never remembered. The
 /// "not found" messages quote this one.
-static compiled_pat: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static COMPILED_PAT: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
 state_record! {
     /// What the save/restore pairs put aside while autocommands, user
     /// functions and incremental search run a search of their own.
     struct SavedSearch in SAVED as SavedField;
-    /// [`spats`], kept while autocommands and user functions run.
-    saved_spats: [SearchPattern; 2] = [no_pattern(false, 0), no_pattern(false, 0)];
-    /// [`compiled_pat`], kept alongside.
-    saved_compiled_pat: Option<XString> = None;
-    saved_spats_last_idx: c_int = 0;
-    saved_spats_no_hlsearch: bool = false;
+    /// [`SPATS`], kept while autocommands and user functions run.
+    SAVED_SPATS: [SearchPattern; 2] = [no_pattern(false, 0), no_pattern(false, 0)];
+    /// [`COMPILED_PAT`], kept alongside.
+    SAVED_COMPILED_PAT: Option<XString> = None;
+    SAVED_SPATS_LAST_IDX: c_int = 0;
+    SAVED_SPATS_NO_HLSEARCH: bool = false;
     /// Nesting depth of [`save_search_patterns`]; only the outermost saves.
-    save_level: c_int = 0;
-    /// A second, independent copy of `spats[RE_SEARCH]`, for incremental
+    SAVE_LEVEL: c_int = 0;
+    /// A second, independent copy of `SPATS[RE_SEARCH]`, for incremental
     /// search — which has to be able to put the pattern back even when it
     /// was cancelled from inside a user function.
-    saved_last_search_spat: SearchPattern = no_pattern(false, 0);
+    SAVED_LAST_SEARCH_SPAT: SearchPattern = no_pattern(false, 0);
     /// Nesting depth of [`save_last_search_pattern`].
-    did_save_last_search_spat: c_int = 0;
-    saved_last_idx: c_int = 0;
-    saved_no_hlsearch: bool = false;
+    DID_SAVE_LAST_SEARCH_SPAT: c_int = 0;
+    SAVED_LAST_IDX: c_int = 0;
+    SAVED_NO_HLSEARCH: bool = false;
     /// The incremental-search highlight range, kept across `searchcount()`.
-    saved_search_match_endcol: ColNr = ColNr::ZERO;
-    saved_search_match_lines: i32 = 0;
+    SAVED_SEARCH_MATCH_ENDCOL: ColNr = ColNr::ZERO;
+    SAVED_SEARCH_MATCH_LINES: i32 = 0;
 }
 
 /// A slot index as the array index it is.
@@ -132,12 +131,12 @@ fn slot(idx: c_int) -> usize {
 
 /// Look at the remembered pattern at `idx`.
 fn with_spat<R>(idx: c_int, f: impl FnOnce(&SearchPattern) -> R) -> R {
-    spats.with(|slots| f(&slots[slot(idx)]))
+    SPATS.with(|slots| f(&slots[slot(idx)]))
 }
 
 /// Change the remembered pattern at `idx` in place.
 fn update_spat<R>(idx: c_int, f: impl FnOnce(&mut SearchPattern) -> R) -> R {
-    spats.with_mut(|slots| f(&mut slots[slot(idx)]))
+    SPATS.with_mut(|slots| f(&mut slots[slot(idx)]))
 }
 
 /// A copy of the remembered pattern's text at `idx`.
@@ -157,8 +156,8 @@ fn put_spat(idx: c_int, pat: SearchPattern) -> SearchPattern {
 
 /// Compile a search pattern, remembering it as the caller asks.
 ///
-/// - `pat_save == RE_SEARCH`: save `pat` in `spats[RE_SEARCH]` (a normal
-///   search command); `RE_SUBST`: in `spats[RE_SUBST]` (`:substitute`);
+/// - `pat_save == RE_SEARCH`: save `pat` in `SPATS[RE_SEARCH]` (a normal
+///   search command); `RE_SUBST`: in `SPATS[RE_SUBST]` (`:substitute`);
 ///   `RE_BOTH`: in both (`:global`).
 /// - `pat_use == RE_SEARCH`/`RE_SUBST`/`RE_LAST`: which remembered pattern
 ///   to use when `pat` is empty.
@@ -186,7 +185,7 @@ pub(crate) fn search_regcomp(
     let source = if typed.is_empty() {
         // No pattern given: use a previously defined one.
         let idx = if pat_use == RE_LAST {
-            last_idx.get()
+            LAST_IDX.get()
         } else {
             pat_use
         };
@@ -204,7 +203,7 @@ pub(crate) fn search_regcomp(
             return Err(Refused::Invalid);
         };
         magic = spat_magic;
-        no_smartcase.set(no_scs);
+        NO_SMARTCASE.set(no_scs);
         from_slot = Some(idx);
         pat
     } else {
@@ -217,7 +216,7 @@ pub(crate) fn search_regcomp(
 
     let rightleft_reverse = Win::current().w_onebuf_opt.wo_rl != 0
         && Win::current().w_onebuf_opt.wo_rlc.first_byte() == b's';
-    compiled_pat.set(Some(if rightleft_reverse {
+    COMPILED_PAT.set(Some(if rightleft_reverse {
         XString::from_vec(reversed_text(text))
     } else {
         source.clone()
@@ -265,7 +264,7 @@ pub(crate) fn search_regcomp_owned(
 /// The pattern [`search_regcomp`] last compiled, copied out; empty before
 /// the first compile.
 pub(crate) fn get_search_pat() -> XString {
-    compiled_pat.with(|pat| pat.clone().unwrap_or_default())
+    COMPILED_PAT.with(|pat| pat.clone().unwrap_or_default())
 }
 
 /// Remember `pat` as the pattern at `idx`, and as the last one used. The
@@ -275,11 +274,11 @@ pub(crate) fn save_re_pat(idx: c_int, pat: &[u8], magic: bool) {
     update_spat(idx, |spat| {
         spat.pat = Some(text);
         spat.magic = magic;
-        spat.no_scs = no_smartcase.get();
+        spat.no_scs = NO_SMARTCASE.get();
         spat.timestamp = os_time();
         spat.additional_data = None;
     });
-    last_idx.set(idx);
+    LAST_IDX.set(idx);
     // With 'hlsearch' a changed pattern means a redraw.
     if p_hls() {
         redraw_all_later(UPD_SOME_VALID);
@@ -290,29 +289,29 @@ pub(crate) fn save_re_pat(idx: c_int, pat: &[u8], magic: bool) {
 /// Save the search patterns so they can be restored later. Used around
 /// autocommands and user functions; only the outermost call saves.
 pub fn save_search_patterns() {
-    if save_level.replace(save_level.get() + 1) != 0 {
+    if SAVE_LEVEL.replace(SAVE_LEVEL.get() + 1) != 0 {
         return;
     }
-    saved_spats.set(spats.with(Clone::clone));
-    saved_compiled_pat.set(compiled_pat.with(Clone::clone));
-    saved_spats_last_idx.set(last_idx.get());
-    saved_spats_no_hlsearch.set(no_hlsearch.get());
+    SAVED_SPATS.set(SPATS.with(Clone::clone));
+    SAVED_COMPILED_PAT.set(COMPILED_PAT.with(Clone::clone));
+    SAVED_SPATS_LAST_IDX.set(LAST_IDX.get());
+    SAVED_SPATS_NO_HLSEARCH.set(NO_HLSEARCH.get());
 }
 
 /// Undo one [`save_search_patterns`]; the outermost call restores.
 pub fn restore_search_patterns() {
-    save_level.set(save_level.get() - 1);
-    if save_level.get() != 0 {
+    SAVE_LEVEL.set(SAVE_LEVEL.get() - 1);
+    if SAVE_LEVEL.get() != 0 {
         return;
     }
-    let saved = saved_spats.replace([no_pattern(false, 0), no_pattern(false, 0)]);
+    let saved = SAVED_SPATS.replace([no_pattern(false, 0), no_pattern(false, 0)]);
     // Dropped after the cell is released: nothing here runs, but the old
     // pair is the caller's no longer.
-    let _replaced = spats.with_mut(|slots| core::mem::replace(slots, saved));
+    let _replaced = SPATS.with_mut(|slots| core::mem::replace(slots, saved));
     set_vv_searchforward();
-    compiled_pat.set(saved_compiled_pat.take());
-    last_idx.set(saved_spats_last_idx.get());
-    set_no_hlsearch(saved_spats_no_hlsearch.get());
+    COMPILED_PAT.set(SAVED_COMPILED_PAT.take());
+    LAST_IDX.set(SAVED_SPATS_LAST_IDX.get());
+    set_no_hlsearch(SAVED_SPATS_NO_HLSEARCH.get());
 }
 
 /// Save the search pattern for incremental search.
@@ -321,44 +320,44 @@ pub fn restore_search_patterns() {
 /// to be restorable when incremental search is cancelled even if that
 /// happens inside a user function. Only the outermost call saves.
 pub fn save_last_search_pattern() {
-    did_save_last_search_spat.set(did_save_last_search_spat.get() + 1);
-    if did_save_last_search_spat.get() != 1 {
+    DID_SAVE_LAST_SEARCH_SPAT.set(DID_SAVE_LAST_SEARCH_SPAT.get() + 1);
+    if DID_SAVE_LAST_SEARCH_SPAT.get() != 1 {
         return;
     }
-    saved_last_search_spat.set(with_spat(RE_SEARCH, Clone::clone));
-    saved_last_idx.set(last_idx.get());
-    saved_no_hlsearch.set(no_hlsearch.get());
+    SAVED_LAST_SEARCH_SPAT.set(with_spat(RE_SEARCH, Clone::clone));
+    SAVED_LAST_IDX.set(LAST_IDX.get());
+    SAVED_NO_HLSEARCH.set(NO_HLSEARCH.get());
 }
 
 /// Undo one [`save_last_search_pattern`]; the outermost call restores.
 pub fn restore_last_search_pattern() {
-    did_save_last_search_spat.set(did_save_last_search_spat.get() - 1);
-    if did_save_last_search_spat.get() > 0 {
+    DID_SAVE_LAST_SEARCH_SPAT.set(DID_SAVE_LAST_SEARCH_SPAT.get() - 1);
+    if DID_SAVE_LAST_SEARCH_SPAT.get() > 0 {
         return;
     }
-    if did_save_last_search_spat.get() != 0 {
+    if DID_SAVE_LAST_SEARCH_SPAT.get() != 0 {
         let msg =
             c"restore_last_search_pattern() called more often than save_last_search_pattern()";
         iemsg(msg);
         return;
     }
-    let saved = saved_last_search_spat.replace(no_pattern(false, 0));
+    let saved = SAVED_LAST_SEARCH_SPAT.replace(no_pattern(false, 0));
     put_spat(RE_SEARCH, saved);
     set_vv_searchforward();
-    last_idx.set(saved_last_idx.get());
-    set_no_hlsearch(saved_no_hlsearch.get());
+    LAST_IDX.set(SAVED_LAST_IDX.get());
+    set_no_hlsearch(SAVED_NO_HLSEARCH.get());
 }
 
 /// Save the incremental-search highlighting variables, so that calling
 /// `searchcount()` does not invalidate the highlighting.
 pub(crate) fn save_incsearch_state() {
-    saved_search_match_endcol.set(search_match_endcol.get());
-    saved_search_match_lines.set(search_match_lines.get());
+    SAVED_SEARCH_MATCH_ENDCOL.set(SEARCH_MATCH_ENDCOL.get());
+    SAVED_SEARCH_MATCH_LINES.set(SEARCH_MATCH_LINES.get());
 }
 
 pub(crate) fn restore_incsearch_state() {
-    search_match_endcol.set(saved_search_match_endcol.get());
-    search_match_lines.set(saved_search_match_lines.get());
+    SEARCH_MATCH_ENDCOL.set(SAVED_SEARCH_MATCH_ENDCOL.get());
+    SEARCH_MATCH_LINES.set(SAVED_SEARCH_MATCH_LINES.get());
 }
 
 /// The pattern `/` and `?` last searched for, copied out, or `None` when
@@ -375,7 +374,7 @@ pub(crate) fn has_last_search_pattern() -> bool {
 /// Whichever of the two patterns was used last, copied out, or `None` when
 /// there is none yet.
 pub fn last_search_pat() -> Option<XString> {
-    spat_text(last_idx.get())
+    spat_text(LAST_IDX.get())
 }
 
 /// The `:substitute` pattern, copied out — what `/` falls back on when no
@@ -387,7 +386,7 @@ pub(crate) fn substitute_pattern() -> Option<XString> {
 /// The offset `/` and `?` remember alongside the search pattern: the
 /// `e`/`s`/`b` suffix and its `+n`/`-n`.
 ///
-/// It lives in `spats[RE_SEARCH]` rather than beside the command that
+/// It lives in `SPATS[RE_SEARCH]` rather than beside the command that
 /// parsed it because `n` and `N` re-apply it, and because `'cpoptions'`
 /// "o" makes a *line* offset one-shot. [`do_search`](super::do_search)
 /// parses into it and puts the old one back for `SEARCH_KEEP`.
@@ -402,7 +401,7 @@ pub(crate) fn set_search_offset(off: SearchOffset) {
 /// Whether the last used pattern's text is `pat` — what the search-count
 /// cache compares itself against.
 pub(crate) fn last_used_pattern_is(pat: &[u8]) -> bool {
-    with_spat(last_idx.get(), |spat| {
+    with_spat(LAST_IDX.get(), |spat| {
         spat.pat.as_deref().is_some_and(|live| live == pat)
     })
 }
@@ -412,7 +411,7 @@ pub(crate) fn last_used_pattern_is(pat: &[u8]) -> bool {
 /// [`save_last_search_pattern`], which puts the real one back.
 pub(crate) fn replace_last_used_pattern(pat: &[u8]) {
     let text = XString::from_bytes(cstr::until_nul(pat));
-    update_spat(last_idx.get(), |spat| spat.pat = Some(text));
+    update_spat(LAST_IDX.get(), |spat| spat.pat = Some(text));
 }
 
 /// Whether case should be ignored for pattern `pat`, per `'ignorecase'`
@@ -427,13 +426,13 @@ pub fn ignorecase_opt(pat: &[u8], ic_in: bool, scs: bool) -> bool {
     let mut ic = ic_in;
     // 'infercase' completion does its own case handling.
     if ic
-        && !no_smartcase.get()
+        && !NO_SMARTCASE.get()
         && scs
         && !(ctrl_x_mode_not_default() && Buf::current().b_p_inf != 0)
     {
         ic = !pat_has_uppercase(pat);
     }
-    no_smartcase.set(false);
+    NO_SMARTCASE.set(false);
     ic
 }
 
@@ -504,18 +503,18 @@ pub fn set_last_search_pat(s: &[u8], idx: c_int, magic: bool, setlast: bool) {
     );
     set_vv_searchforward();
     if setlast {
-        last_idx.set(idx);
+        LAST_IDX.set(idx);
     }
-    if save_level.get() != 0 {
+    if SAVE_LEVEL.get() != 0 {
         // Upstream takes the flags from slot 0 whichever slot is being
         // set, then overwrites only the string. Preserved.
         let mut saved = with_spat(RE_SEARCH, Clone::clone);
         saved.pat = spat_text(idx);
-        saved_spats.with_mut(|slots| slots[slot(idx)] = saved);
-        saved_spats_last_idx.set(last_idx.get());
+        SAVED_SPATS.with_mut(|slots| slots[slot(idx)] = saved);
+        SAVED_SPATS_LAST_IDX.set(LAST_IDX.get());
     }
     // With 'hlsearch' a changed pattern means a redraw.
-    if p_hls() && idx == last_idx.get() && !no_hlsearch.get() {
+    if p_hls() && idx == LAST_IDX.get() && !NO_HLSEARCH.get() {
         redraw_all_later(UPD_SOME_VALID);
     }
 }
@@ -523,13 +522,13 @@ pub fn set_last_search_pat(s: &[u8], idx: c_int, magic: bool, setlast: bool) {
 /// Compile the last used search pattern, for highlighting every match in a
 /// window. Leaves no program in `regmatch` when there is no pattern.
 pub fn last_pat_prog(regmatch: &mut RegMMatch) {
-    if !has_spat(last_idx.get()) {
+    if !has_spat(LAST_IDX.get()) {
         regmatch.regprog = None;
         return;
     }
     // So it doesn't beep if the pattern is bad.
     let _no_emsg = Suppress::emsg();
-    let _ = search_regcomp(b"", 0, last_idx.get(), SEARCH_KEEP, regmatch);
+    let _ = search_regcomp(b"", 0, LAST_IDX.get(), SEARCH_KEEP, regmatch);
 }
 
 /// Set the direction `n` repeats in, for `:let v:searchforward =`.
@@ -679,7 +678,7 @@ pub(crate) fn shada_set_pattern(is_substitute: bool, pattern: ShadaPattern) {
 
 /// Record which of the two patterns was used last.
 pub fn set_last_used_pattern(is_substitute_pattern: bool) {
-    last_idx.set(if is_substitute_pattern {
+    LAST_IDX.set(if is_substitute_pattern {
         RE_SUBST
     } else {
         RE_SEARCH
@@ -689,14 +688,14 @@ pub fn set_last_used_pattern(is_substitute_pattern: bool) {
 /// Whether the search pattern, rather than the substitute pattern, was the
 /// one used last.
 pub fn search_was_last_used() -> bool {
-    last_idx.get() == RE_SEARCH
+    LAST_IDX.get() == RE_SEARCH
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::eval::test_fixture::Fixture;
-    use crate::ex_docmd::state::cmdmod;
+    use crate::ex_docmd::state::CMDMOD;
 
     /// Compile `a\xc0` with `'rightleft'` on and `'rightleftcmd'` set to
     /// `rlc`, under `:keeppatterns` so the remembered search patterns of
@@ -707,11 +706,11 @@ mod tests {
         let mut win = Win::current();
         win.w_onebuf_opt.wo_rl = 1;
         win.w_onebuf_opt.wo_rlc = Some(XString::from(rlc));
-        let flags = cmdmod.with(|c| c.cmod_flags);
-        cmdmod.with_mut(|c| c.cmod_flags |= CmdModFlags::KEEPPATTERNS);
+        let flags = CMDMOD.with(|c| c.cmod_flags);
+        CMDMOD.with_mut(|c| c.cmod_flags |= CmdModFlags::KEEPPATTERNS);
         let mut regmatch = RegMMatch::default();
         let rc = search_regcomp(b"a\xc0", 0, 0, 0, &mut regmatch);
-        cmdmod.with_mut(|c| c.cmod_flags = flags);
+        CMDMOD.with_mut(|c| c.cmod_flags = flags);
         assert!(rc.is_ok(), "the pattern compiles");
         get_search_pat()
     }

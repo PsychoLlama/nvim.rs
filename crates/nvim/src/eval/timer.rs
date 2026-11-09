@@ -29,7 +29,7 @@ use crate::eval::{LAST_TIMER_ID, TIMERS, callback_call};
 use crate::event::time::{OwnedTimer, TimerQueue};
 use crate::ex_docmd::{get_pressedreturn, set_pressedreturn};
 use crate::ex_eval::discard_current_exception;
-use crate::ex_eval::state::did_throw;
+use crate::ex_eval::state::DID_THROW;
 use crate::message::state::{CALLED_EMSG, DID_EMSG};
 use crate::os::libc::{int64_t, uint64_t};
 use crate::registry::SlotTable;
@@ -135,7 +135,7 @@ fn timer_due_cb(id: uint64_t) {
     callback_free(&mut callback);
 
     let failed = CALLED_EMSG.get() > called_emsg_before && DID_EMSG.get() != 0;
-    if failed && did_throw.get() {
+    if failed && DID_THROW.get() {
         discard_current_exception();
     }
     DID_EMSG.set(save_did_emsg);

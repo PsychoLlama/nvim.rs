@@ -22,7 +22,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
 use crate::ascii::CAR;
@@ -268,7 +267,7 @@ crate::flag_set! {
 /// The last `:substitute` replacement, after its own `~`s were expanded:
 /// what the next `~` (and a `\~` in a pattern) stands for. `None` until a
 /// substitution has run, and after one with an empty replacement.
-static reg_prev_sub: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static REG_PREV_SUB: GlobalCell<Option<XString>> = GlobalCell::new(None);
 const REGEXP_INRANGE: &CStr = c"]^-n\\";
 const REGEXP_ABBR: &CStr = c"nrtebdoxuU";
 pub const RF_ICASE: c_int = 1;
@@ -282,8 +281,8 @@ pub const REG_NOPAREN: c_int = 0;
 pub const REG_PAREN: c_int = 1;
 pub const REG_ZPAREN: c_int = 2;
 pub const REG_NPAREN: c_int = 3;
-static can_f_submatch: GlobalCell<bool> = GlobalCell::new(false);
-static rsm: GlobalCell<RegSubMatch> = GlobalCell::new(RegSubMatch::None);
+static CAN_F_SUBMATCH: GlobalCell<bool> = GlobalCell::new(false);
+static RSM: GlobalCell<RegSubMatch> = GlobalCell::new(RegSubMatch::None);
 pub const HASWIDTH: c_int = 0x1 as c_int;
 pub const SIMPLE: c_int = 0x2 as c_int;
 pub const SPSTART: c_int = 0x4 as c_int;

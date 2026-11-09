@@ -35,7 +35,7 @@ use crate::ascii::NUL;
 use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::diff::diff_infold;
-use crate::diff::state::diff_context;
+use crate::diff::state::DIFF_CONTEXT;
 use crate::drawscreen::redraw_win_range_later;
 use crate::eval::eval_foldexpr;
 use crate::eval::vars::set_vim_var_nr;
@@ -301,8 +301,8 @@ impl Win {
                     while !GOT_INT.get() {
                         // 'foldexpr' may ask for the level of this line while we
                         // are working out the next one; park the answer.
-                        prev_lnum.set(line.lnum);
-                        prev_lnum_lvl.set(line.lvl);
+                        PREV_LNUM.set(line.lnum);
+                        PREV_LNUM_LVL.set(line.lvl);
                         line.lnum += 1;
                         if line.lnum > linecount {
                             break;
@@ -313,7 +313,7 @@ impl Win {
                             break;
                         }
                     }
-                    prev_lnum.set(LineNr::ZERO);
+                    PREV_LNUM.set(LineNr::ZERO);
                     if line.lnum > linecount {
                         break;
                     }
@@ -346,7 +346,7 @@ impl Win {
 
 /// Update the folding for window "wp", at least from lines "top" to "bot".
 pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineNr) {
-    if invalid_top.get() != LineNr::ZERO {
+    if INVALID_TOP.get() != LineNr::ZERO {
         // Already updating this window; the recursion would fight itself.
         return;
     }
@@ -358,8 +358,8 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
     }
     if foldmethod_is_diff(win) {
         // 'diffopt' context lines belong to the same fold as the change.
-        top = (top - diff_context.get()).max(LineNr::ONE);
-        bot += diff_context.get();
+        top = (top - DIFF_CONTEXT.get()).max(LineNr::ONE);
+        bot += DIFF_CONTEXT.get();
     }
     top = top.min(win.buffer().b_ml.ml_line_count);
     let mut line = FoldLine {
@@ -373,9 +373,9 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
         end: MAX_LEVEL + 1,
         had_end: MAX_LEVEL + 1,
     };
-    fold_changed.set(false);
-    invalid_top.set(top);
-    invalid_bot.set(bot);
+    FOLD_CHANGED.set(false);
+    INVALID_TOP.set(top);
+    INVALID_BOT.set(bot);
 
     // Pick the level getter and prime `line` with a level for `top`.
     let method;
@@ -500,8 +500,8 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
             }
         }
         if line.lvl > 0 {
-            invalid_top.set(line.lnum);
-            invalid_bot.set(end);
+            INVALID_TOP.set(line.lnum);
+            INVALID_BOT.set(end);
             let update = win.update_computed_folds(
                 &mut path,
                 1,
@@ -529,13 +529,13 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
     if !lost {
         win.with_folds(|folds| fold_remove(folds, start, end));
     }
-    if fold_changed.get() && win.w_onebuf_opt.wo_fen != 0 {
+    if FOLD_CHANGED.get() && win.w_onebuf_opt.wo_fen != 0 {
         changed_window_setting(win);
     }
     if end != bot && !lost {
         redraw_win_range_later(win, top, end);
     }
-    invalid_top.set(LineNr::ZERO);
+    INVALID_TOP.set(LineNr::ZERO);
 }
 
 /// What one pass of [`Win::update_computed_folds`]'s loop does once the
@@ -573,7 +573,7 @@ fn finish_fold(
     if fold.len < lnum - fold.top {
         fold.len = lnum - fold.top;
         fold.small = None;
-        fold_changed.set(true);
+        FOLD_CHANGED.set(true);
     } else if fold.top + fold.len > LineNr::new(linecount) {
         fold.len = linecount - fold.top.get() + 1;
     }
@@ -592,7 +592,7 @@ fn finish_fold(
         } else {
             fold.len = lnum - fold.top;
         }
-        fold_changed.set(true);
+        FOLD_CHANGED.set(true);
     }
     // Absorb or drop the folds the new one now overlaps.
     while let Some(next) = folds.get_mut(index + 1) {
@@ -611,14 +611,14 @@ fn finish_fold(
                 );
                 next.len -= lnum - nt;
                 next.top = lnum;
-                fold_changed.set(true);
+                FOLD_CHANGED.set(true);
             }
             if lvl >= level {
                 fold_merge(folds, index);
             }
             break;
         }
-        fold_changed.set(true);
+        FOLD_CHANGED.set(true);
         delete_fold_entry(folds, index + 1, true);
     }
     bot.max(lnum - 1)
@@ -712,7 +712,7 @@ impl Reuse<'_> {
                 if self.open_ended {
                     *self.finish = true;
                 }
-                fold_changed.set(true);
+                FOLD_CHANGED.set(true);
                 return Some(at);
             }
             let mut ci = i;
@@ -732,7 +732,7 @@ impl Reuse<'_> {
                         LINES_DELETED.get(),
                         0,
                     );
-                    fold_changed.set(true);
+                    FOLD_CHANGED.set(true);
                 }
                 continue;
             }
@@ -761,7 +761,7 @@ impl Reuse<'_> {
                     current.len += ct - firstlnum;
                     current.top = firstlnum;
                     current.small = None;
-                    fold_changed.set(true);
+                    FOLD_CHANGED.set(true);
                 } else if line.start != 0 && lvl == level || firstlnum != startlnum {
                     // It starts above: break it in two so the new fold can
                     // start where the levels say it does.

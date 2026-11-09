@@ -139,7 +139,7 @@ use crate::api::window::{
 };
 use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::text_locked;
-use crate::guard::textlock;
+use crate::guard::TEXTLOCK;
 use crate::lua::converter::binding::{
     Binding, Blame, PUSH, PUSH_SPECIAL, expr_map_locked_error, text_locked_error,
 };

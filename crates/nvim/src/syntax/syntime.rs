@@ -24,8 +24,8 @@ use super::*;
 /// `:syntime {on,off,clear,report}`.
 pub(crate) fn ex_syntime(excmd: &mut ExArg) {
     match excmd.line.arg() {
-        b"on" => syn_time_on.set(true),
-        b"off" => syn_time_on.set(false),
+        b"on" => SYN_TIME_ON.set(true),
+        b"off" => SYN_TIME_ON.set(false),
         b"clear" => syntime_clear(),
         b"report" => syntime_report(),
         _ => {

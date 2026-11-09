@@ -20,7 +20,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::cstr;
 use crate::memfile::BlockId;
@@ -39,7 +38,7 @@ use super::*;
 const ML_SIMPLE: c_int = 0x10;
 
 /// Suppresses a second complaint from a redraw triggered by the first.
-static ml_get_recursive: GlobalCell<c_int> = GlobalCell::new(0);
+static ML_GET_RECURSIVE: GlobalCell<c_int> = GlobalCell::new(0);
 
 impl MemLine {
     /// Block `id`'s bytes.
@@ -75,12 +74,12 @@ pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
     }
 
     if lnum > buffer.b_ml.ml_line_count {
-        if ml_get_recursive.get() == 0 {
+        if ML_GET_RECURSIVE.get() == 0 {
             // Avoid giving this message for a recursive call, which
             // happens when the redraw it triggers reads the same line.
-            ml_get_recursive.set(1);
+            ML_GET_RECURSIVE.set(1);
             siemsg!("E315: ml_get: Invalid lnum: {}", int64_t::from(lnum));
-            ml_get_recursive.set(0);
+            ML_GET_RECURSIVE.set(0);
         }
         ml_flush_line(buffer);
         buffer.b_ml.cache_placeholder(c"???", lnum);
@@ -140,8 +139,8 @@ pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
 /// cache the `???` placeholder.
 #[cold]
 fn line_not_found(mut buffer: Buf, lnum: LineNr) {
-    if ml_get_recursive.get() == 0 {
-        ml_get_recursive.set(1);
+    if ML_GET_RECURSIVE.get() == 0 {
+        ML_GET_RECURSIVE.set(1);
         let mut name = trans_bufname(buffer);
         shorten_dir(&mut name);
         // The missing space before "in buffer" is upstream's.
@@ -152,7 +151,7 @@ fn line_not_found(mut buffer: Buf, lnum: LineNr) {
             int64_t::from(lnum),
             buffer.handle
         );
-        ml_get_recursive.set(0);
+        ML_GET_RECURSIVE.set(0);
     }
     buffer.b_ml.cache_placeholder(c"???", lnum);
 }
@@ -160,7 +159,7 @@ fn line_not_found(mut buffer: Buf, lnum: LineNr) {
 /// Set while a line is being written back: the write can append and delete
 /// lines, which call back in here, and the line is already off the books by
 /// then, so there is nothing left to do.
-static flushing: GlobalCell<bool> = GlobalCell::new(false);
+static FLUSHING: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Write the line `ml_replace` left in the line cache back into its data
 /// block, and forget it.
@@ -170,7 +169,7 @@ pub(crate) fn ml_flush_line(mut buffer: Buf) {
     }
 
     if buffer.b_ml.line_is_dirty() {
-        if flushing.get() {
+        if FLUSHING.get() {
             return;
         }
         let lnum = buffer.b_ml.cached_lnum();
@@ -186,13 +185,13 @@ pub(crate) fn ml_flush_line(mut buffer: Buf) {
 /// flushing the line cache does. The cache's line number and length are
 /// what the chunk index reads while it happens.
 pub(crate) fn ml_flush_text(mut buffer: Buf, lnum: LineNr, text: &[u8]) {
-    if flushing.get() {
+    if FLUSHING.get() {
         return;
     }
-    flushing.set(true);
+    FLUSHING.set(true);
     buffer.flush_count += 1;
     ml_write_line(buffer, lnum, text);
-    flushing.set(false);
+    FLUSHING.set(false);
 }
 
 /// Write `new_line` (its NUL included) over line `lnum` of `buffer`.

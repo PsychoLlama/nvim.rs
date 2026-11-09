@@ -122,7 +122,7 @@ pub fn diff_buf_delete(buffer: Buf) {
             tp.tp_diffbuf[i] = None;
             tp.tp_diff_invalid = 1;
             if tp.is_current() {
-                need_diff_redraw.set(true);
+                NEED_DIFF_REDRAW.set(true);
                 redraw_later(Win::current(), UPD_VALID);
             }
         }
@@ -246,7 +246,7 @@ fn diff_mark_adjust_tp(
         line2,
         amount,
         amount_after,
-        busy: diff_busy.get(),
+        busy: DIFF_BUSY.get(),
     };
     let slots = tabpage.tp_diffbuf;
     let reshaped = tabpage.with_diff(|blocks| edit.apply(blocks, &slots));
@@ -256,10 +256,10 @@ fn diff_mark_adjust_tp(
 
     if tabpage.is_current() {
         // Not right away: this runs per edit, and redrawing is slow.
-        need_diff_redraw.set(true);
+        NEED_DIFF_REDRAW.set(true);
         // The filler lines may have moved, so the scroll binding has to
         // be recomputed -- also postponed until the redraw.
-        diff_need_scrollbind.set(true);
+        DIFF_NEED_SCROLLBIND.set(true);
     }
 }
 

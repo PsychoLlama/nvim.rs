@@ -20,8 +20,8 @@ use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::changed_lines;
 use crate::charset::skip;
 use crate::cstr::byte_at;
+use crate::extmark::EXTMARK_UNDO;
 use crate::extmark::extmark_splice_cols;
-use crate::extmark::kExtmarkUndo;
 use crate::mbyte::cluster_len;
 use crate::memline::{Lines, ml_replace_buf_text};
 use crate::message::E_MODIFIABLE;
@@ -62,11 +62,11 @@ pub(super) fn fold_create_markers(window: Win, start: Pos, end: Pos) {
 /// where [`parse_marker`] last measured them.
 ///
 /// The lengths are the stored ones rather than a fresh split, as upstream
-/// reads `foldstartmarkerlen`; a cut past the end of the value is clamped.
+/// reads `FOLDSTARTMARKERLEN`; a cut past the end of the value is clamped.
 pub(super) fn markers(foldmarker: &[u8]) -> (&[u8], &[u8]) {
-    let start_len = foldstartmarkerlen.get().min(foldmarker.len());
+    let start_len = FOLDSTARTMARKERLEN.get().min(foldmarker.len());
     let rest = foldmarker.get(start_len + 1..).unwrap_or_default();
-    let end_len = foldendmarkerlen.get().min(rest.len());
+    let end_len = FOLDENDMARKERLEN.get().min(rest.len());
     (&foldmarker[..start_len], &rest[..end_len])
 }
 
@@ -110,7 +110,7 @@ pub(super) fn fold_add_marker(buffer: Buf, pos: Pos, marker: &[u8]) {
             ColNr::from_index(text.len()),
             ColNr::ZERO,
             ColNr::from_index(added),
-            kExtmarkUndo,
+            EXTMARK_UNDO,
         );
     }
 }
@@ -203,12 +203,12 @@ pub(super) fn fold_del_marker(buffer: Buf, lnum: LineNr, marker: &[u8]) {
         ColNr::from_index(start),
         ColNr::from_index(len),
         ColNr::ZERO,
-        kExtmarkUndo,
+        EXTMARK_UNDO,
     );
 }
 
 /// Parse 'foldmarker' and set "foldstartmarkerlen" and "foldendmarkerlen".
-/// The end marker starts just past the comma, at `foldstartmarkerlen + 1`.
+/// The end marker starts just past the comma, at `FOLDSTARTMARKERLEN + 1`.
 /// Relies on the option value to have been checked for correctness already.
 ///
 /// The lengths describe the value as it is now, so they go stale the
@@ -222,9 +222,9 @@ pub(super) fn parse_marker(window: Win) {
         .iter()
         .position(|&b| b == b',')
         .unwrap_or(foldmarker.len());
-    foldstartmarkerlen.set(comma);
+    FOLDSTARTMARKERLEN.set(comma);
     let end = foldmarker.get(comma + 1..).unwrap_or_default();
-    foldendmarkerlen.set(end.iter().position(|&b| b == 0).unwrap_or(end.len()));
+    FOLDENDMARKERLEN.set(end.iter().position(|&b| b == 0).unwrap_or(end.len()));
 }
 
 /// Low level function to get the foldlevel for the "marker" method.

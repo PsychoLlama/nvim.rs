@@ -3,7 +3,7 @@
 //! A [`SpellLang`] is everything a single `.spl` file turned into: three word
 //! trees, the affix and compound rules, the sound-folding tables, the REP
 //! list, and — once a `.sug` file has been read — a fourth tree of
-//! sound-folded forms. They are listed in the global `loaded_langs`, and
+//! sound-folded forms. They are listed in the global `LOADED_LANGS`, and
 //! shared by every window whose `'spelllang'` names them.
 //!
 //! Only three things happen to one here: it is allocated
@@ -342,17 +342,17 @@ impl LoadedLangs {
 }
 
 /// The language table. Windows name its slots in their `b_langp`.
-pub(crate) static loaded_langs: GlobalCell<LoadedLangs> = GlobalCell::new(LoadedLangs::new());
+pub(crate) static LOADED_LANGS: GlobalCell<LoadedLangs> = GlobalCell::new(LoadedLangs::new());
 
 /// The loaded languages' slots, newest first: a copy to walk, because a
 /// walk may load another language.
 pub(crate) fn languages() -> Vec<LangId> {
-    loaded_langs.with(|langs| langs.order.clone())
+    LOADED_LANGS.with(|langs| langs.order.clone())
 }
 
 /// List a freshly read language as the newest, and answer its slot.
 pub fn register_lang(slang: Box<SpellLang>) -> LangId {
-    loaded_langs.with_mut(|langs| {
+    LOADED_LANGS.with_mut(|langs| {
         let id = LangId(u32::try_from(langs.slots.len()).expect("fewer than 2^32 spell files"));
         langs.slots.push(Some(slang));
         langs.order.insert(0, id);
@@ -362,7 +362,7 @@ pub fn register_lang(slang: Box<SpellLang>) -> LangId {
 
 /// Run `f` over the language in slot `id`, if it is there.
 pub(crate) fn with_lang<R>(id: LangId, f: impl FnOnce(&SpellLang) -> R) -> Option<R> {
-    loaded_langs.with(|langs| langs.get(id).map(f))
+    LOADED_LANGS.with(|langs| langs.get(id).map(f))
 }
 
 /// Take the language out of slot `id` to change it with the table unlocked
@@ -370,18 +370,18 @@ pub(crate) fn with_lang<R>(id: LangId, f: impl FnOnce(&SpellLang) -> R) -> Optio
 /// until [`put_lang`] returns it. A lookup meanwhile sees no language
 /// there, as upstream's saw a cleared one.
 pub fn take_lang(id: LangId) -> Option<Box<SpellLang>> {
-    loaded_langs.with_mut(|langs| langs.slots.get_mut(id.0 as usize)?.take())
+    LOADED_LANGS.with_mut(|langs| langs.slots.get_mut(id.0 as usize)?.take())
 }
 
 /// Return a language [`take_lang`] took to its slot.
 pub(crate) fn put_lang(id: LangId, slang: Box<SpellLang>) {
-    loaded_langs.with_mut(|langs| langs.slots[id.0 as usize] = Some(slang));
+    LOADED_LANGS.with_mut(|langs| langs.slots[id.0 as usize] = Some(slang));
 }
 
 /// Drop every language. The slots stay allocated, empty, so that an id a
 /// window still holds names nothing rather than a later language.
 pub(crate) fn free_langs() {
-    let dropped = loaded_langs.with_mut(|langs| {
+    let dropped = LOADED_LANGS.with_mut(|langs| {
         langs.order.clear();
         langs.slots.iter_mut().map(Option::take).collect::<Vec<_>>()
     });

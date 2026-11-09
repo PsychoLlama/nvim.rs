@@ -35,7 +35,7 @@ use crate::option::magic_isset;
 use crate::option::vars::p_pvh;
 use crate::search::find_pattern_in_path;
 use crate::tag::state::{
-    g_do_tagpreview, postponed_split, postponed_split_flags, postponed_split_tab,
+    G_DO_TAGPREVIEW, POSTPONED_SPLIT, POSTPONED_SPLIT_FLAGS, POSTPONED_SPLIT_TAB,
 };
 use crate::tag::{TagCmd, do_tag};
 use crate::types::ExArg;
@@ -111,7 +111,7 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
 
 /// `:ptag` and friends — the same as `:tag`, in the preview window.
 pub(crate) fn ex_ptag(excmd: &mut ExArg) {
-    g_do_tagpreview.set(number_as_int(p_pvh()));
+    G_DO_TAGPREVIEW.set(number_as_int(p_pvh()));
     ex_tag_cmd(
         excmd,
         &cmdnames[excmd.cmdidx.index()].cmd_name.to_bytes()[1..],
@@ -121,15 +121,15 @@ pub(crate) fn ex_ptag(excmd: &mut ExArg) {
 /// `:stag` and friends — the same as `:tag`, in a new window.
 pub(crate) fn ex_stag(excmd: &mut ExArg) {
     // `-1` means "split, and let the tag code choose the size".
-    postponed_split.set(-1);
-    postponed_split_flags.set(cmdmod_split());
-    postponed_split_tab.set(cmdmod_tab());
+    POSTPONED_SPLIT.set(-1);
+    POSTPONED_SPLIT_FLAGS.set(cmdmod_split());
+    POSTPONED_SPLIT_TAB.set(cmdmod_tab());
     ex_tag_cmd(
         excmd,
         &cmdnames[excmd.cmdidx.index()].cmd_name.to_bytes()[1..],
     );
-    postponed_split_flags.set(0);
-    postponed_split_tab.set(0);
+    POSTPONED_SPLIT_FLAGS.set(0);
+    POSTPONED_SPLIT_TAB.set(0);
 }
 
 /// `:tag`, `:tnext`, `:tselect`, `:tjump`, `:tprevious`, `:tpop`, …

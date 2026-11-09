@@ -69,8 +69,8 @@ use crate::window::win_valid_any_tab;
 use super::chartab::init_spell_chartab;
 use super::slang::{free_langs, register_lang, with_lang};
 use super::{
-    MAXWLEN, REGION_ALL, SpellLoad, int_wordlist, kEqualFiles, languages, last_replacement,
-    loaded_langs,
+    EQUAL_FILES, INT_WORDLIST, LAST_REPLACEMENT, LOADED_LANGS, MAXWLEN, REGION_ALL, SpellLoad,
+    languages,
 };
 use crate::optionstr::{OptString, OptStringRef};
 use crate::runtime::RuntimeOpts;
@@ -104,7 +104,7 @@ fn joined(parts: &[&[u8]], size: usize) -> Vec<u8> {
 /// The `.spl` file name for the internal word list.
 fn int_wordlist_spl() -> Vec<u8> {
     let enc = spell_enc();
-    int_wordlist.with(|list| {
+    INT_WORDLIST.with(|list| {
         // Only asked for while there is a list; upstream's `%s` of a null
         // pointer would print "(null)".
         let list = list.as_ref().map_or(&b"(null)"[..], |list| list);
@@ -270,7 +270,7 @@ fn put_name(buf: &mut [u8], text: &[u8]) {
 /// else by language name, ignoring ASCII case.
 fn names_language(slang: &SpellLang, name: &[u8], filename: bool) -> bool {
     if filename {
-        path_full_compare(&cstr::owned(name), slang.sl_fname.as_cstr(), false, true) == kEqualFiles
+        path_full_compare(&cstr::owned(name), slang.sl_fname.as_cstr(), false, true) == EQUAL_FILES
     } else {
         name.eq_ignore_ascii_case(&slang.sl_name)
     }
@@ -355,7 +355,7 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
         }
 
         let name = cstr::until_nul(&lang).to_vec();
-        let loaded = loaded_langs.with(|langs| {
+        let loaded = LOADED_LANGS.with(|langs| {
             langs
                 .iter()
                 .any(|(_, slang)| names_language(slang, &name, filename))
@@ -398,7 +398,7 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
         for id in languages() {
             // The mask, whether the language is NOBREAK, and whether its
             // region is one it does not have.
-            let entry = loaded_langs.with(|langs| {
+            let entry = LOADED_LANGS.with(|langs| {
                 let slang = langs.get(id)?;
                 if !names_language(slang, &name, filename) {
                     return None;
@@ -453,7 +453,7 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
         let mut round = 0;
         while round == 0 || !spf.is_empty() {
             let spf_name = if round == 0 {
-                if int_wordlist.with(Option::is_none) {
+                if INT_WORDLIST.with(Option::is_none) {
                     round += 1;
                     continue;
                 }
@@ -466,10 +466,10 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
                 // Skip it if the loop above already took it.
                 let name = cstr::owned(&spf_name);
                 let taken = ga.iter().any(|lp| {
-                    loaded_langs.with(|langs| {
+                    LOADED_LANGS.with(|langs| {
                         langs.get(lp.slang).is_some_and(|slang| {
                             path_full_compare(&name, slang.sl_fname.as_cstr(), false, true)
-                                == kEqualFiles
+                                == EQUAL_FILES
                         })
                     })
                 });
@@ -481,12 +481,12 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
             };
 
             let name = cstr::owned(&spf_name);
-            let mut slang = loaded_langs.with(|langs| {
+            let mut slang = LOADED_LANGS.with(|langs| {
                 langs
                     .iter()
                     .find(|(_, slang)| {
                         path_full_compare(&name, slang.sl_fname.as_cstr(), false, true)
-                            == kEqualFiles
+                            == EQUAL_FILES
                     })
                     .map(|(id, _)| id)
             });
@@ -561,7 +561,7 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
 /// language when that has them, else the first entry's whose name starts
 /// with the same two letters, so that "en-math" uses "en"'s.
 fn lend_tables(ga: &mut [LangP]) {
-    loaded_langs.with(|langs| {
+    LOADED_LANGS.with(|langs| {
         // What each entry's language offers: the first two bytes of its
         // name (a region suffix past them does not have to match), whether
         // it sound-folds, and whether it has REP items.
@@ -626,13 +626,13 @@ fn find_region(regions: &[u8], region: &[u8]) -> c_int {
 
 /// Delete the internal word list and its compiled `.spl`.
 pub fn spell_delete_wordlist() {
-    let Some(list) = int_wordlist.with(Clone::clone) else {
+    let Some(list) = INT_WORDLIST.with(Clone::clone) else {
         return;
     };
 
     os_remove(list.as_cstr());
     os_remove(&cstr::owned(&int_wordlist_spl()));
-    int_wordlist.set(None);
+    INT_WORDLIST.set(None);
 }
 
 /// Free every loaded language and everything derived from them.
@@ -645,7 +645,7 @@ pub fn spell_free_all() {
 
     spell_delete_wordlist();
 
-    last_replacement.set(None);
+    LAST_REPLACEMENT.set(None);
 }
 
 /// Drop every spelling table and load them again, after `'encoding'`
@@ -656,7 +656,7 @@ pub fn spell_reload() {
 
     // Only load word lists where 'spelllang' is set and some window on
     // the buffer has 'spell' on. The walk is over the current tab, which
-    // always starts at `firstwin`.
+    // always starts at `FIRSTWIN`.
     for wp in windows() {
         if wp.syn_block().b_p_spl.first_byte() != 0 && wp.w_onebuf_opt.wo_spell != 0 {
             let _ = parse_spelllang(wp);

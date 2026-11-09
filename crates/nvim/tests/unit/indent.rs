@@ -7,7 +7,7 @@
 //! it) and `get_sts_value`'s reading of the current buffer.
 //!
 //! `get_sts_value` is the reason this file needs the editor lock: it answers
-//! from `curbuf`, and `cargo test` runs cases on threads of one process
+//! from `CURBUF`, and `cargo test` runs cases on threads of one process
 //! where the LuaJIT harness forked a child per case and could scribble on
 //! the real buffer's options freely.
 
@@ -25,7 +25,7 @@ use crate::support::{Editor, Sandbox};
 /// afterwards, so that writing it cannot outlive the case.
 ///
 /// The spec wrote the options straight onto the editor's own buffer, which a
-/// forked child could get away with; this file then pointed `curbuf` at a
+/// forked child could get away with; this file then pointed `CURBUF` at a
 /// zeroed `Buffer` of the case's own instead. That is no longer a buffer the
 /// editor can stand in -- "current" is the *identity* of a registered buffer
 /// ([`Buf::current`]), and a boxed one is in no registry -- so the editor's

@@ -14,9 +14,9 @@ use super::{MENU_ALL_MODES, RET_NIL_BOOL};
 use crate::api::private::helpers::api_metadata;
 use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
-use crate::autocmd::state::autocmd_busy;
+use crate::autocmd::state::AUTOCMD_BUSY;
 use crate::cmdexpand::cmdline_pum_active;
-use crate::cmdexpand::state::wild_menu_showing;
+use crate::cmdexpand::state::WILD_MENU_SHOWING;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, tv_dict_alloc_ret, tv_list_alloc_ret};
 use crate::eval::vars::{get_vim_var_nr, set_vim_var_nr};
@@ -37,9 +37,9 @@ use crate::normal::op_pending;
 use crate::ops::cursor_pos_info;
 use crate::os::cshim::cstr_ncasecmp;
 use crate::os::env::{hostname_into, process_id};
-use crate::os::state::windowsVersion;
+use crate::os::state::WINDOWS_VERSION;
 use crate::popupmenu::{pum_set_event_info, pum_visible};
-use crate::startup::{starting, stdin_isatty, stdout_isatty};
+use crate::startup::{STDIN_ISATTY, STDOUT_ISATTY, starting};
 use crate::state::mode::STATE;
 use crate::state::{MODE_CMDLINE, get_mode, get_was_safe_state};
 use crate::strings::has_char;
@@ -235,8 +235,8 @@ fn special_feature(name: &CStr) -> Option<bool> {
     }
     Some(match () {
         _ if same_name(name, c"vim_starting") => starting.get() != 0,
-        _ if same_name(name, c"ttyin") => stdin_isatty.get(),
-        _ if same_name(name, c"ttyout") => stdout_isatty.get(),
+        _ if same_name(name, c"ttyin") => STDIN_ISATTY.get(),
+        _ if same_name(name, c"ttyout") => STDOUT_ISATTY.get(),
         _ if same_name(name, c"multi_byte_encoding") => true,
         _ if same_name(name, c"gui_running") => ui_gui_attached(),
         _ if same_name(name, c"syntax_items") => syntax_present(Win::current()),
@@ -373,7 +373,7 @@ pub fn f_state(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if op_pending() {
         add(b'o');
     }
-    if autocmd_busy.get() {
+    if AUTOCMD_BUSY.get() {
         add(b'x');
     }
     if ins_compl_active() {
@@ -487,7 +487,7 @@ pub fn f_tabpagebuflist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
     };
     let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
     // `windows_in_tab` knows that the current tab's window list lives in
-    // `firstwin` rather than in the tab page record, which is only
+    // `FIRSTWIN` rather than in the tab page record, which is only
     // updated on the way out.
     for wp in windows_in_tab(tab) {
         list.push_number(VarNumber::from(wp.w_buffer.handle().get()));
@@ -508,14 +508,14 @@ pub fn f_visualmode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `wildmenumode()`
 pub(crate) fn f_wildmenumode(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    if wild_menu_showing.get() != 0 || (STATE.get() & MODE_CMDLINE != 0 && cmdline_pum_active()) {
+    if WILD_MENU_SHOWING.get() != 0 || (STATE.get() & MODE_CMDLINE != 0 && cmdline_pum_active()) {
         result.write_number(1);
     }
 }
 
 /// `windowsversion()` — always empty here; kept for scripts that ask.
 pub fn f_windowsversion(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(Some(c_chars_until_nul(&windowsVersion)));
+    result.write_string(Some(c_chars_until_nul(&WINDOWS_VERSION)));
 }
 
 /// A copy of the C characters in `chars` up to the first NUL, or all of

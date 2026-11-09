@@ -122,17 +122,17 @@ impl SourceCookie {
         let from_buf_or_str = self.reads_buf_or_str();
 
         // If breakpoints have been added or deleted we need to look again.
-        if self.dbg_tick < debug_tick.get() && !from_buf_or_str {
+        if self.dbg_tick < DEBUG_TICK.get() && !from_buf_or_str {
             self.refresh_breakpoint();
         }
-        if do_profiling.get() == PROF_YES {
+        if DO_PROFILING.get() == PROF_YES {
             script_line_end();
         }
         // Set the current sourcing line number.
         set_sourcing_lnum(self.sourcing_lnum + 1);
 
         let mut line = self.next_line();
-        if line.is_some() && do_profiling.get() == PROF_YES {
+        if line.is_some() && DO_PROFILING.get() == PROF_YES {
             script_line_start();
         }
 
@@ -168,7 +168,7 @@ impl SourceCookie {
     /// debugger's tick so we only look again when something changed.
     fn refresh_breakpoint(&mut self) {
         self.breakpoint = dbg_find_breakpoint_named(true, self.fname.as_cstr(), sourcing_lnum());
-        self.dbg_tick = debug_tick.get();
+        self.dbg_tick = DEBUG_TICK.get();
     }
 
     /// The next line of the script, using the one read ahead if there is
