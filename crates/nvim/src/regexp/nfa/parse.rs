@@ -15,10 +15,11 @@
 )]
 
 use crate::narrow::number_as_int;
-use crate::regexp::NfaOp;
-use crate::regexp::RegCompiler;
-use crate::regexp::low_byte;
-use crate::regexp::set_magic;
+use crate::regexp::chars::{
+    M_AMP, M_AT, M_BAR, M_BRACE, M_C_LOWER, M_C_UPPER, M_EQUAL, M_M_LOWER, M_M_UPPER,
+    M_PAREN_CLOSE, M_PLUS, M_QUESTION, M_STAR, M_V_LOWER, M_V_UPPER, M_Z_UPPER,
+};
+use crate::regexp::{NfaOp, RegCompiler, low_byte, set_magic};
 use core::ffi::c_int;
 
 use super::Parsed;
@@ -30,23 +31,6 @@ use crate::regexp::{
     RF_NOICASE, getchr, getdecchrs, magic, peekchr, re_multi_type, read_limits,
     restore_parse_state, save_parse_state, skipchr, skipchr_keepstart, spelled, unmagic,
 };
-
-const M_AMP: c_int = magic(b'&');
-const M_AT: c_int = magic(b'@');
-const M_BAR: c_int = magic(b'|');
-const M_BRACE: c_int = magic(b'{');
-const M_C_LOWER: c_int = magic(b'c');
-const M_C_UPPER: c_int = magic(b'C');
-const M_EQUAL: c_int = magic(b'=');
-const M_M_LOWER: c_int = magic(b'm');
-const M_M_UPPER: c_int = magic(b'M');
-const M_PAREN_CLOSE: c_int = magic(b')');
-const M_PLUS: c_int = magic(b'+');
-const M_QUESTION: c_int = magic(b'?');
-const M_STAR: c_int = magic(b'*');
-const M_V_LOWER: c_int = magic(b'v');
-const M_V_UPPER: c_int = magic(b'V');
-const M_Z_UPPER: c_int = magic(b'Z');
 
 /// Above this many repetitions the automatic engine gives up and lets the
 /// backtracking engine have the pattern: `\{n,m}` is expanded by re-parsing

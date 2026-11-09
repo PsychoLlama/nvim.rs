@@ -36,6 +36,38 @@ pub(crate) const fn magic(c: u8) -> c_int {
     c as c_int - 256
 }
 
+/// The metacharacters the two compilers name, in their marker form.
+pub(crate) const M_0: c_int = magic(b'0');
+pub(crate) const M_1: c_int = magic(b'1');
+pub(crate) const M_9: c_int = magic(b'9');
+pub(crate) const M_AMP: c_int = magic(b'&');
+pub(crate) const M_AT: c_int = magic(b'@');
+pub(crate) const M_BAR: c_int = magic(b'|');
+pub(crate) const M_BRACE: c_int = magic(b'{');
+pub(crate) const M_BRACKET: c_int = magic(b'[');
+pub(crate) const M_CARET: c_int = magic(b'^');
+pub(crate) const M_C_LOWER: c_int = magic(b'c');
+pub(crate) const M_C_UPPER: c_int = magic(b'C');
+pub(crate) const M_DOLLAR: c_int = magic(b'$');
+pub(crate) const M_EQUAL: c_int = magic(b'=');
+pub(crate) const M_GT: c_int = magic(b'>');
+pub(crate) const M_LT: c_int = magic(b'<');
+pub(crate) const M_M_LOWER: c_int = magic(b'm');
+pub(crate) const M_M_UPPER: c_int = magic(b'M');
+pub(crate) const M_N: c_int = magic(b'n');
+pub(crate) const M_PAREN_CLOSE: c_int = magic(b')');
+pub(crate) const M_PAREN_OPEN: c_int = magic(b'(');
+pub(crate) const M_PERCENT: c_int = magic(b'%');
+pub(crate) const M_PLUS: c_int = magic(b'+');
+pub(crate) const M_QUESTION: c_int = magic(b'?');
+pub(crate) const M_STAR: c_int = magic(b'*');
+pub(crate) const M_TILDE: c_int = magic(b'~');
+pub(crate) const M_UNDERSCORE: c_int = magic(b'_');
+pub(crate) const M_V_LOWER: c_int = magic(b'v');
+pub(crate) const M_V_UPPER: c_int = magic(b'V');
+pub(crate) const M_Z: c_int = magic(b'z');
+pub(crate) const M_Z_UPPER: c_int = magic(b'Z');
+
 /// The low byte of `c`, as C's store of an `int` in a `char_u`: how a
 /// token -- a character, or a metacharacter's negative code -- is matched
 /// against the ASCII letter it was spelled with.

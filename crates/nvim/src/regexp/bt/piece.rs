@@ -20,11 +20,11 @@
 use super::compile::Node;
 use crate::cstr;
 use crate::narrow::number_as_u32;
-use crate::regexp::RF_HAD_EOL;
-use crate::regexp::RegCompiler;
-use crate::regexp::byte_count;
-use crate::regexp::low_byte;
-use crate::regexp::set_magic;
+use crate::regexp::chars::{
+    M_AMP, M_AT, M_BAR, M_BRACE, M_C_LOWER, M_C_UPPER, M_EQUAL, M_M_LOWER, M_M_UPPER,
+    M_PAREN_CLOSE, M_PLUS, M_QUESTION, M_STAR, M_V_LOWER, M_V_UPPER, M_Z_UPPER,
+};
+use crate::regexp::{BtRegProg, RF_HAD_EOL, RegCompiler, byte_count, low_byte, set_magic};
 use core::ffi::c_int;
 
 use super::atom::regatom;
@@ -32,33 +32,15 @@ use super::compile::regnext;
 use super::op::BtOp;
 use crate::ascii::NUL;
 use crate::os::libc::int64_t;
-use crate::regexp::BtRegProg;
 use crate::regexp::mbyte::char_at_nul;
 use crate::regexp::{
     CompileError, Compiled, HASLOOKBH, HASNL, HASWIDTH, INT_MAX, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF,
     MAGIC_ON, NOT_MULTI, NSUBEXP, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, REGMAGIC,
     RF_HASNL, RF_ICASE, RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, SIMPLE, SPSTART, Spelled, WORST,
-    getchr, getdecchrs, gethexchrs, getoctchrs, magic, peekchr, re_multi_type, read_limits,
-    skipchr, skipchr_keepstart, spelled, unmagic,
+    getchr, getdecchrs, gethexchrs, getoctchrs, peekchr, re_multi_type, read_limits, skipchr,
+    skipchr_keepstart, spelled, unmagic,
 };
 use core::cell::Cell;
-
-const M_AMP: c_int = magic(b'&');
-const M_AT: c_int = magic(b'@');
-const M_BAR: c_int = magic(b'|');
-const M_BRACE: c_int = magic(b'{');
-const M_C_LOWER: c_int = magic(b'c');
-const M_C_UPPER: c_int = magic(b'C');
-const M_EQUAL: c_int = magic(b'=');
-const M_M_LOWER: c_int = magic(b'm');
-const M_M_UPPER: c_int = magic(b'M');
-const M_PAREN_CLOSE: c_int = magic(b')');
-const M_PLUS: c_int = magic(b'+');
-const M_QUESTION: c_int = magic(b'?');
-const M_STAR: c_int = magic(b'*');
-const M_V_LOWER: c_int = magic(b'v');
-const M_V_UPPER: c_int = magic(b'V');
-const M_Z_UPPER: c_int = magic(b'Z');
 
 /// An atom, optionally followed by a repeat.
 ///

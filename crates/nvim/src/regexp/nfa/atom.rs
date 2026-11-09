@@ -14,8 +14,11 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::regexp::NfaOp;
-use crate::regexp::RegCompiler;
+use crate::regexp::chars::{
+    M_1, M_9, M_AMP, M_AT, M_BAR, M_BRACE, M_BRACKET, M_CARET, M_DOLLAR, M_EQUAL, M_GT, M_LT, M_N,
+    M_PAREN_CLOSE, M_PAREN_OPEN, M_PERCENT, M_PLUS, M_QUESTION, M_STAR, M_TILDE, M_UNDERSCORE, M_Z,
+};
+use crate::regexp::{NfaOp, RegCompiler};
 use core::ffi::c_int;
 
 use super::collection::{Collection, collection};
@@ -26,30 +29,7 @@ use super::literal::{
 use super::parse::nfa_reg;
 use super::{Parsed, cursor};
 use crate::ascii::NUL;
-use crate::regexp::{CompileError, NL, REG_PAREN, RF_HASNL, getchr, magic, unmagic};
-
-const M_AMP: c_int = magic(b'&');
-const M_AT: c_int = magic(b'@');
-const M_BAR: c_int = magic(b'|');
-const M_BRACE: c_int = magic(b'{');
-const M_BRACKET: c_int = magic(b'[');
-const M_CARET: c_int = magic(b'^');
-const M_DOLLAR: c_int = magic(b'$');
-const M_EQUAL: c_int = magic(b'=');
-const M_GT: c_int = magic(b'>');
-const M_LT: c_int = magic(b'<');
-const M_N: c_int = magic(b'n');
-const M_PAREN_CLOSE: c_int = magic(b')');
-const M_PAREN_OPEN: c_int = magic(b'(');
-const M_PERCENT: c_int = magic(b'%');
-const M_PLUS: c_int = magic(b'+');
-const M_QUESTION: c_int = magic(b'?');
-const M_STAR: c_int = magic(b'*');
-const M_TILDE: c_int = magic(b'~');
-const M_UNDERSCORE: c_int = magic(b'_');
-const M_Z: c_int = magic(b'z');
-const M_1: c_int = magic(b'1');
-const M_9: c_int = magic(b'9');
+use crate::regexp::{CompileError, NL, REG_PAREN, RF_HASNL, getchr, unmagic};
 
 /// Parse one atom and append it to the postfix program.
 pub(crate) fn nfa_regatom(rc: &mut RegCompiler) -> Parsed {

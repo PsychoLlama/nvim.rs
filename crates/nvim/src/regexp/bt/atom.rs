@@ -15,8 +15,12 @@
 )]
 
 use super::compile::Node;
-use crate::regexp::RegCompiler;
-use crate::regexp::low_byte;
+use crate::regexp::chars::{
+    M_0, M_1, M_9, M_AMP, M_AT, M_BAR, M_BRACE, M_BRACKET, M_CARET, M_DOLLAR, M_EQUAL, M_GT, M_LT,
+    M_N, M_PAREN_CLOSE, M_PAREN_OPEN, M_PERCENT, M_PLUS, M_QUESTION, M_STAR, M_TILDE, M_UNDERSCORE,
+    M_Z,
+};
+use crate::regexp::{RegCompiler, low_byte};
 use core::ffi::c_int;
 
 use super::collection::{Collection, collection};
@@ -28,32 +32,8 @@ use super::piece::reg;
 use crate::ascii::NUL;
 use crate::regexp::{
     CompileError, Compiled, HASLOOKBH, HASNL, HASWIDTH, MAGIC_ALL, MAGIC_ON, NL, REG_PAREN, SIMPLE,
-    SPSTART, Spelled, WORST, getchr, magic, spelled, unmagic,
+    SPSTART, Spelled, WORST, getchr, spelled, unmagic,
 };
-
-const M_AMP: c_int = magic(b'&');
-const M_AT: c_int = magic(b'@');
-const M_BAR: c_int = magic(b'|');
-const M_BRACE: c_int = magic(b'{');
-const M_BRACKET: c_int = magic(b'[');
-const M_CARET: c_int = magic(b'^');
-const M_DOLLAR: c_int = magic(b'$');
-const M_EQUAL: c_int = magic(b'=');
-const M_GT: c_int = magic(b'>');
-const M_LT: c_int = magic(b'<');
-const M_N: c_int = magic(b'n');
-const M_PAREN_CLOSE: c_int = magic(b')');
-const M_PAREN_OPEN: c_int = magic(b'(');
-const M_PERCENT: c_int = magic(b'%');
-const M_PLUS: c_int = magic(b'+');
-const M_QUESTION: c_int = magic(b'?');
-const M_STAR: c_int = magic(b'*');
-const M_TILDE: c_int = magic(b'~');
-const M_UNDERSCORE: c_int = magic(b'_');
-const M_Z: c_int = magic(b'z');
-const M_0: c_int = magic(b'0');
-const M_1: c_int = magic(b'1');
-const M_9: c_int = magic(b'9');
 
 /// `\%[abc]` compiles each of its members as a single atom, so a member that
 /// is itself a group or an alternation cannot work. Refuses with E369 when
