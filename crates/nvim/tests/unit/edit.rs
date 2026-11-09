@@ -630,6 +630,8 @@ fn indentkeys_o_and_o_upper_reindent_the_opened_line_and_a_completion_reindents(
     fx.run("setlocal indentexpr=7 indentkeys=o");
     typed(&fx, "['x']", r"oy\<Esc>", &[("indent(2)", "7")]);
     typed(&fx, "['x']", r"Oy\<Esc>", &[("indent(1)", "0")]);
+    // Upstream's `o` pseudo-key was U+0101, so typing `ā` reindented too.
+    typed(&fx, "['x']", r"A\u0101\<Esc>", &[("indent(1)", "0")]);
     fx.run("setlocal indentkeys=O");
     typed(&fx, "['x']", r"oy\<Esc>", &[("indent(2)", "0")]);
     typed(&fx, "['x']", r"Oy\<Esc>", &[("indent(1)", "7")]);

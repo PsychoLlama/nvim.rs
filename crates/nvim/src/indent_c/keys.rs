@@ -18,13 +18,14 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::ascii::NUL;
+
 use crate::charset::is_word_at;
 use crate::indent::Indenter;
 use crate::mbyte::{head_off, strnicmp_in};
 use crate::option::skip_option_separator;
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::byte_tolower;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -40,8 +41,8 @@ pub(crate) fn cindent_on() -> bool {
 /// `'*'` is "reindent *before* inserting", `'!'` "do not insert at all, just
 /// reindent", and anything else the plain "reindent afterwards" form -- which
 /// matches every item that is *not* prefixed `*`.
-fn wants(when: c_int, look: u8) -> bool {
-    match when.to_le_bytes()[0] {
+fn wants(when: u8, look: u8) -> bool {
+    match when {
         b'*' => look == b'*',
         b'!' => look == b'!',
         _ => look != b'*',
@@ -51,12 +52,13 @@ fn wants(when: c_int, look: u8) -> bool {
 /// Whether 'cinkeys' (or 'indentkeys', with 'indentexpr' set) asks for a
 /// reindent on `keytyped`.
 ///
-/// `keytyped` is normally the character just typed, but may also be
-/// [`KEY_OPEN_FORW`]/[`KEY_OPEN_BACK`] (the `o`/`O` commands) or
-/// [`KEY_COMPLETE`] (a completion just finished).  `when` selects the prefix
-/// class -- see [`wants`].  `line_is_empty` allows the `0` forms.
-pub fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool {
-    if keytyped == NUL {
+/// `keytyped` is normally the character just typed, but may also be one of
+/// the pseudo-keys [`Key::OPEN_FORWARD`]/[`Key::OPEN_BACKWARD`] (the `o`/`O`
+/// commands) or [`Key::COMPLETED`] (a completion just finished).  `when`
+/// selects the prefix class -- see [`wants`].  `line_is_empty` allows the `0`
+/// forms.
+pub fn in_cinkeys(keytyped: Key, when: u8, line_is_empty: bool) -> bool {
+    if keytyped.is_nul() {
         // Can happen with CTRL-Y and CTRL-E on a short line.
         return false;
     }
@@ -103,29 +105,26 @@ pub fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool {
             // `CTRL_CHR(x)` is `TOUPPER_ASC(x) ^ 0x40`; the guarded range
             // holds no lower-case letter, so the fold is a no-op there.
             let ctrl = at(i + 1).to_ascii_uppercase() ^ 0x40;
-            if try_match && keytyped == c_int::from(ctrl) {
+            if try_match && keytyped == Key::byte(ctrl) {
                 return true;
             }
             i += 2;
         } else if c == b'o' {
             // The "o" command: open a line forward.
-            if try_match && keytyped == KEY_OPEN_FORW {
+            if try_match && keytyped == Key::OPEN_FORWARD {
                 return true;
             }
             i += 1;
         } else if c == b'O' {
             // The "O" command: open a line backward.
-            if try_match && keytyped == KEY_OPEN_BACK {
+            if try_match && keytyped == Key::OPEN_BACKWARD {
                 return true;
             }
             i += 1;
         } else if c == b'e' {
             // Check for "else" at the start of the line and just before
             // the cursor.
-            if try_match
-                && keytyped == c_int::from(b'e')
-                && Win::current().w_cursor.col >= ColNr::new(4)
-            {
+            if try_match && keytyped.is('e') && Win::current().w_cursor.col >= ColNr::new(4) {
                 let back = usize::try_from(Win::current().w_cursor.col - 4).unwrap_or(0);
                 let cursor_lnum = Win::current().w_cursor.lnum;
                 let mut lines = Lines::current();
@@ -139,7 +138,7 @@ pub fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool {
             i += 1;
         } else if c == b':' {
             // The two cheap tests are kept in front of the line read.
-            if try_match && keytyped == c_int::from(b':') && colon_reindents() {
+            if try_match && keytyped.is(':') && colon_reindents() {
                 return true;
             }
             i += 1;
@@ -149,10 +148,10 @@ pub fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool {
                 // <<>, <*>, <:> and <!> -- so that o, O, e, 0, <, >, *, :
                 // and ! can be re-indent keys for anyone who wants them.
                 let named = at(i + 1);
-                if b"<>!*oOe0:".contains(&named) && keytyped == c_int::from(named) {
+                if b"<>!*oOe0:".contains(&named) && keytyped == Key::byte(named) {
                     return true;
                 }
-                if keytyped == special_key_code(&look[i + 1..]).code() {
+                if keytyped == special_key_code(&look[i + 1..]) {
                     return true;
                 }
             }
@@ -183,7 +182,7 @@ pub fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool {
             i = end;
         } else {
             // A boring generic character.
-            if try_match && c_int::from(c) == keytyped {
+            if try_match && Key::byte(c) == keytyped {
                 return true;
             }
             if c != 0 {
@@ -245,7 +244,7 @@ fn colon_reindents() -> bool {
 /// Whether the `=word` form of a 'cinkeys' item matches what was just typed:
 /// the word is `look[word]`.
 ///
-/// There are two ways in: [`KEY_COMPLETE`], where a whole word was just
+/// There are two ways in: [`Key::COMPLETED`], where a whole word was just
 /// completed and the check is on the word behind the cursor, and an ordinary
 /// key, where the typed character must be the word's *last* one and the text
 /// before the cursor must be the rest of it.
@@ -253,7 +252,7 @@ fn colon_reindents() -> bool {
 /// The caller has established that the cursor column is at least the word's
 /// length.
 fn word_matches(
-    keytyped: c_int,
+    keytyped: Key,
     look: &[u8],
     word: core::ops::Range<usize>,
     icase: bool,
@@ -275,7 +274,7 @@ fn word_matches(
     let cursor = Win::current().w_cursor;
     let col = usize::try_from(cursor.col).unwrap_or(0);
 
-    let matched = if keytyped == KEY_COMPLETE {
+    let matched = if keytyped == Key::COMPLETED {
         // A word was just completed: search back for its start and check
         // that it begins with `word`.
         let mut lines = Lines::current();
@@ -296,10 +295,11 @@ fn word_matches(
         // the item: with `cinkeys==~,` the word is empty and that byte is
         // the `~` in front of it, which is still inside the option.
         let last = look[end - 1];
-        let mismatch = keytyped != c_int::from(last)
+        let mismatch = keytyped != Key::byte(last)
             && !(icase
-                && (0..256).contains(&keytyped)
-                && byte_tolower(keytyped) == byte_tolower(c_int::from(last)));
+                && keytyped.as_byte().is_some_and(|b| {
+                    byte_tolower(c_int::from(b)) == byte_tolower(c_int::from(last))
+                }));
         if mismatch {
             return false;
         }

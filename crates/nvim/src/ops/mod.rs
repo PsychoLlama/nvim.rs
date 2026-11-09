@@ -142,11 +142,6 @@ pub const CA_COMMAND_BUSY: ::core::ffi::c_int = 1;
 /// `CmdArg::retval`: leave `op.end` where the motion put it.
 pub const CA_NO_ADJ_OP_END: ::core::ffi::c_int = 2;
 
-/// `r CTRL-V <CR>` and `r CTRL-V <NL>`: the literal byte, not a line split.
-/// They travel in `CmdArg::nchar` as codes no key has.
-pub const REPLACE_CR_NCHAR: crate::types::Key = crate::types::Key::from_code(-1);
-pub const REPLACE_NL_NCHAR: crate::types::Key = crate::types::Key::from_code(-2);
-
 /// The Visual area a `.` replays -- see `pending::REDO_VISUAL`.
 #[derive(Copy, Clone, Debug)]
 pub struct RedoVisual {

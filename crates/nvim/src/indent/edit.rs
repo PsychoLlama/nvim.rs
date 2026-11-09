@@ -59,6 +59,7 @@ use crate::search::findmatch;
 use crate::state::mode::{AI_COL, CAN_SI, CAN_SI_BACK, DID_SI, INSSTART, OLD_INDENT, STATE};
 use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG};
 use crate::types::CmdModFlags;
+use crate::types::Key;
 use crate::undo::{u_clearline, u_save, u_savecommon};
 use crate::winlayer::{Buf, Win};
 
@@ -179,7 +180,7 @@ pub fn preprocs_left() -> bool {
     let buf = Buf::current();
     buf.b_p_si != 0 && buf.b_p_cin == 0
         || buf.b_p_cin != 0
-            && in_cinkeys(c_int::from(b'#'), c_int::from(b' '), true)
+            && in_cinkeys(Key::ascii(b'#'), b' ', true)
             && buf.b_ind_hash_comment == 0
 }
 

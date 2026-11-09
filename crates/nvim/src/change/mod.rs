@@ -53,7 +53,6 @@ use crate::indent::{
     copy_indent, fixthisline, get_indent, get_sw_value, may_do_si, set_indent,
     use_indentexpr_for_lisp,
 };
-use crate::indent_c::{KEY_OPEN_BACK, KEY_OPEN_FORW};
 use crate::indent_c::{do_c_expr_indent, in_cinkeys, starts_with_cinword};
 use crate::insexpand::ins_compl_active;
 use crate::mark::defs::FileMarkView;

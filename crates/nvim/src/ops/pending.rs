@@ -462,9 +462,9 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
             Key::NUL
         };
         // Undo what `nv_replace` did.
-        if nchar == REPLACE_CR_NCHAR {
+        if nchar == Key::REPLACE_CR {
             nchar = Key::CAR;
-        } else if nchar == REPLACE_NL_NCHAR {
+        } else if nchar == Key::REPLACE_NL {
             nchar = Key::NL;
         }
 

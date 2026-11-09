@@ -10,7 +10,7 @@
 //!   re-lay any TAB the block splits, which is why [`replace_block_line`]
 //!   builds a whole new line;
 //! * `r<CR>` does not replace with a character at all, it *splits* the line,
-//!   and `CTRL-V <CR>` (`REPLACE_CR_NCHAR`) asks for the literal carriage
+//!   and `CTRL-V <CR>` (`Key::REPLACE_CR`) asks for the literal carriage
 //!   return instead -- which is the whole job of the `had_ctrl_v_cr` flag.
 
 #![forbid(unsafe_code)]
@@ -83,7 +83,7 @@ fn replace_character(c: Key) {
 
 /// `r` over the operator's region.
 ///
-/// `c` is the replacement, or `REPLACE_CR_NCHAR`/`REPLACE_NL_NCHAR` for the
+/// `c` is the replacement, or `Key::REPLACE_CR`/`Key::REPLACE_NL` for the
 /// `CTRL-V <CR>`/`CTRL-V <NL>` spellings that mean the literal byte rather
 /// than a line split. `op` describes a region of the current buffer.
 pub(crate) fn op_replace(op: &mut OpArg, mut c: Key) -> Result<(), Failed> {
@@ -93,10 +93,10 @@ pub(crate) fn op_replace(op: &mut OpArg, mut c: Key) -> Result<(), Failed> {
 
     // CTRL-V CR / CTRL-V NL: put the byte in, do not split the line.
     let mut had_ctrl_v_cr = false;
-    if c == REPLACE_CR_NCHAR {
+    if c == Key::REPLACE_CR {
         had_ctrl_v_cr = true;
         c = Key::CAR;
-    } else if c == REPLACE_NL_NCHAR {
+    } else if c == Key::REPLACE_NL {
         had_ctrl_v_cr = true;
         c = Key::NL;
     }

@@ -49,9 +49,7 @@ use crate::normal::{
     set_visual_mode, v_swap_corners, v_visop, visual_active, visual_mode,
 };
 use crate::ops::OpType;
-use crate::ops::{
-    REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, do_join, do_pending_operator, op_addsub, swapchar,
-};
+use crate::ops::{do_join, do_pending_operator, op_addsub, swapchar};
 use crate::option::defs::FoFlag;
 use crate::option::get_ve_flags;
 use crate::option::vars::{CB_FLAGS, P_SEL, p_sta, p_to, p_ww};
@@ -129,9 +127,9 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
             // A literal line break has to survive being carried through
             // `cmd_arg` as a character.
             if cmd_arg.nchar == Key::CAR {
-                cmd_arg.nchar = REPLACE_CR_NCHAR;
+                cmd_arg.nchar = Key::REPLACE_CR;
             } else if cmd_arg.nchar == Key::NL {
-                cmd_arg.nchar = REPLACE_NL_NCHAR;
+                cmd_arg.nchar = Key::REPLACE_NL;
             }
         }
         nv_operator(cmd_arg);

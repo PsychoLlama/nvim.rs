@@ -27,6 +27,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -129,8 +130,7 @@ fn c_indent(line: &Line) -> Option<c_int> {
     // excluding `#pragma` when 'cinoptions' `P` asks.
     let theline = line.theline();
     let hash_at_left = line.starts_with(b'#')
-        && (line.whole().first() == Some(&b'#')
-            || in_cinkeys(c_int::from(b'#'), c_int::from(b' '), true))
+        && (line.whole().first() == Some(&b'#') || in_cinkeys(Key::ascii(b'#'), b' ', true))
         && {
             let directive = 1 + skip::white(&theline[1..]);
             Buf::current().b_ind_pragma == 0 || !theline[directive..].starts_with(b"pragma")

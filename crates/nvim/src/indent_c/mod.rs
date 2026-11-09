@@ -83,11 +83,6 @@ pub use self::recog::*;
 pub(crate) use crate::cstr::byte_at;
 pub(crate) use crate::indent::line_vcol;
 
-pub const KEY_COMPLETE: ::core::ffi::c_int = 259;
-/// The pseudo-keys `in_cinkeys()` matches `o`/`O` against, compared to a
-/// `c_int` `keytyped`.
-pub const KEY_OPEN_BACK: ::core::ffi::c_int = 258;
-pub const KEY_OPEN_FORW: ::core::ffi::c_int = 257;
 #[derive(Debug)]
 pub struct CppBaseclassCache {
     pub found: ::core::ffi::c_int,

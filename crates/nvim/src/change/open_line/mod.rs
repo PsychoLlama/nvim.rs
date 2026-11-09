@@ -59,6 +59,7 @@ use crate::mbyte::char_at;
 use crate::option::defs::FoFlag;
 use crate::optionstr::OptString;
 use crate::types::Failed;
+use crate::types::Key;
 
 mod comment;
 mod smart;
@@ -411,20 +412,16 @@ pub fn open_line(
 
     // Whether to reindent once the line is open.
     let key = if dir == FORWARD {
-        KEY_OPEN_FORW
+        Key::OPEN_FORWARD
     } else {
-        KEY_OPEN_BACK
+        Key::OPEN_BACKWARD
     };
     // The short circuits are upstream's: `in_cinkeys` reads 'cinkeys' and
     // the cursor line.
     let do_cindent = !p_paste()
         && (Buf::current().b_p_cin != 0
             || c_int::from(Buf::current().b_p_inde.first_byte()) != NUL)
-        && in_cinkeys(
-            key,
-            c_int::from(b' '),
-            linewhite(Win::current().w_cursor.lnum),
-        )
+        && in_cinkeys(key, b' ', linewhite(Win::current().w_cursor.lnum))
         && flags & OPENLINE_FORCE_INDENT == 0;
 
     // Does the current line start with a comment leader that should be

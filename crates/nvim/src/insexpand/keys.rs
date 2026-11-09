@@ -374,7 +374,7 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: c_int, mut retval: bool) -> bool
     }
 
     // Indent now if a key was typed that is in 'cinkeys'.
-    if want_cindent && in_cinkeys(KEY_COMPLETE, c_int::from(b' '), inindent(0)) {
+    if want_cindent && in_cinkeys(Key::COMPLETED, b' ', inindent(0)) {
         do_c_expr_indent();
     }
     // Trigger the CompleteDone event to give scripts a chance to act upon

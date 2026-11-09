@@ -12,7 +12,6 @@ use crate::ascii::TAB;
 use crate::autocmd::defs::AutoEvent;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::fuzzy::{FUZZY_SCORE_NONE, fuzzy_match_str};
-use crate::indent_c::KEY_COMPLETE;
 use crate::memory::XString;
 use crate::search::DIRECTION_NOT_SET;
 use crate::tag::{

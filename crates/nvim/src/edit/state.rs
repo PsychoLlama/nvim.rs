@@ -510,11 +510,11 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: Key) -> Step {
     // inserted.
     if cindent_on() && ctrl_x_mode_none() {
         s.line_is_white = inindent(0);
-        if cinkeys(s.c, b'!', s.line_is_white) && stop_arrow_ok() {
+        if in_cinkeys(s.c, b'!', s.line_is_white) && stop_arrow_ok() {
             c_expr_indent();
             return Step::Go; // don't insert the key
         }
-        if CAN_CINDENT.get() && cinkeys(s.c, b'*', s.line_is_white) && stop_arrow_ok() {
+        if CAN_CINDENT.get() && in_cinkeys(s.c, b'*', s.line_is_white) && stop_arrow_ok() {
             c_expr_indent();
         }
     }
@@ -646,7 +646,7 @@ pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
     if CAN_CINDENT.get()
         && cindent_on()
         && ctrl_x_mode_normal()
-        && cinkeys(s.c, b' ', s.line_is_white)
+        && in_cinkeys(s.c, b' ', s.line_is_white)
         && stop_arrow_ok()
     {
         c_expr_indent();
@@ -729,13 +729,6 @@ fn key_available() -> bool {
 #[inline(always)]
 fn stop_arrow_ok() -> bool {
     stop_arrow().is_ok()
-}
-
-/// Does 'cinkeys' list `c` for `when`?  `line_is_white` says whether the
-/// line held nothing but white space before the key arrived.
-#[inline(always)]
-fn cinkeys(c: Key, when: u8, line_is_white: bool) -> bool {
-    in_cinkeys(c.code(), c_int::from(when), line_is_white)
 }
 
 /// Re-indent the current line the way 'cindent'/'indentexpr' wants it.
