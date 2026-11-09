@@ -20,6 +20,7 @@ use super::*;
 use crate::autocmd::defs::{AutoHandler, PatId};
 use crate::cmdexpand::defs::ExpandContext;
 use crate::memory::XString;
+use crate::message::msg_put_ascii;
 use crate::types::Handle;
 use crate::types::ScriptCtx;
 use crate::winlayer::Buf;
@@ -126,7 +127,7 @@ pub(crate) fn au_show_for_event(group: ::core::ffi::c_int, event: AutoEvent, pat
                 if GOT_INT.get() {
                     return;
                 }
-                msg_putchar('\n' as ::core::ffi::c_int);
+                msg_put_ascii(b'\n');
                 if GOT_INT.get() {
                     return;
                 }
@@ -145,7 +146,7 @@ pub(crate) fn au_show_for_event(group: ::core::ffi::c_int, event: AutoEvent, pat
             // The pattern only when it changed.
             if last_pat != Some(row.pat_id) {
                 last_pat = Some(row.pat_id);
-                msg_putchar('\n' as ::core::ffi::c_int);
+                msg_put_ascii(b'\n');
                 if GOT_INT.get() {
                     return;
                 }
@@ -157,7 +158,7 @@ pub(crate) fn au_show_for_event(group: ::core::ffi::c_int, event: AutoEvent, pat
                 return;
             }
             if MSG_COL.get() >= 14 {
-                msg_putchar('\n' as ::core::ffi::c_int);
+                msg_put_ascii(b'\n');
             }
             msg_advance(14);
             if GOT_INT.get() {

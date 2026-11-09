@@ -53,7 +53,7 @@ use crate::message::state::{
 };
 use crate::message::{
     do_dialog, emsg, iemsg, msg, msg_ext_set_kind, msg_home_replace, msg_multiline, msg_outnum,
-    msg_putchar, msg_reset_scroll, msg_str, msg_str_hl, set_keep_msg, verb_msg,
+    msg_reset_scroll, msg_str, msg_str_hl, set_keep_msg, verb_msg,
 };
 use crate::message_fmt::msg_cstr_opt;
 use crate::option::defs::OptVal;

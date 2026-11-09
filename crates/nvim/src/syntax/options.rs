@@ -27,6 +27,7 @@ use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::ascii::NUL;
+use crate::ex_docmd::ends_excmd_char;
 use crate::regexp::RE_MAGIC;
 use crate::winlayer::Win;
 
@@ -47,7 +48,7 @@ pub(crate) struct GroupName {
 pub(crate) fn split_group_name(line: &[u8]) -> Option<GroupName> {
     let len = skip::to_white(line);
     let rest = len + skip::white(&line[len..]);
-    if ends_excmd(byte(line, 0)) != 0 || byte(line, rest) == NUL {
+    if ends_excmd_char(byte(line, 0)) || byte(line, rest) == NUL {
         return None;
     }
     Some(GroupName { len, rest })
@@ -160,7 +161,7 @@ fn flag_matches(rest: &[u8], f: &SynFlag) -> bool {
         || if f.arg.takes_value() {
             after == c_int::from(b'=')
         } else {
-            ends_excmd(after) != 0
+            ends_excmd_char(after)
         }
 }
 
@@ -362,7 +363,7 @@ fn parse_id_list(line: &[u8], at: usize, keylen: usize, skip: bool) -> IdListPas
     }
     p += 1; // the `=` itself; it is not the terminator, so this is in range
     p += skip::white(&line[p..]);
-    if ends_excmd(byte(line, p)) != 0 {
+    if ends_excmd_char(byte(line, p)) {
         return IdListPass {
             ids,
             end: p,
@@ -397,7 +398,7 @@ fn parse_id_list(line: &[u8], at: usize, keylen: usize, skip: bool) -> IdListPas
         }
         p += 1; // skip the comma between arguments; it is not the terminator
         p += skip::white(&line[p..]);
-        if ends_excmd(byte(line, p)) != 0 {
+        if ends_excmd_char(byte(line, p)) {
             break;
         }
     }

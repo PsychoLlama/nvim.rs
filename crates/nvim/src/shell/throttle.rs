@@ -27,7 +27,8 @@ use crate::event_queue::put_job_on_fast_events;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_SE, HLF_SO};
 use crate::mbyte::{UTF8LEN_TAB_ZERO, cluster_len};
-use crate::message::{msg_ext_set_append, msg_ext_set_kind, msg_multiline, msg_putchar, msg_str};
+use crate::message::msg_put_ascii;
+use crate::message::{msg_ext_set_append, msg_ext_set_kind, msg_multiline, msg_str};
 use crate::os::libc::uint64_t;
 use crate::os::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::os::time::os_hrtime;
@@ -100,9 +101,9 @@ pub(crate) fn out_data_decide_throttle(size: usize) -> bool {
         msg_str(c"...\n");
     }
     // Put the cursor back at the start of the line either side.
-    msg_putchar('\r' as c_int);
+    msg_put_ascii(b'\r');
     msg_str(pulse);
-    msg_putchar('\r' as c_int);
+    msg_put_ascii(b'\r');
     ui_flush();
     true
 }

@@ -206,7 +206,7 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
     // Where the pattern starts and ends in the line. `None` is the
     // implicit `.*` of a bare `:catch`, which is not in the line at all.
     let mut span = None;
-    if ends_excmd(c_int::from(excmd.line.byte_at(excmd.line.arg))) != 0 {
+    if ends_excmd(excmd.line.byte_at(excmd.line.arg)) {
         // No argument: catch everything.
         excmd.line.next = excmd.line.find_next(excmd.line.arg);
     } else {
@@ -239,9 +239,7 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
         if !skip && flags.has(CsFlags::THROWN) && !flags.has(CsFlags::CAUGHT) {
             if let Some((_, end)) = span
                 && excmd.line.byte_at(end) != 0
-                && ends_excmd(c_int::from(
-                    excmd.line.byte_at(excmd.line.skip_white(end + 1)),
-                )) == 0
+                && !ends_excmd(excmd.line.byte_at(excmd.line.skip_white(end + 1)))
             {
                 let trailing = msg_bytes(excmd.line.rest_of(end));
                 semsg!("E488: Trailing characters: {trailing}");

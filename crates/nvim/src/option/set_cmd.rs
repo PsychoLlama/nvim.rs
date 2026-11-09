@@ -46,7 +46,7 @@ use crate::guard::{SANDBOX, Suppress};
 use crate::message::IOSIZE;
 use crate::message::state::INFO_MESSAGE;
 use crate::message::{E_INVARG, E_SANDBOX, E_TRAILING};
-use crate::message::{emsg, msg_ext_set_kind, msg_putchar};
+use crate::message::{emsg, msg_ext_set_kind};
 use crate::option::defs::{OptError, OptIndex, OptVal, OptionSetFlags};
 use crate::option::vars::{p_mle, p_verbose};
 use crate::options::{OPT_FOLDMETHOD, OPT_INVALID, OPT_WILDCHAR, OPT_WILDCHARM, OPT_WRAP};
@@ -63,6 +63,7 @@ use super::{
     unset_option_local_value,
 };
 use crate::ascii::CTRL_V;
+use crate::message::msg_put_ascii;
 
 /// The messages the parse reports. They go back to [`do_set`] rather than
 /// being emitted here, so that the offending argument can be appended.
@@ -453,7 +454,7 @@ fn do_one_set_option(
 /// which script context 'verbose' reports.
 fn show_one(opt_idx: OptIndex, opt_flags: OptionSetFlags, varp: OptSlot, did_show: &mut bool) {
     if *did_show {
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
     } else {
         msg_ext_set_kind(c"list_cmd");
         gotocmdline(true);
@@ -535,7 +536,7 @@ pub(crate) fn do_set(arg: &[u8], opt_flags: OptionSetFlags) -> Result<(), Failed
     if SILENT_MODE.get() && did_show {
         SILENT_MODE.set(false);
         INFO_MESSAGE.set(true);
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
         SILENT_MODE.set(true);
         INFO_MESSAGE.set(false);
     }

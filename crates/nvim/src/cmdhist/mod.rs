@@ -41,8 +41,9 @@ use crate::getchar::state::{GOT_INT, MAPTICK};
 use crate::global_cell::GlobalCell;
 use crate::memory::ThinCString;
 use crate::message::IOSIZE;
+use crate::message::msg_put_ascii;
 use crate::message::{
-    cut_middle, message_filtered, msg, msg_display_bytes, msg_ext_set_kind, msg_putchar, msg_title,
+    cut_middle, message_filtered, msg, msg_display_bytes, msg_ext_set_kind, msg_title,
 };
 use crate::message_fmt::emsg_text;
 use crate::narrow::number_as_int;
@@ -142,19 +143,14 @@ pub fn hist_entry_text(histype: HistoryType, idx: usize) -> Option<HistEntryText
 }
 
 /// Translate a cmdline first-character into a history type.
-pub fn hist_char2type(c: c_int) -> HistoryType {
-    if c == ':' as c_int {
-        HIST_CMD
-    } else if c == '=' as c_int {
-        HIST_EXPR
-    } else if c == '@' as c_int {
-        HIST_INPUT
-    } else if c == '>' as c_int {
-        HIST_DEBUG
-    } else if c == 0 || c == '/' as c_int || c == '?' as c_int {
-        HIST_SEARCH
-    } else {
-        HIST_INVALID
+pub fn hist_char2type(c: u8) -> HistoryType {
+    match c {
+        b':' => HIST_CMD,
+        b'=' => HIST_EXPR,
+        b'@' => HIST_INPUT,
+        b'>' => HIST_DEBUG,
+        0 | b'/' | b'?' => HIST_SEARCH,
+        _ => HIST_INVALID,
     }
 }
 
@@ -167,7 +163,7 @@ fn get_histtype(name: &[u8], return_default: bool) -> HistoryType {
             return HIST_DEFAULT;
         }
         // SAFETY: reads the cmdline state global; main thread only.
-        return hist_char2type(c_int::from(get_cmdline_firstc()));
+        return hist_char2type(get_cmdline_firstc());
     }
     for (histype, hist_name) in (HIST_CMD..).zip(HISTORY_NAMES) {
         let hist_name = &hist_name[..hist_name.len() - 1]; // drop the NUL
@@ -176,7 +172,7 @@ fn get_histtype(name: &[u8], return_default: bool) -> HistoryType {
         }
     }
     if name.len() == 1 && SHORT_NAMES.contains(&name[0]) {
-        return hist_char2type(c_int::from(name[0]));
+        return hist_char2type(name[0]);
     }
     HIST_INVALID
 }
@@ -503,7 +499,7 @@ fn list_one_history(histype: HistoryType, first: c_int, last: c_int) {
 /// One `:history` row: `>` on the newest entry, the sequence number, and the
 /// text truncated to the window width.
 fn print_history_entry(text: &[u8], num: c_int, newest: bool) {
-    msg_putchar(c_int::from(b'\n'));
+    msg_put_ascii(b'\n');
     // Upstream builds the row in `IObuff`: the marker, the number, and the
     // text in what is left.
     let mut row = format!("{}{num:6}  ", if newest { '>' } else { ' ' }).into_bytes();

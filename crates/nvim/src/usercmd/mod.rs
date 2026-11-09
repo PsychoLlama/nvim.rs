@@ -40,6 +40,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ex_docmd::ends_excmd_char;
 mod attr;
 mod complete;
 mod expand;
@@ -332,7 +333,7 @@ pub(crate) fn uc_validate_name(name: &[u8]) -> Option<usize> {
         }
     }
     let next = c_int::from(at(end));
-    (ends_excmd(next) != 0 || ascii_iswhite(next)).then_some(end)
+    (ends_excmd_char(next) || ascii_iswhite(next)).then_some(end)
 }
 
 /// Everything a command is defined with bar its name and its replacement.
@@ -529,7 +530,7 @@ fn define_command(excmd: &ExArg) -> Result<(), UserCmdError> {
     // leaves the name empty, and upstream still reads the byte there.
     let first = line.byte_at(name);
 
-    if !has_attr && ends_excmd(c_int::from(line.byte_at(rest))) != 0 {
+    if !has_attr && ends_excmd(line.byte_at(rest)) {
         list::uc_list(name_bytes);
         Ok(())
     } else if !first.is_ascii_uppercase() {

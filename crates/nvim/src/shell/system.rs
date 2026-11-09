@@ -24,9 +24,10 @@ use crate::cstr;
 use crate::event::libuv_proc::{ChildRun, OutputSink, run_to_exit};
 use crate::getchar::state::GOT_INT;
 use crate::guard::Suppress;
+use crate::message::msg_put_ascii;
 use crate::message::msg_str;
 use crate::message::state::{LINES_LEFT, MSG_NO_MORE};
-use crate::message::{msg_display, msg_end, msg_putchar, msg_sb_eol, msg_start};
+use crate::message::{msg_display, msg_end, msg_sb_eol, msg_start};
 use crate::message_fmt::msg_cstr;
 use crate::msg_schedule_semsg;
 use crate::os::cshim::gettext;
@@ -103,7 +104,7 @@ pub(crate) fn do_os_system(
                 msg_display(os_strerror(status), 0, false);
                 msg_str(c": ");
                 msg_display(&prog, 0, false);
-                msg_putchar('\n' as c_int);
+                msg_put_ascii(b'\n');
             }
             return (-1, None);
         }

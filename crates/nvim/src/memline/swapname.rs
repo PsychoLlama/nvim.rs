@@ -41,6 +41,7 @@ use core::ffi::{CStr, c_int, c_uint};
 
 use super::*;
 use crate::message::IOSIZE;
+use crate::message::msg_put_ascii;
 use crate::option::defs::ShmFlag;
 use crate::path::MAXPATHL;
 use crate::types::{CmdModFlags, Failed, Vv};
@@ -640,7 +641,7 @@ pub fn recover_names(
         // Use msg() to start the scrolling properly.
         msg_ext_set_kind(c"list_cmd");
         tell(c"Swap files found:", 0);
-        msg_putchar('\n' as c_int);
+        msg_put_ascii(b'\n');
     }
 
     let mut file_count = 0;
@@ -746,7 +747,7 @@ pub fn recover_names(
                     msg_outnum(file_count);
                     msg_str(c".    ");
                     msg_str(path_tail(name.as_cstr()));
-                    msg_putchar('\n' as c_int);
+                    msg_put_ascii(b'\n');
 
                     // Upstream's `kv_resize(msg, IOSIZE)`: a size hint.
                     let mut msg_buf: Vec<u8> = Vec::with_capacity(IOSIZE as usize);

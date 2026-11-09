@@ -213,7 +213,8 @@ fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
     } else {
         false
     };
-    let what = if nchar.code() & 0xf == c_int::from(b'd') & 0xf {
+    // `d`, `D` and CTRL-D look for a definition; `i`, `I` and Tab for any match.
+    let what = if nchar.is('d') || nchar.is('D') || nchar == Key::CTRL_D {
         FIND_DEFINE
     } else {
         FIND_ANY
@@ -300,15 +301,10 @@ pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
     } else if nchar.is('[') || nchar.is(']') {
         // `[[` and `]]` look for a section start, `[]` and `][` for its
         // end.
-        let flag = if nchar == cmd_arg.cmdchar {
-            c_int::from(b'{')
-        } else {
-            c_int::from(b'}')
-        };
+        let flag = if nchar == cmd_arg.cmdchar { b'{' } else { b'}' };
         Win::current().w_set_curswant = true;
-        let both_ways = cmd_arg.op().op_type != OpType::Nop
-            && cmd_arg.arg == FORWARD as c_int
-            && flag == c_int::from(b'{');
+        let both_ways =
+            cmd_arg.op().op_type != OpType::Nop && cmd_arg.arg == FORWARD as c_int && flag == b'{';
         let (dir, n) = (cmd_arg.arg, cmd_arg.count1);
         if let Some(inclusive) = findpar(dir, n, flag, both_ways) {
             if inclusive {

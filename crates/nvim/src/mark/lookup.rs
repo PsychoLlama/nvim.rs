@@ -15,7 +15,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ascii::NUL;
 use crate::ascii::{ascii_isdigit, ascii_isupper};
 use crate::buffer::GETF_SETMARK;
 use crate::buffer::{buf_is_prompt, buflist_getfile};
@@ -160,7 +159,7 @@ pub fn mark_get_motion(buffer: Buf, win: Win, name: u8) -> Option<FileMark> {
     let mut mark = None;
     if name == b'{' || name == b'}' {
         let dir = if name == b'}' { FORWARD } else { BACKWARD };
-        if findpar(dir as c_int, 1, NUL, false).is_some() {
+        if findpar(dir as c_int, 1, 0, false).is_some() {
             mark = Some(pos_to_mark(buffer, win.w_cursor));
         }
     } else if name == b'(' || name == b')' {

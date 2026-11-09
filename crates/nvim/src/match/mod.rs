@@ -309,12 +309,11 @@ pub(crate) fn ex_match(excmd: &mut ExArg) {
     let line = &excmd.line;
     let arg = line.arg;
     let end;
-    if ends_excmd(c_int::from(line.byte_at(arg))) != 0 {
+    if ends_excmd(line.byte_at(arg)) {
         // `:match` on its own: just clear.
         end = arg;
     } else if line.slice_at(arg, 4).eq_ignore_ascii_case(b"none")
-        && (ascii_iswhite(c_int::from(line.byte_at(arg + 4)))
-            || ends_excmd(c_int::from(line.byte_at(arg + 4))) != 0)
+        && (ascii_iswhite(c_int::from(line.byte_at(arg + 4))) || ends_excmd(line.byte_at(arg + 4)))
     {
         end = arg + 4;
     } else {
@@ -332,9 +331,7 @@ pub(crate) fn ex_match(excmd: &mut ExArg) {
         let delim = line.byte_at(p);
         end = p + 1 + skip_regexp_at(line.tail(p + 1), char_delim(delim), 1);
         if let Some(group) = group {
-            if line.byte_at(end) != 0
-                && ends_excmd(c_int::from(line.byte_at(line.skip_white(end + 1)))) == 0
-            {
+            if line.byte_at(end) != 0 && !ends_excmd(line.byte_at(line.skip_white(end + 1))) {
                 excmd.errmsg = Some(ex_errmsg(E_TRAILING_ARG, line.cstr_from(end)));
                 return;
             }

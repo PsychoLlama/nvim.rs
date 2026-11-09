@@ -24,10 +24,11 @@ use crate::env::{expand_env, home_to_tilde};
 use crate::getchar::state::GOT_INT;
 use crate::highlight_group::{HLF_D, HLF_T};
 use crate::lua::executor::nlua_expand_pat;
+use crate::message::msg_put_ascii;
 use crate::message::state::{MSG_COL, MSG_DIDANY, MSG_ROW};
 use crate::message::{
-    msg_advance, msg_clr_eos, msg_display, msg_display_elided, msg_ext_set_kind, msg_putchar,
-    msg_start, msg_str, msg_str_hl,
+    msg_advance, msg_clr_eos, msg_display, msg_display_elided, msg_ext_set_kind, msg_start,
+    msg_str, msg_str_hl,
 };
 use crate::os::cshim::gettext;
 use crate::os::fs::dir_exists;
@@ -105,7 +106,7 @@ pub(crate) fn showmatches_oneline(
             break;
         }
         for _ in 0..(maxlen - lastlen).max(0) {
-            msg_putchar(c_int::from(b' '));
+            msg_put_ascii(b' ');
         }
         let (isdir, shown) = if lists_paths(expand) {
             // Highlight directories.
@@ -134,7 +135,7 @@ pub(crate) fn showmatches_oneline(
     if MSG_COL.get() > 0 {
         // When not wrapped around.
         msg_clr_eos();
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
     }
 }
 
@@ -183,7 +184,7 @@ pub fn showmatches(
         MSG_DIDANY.set(false); // lines_left will be set
         msg_start(); // prepare for paging
         if !ui_has(UI_MESSAGES) {
-            msg_putchar(c_int::from(b'\n'));
+            msg_put_ascii(b'\n');
         }
         ui_flush();
         CMDLINE_ROW.set(MSG_ROW.get());

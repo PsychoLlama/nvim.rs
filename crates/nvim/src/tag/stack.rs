@@ -21,6 +21,7 @@ use crate::formatted;
 use crate::highlight_group::HLF_D;
 use crate::memory::ThinCString;
 use crate::message::IOSIZE;
+use crate::message::msg_put_ascii;
 use crate::narrow::number_as_int;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
@@ -224,7 +225,7 @@ pub fn do_tags(_excmd: &mut ExArg) {
             // The file the jump came from is gone.
             continue;
         };
-        msg_putchar('\n' as c_int);
+        msg_put_ascii(b'\n');
         // Formatted rather than built up: a tag name longer than the
         // buffer is truncated, as upstream truncates it. Two trailing
         // spaces: the file name that follows is a separate `msg_display`,

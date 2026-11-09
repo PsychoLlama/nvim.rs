@@ -122,7 +122,7 @@ pub fn ex_let(excmd: &mut ExArg) {
         let mut end = arg;
         if head == b'[' {
             emsg_static(E_INVARG);
-        } else if ends_excmd(c_int::from(head)) == 0 {
+        } else if !ends_excmd(head) {
             // ":let var1 var2"
             end = arg + list_arg_vars(line.rest_of(arg), excmd.skip, &mut first);
         } else if !excmd.skip {

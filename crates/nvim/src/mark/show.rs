@@ -24,8 +24,7 @@ use crate::mbyte::{c_cells_at, c_cluster_len};
 use crate::memory::XString;
 use crate::message::{E_ARGREQ, E_INVARG};
 use crate::message::{
-    emsg, message_filtered, msg, msg_display, msg_display_bytes, msg_ext_set_kind, msg_putchar,
-    msg_title,
+    emsg, message_filtered, msg, msg_display, msg_display_bytes, msg_ext_set_kind, msg_title,
 };
 use crate::message_fmt::msg_bytes;
 use crate::os::cshim::gettext;
@@ -40,6 +39,7 @@ use core::ffi::{CStr, c_char, c_int};
 use super::store::{UNSET_POS, global_mark_names, mark_name, nth_name, slot};
 use super::*;
 use crate::highlight_group::HLF_D;
+use crate::message::msg_put_ascii;
 
 /// print the marks
 pub fn ex_marks(excmd: &mut ExArg) {
@@ -159,7 +159,7 @@ pub(super) fn show_one_mark(
     if !DID_TITLE.replace(true) {
         msg_title(gettext(c"\nmark line  col file/text"));
     }
-    msg_putchar(c_int::from(b'\n'));
+    msg_put_ascii(b'\n');
     if GOT_INT.get() {
         return;
     }

@@ -77,7 +77,7 @@ use crate::message::{
 };
 use crate::message::{
     emsg, internal_error, message_filtered, msg, msg_clr_eos, msg_display, msg_ext_set_kind,
-    msg_prt_line, msg_putchar, msg_start, msg_str, msg_str_hl,
+    msg_prt_line, msg_start, msg_str, msg_str_hl,
 };
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::r#move::update_topline;

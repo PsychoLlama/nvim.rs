@@ -23,6 +23,7 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{SpecialKey, key_unescape};
 use crate::lua::executor::funcref_description;
 use crate::memory::XString;
+use crate::message::msg_put_ascii;
 use crate::option::defs::CpoFlag;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
@@ -53,7 +54,7 @@ pub(crate) fn showmap(mp: &MapBlock, local: bool) {
     }
 
     if MSG_COL.get() > 0 || MSG_SILENT.get() != 0 {
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
         if GOT_INT.get() {
             return; // 'q' typed at the MORE prompt
         }
@@ -65,7 +66,7 @@ pub(crate) fn showmap(mp: &MapBlock, local: bool) {
     let mut len = modes.count_bytes();
     len += 1;
     while len <= 3 {
-        msg_putchar(c_int::from(b' '));
+        msg_put_ascii(b' ');
         len += 1;
     }
 
@@ -73,7 +74,7 @@ pub(crate) fn showmap(mp: &MapBlock, local: bool) {
     // A width, never negative.
     len = usize::try_from(msg_display_keys(mp.m_keys.as_cstr(), true, 0)).unwrap_or(0);
     loop {
-        msg_putchar(c_int::from(b' '));
+        msg_put_ascii(b' ');
         len += 1;
         if len >= 12 {
             break;
@@ -85,7 +86,7 @@ pub(crate) fn showmap(mp: &MapBlock, local: bool) {
     } else if mp.m_noremap == Remap::Script {
         msg_str_hl(c"&", HLF_8, false);
     } else {
-        msg_putchar(c_int::from(b' '));
+        msg_put_ascii(b' ');
     }
 
     msg_putchar(c_int::from(if local { b'@' } else { b' ' }));

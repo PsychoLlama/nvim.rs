@@ -29,8 +29,9 @@ use crate::keycodes::{K_SPECIAL, KS_MODIFIER, SpecialKey, key_unescape};
 use crate::mbyte::{char_at, utf8len_tab};
 use crate::memory::XString;
 use crate::message::IOSIZE;
+use crate::message::msg_put_ascii;
+use crate::message::set_keep_msg;
 use crate::message::state::{KEEP_MSG, KEEP_MSG_HL_ID, MSG_ROW, MSG_SCROLLED, NEED_WAIT_RETURN};
-use crate::message::{msg_putchar, set_keep_msg};
 use crate::mouse::{is_mouse_key, setmouse};
 use crate::narrow::{as_index, len_as_int};
 use crate::os::cshim::gettext;
@@ -69,7 +70,7 @@ pub(crate) fn ask_yesno(question: &CStr) -> bool {
         }
         if r == Key::CTRL_C || r == Key::ESC {
             if !ui_has(UI_MESSAGES) {
-                msg_putchar(c_int::from(b'n'));
+                msg_put_ascii(b'n');
             }
             break false;
         }

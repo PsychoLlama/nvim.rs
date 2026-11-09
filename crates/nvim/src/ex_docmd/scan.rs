@@ -328,10 +328,14 @@ pub(crate) fn skip_cmd_arg_at(text: &[u8], mut at: usize) -> usize {
     at
 }
 
-/// Does this character end an Ex command? Answers a `c_int` rather than a
-/// `bool` because a dozen still-transpiled callers compare it against 0.
-pub fn ends_excmd(c: c_int) -> c_int {
-    c_int::from(
-        c == NUL || c == c_int::from(b'|') || c == c_int::from(b'"') || c == c_int::from(b'\n'),
-    )
+/// Does this byte end an Ex command: the end of the line, a `|`, a comment's
+/// `"` or a newline?
+pub fn ends_excmd(c: u8) -> bool {
+    matches!(c, 0 | b'|' | b'"' | b'\n')
+}
+
+/// [`ends_excmd`] for a character held as a `c_int`: none past a byte ends
+/// one.
+pub(crate) fn ends_excmd_char(c: c_int) -> bool {
+    u8::try_from(c).is_ok_and(ends_excmd)
 }

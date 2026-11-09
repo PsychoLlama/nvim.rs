@@ -66,7 +66,7 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
     // Output a space for an empty line, or it would not overwrite what is
     // already on the row.
     if at(0) == 0 && !(list && lcs.eol != 0) {
-        msg_putchar(c_int::from(b' '));
+        msg_put_ascii(b' ');
     }
 
     let mut s = 0;

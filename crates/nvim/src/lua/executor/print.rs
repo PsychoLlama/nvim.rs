@@ -27,7 +27,8 @@ use crate::lua::stack::{At, CFunction, Function, Raise, Stack};
 use crate::lua_functions;
 use crate::message::HlMessageChunk;
 use crate::message::IOSIZE;
-use crate::message::{msg_multihl, msg_putchar};
+use crate::message::msg_multihl;
+use crate::message::msg_put_ascii;
 use crate::os::cshim::gettext;
 use crate::profile::startup_timing;
 use crate::profile::{time_msg, time_pop, time_push};
@@ -229,7 +230,7 @@ fn debug(stack: &mut Stack) -> Result<c_int, Raise> {
             line.truncate(IOSIZE as usize - 1);
             ui_ext_cmdline_block_append(0, &line);
         } else {
-            msg_putchar(c_int::from(b'\n'));
+            msg_put_ascii(b'\n');
         }
 
         // Done on anything but a String with text other than "cont".

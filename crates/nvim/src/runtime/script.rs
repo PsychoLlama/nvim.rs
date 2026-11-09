@@ -33,6 +33,7 @@ use crate::formatted;
 use crate::mbyte::canonize;
 use crate::memory::ThinCString;
 use crate::message::IOSIZE;
+use crate::message::msg_put_ascii;
 use crate::message_fmt::msg_cstr;
 use crate::path::MAXPATHL;
 use crate::regexp::OwnedProg;
@@ -170,7 +171,7 @@ pub fn ex_scriptnames(excmd: &mut ExArg) {
         let row = cstr::owned(&row);
         if !message_filtered(&row) {
             if MSG_COL.get() > 0 {
-                msg_putchar('\n' as c_int);
+                msg_put_ascii(b'\n');
             }
             msg_display(&row, 0, false);
             line_breakcheck();

@@ -25,6 +25,7 @@ use core::ffi::c_int;
 use super::*;
 use crate::cmdexpand::defs::{Candidate, ExpandContext};
 use crate::message::IOSIZE;
+use crate::message::msg_put_ascii;
 use std::ffi::CString;
 
 /// Print the head of every function, or of the ones `pattern` matches.
@@ -83,7 +84,7 @@ pub(crate) fn list_functions_matching_pat(excmd: &mut ExArg) -> usize {
 ///
 /// `name` is the translated name and `at` where it ends in the command line.
 pub(crate) fn list_one_function(excmd: &mut ExArg, name: &[u8], at: usize) {
-    if ends_excmd(c_int::from(excmd.line.byte_at(excmd.line.skip_white(at)))) == 0 {
+    if !ends_excmd(excmd.line.byte_at(excmd.line.skip_white(at))) {
         let rest = msg_bytes(excmd.line.rest_of(at));
         semsg!("E488: Trailing characters: {rest}");
         return;
@@ -116,15 +117,15 @@ pub(crate) fn list_one_function(excmd: &mut ExArg, name: &[u8], at: usize) {
         let Some(line) = line else {
             continue;
         };
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
         if !excmd.forceit {
             // The line number, right-aligned in three columns.
             msg_outnum(c_int::try_from(j + 1).unwrap_or(c_int::MAX));
             if j < 9 {
-                msg_putchar(c_int::from(b' '));
+                msg_put_ascii(b' ');
             }
             if j < 99 {
-                msg_putchar(c_int::from(b' '));
+                msg_put_ascii(b' ');
             }
             if function_list_modified(prev_ht_changed) != 0 {
                 break;
@@ -134,7 +135,7 @@ pub(crate) fn list_one_function(excmd: &mut ExArg, name: &[u8], at: usize) {
         line_breakcheck();
     }
     if !GOT_INT.get() {
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
         if function_list_modified(prev_ht_changed) == 0 {
             msg_str(if excmd.forceit {
                 c"endfunction"
@@ -253,7 +254,7 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
         return;
     };
     let at = arg + end;
-    if ends_excmd(c_int::from(excmd.line.byte_at(excmd.line.skip_white(at)))) == 0 {
+    if !ends_excmd(excmd.line.byte_at(excmd.line.skip_white(at))) {
         let rest = msg_bytes(excmd.line.rest_of(at));
         semsg!("E488: Trailing characters: {rest}");
         return;

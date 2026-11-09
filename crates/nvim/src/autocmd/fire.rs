@@ -331,9 +331,10 @@ pub fn apply_autocmds_group(
             Some(afile)
         } else if afile_is_not_a_name(event) {
             None
-        } else if let Some(name) = pattern.as_ref().filter(|name| {
-            ends_excmd(::core::ffi::c_int::from(name.first().copied().unwrap_or(0))) == 0
-        }) {
+        } else if let Some(name) = pattern
+            .as_ref()
+            .filter(|name| !ends_excmd(name.first().copied().unwrap_or(0)))
+        {
             Some(name.clone())
         } else {
             buffer.and_then(|b| b.name.full().map(XString::from_cstr))

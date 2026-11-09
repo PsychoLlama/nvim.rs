@@ -27,6 +27,7 @@ use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
 use super::*;
+use crate::message::msg_put_ascii;
 
 /// Print `text`'s characters, up to its first NUL, for as long as they fit in
 /// the `n` cells left, which it counts down -- below zero when a character
@@ -94,11 +95,11 @@ fn dis_register(yb: &YankReg, name: RegName, type_0: u8, hl_id: c_int) {
         return;
     }
 
-    msg_putchar(c_int::from(b'\n'));
+    msg_put_ascii(b'\n');
     msg_str(c"  ");
     msg_putchar(c_int::from(type_0));
     msg_str(c"  ");
-    msg_putchar(c_int::from(b'"'));
+    msg_put_ascii(b'"');
     msg_putchar(c_int::from(name.byte()));
     msg_str(c"   ");
 

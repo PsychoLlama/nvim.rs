@@ -241,17 +241,13 @@ impl ExArg<'_> {
                         break;
                     };
                     at = after;
-                    if self.line.byte_at(at) == 0
-                        || ends_excmd(c_int::from(self.line.byte_at(at))) != 0
-                    {
+                    if self.line.byte_at(at) == 0 || ends_excmd(self.line.byte_at(at)) {
                         break;
                     }
                     if self.line.byte_at(at) == b'!' {
                         cm.cmod_filter_force = true;
                         at = self.line.skip_white(at + 1);
-                        if self.line.byte_at(at) == 0
-                            || ends_excmd(c_int::from(self.line.byte_at(at))) != 0
-                        {
+                        if self.line.byte_at(at) == 0 || ends_excmd(self.line.byte_at(at)) {
                             break;
                         }
                     }
@@ -282,7 +278,7 @@ impl ExArg<'_> {
                     } else if at == self.line.cmd
                         && let Some(after) = check_for_word(&self.line, at, b"hide", 3)
                         && self.line.byte_at(after) != 0
-                        && ends_excmd(c_int::from(self.line.byte_at(after))) == 0
+                        && !ends_excmd(self.line.byte_at(after))
                     {
                         // `:hide` is a command in its own right, so it is
                         // only a modifier when a command follows it and no

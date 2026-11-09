@@ -333,7 +333,7 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
     // Where the enclosing block starts, which is as far back as a local
     // declaration may be.
     let par_pos;
-    let in_block = locally && findpar(BACKWARD as c_int, 1, c_int::from(b'{'), false).is_some();
+    let in_block = locally && findpar(BACKWARD as c_int, 1, b'{', false).is_some();
     if !in_block {
         setpcmark();
         Win::current().w_cursor.lnum = LineNr::ONE;

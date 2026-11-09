@@ -22,6 +22,7 @@ use crate::getchar::typeahead;
 use crate::guard::Keys;
 use crate::keycodes::{ModMask, SpecialKey};
 use crate::mbyte::MB_MAXCHAR;
+use crate::message::msg_put_ascii;
 use crate::narrow::len_as_int;
 use crate::state::Step;
 use crate::types::KeyKind;
@@ -105,7 +106,7 @@ pub(crate) fn command_line_erase_chars(s: &mut CommandLineState) -> KeyOutcome {
 
         if !CMD_SILENT.get() && !ui_has(UI_CMDLINE) {
             MSG_COL.set(0);
-            msg_putchar(::core::ffi::c_int::from(b' ')); // delete ':'
+            msg_put_ascii(b' '); // delete ':'
         }
         s.is_state.search_start = s.is_state.save_cursor;
         REDRAW_CMDLINE.set(true);
@@ -569,7 +570,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
                     unputcmdline();
                 } else {
                     draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
-                    msg_putchar(::core::ffi::c_int::from(b' '));
+                    msg_put_ascii(b' ');
                     cursorcmd();
                 }
             }

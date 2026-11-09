@@ -38,7 +38,7 @@ use crate::types::{ColNr, LineNr};
 /// stops at a `}` in column 0. Answers `None` when there is no such
 /// boundary, and otherwise whether the last character of the buffer was
 /// reached and has to be included in the motion.
-pub fn findpar(dir: c_int, mut count: c_int, what: c_int, both: bool) -> Option<bool> {
+pub fn findpar(dir: c_int, mut count: c_int, what: u8, both: bool) -> Option<bool> {
     let mut curr = Win::current().w_cursor.lnum;
 
     loop {
@@ -88,8 +88,7 @@ pub fn findpar(dir: c_int, mut count: c_int, what: c_int, both: bool) -> Option<
     }
     Win::current().w_cursor.lnum = curr;
     let mut inclusive = false;
-    if curr == Buf::current().b_ml.ml_line_count && what != '}' as c_int && dir == FORWARD as c_int
-    {
+    if curr == Buf::current().b_ml.ml_line_count && what != b'}' && dir == FORWARD as c_int {
         // Put the cursor on the last character of the last line and make
         // the motion inclusive.
         let mut lines = Lines::current();
@@ -140,11 +139,11 @@ fn inmacro(opt: &[u8], s: &[u8]) -> bool {
 ///
 /// `para` is `{` or `}` to ask about sections only; `both` also stops at a
 /// `}` in column 0.
-pub fn starts_para(lnum: LineNr, para: c_int, both: bool) -> bool {
+pub fn starts_para(lnum: LineNr, para: u8, both: bool) -> bool {
     let mut lines = Lines::current();
     let line = lines.line(lnum);
     let first = byte_at(line, 0);
-    if c_int::from(first) == para || first == 0x0c || (both && first == b'}') {
+    if first == para || first == 0x0c || (both && first == b'}') {
         return true;
     }
     if first != b'.' {
@@ -224,15 +223,15 @@ fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> Res
 /// last line. In Visual mode an existing multi-line selection is extended
 /// instead.
 ///
-/// `type_0` is `p`; `S` (section) is not implemented upstream and finds
+/// `kind` is `p`; `S` (section) is not implemented upstream and finds
 /// nothing.
 pub(crate) fn current_par(
     op: &mut OpArg,
     count: c_int,
     include: bool,
-    type_0: c_int,
+    kind: u8,
 ) -> Result<(), NoObject> {
-    if type_0 == 'S' as c_int {
+    if kind == b'S' {
         return Err(NoObject); // not implemented yet
     }
     let mut start_lnum = Win::current().w_cursor.lnum;
@@ -338,7 +337,7 @@ fn line_is_white(lnum: LineNr) -> bool {
 }
 
 /// [`starts_para`] for a line of the current buffer.
-fn line_starts_para(lnum: LineNr, para: c_int, both: bool) -> bool {
+fn line_starts_para(lnum: LineNr, para: u8, both: bool) -> bool {
     starts_para(lnum, para, both)
 }
 

@@ -21,6 +21,7 @@ use crate::ex_docmd::sourcing_lnum;
 use crate::getchar::Remap;
 use crate::lua::executor::nlua_set_sctx;
 use crate::mapping::{MapTables, MapTwin};
+use crate::message::msg_put_ascii;
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::tr_c;
 use crate::winlayer::Buf;
@@ -647,7 +648,7 @@ pub fn ex_map(excmd: &mut ExArg) {
     if SECURE.get() != 0 {
         SECURE.set(2);
         msg_display(excmd.line.cstr_from(excmd.line.cmd), 0, false);
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
     }
     do_exmap(excmd, false);
 }

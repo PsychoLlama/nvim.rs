@@ -25,8 +25,9 @@ use crate::fileio::temp_name;
 use crate::global_cell::GlobalCell;
 use crate::guard::{SANDBOX, SECURE};
 use crate::memory::XString;
+use crate::message::msg_put_ascii;
 use crate::message::{E_NOTMP, E_WILDEXPAND};
-use crate::message::{emsg, msg, msg_putchar, msg_start};
+use crate::message::{emsg, msg, msg_start};
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_sh;
 use crate::os::cshim::gettext;
@@ -372,7 +373,7 @@ pub(crate) fn shell_expand_wildcards(
         os_remove(tempname.as_cstr());
         // With interactive completion the message is not printed.
         if !flags.has(ExpandFlags::SILENT) {
-            msg_putchar('\n' as c_int); // clear the bottom line quickly
+            msg_put_ascii(b'\n'); // clear the bottom line quickly
             CMDLINE_ROW.set(ROWS.get() - 1); // continue on the last line
             msg(gettext(E_WILDEXPAND), 0);
             msg_start(); // do not overwrite this message

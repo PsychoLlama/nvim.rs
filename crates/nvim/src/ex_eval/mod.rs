@@ -396,7 +396,7 @@ fn elseif_condition(excmd: &mut ExArg, skip: bool) -> (bool, bool) {
     // here starts a string, it is not a comment.
     if skip
         && excmd.line.byte_at(excmd.line.arg) != b'"'
-        && ends_excmd(c_int::from(excmd.line.byte_at(excmd.line.arg))) != 0
+        && ends_excmd(excmd.line.byte_at(excmd.line.arg))
     {
         let arg = msg_bytes(excmd.line.arg());
         semsg!("E15: Invalid expression: \"{arg}\"");

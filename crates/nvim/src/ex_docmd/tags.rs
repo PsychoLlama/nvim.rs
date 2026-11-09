@@ -80,7 +80,7 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
         if excmd.line.byte_at(at) != 0 {
             excmd.line.terminate_at(at);
             at = excmd.line.skip_white(at + 1);
-            if ends_excmd(c_int::from(excmd.line.byte_at(at))) == 0 {
+            if !ends_excmd(excmd.line.byte_at(at)) {
                 excmd.errmsg = Some(ex_errmsg(E_TRAILING_ARG, excmd.line.cstr_from(at)));
             } else {
                 excmd.line.next = excmd.line.check_next(at);

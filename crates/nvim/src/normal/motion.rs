@@ -622,7 +622,7 @@ pub(crate) fn nv_findpar(cmd_arg: &mut CmdArg) {
     cmd_arg.op().inclusive = false;
     cmd_arg.op().use_reg_one = true;
     Win::current().w_set_curswant = true;
-    let Some(inclusive) = findpar(cmd_arg.arg, cmd_arg.count1, NUL, false) else {
+    let Some(inclusive) = findpar(cmd_arg.arg, cmd_arg.count1, 0, false) else {
         clear_op_beep(cmd_arg.op());
         return;
     };

@@ -57,7 +57,7 @@ use crate::log::{LOGLVL_DBG, LOGLVL_INF, log_init, logmsg};
 use crate::lua::executor::{nlua_exec_file, nlua_init, nlua_init_defaults, nlua_run_script};
 use crate::mark::setpcmark;
 use crate::memline::list_swap_files;
-use crate::message::msg_putchar;
+use crate::message::msg_put_ascii;
 use crate::message::state::{MSG_DIDOUT, MSG_ROW, MSG_SCROLL, NO_WAIT_RETURN};
 use crate::mouse::setmouse;
 use crate::r#move::update_topline;
@@ -483,7 +483,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         let lua_ok = nlua_exec_file(lua_script).is_ok();
         time_msg_at(c"executing Lua -l script");
         if MSG_DIDOUT.get() {
-            msg_putchar('\n' as c_int);
+            msg_put_ascii(b'\n');
             MSG_DIDOUT.set(false);
         }
         getout(if lua_ok { 0 } else { 1 });

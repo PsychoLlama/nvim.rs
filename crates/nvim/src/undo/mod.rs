@@ -51,8 +51,8 @@ use crate::memline::MlFlags;
 use crate::memline::{ml_delete, resolve_symlink};
 use crate::memory::XString;
 use crate::message::{
-    emsg, iemsg, internal_error, messaging, msg, msg_end, msg_ext_set_kind, msg_putchar, msg_start,
-    msg_str, msg_str_hl, verb_msg, verbose_enter, verbose_leave,
+    emsg, iemsg, internal_error, messaging, msg, msg_end, msg_ext_set_kind, msg_start, msg_str,
+    msg_str_hl, verb_msg, verbose_enter, verbose_leave,
 };
 use crate::option::vars::{FDO_FLAGS, p_fs, p_ul, p_verbose};
 use crate::options::OPT_FDO_FLAG_UNDO;

@@ -42,8 +42,8 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::fileio::{ReadFlags, readfile_named};
 use crate::getchar::state::GOT_INT;
 use crate::getchar::vgetc;
+use crate::message::IOSIZE;
 use crate::message::state::{DID_EMSG, MSG_DIDANY, MSG_SCROLL, NO_WAIT_RETURN};
-use crate::message::{IOSIZE, msg_putchar};
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::vars::{P_EF, P_EFM, P_MENC, p_ef, p_fdls, p_shm};
 use crate::option::{set_option_direct, set_option_value_give_err};
@@ -63,6 +63,7 @@ use crate::window::{
     win_equal,
 };
 
+use crate::message::msg_put_ascii;
 use crate::pos::MAXLNUM;
 use crate::winlayer::{Buf, TabPage, Win, first_window};
 
@@ -116,7 +117,7 @@ pub(crate) fn handle_quickfix(parm: &MainParams) {
     let (ef, efm, enc) = (P_EF.get(), P_EFM.get(), P_MENC.get());
     let (ef, efm, enc) = (ef.as_cstr(), efm.as_cstr(), enc.as_cstr());
     if qf_init(None, ef, efm, true, true, Some(&title), Some(enc)).is_err() {
-        msg_putchar('\n' as c_int);
+        msg_put_ascii(b'\n');
         os_exit(3);
     }
     time_msg_at(c"reading errorfile");

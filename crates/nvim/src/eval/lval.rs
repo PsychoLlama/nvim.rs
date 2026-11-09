@@ -793,7 +793,7 @@ pub(crate) fn get_lval<'a>(
         // already.
         if unlet
             && !ascii_iswhite(c_int::from(after))
-            && ends_excmd(c_int::from(after)) == 0
+            && !ends_excmd(after)
             && after != b'['
             && after != b'.'
         {

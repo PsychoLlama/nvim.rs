@@ -78,7 +78,7 @@ pub(crate) fn findsent(dir: Direction, mut count: c_int) -> Result<(), NoObject>
                 }
             } else if dir as c_int == FORWARD as c_int
                 && pos.col == ColNr::ZERO
-                && starts_para(pos.lnum, NUL, false)
+                && starts_para(pos.lnum, 0, false)
             {
                 // At the start of a paragraph or section, going forward:
                 // the next line is the answer.
@@ -131,7 +131,7 @@ pub(crate) fn findsent(dir: Direction, mut count: c_int) -> Result<(), NoObject>
                 // Find the end of the sentence.
                 let mut c = gchar_pos(&pos);
                 // `pos.lnum` is a line of the current buffer.
-                if c == NUL || (pos.col == ColNr::ZERO && starts_para(pos.lnum, NUL, false)) {
+                if c == NUL || (pos.col == ColNr::ZERO && starts_para(pos.lnum, 0, false)) {
                     if dir as c_int == BACKWARD as c_int && pos.lnum != startlnum {
                         pos.lnum += 1;
                     }

@@ -35,6 +35,7 @@ use crate::highlight_group::{HLF_8, HLF_D};
 use crate::lua::executor::{api_new_luaref, funcref_description};
 use crate::lua::ffi::LUA_NOREF;
 use crate::message::msg_display_bytes;
+use crate::message::msg_put_ascii;
 use crate::message::{
     message_filtered, msg, msg_display, msg_display_keys, msg_ext_set_kind, msg_putchar, msg_str,
     msg_str_hl, msg_title,
@@ -174,7 +175,7 @@ pub(super) fn uc_list(wanted: &[u8]) {
                 ));
             }
             found = true;
-            msg_putchar(c_int::from(b'\n'));
+            msg_put_ascii(b'\n');
             if GOT_INT.get() {
                 interrupted = true;
                 break;
@@ -225,7 +226,7 @@ fn list_one(cmd: &Row, scope: Scope, name_len: usize) {
         msg_str(cstr::in_bytes(&SPACES[len - 4..]));
         len = 21;
     }
-    msg_putchar(c_int::from(b' '));
+    msg_put_ascii(b' ');
     len += 1;
     let over = len_as_integer(len) - 22;
 

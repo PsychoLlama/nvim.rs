@@ -24,7 +24,9 @@ use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::eval::typval::DictRef;
+use crate::ex_docmd::ends_excmd_char;
 use crate::message::IOSIZE;
+use crate::message::msg_put_ascii;
 
 /// The variables in `dict`, one per line, each name prefixed with `prefix`.
 ///
@@ -110,14 +112,14 @@ pub(crate) fn list_arg_vars(text: &[u8], skip: bool, first: &mut bool) -> usize 
     let mut error = false;
     let mut arg = 0;
     let rest = |at: usize| text.get(at..).unwrap_or_default();
-    while ends_excmd(c_int::from(cstr::byte_at(text, arg))) == 0 && !GOT_INT.get() {
+    while !ends_excmd(cstr::byte_at(text, arg)) && !GOT_INT.get() {
         if error || skip {
             // Nothing is being printed any more; just check that what is
             // left parses as names.
             let flags = FNE_INCL_BR | FNE_CHECK_START;
             arg += name_end(rest(arg), flags).end;
             let c = c_int::from(cstr::byte_at(text, arg));
-            if !ascii_iswhite(c) && ends_excmd(c) == 0 {
+            if !ascii_iswhite(c) && !ends_excmd_char(c) {
                 EMSG_SEVERE.set(true);
                 let shown = crate::message_fmt::msg_bytes(rest(arg));
                 semsg!("E488: Trailing characters: {shown}");
@@ -217,14 +219,14 @@ fn list_one_var_a(prefix: &CStr, name: &[u8], value_type: VarType, text: &[u8], 
         msg_ext_set_kind(c"list_cmd");
         msg_start();
     } else {
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
     }
     // Not `msg()`, which would overwrite "v:statusmsg".
     if !prefix.is_empty() {
         msg_str(prefix);
     }
     msg_bytes(name, 0, false);
-    msg_putchar(c_int::from(b' '));
+    msg_put_ascii(b' ');
     msg_advance(22);
 
     // The sigil, and the bracket it stands in for.

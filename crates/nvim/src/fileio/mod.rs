@@ -51,6 +51,7 @@ use crate::mbyte::{canon_props, canonize, utf_byte2len};
 use crate::memline::SEA_QUIT;
 use crate::memline::{check_need_swap, ml_append_terminated, ml_delete, ml_open};
 use crate::memory::{XString, try_grow_zeroed};
+use crate::message::msg_put_ascii;
 use crate::message::state::{
     EMSG_SILENT, IN_ASSERT_FAILS, KEEP_MSG, MSG_COL, MSG_LISTDO_OVERWRITE, MSG_SCROLL,
     MSG_SCROLLED, MSG_SCROLLED_IGN, MSG_SILENT, NEED_FILEINFO, NEED_WAIT_RETURN, NO_WAIT_RETURN,
@@ -58,7 +59,7 @@ use crate::message::state::{
 use crate::message::{E_INTERR, IOSIZE};
 use crate::message::{
     do_dialog, emsg, fit_head, msg, msg_check_for_delay, msg_clr_eos, msg_delay, msg_display_bytes,
-    msg_end, msg_fit_head, msg_progress, msg_putchar, msg_start, msg_str, msg_str_hl, set_keep_msg,
+    msg_end, msg_fit_head, msg_progress, msg_start, msg_str, msg_str_hl, set_keep_msg,
 };
 use crate::message_fmt::msg_bytes;
 use crate::r#move::update_topline;
@@ -224,7 +225,7 @@ impl Buf {
         }
         msg_start();
         if prev_msg_col != 0 && MSG_COL.get() == 0 {
-            msg_putchar(c_int::from(b'\r')); // overwrite any previous message
+            msg_put_ascii(b'\r'); // overwrite any previous message
         }
         MSG_SCROLL.set(msg_scroll_save);
         MSG_SCROLLED_IGN.set(true);

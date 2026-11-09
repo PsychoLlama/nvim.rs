@@ -27,6 +27,7 @@ use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::ascii::NUL;
+use crate::ex_docmd::ends_excmd_char;
 use crate::regexp::{RE_MAGIC, char_delim, skip_regexp_at};
 use crate::runtime::RuntimeOpts;
 use crate::types::ExArgt;
@@ -168,7 +169,7 @@ pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
     if let Some(at) = end {
         // Check for a trailing command and illegal trailing arguments.
         args.line.next = args.line.check_next(args.line.arg + at);
-        if ends_excmd(c_int::from(cstr::byte_at(&line, at))) == 0 || args.skip {
+        if !ends_excmd(cstr::byte_at(&line, at)) || args.skip {
             end = None;
         } else {
             let name_len = name.as_ref().map_or(0, |name| name.len);
@@ -269,14 +270,14 @@ impl ExArg<'_> {
         let byte = |at: usize| c_int::from(cstr::byte_at(line, at));
 
         let mut cursor = at;
-        while let Some(mut at) = cursor.filter(|&at| ends_excmd(byte(at)) == 0) {
+        while let Some(mut at) = cursor.filter(|&at| !ends_excmd_char(byte(at))) {
             // Options may appear anywhere between the patterns. A refusal is
             // said here, before the E475 `syn_cmd_region` follows it with.
             cursor = read_item_options(line, at, &mut out.opt, &mut out.conceal_char, self.skip)
                 .map_err(|why| why.report())
                 .ok();
             match cursor {
-                Some(next) if ends_excmd(byte(next)) == 0 => at = next,
+                Some(next) if !ends_excmd_char(byte(next)) => at = next,
                 _ => break,
             }
 
@@ -373,7 +374,7 @@ pub(crate) fn syn_cmd_region(args: &mut ExArg, syncing: c_int) {
     if let Some(at) = end {
         // Check for trailing garbage or a command; if OK, add the item.
         args.line.next = args.line.check_next(args.line.arg + at);
-        if ends_excmd(c_int::from(cstr::byte_at(&line, at))) == 0 || args.skip {
+        if !ends_excmd(cstr::byte_at(&line, at)) || args.skip {
             end = None;
         } else {
             let name_len = name.as_ref().map_or(0, |name| name.len);
@@ -492,7 +493,7 @@ pub(crate) fn read_pattern(
 
     let end = read_pattern_offsets(ci, &mut tail, end + 1);
     let after = c_int::from(cstr::byte_at(&tail, end));
-    if ends_excmd(after) == 0 && !ascii_iswhite(after) {
+    if !ends_excmd_char(after) && !ascii_iswhite(after) {
         return Err(SyntaxError::GarbageAfterPattern(ThinCString::from_bytes(
             body,
         )));

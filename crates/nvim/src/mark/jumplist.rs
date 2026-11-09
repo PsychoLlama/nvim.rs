@@ -26,8 +26,7 @@ use crate::ex_docmd::state::{GLOBAL_BUSY, LISTCMD_BUSY};
 use crate::getchar::state::GOT_INT;
 use crate::memory::XString;
 use crate::message::{
-    message_filtered, msg_display, msg_display_bytes, msg_ext_set_kind, msg_putchar, msg_str,
-    msg_title,
+    message_filtered, msg_display, msg_display_bytes, msg_ext_set_kind, msg_str, msg_title,
 };
 use crate::option::vars::JOP_FLAGS;
 use crate::os::cshim::gettext;
@@ -41,6 +40,7 @@ use super::show::*;
 use super::store::slot;
 use super::*;
 use crate::highlight_group::HLF_D;
+use crate::message::msg_put_ascii;
 use crate::types::CmdModFlags;
 
 /// Set the previous context mark to the current position and add it to the
@@ -337,7 +337,7 @@ pub fn ex_jumps(_excmd: &mut ExArg) {
             if let Some(name) = name
                 && !message_filtered(name.as_cstr())
             {
-                msg_putchar(c_int::from(b'\n'));
+                msg_put_ascii(b'\n');
                 if GOT_INT.get() {
                     break;
                 }
@@ -379,7 +379,7 @@ pub fn ex_changes(_excmd: &mut ExArg) {
     while i < buf.b_changelistlen && !GOT_INT.get() {
         let pos = buf.b_changelist[slot(i)].mark;
         if pos.lnum != LineNr::ZERO {
-            msg_putchar(c_int::from(b'\n'));
+            msg_put_ascii(b'\n');
             if GOT_INT.get() {
                 break;
             }

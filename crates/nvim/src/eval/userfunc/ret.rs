@@ -386,7 +386,7 @@ pub fn ex_call(excmd: &mut ExArg) {
     // error is reported for it rather than swallowed.
     let in_try = cond_stack_of(excmd).with(|cs| cs.try_level > 0);
     if (!aborting() || DID_THROW.get()) && (!failed || in_try) {
-        if ends_excmd(c_int::from(excmd.line.byte_at(stop))) == 0 {
+        if !ends_excmd(excmd.line.byte_at(stop)) {
             if !failed && !aborting() {
                 EMSG_SEVERE.set(true);
                 let rest = msg_bytes(excmd.line.rest_of(stop));

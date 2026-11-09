@@ -34,6 +34,12 @@ pub fn msg_putchar(c: c_int) {
     msg_putchar_hl(c, 0)
 }
 
+/// Show one ASCII character: [`msg_putchar`] for the byte a caller spells.
+pub(crate) fn msg_put_ascii(c: u8) {
+    debug_assert!(c.is_ascii(), "not an ASCII character");
+    msg_putchar_hl(c_int::from(c), 0)
+}
+
 /// Show one character with a highlight id.
 ///
 /// A special key is put back into the three-byte `K_SPECIAL` form it arrived
@@ -259,7 +265,7 @@ pub fn msg_make(arg: &CStr) {
         }
     }
     if left == 0 {
-        msg_putchar(c_int::from(NL));
+        msg_put_ascii(NL);
         for &byte in SHIFTED {
             msg_putchar(c_int::from(byte - 3));
         }

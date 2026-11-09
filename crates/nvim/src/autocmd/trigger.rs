@@ -69,7 +69,7 @@ pub fn do_doautocmd(
     let pattern = &arg[fname_at..];
 
     while byte(at) != 0
-        && ends_excmd(::core::ffi::c_int::from(byte(at))) == 0
+        && !ends_excmd(byte(at))
         && !ascii_iswhite(::core::ffi::c_int::from(byte(at)))
     {
         let (event, consumed) = event_name2nr(&arg[at..]);

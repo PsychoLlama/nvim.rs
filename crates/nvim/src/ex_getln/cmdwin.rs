@@ -232,7 +232,7 @@ pub(crate) fn open_cmdwin() -> Key {
     // Showing the prompt may have set need_wait_return; reset it.
     NEED_WAIT_RETURN.set(false);
 
-    let histtype = hist_char2type(::core::ffi::c_int::from(CMDWIN_TYPE.get()));
+    let histtype = hist_char2type(CMDWIN_TYPE.get());
     if histtype == HIST_CMD || histtype == HIST_DEBUG {
         if wildchar() == Key::TAB {
             add_map(b"<Tab>", b"<C-X><C-V>", MODE_INSERT, true);

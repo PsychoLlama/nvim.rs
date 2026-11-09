@@ -49,7 +49,7 @@ use crate::mbyte::{c_cluster_len, char_at, strnicmp_in};
 use crate::memline::{ml_append_text, ml_delete};
 use crate::memory::XString;
 use crate::message::IOSIZE;
-use crate::message::{msg_end, msg_ext_set_kind, msg_putchar, msg_start, msg_str};
+use crate::message::{msg_end, msg_ext_set_kind, msg_start, msg_str};
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::vars::p_ic;
 use crate::option::{get_option_value, set_option_value_give_err};
@@ -63,6 +63,7 @@ use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
 use super::check::no_spell_checking;
 use super::lookup::valid_word_prefix;
 use super::{LOADED_LANGS, MAXWLEN};
+use crate::message::msg_put_ascii;
 
 /// Round 2 of the walk: the keep-case tree.
 const DUMPFLAG_KEEPCASE: c_int = 1;
@@ -117,11 +118,11 @@ pub fn ex_spellinfo(_excmd: &mut ExArg) {
         msg_str(c"file: ");
         msg_str(fname.as_cstr());
         // Always true, as upstream's test is.
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
         if let Some(info) = info {
             msg_str(info.as_cstr());
             if lpi + 1 < count {
-                msg_putchar(c_int::from(b'\n'));
+                msg_put_ascii(b'\n');
             }
         }
     }

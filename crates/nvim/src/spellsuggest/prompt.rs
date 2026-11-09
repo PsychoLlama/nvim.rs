@@ -50,10 +50,9 @@ use crate::memline::{Lines, ml_replace_owned};
 use crate::memory::XString;
 use crate::message::E_NO_SPELL;
 use crate::message::IOSIZE;
+use crate::message::msg_put_ascii;
 use crate::message::state::{CMDMSG_RL, LINES_LEFT, MSG_COL, MSG_ROW, MSG_SCROLL};
-use crate::message::{
-    emsg, msg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_start,
-};
+use crate::message::{emsg, msg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_start};
 use crate::message_fmt::{msg_bytes, msg_text};
 use crate::mouse::state::MOUSE_ROW;
 use crate::narrow::as_index;
@@ -242,14 +241,14 @@ fn ask_which_suggestion(sug: &SugInfo, msg_scroll_save: c_int) -> c_int {
     };
     msg_text(asked);
     msg_clr_eos();
-    msg_putchar(c_int::from(b'\n'));
+    msg_put_ascii(b'\n');
 
     MSG_SCROLL.set(1);
     let last = len_as_int(sug.su_ga.len()) - 1;
     for (i, stp) in sug.su_ga.iter().enumerate() {
         show_suggestion(len_as_int(i), stp, sug);
         if !ui_has(UI_MESSAGES) || len_as_int(i) < last {
-            msg_putchar(c_int::from(b'\n'));
+            msg_put_ascii(b'\n');
         }
     }
 

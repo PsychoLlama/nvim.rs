@@ -63,7 +63,7 @@ use crate::marktree::cursor::{Cursor, lookup_ns};
 use crate::marktree::key::{MtFlags, mt_decor, mt_decor_sign, mt_end};
 use crate::marktree::{MTKey, MarkTreeIter};
 use crate::memory::ThinCString;
-use crate::message::{msg_putchar, msg_str, msg_title};
+use crate::message::{msg_str, msg_title};
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::os::cshim::gettext;
 use crate::os::libc::{int32_t, int64_t, ptrdiff_t};

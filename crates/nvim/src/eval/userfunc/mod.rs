@@ -56,7 +56,7 @@ use crate::message::{
 };
 use crate::message::{
     emsg, internal_error, message_filtered, msg_clr_eos, msg_ext_set_kind, msg_outnum,
-    msg_prt_line, msg_putchar, msg_start, msg_str, verbose_enter_scroll, verbose_leave_scroll,
+    msg_prt_line, msg_start, msg_str, verbose_enter_scroll, verbose_leave_scroll,
 };
 use crate::message_fmt::msg_bytes;
 use crate::option::vars::{p_ic, p_mfd, p_verbose};

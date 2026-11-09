@@ -26,6 +26,7 @@ use crate::guard::{Allow, Depth};
 use crate::keycodes::SpecialKey;
 use crate::memory::XString;
 use crate::message::emsg;
+use crate::message::msg_put_ascii;
 use crate::option::defs::OptionSetFlags;
 use crate::option::vars::{P_STL, P_TAL, P_WBR};
 use crate::optionstr::OptString;
@@ -287,7 +288,7 @@ pub(crate) fn command_line_enter(
 
             if err.is_set() {
                 if !ui_has(UI_MESSAGES) {
-                    msg_putchar(::core::ffi::c_int::from(b'\n'));
+                    msg_put_ascii(b'\n');
                 }
                 MSG_SCROLL.set(1);
                 msg_str_hl(err.message_or_empty(), HLF_E, true);
@@ -300,7 +301,7 @@ pub(crate) fn command_line_enter(
 
         init_history();
         s.hiscnt = get_hislen(); // an impossible history value
-        s.histype = hist_char2type(::core::ffi::c_int::from(s.firstc));
+        s.histype = hist_char2type(s.firstc);
         reset_digraph(); // init digraph typeahead
 
         // If something above caused an error, reset the flags: we do
@@ -435,7 +436,7 @@ pub(crate) fn command_line_enter(
 
         if err.is_set() {
             if !ui_has(UI_MESSAGES) {
-                msg_putchar(::core::ffi::c_int::from(b'\n'));
+                msg_put_ascii(b'\n');
             }
             emsg(err.message_or_empty());
             DID_EMSG.set(0);

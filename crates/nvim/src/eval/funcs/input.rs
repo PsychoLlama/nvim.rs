@@ -25,10 +25,11 @@ use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::input::prompt_for_number;
+use crate::message::msg_put_ascii;
 use crate::message::state::{LINES_LEFT, MSG_ROW, MSG_SCROLL};
 use crate::message::{E_INVARG, VIM_ERROR, VIM_GENERIC, VIM_INFO, VIM_QUESTION, VIM_WARNING};
 use crate::message::{
-    confirm_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_start, msg_str, verb_msg,
+    confirm_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_start, msg_str, verb_msg,
 };
 use crate::mouse::state::MOUSE_ROW;
 use crate::narrow::{as_index, number_as_int};
@@ -180,7 +181,7 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // A UI that owns the message area keeps the items in one message,
         // bar the last separator.
         if !ui_has(UI_MESSAGES) || at + 1 < len {
-            msg_putchar(c_int::from(b'\n'));
+            msg_put_ascii(b'\n');
         }
     }
 

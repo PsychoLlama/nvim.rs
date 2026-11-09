@@ -72,7 +72,7 @@ pub fn msg_start() {
         if p_ch() == 0 && !MSG_DIDOUT.get() && msg_use_printf() != 0 {
             msg_bytes_to_grid(b"\n", 0, false);
         } else {
-            msg_putchar(c_int::from(NL));
+            msg_put_ascii(NL);
         }
         did_return = true;
         CMDLINE_ROW.set(MSG_ROW.get());
@@ -505,6 +505,6 @@ pub fn msg_advance(col: c_int) {
     }
     let col = col.min(COLUMNS.get() - 1); // not enough room
     while MSG_COL.get() < col {
-        msg_putchar(c_int::from(b' '));
+        msg_put_ascii(b' ');
     }
 }

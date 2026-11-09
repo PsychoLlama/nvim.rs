@@ -50,8 +50,8 @@ use crate::message::state::{DID_EMSG, MSG_COL};
 use crate::message::{E_ARGREQ, E_CANNOT_DEFINE_AUTOCOMMANDS_FOR_ALL_EVENTS};
 use crate::message::{
     emsg, give_warning, msg_advance, msg_clr_eos, msg_display, msg_end, msg_ext_set_kind,
-    msg_putchar, msg_start, msg_str, msg_str_hl, msg_title, verbose_enter, verbose_enter_scroll,
-    verbose_leave, verbose_leave_scroll,
+    msg_start, msg_str, msg_str_hl, msg_title, verbose_enter, verbose_enter_scroll, verbose_leave,
+    verbose_leave_scroll,
 };
 use crate::option::defs::OptVal;
 use crate::option::set_option_direct;

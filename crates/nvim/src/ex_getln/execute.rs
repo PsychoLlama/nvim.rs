@@ -21,6 +21,7 @@ use crate::cstr;
 use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::guard::{Keys, Lock, Suppress};
 use crate::keycodes::SpecialKey;
+use crate::message::msg_put_ascii;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
 use crate::option::vars::P_ICM;
@@ -486,7 +487,7 @@ pub(crate) fn do_autocmd_cmdlinechanged(firstc: u8) {
 
     if err.is_set() {
         if !ui_has(UI_MESSAGES) {
-            msg_putchar(::core::ffi::c_int::from(b'\n'));
+            msg_put_ascii(b'\n');
         }
         MSG_SCROLL.set(1);
         msg_str_hl(err.message_or_empty(), HLF_E, true);

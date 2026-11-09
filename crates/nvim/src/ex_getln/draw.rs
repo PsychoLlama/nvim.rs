@@ -18,6 +18,7 @@
 use super::*;
 use crate::ascii::NUL;
 use crate::cstr;
+use crate::message::msg_put_ascii;
 use crate::winlayer::cmdline_window;
 
 /// The screen width of the command-line byte at `idx`.
@@ -114,7 +115,7 @@ pub(crate) fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
         // One star per character, not per byte.
         let mut i = 0;
         while i < len {
-            msg_putchar(::core::ffi::c_int::from(b'*'));
+            msg_put_ascii(b'*');
             i += cluster_len_at(cc, start + i).max(1);
         }
     } else if !cc.last_colors.chunks().is_empty() {
@@ -200,7 +201,7 @@ pub fn unputcmdline() {
     let mut cc = Cc::current();
     MSG_NO_MORE.set(true);
     if cc.len() == cc.cmdpos && !ui_has(UI_CMDLINE) {
-        msg_putchar(::core::ffi::c_int::from(b' '));
+        msg_put_ascii(b' ');
     } else {
         draw_cmdline(cc.cmdpos, cluster_len_at(cc, cc.cmdpos));
     }
@@ -334,7 +335,7 @@ pub(crate) fn redrawcmdprompt() {
     } else {
         let mut i = cc.cmdindent;
         while i > 0 {
-            msg_putchar(::core::ffi::c_int::from(b' '));
+            msg_put_ascii(b' ');
             i -= 1;
         }
     }

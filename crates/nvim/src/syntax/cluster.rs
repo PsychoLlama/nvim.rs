@@ -227,7 +227,7 @@ pub(crate) fn syn_cmd_cluster(args: &mut ExArg, _syncing: c_int) {
     if !got_clstr {
         emsg(gettext(c"E400: No cluster specified"));
     }
-    if !end.is_some_and(|at| ends_excmd(c_int::from(cstr::byte_at(&line, at))) != 0) {
+    if !end.is_some_and(|at| ends_excmd(cstr::byte_at(&line, at))) {
         let shown = msg_bytes(&line);
         semsg!("E475: Invalid argument: {shown}");
     }

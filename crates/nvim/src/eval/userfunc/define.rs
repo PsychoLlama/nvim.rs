@@ -29,6 +29,7 @@ use super::*;
 use crate::eval::typval::value_check_lock_named;
 use crate::eval::vars::with_var;
 use crate::memory::XString;
+use crate::message::msg_put_ascii;
 use crate::types::{Failed, FuncBody};
 
 /// Whether the function table changed under a listing, which means the
@@ -59,7 +60,7 @@ pub(crate) fn list_func_head(func: &UserFunc, indent: bool, force: bool) -> Resu
     }
     msg_str(if force { c"function! " } else { c"function " });
     msg_str(func.printable_name().as_cstr());
-    msg_putchar(c_int::from(b'('));
+    msg_put_ascii(b'(');
 
     let body = func.body();
     let (args, defaults) = (&body.args, &body.def_args);
@@ -84,7 +85,7 @@ pub(crate) fn list_func_head(func: &UserFunc, indent: bool, force: bool) -> Resu
         }
         msg_str(c"...");
     }
-    msg_putchar(c_int::from(b')'));
+    msg_put_ascii(b')');
 
     for (flag, text) in [
         (FuncFlags::ABORT, c" abort"),
@@ -336,7 +337,7 @@ impl Definition<'_, '_> {
             }
             if !ui_has(UI_CMDLINE) {
                 // Don't overwrite the function name.
-                msg_putchar(c_int::from(b'\n'));
+                msg_put_ascii(b'\n');
             }
             CMDLINE_ROW.set(MSG_ROW.get());
         }
@@ -574,7 +575,7 @@ fn reads_as_identifier(name: &[u8]) -> bool {
 /// with a `(` it defines.
 pub fn ex_function(excmd: &mut ExArg) {
     // ":function" without argument: list functions.
-    if ends_excmd(c_int::from(excmd.line.byte_at(excmd.line.arg))) != 0 {
+    if ends_excmd(excmd.line.byte_at(excmd.line.arg)) {
         if !excmd.skip {
             list_functions(None);
         }

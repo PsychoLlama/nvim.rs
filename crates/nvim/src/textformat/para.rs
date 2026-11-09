@@ -18,7 +18,6 @@ use crate::types::ColNr;
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::change::{COM_END, COM_FIRST, COM_MIDDLE, COM_START, ComFlags, get_leader_len};
 use crate::charset::skip;
@@ -92,7 +91,7 @@ pub(crate) fn fmt_check_par(lnum: LineNr, leader: &mut Leader, do_comments: bool
         byte_at(after, skip::white(after)) == b'\0'
     };
     let ends_a_comment = leader.len > 0 && leader.has_flag(COM_END);
-    nothing_but_leader || ends_a_comment || starts_para(lnum, NUL, false)
+    nothing_but_leader || ends_a_comment || starts_para(lnum, 0, false)
 }
 
 /// Whether line `lnum` ends in a white character. An empty line does not.

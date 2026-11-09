@@ -35,8 +35,9 @@ use crate::grid::{default_gridview, grid_line_flush, grid_line_puts, grid_line_s
 use crate::highlight::namespace::hl_attr;
 use crate::highlight_group::{HLF_8, syn_id2attr, syn_name2id};
 use crate::mbyte::{c_cluster_len, char_at};
+use crate::message::msg_put_ascii;
 use crate::message::state::MSG_COL;
-use crate::message::{msg_ext_set_kind, msg_putchar, msg_str};
+use crate::message::{msg_ext_set_kind, msg_str};
 use crate::option::defs::ShmFlag;
 use crate::option::vars::{P_SHM, p_ls, p_verbose};
 use crate::os::cshim::gettext;
@@ -183,7 +184,7 @@ pub(crate) fn ex_version(excmd: &mut ExArg) {
     // Start the banner below the ":version" the user typed. The message
     // UI lays its own messages out, so it needs no help.
     if !ui_has(UI_MESSAGES) {
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
     }
     list_version();
 }
@@ -197,7 +198,7 @@ fn version_msg_wrap(s: &CStr, wrap: bool) {
         && MSG_COL.get() + len >= COLUMNS.get()
         && !s.to_bytes().starts_with(b"\n")
     {
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
     }
     if GOT_INT.get() {
         return;
@@ -236,7 +237,7 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
         for (i, item) in items.iter().enumerate() {
             version_msg_wrap(item, Some(i) == current);
             if MSG_COL.get() > 0 && len_as_int(i) < count - 1 {
-                msg_putchar(c_int::from(b'\n'));
+                msg_put_ascii(b'\n');
             }
         }
         return;
@@ -258,27 +259,27 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
             // A hole in the last column: only the row break is owed.
             if MSG_COL.get() > 0 {
                 if cur_row < nrow {
-                    msg_putchar(c_int::from(b'\n'));
+                    msg_put_ascii(b'\n');
                 }
                 cur_row += 1;
             }
             continue;
         };
         if Some(at) == current {
-            msg_putchar(c_int::from(b'['));
+            msg_put_ascii(b'[');
         }
         msg_str(item);
         if Some(at) == current {
-            msg_putchar(c_int::from(b']'));
+            msg_put_ascii(b']');
         }
         if last_col {
             if MSG_COL.get() > 0 && cur_row < nrow {
-                msg_putchar(c_int::from(b'\n'));
+                msg_put_ascii(b'\n');
             }
             cur_row += 1;
         } else {
             while MSG_COL.get() % width != 0 {
-                msg_putchar(c_int::from(b' '));
+                msg_put_ascii(b' ');
             }
         }
     }
@@ -300,7 +301,7 @@ pub(crate) fn list_lua_version() {
 pub(crate) fn list_version() {
     msg_ext_set_kind(c"list_cmd");
     msg_str(LONG_VERSION);
-    msg_putchar(c_int::from(b'\n'));
+    msg_put_ascii(b'\n');
     // The Nvim release this port tracks -- the version every
     // compatibility surface (`has('nvim-…')`, `v:version`, the API
     // metadata) answers with.
@@ -309,13 +310,13 @@ pub(crate) fn list_version() {
     ))
     .expect("version numbers hold no NUL");
     msg_str(&compat);
-    msg_putchar(c_int::from(b'\n'));
+    msg_put_ascii(b'\n');
     list_lua_version();
 
     if p_verbose() > 0 as OptInt {
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
         msg_str(BUILD_LINE);
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
         msg_str(c"Vim versions: ");
         for (i, baseline) in VIM_BASELINES.iter().enumerate() {
             if i != 0 {

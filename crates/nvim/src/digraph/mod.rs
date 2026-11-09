@@ -40,8 +40,9 @@ use crate::keycodes::SpecialKey;
 use crate::mapping::{MAPTYPE_MAP, MAPTYPE_UNMAP, do_map};
 use crate::mbyte::{char_at, char_len, encode_char, utf_iscomposing_first};
 use crate::memory::ThinCString;
+use crate::message::msg_put_ascii;
 use crate::message::state::MSG_COL;
-use crate::message::{msg_advance, msg_display, msg_ext_set_kind, msg_putchar};
+use crate::message::{msg_advance, msg_display, msg_ext_set_kind};
 use crate::message_fmt::emsg_text;
 use crate::normal::add_to_showcmd;
 use crate::option::defs::OptError;
@@ -373,7 +374,7 @@ fn digraph_header(name: &'static [u8]) {
 
 /// `msg_putchar('\n')`: end the current message line.
 fn newline() {
-    msg_putchar(c_int::from(b'\n'));
+    msg_put_ascii(b'\n');
 }
 
 /// Print one digraph. With `previous`, print a section header when this

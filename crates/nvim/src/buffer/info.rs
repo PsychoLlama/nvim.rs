@@ -43,8 +43,7 @@ use crate::memory::XString;
 use crate::message::IOSIZE;
 use crate::message::state::{MSG_COL, MSG_SCROLL, MSG_SCROLLED, NEED_WAIT_RETURN, NO_LINES_MSG};
 use crate::message::{
-    message_filtered, msg, msg_display, msg_ext_set_kind, msg_fit_head, msg_putchar, msg_start,
-    set_keep_msg,
+    message_filtered, msg, msg_display, msg_ext_set_kind, msg_fit_head, msg_start, set_keep_msg,
 };
 use crate::r#move::validate_virtcol;
 use crate::option::defs::{OptIndex, OptionSetFlags, ShmFlag, StlSyntax};
@@ -69,6 +68,7 @@ use crate::undo::{buf_is_changed, curbuf_is_changed, undo_time_text};
 use crate::winlayer::{Buf, Win, buffers, first_buffer};
 
 use super::list::sort_by_last_used;
+use crate::message::msg_put_ascii;
 
 fn current_win() -> Win {
     Win::current()
@@ -224,7 +224,7 @@ fn show(buffer: Buf, by_time: bool, name: &XString) {
     }
 
     if !ui_has(UI_MESSAGES) || MSG_COL.get() > 0 {
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
     }
 
     let listed = if buffer.b_p_bl != 0 { b' ' } else { b'u' };

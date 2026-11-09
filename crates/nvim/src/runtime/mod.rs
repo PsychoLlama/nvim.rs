@@ -67,8 +67,8 @@ use crate::memory::XString;
 use crate::message::state::MSG_COL;
 use crate::message::{E_ARGREQ, E_INTERR, E_INVARG, E_NORANGE};
 use crate::message::{
-    emsg, message_filtered, msg_display, msg_ext_set_kind, msg_ext_ui_flush, msg_putchar,
-    verbose_enter, verbose_leave,
+    emsg, message_filtered, msg_display, msg_ext_set_kind, msg_ext_ui_flush, verbose_enter,
+    verbose_leave,
 };
 use crate::option::defs::{OptSet, OptVal};
 use crate::option::vars::{p_enc, p_ic, p_lpl, p_verbose};

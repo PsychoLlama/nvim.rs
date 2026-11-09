@@ -24,6 +24,7 @@ use crate::bufwrite::translate;
 
 use super::*;
 use crate::message::IOSIZE;
+use crate::message::msg_put_ascii;
 use crate::option::defs::ShmFlag;
 
 /// A message assembled the way upstream assembles one in `IObuff`: never
@@ -203,7 +204,7 @@ pub(crate) fn report_read(sfname: Option<&CStr>, how: &How, out: &Outcome) {
 
     if !how.stdin && !how.buffer {
         if MSG_COL.get() > 0 {
-            msg_putchar(c_int::from(b'\r')); // overwrite previous message
+            msg_put_ascii(b'\r'); // overwrite previous message
         }
         shown = msg_fit_head(report.as_cstr(), false, 0);
     }

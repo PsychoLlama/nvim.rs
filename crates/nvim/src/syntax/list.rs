@@ -22,6 +22,7 @@ use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
 use super::*;
+use crate::message::msg_put_ascii;
 
 /// Everything is listed in the "directory" highlight, as `:highlight` does.
 const LIST_HL: c_int = HLF_D;
@@ -48,7 +49,7 @@ pub(crate) fn syn_cmd_list(args: &mut ExArg, syncing: c_int) {
     }
 
     msg_title(gettext(c"\n--- Syntax items ---"));
-    if ends_excmd(c_int::from(args.line.byte_at(at))) != 0 {
+    if ends_excmd(args.line.byte_at(at)) {
         // No argument: list every group id, then every cluster.
         let mut id = 1;
         while id <= highlight_num_groups() && !GOT_INT.get() {
@@ -62,7 +63,7 @@ pub(crate) fn syn_cmd_list(args: &mut ExArg, syncing: c_int) {
         }
     } else {
         // List the groups and clusters the argument names.
-        while ends_excmd(c_int::from(args.line.byte_at(at))) == 0 && !GOT_INT.get() {
+        while !ends_excmd(args.line.byte_at(at)) && !GOT_INT.get() {
             let (word, word_len) = word_at(args.line.tail(at));
             if word.first() == Some(&b'@') {
                 let id = syn_scl_namen2id(&word[1..]);
@@ -184,7 +185,7 @@ fn syn_list_flags(names: &[(SynFlags, &CStr)], flags: SynFlags, hl_id: c_int) {
     for (flag, name) in names {
         if flags.has(*flag) {
             msg_str_hl(name, hl_id, false);
-            msg_putchar(c_int::from(b' '));
+            msg_put_ascii(b' ');
         }
     }
 }
@@ -242,7 +243,7 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
     if link != 0 && (did_header || link_only) && !GOT_INT.get() {
         syn_list_header(did_header, 0, id, true);
         msg_str_hl(c"links to", LIST_HL, false);
-        msg_putchar(c_int::from(b' '));
+        msg_put_ascii(b' ');
         msg_display(syn_id2name(link), 0, false);
     }
 }
@@ -265,7 +266,7 @@ fn put_item_patterns(mut idx: usize) -> usize {
             c_int::from(b' '),
             &pats[idx],
         );
-        msg_putchar(c_int::from(b' '));
+        msg_put_ascii(b' ');
     } else if sp_type(idx) == SPTYPE_START {
         // The three loops bound themselves on the array; upstream bounds
         // only the last of them and reads past it if a region's END
@@ -288,7 +289,7 @@ fn put_item_patterns(mut idx: usize) -> usize {
             idx += 1;
         }
         idx -= 1;
-        msg_putchar(c_int::from(b' '));
+        msg_put_ascii(b' ');
     }
     idx
 }
@@ -300,7 +301,7 @@ fn put_sync_group(flags: SynFlags, sync_idx: c_int) {
     } else {
         msg_str_hl(c"groupthere", LIST_HL, false);
     }
-    msg_putchar(c_int::from(b' '));
+    msg_put_ascii(b' ');
     if sync_idx >= 0 {
         let block = cur_syn_block();
         let target_id = c_int::from(block.patterns()[as_index(sync_idx)].sp_syn.id);
@@ -308,7 +309,7 @@ fn put_sync_group(flags: SynFlags, sync_idx: c_int) {
     } else {
         msg_str(c"NONE");
     }
-    msg_putchar(c_int::from(b' '));
+    msg_put_ascii(b' ');
 }
 
 /// List one cluster and its members.
@@ -317,7 +318,7 @@ fn syn_list_cluster(id: c_int) {
     let mut endcol = 15;
     let block = cur_syn_block();
     let cluster = &block.clusters()[as_index(id)];
-    msg_putchar(c_int::from(b'\n'));
+    msg_put_ascii(b'\n');
     msg_display(&cluster.scl_name, 0, false);
 
     if MSG_COL.get() >= endcol {
@@ -339,7 +340,7 @@ fn syn_list_cluster(id: c_int) {
 /// Print `name=a,b,@cl` for a `contains=`/`containedin=`/`nextgroup=` list.
 fn put_id_list(name: &CStr, ids: &[int16_t], hl_id: c_int) {
     msg_str_hl(name, hl_id, false);
-    msg_putchar(c_int::from(b'='));
+    msg_put_ascii(b'=');
     for (at, &id) in ids.iter().enumerate() {
         let item = c_int::from(id);
         // Whether anything follows, which is what tells ALLBUT from ALL and
@@ -356,16 +357,16 @@ fn put_id_list(name: &CStr, ids: &[int16_t], hl_id: c_int) {
         } else if item >= SYNID_CLUSTER {
             let block = cur_syn_block();
             let name = &block.clusters()[as_index(item - SYNID_CLUSTER)].scl_name;
-            msg_putchar(c_int::from(b'@'));
+            msg_put_ascii(b'@');
             msg_display(name, 0, false);
         } else {
             msg_display(syn_id2name(item), 0, false);
         }
         if more {
-            msg_putchar(c_int::from(b','));
+            msg_put_ascii(b',');
         }
     }
-    msg_putchar(c_int::from(b' '));
+    msg_put_ascii(b' ');
 }
 
 /// The delimiters `put_pattern` will wrap a pattern in, best first.
@@ -381,13 +382,13 @@ fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: c_int, spp: &SynPat) {
     if *last_matchgroup != c_int::from(spp.sp_syn_match_id) {
         *last_matchgroup = c_int::from(spp.sp_syn_match_id);
         msg_str_hl(c"matchgroup", LIST_HL, false);
-        msg_putchar(c_int::from(b'='));
+        msg_put_ascii(b'=');
         if *last_matchgroup == 0 {
             msg_display(c"NONE", 0, false);
         } else {
             msg_display(syn_id2name(*last_matchgroup), 0, false);
         }
-        msg_putchar(c_int::from(b' '));
+        msg_put_ascii(b' ');
     }
 
     // The name of the pattern and an '=' or ' '.
@@ -410,7 +411,7 @@ fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: c_int, spp: &SynPat) {
     msg_putchar(c_int::from(SEPCHARS[i]));
 
     put_pattern_offsets(spp);
-    msg_putchar(c_int::from(b' '));
+    msg_put_ascii(b' ');
 }
 
 /// Print the `ms=s+1,he=e-2,lc=3` offsets of one pattern.
@@ -424,18 +425,18 @@ fn put_pattern_offsets(spp: &SynPat) {
             continue;
         }
         if !first {
-            msg_putchar(c_int::from(b',')); // separate with commas
+            msg_put_ascii(b','); // separate with commas
         }
         msg_str(SPO_NAME_TAB[as_index(i)]);
         let n = spp.sp_offsets[as_index(i)];
         if i != SPO_LC_OFF {
             if c_int::from(spp.sp_off_flags) & mask != 0 {
-                msg_putchar(c_int::from(b's'));
+                msg_put_ascii(b's');
             } else {
-                msg_putchar(c_int::from(b'e'));
+                msg_put_ascii(b'e');
             }
             if n > 0 {
-                msg_putchar(c_int::from(b'+'));
+                msg_put_ascii(b'+');
             }
         }
         if n != 0 || i == SPO_LC_OFF {
@@ -543,33 +544,33 @@ fn put_keyword(
 
     if prev.contained != opts.contained {
         msg_str_hl(c"contained", LIST_HL, false);
-        msg_putchar(c_int::from(b' '));
+        msg_put_ascii(b' ');
         prev.contained = opts.contained;
     }
     if !prev.cont_in_list.same(&opts.cont_in_list) {
         put_id_list(c"containedin", opts.cont_in_list.ids(), LIST_HL);
-        msg_putchar(c_int::from(b' '));
+        msg_put_ascii(b' ');
         prev.cont_in_list = opts.cont_in_list.clone();
     }
     if !prev.next_list.same(&opts.next_list) {
         put_id_list(c"nextgroup", opts.next_list.ids(), LIST_HL);
-        msg_putchar(c_int::from(b' '));
+        msg_put_ascii(b' ');
         prev.next_list = opts.next_list.clone();
         // The three skip flags are only meaningful with a `nextgroup=`,
         // and upstream only ever prints them here.
         if opts.skipnl != SynFlags::NONE {
             msg_str_hl(c"skipnl", LIST_HL, false);
-            msg_putchar(c_int::from(b' '));
+            msg_put_ascii(b' ');
             prev.skipnl = opts.skipnl;
         }
         if opts.skipwhite != SynFlags::NONE {
             msg_str_hl(c"skipwhite", LIST_HL, false);
-            msg_putchar(c_int::from(b' '));
+            msg_put_ascii(b' ');
             prev.skipwhite = opts.skipwhite;
         }
         if opts.skipempty != SynFlags::NONE {
             msg_str_hl(c"skipempty", LIST_HL, false);
-            msg_putchar(c_int::from(b' '));
+            msg_put_ascii(b' ');
             prev.skipempty = opts.skipempty;
         }
     }

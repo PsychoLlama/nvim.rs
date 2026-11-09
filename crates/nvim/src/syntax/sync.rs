@@ -424,7 +424,7 @@ const SYNC_COUNTS: [(&CStr, SyncCount); 4] = [
 /// argument the sync listing.
 pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
     let mut arg_start = args.line.arg;
-    if ends_excmd(c_int::from(args.line.byte_at(arg_start))) != 0 {
+    if ends_excmd(args.line.byte_at(arg_start)) {
         syn_cmd_list(args, 1);
         return;
     }
@@ -435,7 +435,7 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
     let mut illegal = false;
     let mut finished = false;
 
-    while ends_excmd(c_int::from(args.line.byte_at(arg_start))) == 0 {
+    while !ends_excmd(args.line.byte_at(arg_start)) {
         let mut arg_end = args.line.skip_to_white(arg_start);
         let mut next_arg = args.line.skip_white(arg_end);
         key.clear();
@@ -448,7 +448,7 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
             if !args.skip {
                 cur_syn_block().b_syn_sync_flags |= SF_CCOMMENT;
             }
-            if ends_excmd(c_int::from(args.line.byte_at(next_arg))) == 0 {
+            if !ends_excmd(args.line.byte_at(next_arg)) {
                 arg_end = args.line.skip_to_white(next_arg);
                 if !args.skip {
                     let name = args.line.slice_at(next_arg, arg_end - next_arg);

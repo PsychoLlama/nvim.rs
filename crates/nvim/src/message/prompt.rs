@@ -287,7 +287,7 @@ pub(crate) fn hit_return_msg(newline_sb: bool) {
         P_MORE.set(false);
     }
     if MSG_DIDOUT.get() {
-        msg_putchar(c_int::from(b'\n')); // start on a new line
+        msg_put_ascii(b'\n'); // start on a new line
     }
     P_MORE.set(false); // don't want to see this message when scrolling back
     if GOT_INT.get() {

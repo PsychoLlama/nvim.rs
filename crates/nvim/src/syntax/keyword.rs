@@ -25,6 +25,7 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::ascii::NUL;
+use crate::ex_docmd::ends_excmd_char;
 
 /// One `:syntax keyword` definition of one keyword text.
 ///
@@ -354,13 +355,13 @@ pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
             let mut cnt = 0;
             let mut out = 0;
             let byte = |at: usize| c_int::from(cstr::byte_at(&line, at));
-            while let Some(mut at) = end.filter(|&at| ends_excmd(byte(at)) == 0) {
+            while let Some(mut at) = end.filter(|&at| !ends_excmd_char(byte(at))) {
                 // A refusal is said here, before the E475 that follows it.
                 end = read_item_options(&line, at, &mut opt, &mut conceal_char, args.skip)
                     .map_err(|why| why.report())
                     .ok();
                 match end {
-                    Some(next) if ends_excmd(byte(next)) == 0 => at = next,
+                    Some(next) if !ends_excmd_char(byte(next)) => at = next,
                     _ => break,
                 }
                 while byte(at) != NUL && !ascii_iswhite(byte(at)) {

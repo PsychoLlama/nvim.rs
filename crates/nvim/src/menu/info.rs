@@ -298,7 +298,7 @@ fn find_by_name<'a>(tree: &'a [VimMenu], menu_name: &[u8]) -> Option<&'a VimMenu
 }
 
 fn ends_of_command(p: &[u8]) -> bool {
-    ends_excmd(c_int::from(crate::cstr::byte_at(p, 0))) != 0
+    ends_excmd(crate::cstr::byte_at(p, 0))
 }
 
 fn clear_menutrans_vars() {

@@ -111,7 +111,7 @@ pub fn append_to_redobuff_literally(s: &[u8]) {
         let c = Key::from_code(char_at(rest));
         at += char_len(rest);
         let last = at == s.len();
-        if c.code() < c_int::from(b' ') || c == Key::DEL || (last && (c.is('0') || c.is('^'))) {
+        if c < Key::SPACE || c == Key::DEL || (last && (c.is('0') || c.is('^'))) {
             redobuff().add_char(Key::ctrl(b'V'));
         }
         if last && c.is('0') {

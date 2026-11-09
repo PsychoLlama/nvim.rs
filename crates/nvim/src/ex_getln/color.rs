@@ -20,6 +20,7 @@ use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{CallbackRefused, NumBuf, index_of, list_items, list_iter};
 use crate::guard::Suppress;
+use crate::message::msg_put_ascii;
 use crate::message_fmt::msg_cstr;
 use crate::narrow::{len_as_int, number_as_int};
 use crate::tr_plural;
@@ -101,7 +102,7 @@ pub(crate) fn color_cmdline(mut colored_ccline: Cc) -> bool {
     macro_rules! print_errmsg {
         ($($arg:tt)*) => {{
             MSG_SCROLL.set(1);
-msg_putchar(::core::ffi::c_int::from(b'\n'));
+msg_put_ascii(b'\n');
             let _: bool = $crate::smsg!(HLF_E, $($arg)*);
             printed_errmsg = true;
         }};

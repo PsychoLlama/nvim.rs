@@ -22,7 +22,6 @@ use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::char_at;
 use crate::register::RegName;
 use crate::types::Key;
-use core::ffi::c_int;
 
 /// Fold `modifiers` into `c` where a single code stands for the combination.
 ///
@@ -35,14 +34,14 @@ pub fn merge_modifiers(key: Key, modifiers: &mut ModMask) -> Key {
     // On the code rather than through `as_byte`: the mapping walk asks this
     // for every typeahead byte it compares under CTRL.
     let c = key.code();
-    let merged = if (c_int::from(b'@')..=0x7f).contains(&c) {
+    let merged = if (Key::ascii(b'@')..=Key::DEL).contains(&key) {
         match c & 0x1f {
             0 => SpecialKey::Zero.code(),
             ctrl => ctrl,
         }
-    } else if c == c_int::from(b'6') {
+    } else if key.is('6') {
         // CTRL-6 is equivalent to CTRL-^.
-        0x1e
+        Key::CTRL_HAT.code()
     } else {
         c
     };

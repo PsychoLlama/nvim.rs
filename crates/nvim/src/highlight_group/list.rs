@@ -28,9 +28,7 @@ use crate::getchar::state::GOT_INT;
 use crate::highlight::HlAttrFlags;
 use crate::highlight::state::{INCLUDE_DEFAULT, INCLUDE_LINK, INCLUDE_NONE};
 use crate::message::state::{MSG_COL, MSG_SILENT};
-use crate::message::{
-    message_filtered, msg_advance, msg_clr_eos, msg_display, msg_putchar, msg_str_hl,
-};
+use crate::message::{message_filtered, msg_advance, msg_clr_eos, msg_display, msg_str_hl};
 use crate::option::vars::p_verbose;
 use crate::os::time::os_delay;
 use crate::ui::state::COLUMNS;
@@ -38,6 +36,7 @@ use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_flush, ui_has};
 
 use super::{ATTR_NAMES, HLF_D, HexBuf, coloridx_to_name, group, highlight_num_groups};
+use crate::message::msg_put_ascii;
 
 /// One value in `:highlight`'s `key=value` output for a group.
 #[derive(Debug)]
@@ -202,7 +201,7 @@ pub(crate) fn highlight_list_one(id: c_int) {
         syn_list_header(didh, 0, id, true);
         didh = true;
         msg_str_hl(c"links to", HLF_D, false);
-        msg_putchar(c_int::from(b' '));
+        msg_put_ascii(b' ');
         msg_display(group(entry.link).name, 0, false);
     }
 
@@ -233,7 +232,7 @@ pub(crate) fn syn_list_header(
     // SAFETY: main-thread message calls.
     if !did_header {
         if !ui_has(UI_MESSAGES) || MSG_COL.get() > 0 {
-            msg_putchar(c_int::from(b'\n'));
+            msg_put_ascii(b'\n');
         }
         if GOT_INT.get() {
             return true;
@@ -242,10 +241,10 @@ pub(crate) fn syn_list_header(
         MSG_COL.set(name_col);
         endcol = 15;
     } else if (ui_has(UI_MESSAGES) || MSG_SILENT.get() != 0) && !force_newline {
-        msg_putchar(c_int::from(b' '));
+        msg_put_ascii(b' ');
         adjust = false;
     } else if MSG_COL.get() + outlen + 1 >= COLUMNS.get() || force_newline {
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
         if GOT_INT.get() {
             return true;
         }
@@ -264,10 +263,10 @@ pub(crate) fn syn_list_header(
 
     if !did_header {
         if endcol == COLUMNS.get() - 1 && endcol <= name_col {
-            msg_putchar(c_int::from(b' '));
+            msg_put_ascii(b' ');
         }
         msg_str_hl(c"xxx", id, false);
-        msg_putchar(c_int::from(b' '));
+        msg_put_ascii(b' ');
     }
 
     newline

@@ -23,6 +23,7 @@ use crate::charset::atoi;
 use crate::charset::getdigits_int_at;
 use crate::charset::skip;
 use crate::message::MSG_BUF_LEN;
+use crate::message::msg_put_ascii;
 use crate::message::{msg_bytes, msg_display_bytes};
 use crate::message_fmt::msg_bytes as shown;
 use crate::smsg;
@@ -75,7 +76,7 @@ pub(crate) fn sign_list_placed(rbuf: Option<Buf>, group: Option<&[u8]>) {
             break;
         }
         if buf_has_signs(cbuf) {
-            msg_putchar('\n' as c_int);
+            msg_put_ascii(b'\n');
             let lbuf = msg_buf!(c"Signs for %s:", cbuf.name.shown());
             msg_bytes(&lbuf, HLF_D, false);
         }
@@ -95,7 +96,7 @@ pub(crate) fn sign_list_placed(rbuf: Option<Buf>, group: Option<&[u8]>) {
 /// The `line=`/`id=`/`group=`/`name=`/`priority=` lines `:sign place`
 /// prints for one buffer's signs, already sorted.
 fn report_signs(signs: &[MTKey]) {
-    msg_putchar('\n' as c_int);
+    msg_put_ascii(b'\n');
     for (i, mark) in signs.iter().enumerate() {
         let sh = sign_of(*mark);
         let namebuf = if sh.sign_name_cstr().is_none() {
@@ -121,7 +122,7 @@ fn report_signs(signs: &[MTKey]) {
         );
         msg_bytes(&lbuf, 0, false);
         if i + 1 < signs.len() {
-            msg_putchar('\n' as c_int);
+            msg_put_ascii(b'\n');
         }
     }
 }

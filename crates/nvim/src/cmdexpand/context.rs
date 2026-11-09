@@ -405,7 +405,7 @@ pub(crate) fn set_context_in_match_cmd(
     mut arg: usize,
 ) -> Option<usize> {
     let t = text.to_bytes();
-    if byte(t, arg) == 0 || ends_excmd(c_int::from(byte(t, arg))) == 0 {
+    if byte(t, arg) == 0 || !ends_excmd(byte(t, arg)) {
         // Also complete "None".
         set_context_in_echohl_cmd(expand, arg);
         arg = skipwhite(t, skiptowhite(t, arg));

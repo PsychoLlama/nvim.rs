@@ -554,7 +554,7 @@ pub fn stuffescaped(arg: &[u8], literally: bool) {
         if !arg.is_empty() {
             let c = Key::from_code(char_at(arg));
             arg = &arg[char_len(arg)..];
-            if literally && ((c.code() < c_int::from(b' ') && c != Key::TAB) || c == Key::DEL) {
+            if literally && ((c < Key::SPACE && c != Key::TAB) || c == Key::DEL) {
                 stuff_readbuf_char(Key::ctrl(b'V'));
             }
             stuff_readbuf_char(c);

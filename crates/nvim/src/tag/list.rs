@@ -20,6 +20,7 @@ use crate::cstr;
 use crate::formatted;
 use crate::highlight_group::{HLF_CM, HLF_D, HLF_T};
 use crate::message::IOSIZE;
+use crate::message::msg_put_ascii;
 use crate::path::MAXPATHL;
 use crate::tag::CMDBUFFSIZE;
 use crate::winlayer::Win;
@@ -86,7 +87,7 @@ pub(crate) fn print_tag_list(new_tag: bool, use_tagstack: bool, matches: &[TagMa
         let current = !new_tag && is_current(number, use_tagstack);
         print_entry_head(number, found, &tagp, current, taglen);
         if MSG_COL.get() > 0 {
-            msg_putchar('\n' as c_int);
+            msg_put_ascii(b'\n');
         }
         if GOT_INT.get() {
             break;
@@ -108,7 +109,7 @@ pub(crate) fn print_tag_list(new_tag: bool, use_tagstack: bool, matches: &[TagMa
         // The last entry needs no line ending of its own when the UI
         // draws the messages itself.
         if MSG_COL.get() != 0 && (!ui_has(UI_MESSAGES) || i + 1 < count) {
-            msg_putchar('\n' as c_int);
+            msg_put_ascii(b'\n');
         }
         os_breakcheck();
     }
@@ -150,7 +151,7 @@ fn print_entry_head(i: c_int, found: &TagMatch, tagp: &TagParts, current: bool, 
     }
     msg_advance(13);
     msg_display_bytes(tagp.tagname.of(line), HLF_T, false);
-    msg_putchar(' ' as c_int);
+    msg_put_ascii(b' ');
     advance_to_files(taglen);
 
     let fname = tag_full_fname(found, tagp);
@@ -191,7 +192,7 @@ fn print_extra_fields(line: &[u8], command_end: usize, tagp: &TagParts) -> bool 
         let mut hl_id = HLF_CM;
         while !matches!(byte(line, p), 0 | b'\r' | b'\n') {
             if MSG_COL.get() + ptr2cells_at(&line[p..]) >= COLUMNS.get() {
-                msg_putchar('\n' as c_int);
+                msg_put_ascii(b'\n');
                 if GOT_INT.get() {
                     break;
                 }
@@ -208,7 +209,7 @@ fn print_extra_fields(line: &[u8], command_end: usize, tagp: &TagParts) -> bool 
         }
     }
     if MSG_COL.get() > INFO_COLUMN {
-        msg_putchar('\n' as c_int);
+        msg_put_ascii(b'\n');
         if GOT_INT.get() {
             return false;
         }
@@ -243,7 +244,7 @@ fn print_command(line: &[u8], command: usize, command_end: usize) {
             ptr2cells_at(&line[p..])
         };
         if MSG_COL.get() + width > COLUMNS.get() {
-            msg_putchar('\n' as c_int);
+            msg_put_ascii(b'\n');
         }
         if GOT_INT.get() {
             break;
@@ -256,7 +257,7 @@ fn print_command(line: &[u8], command: usize, command_end: usize) {
             p += 1;
         }
         if byte(line, p) == b'\t' {
-            msg_putchar(' ' as c_int);
+            msg_put_ascii(b' ');
             p += 1;
         } else {
             p += msg_display_char(cstr::until_nul(&line[p..]), 0, false);
@@ -295,7 +296,7 @@ fn command_text_end(line: &[u8], command: usize) -> usize {
 /// file goes on a line of its own.
 fn advance_to_files(taglen: c_int) {
     if taglen == c_int::MAX {
-        msg_putchar('\n' as c_int);
+        msg_put_ascii(b'\n');
         msg_advance(24);
     } else {
         msg_advance(13 + taglen);

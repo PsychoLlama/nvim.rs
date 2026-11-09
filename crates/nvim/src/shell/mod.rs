@@ -36,11 +36,10 @@ use crate::fileio::temp_name;
 use crate::guard::Suppress;
 use crate::memline::ml_append_terminated;
 use crate::memory::{ThinCString, XString};
+use crate::message::msg_put_ascii;
 use crate::message::state::EMSG_SILENT;
 use crate::message::{E_NOTMP, E_SHELLEMPTY};
-use crate::message::{
-    msg_ext_set_kind, msg_outnum, msg_putchar, msg_str, verbose_enter, verbose_leave,
-};
+use crate::message::{msg_ext_set_kind, msg_outnum, msg_str, verbose_enter, verbose_leave};
 use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::option::vars::{P_SH, P_SHCF, P_SXE, P_SXQ, p_sh, p_verbose};
 use crate::os::cshim::gettext;
@@ -223,7 +222,7 @@ pub(crate) fn run_shell(cmd: Option<&CStr>, opts: ShellOpts, extra_args: Option<
     if EMSG_SILENT.get() == 0 && exitcode != 0 && !opts.has(ShellOpts::SILENT) {
         msg_ext_set_kind(c"shell_ret");
         if !ui_has(UI_MESSAGES) {
-            msg_putchar(c_int::from(NL));
+            msg_put_ascii(NL);
         }
         msg_str(gettext(c"shell returned "));
         msg_outnum(exitcode);
@@ -287,7 +286,7 @@ pub(crate) fn call_shell(
             "Executing command: \"{}\"",
             msg_cstr(cmd.unwrap_or(shell.as_cstr()))
         );
-        msg_putchar(c_int::from(NL));
+        msg_put_ascii(NL);
         verbose_leave();
     }
 

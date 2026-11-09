@@ -25,6 +25,7 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::highlight_group::HLF_T;
 use crate::memory::ThinCString;
+use crate::message::msg_put_ascii;
 use crate::types::{LIST_LEN_MAY_KNOW, VAR_STRING};
 use crate::winlayer::Buf;
 
@@ -72,7 +73,7 @@ pub fn ex_undolist(_excmd: &mut ExArg) {
         if GOT_INT.get() {
             break;
         }
-        msg_putchar('\n' as c_int);
+        msg_put_ascii(b'\n');
         if GOT_INT.get() {
             break;
         }

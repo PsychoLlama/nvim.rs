@@ -26,6 +26,7 @@ use crate::highlight_group::{HLF_D, HLF_R};
 use crate::insexpand::{Added, word_end, word_start};
 use crate::mbyte::c_cluster_len;
 use crate::memory::XString;
+use crate::message::msg_put_ascii;
 use crate::message::{IOSIZE, msg_display_bytes};
 use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_int;
@@ -405,7 +406,7 @@ fn handle_include(
         && let Some(matched) = walk.files.already_searched(name.as_cstr())
     {
         if kind != CHECK_PATH && action == ACTION_SHOW_ALL && matched {
-            msg_putchar('\n' as c_int); // cursor below the last one
+            msg_put_ascii(b'\n'); // cursor below the last one
             if !GOT_INT.get() {
                 // Don't display if 'q' was typed at the
                 // "--more--" message.
@@ -473,7 +474,7 @@ fn show_include_name(
     already_searched: bool,
 ) {
     if walk.did_show {
-        msg_putchar('\n' as c_int); // cursor below the last one
+        msg_put_ascii(b'\n'); // cursor below the last one
     } else {
         gotocmdline(true); // cursor at the status line
         msg_title(gettext(c"--- Included files "));
@@ -680,7 +681,7 @@ fn list_match(walk: &mut Walk, kind: c_int, action: c_int) {
     }
     if walk.curr_fname != walk.prev_fname {
         if walk.did_show {
-            msg_putchar('\n' as c_int); // cursor below the last one
+            msg_put_ascii(b'\n'); // cursor below the last one
         }
         if !GOT_INT.get() {
             // Don't display if 'q' was typed at the "--more--"

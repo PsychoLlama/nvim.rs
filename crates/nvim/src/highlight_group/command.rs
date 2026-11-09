@@ -78,7 +78,7 @@ impl<'a> Line<'a> {
     }
 
     fn at_end(&self) -> bool {
-        ends_excmd(c_int::from(self.peek())) != 0
+        ends_excmd(self.peek())
     }
 
     /// The rest of the line from offset `at`, for `%s` in an error message.

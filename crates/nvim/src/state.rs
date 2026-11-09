@@ -388,6 +388,10 @@ struct ModeInputs {
     restart_edit: Key,
 }
 
+/// How far a visual mode's key is above the select mode's: `v` - `s`, which
+/// takes `v`/`V`/CTRL-V to `s`/`S`/CTRL-S.
+const VISUAL_TO_SELECT: c_int = Key::ascii(b'v').code() - Key::ascii(b's').code();
+
 /// The mode `m` describes, as `mode(1)` spells it.
 ///
 /// Upstream fills a caller-provided `char[MODE_MAX_LENGTH]`; answering the
@@ -440,7 +444,7 @@ fn mode_name(m: &ModeInputs) -> ModeName {
     } else if m.visual_active {
         if m.visual_select {
             // `v`/`V`/`CTRL-V` shifted into the select-mode letters.
-            out.push_key(m.visual_mode + c_int::from(b's') - c_int::from(b'v'));
+            out.push_key(m.visual_mode - VISUAL_TO_SELECT);
         } else {
             out.push_key(m.visual_mode);
             if m.restart_visual_select {
@@ -649,7 +653,7 @@ mod tests {
             len: 0,
         };
         out.push(b'n');
-        out.push_key(c_int::from(b'o'));
+        out.push_key(Key::ascii(b'o').code());
         // `CTRL-V` is 22, and `MOTION_FORCE` may hold it.
         out.push_key(Key::CTRL_V.code());
         assert_eq!(out.name, [110, 111, 22, 0]);
@@ -825,7 +829,7 @@ mod tests {
                 visual_select: true,
                 ..visual
             };
-            let shifted = c_int::from(key) - c_int::from(b'v') + c_int::from(b's');
+            let shifted = c_int::from(key) - VISUAL_TO_SELECT;
             assert_eq!(c_int::from(select_letter(&select)), shifted);
         }
         // `CTRL-V` (22) becomes `CTRL-S` (19), neither of them printable.
@@ -851,7 +855,7 @@ mod tests {
     fn a_resuming_select_mode_appends_s() {
         let resuming = ModeInputs {
             visual_active: true,
-            visual_mode: c_int::from(b'V'),
+            visual_mode: Key::ascii(b'V').code(),
             restart_visual_select: true,
             ..quiet(MODE_NORMAL)
         };
@@ -960,7 +964,7 @@ mod tests {
                                 ctrl_x_pending: true,
                                 visual_active: visual,
                                 visual_select: compl,
-                                visual_mode: c_int::from(b'V'),
+                                visual_mode: Key::ascii(b'V').code(),
                                 restart_visual_select: true,
                                 terminal_buffer: finish,
                                 finish_op: finish,

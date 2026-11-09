@@ -173,7 +173,7 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
         return;
     }
 
-    if ends_excmd(c_int::from(args.line.byte_at(at))) != 0 {
+    if ends_excmd(args.line.byte_at(at)) {
         // No argument: clear all syntax items.
         if syncing != 0 {
             syntax_sync_clear();
@@ -186,7 +186,7 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
         }
     } else {
         // Clear the groups and clusters the argument names.
-        while ends_excmd(c_int::from(args.line.byte_at(at))) == 0 {
+        while !ends_excmd(args.line.byte_at(at)) {
             let (word, word_len) = word_at(args.line.tail(at));
             if word.first() == Some(&b'@') {
                 let id = syn_scl_namen2id(&word[1..]);

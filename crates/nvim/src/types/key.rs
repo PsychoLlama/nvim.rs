@@ -37,9 +37,11 @@ use crate::keycodes::SpecialKey;
 
 /// One key of input: a character, a control character, or a special key.
 ///
-/// The default is [`Key::NUL`], no key.
+/// The default is [`Key::NUL`], no key. Keys order as upstream's integers
+/// do, special keys (negative) below every character, for the range tests
+/// upstream writes as `c < ' '`.
 #[repr(transparent)]
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default)]
 pub struct Key(c_int);
 
 const _: () = assert!(

@@ -32,7 +32,6 @@ use crate::guard::Suppress;
 use crate::log::{LOG_DEBUG, logmsg};
 use crate::message_fmt::{msg_bytes as text_arg, msg_cstr};
 use crate::runtime::{estack_sfile, sourcing_lnum, sourcing_name_copy, with_sourcing_name};
-use crate::strings::has_char;
 use crate::types::LineNr;
 use core::ffi::{CStr, c_int, c_long};
 use std::ffi::CString;
@@ -122,8 +121,8 @@ pub fn msg_source(hl_id: c_int) {
 /// Is this a bad time to show an error?
 pub(crate) fn emsg_not_now() -> bool {
     (EMSG_OFF.get() > 0
-        && !p_debug(|value| has_char(value, c_int::from(b'm')))
-        && !p_debug(|value| has_char(value, c_int::from(b't'))))
+        && !p_debug(|value| value.to_bytes().contains(&b'm'))
+        && !p_debug(|value| value.to_bytes().contains(&b't')))
         || EMSG_SKIP.get() > 0
 }
 
@@ -142,7 +141,7 @@ pub fn emsg_multiline(s: &CStr, kind: Option<&CStr>, hl_id: c_int, multiline: bo
     let severe = EMSG_SEVERE.get();
     EMSG_SEVERE.set(false);
 
-    if EMSG_OFF.get() == 0 || p_debug(|value| has_char(value, c_int::from(b't'))) {
+    if EMSG_OFF.get() == 0 || p_debug(|value| value.to_bytes().contains(&b't')) {
         // Cause a throw of an error exception if appropriate. Don't display
         // the error message in this case.
         let mut ignore = false;

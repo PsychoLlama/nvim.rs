@@ -23,6 +23,7 @@ use crate::highlight_group::{HLF_D, HLF_N, HLF_QFL};
 use crate::memory::XString;
 use crate::message::IOSIZE;
 use crate::message::cut_middle;
+use crate::message::msg_put_ascii;
 use crate::message_fmt::msg_bytes;
 use crate::path::tail_index;
 use crate::semsg;
@@ -159,7 +160,7 @@ fn qf_list_entry(entry: &Listed, qf_idx: c_int, cursel: bool) {
     }
 
     if MSG_COL.get() > 0 {
-        msg_putchar(c_int::from(b'\n'));
+        msg_put_ascii(b'\n');
     }
     let cursel = if cursel { HLF_QFL } else { QF_FILE_HL_ID.get() };
     msg_display(&owned_cstr(&heading), cursel, false);

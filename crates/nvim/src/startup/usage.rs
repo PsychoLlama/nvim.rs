@@ -10,11 +10,11 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
 use crate::lua::executor::nlua_init;
 use crate::message::IOSIZE;
-use crate::message::msg_putchar;
+use crate::message::msg_put_ascii;
 use crate::message::state::{INFO_MESSAGE, MSG_DIDOUT};
 use crate::os::cshim::{gettext, gettext_owned, write_c_stderr, write_c_stdout};
 use crate::os::signal::signal_stop;
@@ -82,7 +82,7 @@ pub(crate) fn version() {
     nlua_init(&[], -1);
     INFO_MESSAGE.set(true);
     list_version();
-    msg_putchar('\n' as c_int);
+    msg_put_ascii(b'\n');
     MSG_DIDOUT.set(false);
 }
 

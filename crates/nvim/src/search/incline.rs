@@ -24,6 +24,7 @@ use crate::cstr;
 use crate::fileio::Fgets;
 use crate::highlight_group::HLF_N;
 use crate::mbyte::strnicmp_in;
+use crate::message::msg_put_ascii;
 use crate::tag::LSIZE;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
@@ -154,7 +155,7 @@ pub(crate) fn show_pat_in_path(
     count: c_int,
 ) {
     if did_show {
-        msg_putchar('\n' as c_int); // cursor below the last one
+        msg_put_ascii(b'\n'); // cursor below the last one
     } else if MSG_SILENT.get() == 0 {
         gotocmdline(true); // cursor at the status line
     }
@@ -208,6 +209,6 @@ pub(crate) fn show_pat_in_path(
             }
             line = Lines::current().line(*lnum).to_vec();
         }
-        msg_putchar('\n' as c_int);
+        msg_put_ascii(b'\n');
     }
 }

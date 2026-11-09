@@ -69,7 +69,7 @@ pub fn eval0(text: &[u8], result: &mut TypVal, evaluate: bool) -> (Result<(), Fa
     let ret = eval1(&mut cursor, result, evaluate);
     // Anything left over is an error, but only once the expression
     // itself parsed.
-    let end_error = ret.is_ok() && ends_excmd(c_int::from(cursor.byte())) == 0;
+    let end_error = ret.is_ok() && !ends_excmd(cursor.byte());
     if ret.is_err() || end_error {
         if ret.is_ok() {
             tv_clear(result);

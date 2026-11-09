@@ -44,8 +44,8 @@ use crate::message::state::{MSG_COL, MSG_DIDOUT, MSG_SCROLL, MSG_SCROLLED, MSG_S
 use crate::message::{E_INVARG, E_LISTREQ};
 use crate::message::{
     emsg, give_warning, msg, msg_advance, msg_clr_eos, msg_delay, msg_display, msg_display_bytes,
-    msg_display_char, msg_ext_set_kind, msg_putchar, msg_start, msg_str, msg_str_hl, msg_title,
-    verbose_enter, verbose_leave, wait_return,
+    msg_display_char, msg_ext_set_kind, msg_start, msg_str, msg_str_hl, msg_title, verbose_enter,
+    verbose_leave, wait_return,
 };
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::r#move::{set_topline, validate_cursor};

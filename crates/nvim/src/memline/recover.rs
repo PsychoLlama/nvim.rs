@@ -37,6 +37,7 @@ use std::ffi::CString;
 
 use super::*;
 use crate::memory::ThinCString;
+use crate::message::msg_put_ascii;
 use crate::option::defs::OptionSetFlags;
 use crate::path::MAXPATHL;
 use crate::winlayer::{Buf, Win};
@@ -163,9 +164,9 @@ pub fn ml_recover(checkext: bool) {
                 home_to_tilde(None, &full, MAXPATHL as usize, true)
             }
         };
-        msg_putchar('\n' as c_int);
+        msg_put_ascii(b'\n');
         smsg!(0, "Original file \"{}\"", shown(path.as_cstr()));
-        msg_putchar('\n' as c_int);
+        msg_put_ascii(b'\n');
         MSG_EXT_SKIP_FLUSH.set(false);
 
         // Compare the dates of the swap file and the original.
@@ -415,7 +416,7 @@ fn choose_swapfile(fname: &CStr) -> Result<XString, MemlineError> {
     } else {
         let _ = recover_names(Some(fname), true, None, 0);
         if !ui_has(UI_MESSAGES) {
-            msg_putchar('\n' as c_int);
+            msg_put_ascii(b'\n');
         }
         let question = gettext(c"Enter number of swap file to use (0 to quit): ");
         let nr = prompt_for_input(Some(question), 0, None);
@@ -693,7 +694,7 @@ fn report_recovery(error: c_int, recorded: &Recorded, fname_used: &CStr) {
             c"E312: Errors detected while recovering; look for lines starting with ???",
         ));
         drop(no_prompt);
-        msg_putchar('\n' as c_int);
+        msg_put_ascii(b'\n');
         tell(c"See \":help E312\" for more information.", 0);
         msg(c"\n>>>>>>>>>>>>>", 0);
         return;

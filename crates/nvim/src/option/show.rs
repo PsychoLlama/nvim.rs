@@ -45,7 +45,7 @@ use crate::keycodes::{get_special_key_name, has_key_name};
 use crate::memory::XString;
 use crate::message::state::INFO_MESSAGE;
 use crate::message::{
-    message_filtered, msg_advance, msg_display, msg_ext_set_kind, msg_putchar, msg_str, msg_title,
+    message_filtered, msg_advance, msg_display, msg_ext_set_kind, msg_str, msg_title,
 };
 use crate::mouse::setmouse;
 use crate::option::defs::{OptIndex, OptVal, OptionSetFlags};
@@ -71,6 +71,7 @@ use super::{
     option_is_window_local, option_parts, option_var, optval_is_default, slot_holds, slot_value,
 };
 use crate::ascii::CTRL_V;
+use crate::message::msg_put_ascii;
 
 /// The column width one option gets in the multi-column listing, and the
 /// gap kept between columns.
@@ -153,7 +154,7 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
         // is `r + i * rows`.
         let mut row = 0;
         while row < rows && !GOT_INT.get() {
-            msg_putchar(c_int::from(b'\n'));
+            msg_put_ascii(b'\n');
             if GOT_INT.get() {
                 break;
             }
@@ -222,7 +223,7 @@ pub(crate) fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     msg_str(opt.fullname);
 
     if !boolean {
-        msg_putchar(c_int::from(b'='));
+        msg_put_ascii(b'=');
         let rendered = option_value_text(opt_idx, opt_flags);
         if !rendered.is_empty() {
             msg_display(rendered.as_cstr(), 0, false);

@@ -56,8 +56,8 @@ use crate::message::state::{
 use crate::message::{E_INTERR, E_NOPRESUB, E_NOPREVRE};
 use crate::message::{
     emsg, fit_middle, give_warning, iemsg, messaging, msg, msg_check, msg_clr_eos, msg_display,
-    msg_end, msg_ext_set_kind, msg_fit_head, msg_home_replace, msg_prt_line, msg_putchar,
-    msg_start, msg_str, msg_str_hl, msg_title, verbose_enter, verbose_leave,
+    msg_end, msg_ext_set_kind, msg_fit_head, msg_home_replace, msg_prt_line, msg_start, msg_str,
+    msg_str_hl, msg_title, verbose_enter, verbose_leave,
 };
 use crate::mouse::setmouse;
 use crate::r#move::validate_cursor;
