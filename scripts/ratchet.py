@@ -2244,7 +2244,6 @@ COPY_KEEPERS = {
     "crates/nvim/src/hashtab.rs::HashItem": "value",
     "crates/nvim/src/api/private/helpers/mod.rs::TryState": "value",
     "crates/nvim/src/highlight/mod.rs::ColorItem": "value",
-    "crates/nvim/src/highlight/mod.rs::HlEntry": "value",
     "crates/nvim/src/mapping/mod.rs::MapTwin": "value",
     "crates/nvim/src/mark/defs.rs::FileMarkView": "value",
     "crates/nvim/src/mark/defs.rs::SavedMark": "value",

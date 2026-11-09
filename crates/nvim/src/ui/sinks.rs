@@ -126,6 +126,9 @@ macro_rules! dup {
     (Object, $v:expr) => {
         $v.clone()
     };
+    (HlAttrs, $v:expr) => {
+        &$v
+    };
     ($ty:ident, $v:expr) => {
         $v
     };

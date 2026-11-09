@@ -51,7 +51,7 @@ use super::{
 ///
 /// `Copy` on purpose: [`super::highlight_changed`] builds ten scratch entries
 /// by cloning real ones, which upstream does with `memmove`.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub(crate) struct HlGroup {
     /// The name as written.
     pub name: &'static CStr,
@@ -192,7 +192,7 @@ pub(crate) fn highlight_link_id(id: c_int) -> c_int {
 
 /// A copy of the group with id `id`.
 pub(crate) fn group(id: c_int) -> HlGroup {
-    GROUPS.with(|table| table.entries[as_index(id) - 1])
+    GROUPS.with(|table| table.entries[as_index(id) - 1].clone())
 }
 
 /// Runs `f` on the group with id `id`.
@@ -440,9 +440,10 @@ fn syn_add_group(name: &[u8]) -> Result<c_int, HighlightError> {
             // 265 builtin groups, always used, plus some room.
             table.entries.reserve(300);
         }
+        let name_u = group.name_u;
         table.entries.push(group);
         let id = len_as_int(table.entries.len());
-        table.ids.insert(group.name_u, id);
+        table.ids.insert(name_u, id);
         Ok(id)
     })
 }

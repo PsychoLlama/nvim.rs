@@ -71,7 +71,7 @@ pub fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: &mut bool) -
         return front_attr;
     }
     let front_raw = syn_attr2entry(front_attr);
-    let front = get_colors_force(front_raw);
+    let front = get_colors_force(front_raw.clone());
     let ratio = front.hl_blend;
     if ratio <= 0 {
         *through = false;
@@ -85,11 +85,11 @@ pub fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: &mut bool) -
     }
 
     let back_raw = syn_attr2entry(back_attr);
-    let back = get_colors_force(back_raw);
+    let back = get_colors_force(back_raw.clone());
     let mut blended = if *through {
-        blend_through(ratio, back, back_raw, front)
+        blend_through(ratio, &back, &back_raw, &front)
     } else {
-        blend_over(ratio, back, front)
+        blend_over(ratio, &back, &front)
     };
 
     // A fully transparent background stays transparent, so that the
@@ -120,8 +120,8 @@ pub fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: &mut bool) -
 
 /// A blank front cell over `back`: the character below stays visible, so the
 /// result is the back set with the front's *background* mixed into it.
-fn blend_through(ratio: c_int, back: HlAttrs, back_raw: HlAttrs, front: HlAttrs) -> HlAttrs {
-    let mut blended = back;
+fn blend_through(ratio: c_int, back: &HlAttrs, back_raw: &HlAttrs, front: &HlAttrs) -> HlAttrs {
+    let mut blended = back.clone();
     blended.rgb_fg_color = rgb_blend(ratio, back.rgb_fg_color, front.rgb_bg_color);
     // Blend the special colour only where the cell below asked for one;
     // otherwise it is cleared rather than mixed towards the default red.
@@ -142,8 +142,8 @@ fn blend_through(ratio: c_int, back: HlAttrs, back_raw: HlAttrs, front: HlAttrs)
 
 /// A non-blank front cell over `back`: the front's own text is drawn, its
 /// foreground pulled halfway towards the one it covers.
-fn blend_over(ratio: c_int, back: HlAttrs, front: HlAttrs) -> HlAttrs {
-    let mut blended = front;
+fn blend_over(ratio: c_int, back: &HlAttrs, front: &HlAttrs) -> HlAttrs {
+    let mut blended = front.clone();
     blended.rgb_fg_color = rgb_blend(ratio / 2, back.rgb_fg_color, front.rgb_fg_color);
     blended.rgb_sp_color = if blended.rgb_ae_attr.has(HlAttrFlags::UNDERLINE_MASK) {
         rgb_blend(ratio / 2, back.rgb_bg_color, front.rgb_sp_color)

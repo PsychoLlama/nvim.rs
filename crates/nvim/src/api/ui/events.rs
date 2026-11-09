@@ -251,7 +251,7 @@ pub(super) fn remote_ui_highlight_set(ui: &mut RemoteUI, id: c_int) {
     ui.hl_id = id;
 
     let mut dict = DictBuilder::with_capacity(HLATTRS_DICT_SIZE);
-    hlattrs2dict(&mut dict, None, syn_attr2entry(id), ui.rgb, false);
+    hlattrs2dict(&mut dict, None, &syn_attr2entry(id), ui.rgb, false);
     send!(ui, c"highlight_set", Object::dict(dict));
 }
 

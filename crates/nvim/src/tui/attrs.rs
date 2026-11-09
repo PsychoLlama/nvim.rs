@@ -106,9 +106,9 @@ pub(crate) fn reserve_attr(tui: &mut TUIData, id: usize) {
 }
 
 /// Highlight `id`'s definition.
-pub(crate) fn attr(tui: &TUIData, id: c_int) -> HlAttrs {
+pub(crate) fn attr(tui: &TUIData, id: c_int) -> &HlAttrs {
     assert!(as_index(id) < tui.attrs.len(), "attribute {id} not defined");
-    tui.attrs[as_index(id)]
+    &tui.attrs[as_index(id)]
 }
 
 /// Would painting under `id1` look any different from painting under `id2`?
@@ -145,7 +145,7 @@ pub(crate) fn attrs_differ(tui: &TUIData, id1: c_int, id2: c_int, rgb: bool) -> 
 
 /// The attribute bits `attr_id` asks for, from the half of its definition
 /// this terminal is being painted in.
-fn ae_attr(tui: &TUIData, attrs: HlAttrs) -> HlAttrFlags {
+fn ae_attr(tui: &TUIData, attrs: &HlAttrs) -> HlAttrFlags {
     if tui.rgb {
         attrs.rgb_ae_attr
     } else {
@@ -161,8 +161,9 @@ pub(crate) fn update_attrs(tui: &mut TUIData, attr_id: c_int) {
     }
     tui.print_attr_id = attr_id;
 
-    let attrs = attr(tui, attr_id);
-    let attr = ae_attr(tui, attrs);
+    // A snapshot: painting below writes to `tui`.
+    let attrs = attr(tui, attr_id).clone();
+    let attr = ae_attr(tui, &attrs);
     let has = |bit: HlAttrFlags| attr.has(bit);
     let (bold, italic, reverse) = (
         has(HlAttrFlags::BOLD),
@@ -265,8 +266,8 @@ pub(crate) fn update_attrs(tui: &mut TUIData, attr_id: c_int) {
         }
     }
 
-    let fg = set_color(tui, ColorRole::Foreground, attrs, attr);
-    let bg = set_color(tui, ColorRole::Background, attrs, attr);
+    let fg = set_color(tui, ColorRole::Foreground, &attrs, attr);
+    let bg = set_color(tui, ColorRole::Background, &attrs, attr);
     set_url(tui, attrs.url);
 
     // What the next cell can assume it inherits: whether the terminal is
@@ -300,7 +301,7 @@ enum ColorRole {
 /// the editor last sent. `HL_*_INDEXED` marks a colour that is a palette
 /// index even under `'termguicolors'`, which is why the RGB path can still
 /// fall through to the indexed one.
-fn set_color(tui: &mut TUIData, role: ColorRole, attrs: HlAttrs, attr: HlAttrFlags) -> c_int {
+fn set_color(tui: &mut TUIData, role: ColorRole, attrs: &HlAttrs, attr: HlAttrFlags) -> c_int {
     let foreground = role == ColorRole::Foreground;
     let indexed_bit = if foreground {
         HlAttrFlags::FG_INDEXED

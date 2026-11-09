@@ -499,7 +499,7 @@ pub fn ui_attach_impl(mut ui: RemoteUI) {
         ui_send_all_hls(
             &mut |id, attr, info| {
                 with_ui(chanid, |ui| {
-                    remote_ui_hl_attr_define(ui, id, attr, attr, info)
+                    remote_ui_hl_attr_define(ui, id, &attr, &attr, info)
                 });
             },
             &mut |name, attr| {

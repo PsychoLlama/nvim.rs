@@ -198,13 +198,13 @@ impl AttrTable {
     }
 
     /// `entry`'s id, and whether it had to be added.
-    fn put(&mut self, entry: HlEntry) -> (c_int, bool) {
-        if let Some(&id) = self.ids.get(&entry) {
+    fn put(&mut self, entry: &HlEntry) -> (c_int, bool) {
+        if let Some(&id) = self.ids.get(entry) {
             return (id.cast_signed(), false);
         }
         let id = uint32_t::try_from(self.entries.len()).expect("attribute ids fit 32 bits");
-        self.entries.push(entry);
-        self.ids.insert(entry, id);
+        self.entries.push(entry.clone());
+        self.ids.insert(entry.clone(), id);
         (id.cast_signed(), true)
     }
 
@@ -217,17 +217,17 @@ impl AttrTable {
     /// Panics on an id the table never handed out. Upstream indexed the array
     /// unchecked here; a panic is the honest answer for the case it read out
     /// of bounds in.
-    fn at(&self, id: c_int) -> HlEntry {
-        self.entries[as_index(id)]
+    fn at(&self, id: c_int) -> &HlEntry {
+        &self.entries[as_index(id)]
     }
 
     /// The entry `id` names, or `None` for anything outside the table — an id
     /// from before the last rebuild, or the 0 sentinel.
-    fn live(&self, id: c_int) -> Option<HlEntry> {
+    fn live(&self, id: c_int) -> Option<&HlEntry> {
         if id <= 0 || as_index(id) >= self.entries.len() {
             None
         } else {
-            Some(self.entries[as_index(id)])
+            Some(&self.entries[as_index(id)])
         }
     }
 
@@ -273,7 +273,7 @@ impl UrlTable {
 /// cell carries.
 pub fn highlight_init() {
     ATTRS.with_mut(|attrs| {
-        attrs.put(HlEntry {
+        attrs.put(&HlEntry {
             attr: HLATTRS_INIT,
             kind: kHlInvalid,
             id1: 0,
@@ -311,7 +311,7 @@ pub(crate) fn get_attr_entry(mut entry: HlEntry) -> c_int {
 
     let mut retried = false;
     let id = loop {
-        let (id, is_new) = ATTRS.with_mut(|attrs| attrs.put(entry));
+        let (id, is_new) = ATTRS.with_mut(|attrs| attrs.put(&entry));
         if !is_new {
             return id;
         }
@@ -341,7 +341,7 @@ pub(crate) fn get_attr_entry(mut entry: HlEntry) -> c_int {
     let inspect = hl_inspect(id);
     // Internally there is one attribute set for cterm and rgb;
     // `remote_ui_hl_attr_define` is where they part company.
-    ui_call_hl_attr_define(Integer::from(id), entry.attr, entry.attr, inspect);
+    ui_call_hl_attr_define(Integer::from(id), entry.attr.clone(), entry.attr, inspect);
     id
 }
 
@@ -363,7 +363,7 @@ pub fn ui_send_all_hls(
     let mut i = 1;
     while i < ATTRS.with(AttrTable::len) {
         let inspect = hl_inspect(len_as_int(i));
-        let attr = ATTRS.with(|attrs| attrs.at(len_as_int(i))).attr;
+        let attr = ATTRS.with(|attrs| attrs.at(len_as_int(i)).attr.clone());
         define(len_as_integer(i), attr, inspect);
         i += 1;
     }
@@ -405,7 +405,7 @@ pub fn hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlAttrs) -> c_int {
 /// `attr` with `'winblend'` applied, unless it carries a `blend=` of its own
 /// — an explicit `blend=` on the group wins over the window's.
 pub fn hl_apply_winblend(winbl: c_int, attr: c_int) -> c_int {
-    let mut entry = ATTRS.with(|attrs| attrs.at(attr));
+    let mut entry = ATTRS.with(|attrs| attrs.at(attr).clone());
     if entry.attr.hl_blend != -1 || winbl <= 0 {
         return attr;
     }
@@ -594,7 +594,11 @@ pub fn attr_entry_count() -> c_int {
 /// answer the drawing code expects for it.
 #[inline]
 pub fn syn_attr2entry(attr: c_int) -> HlAttrs {
-    ATTRS.with(|attrs| attrs.live(attr).map_or(HLATTRS_INIT, |entry| entry.attr))
+    ATTRS.with(|attrs| {
+        attrs
+            .live(attr)
+            .map_or(HLATTRS_INIT, |entry| entry.attr.clone())
+    })
 }
 
 /// What id `attr` was built from, as the `ext_hlstate` UI event carries it:
@@ -613,40 +617,42 @@ pub fn hl_inspect(attr: c_int) -> Array {
 /// How many entries [`hl_inspect_impl`] will produce for `attr`. Combinations
 /// are flattened, so this recurses exactly as the filling does.
 fn hl_inspect_size(attr: c_int) -> usize {
-    let Some(entry) = ATTRS.with(|attrs| attrs.live(attr)) else {
+    let Some((kind, id1, id2)) =
+        ATTRS.with(|attrs| attrs.live(attr).map(|e| (e.kind, e.id1, e.id2)))
+    else {
         return 0;
     };
-    match entry.kind {
-        kHlCombine | kHlBlend | kHlBlendThrough => {
-            hl_inspect_size(entry.id1) + hl_inspect_size(entry.id2)
-        }
+    match kind {
+        kHlCombine | kHlBlend | kHlBlendThrough => hl_inspect_size(id1) + hl_inspect_size(id2),
         _ => 1,
     }
 }
 
 /// Appends `attr`'s provenance to `arr`.
 fn hl_inspect_impl(arr: &mut Vec<Object>, attr: c_int) {
-    let Some(entry) = ATTRS.with(|attrs| attrs.live(attr)) else {
+    let Some((kind, id1, id2)) =
+        ATTRS.with(|attrs| attrs.live(attr).map(|e| (e.kind, e.id1, e.id2)))
+    else {
         return;
     };
-    let mut item = match entry.kind {
+    let mut item = match kind {
         kHlSyntax => {
             let mut item = DictBuilder::with_capacity(3);
             put(&mut item, c"kind", Object::literal("syntax"));
-            put(&mut item, c"hi_name", name_object(syn_id2name(entry.id1)));
+            put(&mut item, c"hi_name", name_object(syn_id2name(id1)));
             item
         }
         kHlUI => {
             let mut item = DictBuilder::with_capacity(4);
             put(&mut item, c"kind", Object::literal("ui"));
             // -1 is `Normal`, which is not one of the `hlf_names`.
-            let ui_name = if entry.id1 == -1 {
+            let ui_name = if id1 == -1 {
                 c"Normal"
             } else {
-                hlf_names[as_index(entry.id1)]
+                hlf_names[as_index(id1)]
             };
             put(&mut item, c"ui_name", name_object(ui_name));
-            put(&mut item, c"hi_name", name_object(syn_id2name(entry.id2)));
+            put(&mut item, c"hi_name", name_object(syn_id2name(id2)));
             item
         }
         kHlTerminal => {
@@ -656,8 +662,8 @@ fn hl_inspect_impl(arr: &mut Vec<Object>, attr: c_int) {
         }
         kHlCombine | kHlBlend | kHlBlendThrough => {
             // Combination is associative, so flatten it to an array.
-            hl_inspect_impl(arr, entry.id1);
-            hl_inspect_impl(arr, entry.id2);
+            hl_inspect_impl(arr, id1);
+            hl_inspect_impl(arr, id2);
             return;
         }
         // kHlUnknown and kHlInvalid: nothing to say about the entry.
@@ -690,7 +696,7 @@ pub struct ColorKey {
     pub ns_id: ::core::ffi::c_int,
     pub syn_id: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct HlAttrs {
     pub rgb_ae_attr: HlAttrFlags,
     pub cterm_ae_attr: HlAttrFlags,
@@ -702,7 +708,7 @@ pub struct HlAttrs {
     pub hl_blend: int32_t,
     pub url: int32_t,
 }
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct HlEntry {
     pub attr: HlAttrs,
     pub kind: HlKind,
@@ -726,15 +732,15 @@ mod tests {
             id1,
             id2: 0,
         };
-        assert_eq!(table.put(entry(1)), (0, true));
-        assert_eq!(table.put(entry(2)), (1, true));
-        assert_eq!(table.put(entry(1)), (0, false));
+        assert_eq!(table.put(&entry(1)), (0, true));
+        assert_eq!(table.put(&entry(2)), (1, true));
+        assert_eq!(table.put(&entry(1)), (0, false));
         assert_eq!(table.len(), 2);
         assert_eq!(table.at(1).id1, 2);
         assert!(table.live(0).is_none());
         assert!(table.live(2).is_none());
         table.clear();
-        assert_eq!(table.put(entry(2)), (0, true));
+        assert_eq!(table.put(&entry(2)), (0, true));
     }
 
     #[test]

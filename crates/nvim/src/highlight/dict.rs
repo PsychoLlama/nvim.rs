@@ -72,7 +72,7 @@ pub fn hl_get_attr_by_id(attr_id: Integer, rgb: Boolean) -> Result<ApiDict, Erro
     let mut retval = DictBuilder::with_capacity(HLATTRS_DICT_SIZE);
     // The range check above keeps the id inside the table.
     let attrs = syn_attr2entry(c_int::try_from(attr_id).unwrap_or(0));
-    hlattrs2dict(&mut retval, None, attrs, rgb, false);
+    hlattrs2dict(&mut retval, None, &attrs, rgb, false);
     Ok(retval.into())
 }
 
@@ -91,7 +91,7 @@ pub fn hl_get_attr_by_id(attr_id: Integer, rgb: Boolean) -> Result<ApiDict, Erro
 pub fn hlattrs2dict(
     hl: &mut DictBuilder,
     hl_attrs: Option<&mut DictBuilder>,
-    ae: HlAttrs,
+    ae: &HlAttrs,
     use_rgb: bool,
     short_keys: bool,
 ) {
@@ -167,7 +167,7 @@ fn put_flags(hl: &mut DictBuilder, mask: HlAttrFlags) {
 /// The colours of `ae`, plus `blend`.
 fn put_colors(
     hl: &mut DictBuilder,
-    ae: HlAttrs,
+    ae: &HlAttrs,
     mask: HlAttrFlags,
     use_rgb: bool,
     short_keys: bool,

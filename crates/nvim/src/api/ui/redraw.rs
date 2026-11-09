@@ -47,8 +47,8 @@ use core::ffi::CStr;
 pub fn remote_ui_hl_attr_define(
     ui: &mut RemoteUI,
     id: Integer,
-    rgb_attrs: HlAttrs,
-    _cterm_attrs: HlAttrs,
+    rgb_attrs: &HlAttrs,
+    _cterm_attrs: &HlAttrs,
     info: Array,
 ) {
     // The legacy protocol has no attribute table; those UIs get the whole
@@ -201,7 +201,7 @@ fn translate_contents(ui: &RemoteUI, contents: &Array) -> Array {
         let attrs = if attr != 0 {
             let mut dict = DictBuilder::with_capacity(HLATTRS_DICT_SIZE);
             // `attr` is a resolved attribute id.
-            hlattrs2dict(&mut dict, None, syn_attr2entry(attr), rgb, false);
+            hlattrs2dict(&mut dict, None, &syn_attr2entry(attr), rgb, false);
             dict.finish()
         } else {
             ApiDict::new()

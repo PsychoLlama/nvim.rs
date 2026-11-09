@@ -87,17 +87,17 @@ pub(crate) fn set_hl_group(id: c_int, attrs: HlAttrs, dict: &KeyDict_highlight, 
         (
             entry.rgb_fg,
             pick(&dict.fg, &dict.foreground),
-            linked.map(|g| g.rgb_fg_idx),
+            linked.as_ref().map(|g| g.rgb_fg_idx),
         ),
         (
             entry.rgb_bg,
             pick(&dict.bg, &dict.background),
-            linked.map(|g| g.rgb_bg_idx),
+            linked.as_ref().map(|g| g.rgb_bg_idx),
         ),
         (
             entry.rgb_sp,
             pick(&dict.sp, &dict.special),
-            linked.map(|g| g.rgb_sp_idx),
+            linked.as_ref().map(|g| g.rgb_sp_idx),
         ),
     ];
     let mut idxs = [KEEP; 3];

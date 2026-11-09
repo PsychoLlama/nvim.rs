@@ -168,6 +168,7 @@ pub fn ns_hl_def(
     // position in the list is the order its callbacks run in.
     provider_field(ns_id, |_| ());
     // A link is resolved lazily, so it has no attribute set of its own.
+    let link_global = attrs.rgb_ae_attr.has(HlAttrFlags::GLOBAL);
     let attr_id = if link_id > 0 {
         -1
     } else {
@@ -181,7 +182,7 @@ pub fn ns_hl_def(
         // another provider and move the list.
         version: provider_field(ns_id, |p| p.hl_valid),
         is_default,
-        link_global: attrs.rgb_ae_attr.has(HlAttrFlags::GLOBAL),
+        link_global,
     };
     NS_HLS.with_mut(|hls| hls.insert(key, item));
     provider_field(ns_id, |p| p.hl_cached = false);
@@ -296,6 +297,8 @@ fn ns_get_item(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> Opt
             }
         }
 
+        item.is_default = attrs.rgb_ae_attr.has(HlAttrFlags::DEFAULT);
+        item.link_global = attrs.rgb_ae_attr.has(HlAttrFlags::GLOBAL);
         item.attr_id = if fallback {
             -1
         } else {
@@ -304,8 +307,6 @@ fn ns_get_item(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> Opt
         // The callback and `hl_get_syn_attr` both pump, so the provider
         // is resolved again rather than read through a stale pointer.
         item.version = provider_field(ns_id, |p| p.hl_valid) - c_int::from(provisional);
-        item.is_default = attrs.rgb_ae_attr.has(HlAttrFlags::DEFAULT);
-        item.link_global = attrs.rgb_ae_attr.has(HlAttrFlags::GLOBAL);
         NS_HLS.with_mut(|hls| hls.insert(key, item));
         valid = true;
     }
