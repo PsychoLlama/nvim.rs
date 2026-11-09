@@ -144,24 +144,74 @@ mod keys;
 pub use self::keys::*;
 #[cfg(test)]
 mod tests;
-pub const CTRL_X_CMDLINE_CTRL_X: ::core::ffi::c_int = 17;
-pub const CTRL_X_NORMAL: ::core::ffi::c_int = 0;
-pub const CTRL_X_NOT_DEFINED_YET: ::core::ffi::c_int = 1;
-pub const CTRL_X_CMDLINE: ::core::ffi::c_int = 11;
-pub const CTRL_X_SCROLL: ::core::ffi::c_int = 2;
-pub const CTRL_X_WHOLE_LINE: ::core::ffi::c_int = 3;
-pub const CTRL_X_FILES: ::core::ffi::c_int = 4;
-pub const CTRL_X_TAGS: ::core::ffi::c_int = 261;
-pub const CTRL_X_PATH_PATTERNS: ::core::ffi::c_int = 262;
-pub const CTRL_X_PATH_DEFINES: ::core::ffi::c_int = 263;
-pub const CTRL_X_DICTIONARY: ::core::ffi::c_int = 265;
-pub const CTRL_X_THESAURUS: ::core::ffi::c_int = 266;
-pub const CTRL_X_FUNCTION: ::core::ffi::c_int = 12;
-pub const CTRL_X_OMNI: ::core::ffi::c_int = 13;
-pub const CTRL_X_SPELL: ::core::ffi::c_int = 14;
-pub const CTRL_X_EVAL: ::core::ffi::c_int = 16;
-pub const CTRL_X_REGISTER: ::core::ffi::c_int = 19;
-pub const CTRL_X_BUFNAMES: ::core::ffi::c_int = 18;
+/// The CTRL-X submode: what Insert-mode completion completes, chosen by the
+/// key typed after CTRL-X (`CTRL_X_MODE`).
+///
+/// The discriminants index [`CTRL_X_MSGS`] and [`CTRL_X_MODE_NAMES`]; row 15 of
+/// the messages is the local-keyword message, which no mode is.
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+#[repr(u8)]
+pub enum CtrlXMode {
+    /// Not in a CTRL-X mode: keyword completion with CTRL-N/CTRL-P.
+    #[default]
+    Normal = 0,
+    /// CTRL-X was typed and the key that picks the mode was not yet.
+    NotDefinedYet = 1,
+    /// CTRL-X CTRL-E/CTRL-Y: scroll the window.
+    Scroll = 2,
+    /// CTRL-X CTRL-L: whole lines.
+    WholeLine = 3,
+    /// CTRL-X CTRL-F: file names.
+    Files = 4,
+    /// CTRL-X CTRL-]: tags.
+    Tags = 5,
+    /// CTRL-X CTRL-I: keywords in included files.
+    PathPatterns = 6,
+    /// CTRL-X CTRL-D: definitions in included files.
+    PathDefines = 7,
+    /// A CTRL-X mode was left by a key that does not belong to it.
+    Finished = 8,
+    /// CTRL-X CTRL-K: 'dictionary' words.
+    Dictionary = 9,
+    /// CTRL-X CTRL-T: 'thesaurus' words.
+    Thesaurus = 10,
+    /// CTRL-X CTRL-V: Vim command lines.
+    Cmdline = 11,
+    /// CTRL-X CTRL-U: 'completefunc'.
+    Function = 12,
+    /// CTRL-X CTRL-O: 'omnifunc'.
+    Omni = 13,
+    /// CTRL-X s: spelling suggestions.
+    Spell = 14,
+    /// `complete()` from Vim script.
+    Eval = 16,
+    /// CTRL-X typed again while completing a command line.
+    CmdlineCtrlX = 17,
+    /// Buffer names, from 'complete' `b`-style sources.
+    Bufnames = 18,
+    /// CTRL-X CTRL-R: register contents.
+    Register = 19,
+}
+
+impl CtrlXMode {
+    /// The row of [`CTRL_X_MSGS`] and [`CTRL_X_MODE_NAMES`] for this mode.
+    pub(crate) const fn row(self) -> usize {
+        self as usize
+    }
+
+    /// Whether the mode completes an identifier rather than a keyword:
+    /// upstream's `CTRL_X_WANT_IDENT` bit, set on these five.
+    pub(crate) const fn wants_ident(self) -> bool {
+        matches!(
+            self,
+            CtrlXMode::Tags
+                | CtrlXMode::PathPatterns
+                | CtrlXMode::PathDefines
+                | CtrlXMode::Dictionary
+                | CtrlXMode::Thesaurus
+        )
+    }
+}
 /// One match: the text it inserts and what the menu and `complete_info()`
 /// show for it.
 ///
@@ -288,8 +338,8 @@ pub(crate) struct InsComplNextState {
 pub const INS_COMPL_CPT_CONT: ::core::ffi::c_int = 2;
 pub const INS_COMPL_CPT_OK: ::core::ffi::c_int = 1;
 pub const INS_COMPL_CPT_END: ::core::ffi::c_int = 3;
-pub const CTRL_X_LOCAL_MSG: ::core::ffi::c_int = 15;
-pub const CTRL_X_FINISHED: ::core::ffi::c_int = 8;
+/// The [`CTRL_X_MSGS`] row of the local-keyword message.
+const LOCAL_MSG_ROW: usize = 15;
 /// A zeroed `InsComplNextState`: C's `CLEAR_FIELD(st)`.
 pub(crate) const INS_COMPL_NEXT_STATE_INIT: InsComplNextState = InsComplNextState {
     cpt: CptScan::EMPTY,
@@ -315,20 +365,19 @@ pub(crate) const POS_T_INIT: Pos = Pos {
     col: ColNr::ZERO,
     coladd: 0,
 };
-pub const CTRL_X_WANT_IDENT: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
-/// Message for CTRL-X mode, indexed by `CTRL_X_MODE` with `CTRL_X_WANT_IDENT`
-/// masked off (C's `CTRL_X_MSG(i)` macro; see `ctrl_x_msg`). `None` is
+/// Message for CTRL-X mode, indexed by [`CtrlXMode::row`] (C's
+/// `CTRL_X_MSG(i)` macro; see `ctrl_x_msg`). `None` is
 /// upstream's NULL: the mode either computes its own message or has none.
 pub(crate) const CTRL_X_MSGS: [Option<&CStr>; 20] = [
-    Some(c" Keyword completion (^N^P)"), // CTRL_X_NORMAL, ^P/^N compl.
+    Some(c" Keyword completion (^N^P)"), // CtrlXMode::Normal, ^P/^N compl.
     Some(c" ^X mode (^]^D^E^F^I^K^L^N^O^P^Rs^U^V^Y)"),
-    None, // CTRL_X_SCROLL: depends on state
+    None, // CtrlXMode::Scroll: depends on state
     Some(c" Whole line completion (^L^N^P)"),
     Some(c" File name completion (^F^N^P)"),
     Some(c" Tag completion (^]^N^P)"),
     Some(c" Path pattern completion (^N^P)"),
     Some(c" Definition completion (^D^N^P)"),
-    None, // CTRL_X_FINISHED
+    None, // CtrlXMode::Finished
     Some(c" Dictionary completion (^K^N^P)"),
     Some(c" Thesaurus completion (^T^N^P)"),
     Some(c" Command-line completion (^V^N^P)"),
@@ -336,9 +385,9 @@ pub(crate) const CTRL_X_MSGS: [Option<&CStr>; 20] = [
     Some(c" Omni completion (^O^N^P)"),
     Some(c" Spelling suggestion (^S^N^P)"),
     Some(c" Keyword Local completion (^N^P)"),
-    None, // CTRL_X_EVAL doesn't use msg.
+    None, // CtrlXMode::Eval doesn't use msg.
     Some(c" Command-line completion (^V^N^P)"),
-    None, // CTRL_X_BUFNAMES
+    None, // CtrlXMode::Bufnames
     Some(c" Register completion (^N^P)"),
 ];
 
@@ -353,7 +402,7 @@ pub(crate) const CTRL_X_MODE_NAMES: [Option<&CStr>; 20] = [
     Some(c"tags"),
     Some(c"path_patterns"),
     Some(c"path_defines"),
-    Some(c"unknown"), // CTRL_X_FINISHED
+    Some(c"unknown"), // CtrlXMode::Finished
     Some(c"dictionary"),
     Some(c"thesaurus"),
     Some(c"cmdline"),
@@ -363,7 +412,7 @@ pub(crate) const CTRL_X_MODE_NAMES: [Option<&CStr>; 20] = [
     None, // CTRL_X_LOCAL_MSG, only used in CTRL_X_MSGS
     Some(c"eval"),
     Some(c"cmdline"),
-    None, // CTRL_X_BUFNAMES
+    None, // CtrlXMode::Bufnames
     Some(c"register"),
 ];
 
@@ -371,10 +420,13 @@ pub(crate) const CTRL_X_MODE_NAMES: [Option<&CStr>; 20] = [
 /// indexes and passes the result to `gettext()` unconditionally, so the NULL
 /// rows answer `None` here rather than panicking; no caller reaches one (the
 /// three modes without a message never take these paths).
-pub(crate) fn ctrl_x_msg(mode: c_int) -> Option<&'static CStr> {
-    let row =
-        usize::try_from(mode & !CTRL_X_WANT_IDENT).expect("a CTRL-X mode number is never negative");
-    CTRL_X_MSGS[row].map(gettext)
+pub(crate) fn ctrl_x_msg(mode: CtrlXMode) -> Option<&'static CStr> {
+    CTRL_X_MSGS[mode.row()].map(gettext)
+}
+
+/// The translated local-keyword message, the [`CTRL_X_MSGS`] row no mode has.
+pub(crate) fn ctrl_x_local_msg() -> Option<&'static CStr> {
+    CTRL_X_MSGS[LOCAL_MSG_ROW].map(gettext)
 }
 
 /// One of the completion's owned strings.
@@ -710,8 +762,8 @@ state_record! {
     COMPL_RESTARTING: bool = false;
     /// The match list has been started.
     COMPL_STARTED: bool = false;
-    /// Which CTRL-X mode is running; `CTRL_X_*`.
-    CTRL_X_MODE: c_int = CTRL_X_NORMAL;
+    /// Which CTRL-X mode is running.
+    CTRL_X_MODE: CtrlXMode = CtrlXMode::Normal;
     /// The number of matches, once known.
     COMPL_MATCHES: c_int = 0;
     /// See [`compl_pattern`].
@@ -739,7 +791,7 @@ state_record! {
     /// See [`ComplOrigExtmarks`].
     COMPL_ORIG_EXTMARKS: Vec<ExtmarkUndoObject> = Vec::new();
     /// The CTRL-X mode a continued completion continues.
-    COMPL_CONT_MODE: c_int = 0;
+    COMPL_CONT_MODE: CtrlXMode = CtrlXMode::Normal;
     /// CTRL-X CTRL-V's expansion context, kept between working out the
     /// pattern and expanding it. Moved out for each use: the expansion runs
     /// Lua and user completion functions.

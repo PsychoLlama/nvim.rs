@@ -507,13 +507,13 @@ pub fn set_ref_in_insexpand_funcs(copy_id: c_int) -> bool {
 }
 
 /// The user-defined completion function name for completion `type_0`.
-pub(crate) fn get_complete_funcname(type_0: c_int) -> XString {
+pub(crate) fn get_complete_funcname(type_0: CtrlXMode) -> XString {
     let buf = Buf::current();
     let local = match type_0 {
-        CTRL_X_FUNCTION => &buf.b_p_cfu,
-        CTRL_X_OMNI => &buf.b_p_ofu,
+        CtrlXMode::Function => &buf.b_p_cfu,
+        CtrlXMode::Omni => &buf.b_p_ofu,
         // The only one of the three with a global value to fall back to.
-        CTRL_X_THESAURUS => return local_or_global(&buf.b_p_tsrfu, P_TSRFU).get(),
+        CtrlXMode::Thesaurus => return local_or_global(&buf.b_p_tsrfu, P_TSRFU).get(),
         _ => return XString::new(),
     };
     local.clone().unwrap_or_default()
@@ -521,15 +521,15 @@ pub(crate) fn get_complete_funcname(type_0: c_int) -> XString {
 
 /// The callback to use for insert-mode completion of `type_0`, held for a
 /// call.
-pub(crate) fn get_insert_callback(type_0: c_int) -> HeldCallback {
+pub(crate) fn get_insert_callback(type_0: CtrlXMode) -> HeldCallback {
     let buf = Buf::current();
-    if type_0 == CTRL_X_FUNCTION {
+    if type_0 == CtrlXMode::Function {
         return HeldCallback::of(&buf.b_cfu_cb);
     }
-    if type_0 == CTRL_X_OMNI {
+    if type_0 == CtrlXMode::Omni {
         return HeldCallback::of(&buf.b_ofu_cb);
     }
-    // CTRL_X_THESAURUS
+    // CtrlXMode::Thesaurus
     if !buf.b_p_tsrfu.bytes().is_empty() {
         HeldCallback::of(&buf.b_tsrfu_cb)
     } else {
@@ -540,10 +540,10 @@ pub(crate) fn get_insert_callback(type_0: c_int) -> HeldCallback {
 /// Call `'completefunc'`, `'omnifunc'` or `'thesaurusfunc'` and add whatever
 /// it answers to the match list.
 ///
-/// `type_0` is one of `CTRL_X_OMNI`, `CTRL_X_FUNCTION` or `CTRL_X_THESAURUS`;
+/// `type_0` is one of `CtrlXMode::Omni`, `CtrlXMode::Function` or `CtrlXMode::Thesaurus`;
 /// `cb` is set when a function in `'complete'` triggered this (the caller
 /// holds it for the call), `None` otherwise.
-pub(crate) fn expand_by_function(type_0: c_int, base: ComplStr, cb: Option<&Callback>) {
+pub(crate) fn expand_by_function(type_0: CtrlXMode, base: ComplStr, cb: Option<&Callback>) {
     debug_assert!(Buf::current_or_none().is_some());
 
     let held;
@@ -723,7 +723,7 @@ pub(crate) fn get_cpt_func_completion_matches(cb: &Callback) {
         ins_compl_insert_text(&ins_compl_leader_str().to_vec());
     }
 
-    expand_by_function(0, cpt_compl_pattern(), Some(cb));
+    expand_by_function(CtrlXMode::Normal, cpt_compl_pattern(), Some(cb));
 
     if !cpt_sources().row(idx).cs_refresh_always {
         ins_compl_delete(false);

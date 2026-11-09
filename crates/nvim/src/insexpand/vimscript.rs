@@ -35,7 +35,7 @@ use crate::winlayer::Win;
 
 /// Fire `CompleteDone` with `v:event` describing how the completion ended:
 /// `word` is the match accepted, if any.
-pub(crate) fn do_autocmd_completedone(c: Key, mode: c_int, word: Option<&CStr>) {
+pub(crate) fn do_autocmd_completedone(c: Key, mode: CtrlXMode, word: Option<&CStr>) {
     let mut save_v_event = SAVE_V_EVENT_INIT;
     let v_event = get_v_event(&mut save_v_event);
     let add_str = |key: &str, val: &CStr| v_event.edit().add_str(key.as_bytes(), Some(val));
@@ -258,7 +258,7 @@ pub(crate) fn set_completion(mut startcol: ColNr, list: Option<&ListRef>) {
         return;
     }
 
-    CTRL_X_MODE.set(CTRL_X_EVAL);
+    CTRL_X_MODE.set(CtrlXMode::Eval);
 
     if let Some(list) = list {
         ins_compl_add_list(list);

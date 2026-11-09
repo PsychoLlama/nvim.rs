@@ -316,7 +316,7 @@ pub(crate) fn get_userdefined_compl_info(
         if is_cpt_function {
             return Err(Declined::Leave);
         }
-        CTRL_X_MODE.set(CTRL_X_NORMAL);
+        CTRL_X_MODE.set(CtrlXMode::Normal);
         EDIT_SUBMODE.set(None);
         if !shortmess(ShmFlag::COMPLETIONMENU) {
             msg_clr_cmdline();
@@ -374,15 +374,14 @@ pub(crate) fn get_spell_compl_info(startcol: c_int, curs_col: ColNr) -> Result<(
 pub(crate) fn compl_get_info(startcol: c_int, curs_col: ColNr) -> Result<(), Failed> {
     if ctrl_x_mode_normal()
         || ctrl_x_mode_register()
-        || (CTRL_X_MODE.get() & CTRL_X_WANT_IDENT != 0
-            && !thesaurus_func_complete(CTRL_X_MODE.get()))
+        || (CTRL_X_MODE.get().wants_ident() && !thesaurus_func_complete(CTRL_X_MODE.get()))
     {
         get_normal_compl_info(startcol, curs_col)
     } else if ctrl_x_mode_line_or_eval() {
         get_wholeline_compl_info(curs_col)
     } else if ctrl_x_mode_files() {
         get_filename_compl_info(startcol, curs_col)
-    } else if CTRL_X_MODE.get() == CTRL_X_CMDLINE {
+    } else if CTRL_X_MODE.get() == CtrlXMode::Cmdline {
         get_cmdline_compl_info(curs_col)
     } else if ctrl_x_mode_function()
         || ctrl_x_mode_omni()
@@ -491,7 +490,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
         // Normal expansion.
         COMPL_CONT_MODE.set(CTRL_X_MODE.get());
         if ctrl_x_mode_not_default() {
-            // Remove LOCAL if ctrl_x_mode != CTRL_X_NORMAL.
+            // Remove LOCAL if ctrl_x_mode != CtrlXMode::Normal.
             COMPL_CONT_STATUS.set(0);
         }
         COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() | CONT_N_ADDS);
@@ -533,7 +532,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
 
     if !shortmess(ShmFlag::COMPLETIONMENU) && !COMPL_AUTOCOMPLETE.get() {
         if COMPL_CONT_STATUS.get() & CONT_LOCAL != 0 {
-            EDIT_SUBMODE.set(ctrl_x_msg(CTRL_X_LOCAL_MSG));
+            EDIT_SUBMODE.set(ctrl_x_local_msg());
         } else {
             EDIT_SUBMODE.set(ctrl_x_msg(CTRL_X_MODE.get()));
         }

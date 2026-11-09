@@ -190,7 +190,7 @@ pub(crate) fn ins_compl_restart() {
     COMPL_STARTED.set(false);
     COMPL_MATCHES.set(0);
     COMPL_CONT_STATUS.set(0);
-    COMPL_CONT_MODE.set(0);
+    COMPL_CONT_MODE.set(CtrlXMode::Normal);
     cpt_sources().clear();
     COMPL_AUTOCOMPLETE.set(false);
     COMPL_FROM_NONKEYWORD.set(false);
@@ -246,7 +246,7 @@ pub fn ins_compl_addfrommatch() {
 }
 
 /// Stop insert completion mode.
-pub(crate) fn ins_compl_stop(c: Key, prev_mode: c_int, mut retval: bool) -> bool {
+pub(crate) fn ins_compl_stop(c: Key, prev_mode: CtrlXMode, mut retval: bool) -> bool {
     // Remove pre-inserted text when present.
     if ins_compl_preinsert_effect() && ins_compl_win_active(Win::current()) {
         ins_compl_delete(false);
@@ -272,7 +272,7 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: c_int, mut retval: bool) -> bool
 
     // When completing whole lines: fix indent for 'cindent'.
     // Otherwise, break the line if it's too long.
-    if COMPL_CONT_MODE.get() == CTRL_X_WHOLE_LINE {
+    if COMPL_CONT_MODE.get() == CtrlXMode::WholeLine {
         // Re-indent the current line.
         if want_cindent {
             do_c_expr_indent();
@@ -356,7 +356,7 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: c_int, mut retval: bool) -> bool
     if !shortmess(ShmFlag::COMPLETIONMENU) {
         msg_clr_cmdline(); // necessary for "noshowmode"
     }
-    CTRL_X_MODE.set(CTRL_X_NORMAL);
+    CTRL_X_MODE.set(CtrlXMode::Normal);
     COMPL_ENTER_SELECTS.set(false);
     if EDIT_SUBMODE.get().is_some() {
         EDIT_SUBMODE.set(None);
@@ -421,7 +421,7 @@ pub fn ins_compl_prep(c: Key) -> bool {
         return retval;
     }
 
-    if CTRL_X_MODE.get() == CTRL_X_CMDLINE_CTRL_X && c != Key::CTRL_X {
+    if CTRL_X_MODE.get() == CtrlXMode::CmdlineCtrlX && c != Key::CTRL_X {
         if c == Key::CTRL_V
             || c == Key::CTRL_Q
             || c == Key::CTRL_Z
@@ -429,17 +429,17 @@ pub fn ins_compl_prep(c: Key) -> bool {
             || !vim_is_ctrl_x_key(c)
         {
             // Not starting another completion mode.
-            CTRL_X_MODE.set(CTRL_X_CMDLINE);
+            CTRL_X_MODE.set(CtrlXMode::Cmdline);
             // CTRL-X CTRL-Z should stop completion without inserting anything.
             if c == Key::CTRL_Z {
                 retval = true;
             }
         } else {
-            CTRL_X_MODE.set(CTRL_X_CMDLINE);
+            CTRL_X_MODE.set(CtrlXMode::Cmdline);
             // Other CTRL-X keys first stop completion, then start another
             // completion mode.
             ins_compl_prep(Key::SPACE);
-            CTRL_X_MODE.set(CTRL_X_NOT_DEFINED_YET);
+            CTRL_X_MODE.set(CtrlXMode::NotDefinedYet);
         }
     }
 
@@ -457,16 +457,16 @@ pub fn ins_compl_prep(c: Key) -> bool {
         // We're already in CTRL-X mode, do we stay in it?
         if !vim_is_ctrl_x_key(c) {
             CTRL_X_MODE.set(if ctrl_x_mode_scroll() {
-                CTRL_X_NORMAL
+                CtrlXMode::Normal
             } else {
-                CTRL_X_FINISHED
+                CtrlXMode::Finished
             });
             EDIT_SUBMODE.set(None);
         }
         REDRAW_MODE.set(true);
     }
 
-    if COMPL_STARTED.get() || CTRL_X_MODE.get() == CTRL_X_FINISHED {
+    if COMPL_STARTED.get() || CTRL_X_MODE.get() == CtrlXMode::Finished {
         // Show the error message from an attempted keyword completion
         // (probably 'Pattern not found') until another key is hit, then go
         // back to showing what mode we are in.
@@ -476,14 +476,10 @@ pub fn ins_compl_prep(c: Key) -> bool {
             && c != Key::CTRL_P
             && c != Key::CTRL_R
             && !ins_compl_pum_key(c))
-            || CTRL_X_MODE.get() == CTRL_X_FINISHED
+            || CTRL_X_MODE.get() == CtrlXMode::Finished
         {
             retval = ins_compl_stop(c, prev_mode, retval);
         }
-    } else if CTRL_X_MODE.get() == CTRL_X_LOCAL_MSG {
-        // Trigger the CompleteDone event to give scripts a chance to act
-        // upon the (possibly failed) completion.
-        do_autocmd_completedone(c, CTRL_X_MODE.get(), None);
     }
 
     may_trigger_modechanged();
@@ -492,7 +488,7 @@ pub fn ins_compl_prep(c: Key) -> bool {
     // (re)set properly in ins_complete().
     if !vim_is_ctrl_x_key(c) {
         COMPL_CONT_STATUS.set(0);
-        COMPL_CONT_MODE.set(0);
+        COMPL_CONT_MODE.set(CtrlXMode::Normal);
     }
 
     retval

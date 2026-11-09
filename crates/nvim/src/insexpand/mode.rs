@@ -30,7 +30,7 @@ const LOWER_S: Key = Key::ascii(b's');
 /// Enter CTRL-X mode, or — already on the command line — its CTRL-X flavour.
 pub fn ins_ctrl_x() {
     if ctrl_x_mode_cmdline() {
-        CTRL_X_MODE.set(CTRL_X_CMDLINE_CTRL_X);
+        CTRL_X_MODE.set(CtrlXMode::CmdlineCtrlX);
     } else {
         // CTRL-X after a completion that was interrupted keeps the ADDING
         // state; a fresh one clears it.
@@ -39,7 +39,7 @@ pub fn ins_ctrl_x() {
         } else {
             COMPL_CONT_STATUS.set(0);
         }
-        CTRL_X_MODE.set(CTRL_X_NOT_DEFINED_YET);
+        CTRL_X_MODE.set(CtrlXMode::NotDefinedYet);
         EDIT_SUBMODE.set(ctrl_x_msg(CTRL_X_MODE.get()));
         EDIT_SUBMODE_PRE.set(None);
         REDRAW_MODE.set(true);
@@ -48,79 +48,79 @@ pub fn ins_ctrl_x() {
 }
 
 pub fn ctrl_x_mode_none() -> bool {
-    CTRL_X_MODE.get() == 0
+    CTRL_X_MODE.get() == CtrlXMode::Normal
 }
 
 pub fn ctrl_x_mode_normal() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_NORMAL
+    CTRL_X_MODE.get() == CtrlXMode::Normal
 }
 
 pub fn ctrl_x_mode_scroll() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_SCROLL
+    CTRL_X_MODE.get() == CtrlXMode::Scroll
 }
 
 pub fn ctrl_x_mode_whole_line() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_WHOLE_LINE
+    CTRL_X_MODE.get() == CtrlXMode::WholeLine
 }
 
 pub fn ctrl_x_mode_files() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_FILES
+    CTRL_X_MODE.get() == CtrlXMode::Files
 }
 
 pub fn ctrl_x_mode_tags() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_TAGS
+    CTRL_X_MODE.get() == CtrlXMode::Tags
 }
 
 pub fn ctrl_x_mode_path_patterns() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_PATH_PATTERNS
+    CTRL_X_MODE.get() == CtrlXMode::PathPatterns
 }
 
 pub fn ctrl_x_mode_path_defines() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_PATH_DEFINES
+    CTRL_X_MODE.get() == CtrlXMode::PathDefines
 }
 
 pub fn ctrl_x_mode_dictionary() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_DICTIONARY
+    CTRL_X_MODE.get() == CtrlXMode::Dictionary
 }
 
 pub fn ctrl_x_mode_thesaurus() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_THESAURUS
+    CTRL_X_MODE.get() == CtrlXMode::Thesaurus
 }
 
 pub fn ctrl_x_mode_cmdline() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_CMDLINE || CTRL_X_MODE.get() == CTRL_X_CMDLINE_CTRL_X
+    CTRL_X_MODE.get() == CtrlXMode::Cmdline || CTRL_X_MODE.get() == CtrlXMode::CmdlineCtrlX
 }
 
 pub fn ctrl_x_mode_function() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_FUNCTION
+    CTRL_X_MODE.get() == CtrlXMode::Function
 }
 
 pub fn ctrl_x_mode_omni() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_OMNI
+    CTRL_X_MODE.get() == CtrlXMode::Omni
 }
 
 pub fn ctrl_x_mode_spell() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_SPELL
+    CTRL_X_MODE.get() == CtrlXMode::Spell
 }
 
 pub(crate) fn ctrl_x_mode_eval() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_EVAL
+    CTRL_X_MODE.get() == CtrlXMode::Eval
 }
 
 pub fn ctrl_x_mode_line_or_eval() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_WHOLE_LINE || CTRL_X_MODE.get() == CTRL_X_EVAL
+    CTRL_X_MODE.get() == CtrlXMode::WholeLine || CTRL_X_MODE.get() == CtrlXMode::Eval
 }
 
 pub fn ctrl_x_mode_register() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_REGISTER
+    CTRL_X_MODE.get() == CtrlXMode::Register
 }
 
 pub fn ctrl_x_mode_not_default() -> bool {
-    CTRL_X_MODE.get() != CTRL_X_NORMAL
+    CTRL_X_MODE.get() != CtrlXMode::Normal
 }
 
 pub fn ctrl_x_mode_not_defined_yet() -> bool {
-    CTRL_X_MODE.get() == CTRL_X_NOT_DEFINED_YET
+    CTRL_X_MODE.get() == CtrlXMode::NotDefinedYet
 }
 
 pub fn compl_status_adding() -> bool {
@@ -169,7 +169,7 @@ pub fn check_compl_option(dict_opt: bool) -> bool {
     if !empty {
         return true;
     }
-    CTRL_X_MODE.set(CTRL_X_NORMAL);
+    CTRL_X_MODE.set(CtrlXMode::Normal);
     EDIT_SUBMODE.set(None);
     emsg(gettext(if dict_opt {
         c"'dictionary' option is empty"
@@ -187,7 +187,7 @@ pub fn check_compl_option(dict_opt: bool) -> bool {
 /// Is `c` a key that goes to, or keeps us in, the current CTRL-X mode?
 pub fn vim_is_ctrl_x_key(c: Key) -> bool {
     // Always allow CTRL-R — let its results then be checked.
-    if c == Key::CTRL_R && CTRL_X_MODE.get() != CTRL_X_REGISTER {
+    if c == Key::CTRL_R && CTRL_X_MODE.get() != CtrlXMode::Register {
         return true;
     }
     // Accept <PageUp> and <PageDown> if the popup menu is visible.
@@ -196,8 +196,8 @@ pub fn vim_is_ctrl_x_key(c: Key) -> bool {
     }
     match CTRL_X_MODE.get() {
         // Not in any CTRL-X mode.
-        CTRL_X_NORMAL => c == Key::CTRL_N || c == Key::CTRL_P || c == Key::CTRL_X,
-        CTRL_X_NOT_DEFINED_YET | CTRL_X_CMDLINE_CTRL_X => {
+        CtrlXMode::Normal => c == Key::CTRL_N || c == Key::CTRL_P || c == Key::CTRL_X,
+        CtrlXMode::NotDefinedYet | CtrlXMode::CmdlineCtrlX => {
             c == Key::CTRL_X
                 || c == Key::CTRL_Y
                 || c == Key::CTRL_E
@@ -219,31 +219,31 @@ pub fn vim_is_ctrl_x_key(c: Key) -> bool {
                 || c == Key::CTRL_Z
                 || c == Key::CTRL_R
         }
-        CTRL_X_SCROLL => c == Key::CTRL_Y || c == Key::CTRL_E,
-        CTRL_X_WHOLE_LINE => c == Key::CTRL_L || c == Key::CTRL_P || c == Key::CTRL_N,
-        CTRL_X_FILES => c == Key::CTRL_F || c == Key::CTRL_P || c == Key::CTRL_N,
-        CTRL_X_DICTIONARY => c == Key::CTRL_K || c == Key::CTRL_P || c == Key::CTRL_N,
-        CTRL_X_THESAURUS => c == Key::CTRL_T || c == Key::CTRL_P || c == Key::CTRL_N,
-        CTRL_X_TAGS => c == Key::CTRL_RSB || c == Key::CTRL_P || c == Key::CTRL_N,
-        CTRL_X_PATH_PATTERNS => c == Key::CTRL_P || c == Key::CTRL_N,
-        CTRL_X_PATH_DEFINES => c == Key::CTRL_D || c == Key::CTRL_P || c == Key::CTRL_N,
-        CTRL_X_CMDLINE => {
+        CtrlXMode::Scroll => c == Key::CTRL_Y || c == Key::CTRL_E,
+        CtrlXMode::WholeLine => c == Key::CTRL_L || c == Key::CTRL_P || c == Key::CTRL_N,
+        CtrlXMode::Files => c == Key::CTRL_F || c == Key::CTRL_P || c == Key::CTRL_N,
+        CtrlXMode::Dictionary => c == Key::CTRL_K || c == Key::CTRL_P || c == Key::CTRL_N,
+        CtrlXMode::Thesaurus => c == Key::CTRL_T || c == Key::CTRL_P || c == Key::CTRL_N,
+        CtrlXMode::Tags => c == Key::CTRL_RSB || c == Key::CTRL_P || c == Key::CTRL_N,
+        CtrlXMode::PathPatterns => c == Key::CTRL_P || c == Key::CTRL_N,
+        CtrlXMode::PathDefines => c == Key::CTRL_D || c == Key::CTRL_P || c == Key::CTRL_N,
+        CtrlXMode::Cmdline => {
             c == Key::CTRL_V
                 || c == Key::CTRL_Q
                 || c == Key::CTRL_P
                 || c == Key::CTRL_N
                 || c == Key::CTRL_X
         }
-        CTRL_X_FUNCTION => c == Key::CTRL_U || c == Key::CTRL_P || c == Key::CTRL_N,
-        CTRL_X_OMNI => c == Key::CTRL_O || c == Key::CTRL_P || c == Key::CTRL_N,
-        CTRL_X_SPELL => c == Key::CTRL_S || c == Key::CTRL_P || c == Key::CTRL_N,
-        CTRL_X_EVAL => c == Key::CTRL_P || c == Key::CTRL_N,
-        CTRL_X_BUFNAMES => c == Key::CTRL_P || c == Key::CTRL_N,
-        CTRL_X_REGISTER => c == Key::CTRL_R || c == Key::CTRL_P || c == Key::CTRL_N,
-        _ => {
-            internal_error(c"vim_is_ctrl_x_key()");
-            false
-        }
+        CtrlXMode::Function => c == Key::CTRL_U || c == Key::CTRL_P || c == Key::CTRL_N,
+        CtrlXMode::Omni => c == Key::CTRL_O || c == Key::CTRL_P || c == Key::CTRL_N,
+        CtrlXMode::Spell => c == Key::CTRL_S || c == Key::CTRL_P || c == Key::CTRL_N,
+        CtrlXMode::Eval => c == Key::CTRL_P || c == Key::CTRL_N,
+        CtrlXMode::Bufnames => c == Key::CTRL_P || c == Key::CTRL_N,
+        CtrlXMode::Register => c == Key::CTRL_R || c == Key::CTRL_P || c == Key::CTRL_N,
+        // Left a moment ago: no key keeps us in it. Upstream's `default:`
+        // reported an internal error for any number outside the table,
+        // which the enum has none of.
+        CtrlXMode::Finished => false,
     }
 }
 
@@ -262,25 +262,25 @@ pub fn ins_compl_accept_char(c: Key) -> bool {
     }
     // The answer is a character class: asked of the codepoint.
     let c = c.code();
-    if CTRL_X_MODE.get() & CTRL_X_WANT_IDENT != 0 {
+    if CTRL_X_MODE.get().wants_ident() {
         // Expanding an identifier: only identifier characters.
         return vim_is_ident_char(c);
     }
     match CTRL_X_MODE.get() {
         // File names, but not path separators, so that "proto/<Tab>"
         // expands files in "proto", not "proto/" as a whole.
-        CTRL_X_FILES => {
+        CtrlXMode::Files => {
             let isfilec = vim_isfilec(c);
             isfilec && !vim_ispathsep(c)
         }
         // Command line and omni completion take just about any printable
         // character, but do stop at white space.
-        CTRL_X_CMDLINE | CTRL_X_CMDLINE_CTRL_X | CTRL_X_OMNI => {
+        CtrlXMode::Cmdline | CtrlXMode::CmdlineCtrlX | CtrlXMode::Omni => {
             let isprintc = vim_isprintc(c);
             isprintc && !ascii_iswhite(c)
         }
         // For whole-line completion a space can be part of the line.
-        CTRL_X_WHOLE_LINE => vim_isprintc(c),
+        CtrlXMode::WholeLine => vim_isprintc(c),
         _ => vim_iswordc(c),
     }
 }
@@ -466,7 +466,7 @@ pub(crate) fn set_ctrl_x_mode(c: Key) -> bool {
         match c.kind() {
             // Scroll the window one line up or down.
             KeyKind::Char(Key::CTRL_E | Key::CTRL_Y) => {
-                CTRL_X_MODE.set(CTRL_X_SCROLL);
+                CTRL_X_MODE.set(CtrlXMode::Scroll);
                 EDIT_SUBMODE.set(Some(gettext(if STATE.get() & REPLACE_FLAG == 0 {
                     c" (insert) Scroll (^E/^Y)"
                 } else {
@@ -478,45 +478,45 @@ pub(crate) fn set_ctrl_x_mode(c: Key) -> bool {
             }
             // Complete whole lines.
             KeyKind::Char(Key::CTRL_L) => {
-                CTRL_X_MODE.set(CTRL_X_WHOLE_LINE);
+                CTRL_X_MODE.set(CtrlXMode::WholeLine);
                 break 'chord;
             }
             // Complete file names.
             KeyKind::Char(Key::CTRL_F) => {
-                CTRL_X_MODE.set(CTRL_X_FILES);
+                CTRL_X_MODE.set(CtrlXMode::Files);
                 break 'chord;
             }
             // Complete words from a dictionary.
             KeyKind::Char(Key::CTRL_K) => {
-                CTRL_X_MODE.set(CTRL_X_DICTIONARY);
+                CTRL_X_MODE.set(CtrlXMode::Dictionary);
                 break 'chord;
             }
             KeyKind::Char(Key::CTRL_R) => {
                 // CTRL-R followed by '=' is an expression register, not
                 // register completion: leave the mode alone.
                 if !vpeekc().is('=') {
-                    CTRL_X_MODE.set(CTRL_X_REGISTER);
+                    CTRL_X_MODE.set(CtrlXMode::Register);
                 }
                 break 'chord;
             }
             // Complete words from a thesaurus.
             KeyKind::Char(Key::CTRL_T) => {
-                CTRL_X_MODE.set(CTRL_X_THESAURUS);
+                CTRL_X_MODE.set(CtrlXMode::Thesaurus);
                 break 'chord;
             }
             // User defined completion.
             KeyKind::Char(Key::CTRL_U) => {
-                CTRL_X_MODE.set(CTRL_X_FUNCTION);
+                CTRL_X_MODE.set(CtrlXMode::Function);
                 break 'chord;
             }
             // Omni completion.
             KeyKind::Char(Key::CTRL_O) => {
-                CTRL_X_MODE.set(CTRL_X_OMNI);
+                CTRL_X_MODE.set(CtrlXMode::Omni);
                 break 'chord;
             }
             // Complete spelling suggestions.
             KeyKind::Char(LOWER_S | Key::CTRL_S) => {
-                CTRL_X_MODE.set(CTRL_X_SPELL);
+                CTRL_X_MODE.set(CtrlXMode::Spell);
                 let no_emsg = Suppress::emsg(); // avoid E756 twice
                 spell_back_to_badword();
                 drop(no_emsg);
@@ -524,27 +524,27 @@ pub(crate) fn set_ctrl_x_mode(c: Key) -> bool {
             }
             // Complete tag names.
             KeyKind::Char(Key::CTRL_RSB) => {
-                CTRL_X_MODE.set(CTRL_X_TAGS);
+                CTRL_X_MODE.set(CtrlXMode::Tags);
                 break 'chord;
             }
             // Complete keywords from included files.
             KeyKind::Special(SpecialKey::STab) | KeyKind::Char(Key::CTRL_I) => {
-                CTRL_X_MODE.set(CTRL_X_PATH_PATTERNS);
+                CTRL_X_MODE.set(CtrlXMode::PathPatterns);
                 break 'chord;
             }
             // Complete definitions from included files.
             KeyKind::Char(Key::CTRL_D) => {
-                CTRL_X_MODE.set(CTRL_X_PATH_DEFINES);
+                CTRL_X_MODE.set(CtrlXMode::PathDefines);
                 break 'chord;
             }
             // Complete Vim commands.
             KeyKind::Char(Key::CTRL_V | Key::CTRL_Q) => {
-                CTRL_X_MODE.set(CTRL_X_CMDLINE);
+                CTRL_X_MODE.set(CtrlXMode::Cmdline);
                 break 'chord;
             }
             // Stop completion.
             KeyKind::Char(Key::CTRL_Z) => {
-                CTRL_X_MODE.set(CTRL_X_NORMAL);
+                CTRL_X_MODE.set(CtrlXMode::Normal);
                 EDIT_SUBMODE.set(None);
                 REDRAW_MODE.set(true);
                 retval = true;
@@ -559,7 +559,7 @@ pub(crate) fn set_ctrl_x_mode(c: Key) -> bool {
             KeyKind::Char(Key::CTRL_P | Key::CTRL_N) => {
                 if COMPL_CONT_STATUS.get() & CONT_INTRPT == 0 {
                     COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() | CONT_LOCAL);
-                } else if COMPL_CONT_MODE.get() != 0 {
+                } else if COMPL_CONT_MODE.get() != CtrlXMode::Normal {
                     COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() & !CONT_LOCAL);
                 }
                 // C: FALLTHROUGH into `default`, which is the tail below.
@@ -576,13 +576,13 @@ pub(crate) fn set_ctrl_x_mode(c: Key) -> bool {
         // respectively; in mode 0 an extra ^X is needed, since ^X^P goes to
         // ADDING mode.  -- Acevedo
         if c == Key::CTRL_X {
-            if COMPL_CONT_MODE.get() != 0 {
+            if COMPL_CONT_MODE.get() != CtrlXMode::Normal {
                 COMPL_CONT_STATUS.set(0);
             } else {
-                COMPL_CONT_MODE.set(CTRL_X_NOT_DEFINED_YET);
+                COMPL_CONT_MODE.set(CtrlXMode::NotDefinedYet);
             }
         }
-        CTRL_X_MODE.set(CTRL_X_NORMAL);
+        CTRL_X_MODE.set(CtrlXMode::Normal);
         EDIT_SUBMODE.set(None);
         REDRAW_MODE.set(true);
     }
@@ -602,9 +602,8 @@ pub(crate) fn ins_compl_mode() -> Option<&'static CStr> {
 
 /// The `complete_info()` name of CTRL-X mode `mode` (its identifier flag
 /// ignored), `None` for the two modes that have none.
-pub(crate) fn ctrl_x_mode_name(mode: c_int) -> Option<&'static CStr> {
-    let index = usize::try_from(mode & !CTRL_X_WANT_IDENT).expect("a CTRL-X mode is not negative");
-    CTRL_X_MODE_NAMES[index]
+pub(crate) fn ctrl_x_mode_name(mode: CtrlXMode) -> Option<&'static CStr> {
+    CTRL_X_MODE_NAMES[mode.row()]
 }
 
 /// Which way the key typed moves through the matches: BACKWARD or FORWARD.

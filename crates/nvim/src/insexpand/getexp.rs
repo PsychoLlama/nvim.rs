@@ -113,8 +113,8 @@ impl CptScan {
 
 /// Thesaurus completion goes through a function rather than a word list:
 /// `'thesaurusfunc'` is set.
-pub(crate) fn thesaurus_func_complete(type_0: c_int) -> bool {
-    type_0 == CTRL_X_THESAURUS
+pub(crate) fn thesaurus_func_complete(type_0: CtrlXMode) -> bool {
+    type_0 == CtrlXMode::Thesaurus
         && (Buf::current().b_p_tsrfu.first_byte() != 0 || P_TSRFU.first_byte() != 0)
 }
 
@@ -131,8 +131,8 @@ pub(crate) struct CptValue {
     /// `INS_COMPL_CPT_CONT` to skip it, `INS_COMPL_CPT_END` when
     /// `'complete'` is exhausted.
     pub(crate) status: c_int,
-    /// The CTRL-X mode the entry stands for, `-1` for none.
-    pub(crate) compl_type: c_int,
+    /// The CTRL-X mode the entry stands for, `None` for none.
+    pub(crate) compl_type: Option<CtrlXMode>,
     /// Whether the source index should move on.
     pub(crate) advance: bool,
 }
@@ -143,7 +143,7 @@ pub(crate) fn process_next_cpt_value(
     start_match_pos: Pos,
     fuzzy_collect: bool,
 ) -> CptValue {
-    let mut compl_type = -1;
+    let mut compl_type = None;
     let mut status = INS_COMPL_CPT_OK;
     let mut advance = false;
     let skip_source = COMPL_AUTOCOMPLETE.get() && COMPL_FROM_NONKEYWORD.get();
@@ -170,7 +170,7 @@ pub(crate) fn process_next_cpt_value(
                 st.first_match_pos.col = Buf::current().lines().line_len(lnum);
             }
             st.last_match_pos = st.first_match_pos;
-            compl_type = 0;
+            compl_type = Some(CtrlXMode::Normal);
             // Remember the first match, so the loop stops when the search
             // wraps and comes back to it a second time.
             st.set_match_pos = true;
@@ -202,7 +202,7 @@ pub(crate) fn process_next_cpt_value(
                 st.last_match_pos.col = ColNr::ZERO;
                 st.first_match_pos.lnum = buf.line_count() + 1;
                 st.last_match_pos.lnum = LineNr::ZERO;
-                compl_type = 0;
+                compl_type = Some(CtrlXMode::Normal);
             } else {
                 // Unloaded buffer: scan it like a dictionary.
                 st.found_all = true;
@@ -210,7 +210,7 @@ pub(crate) fn process_next_cpt_value(
                     status = INS_COMPL_CPT_CONT;
                     break 'done;
                 };
-                compl_type = CTRL_X_DICTIONARY;
+                compl_type = Some(CtrlXMode::Dictionary);
                 // A copy: the progress message below can run Lua, and that
                 // can wipe the buffer the name belongs to.
                 st.dict = Some(XString::from_cstr(name));
@@ -234,20 +234,20 @@ pub(crate) fn process_next_cpt_value(
             status = INS_COMPL_CPT_END;
         } else {
             if ctrl_x_mode_line_or_eval() {
-                // compl_type stays -1.
+                // compl_type stays `None`.
             } else if flag == b'F' || flag == b'o' {
-                compl_type = CTRL_X_FUNCTION;
+                compl_type = Some(CtrlXMode::Function);
                 st.func_cb = get_callback_if_cpt_func(st.cpt.rest(), cpt_sources().index());
                 if st.func_cb.is_none() {
-                    compl_type = -1;
+                    compl_type = None;
                 }
             } else if !skip_source {
                 if flag == b'k' || flag == b's' {
-                    compl_type = if flag == b'k' {
-                        CTRL_X_DICTIONARY
+                    compl_type = Some(if flag == b'k' {
+                        CtrlXMode::Dictionary
                     } else {
-                        CTRL_X_THESAURUS
-                    };
+                        CtrlXMode::Thesaurus
+                    });
                     // C's `*++st->e_cpt`: a name may follow the flag.
                     st.cpt.bump();
                     if !matches!(st.cpt.at(), b',' | 0) {
@@ -255,13 +255,13 @@ pub(crate) fn process_next_cpt_value(
                         st.dict_f = DICT_FIRST;
                     }
                 } else if flag == b'i' {
-                    compl_type = CTRL_X_PATH_PATTERNS;
+                    compl_type = Some(CtrlXMode::PathPatterns);
                 } else if flag == b'd' {
-                    compl_type = CTRL_X_PATH_DEFINES;
+                    compl_type = Some(CtrlXMode::PathDefines);
                 } else if flag == b'f' {
-                    compl_type = CTRL_X_BUFNAMES;
+                    compl_type = Some(CtrlXMode::Bufnames);
                 } else if flag == b']' || flag == b't' {
-                    compl_type = CTRL_X_TAGS;
+                    compl_type = Some(CtrlXMode::Tags);
                     if !shortmess(ShmFlag::COMPLETIONSCAN) && !COMPL_AUTOCOMPLETE.get() {
                         // Upstream copies it through `IObuff`, which cuts it there.
                         let text = gettext(c"Scanning tags.").to_bytes();
@@ -276,7 +276,7 @@ pub(crate) fn process_next_cpt_value(
             advance = may_advance_cpt_index(st.cpt.rest());
 
             st.found_all = true;
-            if compl_type == -1 {
+            if compl_type.is_none() {
                 status = INS_COMPL_CPT_CONT;
             }
         }
@@ -290,11 +290,11 @@ pub(crate) fn process_next_cpt_value(
 }
 
 /// Identifiers (`i`) or defines (`d`) from included files.
-pub(crate) fn get_next_include_file_completion(compl_type: c_int) {
+pub(crate) fn get_next_include_file_completion(compl_type: CtrlXMode) {
     // A copy: the search checks for typed keys, and what that runs can
     // reset the completion's pattern.
     let pattern = compl_pattern().to_vec();
-    let what = if compl_type == CTRL_X_PATH_DEFINES && COMPL_CONT_STATUS.get() & CONT_SOL == 0 {
+    let what = if compl_type == CtrlXMode::PathDefines && COMPL_CONT_STATUS.get() & CONT_SOL == 0 {
         FIND_DEFINE
     } else {
         FIND_ANY
@@ -324,7 +324,7 @@ pub(crate) fn get_next_include_file_completion(compl_type: c_int) {
 /// Words from `'dictionary'` (`k`) or `'thesaurus'` (`s`) files: `dict`, or
 /// the option's value when the entry names none.
 pub(crate) fn get_next_dict_tsr_completion(
-    compl_type: c_int,
+    compl_type: CtrlXMode,
     dict: Option<XString>,
     dict_f: c_int,
 ) {
@@ -333,7 +333,7 @@ pub(crate) fn get_next_dict_tsr_completion(
         expand_by_function(compl_type, compl_pattern(), None);
         return;
     }
-    let thesaurus = compl_type == CTRL_X_THESAURUS;
+    let thesaurus = compl_type == CtrlXMode::Thesaurus;
     let flags = if dict.is_none() { 0 } else { dict_f };
     let files = dict.unwrap_or_else(|| {
         if thesaurus {
@@ -489,24 +489,24 @@ pub(crate) fn get_next_spell_completion(lnum: LineNr) {
 ///
 /// Returns true when a new match was found.
 pub(crate) fn get_next_completion_match(
-    type_0: c_int,
+    type_0: Option<CtrlXMode>,
     st: &mut InsComplNextState,
     ini: Pos,
 ) -> bool {
     let mut found_new_match = false;
     match type_0 {
         // No source: `process_next_cpt_value` rejected this entry.
-        -1 => {}
-        CTRL_X_PATH_PATTERNS | CTRL_X_PATH_DEFINES => {
-            get_next_include_file_completion(type_0);
+        None => {}
+        Some(mode @ (CtrlXMode::PathPatterns | CtrlXMode::PathDefines)) => {
+            get_next_include_file_completion(mode);
         }
-        CTRL_X_DICTIONARY | CTRL_X_THESAURUS => {
-            get_next_dict_tsr_completion(type_0, st.dict.take(), st.dict_f);
+        Some(mode @ (CtrlXMode::Dictionary | CtrlXMode::Thesaurus)) => {
+            get_next_dict_tsr_completion(mode, st.dict.take(), st.dict_f);
         }
-        CTRL_X_TAGS => get_next_tag_completion(),
-        CTRL_X_FILES => get_next_filename_completion(),
-        CTRL_X_CMDLINE | CTRL_X_CMDLINE_CTRL_X => get_next_cmdline_completion(),
-        CTRL_X_FUNCTION => {
+        Some(CtrlXMode::Tags) => get_next_tag_completion(),
+        Some(CtrlXMode::Files) => get_next_filename_completion(),
+        Some(CtrlXMode::Cmdline | CtrlXMode::CmdlineCtrlX) => get_next_cmdline_completion(),
+        Some(CtrlXMode::Function) => {
             if ctrl_x_mode_normal() {
                 // Invoked by an `F`/`o` entry in 'complete': the callback
                 // `process_next_cpt_value` found, held by the scan.
@@ -514,15 +514,15 @@ pub(crate) fn get_next_completion_match(
                     get_cpt_func_completion_matches(cb);
                 }
             } else {
-                expand_by_function(type_0, compl_pattern(), None);
+                expand_by_function(CtrlXMode::Function, compl_pattern(), None);
             }
         }
-        CTRL_X_OMNI => {
-            expand_by_function(type_0, compl_pattern(), None);
+        Some(CtrlXMode::Omni) => {
+            expand_by_function(CtrlXMode::Omni, compl_pattern(), None);
         }
-        CTRL_X_SPELL => get_next_spell_completion(st.first_match_pos.lnum),
-        CTRL_X_BUFNAMES => get_next_bufname_token(),
-        CTRL_X_REGISTER => get_register_completion(),
+        Some(CtrlXMode::Spell) => get_next_spell_completion(st.first_match_pos.lnum),
+        Some(CtrlXMode::Bufnames) => get_next_bufname_token(),
+        Some(CtrlXMode::Register) => get_register_completion(),
         // Normal CTRL-P/CTRL-N and CTRL-X CTRL-L.
         _ => {
             found_new_match = get_next_default_completion(st, ini);
@@ -531,7 +531,7 @@ pub(crate) fn get_next_completion_match(
             }
         }
     }
-    if type_0 != 0 && COMPL_CURR_MATCH.get() != COMPL_OLD_MATCH.get() {
+    if type_0 != Some(CtrlXMode::Normal) && COMPL_CURR_MATCH.get() != COMPL_OLD_MATCH.get() {
         found_new_match = true;
     }
     found_new_match
@@ -579,7 +579,7 @@ impl InsComplNextState {
 /// [`ins_compl_get_exp`] over its scan state.
 fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
     let mut found_new_match;
-    let mut type_0 = CTRL_X_MODE.get();
+    let mut type_0 = Some(CTRL_X_MODE.get());
     let mut may_advance_cpt_idx = false;
     let mut start_pos = ini;
 
@@ -668,7 +668,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
         // — a longer one.
         let mut compl_timeout_save = 0;
         if normal_mode_strict
-            && type_0 == CTRL_X_FUNCTION
+            && type_0 == Some(CtrlXMode::Function)
             && (COMPL_AUTOCOMPLETE.get() || p_cto() > 0)
         {
             compl_timeout_save = COMPL_TIMEOUT_MS.get();
@@ -695,13 +695,13 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
         }
 
         // Break out for the specialised modes — 'complete' is only for the
-        // generic CTRL_X_NORMAL — or when a new match has been found.
+        // generic CtrlXMode::Normal — or when a new match has been found.
         if (ctrl_x_mode_not_default() && !ctrl_x_mode_line_or_eval()) || found_new_match {
             if GOT_INT.get() {
                 break;
             }
             // Fill the popup menu as soon as possible.
-            if type_0 != -1 {
+            if type_0.is_some() {
                 ins_compl_check_keys(0, false);
             }
             if (ctrl_x_mode_not_default() && !ctrl_x_mode_line_or_eval()) || COMPL_INTERRUPTED.get()
@@ -711,7 +711,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
             COMPL_STARTED.set(!COMPL_TIME_SLICE_EXPIRED.get());
         } else {
             // Mark a buffer scanned when it has been scanned completely.
-            if type_0 == 0 || type_0 == CTRL_X_PATH_PATTERNS {
+            if matches!(type_0, Some(CtrlXMode::Normal | CtrlXMode::PathPatterns)) {
                 if let Some(mut buf) = st.ins_buf.and_then(BufId::get) {
                     buf.b_scanned = true;
                 }
@@ -723,7 +723,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
         // Re-tested rather than remembered: the source just run can be a
         // user function, and that can have changed either operand.
         if normal_mode_strict
-            && type_0 == CTRL_X_FUNCTION
+            && type_0 == Some(CtrlXMode::Function)
             && (COMPL_AUTOCOMPLETE.get() || p_cto() > 0)
         {
             COMPL_TIMEOUT_MS.set(compl_timeout_save);
