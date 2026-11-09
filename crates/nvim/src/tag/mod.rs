@@ -213,7 +213,7 @@ pub const CMDBUFFSIZE: usize = 1024;
 /// How many entries a window's stack holds before the oldest is dropped.
 pub const TAGSTACKSIZE: usize = 20;
 
-/// What [`jumpto_tag`](crate::tag::jumpto_tag) did.
+/// What [`jumpto_tag`] did.
 ///
 /// `NOTAGFILE` as a value rather than a status: the file the match names
 /// does not exist, which is not a failure -- the caller goes on to the next

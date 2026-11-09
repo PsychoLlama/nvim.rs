@@ -11,7 +11,7 @@
 //! # Ownership
 //!
 //! Nothing in this module is freed by hand.  A table owns its entries by
-//! value (see [`MapTables`](crate::mapping::MapTables)); a mapping's four
+//! value (see [`MapTables`]); a mapping's four
 //! strings are owned: the LHS is a [`MapStr`] and the three RHS ones a
 //! [`MapRhs`], both held by value on the entry.  Upstream keeps *one* RHS per
 //! `<C-H>`-style pair and leaves it owned by whichever of the two is freed

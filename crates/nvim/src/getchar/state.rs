@@ -16,7 +16,7 @@
 //! Upstream declares these as `EXTERN`s in `globals.h` and statics in
 //! `getchar.c`. They are one [`GetcharState`] here, behind one cell, with a
 //! `const` selector per field under the old name -- see
-//! [`state_record`](crate::global_cell::state_record) for the access rules.
+//! [`state_record`] for the access rules.
 //! The fields below the editor-wide ones are `getchar/`'s own: the key
 //! `vungetc` put back ([`UngotKey`]), the half-assembled keys `gotchars` and
 //! the 'showcmd' echo are holding, and the counters the `getchar.c` statics

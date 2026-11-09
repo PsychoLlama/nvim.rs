@@ -11,7 +11,7 @@
 //! backwards search the whole line is scanned and the last match before the
 //! cursor is kept.
 //!
-//! A word split over a line break — "et<newline>cetera" — is handled by
+//! A word split over a line break — "`et<newline>`cetera" — is handled by
 //! appending the start of the next line to the buffer being scanned
 //! ([`spell_cat_line`]), with the leading white space kept so that columns
 //! still line up.

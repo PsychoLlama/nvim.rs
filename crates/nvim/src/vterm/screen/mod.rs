@@ -5,8 +5,8 @@
 //! granularity the host asked for, and hands cells back on demand. This
 //! module holds the cell grids, the damage bookkeeping and the interface the
 //! state and the host use; the state's reports arrive in
-//! [`callbacks`](self::callbacks), and the resize, which is where the
-//! interesting work is, lives in [`resize`](self::resize).
+//! [`callbacks`], and the resize, which is where the
+//! interesting work is, lives in [`resize`].
 //!
 //! The host's callbacks may run anything, but they reach only the host: the
 //! screen calls them with itself borrowed, and nothing a host is handed leads

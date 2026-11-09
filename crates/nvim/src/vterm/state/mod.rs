@@ -14,7 +14,7 @@
 //! and properties, [`super::selection`] for OSC, [`super::dcs`] for the other
 //! control strings, and `geometry` for the shape of the screen — all of it
 //! written against the methods here. The state machine's construction and its
-//! parser events live in [`entry`](self::entry).
+//! parser events live in [`entry`].
 //!
 //! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.

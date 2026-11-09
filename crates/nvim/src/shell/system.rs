@@ -3,7 +3,7 @@
 //! [`os_system_capture`] is the public entry point; everything `:!`, `system()` and
 //! wildcard expansion do goes through [`do_os_system`], which has the event
 //! loop spawn the child and pump until it exits
-//! ([`run_to_exit`](crate::event::libuv_proc::run_to_exit)), and then either
+//! ([`run_to_exit`]), and then either
 //! hands the output back to the caller or leaves it on the screen. What the
 //! command is, and what becomes of its output on screen, is `crate::shell`'s.
 //!

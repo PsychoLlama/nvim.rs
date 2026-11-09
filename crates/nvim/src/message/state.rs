@@ -29,7 +29,7 @@
 //! The record is never borrowed whole. A number or a flag is copied in and
 //! out; a field that owns something is projected into a closure that may not
 //! call back into the editor, or moved out and back (`update`; see
-//! [`state_record`](crate::global_cell::state_record)). So no reference into
+//! [`state_record`]). So no reference into
 //! the record is open across a call that can run user code -- an autocommand, a `:redir => var` assignment, a UI event, an
 //! `ON_PRINT` callback -- which is where every `msg_*` entry point can end
 //! up.

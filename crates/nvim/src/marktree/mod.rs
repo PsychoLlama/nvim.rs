@@ -10,12 +10,12 @@
 //! The extmark store: a wide B-tree keyed by (row, col).
 //!
 //! Marks go in with [`marktree_put`]; a text change is applied to all of them
-//! at once with [`marktree_splice`](splice::marktree_splice); everything else —
+//! at once with [`marktree_splice`]; everything else —
 //! reading, deleting — goes through `MarkTreeIter`. Position an iterator with
-//! [`marktree_itr_get`](iter::marktree_itr_get), or find a mark by its id with
+//! [`marktree_itr_get`], or find a mark by its id with
 //! [`marktree_lookup`], then read with
-//! [`marktree_itr_current`](iter::marktree_itr_current) and step with
-//! [`marktree_itr_next`](iter::marktree_itr_next). [`marktree_del_itr`] deletes
+//! [`marktree_itr_current`] and step with
+//! [`marktree_itr_next`]. [`marktree_del_itr`] deletes
 //! the mark under the iterator and leaves it on the next one.
 //!
 //! Three design decisions account for most of the code:
@@ -35,7 +35,7 @@
 //!   walk down the tree.
 //!
 //! A tree is reached as `&mut MarkTree`, and its nodes live in the tree's own
-//! slab, named by [`NodeId`](node::NodeId) — see [`node`]. An iterator names
+//! slab, named by [`NodeId`] — see [`node`]. An iterator names
 //! its node by id too, so one handed alongside the wrong tree, or one a change
 //! left stale, reads a wrong key or panics; it never reaches freed memory.
 //!

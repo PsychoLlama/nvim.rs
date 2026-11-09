@@ -133,7 +133,7 @@ impl<'a> Cursor<'a> {
         marktree_itr_step_out_filter(tree, iter, filter)
     }
 
-    /// The mark the walk is on, or [`MT_INVALID_KEY`](super::key::MT_INVALID_KEY)
+    /// The mark the walk is on, or [`MT_INVALID_KEY`]
     /// once it has run off the end.
     pub fn current(&mut self) -> MTKey {
         let (tree, iter) = self.parts();

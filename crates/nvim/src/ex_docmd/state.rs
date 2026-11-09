@@ -9,7 +9,7 @@
 //!
 //! All but `cmdmod` are one [`ExState`] behind one cell, with a `const`
 //! selector per field under the old name -- see
-//! [`state_record`](crate::global_cell::state_record). `cmdmod` stays a
+//! [`state_record`]. `cmdmod` stays a
 //! cell of its own: callers borrow it whole (`cmdmod.with(..)`) and the
 //! unit suite sets its flags.
 #![forbid(unsafe_code)]

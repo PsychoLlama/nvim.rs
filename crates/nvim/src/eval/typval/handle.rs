@@ -287,7 +287,7 @@ impl Dict {
     ///
     /// The walk borrows the dictionary, so nothing can add to or remove from
     /// it while the walk is live. A body that edits the table wants
-    /// [`DictCursor`](super::DictCursor), which is a slot index.
+    /// [`DictCursor`], which is a slot index.
     pub fn items(&self) -> impl Iterator<Item = &DictItem> {
         // Not `item_at` per index: the walk over the slots themselves skips
         // a bounds check and a slot copy per slot, which `tvequal` reads as
