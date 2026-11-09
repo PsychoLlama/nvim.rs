@@ -72,7 +72,7 @@ pub(crate) fn save_viewstate(window: Win) -> ViewState {
 }
 
 /// Put back what [`save_viewstate`] recorded.
-pub(crate) fn restore_viewstate(mut window: Win, vs: ViewState) {
+pub(crate) fn restore_viewstate(mut window: Win, vs: &ViewState) {
     window.w_curswant = vs.vs_curswant;
     window.w_leftcol = vs.vs_leftcol;
     window.w_skipcol = vs.vs_skipcol;
@@ -428,7 +428,7 @@ pub(crate) fn may_do_incsearch_highlighting(
 
     // First restore the old curwin values, so the screen is positioned the
     // same way the real search command would leave it.
-    restore_viewstate(Win::current(), s.old_viewstate);
+    restore_viewstate(Win::current(), &s.old_viewstate);
     curwin_cursor_moved();
 
     let mut end_pos = Win::current().w_cursor;
@@ -564,7 +564,7 @@ pub(crate) fn finish_incsearch_highlighting(
         }
         Win::current().w_cursor = s.search_start;
     }
-    restore_viewstate(Win::current(), s.old_viewstate);
+    restore_viewstate(Win::current(), &s.old_viewstate);
     highlight_match.set(false);
 
     // By default search all lines.

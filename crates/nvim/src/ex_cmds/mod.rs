@@ -195,7 +195,7 @@ pub struct PreviewLines {
     pub subresults: Vec<SubResult>,
     pub lines_needed: i32,
 }
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct SubFlags {
     pub do_all: bool,
     pub do_ask: bool,

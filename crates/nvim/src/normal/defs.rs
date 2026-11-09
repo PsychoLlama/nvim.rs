@@ -83,7 +83,7 @@ impl CmdArg {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct OpArg {
     pub op_type: OpType,
     /// The register the operator reads or writes, 0 for the default.

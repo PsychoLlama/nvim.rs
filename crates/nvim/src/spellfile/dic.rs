@@ -243,12 +243,12 @@ pub(super) fn spell_read_dic(
                 pfxlist: &store_afflist,
                 pfxlen,
             };
-            if store_aff_word(spin, affile, call).is_err() {
+            if store_aff_word(spin, affile, &call).is_err() {
                 retval = Err(Failed);
             }
             call.ht = AffixKind::Prefix;
             call.xht = None;
-            if store_aff_word(spin, affile, call).is_err() {
+            if store_aff_word(spin, affile, &call).is_err() {
                 retval = Err(Failed);
             }
         }
@@ -342,7 +342,7 @@ fn get_compflags(affile: &AffFile, afflist: &[u8], out: &mut [u8]) {
 }
 
 /// One call's worth of [`store_aff_word`] arguments.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 struct AffWord<'a> {
     /// The stem to affix, and the flags it declared.
     word: &'a CStr,
@@ -393,8 +393,8 @@ impl IdList {
 
 /// Apply every affix in `ht` that `word` accepts, store each result, and
 /// recurse for the affixes that may sit on top.
-fn store_aff_word(spin: &mut SpellInfo, affile: &AffFile, call: AffWord<'_>) -> Result<(), Failed> {
-    let AffWord {
+fn store_aff_word(spin: &mut SpellInfo, affile: &AffFile, req: &AffWord<'_>) -> Result<(), Failed> {
+    let &AffWord {
         word,
         afflist,
         ht,
@@ -403,7 +403,7 @@ fn store_aff_word(spin: &mut SpellInfo, affile: &AffFile, call: AffWord<'_>) -> 
         flags,
         pfxlist,
         pfxlen,
-    } = call;
+    } = req;
     let mut newword = [0u8; MAXWLEN];
     let mut store_afflist = [0u8; MAXWLEN];
     let mut pfx_pfxlist = [0u8; MAXWLEN];
@@ -560,7 +560,7 @@ fn store_aff_word(spin: &mut SpellInfo, affile: &AffFile, call: AffWord<'_>) -> 
                     pfxlist: use_pfxlist,
                     pfxlen,
                 };
-                if store_aff_word(spin, affile, deep).is_err() {
+                if store_aff_word(spin, affile, &deep).is_err() {
                     retval = Err(Failed);
                 }
             }
@@ -580,10 +580,10 @@ fn store_aff_word(spin: &mut SpellInfo, affile: &AffFile, call: AffWord<'_>) -> 
                     pfxlist: use_pfxlist,
                     pfxlen,
                 };
-                let a = store_aff_word(spin, affile, cross);
+                let a = store_aff_word(spin, affile, &cross);
                 let b = ae.ae_flags.as_deref().map(|flags| {
                     cross.afflist = flags;
-                    store_aff_word(spin, affile, cross)
+                    store_aff_word(spin, affile, &cross)
                 });
                 if a.is_err() || b.is_some_and(|b| b.is_err()) {
                     retval = Err(Failed);

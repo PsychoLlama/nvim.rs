@@ -143,7 +143,7 @@ pub(crate) struct Outcome {
 }
 
 /// Report what was read.
-pub(crate) fn report_read(sfname: Option<&CStr>, how: How, out: &Outcome) {
+pub(crate) fn report_read(sfname: Option<&CStr>, how: &How, out: &Outcome) {
     // The report. Upstream assembles it in `IObuff`, which `msg_trunc` and
     // `set_keep_msg` reach the message machinery through.
     let mut report = Report::quoted_fname(Buf::current(), sfname, IOSIZE as usize);

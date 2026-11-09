@@ -77,13 +77,14 @@ impl terminal {
     /// field starts as the all-zeroes value C would have produced, so the
     /// initialisation that follows is the same one the C did.
     pub fn new(opts: TerminalOptions, buf_handle: Handle) -> Self {
+        let vt = VTerm::new(
+            ::core::ffi::c_int::from(opts.height),
+            ::core::ffi::c_int::from(opts.width),
+        );
         Self {
             opts,
             buf_handle,
-            vt: VTerm::new(
-                ::core::ffi::c_int::from(opts.height),
-                ::core::ffi::c_int::from(opts.width),
-            ),
+            vt,
             textbuf: Vec::new(),
             sb: Scrollback::default(),
             old_sb_deleted: 0,
@@ -266,7 +267,7 @@ pub struct TerminalCursor {
 
 /// What a terminal is built with: its size and its driver's callbacks, each
 /// told the driver's id. Rust-only: no C code reads it.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct TerminalOptions {
     /// Who drives the terminal (a channel's id), handed to each callback.
     pub owner: u64,

@@ -92,7 +92,7 @@ pub(crate) fn command_line_erase_chars(s: &mut CommandLineState) -> KeyOutcome {
             s.is_state.search_start = s.is_state.save_cursor;
             // Save the view settings, so that the screen won't be
             // restored at the wrong position.
-            s.is_state.old_viewstate = s.is_state.init_viewstate;
+            s.is_state.old_viewstate = s.is_state.init_viewstate.clone();
         }
         redrawcmd();
     } else if cc.is_empty() && s.c != Key::CTRL_W && cc.cmdprompt.is_none() && s.indent == 0 {

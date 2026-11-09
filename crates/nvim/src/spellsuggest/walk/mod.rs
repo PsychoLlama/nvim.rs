@@ -189,7 +189,7 @@ pub(crate) enum State {
 /// so anything not explicitly reset is inherited.
 ///
 /// The layout is pinned to 32 bytes; see the module docs.
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Default, Debug)]
 #[repr(C)]
 pub(crate) struct Frame {
     /// The edit to try next at this level.
@@ -384,7 +384,7 @@ impl<'a> Walk<'a> {
             tword: [0; MAXWLEN],
             preword: [0; PREWORD_SIZE],
             compflags: [0; MAXWLEN],
-            stack: [Frame::default(); STACK_SIZE],
+            stack: core::array::from_fn(|_| Frame::default()),
             depth: 0,
             finished: false,
             breakcheckcount: 1000,
@@ -476,7 +476,7 @@ impl<'a> Walk<'a> {
     #[inline]
     fn go_deeper(&mut self, score_add: c_int) {
         let level = self.depth;
-        let mut child = self.stack[level];
+        let mut child = self.stack[level].clone();
         child.state = State::Start;
         child.score = self.stack[level].score + score_add;
         child.child = 1; // start just after the length byte

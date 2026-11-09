@@ -2156,7 +2156,6 @@ COPY_KEEPERS = {
     "crates/nvim/src/event/uv.rs": "ffi: libuv's structs, copied as C copies them",
     "crates/nvim/src/ex_cmds/mod.rs::SubResult": "value",
     "crates/nvim/src/ex_cmds/sort.rs::StringOrder": "value",
-    "crates/nvim/src/ex_getln/mod.rs::CpWinInfo": "value",
     "crates/nvim/src/extmark/mod.rs::Extent": "value",
     "crates/nvim/src/getchar/mapmatch.rs::Candidate": "value",
     "crates/nvim/src/getchar/mod.rs::GotcharsState": "value",

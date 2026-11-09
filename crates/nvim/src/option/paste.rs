@@ -42,7 +42,7 @@ use super::didset_options_sctx;
 /// already on"; they are only ever read and written together, on the two
 /// transitions, and a saved value means nothing without `on` to say whether
 /// it was ever taken. One record says that.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct PasteSave {
     /// Whether 'paste' was on last time the callback ran — which is what
     /// makes setting 'paste' twice keep the first save.
@@ -87,10 +87,10 @@ static SAVED: GlobalCell<PasteSave> = GlobalCell::new(PasteSave::NONE);
 /// as the option owning nothing.
 static SAVED_VSTS: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
-/// What 'paste' has stashed, for the buffer-local copies `copy.rs` seeds
-/// from it.
-pub(crate) fn paste_save() -> PasteSave {
-    SAVED.get()
+/// Read what 'paste' has stashed, for the buffer-local copies `copy.rs`
+/// seeds from it.
+pub(crate) fn paste_saved<R>(f: impl FnOnce(&PasteSave) -> R) -> R {
+    SAVED.with(f)
 }
 
 /// A copy of what 'paste' stashed for 'varsofttabstop'.
@@ -117,7 +117,7 @@ const PASTE_DEP_OPTS: [OptIndex; 10] = [
 /// remember what to switch back on.
 pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
     if p_paste() {
-        if !SAVED.get().on {
+        if !SAVED.with(|saved| saved.on) {
             for mut buf in buffers() {
                 buf.b_p_tw_nopaste = buf.b_p_tw;
                 buf.b_p_wm_nopaste = buf.b_p_wm;
@@ -164,7 +164,7 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
         P_AI.set(false);
         P_ET.set(false);
         P_VSTS.clear();
-    } else if SAVED.get().on {
+    } else if SAVED.with(|saved| saved.on) {
         for mut buf in buffers() {
             buf.b_p_tw = buf.b_p_tw_nopaste;
             buf.b_p_wm = buf.b_p_wm_nopaste;
@@ -175,7 +175,7 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
             replace_tabstop_array(&mut buf.b_p_vsts_array, vsts.as_ref().map(XString::as_cstr));
             buf.b_p_vsts = vsts;
         }
-        let saved = SAVED.get();
+        let saved = SAVED.with(PasteSave::clone);
         P_SM.set(saved.sm);
         P_STA.set(saved.sta);
         if p_ru() != saved.ru {

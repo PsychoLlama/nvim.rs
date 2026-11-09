@@ -297,7 +297,7 @@ pub struct IncsearchState {
     pub incsearch_postponed: bool,
     pub magic_overruled_save: OptMagic,
 }
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct ViewState {
     pub vs_curswant: ColNr,
     pub vs_leftcol: ColNr,
@@ -345,7 +345,7 @@ pub struct CpUndoInfo {
     pub save_b_u_line_lnum: LineNr,
     pub save_b_u_line_colnr: ColNr,
 }
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct CpWinInfo {
     /// The window saved. [`CpBufInfo::buf`]'s reason.
     pub(crate) win: Option<WinId>,

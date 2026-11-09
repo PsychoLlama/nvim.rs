@@ -147,7 +147,7 @@ pub fn briopt_check(briopt: Option<&CStr>, window: Option<Win>) -> bool {
 /// Everything the cached indent depends on that is a plain value. The three
 /// that are not — the line, 'vartabstop' and 'formatlistpat' — are compared
 /// by content.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 struct BreakindentKey {
     fnum: c_int,
     ts: OptInt,
@@ -212,20 +212,20 @@ impl BreakindentCache {
     fn refill(
         &mut self,
         window: Win,
-        key: &BreakindentKey,
+        key: BreakindentKey,
         line: &[u8],
         vts: TabStopArray,
         flp: XString,
     ) {
         let owned = XString::from_bytes(line);
-        self.key = *key;
+        self.key = key;
         self.list = 0;
         // A fixed column needs no measurement.
         if window.w_briopt_vcol == 0 {
-            self.indent = if key.no_ts {
+            self.indent = if self.key.no_ts {
                 indent_size_no_ts(line)
             } else {
-                indent_size_ts(line, key.ts, vts.as_deref())
+                indent_size_ts(line, self.key.ts, vts.as_deref())
             };
             if window.w_briopt_list != 0 {
                 self.add_list_indent(window, owned.as_cstr(), flp.as_cstr());
@@ -304,7 +304,7 @@ pub fn get_breakindent_win(window: Win, line: &[u8]) -> c_int {
     let fill = (!hit).then(|| (vts.map(Box::from), flp.get()));
     let mut bri = CACHE.with_mut(|prev| {
         if let Some((vts, flp)) = fill {
-            prev.refill(window, &key, line, vts, flp);
+            prev.refill(window, key, line, vts, flp);
         }
         let mut bri = if opt.vcol != 0 {
             // A column value has priority over the measured indent.

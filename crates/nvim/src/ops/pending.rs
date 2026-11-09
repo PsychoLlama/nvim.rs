@@ -662,7 +662,7 @@ fn run_operator(
                 // `zy` yanks without the trailing white space.
                 op.excl_tr_ws = cmd_arg.cmdchar.is('z');
                 // A copy: TextYankPost runs user code.
-                let arg: OpArg = *op;
+                let arg = OpArg::clone(&op);
                 op_yank(&arg, !gui_yank);
             }
             check_cursor_col(Win::current());
@@ -702,7 +702,7 @@ fn run_operator(
         OpType::Format => {
             if c_int::from(Buf::current().b_p_fex.first_byte()) != NUL {
                 // A copy: the expression is user code.
-                let arg = *op;
+                let arg = OpArg::clone(&op);
                 op_formatexpr(&arg);
             } else if P_FP.first_byte() != 0
                 || c_int::from(Buf::current().b_p_fp.first_byte()) != NUL
@@ -710,12 +710,12 @@ fn run_operator(
                 // An external program.
                 op_colon(&op);
             } else {
-                let arg = *op;
+                let arg = OpArg::clone(&op);
                 op_format(&arg, false);
             }
         }
         OpType::Format2 => {
-            let arg = *op;
+            let arg = OpArg::clone(&op);
             op_format(&arg, true);
         }
 
@@ -725,7 +725,7 @@ fn run_operator(
             let saved = REDO_VISUAL.get();
             restore_lbr(lbr_saved != 0);
             // A copy: the function is user code.
-            let arg = *op;
+            let arg = OpArg::clone(&op);
             op_function(&arg);
             REDO_VISUAL.set(saved);
         }
@@ -803,7 +803,7 @@ fn indent_or_colon(op: Op) {
         } else {
             Indenter::Lisp
         };
-        let arg = *op;
+        let arg = OpArg::clone(&op);
         op_reindent(&arg, indent);
         return;
     }
@@ -812,7 +812,7 @@ fn indent_or_colon(op: Op) {
     } else {
         Indenter::C
     };
-    let arg = *op;
+    let arg = OpArg::clone(&op);
     op_reindent(&arg, indent);
 }
 

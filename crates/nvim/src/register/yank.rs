@@ -133,7 +133,7 @@ fn report_yank(op: &OpArg, yank_type: MotionType, yanklines: size_t) {
 /// holds; with `message`, the "N lines yanked" report is given. `op` must
 /// describe a region of the current buffer.
 pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
-    let region = *op;
+    let region = op;
     let mut yank_type = region.motion_type;
     let mut yanklines = usize::try_from(region.line_count).expect("a region holds a line");
     let mut yankendlnum = region.end.lnum;

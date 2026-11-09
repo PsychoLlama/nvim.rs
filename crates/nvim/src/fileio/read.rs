@@ -41,7 +41,7 @@ mod tail;
 use self::tail::{report_and_place, run_read_autocmds};
 use crate::optionstr::OptString;
 /// What the read is being asked to do, decoded from `readfile`'s `flags`.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct How {
     /// Starting to edit a new buffer.
     pub newfile: bool,
@@ -184,7 +184,7 @@ pub(crate) fn readfile_named(
             sfname,
             from,
             excmd.as_deref_mut(),
-            how,
+            &how,
             silent,
             msg_save,
         ) {
@@ -799,7 +799,7 @@ pub(crate) fn readfile_named(
                 linecnt,
                 filesize,
             };
-            report_and_place(sfname, how, silent, &out, conv.bad_char, from);
+            report_and_place(sfname, &how, silent, &out, conv.bad_char, from);
         }
         msg_scroll.set(msg_save);
 
@@ -827,7 +827,7 @@ pub(crate) fn readfile_named(
         if !how.stdin
             && !how.fifo
             && (!how.buffer || sfname.is_some())
-            && !run_read_autocmds(sfname, excmd, how, set_options)
+            && !run_read_autocmds(sfname, excmd, &how, set_options)
         {
             // Autocommands may abort script processing. Note that this
             // skips the swap-file sync below, as upstream does.

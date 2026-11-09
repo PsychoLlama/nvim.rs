@@ -103,7 +103,7 @@ const E_PREVIEW_WINDOW_EXISTS: &CStr = c"E590: A preview window already exists";
 /// The accessors below each belong to a callback whose option the table
 /// declares as that type; the values now carry their own kind, so a
 /// mismatch is a panic naming the option rather than a bad read.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct Frame {
     /// The variable that already holds the new value.
     varp: OptSlot,
@@ -139,22 +139,22 @@ impl Frame {
         }
     }
 
-    fn old_number(self) -> OptInt {
+    fn old_number(&self) -> OptInt {
         self.old_number
             .expect("the table declares this option numeric")
     }
 
-    fn new_number(self) -> OptInt {
+    fn new_number(&self) -> OptInt {
         self.new_number
             .expect("the table declares this option numeric")
     }
 
     /// `None` is the unset global-local marker, not "false".
-    fn old_boolean(self) -> Option<bool> {
+    fn old_boolean(&self) -> Option<bool> {
         self.old_boolean
     }
 
-    fn new_boolean(self) -> Option<bool> {
+    fn new_boolean(&self) -> Option<bool> {
         self.new_boolean
     }
 }

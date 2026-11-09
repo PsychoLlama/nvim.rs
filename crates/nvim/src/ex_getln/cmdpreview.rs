@@ -311,7 +311,7 @@ pub(crate) fn cmdpreview_restore_state(cpinfo: &mut CpInfo) {
         };
 
         win.w_cursor = cp_wininfo.save_w_cursor;
-        restore_viewstate(win, cp_wininfo.save_viewstate);
+        restore_viewstate(win, &cp_wininfo.save_viewstate);
         win.w_onebuf_opt.wo_cul = cp_wininfo.save_w_p_cul;
         win.w_onebuf_opt.wo_cuc = cp_wininfo.save_w_p_cuc;
         update_topline(win);

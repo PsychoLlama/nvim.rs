@@ -42,7 +42,7 @@ use crate::option::vars::{
 };
 
 use super::check::bin_save;
-use super::paste::{paste_save, paste_saved_vsts};
+use super::paste::{paste_saved, paste_saved_vsts};
 use crate::option::defs::{CpoFlag, OptVal};
 use crate::options::{
     BufOptIndex, buf_opt_idx, kBufOptAutoindent, kBufOptBinary, kBufOptBomb, kBufOptCindent,
@@ -332,18 +332,18 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
 
         b.b_p_ai = c_int::from(p_ai());
         copy_sctx(b, kBufOptAutoindent);
-        b.b_p_ai_nopaste = c_int::from(paste_save().ai);
+        b.b_p_ai_nopaste = c_int::from(paste_saved(|saved| saved.ai));
         b.b_p_sw = p_sw();
         copy_sctx(b, kBufOptShiftwidth);
         b.b_p_scbk = p_scbk();
         copy_sctx(b, kBufOptScrollback);
         b.b_p_tw = p_tw();
         copy_sctx(b, kBufOptTextwidth);
-        b.b_p_tw_nopaste = paste_save().tw;
+        b.b_p_tw_nopaste = paste_saved(|saved| saved.tw);
         b.b_p_tw_nobin = bin_save().tw;
         b.b_p_wm = p_wm();
         copy_sctx(b, kBufOptWrapmargin);
-        b.b_p_wm_nopaste = paste_save().wm;
+        b.b_p_wm_nopaste = paste_saved(|saved| saved.wm);
         b.b_p_wm_nobin = bin_save().wm;
         b.b_p_bin = c_int::from(p_bin());
         copy_sctx(b, kBufOptBinary);
@@ -354,7 +354,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         b.b_p_fixeol = c_int::from(p_fixeol());
         copy_sctx(b, kBufOptFixendofline);
         b.b_p_et_nobin = c_int::from(bin_save().et);
-        b.b_p_et_nopaste = c_int::from(paste_save().et);
+        b.b_p_et_nopaste = c_int::from(paste_saved(|saved| saved.et));
         b.b_p_ml = c_int::from(p_ml());
         copy_sctx(b, kBufOptModeline);
         b.b_p_ml_nobin = c_int::from(bin_save().ml);
@@ -385,7 +385,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
 
         b.b_p_sts = p_sts();
         copy_sctx(b, kBufOptSofttabstop);
-        b.b_p_sts_nopaste = paste_save().sts;
+        b.b_p_sts_nopaste = paste_saved(|saved| saved.sts);
         b.b_p_vsts = p_vsts(dup);
         copy_sctx(b, kBufOptVarsofttabstop);
         b.b_p_vsts_array = if P_VSTS.is_unset() {

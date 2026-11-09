@@ -241,7 +241,7 @@ pub(super) fn build_replacement(
     let _sandboxed = counting.then(Lock::sandbox);
     // Save the flags for recursion: they can change for e.g.
     // ":s/^/\=execute("s#^##gn")".
-    let subflags_save = SUB_FLAGS.get();
+    let subflags_save = SUB_FLAGS.with(Clone::clone);
 
     // Disallow changing text or switching window in an expression, and get
     // the length of the substitution part including the NUL.  When it fails

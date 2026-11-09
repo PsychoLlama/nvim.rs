@@ -88,7 +88,7 @@ pub(crate) fn open_source<'a>(
     sfname: Option<&'a CStr>,
     from: LineNr,
     mut excmd: Option<&mut ExArg>,
-    how: How,
+    how: &How,
     silent: bool,
     msg_save: c_int,
 ) -> Result<Opened<'a>, Result<Loaded, ReadError>> {

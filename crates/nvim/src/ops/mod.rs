@@ -207,7 +207,7 @@ impl Op {
     /// `op_pending`). An `&mut` to the frame's own `OpArg` held across that
     /// would alias the read; a copy is nobody else's.
     pub(crate) fn on_copy<R>(mut self, operator: impl FnOnce(&mut OpArg) -> R) -> R {
-        let mut arg = *self;
+        let mut arg = OpArg::clone(&self);
         let result = operator(&mut arg);
         *self = arg;
         result

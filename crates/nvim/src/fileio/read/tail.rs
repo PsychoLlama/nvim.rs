@@ -30,7 +30,7 @@ use crate::types::ColNr;
 /// read-only.
 pub(crate) fn report_and_place(
     sfname: Option<&CStr>,
-    how: How,
+    how: &How,
     silent: bool,
     out: &Outcome,
     bad_char: c_int,
@@ -75,7 +75,7 @@ pub(crate) fn report_and_place(
 pub(crate) fn run_read_autocmds(
     sfname: Option<&CStr>,
     excmd: Option<&mut ExArg>,
-    how: How,
+    how: &How,
     set_options: bool,
 ) -> bool {
     let m = msg_scroll.get();

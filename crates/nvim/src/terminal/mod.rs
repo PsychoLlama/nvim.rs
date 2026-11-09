@@ -200,7 +200,7 @@ pub(crate) fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> Term {
         .set_termprop(VTERM_PROP_CURSORBLINK, Value::Bool(cursor_blink));
 
     term.invalid_start = 0;
-    term.invalid_end = c_int::from(opts.height);
+    term.invalid_end = c_int::from(term.opts.height);
     term.pending.events = Some(ParkingQueue::detached());
 
     if !buffer.b_ml.ml_flags.has(MlFlags::EMPTY) {
