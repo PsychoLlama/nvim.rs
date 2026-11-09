@@ -24,6 +24,7 @@
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::options::BUF_OPT_FORMATEXPR;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -46,8 +47,6 @@ pub use self::auto::*;
 pub(crate) use self::lines::*;
 pub(crate) use self::para::*;
 pub use self::wrap::*;
-
-pub const BUF_OPT_FORMATEXPR: c_int = 36;
 
 // The 'formatoptions' flag letters this family reads. Each is the option's
 // own spelling, so a flag test is `has_format_option(FoFlag::WRAP)`.

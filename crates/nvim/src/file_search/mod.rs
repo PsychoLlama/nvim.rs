@@ -36,6 +36,7 @@ use crate::message::state::LINE_MSG;
 use crate::normal::get_visual_text;
 use crate::option::vars::p_fic;
 use crate::option::{option_parts, was_set_insecurely};
+use crate::options::BUF_OPT_INCLUDEEXPR;
 use crate::options::OPT_INCLUDEEXPR;
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
@@ -65,8 +66,6 @@ pub(crate) use self::cursor::*;
 pub(crate) use self::init::*;
 pub(crate) use self::resolve::*;
 pub(crate) use self::visited::*;
-
-pub(crate) const BUF_OPT_INCLUDEEXPR: c_int = 46;
 
 /// What a search should accept as a match.
 pub(crate) const FINDFILE_DIR: c_int = 1;
