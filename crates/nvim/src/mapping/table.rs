@@ -26,9 +26,9 @@
 )]
 
 use super::*;
+use crate::ascii::CTRL_C;
 use crate::ex_docmd::sourcing_lnum;
 use crate::getchar::Remap;
-use crate::keycodes::CTRL_C;
 use crate::lua::executor::{nlua_set_sctx, release_luaref};
 use crate::mapping::{MapId, MapTables, MapTwin};
 use crate::winlayer::Buf;
@@ -354,7 +354,7 @@ pub(crate) fn map_add(
     let twin = mp.as_twin();
 
     // If CTRL-C has been mapped, don't always use it for Interrupting.
-    if keys.first().copied().map(c_int::from) == Some(CTRL_C) {
+    if keys.first() == Some(&CTRL_C) {
         match table {
             MapTable::Buffer(mut buf) => buf.b_mapped_ctrl_c |= mode,
             MapTable::Global => MAPPED_CTRL_C.set(MAPPED_CTRL_C.get() | mode),

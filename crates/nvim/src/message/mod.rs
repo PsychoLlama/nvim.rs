@@ -62,7 +62,7 @@
 pub mod state;
 use crate::api::keysets::KeyDict_echo_opts;
 use crate::api::vim::nvim_echo;
-use crate::ascii::{BS, CAR, ESC, NL, TAB, ascii_iswhite};
+use crate::ascii::{BS, CAR, NL, TAB, ascii_iswhite};
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::has_event;
 use crate::charset::{
@@ -107,7 +107,7 @@ use crate::highlight_group::{
     HLF_0, HLF_8, HLF_AT, HLF_E, HLF_M, HLF_MSG, HLF_N, HLF_R, HLF_T, HLF_W, highlight_changed,
     syn_check_group, syn_id2attr,
 };
-use crate::input::{get_keystroke, prompt_for_input};
+use crate::input::get_keystroke;
 use crate::keycodes::KS_MODIFIER;
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::log::{LOGLVL_DBG, LOGLVL_INF};

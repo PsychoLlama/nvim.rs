@@ -34,6 +34,7 @@ use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::ffi::CString;
 
+use crate::ascii::CTRL_G;
 use crate::buffer::{buf_is_quickfix, buf_spname_owned};
 use crate::drawscreen::state::MUST_REDRAW;
 use crate::drawscreen::{UPD_CLEAR, UPD_VALID, screen_resize};
@@ -50,7 +51,6 @@ use crate::ex_docmd::tags::ex_findpat;
 use crate::file_search::FileNameOpts;
 use crate::getchar::state::GOT_INT;
 use crate::highlight_group::HLF_T;
-use crate::keycodes::CTRL_G;
 use crate::message::IOSIZE;
 use crate::message::state::{MSG_COL, MSG_SCROLL};
 use crate::message::{E_INVARG, E_INVARG2, E_INVCMD, E_INVRANGE, E_SCREENMODE};
@@ -513,9 +513,7 @@ fn wincmd(excmd: &mut ExArg) {
     // `CTRL-W g` takes a second character.
     let mut xchar = Key::NUL;
     let mut at;
-    if excmd.line.byte_at(excmd.line.arg) == b'g'
-        || c_int::from(excmd.line.byte_at(excmd.line.arg)) == CTRL_G
-    {
+    if excmd.line.byte_at(excmd.line.arg) == b'g' || excmd.line.byte_at(excmd.line.arg) == CTRL_G {
         let second = excmd.line.byte_at(excmd.line.arg + 1);
         if second == 0 {
             err(E_INVARG);

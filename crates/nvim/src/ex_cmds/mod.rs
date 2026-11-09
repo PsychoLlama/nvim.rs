@@ -39,7 +39,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::option::set_option_direct;
 use crate::os::cshim::gettext;
 
-use crate::ascii::{CAR, ESC, NL};
+use crate::ascii::{CAR, NL};
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::fire_autocmds;
 use crate::charset::{skip, vim_is_ident_char};
@@ -301,7 +301,7 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
     }
 
     QUIT_MORE.set(false);
-    let nr = prompt_for_input(None, 0, false, None);
+    let nr = prompt_for_input(None, 0, None);
     say::starthere();
     if nr <= 0 || nr > list_len(Some(&list)) {
         return;

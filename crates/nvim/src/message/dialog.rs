@@ -14,11 +14,11 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::guard::{Allow, Suppress};
-use crate::keycodes::{CTRL_C, ModMask};
+use crate::input::prompt_for_key;
+use crate::keycodes::ModMask;
 use crate::mbyte::{char_at, cluster_len};
-use crate::types::Key;
+use crate::types::{Key, KeyKind};
 use core::ffi::{CStr, c_int};
 
 /// How many buttons can carry a hotkey. Buttons past this share the default.
@@ -73,41 +73,40 @@ pub fn do_dialog(
         // Get a typed character directly from the user. The prompt is a
         // copy: a dialog the typing reaches renders its own buttons.
         let prompt = CONFIRM_BUTTONS.with(Clone::clone).unwrap_or_default();
-        // SAFETY: a main-thread prompt, with no mouse flag.
-        let mut c = prompt_for_input(Some(prompt.as_cstr()), HLF_M, true, None);
-        match c {
-            _ if c == c_int::from(CAR) || c == NUL => {
+        let key = prompt_for_key(prompt.as_cstr(), HLF_M);
+        match key.kind() {
+            KeyKind::Char(Key::CAR | Key::NUL) => {
                 // User accepts the default option.
                 retval = dfltbutton;
                 break;
             }
-            _ if c == CTRL_C || c == c_int::from(ESC) => {
+            KeyKind::Char(Key::CTRL_C | Key::ESC) => {
                 // User aborts/cancels.
                 retval = 0;
                 break;
             }
-            _ if c < 0 => {
-                // Special keys are ignored here.
-                MSG_DIDANY.set(false);
-                MSG_DIDOUT.set(false);
-            }
-            _ if c == c_int::from(b':') && ex_cmd => {
+            KeyKind::Char(c) if c.is(':') && ex_cmd => {
                 retval = dfltbutton;
-                ins_char_typebuf(Key::ascii(b':'), ModMask::NONE, false);
+                ins_char_typebuf(c, ModMask::NONE, false);
                 break;
             }
-            _ => {
+            KeyKind::Char(c) => {
                 // Could be a hotkey. Lowercase it, as the ones in
                 // "hotkeys" are, and count how many buttons precede it. A
                 // NUL hotkey (a button list ending in a separator) ends the
                 // list, as the terminator of upstream's string did.
-                c = mb_tolower(c);
+                let c = mb_tolower(c.code());
                 let listed = hotkeys.iter().take_while(|&&hotkey| hotkey != 0);
                 if let Some(at) = listed.clone().position(|&hotkey| hotkey == c) {
                     retval = c_int::try_from(at).map_or(c_int::MAX, |at| at + 1);
                     break;
                 }
                 // No hotkey match, so keep waiting.
+                MSG_DIDANY.set(false);
+                MSG_DIDOUT.set(false);
+            }
+            _ => {
+                // Special keys are ignored here.
                 MSG_DIDANY.set(false);
                 MSG_DIDOUT.set(false);
             }

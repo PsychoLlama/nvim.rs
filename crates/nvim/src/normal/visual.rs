@@ -56,7 +56,6 @@ use crate::textobject::{
 use crate::types::{ColNr, LineNr, Pos};
 use core::ffi::c_int;
 
-use crate::keycodes::CTRL_V;
 use crate::memory::XString;
 use crate::r#move::{update_curswant_force, update_topline, validate_virtcol};
 
@@ -87,7 +86,7 @@ impl VisualMode {
     /// Linewise, entered with `V`.
     pub(crate) const LINE: Self = Self(Key::ascii(b'V').code());
     /// Blockwise, entered with CTRL-V.
-    pub(crate) const BLOCK: Self = Self(CTRL_V);
+    pub(crate) const BLOCK: Self = Self(Key::CTRL_V.code());
     /// The `NUL` that `RESEL_V_ISUAL_MODE` and `V_ISUAL_MODE_ORIG` use to mean
     /// "nothing remembered".
     pub(crate) const NONE: Self = Self(NUL);

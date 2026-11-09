@@ -16,6 +16,7 @@
 )]
 
 use super::*;
+use crate::ascii::CTRL_V;
 use crate::ascii::{TAB, ascii_isspace};
 use crate::autocmd::set_context_in_autocmd;
 use crate::cmdexpand::defs::ExpandContext;
@@ -24,7 +25,6 @@ use crate::eval::set_context_for_expression;
 use crate::ex_docmd::{excmd_get_argt, is_user_cmd, skip_cmd_arg_at, skip_range};
 use crate::getchar::beep_flush;
 use crate::highlight_group::set_context_in_highlight_cmd;
-use crate::keycodes::CTRL_V;
 use crate::mapping::set_context_in_map_cmd;
 use crate::menu::set_context_in_menu_cmd;
 use crate::option::defs::OptionSetFlags;
@@ -522,7 +522,7 @@ pub(crate) fn set_one_cmd_context(expand: &mut Expand, text: &CStr, buff: usize)
             p += 2;
         }
         while byte(t, p) != 0 {
-            if c_int::from(byte(t, p)) == CTRL_V {
+            if byte(t, p) == CTRL_V {
                 if byte(t, p + 1) != 0 {
                     p += 1;
                 }

@@ -23,14 +23,10 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::{CTRL_A, CTRL_X};
 use crate::message::internal_error;
 use crate::ops::OpType;
 use crate::types::Key;
-
-/// CTRL-A and CTRL-X as the single bytes the table stores them as (the
-/// [`Key`] constants of the same name are the keys).
-const CTRL_A: u8 = b'A' ^ 0x40;
-const CTRL_X: u8 = b'X' ^ 0x40;
 
 /// The operator always works on whole lines, whatever the motion said.
 const OPF_LINES: u8 = 1;

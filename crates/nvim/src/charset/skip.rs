@@ -24,7 +24,7 @@
 )]
 
 use super::{is_bdigit, is_digit, is_white, is_xdigit};
-use crate::keycodes::CTRL_V;
+use crate::ascii::CTRL_V;
 
 /// How many leading bytes of `s` are spaces or tabs.
 ///
@@ -51,7 +51,7 @@ pub fn to_white_esc(s: &[u8]) -> usize {
         if is_white(byte) {
             break;
         }
-        let escapes = (byte == b'\\' || i32::from(byte) == CTRL_V) && at + 1 < s.len();
+        let escapes = (byte == b'\\' || byte == CTRL_V) && at + 1 < s.len();
         at += 1 + usize::from(escapes);
     }
     at

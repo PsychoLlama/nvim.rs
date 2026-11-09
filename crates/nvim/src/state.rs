@@ -20,7 +20,7 @@
 pub(crate) mod mode;
 use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
-use crate::keycodes::{CTRL_V, SpecialKey, get_special_key_name};
+use crate::keycodes::{SpecialKey, get_special_key_name};
 use crate::memory::XString;
 use crate::types::{Key, SaveVEvent};
 use crate::winlayer::Buf;
@@ -284,7 +284,7 @@ fn ve_flags_allow(
 ) -> bool {
     let has = |flag: OptVeFlags| flags & flag != 0;
     flags == OPT_VE_FLAG_ALL
-        || has(OPT_VE_FLAG_BLOCK) && visual_active && visual_mode == CTRL_V
+        || has(OPT_VE_FLAG_BLOCK) && visual_active && visual_mode == Key::CTRL_V.code()
         || has(OPT_VE_FLAG_INSERT) && state & MODE_INSERT != 0
 }
 
@@ -651,7 +651,7 @@ mod tests {
         out.push(b'n');
         out.push_key(c_int::from(b'o'));
         // `CTRL-V` is 22, and `MOTION_FORCE` may hold it.
-        out.push_key(CTRL_V);
+        out.push_key(Key::CTRL_V.code());
         assert_eq!(out.name, [110, 111, 22, 0]);
     }
 
@@ -702,15 +702,25 @@ mod tests {
         let all_onemore = OPT_VE_FLAG_ALL | OPT_VE_FLAG_ONEMORE;
         assert!(ve_flags_allow(OPT_VE_FLAG_ALL, MODE_NORMAL, false, 0));
         assert!(!ve_flags_allow(all_onemore, MODE_NORMAL, false, 0));
-        assert!(!ve_flags_allow(all_onemore, MODE_NORMAL, true, CTRL_V - 1));
-        assert!(ve_flags_allow(all_onemore, MODE_NORMAL, true, CTRL_V));
+        assert!(!ve_flags_allow(
+            all_onemore,
+            MODE_NORMAL,
+            true,
+            Key::CTRL_V.code() - 1
+        ));
+        assert!(ve_flags_allow(
+            all_onemore,
+            MODE_NORMAL,
+            true,
+            Key::CTRL_V.code()
+        ));
         assert!(ve_flags_allow(all_onemore, MODE_INSERT, false, 0));
         // `onemore` alone shares no bit with any of the three.
         assert!(!ve_flags_allow(
             OPT_VE_FLAG_ONEMORE,
             MODE_INSERT,
             true,
-            CTRL_V
+            Key::CTRL_V.code()
         ));
     }
 
@@ -719,7 +729,12 @@ mod tests {
     fn ve_block_and_insert_need_their_mode() {
         assert!(!ve_flags_allow(OPT_VE_FLAG_BLOCK, MODE_NORMAL, false, 0));
         assert!(!ve_flags_allow(OPT_VE_FLAG_BLOCK, MODE_NORMAL, true, 0));
-        assert!(ve_flags_allow(OPT_VE_FLAG_BLOCK, MODE_NORMAL, true, CTRL_V));
+        assert!(ve_flags_allow(
+            OPT_VE_FLAG_BLOCK,
+            MODE_NORMAL,
+            true,
+            Key::CTRL_V.code()
+        ));
         assert!(!ve_flags_allow(OPT_VE_FLAG_INSERT, MODE_NORMAL, false, 0));
         assert!(ve_flags_allow(OPT_VE_FLAG_INSERT, MODE_INSERT, false, 0));
     }
@@ -817,7 +832,7 @@ mod tests {
         let blockwise = ModeInputs {
             visual_active: true,
             visual_select: true,
-            visual_mode: CTRL_V,
+            visual_mode: Key::CTRL_V.code(),
             ..quiet(MODE_NORMAL)
         };
         assert_eq!(mode_name(&blockwise), [19, 0, 0, 0]);

@@ -18,7 +18,6 @@ use crate::eval::typval::{
     NumBuf, dict_get_bool, tv_check_for_list_arg, tv_check_for_opt_dict_arg, tv_list_alloc,
     tv_list_alloc_ret,
 };
-use crate::keycodes::CTRL_V;
 use crate::mbyte::{cluster_len, head_off};
 use crate::memline::{Lines, ml_get_buf_len};
 use crate::memory::ThinCString;
@@ -37,6 +36,7 @@ use crate::types::Handle;
 use crate::types::{ColNr, Key, LIST_LEN_MAY_KNOW, LineNr, Pos, TypVal, VAR_DICT, VarNumber};
 use core::ffi::{CStr, c_int};
 
+use crate::ascii::CTRL_V;
 use crate::winlayer::{Buf, Win};
 
 /// A cleared operator argument, which only the blockwise path fills in.
@@ -262,7 +262,7 @@ fn parse_type(spec: &CStr) -> Result<(MotionType, c_int), Unresolved> {
     match spec.to_bytes() {
         b"v" => Ok((MotionType::CharWise, 0)),
         b"V" => Ok((MotionType::LineWise, 0)),
-        [c, rest @ ..] if c_int::from(*c) == CTRL_V => {
+        [CTRL_V, rest @ ..] => {
             // A bare CTRL-V means "as wide as the corners"; a width
             // must be a positive number and nothing else.
             if rest.is_empty() {

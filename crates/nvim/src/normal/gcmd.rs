@@ -47,19 +47,12 @@ use crate::undo::undo_time;
 use crate::window::{goto_tabpage, goto_tabpage_lastused};
 use core::ffi::c_int;
 
+use crate::ascii::{CTRL_A, CTRL_G, CTRL_H, CTRL_RSB, CTRL_X, TAB};
 use crate::r#move::{
     WinValid, adjust_skipcol, sms_marker_overlap, update_curswant_force, validate_cheight,
     validate_virtcol, win_col_off2,
 };
 
-// The non-printing bytes the tree dispatches on, spelled as the bytes a
-// pattern can name.
-const CTRL_A: u8 = 1;
-const CTRL_G: u8 = 7;
-const CTRL_H: u8 = 8;
-const HTAB: u8 = 9;
-const CTRL_X: u8 = 24;
-const CTRL_RSB: u8 = 29;
 /// `£`, which is `g#` on a keyboard that has it.
 const POUND_BYTE: u8 = 0xa3;
 
@@ -444,7 +437,7 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
             }
         }
         // `g<Tab>`: the tab page used before this one.
-        Some(HTAB) => {
+        Some(TAB) => {
             if !check_clear_op(op) && !goto_tabpage_lastused() {
                 clear_op_beep(op);
             }

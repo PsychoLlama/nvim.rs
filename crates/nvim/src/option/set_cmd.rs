@@ -27,8 +27,8 @@
 use crate::charset::Str2NrBases;
 use crate::charset::{str2nr_in, trans_characters_in};
 use crate::cstr;
-use crate::keycodes::{CTRL_V, SpecialKey, special_key_at};
 use crate::keycodes::{FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY};
+use crate::keycodes::{SpecialKey, special_key_at};
 use crate::memory::ThinCString;
 use crate::option::defs::{OPT_VAL_TYPE_BOOLEAN, OPT_VAL_TYPE_NUMBER};
 use crate::optionstr::OptString;
@@ -62,6 +62,7 @@ use super::{
     set_options_default, showoneopt, showoptions, slot_value, stropt_get_newval,
     unset_option_local_value,
 };
+use crate::ascii::CTRL_V;
 
 /// The messages the parse reports. They go back to [`do_set`] rather than
 /// being emitted here, so that the offending argument can be appended.
@@ -557,7 +558,7 @@ fn skip_to_white_escaped(arg: &[u8], mut p: usize) -> usize {
         if byte == 0 || ascii_iswhite(c_int::from(byte)) {
             return p;
         }
-        let escapes = (byte == b'\\' || c_int::from(byte) == CTRL_V) && at(arg, p + 1) != 0;
+        let escapes = (byte == b'\\' || byte == CTRL_V) && at(arg, p + 1) != 0;
         p += 1 + usize::from(escapes);
     }
 }

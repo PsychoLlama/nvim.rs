@@ -20,6 +20,7 @@
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::ascii::CTRL_C;
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::state::DID_CURSORHOLD;
 use crate::autocmd::{fire_autocmds, trigger_cursorhold};
@@ -32,12 +33,12 @@ use crate::event_queue::{self, ChildQueue, QueueId, queue_in};
 use crate::getchar::state::{CTRL_C_INTERRUPTS, GOT_INT, MAPPED_CTRL_C, TYPEBUF_WAS_FILLED};
 use crate::getchar::{before_blocking, typebuf_changed};
 use crate::global_cell::GlobalCell;
-use crate::keycodes::{
-    CTRL_C, K_SPECIAL, KE_EVENT, KE_FILLER, KE_LEFTMOUSE, KE_MIDDLEMOUSE, KE_MOUSEDOWN,
-    KE_MOUSEMOVE, KE_MOUSERIGHT, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1MOUSE, KE_X2MOUSE,
-    KE_X2RELEASE, KS_EXTRA, KS_MODIFIER, KS_SPECIAL,
-};
 use crate::keycodes::{FSK_KEYCODE, KeyExtra};
+use crate::keycodes::{
+    K_SPECIAL, KE_EVENT, KE_FILLER, KE_LEFTMOUSE, KE_MIDDLEMOUSE, KE_MOUSEDOWN, KE_MOUSEMOVE,
+    KE_MOUSERIGHT, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1MOUSE, KE_X2MOUSE, KE_X2RELEASE, KS_EXTRA,
+    KS_MODIFIER, KS_SPECIAL,
+};
 use crate::keycodes::{ModMask, special_key_at, special_key_bytes};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::mouse::state::{MOUSE_COL, MOUSE_GRID, MOUSE_ROW};
@@ -775,14 +776,14 @@ fn process_ctrl_c() {
     let Some(at) = INPUT_BUFFER.with_mut(|input| {
         let unread = &mut input[read..write];
         let at = (0..unread.len()).rev().find(|&i| {
-            unread[i] == CTRL_C as u8
+            unread[i] == CTRL_C
                 || (unread[i] == b'C'
                     && i >= 3
                     && unread[i - 3] == K_SPECIAL
                     && unread[i - 2] == KS_MODIFIER
                     && unread[i - 1] == ModMask::CTRL.bits() as u8)
         })?;
-        unread[at] = CTRL_C as u8;
+        unread[at] = CTRL_C;
         Some(at)
     }) else {
         return;

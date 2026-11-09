@@ -19,6 +19,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::CTRL_H;
 use crate::ascii::DEL;
 use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
 use crate::message_fmt::msg_bytes_opt;
@@ -47,8 +48,6 @@ const MODE_SET: TermModeState = 1;
 const MODE_RESET: TermModeState = 2;
 const MODE_PERMANENTLY_SET: TermModeState = 3;
 const MODE_PERMANENTLY_RESET: TermModeState = 4;
-
-const CTRL_H: u8 = 8;
 
 /// Ask the terminal whether it has `mode` (DECRQM).
 pub(crate) fn tui_request_term_mode(tui: &mut TUIData, mode: TermMode) {

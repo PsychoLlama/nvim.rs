@@ -66,7 +66,7 @@ pub fn wait_return(redraw: c_int) {
     }
 
     if ui_has(UI_MESSAGES) {
-        prompt_for_input(Some(c"Press any key to continue"), HLF_M, true, None);
+        crate::input::prompt_for_key(c"Press any key to continue", HLF_M);
         return;
     }
 

@@ -418,7 +418,7 @@ fn choose_swapfile(fname: &CStr) -> Result<XString, MemlineError> {
             msg_putchar('\n' as c_int);
         }
         let question = gettext(c"Enter number of swap file to use (0 to quit): ");
-        let nr = prompt_for_input(Some(question), 0, false, None);
+        let nr = prompt_for_input(Some(question), 0, None);
         if nr < 1 || nr > count {
             return Err(MemlineError::NoneChosen);
         }

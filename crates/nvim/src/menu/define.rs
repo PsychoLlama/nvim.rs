@@ -32,11 +32,7 @@ use crate::charset::getdigits_int_at;
 use crate::cstr;
 use crate::keycodes::replace_termcodes;
 
-/// The control bytes `:amenu` wraps a mode's right-hand side in.
-const CTRL_C: u8 = 0x03;
-const CTRL_G: u8 = 0x07;
-const CTRL_O: u8 = 0x0f;
-const CTRL_BSL: u8 = 0x1c;
+use crate::ascii::{CTRL_BSL, CTRL_C, CTRL_G, CTRL_O};
 use crate::mbyte::cluster_len;
 use crate::menu::SYS_MENU;
 use crate::option::vars::p_cpo;

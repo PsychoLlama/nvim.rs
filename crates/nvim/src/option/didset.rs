@@ -24,7 +24,7 @@
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{fire_autocmds, fire_autocmds_for};
 use crate::drawscreen::NO_SCREEN;
-use crate::keycodes::{CTRL_C, SpecialKey};
+use crate::keycodes::SpecialKey;
 use crate::narrow::number_as_int;
 use crate::types::Key;
 use crate::winlayer::{TabPage, current_topframe};
@@ -612,7 +612,7 @@ pub(crate) fn did_set_updatecount(args: &mut OptSet) -> Result<(), OptError> {
 pub(crate) fn did_set_wildchar(args: &mut OptSet) -> Result<(), OptError> {
     let key = option_key(Frame::read(args).varp.number_var().get());
     let refused = [
-        Key::from_code(CTRL_C),
+        Key::CTRL_C,
         Key::ascii(b'\n'),
         Key::ascii(b'\r'),
         Key::from(SpecialKey::Kenter),

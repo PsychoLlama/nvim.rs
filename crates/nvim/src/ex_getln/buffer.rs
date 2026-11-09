@@ -21,9 +21,9 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::ascii::{CTRL_N, CTRL_V};
 use crate::cstr;
 use crate::guard::Lock;
-use crate::keycodes::{CTRL_BSL, CTRL_C, CTRL_L, CTRL_V};
 use crate::memory::XString;
 use core::ffi::CStr;
 
@@ -388,25 +388,24 @@ pub fn cmdline_paste_str(s: &CStr, literally: bool) {
     }
     let mut at = 0;
     while at < text.len() {
-        let cv = ::core::ffi::c_int::from(text[at]);
-        if cv == CTRL_V && at + 1 < text.len() {
+        let quoted = text[at] == CTRL_V;
+        if quoted && at + 1 < text.len() {
             at += 1;
         }
         let info = c_char_info(text, at);
-        let c = info.value;
+        // The character read from the text, typed.
+        let key = Key::from_code(info.value);
         at += usize::try_from(info.len).unwrap_or(1).max(1);
-        if cv == CTRL_V
-            || c == c_int::from(ESC)
-            || c == CTRL_C
-            || c == c_int::from(CAR)
-            || c == c_int::from(NL)
-            || c == CTRL_L
-            || (c == CTRL_BSL && cstr::byte_at(text, at) == 0x0e)
+        if quoted
+            || matches!(
+                key,
+                Key::ESC | Key::CTRL_C | Key::CAR | Key::NL | Key::CTRL_L
+            )
+            || (key == Key::CTRL_BSL && cstr::byte_at(text, at) == CTRL_N)
         {
             stuff_readbuf_char(Key::CTRL_V);
         }
-        // The character read from the text, typed.
-        stuff_readbuf_char(Key::from_code(c));
+        stuff_readbuf_char(key);
     }
 }
 

@@ -345,8 +345,7 @@ impl ExArg<'_> {
                         *errormsg = Some(ex_msg(c"E493: Backwards range given"));
                         return Err(Refused);
                     }
-                    if ask_yesno(gettext(c"Backwards range given, OK to swap")) != c_int::from(b'y')
-                    {
+                    if !ask_yesno(gettext(c"Backwards range given, OK to swap")) {
                         return Err(Refused);
                     }
                 }

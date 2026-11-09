@@ -13,7 +13,6 @@ use crate::api::extmark::nvim_create_namespace;
 use crate::api::private::helpers::TryState;
 use crate::api::private::helpers::{try_enter, try_leave};
 use crate::api::vim::nvim_create_buf;
-use crate::ascii::{CAR, ESC, NL};
 use crate::ascii::{ascii_isspace, ascii_iswhite};
 use crate::autocmd::defs::{AcoSave, AutoEvent};
 use crate::autocmd::{

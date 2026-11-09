@@ -27,7 +27,7 @@
 use crate::cstr;
 use crate::env::home_to_tilde;
 use crate::global_cell::field;
-use crate::keycodes::{CTRL_V, ModMask};
+use crate::keycodes::ModMask;
 use crate::mbyte::unescape_at;
 use crate::narrow::number_as_int;
 use crate::option::defs::{OPT_VAL_TYPE_BOOLEAN, OPT_VAL_TYPE_NUMBER};
@@ -70,6 +70,7 @@ use super::{
     get_varp_scope, option_has_type, option_is_global_local, option_is_global_only,
     option_is_window_local, option_parts, option_var, optval_is_default, slot_holds, slot_value,
 };
+use crate::ascii::CTRL_V;
 
 /// The column width one option gets in the multi-column listing, and the
 /// gap kept between columns.
@@ -523,7 +524,7 @@ pub(crate) fn escaped_set_value(value: &[u8]) -> Vec<u8> {
             if ascii_iswhite(code) || c == b'"' || c == b'\\' {
                 out.push(b'\\');
             } else if !(b' '..=b'~').contains(&c) || c == b'|' {
-                out.push(u8::try_from(CTRL_V).expect("CTRL-V is a byte"));
+                out.push(CTRL_V);
             }
             out.push(c);
         }

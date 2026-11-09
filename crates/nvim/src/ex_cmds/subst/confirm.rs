@@ -20,19 +20,17 @@
 
 use super::SUB_FLAGS;
 use super::exec::Sub;
-use crate::ascii::NUL;
 use crate::cmdexpand::defs::ExpandContext;
 use crate::drawscreen::{
     UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
 };
+use crate::ex_cmds::print_line_no_prefix;
 use crate::ex_cmds::say;
-use crate::ex_cmds::{ESC, print_line_no_prefix};
 use crate::ex_docmd::state::EX_NORMAL_BUSY;
 use crate::ex_getln::{getcmdline_prompt_text, gotocmdline};
 use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_R;
-use crate::input::prompt_for_input;
-use crate::keycodes::{CTRL_C, CTRL_E, CTRL_Y};
+use crate::input::prompt_for_key;
 use crate::memline::{Lines, ml_replace_buf_text};
 use crate::memory::XString;
 use crate::message::IOSIZE;
@@ -49,6 +47,7 @@ use crate::os::cshim::gettext;
 use crate::plines::getvcol;
 use crate::search::state::{HIGHLIGHT_MATCH, SEARCH_MATCH_ENDCOL, SEARCH_MATCH_LINES};
 use crate::state::mode::{EXMODE_ACTIVE, STATE};
+use crate::types::Key;
 use crate::types::{Callback, ColNr};
 use crate::ui::state::UI_MESSAGES;
 use crate::ui::ui_has;
@@ -79,8 +78,16 @@ fn cpo_no_undo_sync() -> bool {
     cpo_has(CpoFlag::UNDO)
 }
 
+// The answers the confirm prompt takes, beside CTRL-E/CTRL-Y (scroll), ESC
+// and CTRL-C (quit).
+const REPLACE_THIS: Key = Key::ascii(b'y');
+const SKIP_THIS: Key = Key::ascii(b'n');
+const REPLACE_REST: Key = Key::ascii(b'a');
+const STOP: Key = Key::ascii(b'q');
+const REPLACE_AND_STOP: Key = Key::ascii(b'l');
+
 /// Ex mode's prompt: print the line, then a row of `^` under the match.
-fn prompt_exmode(st: &Sub) -> c_int {
+fn prompt_exmode(st: &Sub) -> Key {
     print_line_no_prefix(
         st.lnum,
         SUB_FLAGS.with(|flags| flags.do_number),
@@ -125,19 +132,21 @@ fn prompt_exmode(st: &Sub) -> c_int {
     }
     // getcmdline_prompt() answers NULL when there is no command line to
     // return.
-    let typed = resp.map_or(NUL, |resp| c_int::from(resp.first().copied().unwrap_or(0)));
+    let typed = resp.map_or(Key::NUL, |resp| {
+        Key::byte(resp.first().copied().unwrap_or(0))
+    });
 
     // When ":normal" runs out of characters we get an empty line.  Use "q" to
     // get out of the loop.
-    if EX_NORMAL_BUSY.get() != 0 && typed == NUL {
-        'q' as c_int
+    if EX_NORMAL_BUSY.get() != 0 && typed.is_nul() {
+        STOP
     } else {
         typed
     }
 }
 
 /// The screen prompt: highlight the match, ask, then put everything back.
-fn prompt_visual(st: &Sub) -> c_int {
+fn prompt_visual(st: &Sub) -> Key {
     let mut orig_line: Option<Vec<u8>> = None;
     let mut len_change = 0 as c_int;
     let save_p_lz = p_lz();
@@ -188,7 +197,7 @@ fn prompt_visual(st: &Sub) -> c_int {
     // Cut where upstream's `IObuff` cut it.
     let prompt = crate::formatted!(IOSIZE as usize, fmt.to_bytes(), replacement);
     let prompt = XString::from_bytes(&prompt);
-    let typed = prompt_for_input(Some(prompt.as_cstr()), HLF_R, true, None);
+    let typed = prompt_for_key(prompt.as_cstr(), HLF_R);
     HIGHLIGHT_MATCH.set(false);
 
     MSG_DIDOUT.set(false); // don't scroll up
@@ -205,7 +214,7 @@ fn prompt_visual(st: &Sub) -> c_int {
 
 /// Ask about this match, looping over the answers that only scroll.
 pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
-    let mut typed = 0 as c_int;
+    let mut typed = Key::NUL;
     let save_state = STATE.get();
     Win::current().w_cursor.col = st.regmatch.startpos[0].col;
     if Win::current().w_onebuf_opt.wo_crb != 0 {
@@ -225,26 +234,26 @@ pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
         };
 
         NEED_WAIT_RETURN.set(false); // no hit-return prompt
-        if typed == 'q' as c_int || typed == c_int::from(ESC) || typed == CTRL_C {
+        if typed == STOP || typed == Key::ESC || typed == Key::CTRL_C {
             st.got_quit = true;
             break;
         }
-        if typed == 'n' as c_int || typed == 'y' as c_int {
+        if typed == SKIP_THIS || typed == REPLACE_THIS {
             break;
         }
-        if typed == 'l' as c_int {
+        if typed == REPLACE_AND_STOP {
             // Last: replace and then stop.
             SUB_FLAGS.with_mut(|flags| flags.do_all = false);
             st.line2 = st.lnum;
             break;
         }
-        if typed == 'a' as c_int {
+        if typed == REPLACE_REST {
             SUB_FLAGS.with_mut(|flags| flags.do_ask = false);
             break;
         }
-        if typed == CTRL_E {
+        if typed == Key::CTRL_E {
             scrollup_clamp();
-        } else if typed == CTRL_Y {
+        } else if typed == Key::CTRL_Y {
             scrolldown_clamp();
         }
     }
@@ -252,7 +261,7 @@ pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
     setmouse();
     drop(no_sync);
 
-    if typed == 'n' as c_int {
+    if typed == SKIP_THIS {
         // For a multi-line match, put matchcol at the NUL at the end of the
         // line and set nmatch to one, so that we continue looking for a match
         // on the next line.  Avoids that ":%s/\nB\@=//gc" and ":%s/\n/,\r/gc"

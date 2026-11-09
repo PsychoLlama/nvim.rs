@@ -60,7 +60,6 @@ use crate::ex_eval::{
 use crate::getchar::openscript;
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
-use crate::keycodes::CTRL_V;
 use crate::lua::executor::{nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
 use crate::mbyte::cluster_len;
 use crate::mbyte::{CONV_NONE, VimConv};

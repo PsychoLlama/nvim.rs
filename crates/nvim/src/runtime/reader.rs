@@ -18,6 +18,7 @@
 )]
 
 use super::*;
+use crate::ascii::CTRL_V;
 use crate::charset::skip;
 use crate::cstr;
 use crate::ex_docmd::{DebugName, DebugPos};
@@ -327,11 +328,7 @@ fn read_chunk(file: &mut BufReader<File>, line: &mut Vec<u8>) -> Option<bool> {
 /// which is faster than counting the run and says the same thing.
 fn escaped_newline(line: &[u8]) -> bool {
     let body = &line[..line.len() - 1];
-    let run = body
-        .iter()
-        .rev()
-        .take_while(|&&b| c_int::from(b) == CTRL_V)
-        .count();
+    let run = body.iter().rev().take_while(|&&b| b == CTRL_V).count();
     run % 2 == 1
 }
 

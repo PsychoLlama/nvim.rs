@@ -108,7 +108,7 @@ fn check_mtime(buffer: Buf, file_info: &FileInfo) -> bool {
         translate(c"WARNING: The file has been changed since reading it!!!"),
         HLF_E,
     );
-    if ask_yesno(translate(c"Do you really want to write to it")) == 'n' as c_int {
+    if !ask_yesno(translate(c"Do you really want to write to it")) {
         return false;
     }
     MSG_SCROLL.set(0); // always overwrite the file message now

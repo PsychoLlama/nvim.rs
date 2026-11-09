@@ -27,8 +27,8 @@ use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use super::*;
+use crate::ascii::CTRL_V;
 use crate::cstr;
-use crate::keycodes::CTRL_V;
 use crate::mbyte::cluster_len;
 
 /// The byte at `i`, with a NUL for anything past the end -- how C reads a
@@ -46,7 +46,7 @@ pub(crate) fn take_component(name: &[u8]) -> (Vec<u8>, &[u8]) {
     let mut component = Vec::with_capacity(name.len());
     let mut i = 0;
     while i < name.len() && name[i] != b'.' {
-        if name[i] == b'\\' || c_int::from(name[i]) == CTRL_V {
+        if name[i] == b'\\' || name[i] == CTRL_V {
             i += 1;
             if i == name.len() {
                 break;

@@ -109,6 +109,30 @@ pub(crate) const FF: u8 = 0x0c;
 /// The delete byte, which some terminals send for backspace.
 pub(crate) const DEL: u8 = 0x7f;
 
+// The control bytes by the letter that types them, upstream's `Ctrl_*`, for
+// readers of bytes (text, option values, `:menu` and mapping strings, the
+// typeahead's raw input). A key compares against `Key::CTRL_*`.
+/// CTRL-A.
+pub(crate) const CTRL_A: u8 = 0x01;
+/// CTRL-C.
+pub(crate) const CTRL_C: u8 = 0x03;
+/// CTRL-G.
+pub(crate) const CTRL_G: u8 = 0x07;
+/// CTRL-H.
+pub(crate) const CTRL_H: u8 = 0x08;
+/// CTRL-N.
+pub(crate) const CTRL_N: u8 = 0x0e;
+/// CTRL-O.
+pub(crate) const CTRL_O: u8 = 0x0f;
+/// CTRL-V, which quotes the next character.
+pub(crate) const CTRL_V: u8 = 0x16;
+/// CTRL-X.
+pub(crate) const CTRL_X: u8 = 0x18;
+/// CTRL-\.
+pub(crate) const CTRL_BSL: u8 = 0x1c;
+/// CTRL-].
+pub(crate) const CTRL_RSB: u8 = 0x1d;
+
 #[cfg(test)]
 mod tests {
     use super::*;

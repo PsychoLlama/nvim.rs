@@ -28,46 +28,6 @@ use super::{extra, termcap};
 /// The ASCII characters the `<>` notation has names for.
 pub const CSI: c_int = 0x9b;
 
-/// The C0 control characters, named after the key that types them
-/// (upstream's `ascii_defs.h`). Several have a second name above: `CTRL_H`
-/// is `BS`, `CTRL_I` is `TAB`, `CTRL_J` is `NL`, `CTRL_M` is `CAR`, and
-/// CTRL-`[` is `ESC` and has no `Ctrl_` spelling at all. `CTRL_V` is the
-/// one that quotes the next character. The four non-letters are named after
-/// the character rather than the key: `@`, `\`, `]` and `^`.
-pub const CTRL_AT: c_int = 0;
-pub const CTRL_A: c_int = 1;
-pub const CTRL_B: c_int = 2;
-pub const CTRL_C: c_int = 3;
-pub const CTRL_D: c_int = 4;
-pub const CTRL_E: c_int = 5;
-pub const CTRL_F: c_int = 6;
-pub const CTRL_G: c_int = 7;
-pub const CTRL_H: c_int = 8;
-pub const CTRL_I: c_int = 9;
-pub const CTRL_J: c_int = 10;
-pub const CTRL_K: c_int = 11;
-pub const CTRL_L: c_int = 12;
-pub const CTRL_M: c_int = 13;
-pub const CTRL_N: c_int = 14;
-pub const CTRL_O: c_int = 15;
-pub const CTRL_P: c_int = 16;
-pub const CTRL_Q: c_int = 17;
-pub const CTRL_R: c_int = 18;
-pub const CTRL_S: c_int = 19;
-pub const CTRL_T: c_int = 20;
-pub const CTRL_U: c_int = 21;
-pub const CTRL_V: c_int = 22;
-pub const CTRL_W: c_int = 23;
-pub const CTRL_X: c_int = 24;
-pub const CTRL_Y: c_int = 25;
-pub const CTRL_Z: c_int = 26;
-/// `CTRL-[`: the escape key.
-pub const CTRL_LSB: c_int = 27;
-pub const CTRL_BSL: c_int = 28;
-pub const CTRL_RSB: c_int = 29;
-pub const CTRL_HAT: c_int = 30;
-pub const CTRL_: c_int = 31;
-
 /// The byte that introduces a special key in a byte stream. A literal 0x80
 /// in text is escaped as `K_SPECIAL KS_SPECIAL KE_FILLER`.
 pub const K_SPECIAL: u8 = 0x80;

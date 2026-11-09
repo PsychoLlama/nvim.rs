@@ -15,7 +15,6 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::ascii::ESC;
 use crate::cmdexpand::defs::ExpandContext;
 use crate::drawscreen::state::CMDLINE_ROW;
 use crate::event_queue::ChildQueue;
@@ -26,8 +25,9 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{Keys, Suppress};
 use crate::highlight_group::HLF_R;
 use crate::keycodes::ModMask;
-use crate::keycodes::{CTRL_C, K_SPECIAL, KS_MODIFIER, SpecialKey, key_unescape};
+use crate::keycodes::{K_SPECIAL, KS_MODIFIER, SpecialKey, key_unescape};
 use crate::mbyte::{char_at, utf8len_tab};
+use crate::memory::XString;
 use crate::message::IOSIZE;
 use crate::message::state::{KEEP_MSG, KEEP_MSG_HL_ID, MSG_ROW, MSG_SCROLLED, NEED_WAIT_RETURN};
 use crate::message::{msg_putchar, set_keep_msg};
@@ -47,9 +47,8 @@ const CALLBACK_NONE: Callback = Callback::None;
 
 /// Ask for a `y` or an `n`, with `str` (already translated) as the question;
 /// it is always followed by `" (y/n)?"` and repeated until one of the two —
-/// or `CTRL-C`, which answers `n` — is typed.
-///
-pub(crate) fn ask_yesno(question: &CStr) -> c_int {
+/// or `CTRL-C`, which answers `n` — is typed. Answers whether it was `y`.
+pub(crate) fn ask_yesno(question: &CStr) -> bool {
     let save_state = STATE.get();
     let no_prompt = Suppress::wait_return();
 
@@ -59,23 +58,28 @@ pub(crate) fn ask_yesno(question: &CStr) -> c_int {
     let fmt = gettext(c"%s (y/n)?");
     let prompt = cstr::owned(&formatted!(IOSIZE as usize, fmt.to_bytes(), question));
 
-    let mut r = c_int::from(b' ');
-    while r != c_int::from(b'y') && r != c_int::from(b'n') {
+    let yes = loop {
         // Same highlighting as for wait_return().
-        r = prompt_for_input(Some(&prompt), HLF_R, true, None);
-        if r == CTRL_C || r == c_int::from(ESC) {
-            r = c_int::from(b'n');
-            if !ui_has(UI_MESSAGES) {
-                msg_putchar(r);
-            }
+        let r = prompt_for_key(&prompt, HLF_R);
+        if r.is('y') {
+            break true;
         }
-    }
+        if r.is('n') {
+            break false;
+        }
+        if r == Key::CTRL_C || r == Key::ESC {
+            if !ui_has(UI_MESSAGES) {
+                msg_putchar(c_int::from(b'n'));
+            }
+            break false;
+        }
+    };
 
     NEED_WAIT_RETURN.set(MSG_SCROLLED.get() != 0);
     drop(no_prompt);
     STATE.set(save_state);
     setmouse();
-    r
+    yes
 }
 
 /// Whether `key` is one [`get_keystroke`] swallows rather than returns: a
@@ -181,19 +185,39 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
 /// [`prompt_for_input`] for a number from a list on screen, which a mouse
 /// click may pick instead of a typed number: `mouse_used` says which.
 pub(crate) fn prompt_for_number(mouse_used: &mut bool) -> c_int {
-    prompt_for_input(None, 0, false, Some(mouse_used))
+    prompt_for_input(None, 0, Some(mouse_used))
 }
 
-/// `one_key` returns after a single key press; `mouse_used`, when given,
-/// lets the user click a number instead of typing it. No `prompt` gets the
-/// default "type a number" wording, which depends on `mouse_used`.
+/// Ask for a number; `mouse_used`, when given, lets the user click a number
+/// instead of typing it. No `prompt` gets the default "type a number"
+/// wording, which depends on `mouse_used`. An empty or cancelled answer is 0.
 pub(crate) fn prompt_for_input(
+    prompt: Option<&CStr>,
+    hl_id: c_int,
+    mouse_used: Option<&mut bool>,
+) -> c_int {
+    prompt_line(prompt, hl_id, false, mouse_used)
+        .map_or(0, |resp| crate::charset::atoi(resp.as_cstr().to_bytes()))
+}
+
+/// Ask with `prompt` and answer after a single key press: the key, or
+/// `ESC` when there was no command line to read it from.
+pub(crate) fn prompt_for_key(prompt: &CStr, hl_id: c_int) -> Key {
+    // One key is one character, multibyte or not: upstream answers the
+    // first *byte* through a signed `char`, which `do_dialog` drops as a
+    // special key whenever the hotkey is not ASCII.
+    prompt_line(Some(prompt), hl_id, true, None).map_or(Key::ESC, |resp| {
+        Key::from_code(char_at(resp.as_cstr().to_bytes()))
+    })
+}
+
+/// The prompt both of the above read through.
+fn prompt_line(
     prompt: Option<&CStr>,
     hl_id: c_int,
     one_key: bool,
     mouse_used: Option<&mut bool>,
-) -> c_int {
-    let mut ret = if one_key { c_int::from(ESC) } else { 0 };
+) -> Option<XString> {
     // A copy: the prompt's own messages replace the kept one.
     let kmsg = KEEP_MSG.with(Clone::clone);
 
@@ -222,19 +246,8 @@ pub(crate) fn prompt_for_input(
     );
     drop(raw_key);
 
-    if let Some(resp) = resp {
-        let text = resp.as_cstr().to_bytes();
-        // One key is one character, multibyte or not: upstream answers the
-        // first *byte* through a signed `char`, which `do_dialog` drops as
-        // a special key whenever the hotkey is not ASCII.
-        ret = if one_key {
-            char_at(text)
-        } else {
-            crate::charset::atoi(text)
-        };
-    }
     if let Some(kmsg) = kmsg {
         set_keep_msg(Some(kmsg.as_cstr()), KEEP_MSG_HL_ID.get());
     }
-    ret
+    resp
 }

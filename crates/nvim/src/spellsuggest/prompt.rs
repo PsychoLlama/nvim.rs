@@ -257,7 +257,7 @@ fn ask_which_suggestion(sug: &SugInfo, msg_scroll_save: c_int) -> c_int {
     MSG_COL.set(0);
 
     let mut mouse_used = false;
-    let mut selected = prompt_for_input(None, 0, false, Some(&mut mouse_used));
+    let mut selected = prompt_for_input(None, 0, Some(&mut mouse_used));
     if mouse_used {
         selected = len_as_int(sug.su_ga.len()) + 1 - (CMDLINE_ROW.get() - MOUSE_ROW.get());
     }

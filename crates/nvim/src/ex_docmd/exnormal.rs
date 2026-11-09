@@ -19,7 +19,6 @@ use crate::message::{E_SECURE, emsg};
 use crate::os::cshim::gettext;
 use crate::types::{CmdIdx, Key, LineNr};
 use core::ffi::CStr;
-use core::ffi::c_int;
 use std::ffi::CString;
 
 use crate::drawscreen::{clearmode, showmode};
@@ -29,7 +28,7 @@ use crate::getchar::{restore_typeahead, save_typeahead, stuff_empty, typeahead, 
 
 use crate::ex_docmd::state::{EX_NORMAL_BUSY, SaveState};
 use crate::getchar::state::{GOT_INT, PENDING_END_REG_EXECUTING, REG_EXECUTING};
-use crate::keycodes::{CTRL_C, K_SPECIAL, KE_FILLER};
+use crate::keycodes::{K_SPECIAL, KE_FILLER};
 use crate::message::state::{MSG_DIDOUT, MSG_SCROLL};
 use crate::option::vars::p_mmd;
 use crate::state::mode::{
@@ -41,7 +40,6 @@ use crate::r#move::check_cursor_moved;
 use crate::normal::{normal_cmd, set_cursor_for_append_to_line, visual_active, with_frame_op};
 use crate::ops::Op;
 
-use crate::ascii::NUL;
 use crate::normal::defs::OpArg;
 use crate::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::types::{ColNr, ExArg};
@@ -230,15 +228,15 @@ pub fn exec_normal(was_typed: bool, use_vpeekc: bool) {
 
 /// [`exec_normal`]'s loop, every command pending on `op`.
 fn exec_normal_on(op: Op, was_typed: bool, use_vpeekc: bool) {
-    let mut c: c_int;
+    let mut c: Key;
     while (!stuff_empty()
         || (was_typed || typeahead().maplen() != 0) && !typeahead().is_empty()
         // `use_vpeekc` also runs whatever the *user* has typed, but
         // stops at a CTRL-C rather than swallowing it.
         || use_vpeekc && {
-            c = vpeekc().code();
-            c != NUL
-        } && c != CTRL_C)
+            c = vpeekc();
+            !c.is_nul()
+        } && c != Key::CTRL_C)
         && !GOT_INT.get()
     {
         update_topline_cursor();

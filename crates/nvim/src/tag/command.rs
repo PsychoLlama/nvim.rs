@@ -634,7 +634,7 @@ impl DoTag {
         }
 
         if ask {
-            let chosen = prompt_for_input(None, 0, false, None);
+            let chosen = prompt_for_input(None, 0, None);
             if chosen <= 0 || chosen > found || GOT_INT.get() {
                 // No valid choice: change nothing.
                 if self.use_tagstack {
