@@ -19,6 +19,7 @@ use crate::event::wstream::SharedBuffer;
 use crate::memory::{block_vec, recycle_block};
 use crate::msgpack_rpc::handler::{ApiDispatchFn, MsgpackRpcRequestHandler};
 use crate::msgpack_rpc::packer::PackerBuffer;
+use crate::msgpack_rpc::packer::format::NIL;
 use crate::msgpack_rpc::packer::{
     Addressees, mpack_array, mpack_integer, mpack_object, mpack_object_array, mpack_str, mpack_uint,
 };
@@ -86,9 +87,9 @@ pub fn serialize_response(
         mpack_array(&mut packer, 2);
         mpack_integer(&mut packer, Integer::from(err_type));
         mpack_str(err.message_or_empty().to_bytes(), &mut packer);
-        packer.push_byte(wire::NIL);
+        packer.push_byte(NIL);
     } else {
-        packer.push_byte(wire::NIL);
+        packer.push_byte(NIL);
         mpack_object(arg, &mut packer);
     }
     packer_buffer_finish(&mut packer);
@@ -115,13 +116,6 @@ fn report_failed_notification(
         Object::string(ApiString::from_cstr(err.message_or_empty())),
     ]);
     serialize_request(Addressees::One(channel_id), 0, b"nvim_error_event", args);
-}
-
-/// The msgpack encoding of nil, which is what the unused half of the
-/// `[type, id, error, result]` envelope carries. Nested so it stays out of
-/// the flat namespace the unit-test header generator collects constants into.
-mod wire {
-    pub(super) const NIL: u8 = 0xc0;
 }
 
 /// Opens a packer whose flush hook writes to every channel in `chans`.

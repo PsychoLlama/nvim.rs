@@ -11,8 +11,7 @@
 
 use super::wrappers::{arg_copy, arg_number_chk};
 use crate::eval::funcs::builtin::EvalFuncData;
-use crate::eval::typval::CallFrame;
-use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{CallFrame, TV_INITIAL_VALUE};
 use crate::eval::typval::{
     ListRef, LockName, NumBuf, blob_bytes, blob_len, dict_get_number_def, dict_len, index_of,
     list_copy, list_flatten, list_index, list_len, list_uidx, tv_check_for_list_or_blob_arg,
@@ -30,8 +29,7 @@ use crate::message::E_LISTBLOBREQ;
 use crate::message::state::{CALLED_EMSG, DID_EMSG};
 use crate::message::{emsg, internal_error};
 use crate::message_fmt::msg_bytes;
-use crate::narrow::len_as_integer;
-use crate::narrow::number_as_int;
+use crate::narrow::{len_as_integer, number_as_int};
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
@@ -41,9 +39,6 @@ use crate::types::{
     VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL, VAR_TYPE_STRING, VAR_UNKNOWN, VarNumber, Vv,
 };
 use core::ffi::{CStr, c_int};
-
-/// A cleared typval, the shape both dispatchers start every slot from.
-const NIL: TypVal = TV_INITIAL_VALUE;
 
 /// `copy({expr})` — one level deep.
 pub fn f_copy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
@@ -359,7 +354,7 @@ fn index_blob(args: &[TypVal], result: &mut TypVal) {
         start = (len + start).max(0);
     }
     for idx in start..len {
-        let mut tv = NIL;
+        let mut tv = TV_INITIAL_VALUE;
         tv.write_number(VarNumber::from(b.byte(idx)));
         // The Blob branch never reads argument 3, so a Blob search is
         // always case-sensitive however 'ic' was spelled. Upstream is
@@ -438,7 +433,7 @@ pub fn f_indexof(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         0
     };
 
-    let (mut save_val, mut save_key) = (NIL, NIL);
+    let (mut save_val, mut save_key) = (TV_INITIAL_VALUE, TV_INITIAL_VALUE);
     prepare_vimvar(Vv::Val, &mut save_val);
     prepare_vimvar(Vv::Key, &mut save_key);
     let saved_did_emsg = DID_EMSG.get();
@@ -464,7 +459,7 @@ fn indexof_matches(expr: &TypVal) -> bool {
     let mut argv = CallFrame::<2>::new();
     with_vim_var(Vv::Key, |key| argv.push_borrowed(key));
     with_vim_var(Vv::Val, |val| argv.push_borrowed(val));
-    let mut newtv = NIL;
+    let mut newtv = TV_INITIAL_VALUE;
     if eval_expr_typval(expr, false, argv.args(), &mut newtv).is_err() {
         return false;
     }

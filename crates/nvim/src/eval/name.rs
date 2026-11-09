@@ -39,7 +39,7 @@ use crate::types::TypVal;
 use core::ffi::c_int;
 
 /// The NUL byte, as the scans below compare it.
-const END: u8 = b'\0';
+pub(crate) const END: u8 = b'\0';
 
 /// How long the environment-variable name `text` starts with is. Zero when
 /// there is none.

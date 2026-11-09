@@ -21,6 +21,7 @@ use crate::ascii::ascii_isxdigit;
 use crate::charset::{Str2NrBases, hex2nr, str2nr_in};
 use crate::cstr::byte_at;
 use crate::env::{expand_env, getenv_resolved};
+use crate::eval::name::END;
 use crate::eval::typval::{tv_blob_alloc, tv_blob_set_ret};
 use crate::eval::vars::eval_one_expr_in_text;
 use crate::eval::{Cursor, char_len_at, env_name_len, option_var_end};
@@ -37,9 +38,6 @@ use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{Failed, Float, TypVal};
 use core::ffi::c_int;
-
-/// The NUL byte, as the walks below compare it.
-const END: u8 = b'\0';
 
 /// `&option`, `&l:option`, `&g:option` or `+option`, with the cursor on the
 /// `&` or the `+`. Leaves it after the option name.
