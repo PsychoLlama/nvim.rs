@@ -15,11 +15,9 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::env::XDGVarType;
 use crate::global_cell::GlobalCell;
 use core::ffi::c_char;
 
-pub(crate) const XDG_CONFIG_DIRS: XDGVarType = 5;
 pub(crate) static DIDSET_VIM: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static DIDSET_VIMRUNTIME: GlobalCell<bool> = GlobalCell::new(false);
 /// The directory to go back to when no window or tab page has one of its

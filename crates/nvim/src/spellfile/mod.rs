@@ -16,7 +16,6 @@ use crate::spell::{SPELL_ADD_BAD, SPELL_ADD_GOOD, SpellBuf};
 use core::cell::RefCell;
 
 use crate::ascii::TAB;
-use crate::env::XDGVarType;
 use crate::mbyte::{CONV_NONE, VimConv};
 use crate::memory::{ThinCString, XString};
 use crate::message::{E_EXISTS, E_INVARG};
@@ -52,6 +51,7 @@ mod wordfile;
 mod wordtree;
 mod write;
 use crate::regexp::{OwnedProg, vim_regcomp, vim_regexec_prog};
+pub use crate::spell::MAXWLEN;
 pub use add::spell_add_word;
 use aff::spell_read_aff;
 use dic::spell_read_dic;
@@ -65,8 +65,6 @@ use wordtree::{
     wordtree_compress,
 };
 use write::write_vim_spell;
-pub const XDG_DATA_HOME: XDGVarType = 1;
-pub use crate::spell::MAXWLEN;
 pub const MAXREGIONS: ::core::ffi::c_uint = 8;
 pub const WFP_COMPFORBID: ::core::ffi::c_uint = 16;
 pub const WFP_COMPPERMIT: ::core::ffi::c_uint = 8;

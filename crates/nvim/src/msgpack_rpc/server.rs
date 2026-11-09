@@ -11,6 +11,7 @@
 //! `serverstart()` and `$NVIM_LISTEN_ADDRESS` open, and the channels that
 //! come out of them.
 
+use crate::env::XdgVar;
 use core::ffi::{CStr, c_int};
 
 use crate::channel::channel_from_connection;
@@ -38,8 +39,6 @@ use crate::event::socket::address::SOCKET_ADDR_LEN;
 mod known {
     use core::ffi::c_int;
 
-    /// `XDGVarType` of the runtime directory generated addresses live in.
-    pub(super) const XDG_RUNTIME_DIR: c_int = 4;
     /// How many connections the kernel may queue behind a listening socket.
     pub(super) const MAX_CONNECTIONS: c_int = 32;
 }
@@ -156,7 +155,7 @@ pub fn server_address_new(name: Option<&CStr>) -> XString {
     SEQUENCE.set(sequence.wrapping_add(1));
 
     let appname = get_appname(true);
-    let dir = xdg_var(XDG_RUNTIME_DIR);
+    let dir = xdg_var(XdgVar::RuntimeDir);
     let base = name.unwrap_or(&appname);
     let pid = process_id();
     let mut address = Vec::with_capacity(SOCKET_ADDR_LEN);

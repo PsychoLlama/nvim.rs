@@ -628,7 +628,6 @@ const TYPE_HOMES: &[&str] = &[
     "src/cursor_shape.rs::CursorShape",
     "src/decoration/defs.rs",
     "src/edit/mod.rs::InscharFlags",
-    "src/env/mod.rs::XDGVarType",
     "src/eval/funcs/builtin.rs",
     "src/eval/typval/dictitem.rs::DictKey",
     "src/eval/typval/dictitem.rs::ScopeDictItem",

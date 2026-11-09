@@ -14,27 +14,19 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use crate::cstr;
-use crate::env::XDGVarType;
+use crate::env::XdgVar;
 use crate::env::expand_env;
 use crate::fileio::vim_gettempdir;
 use crate::memory::{ThinCString, XString};
 use crate::message::IOSIZE;
-use crate::os::env::{env_exists, env_get_bounded, getenv_owned};
+use crate::os::env::{ENV_SEPCHAR, env_exists, env_get_bounded, getenv_owned};
 use crate::path::{concat_fnames, path_fnamecmp, path_is_absolute};
 use core::ffi::CStr;
 use std::ffi::CString;
 
-pub(crate) const XDG_CONFIG_HOME: XDGVarType = 0;
-pub(crate) const XDG_STATE_HOME: XDGVarType = 3;
-pub(crate) const XDG_RUNTIME_DIR: XDGVarType = 4;
-pub(crate) const XDG_CONFIG_DIRS: XDGVarType = 5;
-pub(crate) const XDG_DATA_DIRS: XDGVarType = 6;
-
 const PATHSEP: u8 = b'/';
-/// Separator between entries of `$XDG_*_DIRS`.
-const ENV_SEP: u8 = b':';
 
-/// The environment variable behind each [`XDGVarType`].
+/// The environment variable behind each [`XdgVar`].
 const XDG_ENV_VARS: [&CStr; 7] = [
     c"XDG_CONFIG_HOME",
     c"XDG_DATA_HOME",
@@ -143,8 +135,8 @@ fn dedup_dirs(list: &CStr, sep: u8, same: impl Fn(&CStr, &CStr) -> bool) -> Opti
 
 /// The value of an XDG base directory variable, or `None` when there is
 /// none.
-pub(crate) fn xdg_var(idx: XDGVarType) -> Option<ThinCString> {
-    let slot = usize::try_from(idx).expect("an XDGVarType is one of the seven");
+pub(crate) fn xdg_var(idx: XdgVar) -> Option<ThinCString> {
+    let slot = idx as usize;
     let env = XDG_ENV_VARS[slot];
     let value = match getenv_owned(env) {
         Some(value) => value.to_vec(),
@@ -154,7 +146,7 @@ pub(crate) fn xdg_var(idx: XDGVarType) -> Option<ThinCString> {
             Some(fallback) => expand_env(fallback, false).to_vec(),
             // stdpath('run') is whatever vim_mktempdir() decided at
             // startup, minus its trailing slash.
-            None if idx == XDG_RUNTIME_DIR => {
+            None if idx == XdgVar::RuntimeDir => {
                 let tmpdir = vim_gettempdir();
                 let tmpdir = tmpdir.as_deref().unwrap_or(c"/tmp/").to_bytes();
                 tmpdir[..tmpdir.len().saturating_sub(1)].to_vec()
@@ -162,14 +154,14 @@ pub(crate) fn xdg_var(idx: XDGVarType) -> Option<ThinCString> {
             None => return None,
         },
     };
-    if idx != XDG_DATA_DIRS && idx != XDG_CONFIG_DIRS {
+    if idx != XdgVar::DataDirs && idx != XdgVar::ConfigDirs {
         return Some(ThinCString::from_vec(value));
     }
-    remove_duplicate_dirs(&cstr::owned(&value), ENV_SEP).map(ThinCString::from)
+    remove_duplicate_dirs(&cstr::owned(&value), ENV_SEPCHAR).map(ThinCString::from)
 }
 
 /// `{xdg_directory}/$NVIM_APPNAME`, or `None` when the directory is unset.
-pub(crate) fn xdg_home(idx: XDGVarType) -> Option<XString> {
+pub(crate) fn xdg_home(idx: XdgVar) -> Option<XString> {
     let dir = xdg_var(idx);
     let appname = get_appname(false);
     // Windows appends "-data" to the data/state homes; the headroom upstream
@@ -185,7 +177,7 @@ pub(crate) fn xdg_home(idx: XDGVarType) -> Option<XString> {
 
 /// `$XDG_CONFIG_HOME/$NVIM_APPNAME/{fname}`.
 pub(crate) fn user_config_path(fname: &[u8]) -> XString {
-    let home = xdg_home(XDG_CONFIG_HOME).expect("the config home has a default");
+    let home = xdg_home(XdgVar::ConfigHome).expect("the config home has a default");
     concat_fnames(&home, fname, true)
 }
 
@@ -197,7 +189,7 @@ pub(crate) fn state_subpath(
     trailing_pathseps: usize,
     escape_commas: bool,
 ) -> XString {
-    let home = xdg_home(XDG_STATE_HOME).expect("the state home has a default");
+    let home = xdg_home(XdgVar::StateHome).expect("the state home has a default");
     let path = concat_fnames(&home, fname.to_bytes(), true);
     let mut out = XString::with_capacity(path.len() + trailing_pathseps);
     for &byte in path.iter() {
@@ -220,7 +212,7 @@ mod tests {
     /// reaches `path_fnamecmp` (and through it libc, which Miri cannot
     /// call).
     fn dedup(list: &CStr) -> Option<CString> {
-        dedup_dirs(list, ENV_SEP, |a, b| a == b)
+        dedup_dirs(list, ENV_SEPCHAR, |a, b| a == b)
     }
 
     #[test]

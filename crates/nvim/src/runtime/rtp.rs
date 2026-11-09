@@ -24,6 +24,7 @@
 )]
 
 use super::*;
+use crate::env::XdgVar;
 use crate::env::{getenv_resolved, xdg_var};
 use crate::memory::ThinCString;
 use crate::os::env::DEFAULT_LIB_DIR;
@@ -205,17 +206,17 @@ pub(crate) fn runtimepath_default(clean_arg: bool) -> Option<XString> {
     let data_home = if clean_arg {
         None
     } else {
-        xdg_var(XDG_DATA_HOME)
+        xdg_var(XdgVar::DataHome)
     };
     let config_home = if clean_arg {
         None
     } else {
-        xdg_var(XDG_CONFIG_HOME)
+        xdg_var(XdgVar::ConfigHome)
     };
     let vimruntime = getenv_resolved(c"VIMRUNTIME");
     let libdir = get_lib_dir();
-    let data_dirs = xdg_var(XDG_DATA_DIRS);
-    let config_dirs = xdg_var(XDG_CONFIG_DIRS);
+    let data_dirs = xdg_var(XdgVar::DataDirs);
+    let config_dirs = xdg_var(XdgVar::ConfigDirs);
 
     let mut rtp = RtpParts {
         appname: appname.to_bytes(),

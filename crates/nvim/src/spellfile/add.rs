@@ -35,6 +35,7 @@
 )]
 
 use crate::cstr;
+use crate::env::XdgVar;
 use crate::env::{home_to_tilde, xdg_home};
 use crate::semsg;
 use crate::smsg;
@@ -64,7 +65,7 @@ use crate::spell::{INT_WORDLIST, spell_enc, with_lang};
 use crate::undo::buf_is_changed;
 
 use super::wordtree::valid_spell_word;
-use super::{E_ILLEGAL_CHARACTER_IN_WORD, MAXWLEN, SPELL_ADD_RARE, XDG_DATA_HOME, mkspell};
+use super::{E_ILLEGAL_CHARACTER_IN_WORD, MAXWLEN, SPELL_ADD_RARE, mkspell};
 use crate::optionstr::OptString;
 
 /// Add `word` to a spell file, or take it back out again.
@@ -278,7 +279,7 @@ fn init_spellfile() {
         spl[..lend].to_vec()
     } else {
         // Otherwise the user's own site directory, created if need be.
-        let mut buf = xdg_home(XDG_DATA_HOME)
+        let mut buf = xdg_home(XdgVar::DataHome)
             .map(|home| home.to_vec())
             .unwrap_or_default();
         buf.truncate(room);

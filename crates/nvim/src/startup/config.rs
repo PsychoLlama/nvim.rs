@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::env::XdgVar;
 use crate::env::{get_appname, user_config_path, xdg_var};
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
@@ -33,7 +34,6 @@ use crate::message::state::MSG_SCROLL;
 use crate::option::vars::p_exrc;
 use crate::os::cshim::{gettext, write_c_stderr};
 use crate::os::fs::path_exists;
-use crate::os::state::XDG_CONFIG_DIRS;
 use crate::profile::time_msg_at;
 use crate::quickfix::qf_jump_to_current;
 use crate::runtime::state::CURRENT_SCTX;
@@ -131,7 +131,7 @@ fn config_subpath(dir: &[u8], appname: &[u8], suffix: &[u8], dedup_sep: bool) ->
 ///
 /// `visit` answers `true` to stop the walk. Answers whether it did.
 fn for_each_config_dir(visit: impl FnMut(&[u8]) -> bool) -> bool {
-    let Some(config_dirs) = xdg_var(XDG_CONFIG_DIRS) else {
+    let Some(config_dirs) = xdg_var(XdgVar::ConfigDirs) else {
         return false;
     };
     config_dirs

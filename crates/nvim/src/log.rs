@@ -46,7 +46,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::env::XDGVarType;
+use crate::env::XdgVar;
 use crate::env::{expand_env_within, state_subpath, xdg_home};
 use crate::eval::vars::vim_var_bytes;
 use crate::global_cell::GlobalCell;
@@ -108,7 +108,6 @@ pub const LOGLVL_INF: c_int = 2;
 pub const LOGLVL_WRN: c_int = 3;
 pub const LOGLVL_ERR: c_int = 4;
 
-const XDG_STATE_HOME: XDGVarType = 3;
 /// `MAXPATHL + 1`: what `log_file_path[]` is declared as upstream, and the
 /// bound `expand_env`/`xstrlcpy` truncate the path to.
 const LOG_PATH_SIZE: usize = 4096 + 1;
@@ -218,7 +217,7 @@ fn expand_log_file_var() -> (Vec<u8>, bool) {
 /// An unset state directory answers `None` rather than being tested: upstream
 /// hands `get_xdg_home`'s null straight to `os_isdir`.
 fn ensure_state_home() -> Option<MkdirFailure> {
-    let home = xdg_home(XDG_STATE_HOME)?;
+    let home = xdg_home(XdgVar::StateHome)?;
     if dir_exists(home.as_cstr()) {
         return None;
     }

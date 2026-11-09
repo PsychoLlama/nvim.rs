@@ -9,14 +9,11 @@
     clippy::ptr_as_ptr
 )]
 
+use super::tv_get_buf;
 use super::wrappers::{arg_number_chk, dict_alloc_ret};
-use super::{
-    XDG_CACHE_HOME, XDG_CONFIG_DIRS, XDG_CONFIG_HOME, XDG_DATA_DIRS, XDG_DATA_HOME,
-    XDG_RUNTIME_DIR, XDG_STATE_HOME, tv_get_buf,
-};
 use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one};
-use crate::env::XDGVarType;
+use crate::env::XdgVar;
 use crate::env::{get_appname, getenv_resolved, xdg_home, xdg_var};
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, dict_get_bool, dict_has_key, tv_list_alloc_ret};
@@ -218,7 +215,7 @@ pub fn f_setfperm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// The `config_dirs`/`data_dirs` answer: every directory in the XDG search
 /// path, each with the application name appended.
-fn get_xdg_var_list(xdg: XDGVarType, result: &mut TypVal) {
+fn get_xdg_var_list(xdg: XdgVar, result: &mut TypVal) {
     let appname = get_appname(false);
     let list = tv_list_alloc_ret(result, LIST_LEN_SHOULD_KNOW as isize);
     let Some(dirs) = xdg_var(xdg) else {
@@ -241,15 +238,15 @@ pub fn f_stdpath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     };
     let dir = match p.to_bytes() {
-        b"config" => xdg_home(XDG_CONFIG_HOME),
-        b"data" => xdg_home(XDG_DATA_HOME),
-        b"cache" => xdg_home(XDG_CACHE_HOME),
+        b"config" => xdg_home(XdgVar::ConfigHome),
+        b"data" => xdg_home(XdgVar::DataHome),
+        b"cache" => xdg_home(XdgVar::CacheHome),
         // "log" is deliberately the state directory: the log file lives
         // there and there is no XDG log home.
-        b"state" | b"log" => xdg_home(XDG_STATE_HOME),
-        b"run" => xdg_var(XDG_RUNTIME_DIR).map(ThinCString::into_xstring),
-        b"config_dirs" => return get_xdg_var_list(XDG_CONFIG_DIRS, result),
-        b"data_dirs" => return get_xdg_var_list(XDG_DATA_DIRS, result),
+        b"state" | b"log" => xdg_home(XdgVar::StateHome),
+        b"run" => xdg_var(XdgVar::RuntimeDir).map(ThinCString::into_xstring),
+        b"config_dirs" => return get_xdg_var_list(XdgVar::ConfigDirs, result),
+        b"data_dirs" => return get_xdg_var_list(XdgVar::DataDirs, result),
         _ => {
             let p = msg_cstr(p);
             semsg!("E6100: \"{p}\" is not a valid stdpath");

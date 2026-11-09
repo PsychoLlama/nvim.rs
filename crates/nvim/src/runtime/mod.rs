@@ -41,7 +41,6 @@ use crate::cmdexpand::defs::Expand;
 use crate::cmdexpand::globpath;
 use crate::debugger::state::{DEBUG_BREAK_LEVEL, DEBUG_TICK};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, profiling_forced};
-use crate::env::XDGVarType;
 use crate::env::{get_appname, install_prefix};
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
@@ -129,15 +128,6 @@ pub use self::source::*;
 
 /// The room upstream's `MAXPATHL` buffers had, terminator included.
 const PATH_ROOM: usize = crate::path::MAXPATHL as usize;
-/// `globpath` flags.
-pub const XDG_DATA_DIRS: XDGVarType = 6;
-pub const XDG_CONFIG_DIRS: XDGVarType = 5;
-pub const XDG_RUNTIME_DIR: XDGVarType = 4;
-pub const XDG_STATE_HOME: XDGVarType = 3;
-pub const XDG_CACHE_HOME: XDGVarType = 2;
-pub const XDG_DATA_HOME: XDGVarType = 1;
-pub const XDG_CONFIG_HOME: XDGVarType = 0;
-pub const XDG_NONE: XDGVarType = -1;
 crate::flag_set! {
     /// How a runtime-file search should behave -- upstream's `DIP_*`, the
     /// `flags` argument [`do_in_path_visit`] and everything under it thread:
