@@ -26,6 +26,7 @@ use crate::normal::defs::MotionType;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
 use crate::optionstr::OptStringRef;
+use crate::search::{BACKWARD, FORWARD};
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -33,8 +34,6 @@ use core::ffi::c_int;
 const FM_BACKWARD: c_int = super::FM_BACKWARD.cast_signed();
 const FM_FORWARD: c_int = super::FM_FORWARD.cast_signed();
 const FM_BLOCKSTOP: c_int = super::FM_BLOCKSTOP.cast_signed();
-const FORWARD: c_int = super::FORWARD as c_int;
-const BACKWARD: c_int = super::BACKWARD as c_int;
 
 /// Find the match for the bracket under the cursor.
 pub fn findmatch(op: Option<&mut OpArg>, initc: c_int) -> Option<Pos> {

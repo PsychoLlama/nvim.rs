@@ -42,12 +42,12 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{SpecialKey, simplify_mod_mask};
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
-use crate::mbyte::GraphemeState;
+use crate::mbyte::{GRAPHEME_STATE_INIT, GraphemeState};
 use crate::mbyte::{encode_char, iscomposing, utf8len_tab};
 use crate::message::state::{MSG_COL, MSG_DIDOUT, MSG_NOWAIT};
 use crate::normal::defs::{CmdArg, Outcome};
 use crate::normal::{
-    GRAPHEME_STATE_INIT, NV_CMD_TABLE, NV_CMDS, NV_CMDS_SIZE, NormalState, NvFlags, add_to_showcmd,
+    NV_CMD_TABLE, NV_CMDS, NV_CMDS_SIZE, NormalState, NvFlags, add_to_showcmd,
     check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd, do_check_scrollbind,
     normal_handle_special_visual_command, normal_need_additional_char,
     normal_need_redraw_mode_message, normal_redraw_mode_message, set_vcount_ca, set_visual_select,

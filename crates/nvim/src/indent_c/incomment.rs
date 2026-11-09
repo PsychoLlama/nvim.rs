@@ -26,7 +26,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 /// How long a 'comments' leader part may be.
-const LEN: usize = COM_MAX_LEN as usize;
+const LEN: usize = COM_MAX_LEN;
 
 /// The column of the nearest `//` comment above the cursor, or `None`.
 ///

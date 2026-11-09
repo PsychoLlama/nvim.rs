@@ -29,8 +29,7 @@ use crate::ascii::NUL;
 use crate::decoration::{SCL_NUM, SIGN_WIDTH};
 use crate::grid::with_linebuf;
 use crate::r#move::WinValid;
-use crate::narrow::as_index;
-use crate::narrow::count_as_int;
+use crate::narrow::{as_index, count_as_int};
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
 use crate::optionstr::OptString;
@@ -44,7 +43,7 @@ use std::io::Write as _;
 ///
 /// Upstream's `MAX_STCWIDTH`: a full-width line number, every sign the sign
 /// column can show, and the widest fold column.
-const MAX_STCWIDTH: ::core::ffi::c_int =
+pub(crate) const MAX_STCWIDTH: ::core::ffi::c_int =
     MAX_NUMBERWIDTH + SIGN_SHOW_MAX * SIGN_WIDTH as ::core::ffi::c_int + 9;
 
 /// The widest `'foldcolumn'` (and so the size of the arrays

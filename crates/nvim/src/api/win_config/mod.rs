@@ -17,11 +17,11 @@ use crate::api::private::helpers::{
 };
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{block_autocmds, is_aucmd_win, unblock_autocmds};
-use crate::decoration::defs::VirtText;
-use crate::decoration::defs::VirtTextChunk;
+use crate::decoration::defs::{VirtText, VirtTextChunk};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later, set_must_redraw};
 use crate::eval::window::{restore_win, restore_win_noblock, switch_win, switch_win_noblock};
 use crate::ex_docmd::expr_map_locked;
+use crate::grid::schar::MAX_SCHAR_SIZE;
 use crate::guard::TEXTLOCK;
 use crate::highlight_group::{syn_check_group, syn_id2name};
 use crate::mbyte::{c_string_cells, c_string_cells_len};
@@ -29,6 +29,7 @@ use crate::message::{E_CMDWIN, E_TEXTLOCK};
 use crate::r#move::changed_window_setting;
 use crate::option::didset_window_options;
 use crate::option::vars::{p_sb, p_spr, p_winborder};
+use crate::types::buffer::{ALIGN_CENTER, ALIGN_RIGHT};
 use crate::types::{
     AlignTextPos, ApiString, Array, Boolean, BorderTextType, BufferHandle, ERROR_TYPE_EXCEPTION,
     ERROR_TYPE_VALIDATION, Error, FLOAT_ANCHOR_EAST, FLOAT_ANCHOR_SOUTH, FLOAT_RELATIVE_CURSOR,
@@ -64,13 +65,10 @@ pub use self::border::*;
 pub use self::get::*;
 pub use self::open::*;
 pub(crate) use self::parse::*;
-pub const ALIGN_RIGHT: AlignTextPos = 2;
-pub const ALIGN_CENTER: AlignTextPos = 1;
 pub const WIN_SPLIT_BELOW: WinSplit = 3;
 pub const WIN_SPLIT_ABOVE: WinSplit = 2;
 pub const WIN_SPLIT_RIGHT: WinSplit = 1;
 pub const BORDER_TEXT_FOOTER: BorderTextType = 1;
 pub const BORDER_TEXT_TITLE: BorderTextType = 0;
-pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

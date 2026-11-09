@@ -35,6 +35,7 @@ use crate::cstr;
 use crate::ex_docmd::state::CMDMOD;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::guard::Script;
+use crate::keycodes::KS_SPECIAL;
 use crate::keycodes::{K_SPECIAL, KE_FILLER};
 use crate::lua::executor::nlua_do_ucmd;
 use crate::mbyte::c_cluster_len;
@@ -48,9 +49,6 @@ use crate::winlayer::TabPage;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 use std::rc::Rc;
-
-/// The second byte of an escaped `K_SPECIAL`.
-const KS_SPECIAL: u8 = 254;
 
 /// One argument of the whitespace-separated argument list, unescaped into
 /// `out` (which is cleared first).

@@ -27,10 +27,11 @@ use crate::buffer::{buf_is_quickfix, buf_is_terminal, find_buf};
 use crate::cmdhist::{HIST_DEBUG, HIST_EXPR, HIST_INPUT};
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_copy};
 use crate::eval::{var_flavour, vars::globvar_dict};
+use crate::mark::JUMPLISTSIZE;
 use crate::mark::{ShadaMark, cleanup_jumplist, setpcmark, shada_jumps};
 use crate::memory::XString;
 use crate::message_fmt::msg_addr;
-use crate::narrow::len_as_int;
+use crate::narrow::{as_index, len_as_int};
 use crate::normal::defs::MotionType;
 use crate::os::time::os_time;
 use crate::register::{op_reg_index, shada_registers};
@@ -47,8 +48,8 @@ use core::ffi::c_int;
 use super::file::{get_shada_parameter, shada_removable};
 use super::pack::{Packer, pack_entry};
 use super::{
-    DEFAULT_SEARCH_PATTERN, JUMPLISTSIZE, RemovableBufs, ShadaBufferListItem, ShadaEntry,
-    ShadaEntryData, ShadaFileMark, ShadaGlobalVar, ShadaRegister, WriteMergerState, WriteStatus,
+    DEFAULT_SEARCH_PATTERN, RemovableBufs, ShadaBufferListItem, ShadaEntry, ShadaEntryData,
+    ShadaFileMark, ShadaGlobalVar, ShadaRegister, WriteMergerState, WriteStatus,
 };
 use crate::cmdhist::{HIST_CMD, HIST_SEARCH};
 
@@ -246,7 +247,7 @@ impl Iterator for VarWalk {
 /// The current position is pushed onto the jump list first, so that where
 /// Nvim was when it exited is remembered too.
 pub(crate) fn shada_init_jumps(
-    jumps: &mut [ShadaEntry; JUMPLISTSIZE],
+    jumps: &mut [ShadaEntry; as_index(JUMPLISTSIZE)],
     removable_bufs: &RemovableBufs,
 ) -> usize {
     setpcmark();
@@ -337,7 +338,7 @@ pub fn shada_encode_regs() -> ApiString {
 pub fn shada_encode_jumps() -> ApiString {
     let mut removable_bufs = crate::registry::id_set();
     find_removable_bufs(&mut removable_bufs);
-    let mut jumps = [const { ShadaEntry::MISSING }; JUMPLISTSIZE];
+    let mut jumps = [const { ShadaEntry::MISSING }; as_index(JUMPLISTSIZE)];
     let jumps_size = shada_init_jumps(&mut jumps, &removable_bufs);
     let mut out = Packer::default();
     for jump in &jumps[..jumps_size] {

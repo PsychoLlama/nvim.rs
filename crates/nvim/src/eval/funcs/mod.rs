@@ -77,7 +77,6 @@ pub use self::timer::*;
 pub use self::variables::*;
 pub use self::wrappers::*;
 pub const PROC_TYPE_PTY: ProcType = 1;
-pub const NSUBEXP: ::core::ffi::c_uint = 10;
 pub const CHANNEL_PART_ALL: ChannelPart = 4;
 pub const CHANNEL_PART_RPC: ChannelPart = 3;
 pub const CHANNEL_PART_STDERR: ChannelPart = 2;

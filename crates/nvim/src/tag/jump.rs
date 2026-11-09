@@ -30,17 +30,12 @@ use crate::os::fs::path_exists;
 use crate::regexp::skip_regexp_at;
 use crate::search::{SEARCH_KEEP, do_search_in};
 use crate::strings::{FmtArg, find_bytes, format_into};
+use crate::tag::LSIZE;
 use crate::types::Failed;
-use crate::window::WSP_VERT;
-use crate::window::tab_index;
+use crate::window::{WSP_VERT, tab_index};
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win, WinId};
 use core::ffi::{CStr, c_int, c_uint};
-
-/// The buffer a tag's command is copied into, in bytes.
-///
-/// A command longer than this is truncated, as upstream truncates it.
-const LSIZE: usize = super::LSIZE as usize;
 
 /// The byte `at` of a C string's bytes, NUL past the end.
 fn byte(s: &[u8], at: usize) -> u8 {

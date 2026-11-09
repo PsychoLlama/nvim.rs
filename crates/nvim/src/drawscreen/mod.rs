@@ -11,6 +11,8 @@
 pub mod state;
 use crate::autocmd::defs::AutoEvent;
 use crate::narrow::number_as_int;
+use crate::normal::SHOWCMD_COLS;
+use crate::option::MIN_COLUMNS;
 use core::ffi::c_int;
 
 use crate::buffer::{buf_meta_total, maketitle};
@@ -28,8 +30,7 @@ use crate::decoration_provider::{
 use crate::diff::diff_redraw;
 use crate::diff::state::NEED_DIFF_REDRAW;
 use crate::digraph::keymap_str;
-use crate::drawline::SpellVars;
-use crate::drawline::win_line;
+use crate::drawline::{SpellVars, win_line};
 use crate::drawscreen::state::{
     CLEAR_CMDLINE, CMDLINE_ROW, DO_REDRAW, DOLLAR_VCOL, MODE_DISPLAYED, MUST_REDRAW,
     NEED_MAKETITLE, REDRAW_CMDLINE, REDRAW_MODE, REDRAW_NOT_ALLOWED, REDRAW_TABLINE,
@@ -154,10 +155,6 @@ pub const UPD_REDRAW_TOP: RedrawType = 30;
 pub const UPD_INVERTED_ALL: RedrawType = 25;
 pub const UPD_INVERTED: RedrawType = 20;
 pub const UPD_VALID: RedrawType = 10;
-/// Columns `'showcmd'` reserves at the right of the last line.
-pub const SHOWCMD_COLS: ::core::ffi::c_int = 10;
-/// The narrowest screen the editor will lay windows out on.
-pub const MIN_COLUMNS: ::core::ffi::c_int = 12;
 static REDRAW_POPUPMENU: GlobalCell<bool> = GlobalCell::new(false);
 static MSG_GRID_INVALID: GlobalCell<bool> = GlobalCell::new(false);
 static RESIZING_AUTOCMD: GlobalCell<bool> = GlobalCell::new(false);

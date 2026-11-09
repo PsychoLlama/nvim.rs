@@ -11,29 +11,25 @@
 #![forbid(unsafe_code)]
 
 use super::edit::{ui_cursor_shape, update_topline_cursor};
-use crate::getchar::Remap;
-use crate::getchar::ins_typebuf;
+use crate::getchar::{Remap, ins_typebuf};
 use crate::guard::Depth;
+use crate::keycodes::KS_SPECIAL;
 use crate::mbyte::cluster_len;
-use crate::message::emsg;
+use crate::message::{E_SECURE, emsg};
 use crate::os::cshim::gettext;
-use crate::types::CmdIdx;
-use crate::types::Key;
-use crate::types::LineNr;
+use crate::types::{CmdIdx, Key, LineNr};
 use core::ffi::CStr;
 use core::ffi::c_int;
 use std::ffi::CString;
 
 use crate::drawscreen::{clearmode, showmode};
 
-use crate::ex_docmd::KS_SPECIAL;
 use crate::ex_docmd::modifier::expr_map_locked;
 use crate::getchar::{restore_typeahead, save_typeahead, stuff_empty, typeahead, vpeekc};
 
-use crate::ex_docmd::state::EX_NORMAL_BUSY;
+use crate::ex_docmd::state::{EX_NORMAL_BUSY, SaveState};
 use crate::getchar::state::{GOT_INT, PENDING_END_REG_EXECUTING, REG_EXECUTING};
 use crate::keycodes::{CTRL_C, K_SPECIAL, KE_FILLER};
-use crate::message::E_SECURE;
 use crate::message::state::{MSG_DIDOUT, MSG_SCROLL};
 use crate::option::vars::p_mmd;
 use crate::state::mode::{
@@ -46,7 +42,6 @@ use crate::normal::{normal_cmd, set_cursor_for_append_to_line, visual_active, wi
 use crate::ops::Op;
 
 use crate::ascii::NUL;
-use crate::ex_docmd::state::SaveState;
 use crate::normal::defs::OpArg;
 use crate::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::types::{ColNr, ExArg};

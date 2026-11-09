@@ -24,10 +24,9 @@ use crate::cstr;
 use crate::fileio::Fgets;
 use crate::highlight_group::HLF_N;
 use crate::mbyte::strnicmp_in;
+use crate::tag::LSIZE;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
-
-const LSIZE: usize = super::LSIZE as usize;
 
 /// Whether a match at `startp` is really in code rather than in a
 /// comment, for `skip_comments`.

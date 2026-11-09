@@ -22,11 +22,11 @@
 use crate::edit::BeginlineOpts;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::SpecialKey;
-use crate::mark::defs::{MarkGet, MarkMove};
+use crate::mark::defs::MarkMove;
 use crate::mouse::{MSCR_DOWN, MSCR_LEFT, MSCR_RIGHT, MSCR_UP, nv_mouse, nv_mousescroll};
 use crate::normal::defs::CmdArg;
 use crate::os::libc::uint16_t;
-use crate::spell::{SpellAddType, SpellMoveType};
+
 use crate::types::{Direction, Key, Pos};
 use core::ffi::{CStr, c_int, c_uint};
 
@@ -62,9 +62,8 @@ mod misc;
 pub(crate) use self::misc::*;
 pub(crate) const DIRECTION_NOT_SET: Direction = 0;
 pub(crate) const K_MARK_NO_CONTEXT: MarkMove = 4;
-pub(crate) const MARK_ALL: MarkGet = 1;
-pub(crate) use crate::cmdhist::HIST_SEARCH;
-pub(crate) const SHOWCMD_COLS: c_uint = 10;
+/// Columns `'showcmd'` reserves at the right of the last line.
+pub(crate) const SHOWCMD_COLS: c_int = 10;
 pub(crate) const SHOWCMD_BUFLEN: c_uint = 41;
 pub(crate) const FIND_EVAL: c_int = 4;
 pub(crate) const FIND_STRING: c_int = 2;
@@ -89,10 +88,6 @@ pub(crate) struct NvCmd {
 /// to do" says so by name ([`nv_nop`]).
 pub(crate) type NvFunc = fn(&mut CmdArg);
 pub(crate) const FM_FORWARD: c_uint = 2;
-pub(crate) const SPELL_ADD_BAD: SpellAddType = 1;
-pub(crate) const SPELL_ADD_GOOD: SpellAddType = 0;
-pub(crate) const SMT_RARE: SpellMoveType = 2;
-pub(crate) const SMT_BAD: SpellMoveType = 1;
 pub(crate) const FM_BACKWARD: c_uint = 1;
 /// The normal-mode state machine's own state: one per running
 /// `normal_enter` (lent to `state_enter` for the length of its loop) or
@@ -123,7 +118,6 @@ pub(crate) struct NormalState {
     pub old_pos: Pos,
 }
 pub(crate) const TAB: c_int = 9;
-pub(crate) const GRAPHEME_STATE_INIT: c_int = 0 as c_int;
 static V_ISUAL_MODE_ORIG: GlobalCell<VisualMode> = GlobalCell::new(VisualMode::NONE);
 const E_CHANGELIST_IS_EMPTY: &CStr = c"E664: Changelist is empty";
 const E_CMDLINE_WINDOW_ALREADY_OPEN: &CStr = c"E1292: Command-line window is already open";

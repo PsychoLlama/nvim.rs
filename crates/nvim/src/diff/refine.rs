@@ -29,6 +29,7 @@
 )]
 
 use super::*;
+use crate::mbyte::CLASS_WORD;
 use crate::mbyte::{c_cluster_len, char_at, class_in, class_of, encode_char};
 use crate::narrow::len_as_int;
 use crate::winlayer::BufId;
@@ -36,13 +37,6 @@ use core::ffi::c_int;
 
 /// One entry per token written into the fake file, per buffer.
 type LineMap = [Vec<LinemapEntry>; DB_COUNT as usize];
-
-/// The character class `mb_get_class_tab` gives an alphanumeric character.
-///
-/// Only this class counts as "word" for `inline:word`: emoji and CJK
-/// ideographs get their own classes, and word-diffing them is not useful
-/// because nvim has no way to segment them.
-const CLASS_WORD: c_int = 2;
 
 /// Whether the two blocks either side of a gap should be merged into one.
 ///

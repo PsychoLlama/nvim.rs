@@ -26,17 +26,16 @@ use crate::highlight_group::{HLF_D, HLF_R};
 use crate::insexpand::{Added, word_end, word_start};
 use crate::mbyte::c_cluster_len;
 use crate::memory::XString;
-use crate::message::IOSIZE;
-use crate::message::msg_display_bytes;
+use crate::message::{IOSIZE, msg_display_bytes};
 use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_int;
 use crate::option::defs::ShmFlag;
-use crate::option::vars::P_DEF;
-use crate::option::vars::P_INC;
+use crate::option::vars::{P_DEF, P_INC};
 use crate::optionstr::{OptString, local_or_global};
 use crate::regexp::RE_MAGIC;
 use crate::smsg;
 use crate::strings::has_bytes;
+use crate::tag::LSIZE;
 use crate::window::valid_win;
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win};
@@ -44,8 +43,6 @@ use core::ffi::{CStr, c_int, c_uint};
 use std::ffi::OsStr;
 use std::fs::File;
 use std::os::unix::ffi::OsStrExt;
-
-const LSIZE: usize = super::LSIZE as usize;
 
 /// One file on the include stack.
 #[derive(Debug)]

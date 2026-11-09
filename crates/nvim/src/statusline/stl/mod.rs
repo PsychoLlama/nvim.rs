@@ -47,10 +47,9 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::drawline::MAX_STCWIDTH;
 use crate::env::home_to_tilde;
-use crate::narrow::as_index;
-use crate::narrow::number_as_int;
-use crate::narrow::number_as_lnum;
+use crate::narrow::{as_index, number_as_int, number_as_lnum};
 use crate::normal::{SHOWCMD_BUF, set_visual_active, visual_active};
 use core::cell::Cell;
 use core::ffi::{CStr, c_int};
@@ -59,7 +58,6 @@ use std::ffi::CString;
 use super::*;
 use crate::buffer::{append_arg_number, buf_is_quickfix, buf_spname, calc_percentage, get_rel_pos};
 use crate::charset::{ptr2cells_at, strsize, trans_characters_in};
-use crate::decoration::SIGN_WIDTH;
 use crate::digraph::keymap_str;
 use crate::drawline::{fill_foldcolumn, use_cursor_line_highlight};
 use crate::drawscreen::compute_foldcolumn;
@@ -79,11 +77,9 @@ use crate::option::{
 };
 use crate::options::OPT_INVALID;
 use crate::os::cshim::{byte_toupper, gettext};
-use crate::path::MAXPATHL;
-use crate::path::tail_index;
+use crate::path::{MAXPATHL, tail_index};
 use crate::quickfix::{MSG_LOCLIST, MSG_QFLIST};
-use crate::sign::SignTextAttrs;
-use crate::sign::push_sign_text;
+use crate::sign::{SignTextAttrs, push_sign_text};
 use crate::state::MODE_INSERT;
 use crate::state::mode::STATE;
 use crate::statusline::defs::{StlClickRecord, StlHlRun};
@@ -103,10 +99,6 @@ mod parse;
 use self::arena::{
     Built, Kind, StlItem, StlScratch, collect_clicks, collect_highlights, with_scratch,
 };
-
-/// Widest a `'statuscolumn'` may get before the truncation pass bothers with
-/// it: upstream's `MAX_STCWIDTH`.
-const MAX_STCWIDTH: c_int = MAX_NUMBERWIDTH + SIGN_SHOW_MAX * SIGN_WIDTH as c_int + 9;
 
 // ---------------------------------------------------------------------------
 // The editor, wrapped

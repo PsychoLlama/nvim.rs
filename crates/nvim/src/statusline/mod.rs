@@ -96,7 +96,6 @@ pub const SIGN_SHOW_MAX: ::core::ffi::c_int = 9;
 pub type NumberBase = ::core::ffi::c_uint;
 pub const NUM_BASE_HEXADECIMAL: NumberBase = 16;
 pub const NUM_BASE_DECIMAL: NumberBase = 10;
-pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const MAX_STL_EVAL_DEPTH: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub const RULER_BUF_LEN: ::core::ffi::c_int = 70 as ::core::ffi::c_int;
 pub const TMPLEN: ::core::ffi::c_int = 70 as ::core::ffi::c_int;

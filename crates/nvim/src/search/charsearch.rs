@@ -16,7 +16,7 @@
 use super::*;
 use crate::ascii::NUL;
 use crate::cstr;
-use crate::mbyte::MAX_SCHAR_SIZE;
+use crate::grid::schar::MAX_SCHAR_SIZE;
 use crate::mbyte::{c_cluster_len, char_len, encode_char};
 use crate::narrow::len_as_int;
 use crate::option::cpo_has;
@@ -43,7 +43,7 @@ state_record! {
 }
 
 /// One `ScreenChar`'s bytes plus its NUL — what `LASTC_BYTES` holds.
-const SCHAR_BYTES: usize = MAX_SCHAR_SIZE as usize + 1;
+const SCHAR_BYTES: usize = MAX_SCHAR_SIZE + 1;
 
 /// The bytes `;` and `,` look for, NUL-terminated, by value: `getcharsearch()`
 /// reads them while the very dictionary it is building can run code.

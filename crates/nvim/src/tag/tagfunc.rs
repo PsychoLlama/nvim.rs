@@ -15,8 +15,7 @@
 )]
 
 use super::*;
-use crate::eval::typval::CallFrame;
-use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{CallFrame, TV_INITIAL_VALUE};
 use crate::option::defs::{OptError, OptionSetFlags};
 use crate::optionstr::OptString;
 use crate::types::TypVal;
@@ -234,7 +233,7 @@ fn tag_of(d: &Dict, flags: c_int) -> Option<Found> {
 
     if flags & TAG_NAMES != 0 {
         // Only the name is wanted.
-        return Some(Found::new(name.to_bytes().to_vec(), MT_GL_OTH as usize));
+        return Some(Found::new(name.to_bytes().to_vec(), MT_GL_OTH));
     }
 
     // An empty tags file name, and the line.
@@ -260,7 +259,7 @@ fn tag_of(d: &Dict, flags: c_int) -> Option<Found> {
             out.extend_from_slice(field.value.to_bytes());
         }
     }
-    Some(Found::new(out, MT_GL_OTH as usize))
+    Some(Found::new(out, MT_GL_OTH))
 }
 
 /// One string-valued entry of a `'tagfunc'` result dictionary, borrowed

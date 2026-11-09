@@ -536,7 +536,7 @@ const LIST_LINE: &str = "\t  \tlead  two   three x\u{a0}y \t ";
 /// of the process's glyph cache, whose number depends on what else the
 /// suite drew first, so the digest is of what it says rather than of it.
 fn glyph(sc: ScreenChar) -> String {
-    let mut buf: [c_char; MAX_SCHAR_SIZE as usize] = [0; MAX_SCHAR_SIZE as usize];
+    let mut buf: [c_char; MAX_SCHAR_SIZE] = [0; MAX_SCHAR_SIZE];
     // SAFETY: the buffer has the room `schar_get` asks for.
     let len = unsafe { schar_get(buf.as_mut_ptr(), sc) };
     buf[..len]

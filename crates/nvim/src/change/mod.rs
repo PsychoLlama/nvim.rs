@@ -53,11 +53,12 @@ use crate::indent::{
     copy_indent, fixthisline, get_indent, get_sw_value, may_do_si, set_indent,
     use_indentexpr_for_lisp,
 };
+use crate::indent_c::{KEY_OPEN_BACK, KEY_OPEN_FORW};
 use crate::indent_c::{do_c_expr_indent, in_cinkeys, starts_with_cinword};
 use crate::insexpand::ins_compl_active;
 use crate::mark::defs::FileMarkView;
 use crate::mark::{mark_adjust, mark_col_adjust, mark_view_make};
-use crate::mbyte::GraphemeState;
+use crate::mbyte::{GRAPHEME_STATE_INIT, GraphemeState};
 use crate::mbyte::{mb_adjust_cursor, utf_iscomposing_first};
 use crate::memline::ML_DEL_MESSAGE;
 use crate::memline::{
@@ -127,11 +128,6 @@ pub const OPENLINE_DO_COM: ::core::ffi::c_int = 2;
 /// Delete the white space the split left behind.
 pub const OPENLINE_DELSPACES: ::core::ffi::c_int = 1;
 
-/// The pseudo-keys `in_cinkeys()` matches `o`/`O` against, compared to a
-/// `c_int` `keytyped`.
-pub const KEY_OPEN_BACK: ::core::ffi::c_int = 258;
-pub const KEY_OPEN_FORW: ::core::ffi::c_int = 257;
-
 pub const COM_NEST: u8 = b'n';
 pub const COM_BLANK: u8 = b'b';
 pub const COM_START: u8 = b's';
@@ -143,4 +139,3 @@ pub const COM_LEFT: u8 = b'l';
 pub const COM_RIGHT: u8 = b'r';
 pub const COM_NOBACK: u8 = b'O';
 pub const COM_MAX_LEN: usize = 50;
-pub const GRAPHEME_STATE_INIT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

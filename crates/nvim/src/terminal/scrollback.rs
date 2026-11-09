@@ -23,21 +23,20 @@
 
 use crate::change::{appended_lines_buf, deleted_lines_buf};
 use crate::extmark::EXTMARK_UNDO;
-use crate::grid::{MAX_SCHAR_SIZE, schar_put_scratch};
-use crate::mark::MARK_ADJUST_TERM;
-use crate::mark::mark_adjust_buf;
+use crate::grid::schar::MAX_SCHAR_SIZE;
+use crate::grid::schar_put_scratch;
+use crate::mark::{MARK_ADJUST_TERM, mark_adjust_buf};
 use crate::memline::{ml_append_buf_terminated, ml_delete_buf};
-use crate::narrow::as_index;
-use crate::narrow::count_as_int;
-use crate::narrow::len_as_int;
+use crate::narrow::{as_index, count_as_int, len_as_int};
+use crate::option::SB_MAX;
 use crate::types::{LineNr, OptInt};
 use crate::vterm::screen::ZERO_SCREEN_CELL;
 use crate::vterm::types::{VTermPos, VTermScreenCell};
 use crate::winlayer::Buf;
 use core::ffi::c_int;
 
+use super::Term;
 use super::refresh::invalidate_terminal;
-use super::{SB_MAX, Term};
 use crate::pos::MAXLNUM;
 
 /// A cell holding nothing. vterm reports an empty cell as a zero `schar`;
@@ -121,7 +120,7 @@ pub(crate) fn fetch_row(mut term: Term, row: c_int, end_col: c_int) {
     // Worst case is one maximum-length grapheme cluster per column, plus
     // the terminator. C sized this buffer once, at 8191 bytes, which a wide
     // enough terminal full of clusters overruns.
-    let needed = as_index(end_col.max(0)) * MAX_SCHAR_SIZE as usize + 1;
+    let needed = as_index(end_col.max(0)) * MAX_SCHAR_SIZE + 1;
     if term.textbuf.len() < needed {
         term.textbuf.resize(needed, 0);
     }

@@ -21,6 +21,7 @@
 use super::low_byte;
 use crate::buffer::BLN_LISTED;
 use crate::buffer::{buflist_new, buflist_setfpos};
+use crate::cmdhist::HIST_COUNT;
 use crate::eval::typval::{ListRef, tv_list_alloc};
 use crate::eval::var_set_global;
 use crate::eval::vars::{get_vim_var_list_handle, set_vim_var_list};
@@ -49,9 +50,8 @@ use core::ffi::{c_char, c_int};
 use super::file::{find_shada_parameter, get_shada_parameter};
 use super::unpack::Source;
 use super::{
-    DEFAULT_SEARCH_PATTERN, HIST_COUNT, HistoryMergerState, ReadKinds, ReadStatus,
-    ShadaBufferListItem, ShadaEntry, ShadaEntryData, ShadaExtra, ShadaFileMark, WANT_ALWAYS, kind,
-    read_flags, want,
+    DEFAULT_SEARCH_PATTERN, HistoryMergerState, ReadKinds, ReadStatus, ShadaBufferListItem,
+    ShadaEntry, ShadaEntryData, ShadaExtra, ShadaFileMark, WANT_ALWAYS, kind, read_flags, want,
 };
 
 /// The kinds of entry a read with these flags is looking for.

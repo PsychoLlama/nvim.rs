@@ -26,11 +26,13 @@
 )]
 
 use crate::ascii::ascii_isdigit;
+use crate::cmdhist::HIST_COUNT;
 use crate::cmdhist::{
     HistRestored, HistShadaEntry, hist_shada_replace, hist_shada_take, hist_shada_view,
 };
+use crate::mark::JUMPLISTSIZE;
 use crate::mark::{global_mark_timestamp, shada_local_mark_timestamp};
-use crate::narrow::len_as_int;
+use crate::narrow::{as_index, len_as_int};
 use crate::path::path_fnamecmp;
 use crate::register::{op_reg_index, shada_cleared_register_timestamp};
 use crate::registry::{IdMap, id_map};
@@ -47,9 +49,8 @@ use super::file::shada_removable;
 use super::pack::{Packer, pack_entry};
 use super::unpack::Source;
 use super::{
-    FileMarks, HIST_COUNT, HistoryMergerState, JUMPLISTSIZE, ReadKinds, ReadStatus, ShadaEntry,
-    ShadaEntryData, ShadaHistoryItem, WriteMergerState, WriteStatus, mark_global_index,
-    mark_local_index,
+    FileMarks, HistoryMergerState, ReadKinds, ReadStatus, ShadaEntry, ShadaEntryData,
+    ShadaHistoryItem, WriteMergerState, WriteStatus, mark_global_index, mark_local_index,
 };
 
 /// One slot of a [`HistoryRing`]: an entry and its neighbours in timestamp
@@ -333,7 +334,7 @@ pub(crate) fn marks_equal(a: Pos, b: Pos) -> bool {
 /// the slot answered is whatever the caller is about to write over.
 pub(crate) fn marklist_insert<T>(list: &mut [T], len: usize, i: usize) -> Option<usize> {
     match i {
-        0 if len == JUMPLISTSIZE => None, // older than the whole list
+        0 if len == as_index(JUMPLISTSIZE) => None, // older than the whole list
         0 => {
             if len > 0 {
                 shift_within(list, 0..len, 1);
@@ -341,7 +342,7 @@ pub(crate) fn marklist_insert<T>(list: &mut [T], len: usize, i: usize) -> Option
             Some(0)
         }
         mut at => {
-            if len == JUMPLISTSIZE {
+            if len == as_index(JUMPLISTSIZE) {
                 at -= 1;
                 if at > 0 {
                     shift_within(list, 1..at + 1, 0); // the oldest item goes
@@ -395,7 +396,7 @@ fn insert_mark_list(
         return;
     };
     list[i] = entry;
-    if *size < JUMPLISTSIZE {
+    if *size < as_index(JUMPLISTSIZE) {
         *size += 1;
     }
 }

@@ -8,9 +8,3 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-
-use crate::regexp::OptMagic;
-
-pub(crate) const OPTION_MAGIC_OFF: OptMagic = 2;
-pub(crate) const OPTION_MAGIC_ON: OptMagic = 1;
-pub(crate) const OPTION_MAGIC_NOT_SET: OptMagic = 0;

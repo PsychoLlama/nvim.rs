@@ -18,14 +18,11 @@
 
 use crate::cstr;
 use crate::regexp::NfaOp;
+use crate::regexp::nfa::build::MAX_DEPTH;
 use core::ffi::c_int;
 
 use super::program::{NfaState, StateId};
-use crate::mbyte::MB_MAXBYTES;
-use crate::mbyte::encode_char;
-
-/// How far the walks below follow a `NFA_SPLIT` before giving up.
-const MAX_DEPTH: c_int = 4;
+use crate::mbyte::{MB_MAXBYTES, encode_char};
 
 /// The capture brackets and `\zs`/`\ze` markers: they consume no input, so a
 /// walk looking for the first *character* steps straight through them.

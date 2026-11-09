@@ -150,5 +150,4 @@ pub const FM_FORWARD: ::core::ffi::c_uint = 2;
 pub const FM_BACKWARD: ::core::ffi::c_uint = 1;
 pub const SEARCH_STAT_DEF_TIMEOUT: ::core::ffi::c_int = 40;
 pub const SEARCH_STAT_BUF_LEN: ::core::ffi::c_int = 16;
-pub const LSIZE: ::core::ffi::c_uint = 512;
 pub(crate) mod state;

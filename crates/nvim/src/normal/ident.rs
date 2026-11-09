@@ -13,6 +13,7 @@
 use super::identfind::find_ident_under_cursor;
 use super::state::with_scratch_cmd;
 use crate::ascii::ascii_iswhite;
+use crate::cmdhist::HIST_SEARCH;
 use crate::cstr;
 use crate::ex_cmds::{EcmdFlags, do_ecmd, newlnum};
 use crate::ex_getln::{VSE_NONE, fnameescape};
@@ -36,8 +37,8 @@ use crate::memline::Lines;
 use crate::message::{E_NOIDENT, emsg};
 use crate::normal::defs::CmdArg;
 use crate::normal::{
-    FIND_IDENT, FIND_STRING, HIST_SEARCH, check_clear_op_quit, check_text_or_curbuf_locked,
-    clear_op, get_visual_text, normal_search, visual_active,
+    FIND_IDENT, FIND_STRING, check_clear_op_quit, check_text_or_curbuf_locked, clear_op,
+    get_visual_text, normal_search, visual_active,
 };
 use crate::option::magic_isset;
 use crate::optionstr::{OptString, OptStringRef, local_or_global};

@@ -26,10 +26,10 @@ use crate::memory::{ThinCString, XString};
 use crate::message::IOSIZE;
 use crate::message::{MSG_IOBUFF_LEN, msg};
 use crate::message_fmt::{msg_cstr, to_message};
+use crate::narrow::const_len_as_int;
 use crate::pos::MAXCOL;
 use crate::semsg;
-use crate::types::Handle;
-use crate::types::Vv;
+use crate::types::{Handle, Vv};
 use crate::winlayer::{Buf, Win, WinId};
 use crate::{smsg, tr};
 use core::ffi::{CStr, c_int, c_uint};
@@ -292,9 +292,9 @@ impl DoTag {
         }
 
         self.len += 1;
-        if self.len > TAGSTACKSIZE {
+        if self.len > const_len_as_int(TAGSTACKSIZE) {
             // Full: drop the oldest entry and shift the rest down.
-            self.len = TAGSTACKSIZE;
+            self.len = const_len_as_int(TAGSTACKSIZE);
             drop_oldest(&mut stack[..stack_index(self.len)]);
             self.idx -= 1;
         }
@@ -720,7 +720,7 @@ impl DoTag {
         }
 
         let found = match_at(self.cur_match);
-        let ignored_case = usize::from(found.priority) & MT_IC_OFF as usize != 0;
+        let ignored_case = usize::from(found.priority) & MT_IC_OFF != 0;
         self.report_count(ignored_case);
 
         // Let the SwapExists event know what tag is being jumped to, cut

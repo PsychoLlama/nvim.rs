@@ -99,12 +99,9 @@ pub(crate) use refresh::{
     on_scrollback_changed_in, terminal_check_refresh, terminal_init, terminal_teardown,
 };
 
-/// The largest `'scrollback'` that means anything; the option's negative
-/// "unlimited" spelling becomes this.
-const SB_MAX: c_int = 1000000;
 /// The most columns [`terminal_get_line_attributes`] will resolve;
 /// `drawline` sizes its array to match.
-const TERM_ATTRS_MAX: c_int = 1024;
+pub(crate) const TERM_ATTRS_MAX: c_int = 1024;
 
 // ---------------------------------------------------------------------------
 // The emulator, through the handle

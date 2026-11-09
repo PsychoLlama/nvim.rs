@@ -26,6 +26,7 @@
 )]
 
 use crate::api::keysets::KeyDict__shada_search_pat;
+use crate::cmdhist::HIST_SEARCH;
 use crate::eval::encode::encode_vim_to_msgpack;
 use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::packer::{format, pack_to_bytes};
@@ -34,9 +35,9 @@ use crate::types::{ApiDict, Integer, Object, VAR_BLOB, VAR_TYPE_BLOB};
 use std::ffi::CString;
 
 use super::{
-    DEFAULT_POS, DEFAULT_REGISTER, DEFAULT_SEARCH_PATTERN, HIST_SEARCH, ShadaBufferListItem,
-    ShadaEntry, ShadaEntryData, ShadaExtra, ShadaFileMark, ShadaGlobalVar, ShadaHistoryItem,
-    ShadaRegister, WriteStatus, default_mark_name,
+    DEFAULT_POS, DEFAULT_REGISTER, DEFAULT_SEARCH_PATTERN, ShadaBufferListItem, ShadaEntry,
+    ShadaEntryData, ShadaExtra, ShadaFileMark, ShadaGlobalVar, ShadaHistoryItem, ShadaRegister,
+    WriteStatus, default_mark_name,
 };
 
 /// A msgpack encoder into a byte vector.
@@ -214,7 +215,7 @@ fn pack_header(header: &ApiDict, out: &mut Packer) {
 /// One history line: the history it belongs to, its text, and — for search
 /// history only — the character the search was started with.
 fn pack_history(history: &ShadaHistoryItem, extra: &Option<ShadaExtra>, out: &mut Packer) {
-    let is_search = history.histtype == HIST_SEARCH;
+    let is_search = core::ffi::c_int::from(history.histtype) == HIST_SEARCH;
     out.array(2 + u32::from(is_search) + extra_len(extra));
     out.uint(u32::from(history.histtype));
     out.bin(history.text.to_bytes());

@@ -11,7 +11,11 @@
 use crate::ascii::TAB;
 use crate::autocmd::defs::AutoEvent;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::indent_c::KEY_COMPLETE;
 use crate::memory::XString;
+use crate::tag::{
+    LSIZE, TAG_INS_COMP, TAG_MANY, TAG_NOIC, TAG_REGEXP, TAG_VERBOSE, find_tag_names,
+};
 use core::ffi::{CStr, c_int, c_uint};
 
 use std::rc::Rc;
@@ -44,8 +48,7 @@ use crate::eval::vars::set_vim_var_dict;
 use crate::eval::{callback_call, get_v_event, restore_v_event, set_ref_in_callback};
 use crate::ex_docmd::state::{EX_NORMAL_BUSY, GLOBAL_BUSY};
 use crate::ex_eval::aborting;
-use crate::extmark::ExtmarkUndoObject;
-use crate::extmark::extmark_apply_undo;
+use crate::extmark::{ExtmarkUndoObject, extmark_apply_undo};
 use crate::fuzzy::fuzzy_match_str;
 use crate::getchar::state::{GOT_INT, KEY_TYPED, test_disable_char_avail};
 use crate::getchar::{
@@ -83,8 +86,7 @@ use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::os::libc::{ptrdiff_t, size_t, uint64_t};
 use crate::os::time::{os_delay, os_hrtime};
 use crate::path::{expand_wildcards, path_tail, vim_ispathsep};
-use crate::popupmenu::state::PUM_WANT;
-use crate::popupmenu::state::PumItem;
+use crate::popupmenu::state::{PUM_WANT, PumItem};
 use crate::popupmenu::{
     pum_clear, pum_display, pum_get_height, pum_set_event_info, pum_undisplay, pum_visible,
 };
@@ -104,7 +106,6 @@ use crate::state::mode::{
     EDIT_SUBMODE_HIGHL, EDIT_SUBMODE_PRE, STATE,
 };
 use crate::state::{MODE_INSERT, REPLACE_FLAG, may_trigger_modechanged};
-use crate::tag::find_tag_names;
 use crate::tag::state::G_TAG_AT_CURSOR;
 use crate::textformat::auto_format;
 use crate::types::{
@@ -144,7 +145,6 @@ pub use self::keys::*;
 #[cfg(test)]
 mod tests;
 pub const DIRECTION_NOT_SET: Direction = 0;
-pub const KEY_COMPLETE: ::core::ffi::c_int = 259;
 pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
 pub const CTRL_X_CMDLINE_CTRL_X: ::core::ffi::c_int = 17;
 pub const CTRL_X_NORMAL: ::core::ffi::c_int = 0;
@@ -287,13 +287,6 @@ pub(crate) struct InsComplNextState {
     /// kept so its allocation serves the whole scan.
     pub(crate) found: Vec<u8>,
 }
-pub const TAG_MANY: ::core::ffi::c_int = 300;
-pub const TAG_VERBOSE: ::core::ffi::c_int = 32;
-pub const TAG_INS_COMP: ::core::ffi::c_int = 64;
-pub const TAG_NOIC: ::core::ffi::c_int = 8;
-pub const TAG_NAMES: ::core::ffi::c_int = 2;
-pub const TAG_REGEXP: ::core::ffi::c_int = 4;
-pub const LSIZE: ::core::ffi::c_int = 512;
 pub const INS_COMPL_CPT_CONT: ::core::ffi::c_int = 2;
 pub const INS_COMPL_CPT_OK: ::core::ffi::c_int = 1;
 pub const INS_COMPL_CPT_END: ::core::ffi::c_int = 3;

@@ -92,7 +92,7 @@ pub(crate) fn ins_compl_dictionaries(dict_start: &[u8], pat: &CStr, flags: c_int
                 // `LSIZE` buffer cuts it, and expand wildcards in it -- but
                 // do not allow backticks (for security, the 'dict' option
                 // may have been set in a modeline).
-                let (part, rest) = split_option_part(dict, LSIZE as usize, b",");
+                let (part, rest) = split_option_part(dict, LSIZE, b",");
                 dict = rest;
                 if !thesaurus && part == b"spell" {
                     None
@@ -188,7 +188,7 @@ pub(crate) fn ins_compl_files(
         .map(ApiString::as_cstr)
         .filter(|l| !l.is_empty());
     // One line at a time, with the terminator `vim_regexec` wants.
-    let mut raw: Vec<u8> = Vec::with_capacity(LSIZE as usize);
+    let mut raw: Vec<u8> = Vec::with_capacity(LSIZE);
 
     for file in files {
         if GOT_INT.get() || ins_compl_interrupted() {
@@ -211,10 +211,7 @@ pub(crate) fn ins_compl_files(
         let mut reader = Fgets::new(fp);
 
         // Read the dictionary file line by line, checking each for a match.
-        while !GOT_INT.get()
-            && !ins_compl_interrupted()
-            && reader.line_capped(&mut raw, LSIZE as usize)
-        {
+        while !GOT_INT.get() && !ins_compl_interrupted() && reader.line_capped(&mut raw, LSIZE) {
             // Read as the C string `vim_fgets` left: up to a NUL in it.
             raw.push(b'\0');
             let line_cstr = cstr::in_bytes(&raw);

@@ -36,6 +36,7 @@
 
 use super::events::{linegrid, remote_ui_cursor_goto, remote_ui_highlight_set, remote_ui_put};
 use super::packer::{MAX_CELLS_PENDING, UI_BUF_SIZE, prepare_call, push_call, ui_flush_buf};
+use crate::grid::schar::MAX_SCHAR_SIZE;
 use crate::grid::{SCHAR_BUF_SIZE, SCharBuf, schar_copy, schar_get_adv};
 use crate::mbyte::ambiguous_width_at;
 use crate::msgpack_rpc::packer::{
@@ -44,8 +45,7 @@ use crate::msgpack_rpc::packer::{
 use crate::narrow::{len_as_integer, number_as_int, number_as_u32};
 use crate::types::builders::ArrayBuf;
 use crate::types::{Integer, ScreenAttr, ScreenChar};
-use crate::ui::state::COLUMNS;
-use crate::ui::state::LINE_FLAG_WRAP;
+use crate::ui::state::{COLUMNS, LINE_FLAG_WRAP};
 use crate::ui::state::{LineFlags, RemoteUI};
 use core::ffi::c_int;
 
@@ -53,9 +53,6 @@ use core::ffi::c_int;
 /// its header, the highlight id and the repeat count. Two of those plus the
 /// closing `wrap` byte is what has to be free before a cell is emitted.
 const MAX_CELL_SIZE: usize = 1 + 2 + MAX_SCHAR_SIZE + 5 + 5;
-
-/// The longest a single cell's text can be, as [`schar_get_adv`] writes it.
-const MAX_SCHAR_SIZE: usize = 32;
 
 /// The event this module packs. Named once, because the mid-run flush has
 /// to reopen the same event.

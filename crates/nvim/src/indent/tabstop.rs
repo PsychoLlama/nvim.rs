@@ -20,13 +20,7 @@ use core::ffi::c_int;
 
 use crate::types::{ColNr, OptInt};
 
-// Nested so that ffigen, which flattens a file's top-level constants into one
-// C namespace, does not publish a name this generic.
-mod limit {
-    /// The largest width a single stop may name.
-    pub const TABSTOP_MAX: ::core::ffi::c_int = 9999;
-}
-pub use limit::TABSTOP_MAX;
+use crate::option::TABSTOP_MAX;
 
 /// A stop number (or the count, which is the last one's) as an index into
 /// the list; the list never names a negative one.

@@ -25,7 +25,7 @@ use crate::mbyte::{c_cells_at, char_at, char_len, cp_bounds, encode_char};
 use core::ffi::CStr;
 
 /// Largest glyph in bytes, including the terminating NUL.
-pub const MAX_SCHAR_SIZE: c_int = 32;
+pub const MAX_SCHAR_SIZE: usize = 32;
 
 /// Room for any glyph and its NUL: [`MAX_SCHAR_SIZE`] plus one.
 ///
@@ -33,7 +33,7 @@ pub const MAX_SCHAR_SIZE: c_int = 32;
 /// build only, as upstream's `assert()` does, so a release build can intern
 /// one -- and then its NUL needs the byte past `MAX_SCHAR_SIZE`. Upstream's
 /// scratch buffers are `MAX_SCHAR_SIZE` long and would be overrun by one.
-pub(crate) const SCHAR_BUF_SIZE: usize = MAX_SCHAR_SIZE as usize + 1;
+pub(crate) const SCHAR_BUF_SIZE: usize = MAX_SCHAR_SIZE + 1;
 
 /// A scratch buffer a glyph is copied out into.
 pub(crate) type SCharBuf = [u8; SCHAR_BUF_SIZE];
@@ -100,7 +100,7 @@ pub fn schar_from_str(str: &CStr) -> ScreenChar {
 #[inline]
 pub fn schar_from_buf(buf: &[u8]) -> ScreenChar {
     let len = buf.len();
-    debug_assert!(len < MAX_SCHAR_SIZE as size_t, "len < MAX_SCHAR_SIZE");
+    debug_assert!(len < MAX_SCHAR_SIZE, "len < MAX_SCHAR_SIZE");
     if len <= 4 {
         let mut bytes = [0u8; 4];
         bytes[..len].copy_from_slice(buf);
@@ -380,7 +380,7 @@ fn reshape(sc: ScreenChar, c0: c_int, c1: c_int, c0new: c_int, c1new: c_int) -> 
         .get(usize::try_from(off).unwrap_or(usize::MAX)..)
         .unwrap_or(&[]);
     let mut rest = tail.len();
-    if rest + len + 1 > MAX_SCHAR_SIZE as size_t {
+    if rest + len + 1 > MAX_SCHAR_SIZE {
         // Too bigly: discard one codepoint. That is always enough,
         // because c0 cannot grow by more than two bytes (base Arabic to
         // extended Arabic).

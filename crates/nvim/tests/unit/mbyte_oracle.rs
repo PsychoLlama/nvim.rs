@@ -164,7 +164,7 @@ fn the_drawing_walk() {
             }
             d.add(at as i64);
         }
-        let mut out = [0 as c_char; MAX_SCHAR_SIZE as usize + 1];
+        let mut out = [0 as c_char; MAX_SCHAR_SIZE + 1];
         for i in 0..=text.len() {
             let (sc, firstc) = c_cluster_schar(&text[i..]);
             // SAFETY: `out` has room for any glyph and its NUL.

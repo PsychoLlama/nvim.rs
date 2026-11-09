@@ -39,8 +39,13 @@ use core::ffi::c_int;
 /// codepoint (see the module docs), so callers test `>= CLASS_WORD` rather
 /// than `== CLASS_WORD` when they mean "part of a word".
 const CLASS_BLANK: c_int = 0;
-const CLASS_PUNCT: c_int = 1;
-const CLASS_WORD: c_int = 2;
+pub(crate) const CLASS_PUNCT: c_int = 1;
+/// The character class `mb_get_class_tab` gives an alphanumeric character.
+///
+/// Only this class counts as "word" for `inline:word`: emoji and CJK
+/// ideographs get their own classes, and word-diffing them is not useful
+/// because nvim has no way to segment them.
+pub(crate) const CLASS_WORD: c_int = 2;
 const CLASS_EMOJI: c_int = 3;
 
 /// Every codepoint in `first..=last` has class `class`.

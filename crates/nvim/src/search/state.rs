@@ -18,8 +18,7 @@
 
 use crate::global_cell::GlobalCell;
 use crate::os::libc::int64_t;
-use crate::regexp::OptMagic;
-use crate::regexp::state::OPTION_MAGIC_NOT_SET;
+use crate::regexp::{OPTION_MAGIC_NOT_SET, OptMagic};
 use crate::types::ProfTime;
 use crate::types::{ColNr, LineNr};
 use core::ffi::c_int;

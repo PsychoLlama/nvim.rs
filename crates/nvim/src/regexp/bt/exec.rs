@@ -17,6 +17,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::regexp::{ExtMatch, ExtMatchRef, TIME_CHECK_INTERVAL};
 use crate::types::LineNr;
 use core::ffi::c_int;
 
@@ -31,17 +32,11 @@ use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
 use crate::os::libc::{int64_t, uint32_t};
 use crate::profile::profile_passed_limit;
-use crate::regexp::ExtMatch;
-use crate::regexp::ExtMatchRef;
 use crate::regexp::{
     BtRegProg, MatchPos, NSUBEXP, REGMAGIC, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex, char_at_nul,
     cleanup_subexpr, cleanup_zsubexpr, cluster_len_at, cstrchr_line, cstrncmp, reg_getline,
 };
 use crate::types::{ColNr, LPos};
-
-/// How many start columns may be tried between two reads of the caller's
-/// time limit.
-const TIME_CHECK_INTERVAL: c_int = 20;
 
 /// `line` from byte `col` on. A column past the end — which no caller passes
 /// — reads as the end of the line rather than past it.

@@ -20,10 +20,8 @@
 )]
 
 use super::do_sub_msg;
-use crate::cmdhist::add_to_history;
-use crate::ex_cmds::{
-    HIST_SEARCH, IS_ALPHA, SUB_HONOR_OPTIONS, SUB_IGNORE_CASE, SUB_MATCH_CASE, SubFlags,
-};
+use crate::cmdhist::{HIST_SEARCH, add_to_history};
+use crate::ex_cmds::{IS_ALPHA, SUB_HONOR_OPTIONS, SUB_IGNORE_CASE, SUB_MATCH_CASE, SubFlags};
 use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
 use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, ex_may_print};
 use crate::global_cell::GlobalCell;

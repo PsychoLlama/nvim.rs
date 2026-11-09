@@ -12,10 +12,11 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::insexpand::{CPT_ABBR, CPT_KIND, CPT_MENU, set_cpt_callbacks};
+use crate::tag::LSIZE;
 use core::ffi::{CStr, c_int, c_uint};
 
 use crate::eval::userfunc::scriptlocal_funcname;
-use crate::insexpand::set_cpt_callbacks;
 use crate::option::defs::{OptError, OptSet, OptionSetFlags};
 use crate::option::split_option_part;
 use crate::option::vars::{CIA_FLAGS, COT_FLAGS, P_CIA, P_HLG, SPO_FLAGS, TC_FLAGS};
@@ -27,9 +28,7 @@ use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 
 use super::frame::{invalid, new_bytes, new_value, varp, win};
-use super::{
-    CPT_ABBR, CPT_KIND, CPT_MENU, LSIZE, illegal_char, illegal_char_after_chr, opt_strings_mask,
-};
+use super::{illegal_char, illegal_char_after_chr, opt_strings_mask};
 
 /// The sources 'complete' accepts, one letter each.
 const CPT_SOURCES: &CStr = c".wbuksid]tUfFo";
@@ -52,9 +51,9 @@ pub fn did_set_complete(args: &mut OptSet) -> Result<(), OptError> {
     let at = |i: usize| value.get(i).copied().unwrap_or(0);
     let mut p = 0;
     while at(p) != 0 {
-        let mut part = Vec::with_capacity(LSIZE as usize);
+        let mut part = Vec::with_capacity(LSIZE);
         let mut escaped = false;
-        while at(p) != 0 && (at(p) != b',' || escaped) && part.len() < LSIZE as usize - 1 {
+        while at(p) != 0 && (at(p) != b',' || escaped) && part.len() < LSIZE - 1 {
             if at(p) == b'\\' && at(p + 1) == b',' {
                 escaped = true;
                 p += 1;
@@ -112,7 +111,7 @@ pub fn did_set_complete(args: &mut OptSet) -> Result<(), OptError> {
 /// what the menu drawing code reads.
 pub fn did_set_completeitemalign(_args: &mut OptSet) -> Result<(), OptError> {
     // Each column's position here is its digit.
-    const COLUMNS: [(&CStr, c_uint); 3] = [
+    const COLUMNS: [(&CStr, usize); 3] = [
         (c"abbr", CPT_ABBR),
         (c"kind", CPT_KIND),
         (c"menu", CPT_MENU),
@@ -144,7 +143,8 @@ pub fn did_set_completeitemalign(_args: &mut OptSet) -> Result<(), OptError> {
             return invalid();
         }
         seen[which] = true;
-        order = order * 10 + COLUMNS[which].1;
+        order =
+            order * 10 + c_uint::try_from(COLUMNS[which].1).expect("a column index is one digit");
         count += 1;
     }
     // "abbr" alone would leave the order at 0, which is also "nothing was

@@ -19,8 +19,7 @@
 
 use super::*;
 use crate::autocmd::fire_autocmds;
-use crate::grid::DEFAULT_GRID_HANDLE;
-use crate::grid::default_grid_ref;
+use crate::grid::{DEFAULT_GRID_HANDLE, default_grid_ref};
 use crate::guard::Suppress;
 use crate::statusline::{NO_CLICK, clear_click_defs};
 use crate::winlayer::{self, Win};
@@ -277,5 +276,5 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
 /// Clamp the screen size to something the editor can lay out and index.
 pub fn check_screensize() {
     ROWS.set(ROWS.get().max(min_rows_for_all_tabpages()).min(MAX_ROWS));
-    COLUMNS.set(COLUMNS.get().max(MIN_COLUMNS as c_int).min(MAX_COLUMNS));
+    COLUMNS.set(COLUMNS.get().clamp(MIN_COLUMNS, MAX_COLUMNS));
 }

@@ -27,6 +27,7 @@
 )]
 
 use crate::os::env::{env_exists, getenv_owned};
+use crate::tui::state::KEY_ENCODING_XTERM;
 use crate::tui::state::{KeyEncoding, TerminfoExt};
 use crate::tui::terminfo::caps::{
     TERM_CARRIAGE_RETURN, TERM_CURSOR_INVISIBLE, TERM_CURSOR_NORMAL, TERM_ENTER_CA_MODE,
@@ -44,7 +45,6 @@ use std::borrow::Cow;
 /// The two key-encoding schemes this module chooses between. `KeyEncoding`
 /// is a bare integer alias, so name the values rather than spelling them.
 const KEY_ENCODING_LEGACY: KeyEncoding = 0;
-const KEY_ENCODING_XTERM: KeyEncoding = 2;
 
 /// The suffix a linux console's `cursor_normal` carries when it also resets
 /// the cursor to the "default" shape, and the matching one for

@@ -28,7 +28,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use core::ffi::{CStr, c_int, c_uint};
+use core::ffi::{CStr, c_int};
 
 mod check;
 mod read;
@@ -51,10 +51,6 @@ mod statusline;
 pub use self::statusline::*;
 use crate::regexp::vim_regexec;
 use crate::terminal::terminal_notify_theme;
-pub const CPT_MENU: c_uint = 2;
-pub const CPT_KIND: c_uint = 1;
-pub const CPT_ABBR: c_uint = 0;
-pub const LSIZE: c_uint = 512;
 /// The letters 'formatoptions' accepts.
 pub const FO_ALL: &CStr = c"tcro/q2vlb1mMBn,aw]jp";
 /// The letters 'cpoptions' accepts.

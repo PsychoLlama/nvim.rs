@@ -32,16 +32,15 @@
 
 use super::*;
 use crate::charset::display::ptr2cells_at;
-use crate::drawscreen::SHOWCMD_COLS;
 use crate::guard::Depth;
 use crate::keycodes::{K_SPECIAL, KS_EXTRA, key_escape};
 use crate::mbyte::{cells_at, head_off};
 use crate::memline::Lines;
+use crate::normal::SHOWCMD_COLS;
 use crate::os::input::InputEvents;
 use crate::plines::win_line_prefix_cells;
 use crate::types::Key;
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_long};
 
 /// `<Esc>` and CTRL-C as the typeahead bytes they are.

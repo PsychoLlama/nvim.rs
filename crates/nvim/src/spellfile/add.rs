@@ -38,8 +38,8 @@ use crate::cstr;
 use crate::env::{home_to_tilde, xdg_home};
 use crate::semsg;
 use crate::smsg;
-use crate::strings::has_bytes;
-use crate::strings::has_char;
+use crate::spell::{SPELL_ADD_BAD, SpellAddType};
+use crate::strings::{has_bytes, has_char};
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 use std::ffi::OsStr;
@@ -47,32 +47,24 @@ use std::fs::OpenOptions;
 use std::io::{Cursor, Seek, SeekFrom, Write};
 use std::os::unix::ffi::OsStrExt;
 
-use crate::buffer::BufRef;
-use crate::buffer::find_buffer_by_name;
+use crate::buffer::{BufRef, find_buffer_by_name};
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
-use crate::fileio::Fgets;
-use crate::fileio::buf_reload;
-use crate::fileio::temp_name;
+use crate::fileio::{Fgets, buf_reload, temp_name};
 use crate::memory::XString;
-use crate::message::E_BUFLOADED;
-use crate::message::emsg;
+use crate::message::{E_BUFLOADED, emsg};
 use crate::message_fmt::msg_bytes;
 use crate::option::defs::{OptVal, OptionSetFlags};
-use crate::option::set_option_value_give_err;
-use crate::option::split_option_part;
+use crate::option::{set_option_value_give_err, split_option_part};
 use crate::options::OPT_SPELLFILE;
 use crate::os::cshim::gettext;
 use crate::os::fs::{mkdir_recurse, os_mkdir};
 use crate::path::MAXPATHL;
 use crate::path::{dir_of_file_exists, path_tail, tail_with_sep_index, vim_ispathsep};
-use crate::spell::SpellAddType;
 use crate::spell::{INT_WORDLIST, spell_enc, with_lang};
 use crate::undo::buf_is_changed;
 
 use super::wordtree::valid_spell_word;
-use super::{
-    E_ILLEGAL_CHARACTER_IN_WORD, MAXWLEN, SPELL_ADD_BAD, SPELL_ADD_RARE, XDG_DATA_HOME, mkspell,
-};
+use super::{E_ILLEGAL_CHARACTER_IN_WORD, MAXWLEN, SPELL_ADD_RARE, XDG_DATA_HOME, mkspell};
 use crate::optionstr::OptString;
 
 /// Add `word` to a spell file, or take it back out again.

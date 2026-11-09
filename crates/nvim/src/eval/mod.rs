@@ -35,7 +35,6 @@ use crate::ascii::NL;
 use crate::global_cell::GlobalCell;
 // Named here so the expression tree and `list.rs` can reach it by one
 // path; it belongs to `message`.
-use crate::mark::defs::MarkGet;
 pub(crate) use crate::message::E_INVALBLOB;
 use crate::os::libc::uint64_t;
 use crate::registry::SlotTable;
@@ -75,7 +74,6 @@ pub(crate) use self::vars::{get_v_event, restore_v_event};
 pub use self::expr::eval0;
 
 pub const IS_ALNUM: c_uint = 8;
-pub const MARK_ALL: MarkGet = 1;
 pub const GLV_READ_ONLY: c_int = 16;
 pub const GLV_NO_AUTOLOAD: c_int = 4;
 /// `get_lval`'s "do not report" flag.

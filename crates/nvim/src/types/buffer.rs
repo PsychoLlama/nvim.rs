@@ -41,6 +41,8 @@ use crate::undo::store::UndoStore;
 use crate::winlayer::{Buf, BufId};
 
 pub type AlignTextPos = ::core::ffi::c_uint;
+pub(crate) const ALIGN_CENTER: AlignTextPos = 1;
+pub(crate) const ALIGN_RIGHT: AlignTextPos = 2;
 pub type BorderTextType = ::core::ffi::c_uint;
 /// One `nvim_buf_attach` subscription's Lua callbacks.
 ///

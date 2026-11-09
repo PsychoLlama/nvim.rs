@@ -44,7 +44,7 @@ fn intern(text: &str) -> ScreenChar {
 /// `sc`'s bytes, through `schar_get` into a buffer of exactly
 /// `MAX_SCHAR_SIZE`, checking the terminator it writes.
 fn text(sc: ScreenChar) -> Vec<u8> {
-    let mut buf = [0x55u8; MAX_SCHAR_SIZE as usize];
+    let mut buf = [0x55u8; MAX_SCHAR_SIZE];
     // SAFETY: `buf` has room for `MAX_SCHAR_SIZE` bytes.
     let len = unsafe { schar_get(buf.as_mut_ptr().cast::<c_char>(), sc) };
     assert_eq!(buf[len], 0, "schar_get terminates the glyph");
@@ -117,7 +117,7 @@ fn the_longest_glyph_and_its_terminator_fill_the_buffer() {
     for _ in 0..15 {
         long.push('\u{301}');
     }
-    assert_eq!(long.len(), MAX_SCHAR_SIZE as usize - 1);
+    assert_eq!(long.len(), MAX_SCHAR_SIZE - 1);
     let sc = intern(&long);
     assert!(schar_high(sc));
     assert_eq!(text(sc), long.as_bytes());
@@ -136,7 +136,7 @@ fn a_glyph_of_max_schar_size_bytes_is_refused() {
     for _ in 0..15 {
         long.push('\u{301}');
     }
-    assert_eq!(long.len(), MAX_SCHAR_SIZE as usize);
+    assert_eq!(long.len(), MAX_SCHAR_SIZE);
     let _ = intern(&long);
 }
 
@@ -150,7 +150,7 @@ fn schar_get_adv_builds_a_string_from_glyphs() {
         0,
         intern("z"),
     ];
-    let mut buf = [0u8; 5 * MAX_SCHAR_SIZE as usize];
+    let mut buf = [0u8; 5 * MAX_SCHAR_SIZE];
     let mut at: &mut [u8] = &mut buf;
     let mut total = 0;
     for &sc in &glyphs {

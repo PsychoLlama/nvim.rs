@@ -22,15 +22,12 @@
 
 use super::addrtype::{arglist_len, get_cmd_default_range, loaded_buffer_range};
 use crate::cstr::byte_at;
-use crate::ex_docmd::ex_msg;
-use crate::ex_docmd::is_user_cmd;
-use crate::mark::MARK_BUF_LOCAL;
+use crate::ex_docmd::{ex_msg, is_user_cmd};
+use crate::mark::{MARK_ALL, MARK_BUF_LOCAL};
 use crate::mark::{mark_check, mark_get, mark_get_visual, mark_move_to};
 use crate::message::emsg;
-use crate::narrow::len_as_int;
-use crate::narrow::number_as_lnum;
-use crate::search::do_search_in;
-use crate::search::search_last_pattern;
+use crate::narrow::{len_as_int, number_as_lnum};
+use crate::search::{do_search_in, search_last_pattern};
 use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::winlayer::TabPage;
@@ -46,7 +43,7 @@ use crate::cursor::{check_cursor, check_cursor_col};
 use crate::ex_docmd::window::{current_tab_nr, current_win_nr};
 use crate::ex_docmd::{
     E_BACKSLASH, E_INVRANGE, E_LINE_NUMBER_OUT_OF_RANGE, E_NO_ERRORS, E_NORANGE, INT32_MAX,
-    MARK_ALL, SEARCHCMDLEN,
+    SEARCHCMDLEN,
 };
 
 use crate::option::magic_isset;

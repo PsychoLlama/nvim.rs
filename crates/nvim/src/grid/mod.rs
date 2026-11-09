@@ -50,6 +50,7 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::{hl_apply_winblend, hl_combine_attr};
 use crate::log::LOGLVL_DBG;
 use crate::mbyte::{cluster_len, utf_char2len};
+use crate::types::buffer::{ALIGN_CENTER, ALIGN_RIGHT};
 
 use crate::decoration::defs::VirtText;
 use crate::grid::defs::{GridCells, GridView, ScreenGrid};
@@ -96,8 +97,6 @@ pub(crate) use schar::{
 
 pub(crate) static DEFAULT_GRID: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
 
-const ALIGN_CENTER: AlignTextPos = 1;
-const ALIGN_RIGHT: AlignTextPos = 2;
 /// `grid_put_linebuf` flag: 'rightleft' text.
 pub const SLF_RIGHTLEFT: c_int = 1;
 /// `grid_put_linebuf` flag: this row is a line wrapped into the next.

@@ -38,9 +38,8 @@ use crate::ascii::NUL;
 use crate::getchar::state::GOT_INT;
 use crate::mbyte::{c_cluster_len, char_at, utf_iscomposing_legacy, utf8len_tab};
 use crate::narrow::as_index;
-use crate::spell::SpellIdx;
-use crate::spell::WordFlags;
-use crate::spellsuggest::score::similar_chars;
+use crate::spell::{SpellIdx, WordFlags};
+use crate::spellsuggest::score::{SOUND_VOWEL, similar_chars};
 use crate::spellsuggest::walk::{
     DIFF_INSERT, DIFF_NONE, DIFF_YES, FLAG_DID_DEL, State, Walk, char_back, frame_pos,
 };
@@ -49,11 +48,6 @@ use crate::spellsuggest::{
     SCORE_SUBCOMP, SCORE_SUBST,
 };
 use core::ffi::c_int;
-
-/// The sound-fold marker for a word starting with a vowel. Adding or
-/// dropping one is cheaper than a real edit, as `soundalike_score` also
-/// assumes.
-const SOUND_VOWEL: u8 = b'*';
 
 /// How many bytes a character starting with this byte has, from the
 /// encoding's own table.

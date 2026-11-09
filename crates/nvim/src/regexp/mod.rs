@@ -24,10 +24,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 pub(crate) mod state;
-use crate::ascii::CAR;
-use crate::ascii::ESC;
-use crate::ascii::NL;
-use crate::ascii::TAB;
+use crate::ascii::{CAR, ESC, NL, TAB};
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
 use crate::os::libc::{int64_t, uint8_t};
@@ -305,7 +302,6 @@ pub enum PimResult {
     NoMatch,
 }
 pub const ADDSTATE_HERE_OFFSET: c_int = 10;
-pub const GRAPHEME_STATE_INIT: c_int = 0;
 pub const INT_MAX: c_int = __INT_MAX__;
 pub const RE_MAGIC: ::core::ffi::c_int = 1;
 pub const RE_STRING: ::core::ffi::c_int = 2;
@@ -319,6 +315,9 @@ pub const __INT_MAX__: c_int = 2147483647;
 
 pub type Magic = ::core::ffi::c_uint;
 pub type OptMagic = ::core::ffi::c_uint;
+pub(crate) const OPTION_MAGIC_NOT_SET: OptMagic = 0;
+pub(crate) const OPTION_MAGIC_OFF: OptMagic = 2;
+pub(crate) const OPTION_MAGIC_ON: OptMagic = 1;
 /// A pattern and where its groups landed in the string it last ran over.
 ///
 /// Upstream's `startp`/`endp` are `char *` into the matched text, which
@@ -348,6 +347,9 @@ pub struct RegMatch {
 
 /// How many capture groups a match records: `\0` and `\1`..`\9`.
 pub const RE_GROUPS: usize = 10;
+/// How many start columns may be tried between two reads of the caller's
+/// time limit.
+pub(crate) const TIME_CHECK_INTERVAL: c_int = 20;
 
 impl RegMatch {
     /// A match structure for `regprog`, with no groups filled in yet.

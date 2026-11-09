@@ -17,10 +17,10 @@ use crate::buffer::{buf_ensure_loaded, buf_get_changedtick, buf_meta_total, do_b
 use crate::buffer_updates::{buf_updates_register, buf_updates_unregister};
 use crate::change::changed_lines;
 use crate::cursor::{check_cursor_col, check_cursor_lnum, check_visual_pos};
-use crate::ex_cmds::rename_buffer;
-use crate::extmark::extmark_splice;
-
 use crate::decoration::MT_META_LINES;
+use crate::ex_cmds::rename_buffer;
+use crate::extmark::{BCount, extmark_splice};
+
 use crate::lua::executor::nlua_call_ref_reporting;
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::{mark_adjust_buf, mark_get};
@@ -29,7 +29,6 @@ use crate::memline::{ml_append_buf_terminated, ml_delete_buf, ml_get_buf_len, ml
 use crate::api::keysets::{KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap};
 use crate::api::private::helpers::TryState;
 use crate::autocmd::defs::AcoSave;
-use crate::extmark::BCount;
 use crate::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
 use crate::ops::get_region_bytecount;
 use crate::option::vars::{P_ACD, p_acd};

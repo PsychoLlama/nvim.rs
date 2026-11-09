@@ -31,7 +31,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 /// How large the fixed field buffers are. A file name, module name or
 /// search pattern longer than this is truncated, as upstream does.
-const FIELD_MAX: usize = CMDBUFFSIZE as usize;
+const FIELD_MAX: usize = CMDBUFFSIZE;
 
 /// What became of one line, or of one attempt to match it.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

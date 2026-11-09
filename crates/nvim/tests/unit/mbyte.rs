@@ -50,7 +50,7 @@ fn cbuf(s: &[u8]) -> Vec<c_char> {
 /// long to sit inline, so reading it back goes through `schar_get`. That
 /// makes this a statement about the pair, which is how the editor uses them.
 fn cluster(seq: &[u8]) -> (Vec<u8>, c_int) {
-    let mut out = [0 as c_char; MAX_SCHAR_SIZE as usize + 1];
+    let mut out = [0 as c_char; MAX_SCHAR_SIZE + 1];
     let (sc, firstc) = c_cluster_schar(seq);
     // SAFETY: `out` has room for any glyph and the terminator.
     let len = unsafe { schar_get(out.as_mut_ptr(), sc) };

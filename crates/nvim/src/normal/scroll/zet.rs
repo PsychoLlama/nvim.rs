@@ -12,6 +12,7 @@
 
 use crate::keycodes::SpecialKey;
 use crate::narrow::number_as_int;
+use crate::spell::{SMT_ALL, SPELL_ADD_BAD, SPELL_ADD_GOOD, SpellAddType};
 use crate::strings::has_char;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win, windows};
@@ -31,15 +32,13 @@ use crate::memory::XString;
 use crate::message::emsg;
 use crate::normal::defs::CmdArg;
 use crate::normal::{
-    FIND_IDENT, INT_MAX, SPELL_ADD_BAD, SPELL_ADD_GOOD, check_clear_op, clear_op_beep,
-    get_visual_text, ident_under_cursor, nv_operator, nv_put, read_command_char, visual_active,
+    FIND_IDENT, INT_MAX, check_clear_op, clear_op_beep, get_visual_text, ident_under_cursor,
+    nv_operator, nv_put, read_command_char, visual_active,
 };
 use crate::ops::OpType;
 use crate::option::get_sidescrolloff_value;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
-use crate::spell::SMT_ALL;
-use crate::spell::SpellAddType;
 use crate::spellfile::spell_add_word;
 use crate::spellsuggest::spell_suggest;
 use crate::state::mode::FINISH_OP;

@@ -175,7 +175,7 @@ pub fn c_cluster_schar(bytes: &[u8]) -> (ScreenChar, c_int) {
     let text = CBytes(bytes);
     let c = char_at_in(text, 0);
     let first_compose = utf_iscomposing_first(c);
-    let maxlen = (MAX_SCHAR_SIZE - 1) as usize - usize::from(first_compose);
+    let maxlen = (MAX_SCHAR_SIZE - 1) - usize::from(first_compose);
     let len = cluster_len_in(Prefix::new(text, 0, maxlen), 0);
     if len == 1 && text.byte(0) >= 0x80 {
         return (0, c);
@@ -190,7 +190,7 @@ fn pack_cluster(cluster: &[u8], first_compose: bool) -> ScreenChar {
     if !first_compose {
         return schar_from_buf(cluster);
     }
-    let mut cbuf = [0u8; MAX_SCHAR_SIZE as usize];
+    let mut cbuf = [0u8; MAX_SCHAR_SIZE];
     cbuf[0] = b' ';
     cbuf[1..=cluster.len()].copy_from_slice(cluster);
     schar_from_buf(&cbuf[..cluster.len() + 1])
@@ -210,7 +210,7 @@ pub(crate) fn c_cluster_cell(bytes: &[u8]) -> (usize, ScreenChar, c_int) {
     let len = cluster_len_in(text, 0);
     let c = char_at_in(text, 0);
     let first_compose = utf_iscomposing_first(c);
-    let maxlen = (MAX_SCHAR_SIZE - 1) as usize - usize::from(first_compose);
+    let maxlen = (MAX_SCHAR_SIZE - 1) - usize::from(first_compose);
     let cell_len = if len + 6 <= maxlen {
         len
     } else {

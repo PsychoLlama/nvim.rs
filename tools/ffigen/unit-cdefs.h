@@ -1516,6 +1516,7 @@ static const int CAR = 13;
 static const int CA_COMMAND_BUSY = 1;
 static const int CA_NO_ADJ_OP_END = 2;
 static const int CB_MAX_ERROR = 3;
+static const int CB_MAX_ERRORS = 3;
 static const int CC_STRATEGY_IGNORE_CASE = 63;
 static const int CC_STRATEGY_MATCH_CASE = 35;
 static const int CC_STRATEGY_USE_OPTION = 0;

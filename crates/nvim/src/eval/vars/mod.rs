@@ -8,10 +8,10 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::eval::DICT_MAXNEST;
 use crate::ex_docmd::ends_excmd;
 use crate::fileio::{BAD_DROP, BAD_KEEP};
 
-use crate::eval::DICT_MAXNEST;
 use crate::eval::typval::DO_NOT_FREE_CNT;
 use crate::option::defs::{OPT_VAL_TYPE_BOOLEAN, OPT_VAL_TYPE_NUMBER, OPT_VAL_TYPE_STRING};
 use crate::runtime::{SID_LUA, SID_STR};
@@ -127,7 +127,6 @@ pub const INT64_MIN: ::core::ffi::c_long = -9223372036854775807 - 1;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615;
 
-pub const NOTDONE: c_int = 2;
 pub const CHAN_STDERR: c_int = 2;
 
 /// The two `name_len` sentinels the `var_check_*` family accepts in place of

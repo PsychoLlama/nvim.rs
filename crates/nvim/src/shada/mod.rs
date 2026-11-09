@@ -22,7 +22,10 @@
 )]
 
 use crate::api::keysets::KeyDict__shada_search_pat;
+use crate::cmdhist::HIST_COUNT;
+use crate::mark::{JUMPLISTSIZE, NMARKS};
 use crate::memory::XString;
+use crate::narrow::as_index;
 use crate::normal::defs::MotionType;
 use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::types::{ApiDict, ApiString, Pos, Timestamp, TypVal};
@@ -172,16 +175,6 @@ pub(crate) enum WriteStatus {
     /// One entry could not be written; the rest of the file is still good.
     IgnError,
 }
-
-/// The number of history types.
-pub(crate) const HIST_COUNT: usize = 5;
-/// The search history's number: the only one with a separator.
-pub(crate) const HIST_SEARCH: u8 = 1;
-
-/// The lettered marks of one buffer.
-pub(crate) const NMARKS: usize = 26;
-/// The most entries a jump list or a change list holds.
-pub(crate) const JUMPLISTSIZE: usize = 100;
 
 /// One ShaDa entry: when it was made, what it holds, and the extra data it
 /// carried that this Nvim has no field for.
@@ -368,7 +361,7 @@ pub(crate) struct WriteMergerState {
     pub(crate) numbered_marks: [ShadaEntry; 10],
     pub(crate) registers: [ShadaEntry; 37],
     /// The jump list, oldest first; `jumps_size` of them are real.
-    pub(crate) jumps: [ShadaEntry; JUMPLISTSIZE],
+    pub(crate) jumps: [ShadaEntry; as_index(JUMPLISTSIZE)],
     pub(crate) jumps_size: usize,
     pub(crate) search_pattern: ShadaEntry,
     pub(crate) sub_search_pattern: ShadaEntry,
@@ -396,7 +389,7 @@ impl WriteMergerState {
             global_marks: [const { ShadaEntry::MISSING }; 26],
             numbered_marks: [const { ShadaEntry::MISSING }; 10],
             registers: [const { ShadaEntry::MISSING }; 37],
-            jumps: [const { ShadaEntry::MISSING }; JUMPLISTSIZE],
+            jumps: [const { ShadaEntry::MISSING }; as_index(JUMPLISTSIZE)],
             jumps_size: 0,
             search_pattern: ShadaEntry::MISSING,
             sub_search_pattern: ShadaEntry::MISSING,
@@ -428,7 +421,7 @@ pub(crate) struct FileMarks {
     /// `a`-`z`, then `"`, `^` and `.`.
     pub(crate) marks: [ShadaEntry; 29],
     /// The change list, oldest first; `changes_size` of them are real.
-    pub(crate) changes: [ShadaEntry; JUMPLISTSIZE],
+    pub(crate) changes: [ShadaEntry; as_index(JUMPLISTSIZE)],
     pub(crate) changes_size: usize,
     /// Marks the old file had for this file under names this Nvim does not
     /// know, kept to be written back.
@@ -441,7 +434,7 @@ impl FileMarks {
     fn new() -> Box<FileMarks> {
         Box::new(FileMarks {
             marks: [const { ShadaEntry::MISSING }; 29],
-            changes: [const { ShadaEntry::MISSING }; JUMPLISTSIZE],
+            changes: [const { ShadaEntry::MISSING }; as_index(JUMPLISTSIZE)],
             changes_size: 0,
             additional_marks: Vec::new(),
             greatest_timestamp: 0,
@@ -459,7 +452,7 @@ pub(crate) type RemovableBufs = IdSet<*const Buffer>;
 fn mark_global_index(name: c_char) -> Option<usize> {
     match name.cast_unsigned() {
         letter @ b'A'..=b'Z' => Some(usize::from(letter - b'A')),
-        digit @ b'0'..=b'9' => Some(NMARKS + usize::from(digit - b'0')),
+        digit @ b'0'..=b'9' => Some(as_index(NMARKS) + usize::from(digit - b'0')),
         _ => None,
     }
 }
@@ -470,9 +463,9 @@ fn mark_global_index(name: c_char) -> Option<usize> {
 fn mark_local_index(name: c_char) -> Option<usize> {
     match name.cast_unsigned() {
         letter @ b'a'..=b'z' => Some(usize::from(letter - b'a')),
-        b'"' => Some(NMARKS),
-        b'^' => Some(NMARKS + 1),
-        b'.' => Some(NMARKS + 2),
+        b'"' => Some(as_index(NMARKS)),
+        b'^' => Some(as_index(NMARKS) + 1),
+        b'.' => Some(as_index(NMARKS) + 2),
         _ => None,
     }
 }

@@ -15,14 +15,14 @@
 )]
 
 use super::*;
-use crate::charset::atoi;
-use crate::charset::ptr2cells_at;
+use crate::charset::{atoi, ptr2cells_at};
 use crate::cstr;
 use crate::formatted;
 use crate::highlight_group::{HLF_CM, HLF_D, HLF_T};
 use crate::message::IOSIZE;
 use crate::path::MAXPATHL;
 use crate::pos::MAXCOL;
+use crate::tag::CMDBUFFSIZE;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 
@@ -34,9 +34,6 @@ const MIN_TAG_WIDTH: c_int = 18;
 
 /// A `:ltag` entry's tag name is truncated to this many bytes.
 const MAX_LTAG_NAME: usize = 128;
-
-/// A `:ltag` search pattern is built in a buffer this big.
-const CMDBUFFSIZE: usize = super::CMDBUFFSIZE as usize;
 
 /// How a match was found, in the order the match's bucket byte numbers
 /// them: F(ull, not a partial match) / S(tatic, local to its file) /
@@ -144,7 +141,7 @@ fn print_entry_head(i: c_int, found: &TagMatch, tagp: &TagParts, current: bool, 
     let line = found.line();
     let mut head = vec![if current { b'>' } else { b' ' }];
     // Cut where upstream's `IOSIZE` scratch cut it.
-    let priority = PRIORITY[usize::from(found.priority) & MT_MASK as usize];
+    let priority = PRIORITY[usize::from(found.priority) & MT_MASK];
     head.extend(formatted!(IOSIZE as usize - 1, b"%2d %s ", i + 1, priority));
     head.push(0);
     msg_str(cstr::in_bytes(&head));

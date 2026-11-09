@@ -155,7 +155,6 @@ pub(crate) struct GotcharsState {
     pub pending_mbyte: usize,
 }
 pub const KEYLEN_PART_KEY: ::core::ffi::c_int = -1;
-pub const SHOWCMD_COLS: ::core::ffi::c_uint = 10;
 /// What [`handle_mapping`] did with the front of the typeahead.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum MapResult {

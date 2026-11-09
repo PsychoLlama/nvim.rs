@@ -27,8 +27,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::ascii::TAB;
-use crate::ascii::ascii_iswhite;
+use crate::ascii::{TAB, ascii_iswhite};
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{
     au_event_disable, au_event_restore, block_autocmds, fire_autocmds_for, unblock_autocmds,
@@ -48,12 +47,11 @@ use crate::drawscreen::{
 use crate::edit::beginline;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::mark_root;
-use crate::eval::typval::ListRef;
-use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     KeyTaken, dict_get_bool, dict_get_number, dict_get_tv, list_len, tv_copy, tv_dict_alloc,
     tv_dict_alloc_lock, tv_dict_alloc_ret, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
 };
+use crate::eval::typval::{ListRef, TV_INITIAL_VALUE};
 use crate::eval::window::{find_win_by_nr_or_id, win_by_id};
 use crate::ex_cmds::{VGR_FUZZY, VGR_GLOBAL, VGR_NOJUMP, append_redir, check_secure};
 use crate::ex_cmds2::{autowrite_all, can_abandon};
@@ -106,6 +104,7 @@ use crate::quickfix::model::{
 use crate::regexp::{RegMMatch, RegMatch};
 use crate::search::{BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE};
 use crate::state::mode::RESTART_EDIT;
+use crate::tag::CMDBUFFSIZE;
 use crate::tr;
 use crate::types::Failed;
 use crate::types::{
@@ -276,7 +275,6 @@ crate::flag_set! {
     /// What `{'all': 1}` asks for: every bit above.
     const ALL = 4095;
 }
-pub const CMDBUFFSIZE: c_int = 1024;
 pub const INVALID_QFIDX: c_int = -1;
 /// Messages more than one child reports.
 pub(crate) const E_NO_MORE_ITEMS: &CStr = c"E553: No more items";

@@ -40,10 +40,10 @@ fn err_border(want: &CStr, got: Option<&CStr>) -> Error {
 
 /// One border cell: up to `MAX_SCHAR_SIZE` bytes of UTF-8, NUL-terminated.
 /// The same shape as one slot of `WinConfig::border_chars`.
-type BorderChar = [u8; MAX_SCHAR_SIZE as usize];
+type BorderChar = [u8; MAX_SCHAR_SIZE];
 
 /// An empty border cell, which the drawing code reads as "nothing here".
-const BLANK_CHAR: BorderChar = [0; MAX_SCHAR_SIZE as usize];
+const BLANK_CHAR: BorderChar = [0; MAX_SCHAR_SIZE];
 
 /// The `'winborder'` style that draws a drop shadow instead of a box: the
 /// cells to the right of and below the window are darkened, and nothing is
@@ -60,7 +60,7 @@ pub(crate) const BORDER_NONE: &CStr = c"none";
 const fn border_char(text: &str) -> BorderChar {
     let bytes = text.as_bytes();
     assert!(
-        bytes.len() < MAX_SCHAR_SIZE as usize,
+        bytes.len() < MAX_SCHAR_SIZE,
         "a border cell must leave room for its NUL"
     );
     let mut out = BLANK_CHAR;
@@ -201,7 +201,7 @@ fn parse_border_item(item: &Object) -> Result<(ApiString, c_int), Error> {
 fn cell_of(string: ApiString) -> BorderChar {
     let mut out = BLANK_CHAR;
     // The last byte stays the NUL already there.
-    let room = MAX_SCHAR_SIZE as usize - 1;
+    let room = MAX_SCHAR_SIZE - 1;
     for (cell, &byte) in out[..room].iter_mut().zip(string.as_bytes()) {
         *cell = byte;
     }
@@ -336,7 +336,7 @@ fn border_cell_list(border_opt: &[u8]) -> Option<Array> {
         if cells.len() == 8 {
             return None;
         }
-        let (part, after) = split_option_part(rest, MAX_SCHAR_SIZE as usize, b",");
+        let (part, after) = split_option_part(rest, MAX_SCHAR_SIZE, b",");
         if part.is_empty() {
             return None;
         }

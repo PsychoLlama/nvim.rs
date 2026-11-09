@@ -82,17 +82,16 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::grid::schar::MAX_SCHAR_SIZE;
 use crate::keycodes::KS_SPECIAL;
 use crate::os::libc::{int8_t, int32_t};
 use core::fmt::Write as _;
 
-use crate::ascii::NL;
-use crate::ascii::TAB;
+use crate::ascii::{NL, TAB, ascii_iswhite};
 use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
-use crate::ascii::ascii_iswhite;
 use crate::charset::{ptr2cells_at, vim_isprintc, vim_iswordc_tab};
 use crate::cmdexpand::defs::Expand;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
@@ -102,14 +101,12 @@ use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::grid::schar_from_buf;
 use crate::keycodes::{K_SPECIAL, KE_FILLER};
-use crate::message::E_LISTREQ;
-use crate::message::IOSIZE;
+use crate::message::{E_LISTREQ, IOSIZE};
 use crate::message::{emsg, msg};
 use crate::r#move::changed_window_setting_all;
 use crate::option::vars::{CMP_FLAGS, FENC_DEFAULT, p_emoji, p_enc};
 use crate::options::{OPT_CMP_FLAG_INTERNAL, OPT_CMP_FLAG_KEEPASCII};
-use crate::optionstr::OptStringRef;
-use crate::optionstr::check_chars_options;
+use crate::optionstr::{OptStringRef, check_chars_options};
 use crate::os::cshim::gettext;
 use crate::os::libc::uint64_t;
 use crate::types::{ColNr, List, ScreenChar, TypVal, VarNumber};
@@ -147,8 +144,6 @@ pub const LC_CTYPE: c_int = 0;
 pub const SIZE_MAX: ::core::ffi::c_ulong = usize::MAX as ::core::ffi::c_ulong;
 /// `INT_MAX`, the "no limit" length `utf_cp_bounds` passes.
 pub const INT_MAX: c_int = c_int::MAX;
-/// How many bytes a `ScreenChar` can hold, NUL included.
-pub const MAX_SCHAR_SIZE: c_int = 32;
 /// The second byte of an escaped literal `K_SPECIAL`; see [`unescape_at`].
 use crate::cursor::with_cursor_rest;
 /// `g8`: show the bytes of the character under the cursor, in hex.

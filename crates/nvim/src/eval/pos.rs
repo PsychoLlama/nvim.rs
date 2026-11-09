@@ -9,23 +9,19 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::narrow::number_as_col;
-use crate::narrow::number_as_int;
-use crate::narrow::number_as_lnum;
+use crate::mark::{MARK_ALL, mark_get};
+use crate::narrow::{number_as_col, number_as_int, number_as_lnum};
 use crate::types::Handle;
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use crate::buffer::find_buf;
-use crate::eval::MARK_ALL;
 use crate::eval::typval::{NumBuf, list_find_nr, list_len};
-use crate::mark::mark_get;
 use crate::mbyte::{char_count, cluster_len};
 use crate::memline::{Lines, ml_get_buf_len};
 use crate::r#move::{check_cursor_moved, update_topline, validate_botline_win};
 use crate::normal::{visual_active, visual_anchor};
 use crate::types::{ColNr, Failed, LineNr, Pos, TypVal, VAR_LIST};
-use crate::winlayer::Win;
 
 /// How many characters line `lnum` of `buffer` holds.
 fn line_char_count(buffer: Buf, lnum: LineNr) -> c_int {

@@ -42,14 +42,11 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ascii::NUL;
-use crate::ascii::ascii_iswhite;
+use crate::ascii::{NUL, ascii_iswhite};
 use crate::cstr::until_nul;
 use crate::mbyte::{char_at, char_len, mb_isupper, utf_fold};
-use crate::narrow::as_index;
-use crate::narrow::len_as_int;
-use crate::spell::MAXWLEN_INT;
-use crate::spell::SpellLang;
+use crate::narrow::{as_index, len_as_int};
+use crate::spell::{MAXWLEN_INT, SpellLang};
 use crate::spell::{spell_casefold, spell_soundfold, spelltab_fold, spelltab_isu};
 use crate::spellsuggest::{
     MAXWLEN, SCORE_COMMON1, SCORE_COMMON2, SCORE_COMMON3, SCORE_DEL, SCORE_ICASE, SCORE_INS,
@@ -67,7 +64,7 @@ pub(super) const EMPTY_SOUND: SoundBuf = [0; MAXWLEN];
 
 /// The character that sound-folding puts at the front of a word starting
 /// with a vowel. Adding or dropping one is cheaper than a real edit.
-const SOUND_VOWEL: u8 = b'*';
+pub(crate) const SOUND_VOWEL: u8 = b'*';
 
 /// Fold a character for comparison, mirroring the `SPELL_TOFOLD` macro:
 /// the byte table covers Latin-1, everything above it goes through the

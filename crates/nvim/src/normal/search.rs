@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 
 use crate::keycodes::ModMask;
+use crate::mark::MARK_ALL;
 use crate::mark::{
     MARK_BEGIN_LINE, MARK_CHANGED_CURSOR, MARK_CHANGED_LINE, MARK_CONTEXT, MARK_JUMP_LIST,
     MARK_MOVE_FAILED, MARK_MOVE_SUCCESS, MARK_SET_VIEW, MARK_SWITCHED_BUF,
@@ -34,8 +35,8 @@ use crate::mark::defs::{FileMark, MarkMove, MarkMoveRes};
 use crate::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark};
 use crate::message::emsg;
 use crate::normal::{
-    E_CHANGELIST_IS_EMPTY, K_MARK_NO_CONTEXT, MARK_ALL, check_clear_op, check_clear_op_quit,
-    clear_op, clear_op_beep, nv_operator,
+    E_CHANGELIST_IS_EMPTY, K_MARK_NO_CONTEXT, check_clear_op, check_clear_op_quit, clear_op,
+    clear_op_beep, nv_operator,
 };
 use crate::ops::OpType;
 use crate::option::vars::{FDO_FLAGS, JOP_FLAGS, p_hls};

@@ -172,7 +172,6 @@ pub const GETFILE_OPEN_OTHER: GetFileRet = -1;
 pub const GETFILE_SAME_FILE: GetFileRet = 0;
 pub const GETFILE_NOT_WRITTEN: GetFileRet = 2;
 pub const GETFILE_ERROR: GetFileRet = 1;
-pub(crate) use crate::cmdhist::HIST_SEARCH;
 #[derive(Copy, Clone, Debug)]
 pub struct SubResult {
     pub start: LPos,

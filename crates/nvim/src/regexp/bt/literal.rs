@@ -12,18 +12,18 @@
 )]
 
 use super::compile::Node;
+use crate::mbyte::GRAPHEME_STATE_INIT;
 use crate::regexp::RegCompiler;
 use core::ffi::c_int;
 
 use super::compile::use_multibytecode;
 use super::op::BtOp;
 use crate::ascii::NUL;
-use crate::mbyte::GraphemeState;
-use crate::mbyte::utf_iscomposing_legacy;
+use crate::mbyte::{GraphemeState, utf_iscomposing_legacy};
 use crate::regexp::mbyte::{char_at_nul, char_len_at, composes_at};
 use crate::regexp::{
-    CompileError, Compiled, GRAPHEME_STATE_INIT, HASWIDTH, NOT_MULTI, REG_PREV_SUB, SIMPLE, getchr,
-    magic, peekchr, re_multi_type, skipchr, ungetchr, unmagic,
+    CompileError, Compiled, HASWIDTH, NOT_MULTI, REG_PREV_SUB, SIMPLE, getchr, magic, peekchr,
+    re_multi_type, skipchr, ungetchr, unmagic,
 };
 
 /// The `\x` class shorthands, in the order upstream's two parallel tables

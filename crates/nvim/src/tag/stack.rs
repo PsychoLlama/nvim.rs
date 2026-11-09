@@ -24,6 +24,7 @@ use crate::message::IOSIZE;
 use crate::narrow::number_as_int;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
+use crate::tag::TAGSTACKSIZE;
 use crate::types::Handle;
 use crate::types::{Failed, VAR_LIST};
 use crate::winlayer::{Buf, Win};
@@ -42,9 +43,6 @@ pub(crate) fn tag_emsg(msg: &'static CStr) {
 fn depth(len: usize) -> c_int {
     c_int::try_from(len.min(TAGSTACKSIZE)).expect("twenty entries")
 }
-
-/// How many entries a window's stack holds before the oldest is dropped.
-const TAGSTACKSIZE: usize = super::TAGSTACKSIZE as usize;
 
 /// The view a stack entry's mark starts with: no remembered scroll position.
 const NO_VIEW: FileMarkView = FileMarkView {

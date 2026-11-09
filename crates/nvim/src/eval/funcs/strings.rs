@@ -9,7 +9,6 @@
     clippy::ptr_as_ptr
 )]
 
-use super::NSUBEXP;
 use super::wrappers::{arg_bool_chk, arg_number, arg_number_chk, blob_alloc_ret, non_zero_arg};
 use crate::eval::do_string_sub;
 use crate::eval::funcs::builtin::EvalFuncData;
@@ -35,6 +34,7 @@ use crate::os::libc::{time_t, tm};
 use crate::os::time::{
     os_localtime_r, os_mktime, os_strftime, os_strptime, os_time_raw, tm_zeroed,
 };
+use crate::regexp::NSUBEXP;
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING, reg_submatch, reg_submatch_list};
 use crate::search::FORWARD;
 use crate::semsg;

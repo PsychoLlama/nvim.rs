@@ -41,7 +41,7 @@ use crate::ui::state::{UI_CMDLINE, UI_LINEGRID, UI_MESSAGES};
 use core::ffi::CStr;
 
 /// How many times a handler may raise an error before it is unregistered.
-const MAX_ERRORS: u8 = 3;
+const CB_MAX_ERRORS: u8 = 3;
 
 /// One registered `vim.ui_attach()` handler.
 #[derive(Debug)]
@@ -49,7 +49,7 @@ struct Handler {
     /// The namespace that registered it, and the key it is removed by.
     ns_id: u32,
     callback: LuaRef,
-    /// Errors raised so far. The handler is dropped past [`MAX_ERRORS`],
+    /// Errors raised so far. The handler is dropped past [`CB_MAX_ERRORS`],
     /// because a handler that throws on every redraw makes the editor
     /// unusable and there is no other way to stop it.
     errors: u8,
@@ -100,13 +100,13 @@ pub fn ui_add_cb(ns_id: u32, cb: LuaRef, mut ext_widgets: [bool; UI_LINEGRID as 
 /// Unregisters `ns_id`'s handler.
 ///
 /// With `checkerr`, this is the error path: the handler's error count goes
-/// up and it is only dropped once it passes [`MAX_ERRORS`].
+/// up and it is only dropped once it passes [`CB_MAX_ERRORS`].
 pub fn ui_remove_cb(ns_id: u32, checkerr: bool) {
     let removed = REGISTERED.with_mut(|handlers| {
         let index = handlers.iter().position(|h| h.ns_id == ns_id)?;
         if checkerr {
             handlers[index].errors += 1;
-            if handlers[index].errors <= MAX_ERRORS {
+            if handlers[index].errors <= CB_MAX_ERRORS {
                 return None;
             }
         }

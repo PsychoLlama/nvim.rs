@@ -64,7 +64,7 @@ use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::path::{full_name_save, has_wildcard, path_full_compare, vim_is_abs_name};
 use crate::pos::MAXLNUM;
 use crate::quickfix::set_errorlist;
-use crate::regexp::{OptMagic, vim_regexec};
+use crate::regexp::{OPTION_MAGIC_OFF, vim_regexec};
 use crate::search::state::{MAGIC_OVERRULED, NO_HLSEARCH};
 use crate::state::MODE_INSERT;
 use crate::state::mode::STATE;
@@ -102,8 +102,10 @@ mod stack;
 pub use self::stack::*;
 mod command;
 pub(crate) use self::command::*;
-pub const OPTION_MAGIC_OFF: OptMagic = 2;
-pub const LSIZE: ::core::ffi::c_uint = 512;
+/// The bytes a scratch line holds -- a tag's command, an included file's
+/// name. A longer one is truncated, as upstream truncates it.
+pub const LSIZE: usize = 512;
+/// The longest match list `:help` will show.
 pub const TAG_MANY: ::core::ffi::c_int = 300;
 pub const TAG_NO_TAGFUNC: ::core::ffi::c_int = 256;
 pub const TAG_KEEP_LANG: ::core::ffi::c_int = 128;
@@ -112,6 +114,7 @@ pub const TAG_VERBOSE: ::core::ffi::c_int = 32;
 pub const TAG_NOIC: ::core::ffi::c_int = 8;
 pub const TAG_REGEXP: ::core::ffi::c_int = 4;
 pub const TAG_NAMES: ::core::ffi::c_int = 2;
+/// `find_tags` flags.
 pub const TAG_HELP: ::core::ffi::c_int = 1;
 /// Why a tag command stopped, and the message that says so. Reported
 /// once, by [`do_tag`].
@@ -188,17 +191,27 @@ pub(crate) struct TagParts {
     pub(crate) user_data: Option<Span>,
     pub(crate) tagline: LineNr,
 }
-pub const MT_IC_OFF: ::core::ffi::c_uint = 4;
-pub const MT_MASK: ::core::ffi::c_uint = 7;
-pub const MT_COUNT: ::core::ffi::c_uint = 16;
-pub const MT_GL_OTH: ::core::ffi::c_uint = 2;
-pub const MT_GL_CUR: ::core::ffi::c_uint = 1;
-pub const MT_ST_OTH: ::core::ffi::c_uint = 3;
-pub const MT_ST_CUR: ::core::ffi::c_uint = 0;
-pub const MT_RE_OFF: ::core::ffi::c_uint = 8;
-pub const CMDBUFFSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int;
-pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const TAGSTACKSIZE: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
+/// Added when the match only holds with case ignored.
+pub const MT_IC_OFF: usize = 4;
+pub const MT_MASK: usize = 7;
+/// How many priority buckets a match can land in: four kinds of match,
+/// doubled for an ignore-case match and again for a regexp match.
+pub const MT_COUNT: usize = 16;
+/// Global match in another file.
+pub const MT_GL_OTH: usize = 2;
+/// Global match in the current file.
+pub const MT_GL_CUR: usize = 1;
+/// Static match in another file.
+pub const MT_ST_OTH: usize = 3;
+/// Static match in the current file.
+pub const MT_ST_CUR: usize = 0;
+/// Added when the match came from the regexp rather than from comparing
+/// the pattern literally.
+pub const MT_RE_OFF: usize = 8;
+/// A `:ltag` search pattern is built in a buffer this big.
+pub const CMDBUFFSIZE: usize = 1024;
+/// How many entries a window's stack holds before the oldest is dropped.
+pub const TAGSTACKSIZE: usize = 20;
 
 /// What [`jumpto_tag`](crate::tag::jumpto_tag) did.
 ///

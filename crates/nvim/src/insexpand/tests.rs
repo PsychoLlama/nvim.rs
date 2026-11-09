@@ -646,9 +646,9 @@ fn complete_option_entries_split_as_copy_option_part_does() {
     assert!(entries[5].1.is_empty());
     assert_eq!(cpt_entries(b" , ,").count(), 0);
     // A long entry is cut where upstream's `LSIZE` buffer ends.
-    let long = vec![b'x'; LSIZE as usize + 10];
+    let long = vec![b'x'; LSIZE + 10];
     let entry = cpt_entries(&long).next().expect("one entry");
-    assert_eq!(entry.part.len(), LSIZE as usize - 1);
+    assert_eq!(entry.part.len(), LSIZE - 1);
     assert!(entry.after.is_empty());
 }
 

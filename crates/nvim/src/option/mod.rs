@@ -43,11 +43,9 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::highlight::HlAttrFlags;
-use crate::highlight::{HlAttrs, RgbValue};
 use crate::option::defs::OptScope;
 use crate::optionstr::CharsOption;
-use crate::os::libc::{int16_t, int32_t};
+
 use core::ffi::{c_int, c_uint};
 
 mod check;
@@ -132,7 +130,8 @@ pub(crate) const OP_PREPENDING: SetOp = 2;
 pub(crate) const OP_ADDING: SetOp = 1;
 pub(crate) const OP_NONE: SetOp = 0;
 pub(crate) const FUZZY_SCORE_NONE: c_int = -2147483648;
-pub(crate) const MIN_COLUMNS: c_uint = 12;
+/// The narrowest screen the editor will lay windows out on.
+pub(crate) const MIN_COLUMNS: c_int = 12;
 pub(crate) const LISTCHARS: CharsOption = 1;
 pub(crate) const FILLCHARS: CharsOption = 0;
 pub(crate) const ROOT_UID: c_int = 0 as c_int;
@@ -143,17 +142,6 @@ pub(crate) const B_IMODE_LMAP: crate::types::OptInt = 1;
 /// The largest 'iminsert'/'imsearch' value: the language-mapping mode.
 pub(crate) const B_IMODE_LAST: crate::types::OptInt = 1;
 pub(crate) const CTRL_F_STR: &::core::ffi::CStr = c"\x06";
-pub(crate) const HLATTRS_INIT: HlAttrs = HlAttrs {
-    rgb_ae_attr: HlAttrFlags::NONE,
-    cterm_ae_attr: HlAttrFlags::NONE,
-    rgb_fg_color: -1 as RgbValue,
-    rgb_bg_color: -1 as RgbValue,
-    rgb_sp_color: -1 as RgbValue,
-    cterm_fg_color: 0 as int16_t,
-    cterm_bg_color: 0 as int16_t,
-    hl_blend: -1 as int32_t,
-    url: -1 as int32_t,
-};
 pub(crate) const HIGHLIGHT_INIT: &::core::ffi::CStr = c"8:SpecialKey,~:EndOfBuffer,z:TermCursor,@:NonText,d:Directory,e:ErrorMsg,i:IncSearch,l:Search,y:CurSearch,m:MoreMsg,M:ModeMsg,n:LineNr,a:LineNrAbove,b:LineNrBelow,N:CursorLineNr,G:CursorLineSign,O:CursorLineFold,r:Question,s:StatusLine,S:StatusLineNC,c:VertSplit,t:Title,v:Visual,V:VisualNOS,w:WarningMsg,W:WildMenu,f:Folded,F:FoldColumn,A:DiffAdd,C:DiffChange,D:DiffDelete,T:DiffText,E:DiffTextAdd,>:SignColumn,-:Conceal,B:SpellBad,P:SpellCap,R:SpellRare,L:SpellLocal,+:Pmenu,=:PmenuSel,k:PmenuMatch,<:PmenuMatchSel,[:PmenuKind,]:PmenuKindSel,{:PmenuExtra,}:PmenuExtraSel,x:PmenuSbar,X:PmenuThumb,*:TabLine,#:TabLineSel,_:TabLineFill,!:CursorColumn,.:CursorLine,o:ColorColumn,q:QuickFixLine,z:StatusLineTerm,Z:StatusLineTermNC,g:MsgArea,h:ComplMatchIns,0:Whitespace,I:PreInsert";
 pub(crate) const DFLT_EFM: &::core::ffi::CStr = c"%*[^\"]\"%f\"%*\\D%l: %m,\"%f\"%*\\D%l: %m,%-Gg%\\?make[%*\\d]: *** [%f:%l:%m,%-Gg%\\?make: *** [%f:%l:%m,%-G%f:%l: (Each undeclared identifier is reported only once,%-G%f:%l: for each function it appears in.),%-GIn file included from %f:%l:%c:,%-GIn file included from %f:%l:%c\\,,%-GIn file included from %f:%l:%c,%-GIn file included from %f:%l,%-G%*[ ]from %f:%l:%c,%-G%*[ ]from %f:%l:,%-G%*[ ]from %f:%l\\,,%-G%*[ ]from %f:%l,%f:%l:%c:%m,%f(%l):%m,%f:%l:%m,\"%f\"\\, line %l%*\\D%c%*[^ ] %m,%D%*\\a[%*\\d]: Entering directory %*[`']%f',%X%*\\a[%*\\d]: Leaving directory %*[`']%f',%D%*\\a: Entering directory %*[`']%f',%X%*\\a: Leaving directory %*[`']%f',%DMaking %*\\a in %f,%f|%l| %m";
 pub(crate) const DFLT_GFN: &::core::ffi::CStr =
@@ -163,11 +151,16 @@ pub(crate) const ENC_DFLT: &::core::ffi::CStr = c"utf-8";
 pub(crate) const DFLT_FO_VIM: &::core::ffi::CStr = c"tcqj";
 pub(crate) const CPO_VIM: &::core::ffi::CStr = c"aABceFs_";
 pub(crate) const LISPWORD_VALUE: &::core::ffi::CStr = c"defun,define,defmacro,set!,lambda,if,case,let,flet,let*,letrec,do,do*,define-syntax,let-syntax,letrec-syntax,destructuring-bind,defpackage,defparameter,defstruct,deftype,defvar,do-all-symbols,do-external-symbols,do-symbols,dolist,dotimes,ecase,etypecase,eval-when,labels,macrolet,multiple-value-bind,multiple-value-call,multiple-value-prog1,multiple-value-setq,prog1,progv,typecase,unless,unwind-protect,when,with-input-from-string,with-open-file,with-open-stream,with-output-to-string,with-package-iterator,define-condition,handler-bind,handler-case,restart-bind,restart-case,with-simple-restart,store-value,use-value,muffle-warning,abort,continue,with-slots,with-slots*,with-accessors,with-accessors*,defclass,defmethod,print-unreadable-object";
+/// The largest `'scrollback'` that means anything; the option's negative
+/// "unlimited" spelling becomes this.
 pub(crate) const SB_MAX: c_int = 1000000 as c_int;
 pub(crate) const MAX_NUMBERWIDTH: c_int = 20 as c_int;
+/// The largest width a single stop may name.
 pub(crate) const TABSTOP_MAX: c_int = 9999 as c_int;
 pub(crate) const DFLT_ERRORFILE: &::core::ffi::CStr = c"errors.err";
 pub(crate) const DFLT_HELPFILE: &::core::ffi::CStr = c"$VIMRUNTIME/doc/help.txt";
+/// The size to fall back to when neither the terminal, the environment nor
+/// terminfo says anything useful.
 pub(crate) const DFLT_COLS: c_int = 80 as c_int;
 pub(crate) const DFLT_ROWS: c_int = 24 as c_int;
 pub(crate) const INT_MIN: c_int = -INT_MAX - 1 as c_int;

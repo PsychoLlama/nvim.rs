@@ -22,23 +22,23 @@
 use super::low_byte;
 use crate::ascii::ascii_isdigit;
 use crate::buffer::find_buf;
+use crate::cmdhist::{HIST_COUNT, HIST_SEARCH};
 use crate::eval::{get_copy_id, set_ref_in_dict_items, set_ref_in_list_items};
 use crate::ex_cmds::shada_replacement;
 use crate::fileio::buffered::WriteFile;
 use crate::mark::{set_last_cursor, shada_buffer_marks, shada_changes, shada_global_marks};
 use crate::memory::{XString, qsort_by};
-use crate::narrow::len_as_int;
-use crate::narrow::len_as_integer;
+use crate::narrow::as_index;
+use crate::narrow::{len_as_int, len_as_integer};
 use crate::option::vars::{p_enc, p_hi};
 use crate::os::env::process_id;
 use crate::os::time::os_time;
 use crate::search::{search_was_last_used, state::NO_HLSEARCH};
-use crate::types::Handle;
-use crate::types::LineNr;
 use crate::types::builders::DictBuf;
 use crate::types::{
     ApiString, Object, TypVal, VAR_DICT, VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_LIST, VAR_PARTIAL,
 };
+use crate::types::{Handle, LineNr};
 use crate::version::LONG_VERSION;
 use crate::winlayer::{Buf, Win, buffers, tab_windows};
 use core::ffi::c_int;
@@ -52,9 +52,9 @@ use super::merge::{compare_file_marks, read_when_writing};
 use super::pack::{Packer, pack_entry};
 use super::unpack::Source;
 use super::{
-    HIST_COUNT, HIST_SEARCH, HistoryMergerState, ReadKinds, RemovableBufs, ShadaEntry,
-    ShadaEntryData, ShadaFileMark, ShadaGlobalVar, WANT_ALWAYS, WANT_UNKNOWN, WriteMergerState,
-    WriteStatus, kind, mark_global_index, mark_local_index, want,
+    HistoryMergerState, ReadKinds, RemovableBufs, ShadaEntry, ShadaEntryData, ShadaFileMark,
+    ShadaGlobalVar, WANT_ALWAYS, WANT_UNKNOWN, WriteMergerState, WriteStatus, kind,
+    mark_global_index, mark_local_index, want,
 };
 
 /// How much packed output is kept before it is handed to the file.
@@ -341,7 +341,7 @@ impl Writing<'_> {
     /// The last search and substitute patterns, and the last `:substitute`
     /// replacement string. All three ride on the search history's setting.
     fn collect_search_patterns(&mut self) {
-        if !self.histories[usize::from(HIST_SEARCH)] {
+        if !self.histories[as_index(HIST_SEARCH)] {
             return;
         }
         let highlighted = !(NO_HLSEARCH.get() || find_shada_parameter(c_int::from(b'h')).is_some());

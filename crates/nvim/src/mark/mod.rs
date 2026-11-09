@@ -117,6 +117,7 @@ pub const NGLOBALMARKS: c_int = NMARKS + EXTRA_MARKS;
 pub const NMARK_LOCAL_MAX: c_int = 126;
 /// How many positions a window's jumplist remembers.
 pub const JUMPLISTSIZE: c_int = 100;
+pub(crate) const MARK_ALL: MarkGet = 1;
 
 use crate::global_cell::GlobalCell;
 use crate::quickfix::{BUF_HAS_LL_ENTRY, BUF_HAS_QF_ENTRY};

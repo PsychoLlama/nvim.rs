@@ -13,10 +13,9 @@
 /// The `mb_get_class` classes this file cares about: 0 is white space, 1 is
 /// punctuation, 2 and up are the word classes (one per script).
 const CLASS_WHITE: c_int = 0;
-const CLASS_PUNCT: c_int = 1;
-const CLASS_WORD: c_int = 2;
 
-use crate::ops::Op;
+use crate::mbyte::{CLASS_PUNCT, CLASS_WORD};
+use crate::ops::{Op, OpType};
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
@@ -34,7 +33,6 @@ use crate::message::E_NOIDENT;
 use crate::message::state::MSG_SILENT;
 use crate::message::{emsg, messaging};
 use crate::normal::{FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD, clear_op_beep};
-use crate::ops::OpType;
 use crate::option::defs::ShmFlag;
 use crate::option::shortmess;
 use crate::option::vars::{FDO_FLAGS, P_SCS, P_WS, p_scs, p_ws};

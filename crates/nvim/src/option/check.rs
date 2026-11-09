@@ -16,9 +16,10 @@
 )]
 
 use crate::drawscreen::NO_SCREEN;
-use crate::global_cell::field;
+use crate::global_cell::{GlobalCell, field};
+use crate::highlight::{HLATTRS_INIT, HlAttrs};
 use crate::types::Handle;
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
 use crate::api::extmark::nvim_create_namespace;
@@ -30,8 +31,6 @@ use crate::drawscreen::{
     UPD_NOT_VALID, redraw_all_later, redraw_buf_later, redraw_later, status_redraw_all,
 };
 use crate::ex_getln::{check_opt_wim, derive_cedit_key};
-use crate::global_cell::GlobalCell;
-use crate::highlight::HlAttrs;
 use crate::highlight::{HlAttrFlags, ns_hl_def};
 use crate::highlight_group::{highlight_changed, syn_check_group};
 use crate::indent::replace_tabstop_array;
@@ -48,13 +47,11 @@ use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::startup::starting;
 use crate::types::{ApiString, Buffer, OptInt, WinOpt};
-use crate::winlayer::Win;
 
 use super::{
-    FILLCHARS, HLATTRS_INIT, LISTCHARS, Local, OPT_FLAG_HL_ONLY, OPT_FLAG_INSECURE,
-    OPT_FLAG_REDR_ALL, OPT_FLAG_REDR_BUF, OPT_FLAG_REDR_STAT, OPT_FLAG_REDR_TABL,
-    OPT_FLAG_REDR_WIN, WinOptSet, didset_options_sctx, didset_window_options, option_is_insecure,
-    set_option_insecure,
+    FILLCHARS, LISTCHARS, Local, OPT_FLAG_HL_ONLY, OPT_FLAG_INSECURE, OPT_FLAG_REDR_ALL,
+    OPT_FLAG_REDR_BUF, OPT_FLAG_REDR_STAT, OPT_FLAG_REDR_TABL, OPT_FLAG_REDR_WIN, WinOptSet,
+    didset_options_sctx, didset_window_options, option_is_insecure, set_option_insecure,
 };
 
 /// What 'binary' overrode, so that switching it off again restores the

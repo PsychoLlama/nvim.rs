@@ -51,11 +51,9 @@ use crate::ex_session::{ex_loadview, ex_mkrc};
 use crate::global_cell::GlobalCell;
 use crate::help::{ex_exusage, ex_help, ex_helpclose, ex_helptags, ex_viusage};
 use crate::indent::ex_retab;
-use crate::keycodes::KS_SPECIAL;
 use crate::lua::executor::{ex_lua, ex_luado, ex_luafile};
 use crate::lua::secure::ex_trust;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
-use crate::mark::defs::MarkGet;
 use crate::mark::{ex_changes, ex_clearjumps, ex_delmarks, ex_jumps, ex_marks};
 use crate::r#match::ex_match;
 use crate::memory::{ThinCString, XString};
@@ -72,7 +70,6 @@ use crate::quickfix::{
     ex_cbelow, ex_cbottom, ex_cbuffer, ex_cc, ex_cclose, ex_cexpr, ex_cfile, ex_cnext, ex_copen,
     ex_cwindow, ex_helpgrep, ex_make, ex_vimgrep, qf_age, qf_history, qf_list,
 };
-use crate::regexp::OptMagic;
 use crate::register::ex_display;
 
 use crate::runtime::{
@@ -144,9 +141,6 @@ mod childproc;
 mod tests;
 pub(crate) use self::childproc::*;
 pub const DIRECTION_NOT_SET: Direction = 0;
-pub const OPTION_MAGIC_OFF: OptMagic = 2;
-pub const OPTION_MAGIC_ON: OptMagic = 1;
-pub const MARK_ALL: MarkGet = 1;
 crate::flag_set! {
     /// How [`do_cmdline`] should run the lines it is given -- upstream's
     /// `DOCMD_*`.

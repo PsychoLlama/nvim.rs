@@ -55,8 +55,7 @@ pub mod splice;
 
 use crate::decoration::defs::DecorInline;
 use crate::marktree::node::{NodeId, NodeSlab};
-use crate::narrow::as_index;
-use crate::narrow::count_as_int;
+use crate::narrow::{as_index, count_as_int};
 use crate::os::libc::{int32_t, size_t, uint32_t, uint64_t};
 use crate::registry::{IdMap, id_map};
 use core::ffi::c_int;

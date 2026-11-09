@@ -30,13 +30,14 @@ use crate::cstr::byte_at;
 use crate::decoration::{
     MT_META_INLINE, decor_conceal_line, mark_virt_chain, ns_in_win, with_decor_virt,
 };
+use crate::decoration::{MT_META_LINES, VT_IS_LINES};
 use crate::diff::{diff_check_fill, diffopt_filler};
 use crate::fold::line_folded;
 use crate::indent::get_breakindent_win;
+use crate::marktree::MarkTreeIter;
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{MT_FILTER_SELECT, mt_invalid, mt_right};
 use crate::marktree::meta::MetaCount;
-use crate::marktree::{MarkTreeIter, MetaIndex};
 use crate::mbyte::{CharInfo, MB_MAXCHAR};
 use crate::mbyte::{c_cells_in, c_char_info, c_cluster_len, c_next_cluster, char_at};
 use crate::r#move::win_col_off2;
@@ -46,20 +47,15 @@ use crate::pos::{MAXCOL, lt, ltoreq};
 use crate::state::mode::STATE;
 use crate::state::{MODE_NORMAL, virtual_active};
 use crate::types::{ColNr, LineNr, Pos};
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 
 use core::ffi::{CStr, c_int, c_long};
 
 /// Cells a byte that is not part of a valid UTF-8 sequence occupies: it is
 /// shown as `<xx>`.
 const INVALID_BYTE_CELLS: c_int = 4;
-/// `VT_IS_LINES` — the virtual text is a block of whole lines, not inline.
-const VT_IS_LINES: c_int = 1;
 /// `V_POS_INLINE` — the virtual text sits between two characters of the line.
 const VPOS_INLINE: uint32_t = 2;
-/// `MT_META_LINES` — the marktree's per-node count of virtual-line marks.
-const MT_META_LINES: MetaIndex = 1;
 const TAB: int32_t = b'\t' as int32_t;
 
 /// The most bytes measuring one character reads: its own sequence and the
@@ -405,8 +401,7 @@ fn add_inline_virt_text(
         if mark.pos.col == col && !mt_invalid(mark) && ns_in_win(mark.ns, wp) {
             let inline = mark_virt_chain(mark).filter_map(|link| {
                 with_decor_virt(link, |vt| {
-                    let inline = c_int::from(vt.flags) & VT_IS_LINES == 0
-                        && vt.pos as uint32_t == VPOS_INLINE;
+                    let inline = vt.flags & VT_IS_LINES == 0 && vt.pos as uint32_t == VPOS_INLINE;
                     inline.then_some(vt.width)
                 })
             });

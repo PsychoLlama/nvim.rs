@@ -24,7 +24,7 @@
 
 mod ring;
 
-use crate::cmdexpand::defs::Candidate;
+use crate::cmdexpand::defs::{Candidate, Expand};
 use crate::cstr;
 use ring::EMPTY_RING;
 pub use ring::{HistEntry, Ring};
@@ -32,7 +32,6 @@ use std::ffi::CString;
 use std::rc::Rc;
 
 use crate::charset::strsize;
-use crate::cmdexpand::defs::Expand;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, tv_get_number, tv_get_number_chk};
 use crate::ex_cmds::check_secure;
@@ -61,10 +60,12 @@ use core::ffi::{CStr, c_int};
 pub const HIST_DEFAULT: HistoryType = -2;
 pub const HIST_INVALID: HistoryType = -1;
 pub const HIST_CMD: HistoryType = 0;
+/// The search history's number: the only one with a separator.
 pub const HIST_SEARCH: HistoryType = 1;
 pub const HIST_EXPR: HistoryType = 2;
 pub const HIST_INPUT: HistoryType = 3;
 pub const HIST_DEBUG: HistoryType = 4;
+/// The number of history types.
 pub const HIST_COUNT: usize = 5;
 
 /// Names accepted by `:history` and `histget()` etc., indexed by history

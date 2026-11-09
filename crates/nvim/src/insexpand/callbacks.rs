@@ -295,7 +295,7 @@ pub(crate) fn cpt_entries(mut option: &[u8]) -> impl Iterator<Item = CptEntry<'_
         let at = &option[start..];
         let mut part = Vec::new();
         let after = next_option_part(at, &mut part);
-        part.truncate(LSIZE as usize - 1);
+        part.truncate(LSIZE - 1);
         option = after;
         Some(CptEntry { at, part, after })
     })

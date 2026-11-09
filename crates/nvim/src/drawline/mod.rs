@@ -7,8 +7,7 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::ascii::NUL;
-use crate::ascii::TAB;
+use crate::ascii::{NUL, TAB};
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::buffer::{buf_is_quickfix, buf_meta_total};
 use crate::charset::{
@@ -62,8 +61,8 @@ use crate::memline::gchar_pos;
 use crate::message::state::DID_EMSG;
 use crate::r#move::{set_empty_rows, validate_virtcol, win_col_off2};
 use crate::narrow::as_index;
-use crate::option::OPT_FLAG_INSECURE;
 use crate::option::vars::DY_FLAGS;
+use crate::option::{MAX_NUMBERWIDTH, OPT_FLAG_INSECURE};
 use crate::options::{
     OPT_CULOPT_FLAG_LINE, OPT_CULOPT_FLAG_NUMBER, OPT_CULOPT_FLAG_SCREENLINE, OPT_DY_FLAG_UHEX,
     OPT_SPO_FLAG_NOPLAINBUFFER,
@@ -82,7 +81,7 @@ use crate::state::{MODE_INSERT, virtual_active};
 use crate::statusline::defs::StatusCol;
 use crate::statusline::{SIGN_SHOW_MAX, build_statuscol_str};
 use crate::syntax::{SynFlags, syn_get_sub_char, syntax_present};
-use crate::terminal::terminal_get_line_attributes;
+use crate::terminal::{TERM_ATTRS_MAX, terminal_get_line_attributes};
 use crate::types::NS;
 use crate::types::{ColNr, DiffLine, LineNr, Pos, ScreenAttr, ScreenChar, VarNumber};
 use crate::ui::ui_rgb_attached;
@@ -106,14 +105,6 @@ use self::attrs::attr_has_line_deco;
 mod chars;
 mod rows;
 mod special;
-/// A `DecorRange` that draws virtual text of its own.
-/// A `DecorRange` that draws nothing and reports its position to the UI.
-/// Columns of a `:terminal` line whose attributes `win_line` will look up.
-///
-/// The scratch array is that many entries; past it a terminal cell just takes
-/// the window's own attributes.
-pub const TERM_ATTRS_MAX: ::core::ffi::c_int = 1024;
-pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 /// Draw one buffer line, and answer the window row after it.
 ///
 /// The work is in two halves: [`prepare_line`] decides everything that is

@@ -31,8 +31,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
-use crate::narrow::as_index;
-use crate::narrow::len_as_int;
+use crate::narrow::{as_index, len_as_int};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::io::Read;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
@@ -541,11 +540,9 @@ mod tests {
         }
     }
 
-    // Caps used below, by their unibilium enum values.
-    const BACK_COLOR_ERASE: u32 = 29; // boolean index 28
-    const COLUMNS: u32 = 46; // numeric index 0
-    const LINES: u32 = 48; // numeric index 2
-    const CARRIAGE_RETURN: u32 = 88; // string index 2
+    use crate::tui::terminfo::caps::unibi_cap::{
+        BACK_COLOR_ERASE, CARRIAGE_RETURN, COLUMNS, LINES,
+    };
 
     #[test]
     fn parses_the_standard_sections() {

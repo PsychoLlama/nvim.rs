@@ -20,19 +20,17 @@
 )]
 
 use super::program::{NfaState, StateId, States};
-use crate::regexp::NfaOp;
-use crate::regexp::NfaStates;
+use crate::regexp::{NfaOp, NfaStates};
 use core::ffi::c_int;
 
 use super::Parsed;
 use super::run::failure_chance;
 use super::sub::match_follows;
-use crate::mbyte::MB_MAXBYTES;
-use crate::mbyte::utf_char2len;
+use crate::mbyte::{MB_MAXBYTES, utf_char2len};
 use crate::regexp::{CompileError, NfaRegProg};
 
 /// How far the width walk follows a `NFA_SPLIT` before giving up.
-const MAX_DEPTH: c_int = 4;
+pub(crate) const MAX_DEPTH: c_int = 4;
 
 /// One unset edge of a half-built machine: a state's `out` or `out1`, seen
 /// as a link in the list of edges still waiting to be patched.

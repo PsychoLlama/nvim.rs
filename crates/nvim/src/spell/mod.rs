@@ -463,6 +463,8 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
 }
 
 pub type SpellAddType = ::core::ffi::c_uint;
+pub(crate) const SPELL_ADD_BAD: SpellAddType = 1;
+pub(crate) const SPELL_ADD_GOOD: SpellAddType = 0;
 /// One `REP`/`REPSAL` item: text to look for, and what to put in its
 /// place. Both ends of the format hold it — the loaded language's tables
 /// and `:mkspell`'s, whose copies the writer sorts.

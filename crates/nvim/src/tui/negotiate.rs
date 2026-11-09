@@ -23,7 +23,8 @@ use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
 use crate::message_fmt::msg_bytes_opt;
 use crate::startup::NVIM_TESTING;
 use crate::tui::output::{flush, out, out_fmt};
-use crate::tui::state::{KeyEncoding, TUIData, TermMode, TermModeState};
+use crate::tui::state::{KEY_ENCODING_KITTY, KEY_ENCODING_XTERM};
+use crate::tui::state::{TUIData, TermMode, TermModeState};
 use crate::tui::terminfo::caps::TERM_SET_UNDERLINE_STYLE;
 use core::ffi::CStr;
 
@@ -154,9 +155,6 @@ pub(crate) fn tui_reset_key_encoding(tui: &mut TUIData) {
         _ => {}
     }
 }
-
-const KEY_ENCODING_KITTY: KeyEncoding = 1;
-const KEY_ENCODING_XTERM: KeyEncoding = 2;
 
 /// Ask the terminal for its background colour, so `'background'` can follow
 /// it. The trailing DSR is what guarantees an answer either way.

@@ -19,6 +19,7 @@ use super::low_byte;
 use crate::api::keysets::{
     KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
 };
+use crate::cmdhist::HIST_SEARCH;
 use crate::eval::decode::decode_string;
 use crate::memory::XString;
 use crate::mpack::mpack_core::MPACK_OK;
@@ -30,9 +31,9 @@ use std::rc::Rc;
 
 use super::unpack::{Cursor, Header, Parsed};
 use super::{
-    DEFAULT_POS, DEFAULT_REGISTER, DEFAULT_SEARCH_PATTERN, EntryFault, HIST_SEARCH, Keyed,
-    ShadaBufferListItem, ShadaEntry, ShadaEntryData, ShadaError, ShadaExtra, ShadaFileMark,
-    ShadaGlobalVar, ShadaHistoryItem, ShadaRegister, default_mark_name, kind,
+    DEFAULT_POS, DEFAULT_REGISTER, DEFAULT_SEARCH_PATTERN, EntryFault, Keyed, ShadaBufferListItem,
+    ShadaEntry, ShadaEntryData, ShadaError, ShadaExtra, ShadaFileMark, ShadaGlobalVar,
+    ShadaHistoryItem, ShadaRegister, default_mark_name, kind,
 };
 use crate::eval::typval::TV_INITIAL_VALUE;
 
@@ -208,7 +209,7 @@ fn parse_history(pos: u64, cursor: &mut Cursor) -> Parsed2 {
     };
 
     let histtype = low_byte(hist_type);
-    let is_search = histtype == HIST_SEARCH;
+    let is_search = core::ffi::c_int::from(histtype) == HIST_SEARCH;
     let mut sep = 0;
     if is_search {
         if len < 3 {

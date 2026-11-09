@@ -25,10 +25,9 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{
-    CORRECTIONS, GRAPHEME_STATE_INIT, LEAD_PAYLOAD, iscomposing, utf_is_trail_byte, utf8len_tab,
-};
+use super::{CORRECTIONS, LEAD_PAYLOAD, iscomposing, utf_is_trail_byte, utf8len_tab};
 use crate::charset::char2cells;
+use crate::mbyte::GRAPHEME_STATE_INIT;
 use crate::mbyte::{CharInfo, GraphemeState};
 use crate::mbyte::{emoji_widens, prop_is_emojilike, utf_char2cells};
 use crate::utf8proc::{

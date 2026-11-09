@@ -161,7 +161,6 @@ crate::flag_set! {
     /// to. Cleared by the first line that is appended or replaced.
     const EMPTY = 0x1;
 }
-pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const SEA_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEA_QUIT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const SEA_RECOVER: ::core::ffi::c_int = 3 as ::core::ffi::c_int;

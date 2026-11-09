@@ -132,7 +132,6 @@ pub const FCERR_TOOMANY: c_int = 1;
 pub const FCERR_UNKNOWN: c_int = 0;
 
 pub const LUA_NOREF: c_int = -2;
-pub const NOTDONE: c_int = 2;
 pub const TV_CSTRING: size_t = size_t::MAX - 1;
 use crate::message::MSG_BUF_LEN;
 pub const MSG_BUF_CLEN: c_int = MSG_BUF_LEN / 6;

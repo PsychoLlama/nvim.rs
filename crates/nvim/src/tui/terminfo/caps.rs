@@ -25,13 +25,13 @@ use core::ffi::{CStr, c_uint};
 /// unibilium's capability numbers. Nested so they stay out of the flat
 /// namespace the unit-test cdefs are generated into -- they are an
 /// implementation detail of the tables below.
-mod unibi_cap {
+pub(crate) mod unibi_cap {
     pub const BACK_COLOR_ERASE: super::UnibiCap = 29;
     pub const MAX_COLORS: super::UnibiCap = 59;
     pub const LINES: super::UnibiCap = 48;
     pub const COLUMNS: super::UnibiCap = 46;
 
-    pub(super) const CARRIAGE_RETURN: super::UnibiString = 88;
+    pub(crate) const CARRIAGE_RETURN: super::UnibiString = 88;
     pub(super) const CHANGE_SCROLL_REGION: super::UnibiString = 89;
     pub(super) const CLEAR_SCREEN: super::UnibiString = 91;
     pub(super) const CLR_EOL: super::UnibiString = 92;

@@ -10,8 +10,8 @@
 
 use super::wrappers::arg_number_chk;
 use super::{
-    NSUBEXP, SOME_MATCH, SOME_MATCH_END, SOME_MATCH_LIST, SOME_MATCH_STR, SOME_MATCH_STR_POS,
-    SomeMatchType, tv_get_buf,
+    SOME_MATCH, SOME_MATCH_END, SOME_MATCH_LIST, SOME_MATCH_STR, SOME_MATCH_STR_POS, SomeMatchType,
+    tv_get_buf,
 };
 use crate::eval::callback_call;
 use crate::eval::encode::encode_tv2echo;
@@ -27,17 +27,14 @@ use crate::fuzzy::{FUZZY_MATCH_MAX_LEN, fuzzy_match, matched_char_count};
 use crate::mbyte::cluster_len;
 use crate::memline::Lines;
 use crate::memory::ThinCString;
-use crate::message::E_BUFFER_IS_NOT_LOADED;
-use crate::message::emsg;
 use crate::message::state::DID_EMSG;
+use crate::message::{E_BUFFER_IS_NOT_LOADED, emsg};
 use crate::message_fmt::msg_cstr;
-use crate::narrow::as_index;
-use crate::narrow::len_as_integer;
-use crate::narrow::number_as_int;
+use crate::narrow::{as_index, len_as_integer, number_as_int};
 use crate::option::SavedCpo;
 use crate::option::vars::p_ic;
 use crate::os::cshim::gettext;
-use crate::regexp::RegMatch;
+use crate::regexp::{NSUBEXP, RegMatch};
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING};
 use crate::semsg;
 use crate::types::{

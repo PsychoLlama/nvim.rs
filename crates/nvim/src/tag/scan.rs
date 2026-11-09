@@ -30,36 +30,17 @@ use crate::options::{
 };
 use crate::optionstr::OptString;
 use crate::pos::MAXCOL;
-use crate::regexp::RE_MAGIC;
-use crate::regexp::RegMatch;
+use crate::regexp::{RE_MAGIC, RegMatch};
 use crate::search::ignorecase_opt;
 use crate::semsg;
 use crate::smsg;
+use crate::tag::{
+    LSIZE, MT_COUNT, MT_GL_CUR, MT_GL_OTH, MT_IC_OFF, MT_RE_OFF, MT_ST_CUR, MT_ST_OTH,
+};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 use core::hash::{Hash, Hasher};
 use std::collections::HashSet;
-
-/// How many priority buckets a match can land in: four kinds of match,
-/// doubled for an ignore-case match and again for a regexp match.
-const MT_COUNT: usize = super::MT_COUNT as usize;
-/// Static match in the current file.
-const MT_ST_CUR: usize = super::MT_ST_CUR as usize;
-/// Global match in the current file.
-const MT_GL_CUR: usize = super::MT_GL_CUR as usize;
-/// Global match in another file.
-const MT_GL_OTH: usize = super::MT_GL_OTH as usize;
-/// Static match in another file.
-const MT_ST_OTH: usize = super::MT_ST_OTH as usize;
-/// Added when the match only holds with case ignored.
-const MT_IC_OFF: usize = super::MT_IC_OFF as usize;
-/// Added when the match came from the regexp rather than from comparing
-/// the pattern literally.
-const MT_RE_OFF: usize = super::MT_RE_OFF as usize;
-
-/// The line buffer starts this big and doubles whenever a line does not
-/// fit in it.
-const LSIZE: usize = super::LSIZE as usize;
 
 /// How the tags file being read is being read.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

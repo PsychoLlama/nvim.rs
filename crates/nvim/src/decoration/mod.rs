@@ -138,6 +138,7 @@ pub(crate) const DECOR_KIND_UI_WATCHED: DecorRangeKind = 4;
 /// `kMTMeta*`: the marktree's per-node counts, which is what lets a walk skip
 /// a whole subtree that has no mark of the kind it is looking for.
 pub(crate) const MT_META_INLINE: MetaIndex = 0;
+/// `MT_META_LINES` — the marktree's per-node count of virtual-line marks.
 pub(crate) const MT_META_LINES: MetaIndex = 1;
 pub(crate) const MT_META_SIGN_HL: MetaIndex = 2;
 pub(crate) const MT_META_SIGN_TEXT: MetaIndex = 3;

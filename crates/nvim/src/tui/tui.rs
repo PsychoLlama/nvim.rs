@@ -44,11 +44,11 @@ use crate::event::signal::{
 use crate::event::stream::stream_set_blocking;
 use crate::event::uv::{uv_file, uv_handle_t, uv_timer_t, uv_tty_mode_t};
 use crate::global_cell::GlobalCell;
-use crate::highlight::HlAttrFlags;
-use crate::highlight::HlAttrs;
+use crate::highlight::{HlAttrFlags, HlAttrs};
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
+use crate::option::{DFLT_COLS, DFLT_ROWS};
 use crate::os::env::{env_get_within, getenv_owned};
 use crate::os::fs::os_strerror;
 use crate::os::input::os_isatty;
@@ -93,11 +93,6 @@ const UV_TTY_MODE_IO: uv_tty_mode_t = 2;
 
 const SIGSTOP: c_int = 19;
 const SIGWINCH: c_int = 28;
-
-/// The size to fall back to when neither the terminal, the environment nor
-/// terminfo says anything useful.
-const DFLT_COLS: c_int = 80;
-const DFLT_ROWS: c_int = 24;
 
 /// The first entry in the highlight table: the editor's default highlight.
 pub(crate) const DEFAULT_ATTRS: HlAttrs = HlAttrs {

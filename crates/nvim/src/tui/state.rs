@@ -321,3 +321,6 @@ pub struct TerminfoExt {
 }
 
 pub type KeyEncoding = ::core::ffi::c_uint;
+pub(crate) const KEY_ENCODING_XTERM: KeyEncoding = 2;
+/// The terminal speaks the kitty keyboard protocol.
+pub(crate) const KEY_ENCODING_KITTY: KeyEncoding = 1;

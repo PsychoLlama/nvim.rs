@@ -49,6 +49,7 @@ use crate::fold::{fold_update_all, foldmethod_is_syntax};
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::highlight::state::{INCLUDE_DEFAULT, INCLUDE_LINK, INCLUDE_NONE};
+use crate::highlight_group::MAX_HL_ID;
 use crate::highlight_group::{
     HLF_D, highlight_link_id, highlight_num_groups, init_highlight, syn_check_group, syn_id2attr,
     syn_id2name, syn_list_header, syn_name2id, syn_name2id_bytes,
@@ -61,10 +62,9 @@ use crate::message::{
     emsg, msg, msg_advance, msg_display, msg_display_bytes, msg_ext_set_kind, msg_outnum,
     msg_putchar, msg_str, msg_str_hl, msg_title,
 };
-use crate::narrow::as_index;
-use crate::narrow::count_as_int;
-use crate::winlayer::BufId;
-use crate::winlayer::WinId;
+use crate::narrow::{as_index, count_as_int};
+use crate::regexp::{REX_SET, REX_USE};
+use crate::winlayer::{Buf, BufId, WinId};
 
 use crate::autocmd::defs::AutoEvent;
 use crate::cmdexpand::defs::Expand;
@@ -86,7 +86,6 @@ use crate::regexp::{RegMMatch, RegMatch};
 use crate::runtime::{do_source, source_runtime};
 use crate::types::{ColNr, ExArg, LPos, LineNr, OptInt, ProfTime, SynBlock, SynTime};
 use crate::ui::state::{COLUMNS, ROWS};
-use crate::winlayer::Buf;
 use crate::winlayer::{Live, Win};
 use ::std::rc::Rc;
 
@@ -216,8 +215,6 @@ impl IdList {
         }
     }
 }
-/// The highest highlight id there can be.
-pub(crate) const MAX_HL_ID: ::core::ffi::c_uint = 20000;
 /// The `contains=ALL`/`ALLBUT` marker, which shares its value with the highest
 /// possible highlight id and is offset by the `:syntax include` tag.
 pub(crate) const SYNID_ALLBUT: ::core::ffi::c_int = 20000;
@@ -537,8 +534,6 @@ pub(crate) const ITEM_START: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub(crate) const ITEM_SKIP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub(crate) const ITEM_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub(crate) const ITEM_MATCHGROUP: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub(crate) const REX_SET: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub(crate) const REX_USE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 
 /// A syntax or group id as the `int16_t` the pattern tables keep it in, as
 /// upstream's `(int16_t)` casts did. Ids are bounded by `MAX_HL_ID` and the

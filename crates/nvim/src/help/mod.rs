@@ -72,21 +72,9 @@ use std::os::unix::ffi::OsStrExt;
 pub(crate) use tags::ex_helptags;
 
 /// Constants the transpiler copied in from the headers this module includes.
-mod flag {
-    use core::ffi::c_uint;
-
-    /// `find_tags` flags.
-    pub(super) const TAG_HELP: c_uint = 1;
-    pub(super) const TAG_NAMES: c_uint = 2;
-    pub(super) const TAG_REGEXP: c_uint = 4;
-    pub(super) const TAG_VERBOSE: c_uint = 32;
-    pub(super) const TAG_KEEP_LANG: c_uint = 128;
-    pub(super) const TAG_NO_TAGFUNC: c_uint = 256;
-    /// The longest match list `:help` will show.
-    pub(super) const TAG_MANY: c_uint = 300;
-}
-
-use flag::{TAG_HELP, TAG_KEEP_LANG, TAG_MANY, TAG_NAMES, TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE};
+use crate::tag::{
+    TAG_HELP, TAG_KEEP_LANG, TAG_MANY, TAG_NAMES, TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE,
+};
 
 /// Whether the `:keepalt` modifier is off, so that the alternate file may
 /// be changed.
@@ -407,10 +395,9 @@ fn find_help_tags(subject: &[u8], keep_lang: bool) -> Option<Vec<Vec<u8>>> {
     let pattern = XString::from_bytes(escaped.split(|&b| b == 0).next().unwrap_or_default());
     drop(res);
 
-    let mut flags =
-        (TAG_HELP | TAG_REGEXP | TAG_NAMES | TAG_VERBOSE | TAG_NO_TAGFUNC).cast_signed();
+    let mut flags = TAG_HELP | TAG_REGEXP | TAG_NAMES | TAG_VERBOSE | TAG_NO_TAGFUNC;
     if keep_lang {
-        flags |= TAG_KEEP_LANG.cast_signed();
+        flags |= TAG_KEEP_LANG;
     }
     let mut matches = find_help_tag_matches(pattern.as_cstr(), flags, MAXCOL)?;
     // Sort on the heuristic number `find_tags` put after the tag.

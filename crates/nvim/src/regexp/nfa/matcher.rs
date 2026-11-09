@@ -20,9 +20,8 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::regexp::NfaOp;
-use crate::types::ColNr;
-use crate::types::LineNr;
+use crate::regexp::{NfaOp, TIME_CHECK_INTERVAL};
+use crate::types::{ColNr, LineNr};
 use core::ffi::c_int;
 
 use super::list::{BLANK_SUBS, NfaPim, ThreadList, addstate, addstate_here};
@@ -37,10 +36,6 @@ use crate::regexp::{
     NFA_MAX_STATES, NFA_TOO_EXPENSIVE, PimResult, RegSubs, Rex, recursive_regmatch, reg_breakcheck,
     reg_nextline, skip_to_start,
 };
-
-/// How many characters may pass between two checks of the caller's time
-/// limit.
-const TIME_CHECK_INTERVAL: c_int = 20;
 
 /// Run the machine `start` over the input, from `rex.input`.
 ///

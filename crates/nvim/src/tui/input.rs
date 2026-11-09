@@ -45,16 +45,14 @@ use crate::log::{LOGLVL_DBG, logmsg};
 use crate::message_fmt::msg_bytes;
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::option::vars::{p_ttimeout, p_ttm};
-use crate::os::libc::STDIN_FILENO;
-use crate::os::libc::size_t;
-use crate::os::libc::termios;
+use crate::os::libc::{STDIN_FILENO, size_t, termios};
 use crate::startup::{UI_CLIENT_CHANNEL_ID, os_exit};
 use crate::tui::keys::{KEYMOD_RECOGNIZED, modified_utf8, mouse_event, simple_utf8};
 use crate::tui::negotiate::{
     tui_enable_extended_underline, tui_handle_term_mode, tui_query_bg_color, tui_tk_ti_getstr,
 };
-use crate::tui::state::TUIData;
-use crate::tui::state::{KEY_BUFFER_SIZE, KeyEncoding, TermInput, TermInputCallbacks};
+use crate::tui::state::{KEY_BUFFER_SIZE, TermInput, TermInputCallbacks};
+use crate::tui::state::{KEY_ENCODING_KITTY, TUIData};
 use crate::tui::terminfo::entry::TerminfoEntry;
 use crate::tui::termkey::termkey::{
     TERMKEY_CANON_DELBS, TERMKEY_EVENT_PRESS, TERMKEY_EVENT_REPEAT, TERMKEY_FLAG_KEEPC0,
@@ -95,9 +93,6 @@ const END_PASTE: &[u8; 6] = b"\x1b[201~";
 /// What a terminal reporting focus sends when its window gains or loses it.
 const FOCUS_GAINED: &[u8; 3] = b"\x1b[I";
 const FOCUS_LOST: &[u8; 3] = b"\x1b[O";
-
-/// The terminal speaks the kitty keyboard protocol.
-const KEY_ENCODING_KITTY: KeyEncoding = 1;
 
 /// How long to sit on background-colour queries before making another.
 const BG_QUERY_DELAY_MS: u64 = 100;

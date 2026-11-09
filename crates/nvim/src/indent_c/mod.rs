@@ -31,6 +31,7 @@
 #![forbid(unsafe_code)]
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::change::COM_MAX_LEN;
 use crate::charset::skip;
 use crate::charset::{getwhitecols_curline, vim_is_ident_char, vim_iswordc};
 use crate::eval::funcs::builtin::EvalFuncData;
@@ -82,6 +83,8 @@ pub(crate) use crate::cstr::byte_at;
 pub(crate) use crate::indent::line_vcol;
 
 pub const KEY_COMPLETE: ::core::ffi::c_int = 259;
+/// The pseudo-keys `in_cinkeys()` matches `o`/`O` against, compared to a
+/// `c_int` `keytyped`.
 pub const KEY_OPEN_BACK: ::core::ffi::c_int = 258;
 pub const KEY_OPEN_FORW: ::core::ffi::c_int = 257;
 pub const FM_BACKWARD: ::core::ffi::c_int = 1;
@@ -96,7 +99,6 @@ pub const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
 pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;
 pub const COM_LEFT: ::core::ffi::c_int = 'l' as ::core::ffi::c_int;
 pub const COM_RIGHT: ::core::ffi::c_int = 'r' as ::core::ffi::c_int;
-pub const COM_MAX_LEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 pub const FIND_NAMESPACE_LIM: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const BRACE_IN_COL0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const BRACE_AT_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
