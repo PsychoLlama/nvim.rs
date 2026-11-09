@@ -421,7 +421,7 @@ impl OptVar {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct VimOption {
     pub fullname: &'static ::core::ffi::CStr,
     /// The abbreviation, for an option that has one.

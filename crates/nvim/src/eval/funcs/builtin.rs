@@ -15,7 +15,7 @@ use crate::types::TypVal;
 
 /// One row of the builtin-function table: what `abs()` *is* to the
 /// evaluator.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct EvalFuncDef {
     /// The name it answers to; `None` on the blank row that ends the table.
     pub name: Option<&'static ::core::ffi::CStr>,

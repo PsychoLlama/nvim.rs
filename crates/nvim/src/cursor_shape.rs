@@ -51,7 +51,7 @@ use crate::types::{Array, Object};
 use crate::ui::ui_mode_info_set;
 
 pub(crate) type CursorShape = ::core::ffi::c_uint;
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct CursorEntry {
     pub full_name: &'static ::core::ffi::CStr,
     pub shape: CursorShape,
@@ -163,8 +163,8 @@ const fn default_entry(idx: usize) -> CursorEntry {
 }
 
 const fn default_table() -> [CursorEntry; SHAPE_IDX_COUNT as usize] {
-    let mut table = [default_entry(0); SHAPE_IDX_COUNT as usize];
-    let mut idx = 1;
+    let mut table = [CursorEntry::BLANK; SHAPE_IDX_COUNT as usize];
+    let mut idx = 0;
     while idx < SHAPE_IDX_COUNT as usize {
         table[idx] = default_entry(idx);
         idx += 1;
@@ -178,7 +178,7 @@ static SHAPE_TABLE: GlobalCell<[CursorEntry; SHAPE_IDX_COUNT as usize]> =
 
 /// One mode's entry, copied out of the table.
 pub(crate) fn shape_entry(idx: ShapeIdx) -> CursorEntry {
-    SHAPE_TABLE.with(|table| table[as_index(idx)])
+    SHAPE_TABLE.with(|table| table[as_index(idx)].clone())
 }
 
 /// Change one mode's entry in place.

@@ -22,7 +22,7 @@ use crate::cursor_shape::{CursorEntry, CursorShape};
 use crate::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_N, SHAPE_VER, shape_entry};
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
-use crate::highlight::{HlAttrs, RgbValue};
+use crate::highlight::RgbValue;
 use crate::log::{LOGLVL_WRN, logmsg};
 use crate::message_fmt::msg_cstr_opt;
 use crate::narrow::as_index;
@@ -115,7 +115,7 @@ pub fn set_mode(tui: &mut TUIData, mode: usize) {
         return;
     }
     // `mode` indexes the fixed-size shape array, whose bounds Rust checks.
-    let entry = tui.cursor_shapes[mode];
+    let entry = tui.cursor_shapes[mode].clone();
     apply_color(tui, &entry);
     terminfo_print_nums(tui, kTerm_set_cursor_style, &[decscusr_code(&entry)]);
 }
@@ -140,22 +140,23 @@ fn apply_color(tui: &mut TUIData, entry: &CursorEntry) {
         return;
     }
 
-    let aep: HlAttrs = tui.attrs[as_index(entry.id)];
-    tui.want_invisible = aep.hl_blend == BLEND_INVISIBLE;
+    let aep = &tui.attrs[as_index(entry.id)];
+    let (blend, ae_attr, bg_color) = (aep.hl_blend, aep.rgb_ae_attr, aep.rgb_bg_color);
+    tui.want_invisible = blend == BLEND_INVISIBLE;
     if tui.want_invisible {
         return;
     }
-    if aep.rgb_ae_attr.has(HlAttrFlags::INVERSE) {
+    if ae_attr.has(HlAttrFlags::INVERSE) {
         // The terminal's own inverse video is the cursor; any colour we set
         // would fight it.
         terminfo_out(tui, kTerm_reset_cursor_color);
-    } else if aep.rgb_bg_color >= 0 as RgbValue {
+    } else if bg_color >= 0 as RgbValue {
         // Some terminals want `#rrggbb`, the rest a bare number; which one
         // was settled when the description was augmented.
         if tui.set_cursor_color_as_str {
             let mut hex = [0u8; 8];
             // 24 bits is all the capability can carry.
-            let color = aep.rgb_bg_color.cast_unsigned() & 0xff_ffff;
+            let color = bg_color.cast_unsigned() & 0xff_ffff;
             hex[0] = b'#';
             for i in 0..6 {
                 let nibble = (color >> (20 - 4 * i)) & 0xf;
@@ -164,7 +165,7 @@ fn apply_color(tui: &mut TUIData, entry: &CursorEntry) {
             let s = CStr::from_bytes_with_nul(&hex).expect("hex buffer is NUL-terminated");
             terminfo_print_str(tui, kTerm_set_cursor_color, s);
         } else {
-            terminfo_print_nums(tui, kTerm_set_cursor_color, &[aep.rgb_bg_color as c_int]);
+            terminfo_print_nums(tui, kTerm_set_cursor_color, &[bg_color as c_int]);
         }
         tui.cursor_has_color = true;
     }

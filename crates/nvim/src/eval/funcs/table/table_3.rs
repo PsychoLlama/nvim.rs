@@ -16,9 +16,8 @@
 #[allow(unused_imports)]
 use super::*;
 
-/// This file's run of the builtin table (223 rows), spliced in by
-/// the parent.
-pub(super) const PART: &[EvalFuncDef] = &[
+/// This file's run of the builtin table, spliced in by the parent.
+pub(super) const PART: [EvalFuncDef; 223] = [
     builtin(
         c"sign_unplace",
         Arity::Between(1, 2),

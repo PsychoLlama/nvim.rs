@@ -202,14 +202,18 @@ const fn api(name: &'static CStr, argc: u8, row: usize) -> EvalFuncDef {
     }
 }
 
-/// Copy one generated run of rows into place.
-const fn fill(table: &mut [EvalFuncDef], base: usize, part: &[EvalFuncDef]) -> usize {
+/// Move one generated run of rows into place.
+const fn fill<const N: usize>(
+    table: &mut [EvalFuncDef],
+    base: usize,
+    mut part: [EvalFuncDef; N],
+) -> usize {
     let mut i = 0;
-    while i < part.len() {
-        table[base + i] = part[i];
+    while i < N {
+        core::mem::swap(&mut table[base + i], &mut part[i]);
         i += 1;
     }
-    base + part.len()
+    base + N
 }
 
 /// Every builtin Vimscript function there is, plus the blank row

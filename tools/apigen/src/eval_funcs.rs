@@ -287,14 +287,18 @@ const fn api(name: &'static CStr, argc: u8, row: usize) -> EvalFuncDef {
     }
 }
 
-/// Copy one generated run of rows into place.
-const fn fill(table: &mut [EvalFuncDef], base: usize, part: &[EvalFuncDef]) -> usize {
+/// Move one generated run of rows into place.
+const fn fill<const N: usize>(
+    table: &mut [EvalFuncDef],
+    base: usize,
+    mut part: [EvalFuncDef; N],
+) -> usize {
     let mut i = 0;
-    while i < part.len() {
-        table[base + i] = part[i];
+    while i < N {
+        core::mem::swap(&mut table[base + i], &mut part[i]);
         i += 1;
     }
-    base + part.len()
+    base + N
 }
 "#;
 
@@ -438,13 +442,12 @@ pub fn generate(
         parts.last_mut().unwrap().push(row);
     }
     for (n, part) in parts.iter().enumerate() {
-        // A slice rather than an array: 643 rows of a 32-byte struct is over
-        // clippy's `large_const_arrays` threshold, and a `static` could not be
-        // read back by the `const fn` that splices the parts together.
+        // An array, moved whole into the `const fn` that splices the parts
+        // together (a row is not `Copy`); a `static` could not be read back
+        // there.
         let mut body = format!(
-            "/// This file's run of the builtin table ({} rows), spliced in by\n\
-             /// the parent.\n\
-             pub(super) const PART: &[EvalFuncDef] = &[\n",
+            "/// This file's run of the builtin table, spliced in by the parent.\n\
+             pub(super) const PART: [EvalFuncDef; {}] = [\n",
             part.len()
         );
         for row in part {

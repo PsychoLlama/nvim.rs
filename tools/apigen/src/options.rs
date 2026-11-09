@@ -1455,14 +1455,14 @@ const fn string(value: &'static CStr) -> OptDefault {
     OptDefault::String(value)
 }
 
-/// Copy one generated part into the table under construction.
-const fn fill(table: &mut [VimOption], base: usize, part: &[VimOption]) -> usize {
+/// Move one generated part into the table under construction.
+const fn fill<const N: usize>(table: &mut [VimOption], base: usize, mut part: [VimOption; N]) -> usize {
     let mut i = 0;
-    while i < part.len() {
-        table[base + i] = part[i];
+    while i < N {
+        core::mem::swap(&mut table[base + i], &mut part[i]);
         i += 1;
     }
-    base + part.len()
+    base + N
 }
 "#;
 
@@ -1700,7 +1700,7 @@ pub fn generate(
     for n in 0..parts.len() {
         writeln!(
             out,
-            "    base = fill(&mut table, base, &table_{}::PART);",
+            "    base = fill(&mut table, base, table_{}::PART);",
             n + 1
         )
         .unwrap();

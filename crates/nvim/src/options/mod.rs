@@ -153,14 +153,18 @@ const fn string(value: &'static CStr) -> OptDefault {
     OptDefault::String(value)
 }
 
-/// Copy one generated part into the table under construction.
-const fn fill(table: &mut [VimOption], base: usize, part: &[VimOption]) -> usize {
+/// Move one generated part into the table under construction.
+const fn fill<const N: usize>(
+    table: &mut [VimOption],
+    base: usize,
+    mut part: [VimOption; N],
+) -> usize {
     let mut i = 0;
-    while i < part.len() {
-        table[base + i] = part[i];
+    while i < N {
+        core::mem::swap(&mut table[base + i], &mut part[i]);
         i += 1;
     }
-    base + part.len()
+    base + N
 }
 
 /// Every option there is. A row's position is its `OptIndex`.
@@ -175,11 +179,11 @@ pub static options: ConstTable<[VimOption; kOptCount as usize]> = ConstTable::ne
 pub(crate) const fn table() -> [VimOption; kOptCount as usize] {
     let mut table = [BLANK; kOptCount as usize];
     let mut base = 0;
-    base = fill(&mut table, base, &table_1::PART);
-    base = fill(&mut table, base, &table_2::PART);
-    base = fill(&mut table, base, &table_3::PART);
-    base = fill(&mut table, base, &table_4::PART);
-    base = fill(&mut table, base, &table_5::PART);
+    base = fill(&mut table, base, table_1::PART);
+    base = fill(&mut table, base, table_2::PART);
+    base = fill(&mut table, base, table_3::PART);
+    base = fill(&mut table, base, table_4::PART);
+    base = fill(&mut table, base, table_5::PART);
     assert!(base == kOptCount as usize);
     let mut i = 0;
     while i < table.len() {
