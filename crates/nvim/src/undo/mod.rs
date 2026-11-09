@@ -35,8 +35,7 @@ use crate::eval::typval::{tv_dict_alloc, tv_dict_alloc_ret, tv_list_alloc};
 use crate::ex_docmd::expr_map_locked;
 use crate::ex_docmd::state::GLOBAL_BUSY;
 use crate::ex_getln::{text_locked, text_locked_msg};
-use crate::extmark::ExtmarkOp;
-use crate::extmark::UndoObjectType;
+use crate::extmark::{EXTMARK_MOVE, EXTMARK_NOOP, EXTMARK_SPLICE, EXTMARK_UNDO};
 use crate::extmark::{extmark_apply_undo, extmark_splice_cols};
 use crate::fold::fold_open_cursor;
 use crate::formatted;
@@ -77,7 +76,7 @@ use core::ptr;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod header {
-    use super::{ExtmarkOp, UndoObjectType, c_int};
+    use super::c_int;
 
     pub(super) const EOF: c_int = -1;
 
@@ -85,11 +84,6 @@ mod header {
     pub(super) const UH_CHANGED: c_int = 1;
     pub(super) const UH_EMPTYBUF: c_int = 2;
     pub(super) const UH_RELOAD: c_int = 4;
-
-    pub(super) const EXTMARK_NOOP: ExtmarkOp = 0;
-    pub(super) const EXTMARK_UNDO: ExtmarkOp = 1;
-    pub(super) const EXTMARK_SPLICE: UndoObjectType = 0;
-    pub(super) const EXTMARK_MOVE: UndoObjectType = 1;
 }
 use header::*;
 

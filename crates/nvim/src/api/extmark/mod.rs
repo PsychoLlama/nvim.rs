@@ -32,7 +32,9 @@ use crate::decoration_provider::{
     DECOR_PROVIDER_ACTIVE, decor_provider_clear, with_decor_provider,
 };
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
-use crate::extmark::ExtmarkType;
+use crate::extmark::{
+    EXTMARK_HIGHLIGHT, EXTMARK_SIGN, EXTMARK_VIRT_LINES, EXTMARK_VIRT_TEXT, ExtmarkType,
+};
 use crate::extmark::{extmark_clear, extmark_del_id, extmark_from_id, extmark_get};
 use crate::grid::schar_high;
 use crate::marktree::key::{
@@ -60,10 +62,6 @@ pub use self::decor::*;
 pub use self::ns::*;
 pub use self::query::*;
 pub use self::set::*;
-pub const EXTMARK_HIGHLIGHT: ExtmarkType = 32;
-pub const EXTMARK_VIRT_LINES: ExtmarkType = 16;
-pub const EXTMARK_VIRT_TEXT: ExtmarkType = 8;
-pub const EXTMARK_SIGN: ExtmarkType = 2;
 /// No allocated decoration: the index a `DecorSignHighlight` chain ends on.
 pub const DECOR_ID_INVALID: uint32_t = u32::MAX;
 pub(crate) use crate::decoration::{

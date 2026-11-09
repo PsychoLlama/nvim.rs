@@ -187,7 +187,7 @@ typedef unsigned int ExprType;
 typedef unsigned int ExprVarScope;
 typedef struct ExtmarkNs ExtmarkNs;
 typedef unsigned int ExtmarkOp;
-typedef unsigned int ExtmarkType;
+typedef uint16_t ExtmarkType;
 typedef struct FcId FcId;
 typedef unsigned int FileComparison;
 typedef long off_t;

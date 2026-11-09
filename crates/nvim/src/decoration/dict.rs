@@ -30,22 +30,15 @@ use crate::decoration::defs::{DecorInline, DecorSignHighlight, DecorVirtText};
 use crate::decoration::{
     V_POS_WIN_COL, VL_LEFTCOL, VL_SCROLL, VT_HIDE, VT_IS_LINES, VT_LINES_ABOVE, VT_REPEAT_LINEBREAK,
 };
+use crate::extmark::{EXTMARK_HIGHLIGHT, EXTMARK_SIGN, EXTMARK_VIRT_LINES, EXTMARK_VIRT_TEXT};
+use crate::extmark::{EXTMARK_NONE, ExtmarkType};
 use crate::grid::schar_bytes;
 use crate::highlight::dict::put;
 use crate::highlight_group::syn_id2name;
-use crate::os::libc::uint16_t;
 use crate::sign::sign_text_bytes;
 use crate::types::DictBuilder;
 use crate::types::{ApiString, Object};
 use core::ffi::{CStr, c_int};
-
-/// `kExtmark*`: which kinds of decoration a mark carries, as the bit mask the
-/// marktree stores beside it.
-const EXTMARK_NONE: uint16_t = 1;
-const EXTMARK_SIGN: uint16_t = 2;
-const EXTMARK_VIRT_TEXT: uint16_t = 8;
-const EXTMARK_VIRT_LINES: uint16_t = 16;
-const EXTMARK_HIGHLIGHT: uint16_t = 32;
 
 /// `VirtTextPos` as the API spells it. Keep in sync with `VirtTextPos`.
 const VIRT_TEXT_POS_STR: [&CStr; 6] = [
@@ -253,9 +246,9 @@ fn put_sign(dict: &mut DictBuilder, sh: &DecorSignHighlight, hl_name: bool) {
     }
 }
 
-/// Which kinds of decoration `decor` carries, as the `kExtmark*` mask the
+/// Which kinds of decoration `decor` carries, as the `EXTMARK_*` mask the
 /// marktree stores beside the mark.
-pub fn decor_type_flags(decor: DecorInline) -> uint16_t {
+pub fn decor_type_flags(decor: DecorInline) -> ExtmarkType {
     let ext = match decor {
         DecorInline::Hl(hl) => {
             return if hl.flags & SH_IS_SIGN != 0 {

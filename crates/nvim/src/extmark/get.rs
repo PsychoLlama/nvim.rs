@@ -103,7 +103,7 @@ fn push_mark(array: &mut Vec<MTPair>, ns_id: uint32_t, type_filter: ExtmarkType,
         if !mt_decor_any(mark.start) {
             return;
         }
-        if ExtmarkType::from(type_flags(mt_decor(mark.start))) & type_filter == 0 {
+        if type_flags(mt_decor(mark.start)) & type_filter == 0 {
             return;
         }
     }

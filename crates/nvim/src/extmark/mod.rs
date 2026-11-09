@@ -56,7 +56,7 @@ use crate::marktree::{
     marktree_itr_step_overlap, marktree_lookup, marktree_lookup_ns, marktree_move,
     marktree_move_region, marktree_put, marktree_revise_meta, marktree_splice,
 };
-use crate::os::libc::{int32_t, uint16_t, uint32_t};
+use crate::os::libc::{int32_t, uint32_t};
 use crate::types::buffer::ExtmarkNs;
 use crate::types::{ColNr, LineNr};
 use crate::undo::node::UndoLink;
@@ -82,7 +82,6 @@ pub const EXTMARK_SPLICE: UndoObjectType = 0;
 pub const EXTMARK_NO_UNDO: ExtmarkOp = 2;
 pub const EXTMARK_UNDO: ExtmarkOp = 1;
 pub const EXTMARK_NOOP: ExtmarkOp = 0;
-pub const EXTMARK_NONE: ExtmarkType = 1;
 // ---------------------------------------------------------------------------
 // The two containers hanging off a buffer
 
@@ -250,7 +249,7 @@ fn free_decor(decor: DecorInline) {
     decor_free(decor)
 }
 
-fn type_flags(decor: DecorInline) -> uint16_t {
+fn type_flags(decor: DecorInline) -> ExtmarkType {
     decor_type_flags(decor)
 }
 
@@ -487,7 +486,14 @@ pub struct ExtmarkSplice {
     pub old_byte: BCount,
     pub new_byte: BCount,
 }
-pub type ExtmarkType = ::core::ffi::c_uint;
+pub type ExtmarkType = u16;
+/// `nvim_buf_get_extmarks`' type filter bits, as a decoration's
+/// `type_flags` holds them.
+pub const EXTMARK_NONE: ExtmarkType = 1;
+pub(crate) const EXTMARK_SIGN: ExtmarkType = 2;
+pub(crate) const EXTMARK_VIRT_TEXT: ExtmarkType = 8;
+pub(crate) const EXTMARK_VIRT_LINES: ExtmarkType = 16;
+pub(crate) const EXTMARK_HIGHLIGHT: ExtmarkType = 32;
 pub type UndoObjectType = ::core::ffi::c_uint;
 pub type BCount = ptrdiff_t;
 /// One recorded extmark operation, as a buffer's undo list holds it.
