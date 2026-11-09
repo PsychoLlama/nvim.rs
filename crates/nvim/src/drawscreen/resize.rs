@@ -68,7 +68,7 @@ pub fn default_grid_alloc() -> bool {
 
     grid.comp_height = ROWS.get();
     grid.comp_width = COLUMNS.get();
-    grid.handle = Handle::new(DEFAULT_GRID_HANDLE);
+    grid.handle = DEFAULT_GRID_HANDLE;
 
     RESIZING.set(false);
     true

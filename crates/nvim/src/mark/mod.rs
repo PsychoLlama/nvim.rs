@@ -81,7 +81,7 @@ pub(crate) use shada::{
 };
 pub use show::{ex_delmarks, ex_marks, fm_getname};
 
-use store::{NO_VIEW, mark_name, slot};
+use store::{mark_name, slot};
 
 /// How `mark_get` is allowed to resolve a mark's name.
 pub const MARK_BUF_LOCAL: MarkGet = 0;
@@ -253,7 +253,7 @@ fn setmark_pos(
 /// A position held by value is never the cursor itself, so `''` set this way
 /// just moves the context mark rather than pushing a jumplist entry.
 pub(crate) fn setmark_at(c: u8, pos: Pos, fnum: Option<Handle>) -> Result<(), Failed> {
-    setmark_pos(c, pos, false, fnum, NO_VIEW)
+    setmark_pos(c, pos, false, fnum, FileMarkView::NONE)
 }
 
 impl Win {
@@ -497,7 +497,7 @@ pub fn set_last_cursor(win: Win) {
     };
     // `fnum` 0, not the buffer's handle: this mark is written when the buffer
     // is left, and the shada writer is what fills the file name in.
-    buf.b_last_cursor = FileMark::fresh(win.w_cursor, None, NO_VIEW);
+    buf.b_last_cursor = FileMark::fresh(win.w_cursor, None, FileMarkView::NONE);
 }
 
 /// Adjust position to point to the first byte of a multi-byte character

@@ -14,6 +14,7 @@ use crate::keycodes::SpecialKey;
 use crate::mark::{MARK_BEGIN_LINE, MARK_CONTEXT};
 use crate::normal::defs::{CmdArg, MotionType};
 use crate::search::{ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, FIND_ANY, FIND_DEFINE};
+use crate::search::{FM_BACKWARD, FM_FORWARD};
 use crate::spell::{SMT_BAD, SMT_RARE};
 use crate::strings::has_char;
 use crate::types::{ColNr, Key, LineNr, Pos};
@@ -27,8 +28,8 @@ use crate::mark::defs::MarkMove;
 use crate::mark::{getnextmark, pos_to_mark, setpcmark};
 use crate::mouse::do_mouse;
 use crate::normal::{
-    DIRECTION_NOT_SET, FIND_IDENT, FM_BACKWARD, FM_FORWARD, clear_op, clear_op_beep,
-    ident_under_cursor, may_fold_open, nv_gotofile, nv_mark_move_to, nv_put_opt,
+    DIRECTION_NOT_SET, FIND_IDENT, clear_op, clear_op_beep, ident_under_cursor, may_fold_open,
+    nv_gotofile, nv_mark_move_to, nv_put_opt,
 };
 use crate::ops::OpType;
 use crate::options::{OPT_FDO_FLAG_BLOCK, OPT_FDO_FLAG_SEARCH};
@@ -52,9 +53,9 @@ fn direction(cmd_arg: &mut CmdArg) -> c_int {
 /// `Direction` constants.
 fn match_direction(cmd_arg: &mut CmdArg) -> c_int {
     if cmd_arg.cmdchar.is('[') {
-        FM_BACKWARD.cast_signed()
+        FM_BACKWARD
     } else {
-        FM_FORWARD.cast_signed()
+        FM_FORWARD
     }
 }
 

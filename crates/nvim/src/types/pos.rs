@@ -429,6 +429,14 @@ pub struct Pos {
 }
 
 impl Pos {
+    /// The zeroed position: line 0 is before the first line, so it names
+    /// no position at all.
+    pub const NOWHERE: Self = Self {
+        lnum: LineNr::ZERO,
+        col: ColNr::ZERO,
+        coladd: 0,
+    };
+
     /// The same position moved to `col`, for the read-modify-write of a
     /// position held in a [`crate::global_cell::GlobalCell`].
     pub fn with_col(self, col: ColNr) -> Pos {

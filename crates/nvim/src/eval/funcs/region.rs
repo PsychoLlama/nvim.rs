@@ -38,12 +38,6 @@ use crate::types::{ColNr, Key, LIST_LEN_MAY_KNOW, LineNr, Pos, TypVal, VAR_DICT,
 use core::ffi::{CStr, c_int};
 
 use crate::winlayer::{Buf, Win};
-/// The zeroed position every local in this module starts from.
-const NOWHERE: Pos = Pos {
-    lnum: LineNr::ZERO,
-    col: ColNr::ZERO,
-    coladd: 0,
-};
 
 /// A cleared operator argument, which only the blockwise path fills in.
 const NO_OPARG: OpArg = OpArg {
@@ -54,9 +48,9 @@ const NO_OPARG: OpArg = OpArg {
     use_reg_one: false,
     inclusive: false,
     end_adjusted: false,
-    start: NOWHERE,
-    end: NOWHERE,
-    cursor_start: NOWHERE,
+    start: Pos::NOWHERE,
+    end: Pos::NOWHERE,
+    cursor_start: Pos::NOWHERE,
     line_count: 0,
     empty: false,
     is_visual: false,
@@ -167,7 +161,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Result<Region, Unresolved> {
     {
         return Err(Unresolved::Said);
     }
-    let (mut p1, mut p2) = (NOWHERE, NOWHERE);
+    let (mut p1, mut p2) = (Pos::NOWHERE, Pos::NOWHERE);
     let (mut fnum1, mut fnum2) = (-1, -1);
     // The second is only read when the first parsed, as upstream's
     // short-circuit has it.
@@ -414,11 +408,11 @@ fn line_corners(r: &Region, lnum: LineNr) -> (Pos, Pos) {
         return (
             Pos {
                 col: ColNr::new(1),
-                ..NOWHERE
+                ..Pos::NOWHERE
             },
             Pos {
                 col: ColNr::MAX,
-                ..NOWHERE
+                ..Pos::NOWHERE
             },
         );
     }
@@ -440,7 +434,7 @@ fn line_corners(r: &Region, lnum: LineNr) -> (Pos, Pos) {
         ColNr::from_index(prev) + 1
     };
 
-    let mut p1 = NOWHERE;
+    let mut p1 = Pos::NOWHERE;
     if bd.is_one_char {
         if r.region_type == MotionType::BlockWise {
             p1.col = before_text(&bd);
@@ -461,7 +455,7 @@ fn line_corners(r: &Region, lnum: LineNr) -> (Pos, Pos) {
         p1.col = bd.textcol + 1;
     }
 
-    let mut p2 = NOWHERE;
+    let mut p2 = Pos::NOWHERE;
     if bd.is_one_char {
         p2.col = p1.col;
         p2.coladd = p1.coladd + bd.startspaces + bd.endspaces;

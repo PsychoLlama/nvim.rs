@@ -53,6 +53,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 pub(crate) mod state;
+use crate::fuzzy::FUZZY_SCORE_NONE;
 use crate::os::cshim::gettext;
 use crate::undo::{NO_LOCAL_UNDOLEVEL, buf_is_changed};
 
@@ -153,7 +154,6 @@ pub struct BufMatch {
     pub buf: Buf,
     pub match_0: *mut ::core::ffi::c_char,
 }
-pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
 
 crate::flag_set! {
     /// What has and has not happened to a buffer -- upstream's `BF_*`, the
@@ -188,7 +188,6 @@ crate::flag_set! {
     const WRITE_MASK = 0x8 | 0x10 | 0x40;
 }
 pub const KEYMAP_INIT: ::core::ffi::c_short = 1;
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = u32::MAX;
 #[inline(always)]
 pub fn buf_get_changedtick(buffer: Buf) -> VarNumber {
     // `b:changedtick`'s dict item is always a `VAR_NUMBER`, so the tag test

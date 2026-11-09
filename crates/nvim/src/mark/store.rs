@@ -38,14 +38,11 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::types::ColNr;
-use crate::types::Handle;
-use crate::types::LineNr;
+use crate::types::{ColNr, Handle, LineNr, Pos};
 use core::ffi::{c_char, c_int};
 
 use crate::mark::defs::{FileMark, FileMarkView, XFileMark};
 use crate::os::time::os_time;
-use crate::types::Pos;
 use crate::winlayer::Buf;
 
 /// The position a mark that has never been set reports, and what
@@ -55,10 +52,6 @@ pub(super) const UNSET_POS: Pos = Pos {
     col: ColNr::ZERO,
     coladd: 0,
 };
-
-/// The view an unset mark carries. The module's spelling of
-/// [`FileMarkView::NONE`].
-pub(super) const NO_VIEW: FileMarkView = FileMarkView::NONE;
 
 /// One byte of a mark name, as the stores spell it.
 ///
@@ -220,7 +213,7 @@ mod tests {
         assert!(!fm.is_set());
         assert_eq!(fm.fnum(), None);
         assert_eq!(fm.timestamp, 4242);
-        assert_eq!(fm.view.topline_offset, NO_VIEW.topline_offset);
+        assert_eq!(fm.view.topline_offset, FileMarkView::NONE.topline_offset);
         assert!(fm.extra.is_none());
     }
 

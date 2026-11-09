@@ -145,7 +145,7 @@ enum Order {
 /// skip a zero-length component, so both are a `split` with the empties
 /// filtered out.
 fn entries(val: &[u8], order: Order) -> impl Iterator<Item = &[u8]> {
-    let sep = u8::try_from(ENV_SEPCHAR).expect("`ENV_SEPCHAR` is an ASCII byte");
+    let sep = ENV_SEPCHAR;
     let mut fwd = val.split(move |&b| b == sep).filter(|d| !d.is_empty());
     let mut rev = fwd.clone();
     core::iter::from_fn(move || match order {

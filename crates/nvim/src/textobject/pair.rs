@@ -120,7 +120,7 @@ pub(crate) fn current_block(
             break;
         }
         pos = if unbounded {
-            findmatchlimit(None, what, FM_FORWARD.cast_signed(), 0)
+            findmatchlimit(None, what, FM_FORWARD, 0)
         } else {
             findmatch(None, what)
         };

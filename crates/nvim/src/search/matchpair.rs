@@ -27,13 +27,10 @@ use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
 use crate::optionstr::OptStringRef;
 use crate::search::{BACKWARD, FORWARD};
+use crate::search::{FM_BACKWARD, FM_BLOCKSTOP, FM_FORWARD};
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
-
-const FM_BACKWARD: c_int = super::FM_BACKWARD.cast_signed();
-const FM_FORWARD: c_int = super::FM_FORWARD.cast_signed();
-const FM_BLOCKSTOP: c_int = super::FM_BLOCKSTOP.cast_signed();
 
 /// Find the match for the bracket under the cursor.
 pub fn findmatch(op: Option<&mut OpArg>, initc: c_int) -> Option<Pos> {

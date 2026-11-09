@@ -43,6 +43,7 @@ use crate::memline::Lines;
 use crate::option::vars::p_paste;
 use crate::os::libc::int64_t;
 use crate::pos::{MAXCOL, MAXLNUM, lt};
+use crate::search::{FM_BACKWARD, FM_BLOCKSTOP};
 use crate::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::state::MODE_INSERT;
 use crate::state::mode::STATE;
@@ -87,13 +88,11 @@ pub const KEY_COMPLETE: ::core::ffi::c_int = 259;
 /// `c_int` `keytyped`.
 pub const KEY_OPEN_BACK: ::core::ffi::c_int = 258;
 pub const KEY_OPEN_FORW: ::core::ffi::c_int = 257;
-pub const FM_BACKWARD: ::core::ffi::c_int = 1;
 #[derive(Debug)]
 pub struct CppBaseclassCache {
     pub found: ::core::ffi::c_int,
     pub lpos: LPos,
 }
-pub const FM_BLOCKSTOP: ::core::ffi::c_int = 4;
 pub const COM_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
 pub const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
 pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;

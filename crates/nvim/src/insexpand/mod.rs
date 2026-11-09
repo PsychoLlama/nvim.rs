@@ -11,6 +11,7 @@
 use crate::ascii::TAB;
 use crate::autocmd::defs::AutoEvent;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::fuzzy::{FUZZY_SCORE_NONE, fuzzy_match_str};
 use crate::indent_c::KEY_COMPLETE;
 use crate::memory::XString;
 use crate::tag::{
@@ -50,7 +51,6 @@ use crate::eval::{callback_call, get_v_event, restore_v_event, set_ref_in_callba
 use crate::ex_docmd::state::{EX_NORMAL_BUSY, GLOBAL_BUSY};
 use crate::ex_eval::aborting;
 use crate::extmark::{ExtmarkUndoObject, extmark_apply_undo};
-use crate::fuzzy::fuzzy_match_str;
 use crate::getchar::state::{GOT_INT, KEY_TYPED, test_disable_char_avail};
 use crate::getchar::{
     append_to_redobuff_char, append_to_redobuff_literally, char_avail, safe_vgetc, using_script,
@@ -145,7 +145,6 @@ pub use self::keys::*;
 #[cfg(test)]
 mod tests;
 pub const DIRECTION_NOT_SET: Direction = 0;
-pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
 pub const CTRL_X_CMDLINE_CTRL_X: ::core::ffi::c_int = 17;
 pub const CTRL_X_NORMAL: ::core::ffi::c_int = 0;
 pub const CTRL_X_NOT_DEFINED_YET: ::core::ffi::c_int = 1;

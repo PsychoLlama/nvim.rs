@@ -34,6 +34,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::fuzzy::{FUZZY_SCORE_NONE, fuzzy_match_str};
 use crate::keycodes::{KS_EXTRA, KS_MODIFIER};
 use crate::keycodes::{REPTERM_DO_LT, REPTERM_FROM_PART};
 use crate::lua::ffi::LUA_NOREF;
@@ -55,7 +56,6 @@ use crate::eval::userfunc::find_func;
 use crate::eval::vars::set_vim_var_char;
 use crate::eval::{eval_to_string, last_set_msg};
 use crate::ex_cmds::check_secure;
-use crate::fuzzy::fuzzy_match_str;
 use crate::getchar::noremap_keys;
 use crate::getchar::state::{GOT_INT, LANGMAP_MAPCHAR, MAPPED_CTRL_C};
 use crate::global_cell::GlobalCell;
@@ -112,7 +112,6 @@ pub use self::abbrev::*;
 mod langmap;
 pub use self::langmap::*;
 pub use crate::getchar::MAXMAPLEN;
-pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
 pub use crate::keycodes::REPTERM_NO_SIMPLIFY;
 /// The `:map` arguments being parsed, and the owner of everything a parse
 /// allocates.

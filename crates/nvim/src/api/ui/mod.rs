@@ -45,6 +45,7 @@ use crate::api_error;
 use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
 use crate::channel::CHAN_STDIO;
 use crate::event::r#loop::{Drain, wait_on_main_loop};
+use crate::grid::DEFAULT_GRID_HANDLE;
 use crate::memory::XString;
 use crate::narrow::number_as_int;
 use crate::option::set_tty_option;
@@ -65,9 +66,6 @@ use crate::ui::{
     ui_is_attached, ui_refresh, ui_set_ext_option, with_ui,
 };
 use core::ffi::CStr;
-
-/// The handle of the grid every UI has, before `ext_multigrid` adds more.
-const DEFAULT_GRID_HANDLE: Integer = 1;
 
 /// Why a call that needs the UI on `chan_id` cannot have it.
 fn not_attached(chan_id: u64) -> Error {
@@ -427,7 +425,7 @@ pub fn nvim_ui_try_resize_grid(
     height: Integer,
 ) -> Result<(), Error> {
     on_ui(channel_id, |_| ())?;
-    if grid == DEFAULT_GRID_HANDLE {
+    if grid == Integer::from(DEFAULT_GRID_HANDLE.get()) {
         // The default grid is the screen, so resizing it is a window
         // resize like any other.
         return nvim_ui_try_resize(channel_id, width, height);

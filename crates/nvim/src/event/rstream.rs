@@ -48,7 +48,7 @@ use core::ops::{Deref, DerefMut};
 use core::ptr;
 
 /// The size of the arena block an `RStream` reads into.
-const ARENA_BLOCK_SIZE: usize = 4096;
+pub(crate) const ARENA_BLOCK_SIZE: usize = 4096;
 
 /// A reading stream, reached through the raw pointer libuv keeps in its
 /// handle's `data` field.

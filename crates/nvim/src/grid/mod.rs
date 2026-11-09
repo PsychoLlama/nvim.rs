@@ -104,7 +104,7 @@ pub const SLF_WRAP: c_int = 2;
 /// `grid_put_linebuf` flag: number the cleared columns' vcols upwards.
 pub const SLF_INC_VCOL: c_int = 4;
 /// Handle of `DEFAULT_GRID`; window grids are numbered above it.
-pub(crate) const DEFAULT_GRID_HANDLE: c_int = 1;
+pub(crate) const DEFAULT_GRID_HANDLE: Handle = Handle::new(1);
 
 /// The screen grid, as a handle.
 ///
@@ -248,7 +248,7 @@ pub fn win_grid_alloc(mut window: Win) {
 
 /// Give `grid` a handle if it has none. The grid need not be allocated.
 pub fn grid_assign_handle(grid: &mut ScreenGrid) {
-    static LAST_GRID_HANDLE: GlobalCell<c_int> = GlobalCell::new(DEFAULT_GRID_HANDLE);
+    static LAST_GRID_HANDLE: GlobalCell<c_int> = GlobalCell::new(DEFAULT_GRID_HANDLE.get());
     if grid.handle == Handle::NONE {
         LAST_GRID_HANDLE.set(LAST_GRID_HANDLE.get() + 1);
         grid.handle = Handle::new(LAST_GRID_HANDLE.get());

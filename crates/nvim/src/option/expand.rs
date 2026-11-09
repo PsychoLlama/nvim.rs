@@ -20,8 +20,8 @@
 )]
 
 use crate::env::expand_env_escaped;
-use crate::option::defs::OPT_VAL_TYPE_BOOLEAN;
-use crate::option::defs::OPT_VAL_TYPE_NUMBER;
+use crate::fuzzy::{FUZZY_SCORE_NONE, fuzzy_match_str};
+use crate::option::defs::{OPT_VAL_TYPE_BOOLEAN, OPT_VAL_TYPE_NUMBER};
 use crate::optionstr::OptString;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
@@ -30,7 +30,6 @@ use std::ffi::CString;
 use crate::cmdexpand::defs::{BackslashEscape, Expand, ExpandContext, XpPrefix};
 use crate::cmdexpand::{Scored, cmdline_fuzzy_complete, fuzzy_sorted};
 use crate::ex_docmd::state::ESCAPE_CHARS;
-use crate::fuzzy::fuzzy_match_str;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::{special_key_code, termcap_name};
 use crate::memory::XString;
@@ -42,14 +41,13 @@ use crate::options::{
 };
 use crate::os::libc::uint32_t;
 use crate::path::MAXPATHL;
-use crate::regexp::RegMatch;
-use crate::regexp::vim_regexec;
+use crate::regexp::{RegMatch, vim_regexec};
 use crate::strings::escaped_bytes;
 
 use super::{
-    FUZZY_SCORE_NONE, OPT_FLAG_COLON, OPT_FLAG_COMMA, OPT_FLAG_EXPAND, OPT_FLAG_FLAG_LIST,
-    find_option_len, get_option, get_varp_scope_from, is_option_hidden, option_has_type,
-    option_value_text, option_var,
+    OPT_FLAG_COLON, OPT_FLAG_COMMA, OPT_FLAG_EXPAND, OPT_FLAG_FLAG_LIST, find_option_len,
+    get_option, get_varp_scope_from, is_option_hidden, option_has_type, option_value_text,
+    option_var,
 };
 
 /// What [`set_context_in_set_cmd`] worked out, for the `Expand*` half.

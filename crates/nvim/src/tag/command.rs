@@ -52,13 +52,6 @@ fn match_at(i: c_int) -> TagMatch {
 /// so there is no point looking again for a later one.
 static MATCH_LIMIT: GlobalCell<c_int> = GlobalCell::new(0);
 
-/// The view the tag stack starts a jump from: no remembered scroll
-/// position.
-const NO_VIEW: FileMarkView = FileMarkView {
-    topline_offset: MAXLNUM.get(),
-    skipcol: ColNr::ZERO,
-};
-
 /// The preview window's entry: the match it shows, and the buffer it came
 /// from.
 fn ptag_position() -> (c_int, Option<Handle>) {
@@ -191,7 +184,7 @@ impl DoTag {
                 mark: Pos::default(),
                 in_buffer: Handle::NONE,
                 timestamp: 0,
-                view: NO_VIEW,
+                view: FileMarkView::NONE,
                 extra: None,
             },
             buf_ffname: Buf::current().name.full().map(XString::from_cstr),

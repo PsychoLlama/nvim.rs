@@ -21,12 +21,10 @@ use crate::eval::{buf_byteidx_to_charidx, buf_charidx_to_byteidx, list2fpos, var
 use crate::mark::setmark_at;
 use crate::mbyte::{char_at, cluster_len, mb_adjust_cursor};
 use crate::memline::ml_get_buf_len;
-use crate::message::E_INVARG;
-use crate::message::emsg;
+use crate::message::{E_INVARG, emsg};
 use crate::message_fmt::msg_cstr;
 use crate::r#move::{WinValid, update_curswant};
-use crate::narrow::number_as_col;
-use crate::narrow::number_as_int;
+use crate::narrow::{number_as_col, number_as_int};
 use crate::option::vars::P_SPK;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
@@ -35,26 +33,17 @@ use crate::search::{
     set_csearch_direction, set_csearch_until, set_last_csearch,
 };
 use crate::semsg;
-use crate::types::Handle;
-use crate::types::LineNr;
 use crate::types::{
     ColNr, Direction, List, Pos, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber,
 };
+use crate::types::{Handle, LineNr};
 use crate::window::state::SKIP_UPDATE_TOPLINE;
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 /// "End of line", the column sentinel. `MAXCOL` is spelled as an unsigned
 /// constant but every column it is compared against is a `ColNr`.
 const END_OF_LINE: ColNr = ColNr::MAX;
-
-/// The zeroed position both the getters and the setters start from.
-const NOWHERE: Pos = Pos {
-    lnum: LineNr::ZERO,
-    col: ColNr::ZERO,
-    coladd: 0,
-};
 
 /// `byte2line({byte})` — which line a byte offset falls in.
 pub fn f_byte2line(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
@@ -332,7 +321,7 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
     result.write_number(-1);
     let mut set_curswant = true;
     let (lnum, mut col, coladd) = if args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) {
-        let mut pos = NOWHERE;
+        let mut pos = Pos::NOWHERE;
         let mut curswant: ColNr = ColNr::NONE;
         let read = list2fpos(&args[0], &mut pos, None, Some(&mut curswant), charcol);
         if read.is_err() {
@@ -408,7 +397,7 @@ fn set_position(args: &[TypVal], result: &mut TypVal, charpos: bool) {
     let Some(name) = numbuf.bytes_chk(&args[0]) else {
         return;
     };
-    let mut pos = NOWHERE;
+    let mut pos = Pos::NOWHERE;
     let mut fnum: c_int = 0;
     let mut curswant: ColNr = ColNr::NONE;
     let want = Some(&mut curswant);

@@ -44,12 +44,6 @@ fn depth(len: usize) -> c_int {
     c_int::try_from(len.min(TAGSTACKSIZE)).expect("twenty entries")
 }
 
-/// The view a stack entry's mark starts with: no remembered scroll position.
-const NO_VIEW: FileMarkView = FileMarkView {
-    topline_offset: MAXLNUM.get(),
-    skipcol: ColNr::ZERO,
-};
-
 /// One window's tag stack.
 ///
 /// The entries live in the window itself — `w_tagstack`, of which
@@ -149,7 +143,7 @@ impl TagStack {
         entry.cur_match = item.cur_match.max(0);
         entry.fmark.mark = item.mark;
         entry.fmark.set_fnum(item.fnum);
-        entry.fmark.view = NO_VIEW;
+        entry.fmark.view = FileMarkView::NONE;
         entry.user_data = item.user_data;
     }
 

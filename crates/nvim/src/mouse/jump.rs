@@ -27,7 +27,7 @@
 )]
 
 use crate::grid::DEFAULT_GRID_HANDLE;
-use crate::types::Key;
+use crate::types::{Key, Pos};
 use crate::winlayer::cmdwin_window;
 use core::ffi::c_int;
 
@@ -45,7 +45,6 @@ use crate::normal::{
 };
 use crate::option::vars::p_smd;
 use crate::state::mode::V_ISUAL_RESELECT;
-use crate::types::Pos;
 use crate::winlayer::graph::{CMDWIN_TYPE, CMDWIN_WIN};
 
 // What the last event that could move focus landed on.  A drag or a release
@@ -191,10 +190,12 @@ fn stop_visual() {
 /// arms of a *later* drag or release read them back.
 fn classify(pos: MousePos, win: Win) -> bool {
     let below_window =
-        pos.grid == DEFAULT_GRID_HANDLE && pos.row + win.w_winbar_height >= win.w_height;
+        pos.grid == DEFAULT_GRID_HANDLE.get() && pos.row + win.w_winbar_height >= win.w_height;
     ON_STATUS_LINE.set(below_window && pos.row + win.w_winbar_height - win.w_height + 1 == 1);
     ON_SEP_LINE.set(
-        pos.grid == DEFAULT_GRID_HANDLE && pos.col >= win.w_width && pos.col - win.w_width == 0,
+        pos.grid == DEFAULT_GRID_HANDLE.get()
+            && pos.col >= win.w_width
+            && pos.col - win.w_width == 0,
     );
     ON_WINBAR.set(pos.row < 0 && pos.row + win.w_winbar_height >= 0);
     ON_STATUSCOL.set(
@@ -261,7 +262,7 @@ fn enter_window(
         STATUS_LINE_OFFSET.set(0);
     }
 
-    if pos.grid == DEFAULT_GRID_HANDLE && pos.col >= win.w_width {
+    if pos.grid == DEFAULT_GRID_HANDLE.get() && pos.col >= win.w_width {
         // In separator line
         SEP_LINE_OFFSET.set(pos.col - win.w_width + 1);
         DRAGWIN.set(Some(win.id()));
@@ -380,7 +381,7 @@ fn drag_or_extend(pos: &mut MousePos, flags: c_int, which_button: c_int) -> Opti
     if pos.grid == 0 {
         pos.row -= win.w_grid_alloc.comp_row + win.w_grid.row_offset;
         pos.col -= win.w_grid_alloc.comp_col + win.w_grid.col_offset;
-    } else if pos.grid != DEFAULT_GRID_HANDLE {
+    } else if pos.grid != DEFAULT_GRID_HANDLE.get() {
         pos.row -= win.w_grid.row_offset;
         pos.col -= win.w_grid.col_offset;
     }

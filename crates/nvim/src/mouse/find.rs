@@ -23,18 +23,15 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::grid::DEFAULT_GRID_HANDLE;
-use crate::window::FR_LEAF;
-use crate::window::FR_ROW;
+use crate::grid::{DEFAULT_GRID_HANDLE, get_win_by_grid_handle};
+use crate::window::{FR_LEAF, FR_ROW};
 use core::ffi::c_int;
 
 use super::*;
 use crate::cstr;
-use crate::grid::get_win_by_grid_handle;
 use crate::mbyte::{c_char_info, c_next_cluster};
 use crate::message::state::{MSG_GRID, MSG_GRID_POS};
-use crate::plines::CharsizeArg;
-use crate::plines::win_charsize;
+use crate::plines::{CharsizeArg, win_charsize};
 use crate::popupmenu::pum_grid_ref;
 use crate::types::{Handle, LineNr};
 use crate::ui_compositor::ui_comp_mouse_focus;
@@ -107,7 +104,7 @@ pub(crate) fn find_win_outer(pos: &mut MousePos) -> Option<Win> {
 fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
     if pos.grid == (MSG_GRID.with(|grid| grid.handle)).get() {
         pos.row += MSG_GRID_POS.get();
-        pos.grid = DEFAULT_GRID_HANDLE;
+        pos.grid = DEFAULT_GRID_HANDLE.get();
     } else if pos.grid > 1 {
         let wp = get_win_by_grid_handle(Handle::new(pos.grid))?;
         if wp.w_grid_alloc.is_allocated() && !(wp.w_floating && !wp.w_config.mouse) {
@@ -135,7 +132,7 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
 
         // No grid found, return the default grid. With multigrid this happens
         // for split separators for example.
-        pos.grid = DEFAULT_GRID_HANDLE;
+        pos.grid = DEFAULT_GRID_HANDLE.get();
     }
     None
 }

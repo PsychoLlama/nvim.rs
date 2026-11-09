@@ -16,6 +16,7 @@ const CLASS_WHITE: c_int = 0;
 
 use crate::mbyte::{CLASS_PUNCT, CLASS_WORD};
 use crate::ops::{Op, OpType};
+use crate::search::FM_FORWARD;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
@@ -32,7 +33,7 @@ use crate::memline::Lines;
 use crate::message::E_NOIDENT;
 use crate::message::state::MSG_SILENT;
 use crate::message::{emsg, messaging};
-use crate::normal::{FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD, clear_op_beep};
+use crate::normal::{FIND_EVAL, FIND_IDENT, FIND_STRING, clear_op_beep};
 use crate::option::defs::ShmFlag;
 use crate::option::shortmess;
 use crate::option::vars::{FDO_FLAGS, P_SCS, P_WS, p_scs, p_ws};
@@ -381,7 +382,7 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
             // cursor: it is a different scope.
             let travel = int64_t::from(old_pos.lnum - Win::current().w_cursor.lnum + 1);
             let brace = c_int::from(b'}');
-            let close = findmatchlimit(None, brace, FM_FORWARD.cast_signed(), travel);
+            let close = findmatchlimit(None, brace, FM_FORWARD, travel);
             if let Some(close) = close
                 && close.lnum < old_pos.lnum
             {

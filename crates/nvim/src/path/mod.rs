@@ -24,6 +24,7 @@
 
 use crate::cstr;
 use crate::memory::XString;
+use crate::os::env::{ENV_SEPCHAR, getenv_owned};
 use core::ffi::c_int;
 use std::ffi::CStr;
 
@@ -36,7 +37,6 @@ use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{char_at, cluster_len, head_off, mb_isalpha, mb_toupper};
 use crate::option::vars::{p_fic, p_wig};
-use crate::os::env::getenv_owned;
 use crate::os::fs::Directory;
 use crate::os::fs::{
     can_execute, dir_exists, dirname_within, file_info, link_info, os_closedir,
@@ -114,7 +114,6 @@ pub const URL_BACKSLASH: c_int = 2;
 pub const URL_SLASH: c_int = 1;
 pub const PATHSEP: c_int = '/' as c_int;
 pub const MAXSUFLEN: c_int = 30;
-pub const ENV_SEPCHAR: u8 = b':';
 
 /// The full path of `fname`, in a string the caller owns — or a copy of
 /// `fname` itself when it cannot be made absolute.

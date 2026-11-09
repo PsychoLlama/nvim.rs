@@ -87,8 +87,6 @@ pub(crate) struct NvCmd {
 /// not an `Option`: every row has a handler, and the one that means "nothing
 /// to do" says so by name ([`nv_nop`]).
 pub(crate) type NvFunc = fn(&mut CmdArg);
-pub(crate) const FM_FORWARD: c_uint = 2;
-pub(crate) const FM_BACKWARD: c_uint = 1;
 /// The normal-mode state machine's own state: one per running
 /// `normal_enter` (lent to `state_enter` for the length of its loop) or
 /// `normal_cmd` (on that call's stack).

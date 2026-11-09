@@ -1462,24 +1462,24 @@ fn expr_map_locked_error() -> Error {
     ),
 ];
 
-/// Constants that belong to other modules. Only the referenced ones are
-/// emitted: an unused one is a `dead_code` warning, and the dev shell builds
-/// with `-D warnings`.
-const KNOWN: &[(&str, &str, &str)] = &[
-    ("ERROR_TYPE_NONE", "ErrorType", "-1"),
-    ("ERROR_TYPE_EXCEPTION", "ErrorType", "0"),
-    ("OBJECT_TYPE_NIL", "ObjectType", "0"),
-    ("OBJECT_TYPE_BOOLEAN", "ObjectType", "1"),
-    ("OBJECT_TYPE_INTEGER", "ObjectType", "2"),
-    ("OBJECT_TYPE_FLOAT", "ObjectType", "3"),
-    ("OBJECT_TYPE_STRING", "ObjectType", "4"),
-    ("OBJECT_TYPE_ARRAY", "ObjectType", "5"),
-    ("OBJECT_TYPE_DICT", "ObjectType", "6"),
-    ("OBJECT_TYPE_LUA_REF", "ObjectType", "7"),
-    ("OBJECT_TYPE_BUFFER", "ObjectType", "8"),
-    ("OBJECT_TYPE_WINDOW", "ObjectType", "9"),
-    ("OBJECT_TYPE_TABPAGE", "ObjectType", "10"),
-    ("LOGLVL_DBG", "c_int", "1"),
+/// Constants the wrappers name, with the module that declares each. Only the
+/// referenced ones are imported: an unused import is a warning, and the dev
+/// shell builds with `-D warnings`.
+const KNOWN: &[(&str, &str)] = &[
+    ("ERROR_TYPE_NONE", "crate::types"),
+    ("ERROR_TYPE_EXCEPTION", "crate::types"),
+    ("OBJECT_TYPE_NIL", "crate::types"),
+    ("OBJECT_TYPE_BOOLEAN", "crate::types"),
+    ("OBJECT_TYPE_INTEGER", "crate::types"),
+    ("OBJECT_TYPE_FLOAT", "crate::types"),
+    ("OBJECT_TYPE_STRING", "crate::types"),
+    ("OBJECT_TYPE_ARRAY", "crate::types"),
+    ("OBJECT_TYPE_DICT", "crate::types"),
+    ("OBJECT_TYPE_LUA_REF", "crate::types"),
+    ("OBJECT_TYPE_BUFFER", "crate::types"),
+    ("OBJECT_TYPE_WINDOW", "crate::types"),
+    ("OBJECT_TYPE_TABPAGE", "crate::types"),
+    ("LOGLVL_DBG", "crate::log"),
 ];
 
 /// Names re-exported by `crate::types`, emitted when referenced.
@@ -1657,24 +1657,11 @@ fn generate(
     }
 
     let referenced = idents(&format!("{support}{body}"));
-    let mut known = String::new();
-    let mut known_types: BTreeSet<&str> = BTreeSet::new();
-    for (name, ty, value) in KNOWN {
-        if !referenced.contains(*name) {
-            continue;
-        }
-        if name.starts_with("kObjectType") || name.starts_with("kErrorType") {
-            // These have one definition, in `types`. Re-export rather than
-            // repeat it -- a `use` is not a constant, so it still stays out
-            // of what the unit-test header generator collects.
-            known.push_str(&format!("    pub(crate) use crate::types::{name};\n"));
-            continue;
-        }
-        if *ty != "c_int" {
-            known_types.insert(ty);
-        }
-        known.push_str(&format!("    pub(crate) const {name}: {ty} = {value};\n"));
-    }
+    let known: Vec<String> = KNOWN
+        .iter()
+        .filter(|(name, _)| referenced.contains(*name))
+        .map(|(name, home)| format!("use {home}::{name};"))
+        .collect();
 
     let mut uses: Vec<String> = Vec::new();
     uses.push("use core::ffi::CStr;".into());
@@ -1706,8 +1693,8 @@ fn generate(
     }
     uses.push("use crate::log::logmsg;".into());
     uses.push("use crate::message_fmt::msg_cstr;".into());
-    // `mod known` names its constants' types, so it counts as a reference.
-    let referenced_all = idents(&format!("{support}{body}{known}"));
+    uses.extend(known);
+    let referenced_all = idents(&format!("{support}{body}"));
     let types: Vec<String> = TYPE_NAMES
         .iter()
         .map(|s| (*s).to_string())
@@ -1740,22 +1727,6 @@ fn generate(
         out.push_str(&line);
         out.push('\n');
     }
-    out.push_str(&format!(
-        r#"
-/// Values that belong to other modules; nested so they stay out of the flat
-/// namespace the unit-test header generator collects constants into.
-/// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
-/// unreachable from outside the crate and `unreachable_pub` says so.
-mod known {{
-    use super::{{{}}};
-    use core::ffi::c_int;
-
-{known}}}
-
-use known::*;
-"#,
-        known_types.iter().cloned().collect::<Vec<_>>().join(", ")
-    ));
     out.push_str(&support);
 
     // `forbid` reaches every child, so the parent forbids unsafe code only
@@ -2129,21 +2100,7 @@ fn generate_tables(
         .collect();
     keydicts.sort();
     writeln!(out, "use crate::api::keysets::{{{}}};", keydicts.join(", ")).unwrap();
-    write!(
-        out,
-        r#"
-/// Values that belong to other modules; nested so they stay out of the flat
-/// namespace the unit-test header generator collects constants into.
-/// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
-/// unreachable from outside the crate and `unreachable_pub` says so.
-mod known {{
-    pub(crate) use crate::types::ERROR_TYPE_EXCEPTION;
-}}
-
-use known::*;
-"#
-    )
-    .unwrap();
+    writeln!(out, "use crate::types::ERROR_TYPE_EXCEPTION;").unwrap();
     out.push_str(TABLES_SUPPORT);
 
     files.insert(

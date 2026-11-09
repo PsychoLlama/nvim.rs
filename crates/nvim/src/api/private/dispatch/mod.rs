@@ -61,18 +61,9 @@ use crate::api_error;
 use crate::global_cell::ConstTable;
 use crate::message_fmt::msg_bytes;
 use crate::msgpack_rpc::handler::{ApiDispatchFn, MsgpackRpcRequestHandler};
+use crate::types::ERROR_TYPE_EXCEPTION;
 use crate::types::Error;
 use crate::ui_client::handle_ui_client_redraw;
-
-/// Values that belong to other modules; nested so they stay out of the flat
-/// namespace the unit-test header generator collects constants into.
-/// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
-/// unreachable from outside the crate and `unreachable_pub` says so.
-mod known {
-    pub(crate) use crate::types::ERROR_TYPE_EXCEPTION;
-}
-
-use known::*;
 
 /// One row of [`METHOD_HANDLERS`]: the name a client calls the method by, the
 /// wrapper that serves it, whether it may run straight from the RPC read

@@ -129,7 +129,6 @@ pub(crate) const OP_REMOVING: SetOp = 3;
 pub(crate) const OP_PREPENDING: SetOp = 2;
 pub(crate) const OP_ADDING: SetOp = 1;
 pub(crate) const OP_NONE: SetOp = 0;
-pub(crate) const FUZZY_SCORE_NONE: c_int = -2147483648;
 /// The narrowest screen the editor will lay windows out on.
 pub(crate) const MIN_COLUMNS: c_int = 12;
 pub(crate) const LISTCHARS: CharsOption = 1;

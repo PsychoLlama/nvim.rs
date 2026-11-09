@@ -56,6 +56,7 @@ use crate::event_queue::put_job_in;
 use crate::ex_getln::cmdline_ui_flush;
 use crate::getchar::state::EXPR_MAP_LOCK;
 use crate::global_cell::GlobalCell;
+use crate::grid::DEFAULT_GRID_HANDLE;
 use crate::grid::{GridRef, default_grid_ref, get_win_by_grid_handle};
 use crate::guard::TEXTLOCK;
 use crate::highlight::state::{
@@ -95,8 +96,6 @@ use core::ffi::c_int;
 
 use crate::api::private::validate::err_bad_number;
 use crate::winlayer::{Win, tabs};
-/// The screen the editor draws into when nothing else claims a grid.
-const DEFAULT_GRID_HANDLE: Handle = Handle::new(1);
 
 /// How many UIs may be attached at once.
 ///

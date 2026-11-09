@@ -145,32 +145,19 @@ use crate::api_error;
 use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::{get_text_locked_msg, text_locked};
 use crate::guard::TEXTLOCK;
+use crate::log::LOGLVL_DBG;
 use crate::log::logmsg;
 use crate::message::E_TEXTLOCK;
 use crate::message_fmt::msg_cstr;
 use crate::os::libc::uint64_t;
+use crate::types::ERROR_TYPE_EXCEPTION;
+use crate::types::OBJECT_TYPE_BUFFER;
+use crate::types::OBJECT_TYPE_TABPAGE;
+use crate::types::OBJECT_TYPE_WINDOW;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, Error, ErrorType, Float, Handle, Integer, Object,
-    ObjectType,
+    ApiDict, ApiString, Array, Boolean, Error, Float, Handle, Integer, Object, ObjectType,
 };
 use core::ffi::CStr;
-
-/// Values that belong to other modules; nested so they stay out of the flat
-/// namespace the unit-test header generator collects constants into.
-/// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
-/// unreachable from outside the crate and `unreachable_pub` says so.
-mod known {
-    use super::{ErrorType, ObjectType};
-    use core::ffi::c_int;
-
-    pub(crate) const ERROR_TYPE_EXCEPTION: ErrorType = 0;
-    pub(crate) const OBJECT_TYPE_BUFFER: ObjectType = 8;
-    pub(crate) const OBJECT_TYPE_WINDOW: ObjectType = 9;
-    pub(crate) const OBJECT_TYPE_TABPAGE: ObjectType = 10;
-    pub(crate) const LOGLVL_DBG: c_int = 1;
-}
-
-use known::*;
 
 /// One "RPC: ch N: invoke nvim_foo" debug line: upstream's `DLOG` under
 /// `#ifdef NVIM_LOG_DEBUG`, so a release build compiles it out.

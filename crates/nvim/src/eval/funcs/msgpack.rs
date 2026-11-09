@@ -8,7 +8,6 @@
     clippy::ptr_as_ptr
 )]
 
-use super::ARENA_BLOCK_SIZE;
 use super::wrappers::blob_alloc_ret;
 use crate::eval::decode::{MsgpackDecoder, json_decode_string, unpack_typval};
 use crate::eval::encode::{
@@ -17,10 +16,9 @@ use crate::eval::encode::{
 };
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, blob_bytes, tv_list_alloc};
+use crate::event::rstream::ARENA_BLOCK_SIZE;
 use crate::message_fmt::msg_bytes;
-use crate::mpack::mpack_core::MPACK_EOF;
-use crate::mpack::mpack_core::MPACK_ERROR;
-use crate::mpack::mpack_core::MPACK_OK;
+use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK};
 use crate::msgpack_rpc::packer::pack_to_bytes;
 use crate::semsg;
 use crate::types::{
@@ -122,7 +120,7 @@ fn msgpackparse_unpack_list(list: &List, ret_list: &mut List) {
     }
     let mut reader = ListReader::new(list);
     // One arena block's worth at a time, as upstream reads.
-    let mut buf = vec![0u8; ARENA_BLOCK_SIZE.cast_unsigned() as usize];
+    let mut buf = vec![0u8; ARENA_BLOCK_SIZE];
     let mut decoder = MsgpackDecoder::new();
     let mut status = MPACK_OK;
     loop {

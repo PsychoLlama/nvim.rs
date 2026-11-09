@@ -93,7 +93,6 @@ pub const XDG_STATE_HOME: XDGVarType = 3;
 pub const XDG_CACHE_HOME: XDGVarType = 2;
 pub const XDG_DATA_HOME: XDGVarType = 1;
 pub const XDG_CONFIG_HOME: XDGVarType = 0;
-pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 static E_STRING_LIST_OR_BLOB_REQUIRED: &::core::ffi::CStr = c"E1098: String, List or Blob required";
 static E_MISSING_FUNCTION_ARGUMENT: &::core::ffi::CStr = c"E1132: Missing function argument";
 

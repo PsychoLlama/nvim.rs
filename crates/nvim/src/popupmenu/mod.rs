@@ -46,8 +46,7 @@ use crate::mbyte::{c_cells_at, c_cluster_len, c_string_cells, strnicmp_in};
 use crate::memory::XString;
 use crate::menu::VimMenu;
 use crate::menu::{execute_menu, get_menu_mode_flag, menu_find};
-use crate::message::E_MENU_ONLY_EXISTS_IN_ANOTHER_MODE;
-use crate::message::emsg;
+use crate::message::{E_MENU_ONLY_EXISTS_IN_ANOTHER_MODE, emsg};
 use crate::mouse::state::{MOUSE_COL, MOUSE_GRID, MOUSE_ROW};
 use crate::mouse::{MousePos, find_win_outer};
 use crate::r#move::{update_topline, validate_cheight, validate_cursor, validate_cursor_col};
@@ -232,7 +231,7 @@ fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
         PUM_ANCHOR_GRID.set(if ui_has(UI_CMDLINE) {
             -1
         } else {
-            DEFAULT_GRID_HANDLE
+            DEFAULT_GRID_HANDLE.get()
         });
     } else {
         // The start of the completed word.
@@ -257,7 +256,7 @@ fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
             } else {
                 // ext_popupmenu always anchors to the default grid when
                 // multigrid is off.
-                PUM_ANCHOR_GRID.set(DEFAULT_GRID_HANDLE);
+                PUM_ANCHOR_GRID.set(DEFAULT_GRID_HANDLE.get());
             }
         }
     }

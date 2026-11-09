@@ -76,6 +76,7 @@ use crate::option::vars::{p_enc, p_ic, p_lpl, p_verbose};
 use crate::option::{set_option_value_give_err, vimrc_found};
 use crate::options::OPT_RUNTIMEPATH;
 use crate::os::cshim::gettext;
+use crate::os::env::ENV_SEPCHAR;
 use crate::os::fs::os_file_is_readable;
 use crate::os::input::line_breakcheck;
 use crate::os::libc::{int64_t, ptrdiff_t};
@@ -242,4 +243,3 @@ static RUNTIME_SEARCH_PATH: GlobalCell<Option<Rc<Vec<SearchPathItem>>>> = Global
 /// reaches it.
 static THREAD_SEARCH_PATH: Mutex<Vec<SearchPathItem>> = Mutex::new(Vec::new());
 static RUNTIME_EXPAND_FLAGS: GlobalCell<RuntimeOpts> = GlobalCell::new(RuntimeOpts::NONE);
-pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;
