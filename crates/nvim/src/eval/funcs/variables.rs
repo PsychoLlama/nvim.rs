@@ -20,9 +20,6 @@ use crate::semsg;
 use crate::strings::format_typvals;
 use crate::types::{Callback, TypVal, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING, VarNumber};
 
-/// An unset callback, the shape `callback_from_typval` fills in.
-const NO_CALLBACK: Callback = Callback::None;
-
 /// `dictwatcheradd({dict}, {pattern}, {callback})`.
 pub fn f_dictwatcheradd(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
@@ -46,7 +43,7 @@ pub fn f_dictwatcheradd(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDa
     let Some(key_pattern) = numbuf.bytes_chk(&args[1]) else {
         return;
     };
-    let mut callback = NO_CALLBACK;
+    let mut callback = Callback::None;
     if callback_from_typval(&mut callback, &args[2]).is_err() {
         semsg!("E475: Invalid argument: funcref");
         return;
@@ -72,7 +69,7 @@ pub fn f_dictwatcherdel(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDa
     let Some(key_pattern) = numbuf.bytes_chk(&args[1]) else {
         return;
     };
-    let mut callback = NO_CALLBACK;
+    let mut callback = Callback::None;
     if callback_from_typval(&mut callback, &args[2]).is_err() {
         return;
     }

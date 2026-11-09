@@ -39,7 +39,7 @@ pub(crate) use crate::message::E_INVALBLOB;
 use crate::os::libc::uint64_t;
 use crate::registry::SlotTable;
 use crate::types::{ExprType, Failed, Timer};
-use core::ffi::{CStr, c_int, c_long, c_uint, c_ulong};
+use core::ffi::{CStr, c_int, c_uint, c_ulong};
 
 mod entry;
 pub use self::entry::*;
@@ -73,7 +73,6 @@ pub(crate) use self::vars::{get_v_event, restore_v_event};
 // from outside; the rest of `expr` stays in-crate.
 pub use self::expr::eval0;
 
-pub const IS_ALNUM: c_uint = 8;
 pub const GLV_READ_ONLY: c_int = 16;
 pub const GLV_NO_AUTOLOAD: c_int = 4;
 /// `get_lval`'s "do not report" flag.
@@ -93,12 +92,8 @@ pub const GLV_STOP: GlvStatus = 2;
 pub type GlvStatus = c_uint;
 pub const GLV_OK: GlvStatus = 1;
 pub const GLV_FAIL: GlvStatus = 0;
-pub const INT64_MIN: c_long = -9223372036854775807 as c_long - 1 as c_long;
-pub const INT64_MAX: c_long = 9223372036854775807 as c_long;
-pub const UINT32_MAX: c_uint = 4294967295 as c_uint;
-pub const SIZE_MAX: c_ulong = 18446744073709551615 as c_ulong;
-pub const VARNUMBER_MAX: c_long = INT64_MAX;
-pub const VARNUMBER_MIN: c_long = INT64_MIN;
+pub const VARNUMBER_MAX: crate::types::VarNumber = crate::types::VarNumber::MAX;
+pub const VARNUMBER_MIN: crate::types::VarNumber = crate::types::VarNumber::MIN;
 pub const FF: c_int = '\u{c}' as c_int;
 pub const NOTDONE: c_int = 2 as c_int;
 
@@ -166,6 +161,4 @@ static LAST_TIMER_ID: GlobalCell<uint64_t> = GlobalCell::new(1 as uint64_t);
 /// this across one.
 static TIMERS: GlobalCell<SlotTable<uint64_t, Timer>> = GlobalCell::new(SlotTable::new());
 static CALLBACK_DEPTH: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub const TV_CSTRING: c_ulong = SIZE_MAX.wrapping_sub(1 as c_ulong);
-pub const INT_MAX: c_int = __INT_MAX__;
-pub const __INT_MAX__: c_int = 2147483647 as c_int;
+pub const TV_CSTRING: c_ulong = u64::MAX.wrapping_sub(1 as c_ulong);

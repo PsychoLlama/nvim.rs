@@ -33,7 +33,6 @@ use crate::drawscreen::{setcursor, update_screen};
 use crate::edit::{InsertState, insert_check, insert_execute};
 use crate::eval::{get_v_event, restore_v_event};
 use crate::event::r#loop::run_next_main_event;
-use crate::event::objects::ProcType;
 use crate::ex_docmd::state::GLOBAL_BUSY;
 use crate::ex_getln::cmdline_overstrike;
 use crate::ex_getln::{CommandLineState, command_line_check, command_line_execute};
@@ -65,7 +64,6 @@ use crate::types::{Direction, SaveVEvent};
 use crate::ui::ui_flush;
 use crate::winlayer::{Cc, Win};
 
-pub const PROC_TYPE_PTY: ProcType = 1;
 pub const DIRECTION_NOT_SET: Direction = 0;
 
 /// The editor-mode bitmask `State` carries, and the masks that read it.

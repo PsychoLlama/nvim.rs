@@ -20,6 +20,7 @@
 #![forbid(unsafe_code)]
 
 use crate::os::libc::uint32_t;
+use crate::tui::termkey::utf8::UNICODE_INVALID;
 use crate::vterm::abi::{ENCODING_DEC_DRAWING, ENCODING_USASCII, ENCODING_UTF8};
 use crate::vterm::internal::{VTermEncoding, VTermEncodingType};
 use core::ffi::c_int;
@@ -27,9 +28,6 @@ use core::ptr::NonNull;
 
 pub const ENC_UTF8: VTermEncodingType = 0;
 pub const ENC_SINGLE_94: VTermEncodingType = 1;
-
-/// Emitted in place of any byte sequence a decoder rejects.
-const UNICODE_INVALID: u32 = 0xfffd;
 
 /// The caller's codepoint array plus the count written into it so far.
 ///
@@ -100,7 +98,7 @@ impl Utf8Decoder {
     /// character emitted, exactly as upstream did.
     fn begin(&mut self, out: &mut Codepoints, total: c_int, bits: u8) {
         if self.bytes_remaining != 0 {
-            out.push(UNICODE_INVALID);
+            out.push(UNICODE_INVALID.cast_unsigned());
         }
         self.this_cp = c_int::from(bits);
         self.bytes_total = total;
@@ -121,7 +119,7 @@ impl Utf8Decoder {
         };
         let cp = self.this_cp;
         if cp < min || (0xd800..=0xdfff).contains(&cp) || cp == 0xfffe || cp == 0xffff {
-            UNICODE_INVALID
+            UNICODE_INVALID.cast_unsigned()
         } else {
             cp.cast_unsigned()
         }
@@ -136,14 +134,14 @@ impl Utf8Decoder {
                 0x00..=0x1f | 0x7f => return,
                 c @ 0x20..=0x7e => {
                     if self.bytes_remaining != 0 {
-                        out.push(UNICODE_INVALID);
+                        out.push(UNICODE_INVALID.cast_unsigned());
                     }
                     out.push(u32::from(c));
                     self.bytes_remaining = 0;
                 }
                 c @ 0x80..=0xbf => {
                     if self.bytes_remaining == 0 {
-                        out.push(UNICODE_INVALID);
+                        out.push(UNICODE_INVALID.cast_unsigned());
                     } else {
                         self.this_cp = (self.this_cp << 6) | c_int::from(c & 0x3f);
                         self.bytes_remaining -= 1;
@@ -159,7 +157,7 @@ impl Utf8Decoder {
                 c @ 0xfc..=0xfd => self.begin(out, 6, c & 0x01),
                 // 0xfe and 0xff can't lead anything. Upstream deliberately
                 // leaves a sequence in progress untouched here.
-                0xfe..=0xff => out.push(UNICODE_INVALID),
+                0xfe..=0xff => out.push(UNICODE_INVALID.cast_unsigned()),
             }
             *pos += 1;
         }
@@ -358,24 +356,30 @@ mod tests {
     #[test]
     fn utf8_rejects_overlong_surrogate_and_noncharacter() {
         // 0xc0 0x80 encodes U+0000 in two bytes.
-        assert_eq!(utf8(b"\xc0\x80"), [UNICODE_INVALID]);
+        assert_eq!(utf8(b"\xc0\x80"), [UNICODE_INVALID.cast_unsigned()]);
         // 0xed 0xa0 0x80 is the surrogate half U+D800.
-        assert_eq!(utf8(b"\xed\xa0\x80"), [UNICODE_INVALID]);
-        assert_eq!(utf8(b"\xef\xbf\xbe"), [UNICODE_INVALID]);
-        assert_eq!(utf8(b"\xef\xbf\xbf"), [UNICODE_INVALID]);
+        assert_eq!(utf8(b"\xed\xa0\x80"), [UNICODE_INVALID.cast_unsigned()]);
+        assert_eq!(utf8(b"\xef\xbf\xbe"), [UNICODE_INVALID.cast_unsigned()]);
+        assert_eq!(utf8(b"\xef\xbf\xbf"), [UNICODE_INVALID.cast_unsigned()]);
         // U+FFFD itself round-trips; only the two noncharacters are rejected.
-        assert_eq!(utf8(b"\xef\xbf\xbd"), [UNICODE_INVALID]);
+        assert_eq!(utf8(b"\xef\xbf\xbd"), [UNICODE_INVALID.cast_unsigned()]);
     }
 
     #[test]
     fn utf8_abandons_a_truncated_sequence() {
         // Lead byte then a printable: the sequence is replaced, the printable
         // still arrives.
-        assert_eq!(utf8(b"\xc3a"), [UNICODE_INVALID, 0x61]);
+        assert_eq!(utf8(b"\xc3a"), [UNICODE_INVALID.cast_unsigned(), 0x61]);
         // A stray continuation byte with nothing in progress.
-        assert_eq!(utf8(b"\x80"), [UNICODE_INVALID]);
+        assert_eq!(utf8(b"\x80"), [UNICODE_INVALID.cast_unsigned()]);
         // 0xfe/0xff lead nothing.
-        assert_eq!(utf8(b"\xfe\xff"), [UNICODE_INVALID, UNICODE_INVALID]);
+        assert_eq!(
+            utf8(b"\xfe\xff"),
+            [
+                UNICODE_INVALID.cast_unsigned(),
+                UNICODE_INVALID.cast_unsigned()
+            ]
+        );
     }
 
     #[test]
@@ -415,7 +419,7 @@ mod tests {
         let mut pos = 0;
         decoder.decode(b"a", &mut pos, &mut out);
         assert_eq!(out.len, 1);
-        assert_eq!(buf, [UNICODE_INVALID]);
+        assert_eq!(buf, [UNICODE_INVALID.cast_unsigned()]);
     }
 
     #[test]

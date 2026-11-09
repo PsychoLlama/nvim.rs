@@ -16,6 +16,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::eval::{VARNUMBER_MAX, VARNUMBER_MIN};
 use core::ffi::c_int;
 
 use super::{Scan, is_bdigit, is_digit, is_odigit, is_xdigit};
@@ -50,9 +51,6 @@ crate::flag_set! {
     /// Either octal spelling, which is forced the same way.
     const OCT_ANY = Self::OCT.bits() | Self::OOCT.bits();
 }
-
-const VARNUMBER_MAX: UVarNumber = 9223372036854775807;
-const VARNUMBER_MIN: VarNumber = -9223372036854775808;
 
 /// A base `vim_str2nr` can parse in, together with the prefix letter it
 /// reports through its `prep` out-argument.
@@ -136,7 +134,7 @@ pub fn accumulate(accumulated: UVarNumber, digit: UVarNumber, radix: Radix) -> (
 /// positive one clamps to `VARNUMBER_MAX`. Note that `-VARNUMBER_MIN` itself
 /// is over the bound and therefore clamps rather than round-tripping.
 pub fn signed(magnitude: UVarNumber, negative: bool) -> (VarNumber, bool) {
-    if magnitude > VARNUMBER_MAX {
+    if magnitude > VARNUMBER_MAX.unsigned_abs() {
         if negative {
             (VARNUMBER_MIN, true)
         } else {
@@ -362,10 +360,19 @@ mod tests {
     fn signed_conversion_clamps_at_both_ends() {
         assert_eq!(signed(42, false), (42, false));
         assert_eq!(signed(42, true), (-42, false));
-        assert_eq!(signed(VARNUMBER_MAX, false), (VarNumber::MAX, false));
-        assert_eq!(signed(VARNUMBER_MAX + 1, false), (VarNumber::MAX, true));
+        assert_eq!(
+            signed(VARNUMBER_MAX.unsigned_abs(), false),
+            (VarNumber::MAX, false)
+        );
+        assert_eq!(
+            signed(VARNUMBER_MAX.unsigned_abs() + 1, false),
+            (VarNumber::MAX, true)
+        );
         // -(2^63) is representable, but the magnitude is not, so it clamps.
-        assert_eq!(signed(VARNUMBER_MAX + 1, true), (VARNUMBER_MIN, true));
+        assert_eq!(
+            signed(VARNUMBER_MAX.unsigned_abs() + 1, true),
+            (VARNUMBER_MIN, true)
+        );
     }
 
     #[test]

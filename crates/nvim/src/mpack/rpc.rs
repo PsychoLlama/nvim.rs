@@ -49,8 +49,8 @@ pub const MPACK_RPC_ERESPID: c_int = 11;
 
 pub const MPACK_RPC_MAX_REQUESTS: c_int = 32;
 
-const COMPLETE: c_int = MPACK_OK;
-const PENDING: c_int = MPACK_EOF;
+pub(crate) const COMPLETE: c_int = MPACK_OK;
+pub(crate) const PENDING: c_int = MPACK_EOF;
 
 /// The envelope's `type` field. Adding [`MPACK_RPC_REQUEST`] to it gives the
 /// kind this module reports.

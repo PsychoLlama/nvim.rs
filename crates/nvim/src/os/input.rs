@@ -27,7 +27,7 @@ use crate::event::libuv::uv_guess_handle;
 use crate::event::r#loop::{Drain, loop_poll_events, wait_on_main_loop};
 use crate::event::objects::{Event, RStream, Stream};
 use crate::event::rstream::{rstream_init_fd, rstream_may_close, rstream_start, rstream_stop};
-use crate::event::uv::uv_handle_type;
+use crate::event::uv::UV_TTY;
 use crate::event_queue::{self, ChildQueue, QueueId, queue_in};
 use crate::getchar::state::{CTRL_C_INTERRUPTS, GOT_INT, MAPPED_CTRL_C, TYPEBUF_WAS_FILLED};
 use crate::getchar::{before_blocking, typebuf_changed};
@@ -59,7 +59,6 @@ use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::MaybeUninit;
 use core::ptr;
 
-const UV_TTY: uv_handle_type = 14;
 /// The longest byte sequence one key can become: `K_SPECIAL KS_MODIFIER mod`
 /// plus `K_SPECIAL KS_EXTRA code`.
 const MAX_KEY_CODE_LEN: usize = 6;

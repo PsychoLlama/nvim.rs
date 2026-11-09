@@ -25,7 +25,8 @@ use crate::narrow::{number_as_int, number_as_lnum};
 use crate::option::vars::P_CPO;
 use crate::semsg;
 use crate::types::Handle;
-use crate::types::{ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, VAR_DICT, VAR_FUNC};
+use crate::types::api::ERROR_TYPE_EXCEPTION;
+use crate::types::{ERROR_TYPE_VALIDATION, VAR_DICT, VAR_FUNC};
 use crate::winlayer::Buf;
 use core::ffi::CStr;
 

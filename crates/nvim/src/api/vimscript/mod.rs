@@ -19,9 +19,10 @@ use crate::message::state::{DID_EMSG, MSG_COL, REDIR_OFF};
 use crate::message::{capture_finish, capture_start};
 use crate::os::libc::{size_t, uint64_t};
 use crate::runtime::do_source_str;
+use crate::types::api::ERROR_TYPE_EXCEPTION;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, Error,
-    Integer, Object, TypVal, VAR_FUNC, VAR_PARTIAL,
+    ApiDict, ApiString, Array, Boolean, ERROR_TYPE_VALIDATION, Error, Integer, Object, TypVal,
+    VAR_FUNC, VAR_PARTIAL,
 };
 use crate::viml::parser::expressions::{
     ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, NODE_TYPE_NAMES, viml_pexpr_parse,

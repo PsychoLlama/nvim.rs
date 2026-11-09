@@ -106,11 +106,12 @@ pub(crate) fn decode_owned_string(bytes: Vec<u8>) -> TypVal {
 mod tests {
     //! The msgpack decoder's statuses, and the shapes a cut-off stream leaves.
 
-    use super::msgpack::{MPACK_NOMEM, MsgpackDecoder};
+    use super::msgpack::MsgpackDecoder;
     use super::unpack_typval;
     use crate::eval::encode::tv2string_bytes;
     use crate::global_cell::editor_state_lock;
     use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK};
+    use crate::mpack::object::MPACK_NOMEM;
     use crate::types::{TypVal, VAR_UNKNOWN};
 
     fn unpack(bytes: &[u8]) -> (core::ffi::c_int, TypVal, usize) {

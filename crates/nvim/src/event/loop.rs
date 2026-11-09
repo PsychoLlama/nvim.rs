@@ -23,7 +23,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::os::signal::SIGCHLD;
+use crate::event::uv::{UV_RUN_DEFAULT, UV_RUN_NOWAIT, UV_RUN_ONCE};
 use crate::os::uv_error::UV_EBUSY;
 use core::ffi::{c_int, c_void};
 use core::ops::{Deref, DerefMut};
@@ -36,7 +36,7 @@ use crate::event::libuv::{
 };
 use crate::event::objects::Loop;
 use crate::event::objects::{Event, Proc};
-use crate::event::uv::{uv_async_t, uv_handle_t, uv_loop_t, uv_run_mode, uv_signal_t, uv_timer_t};
+use crate::event::uv::{uv_async_t, uv_handle_t, uv_loop_t, uv_signal_t, uv_timer_t};
 use crate::event_queue::{self, QueueId};
 use crate::log::{LOGLVL_ERR, log_file_path, logmsg, with_log_lock};
 use crate::os::cshim::stderr;
@@ -45,10 +45,6 @@ use ::libc::{abort, fclose, fopen};
 use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicPtr, Ordering};
-
-const UV_RUN_DEFAULT: uv_run_mode = 0;
-const UV_RUN_ONCE: uv_run_mode = 1;
-const UV_RUN_NOWAIT: uv_run_mode = 2;
 
 /// The loop, reached through the raw pointer its subsystems hold.
 ///
@@ -321,7 +317,7 @@ pub(crate) fn start_children_watcher(on_child: unsafe extern "C" fn(*mut uv_sign
         uv_signal_start(
             &raw mut (*main_loop_raw()).children_watcher,
             Some(on_child),
-            SIGCHLD,
+            libc::SIGCHLD,
         )
     };
 }

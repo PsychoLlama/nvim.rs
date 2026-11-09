@@ -14,9 +14,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::api::private::helpers::TryState;
 use core::ffi::{CStr, c_int};
 
-use super::TRY_STATE_INIT;
 use crate::api::private::helpers::{try_enter, try_leave};
 use crate::cstr;
 use crate::lua::abi::lua_Integer;
@@ -200,7 +200,7 @@ pub(crate) fn regex(stack: &mut Stack) -> Result<c_int, Raise> {
     let mut err = Error::none();
 
     // vim_regcomp reports a bad pattern by throwing, so it runs bracketed.
-    let mut tstate = TRY_STATE_INIT;
+    let mut tstate = TryState::INIT;
     try_enter(&mut tstate);
     // Pick the engine automatically, honour 'magic', reject what the
     // automaton cannot take -- and never check for CTRL-C: that polls

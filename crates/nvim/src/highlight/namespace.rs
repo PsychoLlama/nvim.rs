@@ -50,8 +50,8 @@ use crate::highlight_group::{
     HLF_BORDER, HLF_COUNT, HLF_INACTIVE, HLF_NAMES, HLF_NFLOAT, HLF_NONE, HLF_PNI, HLF_PST,
     set_hl_group, syn_check_group, syn_id2name, syn_ns_id2attr,
 };
-use crate::lua::executor::LuaRetMode;
-use crate::lua::executor::nlua_call_ref_reporting;
+use crate::lua::executor::{LuaRetMode, nlua_call_ref_reporting};
+use crate::lua::ffi::LUA_NOREF;
 use crate::option::check_blending;
 use crate::option::vars::p_pb;
 use crate::popupmenu::pum_drawn;
@@ -82,8 +82,6 @@ fn provider_field<R>(ns_id: NS, f: impl FnOnce(&mut DecorProvider) -> R) -> R {
     with_decor_provider(ns_id, true, f).expect("force registers one")
 }
 
-/// The `hl_def` slot of a provider that has no callback.
-const LUA_NOREF: c_int = -2;
 /// A group definition private to a namespace, indexed by `(ns_id, hl_id)`.
 ///
 /// The `version` is the provider's `hl_valid` at the time it was resolved:

@@ -36,6 +36,7 @@
 // a per-module rewrite.
 
 use crate::types::DictBuilder;
+use crate::types::api::{OBJECT_TYPE_BUFFER, OBJECT_TYPE_TABPAGE, OBJECT_TYPE_WINDOW};
 use core::ffi::{CStr, c_int};
 
 use crate::eval::decode::decode_string;
@@ -47,9 +48,9 @@ use crate::eval::userfunc::{find_func, register_luafunc};
 use crate::lua::executor::api_new_luaref;
 use crate::types::{
     ApiDict, ApiString, Array, BOOL_VAR_FALSE, BOOL_VAR_TRUE, BoolVarValue, Error, Float, Integer,
-    KeyValuePair, ListItem, OBJECT_TYPE_ARRAY, OBJECT_TYPE_BOOLEAN, OBJECT_TYPE_BUFFER,
-    OBJECT_TYPE_DICT, OBJECT_TYPE_FLOAT, OBJECT_TYPE_INTEGER, OBJECT_TYPE_LUA_REF, OBJECT_TYPE_NIL,
-    OBJECT_TYPE_STRING, OBJECT_TYPE_TABPAGE, OBJECT_TYPE_WINDOW, Object, SPECIAL_VAR_NULL, TypVal,
+    KeyValuePair, ListItem, OBJECT_TYPE_ARRAY, OBJECT_TYPE_BOOLEAN, OBJECT_TYPE_DICT,
+    OBJECT_TYPE_FLOAT, OBJECT_TYPE_INTEGER, OBJECT_TYPE_LUA_REF, OBJECT_TYPE_NIL,
+    OBJECT_TYPE_STRING, Object, SPECIAL_VAR_NULL, TypVal,
 };
 
 /// A container the walk has opened and not yet closed: the open form of
@@ -377,5 +378,5 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
 pub(crate) fn call_handler_for_vimscript(row: usize, args: Array) -> Result<TypVal, Error> {
     let handler = crate::api::private::dispatch::METHOD_HANDLERS[row];
     let call = handler.fn_0.expect("non-null function pointer");
-    call(crate::eval::funcs::VIML_INTERNAL_CALL, args).map(TypVal::from)
+    call(crate::api::private::helpers::VIML_INTERNAL_CALL, args).map(TypVal::from)
 }

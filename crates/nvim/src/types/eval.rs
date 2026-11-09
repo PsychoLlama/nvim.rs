@@ -423,3 +423,8 @@ pub type VarFlavour = ::core::ffi::c_uint;
 pub const VAR_FLAVOUR_DEFAULT: VarFlavour = 1;
 pub const VAR_FLAVOUR_SESSION: VarFlavour = 2;
 pub const VAR_FLAVOUR_SHADA: VarFlavour = 4;
+/// A zeroed `SaveVEvent`, which `get_v_event` fills in.
+pub(crate) const SAVE_V_EVENT_INIT: SaveVEvent = SaveVEvent {
+    sve_did_save: false,
+    sve_hashtab: crate::hashtab::HashTab::new(),
+};

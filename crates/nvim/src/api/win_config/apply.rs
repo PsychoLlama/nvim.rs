@@ -18,8 +18,7 @@
 use super::*;
 use crate::api_error;
 use crate::types::Handle;
-use crate::winfloat::WIN_SPLIT_LEFT;
-use crate::winfloat::WIN_STYLE_MINIMAL;
+use crate::winfloat::{WIN_SPLIT_LEFT, WIN_STYLE_MINIMAL};
 use crate::winlayer::{FrameId, FrameRef, TabPage, Win, WinId};
 use core::ffi::c_int;
 
@@ -595,9 +594,9 @@ pub fn nvim_win_set_config(
         didset_window_options(w, true);
         changed_window_setting(w);
     }
-    if fconfig._cmdline_offset < INT_MAX {
+    if fconfig._cmdline_offset < c_int::MAX {
         CMDLINE_WIN.set(Some(w.id()));
-    } else if CMDLINE_WIN.get() == Some(w.id()) && fconfig._cmdline_offset == INT_MAX {
+    } else if CMDLINE_WIN.get() == Some(w.id()) && fconfig._cmdline_offset == c_int::MAX {
         CMDLINE_WIN.set(None);
     }
     raised.map_or(Ok(()), Err)

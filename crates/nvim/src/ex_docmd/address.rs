@@ -42,8 +42,7 @@ use crate::cursor::{check_cursor, check_cursor_col};
 
 use crate::ex_docmd::window::{current_tab_nr, current_win_nr};
 use crate::ex_docmd::{
-    E_BACKSLASH, E_INVRANGE, E_LINE_NUMBER_OUT_OF_RANGE, E_NO_ERRORS, E_NORANGE, INT32_MAX,
-    SEARCHCMDLEN,
+    E_BACKSLASH, E_INVRANGE, E_LINE_NUMBER_OUT_OF_RANGE, E_NO_ERRORS, E_NORANGE, SEARCHCMDLEN,
 };
 
 use crate::option::magic_isset;
@@ -614,7 +613,7 @@ pub(crate) fn get_address(
                 }
                 if sign == b'-' {
                     lnum -= n;
-                } else if lnum >= LineNr::ZERO && n >= INT32_MAX - lnum.get() {
+                } else if lnum >= LineNr::ZERO && n >= i32::MAX - lnum.get() {
                     return Err(AddressError::Refused(ex_msg(E_LINE_NUMBER_OUT_OF_RANGE)));
                 } else {
                     lnum += n;

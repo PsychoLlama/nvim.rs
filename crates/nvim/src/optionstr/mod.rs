@@ -99,7 +99,6 @@ pub(crate) const E_CONFLICTS_WITH_VALUE_OF_LISTCHARS: &CStr =
 /// "E835: Conflicts with value of 'fillchars'", as above.
 pub(crate) const E_CONFLICTS_WITH_VALUE_OF_FILLCHARS: &CStr =
     c"E835: Conflicts with value of 'fillchars'";
-pub const INT_MAX: c_int = 2147483647;
 
 pub type CharsOption = ::core::ffi::c_uint;
 

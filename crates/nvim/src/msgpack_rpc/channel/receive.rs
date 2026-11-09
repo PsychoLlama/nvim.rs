@@ -19,6 +19,8 @@
 //! handler run on the spot, a refusal sent back, a redraw applied — runs
 //! after the borrow ends, so it may reach the channel table itself.
 
+use crate::types::api::{ERROR_TYPE_EXCEPTION, MESSAGE_TYPE_NOTIFICATION};
+use crate::types::api::{MESSAGE_TYPE_REDRAW_EVENT, MESSAGE_TYPE_REQUEST, MESSAGE_TYPE_RESPONSE};
 use core::ffi::{CStr, c_int, c_void};
 
 use crate::api::private::dispatch_wrappers::{handle_nvim_get_mode, handle_nvim_ui_try_resize};
@@ -29,12 +31,11 @@ use crate::grid::defs::GridLineEvent;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::message_fmt::{msg_addr, msg_bytes};
 use crate::msgpack_rpc::channel::CH_BEFORE_BLOCKING_EVENTS;
-use crate::msgpack_rpc::handler::ApiDispatchFn;
-use crate::msgpack_rpc::handler::MsgpackRpcRequestHandler;
+use crate::msgpack_rpc::handler::{ApiDispatchFn, MsgpackRpcRequestHandler};
 use crate::os::input::input_blocking;
 use crate::os::libc::{uint32_t, uint64_t};
 use crate::startup::UI_CLIENT_ATTACHED;
-use crate::types::{Array, ERROR_TYPE_EXCEPTION, Error, MessageType, Object};
+use crate::types::{Array, Error, MessageType, Object};
 use crate::ui::state::RESIZE_EVENTS;
 use crate::ui_client::ui_client_event_raw_line;
 

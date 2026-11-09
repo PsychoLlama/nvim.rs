@@ -65,6 +65,7 @@ use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::replace_termcodes;
 use crate::lua::executor::nlua_set_sctx;
+use crate::lua::ffi::LUA_NOREF;
 use crate::memory::{ThinCString, XString};
 use crate::message_fmt::{emsg_text, msg_bytes, msg_cstr};
 use crate::option::vars::p_cpo;
@@ -73,9 +74,8 @@ use crate::runtime::sourcing_lnum;
 use crate::runtime::state::CURRENT_SCTX;
 use crate::semsg;
 use crate::tr;
-use crate::types::CmdIdx;
-use crate::types::ScriptCtx;
 use crate::types::{CmdAddr, ExArg, ExArgt, LuaRef};
+use crate::types::{CmdIdx, ScriptCtx};
 use crate::window::prevwin_curwin;
 use crate::winlayer::Buf;
 use core::cmp::Ordering;
@@ -83,8 +83,6 @@ use core::ffi::{CStr, c_int};
 use core::mem;
 use std::ffi::CString;
 use std::rc::Rc;
-
-pub(crate) const LUA_NOREF: c_int = -2;
 
 /// The global user commands, sorted by name. A buffer's own live in its
 /// `b_ucmds`, which is the same `Vec`; [`Table`] is the pair.

@@ -2612,7 +2612,8 @@ fn generate_lua(
             "push_string",
         ],
     );
-    use_from("lua::executor", &["ActiveState", "LUA_INTERNAL_CALL"]);
+    use_from("lua::executor", &["ActiveState"]);
+    use_from("api::private::helpers", &["LUA_INTERNAL_CALL"]);
     use_from("lua::stack", &["At", "Stack"]);
     let types: Vec<String> = referenced_names(&["Error"]);
     uses.push(format!("use crate::types::{{{}}};", types.join(", ")));

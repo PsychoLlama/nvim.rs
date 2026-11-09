@@ -13,12 +13,11 @@
 //! libuv's own types -- the loop, its handles and requests, the callback
 //! typedefs -- laid out exactly as the library lays them out.
 
-use crate::os::libc::mode_t;
-use crate::os::libc::termios;
 use crate::os::libc::{
     gid_t, int32_t, int64_t, off_t, pthread_mutex_t, pthread_rwlock_t, pthread_t, sa_family_t,
     size_t, socklen_t, ssize_t, uid_t, uint64_t,
 };
+use crate::os::libc::{mode_t, termios};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -188,6 +187,11 @@ pub union uv_handle_s_u {
 }
 pub type uv_handle_t = uv_handle_s;
 pub type uv_handle_type = ::core::ffi::c_uint;
+pub(crate) const UV_TTY: uv_handle_type = 14;
+pub(crate) const UV_NAMED_PIPE: uv_handle_type = 7;
+pub(crate) const UV_FILE: uv_handle_type = 17;
+pub(crate) const UV_TCP: uv_handle_type = 12;
+pub(crate) const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
 pub type uv_idle_cb = Option<unsafe extern "C" fn(*mut uv_idle_t) -> ()>;
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
@@ -306,6 +310,8 @@ pub union uv_tty_s_u {
 }
 pub type uv_tty_t = uv_tty_s;
 pub type uv_tty_mode_t = ::core::ffi::c_uint;
+pub(crate) const UV_TTY_MODE_NORMAL: uv_tty_mode_t = 0;
+pub(crate) const UV_TTY_MODE_IO: uv_tty_mode_t = 2;
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct uv_pipe_s {
@@ -403,6 +409,9 @@ pub type uv_read_cb =
     Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
 pub type uv_req_type = ::core::ffi::c_uint;
 pub type uv_run_mode = ::core::ffi::c_uint;
+pub(crate) const UV_RUN_DEFAULT: uv_run_mode = 0;
+pub(crate) const UV_RUN_ONCE: uv_run_mode = 1;
+pub(crate) const UV_RUN_NOWAIT: uv_run_mode = 2;
 pub type uv_rwlock_t = pthread_rwlock_t;
 /// glibc's `PTHREAD_RWLOCK_INITIALIZER`, which is all-zero.
 pub const UV_RWLOCK_INIT: uv_rwlock_t = pthread_rwlock_t { __size: [0; 56] };

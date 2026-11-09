@@ -18,7 +18,7 @@
 
 use crate::eval::Parsed;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use core::ffi::CStr;
@@ -31,13 +31,9 @@ use crate::eval::{
     is_luafunc, luafunc_name_end,
 };
 use crate::ex_eval::aborting;
-use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{Failed, TypVal, VAR_FUNC, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN};
-
-/// A freshly declared typval.
-const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// Call a function by name, having parsed the name but not the arguments,
 /// which the cursor is on.
@@ -95,7 +91,7 @@ pub(crate) fn call_func_rettv(
     // The callee moves out of `result` so the call can fill it. It is
     // cleared at the end rather than here: the arguments are evaluated
     // in between and may delete the Funcref they name.
-    let mut functv = UNSET_TV;
+    let mut functv = TV_INITIAL_VALUE;
     // A `v:lua.` name is not terminated: it runs to the cursor, and only
     // that much is called -- though a message quotes the rest of the text.
     let lua_text: Option<XString>;
@@ -251,7 +247,7 @@ pub(crate) fn eval_method(
             // The callee alone is evaluated: the text up to the `(`.
             let mut callee_cursor = Cursor::new(&text[..paren]);
             callee_cursor.bump(start);
-            let mut callee = UNSET_TV;
+            let mut callee = TV_INITIAL_VALUE;
             if eval7(&mut callee_cursor, &mut callee, evaluate, false).is_err() {
                 cursor.set_offset(start + len);
                 ret = Err(Failed);

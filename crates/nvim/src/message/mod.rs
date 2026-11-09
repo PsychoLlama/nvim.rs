@@ -85,7 +85,7 @@ use crate::ex_eval::cause_errthrow;
 use crate::ex_getln::state::{CMDLINE_WAS_LAST_DRAWN, REDRAWING_CMDLINE};
 use crate::fileio::check_timestamps;
 use crate::fileio::state::NEED_CHECK_TIMESTAMPS;
-use crate::getchar::state::FlushBuffers;
+use crate::getchar::FLUSH_MINIMAL;
 use crate::getchar::state::{
     GOT_INT, KEY_TYPED, REG_RECORDING, SCRIPTOUT, VGETC_BUSY, VGETC_CHAR, VGETC_MOD_MASK,
 };
@@ -215,7 +215,6 @@ pub const SB_CLEAR_CMDLINE_DONE: ScrollbackClear = 3;
 pub const SB_CLEAR_CMDLINE_BUSY: ScrollbackClear = 2;
 pub const SB_CLEAR_ALL: ScrollbackClear = 1;
 pub const SB_CLEAR_NONE: ScrollbackClear = 0;
-pub const FLUSH_MINIMAL: FlushBuffers = 0;
 /// A dialog's button list: `&` marks the next character as its hotkey, and
 /// a newline separates buttons.
 pub const DLG_HOTKEY_CHAR: c_uint = 38;
@@ -224,8 +223,6 @@ pub const BELL: ::core::ffi::c_int = '\u{7}' as ::core::ffi::c_int;
 pub const PROGRESS_TARGET_CMD: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 
 pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 
 /// `grid_clear` over a rectangle of the message grid, in the message
 /// highlight -- C's repeated

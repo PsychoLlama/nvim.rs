@@ -29,9 +29,10 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mpack::rpc::{COMPLETE, PENDING};
 use core::ffi::c_int;
 
-use super::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK, Next, TokBuf};
+use super::mpack_core::{MPACK_ERROR, Next, TokBuf};
 use super::token::{Kind, Tok};
 
 /// The stack is full: the document nests deeper than `capacity`.
@@ -42,9 +43,6 @@ pub const MPACK_NOMEM: c_int = MPACK_ERROR + 1;
 pub const MPACK_EXCEPTION: c_int = MPACK_NOMEM + 1;
 
 pub const MPACK_MAX_OBJECT_DEPTH: c_int = 32;
-
-const COMPLETE: c_int = MPACK_OK;
-const PENDING: c_int = MPACK_EOF;
 
 /// One object in the walk: its token, how many of its children have been
 /// seen, and the walker's own state for it.

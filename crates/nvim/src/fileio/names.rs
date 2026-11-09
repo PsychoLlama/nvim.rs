@@ -21,21 +21,18 @@
 use crate::ascii::ascii_isspace;
 use crate::cstr;
 use crate::memory::XString;
+use crate::os::fs::S_IFLNK;
 use core::ffi::c_int;
 use std::ffi::CStr;
 use std::os::unix::ffi::OsStrExt;
 
 use crate::option::split_option_part;
 use crate::os::fs::{dirname_within, file_info, link_info, path_exists};
-use crate::path::tail_index;
+use crate::path::{MAXPATHL, tail_index};
 
 use super::*;
-use crate::path::MAXPATHL;
 use crate::regexp::{OwnedProg, RE_MAGIC};
 use crate::winlayer::buffers;
-
-/// `S_IFLNK`: the file type bits of a symbolic link.
-const S_IFLNK: u64 = 0o120000;
 
 /// Shorten `buffer`'s displayed file name to be relative to `dirname`.
 pub fn shorten_buf_fname(mut buffer: Buf, dirname: &[u8], force: bool) {
@@ -257,7 +254,7 @@ pub(crate) fn rename_file(from: &CStr, to: &CStr) -> Result<(), IoFailed> {
 /// A symbolic link is copied as a link, not as its target.
 pub(crate) fn vim_copyfile(from: &CStr, to: &CStr) -> Result<(), IoFailed> {
     let path = |name: &CStr| std::path::PathBuf::from(std::ffi::OsStr::from_bytes(name.to_bytes()));
-    if link_info(from).is_some_and(|info| info.stat.st_mode & S_IFMT as u64 == S_IFLNK) {
+    if link_info(from).is_some_and(|info| info.stat.st_mode & S_IFMT == S_IFLNK) {
         // Upstream reads the link into a `MAXPATHL` buffer: a longer target
         // fails.
         let target = std::fs::read_link(path(from))

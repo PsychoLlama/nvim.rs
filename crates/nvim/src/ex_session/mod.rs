@@ -76,6 +76,7 @@ use crate::path::MAXPATHL;
 use crate::path::{after_pathsep, vim_full_name, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::search::state::NO_HLSEARCH;
+use crate::startup::{SESSION_FILE, VIMRC_FILE};
 use crate::tr;
 use crate::types::CmdIdx;
 use crate::types::{ExArg, Vv};
@@ -93,9 +94,6 @@ use view::put_view;
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {}
 
-/// The default file name of each command that has one.
-const SESSION_FILE: &CStr = c"Session.vim";
-const VIMRC_FILE: &CStr = c".nvimrc";
 const EXRC_FILE: &CStr = c".exrc";
 
 /// Whether a `:lcd` or `:tcd` has been written for this session. Once one

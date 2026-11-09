@@ -23,12 +23,11 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use crate::api::keysets::KeyDict_exec_opts;
-use crate::api::private::helpers::string_to_array;
+use crate::api::private::helpers::{VIML_INTERNAL_CALL, string_to_array};
 use crate::api::vimscript::exec_impl;
 use crate::eval::encode::encode_vim_list_to_buf;
 use crate::eval::userfunc::all_funcs;
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::getchar::VIML_INTERNAL_CALL;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::K_SPECIAL;
 use crate::option::defs::{OptVal, OptionSetFlags};
@@ -39,9 +38,8 @@ use crate::shada::{
     shada_encode_buflist, shada_encode_gvars, shada_encode_jumps, shada_encode_regs,
     shada_read_string,
 };
-use crate::types::DictBuilder;
-use crate::types::TypVal;
 use crate::types::{ApiDict, ApiString, Array, Error, KeyValuePair, Object, VAR_LIST};
+use crate::types::{DictBuilder, TypVal};
 use core::ffi::{CStr, c_int};
 
 /// The `ContextTypeFlags` a `Context` can carry, one bit per section.

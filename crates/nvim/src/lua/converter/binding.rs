@@ -20,6 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::api::ERROR_TYPE_EXCEPTION;
 use core::ffi::{CStr, c_int};
 
 use crate::api_error;
@@ -28,7 +29,7 @@ use crate::lua::api_wrappers::BINDINGS;
 use crate::lua::executor::nlua_is_deferred_safe;
 use crate::lua::stack::{At, CFunction, Dispatch, Raise, Stack, dispatch_entry};
 use crate::message::{E_FAST_API_DISABLED, E_TEXTLOCK};
-use crate::types::{ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, Error};
+use crate::types::{ERROR_TYPE_VALIDATION, Error};
 
 /// How a result goes back to Lua: `PUSH_SPECIAL` converts `nil` and the
 /// other special values the pre-0.11 way, which is what clients of methods

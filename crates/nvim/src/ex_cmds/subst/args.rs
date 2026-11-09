@@ -25,10 +25,9 @@
 )]
 
 use super::{SUB_FLAGS, check_regexp_delim, skip_substitute, sub_parse_flags, sub_set_replacement};
-use crate::ascii::NUL;
-use crate::ascii::ascii_iswhite;
+use crate::ascii::{NUL, ascii_iswhite};
 use crate::charset::getdigits_int_at;
-use crate::ex_cmds::{INT_MAX, SUB_IGNORE_CASE, SUB_MATCH_CASE};
+use crate::ex_cmds::{SUB_IGNORE_CASE, SUB_MATCH_CASE};
 use crate::memory::{ThinCString, XString};
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::option::magic_isset;
@@ -36,12 +35,8 @@ use crate::regexp::RegMMatch;
 use crate::regexp::{RE_LAST, RE_SEARCH, RE_SUBST, regtilde_owned, skip_regexp_in_place};
 use crate::search::{SEARCH_HIS, search_regcomp_owned};
 use crate::tr;
-use crate::types::CmdIdx;
-use crate::types::ColNr;
-use crate::types::ExArg;
-use crate::types::Failed;
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
+use crate::types::{CmdIdx, ColNr, ExArg, Failed};
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
@@ -244,13 +239,13 @@ fn read_count(args: &mut ExArg, at: &mut usize) -> Result<(), SubError> {
         return Ok(());
     }
     let count_at = *at;
-    let (i, past) = getdigits_int_at(args.line.buffer(), count_at, false, INT_MAX);
+    let (i, past) = getdigits_int_at(args.line.buffer(), count_at, false, c_int::MAX);
     *at = past;
     if i <= 0 && !args.skip && SUB_FLAGS.with(|flags| flags.do_error) {
         return Err(SubError::ZeroCount);
     }
     // Upstream writes `i >= INT_MAX`, which for a `c_int` is `==`.
-    if i == INT_MAX {
+    if i == c_int::MAX {
         let count_arg = args.line.slice_at(count_at, past - count_at);
         return Err(SubError::TooLarge(count_arg.into()));
     }

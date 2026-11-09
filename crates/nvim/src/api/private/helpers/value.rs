@@ -27,11 +27,11 @@ use crate::lua::executor::{api_new_luaref, release_luaref};
 use crate::message::HlMessageChunk;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::narrow::number_as_int;
+use crate::types::api::{OBJECT_TYPE_BUFFER, OBJECT_TYPE_TABPAGE, OBJECT_TYPE_WINDOW};
 use crate::types::{
     ApiDict, ApiString, Array, Error, HlMessage, LuaRef, OBJECT_TYPE_ARRAY, OBJECT_TYPE_BOOLEAN,
-    OBJECT_TYPE_BUFFER, OBJECT_TYPE_DICT, OBJECT_TYPE_FLOAT, OBJECT_TYPE_INTEGER,
-    OBJECT_TYPE_LUA_REF, OBJECT_TYPE_NIL, OBJECT_TYPE_STRING, OBJECT_TYPE_TABPAGE,
-    OBJECT_TYPE_WINDOW, Object, ObjectType,
+    OBJECT_TYPE_DICT, OBJECT_TYPE_FLOAT, OBJECT_TYPE_INTEGER, OBJECT_TYPE_LUA_REF, OBJECT_TYPE_NIL,
+    OBJECT_TYPE_STRING, Object, ObjectType,
 };
 use core::ffi::{CStr, c_int};
 use core::mem::ManuallyDrop;

@@ -43,15 +43,17 @@ use crate::api::private::validate::handle_arg;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::api_error;
 use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
+use crate::channel::CHAN_STDIO;
 use crate::event::r#loop::{Drain, wait_on_main_loop};
 use crate::memory::XString;
 use crate::narrow::number_as_int;
 use crate::option::set_tty_option;
 use crate::startup::{STDIN_FD, STDIN_ISATTY, STDOUT_ISATTY, starting};
+use crate::types::api::ERROR_TYPE_EXCEPTION;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    ApiDict, ApiString, Boolean, ERROR_TYPE_EXCEPTION, Error, Float, Integer, OBJECT_TYPE_BOOLEAN,
-    OBJECT_TYPE_INTEGER, OBJECT_TYPE_STRING, Object, ObjectType,
+    ApiDict, ApiString, Boolean, Error, Float, Integer, OBJECT_TYPE_BOOLEAN, OBJECT_TYPE_INTEGER,
+    OBJECT_TYPE_STRING, Object, ObjectType,
 };
 use crate::ui::state::{CURRENT_UI, T_COLORS, UI_EXT_NAMES};
 use crate::ui::state::{RemoteUI, UIExtension};
@@ -63,10 +65,6 @@ use crate::ui::{
     ui_is_attached, ui_refresh, ui_set_ext_option, with_ui,
 };
 use core::ffi::CStr;
-
-/// The channel id `--embed` and `nvim -` use, which is the only one whose
-/// tty-ness is the editor's own.
-const CHAN_STDIO: u64 = 1;
 
 /// The handle of the grid every UI has, before `ext_multigrid` adds more.
 const DEFAULT_GRID_HANDLE: Integer = 1;

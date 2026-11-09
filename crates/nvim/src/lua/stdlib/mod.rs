@@ -17,8 +17,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::api::private::helpers::TryState;
-
 mod regex;
 mod register;
 mod strings;
@@ -30,8 +28,3 @@ pub use self::register::*;
 pub(crate) use self::strings::*;
 pub(crate) use self::vars::*;
 pub(crate) use self::with::*;
-
-/// An all-zero [`TryState`], which [`try_enter`] fills.
-///
-/// [`try_enter`]: crate::api::private::helpers::try_enter
-pub(crate) const TRY_STATE_INIT: TryState = TryState::INIT;

@@ -31,8 +31,7 @@
 pub mod entry;
 
 use crate::deref::deref_to_field;
-use crate::narrow::as_index;
-use crate::narrow::count_as_int;
+use crate::narrow::{as_index, count_as_int};
 use core::ffi::{c_int, c_long, c_uint};
 
 use crate::grid::schar_from_buf;
@@ -55,7 +54,9 @@ use crate::vterm::vterm::{Output, ScrollTarget, scroll_rect};
 /// What the host asked to be told about the pointer, as
 /// `VTERM_PROP_MOUSE` reduces to.
 pub const MOUSE_WANT_CLICK: c_int = 0x1;
+/// The host wants motion reported while a button is held.
 pub const MOUSE_WANT_DRAG: c_int = 0x2;
+/// The host wants motion reported unconditionally.
 pub const MOUSE_WANT_MOVE: c_int = 0x4;
 
 /// A change to the pen that the consumer is told about.

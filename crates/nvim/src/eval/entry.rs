@@ -57,9 +57,6 @@ use crate::types::{
     VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv,
 };
 
-/// A freshly declared typval.
-const UNSET_TV: TypVal = TV_INITIAL_VALUE;
-
 /// Bring up the evaluator: the `v:` variables and the function table.
 pub fn eval_init() {
     evalvars_init();
@@ -76,7 +73,7 @@ fn truth(tv: &mut TypVal) -> Result<bool, Failed> {
 /// Evaluate `text` and answer its truth. An `Err` is an evaluation that
 /// failed, which is not the same as answering false.
 pub(crate) fn eval_to_bool(text: &[u8], use_simple_function: bool) -> Result<bool, Failed> {
-    let mut tv = UNSET_TV;
+    let mut tv = TV_INITIAL_VALUE;
     if use_simple_function {
         eval0_simple_funccal(text, &mut tv)?;
     } else {
@@ -89,7 +86,7 @@ pub(crate) fn eval_to_bool(text: &[u8], use_simple_function: bool) -> Result<boo
 /// when `skip`, only its parse (and then false). The command after it is
 /// left in `line.next`.
 pub(crate) fn eval_cmd_bool(excmd: &mut ExArg, skip: bool) -> Result<bool, Failed> {
-    let mut tv = UNSET_TV;
+    let mut tv = TV_INITIAL_VALUE;
     let _skipping = skip.then(Suppress::emsg_skip);
     let at = excmd.line.arg;
     eval0_in_cmd(excmd, at, &mut tv, !skip)?;
@@ -206,7 +203,7 @@ pub fn eval_expr_typval(
 
 /// `eval_expr_typval` with no arguments, answering the result's truth.
 pub(crate) fn eval_expr_to_bool(expr: &TypVal) -> Result<bool, Failed> {
-    let mut rettv = UNSET_TV;
+    let mut rettv = TV_INITIAL_VALUE;
     eval_expr_typval(expr, false, &[], &mut rettv)?;
     truth(&mut rettv)
 }
@@ -215,7 +212,7 @@ pub(crate) fn eval_expr_to_bool(expr: &TypVal) -> Result<bool, Failed> {
 /// `skip`, only parsed. The command after it is left in `line.next`.
 pub(crate) fn eval_cmd_string(excmd: &mut ExArg, skip: bool) -> Option<XString> {
     let mut numbuf = NumBuf::new();
-    let mut tv = UNSET_TV;
+    let mut tv = TV_INITIAL_VALUE;
     let _skipping = skip.then(Suppress::emsg_skip);
     let at = excmd.line.arg;
     if eval0_in_cmd(excmd, at, &mut tv, !skip).is_err() || skip {
@@ -232,7 +229,7 @@ pub(crate) fn eval_cmd_string(excmd: &mut ExArg, skip: bool) -> Option<XString> 
 pub(crate) fn skip_expr(text: &[u8]) -> usize {
     let mut cursor = Cursor::new(text);
     cursor.skip_white();
-    let mut skipped = UNSET_TV;
+    let mut skipped = TV_INITIAL_VALUE;
     let _ = eval1(&mut cursor, &mut skipped, false);
     cursor.offset()
 }
@@ -260,7 +257,7 @@ pub(crate) fn typval2string(tv: &TypVal, join_list: bool) -> XString {
 /// Evaluate `text` for its String: a List joined with newlines when
 /// `join_list`. `None` when the evaluation failed.
 pub fn eval_to_string(text: &[u8], join_list: bool, use_simple_function: bool) -> Option<XString> {
-    let mut tv = UNSET_TV;
+    let mut tv = TV_INITIAL_VALUE;
     let r = if use_simple_function {
         eval0_simple_funccal(text, &mut tv)
     } else {
@@ -290,7 +287,7 @@ pub(crate) fn eval_to_string_safe(
 /// Evaluate `text` for its Number, silently. -1 for a failure, which is
 /// not distinguishable from a result of -1.
 pub fn eval_to_number(text: &[u8], use_simple_function: bool) -> VarNumber {
-    let mut rettv = UNSET_TV;
+    let mut rettv = TV_INITIAL_VALUE;
     let _no_emsg = Suppress::emsg();
     // Note the shortcut is handed the *unskipped* expression, unlike `eval1`.
     let simple = if use_simple_function {
@@ -319,7 +316,7 @@ pub fn eval_to_number(text: &[u8], use_simple_function: bool) -> VarNumber {
 /// Evaluate the command's argument as an expression, leaving the command
 /// after it in `line.next`. `None` when it failed.
 pub(crate) fn eval_cmd_arg(excmd: &mut ExArg) -> Option<TypVal> {
-    let mut tv = UNSET_TV;
+    let mut tv = TV_INITIAL_VALUE;
     let at = excmd.line.arg;
     let evaluate = !excmd.skip;
     eval0_in_cmd(excmd, at, &mut tv, evaluate).ok()?;
@@ -334,7 +331,7 @@ pub(crate) fn eval_expr(text: &[u8]) -> Option<TypVal> {
 /// As `eval_expr`, optionally taking the shortcut for an expression that is
 /// nothing but one function call.
 pub(crate) fn eval_expr_ext(text: &[u8], use_simple_function: bool) -> Option<TypVal> {
-    let mut tv = UNSET_TV;
+    let mut tv = TV_INITIAL_VALUE;
     let r = if use_simple_function {
         eval0_simple_funccal(text, &mut tv)
     } else {
@@ -379,7 +376,7 @@ pub(crate) fn call_vim_function(
 /// failed.
 pub(crate) fn call_func_retstr(func: &CStr, argv: &[TypVal]) -> Option<XString> {
     let mut numbuf = NumBuf::new();
-    let mut rettv = UNSET_TV;
+    let mut rettv = TV_INITIAL_VALUE;
     call_vim_function(func, argv, &mut rettv).ok()?;
     let retval = XString::from_cstr(cstr_of(&rettv, &mut numbuf));
     clear_local(&mut rettv);
@@ -389,7 +386,7 @@ pub(crate) fn call_func_retstr(func: &CStr, argv: &[TypVal]) -> Option<XString> 
 /// [`call_vim_function`] of the function named `func`, answering its result
 /// when that is a List; `None` for anything else.
 pub(crate) fn call_func_retlist(func: &CStr, argv: &[TypVal]) -> Option<TypVal> {
-    let mut rettv = UNSET_TV;
+    let mut rettv = TV_INITIAL_VALUE;
     call_vim_function(func, argv, &mut rettv).ok()?;
     if rettv.v_type() != VAR_LIST {
         clear_local(&mut rettv);
@@ -434,7 +431,7 @@ pub(crate) fn eval_foldexpr(window: Win) -> (c_int, c_int) {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
         let _locked = Lock::text();
 
-        let mut tv = UNSET_TV;
+        let mut tv = TV_INITIAL_VALUE;
         let mut retval: VarNumber = 0;
         if eval0_simple_funccal(text, &mut tv).is_ok() {
             if tv.v_type() == VAR_NUMBER {
@@ -472,7 +469,7 @@ pub fn eval_foldtext(window: Win) -> Object {
     let _sandboxed = use_sandbox.then(Lock::sandbox);
     let _locked = Lock::text();
 
-    let mut tv = UNSET_TV;
+    let mut tv = TV_INITIAL_VALUE;
     let retval = if eval0_simple_funccal(&expr, &mut tv).is_err() {
         Object::string(ApiString::NULL)
     } else {

@@ -29,15 +29,11 @@
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::narrow::float_as_int;
-use crate::narrow::number_as_int;
-use crate::narrow::number_as_lnum;
-use crate::types::ColNr;
-use crate::types::Handle;
-use crate::window::Z_INDEX_FLOAT_DEFAULT;
-use crate::window::Z_INDEX_MESSAGES;
-use crate::winlayer::cmdwin_window;
-use crate::winlayer::prev_window;
+use crate::narrow::{float_as_int, number_as_int, number_as_lnum};
+use crate::types::api::ERROR_TYPE_EXCEPTION;
+use crate::types::{ColNr, Handle};
+use crate::window::{Z_INDEX_FLOAT_DEFAULT, Z_INDEX_MESSAGES};
+use crate::winlayer::{cmdwin_window, prev_window};
 use core::ffi::{CStr, c_int};
 
 use crate::api::private::helpers::{find_buffer_by_handle, find_window_by_handle};
@@ -47,8 +43,7 @@ use crate::decoration::defs::VirtText;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, set_must_redraw};
 use crate::grid::grid_adjust;
 use crate::memory::XString;
-use crate::message::E_CMDWIN;
-use crate::message::emsg;
+use crate::message::{E_CMDWIN, emsg};
 use crate::mouse::{MousePos, find_win_inner};
 use crate::r#move::{textpos2screenpos, validate_cursor};
 use crate::option::defs::{OptVal, OptionSetFlags};
@@ -57,10 +52,9 @@ use crate::option::{OptionTarget, parse_winhl_opt, set_option_direct_for};
 use crate::options::OPT_BUFHIDDEN;
 use crate::optionstr::OptStringRef;
 use crate::types::{
-    AlignTextPos, BufferHandle, ERROR_TYPE_EXCEPTION, Error, FLOAT_RELATIVE_CURSOR,
-    FLOAT_RELATIVE_EDITOR, FLOAT_RELATIVE_LASTSTATUS, FLOAT_RELATIVE_MOUSE, FLOAT_RELATIVE_WINDOW,
-    FloatAnchor, LPos, LineNr, OptInt, Pos, ScreenChar, WinConfig, WinSplit, WinStyle,
-    WindowHandle,
+    AlignTextPos, BufferHandle, Error, FLOAT_RELATIVE_CURSOR, FLOAT_RELATIVE_EDITOR,
+    FLOAT_RELATIVE_LASTSTATUS, FLOAT_RELATIVE_MOUSE, FLOAT_RELATIVE_WINDOW, FloatAnchor, LPos,
+    LineNr, OptInt, Pos, ScreenChar, WinConfig, WinSplit, WinStyle, WindowHandle,
 };
 use crate::ui::state::UI_MULTIGRID;
 use crate::ui::state::{COLUMNS, ROWS};

@@ -31,20 +31,21 @@ use crate::os::uv_error::UV_ESRCH;
 use core::ffi::c_int;
 use std::ffi::CString;
 
-const SIGKILL: c_int = 9;
-const SIGTERM: c_int = 15;
-
 /// Kill the process group led by `pid`, which is what nvim's spawned jobs
 /// are set up as. `sig` must be SIGTERM or SIGKILL.
 ///
 /// Returns whether the signal was delivered.
 pub fn os_proc_tree_kill(pid: c_int, sig: c_int) -> bool {
-    debug_assert!(sig == SIGTERM || sig == SIGKILL);
+    debug_assert!(sig == libc::SIGTERM || sig == libc::SIGKILL);
     if pid == 0 {
         // Never kill self: `kill(0, ...)` signals our own process group.
         return false;
     }
-    let name = if sig == SIGTERM { "SIGTERM" } else { "SIGKILL" };
+    let name = if sig == libc::SIGTERM {
+        "SIGTERM"
+    } else {
+        "SIGKILL"
+    };
     let text = CString::new(format!("sending {name} to PID {}", -pid)).expect("no interior NUL");
     // SAFETY: `logmsg` is variadic and printf-shaped, so the message goes
     // through `%s` rather than becoming the format string itself; both

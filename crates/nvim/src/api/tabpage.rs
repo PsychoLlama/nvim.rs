@@ -15,6 +15,7 @@ use crate::api::private::helpers::{
 };
 use crate::api::vim::nvim_get_current_win;
 use crate::types::Handle;
+use crate::types::api::ERROR_TYPE_EXCEPTION;
 use crate::window::tab_index;
 
 use crate::api::keysets::KeyDict_tabpage_config;
@@ -24,8 +25,7 @@ use crate::message::E_CMDWIN;
 use crate::narrow::number_as_int;
 use crate::os::libc::size_t;
 use crate::types::{
-    ApiString, Array, Boolean, BufferHandle, ERROR_TYPE_EXCEPTION, Error, Integer, Object,
-    TabpageHandle, WindowHandle,
+    ApiString, Array, Boolean, BufferHandle, Error, Integer, Object, TabpageHandle, WindowHandle,
 };
 use crate::window::{
     tabpage_win_valid, valid_tab, valid_tabpage, win_goto, win_new_tabpage, win_set_buf,

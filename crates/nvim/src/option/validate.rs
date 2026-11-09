@@ -38,8 +38,8 @@ use crate::ui::state::ROWS;
 use crate::window::{min_rows_for_all_tabpages, win_default_scroll};
 
 use super::{
-    INT_MAX, INT_MIN, MAX_NUMBERWIDTH, MIN_COLUMNS, SB_MAX, TABSTOP_MAX, get_option,
-    get_option_unset_value, option_has_type, option_is_global_local, optval_type_name,
+    MAX_NUMBERWIDTH, MIN_COLUMNS, SB_MAX, TABSTOP_MAX, get_option, get_option_unset_value,
+    option_has_type, option_is_global_local, optval_type_name,
 };
 
 /// The two messages the quickfix-stack bounds report.
@@ -99,7 +99,7 @@ pub(crate) fn check_num_option_bounds(
                 )));
                 *newval = OptInt::from(least);
             }
-            *newval = (*newval).min(OptInt::from(INT_MAX));
+            *newval = (*newval).min(OptInt::from(c_int::MAX));
         }
         OPT_COLUMNS => {
             if *newval < OptInt::from(MIN_COLUMNS) && FULL_SCREEN.get() {
@@ -108,7 +108,7 @@ pub(crate) fn check_num_option_bounds(
                 )));
                 *newval = OptInt::from(MIN_COLUMNS);
             }
-            *newval = (*newval).min(OptInt::from(INT_MAX));
+            *newval = (*newval).min(OptInt::from(c_int::MAX));
         }
         // 'pumblend' saturates silently rather than reporting.
         OPT_PUMBLEND => *newval = (*newval).clamp(0, 100),
@@ -142,7 +142,7 @@ pub(crate) fn check_num_option_bounds(
 pub(crate) fn validate_num_option(opt_idx: OptIndex, newval: &mut OptInt) -> Result<(), OptError> {
     let value = *newval;
     // Every numeric option ends up in an `int` somewhere down the line.
-    if value < OptInt::from(INT_MIN) || value > OptInt::from(INT_MAX) {
+    if value < OptInt::from(c_int::MIN) || value > OptInt::from(c_int::MAX) {
         return Err(invalid());
     }
     let errmsg = match opt_idx {

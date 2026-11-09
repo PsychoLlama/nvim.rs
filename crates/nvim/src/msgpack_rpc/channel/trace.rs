@@ -12,7 +12,7 @@
 //! Nothing is written unless a debug log level is in force, so the formatting
 //! is left to `logmsg` rather than done at the call sites.
 
-use crate::log::logmsg_tagged;
+use crate::log::{LOGLVL_DBG, logmsg_tagged};
 use core::ffi::CStr;
 
 use crate::message_fmt::{msg_cstr, msg_cstr_opt};
@@ -22,9 +22,7 @@ use crate::os::libc::{uint32_t, uint64_t};
 /// part of the text. Nested to stay out of the flat namespace the unit-test
 /// header generator collects top-level constants into.
 mod column {
-    use core::ffi::{CStr, c_int};
-
-    pub(super) const LOGLVL_DBG: c_int = 1;
+    use core::ffi::CStr;
 
     pub(super) const REQUEST: &CStr = c"[request]  ";
     pub(super) const RESPONSE: &CStr = c"[response] ";
@@ -61,7 +59,7 @@ pub fn log_call(dir: &CStr, channel_id: uint64_t, req_id: Option<uint32_t>, name
         Some(id) => {
             let kind = msg_cstr(column::REQUEST);
             logmsg_tagged!(
-                column::LOGLVL_DBG,
+                LOGLVL_DBG,
                 column::TAG,
                 false,
                 "{dir} {channel_id}: {kind} id={id}: {name}\n"
@@ -70,7 +68,7 @@ pub fn log_call(dir: &CStr, channel_id: uint64_t, req_id: Option<uint32_t>, name
         None => {
             let kind = msg_cstr(column::NOTIFY);
             logmsg_tagged!(
-                column::LOGLVL_DBG,
+                LOGLVL_DBG,
                 column::TAG,
                 false,
                 "{dir} {channel_id}: {kind} {name}\n"
@@ -88,7 +86,7 @@ pub fn log_response(dir: &CStr, channel_id: uint64_t, errored: bool, req_id: uin
         column::RESPONSE
     });
     logmsg_tagged!(
-        column::LOGLVL_DBG,
+        LOGLVL_DBG,
         column::TAG,
         false,
         "{dir} {channel_id}: {kind} id={req_id}\n"

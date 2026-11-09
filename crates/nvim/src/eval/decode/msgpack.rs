@@ -23,6 +23,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mpack::object::MPACK_NOMEM;
 use core::ffi::c_int;
 
 use super::{
@@ -40,9 +41,6 @@ use crate::types::{
 /// How deep a value may nest, counting each string's bytes as one more
 /// level: upstream's `MPACK_MAX_OBJECT_DEPTH`.
 const MAX_NESTING: usize = 32;
-
-/// The status past `MPACK_ERROR`: the value nests deeper than [`MAX_NESTING`].
-pub(crate) const MPACK_NOMEM: c_int = MPACK_ERROR + 1;
 
 /// The most a container's header may reserve before its items arrive.
 ///

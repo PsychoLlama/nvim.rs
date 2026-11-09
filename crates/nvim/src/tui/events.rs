@@ -20,7 +20,8 @@
 )]
 
 use crate::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_tty_set_mode, uv_write};
-use crate::event::uv::{uv_buf_t, uv_stream_t, uv_tty_mode_t, uv_write_t};
+use crate::event::uv::{UV_RUN_DEFAULT, UV_TTY_MODE_IO, UV_TTY_MODE_NORMAL};
+use crate::event::uv::{uv_buf_t, uv_stream_t, uv_write_t};
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::channel::rpc_send_event;
@@ -39,10 +40,6 @@ use crate::tui::state::TUIData;
 use crate::tui::terminfo::caps::{TERM_FROM_STATUS_LINE, TERM_TO_STATUS_LINE};
 use crate::tui::terminfo::terminfo_info_msg;
 use crate::types::{ApiString, Array, ArrayBuf, DictBuf, Integer, Object};
-
-const UV_TTY_MODE_NORMAL: uv_tty_mode_t = 0;
-const UV_TTY_MODE_IO: uv_tty_mode_t = 2;
-const UV_RUN_DEFAULT: core::ffi::c_uint = 0;
 
 /// The longest title worth sending. Terminals truncate long ones anyway, and
 /// a title that does not fit the staging buffer would be cut mid-sequence.

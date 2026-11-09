@@ -134,7 +134,8 @@ pub(crate) const FUZZY_SCORE_NONE: c_int = -2147483648;
 pub(crate) const MIN_COLUMNS: c_int = 12;
 pub(crate) const LISTCHARS: CharsOption = 1;
 pub(crate) const FILLCHARS: CharsOption = 0;
-pub(crate) const ROOT_UID: c_int = 0 as c_int;
+/// The superuser's id.
+pub(crate) const ROOT_UID: ::libc::uid_t = 0;
 /// 'imsearch' at -1 follows 'iminsert' rather than answering for itself.
 pub(crate) const B_IMODE_USE_INSERT: crate::types::OptInt = -1;
 pub(crate) const B_IMODE_NONE: crate::types::OptInt = 0;
@@ -163,7 +164,4 @@ pub(crate) const DFLT_HELPFILE: &::core::ffi::CStr = c"$VIMRUNTIME/doc/help.txt"
 /// terminfo says anything useful.
 pub(crate) const DFLT_COLS: c_int = 80 as c_int;
 pub(crate) const DFLT_ROWS: c_int = 24 as c_int;
-pub(crate) const INT_MIN: c_int = -INT_MAX - 1 as c_int;
-pub(crate) const INT_MAX: c_int = __INT_MAX__;
 pub(crate) const PROJECT_NAME: &::core::ffi::CStr = c"nvim";
-pub(crate) const __INT_MAX__: c_int = 2147483647 as c_int;

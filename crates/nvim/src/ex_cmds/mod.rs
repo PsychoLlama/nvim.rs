@@ -37,6 +37,7 @@
 
 use crate::ex_docmd::cmdmod_has;
 use crate::option::set_option_direct;
+use crate::os::cshim::gettext;
 
 use crate::ascii::{CAR, ESC, NL};
 use crate::autocmd::defs::AutoEvent;
@@ -59,7 +60,6 @@ use crate::message::{
 };
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::options::OPT_FOLDCOLUMN;
-use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp_at};
@@ -167,7 +167,6 @@ pub(crate) fn split_vimgrep_pat(arg: &[u8]) -> Option<(Vec<u8>, ::core::ffi::c_i
     Some((pat.pattern.to_vec(), pat.flags, pat.rest))
 }
 
-pub const IS_ALPHA: ::core::ffi::c_uint = 1024;
 pub const GETFILE_OPEN_OTHER: GetFileRet = -1;
 pub const GETFILE_SAME_FILE: GetFileRet = 0;
 pub const GETFILE_NOT_WRITTEN: GetFileRet = 2;
@@ -216,7 +215,6 @@ pub struct LineData {
 pub const VGR_FUZZY: ::core::ffi::c_int = 4;
 pub const VGR_NOJUMP: ::core::ffi::c_int = 2;
 pub const VGR_GLOBAL: ::core::ffi::c_int = 1;
-pub const NODE_OTHER: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 /// Fire `event` for `buffer`: no file name, no pattern, no forcing -- the shape
 /// every buffer-lifecycle autocommand in this family uses.
 ///
@@ -437,7 +435,5 @@ pub(crate) mod say {
         msgmore(n)
     }
 }
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const DBL_MAX: ::core::ffi::c_double = __DBL_MAX__;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 pub const __DBL_MAX__: ::core::ffi::c_double = 1.7976931348623157e+308f64;

@@ -36,6 +36,7 @@
 
 use crate::keycodes::{KS_EXTRA, KS_MODIFIER};
 use crate::keycodes::{REPTERM_DO_LT, REPTERM_FROM_PART};
+use crate::lua::ffi::LUA_NOREF;
 use crate::types::ScriptCtx;
 use core::ffi::{CStr, c_int};
 
@@ -185,7 +186,6 @@ pub const MAPTYPE_UNMAP: c_int = 1;
 pub const MAPTYPE_NOREMAP: c_int = 2;
 /// `:unmap` of a LHS only, not a RHS that happens to match (`mapset()`).
 pub const MAPTYPE_UNMAP_LHS: c_int = 3;
-pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 /// How many hash buckets the mapping table has.
 pub const MAX_MAPHASH: usize = 256;
 /// The error texts `mapping` raises for itself; the rest come from the

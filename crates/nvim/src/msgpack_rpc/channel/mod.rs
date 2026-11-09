@@ -28,6 +28,7 @@
 use crate::event_queue::{ChildQueue, put_id_event_on_fast_events, put_job};
 use crate::message_fmt::{msg_addr, msg_bytes};
 use crate::os::uv_error::UV_EPIPE;
+use crate::types::api::ERROR_TYPE_EXCEPTION;
 use core::ffi::{CStr, c_int};
 
 use crate::api::ui::remote_ui_disconnect;
@@ -47,10 +48,7 @@ use crate::msgpack_rpc::packer::Addressees;
 use crate::msgpack_rpc::unpacker::Unpacker;
 use crate::os::libc::uint64_t;
 use crate::startup::{UI_CLIENT_CHANNEL_ID, UI_CLIENT_ERROR_EXIT};
-use crate::types::{
-    ApiDict, ApiString, Array, ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, Error, Integer,
-    MessageType, Object,
-};
+use crate::types::{ApiDict, ApiString, Array, ERROR_TYPE_VALIDATION, Error, Integer, Object};
 use crate::ui_client::ui_client_attach_to_restarted_server;
 
 pub mod call_stack;
@@ -67,12 +65,7 @@ use receive::parse_msgpack;
 /// Values these belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
 mod known {
-    use super::{ChannelPart, ClientType, MessageType};
-
-    pub(super) const MESSAGE_TYPE_REQUEST: MessageType = 0;
-    pub(super) const MESSAGE_TYPE_RESPONSE: MessageType = 1;
-    pub(super) const MESSAGE_TYPE_NOTIFICATION: MessageType = 2;
-    pub(super) const MESSAGE_TYPE_REDRAW_EVENT: MessageType = 3;
+    use super::{ChannelPart, ClientType};
 
     pub(super) const CHANNEL_PART_RPC: ChannelPart = 3;
 

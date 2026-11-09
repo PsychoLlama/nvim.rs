@@ -12,10 +12,10 @@
 //! makes them about: which parse stage comes next, which token types are
 //! interchangeable, and how the two hand-rolled vectors grow.
 
+use crate::types::api::MESSAGE_TYPE_NOTIFICATION;
 use core::ffi::c_int;
 
 use crate::mpack::typedefs::mpack_token_type_t;
-use crate::types::MessageType;
 
 /// Parse stages. The unpacker resumes mid-message whenever the stream runs
 /// out, so its position is one of these plus the byte offset it stopped at.
@@ -95,8 +95,6 @@ pub fn header_shape_is_valid(array_length: usize, message_type: u32) -> bool {
         message_type < MESSAGE_TYPE_NOTIFICATION as u32
     }
 }
-
-const MESSAGE_TYPE_NOTIFICATION: MessageType = 2;
 
 mod limit {
     /// The longest method name the header parser will look at. A longer one

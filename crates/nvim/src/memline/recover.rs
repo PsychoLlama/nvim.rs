@@ -31,7 +31,7 @@ use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_int;
 use crate::os::fs::file_info;
 use crate::smsg;
-use crate::types::ApiString;
+use crate::types::{ApiString, Failed};
 use core::ffi::{CStr, c_int, c_long, c_uint};
 use std::ffi::CString;
 
@@ -39,7 +39,6 @@ use super::*;
 use crate::memory::ThinCString;
 use crate::option::defs::OptionSetFlags;
 use crate::path::MAXPATHL;
-use crate::types::Failed;
 use crate::winlayer::{Buf, Win};
 
 /// Read the original file into `CURBUF`, starting after line `from`.
@@ -130,7 +129,7 @@ pub fn ml_recover(checkext: bool) {
         buf.b_ml.ml_flags = MlFlags::NONE;
 
         // Open the memfile on the old swap file.
-        let Some(memfile) = MemFile::open(fname_used.clone(), O_RDONLY) else {
+        let Some(memfile) = MemFile::open(fname_used.clone(), libc::O_RDONLY) else {
             break 'theend Err(MemlineError::CannotOpen(ThinCString::from_cstr(
                 &fname_used,
             )));

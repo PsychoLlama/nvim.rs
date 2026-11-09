@@ -279,7 +279,7 @@ pub(crate) fn command_line_enter(
             // C's TRY_WRAP. restore_v_event() runs *inside* the try here
             // and outside it at CmdlineLeave below; that asymmetry is
             // upstream's.
-            let mut tstate: TryState = TRY_STATE_INIT;
+            let mut tstate: TryState = TryState::INIT;
             try_enter(&mut tstate);
             cmdline_autocmd(AutoEvent::CmdlineEnter, cstr::in_bytes(&firstcbuf));
             restore_v_event(dict, &mut save_v_event);
@@ -362,7 +362,7 @@ pub(crate) fn command_line_enter(
 
             // C's TRY_WRAP; the error is printed further below, to avoid
             // redraw issues.
-            let mut tstate: TryState = TRY_STATE_INIT;
+            let mut tstate: TryState = TryState::INIT;
             try_enter(&mut tstate);
             cmdline_autocmd(AutoEvent::CmdlineLeave, cstr::in_bytes(&firstcbuf));
             err.absorb(try_leave(&tstate));

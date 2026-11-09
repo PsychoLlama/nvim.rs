@@ -25,6 +25,8 @@
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::api::private::helpers::LUA_INTERNAL_CALL;
+use crate::lua::ffi::LUA_NOREF;
 use crate::narrow::len_as_integer;
 use core::ffi::{CStr, c_int};
 
@@ -42,11 +44,6 @@ use crate::os::libc::{int64_t, size_t, uint64_t};
 use crate::types::builders::ArrayBuf;
 use crate::types::{Array, BufUpdateCallbacks, ColNr, Integer, LineNr, LuaRef, Object};
 use crate::winlayer::{Buf, Win};
-
-pub const LUA_NOREF: c_int = -2;
-const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);
-const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
-const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 
 // ---------------------------------------------------------------------------
 // The two subscriber lists

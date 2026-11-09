@@ -17,16 +17,15 @@
 use crate::api::private::dispatch_wrappers::handle_nvim_paste;
 use crate::event::wstream::SharedBuffer;
 use crate::memory::{block_vec, recycle_block};
-use crate::msgpack_rpc::handler::ApiDispatchFn;
-use crate::msgpack_rpc::handler::MsgpackRpcRequestHandler;
+use crate::msgpack_rpc::handler::{ApiDispatchFn, MsgpackRpcRequestHandler};
 use crate::msgpack_rpc::packer::PackerBuffer;
 use crate::msgpack_rpc::packer::{
     Addressees, mpack_array, mpack_integer, mpack_object, mpack_object_array, mpack_str, mpack_uint,
 };
 use crate::os::libc::{uint32_t, uint64_t};
+use crate::types::api::{MESSAGE_TYPE_NOTIFICATION, MESSAGE_TYPE_REQUEST, MESSAGE_TYPE_RESPONSE};
 use crate::types::{ApiString, Array, ERROR_TYPE_NONE, Error, Integer, MessageType, Object};
 
-use super::known::*;
 use super::{channel_write, trace};
 
 /// Packs a request (with an id) or a notification (without one) and sends it

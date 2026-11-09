@@ -19,6 +19,7 @@ use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::hashtab::Slot;
 use crate::lua::executor::release_luaref;
+use crate::lua::ffi::LUA_NOREF;
 use crate::mbyte::VimConv;
 use crate::memory::{xcalloc, xfree};
 use crate::message::emsg;
@@ -90,12 +91,9 @@ pub type DictListType = ::core::ffi::c_uint;
 pub const DICT2_LIST_ITEMS: DictListType = 2;
 pub const DICT2_LIST_VALUES: DictListType = 1;
 pub const DICT2_LIST_KEYS: DictListType = 0;
-pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const INT8_MIN: ::core::ffi::c_int = -128 as ::core::ffi::c_int;
-pub const INT8_MAX: ::core::ffi::c_int = 127 as ::core::ffi::c_int;
-pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
-pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX.wrapping_sub(1 as ::core::ffi::c_ulong);
+pub const TV_TRANSLATE: ::core::ffi::c_ulong = u64::MAX;
+pub const TV_CSTRING: ::core::ffi::c_ulong = u64::MAX.wrapping_sub(1 as ::core::ffi::c_ulong);
 static E_VARIABLE_NESTED_TOO_DEEP_FOR_UNLOCK: &::core::ffi::CStr =
     c"E743: Variable nested too deep for (un)lock";
 static E_USING_INVALID_VALUE_AS_STRING: &::core::ffi::CStr =

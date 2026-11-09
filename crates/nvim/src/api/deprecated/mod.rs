@@ -60,5 +60,4 @@ pub use self::options::*;
 pub use self::vars::*;
 pub use self::write::*;
 pub const LINE_BUFFER_MIN_SIZE: ::core::ffi::c_uint = 4096;
-pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub(crate) use crate::decoration::DECOR_ID_INVALID;

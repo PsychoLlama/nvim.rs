@@ -290,5 +290,3 @@ static QF_LINE_HL_ID: GlobalCell<c_int> = GlobalCell::new(0);
 /// quickfix stack, one for any location list.
 pub const BUF_HAS_QF_ENTRY: c_int = 1;
 pub const BUF_HAS_LL_ENTRY: c_int = 2;
-/// `INT_MAX`, as an entry with no line or column is that far away.
-pub(crate) const INT_MAX: c_int = c_int::MAX;

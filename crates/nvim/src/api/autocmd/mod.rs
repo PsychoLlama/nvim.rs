@@ -48,5 +48,4 @@ pub use self::exec::*;
 pub use self::group::*;
 pub(crate) use self::pattern::*;
 pub use self::query::*;
-pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 static NEXT_AUTOCMD_ID: GlobalCell<int64_t> = GlobalCell::new(1 as int64_t);

@@ -28,7 +28,7 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{__S_IFMT, str_arg};
+use super::str_arg;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{tv_blob_alloc_ret, tv_get_number, tv_list_alloc_ret};
@@ -37,7 +37,7 @@ use crate::memory::ThinCString;
 use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_integer;
 use crate::os::cshim::gettext;
-use crate::os::fs::dir_exists;
+use crate::os::fs::{S_IFCHR, S_IFMT, dir_exists};
 use crate::os::libc::{int64_t, ptrdiff_t, uint64_t};
 use crate::pos::MAXLNUM;
 use crate::semsg;
@@ -180,8 +180,7 @@ fn read_blob(fd: &mut File, result: &mut TypVal, offset: FileOffset, size_arg: F
     };
     // `S_ISCHR`: a character device, whose size a `stat` does not answer,
     // which is why the two clamps below skip it.
-    const S_IFCHR: uint64_t = 0o20000;
-    let chardev = mode & __S_IFMT as uint64_t == S_IFCHR;
+    let chardev = mode & S_IFMT == S_IFCHR;
 
     let mut offset = offset;
     let mut size = size_arg;

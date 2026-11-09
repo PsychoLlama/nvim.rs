@@ -163,7 +163,7 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
             can_free_cb = true;
         } else if colored_ccline.cmdfirstc == b':' {
             // C's TRY_WRAP.
-            let mut tstate: TryState = TRY_STATE_INIT;
+            let mut tstate: TryState = TryState::INIT;
             try_enter(&mut tstate);
             err_errmsg = c"E5408: Unable to get g:Nvim_color_cmdline callback: %s";
             dgc_ret =
@@ -201,7 +201,7 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
         // TRY_WRAP too, because error messages would otherwise overwrite
         // the typed command line.
         GETLN_INTERRUPTED_HIGHLIGHT.set(false);
-        let mut tstate: TryState = TRY_STATE_INIT;
+        let mut tstate: TryState = TryState::INIT;
         try_enter(&mut tstate);
         err_errmsg = c"E5407: Callback has thrown an exception: %s";
         let saved_msg_col = MSG_COL.get();

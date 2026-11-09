@@ -26,13 +26,14 @@
 
 use super::attr::named_addr_type;
 use super::complete::command_complete_name;
-use super::{LUA_NOREF, Scope, Table};
+use super::{Scope, Table};
 use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::eval::last_set_msg;
 use crate::getchar::state::GOT_INT;
 use crate::highlight_group::{HLF_8, HLF_D};
 use crate::lua::executor::{api_new_luaref, funcref_description};
+use crate::lua::ffi::LUA_NOREF;
 use crate::message::msg_display_bytes;
 use crate::message::{
     message_filtered, msg, msg_display, msg_display_keys, msg_ext_set_kind, msg_putchar, msg_str,
@@ -43,9 +44,8 @@ use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::os::libc::int64_t;
-use crate::types::ApiString;
-use crate::types::DictBuilder;
 use crate::types::{ApiDict, CmdAddr, ExArgt, LuaRef, Object, ScriptCtx};
+use crate::types::{ApiString, DictBuilder};
 use crate::ui::state::COLUMNS;
 use crate::usercmd::UserCmd;
 use crate::winlayer::Buf;

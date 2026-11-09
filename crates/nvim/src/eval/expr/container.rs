@@ -20,9 +20,6 @@ use crate::eval::{Cursor, eval1};
 use crate::os::libc::ptrdiff_t;
 use crate::types::{Failed, LIST_LEN_SHOULD_KNOW, TypVal};
 
-/// A freshly declared typval.
-const UNSET_TV: TypVal = TV_INITIAL_VALUE;
-
 /// `[a, b, c]`, with the cursor on the `[`.
 pub(crate) fn eval_list(
     cursor: &mut Cursor<'_>,
@@ -38,7 +35,7 @@ pub(crate) fn eval_list(
 
     let ok = 'items: {
         while cursor.byte() != b']' && cursor.byte() != b'\0' {
-            let mut tv = UNSET_TV;
+            let mut tv = TV_INITIAL_VALUE;
             if eval1(cursor, &mut tv, evaluate).is_err() {
                 break 'items false;
             }
@@ -104,7 +101,7 @@ pub(crate) fn eval_dict(
     evaluate: bool,
     literal: bool,
 ) -> Result<Parsed, Failed> {
-    let mut tv = UNSET_TV;
+    let mut tv = TV_INITIAL_VALUE;
     let mut buf = NumBuf::new();
 
     // Is this `{expr}` rather than a Dict? It has to be decided without
@@ -124,8 +121,8 @@ pub(crate) fn eval_dict(
     // up drops it, which is what upstream's `tv_dict_free` on a dictionary
     // still at refcount zero was.
     let mut held = evaluate.then(tv_dict_alloc);
-    let mut tvkey = UNSET_TV;
-    tv = UNSET_TV;
+    let mut tvkey = TV_INITIAL_VALUE;
+    tv = TV_INITIAL_VALUE;
     cursor.bump(1);
     cursor.skip_white();
 

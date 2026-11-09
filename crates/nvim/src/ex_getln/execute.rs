@@ -478,7 +478,7 @@ pub(crate) fn do_autocmd_cmdlinechanged(firstc: u8) {
     let dict = cmdline_event_dict(&mut save_v_event, firstcbuf);
 
     // C's TRY_WRAP, with restore_v_event() inside it.
-    let mut tstate: TryState = TRY_STATE_INIT;
+    let mut tstate: TryState = TryState::INIT;
     try_enter(&mut tstate);
     cmdline_autocmd(AutoEvent::CmdlineChanged, firstcbuf);
     restore_v_event(dict, &mut save_v_event);

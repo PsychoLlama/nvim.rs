@@ -213,7 +213,6 @@ pub struct SavedDebugState {
     pub(crate) current_exception: Option<ExcId>,
 }
 
-pub const INT32_MAX: c_int = 2147483647 as c_int;
 pub const NULL_1: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const EXIT_FAILURE: c_int = 1 as c_int;
 pub const EXFLAG_LIST: c_int = 0x1 as c_int;

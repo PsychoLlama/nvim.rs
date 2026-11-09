@@ -16,6 +16,7 @@
 )]
 
 use crate::eval::userfunc::{FCERR_NONE, FCERR_OTHER};
+use crate::types::api::ERROR_TYPE_EXCEPTION;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
@@ -28,8 +29,7 @@ use crate::lua::stack::{At, Kind, Stack};
 use crate::message_fmt::msg_bytes_opt;
 use crate::narrow::len_as_int;
 use crate::types::{
-    Array, ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, Error, ErrorType, LuaRef, Object, TypVal,
-    VAR_UNKNOWN, VarNumber,
+    Array, ERROR_TYPE_VALIDATION, Error, ErrorType, LuaRef, Object, TypVal, VAR_UNKNOWN, VarNumber,
 };
 
 /// `luaeval("expr")` becomes this chunk with the expression appended and a

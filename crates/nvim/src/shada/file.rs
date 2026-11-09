@@ -33,10 +33,10 @@ use crate::mbyte::strnicmp_in;
 use crate::memory::ThinCString;
 use crate::message::{verbose_enter, verbose_leave};
 use crate::message_fmt::msg_cstr;
-use crate::option::split_option_part;
 use crate::option::vars::{P_SHADA, P_SHADAFILE, p_fs, p_shada, p_shadafile, p_verbose};
+use crate::option::{ROOT_UID, split_option_part};
 use crate::os::cshim::gettext;
-use crate::os::fs::FileInfo;
+use crate::os::fs::{FileInfo, S_IFDIR, S_IFMT};
 use crate::os::fs::{dir_exists, file_info, getperm, mkdir_recurse, os_remove};
 use crate::os::users::{os_getgid, os_getuid};
 use crate::os::uv_error::{UV_EEXIST, UV_ELOOP, UV_ENOENT};
@@ -378,15 +378,10 @@ fn replace_original(
     Ok(())
 }
 
-/// The superuser's id.
-const ROOT_UID: libc::uid_t = 0;
-
 /// Whether the existing ShaDa file is one this process may overwrite: a
 /// plain file, and writable by whichever of owner, group or others this
 /// process counts as. Root may write anything.
 fn writable_by_us(info: &FileInfo) -> bool {
-    const S_IFMT: u64 = 0o170000;
-    const S_IFDIR: u64 = 0o40000;
     if info.stat.st_mode & S_IFMT == S_IFDIR {
         return false;
     }

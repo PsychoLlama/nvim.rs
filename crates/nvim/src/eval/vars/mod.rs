@@ -8,14 +8,16 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::channel::CHAN_STDERR;
 use crate::eval::DICT_MAXNEST;
 use crate::ex_docmd::ends_excmd;
 use crate::fileio::{BAD_DROP, BAD_KEEP};
+use crate::os::cshim::gettext;
 
 use crate::eval::typval::DO_NOT_FREE_CNT;
 use crate::option::defs::{OPT_VAL_TYPE_BOOLEAN, OPT_VAL_TYPE_NUMBER, OPT_VAL_TYPE_STRING};
 use crate::runtime::{SID_LUA, SID_STR};
-use core::ffi::{CStr, c_int, c_uint};
+use core::ffi::CStr;
 use core::mem::ManuallyDrop;
 
 use crate::eval::gc::{RootId, unroot_dict};
@@ -70,7 +72,6 @@ use crate::option::{
     option_last_set,
 };
 use crate::options::{OPT_CHARCONVERT, OPT_DIFFEXPR, OPT_INVALID, OPT_PATCHEXPR, OPT_SPELLSUGGEST};
-use crate::os::cshim::gettext;
 use crate::os::libc::{int64_t, ptrdiff_t, size_t, uint32_t};
 use crate::pos::MAXCOL;
 use crate::runtime::defs::ScriptVar;
@@ -120,18 +121,9 @@ pub use self::vvar::*;
 /// ... can name, whether on a `:let` line or as the whole of one.
 pub(crate) type ScopeLister = fn(&mut bool);
 
-/// `__ctype_b_loc()`'s lower-case bit, the one `islower()` reads.
-pub const IS_LOWER: c_uint = 512;
-
-pub const INT64_MIN: ::core::ffi::c_long = -9223372036854775807 - 1;
-pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807;
-pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615;
-
-pub const CHAN_STDERR: c_int = 2;
-
 /// The two `name_len` sentinels the `var_check_*` family accepts in place of
 /// a real length: translate the name and measure it, or just measure it.
-pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX - 1;
+pub const TV_CSTRING: ::core::ffi::c_ulong = u64::MAX - 1;
 
 // The error texts this family owns.  They are `%`-format strings handed to
 // the variadic `semsg`/`emsg`, so they stay C strings rather than becoming

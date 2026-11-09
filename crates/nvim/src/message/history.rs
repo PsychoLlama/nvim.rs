@@ -203,10 +203,11 @@ pub fn messagesopt_changed() -> Result<(), Failed> {
             at += OPT_HIT_ENTER.count_bytes();
             flags |= OPT_MOPT_FLAG_HIT_ENTER;
         } else if item_at(text, at, OPT_WAIT, true) {
-            (wait, at) = getdigits_int_at(text, at + OPT_WAIT.count_bytes(), false, INT_MAX);
+            (wait, at) = getdigits_int_at(text, at + OPT_WAIT.count_bytes(), false, c_int::MAX);
             flags |= OPT_MOPT_FLAG_WAIT;
         } else if item_at(text, at, OPT_HISTORY, true) {
-            (history, at) = getdigits_int_at(text, at + OPT_HISTORY.count_bytes(), false, INT_MAX);
+            (history, at) =
+                getdigits_int_at(text, at + OPT_HISTORY.count_bytes(), false, c_int::MAX);
             flags |= OPT_MOPT_FLAG_HISTORY;
         } else if item_at(text, at, OPT_PROGRESS, false) {
             at += OPT_PROGRESS.count_bytes();

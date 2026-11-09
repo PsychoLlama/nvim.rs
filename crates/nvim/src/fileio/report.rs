@@ -153,10 +153,10 @@ pub(crate) fn report_read(sfname: Option<&CStr>, how: &How, out: &Outcome) {
         noted = true;
     };
 
-    if out.perm & S_IFMT == 0o10000 {
+    if u64::from(out.perm.cast_unsigned()) & S_IFMT == 0o10000 {
         note(&mut report, translate(c"[fifo]"));
     }
-    if out.perm & S_IFMT == 0o140000 {
+    if u64::from(out.perm.cast_unsigned()) & S_IFMT == 0o140000 {
         note(&mut report, translate(c"[socket]"));
     }
     if Buf::current().b_p_ro != 0 {

@@ -21,19 +21,14 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::buffer::DOBUF_FIRST;
-use crate::buffer::DOBUF_GOTO;
-use crate::narrow::as_index;
-use crate::narrow::float_as_int;
-use crate::narrow::len_as_int;
-use crate::narrow::number_as_int;
-use crate::narrow::number_as_lnum;
+use crate::buffer::{DOBUF_FIRST, DOBUF_GOTO, do_buffer};
+use crate::narrow::{as_index, float_as_int, len_as_int, number_as_int, number_as_lnum};
+use crate::types::api::ERROR_TYPE_EXCEPTION;
 use core::ffi::{c_int, c_uint};
 
 use super::*;
 use crate::api::private::helpers::TryState;
 use crate::api::private::helpers::{find_window_by_handle, try_enter, try_leave};
-use crate::buffer::do_buffer;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::fold::deepest_fold_nesting;
@@ -47,9 +42,9 @@ use crate::os::libc::{int64_t, size_t};
 use crate::pos::MAXCOL;
 use crate::search::FORWARD;
 use crate::types::{
-    ApiString, Boolean, ERROR_TYPE_EXCEPTION, Error, FLOAT_ANCHOR_EAST, FLOAT_ANCHOR_SOUTH,
-    FLOAT_RELATIVE_LASTSTATUS, FLOAT_RELATIVE_TABLINE, FLOAT_RELATIVE_WINDOW, Failed, Float,
-    Integer, LineNr, Pos, SwitchWin, WinConfig, WinStyle, WindowHandle,
+    ApiString, Boolean, Error, FLOAT_ANCHOR_EAST, FLOAT_ANCHOR_SOUTH, FLOAT_RELATIVE_LASTSTATUS,
+    FLOAT_RELATIVE_TABLINE, FLOAT_RELATIVE_WINDOW, Failed, Float, Integer, LineNr, Pos, SwitchWin,
+    WinConfig, WinStyle, WindowHandle,
 };
 use crate::ui::state::UI_MULTIGRID;
 use crate::ui::state::{COLUMNS, ROWS};
@@ -418,7 +413,7 @@ fn text_height(
         end_lnum,
         end_vcol,
         None,
-        INT64_MAX as int64_t,
+        i64::MAX as int64_t,
     )
 }
 

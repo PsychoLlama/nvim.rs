@@ -38,8 +38,9 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{ERROR_TYPE_EXCEPTION, ERROR_TYPE_NONE, ERROR_TYPE_VALIDATION, ErrorType};
+use super::{ERROR_TYPE_NONE, ERROR_TYPE_VALIDATION, ErrorType};
 use crate::message_fmt::to_message;
+use crate::types::api::ERROR_TYPE_EXCEPTION;
 use core::ffi::CStr;
 use core::fmt;
 use std::ffi::CString;

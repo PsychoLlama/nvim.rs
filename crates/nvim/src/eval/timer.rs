@@ -21,8 +21,7 @@
 use crate::narrow::number_as_int;
 use core::ffi::c_int;
 
-use crate::eval::typval::DictItem;
-use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{DictItem, TV_INITIAL_VALUE};
 use crate::eval::typval::{ListRef, callback_copy, callback_free, callback_put, tv_dict_alloc};
 use crate::eval::vars::clear_local;
 use crate::eval::{LAST_TIMER_ID, TIMERS, callback_call};
@@ -38,9 +37,6 @@ use crate::types::{Callback, Timer, TypVal, VarNumber};
 /// How many consecutive errors a timer's callback may raise before the
 /// timer is stopped for good.
 const MAX_ERRORS: c_int = 3;
-
-/// A freshly declared typval.
-const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// The table's key for a timer number. Timer numbers are handed to
 /// Vimscript as Numbers; a negative one names no timer.
@@ -129,7 +125,7 @@ fn timer_due_cb(id: uint64_t) {
     }
 
     let argv = [TypVal::Number(number)];
-    let mut rettv = UNSET_TV;
+    let mut rettv = TV_INITIAL_VALUE;
     let _ = callback_call(&callback, &argv, &mut rettv);
     let mut callback = callback;
     callback_free(&mut callback);

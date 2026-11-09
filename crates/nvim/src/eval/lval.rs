@@ -58,9 +58,6 @@ use crate::types::{
     Failed, LIST_LEN_UNKNOWN, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VarLock,
 };
 
-/// A freshly declared typval.
-pub(super) const UNSET_TV: TypVal = TV_INITIAL_VALUE;
-
 /// Why [`get_lval`] resolved no left-hand side.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum LvalError {
@@ -848,8 +845,8 @@ pub(crate) fn get_lval<'a>(
     };
     // The two index expressions. They outlive the walk, so a refusal
     // part-way through still releases whichever of them was evaluated.
-    let mut var1 = UNSET_TV;
-    let mut var2 = UNSET_TV;
+    let mut var1 = TV_INITIAL_VALUE;
+    let mut var2 = TV_INITIAL_VALUE;
     let walked = walk.walk(&mut var1, &mut var2);
     clear_local(&mut var1);
     clear_local(&mut var2);

@@ -15,12 +15,10 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::types::ColNr;
-use crate::types::Handle;
-use crate::types::LineNr;
+use crate::api::private::helpers::TryState;
+use crate::types::{ColNr, Handle, LineNr};
 use core::ffi::{CStr, c_int};
 
-use super::TRY_STATE_INIT;
 use crate::api::private::helpers::{try_enter, try_leave};
 use crate::autocmd::defs::AcoSave;
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
@@ -127,7 +125,7 @@ pub(crate) fn with(stack: &mut Stack) -> Result<c_int, Raise> {
     });
 
     let mut err = Error::none();
-    let mut tstate = TRY_STATE_INIT;
+    let mut tstate = TryState::INIT;
     try_enter(&mut tstate);
     {
         let mut aco = AcoSave::default();

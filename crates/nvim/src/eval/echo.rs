@@ -10,14 +10,13 @@
 )]
 
 use crate::cstr;
-use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{NumBuf, TV_INITIAL_VALUE};
 use crate::guard::Suppress;
 use crate::semsg;
 use crate::types::CmdIdx;
 use core::ffi::{CStr, c_int};
 
 use crate::eval::encode::{tv2echo_bytes, tv2string_bytes};
-use crate::eval::typval::NumBuf;
 use crate::eval::userfunc::CallStackAside;
 use crate::eval::vars::{clear_local, set_var};
 use crate::eval::{Cursor, ECHO_HL_ID, eval1, eval1_emsg};
@@ -44,9 +43,6 @@ use crate::types::{
 use crate::ui::state::UI_MESSAGES;
 use crate::ui::ui_has;
 
-/// A freshly declared typval.
-const UNSET_TV: TypVal = TV_INITIAL_VALUE;
-
 /// Does this byte end the `:echo` argument list?
 fn ends_args(c: u8) -> bool {
     matches!(c, 0 | b'|' | b'\n')
@@ -54,7 +50,7 @@ fn ends_args(c: u8) -> bool {
 
 /// `:echo` and `:echon`.
 pub fn ex_echo(excmd: &mut ExArg) {
-    let mut rettv = UNSET_TV;
+    let mut rettv = TV_INITIAL_VALUE;
     let mut atstart = true;
     let mut need_clear = true;
     let did_emsg_before = DID_EMSG.get();
@@ -139,7 +135,7 @@ pub(crate) fn get_echo_hl_id() -> c_int {
 /// one string.
 pub fn ex_execute(excmd: &mut ExArg) {
     let mut numbuf = NumBuf::new();
-    let mut rettv = UNSET_TV;
+    let mut rettv = TV_INITIAL_VALUE;
     let mut ret = Ok(());
     let mut text = Vec::<u8>::new();
     // Whether anything was appended at all: with every argument skipped

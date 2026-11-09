@@ -26,11 +26,12 @@
 )]
 
 use crate::eval::typval::DictItem;
+use crate::eval::{VARNUMBER_MAX, VARNUMBER_MIN};
 use crate::semsg;
 use core::ffi::CStr;
 
+use super::classify_table;
 use super::pop::TURN_SLOTS;
-use super::{VARNUMBER_MAX, VARNUMBER_MIN, classify_table};
 use crate::eval::decode::{decode_create_map_special_dict, decode_string};
 use crate::eval::typval::{DictRef, ListRef, tv_dict_alloc, tv_list_alloc};
 use crate::eval::userfunc::register_luafunc;

@@ -12,20 +12,17 @@
 )]
 
 use crate::narrow::const_len_as_int;
-use crate::regexp::NfaOp;
-use crate::regexp::RegCompiler;
-use crate::regexp::low_byte;
+use crate::regexp::{NfaOp, RegCompiler, low_byte};
 use core::ffi::c_int;
 
 use super::Parsed;
 use super::atom::nfa_regatom;
 use super::parse::nfa_reg;
-use crate::ascii::NUL;
-use crate::ascii::ascii_isdigit;
+use crate::ascii::{NUL, ascii_isdigit};
 use crate::mbyte::MB_MAXBYTES;
 use crate::regexp::{
-    CompileError, INT32_MAX, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, getchr, getdecchrs,
-    gethexchrs, getoctchrs, pat_byte, peekchr, re_mult_next, spelled, unmagic,
+    CompileError, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, getchr, getdecchrs, gethexchrs,
+    getoctchrs, pat_byte, peekchr, re_mult_next, spelled, unmagic,
 };
 
 use crate::winlayer::Win;
@@ -112,7 +109,7 @@ fn character_escape(rc: &mut RegCompiler, escape: u8) -> Parsed {
         b'u' => gethexchrs(rc, 4),
         _ => gethexchrs(rc, 8),
     };
-    if !(0..=i64::from(INT32_MAX)).contains(&nr) {
+    if !(0..=i64::from(i32::MAX)).contains(&nr) {
         return Err(CompileError::InvalidNumber(spelled(rc)));
     }
     // A NUL cannot be matched as itself; in a pattern it stands for a line
@@ -182,7 +179,7 @@ fn position_atom(rc: &mut RegCompiler, cmp: c_int, save_prev_at_start: c_int) ->
         if cur {
             return Err(CompileError::NumberAfterDot(low_byte(unmagic(c))));
         }
-        if n > i64::from((INT32_MAX - (c - c_int::from(b'0'))) / 10) {
+        if n > i64::from((i32::MAX - (c - c_int::from(b'0'))) / 10) {
             return Err(CompileError::PositionTooLarge);
         }
         n = n * 10 + i64::from(c - c_int::from(b'0'));
@@ -194,7 +191,7 @@ fn position_atom(rc: &mut RegCompiler, cmp: c_int, save_prev_at_start: c_int) ->
         if !cur && !got_digit {
             return Err(CompileError::MissingValue(low_byte(unmagic(c))));
         }
-        let mut limit = INT32_MAX;
+        let mut limit = i32::MAX;
         match unit {
             b'l' => {
                 if cur {
@@ -235,7 +232,7 @@ fn position_atom(rc: &mut RegCompiler, cmp: c_int, save_prev_at_start: c_int) ->
                 ));
                 // A virtual column is bounded by what a byte column can
                 // expand to.
-                limit = INT32_MAX / const_len_as_int(MB_MAXBYTES);
+                limit = i32::MAX / const_len_as_int(MB_MAXBYTES);
             }
         }
         if n >= i64::from(limit) {

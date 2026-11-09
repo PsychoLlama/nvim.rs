@@ -20,12 +20,9 @@ use super::*;
 use crate::autocmd::fire_autocmds;
 use crate::buffer::BufRef;
 use crate::guard::Suppress;
-use crate::types::CmdIdx;
-use crate::types::Handle;
+use crate::types::{CmdIdx, Handle};
 use crate::window::FR_COL;
-use crate::winfloat::WIN_CONFIG_INIT;
-use crate::winfloat::WIN_SPLIT_LEFT;
-use crate::winfloat::WIN_STYLE_MINIMAL;
+use crate::winfloat::{WIN_CONFIG_INIT, WIN_SPLIT_LEFT, WIN_STYLE_MINIMAL};
 use crate::winlayer::Buf;
 use crate::winlayer::{TabPage, Win, WinId};
 use core::ffi::c_int;
@@ -82,7 +79,7 @@ impl Opening {
         // below is asking about *this* window rather than whichever one is
         // current by then.
         let window_id = window.id();
-        if self.cmdline_offset < INT_MAX {
+        if self.cmdline_offset < c_int::MAX {
             CMDLINE_WIN.set(Some(window_id));
         }
         self.bufref = Some(BufRef::of(self.buffer));

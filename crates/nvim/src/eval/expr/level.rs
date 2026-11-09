@@ -55,10 +55,6 @@ use crate::types::{
     VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarNumber,
 };
 
-/// A freshly declared typval, which is what every level starts a second
-/// operand as.
-const UNSET_TV: TypVal = TV_INITIAL_VALUE;
-
 /// Evaluate a whole expression, which must be all that is left of `text`.
 ///
 /// Answers how far the parse got as well: the offset into `text` of the
@@ -200,7 +196,7 @@ pub(crate) fn eval1(
     result: &mut TypVal,
     evaluate: bool,
 ) -> Result<(), Failed> {
-    result.overwrite(UNSET_TV);
+    result.overwrite(TV_INITIAL_VALUE);
     eval2(cursor, result, evaluate)?;
     if cursor.byte() != b'?' {
         return Ok(());
@@ -236,7 +232,7 @@ pub(crate) fn eval1(
     cursor.skip_white();
     let first = evaluate && if op_falsy { !truthy } else { truthy };
 
-    let mut var2 = UNSET_TV;
+    let mut var2 = TV_INITIAL_VALUE;
     eval1(cursor, &mut var2, first)?;
     if !op_falsy || !truthy {
         *result = var2.take();
@@ -301,7 +297,7 @@ fn eval_logical(
     while is_op(cursor) {
         cursor.bump(2);
         cursor.skip_white();
-        let mut var2 = UNSET_TV;
+        let mut var2 = TV_INITIAL_VALUE;
         operand(cursor, &mut var2, evaluate && truthy != stop_at)?;
         if evaluate && truthy != stop_at {
             let read = tv_get_number_chk(&var2);
@@ -364,7 +360,7 @@ pub(crate) fn eval4(
 
     cursor.bump(len);
     cursor.skip_white();
-    let mut var2 = UNSET_TV;
+    let mut var2 = TV_INITIAL_VALUE;
     if eval5(cursor, &mut var2, evaluate).is_err() {
         tv_clear(result);
         return Err(Failed);
@@ -413,7 +409,7 @@ pub(crate) fn eval5(
         cursor.bump(if concat && cursor.at(1) == b'.' { 2 } else { 1 });
         cursor.skip_white();
 
-        let mut var2 = UNSET_TV;
+        let mut var2 = TV_INITIAL_VALUE;
         if eval6(cursor, &mut var2, evaluate, concat).is_err() {
             tv_clear(result);
             return Err(Failed);
@@ -453,7 +449,7 @@ pub(crate) fn eval6(
         }
         cursor.bump(1);
         cursor.skip_white();
-        let mut var2 = UNSET_TV;
+        let mut var2 = TV_INITIAL_VALUE;
         eval7(cursor, &mut var2, evaluate, false)?;
         if evaluate {
             eval_multdiv_number(result, &mut var2, op)?;

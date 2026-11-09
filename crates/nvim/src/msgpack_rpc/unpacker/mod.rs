@@ -22,6 +22,9 @@
 //! `grid_line` event would otherwise allocate an object per screen cell —
 //! and are decoded a token at a time straight into the shared line buffers.
 
+use crate::types::api::{
+    MESSAGE_TYPE_NOTIFICATION, MESSAGE_TYPE_REDRAW_EVENT, MESSAGE_TYPE_RESPONSE,
+};
 use core::ffi::c_int;
 
 use crate::api::private::dispatch::{NO_HANDLER, msgpack_rpc_get_handler_for};
@@ -31,8 +34,7 @@ use crate::memory::XString;
 use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK, Next, TokBuf, read_token};
 use crate::mpack::object::{MPACK_NOMEM, Node, Parser};
 use crate::mpack::token::{self, Kind, Tok};
-use crate::msgpack_rpc::handler::ApiDispatchFn;
-use crate::msgpack_rpc::handler::MsgpackRpcRequestHandler;
+use crate::msgpack_rpc::handler::{ApiDispatchFn, MsgpackRpcRequestHandler};
 use crate::msgpack_rpc::packer::{EXT_BUFFER, EXT_TABPAGE, EXT_WINDOW};
 use crate::narrow::msgpack_uint_as_u32;
 use crate::types::{ApiDict, ApiString, Error, Integer, KeyValuePair, MessageType, Object};
@@ -48,9 +50,6 @@ use protocol::{
     STR as TOKEN_STR, UINT as TOKEN_UINT,
 };
 
-pub const MESSAGE_TYPE_REDRAW_EVENT: MessageType = 3;
-pub const MESSAGE_TYPE_NOTIFICATION: MessageType = 2;
-pub const MESSAGE_TYPE_RESPONSE: MessageType = 1;
 pub const UNPACK_TYPE_STRING_ARRAY: c_int = -1;
 
 /// The most bytes an extension object's payload may take before it is

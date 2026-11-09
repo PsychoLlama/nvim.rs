@@ -35,16 +35,12 @@ use crate::eval::{
 };
 use crate::ex_eval::aborting;
 use crate::mbyte::head_off;
-use crate::message::E_USING_FLOAT_AS_STRING;
-use crate::message::emsg;
+use crate::message::{E_USING_FLOAT_AS_STRING, emsg};
 use crate::os::cshim::gettext;
 use crate::types::{
     Failed, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
     VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber,
 };
-
-/// A freshly declared typval.
-const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// `expr[idx]`, `expr[first : last]` or `dict.key`, with the cursor on the
 /// `[` or the `.`. Leaves the cursor after the `]` or the key.
@@ -61,8 +57,8 @@ pub(crate) fn eval_index(
 
     check_can_index(result, evaluate, verbose)?;
 
-    let mut var1 = UNSET_TV;
-    let mut var2 = UNSET_TV;
+    let mut var1 = TV_INITIAL_VALUE;
+    let mut var2 = TV_INITIAL_VALUE;
     if cursor.byte() == b'.' {
         // dict.name
         let rest = &cursor.rest()[1..];
@@ -278,7 +274,7 @@ pub(crate) fn eval_index_inner(
             // `v:_null_dict` holds no key at all. The value is copied out
             // of the item before `result` -- which owns the Dict the item
             // lives in -- is cleared.
-            let mut tmp = UNSET_TV;
+            let mut tmp = TV_INITIAL_VALUE;
             match result.dict_ref().and_then(|d| d.find(key)) {
                 Some(item) if !tv_is_luafunc(&item.di_tv) => tv_copy(&item.di_tv, &mut tmp),
                 Some(_) => return Err(Failed),

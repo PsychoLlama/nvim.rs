@@ -22,8 +22,7 @@
 )]
 
 use super::{
-    GETFILE_ERROR, GETFILE_NOT_WRITTEN, GETFILE_OPEN_OTHER, GETFILE_SAME_FILE, NODE_OTHER,
-    buf_autocmd, do_bang,
+    GETFILE_ERROR, GETFILE_NOT_WRITTEN, GETFILE_OPEN_OTHER, GETFILE_SAME_FILE, buf_autocmd, do_bang,
 };
 use crate::arglist::do_argfile;
 use crate::ascii::NUL;
@@ -49,10 +48,9 @@ use crate::guard::Suppress;
 use crate::mark::setpcmark;
 use crate::memline::swap_name_for;
 use crate::memory::XString;
-use crate::message::VIM_QUESTION;
-use crate::message::VIM_YES;
 use crate::message::state::EMSG_SILENT;
 use crate::message::{E_ARGREQ, E_BUFLOADED, E_EXISTS, E_INVARG, E_READONLY};
+use crate::message::{VIM_QUESTION, VIM_YES};
 use crate::message::{emsg, vim_dialog_yesno};
 use crate::message_fmt::msg_cstr;
 use crate::option::defs::{CpoFlag, OptionSetFlags, ShmFlag};
@@ -60,14 +58,13 @@ use crate::option::vars::{P_DIR, p_confirm, p_dir, p_wa, p_write};
 use crate::option::{cpo_has, option_part, shortmess};
 use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
+use crate::os::fs::NODE_OTHER;
 use crate::os::fs::{dir_exists, file_mkdir, os_file_is_writable, os_nodetype, path_exists};
 use crate::os::libc::int32_t;
-use crate::path::MAXPATHL;
-use crate::path::fix_fname;
+use crate::path::{MAXPATHL, fix_fname};
 use crate::semsg;
 use crate::startup::{EXITING, getout};
-use crate::types::CmdIdx;
-use crate::types::Handle;
+use crate::types::{CmdIdx, Handle};
 use crate::types::{CmdModFlags, ExArg, Failed, LineNr};
 use crate::undo::{buf_is_changed, curbuf_is_changed};
 use crate::window::check_can_set_curbuf_forceit;

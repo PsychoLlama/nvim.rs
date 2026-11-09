@@ -11,12 +11,12 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::eval::typval::{LUA_NOREF, PartialRef, partial_name};
+use crate::eval::typval::{PartialRef, partial_name};
 use crate::guard::Depth;
 use crate::lua::executor::LuaRetMode;
+use crate::lua::ffi::LUA_NOREF;
 use crate::memory::ThinCString;
-use crate::types::Array;
-use crate::types::Failed;
+use crate::types::{Array, Failed};
 use core::ffi::{CStr, c_int};
 use core::mem::ManuallyDrop;
 

@@ -21,7 +21,7 @@
 
 use super::do_sub_msg;
 use crate::cmdhist::{HIST_SEARCH, add_to_history};
-use crate::ex_cmds::{IS_ALPHA, SUB_HONOR_OPTIONS, SUB_IGNORE_CASE, SUB_MATCH_CASE, SubFlags};
+use crate::ex_cmds::{SUB_HONOR_OPTIONS, SUB_IGNORE_CASE, SUB_MATCH_CASE, SubFlags};
 use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
 use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, ex_may_print};
 use crate::global_cell::GlobalCell;
@@ -31,6 +31,7 @@ use crate::message::emsg;
 use crate::ops::do_join;
 use crate::option::magic_isset;
 use crate::option::vars::p_gd;
+use crate::os::cshim::IS_ALPHA;
 use crate::os::cshim::{ctype_bits, gettext};
 use crate::os::time::os_time;
 use crate::regexp::{RE_LAST, RE_SUBST, regtilde_owned};
@@ -279,7 +280,7 @@ pub(crate) fn skip_substitute(
 /// line's byte, which is how the ctype table upstream indexes is read.
 pub(crate) fn check_regexp_delim(c: c_int) -> Result<(), Failed> {
     // The table is indexed by the `char`'s byte: its low eight bits.
-    let isalpha = c_int::from(ctype_bits(c.to_le_bytes()[0])) & IS_ALPHA.cast_signed();
+    let isalpha = ctype_bits(c.to_le_bytes()[0]) & IS_ALPHA;
     if isalpha != 0 {
         emsg(gettext(
             c"E146: Regular expressions can't be delimited by letters",

@@ -22,6 +22,7 @@ use crate::cstr;
 use crate::option::vars::P_SLOC;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
+use core::ffi::c_int;
 use std::ffi::CString;
 
 use super::*;
@@ -105,7 +106,7 @@ pub fn showmode() -> c_int {
                 // external message UI imposes no limit of its own.
                 // `EDIT_SUBMODE_EXTRA` is preferred over `EDIT_SUBMODE`.
                 length = if ui_has(UI_MESSAGES) {
-                    INT_MAX
+                    c_int::MAX
                 } else {
                     (ROWS.get() - MSG_ROW.get()) * COLUMNS.get() - 3
                 };

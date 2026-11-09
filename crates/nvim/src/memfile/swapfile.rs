@@ -67,11 +67,11 @@ impl MemFile {
         // and it is a symlink, this is most likely an attack.
         // The file is opened close-on-exec, which upstream's
         // `os_set_cloexec` after the open made sure of a second time.
-        if flags & O_CREAT != 0 && link_exists(name) {
+        if flags & libc::O_CREAT != 0 && link_exists(name) {
             self.file = None;
             emsg(gettext(c"E300: Swap file already exists (symlink attack?)"));
         } else {
-            flags |= O_NOFOLLOW;
+            flags |= libc::O_NOFOLLOW;
             self.open_flags = flags;
             self.file = open_file(name, flags, SWAPFILE_MODE).ok();
         }
@@ -95,7 +95,7 @@ impl MemFile {
         self.file = self
             .fname
             .as_deref()
-            .and_then(|name| open_file(name, O_RDWR, 0).ok());
+            .and_then(|name| open_file(name, libc::O_RDWR, 0).ok());
         self.file.is_some()
     }
 }

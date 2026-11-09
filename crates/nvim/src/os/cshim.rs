@@ -49,6 +49,17 @@ pub(crate) fn cstr_ncasecmp(
     unsafe { strncasecmp(a.as_ptr(), b.as_ptr(), len) }
 }
 
+/// glibc's `__ctype_b_loc()` class bits, as [`ctype_bits`] answers them:
+/// the upper-case bit, the one `isupper()` reads.
+pub(crate) const IS_UPPER: ::core::ffi::c_ushort = 256;
+/// `__ctype_b_loc()`'s lower-case bit, the one `islower()` reads.
+pub(crate) const IS_LOWER: ::core::ffi::c_ushort = 512;
+/// The alphabetic bit, the one `isalpha()` reads.  Locale-dependent.
+pub(crate) const IS_ALPHA: ::core::ffi::c_ushort = 1024;
+/// The alphanumeric bit of the C library's `__ctype_b_loc()` table, the one
+/// `isalnum()` reads.  Locale-dependent by construction.
+pub(crate) const IS_ALNUM: ::core::ffi::c_ushort = 8;
+
 /// The character-class bits glibc's table holds for byte `c` in the process
 /// locale -- what `isalnum(c)` and friends test, `IS_ALNUM` and the rest.
 pub(crate) fn ctype_bits(c: u8) -> ::core::ffi::c_ushort {
@@ -732,8 +743,6 @@ pub(crate) fn unbuffer_c_stdout() {
 /// The C library's `islower()` of `byte`, under the current locale -- which
 /// in a non-C locale covers more than `a`-`z`.
 pub(crate) fn is_lower_in_locale(byte: u8) -> bool {
-    /// `__ctype_b_loc()`'s lower-case bit, the one `islower()` reads.
-    const IS_LOWER: ::core::ffi::c_ushort = 512;
     // SAFETY: glibc's table is indexed by any `unsigned char`, and the
     // pointer it answers is the thread's own and live.
     let class = unsafe { *(*__ctype_b_loc()).add(usize::from(byte)) };

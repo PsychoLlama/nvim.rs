@@ -35,7 +35,8 @@ use crate::event::libuv::{
 use crate::event::objects::Loop;
 use crate::event::objects::{RStream, Stream, stream_read_cb};
 use crate::event::stream::{Conn, close_handle, may_close, stream_init};
-use crate::event::uv::{uv_buf_t, uv_fs_t, uv_handle_t, uv_handle_type, uv_idle_t, uv_stream_t};
+use crate::event::uv::UV_TTY;
+use crate::event::uv::{uv_buf_t, uv_fs_t, uv_handle_t, uv_idle_t, uv_stream_t};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::memory::{alloc_block, free_block};
 use crate::message_fmt::{msg_addr, msg_cstr};
@@ -45,8 +46,6 @@ use crate::os::uv_error::{UV_ENOBUFS, UV_EOF};
 use core::ffi::{c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::ptr;
-
-const UV_TTY: uv_handle_type = 14;
 
 /// The size of the arena block an `RStream` reads into.
 const ARENA_BLOCK_SIZE: usize = 4096;

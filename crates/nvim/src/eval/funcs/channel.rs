@@ -25,12 +25,9 @@ use crate::eval::typval::{
 use crate::eval::userfunc::{CallStackAside, set_current_fc};
 use crate::ex_cmds::check_secure;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::lua::executor::LuaRetMode;
-use crate::lua::executor::nlua_exec_cstr;
+use crate::lua::executor::{LuaRetMode, nlua_exec_cstr};
 use crate::memory::{ThinCString, XString};
-use crate::message::E_INVARG;
-use crate::message::emsg;
-use crate::message::with_on_print;
+use crate::message::{E_INVARG, emsg, with_on_print};
 use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::channel::{client_info, rpc_call_with, rpc_send_event};
 use crate::msgpack_rpc::server::{
@@ -48,9 +45,6 @@ use crate::types::{
     VarNumber,
 };
 use core::ffi::{CStr, c_int};
-
-/// A cleared `CallbackReader`, which the option parsers fill in.
-const NO_READER: CallbackReader = CallbackReader::none();
 
 /// A cleared `Object`.
 /// The `{stream}` names `chanclose()` accepts.
@@ -418,7 +412,7 @@ pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     };
 
     let mut rpc = false;
-    let mut on_data = NO_READER;
+    let mut on_data = CallbackReader::none();
     if args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT) {
         let opts = args[2].dict_ref();
         rpc = dict_get_number(opts, b"rpc") != 0;
@@ -450,7 +444,7 @@ pub fn f_stdioopen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         emsg(gettext(E_INVARG));
         return;
     }
-    let mut on_stdin = NO_READER;
+    let mut on_stdin = CallbackReader::none();
     let rpc = dict_get_number(args[0].dict_ref(), b"rpc") != 0;
     if let Err(refused) = dict_get_callback(args[0].dict_shared(), b"on_stdin", &mut on_stdin.cb) {
         refused.report();

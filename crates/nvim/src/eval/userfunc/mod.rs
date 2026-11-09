@@ -13,6 +13,7 @@ use crate::eval::GLV_READ_ONLY;
 use crate::eval::typval::{DO_NOT_FREE_CNT, DictItem};
 use crate::ex_eval::flag::CSTP_RETURN;
 use crate::keycodes::{K_SPECIAL, KS_EXTRA};
+use crate::lua::ffi::LUA_NOREF;
 use crate::profile::{DO_PROFILING, PROF_YES};
 use core::ffi::{CStr, c_int};
 
@@ -131,7 +132,6 @@ pub const FCERR_TOOFEW: c_int = 2;
 pub const FCERR_TOOMANY: c_int = 1;
 pub const FCERR_UNKNOWN: c_int = 0;
 
-pub const LUA_NOREF: c_int = -2;
 pub const TV_CSTRING: size_t = size_t::MAX - 1;
 use crate::message::MSG_BUF_LEN;
 pub const MSG_BUF_CLEN: c_int = MSG_BUF_LEN / 6;

@@ -714,5 +714,3 @@ static NV_CMD_TABLE: [NvCmd; 188] = NV_CMDS;
 pub(crate) const NV_CMDS_SIZE: usize = NV_CMDS.len();
 static SHOWCMD_IS_CLEAR: GlobalCell<bool> = GlobalCell::new(true);
 static SHOWCMD_VISUAL: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) const INT_MAX: c_int = __INT_MAX__;
-pub(crate) const __INT_MAX__: c_int = 2147483647 as c_int;

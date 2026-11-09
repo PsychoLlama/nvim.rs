@@ -24,9 +24,7 @@ use crate::vterm::host::{
 };
 use crate::vterm::internal::VTermParserState;
 use crate::vterm::keycodes::{VTermKey, VTermModifier};
-use crate::vterm::mode;
 use crate::vterm::output::EscapeSeq;
-use crate::vterm::parser;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
 use crate::vterm::screen::ScreenRow;
 use crate::vterm::state::StateCx;
@@ -35,6 +33,7 @@ use crate::vterm::types::{
     VTermPos, VTermProp, VTermRect, VTermScreen, VTermScreenCell, VTermSelectionMask, VTermState,
     VTermState_mouse_protocol, VTermState_tmp_selection_state, VTermTerminator, VTermValueType,
 };
+use crate::vterm::{mode, parser};
 
 /// How much of the screen a single damaged cell is reported as.
 pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;
@@ -77,8 +76,11 @@ pub const SELECTION_INVALID: VTermState_tmp_selection_state = 5;
 
 /// How pointer events are encoded on the wire.
 pub const MOUSE_X10: VTermState_mouse_protocol = 0;
+/// X10 with the three bytes UTF-8 encoded, lifting the 223-column ceiling.
 pub const MOUSE_UTF8: VTermState_mouse_protocol = 1;
+/// Decimal fields plus a final `M`/`m` distinguishing press from release.
 pub const MOUSE_SGR: VTermState_mouse_protocol = 2;
+/// rxvt's decimal variant, which cannot distinguish which button was released.
 pub const MOUSE_RXVT: VTermState_mouse_protocol = 3;
 
 /// The pen attributes a consumer is told about.

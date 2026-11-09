@@ -25,10 +25,11 @@
 )]
 
 use crate::cstr;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 
-use super::{LValue, Slot, Span, Target, UNSET_TV};
+use super::{LValue, Slot, Span, Target};
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::typval::{
     BlobRef, DictRef, assign_range, blob_len, dict_is_watched, dict_watcher_notify, set_range,
@@ -50,7 +51,7 @@ fn is_compound(op: Option<u8>) -> bool {
 /// empty.
 fn stored(value: &mut TypVal, copy: bool) -> TypVal {
     if copy {
-        let mut tv = UNSET_TV;
+        let mut tv = TV_INITIAL_VALUE;
         tv_copy(value, &mut tv);
         tv
     } else {
@@ -149,7 +150,7 @@ pub(crate) fn set_var_lval(
         write_slot(lval, value, copy, op);
         return;
     };
-    let mut oldtv = UNSET_TV;
+    let mut oldtv = TV_INITIAL_VALUE;
     lval.with_slot(|tv, _| tv_copy(tv, &mut oldtv));
     write_slot(lval, value, copy, op);
     notify_key(&dict, &key, lval, &oldtv);
@@ -175,7 +176,7 @@ fn write_slot(lval: &mut LValue<'_>, value: &mut TypVal, copy: bool, op: Option<
     // and the result goes back. The slot itself stays put while the
     // operator reads the value: `:let l[0] += l` reads the List that holds
     // the slot.
-    let mut current = UNSET_TV;
+    let mut current = TV_INITIAL_VALUE;
     if lval.with_slot(|tv, _| tv_copy(tv, &mut current)).is_none() {
         return;
     }
@@ -201,7 +202,7 @@ fn add_key(dict: &DictRef, key: &[u8], value: &mut TypVal, copy: bool, op: Optio
     }
     if dict_is_watched(Some(dict)) {
         // Nothing was saved, so this is the new-key case.
-        let mut newtv = UNSET_TV;
+        let mut newtv = TV_INITIAL_VALUE;
         if let Some(item) = target.find(key) {
             tv_copy(&item.di_tv, &mut newtv);
         }
@@ -215,7 +216,7 @@ fn add_key(dict: &DictRef, key: &[u8], value: &mut TypVal, copy: bool, op: Optio
 /// Tell `dict`'s watchers that `key` changed from `oldtv` to what the slot
 /// holds now.
 fn notify_key(dict: &DictRef, key: &[u8], lval: &mut LValue<'_>, oldtv: &TypVal) {
-    let mut newtv = UNSET_TV;
+    let mut newtv = TV_INITIAL_VALUE;
     lval.with_slot(|tv, _| tv_copy(tv, &mut newtv));
     // An old value of `VAR_UNKNOWN` is how the C told a new key; a key that
     // existed always has one.
@@ -245,7 +246,7 @@ fn set_whole_var(
     }
     // A lookup that may source an autoload script, as `eval_variable` is.
     let found = with_var(name, false, |item| {
-        let mut tv = UNSET_TV;
+        let mut tv = TV_INITIAL_VALUE;
         tv_copy(&item.di_tv, &mut tv);
         (tv, item.di_flags, item.di_lock)
     });

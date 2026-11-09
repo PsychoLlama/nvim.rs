@@ -46,8 +46,7 @@
 use crate::event::libuv::{
     uv_close, uv_pipe_init, uv_recv_buffer_size, uv_timer_start, uv_timer_stop, uv_unref,
 };
-use crate::event::libuv_proc::LibuvProc;
-use crate::event::libuv_proc::free_raw_argv;
+use crate::event::libuv_proc::{LibuvProc, free_raw_argv};
 use crate::event::libuv_proc::{libuv_proc_close, libuv_proc_spawn};
 use crate::event::r#loop::{
     RawEvent, loop_children, loop_poll_events, process_events, process_events_until,
@@ -66,7 +65,6 @@ use crate::message_fmt::msg_cstr_opt;
 use crate::os::proc::os_proc_tree_kill;
 use crate::os::pty_proc_unix::PtyProc;
 use crate::os::pty_proc_unix::{pty_proc_close_master, pty_proc_flush_master, pty_proc_spawn};
-use crate::os::signal::{SIGHUP, SIGKILL, SIGTERM};
 use crate::os::time::os_hrtime;
 use crate::startup::{
     EXITING, MAIN_LOOP, UI_CLIENT_CHANNEL_ID, UI_CLIENT_EXIT_STATUS, os_exit, preserve_exit,
@@ -472,13 +470,13 @@ pub unsafe fn proc_stop(proc: *mut Proc) {
 
     if child.is_pty() {
         // Closing every stream is what sends SIGHUP to a pty child.
-        child.exit_signal = as_exit_signal(SIGHUP);
+        child.exit_signal = as_exit_signal(libc::SIGHUP);
         // SAFETY: a live child.
         unsafe { proc_close_streams(child.as_ptr()) };
         pty_proc_close_master(child.pty());
     } else {
-        child.exit_signal = as_exit_signal(SIGTERM);
-        os_proc_tree_kill(child.pid, SIGTERM);
+        child.exit_signal = as_exit_signal(libc::SIGTERM);
+        os_proc_tree_kill(child.pid, libc::SIGTERM);
     }
 
     arm_kill_timer(child);
@@ -595,11 +593,11 @@ unsafe extern "C" fn children_kill_cb(handle: *mut uv_timer_t) {
         }
         let term_sent = child.stopped_time == u64::MAX;
         if !child.is_pty() || term_sent {
-            child.exit_signal = as_exit_signal(SIGKILL);
-            os_proc_tree_kill(child.pid, SIGKILL);
+            child.exit_signal = as_exit_signal(libc::SIGKILL);
+            os_proc_tree_kill(child.pid, libc::SIGKILL);
         } else {
-            child.exit_signal = as_exit_signal(SIGTERM);
-            os_proc_tree_kill(child.pid, SIGTERM);
+            child.exit_signal = as_exit_signal(libc::SIGTERM);
+            os_proc_tree_kill(child.pid, libc::SIGTERM);
             child.stopped_time = u64::MAX;
             arm_kill_timer(child);
         }
@@ -831,7 +829,6 @@ unsafe fn on_proc_stream_close(_stream: *mut Stream, data: *mut c_void) {
 #[cfg(test)]
 mod tests {
     use super::{Proc, as_exit_signal, remove_child};
-    use crate::os::signal::{SIGHUP, SIGKILL, SIGTERM};
     use core::ptr;
 
     /// Distinct, never-dereferenced `*mut Proc` stand-ins. `remove_child`
@@ -862,9 +859,9 @@ mod tests {
 
     #[test]
     fn a_signal_number_fits_in_the_exit_signal_byte() {
-        assert_eq!(as_exit_signal(SIGHUP), 1);
-        assert_eq!(as_exit_signal(SIGKILL), 9);
-        assert_eq!(as_exit_signal(SIGTERM), 15);
+        assert_eq!(as_exit_signal(libc::SIGHUP), 1);
+        assert_eq!(as_exit_signal(libc::SIGKILL), 9);
+        assert_eq!(as_exit_signal(libc::SIGTERM), 15);
         assert_eq!(as_exit_signal(0), 0);
     }
 }

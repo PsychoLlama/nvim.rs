@@ -41,6 +41,7 @@ use crate::highlight::state::NS_HL_ACTIVE;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::{nlua_call_ref_reporting, release_luaref};
+use crate::lua::ffi::LUA_NOREF;
 use crate::message_fmt::msg_bytes;
 use crate::r#move::validate_botline_win;
 use crate::msg_schedule_semsg_multiline;
@@ -48,8 +49,7 @@ use crate::narrow::number_as_int;
 use crate::types::Handle;
 use crate::types::builders::ArrayBuf;
 use crate::types::{Array, Error, Integer, LineNr, LuaRef, NS, Object};
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 
 use core::ffi::{CStr, c_int};
 
@@ -64,8 +64,6 @@ pub(crate) const DECOR_PROVIDER_REDRAW_DISABLED: DecorProvider_state = 3;
 /// Turned off until it is registered again.
 pub(crate) const DECOR_PROVIDER_DISABLED: DecorProvider_state = 4;
 
-/// `LuaRef` value meaning "no callback".
-const LUA_NOREF: LuaRef = -2;
 /// Errors reported from one provider before it is disabled.
 const CB_MAX_ERROR: u8 = 3;
 

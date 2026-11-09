@@ -43,7 +43,6 @@ pub(super) const IEXTEN: tcflag_t = 0o100000;
 // Indices into `c_cc`.
 pub(super) const VINTR: usize = 0;
 pub(super) const VQUIT: usize = 1;
-pub(super) const VERASE: usize = 2;
 pub(super) const VKILL: usize = 3;
 pub(super) const VEOF: usize = 4;
 pub(super) const VTIME: usize = 5;
@@ -77,7 +76,7 @@ pub(super) fn default_termios() -> termios {
     let mut cc = [0 as cc_t; 32];
     cc[VINTR] = ctrl(b'C');
     cc[VQUIT] = ctrl(b'\\');
-    cc[VERASE] = 0x7f;
+    cc[libc::VERASE] = 0x7f;
     cc[VKILL] = ctrl(b'U');
     cc[VEOF] = ctrl(b'D');
     cc[VEOL] = POSIX_VDISABLE;
@@ -112,7 +111,7 @@ mod tests {
         let t = default_termios();
         assert_eq!(t.c_cc[VINTR], 0x03);
         assert_eq!(t.c_cc[VQUIT], 0x1c);
-        assert_eq!(t.c_cc[VERASE], 0x7f);
+        assert_eq!(t.c_cc[libc::VERASE], 0x7f);
         assert_eq!(t.c_cc[VKILL], 0x15);
         assert_eq!(t.c_cc[VEOF], 0x04);
         assert_eq!(t.c_cc[VSTART], 0x11);
@@ -145,8 +144,21 @@ mod tests {
     fn nothing_outside_the_named_slots_is_set() {
         let t = default_termios();
         let named = [
-            VINTR, VQUIT, VERASE, VKILL, VEOF, VTIME, VMIN, VSTART, VSTOP, VSUSP, VEOL, VREPRINT,
-            VWERASE, VLNEXT, VEOL2,
+            VINTR,
+            VQUIT,
+            libc::VERASE,
+            VKILL,
+            VEOF,
+            VTIME,
+            VMIN,
+            VSTART,
+            VSTOP,
+            VSUSP,
+            VEOL,
+            VREPRINT,
+            VWERASE,
+            VLNEXT,
+            VEOL2,
         ];
         for (i, &value) in t.c_cc.iter().enumerate() {
             if !named.contains(&i) {

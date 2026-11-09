@@ -27,6 +27,7 @@
 
 pub mod address;
 
+use crate::event::uv::UV_TCP;
 use crate::message_fmt::msg_cstr;
 use crate::os::uv_error::{UV_EACCES, UV_EADDRINUSE, UV_EINVAL, UV_ENOENT};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -46,8 +47,8 @@ use crate::event::rstream::Reader;
 use crate::event::socket::address::{SOCKET_ADDR_LEN, port_suffix, tcp_host_end};
 use crate::event::stream::{may_close, stream_init, stream_may_close};
 use crate::event::uv::{
-    addrinfo, uv_connect_t, uv_getaddrinfo_t, uv_handle_t, uv_handle_type, uv_loop_t, uv_pipe_t,
-    uv_stream_t, uv_tcp_t,
+    addrinfo, uv_connect_t, uv_getaddrinfo_t, uv_handle_t, uv_loop_t, uv_pipe_t, uv_stream_t,
+    uv_tcp_t,
 };
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, logmsg};
 use crate::memory::{xfree, xstrdup, xstrlcpy};
@@ -58,7 +59,6 @@ use crate::path::tail_index;
 use crate::startup::MAIN_LOOP;
 use ::libc::ntohs;
 
-const UV_TCP: uv_handle_type = 12;
 /// `uv_pipe_bind2`: fail on a name too long for a socket path, rather than
 /// truncating it.
 const UV_PIPE_NO_TRUNCATE: c_uint = 1;

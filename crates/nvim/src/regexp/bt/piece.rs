@@ -34,10 +34,10 @@ use crate::ascii::NUL;
 use crate::os::libc::int64_t;
 use crate::regexp::mbyte::char_at_nul;
 use crate::regexp::{
-    CompileError, Compiled, HASLOOKBH, HASNL, HASWIDTH, INT_MAX, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF,
-    MAGIC_ON, NOT_MULTI, NSUBEXP, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, REGMAGIC,
-    RF_HASNL, RF_ICASE, RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, SIMPLE, SPSTART, Spelled, WORST,
-    getchr, getdecchrs, gethexchrs, getoctchrs, peekchr, re_multi_type, read_limits, skipchr,
+    CompileError, Compiled, HASLOOKBH, HASNL, HASWIDTH, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON,
+    NOT_MULTI, NSUBEXP, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, REGMAGIC, RF_HASNL,
+    RF_ICASE, RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, SIMPLE, SPSTART, Spelled, WORST, getchr,
+    getdecchrs, gethexchrs, getoctchrs, peekchr, re_multi_type, read_limits, skipchr,
     skipchr_keepstart, spelled, unmagic,
 };
 use core::cell::Cell;
@@ -499,7 +499,7 @@ pub(crate) fn coll_get_char(rc: &mut RegCompiler) -> c_int {
         rc.cursor = start;
         nr = int64_t::from(b'\\');
     }
-    c_int::try_from(nr).unwrap_or(INT_MAX)
+    c_int::try_from(nr).unwrap_or(c_int::MAX)
 }
 
 /// The opcode of node `p` of `code`, or `None` when `p` is 0 (no node) or

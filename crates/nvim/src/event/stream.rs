@@ -31,22 +31,14 @@ use crate::event::libuv::{
     uv_pipe_init, uv_pipe_open, uv_run, uv_stream_get_write_queue_size, uv_stream_set_blocking,
 };
 use crate::event::r#loop::EventLoop;
-use crate::event::objects::Loop;
-use crate::event::objects::Stream;
-use crate::event::uv::{
-    uv_handle_t, uv_handle_type, uv_idle_t, uv_loop_t, uv_pipe_t, uv_run_mode, uv_stream_t,
-    uv_tcp_t,
-};
+use crate::event::objects::{Loop, Stream};
+use crate::event::uv::{UV_FILE, UV_NAMED_PIPE, UV_RUN_NOWAIT, UV_TTY};
+use crate::event::uv::{uv_handle_t, uv_idle_t, uv_loop_t, uv_pipe_t, uv_stream_t, uv_tcp_t};
 use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
 use crate::message_fmt::msg_addr;
 use core::ffi::{c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::ptr;
-
-const UV_NAMED_PIPE: uv_handle_type = 7;
-const UV_TTY: uv_handle_type = 14;
-const UV_FILE: uv_handle_type = 17;
-const UV_RUN_NOWAIT: uv_run_mode = 2;
 
 /// A stream, reached through the raw pointer libuv keeps in its handle's
 /// `data` field.

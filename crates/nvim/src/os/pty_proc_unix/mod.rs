@@ -30,8 +30,7 @@ mod wait_status;
 use crate::eval::typval::dict_to_env;
 use crate::event::libuv::{uv_chdir, uv_disable_stdio_inheritance, uv_pipe_open};
 use crate::event::r#loop::{loop_children, start_children_watcher};
-use crate::event::objects::Loop;
-use crate::event::objects::Proc;
+use crate::event::objects::{Loop, Proc};
 use crate::event::proc::{PROC_TYPE_PTY, proc_get_exepath, proc_init};
 use crate::event::uv::{uv_pipe_t, uv_signal_t};
 use crate::global_cell::GlobalCell;
@@ -40,7 +39,6 @@ use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::os::cshim::environ;
 use crate::os::fs::{errno_text, os_strerror, set_cloexec};
 use crate::os::libc::{speed_t, uint16_t, winsize};
-use crate::os::signal::{SIGALRM, SIGCHLD, SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGQUIT, SIGTERM};
 use crate::os::uv_error::uv_code;
 use ::libc::{
     __errno_location, _exit, SIG_DFL, cfsetispeed, cfsetospeed, close, execvp, fcntl, forkpty,
@@ -55,7 +53,6 @@ use wait_status::ChildState;
 const POLLIN: c_short = 0x1;
 const EINTR: c_int = 4;
 
-const O_NONBLOCK: c_int = 0o4000;
 const F_GETFL: c_int = 3;
 const F_SETFL: c_int = 4;
 
@@ -182,7 +179,7 @@ pub fn pty_proc_spawn(ptyproc: &mut PtyProc) -> c_int {
         // SAFETY: `pid` is this call's own child, and the status word is
         // not asked for.
         unsafe {
-            kill(pid, SIGKILL);
+            kill(pid, libc::SIGKILL);
             waitpid(pid, ptr::null_mut(), 0);
         }
         return status;
@@ -209,7 +206,7 @@ fn configure_master(ptyproc: &mut PtyProc, master: BorrowedFd<'_>) -> c_int {
         return status;
     }
     // SAFETY: as above.
-    if unsafe { fcntl(master.as_raw_fd(), F_SETFL, flags | O_NONBLOCK) } == -1 {
+    if unsafe { fcntl(master.as_raw_fd(), F_SETFL, flags | libc::O_NONBLOCK) } == -1 {
         let status = -errno();
         let what = "Failed to make master descriptor non-blocking";
         warn_errno(c"pty_proc_spawn", 205, what);
@@ -266,7 +263,7 @@ pub fn pty_proc_resize(ptyproc: &mut PtyProc, width: u16, height: u16) {
 /// not propagate SIGCONT to their own suspended children.
 pub fn pty_proc_resume(ptyproc: &PtyProc) {
     // SAFETY: signals the child's own process group.
-    unsafe { killpg(ptyproc.proc.pid, SIGCONT) };
+    unsafe { killpg(ptyproc.proc.pid, libc::SIGCONT) };
 }
 
 /// Nudge the kernel into flushing the pty master's pending work.
@@ -316,7 +313,14 @@ fn init_child(ptyproc: &PtyProc) -> ! {
     // SAFETY: this process's own session.
     unsafe { setsid() };
     // Whatever the editor was ignoring or handling, the child should not.
-    for sig in [SIGCHLD, SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGALRM] {
+    for sig in [
+        libc::SIGCHLD,
+        libc::SIGHUP,
+        libc::SIGINT,
+        libc::SIGQUIT,
+        libc::SIGTERM,
+        libc::SIGALRM,
+    ] {
         // SAFETY: the default disposition, in this process.
         unsafe { signal(sig, SIG_DFL) };
     }

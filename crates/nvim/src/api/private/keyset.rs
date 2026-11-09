@@ -22,14 +22,14 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::api::{OBJECT_TYPE_BUFFER, OBJECT_TYPE_WINDOW};
 use core::ffi::CStr;
 
 use crate::api::private::helpers::StringArray;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, Float, Handle, Integer, LuaRef, OBJECT_TYPE_ARRAY,
-    OBJECT_TYPE_BOOLEAN, OBJECT_TYPE_BUFFER, OBJECT_TYPE_DICT, OBJECT_TYPE_FLOAT,
-    OBJECT_TYPE_INTEGER, OBJECT_TYPE_LUA_REF, OBJECT_TYPE_NIL, OBJECT_TYPE_STRING,
-    OBJECT_TYPE_WINDOW, Object, ObjectType,
+    OBJECT_TYPE_BOOLEAN, OBJECT_TYPE_DICT, OBJECT_TYPE_FLOAT, OBJECT_TYPE_INTEGER,
+    OBJECT_TYPE_LUA_REF, OBJECT_TYPE_NIL, OBJECT_TYPE_STRING, Object, ObjectType,
 };
 
 /// What a keyset field holds, and so what a value for it has to arrive as.

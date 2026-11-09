@@ -42,7 +42,8 @@ use crate::event::signal::{
     signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
 };
 use crate::event::stream::stream_set_blocking;
-use crate::event::uv::{uv_file, uv_handle_t, uv_timer_t, uv_tty_mode_t};
+use crate::event::uv::{UV_RUN_DEFAULT, UV_TTY_MODE_IO};
+use crate::event::uv::{uv_file, uv_handle_t, uv_timer_t};
 use crate::global_cell::GlobalCell;
 use crate::highlight::{HlAttrFlags, HlAttrs};
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
@@ -87,12 +88,6 @@ use std::borrow::Cow;
 // --------------------------------------------------------------- the state
 
 // ----------------------------------------------------------- the constants
-
-const UV_RUN_DEFAULT: core::ffi::c_uint = 0;
-const UV_TTY_MODE_IO: uv_tty_mode_t = 2;
-
-const SIGSTOP: c_int = 19;
-const SIGWINCH: c_int = 28;
 
 /// The first entry in the highlight table: the editor's default highlight.
 pub(crate) const DEFAULT_ATTRS: HlAttrs = HlAttrs {
@@ -167,7 +162,7 @@ impl Tui {
             // looks the state up again.
             unsafe {
                 signal_watcher_init(main_loop_raw(), &raw mut tui.winch_handle, ptr::null_mut());
-                signal_watcher_start(&raw mut tui.winch_handle, Some(sigwinch_cb), SIGWINCH);
+                signal_watcher_start(&raw mut tui.winch_handle, Some(sigwinch_cb), libc::SIGWINCH);
             }
             tui_terminal_start(tui);
             // SAFETY: as above, for the startup timer.
@@ -626,7 +621,7 @@ fn tui_suspend_cb(tui: &mut TUIData) {
     stream_set_blocking(tui.input.in_fd, true);
     // Stop the whole process group, which is what returns to the shell.
     // SAFETY: signals this process's own group.
-    unsafe { kill(0, SIGSTOP) };
+    unsafe { kill(0, libc::SIGSTOP) };
     // Execution resumes here on SIGCONT. Restarting the terminal
     // re-registers its handles, which keep their addresses in the box.
     tui_terminal_start(tui);

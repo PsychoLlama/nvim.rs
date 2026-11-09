@@ -23,6 +23,7 @@ use crate::fileio::{EOL_DOS, EOL_MAC, EOL_UNIX, FileOffset};
 use crate::mbyte::canonize;
 use crate::memline::MlFlags;
 use crate::narrow::len_as_int;
+use crate::os::fs::NODE_WRITABLE;
 use crate::semsg;
 use crate::tr_plural;
 use crate::types::ColNr;
@@ -190,9 +191,7 @@ impl WriteError {
     }
 }
 
-pub const O_NOFOLLOW: ::core::ffi::c_int = ::libc::O_NOFOLLOW;
 pub const UV_FS_COPYFILE_FICLONE: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const NODE_WRITABLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 /// `'cpoptions'` "W": refuse to overwrite a read-only file even with `!`.
 pub(crate) const E_READONLY_CPO: &CStr = c"is read-only (cannot override: \"W\" in 'cpoptions')";
 
@@ -837,5 +836,3 @@ impl Buf {
         retval
     }
 }
-
-pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;

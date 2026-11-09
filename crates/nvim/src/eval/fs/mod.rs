@@ -45,7 +45,7 @@ use crate::mbyte::head_off;
 use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::os::fs::FileInfo;
+use crate::os::fs::{FileInfo, S_IFMT};
 use crate::os::fs::{
     can_execute, dir_exists, executable_path, file_info, link_info, os_file_is_readable,
     os_file_is_writable,
@@ -302,7 +302,7 @@ pub fn f_getftype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_empty(VAR_STRING);
     let named = lstat(str_arg(args, 0, &mut numbuf)).map(|info| {
         // The `S_IS*` family, spelled out.
-        match info.stat.st_mode & __S_IFMT as uint64_t {
+        match info.stat.st_mode & S_IFMT {
             0o100000 => c"file",
             0o40000 => c"dir",
             0o120000 => c"link",
@@ -332,5 +332,3 @@ pub fn f_browse(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_browsedir(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
     f_browse(args, result, fptr);
 }
-
-pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;

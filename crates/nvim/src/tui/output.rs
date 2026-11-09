@@ -27,6 +27,7 @@
 // one `uv_write` a flush makes.
 
 use crate::event::libuv::{uv_run, uv_write};
+use crate::event::uv::UV_RUN_DEFAULT;
 use crate::event::uv::{uv_buf_t, uv_stream_t, uv_write_t};
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message_fmt::msg_cstr;
@@ -346,5 +347,3 @@ fn write_out(tui: &mut TUIData, oversized: Option<&[u8]>) {
 
     tui.staging.clear();
 }
-
-const UV_RUN_DEFAULT: core::ffi::c_uint = 0;

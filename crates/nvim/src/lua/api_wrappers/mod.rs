@@ -102,6 +102,7 @@ use crate::api::keysets::{
 use crate::api::options::{
     nvim_get_all_options_info, nvim_get_option_info2, nvim_get_option_value, nvim_set_option_value,
 };
+use crate::api::private::helpers::LUA_INTERNAL_CALL;
 use crate::api::tabpage::{
     nvim_open_tabpage, nvim_tabpage_del_var, nvim_tabpage_get_number, nvim_tabpage_get_var,
     nvim_tabpage_get_win, nvim_tabpage_is_valid, nvim_tabpage_list_wins, nvim_tabpage_set_var,
@@ -148,6 +149,6 @@ use crate::lua::converter::{
     pop_string, push_array, push_boolean, push_dict, push_float, push_handle, push_integer,
     push_keydict, push_object, push_string,
 };
-use crate::lua::executor::{ActiveState, LUA_INTERNAL_CALL};
+use crate::lua::executor::ActiveState;
 use crate::lua::stack::{At, Stack};
 use crate::types::Error;

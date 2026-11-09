@@ -15,8 +15,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::buffer::DOBUF_FIRST;
-use crate::buffer::DOBUF_GOTO;
+use crate::buffer::{DOBUF_FIRST, DOBUF_GOTO};
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_split, cmdmod_set_tab};
 use crate::guard::{Allow, Suppress};
 use crate::option::defs::OptionSetFlags;
@@ -24,6 +23,7 @@ use crate::option::vars::P_ICM;
 use crate::types::{CmdLine, CmdModFlags, ExArgt};
 use crate::winlayer::{Buf, TabPage, Win, windows_in_tab};
 use crate::winlayer::{BufId, WinId};
+use core::ffi::c_int;
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
 pub fn cmdpreview_get_bufnr() -> Handle {
@@ -102,7 +102,7 @@ pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
     let mut err: Error = Error::none();
 
     // Switch to the preview buffer. C's TRY_WRAP.
-    let mut tstate: TryState = TRY_STATE_INIT;
+    let mut tstate: TryState = TryState::INIT;
     try_enter(&mut tstate);
     let result = do_buffer(
         DOBUF_GOTO,
@@ -208,7 +208,7 @@ pub(crate) fn cmdpreview_prepare(cpinfo: &mut CpInfo) {
 
             u_clearall(buf);
             // Make sure every change can be undone.
-            buf.b_p_ul = OptInt::from(INT_MAX);
+            buf.b_p_ul = OptInt::from(c_int::MAX);
         }
 
         let mut cp_wininfo = CP_WIN_INFO_INIT;
@@ -407,7 +407,7 @@ pub(crate) fn cmdpreview_may_show() -> bool {
         // show a preview and whether to open the preview window. It also
         // makes the changes and highlights the preview shows.
         let mut err: Error = Error::none();
-        let mut tstate: TryState = TRY_STATE_INIT;
+        let mut tstate: TryState = TryState::INIT;
         try_enter(&mut tstate);
         cmdpreview_type = execute_cmd(&mut ea, &cmdinfo, true);
         err.absorb(try_leave(&tstate));

@@ -24,7 +24,7 @@ use crate::charset::getdigits_int_at;
 use crate::eval::skip_expr;
 use crate::ex_cmds::skip_vimgrep_pat_at;
 use crate::ex_docmd::onecmd::shift_cmd_args;
-use crate::ex_docmd::{E_ZEROCOUNT, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, ex_msg};
+use crate::ex_docmd::{E_ZEROCOUNT, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, ex_msg};
 use crate::keycodes::CTRL_V;
 
 use crate::ascii::NUL;
@@ -107,8 +107,8 @@ pub fn set_cmd_count(excmd: &mut ExArg, count: i32, validate: bool) {
     // right-hand side itself overflows. The C wraps there, so the
     // comparison always succeeds and the answer is `INT32_MAX`. Spelled
     // as a wrapping subtraction so the debug build does not abort.
-    if excmd.line2 >= LineNr::new(INT32_MAX.wrapping_sub(count.wrapping_sub(1))) {
-        excmd.line2 = LineNr::new(INT32_MAX);
+    if excmd.line2 >= LineNr::new(i32::MAX.wrapping_sub(count.wrapping_sub(1))) {
+        excmd.line2 = LineNr::new(i32::MAX);
     } else {
         excmd.line2 += count - 1;
     }
@@ -142,7 +142,7 @@ impl ExArg<'_> {
         }
 
         let arg = self.line.arg;
-        let (n, past) = getdigits_int_at(self.line.buffer_mut(), arg, false, INT32_MAX);
+        let (n, past) = getdigits_int_at(self.line.buffer_mut(), arg, false, i32::MAX);
         let n = LineNr::new(n);
         self.line.arg = self.line.skip_white(past);
         if let Some(&(first, first_len)) = self.line.args.first() {

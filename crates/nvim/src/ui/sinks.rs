@@ -52,7 +52,7 @@ use crate::api::ui::{
 };
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrs;
-use crate::log::logmsg_tagged;
+use crate::log::{LOGLVL_DBG, logmsg_tagged};
 use crate::message_fmt::msg_cstr;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
@@ -64,7 +64,7 @@ use crate::ui_compositor::{
     ui_comp_grid_cursor_goto, ui_comp_grid_resize, ui_comp_grid_scroll, ui_comp_msg_set_pos,
     ui_comp_raw_line,
 };
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
 use super::callbacks::ui_call_event;
 
@@ -171,7 +171,6 @@ macro_rules! broadcast {
 pub(super) fn log_event(name: &'static CStr) {
     /// The log prefix every UI-event line shares, passed as the context.
     const UI_TAG: &CStr = c"UI: ";
-    const LOGLVL_DBG: c_int = 1;
 
     static SEEN: GlobalCell<usize> = GlobalCell::new(0);
     static LAST_EVENT: GlobalCell<Option<&'static CStr>> = GlobalCell::new(None);

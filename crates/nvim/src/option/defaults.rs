@@ -285,7 +285,7 @@ pub(crate) fn set_init_1(clean_arg: bool) {
 pub(crate) fn get_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptVal {
     // Running as root, 'modeline' defaults off: a modeline is arbitrary
     // code from whoever wrote the file.
-    if opt_idx == OPT_MODELINE && os_getuid() == ROOT_UID as _ {
+    if opt_idx == OPT_MODELINE && os_getuid() == ROOT_UID {
         return OFF;
     }
     if opt_flags.has(OptionSetFlags::LOCAL) && option_is_global_local(opt_idx) {

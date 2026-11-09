@@ -157,5 +157,3 @@ static Y_PREVIOUS: GlobalCell<Option<usize>> = GlobalCell::new(None);
 static E_SEARCH_PATTERN_AND_EXPRESSION_REGISTER_MAY_NOT_CONTAIN_TWO_OR_MORE_LINES:
     &::core::ffi::CStr =
     c"E883: Search pattern and expression register may not contain two or more lines";
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

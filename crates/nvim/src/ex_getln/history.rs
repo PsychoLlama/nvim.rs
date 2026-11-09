@@ -20,6 +20,7 @@ use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::keycodes::SpecialKey;
 use crate::types::Failed;
+use core::ffi::c_int;
 
 /// Step `s->hiscnt` one entry back (or forward, with `next_match`) through
 /// the history, skipping entries that do not start with what was typed.
@@ -182,7 +183,7 @@ pub(crate) fn get_list_range(
     if c == b'-' || c.is_ascii_digit() {
         let (len, num) = number(*at);
         *at += len;
-        if num > VarNumber::from(INT_MAX) {
+        if num > VarNumber::from(c_int::MAX) {
             return Err(Failed);
         }
         #[allow(clippy::cast_possible_truncation, reason = "C's `(int)` narrowing")]
@@ -198,7 +199,7 @@ pub(crate) fn get_list_range(
         let (len, num) = number(*at);
         if len > 0 {
             *at = skipwhite(*at + len);
-            if num > VarNumber::from(INT_MAX) {
+            if num > VarNumber::from(c_int::MAX) {
                 return Err(Failed);
             }
             #[allow(clippy::cast_possible_truncation, reason = "C's `(int)` narrowing")]

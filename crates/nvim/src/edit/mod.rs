@@ -146,7 +146,7 @@ use crate::options::{
     OPT_BO_FLAG_REGISTER, OPT_FDO_FLAG_ALL, OPT_FDO_FLAG_HOR, OPT_FDO_FLAG_INSERT, OPT_VE_FLAG_ALL,
     OPT_VE_FLAG_ONEMORE,
 };
-use crate::os::cshim::gettext;
+use crate::os::cshim::{IS_ALNUM, gettext};
 use crate::os::input::line_breakcheck;
 use crate::os::libc::{int32_t, int64_t, size_t};
 use crate::plines::CharsizeArg;
@@ -222,9 +222,6 @@ pub(crate) use self::state::*;
 pub(crate) use self::tab::*;
 pub(crate) use self::undo::*;
 
-/// The alphanumeric bit of the C library's `__ctype_b_loc()` table, the one
-/// `isalnum()` reads.  Locale-dependent by construction.
-pub(crate) const IS_ALNUM: ::core::ffi::c_ushort = 8;
 #[derive(Debug)]
 pub(crate) struct InsertState {
     pub mincol: ::core::ffi::c_int,

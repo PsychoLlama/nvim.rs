@@ -20,7 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::types::ColNr;
+use crate::types::{ColNr, Failed};
 use std::fs::File;
 
 use crate::autocmd::defs::AutoEvent;
@@ -36,7 +36,6 @@ use crate::bufwrite::translate;
 use super::*;
 use crate::option::defs::ShmFlag;
 use crate::path::MAXPATHL;
-use crate::types::Failed;
 
 /// `filemess` about the current buffer, with a translated note.
 fn filemess_note(fname: Option<&CStr>, note: &'static CStr) {
@@ -220,7 +219,7 @@ pub(crate) fn open_source<'a>(
     }
 
     if !how.stdin && !how.buffer && !how.fifo {
-        let kind = perm & S_IFMT;
+        let kind = u64::from(perm.cast_unsigned()) & S_IFMT;
         if perm >= 0 && kind != 0o100000 && kind != 0o10000 && kind != 0o140000 {
             // On Unix it is possible to read a directory, so check for
             // one before opening it.

@@ -23,24 +23,11 @@
 
 use crate::vterm::keycodes::VTermModifier;
 use crate::vterm::output::EscapeSeq;
+use crate::vterm::state::{MOUSE_WANT_DRAG, MOUSE_WANT_MOVE};
 use crate::vterm::types::VTerm;
+use crate::vterm::vterm::{MOUSE_RXVT, MOUSE_SGR, MOUSE_UTF8, MOUSE_X10};
 use core::ffi::{c_int, c_uint};
 use core::fmt::Write;
-
-/// The host wants motion reported while a button is held.
-const MOUSE_WANT_DRAG: c_int = 0x2;
-/// The host wants motion reported unconditionally.
-const MOUSE_WANT_MOVE: c_int = 0x4;
-
-/// The original xterm protocol: one byte each for button, column and row,
-/// biased so they land in the printable range.
-const MOUSE_X10: c_uint = 0;
-/// X10 with the three bytes UTF-8 encoded, lifting the 223-column ceiling.
-const MOUSE_UTF8: c_uint = 1;
-/// Decimal fields plus a final `M`/`m` distinguishing press from release.
-const MOUSE_SGR: c_uint = 2;
-/// rxvt's decimal variant, which cannot distinguish which button was released.
-const MOUSE_RXVT: c_uint = 3;
 
 /// Spell one mouse report, or `None` when the selected protocol cannot carry
 /// it.

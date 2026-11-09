@@ -27,10 +27,7 @@ use crate::eval::{E_STRING_LIST_OR_BLOB_REQUIRED, eval0_in_cmd};
 use crate::guard::Suppress;
 use crate::mbyte::cluster_len;
 use crate::memory::ThinCString;
-use crate::types::{ExArg, ListWatch, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber};
-
-/// A freshly declared typval.
-const UNSET_TV: TypVal = TV_INITIAL_VALUE;
+use crate::types::{ExArg, ListWatch, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber};
 
 /// One `:for` loop's iteration: its targets and what it walks.
 #[derive(Debug)]
@@ -92,7 +89,7 @@ pub(crate) fn eval_for_line(excmd: &mut ExArg, skip: bool) -> (Box<ForInfo>, boo
 
     let _skipping = skip.then(Suppress::emsg_skip);
     let at = line.skip_white(at + 2);
-    let mut tv = UNSET_TV;
+    let mut tv = TV_INITIAL_VALUE;
     if eval0_in_cmd(excmd, at, &mut tv, !skip).is_err() {
         return (info, true);
     }
@@ -112,7 +109,7 @@ pub(crate) fn eval_for_line(excmd: &mut ExArg, skip: bool) -> (Box<ForInfo>, boo
                 if tv.blob_ref().is_some() {
                     // Copied, so the loop is not affected by later changes
                     // to the Blob it was handed.
-                    let mut copy = UNSET_TV;
+                    let mut copy = TV_INITIAL_VALUE;
                     blob_copy(tv.blob_ref(), &mut copy);
                     if let Some(blob) = copy.take_blob() {
                         info.walk = Walk::Blob { blob, next: 0 };
@@ -143,7 +140,7 @@ pub(crate) fn eval_for_line(excmd: &mut ExArg, skip: bool) -> (Box<ForInfo>, boo
 /// edit the List being walked.
 pub(crate) fn next_for_item(info: &mut ForInfo, arg: &[u8]) -> bool {
     let targets = info.targets;
-    let mut value = UNSET_TV;
+    let mut value = TV_INITIAL_VALUE;
     match &mut info.walk {
         Walk::Nothing => return false,
         Walk::Blob { blob, next } => {

@@ -188,8 +188,6 @@ pub fn tinput_destroy(input: &mut TermInput) {
 /// The line discipline's erase character on `fd`, or 0 when it names none
 /// or `fd` is not a terminal.
 fn stty_erase(fd: c_int) -> u8 {
-    /// The `termios` slot holding the erase character.
-    const VERASE: usize = 2;
     // SAFETY: `tcgetattr` fills the `termios` this frame owns, and an
     // all-zero `termios` is a valid one for it to overwrite.
     let erase = unsafe {
@@ -197,7 +195,7 @@ fn stty_erase(fd: c_int) -> u8 {
         if tcgetattr(fd, &raw mut t) == -1 {
             return 0;
         }
-        t.c_cc[VERASE]
+        t.c_cc[libc::VERASE]
     };
     logmsg!(
         LOGLVL_DBG,

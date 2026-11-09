@@ -18,6 +18,7 @@ use super::*;
 use crate::api::private::helpers::find_window_by_handle;
 use crate::types::LineNr;
 use core::ffi::CStr;
+use core::ffi::c_int;
 
 // The enumerated keys' spellings, each indexed by the value it names. They
 // are the same literals `parse.rs` matches on the way in; upstream keeps
@@ -151,7 +152,7 @@ pub fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Erro
         c""
     };
     rv.relative = Some(ApiString::from_cstr(rel));
-    if config._cmdline_offset < INT_MAX {
+    if config._cmdline_offset < c_int::MAX {
         rv._cmdline_offset = Some(Integer::from(config._cmdline_offset));
     }
     Ok(rv)

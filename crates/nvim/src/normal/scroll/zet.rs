@@ -32,8 +32,8 @@ use crate::memory::XString;
 use crate::message::emsg;
 use crate::normal::defs::CmdArg;
 use crate::normal::{
-    FIND_IDENT, INT_MAX, check_clear_op, clear_op_beep, get_visual_text, ident_under_cursor,
-    nv_operator, nv_put, read_command_char, visual_active,
+    FIND_IDENT, check_clear_op, clear_op_beep, get_visual_text, ident_under_cursor, nv_operator,
+    nv_put, read_command_char, visual_active,
 };
 use crate::ops::OpType;
 use crate::option::get_sidescrolloff_value;
@@ -226,11 +226,11 @@ fn scroll_cursor_to_edge(to_left: bool) {
         let width = int64_t::from(width);
         col = if (i64::from(col) + siso) < width {
             ColNr::ZERO
-        } else if (siso - width) < i64::from(INT_MAX - col.get()) {
+        } else if (siso - width) < i64::from(c_int::MAX - col.get()) {
             // Bounded by `INT_MAX` just above.
             ColNr::new(number_as_int(i64::from(col) + siso - width + 1))
         } else {
-            ColNr::new(INT_MAX)
+            ColNr::new(c_int::MAX)
         };
     }
     if win.w_leftcol != col {

@@ -72,6 +72,7 @@ use crate::option::{
 use crate::options::OPT_FILEENCODING;
 use crate::optionstr::OptString;
 use crate::os::cshim::{gettext, ngettext};
+use crate::os::fs::S_IFMT;
 use crate::os::fs::{Directory, FileInfo};
 use crate::os::fs::{
     dir_exists, mark_stdin_cloexec, os_closedir, os_copy, os_file_is_writable, os_file_owned,
@@ -135,8 +136,6 @@ pub const EOL_UNIX: c_int = 0;
 pub const EOL_DOS: c_int = 1;
 pub const EOL_MAC: c_int = 2;
 const EOVERFLOW: c_int = ::libc::EOVERFLOW;
-/// The file-type bits of a mode.
-const S_IFMT: c_int = 0o170000;
 
 crate::flag_set! {
     /// What `readfile_named` is asked to do: upstream's `READ_*` bits.

@@ -17,6 +17,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::api::ERROR_TYPE_EXCEPTION;
 use core::ffi::c_int;
 
 use crate::api::keysets::KeyDict_xdl_diff;
@@ -28,7 +29,7 @@ use crate::lua::executor::{release_luaref, until_nul};
 use crate::lua::stack::{At, CFunction, Kind, Raise, Stack};
 use crate::lua_functions;
 use crate::message_fmt::msg_bytes_opt;
-use crate::types::{ERROR_TYPE_EXCEPTION, Error, LineNr, Object};
+use crate::types::{Error, LineNr, Object};
 use crate::xdiff::ffi::{Emit, diff_with};
 use crate::xdiff::xtypes::{
     XDF_HISTOGRAM_DIFF, XDF_IGNORE_BLANK_LINES, XDF_IGNORE_CR_AT_EOL, XDF_IGNORE_WHITESPACE,

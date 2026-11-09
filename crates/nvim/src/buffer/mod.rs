@@ -53,6 +53,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 pub(crate) mod state;
+use crate::os::cshim::gettext;
 use crate::undo::{NO_LOCAL_UNDOLEVEL, buf_is_changed};
 
 use crate::autocmd::defs::AutoEvent;
@@ -81,7 +82,6 @@ use crate::memory::XString;
 use crate::message::emsg;
 use crate::normal::end_visual_mode;
 use crate::option::shortmess;
-use crate::os::cshim::gettext;
 use crate::os::libc::uint32_t;
 use crate::syntax::reset_synblock;
 use crate::types::{
@@ -118,7 +118,6 @@ pub use self::open::*;
 pub use self::pos::*;
 pub use self::switch::*;
 pub use self::r#type::*;
-pub const IS_DIGIT: ::core::ffi::c_uint = 2048;
 pub const GETF_SWITCH: GetFileFlags = 4;
 pub const GETF_ALT: GetFileFlags = 2;
 pub const GETF_SETMARK: GetFileFlags = 1;
@@ -156,7 +155,6 @@ pub struct BufMatch {
 }
 pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
 
-pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 crate::flag_set! {
     /// What has and has not happened to a buffer -- upstream's `BF_*`, the
     /// bits `Buffer::b_flags` carries.
@@ -190,7 +188,7 @@ crate::flag_set! {
     const WRITE_MASK = 0x8 | 0x10 | 0x40;
 }
 pub const KEYMAP_INIT: ::core::ffi::c_short = 1;
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
+pub const MH_TOMBSTONE: ::core::ffi::c_uint = u32::MAX;
 #[inline(always)]
 pub fn buf_get_changedtick(buffer: Buf) -> VarNumber {
     // `b:changedtick`'s dict item is always a `VAR_NUMBER`, so the tag test
@@ -301,7 +299,6 @@ pub fn buf_valid(buffer: BufId) -> bool {
 /// null -- "the UI has never been told one".
 static LASTTITLE: GlobalCell<Option<XString>> = GlobalCell::new(None);
 static LASTICON: GlobalCell<Option<XString>> = GlobalCell::new(None);
-pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
 pub(crate) const DOBUF_LAST: DoBufStart = 2;
 
 /// The buffer's running total of one kind of extmark metadata, kept at the

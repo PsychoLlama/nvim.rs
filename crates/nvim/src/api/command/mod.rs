@@ -19,6 +19,8 @@ use crate::ex_docmd::{
     set_cmd_dflall_range, undo_cmdmod,
 };
 use crate::ex_eval::aborting;
+use crate::lua::ffi::LUA_NOREF;
+use crate::types::api::ERROR_TYPE_EXCEPTION;
 
 use crate::api::keysets::{
     KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts,
@@ -34,8 +36,8 @@ use crate::regexp::RE_MAGIC;
 use crate::register::valid_yank_reg;
 use crate::types::{
     ApiDict, ApiString, Array, BufferHandle, CmdAddr, CmdMod, CmdModFlags, CmdParseInfo, Direction,
-    ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, Error, ExArg, Integer, LuaRef,
-    OBJECT_TYPE_LUA_REF, OBJECT_TYPE_STRING, Object,
+    ERROR_TYPE_VALIDATION, Error, ExArg, Integer, LuaRef, OBJECT_TYPE_LUA_REF, OBJECT_TYPE_STRING,
+    Object,
 };
 use crate::usercmd::{
     Definition, Table, commands_array, parse_addr_type_arg, parse_compl_arg, uc_add_command,
@@ -54,4 +56,3 @@ pub(crate) use self::cmdline::*;
 pub use self::parse::*;
 pub use self::user::*;
 pub const DIRECTION_NOT_SET: Direction = 0;
-pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;

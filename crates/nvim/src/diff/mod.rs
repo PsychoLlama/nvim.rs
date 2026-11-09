@@ -59,9 +59,9 @@ use crate::fileio::{buf_check_timestamp, shorten_fnames, temp_name, vim_gettempd
 use crate::fold::{
     fold_update, fold_update_all, foldmethod_is_diff, foldmethod_is_manual, new_fold_level,
 };
+use crate::os::cshim::gettext;
 
-use crate::autocmd::defs::AcoSave;
-use crate::autocmd::defs::AutoEvent;
+use crate::autocmd::defs::{AcoSave, AutoEvent};
 use crate::diff::state::{DIFF_CONTEXT, DIFF_FOLDCOLUMN, DIFF_NEED_SCROLLBIND, NEED_DIFF_REDRAW};
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::getchar::state::KEY_TYPED;
@@ -87,7 +87,6 @@ use crate::option::defs::OptVal;
 use crate::option::vars::{p_dex, p_sbo, p_srr};
 use crate::option::{OptionTarget, set_option_direct_for, set_option_value_give_err};
 use crate::options::{OPT_BO_FLAG_OPERATOR, OPT_DIFF, OPT_FOLDMETHOD};
-use crate::os::cshim::gettext;
 use crate::os::fs::{os_chdir, os_remove};
 use crate::os::libc::{size_t, uint64_t};
 use crate::pos::{MAXCOL, MAXLNUM};
@@ -137,7 +136,6 @@ pub use self::opts::*;
 pub(crate) use self::refine::*;
 pub use self::scroll::*;
 pub use self::update::*;
-pub const IS_DIGIT: ::core::ffi::c_uint = 2048;
 /// One diff run: the two sides and the answer.
 ///
 /// `internal` picks the engine: the built-in one reads each side's `text`
@@ -233,5 +231,3 @@ pub const LBUFLEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 pub const MAX_XDIFF_SIZE: ::core::ffi::c_long =
     1024 as ::core::ffi::c_long * 1024 as ::core::ffi::c_long * 1023 as ::core::ffi::c_long;
 static DIFF_A_WORKS: GlobalCell<Option<bool>> = GlobalCell::new(None);
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

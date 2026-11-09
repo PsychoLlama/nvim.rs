@@ -21,6 +21,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::os::fs::{S_IFDIR, S_IFMT, S_IFREG};
 use std::ffi::CString;
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt as _;
@@ -28,8 +29,8 @@ use std::os::unix::fs::OpenOptionsExt as _;
 use crate::cstr;
 use crate::fileio::IoFailed;
 use crate::memline::{file_in_dir, percent_swname};
-use crate::option::split_option_part;
 use crate::option::vars::{P_BDIR, P_BEX};
+use crate::option::{cpo_has, split_option_part};
 use crate::os::fs::{
     close_file, copy_xattr, dir_exists, file_info, fsync_file, getperm, link_info, mkdir_recurse,
     path_exists,
@@ -44,13 +45,7 @@ use crate::highlight_group::HLF_E;
 use crate::message::IOSIZE;
 use crate::message::{emsg, msg};
 use crate::message_fmt::msg_cstr;
-use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
-
-/// `st_mode & S_IFMT` for a regular file.
-const S_IFREG: uint64_t = 0o100000;
-/// `st_mode & S_IFMT` for a directory.
-const S_IFDIR: uint64_t = 0o40000;
 
 /// What the pre-flight learned about the file being written over.
 #[derive(Debug)]
@@ -131,9 +126,9 @@ fn get_fileinfo_os(fname: &CStr, file_info_old: &mut FileInfo) -> Result<TargetF
     let mode = file_info_old.stat.st_mode;
     let (perm, device, newfile) = if !exists {
         (-1, false, true)
-    } else if mode & __S_IFMT as uint64_t == S_IFREG {
+    } else if mode & S_IFMT == S_IFREG {
         (file_info_old.mode(), false, false)
-    } else if mode & __S_IFMT as uint64_t == S_IFDIR {
+    } else if mode & S_IFMT == S_IFDIR {
         return Err(WriteError::IsDirectory);
     } else if os_nodetype(fname) != NODE_WRITABLE {
         return Err(WriteError::NotWritable);
@@ -278,7 +273,7 @@ fn want_backup_copy(
     };
 
     let mut options = OpenOptions::new();
-    options.create_new(true).custom_flags(O_NOFOLLOW);
+    options.create_new(true).custom_flags(libc::O_NOFOLLOW);
     let Ok(file) = open_for_write(&tmp_fname, &mut options, perm) else {
         return true; // can't write in this directory
     };
@@ -602,7 +597,7 @@ pub(crate) fn apply_patchmode(
         let mode = if perm < 0 { 0o666 } else { perm & 0o777 };
         let touched = org.as_ref().and_then(|org| {
             let mut options = OpenOptions::new();
-            options.create_new(true).custom_flags(O_NOFOLLOW);
+            options.create_new(true).custom_flags(libc::O_NOFOLLOW);
             open_for_write(org.as_cstr(), &mut options, mode).ok()
         });
         if touched.is_none() {

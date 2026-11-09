@@ -15,8 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::regexp::NfaOp;
-use crate::regexp::RegCompiler;
+use crate::regexp::{NfaOp, RegCompiler};
 use core::ffi::c_int;
 
 use super::Parsed;
@@ -24,8 +23,8 @@ use super::cursor;
 use super::equi_class::nfa_emit_equi_class;
 use crate::mbyte::utf_char2len;
 use crate::regexp::{
-    CharClass, CompileError, INT_MAX, MAGIC_OFF, NL, REGEXP_ABBR, REGEXP_INRANGE, Spelled,
-    backslash_abbr, coll_get_char, pat_byte, pat_char, pat_charlen,
+    CharClass, CompileError, MAGIC_OFF, NL, REGEXP_ABBR, REGEXP_INRANGE, Spelled, backslash_abbr,
+    coll_get_char, pat_byte, pat_char, pat_charlen,
 };
 
 use super::cursor::{
@@ -157,7 +156,7 @@ pub(crate) fn collection(
                 }
                 b'd' | b'o' | b'x' | b'u' | b'U' => {
                     startc = coll_get_char(rc);
-                    if startc == INT_MAX {
+                    if startc == c_int::MAX {
                         return Err(CompileError::CodepointTooLarge);
                     }
                     got_coll_char = true;

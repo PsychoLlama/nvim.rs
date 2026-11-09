@@ -7,6 +7,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::api::private::helpers::{LUA_INTERNAL_CALL, TryState, VIML_INTERNAL_CALL};
 use crate::api::private::helpers::{
     buf_get_text, dict_get_value, dict_set_var, find_buffer_by_handle, normalize_index, set_mark,
     try_enter, try_leave,
@@ -20,6 +21,7 @@ use crate::cursor::{check_cursor_col, check_cursor_lnum, check_visual_pos};
 use crate::decoration::MT_META_LINES;
 use crate::ex_cmds::rename_buffer;
 use crate::extmark::{BCount, extmark_splice};
+use crate::lua::ffi::LUA_NOREF;
 
 use crate::lua::executor::nlua_call_ref_reporting;
 use crate::mapping::{keymap_array, modify_keymap};
@@ -27,7 +29,6 @@ use crate::mark::{mark_adjust_buf, mark_get};
 use crate::memline::{ml_append_buf_terminated, ml_delete_buf, ml_get_buf_len, ml_replace_buf_now};
 
 use crate::api::keysets::{KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap};
-use crate::api::private::helpers::TryState;
 use crate::autocmd::defs::AcoSave;
 use crate::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
 use crate::ops::get_region_bytecount;
@@ -55,13 +56,6 @@ pub use self::lines::*;
 pub use self::marks::*;
 pub use self::props::*;
 pub use self::text::*;
-pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const INTERNAL_CALL_MASK: uint64_t = 1_u64
-    << ::core::mem::size_of::<uint64_t>()
-        .wrapping_mul(8_usize)
-        .wrapping_sub(1_usize);
-pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
-pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL.wrapping_add(1 as uint64_t);
 pub const BUF_UPDATE_CALLBACKS_INIT: BufUpdateCallbacks = BufUpdateCallbacks {
     on_lines: LUA_NOREF,
     on_bytes: LUA_NOREF,

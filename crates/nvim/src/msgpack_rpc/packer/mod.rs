@@ -20,6 +20,7 @@
 //! The encodings themselves live in [`mod@format`], which is pure and tested
 //! against fixed byte sequences.
 
+use crate::lua::ffi::LUA_NOREF;
 use core::ffi::{c_double, c_int};
 
 use crate::lua::executor::release_luaref;
@@ -150,8 +151,6 @@ impl Addressees {
         }
     }
 }
-
-pub const LUA_NOREF: c_int = -2;
 
 /// The most bytes one msgpack item's tag and inline payload can take.
 pub const MPACK_ITEM_SIZE: c_int = 9;

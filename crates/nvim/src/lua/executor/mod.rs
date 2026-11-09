@@ -31,7 +31,6 @@ use core::ffi::c_int;
 
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::lua::ffi::LUA_REFNIL;
-use crate::os::libc::uint64_t;
 use crate::types::LuaRef;
 
 mod call;
@@ -79,11 +78,6 @@ pub enum LuaRetMode {
 
 /// `call_func`'s answers: the two this module can produce.
 pub type FuncErrorType = ::core::ffi::c_uint;
-
-/// The channel id an api call made from inside the editor carries.
-const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);
-pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
-pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 
 // -- The editor-wide state --------------------------------------------------
 

@@ -154,7 +154,9 @@ pub(crate) const EDIT_STDIN: c_uint = 2;
 pub(crate) const EDIT_FILE: c_uint = 1;
 pub(crate) const EDIT_TAG: c_uint = 3;
 pub(crate) const EDIT_NONE: c_uint = 0;
+/// The default file name of each command that has one.
 pub(crate) const SESSION_FILE: &CStr = c"Session.vim";
+/// The vimrc `:version` reports as this build's system-wide one.
 pub(crate) const SYS_VIMRC_FILE: &CStr = c"$VIM/sysinit.vim";
 pub(crate) const VIMRC_FILE: &CStr = c".nvimrc";
 pub(crate) const NO_BUFFERS: c_int = 1 as c_int;

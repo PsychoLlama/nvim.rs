@@ -17,10 +17,8 @@ use crate::memory::XString;
 use crate::option::HIGHLIGHT_INIT;
 use crate::strings::has_char;
 use crate::types::Handle;
-use crate::window::Z_INDEX_FLOAT_DEFAULT;
-use crate::winfloat::ALIGN_LEFT;
-use crate::winfloat::WIN_SPLIT_LEFT;
-use crate::winfloat::WIN_STYLE_UNUSED;
+use crate::window::{Z_INDEX_FLOAT_DEFAULT, check_colorcolumn};
+use crate::winfloat::{ALIGN_LEFT, WIN_SPLIT_LEFT, WIN_STYLE_UNUSED};
 use core::ffi::{CStr, c_int, c_uint};
 
 use crate::api::win_config::parse_winborder;
@@ -53,11 +51,10 @@ use crate::state::mode::{KM_STARTSEL, KM_STOPSEL};
 use crate::types::{
     ColNr, FLOAT_RELATIVE_EDITOR, FloatAnchor, LPos, LineNr, OptInt, WinConfig, WinOpt,
 };
-use crate::window::check_colorcolumn;
 
 use super::frame::{invalid, local_window, new_bytes, new_value, old_bytes, varp, win};
 use super::{
-    COCU_ALL, E_SHOWBREAK_CONTAINS_UNPRINTABLE_OR_WIDE_CHARACTER, INT_MAX, MOUSESCROLL_HOR_DFLT,
+    COCU_ALL, E_SHOWBREAK_CONTAINS_UNPRINTABLE_OR_WIDE_CHARACTER, MOUSESCROLL_HOR_DFLT,
     MOUSESCROLL_VERT_DFLT, WW_ALL, check_chars_options, check_signcolumn, check_str_opt,
     did_set_option_listflag, did_set_statustabline_rulerformat, did_set_str_generic,
     opt_strings_mask, terminal_notify_theme,
@@ -406,7 +403,7 @@ pub(crate) fn parse_border_opt(border_opt: &CStr) -> bool {
         noautocmd: false,
         fixed: false,
         hide: false,
-        _cmdline_offset: INT_MAX,
+        _cmdline_offset: c_int::MAX,
     };
     // Whatever the call refused with is dropped rather than reported.
     parse_winborder(&mut fconfig, border_opt).unwrap_or(false)

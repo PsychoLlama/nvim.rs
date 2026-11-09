@@ -22,6 +22,7 @@
 use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
 use crate::fileio::{EOL_DOS, FileOffset, READ_NEW};
+use crate::getchar::{FLUSH_TYPEAHEAD, flush_buffers};
 use crate::memfile::{BlockNr, MIN_SWAP_PAGE_SIZE};
 use crate::path::EQUAL_FILES;
 
@@ -38,8 +39,7 @@ use crate::fileio::state::{DID_CHECK_TIMESTAMPS, NEED_CHECK_TIMESTAMPS};
 use crate::fileio::{
     buf_store_file_info, modname, readfile_named, rename_file, temp_name, vim_deltempdir,
 };
-use crate::getchar::flush_buffers;
-use crate::getchar::state::{FlushBuffers, GOT_INT};
+use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;
@@ -110,7 +110,6 @@ pub use self::lines::*;
 
 pub(crate) static INHIBIT_DELETE_COUNT: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
-pub const FLUSH_TYPEAHEAD: FlushBuffers = 1;
 pub const SEA_CHOICE_NONE: SwapExistsChoice = 0;
 pub type SwapExistsChoice = ::core::ffi::c_uint;
 pub const SEA_CHOICE_ABORT: SwapExistsChoice = 6;
@@ -143,7 +142,6 @@ pub const ML_APPEND_NEW: ::core::ffi::c_int = 1;
 /// `flags` for `ml_delete_int`: say "--No lines in buffer--" if the buffer
 /// ends up empty.
 pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
-pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const ML_CHNK_ADDLINE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const ML_CHNK_DELLINE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const ML_CHNK_UPDLINE: ::core::ffi::c_int = 3 as ::core::ffi::c_int;

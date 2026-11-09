@@ -272,6 +272,10 @@ pub type Integer = int64_t;
 pub type KeyValuePair = key_value_pair;
 pub type LuaRef = ::core::ffi::c_int;
 pub type MessageType = ::core::ffi::c_int;
+pub(crate) const MESSAGE_TYPE_NOTIFICATION: MessageType = 2;
+pub(crate) const MESSAGE_TYPE_REDRAW_EVENT: MessageType = 3;
+pub(crate) const MESSAGE_TYPE_RESPONSE: MessageType = 1;
+pub(crate) const MESSAGE_TYPE_REQUEST: MessageType = 0;
 pub type ObjectType = ::core::ffi::c_uint;
 /// The numbers [`Object`]'s variants carry, which are visible outside the
 /// editor in two places: the Lua binding recognises three of them in a

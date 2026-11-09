@@ -15,17 +15,15 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::event::objects::Loop;
-use crate::event::objects::Proc;
+use crate::event::objects::{Loop, Proc};
+use crate::event::uv::UV_UNKNOWN_HANDLE;
 use crate::event::uv::{
     UV_MUTEX_INIT, UV_RWLOCK_INIT, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t,
-    uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s,
-    uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
+    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
+    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
 };
 use crate::global_cell::SharedCell;
 use core::ffi::c_void;
-
-pub(crate) const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
 
 pub static MAIN_LOOP: SharedCell<Loop> = SharedCell::new(Loop {
     uv: uv_loop_t {

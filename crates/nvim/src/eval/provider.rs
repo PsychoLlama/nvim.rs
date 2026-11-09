@@ -64,9 +64,6 @@ pub(crate) static PROVIDER_CALLER_SCOPE: GlobalCell<CallerScope> = GlobalCell::n
 });
 pub(crate) static PROVIDER_CALL_NESTING: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
-/// A freshly declared typval.
-const UNSET_TV: TypVal = TV_INITIAL_VALUE;
-
 /// The top of the execution stack, which is where a provider records who
 /// called it.
 ///
@@ -196,7 +193,7 @@ pub fn eval_call_provider(
         TypVal::string(Some(ThinCString::from_cstr(method))),
         TypVal::list(arguments),
     ];
-    let mut rettv = UNSET_TV;
+    let mut rettv = TV_INITIAL_VALUE;
 
     let _ = call_func_with(&func, None, &mut rettv, &argvars, CallWith::at_cursor(true));
     drop(argvars);
@@ -252,7 +249,7 @@ pub fn eval_has_provider(feat: &CStr) -> bool {
     let name = feat.split(|&b| b == b'_').next().unwrap_or(feat);
     let loaded = [b"g:loaded_".as_slice(), name, b"_provider"].concat();
     let call = provider_name(name, b"Call");
-    let mut tv = UNSET_TV;
+    let mut tv = TV_INITIAL_VALUE;
 
     if eval_variable(&loaded, Some(&mut tv), false, true).is_err() {
         // Not loaded yet: sourcing any function in the provider's
@@ -329,7 +326,7 @@ pub fn prompt_invoke_callback() {
     if !Buf::current().b_prompt_callback.is_set() {
         drop(user_input);
     } else {
-        let mut rettv = UNSET_TV;
+        let mut rettv = TV_INITIAL_VALUE;
         // The array takes the input over and frees it.
         let argv = [TypVal::string(Some(user_input))];
         // A copy: the callback may replace itself, or wipe the buffer.
@@ -350,7 +347,7 @@ pub fn invoke_prompt_interrupt() -> bool {
     if !Buf::current().b_prompt_interrupt.is_set() {
         return false;
     }
-    let mut rettv = UNSET_TV;
+    let mut rettv = TV_INITIAL_VALUE;
     // The interrupt is consumed here; the callback decides what to do
     // about it.
     GOT_INT.set(false);

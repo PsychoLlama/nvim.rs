@@ -16,6 +16,8 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::channel::CHAN_STDIO;
+use crate::lua::ffi::LUA_NOREF;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
@@ -50,7 +52,6 @@ use crate::terminal::{terminal_close, terminal_set_state};
 use crate::types::{Callback, LuaRef, VarNumber};
 use crate::ui_client::ui_client_attach_to_restarted_server;
 
-use super::known::*;
 use super::reader::{callback_reader_start, schedule_channel_event};
 use super::{
     alloc_channel, channel_create_event, channel_decref, channel_destroy_early, with_channel,

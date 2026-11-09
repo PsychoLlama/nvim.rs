@@ -14,18 +14,16 @@
 )]
 
 use crate::api_error;
-use crate::eval::typval::DictItem;
-use crate::eval::typval::DictRef;
-use crate::eval::typval::ScopeDictItem;
-use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO};
+use crate::eval::typval::{DictItem, DictRef, ScopeDictItem, TV_INITIAL_VALUE};
 use crate::eval::typval::{
     dict_find, dict_is_watched, dict_watcher_notify, tv_clear, tv_copy, tv_dict_item_remove,
 };
 use crate::eval::vars::{VvarStore, before_set_vvar, vimvar_dict};
 use crate::os::libc::size_t;
 use crate::types::TypVal;
-use crate::types::{ApiString, ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, Error, Object};
+use crate::types::api::ERROR_TYPE_EXCEPTION;
+use crate::types::{ApiString, ERROR_TYPE_VALIDATION, Error, Object};
 use core::ffi::c_int;
 
 // -- Vimscript dictionaries ------------------------------------------------

@@ -15,23 +15,24 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::api::private::helpers::{LUA_INTERNAL_CALL, TryState};
 use crate::eval::userfunc::MAX_FUNC_ARGS;
+use crate::types::api::ERROR_TYPE_EXCEPTION;
 use core::ffi::{CStr, c_int};
 
-use super::{LUA_INTERNAL_CALL, nlua_is_deferred_safe, viml_func_is_fast};
+use super::{nlua_is_deferred_safe, viml_func_is_fast};
 use crate::api::private::helpers::{api_set_sctx, try_enter, try_leave};
 use crate::api_error;
 use crate::eval::typval::{CallFrame, TV_INITIAL_VALUE, tv_clear};
 use crate::eval::userfunc::{CallWith, call_func_with};
 use crate::ex_eval::state::{DID_THROW, FORCE_ABORT, SUPPRESS_ERRTHROW};
-use crate::ex_getln::TRY_STATE_INIT;
 use crate::lua::converter::{pop_object, pop_typval, push_object, push_typval};
 use crate::lua::stack::{At, Raise, Stack};
 use crate::message::E_FAST_API_DISABLED;
 use crate::message::state::DID_EMSG;
 use crate::msgpack_rpc::channel::{rpc_call_with, rpc_send_event};
 use crate::narrow::len_as_int;
-use crate::types::{ERROR_TYPE_EXCEPTION, ERROR_TYPE_VALIDATION, Error};
+use crate::types::{ERROR_TYPE_VALIDATION, Error};
 
 /// How much of a rejected function's name the "not allowed in a fast event"
 /// message quotes.
@@ -135,7 +136,7 @@ fn convert_and_call(
     let mut rettv = TV_INITIAL_VALUE;
     let mut err = Error::none();
     let sctx = api_set_sctx(LUA_INTERNAL_CALL);
-    let mut tstate = TRY_STATE_INIT;
+    let mut tstate = TryState::INIT;
     try_enter(&mut tstate);
     let _ = call_func_with(
         name,

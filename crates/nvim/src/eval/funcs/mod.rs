@@ -15,8 +15,6 @@
 
 use crate::channel::defs::ChannelPart;
 use crate::env::XDGVarType;
-use crate::event::objects::ProcType;
-use crate::os::libc::uint64_t;
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash
 /// lookup over their names. Regenerate with `just apigen`.
@@ -76,7 +74,6 @@ pub use self::strings::*;
 pub use self::timer::*;
 pub use self::variables::*;
 pub use self::wrappers::*;
-pub const PROC_TYPE_PTY: ProcType = 1;
 pub const CHANNEL_PART_ALL: ChannelPart = 4;
 pub const CHANNEL_PART_RPC: ChannelPart = 3;
 pub const CHANNEL_PART_STDERR: ChannelPart = 2;
@@ -96,19 +93,9 @@ pub const XDG_STATE_HOME: XDGVarType = 3;
 pub const XDG_CACHE_HOME: XDGVarType = 2;
 pub const XDG_DATA_HOME: XDGVarType = 1;
 pub const XDG_CONFIG_HOME: XDGVarType = 0;
-pub const INT64_MIN: ::core::ffi::c_long =
-    -9223372036854775807 as ::core::ffi::c_long - 1 as ::core::ffi::c_long;
-pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
-pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const INTERNAL_CALL_MASK: uint64_t = 1_u64
-    << ::core::mem::size_of::<uint64_t>()
-        .wrapping_mul(8_usize)
-        .wrapping_sub(1_usize);
-pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 static E_STRING_LIST_OR_BLOB_REQUIRED: &::core::ffi::CStr = c"E1098: String, List or Blob required";
 static E_MISSING_FUNCTION_ARGUMENT: &::core::ffi::CStr = c"E1132: Missing function argument";
-pub const SIGINT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 
 #[cfg(test)]
 mod arity_audit {

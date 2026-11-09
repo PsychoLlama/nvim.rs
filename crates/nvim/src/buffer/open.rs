@@ -25,16 +25,15 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::autocmd::defs::AutoEvent;
-use crate::ex_cmds::EcmdFlags;
-use crate::ex_cmds::newlnum;
-use crate::memline::MlFlags;
+use crate::autocmd::defs::{AcoSave, AutoEvent};
+use crate::ex_cmds::{EcmdFlags, newlnum};
+use crate::memline::{MlFlags, ml_open};
 use crate::narrow::number_as_int;
+use crate::os::fs::{S_IFMT, getperm};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use super::*;
-use crate::autocmd::defs::AcoSave;
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::change::{changed, save_file_ff};
 use crate::charset::buf_init_chartab;
@@ -43,12 +42,10 @@ use crate::getchar::state::GOT_INT;
 use crate::help::get_local_additions;
 use crate::indent_c::parse_cino;
 use crate::memfile::MfDirty;
-use crate::memline::ml_open;
 use crate::r#move::WinValid;
 use crate::option::defs::{CpoFlag, OptVal, OptionSetFlags, ShmFlag};
 use crate::option::{cpo_has, set_option_value_give_err};
 use crate::options::{OPT_BUFHIDDEN, OPT_BUFTYPE, OPT_SWAPFILE};
-use crate::os::fs::getperm;
 use crate::os::libc::int64_t;
 use crate::pos::MAXLNUM;
 use crate::startup::{READONLYMODE, V_DYING, getout};
@@ -353,7 +350,10 @@ fn open_buffer_inner(
         let perm = buf.name.full().map_or(-1, getperm);
         // `S_ISFIFO(perm) || S_ISSOCK(perm)`; the literals stay literals so
         // that ffigen does not export them as new C declarations.
-        if perm >= 0 && (perm & __S_IFMT == 0o10000 || perm & __S_IFMT == 0o140000) {
+        if perm >= 0
+            && (u64::from(perm.cast_unsigned()) & S_IFMT == 0o10000
+                || u64::from(perm.cast_unsigned()) & S_IFMT == 0o140000)
+        {
             read_fifo = true;
         }
         if read_fifo {

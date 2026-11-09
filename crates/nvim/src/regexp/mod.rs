@@ -222,7 +222,6 @@ pub(crate) struct RegBehind {
 }
 pub const BACKTRACKING_ENGINE: c_uint = 1;
 pub const NFA_ENGINE: c_uint = 2;
-pub const INT32_MAX: c_int = 2147483647;
 pub const REGMAGIC: c_int = 0o234;
 pub const MAX_LIMIT: c_int = 32767 << 16;
 const E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN: &CStr =
@@ -302,7 +301,6 @@ pub enum PimResult {
     NoMatch,
 }
 pub const ADDSTATE_HERE_OFFSET: c_int = 10;
-pub const INT_MAX: c_int = __INT_MAX__;
 pub const RE_MAGIC: ::core::ffi::c_int = 1;
 pub const RE_STRING: ::core::ffi::c_int = 2;
 pub const RE_STRICT: ::core::ffi::c_int = 4;
@@ -311,7 +309,6 @@ pub const RE_NOBREAK: ::core::ffi::c_int = 16;
 pub const REX_SET: c_int = 1;
 pub const REX_USE: c_int = 2;
 pub const REX_ALL: c_int = REX_SET | REX_USE;
-pub const __INT_MAX__: c_int = 2147483647;
 
 pub type Magic = ::core::ffi::c_uint;
 pub type OptMagic = ::core::ffi::c_uint;

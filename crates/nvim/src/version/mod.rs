@@ -17,8 +17,9 @@
 mod vim_patches;
 
 use crate::env::{DEFAULT_VIM_DIR, DEFAULT_VIMRUNTIME_DIR};
-use crate::lua::executor::LuaRetMode;
+use crate::lua::executor::{LuaRetMode, nlua_exec};
 use crate::narrow::len_as_int;
+use crate::startup::{SYS_VIMRC_FILE, starting};
 use crate::types::Handle;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
@@ -33,21 +34,18 @@ use crate::getchar::state::GOT_INT;
 use crate::grid::{default_gridview, grid_line_flush, grid_line_puts, grid_line_start};
 use crate::highlight::namespace::hl_attr;
 use crate::highlight_group::{HLF_8, syn_id2attr, syn_name2id};
-use crate::lua::executor::nlua_exec;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::message::state::MSG_COL;
 use crate::message::{msg_ext_set_kind, msg_putchar, msg_str};
 use crate::option::defs::ShmFlag;
 use crate::option::vars::{P_SHM, p_ls, p_verbose};
 use crate::os::cshim::gettext;
-use crate::startup::starting;
 use crate::types::{Array, ExArg, OptInt};
 use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::state::{UI_MESSAGES, UI_MULTIGRID};
 use crate::ui::ui_has;
 use crate::window::{LOWEST_WIN_ID, one_window};
-use crate::winlayer::current_topframe;
-use crate::winlayer::first_window;
+use crate::winlayer::{current_topframe, first_window};
 
 pub(crate) const NVIM_VERSION_MAJOR: c_int = 0;
 pub(crate) const NVIM_VERSION_MINOR: c_int = 12;
@@ -69,9 +67,6 @@ const BUILD_LINE: &CStr = terminated(concat!(
     env!("NVIM_RS_RUSTC"),
     "\0"
 ));
-
-/// The vimrc `:version` reports as this build's system-wide one.
-const SYS_VIMRC_FILE: &CStr = c"$VIM/sysinit.vim";
 
 /// A `&'static CStr` from a `concat!`-assembled literal that ends in a NUL.
 /// Wrong input is a compile error, which is the point: everything here is

@@ -35,14 +35,14 @@ use crate::types::{Failed, Float, TypVal, VAR_FLOAT, VarNumber};
 pub(crate) fn num_divide(n1: VarNumber, n2: VarNumber) -> VarNumber {
     if n2 == 0 {
         if n1 == 0 {
-            VARNUMBER_MIN as VarNumber
+            VARNUMBER_MIN
         } else if n1 < 0 {
-            -(VARNUMBER_MAX as VarNumber)
+            -(VARNUMBER_MAX)
         } else {
-            VARNUMBER_MAX as VarNumber
+            VARNUMBER_MAX
         }
-    } else if n1 == VARNUMBER_MIN as VarNumber && n2 == -1 {
-        VARNUMBER_MAX as VarNumber
+    } else if n1 == VARNUMBER_MIN && n2 == -1 {
+        VARNUMBER_MAX
     } else {
         n1 / n2
     }

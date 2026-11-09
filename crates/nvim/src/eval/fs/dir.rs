@@ -40,14 +40,12 @@ use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{change_dir, vim_mkdir_emsg};
 use crate::fileio::{delete_recursive, rename_file, temp_name, vim_copyfile};
 use crate::memory::ThinCString;
-use crate::message::E_INVARG;
-use crate::message::emsg;
+use crate::message::{E_INVARG, emsg};
 use crate::message_fmt::{msg_cstr, msg_cstr_opt};
-use crate::narrow::len_as_int;
-use crate::narrow::number_as_int;
+use crate::narrow::{len_as_int, number_as_int};
 use crate::os::cshim::gettext;
+use crate::os::fs::{S_IFLNK, S_IFMT, S_IFREG};
 use crate::os::fs::{current_dir, link_info, mkdir_recurse, os_remove, os_rmdir};
-use crate::os::libc::uint64_t;
 use crate::path::MAXPATHL;
 use crate::path::{full_name_save, tail_index};
 use crate::semsg;
@@ -303,10 +301,8 @@ pub fn f_filecopy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let from = str_arg(args, 0, &mut numbuf);
     // `S_ISREG` and `S_ISLNK`: only a plain file or a symlink is copied.
-    const S_IFREG: uint64_t = 0o100000;
-    const S_IFLNK: uint64_t = 0o120000;
     let copyable = link_info(from).is_some_and(|info| {
-        let kind = info.stat.st_mode & super::__S_IFMT as uint64_t;
+        let kind = info.stat.st_mode & S_IFMT;
         kind == S_IFREG || kind == S_IFLNK
     });
     if copyable {

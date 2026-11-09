@@ -14,10 +14,8 @@
 )]
 
 use crate::cstr;
-use crate::eval::VARNUMBER_MAX;
-use crate::eval::VARNUMBER_MIN;
-use crate::eval::typval::DI_FLAGS_FIX;
-use crate::eval::typval::DI_FLAGS_RO;
+use crate::eval::typval::{DI_FLAGS_FIX, DI_FLAGS_RO, DictKey, PartialRef};
+use crate::eval::{VARNUMBER_MAX, VARNUMBER_MIN};
 use crate::memory::ThinCString;
 use crate::narrow::len_as_integer;
 use crate::os::env::{ENV_STARTREASON, env_exists, env_unset, getenv_owned};
@@ -25,14 +23,10 @@ use core::ffi::CStr;
 use core::ffi::c_int;
 
 use super::*;
-use crate::eval::typval::DictKey;
-use crate::eval::typval::PartialRef;
 use crate::eval::typval::{DictRef, ListRef};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use crate::types::Failed;
-use crate::types::MessagePackType;
-use crate::types::Refcount;
+use crate::types::{Failed, MessagePackType, Refcount};
 
 /// Build the `g:` and `v:` scopes and give the `v:` variables their first
 /// values.  Called once, at startup.
@@ -83,7 +77,7 @@ pub fn evalvars_init() {
     // another row, so the table's order is the source's only.
     let numbersize = len_as_integer(::core::mem::size_of::<VarNumber>() * 8);
     for (idx, n) in [
-        (Vv::Stderr, VarNumber::from(CHAN_STDERR)),
+        (Vv::Stderr, CHAN_STDERR.cast_signed()),
         (Vv::Searchforward, 1),
         (Vv::Hlsearch, 1),
         (Vv::Count1, 1),

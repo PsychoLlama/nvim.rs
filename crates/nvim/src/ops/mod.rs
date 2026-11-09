@@ -83,6 +83,7 @@ use crate::option::{
     callback_from_option, get_equalprg, get_fileformat, get_ve_flags, install_callback,
 };
 use crate::options::{OPT_BO_FLAG_OPERATOR, OPT_VE_FLAG_ALL, OPT_VE_FLAG_ONEMORE};
+use crate::os::cshim::{IS_ALPHA, IS_UPPER};
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::{line_breakcheck, os_breakcheck};
 use crate::os::libc::{int32_t, int64_t, size_t, ssize_t};
@@ -135,14 +136,6 @@ pub use self::optype::*;
 pub use self::pending::*;
 pub(crate) use self::replace::*;
 pub use self::shift::*;
-
-/// `IS_ALPHA` and `IS_UPPER` from the C library's `__ctype_b_loc` table.
-///
-/// `isalpha`/`isupper` are locale-dependent, which is why `do_addsub` uses
-/// them rather than `ascii_isalpha`: the case of a hex digit follows the
-/// user's locale.
-pub const IS_ALPHA: ::core::ffi::c_ushort = 1024;
-pub const IS_UPPER: ::core::ffi::c_ushort = 256;
 
 /// `CmdArg::retval`: normal mode must not act on what the operator left.
 pub const CA_COMMAND_BUSY: ::core::ffi::c_int = 1;

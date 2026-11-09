@@ -30,6 +30,7 @@ use crate::deref::deref_to_field;
 use crate::ex_eval::defs::ExcId;
 use crate::narrow::{number_as_int, number_as_lnum};
 use crate::runtime::{SID_API_CLIENT, SID_LUA, script_is_lua};
+use crate::types::api::ERROR_TYPE_EXCEPTION;
 use crate::types::{ColNr, LineNr};
 use core::ffi::{CStr, c_int};
 
@@ -47,9 +48,7 @@ use crate::message::state::DID_EMSG;
 use crate::os::libc::uint64_t;
 use crate::pos::MAXCOL;
 use crate::runtime::state::CURRENT_SCTX;
-use crate::types::{
-    ApiString, BufferHandle, ERROR_TYPE_EXCEPTION, Error, Integer, Pos, TabpageHandle, WindowHandle,
-};
+use crate::types::{ApiString, BufferHandle, Error, Integer, Pos, TabpageHandle, WindowHandle};
 use crate::winlayer::{self, Buf, TabPage, Win};
 
 mod keydict;
@@ -69,9 +68,9 @@ const CAR: u8 = b'\r';
 
 /// Channel ids with the top bit set are not channels at all: they mark a call
 /// nvim made of itself, from Vimscript or from Lua.
-const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);
-const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
-const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
+pub(crate) const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);
+pub(crate) const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
+pub(crate) const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 
 use crate::api::private::validate::{Bad, err_bad_number, err_invalid};
 use crate::api_error;

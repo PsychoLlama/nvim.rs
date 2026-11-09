@@ -15,6 +15,7 @@ use crate::api::keysets::{
     KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
     KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime,
 };
+use crate::api::private::helpers::INTERNAL_CALL_MASK;
 use crate::api::private::helpers::{
     api_metadata, api_set_sctx, api_typename, dict_get_value, dict_set_var, find_buffer_by_handle,
     find_window_by_handle, get_default_stl_hl, parse_hl_msg, set_mark, string_to_array,
@@ -68,6 +69,7 @@ use crate::keycodes::{REPTERM_DO_LT, REPTERM_FROM_PART, REPTERM_NO_SPECIAL};
 use crate::keycodes::{name_to_mod_mask, replace_termcodes};
 use crate::log::{G_STATS, LOGLVL_DBG};
 use crate::lua::executor::{nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe};
+use crate::lua::ffi::LUA_NOREF;
 use crate::lua::state::TSLUA_QUERY_PARSE_COUNT;
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::mark_get_global;
@@ -112,10 +114,11 @@ use crate::terminal::{
     buf_terminal_running, buf_terminal_set_streamed_paste, terminal_alloc, terminal_buf,
     terminal_check_size, terminal_destroy, terminal_open,
 };
+use crate::types::api::ERROR_TYPE_EXCEPTION;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, BufferHandle, CD_SCOPE_GLOBAL, ERROR_TYPE_EXCEPTION,
-    ERROR_TYPE_VALIDATION, Error, Float, Handle, Integer, LineNr, LuaRef, MessageType,
-    OBJECT_TYPE_STRING, Object, ScreenChar, ScriptId, TabpageHandle, VarNumber, Vv, WindowHandle,
+    ApiDict, ApiString, Array, Boolean, BufferHandle, CD_SCOPE_GLOBAL, ERROR_TYPE_VALIDATION,
+    Error, Float, Handle, Integer, LineNr, LuaRef, OBJECT_TYPE_STRING, Object, ScreenChar,
+    ScriptId, TabpageHandle, VarNumber, Vv, WindowHandle,
 };
 use crate::ui::state::COLUMNS;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
@@ -152,12 +155,7 @@ pub use self::runtime::*;
 pub use self::statusline::*;
 pub use self::term::*;
 pub use self::vars::*;
-pub const MESSAGE_TYPE_NOTIFICATION: MessageType = 2;
 pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
-pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-/// The top bit of a channel id: an API call made by the editor itself
-/// rather than by a client.
-pub const INTERNAL_CALL_MASK: uint64_t = 1 << (::core::mem::size_of::<uint64_t>() * 8 - 1);
 #[inline(always)]
 fn is_internal_call(channel_id: uint64_t) -> bool {
     channel_id & INTERNAL_CALL_MASK != 0

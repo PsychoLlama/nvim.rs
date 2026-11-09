@@ -45,16 +45,6 @@ use std::os::unix::fs::OpenOptionsExt;
 /// Size of the block a [`BufferedFile`] buffers through.
 pub(crate) const BLOCK_BYTES: usize = 4096;
 
-/// `open(2)` flags.
-const O_RDONLY: c_int = 0;
-const O_WRONLY: c_int = 0o1;
-const O_ACCMODE: c_int = 0o3;
-const O_CREAT: c_int = 0o100;
-const O_EXCL: c_int = 0o200;
-const O_TRUNC: c_int = 0o1000;
-const O_APPEND: c_int = 0o2000;
-const O_NOFOLLOW: c_int = 0o400000;
-
 /// The `flags` argument of [`BufferedFile::open`].
 pub type FileOpenFlags = c_uint;
 pub const FILE_READ_ONLY: FileOpenFlags = 1;
@@ -100,33 +90,33 @@ fn code_as_signed(code: c_int) -> ptrdiff_t {
 fn open_flags(flags: FileOpenFlags) -> c_int {
     let mut oflags = 0;
     if has(flags, FILE_WRITE_ONLY) {
-        oflags |= O_WRONLY;
+        oflags |= libc::O_WRONLY;
     }
     if has(flags, FILE_CREATE_ONLY) {
-        oflags |= O_CREAT | O_EXCL | O_WRONLY;
+        oflags |= libc::O_CREAT | libc::O_EXCL | libc::O_WRONLY;
     }
     if has(flags, FILE_CREATE) {
         debug_assert!(!has(flags, FILE_CREATE_ONLY));
-        oflags |= O_CREAT | O_WRONLY;
+        oflags |= libc::O_CREAT | libc::O_WRONLY;
     }
     if has(flags, FILE_TRUNCATE) {
         debug_assert!(!has(flags, FILE_CREATE_ONLY));
-        oflags |= O_TRUNC | O_WRONLY;
+        oflags |= libc::O_TRUNC | libc::O_WRONLY;
     }
     if has(flags, FILE_APPEND) {
         debug_assert!(!has(flags, FILE_CREATE_ONLY));
-        oflags |= O_APPEND | O_WRONLY;
+        oflags |= libc::O_APPEND | libc::O_WRONLY;
     }
     if has(flags, FILE_READ_ONLY) {
         debug_assert!(!has(flags, WRITING));
-        oflags |= O_RDONLY;
+        oflags |= libc::O_RDONLY;
     }
     if has(flags, FILE_NO_SYMLINK) {
-        oflags |= O_NOFOLLOW;
+        oflags |= libc::O_NOFOLLOW;
     }
     if has(flags, FILE_MK_DIR) {
         debug_assert!(!has(flags, FILE_CREATE_ONLY));
-        oflags |= O_CREAT | O_WRONLY;
+        oflags |= libc::O_CREAT | libc::O_WRONLY;
     }
     oflags
 }
@@ -208,13 +198,13 @@ impl BufferedFile {
             file_mkdir(fname, 0o755)?;
         }
         let oflags = open_flags(flags);
-        let writing = oflags & O_ACCMODE != O_RDONLY;
+        let writing = oflags & libc::O_ACCMODE != libc::O_RDONLY;
         // The access mode is the `read`/`write` pair; every other flag goes
         // through as it is, `O_CLOEXEC` added as libuv adds it.
         let file = OpenOptions::new()
             .read(!writing)
             .write(writing)
-            .custom_flags(oflags & !O_ACCMODE)
+            .custom_flags(oflags & !libc::O_ACCMODE)
             .mode(mode.cast_unsigned())
             .open(OsStr::from_bytes(fname.to_bytes()))
             .map_err(|error| uv_code(&error))?;
@@ -548,8 +538,8 @@ mod tests {
 
     #[test]
     fn read_only_flags_are_the_default() {
-        assert_eq!(open_flags(0), O_RDONLY);
-        assert_eq!(open_flags(FILE_READ_ONLY), O_RDONLY);
+        assert_eq!(open_flags(0), libc::O_RDONLY);
+        assert_eq!(open_flags(FILE_READ_ONLY), libc::O_RDONLY);
     }
 
     #[test]
@@ -562,25 +552,31 @@ mod tests {
             FILE_APPEND,
             FILE_MK_DIR,
         ] {
-            assert_ne!(open_flags(bit) & O_WRONLY, 0, "{bit:#x}");
+            assert_ne!(open_flags(bit) & libc::O_WRONLY, 0, "{bit:#x}");
         }
     }
 
     #[test]
     fn create_only_is_exclusive_create() {
-        assert_eq!(open_flags(FILE_CREATE_ONLY), O_CREAT | O_EXCL | O_WRONLY);
+        assert_eq!(
+            open_flags(FILE_CREATE_ONLY),
+            libc::O_CREAT | libc::O_EXCL | libc::O_WRONLY
+        );
         // Plain kFileCreate opens an existing file instead of failing.
-        assert_eq!(open_flags(FILE_CREATE), O_CREAT | O_WRONLY);
+        assert_eq!(open_flags(FILE_CREATE), libc::O_CREAT | libc::O_WRONLY);
     }
 
     #[test]
     fn flags_accumulate() {
         assert_eq!(
             open_flags(FILE_CREATE | FILE_TRUNCATE | FILE_NO_SYMLINK),
-            O_CREAT | O_TRUNC | O_WRONLY | O_NOFOLLOW
+            libc::O_CREAT | libc::O_TRUNC | libc::O_WRONLY | libc::O_NOFOLLOW
         );
         // Non-blocking is a property of the buffered file, not an open flag.
-        assert_eq!(open_flags(FILE_READ_ONLY | FILE_NON_BLOCKING), O_RDONLY);
+        assert_eq!(
+            open_flags(FILE_READ_ONLY | FILE_NON_BLOCKING),
+            libc::O_RDONLY
+        );
     }
 
     #[test]

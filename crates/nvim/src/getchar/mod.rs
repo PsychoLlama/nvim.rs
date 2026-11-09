@@ -9,6 +9,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 pub mod state;
+use crate::api::private::helpers::{INTERNAL_CALL_MASK, LUA_INTERNAL_CALL};
 use crate::api::vim::nvim_paste;
 use crate::ascii::ascii_iswhite;
 use crate::debugger::state::DEBUG_DID_MSG;
@@ -168,11 +169,6 @@ pub(crate) enum MapResult {
     NoMatch,
 }
 pub const KEYLEN_PART_MAP: ::core::ffi::c_int = -2;
-/// The top bit of a channel id, which no real channel has: a call that
-/// carries it came from inside nvim rather than over a channel.
-pub const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);
-pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
-pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 
 /// Whether `channel_id` names an internal caller rather than a channel.
 fn is_internal_call(channel_id: uint64_t) -> bool {
@@ -196,3 +192,4 @@ static E_CMD_MAPPING_MUST_END_WITH_CR: &::core::ffi::CStr =
 static E_CMD_MAPPING_MUST_END_WITH_CR_BEFORE_SECOND_CMD: &::core::ffi::CStr =
     c"E1136: <Cmd> mapping must end with <CR> before second <Cmd>";
 pub const K_SELECT_STRING: &::core::ffi::CStr = c"\x80\xF5X";
+pub(crate) const FLUSH_TYPEAHEAD: FlushBuffers = 1;

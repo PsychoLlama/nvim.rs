@@ -38,6 +38,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::lua::ffi::LUA_NOREF;
 use core::ffi::{CStr, c_int};
 
 use crate::channel::defs::{
@@ -67,23 +68,20 @@ use std::os::fd::AsFd as _;
 /// namespace the unit-test header generator collects constants into.
 mod known {
     use super::ChannelPart;
-    use core::ffi::c_int;
 
     pub(super) const CHANNEL_PART_STDIN: ChannelPart = 0;
     pub(super) const CHANNEL_PART_STDOUT: ChannelPart = 1;
     pub(super) const CHANNEL_PART_STDERR: ChannelPart = 2;
     pub(super) const CHANNEL_PART_RPC: ChannelPart = 3;
     pub(super) const CHANNEL_PART_ALL: ChannelPart = 4;
-
-    pub(super) const LUA_NOREF: c_int = -2;
-
-    /// The id of the channel over this process's own stdin/stdout.
-    pub(super) const CHAN_STDIO: u64 = 1;
-    /// The id of the channel over this process's own stderr.
-    pub(super) const CHAN_STDERR: u64 = 2;
 }
 
 use known::*;
+
+/// The id of the channel over this process's own stdin/stdout.
+pub(crate) const CHAN_STDIO: u64 = 1;
+/// The id of the channel over this process's own stderr.
+pub(crate) const CHAN_STDERR: u64 = 2;
 
 pub mod defs;
 pub mod info;

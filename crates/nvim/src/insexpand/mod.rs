@@ -16,6 +16,7 @@ use crate::memory::XString;
 use crate::tag::{
     LSIZE, TAG_INS_COMP, TAG_MANY, TAG_NOIC, TAG_REGEXP, TAG_VERBOSE, find_tag_names,
 };
+use crate::types::eval::SAVE_V_EVENT_INIT;
 use core::ffi::{CStr, c_int, c_uint};
 
 use std::rc::Rc;
@@ -56,7 +57,6 @@ use crate::getchar::{
     vgetc, vpeekc, vpeekc_any, vungetc,
 };
 use crate::global_cell::{GlobalCell, state_record};
-use crate::hashtab::HashTab;
 use crate::highlight_group::{HLF_COUNT, HLF_E, HLF_R, HLF_W, syn_name2attr};
 use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
@@ -109,8 +109,8 @@ use crate::state::{MODE_INSERT, REPLACE_FLAG, may_trigger_modechanged};
 use crate::tag::state::G_TAG_AT_CURSOR;
 use crate::textformat::auto_format;
 use crate::types::{
-    ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, LineNr, List, OptInt, Pos,
-    SaveVEvent, TypVal, VarNumber, Vv,
+    ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, LineNr, List, OptInt, Pos, TypVal,
+    VarNumber, Vv,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -316,11 +316,6 @@ pub(crate) const POS_T_INIT: Pos = Pos {
     lnum: LineNr::ZERO,
     col: ColNr::ZERO,
     coladd: 0,
-};
-/// A zeroed `SaveVEvent`, which `get_v_event` fills in.
-pub(crate) const SAVE_V_EVENT_INIT: SaveVEvent = SaveVEvent {
-    sve_did_save: false,
-    sve_hashtab: HashTab::new(),
 };
 pub const CTRL_X_WANT_IDENT: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 /// Message for CTRL-X mode, indexed by `CTRL_X_MODE` with `CTRL_X_WANT_IDENT`

@@ -135,11 +135,6 @@ pub(crate) const MEMFILE_PAGE_SIZE: c_uint = 4096;
 pub(crate) const MIN_SWAP_PAGE_SIZE: u32 = 1048;
 pub(crate) const MAX_SWAP_PAGE_SIZE: u64 = 50000;
 
-const O_RDWR: c_int = 0o2;
-const O_CREAT: c_int = 0o100;
-const O_EXCL: c_int = 0o200;
-const O_TRUNC: c_int = 0o1000;
-const O_NOFOLLOW: c_int = 0o400000;
 /// `S_IREAD | S_IWRITE`: the mode a swap file is created with.
 const SWAPFILE_MODE: c_int = 0o400 | 0o200;
 
@@ -262,7 +257,7 @@ impl MemFile {
         // When recovering, the real page size comes out of block zero later
         // (`ml_recover` calls `set_page_size`), so the size used here may
         // be too small and the block count is rounded up.
-        let size = if memfile.file.is_none() || flags & (O_TRUNC | O_EXCL) != 0 {
+        let size = if memfile.file.is_none() || flags & (libc::O_TRUNC | libc::O_EXCL) != 0 {
             0
         } else {
             memfile.file_size()
@@ -291,7 +286,7 @@ impl MemFile {
     /// Give a memory-only memfile a swap file, as `'updatecount'` going from
     /// zero to non-zero does.
     pub(crate) fn open_file(&mut self, fname: CString) -> Result<(), SwapFailed> {
-        if self.do_open(fname, O_RDWR | O_CREAT | O_EXCL) {
+        if self.do_open(fname, libc::O_RDWR | libc::O_CREAT | libc::O_EXCL) {
             self.mf_dirty = MfDirty::Yes;
             Ok(())
         } else {
@@ -875,7 +870,8 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("a scratch directory");
         let path = dir.join("x.swp");
         let name = CString::new(path.as_os_str().as_bytes()).expect("a path without NUL");
-        let mut memfile = MemFile::open(name, O_RDWR | O_CREAT | O_EXCL).expect("a swap file");
+        let mut memfile =
+            MemFile::open(name, libc::O_RDWR | libc::O_CREAT | libc::O_EXCL).expect("a swap file");
 
         // Three blocks, numbered 0, 1 and 2; the middle one stays held, as
         // the memline's locked data block does while a line is cached.

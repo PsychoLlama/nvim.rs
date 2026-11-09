@@ -23,8 +23,7 @@
 
 use super::*;
 use crate::eval::list::{cstr_of, string_bytes};
-use crate::eval::typval::ListRef;
-use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{ListRef, TV_INITIAL_VALUE};
 use crate::eval::typval::{NumBuf, dict_has_key, list_items};
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
@@ -189,7 +188,7 @@ fn entry_is_closer_to_target(
         if entry.lnum != LineNr::ZERO {
             (entry.lnum - target_lnum).abs()
         } else {
-            INT_MAX
+            c_int::MAX
         }
     };
     let (line_distance, other_line_distance) = (distance(entry), distance(other_entry));
@@ -204,7 +203,7 @@ fn entry_is_closer_to_target(
         if entry.col != 0 {
             (entry.col - target_col).abs()
         } else {
-            INT_MAX
+            c_int::MAX
         }
     };
     let (column_distance, other_column_distance) = (distance(entry), distance(other_entry));

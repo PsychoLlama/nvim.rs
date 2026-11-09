@@ -758,5 +758,3 @@ pub fn win_update_cursorline(mut window: Win, foldinfo: &mut FoldInfo) {
 }
 
 pub const NO_SCREEN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

@@ -37,40 +37,29 @@ use crate::ex_cmds::check_secure;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::memline::ml_open;
 use crate::memory::XString;
-use crate::message::IOSIZE;
-use crate::message::emsg;
 use crate::message::{E_CHANNOTPTY, E_INVARG};
+use crate::message::{IOSIZE, emsg};
 use crate::message_fmt::msg_cstr;
-use crate::narrow::number_as_int;
-use crate::narrow::number_as_u16;
+use crate::narrow::{number_as_int, number_as_u16};
 use crate::option::vars::p_tgc;
 use crate::os::cshim::gettext;
 use crate::os::env::{ENV_NVIM, getenv_owned};
 use crate::os::fs::dir_exists;
 use crate::os::libc::uint64_t;
 use crate::os::time::os_hrtime;
-use crate::path::MAXPATHL;
-use crate::path::vim_full_name;
+use crate::path::{MAXPATHL, vim_full_name};
 use crate::semsg;
 use crate::terminal::{Term, buf_terminal_running, terminal_buf, terminal_open};
-use crate::types::Failed;
-use crate::types::Handle;
 use crate::types::{
     ApiString, Callback, Dict, Integer, Object, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER,
     VAR_STRING, VarNumber, Vv,
 };
+use crate::types::{Failed, Handle};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 use core::pin::Pin;
 use std::ffi::CString;
-
-/// A cleared `CallbackReader`, which the option parser fills in.
-const NO_READER: CallbackReader = CallbackReader::none();
-
-/// A cleared `Callback`.
-const NO_CALLBACK: Callback = Callback::None;
 
 /// The job id a `job*()` builtin was handed, or `None` when the argument
 /// was not a Number at all -- in which case the error is already out.
@@ -414,9 +403,9 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut clear_env = false;
     let mut overlapped = false;
     let mut stdin_mode: ChannelStdinMode = CHANNEL_STDIN_PIPE;
-    let mut on_stdout = NO_READER;
-    let mut on_stderr = NO_READER;
-    let mut on_exit = NO_CALLBACK;
+    let mut on_stdout = CallbackReader::none();
+    let mut on_stderr = CallbackReader::none();
+    let mut on_exit = Callback::None;
     let mut cwd: Option<&CStr> = None;
     // A reference to the env dictionary itself, not the item holding it:
     // the borrow the lookup answers does not survive `common_job_callbacks`,

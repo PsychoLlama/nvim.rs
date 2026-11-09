@@ -29,7 +29,7 @@ use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::mbyte::{mb_islower, mb_isupper, utf_char2len};
 use crate::regexp::{
-    CharClass, CompileError, Compiled, ESC, HASNL, HASWIDTH, INT_MAX, MAGIC_OFF, REGEXP_ABBR,
+    CharClass, CompileError, Compiled, ESC, HASNL, HASWIDTH, MAGIC_OFF, REGEXP_ABBR,
     REGEXP_INRANGE, SIMPLE, Spelled, backslash_abbr, pat_byte, pat_char, pat_charlen, pat_seek,
     skip_anyof, skipchr, take_bracketed, take_char_class,
 };
@@ -211,7 +211,7 @@ fn escaped(
         }
         b'd' | b'o' | b'x' | b'u' | b'U' => {
             *startc = coll_get_char(rc);
-            if *startc == INT_MAX {
+            if *startc == c_int::MAX {
                 return Err(CompileError::CodepointTooLarge);
             }
             // As elsewhere, a NUL in the pattern stands for a newline.

@@ -70,7 +70,6 @@ use crate::getchar::{
 };
 use crate::global_cell::GlobalCell;
 use crate::guard::{ALLBUF_LOCK, TEXTLOCK};
-use crate::hashtab::HashTab;
 use crate::highlight_group::{HLF_E, syn_id2attr, syn_name2id};
 use crate::keycodes::KS_EXTRA;
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
@@ -154,6 +153,7 @@ use crate::state::{
     may_trigger_safestate, state_enter, state_handle_k_event,
 };
 use crate::strings::escaped_bytes;
+use crate::types::eval::SAVE_V_EVENT_INIT;
 use crate::types::{
     ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdLine, CmdMod, CmdParseInfo,
     CmdParseMagic, ColNr, Direction, DispTick, Error, ExArg, ExArgt, Handle, Integer, LineNr,
@@ -182,6 +182,7 @@ use crate::winlayer::graph::{
     CMDWIN_BUF, CMDWIN_LEVEL, CMDWIN_OLD_CURWIN, CMDWIN_RESULT, CMDWIN_TYPE, CMDWIN_WIN,
 };
 use crate::winlayer::{BufId, WinId};
+use core::ffi::c_int;
 
 // The carve of the transpiled module; see each child's docs.
 mod incsearch;
@@ -363,7 +364,6 @@ pub(crate) enum KeyOutcome {
     /// Leave the command line for Normal mode.
     GotoNormalMode,
 }
-pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 static LAST_PROMPT_ID: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0 as ::core::ffi::c_uint);
 
 /// No command line: C's `CLEAR_FIELD(ccline)`, and what [`save_cmdline`]
@@ -425,10 +425,6 @@ pub(crate) const INCSEARCH_STATE_INIT: IncsearchState = IncsearchState {
     incsearch_postponed: false,
     magic_overruled_save: OPTION_MAGIC_NOT_SET,
 };
-
-/// An all-zero [`TryState`], which is what the `TRY_WRAP` macro declares
-/// (uninitialised in the C; `try_enter` fills every field).
-pub(crate) const TRY_STATE_INIT: TryState = TryState::INIT;
 
 /// An all-zero [`ExArg`]; `parse_cmdline` fills it.
 pub(crate) const EXARG_T_INIT: ExArg<'static> = ExArg {
@@ -525,11 +521,6 @@ pub(crate) const CP_INFO_INIT: CpInfo = CpInfo {
     save_view: Vec::new(),
 };
 
-pub(crate) const SAVE_V_EVENT_INIT: SaveVEvent = SaveVEvent {
-    sve_did_save: false,
-    sve_hashtab: HashTab::new(),
-};
-
 /// The command line being edited. Reached through [`Cc::current`], whose
 /// constructor lives beside `Cc` in the handle perimeter.
 pub(crate) static CCLINE: GlobalCell<CmdlineInfo> = GlobalCell::new(CMDLINE_INFO_INIT);
@@ -558,8 +549,6 @@ static E_ACTIVE_WINDOW_OR_BUFFER_CHANGED_OR_DELETED: &::core::ffi::CStr =
 pub const PATH_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[{`$\\%#'\"|!<";
 pub const SHELL_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[{`$\\%#'\"|!<>();&";
 pub const BUFFER_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[`$\\%#'\"|!<";
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const UINT_MAX: ::core::ffi::c_uint = (INT_MAX as ::core::ffi::c_uint)
+pub const UINT_MAX: ::core::ffi::c_uint = (c_int::MAX as ::core::ffi::c_uint)
     .wrapping_mul(2 as ::core::ffi::c_uint)
     .wrapping_add(1 as ::core::ffi::c_uint);
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

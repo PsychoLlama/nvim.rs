@@ -136,14 +136,6 @@ pub use self::linebreak::*;
 pub use self::utf8::*;
 pub use self::walk::*;
 
-/// The C-level vocabulary every transpiled module carries a copy of;
-/// consolidating them tree-wide is a family of its own, not this slice's.
-/// `setlocale`'s category for character classification.
-pub const LC_CTYPE: c_int = 0;
-/// `SIZE_MAX`, which `iconv` answers with on failure.
-pub const SIZE_MAX: ::core::ffi::c_ulong = usize::MAX as ::core::ffi::c_ulong;
-/// `INT_MAX`, the "no limit" length `utf_cp_bounds` passes.
-pub const INT_MAX: c_int = c_int::MAX;
 /// The second byte of an escaped literal `K_SPECIAL`; see [`unescape_at`].
 use crate::cursor::with_cursor_rest;
 /// `g8`: show the bytes of the character under the cursor, in hex.

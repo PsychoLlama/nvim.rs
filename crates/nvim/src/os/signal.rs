@@ -23,9 +23,8 @@ use crate::event::objects::SignalWatcher;
 use crate::event::signal::{
     signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
 };
-use crate::event::uv::{
-    uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t,
-};
+use crate::event::uv::UV_UNKNOWN_HANDLE;
+use crate::event::uv::{uv__queue, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t};
 use crate::ex_cmds2::autowrite_all;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
@@ -43,27 +42,19 @@ use core::ptr;
 // Signal numbers, for this module and for anything else that names one. Only
 // the values Linux and the BSDs agree on are listed without qualification;
 // these are the numbers the editor builds against.
-pub const SIGHUP: c_int = 1;
-pub const SIGINT: c_int = 2;
-pub const SIGQUIT: c_int = 3;
-pub const SIGKILL: c_int = 9;
-pub const SIGUSR1: c_int = 10;
-pub const SIGPIPE: c_int = 13;
-pub const SIGALRM: c_int = 14;
-pub const SIGTERM: c_int = 15;
-pub const SIGCHLD: c_int = 17;
-pub const SIGCONT: c_int = 18;
-pub const SIGTSTP: c_int = 20;
-pub const SIGWINCH: c_int = 28;
-pub const SIGPWR: c_int = 30;
-
-const SIG_SETMASK: c_int = 2;
-const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
 
 /// The signals the editor watches, in the order upstream registered them.
 /// `WATCHERS[i]` is the watcher for `WATCHED[i]`.
 const WATCHED: [c_int; 9] = [
-    SIGPIPE, SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGTSTP, SIGPWR, SIGUSR1, SIGWINCH,
+    libc::SIGPIPE,
+    libc::SIGHUP,
+    libc::SIGINT,
+    libc::SIGQUIT,
+    libc::SIGTERM,
+    libc::SIGTSTP,
+    libc::SIGPWR,
+    libc::SIGUSR1,
+    libc::SIGWINCH,
 ];
 
 /// A watcher before `signal_watcher_init` has filled it in.
@@ -124,7 +115,7 @@ pub fn signal_init() {
         // blocked, for instance, libuv may hang after spawning a subprocess
         // on Linux. #5230
         sigemptyset(&raw mut mask);
-        if pthread_sigmask(SIG_SETMASK, &raw mut mask, ptr::null_mut()) != 0 {
+        if pthread_sigmask(libc::SIG_SETMASK, &raw mut mask, ptr::null_mut()) != 0 {
             logmsg!(
                 LOGLVL_ERR,
                 c"signal_init",
@@ -184,15 +175,15 @@ pub fn signal_accept_deadly() {
 
 fn signal_name(signum: c_int) -> &'static CStr {
     match signum {
-        SIGPWR => c"SIGPWR",
-        SIGPIPE => c"SIGPIPE",
-        SIGTERM => c"SIGTERM",
-        SIGTSTP => c"SIGTSTP",
-        SIGQUIT => c"SIGQUIT",
-        SIGHUP => c"SIGHUP",
-        SIGINT => c"SIGINT",
-        SIGUSR1 => c"SIGUSR1",
-        SIGWINCH => c"SIGWINCH",
+        libc::SIGPWR => c"SIGPWR",
+        libc::SIGPIPE => c"SIGPIPE",
+        libc::SIGTERM => c"SIGTERM",
+        libc::SIGTSTP => c"SIGTSTP",
+        libc::SIGQUIT => c"SIGQUIT",
+        libc::SIGHUP => c"SIGHUP",
+        libc::SIGINT => c"SIGINT",
+        libc::SIGUSR1 => c"SIGUSR1",
+        libc::SIGWINCH => c"SIGWINCH",
         _ => c"Unknown",
     }
 }
@@ -217,7 +208,7 @@ fn deadly_signal(signum: c_int) -> ! {
         signum,
         msg_cstr(name)
     );
-    if p_awa() && signum != SIGTERM && signum != SIGINT {
+    if p_awa() && signum != libc::SIGTERM && signum != libc::SIGINT {
         autowrite_all();
     }
     // Preserve files and exit.
@@ -237,21 +228,21 @@ fn handle_signal(signum: c_int) {
     match signum {
         // Power failure (eg batteries low): flush the swap files to be
         // safe.
-        SIGPWR => ml_sync_all(0, 0, true),
-        SIGPIPE => {}
-        SIGTSTP => {
+        libc::SIGPWR => ml_sync_all(0, 0, true),
+        libc::SIGPIPE => {}
+        libc::SIGTSTP => {
             if p_awa() {
                 autowrite_all();
             }
         }
-        SIGHUP | SIGINT | SIGTERM | SIGQUIT => {
+        libc::SIGHUP | libc::SIGINT | libc::SIGTERM | libc::SIGQUIT => {
             if !REJECTING_DEADLY.get() {
                 deadly_signal(signum);
             }
         }
         // The autocommand is named for the signal, which is exactly what
         // signal_name yields.
-        SIGUSR1 | SIGWINCH => {
+        libc::SIGUSR1 | libc::SIGWINCH => {
             apply_autocmds(
                 AutoEvent::Signal,
                 Some(XString::from_cstr(signal_name(signum))),

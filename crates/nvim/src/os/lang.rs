@@ -30,8 +30,7 @@ use crate::eval::vars::{set_vim_var_string, vim_var_string};
 use crate::global_cell::GlobalCell;
 use crate::memory::ThinCString;
 
-use crate::cmdexpand::defs::Candidate;
-use crate::cmdexpand::defs::Expand;
+use crate::cmdexpand::defs::{Candidate, Expand};
 use crate::message_fmt::msg_cstr;
 use crate::option::{PROJECT_NAME, set_helplang_default};
 use crate::os::cshim::{bindtextdomain, bump_catalogue_epoch, textdomain};
@@ -53,7 +52,6 @@ use std::ffi::CString;
 // `:language messages` selector becomes a sentinel that reaches no
 // `setlocale` call at all. On POSIX the two are the same number, so
 // `VIM_LC_MESSAGES` below reads as upstream's `#define`.
-const LC_CTYPE: c_int = 0;
 const LC_NUMERIC: c_int = 1;
 const LC_TIME: c_int = 2;
 const LC_COLLATE: c_int = 3;
@@ -96,7 +94,7 @@ pub(crate) fn locale_codeset() -> Option<Vec<u8>> {
 /// The locale in effect for character classification (`LC_CTYPE`), or
 /// `None` when libc reports none.
 pub(crate) fn ctype_locale() -> Option<Vec<u8>> {
-    locale(LC_CTYPE)
+    locale(libc::LC_CTYPE)
         .filter(|name| !name.is_empty())
         .map(CString::into_bytes)
 }
@@ -130,7 +128,7 @@ fn get_mess_env() -> Option<CString> {
 /// `v:collate`.
 pub fn set_lang_var() {
     for (var, loc) in [
-        (Vv::Ctype, locale(LC_CTYPE)),
+        (Vv::Ctype, locale(libc::LC_CTYPE)),
         (Vv::Lang, get_mess_env()),
         (Vv::LcTime, locale(LC_TIME)),
         (Vv::Collate, locale(LC_COLLATE)),
@@ -177,7 +175,7 @@ pub fn init_locale() {
 /// stay available as two-letter *language* names.
 const SELECTORS: [(&CStr, c_int, &CStr); 4] = [
     (c"messages", VIM_LC_MESSAGES, c"messages "),
-    (c"ctype", LC_CTYPE, c"ctype "),
+    (c"ctype", libc::LC_CTYPE, c"ctype "),
     (c"time", LC_TIME, c"time "),
     (c"collate", LC_COLLATE, c"collate "),
 ];
@@ -244,7 +242,7 @@ pub fn ex_language(excmd: &mut ExArg) {
             // GNU gettext prefers $LANGUAGE over $LANG.
             env_set(c"LANGUAGE", c"");
         }
-        if what != LC_CTYPE {
+        if what != libc::LC_CTYPE {
             env_set(c"LC_MESSAGES", &name);
             set_helplang_default(name.to_bytes());
         }

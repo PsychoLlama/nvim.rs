@@ -60,8 +60,6 @@ pub(crate) const VAL_IDX_VALUE: bool = false;
 /// `VarNumber` hold — both are `int64_t`.
 pub(crate) const API_INTEGER_MAX: i64 = i64::MAX;
 pub(crate) const API_INTEGER_MIN: i64 = i64::MIN;
-pub(crate) const VARNUMBER_MAX: i64 = i64::MAX;
-pub(crate) const VARNUMBER_MIN: i64 = i64::MIN;
 
 /// What keys a Lua table turned out to contain — the answer
 /// [`classify_table`] hands both `pop` walks.

@@ -29,7 +29,7 @@
 
 use crate::cstr;
 use crate::event::uv::{uv_dirent_t, uv_fs_t, uv_gid_t, uv_stat_t, uv_uid_t};
-use crate::os::libc::uint64_t;
+use crate::os::libc::{FILE, uint64_t};
 use crate::os::uv_error::{UV_EAGAIN, UV_EINTR, UV_ENOBUFS, UV_UNKNOWN, uv_code};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -52,13 +52,11 @@ use crate::message::{verbose_enter, verbose_leave};
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_verbose;
 use crate::os::env::{ENV_SEPCHAR, getenv_owned};
-use crate::os::libc::FILE;
 use crate::os::libc::{ptrdiff_t, size_t};
 use crate::path::{append_path, gettail_dir, save_abs_path};
 use crate::smsg;
 use crate::startup::STDIN_FD;
-use crate::types::ApiString;
-use crate::types::OptInt;
+use crate::types::{ApiString, OptInt};
 use crate::ui::ui_call_chdir;
 use ::libc::{fcntl, fdopen, write};
 
@@ -80,14 +78,6 @@ const R_OK: c_int = 4;
 const W_OK: c_int = 2;
 const X_OK: c_int = 1;
 
-/// `open(2)` flags, in the combinations [`fopen_flags`] hands out.
-const O_RDONLY: c_int = 0;
-const O_WRONLY: c_int = 0o1;
-const O_RDWR: c_int = 0o2;
-const O_CREAT: c_int = 0o100;
-const O_TRUNC: c_int = 0o1000;
-const O_APPEND: c_int = 0o2000;
-
 /// `fcntl(2)`'s close-on-exec commands and flag.
 const F_GETFD: c_int = 1;
 const F_SETFD: c_int = 2;
@@ -100,10 +90,15 @@ pub const NODE_WRITABLE: c_int = 1;
 pub const NODE_OTHER: c_int = 2;
 
 /// `stat(2)`'s file-type field and the three types this family asks about.
-const S_IFMT: u64 = 0o170000;
-const S_IFREG: u64 = 0o100000;
-const S_IFDIR: u64 = 0o40000;
-const S_IFBLK: u64 = 0o60000;
+pub(crate) const S_IFMT: u64 = 0o170000;
+/// `st_mode & S_IFMT` for a regular file.
+pub(crate) const S_IFREG: u64 = 0o100000;
+/// `st_mode & S_IFMT` for a directory.
+pub(crate) const S_IFDIR: u64 = 0o40000;
+pub(crate) const S_IFBLK: u64 = 0o60000;
+/// `S_IFLNK`: the file type bits of a symbolic link.
+pub(crate) const S_IFLNK: u64 = 0o120000;
+pub(crate) const S_IFCHR: u64 = 0o20000;
 
 const PATHSEP: c_char = b'/' as c_char;
 /// The buffer [`os_mkdtemp`] fills, sized by its callers.
@@ -436,8 +431,8 @@ pub fn open_file(path: &CStr, flags: c_int, mode: c_int) -> Result<File, c_int> 
     // custom flags); every other flag goes through as it is.
     let access = flags & ::libc::O_ACCMODE;
     OpenOptions::new()
-        .read(access != O_WRONLY)
-        .write(access != O_RDONLY)
+        .read(access != libc::O_WRONLY)
+        .write(access != libc::O_RDONLY)
         .custom_flags(flags & !::libc::O_ACCMODE)
         .mode(mode.cast_unsigned())
         .open(OsStr::from_bytes(path.to_bytes()))
@@ -454,12 +449,12 @@ fn fopen_flags(mode: &[u8]) -> Option<c_int> {
     let update = !matches!(mode.first_chunk::<2>().map(|m| m[1]), None | Some(b'b'));
     debug_assert!(!update || mode.get(1) == Some(&b'+'));
     Some(match (mode.first()?, update) {
-        (b'r', false) => O_RDONLY,
-        (b'w', false) => O_WRONLY | O_CREAT | O_TRUNC,
-        (b'a', false) => O_WRONLY | O_CREAT | O_APPEND,
-        (b'r', true) => O_RDWR,
-        (b'w', true) => O_RDWR | O_CREAT | O_TRUNC,
-        (b'a', true) => O_RDWR | O_CREAT | O_APPEND,
+        (b'r', false) => libc::O_RDONLY,
+        (b'w', false) => libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC,
+        (b'a', false) => libc::O_WRONLY | libc::O_CREAT | libc::O_APPEND,
+        (b'r', true) => libc::O_RDWR,
+        (b'w', true) => libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC,
+        (b'a', true) => libc::O_RDWR | libc::O_CREAT | libc::O_APPEND,
         _ => return None,
     })
 }
@@ -776,13 +771,25 @@ mod tests {
 
     #[test]
     fn fopen_flags_matches_the_fopen_table() {
-        assert_eq!(fopen_flags(b"r"), Some(O_RDONLY));
-        assert_eq!(fopen_flags(b"rb"), Some(O_RDONLY));
-        assert_eq!(fopen_flags(b"w"), Some(O_WRONLY | O_CREAT | O_TRUNC));
-        assert_eq!(fopen_flags(b"a"), Some(O_WRONLY | O_CREAT | O_APPEND));
-        assert_eq!(fopen_flags(b"r+"), Some(O_RDWR));
-        assert_eq!(fopen_flags(b"w+"), Some(O_RDWR | O_CREAT | O_TRUNC));
-        assert_eq!(fopen_flags(b"a+"), Some(O_RDWR | O_CREAT | O_APPEND));
+        assert_eq!(fopen_flags(b"r"), Some(libc::O_RDONLY));
+        assert_eq!(fopen_flags(b"rb"), Some(libc::O_RDONLY));
+        assert_eq!(
+            fopen_flags(b"w"),
+            Some(libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC)
+        );
+        assert_eq!(
+            fopen_flags(b"a"),
+            Some(libc::O_WRONLY | libc::O_CREAT | libc::O_APPEND)
+        );
+        assert_eq!(fopen_flags(b"r+"), Some(libc::O_RDWR));
+        assert_eq!(
+            fopen_flags(b"w+"),
+            Some(libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC)
+        );
+        assert_eq!(
+            fopen_flags(b"a+"),
+            Some(libc::O_RDWR | libc::O_CREAT | libc::O_APPEND)
+        );
         // Neither an empty mode nor an unknown first byte has an answer.
         assert_eq!(fopen_flags(b""), None);
         assert_eq!(fopen_flags(b"x"), None);
