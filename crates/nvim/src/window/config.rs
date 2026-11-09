@@ -77,12 +77,7 @@ fn set_buf(win: Win, buffer: Buf) -> Result<(), Error> {
     let tab = win_find_tabpage(win.id());
     let _redraw_off = Suppress::redraw();
 
-    let mut switchwin = SwitchWin {
-        sw_curwin: None,
-        sw_curtab: None,
-        sw_same_win: false,
-        sw_visual_active: false,
-    };
+    let mut switchwin = SwitchWin::default();
     let mut tstate = TRY_STATE;
     try_enter(&mut tstate);
     let win_result = switch_win_noblock(&mut switchwin, win, tab, true);

@@ -103,12 +103,7 @@ impl OptionContext {
             Some(OptionTarget::Win(win)) if win.is_current() => Ok(None),
             Some(OptionTarget::Buf(buf)) if buf.is_current() => Ok(None),
             Some(OptionTarget::Win(win)) => {
-                let mut switchwin = SwitchWin {
-                    sw_curwin: None,
-                    sw_curtab: None,
-                    sw_same_win: false,
-                    sw_visual_active: false,
-                };
+                let mut switchwin = SwitchWin::default();
                 let tab = win_find_tabpage(win.id());
                 if switch_win_noblock(&mut switchwin, win, tab, true).is_err() {
                     restore_win_noblock(&mut switchwin, true);

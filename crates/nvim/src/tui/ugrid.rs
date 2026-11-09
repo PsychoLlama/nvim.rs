@@ -41,7 +41,7 @@ pub struct UGridCells {
 /// zeroed `TUIData` the TUI allocates itself out of leaves behind, because
 /// `Option<Box<_>>` spells `None` as a null pointer — so there is nothing to
 /// initialise before the first resize.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct UGrid {
     pub row: ::core::ffi::c_int,
     pub col: ::core::ffi::c_int,
@@ -173,13 +173,7 @@ mod tests {
     use super::*;
 
     fn filled(width: c_int, height: c_int) -> UGrid {
-        let mut grid = UGrid {
-            row: 0,
-            col: 0,
-            width: 0,
-            height: 0,
-            cells: None,
-        };
+        let mut grid = UGrid::default();
         grid.resize(width, height);
         for row in 0..height {
             for col in 0..width {

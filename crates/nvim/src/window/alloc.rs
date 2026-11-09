@@ -100,51 +100,6 @@ const ZERO_TAGGY: Taggy = Taggy {
     user_data: None,
 };
 
-/// `'listchars'` before the window's value is parsed: no characters.
-const ZERO_LCS: LcsChars = LcsChars {
-    eol: 0,
-    ext: 0,
-    prec: 0,
-    nbsp: 0,
-    space: 0,
-    tab1: 0,
-    tab2: 0,
-    tab3: 0,
-    leadtab1: 0,
-    leadtab2: 0,
-    leadtab3: 0,
-    lead: 0,
-    trail: 0,
-    multispace: None,
-    leadmultispace: None,
-    conceal: 0,
-};
-
-/// `'fillchars'` before the window's value is parsed: no characters.
-const ZERO_FCS: FcsChars = FcsChars {
-    stl: 0,
-    stlnc: 0,
-    wbr: 0,
-    horiz: 0,
-    horizup: 0,
-    horizdown: 0,
-    vert: 0,
-    vertleft: 0,
-    vertright: 0,
-    verthoriz: 0,
-    fold: 0,
-    foldopen: 0,
-    foldclosed: 0,
-    foldsep: 0,
-    foldinner: 0,
-    diff: 0,
-    msgsep: 0,
-    eob: 0,
-    lastline: 0,
-    trunc: 0,
-    truncrl: 0,
-};
-
 /// A fresh window, every field what upstream's `xcalloc(1, sizeof(win_T))`
 /// zero bytes stand for -- an empty grid, set, option block, list, config
 /// and string where the field owns one. Unregistered, with handle zero.
@@ -184,8 +139,8 @@ fn zeroed_window() -> Win {
             w_old_visual_col: ColNr::ZERO,
             w_old_curswant: ColNr::ZERO,
             w_last_cursor_lnum_rnu: LineNr::ZERO,
-            w_p_lcs_chars: ZERO_LCS,
-            w_p_fcs_chars: ZERO_FCS,
+            w_p_lcs_chars: LcsChars::default(),
+            w_p_fcs_chars: FcsChars::default(),
             w_topline: LineNr::ZERO,
             w_topline_was_set: false,
             w_topfill: 0,

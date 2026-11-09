@@ -164,7 +164,7 @@ pub(crate) struct RegSubs {
 pub const NFA_TOO_EXPENSIVE: c_int = -1;
 pub const NFA_MAX_STATES: c_int = 100000;
 pub const AUTOMATIC_ENGINE: c_uint = 0;
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ParseState {
     pub regparse: usize,
     pub prevchr_len: usize,

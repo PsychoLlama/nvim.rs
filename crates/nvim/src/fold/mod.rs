@@ -517,12 +517,7 @@ pub fn line_folded(win: Win, lnum: LineNr) -> bool {
 ///                    or 0 if line is not folded.
 ///
 pub fn fold_info(win: Win, lnum: LineNr) -> FoldInfo {
-    let mut info = FoldInfo {
-        fi_lnum: LineNr::ZERO,
-        fi_level: 0,
-        fi_low_level: 0,
-        fi_lines: 0,
-    };
+    let mut info = FoldInfo::default();
     let mut last: LineNr = LineNr::ZERO;
     let folded = win.has_folding_with(lnum, None, Some(&mut last), false, Some(&mut info));
     info.fi_lines = if folded { last - lnum + 1 } else { 0 };

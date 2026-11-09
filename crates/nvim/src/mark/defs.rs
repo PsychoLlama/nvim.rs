@@ -35,7 +35,7 @@ pub struct FileMark {
     /// all-zero bytes -- which also keeps the record five words.
     pub(crate) extra: Option<Box<crate::shada::ShadaExtra>>,
 }
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct FileMarkView {
     pub topline_offset: i32,
     pub skipcol: ColNr,
@@ -107,7 +107,7 @@ impl FileMark {
 /// a named mark, to put back when the change is undone. `Copy`, because a
 /// header is saved per change and a deep copy of twenty-six marks each time
 /// costs more than the save.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct SavedMark {
     pub mark: Pos,
     /// [`FileMark::fnum`] with `Handle::NONE` for `None`: an

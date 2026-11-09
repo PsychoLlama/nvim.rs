@@ -349,7 +349,7 @@ pub struct StrCharInfo {
 }
 /// A conversion plan (`VimConv::setup`). Neither `Copy` nor `Clone`: `vc_fd`
 /// owns an iconv descriptor, which dropping the plan closes.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct VimConv {
     pub vc_type: ::core::ffi::c_int,
     pub vc_factor: ::core::ffi::c_int,

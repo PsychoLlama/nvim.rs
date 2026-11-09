@@ -124,7 +124,7 @@ pub const kRetObject: LuaRetMode = 0;
 /// will *share*, so `map_add` clones the [`Rc`] rather than taking a pointer
 /// and the caller no longer has to null its own fields out afterwards.  If no
 /// mapping is created, dropping the struct releases the Lua reference too.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct MapArguments {
     pub buffer: bool,
     pub expr: bool,
@@ -152,28 +152,6 @@ pub(crate) struct MapArguments {
     /// `:map <desc>`'s text.  Set *before* [`set_maparg_rhs`], which folds it
     /// into the [`MapRhs`] it builds.
     pub desc: Option<MapStr>,
-}
-
-impl Default for MapArguments {
-    fn default() -> Self {
-        Self {
-            buffer: false,
-            expr: false,
-            noremap: false,
-            nowait: false,
-            script: false,
-            silent: false,
-            unique: false,
-            replace_keycodes: false,
-            lhs: MapStr::empty(),
-            lhs_len: 0,
-            alt_lhs: MapStr::empty(),
-            alt_lhs_len: 0,
-            rhs: None,
-            rhs_is_noop: false,
-            desc: None,
-        }
-    }
 }
 
 /// `skipwhite` over a slice: `bytes` without its leading spaces and tabs.
@@ -246,7 +224,7 @@ static EMPTY_MAP_STR: [u8; 1] = [0];
 /// `<Nop>` mapping's RHS is empty, and the mapping table's per-entry heap is
 /// exactly what `inbench`'s bucket walk measures (see the module docs of
 /// `mapping`).
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct MapStr(Option<Box<[u8]>>);
 
 impl MapStr {

@@ -393,12 +393,7 @@ impl SpellInfo {
             si_add: 0,
             si_clear_chartab: 0,
             si_region: 0,
-            si_conv: VimConv {
-                vc_type: 0,
-                vc_factor: 0,
-                vc_fd: None,
-                vc_fail: false,
-            },
+            si_conv: VimConv::default(),
             si_memtot: 0,
             si_verbose: 0,
             si_msg_count: 0,

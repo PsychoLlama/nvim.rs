@@ -65,12 +65,7 @@ impl SynBlock {
     /// `xcalloc` gave a buffer and `:ownsyntax`, and what a zeroed block
     /// would be if all-zero bytes were a valid `Vec` and `Option`.
     pub(crate) fn new() -> SynBlock {
-        let no_time = SynTime {
-            total: 0,
-            slowest: 0,
-            count: 0,
-            match_0: 0,
-        };
+        let no_time = SynTime::default();
         SynBlock {
             b_keywtab: KeywordTable::new(),
             b_keywtab_ic: KeywordTable::new(),

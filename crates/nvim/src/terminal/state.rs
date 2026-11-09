@@ -96,19 +96,8 @@ impl terminal {
             forward_mouse: false,
             invalid_start: 0,
             invalid_end: 0,
-            cursor: TerminalCursor {
-                row: 0,
-                col: 0,
-                shape: 0,
-                visible: false,
-                blink: false,
-            },
-            pending: TerminalPending {
-                resize: false,
-                cursor: false,
-                send: None,
-                events: None,
-            },
+            cursor: TerminalCursor::default(),
+            pending: TerminalPending::default(),
             streamed_paste: false,
             theme_updates: false,
             synchronized_output: false,
@@ -254,7 +243,7 @@ impl Scrollback {
     }
 }
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TerminalPending {
     pub resize: bool,
     pub cursor: bool,
@@ -266,7 +255,7 @@ pub struct TerminalPending {
     pub(crate) events: Option<crate::event_queue::ParkingQueue>,
 }
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TerminalCursor {
     pub row: ::core::ffi::c_int,
     pub col: ::core::ffi::c_int,

@@ -99,28 +99,16 @@ impl FrameRef {
 
 /// How much room a row or column has to give away, and how many windows will
 /// be sharing it: the state upstream carries in `room`, `totwincount`,
-/// `next_curwin_size`, `extra_sep` and `has_next_curwin`.
-#[derive(Debug)]
+/// `next_curwin_size`, `extra_sep` and `has_next_curwin`. `Default` is the
+/// state before either axis has been equalized, which is what the `dir` that
+/// skips this axis leaves in place.
+#[derive(Debug, Default)]
 struct Share {
     room: c_int,
     totwincount: c_int,
     next_curwin_size: c_int,
     extra_sep: c_int,
     has_next_curwin: bool,
-}
-
-impl Share {
-    /// The state before either axis has been equalized, which is what the
-    /// `dir` that skips this axis leaves in place.
-    fn none() -> Self {
-        Self {
-            room: 0,
-            totwincount: 0,
-            next_curwin_size: 0,
-            extra_sep: 0,
-            has_next_curwin: false,
-        }
-    }
 }
 
 /// A row of frames: equalize the widths unless `'eadirection'` says vertical
@@ -139,7 +127,7 @@ fn equal_row(
     let mut topfr = topfr;
     topfr.fr_width = width;
     topfr.fr_height = height;
-    let mut sh = Share::none();
+    let mut sh = Share::default();
     if dir != b'v' {
         sh = row_share(next_curwin, topfr, col, width);
     }
@@ -287,7 +275,7 @@ fn equal_col(
     let mut topfr = topfr;
     topfr.fr_width = width;
     topfr.fr_height = height;
-    let mut sh = Share::none();
+    let mut sh = Share::default();
     if dir != b'h' {
         sh = col_share(next_curwin, topfr, row, height);
     }

@@ -30,7 +30,7 @@ use crate::statusline::defs::{StlClickDefinition, StlClickRecord, StlHlRun, StlO
 /// What one `%` item turned into. Upstream's `StlItem`, with the `char *`
 /// into the output buffer replaced by a byte offset into it -- which is what
 /// lets every stage that shifts the text around be safe code.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub(super) struct StlItem {
     /// Where the item starts in the output buffer.
     pub start: usize,
@@ -48,23 +48,12 @@ pub(super) struct StlItem {
     pub kind: Kind,
 }
 
-impl Default for StlItem {
-    fn default() -> Self {
-        StlItem {
-            start: 0,
-            cmd: 0,
-            minwid: 0,
-            maxwid: 0,
-            kind: Kind::Normal,
-        }
-    }
-}
-
 /// The kinds of item the format language has. Upstream's anonymous enum in
 /// `StlItem`.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub(super) enum Kind {
     /// Text, laid out by the item's width fields.
+    #[default]
     Normal,
     /// An item that produced nothing.
     Empty,

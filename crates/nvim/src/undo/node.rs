@@ -99,7 +99,8 @@ impl UndoLink {
 ///
 /// Owned by the buffer's [`UndoStore`](crate::undo::store::UndoStore), which
 /// a [`UndoLink`] names it through. Dropping one drops everything it saved.
-#[derive(Clone, Debug)]
+/// `Default` is a header linked to nothing, holding nothing, every field zero.
+#[derive(Clone, Debug, Default)]
 pub struct UndoHeader {
     /// The change before this one on the same branch (older).
     pub next: UndoLink,
@@ -144,36 +145,7 @@ impl UndoHeader {
     }
 }
 
-impl Default for UndoHeader {
-    /// A header linked to nothing, holding nothing, with every other field
-    /// zero.
-    fn default() -> Self {
-        Self {
-            next: UndoLink::NONE,
-            prev: UndoLink::NONE,
-            alt_next: UndoLink::NONE,
-            alt_prev: UndoLink::NONE,
-            seq: 0,
-            walk: 0,
-            entries: Vec::new(),
-            getbot: None,
-            cursor: Pos::default(),
-            cursor_vcol: ColNr::ZERO,
-            flags: 0,
-            named_marks: [SavedMark::ZERO; 26],
-            extmarks: Vec::new(),
-            visual: VisualInfo {
-                vi_start: Pos::default(),
-                vi_end: Pos::default(),
-                vi_mode: 0,
-                vi_curswant: ColNr::ZERO,
-            },
-            time: 0,
-            save_nr: 0,
-        }
-    }
-}
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct VisualInfo {
     pub vi_start: Pos,
     pub vi_end: Pos,

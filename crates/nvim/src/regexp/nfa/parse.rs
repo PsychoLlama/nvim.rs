@@ -54,21 +54,6 @@ const M_Z_UPPER: c_int = magic(b'Z');
 const AUTO_MAX_REPEAT: c_int = 500;
 const AUTO_MAX_SPAN: c_int = 200;
 
-/// A blank parse-cursor snapshot for [`save_parse_state`] to fill in.
-fn no_state() -> ParseState {
-    ParseState {
-        regparse: 0,
-        prevchr_len: 0,
-        curchr: 0,
-        prevchr: 0,
-        prevprevchr: 0,
-        nextchr: 0,
-        at_start: 0,
-        prev_at_start: 0,
-        regnpar: 0,
-    }
-}
-
 /// The lookaround `\@=`, `\@!`, `\@<=`, `\@<!` and `\@>` operators.
 ///
 /// The two "just before" forms take the optional width `\@123<=` gives,
@@ -173,7 +158,7 @@ fn counted_repeat(
 
     rc.post.truncate(atom_start);
     // Where the pattern continues, to be restored once the copies are out.
-    let mut after_atom = no_state();
+    let mut after_atom = ParseState::default();
     save_parse_state(rc, &mut after_atom);
     let quest = if greedy {
         NfaOp::Quest.code()
@@ -216,7 +201,7 @@ fn counted_repeat(
 pub(crate) fn nfa_regpiece(rc: &mut RegCompiler) -> Parsed {
     // `\+` and `\{n,m}` re-parse the atom, so the cursor as it stood before
     // it has to be recoverable.
-    let mut before_atom = no_state();
+    let mut before_atom = ParseState::default();
     save_parse_state(rc, &mut before_atom);
     let atom_start = rc.post.len();
 

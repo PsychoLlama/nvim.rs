@@ -22,7 +22,9 @@ use crate::registry::IdSet;
 use crate::statusline::defs::WinClickDefs;
 use crate::winlayer::{Buf, BufId, FrameId, TabId, WinId};
 
-#[derive(Debug)]
+/// `Default` is the zeroed state a caller declares before handing it to
+/// `switch_win`, which fills every field.
+#[derive(Debug, Default)]
 pub struct SwitchWin {
     /// The window and tab page to go back to. Handles: `switch_win` runs
     /// user code between the save and the restore, and that code can close
@@ -32,7 +34,9 @@ pub struct SwitchWin {
     pub sw_same_win: bool,
     pub sw_visual_active: bool,
 }
-#[derive(Debug)]
+/// `Default` is the zeroed state a caller declares before handing it to
+/// `win_execute_before`, which fills what it needs and leaves the rest.
+#[derive(Debug, Default)]
 pub struct WinExecute {
     /// The window the command ran in, as a handle: it may be gone by the
     /// time `win_execute_after` looks.
@@ -45,38 +49,6 @@ pub struct WinExecute {
     /// The buffer's short name, saved for 'autochdir' to put back.
     pub save_sfname: Option<XString>,
     pub switchwin: SwitchWin,
-}
-
-impl Default for SwitchWin {
-    /// The zeroed state a caller declares before handing it to `switch_win`,
-    /// which fills every field. Nothing reads one of these before that.
-    fn default() -> Self {
-        SwitchWin {
-            sw_curwin: None,
-            sw_curtab: None,
-            sw_same_win: false,
-            sw_visual_active: false,
-        }
-    }
-}
-
-impl Default for WinExecute {
-    /// The zeroed state a caller declares before handing it to
-    /// `win_execute_before`, which fills what it needs and leaves the rest.
-    fn default() -> Self {
-        WinExecute {
-            wp: None,
-            curpos: Pos {
-                lnum: LineNr::ZERO,
-                col: ColNr::ZERO,
-                coladd: 0,
-            },
-            cwd: None,
-            apply_acd: false,
-            save_sfname: None,
-            switchwin: SwitchWin::default(),
-        }
-    }
 }
 
 /// Neither `Copy` nor `Clone`: a frame is a *node* of the window layout

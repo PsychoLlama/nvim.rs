@@ -77,12 +77,7 @@ impl SourceCookie {
             fname: XString::new(),
             dbg_tick: 0,
             level: 0,
-            conv: VimConv {
-                vc_type: 0,
-                vc_factor: 0,
-                vc_fd: None,
-                vc_fail: false,
-            },
+            conv: VimConv::default(),
         }
     }
 

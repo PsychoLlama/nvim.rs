@@ -617,7 +617,7 @@ enum Retabulated {
 /// upstream, so a white-space run that reaches the end of a line is still
 /// open when the next line starts. That is observable, so they live here
 /// rather than being per-line locals.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Retab {
     got_tab: bool,
     num_spaces: c_int,
@@ -793,14 +793,7 @@ pub fn ex_retab(excmd: &mut ExArg) {
         // list leaves 'list' off, and that is observable.
         return;
     };
-    let mut retab = Retab {
-        got_tab: false,
-        num_spaces: 0,
-        start_col: 0,
-        start_vcol: 0,
-        first_line: LineNr::ZERO,
-        last_line: LineNr::ZERO,
-    };
+    let mut retab = Retab::default();
     let mut lnum = excmd.line1;
     while !got_int.get() && lnum <= excmd.line2 {
         if !retab.line(lnum, &tabs, excmd.forceit) {

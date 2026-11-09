@@ -67,52 +67,6 @@ use super::{
     e_wrong_character_width_for_field_str, e_wrong_number_of_characters_for_field_str,
 };
 
-/// A 'fillchars' struct with every field blank -- what the assignment round
-/// starts from, before the defaults and then the value fill it in.
-const NO_FILL_CHARS: FcsChars = FcsChars {
-    stl: 0,
-    stlnc: 0,
-    wbr: 0,
-    horiz: 0,
-    horizup: 0,
-    horizdown: 0,
-    vert: 0,
-    vertleft: 0,
-    vertright: 0,
-    verthoriz: 0,
-    fold: 0,
-    foldopen: 0,
-    foldclosed: 0,
-    foldsep: 0,
-    foldinner: 0,
-    diff: 0,
-    msgsep: 0,
-    eob: 0,
-    lastline: 0,
-    trunc: 0,
-    truncrl: 0,
-};
-
-/// A 'listchars' struct with every field blank, owning no runs.
-const NO_LIST_CHARS: LcsChars = LcsChars {
-    eol: 0,
-    ext: 0,
-    prec: 0,
-    nbsp: 0,
-    space: 0,
-    tab1: 0,
-    tab2: 0,
-    tab3: 0,
-    leadtab1: 0,
-    leadtab2: 0,
-    leadtab3: 0,
-    lead: 0,
-    trail: 0,
-    multispace: None,
-    leadmultispace: None,
-    conceal: 0,
-};
-
 /// What a field does with the characters it is given, beyond the one
 /// character every field takes.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -144,7 +98,7 @@ enum Slot {
 }
 
 /// The two character structs a parse fills, one of which it hands over.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Chars {
     fill: FcsChars,
     list: LcsChars,
@@ -392,10 +346,7 @@ fn parse_chars(bytes: &[u8], listchars: bool, apply: bool) -> Result<Option<Char
     let tab: &[Field] = if listchars { &LCS_TAB } else { &FCS_TAB };
     // The struct this call fills in and, when `apply`, hands back. Only one
     // of the two is ever used; which one is `listchars`.
-    let mut chars = Chars {
-        fill: NO_FILL_CHARS,
-        list: NO_LIST_CHARS,
-    };
+    let mut chars = Chars::default();
 
     // The offset of the last "multispace:"/"leadmultispace:" field in the
     // value, and how many characters it names. The first round works these

@@ -259,7 +259,7 @@ pub(crate) struct LineCache {
     offset: size_t,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct InfoPtr {
     pub ip_bnum: BlockNr,
     pub ip_low: LineNr,
@@ -343,12 +343,7 @@ impl MemLine {
 
     /// Push a blank entry and answer its index. Every caller fills it in.
     pub fn stack_push(&mut self) -> usize {
-        self.ml_stack.push(InfoPtr {
-            ip_bnum: 0,
-            ip_low: LineNr::ZERO,
-            ip_high: LineNr::ZERO,
-            ip_index: 0,
-        });
+        self.ml_stack.push(InfoPtr::default());
         self.ml_stack.len() - 1
     }
 

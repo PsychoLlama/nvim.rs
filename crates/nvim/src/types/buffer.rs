@@ -192,7 +192,7 @@ pub struct DiffLineChange {
 pub type DispTick = uint64_t;
 pub type DoBufAction = ::core::ffi::c_int;
 pub type DoBufStart = ::core::ffi::c_int;
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FcsChars {
     pub stl: ScreenChar,
     pub stlnc: ScreenChar,
@@ -704,7 +704,7 @@ pub type GetFileFlags = ::core::ffi::c_int;
 /// Not `Copy`: `multispace` and `leadmultispace` are owned runs, made by
 /// 'listchars' and dropped when the window's value is replaced. A zeroed
 /// struct holds neither, which is what a zeroed window starts with.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct LcsChars {
     pub eol: ScreenChar,
     pub ext: ScreenChar,
@@ -783,7 +783,7 @@ pub struct PosSave {
     pub w_cursor_save: Pos,
     pub w_cursor_corr: Pos,
 }
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct SynTime {
     pub total: ProfTime,
     pub slowest: ProfTime,

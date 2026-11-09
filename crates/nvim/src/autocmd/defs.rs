@@ -210,7 +210,8 @@ pub struct AutoPatCmd {
     pub arg_bufnr: ::core::ffi::c_int,
     pub(crate) walk: Option<usize>,
 }
-#[derive(Debug)]
+/// `Default` is the zeroed state `aucmd_prepbuf` expects to be handed.
+#[derive(Debug, Default)]
 pub struct AcoSave {
     pub use_aucmd_win_idx: ::core::ffi::c_int,
     pub save_curwin_handle: Handle,
@@ -223,24 +224,6 @@ pub struct AcoSave {
     pub globaldir: Option<XString>,
     pub save_visual_active: bool,
     pub save_prompt_insert: Key,
-}
-
-impl Default for AcoSave {
-    /// The zeroed state `aucmd_prepbuf` expects to be handed. Every caller
-    /// declares one of these as a local and immediately fills it in.
-    fn default() -> Self {
-        AcoSave {
-            use_aucmd_win_idx: 0,
-            save_curwin_handle: Handle::NONE,
-            new_curwin_handle: Handle::NONE,
-            save_prevwin_handle: Handle::NONE,
-            new_curbuf: BufferRef::new(),
-            tp_localdir: None,
-            globaldir: None,
-            save_visual_active: false,
-            save_prompt_insert: Key::NUL,
-        }
-    }
 }
 
 #[derive(Debug)]
