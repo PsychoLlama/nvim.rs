@@ -13,7 +13,6 @@
 )]
 #![deny(unsafe_op_in_unsafe_fn)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub mod buffer;
 pub mod decode;
@@ -77,10 +76,10 @@ pub(crate) use self::vars::{get_v_event, restore_v_event};
 // from outside; the rest of `expr` stays in-crate.
 pub use self::expr::eval0;
 
-pub const _ISalnum: c_uint = 8;
+pub const IS_ALNUM: c_uint = 8;
 pub const REGSUB_MAGIC: c_uint = 2;
 pub const REGSUB_COPY: c_uint = 1;
-pub const kMarkAll: MarkGet = 1;
+pub const MARK_ALL: MarkGet = 1;
 pub const GLV_READ_ONLY: c_uint = 16;
 pub const GLV_NO_AUTOLOAD: c_uint = 4;
 pub const GLV_QUIET: c_uint = 2;
@@ -95,7 +94,7 @@ pub const EXPR_GREATER: ExprType = 3;
 pub const EXPR_NEQUAL: ExprType = 2;
 pub const EXPR_EQUAL: ExprType = 1;
 pub const EXPR_UNKNOWN: ExprType = 0;
-pub const kGRegExprSrc: GRegFlags = 2;
+pub const G_REG_EXPR_SRC: GRegFlags = 2;
 pub const FSK_IN_STRING: c_uint = 4;
 pub const FSK_KEYCODE: c_uint = 1;
 pub const FSK_SIMPLIFY: c_uint = 8;
@@ -149,19 +148,19 @@ pub const DICT_MAXNEST: c_int = 100 as c_int;
 /// The messages this tree reports, as the C spells them. Each is a
 /// format string for `semsg` or a plain one for `emsg`; both want a
 /// NUL-terminated pointer, which is what `as_ptr()` gives.
-pub(crate) const e_missbrac: &CStr = c"E111: Missing ']'";
-pub(crate) const e_cannot_slice_dictionary: &CStr = c"E719: Cannot slice a Dictionary";
-pub(crate) const e_cannot_index_special_variable: &CStr = c"E909: Cannot index a special variable";
-pub(crate) const e_nowhitespace: &CStr = c"E274: No white space allowed before parenthesis";
-pub(crate) const e_cannot_index_a_funcref: &CStr = c"E695: Cannot index a Funcref";
-pub(crate) const e_variable_nested_too_deep_for_making_copy: &CStr =
+pub(crate) const E_MISSBRAC: &CStr = c"E111: Missing ']'";
+pub(crate) const E_CANNOT_SLICE_DICTIONARY: &CStr = c"E719: Cannot slice a Dictionary";
+pub(crate) const E_CANNOT_INDEX_SPECIAL_VARIABLE: &CStr = c"E909: Cannot index a special variable";
+pub(crate) const E_NOWHITESPACE: &CStr = c"E274: No white space allowed before parenthesis";
+pub(crate) const E_CANNOT_INDEX_A_FUNCREF: &CStr = c"E695: Cannot index a Funcref";
+pub(crate) const E_VARIABLE_NESTED_TOO_DEEP_FOR_MAKING_COPY: &CStr =
     c"E698: Variable nested too deep for making a copy";
-pub(crate) const e_string_list_or_blob_required: &CStr = c"E1098: String, List or Blob required";
-pub(crate) const e_empty_function_name: &CStr = c"E1192: Empty function name";
-pub(crate) const e_cannot_use_partial_here: &CStr = c"E1265: Cannot use a partial here";
+pub(crate) const E_STRING_LIST_OR_BLOB_REQUIRED: &CStr = c"E1098: String, List or Blob required";
+pub(crate) const E_EMPTY_FUNCTION_NAME: &CStr = c"E1192: Empty function name";
+pub(crate) const E_CANNOT_USE_PARTIAL_HERE: &CStr = c"E1265: Cannot use a partial here";
 
 /// The scope letters a `x:` variable prefix may use.
-pub(crate) const namespace_char: &CStr = c"abglstvw";
+pub(crate) const NAMESPACE_CHAR: &CStr = c"abglstvw";
 
 /// Whether the lambda being parsed reads a function-local variable or an
 /// argument, which makes it a closure; `None` while no evaluating lambda is
@@ -169,14 +168,14 @@ pub(crate) const namespace_char: &CStr = c"abglstvw";
 /// back the enclosing one's value when it ends — upstream's
 /// `eval_lavars_used`, a pointer to a flag in that call's frame.
 pub(crate) static LAMBDA_USES_LOCALS: GlobalCell<Option<bool>> = GlobalCell::new(None);
-static echo_hl_id: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-static last_timer_id: GlobalCell<uint64_t> = GlobalCell::new(1 as uint64_t);
+static ECHO_HL_ID: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+static LAST_TIMER_ID: GlobalCell<uint64_t> = GlobalCell::new(1 as uint64_t);
 /// Every live timer, by `timer_id`. See [`crate::registry`] for the order
 /// this keeps and the reentrancy rule it answers: a timer's callback runs
 /// Vimscript, which can start and stop timers, so nothing holds a borrow of
 /// this across one.
-static timers: GlobalCell<SlotTable<uint64_t, Timer>> = GlobalCell::new(SlotTable::new());
-static callback_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+static TIMERS: GlobalCell<SlotTable<uint64_t, Timer>> = GlobalCell::new(SlotTable::new());
+static CALLBACK_DEPTH: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub const TV_CSTRING: c_ulong = SIZE_MAX.wrapping_sub(1 as c_ulong);
 pub const PROF_YES: c_int = 1 as c_int;
 pub const INT_MAX: c_int = __INT_MAX__;

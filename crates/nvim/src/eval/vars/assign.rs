@@ -29,8 +29,8 @@ use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use super::{
-    ScopeLister, clear_local, e_double_semicolon_in_list_of_variables, e_letunexp, emsg_static,
-    heredoc_get, kGRegExprSrc, list_arg_vars, list_buf_vars, list_func_vars, list_glob_vars,
+    E_DOUBLE_SEMICOLON_IN_LIST_OF_VARIABLES, E_LETUNEXP, G_REG_EXPR_SRC, ScopeLister, clear_local,
+    emsg_static, heredoc_get, list_arg_vars, list_buf_vars, list_func_vars, list_glob_vars,
     list_script_vars, list_tab_vars, list_vim_vars, list_win_vars, tv_to_optval,
 };
 use crate::charset::skip;
@@ -312,7 +312,7 @@ pub(crate) fn skip_var_list(text: &[u8], silent: bool) -> Option<VarList> {
             }
             b';' if list.semicolon => {
                 if !silent {
-                    emsg_static(e_double_semicolon_in_list_of_variables);
+                    emsg_static(E_DOUBLE_SEMICOLON_IN_LIST_OF_VARIABLES);
                 }
                 return None;
             }
@@ -366,7 +366,7 @@ fn ex_let_env(
     } else if is_arithmetic(op) {
         wrong_type(op);
     } else if !ends_target(endchars, text, end) {
-        emsg_static(e_letunexp);
+        emsg_static(E_LETUNEXP);
     } else if !check_secure() {
         let name = &text[1..end];
         let value = numbuf.string_chk(tv)?;
@@ -414,7 +414,7 @@ fn ex_let_option(
     let option = option_var_end(text);
     let (opt_idx, opt_flags) = (option.index, option.flags);
     let Some(end) = option.end.filter(|&end| ends_target(endchars, text, end)) else {
-        emsg_static(e_letunexp);
+        emsg_static(E_LETUNEXP);
         return Err(Failed);
     };
     // The name proper starts after the scope, if there is one.
@@ -531,7 +531,7 @@ fn ex_let_register(
     // The register name is one byte.
     let past = 2;
     if !ends_target(endchars, text, past) {
-        emsg_static(e_letunexp);
+        emsg_static(E_LETUNEXP);
         return Err(Failed);
     }
 
@@ -546,7 +546,7 @@ fn ex_let_register(
     let joined;
     let mut value = value;
     if op == Some(b'.')
-        && let Some(old) = get_reg_contents_owned(regname, kGRegExprSrc.cast_signed())
+        && let Some(old) = get_reg_contents_owned(regname, G_REG_EXPR_SRC.cast_signed())
     {
         joined = join(&old, value);
         value = joined.to_bytes();
@@ -589,7 +589,7 @@ fn ex_let_one(
     // not quiet here.
     let end = end.ok().filter(|_| lval.has_name()).ok_or(Failed)?;
     if !ends_target(endchars, text, end) {
-        emsg_static(e_letunexp);
+        emsg_static(E_LETUNEXP);
         return Err(Failed);
     }
     set_var_lval(&mut lval, tv, copy, is_const, op);

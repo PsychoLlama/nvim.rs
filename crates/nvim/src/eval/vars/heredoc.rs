@@ -23,7 +23,7 @@ use crate::semsg;
 use crate::types::{ExArg, Failed, TypVal};
 use core::ffi::c_int;
 
-use super::{e_cannot_use_heredoc_here, emsg_static};
+use super::{E_CANNOT_USE_HEREDOC_HERE, emsg_static};
 
 /// The comment character a marker line may carry after it.
 const COMMENT_CHAR: u8 = b'"';
@@ -145,7 +145,7 @@ pub(crate) fn heredoc_get(
         excmd.line.set_byte(at + nl, 0);
         line_arg = Some(at + nl + 1);
     } else if excmd.source.is_none() {
-        emsg_static(e_cannot_use_heredoc_here);
+        emsg_static(E_CANNOT_USE_HEREDOC_HERE);
         return Err(Failed);
     }
 

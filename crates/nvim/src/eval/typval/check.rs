@@ -77,7 +77,7 @@ pub fn tv_check_num(tv: &TypVal) -> Result<(), Failed> {
     match tv.v_type() {
         VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING => Ok(()),
         VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_FLOAT | VAR_BLOB | VAR_UNKNOWN => {
-            emsg(gettext(num_errors[tv.v_type() as usize]));
+            emsg(gettext(NUM_ERRORS[tv.v_type() as usize]));
             Err(Failed)
         }
         _ => unreachable!("a VarType outside the eleven the enum names"),
@@ -89,7 +89,7 @@ pub fn tv_check_str(tv: &TypVal) -> Result<(), Failed> {
     match tv.v_type() {
         VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING | VAR_FLOAT => Ok(()),
         VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
-            emsg(gettext(str_errors[tv.v_type() as usize]));
+            emsg(gettext(STR_ERRORS[tv.v_type() as usize]));
             Err(Failed)
         }
         _ => unreachable!("a VarType outside the eleven the enum names"),
@@ -101,7 +101,7 @@ pub fn tv_check_for_string_arg(args: &[TypVal], idx: usize) -> Result<(), Failed
     arg_is(
         args,
         idx,
-        e_string_required_for_argument_nr,
+        E_STRING_REQUIRED_FOR_ARGUMENT_NR,
         TypVal::is_string,
     )
 }
@@ -110,7 +110,7 @@ pub fn tv_check_for_string_arg(args: &[TypVal], idx: usize) -> Result<(), Failed
 pub fn tv_check_for_nonempty_string_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
     tv_check_for_string_arg(args, idx)?;
     let nonempty = args[idx].string_ref().is_some_and(|text| !text.is_empty());
-    arg_check(nonempty, e_non_empty_string_required_for_argument_nr, idx)
+    arg_check(nonempty, E_NON_EMPTY_STRING_REQUIRED_FOR_ARGUMENT_NR, idx)
 }
 
 /// [`tv_check_for_string_arg`], accepting a missing argument.
@@ -123,7 +123,7 @@ pub fn tv_check_for_opt_string_arg(args: &[TypVal], idx: usize) -> Result<(), Fa
 
 /// `E1210`: argument `idx` must be a Number.
 pub fn tv_check_for_number_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
-    arg_is(args, idx, e_number_required_for_argument_nr, |arg| {
+    arg_is(args, idx, E_NUMBER_REQUIRED_FOR_ARGUMENT_NR, |arg| {
         arg.v_type() == VAR_NUMBER
     })
 }
@@ -141,14 +141,14 @@ pub fn tv_check_for_float_or_nr_arg(args: &[TypVal], idx: usize) -> Result<(), F
     arg_is(
         args,
         idx,
-        e_float_or_number_required_for_argument_nr,
+        E_FLOAT_OR_NUMBER_REQUIRED_FOR_ARGUMENT_NR,
         |arg| arg.v_type() == VAR_FLOAT || arg.v_type() == VAR_NUMBER,
     )
 }
 
 /// `E1212`: argument `idx` must be a Bool, or the Number 0 or 1.
 pub fn tv_check_for_bool_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
-    arg_is(args, idx, e_bool_required_for_argument_nr, |arg| {
+    arg_is(args, idx, E_BOOL_REQUIRED_FOR_ARGUMENT_NR, |arg| {
         let numeric_bool =
             arg.v_type() == VAR_NUMBER && (arg.number_or_zero() == 0 || arg.number_or_zero() == 1);
         arg.v_type() == VAR_BOOL || numeric_bool
@@ -165,21 +165,21 @@ pub fn tv_check_for_opt_bool_arg(args: &[TypVal], idx: usize) -> Result<(), Fail
 
 /// `E1238`: argument `idx` must be a Blob.
 pub fn tv_check_for_blob_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
-    arg_is(args, idx, e_blob_required_for_argument_nr, |arg| {
+    arg_is(args, idx, E_BLOB_REQUIRED_FOR_ARGUMENT_NR, |arg| {
         arg.v_type() == VAR_BLOB
     })
 }
 
 /// `E1211`: argument `idx` must be a List.
 pub fn tv_check_for_list_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
-    arg_is(args, idx, e_list_required_for_argument_nr, |arg| {
+    arg_is(args, idx, E_LIST_REQUIRED_FOR_ARGUMENT_NR, |arg| {
         arg.v_type() == VAR_LIST
     })
 }
 
 /// `E1206`: argument `idx` must be a Dictionary.
 pub fn tv_check_for_dict_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
-    arg_is(args, idx, e_dict_required_for_argument_nr, |arg| {
+    arg_is(args, idx, E_DICT_REQUIRED_FOR_ARGUMENT_NR, |arg| {
         arg.v_type() == VAR_DICT
     })
 }
@@ -190,7 +190,7 @@ pub fn tv_check_for_nonnull_dict_arg(args: &[TypVal], idx: usize) -> Result<(), 
     let dict = args[idx].dict_or_null();
     arg_check(
         !dict.is_null(),
-        e_non_null_dict_required_for_argument_nr,
+        E_NON_NULL_DICT_REQUIRED_FOR_ARGUMENT_NR,
         idx,
     )
 }
@@ -208,7 +208,7 @@ pub fn tv_check_for_string_or_number_arg(args: &[TypVal], idx: usize) -> Result<
     arg_is(
         args,
         idx,
-        e_string_or_number_required_for_argument_nr,
+        E_STRING_OR_NUMBER_REQUIRED_FOR_ARGUMENT_NR,
         |arg| arg.v_type() == VAR_STRING || arg.v_type() == VAR_NUMBER,
     )
 }
@@ -228,7 +228,7 @@ pub fn tv_check_for_string_or_list_arg(args: &[TypVal], idx: usize) -> Result<()
     arg_is(
         args,
         idx,
-        e_string_or_list_required_for_argument_nr,
+        E_STRING_OR_LIST_REQUIRED_FOR_ARGUMENT_NR,
         |arg| arg.v_type() == VAR_STRING || arg.v_type() == VAR_LIST,
     )
 }
@@ -238,7 +238,7 @@ pub fn tv_check_for_string_or_list_or_blob_arg(args: &[TypVal], idx: usize) -> R
     arg_is(
         args,
         idx,
-        e_string_list_or_blob_required_for_argument_nr,
+        E_STRING_LIST_OR_BLOB_REQUIRED_FOR_ARGUMENT_NR,
         |arg| arg.v_type() == VAR_STRING || arg.v_type() == VAR_LIST || arg.v_type() == VAR_BLOB,
     )
 }
@@ -256,14 +256,14 @@ pub fn tv_check_for_string_or_func_arg(args: &[TypVal], idx: usize) -> Result<()
     arg_is(
         args,
         idx,
-        e_string_or_function_required_for_argument_nr,
+        E_STRING_OR_FUNCTION_REQUIRED_FOR_ARGUMENT_NR,
         |arg| arg.v_type() == VAR_PARTIAL || arg.v_type() == VAR_FUNC || arg.v_type() == VAR_STRING,
     )
 }
 
 /// `E1226`: argument `idx` must be a List or a Blob.
 pub fn tv_check_for_list_or_blob_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
-    arg_is(args, idx, e_list_or_blob_required_for_argument_nr, |arg| {
+    arg_is(args, idx, E_LIST_OR_BLOB_REQUIRED_FOR_ARGUMENT_NR, |arg| {
         arg.v_type() == VAR_LIST || arg.v_type() == VAR_BLOB
     })
 }

@@ -36,7 +36,7 @@ use crate::ex_docmd::cmdline::do_cmdline;
 use crate::ex_docmd::scan::get_flags;
 use crate::ex_docmd::source::LineSource;
 use crate::ex_docmd::{
-    DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, kMTLineWise,
+    DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, MT_LINE_WISE, OPTION_MAGIC_OFF, OPTION_MAGIC_ON,
 };
 use crate::fold::{fold_create, fold_manual_allowed, op_fold_range};
 use crate::getchar::{beep_flush, stuff_empty, typeahead, vpeekc};
@@ -215,7 +215,7 @@ pub(crate) fn ex_operators(excmd: &mut ExArg) {
         start: line(excmd.line1),
         end: line(excmd.line2),
         line_count: (excmd.line2 - excmd.line1 + 1),
-        motion_type: kMTLineWise,
+        motion_type: MT_LINE_WISE,
         ..OpArg::default()
     };
     // An Ex range is whole lines, so 'virtualedit' must not apply.

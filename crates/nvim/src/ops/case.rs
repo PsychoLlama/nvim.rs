@@ -45,7 +45,7 @@ pub(crate) fn op_tilde(op: &mut OpArg) {
     }
 
     let mut pos: Pos = op.start;
-    if op.motion_type == kMTBlockWise {
+    if op.motion_type == MT_BLOCK_WISE {
         let mut bd = BlockDef::ZERO;
         while pos.lnum <= op.end.lnum {
             block_prep(&mut bd, op, pos.lnum, false);
@@ -58,7 +58,7 @@ pub(crate) fn op_tilde(op: &mut OpArg) {
             changed_lines(Buf::current(), first, ColNr::ZERO, last, 0, true);
         }
     } else {
-        if op.motion_type == kMTLineWise {
+        if op.motion_type == MT_LINE_WISE {
             op.start.col = ColNr::ZERO;
             pos.col = ColNr::ZERO;
             op.end.col = Lines::current().line_len(op.end.lnum);

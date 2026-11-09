@@ -48,8 +48,8 @@ use crate::eval::vars::{
     var_wrong_func_name_named, vimvar_dict, with_var,
 };
 use crate::eval::{
-    Cursor, FNE_INCL_BR, GLV_NO_AUTOLOAD, GLV_QUIET, GLV_READ_ONLY, e_cannot_slice_dictionary,
-    e_missbrac, eval1, expanded_name, name_end, tv_is_luafunc,
+    Cursor, E_CANNOT_SLICE_DICTIONARY, E_MISSBRAC, FNE_INCL_BR, GLV_NO_AUTOLOAD, GLV_QUIET,
+    GLV_READ_ONLY, eval1, expanded_name, name_end, tv_is_luafunc,
 };
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
@@ -475,7 +475,7 @@ impl Walk<'_, '_> {
 
         if byte_at(self.text, self.at) != b']' {
             if !self.quiet {
-                emsg_static(e_missbrac);
+                emsg_static(E_MISSBRAC);
             }
             return Err(self.refused());
         }
@@ -502,7 +502,7 @@ impl Walk<'_, '_> {
         self.refresh()?;
         if matches!(self.container, Container::Dict(_)) {
             if !self.quiet {
-                emsg_static(e_cannot_slice_dictionary);
+                emsg_static(E_CANNOT_SLICE_DICTIONARY);
             }
             return Err(self.refused());
         }

@@ -21,8 +21,8 @@ use crate::eval::typval::{
     NumBuf, blob_equal, dict_equal, list_equal, tv_clear, tv_equal, tv_get_float, tv_get_number,
 };
 use crate::eval::{
-    _ISalnum, E_INVALBLOB, EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_IS, EXPR_ISNOT, EXPR_MATCH,
-    EXPR_NEQUAL, EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, EXPR_UNKNOWN, pattern_match,
+    E_INVALBLOB, EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_IS, EXPR_ISNOT, EXPR_MATCH,
+    EXPR_NEQUAL, EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, EXPR_UNKNOWN, IS_ALNUM, pattern_match,
 };
 use crate::mbyte::strnicmp_in;
 use crate::message::emsg;
@@ -36,7 +36,7 @@ use crate::types::{
 /// `isnot` stand as whole words. nvim calls `setlocale(LC_ALL, "")` at
 /// startup, so this is deliberately not the ASCII test.
 fn isalnum_locale(c: u8) -> bool {
-    c_uint::from(ctype_bits(c)) & _ISalnum != 0
+    c_uint::from(ctype_bits(c)) & IS_ALNUM != 0
 }
 
 /// Recognise a comparison operator, answering it and how many bytes it took.

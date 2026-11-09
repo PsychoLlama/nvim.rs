@@ -193,7 +193,7 @@ fn split_expr_result(insert_string: &XString) -> (Vec<XString>, MotionType) {
                 rest = &rest[at + 1..];
                 // A trailing newline makes the register linewise.
                 if rest.is_empty() {
-                    y_type = kMTLineWise;
+                    y_type = MT_LINE_WISE;
                     break;
                 }
             }
@@ -244,14 +244,14 @@ impl Put {
     ///
     /// Answers false when undo could not be saved.
     fn save_for_undo(&self) -> bool {
-        if self.kind == kMTBlockWise {
+        if self.kind == MT_BLOCK_WISE {
             let mut lnum = Win::current().w_cursor.lnum + len_as_int(self.lines.len()) + 1;
             lnum = lnum.min(Buf::current().b_ml.ml_line_count + 1);
             // `lnum` is capped at one past the last line.
             return u_save(Win::current().w_cursor.lnum - 1, lnum).is_ok();
         }
 
-        if self.kind != kMTLineWise {
+        if self.kind != MT_LINE_WISE {
             return u_save_cursor().is_ok();
         }
 
@@ -421,7 +421,7 @@ pub fn do_put(
             break 'end;
         }
 
-        if put.kind == kMTLineWise {
+        if put.kind == MT_LINE_WISE {
             let split_failed = put.flags & PUT_LINE_SPLIT != 0 && !put.split_current_line();
             if split_failed {
                 break 'end;
@@ -437,7 +437,7 @@ pub fn do_put(
 
         if put.flags & PUT_LINE != 0 {
             // `:put`, or `p` in Visual line mode.
-            put.kind = kMTLineWise;
+            put.kind = MT_LINE_WISE;
         }
 
         if put.lines.is_empty() {
@@ -460,7 +460,7 @@ pub fn do_put(
         let mut lnum = Win::current().w_cursor.lnum;
         let mut col = Win::current().w_cursor.col;
 
-        if put.kind == kMTBlockWise {
+        if put.kind == MT_BLOCK_WISE {
             put.blockwise(lnum);
         } else {
             if put.kind == MT_CHAR_WISE {

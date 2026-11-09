@@ -8,7 +8,7 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{f_environ, kChannelPartRpc};
+use super::{CHANNEL_PART_RPC, f_environ};
 use crate::api::private::helpers::{dict_set_var, scope_vars};
 use crate::autocmd::apply_autocmds;
 use crate::autocmd::defs::AutoEvent;
@@ -152,7 +152,7 @@ pub fn f_jobstop(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     let is_rpc = with_channel(id, |channel| channel.is_rpc).unwrap_or(false);
     let refused = if is_rpc {
-        channel_close(id, kChannelPartRpc).err()
+        channel_close(id, CHANNEL_PART_RPC).err()
     } else {
         None
     };

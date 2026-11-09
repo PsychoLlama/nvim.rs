@@ -24,8 +24,8 @@ use crate::ascii::ascii_isdigit;
 use crate::env::{expand_env_within, home_to_tilde, state_subpath};
 use crate::event::uv::{uv_gid_t, uv_uid_t};
 use crate::fileio::buffered::{
-    FileOpenFlags, ReadFile, WriteFile, kFileCreate, kFileCreateOnly, kFileNoSymlink,
-    kFileReadOnly, kFileTruncate,
+    FILE_CREATE, FILE_CREATE_ONLY, FILE_NO_SYMLINK, FILE_READ_ONLY, FILE_TRUNCATE, FileOpenFlags,
+    ReadFile, WriteFile,
 };
 use crate::fileio::{modname, rename_file};
 use crate::global_cell::GlobalCell;
@@ -118,7 +118,7 @@ fn shada_read_file(file: Option<&CStr>, flags: u32) {
 /// [`shada_read_file`]'s work.
 fn read_file(file: Option<&CStr>, flags: u32) -> Result<(), ShadaError> {
     let fname = shada_filename(file).ok_or(ShadaError::Off)?;
-    let opened = ReadFile::open(&fname, kFileReadOnly);
+    let opened = ReadFile::open(&fname, FILE_READ_ONLY);
 
     if p_verbose() > 1 {
         verbose_enter();
@@ -205,7 +205,7 @@ fn open_temp_writer(fname: &CStr, perm: c_int) -> Result<(WriteFile, CString), S
 
     loop {
         let name = CString::new(tempname.clone()).expect("shada: a NUL crept in");
-        let flags: FileOpenFlags = kFileCreateOnly | kFileNoSymlink;
+        let flags: FileOpenFlags = FILE_CREATE_ONLY | FILE_NO_SYMLINK;
         match WriteFile::open(&name, flags, perm) {
             Ok(file) => return Ok((file, name)),
             Err(error) if error != UV_EEXIST && error != UV_ELOOP => {
@@ -235,7 +235,7 @@ fn open_direct_writer(fname: &CStr) -> Result<WriteFile, ShadaError> {
         }
     }
 
-    WriteFile::open(fname, kFileCreate | kFileTruncate, 0o600)
+    WriteFile::open(fname, FILE_CREATE | FILE_TRUNCATE, 0o600)
         .map_err(|error| ShadaError::OpenForWriting(ThinCString::from_cstr(fname), error))
 }
 
@@ -260,7 +260,7 @@ fn write_file(file: Option<&CStr>, nomerge: bool) -> Result<(), ShadaError> {
     // The merge half: open the old file, then a temporary next to it.
     let mut merge: Option<(Source, WriteFile, CString)> = None;
     if !nomerge {
-        match ReadFile::open(&fname, kFileReadOnly) {
+        match ReadFile::open(&fname, FILE_READ_ONLY) {
             Err(error) => {
                 if error != UV_ENOENT {
                     // Something other than "no file yet" — say so, but still

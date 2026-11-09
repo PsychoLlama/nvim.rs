@@ -10,7 +10,7 @@
 )]
 
 use super::wrappers::{arg_number_chk, dict_alloc_ret};
-use super::{MT_CHAR_WISE, kGRegExprSrc, kGRegList, kMTBlockWise, kMTLineWise, kMTUnknown};
+use super::{G_REG_EXPR_SRC, G_REG_LIST, MT_BLOCK_WISE, MT_CHAR_WISE, MT_LINE_WISE, MT_UNKNOWN};
 use crate::cstr;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, dict_get_number, dict_len, list_iter, tv_list_alloc};
@@ -61,12 +61,12 @@ pub fn f_getreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
     let mut flags = if expr_src {
-        kGRegExprSrc.cast_signed()
+        G_REG_EXPR_SRC.cast_signed()
     } else {
         0
     };
     if return_list {
-        flags |= kGRegList.cast_signed();
+        flags |= G_REG_LIST.cast_signed();
         result.write_empty(VAR_LIST);
         // An unset register gets a fresh empty list.
         let held = get_reg_contents_list(regname, flags).unwrap_or_else(|| tv_list_alloc(0));
@@ -97,7 +97,7 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     dict_alloc_ret(result);
     // Reading `"*`/`"+` runs the provider, so the answer's dictionary is
     // only borrowed between the reads.
-    let list = get_reg_contents_list(regname, kGRegExprSrc.cast_signed());
+    let list = get_reg_contents_list(regname, G_REG_EXPR_SRC.cast_signed());
     // An unset register has no `regcontents`, and no other key either.
     let Some(list) = list else {
         return;
@@ -109,7 +109,7 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let (reg_type, width) = get_reg_type(regname);
     debug_assert!(matches!(
         reg_type,
-        kMTLineWise | MT_CHAR_WISE | kMTBlockWise
+        MT_LINE_WISE | MT_CHAR_WISE | MT_BLOCK_WISE
     ));
     let regtype = format_reg_type(reg_type, width);
     let _ = dict(result).add_str(b"regtype", Some(&regtype));
@@ -169,14 +169,14 @@ fn get_yank_type(
 ) -> Result<(), Failed> {
     match cstr::byte_at(text, *at) {
         b'v' | b'c' => *yank_type = MT_CHAR_WISE,
-        b'V' | b'l' => *yank_type = kMTLineWise,
-        b'b' => *yank_type = kMTBlockWise,
-        c if Key::byte(c) == Key::CTRL_V => *yank_type = kMTBlockWise,
+        b'V' | b'l' => *yank_type = MT_LINE_WISE,
+        b'b' => *yank_type = MT_BLOCK_WISE,
+        c if Key::byte(c) == Key::CTRL_V => *yank_type = MT_BLOCK_WISE,
         _ => return Err(Failed),
     }
     let digits = &text[(*at + 1).min(text.len())..];
     let count = crate::charset::skip::digits(digits);
-    if *yank_type == kMTBlockWise && count > 0 {
+    if *yank_type == MT_BLOCK_WISE && count > 0 {
         // `getdigits_int` with no default: a width that does not fit an
         // `int` reads as 0.
         let width = digits[..count].iter().try_fold(0 as c_int, |n, &d| {
@@ -206,7 +206,7 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         c => c,
     };
 
-    let mut yank_type: MotionType = kMTUnknown;
+    let mut yank_type: MotionType = MT_UNKNOWN;
     let mut block_len: c_int = -1;
     let regcontents: Option<&TypVal>;
     let mut pointreg: RegName = 0;
@@ -215,7 +215,7 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let d_ref = args[1].dict_ref();
         // An empty dict clears the register outright.
         if dict_len(d_ref) == 0 {
-            write_reg_contents_lst(regname, &[], false, kMTUnknown, -1);
+            write_reg_contents_lst(regname, &[], false, MT_UNKNOWN, -1);
             return;
         }
         // The value is copied out before the register writer runs, which
@@ -254,7 +254,7 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if args.len() > 2 {
         // A dict value already carried the type; a third argument on
         // top of it is one argument too many.
-        if yank_type != kMTUnknown {
+        if yank_type != MT_UNKNOWN {
             let arg0 = "setreg";
             semsg!("E118: Too many arguments for function: {arg0}");
             return;

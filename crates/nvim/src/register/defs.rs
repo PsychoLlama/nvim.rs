@@ -123,7 +123,7 @@ impl core::ops::Deref for RegLines {
 #[derive(Clone, Debug)]
 pub struct YankReg {
     pub lines: RegLines,
-    /// `MT_CHAR_WISE`, `kMTLineWise`, `kMTBlockWise`, or `kMTUnknown` while a
+    /// `MT_CHAR_WISE`, `MT_LINE_WISE`, `MT_BLOCK_WISE`, or `MT_UNKNOWN` while a
     /// write is still deciding.
     pub kind: MotionType,
     /// A blockwise register's width in cells, less one.

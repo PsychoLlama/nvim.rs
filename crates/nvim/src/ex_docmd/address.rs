@@ -46,7 +46,7 @@ use crate::cursor::{check_cursor, check_cursor_col};
 use crate::ex_docmd::window::{current_tab_nr, current_win_nr};
 use crate::ex_docmd::{
     E_BACKSLASH, E_INVRANGE, E_LINE_NUMBER_OUT_OF_RANGE, E_NO_ERRORS, E_NORANGE, INT32_MAX,
-    kMarkAll, searchcmdlen,
+    MARK_ALL, searchcmdlen,
 };
 
 use crate::option::magic_isset;
@@ -464,7 +464,7 @@ pub(crate) fn get_address(
                     // is the whole address and the command can change
                     // file; otherwise only this buffer's marks count.
                     let flag: MarkGet = if to_other_file && byte_at(text, cmd + 1) == 0 {
-                        kMarkAll
+                        MARK_ALL
                     } else {
                         kMarkBufLocal
                     };

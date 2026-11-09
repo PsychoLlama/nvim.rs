@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::option::defs::OPT_VAL_TYPE_BOOLEAN;
 use crate::option::defs::OPT_VAL_TYPE_NUMBER;
@@ -120,7 +119,7 @@ pub use self::vvar::*;
 pub(crate) type ScopeLister = fn(&mut bool);
 
 /// `__ctype_b_loc()`'s lower-case bit, the one `islower()` reads.
-pub const _ISlower: c_uint = 512;
+pub const IS_LOWER: c_uint = 512;
 
 /// The reference count `init_var_dict` gives a scope dictionary: high enough
 /// that nothing ever frees one.
@@ -129,7 +128,7 @@ pub const DO_NOT_FREE_CNT: c_int = 1073741823;
 /// `get_lval`'s "do not report" flag.
 pub const GLV_QUIET: c_int = 2;
 
-pub const kGRegExprSrc: GRegFlags = 2;
+pub const G_REG_EXPR_SRC: GRegFlags = 2;
 
 pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const INT64_MIN: ::core::ffi::c_long = -9223372036854775807 - 1;
@@ -154,13 +153,13 @@ pub const SID_STR: c_int = -10;
 // The error texts this family owns.  They are `%`-format strings handed to
 // the variadic `semsg`/`emsg`, so they stay C strings rather than becoming
 // `semsg!` arguments.
-pub const e_letunexp: &CStr = c"E18: Unexpected characters in :let";
-pub const e_double_semicolon_in_list_of_variables: &CStr = c"E452: Double ; in list of variables";
-pub const e_lock_unlock: &CStr = c"E940: Cannot lock or unlock variable %s";
-pub const e_setting_v_str_to_value_with_wrong_type: &CStr =
+pub const E_LETUNEXP: &CStr = c"E18: Unexpected characters in :let";
+pub const E_DOUBLE_SEMICOLON_IN_LIST_OF_VARIABLES: &CStr = c"E452: Double ; in list of variables";
+pub const E_LOCK_UNLOCK: &CStr = c"E940: Cannot lock or unlock variable %s";
+pub const E_SETTING_V_STR_TO_VALUE_WITH_WRONG_TYPE: &CStr =
     c"E963: Setting v:%s to value with wrong type";
-pub const e_missing_end_marker_str: &CStr = c"E990: Missing end marker '%s'";
-pub const e_cannot_use_heredoc_here: &CStr = c"E991: Cannot use =<< here";
+pub const E_MISSING_END_MARKER_STR: &CStr = c"E990: Missing end marker '%s'";
+pub const E_CANNOT_USE_HEREDOC_HERE: &CStr = c"E991: Cannot use =<< here";
 
 /// A scope's entry before its dictionary exists: what a bare `g:` or `v:`
 /// names until [`globvar_dict`] or [`vimvar_dict`] first builds the scope.
@@ -172,25 +171,25 @@ state_record! {
 
     /// The entry a bare `g:` resolves to. Its value is the `g:`
     /// dictionary, a heap dictionary that nothing frees.
-    pub(crate) scope_globals: ScopeDictItem = EMPTY_SCOPE_VAR;
+    pub(crate) SCOPE_GLOBALS: ScopeDictItem = EMPTY_SCOPE_VAR;
     /// The entry a bare `v:` resolves to, likewise, and where each row is.
-    pub(crate) scope_vim: VimScope = VimScope {
+    pub(crate) SCOPE_VIM: VimScope = VimScope {
         entry: EMPTY_SCOPE_VAR,
         slots: [(0, 0); VIMVAR_COUNT],
     };
     /// The `v:msgpack_types` lists, which the msgpack encoder and decoder
     /// compare by identity.
-    pub(crate) msgpack_type_lists: [Option<ListRef>; 8] = [const { None }; 8];
+    pub(crate) MSGPACK_TYPE_LISTS: [Option<ListRef>; 8] = [const { None }; 8];
     /// The address of `v:lua`'s partial, which is set once and never
     /// replaced (`v:lua` is read-only): what [`is_lua_partial`] compares
     /// against, on every call through a partial.
-    pub(crate) lua_partial_addr: usize = 0;
+    pub(crate) LUA_PARTIAL_ADDR: usize = 0;
     /// Whether `v:testing` is non-zero, kept beside the variable by every
     /// write to it ([`before_set_vvar`], [`set_vim_var_nr`]): every function
     /// call asks.
-    pub(crate) vim_testing: bool = false;
+    pub(crate) VIM_TESTING: bool = false;
     /// `v:val` and `v:key` while they are not in the `v:` dictionary.
-    pub(crate) outside_vimvars: [Option<Box<DictItem>>; 2] = [None, None];
+    pub(crate) OUTSIDE_VIMVARS: [Option<Box<DictItem>>; 2] = [None, None];
 }
 
 /// The `v:` scope: the entry a bare `v:` resolves to, whose value is the
@@ -343,6 +342,6 @@ pub(crate) static VIMVAR_ROWS: [VimVarRow; VIMVAR_COUNT] = [
 ];
 
 /// The eight `v:msgpack_types` keys, in `MessagePackType` order.
-const msgpack_type_names: [&CStr; 8] = [
+const MSGPACK_TYPE_NAMES: [&CStr; 8] = [
     c"nil", c"boolean", c"integer", c"float", c"string", c"array", c"map", c"ext",
 ];

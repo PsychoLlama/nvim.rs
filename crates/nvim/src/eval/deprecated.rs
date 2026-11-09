@@ -25,7 +25,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::narrow::len_as_int;
 use crate::types::Handle;
@@ -44,7 +43,7 @@ use crate::semsg;
 use crate::types::{TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, kBoolVarTrue};
 use crate::winlayer::buffers;
 
-pub const kChannelPartRpc: ChannelPart = 3;
+pub const CHANNEL_PART_RPC: ChannelPart = 3;
 
 /// `rpcstart(prog[, argv])`: start a job and speak RPC over its pipes.
 ///
@@ -110,7 +109,7 @@ pub fn f_rpcstop(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
     if channel_job_running(id) {
         f_jobstop(args, result, fptr);
     } else {
-        let closed = channel_close_or_report(id, kChannelPartRpc).is_ok();
+        let closed = channel_close_or_report(id, CHANNEL_PART_RPC).is_ok();
         result.write_number(VarNumber::from(closed));
     }
 }

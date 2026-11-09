@@ -39,12 +39,12 @@ use core::ffi::c_int;
 
 use crate::autocmd::{aucmd_win_count, aucmd_window};
 use crate::channel::channels;
+use crate::eval::gc::{GARBAGE_COLLECT_AT_EXIT, MAY_GARBAGE_COLLECT, WANT_GARBAGE_COLLECT};
 use crate::eval::gc::{dict_slots, list_slots};
-use crate::eval::gc::{garbage_collect_at_exit, may_garbage_collect, want_garbage_collect};
 use crate::eval::typval::{
-    DictRef, ListRef, blob_copy, dict_copy, free_registered_dict, free_registered_list, list_copy,
-    list_free_contents, registered_dict, registered_list, tv_copy, tv_dict_free_contents,
-    tv_in_free_unref_items,
+    DictRef, ListRef, TV_IN_FREE_UNREF_ITEMS, blob_copy, dict_copy, free_registered_dict,
+    free_registered_list, list_copy, list_free_contents, registered_dict, registered_list, tv_copy,
+    tv_dict_free_contents,
 };
 use crate::eval::userfunc::{
     free_unref_funccal, set_ref_in_call_stack, set_ref_in_func, set_ref_in_func_args,
@@ -55,8 +55,8 @@ use crate::eval::vars::{
     garbage_collect_globvars, garbage_collect_scriptvars, garbage_collect_vimvars,
 };
 use crate::eval::{
-    COPYID_INC, COPYID_MASK, DICT_MAXNEST, e_variable_nested_too_deep_for_making_copy,
-    set_ref_in_callback, timers,
+    COPYID_INC, COPYID_MASK, DICT_MAXNEST, E_VARIABLE_NESTED_TOO_DEEP_FOR_MAKING_COPY, TIMERS,
+    set_ref_in_callback,
 };
 use crate::ex_docmd::set_ref_in_findfunc;
 use crate::global_cell::GlobalCell;
@@ -122,9 +122,9 @@ pub fn garbage_collect(testing: bool) -> bool {
     let mut abort = false;
     if !testing {
         // Only once per request.
-        want_garbage_collect.set(false);
-        may_garbage_collect.set(false);
-        garbage_collect_at_exit.set(false);
+        WANT_GARBAGE_COLLECT.set(false);
+        MAY_GARBAGE_COLLECT.set(false);
+        GARBAGE_COLLECT_AT_EXIT.set(false);
     }
 
     trim_exestack();
@@ -200,7 +200,7 @@ pub fn garbage_collect(testing: bool) -> bool {
 
     // Timers, likewise. Marking runs no user code, so the table is walked
     // in place.
-    timers.with(|map| {
+    TIMERS.with(|map| {
         for timer in map.values() {
             mark_cb(&timer.callback, copy_id);
         }
@@ -262,12 +262,12 @@ pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
     }
 
     let mut did_free = false;
-    tv_in_free_unref_items.set(true);
+    TV_IN_FREE_UNREF_ITEMS.set(true);
 
     // Pass 1: empty the unreachable dictionaries…
     //
     // Both passes walk the registry by slot index rather than borrowing it:
-    // `tv_in_free_unref_items` holds off every free for the duration, so no
+    // `TV_IN_FREE_UNREF_ITEMS` holds off every free for the duration, so no
     // slot is vacated under the walk, but emptying a container runs
     // arbitrary teardown and the registry must not be borrowed across that.
     for idx in 0..dict_slots() {
@@ -311,7 +311,7 @@ pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
         }
     }
 
-    tv_in_free_unref_items.set(false);
+    TV_IN_FREE_UNREF_ITEMS.set(false);
     c_int::from(did_free)
 }
 
@@ -545,7 +545,7 @@ pub(crate) fn var_item_copy(
     static RECURSE: GlobalCell<c_int> = GlobalCell::new(0);
 
     if RECURSE.get() >= DICT_MAXNEST {
-        emsg_static(e_variable_nested_too_deep_for_making_copy);
+        emsg_static(E_VARIABLE_NESTED_TOO_DEEP_FOR_MAKING_COPY);
         return Err(Failed);
     }
     // The un-bump is the guard's, so that an early exit cannot skip it.

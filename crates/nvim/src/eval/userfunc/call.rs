@@ -16,7 +16,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::charset::vim_strsize_cstr;
 use crate::eval::Parsed;
@@ -88,16 +87,16 @@ pub(crate) fn call_user_func(
     selfdict: Option<&DictRef>,
 ) {
     let argcount = c_int::try_from(args.len()).unwrap_or(c_int::MAX);
-    static depth: GlobalCell<c_int> = GlobalCell::new(0);
+    static DEPTH: GlobalCell<c_int> = GlobalCell::new(0);
 
     // Don't execute the function when the call depth is getting too high.
-    if OptInt::from(depth.get()) >= p_mfd() {
+    if OptInt::from(DEPTH.get()) >= p_mfd() {
         let deep = c"E132: Function call depth is higher than 'maxfuncdepth'";
         emsg(gettext(deep));
         result.write_number(-1);
         return;
     }
-    let call_depth = Depth::of(&depth);
+    let call_depth = Depth::of(&DEPTH);
 
     // Save the search patterns and the redo buffer.
     let mut save_redo = SaveRedo::default();

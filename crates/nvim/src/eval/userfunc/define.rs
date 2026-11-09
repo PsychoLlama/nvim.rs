@@ -15,7 +15,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::cstr;
 use crate::lua::executor::nlua_set_sctx;
@@ -161,7 +160,7 @@ enum Refusal {
 }
 
 /// The number the nameless (dictionary) functions are given.
-static func_nr: GlobalCell<c_int> = GlobalCell::new(0);
+static FUNC_NR: GlobalCell<c_int> = GlobalCell::new(0);
 
 impl Definition<'_, '_> {
     /// The name being defined, or the empty name.
@@ -433,8 +432,8 @@ impl Definition<'_, '_> {
             return Err(Refusal::Unwind);
         }
 
-        func_nr.set(func_nr.get() + 1);
-        self.name = Some(XString::from_bytes(func_nr.get().to_string().as_bytes()));
+        FUNC_NR.set(FUNC_NR.get() + 1);
+        self.name = Some(XString::from_bytes(FUNC_NR.get().to_string().as_bytes()));
         Ok(())
     }
 

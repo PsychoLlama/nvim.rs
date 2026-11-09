@@ -7,7 +7,6 @@
 )]
 #![deny(unsafe_op_in_unsafe_fn)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::eval::encode::{BOOL_VAR_NAMES, SPECIAL_VAR_NAMES};
 use crate::eval::funcs::builtin::EvalFuncData;
@@ -85,9 +84,9 @@ pub const DI_FLAGS_LOCK: u8 = 8;
 pub const DI_FLAGS_ALLOC: ::core::ffi::c_uint = 16;
 pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
 pub type DictListType = ::core::ffi::c_uint;
-pub const kDict2ListItems: DictListType = 2;
-pub const kDict2ListValues: DictListType = 1;
-pub const kDict2ListKeys: DictListType = 0;
+pub const DICT2_LIST_ITEMS: DictListType = 2;
+pub const DICT2_LIST_VALUES: DictListType = 1;
+pub const DICT2_LIST_KEYS: DictListType = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
@@ -97,37 +96,37 @@ pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
 pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX.wrapping_sub(1 as ::core::ffi::c_ulong);
-static e_variable_nested_too_deep_for_unlock: &::core::ffi::CStr =
+static E_VARIABLE_NESTED_TOO_DEEP_FOR_UNLOCK: &::core::ffi::CStr =
     c"E743: Variable nested too deep for (un)lock";
-static e_using_invalid_value_as_string: &::core::ffi::CStr =
+static E_USING_INVALID_VALUE_AS_STRING: &::core::ffi::CStr =
     c"E908: Using an invalid value as a String";
-static e_string_required_for_argument_nr: &::core::ffi::CStr =
+static E_STRING_REQUIRED_FOR_ARGUMENT_NR: &::core::ffi::CStr =
     c"E1174: String required for argument %d";
-static e_non_empty_string_required_for_argument_nr: &::core::ffi::CStr =
+static E_NON_EMPTY_STRING_REQUIRED_FOR_ARGUMENT_NR: &::core::ffi::CStr =
     c"E1175: Non-empty string required for argument %d";
-static e_dict_required_for_argument_nr: &::core::ffi::CStr =
+static E_DICT_REQUIRED_FOR_ARGUMENT_NR: &::core::ffi::CStr =
     c"E1206: Dictionary required for argument %d";
-static e_number_required_for_argument_nr: &::core::ffi::CStr =
+static E_NUMBER_REQUIRED_FOR_ARGUMENT_NR: &::core::ffi::CStr =
     c"E1210: Number required for argument %d";
-static e_list_required_for_argument_nr: &::core::ffi::CStr =
+static E_LIST_REQUIRED_FOR_ARGUMENT_NR: &::core::ffi::CStr =
     c"E1211: List required for argument %d";
-static e_bool_required_for_argument_nr: &::core::ffi::CStr =
+static E_BOOL_REQUIRED_FOR_ARGUMENT_NR: &::core::ffi::CStr =
     c"E1212: Bool required for argument %d";
-static e_float_or_number_required_for_argument_nr: &::core::ffi::CStr =
+static E_FLOAT_OR_NUMBER_REQUIRED_FOR_ARGUMENT_NR: &::core::ffi::CStr =
     c"E1219: Float or Number required for argument %d";
-static e_string_or_number_required_for_argument_nr: &::core::ffi::CStr =
+static E_STRING_OR_NUMBER_REQUIRED_FOR_ARGUMENT_NR: &::core::ffi::CStr =
     c"E1220: String or Number required for argument %d";
-static e_string_or_list_required_for_argument_nr: &::core::ffi::CStr =
+static E_STRING_OR_LIST_REQUIRED_FOR_ARGUMENT_NR: &::core::ffi::CStr =
     c"E1222: String or List required for argument %d";
-static e_list_or_blob_required_for_argument_nr: &::core::ffi::CStr =
+static E_LIST_OR_BLOB_REQUIRED_FOR_ARGUMENT_NR: &::core::ffi::CStr =
     c"E1226: List or Blob required for argument %d";
-static e_blob_required_for_argument_nr: &::core::ffi::CStr =
+static E_BLOB_REQUIRED_FOR_ARGUMENT_NR: &::core::ffi::CStr =
     c"E1238: Blob required for argument %d";
-static e_string_list_or_blob_required_for_argument_nr: &::core::ffi::CStr =
+static E_STRING_LIST_OR_BLOB_REQUIRED_FOR_ARGUMENT_NR: &::core::ffi::CStr =
     c"E1252: String, List or Blob required for argument %d";
-static e_string_or_function_required_for_argument_nr: &::core::ffi::CStr =
+static E_STRING_OR_FUNCTION_REQUIRED_FOR_ARGUMENT_NR: &::core::ffi::CStr =
     c"E1256: String or function required for argument %d";
-static e_non_null_dict_required_for_argument_nr: &::core::ffi::CStr =
+static E_NON_NULL_DICT_REQUIRED_FOR_ARGUMENT_NR: &::core::ffi::CStr =
     c"E1297: Non-NULL Dictionary required for argument %d";
 /// `TV_INITIAL_VALUE`: the `VAR_UNKNOWN` a `TypVal` is initialised to and
 /// left as after being moved out of.  c2rust wrote the designated
@@ -138,16 +137,16 @@ static e_non_null_dict_required_for_argument_nr: &::core::ffi::CStr =
 /// needs a constant on its left, the element type not being `Copy`.
 pub const TV_INITIAL_VALUE: TypVal = TypVal::Unknown;
 
-pub(crate) static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static TV_IN_FREE_UNREF_ITEMS: GlobalCell<bool> = GlobalCell::new(false);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 /// How many submatches a `\=` replacement expression is handed: `\0`
 /// through `\9`.
 pub const SL_SIZE: usize = 10;
 pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = 0;
-static tv_equal_recurse_limit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static TV_EQUAL_RECURSE_LIMIT: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 /// What a value that has no Number form is called when one is asked for,
 /// by its kind. The empty entries are the kinds that do have one.
-static num_errors: [&::core::ffi::CStr; 11] = [
+static NUM_ERRORS: [&::core::ffi::CStr; 11] = [
     c"E685: using an invalid value as a Number",
     c"",
     c"",
@@ -160,9 +159,9 @@ static num_errors: [&::core::ffi::CStr; 11] = [
     c"E703: Using a Funcref as a Number",
     c"E974: Using a Blob as a Number",
 ];
-/// [`num_errors`] for a String.
-static str_errors: [&::core::ffi::CStr; 11] = [
-    e_using_invalid_value_as_string,
+/// [`NUM_ERRORS`] for a String.
+static STR_ERRORS: [&::core::ffi::CStr; 11] = [
+    E_USING_INVALID_VALUE_AS_STRING,
     c"",
     c"",
     c"E729: Using a Funcref as a String",

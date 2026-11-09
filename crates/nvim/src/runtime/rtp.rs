@@ -205,17 +205,17 @@ pub(crate) fn runtimepath_default(clean_arg: bool) -> Option<XString> {
     let data_home = if clean_arg {
         None
     } else {
-        xdg_var(kXDGDataHome)
+        xdg_var(XDG_DATA_HOME)
     };
     let config_home = if clean_arg {
         None
     } else {
-        xdg_var(kXDGConfigHome)
+        xdg_var(XDG_CONFIG_HOME)
     };
     let vimruntime = getenv_resolved(c"VIMRUNTIME");
     let libdir = get_lib_dir();
-    let data_dirs = xdg_var(kXDGDataDirs);
-    let config_dirs = xdg_var(kXDGConfigDirs);
+    let data_dirs = xdg_var(XDG_DATA_DIRS);
+    let config_dirs = xdg_var(XDG_CONFIG_DIRS);
 
     let mut rtp = RtpParts {
         appname: appname.to_bytes(),

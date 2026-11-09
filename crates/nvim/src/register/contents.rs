@@ -41,7 +41,7 @@ use crate::ascii::NUL;
 /// The motion type of register `regname`, and its width if blockwise (0
 /// otherwise).
 ///
-/// `kMTUnknown` for an invalid or empty register. May run the clipboard
+/// `MT_UNKNOWN` for an invalid or empty register. May run the clipboard
 /// provider.
 pub fn get_reg_type(regname: RegName) -> (MotionType, i32) {
     // Every computed register reads as charwise.
@@ -63,13 +63,13 @@ pub fn get_reg_type(regname: RegName) -> (MotionType, i32) {
     }
 
     if regname != 0 && !valid_yank_reg(regname, false) {
-        return (kMTUnknown, 0);
+        return (MT_UNKNOWN, 0);
     }
     get_yank_register(regname, YREG_PASTE).read(|reg| {
         if !reg.lines.is_set() {
-            return (kMTUnknown, 0);
+            return (MT_UNKNOWN, 0);
         }
-        let width = if reg.kind == kMTBlockWise {
+        let width = if reg.kind == MT_BLOCK_WISE {
             reg.width
         } else {
             0
@@ -78,7 +78,7 @@ pub fn get_reg_type(regname: RegName) -> (MotionType, i32) {
     })
 }
 
-/// What a register read answers: one string, or -- with `kGRegList` -- its
+/// What a register read answers: one string, or -- with `G_REG_LIST` -- its
 /// lines.
 #[derive(Debug)]
 enum RegContents {
@@ -87,13 +87,13 @@ enum RegContents {
 }
 
 /// The contents of register `regname`, as one string or -- with
-/// `kGRegList` -- a `List` of lines.
+/// `G_REG_LIST` -- a `List` of lines.
 ///
-/// `kGRegNoExpr` refuses `"=` outright and `kGRegExprSrc` answers its source
+/// `kGRegNoExpr` refuses `"=` outright and `G_REG_EXPR_SRC` answers its source
 /// rather than evaluating it, which is what `getreg('=', 1, ...)` wants.
 /// `"=` may run arbitrary Vimscript, and `"*`/`"+` the clipboard provider.
 fn get_reg_contents(regname: RegName, flags: c_int) -> Option<RegContents> {
-    let as_list = flags & kGRegList.cast_signed() != 0;
+    let as_list = flags & G_REG_LIST.cast_signed() != 0;
     // A computed register's one string, as a one-item list when lines were
     // asked for -- where even a missing string is an item.
     let one_line = |text: Option<XString>| {
@@ -110,7 +110,7 @@ fn get_reg_contents(regname: RegName, flags: c_int) -> Option<RegContents> {
         if flags & kGRegNoExpr.cast_signed() != 0 {
             return None;
         }
-        if flags & kGRegExprSrc.cast_signed() != 0 {
+        if flags & G_REG_EXPR_SRC.cast_signed() != 0 {
             return one_line(get_expr_line_src());
         }
         // Evaluating the expression may run Vimscript, which this
@@ -143,7 +143,7 @@ fn get_reg_contents(regname: RegName, flags: c_int) -> Option<RegContents> {
 
         // One string, with a newline between lines and after the last one if
         // the register is linewise.
-        let needs_nl = |i: usize| reg.kind == kMTLineWise || i < lines.len().wrapping_sub(1);
+        let needs_nl = |i: usize| reg.kind == MT_LINE_WISE || i < lines.len().wrapping_sub(1);
         let mut text = XString::with_capacity(lines.iter().map(|line| line.len() + 1).sum());
         for (i, line) in lines.iter().enumerate() {
             text.push_bytes(line);
@@ -159,7 +159,7 @@ fn get_reg_contents(regname: RegName, flags: c_int) -> Option<RegContents> {
 /// empty or cannot be read. `flags` must not ask for a list.
 pub(crate) fn get_reg_contents_owned(regname: RegName, flags: c_int) -> Option<XString> {
     debug_assert!(
-        flags & kGRegList.cast_signed() == 0,
+        flags & G_REG_LIST.cast_signed() == 0,
         "a list is not a string"
     );
     match get_reg_contents(regname, flags)? {
@@ -171,7 +171,7 @@ pub(crate) fn get_reg_contents_owned(regname: RegName, flags: c_int) -> Option<X
 /// [`get_reg_contents`] as a List of lines, `None` when the register is
 /// empty or cannot be read.
 pub(crate) fn get_reg_contents_list(regname: RegName, flags: c_int) -> Option<ListRef> {
-    match get_reg_contents(regname, flags | kGRegList.cast_signed())? {
+    match get_reg_contents(regname, flags | G_REG_LIST.cast_signed())? {
         RegContents::Lines(list) => Some(list),
         RegContents::Text(_) => unreachable!("lines were asked for"),
     }
@@ -212,18 +212,22 @@ enum RegText<'a> {
 
 /// Put `text` in `reg`, appending to whatever is already there.
 ///
-/// `yank_type` may be `kMTUnknown`, in which case it is worked out from the
+/// `yank_type` may be `MT_UNKNOWN`, in which case it is worked out from the
 /// text: a trailing newline (or carriage return) means linewise. `blocklen`
 /// is the block width, or -1 to measure it.
 fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, blocklen: i32) {
-    if yank_type == kMTUnknown {
+    if yank_type == MT_UNKNOWN {
         let ends_line = match text {
             RegText::Lines(_) => true,
             RegText::Text(text) => text
                 .last()
                 .is_some_and(|&last| c_int::from(last) == NL || c_int::from(last) == CAR),
         };
-        yank_type = if ends_line { kMTLineWise } else { MT_CHAR_WISE };
+        yank_type = if ends_line {
+            MT_LINE_WISE
+        } else {
+            MT_CHAR_WISE
+        };
     }
 
     // How many lines `text` becomes, and whether the first of them joins the
@@ -259,7 +263,7 @@ fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, b
     match text {
         RegText::Lines(new) => {
             for line in new {
-                if yank_type == kMTBlockWise {
+                if yank_type == MT_BLOCK_WISE {
                     maxlen = maxlen.max(c_string_cells(line.to_bytes()));
                 }
                 lines.push(XString::from_cstr(line));
@@ -279,7 +283,7 @@ fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, b
                     if byte == b'\n' {
                         break;
                     }
-                    if yank_type == kMTBlockWise {
+                    if yank_type == MT_BLOCK_WISE {
                         charlen += c_partial_cells_in(text, line_end, end);
                     }
                     // A NUL is one byte and is translated below, so it must
@@ -320,7 +324,7 @@ fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, b
         }
     }
 
-    reg.width = if yank_type == kMTBlockWise {
+    reg.width = if yank_type == MT_BLOCK_WISE {
         if blocklen == -1 {
             c_int::try_from(maxlen).unwrap_or(c_int::MAX) - 1
         } else {
@@ -346,7 +350,7 @@ fn finish_write_reg(name: RegName, reg: Reg, old_y_previous: Option<usize>) {
 
 /// Write `text` to register `name`, working out the motion type from it.
 pub fn write_reg_contents(name: RegName, text: &[u8], must_append: bool) {
-    write_reg_contents_ex(name, text, must_append, kMTUnknown, 0);
+    write_reg_contents_ex(name, text, must_append, MT_UNKNOWN, 0);
 }
 
 /// Write `lines` to register `name`, one line apiece.
@@ -467,11 +471,11 @@ pub fn write_reg_contents_ex(
 /// Answers false for a `regtype` that does not parse.
 pub fn prepare_yankreg_from_object(reg: &mut YankReg, regtype: &[u8]) -> bool {
     let kind = match regtype.first().copied().unwrap_or(0) {
-        0 => kMTUnknown, // "" means "work it out from the text"
+        0 => MT_UNKNOWN, // "" means "work it out from the text"
         b'v' | b'c' => MT_CHAR_WISE,
-        b'V' | b'l' => kMTLineWise,
+        b'V' | b'l' => MT_LINE_WISE,
         // CTRL-V.
-        b'b' | 0x16 => kMTBlockWise,
+        b'b' | 0x16 => MT_BLOCK_WISE,
         _ => return false,
     };
     // As upstream, both fields are settled before the width is parsed, so a
@@ -481,7 +485,7 @@ pub fn prepare_yankreg_from_object(reg: &mut YankReg, regtype: &[u8]) -> bool {
 
     if regtype.len() > 1 {
         // A width only means something for a block.
-        if kind != kMTBlockWise {
+        if kind != MT_BLOCK_WISE {
             return false;
         }
         if !regtype[1].is_ascii_digit() {
@@ -508,14 +512,14 @@ pub fn finish_yankreg_from_object(reg: &mut YankReg, clipboard_adjust: bool) {
     let ends_empty = reg.lines.last().is_some_and(|last| last.is_empty());
     if ends_empty {
         if reg.kind != MT_CHAR_WISE {
-            if reg.kind == kMTUnknown || clipboard_adjust {
+            if reg.kind == MT_UNKNOWN || clipboard_adjust {
                 reg.lines.lines_mut().pop();
             }
-            if reg.kind == kMTUnknown {
-                reg.kind = kMTLineWise;
+            if reg.kind == MT_UNKNOWN {
+                reg.kind = MT_LINE_WISE;
             }
         }
-    } else if reg.kind == kMTUnknown {
+    } else if reg.kind == MT_UNKNOWN {
         reg.kind = MT_CHAR_WISE;
     }
     reg.update_width();

@@ -348,7 +348,7 @@ unsafe fn msgpack(tv: *mut TypVal) -> Option<Vec<u8>> {
 /// Run `f` over each row's built value, naming the row in any failure.
 ///
 /// The editor lock is held for the whole sweep: every sink writes into the
-/// message history, and `string()`'s `E724` latch (`did_echo_string_emsg`)
+/// message history, and `string()`'s `E724` latch (`DID_ECHO_STRING_EMSG`)
 /// is a global only one case at a time may move.
 fn each_row(mut f: impl FnMut(&Editor, &Row, *mut TypVal)) {
     let editor = editor_lock();
@@ -423,7 +423,7 @@ fn msgpack_packs_every_kind_of_value_it_accepts() {
 
 /// The one thing no row can say: `string()` reports `E724` **once** per dump
 /// however many times the cycle is met — the whole point of the
-/// `did_echo_string_emsg` latch — and the latch is reset afterwards, so the
+/// `DID_ECHO_STRING_EMSG` latch — and the latch is reset afterwards, so the
 /// *next* `string()` reports it again.
 #[test]
 fn a_cycle_met_twice_is_reported_once_per_dump() {

@@ -265,7 +265,7 @@ impl YankReg {
     ///
     /// Does nothing to a register that is not blockwise.
     pub fn update_width(&mut self) {
-        if self.kind != kMTBlockWise {
+        if self.kind != MT_BLOCK_WISE {
             return;
         }
         let widest = self
@@ -328,7 +328,7 @@ pub fn yank_register_mline(regname: RegName) -> (bool, Option<YankReg>) {
         return (false, None); // black hole
     }
     let reg = get_yank_register(regname, YREG_PASTE).snapshot();
-    (reg.kind == kMTLineWise, Some(reg))
+    (reg.kind == MT_LINE_WISE, Some(reg))
 }
 
 /// Register `name` as it is now, for `do_put` to work on after something has

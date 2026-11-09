@@ -29,9 +29,9 @@ use crate::eval::typval::{
 };
 use crate::eval::userfunc::set_selfdict;
 use crate::eval::{
-    Cursor, VARNUMBER_MAX, call_func_rettv, char_len_at, check_luafunc_name,
-    e_cannot_index_a_funcref, e_cannot_index_special_variable, e_cannot_slice_dictionary,
-    e_missbrac, eval_isdictc, eval_lambda, eval_method, eval1, tv_is_luafunc,
+    Cursor, E_CANNOT_INDEX_A_FUNCREF, E_CANNOT_INDEX_SPECIAL_VARIABLE, E_CANNOT_SLICE_DICTIONARY,
+    E_MISSBRAC, VARNUMBER_MAX, call_func_rettv, char_len_at, check_luafunc_name, eval_isdictc,
+    eval_lambda, eval_method, eval1, tv_is_luafunc,
 };
 use crate::ex_eval::aborting;
 use crate::mbyte::head_off;
@@ -112,7 +112,7 @@ pub(crate) fn eval_index(
 
         if cursor.byte() != b']' {
             if verbose {
-                emsg(gettext(e_missbrac));
+                emsg(gettext(E_MISSBRAC));
             }
             // Not guarded by `empty1`: an unread `var1` is still unset.
             tv_clear(&mut var1);
@@ -148,15 +148,15 @@ pub(crate) fn check_can_index(
     verbose: bool,
 ) -> Result<(), Failed> {
     let message: &'static CStr = match result.v_type() {
-        VAR_FUNC | VAR_PARTIAL => e_cannot_index_a_funcref,
+        VAR_FUNC | VAR_PARTIAL => E_CANNOT_INDEX_A_FUNCREF,
         VAR_FLOAT => E_USING_FLOAT_AS_STRING,
-        VAR_BOOL | VAR_SPECIAL => e_cannot_index_special_variable,
+        VAR_BOOL | VAR_SPECIAL => E_CANNOT_INDEX_SPECIAL_VARIABLE,
         // Not evaluating: the subscript is only being skipped over, and an
         // unset value is what an unevaluated operand looks like.
         VAR_UNKNOWN if !evaluate => return Ok(()),
         // Reported whether or not the caller asked to be verbose.
         VAR_UNKNOWN => {
-            emsg(gettext(e_cannot_index_special_variable));
+            emsg(gettext(E_CANNOT_INDEX_SPECIAL_VARIABLE));
             return Err(Failed);
         }
         _ => return Ok(()),
@@ -204,7 +204,7 @@ pub(crate) fn eval_index_inner(
     if is_range {
         if result.v_type() == VAR_DICT {
             if verbose {
-                emsg(gettext(e_cannot_slice_dictionary));
+                emsg(gettext(E_CANNOT_SLICE_DICTIONARY));
             }
             return Err(Failed);
         }

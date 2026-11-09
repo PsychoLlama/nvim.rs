@@ -339,7 +339,7 @@ pub fn do_execreg(regname: RegName, colon: bool, addcr: bool, silent: bool) -> R
         i -= 1;
         // A linewise register, and every line of a charwise one but the
         // last, is followed by a newline.
-        let nl_failed = (reg.kind == kMTLineWise || i < lines.len() - 1 || addcr)
+        let nl_failed = (reg.kind == MT_LINE_WISE || i < lines.len() - 1 || addcr)
             && ins_typebuf(b"\n", remap, 0, true, silent).is_err();
         if nl_failed {
             return Err(Failed);
@@ -442,7 +442,7 @@ pub fn insert_reg(
             do_put(regname, None, dir, 1, PUT_CURSEND);
         } else {
             stuffescaped(line, literally);
-            if reg.kind == kMTLineWise || i < lines.len() - 1 {
+            if reg.kind == MT_LINE_WISE || i < lines.len() - 1 {
                 stuff_readbuf_char(Key::ascii(b'\n'));
             }
         }

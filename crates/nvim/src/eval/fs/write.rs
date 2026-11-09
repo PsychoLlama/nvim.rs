@@ -26,7 +26,7 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{from, kFileAppend, kFileCreate, kFileMkDir, kFileTruncate, str_arg_chk};
+use super::{FILE_APPEND, FILE_CREATE, FILE_MK_DIR, FILE_TRUNCATE, from, str_arg_chk};
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, blob_bytes, list_items, tv_check_str_or_nr};
 use crate::eval::userfunc::{add_defer, can_add_defer};
@@ -271,14 +271,14 @@ pub fn f_writefile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     let open_flags = (if flags.append {
-        kFileAppend
+        FILE_APPEND
     } else {
-        kFileTruncate
+        FILE_TRUNCATE
     }) | (if flags.mkdir_p {
-        kFileMkDir
+        FILE_MK_DIR
     } else {
-        kFileCreate
-    }) | kFileCreate;
+        FILE_CREATE
+    }) | FILE_CREATE;
     let mut out = match WriteFile::open(fname, open_flags, 0o666) {
         Ok(out) => out,
         Err(error) => {

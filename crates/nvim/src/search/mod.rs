@@ -127,7 +127,7 @@ pub const FORWARD_FILE: Direction = 3;
 pub const BACKWARD: Direction = -1;
 pub const FORWARD: Direction = 1;
 pub(crate) use crate::cmdhist::HIST_SEARCH;
-pub const kMTLineWise: MotionType = 1;
+pub const MT_LINE_WISE: MotionType = 1;
 pub const kEqualFiles: FileComparison = 1;
 pub const CHECK_PATH: ::core::ffi::c_int = 3;
 pub const FIND_DEFINE: ::core::ffi::c_int = 2;

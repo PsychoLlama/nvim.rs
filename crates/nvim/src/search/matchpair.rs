@@ -325,7 +325,7 @@ fn make_plan(
 
     // Look for a matching #if, #else, #elif or #endif.
     if let Some(op) = op {
-        op.motion_type = kMTLineWise; // linewise for this case only
+        op.motion_type = MT_LINE_WISE; // linewise for this case only
     }
     if initc != '#' as c_int {
         let word = after_hash(line, skip::white(line));

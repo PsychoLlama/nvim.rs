@@ -57,7 +57,7 @@ pub fn tv_get_number_chk(tv: &TypVal) -> Result<VarNumber, Unconvertible> {
         VAR_BOOL => return Ok(VarNumber::from(val.as_bool() == Some(kBoolVarTrue))),
         VAR_SPECIAL => return Ok(0),
         VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_FLOAT => {
-            emsg(gettext(num_errors[val.v_type() as usize]));
+            emsg(gettext(NUM_ERRORS[val.v_type() as usize]));
         }
         VAR_UNKNOWN => {
             let arg0 = "tv_get_number(UNKNOWN)";
@@ -175,7 +175,7 @@ impl NumBuf {
                 Ok(self.copied(SPECIAL_VAR_NAMES[which as usize]))
             }
             VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
-                emsg(gettext(str_errors[tv.v_type() as usize]));
+                emsg(gettext(STR_ERRORS[tv.v_type() as usize]));
                 Err(Failed)
             }
             _ => unreachable!("the eight arms above are every kind there is"),

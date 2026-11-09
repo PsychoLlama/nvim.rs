@@ -353,7 +353,7 @@ pub(crate) fn ins_ctrl_ey(tc: Key) -> Key {
 
     // A non-alphanumeric byte has to be recorded literally, or the redo
     // would read it as a command.
-    if c.as_byte().is_some_and(|b| ctype_bits(b) & _ISalnum == 0) {
+    if c.as_byte().is_some_and(|b| ctype_bits(b) & IS_ALNUM == 0) {
         append_to_redobuff(CTRL_V_STR.to_bytes());
     }
     let tw_save = Buf::current().b_p_tw;

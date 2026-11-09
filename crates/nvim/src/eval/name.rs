@@ -25,8 +25,8 @@ use crate::eval::typval::PartialRef;
 use crate::eval::userfunc::fname_script_len;
 use crate::eval::vars::is_lua_partial;
 use crate::eval::{
-    AUTOLOAD_CHAR, Cursor, FNE_CHECK_START, FNE_INCL_BR, char_len_at, eval_to_string,
-    namespace_char,
+    AUTOLOAD_CHAR, Cursor, FNE_CHECK_START, FNE_INCL_BR, NAMESPACE_CHAR, char_len_at,
+    eval_to_string,
 };
 use crate::keycodes::{K_SPECIAL, KE_SNR, KS_EXTRA};
 use crate::memory::XString;
@@ -56,7 +56,7 @@ pub(crate) fn env_name_len(text: &[u8]) -> usize {
 /// else it ends it.
 pub(crate) fn id_len(text: &[u8]) -> usize {
     for (p, &c) in text.iter().enumerate() {
-        let scope_ends = || p > 1 || (p == 1 && !has_char(namespace_char, c_int::from(text[0])));
+        let scope_ends = || p > 1 || (p == 1 && !has_char(NAMESPACE_CHAR, c_int::from(text[0])));
         if !eval_isnamec(c_int::from(c)) || (c == b':' && scope_ends()) {
             return p;
         }
@@ -212,7 +212,7 @@ pub(crate) fn name_end(text: &[u8], flags: c_int) -> NameEnd {
             // unless a `}` came just before it, which is a curly-braces
             // name that produced the scope letter itself.
             let not_after_brace = p > 1 && text[p - 1] != b'}';
-            let scoped = !has_char(namespace_char, c_int::from(text[0]));
+            let scoped = !has_char(NAMESPACE_CHAR, c_int::from(text[0]));
             if not_after_brace || (p == 1 && scoped) {
                 break;
             }

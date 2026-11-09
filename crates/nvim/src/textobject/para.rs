@@ -326,7 +326,7 @@ pub(crate) fn current_par(
     } else {
         op.start.lnum = start_lnum;
         op.start.col = ColNr::ZERO;
-        op.motion_type = kMTLineWise;
+        op.motion_type = MT_LINE_WISE;
     }
     Win::current().w_cursor.lnum = end_lnum;
     Win::current().w_cursor.col = ColNr::ZERO;

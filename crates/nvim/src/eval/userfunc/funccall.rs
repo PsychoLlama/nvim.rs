@@ -18,7 +18,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::eval::typval::DI_FLAGS_FIX;
 use crate::eval::typval::DI_FLAGS_RO;
@@ -348,22 +347,22 @@ pub(crate) fn cleanup_function_call(frame: Rc<FuncCall>) {
     // The funccall is still in use. This happens when returning "a:000",
     // assigning "l:" to a global variable, or defining a closure. Keep it
     // for the collector to free later.
-    static made_copy: GlobalCell<c_int> = GlobalCell::new(0);
+    static MADE_COPY: GlobalCell<c_int> = GlobalCell::new(0);
     park_funccal(frame.id);
 
-    if want_garbage_collect.get() {
+    if WANT_GARBAGE_COLLECT.get() {
         // The collector is ready anyway; clear the count.
-        made_copy.set(0);
+        MADE_COPY.set(0);
     } else {
-        made_copy.set(made_copy.get() + 1);
-        if made_copy.get()
+        MADE_COPY.set(MADE_COPY.get() + 1);
+        if MADE_COPY.get()
             >= c_int::try_from(4096 * 1024 / size_of::<FuncCall>()).unwrap_or(c_int::MAX)
         {
             // Four megabytes' worth of copies, which happens when a function
             // that references itself is called repeatedly. Ask for a
             // collection soon rather than grow without bound.
-            made_copy.set(0);
-            want_garbage_collect.set(true);
+            MADE_COPY.set(0);
+            WANT_GARBAGE_COLLECT.set(true);
         }
     }
 }
@@ -758,14 +757,14 @@ pub(crate) fn push_func_args(args: &[TypVal]) -> usize {
     }
     let mut frame = CallFrame::new();
     frame.extend_borrowed(args);
-    funcargs.with_mut(|kept| kept.push(frame));
+    FUNCARGS.with_mut(|kept| kept.push(frame));
     1
 }
 
 /// Forget what the last [`push_func_args`] kept, if it kept anything.
 pub(crate) fn pop_func_args(pushed: usize) {
     if pushed > 0 {
-        let frame = funcargs.with_mut(Vec::pop);
+        let frame = FUNCARGS.with_mut(Vec::pop);
         drop(frame);
     }
 }
@@ -773,7 +772,7 @@ pub(crate) fn pop_func_args(pushed: usize) {
 /// Mark everything reachable from an argument of a call in progress.
 pub fn set_ref_in_func_args(copy_id: c_int) -> bool {
     // Marking only reads and calls no function: the borrow may span it.
-    funcargs.with(|frames| {
+    FUNCARGS.with(|frames| {
         frames
             .iter()
             .any(|frame| frame.args().iter().any(|tv| mark_root(tv, copy_id)))

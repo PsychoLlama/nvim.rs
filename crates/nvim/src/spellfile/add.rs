@@ -71,7 +71,7 @@ use crate::undo::buf_is_changed;
 
 use super::wordtree::valid_spell_word;
 use super::{
-    MAXWLEN, SPELL_ADD_BAD, SPELL_ADD_RARE, e_illegal_character_in_word, kXDGDataHome, mkspell,
+    MAXWLEN, SPELL_ADD_BAD, SPELL_ADD_RARE, XDG_DATA_HOME, e_illegal_character_in_word, mkspell,
 };
 use crate::optionstr::OptString;
 
@@ -286,7 +286,7 @@ fn init_spellfile() {
         spl[..lend].to_vec()
     } else {
         // Otherwise the user's own site directory, created if need be.
-        let mut buf = xdg_home(kXDGDataHome)
+        let mut buf = xdg_home(XDG_DATA_HOME)
             .map(|home| home.to_vec())
             .unwrap_or_default();
         buf.truncate(room);

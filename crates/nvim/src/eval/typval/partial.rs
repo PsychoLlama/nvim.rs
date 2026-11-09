@@ -269,13 +269,13 @@ mod tests {
         drop(d);
         assert_eq!(view.dv_refcount.get(), 2, "the cycle keeps it alive");
 
-        tv_in_free_unref_items.set(true);
+        TV_IN_FREE_UNREF_ITEMS.set(true);
         // Pass 1: the item goes, the partial goes with it, and the partial
         // gives back the dictionary's last reference -- which must not
         // free the dictionary under the walk.
         tv_dict_free_contents(&view);
         assert_eq!(view.dv_refcount.get(), 1);
-        tv_in_free_unref_items.set(false);
+        TV_IN_FREE_UNREF_ITEMS.set(false);
         // Pass 2: the view's own reference, the last.
         drop(::core::mem::ManuallyDrop::into_inner(view));
     }

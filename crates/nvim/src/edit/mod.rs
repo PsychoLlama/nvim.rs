@@ -223,7 +223,7 @@ pub(crate) use self::undo::*;
 
 /// The alphanumeric bit of the C library's `__ctype_b_loc()` table, the one
 /// `isalnum()` reads.  Locale-dependent by construction.
-pub(crate) const _ISalnum: ::core::ffi::c_ushort = 8;
+pub(crate) const IS_ALNUM: ::core::ffi::c_ushort = 8;
 #[derive(Debug)]
 pub(crate) struct InsertState {
     pub mincol: ::core::ffi::c_int,

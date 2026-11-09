@@ -17,7 +17,7 @@
 //! therefore never followed -- every container on one has a holder inside
 //! it -- and is left to the collector. While the collector is freeing,
 //! counts can reach zero without anything being freed
-//! (`tv_in_free_unref_items`); taking each value out as it is reached is
+//! (`TV_IN_FREE_UNREF_ITEMS`); taking each value out as it is reached is
 //! what keeps a container the collector also reaches from being released
 //! twice.
 //!

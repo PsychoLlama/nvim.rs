@@ -52,7 +52,7 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
     }
 
     let mut block_col: ColNr = ColNr::ZERO;
-    if op.motion_type == kMTBlockWise {
+    if op.motion_type == MT_BLOCK_WISE {
         block_col = Win::current().w_cursor.col;
     }
 
@@ -63,7 +63,7 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
             // Empty line: nothing to indent, but the cursor still has to
             // land somewhere legal.
             Win::current().w_cursor.col = ColNr::ZERO;
-        } else if op.motion_type == kMTBlockWise {
+        } else if op.motion_type == MT_BLOCK_WISE {
             shift_block(op, amount);
         } else if first_char != c_int::from(b'#') || !preprocs_left() {
             // A line starting with '#' stays put when 'smartindent' or
@@ -74,7 +74,7 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
         Win::current().w_cursor.lnum += 1;
     }
 
-    if op.motion_type == kMTBlockWise {
+    if op.motion_type == MT_BLOCK_WISE {
         Win::current().w_cursor.lnum = op.start.lnum;
         Win::current().w_cursor.col = block_col;
     } else if curs_top {

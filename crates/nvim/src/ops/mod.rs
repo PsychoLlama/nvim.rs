@@ -149,8 +149,8 @@ pub const NUMBUFLEN: usize = 65;
 
 /// The three region shapes an operator can be given.
 pub const MT_CHAR_WISE: MotionType = 0;
-pub const kMTLineWise: MotionType = 1;
-pub const kMTBlockWise: MotionType = 2;
+pub const MT_LINE_WISE: MotionType = 1;
+pub const MT_BLOCK_WISE: MotionType = 2;
 
 /// `CmdArg::retval`: normal mode must not act on what the operator left.
 pub const CA_COMMAND_BUSY: ::core::ffi::c_int = 1;

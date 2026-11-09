@@ -44,7 +44,7 @@ use crate::types::{Key, SaveVEvent};
 
 /// The `v:` dictionary, built on first use.
 pub(crate) fn vimvar_dict() -> DictRef {
-    match scope_vim.with(|vim| vim.entry.di_tv.dict_handle()) {
+    match SCOPE_VIM.with(|vim| vim.entry.di_tv.dict_handle()) {
         Some(dict) => dict,
         None => build_vim_scope(),
     }
@@ -73,13 +73,13 @@ fn build_vim_scope() -> DictRef {
         // available, which is what a `VAR_UNKNOWN` row means.
         if row.declared == VAR_UNKNOWN {
             let at = outside_index(Vv::try_from(i).expect("a row of the table"));
-            outside_vimvars.with_mut(|outside| outside[at] = Some(item));
+            OUTSIDE_VIMVARS.with_mut(|outside| outside[at] = Some(item));
         } else if dict.edit().insert(item).is_err() {
             // The names are distinct by construction.
             unreachable!("v: has two rows named {:?}", row.name);
         }
     }
-    scope_vim.with_mut(|vim| vim.entry = entry);
+    SCOPE_VIM.with_mut(|vim| vim.entry = entry);
     dict
 }
 
@@ -99,7 +99,7 @@ fn vimvar_slot(dict: &Dict, idx: Vv) -> Option<usize> {
     let addr = dict
         .item_at(slot)
         .map_or(0, |item| ::core::ptr::from_ref(item).addr());
-    scope_vim.with_mut(|vim| vim.slots[idx as usize] = (slot, addr));
+    SCOPE_VIM.with_mut(|vim| vim.slots[idx as usize] = (slot, addr));
     Some(slot)
 }
 
@@ -111,7 +111,7 @@ fn vimvar_slot(dict: &Dict, idx: Vv) -> Option<usize> {
 /// `v:` variable (nor anything else of the record) or release a value.
 #[inline(always)]
 fn vimvar_at_hint<R, F: FnOnce(&mut DictItem) -> R>(idx: Vv, f: &mut Option<F>) -> Option<R> {
-    scope_vim.with(|vim| {
+    SCOPE_VIM.with(|vim| {
         let (hint, addr) = vim.slots[idx as usize];
         let dict = vim.entry.di_tv.dict_shared()?;
         let mut edit = dict.edit();
@@ -151,7 +151,7 @@ fn with_vimvar_found<R>(idx: Vv, f: impl FnOnce(&mut DictItem) -> R) -> R {
     let dict = vimvar_dict();
     match vimvar_slot(&dict, idx) {
         Some(slot) => f(dict.edit().item_at_mut(slot).expect("a kept slot")),
-        None => outside_vimvars.with_mut(|outside| {
+        None => OUTSIDE_VIMVARS.with_mut(|outside| {
             f(outside[outside_index(idx)]
                 .as_mut()
                 .expect("a row out of v: waits outside it"))
@@ -188,10 +188,10 @@ pub fn prepare_vimvar(idx: Vv, save_tv: &mut TypVal) {
         // `v:val` and `v:key` have no type until something sets one, and
         // are absent from the dictionary until then.
         let at = outside_index(idx);
-        if let Some(item) = outside_vimvars.with_mut(|outside| outside[at].take())
+        if let Some(item) = OUTSIDE_VIMVARS.with_mut(|outside| outside[at].take())
             && let Err(item) = vimvar_dict().edit().insert(item)
         {
-            outside_vimvars.with_mut(|outside| outside[at] = Some(item));
+            OUTSIDE_VIMVARS.with_mut(|outside| outside[at] = Some(item));
         }
     }
 }
@@ -212,7 +212,7 @@ pub fn restore_vimvar(idx: Vv, save_tv: &mut TypVal) {
     let removed = dict.edit().remove_key(name);
     match removed {
         Some(RemovedItem::Allocated(item)) => {
-            outside_vimvars.with_mut(|outside| outside[outside_index(idx)] = Some(item));
+            OUTSIDE_VIMVARS.with_mut(|outside| outside[outside_index(idx)] = Some(item));
         }
         Some(RemovedItem::Embedded(_)) => unreachable!("v: owns its rows"),
         None => internal_error(c"restore_vimvar()"),
@@ -289,7 +289,7 @@ pub(crate) fn lua_partial() -> Option<PartialRef> {
 /// without the dictionary.
 #[inline]
 pub(crate) fn testing_enabled() -> bool {
-    let enabled = vim_testing.get();
+    let enabled = VIM_TESTING.get();
     debug_assert_eq!(enabled, get_vim_var_nr(Vv::Testing) != 0);
     enabled
 }
@@ -298,7 +298,7 @@ pub(crate) fn testing_enabled() -> bool {
 /// addresses; nothing is read.
 #[inline]
 pub(crate) fn is_lua_partial(partial: usize) -> bool {
-    let lua = lua_partial_addr.get();
+    let lua = LUA_PARTIAL_ADDR.get();
     lua != 0 && partial == lua
 }
 
@@ -311,7 +311,7 @@ pub fn set_vim_var_type(idx: Vv, type_0: VarType) {
 /// Set `v:` variable `idx` to the Number `val`.
 pub fn set_vim_var_nr(idx: Vv, val: VarNumber) {
     if idx == Vv::Testing {
-        vim_testing.set(val != 0);
+        VIM_TESTING.set(val != 0);
     }
     // A Number over a Number has nothing to release: written in place.
     let old = with_vimvar_item(idx, |item| match &mut item.di_tv {
@@ -384,7 +384,7 @@ pub fn set_vim_var_dict(idx: Vv, val: Option<DictRef>) {
 /// The slot takes `val` over.
 pub(crate) fn set_vim_var_partial(idx: Vv, val: PartialRef) {
     if idx == Vv::Lua {
-        lua_partial_addr.set(val.as_ptr().addr());
+        LUA_PARTIAL_ADDR.set(val.as_ptr().addr());
     }
     replace_vimvar(idx, TypVal::partial(Some(val)));
 }
@@ -572,7 +572,7 @@ pub(crate) fn before_set_vvar(key: &[u8], tv: &mut TypVal, copy: bool, watched: 
             no_hlsearch.set(n == 0);
             redraw_all_later(UPD_SOME_VALID);
         } else if key == b"testing" {
-            vim_testing.set(n != 0);
+            VIM_TESTING.set(n != 0);
         }
         if let Some(old) = old {
             notify_vvar_watchers(key, &old);

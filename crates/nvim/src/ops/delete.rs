@@ -119,12 +119,12 @@ pub fn op_delete(op: &mut OpArg) -> Result<(), NotDeleted> {
             skip::white(&line[at..]) == line.len() - at
         };
         if blank && inindent(0) {
-            op.motion_type = kMTLineWise;
+            op.motion_type = MT_LINE_WISE;
         }
     }
 
     // Trying to delete (e.g. `D`) in an empty line. For `c` that is fine.
-    let empty_region = op.motion_type != kMTLineWise
+    let empty_region = op.motion_type != MT_LINE_WISE
         && op.line_count == 1
         && op.op_type == OpType::Delete
         && Lines::current().line(op.start.lnum).is_empty();
@@ -136,9 +136,9 @@ pub fn op_delete(op: &mut OpArg) -> Result<(), NotDeleted> {
         }
 
         // `?` converts the undo layer's refusal into this one's.
-        if op.motion_type == kMTBlockWise {
+        if op.motion_type == MT_BLOCK_WISE {
             delete_block(op)?;
-        } else if op.motion_type == kMTLineWise {
+        } else if op.motion_type == MT_LINE_WISE {
             delete_whole_lines(op)?;
         } else {
             delete_chars(op)?;
@@ -158,7 +158,7 @@ pub fn op_delete(op: &mut OpArg) -> Result<(), NotDeleted> {
     // set as if it had.
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        if op.motion_type == kMTBlockWise {
+        if op.motion_type == MT_BLOCK_WISE {
             Buf::current().b_op_end.lnum = op.end.lnum;
             Buf::current().b_op_end.col = op.start.col;
         } else {
@@ -201,7 +201,7 @@ fn save_deleted_text(op: &OpArg) -> bool {
 
     // Into `"1`, shifting the number registers, when the delete contains a
     // line break or a specific operator was used (Vi compatible).
-    if op.motion_type == kMTLineWise || op.line_count > 1 || op.use_reg_one {
+    if op.motion_type == MT_LINE_WISE || op.line_count > 1 || op.use_reg_one {
         shift_delete_registers(is_append_register(op.regname));
         let one = get_y_register(1);
         op_yank_reg(op, false, one, false);
@@ -211,7 +211,7 @@ fn save_deleted_text(op: &OpArg) -> bool {
 
     // Into the small-delete register when no register was named and the
     // delete is within one line.
-    if op.regname == 0 && op.motion_type != kMTLineWise && op.line_count == 1 {
+    if op.regname == 0 && op.motion_type != MT_LINE_WISE && op.line_count == 1 {
         let small = get_yank_register(b'-', YREG_YANK);
         op_yank_reg(op, false, small, false);
         reg = Some(small);

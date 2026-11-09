@@ -114,7 +114,7 @@ fn dis_register(yb: &YankReg, name: RegName, type_0: u8, hl_id: c_int) {
         }
         put_cut(line, &mut n, false);
     }
-    if n > 1 && yb.kind == kMTLineWise {
+    if n > 1 && yb.kind == MT_LINE_WISE {
         msg_str_hl(c"^J", hl_id, false);
     }
 }
@@ -146,7 +146,7 @@ pub fn ex_display(excmd: &mut ExArg) {
             // queries the provider itself, and upstream's order of the
             // two queries is what the messages depend on.
             let type_0 = match get_reg_type(name).0 {
-                kMTLineWise => b'l',
+                MT_LINE_WISE => b'l',
                 MT_CHAR_WISE => b'c',
                 _ => b'b',
             };

@@ -80,7 +80,7 @@ use core::ptr;
 /// A child started through libuv's process API.
 pub const kProcTypeUv: ProcType = 0;
 /// A child started through `forkpty`.
-pub const kProcTypePty: ProcType = 1;
+pub const PROC_TYPE_PTY: ProcType = 1;
 
 /// How long a stopped child has to exit cleanly before it is killed. A pty
 /// child is sent SIGTERM at this point (SIGHUP having already failed) and
@@ -137,7 +137,7 @@ impl Child {
 
     /// Was the child started by `forkpty` rather than by libuv?
     fn is_pty(self) -> bool {
-        self.type_0 == kProcTypePty
+        self.type_0 == PROC_TYPE_PTY
     }
 
     /// The libuv loop the child runs on.

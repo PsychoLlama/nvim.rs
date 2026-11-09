@@ -77,7 +77,7 @@ pub(crate) fn op_insert(op: &mut OpArg, count1: c_int) {
         ind_pre_vcol: 0,
         pre_textlen: 0,
     };
-    if op.motion_type == kMTBlockWise {
+    if op.motion_type == MT_BLOCK_WISE {
         match measure_before_insert(op, &mut bd) {
             Some(measured) => pre = measured,
             None => return,
@@ -104,7 +104,7 @@ pub(crate) fn op_insert(op: &mut OpArg, count1: c_int) {
         return;
     }
 
-    if op.motion_type == kMTBlockWise {
+    if op.motion_type == MT_BLOCK_WISE {
         replay_insert(op, &mut bd, &mut pre, start_insert);
     }
 }
@@ -154,7 +154,7 @@ fn measure_before_insert(op: &OpArg, bd: &mut BlockDef) -> Option<BlockInsertPre
 ///
 /// `bd` must describe `op`'s first line.
 fn move_cursor_for_append(op: &OpArg, bd: &mut BlockDef) -> bool {
-    if op.motion_type == kMTBlockWise && Win::current().w_cursor.coladd == 0 {
+    if op.motion_type == MT_BLOCK_WISE && Win::current().w_cursor.coladd == 0 {
         // To the character right of the block, or the end of the line.
         Win::current().w_set_curswant = true;
         let len = get_cursor_line_len();
@@ -312,7 +312,7 @@ fn replay_insert(op: &mut OpArg, bd: &mut BlockDef, pre: &mut BlockInsertPre, st
 /// describes a region of the current buffer.
 pub(crate) fn op_change(op: &mut OpArg) -> c_int {
     let mut l = op.start.col;
-    if op.motion_type == kMTLineWise {
+    if op.motion_type == MT_LINE_WISE {
         l = ColNr::ZERO;
         // Like opening a new line: do smart indent.
         can_si.set(may_do_si());
@@ -339,7 +339,7 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
     let mut bd = BlockDef::ZERO;
     let mut pre_textlen = 0;
     let mut pre_indent = 0;
-    if op.motion_type == kMTBlockWise {
+    if op.motion_type == MT_BLOCK_WISE {
         // Add the spaces before measuring the line's length.
         if op_virtual() && (Win::current().w_cursor.coladd > 0 || gchar_cursor() == NUL) {
             coladvance_force(getviscol());
@@ -351,7 +351,7 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
         bd.textcol = Win::current().w_cursor.col;
     }
 
-    if op.motion_type == kMTLineWise {
+    if op.motion_type == MT_LINE_WISE {
         fix_indent();
     }
 
@@ -363,7 +363,7 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
 
     // Copy the new text to the rest of a Visual block. Not when Insert
     // mode ended with CTRL-C.
-    if op.motion_type == kMTBlockWise && op.start.lnum != op.end.lnum && !got_int.get() {
+    if op.motion_type == MT_BLOCK_WISE && op.start.lnum != op.end.lnum && !got_int.get() {
         replay_change(op, &mut bd, pre_textlen, pre_indent);
     }
 

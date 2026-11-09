@@ -70,7 +70,7 @@ use wordtree::{
 };
 use write::write_vim_spell;
 pub const ETYPE_SPELL: EStackType = 9;
-pub const kXDGDataHome: XDGVarType = 1;
+pub const XDG_DATA_HOME: XDGVarType = 1;
 pub const kEqualFiles: FileComparison = 1;
 pub use crate::spell::MAXWLEN;
 pub const MAXREGIONS: ::core::ffi::c_uint = 8;

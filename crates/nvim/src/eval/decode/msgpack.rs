@@ -26,7 +26,7 @@
 use core::ffi::c_int;
 
 use super::{
-    create_special_dict, decode_create_map_special_dict, decode_owned_string, kMPExt, kMPInteger,
+    MP_EXT, MP_INTEGER, create_special_dict, decode_create_map_special_dict, decode_owned_string,
 };
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::DictItem;
@@ -102,7 +102,7 @@ impl Node {
                 let mut payload = tv_list_alloc(kListLenMayKnow as isize);
                 encode_list_write(&mut payload, &bytes);
                 list.push_list(Some(payload));
-                create_special_dict(kMPExt, TypVal::list(Some(list)))
+                create_special_dict(MP_EXT, TypVal::list(Some(list)))
             }
             Node::Bytes { bytes, .. } => decode_owned_string(bytes),
         }
@@ -128,7 +128,7 @@ fn positive_integer_to_special_typval(val: u64) -> TypVal {
     ] {
         list.push_number(VarNumber::try_from(piece).expect("at most 31 bits"));
     }
-    create_special_dict(kMPInteger, TypVal::list(Some(list)))
+    create_special_dict(MP_INTEGER, TypVal::list(Some(list)))
 }
 
 /// A decoded map: a `Dict` when every key is a non-empty string used once,

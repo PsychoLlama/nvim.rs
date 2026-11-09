@@ -58,19 +58,19 @@ const O_NOFOLLOW: c_int = 0o400000;
 
 /// The `flags` argument of [`BufferedFile::open`].
 pub type FileOpenFlags = c_uint;
-pub const kFileReadOnly: FileOpenFlags = 1;
-pub const kFileCreate: FileOpenFlags = 2;
-pub const kFileWriteOnly: FileOpenFlags = 4;
-pub const kFileNoSymlink: FileOpenFlags = 8;
-pub const kFileCreateOnly: FileOpenFlags = 16;
-pub const kFileTruncate: FileOpenFlags = 32;
-pub(crate) const kFileAppend: FileOpenFlags = 64;
+pub const FILE_READ_ONLY: FileOpenFlags = 1;
+pub const FILE_CREATE: FileOpenFlags = 2;
+pub const FILE_WRITE_ONLY: FileOpenFlags = 4;
+pub const FILE_NO_SYMLINK: FileOpenFlags = 8;
+pub const FILE_CREATE_ONLY: FileOpenFlags = 16;
+pub const FILE_TRUNCATE: FileOpenFlags = 32;
+pub(crate) const FILE_APPEND: FileOpenFlags = 64;
 pub(crate) const kFileNonBlocking: FileOpenFlags = 128;
-pub(crate) const kFileMkDir: FileOpenFlags = 256;
+pub(crate) const FILE_MK_DIR: FileOpenFlags = 256;
 
 /// Every flag that opens the file for writing.
 const WRITING: FileOpenFlags =
-    kFileCreate | kFileCreateOnly | kFileTruncate | kFileAppend | kFileWriteOnly;
+    FILE_CREATE | FILE_CREATE_ONLY | FILE_TRUNCATE | FILE_APPEND | FILE_WRITE_ONLY;
 
 fn has(flags: FileOpenFlags, bits: FileOpenFlags) -> bool {
     flags & bits != 0
@@ -96,37 +96,37 @@ fn code_as_signed(code: c_int) -> ptrdiff_t {
 ///
 /// Every creating or truncating flag also implies `O_WRONLY`: this
 /// interface never opens a file for reading and writing at once. The
-/// assertions are upstream's -- `kFileCreateOnly` excludes the other
-/// creating flags, and `kFileReadOnly` excludes all of them.
+/// assertions are upstream's -- `FILE_CREATE_ONLY` excludes the other
+/// creating flags, and `FILE_READ_ONLY` excludes all of them.
 fn open_flags(flags: FileOpenFlags) -> c_int {
     let mut oflags = 0;
-    if has(flags, kFileWriteOnly) {
+    if has(flags, FILE_WRITE_ONLY) {
         oflags |= O_WRONLY;
     }
-    if has(flags, kFileCreateOnly) {
+    if has(flags, FILE_CREATE_ONLY) {
         oflags |= O_CREAT | O_EXCL | O_WRONLY;
     }
-    if has(flags, kFileCreate) {
-        debug_assert!(!has(flags, kFileCreateOnly));
+    if has(flags, FILE_CREATE) {
+        debug_assert!(!has(flags, FILE_CREATE_ONLY));
         oflags |= O_CREAT | O_WRONLY;
     }
-    if has(flags, kFileTruncate) {
-        debug_assert!(!has(flags, kFileCreateOnly));
+    if has(flags, FILE_TRUNCATE) {
+        debug_assert!(!has(flags, FILE_CREATE_ONLY));
         oflags |= O_TRUNC | O_WRONLY;
     }
-    if has(flags, kFileAppend) {
-        debug_assert!(!has(flags, kFileCreateOnly));
+    if has(flags, FILE_APPEND) {
+        debug_assert!(!has(flags, FILE_CREATE_ONLY));
         oflags |= O_APPEND | O_WRONLY;
     }
-    if has(flags, kFileReadOnly) {
+    if has(flags, FILE_READ_ONLY) {
         debug_assert!(!has(flags, WRITING));
         oflags |= O_RDONLY;
     }
-    if has(flags, kFileNoSymlink) {
+    if has(flags, FILE_NO_SYMLINK) {
         oflags |= O_NOFOLLOW;
     }
-    if has(flags, kFileMkDir) {
-        debug_assert!(!has(flags, kFileCreateOnly));
+    if has(flags, FILE_MK_DIR) {
+        debug_assert!(!has(flags, FILE_CREATE_ONLY));
         oflags |= O_CREAT | O_WRONLY;
     }
     oflags
@@ -205,7 +205,7 @@ impl BufferedFile {
     /// Open `fname` with `flags` and, for a file it creates, `mode`; or the
     /// libuv error code saying why not.
     pub fn open(fname: &CStr, flags: FileOpenFlags, mode: c_int) -> Result<Self, c_int> {
-        if has(flags, kFileMkDir) {
+        if has(flags, FILE_MK_DIR) {
             file_mkdir(fname, 0o755)?;
         }
         let oflags = open_flags(flags);
@@ -492,7 +492,7 @@ impl ReadFile {
         };
         Ok(Self(BufferedFile::from_file(
             file,
-            kFileReadOnly | kFileNonBlocking,
+            FILE_READ_ONLY | kFileNonBlocking,
         )))
     }
 
@@ -550,18 +550,18 @@ mod tests {
     #[test]
     fn read_only_flags_are_the_default() {
         assert_eq!(open_flags(0), O_RDONLY);
-        assert_eq!(open_flags(kFileReadOnly), O_RDONLY);
+        assert_eq!(open_flags(FILE_READ_ONLY), O_RDONLY);
     }
 
     #[test]
     fn every_writing_flag_implies_write_only() {
         for bit in [
-            kFileWriteOnly,
-            kFileCreate,
-            kFileCreateOnly,
-            kFileTruncate,
-            kFileAppend,
-            kFileMkDir,
+            FILE_WRITE_ONLY,
+            FILE_CREATE,
+            FILE_CREATE_ONLY,
+            FILE_TRUNCATE,
+            FILE_APPEND,
+            FILE_MK_DIR,
         ] {
             assert_ne!(open_flags(bit) & O_WRONLY, 0, "{bit:#x}");
         }
@@ -569,30 +569,30 @@ mod tests {
 
     #[test]
     fn create_only_is_exclusive_create() {
-        assert_eq!(open_flags(kFileCreateOnly), O_CREAT | O_EXCL | O_WRONLY);
+        assert_eq!(open_flags(FILE_CREATE_ONLY), O_CREAT | O_EXCL | O_WRONLY);
         // Plain kFileCreate opens an existing file instead of failing.
-        assert_eq!(open_flags(kFileCreate), O_CREAT | O_WRONLY);
+        assert_eq!(open_flags(FILE_CREATE), O_CREAT | O_WRONLY);
     }
 
     #[test]
     fn flags_accumulate() {
         assert_eq!(
-            open_flags(kFileCreate | kFileTruncate | kFileNoSymlink),
+            open_flags(FILE_CREATE | FILE_TRUNCATE | FILE_NO_SYMLINK),
             O_CREAT | O_TRUNC | O_WRONLY | O_NOFOLLOW
         );
         // Non-blocking is a property of the buffered file, not an open flag.
-        assert_eq!(open_flags(kFileReadOnly | kFileNonBlocking), O_RDONLY);
+        assert_eq!(open_flags(FILE_READ_ONLY | kFileNonBlocking), O_RDONLY);
     }
 
     #[test]
     #[should_panic(expected = "assertion failed")]
     fn create_only_cannot_be_combined_with_create() {
-        open_flags(kFileCreateOnly | kFileCreate);
+        open_flags(FILE_CREATE_ONLY | FILE_CREATE);
     }
 
     #[test]
     #[should_panic(expected = "assertion failed")]
     fn read_only_cannot_be_combined_with_a_writing_flag() {
-        open_flags(kFileReadOnly | kFileAppend);
+        open_flags(FILE_READ_ONLY | FILE_APPEND);
     }
 }

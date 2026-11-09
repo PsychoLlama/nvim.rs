@@ -15,7 +15,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::eval::Parsed;
 use crate::eval::typval::{DictRef, PartialRef};
@@ -48,9 +47,9 @@ pub(crate) fn register_closure(func: &Rc<UserFunc>) {
 
 /// The name of the next lambda.
 fn get_lambda_name() -> Vec<u8> {
-    static lambda_no: GlobalCell<c_int> = GlobalCell::new(0);
-    lambda_no.set(lambda_no.get() + 1);
-    format!("<lambda>{}", lambda_no.get()).into_bytes()
+    static LAMBDA_NO: GlobalCell<c_int> = GlobalCell::new(0);
+    LAMBDA_NO.set(LAMBDA_NO.get() + 1);
+    format!("<lambda>{}", LAMBDA_NO.get()).into_bytes()
 }
 
 /// A new function called `name`, with nothing in it yet: no body, no

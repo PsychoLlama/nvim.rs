@@ -15,7 +15,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::cstr;
 use crate::message_fmt::msg_bytes;
@@ -192,30 +191,30 @@ fn cat_func_name(func: &UserFunc) -> Vec<u8> {
 /// Called with `idx` 0 first, then increasing; a change to the function
 /// table in between ends the walk.
 pub fn get_user_func_name(expand: &Expand, idx: usize) -> Option<Candidate> {
-    static done: GlobalCell<usize> = GlobalCell::new(0);
-    static changed: GlobalCell<c_int> = GlobalCell::new(0);
+    static DONE: GlobalCell<usize> = GlobalCell::new(0);
+    static CHANGED: GlobalCell<c_int> = GlobalCell::new(0);
     // The cursor is a slot *index*, parked in a `static` across calls into
     // the editor, which may change the table in between.
-    static slot: GlobalCell<usize> = GlobalCell::new(0);
+    static SLOT: GlobalCell<usize> = GlobalCell::new(0);
 
     if idx == 0 {
-        done.set(0);
-        slot.set(0);
-        changed.set(func_table_changed());
+        DONE.set(0);
+        SLOT.set(0);
+        CHANGED.set(func_table_changed());
     }
-    if changed.get() != func_table_changed() || done.get() >= func_table_used() {
+    if CHANGED.get() != func_table_changed() || DONE.get() >= func_table_used() {
         return None;
     }
 
-    if done.get() > 0 {
-        slot.set(slot.get() + 1);
+    if DONE.get() > 0 {
+        SLOT.set(SLOT.get() + 1);
     }
-    done.set(done.get() + 1);
+    DONE.set(DONE.get() + 1);
     let func = loop {
-        if let Some(func) = func_at_slot(slot.get()) {
+        if let Some(func) = func_at_slot(SLOT.get()) {
             break func;
         }
-        slot.set(slot.get() + 1);
+        SLOT.set(SLOT.get() + 1);
     };
     let name = func.name();
 

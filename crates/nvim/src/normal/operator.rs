@@ -28,8 +28,8 @@ use crate::keycodes::SpecialKey;
 use crate::message::{emsg, emsg_invreg};
 use crate::normal::defs::CmdArg;
 use crate::normal::{
-    check_clear_op, check_clear_op_quit, clear_op_beep, e_cmdline_window_already_open, kMTLineWise,
-    langmap_adjust, visual_active, visual_select,
+    MT_LINE_WISE, check_clear_op, check_clear_op_quit, clear_op_beep,
+    e_cmdline_window_already_open, langmap_adjust, visual_active, visual_select,
 };
 use crate::ops::OpType;
 use crate::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};
@@ -216,7 +216,7 @@ pub(crate) fn set_op_var(optype: OpType) {
 
 /// The linewise form of an operator: `count1` lines from this one.
 pub(crate) fn nv_lineop(cmd_arg: &mut CmdArg) {
-    cmd_arg.op().motion_type = kMTLineWise;
+    cmd_arg.op().motion_type = MT_LINE_WISE;
     let op = cmd_arg.op();
     if cursor_down(cmd_arg.count1 - 1, op.op_type == OpType::Nop).is_err() {
         clear_op_beep(op);

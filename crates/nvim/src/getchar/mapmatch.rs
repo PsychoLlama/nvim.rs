@@ -500,11 +500,11 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> MapResult {
     // `:map <expr>`: the RHS is an expression to evaluate.
     let evaluated = if let Some(expr) = &applied.expr {
         let save_vgetc_busy = vgetc_busy.get();
-        let save_may_garbage_collect = may_garbage_collect.get();
+        let save_may_garbage_collect = MAY_GARBAGE_COLLECT.get();
         let prev_did_emsg = DID_EMSG.get();
 
         vgetc_busy.set(0);
-        may_garbage_collect.set(false);
+        MAY_GARBAGE_COLLECT.set(false);
 
         let mut map_str = eval_map_expr(expr, Key::NUL);
 
@@ -527,7 +527,7 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> MapResult {
         }
 
         vgetc_busy.set(save_vgetc_busy);
-        may_garbage_collect.set(save_may_garbage_collect);
+        MAY_GARBAGE_COLLECT.set(save_may_garbage_collect);
         map_str
     } else {
         None

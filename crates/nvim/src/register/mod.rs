@@ -128,9 +128,9 @@ pub use self::special::*;
 pub use self::store::*;
 pub use self::yank::*;
 
-pub const kMTUnknown: MotionType = -1;
-pub const kMTBlockWise: MotionType = 2;
-pub const kMTLineWise: MotionType = 1;
+pub const MT_UNKNOWN: MotionType = -1;
+pub const MT_BLOCK_WISE: MotionType = 2;
+pub const MT_LINE_WISE: MotionType = 1;
 pub const MT_CHAR_WISE: MotionType = 0;
 /// The layout of `y_regs`, and the slots with a fixed meaning: upstream's
 /// anonymous enum in `register_defs.h`, as indices into the array.
@@ -143,8 +143,8 @@ pub const STAR_REGISTER: usize = 37;
 pub const NUM_SAVED_REGISTERS: usize = 37;
 /// `"-`, the small-delete register.
 pub const DELETION_REGISTER: usize = 36;
-pub const kGRegList: GRegFlags = 4;
-pub const kGRegExprSrc: GRegFlags = 2;
+pub const G_REG_LIST: GRegFlags = 4;
+pub const G_REG_EXPR_SRC: GRegFlags = 2;
 pub const kGRegNoExpr: GRegFlags = 1;
 
 /// What `get_yank_register()` is being asked for.  `YREG_PASTE` may query

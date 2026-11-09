@@ -22,7 +22,7 @@ use crate::buffer::{buflist_getfile, fileinfo};
 use crate::cursor::check_cursor_col;
 use crate::drawscreen::state::{clear_cmdline, mode_displayed, redraw_mode};
 use crate::drawscreen::{UPD_CLEAR, UPD_INVERTED, redraw_curbuf_later, redraw_later, showmode};
-use crate::eval::gc::may_garbage_collect;
+use crate::eval::gc::MAY_GARBAGE_COLLECT;
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::compute_cmdrow;
@@ -290,7 +290,7 @@ pub(crate) fn nv_paste(cmd_arg: &mut CmdArg) {
 pub(crate) fn nv_event(cmd_arg: &mut CmdArg) {
     // An event's callback is not a safe point for a collection: it may be
     // holding values the marker cannot see.
-    may_garbage_collect.set(false);
+    MAY_GARBAGE_COLLECT.set(false);
     let may_restart = !restart_edit.get().is_nul() || restart_VIsual_select.get() != 0;
     state_handle_k_event();
     finish_op.set(false);

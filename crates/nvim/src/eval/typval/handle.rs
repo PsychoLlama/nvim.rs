@@ -22,7 +22,7 @@
 //!    outside the container model that still hold a pointer.
 //! 2. **Allocation and release**: the four objects' allocations, the
 //!    reference-count release that frees them, and the collector's
-//!    `tv_in_free_unref_items` gate that makes a release free nothing while
+//!    `TV_IN_FREE_UNREF_ITEMS` gate that makes a release free nothing while
 //!    `free_unref_items` owns the whole graph.
 //! 3. **The dictionary's item store**: a hash table slot names a
 //!    `*mut DictItem`, either a `Box` the dictionary owns (`DI_FLAGS_ALLOC`)
@@ -189,7 +189,7 @@ impl Drop for ListRef {
 /// A no-op while `free_unref_items()` is walking, which frees the whole
 /// graph itself.
 fn free_list(list: &ListRef) {
-    if tv_in_free_unref_items.get() {
+    if TV_IN_FREE_UNREF_ITEMS.get() {
         return;
     }
     // The handle is the view the contents are freed through: it owns the
@@ -407,7 +407,7 @@ impl Drop for DictRef {
 
 /// [`free_list`]'s counterpart: free `dict` and everything in it.
 fn free_dict(dict: &DictRef) {
-    if tv_in_free_unref_items.get() {
+    if TV_IN_FREE_UNREF_ITEMS.get() {
         return;
     }
     tv_dict_free_contents(dict);
@@ -489,7 +489,7 @@ pub unsafe fn tv_dict_free_dict(d: *mut Dict) {
 // ---------------------------------------------------------------------------
 // The collector's free pass
 //
-// While `tv_in_free_unref_items` is set no release frees anything, so every
+// While `TV_IN_FREE_UNREF_ITEMS` is set no release frees anything, so every
 // container the registry names stays live for the pass; these are the
 // views and frees the pass works with, so that `eval/collect.rs` holds no
 // pointer of its own.
@@ -1003,7 +1003,7 @@ mod tests {
         d.add_number(b"a", 0).expect("a key used once");
         d.add_number(b"b", 1).expect("a key used once");
         let dp = d.as_ptr();
-        tv_in_free_unref_items.set(true);
+        TV_IN_FREE_UNREF_ITEMS.set(true);
         drop(d);
         // SAFETY: unreferenced but not freed.
         let (refs, b) = unsafe {
@@ -1013,7 +1013,7 @@ mod tests {
                 dict.find(b"b").map(|di| di.di_tv.number_or_zero()),
             )
         };
-        tv_in_free_unref_items.set(false);
+        TV_IN_FREE_UNREF_ITEMS.set(false);
         assert_eq!(refs, 0);
         assert_eq!(b, Some(1));
         // SAFETY: as above. The handle takes the count below zero, which

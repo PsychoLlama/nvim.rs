@@ -66,7 +66,7 @@ use crate::types::{Direction, SaveVEvent};
 use crate::ui::ui_flush;
 use crate::winlayer::{Cc, Win};
 
-pub const kProcTypePty: ProcType = 1;
+pub const PROC_TYPE_PTY: ProcType = 1;
 pub const DIRECTION_NOT_SET: Direction = 0;
 
 /// The editor-mode bitmask `State` carries, and the masks that read it.

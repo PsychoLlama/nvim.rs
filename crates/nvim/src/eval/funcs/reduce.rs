@@ -9,7 +9,7 @@
 )]
 
 use super::wrappers::arg_copy;
-use super::{e_missing_function_argument, e_string_list_or_blob_required};
+use super::{E_MISSING_FUNCTION_ARGUMENT, E_STRING_LIST_OR_BLOB_REQUIRED};
 use crate::eval::VARNUMBER_MAX;
 use crate::eval::VARNUMBER_MIN;
 use crate::eval::funcs::builtin::EvalFuncData;
@@ -267,7 +267,7 @@ pub fn f_reduce(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let ty = args[0].v_type();
     if ty != VAR_STRING && ty != VAR_LIST && ty != VAR_BLOB {
-        emsg(gettext(e_string_list_or_blob_required));
+        emsg(gettext(E_STRING_LIST_OR_BLOB_REQUIRED));
         return;
     }
     // The callable is checked for emptiness here rather than by
@@ -279,7 +279,7 @@ pub fn f_reduce(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         _ => numbuf.string(&args[1]).is_empty(),
     };
     if missing {
-        emsg(gettext(e_missing_function_argument));
+        emsg(gettext(E_MISSING_FUNCTION_ARGUMENT));
         return;
     }
     let expr = &args[1];

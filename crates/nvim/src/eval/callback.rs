@@ -25,7 +25,7 @@ use crate::eval::userfunc::{
     CallWith, call_func_with, func_ref_name, func_unref_name, scriptlocal_funcname,
 };
 use crate::eval::vars::{emsg_static, lua_partial};
-use crate::eval::{RET_NIL_BOOL, callback_depth, check_luafunc_name};
+use crate::eval::{CALLBACK_DEPTH, RET_NIL_BOOL, check_luafunc_name};
 use crate::lua::executor::{
     api_new_luaref, funcref_description, nlua_call_ref_quiet, nlua_is_table_from_lua,
     register_table_as_callable, release_luaref,
@@ -228,7 +228,7 @@ pub fn callback_to_string(callback: &Callback) -> ThinCString {
 
 /// How deep the callback nesting currently is.
 pub(crate) fn get_callback_depth() -> c_int {
-    callback_depth.get()
+    CALLBACK_DEPTH.get()
 }
 
 /// The prefix that makes a funcref name a Lua one.
@@ -243,7 +243,7 @@ pub fn callback_call(
     args: &[TypVal],
     result: &mut TypVal,
 ) -> Result<bool, Failed> {
-    if OptInt::from(callback_depth.get()) > p_mfd() {
+    if OptInt::from(CALLBACK_DEPTH.get()) > p_mfd() {
         emsg_static(E_COMMAND_TOO_RECURSIVE);
         return Err(Failed);
     }
@@ -282,7 +282,7 @@ pub fn callback_call(
     with.lastline = Win::current().w_cursor.lnum;
     with.partial = partial;
     // The un-bump is the guard's, so that an early exit cannot skip it.
-    let depth = Depth::of(&callback_depth);
+    let depth = Depth::of(&CALLBACK_DEPTH);
     let ret = call_func_with(name, None, result, args, with);
     drop(depth);
     ret.map(|_| true)

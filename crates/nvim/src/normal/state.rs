@@ -44,7 +44,7 @@ use crate::drawscreen::{
     UPD_INVERTED, redraw_curbuf_later, redraw_statuslines, setcursor, show_cursor_info_later,
     showmode, update_screen,
 };
-use crate::eval::gc::may_garbage_collect;
+use crate::eval::gc::MAY_GARBAGE_COLLECT;
 use crate::eval::vars::set_vcount;
 use crate::ex_docmd::do_exmode;
 use crate::ex_docmd::state::{ex_normal_busy, global_busy};
@@ -600,7 +600,7 @@ pub(crate) fn normal_check(ns: &mut NormalState) -> Step {
 
     // Collecting is only safe where no caller up the stack is holding a
     // value: the command-line window and Ex mode both are.
-    may_garbage_collect.set(!ns.cmdwin && !ns.noexmode);
+    MAY_GARBAGE_COLLECT.set(!ns.cmdwin && !ns.noexmode);
     update_curswant();
 
     if exmode_active.get() {

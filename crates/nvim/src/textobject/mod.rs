@@ -29,7 +29,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::normal::defs::MotionType;
 
@@ -50,5 +49,5 @@ pub(crate) use self::word::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct NoObject;
 
-pub const kMTLineWise: MotionType = 1;
+pub const MT_LINE_WISE: MotionType = 1;
 pub const MT_CHAR_WISE: MotionType = 0;

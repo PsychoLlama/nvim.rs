@@ -12,7 +12,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::cstr;
 use crate::env::XDGVarType;
@@ -25,11 +24,11 @@ use crate::path::{concat_fnames, path_fnamecmp, path_is_absolute};
 use core::ffi::CStr;
 use std::ffi::CString;
 
-pub(crate) const kXDGConfigHome: XDGVarType = 0;
-pub(crate) const kXDGStateHome: XDGVarType = 3;
-pub(crate) const kXDGRuntimeDir: XDGVarType = 4;
-pub(crate) const kXDGConfigDirs: XDGVarType = 5;
-pub(crate) const kXDGDataDirs: XDGVarType = 6;
+pub(crate) const XDG_CONFIG_HOME: XDGVarType = 0;
+pub(crate) const XDG_STATE_HOME: XDGVarType = 3;
+pub(crate) const XDG_RUNTIME_DIR: XDGVarType = 4;
+pub(crate) const XDG_CONFIG_DIRS: XDGVarType = 5;
+pub(crate) const XDG_DATA_DIRS: XDGVarType = 6;
 
 const PATHSEP: u8 = b'/';
 /// Separator between entries of `$XDG_*_DIRS`.
@@ -47,7 +46,7 @@ const XDG_ENV_VARS: [&CStr; 7] = [
 ];
 
 /// Value to fall back on when the environment variable is unset. Still
-/// needs `~` expansion. `kXDGRuntimeDir` has none: `vim_mktempdir()`
+/// needs `~` expansion. `XDG_RUNTIME_DIR` has none: `vim_mktempdir()`
 /// decides it at startup.
 const XDG_DEFAULTS: [Option<&CStr>; 7] = [
     Some(c"~/.config"),
@@ -155,7 +154,7 @@ pub(crate) fn xdg_var(idx: XDGVarType) -> Option<ThinCString> {
             Some(fallback) => expand_env(fallback, false).to_vec(),
             // stdpath('run') is whatever vim_mktempdir() decided at
             // startup, minus its trailing slash.
-            None if idx == kXDGRuntimeDir => {
+            None if idx == XDG_RUNTIME_DIR => {
                 let tmpdir = vim_gettempdir();
                 let tmpdir = tmpdir.as_deref().unwrap_or(c"/tmp/").to_bytes();
                 tmpdir[..tmpdir.len().saturating_sub(1)].to_vec()
@@ -163,7 +162,7 @@ pub(crate) fn xdg_var(idx: XDGVarType) -> Option<ThinCString> {
             None => return None,
         },
     };
-    if idx != kXDGDataDirs && idx != kXDGConfigDirs {
+    if idx != XDG_DATA_DIRS && idx != XDG_CONFIG_DIRS {
         return Some(ThinCString::from_vec(value));
     }
     remove_duplicate_dirs(&cstr::owned(&value), ENV_SEP).map(ThinCString::from)
@@ -186,7 +185,7 @@ pub(crate) fn xdg_home(idx: XDGVarType) -> Option<XString> {
 
 /// `$XDG_CONFIG_HOME/$NVIM_APPNAME/{fname}`.
 pub(crate) fn user_config_path(fname: &[u8]) -> XString {
-    let home = xdg_home(kXDGConfigHome).expect("the config home has a default");
+    let home = xdg_home(XDG_CONFIG_HOME).expect("the config home has a default");
     concat_fnames(&home, fname, true)
 }
 
@@ -198,7 +197,7 @@ pub(crate) fn state_subpath(
     trailing_pathseps: usize,
     escape_commas: bool,
 ) -> XString {
-    let home = xdg_home(kXDGStateHome).expect("the state home has a default");
+    let home = xdg_home(XDG_STATE_HOME).expect("the state home has a default");
     let path = concat_fnames(&home, fname.to_bytes(), true);
     let mut out = XString::with_capacity(path.len() + trailing_pathseps);
     for &byte in path.iter() {

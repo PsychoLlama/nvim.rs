@@ -131,14 +131,14 @@ pub(crate) fn op_function(op: &OpArg) {
     // Set '[ and '] to the text to be operated on.
     Buf::current().b_op_start = op.start;
     Buf::current().b_op_end = op.end;
-    if op.motion_type != kMTLineWise && !op.inclusive {
+    if op.motion_type != MT_LINE_WISE && !op.inclusive {
         // Exclude the end position.
         decl(&mut Buf::current().b_op_end);
     }
 
     let kind = match op.motion_type {
-        kMTLineWise => c"line",
-        kMTBlockWise => c"block",
+        MT_LINE_WISE => c"line",
+        MT_BLOCK_WISE => c"block",
         _ => c"char",
     };
     // A copy of the static name, which the array owns and releases.

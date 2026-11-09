@@ -152,7 +152,7 @@ pub const DIRECTION_NOT_SET: Direction = 0;
 pub const kCdCauseManual: CdCause = 0;
 pub const OPTION_MAGIC_OFF: OptMagic = 2;
 pub const OPTION_MAGIC_ON: OptMagic = 1;
-pub const kMarkAll: MarkGet = 1;
+pub const MARK_ALL: MarkGet = 1;
 pub const CSTP_THROW: c_uint = 4;
 pub const CSTP_INTERRUPT: c_uint = 2;
 pub const CSTP_ERROR: c_uint = 1;
@@ -209,8 +209,8 @@ pub struct CommandDefinition {
     pub cmd_addr_type: CmdAddr,
 }
 pub const DOBUF_LAST: DoBufStart = 2;
-pub const kChannelPartAll: ChannelPart = 4;
-pub const kMTLineWise: MotionType = 1;
+pub const CHANNEL_PART_ALL: ChannelPart = 4;
+pub const MT_LINE_WISE: MotionType = 1;
 pub const VALID_HEAD: c_uint = 2;
 pub const VALID_PATH: c_uint = 1;
 pub const DIALOG_MSG_SIZE: c_uint = 1000;

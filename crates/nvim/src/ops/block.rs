@@ -487,7 +487,7 @@ pub(crate) fn get_op_vcol(op: &mut OpArg, redo_visual_vcol: ColNr, initial: bool
         return;
     }
 
-    op.motion_type = kMTBlockWise;
+    op.motion_type = MT_BLOCK_WISE;
     // Do not let the end land on a trail byte.
     op.end = snap_pos_to_char(Win::current().buffer(), op.end);
 

@@ -66,7 +66,7 @@ pub fn openscript(name: &CStr, directly: bool) {
     // `MAXPATHL`.
     let expanded = CString::new(expand_env_within(name, MAXPATHL as usize + 1))
         .expect("an expansion up to its NUL");
-    match ReadFile::open(&expanded, kFileReadOnly) {
+    match ReadFile::open(&expanded, FILE_READ_ONLY) {
         Ok(file) => scriptin.with_mut(|stack| stack[slot(curscript.get())] = Some(file)),
         Err(error) => {
             let (name, why) = (msg_cstr(name), msg_cstr(os_strerror(error)));
@@ -133,7 +133,7 @@ pub fn open_scriptin(scriptin_name: &CStr) -> bool {
     let opened = if scriptin_name.to_bytes() == b"-" {
         ReadFile::stdin()
     } else {
-        ReadFile::open(scriptin_name, kFileReadOnly | kFileNonBlocking)
+        ReadFile::open(scriptin_name, FILE_READ_ONLY | kFileNonBlocking)
     };
     match opened {
         Ok(file) => scriptin.with_mut(|stack| stack[0] = Some(file)),
@@ -175,7 +175,7 @@ pub fn using_script() -> c_int {
 /// character to arrive.
 pub fn before_blocking() {
     updatescript(0);
-    if may_garbage_collect.get() {
+    if MAY_GARBAGE_COLLECT.get() {
         garbage_collect(false);
     }
 }

@@ -10,8 +10,8 @@
 
 use super::wrappers::arg_number_chk;
 use super::{
-    NSUBEXP, SomeMatchType, kSomeMatch, kSomeMatchEnd, kSomeMatchList, kSomeMatchStr,
-    kSomeMatchStrPos, tv_get_buf,
+    NSUBEXP, SOME_MATCH, SOME_MATCH_END, SOME_MATCH_LIST, SOME_MATCH_STR, SOME_MATCH_STR_POS,
+    SomeMatchType, tv_get_buf,
 };
 use crate::eval::callback_call;
 use crate::eval::encode::encode_tv2echo;
@@ -60,10 +60,10 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
     let _cpo = SavedCpo::empty();
     result.write_number(-1);
     match kind {
-        kSomeMatchList => {
+        SOME_MATCH_LIST => {
             tv_list_alloc_ret(result, kListLenMayKnow as isize);
         }
-        kSomeMatchStrPos => {
+        SOME_MATCH_STR_POS => {
             // Seeded with the "no match" answer, which the tail of this
             // function trims back to three items for a String subject.
             let seeded = tv_list_alloc_ret(result, 4);
@@ -72,7 +72,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
             seeded.push_number(-1);
             seeded.push_number(-1);
         }
-        kSomeMatchStr => {
+        SOME_MATCH_STR => {
             result.write_string(None);
         }
         _ => {}
@@ -199,7 +199,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
             whole[skipped..].to_bytes()
         };
         match kind {
-            kSomeMatchStrPos => {
+            SOME_MATCH_STR_POS => {
                 // The four items seeded above, overwritten in place.
                 let seeded = list_items_mut(result.list_mut());
                 drop(seeded[0].li_tv.take_string());
@@ -217,13 +217,13 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                     seeded[1].li_tv.write_number(VarNumber::from(idx));
                 }
             }
-            kSomeMatchList => {
+            SOME_MATCH_LIST => {
                 let out = result.list_mut().expect("the list allocated above");
                 for i in 0..NSUBEXP as usize {
                     out.push_bytes(hit.group_bytes(i, subject));
                 }
             }
-            kSomeMatchStr => {
+            SOME_MATCH_STR => {
                 if let Some(list) = list {
                     // A List subject answers with the whole item, not with
                     // the part that matched.
@@ -237,7 +237,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                 if list.is_some() {
                     result.write_number(VarNumber::from(idx));
                 } else {
-                    let edge = if kind == kSomeMatch {
+                    let edge = if kind == SOME_MATCH {
                         hit.starts[0]
                     } else {
                         hit.ends[0]
@@ -250,7 +250,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
 
     // `matchstrpos()` on a String has no index to report, so the
     // placeholder seeded above comes back out.
-    if kind == kSomeMatchStrPos
+    if kind == SOME_MATCH_STR_POS
         && list.is_none()
         && let Some(seeded) = result.list_mut()
     {
@@ -393,27 +393,27 @@ fn want_submatches(args: &[TypVal], i: usize) -> Result<bool, Failed> {
 
 /// `match({expr}, {pat} [, {start} [, {count}]])`.
 pub fn f_match(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
-    find_some_match(args, result, kSomeMatch)
+    find_some_match(args, result, SOME_MATCH)
 }
 
 /// `matchend({expr}, {pat} [, {start} [, {count}]])`.
 pub fn f_matchend(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
-    find_some_match(args, result, kSomeMatchEnd)
+    find_some_match(args, result, SOME_MATCH_END)
 }
 
 /// `matchlist({expr}, {pat} [, {start} [, {count}]])`.
 pub fn f_matchlist(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
-    find_some_match(args, result, kSomeMatchList)
+    find_some_match(args, result, SOME_MATCH_LIST)
 }
 
 /// `matchstr({expr}, {pat} [, {start} [, {count}]])`.
 pub fn f_matchstr(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
-    find_some_match(args, result, kSomeMatchStr)
+    find_some_match(args, result, SOME_MATCH_STR)
 }
 
 /// `matchstrpos({expr}, {pat} [, {start} [, {count}]])`.
 pub fn f_matchstrpos(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
-    find_some_match(args, result, kSomeMatchStrPos)
+    find_some_match(args, result, SOME_MATCH_STR_POS)
 }
 
 /// `matchstrlist({list}, {pat} [, {dict}])`.

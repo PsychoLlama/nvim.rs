@@ -23,7 +23,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{BlobRef, ListRef, blob_copy, blob_len, index_of, tv_copy};
 use crate::eval::vars::{VarList, ex_let_vars, skip_var_list};
 use crate::eval::vars::{clear_local, emsg_static};
-use crate::eval::{e_string_list_or_blob_required, eval0_in_cmd};
+use crate::eval::{E_STRING_LIST_OR_BLOB_REQUIRED, eval0_in_cmd};
 use crate::guard::Suppress;
 use crate::mbyte::cluster_len;
 use crate::memory::ThinCString;
@@ -127,7 +127,7 @@ pub(crate) fn eval_for_line(excmd: &mut ExArg, skip: bool) -> (Box<ForInfo>, boo
                 info.walk = Walk::Text { text, next: 0 };
             }
             _ => {
-                emsg_static(e_string_list_or_blob_required);
+                emsg_static(E_STRING_LIST_OR_BLOB_REQUIRED);
                 clear_local(&mut tv);
             }
         }

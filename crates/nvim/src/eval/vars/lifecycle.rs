@@ -55,14 +55,14 @@ pub fn evalvars_init() {
     // `v:msgpack_types`: eight empty, locked lists, compared by identity
     // by the msgpack encoder and decoder rather than by name.
     let msgpack_types_dict = tv_dict_alloc();
-    for (i, name) in msgpack_type_names.iter().enumerate() {
+    for (i, name) in MSGPACK_TYPE_NAMES.iter().enumerate() {
         let type_list = tv_list_alloc(0);
         list_set_lock(Some(&mut type_list.edit()), VarLock::Fixed);
         // The encoder and decoder compare these by *identity*, so the
         // record keeps a reference of its own -- never given back, since
         // `v:msgpack_types` lives as long as the process.
         let kept = type_list.clone();
-        msgpack_type_lists.with_mut(|lists| lists[i] = Some(kept));
+        MSGPACK_TYPE_LISTS.with_mut(|lists| lists[i] = Some(kept));
         let mut item = DictItem::boxed(name.to_bytes());
         item.di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX;
         item.di_tv.write_list(Some(type_list));
@@ -204,7 +204,7 @@ pub fn del_menutrans_vars() {
 
 /// The `g:` dictionary, built on first use.
 pub(crate) fn globvar_dict() -> DictRef {
-    match scope_globals.with(|entry| entry.di_tv.dict_handle()) {
+    match SCOPE_GLOBALS.with(|entry| entry.di_tv.dict_handle()) {
         Some(dict) => dict,
         None => {
             let entry = new_unrooted_var_scope(VAR_DEF_SCOPE);
@@ -212,7 +212,7 @@ pub(crate) fn globvar_dict() -> DictRef {
                 .di_tv
                 .dict_handle()
                 .expect("a scope entry names its dictionary");
-            scope_globals.set(entry);
+            SCOPE_GLOBALS.set(entry);
             dict
         }
     }
@@ -220,7 +220,7 @@ pub(crate) fn globvar_dict() -> DictRef {
 
 /// Whether `dict` is the `g:` dictionary.
 pub(crate) fn is_globvar_dict(dict: &Dict) -> bool {
-    scope_globals.with(|entry| {
+    SCOPE_GLOBALS.with(|entry| {
         entry
             .di_tv
             .dict_shared()
@@ -230,7 +230,7 @@ pub(crate) fn is_globvar_dict(dict: &Dict) -> bool {
 
 /// Whether `list` is the `v:msgpack_types` list for `type_`.
 pub(crate) fn msgpack_type_list_is(type_: MessagePackType, list: &List) -> bool {
-    msgpack_type_lists.with(|lists| {
+    MSGPACK_TYPE_LISTS.with(|lists| {
         lists[type_ as usize]
             .as_ref()
             .is_some_and(|l| ::core::ptr::eq(l.as_ptr().cast_const(), list))
@@ -240,7 +240,7 @@ pub(crate) fn msgpack_type_list_is(type_: MessagePackType, list: &List) -> bool 
 /// Which `v:msgpack_types` list `list` is, as an index in `MessagePackType`
 /// order.
 pub(crate) fn msgpack_type_of(list: &List) -> Option<usize> {
-    msgpack_type_lists.with(|lists| {
+    MSGPACK_TYPE_LISTS.with(|lists| {
         lists.iter().position(|l| {
             l.as_ref()
                 .is_some_and(|l| ::core::ptr::eq(l.as_ptr().cast_const(), list))
@@ -251,7 +251,7 @@ pub(crate) fn msgpack_type_of(list: &List) -> Option<usize> {
 /// The `v:msgpack_types` list for `type_`, as a reference of the caller's
 /// own, for a special dictionary's `_TYPE`.
 pub(crate) fn msgpack_type_list_ref(type_: MessagePackType) -> Option<ListRef> {
-    msgpack_type_lists.with(|lists| lists[type_ as usize].clone())
+    MSGPACK_TYPE_LISTS.with(|lists| lists[type_ as usize].clone())
 }
 
 /// Give script `id` its own `s:` scope.

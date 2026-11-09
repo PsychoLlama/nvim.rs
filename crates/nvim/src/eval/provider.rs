@@ -10,7 +10,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::userfunc::FcId;
@@ -54,7 +53,7 @@ use crate::types::{Callback, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumbe
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Win};
 
-pub(crate) static provider_caller_scope: GlobalCell<CallerScope> = GlobalCell::new(CallerScope {
+pub(crate) static PROVIDER_CALLER_SCOPE: GlobalCell<CallerScope> = GlobalCell::new(CallerScope {
     script_ctx: ScriptCtx::NONE,
     es_entry: EStack {
         es_lnum: LineNr::ZERO,
@@ -68,7 +67,7 @@ pub(crate) static provider_caller_scope: GlobalCell<CallerScope> = GlobalCell::n
     autocmd_bufnr: 0,
     funccalp: None,
 });
-pub(crate) static provider_call_nesting: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static PROVIDER_CALL_NESTING: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
 /// A freshly declared typval.
 const UNSET_TV: TypVal = TV_INITIAL_VALUE;
@@ -160,7 +159,7 @@ pub fn script_host_eval(name: &CStr, args: &[TypVal], result: &mut TypVal) {
 ///
 /// The caller's scope — script context, execution-stack entry, the
 /// autocommand variables and the function-call frame — is stashed in
-/// `provider_caller_scope` first, because the provider runs Vimscript that
+/// `PROVIDER_CALLER_SCOPE` first, because the provider runs Vimscript that
 /// may ask about any of it.
 ///
 /// The argument list is handed over: the array holds it for the length of
@@ -191,9 +190,9 @@ pub fn eval_call_provider(
         funccalp: current_fc_id(),
     };
     let saved_provider_caller_scope =
-        provider_caller_scope.with_mut(|current| core::mem::replace(current, scope));
+        PROVIDER_CALLER_SCOPE.with_mut(|current| core::mem::replace(current, scope));
     let call_stack_aside = CallStackAside::new();
-    let nesting = Depth::of(&provider_call_nesting);
+    let nesting = Depth::of(&PROVIDER_CALL_NESTING);
 
     // The argument array holds the two values, so the caller's reference is
     // given back when the array drops -- which is why the method name is
@@ -207,9 +206,9 @@ pub fn eval_call_provider(
     let _ = call_func_with(&func, None, &mut rettv, &argvars, CallWith::at_cursor(true));
     drop(argvars);
     drop(call_stack_aside);
-    provider_caller_scope.set(saved_provider_caller_scope);
+    PROVIDER_CALLER_SCOPE.set(saved_provider_caller_scope);
     drop(nesting);
-    debug_assert!(provider_call_nesting.get() >= 0);
+    debug_assert!(PROVIDER_CALL_NESTING.get() >= 0);
 
     if discard {
         clear_local(&mut rettv);

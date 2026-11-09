@@ -129,13 +129,13 @@ const PATH_ROOM: usize = crate::path::MAXPATHL as usize;
 /// `:finish` as a pending control-flow reason, for `report_pending`.
 pub const CSTP_FINISH: ::core::ffi::c_int = 32;
 /// `globpath` flags.
-pub const kXDGDataDirs: XDGVarType = 6;
-pub const kXDGConfigDirs: XDGVarType = 5;
-pub const kXDGRuntimeDir: XDGVarType = 4;
-pub const kXDGStateHome: XDGVarType = 3;
-pub const kXDGCacheHome: XDGVarType = 2;
-pub const kXDGDataHome: XDGVarType = 1;
-pub const kXDGConfigHome: XDGVarType = 0;
+pub const XDG_DATA_DIRS: XDGVarType = 6;
+pub const XDG_CONFIG_DIRS: XDGVarType = 5;
+pub const XDG_RUNTIME_DIR: XDGVarType = 4;
+pub const XDG_STATE_HOME: XDGVarType = 3;
+pub const XDG_CACHE_HOME: XDGVarType = 2;
+pub const XDG_DATA_HOME: XDGVarType = 1;
+pub const XDG_CONFIG_HOME: XDGVarType = 0;
 pub const kXDGNone: XDGVarType = -1;
 /// `do_cmdline` flags.
 pub const ETYPE_AUCMD: EStackType = 3;

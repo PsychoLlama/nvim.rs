@@ -40,8 +40,8 @@ use crate::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark}
 use crate::message::emsg;
 use crate::normal::defs::CmdArg;
 use crate::normal::{
-    KMarkNoContext, MT_CHAR_WISE, check_clear_op, check_clear_op_quit, clear_op, clear_op_beep,
-    e_changelist_is_empty, kMTLineWise, kMarkAll, nv_operator,
+    KMarkNoContext, MARK_ALL, MT_CHAR_WISE, MT_LINE_WISE, check_clear_op, check_clear_op_quit,
+    clear_op, clear_op_beep, e_changelist_is_empty, nv_operator,
 };
 use crate::ops::OpType;
 use crate::option::vars::{FDO_FLAGS, JOP_FLAGS, p_hls};
@@ -154,7 +154,7 @@ pub(crate) fn normal_search(
     if let Some(hit) = i {
         // A `/pat/+1`-style offset makes the motion linewise.
         if hit == Hit::Linewise {
-            op.motion_type = kMTLineWise;
+            op.motion_type = MT_LINE_WISE;
         }
         Win::current().w_cursor.coladd = 0;
         if op.op_type == OpType::Nop && FDO_FLAGS.get() & kOptFdoFlagSearch != 0 && KeyTyped.get() {
@@ -201,7 +201,7 @@ pub(crate) fn nv_mark_move_to(
     // `'a` is linewise, `` `a `` is charwise -- and only the charwise form
     // fills the "1 last change" register.
     cmd_arg.op().motion_type = if flags & kMarkBeginLine as MarkMove != 0 {
-        kMTLineWise
+        MT_LINE_WISE
     } else {
         MT_CHAR_WISE
     };
@@ -266,7 +266,7 @@ pub(crate) fn nv_gomark(cmd_arg: &mut CmdArg) {
     // A copy of the mark, which outlives the jump below.
     let fm = name
         .as_byte()
-        .and_then(|name| mark_get(Buf::current(), Win::current(), kMarkAll, name));
+        .and_then(|name| mark_get(Buf::current(), Win::current(), MARK_ALL, name));
     let move_res = nv_mark_move_to(cmd_arg, flags, fm.as_ref());
     if !virtual_active(Win::current()) {
         Win::current().w_cursor.coladd = 0;

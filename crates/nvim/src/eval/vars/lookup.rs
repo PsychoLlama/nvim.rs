@@ -15,7 +15,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::eval::AUTOLOAD_CHAR;
 use crate::message_fmt::msg_bytes;
@@ -48,25 +47,25 @@ pub(crate) fn cat_prefix_varname(prefix: u8, name: &CStr) -> Candidate {
 /// then the whole `v:` table -- and only `g:` answers a bare name, because
 /// that is the scope an unprefixed one completes in.
 pub fn get_user_var_name(expand: &Expand, idx: usize) -> Option<Candidate> {
-    static gdone: GlobalCell<size_t> = GlobalCell::new(0);
-    static bdone: GlobalCell<size_t> = GlobalCell::new(0);
-    static wdone: GlobalCell<size_t> = GlobalCell::new(0);
-    static tdone: GlobalCell<size_t> = GlobalCell::new(0);
-    static vidx: GlobalCell<size_t> = GlobalCell::new(0);
+    static GDONE: GlobalCell<size_t> = GlobalCell::new(0);
+    static BDONE: GlobalCell<size_t> = GlobalCell::new(0);
+    static WDONE: GlobalCell<size_t> = GlobalCell::new(0);
+    static TDONE: GlobalCell<size_t> = GlobalCell::new(0);
+    static VIDX: GlobalCell<size_t> = GlobalCell::new(0);
     /// The hashtab cursor, shared by the four hashtab scopes: only one of
     /// them is being walked at a time.
     ///
     /// A slot *index*, parked across calls into the editor: the table's
     /// small run lives inside the table, so a pointer cursor would not
     /// survive the next mutation of it.
-    static slot: GlobalCell<usize> = GlobalCell::new(0);
+    static SLOT: GlobalCell<usize> = GlobalCell::new(0);
 
     if idx == 0 {
-        gdone.set(0);
-        bdone.set(0);
-        wdone.set(0);
-        tdone.set(0);
-        vidx.set(0);
+        GDONE.set(0);
+        BDONE.set(0);
+        WDONE.set(0);
+        TDONE.set(0);
+        VIDX.set(0);
     }
 
     // One step through `dict`: the first call starts at the array, every
@@ -79,7 +78,7 @@ pub fn get_user_var_name(expand: &Expand, idx: usize) -> Option<Candidate> {
             return None;
         }
         done.set(n + 1);
-        let mut at = if n == 0 { 0 } else { slot.get() + 1 };
+        let mut at = if n == 0 { 0 } else { SLOT.get() + 1 };
         // The table holds `ht_used > n` live items, so a kept slot is still
         // ahead of the cursor.
         let key = loop {
@@ -88,11 +87,11 @@ pub fn get_user_var_name(expand: &Expand, idx: usize) -> Option<Candidate> {
             }
             at += 1;
         };
-        slot.set(at);
+        SLOT.set(at);
         Some(CString::new(key).expect("a variable name holds no NUL"))
     };
 
-    if let Some(key) = step(&gdone, Some(globvar_dict())) {
+    if let Some(key) = step(&GDONE, Some(globvar_dict())) {
         if expand.pattern_starts_with(b"g:") {
             return Some(cat_prefix_varname(b'g', &key));
         }
@@ -103,19 +102,19 @@ pub fn get_user_var_name(expand: &Expand, idx: usize) -> Option<Candidate> {
     // current.
     let win = prevwin_curwin();
     let bvars = win.buffer().b_bufvar.di_tv.dict_handle();
-    if let Some(key) = step(&bdone, bvars) {
+    if let Some(key) = step(&BDONE, bvars) {
         return Some(cat_prefix_varname(b'b', &key));
     }
-    if let Some(key) = step(&wdone, win.w_winvar.di_tv.dict_handle()) {
+    if let Some(key) = step(&WDONE, win.w_winvar.di_tv.dict_handle()) {
         return Some(cat_prefix_varname(b'w', &key));
     }
     let tvars = TabPage::current().tp_winvar.di_tv.dict_handle();
-    if let Some(key) = step(&tdone, tvars) {
+    if let Some(key) = step(&TDONE, tvars) {
         return Some(cat_prefix_varname(b't', &key));
     }
-    let v = vidx.get();
+    let v = VIDX.get();
     let vv = Vv::try_from(v).ok()?;
-    vidx.set(v + 1);
+    VIDX.set(v + 1);
     Some(cat_prefix_varname(b'v', get_vim_var_name(vv)))
 }
 
@@ -237,11 +236,11 @@ pub(crate) fn with_scope_entry<R>(
     match kind {
         ScopeKind::Global => {
             drop(globvar_dict());
-            Some(scope_globals.with_mut(|entry| f(entry)))
+            Some(SCOPE_GLOBALS.with_mut(|entry| f(entry)))
         }
         ScopeKind::Vim => {
             drop(vimvar_dict());
-            Some(scope_vim.with_mut(|vim| f(&mut vim.entry)))
+            Some(SCOPE_VIM.with_mut(|vim| f(&mut vim.entry)))
         }
         ScopeKind::Compat => None,
         ScopeKind::Buffer => Some(f(&mut Buf::current().b_bufvar)),

@@ -12,7 +12,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::channel::defs::ChannelPart;
 use crate::env::XDGVarType;
@@ -80,41 +79,41 @@ pub use self::strings::*;
 pub use self::timer::*;
 pub use self::variables::*;
 pub use self::wrappers::*;
-pub const kProcTypePty: ProcType = 1;
+pub const PROC_TYPE_PTY: ProcType = 1;
 pub const MAX_FUNC_ARGS: ::core::ffi::c_uint = 20;
 pub const NSUBEXP: ::core::ffi::c_uint = 10;
-pub const kChannelPartAll: ChannelPart = 4;
-pub const kChannelPartRpc: ChannelPart = 3;
-pub const kChannelPartStderr: ChannelPart = 2;
-pub const kChannelPartStdout: ChannelPart = 1;
-pub const kChannelPartStdin: ChannelPart = 0;
-pub const kMTUnknown: MotionType = -1;
-pub const kMTBlockWise: MotionType = 2;
-pub const kMTLineWise: MotionType = 1;
+pub const CHANNEL_PART_ALL: ChannelPart = 4;
+pub const CHANNEL_PART_RPC: ChannelPart = 3;
+pub const CHANNEL_PART_STDERR: ChannelPart = 2;
+pub const CHANNEL_PART_STDOUT: ChannelPart = 1;
+pub const CHANNEL_PART_STDIN: ChannelPart = 0;
+pub const MT_UNKNOWN: MotionType = -1;
+pub const MT_BLOCK_WISE: MotionType = 2;
+pub const MT_LINE_WISE: MotionType = 1;
 pub const MT_CHAR_WISE: MotionType = 0;
 pub type SomeMatchType = ::core::ffi::c_uint;
-pub const kSomeMatchStrPos: SomeMatchType = 4;
-pub const kSomeMatchStr: SomeMatchType = 3;
-pub const kSomeMatchList: SomeMatchType = 2;
-pub const kSomeMatchEnd: SomeMatchType = 1;
-pub const kSomeMatch: SomeMatchType = 0;
+pub const SOME_MATCH_STR_POS: SomeMatchType = 4;
+pub const SOME_MATCH_STR: SomeMatchType = 3;
+pub const SOME_MATCH_LIST: SomeMatchType = 2;
+pub const SOME_MATCH_END: SomeMatchType = 1;
+pub const SOME_MATCH: SomeMatchType = 0;
 pub const VSE_NONE: ::core::ffi::c_uint = 0;
 pub const RET_NIL_BOOL: LuaRetMode = 1;
 pub const RET_OBJECT: LuaRetMode = 0;
-pub const kGRegList: GRegFlags = 4;
-pub const kGRegExprSrc: GRegFlags = 2;
+pub const G_REG_LIST: GRegFlags = 4;
+pub const G_REG_EXPR_SRC: GRegFlags = 2;
 pub const MENU_ALL_MODES: ::core::ffi::c_uint = 127;
 pub const TFN_NO_DEREF: ::core::ffi::c_uint = 8;
 pub const TFN_NO_AUTOLOAD: ::core::ffi::c_uint = 4;
 pub const TFN_QUIET: ::core::ffi::c_uint = 2;
 pub const TFN_INT: ::core::ffi::c_uint = 1;
-pub const kXDGDataDirs: XDGVarType = 6;
-pub const kXDGConfigDirs: XDGVarType = 5;
-pub const kXDGRuntimeDir: XDGVarType = 4;
-pub const kXDGStateHome: XDGVarType = 3;
-pub const kXDGCacheHome: XDGVarType = 2;
-pub const kXDGDataHome: XDGVarType = 1;
-pub const kXDGConfigHome: XDGVarType = 0;
+pub const XDG_DATA_DIRS: XDGVarType = 6;
+pub const XDG_CONFIG_DIRS: XDGVarType = 5;
+pub const XDG_RUNTIME_DIR: XDGVarType = 4;
+pub const XDG_STATE_HOME: XDGVarType = 3;
+pub const XDG_CACHE_HOME: XDGVarType = 2;
+pub const XDG_DATA_HOME: XDGVarType = 1;
+pub const XDG_CONFIG_HOME: XDGVarType = 0;
 pub const YREG_YANK: ::core::ffi::c_uint = 1;
 pub const FCERR_TOOMANY: ::core::ffi::c_uint = 1;
 pub const FCERR_TOOFEW: ::core::ffi::c_uint = 2;
@@ -132,8 +131,8 @@ pub const INTERNAL_CALL_MASK: uint64_t = 1_u64
         .wrapping_mul(8_usize)
         .wrapping_sub(1_usize);
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
-static e_string_list_or_blob_required: &::core::ffi::CStr = c"E1098: String, List or Blob required";
-static e_missing_function_argument: &::core::ffi::CStr = c"E1132: Missing function argument";
+static E_STRING_LIST_OR_BLOB_REQUIRED: &::core::ffi::CStr = c"E1098: String, List or Blob required";
+static E_MISSING_FUNCTION_ARGUMENT: &::core::ffi::CStr = c"E1132: Missing function argument";
 pub const SIGINT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 
 #[cfg(test)]

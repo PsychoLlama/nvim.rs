@@ -132,7 +132,7 @@ pub(crate) fn tv_blob2items(args: &[TypVal], result: &mut TypVal) {
 
 /// `items()` over a dictionary: a list of `[key, value]` pairs.
 pub(crate) fn tv_dict2items(args: &[TypVal], result: &mut TypVal) {
-    tv_dict2list(args, result, kDict2ListItems);
+    tv_dict2list(args, result, DICT2_LIST_ITEMS);
 }
 
 /// `items()` over a list: a list of `[index, value]` pairs.
@@ -395,13 +395,13 @@ pub(crate) fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListT
         let mut tv_item = TV_INITIAL_VALUE;
 
         match what {
-            kDict2ListKeys => {
+            DICT2_LIST_KEYS => {
                 tv_item.write_string(Some(ThinCString::from_bytes(di.di_key.bytes())));
             }
-            kDict2ListValues => {
+            DICT2_LIST_VALUES => {
                 tv_copy(&di.di_tv, &mut tv_item);
             }
-            kDict2ListItems => {
+            DICT2_LIST_ITEMS => {
                 // items()
                 let mut pair = tv_list_alloc(2);
                 pair.push(TypVal::string(Some(ThinCString::from_bytes(di.key()))));
@@ -433,12 +433,12 @@ pub fn f_items(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `keys()`: the keys of a dictionary.
 pub fn f_keys(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    tv_dict2list(args, result, kDict2ListKeys);
+    tv_dict2list(args, result, DICT2_LIST_KEYS);
 }
 
 /// `values()`: the values of a dictionary.
 pub fn f_values(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    tv_dict2list(args, result, kDict2ListValues);
+    tv_dict2list(args, result, DICT2_LIST_VALUES);
 }
 
 /// `has_key()`: whether a dictionary has a key.

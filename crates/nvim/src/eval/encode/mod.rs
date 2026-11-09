@@ -26,7 +26,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::memory::ThinCString;
 use core::ffi::{CStr, c_int};
@@ -55,7 +54,7 @@ pub use self::msgpack::*;
 mod text;
 use self::text::{encode_vim_to_echo, encode_vim_to_string};
 
-pub const kMPString: MessagePackType = 4;
+pub const MP_STRING: MessagePackType = 4;
 
 /// The UTF-16 surrogate range, which a JSON `\u` escape has to spell a
 /// character above the BMP with — and which a *string* may not contain.
@@ -72,13 +71,13 @@ pub(crate) const SPECIAL_VAR_NAMES: [&CStr; 1] = [c"v:null"];
 
 /// Set once a `string()`/`echo` dump has reported a self-reference, so the
 /// user is told once rather than once per cycle.
-static did_echo_string_emsg: GlobalCell<bool> = GlobalCell::new(false);
+static DID_ECHO_STRING_EMSG: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Report a self-referencing container, once per dump: a cycle usually shows
 /// up many times over.
 pub(crate) fn report_self_reference() {
-    if !did_echo_string_emsg.get() {
-        did_echo_string_emsg.set(true);
+    if !DID_ECHO_STRING_EMSG.get() {
+        DID_ECHO_STRING_EMSG.set(true);
         emsg(gettext(
             c"E724: unable to correctly dump variable with self-referencing container",
         ));
@@ -546,7 +545,7 @@ pub fn encode_check_json_key(tv: &TypVal) -> bool {
     if type_tv.v_type() != VAR_LIST
         || !type_tv
             .list_ref()
-            .is_some_and(|list| msgpack_type_list_is(kMPString, list))
+            .is_some_and(|list| msgpack_type_list_is(MP_STRING, list))
     {
         return false;
     }
@@ -566,7 +565,7 @@ pub(crate) fn tv2string_bytes(tv: &TypVal) -> Vec<u8> {
     let mut ga = Vec::<u8>::new();
     let evs_ret = encode_vim_to_string(&mut ga, tv, c"encode_tv2string() argument");
     debug_assert!(evs_ret);
-    did_echo_string_emsg.set(false);
+    DID_ECHO_STRING_EMSG.set(false);
     ga
 }
 
@@ -609,7 +608,7 @@ pub fn encode_tv2json(tv: &TypVal) -> ThinCString {
     if !evj_ret {
         ga.clear();
     }
-    did_echo_string_emsg.set(false);
+    DID_ECHO_STRING_EMSG.set(false);
     ThinCString::from_vec(ga)
 }
 
@@ -647,7 +646,7 @@ mod tests {
     fn json(tv: &TypVal) -> Option<String> {
         let mut ga = Vec::new();
         let ok = encode_vim_to_json(&mut ga, tv, c"test");
-        did_echo_string_emsg.set(false);
+        DID_ECHO_STRING_EMSG.set(false);
         ok.then(|| String::from_utf8(ga).expect("UTF-8"))
     }
 

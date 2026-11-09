@@ -211,7 +211,7 @@ impl Put {
         col: ColNr,
         lendiff: c_int,
     ) {
-        if self.kind == kMTLineWise {
+        if self.kind == MT_LINE_WISE {
             Buf::current().b_op_start.col = ColNr::ZERO;
             if self.dir == FORWARD {
                 Buf::current().b_op_start.lnum += 1;
@@ -220,7 +220,7 @@ impl Put {
 
         // Only a plain linewise put moves the marks itself; a split put
         // has already spliced them.
-        let kind = if self.kind == kMTLineWise && self.flags & PUT_LINE_SPLIT == 0 {
+        let kind = if self.kind == MT_LINE_WISE && self.flags & PUT_LINE_SPLIT == 0 {
             kExtmarkUndo
         } else {
             kExtmarkNOOP
@@ -258,7 +258,7 @@ impl Put {
             beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         } else if self.flags & PUT_CURSEND != 0 {
             // The cursor goes after the inserted text.
-            if self.kind == kMTLineWise {
+            if self.kind == MT_LINE_WISE {
                 Win::current().w_cursor.lnum = if lnum >= Buf::current().b_ml.ml_line_count {
                     Buf::current().b_ml.ml_line_count
                 } else {
@@ -273,7 +273,7 @@ impl Put {
                     Buf::current().b_op_end.col = col - 1;
                 }
             }
-        } else if self.kind == kMTLineWise {
+        } else if self.kind == MT_LINE_WISE {
             // The cursor goes on the first non-blank of the first line.
             Win::current().w_cursor.col = ColNr::ZERO;
             if self.dir == FORWARD {
@@ -344,7 +344,7 @@ impl Put {
                 // Splice the extmarks for what was inserted. A linewise
                 // put that did *not* split a line has its marks moved by
                 // `mark_adjust` below instead.
-                let splits_a_line = self.kind == kMTLineWise && self.flags & PUT_LINE_SPLIT != 0;
+                let splits_a_line = self.kind == MT_LINE_WISE && self.flags & PUT_LINE_SPLIT != 0;
                 if self.kind == MT_CHAR_WISE || splits_a_line {
                     let (last, init) = self.lines.split_last().expect("a register holds a line");
                     let mut totsize: BCount = 0;

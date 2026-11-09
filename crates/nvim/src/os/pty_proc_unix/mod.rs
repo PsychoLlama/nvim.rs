@@ -32,7 +32,7 @@ use crate::event::libuv::{uv_chdir, uv_disable_stdio_inheritance, uv_pipe_open};
 use crate::event::r#loop::{loop_children, start_children_watcher};
 use crate::event::objects::Loop;
 use crate::event::objects::Proc;
-use crate::event::proc::{kProcTypePty, proc_get_exepath, proc_init};
+use crate::event::proc::{PROC_TYPE_PTY, proc_get_exepath, proc_init};
 use crate::event::uv::{uv_pipe_t, uv_signal_t};
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg};
@@ -79,7 +79,7 @@ pub fn pty_proc_init(uv_loop: *mut Loop, data: *mut c_void) -> PtyProc {
     // SAFETY: every field is a pointer, an integer or an `Option<fn>`, for
     // all of which all-zeroes is the "unset" value.
     let mut rv: PtyProc = unsafe { core::mem::zeroed() };
-    rv.proc = proc_init(uv_loop, kProcTypePty, data);
+    rv.proc = proc_init(uv_loop, PROC_TYPE_PTY, data);
     rv.width = 80;
     rv.height = 24;
     rv.tty_fd = -1;

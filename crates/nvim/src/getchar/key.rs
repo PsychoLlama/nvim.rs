@@ -73,7 +73,7 @@ pub(crate) fn merge_mod_mask(c: Key) -> Key {
 pub fn vgetc() -> Key {
     // Garbage collection was requested by a previous `garbagecollect()`
     // and we are back at the top level.
-    if may_garbage_collect.get() && want_garbage_collect.get() {
+    if MAY_GARBAGE_COLLECT.get() && WANT_GARBAGE_COLLECT.get() {
         garbage_collect(false);
     }
 
@@ -91,10 +91,10 @@ pub fn vgetc() -> Key {
         c = vgetc_from_typeahead();
     }
 
-    // The main loop sets `may_garbage_collect` so that the next `vgetc`
+    // The main loop sets `MAY_GARBAGE_COLLECT` so that the next `vgetc`
     // collects; it is disabled again here so that Lists and Dicts in use
     // internally are not freed under a caller.
-    may_garbage_collect.set(false);
+    MAY_GARBAGE_COLLECT.set(false);
 
     // Hand the key's bytes to the Lua on_key callbacks. The buffer is moved
     // out for the call: a callback can read keys, which append to it, and

@@ -70,11 +70,11 @@ mod known {
     use super::ChannelPart;
     use core::ffi::c_int;
 
-    pub(super) const kChannelPartStdin: ChannelPart = 0;
-    pub(super) const kChannelPartStdout: ChannelPart = 1;
-    pub(super) const kChannelPartStderr: ChannelPart = 2;
-    pub(super) const kChannelPartRpc: ChannelPart = 3;
-    pub(super) const kChannelPartAll: ChannelPart = 4;
+    pub(super) const CHANNEL_PART_STDIN: ChannelPart = 0;
+    pub(super) const CHANNEL_PART_STDOUT: ChannelPart = 1;
+    pub(super) const CHANNEL_PART_STDERR: ChannelPart = 2;
+    pub(super) const CHANNEL_PART_RPC: ChannelPart = 3;
+    pub(super) const CHANNEL_PART_ALL: ChannelPart = 4;
 
     pub(super) const LUA_NOREF: c_int = -2;
 
@@ -160,7 +160,7 @@ pub fn channel_teardown() {
     // The ids are snapshotted rather than walked live because closing a
     // channel queues a free against the same table.
     for id in channels.with(SlotTable::snapshot_keys) {
-        let _ = channel_close(id, kChannelPartAll);
+        let _ = channel_close(id, CHANNEL_PART_ALL);
     }
 }
 
@@ -272,7 +272,7 @@ pub(crate) type CloseError = &'static CStr;
 /// Closes `part` of channel `id`, or says why not.
 ///
 /// Which parts exist depends on the transport, and an RPC channel only
-/// accepts `kChannelPartRpc`/`kChannelPartAll` — its stdin and stdout carry
+/// accepts `CHANNEL_PART_RPC`/`CHANNEL_PART_ALL` — its stdin and stdout carry
 /// the protocol and cannot be closed separately. Closing a channel that has
 /// already gone is not an error: closing twice is allowed.
 pub fn channel_close(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> {
@@ -286,14 +286,14 @@ pub fn channel_close(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> 
         };
     };
 
-    let close_main = part == kChannelPartRpc || part == kChannelPartAll;
+    let close_main = part == CHANNEL_PART_RPC || part == CHANNEL_PART_ALL;
     if close_main {
         if is_rpc {
             rpc_close(id);
-        } else if part == kChannelPartRpc {
+        } else if part == CHANNEL_PART_RPC {
             return Err(E_INVSTREAM);
         }
-    } else if (part == kChannelPartStdin || part == kChannelPartStdout) && is_rpc {
+    } else if (part == CHANNEL_PART_STDIN || part == CHANNEL_PART_STDOUT) && is_rpc {
         return Err(E_INVSTREAMRPC);
     }
 
@@ -335,11 +335,11 @@ fn close_job_parts(id: uint64_t, part: ChannelPart, close_main: bool) {
     with_channel(id, |channel| {
         if let Some(mut job) = channel.stream_mut().job() {
             job.as_mut().close_streams(
-                part == kChannelPartStdin || close_main,
-                part == kChannelPartStdout || close_main,
-                part == kChannelPartStderr || part == kChannelPartAll,
+                part == CHANNEL_PART_STDIN || close_main,
+                part == CHANNEL_PART_STDOUT || close_main,
+                part == CHANNEL_PART_STDERR || part == CHANNEL_PART_ALL,
             );
-            if part == kChannelPartAll {
+            if part == CHANNEL_PART_ALL {
                 job.close_master();
             }
         }
@@ -349,15 +349,15 @@ fn close_job_parts(id: uint64_t, part: ChannelPart, close_main: bool) {
 /// Closes this process's own stdin/stdout.
 fn close_stdio_parts(id: uint64_t, part: ChannelPart, close_main: bool) -> Result<(), CloseError> {
     // This process's stderr belongs to the stderr channel, not here.
-    if part == kChannelPartStderr {
+    if part == CHANNEL_PART_STDERR {
         return Err(E_INVSTREAM);
     }
     with_channel(id, |channel| {
         if let TransportMut::Stdio(stdin, stdout) = channel.stream_mut().project() {
-            if part == kChannelPartStdin || close_main {
+            if part == CHANNEL_PART_STDIN || close_main {
                 stdin.close();
             }
-            if part == kChannelPartStdout || close_main {
+            if part == CHANNEL_PART_STDOUT || close_main {
                 stdout.close();
             }
         }
@@ -367,7 +367,7 @@ fn close_stdio_parts(id: uint64_t, part: ChannelPart, close_main: bool) -> Resul
 
 /// Closes the stderr channel, which is a descriptor rather than a stream.
 fn close_stderr(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> {
-    if part != kChannelPartAll && part != kChannelPartStderr {
+    if part != CHANNEL_PART_ALL && part != CHANNEL_PART_STDERR {
         return Err(E_INVSTREAM);
     }
     let was_open = with_channel(id, |channel| match channel.stream_mut().project() {

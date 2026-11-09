@@ -36,9 +36,9 @@ use crate::eval::typval::{tv_check_num, tv_check_str, tv_clear, tv_get_number_ch
 use crate::eval::userfunc::{call_simple_func, call_simple_luafunc, get_lambda_tv};
 use crate::eval::vars::{check_vars, eval_variable, lua_partial};
 use crate::eval::{
-    EXPR_UNKNOWN, Parsed, comparison_at, eval_dict, eval_env_var, eval_func, eval_interp_string,
-    eval_isnamec, eval_isnamec1, eval_list, eval_lit_dict, eval_lit_string, eval_number,
-    eval_option, eval_string, get_name_len, handle_subscript, kGRegExprSrc, luafunc_name_end,
+    EXPR_UNKNOWN, G_REG_EXPR_SRC, Parsed, comparison_at, eval_dict, eval_env_var, eval_func,
+    eval_interp_string, eval_isnamec, eval_isnamec1, eval_list, eval_lit_dict, eval_lit_string,
+    eval_number, eval_option, eval_string, get_name_len, handle_subscript, luafunc_name_end,
     typval_compare,
 };
 use crate::ex_docmd::ends_excmd;
@@ -530,7 +530,7 @@ pub(crate) fn eval7(
             if evaluate {
                 result.write_empty(VAR_STRING);
                 let name = cursor.byte();
-                let text = get_reg_contents_owned(name, kGRegExprSrc.cast_signed());
+                let text = get_reg_contents_owned(name, G_REG_EXPR_SRC.cast_signed());
                 result.write_string(text.map(ThinCString::from));
             }
             // `@` at the very end of the line names no register.

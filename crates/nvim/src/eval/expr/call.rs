@@ -27,7 +27,7 @@ use crate::eval::typval::{DictRef, tv_clear};
 use crate::eval::userfunc::{CallWith, deref_func_name_owned, get_func_tv, get_lambda_tv};
 use crate::eval::vars::{check_vars, lua_partial};
 use crate::eval::{
-    Cursor, e_cannot_use_partial_here, e_empty_function_name, e_nowhitespace, eval7, get_name_len,
+    Cursor, E_CANNOT_USE_PARTIAL_HERE, E_EMPTY_FUNCTION_NAME, E_NOWHITESPACE, eval7, get_name_len,
     is_luafunc, luafunc_name_end,
 };
 use crate::ex_eval::aborting;
@@ -125,7 +125,7 @@ pub(crate) fn call_func_rettv(
             match name {
                 Some(name) if !name.is_empty() => funcname = name,
                 _ => {
-                    emsg(gettext(e_empty_function_name));
+                    emsg(gettext(E_EMPTY_FUNCTION_NAME));
                     tv_clear(&mut functv);
                     return Err(Failed);
                 }
@@ -174,7 +174,7 @@ pub(crate) fn eval_lambda(
             after.bump(cursor.offset());
             after.skip_white();
             if after.byte() == b'(' {
-                emsg(gettext(e_nowhitespace));
+                emsg(gettext(E_NOWHITESPACE));
             } else {
                 semsg!("E107: Missing parentheses: lambda");
             }
@@ -275,7 +275,7 @@ pub(crate) fn eval_method(
                     let (dict, args) = callee.partial_binding();
                     if !args.is_empty() || dict.is_some() {
                         if verbose {
-                            emsg(gettext(e_cannot_use_partial_here));
+                            emsg(gettext(E_CANNOT_USE_PARTIAL_HERE));
                         }
                         ret = Err(Failed);
                     } else {
@@ -306,7 +306,7 @@ pub(crate) fn eval_method(
                 ret = Err(Failed);
             } else if matches!(text[cursor.offset() - 1], b' ' | b'\t') {
                 if verbose {
-                    emsg(gettext(e_nowhitespace));
+                    emsg(gettext(E_NOWHITESPACE));
                 }
                 ret = Err(Failed);
             } else if lua_name.is_some() {

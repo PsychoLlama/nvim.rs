@@ -39,16 +39,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use core::ptr::NonNull;
 
 use crate::global_cell::GlobalCell;
 use crate::types::{Dict, List};
 
-pub(crate) static may_garbage_collect: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static want_garbage_collect: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static garbage_collect_at_exit: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static MAY_GARBAGE_COLLECT: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static WANT_GARBAGE_COLLECT: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static GARBAGE_COLLECT_AT_EXIT: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Where a container sits in the registry.
 ///
@@ -120,37 +119,37 @@ impl<T> Registry<T> {
     }
 }
 
-static live_lists: GlobalCell<Registry<List>> = GlobalCell::new(Registry::new());
-static live_dicts: GlobalCell<Registry<Dict>> = GlobalCell::new(Registry::new());
+static LIVE_LISTS: GlobalCell<Registry<List>> = GlobalCell::new(Registry::new());
+static LIVE_DICTS: GlobalCell<Registry<Dict>> = GlobalCell::new(Registry::new());
 
 /// Register `l` as a live list, answering the id it must carry.
 pub(crate) fn root_list(l: NonNull<List>) -> RootId {
-    live_lists.with_mut(|reg| reg.insert(l))
+    LIVE_LISTS.with_mut(|reg| reg.insert(l))
 }
 
 /// Take `id` out of the list registry. A no-op for [`RootId::NONE`].
 pub(crate) fn unroot_list(id: RootId) {
-    live_lists.with_mut(|reg| reg.remove(id));
+    LIVE_LISTS.with_mut(|reg| reg.remove(id));
 }
 
 /// Register `d` as a live dictionary, answering the id it must carry.
 pub(crate) fn root_dict(d: NonNull<Dict>) -> RootId {
-    live_dicts.with_mut(|reg| reg.insert(d))
+    LIVE_DICTS.with_mut(|reg| reg.insert(d))
 }
 
 /// Take `id` out of the dictionary registry. A no-op for [`RootId::NONE`].
 pub(crate) fn unroot_dict(id: RootId) {
-    live_dicts.with_mut(|reg| reg.remove(id));
+    LIVE_DICTS.with_mut(|reg| reg.remove(id));
 }
 
 /// How many slots the list registry has: the bound of a walk's index.
 pub(crate) fn list_slots() -> usize {
-    live_lists.with(|reg| reg.slots.len())
+    LIVE_LISTS.with(|reg| reg.slots.len())
 }
 
 /// How many slots the dictionary registry has.
 pub(crate) fn dict_slots() -> usize {
-    live_dicts.with(|reg| reg.slots.len())
+    LIVE_DICTS.with(|reg| reg.slots.len())
 }
 
 /// The list in slot `idx`, or `None` for a hole or a slot past the end.
@@ -159,12 +158,12 @@ pub(crate) fn dict_slots() -> usize {
 /// what it does with each container re-enters: emptying a dictionary runs
 /// its watchers' teardown, and freeing one can allocate.
 pub(crate) fn list_at(idx: usize) -> Option<NonNull<List>> {
-    live_lists.with(|reg| reg.slots.get(idx).copied().flatten())
+    LIVE_LISTS.with(|reg| reg.slots.get(idx).copied().flatten())
 }
 
 /// The dictionary in slot `idx`, or `None` for a hole or a slot past the end.
 pub(crate) fn dict_at(idx: usize) -> Option<NonNull<Dict>> {
-    live_dicts.with(|reg| reg.slots.get(idx).copied().flatten())
+    LIVE_DICTS.with(|reg| reg.slots.get(idx).copied().flatten())
 }
 
 /// Every live list, in registration order.
@@ -175,5 +174,5 @@ pub(crate) fn dict_at(idx: usize) -> Option<NonNull<Dict>> {
 /// -- `garbagecollect()` would collect a leaked one and no Vimscript, Lua or
 /// API call names it.
 pub fn rooted_lists() -> Vec<*mut List> {
-    live_lists.with(|reg| reg.slots.iter().flatten().map(|l| l.as_ptr()).collect())
+    LIVE_LISTS.with(|reg| reg.slots.iter().flatten().map(|l| l.as_ptr()).collect())
 }

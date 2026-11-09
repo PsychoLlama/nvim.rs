@@ -17,7 +17,7 @@ use crate::winlayer::Buf;
 use core::ffi::c_int;
 
 use crate::buffer::find_buf;
-use crate::eval::kMarkAll;
+use crate::eval::MARK_ALL;
 use crate::eval::typval::{NumBuf, list_find_nr, list_len};
 use crate::mark::mark_get;
 use crate::mbyte::{char_count, cluster_len};
@@ -164,7 +164,7 @@ pub fn var2fpos(
             pos = wp.w_cursor;
         }
     } else if first == b'\'' {
-        let fm = mark_get(bp, wp, kMarkAll, second)?;
+        let fm = mark_get(bp, wp, MARK_ALL, second)?;
         if fm.mark.lnum <= LineNr::ZERO {
             return None;
         }

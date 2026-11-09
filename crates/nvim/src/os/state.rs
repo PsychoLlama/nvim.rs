@@ -21,7 +21,7 @@ use crate::global_cell::GlobalCell;
 use crate::path::FileComparison;
 use core::ffi::c_char;
 
-pub(crate) const kXDGConfigDirs: XDGVarType = 5;
+pub(crate) const XDG_CONFIG_DIRS: XDGVarType = 5;
 pub(crate) const kEqualFiles: FileComparison = 1;
 pub(crate) static didset_vim: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static didset_vimruntime: GlobalCell<bool> = GlobalCell::new(false);

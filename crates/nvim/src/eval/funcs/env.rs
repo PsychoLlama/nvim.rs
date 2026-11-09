@@ -11,8 +11,8 @@
 
 use super::wrappers::{arg_number_chk, dict_alloc_ret};
 use super::{
-    kXDGCacheHome, kXDGConfigDirs, kXDGConfigHome, kXDGDataDirs, kXDGDataHome, kXDGRuntimeDir,
-    kXDGStateHome, tv_get_buf,
+    XDG_CACHE_HOME, XDG_CONFIG_DIRS, XDG_CONFIG_HOME, XDG_DATA_DIRS, XDG_DATA_HOME,
+    XDG_RUNTIME_DIR, XDG_STATE_HOME, tv_get_buf,
 };
 use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one};
@@ -241,15 +241,15 @@ pub fn f_stdpath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     };
     let dir = match p.to_bytes() {
-        b"config" => xdg_home(kXDGConfigHome),
-        b"data" => xdg_home(kXDGDataHome),
-        b"cache" => xdg_home(kXDGCacheHome),
+        b"config" => xdg_home(XDG_CONFIG_HOME),
+        b"data" => xdg_home(XDG_DATA_HOME),
+        b"cache" => xdg_home(XDG_CACHE_HOME),
         // "log" is deliberately the state directory: the log file lives
         // there and there is no XDG log home.
-        b"state" | b"log" => xdg_home(kXDGStateHome),
-        b"run" => xdg_var(kXDGRuntimeDir).map(ThinCString::into_xstring),
-        b"config_dirs" => return get_xdg_var_list(kXDGConfigDirs, result),
-        b"data_dirs" => return get_xdg_var_list(kXDGDataDirs, result),
+        b"state" | b"log" => xdg_home(XDG_STATE_HOME),
+        b"run" => xdg_var(XDG_RUNTIME_DIR).map(ThinCString::into_xstring),
+        b"config_dirs" => return get_xdg_var_list(XDG_CONFIG_DIRS, result),
+        b"data_dirs" => return get_xdg_var_list(XDG_DATA_DIRS, result),
         _ => {
             let p = msg_cstr(p);
             semsg!("E6100: \"{p}\" is not a valid stdpath");

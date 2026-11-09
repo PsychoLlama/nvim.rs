@@ -25,7 +25,7 @@ use crate::eval::typval::DictItem;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{ListRef, callback_copy, callback_free, callback_put, tv_dict_alloc};
 use crate::eval::vars::clear_local;
-use crate::eval::{callback_call, last_timer_id, timers};
+use crate::eval::{LAST_TIMER_ID, TIMERS, callback_call};
 use crate::event::time::{OwnedTimer, TimerQueue};
 use crate::ex_docmd::{get_pressedreturn, set_pressedreturn};
 use crate::ex_eval::discard_current_exception;
@@ -51,7 +51,7 @@ fn timer_key(id: VarNumber) -> uint64_t {
 /// Run `f` on the timer numbered `id`, if it is registered. The borrow ends
 /// with `f`, which must not run user code.
 pub(crate) fn with_timer<R>(id: VarNumber, f: impl FnOnce(&mut Timer) -> R) -> Option<R> {
-    timers.with_mut(|map| map.get_mut(&timer_key(id)).map(f))
+    TIMERS.with_mut(|map| map.get_mut(&timer_key(id)).map(f))
 }
 
 /// Whether `timer_info()` lists `timer`: a stopped timer still is while one
@@ -93,7 +93,7 @@ pub fn add_timer_info(list: &ListRef, id: VarNumber) {
 
 /// Append a description of every listed timer to `list`.
 pub fn add_timer_info_all(list: &ListRef) {
-    for id in timers.with(SlotTable::snapshot_keys) {
+    for id in TIMERS.with(SlotTable::snapshot_keys) {
         add_timer_info(list, id.cast_signed());
     }
 }
@@ -168,8 +168,8 @@ fn timer_due_cb(id: uint64_t) {
 
 /// Start a timer running `callback`, which it takes over, answering its id.
 pub fn timer_start(timeout: int64_t, repeat_count: c_int, callback: Callback) -> uint64_t {
-    let id = last_timer_id.get();
-    last_timer_id.set(id.wrapping_add(1));
+    let id = LAST_TIMER_ID.get();
+    LAST_TIMER_ID.set(id.wrapping_add(1));
     let mut watcher = OwnedTimer::new(TimerQueue::OwnChild, true, id);
     let repeat = timeout.cast_unsigned();
     watcher.start(timer_due_cb, repeat, repeat);
@@ -185,7 +185,7 @@ pub fn timer_start(timeout: int64_t, repeat_count: c_int, callback: Callback) ->
         paused: false,
         callback,
     };
-    timers.with_mut(|map| map.insert(id, timer));
+    TIMERS.with_mut(|map| map.insert(id, timer));
     id
 }
 
@@ -223,14 +223,14 @@ pub fn timer_stop(id: VarNumber) {
 
 /// The watcher of the timer numbered `id` is closed: the timer goes.
 fn timer_close_cb(id: uint64_t) {
-    if let Some(mut timer) = timers.with_mut(|map| map.remove(&id)) {
+    if let Some(mut timer) = TIMERS.with_mut(|map| map.remove(&id)) {
         callback_free(&mut timer.callback);
     }
 }
 
 /// Stop every timer.
 pub fn timer_stop_all() {
-    for id in timers.with(SlotTable::snapshot_keys) {
+    for id in TIMERS.with(SlotTable::snapshot_keys) {
         timer_stop(id.cast_signed());
     }
 }

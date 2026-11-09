@@ -868,7 +868,7 @@ impl Win {
         };
 
         self.w_cursor = pos;
-        if op.motion_type == kMTLineWise {
+        if op.motion_type == MT_LINE_WISE {
             set_visual_mode(VisualMode::LINE);
         } else if sel_exclusive() {
             if lt(self.w_cursor, visual_anchor()) {

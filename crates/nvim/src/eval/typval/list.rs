@@ -817,20 +817,20 @@ mod tests {
         drop(ManuallyDrop::into_inner(view));
     }
 
-    /// Hold `tv_in_free_unref_items` up for a scope, and put it down even
+    /// Hold `TV_IN_FREE_UNREF_ITEMS` up for a scope, and put it down even
     /// when an assertion unwinds through it -- a flag left up would turn
     /// every later case's frees into leaks.
     #[derive(Debug)]
     struct Collecting;
     impl Collecting {
         fn start() -> Collecting {
-            tv_in_free_unref_items.set(true);
+            TV_IN_FREE_UNREF_ITEMS.set(true);
             Collecting
         }
     }
     impl Drop for Collecting {
         fn drop(&mut self) {
-            tv_in_free_unref_items.set(false);
+            TV_IN_FREE_UNREF_ITEMS.set(false);
         }
     }
 

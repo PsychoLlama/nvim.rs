@@ -16,7 +16,7 @@ use crate::autocmd::{au_exists, autocmd_supported};
 use crate::env::expand_env;
 use crate::eval::AUTOLOAD_CHAR;
 use crate::eval::funcs::builtin::EvalFuncData;
-use crate::eval::gc::{garbage_collect_at_exit, want_garbage_collect};
+use crate::eval::gc::{GARBAGE_COLLECT_AT_EXIT, WANT_GARBAGE_COLLECT};
 use crate::eval::typval::{
     ListRef, NumBuf, PartialRef, list_iter, list_len, tv_check_for_dict_arg, tv_check_for_list_arg,
 };
@@ -468,9 +468,9 @@ pub fn f_function(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// for one on exit as well.
 pub fn f_garbagecollect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let _rettv = result;
-    want_garbage_collect.set(true);
+    WANT_GARBAGE_COLLECT.set(true);
     if !args.is_empty() && arg_number(&args[0]) == 1 {
-        garbage_collect_at_exit.set(true);
+        GARBAGE_COLLECT_AT_EXIT.set(true);
     }
 }
 

@@ -50,7 +50,7 @@ pub(crate) fn cstr_ncasecmp(
 }
 
 /// The character-class bits glibc's table holds for byte `c` in the process
-/// locale -- what `isalnum(c)` and friends test, `_ISalnum` and the rest.
+/// locale -- what `isalnum(c)` and friends test, `IS_ALNUM` and the rest.
 pub(crate) fn ctype_bits(c: u8) -> ::core::ffi::c_ushort {
     // SAFETY: the table `__ctype_b_loc` answers is valid for every `unsigned
     // char` (and EOF) for the life of the thread.

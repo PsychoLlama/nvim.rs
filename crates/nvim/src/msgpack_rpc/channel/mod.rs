@@ -75,7 +75,7 @@ mod known {
     pub(super) const MESSAGE_TYPE_NOTIFICATION: MessageType = 2;
     pub(super) const kMessageTypeRedrawEvent: MessageType = 3;
 
-    pub(super) const kChannelPartRpc: ChannelPart = 3;
+    pub(super) const CHANNEL_PART_RPC: ChannelPart = 3;
 
     pub(super) const kClientTypeMsgpackRpc: ClientType = 5;
 
@@ -202,7 +202,7 @@ fn chan_close_on_err(id: uint64_t, msg: &[u8], loglevel: c_int) {
             }
         }
     });
-    let _ = channel_close(id, kChannelPartRpc);
+    let _ = channel_close(id, CHANNEL_PART_RPC);
     let msg = msg_bytes(msg);
     // Upstream's `LOG(loglevel, …)`: a level known only at run time, so the
     // line is filtered by the minimum level rather than compiled out.

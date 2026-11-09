@@ -9,7 +9,6 @@
 
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -205,16 +204,16 @@ fn item_lock_depth(
     deep: ::core::ffi::c_int,
 ) -> Result<Option<crate::guard::Bump>, crate::types::Failed> {
     // TODO(ZyX-I): Make this not recursive
-    static recurse: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+    static RECURSE: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
-    if recurse.get() >= DICT_MAXNEST {
-        emsg(gettext(e_variable_nested_too_deep_for_unlock));
+    if RECURSE.get() >= DICT_MAXNEST {
+        emsg(gettext(E_VARIABLE_NESTED_TOO_DEEP_FOR_UNLOCK));
         return Err(crate::types::Failed);
     }
     if deep == 0 {
         return Ok(None);
     }
-    Ok(Some(Depth::of(&recurse)))
+    Ok(Some(Depth::of(&RECURSE)))
 }
 
 /// [`tv_item_lock`] over the item `at` of `list`, with the list edited for
@@ -410,7 +409,7 @@ pub(crate) fn tv_check_lock_named(slot_lock: VarLock, tv: &TypVal, name: &[u8]) 
 /// never equal, except that a funcref and a partial may be.
 pub fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
     // TODO(ZyX-I): Make this not recursive
-    static recursive_cnt: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+    static RECURSIVE_CNT: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
     if !((*tv1).is_func() && (*tv2).is_func()) && (*tv1).v_type() != (*tv2).v_type() {
         return false;
@@ -422,11 +421,11 @@ pub fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
     // Reduce the limit every time running into it. That should work fine for
     // deeply linked structures that are not recursively linked and catch
     // recursiveness quickly.
-    if recursive_cnt.get() == 0 {
-        tv_equal_recurse_limit.set(1000);
+    if RECURSIVE_CNT.get() == 0 {
+        TV_EQUAL_RECURSE_LIMIT.set(1000);
     }
-    if recursive_cnt.get() >= tv_equal_recurse_limit.get() {
-        tv_equal_recurse_limit.set(tv_equal_recurse_limit.get() - 1);
+    if RECURSIVE_CNT.get() >= TV_EQUAL_RECURSE_LIMIT.get() {
+        TV_EQUAL_RECURSE_LIMIT.set(TV_EQUAL_RECURSE_LIMIT.get() - 1);
         return true;
     }
 
@@ -439,11 +438,11 @@ pub fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
     let (a, b) = (tv1, tv2);
     match a.v_type() {
         VAR_LIST => {
-            let _recursing = Depth::of(&recursive_cnt);
+            let _recursing = Depth::of(&RECURSIVE_CNT);
             list_equal((*tv1).list_ref(), (*tv2).list_ref(), ic)
         }
         VAR_DICT => {
-            let _recursing = Depth::of(&recursive_cnt);
+            let _recursing = Depth::of(&RECURSIVE_CNT);
             dict_equal((*tv1).dict_ref(), (*tv2).dict_ref(), ic)
         }
         VAR_PARTIAL | VAR_FUNC => {
@@ -452,7 +451,7 @@ pub fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
             {
                 return false;
             }
-            let _recursing = Depth::of(&recursive_cnt);
+            let _recursing = Depth::of(&RECURSIVE_CNT);
             func_equal(tv1, tv2, ic)
         }
         VAR_BLOB => blob_equal(tv1.blob_ref(), tv2.blob_ref()),

@@ -158,7 +158,7 @@ impl TypVal {
     ///
     /// The discriminants *are* those codes (see [`TypVal`]), so this is a
     /// load, not a jump table -- which is why the tables indexed by type
-    /// (`num_errors`, `str_errors`, `type()`'s codes) and the hundreds of
+    /// (`NUM_ERRORS`, `STR_ERRORS`, `type()`'s codes) and the hundreds of
     /// `== VAR_X` tests keep their spelling instead of becoming matches.
     #[inline(always)]
     pub const fn v_type(&self) -> crate::types::VarType {

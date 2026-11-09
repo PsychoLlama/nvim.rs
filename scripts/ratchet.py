@@ -1074,7 +1074,7 @@ CELL_COPY_OWNER = (
     # to count, and the one genuine move at each is `GlobalCell::take`.
     "CLIPBOARD",
     "EXPAND_WHAT",
-    "provider_caller_scope",
+    "PROVIDER_CALLER_SCOPE",
     "counted",
     # The `Object` cells, from phase 22's F-P22-53 audit at the close: every
     # `GlobalCell<ApiString>` and `GlobalCell<Object>` in the tree, listed

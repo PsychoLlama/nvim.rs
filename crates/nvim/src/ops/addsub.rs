@@ -183,12 +183,12 @@ pub fn op_addsub(op: &mut OpArg, prenum1: i32, g_cmd: bool) {
 /// `pos.lnum` must be a line of the region.
 fn addsub_line_span(op: &mut OpArg, bd: &mut BlockDef, pos: &mut Pos) -> c_int {
     // Every line touched below is one of the region's.
-    if op.motion_type == kMTBlockWise {
+    if op.motion_type == MT_BLOCK_WISE {
         block_prep(bd, op, pos.lnum, false);
         pos.col = bd.textcol;
         return bd.textlen;
     }
-    if op.motion_type == kMTLineWise {
+    if op.motion_type == MT_LINE_WISE {
         Win::current().w_cursor.col = ColNr::ZERO;
         pos.col = ColNr::ZERO;
         return Lines::current().line_len(pos.lnum).get();

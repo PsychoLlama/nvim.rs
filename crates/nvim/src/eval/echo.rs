@@ -20,7 +20,7 @@ use crate::eval::encode::{tv2echo_bytes, tv2string_bytes};
 use crate::eval::typval::NumBuf;
 use crate::eval::userfunc::CallStackAside;
 use crate::eval::vars::{clear_local, set_var};
-use crate::eval::{Cursor, echo_hl_id, eval1, eval1_emsg};
+use crate::eval::{Cursor, ECHO_HL_ID, eval1, eval1_emsg};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::ex_eval::aborting;
 use crate::ex_eval::state::force_abort;
@@ -96,10 +96,10 @@ pub fn ex_echo(excmd: &mut ExArg) {
                 }
             } else if excmd.cmdidx == CmdIdx::echo {
                 // `:echo` separates its arguments; `:echon` does not.
-                msg_str_hl(c" ", echo_hl_id.get(), false);
+                msg_str_hl(c" ", ECHO_HL_ID.get(), false);
             }
             let text = tv2echo_bytes(&rettv);
-            msg_multiline(&text, echo_hl_id.get(), true, false, &mut need_clear);
+            msg_multiline(&text, ECHO_HL_ID.get(), true, false, &mut need_clear);
         }
         clear_local(&mut rettv);
         cursor.skip_white();
@@ -126,12 +126,12 @@ pub fn ex_echo(excmd: &mut ExArg) {
 /// `:echohl`.
 pub fn ex_echohl(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- the argument is NUL-terminated.
-    echo_hl_id.set(syn_name2id(excmd.line.cstr_from(excmd.line.arg)));
+    ECHO_HL_ID.set(syn_name2id(excmd.line.cstr_from(excmd.line.arg)));
 }
 
 /// The highlight group `:echohl` last named.
 pub(crate) fn get_echo_hl_id() -> c_int {
-    echo_hl_id.get()
+    ECHO_HL_ID.get()
 }
 
 /// `:execute`, `:echomsg` and `:echoerr` — the three that evaluate every
@@ -178,7 +178,7 @@ pub fn ex_execute(excmd: &mut ExArg) {
         text.push(0);
         if excmd.cmdidx == CmdIdx::echomsg {
             msg_ext_set_kind(c"echomsg");
-            msg(cstr::in_bytes(&text), echo_hl_id.get());
+            msg(cstr::in_bytes(&text), ECHO_HL_ID.get());
         } else if excmd.cmdidx == CmdIdx::echoerr {
             // `:echoerr` reports without counting as an error unless
             // something is already unwinding.

@@ -6,7 +6,7 @@
 //! `ELOOP` for itself.
 //!
 //! Two isolation obligations the LuaJIT harness did not have. Opening can
-//! reach the editor's message layer (`kFileMkDir` reports E739), which is
+//! reach the editor's message layer (`FILE_MK_DIR` reports E739), which is
 //! process-wide state, so every case takes the editor lock; and the spec's
 //! fixture directory had a fixed name, which two cases running at once would
 //! have fought over, so each case here gets its own.
@@ -18,8 +18,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use neovim::fileio::buffered::{
-    BufferedFile, FileOpenFlags, kFileCreate, kFileCreateOnly, kFileNoSymlink, kFileReadOnly,
-    kFileTruncate, kFileWriteOnly,
+    BufferedFile, FILE_CREATE, FILE_CREATE_ONLY, FILE_NO_SYMLINK, FILE_READ_ONLY, FILE_TRUNCATE,
+    FILE_WRITE_ONLY, FileOpenFlags,
 };
 use neovim::os::uv_error::{UV_EEXIST, UV_EISDIR, UV_ELOOP, UV_EMLINK, UV_ENOENT};
 
@@ -166,7 +166,7 @@ fn a_descriptor_can_be_adopted_for_reading_and_for_writing() {
     let fixture = Fixture::new("adopt");
 
     let file = std::fs::File::open(fixture.file1()).expect("file1");
-    let (err, mut fp) = Handle::adopt(file, kFileReadOnly);
+    let (err, mut fp) = Handle::adopt(file, FILE_READ_ONLY);
     assert_eq!(err, 0);
     let want = contents();
     assert_eq!(fp.read(want.len()), (want.len() as isize, want.clone()));
@@ -174,7 +174,7 @@ fn a_descriptor_can_be_adopted_for_reading_and_for_writing() {
 
     assert_eq!(size_of(&fixture.fresh()), None);
     let file = std::fs::File::create(fixture.fresh()).expect("a new file");
-    let (err, mut fp) = Handle::adopt(file, kFileWriteOnly);
+    let (err, mut fp) = Handle::adopt(file, FILE_WRITE_ONLY);
     assert_eq!(err, 0);
     assert_eq!(fp.write(b"test"), 4);
     assert_eq!(fp.close(false), Ok(()));
@@ -186,7 +186,7 @@ fn a_descriptor_can_be_adopted_for_reading_and_for_writing() {
 #[test]
 fn creating_a_file_honours_the_mode_and_create_only_refuses_an_existing_one() {
     let fixture = Fixture::new("create");
-    for flags in [kFileCreate, kFileCreateOnly] {
+    for flags in [FILE_CREATE, FILE_CREATE_ONLY] {
         for mode in [RWX, RW] {
             let _ = std::fs::remove_file(fixture.fresh());
             let (err, mut fp) = Handle::open(&fixture.fresh(), flags, mode);
@@ -200,10 +200,10 @@ fn creating_a_file_honours_the_mode_and_create_only_refuses_an_existing_one() {
         }
     }
 
-    let (err, _) = Handle::open(&fixture.file1(), kFileCreateOnly, RW);
+    let (err, _) = Handle::open(&fixture.file1(), FILE_CREATE_ONLY, RW);
     assert_eq!(err, UV_EEXIST);
-    // ...whereas `kFileCreate` is happy to open it, for writing.
-    let (err, mut fp) = Handle::open(&fixture.file1(), kFileCreate, RW);
+    // ...whereas `FILE_CREATE` is happy to open it, for writing.
+    let (err, mut fp) = Handle::open(&fixture.file1(), FILE_CREATE, RW);
     assert_eq!(err, 0);
     assert!(fp.writing());
     assert_eq!(fp.close(false), Ok(()));
@@ -214,7 +214,7 @@ fn creating_a_file_honours_the_mode_and_create_only_refuses_an_existing_one() {
 #[test]
 fn the_flags_decide_which_side_the_descriptor_is() {
     let fixture = Fixture::new("sides");
-    for flags in [0, kFileReadOnly, kFileNoSymlink] {
+    for flags in [0, FILE_READ_ONLY, FILE_NO_SYMLINK] {
         let (err, mut fp) = Handle::open(&fixture.file1(), flags, RW);
         assert_eq!(err, 0, "{flags:#x}");
         assert!(!fp.writing(), "{flags:#x} reads");
@@ -222,7 +222,7 @@ fn the_flags_decide_which_side_the_descriptor_is() {
     }
 
     // Write-only leaves the contents alone...
-    let (err, mut fp) = Handle::open(&fixture.file1(), kFileWriteOnly, RW);
+    let (err, mut fp) = Handle::open(&fixture.file1(), FILE_WRITE_ONLY, RW);
     assert_eq!(err, 0);
     assert!(fp.writing());
     assert_eq!(fp.close(false), Ok(()));
@@ -231,7 +231,7 @@ fn the_flags_decide_which_side_the_descriptor_is() {
     // ...and truncating does not. The write proves the side is real: with
     // only `O_TRUNC` and no `O_WRONLY` the file would still come out empty,
     // and `fp.wr` would still be true.
-    let (err, mut fp) = Handle::open(&fixture.file1(), kFileTruncate, RW);
+    let (err, mut fp) = Handle::open(&fixture.file1(), FILE_TRUNCATE, RW);
     assert_eq!(err, 0);
     assert!(fp.writing());
     assert_eq!(fp.write(b"kept"), 4);
@@ -239,25 +239,25 @@ fn the_flags_decide_which_side_the_descriptor_is() {
     assert_eq!(std::fs::read(fixture.file1()).unwrap(), b"kept");
 }
 
-/// What cannot be opened, and with which error. `kFileWriteOnly` alone never
-/// creates anything, which is the distinction between it and `kFileCreate`.
+/// What cannot be opened, and with which error. `FILE_WRITE_ONLY` alone never
+/// creates anything, which is the distinction between it and `FILE_CREATE`.
 #[test]
 fn the_four_ways_an_open_fails() {
     let fixture = Fixture::new("failures");
 
-    let (err, _) = Handle::open(&fixture.fresh(), kFileWriteOnly, RW);
+    let (err, _) = Handle::open(&fixture.fresh(), FILE_WRITE_ONLY, RW);
     assert_eq!(err, UV_ENOENT, "write-only creates nothing");
     assert_eq!(size_of(&fixture.fresh()), None);
 
-    let (err, _) = Handle::open(&fixture.dir, kFileWriteOnly, RW);
+    let (err, _) = Handle::open(&fixture.dir, FILE_WRITE_ONLY, RW);
     assert_eq!(err, UV_EISDIR, "a directory has no write side");
 
-    for flags in [kFileWriteOnly, kFileReadOnly] {
+    for flags in [FILE_WRITE_ONLY, FILE_READ_ONLY] {
         let (err, _) = Handle::open(&fixture.broken(), flags, RW);
         assert_eq!(err, UV_ENOENT, "a broken link points at nothing");
     }
 
-    let (err, _) = Handle::open(&fixture.link(), kFileNoSymlink, RW);
+    let (err, _) = Handle::open(&fixture.link(), FILE_NO_SYMLINK, RW);
     // `O_NOFOLLOW` is `ELOOP` on Linux and `EMLINK` on FreeBSD. The spec
     // spelled the alternative this way round so a third answer would show up
     // in the failure rather than be swallowed by an `or`.
@@ -266,12 +266,12 @@ fn the_four_ways_an_open_fails() {
     }
 }
 
-/// A link is followed for everything except `kFileNoSymlink`, so truncating
+/// A link is followed for everything except `FILE_NO_SYMLINK`, so truncating
 /// through one truncates its target.
 #[test]
 fn truncating_through_a_symlink_truncates_the_target() {
     let fixture = Fixture::new("symlink-truncate");
-    let (err, mut fp) = Handle::open(&fixture.link(), kFileTruncate, RW);
+    let (err, mut fp) = Handle::open(&fixture.link(), FILE_TRUNCATE, RW);
     assert_eq!(err, 0);
     assert!(fp.writing());
     assert_eq!(fp.close(false), Ok(()));
@@ -327,7 +327,7 @@ fn writing_in_chunks_of_every_awkward_size() {
 
     for size in [3, 768, want.len()] {
         let _ = std::fs::remove_file(fixture.fresh());
-        let (err, mut fp) = Handle::open(&fixture.fresh(), kFileCreateOnly, RW);
+        let (err, mut fp) = Handle::open(&fixture.fresh(), FILE_CREATE_ONLY, RW);
         assert_eq!(err, 0);
         assert!(fp.writing());
         for chunk in want.chunks(size) {
@@ -354,7 +354,7 @@ fn output_reaches_the_disk_only_when_it_is_asked_to() {
     ];
     for (name, flush, close_after) in flushers {
         let _ = std::fs::remove_file(fixture.fresh());
-        let (err, mut fp) = Handle::open(&fixture.fresh(), kFileCreateOnly, RW);
+        let (err, mut fp) = Handle::open(&fixture.fresh(), FILE_CREATE_ONLY, RW);
         assert_eq!(err, 0);
         assert_eq!(size_of(&fixture.fresh()), Some(0));
 

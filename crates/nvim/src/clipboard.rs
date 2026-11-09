@@ -16,7 +16,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::eval::eval_call_provider;
 use crate::eval::eval_has_provider;
@@ -29,8 +28,8 @@ use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus};
 use crate::os::libc::ptrdiff_t;
 use crate::register::defs::{RegLines, YankReg};
 use crate::register::{
-    MT_CHAR_WISE, PLUS_REGISTER, Reg, RegName, STAR_REGISTER, get_y_previous, get_y_register,
-    kMTBlockWise, kMTLineWise, kMTUnknown,
+    MT_BLOCK_WISE, MT_CHAR_WISE, MT_LINE_WISE, MT_UNKNOWN, PLUS_REGISTER, Reg, RegName,
+    STAR_REGISTER, get_y_previous, get_y_register,
 };
 use crate::types::{TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING};
 use core::ffi::c_int;
@@ -137,10 +136,10 @@ pub(crate) fn adjust_clipboard_name(
 /// for anything else (which is an error).
 fn regtype_of(byte: u8) -> Option<c_int> {
     match byte {
-        0 => Some(kMTUnknown),
+        0 => Some(MT_UNKNOWN),
         b'v' | b'c' => Some(MT_CHAR_WISE),
-        b'V' | b'l' => Some(kMTLineWise),
-        b'b' | 22 => Some(kMTBlockWise), // 22 == Ctrl_V
+        b'V' | b'l' => Some(MT_LINE_WISE),
+        b'b' | 22 => Some(MT_BLOCK_WISE), // 22 == Ctrl_V
         _ => None,
     }
 }
@@ -177,7 +176,7 @@ fn register_from_provider(result: &TypVal) -> Result<YankReg, bool> {
             (lines.li_tv.list_ref(), kind)
         }
         // The provider did not specify a regtype; inferred below.
-        _ => (result.list_ref(), kMTUnknown),
+        _ => (result.list_ref(), MT_UNKNOWN),
     };
 
     let mut reg = YankReg {
@@ -201,11 +200,11 @@ fn register_from_provider(result: &TypVal) -> Result<YankReg, bool> {
         // otherwise there is no line after the final newline.
         if reg.kind != MT_CHAR_WISE {
             text.pop();
-            if reg.kind == kMTUnknown {
-                reg.kind = kMTLineWise;
+            if reg.kind == MT_UNKNOWN {
+                reg.kind = MT_LINE_WISE;
             }
         }
-    } else if reg.kind == kMTUnknown {
+    } else if reg.kind == MT_UNKNOWN {
         reg.kind = MT_CHAR_WISE;
     }
     // A provider that answered no lines still set the register: upstream's
@@ -260,9 +259,9 @@ pub(crate) fn set_clipboard(mut name: RegName, reg: Reg) {
         // A line-wise or block-wise register carries a trailing empty line.
         let trailing = reg.kind != MT_CHAR_WISE;
         let regtype: u8 = match reg.kind {
-            kMTLineWise => b'V',
+            MT_LINE_WISE => b'V',
             MT_CHAR_WISE => b'v',
-            kMTBlockWise => b'b',
+            MT_BLOCK_WISE => b'b',
             // kMTUnknown, which has no spelling the provider would accept.
             // Upstream aborts here and so does this; every register handed
             // over has been through `get_clipboard` or a yank, both of which

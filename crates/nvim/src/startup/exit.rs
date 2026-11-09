@@ -27,7 +27,7 @@ use core::ffi::c_int;
 use crate::autocmd::{block_autocmds, is_autocmd_blocked, unblock_autocmds};
 use crate::buffer::{BufRef, buf_get_changedtick, buf_set_changedtick};
 use crate::eval::garbage_collect;
-use crate::eval::gc::garbage_collect_at_exit;
+use crate::eval::gc::GARBAGE_COLLECT_AT_EXIT;
 use crate::eval::userfunc::invoke_all_defer;
 use crate::eval::vars::{set_vim_var_nr, set_vim_var_string, set_vim_var_type, with_vim_var_str};
 use crate::event::stream::stream_set_blocking;
@@ -209,7 +209,7 @@ pub fn getout(mut exitval: c_int) -> ! {
         ui_call_set_title(p_titleold(ApiString::from_cstr));
     }
 
-    if garbage_collect_at_exit.get() {
+    if GARBAGE_COLLECT_AT_EXIT.get() {
         garbage_collect(false);
     }
 

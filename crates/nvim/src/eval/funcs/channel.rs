@@ -10,14 +10,14 @@
 )]
 
 use super::{
-    RET_OBJECT, kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin,
-    kChannelPartStdout,
+    CHANNEL_PART_ALL, CHANNEL_PART_RPC, CHANNEL_PART_STDERR, CHANNEL_PART_STDIN,
+    CHANNEL_PART_STDOUT, RET_OBJECT,
 };
 use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
 use crate::channel::defs::{CallbackReader, ChannelPart};
 use crate::channel::{channel_close, channel_connect, channel_from_stdio, channel_send};
 use crate::eval::funcs::builtin::EvalFuncData;
-use crate::eval::provider::{provider_call_nesting, provider_caller_scope};
+use crate::eval::provider::{PROVIDER_CALL_NESTING, PROVIDER_CALLER_SCOPE};
 use crate::eval::save_tv_as_string;
 use crate::eval::typval::{
     NumBuf, blob_bytes, dict_get_bool, dict_get_callback, dict_get_number, tv_list_alloc,
@@ -54,10 +54,10 @@ const NO_READER: CallbackReader = CallbackReader::none();
 /// A cleared `Object`.
 /// The `{stream}` names `chanclose()` accepts.
 const CHANNEL_PARTS: [(&CStr, ChannelPart); 4] = [
-    (c"stdin", kChannelPartStdin),
-    (c"stdout", kChannelPartStdout),
-    (c"stderr", kChannelPartStderr),
-    (c"rpc", kChannelPartRpc),
+    (c"stdin", CHANNEL_PART_STDIN),
+    (c"stdout", CHANNEL_PART_STDOUT),
+    (c"stderr", CHANNEL_PART_STDERR),
+    (c"rpc", CHANNEL_PART_RPC),
 ];
 
 /// The trailing arguments of `rpcnotify()`/`rpcrequest()` as an API `Array`
@@ -83,7 +83,7 @@ pub fn f_chanclose(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let mut part = kChannelPartAll;
+    let mut part = CHANNEL_PART_ALL;
     if args.get(1).is_some_and(|arg| arg.v_type() == VAR_STRING) {
         let stream = numbuf.string(&args[1]);
         let found = CHANNEL_PARTS.iter().find(|&&(name, _)| name == stream);
@@ -202,7 +202,7 @@ impl ProviderScope {
         // back -- `EXESTACK` is a different cell and `set_current_funccal`
         // touches neither -- so a shared borrow reaches every field and the
         // cell's address is not needed.
-        provider_caller_scope.with(|scope| {
+        PROVIDER_CALLER_SCOPE.with(|scope| {
             current_sctx.set(scope.script_ctx);
             // Push the caller's execution-stack entry so that any message
             // names the caller's script, not the provider's.
@@ -238,7 +238,7 @@ pub fn f_rpcrequest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
     // Read before `check_secure`, because that is when it still describes
     // this call rather than anything the request goes on to do.
-    let nesting = provider_call_nesting.get();
+    let nesting = PROVIDER_CALL_NESTING.get();
 
     if check_secure() {
         return;

@@ -202,7 +202,7 @@ fn measure_selection(sel: VisualSelection) -> Selection {
         let saved_w_sbr = Win::current().w_onebuf_opt.wo_sbr.take();
 
         oparg.is_visual = true;
-        oparg.motion_type = kMTBlockWise;
+        oparg.motion_type = MT_BLOCK_WISE;
         oparg.op_type = OpType::Nop;
         (oparg.start_vcol, oparg.end_vcol) = getvcols(Win::current(), &mut min, &mut max);
 

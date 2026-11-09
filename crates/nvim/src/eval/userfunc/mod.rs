@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::autocmd::defs::AutoEvent;
 use crate::keycodes::KS_EXTRA;
@@ -21,7 +20,7 @@ use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, has_profiling_n
 use crate::drawscreen::state::cmdline_row;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::funcs::{check_builtin_argcount, find_builtin};
-use crate::eval::gc::want_garbage_collect;
+use crate::eval::gc::WANT_GARBAGE_COLLECT;
 use crate::eval::typval::DictItem;
 use crate::eval::typval::{TV_INITIAL_VALUE, list_iter, tv_clear, tv_copy, tv_get_number_chk};
 use crate::eval::vars::{skip_var_list, testing_enabled};
@@ -164,7 +163,7 @@ pub const E_CANNOT_USE_PARTIAL_WITH_DICTIONARY_FOR_DEFER: &CStr =
 /// collected. Each frame *names* a caller's arguments, releasing none: the
 /// caller holds them by shared borrow for the whole call, and marking only
 /// reads them.
-static funcargs: GlobalCell<Vec<crate::eval::typval::CallFrame<{ MAX_FUNC_ARGS as usize + 1 }>>> =
+static FUNCARGS: GlobalCell<Vec<crate::eval::typval::CallFrame<{ MAX_FUNC_ARGS as usize + 1 }>>> =
     GlobalCell::new(Vec::new());
 
 crate::flag_set! {

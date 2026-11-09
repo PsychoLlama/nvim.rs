@@ -34,7 +34,7 @@ use crate::mark::setpcmark;
 use crate::mbyte::{cluster_len, mb_adjust_cursor};
 use crate::normal::defs::{CmdArg, Outcome};
 use crate::normal::{
-    MT_CHAR_WISE, TAB, adjust_for_sel, clear_op_beep, kMTLineWise, may_fold_open, nv_page,
+    MT_CHAR_WISE, MT_LINE_WISE, TAB, adjust_for_sel, clear_op_beep, may_fold_open, nv_page,
     unadjust_for_sel, visual_active, visual_mode,
 };
 use crate::ops::OpType;
@@ -205,7 +205,7 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
     let mut op = cmd_arg.op();
     let mut win = Win::current();
     let wp = win;
-    op.motion_type = kMTLineWise;
+    op.motion_type = MT_LINE_WISE;
     setpcmark();
     if cmdchar.is('L') {
         validate_botline_win(wp);
@@ -438,7 +438,7 @@ pub(crate) fn nv_up(cmd_arg: &mut CmdArg) {
         nv_page(cmd_arg);
         return;
     }
-    cmd_arg.op().motion_type = kMTLineWise;
+    cmd_arg.op().motion_type = MT_LINE_WISE;
     if cursor_up(cmd_arg.count1, cmd_arg.op().op_type == OpType::Nop).is_err() {
         clear_op_beep(cmd_arg.op());
     } else if cmd_arg.arg != 0 {
@@ -475,7 +475,7 @@ pub(crate) fn nv_down(cmd_arg: &mut CmdArg) {
             return;
         }
     }
-    cmd_arg.op().motion_type = kMTLineWise;
+    cmd_arg.op().motion_type = MT_LINE_WISE;
     if cursor_down(cmd_arg.count1, cmd_arg.op().op_type == OpType::Nop).is_err() {
         clear_op_beep(cmd_arg.op());
     } else if cmd_arg.arg != 0 {
@@ -569,7 +569,7 @@ pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
         if count0 > 100 {
             clear_op_beep(op);
         } else {
-            op.motion_type = kMTLineWise;
+            op.motion_type = MT_LINE_WISE;
             setpcmark();
             let line_count = Buf::current().b_ml.ml_line_count;
             let count = line_count.get();
@@ -744,7 +744,7 @@ pub(crate) fn nv_beginline(cmd_arg: &mut CmdArg) {
 pub(crate) fn nv_goto(cmd_arg: &mut CmdArg) {
     let last = Buf::current().b_ml.ml_line_count;
     let mut lnum = if cmd_arg.arg != 0 { last } else { LineNr::ONE };
-    cmd_arg.op().motion_type = kMTLineWise;
+    cmd_arg.op().motion_type = MT_LINE_WISE;
     setpcmark();
     if cmd_arg.count0 != 0 {
         lnum = LineNr::new(cmd_arg.count0);

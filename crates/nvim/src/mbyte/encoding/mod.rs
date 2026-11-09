@@ -27,7 +27,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::cmdexpand::defs::Candidate;
@@ -45,7 +44,7 @@ mod tables;
 pub use self::tables::*;
 
 /// `<ctype.h>`'s alphanumeric class bit, as the rest of the tree spells it.
-pub const _ISalnum: c_uint = 8;
+pub const IS_ALNUM: c_uint = 8;
 
 /// What [`canon_props`] reports about an encoding name.
 ///
@@ -273,7 +272,7 @@ fn is_territory_euc(name: &[u8], dot: usize) -> bool {
             .is_some_and(|euc| euc.eq_ignore_ascii_case(b"EUC"))
         // Nothing may follow the "EUC" but a separator: "EUC-JP" is
         // already a codeset name and goes down the ordinary path.
-        && c_uint::from(ctype_bits(at(dot + 4))) & _ISalnum == 0
+        && c_uint::from(ctype_bits(at(dot + 4))) & IS_ALNUM == 0
         && at(dot + 4) != b'-'
         && name[dot - 3] == b'_'
 }

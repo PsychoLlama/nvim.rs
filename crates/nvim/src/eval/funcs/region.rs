@@ -9,7 +9,7 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{MT_CHAR_WISE, kMTBlockWise, kMTLineWise};
+use super::{MT_BLOCK_WISE, MT_CHAR_WISE, MT_LINE_WISE};
 use crate::buffer::find_buf;
 use crate::charset::getdigits_int_at;
 use crate::cstr;
@@ -227,7 +227,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Result<Region, Unresolved> {
         if inclusive && virtual_op.get() == Some(false) && byte_at(p2) == b'\0' {
             inclusive = false;
         }
-    } else if region_type == kMTBlockWise {
+    } else if region_type == MT_BLOCK_WISE {
         op = block_oparg(p1, p2, is_select_exclusive, block_width);
     }
 
@@ -268,18 +268,18 @@ fn parse_type(spec: &CStr) -> Result<(MotionType, c_int), Unresolved> {
     let bad = || Err(Unresolved::Type(ThinCString::from_cstr(spec)));
     match spec.to_bytes() {
         b"v" => Ok((MT_CHAR_WISE, 0)),
-        b"V" => Ok((kMTLineWise, 0)),
+        b"V" => Ok((MT_LINE_WISE, 0)),
         [c, rest @ ..] if c_int::from(*c) == Ctrl_V => {
             // A bare CTRL-V means "as wide as the corners"; a width
             // must be a positive number and nothing else.
             if rest.is_empty() {
-                return Ok((kMTBlockWise, 0));
+                return Ok((MT_BLOCK_WISE, 0));
             }
             let (width, past) = getdigits_int_at(spec.to_bytes(), 1, false, 0);
             if width <= 0 || past != spec.to_bytes().len() {
                 return bad();
             }
-            Ok((kMTBlockWise, width))
+            Ok((MT_BLOCK_WISE, width))
         }
         _ => bad(),
     }
@@ -312,7 +312,7 @@ fn block_oparg(p1: Pos, p2: Pos, is_select_exclusive: bool, block_width: c_int) 
     restore_lbr(lbr_saved);
     let start_vcol = sc1.min(sc2);
     OpArg {
-        motion_type: kMTBlockWise,
+        motion_type: MT_BLOCK_WISE,
         inclusive: true,
         op_type: OpType::Nop,
         start: p1,
@@ -365,9 +365,9 @@ pub fn f_getregion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     };
     for lnum in r.p1.lnum.through(r.p2.lnum) {
-        let bd = if r.region_type == kMTBlockWise {
+        let bd = if r.region_type == MT_BLOCK_WISE {
             Some(block_def(&r.op, lnum))
-        } else if r.region_type == kMTLineWise || (r.p1.lnum < lnum && lnum < r.p2.lnum) {
+        } else if r.region_type == MT_LINE_WISE || (r.p1.lnum < lnum && lnum < r.p2.lnum) {
             // A whole line: either the region is linewise, or this is
             // an interior line of a charwise region.
             None
@@ -410,7 +410,7 @@ pub fn f_getregionpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 /// a virtual offset.
 /// `r` describes a region covering line `lnum` of the current buffer.
 fn line_corners(r: &Region, lnum: LineNr) -> (Pos, Pos) {
-    if r.region_type == kMTLineWise {
+    if r.region_type == MT_LINE_WISE {
         // A linewise region always covers the whole line.
         return (
             Pos {
@@ -423,7 +423,7 @@ fn line_corners(r: &Region, lnum: LineNr) -> (Pos, Pos) {
             },
         );
     }
-    let mut bd = if r.region_type == kMTBlockWise {
+    let mut bd = if r.region_type == MT_BLOCK_WISE {
         block_def(&r.op, lnum)
     } else {
         charwise_block_def(r.p1, r.p2, lnum, r.inclusive)
@@ -443,14 +443,14 @@ fn line_corners(r: &Region, lnum: LineNr) -> (Pos, Pos) {
 
     let mut p1 = NOWHERE;
     if bd.is_one_char {
-        if r.region_type == kMTBlockWise {
+        if r.region_type == MT_BLOCK_WISE {
             p1.col = before_text(&bd);
             p1.coladd = bd.start_char_vcols - (bd.start_vcol - r.op.start_vcol);
         } else {
             p1.col = r.p1.col + 1;
             p1.coladd = r.p1.coladd;
         }
-    } else if r.region_type == kMTBlockWise && r.op.start_vcol > bd.start_vcol {
+    } else if r.region_type == MT_BLOCK_WISE && r.op.start_vcol > bd.start_vcol {
         // The block starts inside a character that begins before it.
         p1.col = ColNr::MAX;
         p1.coladd = r.op.start_vcol - bd.start_vcol;

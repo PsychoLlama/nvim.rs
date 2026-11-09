@@ -30,7 +30,7 @@ use crate::message::state::MSG_SCROLL;
 use crate::option::vars::p_exrc;
 use crate::os::cshim::{gettext, write_c_stderr};
 use crate::os::fs::path_exists;
-use crate::os::state::{kEqualFiles, kXDGConfigDirs};
+use crate::os::state::{XDG_CONFIG_DIRS, kEqualFiles};
 use crate::path::path_full_compare;
 use crate::profile::time_msg_at;
 use crate::quickfix::qf_jump_to_current;
@@ -130,7 +130,7 @@ fn config_subpath(dir: &[u8], appname: &[u8], suffix: &[u8], dedup_sep: bool) ->
 ///
 /// `visit` answers `true` to stop the walk. Answers whether it did.
 fn for_each_config_dir(visit: impl FnMut(&[u8]) -> bool) -> bool {
-    let Some(config_dirs) = xdg_var(kXDGConfigDirs) else {
+    let Some(config_dirs) = xdg_var(XDG_CONFIG_DIRS) else {
         return false;
     };
     config_dirs

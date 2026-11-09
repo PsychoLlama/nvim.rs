@@ -21,7 +21,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::memory::ThinCString;
 
@@ -39,9 +38,9 @@ pub(crate) use self::msgpack::{MsgpackDecoder, unpack_typval};
 
 /// The three `v:msgpack_types` entries the decoders name.  The rest of the
 /// enum belongs to the encoder, which declares its own copy.
-pub(crate) const kMPInteger: MessagePackType = 2;
-pub(crate) const kMPMap: MessagePackType = 6;
-pub(crate) const kMPExt: MessagePackType = 7;
+pub(crate) const MP_INTEGER: MessagePackType = 2;
+pub(crate) const MP_MAP: MessagePackType = 6;
+pub(crate) const MP_EXT: MessagePackType = 7;
 
 /// `{_TYPE: v:msgpack_types.<type>, _VAL: val}`, with one reference.
 ///
@@ -73,7 +72,7 @@ pub(crate) fn create_special_dict(type_: MessagePackType, val: TypVal) -> TypVal
 pub fn decode_create_map_special_dict(len: ptrdiff_t) -> (TypVal, ListRef) {
     let list = tv_list_alloc(len);
     let pairs = list.clone();
-    (create_special_dict(kMPMap, TypVal::list(Some(list))), pairs)
+    (create_special_dict(MP_MAP, TypVal::list(Some(list))), pairs)
 }
 
 /// `bytes` as a `TypVal`: a `VAR_STRING`, or a `VAR_BLOB` when it cannot be

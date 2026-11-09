@@ -32,8 +32,8 @@ use crate::message::show_sb_text;
 use crate::mouse::do_mouse;
 use crate::normal::defs::CmdArg;
 use crate::normal::{
-    MT_CHAR_WISE, adjust_for_sel, check_clear_op, check_clear_op_quit, check_text_locked,
-    clear_op_beep, invoke_edit, kMTLineWise, nv_addsub, nv_edit, nv_gd, nv_gomark, nv_goto,
+    MT_CHAR_WISE, MT_LINE_WISE, adjust_for_sel, check_clear_op, check_clear_op_quit,
+    check_text_locked, clear_op_beep, invoke_edit, nv_addsub, nv_edit, nv_gd, nv_gomark, nv_goto,
     nv_gotofile, nv_gv_cmd, nv_ident, nv_join, nv_operator, nv_pcmark, nv_put, nv_replace_mode,
     nv_screengo, nv_visual, nv_vreplace, visual_active,
 };
@@ -233,7 +233,7 @@ fn nv_g_select(cmd_arg: &mut CmdArg) {
 fn nv_g_screen_line(cmd_arg: &mut CmdArg, dir: c_int) {
     let mut op = cmd_arg.op();
     let moved = if Win::current().w_onebuf_opt.wo_wrap == 0 {
-        op.motion_type = kMTLineWise;
+        op.motion_type = MT_LINE_WISE;
         let stop_at_end = op.op_type == OpType::Nop;
         if dir == FORWARD as c_int {
             cursor_down(cmd_arg.count1, stop_at_end).is_ok()
