@@ -2309,7 +2309,9 @@ COPY_KEEPERS = {
 #   libuv   embeds a libuv handle whose address libuv keeps (`event/objects.rs`'s
 #           eight are on the perimeter and need no row);
 #   codec   a swap-file block's on-disk layout;
-#   ffi     a foreign ABI file (`FOREIGN_ABI_TYPES`): the library's layout.
+#   ffi     a foreign ABI file (`FOREIGN_ABI_TYPES`): the library's layout;
+#   layout  a hot path's measured field order, which only `repr(C)` pins
+#           (its row carries the number).
 # A file inside a PERIMETER module carries no row: `repr_c_sites` reads off the
 # perimeter only, so the perimeter row is what excuses it (`os/libc.rs`,
 # `event/uv.rs`, `event/objects.rs`).
@@ -2327,10 +2329,11 @@ REPR_C_FLOOR = {
     "crates/nvim/src/vterm/types.rs": "ffi: libvterm's public types",
     "crates/nvim/src/vterm/internal.rs": "ffi: libvterm's internal state",
     "crates/nvim/src/lua/abi.rs": "ffi: LuaJIT's `lua_State`",
+    "crates/nvim/src/spellsuggest/walk/mod.rs::Frame": "layout: the z= walk's 32-byte frame in declaration order; Rust's reordering under repr(align(32)) costs spellbench +1.2 % Ir",
 }
 KEEPER_CLASSES = {
     "COPY_KEEPERS": ("ffi", "handle", "value"),
-    "REPR_C_FLOOR": ("abi", "libuv", "codec", "ffi"),
+    "REPR_C_FLOOR": ("abi", "libuv", "codec", "ffi", "layout"),
 }
 
 

@@ -51,9 +51,11 @@
 //! dictionary trie -- so a few decisions here are made for the machine
 //! rather than the reader, and all three were measured:
 //!
-//! - [`Frame`] is aligned to 32 bytes (with a `#[repr(u32)]` `State`), which
-//!   makes it exactly 32 bytes. At its natural Rust size of 28 every access
-//!   to `stack[level]` costs a multiply instead of a shift.
+//! - [`Frame`] is `#[repr(C)]` with a `#[repr(u32)]` `State`, which makes
+//!   it exactly 32 bytes in declaration order. At its natural Rust size of
+//!   28 every access to `stack[level]` costs a multiply instead of a shift,
+//!   and padding it to 32 with `repr(align(32))` instead lets the compiler
+//!   reorder the fields, which costs spellbench 1.2 % (cachegrind Ir).
 //! - The cheap edits in [`edit`] are `#[inline(always)]`. They are the
 //!   states the walk spends most of its rounds in, and leaving them as
 //!   calls out of the driver loop costs about a tenth of the total.
@@ -190,7 +192,7 @@ pub(crate) enum State {
 ///
 /// The layout is pinned to 32 bytes; see the module docs.
 #[derive(Clone, Default, Debug)]
-#[repr(align(32))]
+#[repr(C)]
 pub(crate) struct Frame {
     /// The edit to try next at this level.
     pub state: State,

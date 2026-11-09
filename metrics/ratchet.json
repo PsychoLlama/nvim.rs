@@ -14,7 +14,7 @@
   "const_int_alias": 1868,
   "unions": 20,
   "repr_c_ffi_types": 91,
-  "repr_c_editor_state": 10,
+  "repr_c_editor_state": 11,
   "derive_copy": 217,
   "manual_alloc": 26,
   "garray_sites": 0,
