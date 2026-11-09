@@ -109,7 +109,14 @@ pub struct WinConfig {
     pub hide: bool,
     pub _cmdline_offset: ::core::ffi::c_int,
 }
-pub type WinSplit = ::core::ffi::c_uint;
+/// Which side of its parent window a split window opens on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WinSplit {
+    Left,
+    Right,
+    Above,
+    Below,
+}
 pub type WinStyle = ::core::ffi::c_uint;
 pub type BfaFlags = ::core::ffi::c_int;
 pub type BlnFlags = ::core::ffi::c_int;

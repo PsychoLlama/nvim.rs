@@ -213,7 +213,6 @@ mod eval;
 pub use self::eval::*;
 mod prompt;
 pub use self::prompt::*;
-pub const DIRECTION_NOT_SET: Direction = 0;
 pub const CMD_REDRAW_ALL: CmdRedraw = 2;
 pub const CMD_REDRAW_POS: CmdRedraw = 1;
 pub const CMD_REDRAW_NONE: CmdRedraw = 0;

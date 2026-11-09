@@ -35,7 +35,7 @@ use crate::os::libc::{int64_t, size_t, uint64_t};
 use crate::regexp::RE_MAGIC;
 use crate::register::valid_yank_reg;
 use crate::types::{
-    ApiDict, ApiString, Array, BufferHandle, CmdAddr, CmdMod, CmdModFlags, CmdParseInfo, Direction,
+    ApiDict, ApiString, Array, BufferHandle, CmdAddr, CmdMod, CmdModFlags, CmdParseInfo,
     ERROR_TYPE_VALIDATION, Error, ExArg, Integer, LuaRef, OBJECT_TYPE_LUA_REF, OBJECT_TYPE_STRING,
     Object,
 };
@@ -55,4 +55,3 @@ pub use self::cmd::*;
 pub(crate) use self::cmdline::*;
 pub use self::parse::*;
 pub use self::user::*;
-pub const DIRECTION_NOT_SET: Direction = 0;

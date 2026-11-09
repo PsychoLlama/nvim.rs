@@ -21,18 +21,10 @@
 
 use super::*;
 use crate::api::private::validate::{Bad, err_conflict, err_expected, err_invalid, err_required};
-use crate::narrow::len_as_int;
-use crate::narrow::number_as_int;
-use crate::narrow::number_as_lnum;
+use crate::narrow::{len_as_int, number_as_int, number_as_lnum};
 use crate::os::cshim::cstr_ncasecmp;
-use crate::types::ColNr;
-use crate::types::Handle;
-use crate::types::LineNr;
-use crate::winfloat::ALIGN_LEFT;
-use crate::winfloat::WIN_CONFIG_INIT;
-use crate::winfloat::WIN_SPLIT_LEFT;
-use crate::winfloat::WIN_STYLE_MINIMAL;
-use crate::winfloat::WIN_STYLE_UNUSED;
+use crate::types::{ColNr, Handle, LineNr, WinSplit};
+use crate::winfloat::{ALIGN_LEFT, WIN_CONFIG_INIT, WIN_STYLE_MINIMAL, WIN_STYLE_UNUSED};
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
@@ -126,10 +118,10 @@ fn float_relative(spelling: &CStr) -> Option<FloatRelative> {
 fn config_split(spelling: &CStr) -> Option<WinSplit> {
     const NAMES: [&CStr; 4] = [c"left", c"right", c"above", c"below"];
     const SIDES: [WinSplit; 4] = [
-        WIN_SPLIT_LEFT,
-        WIN_SPLIT_RIGHT,
-        WIN_SPLIT_ABOVE,
-        WIN_SPLIT_BELOW,
+        WinSplit::Left,
+        WinSplit::Right,
+        WinSplit::Above,
+        WinSplit::Below,
     ];
     Some(SIDES[imatch(spelling, &NAMES)?])
 }
@@ -713,7 +705,7 @@ mod tests {
     fn a_name_is_matched_whatever_its_case() {
         assert_eq!(float_anchor(c"nw"), Some(0));
         assert_eq!(float_relative(c"EDITOR"), Some(FLOAT_RELATIVE_EDITOR));
-        assert_eq!(config_split(c"Above"), Some(WIN_SPLIT_ABOVE));
+        assert_eq!(config_split(c"Above"), Some(WinSplit::Above));
     }
 
     /// The border text's position is the one that does not: upstream reads
@@ -730,10 +722,10 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore = "strcasecmp is a foreign function")]
     fn split_names_its_four_sides() {
-        assert_eq!(config_split(c"left"), Some(WIN_SPLIT_LEFT));
-        assert_eq!(config_split(c"right"), Some(WIN_SPLIT_RIGHT));
-        assert_eq!(config_split(c"above"), Some(WIN_SPLIT_ABOVE));
-        assert_eq!(config_split(c"below"), Some(WIN_SPLIT_BELOW));
+        assert_eq!(config_split(c"left"), Some(WinSplit::Left));
+        assert_eq!(config_split(c"right"), Some(WinSplit::Right));
+        assert_eq!(config_split(c"above"), Some(WinSplit::Above));
+        assert_eq!(config_split(c"below"), Some(WinSplit::Below));
         assert_eq!(config_split(c"beside"), None);
     }
 

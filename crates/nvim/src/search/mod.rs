@@ -124,6 +124,8 @@ pub const BACKWARD_FILE: Direction = -3;
 pub const FORWARD_FILE: Direction = 3;
 pub const BACKWARD: Direction = -1;
 pub const FORWARD: Direction = 1;
+/// No direction given: the callee picks its own default.
+pub(crate) const DIRECTION_NOT_SET: Direction = 0;
 pub(crate) use crate::cmdhist::HIST_SEARCH;
 pub const CHECK_PATH: ::core::ffi::c_int = 3;
 pub const FIND_DEFINE: ::core::ffi::c_int = 2;

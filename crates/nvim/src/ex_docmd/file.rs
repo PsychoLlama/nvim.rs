@@ -21,6 +21,7 @@ use crate::memory::{ThinCString, XString};
 use crate::message::{E_TRAILING_ARG, emsg, msg};
 use crate::message_fmt::msg_bytes;
 use crate::os::cshim::gettext;
+use crate::search::DIRECTION_NOT_SET;
 use crate::search::{ACTION_SHOW, ACTION_SHOW_ALL, CHECK_PATH};
 use crate::semsg;
 use crate::types::{CmdIdx, ColNr};
@@ -39,7 +40,7 @@ use crate::ex_cmds2::{check_changed, check_fname};
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
 use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::source::ex_errmsg;
-use crate::ex_docmd::{DIRECTION_NOT_SET, EX_PRESSEDRETURN, cmdmod_has};
+use crate::ex_docmd::{EX_PRESSEDRETURN, cmdmod_has};
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
 

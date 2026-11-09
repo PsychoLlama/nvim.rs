@@ -27,7 +27,7 @@ use crate::mouse::{MSCR_DOWN, MSCR_LEFT, MSCR_RIGHT, MSCR_UP, nv_mouse, nv_mouse
 use crate::normal::defs::CmdArg;
 use crate::os::libc::uint16_t;
 
-use crate::types::{Direction, Key, Pos};
+use crate::types::{Key, Pos};
 use core::ffi::{CStr, c_int, c_uint};
 
 mod state;
@@ -60,7 +60,6 @@ use crate::search::{BACKWARD, FORWARD, SEARCH_REV};
 pub(crate) mod defs;
 mod misc;
 pub(crate) use self::misc::*;
-pub(crate) const DIRECTION_NOT_SET: Direction = 0;
 pub(crate) const K_MARK_NO_CONTEXT: MarkMove = 4;
 /// Columns `'showcmd'` reserves at the right of the last line.
 pub(crate) const SHOWCMD_COLS: c_int = 10;

@@ -70,7 +70,6 @@ use crate::winlayer::{
 };
 
 pub(crate) const ALIGN_LEFT: AlignTextPos = 0;
-pub(crate) const WIN_SPLIT_LEFT: WinSplit = 0;
 pub(crate) const WIN_STYLE_UNUSED: WinStyle = 0;
 pub(crate) const WIN_STYLE_MINIMAL: WinStyle = 1;
 
@@ -95,7 +94,7 @@ pub(crate) const WIN_CONFIG_INIT: WinConfig = WinConfig {
     external: false,
     focusable: true,
     mouse: true,
-    split: WIN_SPLIT_LEFT,
+    split: WinSplit::Left,
     zindex: Z_INDEX_FLOAT_DEFAULT,
     style: WIN_STYLE_UNUSED,
     border: false,

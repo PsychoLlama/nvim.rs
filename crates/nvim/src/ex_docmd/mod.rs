@@ -81,7 +81,7 @@ use crate::spell::{ex_spelldump, ex_spellinfo, ex_spellrepall};
 use crate::spellfile::{ex_mkspell, ex_spell};
 use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
-use crate::types::{Callback, CmdAddr, Direction, ExArg, ExArgt, Handle, LineNr};
+use crate::types::{Callback, CmdAddr, ExArg, ExArgt, Handle, LineNr};
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
 use crate::version::{ex_intro, ex_version};
@@ -139,7 +139,6 @@ mod childproc;
 #[cfg(test)]
 mod tests;
 pub(crate) use self::childproc::*;
-pub const DIRECTION_NOT_SET: Direction = 0;
 crate::flag_set! {
     /// How [`do_cmdline`] should run the lines it is given -- upstream's
     /// `DOCMD_*`.

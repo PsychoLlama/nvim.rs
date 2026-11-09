@@ -16,12 +16,10 @@
 
 use crate::narrow::number_as_int;
 use crate::regexp::skip_regexp_at;
-use crate::search::ACTION_GOTO;
-use crate::search::ACTION_SHOW;
-use crate::search::ACTION_SHOW_ALL;
-use crate::search::ACTION_SPLIT;
-use crate::search::FIND_ANY;
-use crate::search::FIND_DEFINE;
+use crate::search::{
+    ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, ACTION_SPLIT, DIRECTION_NOT_SET, FIND_ANY,
+    FIND_DEFINE, find_pattern_in_path,
+};
 use core::ffi::c_int;
 
 use crate::ascii::ascii_isdigit;
@@ -29,11 +27,10 @@ use crate::charset::getdigits_int_at;
 
 use crate::ex_docmd::scan::ends_excmd;
 use crate::ex_docmd::source::ex_errmsg;
-use crate::ex_docmd::{CMDNAMES, DIRECTION_NOT_SET, cmdmod_split, cmdmod_tab};
+use crate::ex_docmd::{CMDNAMES, cmdmod_split, cmdmod_tab};
 use crate::message::E_TRAILING_ARG;
 use crate::option::magic_isset;
 use crate::option::vars::p_pvh;
-use crate::search::find_pattern_in_path;
 use crate::tag::state::{
     G_DO_TAGPREVIEW, POSTPONED_SPLIT, POSTPONED_SPLIT_FLAGS, POSTPONED_SPLIT_TAB,
 };

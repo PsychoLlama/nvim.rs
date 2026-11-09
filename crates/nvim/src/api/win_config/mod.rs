@@ -35,7 +35,7 @@ use crate::types::{
     AlignTextPos, ApiString, Array, Boolean, BorderTextType, BufferHandle, ERROR_TYPE_VALIDATION,
     Error, FLOAT_ANCHOR_EAST, FLOAT_ANCHOR_SOUTH, FLOAT_RELATIVE_CURSOR, FLOAT_RELATIVE_EDITOR,
     FLOAT_RELATIVE_LASTSTATUS, FLOAT_RELATIVE_MOUSE, FLOAT_RELATIVE_TABLINE, FLOAT_RELATIVE_WINDOW,
-    FloatAnchor, FloatRelative, Integer, LPos, Object, SwitchWin, WinConfig, WinSplit, WinStyle,
+    FloatAnchor, FloatRelative, Integer, LPos, Object, SwitchWin, WinConfig, WinStyle,
     WindowHandle,
 };
 use crate::ui::state::UI_MULTIGRID;
@@ -66,8 +66,5 @@ pub use self::border::*;
 pub use self::get::*;
 pub use self::open::*;
 pub(crate) use self::parse::*;
-pub const WIN_SPLIT_BELOW: WinSplit = 3;
-pub const WIN_SPLIT_ABOVE: WinSplit = 2;
-pub const WIN_SPLIT_RIGHT: WinSplit = 1;
 pub const BORDER_TEXT_FOOTER: BorderTextType = 1;
 pub const BORDER_TEXT_TITLE: BorderTextType = 0;

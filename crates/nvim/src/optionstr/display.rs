@@ -16,9 +16,9 @@ use crate::global_cell::field;
 use crate::memory::XString;
 use crate::option::HIGHLIGHT_INIT;
 use crate::strings::has_char;
-use crate::types::Handle;
+use crate::types::{Handle, WinSplit};
 use crate::window::{Z_INDEX_FLOAT_DEFAULT, check_colorcolumn};
-use crate::winfloat::{ALIGN_LEFT, WIN_SPLIT_LEFT, WIN_STYLE_UNUSED};
+use crate::winfloat::{ALIGN_LEFT, WIN_STYLE_UNUSED};
 use core::ffi::{CStr, c_int, c_uint};
 
 use crate::api::win_config::parse_winborder;
@@ -384,7 +384,7 @@ pub(crate) fn parse_border_opt(border_opt: &CStr) -> bool {
         external: false,
         focusable: true,
         mouse: true,
-        split: WIN_SPLIT_LEFT,
+        split: WinSplit::Left,
         zindex: c_int::try_from(Z_INDEX_FLOAT_DEFAULT).expect("the default z-index is small"),
         style: WIN_STYLE_UNUSED,
         border: false,

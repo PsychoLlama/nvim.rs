@@ -22,7 +22,7 @@ use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
 use crate::keycodes::{CTRL_V, SpecialKey, get_special_key_name};
 use crate::memory::XString;
-use crate::types::Key;
+use crate::types::{Key, SaveVEvent};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
@@ -60,11 +60,8 @@ use crate::state::mode::{
     VIRTUAL_OP,
 };
 use crate::terminal::{TerminalState, terminal_check, terminal_execute};
-use crate::types::{Direction, SaveVEvent};
 use crate::ui::ui_flush;
 use crate::winlayer::{Cc, Win};
-
-pub const DIRECTION_NOT_SET: Direction = 0;
 
 /// The editor-mode bitmask `State` carries, and the masks that read it.
 pub type ModeFlags = c_int;

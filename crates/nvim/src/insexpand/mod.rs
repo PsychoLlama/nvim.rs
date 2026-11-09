@@ -14,6 +14,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::fuzzy::{FUZZY_SCORE_NONE, fuzzy_match_str};
 use crate::indent_c::KEY_COMPLETE;
 use crate::memory::XString;
+use crate::search::DIRECTION_NOT_SET;
 use crate::tag::{
     LSIZE, TAG_INS_COMP, TAG_MANY, TAG_NOIC, TAG_REGEXP, TAG_VERBOSE, find_tag_names,
 };
@@ -144,7 +145,6 @@ mod keys;
 pub use self::keys::*;
 #[cfg(test)]
 mod tests;
-pub const DIRECTION_NOT_SET: Direction = 0;
 pub const CTRL_X_CMDLINE_CTRL_X: ::core::ffi::c_int = 17;
 pub const CTRL_X_NORMAL: ::core::ffi::c_int = 0;
 pub const CTRL_X_NOT_DEFINED_YET: ::core::ffi::c_int = 1;

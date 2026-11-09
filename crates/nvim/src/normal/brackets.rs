@@ -13,6 +13,7 @@
 use crate::keycodes::SpecialKey;
 use crate::mark::{MARK_BEGIN_LINE, MARK_CONTEXT};
 use crate::normal::defs::{CmdArg, MotionType};
+use crate::search::DIRECTION_NOT_SET;
 use crate::search::{ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, FIND_ANY, FIND_DEFINE};
 use crate::search::{FM_BACKWARD, FM_FORWARD};
 use crate::spell::{SMT_BAD, SMT_RARE};
@@ -28,8 +29,8 @@ use crate::mark::defs::MarkMove;
 use crate::mark::{getnextmark, pos_to_mark, setpcmark};
 use crate::mouse::do_mouse;
 use crate::normal::{
-    DIRECTION_NOT_SET, FIND_IDENT, clear_op, clear_op_beep, ident_under_cursor, may_fold_open,
-    nv_gotofile, nv_mark_move_to, nv_put_opt,
+    FIND_IDENT, clear_op, clear_op_beep, ident_under_cursor, may_fold_open, nv_gotofile,
+    nv_mark_move_to, nv_put_opt,
 };
 use crate::ops::OpType;
 use crate::options::{OPT_FDO_FLAG_BLOCK, OPT_FDO_FLAG_SEARCH};

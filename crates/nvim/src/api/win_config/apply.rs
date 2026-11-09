@@ -17,8 +17,8 @@
 
 use super::*;
 use crate::api_error;
-use crate::types::Handle;
-use crate::winfloat::{WIN_SPLIT_LEFT, WIN_STYLE_MINIMAL};
+use crate::types::{Handle, WinSplit};
+use crate::winfloat::WIN_STYLE_MINIMAL;
 use crate::winlayer::{FrameId, FrameRef, TabPage, Win, WinId};
 use core::ffi::c_int;
 
@@ -250,7 +250,7 @@ impl Relayout {
         let neighbour = if n_frames > 2 {
             // Only a nested row or column has a neighbour on the side the
             // split is going.
-            let ahead = self.split == WIN_SPLIT_ABOVE || self.split == WIN_SPLIT_LEFT;
+            let ahead = self.split == WinSplit::Above || self.split == WinSplit::Left;
             let nested = parent_frame.parent().is_some();
             let found = nested.then(|| {
                 if ahead {
@@ -366,15 +366,15 @@ fn apply_split(
     let old_split = win_split_dir(win);
     if has_vertical && !has_split {
         fconfig.split = if config.vertical.unwrap_or(false) {
-            if old_split == WIN_SPLIT_RIGHT || p_spr() {
-                WIN_SPLIT_RIGHT
+            if old_split == WinSplit::Right || p_spr() {
+                WinSplit::Right
             } else {
-                WIN_SPLIT_LEFT
+                WinSplit::Left
             }
-        } else if old_split == WIN_SPLIT_BELOW || p_sb() {
-            WIN_SPLIT_BELOW
+        } else if old_split == WinSplit::Below || p_sb() {
+            WinSplit::Below
         } else {
-            WIN_SPLIT_ABOVE
+            WinSplit::Above
         };
     }
     // Nothing about the layout is changing when neither key was given, or

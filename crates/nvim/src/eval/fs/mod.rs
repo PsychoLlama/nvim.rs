@@ -52,7 +52,7 @@ use crate::os::fs::{
 };
 use crate::os::libc::uint64_t;
 use crate::path::{tail_index, vim_ispathsep};
-use crate::types::{Direction, TypVal, VAR_STRING, VarNumber};
+use crate::types::{TypVal, VAR_STRING, VarNumber};
 use core::ffi::{CStr, c_int};
 
 // The carve of the transpiled module; see each child's docs.
@@ -70,7 +70,6 @@ pub use self::path::*;
 pub use self::read::*;
 pub use self::write::*;
 
-pub const DIRECTION_NOT_SET: Direction = 0;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 

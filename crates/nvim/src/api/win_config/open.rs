@@ -20,9 +20,10 @@ use super::*;
 use crate::autocmd::fire_autocmds;
 use crate::buffer::BufRef;
 use crate::guard::Suppress;
+use crate::types::WinSplit;
 use crate::types::{CmdIdx, Handle};
 use crate::window::FR_COL;
-use crate::winfloat::{WIN_CONFIG_INIT, WIN_SPLIT_LEFT, WIN_STYLE_MINIMAL};
+use crate::winfloat::{WIN_CONFIG_INIT, WIN_STYLE_MINIMAL};
 use crate::winlayer::Buf;
 use crate::winlayer::{TabPage, Win, WinId};
 use core::ffi::c_int;
@@ -152,14 +153,14 @@ impl Opening {
         {
             self.config.split = if vertical {
                 if p_spr() {
-                    WIN_SPLIT_RIGHT
+                    WinSplit::Right
                 } else {
-                    WIN_SPLIT_LEFT
+                    WinSplit::Left
                 }
             } else if p_sb() {
-                WIN_SPLIT_BELOW
+                WinSplit::Below
             } else {
-                WIN_SPLIT_ABOVE
+                WinSplit::Above
             };
         }
         let flags = win_split_flags(self.config.split, self.parent.is_none()) | WSP_NOENTER;
@@ -306,31 +307,31 @@ fn split_ins(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> Option<Win>
 /// answers the default rather than naming a side.
 pub(crate) fn win_split_dir(win: Win) -> WinSplit {
     let Some(frame) = win.frame_or_none() else {
-        return WIN_SPLIT_LEFT;
+        return WinSplit::Left;
     };
     let Some(parent) = frame.parent() else {
-        return WIN_SPLIT_LEFT;
+        return WinSplit::Left;
     };
     // A window in a column was split off the one below it when it still has a
     // sibling ahead of it, and off the one above it otherwise; in a row the
     // same test reads left/right.
     let column = ::core::ffi::c_int::from(parent.fr_layout) == FR_COL;
     match (frame.next().is_none(), column) {
-        (false, true) => WIN_SPLIT_ABOVE,
-        (true, true) => WIN_SPLIT_BELOW,
-        (false, false) => WIN_SPLIT_LEFT,
-        (true, false) => WIN_SPLIT_RIGHT,
+        (false, true) => WinSplit::Above,
+        (true, true) => WinSplit::Below,
+        (false, false) => WinSplit::Left,
+        (true, false) => WinSplit::Right,
     }
 }
 
 pub(crate) fn win_split_flags(split: WinSplit, toplevel: bool) -> ::core::ffi::c_int {
     let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if split == WIN_SPLIT_ABOVE || split == WIN_SPLIT_BELOW {
+    if split == WinSplit::Above || split == WinSplit::Below {
         flags |= WSP_HOR;
     } else {
         flags |= WSP_VERT;
     }
-    if split == WIN_SPLIT_ABOVE || split == WIN_SPLIT_LEFT {
+    if split == WinSplit::Above || split == WinSplit::Left {
         flags |= if ::core::ffi::c_int::from(toplevel) != 0 {
             WSP_TOP
         } else {
