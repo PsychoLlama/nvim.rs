@@ -244,11 +244,10 @@ pub(crate) fn validate_option_value(
         *newval = get_option_unset_value(opt_idx);
         Ok(())
     } else if !option_has_type(opt_idx, newval.kind()) {
-        let rep = newval.to_text();
         let name = msg_cstr(opt.fullname);
         let want = msg_cstr(optval_type_name(opt.type_0));
         let got = msg_cstr(optval_type_name(newval.kind()));
-        let rep = msg_cstr(rep.as_cstr());
+        let rep = &*newval;
         Err(OptError::formatted(tr!(
             "Invalid value for option '{name}': expected {want}, got {got} {rep}"
         )))

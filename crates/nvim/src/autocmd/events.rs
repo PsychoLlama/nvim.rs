@@ -67,6 +67,13 @@ pub fn event_nr2name(event: AutoEvent) -> &'static ::core::ffi::CStr {
     EVENT_NAMES[event.index()].name
 }
 
+/// An event prints as its canonical name, the one `:autocmd` lists.
+impl ::core::fmt::Display for AutoEvent {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        ::core::fmt::Display::fmt(&crate::message_fmt::msg_cstr(event_nr2name(*self)), f)
+    }
+}
+
 /// Whether `ei` -- a value of 'eventignore' or 'eventignorewin' -- names
 /// `event`.
 ///
@@ -280,6 +287,15 @@ fn event_name_index(wanted: &[u8]) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_event_displays_as_its_canonical_name() {
+        assert_eq!(AutoEvent::BufWritePost.to_string(), "BufWritePost");
+        assert_eq!(
+            event_name2nr(b"bufwritepost").0.map(|e| e.to_string()),
+            Some("BufWritePost".to_owned())
+        );
+    }
 
     /// The binary search is only a lookup while the table is sorted the way
     /// `gen_events.lua` emitted it.  Nothing else asserts this: the rows are

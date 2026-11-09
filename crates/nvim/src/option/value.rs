@@ -29,6 +29,7 @@ use crate::option::defs::kOptValTypeString;
 use core::ffi::{CStr, c_int};
 
 use crate::memory::{ThinCString, XString};
+use crate::message_fmt::msg_bytes;
 use crate::option::defs::{OptIndex, OptStr, OptVal, OptValType};
 use crate::types::{
     ApiString, Object, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
@@ -59,6 +60,23 @@ pub(crate) fn optval_type_name(type_0: OptValType) -> &'static CStr {
     }
 }
 
+/// The value as `:set` reports it in a message: a string quoted, a boolean
+/// spelled out, nil as nothing.
+impl ::core::fmt::Display for OptVal {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        match self {
+            OptVal::Nil => Ok(()),
+            OptVal::Boolean(boolean) => f.write_str(if *boolean == Some(true) {
+                "true"
+            } else {
+                "false"
+            }),
+            OptVal::Number(n) => write!(f, "{n}"),
+            OptVal::String(text) => write!(f, "\"{}\"", msg_bytes(text.as_bytes())),
+        }
+    }
+}
+
 impl OptVal {
     /// A string value copying an API string, up to its first NUL.
     pub(crate) fn string(string: ApiString) -> Self {
@@ -75,27 +93,6 @@ impl OptVal {
         joined.extend_from_slice(cur.as_bytes());
         joined.extend_from_slice(new.as_bytes());
         Some(OptVal::from_xstring(XString::from_vec(joined)))
-    }
-
-    /// The value as the text `:set` reports it with in a message: a string is
-    /// quoted, a boolean spelled out.
-    pub(crate) fn to_text(&self) -> XString {
-        match self {
-            OptVal::Nil => XString::new(),
-            OptVal::Boolean(boolean) => XString::from_cstr(if *boolean == Some(true) {
-                c"true"
-            } else {
-                c"false"
-            }),
-            OptVal::Number(n) => XString::from_vec(n.to_string().into_bytes()),
-            OptVal::String(text) => {
-                let mut quoted = Vec::with_capacity(text.len() + 2);
-                quoted.push(b'"');
-                quoted.extend_from_slice(text.as_bytes());
-                quoted.push(b'"');
-                XString::from_vec(quoted)
-            }
-        }
     }
 
     /// An option's value as a typval.  `numbool` renders a Boolean option as a
@@ -278,5 +275,21 @@ pub(crate) fn optval_is_default(opt_idx: OptIndex, slot: OptSlot) -> bool {
             let value = slot_value(opt_idx, slot);
             with_option_default(opt_idx, |default| value == *default)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// What the "Invalid value for option" message quotes the value as.
+    #[test]
+    fn a_value_displays_as_set_reports_it() {
+        assert_eq!(OptVal::Nil.to_string(), "");
+        assert_eq!(OptVal::Boolean(Some(true)).to_string(), "true");
+        assert_eq!(OptVal::Boolean(Some(false)).to_string(), "false");
+        assert_eq!(OptVal::Boolean(None).to_string(), "false");
+        assert_eq!(OptVal::Number(-42).to_string(), "-42");
+        assert_eq!(OptVal::from_bytes(b"a b").to_string(), "\"a b\"");
     }
 }

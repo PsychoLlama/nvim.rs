@@ -20,7 +20,6 @@
 use super::*;
 use crate::autocmd::defs::{AutoPat, EventCmds};
 use crate::memory::XString;
-use crate::message_fmt::msg_cstr;
 use crate::smsg;
 use crate::types::Handle;
 use crate::winlayer::Buf;
@@ -139,7 +138,7 @@ pub fn aubuflocal_remove(buffer: Buf) {
         if p_verbose() >= 6 {
             for _ in 0..count {
                 verbose_enter();
-                let arg0 = msg_cstr(event_nr2name(event));
+                let arg0 = event;
                 smsg!(
                     0,
                     "auto-removing autocommand: {arg0} <buffer={}>",
