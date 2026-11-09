@@ -158,7 +158,7 @@ fn qf_list_entry(entry: &Listed, qf_idx: c_int, cursel: bool) {
         return;
     }
 
-    if msg_col.get() > 0 {
+    if MSG_COL.get() > 0 {
         msg_putchar(c_int::from(b'\n'));
     }
     let cursel = if cursel { HLF_QFL } else { qfFile_hl_id.get() };
@@ -199,7 +199,7 @@ pub fn qf_list(excmd: &mut ExArg) {
         return;
     };
     if qi.is_empty() || qi.current_list().is_empty() {
-        qf_emsg(e_no_errors);
+        qf_emsg(E_NO_ERRORS);
         return;
     }
 
@@ -382,13 +382,13 @@ pub fn qf_history(excmd: &mut ExArg) {
     let stack = stack_for_cmd(excmd.cmdidx, false);
     if excmd.addr_count > 0 {
         match stack {
-            None => qf_emsg(e_loclist),
+            None => qf_emsg(E_LOCLIST),
             Some(mut qi) if excmd.number2 > 0 && excmd.number2 <= qi.list_count => {
                 qi.current = excmd.number2 - 1;
                 qf_msg(qi, qi.current, "");
                 qf_update_buffer(qi, None);
             }
-            Some(_) => qf_emsg(e_invrange),
+            Some(_) => qf_emsg(E_INVRANGE),
         }
         return;
     }
@@ -456,7 +456,7 @@ pub fn qf_view_result(split: bool) {
         Qi::global()
     };
     if qi.current_list().is_empty() {
-        qf_emsg(e_no_errors);
+        qf_emsg(E_NO_ERRORS);
         return;
     }
     if split {

@@ -27,8 +27,8 @@ use crate::eval::{NL, PROF_YES};
 use crate::ex_cmds::check_secure;
 use crate::memline::Lines;
 use crate::memory::ThinCString;
+use crate::message::E_INVARG;
 use crate::message::IOSIZE;
-use crate::message::e_invarg;
 use crate::message::{msg_str, verbose_enter_scroll, verbose_leave_scroll};
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::narrow::as_index;
@@ -74,7 +74,7 @@ pub fn tv_to_argv(cmd_tv: &TypVal) -> Result<Argv, ArgvRefusal> {
     let items = cmd_tv.list_ref();
     let argc = list_len(items);
     if argc == 0 {
-        emsg_static(e_invarg);
+        emsg_static(E_INVARG);
         return Err(ArgvRefusal::Invalid);
     }
 

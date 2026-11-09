@@ -141,7 +141,7 @@ pub(crate) fn ins_compl_add_list(list: &ListRef) {
         if ins_compl_add_tv(&tv, dir, true) == Added::Linked {
             // If dir was BACKWARD then honour it just once.
             dir = FORWARD;
-        } else if did_emsg.get() != 0 {
+        } else if DID_EMSG.get() != 0 {
             break;
         }
         at += 1;
@@ -307,7 +307,7 @@ pub fn f_complete(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     if args[1].v_type() != VAR_LIST {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
     } else {
         let startcol = number_as_col(tv_get_number_chk(&args[0]).unwrap_or(-1));
         if startcol > ColNr::ZERO {
@@ -319,7 +319,7 @@ pub fn f_complete(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// The `complete_add()` function; a `VimLFunc` row in the builtin table.
 pub fn f_complete_add(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    (*result).write_number(ins_compl_add_tv(&args[0], kDirectionNotSet, false).number());
+    (*result).write_number(ins_compl_add_tv(&args[0], DIRECTION_NOT_SET, false).number());
 }
 
 /// The `complete_check()` function; a `VimLFunc` row in the builtin table.
@@ -481,7 +481,7 @@ pub fn f_complete_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     let mut what_list: Option<&List> = None;
     if !args.is_empty() {
         if !args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) {
-            emsg(gettext(e_listreq));
+            emsg(gettext(E_LISTREQ));
             return;
         }
         what_list = args[0].list_ref();

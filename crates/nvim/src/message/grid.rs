@@ -29,17 +29,17 @@ use core::ffi::{c_int, c_uint};
 /// compositor and reached from there while it is being drawn on, so it is
 /// named rather than borrowed -- see [`GridRef`] for why that matters.
 pub(crate) fn msg_grid_ref() -> GridRef {
-    GridRef::of_cell(&msg_grid)
+    GridRef::of_cell(&MSG_GRID)
 }
 
 /// Where message output goes, in screen coordinates.
 ///
-/// The message grid when it has one -- its row 0 sits at `msg_grid_pos`, so
+/// The message grid when it has one -- its row 0 sits at `MSG_GRID_POS`, so
 /// the view offsets screen rows back onto it -- and the default grid
 /// otherwise, where a screen row already is a grid row.
 ///
 /// Computed, never stored. As a cell (`msg_grid_adj`) this was a second name
-/// for `msg_grid`'s address, held in step by hand from three places in
+/// for `MSG_GRID`'s address, held in step by hand from three places in
 /// [`msg_grid_validate`] and [`msg_grid_set_pos`]; between the `grid_alloc`
 /// and the assignment it named the *previous* target, and before the first
 /// [`msg_grid_validate`] it named nothing at all -- which is why the
@@ -50,7 +50,7 @@ pub(crate) fn msg_grid_view() -> GridView {
     if grid.is_allocated() {
         GridView {
             target: grid.raw(),
-            row_offset: -msg_grid_pos.get(),
+            row_offset: -MSG_GRID_POS.get(),
             col_offset: 0,
         }
     } else {
@@ -60,7 +60,7 @@ pub(crate) fn msg_grid_view() -> GridView {
 
 /// Has `id` been handed out as a message id?
 pub fn msg_id_exists(id: int64_t) -> bool {
-    id > 0 && id < msg_id_next.get()
+    id > 0 && id < MSG_ID_NEXT.get()
 }
 
 /// Tell the UI where the message grid now sits.
@@ -83,10 +83,10 @@ pub(crate) fn ui_ext_msg_set_pos(row: c_int, scrolled: bool) {
 pub fn msg_grid_set_pos(row: c_int, scrolled: bool) {
     if !msg_grid_ref().throttled {
         ui_ext_msg_set_pos(row, scrolled);
-        msg_grid_pos_at_flush.set(row);
+        MSG_GRID_POS_AT_FLUSH.set(row);
     }
     // Where [`msg_grid_view`] reads the view's row offset back from.
-    msg_grid_pos.set(row);
+    MSG_GRID_POS.set(row);
 }
 
 /// Are messages drawn on a grid at all?
@@ -116,15 +116,15 @@ pub fn msg_grid_validate() {
         let pos = if State.get() & MODE_ASKMORE != 0 {
             0
         } else {
-            (max_rows - msg_scrolled.get()).max(0)
+            (max_rows - MSG_SCROLLED.get()).max(0)
         };
         grid.throttled = false; // don't throttle in 'cmdheight' area
-        msg_grid_set_pos(pos, msg_scrolled.get() != 0);
+        msg_grid_set_pos(pos, MSG_SCROLLED.get() != 0);
         let (rows, cols) = (grid.rows, grid.cols);
         ui_comp_put_grid(grid, pos, 0, rows, cols, false, true);
         ui_call_grid_resize(grid.handle.into(), cols.into(), rows.into());
 
-        msg_scrolled_at_flush.set(msg_scrolled.get());
+        MSG_SCROLLED_AT_FLUSH.set(MSG_SCROLLED.get());
         grid.mouse_enabled = false;
     } else if !should_alloc && grid.is_allocated() {
         // Note: we run this both on moving to ext_messages, and on
@@ -135,22 +135,22 @@ pub fn msg_grid_validate() {
         ui_call_grid_destroy(grid.handle.into());
         grid.throttled = false;
         redraw_cmdline.set(true);
-    } else if grid.is_allocated() && msg_scrolled.get() == 0 && msg_grid_pos.get() != max_rows {
-        let diff = msg_grid_pos.get() - max_rows;
+    } else if grid.is_allocated() && MSG_SCROLLED.get() == 0 && MSG_GRID_POS.get() != max_rows {
+        let diff = MSG_GRID_POS.get() - max_rows;
         msg_grid_set_pos(max_rows, false);
         if diff > 0 {
             clear_msg_area(Rows.get() - diff, Rows.get(), 0, Columns.get());
         }
     }
 
-    if grid.is_allocated() && msg_scrolled.get() == 0 && cmdline_row.get() < msg_grid_pos.get() {
-        cmdline_row.set(msg_grid_pos.get());
+    if grid.is_allocated() && MSG_SCROLLED.get() == 0 && cmdline_row.get() < MSG_GRID_POS.get() {
+        cmdline_row.set(MSG_GRID_POS.get());
     }
 }
 
 /// Send the line being built to the UI, mirrored if `'rightleft'` applies.
 pub fn msg_line_flush() {
-    if cmdmsg_rl.get() {
+    if CMDMSG_RL.get() {
         grid_line_mirror(msg_grid_ref().cols);
     }
     grid_line_flush_if_valid_row();
@@ -159,7 +159,7 @@ pub fn msg_line_flush() {
 /// Put the cursor at `row`/`col` of the message area.
 pub fn msg_cursor_goto(row: c_int, mut col: c_int) {
     let mut row = row;
-    if cmdmsg_rl.get() {
+    if CMDMSG_RL.get() {
         col = Columns.get() - 1 - col;
     }
     let grid = grid_adjust(msg_grid_view(), &mut row, &mut col);
@@ -168,12 +168,12 @@ pub fn msg_cursor_goto(row: c_int, mut col: c_int) {
 
 /// How many screen lines the message area currently occupies.
 pub fn msg_scrollsize() -> c_int {
-    msg_scrolled.get() + number_as_int(p_ch()) + c_int::from(p_ch() > 0 || msg_scrolled.get() > 1)
+    MSG_SCROLLED.get() + number_as_int(p_ch()) + c_int::from(p_ch() > 0 || MSG_SCROLLED.get() > 1)
 }
 
 /// Should message output be batched into one scroll at flush time?
 pub fn msg_do_throttle() -> bool {
-    msg_use_grid() && rdb_flags.get() & kOptRdbFlagNothrottle as c_uint == 0
+    msg_use_grid() && RDB_FLAGS.get() & kOptRdbFlagNothrottle as c_uint == 0
 }
 
 /// Scroll the message area up one line.
@@ -185,9 +185,9 @@ pub fn msg_scroll_up(may_throttle: bool, zerocmd: bool) {
     if may_throttle && msg_do_throttle() {
         grid.throttled = true;
     }
-    msg_did_scroll.set(true);
-    if msg_grid_pos.get() > 0 {
-        msg_grid_set_pos(msg_grid_pos.get() - 1, !zerocmd);
+    MSG_DID_SCROLL.set(true);
+    if MSG_GRID_POS.get() > 0 {
+        msg_grid_set_pos(MSG_GRID_POS.get() - 1, !zerocmd);
         if zerocmd && grid.is_allocated() {
             // When zerocmd is true, we're scrolling the first line of
             // msg_grid onto the screen; it must be cleared first.
@@ -212,20 +212,20 @@ pub fn msg_scroll_flush() {
     // `ui_ext_msg_set_pos` only wants `curwin` alongside.
     if grid.throttled {
         grid.throttled = false;
-        let pos_delta = msg_grid_pos_at_flush.get() - msg_grid_pos.get();
+        let pos_delta = MSG_GRID_POS_AT_FLUSH.get() - MSG_GRID_POS.get();
         debug_assert!(pos_delta >= 0);
-        let delta = (msg_scrolled.get() - msg_scrolled_at_flush.get()).min(grid.rows);
+        let delta = (MSG_SCROLLED.get() - MSG_SCROLLED_AT_FLUSH.get()).min(grid.rows);
 
         if pos_delta > 0 {
-            ui_ext_msg_set_pos(msg_grid_pos.get(), true);
+            ui_ext_msg_set_pos(MSG_GRID_POS.get(), true);
         }
 
-        let to_scroll = delta - pos_delta - msg_grid_scroll_discount.get();
+        let to_scroll = delta - pos_delta - MSG_GRID_SCROLL_DISCOUNT.get();
         debug_assert!(to_scroll >= 0);
 
         // No scrolling to do while the grid is still moving down: the
         // repositioning above already showed the new lines.
-        if to_scroll > 0 && msg_grid_pos.get() == 0 {
+        if to_scroll > 0 && MSG_GRID_POS.get() == 0 {
             ui_call_grid_scroll(
                 grid.handle.into(),
                 0,
@@ -241,7 +241,7 @@ pub fn msg_scroll_flush() {
         // global that a resize changes, and this loop talks to the UI.
         let mut i = (Rows.get() - delta.max(1)).max(0);
         while i < Rows.get() {
-            let row = i - msg_grid_pos.get();
+            let row = i - MSG_GRID_POS.get();
             debug_assert!(row >= 0);
             let (dirty, cols) = (grid.take_dirty_col(row), grid.cols);
             let attr = hl_attr(HLF_MSG as c_int);
@@ -249,9 +249,9 @@ pub fn msg_scroll_flush() {
             i += 1;
         }
     }
-    msg_scrolled_at_flush.set(msg_scrolled.get());
-    msg_grid_scroll_discount.set(0);
-    msg_grid_pos_at_flush.set(msg_grid_pos.get());
+    MSG_SCROLLED_AT_FLUSH.set(MSG_SCROLLED.get());
+    MSG_GRID_SCROLL_DISCOUNT.set(0);
+    MSG_GRID_POS_AT_FLUSH.set(MSG_GRID_POS.get());
 }
 
 /// The messages are gone: put the grid back under `'cmdheight'` and clear it.
@@ -276,9 +276,9 @@ pub fn msg_reset_scroll() {
             i += 1;
         }
     }
-    msg_scrolled.set(0);
-    msg_scrolled_at_flush.set(0);
-    msg_grid_scroll_discount.set(0);
+    MSG_SCROLLED.set(0);
+    MSG_SCROLLED_AT_FLUSH.set(0);
+    MSG_GRID_SCROLL_DISCOUNT.set(0);
 }
 
 /// The UI reattached or resized: restate the grid's size and position.
@@ -286,7 +286,7 @@ pub fn msg_ui_refresh() {
     let grid = msg_grid_ref();
     if ui_has(kUIMultigrid) && grid.is_allocated() {
         ui_call_grid_resize(grid.handle.into(), grid.cols.into(), grid.rows.into());
-        ui_ext_msg_set_pos(msg_grid_pos.get(), msg_scrolled.get() != 0);
+        ui_ext_msg_set_pos(MSG_GRID_POS.get(), MSG_SCROLLED.get() != 0);
     }
 }
 
@@ -294,7 +294,7 @@ pub fn msg_ui_refresh() {
 pub fn msg_ui_flush() {
     let grid = msg_grid_ref();
     if ui_has(kUIMultigrid) && grid.is_allocated() && grid.pending_comp_index_update {
-        ui_ext_msg_set_pos(msg_grid_pos.get(), msg_scrolled.get() != 0);
+        ui_ext_msg_set_pos(MSG_GRID_POS.get(), MSG_SCROLLED.get() != 0);
     }
 }
 
@@ -314,13 +314,13 @@ pub(crate) fn inc_msg_scrolled() {
         };
         set_vim_var_string(Vv::Scrollstart, Some(&start));
     }
-    msg_scrolled.set(msg_scrolled.get() + 1);
+    MSG_SCROLLED.set(MSG_SCROLLED.get() + 1);
     set_must_redraw(UPD_VALID);
 }
 
 /// Clear from the cursor to the end of the message area, unless silenced.
 pub fn msg_clr_eos() {
-    if msg_silent.get() == 0 {
+    if MSG_SILENT.get() == 0 {
         msg_clr_eos_force();
     }
 }
@@ -330,25 +330,25 @@ pub fn msg_clr_eos_force() {
     if ui_has(kUIMessages) {
         return;
     }
-    let (msg_startcol, msg_endcol) = if cmdmsg_rl.get() {
-        (0, Columns.get() - msg_col.get())
+    let (msg_startcol, msg_endcol) = if CMDMSG_RL.get() {
+        (0, Columns.get() - MSG_COL.get())
     } else {
-        (msg_col.get(), Columns.get())
+        (MSG_COL.get(), Columns.get())
     };
 
     // Avoid clearing the line the grid is about to be moved off.
-    if msg_grid_ref().is_allocated() && msg_row.get() < msg_grid_pos.get() {
+    if msg_grid_ref().is_allocated() && MSG_ROW.get() < MSG_GRID_POS.get() {
         msg_grid_validate();
-        if msg_row.get() < msg_grid_pos.get() {
-            msg_row.set(msg_grid_pos.get());
+        if MSG_ROW.get() < MSG_GRID_POS.get() {
+            MSG_ROW.set(MSG_GRID_POS.get());
         }
     }
 
-    clear_msg_area(msg_row.get(), msg_row.get() + 1, msg_startcol, msg_endcol);
-    clear_msg_area(msg_row.get() + 1, Rows.get(), 0, Columns.get());
+    clear_msg_area(MSG_ROW.get(), MSG_ROW.get() + 1, msg_startcol, msg_endcol);
+    clear_msg_area(MSG_ROW.get() + 1, Rows.get(), 0, Columns.get());
 
     redraw_cmdline.set(true);
-    if msg_row.get() < Rows.get() - 1 || msg_col.get() == 0 {
+    if MSG_ROW.get() < Rows.get() - 1 || MSG_COL.get() == 0 {
         clear_cmdline.set(false);
         mode_displayed.set(false);
         cmdline_was_last_drawn.set(false);
@@ -357,7 +357,7 @@ pub fn msg_clr_eos_force() {
 
 /// Clear the command line.
 pub fn msg_clr_cmdline() {
-    msg_row.set(cmdline_row.get());
-    msg_col.set(0);
+    MSG_ROW.set(cmdline_row.get());
+    MSG_COL.set(0);
     msg_clr_eos_force();
 }

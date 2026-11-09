@@ -40,11 +40,11 @@ use crate::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark}
 use crate::message::emsg;
 use crate::normal::defs::CmdArg;
 use crate::normal::{
-    KMarkNoContext, check_clear_op, check_clear_op_quit, clear_op, clear_op_beep,
-    e_changelist_is_empty, kMTCharWise, kMTLineWise, kMarkAll, nv_operator,
+    KMarkNoContext, MT_CHAR_WISE, check_clear_op, check_clear_op_quit, clear_op, clear_op_beep,
+    e_changelist_is_empty, kMTLineWise, kMarkAll, nv_operator,
 };
 use crate::ops::OpType;
-use crate::option::vars::{fdo_flags, jop_flags, p_hls};
+use crate::option::vars::{FDO_FLAGS, JOP_FLAGS, p_hls};
 use crate::options::{kOptFdoFlagMark, kOptFdoFlagSearch, kOptJopFlagView};
 use crate::os::cshim::gettext;
 use crate::pos::equalpos;
@@ -137,7 +137,7 @@ pub(crate) fn normal_search(
     let mut sia = SearchItArg::default();
     let prev_cursor = Win::current().w_cursor;
     let mut op = cmd_arg.op();
-    op.motion_type = kMTCharWise;
+    op.motion_type = MT_CHAR_WISE;
     op.inclusive = false;
     // A search is one of the motions that fills the "1 last change"
     // register rather than the small-delete one.
@@ -157,7 +157,7 @@ pub(crate) fn normal_search(
             op.motion_type = kMTLineWise;
         }
         Win::current().w_cursor.coladd = 0;
-        if op.op_type == OpType::Nop && fdo_flags.get() & kOptFdoFlagSearch != 0 && KeyTyped.get() {
+        if op.op_type == OpType::Nop && FDO_FLAGS.get() & kOptFdoFlagSearch != 0 && KeyTyped.get() {
             fold_open_cursor();
         }
     } else {
@@ -203,7 +203,7 @@ pub(crate) fn nv_mark_move_to(
     cmd_arg.op().motion_type = if flags & kMarkBeginLine as MarkMove != 0 {
         kMTLineWise
     } else {
-        kMTCharWise
+        MT_CHAR_WISE
     };
     if cmd_arg.cmdchar.is('`') {
         cmd_arg.op().use_reg_one = true;
@@ -216,7 +216,7 @@ pub(crate) fn nv_mark_move_to(
 /// The 'jumpoptions' half of a mark jump's flags: whether the view is
 /// restored along with the position.
 fn view_flag() -> MarkMove {
-    if jop_flags.get() & kOptJopFlagView != 0 {
+    if JOP_FLAGS.get() & kOptJopFlagView != 0 {
         kMarkSetView as MarkMove
     } else {
         0
@@ -230,7 +230,7 @@ fn view_flag() -> MarkMove {
 fn may_open_fold(cmd_arg: &mut CmdArg, moved: bool, old_key_typed: bool) {
     if cmd_arg.op().op_type == OpType::Nop
         && moved
-        && fdo_flags.get() & kOptFdoFlagMark != 0
+        && FDO_FLAGS.get() & kOptFdoFlagMark != 0
         && old_key_typed
     {
         fold_open_cursor();

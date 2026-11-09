@@ -118,7 +118,7 @@ pub(crate) fn list_arg_vars(text: &[u8], skip: bool, first: &mut bool) -> usize 
             arg += name_end(rest(arg), flags).end;
             let c = c_int::from(cstr::byte_at(text, arg));
             if !ascii_iswhite(c) && ends_excmd(c) == 0 {
-                emsg_severe.set(true);
+                EMSG_SEVERE.set(true);
                 let shown = crate::message_fmt::msg_bytes(rest(arg));
                 semsg!("E488: Trailing characters: {shown}");
                 break;
@@ -135,7 +135,7 @@ pub(crate) fn list_arg_vars(text: &[u8], skip: bool, first: &mut bool) -> usize 
         'done: {
             if len <= 0 {
                 if len < 0 && !aborting() {
-                    emsg_severe.set(true);
+                    EMSG_SEVERE.set(true);
                     let shown = crate::message_fmt::msg_bytes(rest(arg));
                     semsg!("E475: Invalid argument: {shown}");
                     return arg;

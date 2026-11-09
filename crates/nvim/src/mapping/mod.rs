@@ -33,7 +33,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::keycodes::{KS_EXTRA, KS_MODIFIER};
 use crate::types::ScriptCtx;
@@ -67,8 +66,8 @@ use crate::keycodes::{
 use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::api_new_luaref;
 use crate::mbyte::cluster_len;
-use crate::message::state::{msg_col, msg_row, msg_silent};
-use crate::message::{e_invarg, e_noabbr, e_nomap};
+use crate::message::state::{MSG_COL, MSG_ROW, MSG_SILENT};
+use crate::message::{E_INVARG, E_NOABBR, E_NOMAP};
 use crate::message::{
     emsg, iemsg, message_filtered, msg, msg_clr_eos, msg_display, msg_display_keys,
     msg_ext_set_kind, msg_putchar, msg_start, msg_str, msg_str_hl, special_keys_text,
@@ -115,7 +114,7 @@ pub use self::langmap::*;
 pub use crate::getchar::MAXMAPLEN;
 pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
 pub use crate::keycodes::{REPTERM_DO_LT, REPTERM_FROM_PART, REPTERM_NO_SIMPLIFY};
-pub const kRetObject: LuaRetMode = 0;
+pub const RET_OBJECT: LuaRetMode = 0;
 /// The `:map` arguments being parsed, and the owner of everything a parse
 /// allocates.
 ///

@@ -153,7 +153,7 @@ pub fn ml_recover(checkext: bool) {
         }
 
         msg_ext_set_kind(c"wmsg");
-        msg_ext_skip_flush.set(true);
+        MSG_EXT_SKIP_FLUSH.set(true);
         let swap_name = buf.b_ml.memfile().fname().unwrap_or(c"").to_owned();
         let path = home_to_tilde(None, &swap_name, MAXPATHL as usize, true);
         smsg!(0, "Using swap file \"{}\"", shown(path.as_cstr()));
@@ -167,7 +167,7 @@ pub fn ml_recover(checkext: bool) {
         msg_putchar('\n' as c_int);
         smsg!(0, "Original file \"{}\"", shown(path.as_cstr()));
         msg_putchar('\n' as c_int);
-        msg_ext_skip_flush.set(false);
+        MSG_EXT_SKIP_FLUSH.set(false);
 
         // Compare the dates of the swap file and the original.
         // Block zero keeps the low 32 bits; so does this.
@@ -255,7 +255,7 @@ pub fn ml_recover(checkext: bool) {
         Buf::current().b_flags |= BufFlags::RECOVERED;
         check_cursor(Win::current());
 
-        msg_ext_skip_flush.set(!got_int.get());
+        MSG_EXT_SKIP_FLUSH.set(!got_int.get());
         recoverymode.set(false);
         report_recovery(error, &recorded, &fname_used);
         redraw_curbuf_later(UPD_NOT_VALID);
@@ -267,7 +267,7 @@ pub fn ml_recover(checkext: bool) {
         err.report();
     }
 
-    msg_ext_skip_flush.set(false);
+    MSG_EXT_SKIP_FLUSH.set(false);
     recoverymode.set(false);
     if let Some(mut buf) = recovery {
         // Whatever block the walk still held goes back, and the memfile
@@ -729,7 +729,7 @@ fn report_recovery(error: c_int, recorded: &Recorded, fname_used: &CStr) {
     if !ui_has(kUIMessages) {
         msg_str(c"\n\n");
     }
-    cmdline_row.set(msg_row.get());
+    cmdline_row.set(MSG_ROW.get());
 }
 
 /// Sync every buffer's memline.

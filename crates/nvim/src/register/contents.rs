@@ -59,7 +59,7 @@ pub fn get_reg_type(regname: RegName) -> (MotionType, i32) {
             | b'%'
             | b'_'
     ) {
-        return (kMTCharWise, 0);
+        return (MT_CHAR_WISE, 0);
     }
 
     if regname != 0 && !valid_yank_reg(regname, false) {
@@ -223,7 +223,7 @@ fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, b
                 .last()
                 .is_some_and(|&last| c_int::from(last) == NL || c_int::from(last) == CAR),
         };
-        yank_type = if ends_line { kMTLineWise } else { kMTCharWise };
+        yank_type = if ends_line { kMTLineWise } else { MT_CHAR_WISE };
     }
 
     // How many lines `text` becomes, and whether the first of them joins the
@@ -235,13 +235,13 @@ fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, b
         RegText::Text(text) => {
             let mut newlines = text.iter().filter(|&&b| b == b'\n').count();
             let extraline =
-                yank_type == kMTCharWise || text.last().is_none_or(|&last| last != b'\n');
+                yank_type == MT_CHAR_WISE || text.last().is_none_or(|&last| last != b'\n');
             if extraline {
                 newlines += 1;
             }
             // A charwise register's last line has no newline of its own, so
             // the first new line continues it.
-            let append = y_size > 0 && reg.kind == kMTCharWise;
+            let append = y_size > 0 && reg.kind == MT_CHAR_WISE;
             if append {
                 newlines -= 1;
             }
@@ -468,7 +468,7 @@ pub fn write_reg_contents_ex(
 pub fn prepare_yankreg_from_object(reg: &mut YankReg, regtype: &[u8]) -> bool {
     let kind = match regtype.first().copied().unwrap_or(0) {
         0 => kMTUnknown, // "" means "work it out from the text"
-        b'v' | b'c' => kMTCharWise,
+        b'v' | b'c' => MT_CHAR_WISE,
         b'V' | b'l' => kMTLineWise,
         // CTRL-V.
         b'b' | 0x16 => kMTBlockWise,
@@ -507,7 +507,7 @@ pub fn prepare_yankreg_from_object(reg: &mut YankReg, regtype: &[u8]) -> bool {
 pub fn finish_yankreg_from_object(reg: &mut YankReg, clipboard_adjust: bool) {
     let ends_empty = reg.lines.last().is_some_and(|last| last.is_empty());
     if ends_empty {
-        if reg.kind != kMTCharWise {
+        if reg.kind != MT_CHAR_WISE {
             if reg.kind == kMTUnknown || clipboard_adjust {
                 reg.lines.lines_mut().pop();
             }
@@ -516,7 +516,7 @@ pub fn finish_yankreg_from_object(reg: &mut YankReg, clipboard_adjust: bool) {
             }
         }
     } else if reg.kind == kMTUnknown {
-        reg.kind = kMTCharWise;
+        reg.kind = MT_CHAR_WISE;
     }
     reg.update_width();
 }

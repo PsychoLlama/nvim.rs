@@ -29,7 +29,7 @@ use crate::api::keysets::KeyDict_win_text_height;
 use crate::api::private::validate::{Bad, err_expected, err_invalid, err_out_of_range};
 use crate::lua::executor::{kRetLuaref, nlua_call_ref_reporting};
 use crate::message::emsg;
-use crate::message::{e_autocmd_close, e_cmdwin};
+use crate::message::{E_AUTOCMD_CLOSE, E_CMDWIN};
 use crate::r#move::{update_topline, validate_cursor};
 use crate::narrow::number_as_int;
 use crate::os::cshim::gettext;
@@ -66,7 +66,7 @@ pub fn nvim_win_set_buf(win: WindowHandle, buf: BufferHandle) -> Result<(), Erro
         || cmdwin_old_curwin.get() == Some(w.id())
         || cmdwin_buf.get() == Some(b.id())
     {
-        return Err(Error::exception(e_cmdwin));
+        return Err(Error::exception(E_CMDWIN));
     }
     win_set_buf(w, b)
 }
@@ -234,7 +234,7 @@ pub fn nvim_win_hide(win: WindowHandle) -> Result<(), Error> {
     let same_tab = tabpage.is_current();
     api_try(|| {
         if is_aucmd {
-            emsg(gettext(e_autocmd_close));
+            emsg(gettext(E_AUTOCMD_CLOSE));
         } else if same_tab {
             let _ = win_close(w, false, false);
         } else {

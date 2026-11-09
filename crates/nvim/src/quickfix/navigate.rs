@@ -291,7 +291,7 @@ impl Adjacent<'_> {
 /// line-and-column positions.
 pub fn ex_cbelow(excmd: &mut ExArg) {
     if excmd.addr_count > 0 && excmd.number2 <= 0 {
-        qf_emsg(e_invrange);
+        qf_emsg(E_INVRANGE);
         return;
     }
 
@@ -306,7 +306,7 @@ pub fn ex_cbelow(excmd: &mut ExArg) {
         BUF_HAS_LL_ENTRY
     };
     if Buf::current().b_has_qf_entry & buf_has_flag == 0 {
-        qf_emsg(e_no_errors);
+        qf_emsg(E_NO_ERRORS);
         return;
     }
 
@@ -314,7 +314,7 @@ pub fn ex_cbelow(excmd: &mut ExArg) {
         return;
     };
     if !qi.current_list().has_valid_entries() {
-        qf_emsg(e_no_errors);
+        qf_emsg(E_NO_ERRORS);
         return;
     }
 

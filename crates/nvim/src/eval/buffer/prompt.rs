@@ -39,7 +39,7 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     let mut numbuf3 = NumBuf::new();
     let mut numbuf4 = NumBuf::new();
     result.write_number(1);
-    let did_emsg_before = did_emsg.get();
+    let did_emsg_before = DID_EMSG.get();
     let Some(buf) = tv_get_buf_from_arg(&args[0]) else {
         return;
     };
@@ -77,7 +77,7 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
             lines = &joined_string;
         }
     }
-    if did_emsg.get() == did_emsg_before {
+    if DID_EMSG.get() == did_emsg_before {
         let split = did_concat && list_len(list.as_deref()) > 1;
         if let (true, Some(list)) = (split, &list) {
             // The joined first item replaces the prompt line; the rest is

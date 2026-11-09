@@ -19,7 +19,7 @@ use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use super::{
-    FCERR_NONE, FCERR_OTHER, fast_pcall, kRetLuaref, kRetMulti, kRetNilBool, kRetObject,
+    FCERR_NONE, FCERR_OTHER, RET_NIL_BOOL, RET_OBJECT, fast_pcall, kRetLuaref, kRetMulti,
     nlua_error, nlua_pcall, with_main_stack,
 };
 use crate::ex_cmds::check_secure;
@@ -308,7 +308,7 @@ fn nlua_call_pop_retval(stack: &mut Stack, mode: LuaRetMode, pretop: At) -> Resu
         return Ok(Object::Nil);
     }
     match mode {
-        kRetNilBool => {
+        RET_NIL_BOOL => {
             let bool_value = stack.to_boolean(At::TOP);
             stack.pop(1);
             Ok(Object::boolean(bool_value))
@@ -318,7 +318,7 @@ fn nlua_call_pop_retval(stack: &mut Stack, mode: LuaRetMode, pretop: At) -> Resu
             stack.pop(1);
             Ok(Object::luaref(reference))
         }
-        kRetObject => pop_object(stack, false),
+        RET_OBJECT => pop_object(stack, false),
         kRetMulti => {
             let nres = stack.top().index() - pretop.index();
             // The values come off the stack topmost first, so they are

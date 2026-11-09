@@ -27,7 +27,7 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::guard::Lock;
-use crate::option::vars::{p_sb, p_spr, tcl_flags};
+use crate::option::vars::{TCL_FLAGS, p_sb, p_spr};
 use crate::options::{kOptTclFlagLeft, kOptTclFlagUselast};
 use crate::winfloat::win_float_find_altwin;
 use crate::winlayer::graph::{cmdline_win, first_tabpage};
@@ -393,14 +393,14 @@ pub(crate) fn alt_frame(win: Win, tabpage: Option<TabPage>) -> FrameRef {
 /// `'tabclose'` says so, otherwise the next, or the previous when the current
 /// is last (or `'tabclose'` says "left" and it is not first).
 pub(crate) fn alt_tab_page() -> TabPage {
-    if tcl_flags.get() & kOptTclFlagUselast != 0
+    if TCL_FLAGS.get() & kOptTclFlagUselast != 0
         && let Some(last) = last_used_tab()
     {
         return last;
     }
     let cur = TabPage::current();
     let forward = cur.next().is_some()
-        && (tcl_flags.get() & kOptTclFlagLeft == 0 || first_tabpage.get() == Some(cur.id()));
+        && (TCL_FLAGS.get() & kOptTclFlagLeft == 0 || first_tabpage.get() == Some(cur.id()));
     match cur.next() {
         Some(next) if forward => next,
         _ => tabs()

@@ -28,7 +28,7 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_C, K_SPECIAL, KS_MODIFIER, SpecialKey, key_unescape};
 use crate::mbyte::{char_at, utf8len_tab};
 use crate::message::IOSIZE;
-use crate::message::state::{keep_msg, keep_msg_hl_id, msg_row, msg_scrolled, need_wait_return};
+use crate::message::state::{KEEP_MSG, KEEP_MSG_HL_ID, MSG_ROW, MSG_SCROLLED, NEED_WAIT_RETURN};
 use crate::message::{msg_putchar, set_keep_msg};
 use crate::mouse::{is_mouse_key, setmouse};
 use crate::narrow::as_index;
@@ -73,7 +73,7 @@ pub(crate) fn ask_yesno(question: &CStr) -> c_int {
         }
     }
 
-    need_wait_return.set(msg_scrolled.get() != 0);
+    NEED_WAIT_RETURN.set(MSG_SCROLLED.get() != 0);
     drop(no_prompt);
     State.set(save_state);
     setmouse();
@@ -197,7 +197,7 @@ pub(crate) fn prompt_for_input(
 ) -> c_int {
     let mut ret = if one_key { ESC } else { 0 };
     // A copy: the prompt's own messages replace the kept one.
-    let kmsg = keep_msg.with(Clone::clone);
+    let kmsg = KEEP_MSG.with(Clone::clone);
 
     let prompt = match prompt {
         Some(prompt) => prompt,
@@ -207,7 +207,7 @@ pub(crate) fn prompt_for_input(
         None => gettext(c"Type number and <Enter> (q or empty cancels): "),
     };
 
-    cmdline_row.set(msg_row.get());
+    cmdline_row.set(MSG_ROW.get());
     ui_flush();
 
     // Don't map prompt input, but do allow special keys.
@@ -236,7 +236,7 @@ pub(crate) fn prompt_for_input(
         };
     }
     if let Some(kmsg) = kmsg {
-        set_keep_msg(Some(kmsg.as_cstr()), keep_msg_hl_id.get());
+        set_keep_msg(Some(kmsg.as_cstr()), KEEP_MSG_HL_ID.get());
     }
     ret
 }

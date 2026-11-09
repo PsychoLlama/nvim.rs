@@ -217,7 +217,7 @@ pub fn do_augroup(arg: &CStr, del_group: bool) {
     let arg = arg.to_bytes();
     if del_group {
         if arg.is_empty() {
-            emsg(gettext(e_argreq));
+            emsg(gettext(E_ARGREQ));
         } else {
             augroup_del(Some(arg), true);
         }

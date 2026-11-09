@@ -65,7 +65,7 @@ use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::memory::XString;
 use crate::message::msg_starthere;
 use crate::message::state::{
-    cmd_silent, did_emsg, emsg_silent, lines_left, msg_row, msg_scroll, need_wait_return, redir_off,
+    CMD_SILENT, DID_EMSG, EMSG_SILENT, LINES_LEFT, MSG_ROW, MSG_SCROLL, NEED_WAIT_RETURN, REDIR_OFF,
 };
 use crate::message_fmt::msg_bytes;
 use crate::path::MAXPATHL;

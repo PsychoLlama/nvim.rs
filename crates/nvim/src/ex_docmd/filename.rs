@@ -45,7 +45,7 @@ use crate::ex_docmd::{
     e_no_script_file_name_to_substitute_for_script, e_no_source_file_name_to_substitute_for_sfile,
 };
 use crate::file_search::{FileNameOpts, file_name_at_cursor};
-use crate::message::{e_usingsid, emsg, msg_make};
+use crate::message::{E_USINGSID, emsg, msg_make};
 use crate::normal::ident_under_cursor;
 use crate::option::vars::{P_GP, P_MP, p_wic};
 use crate::os::cshim::gettext;
@@ -526,7 +526,7 @@ pub(crate) fn eval_vars(
         SPEC_SID => {
             let sid = current_sctx.get().sc_sid;
             if sid <= 0 {
-                return Expansion::Refused(gettext(e_usingsid));
+                return Expansion::Refused(gettext(E_USINGSID));
             }
             cstr::owned(format!("<SNR>{sid}_").as_bytes())
         }

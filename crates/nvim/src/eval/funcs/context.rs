@@ -20,7 +20,7 @@ use crate::context::{
 };
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::list_iter;
-use crate::message::state::did_emsg;
+use crate::message::state::DID_EMSG;
 use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_integer;
 use crate::semsg;
@@ -121,10 +121,10 @@ pub fn f_ctxset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         out_of_bounds();
         return;
     }
-    // The conversion reports its problems through `did_emsg`; the caller's
+    // The conversion reports its problems through `DID_EMSG`; the caller's
     // flag is restored whatever happens here.
-    let save_did_emsg = did_emsg.get();
-    did_emsg.set(0);
+    let save_did_emsg = DID_EMSG.get();
+    DID_EMSG.set(0);
     let dict = Object::from(&args[0])
         .into_dict()
         .expect("a VAR_DICT converts to a Dict object");
@@ -140,7 +140,7 @@ pub fn f_ctxset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
             let _ = with_ctx(index, |ctx| *ctx = read);
         }
     }
-    did_emsg.set(save_did_emsg);
+    DID_EMSG.set(save_did_emsg);
 }
 
 /// `ctxsize()` — how many contexts are on the stack.

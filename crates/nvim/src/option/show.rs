@@ -30,8 +30,8 @@ use crate::global_cell::field;
 use crate::keycodes::{Ctrl_V, ModMask};
 use crate::mbyte::unescape_at;
 use crate::narrow::number_as_int;
-use crate::option::defs::kOptValTypeBoolean;
-use crate::option::defs::kOptValTypeNumber;
+use crate::option::defs::OPT_VAL_TYPE_BOOLEAN;
+use crate::option::defs::OPT_VAL_TYPE_NUMBER;
 use crate::option::vars::P_MOUSE;
 use crate::optionstr::OptString;
 use crate::types::Key;
@@ -45,7 +45,7 @@ use crate::charset::{transchar, vim_strsize_cstr};
 use crate::getchar::state::got_int;
 use crate::keycodes::{get_special_key_name, has_key_name};
 use crate::memory::XString;
-use crate::message::state::info_message;
+use crate::message::state::INFO_MESSAGE;
 use crate::message::{
     message_filtered, msg_advance, msg_display, msg_ext_set_kind, msg_putchar, msg_str, msg_title,
 };
@@ -67,9 +67,9 @@ use crate::ui::ui_call_option_set;
 use crate::undo::curbuf_is_changed;
 
 use super::{
-    Local, OptSlot, WinOptSet, get_option, get_option_unset_value, get_varp, get_varp_scope,
-    kOptFlagComma, kOptFlagExpand, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc,
-    kOptFlagUIOption, option_has_type, option_is_global_local, option_is_global_only,
+    Local, OPT_FLAG_COMMA, OPT_FLAG_EXPAND, OPT_FLAG_NO_GLOB, OPT_FLAG_NO_MKRC, OPT_FLAG_PRI_MKRC,
+    OPT_FLAG_UI_OPTION, OptSlot, WinOptSet, get_option, get_option_unset_value, get_varp,
+    get_varp_scope, option_has_type, option_is_global_local, option_is_global_only,
     option_is_window_local, option_parts, option_var, optval_is_default, slot_holds, slot_value,
 };
 
@@ -128,7 +128,7 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
             // `:set!` gives every option a line of its own.
             let len = if opt_flags.has(OptionSetFlags::ONECOLUMN) {
                 Columns.get()
-            } else if option_has_type(opt_idx, kOptValTypeBoolean) {
+            } else if option_has_type(opt_idx, OPT_VAL_TYPE_BOOLEAN) {
                 1
             } else {
                 let rendered = option_value_text(opt_idx, opt_flags);
@@ -177,7 +177,7 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
 pub(crate) fn ui_refresh_options() {
     for opt_idx in all_options() {
         let opt = get_option(opt_idx);
-        if opt.flags & kOptFlagUIOption as uint32_t == 0 {
+        if opt.flags & OPT_FLAG_UI_OPTION as uint32_t == 0 {
             continue;
         }
         let name = ApiString::from_cstr(opt.fullname);
@@ -197,11 +197,11 @@ pub(crate) fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     // suppresses everything.
     let save_silent = silent_mode.get();
     silent_mode.set(false);
-    info_message.set(true);
+    INFO_MESSAGE.set(true);
 
     let opt = get_option(opt_idx);
     let varp = get_varp_scope(opt_idx, opt_flags);
-    let boolean = option_has_type(opt_idx, kOptValTypeBoolean);
+    let boolean = option_has_type(opt_idx, OPT_VAL_TYPE_BOOLEAN);
 
     // The variable is only read for a boolean option, because for
     // anything else it is not an `int` at all. 'modified' has no
@@ -231,7 +231,7 @@ pub(crate) fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     }
 
     silent_mode.set(save_silent);
-    info_message.set(false);
+    INFO_MESSAGE.set(false);
 }
 
 /// Write `bytes`, a write error being a `Failed`.
@@ -249,7 +249,7 @@ fn put_eol_unchecked(out: &mut dyn Write) {
 /// Write the `:set` commands that would restore the current options to a
 /// session or vimrc file.
 ///
-/// Two priority passes: `kOptFlagPriMkrc` options are written first,
+/// Two priority passes: `OPT_FLAG_PRI_MKRC` options are written first,
 /// because the others may depend on them.
 pub(crate) fn makeset(
     out: &mut dyn Write,
@@ -260,10 +260,10 @@ pub(crate) fn makeset(
         for opt_idx in all_options() {
             let flags = get_option(opt_idx).flags;
 
-            if flags & kOptFlagNoMkrc as uint32_t != 0 {
+            if flags & OPT_FLAG_NO_MKRC as uint32_t != 0 {
                 continue;
             }
-            if priority_pass != (flags & kOptFlagPriMkrc as uint32_t != 0) {
+            if priority_pass != (flags & OPT_FLAG_PRI_MKRC as uint32_t != 0) {
                 continue;
             }
             // A global-only option is written only by `:mkvimrc`, which
@@ -271,7 +271,7 @@ pub(crate) fn makeset(
             if option_is_global_only(opt_idx) && !opt_flags.has(OptionSetFlags::GLOBAL) {
                 continue;
             }
-            if opt_flags.has(OptionSetFlags::GLOBAL) && flags & kOptFlagNoGlob as uint32_t != 0 {
+            if opt_flags.has(OptionSetFlags::GLOBAL) && flags & OPT_FLAG_NO_GLOB as uint32_t != 0 {
                 continue;
             }
             let mut varp = get_varp_scope(opt_idx, opt_flags);
@@ -457,11 +457,11 @@ enum Written {
     Lines,
 }
 
-/// Whether a `kOptFlagExpand` value is too long to write in one line, so
+/// Whether a `OPT_FLAG_EXPAND` value is too long to write in one line, so
 /// that it has to go out as a run of `+=` commands.
 fn needs_splitting(value: &[u8], flags: uint32_t) -> bool {
     value.len() + 1 >= MAXPATHL as usize
-        && flags & kOptFlagComma as uint32_t != 0
+        && flags & OPT_FLAG_COMMA as uint32_t != 0
         && value.contains(&b',')
 }
 
@@ -474,7 +474,7 @@ fn put_string_value(
     value: &[u8],
     flags: uint32_t,
 ) -> Result<Written, Failed> {
-    if flags & kOptFlagExpand as uint32_t == 0 {
+    if flags & OPT_FLAG_EXPAND as uint32_t == 0 {
         put(out, &escaped_set_value(value))?;
         return Ok(Written::Value);
     }
@@ -542,7 +542,7 @@ pub(crate) fn option_value_text(opt_idx: OptIndex, opt_flags: OptionSetFlags) ->
     debug_assert!(!varp.is_none());
     let room = MAXPATHL as usize;
 
-    if option_has_type(opt_idx, kOptValTypeNumber) {
+    if option_has_type(opt_idx, OPT_VAL_TYPE_NUMBER) {
         let mut wc: OptInt = 0;
         let shown = if wc_use_keyname(opt_idx, varp, &mut wc) {
             let key = c_int::try_from(wc).expect("a key code fits an int");
@@ -561,7 +561,7 @@ pub(crate) fn option_value_text(opt_idx: OptIndex, opt_flags: OptionSetFlags) ->
     }
 
     let value = varp.string_var().get();
-    if get_option(opt_idx).flags & kOptFlagExpand as uint32_t != 0 {
+    if get_option(opt_idx).flags & OPT_FLAG_EXPAND as uint32_t != 0 {
         home_to_tilde(None, value.as_cstr(), room, false)
     } else {
         XString::from_bytes(&value[..value.len().min(room - 1)])

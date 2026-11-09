@@ -53,12 +53,12 @@ use crate::getchar::{plain_vgetc, typeahead};
 use crate::guard::Keys;
 use crate::mapping::langmap_adjust_mb;
 use crate::memory::XString;
-use crate::message::e_buffer_nr_not_found;
+use crate::message::E_BUFFER_NR_NOT_FOUND;
 use crate::message_fmt::emsg_text;
 use crate::normal::{
     add_to_showcmd, check_text_or_curbuf_locked, do_nv_ident, reset_visual_and_resel,
 };
-use crate::option::vars::{P_LANGMAP, p_lrm, p_pvh, swb_flags};
+use crate::option::vars::{P_LANGMAP, SWB_FLAGS, p_lrm, p_pvh};
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::os::libc::int64_t;
 use crate::pos::MAXLNUM;
@@ -376,7 +376,7 @@ fn split_alternate(prenum: c_int) {
         if prenum == 0 {
             err(WinError::NoAlternate);
         } else {
-            err_number(e_buffer_nr_not_found, prenum);
+            err_number(E_BUFFER_NR_NOT_FOUND, prenum);
         }
         return;
     }
@@ -558,7 +558,7 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
     // a window, jump to it.
     let jump = kOptSwbFlagUseopen | kOptSwbFlagUsetab;
     let mut wp = None;
-    if swb_flags.get() & jump != 0 && cmdmod.with(|m| m.cmod_tab) == 0 {
+    if SWB_FLAGS.get() & jump != 0 && cmdmod.with(|m| m.cmod_tab) == 0 {
         wp = find_buffer_by_name(name.as_cstr()).and_then(swbuf_goto_win);
     }
     if wp.is_none() && split(0, 0).is_ok() {
@@ -748,7 +748,7 @@ fn search_path(pat: &[u8], kind: c_int, skip_comments: bool, prenum1: c_int) {
     let action = ACTION_SPLIT;
     find_pattern_in_path(
         pat,
-        kDirectionNotSet,
+        DIRECTION_NOT_SET,
         true,
         skip_comments,
         kind,

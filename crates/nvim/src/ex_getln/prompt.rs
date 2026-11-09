@@ -169,11 +169,11 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             msg_start();
             msg_clr_eos();
             msg_bytes(&text[..lastnl + 1], get_echo_hl_id(), false);
-            msg_didout.set(false);
+            MSG_DIDOUT.set(false);
             msg_starthere();
         }
     }
-    cmdline_row.set(msg_row.get());
+    cmdline_row.set(MSG_ROW.get());
 
     stuff_readbuf_one_line(defstr.to_bytes());
 
@@ -203,6 +203,6 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
     }
 
     // Since the user typed this, no need to wait for return.
-    need_wait_return.set(false);
-    msg_didout.set(false);
+    NEED_WAIT_RETURN.set(false);
+    MSG_DIDOUT.set(false);
 }

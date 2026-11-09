@@ -90,7 +90,7 @@ impl Search {
 
         let arg = excmd.line.arg();
         let Some((spat, flags, rest)) = split_vimgrep_pat(arg) else {
-            qf_emsg(e_invalpat);
+            qf_emsg(E_INVALPAT);
             return None;
         };
         let spat = XString::from_bytes(&spat);
@@ -105,7 +105,7 @@ impl Search {
         let files = match expand_arglist(files, true) {
             Ok(files) if !files.is_empty() => files,
             _ => {
-                qf_emsg(e_nomatch);
+                qf_emsg(E_NOMATCH);
                 return None;
             }
         };
@@ -128,7 +128,7 @@ fn compile_pattern(spat: &XString) -> Option<OwnedProg> {
         return OwnedProg::compile(spat.as_cstr(), RE_MAGIC);
     }
     let Some(last) = last_search_pat() else {
-        qf_emsg(e_noprevre);
+        qf_emsg(E_NOPREVRE);
         return None;
     };
     OwnedProg::compile(last.as_cstr(), RE_MAGIC)
@@ -143,9 +143,9 @@ fn display_fname(fname: &CStr) {
         Some(truncated) => msg_display(truncated.as_cstr(), 0, false),
     };
     msg_clr_eos();
-    msg_didout.set(false);
-    msg_nowait.set(true);
-    msg_col.set(0);
+    MSG_DIDOUT.set(false);
+    MSG_NOWAIT.set(true);
+    MSG_COL.set(0);
     ui_flush();
 }
 

@@ -179,7 +179,7 @@ fn split_expr_result(insert_string: &XString) -> (Vec<XString>, MotionType) {
     // Each line is its own string now, so the walk is one pass over the
     // bytes rather than upstream's count-then-fill over one allocation it
     // punched NULs into.
-    let mut y_type = kMTCharWise;
+    let mut y_type = MT_CHAR_WISE;
     let mut lines: Vec<XString> = Vec::new();
     let mut rest: &[u8] = insert_string;
     loop {
@@ -288,7 +288,7 @@ impl Put {
     /// text goes in: break a tab into spaces, or pad out past the end of the
     /// line.
     fn make_room_for_virtualedit(&self) {
-        if self.ve_flags != kOptVeFlagAll as c_uint || self.kind != kMTCharWise {
+        if self.ve_flags != kOptVeFlagAll as c_uint || self.kind != MT_CHAR_WISE {
             return;
         }
         if gchar_cursor() == TAB {
@@ -389,7 +389,7 @@ pub fn do_put(
         count,
         flags,
         ve_flags,
-        kind: kMTCharWise,
+        kind: MT_CHAR_WISE,
         width: 0,
         lines: RegLines::NONE,
         nr_lines: 0,
@@ -463,7 +463,7 @@ pub fn do_put(
         if put.kind == kMTBlockWise {
             put.blockwise(lnum);
         } else {
-            if put.kind == kMTCharWise {
+            if put.kind == MT_CHAR_WISE {
                 // For charwise text, FORWARD is BACKWARD on the next
                 // character.
                 if put.dir == FORWARD && gchar_cursor() != NUL {
@@ -481,7 +481,7 @@ pub fn do_put(
             }
             let new_cursor = Win::current().w_cursor;
 
-            if put.kind == kMTCharWise && put.lines.len() == 1 {
+            if put.kind == MT_CHAR_WISE && put.lines.len() == 1 {
                 put.charwise_one_line(lnum, col);
             } else {
                 put.multiline(lnum, col, new_cursor);

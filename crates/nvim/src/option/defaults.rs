@@ -42,7 +42,7 @@ use crate::mapping::langmap_init;
 use crate::mbyte::enc_locale;
 use crate::message_fmt::msg_cstr;
 use crate::option::defs::{OptIndex, OptVal, OptionSetFlags};
-use crate::option::vars::{P_CH, P_HLG, P_ICON, P_TITLE, P_WINDOW, fenc_default};
+use crate::option::vars::{FENC_DEFAULT, P_CH, P_HLG, P_ICON, P_TITLE, P_WINDOW};
 use crate::option::vars::{mark_option_defaults_set, p_enc, p_rtp, p_sh};
 use crate::options::{
     kOptAleph, kOptBackupdir, kOptBackupskip, kOptCdpath, kOptCmdheight, kOptCount, kOptDirectory,
@@ -66,9 +66,9 @@ use crate::window::{last_status, win_comp_scroll};
 use crate::winlayer::{self, Buf};
 
 use super::{
-    NO_LOCAL_UNDOLEVEL, PROJECT_NAME, ROOT_UID, SID_NONE, default_fileformat, didset_options,
-    didset_options2, find_dup_item, get_option, get_option_unset_value, insecure_flag,
-    kOptFlagGettext, kOptFlagNoDefExp, kOptFlagNoDefault, option_default, option_expand,
+    NO_LOCAL_UNDOLEVEL, OPT_FLAG_GETTEXT, OPT_FLAG_NO_DEF_EXP, OPT_FLAG_NO_DEFAULT, PROJECT_NAME,
+    ROOT_UID, SID_NONE, default_fileformat, didset_options, didset_options2, find_dup_item,
+    get_option, get_option_unset_value, insecure_flag, option_default, option_expand,
     option_is_global_local, option_var, option_was_set, replace_option_default, set_fileformat,
     set_option_direct, set_option_value_give_err, write_slot,
 };
@@ -179,12 +179,12 @@ fn set_init_default_cdpath() {
 fn set_init_expand_env() {
     for opt_idx in all_options() {
         let opt = get_option(opt_idx);
-        if opt.flags & kOptFlagNoDefExp as uint32_t != 0 {
+        if opt.flags & OPT_FLAG_NO_DEF_EXP as uint32_t != 0 {
             continue;
         }
-        // A `kOptFlagGettext` default is a translatable message rather
+        // A `OPT_FLAG_GETTEXT` default is a translatable message rather
         // than a path; there is nothing in it to expand.
-        let translated = opt.flags & kOptFlagGettext as uint32_t != 0 && opt.var.has_global();
+        let translated = opt.flags & OPT_FLAG_GETTEXT as uint32_t != 0 && opt.var.has_global();
         let value = if translated {
             let own = option_var(opt_idx).string_var().get();
             XString::from_cstr(&gettext_owned(own.as_cstr()))
@@ -208,7 +208,7 @@ fn set_init_expand_env() {
 /// the locale.
 fn set_init_fenc_default() {
     let enc = enc_locale().unwrap_or_else(|| XString::from("utf-8"));
-    fenc_default.set(Some(enc));
+    FENC_DEFAULT.set(Some(enc));
 }
 
 /// The first startup pass: compute every default that depends on the
@@ -295,7 +295,7 @@ pub(crate) fn get_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) -
     let Some(string) = default.as_string() else {
         return default;
     };
-    if get_option(opt_idx).flags & kOptFlagNoDefExp as uint32_t != 0 {
+    if get_option(opt_idx).flags & OPT_FLAG_NO_DEF_EXP as uint32_t != 0 {
         return default;
     }
     match option_expand(opt_idx, Some(string.as_cstr())) {
@@ -326,11 +326,11 @@ fn set_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     }
 }
 
-/// Put every option back to its default. `kOptFlagNoDefault` names the ones
+/// Put every option back to its default. `OPT_FLAG_NO_DEFAULT` names the ones
 /// that have already been given a computed value and must keep it.
 pub(crate) fn set_options_default(opt_flags: OptionSetFlags) {
     for opt_idx in all_options() {
-        if get_option(opt_idx).flags & kOptFlagNoDefault as uint32_t == 0 {
+        if get_option(opt_idx).flags & OPT_FLAG_NO_DEFAULT as uint32_t == 0 {
             set_option_default(opt_idx, opt_flags);
         }
     }

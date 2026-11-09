@@ -38,7 +38,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::winlayer::Buf;
 use core::ffi::c_int;
@@ -81,7 +80,7 @@ use crate::winfloat::win_check_anchored_floats;
 use crate::winlayer::Win;
 use crate::winlayer::graph::cmdwin_win;
 
-pub const kMTCharWise: MotionType = 0;
+pub const MT_CHAR_WISE: MotionType = 0;
 
 /// One buffer line as the vertical scrolling walks it: the line, the filler
 /// lines drawn above it, and the screen lines it takes.

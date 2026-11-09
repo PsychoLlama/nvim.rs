@@ -49,7 +49,7 @@ use crate::decoration_provider::decor_providers_invoke_spell;
 use crate::getchar::state::got_int;
 use crate::highlight::Hlf;
 use crate::message::give_warning;
-use crate::message::state::{bot_top_msg, top_bot_msg};
+use crate::message::state::{BOT_TOP_MSG, TOP_BOT_MSG};
 use crate::option::defs::ShmFlag;
 use crate::option::shortmess;
 use crate::option::vars::p_ws;
@@ -288,7 +288,7 @@ impl Win {
                     lnum = self.w_buffer.b_ml.ml_line_count;
                     wrapped = true;
                     if !shortmess(ShmFlag::SEARCH) {
-                        give_warning(gettext(top_bot_msg), true, false);
+                        give_warning(gettext(TOP_BOT_MSG), true, false);
                     }
                 }
                 capcol = ColNr::NONE;
@@ -303,7 +303,7 @@ impl Win {
                     lnum = LineNr::ONE;
                     wrapped = true;
                     if !shortmess(ShmFlag::SEARCH) {
-                        give_warning(gettext(bot_top_msg), true, false);
+                        give_warning(gettext(BOT_TOP_MSG), true, false);
                     }
                 }
 

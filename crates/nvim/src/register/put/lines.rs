@@ -67,7 +67,7 @@ impl Put {
         if self.count == 0 || yanklen == 0 {
             // Nothing to put.
         } else if self.count > c_int::MAX / yanklen {
-            emsg(gettext(e_resulting_text_too_long));
+            emsg(gettext(E_RESULTING_TEXT_TOO_LONG));
         } else {
             // Both are counts, and the check above keeps the product in a
             // `c_int`.
@@ -225,11 +225,11 @@ impl Put {
         } else {
             kExtmarkNOOP
         };
-        let from = Buf::current().b_op_start.lnum + i32::from(self.kind == kMTCharWise);
+        let from = Buf::current().b_op_start.lnum + i32::from(self.kind == MT_CHAR_WISE);
         mark_adjust(from, MAXLNUM, self.nr_lines, 0, kind);
 
         // The range is the lines the put just rewrote.
-        if self.kind == kMTCharWise {
+        if self.kind == MT_CHAR_WISE {
             let at = Win::current().w_cursor.lnum;
             changed_lines(Buf::current(), at, col, at + 1, self.nr_lines, true);
         } else {
@@ -305,7 +305,7 @@ impl Put {
         'error: {
             for cnt in 1..=self.count {
                 let mut i: size_t = 0;
-                if self.kind == kMTCharWise {
+                if self.kind == MT_CHAR_WISE {
                     lnum = new_cursor.lnum;
                     self.split_line_for_charwise(lnum, col);
                     new_lnum += 1;
@@ -317,7 +317,7 @@ impl Put {
                 while i < y_size {
                     // A charwise register's last line is already on the
                     // second half of the split.
-                    if self.kind != kMTCharWise || i < y_size - 1 {
+                    if self.kind != MT_CHAR_WISE || i < y_size - 1 {
                         let line = self.lines[i].as_bytes_with_nul();
                         if ml_append_terminated(lnum, line, false).is_err() {
                             break 'error;
@@ -345,7 +345,7 @@ impl Put {
                 // put that did *not* split a line has its marks moved by
                 // `mark_adjust` below instead.
                 let splits_a_line = self.kind == kMTLineWise && self.flags & PUT_LINE_SPLIT != 0;
-                if self.kind == kMTCharWise || splits_a_line {
+                if self.kind == MT_CHAR_WISE || splits_a_line {
                     let (last, init) = self.lines.split_last().expect("a register holds a line");
                     let mut totsize: BCount = 0;
                     // A register's lines are shorter than `BCount` counts.
@@ -359,7 +359,7 @@ impl Put {
                     let buf = Buf::current();
                     let at = new_cursor.lnum - 1;
                     let y_size = len_as_int(self.lines.len());
-                    let (start, rows, cols, bytes) = if self.kind == kMTCharWise {
+                    let (start, rows, cols, bytes) = if self.kind == MT_CHAR_WISE {
                         (col, y_size - 1, lastsize, totsize)
                     } else {
                         // Account for the last pasted newline and the

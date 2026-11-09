@@ -44,8 +44,8 @@ fn write_msg(message: ApiString, to_err: bool, writeln: bool) {
         } else {
             msg(text, 0);
         }
-        if msg_silent.get() == 0 {
-            msg_didout.set(true);
+        if MSG_SILENT.get() == 0 {
+            MSG_DIDOUT.set(true);
         }
         // Back to its minimum size; whatever a re-entered write left in the
         // cell meanwhile is dropped, as upstream's `size = 0` dropped it.
@@ -92,5 +92,5 @@ pub fn nvim_notify(msg_0: ApiString, log_level: Integer, opts: ApiDict) -> Resul
     args.push(Object::string(msg_0));
     args.push(Object::integer(log_level));
     args.push(Object::dict(opts));
-    nlua_exec(b"return vim.notify(...)", None, args.array(), kRetObject)
+    nlua_exec(b"return vim.notify(...)", None, args.array(), RET_OBJECT)
 }

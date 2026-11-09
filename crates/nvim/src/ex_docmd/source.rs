@@ -53,9 +53,9 @@ use crate::ex_eval::state::{
 use crate::ex_getln::{cmdline_input, getexline};
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::highlight_group::HLF_E;
-use crate::message::e_empty_buffer;
+use crate::message::E_EMPTY_BUFFER;
 use crate::message::state::{
-    did_emsg, emsg_silent, lines_left, msg_col, msg_row, msg_scroll, msg_silent, need_wait_return,
+    DID_EMSG, EMSG_SILENT, LINES_LEFT, MSG_COL, MSG_ROW, MSG_SCROLL, MSG_SILENT, NEED_WAIT_RETURN,
 };
 use crate::option::vars::p_mfd;
 use crate::startup::exiting;
@@ -90,7 +90,7 @@ pub(crate) fn save_dbg_stuff() -> SavedDebugState {
         // pointer to the variable's own string would not survive that.
         vv_exception: vim_var_string(Vv::Exception),
         vv_throwpoint: vim_var_string(Vv::Throwpoint),
-        did_emsg: did_emsg.replace(0),
+        did_emsg: DID_EMSG.replace(0),
         got_int: c_int::from(got_int.replace(false)),
         did_throw: did_throw.replace(false),
         need_rethrow: c_int::from(need_rethrow.replace(false)),
@@ -113,7 +113,7 @@ pub(crate) fn restore_dbg_stuff(saved: SavedDebugState) {
     if let Some(throwpoint) = saved.vv_throwpoint {
         set_vim_var_owned(Vv::Throwpoint, Some(throwpoint));
     }
-    did_emsg.set(saved.did_emsg);
+    DID_EMSG.set(saved.did_emsg);
     got_int.set(saved.got_int != 0);
     did_throw.set(saved.did_throw);
     need_rethrow.set(saved.need_rethrow != 0);
@@ -134,7 +134,7 @@ pub fn do_exmode() {
         return;
     }
 
-    let save_msg_scroll = msg_scroll.get();
+    let save_msg_scroll = MSG_SCROLL.get();
     let redraw_off = Suppress::redraw();
     let no_prompt = Suppress::wait_return();
     msg(
@@ -150,41 +150,41 @@ pub fn do_exmode() {
             break;
         }
 
-        msg_scroll.set(1);
-        need_wait_return.set(false);
+        MSG_SCROLL.set(1);
+        NEED_WAIT_RETURN.set(false);
         ex_pressedreturn.set(false);
         ex_no_reprint.set(false);
         let changedtick = buf_get_changedtick(Buf::current());
-        let prev_msg_row = msg_row.get();
+        let prev_msg_row = MSG_ROW.get();
         let prev_line = Win::current().w_cursor.lnum;
-        cmdline_row.set(msg_row.get());
+        cmdline_row.set(MSG_ROW.get());
 
         let _ = do_cmdline(None, Some(&mut LineSource::Typed), DoCmdOpts::NONE);
-        lines_left.set(Rows.get() - 1);
+        LINES_LEFT.set(Rows.get() - 1);
 
         let moved = prev_line != Win::current().w_cursor.lnum
             || changedtick != buf_get_changedtick(Buf::current());
         if moved && !ex_no_reprint.get() {
             if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
-                emsg(gettext(e_empty_buffer));
+                emsg(gettext(E_EMPTY_BUFFER));
             } else {
                 // A bare Return already scrolled; print over that line
                 // rather than under it.
                 if ex_pressedreturn.get() {
                     msg_scroll_flush();
-                    msg_row.set(prev_msg_row);
+                    MSG_ROW.set(prev_msg_row);
                     if prev_msg_row == Rows.get() - 1 {
-                        msg_row.set(msg_row.get() - 1);
+                        MSG_ROW.set(MSG_ROW.get() - 1);
                     }
                 }
-                msg_col.set(0);
+                MSG_COL.set(0);
                 print_line_no_prefix(Win::current().w_cursor.lnum, false, false);
                 msg_clr_eos();
             }
         } else if ex_pressedreturn.get() && !ex_no_reprint.get() {
             // Return on the last line: there is nothing to print.
             if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
-                emsg(gettext(e_empty_buffer));
+                emsg(gettext(E_EMPTY_BUFFER));
             } else {
                 emsg(gettext(c"E501: At end-of-file"));
             }
@@ -195,8 +195,8 @@ pub fn do_exmode() {
     drop(no_prompt);
     redraw_all_later(UPD_NOT_VALID);
     let _ = update_screen();
-    need_wait_return.set(false);
-    msg_scroll.set(save_msg_scroll);
+    NEED_WAIT_RETURN.set(false);
+    MSG_SCROLL.set(save_msg_scroll);
 }
 
 /// `:verbose` >= 15: report the command about to run, and which line of
@@ -210,7 +210,7 @@ pub(crate) fn msg_verbose_cmd(lnum: LineNr, cmd: &[u8]) {
     } else {
         smsg!(0, "line {}: {cmd}", lnum);
     }
-    if msg_silent.get() == 0 {
+    if MSG_SILENT.get() == 0 {
         msg_str(c"\n");
     }
     verbose_leave_scroll();
@@ -284,7 +284,7 @@ pub fn handle_did_throw() {
     discard_current_exception();
 
     // `:silent!` makes even an uncaught exception non-fatal.
-    if emsg_silent.get() == 0 {
+    if EMSG_SILENT.get() == 0 {
         suppress_errthrow.set(true);
         force_abort.set(true);
     }

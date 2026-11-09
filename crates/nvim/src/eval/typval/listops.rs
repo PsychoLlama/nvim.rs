@@ -277,7 +277,7 @@ pub fn list_remove(
     };
     if last < first {
         // Didn't find "item2" after "item".
-        emsg(gettext(e_invrange));
+        emsg(gettext(E_INVRANGE));
         return;
     }
     let cnt = last - first + 1;

@@ -36,7 +36,7 @@ use crate::types::Vv;
 /// Answering true also sets `redraw_mode`, so it is shown on the next redraw.
 pub fn skip_showmode() -> bool {
     if global_busy.get() != 0
-        || msg_silent.get() != 0
+        || MSG_SILENT.get() != 0
         || !redrawing()
         || (char_avail() && !KeyTyped.get())
     {
@@ -59,7 +59,7 @@ pub fn showmode() -> c_int {
     msg_grid_validate();
 
     let do_mode = p_smd()
-        && msg_silent.get() == 0
+        && MSG_SILENT.get() == 0
         && (State.get() & MODE_TERMINAL != 0
             || State.get() & MODE_INSERT != 0
             || !restart_edit.get().is_nul()
@@ -71,7 +71,7 @@ pub fn showmode() -> c_int {
             return 0;
         }
 
-        let nwr_save = need_wait_return.get();
+        let nwr_save = NEED_WAIT_RETURN.get();
 
         // Wait a bit before overwriting an important message.
         msg_check_for_delay(false);
@@ -88,9 +88,9 @@ pub fn showmode() -> c_int {
 
         // Truncate rather than scroll when the screen is too narrow for the
         // whole message.
-        msg_no_more.set(true);
-        let save_lines_left = lines_left.get();
-        lines_left.set(0);
+        MSG_NO_MORE.set(true);
+        let save_lines_left = LINES_LEFT.get();
+        LINES_LEFT.set(0);
 
         let put = |s: &'static CStr| msg_str_hl(s, hl_id, false);
         let put_translated = |s: &'static CStr| msg_str_hl(gettext(s), hl_id, false);
@@ -107,7 +107,7 @@ pub fn showmode() -> c_int {
                 length = if ui_has(kUIMessages) {
                     INT_MAX
                 } else {
-                    (Rows.get() - msg_row.get()) * Columns.get() - 3
+                    (Rows.get() - MSG_ROW.get()) * Columns.get() - 3
                 };
                 let pre = edit_submode_pre.get();
                 // A copy: drawing it runs the message machinery.
@@ -224,13 +224,13 @@ pub fn showmode() -> c_int {
         if need_clear || clear_cmdline.get() || redraw_mode.get() {
             msg_clr_eos();
         }
-        msg_didout.set(false); // this message may be overwritten
-        length = msg_col.get();
-        msg_col.set(0);
-        msg_no_more.set(false);
-        lines_left.set(save_lines_left);
-        need_wait_return.set(nwr_save); // never ask for hit-return for this
-    } else if clear_cmdline.get() && msg_silent.get() == 0 {
+        MSG_DIDOUT.set(false); // this message may be overwritten
+        length = MSG_COL.get();
+        MSG_COL.set(0);
+        MSG_NO_MORE.set(false);
+        LINES_LEFT.set(save_lines_left);
+        NEED_WAIT_RETURN.set(nwr_save); // never ask for hit-return for this
+    } else if clear_cmdline.get() && MSG_SILENT.get() == 0 {
         // Resets `clear_cmdline`.
         msg_clr_cmdline();
     } else if redraw_mode.get() {
@@ -256,8 +256,8 @@ pub fn showmode() -> c_int {
 
 /// Put the message cursor where a mode message goes.
 pub(crate) fn msg_pos_mode() {
-    msg_col.set(0);
-    msg_row.set(Rows.get() - 1);
+    MSG_COL.set(0);
+    MSG_ROW.set(Rows.get() - 1);
 }
 
 /// Take the mode message away, e.g. when `<Esc>` is typed in Insert mode.
@@ -274,8 +274,8 @@ pub fn unshowmode(force: bool) {
 
 /// Clear the mode message, keeping the message cursor where it was.
 pub fn clearmode() {
-    let save_msg_row = msg_row.get();
-    let save_msg_col = msg_col.get();
+    let save_msg_row = MSG_ROW.get();
+    let save_msg_col = MSG_COL.get();
 
     msg_ext_ui_flush();
     msg_pos_mode();
@@ -286,8 +286,8 @@ pub fn clearmode() {
     msg_clr_eos();
     msg_ext_flush_showmode();
 
-    msg_col.set(save_msg_col);
-    msg_row.set(save_msg_row);
+    MSG_COL.set(save_msg_col);
+    MSG_ROW.set(save_msg_row);
 }
 
 /// Print `recording @x` for the register being recorded into.

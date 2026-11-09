@@ -10,7 +10,7 @@
 )]
 
 use super::wrappers::{arg_number_chk, dict_alloc_ret};
-use super::{kGRegExprSrc, kGRegList, kMTBlockWise, kMTCharWise, kMTLineWise, kMTUnknown};
+use super::{MT_CHAR_WISE, kGRegExprSrc, kGRegList, kMTBlockWise, kMTLineWise, kMTUnknown};
 use crate::cstr;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, dict_get_number, dict_len, list_iter, tv_list_alloc};
@@ -107,7 +107,10 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // A register that has contents has a type, which the check above
     // established.
     let (reg_type, width) = get_reg_type(regname);
-    debug_assert!(matches!(reg_type, kMTLineWise | kMTCharWise | kMTBlockWise));
+    debug_assert!(matches!(
+        reg_type,
+        kMTLineWise | MT_CHAR_WISE | kMTBlockWise
+    ));
     let regtype = format_reg_type(reg_type, width);
     let _ = dict(result).add_str(b"regtype", Some(&regtype));
 
@@ -165,7 +168,7 @@ fn get_yank_type(
     block_len: &mut c_int,
 ) -> Result<(), Failed> {
     match cstr::byte_at(text, *at) {
-        b'v' | b'c' => *yank_type = kMTCharWise,
+        b'v' | b'c' => *yank_type = MT_CHAR_WISE,
         b'V' | b'l' => *yank_type = kMTLineWise,
         b'b' => *yank_type = kMTBlockWise,
         c if Key::byte(c) == Key::CTRL_V => *yank_type = kMTBlockWise,

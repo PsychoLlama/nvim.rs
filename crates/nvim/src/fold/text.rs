@@ -27,7 +27,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::memory::XString;
-use crate::message::state::did_emsg;
+use crate::message::state::DID_EMSG;
 use crate::os::cshim::ngettext;
 use crate::runtime::state::current_sctx;
 use crate::strings::{FmtArg, format_into};
@@ -72,7 +72,7 @@ pub(crate) fn get_foldtext(
     static GOT_FDT_ERROR: GlobalCell<bool> = GlobalCell::new(false);
     static LAST_WIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
     static LAST_LNUM: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
-    let save_did_emsg = did_emsg.get();
+    let save_did_emsg = DID_EMSG.get();
     if LAST_WIN.get() != Some(window.id())
         || LAST_LNUM.get() > lnum
         || LAST_LNUM.get() == LineNr::ZERO
@@ -80,7 +80,7 @@ pub(crate) fn get_foldtext(
         GOT_FDT_ERROR.set(false);
     }
     if !GOT_FDT_ERROR.get() {
-        did_emsg.set(0);
+        DID_EMSG.set(0);
     }
     let win = window;
     if c_int::from(win.w_onebuf_opt.wo_fdt.first_byte()) != NUL {
@@ -119,7 +119,7 @@ pub(crate) fn get_foldtext(
                 _ => drop(obj),
             }
             drop(no_emsg);
-            if answer.is_none() || did_emsg.get() != 0 {
+            if answer.is_none() || DID_EMSG.get() != 0 {
                 GOT_FDT_ERROR.set(true);
             }
             saved.restore();
@@ -128,8 +128,8 @@ pub(crate) fn get_foldtext(
         LAST_LNUM.set(lnum);
         LAST_WIN.set(Some(window.id()));
         set_vim_var_string(Vv::Folddashes, None);
-        if did_emsg.get() == 0 && save_did_emsg != 0 {
-            did_emsg.set(save_did_emsg);
+        if DID_EMSG.get() == 0 && save_did_emsg != 0 {
+            DID_EMSG.set(save_did_emsg);
         }
     }
     answer.unwrap_or_else(|| {

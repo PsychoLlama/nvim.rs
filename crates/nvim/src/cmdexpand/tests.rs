@@ -26,7 +26,7 @@ use crate::eval::typval::{list_items, tv_clear};
 use crate::getchar::state::got_int;
 use crate::global_cell::{editor_state::Held, editor_state_lock};
 use crate::memory::XString;
-use crate::option::vars::{P_CPO, P_PP, P_RTP, P_SU, P_WIC, P_WIG, p_wic, wop_flags};
+use crate::option::vars::{P_CPO, P_PP, P_RTP, P_SU, P_WIC, P_WIG, WOP_FLAGS, p_wic};
 use crate::options::kOptWopFlagFuzzy;
 use crate::types::TypVal;
 use crate::window::{bare_window, free_bare_window};
@@ -63,7 +63,7 @@ impl Fixture {
         Fixture {
             window,
             buffer,
-            wop: wop_flags.get(),
+            wop: WOP_FLAGS.get(),
             wic: p_wic(),
             cpo,
             _held: held,
@@ -71,13 +71,13 @@ impl Fixture {
     }
 
     fn fuzzy(&self) {
-        wop_flags.set(wop_flags.get() | kOptWopFlagFuzzy);
+        WOP_FLAGS.set(WOP_FLAGS.get() | kOptWopFlagFuzzy);
     }
 }
 
 impl Drop for Fixture {
     fn drop(&mut self) {
-        wop_flags.set(self.wop);
+        WOP_FLAGS.set(self.wop);
         P_WIC.set(self.wic);
         P_CPO.restore(self.cpo.take());
         leave_curwin();

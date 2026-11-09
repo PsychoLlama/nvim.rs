@@ -47,7 +47,7 @@ use crate::ex_docmd::{EXIT_FAILURE, cmdmod_has};
 
 use crate::getchar::beep_flush;
 use crate::keycodes::SpecialKey;
-use crate::message::e_autocmd_close;
+use crate::message::E_AUTOCMD_CLOSE;
 use crate::option::vars::{p_awa, p_confirm, p_write};
 use crate::startup::exiting;
 use crate::types::Key;
@@ -306,7 +306,7 @@ pub(crate) fn ex_pclose(excmd: &mut ExArg) {
 pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
     let w = win;
     if is_aucmd_win(win) {
-        emsg(gettext(e_autocmd_close));
+        emsg(gettext(E_AUTOCMD_CLOSE));
         return;
     }
     // A floating window is not part of the layout, so a locked layout

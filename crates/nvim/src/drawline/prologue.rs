@@ -255,13 +255,13 @@ impl LineSetup {
         {
             return;
         }
-        let save_did_emsg = did_emsg.get();
-        did_emsg.set(0);
+        let save_did_emsg = DID_EMSG.get();
+        DID_EMSG.set(0);
         window.syntax_start(lnum);
-        if did_emsg.get() != 0 {
+        if DID_EMSG.get() != 0 {
             window.syn_block_mut().b_syn_error = true;
         } else {
-            did_emsg.set(save_did_emsg);
+            DID_EMSG.set(save_did_emsg);
             if !window.syn_block().b_syn_slow {
                 self.has_syntax = true;
                 self.extra_check = true;

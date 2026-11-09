@@ -38,11 +38,11 @@ use crate::guard::Suppress;
 use crate::insexpand::clear_buffer_cpt_callbacks;
 use crate::mark::defs::{FileMark, FileMarkView};
 use crate::mark::{clrallmarks, fmarks_check_names, mark_view_restore};
-use crate::message::e_noalt;
-use crate::message::state::{emsg_silent, in_assert_fails};
+use crate::message::E_NOALT;
+use crate::message::state::{EMSG_SILENT, IN_ASSERT_FAILS};
 use crate::message::{emsg, msg_delay};
 use crate::message_fmt::msg_cstr;
-use crate::option::vars::{jop_flags, p_sol, swb_flags};
+use crate::option::vars::{JOP_FLAGS, SWB_FLAGS, p_sol};
 use crate::option::{buf_copy_options, magic_isset};
 use crate::options::{kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit};
 use crate::os::cshim::gettext;
@@ -343,7 +343,7 @@ impl Buf {
         if top_file_num.get() < 0 {
             // Wrap around; this may cause duplicates.
             emsg(gettext(c"W14: Warning: List of file names overflow"));
-            if emsg_silent.get() == 0 && !in_assert_fails.get() {
+            if EMSG_SILENT.get() == 0 && !IN_ASSERT_FAILS.get() {
                 // Make sure it is noticed.
                 msg_delay(3001 as uint64_t, true);
             }
@@ -486,7 +486,7 @@ pub fn buflist_getfile(
 ) -> Result<(), Failed> {
     let Some(buf) = find_buf(n) else {
         if options & GETF_ALT != 0 && n.is_none() {
-            emsg(gettext(e_noalt));
+            emsg(gettext(E_NOALT));
         } else {
             semsg!("E92: Buffer {} not found", Handle::number_of(n));
         }
@@ -530,7 +530,7 @@ pub fn buflist_getfile(
         win.w_cursor.coladd = 0;
         win.w_set_curswant = true;
     }
-    if jop_flags.get() & kOptJopFlagView != 0 && fm.is_some() {
+    if JOP_FLAGS.get() & kOptJopFlagView != 0 && fm.is_some() {
         mark_view_restore(fm.as_ref());
     }
     Ok(())
@@ -541,13 +541,13 @@ pub fn buflist_getfile(
 fn goto_existing_window(buffer: Buf) -> bool {
     let wp = swbuf_goto_win_with_buf(Some(buffer));
     let splits = kOptSwbFlagVsplit | kOptSwbFlagSplit | kOptSwbFlagNewtab;
-    if wp.is_some() || swb_flags.get() & splits == 0 || buf_is_empty(Buf::current()) {
+    if wp.is_some() || SWB_FLAGS.get() & splits == 0 || buf_is_empty(Buf::current()) {
         return true;
     }
-    if swb_flags.get() & kOptSwbFlagNewtab != 0 {
+    if SWB_FLAGS.get() & kOptSwbFlagNewtab != 0 {
         tabpage_new();
     } else {
-        let vertical = swb_flags.get() & kOptSwbFlagVsplit != 0;
+        let vertical = SWB_FLAGS.get() & kOptSwbFlagVsplit != 0;
         let flags = if vertical { WSP_VERT } else { 0 };
         if win_split(0, flags).is_err() {
             return false;
@@ -575,7 +575,7 @@ pub(crate) fn buflist_getfpos() {
         win.w_cursor.coladd = 0;
         win.w_set_curswant = true;
     }
-    if jop_flags.get() & kOptJopFlagView != 0 {
+    if JOP_FLAGS.get() & kOptJopFlagView != 0 {
         mark_view_restore(Some(&fm));
     }
 }

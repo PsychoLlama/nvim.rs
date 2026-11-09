@@ -22,7 +22,7 @@ use crate::eval::{eval_expr_typval, partial_name};
 use crate::mbyte::cluster_len;
 use crate::memory::ThinCString;
 use crate::message::emsg;
-use crate::message::state::called_emsg;
+use crate::message::state::CALLED_EMSG;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
@@ -155,7 +155,7 @@ fn fold_step(
     if cleanup.clear_item {
         argv.own(1);
     }
-    r.is_ok() && called_emsg.get() == called_emsg_start
+    r.is_ok() && CALLED_EMSG.get() == called_emsg_start
 }
 
 /// `reduce()` over a List.
@@ -163,7 +163,7 @@ fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     // Locked against modification for the whole fold and restored
     // afterwards.
     let list = args[0].list_shared();
-    let called_emsg_start = called_emsg.get();
+    let called_emsg_start = CALLED_EMSG.get();
     // The accumulator starts as a copy of the initial value, or of the
     // first item when the call gave none.
     let mut at = if args.len() > 2 {
@@ -202,7 +202,7 @@ fn reduce_string(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     // The argument's own string, which the fold cannot modify.
     let text = numbuf.bytes(&args[0]);
     let mut at = 0;
-    let called_emsg_start = called_emsg.get();
+    let called_emsg_start = CALLED_EMSG.get();
     if args.len() <= 2 {
         if text.is_empty() {
             semsg!(
@@ -236,7 +236,7 @@ fn reduce_blob(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     // The blob is re-measured every pass, as the C does, so a fold that
     // shortens it cannot walk off the end.
     let bytes = blob_bytes(args[0].blob_ref());
-    let called_emsg_start = called_emsg.get();
+    let called_emsg_start = CALLED_EMSG.get();
     let mut at = if args.len() > 2 {
         if tv_check_for_number_arg(args, 2).is_err() {
             return;

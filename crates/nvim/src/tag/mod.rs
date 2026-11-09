@@ -38,8 +38,8 @@ use crate::mark::defs::{FileMark, FileMarkView};
 use crate::mark::{fm_getname, mark_view_make, mark_view_restore, setpcmark};
 use crate::mbyte::VimConv;
 use crate::memory::{ThinCString, XString};
-use crate::message::state::{msg_col, msg_didout, msg_scroll, msg_scrolled, msg_silent};
-use crate::message::{e_invarg, e_listreq};
+use crate::message::state::{MSG_COL, MSG_DIDOUT, MSG_SCROLL, MSG_SCROLLED, MSG_SILENT};
+use crate::message::{E_INVARG, E_LISTREQ};
 use crate::message::{
     emsg, give_warning, msg, msg_advance, msg_clr_eos, msg_delay, msg_display, msg_display_bytes,
     msg_display_char, msg_ext_set_kind, msg_putchar, msg_start, msg_str, msg_str_hl, msg_title,
@@ -49,8 +49,8 @@ use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::r#move::{set_topline, validate_cursor};
 use crate::option::defs::OptSet;
 use crate::option::vars::{
-    P_IC, P_SCS, P_WS, fdo_flags, jop_flags, p_enc, p_ic, p_scs, p_sft, p_tbs, p_tgst, p_tl, p_tr,
-    p_verbose, p_ws, swb_flags, tc_flags,
+    FDO_FLAGS, JOP_FLAGS, P_IC, P_SCS, P_WS, SWB_FLAGS, TC_FLAGS, p_enc, p_ic, p_scs, p_sft, p_tbs,
+    p_tgst, p_tl, p_tr, p_verbose, p_ws,
 };
 use crate::option::{callback_from_option, install_callback, magic_isset};
 use crate::options::{

@@ -167,7 +167,7 @@ fn insert_enter(s: &mut InsertState) {
     // `showmode`'s answer is how many lines the message took, which
     // `change_warning` needs so its own message lands below it.
     s.i = 0;
-    if p_smd() && msg_silent.get() == 0 {
+    if p_smd() && MSG_SILENT.get() == 0 {
         s.i = showmode();
     }
     if did_restart_edit.get().is_nul() {
@@ -320,8 +320,8 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
     }
 
     // The mode message is not scrolled away.
-    msg_scroll.set(0);
-    if fdo_flags.get() & kOptFdoFlagInsert as ::core::ffi::c_uint != 0 {
+    MSG_SCROLL.set(0);
+    if FDO_FLAGS.get() & kOptFdoFlagInsert as ::core::ffi::c_uint != 0 {
         fold_open_cursor();
     }
     if !key_available() {
@@ -679,7 +679,7 @@ pub(crate) fn edit(cmdchar: Key, startln: bool, count: c_int) -> Result<bool, Fa
 
     // Don't allow inserting in the sandbox, or while textlock is set.
     if sandbox.get() != 0 {
-        emsg(gettext(e_sandbox));
+        emsg(gettext(E_SANDBOX));
         return Err(Failed);
     }
     if textlock.get() != 0
@@ -688,7 +688,7 @@ pub(crate) fn edit(cmdchar: Key, startln: bool, count: c_int) -> Result<bool, Fa
         || pum_visible()
         || expr_map_locked()
     {
-        emsg(gettext(e_textlock));
+        emsg(gettext(E_TEXTLOCK));
         return Err(Failed);
     }
 

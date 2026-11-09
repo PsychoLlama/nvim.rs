@@ -48,7 +48,7 @@ use crate::highlight_group::{
     HLF_MSG, HLF_TPF, HLF_WBR, HLF_WBRNC, syn_id2attr, syn_name2id_bytes,
 };
 use crate::mbyte::c_cluster_len;
-use crate::message::state::{msg_col, msg_row};
+use crate::message::state::{MSG_COL, MSG_ROW};
 use crate::message::{msg_clr_eos, msg_grid_view};
 use crate::option::defs::{OptIndex, OptionSetFlags};
 use crate::option::vars::{P_RUF, P_STL, P_WBR, p_ch, p_ru, p_ruf, p_tal};
@@ -519,8 +519,8 @@ pub fn redraw_ruler() {
             ui_call_msg_ruler(Array::new());
             DID_SHOW_EXT_RULER.set(false);
         } else if DID_RULER_COL.get() > 0 {
-            msg_col.set(DID_RULER_COL.get());
-            msg_row.set(Rows.get() - 1);
+            MSG_COL.set(DID_RULER_COL.get());
+            MSG_ROW.set(Rows.get() - 1);
             msg_clr_eos();
         }
         DID_RULER_COL.set(-1);

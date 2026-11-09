@@ -31,7 +31,7 @@ use crate::ex_docmd::ex_pressedreturn;
 use crate::ex_getln::state::cmdpreview;
 use crate::highlight_group::{do_highlight, load_colors};
 use crate::message::state::{
-    msg_col, msg_didout, need_wait_return, redir_fd, redir_off, redir_reg, redir_vname,
+    MSG_COL, MSG_DIDOUT, NEED_WAIT_RETURN, REDIR_FD, REDIR_OFF, REDIR_REG, REDIR_VNAME,
 };
 use crate::option::vars::{P_LZ, p_hls, p_lz};
 use crate::search::state::no_hlsearch;
@@ -102,13 +102,13 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         at = excmd.line.skip_white(at);
         close_redir();
         let fname = expand_env(excmd.line.cstr_from(at), false);
-        redir_fd.set(open_exfile(fname.as_cstr(), c_int::from(excmd.forceit), mode).ok());
+        REDIR_FD.set(open_exfile(fname.as_cstr(), c_int::from(excmd.forceit), mode).ok());
     } else if excmd.line.byte_at(at) == b'@' {
         close_redir();
         at += 1;
         let name = excmd.line.byte_at(at);
         if valid_yank_reg(name, true) && name != b'_' {
-            redir_reg.set(name);
+            REDIR_REG.set(name);
             at += 1;
             if excmd.line.byte_at(at) == b'>' && excmd.line.byte_at(at + 1) == b'>' {
                 // `:redir @a>>` appends.
@@ -119,13 +119,13 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
                 }
                 // A lower-case register name overwrites, so empty it
                 // now; an upper-case one always appends.
-                if excmd.line.byte_at(at) == 0 && !redir_reg.get().is_ascii_uppercase() {
-                    write_reg_contents(redir_reg.get(), b"", false);
+                if excmd.line.byte_at(at) == 0 && !REDIR_REG.get().is_ascii_uppercase() {
+                    write_reg_contents(REDIR_REG.get(), b"", false);
                 }
             }
         }
         if excmd.line.byte_at(at) != 0 {
-            redir_reg.set(0);
+            REDIR_REG.set(0);
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = msg_bytes(excmd.line.arg());
             semsg!("E475: Invalid argument: {arg}");
@@ -139,7 +139,7 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         }
         let name = excmd.line.rest_of(excmd.line.skip_white(at));
         if var_redir_start(name, append).is_ok() {
-            redir_vname.set(true);
+            REDIR_VNAME.set(true);
         }
     } else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -147,8 +147,8 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         semsg!("E475: Invalid argument: {arg}");
     }
     // Whichever form succeeded, output is being captured again.
-    if redir_fd.with(Option::is_some) || redir_reg.get() != 0 || redir_vname.get() {
-        redir_off.set(false);
+    if REDIR_FD.with(Option::is_some) || REDIR_REG.get() != 0 || REDIR_VNAME.get() {
+        REDIR_OFF.set(false);
     }
 }
 
@@ -173,9 +173,9 @@ pub(crate) fn ex_redraw(excmd: &mut ExArg) {
     }
     drop(lazyredraw_off);
     // The command line is clean again after a full redraw.
-    msg_didout.set(false);
-    msg_col.set(0);
-    need_wait_return.set(false);
+    MSG_DIDOUT.set(false);
+    MSG_COL.set(0);
+    NEED_WAIT_RETURN.set(false);
     ui_flush();
 }
 
@@ -237,11 +237,11 @@ fn suspend_lazyredraw() -> LazyRedrawOff {
 
 /// Stop capturing message output, whichever destination is open.
 pub(crate) fn close_redir() {
-    redir_fd.set(None);
-    redir_reg.set(0);
-    if redir_vname.get() {
+    REDIR_FD.set(None);
+    REDIR_REG.set(0);
+    if REDIR_VNAME.get() {
         var_redir_stop();
-        redir_vname.set(false);
+        REDIR_VNAME.set(false);
     }
 }
 

@@ -20,8 +20,8 @@
 )]
 
 use crate::env::expand_env_escaped;
-use crate::option::defs::kOptValTypeBoolean;
-use crate::option::defs::kOptValTypeNumber;
+use crate::option::defs::OPT_VAL_TYPE_BOOLEAN;
+use crate::option::defs::OPT_VAL_TYPE_NUMBER;
 use crate::optionstr::OptString;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
@@ -47,8 +47,8 @@ use crate::regexp::vim_regexec;
 use crate::strings::escaped_bytes;
 
 use super::{
-    FUZZY_SCORE_NONE, find_option_len, get_option, get_varp_scope_from, is_option_hidden,
-    kOptFlagColon, kOptFlagComma, kOptFlagExpand, kOptFlagFlagList, option_has_type,
+    FUZZY_SCORE_NONE, OPT_FLAG_COLON, OPT_FLAG_COMMA, OPT_FLAG_EXPAND, OPT_FLAG_FLAG_LIST,
+    find_option_len, get_option, get_varp_scope_from, is_option_hidden, option_has_type,
     option_value_text, option_var,
 };
 
@@ -72,7 +72,7 @@ static APPEND: GlobalCell<bool> = GlobalCell::new(false);
 /// every caller copies the answer out at once, so it is owned here.
 pub(crate) fn option_expand(opt_idx: OptIndex, val: Option<&CStr>) -> Option<XString> {
     let opt = get_option(opt_idx);
-    if opt.flags & kOptFlagExpand as uint32_t == 0 || is_option_hidden(opt_idx) {
+    if opt.flags & OPT_FLAG_EXPAND as uint32_t == 0 || is_option_hidden(opt_idx) {
         return None;
     }
     let own;
@@ -201,20 +201,20 @@ pub(crate) fn set_context_in_set_cmd(expand: &mut Expand, arg: usize, opt_flags:
         expand.context = ExpandContext::Nothing;
     }
 
-    if is_term_option || option_has_type(opt_idx, kOptValTypeNumber) {
+    if is_term_option || option_has_type(opt_idx, OPT_VAL_TYPE_NUMBER) {
         return;
     }
 
     // Only string options from here.
-    if flags & kOptFlagExpand as uint32_t != 0 {
+    if flags & OPT_FLAG_EXPAND as uint32_t != 0 {
         set_file_context(expand, opt_idx, flags);
     }
-    if flags & (kOptFlagExpand | kOptFlagComma | kOptFlagColon) as uint32_t != 0 {
+    if flags & (OPT_FLAG_EXPAND | OPT_FLAG_COMMA | OPT_FLAG_COLON) as uint32_t != 0 {
         seek_item_start(expand, &line, argend, flags);
     }
     // A set of one-letter flags has no words to complete, so the
     // pattern is always empty and the whole set is offered.
-    if flags & kOptFlagFlagList as uint32_t != 0 {
+    if flags & OPT_FLAG_FLAG_LIST as uint32_t != 0 {
         expand.pattern = argend;
     }
     // 'spellsuggest' takes `file:<name>`, whose tail is a file name.
@@ -303,14 +303,14 @@ fn take_option_name(
         return None;
     }
     // A boolean takes no value, so there is nothing after the name.
-    if option_has_type(opt_idx, kOptValTypeBoolean) {
+    if option_has_type(opt_idx, OPT_VAL_TYPE_BOOLEAN) {
         expand.context = ExpandContext::Nothing;
         return None;
     }
     Some((nextchar, opt_idx, get_option(opt_idx).flags, false))
 }
 
-/// A `kOptFlagExpand` option's value is a file or directory name; say which,
+/// A `OPT_FLAG_EXPAND` option's value is a file or directory name; say which,
 /// and how many backslashes escape a space in it.
 fn set_file_context(expand: &mut Expand, opt_idx: OptIndex, flags: uint32_t) {
     // 'path', 'cdpath' and 'tags' need three backslashes for a space,
@@ -336,7 +336,7 @@ fn set_file_context(expand: &mut Expand, opt_idx: OptIndex, flags: uint32_t) {
     } else {
         BackslashEscape::ONE
     };
-    if flags & kOptFlagComma as uint32_t != 0 {
+    if flags & OPT_FLAG_COMMA as uint32_t != 0 {
         expand.backslash |= BackslashEscape::COMMA;
     }
 }
@@ -344,8 +344,8 @@ fn set_file_context(expand: &mut Expand, opt_idx: OptIndex, flags: uint32_t) {
 /// Move `expand.pattern` forward to the start of the item the cursor is in,
 /// for a value that is a list ending at `argend`.
 fn seek_item_start(expand: &mut Expand, line: &[u8], argend: usize, flags: uint32_t) {
-    let comma_list = flags & kOptFlagComma as uint32_t != 0;
-    let colon_list = flags & kOptFlagColon as uint32_t != 0;
+    let comma_list = flags & OPT_FLAG_COMMA as uint32_t != 0;
+    let colon_list = flags & OPT_FLAG_COLON as uint32_t != 0;
 
     let mut p = argend - 1;
     while p > expand.pattern {
@@ -420,7 +420,7 @@ pub(crate) fn expand_settings(
     for opt_idx in kOptAleph..kOptCount as OptIndex {
         let opt = get_option(opt_idx);
         if is_option_hidden(opt_idx)
-            || (booleans_only && !option_has_type(opt_idx, kOptValTypeBoolean))
+            || (booleans_only && !option_has_type(opt_idx, OPT_VAL_TYPE_BOOLEAN))
         {
             continue;
         }
@@ -501,7 +501,7 @@ pub(crate) fn expand_setting_subtract(
     regmatch: &mut RegMatch,
 ) -> Option<Vec<XString>> {
     let opt_idx = IDX.get();
-    if opt_idx == kOptInvalid || option_has_type(opt_idx, kOptValTypeNumber) {
+    if opt_idx == kOptInvalid || option_has_type(opt_idx, OPT_VAL_TYPE_NUMBER) {
         return expand_old_setting();
     }
     let (buf, win) = (Buf::current(), Win::current());
@@ -509,7 +509,7 @@ pub(crate) fn expand_setting_subtract(
     let value = varp.string_var().get();
     let flags = get_option(opt_idx).flags;
 
-    if flags & kOptFlagComma as uint32_t != 0 {
+    if flags & OPT_FLAG_COMMA as uint32_t != 0 {
         if value.is_empty() {
             return None;
         }
@@ -543,7 +543,7 @@ pub(crate) fn expand_setting_subtract(
         return Some(found);
     }
 
-    if flags & kOptFlagFlagList as uint32_t != 0 {
+    if flags & OPT_FLAG_FLAG_LIST as uint32_t != 0 {
         // A set of one-letter flags: offer the whole set first, then
         // each letter. Nothing may have been typed, since a flag set
         // has no word boundary to complete from.

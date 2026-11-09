@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::api::buffer::{api_buf_ensure_loaded, nvim_buf_del_keymap};
 use crate::api::deprecated::{buffer_del_line, buffer_get_line, buffer_set_line};
@@ -79,12 +78,12 @@ use crate::memline::ml_open;
 use crate::memory::arena_alloc_count;
 use crate::message::MessageData;
 use crate::message::state::{
-    did_emsg, lines_left, msg_didany, msg_no_more, msg_scroll, need_wait_return,
+    DID_EMSG, LINES_LEFT, MSG_DIDANY, MSG_NO_MORE, MSG_SCROLL, NEED_WAIT_RETURN,
 };
+use crate::message::{E_CMDWIN, E_INVCHAN};
 use crate::message::{
     do_autocmd_progress, msg_id_exists, msg_multihl, verbose_enter, verbose_leave, verbose_stop,
 };
-use crate::message::{e_cmdwin, e_invchan};
 use crate::r#move::{changed_window_setting, update_topline, validate_cursor};
 use crate::mpack::typedefs::mpack_token_type_t;
 use crate::msgpack_rpc::channel::rpc_set_client_info;
@@ -156,14 +155,14 @@ pub use self::runtime::*;
 pub use self::statusline::*;
 pub use self::term::*;
 pub use self::vars::*;
-pub const kMessageTypeNotification: MessageType = 2;
+pub const MESSAGE_TYPE_NOTIFICATION: MessageType = 2;
 pub const REPTERM_NO_SPECIAL: ::core::ffi::c_uint = 4;
 pub const REPTERM_DO_LT: ::core::ffi::c_uint = 2;
 pub const REPTERM_FROM_PART: ::core::ffi::c_uint = 1;
-pub const kRetNilBool: LuaRetMode = 1;
-pub const kRetObject: LuaRetMode = 0;
+pub const RET_NIL_BOOL: LuaRetMode = 1;
+pub const RET_OBJECT: LuaRetMode = 0;
 pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
-pub const kMTCharWise: MotionType = 0;
+pub const MT_CHAR_WISE: MotionType = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 /// The top bit of a channel id: an API call made by the editor itself

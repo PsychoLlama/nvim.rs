@@ -397,7 +397,7 @@ pub(crate) fn current_sent(op: &mut OpArg, count: c_int, include: bool) -> Resul
         let inclusive = incl(&mut Win::current().cursor()).is_stuck();
         op.inclusive = inclusive;
         op.start = start_pos;
-        op.motion_type = kMTCharWise;
+        op.motion_type = MT_CHAR_WISE;
     }
     Ok(())
 }

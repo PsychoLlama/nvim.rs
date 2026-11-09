@@ -157,10 +157,10 @@ pub fn nvim_buf_get_extmarks(
     if let Some(named) = opts.type_0.as_ref() {
         let name = (!named.is_null()).then(|| named.as_cstr());
         type_0 = match name.map(CStr::to_bytes) {
-            Some(b"sign") => kExtmarkSign,
-            Some(b"virt_text") => kExtmarkVirtText,
-            Some(b"virt_lines") => kExtmarkVirtLines,
-            Some(b"highlight") => kExtmarkHighlight,
+            Some(b"sign") => EXTMARK_SIGN,
+            Some(b"virt_text") => EXTMARK_VIRT_TEXT,
+            Some(b"virt_lines") => EXTMARK_VIRT_LINES,
+            Some(b"highlight") => EXTMARK_HIGHLIGHT,
             _ => {
                 let want = c"sign, virt_text, virt_lines or highlight";
                 return Err(err_expected(c"type", want, name));

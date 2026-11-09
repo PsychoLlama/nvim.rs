@@ -52,8 +52,8 @@ use crate::extmark::BCount;
 use crate::getchar::state::got_int;
 use crate::guard::{sandbox, secure};
 use crate::input::prompt_for_input;
-use crate::message::state::{msg_scroll, quit_more};
-use crate::message::{e_curdir, e_interr, e_sandbox};
+use crate::message::state::{MSG_SCROLL, QUIT_MORE};
+use crate::message::{E_CURDIR, E_INTERR, E_SANDBOX};
 use crate::message::{
     emsg, message_filtered, msg, msg_clr_eos, msg_display, msg_end, msg_outnum, msg_putchar,
     msg_start, msg_starthere, msg_str, msgmore,
@@ -251,11 +251,11 @@ pub(super) fn buf_autocmd(event: AutoEvent, buffer: Buf) -> bool {
 pub fn check_secure() -> bool {
     if secure.get() != 0 {
         secure.set(2);
-        emsg(gettext(e_curdir));
+        emsg(gettext(E_CURDIR));
         return true;
     }
     if sandbox.get() != 0 {
-        emsg(gettext(e_sandbox));
+        emsg(gettext(E_SANDBOX));
         return true;
     }
     false
@@ -311,14 +311,14 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
     };
 
     say::start();
-    msg_scroll.set(1);
+    MSG_SCROLL.set(1);
     list_oldfiles(&list);
     got_int.set(false);
     if !cmdmod_has(CmdModFlags::BROWSE) {
         return;
     }
 
-    quit_more.set(false);
+    QUIT_MORE.set(false);
     let nr = prompt_for_input(None, 0, false, None);
     say::starthere();
     if nr <= 0 || nr > list_len(Some(&list)) {

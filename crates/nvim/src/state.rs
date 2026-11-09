@@ -47,7 +47,7 @@ use crate::global_cell::GlobalCell;
 use crate::hashtab::HashTab;
 use crate::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
 use crate::log::{LOG_DEBUG, LOGLVL_DBG, logmsg};
-use crate::message::state::need_wait_return;
+use crate::message::state::NEED_WAIT_RETURN;
 use crate::message_fmt::msg_cstr;
 use crate::normal::{
     NormalState, normal_check, normal_execute, visual_active, visual_mode, visual_select,
@@ -67,7 +67,7 @@ use crate::ui::ui_flush;
 use crate::winlayer::{Cc, Win};
 
 pub const kProcTypePty: ProcType = 1;
-pub const kDirectionNotSet: Direction = 0;
+pub const DIRECTION_NOT_SET: Direction = 0;
 
 /// The editor-mode bitmask `State` carries, and the masks that read it.
 pub type ModeFlags = c_int;
@@ -234,7 +234,7 @@ fn next_key() -> Key {
             return Key::from(SpecialKey::Event);
         }
         // Nothing to do but wait, so show what has been decided first.
-        if must_redraw.get() != 0 && !need_wait_return.get() && State.get() & MODE_CMDLINE == 0 {
+        if must_redraw.get() != 0 && !NEED_WAIT_RETURN.get() && State.get() & MODE_CMDLINE == 0 {
             let _ = update_screen();
             setcursor();
         }

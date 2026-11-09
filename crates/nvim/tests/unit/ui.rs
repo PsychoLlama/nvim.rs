@@ -172,7 +172,7 @@ fn a_handler_that_keeps_raising_is_dropped_after_its_fourth_error() {
     fx.settle();
 }
 
-/// Upstream's `msg_ext_history` is cleared only by a flush that has an
+/// Upstream's `MSG_EXT_HISTORY` is cleared only by a flush that has an
 /// external message UI to send to, so a message kept in the history while
 /// none was attached leaves it set, and the first message after one
 /// attaches is reported as kept too. Pinned as upstream behaves.

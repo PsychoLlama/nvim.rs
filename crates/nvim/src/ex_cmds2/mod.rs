@@ -69,7 +69,7 @@ use crate::highlight_group::HLF_W;
 use crate::memline::MlFlags;
 use crate::memory::XString;
 use crate::message::VIM_QUESTION;
-use crate::message::state::{msg_col, msg_didany, msg_didout, msg_row};
+use crate::message::state::{MSG_COL, MSG_DIDANY, MSG_DIDOUT, MSG_ROW};
 use crate::message::{
     VIM_ALL, VIM_DISCARDALL, VIM_NO, VIM_YES, emsg, msg, msg_source, vim_dialog_yesnoallcancel,
     vim_dialog_yesnocancel, wait_return,
@@ -498,9 +498,9 @@ fn report_unwritten(buffer: Buf) {
     // `wait_return` is a no-op while `vgetc` is busy (Quit used from a window
     // menu); make sure the message does not scroll up then.
     if vgetc_busy.get() > 0 {
-        msg_row.set(cmdline_row.get());
-        msg_col.set(0);
-        msg_didout.set(false);
+        MSG_ROW.set(cmdline_row.get());
+        MSG_COL.set(0);
+        MSG_DIDOUT.set(false);
     }
     let shown =
         if !buffer.terminal.is_null() && channel_job_running(buffer.b_p_channel.cast_unsigned()) {
@@ -521,7 +521,7 @@ fn report_unwritten(buffer: Buf) {
         };
     // Only makes sense if the error is shown, which `cause_errthrow` may
     // prevent.
-    if shown && msg_didany.get() {
+    if shown && MSG_DIDANY.get() {
         let _prompt = Allow::wait_return();
         wait_return(0);
     }

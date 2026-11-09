@@ -93,7 +93,7 @@ fn patch_into(excmd: &mut ExArg, tmp_orig: &CStr, tmp_new: &CStr) {
 
     if let Some(dir) = &saved_dir {
         if os_chdir(dir.as_cstr()) != 0 {
-            emsg_gettext(e_prev_dir);
+            emsg_gettext(E_PREV_DIR);
         }
         shorten_fnames(true);
     }

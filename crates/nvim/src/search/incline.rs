@@ -156,7 +156,7 @@ pub(crate) fn show_pat_in_path(
 ) {
     if did_show {
         msg_putchar('\n' as c_int); // cursor below the last one
-    } else if msg_silent.get() == 0 {
+    } else if MSG_SILENT.get() == 0 {
         gotocmdline(true); // cursor at the status line
     }
     if got_int.get() {

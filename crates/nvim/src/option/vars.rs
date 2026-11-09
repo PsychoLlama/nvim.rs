@@ -26,7 +26,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub use crate::options::vars::*;
 
@@ -39,31 +38,31 @@ use core::ffi::c_uint;
 
 /// The encoding a file with no 'fileencodings' match is read as; set once
 /// at startup.
-pub(crate) static fenc_default: GlobalCell<Option<XString>> = GlobalCell::new(None);
+pub(crate) static FENC_DEFAULT: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
-pub(crate) static wim_flags: GlobalCell<[uint8_t; 4]> = GlobalCell::new([0; 4]);
-pub(crate) static bkc_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static breakat_flags: GlobalCell<BreakAt> = GlobalCell::new(BreakAt::NONE);
-pub(crate) static bo_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static cmp_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static cb_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static cia_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static cot_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static dy_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static fdo_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static jop_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static p_mousescroll_vert: GlobalCell<OptInt> = GlobalCell::new(3);
-pub(crate) static p_mousescroll_hor: GlobalCell<OptInt> = GlobalCell::new(6);
-pub(crate) static rdb_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static ssop_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static tpf_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static spo_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static swb_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static tcl_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static tc_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static vop_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static ve_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-pub(crate) static wop_flags: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static WIM_FLAGS: GlobalCell<[uint8_t; 4]> = GlobalCell::new([0; 4]);
+pub(crate) static BKC_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static BREAKAT_FLAGS: GlobalCell<BreakAt> = GlobalCell::new(BreakAt::NONE);
+pub(crate) static BO_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static CMP_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static CB_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static CIA_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static COT_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static DY_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static FDO_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static JOP_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static P_MOUSESCROLL_VERT: GlobalCell<OptInt> = GlobalCell::new(3);
+pub(crate) static P_MOUSESCROLL_HOR: GlobalCell<OptInt> = GlobalCell::new(6);
+pub(crate) static RDB_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static SSOP_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static TPF_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static SPO_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static SWB_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static TCL_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static TC_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static VOP_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static VE_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
+pub(crate) static WOP_FLAGS: GlobalCell<c_uint> = GlobalCell::new(0);
 
 /// Whether `set_init_1` has installed the option defaults — the point from
 /// which upstream's global string options are never `NULL` again.

@@ -39,7 +39,7 @@ use crate::eval::funcs::{f_jobstart, f_jobstop};
 use crate::eval::typval::{CallFrame, list_iter, tv_dict_alloc};
 use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
-use crate::message::{e_api_spawn_failed, e_invarg};
+use crate::message::{E_API_SPAWN_FAILED, E_INVARG};
 use crate::semsg;
 use crate::types::{TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, kBoolVarTrue};
 use crate::winlayer::buffers;
@@ -61,7 +61,7 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let given = args.get(1);
     if args[0].v_type() != VAR_STRING || given.is_some_and(|a| a.v_type() != VAR_LIST) {
         // Wrong argument types.
-        emsg_static(e_invarg);
+        emsg_static(E_INVARG);
         return;
     }
 
@@ -79,7 +79,7 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     let Some(prog) = args[0].string_ref().filter(|prog| !prog.is_empty()) else {
-        emsg_static(e_api_spawn_failed);
+        emsg_static(E_API_SPAWN_FAILED);
         return;
     };
 
@@ -101,7 +101,7 @@ pub fn f_rpcstop(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
 
     if args[0].v_type() != VAR_NUMBER {
         // Wrong argument types.
-        emsg_static(e_invarg);
+        emsg_static(E_INVARG);
         return;
     }
 

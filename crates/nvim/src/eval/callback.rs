@@ -25,12 +25,12 @@ use crate::eval::userfunc::{
     CallWith, call_func_with, func_ref_name, func_unref_name, scriptlocal_funcname,
 };
 use crate::eval::vars::{emsg_static, lua_partial};
-use crate::eval::{callback_depth, check_luafunc_name, kRetNilBool};
+use crate::eval::{RET_NIL_BOOL, callback_depth, check_luafunc_name};
 use crate::lua::executor::{
     api_new_luaref, funcref_description, nlua_call_ref_quiet, nlua_is_table_from_lua,
     register_table_as_callable, release_luaref,
 };
-use crate::message::e_command_too_recursive;
+use crate::message::E_COMMAND_TOO_RECURSIVE;
 use crate::option::vars::p_mfd;
 use crate::types::{
     Callback, OptInt, TypVal, VAR_FUNC, VAR_NUMBER, VAR_SPECIAL, VAR_STRING, kSpecialVarNull,
@@ -244,7 +244,7 @@ pub fn callback_call(
     result: &mut TypVal,
 ) -> Result<bool, Failed> {
     if OptInt::from(callback_depth.get()) > p_mfd() {
-        emsg_static(e_command_too_recursive);
+        emsg_static(E_COMMAND_TOO_RECURSIVE);
         return Err(Failed);
     }
 
@@ -271,7 +271,7 @@ pub fn callback_call(
             // general-purpose call.
             let no_args = Array::new();
             // No arguments, no arena and no error sink.
-            let rv = nlua_call_ref_quiet(*luaref, None, no_args, kRetNilBool);
+            let rv = nlua_call_ref_quiet(*luaref, None, no_args, RET_NIL_BOOL);
             return Ok(rv.as_boolean().unwrap_or(false));
         }
         Callback::None => return Ok(false),

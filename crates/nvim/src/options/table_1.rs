@@ -22,7 +22,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"aleph",
         shortname: Some(c"al"),
-        type_0: kOptValTypeNumber,
+        type_0: OPT_VAL_TYPE_NUMBER,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptAleph, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::OwnDefault,
@@ -43,8 +43,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"ambiwidth",
         shortname: Some(c"ambw"),
-        flags: kOptFlagRedrAll | kOptFlagUIOption,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_REDR_ALL | OPT_FLAG_UI_OPTION,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptAmbiwidth, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_AMBW),
@@ -58,7 +58,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"arabic",
         shortname: Some(c"arab"),
-        flags: kOptFlagCurswant,
+        flags: OPT_FLAG_CURSWANT,
         scope_flags: WIN,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptArabic, kBufOptInvalid),
         opt_did_set_cb: Some(did_set_arabic),
@@ -68,7 +68,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"arabicshape",
         shortname: Some(c"arshape"),
-        flags: kOptFlagRedrAll | kOptFlagUIOption,
+        flags: OPT_FLAG_REDR_ALL | OPT_FLAG_UI_OPTION,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptArabicshape, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::Boolean(P_ARSHAPE),
@@ -98,7 +98,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"autocompletedelay",
         shortname: Some(c"acl"),
-        type_0: kOptValTypeNumber,
+        type_0: OPT_VAL_TYPE_NUMBER,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptAutocompletedelay, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::Number(P_ACL),
@@ -109,7 +109,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"autocompletetimeout",
         shortname: Some(c"act"),
-        type_0: kOptValTypeNumber,
+        type_0: OPT_VAL_TYPE_NUMBER,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(
             kGlobalOptAutocompletetimeout,
@@ -162,7 +162,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"background",
         shortname: Some(c"bg"),
-        type_0: kOptValTypeString,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptBackground, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_BG),
@@ -176,8 +176,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"backspace",
         shortname: Some(c"bs"),
-        flags: kOptFlagOneComma | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptBackspace, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_BS),
@@ -200,12 +200,12 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"backupcopy",
         shortname: Some(c"bkc"),
-        flags: kOptFlagOneComma | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL | BUF,
         scope_idx: scope_idx(kGlobalOptBackupcopy, kWinOptInvalid, kBufOptBackupcopy),
         var: OptVar::String(P_BKC),
-        flags_var: Some(&bkc_flags),
+        flags_var: Some(&BKC_FLAGS),
         values: &opt_bkc_values,
         opt_did_set_cb: Some(did_set_backupcopy),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -216,12 +216,12 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"backupdir",
         shortname: Some(c"bdir"),
-        flags: kOptFlagOneComma
-            | kOptFlagExpand
-            | kOptFlagNoDefExp
-            | kOptFlagSecure
-            | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA
+            | OPT_FLAG_EXPAND
+            | OPT_FLAG_NO_DEF_EXP
+            | OPT_FLAG_SECURE
+            | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptBackupdir, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_BDIR),
@@ -232,8 +232,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"backupext",
         shortname: Some(c"bex"),
-        flags: kOptFlagNFname,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_N_FNAME,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptBackupext, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_BEX),
@@ -245,8 +245,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"backupskip",
         shortname: Some(c"bsk"),
-        flags: kOptFlagOneComma | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptBackupskip, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_BSK),
@@ -257,12 +257,12 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"belloff",
         shortname: Some(c"bo"),
-        flags: kOptFlagComma | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_COMMA | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptBelloff, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_BO),
-        flags_var: Some(&bo_flags),
+        flags_var: Some(&BO_FLAGS),
         values: &opt_bo_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -273,7 +273,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"binary",
         shortname: Some(c"bin"),
-        flags: kOptFlagRedrStat,
+        flags: OPT_FLAG_REDR_STAT,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptBinary),
         var: OptVar::Boolean(P_BIN),
@@ -283,7 +283,7 @@ pub(super) const PART: [VimOption; 79] = [
     // 'bomb'
     VimOption {
         fullname: c"bomb",
-        flags: kOptFlagRedrStat | kOptFlagNoMkrc,
+        flags: OPT_FLAG_REDR_STAT | OPT_FLAG_NO_MKRC,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptBomb),
         var: OptVar::Boolean(P_BOMB),
@@ -294,8 +294,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"breakat",
         shortname: Some(c"brk"),
-        flags: kOptFlagFlagList | kOptFlagRedrAll,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_FLAG_LIST | OPT_FLAG_REDR_ALL,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptBreakat, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_BREAKAT),
@@ -307,7 +307,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"breakindent",
         shortname: Some(c"bri"),
-        flags: kOptFlagRedrWin,
+        flags: OPT_FLAG_REDR_WIN,
         scope_flags: WIN,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptBreakindent, kBufOptInvalid),
         ..BLANK
@@ -316,8 +316,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"breakindentopt",
         shortname: Some(c"briopt"),
-        flags: kOptFlagOneComma | kOptFlagRedrBuf | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_REDR_BUF | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: WIN,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptBreakindentopt, kBufOptInvalid),
         values: &opt_briopt_values,
@@ -330,7 +330,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"browsedir",
         shortname: Some(c"bsdir"),
-        type_0: kOptValTypeString,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptBrowsedir, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::OwnDefault,
@@ -342,8 +342,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"bufhidden",
         shortname: Some(c"bh"),
-        flags: kOptFlagNoGlob,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_NO_GLOB,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptBufhidden),
         var: OptVar::String(P_BH),
@@ -357,7 +357,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"buflisted",
         shortname: Some(c"bl"),
-        flags: kOptFlagNoGlob,
+        flags: OPT_FLAG_NO_GLOB,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptBuflisted),
         var: OptVar::Boolean(P_BL),
@@ -369,8 +369,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"buftype",
         shortname: Some(c"bt"),
-        flags: kOptFlagNoGlob,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_NO_GLOB,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptBuftype),
         var: OptVar::String(P_BT),
@@ -383,8 +383,8 @@ pub(super) const PART: [VimOption; 79] = [
     // 'busy'
     VimOption {
         fullname: c"busy",
-        flags: kOptFlagRedrStat | kOptFlagNoGlob,
-        type_0: kOptValTypeNumber,
+        flags: OPT_FLAG_REDR_STAT | OPT_FLAG_NO_GLOB,
+        type_0: OPT_VAL_TYPE_NUMBER,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptBusy),
         var: OptVar::Number(P_BUSY),
@@ -395,12 +395,12 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"casemap",
         shortname: Some(c"cmp"),
-        flags: kOptFlagOneComma | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptCasemap, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_CMP),
-        flags_var: Some(&cmp_flags),
+        flags_var: Some(&CMP_FLAGS),
         values: &opt_cmp_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -411,7 +411,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"cdhome",
         shortname: Some(c"cdh"),
-        flags: kOptFlagSecure,
+        flags: OPT_FLAG_SECURE,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptCdhome, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::Boolean(P_CDH),
@@ -422,8 +422,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"cdpath",
         shortname: Some(c"cd"),
-        flags: kOptFlagComma | kOptFlagExpand | kOptFlagSecure | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_COMMA | OPT_FLAG_EXPAND | OPT_FLAG_SECURE | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptCdpath, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_CDPATH),
@@ -433,7 +433,7 @@ pub(super) const PART: [VimOption; 79] = [
     // 'cedit'
     VimOption {
         fullname: c"cedit",
-        type_0: kOptValTypeString,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptCedit, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_CEDIT),
@@ -444,8 +444,8 @@ pub(super) const PART: [VimOption; 79] = [
     // 'channel'
     VimOption {
         fullname: c"channel",
-        flags: kOptFlagNoDefault | kOptFlagNoMkrc,
-        type_0: kOptValTypeNumber,
+        flags: OPT_FLAG_NO_DEFAULT | OPT_FLAG_NO_MKRC,
+        type_0: OPT_VAL_TYPE_NUMBER,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptChannel),
         var: OptVar::Number(P_CHANNEL),
@@ -456,8 +456,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"charconvert",
         shortname: Some(c"ccv"),
-        flags: kOptFlagSecure,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_SECURE,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptCharconvert, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_CCV),
@@ -469,7 +469,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"chistory",
         shortname: Some(c"chi"),
-        type_0: kOptValTypeNumber,
+        type_0: OPT_VAL_TYPE_NUMBER,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptChistory, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::Number(P_CHI),
@@ -490,8 +490,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"cinkeys",
         shortname: Some(c"cink"),
-        flags: kOptFlagOneComma | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptCinkeys),
         var: OptVar::String(P_CINK),
@@ -502,8 +502,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"cinoptions",
         shortname: Some(c"cino"),
-        flags: kOptFlagOneComma | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptCinoptions),
         var: OptVar::String(P_CINO),
@@ -515,8 +515,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"cinscopedecls",
         shortname: Some(c"cinsd"),
-        flags: kOptFlagOneComma | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptCinscopedecls),
         var: OptVar::String(P_CINSD),
@@ -527,8 +527,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"cinwords",
         shortname: Some(c"cinw"),
-        flags: kOptFlagOneComma | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptCinwords),
         var: OptVar::String(P_CINW),
@@ -539,12 +539,12 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"clipboard",
         shortname: Some(c"cb"),
-        flags: kOptFlagOneComma | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptClipboard, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_CB),
-        flags_var: Some(&cb_flags),
+        flags_var: Some(&CB_FLAGS),
         values: &opt_cb_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -555,8 +555,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"cmdheight",
         shortname: Some(c"ch"),
-        flags: kOptFlagRedrAll,
-        type_0: kOptValTypeNumber,
+        flags: OPT_FLAG_REDR_ALL,
+        type_0: OPT_VAL_TYPE_NUMBER,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptCmdheight, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::Number(P_CH),
@@ -568,7 +568,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"cmdwinheight",
         shortname: Some(c"cwh"),
-        type_0: kOptValTypeNumber,
+        type_0: OPT_VAL_TYPE_NUMBER,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptCmdwinheight, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::Number(P_CWH),
@@ -579,8 +579,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"colorcolumn",
         shortname: Some(c"cc"),
-        flags: kOptFlagOneComma | kOptFlagRedrWin | kOptFlagHLOnly | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_REDR_WIN | OPT_FLAG_HL_ONLY | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: WIN,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptColorcolumn, kBufOptInvalid),
         opt_did_set_cb: Some(did_set_colorcolumn),
@@ -591,8 +591,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"columns",
         shortname: Some(c"co"),
-        flags: kOptFlagNoMkrc,
-        type_0: kOptValTypeNumber,
+        flags: OPT_FLAG_NO_MKRC,
+        type_0: OPT_VAL_TYPE_NUMBER,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptColumns, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::Number(P_COLUMNS),
@@ -604,8 +604,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"comments",
         shortname: Some(c"com"),
-        flags: kOptFlagOneComma | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptComments),
         var: OptVar::String(P_COM),
@@ -617,7 +617,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"commentstring",
         shortname: Some(c"cms"),
-        type_0: kOptValTypeString,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptCommentstring),
         var: OptVar::String(P_CMS),
@@ -639,8 +639,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"complete",
         shortname: Some(c"cpt"),
-        flags: kOptFlagOneComma | kOptFlagNoDup | kOptFlagMLE,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_NO_DUP | OPT_FLAG_MLE,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptComplete),
         var: OptVar::String(P_CPT),
@@ -654,8 +654,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"completefunc",
         shortname: Some(c"cfu"),
-        flags: kOptFlagSecure | kOptFlagFunc,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_SECURE | OPT_FLAG_FUNC,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptCompletefunc),
         var: OptVar::String(P_CFU),
@@ -667,8 +667,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"completeitemalign",
         shortname: Some(c"cia"),
-        flags: kOptFlagOneComma | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptCompleteitemalign, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_CIA),
@@ -680,12 +680,12 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"completeopt",
         shortname: Some(c"cot"),
-        flags: kOptFlagOneComma | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL | BUF,
         scope_idx: scope_idx(kGlobalOptCompleteopt, kWinOptInvalid, kBufOptCompleteopt),
         var: OptVar::String(P_COT),
-        flags_var: Some(&cot_flags),
+        flags_var: Some(&COT_FLAGS),
         values: &opt_cot_values,
         opt_did_set_cb: Some(did_set_completeopt),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -696,7 +696,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"completeslash",
         shortname: Some(c"csl"),
-        type_0: kOptValTypeString,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptCompleteslash),
         var: OptVar::OwnDefault,
@@ -709,7 +709,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"completetimeout",
         shortname: Some(c"cto"),
-        type_0: kOptValTypeNumber,
+        type_0: OPT_VAL_TYPE_NUMBER,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptCompletetimeout, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::Number(P_CTO),
@@ -720,8 +720,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"concealcursor",
         shortname: Some(c"cocu"),
-        flags: kOptFlagFlagList | kOptFlagRedrWin,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_FLAG_LIST | OPT_FLAG_REDR_WIN,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: WIN,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptConcealcursor, kBufOptInvalid),
         opt_did_set_cb: Some(did_set_concealcursor),
@@ -733,8 +733,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"conceallevel",
         shortname: Some(c"cole"),
-        flags: kOptFlagRedrWin,
-        type_0: kOptValTypeNumber,
+        flags: OPT_FLAG_REDR_WIN,
+        type_0: OPT_VAL_TYPE_NUMBER,
         scope_flags: WIN,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptConceallevel, kBufOptInvalid),
         def_val: number(0),
@@ -762,8 +762,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"cpoptions",
         shortname: Some(c"cpo"),
-        flags: kOptFlagFlagList | kOptFlagRedrAll,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_FLAG_LIST | OPT_FLAG_REDR_ALL,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptCpoptions, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_CPO),
@@ -784,7 +784,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"cursorcolumn",
         shortname: Some(c"cuc"),
-        flags: kOptFlagRedrWin | kOptFlagHLOnly,
+        flags: OPT_FLAG_REDR_WIN | OPT_FLAG_HL_ONLY,
         scope_flags: WIN,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptCursorcolumn, kBufOptInvalid),
         ..BLANK
@@ -793,7 +793,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"cursorline",
         shortname: Some(c"cul"),
-        flags: kOptFlagRedrWin | kOptFlagHLOnly,
+        flags: OPT_FLAG_REDR_WIN | OPT_FLAG_HL_ONLY,
         scope_flags: WIN,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptCursorline, kBufOptInvalid),
         ..BLANK
@@ -802,8 +802,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"cursorlineopt",
         shortname: Some(c"culopt"),
-        flags: kOptFlagOneComma | kOptFlagRedrWin | kOptFlagHLOnly | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_REDR_WIN | OPT_FLAG_HL_ONLY | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: WIN,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptCursorlineopt, kBufOptInvalid),
         values: &opt_culopt_values,
@@ -815,8 +815,8 @@ pub(super) const PART: [VimOption; 79] = [
     // 'debug'
     VimOption {
         fullname: c"debug",
-        flags: kOptFlagComma,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_COMMA,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptDebug, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_DEBUG),
@@ -830,7 +830,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"define",
         shortname: Some(c"def"),
-        type_0: kOptValTypeString,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL | BUF,
         scope_idx: scope_idx(kGlobalOptDefine, kWinOptInvalid, kBufOptDefine),
         var: OptVar::String(P_DEF),
@@ -850,8 +850,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"dictionary",
         shortname: Some(c"dict"),
-        flags: kOptFlagOneComma | kOptFlagExpand | kOptFlagNDname | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_EXPAND | OPT_FLAG_N_DNAME | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL | BUF,
         scope_idx: scope_idx(kGlobalOptDictionary, kWinOptInvalid, kBufOptDictionary),
         var: OptVar::String(P_DICT),
@@ -861,7 +861,7 @@ pub(super) const PART: [VimOption; 79] = [
     // 'diff'
     VimOption {
         fullname: c"diff",
-        flags: kOptFlagRedrWin | kOptFlagNoGlob,
+        flags: OPT_FLAG_REDR_WIN | OPT_FLAG_NO_GLOB,
         scope_flags: WIN,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptDiff, kBufOptInvalid),
         opt_did_set_cb: Some(did_set_diff),
@@ -871,8 +871,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"diffanchors",
         shortname: Some(c"dia"),
-        flags: kOptFlagOneComma,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL | BUF,
         scope_idx: scope_idx(kGlobalOptDiffanchors, kWinOptInvalid, kBufOptDiffanchors),
         var: OptVar::String(P_DIA),
@@ -884,8 +884,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"diffexpr",
         shortname: Some(c"dex"),
-        flags: kOptFlagCurswant | kOptFlagSecure,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_CURSWANT | OPT_FLAG_SECURE,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptDiffexpr, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_DEX),
@@ -897,8 +897,8 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"diffopt",
         shortname: Some(c"dip"),
-        flags: kOptFlagOneComma | kOptFlagColon | kOptFlagRedrWin | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_COLON | OPT_FLAG_REDR_WIN | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptDiffopt, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_DIP),
@@ -921,12 +921,12 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"directory",
         shortname: Some(c"dir"),
-        flags: kOptFlagOneComma
-            | kOptFlagExpand
-            | kOptFlagNoDefExp
-            | kOptFlagSecure
-            | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA
+            | OPT_FLAG_EXPAND
+            | OPT_FLAG_NO_DEF_EXP
+            | OPT_FLAG_SECURE
+            | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptDirectory, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_DIR),
@@ -937,12 +937,12 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"display",
         shortname: Some(c"dy"),
-        flags: kOptFlagOneComma | kOptFlagRedrAll | kOptFlagNoDup,
-        type_0: kOptValTypeString,
+        flags: OPT_FLAG_ONE_COMMA | OPT_FLAG_REDR_ALL | OPT_FLAG_NO_DUP,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptDisplay, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_DY),
-        flags_var: Some(&dy_flags),
+        flags_var: Some(&DY_FLAGS),
         values: &opt_dy_values,
         opt_did_set_cb: Some(did_set_display),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -953,7 +953,7 @@ pub(super) const PART: [VimOption; 79] = [
     VimOption {
         fullname: c"eadirection",
         shortname: Some(c"ead"),
-        type_0: kOptValTypeString,
+        type_0: OPT_VAL_TYPE_STRING,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptEadirection, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(P_EAD),

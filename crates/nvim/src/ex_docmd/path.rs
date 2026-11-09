@@ -50,7 +50,7 @@ use crate::file_search::vim_chdir;
 
 use crate::fileio::shorten_fnames;
 use crate::getchar::state::KeyTyped;
-use crate::message::{e_failed, e_invalid_return_type_from_findfunc, e_invarg};
+use crate::message::{E_FAILED, E_INVALID_RETURN_TYPE_FROM_FINDFUNC, E_INVARG};
 use crate::option::vars::{p_cdh, p_ffu, p_verbose};
 use crate::os::state::last_chdir_reason;
 use crate::runtime::state::current_sctx;
@@ -123,7 +123,7 @@ pub(crate) fn call_findfunc(pat: &[u8], cmdcomplete: BoolVarValue) -> Option<Lis
                 .list_shared()
                 .and_then(|list| list_copy(None, list, false, get_copy_id()));
         } else {
-            emsg(gettext(e_invalid_return_type_from_findfunc));
+            emsg(gettext(E_INVALID_RETURN_TYPE_FROM_FINDFUNC));
         }
         tv_clear(&mut rettv);
     }
@@ -197,7 +197,7 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Result<(), OptError> {
         })
     };
     if parsed.is_err() {
-        return Err((e_invarg).into());
+        return Err((E_INVARG).into());
     }
     // A script-local function name is shortened to its `<SNR>` form, as
     // 'operatorfunc' and the other expression options are.
@@ -305,7 +305,7 @@ pub(crate) fn change_dir(new_dir: &CStr, scope: CdScope) -> Result<(), Failed> {
     if dir_differs {
         do_autocmd_dirchanged(new_dir.as_cstr(), scope, kCdCauseManual, true);
         if vim_chdir(new_dir.as_cstr()).is_err() {
-            emsg(gettext(e_failed));
+            emsg(gettext(E_FAILED));
             return Err(Failed);
         }
     }

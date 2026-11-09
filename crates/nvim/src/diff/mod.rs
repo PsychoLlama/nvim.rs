@@ -76,8 +76,8 @@ use crate::memline::{Lines, ml_append_cstr, ml_delete};
 use crate::memory::XString;
 use crate::message::emsg;
 use crate::message::{
-    e_diff_anchors_with_hidden_windows, e_failed_to_find_all_diff_anchors, e_invrange, e_prev_dir,
-    e_problem_creating_internal_diff,
+    E_DIFF_ANCHORS_WITH_HIDDEN_WINDOWS, E_FAILED_TO_FIND_ALL_DIFF_ANCHORS, E_INVRANGE, E_PREV_DIR,
+    E_PROBLEM_CREATING_INTERNAL_DIFF,
 };
 use crate::r#move::{
     changed_line_abv_curs, changed_line_abv_curs_win, changed_window_setting,

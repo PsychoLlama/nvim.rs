@@ -59,8 +59,8 @@ pub fn change_warning(mut buffer: Buf, col: c_int) {
 
     // What msg() does, but with a column offset.
     msg_start();
-    if msg_row.get() == Rows.get() - 1 {
-        msg_col.set(col);
+    if MSG_ROW.get() == Rows.get() - 1 {
+        MSG_COL.set(col);
     }
     msg_source(HLF_W);
     msg_ext_set_kind(c"wmsg");
@@ -68,14 +68,14 @@ pub fn change_warning(mut buffer: Buf, col: c_int) {
     set_vim_var_string(Vv::Warningmsg, Some(gettext(W_READONLY).to_bytes()));
     msg_clr_eos();
     msg_end();
-    if msg_silent.get() == 0 && !silent_mode.get() && ui_active() != 0 {
+    if MSG_SILENT.get() == 0 && !silent_mode.get() && ui_active() != 0 {
         // Give the user time to think about it.
         msg_delay(1002, true);
     }
     buffer.b_did_warn = true;
     // Don't redraw and erase the message.
     redraw_cmdline.set(false);
-    if msg_row.get() < Rows.get() - 1 {
+    if MSG_ROW.get() < Rows.get() - 1 {
         showmode();
     }
 }
@@ -93,7 +93,7 @@ pub fn change_warning(mut buffer: Buf, col: c_int) {
 pub fn changed(buffer: Buf) {
     let bufref = BufRef::of(buffer);
     if buffer.b_changed == 0 {
-        let save_msg_scroll = msg_scroll.get();
+        let save_msg_scroll = MSG_SCROLL.get();
 
         // May check the file out, and so change `curbuf`.
         change_warning(buffer, 0);
@@ -104,23 +104,23 @@ pub fn changed(buffer: Buf) {
         // Create a swap file if that is wanted; not for "nofile" and
         // "nowrite" buffers.
         if buffer.b_may_swap && !buf_is_dontwrite(Some(buffer)) {
-            let save_need_wait_return = need_wait_return.get();
-            need_wait_return.set(false);
+            let save_need_wait_return = NEED_WAIT_RETURN.get();
+            NEED_WAIT_RETURN.set(false);
             ml_open_file(buffer);
 
             // ml_open_file() can produce an ATTENTION message. Wait two
             // seconds so the user reads it, and call wait_return() here
             // rather than letting a later emsg() set msg_scroll.
-            if need_wait_return.get()
-                && emsg_silent.get() == 0
-                && !in_assert_fails.get()
+            if NEED_WAIT_RETURN.get()
+                && EMSG_SILENT.get() == 0
+                && !IN_ASSERT_FAILS.get()
                 && !ui_has(kUIMessages)
             {
                 msg_delay(2002, true);
                 wait_return(c_int::from(true));
-                msg_scroll.set(save_msg_scroll);
+                MSG_SCROLL.set(save_msg_scroll);
             } else {
-                need_wait_return.set(save_need_wait_return);
+                NEED_WAIT_RETURN.set(save_need_wait_return);
             }
         }
         // The swap file's ATTENTION prompt runs `SwapExists`.

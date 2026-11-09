@@ -26,7 +26,7 @@ use crate::winlayer::graph::{switch_buffer, switch_to};
 use crate::winlayer::{Buf, Win};
 
 use super::{
-    get_option_value, kOptScopeBuf, kOptScopeGlobal, kOptScopeWin, set_option_direct,
+    OPT_SCOPE_BUF, OPT_SCOPE_GLOBAL, OPT_SCOPE_WIN, get_option_value, set_option_direct,
     set_option_value_handle_tty,
 };
 
@@ -72,9 +72,9 @@ impl OptionTarget {
     /// scope) is to the option table.
     pub(crate) fn scope_of(target: Option<Self>) -> OptScope {
         match target {
-            None => kOptScopeGlobal,
-            Some(OptionTarget::Win(_)) => kOptScopeWin,
-            Some(OptionTarget::Buf(_)) => kOptScopeBuf,
+            None => OPT_SCOPE_GLOBAL,
+            Some(OptionTarget::Win(_)) => OPT_SCOPE_WIN,
+            Some(OptionTarget::Buf(_)) => OPT_SCOPE_BUF,
         }
     }
 }

@@ -33,8 +33,8 @@ use crate::getchar::{restore_typeahead, save_typeahead, stuff_empty, typeahead, 
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::getchar::state::{got_int, pending_end_reg_executing, reg_executing};
 use crate::keycodes::{Ctrl_C, K_SPECIAL, KE_FILLER};
-use crate::message::e_secure;
-use crate::message::state::{msg_didout, msg_scroll};
+use crate::message::E_SECURE;
+use crate::message::state::{MSG_DIDOUT, MSG_SCROLL};
 use crate::option::vars::p_mmd;
 use crate::state::mode::{
     State, finish_op, force_restart_edit, opcount, restart_edit, stop_insert_mode,
@@ -59,15 +59,15 @@ use crate::winlayer::{Buf, Win};
 /// caller must not run anything, because there would be nowhere to put the
 /// user's own pending keys back.
 pub fn save_current_state(s: &mut SaveState) -> bool {
-    s.save_msg_scroll = msg_scroll.get();
+    s.save_msg_scroll = MSG_SCROLL.get();
     s.save_restart_edit = restart_edit.get();
-    s.save_msg_didout = msg_didout.get();
+    s.save_msg_didout = MSG_DIDOUT.get();
     s.save_state = State.get();
     s.save_finish_op = finish_op.get();
     s.save_opcount = opcount.get();
     s.save_reg_executing = reg_executing.get();
     s.save_pending_end_reg_executing = pending_end_reg_executing.get();
-    msg_scroll.set(0);
+    MSG_SCROLL.set(0);
     // Not entering Insert mode from here.
     restart_edit.set(Key::NUL);
     save_typeahead(&mut s.tabuf);
@@ -77,7 +77,7 @@ pub fn save_current_state(s: &mut SaveState) -> bool {
 /// Put it all back.
 pub fn restore_current_state(s: &mut SaveState) {
     restore_typeahead(&mut s.tabuf);
-    msg_scroll.set(s.save_msg_scroll);
+    MSG_SCROLL.set(s.save_msg_scroll);
     // A command that asked to enter Insert mode *after* `:normal`
     // finishes keeps that request; anything else is put back.
     if force_restart_edit.get() {
@@ -89,7 +89,7 @@ pub fn restore_current_state(s: &mut SaveState) {
     opcount.set(s.save_opcount);
     reg_executing.set(s.save_reg_executing);
     pending_end_reg_executing.set(s.save_pending_end_reg_executing);
-    msg_didout.set(msg_didout.get() || s.save_msg_didout);
+    MSG_DIDOUT.set(MSG_DIDOUT.get() || s.save_msg_didout);
     State.set(s.save_state);
     ui_cursor_shape();
 }
@@ -101,7 +101,7 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
         return;
     }
     if expr_map_locked() {
-        emsg(gettext(e_secure));
+        emsg(gettext(E_SECURE));
         return;
     }
     if crate::types::OptInt::from(ex_normal_busy.get()) >= p_mmd() {

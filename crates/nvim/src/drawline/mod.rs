@@ -59,11 +59,11 @@ use crate::mbyte::{
     char_count, head_off,
 };
 use crate::memline::gchar_pos;
-use crate::message::state::did_emsg;
+use crate::message::state::DID_EMSG;
 use crate::r#move::{set_empty_rows, validate_virtcol, win_col_off2};
 use crate::narrow::as_index;
-use crate::option::kOptFlagInsecure;
-use crate::option::vars::dy_flags;
+use crate::option::OPT_FLAG_INSECURE;
+use crate::option::vars::DY_FLAGS;
 use crate::options::{
     kOptCuloptFlagLine, kOptCuloptFlagNumber, kOptCuloptFlagScreenline, kOptDyFlagUhex,
     kOptSpoFlagNoplainbuffer,

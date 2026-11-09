@@ -48,12 +48,12 @@ use crate::guard::Suppress;
 use crate::highlight_group::HLF_N;
 use crate::mark::mark_adjust;
 use crate::memory::XString;
-use crate::message::state::{info_message, msg_col, msg_didout, msg_row, msg_scroll, msg_silent};
+use crate::message::state::{INFO_MESSAGE, MSG_COL, MSG_DIDOUT, MSG_ROW, MSG_SCROLL, MSG_SILENT};
+use crate::message::{E_NOPREV, E_NOTMP};
 use crate::message::{
     MSG_BUF_LEN, emsg, message_filtered, msg, msg_bytes, msg_display, msg_ext_set_kind,
     msg_prt_line, set_keep_msg, wait_return,
 };
-use crate::message::{e_noprev, e_notmp};
 use crate::message_fmt::{msg_cstr, to_message};
 use crate::r#move::{changed_line_abv_curs, invalidate_botline_win};
 use crate::option::cpo_has;
@@ -87,7 +87,7 @@ static PREVCMD: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 /// Check that [`PREVCMD`] is set: E34 when it is not.
 fn prevcmd_is_set() -> Result<(), Failed> {
     if PREVCMD.with(Vec::is_empty) {
-        emsg(gettext(e_noprev));
+        emsg(gettext(E_NOPREV));
         return Err(Failed);
     }
     Ok(())
@@ -99,7 +99,7 @@ fn prevcmd_is_set() -> Result<(), Failed> {
 /// then remembers.
 pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, do_out: bool) {
     let (line1, line2) = (args.line1, args.line2);
-    let scroll_save = msg_scroll.get();
+    let scroll_save = MSG_SCROLL.get();
     // Disallow shell commands in secure mode.
     if check_secure() {
         return;
@@ -108,9 +108,9 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
     if addr_count == 0 {
         // ":!" -- the shell may look at the files on disk, so 'autowriteall'
         // gets to put them there first.  Don't scroll here.
-        msg_scroll.set(0);
+        MSG_SCROLL.set(0);
         autowrite_all();
-        msg_scroll.set(scroll_save);
+        MSG_SCROLL.set(scroll_save);
     }
 
     // Assemble the command out of the argument's `!`-separated pieces, each
@@ -186,7 +186,7 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
             say::putchar('!' as c_int);
             msg_display(cmd, 0, false);
             say::clear_eos();
-            ui_cursor_goto(msg_row.get(), msg_col.get());
+            ui_cursor_goto(MSG_ROW.get(), MSG_COL.get());
             do_shell(cmd, ShellOpts::NONE);
         } else {
             // The autocommand runs with the current buffer.
@@ -317,7 +317,7 @@ fn do_filter(
             no_tempname = otmp.is_none();
         }
         if no_tempname {
-            emsg(gettext(e_notmp));
+            emsg(gettext(E_NOTMP));
         }
     }
 
@@ -508,7 +508,7 @@ fn report_filtered(linecount: i32) {
     let count = i64::from(linecount);
     // `MSG_BUF_LEN` is where upstream's scratch buffer truncated this.
     let shown = to_message(tr!("{count} lines filtered"), MSG_BUF_LEN as usize);
-    if msg(&shown, 0) && msg_scroll.get() == 0 {
+    if msg(&shown, 0) && MSG_SCROLL.get() == 0 {
         // save message to display it after redraw
         set_keep_msg(Some(&shown), 0);
     }
@@ -527,22 +527,22 @@ pub(crate) fn do_shell(cmd: &CStr, flags: ShellOpts) {
     say::putchar('\r' as c_int);
     say::putchar('\n' as c_int);
 
-    if p_warn() && !autocmd_busy.get() && msg_silent.get() == 0 && buffers().any(buf_is_changed) {
+    if p_warn() && !autocmd_busy.get() && MSG_SILENT.get() == 0 && buffers().any(buf_is_changed) {
         say::puts(gettext(c"[No write since last change]\n"));
     }
 
-    ui_cursor_goto(msg_row.get(), msg_col.get());
+    ui_cursor_goto(MSG_ROW.get(), MSG_COL.get());
     call_shell_text(cmd, flags);
 
-    if msg_silent.get() == 0 {
-        msg_didout.set(true);
+    if MSG_SILENT.get() == 0 {
+        MSG_DIDOUT.set(true);
     }
     did_check_timestamps.set(false);
     need_check_timestamps.set(true);
 
     // Put the cursor back where it was: the shell wrote over the screen.
-    msg_row.set(Rows.get() - 1);
-    msg_col.set(0);
+    MSG_ROW.set(Rows.get() - 1);
+    MSG_COL.set(0);
     buf_autocmd(AutoEvent::ShellCmdPost, Buf::current());
 }
 
@@ -726,7 +726,7 @@ pub fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
     }
 
     silent_mode.set(false);
-    info_message.set(true); // use stdout, not stderr
+    INFO_MESSAGE.set(true); // use stdout, not stderr
     if (global_busy.get() == 0 || GLOBAL_NEED_MSG_KIND.get()) && first {
         say::start();
         msg_ext_set_kind(c"list_cmd");
@@ -741,7 +741,7 @@ pub fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
         say::putchar('\n' as c_int);
         silent_mode.set(save_silent);
     }
-    info_message.set(false);
+    INFO_MESSAGE.set(false);
 }
 
 #[cfg(test)]

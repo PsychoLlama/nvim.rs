@@ -105,7 +105,7 @@ use crate::ascii::NUL;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::valid_utf8;
-use crate::message::state::{msg_col, msg_didout};
+use crate::message::state::{MSG_COL, MSG_DIDOUT};
 use crate::message::{msg_clr_eos, msg_start, msg_str};
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
@@ -566,8 +566,8 @@ pub(super) fn tree_add_word(
             msg_start();
             msg_str(gettext(MSG_COMPRESSING));
             msg_clr_eos();
-            msg_didout.set(false);
-            msg_col.set(0);
+            MSG_DIDOUT.set(false);
+            MSG_COL.set(0);
             ui_flush();
         }
         wordtree_compress(spin, spin.si_foldroot, c"case-folded");

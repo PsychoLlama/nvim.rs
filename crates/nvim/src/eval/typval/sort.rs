@@ -392,7 +392,7 @@ pub(crate) fn parse_sort_uniq_args<'a>(
         } else if arg1.v_type() != VAR_NUMBER {
             info.func = Some(how.string(arg1));
         } else if nr != 0 {
-            emsg(gettext(e_invarg));
+            emsg(gettext(E_INVARG));
             return Err(Failed);
         }
 

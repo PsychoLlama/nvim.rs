@@ -37,7 +37,7 @@ use crate::guard::secure;
 use crate::indent_c::parse_cino;
 use crate::memory::XString;
 use crate::option::defs::OptError;
-use crate::option::{kOptFlagNDname, kOptFlagNFname, valid_name};
+use crate::option::{OPT_FLAG_N_DNAME, OPT_FLAG_N_FNAME, valid_name};
 use crate::options::{
     kOptBackupcopy, kOptBelloff, kOptCasemap, kOptClipboard, kOptCompleteopt, kOptDisplay,
     kOptFoldopen, kOptJumpoptions, kOptRedrawdebug, kOptSessionoptions, kOptSwitchbuf,
@@ -52,8 +52,8 @@ use crate::types::{Buffer, Failed};
 use super::OptStringRef;
 
 use super::{
-    SCL_NO, check_str_opt, e_illegal_character_after_chr, e_unbalanced_groups,
-    e_unclosed_expression_sequence, opt_strings_ok,
+    E_ILLEGAL_CHARACTER_AFTER_CHR, E_UNBALANCED_GROUPS, E_UNCLOSED_EXPRESSION_SEQUENCE, SCL_NO,
+    check_str_opt, opt_strings_ok,
 };
 use crate::decoration::SCL_NUM;
 
@@ -94,7 +94,7 @@ pub fn illegal_char(c: c_int) -> OptError {
 /// "E535: Illegal character after <%c>", for the options that spell a field
 /// as a character followed by a value.
 pub(crate) fn illegal_char_after_chr(c: c_int) -> OptError {
-    let fmt = gettext(e_illegal_character_after_chr);
+    let fmt = gettext(E_ILLEGAL_CHARACTER_AFTER_CHR);
     let message = formatted!(OptError::ROOM, fmt.to_bytes(), c);
     OptError::Owned(ThinCString::from_vec(message))
 }
@@ -349,14 +349,14 @@ pub(crate) fn check_stl_option(format: &[u8]) -> Result<(), OptError> {
                 rest.iter().position(|&b| b == b'}')
             };
             let Some(close) = close else {
-                return Err(e_unclosed_expression_sequence.into());
+                return Err(E_UNCLOSED_EXPRESSION_SEQUENCE.into());
             };
             rest = &rest[close..];
         }
     }
 
     if groupdepth != 0 {
-        return Err(e_unbalanced_groups.into());
+        return Err(E_UNBALANCED_GROUPS.into());
     }
     Ok(())
 }
@@ -366,11 +366,11 @@ pub(crate) fn check_stl_option(format: &[u8]) -> Result<(), OptError> {
 pub fn check_illegal_path_names(val: &CStr, flags: uint32_t) -> bool {
     let val = val.to_bytes();
     let holds = |set: &[u8]| val.iter().any(|b| set.contains(b));
-    (flags & kOptFlagNFname as uint32_t != 0
+    (flags & OPT_FLAG_N_FNAME as uint32_t != 0
         && holds(if secure.get() != 0 {
             b"/\\*?[|;&<>\r\n"
         } else {
             b"/\\*?[<>\r\n"
         }))
-        || (flags & kOptFlagNDname as uint32_t != 0 && holds(b"*?[|;&<>\r\n"))
+        || (flags & OPT_FLAG_N_DNAME as uint32_t != 0 && holds(b"*?[|;&<>\r\n"))
 }

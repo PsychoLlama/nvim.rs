@@ -33,8 +33,8 @@ use crate::eval::list::{
     clear_vim_var, err, list_alloc_ret, number_arm, set_key_nr, set_key_string, set_key_type,
     set_val, string_bytes, string_tv,
 };
-use crate::message::state::did_emsg;
-use crate::message::{e_invalblob, e_string_required};
+use crate::message::state::DID_EMSG;
+use crate::message::{E_INVALBLOB, E_STRING_REQUIRED};
 use crate::types::{TypVal, VAR_BOOL, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv};
 
 /// `filter()`/`map()`/`mapnew()`/`foreach()` over a Dict.
@@ -76,7 +76,7 @@ pub(crate) fn filter_map_dict(
         di.set_val();
         let ok = filter_map_one(expr, filtermap, &mut newtv, &mut rem);
         clear_vim_var(Vv::Key);
-        if !ok || did_emsg.get() != 0 {
+        if !ok || DID_EMSG.get() != 0 {
             clear_tv(&mut newtv);
             break;
         }
@@ -151,13 +151,13 @@ pub(crate) fn filter_map_blob(
         let mut newtv = UNKNOWN_TV;
         let mut rem = false;
         set_val(&mut tv);
-        if !filter_map_one(expr, filtermap, &mut newtv, &mut rem) || did_emsg.get() != 0 {
+        if !filter_map_one(expr, filtermap, &mut newtv, &mut rem) || DID_EMSG.get() != 0 {
             break;
         }
         if filtermap != FilterMap::Foreach {
             if newtv.v_type() != VAR_NUMBER && newtv.v_type() != VAR_BOOL {
                 clear_tv(&mut newtv);
-                err(e_invalblob);
+                err(E_INVALBLOB);
                 break;
             }
             if filtermap != FilterMap::Filter {
@@ -210,7 +210,7 @@ pub(crate) fn filter_map_string(
         let mut newtv = UNKNOWN_TV;
         let mut rem = false;
         set_val(&mut tv);
-        if !filter_map_one(expr, filtermap, &mut newtv, &mut rem) || did_emsg.get() != 0 {
+        if !filter_map_one(expr, filtermap, &mut newtv, &mut rem) || DID_EMSG.get() != 0 {
             clear_tv(&mut newtv);
             clear_tv(&mut tv);
             break;
@@ -219,7 +219,7 @@ pub(crate) fn filter_map_string(
             if newtv.v_type() != VAR_STRING {
                 clear_tv(&mut newtv);
                 clear_tv(&mut tv);
-                err(e_string_required);
+                err(E_STRING_REQUIRED);
                 break;
             }
             out.extend_from_slice(string_bytes(&newtv));
@@ -281,7 +281,7 @@ pub(crate) fn filter_map_list(
         if !filter_map_one(expr, filtermap, &mut newtv, &mut rem) {
             break;
         }
-        if did_emsg.get() != 0 {
+        if DID_EMSG.get() != 0 {
             clear_tv(&mut newtv);
             break;
         }

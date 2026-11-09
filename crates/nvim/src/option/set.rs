@@ -29,7 +29,7 @@
 use crate::autocmd::defs::AutoEvent;
 use crate::message_fmt::emsg_text;
 use crate::narrow::as_index;
-use crate::option::defs::kOptValTypeString;
+use crate::option::defs::OPT_VAL_TYPE_STRING;
 use crate::tr;
 use crate::types::ColNr;
 use crate::types::LineNr;
@@ -46,7 +46,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, secure};
 use crate::lua::executor::nlua_set_sctx;
 use crate::memory::XString;
-use crate::message::{e_invarg, e_sandbox, e_secure, e_unsupportedoption};
+use crate::message::{E_INVARG, E_SANDBOX, E_SECURE, E_UNSUPPORTEDOPTION};
 use crate::mouse::setmouse;
 use crate::runtime::state::current_sctx;
 use crate::startup::starting;
@@ -65,12 +65,13 @@ use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
 
 use super::{
-    NO_LOCAL_UNDOLEVEL, OptSlot, Replaced, SID_NONE, check_redraw, do_spelllang_source,
-    do_syntax_autocmd, get_varp, get_varp_scope, insecure_flag, is_option_hidden, kOptFlagCurswant,
-    kOptFlagHLOnly, kOptFlagRedrAll, kOptFlagSecure, kOptFlagUIOption, kOptScopeBuf, kOptScopeWin,
-    mark_option_was_set, option_has_scope, option_has_type, option_is_global_local,
-    option_is_global_only, option_scope_idx, option_var, replace_slot, restore_slot,
-    set_option_last_set, slot_holds, slot_value, tty_option_end, validate_option_value, write_slot,
+    NO_LOCAL_UNDOLEVEL, OPT_FLAG_CURSWANT, OPT_FLAG_HL_ONLY, OPT_FLAG_REDR_ALL, OPT_FLAG_SECURE,
+    OPT_FLAG_UI_OPTION, OPT_SCOPE_BUF, OPT_SCOPE_WIN, OptSlot, Replaced, SID_NONE, check_redraw,
+    do_spelllang_source, do_syntax_autocmd, get_varp, get_varp_scope, insecure_flag,
+    is_option_hidden, mark_option_was_set, option_has_scope, option_has_type,
+    option_is_global_local, option_is_global_only, option_scope_idx, option_var, replace_slot,
+    restore_slot, set_option_last_set, slot_holds, slot_value, tty_option_end,
+    validate_option_value, write_slot,
 };
 use crate::winlayer::Buf;
 
@@ -97,11 +98,11 @@ pub(crate) fn set_option_sctx(
         return;
     }
     // The scope index the table gives is in range of the per-scope array.
-    if option_has_scope(opt_idx, kOptScopeBuf) {
-        let at = option_scope_idx(opt_idx, kOptScopeBuf).cast_unsigned();
+    if option_has_scope(opt_idx, OPT_SCOPE_BUF) {
+        let at = option_scope_idx(opt_idx, OPT_SCOPE_BUF).cast_unsigned();
         Buf::current().b_p_script_ctx[at] = script_ctx;
-    } else if option_has_scope(opt_idx, kOptScopeWin) {
-        let at = option_scope_idx(opt_idx, kOptScopeWin).cast_unsigned();
+    } else if option_has_scope(opt_idx, OPT_SCOPE_WIN) {
+        let at = option_scope_idx(opt_idx, OPT_SCOPE_WIN).cast_unsigned();
         Win::current().w_onebuf_opt.wo_script_ctx[at] = script_ctx;
         if both {
             // A bare `:set` also writes the "all buffers" copy.
@@ -268,7 +269,7 @@ pub(crate) fn get_option_unset_value(opt_idx: OptIndex) -> OptVal {
         return slot_value(opt_idx, get_varp_scope(opt_idx, OptionSetFlags::GLOBAL));
     }
     // A string global-local option is unset when it is empty.
-    if option_has_type(opt_idx, kOptValTypeString) {
+    if option_has_type(opt_idx, OPT_VAL_TYPE_STRING) {
         return OptVal::static_string(c"");
     }
     match opt_idx {
@@ -335,17 +336,17 @@ pub(crate) fn did_set_option(
     if direct {
         // Nothing to vet: the caller is putting a value back.
     } else if opt.immutable && args.os_oldval != args.os_newval {
-        errmsg = Err(e_unsupportedoption.into());
+        errmsg = Err(E_UNSUPPORTEDOPTION.into());
     } else if (secure.get() != 0 || sandbox.get() != 0)
-        && opt.flags & kOptFlagSecure as uint32_t != 0
+        && opt.flags & OPT_FLAG_SECURE as uint32_t != 0
     {
-        errmsg = Err(e_secure.into());
+        errmsg = Err(E_SECURE.into());
     } else if args
         .os_newval
         .as_string()
         .is_some_and(|value| check_illegal_path_names(value.as_cstr(), opt.flags))
     {
-        errmsg = Err(e_invarg.into());
+        errmsg = Err(E_INVARG.into());
     } else if let Some(did_set_cb) = opt.opt_did_set_cb {
         errmsg = did_set_cb(&mut args);
         // 'filetype' and 'syntax' report whether the value really moved;
@@ -434,8 +435,8 @@ pub(crate) fn did_set_option(
     }
 
     if Win::current().w_curswant != ColNr::MAX
-        && opt.flags & (kOptFlagCurswant | kOptFlagRedrAll) as uint32_t != 0
-        && opt.flags & kOptFlagHLOnly as uint32_t == 0
+        && opt.flags & (OPT_FLAG_CURSWANT | OPT_FLAG_REDR_ALL) as uint32_t != 0
+        && opt.flags & OPT_FLAG_HL_ONLY as uint32_t == 0
     {
         Win::current().w_set_curswant = true;
     }
@@ -565,7 +566,7 @@ pub(crate) fn set_option(
     if errmsg.is_ok()
         && let Some(old_values) = old_values
     {
-        let for_ui = (opt.flags & kOptFlagUIOption as uint32_t != 0).then(|| new_value.clone());
+        let for_ui = (opt.flags & OPT_FLAG_UI_OPTION as uint32_t != 0).then(|| new_value.clone());
         if starting.get() == 0 {
             apply_optionset_autocmd(
                 opt_idx,
@@ -618,8 +619,8 @@ pub(crate) fn set_option_value(
 ) -> Result<(), OptError> {
     debug_assert!(opt_idx != kOptInvalid);
 
-    if sandbox.get() > 0 && get_option(opt_idx).flags & kOptFlagSecure != 0 {
-        return Err(OptError::Static(e_sandbox));
+    if sandbox.get() > 0 && get_option(opt_idx).flags & OPT_FLAG_SECURE != 0 {
+        return Err(OptError::Static(E_SANDBOX));
     }
     set_option(opt_idx, value, opt_flags, 0, false, true)
 }

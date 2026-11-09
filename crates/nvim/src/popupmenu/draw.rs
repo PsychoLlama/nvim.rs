@@ -32,11 +32,11 @@ use crate::winlayer::Win;
 
 /// The order the three item columns are drawn in, per `'completeitemalign'`.
 ///
-/// `cia_flags` holds the three column kinds as decimal digits, most
+/// `CIA_FLAGS` holds the three column kinds as decimal digits, most
 /// significant first; zero means the option is at its default.
 #[inline]
 fn pum_align_order() -> [usize; 3] {
-    let flags = cia_flags.get();
+    let flags = CIA_FLAGS.get();
     if flags == 0 {
         return [CPT_ABBR, CPT_KIND, CPT_MENU];
     }

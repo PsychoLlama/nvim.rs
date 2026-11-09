@@ -71,11 +71,11 @@ use crate::highlight_group::syn_name2id;
 use crate::mark::setpcmark;
 use crate::memline::{check_need_swap, ml_delete, ml_get_buf_len, ml_open};
 use crate::memory::ThinCString;
-use crate::message::state::{msg_col, msg_didout, msg_nowait, msg_scroll, msg_scrolled};
+use crate::message::state::{MSG_COL, MSG_DIDOUT, MSG_NOWAIT, MSG_SCROLL, MSG_SCROLLED};
 use crate::message::{
-    e_au_recursive, e_buffer_is_not_loaded, e_dictreq, e_invalpat, e_invarg, e_invrange, e_listreq,
-    e_loclist, e_no_errors, e_nomatch, e_noprevre, e_notmp, e_string_required,
-    e_winfixbuf_cannot_go_to_buffer,
+    E_AU_RECURSIVE, E_BUFFER_IS_NOT_LOADED, E_DICTREQ, E_INVALPAT, E_INVARG, E_INVRANGE, E_LISTREQ,
+    E_LOCLIST, E_NO_ERRORS, E_NOMATCH, E_NOPREVRE, E_NOTMP, E_STRING_REQUIRED,
+    E_WINFIXBUF_CANNOT_GO_TO_BUFFER,
 };
 use crate::message::{
     emsg, internal_error, message_filtered, msg, msg_clr_eos, msg_display, msg_ext_set_kind,
@@ -87,7 +87,7 @@ use crate::normal::reset_visual_and_resel;
 use crate::ops::get_region_bytecount;
 use crate::option::defs::{OptSet, OptVal};
 use crate::option::vars::{
-    P_ENC, P_MLS, P_SWB, fdo_flags, p_ch, p_chi, p_hh, p_ic, p_mef, p_mls, swb_flags,
+    FDO_FLAGS, P_ENC, P_MLS, P_SWB, SWB_FLAGS, p_ch, p_chi, p_hh, p_ic, p_mef, p_mls,
 };
 use crate::option::{buf_copy_options, set_option_direct, set_option_value_give_err, shortmess};
 use crate::options::{

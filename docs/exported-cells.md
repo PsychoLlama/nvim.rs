@@ -23,7 +23,7 @@ binary as well as the default one.
 
 ## `api`
 
-- `neovim::api::extmark::ns::next_namespace_id`
+- `neovim::api::extmark::ns::NEXT_NAMESPACE_ID`
 
 ## `buffer`
 
@@ -98,24 +98,24 @@ binary as well as the default one.
 
 ## `option`
 
-- `neovim::option::vars::bkc_flags`
-- `neovim::option::vars::bo_flags`
-- `neovim::option::vars::breakat_flags`
-- `neovim::option::vars::cb_flags`
-- `neovim::option::vars::cmp_flags`
-- `neovim::option::vars::cot_flags`
-- `neovim::option::vars::dy_flags`
-- `neovim::option::vars::fdo_flags`
-- `neovim::option::vars::jop_flags`
-- `neovim::option::vars::rdb_flags`
-- `neovim::option::vars::ssop_flags`
-- `neovim::option::vars::swb_flags`
-- `neovim::option::vars::tc_flags`
-- `neovim::option::vars::tcl_flags`
-- `neovim::option::vars::tpf_flags`
-- `neovim::option::vars::ve_flags`
-- `neovim::option::vars::vop_flags`
-- `neovim::option::vars::wop_flags`
+- `neovim::option::vars::BKC_FLAGS`
+- `neovim::option::vars::BO_FLAGS`
+- `neovim::option::vars::BREAKAT_FLAGS`
+- `neovim::option::vars::CB_FLAGS`
+- `neovim::option::vars::CMP_FLAGS`
+- `neovim::option::vars::COT_FLAGS`
+- `neovim::option::vars::DY_FLAGS`
+- `neovim::option::vars::FDO_FLAGS`
+- `neovim::option::vars::JOP_FLAGS`
+- `neovim::option::vars::RDB_FLAGS`
+- `neovim::option::vars::SSOP_FLAGS`
+- `neovim::option::vars::SWB_FLAGS`
+- `neovim::option::vars::TC_FLAGS`
+- `neovim::option::vars::TCL_FLAGS`
+- `neovim::option::vars::TPF_FLAGS`
+- `neovim::option::vars::VE_FLAGS`
+- `neovim::option::vars::VOP_FLAGS`
+- `neovim::option::vars::WOP_FLAGS`
 
 ## `os`
 

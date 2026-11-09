@@ -47,7 +47,7 @@ use crate::highlight_group::syn_check_group;
 use crate::mark::setpcmark;
 use crate::mbyte::cluster_len;
 use crate::memory::XString;
-use crate::message::e_interr;
+use crate::message::E_INTERR;
 use crate::message::{emsg, msg};
 use crate::message_fmt::msg_bytes;
 use crate::r#move::changed_window_setting;
@@ -598,7 +598,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     } else if global_busy.get() == 0 {
         if got_int.get() {
             // Interrupted.
-            emsg(gettext(e_interr));
+            emsg(gettext(E_INTERR));
         } else if st.got_match {
             // Did find something, but nothing was substituted.
             if p_ch() > 0 as OptInt && !ui_has(kUIMessages) {

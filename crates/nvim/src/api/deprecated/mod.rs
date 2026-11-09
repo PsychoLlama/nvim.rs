@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::api::buffer::{nvim_buf_get_lines, nvim_buf_set_lines};
 use crate::api::extmark::{nvim_buf_clear_namespace, nvim_create_namespace, parse_virt_text};
@@ -30,7 +29,7 @@ use crate::highlight_group::{syn_check_group, syn_get_final_id, syn_id2attr, syn
 use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_exec;
 use crate::message::msg_end;
-use crate::message::state::{msg_didout, msg_silent};
+use crate::message::state::{MSG_DIDOUT, MSG_SILENT};
 use crate::msgpack_rpc::handler::MsgpackRpcRequestHandler;
 use crate::option::defs::{OptIndex, OptVal};
 use crate::option::{
@@ -61,7 +60,7 @@ pub use self::lines::*;
 pub use self::options::*;
 pub use self::vars::*;
 pub use self::write::*;
-pub const kRetObject: LuaRetMode = 0;
+pub const RET_OBJECT: LuaRetMode = 0;
 pub const LINE_BUFFER_MIN_SIZE: ::core::ffi::c_uint = 4096;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

@@ -31,8 +31,8 @@ use crate::getchar::state::got_int;
 use crate::guard::{MsgBump, Suppress};
 use crate::memory::{ThinCString, XString};
 use crate::message::state::{
-    called_emsg, did_emsg, emsg_assert_fails_context, emsg_assert_fails_lnum,
-    emsg_assert_fails_msg, emsg_on_display, in_assert_fails, lines_left, msg_col, need_wait_return,
+    CALLED_EMSG, DID_EMSG, EMSG_ASSERT_FAILS_CONTEXT, EMSG_ASSERT_FAILS_LNUM,
+    EMSG_ASSERT_FAILS_MSG, EMSG_ON_DISPLAY, IN_ASSERT_FAILS, LINES_LEFT, MSG_COL, NEED_WAIT_RETURN,
 };
 use crate::message::{emsg, msg_reset_scroll};
 use crate::os::cshim::gettext;
@@ -165,7 +165,7 @@ fn check_error_position(args: &[TypVal], context: &CStr) -> FailsCheck {
         return FailsCheck::BadArg(E_ASSERT_FAILS_FOURTH_ARGUMENT);
     }
     let want_lnum = args[3].number_or_zero();
-    if want_lnum >= 0 && want_lnum != VarNumber::from(emsg_assert_fails_lnum.get()) {
+    if want_lnum >= 0 && want_lnum != VarNumber::from(EMSG_ASSERT_FAILS_LNUM.get()) {
         return FailsCheck::Mismatch(FailsMismatch {
             expected_str: None,
             index: 3,
@@ -192,7 +192,7 @@ fn check_error_position(args: &[TypVal], context: &CStr) -> FailsCheck {
 /// Append a failed `assert_fails()`'s report to `v:errors`.
 fn report_fails_mismatch(args: &[TypVal], cmd: &[u8], context: &CStr, mismatch: &FailsMismatch) {
     let actual_tv = match mismatch.index {
-        3 => TypVal::Number(VarNumber::from(emsg_assert_fails_lnum.get())),
+        3 => TypVal::Number(VarNumber::from(EMSG_ASSERT_FAILS_LNUM.get())),
         4 => TypVal::string_from(context.to_bytes()),
         _ => TypVal::string(mismatch.actual.clone()),
     };
@@ -221,16 +221,16 @@ fn report_fails_mismatch(args: &[TypVal], cmd: &[u8], context: &CStr, mismatch: 
 fn finish_assert_fails(save_trylevel: c_int, no_prompt: MsgBump) {
     trylevel.set(save_trylevel);
     suppress_errthrow.set(false);
-    in_assert_fails.set(false);
-    did_emsg.set(0);
+    IN_ASSERT_FAILS.set(false);
+    DID_EMSG.set(0);
     got_int.set(false);
-    msg_col.set(0);
+    MSG_COL.set(0);
     drop(no_prompt);
-    need_wait_return.set(false);
-    emsg_on_display.set(false);
+    NEED_WAIT_RETURN.set(false);
+    EMSG_ON_DISPLAY.set(false);
     msg_reset_scroll();
-    lines_left.set(Rows.get());
-    emsg_assert_fails_msg.set(None);
+    LINES_LEFT.set(Rows.get());
+    EMSG_ASSERT_FAILS_MSG.set(None);
     set_vim_var_string(Vv::Errmsg, None);
 }
 
@@ -242,13 +242,13 @@ pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     }
 
     let save_trylevel = trylevel.get();
-    let called_emsg_before = called_emsg.get();
+    let called_emsg_before = CALLED_EMSG.get();
     let mut wrong_arg_msg: Option<&'static CStr> = None;
 
     // trylevel must be zero for a ":throw" command to be considered failed.
     trylevel.set(0);
     suppress_errthrow.set(true);
-    in_assert_fails.set(true);
+    IN_ASSERT_FAILS.set(true);
     // Threaded into `finish_assert_fails`, which is where the C released
     // it — before the wrong-argument message below, which *does* want the
     // hit-enter prompt.
@@ -264,7 +264,7 @@ pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     trylevel.set(save_trylevel);
     suppress_errthrow.set(false);
 
-    if called_emsg.get() == called_emsg_before {
+    if CALLED_EMSG.get() == called_emsg_before {
         let mut message = prepare_assert_error();
         push_lit(&mut message, c"command did not fail: ");
         assert_append_cmd_or_arg(&mut message, args, cmd.to_bytes());
@@ -273,9 +273,9 @@ pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     } else if args.len() > 1 {
         // Copies: matching a pattern can raise an error of its own, and
         // the reports below borrow them.
-        let reported = emsg_assert_fails_msg.with(Clone::clone);
+        let reported = EMSG_ASSERT_FAILS_MSG.with(Clone::clone);
         let reported = reported.as_ref().map_or(c"[unknown]", XString::as_cstr);
-        let context = emsg_assert_fails_context.with(Clone::clone);
+        let context = EMSG_ASSERT_FAILS_CONTEXT.with(Clone::clone);
         let context = context.as_ref().map_or(c"", XString::as_cstr);
         let mut check = check_reported_error(args, reported);
         if matches!(check, FailsCheck::Matched) {

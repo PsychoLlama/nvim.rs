@@ -25,11 +25,11 @@ use crate::types::Failed;
 
 /// Whether stage `idx` of `'wildmode'` carries `flag` (a `kOptWimFlag*`).
 ///
-/// `wim_flags` has four entries — `'wildmode'` takes at most four
+/// `WIM_FLAGS` has four entries — `'wildmode'` takes at most four
 /// comma-separated stages — and [`check_opt_wim`] fills the unused tail with
 /// a copy of the last one, so every index answers something.
 pub(crate) fn wim_has(idx: ::core::ffi::c_int, flag: OptWimFlags) -> bool {
-    OptWimFlags::from(wim_flags.get()[usize::try_from(idx).unwrap_or(usize::MAX)]) & flag != 0
+    OptWimFlags::from(WIM_FLAGS.get()[usize::try_from(idx).unwrap_or(usize::MAX)]) & flag != 0
 }
 
 /// One `'wildchar'` press: run the current `'wildmode'` stage.
@@ -164,8 +164,8 @@ const WIM_WORDS: [(&[u8], OptWimFlags); 5] = [
     (b"noselect", kOptWimFlagNoselect),
 ];
 
-/// Read the `'wildmode'` option and fill `wim_flags[]`.  Answers `Err` on a
-/// malformed value, leaving `wim_flags` alone.
+/// Read the `'wildmode'` option and fill `WIM_FLAGS[]`.  Answers `Err` on a
+/// malformed value, leaving `WIM_FLAGS` alone.
 pub fn check_opt_wim() -> Result<(), Failed> {
     let mut new_wim_flags: [uint8_t; 4] = [0; 4];
     let mut idx = 0usize;
@@ -213,6 +213,6 @@ pub fn check_opt_wim() -> Result<(), Failed> {
     }
 
     // Only when there are no errors is wim_flags[] changed.
-    wim_flags.set(new_wim_flags);
+    WIM_FLAGS.set(new_wim_flags);
     Ok(())
 }

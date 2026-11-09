@@ -25,7 +25,7 @@ use crate::event::libuv_proc::{ChildRun, OutputSink, run_to_exit};
 use crate::getchar::state::got_int;
 use crate::guard::Suppress;
 use crate::message::msg_str;
-use crate::message::state::{lines_left, msg_no_more};
+use crate::message::state::{LINES_LEFT, MSG_NO_MORE};
 use crate::message::{msg_display, msg_end, msg_putchar, msg_sb_eol, msg_start};
 use crate::message_fmt::msg_cstr;
 use crate::msg_schedule_semsg;
@@ -91,8 +91,8 @@ pub(crate) fn do_os_system(
         if forward_output {
             msg_sb_eol();
             msg_start();
-            msg_no_more.set(true);
-            lines_left.set(-1);
+            MSG_NO_MORE.set(true);
+            LINES_LEFT.set(-1);
         }
     };
     let exitcode = match run_to_exit(argv, input, output, report_input_written, before_wait) {
@@ -120,7 +120,7 @@ pub(crate) fn do_os_system(
         let no_prompt = Suppress::wait_return();
         msg_end();
         drop(no_prompt);
-        msg_no_more.set(false);
+        MSG_NO_MORE.set(false);
     }
     ui_busy_stop();
     (exitcode, (capture && !buf.is_empty()).then_some(buf))

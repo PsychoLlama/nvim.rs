@@ -56,7 +56,7 @@ use crate::message::{
     emsg, iemsg, internal_error, messaging, msg, msg_end, msg_ext_set_kind, msg_putchar, msg_start,
     msg_str, msg_str_hl, verb_msg, verbose_enter, verbose_leave,
 };
-use crate::option::vars::{fdo_flags, p_fs, p_ul, p_verbose};
+use crate::option::vars::{FDO_FLAGS, p_fs, p_ul, p_verbose};
 use crate::options::kOptFdoFlagUndo;
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::fs::{os_free_acl, os_get_acl, os_remove, os_set_acl};

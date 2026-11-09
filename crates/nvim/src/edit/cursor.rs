@@ -196,7 +196,7 @@ pub(crate) fn cursor_up_inner(mut win: Win, mut n: i32, skip_conceal: bool) {
             // the last step and the fold is about to open anyway.
             if n > 0
                 || !(State.get() & MODE_INSERT != 0
-                    || fdo_flags.get() & kOptFdoFlagAll as ::core::ffi::c_uint != 0)
+                    || FDO_FLAGS.get() & kOptFdoFlagAll as ::core::ffi::c_uint != 0)
             {
                 fold_start(win, lnum, &mut lnum);
             }

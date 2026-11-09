@@ -24,7 +24,7 @@ use crate::extmark::extmark_splice_cols;
 use crate::extmark::kExtmarkUndo;
 use crate::mbyte::cluster_len;
 use crate::memline::{Lines, ml_replace_buf_text};
-use crate::message::e_modifiable;
+use crate::message::E_MODIFIABLE;
 use crate::message::emsg;
 use crate::ops::skip_comment;
 use crate::os::cshim::gettext;
@@ -42,7 +42,7 @@ use crate::winlayer::Buf;
 pub(super) fn fold_create_markers(window: Win, start: Pos, end: Pos) {
     let buf = window.buffer();
     if buf.b_p_ma == 0 {
-        emsg(gettext(e_modifiable));
+        emsg(gettext(E_MODIFIABLE));
         return;
     }
     let num_changed = int64_t::from(end.lnum - start.lnum + 1);

@@ -190,10 +190,10 @@ fn apply_motion_force(mut op: Op) {
             // A linewise motion never set `inclusive`; "exclusive" is the
             // consistent reading, and makes `dvj` behave.
             op.inclusive = false;
-        } else if op.motion_type == kMTCharWise {
+        } else if op.motion_type == MT_CHAR_WISE {
             op.inclusive = !op.inclusive;
         }
-        op.motion_type = kMTCharWise;
+        op.motion_type = MT_CHAR_WISE;
     } else if op.motion_force == Key::CTRL_V {
         // Turn a line- or charwise motion into a Visual block.
         if !visual_active() {
@@ -518,7 +518,7 @@ fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lb
     if visual_mode().is_line() {
         op.motion_type = kMTLineWise;
     } else if visual_mode().is_char() {
-        op.motion_type = kMTCharWise;
+        op.motion_type = MT_CHAR_WISE;
         // `op.end` is a position of the current buffer, so the cache answers
         // with the line it sits on; a column past its end reads as the NUL.
         let ends_on_nul = {
@@ -566,7 +566,7 @@ fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lb
 /// And if the start is on or before that line's first non-blank, the operator
 /// becomes linewise -- strange, but that is what vi does.
 fn adjust_region_end(cmd_arg: &CmdArg, mut op: Op) {
-    if !(op.motion_type == kMTCharWise
+    if !(op.motion_type == MT_CHAR_WISE
         && !op.inclusive
         && !cmd_arg.outcome.has(Outcome::NO_ADJ_OP_END)
         && op.end.col == ColNr::ZERO

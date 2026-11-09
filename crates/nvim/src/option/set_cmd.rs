@@ -31,8 +31,8 @@ use crate::keycodes::Ctrl_V;
 use crate::keycodes::SpecialKey;
 use crate::keycodes::special_key_at;
 use crate::memory::ThinCString;
-use crate::option::defs::kOptValTypeBoolean;
-use crate::option::defs::kOptValTypeNumber;
+use crate::option::defs::OPT_VAL_TYPE_BOOLEAN;
+use crate::option::defs::OPT_VAL_TYPE_NUMBER;
 use crate::optionstr::OptString;
 use crate::types::CmdIdx;
 use crate::winlayer::{Buf, Win};
@@ -47,8 +47,8 @@ use crate::ex_getln::gotocmdline;
 use crate::guard::Suppress;
 use crate::guard::sandbox;
 use crate::message::IOSIZE;
-use crate::message::state::info_message;
-use crate::message::{e_invarg, e_sandbox, e_trailing};
+use crate::message::state::INFO_MESSAGE;
+use crate::message::{E_INVARG, E_SANDBOX, E_TRAILING};
 use crate::message::{emsg, msg_ext_set_kind, msg_putchar};
 use crate::option::defs::{OptError, OptIndex, OptVal, OptionSetFlags};
 use crate::option::vars::{p_mle, p_verbose};
@@ -59,8 +59,8 @@ use crate::types::{ExArg, Failed, OptInt, ScriptId};
 
 use super::{
     FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING,
-    didset_options, didset_options2, get_option, get_option_default, get_option_value, get_varp,
-    get_varp_scope, is_tty_option, kOptFlagMLE, kOptFlagSecure, kOptScopeBuf, kOptScopeWin,
+    OPT_FLAG_MLE, OPT_FLAG_SECURE, OPT_SCOPE_BUF, OPT_SCOPE_WIN, didset_options, didset_options2,
+    get_option, get_option_default, get_option_value, get_varp, get_varp_scope, is_tty_option,
     option_has_scope, option_has_type, option_is_global_local, option_is_window_local,
     option_scope_idx, option_var, set_option, set_options_default, showoneopt, showoptions,
     slot_value, stropt_get_newval, unset_option_local_value,
@@ -146,8 +146,8 @@ impl Win {
         prefix: Prefix,
         errmsg: &mut Option<OptError>,
     ) -> Result<(), Failed> {
-        if prefix != Prefix::None && !option_has_type(opt_idx, kOptValTypeBoolean) {
-            *errmsg = Some(e_invarg.into());
+        if prefix != Prefix::None && !option_has_type(opt_idx, OPT_VAL_TYPE_BOOLEAN) {
+            *errmsg = Some(E_INVARG.into());
             return Err(Failed);
         }
         // A `:set` sweeping over windows or buffers only wants its own kind.
@@ -158,11 +158,11 @@ impl Win {
             return Err(Failed);
         }
         if opt_flags.has(OptionSetFlags::MODELINE) {
-            if flags & kOptFlagSecure as uint32_t != 0 {
+            if flags & OPT_FLAG_SECURE as uint32_t != 0 {
                 *errmsg = Some(E_NOT_ALLOWED_IN_MODELINE.into());
                 return Err(Failed);
             }
-            if flags & kOptFlagMLE as uint32_t != 0 && !p_mle() {
+            if flags & OPT_FLAG_MLE as uint32_t != 0 && !p_mle() {
                 *errmsg = Some(E_MODELINE_NEEDS_MODELINEEXPR.into());
                 return Err(Failed);
             }
@@ -172,8 +172,8 @@ impl Win {
                 return Err(Failed);
             }
         }
-        if sandbox.get() != 0 && flags & kOptFlagSecure as uint32_t != 0 {
-            *errmsg = Some(e_sandbox.into());
+        if sandbox.get() != 0 && flags & OPT_FLAG_SECURE as uint32_t != 0 {
+            *errmsg = Some(E_SANDBOX.into());
             return Err(Failed);
         }
         Ok(())
@@ -270,7 +270,7 @@ fn get_option_newval(
         return get_option_value(opt_idx, OptionSetFlags::GLOBAL);
     }
 
-    if option_has_type(opt_idx, kOptValTypeBoolean) {
+    if option_has_type(opt_idx, OPT_VAL_TYPE_BOOLEAN) {
         let boolean = if nextchar == b'!' {
             // `:set opt!` inverts, leaving an unset global-local value
             // unset.
@@ -281,7 +281,7 @@ fn get_option_newval(
             Some(prefix != Prefix::No)
         };
         OptVal::Boolean(boolean)
-    } else if option_has_type(opt_idx, kOptValTypeNumber) {
+    } else if option_has_type(opt_idx, OPT_VAL_TYPE_NUMBER) {
         let oldval_num = from.number_var().get();
         let Some(newval_num) = take_number(opt_idx, &arg[(*p + 1).min(arg.len())..], errmsg) else {
             return OptVal::Nil;
@@ -321,7 +321,7 @@ fn take_number(opt_idx: OptIndex, arg: &[u8], errmsg: &mut Option<OptError>) -> 
     if is_key_option && looks_like_key {
         let key = OptInt::from(string_to_key(arg));
         if key == 0 {
-            *errmsg = Some(e_invarg.into());
+            *errmsg = Some(E_INVARG.into());
             return None;
         }
         return Some(key);
@@ -397,7 +397,7 @@ fn do_one_set_option(
         }
         // Nothing may follow the ones that take no value.
         if one_of(b"?!&<") && at(arg, *p + 1) != 0 && !white_at(arg, *p + 1) {
-            *errmsg = Some(e_trailing.into());
+            *errmsg = Some(E_TRAILING.into());
             return;
         }
     }
@@ -407,27 +407,27 @@ fn do_one_set_option(
     let showing = nextchar == b'?'
         || (prefix == Prefix::None
             && !one_of(b"=:&<")
-            && !option_has_type(opt_idx, kOptValTypeBoolean));
+            && !option_has_type(opt_idx, OPT_VAL_TYPE_BOOLEAN));
     if showing {
         show_one(opt_idx, opt_flags, varp, did_show);
         if nextchar != b'?' && nextchar != 0 && !after_white {
-            *errmsg = Some(e_trailing.into());
+            *errmsg = Some(E_TRAILING.into());
         }
         return;
     }
 
-    if option_has_type(opt_idx, kOptValTypeBoolean) {
+    if option_has_type(opt_idx, OPT_VAL_TYPE_BOOLEAN) {
         // A boolean takes no value, and nothing may follow it.
         if one_of(b"=:") {
-            *errmsg = Some(e_invarg.into());
+            *errmsg = Some(E_INVARG.into());
             return;
         }
         if !one_of(b"!&<") && nextchar != 0 && !after_white {
-            *errmsg = Some(e_trailing.into());
+            *errmsg = Some(E_TRAILING.into());
             return;
         }
     } else if !one_of(b"=:&<") {
-        *errmsg = Some(e_invarg.into());
+        *errmsg = Some(E_INVARG.into());
         return;
     }
 
@@ -470,11 +470,11 @@ fn show_one(opt_idx: OptIndex, opt_flags: OptionSetFlags, varp: OptSlot, did_sho
     }
     if varp == option_var(opt_idx) {
         last_set_msg(option_last_set(opt_idx));
-    } else if option_has_scope(opt_idx, kOptScopeWin) {
-        let at = option_scope_idx(opt_idx, kOptScopeWin).cast_unsigned();
+    } else if option_has_scope(opt_idx, OPT_SCOPE_WIN) {
+        let at = option_scope_idx(opt_idx, OPT_SCOPE_WIN).cast_unsigned();
         last_set_msg(Win::current().w_onebuf_opt.wo_script_ctx[at]);
-    } else if option_has_scope(opt_idx, kOptScopeBuf) {
-        let at = option_scope_idx(opt_idx, kOptScopeBuf).cast_unsigned();
+    } else if option_has_scope(opt_idx, OPT_SCOPE_BUF) {
+        let at = option_scope_idx(opt_idx, OPT_SCOPE_BUF).cast_unsigned();
         last_set_msg(Buf::current().b_p_script_ctx[at]);
     }
 }
@@ -536,10 +536,10 @@ pub(crate) fn do_set(arg: &[u8], opt_flags: OptionSetFlags) -> Result<(), Failed
     // something still ends its listing with a newline.
     if silent_mode.get() && did_show {
         silent_mode.set(false);
-        info_message.set(true);
+        INFO_MESSAGE.set(true);
         msg_putchar(c_int::from(b'\n'));
         silent_mode.set(true);
-        info_message.set(false);
+        INFO_MESSAGE.set(false);
     }
     Ok(())
 }

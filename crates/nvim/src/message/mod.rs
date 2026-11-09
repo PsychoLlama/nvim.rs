@@ -122,28 +122,28 @@ use crate::mbyte::{
 };
 use crate::memory::XString;
 use crate::message::state::{
-    called_emsg, cmd_silent, cmdmsg_rl, confirm_buttons, confirm_msg, confirm_msg_used, did_emsg,
-    did_wait_return, do_clear_hist_temp, do_clear_sb_text, emsg_assert_fails_context,
-    emsg_assert_fails_lnum, emsg_assert_fails_msg, emsg_noredir, emsg_off, emsg_on_display,
-    emsg_severe, emsg_silent, emsg_skip, in_assert_fails, info_message, is_multihl, keep_msg,
-    keep_msg_hl_id, keep_msg_more, last_sourcing_lnum, last_sourcing_name, lines_left,
-    more_prompt_busy, msg_capture, msg_col, msg_did_scroll, msg_didany, msg_didout, msg_ext_append,
-    msg_ext_chunks, msg_ext_history, msg_ext_id, msg_ext_kind, msg_ext_last_attr,
-    msg_ext_last_chunk, msg_ext_last_hl_id, msg_ext_overwrite, msg_ext_skip_flush,
-    msg_ext_skip_verbose, msg_ext_trigger, msg_flags, msg_grid, msg_grid_pos,
-    msg_grid_pos_at_flush, msg_grid_scroll_discount, msg_hist_off, msg_id_next, msg_keep_depth,
-    msg_no_more, msg_nowait, msg_row, msg_scroll, msg_scrolled, msg_scrolled_at_flush,
-    msg_scrolled_ign, msg_silent, msg_source_busy, msg_wait, need_clr_eos, need_fileinfo,
-    need_wait_return, no_wait_return, on_print, pre_verbose_kind, progress_msg_target, quit_more,
-    redir_col, redir_fd, redir_off, redir_reg, redir_vname, showmode_clear_pending,
-    verbose_did_open, verbose_fd,
+    CALLED_EMSG, CMD_SILENT, CMDMSG_RL, CONFIRM_BUTTONS, CONFIRM_MSG, CONFIRM_MSG_USED, DID_EMSG,
+    DID_WAIT_RETURN, DO_CLEAR_HIST_TEMP, DO_CLEAR_SB_TEXT, EMSG_ASSERT_FAILS_CONTEXT,
+    EMSG_ASSERT_FAILS_LNUM, EMSG_ASSERT_FAILS_MSG, EMSG_NOREDIR, EMSG_OFF, EMSG_ON_DISPLAY,
+    EMSG_SEVERE, EMSG_SILENT, EMSG_SKIP, IN_ASSERT_FAILS, INFO_MESSAGE, IS_MULTIHL, KEEP_MSG,
+    KEEP_MSG_HL_ID, KEEP_MSG_MORE, LAST_SOURCING_LNUM, LAST_SOURCING_NAME, LINES_LEFT,
+    MORE_PROMPT_BUSY, MSG_CAPTURE, MSG_COL, MSG_DID_SCROLL, MSG_DIDANY, MSG_DIDOUT, MSG_EXT_APPEND,
+    MSG_EXT_CHUNKS, MSG_EXT_HISTORY, MSG_EXT_ID, MSG_EXT_KIND, MSG_EXT_LAST_ATTR,
+    MSG_EXT_LAST_CHUNK, MSG_EXT_LAST_HL_ID, MSG_EXT_OVERWRITE, MSG_EXT_SKIP_FLUSH,
+    MSG_EXT_SKIP_VERBOSE, MSG_EXT_TRIGGER, MSG_FLAGS, MSG_GRID, MSG_GRID_POS,
+    MSG_GRID_POS_AT_FLUSH, MSG_GRID_SCROLL_DISCOUNT, MSG_HIST_OFF, MSG_ID_NEXT, MSG_KEEP_DEPTH,
+    MSG_NO_MORE, MSG_NOWAIT, MSG_ROW, MSG_SCROLL, MSG_SCROLLED, MSG_SCROLLED_AT_FLUSH,
+    MSG_SCROLLED_IGN, MSG_SILENT, MSG_SOURCE_BUSY, MSG_WAIT, NEED_CLR_EOS, NEED_FILEINFO,
+    NEED_WAIT_RETURN, NO_WAIT_RETURN, ON_PRINT, PRE_VERBOSE_KIND, PROGRESS_MSG_TARGET, QUIT_MORE,
+    REDIR_COL, REDIR_FD, REDIR_OFF, REDIR_REG, REDIR_VNAME, SHOWMODE_CLEAR_PENDING,
+    VERBOSE_DID_OPEN, VERBOSE_FD,
 };
 use crate::mouse::{MOUSE_SETPOS, jump_to_mouse, setmouse};
 use crate::option::defs::ShmFlag;
 use crate::option::shortmess;
 use crate::option::vars::p_vfile;
 use crate::option::vars::{
-    P_MORE, p_ch, p_debug, p_eb, p_lz, p_more, p_report, p_verbose, rdb_flags,
+    P_MORE, RDB_FLAGS, p_ch, p_debug, p_eb, p_lz, p_more, p_report, p_verbose,
 };
 use crate::options::{
     kOptBoFlagMess, kOptBoFlagShell, kOptMoptFlagHistory, kOptMoptFlagHitEnter,
@@ -322,8 +322,8 @@ pub fn msg_multihl(
     // - Integer: an existing id.
     // - String: a user-defined id, new or existing.
     let id = if id.is_nil() {
-        let next = msg_id_next.get();
-        msg_id_next.set(next + 1);
+        let next = MSG_ID_NEXT.get();
+        MSG_ID_NEXT.set(next + 1);
         Object::integer(next)
     } else {
         if let Object::Integer(n) = id
@@ -337,7 +337,7 @@ pub fn msg_multihl(
     let is_progress = kind == Some(c"progress");
     // Don't display a progress message on the command line when the
     // target does not include it.
-    if is_progress && progress_msg_target.get() & PROGRESS_TARGET_CMD == 0 {
+    if is_progress && PROGRESS_MSG_TARGET.get() & PROGRESS_TARGET_CMD == 0 {
         *needs_msg_clear = true;
         return id;
     }
@@ -349,8 +349,8 @@ pub fn msg_multihl(
     if kind.is_some() {
         msg_ext_set_kind_opt(kind);
     }
-    msg_ext_skip_flush.set(true);
-    msg_ext_id.set(id.clone());
+    MSG_EXT_SKIP_FLUSH.set(true);
+    MSG_EXT_ID.set(id.clone());
 
     // A progress message displays as "title: percent% msg".
     let formatted = msg_data
@@ -362,7 +362,7 @@ pub fn msg_multihl(
     let shown = formatted.as_deref().unwrap_or(hl_msg);
 
     for chunk in shown {
-        is_multihl.set(is_multihl.get() + 1);
+        IS_MULTIHL.set(IS_MULTIHL.get() + 1);
         if err {
             emsg_multiline(chunk.text.as_cstr(), kind, chunk.hl_id, true);
         } else {
@@ -376,7 +376,7 @@ pub fn msg_multihl(
         }
         debug_assert!(
             !ui_has(kUIMessages)
-                || kind.is_none_or(|kind| msg_ext_kind.with(|held| held.as_bytes() == kind.to_bytes()))
+                || kind.is_none_or(|kind| MSG_EXT_KIND.with(|held| held.as_bytes() == kind.to_bytes()))
         );
     }
 
@@ -384,8 +384,8 @@ pub fn msg_multihl(
         msg_hist_add_multihl(shown.to_vec(), false);
     }
 
-    msg_ext_skip_flush.set(false);
-    is_multihl.set(0);
+    MSG_EXT_SKIP_FLUSH.set(false);
+    IS_MULTIHL.set(0);
     drop(no_prompt);
     msg_end();
     id
@@ -393,7 +393,7 @@ pub fn msg_multihl(
 
 /// Show a message, optionally keeping it displayed after a redraw.
 ///
-/// `keep` sets `keep_msg` when the message fits without scrolling;
+/// `keep` sets `KEEP_MSG` when the message fits without scrolling;
 /// `multiline` sends it through [`msg_multiline`] rather than
 /// [`msg_display`]. Upstream's `msg_keep`.
 pub(crate) fn show_message(s: &CStr, hl_id: c_int, keep: bool, multiline: bool) -> bool {
@@ -406,7 +406,7 @@ pub(crate) fn show_message(s: &CStr, hl_id: c_int, keep: bool, multiline: bool) 
 
     // Skip messages that do not match ":filter pattern", but never filter
     // when there is an error.
-    if !emsg_on_display.get() && message_filtered(s) {
+    if !EMSG_ON_DISPLAY.get() && message_filtered(s) {
         return true;
     }
 
@@ -417,24 +417,24 @@ pub(crate) fn show_message(s: &CStr, hl_id: c_int, keep: bool, multiline: bool) 
     // Displaying a message can cause a problem (e.g. when redrawing the
     // window), which causes another message, and so on. Break the loop by
     // limiting the recursion to three levels.
-    if msg_keep_depth.get() >= 3 {
+    if MSG_KEEP_DEPTH.get() >= 3 {
         return true;
     }
-    let _entered = Depth::of(msg_keep_depth);
+    let _entered = Depth::of(MSG_KEEP_DEPTH);
 
     // Add the message to the history unless it is a multihl.
     //
-    // Upstream also skipped a message whose *pointer* was `keep_msg`'s --
+    // Upstream also skipped a message whose *pointer* was `KEEP_MSG`'s --
     // the kept message redisplayed, unless it differed from the newest
-    // entry. Every redisplay hands this a copy (`keep_msg` owns its string
+    // entry. Every redisplay hands this a copy (`KEEP_MSG` owns its string
     // and the display may replace it), so that test could never be true
     // here, and the redisplay sites that must not add to the history say
-    // so with `msg_hist_off`.
-    if is_multihl.get() == 0 {
+    // so with `MSG_HIST_OFF`.
+    if IS_MULTIHL.get() == 0 {
         msg_hist_add(s.to_bytes(), hl_id);
     }
 
-    if is_multihl.get() == 0 {
+    if IS_MULTIHL.get() == 0 {
         msg_start();
     }
 
@@ -453,7 +453,7 @@ pub(crate) fn show_message(s: &CStr, hl_id: c_int, keep: bool, multiline: bool) 
     }
 
     let mut retval = true;
-    if is_multihl.get() == 0 {
+    if IS_MULTIHL.get() == 0 {
         retval = msg_end();
     }
 
@@ -465,7 +465,7 @@ pub(crate) fn show_message(s: &CStr, hl_id: c_int, keep: bool, multiline: bool) 
         set_keep_msg(Some(text), 0);
     }
 
-    need_fileinfo.set(false);
+    NEED_FILEINFO.set(false);
 
     retval
 }
@@ -475,22 +475,22 @@ pub(crate) fn show_message(s: &CStr, hl_id: c_int, keep: bool, multiline: bool) 
 /// Upstream's `msg_strtrunc`.
 pub(crate) fn fit_middle(text: &[u8], force: bool) -> Option<XString> {
     // May truncate the message to avoid a hit-return prompt.
-    let wanted = msg_scroll.get() == 0
-        && !need_wait_return.get()
+    let wanted = MSG_SCROLL.get() == 0
+        && !NEED_WAIT_RETURN.get()
         && shortmess(ShmFlag::TRUNCALL)
         && !exmode_active.get()
-        && msg_silent.get() == 0
+        && MSG_SILENT.get() == 0
         && !ui_has(kUIMessages);
     if !(wanted || force) {
         return None;
     }
     let len = strsize(text);
-    let room = if msg_scrolled.get() != 0 {
+    let room = if MSG_SCROLLED.get() != 0 {
         // Use all the columns.
-        (Rows.get() - msg_row.get()) * Columns.get() - 1
+        (Rows.get() - MSG_ROW.get()) * Columns.get() - 1
     } else {
         // Use up to the 'showcmd' column.
-        (Rows.get() - msg_row.get() - 1) * Columns.get() + sc_col.get() - 1
+        (Rows.get() - MSG_ROW.get() - 1) * Columns.get() + sc_col.get() - 1
     };
     if len <= room || room <= 0 {
         return None;
@@ -626,9 +626,9 @@ pub fn msg_fit_head(text: &CStr, force: bool, hl_id: c_int) -> Option<XString> {
     // The history gets the whole message; only the display is cut.
     msg_hist_add(text.to_bytes(), hl_id);
     let shown = XString::from_bytes(&fit_head(text.to_bytes(), force));
-    msg_hist_off.set(true);
+    MSG_HIST_OFF.set(true);
     let n = msg(shown.as_cstr(), hl_id);
-    msg_hist_off.set(false);
+    MSG_HIST_OFF.set(false);
     n.then_some(shown)
 }
 
@@ -678,14 +678,14 @@ pub fn set_keep_msg(s: Option<&CStr>, hl_id: c_int) {
     if ui_has(kUIMessages) {
         return;
     }
-    keep_msg.set(s.filter(|_| msg_silent.get() == 0).map(XString::from_cstr));
-    keep_msg_more.set(false);
-    keep_msg_hl_id.set(hl_id);
+    KEEP_MSG.set(s.filter(|_| MSG_SILENT.get() == 0).map(XString::from_cstr));
+    KEEP_MSG_MORE.set(false);
+    KEEP_MSG_HL_ID.set(hl_id);
 }
 
 /// Is there a message to show again after the next redraw?
 pub(crate) fn has_keep_msg() -> bool {
-    keep_msg.with(Option::is_some)
+    KEEP_MSG.with(Option::is_some)
 }
 
 /// Would a message be seen if it were shown now?
@@ -701,7 +701,7 @@ pub fn msgmore(n: c_int) {
         return;
     }
     // Keep the message from a previous msgmore(), but not another one.
-    if has_keep_msg() && !keep_msg_more.get() {
+    if has_keep_msg() && !KEEP_MSG_MORE.get() {
         return;
     }
 
@@ -728,7 +728,7 @@ pub fn msgmore(n: c_int) {
     let text = XString::from_bytes(&text);
     if msg(text.as_cstr(), 0) {
         set_keep_msg(Some(text.as_cstr()), 0);
-        keep_msg_more.set(true);
+        KEEP_MSG_MORE.set(true);
     }
 }
 

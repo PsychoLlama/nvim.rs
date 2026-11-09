@@ -51,7 +51,7 @@ use std::path::Path;
 use crate::getchar::state::got_int;
 use crate::memline::{LineError, ml_append_buf_terminated};
 use crate::memory::XString;
-use crate::message::e_write;
+use crate::message::E_WRITE;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
@@ -338,7 +338,7 @@ fn sug_write(spin: &mut SpellInfo, fname: &CStr) {
     let mut w = SplWriter::new(file);
     w.bytes(VIMSUGMAGIC.to_bytes());
     if !w.landed() {
-        emsg(gettext(e_write));
+        emsg(gettext(E_WRITE));
         return;
     }
     w.byte(VIMSUGVERSION);
@@ -368,7 +368,7 @@ fn sug_write(spin: &mut SpellInfo, fname: &CStr) {
         let line = lines.line_cstr(LineNr::new(lnum), 0).to_bytes_with_nul();
         w.bytes(line);
         if !w.landed() {
-            emsg(gettext(e_write));
+            emsg(gettext(E_WRITE));
             return;
         }
         spin.si_memtot += len_as_int(line.len());
@@ -376,7 +376,7 @@ fn sug_write(spin: &mut SpellInfo, fname: &CStr) {
 
     w.byte(0);
     if !w.finish() {
-        emsg(gettext(e_write));
+        emsg(gettext(E_WRITE));
     }
     let used = spin.si_memtot;
     spell_message_fmt(

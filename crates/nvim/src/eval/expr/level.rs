@@ -46,7 +46,7 @@ use crate::ex_eval::aborting;
 use crate::global_cell::GlobalCell;
 use crate::guard::Depth;
 use crate::message::emsg;
-use crate::message::state::{called_emsg, did_emsg};
+use crate::message::state::{CALLED_EMSG, DID_EMSG};
 use crate::option::vars::p_ic;
 use crate::os::cshim::gettext;
 use crate::register::get_reg_contents_owned;
@@ -66,8 +66,8 @@ const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 /// first byte the expression did not consume, which is where the command
 /// after it (`| cmd`) is looked for.
 pub fn eval0(text: &[u8], result: &mut TypVal, evaluate: bool) -> (Result<(), Failed>, usize) {
-    let did_emsg_before = did_emsg.get();
-    let called_emsg_before = called_emsg.get();
+    let did_emsg_before = DID_EMSG.get();
+    let called_emsg_before = CALLED_EMSG.get();
     let mut cursor = Cursor::new(text);
     cursor.skip_white();
     let ret = eval1(&mut cursor, result, evaluate);
@@ -81,8 +81,8 @@ pub fn eval0(text: &[u8], result: &mut TypVal, evaluate: bool) -> (Result<(), Fa
         // Stay quiet if something already reported, or if we are
         // unwinding from an exception.
         if !aborting()
-            && did_emsg.get() == did_emsg_before
-            && called_emsg.get() == called_emsg_before
+            && DID_EMSG.get() == did_emsg_before
+            && CALLED_EMSG.get() == called_emsg_before
         {
             if end_error {
                 let rest = msg_bytes(cursor.rest());

@@ -51,11 +51,11 @@ use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::mbyte::{canon_props, canonize, utf_byte2len};
 use crate::memline::{check_need_swap, ml_append_terminated, ml_delete, ml_open};
 use crate::memory::{XString, try_grow_zeroed};
+use crate::message::E_INTERR;
 use crate::message::IOSIZE;
-use crate::message::e_interr;
 use crate::message::state::{
-    emsg_silent, in_assert_fails, keep_msg, msg_col, msg_listdo_overwrite, msg_scroll,
-    msg_scrolled, msg_scrolled_ign, msg_silent, need_fileinfo, need_wait_return, no_wait_return,
+    EMSG_SILENT, IN_ASSERT_FAILS, KEEP_MSG, MSG_COL, MSG_LISTDO_OVERWRITE, MSG_SCROLL,
+    MSG_SCROLLED, MSG_SCROLLED_IGN, MSG_SILENT, NEED_FILEINFO, NEED_WAIT_RETURN, NO_WAIT_RETURN,
 };
 use crate::message::{
     do_dialog, emsg, fit_head, msg, msg_check_for_delay, msg_clr_eos, msg_delay, msg_display_bytes,
@@ -201,8 +201,8 @@ impl Buf {
     pub fn file_message(self, name: Option<&CStr>, note: &CStr) {
         // The report. Upstream builds it in `IObuff` and then calls
         // `msg_progress`/`msg_display`, which write it again.
-        let prev_msg_col = msg_col.get();
-        if msg_silent.get() != 0 {
+        let prev_msg_col = MSG_COL.get();
+        if MSG_SILENT.get() != 0 {
             return;
         }
         let mut report = Report::quoted_fname(self, name, IOSIZE as usize - 100);
@@ -210,25 +210,25 @@ impl Buf {
         report.push(note.to_bytes());
 
         // For the first message we may have to start a new line. Further ones
-        // overwrite the previous one; reset `msg_scroll` before calling this.
-        let msg_scroll_save = msg_scroll.get();
+        // overwrite the previous one; reset `MSG_SCROLL` before calling this.
+        let msg_scroll_save = MSG_SCROLL.get();
         if shortmess(ShmFlag::OVERALL)
-            && msg_listdo_overwrite.get() == 0
+            && MSG_LISTDO_OVERWRITE.get() == 0
             && !exiting.get()
             && p_verbose() == 0
         {
-            msg_scroll.set(c_int::from(false));
+            MSG_SCROLL.set(c_int::from(false));
         }
-        if msg_scroll.get() == 0 {
+        if MSG_SCROLL.get() == 0 {
             // Wait a bit when overwriting an error message.
             msg_check_for_delay(false);
         }
         msg_start();
-        if prev_msg_col != 0 && msg_col.get() == 0 {
+        if prev_msg_col != 0 && MSG_COL.get() == 0 {
             msg_putchar(c_int::from(b'\r')); // overwrite any previous message
         }
-        msg_scroll.set(msg_scroll_save);
-        msg_scrolled_ign.set(true);
+        MSG_SCROLL.set(msg_scroll_save);
+        MSG_SCROLLED_IGN.set(true);
         let text = report.as_cstr();
         if note.is_empty() {
             msg_progress(text, c"bufwrite", c"running", 0, false, true);
@@ -237,7 +237,7 @@ impl Buf {
             msg_display_bytes(&fit_head(text.to_bytes(), false), 0, false);
         }
         msg_clr_eos();
-        msg_scrolled_ign.set(false);
+        MSG_SCROLLED_IGN.set(false);
     }
 }
 

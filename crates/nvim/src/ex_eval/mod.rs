@@ -68,8 +68,8 @@ use crate::ex_eval::defs::{CondId, CondStack, Pend};
 use crate::ex_eval::state::{did_endif, did_throw, force_abort, trylevel};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::message::state::{did_emsg, emsg_silent};
-use crate::message::{e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_while};
+use crate::message::state::{DID_EMSG, EMSG_SILENT};
+use crate::message::{E_ENDFOR, E_ENDIF, E_ENDTRY, E_ENDWHILE, E_FOR, E_WHILE};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::CmdIdx;
@@ -99,7 +99,7 @@ crate::flag_set! {
     const CAUGHT = 4096;
     /// And that catch clause has ended.
     const FINISHED = 8192;
-    /// This `:try` reset `emsg_silent`; the old value is on
+    /// This `:try` reset `EMSG_SILENT`; the old value is on
     /// `saved_emsg_silent`.
     const SILENT = 16384;
 
@@ -198,7 +198,7 @@ pub(crate) fn cond_stack_of(excmd: &ExArg) -> CondId {
 /// Do not do something after an error, an interrupt or a throw, nor when the
 /// surrounding conditional was not active. Upstream's `CHECK_SKIP`.
 fn check_skip(cond: CondId) -> bool {
-    did_emsg.get() != 0
+    DID_EMSG.get() != 0
         || got_int.get()
         || did_throw.get()
         || cond.with(|cs| cs.idx > 0 && !cs.flags[cs.top().expect("open") - 1].has(CsFlags::ACTIVE))
@@ -214,7 +214,7 @@ fn check_skip(cond: CondId) -> bool {
 /// point is reached, so that during such a cancellation this keeps answering
 /// the same thing. `got_int` is also set by `interrupt()`.
 pub(crate) fn aborting() -> bool {
-    (did_emsg.get() != 0 && force_abort.get()) || got_int.get() || did_throw.get()
+    (DID_EMSG.get() != 0 && force_abort.get()) || got_int.get() || did_throw.get()
 }
 
 /// Put `force_abort` back, when it must be restored before the throw point
@@ -230,7 +230,7 @@ pub(crate) fn update_force_abort() {
 /// the error message has not been shown and so has not itself caused the
 /// abort.
 pub(crate) fn should_abort(failed: bool) -> bool {
-    (failed && trylevel.get() != 0 && emsg_silent.get() == 0) || aborting()
+    (failed && trylevel.get() != 0 && EMSG_SILENT.get() == 0) || aborting()
 }
 
 /// [`should_abort`] over an answer that has already become a `Result`.
@@ -444,7 +444,7 @@ pub(crate) fn ex_while(excmd: &mut ExArg) {
         return;
     };
 
-    let skip = did_emsg.get() != 0 || got_int.get() || did_throw.get() || outer_inactive;
+    let skip = DID_EMSG.get() != 0 || got_int.get() || did_throw.get() || outer_inactive;
     let (result, error) = if is_while {
         let answer = eval_cmd_bool(excmd, skip);
         (answer == Ok(true), answer.is_err())
@@ -552,9 +552,9 @@ pub(crate) fn ex_endwhile(excmd: &mut ExArg) {
     let cond = cond_stack_of(excmd);
     let ending_while = excmd.cmdidx == CmdIdx::endwhile;
     let err = if ending_while {
-        err_msg(e_while)
+        err_msg(E_WHILE)
     } else {
-        err_msg(e_for)
+        err_msg(E_FOR)
     };
     let kind = if ending_while {
         CsFlags::WHILE
@@ -581,9 +581,9 @@ pub(crate) fn ex_endwhile(excmd: &mut ExArg) {
     }
     if !flags.has(CsFlags::LOOP) {
         if !flags.has(CsFlags::TRY) {
-            excmd.errmsg = err_msg(e_endif);
+            excmd.errmsg = err_msg(E_ENDIF);
         } else if flags.has(CsFlags::FINALLY) {
-            excmd.errmsg = err_msg(e_endtry);
+            excmd.errmsg = err_msg(E_ENDTRY);
         }
         // Find the matching ":while" and report what is missing.
         let found = cond.with(|cs| {
@@ -634,7 +634,7 @@ pub(crate) fn ex_endwhile(excmd: &mut ExArg) {
 /// conditional not in its finally clause found on the way always is.
 ///
 /// With `inclusive` and `searched_cond == CsFlags::TRY | CsFlags::SILENT`, the
-/// `emsg_silent` a `:try` saved is restored -- [`ex_endtry`] wants that, and
+/// `EMSG_SILENT` a `:try` saved is restored -- [`ex_endtry`] wants that, and
 /// normally it only happens when such a conditional is left.
 ///
 /// Answers the level the search stopped at, `None` when it went through
@@ -701,7 +701,7 @@ pub(crate) fn cleanup_conditionals(
             break;
         };
         if let Some(saved) = restore {
-            emsg_silent.set(saved);
+            EMSG_SILENT.set(saved);
         }
         if stop {
             break;
@@ -717,7 +717,7 @@ pub(crate) fn cleanup_conditionals(
 /// interrupt happened after it.
 fn discard_finally_pending(cond: CondId, at: usize) {
     let (flags, pending) = cond.with(|cs| (cs.flags[at], cs.pending[at]));
-    if !(did_emsg.get() != 0 || got_int.get() || flags.has(CsFlags::FINALLY)) {
+    if !(DID_EMSG.get() != 0 || got_int.get() || flags.has(CsFlags::FINALLY)) {
         return;
     }
     match pending {
@@ -761,11 +761,11 @@ fn discard_finally_pending(cond: CondId, at: usize) {
 fn get_end_emsg(cs: &CondStack) -> Option<CString> {
     let flags = cs.top_flags();
     if flags.has(CsFlags::WHILE) {
-        err_msg(e_endwhile)
+        err_msg(E_ENDWHILE)
     } else if flags.has(CsFlags::FOR) {
-        err_msg(e_endfor)
+        err_msg(E_ENDFOR)
     } else {
-        err_msg(e_endif)
+        err_msg(E_ENDIF)
     }
 }
 

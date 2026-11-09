@@ -57,7 +57,7 @@ use crate::highlight_group::{
 use crate::indent_c::find_start_comment;
 use crate::mbyte::strcmp_ic_in;
 use crate::memline::{Lines, ml_get_buf_len};
-use crate::message::state::msg_col;
+use crate::message::state::MSG_COL;
 use crate::message::{
     emsg, msg, msg_advance, msg_display, msg_display_bytes, msg_ext_set_kind, msg_outnum,
     msg_putchar, msg_str, msg_str_hl, msg_title,

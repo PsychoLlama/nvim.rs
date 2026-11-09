@@ -684,7 +684,7 @@ mod tests {
     }
 
     /// The interned-name shape: an owned, unhashable-by-`IdHasher`-integer
-    /// key, looked up by a borrowed slice. `namespace_ids` and the augroup
+    /// key, looked up by a borrowed slice. `NAMESPACE_IDS` and the augroup
     /// map are this, and their user-visible order is this order.
     #[test]
     fn an_owned_key_is_found_by_a_borrowed_one() {

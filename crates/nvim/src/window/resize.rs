@@ -34,7 +34,7 @@ use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, comp_col};
 use crate::edit::{cursor_down_inner, cursor_up_inner};
 use crate::grid::{default_gridview, grid_clear};
 use crate::mark::setmark;
-use crate::message::state::{msg_row, msg_scrolled};
+use crate::message::state::{MSG_ROW, MSG_SCROLLED};
 use crate::message::{msg_grid_validate, msg_grid_view};
 use crate::r#move::{
     WinValid, changed_line_abv_curs_win, curs_columns, invalidate_botline_win, set_topline,
@@ -489,14 +489,14 @@ pub fn command_height() {
     comp_positions();
     cmdline_row.set(Rows.get() - number_as_int(p_ch()));
     redraw_cmdline.set(true);
-    if msg_scrolled.get() == 0 && full_screen.get() {
+    if MSG_SCROLLED.get() == 0 && full_screen.get() {
         let mut grid = default_gridview();
         if !ui_has(kUIMessages) {
             msg_grid_validate();
             grid = msg_grid_view();
         }
         grid_clear(grid, cmdline_row.get(), Rows.get(), 0, Columns.get(), 0);
-        msg_row.set(cmdline_row.get());
+        MSG_ROW.set(cmdline_row.get());
     }
     TabPage::current().tp_ch_used = p_ch();
     min_set_ch.set(p_ch());

@@ -57,9 +57,9 @@ use crate::fold::{fold_adjust_visual, fold_check_close, fold_open_cursor, has_an
 use crate::getchar::state::{KeyTyped, got_int, mod_mask, reg_executing, reg_recording};
 use crate::getchar::{char_avail, readbuf1_empty, safe_vgetc, stuff_empty, typeahead, vgetc};
 use crate::message::state::{
-    did_emsg, did_wait_return, emsg_on_display, emsg_silent, in_assert_fails, keep_msg,
-    keep_msg_hl_id, msg_didany, msg_didout, msg_hist_off, msg_nowait, msg_scroll, msg_silent,
-    need_fileinfo, need_wait_return, quit_more,
+    DID_EMSG, DID_WAIT_RETURN, EMSG_ON_DISPLAY, EMSG_SILENT, IN_ASSERT_FAILS, KEEP_MSG,
+    KEEP_MSG_HL_ID, MSG_DIDANY, MSG_DIDOUT, MSG_HIST_OFF, MSG_NOWAIT, MSG_SCROLL, MSG_SILENT,
+    NEED_FILEINFO, NEED_WAIT_RETURN, QUIT_MORE,
 };
 use crate::message::{has_keep_msg, may_clear_sb_text, msg, msg_delay, wait_return};
 use crate::normal::defs::{CmdArg, OpArg, Outcome};
@@ -70,7 +70,7 @@ use crate::normal::{
 use crate::ops::OpType;
 use crate::option::defs::ShmFlag;
 use crate::option::shortmess;
-use crate::option::vars::{fdo_flags, p_smd};
+use crate::option::vars::{FDO_FLAGS, p_smd};
 use crate::options::kOptFdoFlagAll;
 use crate::os::libc::int64_t;
 use crate::os::time::os_time_raw;
@@ -373,30 +373,30 @@ pub(crate) fn normal_need_additional_char(ns: &mut NormalState) -> bool {
 /// back before the next key is read.
 pub(crate) fn normal_need_redraw_mode_message(ns: &mut NormalState) -> bool {
     let showing_mode = p_smd()
-        && msg_silent.get() == 0
+        && MSG_SILENT.get() == 0
         && (!restart_edit.get().is_nul()
             || visual_active()
                 && ns.old_pos.lnum == Win::current().w_cursor.lnum
                 && ns.old_pos.col == Win::current().w_cursor.col)
         && (clear_cmdline.get() || redraw_cmdline.get())
-        && (msg_didout.get() || msg_didany.get() && msg_scroll.get() != 0)
-        && !msg_nowait.get()
+        && (MSG_DIDOUT.get() || MSG_DIDANY.get() && MSG_SCROLL.get() != 0)
+        && !MSG_NOWAIT.get()
         && KeyTyped.get();
     // The other way in: an error is on display and insert mode is
     // pending, with no Visual selection to describe instead.
     let error_on_display = !restart_edit.get().is_nul()
         && !visual_active()
-        && msg_scroll.get() != 0
-        && emsg_on_display.get();
+        && MSG_SCROLL.get() != 0
+        && EMSG_ON_DISPLAY.get();
 
     (showing_mode || error_on_display)
         && ns.oa.regname == 0
         && !ns.ca.outcome.has(Outcome::COMMAND_BUSY)
         && stuff_empty()
         && typeahead().maplen() == 0
-        && emsg_silent.get() == 0
-        && !in_assert_fails.get()
-        && !did_wait_return.get()
+        && EMSG_SILENT.get() == 0
+        && !IN_ASSERT_FAILS.get()
+        && !DID_WAIT_RETURN.get()
         && ns.oa.op_type == OpType::Nop
 }
 
@@ -407,28 +407,28 @@ pub(crate) fn normal_redraw_mode_message() {
     if !restart_edit.get().is_nul() {
         State.set(MODE_INSERT);
     }
-    if must_redraw.get() != 0 && has_keep_msg() && !emsg_on_display.get() {
+    if must_redraw.get() != 0 && has_keep_msg() && !EMSG_ON_DISPLAY.get() {
         // The redraw must not print the kept message itself, so it is
         // taken out for the duration and put back after.
-        let kmsg = keep_msg.take();
+        let kmsg = KEEP_MSG.take();
         setcursor();
         let _ = update_screen();
-        keep_msg.set(kmsg);
+        KEEP_MSG.set(kmsg);
         // A copy: `msg` replaces the kept message.
-        if let Some(copy) = keep_msg.with(Clone::clone) {
-            msg(copy.as_cstr(), keep_msg_hl_id.get());
+        if let Some(copy) = KEEP_MSG.with(Clone::clone) {
+            msg(copy.as_cstr(), KEEP_MSG_HL_ID.get());
         }
     }
     setcursor();
     ui_cursor_shape();
     ui_flush();
-    if msg_scroll.get() != 0 || emsg_on_display.get() {
+    if MSG_SCROLL.get() != 0 || EMSG_ON_DISPLAY.get() {
         msg_delay(1003, true);
     }
     msg_delay(3003, false);
     State.set(save_state);
-    msg_scroll.set(0);
-    emsg_on_display.set(false);
+    MSG_SCROLL.set(0);
+    EMSG_ON_DISPLAY.set(false);
 }
 
 /// File timestamps and a pending "Press ENTER", once the stuff buffer runs
@@ -439,7 +439,7 @@ fn normal_check_stuff_buffer() {
         if need_check_timestamps.get() {
             check_timestamps(false);
         }
-        if need_wait_return.get() {
+        if NEED_WAIT_RETURN.get() {
             wait_return(0);
         }
     }
@@ -459,7 +459,7 @@ fn normal_check_interrupt(ns: &mut NormalState) {
         exmode_active.set(true);
         State.set(MODE_NORMAL);
     } else if global_busy.get() == 0 || !exmode_active.get() {
-        if !quit_more.get() {
+        if !QUIT_MORE.get() {
             vgetc();
         }
         got_int.set(false);
@@ -511,7 +511,7 @@ fn normal_check_folds() {
     fold_adjust_visual();
     if has_any_folding(Win::current()) != 0 && !char_avail() {
         fold_check_close();
-        if fdo_flags.get() & kOptFdoFlagAll != 0 {
+        if FDO_FLAGS.get() & kOptFdoFlagAll != 0 {
             fold_open_cursor();
         }
     }
@@ -534,18 +534,18 @@ fn normal_redraw() {
     Buf::current().b_last_used = os_time_raw();
     // `msg` replaces the kept message, so it is handed a copy -- and the
     // message is not added to the history a second time.
-    if let Some(copy) = keep_msg.with(Clone::clone) {
-        msg_hist_off.set(true);
-        msg(copy.as_cstr(), keep_msg_hl_id.get());
-        msg_hist_off.set(false);
+    if let Some(copy) = KEEP_MSG.with(Clone::clone) {
+        MSG_HIST_OFF.set(true);
+        msg(copy.as_cstr(), KEEP_MSG_HL_ID.get());
+        MSG_HIST_OFF.set(false);
     }
-    if need_fileinfo.get() && !shortmess(ShmFlag::FILEINFO) {
+    if NEED_FILEINFO.get() && !shortmess(ShmFlag::FILEINFO) {
         fileinfo(0, 1, false);
-        need_fileinfo.set(false);
+        NEED_FILEINFO.set(false);
     }
-    emsg_on_display.set(false);
-    did_emsg.set(0);
-    msg_didany.set(false);
+    EMSG_ON_DISPLAY.set(false);
+    DID_EMSG.set(0);
+    MSG_DIDANY.set(false);
     may_clear_sb_text();
     setcursor();
 }
@@ -562,9 +562,9 @@ pub(crate) fn normal_check(ns: &mut NormalState) -> Step {
         discard_current_exception();
     }
     if !exmode_active.get() {
-        msg_scroll.set(0);
+        MSG_SCROLL.set(0);
     }
-    quit_more.set(false);
+    QUIT_MORE.set(false);
     state_no_longer_safe(None);
 
     if skip_redraw.get() || exmode_active.get() {

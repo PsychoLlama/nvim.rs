@@ -480,7 +480,7 @@ pub fn apply_autocmds_group(
                 check_lnums_nested(true);
             }
 
-            let save_did_emsg = did_emsg.get();
+            let save_did_emsg = DID_EMSG.get();
             let save_ex_pressedreturn = get_pressedreturn();
 
             // `getnextac` is what iterates: it is pulled once per
@@ -491,7 +491,7 @@ pub fn apply_autocmds_group(
                 DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT,
             );
 
-            did_emsg.set(did_emsg.get() + save_did_emsg);
+            DID_EMSG.set(DID_EMSG.get() + save_did_emsg);
             set_pressedreturn(save_ex_pressedreturn);
 
             if autocmd_nesting.get() == 1 {

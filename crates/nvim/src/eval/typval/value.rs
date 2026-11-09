@@ -372,10 +372,10 @@ pub fn value_check_lock(lock: VarLock, name: LockName<'_>) -> bool {
     let unnamed = matches!(name, LockName::None);
     let error_message = match (lock, unnamed) {
         (VarLock::Unlocked, _) => return false,
-        (VarLock::Locked, true) => e_value_is_locked,
-        (VarLock::Locked, false) => e_value_is_locked_str,
-        (VarLock::Fixed, true) => e_cannot_change_value,
-        (VarLock::Fixed, false) => e_cannot_change_value_of_str,
+        (VarLock::Locked, true) => E_VALUE_IS_LOCKED,
+        (VarLock::Locked, false) => E_VALUE_IS_LOCKED_STR,
+        (VarLock::Fixed, true) => E_CANNOT_CHANGE_VALUE,
+        (VarLock::Fixed, false) => E_CANNOT_CHANGE_VALUE_OF_STR,
     };
     let error_message = gettext(error_message);
     let name = match name {

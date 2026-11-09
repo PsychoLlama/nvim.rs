@@ -35,7 +35,7 @@ const MAX_SAVED_POS: c_int = 8;
 /// copied, and the window, written to `win`.
 fn matchadd_dict_arg(tv: &TypVal, win: &mut Win) -> Result<Option<CString>, Failed> {
     if tv.v_type() != VAR_DICT {
-        emsg(gettext(e_dictreq));
+        emsg(gettext(E_DICTREQ));
         return Err(Failed);
     }
     let dict = tv.dict_ref();
@@ -47,7 +47,7 @@ fn matchadd_dict_arg(tv: &TypVal, win: &mut Win) -> Result<Option<CString>, Fail
         return Ok(conceal);
     };
     let Some(found) = find_win_by_nr_or_id(&di.di_tv) else {
-        emsg(gettext(e_invalwindow));
+        emsg(gettext(E_INVALWINDOW));
         return Err(Failed);
     };
     *win = found;
@@ -124,7 +124,7 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
 
     result.write_number(-1);
     if args[0].v_type() != VAR_LIST {
-        emsg(gettext(e_listreq));
+        emsg(gettext(E_LISTREQ));
         return;
     }
     let Some(win) = win else {

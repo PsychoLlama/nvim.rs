@@ -207,7 +207,7 @@ impl Put {
         if yanklen + spaces != 0
             && self.count > (c_int::MAX - (land.startspaces + land.endspaces)) / (yanklen + spaces)
         {
-            emsg(gettext(e_resulting_text_too_long));
+            emsg(gettext(E_RESULTING_TEXT_TOO_LONG));
             return Err(Stopped::TooLong);
         }
         let pad = |n: c_int| usize::try_from(n).expect("a count of spaces");

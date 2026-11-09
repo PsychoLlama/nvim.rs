@@ -22,7 +22,7 @@ use core::ffi::CStr;
 
 /// Run `code` as a Lua chunk with `args` as its `...`.
 pub fn nvim_exec_lua(code: ApiString, args: Array) -> Result<Object, Error> {
-    nlua_exec(code.as_bytes(), None, args, kRetObject)
+    nlua_exec(code.as_bytes(), None, args, RET_OBJECT)
 }
 
 /// [`nvim_exec_lua`], marked fast for the RPC dispatcher.

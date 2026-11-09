@@ -26,13 +26,13 @@ use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::input::prompt_for_number;
+use crate::message::E_INVARG;
 use crate::message::VIM_ERROR;
 use crate::message::VIM_GENERIC;
 use crate::message::VIM_INFO;
 use crate::message::VIM_QUESTION;
 use crate::message::VIM_WARNING;
-use crate::message::e_invarg;
-use crate::message::state::{lines_left, msg_row, msg_scroll};
+use crate::message::state::{LINES_LEFT, MSG_ROW, MSG_SCROLL};
 use crate::message::{
     confirm_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_start, msg_str, verb_msg,
 };
@@ -115,7 +115,7 @@ pub fn f_debugbreak(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
     let pid = number_as_int(arg_number(&args[0]));
     if pid == 0 {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     }
     let _ = os_kill(pid, SIGINT);
@@ -174,9 +174,9 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // Start at the bottom of the screen so the whole list is visible.
     msg_ext_set_kind(c"confirm");
     msg_start();
-    msg_row.set(Rows.get() - 1);
-    lines_left.set(Rows.get());
-    msg_scroll.set(1);
+    MSG_ROW.set(Rows.get() - 1);
+    LINES_LEFT.set(Rows.get());
+    MSG_SCROLL.set(1);
     msg_clr_eos();
 
     // The List is held by the argument for the whole call, and printing it

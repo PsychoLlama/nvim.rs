@@ -3,7 +3,7 @@
 //! `nvim_create_autocmd` is where an api-registered autocommand is born: it
 //! resolves the event list, the pattern list and the group, then installs
 //! either a command string or a `LuaRef` callback under a fresh id from the
-//! parent's `next_autocmd_id`.  `nvim_clear_autocmds` is the same
+//! parent's `NEXT_AUTOCMD_ID`.  `nvim_clear_autocmds` is the same
 //! resolution driving `clear_autocmd` over every match instead.
 
 #![forbid(unsafe_code)]
@@ -94,8 +94,8 @@ fn create_autocmd(
     if event_array.is_empty() {
         return Err(err_required(c"event"));
     }
-    let autocmd_id: int64_t = next_autocmd_id.get();
-    next_autocmd_id.set(autocmd_id + 1);
+    let autocmd_id: int64_t = NEXT_AUTOCMD_ID.get();
+    NEXT_AUTOCMD_ID.set(autocmd_id + 1);
     for event_str in event_array.iter() {
         let event_str = event_str
             .as_string()

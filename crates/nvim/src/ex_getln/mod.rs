@@ -88,12 +88,12 @@ use crate::memline::ml_replace_buf_text;
 use crate::memline::{decl, incl, ml_append_cstr};
 use crate::memory::XString;
 use crate::message::state::{
-    cmd_silent, cmdmsg_rl, did_emsg, emsg_on_display, lines_left, msg_col, msg_didout, msg_no_more,
-    msg_row, msg_scroll, msg_scrolled, need_wait_return, quit_more, redir_off,
+    CMD_SILENT, CMDMSG_RL, DID_EMSG, EMSG_ON_DISPLAY, LINES_LEFT, MSG_COL, MSG_DIDOUT, MSG_NO_MORE,
+    MSG_ROW, MSG_SCROLL, MSG_SCROLLED, NEED_WAIT_RETURN, QUIT_MORE, REDIR_OFF,
 };
 use crate::message::{
-    e_cannot_edit_other_buf, e_cmdwin, e_command_too_recursive, e_intern2, e_invarg, e_positive,
-    e_textlock,
+    E_CANNOT_EDIT_OTHER_BUF, E_CMDWIN, E_COMMAND_TOO_RECURSIVE, E_INTERN2, E_INVARG, E_POSITIVE,
+    E_TEXTLOCK,
 };
 use crate::message::{
     emsg, msg, msg_bytes, msg_check, msg_clr_eos, msg_cursor_goto, msg_display_bytes,
@@ -110,8 +110,8 @@ use crate::normal::defs::MotionType;
 use crate::normal::{clear_showcmd, normal_enter};
 use crate::option::defs::{OptSet, OptVal};
 use crate::option::vars::{
-    P_HLS, p_ari, p_arshape, p_cedit, p_ch, p_cwh, p_hls, p_ic, p_icm, p_is, p_paste, p_ru, p_scs,
-    p_tbidi, p_wmnu, wim_flags,
+    P_HLS, WIM_FLAGS, p_ari, p_arshape, p_cedit, p_ch, p_cwh, p_hls, p_ic, p_icm, p_is, p_paste,
+    p_ru, p_scs, p_tbidi, p_wmnu,
 };
 use crate::option::{
     csh_like_shell, magic_isset, set_iminsert_global, set_imsearch_global, set_option_direct,
@@ -215,13 +215,13 @@ mod eval;
 pub use self::eval::*;
 mod prompt;
 pub use self::prompt::*;
-pub const kDirectionNotSet: Direction = 0;
+pub const DIRECTION_NOT_SET: Direction = 0;
 pub const OPTION_MAGIC_OFF: OptMagic = 2;
 pub const OPTION_MAGIC_ON: OptMagic = 1;
 pub const OPTION_MAGIC_NOT_SET: OptMagic = 0;
 pub const MAGIC_ALL: Magic = 4;
 pub const MAGIC_ON: Magic = 3;
-pub const kMTCharWise: MotionType = 0;
+pub const MT_CHAR_WISE: MotionType = 0;
 pub const kCmdRedrawAll: CmdRedraw = 2;
 pub const kCmdRedrawPos: CmdRedraw = 1;
 pub const kCmdRedrawNone: CmdRedraw = 0;

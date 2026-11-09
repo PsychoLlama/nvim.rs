@@ -64,7 +64,7 @@ use crate::memory::XString;
 use crate::menu::{ex_emenu, ex_menu, ex_menutranslate};
 use crate::message::ex_messages;
 use crate::message::{
-    e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors, e_norange, e_zerocount,
+    E_BACKSLASH, E_INVRANGE, E_LINE_NUMBER_OUT_OF_RANGE, E_NO_ERRORS, E_NORANGE, E_ZEROCOUNT,
 };
 use crate::normal::defs::MotionType;
 use crate::option::ex_set;
@@ -148,7 +148,7 @@ mod childproc;
 #[cfg(test)]
 mod tests;
 pub(crate) use self::childproc::*;
-pub const kDirectionNotSet: Direction = 0;
+pub const DIRECTION_NOT_SET: Direction = 0;
 pub const kCdCauseManual: CdCause = 0;
 pub const OPTION_MAGIC_OFF: OptMagic = 2;
 pub const OPTION_MAGIC_ON: OptMagic = 1;
@@ -231,7 +231,7 @@ pub struct SavedDebugState {
 }
 
 pub const ETYPE_EXCEPT: EStackType = 5;
-pub const kRetNilBool: LuaRetMode = 1;
+pub const RET_NIL_BOOL: LuaRetMode = 1;
 pub const ESTACK_SCRIPT: EStackArg = 3;
 pub const ESTACK_STACK: EStackArg = 2;
 pub const ESTACK_SFILE: EStackArg = 1;

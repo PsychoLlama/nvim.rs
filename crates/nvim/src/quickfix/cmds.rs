@@ -142,11 +142,11 @@ fn cbuffer_process_args(excmd: &mut ExArg) -> Option<Buf> {
     };
 
     let Some(buf) = buf else {
-        qf_emsg(e_invarg);
+        qf_emsg(E_INVARG);
         return None;
     };
     if buf.b_ml.ml_mfp.is_none() {
-        qf_emsg(e_buffer_is_not_loaded);
+        qf_emsg(E_BUFFER_IS_NOT_LOADED);
         return None;
     }
 
@@ -159,7 +159,7 @@ fn cbuffer_process_args(excmd: &mut ExArg) -> Option<Buf> {
         || excmd.line2 < LineNr::ONE
         || excmd.line2 > buf.b_ml.ml_line_count
     {
-        qf_emsg(e_invrange);
+        qf_emsg(E_INVRANGE);
         return None;
     }
     Some(buf)

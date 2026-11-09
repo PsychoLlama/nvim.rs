@@ -35,7 +35,7 @@ use crate::eval::{
 };
 use crate::ex_eval::aborting;
 use crate::mbyte::head_off;
-use crate::message::e_using_float_as_string;
+use crate::message::E_USING_FLOAT_AS_STRING;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
@@ -149,7 +149,7 @@ pub(crate) fn check_can_index(
 ) -> Result<(), Failed> {
     let message: &'static CStr = match result.v_type() {
         VAR_FUNC | VAR_PARTIAL => e_cannot_index_a_funcref,
-        VAR_FLOAT => e_using_float_as_string,
+        VAR_FLOAT => E_USING_FLOAT_AS_STRING,
         VAR_BOOL | VAR_SPECIAL => e_cannot_index_special_variable,
         // Not evaluating: the subscript is only being skipped over, and an
         // unset value is what an unevaluated operand looks like.

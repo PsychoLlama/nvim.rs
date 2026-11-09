@@ -281,7 +281,7 @@ fn interrupted(advance: bool) -> u8 {
         // Insert mode.
         gotchars(&[c]);
     }
-    cmd_silent.set(false);
+    CMD_SILENT.set(false);
     c
 }
 
@@ -324,7 +324,7 @@ fn read_from_typeahead(
                     let tb = typeahead();
                     let c = tb.byte(0);
                     if advance {
-                        cmd_silent.set(tb.silent() > 0);
+                        CMD_SILENT.set(tb.silent() > 0);
                         if tb.maplen() > 0 {
                             KeyTyped.set(false);
                         } else {
@@ -433,7 +433,7 @@ fn read_from_typeahead(
             && State.get() & MODE_CMDLINE == 0
             && advance
             && must_redraw.get() != 0
-            && !need_wait_return.get()
+            && !NEED_WAIT_RETURN.get()
         {
             let _ = update_screen();
             setcursor(); // put the cursor back where it belongs
@@ -565,7 +565,7 @@ pub(crate) fn vgetorpeek(advance: bool) -> u8 {
     // The "INSERT" message is taken care of here: if an ESC is answered
     // to leave Insert mode the message is deleted, and if we do not
     // answer an ESC but deleted the message before, it is redisplayed.
-    if advance && p_smd() && msg_silent.get() == 0 && State.get() & MODE_INSERT != 0 {
+    if advance && p_smd() && MSG_SILENT.get() == 0 && State.get() & MODE_INSERT != 0 {
         if c == ESC_BYTE && !mode_deleted && no_mapping.get() == 0 && mode_displayed.get() {
             if !typeahead().is_empty() && !KeyTyped.get() {
                 redraw_cmdline.set(true); // delete the mode later

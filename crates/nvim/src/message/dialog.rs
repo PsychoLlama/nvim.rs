@@ -73,7 +73,7 @@ pub fn do_dialog(
 
         // Get a typed character directly from the user. The prompt is a
         // copy: a dialog the typing reaches renders its own buttons.
-        let prompt = confirm_buttons.with(Clone::clone).unwrap_or_default();
+        let prompt = CONFIRM_BUTTONS.with(Clone::clone).unwrap_or_default();
         // SAFETY: a main-thread prompt, with no mouse flag.
         let mut c = prompt_for_input(Some(prompt.as_cstr()), HLF_M, true, None);
         match c {
@@ -89,8 +89,8 @@ pub fn do_dialog(
             }
             _ if c < 0 => {
                 // Special keys are ignored here.
-                msg_didany.set(false);
-                msg_didout.set(false);
+                MSG_DIDANY.set(false);
+                MSG_DIDOUT.set(false);
             }
             _ if c == c_int::from(b':') && ex_cmd => {
                 retval = dfltbutton;
@@ -109,13 +109,13 @@ pub fn do_dialog(
                     break;
                 }
                 // No hotkey match, so keep waiting.
-                msg_didany.set(false);
-                msg_didout.set(false);
+                MSG_DIDANY.set(false);
+                MSG_DIDOUT.set(false);
             }
         }
     }
 
-    confirm_msg.set(None);
+    CONFIRM_MSG.set(None);
 
     drop(loud);
     State.set(old_state);
@@ -241,10 +241,10 @@ fn msg_show_console_dialog(message: &[u8], buttons: &[u8], dfltbutton: c_int) ->
     if framed {
         text.push(b'\n');
     }
-    confirm_msg.set(Some(XString::from_bytes(&text)));
+    CONFIRM_MSG.set(Some(XString::from_bytes(&text)));
 
     let (shown, hotkeys) = render_buttons(buttons, dfltbutton);
-    confirm_buttons.set(Some(XString::from_bytes(&shown)));
+    CONFIRM_BUTTONS.set(Some(XString::from_bytes(&shown)));
     display_confirm_msg();
     hotkeys
 }
@@ -252,9 +252,9 @@ fn msg_show_console_dialog(message: &[u8], buttons: &[u8], dfltbutton: c_int) ->
 /// Display the `:confirm` message. Also called when the screen is resized.
 pub(crate) fn display_confirm_msg() {
     // Avoid that 'q' at the more prompt truncates the message here.
-    let _in_use = Suppress::counter(confirm_msg_used);
+    let _in_use = Suppress::counter(CONFIRM_MSG_USED);
     // A copy: showing it can redraw, and a redraw can show it again.
-    if let Some(text) = confirm_msg.with(Clone::clone) {
+    if let Some(text) = CONFIRM_MSG.with(Clone::clone) {
         msg_ext_set_kind(c"confirm");
         msg_str_hl(text.as_cstr(), HLF_M, false);
     }

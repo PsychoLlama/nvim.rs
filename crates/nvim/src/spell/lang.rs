@@ -34,7 +34,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
@@ -52,7 +51,7 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{c_cluster_len, char_at};
-use crate::message::e_invarg;
+use crate::message::E_INVARG;
 use crate::option::defs::OptError;
 use crate::option::vars::{P_ENC, p_enc};
 use crate::option::{split_option_part, valid_name};
@@ -235,7 +234,7 @@ fn spell_load_cb(fnames: &[&CStr], all: bool, sl: &mut SpellLoad) -> bool {
 
 /// Guard against re-entering [`parse_spelllang`]: a `SpellFileMissing`
 /// autocommand can open a new buffer with `'spell'` set.
-static recursive: GlobalCell<bool> = GlobalCell::new(false);
+static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Where the region a `'spelllang'` name asked for is read from.
 ///
@@ -291,10 +290,10 @@ fn name_head(slang: &SpellLang) -> [u8; 2] {
 ///
 /// Returns null on success, or an untranslated error message.
 pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
-    if recursive.get() {
+    if RECURSIVE.get() {
         return Ok(());
     }
-    recursive.set(true);
+    RECURSIVE.set(true);
 
     let mut region_cp = [0u8; 3];
     let mut lang = [0u8; MAXWLEN + 1];
@@ -555,7 +554,7 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
         redraw_later(window, UPD_NOT_VALID);
     }
 
-    recursive.set(false);
+    RECURSIVE.set(false);
     ret_msg
 }
 /// Fill in where each entry's sound folding and REP items come from: its own
@@ -717,7 +716,7 @@ pub fn compile_cap_prog(synblock: &mut SynBlock) -> Result<(), OptError> {
         let re = concat(b"^", synblock.b_p_spc.bytes());
         // A pattern that does not compile keeps the previous program.
         let Some(prog) = vim_regcomp(re.as_cstr(), RE_MAGIC as c_int) else {
-            return Err(e_invarg.into());
+            return Err(E_INVARG.into());
         };
         synblock.b_cap_prog = Some(prog);
     }

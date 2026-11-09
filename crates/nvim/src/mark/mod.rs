@@ -38,7 +38,7 @@ use crate::mark::defs::{MarkAdjustMode, MarkGet, MarkMove, MarkMoveRes};
 use crate::mbyte::{char_at, head_off};
 use crate::memory::XString;
 use crate::message::IOSIZE;
-use crate::message::{e_markinval, e_marknotset, e_umark};
+use crate::message::{E_MARKINVAL, E_MARKNOTSET, E_UMARK};
 use crate::r#move::set_topline;
 use crate::normal::defs::MotionType;
 use crate::options::kOptJopFlagStack;
@@ -86,7 +86,7 @@ pub use show::{ex_delmarks, ex_marks, fm_getname};
 use store::{NO_VIEW, mark_name, slot};
 
 pub const AUGROUP_ALL: c_int = -3;
-pub const kMTCharWise: MotionType = 0;
+pub const MT_CHAR_WISE: MotionType = 0;
 
 /// How `mark_get` is allowed to resolve a mark's name.
 pub const kMarkBufLocal: MarkGet = 0;
@@ -430,14 +430,14 @@ fn fmarks_check_one(fm: &mut XFileMark, name: &[u8], handle: Handle) {
 /// Returns true if the mark passes all the above checks, else false.
 pub(crate) fn mark_check(fm: Option<&FileMark>, errormsg: &mut Option<CString>) -> bool {
     let Some(fm) = fm else {
-        *errormsg = Some(ex_msg(e_umark));
+        *errormsg = Some(ex_msg(E_UMARK));
         return false;
     };
     if fm.mark.lnum <= LineNr::ZERO {
         // A negative line number is a mark the shada file mangled; it is not
         // "not set", so it gets no message at all.
         if fm.mark.lnum == LineNr::ZERO {
-            *errormsg = Some(ex_msg(e_marknotset));
+            *errormsg = Some(ex_msg(E_MARKNOTSET));
         }
         return false;
     }
@@ -463,7 +463,7 @@ pub(crate) fn mark_check_line_bounds(
     if fm.mark.lnum <= buf.b_ml.ml_line_count {
         return true;
     }
-    *errormsg = Some(ex_msg(e_markinval));
+    *errormsg = Some(ex_msg(E_MARKINVAL));
     false
 }
 

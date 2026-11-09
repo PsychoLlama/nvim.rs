@@ -61,7 +61,7 @@ fn stuff_yank(regname: RegName, p: XString) -> Result<(), Failed> {
         } else {
             reg.clear();
             reg.lines = RegLines::new(vec![p]);
-            reg.kind = kMTCharWise;
+            reg.kind = MT_CHAR_WISE;
         }
         reg.timestamp = os_time();
     });
@@ -285,7 +285,7 @@ pub fn do_execreg(regname: RegName, colon: bool, addcr: bool, silent: bool) -> R
         // The last command line, re-run. Control characters have to be
         // escaped with CTRL-V or the typeahead buffer would act on them.
         let Some(last) = last_cmdline.with(Clone::clone) else {
-            emsg(gettext(e_nolastcmd));
+            emsg(gettext(E_NOLASTCMD));
             return Err(Failed);
         };
         new_last_cmdline.set(None);
@@ -315,7 +315,7 @@ pub fn do_execreg(regname: RegName, colon: bool, addcr: bool, silent: bool) -> R
 
     if regname == b'.' {
         let Some(p) = get_last_insert_save() else {
-            emsg(gettext(e_noinstext));
+            emsg(gettext(E_NOINSTEXT));
             return Err(Failed);
         };
         return put_in_typebuf(&p, false, colon, silent);
@@ -418,7 +418,7 @@ pub fn insert_reg(
     }
     let lines = reg.lines.as_slice();
     for (i, line) in lines.iter().enumerate() {
-        if regname == b'-' && reg.kind == kMTCharWise {
+        if regname == b'-' && reg.kind == MT_CHAR_WISE {
             // The small-delete register goes in through `do_put`, so that
             // Replace mode's stack and the redo buffer stay right.
             let mut dir = BACKWARD;

@@ -42,9 +42,9 @@ use core::ffi::{CStr, c_char, c_ulong, c_void};
 use core::{ptr, slice};
 
 use crate::memfile::mf_release_all;
+use crate::message::E_OUTOFMEM;
 use crate::message::clear_sb_text;
-use crate::message::e_outofmem;
-use crate::message::state::emsg_silent;
+use crate::message::state::EMSG_SILENT;
 use crate::os::cshim::gettext;
 use crate::os::libc::size_t;
 use crate::startup::preserve_exit;
@@ -78,7 +78,7 @@ fn do_outofmem_msg(size: usize) {
         return;
     }
     // Message queueing would fail the allocation again; report loudly, once.
-    emsg_silent.set(0);
+    EMSG_SILENT.set(0);
     did_outofmem_msg.set(true);
     // A `size_t` that would not fit a `%lu` is not a size any allocator was
     // ever going to serve, so saturating beats panicking on the OOM path.
@@ -288,11 +288,11 @@ pub(crate) fn try_grow_zeroed(bytes: &mut Vec<u8>, len: usize) -> bool {
 ///
 /// As [`try_malloc`].
 pub unsafe extern "C" fn xmalloc(size: usize) -> *mut c_void {
-    // SAFETY: the caller's promise; `e_outofmem` is a NUL-terminated static.
+    // SAFETY: the caller's promise; `E_OUTOFMEM` is a NUL-terminated static.
     unsafe {
         let ret = try_malloc(size);
         if ret.is_null() {
-            preserve_exit(Some(e_outofmem));
+            preserve_exit(Some(E_OUTOFMEM));
         }
         ret
     }
@@ -352,7 +352,7 @@ unsafe fn xcalloc_retry(count: usize, size: usize) -> *mut c_void {
     unsafe { try_to_free_memory() };
     let ret = unsafe { seam_calloc(count, size) };
     if ret.is_null() {
-        preserve_exit(Some(e_outofmem));
+        preserve_exit(Some(E_OUTOFMEM));
     }
     ret
 }
@@ -374,7 +374,7 @@ pub unsafe extern "C" fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void 
     unsafe { try_to_free_memory() };
     let ret = unsafe { seam_realloc(ptr, allocated_size) };
     if ret.is_null() {
-        preserve_exit(Some(e_outofmem));
+        preserve_exit(Some(E_OUTOFMEM));
     }
     ret
 }

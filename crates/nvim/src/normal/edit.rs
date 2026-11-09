@@ -41,7 +41,7 @@ use crate::guard::Suppress;
 use crate::mbyte::{char_count, mb_adjust_cursor};
 use crate::memline::ML_DEL_MESSAGE;
 use crate::memline::{inc, ml_delete_flags};
-use crate::message::e_modifiable;
+use crate::message::E_MODIFIABLE;
 use crate::message::emsg;
 use crate::r#move::WinValid;
 use crate::normal::defs::{CmdArg, Outcome};
@@ -56,7 +56,7 @@ use crate::ops::{
 };
 use crate::option::defs::FoFlag;
 use crate::option::get_ve_flags;
-use crate::option::vars::{P_SEL, cb_flags, p_sta, p_to, p_ww};
+use crate::option::vars::{CB_FLAGS, P_SEL, p_sta, p_to, p_ww};
 use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptVeFlagAll};
 use crate::os::cshim::gettext;
 use crate::register::defs::{
@@ -250,7 +250,7 @@ pub(crate) fn nv_replace_mode(cmd_arg: &mut CmdArg) {
         return;
     }
     if Buf::current().b_p_ma == 0 {
-        emsg(gettext(e_modifiable));
+        emsg(gettext(E_MODIFIABLE));
         return;
     }
     if virtual_active(Win::current()) {
@@ -276,7 +276,7 @@ pub(crate) fn nv_vreplace(cmd_arg: &mut CmdArg) {
         return;
     }
     if Buf::current().b_p_ma == 0 {
-        emsg(gettext(e_modifiable));
+        emsg(gettext(E_MODIFIABLE));
         return;
     }
     if cmd_arg.extra_char == Key::CTRL_V || cmd_arg.extra_char == Key::CTRL_Q {
@@ -503,7 +503,7 @@ pub(crate) fn nv_edit(cmd_arg: &mut CmdArg) {
     }
     // A terminal buffer is not 'modifiable' and is still editable.
     if Buf::current().b_p_ma == 0 && Buf::current().terminal.is_null() {
-        emsg(gettext(e_modifiable));
+        emsg(gettext(E_MODIFIABLE));
         clear_op(cmd_arg.op());
         return;
     }
@@ -675,7 +675,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         // Putting over a selection deletes it first, and that delete would
         // otherwise overwrite the very register being put.
         let clipoverwrite = (regname == b'+' || regname == b'*')
-            && cb_flags.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0;
+            && CB_FLAGS.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0;
         if regname == 0
             || regname == b'"'
             || clipoverwrite

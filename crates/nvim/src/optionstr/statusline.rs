@@ -22,10 +22,10 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int_at, transchar_byte};
 use crate::drawscreen::comp_col;
 use crate::drawscreen::state::ru_wid;
-use crate::message::e_invalid_format_string_single_percent_s;
+use crate::message::E_INVALID_FORMAT_STRING_SINGLE_PERCENT_S;
 use crate::message::{verbose_open, verbose_stop};
 use crate::option::defs::{OptError, OptSet, OptionSetFlags, StlSyntax};
-use crate::option::vars::{P_SHADA, P_VFILE, p_ruf, ssop_flags};
+use crate::option::vars::{P_SHADA, P_VFILE, SSOP_FLAGS, p_ruf};
 use crate::option::{did_set_title, get_option_default};
 use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt_ssop_values};
 use crate::shada::get_shada_parameter;
@@ -165,11 +165,11 @@ pub(crate) fn did_set_statustabline_rulerformat(
 pub fn did_set_sessionoptions(args: &mut OptSet) -> Result<(), OptError> {
     did_set_str_generic(args)?;
     let both = kOptSsopFlagCurdir as c_uint | kOptSsopFlagSesdir as c_uint;
-    if ssop_flags.get() & both == both {
+    if SSOP_FLAGS.get() & both == both {
         // The caller only restores the string, so put the old value's mask
         // back here. A value that does not parse leaves the mask alone.
         if let Some(mask) = opt_strings_mask(old_bytes(args), &opt_ssop_values, true) {
-            ssop_flags.set(mask);
+            SSOP_FLAGS.set(mask);
         }
         return invalid();
     }
@@ -244,7 +244,7 @@ pub fn did_set_shada(_args: &mut OptSet) -> Result<(), OptError> {
 /// `%` has to be followed by something.
 pub fn did_set_shellpipe_redir(args: &mut OptSet) -> Result<(), OptError> {
     let value = new_bytes(args);
-    let bad = || Err(e_invalid_format_string_single_percent_s.into());
+    let bad = || Err(E_INVALID_FORMAT_STRING_SINGLE_PERCENT_S.into());
     let mut seen = false;
     let mut at = 0;
     while at < value.len() {

@@ -45,8 +45,8 @@ use crate::highlight_group::{
 use crate::mbyte::{char_at, encode_char};
 use crate::memory::{ThinCString, XString};
 use crate::message::emsg;
-use crate::message::state::called_emsg;
-use crate::message::{e_dictreq, e_invalwindow, e_invcmd, e_listreq, e_trailing_arg};
+use crate::message::state::CALLED_EMSG;
+use crate::message::{E_DICTREQ, E_INVALWINDOW, E_INVCMD, E_LISTREQ, E_TRAILING_ARG};
 use crate::message_fmt::msg_bytes;
 use crate::option::vars::p_rdt;
 use crate::os::cshim::gettext;
@@ -294,7 +294,7 @@ pub(crate) fn ex_match(excmd: &mut ExArg) {
     // SAFETY: the caller's command.
     // The command's count is the match id: `:match`, `:2match`, `:3match`.
     if excmd.number2 > 3 {
-        emsg(e_invcmd);
+        emsg(E_INVCMD);
         return;
     }
     let id = excmd.number2;
@@ -335,7 +335,7 @@ pub(crate) fn ex_match(excmd: &mut ExArg) {
             if line.byte_at(end) != 0
                 && ends_excmd(c_int::from(line.byte_at(line.skip_white(end + 1)))) == 0
             {
-                excmd.errmsg = Some(ex_errmsg(e_trailing_arg, line.cstr_from(end)));
+                excmd.errmsg = Some(ex_errmsg(E_TRAILING_ARG, line.cstr_from(end)));
                 return;
             }
             if line.byte_at(end) != delim {

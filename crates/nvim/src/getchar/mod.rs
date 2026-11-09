@@ -51,10 +51,10 @@ use crate::memfile::did_swapwrite_msg;
 use crate::memline::ml_sync_all;
 use crate::memory::did_outofmem_msg;
 use crate::message::state::{
-    called_emsg, cmd_silent, did_emsg, emsg_silent, msg_col, msg_didout, msg_row, msg_scroll,
-    msg_silent, need_wait_return,
+    CALLED_EMSG, CMD_SILENT, DID_EMSG, EMSG_SILENT, MSG_COL, MSG_DIDOUT, MSG_ROW, MSG_SCROLL,
+    MSG_SILENT, NEED_WAIT_RETURN,
 };
-use crate::message::{e_nesting, e_toocompl};
+use crate::message::{E_NESTING, E_TOOCOMPL};
 use crate::message::{emsg, iemsg};
 use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
 use crate::mouse::{MousePos, comp_pos, find_win_inner, is_mouse_key};
@@ -171,10 +171,10 @@ pub(crate) enum MapResult {
     NoMatch,
 }
 pub const KEYLEN_PART_MAP: ::core::ffi::c_int = -2;
-pub const kMTCharWise: MotionType = 0;
+pub const MT_CHAR_WISE: MotionType = 0;
 pub const kFileReadOnly: FileOpenFlags = 1;
 pub const kFileNonBlocking: FileOpenFlags = 128;
-pub const kRetNilBool: LuaRetMode = 1;
+pub const RET_NIL_BOOL: LuaRetMode = 1;
 pub const kFileTruncate: FileOpenFlags = 32;
 pub const kFileCreateOnly: FileOpenFlags = 16;
 pub const kFileNoSymlink: FileOpenFlags = 8;

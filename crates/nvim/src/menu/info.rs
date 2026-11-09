@@ -32,7 +32,7 @@ use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
 use crate::mbyte::cluster_len;
-use crate::message::e_invarg;
+use crate::message::E_INVARG;
 use crate::types::{Dict, ExArg, TypVal, VarNumber};
 
 /// One `:menutranslate from to` entry.
@@ -67,7 +67,7 @@ pub(crate) fn ex_menutranslate(excmd: &mut ExArg) {
     let to = skip_white(&arg[from_end..]);
     let to_end = menu_skip_part(to);
     if to_end == 0 {
-        emsg_shared(e_invarg);
+        emsg_shared(E_INVARG);
         return;
     }
     let (from, to) = (&arg[..from_end], &to[..to_end]);

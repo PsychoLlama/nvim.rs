@@ -31,10 +31,10 @@ use crate::highlight::win_hl_attr;
 use crate::highlight_group::HLF_WM;
 use crate::mbyte::cluster_len;
 use crate::menu::is_separator;
-use crate::message::state::msg_scrolled;
+use crate::message::state::MSG_SCROLLED;
 use crate::message::{msg_grid_view, msg_scroll_up};
 use crate::option::csh_like_shell;
-use crate::option::vars::{P_LS, P_WMH, p_ls, p_wmh, wop_flags};
+use crate::option::vars::{P_LS, P_WMH, WOP_FLAGS, p_ls, p_wmh};
 use crate::options::kOptWopFlagPum;
 use crate::popupmenu::{pum_display, pum_undisplay, pum_visible};
 use crate::statusline::{fillchar_status_of, hl_attr};
@@ -161,7 +161,7 @@ pub fn cmdline_compl_is_fuzzy() -> bool {
 /// `need_wildmenu` says whether the current `'wildmode'` part wants one.
 pub(crate) fn cmdline_compl_use_pum(need_wildmenu: bool) -> bool {
     (need_wildmenu
-        && wop_flags.get() & kOptWopFlagPum as c_uint != 0
+        && WOP_FLAGS.get() & kOptWopFlagPum as c_uint != 0
         && !(ui_has(kUICmdline) && cmdline_win.get().is_none()))
         || ui_has(kUIWildmenu)
         || (ui_has(kUICmdline) && ui_has(kUIPopupmenu))
@@ -366,12 +366,12 @@ pub(crate) fn redraw_wildmenu(
     let mut row = cmdline_row.get() - 1;
     if row >= 0 {
         if wild_menu_showing.get() == 0 {
-            if msg_scrolled.get() > 0 {
+            if MSG_SCROLLED.get() > 0 {
                 // Put the wildmenu just above the command line.  If there
                 // is no room, scroll the screen one line up.
                 if cmdline_row.get() == Rows.get() - 1 {
                     msg_scroll_up(false, false);
-                    msg_scrolled.set(msg_scrolled.get() + 1);
+                    MSG_SCROLLED.set(MSG_SCROLLED.get() + 1);
                 } else {
                     cmdline_row.set(cmdline_row.get() + 1);
                     row += 1;

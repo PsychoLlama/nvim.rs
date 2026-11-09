@@ -264,7 +264,7 @@ fn mangle_function_name(
             // It's "s:" or "<SID>".
             let sc_sid = current_sctx.get().sc_sid;
             if sc_sid <= 0 {
-                emsg(gettext(e_usingsid));
+                emsg(gettext(E_USINGSID));
                 return Err(Failed);
             }
             sid = format!("{sc_sid}_").into_bytes();
@@ -510,7 +510,7 @@ pub(crate) fn scriptlocal_funcname(name: &[u8]) -> Result<Option<XString>, Faile
     };
     let sid = current_sctx.get().sc_sid;
     if !script_id_valid(sid) {
-        emsg(gettext(e_usingsid));
+        emsg(gettext(E_USINGSID));
         return Err(Failed);
     }
     let mut local = format!("<SNR>{sid}_").into_bytes();

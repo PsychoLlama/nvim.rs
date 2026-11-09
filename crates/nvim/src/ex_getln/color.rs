@@ -101,7 +101,7 @@ pub(crate) fn color_cmdline(mut colored_ccline: Cc) -> bool {
     // A macro rather than a closure so the message stays a literal.
     macro_rules! print_errmsg {
         ($($arg:tt)*) => {{
-            msg_scroll.set(1);
+            MSG_SCROLL.set(1);
 msg_putchar(::core::ffi::c_int::from(b'\n'));
             let _: bool = $crate::smsg!(HLF_E, $($arg)*);
             printed_errmsg = true;
@@ -142,7 +142,7 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
     let mut color_cb = Callback::None;
     let mut can_free_cb = false;
     let mut err: Error = Error::none();
-    let mut err_errmsg = e_intern2;
+    let mut err_errmsg = E_INTERN2;
     let mut dgc_ret = true;
 
     let outcome = 'body: {
@@ -205,11 +205,11 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
         let mut tstate: TryState = TRY_STATE_INIT;
         try_enter(&mut tstate);
         err_errmsg = c"E5407: Callback has thrown an exception: %s";
-        let saved_msg_col = msg_col.get();
+        let saved_msg_col = MSG_COL.get();
         let silenced = Suppress::messages();
         let called = callback_call(&color_cb, ::core::slice::from_ref(&arg), &mut tv) == Ok(true);
         drop(silenced);
-        msg_col.set(saved_msg_col);
+        MSG_COL.set(saved_msg_col);
         if got_int.get() {
             getln_interrupted_highlight.set(true);
         }

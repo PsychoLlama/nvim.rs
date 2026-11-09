@@ -61,7 +61,7 @@ pub fn utf_fold(a: c_int) -> c_int {
 
 /// Is `'casemap'` asking for this flag?
 fn casemap_has(flag: c_uint) -> bool {
-    cmp_flags.get() & flag != 0
+    CMP_FLAGS.get() & flag != 0
 }
 
 /// The uppercase of `a`, honouring `'casemap'`.

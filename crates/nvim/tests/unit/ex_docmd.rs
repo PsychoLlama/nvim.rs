@@ -610,7 +610,7 @@ fn an_error_inside_a_try_is_caught_and_the_rest_of_the_block_is_skipped() {
 fn silent_is_scoped_to_the_one_command_it_modifies() {
     let editor = editor_lock();
     let _restore = Restore::new(&editor);
-    // `:silent` raises `msg_silent` for the command and puts it back after,
+    // `:silent` raises `MSG_SILENT` for the command and puts it back after,
     // even when the command is a whole nested `do_cmdline`.
     run(&editor, "unlet! g:inner | unlet! g:outer");
     run(&editor, "silent execute 'let g:inner = &verbose'");

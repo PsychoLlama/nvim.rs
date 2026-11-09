@@ -175,7 +175,7 @@ pub fn ins_char_bytes(new: &[u8]) {
 
     // In Insert or Replace mode with 'showmatch', briefly show the match
     // for a closing bracket.
-    if p_sm() && State.get() & MODE_INSERT != 0 && msg_silent.get() == 0 && !ins_compl_active() {
+    if p_sm() && State.get() & MODE_INSERT != 0 && MSG_SILENT.get() == 0 && !ins_compl_active() {
         showmatch(char_at(new));
     }
 

@@ -63,10 +63,10 @@ use crate::guard::Depth;
 use crate::guard::sandbox;
 use crate::input::ask_yesno;
 use crate::mbyte::{cluster_len, head_off};
-use crate::message::state::{did_emsg, msg_silent};
+use crate::message::state::{DID_EMSG, MSG_SILENT};
 use crate::message::{
-    e_argreq, e_cmdwin, e_invarg, e_invrange, e_modifiable, e_nobang, e_norange, e_sandbox,
-    e_trailing_arg,
+    E_ARGREQ, E_CMDWIN, E_INVARG, E_INVRANGE, E_MODIFIABLE, E_NOBANG, E_NORANGE, E_SANDBOX,
+    E_TRAILING_ARG,
 };
 use crate::profile::do_profiling;
 use crate::startup::exiting;
@@ -202,7 +202,7 @@ impl ExArg<'_> {
         let after_modifier = self.line.cmd;
 
         let cond = cond_stack_of(self);
-        self.skip = did_emsg.get() != 0 || got_int.get() || did_throw.get() || in_inactive;
+        self.skip = DID_EMSG.get() != 0 || got_int.get() || did_throw.get() || in_inactive;
 
         let mut p = find_excmd_after_range(self);
         profile_cmd(self, cond);
@@ -326,13 +326,13 @@ impl ExArg<'_> {
                 return Err(Refused);
             }
             if !ni && !self.argt.has(ExArgt::RANGE) && self.addr_count > 0 {
-                *errormsg = Some(ex_msg(e_norange));
+                *errormsg = Some(ex_msg(E_NORANGE));
                 return Err(Refused);
             }
         }
 
         if !ni && !self.argt.has(ExArgt::BANG) && self.forceit {
-            *errormsg = Some(ex_msg(e_nobang));
+            *errormsg = Some(ex_msg(E_NOBANG));
             return Err(Refused);
         }
 
@@ -344,7 +344,7 @@ impl ExArg<'_> {
             // not asked.
             let (first, last) = self.range_numbers();
             if global_busy.get() == 0 && first > last {
-                if msg_silent.get() == 0 {
+                if MSG_SILENT.get() == 0 {
                     if flags.has(DoCmdOpts::VERBOSE) || exmode_active.get() {
                         *errormsg = Some(ex_msg(c"E493: Backwards range given"));
                         return Err(Refused);
@@ -410,7 +410,7 @@ impl ExArg<'_> {
                 && self.line.byte_at(self.line.arg + 1) == b'+'
             {
                 if getargopt(self).is_err() && !ni {
-                    *errormsg = Some(ex_msg(e_invarg));
+                    *errormsg = Some(ex_msg(E_INVARG));
                     return Err(Refused);
                 }
             }
@@ -485,13 +485,13 @@ impl ExArg<'_> {
             && (self.line.byte_at(self.line.arg) != b'|' || !self.argt.has(ExArgt::TRLBAR))
         {
             *errormsg = Some(ex_errmsg(
-                e_trailing_arg,
+                E_TRAILING_ARG,
                 self.line.cstr_from(self.line.arg),
             ));
             return Err(Refused);
         }
         if !ni && self.argt.has(ExArgt::NEEDARG) && self.line.byte_at(self.line.arg) == 0 {
-            *errormsg = Some(ex_msg(e_argreq));
+            *errormsg = Some(ex_msg(E_ARGREQ));
             return Err(Refused);
         }
         Ok(())
@@ -623,7 +623,7 @@ pub(crate) fn do_one_cmd(
 
     if let Some(msg) = errormsg
         && !msg.is_empty()
-        && did_emsg.get() == 0
+        && DID_EMSG.get() == 0
     {
         let msg = if flags.has(DoCmdOpts::VERBOSE) {
             append_command(&msg, excmd.line.line())
@@ -677,7 +677,7 @@ pub(crate) fn profile_cmd(excmd: &ExArg, cond: CondId) {
     if !(!excmd.skip || idx == 0 || below.is_some_and(|flags| flags.has(CsFlags::ACTIVE))) {
         return;
     }
-    let mut skip = did_emsg.get() != 0 || got_int.get() || did_throw.get();
+    let mut skip = DID_EMSG.get() != 0 || got_int.get() || did_throw.get();
     match excmd.cmdidx {
         CmdIdx::catch => {
             skip = !skip
@@ -712,7 +712,7 @@ pub(crate) fn profile_cmd(excmd: &ExArg, cond: CondId) {
 /// Answers the message to report, or `None` when the command may run.
 fn refuses_here(excmd: &ExArg) -> Option<CString> {
     if sandbox.get() != 0 && !excmd.argt.has(ExArgt::SBOXOK) {
-        return Some(ex_msg(e_sandbox));
+        return Some(ex_msg(E_SANDBOX));
     }
     // `:put` is allowed in a terminal buffer, which is not 'modifiable'.
     if Buf::current().b_p_ma == 0
@@ -720,11 +720,11 @@ fn refuses_here(excmd: &ExArg) -> Option<CString> {
         && !(!Buf::current().terminal.is_null()
             && (excmd.cmdidx == CmdIdx::put || excmd.cmdidx == CmdIdx::iput))
     {
-        return Some(ex_msg(e_modifiable));
+        return Some(ex_msg(E_MODIFIABLE));
     }
     if !is_user_cmd(excmd.cmdidx) {
         if cmdwin_type.get() != 0 && !excmd.argt.has(ExArgt::CMDWIN) {
-            return Some(ex_msg(e_cmdwin));
+            return Some(ex_msg(E_CMDWIN));
         }
         if text_locked() && !excmd.argt.has(ExArgt::LOCK_OK) {
             return Some(ex_msg(get_text_locked_msg()));
@@ -756,7 +756,7 @@ pub(crate) fn ex_range_without_command(excmd: &mut ExArg) -> Option<CString> {
     } else if excmd.addr_count != 0 {
         excmd.line2 = excmd.line2.min(Buf::current().b_ml.ml_line_count);
         if excmd.line2 < LineNr::ZERO {
-            errormsg = Some(ex_msg(e_invrange));
+            errormsg = Some(ex_msg(E_INVRANGE));
         } else {
             // Line 0 is not a position; the cursor goes to line 1.
             Win::current().w_cursor.lnum = if excmd.line2 == LineNr::ZERO {

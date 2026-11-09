@@ -47,14 +47,14 @@ use crate::mbyte::{c_cells_at, c_cluster_len, c_string_cells, strnicmp_in};
 use crate::memory::XString;
 use crate::menu::VimMenu;
 use crate::menu::{execute_menu, get_menu_mode_flag, menu_find};
-use crate::message::e_menu_only_exists_in_another_mode;
+use crate::message::E_MENU_ONLY_EXISTS_IN_ANOTHER_MODE;
 use crate::message::emsg;
 use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
 use crate::mouse::{MousePos, find_win_outer};
 use crate::r#move::{update_topline, validate_cheight, validate_cursor, validate_cursor_col};
 use crate::option::defs::OptVal;
 use crate::option::set_option_value_give_err;
-use crate::option::vars::{cia_flags, p_mousemev, p_pb, p_ph, p_pmw, p_pumborder, p_pvh, p_pw};
+use crate::option::vars::{CIA_FLAGS, p_mousemev, p_pb, p_ph, p_pmw, p_pumborder, p_pvh, p_pw};
 use crate::options::{
     kOptBufhidden, kOptBuflisted, kOptBuftype, kOptCotFlagFuzzy, kOptCotFlagPopup,
     kOptCotFlagPreview, kOptDiff, kOptSwapfile,

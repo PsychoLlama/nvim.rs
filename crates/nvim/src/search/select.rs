@@ -188,7 +188,7 @@ pub(crate) fn current_search(count: c_int, forward: bool) -> Result<(), NoMatch>
         }
     }
 
-    if fdo_flags.get() & kOptFdoFlagSearch != 0 && KeyTyped.get() {
+    if FDO_FLAGS.get() & kOptFdoFlagSearch != 0 && KeyTyped.get() {
         fold_open_cursor();
     }
 

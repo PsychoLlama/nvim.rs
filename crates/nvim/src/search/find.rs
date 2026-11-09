@@ -69,7 +69,7 @@ struct Searcher<'a, 'm> {
     /// `'cpo'` contains `c`: a repeated search continues from the end of
     /// the previous match rather than one character past its start.
     from_match_end: bool,
-    /// `called_emsg` on entry — anything above it means an error was
+    /// `CALLED_EMSG` on entry — anything above it means an error was
     /// reported and the search must stop.
     called_emsg_before: c_int,
 }
@@ -127,7 +127,7 @@ impl Searcher<'_, '_> {
     /// way the search stops where it is.
     #[inline(always)]
     fn aborted(&self) -> bool {
-        called_emsg.get() > self.called_emsg_before || self.timed_out
+        CALLED_EMSG.get() > self.called_emsg_before || self.timed_out
     }
 
     /// Whether the timeout has been passed.
@@ -485,9 +485,9 @@ impl Searcher<'_, '_> {
                     && self.opt(SEARCH_MSG)
                 {
                     let msg = if dir == BACKWARD {
-                        top_bot_msg
+                        TOP_BOT_MSG
                     } else {
-                        bot_top_msg
+                        BOT_TOP_MSG
                     };
                     give_warning(gettext(msg), true, false);
                 }
@@ -639,7 +639,7 @@ fn search_buffer(
             timed_out,
             options,
             from_match_end: cpo_has(CpoFlag::SEARCH),
-            called_emsg_before: called_emsg.get(),
+            called_emsg_before: CALLED_EMSG.get(),
         };
 
         let (found, submatch, lnum) = s.walk(
@@ -783,7 +783,7 @@ pub(crate) fn search_for_exact_line(
             }
             pos.lnum = buffer.b_ml.ml_line_count;
             if !shortmess(ShmFlag::SEARCH) {
-                give_warning(gettext(top_bot_msg), true, false);
+                give_warning(gettext(TOP_BOT_MSG), true, false);
             }
         } else if pos.lnum > buffer.b_ml.ml_line_count {
             pos.lnum = LineNr::ONE;
@@ -791,7 +791,7 @@ pub(crate) fn search_for_exact_line(
                 break;
             }
             if !shortmess(ShmFlag::SEARCH) {
-                give_warning(gettext(bot_top_msg), true, false);
+                give_warning(gettext(BOT_TOP_MSG), true, false);
             }
         }
         if pos.lnum == start {

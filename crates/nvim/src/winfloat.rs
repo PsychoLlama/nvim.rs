@@ -48,7 +48,7 @@ use crate::decoration::defs::VirtText;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, set_must_redraw};
 use crate::grid::grid_adjust;
 use crate::memory::XString;
-use crate::message::e_cmdwin;
+use crate::message::E_CMDWIN;
 use crate::message::emsg;
 use crate::mouse::{MousePos, find_win_inner};
 use crate::r#move::{textpos2screenpos, validate_cursor};
@@ -369,7 +369,7 @@ fn unfloat_to_float(win: Win) -> Result<Win, Error> {
             }
         }
         if !other_nonfloat {
-            return Err(make_error(e_cmdwin));
+            return Err(make_error(E_CMDWIN));
         }
     }
     let tp = win_tp.into_other();

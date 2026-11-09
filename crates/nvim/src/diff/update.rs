@@ -239,7 +239,7 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
                 }
                 let found = parse_diffanchors(false, tp.used_diffbuf(idx), Some(&mut anchors[idx]));
                 let Ok(buf_num_anchors) = found else {
-                    emsg(gettext(e_failed_to_find_all_diff_anchors));
+                    emsg(gettext(E_FAILED_TO_FIND_ALL_DIFF_ANCHORS));
                     num_anchors = 0;
                     anchors = [[LineNr::ZERO; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
                     break;

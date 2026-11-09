@@ -90,12 +90,12 @@ pub fn nvim_feedkeys(keys: ApiString, mode: ApiString, escape_ks: Boolean) {
         }
     }
     if execute {
-        let save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
-        msg_scroll.set(0);
+        let save_msg_scroll: ::core::ffi::c_int = MSG_SCROLL.get();
+        MSG_SCROLL.set(0);
         let busy = (!dangerous).then(|| Depth::of(ex_normal_busy));
         exec_normal(true, lowlevel);
         drop(busy);
-        msg_scroll.set(msg_scroll.get() | save_msg_scroll);
+        MSG_SCROLL.set(MSG_SCROLL.get() | save_msg_scroll);
     }
 }
 

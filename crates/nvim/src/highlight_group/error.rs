@@ -19,7 +19,7 @@ use core::fmt;
 
 use crate::memory::ThinCString;
 use crate::message::{
-    e_highlight_group_name_invalid_char, e_highlight_group_name_too_long, msg_source,
+    E_HIGHLIGHT_GROUP_NAME_INVALID_CHAR, E_HIGHLIGHT_GROUP_NAME_TOO_LONG, msg_source,
 };
 use crate::message_fmt::{CDisplay, emsg_text, msg_bytes, msg_cstr};
 use crate::os::cshim::gettext;
@@ -75,14 +75,14 @@ impl fmt::Display for HighlightError {
         // The literals are upstream's msgids, named arguments and all.
         let text = match self {
             Self::NameTooLong => {
-                return write!(f, "{}", msg_cstr(gettext(e_highlight_group_name_too_long)));
+                return write!(f, "{}", msg_cstr(gettext(E_HIGHLIGHT_GROUP_NAME_TOO_LONG)));
             }
             Self::UnprintableName => tr!("E669: Unprintable character in group name"),
             Self::InvalidNameChar => {
                 return write!(
                     f,
                     "{}",
-                    msg_cstr(gettext(e_highlight_group_name_invalid_char))
+                    msg_cstr(gettext(E_HIGHLIGHT_GROUP_NAME_INVALID_CHAR))
                 );
             }
             Self::TooManyGroups => tr!("E849: Too many highlight and syntax groups"),

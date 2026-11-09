@@ -57,7 +57,7 @@ pub fn nvim_set_client_info(
 #[allow(non_snake_case)]
 pub fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Result<(), Error> {
     if with_channel(channel_id, |channel| channel.detach = detach).is_none() {
-        return Err(Error::from_message(kErrorTypeValidation, e_invchan));
+        return Err(Error::from_message(kErrorTypeValidation, E_INVCHAN));
     }
     Ok(())
 }

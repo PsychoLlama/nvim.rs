@@ -18,7 +18,7 @@
 ///
 /// `emsg` is the editor's reporting boundary, not a stage on the way to one.
 /// It sets `v:errmsg`, raises the exception `:try` catches, and honours
-/// `emsg_silent` and `'debug'` *where the failure happened*, so carrying the
+/// `EMSG_SILENT` and `'debug'` *where the failure happened*, so carrying the
 /// message up to a caller and reporting it there would change when that
 /// state is set. `Err(Failed)` is therefore the honest answer after an
 /// `emsg`, where a `false`, `-1` or `None` would be indistinguishable from a

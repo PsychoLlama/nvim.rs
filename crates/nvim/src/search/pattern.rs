@@ -196,9 +196,9 @@ pub(crate) fn search_regcomp(
         let Some((pat, spat_magic, no_scs)) = found else {
             // Never defined.
             let msg = if pat_use == RE_SUBST {
-                e_nopresub
+                E_NOPRESUB
             } else {
-                e_noprevre
+                E_NOPREVRE
             };
             emsg(gettext(msg));
             return Err(Refused::Invalid);
@@ -559,7 +559,7 @@ pub(crate) fn is_zero_width(
     direction: Direction,
 ) -> Option<bool> {
     let mut regmatch = RegMMatch::default();
-    let called_emsg_before = called_emsg.get();
+    let called_emsg_before = CALLED_EMSG.get();
     search_regcomp(pattern, RE_SEARCH, RE_SEARCH, SEARCH_KEEP, &mut regmatch).ok()?;
 
     // Init startcol correctly.
@@ -598,7 +598,7 @@ pub(crate) fn is_zero_width(
             break nmatched;
         }
     };
-    (called_emsg.get() == called_emsg_before).then(|| {
+    (CALLED_EMSG.get() == called_emsg_before).then(|| {
         nmatched != 0
             && regmatch.startpos[0].lnum == regmatch.endpos[0].lnum
             && regmatch.startpos[0].col == regmatch.endpos[0].col

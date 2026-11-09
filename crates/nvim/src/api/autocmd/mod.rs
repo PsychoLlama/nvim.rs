@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::api::keysets::{
     KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd, KeyDict_exec_autocmds,
@@ -54,4 +53,4 @@ pub const AUGROUP_ALL: ::core::ffi::c_int = -3;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-static next_autocmd_id: GlobalCell<int64_t> = GlobalCell::new(1 as int64_t);
+static NEXT_AUTOCMD_ID: GlobalCell<int64_t> = GlobalCell::new(1 as int64_t);

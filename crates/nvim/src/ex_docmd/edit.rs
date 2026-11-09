@@ -45,7 +45,7 @@ use crate::ex_docmd::state::{ex_no_reprint, exec_from_reg};
 use crate::getchar::state::got_int;
 use crate::lua::executor::ex_lua;
 use crate::mark::{checkpcmark, setmark, setpcmark};
-use crate::message::{e_argreq, e_empty_buffer, e_invrange, e_undobang_cannot_redo_or_move_branch};
+use crate::message::{E_ARGREQ, E_EMPTY_BUFFER, E_INVRANGE, E_UNDOBANG_CANNOT_REDO_OR_MOVE_BRANCH};
 use crate::search::state::magic_overruled;
 use crate::state::mode::{did_syncbind, virtual_op};
 
@@ -81,7 +81,7 @@ use crate::winlayer::{Buf, Win, windows};
 /// `:print`, `:number` and `:list`.
 pub(crate) fn ex_print(excmd: &mut ExArg) {
     if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
-        emsg(gettext(e_empty_buffer));
+        emsg(gettext(E_EMPTY_BUFFER));
     } else {
         let idx = excmd.cmdidx;
         let numbered =
@@ -307,7 +307,7 @@ pub(crate) fn ex_copymove(excmd: &mut ExArg) {
 
     // `MAXLNUM` is what `get_address` answers for "no address at all".
     if n == MAXLNUM || n < LineNr::ZERO || n > Buf::current().b_ml.ml_line_count {
-        emsg(gettext(e_invrange));
+        emsg(gettext(E_INVRANGE));
         return;
     }
 
@@ -443,7 +443,7 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
     }
 
     if step >= Buf::current().b_u_seq_cur {
-        emsg(gettext(e_undobang_cannot_redo_or_move_branch));
+        emsg(gettext(E_UNDOBANG_CANNOT_REDO_OR_MOVE_BRANCH));
         return;
     }
     // Count how many states back `step` is along this branch.
@@ -465,7 +465,7 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
     // branch. Sequence 0 is the state before any change and is always
     // reachable.
     if step != 0 && reached.is_none_or(|seq| seq < step) {
-        emsg(gettext(e_undobang_cannot_redo_or_move_branch));
+        emsg(gettext(E_UNDOBANG_CANNOT_REDO_OR_MOVE_BRANCH));
         return;
     }
     u_undo_and_forget(count, true);
@@ -541,7 +541,7 @@ pub(crate) fn ex_later(excmd: &mut ExArg) {
 /// `:mark` and `:k`.
 pub(crate) fn ex_mark(excmd: &mut ExArg) {
     if excmd.line.byte_at(excmd.line.arg) == 0 {
-        emsg(gettext(e_argreq));
+        emsg(gettext(E_ARGREQ));
         return;
     }
     if excmd.line.byte_at(excmd.line.arg + 1) != 0 {

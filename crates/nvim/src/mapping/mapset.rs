@@ -314,8 +314,8 @@ pub fn modify_keymap(
         // still hand them to a `printf`.
         let lhs = msg_cstr(lhs.as_cstr());
         let refused = match (answer, is_abbrev) {
-            (1, _) => Some(Error::exception(e_invarg)),
-            (2, _) => Some(Error::exception(e_nomap)),
+            (1, _) => Some(Error::exception(E_INVARG)),
+            (2, _) => Some(Error::exception(E_NOMAP)),
             (5, true) => Some(api_error!(
                 kErrorTypeException,
                 "E226: Abbreviation already exists for {lhs}"

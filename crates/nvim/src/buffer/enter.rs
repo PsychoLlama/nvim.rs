@@ -48,10 +48,10 @@ use crate::ex_docmd::cmdmod_has;
 use crate::file_search::vim_chdirfile;
 use crate::fileio::{buf_check_timestamp, shorten_fnames};
 use crate::indent::inindent;
-use crate::message::state::{msg_silent, need_fileinfo};
+use crate::message::state::{MSG_SILENT, NEED_FILEINFO};
 use crate::message::{
-    e_job_still_running, e_job_still_running_add_bang_to_end_the_job, e_no_write_since_last_change,
-    e_no_write_since_last_change_add_bang_to_override,
+    E_JOB_STILL_RUNNING, E_JOB_STILL_RUNNING_ADD_BANG_TO_END_THE_JOB, E_NO_WRITE_SINCE_LAST_CHANGE,
+    E_NO_WRITE_SINCE_LAST_CHANGE_ADD_BANG_TO_OVERRIDE,
 };
 use crate::r#move::WinValid;
 use crate::normal::visual_active;
@@ -362,8 +362,8 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
         }
         load_current_buffer();
     } else {
-        if msg_silent.get() == 0 && !shortmess(ShmFlag::FILEINFO) {
-            need_fileinfo.set(true); // display file info after redraw
+        if MSG_SILENT.get() == 0 && !shortmess(ShmFlag::FILEINFO) {
+            NEED_FILEINFO.set(true); // display file info after redraw
         }
         check_timestamp(Buf::current()); // check if file changed
 
@@ -432,7 +432,7 @@ fn do_autochdir_now() {
 
 pub fn no_write_message_buf(buffer: Buf) {
     if !buffer.terminal.is_null() && job_running(buffer) {
-        err_static(e_job_still_running_add_bang_to_end_the_job);
+        err_static(E_JOB_STILL_RUNNING_ADD_BANG_TO_END_THE_JOB);
     } else {
         let nr = buffer.handle.get();
         semsg!("E89: No write since last change for buffer {nr} (add ! to override)");
@@ -442,17 +442,17 @@ pub fn no_write_message_buf(buffer: Buf) {
 pub fn no_write_message() {
     let buf = Buf::current();
     if !buf.terminal.is_null() && job_running(buf) {
-        err_static(e_job_still_running_add_bang_to_end_the_job);
+        err_static(E_JOB_STILL_RUNNING_ADD_BANG_TO_END_THE_JOB);
     } else {
-        err_static(e_no_write_since_last_change_add_bang_to_override);
+        err_static(E_NO_WRITE_SINCE_LAST_CHANGE_ADD_BANG_TO_OVERRIDE);
     }
 }
 
 pub fn no_write_message_nobang(buffer: Buf) {
     if !buffer.terminal.is_null() && job_running(buffer) {
-        err_static(e_job_still_running);
+        err_static(E_JOB_STILL_RUNNING);
     } else {
-        err_static(e_no_write_since_last_change);
+        err_static(E_NO_WRITE_SINCE_LAST_CHANGE);
     }
 }
 

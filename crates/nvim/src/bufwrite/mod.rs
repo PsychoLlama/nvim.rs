@@ -51,8 +51,8 @@ use crate::input::ask_yesno;
 use crate::memline::{ml_preserve, ml_timestamp};
 use crate::memory::XString;
 use crate::message::IOSIZE;
-use crate::message::state::{msg_scroll, msg_silent, no_wait_return};
-use crate::message::{e_empty_buffer, e_fsync, e_interr, e_longname};
+use crate::message::state::{MSG_SCROLL, MSG_SILENT, NO_WAIT_RETURN};
+use crate::message::{E_EMPTY_BUFFER, E_FSYNC, E_INTERR, E_LONGNAME};
 use crate::message::{emsg, msg_progress, msg_str_hl, set_keep_msg};
 use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::option::defs::{CpoFlag, ShmFlag};
@@ -166,9 +166,9 @@ impl WriteError {
             Self::CannotMakeBackup => plain(c"E510: Can't make backup file (add ! to override)"),
             Self::LinkedFile => plain(c"E166: Can't open linked file for writing"),
             Self::CannotOpen(code) => with_errno(c"E212: Can't open file for writing: %s", code),
-            Self::FsyncFailed(code) => with_errno(e_fsync, code),
+            Self::FsyncFailed(code) => with_errno(E_FSYNC, code),
             Self::CloseFailed(code) => with_errno(c"E512: Close failed: %s", code),
-            Self::Interrupted => plain(e_interr),
+            Self::Interrupted => plain(E_INTERR),
             Self::NoTempFile => plain(c"E214: Can't find temp file for writing"),
             Self::CannotConvert => {
                 plain(c"E213: Cannot convert (add ! to write without conversion)");
@@ -295,7 +295,7 @@ impl Buf {
         let mut b = self;
         let (mut buf, mut start, mut end) = (self, start, end);
         let mut retval = Ok(());
-        let msg_save = msg_scroll.get();
+        let msg_save = MSG_SCROLL.get();
         let mut prev_got_int = got_int.get();
         let whole = start == LineNr::ONE && end == b.b_ml.ml_line_count;
         let mut write_undo_file = false;
@@ -307,14 +307,14 @@ impl Buf {
         };
         if b.b_ml.ml_mfp.is_none() {
             // Can happen during startup, from a stray "w" in the vimrc.
-            emsg(gettext(e_empty_buffer));
+            emsg(gettext(E_EMPTY_BUFFER));
             return Err(Failed);
         }
         if check_secure() {
             return Err(Failed); // writing is disallowed in secure mode
         }
         if fname.as_cstr().to_bytes().len() >= MAXPATHL as usize {
-            emsg(gettext(e_longname)); // avoid a crash for a long name
+            emsg(gettext(E_LONGNAME)); // avoid a crash for a long name
             return Err(Failed);
         }
 
@@ -351,7 +351,7 @@ impl Buf {
             .name
             .full()
             .is_some_and(|full| path_fnamecmp(ffname.as_cstr().to_bytes(), full.to_bytes()) == 0);
-        no_wait_return.set(no_wait_return.get() + 1); // don't wait for return yet
+        NO_WAIT_RETURN.set(NO_WAIT_RETURN.get() + 1); // don't wait for return yet
 
         let orig = OpMarks {
             start: b.b_op_start,
@@ -397,7 +397,7 @@ impl Buf {
             b.b_op_end = orig.end;
         }
         // Overwrite the previous file message, or don't.
-        msg_scroll.set(if shortmess(ShmFlag::OVER) && !exiting.get() {
+        MSG_SCROLL.set(if shortmess(ShmFlag::OVER) && !exiting.get() {
             0
         } else {
             1
@@ -405,7 +405,7 @@ impl Buf {
         if !req.filtering {
             b.file_message(Some(fname), c""); // show that we are busy
         }
-        msg_scroll.set(0); // always overwrite the file message now
+        MSG_SCROLL.set(0); // always overwrite the file message now
 
         let mut writer = ByteWriter::new();
         let mut err: Option<WriteError> = None;
@@ -719,7 +719,7 @@ impl Buf {
                     }
 
                     written.lnum -= start.get(); // the number of lines written
-                    no_wait_return.set(no_wait_return.get() - 1); // may wait now
+                    NO_WAIT_RETURN.set(NO_WAIT_RETURN.get() - 1); // may wait now
 
                     if !req.filtering {
                         let notes = WriteNotes {
@@ -788,7 +788,7 @@ impl Buf {
                     end = LineNr::ZERO; // the original no longer exists either
                 }
             }
-            no_wait_return.set(no_wait_return.get() - 1); // may wait for return now
+            NO_WAIT_RETURN.set(NO_WAIT_RETURN.get() - 1); // may wait for return now
         }
 
         // Done saving; accept changed-buffer warnings again.
@@ -819,7 +819,7 @@ impl Buf {
                 }
             }
         }
-        msg_scroll.set(msg_save);
+        MSG_SCROLL.set(msg_save);
 
         // Writing the whole file with 'undofile' set writes the undo file too.
         if retval.is_ok() && write_undo_file {

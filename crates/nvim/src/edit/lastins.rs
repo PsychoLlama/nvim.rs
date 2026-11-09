@@ -56,7 +56,7 @@ pub(crate) fn set_last_insert(c: Key) {
 pub(crate) fn stuff_inserted(c: Key, mut count: c_int, no_esc: bool) -> Result<(), Failed> {
     let mut insert = get_last_insert(); // text to be inserted
     if insert.is_null() {
-        emsg(gettext(e_noinstext));
+        emsg(gettext(E_NOINSTEXT));
         return Err(Failed);
     }
 

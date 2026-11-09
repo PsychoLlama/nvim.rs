@@ -204,7 +204,7 @@ pub(crate) fn win_update(window: Win) {
     search_hl_has_cursor_lnum.set(LineNr::ZERO);
 
     // UPD_REDRAW_TOP: only the top `w_upd_rows` lines, used when the window
-    // scrolled down for `msg_scrolled`.
+    // scrolled down for `MSG_SCROLLED`.
     if rg.redr_type == UPD_REDRAW_TOP {
         let mut rows = 0;
         for i in 0..win.w_lines_valid {

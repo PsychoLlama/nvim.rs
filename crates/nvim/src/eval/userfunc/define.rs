@@ -229,7 +229,7 @@ impl Definition<'_, '_> {
             && !holds_func
             && !reads_as_identifier(name)
         {
-            emsg_funcname(e_invarg2, name);
+            emsg_funcname(E_INVARG2, name);
             return Err(Failed);
         }
         // Disallow using the g: dict.
@@ -325,21 +325,21 @@ impl Definition<'_, '_> {
         let next = self.excmd.line.byte_at(self.at);
         if next == b'\n' {
             self.line_arg = Some(self.at + 1);
-        } else if next != 0 && next != b'"' && !self.excmd.skip && did_emsg.get() == 0 {
+        } else if next != 0 && next != b'"' && !self.excmd.skip && DID_EMSG.get() == 0 {
             let rest = msg_bytes(self.excmd.line.rest_of(self.at));
             semsg!("E488: Trailing characters: {rest}");
         }
 
         if KeyTyped.get() {
             self.report_existing();
-            if !self.excmd.skip && did_emsg.get() != 0 {
+            if !self.excmd.skip && DID_EMSG.get() != 0 {
                 return Err(Refusal::Unwind);
             }
             if !ui_has(kUICmdline) {
                 // Don't overwrite the function name.
                 msg_putchar(c_int::from(b'\n'));
             }
-            cmdline_row.set(msg_row.get());
+            cmdline_row.set(MSG_ROW.get());
         }
         Ok(())
     }
@@ -623,8 +623,8 @@ pub fn ex_function(excmd: &mut ExArg) {
 
     // An error in a function call while evaluating an expression in magic
     // braces should not stop the function being defined.
-    let saved_did_emsg = did_emsg.get();
-    did_emsg.set(0);
+    let saved_did_emsg = DID_EMSG.get();
+    DID_EMSG.set(0);
 
     let mut definition = Definition {
         excmd,
@@ -648,7 +648,7 @@ pub fn ex_function(excmd: &mut ExArg) {
     // it.
     let show_block = definition.show_block;
     drop(definition);
-    did_emsg.set(did_emsg.get() | saved_did_emsg);
+    DID_EMSG.set(DID_EMSG.get() | saved_did_emsg);
     if show_block {
         ui_ext_cmdline_block_leave();
     }

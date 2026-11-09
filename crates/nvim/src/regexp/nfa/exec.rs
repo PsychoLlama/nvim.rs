@@ -30,7 +30,7 @@ use super::parse::re2post;
 use super::run::{find_match_text, skip_to_start};
 use super::sub::{clear_sub, slots};
 use crate::ascii::NUL;
-use crate::message::e_null;
+use crate::message::E_NULL;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
@@ -178,7 +178,7 @@ pub(crate) fn nfa_regexec(rex: Rex, prog: &NfaRegProg, startcol: ColNr) -> c_int
                 Attempt::Done(retval) => return retval,
             };
         }
-        None => iemsg(gettext(e_null)),
+        None => iemsg(gettext(E_NULL)),
     }
 
     if retval > 0 {

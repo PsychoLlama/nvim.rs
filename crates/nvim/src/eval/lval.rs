@@ -54,7 +54,7 @@ use crate::eval::{
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
 use crate::memory::XString;
-use crate::message::state::emsg_severe;
+use crate::message::state::EMSG_SEVERE;
 use crate::types::{
     Failed, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VarLock, kListLenUnknown,
 };
@@ -808,7 +808,7 @@ pub(crate) fn get_lval<'a>(
         lval.expanded = expanded_name(&text[..p], open, found.brace_close);
         if lval.expanded.is_none() {
             if !aborting() && !quiet {
-                emsg_severe.set(true);
+                EMSG_SEVERE.set(true);
                 let name = msg_bytes(text);
                 semsg!("E475: Invalid argument: {name}");
                 return (lval, Err(LvalError::Said(Failed)));

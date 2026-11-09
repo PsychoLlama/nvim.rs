@@ -64,12 +64,12 @@ use crate::highlight::state::{
 };
 use crate::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::highlight_group::HLF_W;
-use crate::message::state::{emsg_silent, in_assert_fails};
+use crate::message::state::{EMSG_SILENT, IN_ASSERT_FAILS};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};
 use crate::narrow::as_index;
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::vars::{
-    P_GUICURSOR, P_LZ, bo_flags, p_debug, p_lz, p_tgc, p_vb, p_wd, rdb_flags,
+    BO_FLAGS, P_GUICURSOR, P_LZ, RDB_FLAGS, p_debug, p_lz, p_tgc, p_vb, p_wd,
 };
 use crate::option::{set_option_value, ui_refresh_options};
 use crate::options::{kOptBoFlagAll, kOptCmdheight, kOptRdbFlagFlush, kOptRdbFlagLine};
@@ -415,10 +415,10 @@ pub fn ui_busy_stop() {
 /// Beeps, unless `'belloff'` covers `val`.
 pub fn vim_beep(val: core::ffi::c_uint) {
     called_vim_beep.set(true);
-    if emsg_silent.get() != 0 || in_assert_fails.get() {
+    if EMSG_SILENT.get() != 0 || IN_ASSERT_FAILS.get() {
         return;
     }
-    if bo_flags.get() & val == 0 && bo_flags.get() & kOptBoFlagAll == 0 {
+    if BO_FLAGS.get() & val == 0 && BO_FLAGS.get() & kOptBoFlagAll == 0 {
         // At most three beeps per half second: a stuck macro that beeps on
         // every iteration should not make the terminal unusable.
         static beeps: GlobalCell<c_int> = GlobalCell::new(0);
@@ -587,7 +587,7 @@ pub fn ui_line(
 
     // 'writedelay' with `redrawdebug=line`: park the cursor at the end of
     // the line just drawn and pause, so the draw order is watchable.
-    if p_wd() != 0 && rdb_flags.get() & kOptRdbFlagLine != 0 {
+    if p_wd() != 0 && RDB_FLAGS.get() & kOptRdbFlagLine != 0 {
         ui_call_grid_cursor_goto(
             Integer::from(grid.handle),
             Integer::from(row),
@@ -728,7 +728,7 @@ pub fn ui_flush() {
 
     ui_call_flush();
 
-    if p_wd() != 0 && rdb_flags.get() & kOptRdbFlagFlush != 0 {
+    if p_wd() != 0 && RDB_FLAGS.get() & kOptRdbFlagFlush != 0 {
         os_sleep(p_wd().unsigned_abs());
     }
 }

@@ -65,8 +65,8 @@ use crate::r#match::prepare_search_hl;
 use crate::mbyte::{c_cells_at, c_char_info};
 use crate::memline::ml_get_buf_len;
 use crate::message::state::{
-    lines_left, msg_col, msg_did_scroll, msg_didany, msg_didout, msg_grid_scroll_discount,
-    msg_no_more, msg_row, msg_scrolled, msg_scrolled_at_flush, msg_silent, need_wait_return,
+    LINES_LEFT, MSG_COL, MSG_DID_SCROLL, MSG_DIDANY, MSG_DIDOUT, MSG_GRID_SCROLL_DISCOUNT,
+    MSG_NO_MORE, MSG_ROW, MSG_SCROLLED, MSG_SCROLLED_AT_FLUSH, MSG_SILENT, NEED_WAIT_RETURN,
 };
 use crate::message::{
     msg_check_for_delay, msg_clr_cmdline, msg_clr_eos, msg_ext_flush_showmode, msg_ext_ui_flush,
@@ -80,7 +80,7 @@ use crate::r#move::{
 };
 use crate::normal::{clear_showcmd, do_check_scrollbind};
 use crate::option::vars::{
-    P_CH, P_COLUMNS, P_LINES, dy_flags, p_ch, p_hls, p_icon, p_lz, p_paste, p_rdt, p_ri, p_ru,
+    DY_FLAGS, P_CH, P_COLUMNS, P_LINES, p_ch, p_hls, p_icon, p_lz, p_paste, p_rdt, p_ri, p_ru,
     p_sc, p_smd, p_title, p_wmw,
 };
 use crate::option::{get_ve_flags, shortmess};
@@ -216,7 +216,7 @@ pub fn redrawing() -> bool {
 fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
     clear_cmdline.set(true);
 
-    // `msg_scrollsize` is a pure function of `msg_scrolled` and 'cmdheight',
+    // `msg_scrollsize` is a pure function of `MSG_SCROLLED` and 'cmdheight',
     // neither of which changes until the end of this function.
     let scrollsize = msg_scrollsize();
     let valid = (Rows.get() - scrollsize).max(0);
@@ -233,7 +233,7 @@ fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
 
     let mut was_invalidated = false;
     // UPD_CLEAR is already handled by the caller.
-    if redr_type == UPD_NOT_VALID && !ui_has(kUIMultigrid) && msg_scrolled.get() != 0 {
+    if redr_type == UPD_NOT_VALID && !ui_has(kUIMultigrid) && MSG_SCROLLED.get() != 0 {
         was_invalidated = ui_comp_set_screen_valid(false);
         let mut dg = default_grid_ref();
         let mut row = valid;
@@ -267,10 +267,10 @@ fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
         ui_comp_set_screen_valid(true);
     }
 
-    msg_scrolled.set(0);
-    msg_scrolled_at_flush.set(0);
-    msg_grid_scroll_discount.set(0);
-    need_wait_return.set(false);
+    MSG_SCROLLED.set(0);
+    MSG_SCROLLED_AT_FLUSH.set(0);
+    MSG_GRID_SCROLL_DISCOUNT.set(0);
+    NEED_WAIT_RETURN.set(false);
 }
 
 /// Bring every displayed buffer's cached syntax and decoration state up to date
@@ -347,18 +347,18 @@ pub fn update_screen() -> Result<(), Failed> {
         redr_type = redr_type.max(UPD_CLEAR);
     }
 
-    // Tricky: other code can reset `msg_scrolled` behind our back, so this
+    // Tricky: other code can reset `MSG_SCROLLED` behind our back, so this
     // is bookkept separately.
-    if msg_did_scroll.get() {
-        msg_did_scroll.set(false);
-        msg_scrolled_at_flush.set(0);
+    if MSG_DID_SCROLL.get() {
+        MSG_DID_SCROLL.set(false);
+        MSG_SCROLLED_AT_FLUSH.set(0);
     }
 
     if redr_type >= UPD_CLEAR || !default_grid_ref().valid {
         ui_comp_set_screen_valid(false);
     }
 
-    if msg_scrolled.get() != 0 || msg_grid_invalid.get() {
+    if MSG_SCROLLED.get() != 0 || msg_grid_invalid.get() {
         restore_scrolled_messages(redr_type, is_stl_global);
     }
 

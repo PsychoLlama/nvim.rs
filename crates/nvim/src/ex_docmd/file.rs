@@ -52,7 +52,7 @@ use crate::ex_cmds2::{check_changed, check_fname};
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
 use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::source::ex_errmsg;
-use crate::ex_docmd::{DOBUF_LAST, cmdmod_has, ex_pressedreturn, kDirectionNotSet};
+use crate::ex_docmd::{DIRECTION_NOT_SET, DOBUF_LAST, cmdmod_has, ex_pressedreturn};
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
 use crate::file_search::FileNameOpts;
@@ -60,8 +60,8 @@ use crate::file_search::FileNameOpts;
 use crate::ex_docmd::state::{ex_no_reprint, global_busy};
 use crate::getchar::stuff_readbuf;
 use crate::mark::setpcmark;
-use crate::message::e_trailing_arg;
-use crate::message::state::{msg_scroll, need_wait_return};
+use crate::message::E_TRAILING_ARG;
+use crate::message::state::{MSG_SCROLL, NEED_WAIT_RETURN};
 use crate::option::vars::{P_SHADA, p_awa, p_shada};
 use crate::startup::{readonlymode, recoverymode};
 use crate::state::mode::{exmode_active, pending_exmode_active};
@@ -124,7 +124,7 @@ pub(crate) fn do_exbuffer(excmd: &mut ExArg) {
     // `execute_cmd0`'s `ExArgt::BUFNAME` handling, so anything left is junk.
     if excmd.line.byte_at(excmd.line.arg) != 0 {
         excmd.errmsg = Some(ex_errmsg(
-            e_trailing_arg,
+            E_TRAILING_ARG,
             excmd.line.cstr_from(excmd.line.arg),
         ));
         return;
@@ -271,14 +271,14 @@ impl ExArg<'_> {
                     }
                     let _redraw = Allow::redraw();
                     let _prompt = Allow::wait_return();
-                    need_wait_return.set(false);
-                    let save_ms = msg_scroll.get();
-                    msg_scroll.set(0);
+                    NEED_WAIT_RETURN.set(false);
+                    let save_ms = MSG_SCROLL.get();
+                    MSG_SCROLL.set(0);
                     redraw_all_later(UPD_NOT_VALID);
                     pending_exmode_active.set(true);
                     normal_enter(false, true);
                     pending_exmode_active.set(false);
-                    msg_scroll.set(save_ms);
+                    MSG_SCROLL.set(save_ms);
                 }
                 return;
             }
@@ -494,7 +494,7 @@ pub(crate) fn ex_rundo(excmd: &mut ExArg) {
 pub(crate) fn ex_checkpath(excmd: &mut ExArg) {
     find_pattern_in_path(
         b"",
-        kDirectionNotSet,
+        DIRECTION_NOT_SET,
         false,
         false,
         CHECK_PATH,

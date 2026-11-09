@@ -28,8 +28,8 @@ use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::getchar::state::got_int;
 use crate::mark::setpcmark;
 use crate::memline::{ml_clearmarked, ml_firstmarked, ml_setmarked};
-use crate::message::state::{msg_col, msg_didout, msg_scrolled};
-use crate::message::{e_interr, e_invcmd};
+use crate::message::state::{MSG_COL, MSG_DIDOUT, MSG_SCROLLED};
+use crate::message::{E_INTERR, E_INVCMD};
 use crate::message::{emsg, msg};
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::r#move::changed_line_abv_curs;
@@ -234,7 +234,7 @@ pub fn ex_global(excmd: &mut ExArg) {
         true,
     );
     let Some((mut regmatch, Some(used_pat))) = compiled else {
-        emsg(gettext(e_invcmd));
+        emsg(gettext(E_INVCMD));
         return;
     };
 
@@ -249,7 +249,7 @@ pub fn ex_global(excmd: &mut ExArg) {
         let ndone = global_mark(excmd, &mut regmatch, kind);
         // Pass 2: execute the command for each line that has been marked.
         if got_int.get() {
-            msg(gettext(e_interr), 0 as c_int);
+            msg(gettext(E_INTERR), 0 as c_int);
         } else if ndone == 0 as c_int {
             let pat = msg_bytes(&used_pat);
             if kind == b'v' {
@@ -278,7 +278,7 @@ pub fn global_exe(cmd: &[u8]) {
     setpcmark();
 
     // When the command writes a message, don't overwrite the command.
-    msg_didout.set(true);
+    MSG_DIDOUT.set(true);
 
     SUB_NSUBS.set(0 as c_int);
     SUB_NLINES.set(0);
@@ -309,8 +309,8 @@ pub fn global_exe(cmd: &[u8]) {
 
     // If it looks like no message was written, allow overwriting the command
     // with the report for number of changes.
-    if msg_col.get() == 0 as c_int && msg_scrolled.get() == 0 as c_int {
-        msg_didout.set(false);
+    if MSG_COL.get() == 0 as c_int && MSG_SCROLLED.get() == 0 as c_int {
+        MSG_DIDOUT.set(false);
     }
 
     // If substitutes were done, report the number of substitutes, otherwise

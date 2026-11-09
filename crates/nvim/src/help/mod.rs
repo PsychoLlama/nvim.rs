@@ -47,8 +47,8 @@ use crate::highlight_group::HLF_E;
 use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::nlua_exec_cstr;
 use crate::memory::XString;
+use crate::message::E_NOIDENT;
 use crate::message::IOSIZE;
-use crate::message::e_noident;
 use crate::message::{emsg, emsg_multiline};
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::narrow::len_as_int;
@@ -101,13 +101,13 @@ mod flag {
     /// `path_full_compare`'s "same file" answer.
     pub(super) const kEqualFiles: FileComparison = 1;
     /// `nlua_exec` return modes.
-    pub(super) const kRetObject: LuaRetMode = 0;
-    pub(super) const kRetNilBool: LuaRetMode = 1;
+    pub(super) const RET_OBJECT: LuaRetMode = 0;
+    pub(super) const RET_NIL_BOOL: LuaRetMode = 1;
 }
 
 use flag::{
-    TAG_HELP, TAG_KEEP_LANG, TAG_MANY, TAG_NAMES, TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE,
-    kRetNilBool, kRetObject,
+    RET_NIL_BOOL, RET_OBJECT, TAG_HELP, TAG_KEEP_LANG, TAG_MANY, TAG_NAMES, TAG_NO_TAGFUNC,
+    TAG_REGEXP, TAG_VERBOSE,
 };
 
 /// Whether the `:keepalt` modifier is off, so that the alternate file may
@@ -154,7 +154,7 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
     // `:help!` asks Lua for the best tag at the cursor.
     if helpbang {
         let Some(tag) = resolve_tag_at_cursor() else {
-            emsg(gettext(e_noident));
+            emsg(gettext(E_NOIDENT));
             return;
         };
         subject = tag;
@@ -239,7 +239,7 @@ fn trimmed_subject(arg: &[u8]) -> Vec<u8> {
 /// owned bytes, or `None` when it declines to pick one.
 fn resolve_tag_at_cursor() -> Option<Vec<u8>> {
     let chunk = c"return require'vim._core.help'.resolve_tag()";
-    let res = nlua_exec_cstr(chunk, Array::new(), kRetObject).ok()?;
+    let res = nlua_exec_cstr(chunk, Array::new(), RET_OBJECT).ok()?;
     let tag = res.as_string().filter(|tag| !tag.is_empty())?;
     // Upstream copied the answer as a C string: up to a NUL.
     Some(
@@ -411,7 +411,7 @@ fn find_help_tags(subject: &[u8], keep_lang: bool) -> Option<Vec<Vec<u8>>> {
     let mut args = ArrayBuf::<1>::new();
     args.push(Object::string(ApiString::from_bytes(subject)));
     let chunk = c"return require'vim._core.help'.escape_subject(...)";
-    let res = match nlua_exec_cstr(chunk, args.array(), kRetObject) {
+    let res = match nlua_exec_cstr(chunk, args.array(), RET_OBJECT) {
         Ok(value) => value,
         Err(mut err) => {
             emsg_multiline(err.message_or_empty(), Some(c"lua_error"), HLF_E, true);
@@ -552,7 +552,7 @@ pub(crate) fn prepare_help_buffer() {
 /// Populate `*local-additions*` in `help.txt`.
 pub(crate) fn get_local_additions() {
     let chunk = c"return require'vim._core.help'.local_additions()";
-    if let Err(mut err) = nlua_exec_cstr(chunk, Array::new(), kRetNilBool) {
+    if let Err(mut err) = nlua_exec_cstr(chunk, Array::new(), RET_NIL_BOOL) {
         emsg_multiline(err.message_or_empty(), Some(c"lua_error"), HLF_E, true);
         err.clear();
     }

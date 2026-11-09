@@ -27,7 +27,7 @@ use crate::ex_getln::get_text_locked_msg;
 use crate::lua::api_wrappers::BINDINGS;
 use crate::lua::executor::nlua_is_deferred_safe;
 use crate::lua::stack::{At, CFunction, Dispatch, Raise, Stack, dispatch_entry};
-use crate::message::{e_fast_api_disabled, e_textlock};
+use crate::message::{E_FAST_API_DISABLED, E_TEXTLOCK};
 use crate::types::{Error, kErrorTypeException, kErrorTypeValidation};
 
 /// How a result goes back to Lua: `PUSH_SPECIAL` converts `nil` and the
@@ -173,7 +173,7 @@ fn refusal(err: &Error, blame: Blame) -> Raise {
 
 /// `E5560: <name> must not be called in a fast event context`.
 fn fast_api_refusal(name: &CStr) -> Vec<u8> {
-    let template = e_fast_api_disabled.to_bytes();
+    let template = E_FAST_API_DISABLED.to_bytes();
     let at = template
         .windows(2)
         .position(|w| w == b"%s")
@@ -199,5 +199,5 @@ pub(crate) fn text_locked_error() -> Error {
 /// Refuses a call made from an expression mapping, which the cmdline window
 /// alone would have allowed.
 pub(crate) fn expr_map_locked_error() -> Error {
-    Error::from_message(kErrorTypeException, e_textlock)
+    Error::from_message(kErrorTypeException, E_TEXTLOCK)
 }

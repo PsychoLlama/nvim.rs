@@ -116,7 +116,7 @@ fn qf_open_new_file_win(ll_ref: Option<QfId>) -> Result<(), Failed> {
     }
     // Do not split again for the next entry.
     P_SWB.clear();
-    swb_flags.set(0);
+    SWB_FLAGS.set(0);
     Win::current().w_onebuf_opt.wo_scb = c_int::from(false);
     Win::current().w_onebuf_opt.wo_crb = c_int::from(false);
     if let Some(ll_ref) = ll_ref {
@@ -180,7 +180,7 @@ fn qf_goto_win_with_qfl_file(qf_fnum: Option<Handle>) {
         if win.is_quickfix_window() {
             let last = crate::winlayer::prev_window()
                 .filter(|p| win_valid(p.id()) && p.w_onebuf_opt.wo_wfb == 0)
-                .filter(|_| swb_flags.get() & kOptSwbFlagUselast as c_uint != 0);
+                .filter(|_| SWB_FLAGS.get() & kOptSwbFlagUselast as c_uint != 0);
             win = if let Some(last) = last {
                 last
             } else if let Some(altwin) = altwin {
@@ -229,7 +229,7 @@ pub(crate) fn qf_jump_to_usable_window(
     // "is there one", so a window showing an ordinary buffer does not
     // become the one jumped to; `qf_goto_win_*` looks again.
     let mut usable_win = usable_wp.is_some() || qf_find_win_with_normal_buf().is_some();
-    if !usable_win && swb_flags.get() & kOptSwbFlagUsetab as c_uint != 0 {
+    if !usable_win && SWB_FLAGS.get() & kOptSwbFlagUsetab as c_uint != 0 {
         usable_win = qf_goto_tabwin_with_file(qf_fnum);
     }
 

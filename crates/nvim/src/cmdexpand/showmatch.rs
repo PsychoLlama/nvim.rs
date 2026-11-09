@@ -24,7 +24,7 @@ use crate::env::{expand_env, home_to_tilde};
 use crate::getchar::state::got_int;
 use crate::highlight_group::{HLF_D, HLF_T};
 use crate::lua::executor::nlua_expand_pat;
-use crate::message::state::{msg_col, msg_didany, msg_row};
+use crate::message::state::{MSG_COL, MSG_DIDANY, MSG_ROW};
 use crate::message::{
     msg_advance, msg_clr_eos, msg_display, msg_display_elided, msg_ext_set_kind, msg_putchar,
     msg_start, msg_str, msg_str_hl,
@@ -131,7 +131,7 @@ pub(crate) fn showmatches_oneline(
         lastlen = msg_display(shown.as_cstr(), if isdir { HLF_D } else { 0 }, false);
         j += lines;
     }
-    if msg_col.get() > 0 {
+    if MSG_COL.get() > 0 {
         // When not wrapped around.
         msg_clr_eos();
         msg_putchar(c_int::from(b'\n'));
@@ -180,14 +180,14 @@ pub fn showmatches(
     let matches = found.as_deref().unwrap_or(expand.matches());
 
     if display_list {
-        msg_didany.set(false); // lines_left will be set
+        MSG_DIDANY.set(false); // lines_left will be set
         msg_start(); // prepare for paging
         if !ui_has(kUIMessages) {
             msg_putchar(c_int::from(b'\n'));
         }
         ui_flush();
-        cmdline_row.set(msg_row.get());
-        msg_didany.set(false); // lines_left will be set again
+        cmdline_row.set(MSG_ROW.get());
+        MSG_DIDANY.set(false); // lines_left will be set again
         msg_ext_set_kind(c"wildlist");
         msg_start(); // prepare for paging
     }
@@ -248,7 +248,7 @@ pub fn showmatches(
 
         // We redraw the command below the lines that we have just listed.
         // This is a bit tricky, but it saves a lot of screen updating.
-        cmdline_row.set(msg_row.get()); // will put it back later
+        cmdline_row.set(MSG_ROW.get()); // will put it back later
     }
 
     Expanded::Ok

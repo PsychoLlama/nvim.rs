@@ -50,7 +50,7 @@ use protocol::{
 };
 
 pub const kMessageTypeRedrawEvent: MessageType = 3;
-pub const kMessageTypeNotification: MessageType = 2;
+pub const MESSAGE_TYPE_NOTIFICATION: MessageType = 2;
 pub const kMessageTypeResponse: MessageType = 1;
 pub const kUnpackTypeStringArray: c_int = -1;
 
@@ -134,7 +134,7 @@ impl Unpacker {
             let is_redraw = self.handler.fn_0.is_some_and(|f| {
                 core::ptr::fn_addr_eq(f, handle_ui_client_redraw as ApiDispatchFn)
             });
-            if self.type_0 == kMessageTypeNotification && is_redraw {
+            if self.type_0 == MESSAGE_TYPE_NOTIFICATION && is_redraw {
                 self.type_0 = kMessageTypeRedrawEvent;
                 self.state = protocol::REDRAW_EVENTS;
             } else {
@@ -245,7 +245,7 @@ impl Unpacker {
         self.type_0 = message_type.cast_signed();
         self.request_id = 0;
 
-        if self.type_0 != kMessageTypeNotification {
+        if self.type_0 != MESSAGE_TYPE_NOTIFICATION {
             let tok = next_header_token(reader, data)?.0;
             if tok.kind != Some(Kind::Uint) {
                 return Err(HeaderStop::Invalid);

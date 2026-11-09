@@ -20,7 +20,7 @@ use crate::env::XDGVarType;
 use crate::mbyte::{CONV_NONE, VimConv};
 use crate::memory::ThinCString;
 use crate::memory::XString;
-use crate::message::{e_exists, e_invarg};
+use crate::message::{E_EXISTS, E_INVARG};
 use crate::message::{emsg, msg, verbose_enter, verbose_leave};
 use crate::message_fmt::{emsg_text, msg_bytes, msg_cstr};
 use crate::option::vars::{p_msm, p_verbose};
@@ -648,7 +648,7 @@ fn output_name(
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum MkspellError {
     /// No input names.
-    #[error("{}", msg_cstr(gettext(e_invarg)))]
+    #[error("{}", msg_cstr(gettext(E_INVARG)))]
     NoInput,
     /// The output name carries a region.
     #[error(
@@ -660,7 +660,7 @@ pub(crate) enum MkspellError {
     #[error("{}", tr!("E754: Only up to {} regions supported", MAXREGIONS.cast_signed()))]
     TooManyRegions,
     /// The output exists and `!` was not given.
-    #[error("{}", msg_cstr(gettext(e_exists)))]
+    #[error("{}", msg_cstr(gettext(E_EXISTS)))]
     OutputExists,
     /// The output is a directory.
     #[error("{}", tr!("E17: \"{}\" is a directory", msg_cstr(.0.as_cstr())))]

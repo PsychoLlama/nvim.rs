@@ -127,9 +127,9 @@ fn config_split(spelling: &CStr) -> Option<WinSplit> {
     const NAMES: [&CStr; 4] = [c"left", c"right", c"above", c"below"];
     const SIDES: [WinSplit; 4] = [
         kWinSplitLeft,
-        kWinSplitRight,
-        kWinSplitAbove,
-        kWinSplitBelow,
+        WIN_SPLIT_RIGHT,
+        WIN_SPLIT_ABOVE,
+        WIN_SPLIT_BELOW,
     ];
     Some(SIDES[imatch(spelling, &NAMES)?])
 }
@@ -138,7 +138,7 @@ fn config_split(spelling: &CStr) -> Option<WinSplit> {
 /// at. Case-sensitive, unlike every other name here.
 fn align_pos(spelling: &CStr) -> Option<AlignTextPos> {
     const NAMES: [&CStr; 3] = [c"left", c"center", c"right"];
-    const ENDS: [AlignTextPos; 3] = [kAlignLeft, kAlignCenter, kAlignRight];
+    const ENDS: [AlignTextPos; 3] = [kAlignLeft, ALIGN_CENTER, ALIGN_RIGHT];
     Some(ENDS[NAMES.iter().position(|name| *name == spelling)?])
 }
 
@@ -177,7 +177,7 @@ impl BorderText {
     /// builder's own copy, and the window keeps its until whatever reaches
     /// it replaces them.
     fn apply(self, config: &mut WinConfig, which: BorderTextType) {
-        let (present, chunks, width) = if which == kBorderTextFooter {
+        let (present, chunks, width) = if which == BORDER_TEXT_FOOTER {
             (
                 &mut config.footer,
                 &mut config.footer_chunks,
@@ -256,7 +256,7 @@ fn one_chunk(string: &ApiString) -> VirtText {
 
 /// Write the `title_pos`/`footer_pos` field `which` names.
 fn set_align(config: &mut WinConfig, which: BorderTextType, align: AlignTextPos) {
-    if which == kBorderTextFooter {
+    if which == BORDER_TEXT_FOOTER {
         config.footer_pos = align;
     } else {
         config.title_pos = align;
@@ -552,13 +552,13 @@ impl Decode<'_> {
 
     /// The `title`/`footer` keys and the `*_pos` each of them takes.
     fn border_text(&mut self) -> Result<(), Error> {
-        self.one_border_text(kBorderTextTitle)?;
-        self.one_border_text(kBorderTextFooter)
+        self.one_border_text(BORDER_TEXT_TITLE)?;
+        self.one_border_text(BORDER_TEXT_FOOTER)
     }
 
     /// One of the two, whichever `which` names.
     fn one_border_text(&mut self, which: BorderTextType) -> Result<(), Error> {
-        let footer = which == kBorderTextFooter;
+        let footer = which == BORDER_TEXT_FOOTER;
         let (name, text, pos) = if footer {
             (c"footer", &self.config.footer, &self.config.footer_pos)
         } else {
@@ -713,7 +713,7 @@ mod tests {
     fn a_name_is_matched_whatever_its_case() {
         assert_eq!(float_anchor(c"nw"), Some(0));
         assert_eq!(float_relative(c"EDITOR"), Some(kFloatRelativeEditor));
-        assert_eq!(config_split(c"Above"), Some(kWinSplitAbove));
+        assert_eq!(config_split(c"Above"), Some(WIN_SPLIT_ABOVE));
     }
 
     /// The border text's position is the one that does not: upstream reads
@@ -721,8 +721,8 @@ mod tests {
     #[test]
     fn the_border_text_position_is_case_sensitive() {
         assert_eq!(align_pos(c"left"), Some(kAlignLeft));
-        assert_eq!(align_pos(c"center"), Some(kAlignCenter));
-        assert_eq!(align_pos(c"right"), Some(kAlignRight));
+        assert_eq!(align_pos(c"center"), Some(ALIGN_CENTER));
+        assert_eq!(align_pos(c"right"), Some(ALIGN_RIGHT));
         assert_eq!(align_pos(c"Left"), None);
         assert_eq!(align_pos(c""), None);
     }
@@ -731,9 +731,9 @@ mod tests {
     #[cfg_attr(miri, ignore = "strcasecmp is a foreign function")]
     fn split_names_its_four_sides() {
         assert_eq!(config_split(c"left"), Some(kWinSplitLeft));
-        assert_eq!(config_split(c"right"), Some(kWinSplitRight));
-        assert_eq!(config_split(c"above"), Some(kWinSplitAbove));
-        assert_eq!(config_split(c"below"), Some(kWinSplitBelow));
+        assert_eq!(config_split(c"right"), Some(WIN_SPLIT_RIGHT));
+        assert_eq!(config_split(c"above"), Some(WIN_SPLIT_ABOVE));
+        assert_eq!(config_split(c"below"), Some(WIN_SPLIT_BELOW));
         assert_eq!(config_split(c"beside"), None);
     }
 

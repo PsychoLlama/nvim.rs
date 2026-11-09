@@ -34,8 +34,8 @@ use crate::mark::{getnextmark, pos_to_mark, setpcmark};
 use crate::mouse::do_mouse;
 use crate::normal::defs::CmdArg;
 use crate::normal::{
-    FIND_IDENT, FM_BACKWARD, FM_FORWARD, SMT_BAD, SMT_RARE, clear_op, clear_op_beep,
-    ident_under_cursor, kDirectionNotSet, kMTCharWise, may_fold_open, nv_gotofile, nv_mark_move_to,
+    DIRECTION_NOT_SET, FIND_IDENT, FM_BACKWARD, FM_FORWARD, MT_CHAR_WISE, SMT_BAD, SMT_RARE,
+    clear_op, clear_op_beep, ident_under_cursor, may_fold_open, nv_gotofile, nv_mark_move_to,
     nv_put_opt,
 };
 use crate::ops::OpType;
@@ -239,7 +239,7 @@ fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
     } else {
         LineNr::ONE
     };
-    let (dir, n) = (kDirectionNotSet, cmd_arg.count1);
+    let (dir, n) = (DIRECTION_NOT_SET, cmd_arg.count1);
     let last = MAXLNUM;
     find_pattern_in_path(
         &name, dir, true, fold_case, what, n, action, from, last, false, false,
@@ -288,7 +288,7 @@ fn nv_bracket_spell(cmd_arg: &mut CmdArg) {
 
 /// `[` and `]`, whose second character says what kind of jump this is.
 pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
-    cmd_arg.op().motion_type = kMTCharWise;
+    cmd_arg.op().motion_type = MT_CHAR_WISE;
     cmd_arg.op().inclusive = false;
     let old_pos = Win::current().w_cursor;
     Win::current().w_cursor.coladd = 0;

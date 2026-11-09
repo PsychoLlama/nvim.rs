@@ -139,7 +139,7 @@ pub(crate) fn diff_file_internal(
         Ok(())
     };
     if too_big(orig) || too_big(new) || diff_hunks(orig, new, xdiff_flags, &mut push).is_err() {
-        emsg(gettext(e_problem_creating_internal_diff));
+        emsg(gettext(E_PROBLEM_CREATING_INTERNAL_DIFF));
         return Err(Failed);
     }
     Ok(())

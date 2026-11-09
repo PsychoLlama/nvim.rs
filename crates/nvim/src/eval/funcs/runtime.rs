@@ -10,7 +10,7 @@
 )]
 
 use super::wrappers::{arg_lnum, arg_number, arg_number_chk, non_zero_arg};
-use super::{MENU_ALL_MODES, kRetNilBool};
+use super::{MENU_ALL_MODES, RET_NIL_BOOL};
 use crate::api::private::helpers::api_metadata;
 use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
@@ -30,7 +30,7 @@ use crate::lua::executor::nlua_exec_cstr;
 use crate::memline::Lines;
 use crate::memory::ThinCString;
 use crate::menu::{cmd_modes, menu_get};
-use crate::message::state::msg_scrolled;
+use crate::message::state::MSG_SCROLLED;
 use crate::narrow::number_as_col;
 use crate::narrow::number_as_int;
 use crate::normal::op_pending;
@@ -251,7 +251,7 @@ fn has_wsl() -> bool {
     if ANSWER.get().is_none() {
         let mut err = Error::none();
         const PROBE: &CStr = c"return vim.uv.os_uname()['release']:lower():match('microsoft')";
-        let o: Object = match nlua_exec_cstr(PROBE, Array::new(), kRetNilBool) {
+        let o: Object = match nlua_exec_cstr(PROBE, Array::new(), RET_NIL_BOOL) {
             Ok(value) => value,
             Err(e) => {
                 err = e;
@@ -386,7 +386,7 @@ pub fn f_state(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     for _ in 0..get_callback_depth().min(3) {
         add(b'c');
     }
-    if msg_scrolled.get() > 0 {
+    if MSG_SCROLLED.get() > 0 {
         add(b's');
     }
 

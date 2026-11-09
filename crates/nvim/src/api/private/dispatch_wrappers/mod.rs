@@ -146,7 +146,7 @@ use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::{get_text_locked_msg, text_locked};
 use crate::guard::textlock;
 use crate::log::logmsg;
-use crate::message::e_textlock;
+use crate::message::E_TEXTLOCK;
 use crate::message_fmt::msg_cstr;
 use crate::os::libc::uint64_t;
 use crate::types::{
@@ -304,5 +304,5 @@ fn text_locked_error() -> Error {
 /// Refuses a call made from an expression mapping, which the cmdline window
 /// alone would have allowed.
 fn expr_map_locked_error() -> Error {
-    Error::from_message(kErrorTypeException, e_textlock)
+    Error::from_message(kErrorTypeException, E_TEXTLOCK)
 }

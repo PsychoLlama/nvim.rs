@@ -10,8 +10,8 @@
 )]
 
 use super::{
-    kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin, kChannelPartStdout,
-    kRetObject,
+    RET_OBJECT, kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin,
+    kChannelPartStdout,
 };
 use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
 use crate::channel::defs::{CallbackReader, ChannelPart};
@@ -27,7 +27,7 @@ use crate::ex_cmds::check_secure;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::nlua_exec_cstr;
 use crate::memory::{ThinCString, XString};
-use crate::message::e_invarg;
+use crate::message::E_INVARG;
 use crate::message::emsg;
 use crate::message::with_on_print;
 use crate::message_fmt::msg_cstr;
@@ -79,7 +79,7 @@ pub fn f_chanclose(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if args[0].v_type() != VAR_NUMBER
         || (!args.get(1).is_some_and(|arg| arg.v_type() == VAR_STRING) && args.len() > 1)
     {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     }
 
@@ -112,7 +112,7 @@ pub fn f_chansend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     if args[0].v_type() != VAR_NUMBER || args.len() <= 1 {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     }
 
@@ -309,7 +309,7 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     {
         let lua_args = Array::from(vec![Object::array(addrs_arr)]);
         const PEERS: &CStr = c"return require('vim._core.server').serverlist(...)";
-        match nlua_exec_cstr(PEERS, lua_args, kRetObject) {
+        match nlua_exec_cstr(PEERS, lua_args, RET_OBJECT) {
             Err(err) => {
                 // A missing or broken helper is logged, not reported: the
                 // local addresses above are still a useful answer.
@@ -347,7 +347,7 @@ pub fn f_serverstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let address = if args.is_empty() {
         server_address_generated()
     } else if !args.first().is_some_and(|arg| arg.v_type() == VAR_STRING) {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     } else {
         XString::from_cstr(numbuf.string(&args[0]))
@@ -377,7 +377,7 @@ pub fn f_serverstop(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     if args[0].v_type() != VAR_STRING {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     }
     // Note the order: the return value is only cleared *after* the type
@@ -395,7 +395,7 @@ pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     if args[0].v_type() != VAR_STRING || args[1].v_type() != VAR_STRING {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     }
     if !args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT) && args.len() > 2 {
@@ -446,7 +446,7 @@ pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// channel.
 pub fn f_stdioopen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if args[0].v_type() != VAR_DICT {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     }
     let mut on_stdin = NO_READER;
@@ -455,7 +455,7 @@ pub fn f_stdioopen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         refused.report();
         return;
     }
-    // `on_print` is a global: there is only one stdio channel.
+    // `ON_PRINT` is a global: there is only one stdio channel.
     let options = args[0].dict_shared();
     if let Err(refused) = with_on_print(|cb| dict_get_callback(options, b"on_print", cb)) {
         refused.report();

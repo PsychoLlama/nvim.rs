@@ -20,7 +20,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{fire_autocmds, fire_autocmds_for};
@@ -51,7 +50,7 @@ use crate::highlight::hl_invalidate_blends;
 use crate::indent_c::parse_cino;
 use crate::memfile::mf_close_file;
 use crate::memline::{ml_open_file, ml_open_files};
-use crate::message::e_invarg;
+use crate::message::E_INVARG;
 use crate::message::{msg, msg_source};
 use crate::r#move::changed_window_setting;
 use crate::normal::{do_check_scrollbind, get_vtopline};
@@ -621,7 +620,7 @@ pub(crate) fn did_set_wildchar(args: &mut OptSet) -> Result<(), OptError> {
         Key::from(SpecialKey::Kenter),
     ];
     if key.is_some_and(|key| refused.contains(&key)) {
-        return Err((e_invarg).into());
+        return Err((E_INVARG).into());
     }
     Ok(())
 }
@@ -692,15 +691,15 @@ pub(crate) fn did_set_xhistory(args: &mut OptSet) -> Result<(), OptError> {
 /// The recursion counter is what lets a syntax file set 'syntax' again (to
 /// include another one) without the outer pass being treated as a no-op.
 pub(crate) fn do_syntax_autocmd(mut buffer: Buf, value_changed: bool) {
-    static syn_recursive: GlobalCell<c_int> = GlobalCell::new(0);
+    static SYN_RECURSIVE: GlobalCell<c_int> = GlobalCell::new(0);
 
-    let _syn_recursive = Depth::of(&syn_recursive);
+    let _syn_recursive = Depth::of(&SYN_RECURSIVE);
     buffer.b_flags |= BufFlags::SYN_SET;
     fire_autocmds_for(
         AutoEvent::Syntax,
         Some(buffer.b_p_syn.get()),
         buffer.name.shown().map(XString::from_cstr),
-        value_changed || syn_recursive.get() == 1,
+        value_changed || SYN_RECURSIVE.get() == 1,
         Some(buffer),
         None,
     );

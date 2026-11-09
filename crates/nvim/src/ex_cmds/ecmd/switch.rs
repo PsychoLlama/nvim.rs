@@ -45,7 +45,7 @@ use crate::ex_cmds::buf_autocmd;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::aborting;
 use crate::fileio::{buf_check_timestamp, set_file_options, set_forced_fenc};
-use crate::message::e_cannot_switch_to_a_closing_buffer;
+use crate::message::E_CANNOT_SWITCH_TO_A_CLOSING_BUFFER;
 use crate::message::emsg;
 use crate::option::buf_copy_options;
 use crate::os::cshim::gettext;
@@ -150,7 +150,7 @@ pub(super) fn switch_to_other_buffer(
         {
             Win::current().w_buffer.b_nwindows -= 1;
         }
-        emsg(gettext(e_cannot_switch_to_a_closing_buffer));
+        emsg(gettext(E_CANNOT_SWITCH_TO_A_CLOSING_BUFFER));
         return Switch::Abandon;
     }
 

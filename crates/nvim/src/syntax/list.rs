@@ -320,8 +320,8 @@ fn syn_list_cluster(id: c_int) {
     msg_putchar(c_int::from(b'\n'));
     msg_display(&cluster.scl_name, 0, false);
 
-    if msg_col.get() >= endcol {
-        endcol = msg_col.get() + 1; // output at least one space
+    if MSG_COL.get() >= endcol {
+        endcol = MSG_COL.get() + 1; // output at least one space
     }
     if Columns.get() <= endcol {
         endcol = Columns.get() - 1; // avoid a hang for a tiny window

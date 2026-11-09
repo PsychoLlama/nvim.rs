@@ -24,9 +24,9 @@ use crate::autocmd::{
 };
 use crate::buffer::BLN_DUMMY;
 use crate::buffer::{BufFlags, BufRef, buflist_new, wipe_buffer};
-use crate::option::kOptScopeBuf;
-use crate::option::kOptScopeGlobal;
-use crate::option::kOptScopeWin;
+use crate::option::OPT_SCOPE_BUF;
+use crate::option::OPT_SCOPE_GLOBAL;
+use crate::option::OPT_SCOPE_WIN;
 use crate::options::{kOptBufhidden, kOptBuftype, kOptInvalid};
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
@@ -87,10 +87,10 @@ fn option_target<'a>(opts: &'a KeyDict_option, name: &CStr) -> Result<OptionRequ
         };
     }
 
-    let mut scope = kOptScopeGlobal;
+    let mut scope = OPT_SCOPE_GLOBAL;
     let (mut win, mut buf) = (None, None);
     if let Some(handle) = given_win {
-        scope = kOptScopeWin;
+        scope = OPT_SCOPE_WIN;
         win = find_window_by_handle(handle)?;
     }
     if let Some(handle) = given_buf {
@@ -99,7 +99,7 @@ fn option_target<'a>(opts: &'a KeyDict_option, name: &CStr) -> Result<OptionRequ
             return Err(Error::validation(why));
         }
         opt_flags = OptionSetFlags::LOCAL;
-        scope = kOptScopeBuf;
+        scope = OPT_SCOPE_BUF;
         buf = find_buffer_by_handle(handle)?;
     }
     if given_filetype.is_some()
@@ -116,21 +116,22 @@ fn option_target<'a>(opts: &'a KeyDict_option, name: &CStr) -> Result<OptionRequ
     if opt_idx == kOptInvalid {
         let name = msg_cstr(name);
         return Err(api_error!(kErrorTypeValidation, "Unknown option '{name}'"));
-    } else if (scope == kOptScopeBuf || scope == kOptScopeWin) && !option_has_scope(opt_idx, scope)
+    } else if (scope == OPT_SCOPE_BUF || scope == OPT_SCOPE_WIN)
+        && !option_has_scope(opt_idx, scope)
     {
-        let tgt = if scope == kOptScopeBuf {
+        let tgt = if scope == OPT_SCOPE_BUF {
             c"buf"
         } else {
             c"win"
         };
-        let global = if option_has_scope(opt_idx, kOptScopeGlobal) {
+        let global = if option_has_scope(opt_idx, OPT_SCOPE_GLOBAL) {
             c"global "
         } else {
             c""
         };
-        let req = if option_has_scope(opt_idx, kOptScopeBuf) {
+        let req = if option_has_scope(opt_idx, OPT_SCOPE_BUF) {
             c"buffer-local "
-        } else if option_has_scope(opt_idx, kOptScopeWin) {
+        } else if option_has_scope(opt_idx, OPT_SCOPE_WIN) {
             c"window-local "
         } else {
             c""
@@ -309,9 +310,9 @@ pub fn nvim_set_option_value(
     // Setting a window-local option without saying local or global writes the
     // local value, where *reading* one falls back to the global.
     let mut opt_flags = target.opt_flags;
-    if target.scope == kOptScopeWin
+    if target.scope == OPT_SCOPE_WIN
         && opt_flags.is_empty()
-        && option_has_scope(target.opt_idx, kOptScopeGlobal)
+        && option_has_scope(target.opt_idx, OPT_SCOPE_GLOBAL)
     {
         opt_flags = OptionSetFlags::LOCAL;
     }

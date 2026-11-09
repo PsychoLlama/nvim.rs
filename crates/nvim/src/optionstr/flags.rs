@@ -26,9 +26,9 @@
 
 use core::ffi::{CStr, c_int, c_uint};
 
-use crate::message::e_invarg;
+use crate::message::E_INVARG;
 use crate::option::defs::{OptError, OptIndex, OptSet};
-use crate::option::{get_option, kOptFlagComma, kOptFlagOneComma, option_var};
+use crate::option::{OPT_FLAG_COMMA, OPT_FLAG_ONE_COMMA, get_option, option_var};
 use crate::options::{kOptFileformat, kOptFileformats, kOptSessionoptions, kOptViewoptions};
 use crate::types::Failed;
 
@@ -105,7 +105,7 @@ pub(crate) fn did_set_opt_flags(
     if opt_strings_ok(value, values, list) {
         Ok(())
     } else {
-        Err(e_invarg.into())
+        Err(E_INVARG.into())
     }
 }
 
@@ -114,7 +114,7 @@ pub(crate) fn did_set_opt_flags(
 pub fn did_set_str_generic(args: &mut OptSet) -> Result<(), OptError> {
     let (idx, varp) = (args.os_idx, args.os_varp.string_var());
     if check_str_opt(idx, Some(varp)).is_err() {
-        Err(e_invarg.into())
+        Err(E_INVARG.into())
     } else {
         Ok(())
     }
@@ -137,7 +137,7 @@ pub(crate) fn check_str_opt(
 ) -> Result<(), Failed> {
     let opt = get_option(idx);
     let varp = varp.unwrap_or_else(|| option_var(idx).string_var());
-    let list = opt.flags & (kOptFlagComma | kOptFlagOneComma) != 0;
+    let list = opt.flags & (OPT_FLAG_COMMA | OPT_FLAG_ONE_COMMA) != 0;
     let Some(mask) = varp.with_bytes(|value| opt_strings_mask(value, opt_values(idx), list)) else {
         return Err(Failed);
     };

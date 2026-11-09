@@ -323,7 +323,7 @@ pub fn set_tagstack(window: Win, d: &Dict, action: c_int) -> Result<(), Failed> 
     let mut items = None;
     if let Some(di) = dict_find(Some(d), b"items") {
         if di.di_tv.v_type() != VAR_LIST {
-            emsg(gettext(e_listreq));
+            emsg(gettext(E_LISTREQ));
             return Err(Failed);
         }
         items = di.di_tv.list_handle();

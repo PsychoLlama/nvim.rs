@@ -24,13 +24,13 @@ use crate::eval::typval::{list_iter, tv_list_alloc};
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
 use crate::message::{emsg, msg, redirecting};
-use crate::option::vars::cb_flags;
+use crate::option::vars::CB_FLAGS;
 use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus};
 use crate::os::libc::ptrdiff_t;
 use crate::register::defs::{RegLines, YankReg};
 use crate::register::{
-    PLUS_REGISTER, Reg, RegName, STAR_REGISTER, get_y_previous, get_y_register, kMTBlockWise,
-    kMTCharWise, kMTLineWise, kMTUnknown,
+    MT_CHAR_WISE, PLUS_REGISTER, Reg, RegName, STAR_REGISTER, get_y_previous, get_y_register,
+    kMTBlockWise, kMTLineWise, kMTUnknown,
 };
 use crate::types::{TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING};
 use core::ffi::c_int;
@@ -72,7 +72,7 @@ pub(crate) fn adjust_clipboard_name(
 ) -> Option<usize> {
     let explicit_cb_reg = *name == b'*' || *name == b'+';
     let implicit_cb_reg =
-        *name == 0 && cb_flags.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0;
+        *name == 0 && CB_FLAGS.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0;
     if !explicit_cb_reg && !implicit_cb_reg {
         return None;
     }
@@ -101,7 +101,7 @@ pub(crate) fn adjust_clipboard_name(
         } else {
             (PLUS_REGISTER, kOptCbFlagUnnamedplus)
         };
-        if writing && cb_flags.get() & flag != 0 {
+        if writing && CB_FLAGS.get() & flag != 0 {
             CLIPBOARD.with_mut(|st| st.needs_update = false);
         }
         return Some(reg);
@@ -119,8 +119,8 @@ pub(crate) fn adjust_clipboard_name(
         // register instead of stale provider contents.
         return None;
     }
-    let reg = if cb_flags.get() & kOptCbFlagUnnamedplus != 0 {
-        *name = if cb_flags.get() & kOptCbFlagUnnamed != 0 && writing {
+    let reg = if CB_FLAGS.get() & kOptCbFlagUnnamedplus != 0 {
+        *name = if CB_FLAGS.get() & kOptCbFlagUnnamed != 0 && writing {
             b'"'
         } else {
             b'+'
@@ -138,7 +138,7 @@ pub(crate) fn adjust_clipboard_name(
 fn regtype_of(byte: u8) -> Option<c_int> {
     match byte {
         0 => Some(kMTUnknown),
-        b'v' | b'c' => Some(kMTCharWise),
+        b'v' | b'c' => Some(MT_CHAR_WISE),
         b'V' | b'l' => Some(kMTLineWise),
         b'b' | 22 => Some(kMTBlockWise), // 22 == Ctrl_V
         _ => None,
@@ -199,14 +199,14 @@ fn register_from_provider(result: &TypVal) -> Result<YankReg, bool> {
     if text.last().is_some_and(|last| last.is_empty()) {
         // A known-to-be charwise yank might have a final linebreak, but
         // otherwise there is no line after the final newline.
-        if reg.kind != kMTCharWise {
+        if reg.kind != MT_CHAR_WISE {
             text.pop();
             if reg.kind == kMTUnknown {
                 reg.kind = kMTLineWise;
             }
         }
     } else if reg.kind == kMTUnknown {
-        reg.kind = kMTCharWise;
+        reg.kind = MT_CHAR_WISE;
     }
     // A provider that answered no lines still set the register: upstream's
     // array of none, which `@*` replays as nothing rather than failing.
@@ -258,10 +258,10 @@ pub(crate) fn set_clipboard(mut name: RegName, reg: Reg) {
 
     let (lines, regtype) = reg.read(|reg| {
         // A line-wise or block-wise register carries a trailing empty line.
-        let trailing = reg.kind != kMTCharWise;
+        let trailing = reg.kind != MT_CHAR_WISE;
         let regtype: u8 = match reg.kind {
             kMTLineWise => b'V',
-            kMTCharWise => b'v',
+            MT_CHAR_WISE => b'v',
             kMTBlockWise => b'b',
             // kMTUnknown, which has no spelling the provider would accept.
             // Upstream aborts here and so does this; every register handed

@@ -207,7 +207,7 @@ pub(crate) fn current_block(
         showmode();
     } else {
         op.start = start_pos;
-        op.motion_type = kMTCharWise;
+        op.motion_type = MT_CHAR_WISE;
         op.inclusive = false;
         if sol {
             incl(&mut Win::current().cursor());
@@ -457,7 +457,7 @@ pub(crate) fn current_tagblock(
         showmode();
     } else {
         op.start = start_pos;
-        op.motion_type = kMTCharWise;
+        op.motion_type = MT_CHAR_WISE;
         if lt(end_pos, start_pos) {
             // No text between the tags: operate on an empty area.
             Win::current().w_cursor = start_pos;

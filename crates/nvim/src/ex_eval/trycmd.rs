@@ -22,7 +22,7 @@
 //! outcome cannot simply happen: the finally clause has to execute first.
 //! So [`ex_finally`] parks it in the level's `pending` (the `CSTP_*` values,
 //! with the value or exception beside it), the finally clause runs on a
-//! cleared `did_emsg`/`got_int`/`did_throw`, and [`ex_endtry`] resumes
+//! cleared `DID_EMSG`/`got_int`/`did_throw`, and [`ex_endtry`] resumes
 //! whatever was parked -- unless the finally clause produced something new,
 //! which replaces it.
 //!
@@ -63,8 +63,8 @@ use crate::ex_eval::defs::{Cleanup, CondId, Pend};
 use crate::ex_eval::state::{current_exception, did_throw, force_abort, need_rethrow};
 use crate::getchar::state::got_int;
 use crate::guard::Suppress;
-use crate::message::e_argreq;
-use crate::message::state::{did_emsg, emsg_silent};
+use crate::message::E_ARGREQ;
+use crate::message::state::{DID_EMSG, EMSG_SILENT};
 use crate::message::{emsg, internal_error};
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::option::SavedCpo;
@@ -77,7 +77,7 @@ use core::ffi::c_int;
 /// `:throw {expr}`
 pub(crate) fn ex_throw(excmd: &mut ExArg) {
     if matches!(excmd.line.byte_at(excmd.line.arg), 0 | b'|' | b'\n') {
-        emsg(message(e_argreq));
+        emsg(message(E_ARGREQ));
         return;
     }
     let skip = excmd.skip;
@@ -154,7 +154,7 @@ pub(crate) fn ex_try(excmd: &mut ExArg) {
     // when that conditional is left, however it is left. If it is left
     // by an aborting error, an interrupt or an exception, restoring it
     // does not matter -- the effect is then just forgetting the value.
-    let silent = emsg_silent.get();
+    let silent = EMSG_SILENT.get();
     cond.with(|cs| {
         // ACTIVE and TRUE: TRUE means the ":catch" commands should look for
         // a match when an exception is thrown, and that the finally clause
@@ -166,7 +166,7 @@ pub(crate) fn ex_try(excmd: &mut ExArg) {
         }
     });
     if silent != 0 {
-        emsg_silent.set(0);
+        EMSG_SILENT.set(0);
     }
 }
 
@@ -270,7 +270,7 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
                 cs.flags[at] |= CsFlags::ACTIVE | CsFlags::CAUGHT;
                 cs.pending_exception(at)
             });
-            did_emsg.set(0);
+            DID_EMSG.set(0);
             got_int.set(false);
             did_throw.set(false);
             catch_exception(caught.expect("a thrown exception at the level that catches it"));
@@ -401,7 +401,7 @@ pub(crate) fn ex_finally(excmd: &mut ExArg) {
     // ":endfor" or ":endif" detected above counts as did_emsg and
     // did_throw respectively. did_emsg must not be set here: that would
     // suppress the error message.
-    if pending == CSTP_ERROR || did_emsg.get() != 0 || got_int.get() || did_throw.get() {
+    if pending == CSTP_ERROR || DID_EMSG.get() != 0 || got_int.get() || did_throw.get() {
         let top = cond.with(|cs| cs.top().expect("the :try is open"));
         let returning = cond.with(|cs| (cs.pending[top] == CSTP_RETURN).then(|| cs.take_pend(top)));
         if let Some(pend) = returning {
@@ -416,12 +416,12 @@ pub(crate) fn ex_finally(excmd: &mut ExArg) {
             );
             drop(pend);
         }
-        if pending == CSTP_ERROR && did_emsg.get() == 0 {
+        if pending == CSTP_ERROR && DID_EMSG.get() == 0 {
             pending |= if THROW_ON_ERROR { CSTP_THROW } else { 0 };
         } else {
             pending |= if did_throw.get() { CSTP_THROW } else { 0 };
         }
-        pending |= if did_emsg.get() != 0 { CSTP_ERROR } else { 0 };
+        pending |= if DID_EMSG.get() != 0 { CSTP_ERROR } else { 0 };
         pending |= if got_int.get() { CSTP_INTERRUPT } else { 0 };
         let parked = cond.with(|cs| {
             cs.pending[top] = pending;
@@ -476,7 +476,7 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
     // not be tested: anything pending has already been discarded then.
     let top_flags = cond.with(|cs| cs.top_flags());
     let mut skip =
-        did_emsg.get() != 0 || got_int.get() || did_throw.get() || !top_flags.has(CsFlags::TRUE);
+        DID_EMSG.get() != 0 || got_int.get() || did_throw.get() || !top_flags.has(CsFlags::TRUE);
 
     if top_flags.has(CsFlags::TRY) {
         idx = cond.with(|cs| cs.idx);
@@ -500,7 +500,7 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
             discard_current_exception();
         }
         // Report eap->errmsg even if there already was an error.
-        did_emsg.set(0);
+        DID_EMSG.set(0);
     }
     let at = usize::try_from(idx).expect("checked");
 
@@ -583,7 +583,7 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
             // something new.
             _ => {
                 if pending & CSTP_ERROR != 0 {
-                    did_emsg.set(1);
+                    DID_EMSG.set(1);
                 }
                 if pending & CSTP_INTERRUPT != 0 {
                     got_int.set(true);
@@ -618,13 +618,13 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
 pub(crate) fn enter_cleanup(parked: &mut Cleanup) {
     // The pending values are restored by `leave_cleanup`, unless an aborting
     // error, an interrupt or an uncaught exception happens in between.
-    if !(did_emsg.get() != 0 || got_int.get() || did_throw.get() || need_rethrow.get()) {
+    if !(DID_EMSG.get() != 0 || got_int.get() || did_throw.get() || need_rethrow.get()) {
         parked.pending = CSTP_NONE;
         parked.exception = None;
         return;
     }
 
-    parked.pending = if did_emsg.get() != 0 { CSTP_ERROR } else { 0 }
+    parked.pending = if DID_EMSG.get() != 0 { CSTP_ERROR } else { 0 }
         | if got_int.get() { CSTP_INTERRUPT } else { 0 }
         | if did_throw.get() { CSTP_THROW } else { 0 }
         | if need_rethrow.get() { CSTP_THROW } else { 0 };
@@ -638,12 +638,12 @@ pub(crate) fn enter_cleanup(parked: &mut Cleanup) {
         parked.exception = current_exception.take();
     } else {
         parked.exception = None;
-        if did_emsg.get() != 0 {
+        if DID_EMSG.get() != 0 {
             force_abort.set(force_abort.get() | super::cause_abort.get());
             super::cause_abort.set(false);
         }
     }
-    did_emsg.set(0);
+    DID_EMSG.set(0);
     got_int.set(false);
     did_throw.set(false);
     need_rethrow.set(false);
@@ -700,7 +700,7 @@ pub(crate) fn leave_cleanup(parked: &mut Cleanup) {
     }
 
     if pending & CSTP_ERROR != 0 {
-        did_emsg.set(1);
+        DID_EMSG.set(1);
     }
     if pending & CSTP_INTERRUPT != 0 {
         got_int.set(true);

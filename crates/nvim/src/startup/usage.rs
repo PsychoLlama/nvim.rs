@@ -15,7 +15,7 @@ use core::ffi::{CStr, c_int};
 use crate::lua::executor::nlua_init;
 use crate::message::IOSIZE;
 use crate::message::msg_putchar;
-use crate::message::state::{info_message, msg_didout};
+use crate::message::state::{INFO_MESSAGE, MSG_DIDOUT};
 use crate::os::cshim::{gettext, gettext_owned, write_c_stderr, write_c_stdout};
 use crate::os::signal::signal_stop;
 use crate::path::path_tail;
@@ -80,10 +80,10 @@ pub(crate) fn usage() {
 /// features that depend on it.
 pub(crate) fn version() {
     nlua_init(&[], -1);
-    info_message.set(true);
+    INFO_MESSAGE.set(true);
     list_version();
     msg_putchar('\n' as c_int);
-    msg_didout.set(false);
+    MSG_DIDOUT.set(false);
 }
 
 /// Report a command-line error on stderr, in the shape every other tool

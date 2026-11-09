@@ -45,7 +45,7 @@ use crate::cursor::{check_cursor, check_cursor_col};
 
 use crate::ex_docmd::window::{current_tab_nr, current_win_nr};
 use crate::ex_docmd::{
-    INT32_MAX, e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors, e_norange,
+    E_BACKSLASH, E_INVRANGE, E_LINE_NUMBER_OUT_OF_RANGE, E_NO_ERRORS, E_NORANGE, INT32_MAX,
     kMarkAll, searchcmdlen,
 };
 
@@ -233,7 +233,7 @@ fn read_range(
             excmd.addr_count += 1;
         } else if excmd.line.byte_at(excmd.line.cmd) == b'*' {
             if excmd.addr_type != CmdAddr::Lines {
-                return Err(AddressError::Refused(ex_msg(e_invrange)));
+                return Err(AddressError::Refused(ex_msg(E_INVRANGE)));
             }
             excmd.line.cmd += 1;
             if !excmd.skip {
@@ -304,7 +304,7 @@ fn whole_range(excmd: &mut ExArg) -> Result<(), AddressError> {
             // Only a *user* command may say `%` over windows or tab
             // pages; a builtin one would not know what to do with it.
             if !is_user_cmd(excmd.cmdidx) {
-                return Err(AddressError::Refused(ex_msg(e_invrange)));
+                return Err(AddressError::Refused(ex_msg(E_INVRANGE)));
             }
             excmd.number1 = 1;
             excmd.number2 = if excmd.addr_type == CmdAddr::Windows {
@@ -314,7 +314,7 @@ fn whole_range(excmd: &mut ExArg) -> Result<(), AddressError> {
             };
         }
         CmdAddr::TabsRelative | CmdAddr::Unsigned | CmdAddr::Quickfix => {
-            return Err(AddressError::Refused(ex_msg(e_invrange)));
+            return Err(AddressError::Refused(ex_msg(E_INVRANGE)));
         }
         CmdAddr::Arguments => {
             let len = arglist_len();
@@ -392,9 +392,9 @@ pub fn skip_range(text: &[u8], mut ctx: Option<&mut ExpandContext>) -> usize {
 /// E493 or E481, depending on whether the command takes a range at all.
 pub(crate) fn addr_error(addr_type: CmdAddr) -> CString {
     if addr_type == CmdAddr::NoRange {
-        ex_msg(e_norange)
+        ex_msg(E_NORANGE)
     } else {
-        ex_msg(e_invrange)
+        ex_msg(E_INVRANGE)
     }
 }
 
@@ -539,7 +539,7 @@ pub(crate) fn get_address(
                 let i = match byte_at(text, cmd) {
                     b'&' => RE_SUBST as c_int,
                     b'?' | b'/' => RE_SEARCH as c_int,
-                    _ => return Err(AddressError::Refused(ex_msg(e_backslash))),
+                    _ => return Err(AddressError::Refused(ex_msg(E_BACKSLASH))),
                 };
                 if !skip {
                     pos.lnum = if lnum != MAXLNUM {
@@ -598,12 +598,12 @@ pub(crate) fn get_address(
                 let (n, past) = getdigits_int_at(text, cmd, false, MAXLNUM.get());
                 cmd = past;
                 if n == MAXLNUM.get() {
-                    return Err(AddressError::Refused(ex_msg(e_line_number_out_of_range)));
+                    return Err(AddressError::Refused(ex_msg(E_LINE_NUMBER_OUT_OF_RANGE)));
                 }
                 n
             };
             if addr_type == CmdAddr::TabsRelative {
-                return Err(AddressError::Refused(ex_msg(e_invrange)));
+                return Err(AddressError::Refused(ex_msg(E_INVRANGE)));
             } else if addr_type == CmdAddr::LoadedBuffers || addr_type == CmdAddr::Buffers {
                 let offset = if sign == b'-' { -n } else { n };
                 lnum = LineNr::new(compute_buffer_local_count(addr_type, lnum, offset));
@@ -618,7 +618,7 @@ pub(crate) fn get_address(
                 if sign == b'-' {
                     lnum -= n;
                 } else if lnum >= LineNr::ZERO && n >= INT32_MAX - lnum.get() {
-                    return Err(AddressError::Refused(ex_msg(e_line_number_out_of_range)));
+                    return Err(AddressError::Refused(ex_msg(E_LINE_NUMBER_OUT_OF_RANGE)));
                 } else {
                     lnum += n;
                 }
@@ -710,7 +710,7 @@ fn offset_base(cmdidx: Option<CmdIdx>, addr_type: CmdAddr) -> Addr {
 /// Is the range this command was given out of bounds? Answers the message
 /// to report, or null.
 pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
-    let invrange = || Some(ex_msg(e_invrange));
+    let invrange = || Some(ex_msg(E_INVRANGE));
     let (first, last) = excmd.range_numbers();
     if first < 0 || last < 0 || first > last {
         return invrange();
@@ -779,7 +779,7 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
                 // "no errors" reads better than "invalid range" when
                 // the user did not ask for a particular entry.
                 if excmd.addr_count == 0 {
-                    return Some(ex_msg(e_no_errors));
+                    return Some(ex_msg(E_NO_ERRORS));
                 }
                 return invrange();
             }

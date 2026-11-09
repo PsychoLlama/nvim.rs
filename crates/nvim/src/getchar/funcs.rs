@@ -53,7 +53,7 @@ struct GetcharOpts {
 /// Read the `{opts}` dictionary, if there is one.
 ///
 /// Answers `None` when an argument was rejected — the caller must then leave
-/// `result` alone, which is what upstream's `called_emsg` comparison decides.
+/// `result` alone, which is what upstream's `CALLED_EMSG` comparison decides.
 fn getchar_opts(args: &[TypVal], allow_number: bool) -> Option<GetcharOpts> {
     let mut numbuf = NumBuf::new();
     let mut opts = GetcharOpts {
@@ -61,7 +61,7 @@ fn getchar_opts(args: &[TypVal], allow_number: bool) -> Option<GetcharOpts> {
         simplify: true,
         cursor: CursorFlag::Default,
     };
-    let called_emsg_start = called_emsg.get();
+    let called_emsg_start = CALLED_EMSG.get();
 
     // SAFETY (this body): the Vimscript call convention -- `args` is a live
     // argument vector running to a `VAR_UNKNOWN`, so every slot tested here is
@@ -95,7 +95,7 @@ fn getchar_opts(args: &[TypVal], allow_number: bool) -> Option<GetcharOpts> {
         }
     }
 
-    if called_emsg.get() != called_emsg_start {
+    if CALLED_EMSG.get() != called_emsg_start {
         return None;
     }
     Some(opts)
@@ -107,8 +107,8 @@ fn getchar_opts(args: &[TypVal], allow_number: bool) -> Option<GetcharOpts> {
 /// if one is there. Keys nothing can act on are skipped.
 fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> Key {
     loop {
-        if cursor == CursorFlag::Msg || (cursor == CursorFlag::Default && msg_col.get() > 0) {
-            ui_cursor_goto(msg_row.get(), msg_col.get());
+        if cursor == CursorFlag::Msg || (cursor == CursorFlag::Default && MSG_COL.get() > 0) {
+            ui_cursor_goto(MSG_ROW.get(), MSG_COL.get());
         }
 
         // SAFETY (this body): reads one key through the ordinary input stack;

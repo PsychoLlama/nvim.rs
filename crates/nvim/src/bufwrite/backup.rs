@@ -106,8 +106,8 @@ fn check_mtime(buffer: Buf, file_info: &FileInfo) -> bool {
     {
         return true;
     }
-    msg_scroll.set(1); // don't overwrite messages here
-    msg_silent.set(0); // must give this prompt
+    MSG_SCROLL.set(1); // don't overwrite messages here
+    MSG_SILENT.set(0); // must give this prompt
     // Not emsg(): that would flush the buffers.
     msg(
         translate(c"WARNING: The file has been changed since reading it!!!"),
@@ -116,7 +116,7 @@ fn check_mtime(buffer: Buf, file_info: &FileInfo) -> bool {
     if ask_yesno(translate(c"Do you really want to write to it")) == 'n' as c_int {
         return false;
     }
-    msg_scroll.set(0); // always overwrite the file message now
+    MSG_SCROLL.set(0); // always overwrite the file message now
     true
 }
 
@@ -560,7 +560,7 @@ pub(crate) fn recover_from_backup(backup: &Backup, fname: &CStr) -> Result<(), I
     // Copying may take a while; if we were interrupted, let the user
     // know the message arrived.
     if got_int.get() {
-        msg(gettext(e_interr), 0);
+        msg(gettext(E_INTERR), 0);
         ui_flush();
     }
     if os_copy(path.as_cstr(), fname, UV_FS_COPYFILE_FICLONE) == 0 {

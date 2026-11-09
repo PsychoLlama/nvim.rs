@@ -27,7 +27,7 @@ use crate::event::libuv::{
     uv_fs_mkdir, uv_fs_mkdtemp, uv_fs_rename, uv_fs_req_cleanup, uv_fs_rmdir, uv_fs_scandir,
     uv_fs_scandir_next, uv_fs_unlink,
 };
-use crate::message::e_noname;
+use crate::message::E_NONAME;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
@@ -145,7 +145,7 @@ pub(crate) fn file_mkdir(fname: &CStr, mode: int32_t) -> Result<(), c_int> {
     // itself is empty -- the case upstream's `tail + strlen(tail) - 1` is
     // written for.
     if vim_ispathsep(c_int::from(name[name.len() - 1])) {
-        emsg(gettext(e_noname));
+        emsg(gettext(E_NONAME));
         return Err(-1);
     }
     match mkdir_recurse(&cstr::owned(&name[..tail]), mode) {

@@ -34,8 +34,8 @@ use crate::cmdexpand::defs::{Expand, ExpandContext};
 use crate::cmdexpand::{WildMode, WildOpts, expand_one};
 use crate::getchar::state::got_int;
 use crate::memory::XString;
+use crate::message::E_FNAMETOOLONG;
 use crate::message::IOSIZE;
-use crate::message::e_fnametoolong;
 use crate::message::emsg;
 use crate::message_fmt::msg_bytes;
 use crate::option::vars::P_RTP;
@@ -129,7 +129,7 @@ fn do_helptags(dirname: &[u8], add_help_tags: bool, ignore_writeerr: bool) {
     // `xstrlcpy` into `NameBuff` cut the name to the room, silently.
     let mut glob = dirname[..dirname.len().min(NAME_ROOM - 1)].to_vec();
     if !push_pathsep(&mut glob) || glob.len() + 2 >= NAME_ROOM {
-        emsg(gettext(e_fnametoolong));
+        emsg(gettext(E_FNAMETOOLONG));
         return;
     }
     glob.extend_from_slice(b"**");
@@ -218,7 +218,7 @@ fn helptags_one(
     glob.extend_from_slice(b"/**/*");
     glob.extend_from_slice(ext);
     if glob.len() >= NAME_ROOM {
-        emsg(gettext(e_fnametoolong));
+        emsg(gettext(E_FNAMETOOLONG));
         return;
     }
     let Some(files) = expand_help_files(&glob) else {
@@ -233,7 +233,7 @@ fn helptags_one(
     // we cannot write to costs nothing.
     let mut tags_path = dir.to_vec();
     if !push_pathsep(&mut tags_path) || tags_path.len() + tagfname.len() >= NAME_ROOM {
-        emsg(gettext(e_fnametoolong));
+        emsg(gettext(E_FNAMETOOLONG));
         return;
     }
     tags_path.extend_from_slice(tagfname);

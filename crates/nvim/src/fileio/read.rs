@@ -134,7 +134,7 @@ pub(crate) fn readfile_named(
     let mut keep_fileformat = false;
     let mut skip_count: i32 = 0;
     let mut read_count: i32 = 0;
-    let msg_save = msg_scroll.get();
+    let msg_save = MSG_SCROLL.get();
     // Non-zero line number when the last line read had no end-of-line.
     let mut read_no_eol_lnum: LineNr = LineNr::ZERO;
     let mut file_rewind = false;
@@ -213,7 +213,7 @@ pub(crate) fn readfile_named(
             Buf::current().file_message(sfname, c"");
         }
 
-        msg_scroll.set(c_int::from(false)); // overwrite the file message
+        MSG_SCROLL.set(c_int::from(false)); // overwrite the file message
 
         // Set linecnt now, before the "retry" caused by a wrong guess at
         // the fileformat, and after the autocommands, which may change it.
@@ -743,7 +743,7 @@ pub(crate) fn readfile_named(
         if let Some(name) = tmpname.take() {
             os_remove(name.as_cstr()); // delete the converted file
         }
-        no_wait_return.set(no_wait_return.get() - 1); // may wait for return now
+        NO_WAIT_RETURN.set(NO_WAIT_RETURN.get() - 1); // may wait for return now
 
         // In recovery mode everything but autocommands is skipped.
         if !recoverymode.get() {
@@ -774,12 +774,12 @@ pub(crate) fn readfile_named(
 
             if got_int.get() {
                 if !how.dummy {
-                    Buf::current().file_message(sfname, gettext(e_interr));
+                    Buf::current().file_message(sfname, gettext(E_INTERR));
                     if how.newfile {
                         Buf::current().b_p_ro = c_int::from(true); // must use "w!" now
                     }
                 }
-                msg_scroll.set(msg_save);
+                MSG_SCROLL.set(msg_save);
                 check_marks_read();
                 retval = Ok(Loaded::Read); // an interrupt isn't really an error
                 break 'theend;
@@ -801,7 +801,7 @@ pub(crate) fn readfile_named(
             };
             report_and_place(sfname, &how, silent, &out, conv.bad_char, from);
         }
-        msg_scroll.set(msg_save);
+        MSG_SCROLL.set(msg_save);
 
         // Get the marks before running autocommands, so they can use them.
         check_marks_read();

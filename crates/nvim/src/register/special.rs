@@ -26,7 +26,7 @@
 use crate::ex_getln::cmdline_input;
 use crate::guard::Depth;
 use crate::memory::XString;
-use crate::message::e_noalt;
+use crate::message::E_NOALT;
 use crate::normal::FIND_IDENT;
 use crate::normal::FIND_STRING;
 use crate::normal::ident_under_cursor;
@@ -116,7 +116,7 @@ pub fn get_spec_reg(regname: RegName, errmsg: bool) -> Option<Option<XString>> {
             Some((alt, _)) => alt.name.shown().map(XString::from_cstr),
             None => {
                 if errmsg {
-                    emsg(gettext(e_noalt));
+                    emsg(gettext(E_NOALT));
                 }
                 None
             }
@@ -128,7 +128,7 @@ pub fn get_spec_reg(regname: RegName, errmsg: bool) -> Option<Option<XString>> {
             // A copy: the caller may run commands while it holds it.
             let line = last_cmdline.with(Clone::clone);
             if line.is_none() && errmsg {
-                emsg(gettext(e_nolastcmd));
+                emsg(gettext(E_NOLASTCMD));
             }
             line
         }
@@ -136,7 +136,7 @@ pub fn get_spec_reg(regname: RegName, errmsg: bool) -> Option<Option<XString>> {
         b'/' => {
             let pat = last_search_pat();
             if pat.is_none() && errmsg {
-                emsg(gettext(e_noprevre));
+                emsg(gettext(E_NOPREVRE));
             }
             pat
         }
@@ -144,7 +144,7 @@ pub fn get_spec_reg(regname: RegName, errmsg: bool) -> Option<Option<XString>> {
         b'.' => {
             let text = get_last_insert_save();
             if text.is_none() && errmsg {
-                emsg(gettext(e_noinstext));
+                emsg(gettext(E_NOINSTEXT));
             }
             text
         }

@@ -565,12 +565,12 @@ pub(crate) fn ins_compl_show_filename() {
     if compl_autocomplete.get() {
         return;
     }
-    msg_hist_off.set(true);
+    MSG_HIST_OFF.set(true);
     let ellipsis: &[u8] = if s > 0 { b"<" } else { b"" };
     // Upstream formats into `IObuff`, which cuts it there.
     let text = formatted!(IOSIZE as usize, b"%s %s%s", lead, ellipsis, &fname[s..]);
     msg(XString::from_vec(text).as_cstr(), 0);
-    msg_hist_off.set(false);
+    MSG_HIST_OFF.set(false);
     redraw_cmdline.set(false);
 }
 
@@ -601,7 +601,7 @@ pub(crate) fn ins_compl_show_statusmsg() {
         let text = if compl_status_adding() && compl_length.get() > 1 {
             E_HITEND
         } else {
-            e_patnotf
+            E_PATNOTF
         };
         edit_submode_extra.set(Some(XString::from_cstr(gettext(text))));
         edit_submode_highl.set(HLF_E);
@@ -644,7 +644,7 @@ pub(crate) fn ins_compl_show_statusmsg() {
     match edit_submode_extra.with(Clone::clone) {
         None => msg_clr_cmdline(),
         Some(extra) if !p_smd() => {
-            msg_hist_off.set(true);
+            MSG_HIST_OFF.set(true);
             let highl = edit_submode_highl.get();
             let attr = if (0..HLF_COUNT).contains(&highl) {
                 highl + 1
@@ -653,7 +653,7 @@ pub(crate) fn ins_compl_show_statusmsg() {
             };
             msg_ext_set_kind(c"completion");
             msg(extra.as_cstr(), attr);
-            msg_hist_off.set(false);
+            MSG_HIST_OFF.set(false);
         }
         Some(_) => {}
     }

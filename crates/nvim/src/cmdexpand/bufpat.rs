@@ -20,7 +20,7 @@ use crate::guard::Suppress;
 use crate::mbyte::class_in;
 use crate::mbyte::cluster_len;
 use crate::memline::Lines;
-use crate::option::vars::{p_ic, p_scs, wop_flags};
+use crate::option::vars::{WOP_FLAGS, p_ic, p_scs};
 use crate::options::kOptWopFlagExacttext;
 use crate::pos::ltoreq;
 use crate::regexp::RegMatch;
@@ -40,7 +40,7 @@ use std::ffi::CString;
 /// True when `'wildoptions'` carries `exacttext`, which offers the buffer text
 /// itself rather than a pattern that would match it.
 fn exacttext() -> bool {
-    wop_flags.get() & kOptWopFlagExacttext as c_uint != 0
+    WOP_FLAGS.get() & kOptWopFlagExacttext as c_uint != 0
 }
 
 /// Line `lnum` of the current buffer.

@@ -82,8 +82,8 @@ fn make_get_fullcmd(makecmd: &[u8], fname: &CStr) -> CString {
     // Display the fully formed command. Output a newline if there is
     // something else than the :make command that was typed, in which
     // case the cursor is in column 0.
-    if msg_col.get() == 0 {
-        msg_didout.set(false);
+    if MSG_COL.get() == 0 {
+        MSG_DIDOUT.set(false);
     }
     msg_start();
     msg_str(c":!");
@@ -181,7 +181,7 @@ fn get_mef_name() -> Option<XString> {
     if p_mef(CStr::is_empty) {
         let name = temp_name();
         if name.is_none() {
-            qf_emsg(e_notmp);
+            qf_emsg(E_NOTMP);
         }
         return name;
     }

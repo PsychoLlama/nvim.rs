@@ -41,7 +41,7 @@ use crate::eval::{
 };
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::ends_excmd;
-use crate::message::{e_invarg, e_listreq, internal_error};
+use crate::message::{E_INVARG, E_LISTREQ, internal_error};
 use crate::option::defs::OptVal;
 use crate::option::{
     get_option_value, get_tty_option, is_option_hidden, is_tty_option, set_option_value_handle_tty,
@@ -120,7 +120,7 @@ pub fn ex_let(excmd: &mut ExArg) {
         let head = line.byte_at(arg);
         let mut end = arg;
         if head == b'[' {
-            emsg_static(e_invarg);
+            emsg_static(E_INVARG);
         } else if ends_excmd(c_int::from(head)) == 0 {
             // ":let var1 var2"
             end = arg + list_arg_vars(line.rest_of(arg), excmd.skip, &mut first);
@@ -212,7 +212,7 @@ pub(crate) fn ex_let_vars(
 
     // ":let [v1, v2] = list" or ":for [v1, v2] in listlist"
     if tv.v_type() != VAR_LIST {
-        emsg_static(e_listreq);
+        emsg_static(E_LISTREQ);
         return Err(Failed);
     }
     let len = list_len(tv.list_ref());

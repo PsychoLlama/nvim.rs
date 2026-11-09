@@ -168,17 +168,17 @@ fn display_span(
 /// right when `shift` is set.  Used for CTRL-V, CTRL-K and the like; `c` must
 /// be printable and fit in one display cell.
 pub fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
-    if cmd_silent.get() {
+    if CMD_SILENT.get() {
         return;
     }
     let mut cc = Cc::current();
     if !ui_has(kUICmdline) {
-        msg_no_more.set(true);
+        MSG_NO_MORE.set(true);
         msg_putchar(::core::ffi::c_int::from(c));
         if shift {
             draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
         }
-        msg_no_more.set(false);
+        MSG_NO_MORE.set(false);
     } else if cc.redraw_state != kCmdRedrawAll {
         ui_call_cmdline_special_char(
             ApiString::from_bytes(cstr::until_nul(&[c.cast_unsigned()])),
@@ -194,17 +194,17 @@ pub fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
 
 /// Undo a `putcmdline(c, false)`.
 pub fn unputcmdline() {
-    if cmd_silent.get() {
+    if CMD_SILENT.get() {
         return;
     }
     let mut cc = Cc::current();
-    msg_no_more.set(true);
+    MSG_NO_MORE.set(true);
     if cc.len() == cc.cmdpos && !ui_has(kUICmdline) {
         msg_putchar(::core::ffi::c_int::from(b' '));
     } else {
         draw_cmdline(cc.cmdpos, cluster_len_at(cc, cc.cmdpos));
     }
-    msg_no_more.set(false);
+    MSG_NO_MORE.set(false);
     cursorcmd();
     cc.special_char = 0;
     ui_cursor_shape();
@@ -255,8 +255,8 @@ pub fn put_on_cmdline(text: &[u8], redraw: bool) {
         }
     }
 
-    if redraw && !cmd_silent.get() {
-        msg_no_more.set(true);
+    if redraw && !CMD_SILENT.get() {
+        MSG_NO_MORE.set(true);
         let row_before = cmdline_row.get();
         cursorcmd();
         draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
@@ -264,7 +264,7 @@ pub fn put_on_cmdline(text: &[u8], redraw: bool) {
         if cmdline_row.get() != row_before || cc.overstrike {
             msg_clr_eos();
         }
-        msg_no_more.set(false);
+        MSG_NO_MORE.set(false);
     }
 
     // The maximum column; an overflowed product reads as negative.
@@ -299,10 +299,10 @@ pub fn put_on_cmdline(text: &[u8], redraw: bool) {
 /// Redraw the command line after a screen size change, an incremental search
 /// or anything else that may have overwritten it.
 pub fn redrawcmdline() {
-    if cmd_silent.get() {
+    if CMD_SILENT.get() {
         return;
     }
-    need_wait_return.set(false);
+    NEED_WAIT_RETURN.set(false);
     compute_cmdrow();
     redrawcmd();
     cursorcmd();
@@ -312,7 +312,7 @@ pub fn redrawcmdline() {
 /// Draw the `:` / `/` / `?` and the prompt in front of the command line, and
 /// record the indent they take up.
 pub(crate) fn redrawcmdprompt() {
-    if cmd_silent.get() {
+    if CMD_SILENT.get() {
         return;
     }
     let mut cc = Cc::current();
@@ -326,7 +326,7 @@ pub(crate) fn redrawcmdprompt() {
     // A copy: the message code re-enters the editor.
     if let Some(prompt) = cc.cmdprompt.clone() {
         msg_str_hl(prompt.as_cstr(), cc.hl_id, false);
-        cc.cmdindent = msg_col.get() + (msg_row.get() - cmdline_row.get()) * Columns.get();
+        cc.cmdindent = MSG_COL.get() + (MSG_ROW.get() - cmdline_row.get()) * Columns.get();
         // The reverse of cmd_startcol().
         if cc.cmdfirstc != 0 {
             cc.cmdindent -= 1;
@@ -342,7 +342,7 @@ pub(crate) fn redrawcmdprompt() {
 
 /// Redraw what is currently on the command line.
 pub fn redrawcmd() {
-    if cmd_silent.get() {
+    if CMD_SILENT.get() {
         return;
     }
 
@@ -367,10 +367,10 @@ pub fn redrawcmd() {
 
     // Don't use the more prompt; truncate the command line if it doesn't
     // fit.
-    msg_no_more.set(true);
+    MSG_NO_MORE.set(true);
     draw_cmdline(0, cc.len());
     msg_clr_eos();
-    msg_no_more.set(false);
+    MSG_NO_MORE.set(false);
 
     cc.cmdspos = cmd_screencol(cc.cmdpos);
 
@@ -380,7 +380,7 @@ pub fn redrawcmd() {
 
     // An earlier emsg() may have set msg_scroll; in command-line mode it
     // can be reset now, so the next message overwrites the command line.
-    msg_scroll.set(0);
+    MSG_SCROLL.set(0);
 
     // Typing ':' at the more prompt may set skip_redraw, which is not
     // wanted in command-line mode.
@@ -391,7 +391,7 @@ pub fn redrawcmd() {
 
 /// Recompute the screen row the command line lives on.
 pub fn compute_cmdrow() {
-    if exmode_active.get() || msg_scrolled.get() != 0 {
+    if exmode_active.get() || MSG_SCROLLED.get() != 0 {
         cmdline_row.set(Rows.get() - 1);
     } else {
         let wp = lastwin_nofloating(None);
@@ -402,21 +402,21 @@ pub fn compute_cmdrow() {
     if cmdline_row.get() == Rows.get() && p_ch() > 0 {
         cmdline_row.set(cmdline_row.get() - 1);
     }
-    lines_left.set(cmdline_row.get());
+    LINES_LEFT.set(cmdline_row.get());
 }
 
 /// Move the screen cursor to the command line's cursor position.
 pub fn cursorcmd() {
-    if cmd_silent.get() || ui_has(kUICmdline) {
+    if CMD_SILENT.get() || ui_has(kUICmdline) {
         return;
     }
 
     let cmdspos = Cc::current().cmdspos;
-    msg_row.set(cmdline_row.get() + cmdspos / Columns.get());
-    msg_col.set(cmdspos % Columns.get());
-    msg_row.set(msg_row.get().min(Rows.get() - 1));
+    MSG_ROW.set(cmdline_row.get() + cmdspos / Columns.get());
+    MSG_COL.set(cmdspos % Columns.get());
+    MSG_ROW.set(MSG_ROW.get().min(Rows.get() - 1));
 
-    msg_cursor_goto(msg_row.get(), msg_col.get());
+    msg_cursor_goto(MSG_ROW.get(), MSG_COL.get());
 }
 
 /// Move the screen cursor to the start of the command line, clearing the
@@ -427,7 +427,7 @@ pub fn gotocmdline(clr: bool) {
     }
     msg_start();
     // Always start in column 0.
-    msg_col.set(0);
+    MSG_COL.set(0);
     if clr {
         // Clear the bottom line(s); this resets clear_cmdline.
         msg_clr_eos();

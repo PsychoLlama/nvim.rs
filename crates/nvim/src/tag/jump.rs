@@ -397,7 +397,7 @@ impl Jump {
             if Buf::current().b_help {
                 set_topline(Win::current(), Win::current().w_cursor.lnum);
             }
-            if fdo_flags.get() & kOptFdoFlagTag as c_uint != 0 && self.key_typed {
+            if FDO_FLAGS.get() & kOptFdoFlagTag as c_uint != 0 && self.key_typed {
                 fold_open_cursor();
             }
         }
@@ -442,7 +442,7 @@ impl Jump {
     /// unless `'switchbuf'` says to go to one that already holds the file.
     /// Answers `false` when a split was wanted and failed.
     fn open_window(&mut self) -> bool {
-        let switchbuf = swb_flags.get();
+        let switchbuf = SWB_FLAGS.get();
         if postponed_split.get() != 0
             && switchbuf & (kOptSwbFlagUseopen | kOptSwbFlagUsetab) as c_uint != 0
             && let Some(existing) = find_buffer_by_name(self.fname())
@@ -550,7 +550,7 @@ impl Jump {
                 if matches!(found, Found::Guessing) || !save_p_ic {
                     let s2 = gettext(c"E435: Couldn't find tag, just guessing!");
                     msg(s2, 0);
-                    if msg_scrolled.get() == 0 && msg_silent.get() == 0 {
+                    if MSG_SCROLLED.get() == 0 && MSG_SILENT.get() == 0 {
                         msg_delay(1010, true);
                     }
                 }

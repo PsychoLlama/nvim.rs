@@ -183,7 +183,7 @@ pub(crate) fn get_next_bufname_token() {
             compl_orig_text().with_bytes(|orig| cstr::ncmp_eq(tail.to_bytes(), orig, orig.len()));
         if starts {
             let flags = if p_ic() { CP_ICASE } else { 0 };
-            let (dir, score) = (kDirectionNotSet, FUZZY_SCORE_NONE);
+            let (dir, score) = (DIRECTION_NOT_SET, FUZZY_SCORE_NONE);
             let tail = tail.to_bytes();
             ins_compl_add(tail, None, NO_EXTRA, None, dir, flags, false, NO_HL, score);
         }

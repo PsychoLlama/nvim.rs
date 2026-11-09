@@ -353,7 +353,7 @@ pub fn did_set_completefunc(args: &mut OptSet) -> Result<(), OptError> {
         retval
     };
     if retval.is_err() {
-        Err(e_invarg.into())
+        Err(E_INVARG.into())
     } else {
         Ok(())
     }
@@ -385,7 +385,7 @@ pub fn did_set_omnifunc(args: &mut OptSet) -> Result<(), OptError> {
         retval
     };
     if retval.is_err() {
-        Err(e_invarg.into())
+        Err(E_INVARG.into())
     } else {
         Ok(())
     }
@@ -483,7 +483,7 @@ pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Result<(), OptError> {
         retval
     };
     if retval.is_err() {
-        Err(e_invarg.into())
+        Err(E_INVARG.into())
     } else {
         Ok(())
     }

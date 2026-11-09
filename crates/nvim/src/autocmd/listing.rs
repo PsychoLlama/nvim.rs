@@ -156,7 +156,7 @@ pub(crate) fn au_show_for_event(group: ::core::ffi::c_int, event: AutoEvent, pat
             if got_int.get() {
                 return;
             }
-            if msg_col.get() >= 14 {
+            if MSG_COL.get() >= 14 {
                 msg_putchar('\n' as ::core::ffi::c_int);
             }
             msg_advance(14);

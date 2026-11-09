@@ -378,11 +378,11 @@ impl DoTag {
         }
         Win::current().w_cursor.col = mark.mark.col;
         Win::current().w_set_curswant = true;
-        if jop_flags.get() & kOptJopFlagView as c_uint != 0 {
+        if JOP_FLAGS.get() & kOptJopFlagView as c_uint != 0 {
             mark_view_restore(Some(&self.saved_fmark));
         }
         check_cursor(Win::current());
-        if fdo_flags.get() & kOptFdoFlagTag as c_uint != 0 && old_key_typed {
+        if FDO_FLAGS.get() & kOptFdoFlagTag as c_uint != 0 && old_key_typed {
             fold_open_cursor();
         }
 
@@ -785,11 +785,11 @@ impl DoTag {
         if (found > self.prev_num_matches || self.new_tag) && found > 1 {
             msg(&report, if ignored_case { HLF_W } else { 0 });
             // Don't overwrite this message.
-            msg_scroll.set(1);
+            MSG_SCROLL.set(1);
         } else {
             give_warning(&report, ignored_case, true);
         }
-        if ignored_case && msg_scrolled.get() == 0 && msg_silent.get() == 0 {
+        if ignored_case && MSG_SCROLLED.get() == 0 && MSG_SILENT.get() == 0 {
             msg_delay(1007, true);
         }
     }

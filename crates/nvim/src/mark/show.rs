@@ -22,7 +22,7 @@ use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{c_cells_at, c_cluster_len};
 use crate::memory::XString;
-use crate::message::{e_argreq, e_invarg};
+use crate::message::{E_ARGREQ, E_INVARG};
 use crate::message::{
     emsg, message_filtered, msg, msg_display, msg_display_bytes, msg_ext_set_kind, msg_putchar,
     msg_title,
@@ -248,11 +248,11 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
     if forceit {
         // `:delmarks!` takes no argument at all; naming one is E474 rather
         // than "clear these, forcefully".
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     }
     if empty {
-        emsg(gettext(e_argreq));
+        emsg(gettext(E_ARGREQ));
         return;
     }
 

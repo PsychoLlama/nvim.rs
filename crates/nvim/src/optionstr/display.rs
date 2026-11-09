@@ -38,13 +38,13 @@ use crate::ex_getln::state::cmdpreview;
 use crate::highlight_group::init_highlight;
 use crate::indent::briopt_check;
 use crate::mbyte::c_cluster_len;
-use crate::message::e_unsupportedoption;
+use crate::message::E_UNSUPPORTEDOPTION;
 use crate::message::{messagesopt_changed, msg_grid_validate};
 use crate::r#move::validate_virtcol;
 use crate::option::defs::{OptError, OptSet, OptionSetFlags};
 use crate::option::vars::{
-    P_BG, P_MOUSESCROLL, breakat_flags, p_breakat, p_km, p_mousescroll_hor, p_mousescroll_vert,
-    p_pumborder, p_winborder, ve_flags,
+    BREAKAT_FLAGS, P_BG, P_MOUSESCROLL, P_MOUSESCROLL_HOR, P_MOUSESCROLL_VERT, VE_FLAGS, p_breakat,
+    p_km, p_pumborder, p_winborder,
 };
 use crate::option::{fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
@@ -57,10 +57,10 @@ use crate::window::check_colorcolumn;
 
 use super::frame::{invalid, local_window, new_bytes, new_value, old_bytes, varp, win};
 use super::{
-    COCU_ALL, INT_MAX, MOUSESCROLL_HOR_DFLT, MOUSESCROLL_VERT_DFLT, WW_ALL, check_chars_options,
-    check_signcolumn, check_str_opt, did_set_option_listflag, did_set_statustabline_rulerformat,
-    did_set_str_generic, e_showbreak_contains_unprintable_or_wide_character, opt_strings_mask,
-    terminal_notify_theme,
+    COCU_ALL, E_SHOWBREAK_CONTAINS_UNPRINTABLE_OR_WIDE_CHARACTER, INT_MAX, MOUSESCROLL_HOR_DFLT,
+    MOUSESCROLL_VERT_DFLT, WW_ALL, check_chars_options, check_signcolumn, check_str_opt,
+    did_set_option_listflag, did_set_statustabline_rulerformat, did_set_str_generic,
+    opt_strings_mask, terminal_notify_theme,
 };
 use crate::decoration::SCL_NUM;
 use crate::normal::visual_active;
@@ -130,7 +130,7 @@ pub(crate) fn derive_breakat_flags() {
             chars.insert(byte);
         }
     });
-    breakat_flags.set(chars);
+    BREAKAT_FLAGS.set(chars);
 }
 
 pub fn did_set_breakindentopt(args: &mut OptSet) -> Result<(), OptError> {
@@ -193,7 +193,7 @@ pub fn did_set_guicursor(_args: &mut OptSet) -> Result<(), OptError> {
 /// implement: only its default value is accepted.
 pub fn did_set_highlight(args: &mut OptSet) -> Result<(), OptError> {
     if new_bytes(args) != HIGHLIGHT_INIT.to_bytes() {
-        return Err((e_unsupportedoption).into());
+        return Err((E_UNSUPPORTEDOPTION).into());
     }
     Ok(())
 }
@@ -264,8 +264,8 @@ pub fn did_set_mousescroll(_args: &mut OptSet) -> Result<(), OptError> {
         offset += part.len() + 1;
     }
 
-    p_mousescroll_vert.set(vertical.unwrap_or(OptInt::from(MOUSESCROLL_VERT_DFLT)));
-    p_mousescroll_hor.set(horizontal.unwrap_or(OptInt::from(MOUSESCROLL_HOR_DFLT)));
+    P_MOUSESCROLL_VERT.set(vertical.unwrap_or(OptInt::from(MOUSESCROLL_VERT_DFLT)));
+    P_MOUSESCROLL_HOR.set(horizontal.unwrap_or(OptInt::from(MOUSESCROLL_HOR_DFLT)));
     Ok(())
 }
 
@@ -286,7 +286,7 @@ pub fn did_set_showbreak(args: &mut OptSet) -> Result<(), OptError> {
     let mut rest = new_bytes(args);
     while !rest.is_empty() {
         if ptr2cells_at(rest) != 1 {
-            return Err((e_showbreak_contains_unprintable_or_wide_character).into());
+            return Err((E_SHOWBREAK_CONTAINS_UNPRINTABLE_OR_WIDE_CHARACTER).into());
         }
         rest = &rest[c_cluster_len(rest)..];
     }
@@ -328,7 +328,7 @@ pub fn did_set_virtualedit(args: &mut OptSet) -> Result<(), OptError> {
         if local {
             wp.w_onebuf_opt.wo_ve_flags = mask;
         } else {
-            ve_flags.set(mask);
+            VE_FLAGS.set(mask);
         }
     };
 

@@ -16,7 +16,7 @@
 use core::ffi::c_int;
 
 use super::{SEARCH_MSG, get_search_pat};
-use crate::message::{e_interr, emsg};
+use crate::message::{E_INTERR, emsg};
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::os::cshim::gettext;
 use crate::regexp::Refused;
@@ -61,7 +61,7 @@ impl SearchError {
             }
             Self::Pattern(_) => {}
             Self::Interrupted => {
-                emsg(gettext(e_interr));
+                emsg(gettext(E_INTERR));
             }
             Self::NotFound(edge) if options & SEARCH_MSG == SEARCH_MSG => {
                 let pattern = get_search_pat();

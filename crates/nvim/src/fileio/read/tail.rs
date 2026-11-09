@@ -78,8 +78,8 @@ pub(crate) fn run_read_autocmds(
     how: &How,
     set_options: bool,
 ) -> bool {
-    let m = msg_scroll.get();
-    let n = msg_scrolled.get();
+    let m = MSG_SCROLL.get();
+    let n = MSG_SCROLLED.get();
 
     // Save the fileformat now, or the buffer would be considered modified
     // because the format or encoding was auto-detected.
@@ -89,7 +89,7 @@ pub(crate) fn run_read_autocmds(
 
     // The output from the autocommands should neither overwrite anything nor
     // be overwritten: set msg_scroll, and restore it if no output was done.
-    msg_scroll.set(c_int::from(true));
+    MSG_SCROLL.set(c_int::from(true));
     // A `BufReadPost` also owes a `FileType` when the buffer already has one
     // and nothing triggered it.
     let buf_read = !how.filtering && (how.newfile || (how.buffer && sfname.is_some()));
@@ -118,8 +118,8 @@ pub(crate) fn run_read_autocmds(
             None,
         );
     }
-    if msg_scrolled.get() == n {
-        msg_scroll.set(m);
+    if MSG_SCROLLED.get() == n {
+        MSG_SCROLL.set(m);
     }
     !aborting()
 }

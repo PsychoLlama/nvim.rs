@@ -126,7 +126,7 @@ pub(crate) fn emoji_widens(c: c_int) -> bool {
 /// not.
 pub fn f_setcellwidths(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let Some(list) = args[0].list_ref() else {
-        emsg(gettext(e_listreq));
+        emsg(gettext(E_LISTREQ));
         return;
     };
     let table = match parse_cell_widths(list) {

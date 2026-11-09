@@ -36,7 +36,7 @@ use crate::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::memline::{Lines, ml_replace_buf_text};
 use crate::memory::XString;
 use crate::message::IOSIZE;
-use crate::message::state::{msg_didout, need_wait_return};
+use crate::message::state::{MSG_DIDOUT, NEED_WAIT_RETURN};
 use crate::mouse::setmouse;
 use crate::r#move::{
     do_check_cursorbind, scrolldown_clamp, scrollup_clamp, update_topline, validate_cursor,
@@ -191,7 +191,7 @@ fn prompt_visual(st: &Sub) -> c_int {
     let typed = prompt_for_input(Some(prompt.as_cstr()), HLF_R, true, None);
     highlight_match.set(false);
 
-    msg_didout.set(false); // don't scroll up
+    MSG_DIDOUT.set(false); // don't scroll up
     gotocmdline(true);
     P_LZ.set(save_p_lz);
     drop(redraw);
@@ -224,7 +224,7 @@ pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
             prompt_visual(st)
         };
 
-        need_wait_return.set(false); // no hit-return prompt
+        NEED_WAIT_RETURN.set(false); // no hit-return prompt
         if typed == 'q' as c_int || typed == ESC || typed == Ctrl_C {
             st.got_quit = true;
             break;

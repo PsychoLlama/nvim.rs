@@ -48,9 +48,9 @@ use crate::input::prompt_for_input;
 use crate::mbyte::{c_cluster_len, head_off};
 use crate::memline::{Lines, ml_replace_owned};
 use crate::memory::XString;
+use crate::message::E_NO_SPELL;
 use crate::message::IOSIZE;
-use crate::message::e_no_spell;
-use crate::message::state::{cmdmsg_rl, lines_left, msg_col, msg_row, msg_scroll};
+use crate::message::state::{CMDMSG_RL, LINES_LEFT, MSG_COL, MSG_ROW, MSG_SCROLL};
 use crate::message::{
     emsg, msg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_start,
 };
@@ -92,7 +92,7 @@ pub(crate) fn spell_suggest(count: c_int) {
     // `curwin` is re-read after the body because autocommands may have
     // moved it.
     let prev_cursor = Win::current().w_cursor;
-    let msg_scroll_save = msg_scroll.get();
+    let msg_scroll_save = MSG_SCROLL.get();
 
     // `z=` works with 'spell' off, but 'spelllang' has to be parsed
     // for it, which is what turning the option on does.
@@ -111,7 +111,7 @@ pub(crate) fn spell_suggest(count: c_int) {
 /// The body of `z=`, with `'spell'` already on.
 fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
     if c_int::from(Win::current().syn_block().b_p_spl.first_byte()) == NUL {
-        emsg(gettext(e_no_spell));
+        emsg(gettext(E_NO_SPELL));
         return;
     }
 
@@ -223,15 +223,15 @@ fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
 /// Returns the number chosen, or 0 for none.
 fn ask_which_suggestion(sug: &SugInfo, msg_scroll_save: c_int) -> c_int {
     // With 'rightleft' the list is drawn right to left.
-    cmdmsg_rl.set(Win::current().w_onebuf_opt.wo_rl != 0);
+    CMDMSG_RL.set(Win::current().w_onebuf_opt.wo_rl != 0);
 
     msg_start();
-    msg_row.set(Rows.get() - 1); // for when 'cmdheight' > 1
-    lines_left.set(Rows.get()); // avoid the more-prompt
+    MSG_ROW.set(Rows.get() - 1); // for when 'cmdheight' > 1
+    LINES_LEFT.set(Rows.get()); // avoid the more-prompt
 
     let bad = msg_bytes(bad_prefix(sug, sug.su_badlen));
     let asked = tr!("Change \"{bad}\" to:");
-    let asked = if cmdmsg_rl.get() && asked.starts_with("Change") {
+    let asked = if CMDMSG_RL.get() && asked.starts_with("Change") {
         // And now the rabbit from the high hat: avoid showing the
         // untranslated message right-to-left. Upstream tests the
         // *template* for that prefix; the rendering carries it just as
@@ -244,7 +244,7 @@ fn ask_which_suggestion(sug: &SugInfo, msg_scroll_save: c_int) -> c_int {
     msg_clr_eos();
     msg_putchar(c_int::from(b'\n'));
 
-    msg_scroll.set(1);
+    MSG_SCROLL.set(1);
     let last = len_as_int(sug.su_ga.len()) - 1;
     for (i, stp) in sug.su_ga.iter().enumerate() {
         show_suggestion(len_as_int(i), stp, sug);
@@ -253,8 +253,8 @@ fn ask_which_suggestion(sug: &SugInfo, msg_scroll_save: c_int) -> c_int {
         }
     }
 
-    cmdmsg_rl.set(false);
-    msg_col.set(0);
+    CMDMSG_RL.set(false);
+    MSG_COL.set(0);
 
     let mut mouse_used = false;
     let mut selected = prompt_for_input(None, 0, false, Some(&mut mouse_used));
@@ -262,8 +262,8 @@ fn ask_which_suggestion(sug: &SugInfo, msg_scroll_save: c_int) -> c_int {
         selected = len_as_int(sug.su_ga.len()) + 1 - (cmdline_row.get() - mouse_row.get());
     }
 
-    lines_left.set(Rows.get()); // avoid the more-prompt
-    msg_scroll.set(msg_scroll_save); // no delay for 'smd' in normal_cmd()
+    LINES_LEFT.set(Rows.get()); // avoid the more-prompt
+    MSG_SCROLL.set(msg_scroll_save); // no delay for 'smd' in normal_cmd()
     selected
 }
 
@@ -289,7 +289,7 @@ fn show_suggestion(i: c_int, stp: &Suggest, sug: &SugInfo) {
     }
 
     let mut number = format!("{:2}", i + 1);
-    if cmdmsg_rl.get() {
+    if CMDMSG_RL.get() {
         // Mirrored for 'rightleft'. The number is generated ASCII, so
         // reversing its characters is reversing its bytes.
         number = number.chars().rev().collect();
@@ -317,7 +317,7 @@ fn show_score(stp: &Suggest) {
     } else {
         format!(" ({})", stp.st_score)
     };
-    if cmdmsg_rl.get() {
+    if CMDMSG_RL.get() {
         // Mirror the numbers, but keep the leading space. All of it is
         // generated ASCII, so reversing characters reverses bytes.
         let mirrored: String = shown[1..].chars().rev().collect();

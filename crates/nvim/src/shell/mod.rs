@@ -35,8 +35,8 @@ use crate::fileio::temp_name;
 use crate::guard::Suppress;
 use crate::memline::ml_append_terminated;
 use crate::memory::{ThinCString, XString};
-use crate::message::state::emsg_silent;
-use crate::message::{e_notmp, e_shellempty};
+use crate::message::state::EMSG_SILENT;
+use crate::message::{E_NOTMP, E_SHELLEMPTY};
 use crate::message::{
     msg_ext_set_kind, msg_outnum, msg_putchar, msg_str, verbose_enter, verbose_leave,
 };
@@ -213,7 +213,7 @@ pub(crate) fn run_shell(cmd: Option<&CStr>, opts: ShellOpts, extra_args: Option<
         argv,
         &input,
         capture,
-        emsg_silent.get() != 0,
+        EMSG_SILENT.get() != 0,
         forward_output,
     );
     drop(input);
@@ -222,7 +222,7 @@ pub(crate) fn run_shell(cmd: Option<&CStr>, opts: ShellOpts, extra_args: Option<
         write_output(&mut output, true);
     }
 
-    if emsg_silent.get() == 0 && exitcode != 0 && !opts.has(ShellOpts::SILENT) {
+    if EMSG_SILENT.get() == 0 && exitcode != 0 && !opts.has(ShellOpts::SILENT) {
         msg_ext_set_kind(c"shell_ret");
         if !ui_has(kUIMessages) {
             msg_putchar(NL);
@@ -241,10 +241,10 @@ pub(crate) fn run_shell(cmd: Option<&CStr>, opts: ShellOpts, extra_args: Option<
 #[derive(Debug, thiserror::Error)]
 enum ShellError {
     /// E91: 'shell' is empty.
-    #[error("{}", msg_cstr(gettext(e_shellempty)))]
+    #[error("{}", msg_cstr(gettext(E_SHELLEMPTY)))]
     EmptyShell,
     /// E483: no temp file name for the output.
-    #[error("{}", msg_cstr(gettext(e_notmp)))]
+    #[error("{}", msg_cstr(gettext(E_NOTMP)))]
     NoTempFile,
     /// The output file could not be opened or measured.
     #[error("{}", tr!("E282: Cannot read from \"{}\"", msg_cstr(.0.as_cstr())))]

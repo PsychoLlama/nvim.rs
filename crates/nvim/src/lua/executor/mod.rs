@@ -66,8 +66,8 @@ pub use self::ucmd::*;
 pub(crate) use self::vim_module::*;
 
 /// What a Lua call's result is converted to.
-pub const kRetObject: LuaRetMode = 0;
-pub const kRetNilBool: LuaRetMode = 1;
+pub const RET_OBJECT: LuaRetMode = 0;
+pub const RET_NIL_BOOL: LuaRetMode = 1;
 pub const kRetLuaref: LuaRetMode = 2;
 pub const kRetMulti: LuaRetMode = 3;
 

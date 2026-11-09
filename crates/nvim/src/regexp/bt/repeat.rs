@@ -25,7 +25,7 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::getchar::state::got_int;
 use crate::mbyte::{mb_tolower, mb_toupper, utf_fold};
-use crate::message::e_re_corr;
+use crate::message::E_RE_CORR;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
@@ -63,7 +63,7 @@ pub(crate) fn regrepeat(rex: Rex, prog: BtProg<'_>, p: usize, maxcount: int64_t)
     // that names no opcode is upstream's `default:` arm: the program is
     // corrupt, which is said, and nothing is counted.
     let Ok((op, crosses_lines)) = opcode else {
-        iemsg(gettext(e_re_corr));
+        iemsg(gettext(E_RE_CORR));
         rex.set_input(scan);
         return count;
     };
@@ -272,7 +272,7 @@ pub(crate) fn regrepeat(rex: Rex, prog: BtProg<'_>, p: usize, maxcount: int64_t)
         // Everything else is one of the `RI_*` byte classes.
         _ => {
             let Some((mask, positive)) = byte_class(op) else {
-                iemsg(gettext(e_re_corr));
+                iemsg(gettext(E_RE_CORR));
                 rex.set_input(scan);
                 return count;
             };

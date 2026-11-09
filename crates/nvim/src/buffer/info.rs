@@ -41,7 +41,7 @@ use crate::getchar::state::got_int;
 use crate::mbyte::cp_bounds;
 use crate::memory::XString;
 use crate::message::IOSIZE;
-use crate::message::state::{msg_col, msg_scroll, msg_scrolled, need_wait_return, no_lines_msg};
+use crate::message::state::{MSG_COL, MSG_SCROLL, MSG_SCROLLED, NEED_WAIT_RETURN, NO_LINES_MSG};
 use crate::message::{
     message_filtered, msg, msg_display, msg_ext_set_kind, msg_fit_head, msg_putchar, msg_start,
     set_keep_msg,
@@ -223,7 +223,7 @@ fn show(buffer: Buf, by_time: bool, name: &XString) {
         };
     }
 
-    if !ui_has(kUIMessages) || msg_col.get() > 0 {
+    if !ui_has(kUIMessages) || MSG_COL.get() > 0 {
         msg_putchar(c_int::from(b'\n'));
     }
 
@@ -347,7 +347,7 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
     let lines = buf.b_ml.ml_line_count;
     let cursor = win.w_cursor.lnum;
     if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
-        out.push(gettext(no_lines_msg).to_bytes());
+        out.push(gettext(NO_LINES_MSG).to_bytes());
     } else if p_ru() {
         // The current line and column are already on the screen -- webb
         let fmt = ngettext(
@@ -380,16 +380,16 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         // Temporarily set msg_scroll to keep the message from being
         // truncated; msg_start() first, to get it in the right place.
         msg_start();
-        let n = msg_scroll.get();
-        msg_scroll.set(1);
+        let n = MSG_SCROLL.get();
+        MSG_SCROLL.set(1);
         msg(out.as_cstr(), 0);
-        msg_scroll.set(n);
+        MSG_SCROLL.set(n);
     } else {
         let p = msg_fit_head(out.as_cstr(), false, 0);
         // Repeat the message after redrawing when 'restart_edit' is set
         // (otherwise there is a delay before redrawing), or when the screen
         // scrolled but there is no wait-return prompt.
-        if !restart_edit.get().is_nul() || msg_scrolled.get() != 0 && !need_wait_return.get() {
+        if !restart_edit.get().is_nul() || MSG_SCROLLED.get() != 0 && !NEED_WAIT_RETURN.get() {
             set_keep_msg(p.as_ref().map(XString::as_cstr), 0);
         }
     }

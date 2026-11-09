@@ -473,7 +473,7 @@ pub fn flush_buffers(flush_typeahead: FlushBuffers) {
 
 /// Flush the map and typeahead buffers and beep about an error.
 pub fn beep_flush() {
-    if emsg_silent.get() == 0 {
+    if EMSG_SILENT.get() == 0 {
         flush_buffers(FLUSH_MINIMAL);
         vim_beep(kOptBoFlagError as c_uint);
     }

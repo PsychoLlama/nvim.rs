@@ -32,9 +32,9 @@ use crate::getchar::state::got_int;
 use crate::grid::{default_gridview, grid_line_flush, grid_line_puts, grid_line_start};
 use crate::highlight::namespace::hl_attr;
 use crate::highlight_group::{HLF_8, syn_id2attr, syn_name2id};
-use crate::lua::executor::{kRetObject, nlua_exec};
+use crate::lua::executor::{RET_OBJECT, nlua_exec};
 use crate::mbyte::{c_cluster_len, char_at};
-use crate::message::state::msg_col;
+use crate::message::state::MSG_COL;
 use crate::message::{msg_ext_set_kind, msg_putchar, msg_str};
 use crate::option::defs::ShmFlag;
 use crate::option::vars::{P_SHM, p_ls, p_verbose};
@@ -198,7 +198,7 @@ fn version_msg_wrap(s: &CStr, wrap: bool) {
     let len = vim_strsize_cstr(s) + if wrap { 2 } else { 0 };
     if !got_int.get()
         && len < Columns.get()
-        && msg_col.get() + len >= Columns.get()
+        && MSG_COL.get() + len >= Columns.get()
         && !s.to_bytes().starts_with(b"\n")
     {
         msg_putchar(c_int::from(b'\n'));
@@ -239,7 +239,7 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
     if Columns.get() < width {
         for (i, item) in items.iter().enumerate() {
             version_msg_wrap(item, Some(i) == current);
-            if msg_col.get() > 0 && len_as_int(i) < count - 1 {
+            if MSG_COL.get() > 0 && len_as_int(i) < count - 1 {
                 msg_putchar(c_int::from(b'\n'));
             }
         }
@@ -260,7 +260,7 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
         let at = idx.cast_unsigned() as usize;
         let Some(item) = items.get(at) else {
             // A hole in the last column: only the row break is owed.
-            if msg_col.get() > 0 {
+            if MSG_COL.get() > 0 {
                 if cur_row < nrow {
                     msg_putchar(c_int::from(b'\n'));
                 }
@@ -276,12 +276,12 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
             msg_putchar(c_int::from(b']'));
         }
         if last_col {
-            if msg_col.get() > 0 && cur_row < nrow {
+            if MSG_COL.get() > 0 && cur_row < nrow {
                 msg_putchar(c_int::from(b'\n'));
             }
             cur_row += 1;
         } else {
-            while msg_col.get() % width != 0 {
+            while MSG_COL.get() % width != 0 {
                 msg_putchar(c_int::from(b' '));
             }
         }
@@ -292,7 +292,7 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
 pub(crate) fn list_lua_version() {
     const CODE: &CStr = c"return ((jit and jit.version) and jit.version or _VERSION)";
 
-    let ret = nlua_exec(CODE.to_bytes(), None, Array::new(), kRetObject)
+    let ret = nlua_exec(CODE.to_bytes(), None, Array::new(), RET_OBJECT)
         .expect("a literal chunk cannot fail");
     let version = ret.as_string().expect("_VERSION is a string");
     msg_str(version.as_cstr());

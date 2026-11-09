@@ -310,11 +310,11 @@ pub(crate) fn call_user_func(
 
     let save_current_sctx = current_sctx.get();
     current_sctx.set(func.script_ctx.get());
-    let save_did_emsg = did_emsg.get();
-    did_emsg.set(0);
+    let save_did_emsg = DID_EMSG.get();
+    DID_EMSG.set(0);
 
     if default_arg_err && (func.has_flag(FuncFlags::ABORT) || trylevel.get() > 0) {
-        did_emsg.set(1);
+        DID_EMSG.set(1);
     } else if islambda {
         // A lambda's body is one line, "return <expr>"; evaluate the
         // expression straight rather than going through `do_cmdline`.
@@ -346,7 +346,7 @@ pub(crate) fn call_user_func(
     // The return value is the caller's from here.
     *result = frame.rettv.replace(TypVal::Unknown);
     // When the function was aborted because of an error, return -1.
-    if (did_emsg.get() != 0 && func.has_flag(FuncFlags::ABORT)) || result.v_type() == VAR_UNKNOWN {
+    if (DID_EMSG.get() != 0 && func.has_flag(FuncFlags::ABORT)) || result.v_type() == VAR_UNKNOWN {
         tv_clear(result);
         result.write_number(-1);
     }
@@ -407,7 +407,7 @@ pub(crate) fn call_user_func(
         });
     }
 
-    did_emsg.set(did_emsg.get() | save_did_emsg);
+    DID_EMSG.set(DID_EMSG.get() | save_did_emsg);
     // The tear-down below is the caller's depth, not this call's.
     drop(call_depth);
     for (local, name) in &defaults_set {
@@ -481,11 +481,11 @@ pub(crate) fn user_func_error(error: c_int, name: &[u8], found_var: bool) {
             semsg!("E1085: Not a callable type: {name}");
             return;
         }
-        FCERR_UNKNOWN => e_unknown_function_str,
+        FCERR_UNKNOWN => E_UNKNOWN_FUNCTION_STR,
         FCERR_NOTMETHOD => c"E276: Cannot use function as a method: %s",
         FCERR_DELETED => c"E933: Function was deleted: %s",
-        FCERR_TOOMANY => e_toomanyarg,
-        FCERR_TOOFEW => e_toofewarg,
+        FCERR_TOOMANY => E_TOOMANYARG,
+        FCERR_TOOFEW => E_TOOFEWARG,
         FCERR_SCRIPT => c"E120: Using <SID> not in a script context: %s",
         FCERR_DICT => c"E725: Calling dict function without Dictionary: %s",
         _ => return,

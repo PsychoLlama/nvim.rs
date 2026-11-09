@@ -32,7 +32,7 @@ use super::*;
 use crate::cstr;
 use crate::grid::get_win_by_grid_handle;
 use crate::mbyte::{c_char_info, c_next_cluster};
-use crate::message::state::{msg_grid, msg_grid_pos};
+use crate::message::state::{MSG_GRID, MSG_GRID_POS};
 use crate::plines::CharsizeArg;
 use crate::plines::win_charsize;
 use crate::popupmenu::pum_grid_ref;
@@ -105,8 +105,8 @@ pub(crate) fn find_win_outer(pos: &mut MousePos) -> Option<Win> {
 /// The `ext_multigrid` half: map a grid handle plus coordinates onto the
 /// window that drew them, rewriting `pos` for the grid it settled on.
 fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
-    if pos.grid == (msg_grid.with(|grid| grid.handle)).get() {
-        pos.row += msg_grid_pos.get();
+    if pos.grid == (MSG_GRID.with(|grid| grid.handle)).get() {
+        pos.row += MSG_GRID_POS.get();
         pos.grid = DEFAULT_GRID_HANDLE;
     } else if pos.grid > 1 {
         let wp = get_win_by_grid_handle(Handle::new(pos.grid))?;

@@ -178,7 +178,7 @@ pub(crate) fn cmdline_search_stat(
     // `maxcount + 1` here. Nothing reads it afterwards.)
 
     // Keep the message even after a redraw, but not in the history.
-    msg_ext_overwrite.set(true);
+    MSG_EXT_OVERWRITE.set(true);
     msg_ext_set_kind(c"search_count");
     let text = CStr::from_bytes_until_nul(msgbuf).unwrap_or_default();
     give_warning(text, false, false);

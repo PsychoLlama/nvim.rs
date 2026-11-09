@@ -38,8 +38,8 @@ use crate::cmdexpand::defs::Candidate;
 use crate::formatted;
 use crate::global_cell::field;
 use crate::memory::ThinCString;
-use crate::option::kFillchars;
-use crate::option::kListchars;
+use crate::option::FILLCHARS;
+use crate::option::LISTCHARS;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_uint};
 
@@ -49,7 +49,7 @@ use crate::cmdexpand::defs::Expand;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::grid::schar_from_char;
 use crate::mbyte::{c_cluster_len, c_cluster_schar};
-use crate::message::{e_invarg, e_leadtab_requires_tab};
+use crate::message::{E_INVARG, E_LEADTAB_REQUIRES_TAB};
 use crate::narrow::number_as_int;
 use crate::option::defs::{OptError, OptSet, OptionSetFlags};
 use crate::option::vars::{P_FCS, P_LCS};
@@ -63,8 +63,9 @@ use crate::winlayer;
 
 use super::frame::new_bytes;
 use super::{
-    OptStringRef, e_conflicts_with_value_of_fillchars, e_conflicts_with_value_of_listchars,
-    e_wrong_character_width_for_field_str, e_wrong_number_of_characters_for_field_str,
+    E_CONFLICTS_WITH_VALUE_OF_FILLCHARS, E_CONFLICTS_WITH_VALUE_OF_LISTCHARS,
+    E_WRONG_CHARACTER_WIDTH_FOR_FIELD_STR, E_WRONG_NUMBER_OF_CHARACTERS_FOR_FIELD_STR,
+    OptStringRef,
 };
 
 /// What a field does with the characters it is given, beyond the one
@@ -225,7 +226,7 @@ static LCS_TAB: [Field; 12] = [
 
 /// Is this the 'listchars' half of the shared machinery?
 fn is_listchars(what: CharsOption) -> bool {
-    what as c_uint == kListchars as c_uint
+    what as c_uint == LISTCHARS as c_uint
 }
 
 /// Read one character of a field's value and step `at` past it.
@@ -380,13 +381,13 @@ fn parse_chars(bytes: &[u8], listchars: bool, apply: bool) -> Result<Option<Char
                 .iter()
                 .position(|field| field_opens_at(bytes, p, field.name))
             else {
-                return Err((e_invarg).into());
+                return Err((E_INVARG).into());
             };
             let field = &tab[i];
             let mut s = p + field.name.to_bytes().len() + 1;
-            let width_err = |name| field_value_err(e_wrong_character_width_for_field_str, name);
+            let width_err = |name| field_value_err(E_WRONG_CHARACTER_WIDTH_FOR_FIELD_STR, name);
             let count_err =
-                |name| field_value_err(e_wrong_number_of_characters_for_field_str, name);
+                |name| field_value_err(E_WRONG_NUMBER_OF_CHARACTERS_FOR_FIELD_STR, name);
 
             match field.shape {
                 Shape::Multispace | Shape::LeadMultispace => {
@@ -495,7 +496,7 @@ fn parse_chars(bytes: &[u8], listchars: bool, apply: bool) -> Result<Option<Char
         }
 
         if listchars && has_leadtab && !has_tab {
-            return Err((e_leadtab_requires_tab).into());
+            return Err((E_LEADTAB_REQUIRES_TAB).into());
         }
     }
 
@@ -612,9 +613,9 @@ pub fn did_set_chars_option(args: &mut OptSet) -> Result<(), OptError> {
     // option it is and the variable says which *scope*: the option's own
     // global one, or this window's copy.
     let which = if idx == kOptListcharsIdx {
-        kListchars
+        LISTCHARS
     } else {
-        kFillchars
+        FILLCHARS
     };
     // Which variable it is, not what it says.
     if varp == option_var(idx).string_var() {
@@ -654,22 +655,22 @@ pub fn check_chars_options() -> Result<(), OptError> {
         if wp.set_chars_option(value, what, apply).is_ok() {
             None
         } else if is_listchars(what) {
-            Some(e_conflicts_with_value_of_listchars)
+            Some(E_CONFLICTS_WITH_VALUE_OF_LISTCHARS)
         } else {
-            Some(e_conflicts_with_value_of_fillchars)
+            Some(E_CONFLICTS_WITH_VALUE_OF_FILLCHARS)
         }
     };
 
     // Copies: the check reads the global value again for a window that has
     // none of its own.
-    if let Some(global) = check(Win::current(), Some(&P_LCS.get()[..]), kListchars, false) {
+    if let Some(global) = check(Win::current(), Some(&P_LCS.get()[..]), LISTCHARS, false) {
         return Err((global).into());
     }
-    if let Some(global) = check(Win::current(), Some(&P_FCS.get()[..]), kFillchars, false) {
+    if let Some(global) = check(Win::current(), Some(&P_FCS.get()[..]), FILLCHARS, false) {
         return Err((global).into());
     }
     let per_window = for_each_window(|wp| {
-        check(wp, None, kListchars, true).or_else(|| check(wp, None, kFillchars, true))
+        check(wp, None, LISTCHARS, true).or_else(|| check(wp, None, FILLCHARS, true))
     });
     match per_window {
         Some(errmsg) => Err(errmsg.into()),

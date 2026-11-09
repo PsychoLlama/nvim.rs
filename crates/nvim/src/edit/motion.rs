@@ -87,7 +87,7 @@ pub(crate) fn ins_start_select(c: Key) -> bool {
 /// Open the fold under the cursor if 'foldopen' contains `hor` and the key
 /// was typed rather than mapped.
 fn may_open_fold_hor() {
-    if fdo_flags.get() & kOptFdoFlagHor as ::core::ffi::c_uint != 0 && KeyTyped.get() {
+    if FDO_FLAGS.get() & kOptFdoFlagHor as ::core::ffi::c_uint != 0 && KeyTyped.get() {
         fold_open_cursor();
     }
 }

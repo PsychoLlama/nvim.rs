@@ -48,8 +48,8 @@ use crate::ex_getln::{
     cmdpreview_get_bufnr, cmdpreview_get_ns, curbuf_locked, get_text_locked_msg, text_locked,
 };
 use crate::guard::Suppress;
-use crate::message::state::emsg_silent;
-use crate::message::{e_cmdwin, e_command_too_recursive, e_modifiable, e_nobang, e_norange};
+use crate::message::state::EMSG_SILENT;
+use crate::message::{E_CMDWIN, E_COMMAND_TOO_RECURSIVE, E_MODIFIABLE, E_NOBANG, E_NORANGE};
 use crate::winlayer::graph::cmdwin_type;
 
 use crate::os::cshim::gettext;
@@ -178,11 +178,11 @@ pub fn parse_cmdline(
         }
 
         if !excmd.argt.has(ExArgt::BANG) && excmd.forceit {
-            *errormsg = Some(ex_msg(e_nobang));
+            *errormsg = Some(ex_msg(E_NOBANG));
             break 'end;
         }
         if !excmd.argt.has(ExArgt::RANGE) && excmd.addr_count > 0 {
-            *errormsg = Some(ex_msg(e_norange));
+            *errormsg = Some(ex_msg(E_NORANGE));
             break 'end;
         }
         if excmd.argt.has(ExArgt::DFLALL) && excmd.addr_count == 0 {
@@ -280,7 +280,7 @@ pub(crate) fn execute_cmd0(
     // still be silencing by the time the body runs.
     let did_esilent = cmdmod.with(|mods| mods.cmod_did_esilent);
     if excmd.cmdidx == CmdIdx::r#try && did_esilent > 0 {
-        emsg_silent.set((emsg_silent.get() - did_esilent).max(0));
+        EMSG_SILENT.set((EMSG_SILENT.get() - did_esilent).max(0));
         cmdmod.with_mut(|mods| mods.cmod_did_esilent = 0);
     }
 
@@ -319,7 +319,7 @@ pub(crate) fn execute_cmd0(
 pub fn execute_cmd(excmd: &mut ExArg, cmdinfo: &CmdParseInfo, preview: bool) -> c_int {
     let mut retv: c_int = 0;
     if do_cmdline_start().is_err() {
-        emsg(gettext(e_command_too_recursive));
+        emsg(gettext(E_COMMAND_TOO_RECURSIVE));
         return retv;
     }
 
@@ -337,12 +337,12 @@ pub fn execute_cmd(excmd: &mut ExArg, cmdinfo: &CmdParseInfo, preview: bool) -> 
             && !(!Buf::current().terminal.is_null()
                 && (excmd.cmdidx == CmdIdx::put || excmd.cmdidx == CmdIdx::iput))
         {
-            errormsg = Some(ex_msg(e_modifiable));
+            errormsg = Some(ex_msg(E_MODIFIABLE));
             break 'end;
         }
         if !is_user_cmd(excmd.cmdidx) {
             if cmdwin_type.get() != 0 && !excmd.argt.has(ExArgt::CMDWIN) {
-                errormsg = Some(ex_msg(e_cmdwin));
+                errormsg = Some(ex_msg(E_CMDWIN));
                 break 'end;
             }
             if text_locked() && !excmd.argt.has(ExArgt::LOCK_OK) {

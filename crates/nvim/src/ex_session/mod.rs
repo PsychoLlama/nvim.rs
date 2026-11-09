@@ -19,9 +19,9 @@
 //!   by 'sessionoptions', which is `put_view` per window plus the buffer
 //!   list, the argument list, the tab pages and the window layout.
 //!
-//! Upstream distinguishes the two option sets by passing `&ssop_flags` or
-//! `&vop_flags` and then comparing the pointer back against one of them --
-//! `flagp == &ssop_flags` reads as "this is a session, not a view".
+//! Upstream distinguishes the two option sets by passing `&SSOP_FLAGS` or
+//! `&VOP_FLAGS` and then comparing the pointer back against one of them --
+//! `flagp == &SSOP_FLAGS` reads as "this is a session, not a view".
 //! [`SessionOpts`] names that choice instead, so nothing here needs the
 //! address of an option word.
 //!
@@ -63,11 +63,11 @@ use crate::mbyte::cluster_len;
 use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::message::emsg;
-use crate::message::{e_noname, e_prev_dir, e_write};
+use crate::message::{E_NONAME, E_PREV_DIR, E_WRITE};
 use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::option::defs::OptionSetFlags;
 use crate::option::makeset;
-use crate::option::vars::{P_VDIR, p_acd, p_hls, ssop_flags, vop_flags};
+use crate::option::vars::{P_VDIR, SSOP_FLAGS, VOP_FLAGS, p_acd, p_hls};
 use crate::options::{
     OptSsopFlags, kOptSsopFlagBlank, kOptSsopFlagCurdir, kOptSsopFlagHelp, kOptSsopFlagOptions,
     kOptSsopFlagSesdir, kOptSsopFlagSkiprtp, kOptSsopFlagTerminal,
@@ -122,7 +122,7 @@ static did_lcd: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Which option word filters what gets written.
 ///
-/// Upstream threads a `unsigned *` and asks `flagp == &ssop_flags`; this is
+/// Upstream threads a `unsigned *` and asks `flagp == &SSOP_FLAGS`; this is
 /// the same question with a name. The distinction is not only which flags
 /// apply: a session knows the working directory it will be sourced in and a
 /// view does not, so several decisions turn on the *kind* rather than on any
@@ -140,8 +140,8 @@ impl SessionOpts {
     /// The option word's current value.
     fn flags(self) -> OptSsopFlags {
         match self {
-            Self::Session => ssop_flags.get(),
-            Self::View => vop_flags.get(),
+            Self::Session => SSOP_FLAGS.get(),
+            Self::View => VOP_FLAGS.get(),
         }
     }
 
@@ -308,13 +308,13 @@ pub(crate) fn ses_do_win(win: Win) -> bool {
         // The contents of a "nofile" buffer cannot be restored.
         || (buf.terminal.is_null() && buf_is_nofilename(Some(buf)))
     {
-        return ssop_flags.get() & kOptSsopFlagBlank != 0;
+        return SSOP_FLAGS.get() & kOptSsopFlagBlank != 0;
     }
     if buf_is_help(Some(buf)) {
-        return ssop_flags.get() & kOptSsopFlagHelp != 0;
+        return SSOP_FLAGS.get() & kOptSsopFlagHelp != 0;
     }
     if buf_is_terminal(Some(buf)) {
-        return ssop_flags.get() & kOptSsopFlagTerminal != 0;
+        return SSOP_FLAGS.get() & kOptSsopFlagTerminal != 0;
     }
     true
 }
@@ -325,7 +325,7 @@ pub(crate) fn ses_do_win(win: Win) -> bool {
 #[derive(Debug, thiserror::Error)]
 enum ViewError {
     /// The buffer has no name to make a view file name from.
-    #[error("{}", msg_cstr(gettext(e_noname)))]
+    #[error("{}", msg_cstr(gettext(E_NONAME)))]
     NoFileName,
     /// The view file would not open.
     #[error("{}", tr!("E484: Can't open file {}", msg_cstr(.0.as_cstr())))]
@@ -452,7 +452,7 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
         // whether or not anything failed above.
         let closed = out.finish();
         if written.and(closed).is_err() {
-            emsg(gettext(e_write));
+            emsg(gettext(E_WRITE));
         } else if cmdidx == CmdIdx::mksession {
             // A successful session write sets v:this_session.
             if let Ok(full) = vim_full_name(fname, MAXPATHL as usize, false) {
@@ -539,8 +539,8 @@ fn write_session(out: &mut SessionFile, fname: &CStr) -> Written {
         .map_or_else(XString::new, XString::from_vec);
     let known = !dirnow.is_empty();
     let globaldir = own_dir(DirOwner::Global);
-    let to_sesdir = known && ssop_flags.get() & kOptSsopFlagSesdir != 0;
-    let to_globaldir = known && ssop_flags.get() & kOptSsopFlagCurdir != 0 && globaldir.is_some();
+    let to_sesdir = known && SSOP_FLAGS.get() & kOptSsopFlagSesdir != 0;
+    let to_globaldir = known && SSOP_FLAGS.get() & kOptSsopFlagCurdir != 0 && globaldir.is_some();
     if to_sesdir {
         if vim_chdirfile(fname, flag::kCdCauseOther).is_ok() {
             shorten_fnames(true);
@@ -557,7 +557,7 @@ fn write_session(out: &mut SessionFile, fname: &CStr) -> Written {
     // Restore the original directory.
     if to_sesdir || to_globaldir {
         if os_chdir(dirnow.as_cstr()) != 0 {
-            emsg(gettext(e_prev_dir));
+            emsg(gettext(E_PREV_DIR));
         }
         shorten_fnames(true);
     }

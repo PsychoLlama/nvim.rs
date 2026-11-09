@@ -20,7 +20,7 @@
 use core::ffi::c_int;
 use core::fmt;
 
-use crate::message::e_nopresub;
+use crate::message::E_NOPRESUB;
 use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::os::cshim::gettext;
 use crate::tr;
@@ -326,7 +326,7 @@ impl fmt::Display for CompileError {
                 let which = char::from(which);
                 tr!("E1281: Atom '\\%#={which}' must be at the start of the pattern")
             }
-            Self::NoPreviousSubstitute => msg_cstr(gettext(e_nopresub)).to_string(),
+            Self::NoPreviousSubstitute => msg_cstr(gettext(E_NOPRESUB)).to_string(),
             Self::PrematureEnd => tr!("E865: (NFA) Regexp end encountered prematurely"),
             Self::Misplaced(c) => {
                 let c = char::from(c);

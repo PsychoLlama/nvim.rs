@@ -78,8 +78,8 @@ fn grid_draw_bordertext(
 fn get_bordertext_col(total_col: c_int, text_width: c_int, align: AlignTextPos) -> c_int {
     match align {
         kAlignLeft => 1,
-        kAlignCenter => ((total_col - text_width) / 2 + 1).max(1),
-        kAlignRight => (total_col - text_width + 1).max(1),
+        ALIGN_CENTER => ((total_col - text_width) / 2 + 1).max(1),
+        ALIGN_RIGHT => (total_col - text_width + 1).max(1),
         _ => unreachable!(),
     }
 }

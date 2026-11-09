@@ -27,7 +27,7 @@ use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::ex_getln::text_or_buf_locked;
 use crate::getchar::beep_flush;
-use crate::message::e_floatexchange;
+use crate::message::E_FLOATEXCHANGE;
 use crate::message::{emsg, iemsg};
 use crate::normal::{reset_visual_and_resel, visual_active};
 use crate::option::vars::{p_ea, p_wh, p_wiw, p_wmh, p_wmw};
@@ -91,7 +91,7 @@ pub fn make_windows(count: c_int, vertical: bool) -> c_int {
 pub(crate) fn exchange(prenum: c_int) {
     let mut cur = Win::current();
     if cur.w_floating {
-        emsg(e_floatexchange);
+        emsg(E_FLOATEXCHANGE);
         return;
     }
     if is_only_window(cur, None) || text_or_buf_locked() {
@@ -170,7 +170,7 @@ pub(crate) fn exchange(prenum: c_int) {
 /// downwards.
 pub(crate) fn rotate(upwards: bool, count: c_int) {
     if Win::current().w_floating {
-        emsg(e_floatexchange);
+        emsg(E_FLOATEXCHANGE);
         return;
     }
     if count <= 0 || is_only_window(Win::current(), None) {

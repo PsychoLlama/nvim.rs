@@ -34,7 +34,7 @@ use crate::eval::window::find_win_by_nr_or_id;
 use crate::ex_cmds::check_secure;
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
-use crate::message::e_invalwindow;
+use crate::message::E_INVALWINDOW;
 use crate::message::emsg;
 use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::narrow::as_index;
@@ -399,7 +399,7 @@ pub fn get_optional_window(args: &[TypVal], idx: usize) -> Option<Win> {
     };
     let win = find_win_by_nr_or_id(arg);
     if win.is_none() {
-        emsg(gettext(e_invalwindow));
+        emsg(gettext(E_INVALWINDOW));
     }
     win
 }

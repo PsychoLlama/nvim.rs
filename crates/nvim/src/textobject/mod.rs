@@ -51,4 +51,4 @@ pub(crate) use self::word::*;
 pub(crate) struct NoObject;
 
 pub const kMTLineWise: MotionType = 1;
-pub const kMTCharWise: MotionType = 0;
+pub const MT_CHAR_WISE: MotionType = 0;

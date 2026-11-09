@@ -32,8 +32,8 @@ use crate::message::show_sb_text;
 use crate::mouse::do_mouse;
 use crate::normal::defs::CmdArg;
 use crate::normal::{
-    adjust_for_sel, check_clear_op, check_clear_op_quit, check_text_locked, clear_op_beep,
-    invoke_edit, kMTCharWise, kMTLineWise, nv_addsub, nv_edit, nv_gd, nv_gomark, nv_goto,
+    MT_CHAR_WISE, adjust_for_sel, check_clear_op, check_clear_op_quit, check_text_locked,
+    clear_op_beep, invoke_edit, kMTLineWise, nv_addsub, nv_edit, nv_gd, nv_gomark, nv_goto,
     nv_gotofile, nv_gv_cmd, nv_ident, nv_join, nv_operator, nv_pcmark, nv_put, nv_replace_mode,
     nv_screengo, nv_visual, nv_vreplace, visual_active,
 };
@@ -73,7 +73,7 @@ const POUND_BYTE: u8 = 0xa3;
 pub(crate) fn nv_g_home_m_cmd(cmd_arg: &mut CmdArg) {
     let mut win = Win::current();
     let to_first_non_blank = cmd_arg.nchar.is('^');
-    cmd_arg.op().motion_type = kMTCharWise;
+    cmd_arg.op().motion_type = MT_CHAR_WISE;
     cmd_arg.op().inclusive = false;
     let mut i;
     if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
@@ -126,7 +126,7 @@ pub(crate) fn nv_g_home_m_cmd(cmd_arg: &mut CmdArg) {
 /// `g_`: the last non-blank of the line, `count1 - 1` lines down.
 pub(crate) fn nv_g_underscore_cmd(cmd_arg: &mut CmdArg) {
     let mut win = Win::current();
-    cmd_arg.op().motion_type = kMTCharWise;
+    cmd_arg.op().motion_type = MT_CHAR_WISE;
     cmd_arg.op().inclusive = true;
     win.w_curswant = ColNr::MAX;
     if cursor_down(cmd_arg.count1 - 1, cmd_arg.op().op_type == OpType::Nop).is_err() {
@@ -154,7 +154,7 @@ pub(crate) fn nv_g_dollar_cmd(cmd_arg: &mut CmdArg) {
     let col_off = win.col_off();
     // `<End>` also skips back over trailing white space.
     let to_last_non_blank = cmd_arg.nchar == SpecialKey::End || cmd_arg.nchar == SpecialKey::Kend;
-    op.motion_type = kMTCharWise;
+    op.motion_type = MT_CHAR_WISE;
     op.inclusive = true;
     if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
         win.w_curswant = ColNr::MAX;
@@ -345,7 +345,7 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
         // `gM`: the middle of the line by *text* width, or the count'th
         // percentage of it.
         Some(b'M') => {
-            op.motion_type = kMTCharWise;
+            op.motion_type = MT_CHAR_WISE;
             op.inclusive = false;
             let width = linetabsize(Win::current(), Win::current().w_cursor.lnum);
             if cmd_arg.count0 > 0 && cmd_arg.count0 <= 100 {
@@ -362,7 +362,7 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
         Some(b'*' | b'#' | POUND_BYTE | CTRL_RSB | b']') => nv_ident(cmd_arg),
         // `ge`/`gE`: back to the end of the previous word.
         Some(b'e' | b'E') => {
-            op.motion_type = kMTCharWise;
+            op.motion_type = MT_CHAR_WISE;
             Win::current().w_set_curswant = true;
             op.inclusive = true;
             if bckend_word(cmd_arg.count1, nchar.is('E'), false).is_err() {

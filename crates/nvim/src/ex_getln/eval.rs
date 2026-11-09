@@ -228,7 +228,7 @@ pub fn f_setcmdline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         };
         pos = number_as_int(given) - 1;
         if pos < 0 {
-            emsg(gettext(e_positive));
+            emsg(gettext(E_POSITIVE));
             return;
         }
     }

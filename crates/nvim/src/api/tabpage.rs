@@ -20,7 +20,7 @@ use crate::window::tab_index;
 use crate::api::keysets::KeyDict_tabpage_config;
 use crate::api_error;
 use crate::guard::Suppress;
-use crate::message::e_cmdwin;
+use crate::message::E_CMDWIN;
 use crate::narrow::number_as_int;
 use crate::os::libc::size_t;
 use crate::types::{
@@ -145,7 +145,7 @@ pub fn nvim_open_tabpage(
         return Ok(Handle::NONE);
     };
     if cmdwin_type.get() != 0 && enter || cmdwin_buf.get() == Some(b.id()) {
-        return Err(Error::exception(e_cmdwin));
+        return Err(Error::exception(E_CMDWIN));
     }
     let after = config.after.map_or(-1, number_as_int);
 

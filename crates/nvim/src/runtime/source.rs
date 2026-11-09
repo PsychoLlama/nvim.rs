@@ -59,13 +59,13 @@ fn cmd_source(fname: &CStr, excmd: Option<&mut ExArg>) {
             .is_some_and(|command| command.addr_count > 0)
     {
         // A range only makes sense when the lines come from a buffer.
-        emsg(gettext(e_norange));
+        emsg(gettext(E_NORANGE));
         return;
     }
     let sourced = if let Some(command) = excmd {
         if !named {
             if forceit {
-                emsg(gettext(e_argreq));
+                emsg(gettext(E_ARGREQ));
             } else {
                 cmd_source_buffer(command, false);
             }
@@ -438,7 +438,7 @@ fn range_is_lua(excmd: &ExArg) -> bool {
         integer_obj(Integer::from(line2)),
     ]);
     let src = c"return require('vim._core.util').source_is_lua(...)";
-    match nlua_exec_cstr(src, args, kRetNilBool) {
+    match nlua_exec_cstr(src, args, RET_NIL_BOOL) {
         Ok(value) => value.as_boolean() == Some(true),
         Err(mut err) => {
             err.clear();
@@ -585,7 +585,7 @@ fn source_bracket(
         profile_script_stop(wait_start);
     }
     if got_int.get() {
-        emsg(gettext(e_interr));
+        emsg(gettext(E_INTERR));
     }
     estack_pop();
     if p_verbose() > 1 {

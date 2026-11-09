@@ -131,7 +131,7 @@ pub(crate) fn set_buffer_lines(
 
 /// `setbufline()` and `appendbufline()`, which differ only in `append`.
 fn buf_set_append_line(args: &[TypVal], result: &mut TypVal, append: bool) {
-    let did_emsg_before = did_emsg.get();
+    let did_emsg_before = DID_EMSG.get();
     let Some(buf) = arg_buf(args, 0, 0) else {
         result.write_number(1);
         return;
@@ -139,7 +139,7 @@ fn buf_set_append_line(args: &[TypVal], result: &mut TypVal, append: bool) {
     // The line number is resolved against the named buffer, and a bad one
     // reports; only then is anything written.
     let lnum = arg_lnum_buf(args, 1, Some(buf));
-    if did_emsg.get() == did_emsg_before {
+    if DID_EMSG.get() == did_emsg_before {
         set_buffer_lines(Some(buf), lnum, append, &args[2], result);
     }
 }
@@ -183,10 +183,10 @@ fn get_buffer_lines(
 
 /// `getbufline()` when `retlist`, `getbufoneline()` otherwise.
 fn getbufline(args: &[TypVal], result: &mut TypVal, retlist: bool) {
-    let did_emsg_before = did_emsg.get();
+    let did_emsg_before = DID_EMSG.get();
     let buf = arg_buf_chk(args, 0);
     let lnum = arg_lnum_buf(args, 1, buf);
-    if did_emsg.get() > did_emsg_before {
+    if DID_EMSG.get() > did_emsg_before {
         return;
     }
     let end = if args.len() > 2 {
@@ -199,9 +199,9 @@ fn getbufline(args: &[TypVal], result: &mut TypVal, retlist: bool) {
 
 /// `append({lnum}, {string/list})`.
 pub fn f_append(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let did_emsg_before = did_emsg.get();
+    let did_emsg_before = DID_EMSG.get();
     let lnum = arg_lnum(args, 0);
-    if did_emsg.get() == did_emsg_before {
+    if DID_EMSG.get() == did_emsg_before {
         set_buffer_lines(Buf::current_or_none(), lnum, true, &args[1], result);
     }
 }
@@ -218,9 +218,9 @@ pub fn f_setbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `setline({lnum}, {string/list})`.
 pub fn f_setline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let did_emsg_before = did_emsg.get();
+    let did_emsg_before = DID_EMSG.get();
     let lnum = arg_lnum(args, 0);
-    if did_emsg.get() == did_emsg_before {
+    if DID_EMSG.get() == did_emsg_before {
         set_buffer_lines(Buf::current_or_none(), lnum, false, &args[1], result);
     }
 }
@@ -250,12 +250,12 @@ pub fn f_getbufoneline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 /// `deletebufline({buf}, {first} [, {last}])` — 0 when the lines went.
 pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(1);
-    let did_emsg_before = did_emsg.get();
+    let did_emsg_before = DID_EMSG.get();
     let Some(buf) = arg_buf(args, 0, 0) else {
         return;
     };
     let first = arg_lnum_buf(args, 1, Some(buf));
-    if did_emsg.get() > did_emsg_before {
+    if DID_EMSG.get() > did_emsg_before {
         return;
     }
     let mut last = if args.len() > 2 {

@@ -581,7 +581,7 @@ fn do_mapclear(excmd: &mut ExArg, forceit: bool, abbr: bool) {
     let arg = excmd.line.arg();
     let local = arg == b"<buffer>";
     if !local && !arg.is_empty() {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     }
     map_clear_mode(Buf::current(), mode, local, abbr);
@@ -611,16 +611,16 @@ fn do_exmap(excmd: &mut ExArg, isabbrev: bool) {
     let mut parsed = MapArguments::default();
     let is_unmap = maptype == MAPTYPE_UNMAP;
     if str_to_mapargs(excmd.line.arg(), is_unmap, &mut parsed) != 0 {
-        emsg(gettext(e_invarg)); // invalid arguments
+        emsg(gettext(E_INVARG)); // invalid arguments
         return;
     }
     let answer = buf_do_map(maptype, &parsed, mode, isabbrev, Buf::current());
     match answer {
         1 => {
-            emsg(gettext(e_invarg));
+            emsg(gettext(E_INVARG));
         }
         2 => {
-            emsg(gettext(if isabbrev { e_noabbr } else { e_nomap }));
+            emsg(gettext(if isabbrev { E_NOABBR } else { E_NOMAP }));
         }
         5 | 6 => {
             let which = match (answer, isabbrev) {

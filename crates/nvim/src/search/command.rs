@@ -198,12 +198,12 @@ fn echo_size(plen: size_t, off_len: size_t, with_stats: bool) -> size_t {
     let available = {
         if ui_has(kUIMessages) {
             0 // adjusted below
-        } else if msg_scrolled.get() != 0 && !cmd_silent.get() {
+        } else if MSG_SCROLLED.get() != 0 && !CMD_SILENT.get() {
             // Use all the columns.
-            usize::try_from((Rows.get() - msg_row.get()) * Columns.get() - 1).unwrap_or(0)
+            usize::try_from((Rows.get() - MSG_ROW.get()) * Columns.get() - 1).unwrap_or(0)
         } else {
             // Use up to the 'showcmd' column.
-            let cells = (Rows.get() - msg_row.get() - 1) * Columns.get() + sc_col.get() - 1;
+            let cells = (Rows.get() - MSG_ROW.get() - 1) * Columns.get() + sc_col.get() - 1;
             usize::try_from(cells).unwrap_or(0)
         }
     };
@@ -233,8 +233,8 @@ fn reverse_echo(echo: &[u8]) -> Vec<u8> {
 fn echo_search_cmd(dirc: c_int, searchstr: &[u8], options: c_int) -> Option<(Echo, bool)> {
     if !(options & SEARCH_ECHO != 0
         && messaging()
-        && msg_silent.get() == 0
-        && (!cmd_silent.get() || !shortmess(ShmFlag::SEARCHCOUNT)))
+        && MSG_SILENT.get() == 0
+        && (!CMD_SILENT.get() || !shortmess(ShmFlag::SEARCHCOUNT)))
     {
         return None;
     }
@@ -243,7 +243,7 @@ fn echo_search_cmd(dirc: c_int, searchstr: &[u8], options: c_int) -> Option<(Ech
     msg_start();
     msg_ext_set_kind(c"search_cmd");
 
-    let off_text = if cmd_silent.get() {
+    let off_text = if CMD_SILENT.get() {
         Vec::new()
     } else {
         write_offset(dirc, search_offset())
@@ -258,14 +258,14 @@ fn echo_search_cmd(dirc: c_int, searchstr: &[u8], options: c_int) -> Option<(Ech
     };
     let plen = p.len();
 
-    let with_stats = !shortmess(ShmFlag::SEARCHCOUNT) || cmd_silent.get();
+    let with_stats = !shortmess(ShmFlag::SEARCHCOUNT) || CMD_SILENT.get();
     let size = echo_size(plen, off_text.len(), with_stats);
     let mut echo = vec![b' '; size];
     echo[size - 1] = b'\0';
 
     // Do not fill the buffer when cmd_silent is set: it is left empty
     // for the search-statistics feature.
-    if !cmd_silent.get() {
+    if !CMD_SILENT.get() {
         ui_busy_start();
         echo[0] = low_byte(dirc);
         let at = if utf_iscomposing_first(char_at(p)) {
@@ -297,7 +297,7 @@ fn echo_search_cmd(dirc: c_int, searchstr: &[u8], options: c_int) -> Option<(Ech
         gotocmdline(false);
         ui_flush();
         ui_busy_stop();
-        msg_nowait.set(true);
+        MSG_NOWAIT.set(true);
     }
 
     Some((echo, !shortmess(ShmFlag::SEARCHCOUNT)))
@@ -494,7 +494,7 @@ pub(crate) fn do_search(
             let mut show_top_bot_msg = false;
 
             let Some(source) = pattern_to_search(cstr::byte_at(&text, at), delim) else {
-                emsg(gettext(e_noprevre));
+                emsg(gettext(E_NOPREVRE));
                 break 'end false;
             };
             // The pattern searched for, as a span of `text` or as the
@@ -614,7 +614,7 @@ pub(crate) fn do_search(
             if let Some((mut echo, true)) = echoed {
                 let inexact = count != 1
                     || has_offset
-                    || (fdo_flags.get() & kOptFdoFlagSearch == 0 && {
+                    || (FDO_FLAGS.get() & kOptFdoFlagSearch == 0 && {
                         let (w, lnum) = (Win::current(), Win::current().w_cursor.lnum);
                         w.has_folding(lnum, None, None)
                     });

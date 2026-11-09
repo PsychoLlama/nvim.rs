@@ -736,7 +736,7 @@ fn adding_an_item_transfers_it_and_refuses_a_duplicate() {
 ///
 /// All six share one shape: the key is taken by *length*, so `'testt'`
 /// with 3 is the key `tes`; a duplicate reports `E685`; and with
-/// `emsg_skip` raised the failure is silent but the item is still not
+/// `EMSG_SKIP` raised the failure is silent but the item is still not
 /// leaked — the value it was given is released with it.
 #[test]
 fn adding_a_typed_value_takes_the_key_by_length() {

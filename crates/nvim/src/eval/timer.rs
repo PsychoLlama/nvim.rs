@@ -30,7 +30,7 @@ use crate::event::time::{OwnedTimer, TimerQueue};
 use crate::ex_docmd::{get_pressedreturn, set_pressedreturn};
 use crate::ex_eval::discard_current_exception;
 use crate::ex_eval::state::did_throw;
-use crate::message::state::{called_emsg, did_emsg};
+use crate::message::state::{CALLED_EMSG, DID_EMSG};
 use crate::os::libc::{int64_t, uint64_t};
 use crate::registry::SlotTable;
 use crate::types::{Callback, Timer, TypVal, VarNumber};
@@ -101,8 +101,8 @@ pub fn add_timer_info_all(list: &ListRef) {
 /// The timer numbered `id` is due: run its callback.
 fn timer_due_cb(id: uint64_t) {
     let number = id.cast_signed();
-    let save_did_emsg = did_emsg.get();
-    let called_emsg_before = called_emsg.get();
+    let save_did_emsg = DID_EMSG.get();
+    let called_emsg_before = CALLED_EMSG.get();
     let save_ex_pressedreturn = get_pressedreturn();
 
     // The callback is copied out: the call below runs Vimscript, which may
@@ -134,11 +134,11 @@ fn timer_due_cb(id: uint64_t) {
     let mut callback = callback;
     callback_free(&mut callback);
 
-    let failed = called_emsg.get() > called_emsg_before && did_emsg.get() != 0;
+    let failed = CALLED_EMSG.get() > called_emsg_before && DID_EMSG.get() != 0;
     if failed && did_throw.get() {
         discard_current_exception();
     }
-    did_emsg.set(save_did_emsg);
+    DID_EMSG.set(save_did_emsg);
     set_pressedreturn(save_ex_pressedreturn);
     clear_local(&mut rettv);
 

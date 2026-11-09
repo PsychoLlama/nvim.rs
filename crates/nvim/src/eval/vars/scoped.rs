@@ -146,60 +146,61 @@ pub(crate) fn tv_to_optval(tv: &TypVal, opt_idx: OptIndex, name: &[u8]) -> (OptV
     let mut nbuf = NumBuf::new();
     let mut err = false;
     let is_tty_opt = is_tty_option(name);
-    let option_has_bool = !is_tty_opt && option_has_type(opt_idx, kOptValTypeBoolean);
-    let option_has_num = !is_tty_opt && option_has_type(opt_idx, kOptValTypeNumber);
-    let option_has_str = is_tty_opt || option_has_type(opt_idx, kOptValTypeString);
+    let option_has_bool = !is_tty_opt && option_has_type(opt_idx, OPT_VAL_TYPE_BOOLEAN);
+    let option_has_num = !is_tty_opt && option_has_type(opt_idx, OPT_VAL_TYPE_NUMBER);
+    let option_has_str = is_tty_opt || option_has_type(opt_idx, OPT_VAL_TYPE_STRING);
 
-    let value =
-        if !is_tty_opt && get_option(opt_idx).flags & kOptFlagFunc as uint32_t != 0 && tv.is_func()
-        {
-            // An option that takes a function reference or a lambda stores
-            // the name of one.
-            OptVal::string(ApiString::from_bytes(encode_tv2string(tv).as_bytes()))
-        } else if option_has_bool || option_has_num {
-            let read = if option_has_num {
-                tv_get_number_chk(tv)
-            } else {
-                tv_get_bool_chk(tv)
-            };
-            err = read.is_err();
-            let n = read.unwrap_or(0);
-            // A String answers 0 both when it *is* zero and when it is not a
-            // number at all, so a zero from a String has to be re-read: it
-            // is only honest if the string is all '0's and nothing else.
-            if !err && tv.v_type() == VAR_STRING && n == 0 {
-                let s = tv.string_bytes();
-                let zeros = s.iter().take_while(|&&byte| byte == b'0').count();
-                if zeros == 0 || zeros != s.len() {
-                    err = true;
-                    let option = msg_bytes(name);
-                    let arg1 = msg_bytes(s);
-                    semsg!("E521: Number required: &{option} = '{arg1}'");
-                }
-            }
-            if option_has_num {
-                OptVal::Number(n)
-            } else {
-                OptVal::Boolean(tristate_from_int(n))
-            }
-        } else if option_has_str {
-            // Never set a string option to `v:true` or `v:null`.
-            if tv.v_type() != VAR_BOOL && tv.v_type() != VAR_SPECIAL {
-                let strval = nbuf.string_chk(tv).ok();
-                err = strval.is_none();
-                OptVal::string(strval.map_or(ApiString::NULL, |text| {
-                    ApiString::from_bytes(text.to_bytes())
-                }))
-            } else {
-                if !is_tty_opt {
-                    err = true;
-                    emsg_static(e_string_required);
-                }
-                OptVal::Nil
-            }
+    let value = if !is_tty_opt
+        && get_option(opt_idx).flags & OPT_FLAG_FUNC as uint32_t != 0
+        && tv.is_func()
+    {
+        // An option that takes a function reference or a lambda stores
+        // the name of one.
+        OptVal::string(ApiString::from_bytes(encode_tv2string(tv).as_bytes()))
+    } else if option_has_bool || option_has_num {
+        let read = if option_has_num {
+            tv_get_number_chk(tv)
         } else {
-            unreachable!("every option has at least one type");
+            tv_get_bool_chk(tv)
         };
+        err = read.is_err();
+        let n = read.unwrap_or(0);
+        // A String answers 0 both when it *is* zero and when it is not a
+        // number at all, so a zero from a String has to be re-read: it
+        // is only honest if the string is all '0's and nothing else.
+        if !err && tv.v_type() == VAR_STRING && n == 0 {
+            let s = tv.string_bytes();
+            let zeros = s.iter().take_while(|&&byte| byte == b'0').count();
+            if zeros == 0 || zeros != s.len() {
+                err = true;
+                let option = msg_bytes(name);
+                let arg1 = msg_bytes(s);
+                semsg!("E521: Number required: &{option} = '{arg1}'");
+            }
+        }
+        if option_has_num {
+            OptVal::Number(n)
+        } else {
+            OptVal::Boolean(tristate_from_int(n))
+        }
+    } else if option_has_str {
+        // Never set a string option to `v:true` or `v:null`.
+        if tv.v_type() != VAR_BOOL && tv.v_type() != VAR_SPECIAL {
+            let strval = nbuf.string_chk(tv).ok();
+            err = strval.is_none();
+            OptVal::string(strval.map_or(ApiString::NULL, |text| {
+                ApiString::from_bytes(text.to_bytes())
+            }))
+        } else {
+            if !is_tty_opt {
+                err = true;
+                emsg_static(E_STRING_REQUIRED);
+            }
+            OptVal::Nil
+        }
+    } else {
+        unreachable!("every option has at least one type");
+    };
     (value, err)
 }
 

@@ -17,7 +17,7 @@ use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 use crate::lua::abi::lua_Integer;
 use crate::lua::stack::{At, Kind, Raise, Stack};
 use crate::lua_functions;
-use crate::message::{e_no_spell, emsg};
+use crate::message::{E_NO_SPELL, emsg};
 use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
 use crate::spell::parse_spelllang;
@@ -59,7 +59,7 @@ fn spell_check_text(stack: &mut Stack) -> Result<c_int, Raise> {
         win.w_onebuf_opt.wo_spell = 1;
     }
     if win.syn_block().b_p_spl.first_byte() == 0 {
-        emsg(gettext(e_no_spell));
+        emsg(gettext(E_NO_SPELL));
         win.w_onebuf_opt.wo_spell = wo_spell_save;
         return Ok(0);
     }

@@ -43,7 +43,7 @@ pub(crate) fn serialize_request(
     let kind = if is_request {
         kMessageTypeRequest
     } else {
-        kMessageTypeNotification
+        MESSAGE_TYPE_NOTIFICATION
     };
     packer.push_byte(kind.to_le_bytes()[0]);
     if is_request {
@@ -74,7 +74,7 @@ pub fn serialize_response(
     let err_type = err.kind();
     let errored = err_type != kErrorTypeNone;
 
-    if errored && type_0 == kMessageTypeNotification {
+    if errored && type_0 == MESSAGE_TYPE_NOTIFICATION {
         report_failed_notification(channel_id, handler, err);
         return;
     }

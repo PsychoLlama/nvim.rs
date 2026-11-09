@@ -347,7 +347,7 @@ pub(crate) fn current_quote(
         }
     } else {
         op.start = Win::current().w_cursor;
-        op.motion_type = kMTCharWise;
+        op.motion_type = MT_CHAR_WISE;
     }
 
     // The end position.

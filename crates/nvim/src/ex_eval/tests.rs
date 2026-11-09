@@ -693,7 +693,7 @@ fn an_abort_function_stops_at_its_first_error_unless_caught() {
         "  call add(g:log, 'b')",
         "endfunction",
     ]);
-    // Under `:silent!` (the fixture's) an error sets no `did_emsg`, so not
+    // Under `:silent!` (the fixture's) an error sets no `DID_EMSG`, so not
     // even an `abort` function stops.
     assert_eq!(logged(&fx, &["call g:EeAbort()"]), "['a', 'b']");
     assert_eq!(logged(&fx, &["call g:EeNoAbort()"]), "['a', 'b']");

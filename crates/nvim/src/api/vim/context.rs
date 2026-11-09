@@ -64,14 +64,14 @@ pub fn nvim_get_context(opts: &mut KeyDict_context) -> Result<ApiDict, Error> {
 
 pub fn nvim_load_context(dict: ApiDict) -> Result<Object, Error> {
     let mut ctx: Context = Context::default();
-    let save_did_emsg: ::core::ffi::c_int = did_emsg.get();
-    did_emsg.set(0);
+    let save_did_emsg: ::core::ffi::c_int = DID_EMSG.get();
+    DID_EMSG.set(0);
     let read = ctx_from_dict(dict, &mut ctx);
     if read.is_ok() {
         ctx_restore(Some(&ctx), CTX_ALL);
     }
     ctx_free(&mut ctx);
-    did_emsg.set(save_did_emsg);
+    DID_EMSG.set(save_did_emsg);
     read.map(|_| Object::Nil)
 }
 

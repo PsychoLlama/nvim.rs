@@ -7,7 +7,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::api::keysets::{
     KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_ns_opts, KeyDict_set_decoration_provider,
@@ -59,10 +58,10 @@ pub use self::decor::*;
 pub use self::ns::*;
 pub use self::query::*;
 pub use self::set::*;
-pub const kExtmarkHighlight: ExtmarkType = 32;
-pub const kExtmarkVirtLines: ExtmarkType = 16;
-pub const kExtmarkVirtText: ExtmarkType = 8;
-pub const kExtmarkSign: ExtmarkType = 2;
+pub const EXTMARK_HIGHLIGHT: ExtmarkType = 32;
+pub const EXTMARK_VIRT_LINES: ExtmarkType = 16;
+pub const EXTMARK_VIRT_TEXT: ExtmarkType = 8;
+pub const EXTMARK_SIGN: ExtmarkType = 2;
 /// No allocated decoration: the index a `DecorSignHighlight` chain ends on.
 pub const DECOR_ID_INVALID: uint32_t = u32::MAX;
 pub(crate) use crate::decoration::{

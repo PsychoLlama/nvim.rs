@@ -25,9 +25,9 @@ use crate::types::{ApiDict, ApiString, Error, Integer, Object, ScriptCtx};
 use crate::api::private::validate::err_bad_value;
 
 use super::{
-    find_option_len, get_option, kOptFlagComma, kOptFlagFlagList, kOptFlagNoDup, kOptScopeBuf,
-    kOptScopeWin, option_default, option_get_type, option_has_scope, option_is_global_local,
-    option_last_set, option_was_set, optval_type_name,
+    OPT_FLAG_COMMA, OPT_FLAG_FLAG_LIST, OPT_FLAG_NO_DUP, OPT_SCOPE_BUF, OPT_SCOPE_WIN,
+    find_option_len, get_option, option_default, option_get_type, option_has_scope,
+    option_is_global_local, option_last_set, option_was_set, optval_type_name,
 };
 
 /// Append `key: value` to the dictionary.
@@ -94,12 +94,12 @@ fn last_set(opt_idx: OptIndex, opt_flags: OptionSetFlags, buffer: Buf, win: Win)
         return option_last_set(opt_idx);
     }
     let mut script_ctx = ScriptCtx::NONE;
-    if option_has_scope(opt_idx, kOptScopeBuf) {
-        let idx = opt.scope_idx[kOptScopeBuf as usize].cast_unsigned();
+    if option_has_scope(opt_idx, OPT_SCOPE_BUF) {
+        let idx = opt.scope_idx[OPT_SCOPE_BUF as usize].cast_unsigned();
         script_ctx = buffer.b_p_script_ctx[idx];
     }
-    if option_has_scope(opt_idx, kOptScopeWin) {
-        let idx = opt.scope_idx[kOptScopeWin as usize].cast_unsigned();
+    if option_has_scope(opt_idx, OPT_SCOPE_WIN) {
+        let idx = opt.scope_idx[OPT_SCOPE_WIN as usize].cast_unsigned();
         script_ctx = win.w_onebuf_opt.wo_script_ctx[idx];
     }
     if opt_flags != OptionSetFlags::LOCAL && script_ctx.sc_sid == 0 {
@@ -121,9 +121,9 @@ pub(crate) fn vimoption2dict(
     let mut dict = DictBuilder::with_capacity(13 as size_t);
 
     // An option in more than one scope reports the narrowest.
-    let scope = if option_has_scope(opt_idx, kOptScopeBuf) {
+    let scope = if option_has_scope(opt_idx, OPT_SCOPE_BUF) {
         c"buf"
-    } else if option_has_scope(opt_idx, kOptScopeWin) {
+    } else if option_has_scope(opt_idx, OPT_SCOPE_WIN) {
         c"win"
     } else {
         c"global"
@@ -139,8 +139,8 @@ pub(crate) fn vimoption2dict(
         (c"shortname", name_value(opt.shortname)),
         (c"scope", name_value(Some(scope))),
         (c"global_local", bool_value(option_is_global_local(opt_idx))),
-        (c"commalist", bool_value(opt.flags & kOptFlagComma != 0)),
-        (c"flaglist", bool_value(opt.flags & kOptFlagFlagList != 0)),
+        (c"commalist", bool_value(opt.flags & OPT_FLAG_COMMA != 0)),
+        (c"flaglist", bool_value(opt.flags & OPT_FLAG_FLAG_LIST != 0)),
         (c"was_set", bool_value(option_was_set(opt_idx))),
         (c"last_set_sid", int_value(Integer::from(script_ctx.sc_sid))),
         (
@@ -155,7 +155,7 @@ pub(crate) fn vimoption2dict(
         (c"default", option_default(opt_idx).into_object()),
         (
             c"allows_duplicates",
-            bool_value(opt.flags & kOptFlagNoDup == 0),
+            bool_value(opt.flags & OPT_FLAG_NO_DUP == 0),
         ),
     ];
     for (key, value) in entries {

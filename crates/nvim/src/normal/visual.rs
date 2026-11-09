@@ -32,7 +32,7 @@ use crate::getchar::{beep_flush, stuff_empty, typeahead};
 use crate::global_cell::GlobalCell;
 use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::cluster_len;
-use crate::message::state::msg_silent;
+use crate::message::state::MSG_SILENT;
 use crate::mouse::setmouse;
 use crate::mouse::state::mouse_dragging;
 use crate::normal::defs::{CmdArg, Outcome};
@@ -507,7 +507,7 @@ fn reselect_scaled(cmd_arg: &mut CmdArg) {
         may_start_select(Key::ascii(b'c'));
     }
     setmouse();
-    if p_smd() && msg_silent.get() == 0 {
+    if p_smd() && MSG_SILENT.get() == 0 {
         redraw_cmdline.set(true);
     }
     // The count multiplies the size of the remembered selection, and it
@@ -667,7 +667,7 @@ pub(crate) fn n_start_visual_mode(c: Key) {
     may_trigger_modechanged();
     setmouse();
     conceal_check_cursor_line();
-    if p_smd() && msg_silent.get() == 0 {
+    if p_smd() && MSG_SILENT.get() == 0 {
         redraw_cmdline.set(true);
     }
     // Seed the "what was highlighted last time" pair so the first redraw

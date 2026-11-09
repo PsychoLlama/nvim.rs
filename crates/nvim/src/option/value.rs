@@ -22,10 +22,10 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::option::defs::kOptValTypeBoolean;
-use crate::option::defs::kOptValTypeNil;
-use crate::option::defs::kOptValTypeNumber;
-use crate::option::defs::kOptValTypeString;
+use crate::option::defs::OPT_VAL_TYPE_BOOLEAN;
+use crate::option::defs::OPT_VAL_TYPE_NIL;
+use crate::option::defs::OPT_VAL_TYPE_NUMBER;
+use crate::option::defs::OPT_VAL_TYPE_STRING;
 use core::ffi::{CStr, c_int};
 
 use crate::memory::{ThinCString, XString};
@@ -52,10 +52,10 @@ pub(crate) const fn tristate(word: c_int) -> Option<bool> {
 /// What `:set` and `nvim_get_option_info` call each value type.
 pub(crate) fn optval_type_name(type_0: OptValType) -> &'static CStr {
     match type_0 {
-        kOptValTypeNil => c"nil",
-        kOptValTypeBoolean => c"boolean",
-        kOptValTypeNumber => c"number",
-        kOptValTypeString => c"string",
+        OPT_VAL_TYPE_NIL => c"nil",
+        OPT_VAL_TYPE_BOOLEAN => c"boolean",
+        OPT_VAL_TYPE_NUMBER => c"number",
+        OPT_VAL_TYPE_STRING => c"string",
         _ => unreachable!("option value type {type_0}"),
     }
 }

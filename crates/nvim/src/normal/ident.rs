@@ -35,7 +35,7 @@ use crate::mapping::add_map;
 use crate::mark::setpcmark;
 use crate::mbyte::{cluster_len, head_off};
 use crate::memline::Lines;
-use crate::message::e_noident;
+use crate::message::E_NOIDENT;
 use crate::message::emsg;
 use crate::normal::defs::CmdArg;
 use crate::normal::{
@@ -108,7 +108,7 @@ fn build_keywordprg_cmd(
         n -= 1;
     }
     if n == 0 {
-        emsg(gettext(e_noident));
+        emsg(gettext(E_NOIDENT));
         return Err(Failed);
     }
     // `man` and `man -s` take the count as a section number, which goes
@@ -248,7 +248,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
     let kp_help =
         kp_helpbang || keywordprg.is_empty() || keywordprg == c":he" || keywordprg == c":help";
     if kp_help && !kp_helpbang && text.iter().all(|&b| ascii_iswhite(c_int::from(b))) {
-        emsg(gettext(e_noident));
+        emsg(gettext(E_NOIDENT));
         return;
     }
     let kp_ex = cstr::byte_at(kp, 0) == b':';

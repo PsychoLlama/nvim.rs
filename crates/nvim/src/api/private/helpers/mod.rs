@@ -44,7 +44,7 @@ use crate::getchar::state::got_int;
 use crate::guard::{SavedSctx, Script};
 use crate::highlight_group::syn_id2name;
 use crate::mark::setmark_at;
-use crate::message::state::did_emsg;
+use crate::message::state::DID_EMSG;
 use crate::os::libc::uint64_t;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
@@ -141,7 +141,7 @@ pub(crate) fn try_enter(tstate: &mut TryState) {
         got_int: c_int::from(got_int.get()),
         did_throw: did_throw.get(),
         need_rethrow: c_int::from(need_rethrow.get()),
-        did_emsg: did_emsg.get(),
+        did_emsg: DID_EMSG.get(),
     };
     *tstate = saved;
     // Errors go to a list of the call's own from here on, so that an
@@ -151,7 +151,7 @@ pub(crate) fn try_enter(tstate: &mut TryState) {
     got_int.set(false);
     did_throw.set(false);
     need_rethrow.set(false);
-    did_emsg.set(0);
+    DID_EMSG.set(0);
     trylevel.set(trylevel.get() + 1);
 }
 
@@ -160,7 +160,7 @@ pub(crate) fn try_enter(tstate: &mut TryState) {
 pub(crate) fn try_leave(tstate: &TryState) -> Result<(), Error> {
     debug_assert!(trylevel.get() > 0);
     trylevel.set(trylevel.get() - 1);
-    did_emsg.set(0);
+    DID_EMSG.set(0);
     force_abort.set(false);
 
     // The call's own list, which `try_enter` started and which stays the
@@ -207,7 +207,7 @@ pub(crate) fn try_leave(tstate: &TryState) -> Result<(), Error> {
     got_int.set(saved.got_int != 0);
     did_throw.set(saved.did_throw);
     need_rethrow.set(saved.need_rethrow != 0);
-    did_emsg.set(saved.did_emsg);
+    DID_EMSG.set(saved.did_emsg);
 
     match caught {
         Some(e) => Err(e),

@@ -72,7 +72,7 @@ const CB_MAX_ERROR: u8 = 3;
 /// Ask `nlua_call_ref` for all return values (an `Array`).
 const kRetMulti: LuaRetMode = 3;
 /// Ask `nlua_call_ref` for one value, interpreted as a boolean.
-const kRetNilBool: LuaRetMode = 1;
+const RET_NIL_BOOL: LuaRetMode = 1;
 
 /// The registered providers, in registration order — which is the order every
 /// callback runs in. Entries are never removed: unregistering clears the
@@ -139,7 +139,7 @@ fn decor_provider_invoke(
     let want_list = res.is_some();
 
     let locked = Lock::text();
-    let mode = if want_list { kRetMulti } else { kRetNilBool };
+    let mode = if want_list { kRetMulti } else { RET_NIL_BOOL };
     // The call owns `args` from here; a reference that names nothing pushes
     // nil, which the protected call reports.
     let ret = match nlua_call_ref_reporting(callback, Some(name), args, mode) {

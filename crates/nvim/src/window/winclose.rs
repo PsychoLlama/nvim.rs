@@ -33,7 +33,7 @@ use crate::drawscreen::state::{redraw_cmdline, redraw_tabline};
 use crate::ex_eval::aborting;
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
-use crate::message::e_floatonly;
+use crate::message::E_FLOATONLY;
 use crate::message::internal_error;
 use crate::normal::reset_visual_and_resel;
 use crate::option::vars::{p_ea, p_ead, p_ru};
@@ -157,7 +157,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClos
     }
     if only_window(win, None) && (first_tab().next().is_none() || last_win().w_floating) {
         if first_tab().next().is_some() {
-            err_raw(e_floatonly);
+            err_raw(E_FLOATONLY);
         }
         unclose_win_buffer(win, bufref, did_decrement);
         return Err(NotClosed);
@@ -304,7 +304,7 @@ fn close_the_floats(win: Win, force: bool) -> Result<(), NotClosed> {
         return Err(NotClosed);
     }
     if !force && !can_close_floats(None) {
-        err_raw(e_floatonly);
+        err_raw(E_FLOATONLY);
         return Err(NotClosed);
     }
     // Close the last window until there are no floating windows left. The
@@ -498,7 +498,7 @@ pub(crate) fn close_othertab(
         // Would closing this window leave only floating windows?
         if tab_last_win(tabpage).w_floating && only_window(win, Some(tabpage)) {
             if !force && !can_close_floats(Some(tabpage)) {
-                err_raw(e_floatonly);
+                err_raw(E_FLOATONLY);
                 break 'leave_open;
             }
             // Close the last window until there are no floating windows left.
@@ -553,7 +553,7 @@ pub(crate) fn close_othertab(
         // Autocommands may again leave only floats; check again, but this time
         // without bothering to close them.
         if tab_last_win(tabpage).w_floating && only_window(win, Some(tabpage)) {
-            err_raw(e_floatonly);
+            err_raw(E_FLOATONLY);
             break 'leave_open;
         }
 

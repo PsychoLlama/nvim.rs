@@ -14,10 +14,10 @@
 //!
 //! - a **plain string** — concatenated, with a comma between the parts for
 //!   a comma-separated option;
-//! - a **key-value list** (`kOptFlagComma | kOptFlagColon`, e.g.
+//! - a **key-value list** (`OPT_FLAG_COMMA | OPT_FLAG_COLON`, e.g.
 //!   'listchars', 'fillchars') — an added `key:value` replaces the item
 //!   with the same key rather than sitting beside it;
-//! - a **flag-letter set** (`kOptFlagFlagList`) — duplicate letters are
+//! - a **flag-letter set** (`OPT_FLAG_FLAG_LIST`) — duplicate letters are
 //!   dropped after the concatenation.
 
 #![deny(
@@ -40,8 +40,9 @@ use crate::options::kOptKeywordprg;
 use crate::os::libc::uint32_t;
 
 use super::{
-    OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, OptSlot, SetOp, kOptFlagColon, kOptFlagComma,
-    kOptFlagFlagList, kOptFlagNoDup, kOptFlagOneComma, option_expand, option_var,
+    OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, OPT_FLAG_COLON, OPT_FLAG_COMMA,
+    OPT_FLAG_FLAG_LIST, OPT_FLAG_NO_DUP, OPT_FLAG_ONE_COMMA, OptSlot, SetOp, option_expand,
+    option_var,
 };
 
 /// The byte at `i`, the end of `text` reading as its terminator.
@@ -78,7 +79,7 @@ pub(crate) fn stropt_copy_value(arg: &[u8]) -> (Vec<u8>, usize) {
 /// the backslash count is what decides that: an even number of backslashes
 /// before it, or a single backslash that is itself preceded by a comma.
 pub(crate) fn find_dup_item(origval: &[u8], newval: &[u8], flags: uint32_t) -> Option<usize> {
-    let comma_list = flags & kOptFlagComma as uint32_t != 0;
+    let comma_list = flags & OPT_FLAG_COMMA as uint32_t != 0;
     let mut bs = 0;
     for s in 0..origval.len() {
         let starts_item = !comma_list || s == 0 || (origval[s - 1] == b',' && bs & 1 == 0);
@@ -109,13 +110,13 @@ pub(crate) fn stropt_concat_with_comma(
     flags: uint32_t,
 ) -> Vec<u8> {
     let separated =
-        flags & kOptFlagComma as uint32_t != 0 && !origval.is_empty() && !newval.is_empty();
+        flags & OPT_FLAG_COMMA as uint32_t != 0 && !origval.is_empty() && !newval.is_empty();
     let comma: &[u8] = if separated { b"," } else { b"" };
     if op == OP_ADDING {
         let mut len = origval.len();
         if separated
             && len > 1
-            && flags & kOptFlagOneComma as uint32_t == kOptFlagOneComma as uint32_t
+            && flags & OPT_FLAG_ONE_COMMA as uint32_t == OPT_FLAG_ONE_COMMA as uint32_t
             && origval[len - 1] == b','
             && origval[len - 2] != b'\\'
         {
@@ -138,7 +139,7 @@ pub(crate) fn stropt_remove_val(origval: &[u8], flags: uint32_t, at: usize, len:
         return origval.to_vec();
     }
     let (mut at, mut len) = (at, len);
-    if flags & kOptFlagComma as uint32_t != 0 {
+    if flags & OPT_FLAG_COMMA as uint32_t != 0 {
         if at == 0 {
             if self::at(origval, len) == b',' {
                 len += 1;
@@ -260,7 +261,7 @@ pub(crate) fn stropt_handle_keymatch(
                 }
                 None => {
                     // An item with no key of its own is matched whole.
-                    let found = find_dup_item(&newval, item, kOptFlagComma as uint32_t);
+                    let found = find_dup_item(&newval, item, OPT_FLAG_COMMA as uint32_t);
                     match (op, found) {
                         (OP_ADDING | OP_PREPENDING, None) => place(&mut newval, item, op),
                         (OP_REMOVING, Some(found)) => {
@@ -286,9 +287,9 @@ pub(crate) fn stropt_handle_keymatch(
 /// a character, as upstream's `vim_strchr` looks: a byte above 0x7f is the
 /// two-byte encoding of its code point.
 pub(crate) fn stropt_remove_dupflags(newval: &mut Vec<u8>, flags: uint32_t) {
-    // Upstream's `flags & kOptFlagOneComma`, which any comma list passes.
-    let one_comma = flags & kOptFlagOneComma as uint32_t != 0;
-    let comma_list = flags & kOptFlagComma as uint32_t != 0;
+    // Upstream's `flags & OPT_FLAG_ONE_COMMA`, which any comma list passes.
+    let one_comma = flags & OPT_FLAG_ONE_COMMA as uint32_t != 0;
+    let comma_list = flags & OPT_FLAG_COMMA as uint32_t != 0;
     let mut s = 0;
     while s < newval.len() {
         let letter = c_int::from(newval[s]);
@@ -337,15 +338,15 @@ pub(crate) fn stropt_get_newval(
 
     // Only a whole value or a comma-separated one is expanded; a `+=`
     // on a non-list option would expand the concatenation.
-    if *op == OP_NONE || flags & kOptFlagComma as uint32_t != 0 {
+    if *op == OP_NONE || flags & OPT_FLAG_COMMA as uint32_t != 0 {
         let value = XString::from_vec(newval);
         let value = option_expand(opt_idx, Some(value.as_cstr())).unwrap_or(value);
         newval = value.into_vec();
         newval.pop(); // the terminator
     }
 
-    let keyed = flags & kOptFlagComma as uint32_t != 0
-        && flags & kOptFlagColon as uint32_t != 0
+    let keyed = flags & OPT_FLAG_COMMA as uint32_t != 0
+        && flags & OPT_FLAG_COLON as uint32_t != 0
         && *op != OP_NONE;
     let matched = if keyed {
         stropt_handle_keymatch(origval, &newval, *op)
@@ -357,7 +358,7 @@ pub(crate) fn stropt_get_newval(
     } else {
         let mut len = 0;
         let mut at = origval.len();
-        if *op == OP_REMOVING || flags & kOptFlagNoDup as uint32_t != 0 {
+        if *op == OP_REMOVING || flags & OPT_FLAG_NO_DUP as uint32_t != 0 {
             len = newval.len();
             let found = find_dup_item(origval, &newval, flags);
             // Adding something already there changes nothing.
@@ -376,7 +377,7 @@ pub(crate) fn stropt_get_newval(
         }
     }
 
-    if flags & kOptFlagFlagList as uint32_t != 0 {
+    if flags & OPT_FLAG_FLAG_LIST as uint32_t != 0 {
         stropt_remove_dupflags(&mut newval, flags);
     }
 

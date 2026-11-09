@@ -31,7 +31,7 @@ use crate::getchar::char_avail;
 use crate::global_cell::GlobalCell;
 use crate::grid::{grid_line_flush, grid_line_puts, grid_line_start};
 use crate::mbyte::{cluster_len, encode_char};
-use crate::message::state::msg_silent;
+use crate::message::state::MSG_SILENT;
 use crate::message::{msg_grid_validate, msg_grid_view};
 use crate::normal::{
     SHOWCMD_BUFLEN, SHOWCMD_COLS, VisualSelection, showcmd_is_clear, showcmd_visual,
@@ -294,7 +294,7 @@ pub(crate) fn clear_showcmd() {
 /// Answers whether the area was redrawn: the caller uses that to decide
 /// whether it must put the cursor back.
 pub(crate) fn add_to_showcmd(c: Key) -> bool {
-    if !p_sc() || msg_silent.get() != 0 || ex_normal_busy.get() != 0 {
+    if !p_sc() || MSG_SILENT.get() != 0 || ex_normal_busy.get() != 0 {
         return false;
     }
     // A Visual size sitting in the area is replaced, not appended to.

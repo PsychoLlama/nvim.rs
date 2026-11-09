@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::api::private::helpers::{
     api_dict_to_keydict, api_set_sctx, api_typename, find_buffer_by_handle, try_enter, try_leave,
@@ -28,7 +27,7 @@ use crate::api::keysets::{
 use crate::api::private::helpers::TryState;
 use crate::lua::executor::{api_new_luaref, release_luaref};
 use crate::mbyte::mb_islower;
-use crate::message::state::{msg_col, redir_off};
+use crate::message::state::{MSG_COL, REDIR_OFF};
 use crate::message::{capture_finish, capture_start};
 use crate::os::libc::{int64_t, size_t, uint64_t};
 use crate::regexp::RE_MAGIC;
@@ -54,6 +53,6 @@ pub use self::cmd::*;
 pub(crate) use self::cmdline::*;
 pub use self::parse::*;
 pub use self::user::*;
-pub const kDirectionNotSet: Direction = 0;
+pub const DIRECTION_NOT_SET: Direction = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;

@@ -194,7 +194,7 @@ fn name_length(name: &[u8], options: FileNameOpts) -> usize {
 /// one are accepted, as `last_set_msg()` writes the latter.
 fn trailing_line_number(after_name: &[u8]) -> Option<c_long> {
     let english: &[u8] = b" line ";
-    let localized = gettext(line_msg).to_bytes();
+    let localized = gettext(LINE_MSG).to_bytes();
 
     let mut p = if after_name.starts_with(english) {
         english.len()

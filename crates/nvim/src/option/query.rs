@@ -31,8 +31,8 @@ use crate::eval::{callback_from_typval, eval_expr};
 use crate::memory::XString;
 use crate::option::defs::{BsFlag, CpoFlag, OptVal, OptionSetFlags, ShmFlag};
 use crate::option::vars::{
-    P_BS, P_CPO, P_FFS, P_SHM, P_SISO, P_SO, bkc_flags, p_magic, p_sh, p_siso, p_so, p_wc, p_wcm,
-    ve_flags,
+    BKC_FLAGS, P_BS, P_CPO, P_FFS, P_SHM, P_SISO, P_SO, VE_FLAGS, p_magic, p_sh, p_siso, p_so,
+    p_wc, p_wcm,
 };
 use crate::options::*;
 use crate::optionstr::OptStringRef;
@@ -45,8 +45,8 @@ use crate::state::mode::State;
 use crate::types::{Callback, ExArg, Failed, OptInt, ScriptId, TypVal};
 
 use super::{
-    EOL_DOS, EOL_MAC, EOL_UNIX, get_option, get_varp, kOptScopeBuf, kOptScopeWin, option_has_scope,
-    set_option_direct, slot_value,
+    EOL_DOS, EOL_MAC, EOL_UNIX, OPT_SCOPE_BUF, OPT_SCOPE_WIN, get_option, get_varp,
+    option_has_scope, set_option_direct, slot_value,
 };
 
 use crate::state::MODE_TERMINAL;
@@ -207,7 +207,7 @@ pub(crate) fn can_bs(what: BsFlag) -> bool {
 /// 'backupcopy' as flags, local where set.
 pub(crate) fn get_bkc_flags(buffer: Buf) -> c_uint {
     match buffer.b_bkc_flags {
-        0 => bkc_flags.get(),
+        0 => BKC_FLAGS.get(),
         local => local,
     }
 }
@@ -218,7 +218,7 @@ pub(crate) fn get_bkc_flags(buffer: Buf) -> c_uint {
 ///
 pub(crate) fn get_ve_flags(window: Win) -> c_uint {
     let flags = match window.w_onebuf_opt.wo_ve_flags {
-        0 => ve_flags.get(),
+        0 => VE_FLAGS.get(),
         local => local,
     };
     flags & !(kOptVeFlagNone | kOptVeFlagNoneU)
@@ -488,7 +488,7 @@ pub(crate) fn fish_like_shell() -> bool {
 /// Every buffer-local (`buffer`) or window-local option of the current
 /// buffer and window, as a dictionary — what `b:` and `w:` expose.
 pub(crate) fn get_winbuf_options(buffer: bool) -> DictRef {
-    let scope = if buffer { kOptScopeBuf } else { kOptScopeWin };
+    let scope = if buffer { OPT_SCOPE_BUF } else { OPT_SCOPE_WIN };
     let dict = tv_dict_alloc();
     for opt_idx in kOptAleph..kOptCount {
         if !option_has_scope(opt_idx, scope) {

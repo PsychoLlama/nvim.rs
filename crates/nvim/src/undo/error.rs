@@ -18,7 +18,7 @@
 use core::ffi::{CStr, c_int};
 
 use crate::memory::ThinCString;
-use crate::message::{e_modifiable, e_sandbox, e_textlock, give_warning, msg};
+use crate::message::{E_MODIFIABLE, E_SANDBOX, E_TEXTLOCK, give_warning, msg};
 use crate::message_fmt::{emsg_text, msg_cstr, msg_cstr_opt};
 use crate::os::cshim::gettext;
 use crate::tr;
@@ -29,13 +29,13 @@ use super::verbosely;
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum UndoError {
     /// 'modifiable' is off.
-    #[error("{}", msg_cstr(gettext(e_modifiable)))]
+    #[error("{}", msg_cstr(gettext(E_MODIFIABLE)))]
     NotModifiable,
     /// In the sandbox.
-    #[error("{}", msg_cstr(gettext(e_sandbox)))]
+    #[error("{}", msg_cstr(gettext(E_SANDBOX)))]
     Sandbox,
     /// The text is locked.
-    #[error("{}", msg_cstr(gettext(e_textlock)))]
+    #[error("{}", msg_cstr(gettext(E_TEXTLOCK)))]
     Textlock,
     /// The region to save runs past the end of the buffer.
     #[error("{}", tr!("E881: Line count changed unexpectedly"))]

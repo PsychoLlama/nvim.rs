@@ -21,8 +21,8 @@ use crate::eval::typval::{
     NumBuf, blob_equal, dict_equal, list_equal, tv_clear, tv_equal, tv_get_float, tv_get_number,
 };
 use crate::eval::{
-    _ISalnum, EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_IS, EXPR_ISNOT, EXPR_MATCH, EXPR_NEQUAL,
-    EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, EXPR_UNKNOWN, e_invalblob, pattern_match,
+    _ISalnum, E_INVALBLOB, EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_IS, EXPR_ISNOT, EXPR_MATCH,
+    EXPR_NEQUAL, EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, EXPR_UNKNOWN, pattern_match,
 };
 use crate::mbyte::strnicmp_in;
 use crate::message::emsg;
@@ -173,7 +173,7 @@ pub(crate) fn typval_compare(
         let same = || b1.map(::core::ptr::from_ref) == b2.map(::core::ptr::from_ref);
         let eq = || blob_equal(b1, b2);
         let wrong_type = c"E977: Can only compare Blob with Blob";
-        let cmp = compare_container(op, same_type, same, eq, wrong_type, e_invalblob);
+        let cmp = compare_container(op, same_type, same, eq, wrong_type, E_INVALBLOB);
         match cmp {
             Ok(n) => n,
             Err(failed) => {

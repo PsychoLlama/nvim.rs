@@ -38,7 +38,7 @@ use crate::eval::vars::{
     clear_local, emsg_static, set_var_const, set_vvar_key, var_check_ro_named, vimvar_dict,
     with_var,
 };
-use crate::message::{e_cannot_mod, e_listreq};
+use crate::message::{E_CANNOT_MOD, E_LISTREQ};
 use crate::types::{TypVal, VAR_BLOB, VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber};
 
 /// Whether `op` is one of the compound operators rather than `=` or none.
@@ -107,7 +107,7 @@ pub(crate) fn set_var_lval(
         // -- walking a `Blob` as a `List`. `let l = [1,2] | let l[0:] =
         // 0z11` is enough. Report what the assignment actually needs.
         if value.v_type() != VAR_LIST {
-            emsg_static(e_listreq);
+            emsg_static(E_LISTREQ);
             return;
         }
         let src = value.list_handle();
@@ -240,7 +240,7 @@ fn set_whole_var(
     };
     // `+=`, `-=`, `*=`, `/=`, `%=` and `..=`.
     if is_const {
-        emsg_static(e_cannot_mod);
+        emsg_static(E_CANNOT_MOD);
         return;
     }
     // A lookup that may source an autoload script, as `eval_variable` is.

@@ -108,14 +108,14 @@ pub fn nvim_echo(
         status: status.clone(),
         data: data.clone(),
     };
-    let save_nwr = need_wait_return.get();
-    let save_lines_left = lines_left.get();
-    let save_msg_didany = msg_didany.get();
+    let save_nwr = NEED_WAIT_RETURN.get();
+    let save_lines_left = LINES_LEFT.get();
+    let save_msg_didany = MSG_DIDANY.get();
     let no_prompt = truncate.then(Suppress::wait_return);
     if truncate {
-        lines_left.set(0 as ::core::ffi::c_int);
-        msg_didany.set(true);
-        msg_no_more.set(true);
+        LINES_LEFT.set(0 as ::core::ffi::c_int);
+        MSG_DIDANY.set(true);
+        MSG_NO_MORE.set(true);
     }
     let id = msg_multihl(
         given_id.clone(),
@@ -127,11 +127,11 @@ pub fn nvim_echo(
         &mut needs_clear,
     );
     if truncate {
-        msg_no_more.set(false);
-        msg_didany.set(save_msg_didany);
-        lines_left.set(save_lines_left);
+        MSG_NO_MORE.set(false);
+        MSG_DIDANY.set(save_msg_didany);
+        LINES_LEFT.set(save_lines_left);
         drop(no_prompt);
-        need_wait_return.set(save_nwr);
+        NEED_WAIT_RETURN.set(save_nwr);
     }
     if verbose {
         verbose_leave();

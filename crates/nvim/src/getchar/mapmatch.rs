@@ -473,7 +473,7 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> MapResult {
         gotchars(tb.copy_out(tb.maplen(), typed).as_slice());
     }
 
-    cmd_silent.set(tb.silent() > 0);
+    CMD_SILENT.set(tb.silent() > 0);
     del_typebuf(keylen, 0); // remove the mapped keys
 
     // The depth check catches `:map x y` plus `:map y x`.
@@ -501,7 +501,7 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> MapResult {
     let evaluated = if let Some(expr) = &applied.expr {
         let save_vgetc_busy = vgetc_busy.get();
         let save_may_garbage_collect = may_garbage_collect.get();
-        let prev_did_emsg = did_emsg.get();
+        let prev_did_emsg = DID_EMSG.get();
 
         vgetc_busy.set(0);
         may_garbage_collect.set(false);
@@ -509,15 +509,15 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> MapResult {
         let mut map_str = eval_map_expr(expr, Key::NUL);
 
         if map_str.as_ref().is_none_or(MapStr::is_empty) {
-            if prev_did_emsg != did_emsg.get() {
+            if prev_did_emsg != DID_EMSG.get() {
                 // An error was displayed and the expression answered
                 // nothing: generate a <Nop> so that a redraw can happen.
                 let nop = [K_SPECIAL, KS_EXTRA, KE_IGNORE];
                 map_str = Some(MapStr::new(&nop));
                 if State.get() & MODE_CMDLINE != 0 {
                     // Redraw the command below the error.
-                    msg_didout.set(true);
-                    msg_row.set(msg_row.get().max(cmdline_row.get()));
+                    MSG_DIDOUT.set(true);
+                    MSG_ROW.set(MSG_ROW.get().max(cmdline_row.get()));
                     redrawcmd();
                 }
             } else if State.get() & (MODE_NORMAL | MODE_INSERT) != 0 {
@@ -566,7 +566,7 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> MapResult {
             noremap,
             0,
             true,
-            cmd_silent.get() || applied.silent,
+            CMD_SILENT.get() || applied.silent,
         )
     } else {
         Err(Failed)

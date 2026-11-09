@@ -27,7 +27,7 @@ use crate::eval::last_set_msg;
 use crate::getchar::state::got_int;
 use crate::highlight::HlAttrFlags;
 use crate::highlight::state::{include_default, include_link, include_none};
-use crate::message::state::{msg_col, msg_silent};
+use crate::message::state::{MSG_COL, MSG_SILENT};
 use crate::message::{
     message_filtered, msg_advance, msg_clr_eos, msg_display, msg_putchar, msg_str_hl,
 };
@@ -232,32 +232,32 @@ pub(crate) fn syn_list_header(
 
     // SAFETY: main-thread message calls.
     if !did_header {
-        if !ui_has(kUIMessages) || msg_col.get() > 0 {
+        if !ui_has(kUIMessages) || MSG_COL.get() > 0 {
             msg_putchar(c_int::from(b'\n'));
         }
         if got_int.get() {
             return true;
         }
         name_col = msg_display(group(id).name, 0, false);
-        msg_col.set(name_col);
+        MSG_COL.set(name_col);
         endcol = 15;
-    } else if (ui_has(kUIMessages) || msg_silent.get() != 0) && !force_newline {
+    } else if (ui_has(kUIMessages) || MSG_SILENT.get() != 0) && !force_newline {
         msg_putchar(c_int::from(b' '));
         adjust = false;
-    } else if msg_col.get() + outlen + 1 >= Columns.get() || force_newline {
+    } else if MSG_COL.get() + outlen + 1 >= Columns.get() || force_newline {
         msg_putchar(c_int::from(b'\n'));
         if got_int.get() {
             return true;
         }
-    } else if msg_col.get() >= endcol {
+    } else if MSG_COL.get() >= endcol {
         // Wrapping around is like starting a new line.
         newline = false;
     }
 
     if adjust {
-        if msg_col.get() >= endcol {
+        if MSG_COL.get() >= endcol {
             // Output at least one space.
-            endcol = msg_col.get() + 1;
+            endcol = MSG_COL.get() + 1;
         }
         msg_advance(endcol);
     }

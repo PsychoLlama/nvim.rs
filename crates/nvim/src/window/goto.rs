@@ -38,7 +38,7 @@ use crate::ex_eval::aborting;
 use crate::ex_getln::text_or_buf_locked;
 use crate::file_search::do_autocmd_dirchanged;
 use crate::fileio::shorten_fnames;
-use crate::message::state::msg_scrolled;
+use crate::message::state::MSG_SCROLLED;
 use crate::mouse::setmouse;
 use crate::r#move::{changed_line_abv_curs, update_topline};
 use crate::normal::{reset_visual_and_resel, visual_active};
@@ -83,11 +83,11 @@ pub(crate) fn goto_win(window: Win) {
     // Conceal cursor line in previous window, unconceal in current window.
     if let Some(owp) = valid_win(owp.id())
         && owp.w_onebuf_opt.wo_cole > 0 as OptInt
-        && msg_scrolled.get() == 0
+        && MSG_SCROLLED.get() == 0
     {
         redraw_winline(owp);
     }
-    if Win::current().w_onebuf_opt.wo_cole > 0 as OptInt && msg_scrolled.get() == 0 {
+    if Win::current().w_onebuf_opt.wo_cole > 0 as OptInt && MSG_SCROLLED.get() == 0 {
         redraw_winline(Win::current());
     }
 }

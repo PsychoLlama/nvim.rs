@@ -27,7 +27,7 @@ use crate::lua::abi::lua_Number;
 use crate::lua::stack::{At, Kind};
 use crate::memline::ml_replace_owned;
 use crate::memory::XString;
-use crate::message::{e_argreq, emsg};
+use crate::message::{E_ARGREQ, emsg};
 use crate::narrow::len_as_int;
 use crate::os::cshim::gettext;
 use crate::runtime::cmd_source_buffer;
@@ -69,7 +69,7 @@ pub fn ex_lua(excmd: &mut ExArg) {
         if excmd.addr_count > 0 {
             cmd_source_buffer(excmd, true);
         } else {
-            emsg(gettext(e_argreq));
+            emsg(gettext(E_ARGREQ));
         }
         return;
     }

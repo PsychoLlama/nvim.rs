@@ -182,7 +182,7 @@ fn normalise_punctuation(name: &[u8]) -> Vec<u8> {
 /// might accept.
 pub fn canonize(enc: &[u8]) -> XString {
     if enc == b"default" {
-        return fenc_default.with(|enc| enc.clone().expect("set at startup"));
+        return FENC_DEFAULT.with(|enc| enc.clone().expect("set at startup"));
     }
 
     let normalised = normalise_spelling(enc);

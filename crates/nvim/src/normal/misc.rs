@@ -31,11 +31,11 @@ use crate::getchar::{
     map_execute_lua, paste_repeat, stuff_readbuf, stuff_readbuf_char, stuff_readbuf_number,
 };
 use crate::help::open_help;
-use crate::message::state::did_emsg;
+use crate::message::state::DID_EMSG;
 use crate::message::{msg, msg_ext_set_trigger};
 use crate::normal::defs::{CmdArg, Outcome};
 use crate::normal::{
-    check_clear_op, check_clear_op_quit, clear_op, clear_op_beep, end_visual_mode, kMTCharWise,
+    MT_CHAR_WISE, check_clear_op, check_clear_op_quit, clear_op, clear_op_beep, end_visual_mode,
     nv_left, nv_operator, nv_pcmark, set_visual_select, v_visop, visual_active, visual_select,
 };
 use crate::ops::OpType;
@@ -86,7 +86,7 @@ pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
     }
     let mut op = cmd_arg.op();
     if op.op_type != OpType::Nop {
-        op.motion_type = kMTCharWise;
+        op.motion_type = MT_CHAR_WISE;
         op.inclusive = false;
     } else if cmd_arg.count0 != 0 && !is_cmdkey && !is_lua {
         // A count in front of `:` becomes a range: `3:` is `:.,.+2`.
@@ -123,7 +123,7 @@ pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
     } else if op.op_type != OpType::Nop
         && (op.start.lnum > Buf::current().b_ml.ml_line_count
             || op.start.col > Buf::current().lines().line_len(op.start.lnum)
-            || did_emsg.get() != 0)
+            || DID_EMSG.get() != 0)
     {
         // The command moved or deleted the line the operator started on,
         // so there is nothing left to apply it to.

@@ -25,7 +25,7 @@ use core::ffi::{CStr, c_int};
 use super::*;
 use crate::getchar::state::got_int;
 use crate::highlight_group::{HLF_8, HLF_D};
-use crate::message::e_menu_only_exists_in_another_mode;
+use crate::message::E_MENU_ONLY_EXISTS_IN_ANOTHER_MODE;
 use crate::message::{
     msg_display, msg_display_keys, msg_outnum, msg_putchar, msg_str, msg_str_hl, msg_title,
 };
@@ -113,7 +113,7 @@ pub(crate) fn remove_menu(
         if node.modes & modes != 0 {
             remove_menu(&mut node.children, rest, modes)?;
         } else if named {
-            return Err(MenuError::Msg(e_menu_only_exists_in_another_mode));
+            return Err(MenuError::Msg(E_MENU_ONLY_EXISTS_IN_ANOTHER_MODE));
         }
         if named {
             found = Some(at);
@@ -248,7 +248,7 @@ fn find_menu<'a>(tree: &'a [VimMenu], path: &[u8], modes: c_int) -> Result<&'a V
             return Err(MenuError::Msg(E_NOTSUBMENU));
         }
         if node.modes & modes == 0 {
-            return Err(MenuError::Msg(e_menu_only_exists_in_another_mode));
+            return Err(MenuError::Msg(E_MENU_ONLY_EXISTS_IN_ANOTHER_MODE));
         }
         if rest.is_empty() {
             return Ok(node);

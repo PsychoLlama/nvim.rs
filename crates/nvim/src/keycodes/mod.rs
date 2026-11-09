@@ -39,7 +39,7 @@ use crate::eval::vars::var_string_value;
 use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char};
 use crate::message::emsg;
-use crate::message::{e_invarg, e_usingsid};
+use crate::message::{E_INVARG, E_USINGSID};
 use crate::option::defs::CpoFlag;
 use crate::os::cshim::gettext;
 use crate::runtime::state::current_sctx;
@@ -359,7 +359,7 @@ pub fn special_key_at(
         } else if gap(bp) > 4 && opens_with_ignoring_case(&text[bp..], b"char-") {
             let digits = str2nr_in(&text[bp + 5..], Str2NrBases::ALL, true).len;
             if digits == 0 {
-                emsg(gettext(e_invarg));
+                emsg(gettext(E_INVARG));
                 return Err(Failed);
             }
             bp += digits + 5;
@@ -392,7 +392,7 @@ pub fn special_key_at(
         // <Char-123>, <Char-033> or <Char-0x33>.
         let number = str2nr_in(&text[last_dash + 6..], Str2NrBases::ALL, true);
         if number.len == 0 {
-            emsg(gettext(e_invarg));
+            emsg(gettext(E_INVARG));
             return Err(Failed);
         }
         // Upstream's `(int)` of the number: the low 32 bits.
@@ -586,7 +586,7 @@ pub fn replace_termcodes(
             // script-local function's name is spelled.
             if gap(src) >= 4 && opens(src, b"<SID>") {
                 if sid_arg < 0 || (sid_arg == 0 && current_sctx.get().sc_sid <= 0) {
-                    emsg(gettext(e_usingsid));
+                    emsg(gettext(E_USINGSID));
                 } else {
                     let sid = if sid_arg != 0 {
                         sid_arg

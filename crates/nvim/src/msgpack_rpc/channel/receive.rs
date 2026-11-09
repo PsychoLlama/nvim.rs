@@ -208,7 +208,7 @@ fn next_message(chan: &mut Channel, input: &mut &[u8]) -> Step {
             Step::Routed
         }
         _ => {
-            let req_id = (p.type_0 != kMessageTypeNotification).then_some(p.request_id);
+            let req_id = (p.type_0 != MESSAGE_TYPE_NOTIFICATION).then_some(p.request_id);
             trace::log_call(trace::RECV, id, req_id, p.handler.name);
             let Some(args) = p.result.take().into_array() else {
                 let why = b"msgpack-rpc request args must be an array".to_vec();
@@ -238,7 +238,7 @@ fn next_message(chan: &mut Channel, input: &mut &[u8]) -> Step {
 /// request takes a reference to the channel, whichever it is.
 fn schedule(chan: &mut Channel, request: Request, method_name_len: usize) -> Step {
     debug_assert!(
-        request.type_0 == kMessageTypeRequest || request.type_0 == kMessageTypeNotification
+        request.type_0 == kMessageTypeRequest || request.type_0 == MESSAGE_TYPE_NOTIFICATION
     );
     let handler = request.handler;
     let handler_fn = handler.fn_0.expect("a resolved handler");

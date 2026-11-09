@@ -26,7 +26,7 @@ use crate::fileio::temp_name;
 use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, secure};
 use crate::memory::XString;
-use crate::message::{e_notmp, e_wildexpand};
+use crate::message::{E_NOTMP, E_WILDEXPAND};
 use crate::message::{emsg, msg, msg_putchar, msg_start};
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_sh;
@@ -341,7 +341,7 @@ pub(crate) fn shell_expand_wildcards(
     }
 
     let Some(tempname) = temp_name() else {
-        emsg(gettext(e_notmp));
+        emsg(gettext(E_NOTMP));
         return Err(Failed);
     };
     let style = pick_shell_style(patterns);
@@ -375,7 +375,7 @@ pub(crate) fn shell_expand_wildcards(
         if !flags.has(ExpandFlags::SILENT) {
             msg_putchar('\n' as c_int); // clear the bottom line quickly
             cmdline_row.set(Rows.get() - 1); // continue on the last line
-            msg(gettext(e_wildexpand), 0);
+            msg(gettext(E_WILDEXPAND), 0);
             msg_start(); // do not overwrite this message
         }
         // A failed `cmd` expansion must not list `cmd` as a match, even
@@ -481,7 +481,7 @@ fn read_temp_file(tempname: &CStr, flags: ExpandFlags) -> Read {
         // Something went wrong -- perhaps a file name with a special
         // character in it.
         if !flags.has(ExpandFlags::SILENT) {
-            msg(gettext(e_wildexpand), 0);
+            msg(gettext(E_WILDEXPAND), 0);
             msg_start(); // do not overwrite this message
         }
         return Read::NotFound;

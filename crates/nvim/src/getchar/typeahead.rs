@@ -339,7 +339,7 @@ pub fn noremap_keys() -> bool {
 impl TypeAhead {
     /// Insert `s` at `offset`, marking its bytes with `noremap`. Answers
     /// false when the buffer would overflow an `int`, which is upstream's
-    /// `e_toocompl`; the message is the caller's to emit, because emitting it
+    /// `E_TOOCOMPL`; the message is the caller's to emit, because emitting it
     /// flushes the buffers and this runs inside the cell's borrow.
     ///
     /// `offset` must be within the current typeahead.
@@ -416,7 +416,7 @@ impl TypeAhead {
         }
         if silent || self.silent > offset {
             self.silent += addlen;
-            cmd_silent.set(true);
+            CMD_SILENT.set(true);
         }
         if self.no_abbr_cnt != 0 && offset == 0 {
             // ... and is not to be used for abbreviations.
@@ -505,7 +505,7 @@ impl TypeAhead {
 /// `noremap` says how much of it may be mapped again; see [`Remap`].
 ///
 /// With `nottyped` the string does not set `KeyTyped` — do not use it with a
-/// non-zero `offset`. With `silent`, `cmd_silent` is set when the characters
+/// non-zero `offset`. With `silent`, `CMD_SILENT` is set when the characters
 /// are read back. `text` is read up to its first NUL, as upstream's `char *`
 /// is, and `offset` must be within the current typeahead. Answers `Err` when
 /// the buffer would overflow an `int`.
@@ -525,7 +525,7 @@ pub fn ins_typebuf(
     if !inserted {
         // Outside the borrow: `emsg` also flushes the buffers, i.e.
         // reaches the typeahead itself.
-        emsg(gettext(e_toocompl));
+        emsg(gettext(E_TOOCOMPL));
         setcursor();
         return Err(Failed);
     }
@@ -533,7 +533,7 @@ pub fn ins_typebuf(
 }
 
 /// Put character `c` back into the typeahead buffer, restoring the flags that
-/// belong to it from `cmd_silent`, `KeyTyped` and `KeyNoremap`.
+/// belong to it from `CMD_SILENT`, `KeyTyped` and `KeyNoremap`.
 ///
 /// Used for a character `vgetc` handed out and the caller then decided not to
 /// consume. With `on_key_ignore` the bytes are not reported to `vim.on_key()`.
@@ -553,7 +553,7 @@ pub fn ins_char_typebuf(c: Key, modifiers: ModMask, on_key_ignore: bool) -> usiz
         noremap,
         0,
         !KeyTyped.get(),
-        cmd_silent.get(),
+        CMD_SILENT.get(),
     );
     if KeyTyped.get() && on_key_ignore {
         on_key_ignore_len.set(on_key_ignore_len.get() + len);
@@ -595,7 +595,7 @@ pub(crate) fn flush_typebuf(minimal: bool) {
         // Text received from a client or from feedkeys() is gone with it.
         typebuf_was_filled.set(false);
     }
-    cmd_silent.set(false);
+    CMD_SILENT.set(false);
 }
 
 /// Undo the last [`gotchars`] for `len` bytes, so that putting a typed

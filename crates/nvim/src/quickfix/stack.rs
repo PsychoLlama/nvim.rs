@@ -363,7 +363,7 @@ pub(crate) fn stack_for_cmd(cmdidx: CmdIdx, print_emsg: bool) -> Option<Qi> {
     }
     let qi = Win::current().location_list();
     if qi.is_none() && print_emsg {
-        qf_emsg(e_loclist);
+        qf_emsg(E_LOCLIST);
     }
     qi.map(QfId::stack)
 }

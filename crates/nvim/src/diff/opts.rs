@@ -120,7 +120,7 @@ pub(crate) fn parse_diffanchors(
     } else {
         let shown = windows().find(|w| w.w_buffer == buffer && w.w_onebuf_opt.wo_diff != 0);
         if shown.is_none() && dia[at] != 0 {
-            emsg(gettext(e_diff_anchors_with_hidden_windows));
+            emsg(gettext(E_DIFF_ANCHORS_WITH_HIDDEN_WINDOWS));
             return Err(Failed);
         }
         shown
@@ -161,7 +161,7 @@ pub(crate) fn parse_diffanchors(
         if !check_only
             && (lnum == MAXLNUM || lnum <= LineNr::ZERO || lnum > buffer.b_ml.ml_line_count + 1)
         {
-            emsg(gettext(e_invrange));
+            emsg(gettext(E_INVRANGE));
             return Err(Failed);
         }
         if let Some(anchors) = anchors.as_deref_mut() {

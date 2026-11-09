@@ -22,10 +22,10 @@ use crate::lua::executor::release_luaref;
 use crate::mbyte::VimConv;
 use crate::memory::{xcalloc, xfree};
 use crate::message::emsg;
-use crate::message::state::did_emsg;
+use crate::message::state::DID_EMSG;
 use crate::message::{
-    e_cannot_change_value, e_cannot_change_value_of_str, e_invarg, e_invrange, e_listreq,
-    e_value_is_locked, e_value_is_locked_str,
+    E_CANNOT_CHANGE_VALUE, E_CANNOT_CHANGE_VALUE_OF_STR, E_INVARG, E_INVRANGE, E_LISTREQ,
+    E_VALUE_IS_LOCKED, E_VALUE_IS_LOCKED_STR,
 };
 use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck};

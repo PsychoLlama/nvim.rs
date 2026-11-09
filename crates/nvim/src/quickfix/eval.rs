@@ -128,7 +128,7 @@ fn get_qf_loc_list(
         return;
     }
     if what_arg.v_type() != VAR_DICT {
-        emsg(gettext(e_dictreq));
+        emsg(gettext(E_DICTREQ));
         return;
     }
     if let Some(what) = what_arg.dict_ref()
@@ -163,11 +163,11 @@ fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: &mut TypVal) {
 
     let list_arg = &args[0];
     if list_arg.v_type() != VAR_LIST {
-        emsg(gettext(e_listreq));
+        emsg(gettext(E_LISTREQ));
         return;
     }
     if RECURSIVE.get() != 0 {
-        emsg(gettext(e_au_recursive));
+        emsg(gettext(E_AU_RECURSIVE));
         return;
     }
 
@@ -177,7 +177,7 @@ fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: &mut TypVal) {
 
     if let Some(action_arg) = args.get(1) {
         if action_arg.v_type() != VAR_STRING {
-            emsg(gettext(e_string_required));
+            emsg(gettext(E_STRING_REQUIRED));
             return;
         }
         let mut numbuf = NumBuf::new();
@@ -204,7 +204,7 @@ fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: &mut TypVal) {
             {
                 what = Some(d);
             } else {
-                emsg(gettext(e_dictreq));
+                emsg(gettext(E_DICTREQ));
                 return;
             }
         }

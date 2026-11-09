@@ -81,36 +81,36 @@ pub const SCL_NO: c_int = -1;
 pub const SID_NONE: c_int = -6;
 /// "E535: Illegal character after <%c>", for the options that spell a
 /// field as a character followed by a value.
-pub(crate) const e_illegal_character_after_chr: &CStr = c"E535: Illegal character after <%c>";
+pub(crate) const E_ILLEGAL_CHARACTER_AFTER_CHR: &CStr = c"E535: Illegal character after <%c>";
 /// "E536: Comma required", for 'foldmarker'.
-pub(crate) const e_comma_required: &CStr = c"E536: Comma required";
+pub(crate) const E_COMMA_REQUIRED: &CStr = c"E536: Comma required";
 /// "E540: Unclosed expression sequence", for a `%{` with no `}`.
-pub(crate) const e_unclosed_expression_sequence: &CStr = c"E540: Unclosed expression sequence";
+pub(crate) const E_UNCLOSED_EXPRESSION_SEQUENCE: &CStr = c"E540: Unclosed expression sequence";
 /// "E542: Unbalanced groups", for a `%(` with no `%)`.
-pub(crate) const e_unbalanced_groups: &CStr = c"E542: Unbalanced groups";
+pub(crate) const E_UNBALANCED_GROUPS: &CStr = c"E542: Unbalanced groups";
 /// "E589: 'backupext' and 'patchmode' are equal".
-pub(crate) const e_backupext_and_patchmode_are_equal: &CStr =
+pub(crate) const E_BACKUPEXT_AND_PATCHMODE_ARE_EQUAL: &CStr =
     c"E589: 'backupext' and 'patchmode' are equal";
 /// "E595: 'showbreak' contains unprintable or wide character".
-pub(crate) const e_showbreak_contains_unprintable_or_wide_character: &CStr =
+pub(crate) const E_SHOWBREAK_CONTAINS_UNPRINTABLE_OR_WIDE_CHARACTER: &CStr =
     c"E595: 'showbreak' contains unprintable or wide character";
 /// "E1511: Wrong number of characters for field", for a 'fillchars' or
 /// 'listchars' field given too few or too many characters.
-pub(crate) const e_wrong_number_of_characters_for_field_str: &CStr =
+pub(crate) const E_WRONG_NUMBER_OF_CHARACTERS_FOR_FIELD_STR: &CStr =
     c"E1511: Wrong number of characters for field \"%s\"";
 /// "E1512: Wrong character width for field", for one that does not fit
 /// in a single screen cell.
-pub(crate) const e_wrong_character_width_for_field_str: &CStr =
+pub(crate) const E_WRONG_CHARACTER_WIDTH_FOR_FIELD_STR: &CStr =
     c"E1512: Wrong character width for field \"%s\"";
 /// The letters 'shortmess' accepts. The trailing "nfxi" were removed
 /// as flags and are now silently ignored.
 pub const SHM_ALL: &CStr = c"rmlwaWtToOsAIcCqFSnfxi";
 /// "E834: Conflicts with value of 'listchars'", reported when something
 /// other than `:set` made the current value unrenderable.
-pub(crate) const e_conflicts_with_value_of_listchars: &CStr =
+pub(crate) const E_CONFLICTS_WITH_VALUE_OF_LISTCHARS: &CStr =
     c"E834: Conflicts with value of 'listchars'";
 /// "E835: Conflicts with value of 'fillchars'", as above.
-pub(crate) const e_conflicts_with_value_of_fillchars: &CStr =
+pub(crate) const E_CONFLICTS_WITH_VALUE_OF_FILLCHARS: &CStr =
     c"E835: Conflicts with value of 'fillchars'";
 pub const INT_MAX: c_int = 2147483647;
 

@@ -37,7 +37,7 @@ use super::{
 };
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::CallFrame;
-use crate::message::state::did_emsg;
+use crate::message::state::DID_EMSG;
 use crate::types::{TypVal, VAR_UNKNOWN, Vv};
 
 // The carve of the transpiled module; see each child's docs.
@@ -101,7 +101,7 @@ pub(crate) fn filter_map_one(
         // foreach() is not limited to an expression.
         if let (FilterMap::Foreach, Container::Str(cmd)) = (filtermap, Container::of(expr)) {
             run_cmd(cmd);
-            retval = did_emsg.get() == 0;
+            retval = DID_EMSG.get() == 0;
             break 'theend;
         }
         let mut argv = CallFrame::<2>::new();
@@ -159,8 +159,8 @@ fn filter_map(args: &[TypVal], result: &mut TypVal, filtermap: FilterMap) {
 
     // Reset did_emsg to be able to detect whether an error occurred during
     // evaluation of the expression.
-    let save_did_emsg = did_emsg.get();
-    did_emsg.set(0);
+    let save_did_emsg = DID_EMSG.get();
+    DID_EMSG.set(0);
 
     let arg_errmsg = filtermap.arg_errmsg();
     match container {
@@ -174,7 +174,7 @@ fn filter_map(args: &[TypVal], result: &mut TypVal, filtermap: FilterMap) {
     restore_vim_var(Vv::Key, &mut save_key);
     restore_vim_var(Vv::Val, &mut save_val);
 
-    did_emsg.set(did_emsg.get() | save_did_emsg);
+    DID_EMSG.set(DID_EMSG.get() | save_did_emsg);
 }
 
 /// `filter(container, expr)`: drop every item the expression calls false.

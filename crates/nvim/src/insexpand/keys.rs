@@ -601,7 +601,7 @@ pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
 
     if compl_pending.get() != 0
         && !got_int.get()
-        && cot_flags.get() & (kOptCotFlagNoinsert as c_uint | kOptCotFlagFuzzy as c_uint) == 0
+        && COT_FLAGS.get() & (kOptCotFlagNoinsert as c_uint | kOptCotFlagFuzzy as c_uint) == 0
         && (!compl_autocomplete.get() || ins_compl_has_preinsert())
     {
         // Insert the first match immediately and advance

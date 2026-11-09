@@ -53,8 +53,8 @@ use crate::getchar::state::got_int;
 use crate::highlight_group::HLF_T;
 use crate::keycodes::Ctrl_G;
 use crate::message::IOSIZE;
-use crate::message::state::{msg_col, msg_scroll};
-use crate::message::{e_invarg, e_invarg2, e_invcmd, e_invrange, e_screenmode};
+use crate::message::state::{MSG_COL, MSG_SCROLL};
+use crate::message::{E_INVARG, E_INVARG2, E_INVCMD, E_INVRANGE, E_SCREENMODE};
 use crate::message::{emsg, msg_display, msg_ext_set_kind, msg_putchar, msg_start};
 use crate::normal::do_check_scrollbind;
 use crate::option::get_findfunc;
@@ -152,7 +152,7 @@ pub(crate) fn current_tab_nr(tab: Option<TabPage>) -> c_int {
 /// The handler every command modifier carries in the table, for the case
 /// where it was typed as a command in its own right.
 pub(crate) fn ex_wrongmodifier(excmd: &mut ExArg) {
-    excmd.errmsg = err_msg(e_invcmd);
+    excmd.errmsg = err_msg(E_INVCMD);
 }
 
 /// `:split`, `:vsplit`, `:new`, `:sfind`, `:tabedit`, `:tabnew`,
@@ -314,7 +314,7 @@ fn tabnext(excmd: &mut ExArg) {
             || excmd.line.byte_at(at) != 0
             || tab_number == 0
         {
-            excmd.errmsg = Some(ex_errmsg(e_invarg2, excmd.line.cstr_from(excmd.line.arg)));
+            excmd.errmsg = Some(ex_errmsg(E_INVARG2, excmd.line.cstr_from(excmd.line.arg)));
             return;
         }
     } else if excmd.addr_count == 0 {
@@ -322,7 +322,7 @@ fn tabnext(excmd: &mut ExArg) {
     } else {
         tab_number = excmd.number2;
         if tab_number < 1 {
-            excmd.errmsg = err_msg(e_invrange);
+            excmd.errmsg = err_msg(E_INVRANGE);
             return;
         }
     }
@@ -346,7 +346,7 @@ pub(crate) fn ex_tabs(_excmd: &mut ExArg) {
     // SAFETY: writes the message area.
     msg_ext_set_kind(c"list_cmd");
     msg_start();
-    msg_scroll.set(1);
+    MSG_SCROLL.set(1);
 
     let lastused_win = last_used_tab().and_then(TabPage::current_window);
 
@@ -354,7 +354,7 @@ pub(crate) fn ex_tabs(_excmd: &mut ExArg) {
         if got_int.get() {
             break;
         }
-        if msg_col.get() > 0 {
+        if MSG_COL.get() > 0 {
             msg_char(b'\n');
         }
         // Upstream assembles the line in `IObuff`; it is cut where that
@@ -429,7 +429,7 @@ pub(crate) fn ex_mode(excmd: &mut ExArg) {
         // SAFETY: a live command.
         ex_redraw(excmd);
     } else {
-        err(e_screenmode);
+        err(E_SCREENMODE);
     }
 }
 
@@ -519,7 +519,7 @@ fn wincmd(excmd: &mut ExArg) {
     {
         let second = excmd.line.byte_at(excmd.line.arg + 1);
         if second == 0 {
-            err(e_invarg);
+            err(E_INVARG);
             return;
         }
         xchar = c_int::from(second);
@@ -532,7 +532,7 @@ fn wincmd(excmd: &mut ExArg) {
     at = excmd.line.skip_white(at);
     let byte = excmd.line.byte_at(at);
     if byte != 0 && byte != b'"' && excmd.line.next.is_none() {
-        err(e_invarg);
+        err(E_INVARG);
     } else if !excmd.skip {
         // A `:vertical`/`:tab` in front applies to the split the window
         // command is about to make.

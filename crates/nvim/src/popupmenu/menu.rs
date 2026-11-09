@@ -220,7 +220,7 @@ pub(crate) fn pum_show_popupmenu(menu: MenuId) {
     // "popup Edit" with only Terminal-mode entries lands here.
     pum_size.set(c_int::try_from(entries.len()).unwrap_or(c_int::MAX));
     if entries.is_empty() {
-        emsg(gettext(e_menu_only_exists_in_another_mode));
+        emsg(gettext(E_MENU_ONLY_EXISTS_IN_ANOTHER_MODE));
         return;
     }
 

@@ -89,7 +89,7 @@ pub(crate) use self::visual::*;
 // ---------------------------------------------------------------------------
 // The flag alphabet
 
-pub(crate) const kMTCharWise: MotionType = 0;
+pub(crate) const MT_CHAR_WISE: MotionType = 0;
 pub(crate) const kMTLineWise: MotionType = 1;
 
 /// Where a click landed, as [`jump_to_mouse`] and `get_fpos_of_mouse()` report

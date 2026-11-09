@@ -53,7 +53,7 @@ fn config_put_bordertext(
     fconfig: &WinConfig,
     bordertext_type: BorderTextType,
 ) {
-    let footer = bordertext_type == kBorderTextFooter;
+    let footer = bordertext_type == BORDER_TEXT_FOOTER;
     let (vt, align) = if footer {
         (&fconfig.footer_chunks, fconfig.footer_pos)
     } else {
@@ -130,10 +130,10 @@ pub fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Erro
         if config.border {
             rv.border = Some(Object::array(border_array(config)));
             if config.title {
-                config_put_bordertext(&mut rv, config, kBorderTextTitle);
+                config_put_bordertext(&mut rv, config, BORDER_TEXT_TITLE);
             }
             if config.footer {
-                config_put_bordertext(&mut rv, config, kBorderTextFooter);
+                config_put_bordertext(&mut rv, config, BORDER_TEXT_FOOTER);
             }
         } else {
             rv.border = Some(Object::string(ApiString::from_cstr(c"none")));

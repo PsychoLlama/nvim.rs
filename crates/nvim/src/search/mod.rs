@@ -51,10 +51,10 @@ use crate::mark::setpcmark;
 use crate::mbyte::{cluster_len, head_off, mb_isupper, utf_iscomposing_first};
 use crate::memline::{Lines, decl, inc, incl};
 use crate::message::state::{
-    bot_top_msg, called_emsg, cmd_silent, msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row,
-    msg_scrolled, msg_silent, top_bot_msg,
+    BOT_TOP_MSG, CALLED_EMSG, CMD_SILENT, MSG_EXT_OVERWRITE, MSG_HIST_OFF, MSG_NOWAIT, MSG_ROW,
+    MSG_SCROLLED, MSG_SILENT, TOP_BOT_MSG,
 };
-use crate::message::{e_interr, e_nopresub, e_noprevre};
+use crate::message::{E_INTERR, E_NOPRESUB, E_NOPREVRE};
 use crate::message::{
     emsg, fit_middle, give_warning, iemsg, messaging, msg, msg_check, msg_clr_eos, msg_display,
     msg_end, msg_ext_set_kind, msg_fit_head, msg_home_replace, msg_prt_line, msg_putchar,
@@ -65,7 +65,7 @@ use crate::r#move::validate_cursor;
 use crate::normal::defs::{CmdArg, MotionType, OpArg};
 use crate::normal::may_start_select;
 use crate::option::vars::{
-    P_WS, fdo_flags, p_hls, p_ic, p_js, p_mat, p_msc, p_ri, p_scs, p_verbose, p_ws,
+    FDO_FLAGS, P_WS, p_hls, p_ic, p_js, p_mat, p_msc, p_ri, p_scs, p_verbose, p_ws,
 };
 use crate::option::{magic_isset, shortmess};
 use crate::options::{kOptBoFlagShowmatch, kOptFdoFlagSearch};

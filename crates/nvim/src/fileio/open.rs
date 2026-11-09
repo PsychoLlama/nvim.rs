@@ -128,7 +128,7 @@ pub(crate) fn open_source<'a>(
     // to display the line.
     ex_no_reprint.set(true);
     // Don't display the file info for another buffer now.
-    need_fileinfo.set(false);
+    NEED_FILEINFO.set(false);
 
     // Use the short file name whenever possible: it avoids problems
     // with networks and when directory names change.
@@ -184,8 +184,8 @@ pub(crate) fn open_source<'a>(
         }
     }
 
-    msg_scroll.set(c_int::from(
-        !((shortmess(ShmFlag::OVER) && msg_listdo_overwrite.get() == 0) || Buf::current().b_help)
+    MSG_SCROLL.set(c_int::from(
+        !((shortmess(ShmFlag::OVER) && MSG_LISTDO_OVERWRITE.get() == 0) || Buf::current().b_help)
             || p_verbose() != 0,
     ));
 
@@ -196,7 +196,7 @@ pub(crate) fn open_source<'a>(
         if fnamelen >= MAXPATHL as usize {
             filemess_note(fname, c"Illegal file name");
             msg_end();
-            msg_scroll.set(msg_save);
+            MSG_SCROLL.set(msg_save);
             return Err(retval);
         }
         // A name ending in a path separator can't be opened. Check it
@@ -207,7 +207,7 @@ pub(crate) fn open_source<'a>(
                 filemess_note(fname, msg_is_a_directory);
             }
             msg_end();
-            msg_scroll.set(msg_save);
+            MSG_SCROLL.set(msg_save);
             retval = Ok(Loaded::Skipped);
             return Err(retval);
         }
@@ -233,7 +233,7 @@ pub(crate) fn open_source<'a>(
                 filemess_note(fname, c"is not a file");
             }
             msg_end();
-            msg_scroll.set(msg_save);
+            MSG_SCROLL.set(msg_save);
             return Err(retval);
         }
     }
@@ -296,7 +296,7 @@ pub(crate) fn open_source<'a>(
         && let Err(fd) = input
     {
         // Cannot open at all.
-        msg_scroll.set(msg_save);
+        MSG_SCROLL.set(msg_save);
         if !how.newfile {
             return Err(retval);
         }
@@ -415,7 +415,7 @@ pub(crate) fn open_source<'a>(
         return Err(retval); // the file is closed with `input`
     }
 
-    no_wait_return.set(no_wait_return.get() + 1); // don't wait for return yet
+    NO_WAIT_RETURN.set(NO_WAIT_RETURN.get() + 1); // don't wait for return yet
 
     // Set the '[ mark to the line above where the lines go, line 1 if
     // zero.
@@ -430,8 +430,8 @@ pub(crate) fn open_source<'a>(
     let mut guess = FormatGuess::from_ffs();
 
     if !how.buffer {
-        let m = msg_scroll.get();
-        let n = msg_scrolled.get();
+        let m = MSG_SCROLL.get();
+        let n = MSG_SCROLLED.get();
 
         // The file must be closed again: the autocommands may want to
         // change it before it is read.
@@ -442,7 +442,7 @@ pub(crate) fn open_source<'a>(
         // The output from the autocommands should neither overwrite
         // anything nor be overwritten: set msg_scroll, and restore it
         // if no output was done.
-        msg_scroll.set(c_int::from(true));
+        MSG_SCROLL.set(c_int::from(true));
         if how.filtering {
             read_autocmd(
                 AutoEvent::FilterReadPre,
@@ -462,14 +462,14 @@ pub(crate) fn open_source<'a>(
         guess = FormatGuess::from_ffs();
         Buf::current().b_op_start = orig_start;
 
-        if msg_scrolled.get() == n {
-            msg_scroll.set(m);
+        if MSG_SCROLLED.get() == n {
+            MSG_SCROLL.set(m);
         }
 
         if aborting() {
             // Autocommands may abort script processing.
-            no_wait_return.set(no_wait_return.get() - 1);
-            msg_scroll.set(msg_save);
+            NO_WAIT_RETURN.set(NO_WAIT_RETURN.get() - 1);
+            MSG_SCROLL.set(msg_save);
             Buf::current().b_p_ro = c_int::from(true); // must use "w!" now
             return Err(retval);
         }
@@ -484,8 +484,8 @@ pub(crate) fn open_source<'a>(
             input.is_err()
         };
         if changed || unreadable {
-            no_wait_return.set(no_wait_return.get() - 1);
-            msg_scroll.set(msg_save);
+            NO_WAIT_RETURN.set(NO_WAIT_RETURN.get() - 1);
+            MSG_SCROLL.set(msg_save);
             Buf::current().b_p_ro = c_int::from(true); // must use "w!" now
             return Err(Err(if unreadable {
                 ReadError::ReadPreUnreadable

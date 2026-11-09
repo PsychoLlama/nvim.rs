@@ -111,7 +111,7 @@ impl ExArg<'_> {
             if ranged {
                 // Default is the line number, not the range.
                 if lnum > Buf::current().b_ml.ml_line_count {
-                    emsg(gettext(e_invrange));
+                    emsg(gettext(E_INVRANGE));
                     break;
                 }
                 Win::current().w_cursor.lnum = lnum;
@@ -238,7 +238,7 @@ fn ex_defer_inner(
         if builtin_function(callee) {
             r = match find_builtin(callee) {
                 None => {
-                    emsg_funcname(e_unknown_function_str, callee);
+                    emsg_funcname(E_UNKNOWN_FUNCTION_STR, callee);
                     Err(Failed)
                 }
                 Some(fdef) => check_builtin_argcount(fdef, argcount),
@@ -388,7 +388,7 @@ pub fn ex_call(excmd: &mut ExArg) {
     if (!aborting() || did_throw.get()) && (!failed || in_try) {
         if ends_excmd(c_int::from(excmd.line.byte_at(stop))) == 0 {
             if !failed && !aborting() {
-                emsg_severe.set(true);
+                EMSG_SEVERE.set(true);
                 let rest = msg_bytes(excmd.line.rest_of(stop));
                 semsg!("E488: Trailing characters: {rest}");
             }
@@ -482,7 +482,7 @@ impl FuncCall {
     /// Whether the function has ended: it returned, or it is declared
     /// `abort` and an error not caught by a `:try` stopped it.
     pub(crate) fn has_ended(&self) -> bool {
-        (self.aborts() && did_emsg.get() != 0 && !aborted_in_try()) || self.returned.get()
+        (self.aborts() && DID_EMSG.get() != 0 && !aborted_in_try()) || self.returned.get()
     }
 
     /// Whether the function was declared `abort`.

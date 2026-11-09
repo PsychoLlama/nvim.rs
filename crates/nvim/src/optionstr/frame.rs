@@ -22,14 +22,14 @@ use crate::global_cell::Field;
 use crate::option::StrVar;
 
 use crate::memory::XString;
-use crate::message::e_invarg;
+use crate::message::E_INVARG;
 use crate::option::defs::{OptError, OptSet, OptStr};
 use crate::types::WinOpt;
 
 /// "E474: Invalid argument", the message almost every string option's check
 /// reports when it has nothing more specific to say.
 pub(crate) fn invalid() -> Result<(), OptError> {
-    Err(e_invarg.into())
+    Err(E_INVARG.into())
 }
 
 /// The option's value variable — a string one, since every option here is.

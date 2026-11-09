@@ -84,9 +84,9 @@ pub fn tv_get_bool_chk(tv: &TypVal) -> Result<VarNumber, Unconvertible> {
 /// `tv` as a line number, resolving a non-Number such as `"$"` or `"."`
 /// through `var2fpos`.
 pub fn tv_get_lnum(tv: &TypVal) -> LineNr {
-    let did_emsg_before = did_emsg.get();
+    let did_emsg_before = DID_EMSG.get();
     let mut lnum = number_as_lnum(tv_get_bool(tv));
-    if lnum <= LineNr::ZERO && did_emsg_before == did_emsg.get() && tv.v_type() != VAR_NUMBER {
+    if lnum <= LineNr::ZERO && did_emsg_before == DID_EMSG.get() && tv.v_type() != VAR_NUMBER {
         // No valid number, try using same function as line() does.
         let mut fnum = 0;
         let fp = var2fpos(tv, true, &mut fnum, false, Win::current());

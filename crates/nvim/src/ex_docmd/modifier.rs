@@ -40,12 +40,12 @@ use crate::ex_docmd::source::SourceKind;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
-    ExFunc, SID_NONE, builtin_command_cstr, cmdnames, e_invrange, ex_msg, ex_pressedreturn,
+    E_INVRANGE, ExFunc, SID_NONE, builtin_command_cstr, cmdnames, ex_msg, ex_pressedreturn,
 };
 use crate::getchar::state::expr_map_lock;
 use crate::guard::sandbox;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
-use crate::message::state::{did_emsg, emsg_silent, msg_col, msg_scroll, msg_silent};
+use crate::message::state::{DID_EMSG, EMSG_SILENT, MSG_COL, MSG_SCROLL, MSG_SILENT};
 use crate::option::vars::{P_EI, P_VERBOSE, p_verbose};
 use crate::state::mode::exmode_active;
 
@@ -366,7 +366,7 @@ impl ExArg<'_> {
                                 cm.cmod_tab = tab_index(TabPage::current()) + 1;
                             } else {
                                 if tabnr < 0 || tabnr > current_tab_nr(None) {
-                                    *errormsg = Some(ex_msg(e_invrange));
+                                    *errormsg = Some(ex_msg(E_INVRANGE));
                                     return Err(Failed);
                                 }
                                 cm.cmod_tab = tabnr + 1;
@@ -579,20 +579,20 @@ fn apply_cmdmod() {
     if mods.has(CmdModFlags::SILENT | CmdModFlags::UNSILENT)
         && cmdmod.with(|cm| cm.cmod_save_msg_silent) == 0
     {
-        let (silent, scroll) = (msg_silent.get() + 1, msg_scroll.get());
+        let (silent, scroll) = (MSG_SILENT.get() + 1, MSG_SCROLL.get());
         cmdmod.with_mut(|cm| {
             cm.cmod_save_msg_silent = silent;
             cm.cmod_save_msg_scroll = scroll;
         });
     }
     if mods.has(CmdModFlags::SILENT) {
-        msg_silent.set(msg_silent.get() + 1);
+        MSG_SILENT.set(MSG_SILENT.get() + 1);
     }
     if mods.has(CmdModFlags::UNSILENT) {
-        msg_silent.set(0);
+        MSG_SILENT.set(0);
     }
     if mods.has(CmdModFlags::ERRSILENT) {
-        emsg_silent.set(emsg_silent.get() + 1);
+        EMSG_SILENT.set(EMSG_SILENT.get() + 1);
         cmdmod.with_mut(|cm| cm.cmod_did_esilent += 1);
     }
     if mods.has(CmdModFlags::NOAUTOCMD) && cmdmod.with(|cm| cm.cmod_save_ei.is_none()) {
@@ -636,13 +636,13 @@ pub(crate) fn undo_cmdmod(cm: &mut CmdMod) {
     if cm.cmod_save_msg_silent > 0 {
         // A command that raised an error may have wanted the message
         // level it left behind; only restore over it when nothing did.
-        if did_emsg.get() == 0 || msg_silent.get() > cm.cmod_save_msg_silent - 1 {
-            msg_silent.set(cm.cmod_save_msg_silent - 1);
+        if DID_EMSG.get() == 0 || MSG_SILENT.get() > cm.cmod_save_msg_silent - 1 {
+            MSG_SILENT.set(cm.cmod_save_msg_silent - 1);
         }
-        emsg_silent.set((emsg_silent.get() - cm.cmod_did_esilent).max(0));
-        msg_scroll.set(cm.cmod_save_msg_scroll);
+        EMSG_SILENT.set((EMSG_SILENT.get() - cm.cmod_did_esilent).max(0));
+        MSG_SCROLL.set(cm.cmod_save_msg_scroll);
         if redirecting() {
-            msg_col.set(0);
+            MSG_COL.set(0);
         }
         cm.cmod_save_msg_silent = 0;
         cm.cmod_did_esilent = 0;

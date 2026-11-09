@@ -19,7 +19,7 @@
 use core::ffi::CStr;
 use std::ffi::CString;
 
-use super::{kRetNilBool, nlua_error, nlua_exec, with_main_stack};
+use super::{RET_NIL_BOOL, nlua_error, nlua_exec, with_main_stack};
 use crate::env::home_to_tilde;
 use crate::eval::userfunc::register_luafunc;
 use crate::getchar::state::{got_int, mod_mask};
@@ -176,7 +176,7 @@ pub fn nlua_func_exists(lua_funcname: &CStr) -> bool {
         b"return type(loadstring(...)()) == 'function'",
         None,
         args,
-        kRetNilBool,
+        RET_NIL_BOOL,
     );
     result.is_ok_and(|value| value.as_boolean() == Some(true))
 }

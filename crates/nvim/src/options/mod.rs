@@ -54,31 +54,34 @@ use crate::global_cell::ConstTable;
 use crate::insexpand::{did_set_completefunc, did_set_omnifunc, did_set_thesaurusfunc};
 use crate::mapping::did_set_langmap;
 use crate::ops::did_set_operatorfunc;
-use crate::option::defs::{MAX_MCO, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString};
+use crate::option::defs::{
+    MAX_MCO, OPT_VAL_TYPE_BOOLEAN, OPT_VAL_TYPE_NUMBER, OPT_VAL_TYPE_STRING,
+};
 use crate::option::defs::{OptDefault, OptIndex, OptScopeFlags, OptVar, VimOption};
 use crate::option::vars::{
-    bkc_flags, bo_flags, cb_flags, cmp_flags, cot_flags, dy_flags, fdo_flags, jop_flags, rdb_flags,
-    ssop_flags, swb_flags, tc_flags, tcl_flags, tpf_flags, ve_flags, vop_flags, wop_flags,
+    BKC_FLAGS, BO_FLAGS, CB_FLAGS, CMP_FLAGS, COT_FLAGS, DY_FLAGS, FDO_FLAGS, JOP_FLAGS, RDB_FLAGS,
+    SSOP_FLAGS, SWB_FLAGS, TC_FLAGS, TCL_FLAGS, TPF_FLAGS, VE_FLAGS, VOP_FLAGS, WOP_FLAGS,
 };
 use crate::option::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, CPO_VIM, CTRL_F_STR, DFLT_COLS, DFLT_EFM, DFLT_ERRORFILE,
     DFLT_FO_VIM, DFLT_GFN, DFLT_GREPFORMAT, DFLT_HELPFILE, DFLT_ROWS, ENC_DFLT, HIGHLIGHT_INIT,
-    LISPWORD_VALUE, did_set_arabic, did_set_autochdir, did_set_binary, did_set_buflisted,
-    did_set_cmdheight, did_set_diff, did_set_eof_eol_fixeol_bomb, did_set_equalalways,
-    did_set_foldlevel, did_set_foldminlines, did_set_foldnestmax, did_set_helpheight,
-    did_set_hlsearch, did_set_ignorecase, did_set_iminsert, did_set_langnoremap, did_set_langremap,
-    did_set_laststatus, did_set_lines_or_columns, did_set_lisp, did_set_modifiable,
-    did_set_modified, did_set_number_relativenumber, did_set_numberwidth, did_set_paste,
-    did_set_previewwindow, did_set_pumblend, did_set_readonly, did_set_scrollback,
-    did_set_scrollbind, did_set_shiftwidth_tabstop, did_set_showtabline, did_set_smoothscroll,
-    did_set_spell, did_set_swapfile, did_set_textwidth, did_set_title_icon, did_set_titlelen,
-    did_set_undofile, did_set_undolevels, did_set_updatecount, did_set_wildchar, did_set_winblend,
-    did_set_window, did_set_winheight, did_set_winwidth, did_set_wrap, did_set_xhistory,
-    kOptFlagColon, kOptFlagComma, kOptFlagCurswant, kOptFlagExpand, kOptFlagFlagList, kOptFlagFunc,
-    kOptFlagHLOnly, kOptFlagMLE, kOptFlagNDname, kOptFlagNFname, kOptFlagNoDefExp,
-    kOptFlagNoDefault, kOptFlagNoDup, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagOneComma,
-    kOptFlagPriMkrc, kOptFlagRedrAll, kOptFlagRedrBuf, kOptFlagRedrStat, kOptFlagRedrTabl,
-    kOptFlagRedrWin, kOptFlagSecure, kOptFlagUIOption, kOptScopeBuf, kOptScopeGlobal, kOptScopeWin,
+    LISPWORD_VALUE, OPT_FLAG_COLON, OPT_FLAG_COMMA, OPT_FLAG_CURSWANT, OPT_FLAG_EXPAND,
+    OPT_FLAG_FLAG_LIST, OPT_FLAG_FUNC, OPT_FLAG_HL_ONLY, OPT_FLAG_MLE, OPT_FLAG_N_DNAME,
+    OPT_FLAG_N_FNAME, OPT_FLAG_NO_DEF_EXP, OPT_FLAG_NO_DEFAULT, OPT_FLAG_NO_DUP, OPT_FLAG_NO_GLOB,
+    OPT_FLAG_NO_MKRC, OPT_FLAG_ONE_COMMA, OPT_FLAG_PRI_MKRC, OPT_FLAG_REDR_ALL, OPT_FLAG_REDR_BUF,
+    OPT_FLAG_REDR_STAT, OPT_FLAG_REDR_TABL, OPT_FLAG_REDR_WIN, OPT_FLAG_SECURE, OPT_FLAG_UI_OPTION,
+    OPT_SCOPE_BUF, OPT_SCOPE_GLOBAL, OPT_SCOPE_WIN, did_set_arabic, did_set_autochdir,
+    did_set_binary, did_set_buflisted, did_set_cmdheight, did_set_diff,
+    did_set_eof_eol_fixeol_bomb, did_set_equalalways, did_set_foldlevel, did_set_foldminlines,
+    did_set_foldnestmax, did_set_helpheight, did_set_hlsearch, did_set_ignorecase,
+    did_set_iminsert, did_set_langnoremap, did_set_langremap, did_set_laststatus,
+    did_set_lines_or_columns, did_set_lisp, did_set_modifiable, did_set_modified,
+    did_set_number_relativenumber, did_set_numberwidth, did_set_paste, did_set_previewwindow,
+    did_set_pumblend, did_set_readonly, did_set_scrollback, did_set_scrollbind,
+    did_set_shiftwidth_tabstop, did_set_showtabline, did_set_smoothscroll, did_set_spell,
+    did_set_swapfile, did_set_textwidth, did_set_title_icon, did_set_titlelen, did_set_undofile,
+    did_set_undolevels, did_set_updatecount, did_set_wildchar, did_set_winblend, did_set_window,
+    did_set_winheight, did_set_winwidth, did_set_wrap, did_set_xhistory,
 };
 use crate::optionstr::{
     did_set_ambiwidth, did_set_background, did_set_backspace, did_set_backupcopy,
@@ -112,9 +115,9 @@ use crate::types::OptInt;
 use crate::window::{did_set_winminheight, did_set_winminwidth};
 
 /// `scope_flags` bits.
-const GLOBAL: OptScopeFlags = 1 << kOptScopeGlobal;
-const WIN: OptScopeFlags = 1 << kOptScopeWin;
-const BUF: OptScopeFlags = 1 << kOptScopeBuf;
+const GLOBAL: OptScopeFlags = 1 << OPT_SCOPE_GLOBAL;
+const WIN: OptScopeFlags = 1 << OPT_SCOPE_WIN;
+const BUF: OptScopeFlags = 1 << OPT_SCOPE_BUF;
 
 /// A row with every field at rest: a global-scoped, mutable, flagless
 /// boolean that defaults to false and belongs to no scope. Each row below
@@ -123,7 +126,7 @@ const BLANK: VimOption = VimOption {
     fullname: c"",
     shortname: None,
     flags: 0,
-    type_0: kOptValTypeBoolean,
+    type_0: OPT_VAL_TYPE_BOOLEAN,
     scope_flags: 0,
     var: OptVar::NoGlobal,
     flags_var: None,

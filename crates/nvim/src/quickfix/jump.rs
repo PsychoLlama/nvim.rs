@@ -164,7 +164,7 @@ fn escape_winfixbuf(
     }
     if qi.kind == QFLT_LOCATION {
         // A location list cannot split or reassign its window.
-        qf_emsg(e_winfixbuf_cannot_go_to_buffer);
+        qf_emsg(E_WINFIXBUF_CANNOT_GO_TO_BUFFER);
         return None;
     }
     // Try the previously used window, if it can take another buffer.
@@ -186,7 +186,7 @@ fn escape_winfixbuf(
     }
     // The split failed, or autocommands set 'winfixbuf' again or sent
     // us to another window that has it.
-    qf_emsg(e_winfixbuf_cannot_go_to_buffer);
+    qf_emsg(E_WINFIXBUF_CANNOT_GO_TO_BUFFER);
     Some(false)
 }
 
@@ -234,7 +234,7 @@ fn qf_jump_goto_line(position: &Position) {
 
 /// Say which entry of how many the jump landed on, and what it said.
 fn qf_jump_print_msg(qi: Qi, qf_index: c_int, at: usize, old_curbuf: Buf, old_lnum: LineNr) {
-    if msg_scrolled.get() == 0 {
+    if MSG_SCROLLED.get() == 0 {
         update_topline(Win::current());
         if must_redraw.get() != 0 {
             let _ = update_screen();
@@ -274,17 +274,17 @@ fn qf_jump_print_msg(qi: Qi, qf_index: c_int, at: usize, old_curbuf: Buf, old_ln
 
     // Overwrite rather than scroll when 'shortmess' holds "O" — but
     // print the whole message when the jump did not actually move.
-    let old_msg_scroll = msg_scroll.get();
+    let old_msg_scroll = MSG_SCROLL.get();
     if Buf::current_or_none() == Some(old_curbuf) && Win::current().w_cursor.lnum == old_lnum {
-        msg_scroll.set(c_int::from(true));
-    } else if (msg_scrolled.get() == 0 || p_ch() == 0 && msg_scrolled.get() == 1)
+        MSG_SCROLL.set(c_int::from(true));
+    } else if (MSG_SCROLLED.get() == 0 || p_ch() == 0 && MSG_SCROLLED.get() == 1)
         && shortmess(ShmFlag::OVERALL)
     {
-        msg_scroll.set(c_int::from(false));
+        MSG_SCROLL.set(c_int::from(false));
     }
     msg_ext_set_kind(c"quickfix");
     msg_keep_text(line, 0);
-    msg_scroll.set(old_msg_scroll);
+    MSG_SCROLL.set(old_msg_scroll);
 }
 
 /// Find a window to show entry `at` in, when the jump starts from a
@@ -355,7 +355,7 @@ fn qf_jump_to_buffer(
         }
     };
     qf_jump_goto_line(&position);
-    if fdo_flags.get() & kOptFdoFlagQuickfix as c_uint != 0 && openfold {
+    if FDO_FLAGS.get() & kOptFdoFlagQuickfix as c_uint != 0 && openfold {
         fold_open_cursor();
     }
     if print_message {
@@ -384,14 +384,14 @@ pub fn qf_jump_to_current() {
 /// a new window.
 pub(crate) fn qf_jump_newwin(qi: Qi, dir: c_int, errornr: c_int, forceit: bool, newwin: bool) {
     if qi.is_empty() || qi.current_list().is_empty() {
-        qf_emsg(e_no_errors);
+        qf_emsg(E_NO_ERRORS);
         return;
     }
     // A copy of 'switchbuf', to put back if the jump empties it: the split
     // path below clears the option so that the *next* entry does not split
     // again, and the option owning nothing is how that is recognised.
     let old_swb = (!P_SWB.is_unset()).then(|| P_SWB.get());
-    let old_swb_flags = swb_flags.get();
+    let old_swb_flags = SWB_FLAGS.get();
     // Getting the file may reset it.
     let old_key_typed = KeyTyped.get();
 
@@ -463,7 +463,7 @@ pub(crate) fn qf_jump_newwin(qi: Qi, dir: c_int, errornr: c_int, forceit: bool, 
     // it meanwhile -- in which case it owns a value of its own.
     if P_SWB.is_unset() {
         P_SWB.restore(old_swb);
-        swb_flags.set(old_swb_flags);
+        SWB_FLAGS.set(old_swb_flags);
     }
     drop(busy);
 }

@@ -47,10 +47,10 @@ use crate::insexpand::ins_compl_active;
 use crate::keycodes::K_SPECIAL;
 use crate::lua::executor::{release_luaref, typval_exec_lua_callable};
 use crate::message::state::{
-    did_emsg, emsg_severe, lines_left, msg_row, msg_scroll, need_wait_return,
+    DID_EMSG, EMSG_SEVERE, LINES_LEFT, MSG_ROW, MSG_SCROLL, NEED_WAIT_RETURN,
 };
 use crate::message::{
-    e_invarg2, e_invrange, e_toofewarg, e_toomanyarg, e_unknown_function_str, e_usingsid,
+    E_INVARG2, E_INVRANGE, E_TOOFEWARG, E_TOOMANYARG, E_UNKNOWN_FUNCTION_STR, E_USINGSID,
 };
 use crate::message::{
     emsg, internal_error, message_filtered, msg_clr_eos, msg_ext_set_kind, msg_outnum,

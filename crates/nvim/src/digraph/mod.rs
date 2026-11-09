@@ -40,7 +40,7 @@ use crate::keycodes::SpecialKey;
 use crate::mapping::{MAPTYPE_MAP, MAPTYPE_UNMAP, do_map};
 use crate::mbyte::{char_at, char_len, encode_char, utf_iscomposing_first};
 use crate::memory::ThinCString;
-use crate::message::state::msg_col;
+use crate::message::state::MSG_COL;
 use crate::message::{msg_advance, msg_display, msg_ext_set_kind, msg_putchar};
 use crate::message_fmt::emsg_text;
 use crate::normal::add_to_showcmd;
@@ -364,7 +364,7 @@ fn outtrans(bytes: &[u8], hl_id: c_int) {
 }
 
 fn digraph_header(name: &'static [u8]) {
-    if msg_col.get() > 0 {
+    if MSG_COL.get() > 0 {
         newline();
     }
     let header = gettext(cstr::in_bytes(name));
@@ -397,11 +397,11 @@ fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
         }
         *previous = result;
     }
-    if msg_col.get() > Columns.get() - LIST_WIDTH {
+    if MSG_COL.get() > Columns.get() - LIST_WIDTH {
         newline();
     }
-    if msg_col.get() % LIST_WIDTH != 0 {
-        msg_advance((msg_col.get() / LIST_WIDTH + 1) * LIST_WIDTH);
+    if MSG_COL.get() % LIST_WIDTH != 0 {
+        msg_advance((MSG_COL.get() / LIST_WIDTH + 1) * LIST_WIDTH);
     }
     outtrans(&[dp.char1, dp.char2, b' '], 0);
     let mut buf = [0u8; 12];

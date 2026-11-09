@@ -155,14 +155,14 @@ impl Opening {
         {
             self.config.split = if vertical {
                 if p_spr() {
-                    kWinSplitRight
+                    WIN_SPLIT_RIGHT
                 } else {
                     kWinSplitLeft
                 }
             } else if p_sb() {
-                kWinSplitBelow
+                WIN_SPLIT_BELOW
             } else {
-                kWinSplitAbove
+                WIN_SPLIT_ABOVE
             };
         }
         let flags = win_split_flags(self.config.split, self.parent.is_none()) | WSP_NOENTER;
@@ -252,7 +252,7 @@ pub fn nvim_open_win(
         return Ok(Handle::NONE);
     };
     if cmdwin_type.get() != 0 && enter || cmdwin_buf.get() == Some(buffer.id()) {
-        return Err(Error::exception(e_cmdwin));
+        return Err(Error::exception(E_CMDWIN));
     }
     let mut fconfig = WIN_CONFIG_INIT;
     if matches!(
@@ -319,21 +319,21 @@ pub(crate) fn win_split_dir(win: Win) -> WinSplit {
     // same test reads left/right.
     let column = ::core::ffi::c_int::from(parent.fr_layout) == FR_COL;
     match (frame.next().is_none(), column) {
-        (false, true) => kWinSplitAbove,
-        (true, true) => kWinSplitBelow,
+        (false, true) => WIN_SPLIT_ABOVE,
+        (true, true) => WIN_SPLIT_BELOW,
         (false, false) => kWinSplitLeft,
-        (true, false) => kWinSplitRight,
+        (true, false) => WIN_SPLIT_RIGHT,
     }
 }
 
 pub(crate) fn win_split_flags(split: WinSplit, toplevel: bool) -> ::core::ffi::c_int {
     let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if split == kWinSplitAbove || split == kWinSplitBelow {
+    if split == WIN_SPLIT_ABOVE || split == WIN_SPLIT_BELOW {
         flags |= WSP_HOR;
     } else {
         flags |= WSP_VERT;
     }
-    if split == kWinSplitAbove || split == kWinSplitLeft {
+    if split == WIN_SPLIT_ABOVE || split == kWinSplitLeft {
         flags |= if ::core::ffi::c_int::from(toplevel) != 0 {
             WSP_TOP
         } else {
@@ -363,7 +363,7 @@ pub(crate) fn win_can_move_tp(window: Win, tabpage: TabPage) -> Result<(), Error
     }
     window_layout_locked_err(CmdIdx::SIZE)?;
     if textlock.get() != 0 || expr_map_locked() {
-        return Err(Error::exception(e_textlock));
+        return Err(Error::exception(E_TEXTLOCK));
     }
     if is_aucmd_win(window) {
         return Err(Error::exception(
@@ -371,7 +371,7 @@ pub(crate) fn win_can_move_tp(window: Win, tabpage: TabPage) -> Result<(), Error
         ));
     }
     if cmdwin_win.get() == Some(window.id()) || cmdwin_old_curwin.get() == Some(window.id()) {
-        return Err(Error::exception(e_cmdwin));
+        return Err(Error::exception(E_CMDWIN));
     }
     Ok(())
 }

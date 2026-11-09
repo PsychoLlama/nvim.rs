@@ -638,8 +638,8 @@ fn run_cmd(
     cmdinfo: &mut CmdParseInfo,
     capture: bool,
 ) -> Result<ApiString, Error> {
-    let save_redir_off = redir_off.get();
-    let save_msg_col = msg_col.get();
+    let save_redir_off = REDIR_OFF.get();
+    let save_msg_col = MSG_COL.get();
     let outer_capture = capture.then(capture_start);
 
     let mut tstate = TryState::default();
@@ -647,8 +647,8 @@ fn run_cmd(
     // Captured output must not also reach the message grid.
     let silenced = capture.then(Suppress::messages_saved);
     if capture {
-        redir_off.set(false);
-        msg_col.set(0);
+        REDIR_OFF.set(false);
+        MSG_COL.set(0);
     }
 
     let sctx = api_set_sctx(channel_id);
@@ -658,8 +658,8 @@ fn run_cmd(
     drop(silenced);
     let captured = outer_capture.map(capture_finish);
     if capture {
-        redir_off.set(save_redir_off);
-        msg_col.set(save_msg_col);
+        REDIR_OFF.set(save_redir_off);
+        MSG_COL.set(save_msg_col);
     }
     let caught = try_leave(&tstate);
 

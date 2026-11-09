@@ -55,8 +55,8 @@ use crate::ex_eval::state::{
 };
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::guard::{Bump, Depth, MsgBump, Suppress};
-use crate::message::state::{did_emsg, msg_didany, msg_didout, msg_scroll, need_wait_return};
-use crate::message::{e_command_too_recursive, e_endfor, e_endif, e_endtry, e_endwhile};
+use crate::message::state::{DID_EMSG, MSG_DIDANY, MSG_DIDOUT, MSG_SCROLL, NEED_WAIT_RETURN};
+use crate::message::{E_COMMAND_TOO_RECURSIVE, E_ENDFOR, E_ENDIF, E_ENDTRY, E_ENDWHILE};
 use crate::option::vars::p_verbose;
 use crate::profile::{do_profiling, func_line_end, func_line_start};
 
@@ -238,7 +238,7 @@ fn ask_for_line(
         }
         // The first line after an `:if` needs this, or the `:if` is
         // overwritten.
-        msg_didout.set(true);
+        MSG_DIDOUT.set(true);
     }
 
     // A run with no source has only the line it was given.
@@ -251,7 +251,7 @@ fn ask_for_line(
         // sourced file or a function is not an abort and does not reach
         // here with 'KeyTyped' set.
         if KeyTyped.get() && !flags.has(DoCmdOpts::REPEAT) {
-            need_wait_return.set(false);
+            NEED_WAIT_RETURN.set(false);
         }
         return None;
     };
@@ -315,7 +315,7 @@ fn advance_loop(
             return Ok(None);
         };
         let flags = cs.flags[top];
-        if did_emsg.get() == 0
+        if DID_EMSG.get() == 0
             && !got_int.get()
             && !did_throw.get()
             && flags.has(CsFlags::LOOP)
@@ -365,13 +365,13 @@ fn unwind_conditionals(source: &Source, cond: CondId, initial_trylevel: c_int) {
     {
         let flags_here = cond.with(|cs| cs.top_flags());
         let missing = if flags_here.has(CsFlags::TRY) {
-            e_endtry
+            E_ENDTRY
         } else if flags_here.has(CsFlags::WHILE) {
-            e_endwhile
+            E_ENDWHILE
         } else if flags_here.has(CsFlags::FOR) {
-            e_endfor
+            E_ENDFOR
         } else {
-            e_endif
+            E_ENDIF
         };
         emsg(gettext(missing));
     }
@@ -633,7 +633,7 @@ impl Run {
                 pending & (CSTP_ERROR | CSTP_INTERRUPT | CSTP_THROW),
                 carried,
             );
-            did_emsg.set(0);
+            DID_EMSG.set(0);
             got_int.set(false);
             did_throw.set(false);
             self.seen.in_inactive = cond.with(|cs| {
@@ -650,7 +650,7 @@ impl Run {
         // sourced files -- aborting cancels everything. Leaving it normally
         // puts the non-exception abort behaviour back for the rest of the
         // script.
-        if trylevel.get() == 0 && did_emsg.get() == 0 && !got_int.get() && !did_throw.get() {
+        if trylevel.get() == 0 && DID_EMSG.get() == 0 && !got_int.get() && !did_throw.get() {
             force_abort.set(false);
         }
 
@@ -666,12 +666,12 @@ impl Run {
     fn keep_going(&self, source: &Source, flags: DoCmdOpts) -> Pass {
         let CondSummary { try_level, idx, .. } = self.seen;
         let aborting_now =
-            (got_int.get() || did_emsg.get() != 0 && force_abort.get() || did_throw.get())
+            (got_int.get() || DID_EMSG.get() != 0 && force_abort.get() || did_throw.get())
                 && try_level == 0;
         // Inside try/catch an error keeps going, so that it can be dealt
         // with -- unless it is a syntax error, which may make the `:endtry`
         // itself be missed.
-        let typed_error = did_emsg.get() != 0
+        let typed_error = DID_EMSG.get() != 0
             && (try_level == 0 || did_emsg_syntax.get())
             && self.read_from_source
             && source.is_typed();
@@ -692,7 +692,7 @@ impl Run {
             && self.seen.idx < 0
             && !source.func_aborted()
         {
-            did_emsg.set(0);
+            DID_EMSG.set(0);
         }
 
         if self.take_line(source, flags) == Pass::Done {
@@ -706,10 +706,10 @@ impl Run {
         // Not for commands from a script, and not for a recursive call
         // (`:e +command file`).
         if self.count == 0 && !flags.has(DoCmdOpts::NOWAIT) && RECURSIVE.get() == 0 {
-            self.msg_didout_before = msg_didout.get();
-            msg_didany.set(false);
+            self.msg_didout_before = MSG_DIDOUT.get();
+            MSG_DIDANY.set(false);
             msg_start();
-            msg_scroll.set(1);
+            MSG_SCROLL.set(1);
             self.quiet_output = Some((Suppress::wait_return(), Suppress::redraw()));
         }
         self.count += 1;
@@ -725,8 +725,8 @@ impl Run {
         self.run_one(source, flags);
 
         // A function that an error did not abort keeps going.
-        if did_emsg.get() != 0 && !force_abort.get() && source.is_func() && !source.func_aborted() {
-            did_emsg.set(0);
+        if DID_EMSG.get() != 0 && !force_abort.get() && source.is_func() && !source.func_aborted() {
+            DID_EMSG.set(0);
         }
 
         self.settle_conditionals(source);
@@ -739,16 +739,16 @@ impl Run {
     /// caller's list and not this run's.
     fn report(&mut self) {
         if self.quiet_output.take().is_some() {
-            msg_scroll.set(0);
+            MSG_SCROLL.set(0);
 
-            if self.retval.is_err() || did_endif.get() && KeyTyped.get() && did_emsg.get() == 0 {
+            if self.retval.is_err() || did_endif.get() && KeyTyped.get() && DID_EMSG.get() == 0 {
                 // A typed `:if`/`:else` that has just finished, or an error.
-                need_wait_return.set(false);
-                msg_didany.set(false);
-            } else if need_wait_return.get() {
+                NEED_WAIT_RETURN.set(false);
+                MSG_DIDANY.set(false);
+            } else if NEED_WAIT_RETURN.get() {
                 // `msg_start` above cleared 'msg_didout'; the `wait_return`
                 // here must not overwrite whatever was shown before it.
-                msg_didout.set(msg_didout.get() || self.msg_didout_before);
+                MSG_DIDOUT.set(MSG_DIDOUT.get() || self.msg_didout_before);
                 wait_return(0);
             }
         }
@@ -779,7 +779,7 @@ impl Run {
                 // discard it, stop converting errors and interrupts to
                 // exceptions, and run nothing more.
                 handle_did_throw();
-            } else if got_int.get() || did_emsg.get() != 0 && force_abort.get() {
+            } else if got_int.get() || DID_EMSG.get() != 0 && force_abort.get() {
                 // An interrupt, or an aborting error that did not become an
                 // exception. Errors stop being converted -- which is also
                 // what lets the interrupt message through when 'force_abort'
@@ -818,7 +818,7 @@ pub(crate) fn do_cmdline(
     push_msg_list();
 
     if do_cmdline_start().is_err() {
-        emsg(gettext(e_command_too_recursive));
+        emsg(gettext(E_COMMAND_TOO_RECURSIVE));
         // No command name: this is not an error of any one command, and
         // the throw goes through an empty stack of its own.
         let none = OwnedCondStack::open();
@@ -854,7 +854,7 @@ pub(crate) fn do_cmdline(
     did_throw.set(false);
     // An `emsg` cancels the whole command line and any conditional or
     // loop around it. With 'force_abort' set, everything is cancelled.
-    did_emsg.set(0);
+    DID_EMSG.set(0);
 
     // 'KeyTyped' is only set by `vgetc`; a sourced line never went
     // through it.

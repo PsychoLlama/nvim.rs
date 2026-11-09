@@ -72,7 +72,7 @@ pub use self::path::*;
 pub use self::read::*;
 pub use self::write::*;
 
-pub const kDirectionNotSet: Direction = 0;
+pub const DIRECTION_NOT_SET: Direction = 0;
 pub const VALID_PATH: ::core::ffi::c_uint = 1;
 pub const VALID_HEAD: ::core::ffi::c_uint = 2;
 pub const FINDFILE_DIR: ::core::ffi::c_uint = 1;

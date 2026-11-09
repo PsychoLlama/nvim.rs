@@ -11,9 +11,9 @@
 //! - the **default**, which startup rewrites once it can expand `$VIMRUNTIME`
 //!   and read the environment -- `None` until then, which reads as the
 //!   literal the table declares;
-//! - **`kOptFlagWasSet`**, raised the first time anything sets the option, so
+//! - **`OPT_FLAG_WAS_SET`**, raised the first time anything sets the option, so
 //!   that a computed default does not overwrite what a script chose;
-//! - **`kOptFlagInsecure`**, raised when the value came from a modeline, the
+//! - **`OPT_FLAG_INSECURE`**, raised when the value came from a modeline, the
 //!   sandbox or secure mode — for most options; the ones whose value is
 //!   evaluated as an expression keep their own copy per window or buffer,
 //!   which is what [`crate::option::insecure_flag`] chooses between;
@@ -44,12 +44,12 @@ use crate::options::{kOptCount, kOptInvalid, options};
 use crate::os::libc::uint32_t;
 use crate::types::ScriptCtx;
 
-use super::{kOptFlagInsecure, kOptFlagWasSet};
+use super::{OPT_FLAG_INSECURE, OPT_FLAG_WAS_SET};
 
 /// One option's mutable state. See the module docs.
 #[derive(Debug)]
 struct OptionState {
-    /// `kOptFlagWasSet` and `kOptFlagInsecure`, in their table positions so
+    /// `OPT_FLAG_WAS_SET` and `OPT_FLAG_INSECURE`, in their table positions so
     /// that the shared word and a window's or buffer's own read alike.
     flags: uint32_t,
     /// What `:set opt&` installs, once something has given the option a
@@ -114,31 +114,31 @@ pub(crate) fn set_option_last_set(opt_idx: OptIndex, script_ctx: ScriptCtx) {
 /// Whether anything has ever set the option, in which case a computed
 /// default must not overwrite what it chose.
 pub(crate) fn option_was_set(opt_idx: OptIndex) -> bool {
-    STATE.with(|state| state[slot(opt_idx)].flags & kOptFlagWasSet != 0)
+    STATE.with(|state| state[slot(opt_idx)].flags & OPT_FLAG_WAS_SET != 0)
 }
 
 /// Remember that the option has been set.
 pub(crate) fn mark_option_was_set(opt_idx: OptIndex) {
-    STATE.with_mut(|state| state[slot(opt_idx)].flags |= kOptFlagWasSet);
+    STATE.with_mut(|state| state[slot(opt_idx)].flags |= OPT_FLAG_WAS_SET);
 }
 
 /// Forget that anything set the option — what `:set all&` does.
 pub(crate) fn reset_option_was_set(opt_idx: OptIndex) {
-    STATE.with_mut(|state| state[slot(opt_idx)].flags &= !kOptFlagWasSet);
+    STATE.with_mut(|state| state[slot(opt_idx)].flags &= !OPT_FLAG_WAS_SET);
 }
 
 /// Whether the option's shared insecure mark is raised.
 pub(crate) fn option_is_insecure(opt_idx: OptIndex) -> bool {
-    STATE.with(|state| state[slot(opt_idx)].flags & kOptFlagInsecure != 0)
+    STATE.with(|state| state[slot(opt_idx)].flags & OPT_FLAG_INSECURE != 0)
 }
 
 /// Raise or lower the option's shared insecure mark.
 pub(crate) fn set_option_insecure(opt_idx: OptIndex, insecure: bool) {
     STATE.with_mut(|state| {
         if insecure {
-            state[slot(opt_idx)].flags |= kOptFlagInsecure;
+            state[slot(opt_idx)].flags |= OPT_FLAG_INSECURE;
         } else {
-            state[slot(opt_idx)].flags &= !kOptFlagInsecure;
+            state[slot(opt_idx)].flags &= !OPT_FLAG_INSECURE;
         }
     });
 }

@@ -63,12 +63,12 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_getln::is_in_cmdwin;
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
-use crate::message::{e_autocmd_close, e_cmdwin, e_noalt, e_noroom, emsg, msg};
+use crate::message::{E_AUTOCMD_CLOSE, E_CMDWIN, E_NOALT, E_NOROOM, emsg, msg};
 use crate::message::{
-    e_not_allowed_to_change_window_layout_in_this_autocmd, e_winfixbuf_cannot_go_to_buffer,
+    E_NOT_ALLOWED_TO_CHANGE_WINDOW_LAYOUT_IN_THIS_AUTOCMD, E_WINFIXBUF_CANNOT_GO_TO_BUFFER,
 };
 use crate::normal::defs::MotionType;
-use crate::option::vars::swb_flags;
+use crate::option::vars::SWB_FLAGS;
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::os::cshim::gettext;
 use crate::terminal::buf_terminal_check_size;
@@ -120,12 +120,12 @@ pub use self::winclose::*;
 
 pub const kZIndexMessages: c_int = 200;
 pub const kZIndexFloatDefault: c_int = 50;
-pub const kDirectionNotSet: Direction = 0;
+pub const DIRECTION_NOT_SET: Direction = 0;
 pub const kCdCauseWindow: CdCause = 1;
 pub const kCdCauseManual: CdCause = 0;
 pub const DOBUF_LAST: DoBufStart = 2;
 pub const kMTLineWise: MotionType = 1;
-pub const kMTCharWise: MotionType = 0;
+pub const MT_CHAR_WISE: MotionType = 0;
 pub const WSP_QUICKFIX: c_int = 1024;
 pub const WSP_NOENTER: c_int = 512;
 pub const WSP_NEWLOC: c_int = 256;
@@ -217,7 +217,7 @@ fn locked_err(cmd: CmdIdx) -> Result<(), Error> {
     let msg = if close_disallowed.get() == 0 && cmd == CmdIdx::tabnew {
         e_cannot_split_window_when_closing_buffer
     } else {
-        e_not_allowed_to_change_window_layout_in_this_autocmd
+        E_NOT_ALLOWED_TO_CHANGE_WINDOW_LAYOUT_IN_THIS_AUTOCMD
     };
     Err(make_err(msg))
 }
@@ -255,7 +255,7 @@ pub fn swbuf_goto_win_with_buf(buffer: Option<Buf>) -> Option<Win> {
 
 /// The window `'switchbuf'` says to jump to for `buffer`, having jumped to it.
 fn swbuf_goto_win(buffer: Buf) -> Option<Win> {
-    let flag = |f: ::core::ffi::c_uint| swb_flags.get() & f != 0;
+    let flag = |f: ::core::ffi::c_uint| SWB_FLAGS.get() & f != 0;
     let mut wp = None;
     if flag(kOptSwbFlagUseopen) {
         wp = jump_open_win(buffer);
@@ -374,15 +374,15 @@ impl WinError {
     /// The message, untranslated.
     fn msgid(self) -> &'static ::core::ffi::CStr {
         match self {
-            Self::NoRoom => e_noroom,
-            Self::WinFixBuf => e_winfixbuf_cannot_go_to_buffer,
-            Self::AutocmdClose => e_autocmd_close,
+            Self::NoRoom => E_NOROOM,
+            Self::WinFixBuf => E_WINFIXBUF_CANNOT_GO_TO_BUFFER,
+            Self::AutocmdClose => E_AUTOCMD_CLOSE,
             Self::OnlyAutocmdWindow => {
                 c"E814: Cannot close window, only autocmd window would remain"
             }
             Self::LastWindow => e_cannot_close_last_window,
-            Self::CmdWin => e_cmdwin,
-            Self::NoAlternate => e_noalt,
+            Self::CmdWin => E_CMDWIN,
+            Self::NoAlternate => E_NOALT,
             Self::NoPreviewWindow => c"E441: There is no preview window",
             Self::TopAndBottom => c"E442: Can't split topleft and botright at the same time",
             Self::RotateSplit => c"E443: Cannot rotate when another window is split",

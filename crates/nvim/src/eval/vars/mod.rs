@@ -9,9 +9,9 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::option::defs::kOptValTypeBoolean;
-use crate::option::defs::kOptValTypeNumber;
-use crate::option::defs::kOptValTypeString;
+use crate::option::defs::OPT_VAL_TYPE_BOOLEAN;
+use crate::option::defs::OPT_VAL_TYPE_NUMBER;
+use crate::option::defs::OPT_VAL_TYPE_STRING;
 use core::ffi::{CStr, c_int, c_uint, c_void};
 use core::mem::ManuallyDrop;
 
@@ -52,10 +52,10 @@ use crate::guard::sandbox;
 use crate::hashtab::hash_reset;
 use crate::lua::executor::nlua_set_sctx;
 use crate::memory::XString;
-use crate::message::state::emsg_severe;
+use crate::message::state::EMSG_SEVERE;
 use crate::message::{
-    e_cannot_change_readonly_variable_str, e_cannot_mod, e_cannot_set_variable_in_sandbox_str,
-    e_string_required,
+    E_CANNOT_CHANGE_READONLY_VARIABLE_STR, E_CANNOT_MOD, E_CANNOT_SET_VARIABLE_IN_SANDBOX_STR,
+    E_STRING_REQUIRED,
 };
 use crate::message::{
     internal_error, message_filtered, msg_advance, msg_bytes, msg_clr_eos, msg_display_bytes,
@@ -64,7 +64,7 @@ use crate::message::{
 use crate::option::defs::{OptIndex, OptVal};
 use crate::option::vars::{p_ccv, p_dex, p_pex, p_verbose};
 use crate::option::{
-    find_option, get_option, get_winbuf_options, is_tty_option, kOptFlagFunc, option_has_type,
+    OPT_FLAG_FUNC, find_option, get_option, get_winbuf_options, is_tty_option, option_has_type,
     option_last_set,
 };
 use crate::options::{kOptCharconvert, kOptDiffexpr, kOptInvalid, kOptPatchexpr, kOptSpellsuggest};

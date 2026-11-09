@@ -24,7 +24,7 @@ use crate::charset::getdigits_int_at;
 use crate::eval::skip_expr;
 use crate::ex_cmds::skip_vimgrep_pat_at;
 use crate::ex_docmd::onecmd::shift_cmd_args;
-use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, e_zerocount, ex_msg};
+use crate::ex_docmd::{E_ZEROCOUNT, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, ex_msg};
 use crate::keycodes::Ctrl_V;
 
 use crate::ascii::NUL;
@@ -157,7 +157,7 @@ impl ExArg<'_> {
             }
         }
         if n <= LineNr::ZERO && !self.argt.has(ExArgt::ZEROR) {
-            *errormsg = Some(ex_msg(e_zerocount));
+            *errormsg = Some(ex_msg(E_ZEROCOUNT));
             return Err(Failed);
         }
         set_cmd_count(self, n.get(), validate);

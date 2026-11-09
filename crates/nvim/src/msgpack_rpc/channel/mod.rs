@@ -72,7 +72,7 @@ mod known {
 
     pub(super) const kMessageTypeRequest: MessageType = 0;
     pub(super) const kMessageTypeResponse: MessageType = 1;
-    pub(super) const kMessageTypeNotification: MessageType = 2;
+    pub(super) const MESSAGE_TYPE_NOTIFICATION: MessageType = 2;
     pub(super) const kMessageTypeRedrawEvent: MessageType = 3;
 
     pub(super) const kChannelPartRpc: ChannelPart = 3;

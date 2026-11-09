@@ -293,7 +293,7 @@ pub(crate) fn do_incsearch_highlighting(
     firstc: u8,
     is_state: &IncsearchState,
 ) -> Option<PatternSpan> {
-    if !p_is() || cmd_silent.get() {
+    if !p_is() || CMD_SILENT.get() {
         return None;
     }
 

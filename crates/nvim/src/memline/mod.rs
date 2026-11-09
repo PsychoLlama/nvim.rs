@@ -50,7 +50,7 @@ use crate::memfile::{MFS_ALL, MFS_FLUSH, MFS_STOP, MFS_ZERO, MemFile, MfDirty, m
 use crate::memline::state::InfoPtr;
 use crate::memory::XString;
 use crate::message::state::{
-    msg_ext_skip_flush, msg_row, msg_silent, need_wait_return, no_lines_msg,
+    MSG_EXT_SKIP_FLUSH, MSG_ROW, MSG_SILENT, NEED_WAIT_RETURN, NO_LINES_MSG,
 };
 use crate::message::{
     do_dialog, emsg, iemsg, msg, msg_ext_set_kind, msg_home_replace, msg_multiline, msg_outnum,
@@ -398,7 +398,7 @@ pub fn ml_open_file(mut buffer: Buf) {
     }
 
     if P_DIR.first_byte() != 0 && buffer.b_ml.memfile().fname().is_none() {
-        need_wait_return.set(true); // call wait_return() later
+        NEED_WAIT_RETURN.set(true); // call wait_return() later
         let _no_prompt = Suppress::wait_return();
         let arg0 = msg_cstr_opt(buf_spname(&buffer).or(buffer.name.shown()));
         semsg!("E303: Unable to open swap file for \"{arg0}\", recovery impossible");

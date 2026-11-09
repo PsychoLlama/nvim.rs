@@ -45,7 +45,7 @@ use crate::log::{LOGLVL_ERR, logmsg};
 use crate::memline::Lines;
 use crate::memline::ml_replace_owned;
 use crate::memory::XString;
-use crate::message::e_positive;
+use crate::message::E_POSITIVE;
 use crate::message::emsg;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::options::kOptDyFlagUhex;
@@ -148,7 +148,7 @@ pub fn tabstop_set(text: &[u8]) -> Result<TabStopArray, Failed> {
     match tabstop::parse(text) {
         Ok(parsed) => Ok(parsed.map(Vec::into_boxed_slice)),
         Err(tabstop::ParseError::NotPositive(_)) => {
-            emsg(gettext(e_positive));
+            emsg(gettext(E_POSITIVE));
             Err(Failed)
         }
         Err(tabstop::ParseError::Malformed(at) | tabstop::ParseError::OutOfRange(at)) => {

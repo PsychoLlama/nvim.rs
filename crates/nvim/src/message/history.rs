@@ -138,21 +138,21 @@ pub(crate) fn msg_hist_add_chunks(chunks: impl IntoIterator<Item = HlMessageChun
 ///
 /// A `temp` entry is one only `g<` shows; the next real message displaces it.
 pub(crate) fn msg_hist_add_multihl(msg: HlMessage, temp: bool) {
-    if do_clear_hist_temp.get() {
+    if DO_CLEAR_HIST_TEMP.get() {
         HISTORY.with_mut(History::clear_temp);
-        do_clear_hist_temp.set(false);
+        DO_CLEAR_HIST_TEMP.set(false);
     }
 
-    if msg_hist_off.get() || msg_silent.get() != 0 {
+    if MSG_HIST_OFF.get() || MSG_SILENT.get() != 0 {
         return;
     }
 
-    let kind = msg_ext_kind.with(ApiString::clone);
+    let kind = MSG_EXT_KIND.with(ApiString::clone);
     // NOTE: this does not encode whether the message was actually appended
     // to the previous history entry. `append` is currently only true for
     // `:echon`, which is stored as a temporary entry for `g<`, where it is
     // guaranteed to follow the entry it was appended to.
-    let append = msg_ext_append.get();
+    let append = MSG_EXT_APPEND.get();
     HISTORY.with_mut(|history| {
         let seq = history.next_seq;
         history.next_seq += 1;
@@ -167,7 +167,7 @@ pub(crate) fn msg_hist_add_multihl(msg: HlMessage, temp: bool) {
         history.len += c_int::from(!temp);
         history.clear(history.max);
     });
-    msg_ext_history.set(true);
+    MSG_EXT_HISTORY.set(true);
 }
 
 /// Delete the oldest messages until `keep` non-temporary ones remain.
@@ -241,9 +241,9 @@ pub fn messagesopt_changed() -> Result<(), Failed> {
         return Err(Failed);
     }
 
-    msg_flags.set(flags);
-    msg_wait.set(wait);
-    progress_msg_target.set(progress_target);
+    MSG_FLAGS.set(flags);
+    MSG_WAIT.set(wait);
+    PROGRESS_MSG_TARGET.set(progress_target);
 
     HISTORY.with_mut(|entries| {
         entries.max = history;
@@ -316,7 +316,7 @@ pub fn ex_messages(excmd: &mut ExArg) {
         return;
     }
     if excmd.line.byte_at(excmd.line.arg) != 0 {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     }
 
@@ -347,7 +347,7 @@ pub fn ex_messages(excmd: &mut ExArg) {
         if temporary || counted_out {
             continue;
         }
-        if ui_has(kUIMessages) && msg_silent.get() == 0 {
+        if ui_has(kUIMessages) && MSG_SILENT.get() == 0 {
             entries.push(entry_to_event(&entry));
         }
         if redirecting() || !ui_has(kUIMessages) {
@@ -357,7 +357,7 @@ pub fn ex_messages(excmd: &mut ExArg) {
             // as upstream does, and deliberately not hoisted into a
             // local: `msg_multihl` can reach `wait_return`, which pumps
             // the event loop, which can service a UI attach or detach.
-            msg_silent.set(msg_silent.get() + c_int::from(ui_has(kUIMessages)));
+            MSG_SILENT.set(MSG_SILENT.get() + c_int::from(ui_has(kUIMessages)));
             let mut needs_clear = false;
             let kind = (!entry.kind.is_null()).then(|| entry.kind.as_cstr());
             let shown = &entry.chunks;
@@ -370,7 +370,7 @@ pub fn ex_messages(excmd: &mut ExArg) {
                 None,
                 &mut needs_clear,
             );
-            msg_silent.set(msg_silent.get() - c_int::from(ui_has(kUIMessages)));
+            MSG_SILENT.set(MSG_SILENT.get() - c_int::from(ui_has(kUIMessages)));
         }
     }
 

@@ -32,40 +32,40 @@ const SCOPE_IDX_ORDER: [&str; 3] = ["global", "win", "buf"];
 
 /// `list` -> the flags it contributes, in upstream's order.
 const LIST_FLAGS: &[(&str, &[&str])] = &[
-    ("comma", &["kOptFlagComma"]),
-    ("onecomma", &["kOptFlagOneComma"]),
-    ("commacolon", &["kOptFlagComma", "kOptFlagColon"]),
-    ("onecommacolon", &["kOptFlagOneComma", "kOptFlagColon"]),
-    ("flags", &["kOptFlagFlagList"]),
-    ("flagscomma", &["kOptFlagComma", "kOptFlagFlagList"]),
+    ("comma", &["OPT_FLAG_COMMA"]),
+    ("onecomma", &["OPT_FLAG_ONE_COMMA"]),
+    ("commacolon", &["OPT_FLAG_COMMA", "OPT_FLAG_COLON"]),
+    ("onecommacolon", &["OPT_FLAG_ONE_COMMA", "OPT_FLAG_COLON"]),
+    ("flags", &["OPT_FLAG_FLAG_LIST"]),
+    ("flagscomma", &["OPT_FLAG_COMMA", "OPT_FLAG_FLAG_LIST"]),
 ];
 
 /// A `redraw` entry -> its flag.
 const REDRAW_FLAGS: &[(&str, &str)] = &[
-    ("ui_option", "kOptFlagUIOption"),
-    ("tabline", "kOptFlagRedrTabl"),
-    ("statuslines", "kOptFlagRedrStat"),
-    ("current_window", "kOptFlagRedrWin"),
-    ("current_buffer", "kOptFlagRedrBuf"),
-    ("all_windows", "kOptFlagRedrAll"),
-    ("curswant", "kOptFlagCurswant"),
-    ("highlight_only", "kOptFlagHLOnly"),
+    ("ui_option", "OPT_FLAG_UI_OPTION"),
+    ("tabline", "OPT_FLAG_REDR_TABL"),
+    ("statuslines", "OPT_FLAG_REDR_STAT"),
+    ("current_window", "OPT_FLAG_REDR_WIN"),
+    ("current_buffer", "OPT_FLAG_REDR_BUF"),
+    ("all_windows", "OPT_FLAG_REDR_ALL"),
+    ("curswant", "OPT_FLAG_CURSWANT"),
+    ("highlight_only", "OPT_FLAG_HL_ONLY"),
 ];
 
 /// The boolean option attributes that become flags, in the order upstream
 /// tests them — the table's `|` chains are in exactly this sequence.
 const BOOL_FLAGS: &[(&str, &str)] = &[
-    ("nodefault", "kOptFlagNoDefault"),
-    ("no_mkrc", "kOptFlagNoMkrc"),
-    ("secure", "kOptFlagSecure"),
-    ("gettext", "kOptFlagGettext"),
-    ("noglob", "kOptFlagNoGlob"),
-    ("normal_fname_chars", "kOptFlagNFname"),
-    ("normal_dname_chars", "kOptFlagNDname"),
-    ("pri_mkrc", "kOptFlagPriMkrc"),
-    ("deny_duplicates", "kOptFlagNoDup"),
-    ("modelineexpr", "kOptFlagMLE"),
-    ("func", "kOptFlagFunc"),
+    ("nodefault", "OPT_FLAG_NO_DEFAULT"),
+    ("no_mkrc", "OPT_FLAG_NO_MKRC"),
+    ("secure", "OPT_FLAG_SECURE"),
+    ("gettext", "OPT_FLAG_GETTEXT"),
+    ("noglob", "OPT_FLAG_NO_GLOB"),
+    ("normal_fname_chars", "OPT_FLAG_N_FNAME"),
+    ("normal_dname_chars", "OPT_FLAG_N_DNAME"),
+    ("pri_mkrc", "OPT_FLAG_PRI_MKRC"),
+    ("deny_duplicates", "OPT_FLAG_NO_DUP"),
+    ("modelineexpr", "OPT_FLAG_MLE"),
+    ("func", "OPT_FLAG_FUNC"),
 ];
 
 /// One entry of an option's `values` list: a name, plus the nested list a
@@ -361,9 +361,9 @@ fn parse_options(source: &str) -> Result<Vec<Opt>, String> {
             flags.push((*f).to_string());
         }
         if o.truthy("expand") {
-            flags.push("kOptFlagExpand".into());
+            flags.push("OPT_FLAG_EXPAND".into());
             if o.str("expand") == Some("nodefault") {
-                flags.push("kOptFlagNoDefExp".into());
+                flags.push("OPT_FLAG_NO_DEF_EXP".into());
             }
         }
         for (key, flag) in BOOL_FLAGS {
@@ -414,7 +414,8 @@ fn parse_options(source: &str) -> Result<Vec<Opt>, String> {
             scope,
             scope_idx,
             varname: varname.filter(|_| !disabled),
-            flags_varname: o.str("flags_varname").map(str::to_string),
+            // The cell is upper-cased here; `options.lua` keeps upstream's name.
+            flags_varname: o.str("flags_varname").map(str::to_uppercase),
             flags,
             flag_enum: flag_enum(o, &values, &full_name)?,
             values,
@@ -1328,7 +1329,7 @@ fn emit_row(out: &mut String, o: &Opt) {
         writeln!(out, "        flags: {},", o.flags.join(" | ")).unwrap();
     }
     if o.ty != "boolean" {
-        writeln!(out, "        type_0: kOptValType{},", titlecase(&o.ty)).unwrap();
+        writeln!(out, "        type_0: OPT_VAL_TYPE_{},", o.ty.to_uppercase()).unwrap();
     }
     let scopes: Vec<String> = o.scope.iter().map(|s| s.to_uppercase()).collect();
     writeln!(out, "        scope_flags: {},", scopes.join(" | ")).unwrap();
@@ -1410,9 +1411,9 @@ fn emit_lookup(out: &mut String, opts: &[Opt]) -> Result<(), String> {
 /// the constructors that keep a row to a readable handful of lines.
 const SUPPORT: &str = r#"
 /// `scope_flags` bits.
-const GLOBAL: OptScopeFlags = 1 << kOptScopeGlobal;
-const WIN: OptScopeFlags = 1 << kOptScopeWin;
-const BUF: OptScopeFlags = 1 << kOptScopeBuf;
+const GLOBAL: OptScopeFlags = 1 << OPT_SCOPE_GLOBAL;
+const WIN: OptScopeFlags = 1 << OPT_SCOPE_WIN;
+const BUF: OptScopeFlags = 1 << OPT_SCOPE_BUF;
 
 /// A row with every field at rest: a global-scoped, mutable, flagless
 /// boolean that defaults to false and belongs to no scope. Each row below
@@ -1421,7 +1422,7 @@ const BLANK: VimOption = VimOption {
     fullname: c"",
     shortname: None,
     flags: 0,
-    type_0: kOptValTypeBoolean,
+    type_0: OPT_VAL_TYPE_BOOLEAN,
     scope_flags: 0,
     var: OptVar::NoGlobal,
     flags_var: None,
@@ -1469,12 +1470,12 @@ const fn fill<const N: usize>(table: &mut [VimOption], base: usize, mut part: [V
 /// Everything the generated module needs from the rest of the crate.
 fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), String> {
     let mut wanted: BTreeSet<&str> = [
-        "kOptScopeGlobal",
-        "kOptScopeWin",
-        "kOptScopeBuf",
-        "kOptValTypeBoolean",
-        "kOptValTypeNumber",
-        "kOptValTypeString",
+        "OPT_SCOPE_GLOBAL",
+        "OPT_SCOPE_WIN",
+        "OPT_SCOPE_BUF",
+        "OPT_VAL_TYPE_BOOLEAN",
+        "OPT_VAL_TYPE_NUMBER",
+        "OPT_VAL_TYPE_STRING",
     ]
     .into_iter()
     .collect();

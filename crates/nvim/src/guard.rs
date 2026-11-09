@@ -1,7 +1,7 @@
 //! RAII guards over the editor's suppression counters and script context.
 //!
-//! `textlock`, `sandbox`, `msg_silent`, `emsg_off`, `emsg_skip`,
-//! `no_wait_return`, `no_mapping`, `allow_keys` and `RedrawingDisabled` are
+//! `textlock`, `sandbox`, `MSG_SILENT`, `EMSG_OFF`, `EMSG_SKIP`,
+//! `NO_WAIT_RETURN`, `no_mapping`, `allow_keys` and `RedrawingDisabled` are
 //! the globals that say "for the duration of this operation, don't show
 //! errors / don't redraw / don't let anything touch the buffer". C bumps
 //! them by hand and unbumps them at every exit — which is fine until an
@@ -69,7 +69,7 @@
 //!   `ui_busy_start`/`ui_busy_stop`, `window_lock`/`window_unlock` — are
 //!   the *public* form of a guard already; wrapping the counter would just
 //!   move the pairing problem to their own callers.
-//! - **`buf_write` releases `no_wait_return` inside a callee.** The
+//! - **`buf_write` releases `NO_WAIT_RETURN` inside a callee.** The
 //!   contract is written on `buf_write_do_autocmds`; a guard here would
 //!   have to be handed across the call.
 //! - **Upstream leaks it on purpose.** `win_float_setup_preview` returns
@@ -124,7 +124,7 @@ use crate::getchar::state::{GetcharField, allow_keys, expr_map_lock, no_mapping,
 use crate::global_cell::{GlobalCell, Level};
 use crate::memline::inhibit_delete_count;
 use crate::message::state::{
-    MsgField, emsg_off, emsg_silent, emsg_skip, msg_listdo_overwrite, msg_silent, no_wait_return,
+    EMSG_OFF, EMSG_SILENT, EMSG_SKIP, MSG_LISTDO_OVERWRITE, MSG_SILENT, MsgField, NO_WAIT_RETURN,
 };
 use crate::runtime::state::current_sctx;
 use crate::types::{ScriptCtx, ScriptId};
@@ -234,7 +234,7 @@ pub(crate) type AutocmdBump = Bump<AutocmdField<c_int>>;
 /// [`Saved`] over a cell holding something other than an `int`.
 ///
 /// The named constructors below exist because a counter's *direction* is
-/// what a reader needs told: `emsg_off += 1` and `msg_silent = 0` are both
+/// what a reader needs told: `EMSG_OFF += 1` and `MSG_SILENT = 0` are both
 /// "one line of arithmetic on a global" until something says which way they
 /// point. A cell that holds a value rather than a level has no direction to
 /// document -- `Restore::of(&cell, value)` already says what it does -- so
@@ -278,7 +278,7 @@ pub(crate) struct RawKeys {
     _allow_keys: KeyBump,
 }
 
-/// `emsg_off` and `msg_silent` together: "run this and tell me nothing".
+/// `EMSG_OFF` and `MSG_SILENT` together: "run this and tell me nothing".
 #[must_use = "the counters are released as soon as the guard is dropped"]
 #[derive(Debug)]
 pub(crate) struct Quiet {
@@ -291,24 +291,24 @@ pub(crate) struct Quiet {
 pub struct Suppress;
 
 impl Suppress {
-    /// `emsg_off` — error messages are not displayed at all.
+    /// `EMSG_OFF` — error messages are not displayed at all.
     ///
     /// For the caller who evaluates something it expects to fail and does
     /// not want the user to hear about it.
     pub(crate) fn emsg() -> MsgBump {
-        Bump::new(emsg_off)
+        Bump::new(EMSG_OFF)
     }
 
-    /// `emsg_skip` — errors from an expression that is only being parsed,
+    /// `EMSG_SKIP` — errors from an expression that is only being parsed,
     /// not executed (a skipped `:if` branch, a `:for` over a bad list).
     pub(crate) fn emsg_skip() -> MsgBump {
-        Bump::new(emsg_skip)
+        Bump::new(EMSG_SKIP)
     }
 
-    /// `msg_silent` — messages are computed but not shown, as under
+    /// `MSG_SILENT` — messages are computed but not shown, as under
     /// `:silent`.
     pub(crate) fn messages() -> MsgBump {
-        Bump::new(msg_silent)
+        Bump::new(MSG_SILENT)
     }
 
     /// [`Suppress::messages`] whose release *restores* the level it found
@@ -318,7 +318,7 @@ impl Suppress {
     /// put the whole message state back in one block afterwards, so a
     /// script that leaked a `:silent` cannot escape through them.
     pub(crate) fn messages_saved() -> Saved<MsgField<c_int>> {
-        Saved::new(msg_silent, msg_silent.get() + 1)
+        Saved::new(MSG_SILENT, MSG_SILENT.get() + 1)
     }
 
     /// [`Suppress::messages_saved`] that only raises the level when `cond`,
@@ -326,13 +326,13 @@ impl Suppress {
     /// an explicit empty value asks for output *and* still resets whatever
     /// the executed commands left behind.
     pub(crate) fn messages_saved_when(cond: bool) -> Saved<MsgField<c_int>> {
-        Saved::when(cond, msg_silent, msg_silent.get() + 1)
+        Saved::when(cond, MSG_SILENT, MSG_SILENT.get() + 1)
     }
 
-    /// `no_wait_return` — a message shown in this scope does not stop for
+    /// `NO_WAIT_RETURN` — a message shown in this scope does not stop for
     /// the hit-enter prompt.
     pub(crate) fn wait_return() -> MsgBump {
-        Bump::new(no_wait_return)
+        Bump::new(NO_WAIT_RETURN)
     }
 
     /// `RedrawingDisabled` — the screen is not updated while this is held.
@@ -340,12 +340,12 @@ impl Suppress {
         Bump::new(&RedrawingDisabled)
     }
 
-    /// `emsg_off = 1` — errors off for the scope, restoring the level that
+    /// `EMSG_OFF = 1` — errors off for the scope, restoring the level that
     /// was in effect rather than decrementing it. The one site spelled this
     /// way compiles a user's tag pattern, where an error raised by a
     /// *nested* evaluation must not survive the scope either.
     pub(crate) fn emsg_outright() -> Saved<MsgField<c_int>> {
-        Saved::new(emsg_off, 1)
+        Saved::new(EMSG_OFF, 1)
     }
 
     /// [`Suppress::emsg`] + [`Suppress::messages`]: the recurring "compile
@@ -357,14 +357,14 @@ impl Suppress {
         }
     }
 
-    /// `emsg_silent` — an error raised in this scope still sets `v:errmsg`
+    /// `EMSG_SILENT` — an error raised in this scope still sets `v:errmsg`
     /// and still aborts, it is only not *shown*.
     ///
     /// Weaker than [`Suppress::emsg`], which stops the error being raised
     /// at all: `:silent!`, `'debug'` and `assert_fails()` all read this
     /// counter rather than that one.
     pub(crate) fn emsg_silent() -> MsgBump {
-        Bump::new(emsg_silent)
+        Bump::new(EMSG_SILENT)
     }
 
     /// Run `f` under [`Suppress::emsg_silent`], for the unit suite.
@@ -421,13 +421,13 @@ impl Suppress {
         Bump::new(&inhibit_delete_count)
     }
 
-    /// `msg_listdo_overwrite` — a file message in this scope does not
+    /// `MSG_LISTDO_OVERWRITE` — a file message in this scope does not
     /// overwrite the line above it, whatever `'shortmess'` says.
     ///
     /// `:argdo` and its siblings hold this so that the per-file header
     /// stays on screen above the command's own output.
     pub(crate) fn message_overwrite() -> MsgBump {
-        Bump::new(msg_listdo_overwrite)
+        Bump::new(MSG_LISTDO_OVERWRITE)
     }
 
     /// `cmdline_star` — the command line shows `*` for each character
@@ -515,10 +515,10 @@ impl Depth {
 pub struct Allow;
 
 impl Allow {
-    /// `msg_silent = 0` — this scope's messages reach the user even inside
+    /// `MSG_SILENT = 0` — this scope's messages reach the user even inside
     /// `:silent`.
     pub(crate) fn messages() -> Saved<MsgField<c_int>> {
-        Saved::new(msg_silent, 0)
+        Saved::new(MSG_SILENT, 0)
     }
 
     /// `RedrawingDisabled = 0` — this scope redraws even inside an
@@ -527,10 +527,10 @@ impl Allow {
         Saved::new(&RedrawingDisabled, 0)
     }
 
-    /// `no_wait_return = 0` — the hit-enter prompt is armed again for this
+    /// `NO_WAIT_RETURN = 0` — the hit-enter prompt is armed again for this
     /// scope, whatever the caller had asked for.
     pub(crate) fn wait_return() -> Saved<MsgField<c_int>> {
-        Saved::new(no_wait_return, 0)
+        Saved::new(NO_WAIT_RETURN, 0)
     }
 
     /// `textlock = 0` — the callback about to run is allowed to change
@@ -744,33 +744,33 @@ mod tests {
     #[test]
     fn bump_nests_and_unwinds() {
         let _serial = counters();
-        assert_eq!(emsg_off.get(), 0);
+        assert_eq!(EMSG_OFF.get(), 0);
         {
             let _outer = Suppress::emsg();
-            assert_eq!(emsg_off.get(), 1);
+            assert_eq!(EMSG_OFF.get(), 1);
             {
                 let _inner = Suppress::emsg();
-                assert_eq!(emsg_off.get(), 2);
+                assert_eq!(EMSG_OFF.get(), 2);
             }
-            assert_eq!(emsg_off.get(), 1);
+            assert_eq!(EMSG_OFF.get(), 1);
         }
-        assert_eq!(emsg_off.get(), 0);
+        assert_eq!(EMSG_OFF.get(), 0);
     }
 
     #[test]
     fn saved_restores_what_it_saw() {
         let _serial = counters();
-        msg_silent.set(3);
+        MSG_SILENT.set(3);
         {
             let _guard = Allow::messages();
-            assert_eq!(msg_silent.get(), 0);
+            assert_eq!(MSG_SILENT.get(), 0);
             // A callee bumping it does not survive the restore.
             let inner = Suppress::messages();
-            assert_eq!(msg_silent.get(), 1);
+            assert_eq!(MSG_SILENT.get(), 1);
             core::mem::forget(inner);
         }
-        assert_eq!(msg_silent.get(), 3);
-        msg_silent.set(0);
+        assert_eq!(MSG_SILENT.get(), 3);
+        MSG_SILENT.set(0);
     }
 
     #[test]

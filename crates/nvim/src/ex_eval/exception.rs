@@ -62,9 +62,9 @@ use crate::ex_eval::state::{
 use crate::getchar::state::got_int;
 use crate::guard::{Allow, Suppress};
 use crate::memory::XString;
+use crate::message::E_INTERR;
 use crate::message::IOSIZE;
-use crate::message::e_interr;
-use crate::message::state::{did_emsg, emsg_silent, msg_row, msg_scroll};
+use crate::message::state::{DID_EMSG, EMSG_SILENT, MSG_ROW, MSG_SCROLL};
 use crate::message::{emsg, internal_error, msg_str, verbose_enter, verbose_leave};
 use crate::message_fmt::{msg_bytes, msg_cstr, report_msg};
 use crate::option::vars::p_verbose;
@@ -102,7 +102,7 @@ pub(crate) fn cause_errthrow(
     // every error of one command. Parsing errors during an expression then
     // all get reported, even from a finally clause entered because of an
     // aborting error.
-    if did_emsg.get() == 0 {
+    if DID_EMSG.get() == 0 {
         cause_abort.set(force_abort.get());
         force_abort.set(false);
     }
@@ -111,7 +111,7 @@ pub(crate) fn cause_errthrow(
     // try conditional so far: do nothing, for the sake of non-EH scripts.
     // Under ":silent!" and outside a throw, likewise -- `emsg` will store
     // the text in v:errmsg without displaying it.
-    if (trylevel.get() == 0 && !cause_abort.get() || emsg_silent.get() != 0) && !did_throw.get() {
+    if (trylevel.get() == 0 && !cause_abort.get() || EMSG_SILENT.get() != 0) && !did_throw.get() {
         return false;
     }
 
@@ -119,7 +119,7 @@ pub(crate) fn cause_errthrow(
     // interrupt exception stays catchable by the innermost one instead of
     // being replaced by an error exception carrying its text. The identity
     // test is upstream's: only *this* message is meant.
-    if ::core::ptr::eq(mesg.as_ptr(), message(e_interr).as_ptr()) {
+    if ::core::ptr::eq(mesg.as_ptr(), message(E_INTERR).as_ptr()) {
         *ignore = true;
         return true;
     }
@@ -485,14 +485,14 @@ fn verbose_exception(fate: Fate, id: ExcId) {
     let no_prompt = Suppress::wait_return();
     if debug_break_level.get() > 0 || p_vfile(CStr::is_empty) {
         // Always scroll up, don't overwrite.
-        msg_scroll.set(1);
+        MSG_SCROLL.set(1);
     }
     let shown = msg_cstr(value.as_cstr());
     let _: bool = report_msg(0, || fate.say(shown));
     // Don't overwrite this either.
     msg_str(c"\n");
     if debug_break_level.get() > 0 || p_vfile(CStr::is_empty) {
-        cmdline_row.set(msg_row.get());
+        cmdline_row.set(MSG_ROW.get());
     }
     drop(no_prompt);
     drop(loud);
@@ -595,7 +595,7 @@ pub(crate) fn exception_state_save() -> ExceptionState {
         estate_did_throw: did_throw.get(),
         estate_need_rethrow: need_rethrow.get(),
         estate_trylevel: trylevel.get(),
-        estate_did_emsg: did_emsg.get(),
+        estate_did_emsg: DID_EMSG.get(),
     }
 }
 
@@ -609,7 +609,7 @@ pub(crate) fn exception_state_restore(estate: &ExceptionState) {
     did_throw.set(estate.estate_did_throw);
     need_rethrow.set(estate.estate_need_rethrow);
     trylevel.set(estate.estate_trylevel);
-    did_emsg.set(estate.estate_did_emsg);
+    DID_EMSG.set(estate.estate_did_emsg);
 }
 
 /// Forget the exception state entirely.
@@ -618,7 +618,7 @@ pub(crate) fn exception_state_clear() {
     did_throw.set(false);
     need_rethrow.set(false);
     trylevel.set(0);
-    did_emsg.set(0);
+    DID_EMSG.set(0);
 }
 
 /// What [`report_pending`] is saying about the pending thing.
@@ -703,11 +703,11 @@ pub(crate) fn report_pending(action: PendingAction, pending: c_int, value: Pendi
     let loud = (!quiet).then(Allow::messages);
     let no_prompt = Suppress::wait_return();
     // Always scroll up, don't overwrite.
-    msg_scroll.set(1);
+    MSG_SCROLL.set(1);
     let _: bool = report_msg(0, || text);
     // Don't overwrite this either.
     msg_str(c"\n");
-    cmdline_row.set(msg_row.get());
+    cmdline_row.set(MSG_ROW.get());
     drop(no_prompt);
     drop(loud);
     if quiet {

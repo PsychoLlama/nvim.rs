@@ -49,7 +49,7 @@ use crate::mapping::map_clear_mode;
 use crate::mark::defs::{FileMark, FileMarkView};
 use crate::mark::{NMARKS, mark_adjust_buf, set_last_cursor};
 use crate::memline::ml_close;
-use crate::message::e_auabort;
+use crate::message::E_AUABORT;
 use crate::normal::visual_active;
 use crate::optionstr::OptString;
 use crate::pos::MAXLNUM;
@@ -520,7 +520,7 @@ fn leave_last_window(
         buffer.b_locked_split += 1;
         if fire_named(event, buffer) && !bufref.valid() {
             // Autocommands deleted the buffer.
-            err(e_auabort);
+            err(E_AUABORT);
             return Err(Failed);
         }
         // Only an autocommand could have deleted it, and none ran.
@@ -531,7 +531,7 @@ fn leave_last_window(
         buffer.b_locked_split -= 1;
         if abort_if_last && win.is_some_and(is_only_window) {
             // Autocommands made this the only window.
-            err(e_auabort);
+            err(E_AUABORT);
             return Err(Failed);
         }
     }

@@ -17,10 +17,10 @@
 use super::*;
 use crate::api::private::helpers::{find_buffer_by_handle, find_window_by_handle};
 use crate::api::private::validate::{err_bad_value, err_expected};
+use crate::option::OPT_SCOPE_GLOBAL;
+use crate::option::OPT_SCOPE_WIN;
 use crate::option::OptionTarget;
 use crate::option::defs::OptionSetFlags;
-use crate::option::kOptScopeGlobal;
-use crate::option::kOptScopeWin;
 use crate::winlayer::{Buf, Win};
 
 pub fn nvim_get_option_info(name: ApiString) -> Result<ApiDict, Error> {
@@ -97,7 +97,7 @@ fn get_option_from(from: Option<OptionTarget>, name: ApiString) -> Result<Object
     let scope = OptionTarget::scope_of(from);
     let mut value: OptVal = OptVal::Nil;
     if option_has_scope(opt_idx, scope) {
-        let flags = if scope == kOptScopeGlobal {
+        let flags = if scope == OPT_SCOPE_GLOBAL {
             OptionSetFlags::GLOBAL
         } else {
             OptionSetFlags::LOCAL
@@ -129,9 +129,9 @@ fn set_option_to(
     // A window-local option with no global half is set locally without the
     // "and globally" that `LOCAL` would otherwise imply.
     let opt_flags: OptionSetFlags =
-        if scope == kOptScopeWin && !option_has_scope(opt_idx, kOptScopeGlobal) {
+        if scope == OPT_SCOPE_WIN && !option_has_scope(opt_idx, OPT_SCOPE_GLOBAL) {
             OptionSetFlags::NONE
-        } else if scope == kOptScopeGlobal {
+        } else if scope == OPT_SCOPE_GLOBAL {
             OptionSetFlags::GLOBAL
         } else {
             OptionSetFlags::LOCAL

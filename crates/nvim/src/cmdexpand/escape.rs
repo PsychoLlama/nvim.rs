@@ -18,7 +18,7 @@
 use super::*;
 use crate::cmdexpand::defs::{BackslashEscape, ExpandContext};
 use crate::ex_getln::{VSE_BUFFER, VSE_NONE, VSE_SHELL, fnameescape, tilde_replace_matches};
-use crate::option::vars::wop_flags;
+use crate::option::vars::WOP_FLAGS;
 use crate::options::kOptWopFlagFuzzy;
 use crate::strings::escaped_bytes;
 
@@ -54,7 +54,7 @@ pub(crate) fn cmdline_fuzzy_completion_supported(expand: &Expand) -> bool {
         | ExpandContext::TagsListFiles
         | ExpandContext::UserList
         | ExpandContext::UserLua => false,
-        _ => wop_flags.get() & kOptWopFlagFuzzy != 0,
+        _ => WOP_FLAGS.get() & kOptWopFlagFuzzy != 0,
     }
 }
 
@@ -63,7 +63,7 @@ pub(crate) fn cmdline_fuzzy_completion_supported(expand: &Expand) -> bool {
 /// An empty search pattern never fuzzy-matches: it would score every candidate
 /// alike and throw away the sort order the caller wants.
 pub fn cmdline_fuzzy_complete(fuzzystr: &[u8]) -> bool {
-    wop_flags.get() & kOptWopFlagFuzzy != 0 && !fuzzystr.is_empty()
+    WOP_FLAGS.get() & kOptWopFlagFuzzy != 0 && !fuzzystr.is_empty()
 }
 
 /// `name` with a backslash in front: upstream's `escape_fname`.

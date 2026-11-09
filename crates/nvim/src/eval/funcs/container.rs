@@ -26,8 +26,8 @@ use crate::eval::vars::{
 };
 use crate::eval::{eval_expr_typval, get_copy_id, partial_name, var_item_copy};
 use crate::memory::ThinCString;
-use crate::message::e_listblobreq;
-use crate::message::state::{called_emsg, did_emsg};
+use crate::message::E_LISTBLOBREQ;
+use crate::message::state::{CALLED_EMSG, DID_EMSG};
 use crate::message::{emsg, internal_error};
 use crate::message_fmt::msg_bytes;
 use crate::narrow::len_as_integer;
@@ -334,7 +334,7 @@ pub fn f_index(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         VAR_BLOB => index_blob(args, result),
         VAR_LIST => index_list(args, result),
         _ => {
-            emsg(gettext(e_listblobreq));
+            emsg(gettext(E_LISTBLOBREQ));
         }
     }
 }
@@ -441,8 +441,8 @@ pub fn f_indexof(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let (mut save_val, mut save_key) = (NIL, NIL);
     prepare_vimvar(Vv::Val, &mut save_val);
     prepare_vimvar(Vv::Key, &mut save_key);
-    let saved_did_emsg = did_emsg.get();
-    did_emsg.set(0);
+    let saved_did_emsg = DID_EMSG.get();
+    DID_EMSG.set(0);
     result.write_number(if args[0].v_type() == VAR_BLOB {
         indexof_blob(args[0].blob_ref(), startidx, &args[1])
     } else {
@@ -452,7 +452,7 @@ pub fn f_indexof(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     restore_vimvar(Vv::Val, &mut save_val);
     // As `printf()`: an error raised before this call survives, one
     // raised inside it does not.
-    did_emsg.set(did_emsg.get() | saved_did_emsg);
+    DID_EMSG.set(DID_EMSG.get() | saved_did_emsg);
 }
 
 /// Evaluate `indexof()`'s predicate against the `v:key`/`v:val` already in
@@ -486,7 +486,7 @@ fn indexof_blob(b: Option<&Blob>, startidx: VarNumber, expr: &TypVal) -> VarNumb
     };
     set_vim_var_type(Vv::Key, VAR_NUMBER);
     set_vim_var_type(Vv::Val, VAR_NUMBER);
-    let called_emsg_start = called_emsg.get();
+    let called_emsg_start = CALLED_EMSG.get();
     for idx in start..len {
         set_vim_var_nr(Vv::Key, idx);
         let at = c_int::try_from(idx).expect("a byte of the blob");
@@ -495,7 +495,7 @@ fn indexof_blob(b: Option<&Blob>, startidx: VarNumber, expr: &TypVal) -> VarNumb
             return idx;
         }
         // A predicate that reported an error ends the search.
-        if called_emsg.get() != called_emsg_start {
+        if CALLED_EMSG.get() != called_emsg_start {
             return -1;
         }
     }
@@ -518,7 +518,7 @@ fn indexof_list(list: Option<&ListRef>, startidx: VarNumber, expr: &TypVal) -> V
     };
     let Some(start) = start else { return -1 };
     set_vim_var_type(Vv::Key, VAR_NUMBER);
-    let called_emsg_start = called_emsg.get();
+    let called_emsg_start = CALLED_EMSG.get();
     // By index, through the handle: `expr` is the user's, and may edit the
     // list it is testing.
     let mut at = start;
@@ -530,7 +530,7 @@ fn indexof_list(list: Option<&ListRef>, startidx: VarNumber, expr: &TypVal) -> V
         if found {
             return idx;
         }
-        if called_emsg.get() != called_emsg_start {
+        if CALLED_EMSG.get() != called_emsg_start {
             return -1;
         }
         at += 1;

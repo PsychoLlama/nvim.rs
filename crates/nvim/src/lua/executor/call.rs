@@ -26,8 +26,8 @@ use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
 use crate::ex_getln::TRY_STATE_INIT;
 use crate::lua::converter::{pop_object, pop_typval, push_object, push_typval};
 use crate::lua::stack::{At, Raise, Stack};
-use crate::message::e_fast_api_disabled;
-use crate::message::state::did_emsg;
+use crate::message::E_FAST_API_DISABLED;
+use crate::message::state::DID_EMSG;
 use crate::msgpack_rpc::channel::{rpc_call_with, rpc_send_event};
 use crate::narrow::len_as_int;
 use crate::types::{Error, kErrorTypeException, kErrorTypeValidation};
@@ -40,10 +40,10 @@ const NAME_LIMIT: usize = 100;
 /// spare.
 const FRAME_SLOTS: usize = MAX_FUNC_ARGS as usize + 1;
 
-/// `e_fast_api_disabled` with `what` in its slot: the refusal a function
+/// `E_FAST_API_DISABLED` with `what` in its slot: the refusal a function
 /// that may not run in a fast event raises, as `luaL_error` formats it.
 pub(crate) fn fast_api_refusal(what: &[u8]) -> Vec<u8> {
-    let template = e_fast_api_disabled.to_bytes();
+    let template = E_FAST_API_DISABLED.to_bytes();
     let at = template
         .windows(2)
         .position(|w| w == b"%s")
@@ -129,7 +129,7 @@ fn convert_and_call(
     force_abort.set(false);
     suppress_errthrow.set(false);
     did_throw.set(false);
-    did_emsg.set(0);
+    DID_EMSG.set(0);
 
     let mut rettv = TV_INITIAL_VALUE;
     let mut err = Error::none();

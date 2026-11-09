@@ -48,9 +48,9 @@ pub fn text_locked_msg() {
 /// The message [`text_locked_msg`] gives: which of the two locks is on.
 pub fn get_text_locked_msg() -> &'static CStr {
     if cmdwin_type.get() != 0 {
-        e_cmdwin
+        E_CMDWIN
     } else {
-        e_textlock
+        E_TEXTLOCK
     }
 }
 
@@ -67,7 +67,7 @@ pub fn text_or_buf_locked() -> bool {
 /// either is set.
 pub fn curbuf_locked() -> bool {
     if Buf::current().b_ro_locked > 0 {
-        emsg(gettext(e_cannot_edit_other_buf));
+        emsg(gettext(E_CANNOT_EDIT_OTHER_BUF));
         return true;
     }
     allbuf_locked()
@@ -106,7 +106,7 @@ pub(crate) fn derive_cedit_key() -> Result<(), OptError> {
         // The option names the key the way `'wildchar'` does: by its code.
         let n = p_cedit(|value| string_to_key(value.to_bytes()));
         if n == 0 || vim_isprintc(n) {
-            return Err(e_invarg.into());
+            return Err(E_INVARG.into());
         }
         cedit_key.set(Some(Key::from_code(n)));
     }
@@ -125,7 +125,7 @@ pub(crate) fn open_cmdwin() -> Key {
     let save_restart_edit = restart_edit.get();
     let save_state = State.get();
     let save_exmode = exmode_active.get();
-    let save_cmdmsg_rl = cmdmsg_rl.get();
+    let save_cmdmsg_rl = CMDMSG_RL.get();
 
     // Can't do this when text or buffer is locked, can't do it
     // recursively, and can't do it when typing a password.
@@ -223,14 +223,14 @@ pub(crate) fn open_cmdwin() -> Key {
     );
     Buf::current().b_p_ma = 1;
     Win::current().w_onebuf_opt.wo_fen = 0;
-    Win::current().w_onebuf_opt.wo_rl = ::core::ffi::c_int::from(cmdmsg_rl.get());
-    cmdmsg_rl.set(false);
+    Win::current().w_onebuf_opt.wo_rl = ::core::ffi::c_int::from(CMDMSG_RL.get());
+    CMDMSG_RL.set(false);
 
     // Don't allow switching to another buffer.
     Buf::current().b_ro_locked += 1;
 
     // Showing the prompt may have set need_wait_return; reset it.
-    need_wait_return.set(false);
+    NEED_WAIT_RETURN.set(false);
 
     let histtype = hist_char2type(::core::ffi::c_int::from(cmdwin_type.get()));
     if histtype == HIST_CMD || histtype == HIST_DEBUG {
@@ -418,7 +418,7 @@ pub(crate) fn open_cmdwin() -> Key {
     }
 
     restart_edit.set(save_restart_edit);
-    cmdmsg_rl.set(save_cmdmsg_rl);
+    CMDMSG_RL.set(save_cmdmsg_rl);
 
     State.set(save_state);
     may_trigger_modechanged();

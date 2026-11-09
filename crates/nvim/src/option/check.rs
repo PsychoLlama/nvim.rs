@@ -51,9 +51,10 @@ use crate::types::{ApiString, Buffer, OptInt, WinOpt};
 use crate::winlayer::Win;
 
 use super::{
-    HLATTRS_INIT, Local, WinOptSet, didset_options_sctx, didset_window_options, kFillchars,
-    kListchars, kOptFlagHLOnly, kOptFlagInsecure, kOptFlagRedrAll, kOptFlagRedrBuf,
-    kOptFlagRedrStat, kOptFlagRedrTabl, kOptFlagRedrWin, option_is_insecure, set_option_insecure,
+    FILLCHARS, HLATTRS_INIT, LISTCHARS, Local, OPT_FLAG_HL_ONLY, OPT_FLAG_INSECURE,
+    OPT_FLAG_REDR_ALL, OPT_FLAG_REDR_BUF, OPT_FLAG_REDR_STAT, OPT_FLAG_REDR_TABL,
+    OPT_FLAG_REDR_WIN, WinOptSet, didset_options_sctx, didset_window_options, option_is_insecure,
+    set_option_insecure,
 };
 
 /// What 'binary' overrode, so that switching it off again restores the
@@ -171,8 +172,8 @@ pub(crate) fn didset_options() {
 pub(crate) fn didset_options2() {
     highlight_changed();
     let win = Win::current();
-    let _ = set_window_chars_option(win, kFillchars, true);
-    let _ = set_window_chars_option(win, kListchars, true);
+    let _ = set_window_chars_option(win, FILLCHARS, true);
+    let _ = set_window_chars_option(win, LISTCHARS, true);
     let _ = check_opt_wim();
     let mut buf = Buf::current();
     let vsts = buf.b_p_vsts.get();
@@ -192,7 +193,7 @@ pub(crate) fn was_set_insecurely(
     insecure_flag(Some(window), opt_idx, opt_flags).is_set()
 }
 
-/// Where an option's `kOptFlagInsecure` mark lives.
+/// Where an option's `OPT_FLAG_INSECURE` mark lives.
 ///
 /// The options whose value is evaluated as an expression keep the mark per
 /// window or per buffer, because one window may be showing a file whose
@@ -213,7 +214,7 @@ impl InsecureFlag {
     pub(crate) fn is_set(self) -> bool {
         match self {
             InsecureFlag::Shared(opt_idx) => option_is_insecure(opt_idx),
-            InsecureFlag::Field(flags) => flags.get() & kOptFlagInsecure != 0,
+            InsecureFlag::Field(flags) => flags.get() & OPT_FLAG_INSECURE != 0,
         }
     }
 
@@ -224,8 +225,8 @@ impl InsecureFlag {
             InsecureFlag::Field(flags) => {
                 let word = flags.get();
                 flags.set(match insecure {
-                    true => word | kOptFlagInsecure,
-                    false => word & !kOptFlagInsecure,
+                    true => word | OPT_FLAG_INSECURE,
+                    false => word & !OPT_FLAG_INSECURE,
                 });
             }
         }
@@ -388,22 +389,22 @@ pub(crate) fn parse_winhl_opt(winhl: Option<&[u8]>, window: Option<Win>) -> bool
 
 /// Ask for whatever the option's redraw flags say has to be redrawn.
 pub(crate) fn check_redraw_for(buffer: Buf, win: Win, flags: uint32_t) {
-    // `kOptFlagRedrAll` is the two window bits together, so test for both.
-    let all = flags & kOptFlagRedrAll == kOptFlagRedrAll;
-    if flags & kOptFlagRedrStat != 0 || all {
+    // `OPT_FLAG_REDR_ALL` is the two window bits together, so test for both.
+    let all = flags & OPT_FLAG_REDR_ALL == OPT_FLAG_REDR_ALL;
+    if flags & OPT_FLAG_REDR_STAT != 0 || all {
         status_redraw_all();
     }
-    if flags & kOptFlagRedrTabl != 0 || all {
+    if flags & OPT_FLAG_REDR_TABL != 0 || all {
         redraw_tabline.set(true);
     }
-    if flags & (kOptFlagRedrBuf | kOptFlagRedrWin) != 0 || all {
-        if flags & kOptFlagHLOnly != 0 {
+    if flags & (OPT_FLAG_REDR_BUF | OPT_FLAG_REDR_WIN) != 0 || all {
+        if flags & OPT_FLAG_HL_ONLY != 0 {
             redraw_later(win, UPD_NOT_VALID);
         } else {
             changed_window_setting(win);
         }
     }
-    if flags & kOptFlagRedrBuf != 0 {
+    if flags & OPT_FLAG_REDR_BUF != 0 {
         redraw_buf_later(buffer, UPD_NOT_VALID);
     }
     if all {

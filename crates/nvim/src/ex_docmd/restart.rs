@@ -14,7 +14,7 @@ use crate::channel::channel_job_start;
 use crate::channel::channel_job_stop_wait;
 use crate::channel::open::JobOptions;
 use crate::eval::funcs::create_environment;
-use crate::ex_docmd::kRetNilBool;
+use crate::ex_docmd::RET_NIL_BOOL;
 use crate::lua::executor::nlua_exec_cstr;
 use crate::memory::ThinCString;
 use crate::message::emsg;
@@ -37,7 +37,7 @@ use crate::eval::vars::{get_vim_var_list_handle, set_vim_var_string, vim_var_byt
 
 use crate::ex_docmd::{cmdmod_has, kChannelPartAll};
 use crate::log::{LOGLVL_INF, logmsg};
-use crate::message::e_invchan;
+use crate::message::E_INVCHAN;
 use crate::startup::{exiting, getout};
 use crate::ui::state::current_ui;
 
@@ -97,7 +97,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
         obj_str(quit_cmd),
     ]);
     const CHUNK: &CStr = c"require'vim._core.server'.ex_session_restart(...)";
-    if let Err(e) = nlua_exec_cstr(CHUNK, args, kRetNilBool) {
+    if let Err(e) = nlua_exec_cstr(CHUNK, args, RET_NIL_BOOL) {
         emsg(e.message_or_empty());
     }
 }
@@ -412,7 +412,7 @@ fn detach_ui() {
     }
     let id = current_ui.get();
     if !channel_exists(id) {
-        emsg(e_invchan);
+        emsg(E_INVCHAN);
         return;
     }
 

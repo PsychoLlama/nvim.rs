@@ -28,7 +28,7 @@ use crate::mbyte::{
 };
 use crate::memory::XString;
 use crate::option::get_fileformat;
-use crate::option::vars::dy_flags;
+use crate::option::vars::DY_FLAGS;
 use crate::os::libc::uint8_t;
 use crate::winlayer::Buf;
 
@@ -353,7 +353,7 @@ fn render_nonprint(buffer: Option<Buf>, c: c_int) -> render::Rendered {
         c
     };
     debug_assert!(c <= 0xff, "c <= 0xff");
-    if dy_flags.get() & kOptDyFlagUhex != 0 || c > 0x7f {
+    if DY_FLAGS.get() & kOptDyFlagUhex != 0 || c > 0x7f {
         render::hex_form(c)
     } else {
         render::control_form(c)

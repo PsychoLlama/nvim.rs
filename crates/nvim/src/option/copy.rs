@@ -34,11 +34,11 @@ use crate::insexpand::{
 };
 use crate::memory::XString;
 use crate::option::vars::{
-    P_CPO, P_FFS, P_IMINSERT, P_IMSEARCH, P_MA, P_VSTS, p_ai, p_bin, p_bomb, p_cfu, p_ci, p_cin,
-    p_cink, p_cino, p_cinsd, p_cinw, p_cms, p_com, p_cpt, p_et, p_fenc, p_fex, p_ff, p_fixeol,
-    p_flp, p_fo, p_iminsert, p_imsearch, p_inde, p_indk, p_inex, p_inf, p_isk, p_keymap, p_lisp,
-    p_lop, p_ma, p_ml, p_mps, p_nf, p_ofu, p_pi, p_qe, p_scbk, p_si, p_smc, p_spc, p_spf, p_spl,
-    p_spo, p_sts, p_sua, p_sw, p_swf, p_tfu, p_ts, p_tw, p_udf, p_vsts, p_vts, p_wm, spo_flags,
+    P_CPO, P_FFS, P_IMINSERT, P_IMSEARCH, P_MA, P_VSTS, SPO_FLAGS, p_ai, p_bin, p_bomb, p_cfu,
+    p_ci, p_cin, p_cink, p_cino, p_cinsd, p_cinw, p_cms, p_com, p_cpt, p_et, p_fenc, p_fex, p_ff,
+    p_fixeol, p_flp, p_fo, p_iminsert, p_imsearch, p_inde, p_indk, p_inex, p_inf, p_isk, p_keymap,
+    p_lisp, p_lop, p_ma, p_ml, p_mps, p_nf, p_ofu, p_pi, p_qe, p_scbk, p_si, p_smc, p_spc, p_spf,
+    p_spl, p_spo, p_sts, p_sua, p_sw, p_swf, p_tfu, p_ts, p_tw, p_udf, p_vsts, p_vts, p_wm,
 };
 
 use super::check::bin_save;
@@ -68,8 +68,8 @@ use crate::window::{check_window_colorcolumn, set_winbar_win};
 use crate::winlayer::{Buf, Win};
 
 use super::{
-    NO_LOCAL_UNDOLEVEL, change_option_default, check_blending, fill_culopt_flags, kFillchars,
-    kListchars, option_last_set, parse_winhl_opt,
+    FILLCHARS, LISTCHARS, NO_LOCAL_UNDOLEVEL, change_option_default, check_blending,
+    fill_culopt_flags, option_last_set, parse_winhl_opt,
 };
 use crate::option::cpo_has;
 
@@ -248,8 +248,8 @@ pub(crate) fn didset_window_options(window: Win, valid_cursor: bool) {
     let _ = fill_culopt_flags(None, w);
     // Each value is read where it is used: the calls above parse other
     // options and this one must see whatever they left behind.
-    let _ = set_window_chars_option(window, kFillchars, true);
-    let _ = set_window_chars_option(window, kListchars, true);
+    let _ = set_window_chars_option(window, FILLCHARS, true);
+    let _ = set_window_chars_option(window, LISTCHARS, true);
     parse_winhl_opt(None, Some(window));
     check_blending(window);
     let _ = set_winbar_win(window, false, valid_cursor);
@@ -445,7 +445,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         copy_sctx(b, kBufOptSpelllang);
         b.b_s.b_p_spo = p_spo(dup);
         copy_sctx(b, kBufOptSpelloptions);
-        b.b_s.b_p_spo_flags = spo_flags.get();
+        b.b_s.b_p_spo_flags = SPO_FLAGS.get();
 
         b.b_p_inde = p_inde(dup);
         copy_sctx(b, kBufOptIndentexpr);

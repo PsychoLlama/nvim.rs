@@ -44,7 +44,7 @@ use crate::indent_c::in_cinkeys;
 use crate::mbyte::{c_char_info, c_cluster_len, c_next_cluster};
 use crate::memline::Lines;
 use crate::memline::ml_replace_owned;
-use crate::message::{e_interr, e_modifiable, e_resulting_text_too_long};
+use crate::message::{E_INTERR, E_MODIFIABLE, E_RESULTING_TEXT_TOO_LONG};
 use crate::message::{emsg, msg_progress};
 use crate::r#move::changed_cline_bef_curs;
 use crate::ops::shift_line;
@@ -84,7 +84,7 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
     let start_lnum = win.w_cursor.lnum;
     let line_count = op.line_count;
     if buf.b_p_ma == 0 {
-        emsg(gettext(e_modifiable));
+        emsg(gettext(E_MODIFIABLE));
         return;
     }
     let mut first_changed: LineNr = LineNr::ZERO;
@@ -551,7 +551,7 @@ pub fn copy_indent(size: c_int, src: &[u8]) -> bool {
 /// Reports "resulting text is too long", and breaks out of any loop when
 /// there is no `:try` to catch it.
 fn emsg_text_too_long() {
-    emsg(gettext(e_resulting_text_too_long));
+    emsg(gettext(E_RESULTING_TEXT_TOO_LONG));
     if trylevel.get() == 0 {
         got_int.set(true);
     }
@@ -803,7 +803,7 @@ pub fn ex_retab(excmd: &mut ExArg) {
         lnum += 1;
     }
     if got_int.get() {
-        emsg(gettext(e_interr));
+        emsg(gettext(E_INTERR));
     }
     // A single value given is equal to either 'tabstop' or 'vartabstop',
     // and then nothing on screen changed.

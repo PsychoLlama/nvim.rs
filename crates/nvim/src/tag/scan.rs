@@ -683,7 +683,7 @@ fn search(
     let save_p_ic = p_ic();
     // 'tagcase' decides how case is treated for this search.
     let tagcase = match Buf::current().b_tc_flags {
-        0 => tc_flags.get(),
+        0 => TC_FLAGS.get(),
         local => local,
     };
     if tagcase == kOptTcFlagIgnore {

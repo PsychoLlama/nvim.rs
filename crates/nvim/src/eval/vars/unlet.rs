@@ -25,7 +25,7 @@ use crate::eval::typval::{
 };
 use crate::eval::{FNE_CHECK_START, env_name_len, get_lval};
 use crate::ex_docmd::ends_excmd;
-use crate::message::state::emsg_severe;
+use crate::message::state::EMSG_SEVERE;
 use crate::message_fmt::msg_bytes;
 use crate::os::env::vim_unsetenv_named;
 use crate::semsg;
@@ -111,7 +111,7 @@ fn ex_unletlock(excmd: &mut ExArg, start: usize, glv_flags: c_int, action: Actio
                 .filter(|_| trailing.is_some_and(|c| ascii_iswhite(c) || ends_excmd(c) != 0))
             else {
                 if let Ok(end) = end {
-                    emsg_severe.set(true);
+                    EMSG_SEVERE.set(true);
                     let rest = msg_bytes(&text[end..]);
                     semsg!("E488: Trailing characters: {rest}");
                 }

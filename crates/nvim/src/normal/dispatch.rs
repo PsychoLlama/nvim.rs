@@ -44,7 +44,7 @@ use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
 use crate::mbyte::GraphemeState;
 use crate::mbyte::{encode_char, iscomposing, utf8len_tab};
-use crate::message::state::{msg_col, msg_didout, msg_nowait};
+use crate::message::state::{MSG_COL, MSG_DIDOUT, MSG_NOWAIT};
 use crate::normal::defs::{CmdArg, Outcome};
 use crate::normal::{
     B_IMODE_LMAP, GRAPHEME_STATE_INIT, NV_CMDS, NV_CMDS_SIZE, NormalState, NvFlags, add_to_showcmd,
@@ -56,7 +56,7 @@ use crate::normal::{
 use crate::ops::OpType;
 use crate::ops::{Op, do_pending_operator, get_op_type};
 use crate::option::defs::CpoFlag;
-use crate::option::vars::{P_LANGMAP, fdo_flags, p_lrm, p_tm, p_ttm};
+use crate::option::vars::{FDO_FLAGS, P_LANGMAP, p_lrm, p_tm, p_ttm};
 use crate::os::libc::int64_t;
 use crate::register::get_default_register_name;
 use crate::state::Step;
@@ -488,7 +488,7 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
             normal_redraw_mode_message();
         }
     }
-    msg_nowait.set(false);
+    MSG_NOWAIT.set(false);
 
     if finish_op.get() || did_visual_op {
         set_reg_var(get_default_register_name());
@@ -584,7 +584,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
         } else {
             Key::ascii(b'c')
         };
-        msg_nowait.set(true);
+        MSG_NOWAIT.set(true);
         ns.old_mapped_len = 0;
     }
 
@@ -654,8 +654,8 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
             ns.command_finished = true;
         } else {
             if ns.ca.cmdchar != SpecialKey::Ignore {
-                msg_didout.set(false);
-                msg_col.set(0);
+                MSG_DIDOUT.set(false);
+                MSG_COL.set(0);
             }
             ns.old_pos = Win::current().w_cursor;
 
@@ -810,7 +810,7 @@ pub(crate) fn read_command_char() -> Key {
 /// of movement is set, the key was typed rather than mapped, and no operator
 /// is waiting for the motion to finish.
 pub(crate) fn may_fold_open(cmd_arg: &mut CmdArg, fdo_flag: c_uint) {
-    if fdo_flags.get() & fdo_flag != 0 && KeyTyped.get() && cmd_arg.op().op_type == OpType::Nop {
+    if FDO_FLAGS.get() & fdo_flag != 0 && KeyTyped.get() && cmd_arg.op().op_type == OpType::Nop {
         fold_open_cursor();
     }
 }

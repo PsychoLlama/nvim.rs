@@ -23,8 +23,8 @@ use crate::getchar::state::got_int;
 use crate::lua::executor::nlua_expand_pat;
 use crate::mbyte::char_at;
 use crate::mbyte::{cluster_len, mb_tolower};
-use crate::message::state::cmd_silent;
-use crate::message::{e_toomany, emsg, msg_str};
+use crate::message::state::CMD_SILENT;
+use crate::message::{E_TOOMANY, emsg, msg_str};
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::{p_fic, p_wic, p_wmnu};
 use crate::options::kOptBoFlagWildmode;
@@ -123,7 +123,7 @@ pub(crate) fn nextwild(
 
     // If 'cmd_silent' is set don't show the dots, because the redrawcmd()
     // below won't remove them.
-    if !cmd_silent.get()
+    if !CMD_SILENT.get()
         && !from_wildtrigger_func
         && !wild_navigate
         && !(ui_has(kUICmdline) || ui_has(kUIWildmenu))
@@ -362,7 +362,7 @@ fn expand_one_start(
         // Don't really want to wait for this message (and possibly have
         // to hit return to continue!).
         if !options.has(WildOpts::SILENT) {
-            emsg(gettext(e_toomany));
+            emsg(gettext(E_TOOMANY));
         } else if !options.has(WildOpts::NO_BEEP) {
             beep_flush();
         }

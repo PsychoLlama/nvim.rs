@@ -29,7 +29,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::mark::fmarks_check_names;
 use crate::memline::{ml_setname, ml_timestamp};
 use crate::memory::XString;
-use crate::message::e_noalt;
+use crate::message::E_NOALT;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::fs::FileID;
@@ -206,7 +206,7 @@ pub fn getaltfname(errmsg: bool) -> *mut c_char {
         Some((alt, _)) => alt.name.shown_ptr(),
         None => {
             if errmsg {
-                emsg(gettext(e_noalt));
+                emsg(gettext(E_NOALT));
             }
             ptr::null_mut()
         }

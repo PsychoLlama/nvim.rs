@@ -43,7 +43,7 @@ use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::nlua_is_deferred_safe;
 use crate::memline::{Lines, ml_append_bytes};
-use crate::message::{e_invarg, e_invchan, e_invchanjob};
+use crate::message::{E_INVARG, E_INVCHAN, E_INVCHANJOB};
 use crate::option::vars::p_lpl;
 use crate::os::libc::{ptrdiff_t, uint64_t};
 use crate::runtime::defs::EstackInfo;
@@ -136,7 +136,7 @@ pub fn find_job(id: uint64_t, show_error: bool) -> bool {
     if show_error {
         // A channel that exists but is not a job gets its own message.
         let wrong_kind = channel_stream_type(id).is_some_and(|kind| kind != kChannelStreamProc);
-        emsg_static(if wrong_kind { e_invchanjob } else { e_invchan });
+        emsg_static(if wrong_kind { E_INVCHANJOB } else { E_INVCHAN });
     }
     false
 }
@@ -148,7 +148,7 @@ pub fn script_host_eval(name: &CStr, args: &[TypVal], result: &mut TypVal) {
     }
     let arg = &args[0];
     if arg.v_type() != VAR_STRING {
-        emsg_static(e_invarg);
+        emsg_static(E_INVARG);
         return;
     }
     let list = tv_list_alloc(1 as ptrdiff_t);

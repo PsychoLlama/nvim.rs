@@ -31,7 +31,7 @@ use crate::r#move::pagescroll;
 use crate::narrow::number_as_int;
 use crate::normal::defs::CmdArg;
 use crate::normal::{nv_scroll_line, with_scratch_cmd};
-use crate::option::vars::{P_MOUSEM, p_mousem, p_mousescroll_hor, p_mousescroll_vert};
+use crate::option::vars::{P_MOUSEM, P_MOUSESCROLL_HOR, P_MOUSESCROLL_VERT, p_mousem};
 use crate::popupmenu::pum_visible;
 use crate::pos::equalpos;
 use crate::search::{BACKWARD, FORWARD};
@@ -100,7 +100,7 @@ pub(crate) fn do_mousescroll(cmd_arg: &mut CmdArg) {
         let count = if shift_or_ctrl {
             win.w_botline - win.w_topline
         } else {
-            number_as_int(p_mousescroll_vert.get())
+            number_as_int(P_MOUSESCROLL_VERT.get())
         };
         // The count is written even when it is zero, as the C is, and
         // `nv_scroll_line` reads the counts just written.
@@ -116,7 +116,7 @@ pub(crate) fn do_mousescroll(cmd_arg: &mut CmdArg) {
     let step = if shift_or_ctrl {
         win.w_view_width
     } else {
-        number_as_int(p_mousescroll_hor.get())
+        number_as_int(P_MOUSESCROLL_HOR.get())
     };
     do_mousescroll_horiz(win, wheel_leftcol(win.w_leftcol, step, arg));
 }

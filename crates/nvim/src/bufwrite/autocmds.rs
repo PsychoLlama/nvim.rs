@@ -114,7 +114,7 @@ pub(crate) enum PreWrite {
     Proceed,
     /// The write is over before it began — either a `*WriteCmd` autocommand
     /// did it, or something went wrong. This is `buf_write`'s return value,
-    /// and `no_wait_return` has already been decremented.
+    /// and `NO_WAIT_RETURN` has already been decremented.
     Finished(Result<(), Failed>),
 }
 
@@ -158,7 +158,7 @@ impl Buf {
         orig: OpMarks,
     ) -> PreWrite {
         let old_line_count = self.b_ml.ml_line_count;
-        let msg_save = msg_scroll.get();
+        let msg_save = MSG_SCROLL.get();
         let empty_memline = self.b_ml.ml_mfp.is_none();
         // The short name the events are fired with, each firing its own.
         let sfname = names.sfname.text.clone();
@@ -243,8 +243,8 @@ impl Buf {
                 b.b_op_start = orig.start;
                 b.b_op_end = orig.end;
             }
-            no_wait_return.set(no_wait_return.get() - 1);
-            msg_scroll.set(msg_save);
+            NO_WAIT_RETURN.set(NO_WAIT_RETURN.get() - 1);
+            MSG_SCROLL.set(msg_save);
             if nofile_err {
                 let buftype = Buf::current().b_p_bt.clone().unwrap_or_default();
                 let buftype = msg_bytes(&buftype);
@@ -301,8 +301,8 @@ impl Buf {
             } else {
                 *end -= old_line_count - line_count;
                 if *end < start {
-                    no_wait_return.set(no_wait_return.get() - 1);
-                    msg_scroll.set(msg_save);
+                    NO_WAIT_RETURN.set(NO_WAIT_RETURN.get() - 1);
+                    MSG_SCROLL.set(msg_save);
                     let why =
                         gettext(c"E204: Autocommand changed number of lines in unexpected way");
                     emsg(why);

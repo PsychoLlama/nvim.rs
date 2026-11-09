@@ -176,7 +176,7 @@ pub fn check_compl_option(dict_opt: bool) -> bool {
     } else {
         c"'thesaurus' option is empty"
     }));
-    if emsg_silent.get() == 0 && !in_assert_fails.get() {
+    if EMSG_SILENT.get() == 0 && !IN_ASSERT_FAILS.get() {
         vim_beep(kOptBoFlagComplete);
         setcursor();
         msg_delay(2004, false);
@@ -364,7 +364,7 @@ pub(crate) fn ins_compl_long_shown_match() -> bool {
 /// the global value answers alone; the editor always has one.
 pub(crate) fn completeopt_flags() -> c_uint {
     let local = Buf::current_or_none().map_or(0, |buf| buf.b_cot_flags);
-    if local != 0 { local } else { cot_flags.get() }
+    if local != 0 { local } else { COT_FLAGS.get() }
 }
 
 /// [`completeopt_flags`] under the name the rest of the editor calls it by.

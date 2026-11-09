@@ -131,7 +131,7 @@ pub fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
         repeat_luaref.set(luaref);
     }
 
-    let called = nlua_call_ref_reporting(luaref, None, Array::new(), kRetNilBool);
+    let called = nlua_call_ref_reporting(luaref, None, Array::new(), RET_NIL_BOOL);
     if let Err(e) = called {
         let msg = msg_cstr(e.message_or_empty());
         semsg_multiline!(c"emsg", "E5108: {msg}");

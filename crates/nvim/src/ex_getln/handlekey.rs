@@ -103,8 +103,8 @@ pub(crate) fn command_line_erase_chars(s: &mut CommandLineState) -> KeyOutcome {
 
         dealloc_cmdbuff(); // no command line to return
 
-        if !cmd_silent.get() && !ui_has(kUICmdline) {
-            msg_col.set(0);
+        if !CMD_SILENT.get() && !ui_has(kUICmdline) {
+            MSG_COL.set(0);
             msg_putchar(::core::ffi::c_int::from(b' ')); // delete ':'
         }
         s.is_state.search_start = s.is_state.save_cursor;
@@ -556,7 +556,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             s.do_abbr = false; // don't do abbreviation now
             cc.special_char = 0;
             // May need to remove the ^ when a composing char was typed.
-            if utf_iscomposing_first(s.c.code()) && !cmd_silent.get() {
+            if utf_iscomposing_first(s.c.code()) && !CMD_SILENT.get() {
                 if ui_has(kUICmdline) {
                     // TODO(bfredl): why not make unputcmdline also work
                     // with true?

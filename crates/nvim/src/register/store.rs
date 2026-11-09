@@ -417,7 +417,7 @@ pub fn get_register_name(num: Option<usize>) -> RegName {
 fn reg_empty(reg: &YankReg) -> bool {
     match reg.lines.as_slice() {
         [] => true,
-        [only] => reg.kind == kMTCharWise && only.is_empty(),
+        [only] => reg.kind == MT_CHAR_WISE && only.is_empty(),
         _ => false,
     }
 }

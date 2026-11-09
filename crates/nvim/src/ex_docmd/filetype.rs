@@ -31,11 +31,11 @@ use crate::buffer::do_modelines;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{
     FILETYPE_FILE, FTOFF_FILE, FTPLUGIN_FILE, FTPLUGOF_FILE, INDENT_FILE, INDOFF_FILE,
-    cmdmod_split, cmdmod_tab, ex_msg, filetype_detect, filetype_indent, filetype_plugin,
-    kRetNilBool,
+    RET_NIL_BOOL, cmdmod_split, cmdmod_tab, ex_msg, filetype_detect, filetype_indent,
+    filetype_plugin,
 };
 use crate::guard::secure;
-use crate::message::e_curdir;
+use crate::message::E_CURDIR;
 use crate::option::vars::p_rtp;
 
 use crate::option::set_option_value_give_err;
@@ -55,7 +55,7 @@ pub(crate) fn ex_autocmd(excmd: &mut ExArg) {
     if secure.get() != 0 {
         // 2 means "an error was already reported for this".
         secure.set(2);
-        excmd.errmsg = Some(ex_msg(e_curdir));
+        excmd.errmsg = Some(ex_msg(E_CURDIR));
     } else if excmd.cmdidx == CmdIdx::autocmd {
         let forceit = c_int::from(excmd.forceit);
         do_autocmd(excmd, forceit);
@@ -220,7 +220,7 @@ pub(crate) fn ex_checkhealth(excmd: &mut ExArg) {
         Object::string(ApiString::from_bytes(excmd.line.arg())),
     ]);
 
-    let ran = nlua_exec_cstr(c"vim.health._check(...)", argv, kRetNilBool);
+    let ran = nlua_exec_cstr(c"vim.health._check(...)", argv, RET_NIL_BOOL);
     let Err(err) = ran else {
         return;
     };

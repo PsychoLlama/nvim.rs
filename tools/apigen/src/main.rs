@@ -1496,7 +1496,7 @@ fn text_locked_error() -> Error {
 /// Refuses a call made from an expression mapping, which the cmdline window
 /// alone would have allowed.
 fn expr_map_locked_error() -> Error {
-    Error::from_message(kErrorTypeException, e_textlock)
+    Error::from_message(kErrorTypeException, E_TEXTLOCK)
 }
 "#,
     ),
@@ -1739,7 +1739,7 @@ fn generate(
     if referenced.contains("expr_map_locked") {
         uses.push("use crate::ex_docmd::expr_map_locked;".into());
         uses.push("use crate::guard::textlock;".into());
-        uses.push("use crate::message::e_textlock;".into());
+        uses.push("use crate::message::E_TEXTLOCK;".into());
     }
     if referenced.contains("text_locked") {
         uses.push("use crate::ex_getln::{get_text_locked_msg, text_locked};".into());

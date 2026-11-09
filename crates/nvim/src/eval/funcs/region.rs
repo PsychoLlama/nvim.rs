@@ -9,7 +9,7 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{kMTBlockWise, kMTCharWise, kMTLineWise};
+use super::{MT_CHAR_WISE, kMTBlockWise, kMTLineWise};
 use crate::buffer::find_buf;
 use crate::charset::getdigits_int_at;
 use crate::cstr;
@@ -50,7 +50,7 @@ const NOWHERE: Pos = Pos {
 const NO_OPARG: OpArg = OpArg {
     op_type: OpType::Nop,
     regname: 0,
-    motion_type: kMTCharWise,
+    motion_type: MT_CHAR_WISE,
     motion_force: Key::NUL,
     use_reg_one: false,
     inclusive: false,
@@ -218,7 +218,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Result<Region, Unresolved> {
 
     let mut inclusive = true;
     let mut op = NO_OPARG;
-    if region_type == kMTCharWise {
+    if region_type == MT_CHAR_WISE {
         if is_select_exclusive && !equalpos(p1, p2) {
             inclusive = !unadjust_for_sel_inner(&mut p2);
         }
@@ -267,7 +267,7 @@ fn cluster_at(pos: Pos) -> ColNr {
 fn parse_type(spec: &CStr) -> Result<(MotionType, c_int), Unresolved> {
     let bad = || Err(Unresolved::Type(ThinCString::from_cstr(spec)));
     match spec.to_bytes() {
-        b"v" => Ok((kMTCharWise, 0)),
+        b"v" => Ok((MT_CHAR_WISE, 0)),
         b"V" => Ok((kMTLineWise, 0)),
         [c, rest @ ..] if c_int::from(*c) == Ctrl_V => {
             // A bare CTRL-V means "as wide as the corners"; a width

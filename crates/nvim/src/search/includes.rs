@@ -452,7 +452,7 @@ fn handle_include(
     });
     let name = walk.files.innermost().name.as_cstr();
     if action == ACTION_EXPAND && !shortmess(ShmFlag::COMPLETIONSCAN) && !silent {
-        msg_hist_off.set(true); // reset in msg_fit_head()
+        MSG_HIST_OFF.set(true); // reset in msg_fit_head()
         // Upstream formats into `IObuff`, and the name is cut there.
         let fmt = gettext(c"Scanning included file: %s");
         let progress =
@@ -916,7 +916,7 @@ pub fn find_pattern_in_path(
         }
     } else if !walk.found && action != ACTION_EXPAND && !silent {
         if got_int.get() || ins_compl_interrupted() {
-            emsg(gettext(e_interr));
+            emsg(gettext(E_INTERR));
         } else if kind == FIND_DEFINE {
             emsg(gettext(c"E388: Couldn't find definition"));
         } else {

@@ -197,12 +197,12 @@ pub(crate) fn report_read(sfname: Option<&CStr>, how: &How, out: &Outcome) {
     }
     msg_add_lines(&mut report, noted, LineNr::new(out.linecnt), out.filesize);
 
-    keep_msg.set(None);
+    KEEP_MSG.set(None);
     let mut shown = None;
-    msg_scrolled_ign.set(true);
+    MSG_SCROLLED_IGN.set(true);
 
     if !how.stdin && !how.buffer {
-        if msg_col.get() > 0 {
+        if MSG_COL.get() > 0 {
             msg_putchar(c_int::from(b'\r')); // overwrite previous message
         }
         shown = msg_fit_head(report.as_cstr(), false, 0);
@@ -215,9 +215,9 @@ pub(crate) fn report_read(sfname: Option<&CStr>, how: &How, out: &Outcome) {
     if how.stdin
         || how.buffer
         || !restart_edit.get().is_nul()
-        || (msg_scrolled.get() != 0 && !need_wait_return.get())
+        || (MSG_SCROLLED.get() != 0 && !NEED_WAIT_RETURN.get())
     {
         set_keep_msg(shown.as_ref().map(XString::as_cstr), 0);
     }
-    msg_scrolled_ign.set(false);
+    MSG_SCROLLED_IGN.set(false);
 }

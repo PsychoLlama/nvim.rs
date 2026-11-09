@@ -65,8 +65,8 @@ use crate::memline::{
     ml_replace_owned,
 };
 use crate::memory::XString;
-use crate::message::state::{msg_scroll, no_lines_msg};
-use crate::message::{e_invarg, e_modifiable};
+use crate::message::state::{MSG_SCROLL, NO_LINES_MSG};
+use crate::message::{E_INVARG, E_MODIFIABLE};
 use crate::message::{emsg, msg, msg_keep_text, msg_start, msgmore};
 use crate::mouse::setmouse;
 use crate::mouse::state::mouse_dragging;
@@ -148,7 +148,7 @@ pub const _ISupper: ::core::ffi::c_ushort = 256;
 pub const NUMBUFLEN: usize = 65;
 
 /// The three region shapes an operator can be given.
-pub const kMTCharWise: MotionType = 0;
+pub const MT_CHAR_WISE: MotionType = 0;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTBlockWise: MotionType = 2;
 

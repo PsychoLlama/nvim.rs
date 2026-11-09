@@ -49,12 +49,12 @@ const KEY_U: c_int = Key::ascii(b'u').code();
 /// Call this after prompting the user: avoids a hit-return message and a
 /// delay.
 pub fn msg_end_prompt() {
-    need_wait_return.set(false);
-    emsg_on_display.set(false);
-    cmdline_row.set(msg_row.get());
-    msg_col.set(0);
+    NEED_WAIT_RETURN.set(false);
+    EMSG_ON_DISPLAY.set(false);
+    cmdline_row.set(MSG_ROW.get());
+    MSG_COL.set(0);
     msg_clr_eos();
-    lines_left.set(-1);
+    LINES_LEFT.set(-1);
 }
 
 /// Wait for the user to hit a key, normally Enter.
@@ -73,7 +73,7 @@ pub fn wait_return(redraw: c_int) {
 
     // If using ":silent cmd", don't wait for a return.  Also don't set
     // need_wait_return to do it later.
-    if msg_silent.get() != 0 {
+    if MSG_SILENT.get() != 0 {
         return;
     }
     if headless_mode.get() && ui_active() == 0 {
@@ -83,23 +83,23 @@ pub fn wait_return(redraw: c_int) {
     if vgetc_busy.get() > 0 {
         return;
     }
-    need_wait_return.set(true);
-    if no_wait_return.get() != 0 {
+    NEED_WAIT_RETURN.set(true);
+    if NO_WAIT_RETURN.get() != 0 {
         // With the global command (and some others) we only need one
         // return at the end. Adjust cmdline_row so the next message does
         // not overwrite the last one.
         if !exmode_active.get() {
-            cmdline_row.set(msg_row.get());
+            cmdline_row.set(MSG_ROW.get());
         }
         return;
     }
 
-    redir_off.set(true); // don't redirect this message
+    REDIR_OFF.set(true); // don't redirect this message
     let old_state = State.get();
     let mut c;
-    if quit_more.get() {
+    if QUIT_MORE.get() {
         c = CAR; // just pretend CR was hit
-        quit_more.set(false);
+        QUIT_MORE.set(false);
         got_int.set(false);
     } else if exmode_active.get() {
         msg_str(c" "); // make sure the cursor is on the right line
@@ -112,7 +112,7 @@ pub fn wait_return(redraw: c_int) {
     } else {
         State.set(MODE_HITRETURN);
         setmouse();
-        cmdline_row.set(msg_row.get());
+        cmdline_row.set(MSG_ROW.get());
         // Avoid the sequence where the user types ":" at the hit-return
         // prompt to start an Ex command but the file-changed dialog gets
         // in the way.
@@ -122,14 +122,14 @@ pub fn wait_return(redraw: c_int) {
 
         // With 'cmdheight' zero we need to scroll the first line of
         // msg_grid onto the screen.
-        if p_ch() == 0 && !ui_has(kUIMessages) && msg_scrolled.get() == 0 {
+        if p_ch() == 0 && !ui_has(kUIMessages) && MSG_SCROLLED.get() == 0 {
             msg_grid_validate();
             msg_scroll_up(false, true);
-            msg_scrolled.set(msg_scrolled.get() + 1);
+            MSG_SCROLLED.set(MSG_SCROLLED.get() + 1);
             cmdline_row.set(Rows.get() - 1);
         }
 
-        if msg_flags.get() & kOptMoptFlagHitEnter != 0 {
+        if MSG_FLAGS.get() & kOptMoptFlagHitEnter != 0 {
             hit_return_msg(true);
             loop {
                 // Remember "got_int": if it is set vgetc().code() probably
@@ -161,23 +161,23 @@ pub fn wait_return(redraw: c_int) {
                         Ok(SpecialKey::Up | SpecialKey::Pageup)
                             | Err(NotAKey(KEY_B | Ctrl_B | KEY_K | KEY_U | KEY_G))
                     ) {
-                        if msg_scrolled.get() > Rows.get() {
+                        if MSG_SCROLLED.get() > Rows.get() {
                             // scroll back to show older messages
                             do_more_prompt(c);
                         } else {
-                            msg_didout.set(false);
+                            MSG_DIDOUT.set(false);
                             c = SpecialKey::Ignore.code();
-                            msg_col.set(0);
+                            MSG_COL.set(0);
                         }
-                        if quit_more.get() {
+                        if QUIT_MORE.get() {
                             c = CAR; // just pretend CR was hit
-                            quit_more.set(false);
+                            QUIT_MORE.set(false);
                             got_int.set(false);
                         } else if c != SpecialKey::Ignore.code() {
                             c = SpecialKey::Ignore.code();
                             hit_return_msg(false);
                         }
-                    } else if msg_scrolled.get() > Rows.get() - 2
+                    } else if MSG_SCROLLED.get() > Rows.get() - 2
                         && matches!(
                             SpecialKey::try_from(c),
                             Ok(SpecialKey::Down | SpecialKey::Pagedown)
@@ -228,17 +228,17 @@ pub fn wait_return(redraw: c_int) {
         } else {
             c = CAR;
             // Wait to allow the user to verify the output.
-            do_sleep(int64_t::from(msg_wait.get()), true);
+            do_sleep(int64_t::from(MSG_WAIT.get()), true);
         }
     }
-    redir_off.set(false);
+    REDIR_OFF.set(false);
 
     // If the user hits ':', '?' or '/' we get a command line from the next
     // line. It draws over the prompt, so move the cmdline row down to
     // where the prompt was and skip the redraw this tail would queue.
     if c == KEY_COLON || c == c_int::from(b'?') || c == c_int::from(b'/') {
         if !exmode_active.get() {
-            cmdline_row.set(msg_row.get());
+            cmdline_row.set(MSG_ROW.get());
         }
         skip_redraw.set(true); // skip redraw once
         do_redraw.set(false);
@@ -251,24 +251,24 @@ pub fn wait_return(redraw: c_int) {
     State.set(old_state); // restore State before screen_resize()
     setmouse();
     msg_check();
-    need_wait_return.set(false);
-    did_wait_return.set(true);
-    emsg_on_display.set(false); // can delete error message now
-    lines_left.set(-1); // reset lines_left at next msg_start()
+    NEED_WAIT_RETURN.set(false);
+    DID_WAIT_RETURN.set(true);
+    EMSG_ON_DISPLAY.set(false); // can delete error message now
+    LINES_LEFT.set(-1); // reset lines_left at next msg_start()
     reset_last_sourcing();
     let room = (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get();
-    if keep_msg.with(|kept| {
+    if KEEP_MSG.with(|kept| {
         kept.as_ref()
             .is_some_and(|kept| vim_strsize_cstr(kept.as_cstr()) >= room)
     }) {
         // Don't redisplay the message, it's too long.
-        keep_msg.set(None);
+        KEEP_MSG.set(None);
     }
 
     if tmp_state == MODE_SETWSIZE {
         // got resize event while in vgetc().code()
         ui_refresh();
-    } else if !skip_redraw.get() && (redraw == 1 || (msg_scrolled.get() != 0 && redraw != -1)) {
+    } else if !skip_redraw.get() && (redraw == 1 || (MSG_SCROLLED.get() != 0 && redraw != -1)) {
         redraw_later(Win::current(), UPD_VALID);
     }
 }
@@ -282,7 +282,7 @@ pub(crate) fn hit_return_msg(newline_sb: bool) {
     if !newline_sb {
         P_MORE.set(false);
     }
-    if msg_didout.get() {
+    if MSG_DIDOUT.get() {
         msg_putchar(c_int::from(b'\n')); // start on a new line
     }
     P_MORE.set(false); // don't want to see this message when scrolling back
@@ -315,11 +315,11 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
     // In that case don't show another prompt. Also don't take over a
     // hit-return prompt nobody asked us to.
     let no_need_more = headless_mode.get() && !embedded_mode.get() && ui_active() == 0;
-    if no_need_more || more_prompt_busy.get() || (State.get() == MODE_HITRETURN && typed_char == 0)
+    if no_need_more || MORE_PROMPT_BUSY.get() || (State.get() == MODE_HITRETURN && typed_char == 0)
     {
         return false;
     }
-    more_prompt_busy.set(true);
+    MORE_PROMPT_BUSY.set(true);
 
     if typed_char == KEY_UPPER_G {
         // "g<" -- find the first line on the last page.
@@ -382,16 +382,16 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
                 }
                 Err(NotAKey(KEY_UPPER_G)) => {
                     toscroll = 999999;
-                    lines_left.set(999999);
+                    LINES_LEFT.set(999999);
                     break 'scroll;
                 }
                 Err(NotAKey(KEY_COLON)) => {
                     // Start an Ex command on the next line.
-                    if confirm_msg_used.get() == 0 {
+                    if CONFIRM_MSG_USED.get() == 0 {
                         typeahead_noflush(b':');
                         cmdline_row.set(Rows.get() - 1);
                         skip_redraw.set(true);
-                        need_wait_return.set(false);
+                        NEED_WAIT_RETURN.set(false);
                     }
                     // falls through to the quit tail
                 }
@@ -411,13 +411,13 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
                 }
             }
             // Quit: answer a :confirm dialog, or interrupt the output.
-            if confirm_msg_used.get() != 0 {
+            if CONFIRM_MSG_USED.get() != 0 {
                 retval = true;
             } else {
                 got_int.set(true);
-                quit_more.set(true);
+                QUIT_MORE.set(true);
             }
-            lines_left.set(Rows.get() - 1);
+            LINES_LEFT.set(Rows.get() - 1);
         }
 
         debug_assert!(toscroll == 0 || !to_redraw);
@@ -472,7 +472,7 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
                         && i < Rows.get() - 1
                     {
                         mp = disp_sb_line(i, line);
-                        msg_scrolled.set(msg_scrolled.get() + 1);
+                        MSG_SCROLLED.set(MSG_SCROLLED.get() + 1);
                         i += 1;
                     }
                     to_redraw = false;
@@ -483,7 +483,7 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
             // Scroll forwards.
             if cmdline_row.get() >= Rows.get() && !ui_has(kUIMessages) {
                 msg_scroll_up(true, false);
-                msg_scrolled.set(msg_scrolled.get() + 1);
+                MSG_SCROLLED.set(MSG_SCROLLED.get() + 1);
             }
             while toscroll > 0
                 && let Some(line) = mp_last
@@ -491,8 +491,8 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
                 // A throttled scroll here would be undone by the flush, so
                 // discount it instead.
                 if msg_do_throttle() && !msg_grid_ref().throttled {
-                    msg_scrolled_at_flush.set(msg_scrolled_at_flush.get() - 1);
-                    msg_grid_scroll_discount.set(msg_grid_scroll_discount.get() + 1);
+                    MSG_SCROLLED_AT_FLUSH.set(MSG_SCROLLED_AT_FLUSH.get() - 1);
+                    MSG_GRID_SCROLL_DISCOUNT.set(MSG_GRID_SCROLL_DISCOUNT.get() + 1);
                 }
                 msg_scroll_up(true, false);
                 inc_msg_scrolled();
@@ -504,7 +504,7 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
 
         if toscroll > 0 {
             // Displayed the requested number of lines: quit the prompt.
-            lines_left.set(toscroll);
+            LINES_LEFT.set(toscroll);
             break;
         }
         clear_msg_area(Rows.get() - 1, Rows.get(), 0, Columns.get());
@@ -519,12 +519,12 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
 
     State.set(old_state);
     setmouse();
-    if quit_more.get() {
-        msg_row.set(Rows.get() - 1);
-        msg_col.set(0);
+    if QUIT_MORE.get() {
+        MSG_ROW.set(Rows.get() - 1);
+        MSG_COL.set(0);
     }
 
-    more_prompt_busy.set(false);
+    MORE_PROMPT_BUSY.set(false);
     retval
 }
 
@@ -549,21 +549,21 @@ pub fn repeat_message() {
     }
     if State.get() == MODE_ASKMORE {
         msg_moremsg(true); // display --MORE-- message again
-        msg_row.set(Rows.get() - 1);
-    } else if State.get() & MODE_CMDLINE != 0 && confirm_msg.with(Option::is_some) {
+        MSG_ROW.set(Rows.get() - 1);
+    } else if State.get() & MODE_CMDLINE != 0 && CONFIRM_MSG.with(Option::is_some) {
         display_confirm_msg(); // display ":confirm" message again
-        msg_row.set(Rows.get() - 1);
+        MSG_ROW.set(Rows.get() - 1);
     } else if State.get() == MODE_EXTERNCMD {
-        ui_cursor_goto(msg_row.get(), msg_col.get()); // put cursor back
+        ui_cursor_goto(MSG_ROW.get(), MSG_COL.get()); // put cursor back
     } else if State.get() == MODE_HITRETURN || State.get() == MODE_SETWSIZE {
-        if msg_row.get() == Rows.get() - 1 {
+        if MSG_ROW.get() == Rows.get() - 1 {
             // Avoid drawing the "hit-enter" prompt below the last line.
-            msg_didout.set(false);
-            msg_col.set(0);
+            MSG_DIDOUT.set(false);
+            MSG_COL.set(0);
             msg_clr_eos();
         }
         hit_return_msg(false);
-        msg_row.set(Rows.get() - 1);
+        MSG_ROW.set(Rows.get() - 1);
     }
 }
 
@@ -586,16 +586,16 @@ pub fn msg_delay(ms: uint64_t, ignoreinput: bool) {
 
 /// Pause after an error message, so it is not scrolled away unseen.
 pub fn msg_check_for_delay(check_msg_scroll: bool) {
-    if (emsg_on_display.get() || (check_msg_scroll && msg_scroll.get() != 0))
-        && !did_wait_return.get()
-        && emsg_silent.get() == 0
-        && !in_assert_fails.get()
+    if (EMSG_ON_DISPLAY.get() || (check_msg_scroll && MSG_SCROLL.get() != 0))
+        && !DID_WAIT_RETURN.get()
+        && EMSG_SILENT.get() == 0
+        && !IN_ASSERT_FAILS.get()
         && !ui_has(kUIMessages)
     {
         msg_delay(1006, true);
-        emsg_on_display.set(false);
+        EMSG_ON_DISPLAY.set(false);
         if check_msg_scroll {
-            msg_scroll.set(0);
+            MSG_SCROLL.set(0);
         }
     }
 }

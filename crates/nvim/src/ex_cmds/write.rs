@@ -51,8 +51,8 @@ use crate::memline::swap_name_for;
 use crate::memory::XString;
 use crate::message::VIM_QUESTION;
 use crate::message::VIM_YES;
-use crate::message::state::emsg_silent;
-use crate::message::{e_argreq, e_bufloaded, e_exists, e_invarg, e_readonly};
+use crate::message::state::EMSG_SILENT;
+use crate::message::{E_ARGREQ, E_BUFLOADED, E_EXISTS, E_INVARG, E_READONLY};
 use crate::message::{emsg, vim_dialog_yesno};
 use crate::message_fmt::msg_cstr;
 use crate::option::defs::{CpoFlag, OptionSetFlags, ShmFlag};
@@ -141,7 +141,7 @@ pub fn ex_file(excmd: &mut ExArg) {
     // ":0file" removes the file name.  Check for illegal uses ":3file",
     // "0file name", etc.
     if excmd.addr_count > 0 && (!no_arg || excmd.number2 > 0 || excmd.addr_count > 1) {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     }
 
@@ -243,7 +243,7 @@ impl ExArg<'_> {
                 return Err(Failed);
             }
             if !confirming() {
-                emsg(gettext(e_exists));
+                emsg(gettext(E_EXISTS));
                 return Err(Failed);
             }
             if !dialog_yesno_about(gettext(c"Overwrite existing file \"%s\"?"), fname) {
@@ -252,7 +252,7 @@ impl ExArg<'_> {
             self.forceit = true;
         }
 
-        if !other || emsg_silent.get() != 0 {
+        if !other || EMSG_SILENT.get() != 0 {
             return Ok(());
         }
 
@@ -300,7 +300,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
     // this situation.
     let typed: Option<CString> = if args.line.arg().is_empty() {
         if args.cmdidx == CmdIdx::saveas {
-            emsg(gettext(e_argreq));
+            emsg(gettext(E_ARGREQ));
             return Err(Failed);
         }
         None
@@ -324,7 +324,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
         if let Some(alt_buf) = alt_buf
             && alt_buf.b_ml.ml_mfp.is_some()
         {
-            emsg(gettext(e_bufloaded));
+            emsg(gettext(E_BUFLOADED));
             return Err(Failed);
         }
     }
@@ -664,7 +664,7 @@ fn check_readonly(forceit: &mut bool, buffer: Buf) -> bool {
     let (is_ro, name) = (buffer.b_p_ro != 0, own_name(buffer.name.shown()));
     if !confirming() || name.is_none() {
         if is_ro {
-            emsg(gettext(e_readonly));
+            emsg(gettext(E_READONLY));
         } else {
             let name = msg_cstr(name.as_deref().unwrap_or_default());
             semsg!("E505: \"{name}\" is read-only (add ! to override)");

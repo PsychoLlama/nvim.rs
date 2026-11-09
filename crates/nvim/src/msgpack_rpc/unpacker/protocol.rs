@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 //! The decisions the streaming unpacker makes, separated from the buffers it
 //! makes them about: which parse stage comes next, which token types are
@@ -91,13 +90,13 @@ pub fn token_matches(expected: mpack_token_type_t, actual: mpack_token_type_t) -
 /// or a response. Anything else has already been rejected by the caller.
 pub fn header_shape_is_valid(array_length: usize, message_type: u32) -> bool {
     if array_length == 3 {
-        message_type == kMessageTypeNotification as u32
+        message_type == MESSAGE_TYPE_NOTIFICATION as u32
     } else {
-        message_type < kMessageTypeNotification as u32
+        message_type < MESSAGE_TYPE_NOTIFICATION as u32
     }
 }
 
-const kMessageTypeNotification: MessageType = 2;
+const MESSAGE_TYPE_NOTIFICATION: MessageType = 2;
 
 mod limit {
     /// The longest method name the header parser will look at. A longer one

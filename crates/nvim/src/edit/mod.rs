@@ -122,8 +122,8 @@ use crate::mark::mark_view_make;
 use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{mb_adjust_cursor, utf8len_tab};
 use crate::memline::{Lines, gchar_pos, ml_append_text, ml_get_len, ml_replace_buf_text};
-use crate::message::state::{emsg_on_display, msg_scroll, msg_silent};
-use crate::message::{e_noinstext, e_sandbox, e_textlock};
+use crate::message::state::{EMSG_ON_DISPLAY, MSG_SCROLL, MSG_SILENT};
+use crate::message::{E_NOINSTEXT, E_SANDBOX, E_TEXTLOCK};
 use crate::message::{emsg, msg_check_for_delay};
 use crate::mouse::{
     MSCR_DOWN, MSCR_LEFT, MSCR_RIGHT, MSCR_UP, ins_mouse, ins_mousescroll, setmouse,
@@ -139,7 +139,7 @@ use crate::normal::{
 };
 use crate::ops::do_join;
 use crate::option::vars::{
-    P_RI, fdo_flags, p_ari, p_ch, p_deco, p_lrm, p_paste, p_ri, p_smd, p_sol, p_sta, p_ww,
+    FDO_FLAGS, P_RI, p_ari, p_ch, p_deco, p_lrm, p_paste, p_ri, p_smd, p_sol, p_sta, p_ww,
 };
 use crate::option::{can_bs, get_scrolloff_value, get_ve_flags, set_iminsert_global};
 use crate::options::{

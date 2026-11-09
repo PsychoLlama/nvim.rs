@@ -54,7 +54,7 @@ use crate::fileio::Fgets;
 use crate::fileio::buf_reload;
 use crate::fileio::temp_name;
 use crate::memory::XString;
-use crate::message::e_bufloaded;
+use crate::message::E_BUFLOADED;
 use crate::message::emsg;
 use crate::message_fmt::msg_bytes;
 use crate::option::defs::{OptVal, OptionSetFlags};
@@ -134,7 +134,7 @@ pub fn spell_add_word(word: &[u8], what: SpellAddType, idx: c_int, undo: bool) {
         // editing it and have unsaved changes.
         let open = find_buffer_by_name(name.as_cstr()).filter(|b| b.b_ml.ml_mfp.is_some());
         if open.is_some_and(buf_is_changed) {
-            emsg(gettext(e_bufloaded));
+            emsg(gettext(E_BUFLOADED));
             return;
         }
         bufref = BufRef::of_opt(open);

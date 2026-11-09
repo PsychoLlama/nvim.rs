@@ -376,7 +376,7 @@ pub fn did_set_quickfixtextfunc(_args: &mut OptSet) -> Result<(), OptError> {
     // option again.
     let value = P_QFTF.get();
     let Ok(cb) = callback_from_option(value.as_cstr()) else {
-        return Err((e_invarg).into());
+        return Err((E_INVARG).into());
     };
     let mut old = qftf_cb.with_mut(|slot| core::mem::replace(slot, cb.unwrap_or(Callback::None)));
     old.clear();

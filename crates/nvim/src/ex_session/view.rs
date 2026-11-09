@@ -36,7 +36,7 @@ use crate::fileio::IoFailed;
 use crate::fold::put_folds;
 use crate::mapping::makemap;
 use crate::option::defs::OptionSetFlags;
-use crate::option::vars::ssop_flags;
+use crate::option::vars::SSOP_FLAGS;
 use crate::option::{makefoldset, makeset};
 use crate::options::{
     kOptSsopFlagCurdir, kOptSsopFlagCursor, kOptSsopFlagFolds, kOptSsopFlagLocaloptions,
@@ -208,7 +208,7 @@ fn put_alternate(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Writt
     let wanted = opts.is_session()
         && restorable
         // Not a terminal, unless terminals are in 'sessionoptions'.
-        && !(buf_is_terminal(alt) && ssop_flags.get() & kOptSsopFlagTerminal == 0);
+        && !(buf_is_terminal(alt) && SSOP_FLAGS.get() & kOptSsopFlagTerminal == 0);
     let Some(alt) = alt.filter(|_| wanted) else {
         return Ok(());
     };

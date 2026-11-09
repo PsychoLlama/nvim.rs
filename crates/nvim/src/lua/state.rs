@@ -20,7 +20,7 @@ use crate::lua::executor::{LuaRetMode, NluaRefState};
 use crate::lua::ffi::LUA_NOREF;
 use crate::os::libc::uint64_t;
 
-pub(crate) const kRetObject: LuaRetMode = 0;
+pub(crate) const RET_OBJECT: LuaRetMode = 0;
 /// The main state's reference bookkeeping: how many references it holds
 /// (what the leak checks read), and the `vim.NIL` and `vim.empty_dict()`
 /// sentinels, which are references too.

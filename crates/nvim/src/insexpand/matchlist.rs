@@ -63,7 +63,7 @@ impl Added {
 /// `fname` the file it came from, `extra` the `abbr`/`kind`/`menu`/`info`
 /// strings (an empty one is dropped), `user_data` taken over only when the
 /// match is added, `cdir` the side of `compl_curr_match` to link it on
-/// (`kDirectionNotSet` means `compl_direction`), `adup` whether a duplicate
+/// (`DIRECTION_NOT_SET` means `compl_direction`), `adup` whether a duplicate
 /// is acceptable, and `user_hl` the `abbr` and `kind` highlight attributes.
 ///
 /// Answers [`Added::Duplicate`] when the text is already in the list and
@@ -80,7 +80,7 @@ pub(crate) fn ins_compl_add(
     user_hl: [c_int; 2],
     score: c_int,
 ) -> Added {
-    let dir = if cdir == kDirectionNotSet {
+    let dir = if cdir == DIRECTION_NOT_SET {
         compl_direction.get()
     } else {
         cdir
@@ -498,7 +498,7 @@ fn merge_sort<T: Copy>(items: &mut Vec<T>, compare: impl Fn(&T, &T) -> Ordering)
 /// starts with, taken from `compl_orig_text`.
 pub(crate) fn ins_compl_add_orig_text(flags: c_int) -> Result<(), Failed> {
     let text = compl_orig_text().to_vec();
-    let (dir, score) = (kDirectionNotSet, FUZZY_SCORE_NONE);
+    let (dir, score) = (DIRECTION_NOT_SET, FUZZY_SCORE_NONE);
     let added = ins_compl_add(&text, None, NO_EXTRA, None, dir, flags, false, NO_HL, score);
     // A text already in the list is "not added" to upstream's callers here.
     if added == Added::Linked {

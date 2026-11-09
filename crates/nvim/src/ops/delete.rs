@@ -89,7 +89,7 @@ pub fn op_delete(op: &mut OpArg) -> Result<(), NotDeleted> {
         return Ok(());
     }
     if Buf::current().b_p_ma == 0 {
-        emsg(gettext(e_modifiable));
+        emsg(gettext(E_MODIFIABLE));
         return Err(NotDeleted::NotModifiable);
     }
     if visual_select() && op.is_visual {
@@ -102,7 +102,7 @@ pub fn op_delete(op: &mut OpArg) -> Result<(), NotDeleted> {
     // Imitate the strange Vi behaviour: a charwise delete spanning more
     // than one line whose result would be a blank line becomes linewise.
     // Not for `c`, and not in Visual mode.
-    if op.motion_type == kMTCharWise
+    if op.motion_type == MT_CHAR_WISE
         && !op.is_visual
         && op.line_count > 1
         && op.motion_force.is_nul()

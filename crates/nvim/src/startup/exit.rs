@@ -34,7 +34,7 @@ use crate::event::stream::stream_set_blocking;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_INF, logmsg};
 use crate::memline::{ml_close_all, ml_close_notmod, ml_sync_all};
-use crate::message::state::{did_emsg, no_wait_return};
+use crate::message::state::{DID_EMSG, NO_WAIT_RETURN};
 use crate::message::wait_return;
 use crate::option::vars::{P_SHADA, P_TITLEOLD, p_title, p_titleold};
 use crate::os::cshim::write_c_stderr;
@@ -197,9 +197,9 @@ pub fn getout(mut exitval: c_int) -> ! {
 
     profile_dump();
 
-    if did_emsg.get() != 0 {
+    if DID_EMSG.get() != 0 {
         // Give the user a chance to read the error.
-        no_wait_return.set(0);
+        NO_WAIT_RETURN.set(0);
         // NB: upstream notes this may itself call getout(0) and clobber
         // `exitval`.
         wait_return(0);

@@ -386,7 +386,7 @@ pub(crate) fn current_word(
             redraw_curbuf_later(UPD_INVERTED); // update the inversion
         } else {
             op.start = start_pos;
-            op.motion_type = kMTCharWise;
+            op.motion_type = MT_CHAR_WISE;
         }
         count -= 1;
     }

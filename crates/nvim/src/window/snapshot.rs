@@ -26,7 +26,7 @@ use core::ffi::{CStr, c_int};
 use super::*;
 use crate::charset::getdigits_int_at;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::message::e_invarg;
+use crate::message::E_INVARG;
 use crate::message::msg_ui_flush;
 use crate::r#move::WinValid;
 use crate::option::defs::OptError;
@@ -317,7 +317,7 @@ fn parse_colorcolumn(text: &[u8], tw: OptInt) -> Result<Vec<c_int>, OptError> {
             col = if at(i) == b'-' { -1 } else { 1 };
             i += 1;
             if !at(i).is_ascii_digit() {
-                return Err((e_invarg).into());
+                return Err((E_INVARG).into());
             }
             let (n, past) = getdigits_int_at(text, i, true, 0);
             (col, i) = (col * n, past);
@@ -335,7 +335,7 @@ fn parse_colorcolumn(text: &[u8], tw: OptInt) -> Result<Vec<c_int>, OptError> {
         } else if at(i).is_ascii_digit() {
             (col, i) = getdigits_int_at(text, i, true, 0);
         } else {
-            return Err((e_invarg).into());
+            return Err((E_INVARG).into());
         }
         if !skip {
             cols.push(col - 1); // 1-based to 0-based
@@ -344,11 +344,11 @@ fn parse_colorcolumn(text: &[u8], tw: OptInt) -> Result<Vec<c_int>, OptError> {
             break;
         }
         if at(i) != b',' {
-            return Err((e_invarg).into());
+            return Err((E_INVARG).into());
         }
         i += 1;
         if at(i) == 0 {
-            return Err((e_invarg).into()); // illegal trailing comma
+            return Err((E_INVARG).into()); // illegal trailing comma
         }
     }
 

@@ -34,7 +34,7 @@ use crate::event::r#loop::{main_loop_raw, schedule_deferred_job};
 use crate::lua::abi::{lua_CFunction, lua_State};
 use crate::lua::ffi::{LUA_MULTRET, lua_close, luaopen_luv, luv_set_loop};
 use crate::lua::stack::{At, Stack};
-use crate::message::e_outofmem;
+use crate::message::E_OUTOFMEM;
 use ::libc::pthread_exit;
 
 unsafe extern "C" {
@@ -184,7 +184,7 @@ unsafe fn nlua_luv_thread_common_cfpcall(
     if let Err(failed) = stack.pcall(nargs, nresult, None) {
         let status = failed.0;
         if status == LUA_ERRMEM && flags & LUVF_CALLBACK_NOEXIT == 0 {
-            let _ = std::io::stderr().write_all(&[e_outofmem.to_bytes(), b"\n"].concat());
+            let _ = std::io::stderr().write_all(&[E_OUTOFMEM.to_bytes(), b"\n"].concat());
             // SAFETY: the thread's own state, closed once, and the thread
             // left without touching it again.
             unsafe {

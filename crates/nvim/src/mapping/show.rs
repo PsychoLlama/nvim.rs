@@ -52,7 +52,7 @@ pub(crate) fn showmap(mp: &MapBlock, local: bool) {
         return;
     }
 
-    if msg_col.get() > 0 || msg_silent.get() != 0 {
+    if MSG_COL.get() > 0 || MSG_SILENT.get() != 0 {
         msg_putchar(c_int::from(b'\n'));
         if got_int.get() {
             return; // 'q' typed at the MORE prompt

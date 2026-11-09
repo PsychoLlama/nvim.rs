@@ -24,7 +24,7 @@ use super::{
 };
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::NumBuf;
-use crate::message::{e_invarg, e_listblobreq};
+use crate::message::{E_INVARG, E_LISTBLOBREQ};
 use crate::narrow::number_as_int;
 use crate::os::libc::int64_t;
 use crate::semsg;
@@ -54,7 +54,7 @@ pub fn f_add(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 }
             }
         }
-        _ => err(e_listblobreq),
+        _ => err(E_LISTBLOBREQ),
     }
 }
 
@@ -160,7 +160,7 @@ pub fn f_count(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
             Container::Dict(d) if !d.is_null() => {
                 if args.len() > 2 && args.len() > 3 {
-                    err(e_invarg);
+                    err(E_INVARG);
                 } else {
                     n = count_dict(d, &args[1], ic);
                 }

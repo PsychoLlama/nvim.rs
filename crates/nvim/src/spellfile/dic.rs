@@ -57,7 +57,7 @@ use crate::fileio::Fgets;
 use crate::getchar::state::got_int;
 use crate::mbyte::CONV_NONE;
 use crate::mbyte::{c_cluster_len, char_count, head_off};
-use crate::message::state::{msg_col, msg_didout};
+use crate::message::state::{MSG_COL, MSG_DIDOUT};
 use crate::message::{msg_clr_eos, msg_display_elided, msg_start};
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::vars::p_verbose;
@@ -182,8 +182,8 @@ pub(super) fn spell_read_dic(
                 msg_start();
                 msg_display_elided(&cstr::owned(cstr::until_nul(&message)), 0);
                 msg_clr_eos();
-                msg_didout.set(false);
-                msg_col.set(0);
+                MSG_DIDOUT.set(false);
+                MSG_COL.set(0);
                 ui_flush();
             }
         }

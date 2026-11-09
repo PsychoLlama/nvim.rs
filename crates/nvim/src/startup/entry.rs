@@ -58,12 +58,12 @@ use crate::lua::executor::{nlua_exec_file, nlua_init, nlua_init_defaults, nlua_r
 use crate::mark::setpcmark;
 use crate::memline::list_swap_files;
 use crate::message::msg_putchar;
-use crate::message::state::{msg_didout, msg_row, msg_scroll, no_wait_return};
+use crate::message::state::{MSG_DIDOUT, MSG_ROW, MSG_SCROLL, NO_WAIT_RETURN};
 use crate::mouse::setmouse;
 use crate::r#move::update_topline;
 use crate::msgpack_rpc::server::{server_init, server_teardown};
 use crate::normal::{check_scrollbind, normal_enter};
-use crate::option::vars::{P_LPL, P_SHADA, P_UC, P_UT, cb_flags, p_ch};
+use crate::option::vars::{CB_FLAGS, P_LPL, P_SHADA, P_UC, P_UT, p_ch};
 use crate::option::{set_init_1, set_init_2, set_init_3, set_init_tablocal};
 use crate::os::cshim::{gettext, unbuffer_c_stdout, write_c_stderr};
 use crate::os::env::{env_init, init_homedir, os_hint_priority};
@@ -288,14 +288,14 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         "'cmdheight' does not fit in the screen"
     );
     cmdline_row.set(Rows.get() - c_int::try_from(p_ch()).expect("checked against the screen"));
-    msg_row.set(cmdline_row.get());
+    MSG_ROW.set(cmdline_row.get());
     default_grid_alloc();
 
     set_init_2(headless_mode.get());
     time_msg_at(c"inits 2");
 
-    msg_scroll.set(1);
-    no_wait_return.set(1);
+    MSG_SCROLL.set(1);
+    NO_WAIT_RETURN.set(1);
     init_highlight(true, false);
     ui_comp_syn_init();
     time_msg_at(c"init highlight");
@@ -396,9 +396,9 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     handle_quickfix(&params);
 
     starting.set(NO_BUFFERS);
-    no_wait_return.set(0);
+    NO_WAIT_RETURN.set(0);
     if !exmode_active.get() {
-        msg_scroll.set(0);
+        MSG_SCROLL.set(0);
     }
 
     if params.edit_type == EDIT_STDIN.cast_signed() && !recoverymode.get() {
@@ -407,7 +407,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
 
     setmouse();
     redraw_later(Win::current(), UPD_VALID);
-    no_wait_return.set(1);
+    NO_WAIT_RETURN.set(1);
 
     create_windows(&mut params);
     time_msg_at(c"opening buffers");
@@ -447,7 +447,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     starting.set(0);
     RedrawingDisabled.set(0);
     redraw_all_later(UPD_NOT_VALID);
-    no_wait_return.set(0);
+    NO_WAIT_RETURN.set(0);
     do_autochdir();
 
     set_vim_var_nr(Vv::VimDidEnter, 1 as VarNumber);
@@ -471,20 +471,20 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         stuff_readbuf_char(Key::from_code(-(253 + (c_int::from(KE_NOP) << 8))));
     }
 
-    if cb_flags.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0 {
+    if CB_FLAGS.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0 {
         // Warm the clipboard provider so the first yank is not slow.
         eval_has_provider(c"clipboard");
     }
 
     if let Some(lua_script) = params.lua_script.as_deref() {
         // `-l`: run the script and leave, with its status.
-        msg_scroll.set(1);
+        MSG_SCROLL.set(1);
         logmsg!(LOGLVL_DBG, c"main", 678, "executing Lua -l script");
         let lua_ok = nlua_exec_file(lua_script).is_ok();
         time_msg_at(c"executing Lua -l script");
-        if msg_didout.get() {
+        if MSG_DIDOUT.get() {
             msg_putchar('\n' as c_int);
-            msg_didout.set(false);
+            MSG_DIDOUT.set(false);
         }
         getout(if lua_ok { 0 } else { 1 });
     }

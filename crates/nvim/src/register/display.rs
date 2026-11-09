@@ -131,7 +131,7 @@ pub fn ex_display(excmd: &mut ExArg) {
     let hl_id = HLF_8;
 
     msg_ext_set_kind(c"list_cmd");
-    msg_ext_skip_flush.set(true);
+    MSG_EXT_SKIP_FLUSH.set(true);
     msg_title(gettext(c"\nType Name Content"));
 
     // `None` is the unnamed register, which aliases whichever slot was
@@ -147,7 +147,7 @@ pub fn ex_display(excmd: &mut ExArg) {
             // two queries is what the messages depend on.
             let type_0 = match get_reg_type(name).0 {
                 kMTLineWise => b'l',
-                kMTCharWise => b'c',
+                MT_CHAR_WISE => b'c',
                 _ => b'b',
             };
             let mut yb = get_y_register(i.unwrap_or_else(|| y_previous.get().unwrap_or(0)));
@@ -158,8 +158,8 @@ pub fn ex_display(excmd: &mut ExArg) {
 
             // Don't show the register `:redir` is writing into: it would
             // record its own listing.
-            let redir_target = name == redir_reg.get().to_ascii_lowercase()
-                || redir_reg.get() == b'"' && Some(yb) == get_y_previous();
+            let redir_target = name == REDIR_REG.get().to_ascii_lowercase()
+                || REDIR_REG.get() == b'"' && Some(yb) == get_y_previous();
             // A share of the lines: printing can run `:redir`, which writes
             // a register.
             let reg = yb.snapshot();
@@ -231,5 +231,5 @@ pub fn ex_display(excmd: &mut ExArg) {
         false,
     );
 
-    msg_ext_skip_flush.set(false);
+    MSG_EXT_SKIP_FLUSH.set(false);
 }

@@ -4,7 +4,7 @@
 //! expression's text as bytes (or a command's line and an offset into it),
 //! runs `eval0`, converts the result to whatever the caller wanted, and
 //! clears the typval on both the success and the error path. What differs
-//! is what is counted up around it (`emsg_skip`, `emsg_off`, `sandbox`,
+//! is what is counted up around it (`EMSG_SKIP`, `EMSG_OFF`, `sandbox`,
 //! `textlock`, the funccal stack) and what the answer is converted to.
 //!
 //! The text is the caller's, borrowed for the evaluation. A caller whose
@@ -46,7 +46,7 @@ use crate::eval::{
     may_call_simple_func,
 };
 use crate::ex_eval::aborting;
-use crate::message::state::{called_emsg, did_emsg};
+use crate::message::state::{CALLED_EMSG, DID_EMSG};
 use crate::option::defs::OptionSetFlags;
 use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
@@ -104,13 +104,13 @@ pub(crate) fn eval1_emsg(
     evaluate: bool,
 ) -> Result<(), Failed> {
     let start = cursor.offset();
-    let did_emsg_before = did_emsg.get();
-    let called_emsg_before = called_emsg.get();
+    let did_emsg_before = DID_EMSG.get();
+    let called_emsg_before = CALLED_EMSG.get();
     let ret = eval1(cursor, result, evaluate);
     if ret.is_err()
         && !aborting()
-        && did_emsg.get() == did_emsg_before
-        && called_emsg.get() == called_emsg_before
+        && DID_EMSG.get() == did_emsg_before
+        && CALLED_EMSG.get() == called_emsg_before
     {
         let start = msg_bytes(&cursor.text()[start..]);
         semsg!("E15: Invalid expression: \"{start}\"");

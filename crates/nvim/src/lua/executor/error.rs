@@ -25,7 +25,7 @@ use crate::event_queue::put_job_on_main_loop;
 use crate::guard::Depth;
 use crate::lua::ffi::LUA_MULTRET;
 use crate::lua::stack::{At, Kind, LuaFailed, Stack};
-use crate::message::e_outofmem;
+use crate::message::E_OUTOFMEM;
 use crate::message_fmt::{msg_bytes_opt, report_emsg_multiline};
 use crate::os::cshim::gettext;
 use crate::startup::preserve_exit;
@@ -149,7 +149,7 @@ pub(crate) fn fast_pcall(
     let top = stack.top().index();
     if let Err(LuaFailed(status)) = nlua_pcall(stack, nargs, nresult) {
         if status == LUA_ERRMEM && flags & LUVF_CALLBACK_NOEXIT == 0 {
-            preserve_exit(Some(e_outofmem));
+            preserve_exit(Some(E_OUTOFMEM));
         }
         let error = nlua_get_error(stack).map(|text| until_nul(text).to_vec());
         put_job_on_main_loop(Box::new(move || {

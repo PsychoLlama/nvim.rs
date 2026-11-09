@@ -50,7 +50,7 @@ use crate::guard::Lock;
 pub(crate) use crate::mapping::skip_white;
 use crate::mbyte::encode_char;
 use crate::memory::ThinCString;
-use crate::message::e_cannot_change_menus_while_listing;
+use crate::message::E_CANNOT_CHANGE_MENUS_WHILE_LISTING;
 use crate::message::{emsg, special_keys_text};
 use crate::message_fmt::msg_bytes;
 use crate::normal::{visual_active, visual_select};
@@ -247,7 +247,7 @@ static MENUS_LOCKED: GlobalCell<c_int> = GlobalCell::new(0);
 /// Whether the menus are locked, reporting it if they are.
 pub(crate) fn is_menus_locked() -> bool {
     if MENUS_LOCKED.get() > 0 {
-        emsg_shared(e_cannot_change_menus_while_listing);
+        emsg_shared(E_CANNOT_CHANGE_MENUS_WHILE_LISTING);
         return true;
     }
     false

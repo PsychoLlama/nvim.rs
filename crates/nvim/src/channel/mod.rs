@@ -52,7 +52,7 @@ use crate::event::channel::{process_channel_events, wait_job};
 use crate::event_queue::{ChildQueue, put_job_on_main_loop};
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::release_luaref;
-use crate::message::{e_invchan, e_invstream, e_invstreamrpc};
+use crate::message::{E_INVCHAN, E_INVSTREAM, E_INVSTREAMRPC};
 use crate::msgpack_rpc::channel::{rpc_close, rpc_free};
 use crate::os::cshim::gettext;
 use crate::os::fs::write_bytes;
@@ -282,7 +282,7 @@ pub fn channel_close(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> 
         return if id < next_chan_id.get() {
             Ok(())
         } else {
-            Err(e_invchan)
+            Err(E_INVCHAN)
         };
     };
 
@@ -291,16 +291,16 @@ pub fn channel_close(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> 
         if is_rpc {
             rpc_close(id);
         } else if part == kChannelPartRpc {
-            return Err(e_invstream);
+            return Err(E_INVSTREAM);
         }
     } else if (part == kChannelPartStdin || part == kChannelPartStdout) && is_rpc {
-        return Err(e_invstreamrpc);
+        return Err(E_INVSTREAMRPC);
     }
 
     match kind {
         kChannelStreamSocket => {
             if !close_main {
-                return Err(e_invstream);
+                return Err(E_INVSTREAM);
             }
             with_channel(id, |channel| {
                 if let TransportMut::Socket(socket) = channel.stream_mut().project() {
@@ -313,7 +313,7 @@ pub fn channel_close(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> 
         kChannelStreamStderr => close_stderr(id, part)?,
         kChannelStreamInternal => {
             if !close_main {
-                return Err(e_invstream);
+                return Err(E_INVSTREAM);
             }
             close_internal(id);
         }
@@ -350,7 +350,7 @@ fn close_job_parts(id: uint64_t, part: ChannelPart, close_main: bool) {
 fn close_stdio_parts(id: uint64_t, part: ChannelPart, close_main: bool) -> Result<(), CloseError> {
     // This process's stderr belongs to the stderr channel, not here.
     if part == kChannelPartStderr {
-        return Err(e_invstream);
+        return Err(E_INVSTREAM);
     }
     with_channel(id, |channel| {
         if let TransportMut::Stdio(stdin, stdout) = channel.stream_mut().project() {
@@ -368,7 +368,7 @@ fn close_stdio_parts(id: uint64_t, part: ChannelPart, close_main: bool) -> Resul
 /// Closes the stderr channel, which is a descriptor rather than a stream.
 fn close_stderr(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> {
     if part != kChannelPartAll && part != kChannelPartStderr {
-        return Err(e_invstream);
+        return Err(E_INVSTREAM);
     }
     let was_open = with_channel(id, |channel| match channel.stream_mut().project() {
         TransportMut::Stderr(err) => !core::mem::replace(&mut err.closed, true),
@@ -468,7 +468,7 @@ pub fn channel_send(id: uint64_t, data: Vec<u8>) -> Result<usize, &'static CStr>
         }
     });
     match route {
-        None => Err(gettext(e_invchan)),
+        None => Err(gettext(E_INVCHAN)),
         Some(Err(msg)) => Err(gettext(msg)),
         // stderr is not on the event loop; it is written synchronously and
         // a short write is reported as such.

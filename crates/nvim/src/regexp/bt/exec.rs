@@ -26,7 +26,7 @@ use super::state::{BT_STATE, BtState};
 use crate::ascii::NUL;
 use crate::getchar::state::got_int;
 use crate::mbyte::{mb_tolower, utf_fold};
-use crate::message::{e_null, e_re_corr};
+use crate::message::{E_NULL, E_RE_CORR};
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
 use crate::os::libc::{int64_t, uint32_t};
@@ -191,7 +191,7 @@ fn bt_regexec_both(rex: Rex, prog: BtProg, state: &mut BtState, startcol: ColNr)
                 }
             }
         }
-        None => iemsg(gettext(e_null)),
+        None => iemsg(gettext(E_NULL)),
     }
 
     if retval > 0 {
@@ -204,7 +204,7 @@ fn bt_regexec_both(rex: Rex, prog: BtProg, state: &mut BtState, startcol: ColNr)
 /// Has the program's magic number not survived? Reports so when it has not.
 fn magic_wrong(prog: BtProg<'_>) -> bool {
     if prog.magic() != REGMAGIC {
-        emsg(gettext(e_re_corr));
+        emsg(gettext(E_RE_CORR));
         return true;
     }
     false

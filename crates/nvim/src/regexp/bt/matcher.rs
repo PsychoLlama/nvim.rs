@@ -31,7 +31,7 @@ use super::state::{BackPos, Braces, BtState, RegStack, capture_slot};
 use crate::ascii::NUL;
 use crate::getchar::state::got_int;
 use crate::mbyte::{mb_isupper, mb_tolower, mb_toupper};
-use crate::message::e_re_corr;
+use crate::message::E_RE_CORR;
 use crate::message::{iemsg, internal_error};
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
@@ -156,7 +156,7 @@ fn walk(
             if scan == 0 {
                 // Should not happen. Providing a message and failing is
                 // better than a crash.
-                iemsg(gettext(e_re_corr));
+                iemsg(gettext(E_RE_CORR));
             }
             return status == RA_MATCH;
         }
@@ -335,7 +335,7 @@ fn push_frame(
         _ => {
             // Should not happen: the compiler emitted something the
             // matcher does not know.
-            iemsg(gettext(e_re_corr));
+            iemsg(gettext(E_RE_CORR));
             RA_FAIL
         }
     }

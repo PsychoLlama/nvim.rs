@@ -48,7 +48,7 @@ pub(crate) fn read_script(at: c_int, buf: &mut [u8]) -> ptrdiff_t {
 /// there and then.
 pub fn openscript(name: &CStr, directly: bool) {
     if curscript.get() + 1 == NSCRIPT.cast_signed() {
-        emsg(gettext(e_nesting));
+        emsg(gettext(E_NESTING));
         return;
     }
     // Not in the sandbox: the commands would run later, possibly outside
@@ -88,10 +88,10 @@ pub fn openscript(name: &CStr, directly: bool) {
     let save_state = State.get();
     let save_restart_edit = restart_edit.get();
     let save_finish_op = finish_op.get();
-    let save_msg_scroll = msg_scroll.get();
+    let save_msg_scroll = MSG_SCROLL.get();
 
     State.set(MODE_NORMAL);
-    msg_scroll.set(0); // no message scrolling in Normal mode
+    MSG_SCROLL.set(0); // no message scrolling in Normal mode
     restart_edit.set(Key::NUL); // don't go to Insert mode
     finish_op.set(false);
 
@@ -106,7 +106,7 @@ pub fn openscript(name: &CStr, directly: bool) {
     });
 
     State.set(save_state);
-    msg_scroll.set(save_msg_scroll);
+    MSG_SCROLL.set(save_msg_scroll);
     restart_edit.set(save_restart_edit);
     finish_op.set(save_finish_op);
 }

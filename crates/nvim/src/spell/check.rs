@@ -45,7 +45,7 @@ use crate::charset::skip;
 use crate::global_cell::GlobalCell;
 use crate::highlight::Hlf;
 use crate::mbyte::{c_cluster_len, char_at, head_off, mb_isupper};
-use crate::message::e_no_spell;
+use crate::message::E_NO_SPELL;
 use crate::message::emsg;
 use crate::options::kOptSpoFlagCamel;
 use crate::os::cshim::gettext;
@@ -404,7 +404,7 @@ pub fn no_spell_checking(window: Win) -> bool {
         || window.syn_block().b_p_spl.first_byte() == 0
         || window.syn_block().b_langp.is_empty()
     {
-        emsg(gettext(e_no_spell));
+        emsg(gettext(E_NO_SPELL));
         return true;
     }
     false

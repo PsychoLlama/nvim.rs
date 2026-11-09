@@ -26,7 +26,7 @@ use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::memline::{Lines, ml_append_bytes, ml_replace_buf_text};
 use crate::memory::XString;
-use crate::message::e_interr;
+use crate::message::E_INTERR;
 use crate::message::{MSG_BUF_LEN, emsg, messaging, msg, set_keep_msg};
 use crate::r#move::update_topline;
 use crate::option::defs::{OptVal, OptionSetFlags};
@@ -119,7 +119,7 @@ pub fn do_sub_msg(count_only: bool) -> bool {
         return true;
     }
     if got_int.get() {
-        emsg(gettext(e_interr));
+        emsg(gettext(E_INTERR));
         return true;
     }
     false

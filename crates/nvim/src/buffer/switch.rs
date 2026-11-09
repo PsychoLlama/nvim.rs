@@ -48,11 +48,11 @@ use crate::ex_eval::{enter_cleanup, leave_cleanup};
 use crate::getchar::state::got_int;
 use crate::memline::ml_recover;
 use crate::message::msg_str;
-use crate::message::state::{msg_row, msg_scroll, need_fileinfo};
-use crate::message::{e_cannot_switch_to_a_closing_buffer, e_trailing_arg};
+use crate::message::state::{MSG_ROW, MSG_SCROLL, NEED_FILEINFO};
+use crate::message::{E_CANNOT_SWITCH_TO_A_CLOSING_BUFFER, E_TRAILING_ARG};
 use crate::message_fmt::{msg_cstr_opt, report_msg};
 use crate::option::defs::OptionSetFlags;
-use crate::option::vars::{jop_flags, p_confirm, p_report, p_write};
+use crate::option::vars::{JOP_FLAGS, p_confirm, p_report, p_write};
 use crate::options::kOptJopFlagClean;
 use crate::os::cshim::ngettext;
 use crate::os::input::os_breakcheck;
@@ -156,7 +156,7 @@ fn owned_err(msg: &'static CStr) -> Option<CString> {
     Some(ex_msg(msg))
 }
 fn jop_clean() -> bool {
-    jop_flags.get() & kOptJopFlagClean != 0
+    JOP_FLAGS.get() & kOptJopFlagClean != 0
 }
 fn confirming() -> bool {
     p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)
@@ -259,10 +259,10 @@ pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
         let mut cs = NO_CLEANUP;
         enter_cleanup_now(&mut cs);
         // User selected Recover at ATTENTION prompt.
-        msg_scroll.set(1);
+        MSG_SCROLL.set(1);
         recover_swapfile();
         put_message(c"\n"); // don't overwrite the last message
-        cmdline_row.set(msg_row.get());
+        cmdline_row.set(MSG_ROW.get());
         do_modelines(OptionSetFlags::NONE);
         leave_cleanup_now(&mut cs);
     }
@@ -302,7 +302,7 @@ pub fn do_bufdel(
     let mut bnr = if addr_count == 2 {
         if !text.is_empty() {
             // both range and argument is not allowed
-            return Some(ex_errmsg(e_trailing_arg, arg));
+            return Some(ex_errmsg(E_TRAILING_ARG, arg));
         }
         start_bnr
     } else {
@@ -423,7 +423,7 @@ fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> Result<(),
     }
 
     if !close_others {
-        need_fileinfo.set(false);
+        NEED_FILEINFO.set(false);
     }
 
     retval
@@ -487,7 +487,7 @@ fn do_buffer_ext(
     }
     // Whether splitting or not, don't open a closing buffer in more windows.
     if buf.raw() != Buf::current_raw() && buf.b_locked_split != 0 {
-        err(e_cannot_switch_to_a_closing_buffer);
+        err(E_CANNOT_SWITCH_TO_A_CLOSING_BUFFER);
         return Err(Failed);
     }
     if action == DOBUF_SPLIT && split_window().is_err() {

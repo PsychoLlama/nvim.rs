@@ -102,14 +102,14 @@ static SCROLLBACK: GlobalCell<Scrollback> = GlobalCell::new(Scrollback {
 /// after this one.
 pub(crate) fn store_sb_text(run: &[u8], hl_id: c_int, sb_col: &mut c_int, finish: bool) {
     let mut run = run;
-    let clear = do_clear_sb_text.get();
+    let clear = DO_CLEAR_SB_TEXT.get();
     if clear == SB_CLEAR_ALL || clear == SB_CLEAR_CMDLINE_DONE {
         clear_sb_text(clear == SB_CLEAR_ALL);
         msg_sb_eol(); // prevent messages from overlapping
         if clear == SB_CLEAR_CMDLINE_DONE && run.first() == Some(&b'\n') {
             run = &run[1..];
         }
-        do_clear_sb_text.set(SB_CLEAR_NONE);
+        DO_CLEAR_SB_TEXT.set(SB_CLEAR_NONE);
     }
 
     SCROLLBACK.with_mut(|sb| {
@@ -131,26 +131,26 @@ pub(crate) fn store_sb_text(run: &[u8], hl_id: c_int, sb_col: &mut c_int, finish
 /// Finished showing messages: clear the scroll-back text on the next one.
 pub fn may_clear_sb_text() {
     msg_ext_ui_flush(); // ensure messages until now are emitted
-    do_clear_sb_text.set(SB_CLEAR_ALL);
-    do_clear_hist_temp.set(true);
+    DO_CLEAR_SB_TEXT.set(SB_CLEAR_ALL);
+    DO_CLEAR_HIST_TEMP.set(true);
 }
 
 /// Starting to edit the command line: do not clear messages now.
 pub fn sb_text_start_cmdline() {
-    if do_clear_sb_text.get() == SB_CLEAR_CMDLINE_BUSY {
+    if DO_CLEAR_SB_TEXT.get() == SB_CLEAR_CMDLINE_BUSY {
         // A recursive command line: the outer one need not be remembered,
         // it will be redrawn when this level returns.
         sb_text_restart_cmdline();
     } else {
         msg_sb_eol();
-        do_clear_sb_text.set(SB_CLEAR_CMDLINE_BUSY);
+        DO_CLEAR_SB_TEXT.set(SB_CLEAR_CMDLINE_BUSY);
     }
 }
 
 /// Redrawing the command line: drop the last unfinished line.
 pub fn sb_text_restart_cmdline() {
     // Needed when returning from a nested command line.
-    do_clear_sb_text.set(SB_CLEAR_CMDLINE_BUSY);
+    DO_CLEAR_SB_TEXT.set(SB_CLEAR_CMDLINE_BUSY);
     SCROLLBACK.with_mut(|sb| {
         // No unfinished line: don't clear anything.
         let Some(last) = sb.last().filter(|&last| !sb.chunks[last - sb.first].eol) else {
@@ -164,7 +164,7 @@ pub fn sb_text_restart_cmdline() {
 /// Finished editing the command line: clear the old lines, but the last one
 /// only later.
 pub fn sb_text_end_cmdline() {
-    do_clear_sb_text.set(SB_CLEAR_CMDLINE_DONE);
+    DO_CLEAR_SB_TEXT.set(SB_CLEAR_CMDLINE_DONE);
 }
 
 /// Forget the remembered text. With `all` false the last screen line is kept.
@@ -235,8 +235,8 @@ pub(crate) fn disp_sb_line(row: c_int, pos: SbPos) -> Option<SbPos> {
             sb.get(at)
                 .map(|chunk| (chunk.text.clone(), chunk.msg_col, chunk.hl_id, chunk.eol))
         })?;
-        msg_row.set(row);
-        msg_col.set(col);
+        MSG_ROW.set(row);
+        MSG_COL.set(col);
         msg_bytes_to_grid(&text, hl_id, true);
         let next = at + 1;
         let has_next = SCROLLBACK.with(|sb| sb.get(next).is_some());

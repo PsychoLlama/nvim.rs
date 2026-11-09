@@ -62,15 +62,15 @@ use crate::lua::executor::nlua_expand_pat;
 use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{c_cluster_len, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf8len_tab};
 use crate::memline::{dec, ml_delete};
-use crate::message::state::{did_emsg, emsg_silent, in_assert_fails, msg_hist_off};
-use crate::message::{e_invarg, e_listreq, e_patnotf};
+use crate::message::state::{DID_EMSG, EMSG_SILENT, IN_ASSERT_FAILS, MSG_HIST_OFF};
+use crate::message::{E_INVARG, E_LISTREQ, E_PATNOTF};
 use crate::message::{
     emsg, internal_error, msg_clr_cmdline, msg_delay, msg_ext_set_kind, msg_progress,
 };
 use crate::r#move::{changed_cline_bef_curs, curs_columns, validate_cursor};
 use crate::option::defs::OptSet;
 use crate::option::vars::{
-    P_IC, P_SCS, P_WS, cot_flags, p_ac, p_acl, p_act, p_cto, p_dict, p_fic, p_ic, p_inf, p_js,
+    COT_FLAGS, P_IC, P_SCS, P_WS, p_ac, p_acl, p_act, p_cto, p_dict, p_fic, p_ic, p_inf, p_js,
     p_paste, p_scs, p_smd, p_tsr, p_tsrfu, p_wic, p_ws,
 };
 use crate::option::{callback_from_option, can_bs, install_callback, magic_isset, shortmess};
@@ -144,7 +144,7 @@ mod keys;
 pub use self::keys::*;
 #[cfg(test)]
 mod tests;
-pub const kDirectionNotSet: Direction = 0;
+pub const DIRECTION_NOT_SET: Direction = 0;
 pub const KEY_COMPLETE: ::core::ffi::c_int = 259;
 pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
 pub const CTRL_X_CMDLINE_CTRL_X: ::core::ffi::c_int = 17;

@@ -35,7 +35,7 @@ use crate::mbyte::{
     c_string_cells, char_at, char_count, char_len, cluster_len, clusters, head_off,
 };
 use crate::memory::ThinCString;
-use crate::message::e_invarg;
+use crate::message::E_INVARG;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
@@ -68,7 +68,7 @@ pub fn f_str2nr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if args.len() > 1 {
         base = number_as_int(tv_get_number(&args[1]));
         if !matches!(base, 2 | 8 | 10 | 16) {
-            emsg(gettext(e_invarg));
+            emsg(gettext(E_INVARG));
             return;
         }
         if args.len() > 2 && tv_get_bool(&args[2]) != 0 {

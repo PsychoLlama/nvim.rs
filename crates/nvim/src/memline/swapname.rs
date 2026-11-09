@@ -421,8 +421,8 @@ fn resolve_swapfile_clash(mut buffer: Buf, fname: &CStr, buf_fname: &CStr) -> bo
         }
         SEA_CHOICE_NONE => {
             msg_str(c"\n");
-            if msg_silent.get() == 0 {
-                need_wait_return.set(true); // call wait_return() later
+            if MSG_SILENT.get() == 0 {
+                NEED_WAIT_RETURN.set(true); // call wait_return() later
             }
         }
         // SEA_CHOICE_EDIT: use the file as it is.
@@ -635,7 +635,7 @@ pub fn recover_names(
         .map(|name| cstr::owned(&name));
     let fname_res: Option<&CStr> = resolved.as_deref().or(fname);
 
-    msg_ext_skip_flush.set(true);
+    MSG_EXT_SKIP_FLUSH.set(true);
     if do_list {
         // Use msg() to start the scrolling properly.
         msg_ext_set_kind(c"list_cmd");
@@ -766,7 +766,7 @@ pub fn recover_names(
             file_count += num_files;
         }
     }
-    msg_ext_skip_flush.set(false);
+    MSG_EXT_SKIP_FLUSH.set(false);
     (file_count, wanted)
 }
 

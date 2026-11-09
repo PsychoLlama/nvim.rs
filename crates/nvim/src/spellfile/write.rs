@@ -54,7 +54,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 use crate::mbyte::encode_char;
-use crate::message::e_write;
+use crate::message::E_WRITE;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
@@ -78,7 +78,7 @@ pub(super) struct SplWriter {
     /// is closed.
     ok: bool,
     /// How many tree chains [`put_node`] abandoned on a failed write. Each
-    /// is one `e_write` upstream said on the spot; [`write_vim_spell`] says
+    /// is one `E_WRITE` upstream said on the spot; [`write_vim_spell`] says
     /// them, nothing else being said in between.
     abandoned: usize,
 }
@@ -176,10 +176,10 @@ pub(super) fn write_vim_spell(spin: &mut SpellInfo, fname: &CStr) -> Result<(), 
         retval = Err(Failed);
     }
     for _ in 0..w.abandoned {
-        emsg(gettext(e_write));
+        emsg(gettext(E_WRITE));
     }
     if retval.is_err() {
-        emsg(gettext(e_write));
+        emsg(gettext(E_WRITE));
     }
     retval
 }

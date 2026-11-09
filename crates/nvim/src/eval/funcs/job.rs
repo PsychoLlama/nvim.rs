@@ -39,7 +39,7 @@ use crate::memline::ml_open;
 use crate::memory::XString;
 use crate::message::IOSIZE;
 use crate::message::emsg;
-use crate::message::{e_channotpty, e_invarg};
+use crate::message::{E_CHANNOTPTY, E_INVARG};
 use crate::message_fmt::msg_cstr;
 use crate::narrow::number_as_int;
 use crate::narrow::number_as_u16;
@@ -76,7 +76,7 @@ const NO_CALLBACK: Callback = Callback::None;
 /// was not a Number at all -- in which case the error is already out.
 fn job_id(arg: &TypVal) -> Result<uint64_t, Failed> {
     if arg.v_type() != VAR_NUMBER {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return Err(Failed);
     }
     Ok(arg.number_or_zero().cast_unsigned())
@@ -116,7 +116,7 @@ pub fn f_jobresize(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         || args[1].v_type() != VAR_NUMBER
         || args[2].v_type() != VAR_NUMBER
     {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     }
     let id = args[0].number_or_zero().cast_unsigned();
@@ -131,7 +131,7 @@ pub fn f_jobresize(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         is_pty
     });
     if resized != Some(true) {
-        emsg(gettext(e_channotpty));
+        emsg(gettext(E_CHANNOTPTY));
         return;
     }
     result.write_number(1);
@@ -173,7 +173,7 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if args[0].v_type() != VAR_LIST
         || (!args.get(1).is_some_and(|arg| arg.v_type() == VAR_NUMBER) && args.len() > 1)
     {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     }
 

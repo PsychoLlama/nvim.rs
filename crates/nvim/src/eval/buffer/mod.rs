@@ -61,7 +61,7 @@ use core::ffi::{CStr, c_int};
 use crate::buffer::state::swap_exists_action;
 use crate::memline::ML_DEL_MESSAGE;
 use crate::memline::ml_delete_flags;
-use crate::message::state::did_emsg;
+use crate::message::state::DID_EMSG;
 use crate::r#move::update_topline;
 use crate::normal::{set_visual_active, visual_active};
 use crate::path::path_with_url;

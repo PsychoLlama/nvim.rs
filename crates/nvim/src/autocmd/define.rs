@@ -133,7 +133,7 @@ pub fn do_autocmd(excmd: &mut ExArg, forceit: ::core::ffi::c_int) {
         }
     } else if all_events {
         if !cmd.is_empty() {
-            emsg(gettext(e_cannot_define_autocommands_for_all_events));
+            emsg(gettext(E_CANNOT_DEFINE_AUTOCOMMANDS_FOR_ALL_EVENTS));
         } else {
             do_all_autocmd_events(pattern, once, nested, cmd, forceit != 0, group);
         }

@@ -251,7 +251,7 @@ impl Relayout {
         let neighbour = if n_frames > 2 {
             // Only a nested row or column has a neighbour on the side the
             // split is going.
-            let ahead = self.split == kWinSplitAbove || self.split == kWinSplitLeft;
+            let ahead = self.split == WIN_SPLIT_ABOVE || self.split == kWinSplitLeft;
             let nested = parent_frame.parent().is_some();
             let found = nested.then(|| {
                 if ahead {
@@ -367,15 +367,15 @@ fn apply_split(
     let old_split = win_split_dir(win);
     if has_vertical && !has_split {
         fconfig.split = if config.vertical.unwrap_or(false) {
-            if old_split == kWinSplitRight || p_spr() {
-                kWinSplitRight
+            if old_split == WIN_SPLIT_RIGHT || p_spr() {
+                WIN_SPLIT_RIGHT
             } else {
                 kWinSplitLeft
             }
-        } else if old_split == kWinSplitBelow || p_sb() {
-            kWinSplitBelow
+        } else if old_split == WIN_SPLIT_BELOW || p_sb() {
+            WIN_SPLIT_BELOW
         } else {
-            kWinSplitAbove
+            WIN_SPLIT_ABOVE
         };
     }
     // Nothing about the layout is changing when neither key was given, or

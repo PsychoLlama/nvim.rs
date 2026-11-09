@@ -27,7 +27,7 @@ use crate::ex_eval::state::force_abort;
 use crate::getchar::state::got_int;
 use crate::highlight_group::syn_name2id;
 use crate::message::state::{
-    called_emsg, did_emsg, line_msg, msg_didout, msg_ext_skip_verbose, need_clr_eos,
+    CALLED_EMSG, DID_EMSG, LINE_MSG, MSG_DIDOUT, MSG_EXT_SKIP_VERBOSE, NEED_CLR_EOS,
 };
 use crate::message::{
     emsg_multiline_text, msg, msg_bytes as msg_bytes_out, msg_clr_eos, msg_end, msg_ext_set_append,
@@ -57,8 +57,8 @@ pub fn ex_echo(excmd: &mut ExArg) {
     let mut rettv = UNSET_TV;
     let mut atstart = true;
     let mut need_clear = true;
-    let did_emsg_before = did_emsg.get();
-    let called_emsg_before = called_emsg.get();
+    let did_emsg_before = DID_EMSG.get();
+    let called_emsg_before = CALLED_EMSG.get();
     let skip = excmd.skip;
     let _skipping = skip.then(Suppress::emsg_skip);
 
@@ -68,20 +68,20 @@ pub fn ex_echo(excmd: &mut ExArg) {
         // The flag is set across the evaluation only: an expression
         // that writes to the screen itself must not have the rest of
         // the line cleared out from under it.
-        need_clr_eos.set(true);
+        NEED_CLR_EOS.set(true);
         let start = cursor.offset();
         if eval1(&mut cursor, &mut rettv, !skip).is_err() {
             if !aborting()
-                && did_emsg.get() == did_emsg_before
-                && called_emsg.get() == called_emsg_before
+                && DID_EMSG.get() == did_emsg_before
+                && CALLED_EMSG.get() == called_emsg_before
             {
                 let start = msg_bytes(&cursor.text()[start..]);
                 semsg!("E15: Invalid expression: \"{start}\"");
             }
-            need_clr_eos.set(false);
+            NEED_CLR_EOS.set(false);
             break;
         }
-        need_clr_eos.set(false);
+        NEED_CLR_EOS.set(false);
 
         if !skip {
             if atstart {
@@ -89,7 +89,7 @@ pub fn ex_echo(excmd: &mut ExArg) {
                 msg_ext_set_append(excmd.cmdidx == CmdIdx::echon);
                 msg_ext_set_kind(c"echo");
                 if excmd.cmdidx == CmdIdx::echo {
-                    if !msg_didout.get() {
+                    if !MSG_DIDOUT.get() {
                         msg_sb_eol();
                     }
                     msg_start();
@@ -182,10 +182,10 @@ pub fn ex_execute(excmd: &mut ExArg) {
         } else if excmd.cmdidx == CmdIdx::echoerr {
             // `:echoerr` reports without counting as an error unless
             // something is already unwinding.
-            let save_did_emsg = did_emsg.get();
+            let save_did_emsg = DID_EMSG.get();
             emsg_multiline_text(cstr::in_bytes(&text), c"echoerr");
             if !force_abort.get() {
-                did_emsg.set(save_did_emsg);
+                DID_EMSG.set(save_did_emsg);
             }
         } else if excmd.cmdidx == CmdIdx::execute {
             // Any further lines come from wherever this command reads its
@@ -221,12 +221,12 @@ pub fn last_set_msg(script_ctx: ScriptCtx) {
         return;
     }
     let p = get_scriptname(script_ctx, true);
-    msg_ext_skip_verbose.set(true);
+    MSG_EXT_SKIP_VERBOSE.set(true);
     verbose_enter();
     msg_str(gettext(c"\n\tLast set from "));
     msg_str(&p);
     if script_ctx.sc_lnum > LineNr::ZERO {
-        msg_str(gettext(line_msg));
+        msg_str(gettext(LINE_MSG));
         msg_outnum(script_ctx.sc_lnum.get());
     // SAFETY: the caller's promise about `script_ctx`.
     } else if script_is_lua(script_ctx.sc_sid) {

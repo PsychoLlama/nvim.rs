@@ -115,8 +115,8 @@ fn command_line_handle_ctrl_bsl(s: &mut CommandLineState) -> CtrlBsl {
     }
     beep_flush();
     got_int.set(false); // don't abandon the command line
-    did_emsg.set(0);
-    emsg_on_display.set(false);
+    DID_EMSG.set(0);
+    EMSG_ON_DISPLAY.set(false);
     redrawcmd();
     CtrlBsl::NotChanged
 }
@@ -218,7 +218,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
     if KeyTyped.get() {
         s.some_key_typed = true;
 
-        if cmdmsg_rl.get() && !KeyStuffed.get() {
+        if CMDMSG_RL.get() && !KeyStuffed.get() {
             // Invert horizontal movements and operations. Only when typed
             // by the user directly, not as the result of a mapping.
             match s.c.special() {
@@ -372,9 +372,9 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
                 return command_line_changed(s);
             }
 
-            if !cmd_silent.get() {
+            if !CMD_SILENT.get() {
                 if !ui_has(kUICmdline) {
-                    msg_cursor_goto(msg_row.get(), 0);
+                    msg_cursor_goto(MSG_ROW.get(), 0);
                 }
                 ui_flush();
             }
@@ -488,7 +488,7 @@ pub(crate) fn do_autocmd_cmdlinechanged(firstc: u8) {
         if !ui_has(kUIMessages) {
             msg_putchar(::core::ffi::c_int::from(b'\n'));
         }
-        msg_scroll.set(1);
+        MSG_SCROLL.set(1);
         msg_str_hl(err.message_or_empty(), HLF_E, true);
         err.clear();
         redrawcmd();

@@ -142,7 +142,7 @@ pub fn cursor_pos_info(dict: Option<&mut Dict>) {
 
     if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
         if dict.is_none() {
-            msg(gettext(no_lines_msg), 0);
+            msg(gettext(NO_LINES_MSG), 0);
             return;
         }
     } else {
@@ -167,7 +167,7 @@ pub fn cursor_pos_info(dict: Option<&mut Dict>) {
             let saved_shm = P_SHM.clear();
             if p_ch() < 1 {
                 msg_start();
-                msg_scroll.set(1);
+                MSG_SCROLL.set(1);
             }
             // `IObuff` is where upstream assembled this, and it truncated
             // there.

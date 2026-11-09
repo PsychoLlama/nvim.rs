@@ -27,9 +27,9 @@ use crate::fuzzy::{FUZZY_MATCH_MAX_LEN, fuzzy_match, matched_char_count};
 use crate::mbyte::cluster_len;
 use crate::memline::Lines;
 use crate::memory::ThinCString;
-use crate::message::e_buffer_is_not_loaded;
+use crate::message::E_BUFFER_IS_NOT_LOADED;
 use crate::message::emsg;
-use crate::message::state::did_emsg;
+use crate::message::state::DID_EMSG;
 use crate::message_fmt::msg_cstr;
 use crate::narrow::as_index;
 use crate::narrow::len_as_integer;
@@ -311,26 +311,26 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     {
         return;
     }
-    let prev_did_emsg = did_emsg.get();
+    let prev_did_emsg = DID_EMSG.get();
     let buf = tv_get_buf(&args[0], 0);
     let Some(buf) = buf else {
         // Only report the name when `tv_get_buf` was silent about it.
-        if did_emsg.get() == prev_did_emsg {
+        if DID_EMSG.get() == prev_did_emsg {
             let what = msg_cstr(numbuf.string(&args[0]));
             semsg!("E158: Invalid buffer name: {what}");
         }
         return;
     };
     if buf.b_ml.ml_mfp.is_none() {
-        emsg(gettext(e_buffer_is_not_loaded));
+        emsg(gettext(E_BUFFER_IS_NOT_LOADED));
         return;
     }
     let mut patbuf = NumBuf::new();
     let pat = patbuf.string(&args[1]);
 
-    let did_emsg_before = did_emsg.get();
+    let did_emsg_before = DID_EMSG.get();
     let mut slnum: LineNr = tv_get_lnum_buf(&args[2], Some(buf));
-    if did_emsg.get() > did_emsg_before {
+    if DID_EMSG.get() > did_emsg_before {
         return;
     }
     if slnum < LineNr::ONE {
@@ -339,7 +339,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         return;
     }
     let mut elnum: LineNr = tv_get_lnum_buf(&args[3], Some(buf));
-    if did_emsg.get() > did_emsg_before {
+    if DID_EMSG.get() > did_emsg_before {
         return;
     }
     if elnum < LineNr::ONE || elnum < slnum {

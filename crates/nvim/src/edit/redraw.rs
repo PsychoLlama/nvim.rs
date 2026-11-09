@@ -151,7 +151,7 @@ pub(crate) fn ins_redraw(ready: bool) {
         }
     }
     setcursor();
-    emsg_on_display.set(false); // may remove error message now
+    EMSG_ON_DISPLAY.set(false); // may remove error message now
 }
 
 /// Put character `c` directly onto the screen at the cursor, remembering what

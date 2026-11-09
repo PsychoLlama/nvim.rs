@@ -46,7 +46,7 @@ use crate::mbyte::{
 };
 use crate::memline::Lines;
 use crate::memory::XString;
-use crate::message::{e_null, e_re_corr, e_re_damg, e_resulting_text_too_long};
+use crate::message::{E_NULL, E_RE_CORR, E_RE_DAMG, E_RESULTING_TEXT_TOO_LONG};
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
@@ -201,8 +201,8 @@ impl RegsubError {
     /// Put the message out.
     fn report(self) {
         let text = match self {
-            Self::NullArgument => gettext(e_null),
-            Self::CorruptProgram => gettext(e_re_corr),
+            Self::NullArgument => gettext(E_NULL),
+            Self::CorruptProgram => gettext(E_RE_CORR),
             Self::NestingTooDeep => gettext(E_SUBSTITUTE_NESTING_TOO_DEEP),
             Self::NoSpace => return iemsg(E_NOT_ENOUGH_SPACE),
         };
@@ -265,7 +265,7 @@ fn regtilde(mut source: Vec<u8>, magic: bool, preview: bool) -> (Vec<u8>, bool) 
         };
         // Text longer than MAXCOL causes trouble further downstream.
         if tmpsublen > MAXCOL as usize {
-            emsg(gettext(e_resulting_text_too_long));
+            emsg(gettext(E_RESULTING_TEXT_TOO_LONG));
             error = true;
             break;
         }
@@ -771,7 +771,7 @@ fn copy_run(text: &[u8], len: isize, case: &mut Case, backslash: bool, out: &mut
         let Some(&byte) = text.get(s).filter(|&&byte| byte != b'\0') else {
             // The line is shorter than it was when the match ran.
             if out.copy() {
-                iemsg(gettext(e_re_damg));
+                iemsg(gettext(E_RE_DAMG));
             }
             return Outcome::Damaged;
         };

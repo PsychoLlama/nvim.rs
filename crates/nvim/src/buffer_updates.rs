@@ -24,7 +24,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::narrow::len_as_integer;
 use core::ffi::{CStr, c_int};
@@ -44,8 +43,8 @@ use crate::types::builders::ArrayBuf;
 use crate::types::{Array, BufUpdateCallbacks, ColNr, Integer, LineNr, LuaRef, Object};
 use crate::winlayer::{Buf, Win};
 
-pub const kRetObject: LuaRetMode = 0;
-pub const kRetNilBool: LuaRetMode = 1;
+pub const RET_OBJECT: LuaRetMode = 0;
+pub const RET_NIL_BOOL: LuaRetMode = 1;
 pub const LUA_NOREF: c_int = -2;
 const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);
 const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
@@ -470,7 +469,7 @@ fn unload(mut buffer: Buf, can_reload: bool) {
             let name = if keep { c"reload" } else { c"detach" };
             // Upstream discards the result here: a reload callback cannot
             // detach itself the way `on_lines` can.
-            call_ref(thecb, name, args.array(), kRetObject);
+            call_ref(thecb, name, args.array(), RET_OBJECT);
         }
 
         if keep {
@@ -572,7 +571,7 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
                 args.push(Object::integer(len_as_integer(deleted.codepoints)));
                 args.push(Object::integer(len_as_integer(deleted.codeunits)));
             }
-            let res = call_ref(cb.on_lines, c"lines", args.array(), kRetNilBool);
+            let res = call_ref(cb.on_lines, c"lines", args.array(), RET_NIL_BOOL);
             if truthy(res) {
                 callbacks_free(cb);
                 keep = false;
@@ -654,7 +653,7 @@ fn send_splice(mut buffer: Buf, start: Corner, old: Corner, new: Corner) {
                 args.push(Object::integer(i64::from(corner.col)));
                 args.push(Object::integer(corner.byte as Integer));
             }
-            let res = call_ref(cb.on_bytes, c"bytes", args.array(), kRetNilBool);
+            let res = call_ref(cb.on_bytes, c"bytes", args.array(), RET_NIL_BOOL);
             if truthy(res) {
                 callbacks_free(cb);
                 keep = false;
@@ -698,7 +697,12 @@ fn changedtick_event(mut buffer: Buf) {
             let mut args = ArrayBuf::<2>::new();
             args.push(Object::buffer(buffer.handle));
             args.push(Object::integer(changedtick(buffer)));
-            let res = call_ref(cb.on_changedtick, c"changedtick", args.array(), kRetNilBool);
+            let res = call_ref(
+                cb.on_changedtick,
+                c"changedtick",
+                args.array(),
+                RET_NIL_BOOL,
+            );
             if truthy(res) {
                 callbacks_free(cb);
                 keep = false;

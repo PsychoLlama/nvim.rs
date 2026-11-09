@@ -67,9 +67,9 @@ pub(crate) fn print_tag_list(new_tag: bool, use_tagstack: bool, matches: &[TagMa
         taglen = MAXCOL;
     }
 
-    if msg_col.get() == 0 {
+    if MSG_COL.get() == 0 {
         // Overwrite the previous message.
-        msg_didout.set(false);
+        MSG_DIDOUT.set(false);
     }
     msg_ext_set_kind(c"confirm");
     msg_start();
@@ -89,7 +89,7 @@ pub(crate) fn print_tag_list(new_tag: bool, use_tagstack: bool, matches: &[TagMa
 
         let current = !new_tag && is_current(number, use_tagstack);
         print_entry_head(number, found, &tagp, current, taglen);
-        if msg_col.get() > 0 {
+        if MSG_COL.get() > 0 {
             msg_putchar('\n' as c_int);
         }
         if got_int.get() {
@@ -111,7 +111,7 @@ pub(crate) fn print_tag_list(new_tag: bool, use_tagstack: bool, matches: &[TagMa
 
         // The last entry needs no line ending of its own when the UI
         // draws the messages itself.
-        if msg_col.get() != 0 && (!ui_has(kUIMessages) || i + 1 < count) {
+        if MSG_COL.get() != 0 && (!ui_has(kUIMessages) || i + 1 < count) {
             msg_putchar('\n' as c_int);
         }
         os_breakcheck();
@@ -194,7 +194,7 @@ fn print_extra_fields(line: &[u8], command_end: usize, tagp: &TagParts) -> bool 
         // its colon.
         let mut hl_id = HLF_CM;
         while !matches!(byte(line, p), 0 | b'\r' | b'\n') {
-            if msg_col.get() + ptr2cells_at(&line[p..]) >= Columns.get() {
+            if MSG_COL.get() + ptr2cells_at(&line[p..]) >= Columns.get() {
                 msg_putchar('\n' as c_int);
                 if got_int.get() {
                     break;
@@ -211,7 +211,7 @@ fn print_extra_fields(line: &[u8], command_end: usize, tagp: &TagParts) -> bool 
             }
         }
     }
-    if msg_col.get() > INFO_COLUMN {
+    if MSG_COL.get() > INFO_COLUMN {
         msg_putchar('\n' as c_int);
         if got_int.get() {
             return false;
@@ -246,7 +246,7 @@ fn print_command(line: &[u8], command: usize, command_end: usize) {
         } else {
             ptr2cells_at(&line[p..])
         };
-        if msg_col.get() + width > Columns.get() {
+        if MSG_COL.get() + width > Columns.get() {
             msg_putchar('\n' as c_int);
         }
         if got_int.get() {

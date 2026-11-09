@@ -143,7 +143,7 @@ pub fn grid_line_start(view: GridView, mut row: c_int) {
 /// have no `GridView` (float borders, the popup menu, the statusline).
 pub fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
     debug_assert!(BATCH.with(|b| b.grid.is_none()), "grid_line_grid == NULL");
-    let poison = full_screen.get() && rdb_flags.get() & kOptRdbFlagInvalid != 0;
+    let poison = full_screen.get() && RDB_FLAGS.get() & kOptRdbFlagInvalid != 0;
     let width = with_linebuf(|buf| {
         if poison {
             // This batch must not depend on the previous line's contents.
@@ -397,7 +397,7 @@ pub fn grid_line_flush() {
 pub fn grid_line_flush_if_valid_row() {
     let (row, grid) = BATCH.with(|b| (b.row, b.grid));
     if row < 0 || row >= grid.expect("a batch is in progress").rows {
-        if rdb_flags.get() & kOptRdbFlagInvalid != 0 {
+        if RDB_FLAGS.get() & kOptRdbFlagInvalid != 0 {
             std::process::abort();
         }
         BATCH.with_mut(|b| b.grid = None);
@@ -452,7 +452,7 @@ fn grid_char_needs_redraw(
             || attrs[at] != on_grid.attrs[at]
             || (cols > 1 && chars[at + 1] == 0 && chars[at + 1] != on_grid.chars[at + 1]))
             || exmode_active.get() // TODO(bfredl): what in the actual fuck
-            || rdb_flags.get() & kOptRdbFlagNodelta != 0)
+            || RDB_FLAGS.get() & kOptRdbFlagNodelta != 0)
 }
 
 /// What [`copy_changed_cells`] wrote.
@@ -583,7 +583,7 @@ fn clear_rest_of_line(
         let off = as_index(col);
         if on_grid.chars[off] != schar_from_ascii(b' ')
             || on_grid.attrs[off] != clear_attr
-            || rdb_flags.get() & kOptRdbFlagNodelta != 0
+            || RDB_FLAGS.get() & kOptRdbFlagNodelta != 0
         {
             on_grid.chars[off] = schar_from_ascii(b' ');
             on_grid.attrs[off] = clear_attr;

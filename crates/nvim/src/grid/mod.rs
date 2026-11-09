@@ -54,7 +54,7 @@ use crate::mbyte::{cluster_len, utf_char2len};
 
 use crate::decoration::defs::VirtText;
 use crate::grid::defs::{GridCells, GridView, ScreenGrid};
-use crate::option::vars::{p_arshape, p_tbidi, rdb_flags};
+use crate::option::vars::{RDB_FLAGS, p_arshape, p_tbidi};
 use crate::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
 use crate::optionstr::check_chars_options;
 use crate::os::libc::{size_t, uint32_t};
@@ -97,8 +97,8 @@ pub(crate) use schar::{
 
 pub(crate) static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
 
-const kAlignCenter: AlignTextPos = 1;
-const kAlignRight: AlignTextPos = 2;
+const ALIGN_CENTER: AlignTextPos = 1;
+const ALIGN_RIGHT: AlignTextPos = 2;
 /// `grid_put_linebuf` flag: 'rightleft' text.
 pub const SLF_RIGHTLEFT: c_int = 1;
 /// `grid_put_linebuf` flag: this row is a line wrapped into the next.

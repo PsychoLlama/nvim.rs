@@ -40,7 +40,7 @@ use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{change_dir, vim_mkdir_emsg};
 use crate::fileio::{delete_recursive, rename_file, temp_name, vim_copyfile};
 use crate::memory::ThinCString;
-use crate::message::e_invarg;
+use crate::message::E_INVARG;
 use crate::message::emsg;
 use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::narrow::len_as_int;
@@ -156,13 +156,13 @@ impl Scope {
                 break;
             }
             if !args.get(i).is_some_and(|arg| arg.v_type() == VAR_NUMBER) {
-                err0(e_invarg);
+                err0(E_INVARG);
                 return Err(Failed);
             }
             s.number[i] = number_as_int(number_of(&args[i]));
             // It is an error for a scope number to be less than -1.
             if s.number[i] < -1 {
-                err0(e_invarg);
+                err0(E_INVARG);
                 return Err(Failed);
             }
             // Use the narrowest scope the caller asked for.
@@ -268,7 +268,7 @@ pub fn f_delete(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     let name = str_arg(args, 0, &mut numbuf);
     if name.to_bytes().is_empty() {
-        err0(e_invarg);
+        err0(E_INVARG);
         return;
     }
 

@@ -62,7 +62,7 @@ pub fn did_set_tagfunc(args: &mut OptSet) -> Result<(), OptError> {
         retval
     };
     if retval.is_err() {
-        Err(e_invarg.into())
+        Err(E_INVARG.into())
     } else {
         Ok(())
     }

@@ -30,7 +30,7 @@ use core::ffi::{CStr, c_int};
 
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{char_at, mb_islower, mb_isupper, utf_class_tab, utf_printable, utf8len_tab};
-use crate::option::vars::{breakat_flags, dy_flags, p_isf, p_isi, p_isp};
+use crate::option::vars::{BREAKAT_FLAGS, DY_FLAGS, p_isf, p_isi, p_isp};
 use crate::options::kOptDyFlagUhex;
 use crate::optionstr::OptStringRef;
 use crate::os::libc::{uint8_t, uint64_t};
@@ -105,7 +105,7 @@ fn set_chartab_flag(c: uint8_t, flag: uint8_t, on: bool) {
 /// two for `^X`.
 #[inline(always)]
 fn unprintable_width() -> uint8_t {
-    if dy_flags.get() & kOptDyFlagUhex != 0 {
+    if DY_FLAGS.get() & kOptDyFlagUhex != 0 {
         4
     } else {
         2
@@ -629,7 +629,7 @@ pub fn backslash_halved(text: &[u8]) -> Vec<u8> {
 pub fn vim_isbreak(c: c_int) -> bool {
     // Upstream indexes with `(uint8_t)c`: a wider character reads the slot
     // of its low byte.
-    breakat_flags.get().has(c.to_le_bytes()[0])
+    BREAKAT_FLAGS.get().has(c.to_le_bytes()[0])
 }
 
 /// Fill `g_chartab` with the classification a freshly started editor has, for

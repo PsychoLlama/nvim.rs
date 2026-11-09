@@ -30,14 +30,14 @@ use crate::getchar::state::KeyTyped;
 use crate::mark::setpcmark;
 use crate::mbyte::{class_in, cluster_len, head_off};
 use crate::memline::Lines;
-use crate::message::e_noident;
-use crate::message::state::msg_silent;
+use crate::message::E_NOIDENT;
+use crate::message::state::MSG_SILENT;
 use crate::message::{emsg, messaging};
 use crate::normal::{FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD, clear_op_beep};
 use crate::ops::OpType;
 use crate::option::defs::ShmFlag;
 use crate::option::shortmess;
-use crate::option::vars::{P_SCS, P_WS, fdo_flags, p_scs, p_ws};
+use crate::option::vars::{FDO_FLAGS, P_SCS, P_WS, p_scs, p_ws};
 use crate::options::kOptFdoFlagSearch;
 use crate::os::cshim::gettext;
 use crate::os::libc::int64_t;
@@ -220,7 +220,7 @@ pub(crate) fn find_ident_at_pos(
         if find_type & FIND_STRING != 0 {
             emsg(gettext(c"E348: No string under cursor"));
         } else {
-            emsg(gettext(e_noident));
+            emsg(gettext(E_NOIDENT));
         }
         return None;
     }
@@ -259,7 +259,7 @@ pub(crate) fn nv_gd(op: Op, nchar: Key, thisblock: bool) {
         clear_op_beep(op);
         return;
     }
-    if fdo_flags.get() & kOptFdoFlagSearch as c_uint != 0
+    if FDO_FLAGS.get() & kOptFdoFlagSearch as c_uint != 0
         && KeyTyped.get()
         && op.op_type == OpType::Nop
     {
@@ -267,7 +267,7 @@ pub(crate) fn nv_gd(op: Op, nchar: Key, thisblock: bool) {
     }
     // The search left a "search hit" message that has nothing to say
     // here, unless 'shortmess' has already suppressed it.
-    if messaging() && msg_silent.get() == 0 && !shortmess(ShmFlag::SEARCHCOUNT) {
+    if messaging() && MSG_SILENT.get() == 0 && !shortmess(ShmFlag::SEARCHCOUNT) {
         clear_cmdline.set(true);
     }
 }

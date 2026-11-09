@@ -33,7 +33,7 @@ use crate::global_cell::GlobalCell;
 use crate::mbyte::mb_tolower;
 use crate::memory::XString;
 use crate::message::emsg;
-use crate::message::state::line_msg;
+use crate::message::state::LINE_MSG;
 use crate::normal::get_visual_text;
 use crate::option::vars::p_fic;
 use crate::option::{option_parts, was_set_insecurely};

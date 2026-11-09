@@ -39,7 +39,7 @@ use crate::mouse::{
     MSCR_DOWN, MSCR_LEFT, MSCR_RIGHT, MSCR_UP, MousePos, do_mousescroll, find_win_inner,
 };
 use crate::normal::with_scratch_cmd;
-use crate::option::vars::tpf_flags;
+use crate::option::vars::TPF_FLAGS;
 use crate::options::{
     kOptTpfFlagBS, kOptTpfFlagC0, kOptTpfFlagC1, kOptTpfFlagDEL, kOptTpfFlagESC, kOptTpfFlagFF,
     kOptTpfFlagHT,
@@ -257,7 +257,7 @@ fn is_filter_char(c: c_int) -> bool {
         _ if (0x80..=0x9f).contains(&c) => kOptTpfFlagC1 as ::core::ffi::c_uint,
         _ => return false,
     };
-    tpf_flags.get() & flag != 0
+    TPF_FLAGS.get() & flag != 0
 }
 
 /// Open or close a bracketed paste that spans more than one `nvim_paste`

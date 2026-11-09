@@ -26,7 +26,7 @@ use crate::ex_cmds::check_secure;
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::memory::ThinCString;
-use crate::message::state::called_emsg;
+use crate::message::state::CALLED_EMSG;
 use crate::narrow::number_as_int;
 use crate::os::libc::int32_t;
 use crate::os::time::os_time;
@@ -72,7 +72,7 @@ pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let mut exprval = EMPTY_TV;
     let mut error = false;
-    let called_emsg_before = called_emsg.get();
+    let called_emsg_before = CALLED_EMSG.get();
     ui_flush();
     let done = || {
         let got = eval_expr_typval(expr, false, &[], &mut exprval);
@@ -84,13 +84,13 @@ pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 },
                 |n| n != 0,
             )
-            || called_emsg.get() > called_emsg_before
+            || CALLED_EMSG.get() > called_emsg_before
             || error
             || got_int.get()
     };
     wait_on_main_loop(Drain::Events, i64::from(timeout), done);
     drop(waker);
-    if called_emsg.get() > called_emsg_before || error {
+    if CALLED_EMSG.get() > called_emsg_before || error {
         result.write_number(-3);
     } else if got_int.get() {
         got_int.set(false);

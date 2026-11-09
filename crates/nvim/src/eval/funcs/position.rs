@@ -21,7 +21,7 @@ use crate::eval::{buf_byteidx_to_charidx, buf_charidx_to_byteidx, list2fpos, var
 use crate::mark::setmark_at;
 use crate::mbyte::{char_at, cluster_len, mb_adjust_cursor};
 use crate::memline::ml_get_buf_len;
-use crate::message::e_invarg;
+use crate::message::E_INVARG;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::r#move::{WinValid, update_curswant};
@@ -336,7 +336,7 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
         let mut curswant: ColNr = ColNr::NONE;
         let read = list2fpos(&args[0], &mut pos, None, Some(&mut curswant), charcol);
         if read.is_err() {
-            emsg(gettext(e_invarg));
+            emsg(gettext(E_INVARG));
             return;
         }
         if curswant >= ColNr::ZERO {
@@ -369,7 +369,7 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
         };
         (lnum, col, coladd)
     } else {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     };
 
@@ -435,7 +435,7 @@ fn set_position(args: &[TypVal], result: &mut TypVal, charpos: bool) {
             }
         }
         _ => {
-            emsg(gettext(e_invarg));
+            emsg(gettext(E_INVARG));
         }
     }
 }

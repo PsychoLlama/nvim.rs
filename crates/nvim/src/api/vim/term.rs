@@ -28,7 +28,7 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
         return Ok(0 as Integer);
     };
     if cmdwin_buf.get() == Some(buffer.id()) {
-        return Err(Error::exception(e_cmdwin));
+        return Err(Error::exception(E_CMDWIN));
     }
     let mut may_read_buffer: bool = true;
     if !buffer.terminal.is_null() {
@@ -107,7 +107,7 @@ fn term_write(bytes: &[u8], id: uint64_t) {
     ];
     let _locked = Lock::text();
     // The handler reports nothing, so it is given no error slot.
-    nlua_call_ref_quiet(cb, Some(c"input"), args.into(), kRetNilBool);
+    nlua_call_ref_quiet(cb, Some(c"input"), args.into(), RET_NIL_BOOL);
 }
 
 fn term_resize(_width: uint16_t, _height: uint16_t, _owner: uint64_t) {}

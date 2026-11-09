@@ -25,7 +25,7 @@
 
 use super::LineCopy;
 use super::say;
-use super::{MAXLNUM, RE_MAGIC, e_interr};
+use super::{E_INTERR, MAXLNUM, RE_MAGIC};
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
 use crate::charset::Str2NrBases;
@@ -652,7 +652,7 @@ fn sort_range(args: &mut ExArg) {
 
     drop(regmatch);
     if got_int.get() {
-        emsg(gettext(e_interr));
+        emsg(gettext(E_INTERR));
     }
 }
 
@@ -899,6 +899,6 @@ fn uniq_range(args: &mut ExArg) {
 
     drop(regmatch);
     if got_int.get() {
-        emsg(gettext(e_interr));
+        emsg(gettext(E_INTERR));
     }
 }

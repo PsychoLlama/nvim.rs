@@ -174,7 +174,7 @@ pub fn check_timestamps(focus: bool) {
 
     drop(no_prompt);
     need_check_timestamps.set(false);
-    if need_wait_return.get() && didit == TimestampCheck::Said {
+    if NEED_WAIT_RETURN.get() && didit == TimestampCheck::Said {
         // Make sure the message isn't overwritten.
         msg_str(c"\n");
         ui_flush();
@@ -331,7 +331,7 @@ fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Re
         }
         msg_clr_eos();
         msg_end();
-        if emsg_silent.get() == 0 && !in_assert_fails.get() && !ui_has(kUIMessages) {
+        if EMSG_SILENT.get() == 0 && !IN_ASSERT_FAILS.get() && !ui_has(kUIMessages) {
             msg_delay(1004, true); // give the user some time to think about it
             redraw_cmdline.set(false); // don't redraw and erase the message
         }

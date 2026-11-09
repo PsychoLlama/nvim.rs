@@ -326,8 +326,8 @@ impl Cells {
     ) {
         // An error inside the syntax patterns turns highlighting off for
         // the buffer rather than being reported per character.
-        let save_did_emsg = did_emsg.get();
-        did_emsg.set(0);
+        let save_did_emsg = DID_EMSG.get();
+        DID_EMSG.set(0);
 
         let has_spell = f.spv.spv_has_spell;
         let cell =
@@ -336,11 +336,11 @@ impl Cells {
                 .syntax_attr(ColNr::new(at - 1), has_spell.then_some(can_spell), false);
         self.decor_attr = cell.attr;
 
-        if did_emsg.get() != 0 {
+        if DID_EMSG.get() != 0 {
             window.syn_block_mut().b_syn_error = true;
             self.has_syntax = false;
         } else {
-            did_emsg.set(save_did_emsg);
+            DID_EMSG.set(save_did_emsg);
         }
         if window.syn_block().b_syn_slow {
             self.has_syntax = false;

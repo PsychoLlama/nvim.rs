@@ -303,23 +303,23 @@ pub(crate) fn tv_float(tvs: &[TypVal], idxp: &mut c_int) -> Float {
 /// `None` when reading the format or the measuring pass reported an error,
 /// which skips the formatting pass.
 ///
-/// The caller's `did_emsg` survives: it is cleared before the format is read
+/// The caller's `DID_EMSG` survives: it is cleared before the format is read
 /// so that only *this* call's errors are seen, and OR-ed back afterwards.
 pub(crate) fn format_typvals(fmt: &TypVal, args: &[TypVal]) -> Option<Vec<u8>> {
-    use crate::message::state::did_emsg;
-    let saved_did_emsg = did_emsg.get();
-    did_emsg.set(0);
+    use crate::message::state::DID_EMSG;
+    let saved_did_emsg = DID_EMSG.get();
+    DID_EMSG.set(0);
     let mut buf = NumBuf::new();
     let fmt = buf.string(fmt).to_bytes();
     let len = length_as_int(format(&mut [], fmt, Source::Typvals(args)));
     let len = usize::try_from(len).unwrap_or(0);
-    let out = (did_emsg.get() == 0).then(|| {
+    let out = (DID_EMSG.get() == 0).then(|| {
         let mut out = vec![0u8; len + 1];
         format(&mut out, fmt, Source::Typvals(args));
         out.truncate(len);
         out
     });
-    did_emsg.set(did_emsg.get() | saved_did_emsg);
+    DID_EMSG.set(DID_EMSG.get() | saved_did_emsg);
     out
 }
 

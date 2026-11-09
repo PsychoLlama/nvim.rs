@@ -18,7 +18,7 @@ use crate::eval::userfunc::scriptlocal_funcname;
 use crate::insexpand::set_cpt_callbacks;
 use crate::option::defs::{OptError, OptSet, OptionSetFlags};
 use crate::option::split_option_part;
-use crate::option::vars::{P_CIA, P_HLG, cia_flags, cot_flags, spo_flags, tc_flags};
+use crate::option::vars::{CIA_FLAGS, COT_FLAGS, P_CIA, P_HLG, SPO_FLAGS, TC_FLAGS};
 use crate::options::{opt_cot_values, opt_spo_values, opt_tc_values};
 use crate::os::env::vim_unsetenv_named;
 use crate::os::state::{didset_vim, didset_vimruntime};
@@ -152,7 +152,7 @@ pub fn did_set_completeitemalign(_args: &mut OptSet) -> Result<(), OptError> {
     if order == 0 || count != COLUMNS.len() {
         return invalid();
     }
-    cia_flags.set(order);
+    CIA_FLAGS.set(order);
     Ok(())
 }
 
@@ -171,7 +171,7 @@ pub fn did_set_completeopt(args: &mut OptSet) -> Result<(), OptError> {
     if local {
         buf.b_cot_flags = mask;
     } else {
-        cot_flags.set(mask);
+        COT_FLAGS.set(mask);
     }
     Ok(())
 }
@@ -261,7 +261,7 @@ pub fn did_set_spelloptions(args: &mut OptSet) -> Result<(), OptError> {
             return invalid();
         };
         if global {
-            spo_flags.set(mask);
+            SPO_FLAGS.set(mask);
         }
         if local {
             wp.syntax().b_p_spo_flags = mask;
@@ -295,7 +295,7 @@ pub fn did_set_tagcase(args: &mut OptSet) -> Result<(), OptError> {
     if local {
         buf.b_tc_flags = mask;
     } else {
-        tc_flags.set(mask);
+        TC_FLAGS.set(mask);
     }
     Ok(())
 }

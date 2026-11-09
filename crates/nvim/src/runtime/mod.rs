@@ -66,8 +66,8 @@ use crate::lua::executor::{nlua_exec_file, nlua_exec_lines, nlua_is_deferred_saf
 use crate::mbyte::cluster_len;
 use crate::mbyte::{CONV_NONE, VimConv};
 use crate::memory::XString;
-use crate::message::state::msg_col;
-use crate::message::{e_argreq, e_interr, e_invarg, e_norange};
+use crate::message::state::MSG_COL;
+use crate::message::{E_ARGREQ, E_INTERR, E_INVARG, E_NORANGE};
 use crate::message::{
     emsg, message_filtered, msg_display, msg_ext_set_kind, msg_ext_ui_flush, msg_putchar,
     verbose_enter, verbose_leave,
@@ -145,8 +145,8 @@ pub const ETYPE_TOP: EStackType = 0;
 pub const ESTACK_SCRIPT: EStackArg = 3;
 pub const ESTACK_STACK: EStackArg = 2;
 pub const ESTACK_SFILE: EStackArg = 1;
-pub const kRetNilBool: LuaRetMode = 1;
-pub const kRetObject: LuaRetMode = 0;
+pub const RET_NIL_BOOL: LuaRetMode = 1;
+pub const RET_OBJECT: LuaRetMode = 0;
 crate::flag_set! {
     /// How a runtime-file search should behave -- upstream's `DIP_*`, the
     /// `flags` argument [`do_in_path_visit`] and everything under it thread:

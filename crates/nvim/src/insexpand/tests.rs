@@ -38,7 +38,7 @@ impl Fixture {
         let held = editor_state_lock();
         reset_breakcheck_count();
         got_int.set(false);
-        let saved = cot_flags.replace(cot);
+        let saved = COT_FLAGS.replace(cot);
         reset();
         Fixture {
             cot: saved,
@@ -50,7 +50,7 @@ impl Fixture {
 impl Drop for Fixture {
     fn drop(&mut self) {
         reset();
-        cot_flags.set(self.cot);
+        COT_FLAGS.set(self.cot);
     }
 }
 
@@ -84,11 +84,11 @@ fn add_with(text: &str, dir: Direction, flags: c_int, adup: bool, score: c_int) 
 }
 
 fn add(text: &str) -> Added {
-    add_with(text, kDirectionNotSet, 0, false, FUZZY_SCORE_NONE)
+    add_with(text, DIRECTION_NOT_SET, 0, false, FUZZY_SCORE_NONE)
 }
 
 fn add_scored(text: &str, score: c_int) -> Added {
-    add_with(text, kDirectionNotSet, 0, false, score)
+    add_with(text, DIRECTION_NOT_SET, 0, false, score)
 }
 
 /// Start a completion over `text`: the original-text match every completion
@@ -236,7 +236,7 @@ fn add_full(text: &str, fname: Option<&str>, extra: [&str; 4], user_data: Option
     let fname = fname.map(|f| CString::new(f).expect("no NUL in a test name"));
     let extra = extra.map(|s| Some(XString::from(s)));
     let mut data = user_data.map(|d| TypVal::string_from(d.as_bytes()));
-    let (dir, score) = (kDirectionNotSet, FUZZY_SCORE_NONE);
+    let (dir, score) = (DIRECTION_NOT_SET, FUZZY_SCORE_NONE);
     let fname = fname.as_deref();
     ins_compl_add(
         text.as_bytes(),
@@ -314,7 +314,7 @@ fn duplicates_are_refused_unless_allowed() {
     assert_eq!(add("ap"), Added::Duplicate);
     // `dup` lets the same word in twice.
     assert_eq!(
-        add_with("apple", kDirectionNotSet, 0, true, FUZZY_SCORE_NONE),
+        add_with("apple", DIRECTION_NOT_SET, 0, true, FUZZY_SCORE_NONE),
         Added::Linked
     );
     assert_eq!(texts(), ["<o>", "apple", "app", "apples", "ap", "apple"]);
@@ -336,7 +336,7 @@ fn a_nearer_duplicate_lowers_the_score() {
     assert_eq!(add_scored("word", 0), Added::Duplicate);
     assert_eq!(score_of(nth(1)), 3);
     // Without `nearest` the first score stands.
-    cot_flags.set(0);
+    COT_FLAGS.set(0);
     assert_eq!(add_scored("word", 1), Added::Duplicate);
     assert_eq!(score_of(nth(1)), 3);
 }

@@ -44,7 +44,7 @@ impl ExArg<'_> {
         line_to_free: &mut Option<XString>,
         show_block: bool,
     ) -> Result<(), Failed> {
-        let mut saved_wait_return = need_wait_return.get();
+        let mut saved_wait_return = NEED_WAIT_RETURN.get();
         let mut indent = 2;
         let mut nesting = 0;
         // The line that ends a heredoc or an `:append`, while one is open.
@@ -85,10 +85,10 @@ impl ExArg<'_> {
         'theend: {
             loop {
                 if KeyTyped.get() {
-                    msg_scroll.set(1);
+                    MSG_SCROLL.set(1);
                     saved_wait_return = false;
                 }
-                need_wait_return.set(false);
+                NEED_WAIT_RETURN.set(false);
 
                 // The line, and where it starts in the command's own line when
                 // it is a part of that.
@@ -114,7 +114,7 @@ impl ExArg<'_> {
                     *line_to_free = None;
                     *line_to_free = self.next_body_line(Some(b':'), indent, do_concat);
                     if KeyTyped.get() {
-                        lines_left.set(Rows.get() - 1);
+                        LINES_LEFT.set(Rows.get() - 1);
                     }
                     let Some(read) = line_to_free.as_ref() else {
                         if let Some(marker) = &skip_until {
@@ -128,7 +128,7 @@ impl ExArg<'_> {
                     (read.as_cstr().to_bytes().to_vec(), None)
                 };
                 if line_at.is_some() && KeyTyped.get() {
-                    lines_left.set(Rows.get() - 1);
+                    LINES_LEFT.set(Rows.get() - 1);
                 }
                 let line = &line[..];
                 if show_block {
@@ -354,12 +354,12 @@ impl ExArg<'_> {
             }
 
             // Return OK when no error was detected.
-            if did_emsg.get() == 0 {
+            if DID_EMSG.get() == 0 {
                 ret = Ok(());
             }
         }
 
-        need_wait_return.set(need_wait_return.get() || saved_wait_return);
+        NEED_WAIT_RETURN.set(NEED_WAIT_RETURN.get() || saved_wait_return);
         ret
     }
 }

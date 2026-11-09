@@ -289,12 +289,12 @@ impl Subject {
 }
 
 pub fn may_trigger_win_scrolled_resized() {
-    static recursive: GlobalCell<bool> = GlobalCell::new(false);
+    static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
     let (do_resize, do_scroll) = (
         has_event(AutoEvent::WinResized),
         has_event(AutoEvent::WinScrolled),
     );
-    if recursive.get() || !(do_scroll || do_resize) || !did_initial_scroll_size_snapshot.get() {
+    if RECURSIVE.get() || !(do_scroll || do_resize) || !did_initial_scroll_size_snapshot.get() {
         return;
     }
 
@@ -328,7 +328,7 @@ pub fn may_trigger_win_scrolled_resized() {
     // Both events use the same snapshot, so take the new one before either
     // fires.
     snapshot_windows_scroll_size();
-    recursive.set(true);
+    RECURSIVE.set(true);
 
     let mut resize = first_size.map(Subject::of);
     let mut scroll = first_scroll.map(Subject::of);
@@ -338,7 +338,7 @@ pub fn may_trigger_win_scrolled_resized() {
     if let Some(scroll) = scroll.as_mut().filter(|_| trigger_scroll) {
         fire_scrolled(scroll, scroll_dict);
     }
-    recursive.set(false);
+    RECURSIVE.set(false);
 }
 
 /// Fire `WinResized` with `v:event.windows` set to the resized windows.

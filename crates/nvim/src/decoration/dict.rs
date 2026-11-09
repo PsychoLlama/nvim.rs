@@ -42,10 +42,10 @@ use core::ffi::{CStr, c_int};
 /// `kExtmark*`: which kinds of decoration a mark carries, as the bit mask the
 /// marktree stores beside it.
 const kExtmarkNone: uint16_t = 1;
-const kExtmarkSign: uint16_t = 2;
-const kExtmarkVirtText: uint16_t = 8;
-const kExtmarkVirtLines: uint16_t = 16;
-const kExtmarkHighlight: uint16_t = 32;
+const EXTMARK_SIGN: uint16_t = 2;
+const EXTMARK_VIRT_TEXT: uint16_t = 8;
+const EXTMARK_VIRT_LINES: uint16_t = 16;
+const EXTMARK_HIGHLIGHT: uint16_t = 32;
 
 /// `VirtTextPos` as the API spells it. Keep in sync with `VirtTextPos`.
 const VIRT_TEXT_POS_STR: [&CStr; 6] = [
@@ -259,9 +259,9 @@ pub fn decor_type_flags(decor: DecorInline) -> uint16_t {
     let ext = match decor {
         DecorInline::Hl(hl) => {
             return if hl.flags & kSHIsSign != 0 {
-                kExtmarkSign
+                EXTMARK_SIGN
             } else {
-                kExtmarkHighlight
+                EXTMARK_HIGHLIGHT
             };
         }
         DecorInline::Ext(ext) => ext,
@@ -270,16 +270,16 @@ pub fn decor_type_flags(decor: DecorInline) -> uint16_t {
     let mut type_flags = kExtmarkNone;
     for vt in virt_chain(ext.vt_idx) {
         type_flags |= if with_decor_virt(vt, |link| link.flags & kVTIsLines != 0) {
-            kExtmarkVirtLines
+            EXTMARK_VIRT_LINES
         } else {
-            kExtmarkVirtText
+            EXTMARK_VIRT_TEXT
         };
     }
     for idx in sh_chain(decor) {
         type_flags |= if with_decor_item(idx, |sh| sh.flags & kSHIsSign != 0) {
-            kExtmarkSign
+            EXTMARK_SIGN
         } else {
-            kExtmarkHighlight
+            EXTMARK_HIGHLIGHT
         };
     }
     type_flags

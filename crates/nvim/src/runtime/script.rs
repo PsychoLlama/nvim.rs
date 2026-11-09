@@ -169,7 +169,7 @@ pub fn ex_scriptnames(excmd: &mut ExArg) {
         let row = formatted!(IOSIZE as usize, b"%3d: %s", listed, shortname.as_cstr());
         let row = cstr::owned(&row);
         if !message_filtered(&row) {
-            if msg_col.get() > 0 {
+            if MSG_COL.get() > 0 {
                 msg_putchar('\n' as c_int);
             }
             msg_display(&row, 0, false);
@@ -183,7 +183,7 @@ fn edit_script(excmd: &mut ExArg, by_number: bool) {
     if by_number {
         let sid: ScriptId = excmd.number2;
         let Some(name) = script_name(sid) else {
-            emsg(gettext(e_invarg));
+            emsg(gettext(E_INVARG));
             return;
         };
         excmd.set_arg_text(&name);

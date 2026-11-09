@@ -83,7 +83,7 @@ use crate::fileio::FileOffset;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::memline::ml_open_file;
-use crate::message::e_swapclose;
+use crate::message::E_SWAPCLOSE;
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
 use crate::os::fs::{close_file, fsync_file, open_file, os_remove};
@@ -307,7 +307,7 @@ impl MemFile {
         if let Some(file) = self.file.take()
             && close_file(file).is_err()
         {
-            emsg(gettext(e_swapclose));
+            emsg(gettext(E_SWAPCLOSE));
         }
         if del_file && let Some(fname) = self.fname() {
             os_remove(fname);
@@ -821,7 +821,7 @@ pub(crate) fn mf_close_file(mut buffer: Buf, getlines: bool) {
     if let Some(file) = memfile.file.take()
         && close_file(file).is_err()
     {
-        emsg(gettext(e_swapclose));
+        emsg(gettext(E_SWAPCLOSE));
     }
 
     if let Some(fname) = memfile.fname() {

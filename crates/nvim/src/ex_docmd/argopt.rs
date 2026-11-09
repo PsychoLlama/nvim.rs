@@ -37,7 +37,7 @@ use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, cmdmod_has, quitmore};
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::message::vim_dialog_yesno;
-use crate::message::{e_invarg2, e_invargval, e_invrange};
+use crate::message::{E_INVARG2, E_INVARGVAL, E_INVRANGE};
 use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::narrow::number_as_int;
 use crate::option::vars::p_confirm;
@@ -279,7 +279,7 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
     let invarg2 = |command: &mut ExArg| {
         // SAFETY: the argument is a tail of the command line.
         command.errmsg = Some(ex_errmsg(
-            e_invarg2,
+            E_INVARG2,
             command.line.cstr_from(command.line.arg),
         ));
     };
@@ -312,7 +312,7 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
                 } else if excmd.line.rest_of(p) == b"#" {
                     if last_used_tab().is_none() {
                         excmd.errmsg =
-                            Some(ex_errmsg(e_invargval, excmd.line.cstr_from(excmd.line.arg)));
+                            Some(ex_errmsg(E_INVARGVAL, excmd.line.cstr_from(excmd.line.arg)));
                         tab_number = 0;
                         break 'theend;
                     }
@@ -356,7 +356,7 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
             }
         } else if excmd.addr_count > 0 {
             if unaccept_arg0 != 0 && excmd.number2 == 0 {
-                excmd.errmsg = Some(ex_msg(e_invrange));
+                excmd.errmsg = Some(ex_msg(E_INVRANGE));
                 tab_number = 0;
             } else {
                 tab_number = excmd.number2;
@@ -377,7 +377,7 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
                     if excmd.line.byte_at(at) == b'-' {
                         tab_number = tab_number.wrapping_sub(1);
                         if tab_number < unaccept_arg0 {
-                            excmd.errmsg = Some(ex_msg(e_invrange));
+                            excmd.errmsg = Some(ex_msg(E_INVRANGE));
                         }
                     }
                 }

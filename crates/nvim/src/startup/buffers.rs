@@ -47,7 +47,7 @@ use crate::getchar::vgetc;
 use crate::memline::ml_recover;
 use crate::message::IOSIZE;
 use crate::message::msg_putchar;
-use crate::message::state::{did_emsg, msg_didany, msg_scroll, no_wait_return};
+use crate::message::state::{DID_EMSG, MSG_DIDANY, MSG_SCROLL, NO_WAIT_RETURN};
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::option::vars::{P_EF, P_EFM, P_MENC, p_ef, p_fdls, p_shm};
 use crate::option::{set_option_direct, set_option_value_give_err};
@@ -76,13 +76,13 @@ use crate::winlayer::{Buf, TabPage, Win, first_window};
 /// The user answered "quit" to the swap-file ATTENTION prompt: leave with
 /// status 1.
 ///
-/// `clear_hit_enter` drops `did_emsg` first, so the process does not stop to
+/// `clear_hit_enter` drops `DID_EMSG` first, so the process does not stop to
 /// ask the user to press ENTER for a message on its way out. The tag jump is
 /// the one caller that does *not* want that -- it has just printed something
 /// worth reading.
 fn quit_on_swap_exists(clear_hit_enter: bool) -> ! {
     if clear_hit_enter {
-        did_emsg.set(0);
+        DID_EMSG.set(0);
     }
     ui_call_error_exit(1 as Integer);
     getout(1)
@@ -153,8 +153,8 @@ pub(crate) fn handle_tag(tag: Option<&CStr>) {
 pub(crate) fn read_stdin() {
     // Use a dialog for the ATTENTION prompt, not a message.
     swap_exists_action.set(SEA_DIALOG);
-    no_wait_return.set(1);
-    let save_msg_didany = msg_didany.get();
+    NO_WAIT_RETURN.set(1);
+    let save_msg_didany = MSG_DIDANY.get();
 
     if !Buf::current().name.full().is_none() {
         let Some(stdin_buf) = buflist_add_name(None, LineNr::ZERO, BLN_LISTED) else {
@@ -194,8 +194,8 @@ pub(crate) fn read_stdin() {
         }
     }
 
-    no_wait_return.set(0);
-    msg_didany.set(save_msg_didany);
+    NO_WAIT_RETURN.set(0);
+    MSG_DIDANY.set(save_msg_didany);
     time_msg_at(c"reading stdin");
     check_swap_exists_action();
 }
@@ -242,7 +242,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
     }
 
     if recoverymode.get() {
-        msg_scroll.set(1);
+        MSG_SCROLL.set(1);
         ml_recover(true);
         if Buf::current().b_ml.ml_mfp.is_none() {
             // Recovery failed; there is nothing to edit.

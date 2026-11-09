@@ -113,11 +113,11 @@ pub fn screenclear() {
     }
 
     compute_cmdrow();
-    msg_row.set(cmdline_row.get()); // put the cursor on the last line for messages
-    msg_col.set(0);
+    MSG_ROW.set(cmdline_row.get()); // put the cursor on the last line for messages
+    MSG_COL.set(0);
     msg_reset_scroll(); // can't scroll back
-    msg_didany.set(false);
-    msg_didout.set(false);
+    MSG_DIDANY.set(false);
+    MSG_DIDOUT.set(false);
 
     if crate::statusline::hl_attr(HLF_MSG as c_int) > 0
         && msg_use_grid()

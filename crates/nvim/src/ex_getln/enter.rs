@@ -182,7 +182,7 @@ pub(crate) fn command_line_enter(
         break_ctrl_c: firstc.is_none(),
         count,
         indent,
-        save_msg_scroll: msg_scroll.get(),
+        save_msg_scroll: MSG_SCROLL.get(),
         save_state: State.get(),
         prev_cmdpos: -1,
         ignore_drag_release: true,
@@ -219,12 +219,12 @@ pub(crate) fn command_line_enter(
     if cmdline_level.get() == 50 {
         // Somehow got into a loop recursively calling getcmdline(), bail
         // out. (C's `goto theend`.)
-        emsg(gettext(e_command_too_recursive));
+        emsg(gettext(E_COMMAND_TOO_RECURSIVE));
     } else {
         cc.xpc = Some(Expand::new());
         clear_cmdline_orig();
 
-        cmdmsg_rl.set(
+        CMDMSG_RL.set(
             Win::current().w_onebuf_opt.wo_rl != 0
                 && Win::current().w_onebuf_opt.wo_rlc.first_byte() == b's'
                 && (s.firstc == b'/' || s.firstc == b'?'),
@@ -232,8 +232,8 @@ pub(crate) fn command_line_enter(
 
         msg_grid_validate();
 
-        redir_off.set(true); // don't redirect the typed command
-        if !cmd_silent.get() {
+        REDIR_OFF.set(true); // don't redirect the typed command
+        if !CMD_SILENT.get() {
             gotocmdline(true);
             redrawcmdprompt(); // draw the prompt or the indent
             cc.cmdspos = cmd_startcol();
@@ -251,7 +251,7 @@ pub(crate) fn command_line_enter(
 
         // Avoid scrolling when called by a recursive do_cmdline(), e.g.
         // when doing ":@0" and register 0 doesn't contain a CR.
-        msg_scroll.set(0);
+        MSG_SCROLL.set(0);
 
         State.set(MODE_CMDLINE);
 
@@ -290,7 +290,7 @@ pub(crate) fn command_line_enter(
                 if !ui_has(kUIMessages) {
                     msg_putchar(::core::ffi::c_int::from(b'\n'));
                 }
-                msg_scroll.set(1);
+                MSG_SCROLL.set(1);
                 msg_str_hl(err.message_or_empty(), HLF_E, true);
                 err.clear();
                 redrawcmd();
@@ -307,13 +307,13 @@ pub(crate) fn command_line_enter(
         // If something above caused an error, reset the flags: we do
         // want to type and execute commands. The display may be messed
         // up a bit.
-        if did_emsg.get() != 0 {
+        if DID_EMSG.get() != 0 {
             redrawcmd();
         }
 
         // Redraw the statusline, in case it uses the current mode through
         // the mode() function.
-        if !cmd_silent.get() && !exmode_active.get() {
+        if !CMD_SILENT.get() && !exmode_active.get() {
             let mut found_one = false;
             for mut wp in windows_in_curtab() {
                 if P_STL.first_byte() != 0
@@ -337,7 +337,7 @@ pub(crate) fn command_line_enter(
             }
         }
 
-        did_emsg.set(0);
+        DID_EMSG.set(0);
         got_int.set(false);
         state_enter(ModeState::command_line(s));
 
@@ -374,7 +374,7 @@ pub(crate) fn command_line_enter(
             restore_v_event(dict, &mut save_v_event);
         }
 
-        cmdmsg_rl.set(false);
+        CMDMSG_RL.set(false);
 
         // We could have reached here without a chance to clean up the
         // wildmenu, if a special key like <Esc> or <C-\> was used as
@@ -431,22 +431,22 @@ pub(crate) fn command_line_enter(
         if p_ch() == 0 as OptInt && !ui_has(kUIMessages) {
             set_must_redraw(UPD_VALID);
         }
-        msg_scroll.set(s.save_msg_scroll);
-        redir_off.set(false);
+        MSG_SCROLL.set(s.save_msg_scroll);
+        REDIR_OFF.set(false);
 
         if err.is_set() {
             if !ui_has(kUIMessages) {
                 msg_putchar(::core::ffi::c_int::from(b'\n'));
             }
             emsg(err.message_or_empty());
-            did_emsg.set(0);
+            DID_EMSG.set(0);
             err.clear();
         }
 
         // When the command line was typed, no need for a wait-return
         // prompt.
         if s.some_key_typed && !err.is_set() {
-            need_wait_return.set(false);
+            NEED_WAIT_RETURN.set(false);
         }
 
         set_option_direct(
@@ -477,7 +477,7 @@ pub(crate) fn command_line_enter(
         }
         ui_ext_cmdline_hide(s.gotesc);
     }
-    if !cmd_silent.get() {
+    if !CMD_SILENT.get() {
         redraw_custom_title_later();
         status_redraw_all(); // redraw to show the mode change
     }
@@ -505,12 +505,12 @@ pub(crate) fn command_line_check(s: &mut CommandLineState) -> Step {
 
     // Don't redirect the typed command. Repeated, because a ":redir"
     // inside completion may switch it on.
-    redir_off.set(true);
-    quit_more.set(false); // reset after CTRL-D, which had a more-prompt
+    REDIR_OFF.set(true);
+    QUIT_MORE.set(false); // reset after CTRL-D, which had a more-prompt
 
     // There can't really be a reason why an error that occurs while
     // typing a command should cause the command not to be executed.
-    did_emsg.set(0);
+    DID_EMSG.set(0);
 
     if ex_normal_busy.get() == 0 && stuff_empty() && typeahead().is_empty() {
         // There is no pending input from sources other than user input,
@@ -542,7 +542,7 @@ pub(crate) fn command_line_check(s: &mut CommandLineState) -> Step {
 
 pub(crate) fn abandon_cmdline() {
     dealloc_cmdbuff();
-    if msg_scrolled.get() == 0 {
+    if MSG_SCROLLED.get() == 0 {
         compute_cmdrow();
     }
     // Avoid overwriting a key prompt.
@@ -621,7 +621,7 @@ pub fn getcmdline_prompt(
     one_key: bool,
     mouse_used: Option<&mut bool>,
 ) -> Option<XString> {
-    let msg_col_save = msg_col.get();
+    let msg_col_save = MSG_COL.get();
     let mut cc = Cc::current();
 
     let mut did_save_ccline = false;
@@ -645,9 +645,9 @@ pub fn getcmdline_prompt(
     cc.mouse_prompt = mouse_used.is_some();
     cc.mouse_used = false;
 
-    let cmd_silent_saved = cmd_silent.get();
+    let cmd_silent_saved = CMD_SILENT.get();
     let loud = Allow::messages();
-    cmd_silent.set(false); // want to see the prompt
+    CMD_SILENT.set(false); // want to see the prompt
 
     let ret = command_line_enter(firstc, 1, 0, false);
     cc.redraw_state = kCmdRedrawNone;
@@ -660,9 +660,9 @@ pub fn getcmdline_prompt(
         restore_cmdline();
     }
     drop(loud);
-    cmd_silent.set(cmd_silent_saved);
+    CMD_SILENT.set(cmd_silent_saved);
     if cc.in_use() {
-        msg_col.set(msg_col_save);
+        MSG_COL.set(msg_col_save);
     }
     highlight_callback.clear();
     ret

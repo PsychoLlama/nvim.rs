@@ -36,7 +36,7 @@ use super::*;
 use crate::drawscreen::state::redraw_cmdline;
 use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later};
 use crate::global_cell::GlobalCell;
-use crate::message::state::msg_silent;
+use crate::message::state::MSG_SILENT;
 use crate::mouse::state::{
     mouse_col, mouse_dragging, mouse_past_bottom, mouse_past_eol, mouse_row,
 };
@@ -504,7 +504,7 @@ fn move_cursor_there(
         may_start_select(Key::ascii(b'o'));
         setmouse();
 
-        if p_smd() && msg_silent.get() == 0 {
+        if p_smd() && MSG_SILENT.get() == 0 {
             redraw_cmdline.set(true); // show visual mode later
         }
     }

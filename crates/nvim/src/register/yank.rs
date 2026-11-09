@@ -86,7 +86,7 @@ fn append_to_register(curr: &mut YankReg, new: Vec<XString>, yank_type: MotionTy
     if yank_type == kMTLineWise {
         curr.kind = kMTLineWise;
     }
-    let join = curr.kind == kMTCharWise && !cpo_has(CpoFlag::REGAPPEND);
+    let join = curr.kind == MT_CHAR_WISE && !cpo_has(CpoFlag::REGAPPEND);
     let lines = curr.lines.lines_mut();
     let mut new = new.into_iter();
     if join && let Some(last_old) = lines.last_mut() {
@@ -147,7 +147,7 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
     // A charwise yank that starts in column 0 and ends before column 0 of
     // a later line is really a linewise one.
     let sel_old = region.is_visual && P_SEL.first_byte() != b'o';
-    if region.motion_type == kMTCharWise
+    if region.motion_type == MT_CHAR_WISE
         && region.start.col == ColNr::ZERO
         && !region.inclusive
         && !sel_old
@@ -180,7 +180,7 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
                 lines.push(yank_copy_line(line, &bd, region.excl_tr_ws));
             }
             kMTLineWise => lines.push(XString::from_bytes(Buf::current().lines().line(lnum))),
-            kMTCharWise => {
+            MT_CHAR_WISE => {
                 let mut bd = charwise_block_def(region.start, region.end, lnum, region.inclusive);
                 let mut text = Buf::current().lines();
                 let line = text.line(lnum);
@@ -209,7 +209,7 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
 
     if message {
         // A single charwise line is not worth reporting.
-        if yank_type == kMTCharWise && yanklines == 1 {
+        if yank_type == MT_CHAR_WISE && yanklines == 1 {
             yanklines = 0;
         }
         if len_as_integer(yanklines) > p_report() {
@@ -240,7 +240,7 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
 pub fn format_reg_type(reg_type: MotionType, reg_width: i32) -> ThinCString {
     match reg_type {
         kMTLineWise => ThinCString::from_bytes(b"V"),
-        kMTCharWise => ThinCString::from_bytes(b"v"),
+        MT_CHAR_WISE => ThinCString::from_bytes(b"v"),
         kMTBlockWise => ThinCString::from_vec(format!("\x16{}", reg_width + 1).into_bytes()),
         _ => ThinCString::empty(),
     }
@@ -252,12 +252,12 @@ pub fn format_reg_type(reg_type: MotionType, reg_width: i32) -> ThinCString {
 /// Guarded against recursion: an autocommand that yanks would otherwise fire
 /// this again. Runs arbitrary autocommands, under `textlock`.
 pub fn do_autocmd_textyankpost(op: &OpArg, reg: Reg) {
-    static recursive: GlobalCell<bool> = GlobalCell::new(false);
+    static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
-    if recursive.get() || !has_event(AutoEvent::TextYankPost) {
+    if RECURSIVE.get() || !has_event(AutoEvent::TextYankPost) {
         return;
     }
-    recursive.set(true);
+    RECURSIVE.set(true);
 
     let mut save_v_event = SaveVEvent {
         sve_did_save: false,
@@ -303,7 +303,7 @@ pub fn do_autocmd_textyankpost(op: &OpArg, reg: Reg) {
     drop(locked);
 
     restore_v_event(dict, &mut save_v_event);
-    recursive.set(false);
+    RECURSIVE.set(false);
 }
 
 /// `y`: yank the operator's region into the register it names.

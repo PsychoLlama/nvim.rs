@@ -32,7 +32,7 @@ use crate::ex_docmd::state::cmdmod;
 use crate::fold::copy_folding_state;
 use crate::mark::copy_jumplist;
 use crate::message::msg_clr_eos_force;
-use crate::message::state::{msg_col, msg_row};
+use crate::message::state::{MSG_COL, MSG_ROW};
 use crate::r#move::WinValid;
 use crate::option::vars::{
     P_WH, P_WIW, p_ch, p_ea, p_ead, p_ls, p_sb, p_spk, p_spr, p_wh, p_wiw, p_wmh, p_wmw,
@@ -209,12 +209,12 @@ fn split_ins(
     status_redraw_all();
     if need_status != 0 {
         // The message area is one line shorter now.
-        msg_row.set(Rows.get() - 1);
-        msg_col.set(sc_col.get());
+        MSG_ROW.set(Rows.get() - 1);
+        MSG_COL.set(sc_col.get());
         msg_clr_eos_force();
         comp_col();
-        msg_row.set(Rows.get() - 1);
-        msg_col.set(0);
+        MSG_ROW.set(Rows.get() - 1);
+        MSG_COL.set(0);
     }
 
     if room.do_equal || dir != 0 {

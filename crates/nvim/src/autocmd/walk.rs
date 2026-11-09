@@ -297,7 +297,7 @@ fn au_callback(
     args.push(data.object());
 
     // `args` stands for the length of the call.
-    let result = nlua_call_ref_quiet(luaref, None, args.array(), kRetNilBool);
+    let result = nlua_call_ref_quiet(luaref, None, args.array(), RET_NIL_BOOL);
     matches!(result, Object::Boolean(true))
 }
 

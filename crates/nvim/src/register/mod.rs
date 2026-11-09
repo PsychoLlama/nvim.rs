@@ -72,8 +72,8 @@ use crate::keycodes::{escape_ks_bytes, unescape_ks_in};
 use crate::mark::mark_adjust;
 use crate::memline::{decl, ml_append_cstr, ml_append_terminated, ml_replace_owned};
 use crate::memory::XString;
-use crate::message::state::{msg_ext_skip_flush, redir_reg};
-use crate::message::{e_noinstext, e_nolastcmd, e_noprevre, e_resulting_text_too_long};
+use crate::message::state::{MSG_EXT_SKIP_FLUSH, REDIR_REG};
+use crate::message::{E_NOINSTEXT, E_NOLASTCMD, E_NOPREVRE, E_RESULTING_TEXT_TOO_LONG};
 use crate::message::{
     emsg, emsg_invreg, message_filtered, msg, msg_display_bytes, msg_ext_set_kind, msg_putchar,
     msg_str, msg_str_hl, msg_title, msgmore,
@@ -131,7 +131,7 @@ pub use self::yank::*;
 pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
-pub const kMTCharWise: MotionType = 0;
+pub const MT_CHAR_WISE: MotionType = 0;
 /// The layout of `y_regs`, and the slots with a fixed meaning: upstream's
 /// anonymous enum in `register_defs.h`, as indices into the array.
 pub const NUM_REGISTERS: usize = 39;

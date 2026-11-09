@@ -414,7 +414,7 @@ fn exec_shl(window: Win, which: Which, lnum: LineNr, col: ColNr, timed_out: &mut
 /// A previous match is assumed to be before `lnum` unless its `lnum` is
 /// zero.
 fn next_search_hl(window: Win, which: Which, lnum: LineNr, mincol: ColNr) {
-    let called_emsg_before = called_emsg.get();
+    let called_emsg_before = CALLED_EMSG.get();
     let set_lnum = |lnum: LineNr| window.with_search_hl(which, |shl| shl.lnum = lnum);
 
     // `:{range}s/pat` only highlights inside the range.
@@ -470,7 +470,7 @@ fn next_search_hl(window: Win, which: Which, lnum: LineNr, mincol: ColNr) {
         if has_prog(window, which) {
             let mut timed_out = false;
             nmatched = exec_shl(window, which, lnum, matchcol, &mut timed_out);
-            if called_emsg.get() > called_emsg_before || got_int.get() || timed_out {
+            if CALLED_EMSG.get() > called_emsg_before || got_int.get() || timed_out {
                 // Something went wrong in the regexp: stop using it --
                 // `'hlsearch'` for good, a match for the rest of this redraw.
                 match which {

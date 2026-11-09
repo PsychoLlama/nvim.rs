@@ -19,7 +19,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::api::private::helpers::api_try;
@@ -40,7 +39,7 @@ fn enter_recursive(recursive: &'static GlobalCell<c_int>) -> RecursionGuard {
         force_abort.set(false);
         suppress_errthrow.set(false);
         did_throw.set(false);
-        did_emsg.set(0);
+        DID_EMSG.set(0);
     }
     recursive.set(recursive.get() + 1);
     RecursionGuard(recursive)
@@ -56,8 +55,8 @@ impl Drop for RecursionGuard {
 }
 
 pub fn nvim_eval(expr: ApiString) -> Result<Object, Error> {
-    static recursive: GlobalCell<c_int> = GlobalCell::new(0);
-    let _nesting = enter_recursive(&recursive);
+    static RECURSIVE: GlobalCell<c_int> = GlobalCell::new(0);
+    let _nesting = enter_recursive(&RECURSIVE);
     let mut rettv: TypVal = TV_INITIAL_VALUE;
     // The expression ends at its first NUL, as it did for the C.
     let text = expr.as_cstr().to_bytes();
@@ -91,7 +90,7 @@ fn call_function_with(
     args: Array,
     self_dict: Option<&DictRef>,
 ) -> Result<Object, Error> {
-    static recursive: GlobalCell<c_int> = GlobalCell::new(0);
+    static RECURSIVE: GlobalCell<c_int> = GlobalCell::new(0);
     if args.len() > MAX_FUNC_ARGS as size_t {
         return Err(Error::validation(
             c"Function called with too many arguments",
@@ -102,7 +101,7 @@ fn call_function_with(
         *slot = TypVal::from(&args[i]);
     }
 
-    let _nesting = enter_recursive(&recursive);
+    let _nesting = enter_recursive(&RECURSIVE);
     let mut rettv: TypVal = TV_INITIAL_VALUE;
     let lnum = Win::current().w_cursor.lnum;
     let with = CallWith {

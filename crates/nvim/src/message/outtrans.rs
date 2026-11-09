@@ -143,10 +143,10 @@ fn display(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) -> c_int
 
     // When drawing over the command line there is no need to clear it
     // later or to remove the mode message.
-    if msg_silent.get() == 0
+    if MSG_SILENT.get() == 0
         && !bytes.is_empty()
-        && msg_row.get() >= cmdline_row.get()
-        && msg_col.get() == 0
+        && MSG_ROW.get() >= cmdline_row.get()
+        && MSG_COL.get() == 0
     {
         clear_cmdline.set(false);
         mode_displayed.set(false);
@@ -410,7 +410,7 @@ fn to_special(second: u8, third: u8) -> c_int {
 pub fn msg_display_elided(text: &CStr, hl_id: c_int) {
     let bytes = text.to_bytes();
     let mut tail = bytes.len();
-    let room = usize::try_from(Columns.get() - msg_col.get()).unwrap_or(0);
+    let room = usize::try_from(Columns.get() - MSG_COL.get()).unwrap_or(0);
     if !ui_has(kUIMessages) && bytes.len() > room && room >= 20 {
         tail = (room - 3) / 2;
         msg_display_bytes(&bytes[..tail], hl_id, false);

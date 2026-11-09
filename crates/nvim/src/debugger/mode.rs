@@ -44,7 +44,7 @@ struct SavedState {
     /// queued — and by dropping the whole state if the prompt panics out.
     redraw_off: Bump,
     no_prompt: MsgBump,
-    /// `msg_silent`, put back late with the rest of the message state.
+    /// `MSG_SILENT`, put back late with the rest of the message state.
     loud: Saved<MsgField<c_int>>,
 }
 
@@ -56,22 +56,22 @@ impl SavedState {
         // The prompt has to be visible whatever the debugged code asked for.
         let loud = Allow::messages();
         let saved = Self {
-            msg_scroll: msg_scroll.get(),
+            msg_scroll: MSG_SCROLL.get(),
             state: State.get(),
-            did_emsg: did_emsg.get(),
-            cmd_silent: cmd_silent.get(),
-            emsg_silent: emsg_silent.get(),
-            redir_off: redir_off.get(),
+            did_emsg: DID_EMSG.get(),
+            cmd_silent: CMD_SILENT.get(),
+            emsg_silent: EMSG_SILENT.get(),
+            redir_off: REDIR_OFF.get(),
             redraw_off,
             no_prompt,
             loud,
         };
         // An error from the debugged code is not ours.
-        did_emsg.set(0);
-        cmd_silent.set(false);
-        emsg_silent.set(0);
+        DID_EMSG.set(0);
+        CMD_SILENT.set(false);
+        EMSG_SILENT.set(0);
         // Debug commands are not part of the redirected output.
-        redir_off.set(true);
+        REDIR_OFF.set(true);
         State.set(MODE_NORMAL);
         debug_mode.set(true);
         saved
@@ -81,16 +81,16 @@ impl SavedState {
         drop(self.redraw_off);
         drop(self.no_prompt);
         redraw_all_later(UPD_NOT_VALID);
-        need_wait_return.set(false);
-        msg_scroll.set(self.msg_scroll);
-        lines_left.set(Rows.get() - 1);
+        NEED_WAIT_RETURN.set(false);
+        MSG_SCROLL.set(self.msg_scroll);
+        LINES_LEFT.set(Rows.get() - 1);
         State.set(self.state);
         debug_mode.set(false);
-        did_emsg.set(self.did_emsg);
-        cmd_silent.set(self.cmd_silent);
+        DID_EMSG.set(self.did_emsg);
+        CMD_SILENT.set(self.cmd_silent);
         drop(self.loud);
-        emsg_silent.set(self.emsg_silent);
-        redir_off.set(self.redir_off);
+        EMSG_SILENT.set(self.emsg_silent);
+        REDIR_OFF.set(self.redir_off);
         // Print the banner again only after something else has been typed.
         debug_did_msg.set(true);
     }
@@ -222,8 +222,8 @@ fn debug_prompt(cmd: &CStr) {
     let mut save_ignore_script = false;
 
     loop {
-        msg_scroll.set(1);
-        need_wait_return.set(false);
+        MSG_SCROLL.set(1);
+        NEED_WAIT_RETURN.set(false);
 
         // Read from the user, not from whatever a mapping or a script had
         // queued: swap in an empty typeahead buffer, drop `:normal`'s side
@@ -251,7 +251,7 @@ fn debug_prompt(cmd: &CStr) {
         }
         ex_normal_busy.set(save_ex_normal_busy);
 
-        cmdline_row.set(msg_row.get());
+        cmdline_row.set(MSG_ROW.get());
         msg_starthere();
 
         if let Some(cmdline) = cmdline {
@@ -285,7 +285,7 @@ fn debug_prompt(cmd: &CStr) {
             let _ = do_cmdline(Some(&cmdline[..]), Some(&mut LineSource::Typed), flags);
             debug_break_level.set(outer_level);
         }
-        lines_left.set(Rows.get() - 1);
+        LINES_LEFT.set(Rows.get() - 1);
     }
 }
 

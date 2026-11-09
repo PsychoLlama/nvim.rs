@@ -26,9 +26,9 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::option::defs::kOptValTypeBoolean;
-use crate::option::defs::kOptValTypeNumber;
-use crate::option::defs::kOptValTypeString;
+use crate::option::defs::OPT_VAL_TYPE_BOOLEAN;
+use crate::option::defs::OPT_VAL_TYPE_NUMBER;
+use crate::option::defs::OPT_VAL_TYPE_STRING;
 use core::ffi::c_int;
 
 use crate::message::iemsg;
@@ -43,8 +43,8 @@ use crate::types::OptInt;
 use crate::winlayer::{Buf, Win};
 
 use super::{
-    BoolVar, NO_LOCAL_UNDOLEVEL, NumVar, OptSlot, StrVar, WinOptSet, get_option, kOptScopeBuf,
-    kOptScopeGlobal, kOptScopeWin,
+    BoolVar, NO_LOCAL_UNDOLEVEL, NumVar, OPT_SCOPE_BUF, OPT_SCOPE_GLOBAL, OPT_SCOPE_WIN, OptSlot,
+    StrVar, WinOptSet, get_option,
 };
 
 /// The [`OptSlot`] naming one field of `$buf`. The generated ladder
@@ -129,9 +129,9 @@ pub(crate) fn option_var(opt_idx: OptIndex) -> OptSlot {
         // the value, read (and written, if anything ever got that far) in
         // place. Which arm it is still comes from the row's declared type.
         OptVar::OwnDefault => match super::option_get_type(opt_idx) {
-            kOptValTypeBoolean => OptSlot::Boolean(BoolVar::OwnDefault(opt_idx)),
-            kOptValTypeNumber => OptSlot::Number(NumVar::OwnDefault(opt_idx)),
-            kOptValTypeString => OptSlot::String(StrVar::OwnDefault(opt_idx)),
+            OPT_VAL_TYPE_BOOLEAN => OptSlot::Boolean(BoolVar::OwnDefault(opt_idx)),
+            OPT_VAL_TYPE_NUMBER => OptSlot::Number(NumVar::OwnDefault(opt_idx)),
+            OPT_VAL_TYPE_STRING => OptSlot::String(StrVar::OwnDefault(opt_idx)),
             type_0 => unreachable!("option value type {type_0}"),
         },
     }
@@ -154,7 +154,7 @@ pub(crate) fn option_has_type(opt_idx: OptIndex, type_0: OptValType) -> bool {
 
 /// Whether the option exists in `scope`.
 pub(crate) fn option_has_scope(opt_idx: OptIndex, scope: OptScope) -> bool {
-    assert!(scope <= kOptScopeBuf, "{scope} is not a scope");
+    assert!(scope <= OPT_SCOPE_BUF, "{scope} is not a scope");
     c_int::from(get_option(opt_idx).scope_flags) & 1 << scope != 0
 }
 
@@ -173,12 +173,12 @@ pub(crate) fn option_is_global_local(opt_idx: OptIndex) -> bool {
 
 /// Whether the option's only scope is the global one.
 pub(crate) fn option_is_global_only(opt_idx: OptIndex) -> bool {
-    scope_flags(opt_idx).count_ones() == 1 && option_has_scope(opt_idx, kOptScopeGlobal)
+    scope_flags(opt_idx).count_ones() == 1 && option_has_scope(opt_idx, OPT_SCOPE_GLOBAL)
 }
 
 /// Whether the option's only scope is a window.
 pub(crate) fn option_is_window_local(opt_idx: OptIndex) -> bool {
-    scope_flags(opt_idx).count_ones() == 1 && option_has_scope(opt_idx, kOptScopeWin)
+    scope_flags(opt_idx).count_ones() == 1 && option_has_scope(opt_idx, OPT_SCOPE_WIN)
 }
 
 /// Where in a window's or buffer's array of values this option's sits.

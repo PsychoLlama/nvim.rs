@@ -35,7 +35,7 @@ use crate::drawscreen::state::{clear_cmdline, mode_displayed};
 use crate::ex_cmds2::{can_abandon, dialog_changed};
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
-use crate::message::{e_cmdwin, e_floatonly};
+use crate::message::{E_CMDWIN, E_FLOATONLY};
 use crate::r#move::WinValid;
 use crate::option::vars::{p_confirm, p_write};
 use crate::state::MODE_INSERT;
@@ -260,7 +260,7 @@ fn cmdwin_allows(win: Win) -> Result<bool, Error> {
             cmdwin_result.set(Key::CTRL_C);
             return Ok(false);
         } else if cmdwin_old_curwin.get() == Some(win.id()) {
-            return Err(make_err(e_cmdwin));
+            return Err(make_err(E_CMDWIN));
         }
     }
     Ok(true)
@@ -381,7 +381,7 @@ fn close_all_others(message: bool, forceit: bool) {
     let announce = message && !autocmd_busy.get();
     if old_curwin.w_floating {
         if announce {
-            err_raw(e_floatonly);
+            err_raw(E_FLOATONLY);
         }
         return;
     }

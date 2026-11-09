@@ -28,30 +28,30 @@ pub fn msg_ext_set_kind(msg_kind: &CStr) {
 /// [`msg_ext_set_kind`] for the two callers that may have no kind at all.
 ///
 /// "No kind" is [`ApiString::NULL`], which is a *different* state from the
-/// empty kind: `emsg_core` asks `msg_ext_kind.is_null()` to decide whether to
+/// empty kind: `emsg_core` asks `MSG_EXT_KIND.is_null()` to decide whether to
 /// stamp a message as a warning, so the absence has to survive the round
 /// trip.
 pub(crate) fn msg_ext_set_kind_opt(msg_kind: Option<&CStr>) {
     // Flush before setting the kind, so the previous message is emitted
     // under the kind it was written with.
     msg_ext_ui_flush();
-    msg_ext_kind.set(msg_kind.map_or(ApiString::NULL, ApiString::from_cstr));
+    MSG_EXT_KIND.set(msg_kind.map_or(ApiString::NULL, ApiString::from_cstr));
     // An appended message continues the previous one's column run.
-    if !msg_ext_append.get() {
-        redir_col.set(0);
+    if !MSG_EXT_APPEND.get() {
+        REDIR_COL.set(0);
     }
 }
 
 /// Mark the next message as continuing the last one rather than replacing it.
 pub fn msg_ext_set_append(append: bool) {
     msg_ext_ui_flush();
-    msg_ext_append.set(append);
+    MSG_EXT_APPEND.set(append);
 }
 
 /// Record what caused the next message, for a UI that wants to group by it.
 pub fn msg_ext_set_trigger(trigger: &'static CStr) {
     msg_ext_ui_flush();
-    msg_ext_trigger.set(Some(trigger));
+    MSG_EXT_TRIGGER.set(Some(trigger));
 }
 
 /// Close off the run of text accumulated under one highlight.
@@ -59,24 +59,24 @@ pub fn msg_ext_set_trigger(trigger: &'static CStr) {
 /// Each chunk is `[attr, text, hl_id]`, which is what the `msg_show` UI event
 /// carries.
 pub(crate) fn msg_ext_emit_chunk() {
-    if msg_ext_chunks.with(Option::is_none) {
+    if MSG_EXT_CHUNKS.with(Option::is_none) {
         // The first chunk of the session starts the column over, as the
         // null-pointer check upstream's `msg_ext_init_chunks` guards did.
         msg_ext_init_chunks();
     }
-    if msg_ext_last_attr.get() == -1 {
+    if MSG_EXT_LAST_ATTR.get() == -1 {
         return;
     }
     // The accumulated text moves out, leaving the buffer empty.
-    let accumulated = msg_ext_last_chunk.take();
+    let accumulated = MSG_EXT_LAST_CHUNK.take();
     let mut chunk = Vec::with_capacity(3);
 
-    chunk.push(Object::integer(msg_ext_last_attr.get().into()));
-    msg_ext_last_attr.set(-1);
+    chunk.push(Object::integer(MSG_EXT_LAST_ATTR.get().into()));
+    MSG_EXT_LAST_ATTR.set(-1);
     let text = ApiString::from_bytes(&accumulated);
     chunk.push(Object::string(text));
-    chunk.push(Object::integer(msg_ext_last_hl_id.get().into()));
-    msg_ext_chunks.update(|chunks| {
+    chunk.push(Object::integer(MSG_EXT_LAST_HL_ID.get().into()));
+    MSG_EXT_CHUNKS.update(|chunks| {
         chunks
             .as_mut()
             .expect("the check above installed an array")
@@ -90,8 +90,8 @@ pub(crate) fn msg_ext_emit_chunk() {
 /// first chunk is emitted, and resetting the column is what that first
 /// emission did.
 pub(crate) fn msg_ext_init_chunks() -> Array {
-    msg_col.set(0);
-    msg_ext_chunks
+    MSG_COL.set(0);
+    MSG_EXT_CHUNKS
         .replace(Some(Vec::new()))
         .map(Array::from)
         .unwrap_or_default()
@@ -103,20 +103,20 @@ pub(crate) fn msg_ext_init_chunks() -> Array {
 /// the grid as it was written.
 pub fn msg_ext_ui_flush() {
     if !ui_has(kUIMessages) {
-        msg_ext_kind.set(ApiString::NULL);
+        MSG_EXT_KIND.set(ApiString::NULL);
         return;
     }
-    if msg_ext_skip_flush.get() {
+    if MSG_EXT_SKIP_FLUSH.get() {
         return;
     }
 
     msg_ext_emit_chunk();
-    if msg_ext_chunks.with(|chunks| chunks.as_ref().is_none_or(|chunks| chunks.is_empty())) {
+    if MSG_EXT_CHUNKS.with(|chunks| chunks.as_ref().is_none_or(|chunks| chunks.is_empty())) {
         return;
     }
 
     let mut chunks = msg_ext_init_chunks();
-    let to_ui_history = msg_ext_history.get();
+    let to_ui_history = MSG_EXT_HISTORY.get();
     // The UI is sent a copy only when this message is also kept here; when
     // the UI takes the history the array moves out whole.
     let shown = if to_ui_history {
@@ -126,13 +126,13 @@ pub fn msg_ext_ui_flush() {
     };
     ui_call_msg_show(
         // SAFETY: both are null or NUL-terminated protocol names.
-        msg_ext_kind.with(ApiString::clone),
+        MSG_EXT_KIND.with(ApiString::clone),
         shown,
-        msg_ext_overwrite.get(),
+        MSG_EXT_OVERWRITE.get(),
         to_ui_history,
-        msg_ext_append.get(),
-        msg_ext_id.with(Object::clone),
-        msg_ext_trigger
+        MSG_EXT_APPEND.get(),
+        MSG_EXT_ID.with(Object::clone),
+        MSG_EXT_TRIGGER
             .get()
             .map_or_else(ApiString::default, |trigger| {
                 ApiString::from_bytes(trigger.to_bytes())
@@ -163,25 +163,25 @@ pub fn msg_ext_ui_flush() {
         msg_hist_add_chunks(moved, true);
     }
 
-    msg_ext_overwrite.set(false);
-    msg_ext_history.set(false);
-    msg_ext_append.set(false);
-    msg_ext_kind.set(ApiString::NULL);
+    MSG_EXT_OVERWRITE.set(false);
+    MSG_EXT_HISTORY.set(false);
+    MSG_EXT_APPEND.set(false);
+    MSG_EXT_KIND.set(ApiString::NULL);
     // Only claim the next id if nothing else took it in the meantime. An id
     // the caller supplied is a `String`, not an `Integer`, and never matches.
-    if msg_ext_id.with(|id| id.as_integer()) == Some(msg_id_next.get()) {
-        msg_id_next.set(msg_id_next.get() + 1);
+    if MSG_EXT_ID.with(|id| id.as_integer()) == Some(MSG_ID_NEXT.get()) {
+        MSG_ID_NEXT.set(MSG_ID_NEXT.get() + 1);
     }
-    msg_ext_id.set(Object::integer(msg_id_next.get()));
+    MSG_EXT_ID.set(Object::integer(MSG_ID_NEXT.get()));
 }
 
 /// Emit the pending showmode/showcmd/ruler text as its own event.
 pub fn msg_ext_flush_showmode() {
     // One trailing empty event after the mode text goes away, so the UI
     // knows to clear what it drew.
-    let pending = msg_ext_last_attr.get() != -1;
-    if ui_has(kUIMessages) && (pending || showmode_clear_pending.get()) {
-        showmode_clear_pending.set(pending);
+    let pending = MSG_EXT_LAST_ATTR.get() != -1;
+    if ui_has(kUIMessages) && (pending || SHOWMODE_CLEAR_PENDING.get()) {
+        SHOWMODE_CLEAR_PENDING.set(pending);
         msg_ext_emit_chunk();
         ui_call_msg_showmode(msg_ext_init_chunks());
     }

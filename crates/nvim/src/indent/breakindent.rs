@@ -24,8 +24,8 @@ use crate::mbyte::c_cluster_len;
 use crate::memory::XString;
 use crate::r#move::win_col_off2;
 use crate::narrow::number_as_int;
+use crate::option::vars::DY_FLAGS;
 use crate::option::vars::P_FLP;
-use crate::option::vars::dy_flags;
 use crate::optionstr::local_or_global;
 use crate::optionstr::{OptString, OptStringRef};
 use crate::plines::win_chartabsize;
@@ -282,7 +282,7 @@ pub fn get_breakindent_win(window: Win, line: &[u8]) -> c_int {
         tick: buf_get_changedtick(buf),
         listopt: win.w_briopt_list,
         no_ts: win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == NUL as ScreenChar,
-        dy_uhex: dy_flags.get() & kOptDyFlagUhex as c_uint,
+        dy_uhex: DY_FLAGS.get() & kOptDyFlagUhex as c_uint,
     };
     let opt = Briopt {
         shift: win.w_briopt_shift,

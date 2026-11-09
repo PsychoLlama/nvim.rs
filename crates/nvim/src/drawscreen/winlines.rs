@@ -313,7 +313,7 @@ fn draw_one_line(
         && window.w_lines[idx].wl_valid
         && window.w_lines[idx].wl_lnum == w.lnum
         && w.lnum > window.w_topline
-        && dy_flags.get() & (kOptDyFlagLastline | kOptDyFlagTruncate) == 0
+        && DY_FLAGS.get() & (kOptDyFlagLastline | kOptDyFlagTruncate) == 0
         && w.srow + c_int::from(window.w_lines[idx].wl_size) > window.w_view_height
         && win_get_fill(window, w.lnum) == 0
     {
@@ -654,7 +654,7 @@ fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
         return;
     }
 
-    if dy_flags.get() & kOptDyFlagTruncate != 0 {
+    if DY_FLAGS.get() & kOptDyFlagTruncate != 0 {
         // "@@@" in the last screen line, and nothing else on it.
         grid_line_start(window.w_grid, window.w_view_height - 1);
         grid_line_fill(
@@ -665,7 +665,7 @@ fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
         );
         grid_line_fill(3, window.w_view_width, schar_from_ascii(b' '), at_attr);
         grid_line_flush();
-    } else if dy_flags.get() & kOptDyFlagLastline != 0 {
+    } else if DY_FLAGS.get() & kOptDyFlagLastline != 0 {
         // "@@@" at the end of the last screen line, over the text. Four
         // cells when three would split a double-width character in half.
         grid_line_start(window.w_grid, window.w_view_height - 1);

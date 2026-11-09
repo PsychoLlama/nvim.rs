@@ -40,9 +40,9 @@ use crate::eval::vars::{testing_enabled, vim_var_string, with_vim_var};
 use crate::eval::{garbage_collect, pattern_match};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::suppress_errthrow;
-use crate::message::e_cant_read_file_str;
+use crate::message::E_CANT_READ_FILE_STR;
 use crate::message::emsg;
-use crate::message::state::{emsg_on_display, emsg_silent};
+use crate::message::state::{EMSG_ON_DISPLAY, EMSG_SILENT};
 use crate::os::cshim::gettext;
 use crate::runtime::defs::EStackArg;
 use crate::types::{
@@ -165,7 +165,7 @@ fn assert_beeps(args: &[TypVal], no_beep: bool) -> bool {
     let cmd = numbuf.string_chk(&args[0]).unwrap_or(c"");
     called_vim_beep.set(false);
     suppress_errthrow.set(true);
-    emsg_silent.set(0);
+    EMSG_SILENT.set(0);
     let _ = do_cmdline_cmd(cmd);
 
     let mut held = true;
@@ -185,7 +185,7 @@ fn assert_beeps(args: &[TypVal], no_beep: bool) -> bool {
     }
 
     suppress_errthrow.set(false);
-    emsg_on_display.set(false);
+    EMSG_ON_DISPLAY.set(false);
     held
 }
 
@@ -220,7 +220,7 @@ fn compare_files(fname1: &CStr, fname2: &CStr) -> FileDiff {
     };
     let cant_read = |fname: &CStr| {
         // The message names the file at its one `%s`.
-        let format = gettext(e_cant_read_file_str).to_bytes();
+        let format = gettext(E_CANT_READ_FILE_STR).to_bytes();
         let mut verdict = Vec::with_capacity(format.len() + fname.to_bytes().len());
         match format.windows(2).position(|pair| pair == b"%s") {
             Some(at) => {

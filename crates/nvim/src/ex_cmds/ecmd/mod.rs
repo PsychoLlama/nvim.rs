@@ -73,7 +73,7 @@ use crate::help::prepare_help_buffer;
 use crate::mark::set_last_cursor;
 use crate::memline::Lines;
 use crate::message::msg_check_for_delay;
-use crate::message::state::{msg_listdo_overwrite, msg_scroll, msg_scrolled_ign};
+use crate::message::state::{MSG_LISTDO_OVERWRITE, MSG_SCROLL, MSG_SCROLLED_IGN};
 use crate::r#move::{changed_line_abv_curs, update_topline};
 use crate::normal::reset_visual;
 use crate::option::defs::{OptionSetFlags, ShmFlag};
@@ -688,28 +688,28 @@ fn place_cursor(state: &Ecmd) {
 
 /// The "file, N lines" line `:edit` prints when it did not read the file.
 fn report_file_info() {
-    let msg_scroll_save = msg_scroll.get();
+    let msg_scroll_save = MSG_SCROLL.get();
     // Obey the 'O' flag in 'cpoptions': overwrite any previous file message.
     if shortmess(ShmFlag::OVERALL)
-        && msg_listdo_overwrite.get() == 0
+        && MSG_LISTDO_OVERWRITE.get() == 0
         && !exiting.get()
         && p_verbose() == 0
     {
-        msg_scroll.set(0);
+        MSG_SCROLL.set(0);
     }
-    if msg_scroll.get() == 0 {
+    if MSG_SCROLL.get() == 0 {
         // wait a bit when overwriting an error msg
         msg_check_for_delay(false);
     }
     say::start();
-    msg_scroll.set(msg_scroll_save);
-    msg_scrolled_ign.set(true);
+    MSG_SCROLL.set(msg_scroll_save);
+    MSG_SCROLLED_IGN.set(true);
 
     if !shortmess(ShmFlag::FILEINFO) {
         fileinfo(0, 1, false);
     }
 
-    msg_scrolled_ign.set(false);
+    MSG_SCROLLED_IGN.set(false);
 }
 
 /// Recompute the scroll position for the new cursor line, centring it when the

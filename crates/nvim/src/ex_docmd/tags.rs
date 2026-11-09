@@ -29,8 +29,8 @@ use crate::charset::getdigits_int_at;
 
 use crate::ex_docmd::scan::ends_excmd;
 use crate::ex_docmd::source::ex_errmsg;
-use crate::ex_docmd::{cmdmod_split, cmdmod_tab, cmdnames, kDirectionNotSet};
-use crate::message::e_trailing_arg;
+use crate::ex_docmd::{DIRECTION_NOT_SET, cmdmod_split, cmdmod_tab, cmdnames};
+use crate::message::E_TRAILING_ARG;
 use crate::option::magic_isset;
 use crate::option::vars::p_pvh;
 use crate::search::find_pattern_in_path;
@@ -84,7 +84,7 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
             excmd.line.terminate_at(at);
             at = excmd.line.skip_white(at + 1);
             if ends_excmd(c_int::from(excmd.line.byte_at(at))) == 0 {
-                excmd.errmsg = Some(ex_errmsg(e_trailing_arg, excmd.line.cstr_from(at)));
+                excmd.errmsg = Some(ex_errmsg(E_TRAILING_ARG, excmd.line.cstr_from(at)));
             } else {
                 excmd.line.next = excmd.line.check_next(at);
             }
@@ -95,7 +95,7 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
         let define = excmd.line.byte_at(excmd.line.cmd) == b'd';
         find_pattern_in_path(
             excmd.line.arg(),
-            kDirectionNotSet,
+            DIRECTION_NOT_SET,
             whole,
             !excmd.forceit,
             if define { FIND_DEFINE } else { FIND_ANY },

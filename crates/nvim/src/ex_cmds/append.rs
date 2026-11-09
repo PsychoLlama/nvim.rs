@@ -29,7 +29,7 @@ use crate::indent::get_indent_lnum;
 use crate::memline::MlFlags;
 use crate::memline::{ml_append_cstr, ml_delete};
 use crate::message::emsg;
-use crate::message::state::{lines_left, msg_scroll, need_wait_return};
+use crate::message::state::{LINES_LEFT, MSG_SCROLL, NEED_WAIT_RETURN};
 use crate::narrow::{len_as_int, number_as_int};
 use crate::option::vars::P_WINDOW;
 use crate::os::cshim::gettext;
@@ -84,8 +84,8 @@ pub fn ex_append(excmd: &mut ExArg) {
     }
 
     loop {
-        msg_scroll.set(1);
-        need_wait_return.set(false);
+        MSG_SCROLL.set(1);
+        NEED_WAIT_RETURN.set(false);
         if Buf::current().b_p_ai != 0 {
             if APPEND_INDENT.get() >= 0 {
                 indent = APPEND_INDENT.replace(-1);
@@ -97,7 +97,7 @@ pub fn ex_append(excmd: &mut ExArg) {
         let Some(theline) = next_append_line(excmd, indent) else {
             break;
         };
-        lines_left.set(Rows.get() - 1);
+        LINES_LEFT.set(Rows.get() - 1);
         // The line source saying the input ended.
         let Some(mut theline) = theline else {
             break;
@@ -170,7 +170,7 @@ pub fn ex_append(excmd: &mut ExArg) {
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
 
     // Don't use wait_return() now.
-    need_wait_return.set(false);
+    NEED_WAIT_RETURN.set(false);
     ex_no_reprint.set(true);
 }
 
@@ -185,7 +185,7 @@ fn toggle_autoindent() {
 /// bar, the lines that follow the command in the same script, and the
 /// command's own line source ([`ExArg::source`]).  `None` means the second
 /// source ran out, which upstream leaves the loop for *without* resetting
-/// `lines_left`; `Some(None)` is the line source saying the input ended.
+/// `LINES_LEFT`; `Some(None)` is the line source saying the input ended.
 fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Option<Vec<u8>>> {
     let arg = args.line.arg;
     if args.line.byte_at(arg) == b'|' {

@@ -101,7 +101,7 @@ pub fn did_set_operatorfunc(_args: &mut OptSet) -> Result<(), OptError> {
     // A copy: evaluating the value may set the option again.
     let value = P_OPFUNC.get();
     let Ok(cb) = callback_from_option(value.as_cstr()) else {
-        return Err((e_invarg).into());
+        return Err((E_INVARG).into());
     };
     OPFUNC_CB.with_mut(|slot| install_callback(slot, cb));
     Ok(())

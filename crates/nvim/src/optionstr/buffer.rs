@@ -36,10 +36,10 @@ use crate::mark::defs::{FileMark, FileMarkView};
 use crate::mbyte::canonize;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::memline::ml_setflags;
-use crate::message::{e_modifiable, e_unsupportedoption};
+use crate::message::{E_MODIFIABLE, E_UNSUPPORTEDOPTION};
 use crate::option::defs::{OptError, OptSet, OptVal, OptionSetFlags};
 use crate::option::option_var;
-use crate::option::vars::{P_BS, bkc_flags, p_bex, p_enc, p_pm};
+use crate::option::vars::{BKC_FLAGS, P_BS, p_bex, p_enc, p_pm};
 use crate::option::{
     get_fileformat, redraw_titles, set_iminsert_global, set_imsearch_global, set_option_direct,
     skip_option_separator,
@@ -55,10 +55,10 @@ use crate::window::global_stl_height;
 use super::OptStringRef;
 use super::frame::{invalid, new_bytes, new_value, old_bytes, varp, win};
 use super::{
-    B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT, COM_ALL, CPO_VI, EOL_MAC, FO_ALL, SID_NONE,
-    did_set_opt_flags, did_set_optexpr, did_set_option_listflag, did_set_str_generic,
-    e_backupext_and_patchmode_are_equal, e_comma_required, illegal_char, opt_strings_mask,
-    opt_strings_ok, valid_filetype,
+    B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT, COM_ALL, CPO_VI,
+    E_BACKUPEXT_AND_PATCHMODE_ARE_EQUAL, E_COMMA_REQUIRED, EOL_MAC, FO_ALL, SID_NONE,
+    did_set_opt_flags, did_set_optexpr, did_set_option_listflag, did_set_str_generic, illegal_char,
+    opt_strings_mask, opt_strings_ok, valid_filetype,
 };
 
 /// 'backspace' is a word list, except that the number 2 is also accepted
@@ -89,7 +89,7 @@ pub fn did_set_backupcopy(args: &mut OptSet) -> Result<(), OptError> {
         if local {
             buf.b_bkc_flags = mask;
         } else {
-            bkc_flags.set(mask);
+            BKC_FLAGS.set(mask);
         }
     };
 
@@ -122,7 +122,7 @@ pub fn did_set_backupext_or_patchmode(_args: &mut OptSet) -> Result<(), OptError
         bytes.strip_prefix(b".").unwrap_or(bytes).to_vec()
     };
     if p_bex(undotted) == p_pm(undotted) {
-        return Err((e_backupext_and_patchmode_are_equal).into());
+        return Err((E_BACKUPEXT_AND_PATCHMODE_ARE_EQUAL).into());
     }
     Ok(())
 }
@@ -260,7 +260,7 @@ pub fn did_set_encoding(args: &mut OptSet) -> Result<(), OptError> {
     // ('encoding' and 'makeencoding') are global and skip this block.
     if idx == kOptFileencoding {
         if buf.b_p_ma == 0 && opt_flags != OptionSetFlags::GLOBAL {
-            return Err((e_modifiable).into());
+            return Err((E_MODIFIABLE).into());
         }
         // 'fileencoding' is one encoding, not a list.
         if new_bytes(args).contains(&b',') {
@@ -273,7 +273,7 @@ pub fn did_set_encoding(args: &mut OptSet) -> Result<(), OptError> {
     varp.set(canonize(new_bytes(args)));
     if idx == kOptEncoding {
         if p_enc(|value| value.to_bytes() != b"utf-8") {
-            return Err((e_unsupportedoption).into());
+            return Err((E_UNSUPPORTEDOPTION).into());
         }
         spell_reload();
     }
@@ -292,7 +292,7 @@ pub fn did_set_fileformat(args: &mut OptSet) -> Result<(), OptError> {
     let (buf, opt_flags) = (args.os_buf, args.os_flags);
     // Changing a buffer's line endings changes its text.
     if buf.b_p_ma == 0 && !opt_flags.has(OptionSetFlags::GLOBAL) {
-        return Err((e_modifiable).into());
+        return Err((E_MODIFIABLE).into());
     }
     did_set_str_generic(args)?;
     redraw_titles();
@@ -341,7 +341,7 @@ pub fn did_set_foldmarker(args: &mut OptSet) -> Result<(), OptError> {
     let value = new_bytes(args);
     // Two markers separated by a comma, neither of them empty.
     let Some(comma) = value.iter().position(|&b| b == b',') else {
-        return Err((e_comma_required).into());
+        return Err((E_COMMA_REQUIRED).into());
     };
     if comma == 0 || comma + 1 == value.len() {
         return invalid();

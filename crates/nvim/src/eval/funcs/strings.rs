@@ -24,7 +24,7 @@ use crate::keycodes::escape_ks_bytes;
 use crate::mbyte::{Converter, char_at, cluster_len, enc_locale, encode_char};
 use crate::memline::Lines;
 use crate::memory::{ThinCString, XString};
-use crate::message::e_no_spell;
+use crate::message::E_NO_SPELL;
 use crate::message::{emsg, special_keys_text};
 use crate::narrow::len_as_int;
 use crate::narrow::len_as_integer;
@@ -246,7 +246,7 @@ fn with_spell(body: impl FnOnce()) {
         win.w_onebuf_opt.wo_spell = 1;
     }
     if win.syntax().b_p_spl.first_byte() == 0 {
-        emsg(gettext(e_no_spell));
+        emsg(gettext(E_NO_SPELL));
     } else {
         body();
     }

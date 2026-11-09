@@ -36,8 +36,8 @@ use crate::lua::executor::{
 };
 use crate::memory::{ThinCString, XString};
 use crate::message::emsg;
-use crate::message::state::{emsg_noredir, emsg_silent, msg_col, need_clr_eos, redir_off};
-use crate::message::{capture_finish, capture_start, e_toomanyarg, e_unknown_function_str};
+use crate::message::state::{EMSG_NOREDIR, EMSG_SILENT, MSG_COL, NEED_CLR_EOS, REDIR_OFF};
+use crate::message::{E_TOOMANYARG, E_UNKNOWN_FUNCTION_STR, capture_finish, capture_start};
 use crate::message_fmt::{msg_bytes, msg_cstr, msg_cstr_opt};
 use crate::narrow::as_index;
 use crate::narrow::number_as_int;
@@ -92,7 +92,7 @@ pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let flags = TFN_INT.cast_signed() | TFN_QUIET.cast_signed();
         let written = func.to_bytes();
         let Some(translated) = trans_function_name(written, false, flags, false).name else {
-            emsg_funcname(e_unknown_function_str, written);
+            emsg_funcname(E_UNKNOWN_FUNCTION_STR, written);
             return;
         };
         tofree = translated;
@@ -120,7 +120,7 @@ pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_eval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let Ok(text) = numbuf.string_chk(&args[0]) else {
-        need_clr_eos.set(false);
+        NEED_CLR_EOS.set(false);
         result.write_number(0);
         return;
     };
@@ -133,7 +133,7 @@ pub fn f_eval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let expr_start = msg_bytes(&cursor.text()[expr_start..]);
             semsg!("E15: Invalid expression: \"{expr_start}\"");
         }
-        need_clr_eos.set(false);
+        NEED_CLR_EOS.set(false);
         result.write_number(0);
     } else if cursor.byte() != 0 {
         let rest = msg_bytes(cursor.rest());
@@ -172,10 +172,10 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
     let cmd_idx = as_index(arg_off);
     let silent_idx = cmd_idx + 1;
 
-    let save_emsg_silent = emsg_silent.get();
-    let save_emsg_noredir = emsg_noredir.get();
-    let save_redir_off = redir_off.get();
-    let save_msg_col = msg_col.get();
+    let save_emsg_silent = EMSG_SILENT.get();
+    let save_emsg_noredir = EMSG_NOREDIR.get();
+    let save_redir_off = REDIR_OFF.get();
+    let save_msg_col = MSG_COL.get();
     let mut echo_output = false;
     let mut silence = true;
 
@@ -197,8 +197,8 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
         // also silences errors.
         silence = s.starts_with(b"silent");
         if s == b"silent!" {
-            emsg_silent.set(1);
-            emsg_noredir.set(true);
+            EMSG_SILENT.set(1);
+            EMSG_NOREDIR.set(true);
         }
     }
     // Restored either way: an explicit empty {silent} asks for output
@@ -206,9 +206,9 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
     let _silenced = Suppress::messages_saved_when(silence);
 
     let outer_capture = capture_start();
-    redir_off.set(false);
+    REDIR_OFF.set(false);
     if !echo_output {
-        msg_col.set(0);
+        MSG_COL.set(0);
     }
 
     if !args
@@ -222,10 +222,10 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
         let _ = do_cmdline(None, Some(&mut LineSource::List(&mut walk)), opts);
     }
 
-    emsg_silent.set(save_emsg_silent);
-    emsg_noredir.set(save_emsg_noredir);
-    redir_off.set(save_redir_off);
-    msg_col.set(if echo_output { 0 } else { save_msg_col });
+    EMSG_SILENT.set(save_emsg_silent);
+    EMSG_NOREDIR.set(save_emsg_noredir);
+    REDIR_OFF.set(save_redir_off);
+    MSG_COL.set(if echo_output { 0 } else { save_msg_col });
 
     let captured = capture_finish(outer_capture);
     result.write_string(Some(ThinCString::from_bytes(&captured)));
@@ -399,7 +399,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
             if list_len(list) == 0 {
                 arg_idx = 0;
             } else if list_len(list) > MAX_FUNC_ARGS.cast_signed() {
-                emsg_funcname(e_toomanyarg, written);
+                emsg_funcname(E_TOOMANYARG, written);
                 return;
             }
         }

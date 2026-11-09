@@ -66,7 +66,7 @@ use crate::memline::{
     ml_replace_owned, ml_setflags,
 };
 use crate::message::state::{
-    emsg_silent, in_assert_fails, msg_col, msg_row, msg_scroll, msg_silent, need_wait_return,
+    EMSG_SILENT, IN_ASSERT_FAILS, MSG_COL, MSG_ROW, MSG_SCROLL, MSG_SILENT, NEED_WAIT_RETURN,
 };
 use crate::message::{
     msg_clr_eos, msg_delay, msg_end, msg_ext_set_kind, msg_source, msg_start, msg_str_hl,

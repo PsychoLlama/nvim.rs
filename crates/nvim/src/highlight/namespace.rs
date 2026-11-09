@@ -7,7 +7,6 @@
 )]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 //! Highlight namespaces: `nvim_set_hl(ns, …)`, `'winhighlight'`, and the
 //! per-namespace `HLF_*` tables the drawing code reads through.
@@ -84,7 +83,7 @@ fn provider_field<R>(ns_id: NS, f: impl FnOnce(&mut DecorProvider) -> R) -> R {
 }
 
 /// `nlua_call_ref`'s "give me the value as an Object" mode.
-const kRetObject: LuaRetMode = 0;
+const RET_OBJECT: LuaRetMode = 0;
 /// The `hl_def` slot of a provider that has no callback.
 const LUA_NOREF: c_int = -2;
 /// A group definition private to a namespace, indexed by `(ns_id, hl_id)`.
@@ -272,7 +271,7 @@ fn ns_get_item(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> Opt
         let recursing = Depth::of(&RECURSIVE);
         // A callback that failed is a callback that declined, which the
         // fallback below is.
-        let ret = nlua_call_ref_reporting(hl_def, Some(c"hl_def"), args.array(), kRetObject)
+        let ret = nlua_call_ref_reporting(hl_def, Some(c"hl_def"), args.array(), RET_OBJECT)
             .unwrap_or(Object::Nil);
         drop(recursing);
 

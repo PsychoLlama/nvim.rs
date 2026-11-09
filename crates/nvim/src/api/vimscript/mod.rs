@@ -14,7 +14,7 @@ use crate::eval::typval::tv_clear;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
 use crate::global_cell::GlobalCell;
-use crate::message::state::{did_emsg, msg_col, redir_off};
+use crate::message::state::{DID_EMSG, MSG_COL, REDIR_OFF};
 use crate::message::{capture_finish, capture_start};
 use crate::os::libc::{size_t, uint64_t};
 use crate::runtime::do_source_str;

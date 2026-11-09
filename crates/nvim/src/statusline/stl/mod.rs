@@ -71,7 +71,7 @@ use crate::getchar::state::KeyTyped;
 use crate::grid::{SCHAR_BUF_SIZE, SCharBuf, schar_copy, schar_get_adv};
 use crate::highlight_group::{HLF_CLF, HLF_FC, syn_name2id_bytes};
 use crate::mbyte::{c_cluster_len, char_at};
-use crate::message::state::did_emsg;
+use crate::message::state::DID_EMSG;
 use crate::option::defs::OptIndex;
 use crate::option::vars::{p_sc, p_sloc};
 use crate::option::{
@@ -654,7 +654,7 @@ impl Win {
         let win = self;
         let save_redraw_not_allowed = redraw_not_allowed.get();
         let save_key_typed = KeyTyped.get();
-        let did_emsg_before = did_emsg.get();
+        let did_emsg_before = DID_EMSG.get();
 
         // Inside update_screen() we do not want redrawing a statusline, ruler or
         // title to trigger another redraw; it may loop forever.
@@ -745,7 +745,7 @@ impl Win {
 
         // An error here would mess up the display and might loop redrawing;
         // avoid that by setting the option back to its default.
-        if opt_idx as c_int != kOptInvalid as c_int && did_emsg.get() > did_emsg_before {
+        if opt_idx as c_int != kOptInvalid as c_int && DID_EMSG.get() > did_emsg_before {
             let default = get_option_default(opt_idx, opt_scope);
             set_option_direct(opt_idx, default, opt_scope, SID_ERROR);
         }

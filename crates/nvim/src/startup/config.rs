@@ -26,7 +26,7 @@ use std::ffi::CString;
 
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::lua::executor::nlua_require_module;
-use crate::message::state::msg_scroll;
+use crate::message::state::MSG_SCROLL;
 use crate::option::vars::p_exrc;
 use crate::os::cshim::{gettext, write_c_stderr};
 use crate::os::fs::path_exists;
@@ -68,7 +68,7 @@ pub(crate) fn exe_pre_commands(parm: &MainParams) {
 /// Run the `-c` and `+cmd` commands, which come after the config and the
 /// first file.
 pub(crate) fn exe_commands(parm: &MainParams) {
-    msg_scroll.set(1);
+    MSG_SCROLL.set(1);
     if parm.tag.is_none() && Win::current().w_cursor.lnum <= LineNr::ONE {
         // As in `exe_pre_commands`: let the commands decide the line.
         Win::current().w_cursor.lnum = LineNr::ZERO;
@@ -96,7 +96,7 @@ pub(crate) fn exe_commands(parm: &MainParams) {
         Win::current().w_cursor.lnum = LineNr::ONE;
     }
     if !exmode_active.get() {
-        msg_scroll.set(0);
+        MSG_SCROLL.set(0);
     }
     if parm.edit_type == EDIT_QF.cast_signed() {
         // `-q`: the commands may have changed the quickfix list.

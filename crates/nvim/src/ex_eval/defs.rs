@@ -57,7 +57,7 @@ pub(crate) struct CondStack {
     pub(crate) idx: ::core::ffi::c_int,
     pub(crate) loop_level: ::core::ffi::c_int,
     pub(crate) try_level: ::core::ffi::c_int,
-    /// The `emsg_silent` each `:try` that reset it found, innermost last.
+    /// The `EMSG_SILENT` each `:try` that reset it found, innermost last.
     pub(crate) saved_emsg_silent: Vec<::core::ffi::c_int>,
     pub(crate) loop_flags: crate::ex_eval::CsLoopFlags,
     /// How many levels have ever been open: the ones [`CondStack::clear`]

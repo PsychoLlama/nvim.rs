@@ -169,7 +169,7 @@ pub fn gotchars_ignore() {
 /// Add one byte to `'showcmd'` for a partially matched mapping, and show the
 /// key once all of its bytes are in.
 pub(crate) fn add_byte_to_showcmd(byte: u8) {
-    if !p_sc() || msg_silent.get() != 0 {
+    if !p_sc() || MSG_SILENT.get() != 0 {
         return;
     }
     if !showcmd_pending.with_mut(|st| gotchars_add_byte(st, byte)) {

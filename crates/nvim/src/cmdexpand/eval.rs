@@ -25,7 +25,7 @@ use crate::eval::typval::{
 };
 use crate::lua::executor::nlua_expand_pat;
 use crate::menu::set_context_in_menu_cmd;
-use crate::message::{e_invarg, emsg};
+use crate::message::{E_INVARG, emsg};
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_wic;
 use crate::os::cshim::gettext;
@@ -73,7 +73,7 @@ pub fn f_getcompletion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     }
 
     if args[0].v_type() != VAR_STRING {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     }
     let pattern = cstr_of(&args[0], &mut numbuf2).to_bytes();

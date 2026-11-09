@@ -26,10 +26,10 @@ use crate::types::Callback;
 use core::ffi::{c_int, c_uint};
 use std::borrow::Cow;
 
-/// Run `f` on the `on_print` callback an RPC client installed. `f` must
+/// Run `f` on the `ON_PRINT` callback an RPC client installed. `f` must
 /// not run user code: the callback is borrowed for its length.
 pub(crate) fn with_on_print<R>(f: impl FnOnce(&mut Callback) -> R) -> R {
-    on_print.with_mut(f)
+    ON_PRINT.with_mut(f)
 }
 
 /// Start putting a message on the screen.
@@ -38,52 +38,52 @@ pub(crate) fn with_on_print<R>(f: impl FnOnce(&mut Callback) -> R) -> R {
 /// below it, scrolling if there is no room.
 pub fn msg_start() {
     let mut did_return = false;
-    msg_row.set(msg_row.get().max(cmdline_row.get()));
+    MSG_ROW.set(MSG_ROW.get().max(cmdline_row.get()));
 
-    if msg_silent.get() == 0 {
+    if MSG_SILENT.get() == 0 {
         // Don't display the old message now.
-        keep_msg.set(None);
-        need_fileinfo.set(false);
+        KEEP_MSG.set(None);
+        NEED_FILEINFO.set(false);
     }
     if need_highlight_changed.get() {
         highlight_changed();
     }
-    if need_clr_eos.get() || (p_ch() == 0 && redrawing_cmdline.get()) {
+    if NEED_CLR_EOS.get() || (p_ch() == 0 && redrawing_cmdline.get()) {
         // Halfway an `:echo` and getting an (error) message: clear any
         // text the command left.
-        need_clr_eos.set(false);
+        NEED_CLR_EOS.set(false);
         msg_clr_eos();
     }
 
     // With 'cmdheight' 0 the first line of msg_grid has to be scrolled in
     // over the screen.
-    if p_ch() == 0 && !ui_has(kUIMessages) && msg_scrolled.get() == 0 {
+    if p_ch() == 0 && !ui_has(kUIMessages) && MSG_SCROLLED.get() == 0 {
         msg_grid_validate();
         msg_scroll_up(false, true);
-        msg_scrolled.set(msg_scrolled.get() + 1);
+        MSG_SCROLLED.set(MSG_SCROLLED.get() + 1);
         cmdline_row.set(Rows.get() - 1);
     }
 
-    if msg_scroll.get() == 0 && full_screen.get() {
+    if MSG_SCROLL.get() == 0 && full_screen.get() {
         // Overwrite the last message.
-        msg_row.set(cmdline_row.get());
-        msg_col.set(0);
-    } else if (msg_didout.get() || p_ch() == 0) && !ui_has(kUIMessages) {
+        MSG_ROW.set(cmdline_row.get());
+        MSG_COL.set(0);
+    } else if (MSG_DIDOUT.get() || p_ch() == 0) && !ui_has(kUIMessages) {
         // Start the message on the next line.
-        if p_ch() == 0 && !msg_didout.get() && msg_use_printf() != 0 {
+        if p_ch() == 0 && !MSG_DIDOUT.get() && msg_use_printf() != 0 {
             msg_bytes_to_grid(b"\n", 0, false);
         } else {
             msg_putchar(NL);
         }
         did_return = true;
-        cmdline_row.set(msg_row.get());
+        cmdline_row.set(MSG_ROW.get());
     }
-    if !msg_didany.get() || lines_left.get() < 0 {
+    if !MSG_DIDANY.get() || LINES_LEFT.get() < 0 {
         msg_starthere();
     }
-    if msg_silent.get() == 0 {
+    if MSG_SILENT.get() == 0 {
         // No output on the current line yet.
-        msg_didout.set(false);
+        MSG_DIDOUT.set(false);
     }
     if ui_has(kUIMessages) {
         msg_ext_ui_flush();
@@ -96,11 +96,11 @@ pub fn msg_start() {
 
 /// Note that the current message position is where messages start.
 pub fn msg_starthere() {
-    lines_left.set(cmdline_row.get());
-    msg_didany.set(false);
+    LINES_LEFT.set(cmdline_row.get());
+    MSG_DIDANY.set(false);
 }
 
-/// Show a string at `msg_row`/`msg_col`, advancing them past it.
+/// Show a string at `MSG_ROW`/`MSG_COL`, advancing them past it.
 pub fn msg_str(text: &CStr) {
     msg_str_hl(text, 0, false)
 }
@@ -154,7 +154,7 @@ fn put_bytes(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) {
     redir_write(bytes);
 
     // Print nothing under `:silent`, or for an empty message.
-    if msg_silent.get() != 0 || bytes.is_empty() {
+    if MSG_SILENT.get() != 0 || bytes.is_empty() {
         if bytes.is_empty() && whole_message && ui_has(kUIMessages) {
             msg_ext_ui_flush(); // ensure messages until now are emitted
             ui_call_msg_show(
@@ -177,27 +177,27 @@ fn put_bytes(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) {
 
     // Writing to a screen that has already scrolled needs a hit-enter
     // prompt afterwards. Not when only using CR to move the cursor.
-    let overflow = !ui_has(kUIMessages) && msg_scrolled.get() > c_int::from(p_ch() == 0);
-    if overflow && !msg_scrolled_ign.get() && bytes != b"\r" {
-        need_wait_return.set(true);
+    let overflow = !ui_has(kUIMessages) && MSG_SCROLLED.get() > c_int::from(p_ch() == 0);
+    if overflow && !MSG_SCROLLED_IGN.get() && bytes != b"\r" {
+        NEED_WAIT_RETURN.set(true);
     }
-    msg_didany.set(true); // remember that something was output
+    MSG_DIDANY.set(true); // remember that something was output
 
     // With no valid screen, use stderr so error messages are still seen.
     // A headless process that nonetheless has a grid (`--headless` with a
     // UI attached) gets both.
     if msg_use_printf() != 0 {
-        let saved_msg_col = msg_col.get();
+        let saved_msg_col = MSG_COL.get();
         msg_bytes_to_stdio(bytes);
         if headless_mode.get() {
-            msg_col.set(saved_msg_col);
+            MSG_COL.set(saved_msg_col);
         }
     }
     if msg_use_printf() == 0 || (headless_mode.get() && default_grid_ref().is_allocated()) {
         msg_bytes_to_grid(bytes, hl_id, false);
     }
 
-    need_fileinfo.set(false);
+    NEED_FILEINFO.set(false);
 }
 
 /// The `ext_messages` half of [`msg_bytes_to_grid`].
@@ -206,24 +206,24 @@ fn put_bytes(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) {
 /// out. Only the message column has to be kept, because the code that
 /// decides whether a newline is owed still reads it.
 fn msg_bytes_to_ui(bytes: &[u8], hl_id: c_int, attr: c_int) {
-    if attr as ScreenAttr != msg_ext_last_attr.get() {
+    if attr as ScreenAttr != MSG_EXT_LAST_ATTR.get() {
         // Colour changed: end the chunk and start another.
         msg_ext_emit_chunk();
-        msg_ext_last_attr.set(attr as ScreenAttr);
-        msg_ext_last_hl_id.set(hl_id);
+        MSG_EXT_LAST_ATTR.set(attr as ScreenAttr);
+        MSG_EXT_LAST_HL_ID.set(hl_id);
     }
-    msg_ext_last_chunk.update(|chunk| chunk.extend_from_slice(bytes));
+    MSG_EXT_LAST_CHUNK.update(|chunk| chunk.extend_from_slice(bytes));
 
     // The message column is whatever follows the last newline.
     let tail = match bytes.iter().rposition(|&byte| byte == b'\n') {
         Some(at) => {
-            msg_col.set(0);
+            MSG_COL.set(0);
             &bytes[at + 1..]
         }
         None => bytes,
     };
     let cells = string_cells(tail);
-    msg_col.set(msg_col.get() + c_int::try_from(cells).unwrap_or(c_int::MAX));
+    MSG_COL.set(MSG_COL.get() + c_int::try_from(cells).unwrap_or(c_int::MAX));
 }
 
 /// The display half of [`msg_bytes`].
@@ -239,7 +239,7 @@ fn msg_bytes_to_ui(bytes: &[u8], hl_id: c_int, attr: c_int) {
 /// the pager is what is asking for it.
 pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
     let attr = if hl_id != 0 { syn_id2attr(hl_id) } else { 0 };
-    did_wait_return.set(false);
+    DID_WAIT_RETURN.set(false);
 
     if ui_has(kUIMessages) {
         msg_bytes_to_ui(bytes, hl_id, attr);
@@ -258,7 +258,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
     // much of `text` has been captured, `sb_col` the column the run it holds
     // started at.
     let mut stored = 0;
-    let mut sb_col = msg_col.get();
+    let mut sb_col = MSG_COL.get();
     let store = |run: &[u8], sb_col: &mut c_int, finish: bool| {
         if p_more() && !recurse {
             store_sb_text(run, hl_id, sb_col, finish);
@@ -270,21 +270,21 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
     // stands in for one.
     let mut open_row = -1;
     loop {
-        if msg_col.get() >= Columns.get() {
+        if MSG_COL.get() >= Columns.get() {
             store(&text[stored..at], &mut sb_col, true);
             stored = at;
-            if msg_no_more.get() && lines_left.get() == 0 {
+            if MSG_NO_MORE.get() && LINES_LEFT.get() == 0 {
                 break;
             }
-            msg_col.set(0);
-            msg_row.set(msg_row.get() + 1);
-            msg_didout.set(false);
+            MSG_COL.set(0);
+            MSG_ROW.set(MSG_ROW.get() + 1);
+            MSG_DIDOUT.set(false);
         }
 
-        if msg_row.get() >= Rows.get() {
-            msg_row.set(Rows.get() - 1);
+        if MSG_ROW.get() >= Rows.get() {
+            MSG_ROW.set(Rows.get() - 1);
             // No pager and no room left: truncate here.
-            if msg_no_more.get() && lines_left.get() == 0 {
+            if MSG_NO_MORE.get() && LINES_LEFT.get() == 0 {
                 break;
             }
             if !recurse {
@@ -294,19 +294,19 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
                 }
                 msg_scroll_up(true, false);
                 inc_msg_scrolled();
-                need_wait_return.set(true); // may need wait_return() in main()
+                NEED_WAIT_RETURN.set(true); // may need wait_return() in main()
                 redraw_cmdline.set(true);
                 if cmdline_row.get() > 0 && !exmode_active.get() {
                     cmdline_row.set(cmdline_row.get() - 1);
                 }
-                if lines_left.get() > 0 {
-                    lines_left.set(lines_left.get() - 1);
+                if LINES_LEFT.get() > 0 {
+                    LINES_LEFT.set(LINES_LEFT.get() - 1);
                 }
                 // Screen full and 'more' set: wait for a character.
                 if p_more()
-                    && lines_left.get() == 0
+                    && LINES_LEFT.get() == 0
                     && State.get() != MODE_HITRETURN
-                    && !msg_no_more.get()
+                    && !MSG_NO_MORE.get()
                     && !exmode_active.get()
                 {
                     if do_more_prompt(NUL) {
@@ -314,12 +314,12 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
                         // the rest of the caller's text is not shown and
                         // nothing of it is left to store.
                         // A copy: the rest of the loop can redraw.
-                        let buttons = confirm_buttons.with(Clone::clone).unwrap_or_default();
+                        let buttons = CONFIRM_BUTTONS.with(Clone::clone).unwrap_or_default();
                         text = Cow::Owned(buttons.as_cstr().to_bytes().to_vec());
                         at = 0;
                         stored = 0;
                     }
-                    if quit_more.get() {
+                    if QUIT_MORE.get() {
                         return;
                     }
                 }
@@ -331,12 +331,12 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
         }
 
         let byte = text[at];
-        if msg_row.get() != open_row && (byte >= 0x20 || c_int::from(byte) == TAB) {
+        if MSG_ROW.get() != open_row && (byte >= 0x20 || c_int::from(byte) == TAB) {
             if open_row >= 0 {
                 msg_line_flush();
             }
-            grid_line_start(msg_grid_view(), msg_row.get());
-            open_row = msg_row.get();
+            grid_line_start(msg_grid_view(), MSG_ROW.get());
+            open_row = MSG_ROW.get();
         }
 
         if byte >= 0x20 {
@@ -344,42 +344,42 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
             let mut cw = cells_at(&text[at..]);
             // Composing characters past the end of the text are left out.
             let len = cluster_len(&text[at..]);
-            if cw > 1 && msg_col.get() == Columns.get() - 1 {
+            if cw > 1 && MSG_COL.get() == Columns.get() - 1 {
                 // Doesn't fit: fill the last column with a highlighted '>'
                 // and let the wrap put the character on the next line.
-                grid_line_puts(msg_col.get(), b">", hl_attr(HLF_AT as c_int));
+                grid_line_puts(MSG_COL.get(), b">", hl_attr(HLF_AT as c_int));
                 cw = 1;
             } else {
-                grid_line_puts(msg_col.get(), &text[at..at + len], print_attr);
+                grid_line_puts(MSG_COL.get(), &text[at..at + len], print_attr);
                 at += len;
             }
-            msg_didout.set(true); // remember that the line is not empty
-            msg_col.set(msg_col.get() + cw);
+            MSG_DIDOUT.set(true); // remember that the line is not empty
+            MSG_COL.set(MSG_COL.get() + cw);
             continue;
         }
 
         at += 1;
         match c_int::from(byte) {
             NL => {
-                msg_didout.set(false); // remember that the line is empty
-                msg_col.set(0);
-                msg_row.set(msg_row.get() + 1);
+                MSG_DIDOUT.set(false); // remember that the line is empty
+                MSG_COL.set(0);
+                MSG_ROW.set(MSG_ROW.get() + 1);
                 store(&text[stored..at], &mut sb_col, true);
                 stored = at;
             }
-            CAR => msg_col.set(0),
+            CAR => MSG_COL.set(0),
             BS => {
-                if msg_col.get() != 0 {
-                    msg_col.set(msg_col.get() - 1);
+                if MSG_COL.get() != 0 {
+                    MSG_COL.set(MSG_COL.get() - 1);
                 }
             }
             TAB => {
                 // Translate a tab into spaces, up to the next multiple of
                 // eight or the end of the line.
                 loop {
-                    grid_line_puts(msg_col.get(), b" ", print_attr);
-                    msg_col.set(msg_col.get() + 1);
-                    if msg_col.get() == Columns.get() || msg_col.get() & 7 == 0 {
+                    grid_line_puts(MSG_COL.get(), b" ", print_attr);
+                    MSG_COL.set(MSG_COL.get() + 1);
+                    if MSG_COL.get() == Columns.get() || MSG_COL.get() & 7 == 0 {
                         break;
                     }
                 }
@@ -392,7 +392,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
     if open_row >= 0 {
         msg_line_flush();
     }
-    msg_cursor_goto(msg_row.get(), msg_col.get());
+    msg_cursor_goto(MSG_ROW.get(), MSG_COL.get());
     store(&text[stored..at], &mut sb_col, false);
     msg_check();
 }
@@ -410,12 +410,12 @@ pub fn msg_use_printf() -> c_int {
 
 /// Print a message when there is no valid screen.
 ///
-/// Also keeps `msg_col`/`msg_didout` roughly in step, so that the code that
+/// Also keeps `MSG_COL`/`MSG_DIDOUT` roughly in step, so that the code that
 /// decides whether a newline is needed still works with no grid to measure.
 pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
     // `vim.on_print` takes the whole message instead, if it is set. A
     // second reference, so the call holds no borrow of the cell.
-    if let Some(mut callback) = on_print.with(|cb| cb.is_set().then(|| cb.duplicate())) {
+    if let Some(mut callback) = ON_PRINT.with(|cb| cb.is_set().then(|| cb.duplicate())) {
         // The callback wants a C string, and `bytes` is a span of one; the
         // copy is what gives it a terminator of its own. Upstream handed
         // over the *pointer* instead, so a caller that asked for a prefix
@@ -437,7 +437,7 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
             // One character, with NL translated to CR NL.
             let mut buf = [0u8; 7];
             let mut used = 0;
-            if rest[0] == b'\n' && !info_message.get() && !silent_mode.get() && !headless_mode.get()
+            if rest[0] == b'\n' && !INFO_MESSAGE.get() && !silent_mode.get() && !headless_mode.get()
             {
                 buf[used] = b'\r';
                 used += 1;
@@ -446,7 +446,7 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
             // Up to a NUL, as the `%s` this was printed through read it.
             let text = &buf[..used + len];
             let text = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];
-            if info_message.get() {
+            if INFO_MESSAGE.get() {
                 write_c_stdout(text);
             } else {
                 write_c_stderr(text);
@@ -455,11 +455,11 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
 
         // Primitive way to compute the current column.
         if rest[0] == b'\r' || rest[0] == b'\n' {
-            msg_col.set(0);
-            msg_didout.set(false);
+            MSG_COL.set(0);
+            MSG_DIDOUT.set(false);
         } else {
-            msg_col.set(msg_col.get() + utf_char2cells(char_at(rest)));
-            msg_didout.set(true);
+            MSG_COL.set(MSG_COL.get() + utf_char2cells(char_at(rest)));
+            MSG_DIDOUT.set(true);
         }
         at += len;
     }
@@ -472,7 +472,7 @@ pub(crate) fn msg_end() -> bool {
     // A message larger than the window, or one that ran into the ruler,
     // means the window has to be redrawn -- but not while abandoning the
     // file or editing the command line.
-    if !exiting.get() && need_wait_return.get() && State.get() & MODE_CMDLINE == 0 {
+    if !exiting.get() && NEED_WAIT_RETURN.get() && State.get() & MODE_CMDLINE == 0 {
         wait_return(0);
         return false;
     }
@@ -490,22 +490,22 @@ pub fn msg_check() {
     if ui_has(kUIMessages) {
         return;
     }
-    if msg_row.get() == Rows.get() - 1 && msg_col.get() >= sc_col.get() {
-        need_wait_return.set(true);
+    if MSG_ROW.get() == Rows.get() - 1 && MSG_COL.get() >= sc_col.get() {
+        NEED_WAIT_RETURN.set(true);
         redraw_cmdline.set(true);
     }
 }
 
 /// Pad with spaces up to column `col`.
 pub fn msg_advance(col: c_int) {
-    if msg_silent.get() != 0 {
+    if MSG_SILENT.get() != 0 {
         // Nothing to advance to; keep the column for redirection, which
         // may fill it up later.
-        msg_col.set(col);
+        MSG_COL.set(col);
         return;
     }
     let col = col.min(Columns.get() - 1); // not enough room
-    while msg_col.get() < col {
+    while MSG_COL.get() < col {
         msg_putchar(c_int::from(b' '));
     }
 }

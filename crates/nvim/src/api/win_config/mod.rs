@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::api::extmark::{parse_virt_text, virt_text_to_array};
 use crate::api::keysets::KeyDict_win_config;
@@ -26,7 +25,7 @@ use crate::ex_docmd::expr_map_locked;
 use crate::guard::textlock;
 use crate::highlight_group::{syn_check_group, syn_id2name};
 use crate::mbyte::{c_string_cells, c_string_cells_len};
-use crate::message::{e_cmdwin, e_textlock};
+use crate::message::{E_CMDWIN, E_TEXTLOCK};
 use crate::r#move::changed_window_setting;
 use crate::option::didset_window_options;
 use crate::option::vars::{p_sb, p_spr, p_winborder};
@@ -65,13 +64,13 @@ pub use self::border::*;
 pub use self::get::*;
 pub use self::open::*;
 pub(crate) use self::parse::*;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kBorderTextFooter: BorderTextType = 1;
-pub const kBorderTextTitle: BorderTextType = 0;
+pub const ALIGN_RIGHT: AlignTextPos = 2;
+pub const ALIGN_CENTER: AlignTextPos = 1;
+pub const WIN_SPLIT_BELOW: WinSplit = 3;
+pub const WIN_SPLIT_ABOVE: WinSplit = 2;
+pub const WIN_SPLIT_RIGHT: WinSplit = 1;
+pub const BORDER_TEXT_FOOTER: BorderTextType = 1;
+pub const BORDER_TEXT_TITLE: BorderTextType = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;

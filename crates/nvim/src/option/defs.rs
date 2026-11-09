@@ -7,7 +7,6 @@
     clippy::ptr_as_ptr
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::cmdexpand::defs::Expand;
 use crate::memory::XString;
@@ -72,17 +71,17 @@ pub type OptScopeFlags = uint8_t;
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum OptVal {
     /// A global-local option with no value in this scope, and what the API
-    /// reports as nil. `kOptValTypeNil`.
+    /// reports as nil. `OPT_VAL_TYPE_NIL`.
     Nil,
     /// A boolean option's value: on, off, or **absent** — a global-local
     /// option with no value in this scope, which upstream spells as the
     /// third state of the option variable's `int` (-1) and reports to the
     /// API as nil. The variable keeps that alphabet; the value does not.
-    /// `kOptValTypeBoolean`.
+    /// `OPT_VAL_TYPE_BOOLEAN`.
     Boolean(Option<bool>),
-    /// `kOptValTypeNumber`.
+    /// `OPT_VAL_TYPE_NUMBER`.
     Number(OptInt),
-    /// `kOptValTypeString`.
+    /// `OPT_VAL_TYPE_STRING`.
     String(OptStr),
 }
 
@@ -414,9 +413,9 @@ impl OptVar {
         match self {
             // Neither carries a variable of its own to disagree with.
             OptVar::NoGlobal | OptVar::OwnDefault => true,
-            OptVar::Boolean(_) => type_0 == kOptValTypeBoolean,
-            OptVar::Number(_) => type_0 == kOptValTypeNumber,
-            OptVar::String(_) => type_0 == kOptValTypeString,
+            OptVar::Boolean(_) => type_0 == OPT_VAL_TYPE_BOOLEAN,
+            OptVar::Number(_) => type_0 == OPT_VAL_TYPE_NUMBER,
+            OptVar::String(_) => type_0 == OPT_VAL_TYPE_STRING,
         }
     }
 }
@@ -660,15 +659,15 @@ crate::char_flags! {
 pub const MAX_MCO: ::core::ffi::c_int = 6;
 
 /// No value at all -- the option is not set here.
-pub const kOptValTypeNil: OptValType = -1;
+pub const OPT_VAL_TYPE_NIL: OptValType = -1;
 
 /// A `'boolean'` option's value.
-pub const kOptValTypeBoolean: OptValType = 0;
+pub const OPT_VAL_TYPE_BOOLEAN: OptValType = 0;
 
 /// A `'number'` option's value.
-pub const kOptValTypeNumber: OptValType = 1;
+pub const OPT_VAL_TYPE_NUMBER: OptValType = 1;
 
 /// A `'string'` option's value.
-pub const kOptValTypeString: OptValType = 2;
+pub const OPT_VAL_TYPE_STRING: OptValType = 2;
 
 pub type OptIndex = ::core::ffi::c_int;

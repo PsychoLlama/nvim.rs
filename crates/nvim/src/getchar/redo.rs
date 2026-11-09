@@ -285,7 +285,7 @@ pub fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
         // which ends the expression -- goes in too.
         if c.is('=') {
             readbuf2().add_char(Key::CAR);
-            cmd_silent.set(true);
+            CMD_SILENT.set(true);
         }
 
         c = redo.next_char();

@@ -344,7 +344,7 @@ pub fn list_join(out: &mut XString, l: Option<&List>, sep: &CStr) -> Result<(), 
 pub fn f_join(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     if args[0].v_type() != VAR_LIST {
-        emsg(gettext(e_listreq));
+        emsg(gettext(E_LISTREQ));
         return;
     }
     let sep = if args.len() <= 1 {
@@ -369,7 +369,7 @@ pub fn f_list2str(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(None);
     let arg = &args[0];
     if arg.v_type() != VAR_LIST {
-        emsg(gettext(e_invarg));
+        emsg(gettext(E_INVARG));
         return;
     }
     let Some(list) = arg.list_ref() else {

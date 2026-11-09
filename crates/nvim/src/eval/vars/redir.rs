@@ -19,8 +19,8 @@ use crate::eval::typval::tv_list_alloc;
 use crate::eval::{FNE_CHECK_START, eval_isnamec1, get_lval, set_var_lval};
 use crate::global_cell::GlobalCell;
 use crate::memory::ThinCString;
-use crate::message::e_invarg;
-use crate::message::state::{called_emsg, did_emsg};
+use crate::message::E_INVARG;
+use crate::message::state::{CALLED_EMSG, DID_EMSG};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::{Failed, TypVal, Vv};
@@ -64,7 +64,7 @@ fn string_value(text: &[u8]) -> TypVal {
 pub(crate) fn var_redir_start(name: &[u8], append: bool) -> Result<(), Failed> {
     // Catch a bad name early.
     if !eval_isnamec1(c_int::from(byte_at(name, 0))) {
-        emsg_static(e_invarg);
+        emsg_static(E_INVARG);
         return Err(Failed);
     }
 
@@ -100,13 +100,13 @@ pub(crate) fn var_redir_start(name: &[u8], append: bool) -> Result<(), Failed> {
 
     // Check the variable can be written, by setting it to -- or
     // appending to it -- an empty string.
-    let called_emsg_before = called_emsg.get();
-    did_emsg.set(0);
+    let called_emsg_before = CALLED_EMSG.get();
+    DID_EMSG.set(0);
     let mut tv = string_value(b"");
     let op = if append { b'.' } else { b'=' };
     set_var_lval(&mut lval, &mut tv, true, false, Some(op));
     clear_local(&mut tv);
-    if called_emsg.get() > called_emsg_before {
+    if CALLED_EMSG.get() > called_emsg_before {
         abandon_redir();
         return Err(Failed);
     }
