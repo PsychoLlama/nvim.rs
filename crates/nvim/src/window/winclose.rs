@@ -43,7 +43,7 @@ use crate::ui::state::UI_MULTIGRID;
 use crate::ui::{ui_call_win_close, ui_has};
 use crate::winfloat::win_float_find_altwin;
 use crate::winlayer::graph::{FIRST_TABPAGE, FIRSTWIN, LASTWIN};
-use crate::winlayer::{WinId, tabs};
+use crate::winlayer::{FrameId, WinId, tabs};
 
 /// A window that is still open after [`win_close`] was asked to close it.
 ///
@@ -64,16 +64,47 @@ pub(crate) fn win_close(win: Win, free_buf: bool, force: bool) -> Result<(), Not
 ///
 /// Called by `:quit`, `:close`, `:xit`, `:wq` and `findtag()`.
 pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClosed> {
-    let prev_curtab = TabPage::current();
-    // The frame the closing window hung off, held as an identity because
-    // `win` and its whole subtree are freed before the check below.
-    let win_frame = if win.w_floating {
-        None
-    } else {
-        win.frame().fr_parent
-    };
-    let had_diffmode = win.w_onebuf_opt.wo_diff != 0;
+    let mut closing = Closing::new(win, free_buf, force);
+    may_close(win, force)?;
 
+    // When closing the last window in a tab page first go to another tab page
+    // and then close the window and the tab page, so that `curwin` and `CURTAB`
+    // are never invalid while memory is freed.
+    if close_last_tabpage_window(win, free_buf, closing.prev_curtab) {
+        return Err(NotClosed);
+    }
+    closing.drop_stale_snapshots(win);
+
+    if win.is_current() {
+        match leave_closing_window(win) {
+            Leave::Failed => return Err(NotClosed),
+            Leave::Ok { other } => closing.other_buffer = other,
+        }
+    }
+
+    // Fire WinClosed just before starting to free window-related resources.
+    fire_winclosed(win);
+    // The autocommand may have freed the window already.
+    if !valid_win_any_tab(win.id()) {
+        return Ok(());
+    }
+    closing.release_buffer(win)?;
+
+    // Now the window really is going to close. Disallow any autocommand from
+    // splitting a window, to avoid trouble.
+    let no_split = Lock::held(&SPLIT_DISALLOWED);
+    let freed = closing.free_window(win);
+    closing.share_out_room(&freed);
+    closing.enter_next(&freed);
+    drop(no_split);
+    closing.restore_after(&freed);
+    Ok(())
+}
+
+/// The refusals that come before anything is touched: the last window, a
+/// locked layout, a window already being closed, the autocommand window.
+/// Closing the last non-floating window closes the floats first.
+fn may_close(win: Win, force: bool) -> Result<(), NotClosed> {
     if is_last_window(win) {
         err(WinError::LastWindow);
         return Err(NotClosed);
@@ -91,199 +122,261 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClos
     if last_win().w_floating && only_window(win, None) {
         close_the_floats(win, force)?;
     }
+    Ok(())
+}
 
-    // When closing the last window in a tab page first go to another tab page
-    // and then close the window and the tab page, so that `curwin` and `CURTAB`
-    // are never invalid while memory is freed.
-    if close_last_tabpage_window(win, free_buf, prev_curtab) {
-        return Err(NotClosed);
-    }
+/// What [`close`] knows of the window from before it was freed, for the
+/// steps that run after.
+struct Closing {
+    free_buf: bool,
+    force: bool,
+    prev_curtab: TabPage,
+    /// The frame the closing window hung off, held as an identity because
+    /// `win` and its whole subtree are freed before it is compared.
+    win_frame: Option<FrameId>,
+    had_diffmode: bool,
+    help_window: bool,
+    quickfix_window: bool,
+    /// Leaving the window entered another buffer: `BufEnter` is owed.
+    other_buffer: bool,
+}
 
-    // When closing the help window, try restoring a snapshot afterwards.
-    // Otherwise clear the snapshot, which is now invalid.
-    let help_window = buf_is_help(win.buffer_or_none());
-    if !help_window {
-        drop_snapshot(TabPage::current(), SNAP_HELP_IDX);
-    }
-    let quickfix_window = buf_is_quickfix(win.buffer_or_none());
-    if !quickfix_window {
-        drop_snapshot(TabPage::current(), SNAP_QUICKFIX_IDX);
-    }
+/// What freeing the window left: the window that took its room, and what
+/// the window was.
+struct Freed {
+    /// The window that took the room, to enter next.
+    next: Win,
+    /// The direction the room went (`b'v'`/`b'h'`), for 'eadirection'.
+    dir: u8,
+    was_floating: bool,
+    /// The closed window was `curwin`: the next one must be entered.
+    close_curwin: bool,
+    had_cmdline_ruler: bool,
+    /// The window's final buffer, for `terminal_check_size`.
+    bufref: BufRef,
+}
 
-    let mut other_buffer = false;
-    if win.is_current() {
-        match leave_closing_window(win) {
-            Leave::Failed => return Err(NotClosed),
-            Leave::Ok { other } => other_buffer = other,
+impl Closing {
+    fn new(win: Win, free_buf: bool, force: bool) -> Closing {
+        Closing {
+            free_buf,
+            force,
+            prev_curtab: TabPage::current(),
+            win_frame: if win.w_floating {
+                None
+            } else {
+                win.frame().fr_parent
+            },
+            had_diffmode: win.w_onebuf_opt.wo_diff != 0,
+            help_window: false,
+            quickfix_window: false,
+            other_buffer: false,
         }
     }
 
-    // Fire WinClosed just before starting to free window-related resources.
-    fire_winclosed(win);
-    // The autocommand may have freed the window already.
-    if !valid_win_any_tab(win.id()) {
-        return Ok(());
-    }
-
-    let bufref = BufRef::of_opt(win.buffer_or_none());
-    let action = if free_buf { DOBUF_UNLOAD } else { 0 };
-    let did_decrement = close_win_buffer(win, action, true);
-
-    if valid_win(win.id()).is_some()
-        && win.buffer_or_none().is_none()
-        && !win.w_floating
-        && is_last_window(win)
-    {
-        // Autocommands have closed all windows, quit now. Restore
-        // `curwin->w_buffer`, or writing the ShaDa file may fail.
-        if Win::current().buffer_or_none().is_none() {
-            Win::current().w_buffer = Buf::current_or_none().unwrap_or(Buf::NULL);
+    /// When closing the help window, try restoring a snapshot afterwards.
+    /// Otherwise clear the snapshot, which is now invalid. The same for the
+    /// quickfix window.
+    fn drop_stale_snapshots(&mut self, win: Win) {
+        self.help_window = buf_is_help(win.buffer_or_none());
+        if !self.help_window {
+            drop_snapshot(TabPage::current(), SNAP_HELP_IDX);
         }
-        quit_now();
-    }
-    // Autocommands may have moved to another tab page.
-    if !prev_curtab.is_current() && valid_win_any_tab(win.id()) && win.buffer_or_none().is_none() {
-        // The window has to be closed anyway, since the buffer is gone.
-        if let Some(prev) = valid_tab(prev_curtab.id()) {
-            let _ = close_othertab(win, false, prev, force);
+        self.quickfix_window = buf_is_quickfix(win.buffer_or_none());
+        if !self.quickfix_window {
+            drop_snapshot(TabPage::current(), SNAP_QUICKFIX_IDX);
         }
-        return Err(NotClosed);
     }
 
-    // Autocommands may have closed the window already, or closed the only other
-    // window, or moved to another tab page.
-    if valid_win(win.id()).is_none() {
-        return Err(NotClosed);
-    }
-    if only_window(win, None) && (first_tab().next().is_none() || last_win().w_floating) {
-        if first_tab().next().is_some() {
-            err_raw(E_FLOATONLY);
+    /// Let go of the window's buffer, then re-check everything its
+    /// autocommands may have changed: all windows closed (quit), another
+    /// tab page entered, the window or its only sibling closed.
+    fn release_buffer(&self, win: Win) -> Result<(), NotClosed> {
+        let bufref = BufRef::of_opt(win.buffer_or_none());
+        let action = if self.free_buf { DOBUF_UNLOAD } else { 0 };
+        let did_decrement = close_win_buffer(win, action, true);
+
+        if valid_win(win.id()).is_some()
+            && win.buffer_or_none().is_none()
+            && !win.w_floating
+            && is_last_window(win)
+        {
+            // Autocommands have closed all windows, quit now. Restore
+            // `curwin->w_buffer`, or writing the ShaDa file may fail.
+            if Win::current().buffer_or_none().is_none() {
+                Win::current().w_buffer = Buf::current_or_none().unwrap_or(Buf::NULL);
+            }
+            quit_now();
         }
-        unclose_win_buffer(win, bufref, did_decrement);
-        return Err(NotClosed);
-    }
-    if close_last_tabpage_window(win, free_buf, prev_curtab) {
-        return Err(NotClosed);
+        // Autocommands may have moved to another tab page.
+        if !self.prev_curtab.is_current()
+            && valid_win_any_tab(win.id())
+            && win.buffer_or_none().is_none()
+        {
+            // The window has to be closed anyway, since the buffer is gone.
+            if let Some(prev) = valid_tab(self.prev_curtab.id()) {
+                let _ = close_othertab(win, false, prev, self.force);
+            }
+            return Err(NotClosed);
+        }
+
+        // Autocommands may have closed the window already, or closed the only
+        // other window, or moved to another tab page.
+        if valid_win(win.id()).is_none() {
+            return Err(NotClosed);
+        }
+        if only_window(win, None) && (first_tab().next().is_none() || last_win().w_floating) {
+            if first_tab().next().is_some() {
+                err_raw(E_FLOATONLY);
+            }
+            unclose_win_buffer(win, bufref, did_decrement);
+            return Err(NotClosed);
+        }
+        if close_last_tabpage_window(win, self.free_buf, self.prev_curtab) {
+            return Err(NotClosed);
+        }
+        Ok(())
     }
 
-    // Now the window really is going to close. Disallow any autocommand from
-    // splitting a window, to avoid trouble.
-    let no_split = Lock::held(&SPLIT_DISALLOWED);
-    let was_floating = win.w_floating;
-    if ui_has(UI_MULTIGRID) {
-        ui_call_win_close(Integer::from(win.w_grid_alloc.handle));
-    }
-    if win.w_floating {
-        drop_grid(win);
-        debug_assert!(tabs().next().is_some(), "first_tabpage != NULL");
-        if win.w_config.external {
-            for mut tp in tabs() {
-                if !tp.is_current() && tp.tp_curwin == Some(win.id()) {
-                    // An autocommand can still abort the closing of this
-                    // window, but carrying the change out anyway is no
-                    // catastrophe.
-                    tp.tp_curwin = tp.tp_firstwin;
+    /// Free the window and pick the one to enter next, made `curwin` at
+    /// once when the closed one was. `win` is gone afterwards.
+    fn free_window(&self, win: Win) -> Freed {
+        let was_floating = win.w_floating;
+        if ui_has(UI_MULTIGRID) {
+            ui_call_win_close(Integer::from(win.w_grid_alloc.handle));
+        }
+        if win.w_floating {
+            drop_grid(win);
+            debug_assert!(tabs().next().is_some(), "first_tabpage != NULL");
+            if win.w_config.external {
+                for mut tp in tabs() {
+                    if !tp.is_current() && tp.tp_curwin == Some(win.id()) {
+                        // An autocommand can still abort the closing of this
+                        // window, but carrying the change out anyway is no
+                        // catastrophe.
+                        tp.tp_curwin = tp.tp_firstwin;
+                    }
                 }
             }
         }
-    }
 
-    // About to free the window: remember its final buffer for
-    // `terminal_check_size`, which may have changed since the last `BufRef`
-    // (`close_buffer` autocommands, say).
-    let bufref = BufRef::of_opt(win.buffer_or_none());
-    let had_cmdline_ruler = p_ru() && win.is_current() && win.w_status_height == 0;
-    let was_current = win.is_current();
+        // About to free the window: remember its final buffer for
+        // `terminal_check_size`, which may have changed since the last
+        // `BufRef` (`close_buffer` autocommands, say).
+        let bufref = BufRef::of_opt(win.buffer_or_none());
+        let had_cmdline_ruler = p_ru() && win.is_current() && win.w_status_height == 0;
+        let was_current = win.is_current();
 
-    // Free the memory the window used, and take the window that received its
-    // screen space.
-    let (wp, dir) = free_mem(win, None);
-    let mut wp = wp.expect("the window that took the room");
-    if help_window || quickfix_window {
-        // Closing the help window moves the cursor back to the window that was
-        // current when the snapshot was taken.
-        let idx = snapshot_index(help_window);
-        if let Some(prev) = snapshot_curwin(idx).and_then(|w| valid_win(w.id())) {
-            wp = prev;
+        // Free the memory the window used, and take the window that received
+        // its screen space.
+        let (wp, dir) = free_mem(win, None);
+        let mut wp = wp.expect("the window that took the room");
+        if self.help_window || self.quickfix_window {
+            // Closing the help window moves the cursor back to the window that
+            // was current when the snapshot was taken.
+            let idx = snapshot_index(self.help_window);
+            if let Some(prev) = snapshot_curwin(idx).and_then(|w| valid_win(w.id())) {
+                wp = prev;
+            }
+        }
+
+        // Make sure `curwin` is not invalid: it causes severe trouble when
+        // printing an error message, and `win_equal()` needs `CURBUF` to be
+        // valid too.
+        if was_current {
+            wp.make_current();
+            if wp.w_onebuf_opt.wo_pvw != 0 || buf_is_quickfix(wp.buffer_or_none()) {
+                wp = away_from_preview(wp);
+            }
+            Win::current().buffer().make_current();
+            // The cursor position may be invalid if the buffer changed after
+            // the window was last used.
+            revalidate_cursor(Win::current());
+        }
+        Freed {
+            next: wp,
+            dir,
+            was_floating,
+            close_curwin: was_current,
+            had_cmdline_ruler,
+            bufref,
         }
     }
 
-    // Make sure `curwin` is not invalid: it causes severe trouble when printing
-    // an error message, and `win_equal()` needs `CURBUF` to be valid too.
-    let close_curwin = was_current;
-    if was_current {
-        wp.make_current();
-        if wp.w_onebuf_opt.wo_pvw != 0 || buf_is_quickfix(wp.buffer_or_none()) {
-            wp = away_from_preview(wp);
+    /// Give the closed window's room out: the status line, 'equalalways',
+    /// the cmdline ruler a float covered, a terminal's size.
+    fn share_out_room(&self, freed: &Freed) {
+        if !freed.was_floating {
+            // If the last window has a status line now and we do not want one,
+            // remove it. Do this before `equal()`, which may change a height.
+            update_last_status(false);
+            let ead = p_ead(cstr::first);
+            if !Win::current().w_floating && p_ea() && (ead == b'b' || ead == freed.dir) {
+                // If the frame of the closed window contains the new current
+                // window, resize only that frame; otherwise resize all
+                // windows.
+                let same = Win::current().frame().fr_parent == self.win_frame;
+                equal(Some(Win::current()), same, freed.dir);
+            } else {
+                comp_positions();
+                fix_scroll(false);
+            }
+        } else if freed.had_cmdline_ruler && freed.next.w_status_height > 0 {
+            REDRAW_CMDLINE.set(true); // clear the cmdline 'ruler'
         }
-        Win::current().buffer().make_current();
-        // The cursor position may be invalid if the buffer changed after the
-        // window was last used.
-        revalidate_cursor(Win::current());
-    }
-
-    if !was_floating {
-        // If the last window has a status line now and we do not want one,
-        // remove it. Do this before `equal()`, which may change a height.
-        update_last_status(false);
-        let ead = p_ead(cstr::first);
-        if !Win::current().w_floating && p_ea() && (ead == b'b' || ead == dir) {
-            // If the frame of the closed window contains the new current
-            // window, resize only that frame; otherwise resize all windows.
-            let same = Win::current().frame().fr_parent == win_frame;
-            equal(Some(Win::current()), same, dir);
-        } else {
-            comp_positions();
-            fix_scroll(false);
-        }
-    } else if had_cmdline_ruler && wp.w_status_height > 0 {
-        REDRAW_CMDLINE.set(true); // clear the cmdline 'ruler'
-    }
-    if let Some(buf) = bufref.get() {
-        resize_terminal(buf);
-    }
-
-    if close_curwin {
-        let flags = WEE_CURWIN_INVALID | WEE_TRIGGER_ENTER_AUTOCMDS | WEE_TRIGGER_LEAVE_AUTOCMDS;
-        enter_ext(wp, flags);
-        if other_buffer {
-            // careful: after this `wp` and `win` may be invalid!
-            fire(AutoEvent::BufEnter, Buf::current());
+        if let Some(buf) = freed.bufref.get() {
+            resize_terminal(buf);
         }
     }
 
-    if FIRSTWIN.get() == LASTWIN.get()
-        && Win::current().w_locked
-        && Buf::current().b_locked_split != 0
-        && first_tab().next().is_some()
-    {
-        // The new `curwin` is the last window of the current tab page and is
-        // already being closed. Trigger TabLeave now: once its buffer is gone
-        // it is no longer safe to do so.
-        fire(AutoEvent::TabLeave, Buf::current());
-    }
-    drop(no_split);
+    /// Enter the next window when the closed one was current, with its
+    /// autocommands, and fire `TabLeave` while that is still safe.
+    fn enter_next(&self, freed: &Freed) {
+        if freed.close_curwin {
+            let flags =
+                WEE_CURWIN_INVALID | WEE_TRIGGER_ENTER_AUTOCMDS | WEE_TRIGGER_LEAVE_AUTOCMDS;
+            enter_ext(freed.next, flags);
+            if self.other_buffer {
+                // careful: after this `wp` and `win` may be invalid!
+                fire(AutoEvent::BufEnter, Buf::current());
+            }
+        }
 
-    // After closing the help or quickfix window, try restoring the layout from
-    // before it was opened.
-    if help_window || quickfix_window {
-        restore_layout(snapshot_index(help_window), close_curwin);
-    }
-
-    // If the window had 'diff' set and only one window with 'diff' is left in
-    // the tab page, and "closeoff" is in 'diffopt', run ":diffoff!".
-    if diffopt_closeoff() && had_diffmode && prev_curtab.is_current() {
-        let diffcount = windows().filter(|w| w.w_onebuf_opt.wo_diff != 0).count();
-        if diffcount == 1 {
-            run_cmd(c"diffoff!");
+        if FIRSTWIN.get() == LASTWIN.get()
+            && Win::current().w_locked
+            && Buf::current().b_locked_split != 0
+            && first_tab().next().is_some()
+        {
+            // The new `curwin` is the last window of the current tab page and
+            // is already being closed. Trigger TabLeave now: once its buffer
+            // is gone it is no longer safe to do so.
+            fire(AutoEvent::TabLeave, Buf::current());
         }
     }
 
-    Win::current().w_pos_changed = true;
-    if !was_floating {
-        redraw_all(UPD_NOT_VALID);
+    /// The layout from before a help or quickfix window, ":diffoff!" for a
+    /// lone 'diff' window, and the redraw.
+    fn restore_after(&self, freed: &Freed) {
+        // After closing the help or quickfix window, try restoring the layout
+        // from before it was opened.
+        if self.help_window || self.quickfix_window {
+            restore_layout(snapshot_index(self.help_window), freed.close_curwin);
+        }
+
+        // If the window had 'diff' set and only one window with 'diff' is left
+        // in the tab page, and "closeoff" is in 'diffopt', run ":diffoff!".
+        if diffopt_closeoff() && self.had_diffmode && self.prev_curtab.is_current() {
+            let diffcount = windows().filter(|w| w.w_onebuf_opt.wo_diff != 0).count();
+            if diffcount == 1 {
+                run_cmd(c"diffoff!");
+            }
+        }
+
+        Win::current().w_pos_changed = true;
+        if !freed.was_floating {
+            redraw_all(UPD_NOT_VALID);
+        }
     }
-    Ok(())
 }
 
 /// Which snapshot slot a help or quickfix window restores from.
