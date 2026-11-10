@@ -461,132 +461,106 @@ pub(crate) fn get_compl_len() -> usize {
 /// Returns true when the completion should stop without inserting anything
 /// (CTRL-X CTRL-Z).
 pub(crate) fn set_ctrl_x_mode(c: Key) -> bool {
-    let mut retval = false;
-    'chord: {
-        match c.kind() {
-            // Scroll the window one line up or down.
-            KeyKind::Char(Key::CTRL_E | Key::CTRL_Y) => {
-                CTRL_X_MODE.set(CtrlXMode::Scroll);
-                EDIT_SUBMODE.set(Some(gettext(if STATE.get() & REPLACE_FLAG == 0 {
-                    c" (insert) Scroll (^E/^Y)"
-                } else {
-                    c" (replace) Scroll (^E/^Y)"
-                })));
-                EDIT_SUBMODE_PRE.set(None);
-                REDRAW_MODE.set(true);
-                break 'chord;
-            }
-            // Complete whole lines.
-            KeyKind::Char(Key::CTRL_L) => {
-                CTRL_X_MODE.set(CtrlXMode::WholeLine);
-                break 'chord;
-            }
-            // Complete file names.
-            KeyKind::Char(Key::CTRL_F) => {
-                CTRL_X_MODE.set(CtrlXMode::Files);
-                break 'chord;
-            }
-            // Complete words from a dictionary.
-            KeyKind::Char(Key::CTRL_K) => {
-                CTRL_X_MODE.set(CtrlXMode::Dictionary);
-                break 'chord;
-            }
-            KeyKind::Char(Key::CTRL_R) => {
-                // CTRL-R followed by '=' is an expression register, not
-                // register completion: leave the mode alone.
-                if !vpeekc().is('=') {
-                    CTRL_X_MODE.set(CtrlXMode::Register);
-                }
-                break 'chord;
-            }
-            // Complete words from a thesaurus.
-            KeyKind::Char(Key::CTRL_T) => {
-                CTRL_X_MODE.set(CtrlXMode::Thesaurus);
-                break 'chord;
-            }
-            // User defined completion.
-            KeyKind::Char(Key::CTRL_U) => {
-                CTRL_X_MODE.set(CtrlXMode::Function);
-                break 'chord;
-            }
-            // Omni completion.
-            KeyKind::Char(Key::CTRL_O) => {
-                CTRL_X_MODE.set(CtrlXMode::Omni);
-                break 'chord;
-            }
-            // Complete spelling suggestions.
-            KeyKind::Char(LOWER_S | Key::CTRL_S) => {
-                CTRL_X_MODE.set(CtrlXMode::Spell);
-                let no_emsg = Suppress::emsg(); // avoid E756 twice
-                spell_back_to_badword();
-                drop(no_emsg);
-                break 'chord;
-            }
-            // Complete tag names.
-            KeyKind::Char(Key::CTRL_RSB) => {
-                CTRL_X_MODE.set(CtrlXMode::Tags);
-                break 'chord;
-            }
-            // Complete keywords from included files.
-            KeyKind::Special(SpecialKey::STab) | KeyKind::Char(Key::CTRL_I) => {
-                CTRL_X_MODE.set(CtrlXMode::PathPatterns);
-                break 'chord;
-            }
-            // Complete definitions from included files.
-            KeyKind::Char(Key::CTRL_D) => {
-                CTRL_X_MODE.set(CtrlXMode::PathDefines);
-                break 'chord;
-            }
-            // Complete Vim commands.
-            KeyKind::Char(Key::CTRL_V | Key::CTRL_Q) => {
-                CTRL_X_MODE.set(CtrlXMode::Cmdline);
-                break 'chord;
-            }
-            // Stop completion.
-            KeyKind::Char(Key::CTRL_Z) => {
-                CTRL_X_MODE.set(CtrlXMode::Normal);
-                EDIT_SUBMODE.set(None);
-                REDRAW_MODE.set(true);
-                retval = true;
-                break 'chord;
-            }
-            // CTRL-X CTRL-P means LOCAL expansion if nothing interrupted (we
-            // just started CTRL-X mode, or there were enough CTRL-X's to
-            // cancel the previous mode, say ^X^F^X^X^P or ^P^X^X^X^P); normal
-            // expansion when interrupting a different mode (^X^F^X^P or
-            // ^P^X^X^P).  Nothing changes when interrupting mode 0 — the flag
-            // does not change when going to ADDING mode.  -- Acevedo
-            KeyKind::Char(Key::CTRL_P | Key::CTRL_N) => {
-                if COMPL_CONT_STATUS.get() & CONT_INTRPT == 0 {
-                    COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() | CONT_LOCAL);
-                } else if COMPL_CONT_MODE.get() != CtrlXMode::Normal {
-                    COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() & !CONT_LOCAL);
-                }
-                // C: FALLTHROUGH into `default`, which is the tail below.
-            }
-            _ => {}
-        }
-        // C's `default:` arm, which CTRL-P and CTRL-N fall into.
-        //
-        // After at least two CTRL-X's, for modes != 0 we clear
-        // `COMPL_CONT_STATUS` (as if CTRL-X mode had just started); for mode 0
-        // we set `COMPL_CONT_MODE` to an impossible value.  Either way ^X^X
-        // restarts the same mode, avoiding ADDING mode.  Undocumented: in a
-        // mode != 0, ^X^P and ^X^X^P start 'complete' and local ^P expansions
-        // respectively; in mode 0 an extra ^X is needed, since ^X^P goes to
-        // ADDING mode.  -- Acevedo
-        if c == Key::CTRL_X {
-            if COMPL_CONT_MODE.get() != CtrlXMode::Normal {
-                COMPL_CONT_STATUS.set(0);
+    let mode = match c.kind() {
+        // Scroll the window one line up or down.
+        KeyKind::Char(Key::CTRL_E | Key::CTRL_Y) => {
+            CTRL_X_MODE.set(CtrlXMode::Scroll);
+            EDIT_SUBMODE.set(Some(gettext(if STATE.get() & REPLACE_FLAG == 0 {
+                c" (insert) Scroll (^E/^Y)"
             } else {
-                COMPL_CONT_MODE.set(CtrlXMode::NotDefinedYet);
-            }
+                c" (replace) Scroll (^E/^Y)"
+            })));
+            EDIT_SUBMODE_PRE.set(None);
+            REDRAW_MODE.set(true);
+            return false;
         }
-        CTRL_X_MODE.set(CtrlXMode::Normal);
-        EDIT_SUBMODE.set(None);
-        REDRAW_MODE.set(true);
+        // Complete whole lines.
+        KeyKind::Char(Key::CTRL_L) => CtrlXMode::WholeLine,
+        // Complete file names.
+        KeyKind::Char(Key::CTRL_F) => CtrlXMode::Files,
+        // Complete words from a dictionary.
+        KeyKind::Char(Key::CTRL_K) => CtrlXMode::Dictionary,
+        KeyKind::Char(Key::CTRL_R) => {
+            // CTRL-R followed by '=' is an expression register, not
+            // register completion: leave the mode alone.
+            if vpeekc().is('=') {
+                return false;
+            }
+            CtrlXMode::Register
+        }
+        // Complete words from a thesaurus.
+        KeyKind::Char(Key::CTRL_T) => CtrlXMode::Thesaurus,
+        // User defined completion.
+        KeyKind::Char(Key::CTRL_U) => CtrlXMode::Function,
+        // Omni completion.
+        KeyKind::Char(Key::CTRL_O) => CtrlXMode::Omni,
+        // Complete spelling suggestions.
+        KeyKind::Char(LOWER_S | Key::CTRL_S) => {
+            CTRL_X_MODE.set(CtrlXMode::Spell);
+            let _no_emsg = Suppress::emsg(); // avoid E756 twice
+            spell_back_to_badword();
+            return false;
+        }
+        // Complete tag names.
+        KeyKind::Char(Key::CTRL_RSB) => CtrlXMode::Tags,
+        // Complete keywords from included files.
+        KeyKind::Special(SpecialKey::STab) | KeyKind::Char(Key::CTRL_I) => CtrlXMode::PathPatterns,
+        // Complete definitions from included files.
+        KeyKind::Char(Key::CTRL_D) => CtrlXMode::PathDefines,
+        // Complete Vim commands.
+        KeyKind::Char(Key::CTRL_V | Key::CTRL_Q) => CtrlXMode::Cmdline,
+        // Stop completion.
+        KeyKind::Char(Key::CTRL_Z) => {
+            CTRL_X_MODE.set(CtrlXMode::Normal);
+            EDIT_SUBMODE.set(None);
+            REDRAW_MODE.set(true);
+            return true;
+        }
+        // CTRL-X CTRL-P means LOCAL expansion if nothing interrupted (we
+        // just started CTRL-X mode, or there were enough CTRL-X's to
+        // cancel the previous mode, say ^X^F^X^X^P or ^P^X^X^X^P); normal
+        // expansion when interrupting a different mode (^X^F^X^P or
+        // ^P^X^X^P).  Nothing changes when interrupting mode 0 — the flag
+        // does not change when going to ADDING mode.  -- Acevedo
+        KeyKind::Char(Key::CTRL_P | Key::CTRL_N) => {
+            if COMPL_CONT_STATUS.get() & CONT_INTRPT == 0 {
+                COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() | CONT_LOCAL);
+            } else if COMPL_CONT_MODE.get() != CtrlXMode::Normal {
+                COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() & !CONT_LOCAL);
+            }
+            // C: FALLTHROUGH into `default`.
+            leave_ctrl_x_mode(c);
+            return false;
+        }
+        _ => {
+            leave_ctrl_x_mode(c);
+            return false;
+        }
+    };
+    CTRL_X_MODE.set(mode);
+    false
+}
+
+/// C's `default:` arm of [`set_ctrl_x_mode`], which CTRL-P and CTRL-N fall
+/// into: back to plain CTRL-X mode.
+///
+/// After at least two CTRL-X's, for modes != 0 we clear `COMPL_CONT_STATUS`
+/// (as if CTRL-X mode had just started); for mode 0 we set
+/// `COMPL_CONT_MODE` to an impossible value.  Either way ^X^X restarts the
+/// same mode, avoiding ADDING mode.  Undocumented: in a mode != 0, ^X^P and
+/// ^X^X^P start 'complete' and local ^P expansions respectively; in mode 0
+/// an extra ^X is needed, since ^X^P goes to ADDING mode.  -- Acevedo
+fn leave_ctrl_x_mode(c: Key) {
+    if c == Key::CTRL_X {
+        if COMPL_CONT_MODE.get() != CtrlXMode::Normal {
+            COMPL_CONT_STATUS.set(0);
+        } else {
+            COMPL_CONT_MODE.set(CtrlXMode::NotDefinedYet);
+        }
     }
-    retval
+    CTRL_X_MODE.set(CtrlXMode::Normal);
+    EDIT_SUBMODE.set(None);
+    REDRAW_MODE.set(true);
 }
 
 /// The `mode` string `complete_info()` reports, empty when no completion is
