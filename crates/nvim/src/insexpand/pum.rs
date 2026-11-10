@@ -245,41 +245,39 @@ pub(crate) fn clear_adjusted_leader() {
 /// does not contain, so the leader has that text prepended; the result is
 /// cached in `adjusted_leader`, which [`clear_adjusted_leader`] drops.
 pub(crate) fn get_leader_for_startcol(match_0: MatchId, cached: bool) -> ComplStr {
-    'theend: {
-        if cpt_sources().is_unset() {
-            break 'theend;
-        }
-        let Some(cpt_idx) = match_0.with(ComplItem::cpt_source) else {
-            break 'theend;
-        };
-        let startcol = cpt_sources().row_at(cpt_idx).cs_startcol;
+    if cpt_sources().is_unset() {
+        return compl_leader();
+    }
+    let Some(cpt_idx) = match_0.with(ComplItem::cpt_source) else {
+        return compl_leader();
+    };
+    let startcol = cpt_sources().row_at(cpt_idx).cs_startcol;
 
-        if compl_leader().is_unset() {
-            // The leader is not set yet (`'autocomplete'` fires before
-            // `compl_leader` is initialised). Matches starting at or after
-            // `COMPL_COL` fall back to the original text; matches starting
-            // *before* it carry pre-`COMPL_COL` text that must not be
-            // compared with the original text, so the empty
-            // `compl_leader` is returned to mean "no prefix filter".
-            if startcol.is_none_or(|start| start >= COMPL_COL.get()) {
-                return compl_orig_text();
-            }
-            return compl_leader();
+    if compl_leader().is_unset() {
+        // The leader is not set yet (`'autocomplete'` fires before
+        // `compl_leader` is initialised). Matches starting at or after
+        // `COMPL_COL` fall back to the original text; matches starting
+        // *before* it carry pre-`COMPL_COL` text that must not be
+        // compared with the original text, so the empty
+        // `compl_leader` is returned to mean "no prefix filter".
+        if startcol.is_none_or(|start| start >= COMPL_COL.get()) {
+            return compl_orig_text();
         }
+        return compl_leader();
+    }
 
-        if COMPL_COL.get() <= ColNr::ZERO {
-            break 'theend;
-        }
-        if let Some(startcol) = startcol.filter(|&start| start < COMPL_COL.get()) {
-            let prepend_len = usize::try_from(COMPL_COL.get() - startcol).unwrap_or(0);
-            let new_length = prepend_len + compl_leader().len();
-            if cached && new_length == adjusted_leader().len() && !adjusted_leader().is_unset() {
-                return adjusted_leader();
-            }
-            adjusted_leader().clear();
-            prepend_startcol_text(adjusted_leader(), compl_leader(), startcol);
+    if COMPL_COL.get() <= ColNr::ZERO {
+        return compl_leader();
+    }
+    if let Some(startcol) = startcol.filter(|&start| start < COMPL_COL.get()) {
+        let prepend_len = usize::try_from(COMPL_COL.get() - startcol).unwrap_or(0);
+        let new_length = prepend_len + compl_leader().len();
+        if cached && new_length == adjusted_leader().len() && !adjusted_leader().is_unset() {
             return adjusted_leader();
         }
+        adjusted_leader().clear();
+        prepend_startcol_text(adjusted_leader(), compl_leader(), startcol);
+        return adjusted_leader();
     }
     compl_leader()
 }
