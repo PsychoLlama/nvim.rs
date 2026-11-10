@@ -100,7 +100,7 @@ pub fn do_autocmd(excmd: &mut ExArg, forceit: ::core::ffi::c_int) {
         }
 
         cmd = if at(cmd_at) != 0 {
-            let Some(expanded) = expand_sfile(cstr::until_nul(&line[cmd_at..])) else {
+            let Ok(expanded) = expand_sfile(cstr::until_nul(&line[cmd_at..])) else {
                 return;
             };
             expanded

@@ -563,6 +563,7 @@ fn where_a_line_came_from_expands_in_every_source() {
 #[test]
 fn an_item_with_nothing_to_stand_for_says_why() {
     use crate::ex_docmd::{Expansion, eval_vars, expand_sfile};
+    use crate::types::Failed;
     let _fx = Fixture::new();
     let failed = |text: &std::ffi::CStr, at: usize| match eval_vars(text, at, None, true) {
         Expansion::Refused(msg) => msg.to_string_lossy().into_owned(),
@@ -589,10 +590,7 @@ fn an_item_with_nothing_to_stand_for_says_why() {
     );
     // `<sfile>` in an autocommand's command, read outside any script: the
     // quoted one stays, without its backslash; the bare one fails.
-    assert_eq!(expand_sfile(b"echo 1"), Some(b"echo 1".to_vec()));
-    assert_eq!(
-        expand_sfile(b"x \\<sfile> y"),
-        Some(b"x <sfile> y".to_vec())
-    );
-    assert_eq!(expand_sfile(b"x <sfile>"), None);
+    assert_eq!(expand_sfile(b"echo 1"), Ok(b"echo 1".to_vec()));
+    assert_eq!(expand_sfile(b"x \\<sfile> y"), Ok(b"x <sfile> y".to_vec()));
+    assert_eq!(expand_sfile(b"x <sfile>"), Err(Failed));
 }

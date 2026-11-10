@@ -92,6 +92,9 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let (expanded, errormsg) = match eval_vars(s, 0, None, false) {
             Expansion::Text { text, .. } => (Some(ThinCString::from_vec(text)), None),
             Expansion::Refused(msg) => (None, Some(msg)),
+            // Upstream reports even a quiet refusal, as an empty error
+            // line ("" is its message); `:verbose` users see it.
+            Expansion::Quiet => (None, Some(c"")),
             Expansion::Skip(_) | Expansion::Quoted => (None, None),
         };
         drop(no_emsg);

@@ -146,7 +146,7 @@ impl ExArg<'_> {
                 true,
             );
             let (mut repl, srclen, escaped) = match found {
-                Expansion::Refused(msg) if msg.is_empty() => return Err(CmdError::Quiet),
+                Expansion::Quiet => return Err(CmdError::Quiet),
                 Expansion::Refused(msg) => return Err(CmdError::Message(msg.to_owned())),
                 Expansion::Skip(len) => {
                     at += len;
@@ -326,13 +326,12 @@ pub(crate) enum Expansion {
         used: usize,
         escaped: bool,
     },
-    /// The expansion failed; the message is empty when there is nothing to
-    /// say (a `<cword>` with no word, say), and the caller stops.
+    /// The expansion failed with this message, and the caller stops.
     Refused(&'static CStr),
+    /// The expansion failed with nothing to say (a `<cword>` with no word,
+    /// a `<cfile>` whose lookup already reported), and the caller stops.
+    Quiet,
 }
-
-/// The empty message an expansion that failed quietly answers.
-const QUIET: &CStr = c"";
 
 /// Expand the special item at `at` in `src` (`%`, `#`, `<cword>`, ...),
 /// with any `:p:h`-style modifiers after it.
@@ -380,7 +379,7 @@ fn text_under_cursor(spec_idx: usize, used: usize) -> Expansion {
     };
     let ident = ident_under_cursor(what);
     if ident.is_empty() {
-        return Expansion::Refused(QUIET);
+        return Expansion::Quiet;
     }
     Expansion::Text {
         text: ident,
@@ -496,7 +495,7 @@ fn item_name(
         SPEC_HASH => alternate_name(text, used, lnum)?,
         SPEC_CFILE => {
             let name = file_name_at_cursor(FileNameOpts::MESS | FileNameOpts::HYP, 1, None)
-                .ok_or(Expansion::Refused(QUIET))?;
+                .ok_or(Expansion::Quiet)?;
             Named::path(name.as_cstr().to_owned())
         }
         SPEC_AFILE => Named::path(autocmd_file_name().map_err(Expansion::Refused)?),
@@ -575,7 +574,7 @@ fn alternate_name(
         let oldfiles = get_vim_var_list_handle(Vv::Oldfiles);
         let mut numbuf = NumBuf::new();
         let name = list_find_str(oldfiles.as_deref(), i - 1, &mut numbuf)
-            .map_err(|Failed| Expansion::Refused(QUIET))?;
+            .map_err(|Failed| Expansion::Quiet)?;
         return Ok(Named::path(name.to_owned()));
     }
     if i == 0 && byte(1) == b'<' && *used > 1 {
@@ -632,8 +631,9 @@ fn number(n: impl core::fmt::Display) -> CString {
 
 /// Expand every `<sfile>` in `arg`, in a fresh copy.
 ///
-/// Answers `None` after reporting, when an expansion failed.
-pub(crate) fn expand_sfile(arg: &[u8]) -> Option<Vec<u8>> {
+/// Answers `Err(Failed)` when an expansion failed, its message (if it had
+/// one) already out.
+pub(crate) fn expand_sfile(arg: &[u8]) -> Result<Vec<u8>, Failed> {
     let mut result = arg.to_vec();
     result.push(0);
     let mut p = 0;
@@ -645,11 +645,10 @@ pub(crate) fn expand_sfile(arg: &[u8]) -> Option<Vec<u8>> {
         let src = CStr::from_bytes_until_nul(&result).expect("terminated just above");
         match eval_vars(src, p, None, true) {
             Expansion::Refused(msg) => {
-                if !msg.is_empty() {
-                    emsg(msg);
-                }
-                return None;
+                emsg(msg);
+                return Err(Failed);
             }
+            Expansion::Quiet => return Err(Failed),
             Expansion::Skip(len) => p += len,
             // The backslash goes; the item stays.
             Expansion::Quoted => {
@@ -662,7 +661,7 @@ pub(crate) fn expand_sfile(arg: &[u8]) -> Option<Vec<u8>> {
         }
     }
     result.pop();
-    Some(result)
+    Ok(result)
 }
 
 #[cfg(test)]
