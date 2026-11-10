@@ -330,6 +330,20 @@ pub fn update_screen() -> Result<(), Failed> {
         return Err(Failed);
     }
 
+    let (redr_type, hl_changed) = begin_redraw(is_stl_global);
+    draw_global_elements(redr_type);
+    update_buffer_state(redr_type, hl_changed);
+    redraw_windows();
+    finish_redraw(STILL_MAY_INTRO.get());
+    Ok(())
+}
+
+/// Take the pending redraw type, mark the redraw as started and bring the
+/// default grid to where the windows can be drawn on it: the scrolled
+/// messages taken back, a CLEAR done (after which the type is
+/// UPD_NOT_VALID), the message area cleared. Answers the type the rest of
+/// [`update_screen`] works to and whether the highlights changed.
+fn begin_redraw(is_stl_global: bool) -> (c_int, bool) {
     let mut redr_type = MUST_REDRAW.get();
     // Reset now, so that a redraw asked for while redrawing -- by
     // asynchronous scrolling, by `update_topline` in `win_update`, or by a
@@ -398,7 +412,12 @@ pub fn update_screen() -> Result<(), Failed> {
     }
 
     ui_comp_set_screen_valid(true);
+    (redr_type, hl_changed)
+}
 
+/// Start the decoration providers and draw what belongs to no window: the
+/// current window's redraw type settled first, then the tab line.
+fn draw_global_elements(redr_type: c_int) {
     decor_providers_start();
 
     // The "start" callback may have changed highlights used by the global
@@ -450,10 +469,11 @@ pub fn update_screen() -> Result<(), Failed> {
         }
         draw_tabline();
     }
+}
 
-    update_buffer_state(redr_type, hl_changed);
-
-    // Top to bottom through the windows, redrawing the ones that need it.
+/// Top to bottom through the windows, redrawing the ones that need it,
+/// then the separator connectors over all of them.
+fn redraw_windows() {
     let mut did_one = false;
     SearchHl::current().forget_regprog();
 
@@ -502,7 +522,13 @@ pub fn update_screen() -> Result<(), Failed> {
     }
 
     end_search_hl();
+}
 
+/// After the windows: the popup menu, the buffers' change marks cleared,
+/// the redraw marked done, then what goes over the windows last -- the
+/// title, the mode, the intro (while `still_may_intro`) and a repeated
+/// message.
+fn finish_redraw(still_may_intro: bool) {
     if pum_drawn() && MUST_REDRAW_PUM.get() {
         win_check_ns_hl(Win::current_or_none());
         pum_redraw();
@@ -529,7 +555,7 @@ pub fn update_screen() -> Result<(), Failed> {
         showmode();
     }
 
-    if STILL_MAY_INTRO.get() {
+    if still_may_intro {
         intro_message(false);
     }
     repeat_message();
@@ -541,7 +567,6 @@ pub fn update_screen() -> Result<(), Failed> {
     if !ui_has(UI_CMDLINE) {
         CMDLINE_WAS_LAST_DRAWN.set(false);
     }
-    Ok(())
 }
 
 /// The search-highlight matcher the whole redraw shares: a name for the
