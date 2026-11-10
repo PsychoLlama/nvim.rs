@@ -93,124 +93,15 @@ pub fn showmode() -> c_int {
         let save_lines_left = LINES_LEFT.get();
         LINES_LEFT.set(0);
 
-        let put = |s: &'static CStr| msg_str_hl(s, hl_id, false);
-        let put_translated = |s: &'static CStr| msg_str_hl(gettext(s), hl_id, false);
-
         if do_mode {
-            put(c"--");
+            msg_str_hl(c"--", hl_id, false);
             if let Some(submode) = EDIT_SUBMODE.get()
                 && !shortmess(ShmFlag::COMPLETIONMENU)
             {
-                // CTRL-X in Insert mode. These get long, so they are budgeted
-                // against the room left rather than allowed to wrap; an
-                // external message UI imposes no limit of its own.
-                // `EDIT_SUBMODE_EXTRA` is preferred over `EDIT_SUBMODE`.
-                length = if ui_has(UI_MESSAGES) {
-                    c_int::MAX
-                } else {
-                    (ROWS.get() - MSG_ROW.get()) * COLUMNS.get() - 3
-                };
-                let pre = EDIT_SUBMODE_PRE.get();
-                // A copy: drawing it runs the message machinery.
-                let extra = EDIT_SUBMODE_EXTRA.with(Clone::clone);
-                if let Some(extra) = &extra {
-                    length -= vim_strsize_cstr(extra.as_cstr());
-                }
-                if length > 0 {
-                    if let Some(pre) = pre {
-                        length -= vim_strsize_cstr(pre);
-                    }
-                    if length - vim_strsize_cstr(submode) > 0 {
-                        if let Some(pre) = pre {
-                            msg_str_hl(pre, hl_id, false);
-                        }
-                        msg_str_hl(submode, hl_id, false);
-                    }
-                    if let Some(extra) = &extra {
-                        put(c" ");
-                        let sub_id = if EDIT_SUBMODE_HIGHL.get() < HLF_COUNT {
-                            EDIT_SUBMODE_HIGHL.get()
-                        } else {
-                            hl_id
-                        };
-                        msg_str_hl(extra.as_cstr(), sub_id, false);
-                    }
-                }
+                show_submode(submode, hl_id);
             } else {
-                // The mode itself. Not a `match`: these are tests on
-                // different variables, in upstream's precedence order.
-                if STATE.get() & MODE_TERMINAL != 0 {
-                    put_translated(c" TERMINAL");
-                } else if STATE.get() & VREPLACE_FLAG != 0 {
-                    put_translated(c" VREPLACE");
-                } else if STATE.get() & REPLACE_FLAG != 0 {
-                    put_translated(c" REPLACE");
-                } else if STATE.get() & MODE_INSERT != 0 {
-                    if p_ri() {
-                        put_translated(c" REVERSE");
-                    }
-                    put_translated(c" INSERT");
-                } else if matches!(
-                    RESTART_EDIT.get().as_byte(),
-                    Some(b'I' | b'i' | b'a' | b'A')
-                ) {
-                    if Buf::current().terminal.is_null() {
-                        put_translated(c" (insert)");
-                    } else {
-                        put_translated(c" (terminal)");
-                    }
-                } else if RESTART_EDIT.get().is('R') {
-                    put_translated(c" (replace)");
-                } else if RESTART_EDIT.get().is('V') {
-                    put_translated(c" (vreplace)");
-                }
-
-                if STATE.get() & MODE_LANGMAP != 0 {
-                    if Win::current().w_onebuf_opt.wo_arab != 0 {
-                        put_translated(c" Arabic");
-                    } else if let Some(keymap_name) = keymap_str(Win::current()) {
-                        // Shown only when it would have fitted upstream's
-                        // `MAXPATHL` buffer.
-                        let name = keymap_name.as_bytes();
-                        if name.len() + 3 < MAXPATHL as usize {
-                            let mut text = Vec::with_capacity(name.len() + 4);
-                            text.extend_from_slice(b" (");
-                            text.extend_from_slice(name);
-                            text.extend_from_slice(b")");
-                            let text = CString::new(text).expect("a keymap name holds no NUL");
-                            msg_str_hl(&text, hl_id, false);
-                        }
-                    }
-                }
-
-                if STATE.get() & MODE_INSERT != 0 && p_paste() {
-                    put_translated(c" (paste)");
-                }
-
-                if visual_active() {
-                    // Upstream spells this as arithmetic over a `switch`,
-                    // and does not concatenate the two words: the whole
-                    // phrase is one translatable string.
-                    //
-                    // Its `case 3` -- blockwise AND linewise at once -- ends
-                    // up in the SELECT BLOCK default; `VIsual_mode` cannot
-                    // be both, so nothing observes the difference.
-                    put_translated(
-                        match (
-                            visual_select(),
-                            visual_mode().is_block(),
-                            visual_mode().is_line(),
-                        ) {
-                            (false, true, _) => c" VISUAL BLOCK",
-                            (false, _, true) => c" VISUAL LINE",
-                            (false, _, _) => c" VISUAL",
-                            (true, true, _) => c" SELECT BLOCK",
-                            (true, _, true) => c" SELECT LINE",
-                            (true, _, _) => c" SELECT",
-                        },
-                    );
-                }
-                put(c" --");
+                show_mode_name(hl_id);
+                msg_str_hl(c" --", hl_id, false);
             }
             need_clear = true;
         }
@@ -253,6 +144,129 @@ pub fn showmode() -> c_int {
     CLEAR_CMDLINE.set(false);
 
     length
+}
+
+/// The CTRL-X submode text Insert-mode completion shows in place of the
+/// mode: `EDIT_SUBMODE_PRE`, the submode and `EDIT_SUBMODE_EXTRA`. These get
+/// long, so they are budgeted against the room left rather than allowed to
+/// wrap; an external message UI imposes no limit of its own.
+/// `EDIT_SUBMODE_EXTRA` is preferred over `EDIT_SUBMODE`.
+fn show_submode(submode: &'static CStr, hl_id: c_int) {
+    let mut room = if ui_has(UI_MESSAGES) {
+        c_int::MAX
+    } else {
+        (ROWS.get() - MSG_ROW.get()) * COLUMNS.get() - 3
+    };
+    let pre = EDIT_SUBMODE_PRE.get();
+    // A copy: drawing it runs the message machinery.
+    let extra = EDIT_SUBMODE_EXTRA.with(Clone::clone);
+    if let Some(extra) = &extra {
+        room -= vim_strsize_cstr(extra.as_cstr());
+    }
+    if room <= 0 {
+        return;
+    }
+    if let Some(pre) = pre {
+        room -= vim_strsize_cstr(pre);
+    }
+    if room - vim_strsize_cstr(submode) > 0 {
+        if let Some(pre) = pre {
+            msg_str_hl(pre, hl_id, false);
+        }
+        msg_str_hl(submode, hl_id, false);
+    }
+    if let Some(extra) = &extra {
+        msg_str_hl(c" ", hl_id, false);
+        let sub_id = if EDIT_SUBMODE_HIGHL.get() < HLF_COUNT {
+            EDIT_SUBMODE_HIGHL.get()
+        } else {
+            hl_id
+        };
+        msg_str_hl(extra.as_cstr(), sub_id, false);
+    }
+}
+
+/// The mode itself, between `--` and ` --`: the editing mode, the keymap,
+/// `(paste)` and the Visual mode, each a translated word or phrase.
+fn show_mode_name(hl_id: c_int) {
+    let put_translated = |s: &'static CStr| msg_str_hl(gettext(s), hl_id, false);
+
+    // Not a `match`: these are tests on different variables, in upstream's
+    // precedence order.
+    if STATE.get() & MODE_TERMINAL != 0 {
+        put_translated(c" TERMINAL");
+    } else if STATE.get() & VREPLACE_FLAG != 0 {
+        put_translated(c" VREPLACE");
+    } else if STATE.get() & REPLACE_FLAG != 0 {
+        put_translated(c" REPLACE");
+    } else if STATE.get() & MODE_INSERT != 0 {
+        if p_ri() {
+            put_translated(c" REVERSE");
+        }
+        put_translated(c" INSERT");
+    } else if matches!(
+        RESTART_EDIT.get().as_byte(),
+        Some(b'I' | b'i' | b'a' | b'A')
+    ) {
+        if Buf::current().terminal.is_null() {
+            put_translated(c" (insert)");
+        } else {
+            put_translated(c" (terminal)");
+        }
+    } else if RESTART_EDIT.get().is('R') {
+        put_translated(c" (replace)");
+    } else if RESTART_EDIT.get().is('V') {
+        put_translated(c" (vreplace)");
+    }
+
+    if STATE.get() & MODE_LANGMAP != 0 {
+        if Win::current().w_onebuf_opt.wo_arab != 0 {
+            put_translated(c" Arabic");
+        } else if let Some(keymap_name) = keymap_str(Win::current()) {
+            // Shown only when it would have fitted upstream's `MAXPATHL`
+            // buffer.
+            let name = keymap_name.as_bytes();
+            if name.len() + 3 < MAXPATHL as usize {
+                let mut text = Vec::with_capacity(name.len() + 4);
+                text.extend_from_slice(b" (");
+                text.extend_from_slice(name);
+                text.extend_from_slice(b")");
+                let text = CString::new(text).expect("a keymap name holds no NUL");
+                msg_str_hl(&text, hl_id, false);
+            }
+        }
+    }
+
+    if STATE.get() & MODE_INSERT != 0 && p_paste() {
+        put_translated(c" (paste)");
+    }
+
+    if visual_active() {
+        put_translated(visual_mode_name(
+            visual_select(),
+            visual_mode().is_block(),
+            visual_mode().is_line(),
+        ));
+    }
+}
+
+/// The Visual mode's phrase, untranslated: Select or Visual, blockwise,
+/// linewise or neither.
+///
+/// Upstream spells this as arithmetic over a `switch`, and does not
+/// concatenate the two words: the whole phrase is one translatable string.
+/// Its `case 3` -- blockwise AND linewise at once -- ends up in the SELECT
+/// BLOCK default; `VIsual_mode` cannot be both, so nothing observes the
+/// difference.
+fn visual_mode_name(select: bool, block: bool, line: bool) -> &'static CStr {
+    match (select, block, line) {
+        (false, true, _) => c" VISUAL BLOCK",
+        (false, _, true) => c" VISUAL LINE",
+        (false, _, _) => c" VISUAL",
+        (true, true, _) => c" SELECT BLOCK",
+        (true, _, true) => c" SELECT LINE",
+        (true, _, _) => c" SELECT",
+    }
 }
 
 /// Put the message cursor where a mode message goes.
@@ -362,4 +376,22 @@ pub fn comp_col() {
     RU_COL.set((COLUMNS.get() - ru_width).max(1));
 
     set_vim_var_nr(Vv::Echospace, VarNumber::from(SC_COL.get() - 1));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::visual_mode_name;
+
+    #[test]
+    fn the_visual_phrase_names_select_and_the_shape() {
+        assert_eq!(visual_mode_name(false, false, false), c" VISUAL");
+        assert_eq!(visual_mode_name(false, false, true), c" VISUAL LINE");
+        assert_eq!(visual_mode_name(false, true, false), c" VISUAL BLOCK");
+        assert_eq!(visual_mode_name(true, false, false), c" SELECT");
+        assert_eq!(visual_mode_name(true, false, true), c" SELECT LINE");
+        // Both shapes at once (never seen) is upstream's SELECT BLOCK
+        // default, and blockwise wins for Visual too.
+        assert_eq!(visual_mode_name(true, true, true), c" SELECT BLOCK");
+        assert_eq!(visual_mode_name(false, true, true), c" VISUAL BLOCK");
+    }
 }
