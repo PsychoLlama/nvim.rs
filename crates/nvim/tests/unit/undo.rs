@@ -390,6 +390,11 @@ mod tree {
     /// A scratch buffer of the case's own, with no swap file, and every
     /// change its own undo step.
     fn scratch(fx: &Probe) {
+        // An earlier case's scrolled messages can leave 'cmdheight' grown
+        // past the room to split (E36), and the case would then run in
+        // buffer 1 with whatever undo tree that was left. Setting it back
+        // does not hand the rows back to the window: `:resize` does.
+        fx.run("set cmdheight& | resize");
         fx.run("new");
         fx.run("only!");
         fx.run("setlocal noswapfile undolevels=1000");

@@ -94,6 +94,10 @@ fn teardown(fx: &Probe<'_>) {
     fx.run("silent! delfunction Shape | delfunction Answer | delfunction Expr");
     fx.run("silent! delfunction Two");
     fx.run("silent! unlet g:answer g:t g:h g:f");
+    // `:move` reports "3 lines moved" on the shared screen, and the window
+    // commands after it grow 'cmdheight' over the scrolled rows.
+    fx.settle();
+    fx.run("set cmdheight& | resize");
     fx.home();
 }
 
