@@ -284,72 +284,100 @@ fn name_head(slang: &SpellLang) -> [u8; 2] {
 /// Parse `'spelllang'` and fill `window.w_s->b_langp`.
 ///
 /// Returns null on success, or an untranslated error message.
-pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
+pub fn parse_spelllang(window: Win) -> Result<(), OptError> {
     if RECURSIVE.get() {
         return Ok(());
     }
     RECURSIVE.set(true);
 
-    let mut region_cp = [0u8; 3];
-    let mut lang = [0u8; MAXWLEN + 1];
-    let mut use_region: Option<RegionAt> = None;
-    let mut dont_use_region = false;
-    let mut nobreak = false;
-    let mut ret_msg: Result<(), OptError> = Ok(());
-
     let bufref = BufRef::of_opt(window.buffer_or_none());
-
-    let mut ga: Vec<LangP> = Vec::new();
+    let mut parse = LangParse::new(window);
     clear_midword(window);
 
     // The SpellFileMissing autocommands may change 'spelllang' underfoot.
     let spl_copy = window.syn_block().b_p_spl.bytes().to_vec();
-
-    window.syn_block_mut().b_cjk = 0;
+    parse.window.syn_block_mut().b_cjk = 0;
 
     let mut splp: &[u8] = &spl_copy;
-    'names: while !splp.is_empty() {
+    let mut result = Ok(());
+    while !splp.is_empty() {
         let (part, rest) = split_option_part(splp, MAXWLEN, b",");
         splp = rest;
-        put_name(&mut lang, &part);
+        result = parse.take_name(&part, &bufref);
+        if result.is_err() {
+            break;
+        }
+    }
+
+    if result.is_ok() {
+        parse.add_spellfiles();
+        let LangParse {
+            mut window, mut ga, ..
+        } = parse;
+        lend_tables(&mut ga);
+        // Everything worked; publish the new list.
+        window.syn_block_mut().b_langp = ga;
+        redraw_later(window, UPD_NOT_VALID);
+    }
+
+    RECURSIVE.set(false);
+    result
+}
+
+/// What [`parse_spelllang`] carries from one `'spelllang'` name to the next
+/// and on into `'spellfile'`.
+#[derive(Debug)]
+struct LangParse {
+    window: Win,
+    /// The name being looked at, as a C string buffer: a region read
+    /// through [`RegionAt::Name`] points into it, so it is never cleared
+    /// between names (upstream's aliasing, kept).
+    lang: [u8; MAXWLEN + 1],
+    /// The region a file name carried, copied out of it.
+    region_cp: [u8; 3],
+    /// Where the region of the last name that had one is read from.
+    use_region: Option<RegionAt>,
+    /// Two names disagreed about the region, or one had none: the
+    /// `'spellfile'` entries take every region.
+    dont_use_region: bool,
+    /// Some language is NOBREAK, so the additions are assumed to be too.
+    nobreak: bool,
+    /// The languages found so far, in order.
+    ga: Vec<LangP>,
+}
+
+impl LangParse {
+    fn new(window: Win) -> Self {
+        LangParse {
+            window,
+            lang: [0u8; MAXWLEN + 1],
+            region_cp: [0u8; 3],
+            use_region: None,
+            dont_use_region: false,
+            nobreak: false,
+            ga: Vec::new(),
+        }
+    }
+
+    /// One `'spelllang'` name: its region split off, its language loaded if
+    /// it is not yet, and every file of that language added. An error when
+    /// a `SpellFileMissing` autocommand took the buffer or window away.
+    fn take_name(&mut self, part: &[u8], bufref: &BufRef) -> Result<(), OptError> {
+        put_name(&mut self.lang, part);
         let len = part.len();
-        let mut region: Option<RegionAt> = None;
 
-        if !valid_spelllang(cstr::in_bytes(&lang)) {
-            continue;
+        if !valid_spelllang(cstr::in_bytes(&self.lang)) {
+            return Ok(());
+        }
+        if cstr::until_nul(&self.lang) == b"cjk" {
+            self.window.syn_block_mut().b_cjk = 1;
+            return Ok(());
         }
 
-        if cstr::until_nul(&lang) == b"cjk" {
-            window.syn_block_mut().b_cjk = 1;
-            continue;
-        }
+        let filename = len > 4 && path_fnamecmp(&self.lang[len - 4..], b".spl") == 0;
+        let region = self.split_region(len, filename);
 
-        let filename = len > 4 && path_fnamecmp(&lang[len - 4..], b".spl") == 0;
-        if filename {
-            // The name is a file name; a region in it is pulled out.
-            let tail = tail_index(cstr::until_nul(&lang));
-            let at = lang[tail..len].iter().position(|&b| b == b'_');
-            match at.map(|at| tail + at) {
-                Some(p)
-                    if ascii_isalpha(lang[p + 1])
-                        && ascii_isalpha(lang[p + 2])
-                        && !ascii_isalpha(lang[p + 3]) =>
-                {
-                    put_name(&mut region_cp, &lang[p + 1..p + 3]);
-                    // Close the gap, terminator included.
-                    lang.copy_within(p + 3..len + 1, p);
-                    region = Some(RegionAt::Copy);
-                }
-                _ => dont_use_region = true,
-            }
-        } else if len > 3 && lang[len - 3] == b'_' {
-            region = Some(RegionAt::Name(len - 2));
-            lang[len - 3] = 0;
-        } else {
-            dont_use_region = true;
-        }
-
-        let name = cstr::until_nul(&lang).to_vec();
+        let name = cstr::until_nul(&self.lang).to_vec();
         let loaded = LOADED_LANGS.with(|langs| {
             langs
                 .iter()
@@ -359,12 +387,12 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
         if let Some(region) = region {
             // A region that disagrees with an earlier one disqualifies
             // regions for 'spellfile'.
-            if let Some(used) = use_region
-                && region_text(region, &lang, &region_cp) != region_text(used, &lang, &region_cp)
+            if let Some(used) = self.use_region
+                && self.region_text(region) != self.region_text(used)
             {
-                dont_use_region = true;
+                self.dont_use_region = true;
             }
-            use_region = Some(region);
+            self.use_region = Some(region);
         }
 
         // Not loaded yet: load it now.
@@ -374,22 +402,63 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
                     Some(slang) => {
                         register_lang(slang);
                     }
-                    None => lang[0] = 0,
+                    None => self.lang[0] = 0,
                 }
             } else {
                 spell_load_lang(&name);
                 // The autocommands may have destroyed the buffer being
                 // used, or closed the window.
-                if !bufref.valid() || !win_valid_any_tab(window.id()) {
-                    ret_msg = Err(c"E797: SpellFileMissing autocommand deleted buffer".into());
-                    break 'names;
+                if !bufref.valid() || !win_valid_any_tab(self.window.id()) {
+                    return Err(c"E797: SpellFileMissing autocommand deleted buffer".into());
                 }
             }
         }
 
-        // There can be several files for one language.
-        let name = cstr::until_nul(&lang).to_vec();
-        let region = region.map(|at| region_text(at, &lang, &region_cp).to_vec());
+        self.add_languages(filename, region);
+        Ok(())
+    }
+
+    /// Takes the region off the name in `lang` (`len` bytes): out of a file
+    /// name's tail into `region_cp`, or the `_xx` suffix of a language name
+    /// cut off in place. A name with no region disqualifies regions for
+    /// `'spellfile'`.
+    fn split_region(&mut self, len: usize, filename: bool) -> Option<RegionAt> {
+        let lang = &mut self.lang;
+        if filename {
+            // The name is a file name; a region in it is pulled out.
+            let tail = tail_index(cstr::until_nul(lang));
+            let at = lang[tail..len].iter().position(|&b| b == b'_');
+            match at.map(|at| tail + at) {
+                Some(p)
+                    if ascii_isalpha(lang[p + 1])
+                        && ascii_isalpha(lang[p + 2])
+                        && !ascii_isalpha(lang[p + 3]) =>
+                {
+                    put_name(&mut self.region_cp, &lang[p + 1..p + 3]);
+                    // Close the gap, terminator included.
+                    lang.copy_within(p + 3..len + 1, p);
+                    return Some(RegionAt::Copy);
+                }
+                _ => {}
+            }
+        } else if len > 3 && lang[len - 3] == b'_' {
+            lang[len - 3] = 0;
+            return Some(RegionAt::Name(len - 2));
+        }
+        self.dont_use_region = true;
+        None
+    }
+
+    /// The region string at `at`, as it reads now.
+    fn region_text(&self, at: RegionAt) -> &[u8] {
+        region_text(at, &self.lang, &self.region_cp)
+    }
+
+    /// Every loaded file of the language now in `lang` (there can be
+    /// several), each with the mask of the region asked for.
+    fn add_languages(&mut self, filename: bool, region: Option<RegionAt>) {
+        let name = cstr::until_nul(&self.lang).to_vec();
+        let region = region.map(|at| self.region_text(at).to_vec());
         for id in languages() {
             // The mask, whether the language is NOBREAK, and whether its
             // region is one it does not have.
@@ -426,21 +495,28 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
             }
 
             if region_mask != 0 {
-                ga.push(LangP {
-                    slang: id,
-                    sallang: None,
-                    replang: None,
-                    region: region_mask,
-                });
-                use_midword(id, window);
+                self.push(id, region_mask);
                 if lang_nobreak {
-                    nobreak = true;
+                    self.nobreak = true;
                 }
             }
         }
     }
 
-    if ret_msg.is_ok() {
+    /// Adds a language with its region mask.
+    fn push(&mut self, slang: LangId, region: c_int) {
+        self.ga.push(LangP {
+            slang,
+            sallang: None,
+            replang: None,
+            region,
+        });
+        use_midword(slang, self.window);
+    }
+
+    /// The internal word list, then each `'spellfile'` entry the names did
+    /// not already take, loaded if need be.
+    fn add_spellfiles(&mut self) {
         // Round 0 is the internal word list; each round after that is one
         // entry of 'spellfile'.
         let spf_copy = Win::current().syn_block().b_p_spf.bytes().to_vec();
@@ -448,110 +524,95 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
         let mut round = 0;
         while round == 0 || !spf.is_empty() {
             let spf_name = if round == 0 {
-                if INT_WORDLIST.with(Option::is_none) {
-                    round += 1;
-                    continue;
-                }
-                int_wordlist_spl()
+                INT_WORDLIST.with(Option::is_some).then(int_wordlist_spl)
             } else {
                 let (part, rest) = split_option_part(spf, MAXPATHL as usize - 4, b",");
                 spf = rest;
                 let spf_name = joined(&[&part, b".spl"], MAXPATHL as usize);
-
-                // Skip it if the loop above already took it.
-                let name = cstr::owned(&spf_name);
-                let taken = ga.iter().any(|lp| {
-                    LOADED_LANGS.with(|langs| {
-                        langs.get(lp.slang).is_some_and(|slang| {
-                            path_full_compare(&name, slang.sl_fname.as_cstr(), false, true)
-                                == EQUAL_FILES
-                        })
-                    })
-                });
-                if taken {
-                    round += 1;
-                    continue;
-                }
-                spf_name
+                // Skip it if the names already took it.
+                (!self.has_file(&spf_name)).then_some(spf_name)
             };
-
-            let name = cstr::owned(&spf_name);
-            let mut slang = LOADED_LANGS.with(|langs| {
-                langs
-                    .iter()
-                    .find(|(_, slang)| {
-                        path_full_compare(&name, slang.sl_fname.as_cstr(), false, true)
-                            == EQUAL_FILES
-                    })
-                    .map(|(id, _)| id)
-            });
-
-            if slang.is_none() {
-                // The language name includes the region; the region is
-                // ignored for these. The internal word list gets an
-                // arbitrary name.
-                if round == 0 {
-                    put_name(&mut lang, b"internal wordlist");
-                } else {
-                    let tail = &spf_name[tail_index(&spf_name)..];
-                    put_name(&mut lang, tail);
-                    // Truncate at ".encoding.add".
-                    if let Some(dot) = cstr::until_nul(&lang).iter().position(|&b| b == b'.') {
-                        lang[dot] = 0;
-                    }
-                }
-                match spell_load_file(&name, Some(cstr::until_nul(&lang)), true) {
-                    Some(mut loaded) => {
-                        // If any language has NOBREAK assume the additions
-                        // do too.
-                        if nobreak {
-                            loaded.sl_nobreak = true;
-                        }
-                        slang = Some(register_lang(loaded));
-                    }
-                    None => lang[0] = 0,
-                }
-            }
-
-            if let Some(id) = slang {
-                let mut region_mask = REGION_ALL;
-                if let Some(used) = use_region
-                    && !dont_use_region
-                {
-                    let used = region_text(used, &lang, &region_cp);
-                    let regions = with_lang(id, |slang| slang.sl_regions).unwrap_or_default();
-                    let c = find_region(&regions, used);
-                    if c != REGION_ALL {
-                        region_mask = 1 << c;
-                    } else if regions[0] != 0 {
-                        // This spell file covers other regions.
-                        region_mask = 0;
-                    }
-                }
-
-                if region_mask != 0 {
-                    ga.push(LangP {
-                        slang: id,
-                        sallang: None,
-                        replang: None,
-                        region: region_mask,
-                    });
-                    use_midword(id, window);
-                }
+            if let Some(spf_name) = spf_name {
+                self.add_spellfile(round == 0, &spf_name);
             }
             round += 1;
         }
-
-        lend_tables(&mut ga);
-
-        // Everything worked; publish the new list.
-        window.syn_block_mut().b_langp = ga;
-        redraw_later(window, UPD_NOT_VALID);
     }
 
-    RECURSIVE.set(false);
-    ret_msg
+    /// Whether a language already taken was loaded from `spf_name`.
+    fn has_file(&self, spf_name: &[u8]) -> bool {
+        let name = cstr::owned(spf_name);
+        self.ga.iter().any(|lp| {
+            LOADED_LANGS.with(|langs| {
+                langs.get(lp.slang).is_some_and(|slang| {
+                    path_full_compare(&name, slang.sl_fname.as_cstr(), false, true) == EQUAL_FILES
+                })
+            })
+        })
+    }
+
+    /// One spell file of `'spellfile'` (or the internal word list), loaded
+    /// unless it already is, and added with the region the names agreed on.
+    fn add_spellfile(&mut self, internal: bool, spf_name: &[u8]) {
+        let name = cstr::owned(spf_name);
+        let mut slang = LOADED_LANGS.with(|langs| {
+            langs
+                .iter()
+                .find(|(_, slang)| {
+                    path_full_compare(&name, slang.sl_fname.as_cstr(), false, true) == EQUAL_FILES
+                })
+                .map(|(id, _)| id)
+        });
+
+        if slang.is_none() {
+            // The language name includes the region; the region is ignored
+            // for these. The internal word list gets an arbitrary name.
+            if internal {
+                put_name(&mut self.lang, b"internal wordlist");
+            } else {
+                let tail = &spf_name[tail_index(spf_name)..];
+                put_name(&mut self.lang, tail);
+                // Truncate at ".encoding.add".
+                if let Some(dot) = cstr::until_nul(&self.lang).iter().position(|&b| b == b'.') {
+                    self.lang[dot] = 0;
+                }
+            }
+            match spell_load_file(&name, Some(cstr::until_nul(&self.lang)), true) {
+                Some(mut loaded) => {
+                    // If any language has NOBREAK assume the additions do
+                    // too.
+                    if self.nobreak {
+                        loaded.sl_nobreak = true;
+                    }
+                    slang = Some(register_lang(loaded));
+                }
+                None => self.lang[0] = 0,
+            }
+        }
+
+        let Some(id) = slang else {
+            return;
+        };
+        let mut region_mask = REGION_ALL;
+        if let Some(used) = self.use_region
+            && !self.dont_use_region
+        {
+            let used = self.region_text(used);
+            let regions = with_lang(id, |slang| slang.sl_regions).unwrap_or_default();
+            let c = find_region(&regions, used);
+            if c != REGION_ALL {
+                region_mask = 1 << c;
+            } else if regions[0] != 0 {
+                // This spell file covers other regions.
+                region_mask = 0;
+            }
+        }
+        if region_mask != 0 {
+            self.push(id, region_mask);
+        }
+    }
 }
+
 /// Fill in where each entry's sound folding and REP items come from: its own
 /// language when that has them, else the first entry's whose name starts
 /// with the same two letters, so that "en-math" uses "en"'s.
