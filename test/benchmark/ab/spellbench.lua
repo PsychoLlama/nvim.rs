@@ -153,7 +153,9 @@ phase('suggest', function()
   end
 end)
 
--- soundfold: the SAL engine on its own.
+-- soundfold: the SAL engine on its own. soundfold() answers the word itself
+-- when 'spell' is off, so it is turned on for the phase.
+vim.o.spell = true
 phase('soundfold', function()
   for _ = 1, 200 do
     for _, w in ipairs(WORDS) do
