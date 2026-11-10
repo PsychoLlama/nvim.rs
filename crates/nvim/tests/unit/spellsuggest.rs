@@ -236,6 +236,9 @@ fn moves_land_on_the_next_bad_word() {
     let sandbox = Sandbox::dir("spellsuggest_moves");
     let fx = Probe::new(sandbox.editor());
     speller(&fx, &sandbox, "sugmove", "hello wrld. world helo");
+    // The rows wrap: an earlier case's `:set nows | {failing search} | set ws`
+    // can leave 'wrapscan' off.
+    fx.run("set wrapscan&");
     fx.run("call setline(2, ['', 'check spel', 'ling word. vim', 'xqzt hello'])");
     let at = "[line('.'), col('.')]";
     let mut got = Vec::new();
