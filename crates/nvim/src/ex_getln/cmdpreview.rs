@@ -330,120 +330,125 @@ pub(crate) fn cmdpreview_restore_state(cpinfo: &mut CpInfo) {
 pub(crate) fn cmdpreview_may_show() -> bool {
     let mut ea: ExArg = EXARG_T_INIT;
     let mut cmdinfo: CmdParseInfo = CMD_PARSE_INFO_INIT;
-    let mut cmdpreview_type = 0;
     // A copy of the command line: the parse writes into it.
     let line = CmdLine::from_bytes(crate::cstr::until_nul(Cc::current().bytes()));
     let mut errormsg = None;
 
-    // C's `goto end`: everything below happens only when the command line
-    // parses *and* the command supports a preview.
-    'end: {
-        // Block errors while parsing the command line, and don't update
-        // v:errmsg.
-        let no_emsg = Suppress::emsg();
-        let parsed = parse_cmdline(line, &mut ea, &mut cmdinfo, &mut errormsg);
-        drop(no_emsg);
-        if !parsed {
-            break 'end;
-        }
-
-        // Is the command previewable? If not, don't attempt a preview.
-        if !ea.argt.has(ExArgt::PREVIEW) {
-            undo_cmdmod(&mut cmdinfo.cmdmod);
-            break 'end;
-        }
-
-        // The cursor may be at the end of the message grid rather than at
-        // cmdspos. Put it there in case the preview callback flushes.
-        // #30696
-        cursorcmd();
-        // Flush now: an external command line may itself wish to update
-        // the screen, which is disallowed during cmdpreview.
-        cmdline_ui_flush();
-
-        // Swap an invalid command range.
-        if ea.argt.has(ExArgt::RANGE) && ea.line1 > ea.line2 {
-            ::core::mem::swap(&mut ea.line1, &mut ea.line2);
-        }
-
-        let mut cpinfo: CpInfo = CP_INFO_INIT;
-        // 'inccommand' = "split"
-        let mut icm_split = P_ICM.first_byte() == b's';
-        let mut cmdpreview_buf: Option<Buf> = None;
-        let mut cmdpreview_win: Option<Win> = None;
-
-        // Block error reporting (the command may be incomplete), but
-        // still update v:errmsg; block messages, namely ones that prompt;
-        // block events.
-        let errors_silent = Suppress::emsg_silent();
-        let silenced = Suppress::messages();
-        block_autocmds();
-
-        cmdpreview_prepare(&mut cpinfo);
-
-        // Open the preview buffer if 'inccommand' is "split".
-        if icm_split && {
-            cmdpreview_buf = cmdpreview_open_buf();
-            cmdpreview_buf.is_none()
-        } {
-            // Failed to create the preview buffer, so disable the preview.
-            set_option_direct(
-                OPT_INCCOMMAND,
-                OptVal::static_string(c"nosplit"),
-                OptionSetFlags::NONE,
-                SID_NONE,
-            );
-            icm_split = false;
-        }
-        // Set up the preview namespace if it is not already set.
-        if CMDPREVIEW_NS.get() == 0 {
-            let ns = nvim_create_namespace(ApiString::NULL);
-            CMDPREVIEW_NS.set(::core::ffi::c_int::try_from(ns).unwrap_or(0));
-        }
-
-        CMDPREVIEW.set(true);
-
-        // Execute the preview callback: its return value says whether to
-        // show a preview and whether to open the preview window. It also
-        // makes the changes and highlights the preview shows.
-        let mut err: Error = Error::none();
-        let mut tstate: TryState = TryState::INIT;
-        try_enter(&mut tstate);
-        cmdpreview_type = execute_cmd(&mut ea, &cmdinfo, true);
-        err.absorb(try_leave(&tstate));
-        if err.is_set() {
-            err.clear();
-            cmdpreview_type = 0;
-        }
-
-        // With 'inccommand' = "split" and a callback answering 2, open the
-        // preview window.
-        if icm_split && cmdpreview_type == 2 && {
-            cmdpreview_win = cmdpreview_buf.and_then(cmdpreview_open_win);
-            cmdpreview_win.is_none()
-        } {
-            // Not enough room for the preview window: preview without it.
-            cmdpreview_type = 1;
-        }
-
-        // A nonzero answer means the screen has to be updated now.
-        if cmdpreview_type != 0 {
-            let _redraw = Allow::redraw();
-            let _ = update_screen();
-        }
-
-        // Close the preview window if it is open.
-        if icm_split && cmdpreview_type == 2 && cmdpreview_win.is_some() {
-            cmdpreview_close_win();
-        }
-
-        cmdpreview_restore_state(&mut cpinfo);
-
-        unblock_autocmds();
-        drop(silenced);
-        drop(errors_silent);
-        redrawcmdline();
+    // Block errors while parsing the command line, and don't update
+    // v:errmsg.
+    let no_emsg = Suppress::emsg();
+    let parsed = parse_cmdline(line, &mut ea, &mut cmdinfo, &mut errormsg);
+    drop(no_emsg);
+    if !parsed {
+        return false;
     }
 
-    cmdpreview_type != 0
+    // Is the command previewable? If not, don't attempt a preview.
+    if !ea.argt.has(ExArgt::PREVIEW) {
+        undo_cmdmod(&mut cmdinfo.cmdmod);
+        return false;
+    }
+
+    show_preview(&mut ea, &cmdinfo) != 0
+}
+
+/// Run a parsed, previewable command's preview callback with errors,
+/// messages and autocommands blocked, show what it changed, and put the
+/// buffers and windows back.
+///
+/// Answers the callback's preview type: 0 for no preview, 1 for one in the
+/// buffer, 2 for one with the preview window too.
+fn show_preview(ea: &mut ExArg, cmdinfo: &CmdParseInfo) -> ::core::ffi::c_int {
+    // The cursor may be at the end of the message grid rather than at
+    // cmdspos. Put it there in case the preview callback flushes.
+    // #30696
+    cursorcmd();
+    // Flush now: an external command line may itself wish to update
+    // the screen, which is disallowed during cmdpreview.
+    cmdline_ui_flush();
+
+    // Swap an invalid command range.
+    if ea.argt.has(ExArgt::RANGE) && ea.line1 > ea.line2 {
+        ::core::mem::swap(&mut ea.line1, &mut ea.line2);
+    }
+
+    let mut cpinfo: CpInfo = CP_INFO_INIT;
+    // 'inccommand' = "split"
+    let mut icm_split = P_ICM.first_byte() == b's';
+    let mut cmdpreview_buf: Option<Buf> = None;
+    let mut cmdpreview_win: Option<Win> = None;
+
+    // Block error reporting (the command may be incomplete), but
+    // still update v:errmsg; block messages, namely ones that prompt;
+    // block events.
+    let errors_silent = Suppress::emsg_silent();
+    let silenced = Suppress::messages();
+    block_autocmds();
+
+    cmdpreview_prepare(&mut cpinfo);
+
+    // Open the preview buffer if 'inccommand' is "split".
+    if icm_split && {
+        cmdpreview_buf = cmdpreview_open_buf();
+        cmdpreview_buf.is_none()
+    } {
+        // Failed to create the preview buffer, so disable the preview.
+        set_option_direct(
+            OPT_INCCOMMAND,
+            OptVal::static_string(c"nosplit"),
+            OptionSetFlags::NONE,
+            SID_NONE,
+        );
+        icm_split = false;
+    }
+    // Set up the preview namespace if it is not already set.
+    if CMDPREVIEW_NS.get() == 0 {
+        let ns = nvim_create_namespace(ApiString::NULL);
+        CMDPREVIEW_NS.set(::core::ffi::c_int::try_from(ns).unwrap_or(0));
+    }
+
+    CMDPREVIEW.set(true);
+
+    // Execute the preview callback: its return value says whether to
+    // show a preview and whether to open the preview window. It also
+    // makes the changes and highlights the preview shows.
+    let mut err: Error = Error::none();
+    let mut tstate: TryState = TryState::INIT;
+    try_enter(&mut tstate);
+    let mut cmdpreview_type = execute_cmd(ea, cmdinfo, true);
+    err.absorb(try_leave(&tstate));
+    if err.is_set() {
+        err.clear();
+        cmdpreview_type = 0;
+    }
+
+    // With 'inccommand' = "split" and a callback answering 2, open the
+    // preview window.
+    if icm_split && cmdpreview_type == 2 && {
+        cmdpreview_win = cmdpreview_buf.and_then(cmdpreview_open_win);
+        cmdpreview_win.is_none()
+    } {
+        // Not enough room for the preview window: preview without it.
+        cmdpreview_type = 1;
+    }
+
+    // A nonzero answer means the screen has to be updated now.
+    if cmdpreview_type != 0 {
+        let _redraw = Allow::redraw();
+        let _ = update_screen();
+    }
+
+    // Close the preview window if it is open.
+    if icm_split && cmdpreview_type == 2 && cmdpreview_win.is_some() {
+        cmdpreview_close_win();
+    }
+
+    cmdpreview_restore_state(&mut cpinfo);
+
+    unblock_autocmds();
+    drop(silenced);
+    drop(errors_silent);
+    redrawcmdline();
+
+    cmdpreview_type
 }
