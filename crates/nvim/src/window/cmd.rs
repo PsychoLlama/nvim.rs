@@ -115,172 +115,51 @@ pub fn do_window(nchar: Key, prenum: c_int, xchar: Key) {
 /// (zero for none), and `xchar` the second letter of a CTRL-W g command when
 /// it has already been read.
 fn window_command(nchar: Key, prenum: c_int, xchar: Key) {
-    let prenum1 = if prenum == 0 { 1 } else { prenum };
-    // The cmdline window forbids most of these; the few it allows simply do
-    // not ask.
-    let in_cmdwin = || {
-        let locked = CMDWIN_TYPE.get() != 0;
-        if locked {
-            err(WinError::CmdWin);
-        }
-        locked
+    let Some(command) = WindowCommand::of(nchar) else {
+        beep();
+        return;
     };
-    match nchar.kind() {
-        // split the current window in two parts, horizontally
-        KeyKind::Char(SPLIT | SPLIT_ALT | Key::CTRL_S) => {
-            if in_cmdwin() {
-                return;
-            }
-            reset_visual_and_resel(); // stop Visual mode
-            split_or_new(nchar, prenum, 0);
-        }
-        // split the current window in two parts, vertically
-        KeyKind::Char(VSPLIT | Key::CTRL_V) => {
-            if in_cmdwin() {
-                return;
-            }
-            reset_visual_and_resel();
-            split_or_new(nchar, prenum, WSP_VERT);
-        }
-        // split the current window and edit the alternate file
-        KeyKind::Char(ALTFILE | Key::CTRL_HAT) => {
-            if in_cmdwin() {
-                return;
-            }
-            reset_visual_and_resel();
-            split_alternate(prenum);
-        }
-        // open a new window
-        KeyKind::Char(NEW | Key::CTRL_N) => {
-            if in_cmdwin() {
-                return;
-            }
-            reset_visual_and_resel();
-            new_window(nchar, prenum);
-        }
-        // quit the current window
-        KeyKind::Char(QUIT | Key::CTRL_Q) => {
-            reset_visual_and_resel();
-            run_with_count(c"quit", prenum);
-        }
-        // close the current window
-        KeyKind::Char(CLOSE | Key::CTRL_C) => {
-            reset_visual_and_resel();
-            run_with_count(c"close", prenum);
-        }
-        // close the preview window
-        KeyKind::Char(PCLOSE | Key::CTRL_Z) => {
-            if in_cmdwin() {
-                return;
-            }
-            reset_visual_and_resel();
-            run_cmd(c"pclose");
-        }
-        // cursor to the preview window
-        KeyKind::Char(PREVIEW) => match windows().find(|wp| wp.w_onebuf_opt.wo_pvw != 0) {
+    // The cmdline window forbids most of these; the rest simply do not ask.
+    if command.refused_in_cmdwin() && CMDWIN_TYPE.get() != 0 {
+        err(WinError::CmdWin);
+        return;
+    }
+    if command.ends_visual() {
+        reset_visual_and_resel();
+    }
+    let prenum1 = if prenum == 0 { 1 } else { prenum };
+    match command {
+        WindowCommand::Split => split_or_new(nchar, prenum, 0),
+        WindowCommand::VSplit => split_or_new(nchar, prenum, WSP_VERT),
+        WindowCommand::SplitAlternate => split_alternate(prenum),
+        WindowCommand::New => new_window(nchar, prenum),
+        WindowCommand::Quit => run_with_count(c"quit", prenum),
+        WindowCommand::Close => run_with_count(c"close", prenum),
+        WindowCommand::ClosePreview => run_cmd(c"pclose"),
+        WindowCommand::GotoPreview => match windows().find(|wp| wp.w_onebuf_opt.wo_pvw != 0) {
             None => {
                 err(WinError::NoPreviewWindow);
             }
             Some(wp) => goto_win(wp),
         },
-        // close all but the current window
-        KeyKind::Char(ONLY | Key::CTRL_O) => {
-            if in_cmdwin() {
-                return;
-            }
-            reset_visual_and_resel();
-            run_with_count(c"only", prenum);
-        }
-        // cursor to the next ('w') or previous ('W') window, wrapping around
-        KeyKind::Char(NEXT | Key::CTRL_W | PREV) => {
-            if !in_cmdwin() {
-                cycle_windows(nchar, prenum);
-            }
-        }
-        // cursor to the window below, above, left or right
-        KeyKind::Special(SpecialKey::Down) | KeyKind::Char(DOWN | Key::CTRL_J) => {
-            if !in_cmdwin() {
-                goto_ver(false, prenum1);
-            }
-        }
-        KeyKind::Special(SpecialKey::Up) | KeyKind::Char(UP | Key::CTRL_K) => {
-            if !in_cmdwin() {
-                goto_ver(true, prenum1);
-            }
-        }
-        KeyKind::Special(SpecialKey::Left | SpecialKey::Bs) | KeyKind::Char(LEFT | Key::CTRL_H) => {
-            if !in_cmdwin() {
-                goto_hor(true, prenum1);
-            }
-        }
-        KeyKind::Special(SpecialKey::Right) | KeyKind::Char(RIGHT | Key::CTRL_L) => {
-            if !in_cmdwin() {
-                goto_hor(false, prenum1);
-            }
-        }
-        // move the window to a new tab page
-        KeyKind::Char(TO_NEW_TAB) => {
-            if !in_cmdwin() {
-                move_to_new_tabpage(prenum);
-            }
-        }
-        // cursor to the top-left window
-        KeyKind::Char(TOP | Key::CTRL_T) => goto_win(first_win()),
-        // cursor to the bottom-right window
-        KeyKind::Char(BOTTOM | Key::CTRL_B) => goto_win(lastwin_nofloating(None)),
-        // cursor to the last accessed (previous) window. Upstream tests the
-        // configuration without asking whether the window floats, unlike
-        // [`focusable`] below.
-        KeyKind::Char(LAST_USED | Key::CTRL_P) => {
-            let prev = prev_window().filter(|wp| !wp.w_config.hide && wp.w_config.focusable);
-            match prev {
-                None => beep(),
-                Some(wp) => goto_win(wp),
-            }
-        }
-        // exchange the current and the next window
-        KeyKind::Char(EXCHANGE | Key::CTRL_X) => {
-            if !in_cmdwin() {
-                exchange(prenum);
-            }
-        }
-        // rotate the windows downwards ('r') or upwards ('R')
-        KeyKind::Char(ROTATE_DOWN | Key::CTRL_R) => {
-            if in_cmdwin() {
-                return;
-            }
-            reset_visual_and_resel();
-            rotate(false, prenum1);
-        }
-        KeyKind::Char(ROTATE_UP) => {
-            if in_cmdwin() {
-                return;
-            }
-            reset_visual_and_resel();
-            rotate(true, prenum1);
-        }
-        // move the window to the very top, bottom, left or right
-        KeyKind::Char(MOVE_TOP | MOVE_BOT | MOVE_LEFT | MOVE_RIGHT) => {
-            if !in_cmdwin() {
-                move_to_edge(nchar, prenum);
-            }
-        }
-        // make all windows the same width and/or height
-        KeyKind::Char(EQUALISE) => {
-            let split = CMDMOD.with(|m| m.cmod_split) & (WSP_VERT | WSP_HOR);
-            let dir = if split == WSP_VERT {
-                b'v'
-            } else if split == WSP_HOR {
-                b'h'
-            } else {
-                b'b'
-            };
-            equal(None, false, dir);
-        }
-        // increase, decrease or set the current window's height
-        KeyKind::Char(TALLER) => setheight_win(Win::current().w_height + prenum1, Win::current()),
-        KeyKind::Char(SHORTER) => setheight_win(Win::current().w_height - prenum1, Win::current()),
-        KeyKind::Char(SET_HEIGHT | Key::CTRL_UNDERSCORE) => {
+        WindowCommand::Only => run_with_count(c"only", prenum),
+        WindowCommand::Cycle => cycle_windows(nchar, prenum),
+        WindowCommand::Down => goto_ver(false, prenum1),
+        WindowCommand::Up => goto_ver(true, prenum1),
+        WindowCommand::Left => goto_hor(true, prenum1),
+        WindowCommand::Right => goto_hor(false, prenum1),
+        WindowCommand::ToNewTab => move_to_new_tabpage(prenum),
+        WindowCommand::Top => goto_win(first_win()),
+        WindowCommand::Bottom => goto_win(lastwin_nofloating(None)),
+        WindowCommand::LastUsed => goto_last_used(),
+        WindowCommand::Exchange => exchange(prenum),
+        WindowCommand::RotateDown => rotate(false, prenum1),
+        WindowCommand::RotateUp => rotate(true, prenum1),
+        WindowCommand::MoveToEdge => move_to_edge(nchar, prenum),
+        WindowCommand::Equalise => equalise(),
+        WindowCommand::Taller => setheight_win(Win::current().w_height + prenum1, Win::current()),
+        WindowCommand::Shorter => setheight_win(Win::current().w_height - prenum1, Win::current()),
+        WindowCommand::SetHeight => {
             let height = if prenum != 0 {
                 prenum
             } else {
@@ -288,59 +167,224 @@ fn window_command(nchar: Key, prenum: c_int, xchar: Key) {
             };
             setheight_win(height, Win::current());
         }
-        // increase, decrease or set the current window's width
-        KeyKind::Char(WIDER) => setwidth_win(Win::current().w_width + prenum1, Win::current()),
-        KeyKind::Char(NARROWER) => setwidth_win(Win::current().w_width - prenum1, Win::current()),
-        KeyKind::Char(SET_WIDTH) => {
+        WindowCommand::Wider => setwidth_win(Win::current().w_width + prenum1, Win::current()),
+        WindowCommand::Narrower => setwidth_win(Win::current().w_width - prenum1, Win::current()),
+        WindowCommand::SetWidth => {
             let width = if prenum != 0 { prenum } else { COLUMNS.get() };
             setwidth_win(width, Win::current());
         }
-        // jump to the tag under the cursor in a new window, '}' putting it in
-        // the preview window
-        KeyKind::Char(TAG_PREVIEW) => {
-            if in_cmdwin() {
-                return;
-            }
+        WindowCommand::TagPreview => {
             G_DO_TAGPREVIEW.set(tagpreview_height(prenum));
             jump_to_tag(nchar, prenum);
         }
-        KeyKind::Char(TAG_SPLIT | Key::CTRL_RSB) => {
-            if !in_cmdwin() {
-                jump_to_tag(nchar, prenum);
-            }
-        }
-        // edit the file name under the cursor in a new window
-        KeyKind::Char(FILE | FILE_LINE | Key::CTRL_F) => {
-            if !in_cmdwin() {
-                goto_file(nchar, prenum1);
-            }
-        }
-        // go to the first occurrence of the identifier under the cursor along
-        // 'path', in a new window: any match, or the definition
-        KeyKind::Char(IDENT_ANY | Key::CTRL_I) => {
-            if !in_cmdwin() {
-                find_in_path(FIND_ANY, prenum, prenum1);
-            }
-        }
-        KeyKind::Char(IDENT_DEFINE | Key::CTRL_D) => {
-            if !in_cmdwin() {
-                find_in_path(FIND_DEFINE, prenum, prenum1);
-            }
-        }
-        // quickfix window only: view the result under the cursor in a new split
-        KeyKind::Special(SpecialKey::Kenter) | KeyKind::Char(Key::CTRL_M) => {
+        WindowCommand::TagSplit => jump_to_tag(nchar, prenum),
+        WindowCommand::File => goto_file(nchar, prenum1),
+        WindowCommand::IdentAny => find_in_path(FIND_ANY, prenum, prenum1),
+        WindowCommand::IdentDefine => find_in_path(FIND_DEFINE, prenum, prenum1),
+        WindowCommand::QuickfixView => {
             if buf_is_quickfix(Some(Buf::current())) {
                 view_quickfix_result();
             }
         }
-        // CTRL-W g: the extended commands
-        KeyKind::Char(EXTENDED | Key::CTRL_G) => {
-            if !in_cmdwin() {
-                window_g_command(prenum, prenum1, xchar);
-            }
-        }
-        _ => beep(),
+        WindowCommand::Extended => window_g_command(prenum, prenum1, xchar),
     }
+}
+
+/// What a CTRL-W letter asks for, read from the key alone. Several keep the
+/// letter itself as an argument (`s` vs `S`, `w` vs `W`, `K`/`J`/`H`/`L`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WindowCommand {
+    /// Split the current window in two, horizontally.
+    Split,
+    /// Split the current window in two, vertically.
+    VSplit,
+    /// Split the current window and edit the alternate file.
+    SplitAlternate,
+    /// Open a new window.
+    New,
+    /// Quit the current window.
+    Quit,
+    /// Close the current window.
+    Close,
+    /// Close the preview window.
+    ClosePreview,
+    /// Cursor to the preview window.
+    GotoPreview,
+    /// Close all but the current window.
+    Only,
+    /// Cursor to the next (`w`) or previous (`W`) window, wrapping around.
+    Cycle,
+    /// Cursor to the window below.
+    Down,
+    /// Cursor to the window above.
+    Up,
+    /// Cursor to the window on the left.
+    Left,
+    /// Cursor to the window on the right.
+    Right,
+    /// Move the window to a new tab page.
+    ToNewTab,
+    /// Cursor to the top-left window.
+    Top,
+    /// Cursor to the bottom-right window.
+    Bottom,
+    /// Cursor to the last accessed (previous) window.
+    LastUsed,
+    /// Exchange the current and the next window.
+    Exchange,
+    /// Rotate the windows downwards.
+    RotateDown,
+    /// Rotate the windows upwards.
+    RotateUp,
+    /// Move the window to the very top, bottom, left or right.
+    MoveToEdge,
+    /// Make all windows the same width and/or height.
+    Equalise,
+    /// Increase the current window's height.
+    Taller,
+    /// Decrease the current window's height.
+    Shorter,
+    /// Set the current window's height.
+    SetHeight,
+    /// Increase the current window's width.
+    Wider,
+    /// Decrease the current window's width.
+    Narrower,
+    /// Set the current window's width.
+    SetWidth,
+    /// Jump to the tag under the cursor in the preview window.
+    TagPreview,
+    /// Jump to the tag under the cursor in a new window.
+    TagSplit,
+    /// Edit the file name under the cursor in a new window.
+    File,
+    /// The first occurrence of the identifier under the cursor along
+    /// 'path', in a new window.
+    IdentAny,
+    /// The definition of the identifier under the cursor along 'path', in a
+    /// new window.
+    IdentDefine,
+    /// Quickfix window only: view the result under the cursor in a new split.
+    QuickfixView,
+    /// CTRL-W g: the extended commands.
+    Extended,
+}
+
+impl WindowCommand {
+    /// The command `nchar` names, or `None` for a key CTRL-W does not take.
+    fn of(nchar: Key) -> Option<WindowCommand> {
+        Some(match nchar.kind() {
+            KeyKind::Char(SPLIT | SPLIT_ALT | Key::CTRL_S) => WindowCommand::Split,
+            KeyKind::Char(VSPLIT | Key::CTRL_V) => WindowCommand::VSplit,
+            KeyKind::Char(ALTFILE | Key::CTRL_HAT) => WindowCommand::SplitAlternate,
+            KeyKind::Char(NEW | Key::CTRL_N) => WindowCommand::New,
+            KeyKind::Char(QUIT | Key::CTRL_Q) => WindowCommand::Quit,
+            KeyKind::Char(CLOSE | Key::CTRL_C) => WindowCommand::Close,
+            KeyKind::Char(PCLOSE | Key::CTRL_Z) => WindowCommand::ClosePreview,
+            KeyKind::Char(PREVIEW) => WindowCommand::GotoPreview,
+            KeyKind::Char(ONLY | Key::CTRL_O) => WindowCommand::Only,
+            KeyKind::Char(NEXT | Key::CTRL_W | PREV) => WindowCommand::Cycle,
+            KeyKind::Special(SpecialKey::Down) | KeyKind::Char(DOWN | Key::CTRL_J) => {
+                WindowCommand::Down
+            }
+            KeyKind::Special(SpecialKey::Up) | KeyKind::Char(UP | Key::CTRL_K) => WindowCommand::Up,
+            KeyKind::Special(SpecialKey::Left | SpecialKey::Bs)
+            | KeyKind::Char(LEFT | Key::CTRL_H) => WindowCommand::Left,
+            KeyKind::Special(SpecialKey::Right) | KeyKind::Char(RIGHT | Key::CTRL_L) => {
+                WindowCommand::Right
+            }
+            KeyKind::Char(TO_NEW_TAB) => WindowCommand::ToNewTab,
+            KeyKind::Char(TOP | Key::CTRL_T) => WindowCommand::Top,
+            KeyKind::Char(BOTTOM | Key::CTRL_B) => WindowCommand::Bottom,
+            KeyKind::Char(LAST_USED | Key::CTRL_P) => WindowCommand::LastUsed,
+            KeyKind::Char(EXCHANGE | Key::CTRL_X) => WindowCommand::Exchange,
+            KeyKind::Char(ROTATE_DOWN | Key::CTRL_R) => WindowCommand::RotateDown,
+            KeyKind::Char(ROTATE_UP) => WindowCommand::RotateUp,
+            KeyKind::Char(MOVE_TOP | MOVE_BOT | MOVE_LEFT | MOVE_RIGHT) => {
+                WindowCommand::MoveToEdge
+            }
+            KeyKind::Char(EQUALISE) => WindowCommand::Equalise,
+            KeyKind::Char(TALLER) => WindowCommand::Taller,
+            KeyKind::Char(SHORTER) => WindowCommand::Shorter,
+            KeyKind::Char(SET_HEIGHT | Key::CTRL_UNDERSCORE) => WindowCommand::SetHeight,
+            KeyKind::Char(WIDER) => WindowCommand::Wider,
+            KeyKind::Char(NARROWER) => WindowCommand::Narrower,
+            KeyKind::Char(SET_WIDTH) => WindowCommand::SetWidth,
+            KeyKind::Char(TAG_PREVIEW) => WindowCommand::TagPreview,
+            KeyKind::Char(TAG_SPLIT | Key::CTRL_RSB) => WindowCommand::TagSplit,
+            KeyKind::Char(FILE | FILE_LINE | Key::CTRL_F) => WindowCommand::File,
+            KeyKind::Char(IDENT_ANY | Key::CTRL_I) => WindowCommand::IdentAny,
+            KeyKind::Char(IDENT_DEFINE | Key::CTRL_D) => WindowCommand::IdentDefine,
+            KeyKind::Special(SpecialKey::Kenter) | KeyKind::Char(Key::CTRL_M) => {
+                WindowCommand::QuickfixView
+            }
+            KeyKind::Char(EXTENDED | Key::CTRL_G) => WindowCommand::Extended,
+            _ => return None,
+        })
+    }
+
+    /// Whether the cmdline window refuses the command (`E11`).
+    fn refused_in_cmdwin(self) -> bool {
+        !matches!(
+            self,
+            WindowCommand::Quit
+                | WindowCommand::Close
+                | WindowCommand::GotoPreview
+                | WindowCommand::Top
+                | WindowCommand::Bottom
+                | WindowCommand::LastUsed
+                | WindowCommand::Equalise
+                | WindowCommand::Taller
+                | WindowCommand::Shorter
+                | WindowCommand::SetHeight
+                | WindowCommand::Wider
+                | WindowCommand::Narrower
+                | WindowCommand::SetWidth
+                | WindowCommand::QuickfixView
+        )
+    }
+
+    /// Whether the command stops Visual mode before it runs.
+    fn ends_visual(self) -> bool {
+        matches!(
+            self,
+            WindowCommand::Split
+                | WindowCommand::VSplit
+                | WindowCommand::SplitAlternate
+                | WindowCommand::New
+                | WindowCommand::Quit
+                | WindowCommand::Close
+                | WindowCommand::ClosePreview
+                | WindowCommand::Only
+                | WindowCommand::RotateDown
+                | WindowCommand::RotateUp
+        )
+    }
+}
+
+/// CTRL-W p: cursor to the last accessed window. Upstream tests the
+/// configuration without asking whether the window floats, unlike
+/// [`focusable`] below.
+fn goto_last_used() {
+    let prev = prev_window().filter(|wp| !wp.w_config.hide && wp.w_config.focusable);
+    match prev {
+        None => beep(),
+        Some(wp) => goto_win(wp),
+    }
+}
+
+/// CTRL-W =: every window the same width and/or height, in the direction a
+/// `:vertical`/`:horizontal` modifier asks for.
+fn equalise() {
+    let split = CMDMOD.with(|m| m.cmod_split) & (WSP_VERT | WSP_HOR);
+    let dir = if split == WSP_VERT {
+        b'v'
+    } else if split == WSP_HOR {
+        b'h'
+    } else {
+        b'b'
+    };
+    equal(None, false, dir);
 }
 
 /// CTRL-W s / CTRL-W v. Splitting the quickfix window opens a new buffer in
@@ -743,4 +787,39 @@ fn view_quickfix_result() {
 /// `semsg(_(fmt), n)`, for the one error that names a buffer number.
 fn err_number(fmt: &'static CStr, n: c_int) {
     emsg_text(tr_c!(fmt, int64_t::from(n)));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_letter_and_its_control_key_name_one_command() {
+        let of = WindowCommand::of;
+        assert_eq!(of(SPLIT), Some(WindowCommand::Split));
+        assert_eq!(of(Key::CTRL_S), Some(WindowCommand::Split));
+        assert_eq!(of(Key::CTRL_W), Some(WindowCommand::Cycle));
+        assert_eq!(of(PREV), Some(WindowCommand::Cycle));
+        assert_eq!(
+            of(Key::from_special(SpecialKey::Bs)),
+            Some(WindowCommand::Left)
+        );
+        assert_eq!(of(Key::CTRL_M), Some(WindowCommand::QuickfixView));
+        // CTRL-W R has no control-key twin; CTRL-R is `r`.
+        assert_eq!(of(Key::CTRL_R), Some(WindowCommand::RotateDown));
+        assert_eq!(of(Key::ascii(b'Q')), None);
+    }
+
+    #[test]
+    fn closing_and_resizing_work_in_the_cmdline_window() {
+        assert!(!WindowCommand::Quit.refused_in_cmdwin());
+        assert!(!WindowCommand::SetHeight.refused_in_cmdwin());
+        assert!(WindowCommand::Split.refused_in_cmdwin());
+        assert!(WindowCommand::Down.refused_in_cmdwin());
+        // `:quit` ends Visual mode though the cmdline window allows it;
+        // moving between windows does neither.
+        assert!(WindowCommand::Quit.ends_visual());
+        assert!(!WindowCommand::Down.ends_visual());
+        assert!(!WindowCommand::TagPreview.ends_visual());
+    }
 }
