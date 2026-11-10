@@ -194,8 +194,7 @@ impl ExArg<'_> {
             // A modifier may follow a range (`:1,2 silent print`), so the
             // name is looked for past one — but `args.cmd` only moves for
             // the modifiers that accept that.
-            // SAFETY: a null context is "not completing".
-            let mut at = cmd + skip_range(self.line.tail(cmd), None);
+            let at = cmd + skip_range(self.line.tail(cmd), None);
             match self.line.byte_at(at) {
                 b'a' => {
                     if !takes(self, b"aboveleft", 3) {
@@ -234,42 +233,9 @@ impl ExArg<'_> {
                     }
                 }
                 b'f' => {
-                    // `:filter` insists on a pattern *and* something after
-                    // it: the whole point is the command it wraps.
-                    let Some(after) = check_for_word(&self.line, at, b"filter", 4) else {
-                        break;
-                    };
-                    at = after;
-                    if self.line.byte_at(at) == 0 || ends_excmd(self.line.byte_at(at)) {
+                    if !self.take_filter(at, cm, skip_only) {
                         break;
                     }
-                    if self.line.byte_at(at) == b'!' {
-                        cm.cmod_filter_force = true;
-                        at = self.line.skip_white(at + 1);
-                        if self.line.byte_at(at) == 0 || ends_excmd(self.line.byte_at(at)) {
-                            break;
-                        }
-                    }
-                    let Some((pattern, past)) = filter_pattern(&mut self.line, at, !skip_only)
-                    else {
-                        break;
-                    };
-                    at = past;
-                    if self.line.byte_at(at) == 0 {
-                        break;
-                    }
-                    if !skip_only {
-                        let pat =
-                            CString::new(self.line.slice_at(pattern.0, pattern.1 - pattern.0))
-                                .expect("a pattern ends at its first NUL");
-                        let filter = Rc::new(CmdFilter::new(pat, RE_MAGIC));
-                        let compiled = filter.compiled();
-                        cm.cmod_filter = Some(filter);
-                        if !compiled {
-                            break;
-                        }
-                    }
-                    self.line.cmd = at;
                 }
                 b'h' => {
                     if takes(self, b"horizontal", 3) {
@@ -316,52 +282,14 @@ impl ExArg<'_> {
                     if takes(self, b"sandbox", 3) {
                         cm.cmod_flags |= CmdModFlags::SANDBOX;
                     } else if takes(self, b"silent", 3) {
-                        cm.cmod_flags |= CmdModFlags::SILENT;
-                        // `:silent!` only means "and silence errors" when
-                        // the `!` is stuck to the word: `:silent !cmd` runs
-                        // a shell command quietly.
-                        let cmd = self.line.cmd;
-                        if self.line.byte_at(cmd) == b'!'
-                            && cmd > 0
-                            && !ascii_iswhite(c_int::from(self.line.byte_at(cmd - 1)))
-                        {
-                            self.line.cmd = self.line.skip_white(cmd + 1);
-                            cm.cmod_flags |= CmdModFlags::ERRSILENT;
-                        }
+                        self.take_silent_bang(cm);
                     } else {
                         break;
                     }
                 }
                 b't' => {
                     if let Some(after) = check_for_word(&self.line, at, b"tab", 3) {
-                        at = after;
-                        if !skip_only {
-                            // The scan walks a cursor of its own; see
-                            // `parse_cmd_address`.
-                            let (cmdidx, skip) = (self.cmdidx, self.skip);
-                            let mut cursor = self.line.cmd;
-                            let read = get_address(
-                                Some(cmdidx),
-                                self.line.buffer_mut(),
-                                &mut cursor,
-                                CmdAddr::Tabs,
-                                skip,
-                                skip_only,
-                                false,
-                                1,
-                            );
-                            let tabnr = read?.get();
-                            self.line.cmd = cursor;
-                            if tabnr == MAXLNUM.get() {
-                                cm.cmod_tab = tab_index(TabPage::current()) + 1;
-                            } else {
-                                if tabnr < 0 || tabnr > current_tab_nr(None) {
-                                    return Err(CmdError::Message(ex_msg(E_INVRANGE)));
-                                }
-                                cm.cmod_tab = tabnr + 1;
-                            }
-                        }
-                        self.line.cmd = at;
+                        self.take_tab(after, cm, skip_only)?;
                     } else if takes(self, b"topleft", 2) {
                         cm.cmod_split |= WSP_TOP;
                     } else {
@@ -378,19 +306,7 @@ impl ExArg<'_> {
                     if takes(self, b"vertical", 4) {
                         cm.cmod_split |= WSP_VERT;
                     } else if let Some(after) = check_for_word(&self.line, at, b"verbose", 4) {
-                        at = after;
-                        // The count is read from `args.cmd`, which
-                        // `checkforcmd` left *before* the word: `:5verbose`.
-                        // Saturating: the count is whatever the user typed,
-                        // so `:2147483647verbose set` would otherwise add one
-                        // to `INT_MAX` and end the process.  C wraps here.
-                        cm.cmod_verbose =
-                            if ascii_isdigit(c_int::from(self.line.byte_at(self.line.cmd))) {
-                                atoi(self.line.cmd()).saturating_add(1)
-                            } else {
-                                2
-                            };
-                        self.line.cmd = at;
+                        self.take_verbose(after, cm);
                     } else {
                         break;
                     }
@@ -401,6 +317,106 @@ impl ExArg<'_> {
 
         restore_visual_range(self, orig_cmd, cmd_start, has_visual_range, use_plus_cmd);
         Ok(())
+    }
+
+    /// `:filter[!] {pattern} {cmd}`, the word found at `at`. Answers whether
+    /// it is a modifier here: `:filter` insists on a pattern *and* something
+    /// after it, the whole point being the command it wraps.
+    fn take_filter(&mut self, at: usize, cm: &mut CmdMod, skip_only: bool) -> bool {
+        let Some(mut at) = check_for_word(&self.line, at, b"filter", 4) else {
+            return false;
+        };
+        if self.line.byte_at(at) == 0 || ends_excmd(self.line.byte_at(at)) {
+            return false;
+        }
+        if self.line.byte_at(at) == b'!' {
+            cm.cmod_filter_force = true;
+            at = self.line.skip_white(at + 1);
+            if self.line.byte_at(at) == 0 || ends_excmd(self.line.byte_at(at)) {
+                return false;
+            }
+        }
+        let Some((pattern, past)) = filter_pattern(&mut self.line, at, !skip_only) else {
+            return false;
+        };
+        at = past;
+        if self.line.byte_at(at) == 0 {
+            return false;
+        }
+        if !skip_only {
+            let pat = CString::new(self.line.slice_at(pattern.0, pattern.1 - pattern.0))
+                .expect("a pattern ends at its first NUL");
+            let filter = Rc::new(CmdFilter::new(pat, RE_MAGIC));
+            let compiled = filter.compiled();
+            cm.cmod_filter = Some(filter);
+            if !compiled {
+                return false;
+            }
+        }
+        self.line.cmd = at;
+        true
+    }
+
+    /// The rest of `:silent`: `:silent!` only means "and silence errors"
+    /// when the `!` is stuck to the word, because `:silent !cmd` runs a shell
+    /// command quietly.
+    fn take_silent_bang(&mut self, cm: &mut CmdMod) {
+        cm.cmod_flags |= CmdModFlags::SILENT;
+        let cmd = self.line.cmd;
+        if self.line.byte_at(cmd) == b'!'
+            && cmd > 0
+            && !ascii_iswhite(c_int::from(self.line.byte_at(cmd - 1)))
+        {
+            self.line.cmd = self.line.skip_white(cmd + 1);
+            cm.cmod_flags |= CmdModFlags::ERRSILENT;
+        }
+    }
+
+    /// `:[N]tab {cmd}`, the word ending at `after`: the tab page the command
+    /// opens its window in, read from the count before the word (`:3tab`),
+    /// or the one after the current page.
+    fn take_tab(&mut self, after: usize, cm: &mut CmdMod, skip_only: bool) -> Result<(), CmdError> {
+        if !skip_only {
+            // The scan walks a cursor of its own; see `parse_cmd_address`.
+            let (cmdidx, skip) = (self.cmdidx, self.skip);
+            let mut cursor = self.line.cmd;
+            let tabnr = get_address(
+                Some(cmdidx),
+                self.line.buffer_mut(),
+                &mut cursor,
+                CmdAddr::Tabs,
+                skip,
+                skip_only,
+                false,
+                1,
+            )?
+            .get();
+            self.line.cmd = cursor;
+            if tabnr == MAXLNUM.get() {
+                cm.cmod_tab = tab_index(TabPage::current()) + 1;
+            } else {
+                if tabnr < 0 || tabnr > current_tab_nr(None) {
+                    return Err(CmdError::Message(ex_msg(E_INVRANGE)));
+                }
+                cm.cmod_tab = tabnr + 1;
+            }
+        }
+        self.line.cmd = after;
+        Ok(())
+    }
+
+    /// `:[N]verbose {cmd}`, the word ending at `after`. The count is read
+    /// from `cmd`, which `check_for_word` left *before* the word
+    /// (`:5verbose`). Saturating: the count is whatever the user typed, so
+    /// `:2147483647verbose set` would otherwise add one to `INT_MAX` and end
+    /// the process. C wraps here.
+    fn take_verbose(&mut self, after: usize, cm: &mut CmdMod) {
+        cm.cmod_verbose = if ascii_isdigit(c_int::from(self.line.byte_at(self.line.cmd))) {
+            atoi(self.line.cmd()).saturating_add(1)
+        } else {
+            2
+        };
+        self.line.cmd = after;
     }
 }
 
