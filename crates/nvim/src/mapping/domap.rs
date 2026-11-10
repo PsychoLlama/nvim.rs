@@ -505,6 +505,10 @@ impl Step<'_> {
     ///
     /// Upstream's two `break`s leave *this* walk and resume at the next
     /// bucket, not at the next round.
+    // Out of line, measured: inlined into `MapRequest::run` the scan loop
+    // lost its registers and a `:map` into a 5,000-entry bucket cost ~2,100
+    // more instructions (inbench's per-phase setup +1.1 % Ir).
+    #[inline(never)]
     fn bucket(
         &self,
         tables: &mut MapTables,
