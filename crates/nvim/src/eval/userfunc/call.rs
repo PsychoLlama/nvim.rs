@@ -32,7 +32,7 @@ use super::*;
 use crate::eval::typval::DictRef;
 use crate::lua::executor::typval_call_lua;
 use crate::runtime::sourcing_name_bytes;
-use crate::types::{Failed, Refcount};
+use crate::types::{Failed, ProfTime, Refcount};
 
 /// The function of the call `frame` was made from, if it was made from one.
 fn caller_func(frame: &FuncCall) -> Option<Rc<UserFunc>> {
@@ -86,7 +86,6 @@ pub(crate) fn call_user_func(
     lastline: LineNr,
     selfdict: Option<&DictRef>,
 ) {
-    let argcount = c_int::try_from(args.len()).unwrap_or(c_int::MAX);
     static DEPTH: GlobalCell<c_int> = GlobalCell::new(0);
 
     // Don't execute the function when the call depth is getting too high.
@@ -109,7 +108,103 @@ pub(crate) fn call_user_func(
     func.calls.set(func.calls.get() + 1);
     line_breakcheck(); // check for CTRL-C hit
 
-    // Prepare the funccall.
+    let frame = open_frame(func, result);
+    let body = func.body();
+    let islambda = func.name().as_bytes().starts_with(b"<lambda>");
+    let scopes = &frame.scopes;
+
+    // Init the l: variables. From here a lookup sees the function's scopes.
+    frame.scope_ready.set(true);
+    let has_args = !func.has_flag(FuncFlags::NOARGS);
+    set_fixed_vars(
+        scopes,
+        selfdict,
+        has_args,
+        args.len(),
+        &body,
+        firstline,
+        lastline,
+    );
+    let bound = bind_arguments(scopes, &body, args, islambda, has_args);
+
+    // Don't redraw while executing the function.
+    let redraw_off = Suppress::redraw();
+
+    let sandboxed = func.has_flag(FuncFlags::SANDBOX).then(Lock::sandbox);
+
+    estack_push_ufunc(func, LineNr::ONE);
+    if p_verbose() >= 12 {
+        report_calling(args);
+    }
+
+    let mut profile = CallProfile::start(func, &frame);
+
+    let save_current_sctx = CURRENT_SCTX.get();
+    CURRENT_SCTX.set(func.script_ctx.get());
+    let save_did_emsg = DID_EMSG.get();
+    DID_EMSG.set(0);
+
+    if bound.default_failed && (func.has_flag(FuncFlags::ABORT) || TRYLEVEL.get() > 0) {
+        DID_EMSG.set(1);
+    } else if islambda {
+        run_lambda_body(&frame, &body);
+    } else {
+        // Call do_cmdline() to execute the lines.
+        let opts = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT;
+        let _ = do_cmdline(None, Some(&mut LineSource::Function(&frame)), opts);
+    }
+
+    // Invoke functions added with `:defer`.
+    handle_defer_one(&frame);
+
+    drop(redraw_off);
+
+    // The return value is the caller's from here.
+    *result = frame.rettv.replace(TypVal::Unknown);
+    // When the function was aborted because of an error, return -1.
+    if (DID_EMSG.get() != 0 && func.has_flag(FuncFlags::ABORT)) || result.v_type() == VAR_UNKNOWN {
+        tv_clear(result);
+        result.write_number(-1);
+    }
+
+    profile.finish(func, &frame);
+
+    if p_verbose() >= 12 {
+        report_returning(result);
+    }
+
+    estack_pop();
+    CURRENT_SCTX.set(save_current_sctx);
+    profile.restore_script();
+    drop(sandboxed);
+
+    if p_verbose() >= 12 && sourcing_name_bytes().is_some() {
+        verbose_report(|| {
+            let name = sourcing_name_text();
+            smsg!(0, "continuing in {name}");
+        });
+    }
+
+    DID_EMSG.set(DID_EMSG.get() | save_did_emsg);
+    // The tear-down below is the caller's depth, not this call's.
+    drop(call_depth);
+    clear_defaults(scopes, &bound.defaults);
+    cleanup_function_call(frame);
+
+    func.calls.set(func.calls.get() - 1);
+    // Free the function when it was deleted while it was running.
+    if func.calls.get() <= 0 && func.refcount.get() <= 0 {
+        func_clear_free(func, false);
+    }
+
+    if did_save_redo {
+        restore_redobuff(&mut save_redo);
+    }
+    restore_search_patterns();
+}
+
+/// A fresh funccall for `func`, its return value seeded with the caller's.
+fn open_frame(func: &Rc<UserFunc>, result: &mut TypVal) -> Rc<FuncCall> {
     let frame = create_funccal(func);
     // The funccall's return value starts as what the caller put in its own
     // (upstream's `fc_rettv` *is* the caller's): a plain `:return` leaves it.
@@ -120,13 +215,21 @@ pub(crate) fn call_user_func(
         LineNr::ZERO,
     ));
     frame.dbg_tick.set(DEBUG_TICK.get());
+    frame
+}
 
-    let body = func.body();
-    let islambda = func.name().as_bytes().starts_with(b"<lambda>");
-    let scopes = &frame.scopes;
-
-    // Init the l: variables. From here a lookup sees the function's scopes.
-    frame.scope_ready.set(true);
+/// The variables every call has whatever its arguments: `l:self` for a
+/// dictionary call and, unless the body is known to use none of them, `a:0`,
+/// `a:000`, `a:firstline` and `a:lastline`. Locks `a:` against new entries.
+fn set_fixed_vars(
+    scopes: &FrameScopes,
+    selfdict: Option<&DictRef>,
+    has_args: bool,
+    argcount: usize,
+    body: &FuncBody,
+    firstline: LineNr,
+    lastline: LineNr,
+) {
     if let Some(selfdict) = selfdict {
         // Set l:self to "selfdict"; it takes a reference of its own.
         let value = TypVal::dict(Some(selfdict.clone()));
@@ -136,13 +239,10 @@ pub(crate) fn call_user_func(
         );
     }
 
-    // Init the a: variables, unless the function body is known to use none
-    // of them.
-    let has_args = !func.has_flag(FuncFlags::NOARGS);
-    let declared = c_int::try_from(body.args.len()).unwrap_or(c_int::MAX);
     if has_args {
         // Set a:0 to the number of arguments past the declared ones.
-        let extra = VarNumber::from((argcount - declared).max(0));
+        let extra =
+            VarNumber::try_from(argcount.saturating_sub(body.args.len())).unwrap_or(VarNumber::MAX);
         let item = scopes.entry(b"0", TypVal::Number(extra), VarLock::Fixed);
         add_fixed(&scopes.a_vars, item);
     }
@@ -167,14 +267,35 @@ pub(crate) fn call_user_func(
             scopes.entry(b"lastline", last, VarLock::Fixed),
         );
     }
+}
 
-    // Set the argument variables. The order is important here: the
-    // parameters are named first, so that a default expression may refer to
-    // the parameter to its left.
-    let mut default_arg_err = false;
-    // The defaults evaluated for this call: (in `l:`, name). Upstream
-    // clears their values before the scopes are torn down.
-    let mut defaults_set: Vec<(bool, Vec<u8>)> = Vec::new();
+/// What binding the arguments left for the rest of the call.
+struct BoundArguments {
+    /// A default expression failed to evaluate; the binding stopped there.
+    default_failed: bool,
+    /// The defaults evaluated for this call: (in `l:`, name). Upstream
+    /// clears their values before the scopes are torn down.
+    defaults: Vec<(bool, Vec<u8>)>,
+}
+
+/// Bind the call's arguments: each declared parameter (its default
+/// evaluated when no argument was given for it), then `a:1`, `a:2`, … for the
+/// extra ones, which also go into `a:000`. The order is important: the
+/// parameters are named first, so that a default expression may refer to
+/// the parameter to its left.
+fn bind_arguments(
+    scopes: &FrameScopes,
+    body: &FuncBody,
+    args: &[TypVal],
+    islambda: bool,
+    has_args: bool,
+) -> BoundArguments {
+    let argcount = c_int::try_from(args.len()).unwrap_or(c_int::MAX);
+    let declared = c_int::try_from(body.args.len()).unwrap_or(c_int::MAX);
+    let mut bound = BoundArguments {
+        default_failed: false,
+        defaults: Vec::new(),
+    };
     let mut i = 0;
     while i < argcount || i < declared {
         let mut addlocal = false;
@@ -199,7 +320,7 @@ pub(crate) fn call_user_func(
                 def_rettv.write_number(-1);
                 let default = &body.def_args[usize::try_from(ai + defaults).unwrap_or(0)];
                 if eval1(&mut Cursor::new(default), &mut def_rettv, true).is_err() {
-                    default_arg_err = true;
+                    bound.default_failed = true;
                     break;
                 }
             }
@@ -226,7 +347,7 @@ pub(crate) fn call_user_func(
         };
         let mut item = scopes.entry(&name, value, VarLock::Fixed);
         if isdefault {
-            defaults_set.push((addlocal, name));
+            bound.defaults.push((addlocal, name));
         }
 
         if addlocal {
@@ -250,166 +371,162 @@ pub(crate) fn call_user_func(
         }
         i += 1;
     }
+    bound
+}
 
-    // Don't redraw while executing the function.
-    let redraw_off = Suppress::redraw();
-
-    let sandboxed = func.has_flag(FuncFlags::SANDBOX).then(Lock::sandbox);
-
-    estack_push_ufunc(func, LineNr::ONE);
-    if p_verbose() >= 12 {
-        verbose_report(|| {
-            let called = sourcing_name_text();
-            smsg!(0, "calling {called}");
-            if p_verbose() >= 14 {
-                msg_str(c"(");
-                for (i, tv) in args.iter().enumerate() {
-                    if i > 0 {
-                        msg_str(c", ");
-                    }
-                    if tv.v_type() == VAR_NUMBER {
-                        msg_outnum(c_int::try_from(tv.number_or_zero()).unwrap_or(c_int::MAX));
-                    } else {
-                        // Do not want errors such as E724 here.
-                        let rendered = {
-                            let _no_emsg = Suppress::emsg();
-                            encode_tv2string(tv)
-                        };
-                        crate::cstr::with_terminated(&quoted_value(rendered.as_cstr()), msg_str);
-                    }
+/// The `:verbose` (12) report of a call, with its arguments at 14.
+fn report_calling(args: &[TypVal]) {
+    verbose_report(|| {
+        let called = sourcing_name_text();
+        smsg!(0, "calling {called}");
+        if p_verbose() >= 14 {
+            msg_str(c"(");
+            for (i, tv) in args.iter().enumerate() {
+                if i > 0 {
+                    msg_str(c", ");
                 }
-                msg_str(c")");
+                if tv.v_type() == VAR_NUMBER {
+                    msg_outnum(c_int::try_from(tv.number_or_zero()).unwrap_or(c_int::MAX));
+                } else {
+                    // Do not want errors such as E724 here.
+                    let rendered = {
+                        let _no_emsg = Suppress::emsg();
+                        encode_tv2string(tv)
+                    };
+                    crate::cstr::with_terminated(&quoted_value(rendered.as_cstr()), msg_str);
+                }
             }
-        });
+            msg_str(c")");
+        }
+    });
+}
+
+/// The `:verbose` (12) report of what a call returned.
+fn report_returning(result: &TypVal) {
+    verbose_report(|| {
+        let name = sourcing_name_text();
+        if aborting() {
+            smsg!(0, "{name} aborted");
+        } else if result.v_type() == VAR_NUMBER {
+            let n = result.number_or_zero();
+            smsg!(0, "{name} returning #{}", n);
+        } else {
+            // Do not want errors such as E724 here.
+            let rendered = {
+                let _no_emsg = Suppress::emsg();
+                encode_tv2string(result)
+            };
+            let text = msg_bytes(&quoted_value(rendered.as_cstr())).to_string();
+            smsg!(0, "{name} returning {text}");
+        }
+    });
+}
+
+/// A lambda's body is one line, "return <expr>": evaluate the expression
+/// straight rather than going through `do_cmdline`.
+fn run_lambda_body(frame: &FuncCall, body: &FuncBody) {
+    let line = body
+        .lines
+        .first()
+        .and_then(Option::as_deref)
+        .unwrap_or_default();
+    let expr = line.get(c"return ".count_bytes()..).unwrap_or_default();
+    let _nesting = Depth::of(EX_NESTING_LEVEL);
+    // Into what the caller left there, as upstream evaluates into the
+    // caller's own value.
+    let mut value = frame.rettv.replace(TypVal::Unknown);
+    let _ = eval1(&mut Cursor::new(expr), &mut value, true);
+    // Over whatever a `:return` run from inside the expression left.
+    let old = frame.rettv.replace(value);
+    drop(old);
+}
+
+/// The profiler's view of one call: what `:profile` was doing when it
+/// started, and the clocks it started.
+struct CallProfile {
+    /// `:profile` is on (`PROF_YES`).
+    profiling: bool,
+    /// This call turned on profiling for `func` (`:profile func` named it).
+    started: bool,
+    /// `func` or its caller is profiled, so the call is timed.
+    timed: bool,
+    call_start: ProfTime,
+    wait_start: ProfTime,
+}
+
+impl CallProfile {
+    /// Start the clocks for a call of `func` in `frame`.
+    fn start(func: &Rc<UserFunc>, frame: &FuncCall) -> Self {
+        let profiling = DO_PROFILING.get() == PROF_YES;
+        let mut started = false;
+        if profiling
+            && !func.prof.borrow().profiling
+            && has_profiling_named(false, func.name().as_cstr())
+        {
+            started = true;
+            func_do_profile(func);
+        }
+        let timed = profiling
+            && (func.prof.borrow().profiling
+                || caller_func(frame).is_some_and(|caller| caller.prof.borrow().profiling));
+        let mut call_start = 0;
+        let mut wait_start = 0;
+        if timed {
+            let mut prof = func.prof.borrow_mut();
+            prof.tm_count += 1;
+            call_start = profile_start();
+            prof.tm_children = profile_zero();
+        }
+        if profiling {
+            wait_start = script_prof_save();
+        }
+        Self {
+            profiling,
+            started,
+            timed,
+            call_start,
+            wait_start,
+        }
     }
 
-    let do_profiling_yes = DO_PROFILING.get() == PROF_YES;
-    let mut started_profiling = false;
-    if do_profiling_yes
-        && !func.prof.borrow().profiling
-        && has_profiling_named(false, func.name().as_cstr())
-    {
-        started_profiling = true;
-        func_do_profile(func);
-    }
-    let func_or_func_caller_profiling = do_profiling_yes
-        && (func.prof.borrow().profiling
-            || caller_func(&frame).is_some_and(|caller| caller.prof.borrow().profiling));
-    let mut call_start = 0;
-    let mut wait_start = 0;
-    if func_or_func_caller_profiling {
-        let mut prof = func.prof.borrow_mut();
-        prof.tm_count += 1;
-        call_start = profile_start();
-        prof.tm_children = profile_zero();
-    }
-    if do_profiling_yes {
-        wait_start = script_prof_save();
-    }
-
-    let save_current_sctx = CURRENT_SCTX.get();
-    CURRENT_SCTX.set(func.script_ctx.get());
-    let save_did_emsg = DID_EMSG.get();
-    DID_EMSG.set(0);
-
-    if default_arg_err && (func.has_flag(FuncFlags::ABORT) || TRYLEVEL.get() > 0) {
-        DID_EMSG.set(1);
-    } else if islambda {
-        // A lambda's body is one line, "return <expr>"; evaluate the
-        // expression straight rather than going through `do_cmdline`.
-        let line = body
-            .lines
-            .first()
-            .and_then(Option::as_deref)
-            .unwrap_or_default();
-        let expr = line.get(c"return ".count_bytes()..).unwrap_or_default();
-        let _nesting = Depth::of(EX_NESTING_LEVEL);
-        // Into what the caller left there, as upstream evaluates into the
-        // caller's own value.
-        let mut value = frame.rettv.replace(TypVal::Unknown);
-        let _ = eval1(&mut Cursor::new(expr), &mut value, true);
-        // Over whatever a `:return` run from inside the expression left.
-        let old = frame.rettv.replace(value);
-        drop(old);
-    } else {
-        // Call do_cmdline() to execute the lines.
-        let opts = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT;
-        let _ = do_cmdline(None, Some(&mut LineSource::Function(&frame)), opts);
-    }
-
-    // Invoke functions added with `:defer`.
-    handle_defer_one(&frame);
-
-    drop(redraw_off);
-
-    // The return value is the caller's from here.
-    *result = frame.rettv.replace(TypVal::Unknown);
-    // When the function was aborted because of an error, return -1.
-    if (DID_EMSG.get() != 0 && func.has_flag(FuncFlags::ABORT)) || result.v_type() == VAR_UNKNOWN {
-        tv_clear(result);
-        result.write_number(-1);
-    }
-
-    if func_or_func_caller_profiling {
-        call_start = profile_end(call_start);
-        call_start = profile_sub_wait(wait_start, call_start);
+    /// Stop the call's clock and charge it to `func` and its caller.
+    fn finish(&mut self, func: &UserFunc, frame: &FuncCall) {
+        if !self.timed {
+            return;
+        }
+        self.call_start = profile_end(self.call_start);
+        self.call_start = profile_sub_wait(self.wait_start, self.call_start);
+        let call_time = self.call_start;
         {
             let mut prof = func.prof.borrow_mut();
-            prof.tm_total = profile_add(prof.tm_total, call_start);
-            prof.tm_self = profile_self(prof.tm_self, call_start, prof.tm_children);
+            prof.tm_total = profile_add(prof.tm_total, call_time);
+            prof.tm_self = profile_self(prof.tm_self, call_time, prof.tm_children);
         }
-        if let Some(caller) = caller_func(&frame)
+        if let Some(caller) = caller_func(frame)
             && caller.prof.borrow().profiling
         {
             let mut prof = caller.prof.borrow_mut();
-            prof.tm_children = profile_add(prof.tm_children, call_start);
-            prof.tml_children = profile_add(prof.tml_children, call_start);
+            prof.tm_children = profile_add(prof.tm_children, call_time);
+            prof.tml_children = profile_add(prof.tml_children, call_time);
         }
-        if started_profiling {
+        if self.started {
             // Make a `:profdel func` stop profiling the function.
             func.prof.borrow_mut().profiling = false;
         }
     }
 
-    if p_verbose() >= 12 {
-        let result = &*result;
-        verbose_report(|| {
-            let name = sourcing_name_text();
-            if aborting() {
-                smsg!(0, "{name} aborted");
-            } else if result.v_type() == VAR_NUMBER {
-                let n = result.number_or_zero();
-                smsg!(0, "{name} returning #{}", n);
-            } else {
-                // Do not want errors such as E724 here.
-                let rendered = {
-                    let _no_emsg = Suppress::emsg();
-                    encode_tv2string(result)
-                };
-                let text = msg_bytes(&quoted_value(rendered.as_cstr())).to_string();
-                smsg!(0, "{name} returning {text}");
-            }
-        });
+    /// Give the script's profile back the time the call waited.
+    fn restore_script(&self) {
+        if self.profiling {
+            script_prof_restore(self.wait_start);
+        }
     }
+}
 
-    estack_pop();
-    CURRENT_SCTX.set(save_current_sctx);
-    if do_profiling_yes {
-        script_prof_restore(wait_start);
-    }
-    drop(sandboxed);
-
-    if p_verbose() >= 12 && sourcing_name_bytes().is_some() {
-        verbose_report(|| {
-            let name = sourcing_name_text();
-            smsg!(0, "continuing in {name}");
-        });
-    }
-
-    DID_EMSG.set(DID_EMSG.get() | save_did_emsg);
-    // The tear-down below is the caller's depth, not this call's.
-    drop(call_depth);
-    for (local, name) in &defaults_set {
+/// Clear the values of the defaults this call evaluated, as upstream does
+/// before the scopes are torn down.
+fn clear_defaults(scopes: &FrameScopes, defaults: &[(bool, Vec<u8>)]) {
+    for (local, name) in defaults {
         let scope = if *local {
             &scopes.l_vars
         } else {
@@ -425,18 +542,6 @@ pub(crate) fn call_user_func(
             }
         }
     }
-    cleanup_function_call(frame);
-
-    func.calls.set(func.calls.get() - 1);
-    // Free the function when it was deleted while it was running.
-    if func.calls.get() <= 0 && func.refcount.get() <= 0 {
-        func_clear_free(func, false);
-    }
-
-    if did_save_redo {
-        restore_redobuff(&mut save_redo);
-    }
-    restore_search_patterns();
 }
 
 /// The guard in front of [`call_user_func`]: a Lua reference is called
