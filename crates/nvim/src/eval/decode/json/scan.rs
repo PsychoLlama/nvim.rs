@@ -193,56 +193,23 @@ pub(crate) fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> Result<(),
 /// `at` indexes `dec.buf` and points at `-` or a digit.
 pub(crate) fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> Result<(), DecodeError> {
     let buf = dec.buf;
-    let e = buf.len();
     let s = *at;
     let mut p = s;
-
-    let mut fracs: Option<usize> = None;
-    let mut exps: Option<usize> = None;
-    let mut exps_s: Option<usize> = None;
 
     if buf[p] == b'-' {
         p += 1;
     }
     let ints = p;
-    // Everything below is "scan as far as the grammar allows"; running
-    // out of input is not an error here, it is what the checks below are
-    // for.
-    'scan: {
-        if p >= e {
-            break 'scan;
-        }
-        while p < e && ascii_isdigit(c_int::from(buf[p])) {
-            p += 1;
-        }
-        if p != ints + 1 && buf[ints] == b'0' {
-            return fail(at, p, DecodeError::LeadingZeroes(dec.rest(s)));
-        }
-        if p >= e || p == ints {
-            break 'scan;
-        }
-        if buf[p] == b'.' {
-            p += 1;
-            fracs = Some(p);
-            while p < e && ascii_isdigit(c_int::from(buf[p])) {
-                p += 1;
-            }
-            if p >= e || Some(p) == fracs {
-                break 'scan;
-            }
-        }
-        if buf[p] == b'e' || buf[p] == b'E' {
-            p += 1;
-            exps_s = Some(p);
-            if p < e && (buf[p] == b'-' || buf[p] == b'+') {
-                p += 1;
-            }
-            exps = Some(p);
-            while p < e && ascii_isdigit(c_int::from(buf[p])) {
-                p += 1;
-            }
-        }
-    }
+    let NumberExtent {
+        end,
+        fracs,
+        exps_s,
+        exps,
+    } = match number_extent(buf, ints) {
+        Ok(extent) => extent,
+        Err(stop) => return fail(at, stop, DecodeError::LeadingZeroes(dec.rest(s))),
+    };
+    p = end;
 
     if p == ints {
         return fail(at, p, DecodeError::AfterMinus(dec.rest(s)));
@@ -292,6 +259,73 @@ pub(crate) fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> Result<(),
     Ok(())
 }
 
+/// Where a number's parts start and end, as far as the grammar allows.
+#[derive(Debug, PartialEq, Eq)]
+struct NumberExtent {
+    /// One past the last byte of the number.
+    end: usize,
+    /// The first digit after the `.`, if there is one.
+    fracs: Option<usize>,
+    /// The byte after the `e`/`E`, where a sign may sit, if there is one.
+    exps_s: Option<usize>,
+    /// The first exponent digit's place, past any sign.
+    exps: Option<usize>,
+}
+
+/// Scan a number's integer, fraction and exponent from `ints`, the byte past
+/// any minus sign, as far as the grammar allows.
+///
+/// Running out of input is not an error here: the caller's checks read the
+/// extent and say what is missing. The one refusal made while scanning is a
+/// leading zero, answered as `Err` with the place the integer part ended.
+fn number_extent(buf: &[u8], ints: usize) -> Result<NumberExtent, usize> {
+    let e = buf.len();
+    let mut extent = NumberExtent {
+        end: ints,
+        fracs: None,
+        exps_s: None,
+        exps: None,
+    };
+    let mut p = ints;
+    if p >= e {
+        return Ok(extent);
+    }
+    while p < e && ascii_isdigit(c_int::from(buf[p])) {
+        p += 1;
+    }
+    if p != ints + 1 && buf[ints] == b'0' {
+        return Err(p);
+    }
+    extent.end = p;
+    if p >= e || p == ints {
+        return Ok(extent);
+    }
+    if buf[p] == b'.' {
+        p += 1;
+        extent.fracs = Some(p);
+        while p < e && ascii_isdigit(c_int::from(buf[p])) {
+            p += 1;
+        }
+        extent.end = p;
+        if p >= e || Some(p) == extent.fracs {
+            return Ok(extent);
+        }
+    }
+    if buf[p] == b'e' || buf[p] == b'E' {
+        p += 1;
+        extent.exps_s = Some(p);
+        if p < e && (buf[p] == b'-' || buf[p] == b'+') {
+            p += 1;
+        }
+        extent.exps = Some(p);
+        while p < e && ascii_isdigit(c_int::from(buf[p])) {
+            p += 1;
+        }
+        extent.end = p;
+    }
+    Ok(extent)
+}
+
 /// The `parse_json_*_fail` tail: publish the cursor and answer failure.
 ///
 /// Both scanners write `*pp = p` on the way out whichever exit they take, so
@@ -299,4 +333,54 @@ pub(crate) fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> Result<(),
 fn fail(at: &mut usize, p: usize, refusal: DecodeError) -> Result<(), DecodeError> {
     *at = p;
     Err(refusal)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{NumberExtent, number_extent};
+
+    fn extent(
+        end: usize,
+        fracs: Option<usize>,
+        exps_s: Option<usize>,
+        exps: Option<usize>,
+    ) -> NumberExtent {
+        NumberExtent {
+            end,
+            fracs,
+            exps_s,
+            exps,
+        }
+    }
+
+    #[test]
+    fn number_extent_reads_each_part_and_stops_at_the_first_byte_past_it() {
+        assert_eq!(number_extent(b"42,", 0), Ok(extent(2, None, None, None)));
+        assert_eq!(
+            number_extent(b"-1.5]", 1),
+            Ok(extent(4, Some(3), None, None))
+        );
+        assert_eq!(
+            number_extent(b"1.5e-3", 0),
+            Ok(extent(6, Some(2), Some(4), Some(5)))
+        );
+        assert_eq!(
+            number_extent(b"2E9", 0),
+            Ok(extent(3, None, Some(2), Some(2)))
+        );
+        // A missing part is the caller's to refuse: the extent shows it.
+        assert_eq!(number_extent(b"-", 1), Ok(extent(1, None, None, None)));
+        assert_eq!(number_extent(b"1.", 0), Ok(extent(2, Some(2), None, None)));
+        assert_eq!(
+            number_extent(b"1e", 0),
+            Ok(extent(2, None, Some(2), Some(2)))
+        );
+    }
+
+    #[test]
+    fn number_extent_refuses_a_leading_zero_where_the_integer_ends() {
+        assert_eq!(number_extent(b"012", 0), Err(3));
+        assert_eq!(number_extent(b"-00", 1), Err(3));
+        assert_eq!(number_extent(b"0.5", 0), Ok(extent(3, Some(2), None, None)));
+    }
 }
