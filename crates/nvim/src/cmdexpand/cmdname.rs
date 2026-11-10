@@ -47,6 +47,11 @@ use core::ffi::{CStr, c_int, c_uint};
 /// `argt`. For user-defined commands and for environment variables, `context`
 /// carries the completion type.
 ///
+/// The commands fall into families first -- a command argument, one context
+/// for the whole argument, a mapping, an expression, a menu -- and the
+/// `match` is what is left: the commands whose argument has a parser of its
+/// own.
+///
 /// Returns where the next command starts, or `None` when there is none.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn set_context_by_cmdname(
@@ -59,13 +64,28 @@ pub(crate) fn set_context_by_cmdname(
     context: ExpandContext,
     forceit: bool,
 ) -> Option<usize> {
-    let t = text.to_bytes();
-    let cmd_name = cstr::suffix(text, cmd);
-    // Many commands complete their whole argument in one context.
-    let whole_argument = |expand: &mut Expand, context| {
+    if takes_command(cmdidx) {
+        return Some(arg);
+    }
+    if let Some(context) = whole_argument_context(cmdidx) {
         expand.context = context;
         expand.pattern = arg;
-    };
+        return None;
+    }
+    let cmd_name = cstr::suffix(text, cmd);
+    if let Some(map) = MapCommand::of(cmdidx) {
+        return set_context_in_map_cmd(
+            expand, cmd_name, arg, forceit, map.abbrev, map.unmap, cmdidx,
+        );
+    }
+    if takes_expression(cmdidx) {
+        set_context_for_expression(expand, arg, cmdidx);
+        return None;
+    }
+    if is_menu_command(cmdidx) {
+        return set_context_in_menu_cmd(expand, cmd_name, arg, forceit);
+    }
+    let t = text.to_bytes();
     // A command that takes several names completes only the one the cursor
     // is in, the last.
     let last_word = |from: usize| match t[from..].iter().rposition(|&c| c == b' ') {
@@ -92,47 +112,6 @@ pub(crate) fn set_context_by_cmdname(
                 expand.context = ExpandContext::DirsInCdpath;
             }
         }
-        CmdIdx::help => whole_argument(expand, ExpandContext::Help),
-
-        // Command modifiers: return the argument.  Also for commands with
-        // an argument that is a command.
-        CmdIdx::aboveleft
-        | CmdIdx::argdo
-        | CmdIdx::belowright
-        | CmdIdx::botright
-        | CmdIdx::browse
-        | CmdIdx::bufdo
-        | CmdIdx::cdo
-        | CmdIdx::cfdo
-        | CmdIdx::confirm
-        | CmdIdx::debug
-        | CmdIdx::folddoclosed
-        | CmdIdx::folddoopen
-        | CmdIdx::hide
-        | CmdIdx::horizontal
-        | CmdIdx::keepalt
-        | CmdIdx::keepjumps
-        | CmdIdx::keepmarks
-        | CmdIdx::keeppatterns
-        | CmdIdx::ldo
-        | CmdIdx::leftabove
-        | CmdIdx::lfdo
-        | CmdIdx::lockmarks
-        | CmdIdx::noautocmd
-        | CmdIdx::noswapfile
-        | CmdIdx::restart
-        | CmdIdx::rightbelow
-        | CmdIdx::sandbox
-        | CmdIdx::silent
-        | CmdIdx::tab
-        | CmdIdx::tabdo
-        | CmdIdx::topleft
-        | CmdIdx::unsilent
-        | CmdIdx::verbose
-        | CmdIdx::vertical
-        | CmdIdx::windo => {
-            return Some(arg);
-        }
 
         CmdIdx::filter => return set_context_in_filter_cmd(expand, text, arg),
 
@@ -140,8 +119,6 @@ pub(crate) fn set_context_by_cmdname(
 
         // All completion for the +cmdline_compl feature goes here.
         CmdIdx::command => return set_context_in_user_cmd(expand, arg),
-
-        CmdIdx::delcommand => whole_argument(expand, ExpandContext::UserCommands),
 
         CmdIdx::global | CmdIdx::vglobal => {
             let nextcmd = find_cmd_after_global_cmd(text, arg);
@@ -190,41 +167,17 @@ pub(crate) fn set_context_by_cmdname(
         | CmdIdx::tjump
         | CmdIdx::stjump
         | CmdIdx::ptjump => {
-            let context = if WOP_FLAGS.get() & OPT_WOP_FLAG_TAGFILE as c_uint != 0 {
+            expand.context = if WOP_FLAGS.get() & OPT_WOP_FLAG_TAGFILE as c_uint != 0 {
                 ExpandContext::TagsListFiles
             } else {
                 ExpandContext::Tags
             };
-            whole_argument(expand, context);
+            expand.pattern = arg;
         }
-
-        CmdIdx::augroup => whole_argument(expand, ExpandContext::Augroup),
 
         CmdIdx::syntax => set_context_in_syntax_cmd(expand, arg),
 
-        CmdIdx::r#const
-        | CmdIdx::r#let
-        | CmdIdx::r#if
-        | CmdIdx::elseif
-        | CmdIdx::r#while
-        | CmdIdx::r#for
-        | CmdIdx::echo
-        | CmdIdx::echon
-        | CmdIdx::execute
-        | CmdIdx::echomsg
-        | CmdIdx::echoerr
-        | CmdIdx::call
-        | CmdIdx::r#return
-        | CmdIdx::cexpr
-        | CmdIdx::caddexpr
-        | CmdIdx::cgetexpr
-        | CmdIdx::lexpr
-        | CmdIdx::laddexpr
-        | CmdIdx::lgetexpr => set_context_for_expression(expand, arg, cmdidx),
-
         CmdIdx::unlet => return set_context_in_unlet_cmd(expand, text, arg),
-
-        CmdIdx::function | CmdIdx::delfunction => whole_argument(expand, ExpandContext::UserFunc),
 
         CmdIdx::echohl => set_context_in_echohl_cmd(expand, arg),
         CmdIdx::highlight => set_context_in_highlight_cmd(expand, arg),
@@ -232,113 +185,14 @@ pub(crate) fn set_context_by_cmdname(
 
         CmdIdx::bdelete | CmdIdx::bwipeout | CmdIdx::bunload => {
             // Only the argument the cursor is in is completed.  Upstream
-            // falls through into the buffer-name arm below.
+            // falls through into the buffer-name arm.
             expand.context = ExpandContext::Buffers;
             expand.pattern = last_word(arg);
-        }
-        CmdIdx::buffer | CmdIdx::sbuffer | CmdIdx::pbuffer | CmdIdx::checktime => {
-            whole_argument(expand, ExpandContext::Buffers);
-        }
-
-        CmdIdx::diffget | CmdIdx::diffput => {
-            // If current buffer is in diff mode, complete buffer names
-            // which are in diff mode, and different than current buffer.
-            whole_argument(expand, ExpandContext::DiffBuffers);
         }
 
         CmdIdx::USER | CmdIdx::USER_BUF => {
             return set_context_in_user_cmdarg(expand, cmd_name, arg, argt, context, forceit);
         }
-
-        CmdIdx::map
-        | CmdIdx::noremap
-        | CmdIdx::nmap
-        | CmdIdx::nnoremap
-        | CmdIdx::vmap
-        | CmdIdx::vnoremap
-        | CmdIdx::omap
-        | CmdIdx::onoremap
-        | CmdIdx::imap
-        | CmdIdx::inoremap
-        | CmdIdx::cmap
-        | CmdIdx::cnoremap
-        | CmdIdx::lmap
-        | CmdIdx::lnoremap
-        | CmdIdx::smap
-        | CmdIdx::snoremap
-        | CmdIdx::xmap
-        | CmdIdx::xnoremap => {
-            return set_context_in_map_cmd(expand, cmd_name, arg, forceit, false, false, cmdidx);
-        }
-        CmdIdx::unmap
-        | CmdIdx::nunmap
-        | CmdIdx::vunmap
-        | CmdIdx::ounmap
-        | CmdIdx::iunmap
-        | CmdIdx::cunmap
-        | CmdIdx::lunmap
-        | CmdIdx::sunmap
-        | CmdIdx::xunmap => {
-            return set_context_in_map_cmd(expand, cmd_name, arg, forceit, false, true, cmdidx);
-        }
-        CmdIdx::mapclear
-        | CmdIdx::nmapclear
-        | CmdIdx::vmapclear
-        | CmdIdx::omapclear
-        | CmdIdx::imapclear
-        | CmdIdx::cmapclear
-        | CmdIdx::lmapclear
-        | CmdIdx::smapclear
-        | CmdIdx::xmapclear => whole_argument(expand, ExpandContext::Mapclear),
-
-        CmdIdx::abbreviate
-        | CmdIdx::noreabbrev
-        | CmdIdx::cabbrev
-        | CmdIdx::cnoreabbrev
-        | CmdIdx::iabbrev
-        | CmdIdx::inoreabbrev => {
-            return set_context_in_map_cmd(expand, cmd_name, arg, forceit, true, false, cmdidx);
-        }
-        CmdIdx::unabbreviate | CmdIdx::cunabbrev | CmdIdx::iunabbrev => {
-            return set_context_in_map_cmd(expand, cmd_name, arg, forceit, true, true, cmdidx);
-        }
-
-        CmdIdx::menu
-        | CmdIdx::noremenu
-        | CmdIdx::unmenu
-        | CmdIdx::amenu
-        | CmdIdx::anoremenu
-        | CmdIdx::aunmenu
-        | CmdIdx::nmenu
-        | CmdIdx::nnoremenu
-        | CmdIdx::nunmenu
-        | CmdIdx::vmenu
-        | CmdIdx::vnoremenu
-        | CmdIdx::vunmenu
-        | CmdIdx::omenu
-        | CmdIdx::onoremenu
-        | CmdIdx::ounmenu
-        | CmdIdx::imenu
-        | CmdIdx::inoremenu
-        | CmdIdx::iunmenu
-        | CmdIdx::cmenu
-        | CmdIdx::cnoremenu
-        | CmdIdx::cunmenu
-        | CmdIdx::tlmenu
-        | CmdIdx::tlnoremenu
-        | CmdIdx::tlunmenu
-        | CmdIdx::tmenu
-        | CmdIdx::tunmenu
-        | CmdIdx::popup
-        | CmdIdx::emenu => {
-            return set_context_in_menu_cmd(expand, cmd_name, arg, forceit);
-        }
-
-        CmdIdx::colorscheme => whole_argument(expand, ExpandContext::Colors),
-        CmdIdx::compiler => whole_argument(expand, ExpandContext::Compiler),
-        CmdIdx::ownsyntax => whole_argument(expand, ExpandContext::Ownsyntax),
-        CmdIdx::setfiletype => whole_argument(expand, ExpandContext::Filetype),
-        CmdIdx::packadd => whole_argument(expand, ExpandContext::Packadd),
 
         CmdIdx::runtime => set_context_in_runtime_cmd(expand, arg),
 
@@ -348,11 +202,6 @@ pub(crate) fn set_context_by_cmdname(
 
         CmdIdx::checkhealth => expand.context = ExpandContext::Checkhealth,
         CmdIdx::lsp => expand.context = ExpandContext::Lsp,
-
-        CmdIdx::retab => whole_argument(expand, ExpandContext::Retab),
-        CmdIdx::messages => whole_argument(expand, ExpandContext::Messages),
-        CmdIdx::history => whole_argument(expand, ExpandContext::History),
-        CmdIdx::syntime => whole_argument(expand, ExpandContext::Syntime),
 
         CmdIdx::argdelete => {
             expand.context = ExpandContext::Arglist;
@@ -372,6 +221,203 @@ pub(crate) fn set_context_by_cmdname(
         _ => {}
     }
     None
+}
+
+/// Whether `cmdidx` is a command modifier or a command whose argument is
+/// itself a command (`:vertical`, `:argdo`): completion goes on in the
+/// argument as a command line of its own.
+fn takes_command(cmdidx: CmdIdx) -> bool {
+    matches!(
+        cmdidx,
+        CmdIdx::aboveleft
+            | CmdIdx::argdo
+            | CmdIdx::belowright
+            | CmdIdx::botright
+            | CmdIdx::browse
+            | CmdIdx::bufdo
+            | CmdIdx::cdo
+            | CmdIdx::cfdo
+            | CmdIdx::confirm
+            | CmdIdx::debug
+            | CmdIdx::folddoclosed
+            | CmdIdx::folddoopen
+            | CmdIdx::hide
+            | CmdIdx::horizontal
+            | CmdIdx::keepalt
+            | CmdIdx::keepjumps
+            | CmdIdx::keepmarks
+            | CmdIdx::keeppatterns
+            | CmdIdx::ldo
+            | CmdIdx::leftabove
+            | CmdIdx::lfdo
+            | CmdIdx::lockmarks
+            | CmdIdx::noautocmd
+            | CmdIdx::noswapfile
+            | CmdIdx::restart
+            | CmdIdx::rightbelow
+            | CmdIdx::sandbox
+            | CmdIdx::silent
+            | CmdIdx::tab
+            | CmdIdx::tabdo
+            | CmdIdx::topleft
+            | CmdIdx::unsilent
+            | CmdIdx::verbose
+            | CmdIdx::vertical
+            | CmdIdx::windo
+    )
+}
+
+/// The one context `cmdidx`'s whole argument completes in, for the commands
+/// whose argument is a single name of one kind (`:help`, `:colorscheme`).
+fn whole_argument_context(cmdidx: CmdIdx) -> Option<ExpandContext> {
+    Some(match cmdidx {
+        CmdIdx::help => ExpandContext::Help,
+        CmdIdx::delcommand => ExpandContext::UserCommands,
+        CmdIdx::augroup => ExpandContext::Augroup,
+        CmdIdx::function | CmdIdx::delfunction => ExpandContext::UserFunc,
+        CmdIdx::buffer | CmdIdx::sbuffer | CmdIdx::pbuffer | CmdIdx::checktime => {
+            ExpandContext::Buffers
+        }
+        // If the current buffer is in diff mode, the buffer names that are
+        // in diff mode and are not the current buffer.
+        CmdIdx::diffget | CmdIdx::diffput => ExpandContext::DiffBuffers,
+        CmdIdx::mapclear
+        | CmdIdx::nmapclear
+        | CmdIdx::vmapclear
+        | CmdIdx::omapclear
+        | CmdIdx::imapclear
+        | CmdIdx::cmapclear
+        | CmdIdx::lmapclear
+        | CmdIdx::smapclear
+        | CmdIdx::xmapclear => ExpandContext::Mapclear,
+        CmdIdx::colorscheme => ExpandContext::Colors,
+        CmdIdx::compiler => ExpandContext::Compiler,
+        CmdIdx::ownsyntax => ExpandContext::Ownsyntax,
+        CmdIdx::setfiletype => ExpandContext::Filetype,
+        CmdIdx::packadd => ExpandContext::Packadd,
+        CmdIdx::retab => ExpandContext::Retab,
+        CmdIdx::messages => ExpandContext::Messages,
+        CmdIdx::history => ExpandContext::History,
+        CmdIdx::syntime => ExpandContext::Syntime,
+        _ => return None,
+    })
+}
+
+/// A `:map`/`:abbreviate` family command, as `set_context_in_map_cmd` reads
+/// it.
+#[derive(Debug, PartialEq, Eq)]
+struct MapCommand {
+    /// An abbreviation command rather than a mapping one.
+    abbrev: bool,
+    /// A command that removes (`:unmap`, `:unabbreviate`).
+    unmap: bool,
+}
+
+impl MapCommand {
+    /// The mapping command `cmdidx` is, if it is one; the `:mapclear`s are
+    /// not, their argument is [`whole_argument_context`]'s.
+    fn of(cmdidx: CmdIdx) -> Option<MapCommand> {
+        let (abbrev, unmap) = match cmdidx {
+            CmdIdx::map
+            | CmdIdx::noremap
+            | CmdIdx::nmap
+            | CmdIdx::nnoremap
+            | CmdIdx::vmap
+            | CmdIdx::vnoremap
+            | CmdIdx::omap
+            | CmdIdx::onoremap
+            | CmdIdx::imap
+            | CmdIdx::inoremap
+            | CmdIdx::cmap
+            | CmdIdx::cnoremap
+            | CmdIdx::lmap
+            | CmdIdx::lnoremap
+            | CmdIdx::smap
+            | CmdIdx::snoremap
+            | CmdIdx::xmap
+            | CmdIdx::xnoremap => (false, false),
+            CmdIdx::unmap
+            | CmdIdx::nunmap
+            | CmdIdx::vunmap
+            | CmdIdx::ounmap
+            | CmdIdx::iunmap
+            | CmdIdx::cunmap
+            | CmdIdx::lunmap
+            | CmdIdx::sunmap
+            | CmdIdx::xunmap => (false, true),
+            CmdIdx::abbreviate
+            | CmdIdx::noreabbrev
+            | CmdIdx::cabbrev
+            | CmdIdx::cnoreabbrev
+            | CmdIdx::iabbrev
+            | CmdIdx::inoreabbrev => (true, false),
+            CmdIdx::unabbreviate | CmdIdx::cunabbrev | CmdIdx::iunabbrev => (true, true),
+            _ => return None,
+        };
+        Some(MapCommand { abbrev, unmap })
+    }
+}
+
+/// Whether `cmdidx`'s argument is a Vim expression (`:let`, `:echo`,
+/// `:cexpr`).
+fn takes_expression(cmdidx: CmdIdx) -> bool {
+    matches!(
+        cmdidx,
+        CmdIdx::r#const
+            | CmdIdx::r#let
+            | CmdIdx::r#if
+            | CmdIdx::elseif
+            | CmdIdx::r#while
+            | CmdIdx::r#for
+            | CmdIdx::echo
+            | CmdIdx::echon
+            | CmdIdx::execute
+            | CmdIdx::echomsg
+            | CmdIdx::echoerr
+            | CmdIdx::call
+            | CmdIdx::r#return
+            | CmdIdx::cexpr
+            | CmdIdx::caddexpr
+            | CmdIdx::cgetexpr
+            | CmdIdx::lexpr
+            | CmdIdx::laddexpr
+            | CmdIdx::lgetexpr
+    )
+}
+
+/// Whether `cmdidx` defines, removes or runs a menu entry.
+fn is_menu_command(cmdidx: CmdIdx) -> bool {
+    matches!(
+        cmdidx,
+        CmdIdx::menu
+            | CmdIdx::noremenu
+            | CmdIdx::unmenu
+            | CmdIdx::amenu
+            | CmdIdx::anoremenu
+            | CmdIdx::aunmenu
+            | CmdIdx::nmenu
+            | CmdIdx::nnoremenu
+            | CmdIdx::nunmenu
+            | CmdIdx::vmenu
+            | CmdIdx::vnoremenu
+            | CmdIdx::vunmenu
+            | CmdIdx::omenu
+            | CmdIdx::onoremenu
+            | CmdIdx::ounmenu
+            | CmdIdx::imenu
+            | CmdIdx::inoremenu
+            | CmdIdx::iunmenu
+            | CmdIdx::cmenu
+            | CmdIdx::cnoremenu
+            | CmdIdx::cunmenu
+            | CmdIdx::tlmenu
+            | CmdIdx::tlnoremenu
+            | CmdIdx::tlunmenu
+            | CmdIdx::tmenu
+            | CmdIdx::tunmenu
+            | CmdIdx::popup
+            | CmdIdx::emenu
+    )
 }
 
 /// Walk one command's arguments and set the context for the one the cursor is
@@ -660,4 +706,42 @@ pub fn expand_cmdline(expand: &mut Expand, col: c_int) -> (Expanded, Vec<XString
     // Find all files that match the description.
     let found = expand_from_context(expand, file_str.as_cstr(), options).unwrap_or_default();
     (Expanded::Ok, found)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The families were one `match`, where a command named twice is an
+    /// unreachable pattern; as separate tests nothing else says so.
+    #[test]
+    fn a_command_is_in_at_most_one_family() {
+        let builtins = usize::try_from(CmdIdx::SIZE.code()).expect("a count");
+        for row in 0..builtins {
+            let cmdidx = CmdIdx::at_row(row);
+            let families = [
+                takes_command(cmdidx),
+                whole_argument_context(cmdidx).is_some(),
+                MapCommand::of(cmdidx).is_some(),
+                takes_expression(cmdidx),
+                is_menu_command(cmdidx),
+            ];
+            let count = families.iter().filter(|&&f| f).count();
+            assert!(count <= 1, "{cmdidx:?} is in {count} families");
+        }
+    }
+
+    #[test]
+    fn mapping_commands_say_what_they_do() {
+        let map = |abbrev, unmap| Some(MapCommand { abbrev, unmap });
+        assert_eq!(MapCommand::of(CmdIdx::nnoremap), map(false, false));
+        assert_eq!(MapCommand::of(CmdIdx::xunmap), map(false, true));
+        assert_eq!(MapCommand::of(CmdIdx::inoreabbrev), map(true, false));
+        assert_eq!(MapCommand::of(CmdIdx::cunabbrev), map(true, true));
+        assert_eq!(MapCommand::of(CmdIdx::nmapclear), None);
+        assert_eq!(
+            whole_argument_context(CmdIdx::nmapclear),
+            Some(ExpandContext::Mapclear)
+        );
+    }
 }
