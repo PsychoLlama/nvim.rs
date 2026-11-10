@@ -93,6 +93,42 @@ enum Expr {
     Reparse { block_start: usize, result: Vec<u8> },
 }
 
+/// Whether the walk goes on to the next item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Flow {
+    Next,
+    Stop,
+}
+
+// The item letters a `match` reads, as patterns.
+const SEPARATE: u8 = StlOpt::Separate.letter();
+const TRUNC_MARK: u8 = StlOpt::TruncMark.letter();
+const USER_HL: u8 = StlOpt::UserHl.letter();
+const TAB_PAGE_NR: u8 = StlOpt::TabPageNr.letter();
+const TAB_CLOSE_NR: u8 = StlOpt::TabCloseNr.letter();
+const CLICK_FUNC: u8 = StlOpt::ClickFunc.letter();
+
+/// One walk over a format: where the reader and the writer are, and what
+/// every item reads.
+struct Walk<'a> {
+    env: &'a Env<'a>,
+    out: &'a mut [u8],
+    fill: &'a Fill,
+    discard_clicks: bool,
+    /// The last byte of `out` is reserved for the NUL, so every visible
+    /// character must land before this.
+    end: usize,
+    /// The format, which a `%{%...%}` block can rewrite.
+    fmt: Vec<u8>,
+    /// Where the format is read.
+    p: usize,
+    /// Where `out` is written.
+    pos: usize,
+    /// An item's text, reused from item to item.
+    text: Vec<u8>,
+    st: State,
+}
+
 /// Walk `usefmt`, answering where in `out` the text ends.
 pub(super) fn run(
     env: &Env,
@@ -101,232 +137,295 @@ pub(super) fn run(
     fill: &Fill,
     discard_clicks: bool,
 ) -> usize {
-    // The last byte of the buffer is reserved for the NUL, so every visible
-    // character must land before it.
     let end = out.len() - 1;
-    let mut fmt = usefmt;
-    let mut p = 0usize;
-    let mut pos = 0usize;
-    let mut text: Vec<u8> = Vec::new();
-    let mut st = State {
-        groupdepth: 0,
-        evaldepth: 0,
-        prevchar_isflag: true,
-        prevchar_isitem: false,
+    let mut walk = Walk {
+        env,
+        out,
+        fill,
+        discard_clicks,
+        end,
+        fmt: usefmt,
+        p: 0,
+        pos: 0,
+        text: Vec::new(),
+        st: State {
+            groupdepth: 0,
+            evaldepth: 0,
+            prevchar_isflag: true,
+            prevchar_isitem: false,
+        },
     };
+    while walk.p < walk.fmt.len() && walk.step() == Flow::Next {}
+    walk.pos
+}
 
-    while p < fmt.len() {
-        if fmt[p] != b'%' {
-            st.prevchar_isflag = false;
-            st.prevchar_isitem = false;
+impl Walk<'_> {
+    /// Copy literal text up to the next `%` and read the item it starts.
+    fn step(&mut self) -> Flow {
+        if !self.copy_to_item() {
+            return Flow::Stop;
         }
-        // Copy the format verbatim until the next item, the end of the
-        // format, or the end of the output buffer. Upstream steps a byte at
-        // a time; the run is the same either way.
+        match self.fmt[self.p] {
+            // Two `%` in a row print one.
+            b'%' => {
+                self.out[self.pos] = b'%';
+                self.pos += 1;
+                self.p += 1;
+                self.st.prevchar_isflag = false;
+                self.st.prevchar_isitem = false;
+            }
+            // `%=`: where leftover width is spread. Ignored inside a group.
+            SEPARATE => {
+                self.p += 1;
+                if self.st.groupdepth <= 0 {
+                    let pos = self.pos;
+                    with_scratch(|s| s.push(Kind::Separate, pos));
+                }
+            }
+            // `%<`: where to start cutting when the line is too long.
+            TRUNC_MARK => {
+                self.p += 1;
+                let pos = self.pos;
+                with_scratch(|s| s.push(Kind::Trunc, pos));
+            }
+            // `%)`: the end of a group. Ignored when none is open.
+            b')' => {
+                self.p += 1;
+                if self.st.groupdepth >= 1 {
+                    let Walk {
+                        out,
+                        pos,
+                        end,
+                        st,
+                        fill,
+                        ..
+                    } = self;
+                    *pos = with_scratch(|s| {
+                        group::close(s, out, *pos, *end, &mut st.groupdepth, fill)
+                    });
+                }
+            }
+            _ => return self.item(),
+        }
+        Flow::Next
+    }
+
+    /// Copy the format verbatim until the next item, the end of the format,
+    /// or the end of the output buffer, and step over the `%`. Answers
+    /// whether there is an item to read: a `%` at the very end of the format
+    /// is ignored. Upstream steps a byte at a time; the run is the same.
+    fn copy_to_item(&mut self) -> bool {
+        let (fmt, p) = (&self.fmt, self.p);
+        if fmt[p] != b'%' {
+            self.st.prevchar_isflag = false;
+            self.st.prevchar_isitem = false;
+        }
         let run = fmt[p..]
             .iter()
             .position(|&byte| byte == b'%')
             .unwrap_or(fmt.len() - p)
-            .min(end - pos);
-        out[pos..pos + run].copy_from_slice(&fmt[p..p + run]);
-        pos += run;
-        p += run;
-        if p >= fmt.len() || pos >= end {
-            break;
+            .min(self.end - self.pos);
+        self.out[self.pos..self.pos + run].copy_from_slice(&fmt[p..p + run]);
+        self.pos += run;
+        self.p += run;
+        if self.p >= self.fmt.len() || self.pos >= self.end {
+            return false;
         }
-        // Step over the `%` and read what it introduces. A `%` at the very
-        // end of the format is ignored.
-        p += 1;
-        if p >= fmt.len() {
-            break;
-        }
+        self.p += 1;
+        self.p < self.fmt.len()
+    }
 
-        // Two `%` in a row print one.
-        if fmt[p] == b'%' {
-            out[pos] = fmt[p];
-            pos += 1;
-            p += 1;
-            st.prevchar_isflag = false;
-            st.prevchar_isitem = false;
-            continue;
+    /// An item with a width field: the three that overload it with an
+    /// argument, then the ones that take a maximum width too.
+    fn item(&mut self) -> Flow {
+        let mut spec = parse::Spec::read(&self.fmt, &mut self.p);
+        if self.p >= self.fmt.len() {
+            return Flow::Stop;
         }
-        // `%=`: where leftover width is spread. Ignored inside a group.
-        if fmt[p] == StlOpt::Separate.letter() {
-            p += 1;
-            if st.groupdepth > 0 {
-                continue;
+        match self.fmt[self.p] {
+            USER_HL => {
+                self.user_highlight(&spec);
+                return Flow::Next;
             }
-            with_scratch(|s| s.push(Kind::Separate, pos));
-            continue;
-        }
-        // `%<`: where to start cutting when the line is too long.
-        if fmt[p] == StlOpt::TruncMark.letter() {
-            p += 1;
-            with_scratch(|s| s.push(Kind::Trunc, pos));
-            continue;
-        }
-        // `%)`: the end of a group. Ignored when none is open.
-        if fmt[p] == b')' {
-            p += 1;
-            if st.groupdepth < 1 {
-                continue;
+            letter @ (TAB_PAGE_NR | TAB_CLOSE_NR) => {
+                self.tab_region(letter == TAB_CLOSE_NR, spec.minwid);
+                return Flow::Next;
             }
-            pos = with_scratch(|s| group::close(s, out, pos, end, &mut st.groupdepth, fill));
-            continue;
+            CLICK_FUNC => return self.click_region(spec.minwid),
+            _ => {}
         }
 
-        let mut spec = parse::Spec::read(&fmt, &mut p);
-        if p >= fmt.len() {
-            break;
+        spec.finish(&self.fmt, &mut self.p);
+        if self.p >= self.fmt.len() {
+            return Flow::Stop;
         }
-
-        // `%N*`: a user highlight group, whose number is the width field.
-        if fmt[p] == StlOpt::UserHl.letter() {
-            let minwid = if spec.minwid > 9 { 1 } else { spec.minwid };
-            with_scratch(|s| {
-                s.push_item(StlItem {
-                    start: pos,
-                    minwid,
-                    kind: Kind::Highlight,
-                    ..StlItem::default()
-                });
-            });
-            p += 1;
-            continue;
-        }
-
-        // `%NT` and `%NX`: a region that switches to or closes tab page N.
-        // `tabline=%1Ttab\ one%X` switches to tab 1; `%1X` closes it.
-        if fmt[p] == StlOpt::TabPageNr.letter() || fmt[p] == StlOpt::TabCloseNr.letter() {
-            let mut minwid = spec.minwid;
-            if fmt[p] == StlOpt::TabCloseNr.letter() {
-                if minwid == 0 {
-                    // A bare `%X` ends the label, so it takes the number of
-                    // the last tab label opened -- which, because the items
-                    // are one shared stack, may be an outer expansion's.
-                    minwid = with_scratch(|s| {
-                        (0..s.curitem)
-                            .rev()
-                            .find(|&n| s.items[n].kind == Kind::TabPage && s.items[n].minwid >= 0)
-                            .map_or(0, |n| s.items[n].minwid)
-                    });
-                } else {
-                    // Close numbers are stored negative.
-                    minwid = -minwid;
+        match self.fmt[self.p] {
+            b'(' => self.open_group(&spec),
+            // `%}`: the end of a block a `%{%...%}` was expanded into.
+            b'}' if self.st.evaldepth > 0 => {
+                self.p += 1;
+                self.st.evaldepth -= 1;
+            }
+            byte => {
+                // Anything the alphabet does not name is skipped.
+                self.p += 1;
+                match StlOpt::from_byte(byte) {
+                    Some(opt @ (StlOpt::Highlight | StlOpt::HighlightComb)) => {
+                        self.highlight_name(opt);
+                    }
+                    Some(opt) => return self.printed(opt, &spec),
+                    None => {}
                 }
             }
+        }
+        Flow::Next
+    }
+
+    /// `%N*`: a user highlight group, whose number is the width field.
+    fn user_highlight(&mut self, spec: &parse::Spec) {
+        let minwid = if spec.minwid > 9 { 1 } else { spec.minwid };
+        let start = self.pos;
+        with_scratch(|s| {
+            s.push_item(StlItem {
+                start,
+                minwid,
+                kind: Kind::Highlight,
+                ..StlItem::default()
+            });
+        });
+        self.p += 1;
+    }
+
+    /// `%NT` and `%NX`: a region that switches to or closes tab page N.
+    /// `tabline=%1Ttab\ one%X` switches to tab 1; `%1X` closes it.
+    fn tab_region(&mut self, closes: bool, number: c_int) {
+        let mut minwid = number;
+        if closes {
+            if minwid == 0 {
+                // A bare `%X` ends the label, so it takes the number of
+                // the last tab label opened -- which, because the items
+                // are one shared stack, may be an outer expansion's.
+                minwid = with_scratch(|s| {
+                    (0..s.curitem)
+                        .rev()
+                        .find(|&n| s.items[n].kind == Kind::TabPage && s.items[n].minwid >= 0)
+                        .map_or(0, |n| s.items[n].minwid)
+                });
+            } else {
+                // Close numbers are stored negative.
+                minwid = -minwid;
+            }
+        }
+        let start = self.pos;
+        with_scratch(|s| {
+            s.push_item(StlItem {
+                start,
+                minwid,
+                kind: Kind::TabPage,
+                ..StlItem::default()
+            });
+        });
+        self.p += 1;
+    }
+
+    /// `%@Func@`: the region a mouse click runs `Func` for. An unterminated
+    /// name ends the walk.
+    fn click_region(&mut self, minwid: c_int) -> Flow {
+        self.p += 1;
+        let from = self.p;
+        while self.p < self.fmt.len() && self.fmt[self.p] != CLICK_FUNC {
+            self.p += 1;
+        }
+        if self.p >= self.fmt.len() {
+            return Flow::Stop;
+        }
+        // The name is only copied when the caller asked for the click
+        // records; otherwise the region is recorded without one.
+        let name = (!self.discard_clicks).then(|| dup_cstring(&self.fmt[from..self.p]));
+        let start = self.pos;
+        with_scratch(|s| {
+            let cmd = name.map_or(0, |name| s.add_cmd(name));
+            s.push_item(StlItem {
+                start,
+                cmd,
+                minwid,
+                kind: Kind::ClickFunc,
+                ..StlItem::default()
+            });
+        });
+        self.p += 1;
+        Flow::Next
+    }
+
+    /// `%(`: the start of a group.
+    fn open_group(&mut self, spec: &parse::Spec) {
+        let (start, depth) = (self.pos, self.st.groupdepth);
+        with_scratch(|s| {
+            // The group stack is as long as the item arena, so the item
+            // that grows it must be made room for first.
+            s.grow();
+            s.groupitems[usize::try_from(depth).unwrap_or(usize::MAX)] = s.curitem;
+            s.push_item(StlItem {
+                start,
+                minwid: spec.minwid,
+                maxwid: spec.maxwid,
+                kind: Kind::Group,
+                ..StlItem::default()
+            });
+        });
+        self.st.groupdepth += 1;
+        self.p += 1;
+    }
+
+    /// `%#name#` and `%$name$` name a highlight group rather than printing
+    /// anything, so they record and move on. An unterminated name is
+    /// dropped.
+    fn highlight_name(&mut self, opt: StlOpt) {
+        let from = self.p;
+        while self.p < self.fmt.len() && self.fmt[self.p] != opt.letter() {
+            self.p += 1;
+        }
+        if self.p < self.fmt.len() {
+            let kind = if opt == StlOpt::HighlightComb {
+                Kind::HighlightCombining
+            } else {
+                Kind::Highlight
+            };
+            let minwid = -syntax_id(&self.fmt[from..self.p]);
+            let start = self.pos;
             with_scratch(|s| {
                 s.push_item(StlItem {
-                    start: pos,
+                    start,
                     minwid,
-                    kind: Kind::TabPage,
+                    kind,
                     ..StlItem::default()
                 });
             });
-            p += 1;
-            continue;
+            self.p += 1;
         }
+    }
 
-        // `%@Func@`: the region a mouse click runs `Func` for.
-        if fmt[p] == StlOpt::ClickFunc.letter() {
-            p += 1;
-            let from = p;
-            while p < fmt.len() && fmt[p] != StlOpt::ClickFunc.letter() {
-                p += 1;
-            }
-            if p >= fmt.len() {
-                break;
-            }
-            // The name is only copied when the caller asked for the click
-            // records; otherwise the region is recorded without one.
-            let name = (!discard_clicks).then(|| dup_cstring(&fmt[from..p]));
-            with_scratch(|s| {
-                let cmd = name.map_or(0, |name| s.add_cmd(name));
-                s.push_item(StlItem {
-                    start: pos,
-                    cmd,
-                    minwid: spec.minwid,
-                    kind: Kind::ClickFunc,
-                    ..StlItem::default()
-                });
-            });
-            p += 1;
-            continue;
-        }
-
-        spec.finish(&fmt, &mut p);
-        if p >= fmt.len() {
-            break;
-        }
-
-        // `%(`: the start of a group.
-        if fmt[p] == b'(' {
-            with_scratch(|s| {
-                // The group stack is as long as the item arena, so the item
-                // that grows it must be made room for first.
-                s.grow();
-                s.groupitems[usize::try_from(st.groupdepth).unwrap_or(usize::MAX)] = s.curitem;
-                s.push_item(StlItem {
-                    start: pos,
-                    minwid: spec.minwid,
-                    maxwid: spec.maxwid,
-                    kind: Kind::Group,
-                    ..StlItem::default()
-                });
-            });
-            st.groupdepth += 1;
-            p += 1;
-            continue;
-        }
-
-        // `%}`: the end of a block a `%{%...%}` was expanded into.
-        if fmt[p] == b'}' && st.evaldepth > 0 {
-            p += 1;
-            st.evaldepth -= 1;
-            continue;
-        }
-
-        // Anything the alphabet does not name is skipped.
-        let Some(opt) = StlOpt::from_byte(fmt[p]) else {
-            p += 1;
-            continue;
-        };
-        p += 1;
-
-        // `%#name#` and `%$name$` name a highlight group rather than
-        // printing anything, so they record and move on.
-        if opt == StlOpt::Highlight || opt == StlOpt::HighlightComb {
-            let from = p;
-            while p < fmt.len() && fmt[p] != opt.letter() {
-                p += 1;
-            }
-            if p < fmt.len() {
-                let kind = if opt == StlOpt::HighlightComb {
-                    Kind::HighlightCombining
-                } else {
-                    Kind::Highlight
-                };
-                let minwid = -syntax_id(&fmt[from..p]);
-                with_scratch(|s| {
-                    s.push_item(StlItem {
-                        start: pos,
-                        minwid,
-                        kind,
-                        ..StlItem::default()
-                    });
-                });
-                p += 1;
-            }
-            continue;
-        }
-
-        text.clear();
+    /// An item that prints: evaluate it, then lay it out. Stops the walk
+    /// when the output is full.
+    fn printed(&mut self, opt: StlOpt, spec: &parse::Spec) -> Flow {
+        self.text.clear();
         let mut value = Value::default();
         if opt == StlOpt::VimExpr {
             // Evaluating re-enters the editor, so this is the one arm that
             // must not run under a scratch borrow.
             value.itemisflag = true;
-            match vim_expr(env, out, &mut pos, end, &fmt, &mut p, &mut text, &st) {
+            let Walk {
+                env,
+                out,
+                pos,
+                end,
+                fmt,
+                p,
+                text,
+                st,
+                ..
+            } = self;
+            match vim_expr(env, out, pos, *end, fmt, p, text, st) {
                 Expr::Value { num, itemisflag } => {
                     value.num = num;
                     value.itemisflag = itemisflag;
@@ -335,37 +434,44 @@ pub(super) fn run(
                     block_start,
                     result,
                 } => {
-                    // Splice the result in where the block was, close it
-                    // with a `%}` so the depth comes back down, and read the
-                    // format again from there.
-                    let mut next =
-                        Vec::with_capacity(block_start + result.len() + fmt.len() - p + 2);
-                    next.extend_from_slice(&fmt[..block_start]);
-                    next.extend_from_slice(&result);
-                    next.extend_from_slice(b"%}");
-                    next.extend_from_slice(&fmt[p..]);
-                    fmt = next;
-                    p = block_start;
-                    st.evaldepth += 1;
-                    continue;
+                    self.splice(block_start, &result);
+                    return Flow::Next;
                 }
             }
         } else {
-            value = with_scratch(|s| value_of(env, s, opt, pos, &mut text));
+            let (env, pos, text) = (self.env, self.pos, &mut self.text);
+            value = with_scratch(|s| value_of(env, s, opt, pos, text));
         }
         // The width helpers measure C strings.
-        text.push(0);
+        self.text.push(0);
 
-        let kept = with_scratch(|s| {
-            emit(
-                s, out, &mut pos, end, opt, &spec, &value, &text, &mut st, fill,
-            )
-        });
-        if !kept {
-            break;
-        }
+        let Walk {
+            out,
+            pos,
+            end,
+            text,
+            st,
+            fill,
+            ..
+        } = self;
+        let kept = with_scratch(|s| emit(s, out, pos, *end, opt, spec, &value, text, st, fill));
+        if kept { Flow::Next } else { Flow::Stop }
     }
-    pos
+
+    /// Splice a `%{%...%}` block's result in where the block was, close it
+    /// with a `%}` so the depth comes back down, and read the format again
+    /// from there.
+    fn splice(&mut self, block_start: usize, result: &[u8]) {
+        let fmt = &self.fmt;
+        let mut next = Vec::with_capacity(block_start + result.len() + fmt.len() - self.p + 2);
+        next.extend_from_slice(&fmt[..block_start]);
+        next.extend_from_slice(result);
+        next.extend_from_slice(b"%}");
+        next.extend_from_slice(&fmt[self.p..]);
+        self.fmt = next;
+        self.p = block_start;
+        self.st.evaldepth += 1;
+    }
 }
 
 /// `%{expr}` and `%{%expr%}`: evaluate, and decide whether the result is
