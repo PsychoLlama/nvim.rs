@@ -249,151 +249,41 @@ pub(crate) fn command_line_left_right_mouse(s: &mut CommandLineState) {
 /// C's `break` out of that switch: the key was not handled specially — or its
 /// handler asked for it to be treated as ordinary text — and falls through to
 /// the abbreviation check and then to inserting it into the line.
+///
+/// The match is the table; an arm longer than a line has a `key_*` handler
+/// below it, each answering the same `Option<Step>`.
 fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
-    let mut cc = Cc::current();
     match s.c.kind() {
         KeyKind::Special(SpecialKey::Bs | SpecialKey::Del | SpecialKey::Kdel)
         | KeyKind::Char(Key::CTRL_H | Key::CTRL_W) => {
-            Some(match command_line_erase_chars(s) {
-                KeyOutcome::NotChanged => command_line_not_changed(s),
-                KeyOutcome::GotoNormalMode => Step::Leave, // back to cmd mode
-                KeyOutcome::Changed => command_line_changed(s),
-            })
+            let outcome = command_line_erase_chars(s);
+            Some(step_after(s, outcome))
         }
-
-        KeyKind::Special(SpecialKey::Ins | SpecialKey::Kins) => {
-            cc.overstrike = !cc.overstrike;
-            ui_cursor_shape(); // may show a different cursor shape
-            may_trigger_modechanged();
-            status_redraw_curbuf();
-            redraw_statuslines();
-            Some(command_line_not_changed(s))
-        }
-
+        KeyKind::Special(SpecialKey::Ins | SpecialKey::Kins) => Some(key_toggle_overstrike(s)),
         KeyKind::Char(Key::CTRL_HAT) => {
             command_line_toggle_langmap(s);
             Some(command_line_not_changed(s))
         }
-
-        KeyKind::Char(Key::CTRL_U) => {
-            // Delete all characters left of the cursor.
-            // Shift the tail down over everything left of the cursor;
-            // `set_len` writes the terminator, so it comes after the move.
-            let j = cc.cmdpos;
-            cc.cmdbuff.splice(0, j, &[]);
-            cc.cmdpos = 0;
-            if cc.is_empty() {
-                s.is_state.search_start = s.is_state.save_cursor;
-            }
-            redrawcmd();
-            Some(command_line_changed(s))
-        }
-
+        KeyKind::Char(Key::CTRL_U) => Some(key_delete_to_start(s)),
         // Reached if 'wildchar' is not ESC, or when ESC was typed twice.
-        KeyKind::Char(Key::ESC | Key::CTRL_C) => {
-            // In exmode it doesn't make sense to return, except when
-            // ":normal" runs out of characters. Also, when the highlight
-            // callback is active <C-c> should interrupt only that.
-            if (EXMODE_ACTIVE.get() && (EX_NORMAL_BUSY.get() == 0 || !typeahead().is_empty()))
-                || (GETLN_INTERRUPTED_HIGHLIGHT.get() && s.c == Key::CTRL_C)
-            {
-                GETLN_INTERRUPTED_HIGHLIGHT.set(false);
-                return Some(command_line_not_changed(s));
-            }
-
-            // Will drop the command line after putting it in the history.
-            s.gotesc = true;
-            Some(Step::Leave) // back to cmd mode
+        KeyKind::Char(Key::ESC | Key::CTRL_C) => Some(key_escape(s)),
+        KeyKind::Char(Key::CTRL_R) => {
+            let outcome = command_line_insert_reg(s);
+            Some(step_after(s, outcome))
         }
-
-        KeyKind::Char(Key::CTRL_R) => Some(match command_line_insert_reg(s) {
-            KeyOutcome::GotoNormalMode => Step::Leave, // back to cmd mode
-            KeyOutcome::Changed => command_line_changed(s),
-            KeyOutcome::NotChanged => command_line_not_changed(s),
-        }),
-
-        KeyKind::Char(Key::CTRL_D) => {
-            if show_matches(false, true, wim_has(0, OPT_WIM_FLAG_NOSELECT)) == Expanded::Nothing {
-                return None; // use ^D as a normal character instead
-            }
-            redrawcmd();
-            Some(Step::Go) // don't do incremental search now
-        }
-
+        KeyKind::Char(Key::CTRL_D) => key_list_matches(),
         KeyKind::Special(SpecialKey::Right | SpecialKey::SRight | SpecialKey::CRight) => {
-            while cc.cmdpos < cc.len() {
-                let cells = cmdline_charsize(cc.cmdpos);
-                if KEY_TYPED.get() && cc.cmdspos + cells >= COLUMNS.get() * ROWS.get() {
-                    break;
-                }
-                cc.cmdspos += cells;
-                cc.cmdpos += cluster_len_at(cc, cc.cmdpos);
-                if !((s.c == SpecialKey::SRight
-                    || s.c == SpecialKey::CRight
-                    || MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL))
-                    && cc
-                        .cmdbuff
-                        .raw_byte_at(usize::try_from(cc.cmdpos).unwrap_or(0))
-                        != b' ')
-                {
-                    break;
-                }
-            }
-            cc.cmdspos = cmd_screencol(cc.cmdpos);
-            Some(command_line_not_changed(s))
+            Some(key_cursor_right(s))
         }
-
         KeyKind::Special(SpecialKey::Left | SpecialKey::SLeft | SpecialKey::CLeft) => {
-            if cc.cmdpos == 0 {
-                return Some(command_line_not_changed(s));
-            }
-            loop {
-                cc.cmdpos -= 1;
-                // Move to the first byte of a possibly multibyte char.
-                cc.cmdpos -= len_as_int(head_off(
-                    cc.bytes(),
-                    usize::try_from(cc.cmdpos).unwrap_or(0),
-                ));
-                cc.cmdspos -= cmdline_charsize(cc.cmdpos);
-                if !(cc.cmdpos > 0
-                    && (s.c == SpecialKey::SLeft
-                        || s.c == SpecialKey::CLeft
-                        || MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL))
-                    && cc.byte_at(cc.cmdpos - 1) != b' ')
-                {
-                    break;
-                }
-            }
-
-            cc.cmdspos = cmd_screencol(cc.cmdpos);
-            if cc.special_char != 0 {
-                putcmdline(cc.special_char, cc.special_shift);
-            }
-            Some(command_line_not_changed(s))
+            Some(key_cursor_left(s))
         }
-
-        // Ignore a mouse event or an open_cmdwin() result.
-        KeyKind::Special(SpecialKey::Ignore) => Some(command_line_not_changed(s)),
-
-        // Ignore the mouse.
-        KeyKind::Special(SpecialKey::Middledrag | SpecialKey::Middlerelease) => {
-            Some(command_line_not_changed(s))
-        }
-
-        KeyKind::Special(SpecialKey::Middlemouse) => {
-            cmdline_paste(
-                if eval_has_provider(c"clipboard") {
-                    RegName::STAR
-                } else {
-                    RegName::UNNAMED
-                },
-                true,
-                true,
-            );
-            redrawcmd();
-            Some(command_line_changed(s))
-        }
-
+        // Ignore a mouse event or an open_cmdwin() result, and the middle
+        // button's drag and release.
+        KeyKind::Special(
+            SpecialKey::Ignore | SpecialKey::Middledrag | SpecialKey::Middlerelease,
+        ) => Some(command_line_not_changed(s)),
+        KeyKind::Special(SpecialKey::Middlemouse) => Some(key_paste_clipboard(s)),
         // Three C arms with a FALLTHROUGH between each pair: the
         // drag/release group falls into K_LEFTMOUSE, which falls into
         // K_RIGHTMOUSE.
@@ -404,27 +294,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             | SpecialKey::Rightrelease
             | SpecialKey::Leftmouse
             | SpecialKey::Rightmouse,
-        ) => {
-            // Ignore drag and release events when the button-down wasn't
-            // seen before.
-            if s.c != SpecialKey::Leftmouse
-                && s.c != SpecialKey::Rightmouse
-                && s.ignore_drag_release
-            {
-                return Some(command_line_not_changed(s));
-            }
-            // Return on a left click above a number prompt.
-            if s.c != SpecialKey::Rightmouse
-                && cc.mouse_prompt
-                && MOUSE_ROW.get() < CMDLINE_ROW.get()
-            {
-                cc.mouse_used = true;
-                return Some(Step::Leave);
-            }
-            command_line_left_right_mouse(s);
-            Some(command_line_not_changed(s))
-        }
-
+        ) => Some(key_click(s)),
         // The mouse scroll wheel and the alternate buttons are ignored
         // here, as is the end of a Select-mode mapping.
         KeyKind::Special(
@@ -441,53 +311,28 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             | SpecialKey::Mousemove
             | SpecialKey::Select,
         ) => Some(command_line_not_changed(s)),
-
         // Beginning of the command line.
         KeyKind::Special(
             SpecialKey::Home | SpecialKey::Khome | SpecialKey::SHome | SpecialKey::CHome,
         )
         | KeyKind::Char(Key::CTRL_B) => {
+            let mut cc = Cc::current();
             cc.cmdpos = 0;
             cc.cmdspos = cmd_startcol();
             Some(command_line_not_changed(s))
         }
-
         // End of the command line.
         KeyKind::Special(
             SpecialKey::End | SpecialKey::Kend | SpecialKey::SEnd | SpecialKey::CEnd,
         )
         | KeyKind::Char(Key::CTRL_E) => {
+            let mut cc = Cc::current();
             cc.cmdpos = cc.len();
             cc.cmdspos = cmd_screencol(cc.cmdpos);
             Some(command_line_not_changed(s))
         }
-
-        KeyKind::Char(Key::CTRL_A) => {
-            // all matches
-            if cmdline_pum_active() {
-                // As Ctrl-A completes all the matches, close the popup
-                // menu if there is one.
-                cmdline_pum_cleanup(cc);
-            }
-            if !s.next_wild(WildMode::All, WildOpts::NONE) {
-                return None;
-            }
-            completion_mut(|xpc| xpc.context = ExpandContext::Nothing);
-            s.did_wild_list = false;
-            Some(command_line_changed(s))
-        }
-
-        KeyKind::Char(Key::CTRL_L) => {
-            if may_add_char_to_search(s.firstc, &mut s.c, &mut s.is_state).is_ok() {
-                return Some(command_line_not_changed(s));
-            }
-            // Completion: the longest common part.
-            if !s.next_wild(WildMode::Longest, WildOpts::NONE) {
-                return None;
-            }
-            Some(command_line_changed(s))
-        }
-
+        KeyKind::Char(Key::CTRL_A) => key_complete_all(s),
+        KeyKind::Char(Key::CTRL_L) => key_complete_longest(s),
         // Ctrl_N/Ctrl_P are the next/previous match while completing, and
         // FALL THROUGH into the history keys otherwise.
         KeyKind::Special(
@@ -500,48 +345,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             | SpecialKey::Pagedown
             | SpecialKey::Kpagedown,
         )
-        | KeyKind::Char(Key::CTRL_N | Key::CTRL_P) => {
-            if (s.c == Key::CTRL_N || s.c == Key::CTRL_P) && match_count() > 0 {
-                let wild_type = if s.c == Key::CTRL_P {
-                    WildMode::Prev
-                } else {
-                    WildMode::Next
-                };
-                if !s.next_wild(wild_type, WildOpts::NONE) {
-                    return None;
-                }
-                return Some(command_line_changed(s));
-            }
-
-            if cmdline_pum_active()
-                && (s.c == SpecialKey::Pageup
-                    || s.c == SpecialKey::Pagedown
-                    || s.c == SpecialKey::Kpageup
-                    || s.c == SpecialKey::Kpagedown)
-            {
-                // If the popup menu is displayed, PageUp and PageDown
-                // scroll the menu.
-                let wild_type = if s.c == SpecialKey::Pagedown || s.c == SpecialKey::Kpagedown {
-                    WildMode::PageDown
-                } else {
-                    WildMode::PageUp
-                };
-                if !s.next_wild(wild_type, WildOpts::NONE) {
-                    return None;
-                }
-                Some(command_line_changed(s))
-            } else {
-                Some(match command_line_browse_history(s) {
-                    KeyOutcome::Changed => {
-                        s.did_hist_navigate = true;
-                        command_line_changed(s)
-                    }
-                    KeyOutcome::GotoNormalMode => Step::Leave,
-                    KeyOutcome::NotChanged => command_line_not_changed(s),
-                })
-            }
-        }
-
+        | KeyKind::Char(Key::CTRL_N | Key::CTRL_P) => key_match_or_history(s),
         // Next (CTRL-G) or previous (CTRL-T) 'incsearch' match.
         KeyKind::Char(Key::CTRL_G | Key::CTRL_T) => {
             let next = s.c == Key::CTRL_G;
@@ -551,45 +355,11 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             }
             None
         }
-
         KeyKind::Char(Key::CTRL_V | Key::CTRL_Q) => {
-            s.ignore_drag_release = true;
-            putcmdline(b'^'.cast_signed(), true);
-
-            // Get the next (two) characters. Do not include the modifiers
-            // in the key, for CTRL-SHIFT-V.
-            s.c = get_literal(MOD_MASK.get().has(ModMask::SHIFT));
-
-            s.do_abbr = false; // don't do abbreviation now
-            cc.special_char = 0;
-            // May need to remove the ^ when a composing char was typed.
-            if utf_iscomposing_first(s.c.code()) && !CMD_SILENT.get() {
-                if ui_has(UI_CMDLINE) {
-                    // TODO(bfredl): why not make unputcmdline also work
-                    // with true?
-                    unputcmdline();
-                } else {
-                    draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
-                    msg_put_ascii(b' ');
-                    cursorcmd();
-                }
-            }
+            key_read_literal(s);
             None
         }
-
-        KeyKind::Char(Key::CTRL_K) => {
-            s.ignore_drag_release = true;
-            putcmdline(b'?'.cast_signed(), true);
-            s.c = get_digraph(true);
-            cc.special_char = 0;
-
-            if !s.c.is_nul() {
-                return None;
-            }
-            redrawcmd();
-            Some(command_line_not_changed(s))
-        }
-
+        KeyKind::Char(Key::CTRL_K) => key_read_digraph(s),
         // CTRL-_: switch language mode.
         KeyKind::Char(Key::CTRL_UNDERSCORE) => {
             if !p_ari() {
@@ -597,25 +367,285 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             }
             Some(command_line_not_changed(s))
         }
+        _ => key_other(s),
+    }
+}
 
-        _ => {
-            let c = s.c;
-            // Number prompts use the mouse and return on a 'q' press;
-            // otherwise 'q' FALLS THROUGH to the default arm.
-            if c.is('q') && cc.mouse_prompt {
-                cc.cmdbuff.set_byte(0, 0);
-                return Some(Step::Leave);
-            }
-            // A normal character with no special meaning. Just set
-            // mod_mask to 0x0, so that typing Shift-Space in the GUI
-            // doesn't enter the string <S-Space>. This should only happen
-            // after ^V.
-            if !c.is_special() {
-                MOD_MASK.set(ModMask::NONE);
-            }
-            None
+/// The step a handler's [`KeyOutcome`] leads to.
+fn step_after(s: &mut CommandLineState, outcome: KeyOutcome) -> Step {
+    match outcome {
+        KeyOutcome::NotChanged => command_line_not_changed(s),
+        KeyOutcome::GotoNormalMode => Step::Leave, // back to cmd mode
+        KeyOutcome::Changed => command_line_changed(s),
+    }
+}
+
+/// `<Insert>`: toggle between inserting and overstriking.
+fn key_toggle_overstrike(s: &mut CommandLineState) -> Step {
+    let mut cc = Cc::current();
+    cc.overstrike = !cc.overstrike;
+    ui_cursor_shape(); // may show a different cursor shape
+    may_trigger_modechanged();
+    status_redraw_curbuf();
+    redraw_statuslines();
+    command_line_not_changed(s)
+}
+
+/// CTRL-U: delete all characters left of the cursor.
+fn key_delete_to_start(s: &mut CommandLineState) -> Step {
+    let mut cc = Cc::current();
+    // Shift the tail down over everything left of the cursor; `set_len`
+    // writes the terminator, so it comes after the move.
+    let j = cc.cmdpos;
+    cc.cmdbuff.splice(0, j, &[]);
+    cc.cmdpos = 0;
+    if cc.is_empty() {
+        s.is_state.search_start = s.is_state.save_cursor;
+    }
+    redrawcmd();
+    command_line_changed(s)
+}
+
+/// `<Esc>` or CTRL-C: abandon the command line.
+fn key_escape(s: &mut CommandLineState) -> Step {
+    // In exmode it doesn't make sense to return, except when ":normal" runs
+    // out of characters. Also, when the highlight callback is active <C-c>
+    // should interrupt only that.
+    if (EXMODE_ACTIVE.get() && (EX_NORMAL_BUSY.get() == 0 || !typeahead().is_empty()))
+        || (GETLN_INTERRUPTED_HIGHLIGHT.get() && s.c == Key::CTRL_C)
+    {
+        GETLN_INTERRUPTED_HIGHLIGHT.set(false);
+        return command_line_not_changed(s);
+    }
+
+    // Will drop the command line after putting it in the history.
+    s.gotesc = true;
+    Step::Leave // back to cmd mode
+}
+
+/// CTRL-D: list the completion matches, or insert a plain ^D when there are
+/// none to list.
+fn key_list_matches() -> Option<Step> {
+    if show_matches(false, true, wim_has(0, OPT_WIM_FLAG_NOSELECT)) == Expanded::Nothing {
+        return None; // use ^D as a normal character instead
+    }
+    redrawcmd();
+    Some(Step::Go) // don't do incremental search now
+}
+
+/// Whether a cursor key moves by word: its shifted or controlled form, or
+/// the plain key with Shift or Ctrl held.
+fn moves_by_word(c: Key, shifted: SpecialKey, controlled: SpecialKey) -> bool {
+    c == shifted || c == controlled || MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL)
+}
+
+/// `<Right>` and its word forms: move the cursor right.
+fn key_cursor_right(s: &mut CommandLineState) -> Step {
+    let mut cc = Cc::current();
+    let by_word = moves_by_word(s.c, SpecialKey::SRight, SpecialKey::CRight);
+    while cc.cmdpos < cc.len() {
+        let cells = cmdline_charsize(cc.cmdpos);
+        if KEY_TYPED.get() && cc.cmdspos + cells >= COLUMNS.get() * ROWS.get() {
+            break;
+        }
+        cc.cmdspos += cells;
+        cc.cmdpos += cluster_len_at(cc, cc.cmdpos);
+        if !(by_word
+            && cc
+                .cmdbuff
+                .raw_byte_at(usize::try_from(cc.cmdpos).unwrap_or(0))
+                != b' ')
+        {
+            break;
         }
     }
+    cc.cmdspos = cmd_screencol(cc.cmdpos);
+    command_line_not_changed(s)
+}
+
+/// `<Left>` and its word forms: move the cursor left.
+fn key_cursor_left(s: &mut CommandLineState) -> Step {
+    let mut cc = Cc::current();
+    if cc.cmdpos == 0 {
+        return command_line_not_changed(s);
+    }
+    let by_word = moves_by_word(s.c, SpecialKey::SLeft, SpecialKey::CLeft);
+    loop {
+        cc.cmdpos -= 1;
+        // Move to the first byte of a possibly multibyte char.
+        cc.cmdpos -= len_as_int(head_off(
+            cc.bytes(),
+            usize::try_from(cc.cmdpos).unwrap_or(0),
+        ));
+        cc.cmdspos -= cmdline_charsize(cc.cmdpos);
+        if !(cc.cmdpos > 0 && by_word && cc.byte_at(cc.cmdpos - 1) != b' ') {
+            break;
+        }
+    }
+
+    cc.cmdspos = cmd_screencol(cc.cmdpos);
+    if cc.special_char != 0 {
+        putcmdline(cc.special_char, cc.special_shift);
+    }
+    command_line_not_changed(s)
+}
+
+/// The middle button: paste the clipboard (or the unnamed register when
+/// there is no clipboard provider).
+fn key_paste_clipboard(s: &mut CommandLineState) -> Step {
+    let register = if eval_has_provider(c"clipboard") {
+        RegName::STAR
+    } else {
+        RegName::UNNAMED
+    };
+    cmdline_paste(register, true, true);
+    redrawcmd();
+    command_line_changed(s)
+}
+
+/// A left or right click, drag or release.
+fn key_click(s: &mut CommandLineState) -> Step {
+    let mut cc = Cc::current();
+    // Ignore drag and release events when the button-down wasn't seen
+    // before.
+    if s.c != SpecialKey::Leftmouse && s.c != SpecialKey::Rightmouse && s.ignore_drag_release {
+        return command_line_not_changed(s);
+    }
+    // Return on a left click above a number prompt.
+    if s.c != SpecialKey::Rightmouse && cc.mouse_prompt && MOUSE_ROW.get() < CMDLINE_ROW.get() {
+        cc.mouse_used = true;
+        return Step::Leave;
+    }
+    command_line_left_right_mouse(s);
+    command_line_not_changed(s)
+}
+
+/// CTRL-A: insert all the completion matches.
+fn key_complete_all(s: &mut CommandLineState) -> Option<Step> {
+    if cmdline_pum_active() {
+        // As Ctrl-A completes all the matches, close the popup menu if there
+        // is one.
+        cmdline_pum_cleanup(Cc::current());
+    }
+    if !s.next_wild(WildMode::All, WildOpts::NONE) {
+        return None;
+    }
+    completion_mut(|xpc| xpc.context = ExpandContext::Nothing);
+    s.did_wild_list = false;
+    Some(command_line_changed(s))
+}
+
+/// CTRL-L: add a character from the 'incsearch' match, or complete the
+/// longest common part.
+fn key_complete_longest(s: &mut CommandLineState) -> Option<Step> {
+    if may_add_char_to_search(s.firstc, &mut s.c, &mut s.is_state).is_ok() {
+        return Some(command_line_not_changed(s));
+    }
+    if !s.next_wild(WildMode::Longest, WildOpts::NONE) {
+        return None;
+    }
+    Some(command_line_changed(s))
+}
+
+/// The up/down/page keys and CTRL-N/CTRL-P: the next or previous completion
+/// match when completing, the popup menu's page when it is showing, and the
+/// history otherwise.
+fn key_match_or_history(s: &mut CommandLineState) -> Option<Step> {
+    if (s.c == Key::CTRL_N || s.c == Key::CTRL_P) && match_count() > 0 {
+        let wild_type = if s.c == Key::CTRL_P {
+            WildMode::Prev
+        } else {
+            WildMode::Next
+        };
+        if !s.next_wild(wild_type, WildOpts::NONE) {
+            return None;
+        }
+        return Some(command_line_changed(s));
+    }
+
+    let page_down = s.c == SpecialKey::Pagedown || s.c == SpecialKey::Kpagedown;
+    let page_up = s.c == SpecialKey::Pageup || s.c == SpecialKey::Kpageup;
+    if cmdline_pum_active() && (page_up || page_down) {
+        // If the popup menu is displayed, PageUp and PageDown scroll the
+        // menu.
+        let wild_type = if page_down {
+            WildMode::PageDown
+        } else {
+            WildMode::PageUp
+        };
+        if !s.next_wild(wild_type, WildOpts::NONE) {
+            return None;
+        }
+        return Some(command_line_changed(s));
+    }
+
+    Some(match command_line_browse_history(s) {
+        KeyOutcome::Changed => {
+            s.did_hist_navigate = true;
+            command_line_changed(s)
+        }
+        KeyOutcome::GotoNormalMode => Step::Leave,
+        KeyOutcome::NotChanged => command_line_not_changed(s),
+    })
+}
+
+/// CTRL-V or CTRL-Q: read the next key literally into `s.c`, to be inserted
+/// as ordinary text.
+fn key_read_literal(s: &mut CommandLineState) {
+    let mut cc = Cc::current();
+    s.ignore_drag_release = true;
+    putcmdline(b'^'.cast_signed(), true);
+
+    // Get the next (two) characters. Do not include the modifiers in the
+    // key, for CTRL-SHIFT-V.
+    s.c = get_literal(MOD_MASK.get().has(ModMask::SHIFT));
+
+    s.do_abbr = false; // don't do abbreviation now
+    cc.special_char = 0;
+    // May need to remove the ^ when a composing char was typed.
+    if utf_iscomposing_first(s.c.code()) && !CMD_SILENT.get() {
+        if ui_has(UI_CMDLINE) {
+            // TODO(bfredl): why not make unputcmdline also work with true?
+            unputcmdline();
+        } else {
+            draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
+            msg_put_ascii(b' ');
+            cursorcmd();
+        }
+    }
+}
+
+/// CTRL-K: read a digraph into `s.c`, to be inserted as ordinary text.
+fn key_read_digraph(s: &mut CommandLineState) -> Option<Step> {
+    s.ignore_drag_release = true;
+    putcmdline(b'?'.cast_signed(), true);
+    s.c = get_digraph(true);
+    Cc::current().special_char = 0;
+
+    if !s.c.is_nul() {
+        return None;
+    }
+    redrawcmd();
+    Some(command_line_not_changed(s))
+}
+
+/// Any other key: a `q` that answers a number prompt, or ordinary text.
+fn key_other(s: &CommandLineState) -> Option<Step> {
+    let mut cc = Cc::current();
+    let c = s.c;
+    // Number prompts use the mouse and return on a 'q' press; otherwise 'q'
+    // FALLS THROUGH to the default arm.
+    if c.is('q') && cc.mouse_prompt {
+        cc.cmdbuff.set_byte(0, 0);
+        return Some(Step::Leave);
+    }
+    // A normal character with no special meaning. Just set mod_mask to 0x0,
+    // so that typing Shift-Space in the GUI doesn't enter the string
+    // <S-Space>. This should only happen after ^V.
+    if !c.is_special() {
+        MOD_MASK.set(ModMask::NONE);
+    }
+    None
 }
 
 pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> Step {
