@@ -316,22 +316,25 @@ fn wrap_leader_len() -> i32 {
 /// `format_only` suppresses the redraw, for a caller that is going to do one.
 pub fn internal_format(
     textwidth: c_int,
-    mut second_indent: c_int,
+    second_indent: c_int,
     flags: c_int,
     format_only: bool,
     c: c_int,
 ) {
     let mut win = Win::current();
-    // The space stood in for, when there is one.
-    let mut save_char = None;
-    let mut haveto_redraw = false;
-    let fo_ins_blank = has_format_option(FoFlag::INS_BLANK);
-    let fo_multibyte = has_format_option(FoFlag::MBYTE_BREAK);
-    let fo_rigor_tw = has_format_option(FoFlag::RIGOROUS_TW);
-    let fo_white_par = has_format_option(FoFlag::WHITE_PAR);
-    let mut first_line = true;
-    let mut no_leader = false;
-    let mut do_comments = flags & INSCHAR_DO_COM != 0;
+    let mut wrap = Wrap {
+        textwidth,
+        second_indent,
+        flags,
+        c,
+        fo_ins_blank: has_format_option(FoFlag::INS_BLANK),
+        fo_multibyte: has_format_option(FoFlag::MBYTE_BREAK),
+        fo_rigor_tw: has_format_option(FoFlag::RIGOROUS_TW),
+        fo_white_par: has_format_option(FoFlag::WHITE_PAR),
+        first_line: true,
+        no_leader: false,
+        do_comments: flags & INSCHAR_DO_COM != 0,
+    };
     let has_lbr = win.w_onebuf_opt.wo_lbr;
 
     // So that `win_charsize()` counts correctly.
@@ -339,6 +342,7 @@ pub fn internal_format(
 
     // With 'autoindent' off, a space under the cursor must not be
     // deleted; stand an `x` in for it and put it back at the end.
+    let mut save_char = None;
     if Buf::current().b_p_ai == 0 && STATE.get() & VREPLACE_FLAG == 0 {
         let cc = gchar_cursor();
         if let Some(white) = u8::try_from(cc)
@@ -351,162 +355,81 @@ pub fn internal_format(
     }
 
     // Break lines until the current one is no longer too long.
-    while !GOT_INT.get() {
-        let mut orig_col = 0;
-        let mut did_do_comment = false;
+    let mut haveto_redraw = false;
+    while !GOT_INT.get() && wrap.break_once() {
+        haveto_redraw = true;
+    }
 
-        let virtcol = get_nolist_virtcol() + char2cells(if c != NUL { c } else { gchar_cursor() });
-        if virtcol <= ColNr::new(textwidth) {
-            break;
+    if let Some(white) = save_char {
+        // Put the space after the cursor back.
+        pchar_cursor(white);
+    }
+    win.w_onebuf_opt.wo_lbr = has_lbr;
+
+    if !format_only && haveto_redraw {
+        update_topline(win);
+        redraw_curbuf_later(UPD_VALID);
+    }
+}
+
+/// One [`internal_format`] call: what it was asked, and what each break
+/// leaves for the next.
+#[derive(Debug)]
+struct Wrap {
+    textwidth: c_int,
+    /// The second line's indent (or, with `INSCHAR_COM_LIST`, the leader
+    /// length for `open_line`); a numbered list may set it on the first
+    /// break.
+    second_indent: c_int,
+    flags: c_int,
+    /// The character about to be inserted, or NUL.
+    c: c_int,
+    fo_ins_blank: bool,
+    fo_multibyte: bool,
+    fo_rigor_tw: bool,
+    fo_white_par: bool,
+    /// No line has been broken yet.
+    first_line: bool,
+    /// The line had no comment leader, so the lines broken off it start
+    /// none either.
+    no_leader: bool,
+    do_comments: bool,
+}
+
+impl Wrap {
+    /// Break the cursor line once if it is too long: whether it was, and a
+    /// break column was found.
+    fn break_once(&mut self) -> bool {
+        let mut win = Win::current();
+        let virtcol = get_nolist_virtcol()
+            + char2cells(if self.c != NUL {
+                self.c
+            } else {
+                gchar_cursor()
+            });
+        if virtcol <= ColNr::new(self.textwidth) {
+            return false;
         }
 
-        if no_leader {
-            do_comments = false;
-        } else if flags & INSCHAR_FORMAT == 0 && has_format_option(FoFlag::WRAP_COMS) {
-            do_comments = true;
+        let leader_len = self.comment_leader_len();
+        if self.flags & INSCHAR_FORMAT == 0 && leader_len == 0 && !has_format_option(FoFlag::WRAP) {
+            return false;
         }
-        let leader_len = if do_comments { wrap_leader_len() } else { 0 };
-
-        // When this line does not start with a comment leader, don't
-        // start one on a line broken off it either: otherwise a `%word`
-        // moved to the next line makes every following line start `%`.
-        if leader_len == 0 {
-            no_leader = true;
-        }
-        if flags & INSCHAR_FORMAT == 0 && leader_len == 0 && !has_format_option(FoFlag::WRAP) {
-            break;
-        }
-        let mut startcol = win.w_cursor.col.get();
+        let startcol = win.w_cursor.col.get();
         if startcol == 0 {
-            break;
+            return false;
         }
-
-        // Find the column 'textwidth' falls at.
-        win.coladvance(ColNr::new(textwidth));
-        let wantcol = win.w_cursor.col.get();
-        win.w_cursor.col = ColNr::new(startcol);
-
-        let mut search = BreakSearch {
-            startcol,
-            wantcol,
-            leader_len,
-            c,
-            foundcol: 0,
-            end_foundcol: 0,
-            skip_pos: 0,
-            fo_multibyte,
-            fo_rigor_tw,
-        };
-        search.run(flags, fo_ins_blank);
-        if search.foundcol == 0 {
+        let Some(search) = self.find_break(startcol, leader_len) else {
             // No break column: the line has to stay long.
             win.w_cursor.col = ColNr::new(startcol);
-            break;
-        }
-        let foundcol = search.foundcol;
+            return false;
+        };
 
-        // The line is going to be broken; take any `$` off first.
-        undisplay_dollar();
-
-        // The replace stack needs the offset between the cursor and the
-        // break. MODE_VREPLACE does not use it -- it backspaces over the
-        // text instead.
-        if STATE.get() & VREPLACE_FLAG != 0 {
-            orig_col = startcol; // where the backspacing will start
-        } else {
-            REPLACE_OFFSET.set(startcol - search.end_foundcol);
-        }
-
-        // Move `startcol` past the spaces that are about to be deleted
-        // and the characters that stay on the top line.
-        win.w_cursor.col = ColNr::new(foundcol);
-        while {
-            let cc = gchar_cursor();
-            (whitechar(cc)) && (!fo_white_par || win.w_cursor.col < ColNr::new(startcol))
-        } {
-            inc_cursor();
-        }
-        startcol -= win.w_cursor.col.get();
-        startcol = startcol.max(0);
-
-        let mut saved_text = Vec::new();
-        if STATE.get() & VREPLACE_FLAG != 0 {
-            // MODE_VREPLACE backspaces over the text being wrapped, so
-            // save a copy now -- the `startcol` bytes from the cursor -- to
-            // put on the next line.
-            saved_text = {
-                let cursor = win.w_cursor;
-                let mut lines = Lines::current();
-                let line = lines.line(cursor.lnum);
-                let rest = &line[usize::try_from(cursor.col).unwrap_or(0).min(line.len())..];
-                rest[..usize::try_from(startcol).unwrap_or(0).min(rest.len())].to_vec()
-            };
-            win.w_cursor.col = ColNr::new(orig_col);
-            if !fo_white_par {
-                backspace_until_column(foundcol);
-            }
-        } else if !fo_white_par {
-            // Put the cursor after the position to break at.
-            win.w_cursor.col = ColNr::new(foundcol);
-        }
-
-        // Split the line just before the margin. Only insert and delete
-        // lines; don't really redraw the window.
-        let _ = open_line(
-            FORWARD as c_int,
-            OPENLINE_DELSPACES
-                + OPENLINE_MARKFIX
-                + if fo_white_par { OPENLINE_KEEPTRAIL } else { 0 }
-                + if do_comments { OPENLINE_DO_COM } else { 0 }
-                + OPENLINE_FORMAT
-                + if flags & INSCHAR_COM_LIST != 0 {
-                    OPENLINE_COM_LIST
-                } else {
-                    0
-                },
-            if flags & INSCHAR_COM_LIST != 0 {
-                second_indent
-            } else {
-                OLD_INDENT.get()
-            },
-            Some(&mut did_do_comment),
-        );
-        if flags & INSCHAR_COM_LIST == 0 {
-            OLD_INDENT.set(0);
-        }
-        // A comment leader was inserted, so a following line may get one
-        // too.
-        if did_do_comment {
-            no_leader = false;
-        }
-        REPLACE_OFFSET.set(0);
-
-        if first_line {
-            if flags & INSCHAR_COM_LIST == 0 {
-                // Auto-wrap of numbered lists. Outside Insert mode --
-                // that is, from `format_lines` -- `INSCHAR_COM_LIST` is
-                // set and `open_line` above has already done this.
-                if second_indent < 0 && has_format_option(FoFlag::Q_NUMBER) {
-                    second_indent = get_number_indent(win.w_cursor.lnum - 1);
-                }
-                if second_indent >= 0 {
-                    if STATE.get() & VREPLACE_FLAG != 0 {
-                        change_indent(INDENT_SET, second_indent, 0, true);
-                    } else if leader_len > 0 && second_indent - leader_len > 0 {
-                        // A numbered list item that has a comment:
-                        // `open_line` put the leader in and left the
-                        // cursor after it, so all that is missing is the
-                        // white space the number wants after it.
-                        let padding = second_indent - leader_len;
-                        for _ in 0..padding {
-                            ins_str(b" ");
-                        }
-                    } else {
-                        set_indent(second_indent, SIN_CHANGED);
-                    }
-                }
-            }
-            first_line = false;
+        let (startcol, saved_text) = self.cut_at(&search, startcol);
+        self.open_broken_line();
+        if self.first_line {
+            self.indent_second_line(leader_len);
+            self.first_line = false;
         }
 
         if STATE.get() & VREPLACE_FLAG != 0 {
@@ -521,7 +444,6 @@ pub fn internal_format(
             win.w_cursor.col = win.w_cursor.col.min(len);
         }
 
-        haveto_redraw = true;
         set_can_cindent(true);
         // The cursor moved: don't autoindent or cindent now.
         DID_AI.set(false);
@@ -529,16 +451,228 @@ pub fn internal_format(
         CAN_SI.set(false);
         CAN_SI_BACK.set(false);
         line_breakcheck();
+        true
     }
 
-    if let Some(white) = save_char {
-        // Put the space after the cursor back.
-        pchar_cursor(white);
+    /// The comment leader this break must not go inside, 0 for none; and
+    /// whether the broken-off line repeats it.
+    fn comment_leader_len(&mut self) -> i32 {
+        if self.no_leader {
+            self.do_comments = false;
+        } else if self.flags & INSCHAR_FORMAT == 0 && has_format_option(FoFlag::WRAP_COMS) {
+            self.do_comments = true;
+        }
+        let leader_len = if self.do_comments {
+            wrap_leader_len()
+        } else {
+            0
+        };
+        // When this line does not start with a comment leader, don't start
+        // one on a line broken off it either: otherwise a `%word` moved to
+        // the next line makes every following line start `%`.
+        if leader_len == 0 {
+            self.no_leader = true;
+        }
+        leader_len
     }
-    win.w_onebuf_opt.wo_lbr = has_lbr;
 
-    if !format_only && haveto_redraw {
-        update_topline(win);
-        redraw_curbuf_later(UPD_VALID);
+    /// Search back from `startcol` for a column to break at, `None` when
+    /// there is none. The cursor is left where the search stopped.
+    fn find_break(&self, startcol: c_int, leader_len: i32) -> Option<BreakSearch> {
+        let mut win = Win::current();
+        // Find the column 'textwidth' falls at.
+        win.coladvance(ColNr::new(self.textwidth));
+        let wantcol = win.w_cursor.col.get();
+        win.w_cursor.col = ColNr::new(startcol);
+
+        let mut search = BreakSearch {
+            startcol,
+            wantcol,
+            leader_len,
+            c: self.c,
+            foundcol: 0,
+            end_foundcol: 0,
+            skip_pos: 0,
+            fo_multibyte: self.fo_multibyte,
+            fo_rigor_tw: self.fo_rigor_tw,
+        };
+        search.run(self.flags, self.fo_ins_blank);
+        (search.foundcol != 0).then_some(search)
+    }
+
+    /// Get the line ready to be split at `search`'s column: the replace
+    /// stack's offset, the cursor after the break, and (Virtual Replace)
+    /// the text that moves, which it backspaces over.
+    ///
+    /// Answers how many bytes past the break the cursor was -- where it
+    /// goes back to on the new line -- and the saved text.
+    fn cut_at(&self, search: &BreakSearch, mut startcol: c_int) -> (c_int, Vec<u8>) {
+        let mut win = Win::current();
+        let foundcol = search.foundcol;
+
+        // The line is going to be broken; take any `$` off first.
+        undisplay_dollar();
+
+        // The replace stack needs the offset between the cursor and the
+        // break. MODE_VREPLACE does not use it -- it backspaces over the
+        // text instead.
+        let mut orig_col = 0;
+        if STATE.get() & VREPLACE_FLAG != 0 {
+            orig_col = startcol; // where the backspacing will start
+        } else {
+            REPLACE_OFFSET.set(startcol - search.end_foundcol);
+        }
+
+        // Move `startcol` past the spaces that are about to be deleted and
+        // the characters that stay on the top line.
+        win.w_cursor.col = ColNr::new(foundcol);
+        while {
+            let cc = gchar_cursor();
+            (whitechar(cc)) && (!self.fo_white_par || win.w_cursor.col < ColNr::new(startcol))
+        } {
+            inc_cursor();
+        }
+        startcol -= win.w_cursor.col.get();
+        startcol = startcol.max(0);
+
+        let mut saved_text = Vec::new();
+        if STATE.get() & VREPLACE_FLAG != 0 {
+            // MODE_VREPLACE backspaces over the text being wrapped, so save
+            // a copy now -- the `startcol` bytes from the cursor -- to put
+            // on the next line.
+            saved_text = {
+                let cursor = win.w_cursor;
+                let mut lines = Lines::current();
+                let line = lines.line(cursor.lnum);
+                let rest = &line[usize::try_from(cursor.col).unwrap_or(0).min(line.len())..];
+                rest[..usize::try_from(startcol).unwrap_or(0).min(rest.len())].to_vec()
+            };
+            win.w_cursor.col = ColNr::new(orig_col);
+            if !self.fo_white_par {
+                backspace_until_column(foundcol);
+            }
+        } else if !self.fo_white_par {
+            // Put the cursor after the position to break at.
+            win.w_cursor.col = ColNr::new(foundcol);
+        }
+        (startcol, saved_text)
+    }
+
+    /// The `OPENLINE_*` flags a break opens its new line with.
+    fn open_line_flags(&self) -> c_int {
+        OPENLINE_DELSPACES
+            + OPENLINE_MARKFIX
+            + if self.fo_white_par {
+                OPENLINE_KEEPTRAIL
+            } else {
+                0
+            }
+            + if self.do_comments { OPENLINE_DO_COM } else { 0 }
+            + OPENLINE_FORMAT
+            + if self.flags & INSCHAR_COM_LIST != 0 {
+                OPENLINE_COM_LIST
+            } else {
+                0
+            }
+    }
+
+    /// Split the line at the cursor. Only insert and delete lines; don't
+    /// really redraw the window.
+    fn open_broken_line(&mut self) {
+        let mut did_do_comment = false;
+        let second_line_indent = if self.flags & INSCHAR_COM_LIST != 0 {
+            self.second_indent
+        } else {
+            OLD_INDENT.get()
+        };
+        let _ = open_line(
+            FORWARD as c_int,
+            self.open_line_flags(),
+            second_line_indent,
+            Some(&mut did_do_comment),
+        );
+        if self.flags & INSCHAR_COM_LIST == 0 {
+            OLD_INDENT.set(0);
+        }
+        // A comment leader was inserted, so a following line may get one
+        // too.
+        if did_do_comment {
+            self.no_leader = false;
+        }
+        REPLACE_OFFSET.set(0);
+    }
+
+    /// After the first break, indent the new line as the paragraph's second
+    /// line -- in Insert mode only.
+    ///
+    /// Auto-wrap of numbered lists. Outside Insert mode -- that is, from
+    /// `format_lines` -- `INSCHAR_COM_LIST` is set and `open_line` has
+    /// already done this.
+    fn indent_second_line(&mut self, leader_len: i32) {
+        if self.flags & INSCHAR_COM_LIST != 0 {
+            return;
+        }
+        if self.second_indent < 0 && has_format_option(FoFlag::Q_NUMBER) {
+            self.second_indent = get_number_indent(Win::current().w_cursor.lnum - 1);
+        }
+        let second_indent = self.second_indent;
+        if second_indent < 0 {
+            return;
+        }
+        if STATE.get() & VREPLACE_FLAG != 0 {
+            change_indent(INDENT_SET, second_indent, 0, true);
+        } else if leader_len > 0 && second_indent - leader_len > 0 {
+            // A numbered list item that has a comment: `open_line` put the
+            // leader in and left the cursor after it, so all that is missing
+            // is the white space the number wants after it.
+            let padding = second_indent - leader_len;
+            for _ in 0..padding {
+                ins_str(b" ");
+            }
+        } else {
+            set_indent(second_indent, SIN_CHANGED);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn wrap(flags: c_int, fo_white_par: bool, do_comments: bool) -> Wrap {
+        Wrap {
+            textwidth: 20,
+            second_indent: -1,
+            flags,
+            c: NUL,
+            fo_ins_blank: false,
+            fo_multibyte: false,
+            fo_rigor_tw: false,
+            fo_white_par,
+            first_line: true,
+            no_leader: false,
+            do_comments,
+        }
+    }
+
+    #[test]
+    fn a_break_opens_its_line_with_what_the_call_and_options_ask() {
+        let base = OPENLINE_DELSPACES | OPENLINE_MARKFIX | OPENLINE_FORMAT;
+        assert_eq!(wrap(0, false, false).open_line_flags(), base);
+        // 'formatoptions' `w`: trailing white space marks a paragraph, so
+        // the line being left keeps it.
+        assert_eq!(
+            wrap(0, true, false).open_line_flags(),
+            base | OPENLINE_KEEPTRAIL
+        );
+        assert_eq!(
+            wrap(0, false, true).open_line_flags(),
+            base | OPENLINE_DO_COM
+        );
+        // From `format_lines`: the list's leader length rides along.
+        assert_eq!(
+            wrap(INSCHAR_COM_LIST, false, false).open_line_flags(),
+            base | OPENLINE_COM_LIST
+        );
     }
 }
