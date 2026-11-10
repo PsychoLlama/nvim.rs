@@ -274,7 +274,7 @@ pub fn f_toupper(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// checked lazily -- either when a mapped character's counterpart runs off
 /// the end of `tostr`, or once, the first time an input character is *not*
 /// in `fromstr` and the counts can be compared directly. So
-/// `tr('a', 'ab', 'x')` is an error but `tr('a', 'a', 'x')` is not.
+/// `tr('b', 'ab', 'x')` is an error but `tr('a', 'ab', 'x')` is not.
 pub fn f_tr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buf = NumBuf::new();
@@ -289,64 +289,69 @@ pub fn f_tr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     };
     let from_bytes = fromstr.to_bytes();
 
-    /// The `n`-th character of a set, as its bytes.
-    fn nth_char(set: &[u8], n: usize) -> Option<&[u8]> {
-        let mut at = 0;
-        for _ in 0..n {
-            at += cluster_len(set.get(at..).filter(|rest| !rest.is_empty())?);
+    match translate(in_bytes, from_bytes, to_bytes) {
+        Some(out) => result.write_string(Some(out.into())),
+        None => {
+            let fromstr = msg_cstr(fromstr);
+            semsg!("E475: Invalid argument: {fromstr}");
         }
-        let rest = set.get(at..).filter(|rest| !rest.is_empty())?;
-        Some(&rest[..cluster_len(rest)])
     }
+}
 
+/// The `n`-th character of a set, as its bytes.
+fn nth_char(set: &[u8], n: usize) -> Option<&[u8]> {
+    let mut at = 0;
+    for _ in 0..n {
+        at += cluster_len(set.get(at..).filter(|rest| !rest.is_empty())?);
+    }
+    let rest = set.get(at..).filter(|rest| !rest.is_empty())?;
+    Some(&rest[..cluster_len(rest)])
+}
+
+/// `text` with each character of `from` replaced by the character at the
+/// same position in `to`, or `None` when the two sets turn out to differ in
+/// length (see [`f_tr`] for when that is noticed).
+fn translate(text: &[u8], from: &[u8], to: &[u8]) -> Option<Vec<u8>> {
     let mut out = Vec::<u8>::new();
-
     let mut lengths_checked = false;
     let mut at = 0;
-    'error: {
-        while at < in_bytes.len() {
-            let cur = &in_bytes[at..];
-            let ch = &cur[..cluster_len(cur)];
+    while at < text.len() {
+        let cur = &text[at..];
+        let ch = &cur[..cluster_len(cur)];
 
-            // Which character of `fromstr` is this, if any?
-            let mut idx = 0;
-            let mut found = false;
-            let mut from_at = 0;
-            while from_at < from_bytes.len() {
-                let from_rest = &from_bytes[from_at..];
-                let from_ch = &from_rest[..cluster_len(from_rest)];
-                if from_ch == ch {
-                    found = true;
-                    break;
-                }
-                idx += 1;
-                from_at += from_ch.len();
+        // Which character of `from` is this, if any?
+        let mut idx = 0;
+        let mut found = false;
+        let mut from_at = 0;
+        while from_at < from.len() {
+            let from_rest = &from[from_at..];
+            let from_ch = &from_rest[..cluster_len(from_rest)];
+            if from_ch == ch {
+                found = true;
+                break;
             }
-
-            let replacement = if found {
-                match nth_char(to_bytes, idx) {
-                    Some(hit) => hit,
-                    None => break 'error, // tostr is shorter than fromstr
-                }
-            } else {
-                if !lengths_checked {
-                    lengths_checked = true;
-                    // `idx` is now `fromstr`'s character count.
-                    if char_count(to_bytes) != idx {
-                        break 'error;
-                    }
-                }
-                ch
-            };
-
-            out.extend_from_slice(replacement);
-            at += ch.len();
+            idx += 1;
+            from_at += from_ch.len();
         }
-        result.write_string(Some(out.into()));
-        return;
+
+        let replacement = if found {
+            // `None` when `to` is shorter than `from`.
+            nth_char(to, idx)?
+        } else {
+            if !lengths_checked {
+                lengths_checked = true;
+                // `idx` is now `from`'s character count.
+                if char_count(to) != idx {
+                    return None;
+                }
+            }
+            ch
+        };
+
+        out.extend_from_slice(replacement);
+        at += ch.len();
     }
-    let fromstr = msg_cstr(fromstr);
-    semsg!("E475: Invalid argument: {fromstr}");
+    Some(out)
 }
 
 /// "trim()" function.
@@ -412,4 +417,27 @@ pub fn f_trim(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     result.write_string(Some(ThinCString::from_bytes(&bytes[start..end])));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::translate;
+
+    #[test]
+    fn translate_maps_each_character_by_position() {
+        assert_eq!(
+            translate(b"hello", b"el", b"ip").as_deref(),
+            Some(&b"hippo"[..])
+        );
+        assert_eq!(
+            translate("aä".as_bytes(), "ä".as_bytes(), b"o").as_deref(),
+            Some(&b"ao"[..])
+        );
+        // Unequal sets are noticed when a mapped character runs off `to`...
+        assert_eq!(translate(b"b", b"ab", b"x"), None);
+        // ...or at the first character not in `from`, which compares them.
+        assert_eq!(translate(b"z", b"ab", b"x"), None);
+        // Until then nothing compares them.
+        assert_eq!(translate(b"a", b"ab", b"x").as_deref(), Some(&b"x"[..]));
+    }
 }
