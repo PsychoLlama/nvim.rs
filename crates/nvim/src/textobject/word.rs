@@ -168,28 +168,12 @@ pub(crate) fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Resul
         if dec_cursor().is_stuck() {
             return Err(NoObject); // started at the start of the file
         }
-        'finished: {
-            if !stop || sclass == cls() || sclass == 0 {
-                // Skip the white space before the word, stopping on an
-                // empty line.
-                while cls() == 0 {
-                    if Win::current().w_cursor.col == ColNr::ZERO
-                        && Lines::current()
-                            .line(Win::current().w_cursor.lnum)
-                            .is_empty()
-                    {
-                        break 'finished;
-                    }
-                    if dec_cursor().is_stuck() {
-                        return Ok(()); // hit the start of the file
-                    }
-                }
-                // Back to the start of this word.
-                if skip_chars(cls(), BACKWARD as c_int) {
-                    return Ok(());
-                }
+        match back_over_word(sclass, stop) {
+            Some(Landing::Overshot) => {
+                inc_cursor(); // overshot: forward one
             }
-            inc_cursor(); // overshot: forward one
+            Some(Landing::EmptyLine) => {}
+            None => return Ok(()), // hit the start of the file
         }
         stop = false;
     }
@@ -240,37 +224,83 @@ pub(crate) fn end_word(
         if inc_cursor().is_stuck() {
             return Err(NoObject);
         }
-        'finished: {
-            if cls() == sclass && sclass != 0 {
-                // In the middle of a word: just go to its end.
-                if skip_chars(sclass, FORWARD as c_int) {
-                    return Err(NoObject);
-                }
-            } else if !stop || sclass == 0 {
-                // At the end of a word: go to the end of the next one,
-                // skipping white space first.
-                while cls() == 0 {
-                    if empty
-                        && Win::current().w_cursor.col == ColNr::ZERO
-                        && Lines::current()
-                            .line(Win::current().w_cursor.lnum)
-                            .is_empty()
-                    {
-                        break 'finished;
-                    }
-                    if inc_cursor().is_stuck() {
-                        return Err(NoObject); // hit the end of the file
-                    }
-                }
-                if skip_chars(cls(), FORWARD as c_int) {
-                    return Err(NoObject);
-                }
-            }
+        if forward_over_word(sclass, stop, empty)? == Landing::Overshot {
             dec_cursor(); // overshot: back one
         }
         stop = false; // only the first word moves one less
     }
     Ok(())
+}
+
+/// Where a move over one word left the cursor.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Landing {
+    /// One character past the word, to be stepped back onto it.
+    Overshot,
+    /// On an empty line, which counts as a word of its own.
+    EmptyLine,
+}
+
+/// One word of `b`, after the first step back: over the white space before
+/// it (stopping on an empty line) and on to one before its start. `None`
+/// when the start of the file came first.
+///
+/// With `stop`, a cursor that started on the first character of a word
+/// (the step back left its class `sclass`) only steps forward again.
+fn back_over_word(sclass: c_int, stop: bool) -> Option<Landing> {
+    if !stop || sclass == cls() || sclass == 0 {
+        // Skip the white space before the word, stopping on an empty line.
+        while cls() == 0 {
+            if Win::current().w_cursor.col == ColNr::ZERO
+                && Lines::current()
+                    .line(Win::current().w_cursor.lnum)
+                    .is_empty()
+            {
+                return Some(Landing::EmptyLine);
+            }
+            if dec_cursor().is_stuck() {
+                return None;
+            }
+        }
+        // Back to the start of this word.
+        if skip_chars(cls(), BACKWARD as c_int) {
+            return None;
+        }
+    }
+    Some(Landing::Overshot)
+}
+
+/// One word of `e`, after the first step forward: to the end of the word
+/// the cursor is in, or (at the end of one) over the white space to the end
+/// of the next, stopping on an empty line when `empty`. `Err` when the end
+/// of the file came first.
+fn forward_over_word(sclass: c_int, stop: bool, empty: bool) -> Result<Landing, NoObject> {
+    if cls() == sclass && sclass != 0 {
+        // In the middle of a word: just go to its end.
+        if skip_chars(sclass, FORWARD as c_int) {
+            return Err(NoObject);
+        }
+    } else if !stop || sclass == 0 {
+        // At the end of a word: go to the end of the next one, skipping
+        // white space first.
+        while cls() == 0 {
+            if empty
+                && Win::current().w_cursor.col == ColNr::ZERO
+                && Lines::current()
+                    .line(Win::current().w_cursor.lnum)
+                    .is_empty()
+            {
+                return Ok(Landing::EmptyLine);
+            }
+            if inc_cursor().is_stuck() {
+                return Err(NoObject); // hit the end of the file
+            }
+        }
+        if skip_chars(cls(), FORWARD as c_int) {
+            return Err(NoObject);
+        }
+    }
+    Ok(Landing::Overshot)
 }
 
 /// `ge` / `gE`: move back to the end of the `count`th previous word. Answers

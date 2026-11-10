@@ -62,119 +62,10 @@ pub(crate) fn findsent(dir: Direction, mut count: c_int) -> Result<(), NoObject>
             break;
         }
         let prev_pos = pos;
-        'found: {
-            // For every walk below: `pos` starts at the cursor and
-            // only ever moves by `incl`/`decl`/`inc`, so it stays a position
-            // of the current buffer the caller guarantees.
-            if gchar_pos(&pos) == NUL {
-                // On an empty line: skip up to a non-empty one.
-                while !step(&mut pos).is_stuck() {
-                    if gchar_pos(&pos) != NUL {
-                        break;
-                    }
-                }
-                if dir as c_int == FORWARD as c_int {
-                    break 'found;
-                }
-            } else if dir as c_int == FORWARD as c_int
-                && pos.col == ColNr::ZERO
-                && starts_para(pos.lnum, 0, false)
-            {
-                // At the start of a paragraph or section, going forward:
-                // the next line is the answer.
-                if pos.lnum == Buf::current().b_ml.ml_line_count {
-                    return Err(NoObject);
-                }
-                pos.lnum += 1;
-                break 'found;
-            } else if dir as c_int == BACKWARD as c_int {
-                decl(&mut pos);
-            }
-
-            // Back to the previous non-white, non-punctuation character.
-            let mut found_dot = false;
-            loop {
-                let c = gchar_pos(&pos);
-                if !(ascii_iswhite(c) || has_char(c".!?)]\"'", c)) {
-                    break;
-                }
-                let mut tpos = pos;
-                let moved = decl(&mut tpos);
-                // The line is read only once `decl` has answered that `tpos`
-                // moved, so it is still in the buffer.
-                if moved.is_stuck()
-                    || (dir == FORWARD && Lines::current().line(tpos.lnum).is_empty())
-                {
-                    break;
-                }
-                if found_dot {
-                    break;
-                }
-                if has_char(c".!?", c) {
-                    found_dot = true;
-                }
-                if has_char(c")]\"'", c)
-                    // `tpos` is a position of the current buffer.
-                    && !has_char(c".!?)]\"'", gchar_pos(&tpos))
-                {
-                    break;
-                }
-                decl(&mut pos);
-            }
-
-            // The line the search started on, so that a backward search
-            // that crossed one can step back onto it.
-            let startlnum = pos.lnum;
-            let cpo_j = cpo_has(CpoFlag::ENDOFSENT);
-
-            loop {
-                // Find the end of the sentence.
-                let mut c = gchar_pos(&pos);
-                // `pos.lnum` is a line of the current buffer.
-                if c == NUL || (pos.col == ColNr::ZERO && starts_para(pos.lnum, 0, false)) {
-                    if dir as c_int == BACKWARD as c_int && pos.lnum != startlnum {
-                        pos.lnum += 1;
-                    }
-                    break;
-                }
-                if c == '.' as c_int || c == '!' as c_int || c == '?' as c_int {
-                    let mut tpos = pos;
-                    // Whether the end of the buffer came before anything
-                    // but closing punctuation.
-                    let mut at_end = false;
-                    loop {
-                        if inc(&mut tpos).is_stuck() {
-                            at_end = true;
-                            break;
-                        }
-                        c = gchar_pos(&tpos);
-                        if !has_char(c")]\"'", c) {
-                            break;
-                        }
-                    }
-                    if at_end
-                        || (!cpo_j && (c == ' ' as c_int || c == '\t' as c_int))
-                        || c == NUL
-                        || (cpo_j
-                            && c == ' ' as c_int
-                            && !inc(&mut tpos).is_stuck()
-                            && gchar_pos(&tpos) == ' ' as c_int)
-                    {
-                        pos = tpos;
-                        if gchar_pos(&pos) == NUL {
-                            inc(&mut pos); // skip the NUL at end of line
-                        }
-                        break;
-                    }
-                }
-                if step(&mut pos).is_stuck() {
-                    if count != 0 {
-                        return Err(NoObject);
-                    }
-                    noskip = true;
-                    break;
-                }
-            }
+        let (end, buffer_ended) = next_sentence(pos, dir, step, count)?;
+        pos = end;
+        if buffer_ended {
+            noskip = true;
         }
 
         // Skip the white space in front of the sentence.
@@ -202,6 +93,130 @@ pub(crate) fn findsent(dir: Direction, mut count: c_int) -> Result<(), NoObject>
     setpcmark();
     Win::current().w_cursor = pos;
     Ok(())
+}
+
+/// One sentence of [`findsent`]: from `pos`, past the end of the sentence
+/// it is in (or, on an empty line or a paragraph start, to the next
+/// non-empty line). Answers where that is -- the white space before the
+/// next sentence -- and whether the buffer ended before the sentence did,
+/// so that no white space is to be skipped; `Err` when it ended with
+/// `count` sentences still to go.
+fn next_sentence(
+    mut pos: Pos,
+    dir: Direction,
+    step: StepFn,
+    count: c_int,
+) -> Result<(Pos, bool), NoObject> {
+    // For every walk below: `pos` starts at the cursor and
+    // only ever moves by `incl`/`decl`/`inc`, so it stays a position
+    // of the current buffer the caller guarantees.
+    if gchar_pos(&pos) == NUL {
+        // On an empty line: skip up to a non-empty one.
+        while !step(&mut pos).is_stuck() {
+            if gchar_pos(&pos) != NUL {
+                break;
+            }
+        }
+        if dir as c_int == FORWARD as c_int {
+            return Ok((pos, false));
+        }
+    } else if dir as c_int == FORWARD as c_int
+        && pos.col == ColNr::ZERO
+        && starts_para(pos.lnum, 0, false)
+    {
+        // At the start of a paragraph or section, going forward:
+        // the next line is the answer.
+        if pos.lnum == Buf::current().b_ml.ml_line_count {
+            return Err(NoObject);
+        }
+        pos.lnum += 1;
+        return Ok((pos, false));
+    } else if dir as c_int == BACKWARD as c_int {
+        decl(&mut pos);
+    }
+
+    // Back to the previous non-white, non-punctuation character.
+    let mut found_dot = false;
+    loop {
+        let c = gchar_pos(&pos);
+        if !(ascii_iswhite(c) || has_char(c".!?)]\"'", c)) {
+            break;
+        }
+        let mut tpos = pos;
+        let moved = decl(&mut tpos);
+        // The line is read only once `decl` has answered that `tpos`
+        // moved, so it is still in the buffer.
+        if moved.is_stuck() || (dir == FORWARD && Lines::current().line(tpos.lnum).is_empty()) {
+            break;
+        }
+        if found_dot {
+            break;
+        }
+        if has_char(c".!?", c) {
+            found_dot = true;
+        }
+        if has_char(c")]\"'", c)
+            // `tpos` is a position of the current buffer.
+            && !has_char(c".!?)]\"'", gchar_pos(&tpos))
+        {
+            break;
+        }
+        decl(&mut pos);
+    }
+
+    // The line the search started on, so that a backward search
+    // that crossed one can step back onto it.
+    let startlnum = pos.lnum;
+    let cpo_j = cpo_has(CpoFlag::ENDOFSENT);
+
+    loop {
+        // Find the end of the sentence.
+        let mut c = gchar_pos(&pos);
+        // `pos.lnum` is a line of the current buffer.
+        if c == NUL || (pos.col == ColNr::ZERO && starts_para(pos.lnum, 0, false)) {
+            if dir as c_int == BACKWARD as c_int && pos.lnum != startlnum {
+                pos.lnum += 1;
+            }
+            break;
+        }
+        if c == '.' as c_int || c == '!' as c_int || c == '?' as c_int {
+            let mut tpos = pos;
+            // Whether the end of the buffer came before anything
+            // but closing punctuation.
+            let mut at_end = false;
+            loop {
+                if inc(&mut tpos).is_stuck() {
+                    at_end = true;
+                    break;
+                }
+                c = gchar_pos(&tpos);
+                if !has_char(c")]\"'", c) {
+                    break;
+                }
+            }
+            if at_end
+                || (!cpo_j && (c == ' ' as c_int || c == '\t' as c_int))
+                || c == NUL
+                || (cpo_j
+                    && c == ' ' as c_int
+                    && !inc(&mut tpos).is_stuck()
+                    && gchar_pos(&tpos) == ' ' as c_int)
+            {
+                pos = tpos;
+                if gchar_pos(&pos) == NUL {
+                    inc(&mut pos); // skip the NUL at end of line
+                }
+                break;
+            }
+        }
+        if step(&mut pos).is_stuck() {
+            if count != 0 {
+                return Err(NoObject);
+            }
+            return Ok((pos, true));
+        }
+    }
+    Ok((pos, false))
 }
 
 /// Move `posp` back to the first character of the run of white space it ends
