@@ -134,76 +134,101 @@ pub(crate) fn list_arg_vars(text: &[u8], skip: bool, first: &mut bool) -> usize 
         let mut cursor = Cursor::new(rest(arg));
         let (len, tofree) = get_name_len(&mut cursor, true, true);
         arg += cursor.offset();
-        'done: {
-            if len <= 0 {
-                if len < 0 && !aborting() {
-                    EMSG_SEVERE.set(true);
-                    let shown = crate::message_fmt::msg_bytes(rest(arg));
-                    semsg!("E475: Invalid argument: {shown}");
-                    return arg;
-                }
-                error = true;
-                break 'done;
+        if len <= 0 {
+            if len < 0 && !aborting() {
+                EMSG_SEVERE.set(true);
+                let shown = crate::message_fmt::msg_bytes(rest(arg));
+                semsg!("E475: Invalid argument: {shown}");
+                return arg;
             }
+            error = true;
+        } else {
             let len = usize::try_from(len).expect("a positive length");
-            let name: &[u8] = match &tofree {
-                Some(expanded) => {
-                    let expanded: &[u8] = expanded;
-                    expanded.get(..len).unwrap_or(expanded)
-                }
-                None => &text[name_start..name_start + len],
+            let named = Named {
+                text,
+                start: name_start,
+                len,
+                expanded: tofree.as_deref(),
             };
-
-            let mut tv = TV_INITIAL_VALUE;
-            if eval_variable(name, Some(&mut tv), true, false).is_err() {
-                error = true;
-                break 'done;
-            }
-            // The subscript is read from the same text as the name.
-            let arg_subsc = arg;
-            let subscripted = handle_subscript(&mut cursor, &mut tv, true, true);
-            arg = name_start + cursor.offset();
-            if subscripted.is_err() {
-                error = true;
-                break 'done;
-            }
-
-            if arg == arg_subsc && len == 2 && name[1] == b':' {
-                // A bare scope name lists the whole scope.
-                let lister: Option<ScopeLister> = match name[0] {
-                    b'g' => Some(list_glob_vars),
-                    b'b' => Some(list_buf_vars),
-                    b'w' => Some(list_win_vars),
-                    b't' => Some(list_tab_vars),
-                    b'v' => Some(list_vim_vars),
-                    b's' => Some(list_script_vars),
-                    b'l' => Some(list_func_vars),
-                    _ => None,
-                };
-                match lister {
-                    Some(lister) => lister(first),
-                    None => {
-                        let name = crate::message_fmt::msg_bytes(name);
-                        semsg!("E738: Can't list variables for {name}");
-                    }
-                }
-            } else {
-                let rendered = encode_tv2echo(&tv);
-                // Without a subscript the expanded name is what was
-                // looked up; with one, the command line's own text is
-                // what should be shown.
-                let shown: &[u8] = match &tofree {
-                    Some(expanded) if arg == arg_subsc => expanded,
-                    _ => &text[name_start..arg],
-                };
-                list_one_var_a(c"", shown, tv.v_type(), rendered.as_bytes(), first);
-            }
-            clear_local(&mut tv);
+            error = !named.list(&mut cursor, &mut arg, first);
         }
         drop(tofree);
         arg += skip::white(rest(arg));
     }
     arg
+}
+
+/// A variable name [`list_arg_vars`] read: `len` bytes of `text` from
+/// `start`, or of `expanded` when the name had `{curly}` parts.
+#[derive(Debug)]
+struct Named<'a> {
+    text: &'a [u8],
+    start: usize,
+    len: usize,
+    expanded: Option<&'a [u8]>,
+}
+
+impl Named<'_> {
+    /// Look the variable up, apply the subscript under `cursor` (moving
+    /// `arg` past it) and list it, or the whole scope for a bare `g:`-style
+    /// name. False when the lookup or the subscript failed (already said).
+    fn list(&self, cursor: &mut Cursor<'_>, arg: &mut usize, first: &mut bool) -> bool {
+        let Named {
+            text,
+            start: name_start,
+            len,
+            expanded,
+        } = *self;
+        let name: &[u8] = match expanded {
+            Some(expanded) => expanded.get(..len).unwrap_or(expanded),
+            None => &text[name_start..name_start + len],
+        };
+
+        let mut tv = TV_INITIAL_VALUE;
+        if eval_variable(name, Some(&mut tv), true, false).is_err() {
+            return false;
+        }
+        // The subscript is read from the same text as the name.
+        let arg_subsc = *arg;
+        let subscripted = handle_subscript(cursor, &mut tv, true, true);
+        *arg = name_start + cursor.offset();
+        if subscripted.is_err() {
+            return false;
+        }
+
+        if *arg == arg_subsc && len == 2 && name[1] == b':' {
+            // A bare scope name lists the whole scope.
+            let lister: Option<ScopeLister> = match name[0] {
+                b'g' => Some(list_glob_vars),
+                b'b' => Some(list_buf_vars),
+                b'w' => Some(list_win_vars),
+                b't' => Some(list_tab_vars),
+                b'v' => Some(list_vim_vars),
+                b's' => Some(list_script_vars),
+                b'l' => Some(list_func_vars),
+                _ => None,
+            };
+            match lister {
+                Some(lister) => lister(first),
+                None => {
+                    let name = crate::message_fmt::msg_bytes(name);
+                    semsg!("E738: Can't list variables for {name}");
+                }
+            }
+        } else {
+            let rendered = encode_tv2echo(&tv);
+            // Without a subscript the expanded name is what was
+            // looked up; with one, the command line's own text is
+            // what should be shown.
+            let shown: &[u8] = match expanded {
+                Some(expanded) if *arg == arg_subsc => expanded,
+                _ => &text[name_start..*arg],
+            };
+            list_one_var_a(c"", shown, tv.v_type(), rendered.as_bytes(), first);
+        }
+        clear_local(&mut tv);
+        true
+    }
 }
 
 /// Print one `name  <sigil><value>` line.

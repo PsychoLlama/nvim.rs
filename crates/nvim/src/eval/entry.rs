@@ -347,24 +347,22 @@ pub(crate) fn call_vim_function(
     argv: &[TypVal],
     result: &mut TypVal,
 ) -> Result<(), Failed> {
-    let mut ret = Err(Failed);
-    'fail: {
-        let (name, len, lua) = if let Some(lua_name) = func.to_bytes().strip_prefix(b"v:lua.") {
-            let len = check_luafunc_name(lua_name, false);
-            if len == 0 {
-                break 'fail;
-            }
-            (cstr::suffix(func, 6), Some(len), lua_partial())
-        } else {
-            (func, None, None)
-        };
-        result.write_empty(VAR_UNKNOWN);
-        let with = CallWith {
-            partial: lua.as_ref(),
-            ..CallWith::at_cursor(true)
-        };
-        ret = call_func_with(name, len, result, argv, with);
-    }
+    let (name, len, lua) = if let Some(lua_name) = func.to_bytes().strip_prefix(b"v:lua.") {
+        let len = check_luafunc_name(lua_name, false);
+        if len == 0 {
+            tv_clear(result);
+            return Err(Failed);
+        }
+        (cstr::suffix(func, 6), Some(len), lua_partial())
+    } else {
+        (func, None, None)
+    };
+    result.write_empty(VAR_UNKNOWN);
+    let with = CallWith {
+        partial: lua.as_ref(),
+        ..CallWith::at_cursor(true)
+    };
+    let ret = call_func_with(name, len, result, argv, with);
     if ret.is_err() {
         tv_clear(result);
     }

@@ -42,7 +42,7 @@ use crate::path::full_name_save;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::CURRENT_SCTX;
 use crate::types::Failed;
-use crate::types::{Blob, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber};
+use crate::types::{Blob, List, ListItem, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber};
 use crate::{semsg, tr};
 use core::ffi::{CStr, c_int};
 
@@ -65,87 +65,103 @@ fn err_writing(error: c_int) {
 // The three writers
 // ---------------------------------------------------------------------
 
+/// Why writing stopped short.
+#[derive(Debug)]
+enum WriteStop {
+    /// An item has no string form; it said so itself.
+    Refused,
+    /// A write or the flush failed with this code, for E80 to report.
+    Failed(c_int),
+}
+
+impl WriteStop {
+    /// A failed write, from the negative count [`WriteFile::write`] answered.
+    fn from_count(written: isize) -> Self {
+        WriteStop::Failed(c_int::try_from(written).unwrap_or(c_int::MIN))
+    }
+
+    /// Say E80 for a failed write (a refused item has said its own) and
+    /// answer the `Failed` the builtin reports.
+    fn report(self) -> Failed {
+        if let WriteStop::Failed(code) = self {
+            err_writing(code);
+        }
+        Failed
+    }
+}
+
 /// Write every item of `list` as a line, `binary` suppressing the newline
 /// after the last one.
 ///
 /// A refusal has been said: E80, or an item with no string form, which
 /// reports on its own and is the one exit that does not report a write error.
 fn write_list(out: &mut WriteFile, list: Option<&List>, binary: bool) -> Result<(), Failed> {
-    let items = list_items(list);
-    let error;
-    'failed: {
-        for (i, li) in items.iter().enumerate() {
-            let mut numbuf = NumBuf::new();
-            let Ok(s) = numbuf.string_chk(&li.li_tv) else {
-                return Err(Failed);
-            };
-            let bytes = s.to_bytes();
-            let mut hunk_start = 0;
-            let mut p = 0;
-            loop {
-                if p == bytes.len() || bytes[p] == b'\n' {
-                    if p != hunk_start {
-                        let written = out.write(&bytes[hunk_start..p]);
-                        if written < 0 {
-                            error = c_int::try_from(written).unwrap_or(c_int::MIN);
-                            break 'failed;
-                        }
-                    }
-                    if p == bytes.len() {
-                        break;
-                    }
-                    hunk_start = p + 1;
-                    // A NL in the string stands for a NUL in the file.
-                    let written = out.write(&[0]);
+    write_lines(out, list_items(list), binary)
+        .and_then(|()| out.flush().map_err(WriteStop::Failed))
+        .map_err(WriteStop::report)
+}
+
+/// [`write_list`]'s lines, before the flush.
+fn write_lines(out: &mut WriteFile, items: &[ListItem], binary: bool) -> Result<(), WriteStop> {
+    for (i, li) in items.iter().enumerate() {
+        let mut numbuf = NumBuf::new();
+        let Ok(s) = numbuf.string_chk(&li.li_tv) else {
+            return Err(WriteStop::Refused);
+        };
+        let bytes = s.to_bytes();
+        let mut hunk_start = 0;
+        let mut p = 0;
+        loop {
+            if p == bytes.len() || bytes[p] == b'\n' {
+                if p != hunk_start {
+                    let written = out.write(&bytes[hunk_start..p]);
                     if written < 0 {
-                        // Upstream leaves the *item* here rather than the
-                        // function, still writes the line separator below,
-                        // and then lets the flush overwrite `error` -- so a
-                        // failed NUL write is reported only when the flush
-                        // fails too.  Kept.
-                        break;
+                        return Err(WriteStop::from_count(written));
                     }
                 }
-                p += 1;
-            }
-            if !binary || i + 1 < items.len() {
-                let written = out.write(b"\n");
+                if p == bytes.len() {
+                    break;
+                }
+                hunk_start = p + 1;
+                // A NL in the string stands for a NUL in the file.
+                let written = out.write(&[0]);
                 if written < 0 {
-                    error = c_int::try_from(written).unwrap_or(c_int::MIN);
-                    break 'failed;
+                    // Upstream leaves the *item* here rather than the
+                    // function, still writes the line separator below,
+                    // and then lets the flush decide the answer -- so a
+                    // failed NUL write is reported only when the flush
+                    // fails too.  Kept.
+                    break;
                 }
             }
+            p += 1;
         }
-        match out.flush() {
-            Ok(()) => return Ok(()),
-            Err(code) => error = code,
+        if !binary || i + 1 < items.len() {
+            let written = out.write(b"\n");
+            if written < 0 {
+                return Err(WriteStop::from_count(written));
+            }
         }
     }
-    err_writing(error);
-    Err(Failed)
+    Ok(())
 }
 
 /// Write `data` and flush; E80 when that fails.
 fn write_data(out: &mut WriteFile, data: &[u8]) -> Result<(), Failed> {
-    let error;
-    'failed: {
-        if !data.is_empty() {
-            let written = out.write(data);
-            // Upstream tests against the length, not against zero, so a
-            // short write reports the count it did accept as if it were a
-            // code.
-            if written < data.len().cast_signed() {
-                error = c_int::try_from(written).unwrap_or(c_int::MIN);
-                break 'failed;
-            }
-        }
-        match out.flush() {
-            Ok(()) => return Ok(()),
-            Err(code) => error = code,
+    write_then_flush(out, data).map_err(WriteStop::report)
+}
+
+/// [`write_data`] before the report.
+fn write_then_flush(out: &mut WriteFile, data: &[u8]) -> Result<(), WriteStop> {
+    if !data.is_empty() {
+        let written = out.write(data);
+        // Upstream tests against the length, not against zero, so a short
+        // write reports the count it did accept as if it were a code.
+        if written < data.len().cast_signed() {
+            return Err(WriteStop::from_count(written));
         }
     }
-    err_writing(error);
-    Err(Failed)
+    out.flush().map_err(WriteStop::Failed)
 }
 
 fn write_blob(out: &mut WriteFile, blob: Option<&Blob>) -> Result<(), Failed> {

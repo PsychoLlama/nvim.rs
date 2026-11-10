@@ -12,7 +12,7 @@
 
 use super::*;
 use crate::eval::funcs::builtin::EvalFuncData;
-use crate::eval::typval::list_len;
+use crate::eval::typval::{ListRef, list_len};
 use crate::memline::{Lines, ml_append_text, ml_get_len, ml_replace_buf_text};
 use crate::memory::{ThinCString, XString};
 use crate::narrow::len_as_int;
@@ -32,8 +32,7 @@ pub(crate) fn set_buffer_lines(
     lines: &TypVal,
     result: &mut TypVal,
 ) {
-    let mut lnum: LineNr = lnum_arg + i32::from(append);
-    let mut added: c_int = 0;
+    let lnum: LineNr = lnum_arg + i32::from(append);
     let is_curbuf: bool = buffer == Buf::current_or_none();
     let unloaded = |b: Buf| !is_curbuf && b.b_ml.ml_mfp.is_none();
     let Some(target) = buffer.filter(|&b| !unloaded(b)) else {
@@ -57,18 +56,54 @@ pub(crate) fn set_buffer_lines(
     } else {
         None
     };
-    let mut at: usize = 0;
-    let mut line: Option<XString> = None;
-    '_cleanup: {
-        if lines.v_type() == VAR_LIST {
-            if list_len(list.as_deref()) == 0 {
-                break '_cleanup;
-            }
-        } else {
-            line = Some(typval_tostring(Some(lines), false));
-        }
+    // An empty List sets nothing; any other argument is converted to a
+    // String up front, a List's items one at a time.
+    let is_list = lines.v_type() == VAR_LIST;
+    if !is_list || list_len(list.as_deref()) != 0 {
+        let line = (!is_list).then(|| typval_tostring(Some(lines), false));
+        let into = LinesInto {
+            buffer,
+            is_curbuf,
+            append,
+            append_lnum,
+        };
+        into.put(lnum, line, list.as_ref(), result);
+    }
+    if let Some(cob) = cob {
+        cob.restore();
+    }
+}
+
+/// Where [`set_buffer_lines`] puts its lines, the target being current.
+#[derive(Debug)]
+struct LinesInto {
+    buffer: Option<Buf>,
+    is_curbuf: bool,
+    append: bool,
+    /// The line the appended lines go below, for the marks and cursors.
+    append_lnum: LineNr,
+}
+
+impl LinesInto {
+    /// Set or append `line` (a String argument) or each item of `list` from
+    /// `lnum` on, then fix up the marks and cursors the appended lines move.
+    fn put(
+        &self,
+        mut lnum: LineNr,
+        mut line: Option<XString>,
+        list: Option<&ListRef>,
+        result: &mut TypVal,
+    ) {
+        let LinesInto {
+            buffer,
+            is_curbuf,
+            append,
+            append_lnum,
+        } = *self;
+        let mut added: c_int = 0;
+        let mut at: usize = 0;
         loop {
-            if let Some(list) = &list {
+            if let Some(list) = list {
                 // Re-read the items every time, as upstream does.
                 let Some(item) = list.items().get(at) else {
                     break;
@@ -123,9 +158,6 @@ pub(crate) fn set_buffer_lines(
             check_cursor_col(Win::current());
             update_topline(Win::current());
         }
-    }
-    if let Some(cob) = cob {
-        cob.restore();
     }
 }
 

@@ -423,75 +423,68 @@ fn ex_let_option(
     } else {
         get_option_value(opt_idx, opt_flags)
     };
-    let mut arg_end = None;
+    if curval.is_nil() {
+        let name = msg_bytes(name);
+        semsg!("E355: Unknown option: {name}");
+        return Err(Failed);
+    }
+    let compound = op.is_some_and(|c| c != b'=');
+    let is_string = matches!(curval, OptVal::String(_));
+    if compound && op.is_some_and(|c| (c == b'.') != is_string) {
+        wrong_type(op);
+        return Err(Failed);
+    }
 
-    'theend: {
-        if curval.is_nil() {
-            let name = msg_bytes(name);
-            semsg!("E355: Unknown option: {name}");
-            break 'theend;
-        }
-        let compound = op.is_some_and(|c| c != b'=');
-        let is_string = matches!(curval, OptVal::String(_));
-        if compound && op.is_some_and(|c| (c == b'.') != is_string) {
-            wrong_type(op);
-            break 'theend;
-        }
+    let (mut newval, error) = tv_to_optval(tv, opt_idx, name);
+    if error {
+        return Err(Failed);
+    }
+    // The current and the new value must have the same type.
+    debug_assert!(curval.kind() == newval.kind());
 
-        let (mut newval, error) = tv_to_optval(tv, opt_idx, name);
-        if error {
-            break 'theend;
-        }
-        // The current and the new value must have the same type.
-        debug_assert!(curval.kind() == newval.kind());
-
-        if compound && !hidden {
-            // A Number or Boolean `OptVal` as a number. Only those two
-            // variants get this far: the `if` just below is the guard that
-            // keeps a String or a Nil out, and both calls are inside it.
-            let as_int = |v: &OptVal| -> OptInt {
-                match v {
-                    OptVal::Number(number) => *number,
-                    // The tri-state word itself, as upstream's union read
-                    // of the `boolean` arm answered.
-                    OptVal::Boolean(_) => OptInt::from(v.tristate().expect("the arm is Boolean")),
-                    OptVal::Nil | OptVal::String(_) => {
-                        unreachable!("guarded to a Number or a Boolean")
-                    }
+    if compound && !hidden {
+        // A Number or Boolean `OptVal` as a number. Only those two
+        // variants get this far: the `if` just below is the guard that
+        // keeps a String or a Nil out, and both calls are inside it.
+        let as_int = |v: &OptVal| -> OptInt {
+            match v {
+                OptVal::Number(number) => *number,
+                // The tri-state word itself, as upstream's union read
+                // of the `boolean` arm answered.
+                OptVal::Boolean(_) => OptInt::from(v.tristate().expect("the arm is Boolean")),
+                OptVal::Nil | OptVal::String(_) => {
+                    unreachable!("guarded to a Number or a Boolean")
                 }
-            };
-            if matches!(curval, OptVal::Number(_) | OptVal::Boolean(_)) {
-                let cur_n = as_int(&curval);
-                let new_n = as_int(&newval);
-                let new_n = match op.unwrap_or(b'=') {
-                    b'+' => cur_n + new_n,
-                    b'-' => cur_n - new_n,
-                    b'*' => cur_n * new_n,
-                    b'/' => num_divide(VarNumber::from(cur_n), VarNumber::from(new_n)),
-                    b'%' => num_modulus(VarNumber::from(cur_n), VarNumber::from(new_n)),
-                    // No other operator reaches here: `.` was refused
-                    // above for a non-String option.
-                    _ => new_n,
-                };
-                newval = if matches!(curval, OptVal::Number(_)) {
-                    OptVal::Number(new_n)
-                } else {
-                    OptVal::Boolean(tristate_from_int(new_n))
-                };
-            } else if let Some(joined) = curval.concat(&newval) {
-                newval = joined;
             }
-        }
-
-        let err = set_option_value_handle_tty(name, opt_idx, newval, opt_flags);
-        arg_end = Some(end);
-        if let Err(err) = err {
-            emsg_text(err.to_string());
+        };
+        if matches!(curval, OptVal::Number(_) | OptVal::Boolean(_)) {
+            let cur_n = as_int(&curval);
+            let new_n = as_int(&newval);
+            let new_n = match op.unwrap_or(b'=') {
+                b'+' => cur_n + new_n,
+                b'-' => cur_n - new_n,
+                b'*' => cur_n * new_n,
+                b'/' => num_divide(VarNumber::from(cur_n), VarNumber::from(new_n)),
+                b'%' => num_modulus(VarNumber::from(cur_n), VarNumber::from(new_n)),
+                // No other operator reaches here: `.` was refused
+                // above for a non-String option.
+                _ => new_n,
+            };
+            newval = if matches!(curval, OptVal::Number(_)) {
+                OptVal::Number(new_n)
+            } else {
+                OptVal::Boolean(tristate_from_int(new_n))
+            };
+        } else if let Some(joined) = curval.concat(&newval) {
+            newval = joined;
         }
     }
 
-    // Every refusal above has been said.
-    arg_end.ok_or(Failed)
+    // A refusal from the setter is said, but the name was still read.
+    if let Err(err) = set_option_value_handle_tty(name, opt_idx, newval, opt_flags) {
+        emsg_text(err.to_string());
+    }
+    Ok(end)
 }
 
 /// Upstream's `TRISTATE_FROM_INT`: anything positive is true, zero is false,

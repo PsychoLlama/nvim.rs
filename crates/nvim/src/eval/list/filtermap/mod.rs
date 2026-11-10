@@ -96,39 +96,40 @@ pub(crate) fn filter_map_one(
 ) -> bool {
     newtv.write_empty(VAR_UNKNOWN);
 
-    let mut retval = false;
-    'theend: {
-        // foreach() is not limited to an expression.
-        if let (FilterMap::Foreach, Container::Str(cmd)) = (filtermap, Container::of(expr)) {
-            run_cmd(cmd);
-            retval = DID_EMSG.get() == 0;
-            break 'theend;
-        }
-        let mut argv = CallFrame::<2>::new();
-        push_vim_var(&mut argv, Vv::Key);
-        push_vim_var(&mut argv, Vv::Val);
-        if !eval_expr(expr, &argv, newtv) {
-            break 'theend;
-        }
-        match filtermap {
-            FilterMap::Filter => {
-                // filter(): when expr is zero remove the item.
-                let mut error = false;
-                *rem = number_of(newtv, &mut error) == 0;
-                clear_tv(newtv);
-                // On a type error nothing has been removed; stop the loop
-                // without an answer.  tv_get_number_chk gave the message.
-                if error {
-                    break 'theend;
-                }
-            }
-            FilterMap::Foreach => clear_tv(newtv),
-            FilterMap::Map | FilterMap::MapNew => {}
-        }
-        retval = true;
-    }
+    let retval = eval_one(expr, filtermap, newtv, rem);
     clear_vim_var(Vv::Val);
     retval
+}
+
+/// [`filter_map_one`] before `v:val` is cleared.
+fn eval_one(expr: &TypVal, filtermap: FilterMap, newtv: &mut TypVal, rem: &mut bool) -> bool {
+    // foreach() is not limited to an expression.
+    if let (FilterMap::Foreach, Container::Str(cmd)) = (filtermap, Container::of(expr)) {
+        run_cmd(cmd);
+        return DID_EMSG.get() == 0;
+    }
+    let mut argv = CallFrame::<2>::new();
+    push_vim_var(&mut argv, Vv::Key);
+    push_vim_var(&mut argv, Vv::Val);
+    if !eval_expr(expr, &argv, newtv) {
+        return false;
+    }
+    match filtermap {
+        FilterMap::Filter => {
+            // filter(): when expr is zero remove the item.
+            let mut error = false;
+            *rem = number_of(newtv, &mut error) == 0;
+            clear_tv(newtv);
+            // On a type error nothing has been removed; stop the loop
+            // without an answer.  tv_get_number_chk gave the message.
+            if error {
+                return false;
+            }
+        }
+        FilterMap::Foreach => clear_tv(newtv),
+        FilterMap::Map | FilterMap::MapNew => {}
+    }
+    true
 }
 
 /// The shared body of the four builtins: check the argument, save `v:key`

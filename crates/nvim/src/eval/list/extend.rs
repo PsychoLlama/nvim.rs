@@ -121,23 +121,23 @@ fn extend_list(args: &[TypVal], arg_errmsg: &'static CStr, is_new: bool, result:
 
     // The item to splice in before, or None for "at the end".  Every way out
     // of this block that is not an item has to undo the copy above.
-    let before = 'find: {
-        if args.len() <= 2 {
-            break 'find None;
-        }
-        let idx = number_as_int(number_of(&args[2], &mut error));
-        if !error {
+    let before = match args.get(2) {
+        None => None,
+        Some(index) => {
+            let idx = number_as_int(number_of(index, &mut error));
+            if error {
+                return;
+            }
             if idx == l1.len() {
-                break 'find None;
-            }
-            match l1.find(idx) {
-                Some(item) => break 'find Some(item),
-                None => {
+                None
+            } else {
+                let Some(item) = l1.find(idx) else {
                     semsg!("E684: List index out of range: {}", int64_t::from(idx));
-                }
+                    return;
+                };
+                Some(item)
             }
         }
-        return;
     };
 
     l1.extend_with(l2, before);
