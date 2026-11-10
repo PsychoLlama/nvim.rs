@@ -72,6 +72,7 @@ use crate::ui::state::COLUMNS;
 use crate::ui::{MOUSE_VISUAL, ui_mouse_has};
 use crate::window::{goto_tabpage, tabpage_move};
 use crate::winlayer::graph::CMDWIN_TYPE;
+use core::ops::ControlFlow;
 
 /// Whether the last click was in the tab page line, so that its release is
 /// ignored rather than treated as a click in a window.
@@ -168,39 +169,10 @@ pub(crate) fn do_mouse(
         return answer;
     }
 
-    let mut m_pos = Pos {
-        lnum: LineNr::ZERO,
-        col: ColNr::ZERO,
-        coladd: 0,
+    let (m_pos_flag, m_pos) = match popup_translation(&mut which_button, is_click) {
+        ControlFlow::Break(answer) => return answer,
+        ControlFlow::Continue(at) => at,
     };
-    let mut m_pos_flag = 0;
-    // When 'mousemodel' is "popup" or "popup_setpos", translate mouse events:
-    // right button up   -> pop-up menu
-    // shift-left button -> right button
-    // alt-left button   -> alt-right button
-    if mouse_model_popup() {
-        m_pos_flag = get_fpos_of_mouse(&mut m_pos);
-        let over_text = m_pos_flag & (IN_STATUS_LINE | MOUSE_WINBAR | MOUSE_STATUSCOL) == 0;
-        if over_text
-            && which_button == MOUSE_RIGHT
-            && !MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL)
-        {
-            if !is_click {
-                // Ignore right button release events, only shows the popup
-                // menu on the button down event.
-                return false;
-            }
-            return do_popup(which_button, m_pos_flag, m_pos) & CURSOR_MOVED != 0;
-        }
-        // Only do this translation when mouse is over the buffer text.
-        if over_text
-            && which_button == MOUSE_LEFT
-            && MOD_MASK.get().has(ModMask::SHIFT | ModMask::ALT)
-        {
-            which_button = MOUSE_RIGHT;
-            MOD_MASK.set(MOD_MASK.get().without(ModMask::SHIFT));
-        }
-    }
 
     let mouse_can_visual = ui_mouse_has(MOUSE_VISUAL);
     let visual_corner = visual_jump_flags(
@@ -253,7 +225,7 @@ pub(crate) fn do_mouse(
         return false;
     }
 
-    let mut win = Win::current();
+    let win = Win::current();
 
     // When jumping to another window, clear a pending operator.  That's a bit
     // friendlier than beeping and not jumping to that window.
@@ -266,30 +238,10 @@ pub(crate) fn do_mouse(
         && jump_flags & (MOUSE_FOLD_CLOSE | MOUSE_FOLD_OPEN) != 0
         && which_button == MOUSE_LEFT
     {
-        // Open or close a fold at this line.
-        let fold: fn(Pos, c_int) = if jump_flags & MOUSE_FOLD_OPEN != 0 {
-            open_fold
-        } else {
-            close_fold
-        };
-        fold(win.w_cursor, 1);
-        // Don't move the cursor if still in the same window.
-        if win == old_curwin {
-            win.w_cursor = save_cursor;
-        }
+        fold_click(win, jump_flags, old_curwin, save_cursor);
     }
-
-    // Set global flag that we are extending the Visual area with mouse
-    // dragging; temporarily minimize 'scrolloff'.
-    if visual_active() && is_drag && win.scrolloff() != 0 {
-        // In the very first line, allow scrolling one line.
-        MOUSE_DRAGGING.set(if MOUSE_ROW.get() == 0 { 2 } else { 1 });
-    }
-
-    // When dragging the mouse above the window, scroll down.
-    if is_drag && MOUSE_ROW.get() < 0 && !landed.status_line {
-        scroll_redraw(0, 1);
-        MOUSE_ROW.set(0);
+    if is_drag {
+        drag_scroll(win, landed);
     }
 
     let old_mode = visual_mode();
@@ -318,7 +270,84 @@ pub(crate) fn do_mouse(
         win,
     );
 
-    // If Visual mode changed show it later.
+    show_visual_change(old_active, old_mode);
+    moved
+}
+
+/// When 'mousemodel' is "popup" or "popup_setpos", translate mouse events:
+/// right button up   -> pop-up menu
+/// shift-left button -> right button
+/// alt-left button   -> alt-right button
+///
+/// `Break` with [`do_mouse`]'s answer when the event was the menu's;
+/// otherwise where the mouse is (`get_fpos_of_mouse`'s flag and position,
+/// zero when 'mousemodel' is not a popup one).
+fn popup_translation(which_button: &mut c_int, is_click: bool) -> ControlFlow<bool, (c_int, Pos)> {
+    let mut m_pos = Pos {
+        lnum: LineNr::ZERO,
+        col: ColNr::ZERO,
+        coladd: 0,
+    };
+    if !mouse_model_popup() {
+        return ControlFlow::Continue((0, m_pos));
+    }
+    let m_pos_flag = get_fpos_of_mouse(&mut m_pos);
+    let over_text = m_pos_flag & (IN_STATUS_LINE | MOUSE_WINBAR | MOUSE_STATUSCOL) == 0;
+    if over_text
+        && *which_button == MOUSE_RIGHT
+        && !MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL)
+    {
+        if !is_click {
+            // Ignore right button release events, only shows the popup
+            // menu on the button down event.
+            return ControlFlow::Break(false);
+        }
+        return ControlFlow::Break(do_popup(*which_button, m_pos_flag, m_pos) & CURSOR_MOVED != 0);
+    }
+    // Only do this translation when mouse is over the buffer text.
+    if over_text && *which_button == MOUSE_LEFT && MOD_MASK.get().has(ModMask::SHIFT | ModMask::ALT)
+    {
+        *which_button = MOUSE_RIGHT;
+        MOD_MASK.set(MOD_MASK.get().without(ModMask::SHIFT));
+    }
+    ControlFlow::Continue((m_pos_flag, m_pos))
+}
+
+/// Open or close the fold the click landed on, keeping the cursor where it
+/// was when the click stayed in the same window.
+fn fold_click(win: Win, jump_flags: c_int, old_curwin: Win, save_cursor: Pos) {
+    let mut win = win;
+    let fold: fn(Pos, c_int) = if jump_flags & MOUSE_FOLD_OPEN != 0 {
+        open_fold
+    } else {
+        close_fold
+    };
+    fold(win.w_cursor, 1);
+    // Don't move the cursor if still in the same window.
+    if win == old_curwin {
+        win.w_cursor = save_cursor;
+    }
+}
+
+/// A drag: minimize 'scrolloff' while extending Visual mode, and scroll down
+/// when the mouse went above the window.
+fn drag_scroll(win: Win, landed: Landed) {
+    // Set global flag that we are extending the Visual area with mouse
+    // dragging; temporarily minimize 'scrolloff'.
+    if visual_active() && win.scrolloff() != 0 {
+        // In the very first line, allow scrolling one line.
+        MOUSE_DRAGGING.set(if MOUSE_ROW.get() == 0 { 2 } else { 1 });
+    }
+
+    // When dragging the mouse above the window, scroll down.
+    if MOUSE_ROW.get() < 0 && !landed.status_line {
+        scroll_redraw(0, 1);
+        MOUSE_ROW.set(0);
+    }
+}
+
+/// If Visual mode started, ended or changed kind, show it later.
+fn show_visual_change(old_active: bool, old_mode: VisualMode) {
     if (!visual_active() && old_active && MODE_DISPLAYED.get())
         || (visual_active()
             && p_smd()
@@ -327,8 +356,6 @@ pub(crate) fn do_mouse(
     {
         REDRAW_CMDLINE.set(true);
     }
-
-    moved
 }
 
 // ---------------------------------------------------------------------------
