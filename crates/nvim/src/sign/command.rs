@@ -43,11 +43,6 @@ macro_rules! msg_buf {
     };
 }
 
-/// `text` past its leading spaces and tabs.
-fn skip_white(text: &[u8]) -> &[u8] {
-    &text[skip::white(text)..]
-}
-
 /// `text` up to its first space or tab, and what follows from there.
 fn split_white(text: &[u8]) -> (&[u8], &[u8]) {
     text.split_at(skip::to_white(text))
@@ -182,7 +177,7 @@ fn sign_define_cmd(name: &[u8], args: &[u8]) -> Result<(), SignError> {
     };
     let mut rest = args;
     loop {
-        let arg = skip_white(rest);
+        let arg = skip::past_white(rest);
         if arg.is_empty() {
             break;
         }
@@ -337,7 +332,7 @@ fn parse_sign_cmd_args(cmd: c_int, line: &[u8]) -> Result<SignCmdArgs, SignError
             out.id = -1;
         } else {
             out.id = id;
-            arg = skip_white(&arg[past..]);
+            arg = skip::past_white(&arg[past..]);
         }
     }
 
@@ -377,14 +372,14 @@ fn parse_sign_cmd_args(cmd: c_int, line: &[u8]) -> Result<SignCmdArgs, SignError
             out.buf = find_buf(Handle::from_number(nr));
             // Diagnosed but not fatal, which is why this still breaks
             // out with whatever buffer it found.
-            if !skip_white(&v[past..]).is_empty() {
+            if !skip::past_white(&v[past..]).is_empty() {
                 crate::semsg!("E488: Trailing characters: {}", shown(&v[past..]));
             }
             break;
         } else {
             return Err(SignError::InvalidArgument);
         }
-        arg = skip_white(arg);
+        arg = skip::past_white(arg);
     }
 
     if let Some(filename) = filename
@@ -418,7 +413,7 @@ fn sign_command(line: &[u8]) -> Result<(), SignError> {
     if idx == SIGNCMD_LAST {
         return Err(SignError::UnknownCommand(line.into()));
     }
-    let arg = skip_white(after);
+    let arg = skip::past_white(after);
 
     if idx > SIGNCMD_LIST {
         // Place, unplace or jump: a shared argument parser first.

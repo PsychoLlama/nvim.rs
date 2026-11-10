@@ -18,6 +18,7 @@
 
 use super::*;
 use crate::ascii::CTRL_V;
+use crate::charset::skip;
 use crate::keycodes::KE_LUA;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
@@ -209,7 +210,7 @@ pub(crate) fn take_map_arg(to_parse: &mut &[u8], word: &[u8]) -> bool {
     let Some(rest) = to_parse.strip_prefix(word) else {
         return false;
     };
-    *to_parse = skip_white(rest);
+    *to_parse = skip::past_white(rest);
     true
 }
 
@@ -223,7 +224,7 @@ pub(crate) fn take_map_arg(to_parse: &mut &[u8], word: &[u8]) -> bool {
 ///
 /// Answers 0 on success and 1 if the arguments are invalid.
 pub(crate) fn str_to_mapargs(strargs: &[u8], is_unmap: bool, args: &mut MapArguments) -> c_int {
-    let all = skip_white(strargs);
+    let all = skip::past_white(strargs);
     let mut rest = all;
 
     // Accept <buffer>, <nowait>, <silent>, <expr>, <script> and <unique>
@@ -273,7 +274,7 @@ pub(crate) fn str_to_mapargs(strargs: &[u8], is_unmap: bool, args: &mut MapArgum
         return 1;
     }
     let lhs = &rest[..orig_lhs_len];
-    let rhs = skip_white(&rest[orig_lhs_len..]);
+    let rhs = skip::past_white(&rest[orig_lhs_len..]);
     let ok = p_cpo(|cpo| set_maparg_lhs_rhs(lhs, rhs, LUA_NOREF, cpo, args));
     if !ok {
         return 1;

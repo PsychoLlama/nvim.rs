@@ -21,6 +21,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::charset::skip;
 use crate::cstr;
 use crate::memory::XString;
 use core::ffi::c_int;
@@ -61,13 +62,6 @@ fn leader_len_of(text: &[u8]) -> c_int {
     get_leader_len(text, false, true).0
 }
 
-/// The offset of the first non-white byte of `text`.
-fn skip_white_at(text: &[u8]) -> usize {
-    text.iter()
-        .position(|&b| !ascii_iswhite(c_int::from(b)))
-        .unwrap_or(text.len())
-}
-
 /// Where the C comment that ends on this line began, as an indent.
 ///
 /// Walks forward from the start of a `/*`-style leader looking for the `*/`
@@ -85,7 +79,7 @@ fn skip_white_at(text: &[u8]) -> usize {
 fn indent_of_comment_start(line: &XString) -> Option<c_int> {
     // Owned, because `findmatch` below can leave the walk on another line.
     let mut text = XString::from_bytes(line);
-    let mut at = skip_white_at(&text);
+    let mut at = skip::white(&text);
     if byte(&text, at) == b'/' && byte(&text, at + 1) == b'*' {
         at += 1;
     }
@@ -221,7 +215,7 @@ fn smart_indent_backward(line: &XString, lead_len: c_int, mut newindent: c_int) 
         };
     }
 
-    if byte(&text, skip_white_at(&text)) == b'}' {
+    if byte(&text, skip::white(&text)) == b'}' {
         DID_SI.set(true); // a line starting with `}` indents
     } else {
         CAN_SI_BACK.set(true); // a `{` typed next can delete the indent

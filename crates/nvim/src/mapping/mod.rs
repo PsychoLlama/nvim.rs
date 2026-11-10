@@ -151,15 +151,6 @@ pub(crate) struct MapArguments {
     pub desc: Option<MapStr>,
 }
 
-/// `skipwhite` over a slice: `bytes` without its leading spaces and tabs.
-pub(crate) fn skip_white(bytes: &[u8]) -> &[u8] {
-    let at = bytes
-        .iter()
-        .position(|&byte| !ascii_iswhite(c_int::from(byte)))
-        .unwrap_or(bytes.len());
-    &bytes[at..]
-}
-
 impl MapArguments {
     /// The RHS bundle, which every path that reads one has already built.
     pub(crate) fn rhs(&self) -> &MapRhs {

@@ -19,6 +19,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use super::*;
+use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::narrow::as_index;
 use crate::narrow::len_as_int;
@@ -147,8 +148,8 @@ fn common_prefix(org: &[u8], new: &[u8]) -> (usize, usize) {
         if flags & DIFF_IWHITE != 0 && w_org && w_new
             || flags & DIFF_IWHITEALL != 0 && (w_org || w_new)
         {
-            si_org = org.len() - skip_white(&org[si_org..]).len();
-            si_new = new.len() - skip_white(&new[si_new.min(new.len())..]).len();
+            si_org = org.len() - skip::past_white(&org[si_org..]).len();
+            si_new = new.len() - skip::past_white(&new[si_new.min(new.len())..]).len();
         } else if let Some(l) = char_len(&org[si_org..], &new[si_new.min(new.len())..]) {
             si_org += l;
             si_new += l;

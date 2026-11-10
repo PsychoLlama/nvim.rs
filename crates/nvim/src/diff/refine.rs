@@ -29,6 +29,7 @@
 )]
 
 use super::*;
+use crate::charset::skip;
 use crate::mbyte::CLASS_WORD;
 use crate::mbyte::{c_cluster_len, char_at, class_in, class_of, encode_char};
 use crate::narrow::len_as_int;
@@ -253,7 +254,7 @@ fn tokenize_line(
         if ascii_iswhite(c_int::from(bytes[i])) {
             if flags & DIFF_IWHITEALL != 0 {
                 in_keyword = false;
-                i = bytes.len() - skip_white(&bytes[i..]).len();
+                i = bytes.len() - skip::past_white(&bytes[i..]).len();
                 continue;
             }
             if trim_eol && !last_white {
@@ -273,7 +274,7 @@ fn tokenize_line(
             tok_len = c_cluster_len(rest);
             if ascii_iswhite(c_int::from(bytes[i])) && flags & DIFF_IWHITE != 0 {
                 // The whole run of white space is one token.
-                tok_len = bytes.len() - skip_white(&bytes[i..]).len() - i;
+                tok_len = bytes.len() - skip::past_white(&bytes[i..]).len() - i;
             }
             if flags & DIFF_ICASE != 0 {
                 // xdiff cannot ignore case, so fold the text instead.

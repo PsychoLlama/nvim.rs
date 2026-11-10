@@ -22,22 +22,11 @@
 )]
 
 use super::*;
+use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::os::cshim::byte_tolower;
 use core::ffi::c_int;
-
-/// Skip a run of spaces and tabs: `charset.rs`'s `skipwhite` over a slice.
-///
-/// The two agree by construction -- `skipwhite` advances while
-/// `ascii_iswhite`, which is exactly `b' '` and `b'\t'`.
-pub(crate) fn skip_white(s: &[u8]) -> &[u8] {
-    let n = s
-        .iter()
-        .position(|&b| b != b' ' && b != b'\t')
-        .unwrap_or(s.len());
-    &s[n..]
-}
 
 /// The length of the character both slices start with, if they are the same
 /// character under `'diffopt'`'s `icase`.
@@ -86,7 +75,9 @@ pub(crate) fn lines_equal(b1: &[u8], b2: &[u8]) -> bool {
 
     // `iblank`: a line that is blank once its indent is skipped matches
     // anything at all, including a non-blank line.
-    if flags & DIFF_IBLANK != 0 && (skip_white(b1).is_empty() || skip_white(b2).is_empty()) {
+    if flags & DIFF_IBLANK != 0
+        && (skip::past_white(b1).is_empty() || skip::past_white(b2).is_empty())
+    {
         return true;
     }
     if flags & (DIFF_ICASE | ALL_WHITE_DIFF) == 0 {
@@ -105,8 +96,8 @@ pub(crate) fn lines_equal(b1: &[u8], b2: &[u8]) -> bool {
             ascii_iswhite(c_int::from(p2[0])),
         );
         if flags & DIFF_IWHITE != 0 && w1 && w2 || flags & DIFF_IWHITEALL != 0 && (w1 || w2) {
-            p1 = skip_white(p1);
-            p2 = skip_white(p2);
+            p1 = skip::past_white(p1);
+            p2 = skip::past_white(p2);
         } else if let Some(l) = char_len(p1, p2) {
             p1 = &p1[l..];
             p2 = &p2[l..];
@@ -116,7 +107,7 @@ pub(crate) fn lines_equal(b1: &[u8], b2: &[u8]) -> bool {
     }
     // Trailing white space is ignored on both sides whichever flag got us
     // here, so the lines are equal exactly when both walks reached the end.
-    skip_white(p1).is_empty() && skip_white(p2).is_empty()
+    skip::past_white(p1).is_empty() && skip::past_white(p2).is_empty()
 }
 
 /// Whether a whole diff block holds the same text in two buffers.
@@ -150,18 +141,7 @@ pub(crate) fn diff_equal_entry(
 
 #[cfg(test)]
 mod tests {
-    use super::skip_white;
     use crate::cstr::byte_at;
-
-    #[test]
-    fn skip_white_takes_spaces_and_tabs_only() {
-        assert_eq!(skip_white(b" \t x"), b"x");
-        assert_eq!(skip_white(b"x  "), b"x  ");
-        assert_eq!(skip_white(b"   "), b"");
-        assert_eq!(skip_white(b""), b"");
-        // A newline is not white space to `ascii_iswhite`.
-        assert_eq!(skip_white(b" \n "), b"\n ");
-    }
 
     #[test]
     fn byte_at_reads_the_terminator_past_the_end() {

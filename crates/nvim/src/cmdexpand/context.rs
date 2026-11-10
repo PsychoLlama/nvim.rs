@@ -21,6 +21,7 @@
 
 use super::*;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::charset::skip;
 use crate::charset::{vim_is_ident_char, vim_isfilec_or_wc};
 use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
@@ -58,14 +59,6 @@ fn is_cmd_alnum(c: u8) -> bool {
 /// The byte at `i`, or NUL past the end: how the C walks saw their string.
 pub(super) fn byte(text: &[u8], i: usize) -> u8 {
     text.get(i).copied().unwrap_or(0)
-}
-
-/// Past the blanks at `i`: upstream's `skipwhite`.
-pub(super) fn skipwhite(text: &[u8], mut i: usize) -> usize {
-    while ascii_iswhite(c_int::from(byte(text, i))) {
-        i += 1;
-    }
-    i
 }
 
 /// To the next blank or the end: upstream's `skiptowhite`.
@@ -270,7 +263,7 @@ pub(crate) fn set_context_for_wildcard_arg(
 
     // Allow spaces within back-quotes to count as part of the argument
     // being expanded.
-    expand.pattern = skipwhite(t, arg);
+    expand.pattern = skip::white_from(t, arg);
     let mut p = expand.pattern;
     while byte(t, p) != 0 {
         let mut c = char_at(&t[p..]);
@@ -323,7 +316,7 @@ pub(crate) fn set_context_for_wildcard_arg(
     if usefilter || runs_a_shell || *complp == ExpandContext::ShellCmdLine {
         expand.shell = true;
         // When still after the command name expand executables.
-        if expand.pattern == skipwhite(t, arg) {
+        if expand.pattern == skip::white_from(t, arg) {
             expand.context = ExpandContext::ShellCmd;
         }
     }
@@ -388,7 +381,7 @@ pub(crate) fn set_context_in_filter_cmd(
         arg = skip_vimgrep_pat_at(cstr::suffix(text, at)).map(|len| at + len);
     }
     match arg {
-        Some(at) if byte(t, at) != 0 => Some(skipwhite(t, at)),
+        Some(at) if byte(t, at) != 0 => Some(skip::white_from(t, at)),
         _ => {
             expand.context = ExpandContext::Nothing;
             None
@@ -408,7 +401,7 @@ pub(crate) fn set_context_in_match_cmd(
     if byte(t, arg) == 0 || !ends_excmd(byte(t, arg)) {
         // Also complete "None".
         set_context_in_echohl_cmd(expand, arg);
-        arg = skipwhite(t, skiptowhite(t, arg));
+        arg = skip::white_from(t, skiptowhite(t, arg));
         if byte(t, arg) != 0 {
             expand.context = ExpandContext::Nothing;
             let delim = c_int::from(byte(t, arg));
@@ -476,7 +469,7 @@ pub(crate) fn find_cmd_after_isearch_cmd(
 ) -> Option<usize> {
     let t = text.to_bytes();
     // Skip count.
-    let mut arg = skipwhite(t, skipdigits(t, arg));
+    let mut arg = skip::white_from(t, skipdigits(t, arg));
     if byte(t, arg) != b'/' {
         return None;
     }
@@ -490,7 +483,7 @@ pub(crate) fn find_cmd_after_isearch_cmd(
         arg += 1;
     }
     if byte(t, arg) != 0 {
-        arg = skipwhite(t, arg + 1);
+        arg = skip::white_from(t, arg + 1);
 
         // Check for trailing illegal characters.
         if byte(t, arg) == 0 || !is_one_of(c"|\"\n", t, arg) {
@@ -547,7 +540,7 @@ pub(crate) fn set_context_in_lang_cmd(
             .any(|kind| kind.to_bytes().starts_with(word));
         if named {
             expand.context = ExpandContext::Locales;
-            expand.pattern = skipwhite(t, p);
+            expand.pattern = skip::white_from(t, p);
         } else {
             expand.context = ExpandContext::Nothing;
         }
@@ -576,7 +569,7 @@ pub(crate) fn set_context_in_breakadd_cmd(
         BreakptWhat::ProfDel
     });
 
-    let mut p = skipwhite(t, arg);
+    let mut p = skip::white_from(t, arg);
     if byte(t, p) == 0 {
         return None;
     }
@@ -585,7 +578,7 @@ pub(crate) fn set_context_in_breakadd_cmd(
     if subcmd.starts_with(b"file ") || subcmd.starts_with(b"func ") {
         // :breakadd file [lnum] <filename>
         // :breakadd func [lnum] <funcname>
-        p = skipwhite(t, p + 4);
+        p = skip::white_from(t, p + 4);
 
         // Skip line number (if specified).
         if ascii_isdigit(c_int::from(byte(t, p))) {
@@ -594,7 +587,7 @@ pub(crate) fn set_context_in_breakadd_cmd(
                 expand.context = ExpandContext::Nothing;
                 return None;
             }
-            p = skipwhite(t, p);
+            p = skip::white_from(t, p);
         }
         expand.context = if subcmd.starts_with(b"file") {
             ExpandContext::Files
@@ -605,7 +598,7 @@ pub(crate) fn set_context_in_breakadd_cmd(
     } else if subcmd.starts_with(b"expr ") {
         // :breakadd expr <expression>
         expand.context = ExpandContext::Expression;
-        expand.pattern = skipwhite(t, p + 5);
+        expand.pattern = skip::white_from(t, p + 5);
     }
 
     None
@@ -622,7 +615,7 @@ pub(crate) fn set_context_in_scriptnames_cmd(
     expand.context = ExpandContext::Nothing;
     expand.has_pattern = false;
 
-    let p = skipwhite(t, arg);
+    let p = skip::white_from(t, arg);
     if ascii_isdigit(c_int::from(byte(t, p))) {
         return None;
     }
@@ -646,7 +639,7 @@ pub(crate) fn set_context_in_filetype_cmd(
     expand.pattern = arg;
     FILETYPE_EXPAND_WHAT.set(FiletypeWhat::All);
 
-    let mut p = skipwhite(t, arg);
+    let mut p = skip::white_from(t, arg);
     if byte(t, p) == 0 {
         return None;
     }
@@ -657,12 +650,12 @@ pub(crate) fn set_context_in_filetype_cmd(
     loop {
         if t[p..].starts_with(b"plugin") {
             saw_plugin = true;
-            p = skipwhite(t, p + 6);
+            p = skip::white_from(t, p + 6);
             continue;
         }
         if t[p..].starts_with(b"indent") {
             saw_indent = true;
-            p = skipwhite(t, p + 6);
+            p = skip::white_from(t, p + 6);
             continue;
         }
         break;

@@ -19,6 +19,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::charset::skip;
 use crate::getchar::Remap;
 use crate::message_fmt::msg_bytes;
 use crate::tr;
@@ -86,13 +87,13 @@ fn do_menu(arg: &[u8], modes: c_int, mut noremap: Remap, unmenu: bool, ranged: O
     loop {
         if arg.starts_with(b"<script>") {
             noremap = Remap::Script;
-            arg = skip_white(&arg[8..]);
+            arg = skip::past_white(&arg[8..]);
         } else if arg.starts_with(b"<silent>") {
             silent = true;
-            arg = skip_white(&arg[8..]);
+            arg = skip::past_white(&arg[8..]);
         } else if arg.starts_with(b"<special>") {
             // Obsolete, and ignored.
-            arg = skip_white(&arg[9..]);
+            arg = skip::past_white(&arg[9..]);
         } else {
             break;
         }
@@ -104,10 +105,10 @@ fn do_menu(arg: &[u8], modes: c_int, mut noremap: Remap, unmenu: bool, ranged: O
     let mut enable = Enable::Unchanged;
     if arg.starts_with(b"enable") && ascii_iswhite(at(arg, 6)) {
         enable = Enable::On;
-        arg = skip_white(&arg[6..]);
+        arg = skip::past_white(&arg[6..]);
     } else if arg.starts_with(b"disable") && ascii_iswhite(at(arg, 7)) {
         enable = Enable::Off;
-        arg = skip_white(&arg[7..]);
+        arg = skip::past_white(&arg[7..]);
     }
 
     // No argument at all: list every menu.
@@ -178,7 +179,7 @@ fn skip_icon(arg: &[u8]) -> &[u8] {
     if i >= arg.len() {
         return &arg[arg.len()..];
     }
-    skip_white(&arg[i + 1..])
+    skip::past_white(&arg[i + 1..])
 }
 
 /// Read the leading `10.20.30` priority list, if there is one, and advance
@@ -211,7 +212,7 @@ fn take_priorities(arg: &mut &[u8], ranged: Option<c_int>) -> [c_int; MENUDEPTH 
                 *arg = &arg[1..];
             }
         }
-        *arg = skip_white(arg);
+        *arg = skip::past_white(arg);
     } else if let Some(line2) = ranged {
         pri_tab[0] = line2;
     }

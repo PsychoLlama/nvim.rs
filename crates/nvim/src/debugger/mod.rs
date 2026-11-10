@@ -43,6 +43,7 @@ pub(crate) mod state;
 #[cfg(test)]
 mod tests;
 use crate::charset::atoi;
+use crate::charset::skip;
 use crate::debugger::state::{
     DEBUG_BACKTRACE_LEVEL, DEBUG_BREAK_LEVEL, DEBUG_DID_MSG, DEBUG_MODE, DEBUG_TICK,
 };
@@ -281,15 +282,6 @@ fn eval_expr_no_emsg(expr: &[u8]) -> Option<TypVal> {
     eval_expr(expr)
 }
 
-/// `text` from `at` on, past spaces and tabs.
-fn skip_white(text: &[u8], at: usize) -> usize {
-    let mut at = at.min(text.len());
-    while matches!(text.get(at), Some(b' ' | b'\t')) {
-        at += 1;
-    }
-    at
-}
-
 /// The run of digits at the start of `text` as `getdigits_int32` reads it
 /// strictly: saturated at the integer's range.
 fn digits_saturated(text: &[u8]) -> (LineNr, usize) {
@@ -332,14 +324,14 @@ fn dbg_parsearg(arg: &[u8], list: BreakList) -> Result<Breakpoint, Failed> {
         return invalid();
     };
 
-    let mut at = skip_white(arg, 4);
+    let mut at = skip::white_from(arg, 4);
 
     // An optional line number, which only the debugger's own list accepts.
     let lnum = if here {
         Win::current().w_cursor.lnum
     } else if debugger && arg.get(at).is_some_and(u8::is_ascii_digit) {
         let (lnum, len) = digits_saturated(&arg[at..]);
-        at = skip_white(arg, at + len);
+        at = skip::white_from(arg, at + len);
         lnum
     } else {
         LineNr::ZERO

@@ -24,6 +24,7 @@
 
 use super::*;
 use crate::autocmd::AucmdBuf;
+use crate::charset::skip;
 use crate::eval::list::cstr_of_chk;
 use crate::eval::typval::ListRef;
 use crate::eval::typval::NumBuf;
@@ -210,7 +211,7 @@ fn qf_buf_line(
     // indent: the compiler may be marking a word with "^^^^".
     let recognized = out.len() > 3;
     let text: &[u8] = if recognized {
-        skip_white(&entry.text)
+        skip::past_white(&entry.text)
     } else {
         &entry.text
     };

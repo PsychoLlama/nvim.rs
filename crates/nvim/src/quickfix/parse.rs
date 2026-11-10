@@ -23,6 +23,7 @@
 )]
 
 use super::*;
+use crate::charset::skip;
 use crate::env::expand_env_within;
 use crate::memory::XString;
 use crate::os::fs::path_exists;
@@ -472,7 +473,7 @@ pub(crate) fn parse_line(
             let rest = tail.map(|at| &line.to_bytes()[at..]);
             if claim_file(prefix, fields, qfl, rest) == Status::MultiScan {
                 let rest = rest.expect("a re-scan has a tail");
-                let rest = skip_white(rest);
+                let rest = skip::past_white(rest);
                 if rest.len() >= linelen {
                     // The tail is no shorter than the line it came from, so
                     // re-scanning could not make progress.

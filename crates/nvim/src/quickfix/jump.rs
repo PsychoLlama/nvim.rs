@@ -22,6 +22,7 @@
 )]
 
 use super::*;
+use crate::charset::skip;
 use crate::edit::BeginlineOpts;
 use crate::ex_cmds::{EcmdFlags, edit_buffer_number};
 use crate::ex_docmd::cmdmod_tab;
@@ -268,7 +269,7 @@ fn qf_jump_print_msg(qi: Qi, qf_index: c_int, at: usize, old_curbuf: Buf, old_ln
     );
     let mut line = head.into_bytes();
     // The message itself, without leading whitespace or newlines.
-    qf_fmt_text(&mut line, skip_white(&text));
+    qf_fmt_text(&mut line, skip::past_white(&text));
     line.push(0);
     let line = CStr::from_bytes_until_nul(&line).expect("terminated above");
 

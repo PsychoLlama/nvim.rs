@@ -20,6 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::charset::skip;
 use crate::getchar::Remap;
 use core::ffi::c_int;
 use std::ffi::CString;
@@ -55,7 +56,7 @@ pub(crate) fn ex_menutranslate(excmd: &mut ExArg) {
     let arg = excmd.line.arg();
 
     if let Some(rest) = arg.strip_prefix(b"clear")
-        && ends_of_command(skip_white(rest))
+        && ends_of_command(skip::past_white(rest))
     {
         TRANSLATIONS.with_mut(Vec::clear);
         // And every "menutrans_" global variable with them.
@@ -64,7 +65,7 @@ pub(crate) fn ex_menutranslate(excmd: &mut ExArg) {
     }
 
     let from_end = menu_skip_part(arg);
-    let to = skip_white(&arg[from_end..]);
+    let to = skip::past_white(&arg[from_end..]);
     let to_end = menu_skip_part(to);
     if to_end == 0 {
         emsg_shared(E_INVARG);
@@ -176,7 +177,7 @@ pub(crate) fn menu_translate_tab_and_shift(arg: &[u8]) -> (Vec<u8>, &[u8]) {
         }
     }
     let rest = arg.get(i + 1..).unwrap_or_default();
-    (name, skip_white(rest))
+    (name, skip::past_white(rest))
 }
 
 /// Describe one menu item, or -- for an empty name -- list the top-level

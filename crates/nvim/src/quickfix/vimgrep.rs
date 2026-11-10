@@ -25,6 +25,7 @@ use super::*;
 use crate::arglist::expand_arglist;
 use crate::autocmd::AucmdBuf;
 use crate::buffer::{BufFlags, find_buffer_by_name};
+use crate::charset::skip;
 use crate::ex_cmds::split_vimgrep_pat;
 use crate::ex_docmd::cmdmod_has;
 use crate::file_search::Name;
@@ -97,7 +98,7 @@ impl Search {
 
         let prog = compile_pattern(&spat)?;
 
-        let files = skip_white(&arg[rest..]);
+        let files = skip::past_white(&arg[rest..]);
         if files.is_empty() {
             qf_emsg(c"E683: File name missing or invalid pattern");
             return None;

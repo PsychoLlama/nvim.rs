@@ -18,6 +18,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::charset::skip;
 use crate::getchar::Remap;
 use crate::guard::Depth;
 use crate::message_fmt::msg_bytes;
@@ -223,7 +224,7 @@ pub(crate) fn ex_emenu(excmd: &mut ExArg) {
                 return;
             }
         };
-        arg = skip_white(&arg[2..]);
+        arg = skip::past_white(&arg[2..]);
     }
 
     match with_tree(|tree| menu_getbyname(tree, arg)) {

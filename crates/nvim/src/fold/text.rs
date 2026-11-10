@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 use crate::api::extmark::parse_virt_text;
 use crate::ascii::NUL;
+use crate::charset::skip;
 use crate::decoration::defs::VirtText;
 use crate::types::{LineNr, OBJECT_TYPE_ARRAY, OBJECT_TYPE_STRING, Object, VarNumber};
 use crate::winlayer::WinId;
@@ -173,13 +174,13 @@ pub(super) fn foldtext_cleanup(text: &mut Vec<u8>, from: usize) {
     // 'commentstring' split around its `%s`, with the padding trimmed; a copy
     // of the current buffer's value.
     let cms = Buf::current().b_p_cms.get();
-    let cms = &cms[skip_white(&cms)..];
+    let cms = &cms[skip::white(&cms)..];
     let mut cms_slen = trimmed_len(cms);
     let mut cms_end: Option<&[u8]> = None;
     if let Some(at) = cms.windows(2).position(|w| w == b"%s") {
         cms_slen = trimmed_len(&cms[..at.min(cms_slen)]);
         let after = &cms[at + 2..];
-        let after = &after[skip_white(after)..];
+        let after = &after[skip::white(after)..];
         let end_len = trimmed_len(after);
         cms_end = Some(&after[..end_len]);
     }
@@ -238,14 +239,6 @@ pub(super) fn foldtext_cleanup(text: &mut Vec<u8>, from: usize) {
             s += c_cluster_len(&text[s..]).max(1);
         }
     }
-}
-
-/// How many leading blanks `bytes` has.
-fn skip_white(bytes: &[u8]) -> usize {
-    bytes
-        .iter()
-        .take_while(|&&b| ascii_iswhite(c_int::from(b)))
-        .count()
 }
 
 /// `bytes.len()` without its trailing blanks.

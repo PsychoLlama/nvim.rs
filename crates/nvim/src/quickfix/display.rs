@@ -18,6 +18,7 @@
 )]
 
 use super::*;
+use crate::charset::skip;
 use crate::cstr;
 use crate::highlight_group::{HLF_D, HLF_N, HLF_QFL};
 use crate::memory::XString;
@@ -31,12 +32,6 @@ use crate::tr;
 use crate::types::CmdIdx;
 use core::ffi::c_int;
 use std::ffi::CString;
-
-/// The bytes of `text` after any leading spaces and tabs.
-pub(crate) fn skip_white(text: &[u8]) -> &[u8] {
-    let start = text.iter().position(|&b| b != b' ' && b != b'\t');
-    &text[start.unwrap_or(text.len())..]
-}
 
 /// Append an error message with its newlines, and the whitespace following
 /// them, squeezed into single spaces.
@@ -185,7 +180,7 @@ fn qf_list_entry(entry: &Listed, qf_idx: c_int, cursel: bool) {
     // The message itself. An unrecognized line keeps its indent, since
     // the compiler may be marking a word with "^^^^".
     let text: &[u8] = if entry.fname.is_some() || entry.has_lnum {
-        skip_white(&entry.text)
+        skip::past_white(&entry.text)
     } else {
         &entry.text
     };
@@ -274,19 +269,19 @@ pub fn qf_list(excmd: &mut ExArg) {
 fn parse_list_range(arg: &[u8]) -> Option<(c_int, c_int)> {
     let (mut first, mut last): (c_int, c_int) = (1, -1);
     let mut have_first = false;
-    let mut at = skip_white(arg);
+    let mut at = skip::past_white(arg);
     if at.first().is_some_and(|&b| b == b'-' || b.is_ascii_digit()) {
         let (n, len) = decimal(at);
         first = n?;
         have_first = true;
         at = &at[len..];
     }
-    at = skip_white(at);
+    at = skip::past_white(at);
     if let Some(rest) = at.strip_prefix(b",") {
-        at = skip_white(rest);
+        at = skip::past_white(rest);
         let (n, len) = decimal(at);
         if len > 0 {
-            at = skip_white(&at[len..]);
+            at = skip::past_white(&at[len..]);
             last = n?;
         } else if !have_first {
             return None;

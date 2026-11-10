@@ -47,7 +47,6 @@ use crate::autocmd::fire_autocmds_for;
 use crate::eval::typval::{DictRef, ListRef, tv_dict_alloc, tv_list_alloc};
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
-pub(crate) use crate::mapping::skip_white;
 use crate::mbyte::encode_char;
 use crate::message::E_CANNOT_CHANGE_MENUS_WHILE_LISTING;
 use crate::message::{emsg, special_keys_text};

@@ -23,6 +23,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::charset::skip;
 use crate::narrow::number_as_int;
 use core::ffi::c_int;
 
@@ -84,16 +85,6 @@ fn push_estack(lnum: LineNr) {
 
 fn pop_estack() {
     estack_pop();
-}
-
-/// The first byte at or after `off` that is not a space or tab --
-/// `skipwhite`, in offsets.
-fn skip_white(line: &[u8], off: usize) -> usize {
-    let mut i = off;
-    while at(line, i) == b' ' || at(line, i) == b'\t' {
-        i += 1;
-    }
-    i
 }
 
 /// `line[i]`, or NUL past the end. Upstream reads a NUL-terminated string,
@@ -229,7 +220,7 @@ fn version_guard_matches(line: &[u8], s: usize) -> Option<bool> {
     Some(
         at(line, e) == b':'
             // "Vim" (capitalised) only counts for a "set" list.
-            && (at(line, s) != b'V' || line[skip_white(line, e + 1)..].starts_with(b"set"))
+            && (at(line, s) != b'V' || line[skip::white_from(line, e + 1)..].starts_with(b"set"))
             && (guard == b':'
                 || vim_version >= vers && guard.is_ascii_digit()
                 || vim_version < vers && guard == b'<'
@@ -252,7 +243,7 @@ fn apply_modeline(text: &mut [u8], lnum: LineNr, flags: OptionSetFlags) -> Resul
     let mut s = 0;
     let mut end = false;
     while !end {
-        s = skip_white(text, s);
+        s = skip::white_from(text, s);
         if at(text, s) == 0 {
             break;
         }

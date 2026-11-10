@@ -72,16 +72,11 @@ fn wrong_type(op: Option<u8>) {
     semsg!("E734: Wrong variable type for {op}=");
 }
 
-/// Past the white space at `text[at]`.
-fn skip_white(text: &[u8], at: usize) -> usize {
-    at + skip::white(text.get(at..).unwrap_or_default())
-}
-
 /// Whether what follows the target at `text[at]` is one of the characters
 /// that may. The end of the text is not one of them.
 fn ends_target(endchars: Option<&[u8]>, text: &[u8], at: usize) -> bool {
     endchars.is_none_or(|set| {
-        let byte = byte_at(text, skip_white(text, at));
+        let byte = byte_at(text, skip::white_from(text, at));
         byte != 0 && set.contains(&byte)
     })
 }
@@ -237,7 +232,7 @@ pub(crate) fn ex_let_vars(
     let mut pos: usize = 0;
     while byte_at(text, pos) != b']' {
         // Skip the whitespace after the '[', ',' or ';'.
-        let next = skip_white(text, pos + 1);
+        let next = skip::white_from(text, pos + 1);
         let mut item = TV_INITIAL_VALUE;
         let Some(source) = list.items().get(at) else {
             // The list lost items while an earlier target was resolved.
@@ -250,7 +245,7 @@ pub(crate) fn ex_let_vars(
         let end = end?;
         at += 1;
 
-        pos = skip_white(text, next + end);
+        pos = skip::white_from(text, next + end);
         let sep = byte_at(text, pos);
         if sep == b';' {
             // The rest of the list, which may be empty, goes to the
@@ -261,7 +256,7 @@ pub(crate) fn ex_let_vars(
                 rest_list.push_copy(&item.li_tv);
             }
             let mut ltv = TypVal::list(Some(rest_list));
-            let rest_at = skip_white(text, pos + 1);
+            let rest_at = skip::white_from(text, pos + 1);
             let end = ex_let_one(&text[rest_at..], &mut ltv, false, is_const, Some(b"]"), op);
             clear_local(&mut ltv);
             end?;
@@ -297,7 +292,7 @@ pub(crate) fn skip_var_list(text: &[u8], silent: bool) -> Option<VarList> {
     };
     loop {
         // Skip the whitespace after the '[', ';' or ','.
-        p = skip_white(text, p + 1);
+        p = skip::white_from(text, p + 1);
         let s = skip_var_one(text, p);
         if s == p {
             invalid(p);
@@ -305,7 +300,7 @@ pub(crate) fn skip_var_list(text: &[u8], silent: bool) -> Option<VarList> {
         }
         list.count += 1;
 
-        p = skip_white(text, s);
+        p = skip::white_from(text, s);
         match byte_at(text, p) {
             b']' => {
                 list.end = p + 1;

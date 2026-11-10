@@ -20,6 +20,7 @@ mod tables;
 
 use crate::buffer::KEYMAP_INIT;
 use crate::charset::char2cells;
+use crate::charset::skip;
 use crate::cstr;
 use crate::drawscreen::status_redraw_curbuf;
 use crate::eval::eval_to_string;
@@ -295,12 +296,6 @@ fn check_digraph_chars(char1: Key, char2: Key) -> Result<(), DigraphError> {
     Ok(())
 }
 
-/// Skip over ' ' and '\t', like `skipwhite`.
-fn skip_white(s: &[u8]) -> &[u8] {
-    let n = s.iter().take_while(|&&b| b == b' ' || b == b'\t').count();
-    &s[n..]
-}
-
 /// Split at the first ' ' or '\t', like `skiptowhite`.
 fn split_at_white(s: &[u8]) -> (&[u8], &[u8]) {
     let n = s
@@ -337,7 +332,7 @@ pub fn putdigraph(s: &[u8]) {
 /// turn up to the first that is refused.
 fn put_digraphs(mut s: &[u8]) -> Result<(), DigraphError> {
     loop {
-        s = skip_white(s);
+        s = skip::past_white(s);
         if s.is_empty() {
             return Ok(());
         }
@@ -345,7 +340,7 @@ fn put_digraphs(mut s: &[u8]) -> Result<(), DigraphError> {
         let char2 = s.get(1).copied().unwrap_or(0);
         s = &s[s.len().min(2)..];
         check_digraph_chars(Key::byte(char1), Key::byte(char2))?;
-        s = skip_white(s);
+        s = skip::past_white(s);
         if !s.first().is_some_and(u8::is_ascii_digit) {
             return Err(DigraphError::NumberExpected);
         }
@@ -696,10 +691,10 @@ pub fn ex_loadkeymap(excmd: &mut ExArg) {
 /// reports E791.
 fn read_keymap_entries(excmd: &mut ExArg, mut buffer: Buf) {
     while let Some(line) = excmd.next_source_line(Some(0), 0, true) {
-        let s = skip_white(&line);
+        let s = skip::past_white(&line);
         if !s.is_empty() && s[0] != b'"' {
             let (from, rest) = split_at_white(s);
-            let (to, _) = split_at_white(skip_white(rest));
+            let (to, _) = split_at_white(skip::past_white(rest));
             if from.len() + to.len() >= KMAP_LLEN || from.is_empty() || to.is_empty() {
                 if to.is_empty() {
                     crate::semsg!("E791: Empty keymap entry");

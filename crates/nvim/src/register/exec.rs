@@ -23,6 +23,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::charset::skip;
 use crate::cstr::{self, until_nul};
 use crate::getchar::Remap;
 use crate::mbyte::char_count;
@@ -221,7 +222,7 @@ fn execreg_line_continuation(lines: &[XString], idx: &mut usize) -> Vec<u8> {
         if cmd_start == 0 {
             break;
         }
-        let p = skip_white(&lines[cmd_start]);
+        let p = skip::past_white(&lines[cmd_start]);
         if cstr::byte_at(p, 0) != b'\\' && !is_continuation_comment(p) {
             break;
         }
@@ -231,22 +232,13 @@ fn execreg_line_continuation(lines: &[XString], idx: &mut usize) -> Vec<u8> {
     let mut joined = Vec::<u8>::new();
     joined.extend_from_slice(&lines[cmd_start]);
     for line in &lines[cmd_start + 1..=cmd_end] {
-        let p = skip_white(line);
+        let p = skip::past_white(line);
         if cstr::byte_at(p, 0) == b'\\' {
             joined.extend_from_slice(&p[1..]);
         }
     }
     *idx = cmd_start;
     joined
-}
-
-/// `line` past its leading white space, as `skipwhite` reads a C string.
-fn skip_white(line: &[u8]) -> &[u8] {
-    let white = line
-        .iter()
-        .take_while(|&&b| ascii_iswhite(c_int::from(b)))
-        .count();
-    &line[white..]
 }
 
 /// Whether `p` is a `"\ ` line -- a comment inside a `\`-continuation.
@@ -350,7 +342,7 @@ pub fn do_execreg(regname: RegName, colon: bool, addcr: bool, silent: bool) -> R
         if colon && i > 0 {
             // A `\`-continued Ex command has to be joined back up before
             // it is queued; `i` is moved to the first line of the run.
-            let p = skip_white(until_nul(line));
+            let p = skip::past_white(until_nul(line));
             if cstr::byte_at(p, 0) == b'\\' || is_continuation_comment(p) {
                 joined = execreg_line_continuation(lines, &mut i);
                 text = &joined;

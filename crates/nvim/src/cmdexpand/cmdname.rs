@@ -19,6 +19,7 @@ use super::*;
 use crate::ascii::CTRL_V;
 use crate::ascii::{TAB, ascii_isspace};
 use crate::autocmd::set_context_in_autocmd;
+use crate::charset::skip;
 use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::eval::set_context_for_expression;
@@ -447,7 +448,7 @@ pub(crate) fn set_one_cmd_context(expand: &mut Expand, text: &CStr, buff: usize)
         ea.argt = excmd_get_argt(ea.cmdidx);
     }
 
-    let mut arg = skipwhite(t, p);
+    let mut arg = skip::white_from(t, p);
 
     // Does command allow "++argopt" argument?
     if ea.argt.has(ExArgt::ARGOPT) {
@@ -462,7 +463,7 @@ pub(crate) fn set_one_cmd_context(expand: &mut Expand, text: &CStr, buff: usize)
                 return set_context_in_argopt(expand, text, arg + 2);
             }
 
-            arg = skipwhite(t, p);
+            arg = skip::white_from(t, p);
         }
     }
 
@@ -473,7 +474,7 @@ pub(crate) fn set_one_cmd_context(expand: &mut Expand, text: &CStr, buff: usize)
             if byte(t, arg) == b'>' {
                 arg += 1;
             }
-            arg = skipwhite(t, arg);
+            arg = skip::white_from(t, arg);
         } else if byte(t, arg) == b'!' && ea.cmdidx == CmdIdx::write {
             // :w !filter
             arg += 1;
@@ -495,7 +496,7 @@ pub(crate) fn set_one_cmd_context(expand: &mut Expand, text: &CStr, buff: usize)
         while byte(t, arg) == byte(t, cmd) {
             arg += 1;
         }
-        arg = skipwhite(t, arg);
+        arg = skip::white_from(t, arg);
     }
 
     // Does command allow "+command"?
@@ -510,7 +511,7 @@ pub(crate) fn set_one_cmd_context(expand: &mut Expand, text: &CStr, buff: usize)
         }
 
         // Skip space(s) after +command to get to the real argument.
-        arg = skipwhite(t, arg);
+        arg = skip::white_from(t, arg);
     }
 
     // Check for '|' to separate commands and '"' to start comments.

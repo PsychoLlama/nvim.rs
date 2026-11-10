@@ -33,6 +33,19 @@ pub fn white(s: &[u8]) -> usize {
     count(s, ascii_iswhite)
 }
 
+/// `s` past its leading spaces and tabs: [`white`] as the slice upstream's
+/// `skipwhite` answered a pointer to.
+pub(crate) fn past_white(s: &[u8]) -> &[u8] {
+    &s[white(s)..]
+}
+
+/// The offset of the first byte at or after `at` that is not a space or tab:
+/// [`white`] resumed at an offset, as `skipwhite(p + at) - p`. An `at` past
+/// the end skips nothing and answers itself.
+pub(crate) fn white_from(s: &[u8], at: usize) -> usize {
+    at + white(s.get(at..).unwrap_or_default())
+}
+
 /// How many bytes of `s` come before the first space or tab.
 ///
 /// The slice form of upstream's `skiptowhite`.
@@ -155,6 +168,24 @@ fn count(s: &[u8], keep: impl Fn(u8) -> bool) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn past_white_takes_spaces_and_tabs_only() {
+        assert_eq!(past_white(b" \t x"), b"x");
+        assert_eq!(past_white(b"x  "), b"x  ");
+        assert_eq!(past_white(b"   "), b"");
+        assert_eq!(past_white(b""), b"");
+        // A newline is not white space to `ascii_iswhite`.
+        assert_eq!(past_white(b" \n "), b"\n ");
+    }
+
+    #[test]
+    fn white_from_resumes_at_an_offset_and_never_moves_back() {
+        assert_eq!(white_from(b"ab \tc", 2), 4);
+        assert_eq!(white_from(b"ab \tc", 0), 0);
+        assert_eq!(white_from(b"ab  ", 2), 4);
+        assert_eq!(white_from(b"ab", 5), 5);
+    }
 
     #[test]
     fn an_offset_is_always_a_valid_index() {

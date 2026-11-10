@@ -25,6 +25,7 @@
 )]
 
 use crate::charset::Str2NrBases;
+use crate::charset::skip;
 use crate::charset::{str2nr_in, trans_characters_in};
 use crate::cstr;
 use crate::keycodes::{FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY};
@@ -518,7 +519,7 @@ pub(crate) fn do_set(arg: &[u8], opt_flags: OptionSetFlags) -> Result<(), Failed
             // one — twice at most, which is what `:set opt=a=b` needs.
             for _ in 0..2 {
                 p = skip_to_white_escaped(arg, p);
-                p = skip_white(arg, p);
+                p = skip::white_from(arg, p);
                 if at(arg, p) != b'=' {
                     break;
                 }
@@ -528,7 +529,7 @@ pub(crate) fn do_set(arg: &[u8], opt_flags: OptionSetFlags) -> Result<(), Failed
                 return Err(Failed);
             }
         }
-        p = skip_white(arg, p);
+        p = skip::white_from(arg, p);
     }
 
     // `-s` suppresses messages, but a `:set` that was asked to show
@@ -541,14 +542,6 @@ pub(crate) fn do_set(arg: &[u8], opt_flags: OptionSetFlags) -> Result<(), Failed
         INFO_MESSAGE.set(false);
     }
     Ok(())
-}
-
-/// Past the spaces and tabs at `arg[p..]`.
-fn skip_white(arg: &[u8], mut p: usize) -> usize {
-    while white_at(arg, p) {
-        p += 1;
-    }
-    p
 }
 
 /// To the next space or tab at `arg[p..]`, or its end; a backslash or

@@ -21,6 +21,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use super::*;
+use crate::charset::skip;
 use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::guard::{Allow, Bump, MsgBump, Saved};
 use crate::message::msg;
@@ -254,7 +255,7 @@ fn debug_prompt(cmd: &CStr) {
         msg_starthere();
 
         if let Some(cmdline) = cmdline {
-            let start = skip_white(&cmdline, 0);
+            let start = skip::white(&cmdline);
             let line = &cmdline[start..];
             // A blank line repeats: only a line with something on it decides
             // what `LAST_CMD` is.
@@ -320,7 +321,7 @@ fn run_debug_cmd(
             if arg.is_empty() {
                 do_showbacktrace(cmd);
             } else {
-                do_setdebugtracelevel(&arg[skip_white(arg, 0)..]);
+                do_setdebugtracelevel(&arg[skip::white(arg)..]);
             }
             return true;
         }
