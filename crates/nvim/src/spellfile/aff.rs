@@ -454,6 +454,10 @@ fn split_items(line: &mut [uint8_t]) -> Vec<&CStr> {
 }
 
 /// Handle one line. Returns false to stop reading the file.
+///
+/// The keywords are tried in upstream's order and the first that takes the
+/// line wins; a keyword declared a second time falls through every family
+/// and is reported as a duplicate at the end.
 fn handle_line(
     spin: &mut SpellInfo,
     aff: &mut AffFile,
@@ -464,18 +468,7 @@ fn handle_line(
 ) -> bool {
     // SET must come before anything that could need converting.
     if is_aff_rule(items, c"SET", 2) && aff.af_enc.is_none() {
-        let enc = aff.af_enc.insert(canonize(items[1].to_bytes()));
-        if spin.si_ascii == 0
-            && p_enc(|value| spin.si_conv.setup(Some(enc.as_cstr()), Some(value))).is_err()
-        {
-            let to = p_enc(|value| value.to_bytes().to_vec());
-            let (fname, af_enc, arg2) = (msg_cstr(fname), msg_bytes(enc), msg_bytes(&to));
-            smsg!(
-                0,
-                "Conversion in {fname} not supported: from {af_enc} to {arg2}"
-            );
-        }
-        spin.si_conv.vc_fail = true;
+        set_encoding(spin, aff, items[1], fname);
         return true;
     }
 
@@ -499,14 +492,87 @@ fn handle_line(
         return true;
     }
 
+    if declare_flag(aff, items, fname, lnum) || compound_rule(spin, st, items, fname, lnum) {
+        return true;
+    }
+
+    if is_aff_rule(items, c"SYLLABLE", 2) && st.syllable.is_none() {
+        st.syllable = Some(saved(spin, items[1]));
+        return true;
+    }
+
+    if toggle_rule(spin, aff, items) {
+        return true;
+    }
+
+    let is_affix = items[0] == c"PFX" || items[0] == c"SFX";
+    if is_affix && st.aff_todo == 0 && items.len() >= 4 {
+        return handle_affix_header(spin, aff, st, items, fname, lnum);
+    }
+    if is_affix
+        && st.aff_todo > 0
+        && st
+            .cur_aff
+            .is_some_and(|(kind, at)| aff.affixes(kind).get(at).ah_key == items[1].to_bytes())
+        && items.len() >= 5
+    {
+        handle_affix_entry(spin, aff, st, items, fname, lnum);
+        return true;
+    }
+
+    if case_table(st, items)
+        || rep_rule(spin, st, items, fname, lnum)
+        || sound_rule(spin, st, items, fname, lnum)
+    {
+        return true;
+    }
+
+    if items[0] == c"COMMON" {
+        for item in &items[1..] {
+            let word = item.to_bytes();
+            if spin.si_commonwords.find(word).is_none() {
+                spin.si_commonwords.insert(word.into());
+            }
+        }
+        return true;
+    }
+
+    let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[0]));
+    smsg!(
+        0,
+        "Unrecognized or duplicate item in {fname} line {}: {arg2}",
+        lnum
+    );
+    true
+}
+
+/// `SET`: the file's encoding, and the conversion from it to 'encoding'.
+fn set_encoding(spin: &mut SpellInfo, aff: &mut AffFile, name: &CStr, fname: &CStr) {
+    let enc = aff.af_enc.insert(canonize(name.to_bytes()));
+    if spin.si_ascii == 0
+        && p_enc(|value| spin.si_conv.setup(Some(enc.as_cstr()), Some(value))).is_err()
+    {
+        let to = p_enc(|value| value.to_bytes().to_vec());
+        let (fname, af_enc, arg2) = (msg_cstr(fname), msg_bytes(enc), msg_bytes(&to));
+        smsg!(
+            0,
+            "Conversion in {fname} not supported: from {af_enc} to {arg2}"
+        );
+    }
+    spin.si_conv.vc_fail = true;
+}
+
+/// The keywords that declare one flag (`RARE`, `KEEPCASE`, …). Answers
+/// whether the line was one, declared for the first time.
+fn declare_flag(aff: &mut AffFile, items: &[&CStr], fname: &CStr, lnum: c_int) -> bool {
     for (names, field) in FLAG_RULES {
         if !names.iter().any(|n| is_aff_rule(items, n, 2)) {
             continue;
         }
-        // A second declaration is not this arm's business; it falls
+        // A second declaration is not this family's business; it falls
         // through and is reported as a duplicate.
         if *field.slot(aff) != 0 {
-            break;
+            return false;
         }
         let item = items[1].to_bytes();
         // A bad item is warned about and declares no flag.
@@ -520,7 +586,18 @@ fn handle_line(
         }
         return true;
     }
+    false
+}
 
+/// The compounding keywords: `COMPOUNDFLAG`, `COMPOUNDRULE(S)`, the numbers,
+/// the options and `CHECKCOMPOUNDPATTERN`. Answers whether the line was one.
+fn compound_rule(
+    spin: &mut SpellInfo,
+    st: &mut AffState,
+    items: &[&CStr],
+    fname: &CStr,
+    lnum: c_int,
+) -> bool {
     if is_aff_rule(items, c"COMPOUNDFLAG", 2) && st.compflags.is_none() {
         // One flag becomes a pattern matching one or more of it.
         let mut pattern = items[1].to_bytes().to_vec();
@@ -559,22 +636,7 @@ fn handle_line(
         return true;
     }
 
-    for (name, field) in NUMBER_RULES {
-        if !is_aff_rule(items, name, 2) {
-            continue;
-        }
-        let slot = match field {
-            NumField::WordMax => &mut st.compmax,
-            NumField::Min => &mut st.compminlen,
-            NumField::SylMax => &mut st.compsylmax,
-        };
-        if *slot != 0 {
-            break;
-        }
-        *slot = item_number(items[1]);
-        if *slot == 0 {
-            field.complain(fname, lnum, items[1]);
-        }
+    if compound_number(st, items, fname, lnum) {
         return true;
     }
 
@@ -602,42 +664,56 @@ fn handle_line(
         add_comppat(spin, items);
         return true;
     }
+    false
+}
 
-    if is_aff_rule(items, c"SYLLABLE", 2) && st.syllable.is_none() {
-        st.syllable = Some(saved(spin, items[1]));
-        return true;
-    }
-
-    for (name, toggle) in TOGGLE_RULES {
-        if !is_aff_rule(items, name, 1) {
+/// `COMPOUNDWORDMAX`, `COMPOUNDMIN`, `COMPOUNDSYLMAX`, the first time each
+/// is seen. Answers whether the line was one.
+fn compound_number(st: &mut AffState, items: &[&CStr], fname: &CStr, lnum: c_int) -> bool {
+    for (name, field) in NUMBER_RULES {
+        if !is_aff_rule(items, name, 2) {
             continue;
         }
-        match toggle {
-            Toggle::NoBreak => spin.si_nobreak = 1,
-            Toggle::NoSplitSugs => spin.si_nosplitsugs = 1,
-            Toggle::NoCompoundSugs => spin.si_nocompoundsugs = 1,
-            Toggle::NoSugFile => spin.si_nosugfile = 1,
-            Toggle::PfxPostpone => aff.af_pfxpostpone = 1,
-            Toggle::IgnoreExtra => aff.af_ignoreextra = true,
+        let slot = match field {
+            NumField::WordMax => &mut st.compmax,
+            NumField::Min => &mut st.compminlen,
+            NumField::SylMax => &mut st.compsylmax,
+        };
+        if *slot != 0 {
+            return false;
+        }
+        *slot = item_number(items[1]);
+        if *slot == 0 {
+            field.complain(fname, lnum, items[1]);
         }
         return true;
     }
+    false
+}
 
-    let is_affix = items[0] == c"PFX" || items[0] == c"SFX";
-    if is_affix && st.aff_todo == 0 && items.len() >= 4 {
-        return handle_affix_header(spin, aff, st, items, fname, lnum);
+/// The keywords that only switch something on (`NOBREAK`, `PFXPOSTPONE`,
+/// …). Answers whether the line was one.
+fn toggle_rule(spin: &mut SpellInfo, aff: &mut AffFile, items: &[&CStr]) -> bool {
+    let Some((_, toggle)) = TOGGLE_RULES
+        .iter()
+        .find(|(name, _)| is_aff_rule(items, name, 1))
+    else {
+        return false;
+    };
+    match toggle {
+        Toggle::NoBreak => spin.si_nobreak = 1,
+        Toggle::NoSplitSugs => spin.si_nosplitsugs = 1,
+        Toggle::NoCompoundSugs => spin.si_nocompoundsugs = 1,
+        Toggle::NoSugFile => spin.si_nosugfile = 1,
+        Toggle::PfxPostpone => aff.af_pfxpostpone = 1,
+        Toggle::IgnoreExtra => aff.af_ignoreextra = true,
     }
-    if is_affix
-        && st.aff_todo > 0
-        && st
-            .cur_aff
-            .is_some_and(|(kind, at)| aff.affixes(kind).get(at).ah_key == items[1].to_bytes())
-        && items.len() >= 5
-    {
-        handle_affix_entry(spin, aff, st, items, fname, lnum);
-        return true;
-    }
+    true
+}
 
+/// `FOL`, `LOW`, `UPP`, the first time each is seen. Answers whether the
+/// line was one.
+fn case_table(st: &mut AffState, items: &[&CStr]) -> bool {
     for (name, table) in CASE_RULES {
         if !is_aff_rule(items, name, 2) {
             continue;
@@ -648,12 +724,23 @@ fn handle_line(
             CaseTable::Upp => &mut st.upp,
         };
         if *slot {
-            break;
+            return false;
         }
         *slot = true;
         return true;
     }
+    false
+}
 
+/// `REP` and `REPSAL`: the count line, or one replacement. Answers whether
+/// the line was one.
+fn rep_rule(
+    spin: &mut SpellInfo,
+    st: &mut AffState,
+    items: &[&CStr],
+    fname: &CStr,
+    lnum: c_int,
+) -> bool {
     // The two-item form of REP/REPSAL is the count line.
     if is_aff_rule(items, c"REP", 2) || is_aff_rule(items, c"REPSAL", 2) {
         if !first_byte(items[1]).is_ascii_digit() {
@@ -667,19 +754,28 @@ fn handle_line(
         add_rep_entry(spin, st, items, fname, lnum);
         return true;
     }
+    false
+}
 
+/// The sound-alike keywords: `MAP`, `SAL`, `SOFOFROM`, `SOFOTO`. Answers
+/// whether the line was one.
+fn sound_rule(
+    spin: &mut SpellInfo,
+    st: &mut AffState,
+    items: &[&CStr],
+    fname: &CStr,
+    lnum: c_int,
+) -> bool {
     if is_aff_rule(items, c"MAP", 2) {
         handle_map(spin, st, items, fname, lnum);
         return true;
     }
-
     if is_aff_rule(items, c"SAL", 3) {
         if st.do_sal {
             handle_sal(spin, items);
         }
         return true;
     }
-
     if is_aff_rule(items, c"SOFOFROM", 2) && st.sofofrom.is_none() {
         st.sofofrom = Some(saved(spin, items[1]));
         return true;
@@ -688,24 +784,7 @@ fn handle_line(
         st.sofoto = Some(saved(spin, items[1]));
         return true;
     }
-
-    if items[0] == c"COMMON" {
-        for item in &items[1..] {
-            let word = item.to_bytes();
-            if spin.si_commonwords.find(word).is_none() {
-                spin.si_commonwords.insert(word.into());
-            }
-        }
-        return true;
-    }
-
-    let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[0]));
-    smsg!(
-        0,
-        "Unrecognized or duplicate item in {fname} line {}: {arg2}",
-        lnum
-    );
-    true
+    false
 }
 
 /// A copy of `item`, charged to the arena as upstream's `getroom_save`.
