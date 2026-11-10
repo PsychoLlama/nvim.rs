@@ -526,72 +526,68 @@ pub fn mkspell(fnames: &[&[u8]], ascii: bool, over_write: bool, added_word: bool
     }
     let wfname = wfname.as_cstr();
 
-    '_theend: {
-        if let Err(err) = output_is_writable(wfname, incount, over_write) {
-            err.report();
-            break '_theend;
-        }
-        let innames = &innames[..usize::try_from(incount).unwrap_or(0).min(innames.len())];
-        if let Err(err) = read_region_names(&mut spin, innames) {
-            err.report();
-            break '_theend;
-        }
-        spin.si_region_count = incount;
-        spin.si_foldroot = Some(wordtree_alloc(&mut spin));
-        spin.si_keeproot = Some(wordtree_alloc(&mut spin));
-        spin.si_prefroot = Some(wordtree_alloc(&mut spin));
-        if spin.si_add == 0 {
-            spin.si_clear_chartab = 1;
-        }
+    let innames = &innames[..usize::try_from(incount).unwrap_or(0).min(innames.len())];
+    let checked = output_is_writable(wfname, incount, over_write)
+        .and_then(|()| read_region_names(&mut spin, innames));
+    if let Err(err) = checked {
+        err.report();
+        return;
+    }
+    spin.si_region_count = incount;
+    spin.si_foldroot = Some(wordtree_alloc(&mut spin));
+    spin.si_keeproot = Some(wordtree_alloc(&mut spin));
+    spin.si_prefroot = Some(wordtree_alloc(&mut spin));
+    if spin.si_add == 0 {
+        spin.si_clear_chartab = 1;
+    }
 
-        // The reader stops at the first input that fails; why is said
-        // before anything else is.
-        let mut error = read_inputs(&mut spin, innames, &mut afile)
-            .inspect_err(MkspellError::report)
-            .is_err();
-        if spin.si_compflags.is_some() && spin.si_nobreak != 0 {
-            let text = c"Warning: both compounding and NOBREAK specified";
-            msg(gettext(text), 0);
+    // The reader stops at the first input that fails; why is said
+    // before anything else is.
+    let mut error = read_inputs(&mut spin, innames, &mut afile)
+        .inspect_err(MkspellError::report)
+        .is_err();
+    if spin.si_compflags.is_some() && spin.si_nobreak != 0 {
+        let text = c"Warning: both compounding and NOBREAK specified";
+        msg(gettext(text), 0);
+    }
+    if !error && !GOT_INT.get() {
+        spell_message(&spin, MSG_COMPRESSING);
+        for (root, name) in [
+            (spin.si_foldroot, c"case-folded"),
+            (spin.si_keeproot, c"keep-case"),
+            (spin.si_prefroot, c"prefixes"),
+        ] {
+            wordtree_compress(&mut spin, root, name);
         }
-        if !error && !GOT_INT.get() {
-            spell_message(&spin, MSG_COMPRESSING);
-            for (root, name) in [
-                (spin.si_foldroot, c"case-folded"),
-                (spin.si_keeproot, c"keep-case"),
-                (spin.si_prefroot, c"prefixes"),
-            ] {
-                wordtree_compress(&mut spin, root, name);
-            }
+    }
+    if !error && !GOT_INT.get() {
+        let name = wfname.to_string_lossy();
+        spell_message_fmt(&spin, format_args!("Writing spell file {name}..."));
+        error = write_vim_spell(&mut spin, wfname).is_err();
+        spell_message(&spin, c"Done!");
+        let used = spin.si_memtot;
+        spell_message_fmt(
+            &spin,
+            format_args!("Estimated runtime memory use: {used} bytes"),
+        );
+        if !error {
+            spell_reload_one(wfname, added_word);
         }
-        if !error && !GOT_INT.get() {
-            let name = wfname.to_string_lossy();
-            spell_message_fmt(&spin, format_args!("Writing spell file {name}..."));
-            error = write_vim_spell(&mut spin, wfname).is_err();
-            spell_message(&spin, c"Done!");
-            let used = spin.si_memtot;
-            spell_message_fmt(
-                &spin,
-                format_args!("Estimated runtime memory use: {used} bytes"),
-            );
-            if !error {
-                spell_reload_one(wfname, added_word);
-            }
-        }
+    }
 
-        spin.si_rep = Vec::new();
-        spin.si_repsal = Vec::new();
-        spin.si_sal = Vec::new();
-        spin.si_map = Vec::new();
-        spin.si_comppat = Vec::new();
-        spin.si_prefcond = Vec::new();
-        spin.si_commonwords = KeyedTable::new();
-        afile = Vec::new();
-        // The `.sug` pass reads the file back and builds its own tree,
-        // so the trees go first.
-        spin.clear_trees();
-        if spin.si_sugtime != 0 && !error && !GOT_INT.get() {
-            spell_make_sugfile(&mut spin, wfname);
-        }
+    spin.si_rep = Vec::new();
+    spin.si_repsal = Vec::new();
+    spin.si_sal = Vec::new();
+    spin.si_map = Vec::new();
+    spin.si_comppat = Vec::new();
+    spin.si_prefcond = Vec::new();
+    spin.si_commonwords = KeyedTable::new();
+    afile = Vec::new();
+    // The `.sug` pass reads the file back and builds its own tree,
+    // so the trees go first.
+    spin.clear_trees();
+    if spin.si_sugtime != 0 && !error && !GOT_INT.get() {
+        spell_make_sugfile(&mut spin, wfname);
     }
     drop(afile);
 }

@@ -45,7 +45,7 @@
   "api_err_params": 0,
   "char_as_c_int": 354,
   "emit_sentinel": 5,
-  "labeled_blocks": 48,
+  "labeled_blocks": 42,
   "long_fns": 34,
   "safety_on_safe_fns": 0,
   "dup_consts": 0,

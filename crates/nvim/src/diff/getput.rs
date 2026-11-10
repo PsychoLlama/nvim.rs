@@ -214,15 +214,18 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     } else {
         (idx_other, idx_cur)
     };
-    '_theend: {
-        if Buf::current().b_changed == 0 {
-            change_warning(Buf::current(), 0);
-            // The warning can run autocommands, which can move us.
-            if tp.diff_index(Buf::current()) != idx_to {
-                emsg_gettext(c"E787: Buffer changed unexpectedly");
-                break '_theend;
-            }
-        }
+    let moved = if Buf::current().b_changed == 0 {
+        change_warning(Buf::current(), 0);
+        // The warning can run autocommands, which can move us.
+        tp.diff_index(Buf::current()) != idx_to
+    } else {
+        false
+    };
+    if moved {
+        // The buffer `:diffput` prepared for is not restored here, as
+        // upstream's jump past it did not.
+        emsg_gettext(c"E787: Buffer changed unexpectedly");
+    } else {
         let (line1, line2) = (excmd.line1, excmd.line2);
         diffgetput(excmd.addr_count, idx_cur, idx_from, idx_to, line1, line2);
         if put {

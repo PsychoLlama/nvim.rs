@@ -597,7 +597,7 @@ pub fn ex_sort(excmd: &mut ExArg) {
 
 /// `:sort`, with the command's argument block borrowed.
 fn sort_range(args: &mut ExArg) {
-    let (forceit, line1, line2) = (args.forceit, args.line1, args.line2);
+    let (line1, line2) = (args.line1, args.line2);
 
     // Sorting one line is really quick!
     if line2 - line1 < 1 {
@@ -608,46 +608,51 @@ fn sort_range(args: &mut ExArg) {
     }
 
     let mut regmatch = None;
-    let mut spec = SortSpec::new();
-    let mut count = usize::try_from(line2 - line1).expect("a range of two lines or more") + 1;
-
-    'sortend: {
-        let order = match args.parse_sort_flags(&mut spec, &mut regmatch) {
-            Ok(order) => order,
-            Err(refused) => {
-                refused.report();
-                break 'sortend;
-            }
-        };
-        let Some(mut sorted) = collect_sort_keys(line1, line2, &spec, &mut regmatch) else {
-            break 'sortend;
-        };
-
-        // Note: can't be interrupted!
-        sorted.sort_by(|l1, l2| compare_lines(order, l1, l2));
-
-        // Insert the lines in the sorted order below the last one.
-        let placed = append_sorted(&sorted, order, spec.unique, forceit, line2);
-        if placed.interrupted {
-            break 'sortend;
-        }
-
-        // Delete the original lines if appending worked.
-        if placed.done == count {
-            for _ in 0..count {
-                let _ = ml_delete(line1);
-            }
-        } else {
-            count = 0;
-        }
-
-        finish_sort(line1, line2, count, &placed);
-    }
-
+    sort_lines(args, &mut regmatch);
     drop(regmatch);
     if GOT_INT.get() {
         emsg(gettext(E_INTERR));
     }
+}
+
+/// [`sort_range`] once the range is saved for undo: read the flags, sort
+/// the keys, append the lines in order and delete the originals.
+/// `regmatch` is the frame's, so that the pattern goes before the
+/// interrupt is reported.
+fn sort_lines(args: &mut ExArg, regmatch: &mut Option<RegMatch>) {
+    let (forceit, line1, line2) = (args.forceit, args.line1, args.line2);
+    let mut spec = SortSpec::new();
+    let mut count = usize::try_from(line2 - line1).expect("a range of two lines or more") + 1;
+    let order = match args.parse_sort_flags(&mut spec, regmatch) {
+        Ok(order) => order,
+        Err(refused) => {
+            refused.report();
+            return;
+        }
+    };
+    let Some(mut sorted) = collect_sort_keys(line1, line2, &spec, regmatch) else {
+        return;
+    };
+
+    // Note: can't be interrupted!
+    sorted.sort_by(|l1, l2| compare_lines(order, l1, l2));
+
+    // Insert the lines in the sorted order below the last one.
+    let placed = append_sorted(&sorted, order, spec.unique, forceit, line2);
+    if placed.interrupted {
+        return;
+    }
+
+    // Delete the original lines if appending worked.
+    if placed.done == count {
+        for _ in 0..count {
+            let _ = ml_delete(line1);
+        }
+    } else {
+        count = 0;
+    }
+
+    finish_sort(line1, line2, count, &placed);
 }
 
 /// Adjust marks and extmarks for the lines `:sort` moved, and put the cursor
@@ -785,11 +790,10 @@ pub fn ex_uniq(excmd: &mut ExArg) {
 
 /// `:uniq`, with the command's argument block borrowed.
 fn uniq_range(args: &mut ExArg) {
-    let (forceit, line1, line2) = (args.forceit, args.line1, args.line2);
-    let mut count = line2 - line1 + 1;
+    let (line1, line2) = (args.line1, args.line2);
 
     // Uniq one line is really quick!
-    if count <= 1 {
+    if line2 - line1 < 1 {
         return;
     }
     if u_save(line1 - 1, line2 + 1).is_err() {
@@ -797,6 +801,19 @@ fn uniq_range(args: &mut ExArg) {
     }
 
     let mut regmatch = None;
+    uniq_lines(args, &mut regmatch);
+    drop(regmatch);
+    if GOT_INT.get() {
+        emsg(gettext(E_INTERR));
+    }
+}
+
+/// [`uniq_range`] once the range is saved for undo: read the flags, then
+/// one pass deleting the lines the mode drops. `regmatch` is the frame's,
+/// as for [`sort_lines`].
+fn uniq_lines(args: &mut ExArg, regmatch: &mut Option<RegMatch>) {
+    let (forceit, line1, line2) = (args.forceit, args.line1, args.line2);
+    let mut count = line2 - line1 + 1;
     let mut mode = if forceit {
         UniqMode::OnlyRepeated
     } else {
@@ -806,93 +823,86 @@ fn uniq_range(args: &mut ExArg) {
     let mut change_occurred = false;
     let mut deleted = 0;
 
-    'uniqend: {
-        let order = match args.parse_uniq_flags(&mut mode, &mut use_match, &mut regmatch) {
-            Ok(order) => order,
-            Err(refused) => {
-                refused.report();
-                break 'uniqend;
-            }
-        };
-
-        let mut scan = UniqScan {
-            in_run: false,
-            force_unmatch: false,
-            done_lnum: line1 - 1,
-        };
-        // The key of the line the next one is compared against.
-        let (mut previous, mut current) = (LineCopy::new(), LineCopy::new());
-        let mut i = 0;
-        while i < count {
-            let get_lnum = line1 + i;
-            // Read the key out of the line and compare it with the one
-            // before: the delete below invalidates the memline's copy.
-            {
-                let mut lines = Lines::current();
-                let (start, end) = match_range(&mut regmatch, &mut lines, get_lnum, use_match);
-                let text = lines.line(get_lnum);
-                // A line the pattern missed compares its whole text, which is
-                // what upstream's "terminate at `end` only when there is an
-                // end to terminate at" comes to.
-                let stop = if end > ColNr::ZERO {
-                    end.as_usize()
-                } else {
-                    text.len()
-                };
-                current.fill(&text[start.as_usize()..stop]);
-            }
-
-            let is_match =
-                i > 0 && order.compare(current.with_nul(), previous.with_nul()) == Ordering::Equal;
-            let (delete_lnum, keep) = scan.step(mode, LineNr::new(i), count, get_lnum, is_match);
-            if keep {
-                core::mem::swap(&mut previous, &mut current);
-            }
-
-            if delete_lnum > LineNr::ZERO {
-                let _ = ml_delete(delete_lnum);
-                i -= get_lnum - delete_lnum + 1;
-                count -= 1;
-                deleted += 1;
-                change_occurred = true;
-            }
-
-            fast_breakcheck();
-            if GOT_INT.get() {
-                break 'uniqend;
-            }
-            i += 1;
+    let order = match args.parse_uniq_flags(&mut mode, &mut use_match, regmatch) {
+        Ok(order) => order,
+        Err(refused) => {
+            refused.report();
+            return;
         }
+    };
 
-        // Adjust marks for deleted lines and prepare for displaying.
-        mark_adjust(
-            line2 - deleted,
-            line2,
-            MAXLNUM.get(),
-            -deleted,
-            if change_occurred {
-                EXTMARK_UNDO
+    let mut scan = UniqScan {
+        in_run: false,
+        force_unmatch: false,
+        done_lnum: line1 - 1,
+    };
+    // The key of the line the next one is compared against.
+    let (mut previous, mut current) = (LineCopy::new(), LineCopy::new());
+    let mut i = 0;
+    while i < count {
+        let get_lnum = line1 + i;
+        // Read the key out of the line and compare it with the one
+        // before: the delete below invalidates the memline's copy.
+        {
+            let mut lines = Lines::current();
+            let (start, end) = match_range(regmatch, &mut lines, get_lnum, use_match);
+            let text = lines.line(get_lnum);
+            // A line the pattern missed compares its whole text, which is
+            // what upstream's "terminate at `end` only when there is an
+            // end to terminate at" comes to.
+            let stop = if end > ColNr::ZERO {
+                end.as_usize()
             } else {
-                EXTMARK_NOOP
-            } as ExtmarkOp,
-        );
-        say::more(-deleted);
-        if change_occurred {
-            changed_lines(
-                Buf::current(),
-                line1,
-                ColNr::ZERO,
-                line2 + 1,
-                -deleted,
-                true,
-            );
+                text.len()
+            };
+            current.fill(&text[start.as_usize()..stop]);
         }
-        Win::current().w_cursor.lnum = line1;
-        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
+
+        let is_match =
+            i > 0 && order.compare(current.with_nul(), previous.with_nul()) == Ordering::Equal;
+        let (delete_lnum, keep) = scan.step(mode, LineNr::new(i), count, get_lnum, is_match);
+        if keep {
+            core::mem::swap(&mut previous, &mut current);
+        }
+
+        if delete_lnum > LineNr::ZERO {
+            let _ = ml_delete(delete_lnum);
+            i -= get_lnum - delete_lnum + 1;
+            count -= 1;
+            deleted += 1;
+            change_occurred = true;
+        }
+
+        fast_breakcheck();
+        if GOT_INT.get() {
+            return;
+        }
+        i += 1;
     }
 
-    drop(regmatch);
-    if GOT_INT.get() {
-        emsg(gettext(E_INTERR));
+    // Adjust marks for deleted lines and prepare for displaying.
+    mark_adjust(
+        line2 - deleted,
+        line2,
+        MAXLNUM.get(),
+        -deleted,
+        if change_occurred {
+            EXTMARK_UNDO
+        } else {
+            EXTMARK_NOOP
+        } as ExtmarkOp,
+    );
+    say::more(-deleted);
+    if change_occurred {
+        changed_lines(
+            Buf::current(),
+            line1,
+            ColNr::ZERO,
+            line2 + 1,
+            -deleted,
+            true,
+        );
     }
+    Win::current().w_cursor.lnum = line1;
+    beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
 }

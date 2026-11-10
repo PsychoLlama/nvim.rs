@@ -197,148 +197,162 @@ fn diff_write(
 /// segments' block lists are shifted back into place and chained together.
 ///
 fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>) {
-    let tp = TabPage::current();
-    let idx_orig = usize::try_from(idx_orig).unwrap_or(usize::MAX);
-    let mut anchors = [[LineNr::ZERO; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
-    'theend: {
-        if dio.internal {
-            dio.diff.hunks.clear();
-        } else {
-            dio.orig.fname = temp_name();
-            dio.new.fname = temp_name();
-            dio.diff.fname = temp_name();
-            if dio
-                .temp_names()
-                .is_none_or(|names| check_external_diff(names).is_err())
-            {
-                break 'theend;
-            }
-        }
-
-        // `:diffupdate!` re-reads any buffer that changed on disk first.
-        let forceit = excmd.as_deref().is_some_and(|command| command.forceit);
-        if forceit {
-            for idx in idx_orig..DB_COUNT as usize {
-                // A diff buffer may already have been wiped by an earlier
-                // turn's autocommands; the slot's id answers `None` for it,
-                // and a valid buffer is what `buf_check_timestamp` wants.
-                if let Some(buf) = tp.diffbuf(idx) {
-                    buf_check_timestamp(buf);
-                }
-            }
-        }
-
-        // Every buffer has to supply the same number of anchors, or the
-        // segments would not line up; the smallest count wins, and a
-        // buffer whose `'diffanchors'` does not resolve cancels them all.
-        let mut num_anchors = c_int::MAX;
-        if DIFF_FLAGS.get() & DIFF_ANCHOR != 0 {
-            for idx in 0..DB_COUNT as usize {
-                if tp.tp_diffbuf[idx].is_none() {
-                    continue;
-                }
-                let found = parse_diffanchors(false, tp.used_diffbuf(idx), Some(&mut anchors[idx]));
-                let Ok(buf_num_anchors) = found else {
-                    emsg(gettext(E_FAILED_TO_FIND_ALL_DIFF_ANCHORS));
-                    num_anchors = 0;
-                    anchors = [[LineNr::ZERO; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
-                    break;
-                };
-                num_anchors = num_anchors.min(buf_num_anchors);
-                if buf_num_anchors > 0 {
-                    anchors[idx][..usize::try_from(buf_num_anchors).unwrap_or(0)].sort_unstable();
-                }
-            }
-        }
-        if num_anchors == c_int::MAX {
-            num_anchors = 0;
-        }
-
-        // One diff per segment: `[1, a1)`, `[a1, a2)`, … `[aN, end]`.
-        let num_anchors = usize::try_from(num_anchors).unwrap_or(0);
-        for anchor_i in 0..=num_anchors {
-            let segment = |idx: usize| {
-                (
-                    if anchor_i == 0 {
-                        1
-                    } else {
-                        anchors[idx][anchor_i - 1].get()
-                    },
-                    if anchor_i == num_anchors {
-                        -1
-                    } else {
-                        (anchors[idx][anchor_i] - 1).get()
-                    },
-                )
-            };
-            // Each segment builds its own list, which is appended to the
-            // ones before it once its line numbers have been corrected.
-            let earlier = if anchor_i == 0 {
-                Vec::new()
-            } else {
-                tp.with_diff(::core::mem::take)
-            };
-
-            let (start, end) = segment(idx_orig);
-            let wrote = diff_write(
-                tp.used_diffbuf(idx_orig),
-                &mut dio.orig,
-                LineNr::new(start),
-                LineNr::new(end),
-            );
-            if wrote.is_err() {
-                if anchor_i != 0 {
-                    // Upstream puts the earlier segments back only to
-                    // clear the lot.
-                    drop(earlier);
-                    diff_clear(tp);
-                }
-                break 'theend;
-            }
-            for idx_new in idx_orig + 1..DB_COUNT as usize {
-                let Some(buf) = tp.diffbuf(idx_new).filter(|b| b.b_ml.ml_mfp.is_some()) else {
-                    continue;
-                };
-                let (start, end) = segment(idx_new);
-                if diff_write(buf, &mut dio.new, LineNr::new(start), LineNr::new(end)).is_ok()
-                    && diff_file(dio).is_ok()
-                {
-                    if let Ok(hunks) = HunkSource::open(dio) {
-                        let current = TabPage::current();
-                        let slots = current.tp_diffbuf;
-                        current.with_diff(|blocks| {
-                            diff_read(blocks, &slots, idx_orig, idx_new, hunks);
-                        });
-                    }
-                    clear_diffin(&mut dio.new);
-                    clear_diffout(&mut dio.diff);
-                }
-            }
-            clear_diffin(&mut dio.orig);
-
-            if anchor_i == 0 {
-                continue;
-            }
-            // This segment's diff was computed over lines starting at 1;
-            // shift it down to where the segment really begins, and put the
-            // earlier segments in front of it.
-            tp.with_diff(|blocks| {
-                for dp in blocks.iter_mut() {
-                    for (idx, row) in anchors.iter().enumerate() {
-                        let anchor = row[anchor_i - 1];
-                        if anchor > LineNr::ZERO {
-                            dp.df_lnum[idx] += (anchor - 1).get();
-                        }
-                    }
-                }
-                let this_segment = ::core::mem::replace(blocks, earlier);
-                blocks.extend(this_segment);
-            });
-        }
-    }
+    diff_each_segment(dio, idx_orig, excmd);
     dio.orig.fname = None;
     dio.new.fname = None;
     dio.diff.fname = None;
+}
+
+/// [`diff_try_update`]'s work, between naming the temp files and
+/// forgetting them: stops at the first file it cannot write (or an
+/// external diff that does not work).
+fn diff_each_segment(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>) {
+    let tp = TabPage::current();
+    let idx_orig = usize::try_from(idx_orig).unwrap_or(usize::MAX);
+    if dio.internal {
+        dio.diff.hunks.clear();
+    } else {
+        dio.orig.fname = temp_name();
+        dio.new.fname = temp_name();
+        dio.diff.fname = temp_name();
+        if dio
+            .temp_names()
+            .is_none_or(|names| check_external_diff(names).is_err())
+        {
+            return;
+        }
+    }
+
+    // `:diffupdate!` re-reads any buffer that changed on disk first.
+    let forceit = excmd.as_deref().is_some_and(|command| command.forceit);
+    if forceit {
+        for idx in idx_orig..DB_COUNT as usize {
+            // A diff buffer may already have been wiped by an earlier
+            // turn's autocommands; the slot's id answers `None` for it,
+            // and a valid buffer is what `buf_check_timestamp` wants.
+            if let Some(buf) = tp.diffbuf(idx) {
+                buf_check_timestamp(buf);
+            }
+        }
+    }
+
+    let (anchors, num_anchors) = read_anchors(tp);
+
+    // One diff per segment: `[1, a1)`, `[a1, a2)`, … `[aN, end]`.
+    for anchor_i in 0..=num_anchors {
+        let segment = |idx: usize| {
+            (
+                if anchor_i == 0 {
+                    1
+                } else {
+                    anchors[idx][anchor_i - 1].get()
+                },
+                if anchor_i == num_anchors {
+                    -1
+                } else {
+                    (anchors[idx][anchor_i] - 1).get()
+                },
+            )
+        };
+        // Each segment builds its own list, which is appended to the
+        // ones before it once its line numbers have been corrected.
+        let earlier = if anchor_i == 0 {
+            Vec::new()
+        } else {
+            tp.with_diff(::core::mem::take)
+        };
+
+        let (start, end) = segment(idx_orig);
+        let wrote = diff_write(
+            tp.used_diffbuf(idx_orig),
+            &mut dio.orig,
+            LineNr::new(start),
+            LineNr::new(end),
+        );
+        if wrote.is_err() {
+            if anchor_i != 0 {
+                // Upstream puts the earlier segments back only to
+                // clear the lot.
+                drop(earlier);
+                diff_clear(tp);
+            }
+            return;
+        }
+        for idx_new in idx_orig + 1..DB_COUNT as usize {
+            let Some(buf) = tp.diffbuf(idx_new).filter(|b| b.b_ml.ml_mfp.is_some()) else {
+                continue;
+            };
+            let (start, end) = segment(idx_new);
+            if diff_write(buf, &mut dio.new, LineNr::new(start), LineNr::new(end)).is_ok()
+                && diff_file(dio).is_ok()
+            {
+                if let Ok(hunks) = HunkSource::open(dio) {
+                    let current = TabPage::current();
+                    let slots = current.tp_diffbuf;
+                    current.with_diff(|blocks| {
+                        diff_read(blocks, &slots, idx_orig, idx_new, hunks);
+                    });
+                }
+                clear_diffin(&mut dio.new);
+                clear_diffout(&mut dio.diff);
+            }
+        }
+        clear_diffin(&mut dio.orig);
+
+        if anchor_i == 0 {
+            continue;
+        }
+        // This segment's diff was computed over lines starting at 1;
+        // shift it down to where the segment really begins, and put the
+        // earlier segments in front of it.
+        tp.with_diff(|blocks| {
+            for dp in blocks.iter_mut() {
+                for (idx, row) in anchors.iter().enumerate() {
+                    let anchor = row[anchor_i - 1];
+                    if anchor > LineNr::ZERO {
+                        dp.df_lnum[idx] += (anchor - 1).get();
+                    }
+                }
+            }
+            let this_segment = ::core::mem::replace(blocks, earlier);
+            blocks.extend(this_segment);
+        });
+    }
+}
+
+/// One row of anchors per diff buffer slot.
+type Anchors = [[LineNr; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
+
+/// The anchors each diff buffer's `'diffanchors'` names, sorted, and how
+/// many of them every buffer has. Every buffer has to supply the same
+/// number, or the segments would not line up: the smallest count wins, and
+/// a buffer whose `'diffanchors'` does not resolve cancels them all.
+fn read_anchors(tabpage: TabPage) -> (Anchors, usize) {
+    let mut anchors: Anchors = [[LineNr::ZERO; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
+    let mut num_anchors = c_int::MAX;
+    if DIFF_FLAGS.get() & DIFF_ANCHOR != 0 {
+        for idx in 0..DB_COUNT as usize {
+            if tabpage.tp_diffbuf[idx].is_none() {
+                continue;
+            }
+            let found =
+                parse_diffanchors(false, tabpage.used_diffbuf(idx), Some(&mut anchors[idx]));
+            let Ok(buf_num_anchors) = found else {
+                emsg(gettext(E_FAILED_TO_FIND_ALL_DIFF_ANCHORS));
+                num_anchors = 0;
+                anchors = [[LineNr::ZERO; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
+                break;
+            };
+            num_anchors = num_anchors.min(buf_num_anchors);
+            if buf_num_anchors > 0 {
+                anchors[idx][..usize::try_from(buf_num_anchors).unwrap_or(0)].sort_unstable();
+            }
+        }
+    }
+    if num_anchors == c_int::MAX {
+        num_anchors = 0;
+    }
+    (anchors, usize::try_from(num_anchors).unwrap_or(0))
 }
 
 /// Whether the built-in diff engine is what a recompute would use.

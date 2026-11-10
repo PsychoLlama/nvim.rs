@@ -394,15 +394,24 @@ fn change_for(new_diff: &DiffBlock, linemap: &LineMap) -> DiffLineChange {
 /// the block can be left out of it.
 pub(crate) fn diff_find_change_inline_diff(dp: &mut DiffBlock, slots: &DiffSlots) {
     let save_diff_algorithm = DIFF_ALGORITHM.get();
+    // Always slide diff splits along whitespace.
+    DIFF_ALGORITHM.set(save_diff_algorithm | XDF_INDENT_HEURISTIC);
+    tokenize_and_diff(dp, slots);
+    DIFF_ALGORITHM.set(save_diff_algorithm);
+    dp.has_changes = true;
+}
+
+/// [`diff_find_change_inline_diff`] under its diff algorithm: tokenize each
+/// buffer's lines of the block, diff every buffer's tokens against the
+/// first's, refine, and store the column ranges. Stops, leaving
+/// `df_changes` as it was, when a sub-diff fails.
+fn tokenize_and_diff(dp: &mut DiffBlock, slots: &DiffSlots) {
     // The inline diff only supports the internal algorithm; its two sides
     // are `file1`/`file2` below rather than the run's own images.
     let mut dio = DiffIo {
         internal: true,
         ..DiffIo::default()
     };
-    // Always slide diff splits along whitespace.
-    DIFF_ALGORITHM.set(save_diff_algorithm | XDF_INDENT_HEURISTIC);
-
     // The table `diff_read` and the refinement read: which buffers take part.
     let mut slots = *slots;
     let mut blocks = Vec::new();
@@ -410,61 +419,56 @@ pub(crate) fn diff_find_change_inline_diff(dp: &mut DiffBlock, slots: &DiffSlots
     let (mut file1, mut file2) = (Vec::<u8>::new(), Vec::<u8>::new());
     let mut file1_idx = usize::MAX;
 
-    'done: {
-        for (i, map) in linemap.iter_mut().enumerate() {
-            dio.diff.hunks.clear();
-            let Some(buf) = slots[i]
-                .and_then(BufId::get)
-                .filter(|b| b.b_ml.ml_mfp.is_some())
-            else {
-                continue; // not loaded
-            };
-            if dp.df_count[i] == 0 {
-                // A buffer with no text in this block must not be left in
-                // the table, or the whole block reads as modified in it.
-                slots[i] = None;
-                continue;
-            }
-            if file1_idx == usize::MAX {
-                file1_idx = i;
-            }
-            let first = file1_idx == i;
-            let out = if first { &mut file1 } else { &mut file2 };
-            out.clear();
-            // Deliberately the *first* buffer's 'iskeyword', so that
-            // every buffer is segmented the same way.
-            let chartab = used_slot(&slots, file1_idx).b_chartab;
-            let mut lines = buf.lines();
-            for off in 0..dp.df_count[i] {
-                let line = lines.line(dp.df_lnum[i] + off);
-                let word = DIFF_FLAGS.get() & DIFF_INLINE_WORD != 0;
-                tokenize_line(line, off, &chartab, word, out, map);
-            }
-            if first {
-                continue;
-            }
-            if diff_file_internal(&file1, &file2, &mut dio.diff.hunks).is_err() {
-                break 'done;
-            }
-            if let Ok(hunks) = HunkSource::open(&dio) {
-                diff_read(&mut blocks, &slots, 0, i, hunks);
-            }
+    for (i, map) in linemap.iter_mut().enumerate() {
+        dio.diff.hunks.clear();
+        let Some(buf) = slots[i]
+            .and_then(BufId::get)
+            .filter(|b| b.b_ml.ml_mfp.is_some())
+        else {
+            continue; // not loaded
+        };
+        if dp.df_count[i] == 0 {
+            // A buffer with no text in this block must not be left in
+            // the table, or the whole block reads as modified in it.
+            slots[i] = None;
+            continue;
         }
-
-        if file1_idx != usize::MAX {
-            if DIFF_FLAGS.get() & DIFF_INLINE_WORD != 0 {
-                let start = dp.df_lnum[file1_idx];
-                refine_inline_word(&mut blocks, &slots, &linemap, file1_idx, start);
-            } else if DIFF_FLAGS.get() & DIFF_INLINE_CHAR != 0 {
-                refine_inline_char(&mut blocks, &linemap, file1_idx);
-            }
+        if file1_idx == usize::MAX {
+            file1_idx = i;
         }
-
-        dp.df_changes.clear(); // already empty
-        dp.df_changes
-            .extend(blocks.iter().map(|new_diff| change_for(new_diff, &linemap)));
+        let first = file1_idx == i;
+        let out = if first { &mut file1 } else { &mut file2 };
+        out.clear();
+        // Deliberately the *first* buffer's 'iskeyword', so that
+        // every buffer is segmented the same way.
+        let chartab = used_slot(&slots, file1_idx).b_chartab;
+        let mut lines = buf.lines();
+        for off in 0..dp.df_count[i] {
+            let line = lines.line(dp.df_lnum[i] + off);
+            let word = DIFF_FLAGS.get() & DIFF_INLINE_WORD != 0;
+            tokenize_line(line, off, &chartab, word, out, map);
+        }
+        if first {
+            continue;
+        }
+        if diff_file_internal(&file1, &file2, &mut dio.diff.hunks).is_err() {
+            return;
+        }
+        if let Ok(hunks) = HunkSource::open(&dio) {
+            diff_read(&mut blocks, &slots, 0, i, hunks);
+        }
     }
 
-    DIFF_ALGORITHM.set(save_diff_algorithm);
-    dp.has_changes = true;
+    if file1_idx != usize::MAX {
+        if DIFF_FLAGS.get() & DIFF_INLINE_WORD != 0 {
+            let start = dp.df_lnum[file1_idx];
+            refine_inline_word(&mut blocks, &slots, &linemap, file1_idx, start);
+        } else if DIFF_FLAGS.get() & DIFF_INLINE_CHAR != 0 {
+            refine_inline_char(&mut blocks, &linemap, file1_idx);
+        }
+    }
+
+    dp.df_changes.clear(); // already empty
+    dp.df_changes
+        .extend(blocks.iter().map(|new_diff| change_for(new_diff, &linemap)));
 }
