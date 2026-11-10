@@ -54,7 +54,6 @@ pub(crate) fn ins_compl_dictionaries(dict_start: &[u8], pat: &CStr, flags: c_int
         }
     }
 
-    // So that we can leave through 'theend.
     let mut regmatch = RegMatch::new(None, false);
 
     // If 'infercase' is set, don't use 'smartcase' here.
@@ -62,70 +61,79 @@ pub(crate) fn ins_compl_dictionaries(dict_start: &[u8], pat: &CStr, flags: c_int
     if Buf::current().b_p_inf != 0 {
         P_SCS.set(false);
     }
+    complete_from_dictionaries(dict, pat, flags, thesaurus, &mut regmatch, &mut dir);
+    P_SCS.set(save_p_scs);
+    drop(regmatch);
+}
 
-    // C's `goto theend`, i.e. free and restore below without scanning.
-    'theend: {
-        // When invoked to match whole lines for CTRL-X CTRL-L adjust the
-        // pattern to only match at the start of a line.  Otherwise just
-        // match the pattern.  Also need to double backslashes.
-        if ctrl_x_mode_line_or_eval() {
-            // Upstream sizes the buffer to fit exactly, so nothing is cut.
-            let mut anchored = XString::from_bytes(b"^\\s*\\zs\\V");
-            anchored.push_bytes(&escaped_bytes(pat.to_bytes(), b"\\"));
-            regmatch.regprog = vim_regcomp(anchored.as_cstr(), RE_MAGIC);
-        } else {
-            regmatch.regprog = vim_regcomp(pat, if magic_isset() { RE_MAGIC } else { 0 });
-            if regmatch.regprog.is_none() {
-                break 'theend;
-            }
-        }
-
-        // Ignore case depends on 'ignorecase', 'smartcase' and "pat".
-        regmatch.rm_ic = ignorecase(pat.to_bytes());
-        while !dict.is_empty() && !GOT_INT.get() && !COMPL_INTERRUPTED.get() {
-            // The files to scan; `None` is "complete from active spelling".
-            let files: Option<Vec<XString>> = if flags == DICT_EXACT {
-                // The whole rest of the list is one name.
-                Some(vec![XString::from_bytes(dict)])
-            } else {
-                // Copy one dictionary file name, cut where upstream's
-                // `LSIZE` buffer cuts it, and expand wildcards in it -- but
-                // do not allow backticks (for security, the 'dict' option
-                // may have been set in a modeline).
-                let (part, rest) = split_option_part(dict, LSIZE, b",");
-                dict = rest;
-                if !thesaurus && part == b"spell" {
-                    None
-                } else if part.contains(&b'`') {
-                    Some(Vec::new())
-                } else {
-                    let flags = ExpandFlags::FILE | ExpandFlags::SILENT;
-                    let part = XString::from_vec(part);
-                    Some(expand_wildcards(&[part.as_cstr()], flags).unwrap_or_default())
-                }
-            };
-
-            match files {
-                None => {
-                    // Complete from active spelling.  Skip "\<" in the
-                    // pattern, we don't use it as a RE.
-                    let pat = pat.to_bytes();
-                    let word = pat.strip_prefix(b"\\<").unwrap_or(pat);
-                    spell_dump_compl(Some(word), c_int::from(regmatch.rm_ic), Some(&mut dir), 0);
-                }
-                Some(files) if !files.is_empty() => {
-                    ins_compl_files(&files, thesaurus, flags, &mut regmatch, &mut dir);
-                }
-                Some(_) => {}
-            }
-            if flags != 0 {
-                break;
-            }
+/// [`ins_compl_dictionaries`] with 'smartcase' settled: compile `pat` into
+/// `regmatch` and complete from each file of the `dict` list. Nothing is
+/// scanned when the pattern does not compile (`vim_regcomp` said why).
+fn complete_from_dictionaries(
+    mut dict: &[u8],
+    pat: &CStr,
+    flags: c_int,
+    thesaurus: bool,
+    regmatch: &mut RegMatch,
+    dir: &mut Direction,
+) {
+    // When invoked to match whole lines for CTRL-X CTRL-L adjust the
+    // pattern to only match at the start of a line.  Otherwise just
+    // match the pattern.  Also need to double backslashes.
+    if ctrl_x_mode_line_or_eval() {
+        // Upstream sizes the buffer to fit exactly, so nothing is cut.
+        let mut anchored = XString::from_bytes(b"^\\s*\\zs\\V");
+        anchored.push_bytes(&escaped_bytes(pat.to_bytes(), b"\\"));
+        regmatch.regprog = vim_regcomp(anchored.as_cstr(), RE_MAGIC);
+    } else {
+        regmatch.regprog = vim_regcomp(pat, if magic_isset() { RE_MAGIC } else { 0 });
+        if regmatch.regprog.is_none() {
+            return;
         }
     }
 
-    P_SCS.set(save_p_scs);
-    drop(regmatch);
+    // Ignore case depends on 'ignorecase', 'smartcase' and "pat".
+    regmatch.rm_ic = ignorecase(pat.to_bytes());
+    while !dict.is_empty() && !GOT_INT.get() && !COMPL_INTERRUPTED.get() {
+        // The files to scan; `None` is "complete from active spelling".
+        let files: Option<Vec<XString>> = if flags == DICT_EXACT {
+            // The whole rest of the list is one name.
+            Some(vec![XString::from_bytes(dict)])
+        } else {
+            // Copy one dictionary file name, cut where upstream's
+            // `LSIZE` buffer cuts it, and expand wildcards in it -- but
+            // do not allow backticks (for security, the 'dict' option
+            // may have been set in a modeline).
+            let (part, rest) = split_option_part(dict, LSIZE, b",");
+            dict = rest;
+            if !thesaurus && part == b"spell" {
+                None
+            } else if part.contains(&b'`') {
+                Some(Vec::new())
+            } else {
+                let flags = ExpandFlags::FILE | ExpandFlags::SILENT;
+                let part = XString::from_vec(part);
+                Some(expand_wildcards(&[part.as_cstr()], flags).unwrap_or_default())
+            }
+        };
+
+        match files {
+            None => {
+                // Complete from active spelling.  Skip "\<" in the
+                // pattern, we don't use it as a RE.
+                let pat = pat.to_bytes();
+                let word = pat.strip_prefix(b"\\<").unwrap_or(pat);
+                spell_dump_compl(Some(word), c_int::from(regmatch.rm_ic), Some(dir), 0);
+            }
+            Some(files) if !files.is_empty() => {
+                ins_compl_files(&files, thesaurus, flags, regmatch, dir);
+            }
+            Some(_) => {}
+        }
+        if flags != 0 {
+            break;
+        }
+    }
 }
 
 /// Add all the words in `line` from the thesaurus file `fname`, skipping the

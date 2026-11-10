@@ -143,150 +143,182 @@ pub(crate) fn process_next_cpt_value(
     start_match_pos: Pos,
     fuzzy_collect: bool,
 ) -> CptValue {
-    let mut compl_type = None;
-    let mut status = INS_COMPL_CPT_OK;
-    let mut advance = false;
     let skip_source = COMPL_AUTOCOMPLETE.get() && COMPL_FROM_NONKEYWORD.get();
 
     st.found_all = false;
     st.cpt.skip_separators();
 
-    'done: {
-        let flag = st.cpt.at();
-        if flag == b'.'
-            && !Buf::current().b_scanned
-            && !skip_source
-            && !COMPL_TIME_SLICE_EXPIRED.get()
-        {
-            st.ins_buf = Some(Buf::current().id());
-            st.first_match_pos = start_match_pos;
-            // Move the cursor back one character so that CTRL-N can match
-            // the word immediately after the cursor.
-            if ctrl_x_mode_normal() && !fuzzy_collect && dec(&mut st.first_match_pos).is_stuck() {
-                // Move to after the last character in the buffer, so that
-                // a word at the start of it is found correctly.
-                let lnum = Buf::current().line_count();
-                st.first_match_pos.lnum = lnum;
-                st.first_match_pos.col = Buf::current().lines().line_len(lnum);
-            }
-            st.last_match_pos = st.first_match_pos;
-            compl_type = Some(CtrlXMode::Normal);
-            // Remember the first match, so the loop stops when the search
-            // wraps and comes back to it a second time.
-            st.set_match_pos = true;
-        } else if !skip_source
-            && !COMPL_TIME_SLICE_EXPIRED.get()
-            && has_char(c"buwU", c_int::from(flag))
-            && {
-                // The scan's buffer outlives every autocommand and user
-                // function a pass through this loop runs, so it may have been
-                // wiped since it was stored. Restarting the walk at the
-                // current buffer is what `ins_compl_get_exp` does for the
-                // same case one level up.
-                let from = st.ins_buf.and_then(BufId::get).unwrap_or_else(Buf::current);
-                let next = ins_compl_next_buf(from, flag);
-                st.ins_buf = Some(next.id());
-                next != Buf::current()
-            }
-        {
-            // Scan a buffer, but not the current one: the one just picked,
-            // which nothing since has had a chance to wipe.
-            let buf = st
-                .ins_buf
-                .and_then(BufId::get)
-                .expect("ins_compl_next_buf answered a live buffer");
-            if buf.b_ml.ml_mfp.is_some() {
-                // Loaded buffer.
-                COMPL_STARTED.set(true);
-                st.first_match_pos.col = ColNr::ZERO;
-                st.last_match_pos.col = ColNr::ZERO;
-                st.first_match_pos.lnum = buf.line_count() + 1;
-                st.last_match_pos.lnum = LineNr::ZERO;
-                compl_type = Some(CtrlXMode::Normal);
-            } else {
-                // Unloaded buffer: scan it like a dictionary.
-                st.found_all = true;
-                let Some(name) = buf.name.shown() else {
-                    status = INS_COMPL_CPT_CONT;
-                    break 'done;
-                };
-                compl_type = Some(CtrlXMode::Dictionary);
-                // A copy: the progress message below can run Lua, and that
-                // can wipe the buffer the name belongs to.
-                st.dict = Some(XString::from_cstr(name));
-                st.dict_f = DICT_EXACT;
-            }
-            if !shortmess(ShmFlag::COMPLETIONSCAN) && !COMPL_AUTOCOMPLETE.get() {
-                let name = if buf.name.is_unnamed() {
-                    buf_spname(&buf)
-                } else if buf.name.short().is_none() {
-                    buf.name.shown()
-                } else {
-                    buf.name.short()
-                };
-                // Upstream formats into `IObuff`, which cuts it there. The
-                // name is copied into the message before anything runs.
-                let fmt = gettext(c"Scanning: %s");
-                let message = formatted!(IOSIZE as usize, fmt.to_bytes(), name);
-                scan_progress(XString::from_vec(message).as_cstr());
-            }
-        } else if flag == 0 {
-            status = INS_COMPL_CPT_END;
+    let flag = st.cpt.at();
+    if flag == b'.' && !Buf::current().b_scanned && !skip_source && !COMPL_TIME_SLICE_EXPIRED.get()
+    {
+        scan_current_buffer(st, start_match_pos, fuzzy_collect);
+        return CptValue::ready(CtrlXMode::Normal);
+    }
+    if !skip_source && !COMPL_TIME_SLICE_EXPIRED.get() && has_char(c"buwU", c_int::from(flag)) && {
+        // The scan's buffer outlives every autocommand and user
+        // function a pass through this loop runs, so it may have been
+        // wiped since it was stored. Restarting the walk at the
+        // current buffer is what `ins_compl_get_exp` does for the
+        // same case one level up.
+        let from = st.ins_buf.and_then(BufId::get).unwrap_or_else(Buf::current);
+        let next = ins_compl_next_buf(from, flag);
+        st.ins_buf = Some(next.id());
+        next != Buf::current()
+    } {
+        return match scan_other_buffer(st) {
+            Some(compl_type) => CptValue::ready(compl_type),
+            None => CptValue {
+                status: INS_COMPL_CPT_CONT,
+                compl_type: None,
+                advance: false,
+            },
+        };
+    }
+    if flag == 0 {
+        return CptValue {
+            status: INS_COMPL_CPT_END,
+            compl_type: None,
+            advance: false,
+        };
+    }
+
+    let compl_type = flag_source(st, flag, skip_source);
+    // In any case the scan advances to the next entry.
+    st.cpt.next_entry();
+    let advance = may_advance_cpt_index(st.cpt.rest());
+    st.found_all = true;
+    CptValue {
+        status: if compl_type.is_none() {
+            INS_COMPL_CPT_CONT
         } else {
-            if ctrl_x_mode_line_or_eval() {
-                // compl_type stays `None`.
-            } else if flag == b'F' || flag == b'o' {
-                compl_type = Some(CtrlXMode::Function);
-                st.func_cb = get_callback_if_cpt_func(st.cpt.rest(), cpt_sources().index());
-                if st.func_cb.is_none() {
-                    compl_type = None;
-                }
-            } else if !skip_source {
-                if flag == b'k' || flag == b's' {
-                    compl_type = Some(if flag == b'k' {
-                        CtrlXMode::Dictionary
-                    } else {
-                        CtrlXMode::Thesaurus
-                    });
-                    // C's `*++st->e_cpt`: a name may follow the flag.
-                    st.cpt.bump();
-                    if !matches!(st.cpt.at(), b',' | 0) {
-                        st.dict = Some(XString::from_bytes(st.cpt.rest()));
-                        st.dict_f = DICT_FIRST;
-                    }
-                } else if flag == b'i' {
-                    compl_type = Some(CtrlXMode::PathPatterns);
-                } else if flag == b'd' {
-                    compl_type = Some(CtrlXMode::PathDefines);
-                } else if flag == b'f' {
-                    compl_type = Some(CtrlXMode::Bufnames);
-                } else if flag == b']' || flag == b't' {
-                    compl_type = Some(CtrlXMode::Tags);
-                    if !shortmess(ShmFlag::COMPLETIONSCAN) && !COMPL_AUTOCOMPLETE.get() {
-                        // Upstream copies it through `IObuff`, which cuts it there.
-                        let text = gettext(c"Scanning tags.").to_bytes();
-                        let text = &text[..text.len().min(IOSIZE as usize - 1)];
-                        scan_progress(XString::from_bytes(text).as_cstr());
-                    }
-                }
+            INS_COMPL_CPT_OK
+        },
+        compl_type,
+        advance,
+    }
+}
+
+impl CptValue {
+    /// An entry ready to collect from, in `compl_type`'s mode, that does not
+    /// move the source index.
+    fn ready(compl_type: CtrlXMode) -> Self {
+        CptValue {
+            status: INS_COMPL_CPT_OK,
+            compl_type: Some(compl_type),
+            advance: false,
+        }
+    }
+}
+
+/// `.`: scan the current buffer from `start_match_pos`.
+fn scan_current_buffer(st: &mut InsComplNextState, start_match_pos: Pos, fuzzy_collect: bool) {
+    st.ins_buf = Some(Buf::current().id());
+    st.first_match_pos = start_match_pos;
+    // Move the cursor back one character so that CTRL-N can match
+    // the word immediately after the cursor.
+    if ctrl_x_mode_normal() && !fuzzy_collect && dec(&mut st.first_match_pos).is_stuck() {
+        // Move to after the last character in the buffer, so that
+        // a word at the start of it is found correctly.
+        let lnum = Buf::current().line_count();
+        st.first_match_pos.lnum = lnum;
+        st.first_match_pos.col = Buf::current().lines().line_len(lnum);
+    }
+    st.last_match_pos = st.first_match_pos;
+    // Remember the first match, so the loop stops when the search wraps
+    // and comes back to it a second time.
+    st.set_match_pos = true;
+}
+
+/// `b`, `u`, `w` or `U`: scan the buffer just picked into `st.ins_buf`, which
+/// is not the current one — as text when it is loaded, as a dictionary file
+/// when it is not. `None` when an unloaded buffer has no name to read.
+fn scan_other_buffer(st: &mut InsComplNextState) -> Option<CtrlXMode> {
+    let compl_type;
+    // Scan a buffer, but not the current one: the one just picked,
+    // which nothing since has had a chance to wipe.
+    let buf = st
+        .ins_buf
+        .and_then(BufId::get)
+        .expect("ins_compl_next_buf answered a live buffer");
+    if buf.b_ml.ml_mfp.is_some() {
+        // Loaded buffer.
+        COMPL_STARTED.set(true);
+        st.first_match_pos.col = ColNr::ZERO;
+        st.last_match_pos.col = ColNr::ZERO;
+        st.first_match_pos.lnum = buf.line_count() + 1;
+        st.last_match_pos.lnum = LineNr::ZERO;
+        compl_type = CtrlXMode::Normal;
+    } else {
+        // Unloaded buffer: scan it like a dictionary.
+        st.found_all = true;
+        let name = buf.name.shown()?;
+        compl_type = CtrlXMode::Dictionary;
+        // A copy: the progress message below can run Lua, and that
+        // can wipe the buffer the name belongs to.
+        st.dict = Some(XString::from_cstr(name));
+        st.dict_f = DICT_EXACT;
+    }
+    if !shortmess(ShmFlag::COMPLETIONSCAN) && !COMPL_AUTOCOMPLETE.get() {
+        let name = if buf.name.is_unnamed() {
+            buf_spname(&buf)
+        } else if buf.name.short().is_none() {
+            buf.name.shown()
+        } else {
+            buf.name.short()
+        };
+        // Upstream formats into `IObuff`, which cuts it there. The
+        // name is copied into the message before anything runs.
+        let fmt = gettext(c"Scanning: %s");
+        let message = formatted!(IOSIZE as usize, fmt.to_bytes(), name);
+        scan_progress(XString::from_vec(message).as_cstr());
+    }
+    Some(compl_type)
+}
+
+/// Any other `'complete'` flag: the mode it stands for, or `None` to skip it
+/// (CTRL-X CTRL-L, a skipped source, a 'completefunc' that is not set, a flag
+/// that means nothing).
+fn flag_source(st: &mut InsComplNextState, flag: u8, skip_source: bool) -> Option<CtrlXMode> {
+    let mut compl_type = None;
+    if ctrl_x_mode_line_or_eval() {
+        // compl_type stays `None`.
+    } else if flag == b'F' || flag == b'o' {
+        compl_type = Some(CtrlXMode::Function);
+        st.func_cb = get_callback_if_cpt_func(st.cpt.rest(), cpt_sources().index());
+        if st.func_cb.is_none() {
+            compl_type = None;
+        }
+    } else if !skip_source {
+        if flag == b'k' || flag == b's' {
+            compl_type = Some(if flag == b'k' {
+                CtrlXMode::Dictionary
+            } else {
+                CtrlXMode::Thesaurus
+            });
+            // C's `*++st->e_cpt`: a name may follow the flag.
+            st.cpt.bump();
+            if !matches!(st.cpt.at(), b',' | 0) {
+                st.dict = Some(XString::from_bytes(st.cpt.rest()));
+                st.dict_f = DICT_FIRST;
             }
-
-            // In any case the scan advances to the next entry.
-            st.cpt.next_entry();
-            advance = may_advance_cpt_index(st.cpt.rest());
-
-            st.found_all = true;
-            if compl_type.is_none() {
-                status = INS_COMPL_CPT_CONT;
+        } else if flag == b'i' {
+            compl_type = Some(CtrlXMode::PathPatterns);
+        } else if flag == b'd' {
+            compl_type = Some(CtrlXMode::PathDefines);
+        } else if flag == b'f' {
+            compl_type = Some(CtrlXMode::Bufnames);
+        } else if flag == b']' || flag == b't' {
+            compl_type = Some(CtrlXMode::Tags);
+            if !shortmess(ShmFlag::COMPLETIONSCAN) && !COMPL_AUTOCOMPLETE.get() {
+                // Upstream copies it through `IObuff`, which cuts it there.
+                let text = gettext(c"Scanning tags.").to_bytes();
+                let text = &text[..text.len().min(IOSIZE as usize - 1)];
+                scan_progress(XString::from_bytes(text).as_cstr());
             }
         }
     }
 
-    CptValue {
-        status,
-        compl_type,
-        advance,
-    }
+    compl_type
 }
 
 /// Identifiers (`i`) or defines (`d`) from included files.
@@ -588,13 +620,29 @@ impl InsComplNextState {
 
 /// [`ins_compl_get_exp`] over its scan state.
 fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
-    let mut found_new_match;
-    let mut type_0 = Some(CTRL_X_MODE.get());
-    let mut may_advance_cpt_idx = false;
-    let mut start_pos = ini;
-
     debug_assert!(Buf::current_or_none().is_some());
+    let start_pos = start_scan(st, ini);
 
+    // Remember the last current match.
+    COMPL_OLD_MATCH.set(COMPL_CURR_MATCH.get());
+    st.cur_is_last = compl_dir_forward();
+
+    let normal_mode_strict = ctrl_x_mode_normal()
+        && !ctrl_x_mode_line_or_eval()
+        && COMPL_CONT_STATUS.get() & CONT_LOCAL == 0
+        && !cpt_sources().is_unset();
+    if normal_mode_strict {
+        arm_source_timers();
+    }
+
+    let found_new_match = scan_sources(st, start_pos, normal_mode_strict);
+    finish_collection(st, found_new_match)
+}
+
+/// Start the scan over (with `COMPL_STARTED` off) at `ini`, or carry on the
+/// one in `st`: answers where the search starts.
+fn start_scan(st: &mut InsComplNextState, ini: Pos) -> Pos {
+    let mut start_pos = ini;
     if !COMPL_STARTED.get() {
         for mut buf in buffers() {
             buf.b_scanned = false;
@@ -619,28 +667,39 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
         st.ins_buf = Some(Buf::current().id());
     }
     debug_assert!(st.ins_buf.is_some());
+    start_pos
+}
 
-    // Remember the last current match.
-    COMPL_OLD_MATCH.set(COMPL_CURR_MATCH.get());
-    st.cur_is_last = compl_dir_forward();
-
-    let normal_mode_strict = ctrl_x_mode_normal()
-        && !ctrl_x_mode_line_or_eval()
-        && COMPL_CONT_STATUS.get() & CONT_LOCAL == 0
-        && !cpt_sources().is_unset();
-    if normal_mode_strict {
-        cpt_sources().set_index(0);
-        if COMPL_AUTOCOMPLETE.get() || p_cto() > 0 {
-            compl_source_start_timer(0);
-            COMPL_TIME_SLICE_EXPIRED.set(false);
-            COMPL_TIMEOUT_MS.set(if COMPL_AUTOCOMPLETE.get() {
-                COMPL_INITIAL_TIMEOUT_MS.max(p_act()).cast_unsigned()
-            } else {
-                p_cto().cast_unsigned()
-            });
-        }
+/// Start the first source's time slice and set the budget: the
+/// autocompletion's when it is on, 'completetimeout' otherwise.
+fn arm_source_timers() {
+    cpt_sources().set_index(0);
+    if COMPL_AUTOCOMPLETE.get() || p_cto() > 0 {
+        compl_source_start_timer(0);
+        COMPL_TIME_SLICE_EXPIRED.set(false);
+        COMPL_TIMEOUT_MS.set(if COMPL_AUTOCOMPLETE.get() {
+            COMPL_INITIAL_TIMEOUT_MS.max(p_act()).cast_unsigned()
+        } else {
+            p_cto().cast_unsigned()
+        });
     }
+}
 
+/// Whether the source about to run is a function source collected under a
+/// time budget, which gets a timeout of its own.
+fn function_source_timed(normal_mode_strict: bool, compl_type: Option<CtrlXMode>) -> bool {
+    normal_mode_strict
+        && compl_type == Some(CtrlXMode::Function)
+        && (COMPL_AUTOCOMPLETE.get() || p_cto() > 0)
+}
+
+/// Collect from the sources in turn until one finds a match, the sources run
+/// out or the user interrupts: answers whether the last source collected
+/// from found a new match.
+fn scan_sources(st: &mut InsComplNextState, start_pos: Pos, normal_mode_strict: bool) -> bool {
+    let mut found_new_match;
+    let mut compl_type = Some(CTRL_X_MODE.get());
+    let mut may_advance_cpt_idx = false;
     // For CTRL-N/CTRL-P, loop over all the flags/windows/buffers in
     // 'complete'.
     loop {
@@ -656,7 +715,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
         {
             let value = process_next_cpt_value(st, start_pos, cot_fuzzy());
             let status = value.status;
-            (type_0, may_advance_cpt_idx) = (value.compl_type, value.advance);
+            (compl_type, may_advance_cpt_idx) = (value.compl_type, value.advance);
             if status == INS_COMPL_CPT_END {
                 break;
             }
@@ -677,10 +736,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
         // non-keyword completion — where only function sources are active
         // — a longer one.
         let mut compl_timeout_save = 0;
-        if normal_mode_strict
-            && type_0 == Some(CtrlXMode::Function)
-            && (COMPL_AUTOCOMPLETE.get() || p_cto() > 0)
-        {
+        if function_source_timed(normal_mode_strict, compl_type) {
             compl_timeout_save = COMPL_TIMEOUT_MS.get();
             COMPL_TIMEOUT_MS.set(if COMPL_FROM_NONKEYWORD.get() {
                 COMPL_FUNC_TIMEOUT_NON_KW_MS as uint64_t
@@ -689,7 +745,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
             });
         }
 
-        found_new_match = get_next_completion_match(type_0, st, start_pos);
+        found_new_match = get_next_completion_match(compl_type, st, start_pos);
 
         // If complete() was called then `compl_pattern` has been reset and
         // the rest of this cannot work; bail out.
@@ -711,7 +767,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
                 break;
             }
             // Fill the popup menu as soon as possible.
-            if type_0.is_some() {
+            if compl_type.is_some() {
                 ins_compl_check_keys(0, false);
             }
             if (ctrl_x_mode_not_default() && !ctrl_x_mode_line_or_eval()) || COMPL_INTERRUPTED.get()
@@ -721,10 +777,12 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
             COMPL_STARTED.set(!COMPL_TIME_SLICE_EXPIRED.get());
         } else {
             // Mark a buffer scanned when it has been scanned completely.
-            if matches!(type_0, Some(CtrlXMode::Normal | CtrlXMode::PathPatterns)) {
-                if let Some(mut buf) = st.ins_buf.and_then(BufId::get) {
-                    buf.b_scanned = true;
-                }
+            if matches!(
+                compl_type,
+                Some(CtrlXMode::Normal | CtrlXMode::PathPatterns)
+            ) && let Some(mut buf) = st.ins_buf.and_then(BufId::get)
+            {
+                buf.b_scanned = true;
             }
             COMPL_STARTED.set(false);
         }
@@ -732,25 +790,34 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
         // Restore the timeout after collecting from a function source.
         // Re-tested rather than remembered: the source just run can be a
         // user function, and that can have changed either operand.
-        if normal_mode_strict
-            && type_0 == Some(CtrlXMode::Function)
-            && (COMPL_AUTOCOMPLETE.get() || p_cto() > 0)
-        {
+        if function_source_timed(normal_mode_strict, compl_type) {
             COMPL_TIMEOUT_MS.set(compl_timeout_save);
         }
 
         // For CTRL-P completion, reset `COMPL_CURR_MATCH` to the head, to
         // avoid mixing matches from different sources.
         if !compl_dir_forward() {
-            // Upstream dereferences `COMPL_CURR_MATCH` here without checking.
-            let mut curr = curr_match().expect("a running completion has a current match");
-            while let Some(prev) = curr.prev().filter(|prev| !prev.is_original()) {
-                curr = prev;
-            }
-            COMPL_CURR_MATCH.set(Some(curr));
+            rewind_to_first_match();
         }
     }
 
+    found_new_match
+}
+
+/// Move `COMPL_CURR_MATCH` back to the first match after the original text.
+fn rewind_to_first_match() {
+    // Upstream dereferences `COMPL_CURR_MATCH` here without checking.
+    let mut curr = curr_match().expect("a running completion has a current match");
+    while let Some(prev) = curr.prev().filter(|prev| !prev.is_original()) {
+        curr = prev;
+    }
+    COMPL_CURR_MATCH.set(Some(curr));
+}
+
+/// End a round of collecting: make the list cyclic when the search is done,
+/// move the current match past what was added and sort. Answers the total
+/// number of matches, `None` while that is still unknown.
+fn finish_collection(st: &InsComplNextState, mut found_new_match: bool) -> Option<c_int> {
     cpt_sources().set_index(-1);
     COMPL_STARTED.set(true);
 
