@@ -92,7 +92,6 @@ pub(crate) fn get_lambda_tv(
     // Only an evaluating lambda starts its own: a skipped one leaves the
     // flag alone, so what it reads still counts for the enclosing lambda.
     let enclosing_uses_locals = LAMBDA_USES_LOCALS.get();
-    let mut uses_locals = false;
     let text = cursor.text();
 
     // First, check whether this is a lambda expression at all: an "->"
@@ -108,106 +107,128 @@ pub(crate) fn get_lambda_tv(
     // Neither the function nor the partial escapes the arm that builds
     // them, which is why upstream's `assert(fp == NULL)` at its error label
     // holds.
-    let parsed = 'errret: {
-        // Parse the arguments again, this time keeping them.
-        let names = evaluate.then_some(&mut newargs);
-        cursor.bump(1);
-        cursor.skip_white();
-        let read = get_function_args(cursor, b'-', names, Some(&mut varargs), None, false);
-        if read.is_err() || cursor.byte() != b'>' {
-            break 'errret false;
-        }
-
-        // Set up a flag for checking local variables and arguments.
-        if evaluate {
-            LAMBDA_USES_LOCALS.set(Some(false));
-        }
-
-        // Get the start and the end of the expression.
-        cursor.bump(1);
-        cursor.skip_white();
-        let start = cursor.offset();
-        let mut skipped = TV_INITIAL_VALUE;
-        let ret = eval1(cursor, &mut skipped, false);
-        let end = cursor.offset();
-        if ret.is_err() {
-            break 'errret false;
-        }
-        if evaluate {
-            uses_locals = LAMBDA_USES_LOCALS.get() == Some(true);
-        }
-
-        cursor.skip_white();
-        if cursor.byte() != b'}' {
-            let rest = msg_bytes(cursor.rest());
-            semsg!("E451: Expected }}: {rest}");
-            break 'errret false;
-        }
-        cursor.bump(1);
-
-        if evaluate {
-            let mut flags = FuncFlags::NONE;
-            let name = get_lambda_name();
-            let func = Rc::new(alloc_ufunc(&name));
-
-            // The body is the expression with "return " in front of it.
-            let body = &text[start..end];
-            let mut line = Vec::with_capacity(b"return ".len() + body.len());
-            line.extend_from_slice(b"return ");
-            line.extend_from_slice(body);
-            if find_bytes(body, b"a:").is_none() {
-                // No a: variables are used for sure.
-                flags |= FuncFlags::NOARGS;
-            }
-
-            // Fresh from `alloc_ufunc`, at zero: the one holder is the partial.
-            func.retain();
-            // A lambda's name is new, so the table cannot refuse it; were it
-            // to, the partial still holds the function.
-            let _ = add_func(func.clone());
-            // Every lambda takes any number of arguments.
-            *func.body.borrow_mut() = Rc::new(FuncBody {
-                args: core::mem::take(&mut newargs),
-                def_args: Vec::new(),
-                lines: vec![Some(line.into_boxed_slice())],
-                varargs: true,
-            });
-            if current_fc_id().is_some() && uses_locals {
-                flags |= FuncFlags::CLOSURE;
-                register_closure(&func);
-            } else {
-                func.scoped.set(None);
-            }
-
-            if prof_def_func() {
-                func_do_profile(&func);
-            }
-            if SANDBOX.get() != 0 {
-                flags |= FuncFlags::SANDBOX;
-            }
-            func.flags.set(flags);
-            func.calls.set(0);
-            let mut sctx = CURRENT_SCTX.get();
-            sctx.sc_lnum += (sourcing_lnum() - 1).get();
-            func.script_ctx.set(sctx);
-
-            let part = Partial {
-                pt_func: Some(func),
-                ..Partial::empty()
-            };
-            result.write_partial(Some(PartialRef::new(part)));
-        }
-        true
-    };
+    let names = evaluate.then_some(&mut newargs);
+    let parsed = parse_lambda(cursor, names, &mut varargs, evaluate);
+    if let Ok(lambda) = &parsed
+        && evaluate
+    {
+        let body = &text[lambda.body.clone()];
+        let args = core::mem::take(&mut newargs);
+        let part = make_lambda(body, args, lambda.uses_locals);
+        result.write_partial(Some(PartialRef::new(part)));
+    }
 
     drop(newargs);
     if evaluate {
         LAMBDA_USES_LOCALS.set(enclosing_uses_locals);
     }
-    if parsed {
-        Ok(Parsed::Done)
+    parsed.map(|_| Parsed::Done)
+}
+
+/// A lambda's text, read: where its expression is, and whether it reads
+/// the enclosing function's locals.
+#[derive(Debug)]
+struct LambdaText {
+    body: core::ops::Range<usize>,
+    uses_locals: bool,
+}
+
+/// Read a lambda from its `{` at the cursor to its `}`: the arguments (kept
+/// in `names` when given), the `->` and the expression, skipped. Malformed
+/// is an error: only a missing `}` is said here (E451), the rest by what
+/// read it.
+fn parse_lambda(
+    cursor: &mut Cursor<'_>,
+    names: Option<&mut Vec<Box<[u8]>>>,
+    varargs: &mut bool,
+    evaluate: bool,
+) -> Result<LambdaText, Failed> {
+    // Parse the arguments again, this time keeping them.
+    cursor.bump(1);
+    cursor.skip_white();
+    let read = get_function_args(cursor, b'-', names, Some(varargs), None, false);
+    if read.is_err() || cursor.byte() != b'>' {
+        return Err(Failed);
+    }
+
+    // Set up a flag for checking local variables and arguments.
+    if evaluate {
+        LAMBDA_USES_LOCALS.set(Some(false));
+    }
+
+    // Get the start and the end of the expression.
+    cursor.bump(1);
+    cursor.skip_white();
+    let start = cursor.offset();
+    let mut skipped = TV_INITIAL_VALUE;
+    let ret = eval1(cursor, &mut skipped, false);
+    let end = cursor.offset();
+    ret?;
+    let uses_locals = evaluate && LAMBDA_USES_LOCALS.get() == Some(true);
+
+    cursor.skip_white();
+    if cursor.byte() != b'}' {
+        let rest = msg_bytes(cursor.rest());
+        semsg!("E451: Expected }}: {rest}");
+        return Err(Failed);
+    }
+    cursor.bump(1);
+    Ok(LambdaText {
+        body: start..end,
+        uses_locals,
+    })
+}
+
+/// Define the function for a lambda whose expression is `body`, taking
+/// `args`, and answer the partial that holds it.
+fn make_lambda(body: &[u8], args: Vec<Box<[u8]>>, uses_locals: bool) -> Partial {
+    let mut flags = FuncFlags::NONE;
+    let name = get_lambda_name();
+    let func = Rc::new(alloc_ufunc(&name));
+
+    // The body is the expression with "return " in front of it.
+    let mut line = Vec::with_capacity(b"return ".len() + body.len());
+    line.extend_from_slice(b"return ");
+    line.extend_from_slice(body);
+    if find_bytes(body, b"a:").is_none() {
+        // No a: variables are used for sure.
+        flags |= FuncFlags::NOARGS;
+    }
+
+    // Fresh from `alloc_ufunc`, at zero: the one holder is the partial.
+    func.retain();
+    // A lambda's name is new, so the table cannot refuse it; were it
+    // to, the partial still holds the function.
+    let _ = add_func(func.clone());
+    // Every lambda takes any number of arguments.
+    *func.body.borrow_mut() = Rc::new(FuncBody {
+        args,
+        def_args: Vec::new(),
+        lines: vec![Some(line.into_boxed_slice())],
+        varargs: true,
+    });
+    if current_fc_id().is_some() && uses_locals {
+        flags |= FuncFlags::CLOSURE;
+        register_closure(&func);
     } else {
-        Err(Failed)
+        func.scoped.set(None);
+    }
+
+    if prof_def_func() {
+        func_do_profile(&func);
+    }
+    if SANDBOX.get() != 0 {
+        flags |= FuncFlags::SANDBOX;
+    }
+    func.flags.set(flags);
+    func.calls.set(0);
+    let mut sctx = CURRENT_SCTX.get();
+    sctx.sc_lnum += (sourcing_lnum() - 1).get();
+    func.script_ctx.set(sctx);
+
+    Partial {
+        pt_func: Some(func),
+        ..Partial::empty()
     }
 }
 

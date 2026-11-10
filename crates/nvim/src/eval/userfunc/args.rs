@@ -74,9 +74,7 @@ pub(crate) fn get_function_args(
     mut default_args: Option<&mut Vec<Box<[u8]>>>,
     skip: bool,
 ) -> Result<(), Failed> {
-    let mut mustend = false;
     let start = cursor.offset();
-    let text = cursor.text();
     if let Some(newargs) = newargs.as_deref_mut() {
         newargs.clear();
     }
@@ -88,78 +86,16 @@ pub(crate) fn get_function_args(
     }
 
     // Isolate the arguments: "arg1, arg2, ...)".
-    let mut any_default = false;
-    let closed = 'parse: {
-        while cursor.byte() != endchar {
-            if cursor.rest().starts_with(b"...") {
-                if let Some(varargs) = varargs.as_deref_mut() {
-                    *varargs = true;
-                }
-                cursor.bump(3);
-                mustend = true;
-            } else {
-                if one_function_arg(cursor, newargs.as_deref_mut(), skip).is_err() {
-                    break;
-                }
-                let mut after = Cursor::new(text);
-                after.set_offset(cursor.offset());
-                after.skip_white();
-                if after.byte() == b'=' && default_args.is_some() {
-                    let mut rettv = TV_INITIAL_VALUE;
-                    any_default = true;
-                    cursor.skip_white();
-                    cursor.bump(1);
-                    cursor.skip_white();
-                    let expr = cursor.offset();
-                    if eval1(cursor, &mut rettv, false).is_ok() {
-                        // The default is kept as source, and the walk goes
-                        // on from its end: the blanks are read again below.
-                        let mut end = cursor.offset();
-                        while end > expr && matches!(text[end - 1], b' ' | b'\t') {
-                            end -= 1;
-                        }
-                        cursor.set_offset(end);
-                        if let Some(default_args) = default_args.as_deref_mut() {
-                            default_args.push(text[expr..end].into());
-                        }
-                    } else {
-                        mustend = true;
-                    }
-                } else if any_default {
-                    let fmt = c"E989: Non-default argument follows default argument";
-                    emsg(gettext(fmt));
-                    mustend = true;
-                }
-                let white = matches!(cursor.byte(), b' ' | b'\t');
-                let mut after = Cursor::new(text);
-                after.set_offset(cursor.offset());
-                after.skip_white();
-                if white && after.byte() == b',' {
-                    if !skip {
-                        let at = msg_bytes(cursor.rest());
-                        semsg!("E1068: No white space allowed before ',': {at}");
-                        break 'parse false;
-                    }
-                    cursor.skip_white();
-                }
-                if cursor.byte() == b',' {
-                    cursor.bump(1);
-                } else {
-                    mustend = true;
-                }
-            }
-            cursor.skip_white();
-            if mustend && cursor.byte() != endchar {
-                if !skip {
-                    let at = msg_bytes(&text[start..]);
-                    semsg!("E475: Invalid argument: {at}");
-                }
-                break;
-            }
-        }
-        cursor.byte() == endchar
-    };
-    if closed {
+    let closed = parse_arg_list(
+        cursor,
+        start,
+        endchar,
+        newargs.as_deref_mut(),
+        varargs,
+        default_args.as_deref_mut(),
+        skip,
+    );
+    if closed.is_ok() {
         cursor.bump(1);
         return Ok(());
     }
@@ -172,6 +108,95 @@ pub(crate) fn get_function_args(
         default_args.clear();
     }
     Err(Failed)
+}
+
+/// Walk an argument list from `start` (the cursor) to `endchar`, filling the
+/// three outputs as [`get_function_args`] says. Stopping anywhere else is an
+/// error, said unless `skip`.
+fn parse_arg_list(
+    cursor: &mut Cursor<'_>,
+    start: usize,
+    endchar: u8,
+    mut newargs: Option<&mut Vec<Box<[u8]>>>,
+    mut varargs: Option<&mut bool>,
+    mut default_args: Option<&mut Vec<Box<[u8]>>>,
+    skip: bool,
+) -> Result<(), Failed> {
+    let text = cursor.text();
+    let mut mustend = false;
+    let mut any_default = false;
+    while cursor.byte() != endchar {
+        if cursor.rest().starts_with(b"...") {
+            if let Some(varargs) = varargs.as_deref_mut() {
+                *varargs = true;
+            }
+            cursor.bump(3);
+            mustend = true;
+        } else {
+            if one_function_arg(cursor, newargs.as_deref_mut(), skip).is_err() {
+                break;
+            }
+            let mut after = Cursor::new(text);
+            after.set_offset(cursor.offset());
+            after.skip_white();
+            if after.byte() == b'=' && default_args.is_some() {
+                let mut rettv = TV_INITIAL_VALUE;
+                any_default = true;
+                cursor.skip_white();
+                cursor.bump(1);
+                cursor.skip_white();
+                let expr = cursor.offset();
+                if eval1(cursor, &mut rettv, false).is_ok() {
+                    // The default is kept as source, and the walk goes
+                    // on from its end: the blanks are read again below.
+                    let mut end = cursor.offset();
+                    while end > expr && matches!(text[end - 1], b' ' | b'\t') {
+                        end -= 1;
+                    }
+                    cursor.set_offset(end);
+                    if let Some(default_args) = default_args.as_deref_mut() {
+                        default_args.push(text[expr..end].into());
+                    }
+                } else {
+                    mustend = true;
+                }
+            } else if any_default {
+                let fmt = c"E989: Non-default argument follows default argument";
+                emsg(gettext(fmt));
+                mustend = true;
+            }
+            let white = matches!(cursor.byte(), b' ' | b'\t');
+            let mut after = Cursor::new(text);
+            after.set_offset(cursor.offset());
+            after.skip_white();
+            if white && after.byte() == b',' {
+                if !skip {
+                    let at = msg_bytes(cursor.rest());
+                    semsg!("E1068: No white space allowed before ',': {at}");
+                    return Err(Failed);
+                }
+                cursor.skip_white();
+            }
+            if cursor.byte() == b',' {
+                cursor.bump(1);
+            } else {
+                mustend = true;
+            }
+        }
+        cursor.skip_white();
+        if mustend && cursor.byte() != endchar {
+            if !skip {
+                let at = msg_bytes(&text[start..]);
+                semsg!("E475: Invalid argument: {at}");
+            }
+            break;
+        }
+    }
+    if cursor.byte() == endchar {
+        Ok(())
+    } else {
+        Err(Failed)
+    }
 }
 
 /// Evaluate the arguments of a call, from the `(` at the cursor to its `)`.

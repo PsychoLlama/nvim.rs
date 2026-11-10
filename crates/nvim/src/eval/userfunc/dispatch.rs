@@ -258,6 +258,90 @@ fn unterminated(text: &[u8]) -> &[u8] {
     &text[..text.len() - 1]
 }
 
+/// More arguments than a call frame holds: the call is answered
+/// `FCERR_TOOMANY` without being made.
+#[derive(Debug)]
+struct TooManyArgs;
+
+/// Call the `v:lua` function `name`, with the method base (if any) spliced
+/// in front of the arguments.
+fn call_lua(
+    argv: &mut Option<Argv>,
+    args_in: &[TypVal],
+    nargs: usize,
+    base: Option<&TypVal>,
+    name: &[u8],
+    result: &mut TypVal,
+) -> Result<c_int, TooManyArgs> {
+    if let Some(base) = base {
+        splice_base(argv, &args_in[..nargs], base).map_err(|()| TooManyArgs)?;
+    }
+    let args = spliced_args(argv, args_in, nargs);
+    typval_call_lua(name, args, result);
+    Ok(FCERR_NONE)
+}
+
+/// The user function `rfname`, firing FuncUndefined or autoloading a
+/// package to define it when it is not defined yet.
+fn find_or_load_func(rfname: &[u8], rfname_c: &CStr) -> Option<Rc<UserFunc>> {
+    let mut func = find_func(rfname);
+    // Trigger FuncUndefined, which may load the function.
+    let event = AutoEvent::FuncUndefined;
+    if func.is_none()
+        && fire_autocmds_for(
+            event,
+            Some(XString::from_cstr(rfname_c)),
+            Some(XString::from_cstr(rfname_c)),
+            true,
+            None,
+            None,
+        )
+        && !aborting()
+    {
+        func = find_func(rfname);
+    }
+    // Try loading a package.  Reached by every spelling that does *not* go
+    // through `deref_func_name` first -- `call()`, `nvim_call_function`,
+    // `vim.fn` -- because that one's `find_var` has already sourced it.
+    if func.is_none() && script_autoload_named(rfname, true) && !aborting() {
+        func = find_func(rfname);
+    }
+    func
+}
+
+/// Call the user function `func`: fill in postponed arguments
+/// (`argv_func`), splice the method base in front, and make the call.
+/// Answers the call's `FCERR_*` code.
+fn call_user(
+    func: &Rc<UserFunc>,
+    argv: &mut Option<Argv>,
+    args_in: &[TypVal],
+    mut nargs: usize,
+    with: &mut CallWith<'_>,
+    selfdict: Option<&DictRef>,
+    result: &mut TypVal,
+) -> Result<c_int, TooManyArgs> {
+    if func.has_flag(FuncFlags::DELETED) {
+        return Ok(FCERR_DELETED);
+    }
+    if let Some(argv_func) = with.argv_func {
+        // Postponed filling in the arguments; do it now.
+        let filled = argv.as_ref().map_or(0, Argv::len);
+        let skip = filled.saturating_sub(args_in.len());
+        let args = spliced_args(argv, args_in, nargs);
+        let n = argv_func(args, skip, func);
+        match argv {
+            Some(argv) => argv.truncate(n),
+            None => nargs = n,
+        }
+    }
+    if let Some(base) = with.basetv.as_deref() {
+        splice_base(argv, &args_in[..nargs], base).map_err(|()| TooManyArgs)?;
+    }
+    let args = spliced_args(argv, args_in, nargs);
+    Ok(call_user_func_check(func, args, result, with, selfdict))
+}
+
 /// Make a call: resolve `funcname` to a partial, a `v:lua` reference, a user
 /// function (autoloading one if need be) or a builtin, and run it.
 ///
@@ -271,7 +355,6 @@ pub(crate) fn call_func_with(
     args_in: &[TypVal],
     mut with: CallWith<'_>,
 ) -> Result<(), Failed> {
-    let mut ret = Err(Failed);
     let mut error = FCERR_NONE;
     let mut func: Option<Rc<UserFunc>> = None;
     // The name, copied: if it comes from a funcref variable it could be
@@ -282,9 +365,9 @@ pub(crate) fn call_func_with(
     // A `v:lua` called directly is reported by that name.
     let mut report_vlua = false;
     let mut selfdict = with.selfdict;
-    // How much of `args_in` is still the argument list, once an
-    // `argv_func` has had its say.
-    let mut nargs = args_in.len();
+    // How much of `args_in` is the argument list (an `argv_func` may cut it
+    // down in `call_user`).
+    let nargs = args_in.len();
     // Built only when a partial or the base puts arguments in front; until
     // then the caller's own slice *is* the argument list.
     let mut argv: Option<Argv> = None;
@@ -313,133 +396,93 @@ pub(crate) fn call_func_with(
         *doesrange = false;
     }
 
-    'theend: {
-        if let Some(partial) = partial {
-            // When the function has a partial with a dict and there is a
-            // dict argument, use the dict argument -- that is backwards
-            // compatible.  When the dict was bound explicitly, use the
-            // partial's.
-            if let Some(dict) = &partial.pt_dict
-                && (selfdict.is_none() || !partial.pt_auto)
-            {
-                selfdict = Some(dict);
-            }
-            if error == FCERR_NONE && !partial.pt_argv.is_empty() {
-                let mut frame = Argv::new();
-                if splice_bound(&mut frame, partial, args_in).is_err() {
-                    error = FCERR_TOOMANY;
-                    break 'theend;
-                }
+    if let Some(partial) = partial {
+        // When the function has a partial with a dict and there is a
+        // dict argument, use the dict argument -- that is backwards
+        // compatible.  When the dict was bound explicitly, use the
+        // partial's.
+        if let Some(dict) = &partial.pt_dict
+            && (selfdict.is_none() || !partial.pt_auto)
+        {
+            selfdict = Some(dict);
+        }
+        if error == FCERR_NONE && !partial.pt_argv.is_empty() {
+            let mut frame = Argv::new();
+            if splice_bound(&mut frame, partial, args_in).is_err() {
+                error = FCERR_TOOMANY;
+            } else {
                 argv = Some(frame);
             }
         }
+    }
 
-        if error == FCERR_NONE && with.evaluate {
-            // Skip "g:" before a function name.
-            let skip = if func.is_none() && fname.starts_with(b"g:") {
-                2
+    if error == FCERR_NONE && with.evaluate {
+        // Skip "g:" before a function name.
+        let skip = if func.is_none() && fname.starts_with(b"g:") {
+            2
+        } else {
+            0
+        };
+        let rfname = unterminated(&fname[skip..]);
+        let rfname_c =
+            CStr::from_bytes_until_nul(&fname[skip..]).expect("the stored name is terminated");
+
+        // the default is number zero
+        result.write_number(0);
+
+        let called = if is_luafunc(partial) {
+            if len > 0 {
+                let name = &text[..len.min(text.len())];
+                let base = with.basetv.as_deref();
+                call_lua(&mut argv, args_in, nargs, base, name, result)
             } else {
-                0
-            };
-            let rfname = unterminated(&fname[skip..]);
-            let rfname_c =
-                CStr::from_bytes_until_nul(&fname[skip..]).expect("the stored name is terminated");
-
-            // the default is number zero
-            result.write_number(0);
-            error = FCERR_UNKNOWN;
-
-            if is_luafunc(partial) {
-                if len > 0 {
-                    error = FCERR_NONE;
-                    if let Some(base) = with.basetv.as_deref()
-                        && splice_base(&mut argv, &args_in[..nargs], base).is_err()
-                    {
-                        error = FCERR_TOOMANY;
-                        break 'theend;
-                    }
-                    let args = spliced_args(&argv, args_in, nargs);
-                    typval_call_lua(&text[..len.min(text.len())], args, result);
-                } else {
-                    // v:lua was called directly; show its name in the
-                    // message.
-                    report_vlua = true;
-                }
-            } else if func.is_some() || !builtin_function(rfname) {
-                // A user-defined function.
-                if func.is_none() {
-                    func = find_func(rfname);
-                }
-
-                // Trigger FuncUndefined, which may load the function.
-                let event = AutoEvent::FuncUndefined;
-                if func.is_none()
-                    && fire_autocmds_for(
-                        event,
-                        Some(XString::from_cstr(rfname_c)),
-                        Some(XString::from_cstr(rfname_c)),
-                        true,
-                        None,
-                        None,
-                    )
-                    && !aborting()
-                {
-                    func = find_func(rfname);
-                }
-                // Try loading a package.  Reached by every spelling that
-                // does *not* go through `deref_func_name` first --
-                // `call()`, `nvim_call_function`, `vim.fn` -- because that
-                // one's `find_var` has already sourced it.
-                if func.is_none() && script_autoload_named(rfname, true) && !aborting() {
-                    func = find_func(rfname);
-                }
-
-                if let Some(func) = &func {
-                    if func.has_flag(FuncFlags::DELETED) {
-                        error = FCERR_DELETED;
-                    } else {
-                        if let Some(argv_func) = with.argv_func {
-                            // Postponed filling in the arguments; do it now.
-                            let filled = argv.as_ref().map_or(0, Argv::len);
-                            let skip = filled.saturating_sub(args_in.len());
-                            let args = spliced_args(&argv, args_in, nargs);
-                            let n = argv_func(args, skip, func);
-                            match &mut argv {
-                                Some(argv) => argv.truncate(n),
-                                None => nargs = n,
-                            }
-                        }
-                        if let Some(base) = with.basetv.as_deref()
-                            && splice_base(&mut argv, &args_in[..nargs], base).is_err()
-                        {
-                            error = FCERR_TOOMANY;
-                            break 'theend;
-                        }
-                        let args = spliced_args(&argv, args_in, nargs);
-                        error = call_user_func_check(func, args, result, &mut with, selfdict);
-                    }
-                }
-            } else {
-                let args = spliced_args(&argv, args_in, nargs);
-                let builtin = CStr::from_bytes_until_nul(fname).expect("a terminated name");
-                error = match with.basetv.as_deref_mut() {
-                    None => call_internal_func_named(builtin, args, result),
-                    Some(base) => call_internal_method_named(builtin, args, result, base),
-                };
+                // v:lua was called directly; show its name in the
+                // message.
+                report_vlua = true;
+                Ok(FCERR_UNKNOWN)
             }
+        } else if func.is_some() || !builtin_function(rfname) {
+            // A user-defined function.
+            if func.is_none() {
+                func = find_or_load_func(rfname, rfname_c);
+            }
+            match &func {
+                Some(func) => {
+                    call_user(func, &mut argv, args_in, nargs, &mut with, selfdict, result)
+                }
+                None => Ok(FCERR_UNKNOWN),
+            }
+        } else {
+            let args = spliced_args(&argv, args_in, nargs);
+            let builtin = CStr::from_bytes_until_nul(fname).expect("a terminated name");
+            Ok(match with.basetv.as_deref_mut() {
+                None => call_internal_func_named(builtin, args, result),
+                Some(base) => call_internal_method_named(builtin, args, result, base),
+            })
+        };
 
-            // The call (or the FuncUndefined autocommand sequence) may have
-            // been aborted by an error, an interrupt, or an uncaught
-            // exception, which `aborting()` reports.  For an error inside an
-            // internal function, or for E132 in `call_user_func`, the throw
-            // point where `FORCE_ABORT` is normally updated has not been
-            // reached yet, so update it here to make `aborting()` reliable.
-            update_force_abort();
-        }
-        if error == FCERR_NONE {
-            ret = Ok(());
+        match called {
+            Ok(code) => {
+                error = code;
+                // The call (or the FuncUndefined autocommand sequence) may
+                // have been aborted by an error, an interrupt, or an
+                // uncaught exception, which `aborting()` reports.  For an
+                // error inside an internal function, or for E132 in
+                // `call_user_func`, the throw point where `FORCE_ABORT` is
+                // normally updated has not been reached yet, so update it
+                // here to make `aborting()` reliable.
+                update_force_abort();
+            }
+            // The base did not fit in front of the arguments: nothing was
+            // called, so there is nothing to update.
+            Err(TooManyArgs) => error = FCERR_TOOMANY,
         }
     }
+    let ret = if error == FCERR_NONE {
+        Ok(())
+    } else {
+        Err(Failed)
+    };
 
     // Report an error unless evaluating the arguments or making the call
     // was cancelled by an aborting error, an interrupt or an exception.
