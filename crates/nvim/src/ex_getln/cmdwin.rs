@@ -17,6 +17,7 @@
 use super::*;
 use crate::buffer::DOBUF_WIPE;
 use crate::buffer::{BufRef, current_buf};
+use crate::cmdhist::HistoryType;
 use crate::cstr;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_tab};
 use crate::guard::Allow;
@@ -119,9 +120,7 @@ pub(crate) fn derive_cedit_key() -> Result<(), OptError> {
 /// executed, `CTRL-C` if it is to be abandoned, and `<Ignore>` if editing
 /// continues.
 pub(crate) fn open_cmdwin() -> Key {
-    let mut bufref = BufRef::NONE;
     let old_curwin = Win::current().id();
-    // Uninitialised in the C; `win_size_save` below fills it.
     let save_restart_edit = RESTART_EDIT.get();
     let save_state = STATE.get();
     let save_exmode = EXMODE_ACTIVE.get();
@@ -139,6 +138,48 @@ pub(crate) fn open_cmdwin() -> Key {
     // Save current window sizes.
     let winsizes = win_size_save();
 
+    if let Err(answer) = split_cmdwin(old_curwin, &old_curbuf) {
+        return answer;
+    }
+    let histtype = set_up_cmdwin_buffer();
+    fill_cmdwin_with_history(histtype);
+    put_command_line_in_cmdwin();
+
+    // No Ex mode here.
+    EXMODE_ACTIVE.set(false);
+    edit_in_cmdwin();
+    EXMODE_ACTIVE.set(save_exmode);
+
+    // Safety check: the old window or buffer was changed or deleted.
+    // It is a bug when this happens.
+    if valid_win(old_curwin).is_none_or(|w| !old_curbuf.is(w.buffer_or_none()))
+        || !old_curbuf.valid()
+    {
+        CMDWIN_RESULT.set(Key::CTRL_C);
+        emsg(gettext(E_ACTIVE_WINDOW_OR_BUFFER_CHANGED_OR_DELETED));
+    } else {
+        take_cmdwin_line(histtype);
+        close_cmdwin(old_curwin, &winsizes);
+    }
+
+    RESTART_EDIT.set(save_restart_edit);
+    CMDMSG_RL.set(save_cmdmsg_rl);
+
+    STATE.set(save_state);
+    may_trigger_modechanged();
+    setmouse();
+    setcursor();
+
+    CMDWIN_RESULT.get()
+}
+
+/// Split a window off below for the command-line window and give it a fresh
+/// scratch buffer, setting the `CMDWIN_*` state.
+///
+/// `Err` holds [`open_cmdwin`]'s answer when it cannot: `<Ignore>` when the
+/// split fails, CTRL-C when autocommands messed with the old window or
+/// buffer (treated as abandoning the command line).
+fn split_cmdwin(old_curwin: WinId, old_curbuf: &BufRef) -> Result<(), Key> {
     // When using completion in Insert mode with <C-R>=<C-F> one can open
     // the command line window, but we don't want the popup menu then.
     pum_undisplay(true);
@@ -155,7 +196,7 @@ pub(crate) fn open_cmdwin() -> Key {
     .is_err()
     {
         beep_flush();
-        return Key::from(SpecialKey::Ignore);
+        return Err(Key::from(SpecialKey::Ignore));
     }
     // win_split() autocommands may have messed with the old window or
     // buffer. Treat it as abandoning this command line.
@@ -164,7 +205,7 @@ pub(crate) fn open_cmdwin() -> Key {
         || !old_curbuf.valid()
     {
         beep_flush();
-        return Key::CTRL_C;
+        return Err(Key::CTRL_C);
     }
     // Don't let quitting the More prompt make this fail.
     GOT_INT.set(false);
@@ -189,9 +230,11 @@ pub(crate) fn open_cmdwin() -> Key {
             .get()
             .is_none_or(|w| !old_curbuf.is(w.buffer_or_none()))
     {
-        if newbuf_status.is_ok() {
-            bufref = BufRef::of_opt(current_buf());
-        }
+        let bufref = if newbuf_status.is_ok() {
+            BufRef::of_opt(current_buf())
+        } else {
+            BufRef::NONE
+        };
         if let Some(cw) = cmdwin
             && !last_window(cw)
         {
@@ -210,10 +253,16 @@ pub(crate) fn open_cmdwin() -> Key {
         CMDWIN_WIN.set(None);
         CMDWIN_OLD_CURWIN.set(None);
         beep_flush();
-        return Key::CTRL_C;
+        return Err(Key::CTRL_C);
     }
     CMDWIN_BUF.set(Some(Buf::current().id()));
+    Ok(())
+}
 
+/// Set the command-line window's buffer options — and, for Ex commands, the
+/// `<Tab>` completion maps and 'filetype' `vim`.  Answers the history the
+/// window edits.
+fn set_up_cmdwin_buffer() -> HistoryType {
     // The command-line buffer has bufhidden=wipe, unlike a true
     // "scratch" buffer.
     set_option_value_give_err(
@@ -249,33 +298,39 @@ pub(crate) fn open_cmdwin() -> Key {
     // Reset 'textwidth' after setting 'filetype' (the Vim filetype plugin
     // sets 'textwidth' to 78).
     Buf::current().b_p_tw = 0;
+    histtype
+}
 
-    // Fill the buffer with the history.
+/// Fill the command-line window's buffer with the history, oldest first.
+fn fill_cmdwin_with_history(histtype: HistoryType) {
     init_history();
-    if get_hislen() > 0
-        && histtype != HIST_INVALID
-        && let Some(mut i) = get_hisidx(histtype)
-    {
-        let mut lnum: LineNr = LineNr::ZERO;
-        // C's do-while: `get_hisidx` is re-read at the test, because
-        // `ml_append`'s autocommands can move it.
-        loop {
-            i += 1;
-            if i == get_hislen() {
-                i = 0;
-            }
-            if let Some(entry) = hist_entry_text(histtype, i) {
-                let _ = ml_append_cstr(lnum, &entry.text);
-                lnum += 1;
-            }
-            if Some(i) == get_hisidx(histtype) {
-                break;
-            }
+    if get_hislen() == 0 || histtype == HIST_INVALID {
+        return;
+    }
+    let Some(mut i) = get_hisidx(histtype) else {
+        return;
+    };
+    let mut lnum: LineNr = LineNr::ZERO;
+    // C's do-while: `get_hisidx` is re-read at the test, because
+    // `ml_append`'s autocommands can move it.
+    loop {
+        i += 1;
+        if i == get_hislen() {
+            i = 0;
+        }
+        if let Some(entry) = hist_entry_text(histtype, i) {
+            let _ = ml_append_cstr(lnum, &entry.text);
+            lnum += 1;
+        }
+        if Some(i) == get_hisidx(histtype) {
+            break;
         }
     }
+}
 
-    // Replace the empty last line with the current command line and put
-    // the cursor there.
+/// Replace the empty last line with the current command line and put the
+/// cursor there.
+fn put_command_line_in_cmdwin() {
     let last = Buf::current().b_ml.ml_line_count;
     let cc = Cc::current();
     if cc.in_use() {
@@ -289,10 +344,12 @@ pub(crate) fn open_cmdwin() -> Key {
     invalidate_botline_win(Win::current());
     ui_ext_cmdline_hide(false);
     redraw_later(Win::current(), UPD_SOME_VALID);
+}
 
-    // No Ex mode here.
-    EXMODE_ACTIVE.set(false);
-
+/// Run Normal mode in the command-line window until `<CR>` or CTRL-C is
+/// typed, between its `CmdwinEnter` and `CmdwinLeave`, then clear the
+/// `CMDWIN_*` state.
+fn edit_in_cmdwin() {
     STATE.set(MODE_NORMAL);
     setmouse();
     clear_showcmd();
@@ -325,107 +382,91 @@ pub(crate) fn open_cmdwin() -> Key {
     CMDWIN_BUF.set(None);
     CMDWIN_WIN.set(None);
     CMDWIN_OLD_CURWIN.set(None);
+}
 
-    EXMODE_ACTIVE.set(save_exmode);
-
-    // Safety check: the old window or buffer was changed or deleted.
-    // It is a bug when this happens.
-    if valid_win(old_curwin).is_none_or(|w| !old_curbuf.is(w.buffer_or_none()))
-        || !old_curbuf.valid()
-    {
+/// Set the new command line from the command-line window: the line under
+/// the cursor, `:qa[!]`, or nothing for `:q`/CTRL-C, per `CMDWIN_RESULT`.
+fn take_cmdwin_line(histtype: HistoryType) {
+    // Autocmds may abort script processing.
+    if aborting() && CMDWIN_RESULT.get() != SpecialKey::Ignore {
         CMDWIN_RESULT.set(Key::CTRL_C);
-        emsg(gettext(E_ACTIVE_WINDOW_OR_BUFFER_CHANGED_OR_DELETED));
-    } else {
-        // Autocmds may abort script processing.
-        if aborting() && CMDWIN_RESULT.get() != SpecialKey::Ignore {
-            CMDWIN_RESULT.set(Key::CTRL_C);
-        }
-        // Set the new command line from the cmdline buffer.
-        dealloc_cmdbuff();
+    }
+    dealloc_cmdbuff();
 
-        if CMDWIN_RESULT.get() == SpecialKey::Xf1 || CMDWIN_RESULT.get() == SpecialKey::Xf2 {
-            // ":qa[!]" was typed.
-            let p = if CMDWIN_RESULT.get() == SpecialKey::Xf2 {
-                c"qa"
-            } else {
-                c"qa!"
-            };
-
-            if histtype == HIST_CMD {
-                // Execute the command directly.
-                Cc::current().set_text(p.to_bytes());
-                CMDWIN_RESULT.set(Key::CAR);
-            } else {
-                // First need to cancel what we were doing.
-                stuff_readbuf_char(Key::ascii(b':'));
-                stuff_readbuf(p.to_bytes());
-                stuff_readbuf_char(Key::CAR);
-            }
-        } else if CMDWIN_RESULT.get() == Key::CTRL_C {
-            // ":q" or ":close": don't execute any command and don't
-            // modify the cmdline window.
-            Cc::current().close();
+    if CMDWIN_RESULT.get() == SpecialKey::Xf1 || CMDWIN_RESULT.get() == SpecialKey::Xf2 {
+        // ":qa[!]" was typed.
+        let p = if CMDWIN_RESULT.get() == SpecialKey::Xf2 {
+            c"qa"
         } else {
-            let lnum = Win::current().w_cursor.lnum;
-            Cc::current().set_text(Buf::current().lines().line(lnum));
-        }
+            c"qa!"
+        };
 
-        let mut cc = Cc::current();
-        if !cc.in_use() {
-            cc.set_text(&[]);
-            cc.cmdpos = 0;
-            CMDWIN_RESULT.set(Key::CTRL_C);
+        if histtype == HIST_CMD {
+            // Execute the command directly.
+            Cc::current().set_text(p.to_bytes());
+            CMDWIN_RESULT.set(Key::CAR);
         } else {
-            cc.cmdpos = Win::current().w_cursor.col.get();
-            // If the cursor is on the last character, it probably should
-            // be after it.
-            if cc.cmdpos == cc.len() - 1 || cc.cmdpos > cc.len() {
-                cc.cmdpos = cc.len();
-            }
-            if CMDWIN_RESULT.get() == SpecialKey::Ignore {
-                cc.cmdspos = cmd_screencol(cc.cmdpos);
-                redrawcmd();
-            }
+            // First need to cancel what we were doing.
+            stuff_readbuf_char(Key::ascii(b':'));
+            stuff_readbuf(p.to_bytes());
+            stuff_readbuf_char(Key::CAR);
         }
-
-        // Avoid the command-line window's first character being
-        // concealed.
-        Win::current().w_onebuf_opt.wo_cole = 0;
-        // First go back to the original window.
-        let wp = Win::current().id();
-        bufref = BufRef::of_opt(current_buf());
-        SKIP_WIN_FIX_CURSOR.set(true);
-        let old = old_curwin.get().expect("just checked live");
-        win_goto(old);
-
-        // win_goto() may trigger an autocommand that already closes the
+    } else if CMDWIN_RESULT.get() == Key::CTRL_C {
+        // ":q" or ":close": don't execute any command and don't modify the
         // cmdline window.
-        if let Some(wp) = valid_win(wp).filter(|w| !w.is_current()) {
-            let _ = win_close(wp, true, false);
-        }
-
-        // win_close() may have already wiped the buffer when 'bh' is set
-        // to 'wipe'; autocommands may have closed other windows.
-        if let Some(buffer) = bufref.get()
-            && buffer.raw() != Buf::current_raw()
-        {
-            wipe_buffer(buffer);
-        }
-
-        // Restore window sizes.
-        win_size_restore(&winsizes);
-        SKIP_WIN_FIX_CURSOR.set(false);
+        Cc::current().close();
+    } else {
+        let lnum = Win::current().w_cursor.lnum;
+        Cc::current().set_text(Buf::current().lines().line(lnum));
     }
 
-    RESTART_EDIT.set(save_restart_edit);
-    CMDMSG_RL.set(save_cmdmsg_rl);
+    let mut cc = Cc::current();
+    if !cc.in_use() {
+        cc.set_text(&[]);
+        cc.cmdpos = 0;
+        CMDWIN_RESULT.set(Key::CTRL_C);
+    } else {
+        cc.cmdpos = Win::current().w_cursor.col.get();
+        // If the cursor is on the last character, it probably should be
+        // after it.
+        if cc.cmdpos == cc.len() - 1 || cc.cmdpos > cc.len() {
+            cc.cmdpos = cc.len();
+        }
+        if CMDWIN_RESULT.get() == SpecialKey::Ignore {
+            cc.cmdspos = cmd_screencol(cc.cmdpos);
+            redrawcmd();
+        }
+    }
+}
 
-    STATE.set(save_state);
-    may_trigger_modechanged();
-    setmouse();
-    setcursor();
+/// Go back to `old_curwin`, close the command-line window and wipe its
+/// buffer, and restore the window sizes.
+fn close_cmdwin(old_curwin: WinId, winsizes: &[::core::ffi::c_int]) {
+    // Avoid the command-line window's first character being concealed.
+    Win::current().w_onebuf_opt.wo_cole = 0;
+    // First go back to the original window.
+    let wp = Win::current().id();
+    let bufref = BufRef::of_opt(current_buf());
+    SKIP_WIN_FIX_CURSOR.set(true);
+    let old = old_curwin.get().expect("just checked live");
+    win_goto(old);
 
-    CMDWIN_RESULT.get()
+    // win_goto() may trigger an autocommand that already closes the cmdline
+    // window.
+    if let Some(wp) = valid_win(wp).filter(|w| !w.is_current()) {
+        let _ = win_close(wp, true, false);
+    }
+
+    // win_close() may have already wiped the buffer when 'bh' is set to
+    // 'wipe'; autocommands may have closed other windows.
+    if let Some(buffer) = bufref.get()
+        && buffer.raw() != Buf::current_raw()
+    {
+        wipe_buffer(buffer);
+    }
+
+    win_size_restore(winsizes);
+    SKIP_WIN_FIX_CURSOR.set(false);
 }
 
 /// True when in the cmdwin, and not editing the command line.
