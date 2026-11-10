@@ -569,8 +569,6 @@ pub(crate) fn close_othertab(
     force: bool,
 ) -> Result<(), NotClosed> {
     debug_assert!(!tabpage.is_current(), "tp != curtab");
-    let mut did_decrement = false;
-    let mut bufref = BufRef::of_opt(None);
 
     // Commands that may call this already check the lock, but check again just
     // in case.
@@ -587,122 +585,167 @@ pub(crate) fn close_othertab(
         return Err(NotClosed);
     }
 
-    'leave_open: {
-        // Would closing this window leave only floating windows?
-        if tab_last_win(tabpage).w_floating && only_window(win, Some(tabpage)) {
-            if !force && !can_close_floats(Some(tabpage)) {
-                err_raw(E_FLOATONLY);
-                break 'leave_open;
+    match close_in_tab(win, free_buf, tabpage, force) {
+        Ok(()) => Ok(()),
+        Err(Stopped::AsIs) => Err(NotClosed),
+        Err(Stopped::KeepOpen {
+            bufref,
+            did_decrement,
+        }) => {
+            if let Some(win) = valid_win_any_tab(win.id()).then_some(win) {
+                unclose_win_buffer(win, bufref, did_decrement);
             }
-            // Close the last window until there are no floating windows left.
-            // The `force` flag is not actually used for a floating window.
-            while tab_last_win(tabpage).w_floating {
-                let last = tab_last_win(tabpage);
-                if close_othertab(last, !hides(last.buffer()), tabpage, true).is_err() {
-                    // Give up rather than loop forever.
-                    break 'leave_open;
-                }
-            }
-            if !valid_win_any_tab(win.id()) {
-                return Err(NotClosed); // already closed by autocommands
-            }
+            Err(NotClosed)
         }
+    }
+}
 
-        // Fire WinClosed just before freeing window-related resources. With no
-        // buffer it is not safe to trigger autocommands, and `close()` will
-        // already have fired WinClosed.
-        if win.buffer_or_none().is_some() {
-            fire_winclosed(win);
-            // The autocommand may have freed the window already.
-            if !valid_win_any_tab(win.id()) {
-                return Err(NotClosed);
-            }
-        }
-        if tabpage.tp_firstwin == tabpage.tp_lastwin && !tabpage.tp_did_tabclosedpre {
-            tabclosedpre(tabpage);
-            // The autocommand may have freed the window already.
-            if !valid_win_any_tab(win.id()) {
-                return Err(NotClosed);
-            }
-        }
+/// Why [`close_in_tab`] stopped short of closing the window.
+enum Stopped {
+    /// Leave everything as it is: the window is gone already, or the tab
+    /// page list is broken.
+    AsIs,
+    /// The window stays: give it back the buffer it was letting go of.
+    KeepOpen { bufref: BufRef, did_decrement: bool },
+}
 
-        bufref = BufRef::of_opt(win.buffer_or_none());
-        if let Some(buf) = win.buffer_or_none() {
-            // Close the link to the buffer.
-            let action = if free_buf { DOBUF_UNLOAD } else { 0 };
-            did_decrement = close_buffer(Some(win), buf, action, false, true);
-        }
+impl Stopped {
+    /// Kept open before anything let go of the buffer.
+    const UNTOUCHED: Stopped = Stopped::KeepOpen {
+        bufref: BufRef::NONE,
+        did_decrement: false,
+    };
+}
 
-        // Careful: autocommands may have closed the tab page, or made it the
-        // current one.
-        if valid_tab(tabpage.id()).is_none() || tabpage.is_current() {
-            break 'leave_open;
-        }
-        // Autocommands may have closed the window already, or
-        // `nvim_win_set_config` moved it to a different tab page.
-        if !valid_win_in_tab(tabpage, win.id()) {
-            break 'leave_open;
-        }
-        // Autocommands may again leave only floats; check again, but this time
-        // without bothering to close them.
-        if tab_last_win(tabpage).w_floating && only_window(win, Some(tabpage)) {
-            err_raw(E_FLOATONLY);
-            break 'leave_open;
-        }
-
-        // When closing the last window of a tab page, remove the tab page.
-        let mut free_tp_idx = 0;
-        if tabpage.tp_firstwin == tabpage.tp_lastwin {
-            free_tp_idx = tab_index(tabpage);
-            let h = tabline_rows();
-            if FIRST_TABPAGE.get() == Some(tabpage.id()) {
-                FIRST_TABPAGE.set(tabpage.tp_next);
-            } else {
-                let Some(mut ptp) = tabs().find(|ptp| ptp.tp_next == Some(tabpage.id())) else {
-                    internal_error(c"win_close_othertab()");
-                    return Err(NotClosed);
-                };
-                ptp.tp_next = tabpage.tp_next;
-            }
-            REDRAW_TABLINE.set(true);
-            if h != tabline_rows() {
-                new_screen_rows();
-            }
-        }
-
-        // Take the window off the UI before freeing it: a multigrid UI
-        // must hear that its grid closed, and the compositor must not keep
-        // a float's grid it would otherwise draw from after the free.
-        if ui_has(UI_MULTIGRID) {
-            ui_call_win_close(Integer::from(win.w_grid_alloc.handle));
-        }
-        if win.w_floating {
-            drop_grid(win);
-        }
-
-        // About to free the window: remember its final buffer for
-        // `terminal_check_size` and TabClosed, which may have changed since the
-        // last `BufRef` (`close_buffer` autocommands, say).
-        bufref = BufRef::of_opt(win.buffer_or_none());
-        free_mem(win, Some(tabpage));
-        if let Some(buf) = bufref.get() {
-            resize_terminal(buf);
-        }
-        if free_tp_idx > 0 {
-            free_tab(tabpage);
-            if event_wanted(AutoEvent::TabClosed) {
-                let prev_idx = number_name(free_tp_idx);
-                let buf = bufref.get().unwrap_or_else(Buf::current);
-                fire_named(AutoEvent::TabClosed, Some(&prev_idx), Some(buf));
-            }
-        }
-        return Ok(());
+/// The work of [`close_othertab`] once the refusals have passed: the floats,
+/// the autocommands, the buffer, and then the window and perhaps its tab
+/// page.
+fn close_in_tab(win: Win, free_buf: bool, tabpage: TabPage, force: bool) -> Result<(), Stopped> {
+    // Would closing this window leave only floating windows?
+    if tab_last_win(tabpage).w_floating && only_window(win, Some(tabpage)) {
+        close_floats_in_tab(win, tabpage, force)?;
     }
 
-    if let Some(win) = valid_win_any_tab(win.id()).then_some(win) {
-        unclose_win_buffer(win, bufref, did_decrement);
+    // Fire WinClosed just before freeing window-related resources. With no
+    // buffer it is not safe to trigger autocommands, and `close()` will
+    // already have fired WinClosed.
+    if win.buffer_or_none().is_some() {
+        fire_winclosed(win);
+        // The autocommand may have freed the window already.
+        if !valid_win_any_tab(win.id()) {
+            return Err(Stopped::AsIs);
+        }
     }
-    Err(NotClosed)
+    if tabpage.tp_firstwin == tabpage.tp_lastwin && !tabpage.tp_did_tabclosedpre {
+        tabclosedpre(tabpage);
+        // The autocommand may have freed the window already.
+        if !valid_win_any_tab(win.id()) {
+            return Err(Stopped::AsIs);
+        }
+    }
+
+    let bufref = BufRef::of_opt(win.buffer_or_none());
+    let mut did_decrement = false;
+    if let Some(buf) = win.buffer_or_none() {
+        // Close the link to the buffer.
+        let action = if free_buf { DOBUF_UNLOAD } else { 0 };
+        did_decrement = close_buffer(Some(win), buf, action, false, true);
+    }
+    let keep_open = Stopped::KeepOpen {
+        bufref,
+        did_decrement,
+    };
+
+    // Careful: autocommands may have closed the tab page, or made it the
+    // current one.
+    if valid_tab(tabpage.id()).is_none() || tabpage.is_current() {
+        return Err(keep_open);
+    }
+    // Autocommands may have closed the window already, or
+    // `nvim_win_set_config` moved it to a different tab page.
+    if !valid_win_in_tab(tabpage, win.id()) {
+        return Err(keep_open);
+    }
+    // Autocommands may again leave only floats; check again, but this time
+    // without bothering to close them.
+    if tab_last_win(tabpage).w_floating && only_window(win, Some(tabpage)) {
+        err_raw(E_FLOATONLY);
+        return Err(keep_open);
+    }
+    free_in_tab(win, tabpage)
+}
+
+/// Closing `win` would leave only floating windows in `tabpage`: close
+/// them first, unless that is refused.
+fn close_floats_in_tab(win: Win, tabpage: TabPage, force: bool) -> Result<(), Stopped> {
+    if !force && !can_close_floats(Some(tabpage)) {
+        err_raw(E_FLOATONLY);
+        return Err(Stopped::UNTOUCHED);
+    }
+    // Close the last window until there are no floating windows left.
+    // The `force` flag is not actually used for a floating window.
+    while tab_last_win(tabpage).w_floating {
+        let last = tab_last_win(tabpage);
+        if close_othertab(last, !hides(last.buffer()), tabpage, true).is_err() {
+            // Give up rather than loop forever.
+            return Err(Stopped::UNTOUCHED);
+        }
+    }
+    if !valid_win_any_tab(win.id()) {
+        return Err(Stopped::AsIs); // already closed by autocommands
+    }
+    Ok(())
+}
+
+/// Free `win`, and `tabpage` with it when it was the page's last window.
+fn free_in_tab(win: Win, tabpage: TabPage) -> Result<(), Stopped> {
+    // When closing the last window of a tab page, remove the tab page.
+    let mut free_tp_idx = 0;
+    if tabpage.tp_firstwin == tabpage.tp_lastwin {
+        free_tp_idx = tab_index(tabpage);
+        let h = tabline_rows();
+        if FIRST_TABPAGE.get() == Some(tabpage.id()) {
+            FIRST_TABPAGE.set(tabpage.tp_next);
+        } else {
+            let Some(mut ptp) = tabs().find(|ptp| ptp.tp_next == Some(tabpage.id())) else {
+                internal_error(c"win_close_othertab()");
+                return Err(Stopped::AsIs);
+            };
+            ptp.tp_next = tabpage.tp_next;
+        }
+        REDRAW_TABLINE.set(true);
+        if h != tabline_rows() {
+            new_screen_rows();
+        }
+    }
+
+    // Take the window off the UI before freeing it: a multigrid UI
+    // must hear that its grid closed, and the compositor must not keep
+    // a float's grid it would otherwise draw from after the free.
+    if ui_has(UI_MULTIGRID) {
+        ui_call_win_close(Integer::from(win.w_grid_alloc.handle));
+    }
+    if win.w_floating {
+        drop_grid(win);
+    }
+
+    // About to free the window: remember its final buffer for
+    // `terminal_check_size` and TabClosed, which may have changed since the
+    // last `BufRef` (`close_buffer` autocommands, say).
+    let bufref = BufRef::of_opt(win.buffer_or_none());
+    free_mem(win, Some(tabpage));
+    if let Some(buf) = bufref.get() {
+        resize_terminal(buf);
+    }
+    if free_tp_idx > 0 {
+        free_tab(tabpage);
+        if event_wanted(AutoEvent::TabClosed) {
+            let prev_idx = number_name(free_tp_idx);
+            let buf = bufref.get().unwrap_or_else(Buf::current);
+            fire_named(AutoEvent::TabClosed, Some(&prev_idx), Some(buf));
+        }
+    }
+    Ok(())
 }
 
 /// The last window of `tabpage`, floats included. `tabpage` is never the current tab

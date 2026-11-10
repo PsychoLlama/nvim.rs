@@ -25,6 +25,7 @@ use crate::types::CmdIdx;
 use crate::types::ColNr;
 use crate::types::Key;
 use core::ffi::c_int;
+use core::ops::ControlFlow;
 
 use super::*;
 
@@ -132,58 +133,67 @@ pub fn close_windows(buffer: Buf, keep_curwin: bool) {
 /// there is only one non-floating window left.
 fn close_all(buffer: Buf, keep_curwin: bool) {
     let _redraw_off = Suppress::redraw();
-    'theend: {
-        // Start from `lastwin` to close floating windows showing the buffer
-        // first. When the autocommand window is involved `win_close()` may need
-        // to print an error message.
-        let mut cur = Some(last_win());
-        while let Some(wp) = cur {
-            if !is_autocmd_window(Some(last_win())) && only_window(wp, None) {
+    if close_all_here(buffer, keep_curwin).is_continue() {
+        close_all_elsewhere(buffer);
+    }
+}
+
+/// [`close_all`] on the current tab page. `Break` when the layout is locked:
+/// one error message is enough, so the other tab pages are not tried.
+fn close_all_here(buffer: Buf, keep_curwin: bool) -> ControlFlow<()> {
+    // Start from `lastwin` to close floating windows showing the buffer
+    // first. When the autocommand window is involved `win_close()` may need
+    // to print an error message.
+    let mut cur = Some(last_win());
+    while let Some(wp) = cur {
+        if !is_autocmd_window(Some(last_win())) && only_window(wp, None) {
+            break;
+        }
+        if wp.w_buffer == buffer && (!keep_curwin || !wp.is_current()) && !locked(wp) {
+            if layout_locked(CmdIdx::SIZE) {
+                return ControlFlow::Break(()); // Only give one error message.
+            }
+            if close(wp, false, false).is_err() {
+                // Give up rather than loop forever.
                 break;
             }
-            if wp.w_buffer == buffer && (!keep_curwin || !wp.is_current()) && !locked(wp) {
-                if layout_locked(CmdIdx::SIZE) {
-                    break 'theend; // Only give one error message.
-                }
-                if close(wp, false, false).is_err() {
-                    // Give up rather than loop forever.
+            // Start all over: autocommands may change the window layout.
+            cur = Some(last_win());
+        } else {
+            cur = wp.prev();
+        }
+    }
+    ControlFlow::Continue(())
+}
+
+/// [`close_all`] on the tab pages other than the current one.
+fn close_all_elsewhere(buffer: Buf) {
+    let mut tab = tabs().next();
+    while let Some(tp) = tab {
+        let mut nexttp = tp.next();
+        if !tp.is_current() {
+            // Start from `tp_lastwin` to close floating windows first.
+            let mut cur = tp.tp_lastwin.and_then(WinId::get);
+            while let Some(wp) = cur {
+                if wp.w_buffer == buffer && !locked(wp) {
+                    if layout_locked(CmdIdx::SIZE) {
+                        return; // Only give one error message.
+                    }
+                    if close_othertab(wp, false, tp, false).is_err() {
+                        // Give up rather than loop forever — on every tab
+                        // page: `nexttp` was taken before the autocommands
+                        // ran and may be gone.
+                        return;
+                    }
+                    // Start all over: the tab page may be gone and
+                    // autocommands may change the window layout.
+                    nexttp = tabs().next();
                     break;
                 }
-                // Start all over: autocommands may change the window layout.
-                cur = Some(last_win());
-            } else {
                 cur = wp.prev();
             }
         }
-
-        // Also check windows in other tab pages.
-        let mut tab = tabs().next();
-        while let Some(tp) = tab {
-            let mut nexttp = tp.next();
-            if !tp.is_current() {
-                // Start from `tp_lastwin` to close floating windows first.
-                let mut cur = tp.tp_lastwin.and_then(WinId::get);
-                while let Some(wp) = cur {
-                    if wp.w_buffer == buffer && !locked(wp) {
-                        if layout_locked(CmdIdx::SIZE) {
-                            break 'theend; // Only give one error message.
-                        }
-                        if close_othertab(wp, false, tp, false).is_err() {
-                            // Give up rather than loop forever — on every tab
-                            // page: `nexttp` was taken before the autocommands
-                            // ran and may be gone.
-                            break 'theend;
-                        }
-                        // Start all over: the tab page may be gone and
-                        // autocommands may change the window layout.
-                        nexttp = tabs().next();
-                        break;
-                    }
-                    cur = wp.prev();
-                }
-            }
-            tab = nexttp;
-        }
+        tab = nexttp;
     }
 }
 
@@ -394,44 +404,10 @@ fn close_all_others(message: bool, forceit: bool) {
 
     // Be very careful here: autocommands may change the window layout.
     let mut next = first_window().map(Win::id);
-    while let Some(mut wp) = next.and_then(valid_win) {
+    while let Some(wp) = next.and_then(valid_win) {
         let mut nextwp = wp.next().map(Win::id);
-        'skip: {
-            // autocommands messed this one up
-            if !old_curwin.is_current() && valid_win(old_curwin.id()).is_some() {
-                old_curwin.make_current();
-                old_curwin.buffer().make_current();
-            }
-            if wp.is_current() {
-                break 'skip; // don't close the current window
-            }
-            // autocommands messed this one up
-            if wp.surviving_buffer().is_none() && valid_win(wp.id()).is_some() {
-                wp.w_buffer = Buf::NULL;
-                let _ = close(wp, false, false);
-                break 'skip;
-            }
-            // Check whether it is allowed to abandon this window.
-            let r = may_abandon(wp.buffer(), forceit);
-            if valid_win(wp.id()).is_none() {
-                nextwp = first_window().map(Win::id); // messed up
-                break 'skip;
-            }
-            if !r {
-                let confirm = p_confirm() || cmdmod_has(CmdModFlags::CONFIRM);
-                if message && confirm && p_write() {
-                    ask_about_changes(wp.buffer());
-                    if valid_win(wp.id()).is_none() {
-                        nextwp = first_window().map(Win::id); // messed up
-                        break 'skip;
-                    }
-                }
-                if is_changed(wp.buffer()) {
-                    break 'skip;
-                }
-            }
-            let free_buf = !hides(wp.buffer()) && !is_changed(wp.buffer());
-            let _ = close(wp, free_buf, false);
+        if close_other(wp, old_curwin, message, forceit) == Walk::Restart {
+            nextwp = first_window().map(Win::id); // messed up
         }
         next = nextwp;
     }
@@ -439,6 +415,55 @@ fn close_all_others(message: bool, forceit: bool) {
     if message && FIRSTWIN.get() != LASTWIN.get() {
         err(WinError::OtherWindowChanged);
     }
+}
+
+/// Where [`close_all_others`] goes after one window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Walk {
+    /// To the window that followed this one.
+    Next,
+    /// Back to the first window: autocommands freed this one.
+    Restart,
+}
+
+/// One step of [`close_all_others`]: close `window` unless it is the current
+/// window or its changed buffer may not be abandoned.
+fn close_other(window: Win, old_curwin: Win, message: bool, forceit: bool) -> Walk {
+    let mut wp = window;
+    // autocommands messed this one up
+    if !old_curwin.is_current() && valid_win(old_curwin.id()).is_some() {
+        old_curwin.make_current();
+        old_curwin.buffer().make_current();
+    }
+    if wp.is_current() {
+        return Walk::Next; // don't close the current window
+    }
+    // autocommands messed this one up
+    if wp.surviving_buffer().is_none() && valid_win(wp.id()).is_some() {
+        wp.w_buffer = Buf::NULL;
+        let _ = close(wp, false, false);
+        return Walk::Next;
+    }
+    // Check whether it is allowed to abandon this window.
+    let r = may_abandon(wp.buffer(), forceit);
+    if valid_win(wp.id()).is_none() {
+        return Walk::Restart;
+    }
+    if !r {
+        let confirm = p_confirm() || cmdmod_has(CmdModFlags::CONFIRM);
+        if message && confirm && p_write() {
+            ask_about_changes(wp.buffer());
+            if valid_win(wp.id()).is_none() {
+                return Walk::Restart;
+            }
+        }
+        if is_changed(wp.buffer()) {
+            return Walk::Next;
+        }
+    }
+    let free_buf = !hides(wp.buffer()) && !is_changed(wp.buffer());
+    let _ = close(wp, free_buf, false);
+    Walk::Next
 }
 
 /// Whether `buffer` may be abandoned, saying why it may not.
