@@ -43,7 +43,7 @@ use core::ffi::{CStr, c_int};
 use crate::charset::skip;
 use crate::global_cell::GlobalCell;
 use crate::highlight::Hlf;
-use crate::mbyte::{c_cluster_len, char_at, head_off, mb_isupper};
+use crate::mbyte::{c_cluster_len, char_at, head_off};
 use crate::message::E_NO_SPELL;
 use crate::message::emsg;
 use crate::options::OPT_SPO_FLAG_CAMEL;
@@ -60,20 +60,10 @@ use super::slang::LoadedLangs;
 use super::{
     CHAR_DIGIT, CHAR_OTHER, CHAR_UPPER, FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPWORD, LOADED_LANGS,
     MAXWLEN, MatchInf, SP_BAD, SP_BANNED, SP_OK, SP_RARE, WordEnd, c_text, count_common_word,
-    spelltab_isu,
+    spell_isupper,
 };
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 use crate::optionstr::OptString;
-
-/// Whether `c` is upper case, by the spell table below 128 and the general
-/// rules above it.
-fn is_upper(c: c_int) -> bool {
-    if c >= 128 {
-        mb_isupper(c)
-    } else {
-        usize::try_from(c).is_ok_and(spelltab_isu)
-    }
-}
 
 impl Win {
     /// Check the word `text` starts with in this window.
@@ -205,7 +195,7 @@ impl Win {
 
             if capcol.as_deref() == Some(&ColNr::ZERO) && syn.b_cap_prog.is_some() {
                 // This word should have started with a capital.
-                if !is_upper(char_at(text)) {
+                if !spell_isupper(char_at(text)) {
                     wrongcaplen = mi.fend;
                 }
             }
@@ -332,7 +322,7 @@ fn get_char_type(c: c_int) -> c_int {
     if crate::ascii::ascii_isdigit(c) {
         return CHAR_DIGIT;
     }
-    if is_upper(c) {
+    if spell_isupper(c) {
         return CHAR_UPPER;
     }
     CHAR_OTHER

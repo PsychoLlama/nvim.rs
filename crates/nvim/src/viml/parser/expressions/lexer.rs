@@ -257,7 +257,7 @@ fn scan_identifier(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
     let mut scope = EXPR_VAR_SCOPE_MISSING;
     let mut autoload = false;
     ret.type_0 = EXPR_LEX_PLAIN_IDENTIFIER;
-    ret.len = scan_while(line, ret.len, |b| ascii_isident(b.into()));
+    ret.len = scan_while(line, ret.len, ascii_isident);
     if flags & EL_FLAG_IS_NOT_CMP.cast_signed() == 0
         && ((ret.len == 2 && &line[..2] == b"is") || (ret.len == 5 && &line[..5] == b"isnot"))
     {
@@ -286,16 +286,12 @@ fn scan_identifier(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
         // The ambiguity that leaves is the lexer's to hand on: `is#Foo(1)` is
         // a call of `is#Foo()`, `1is#Foo(1)` is `1 is# Foo(1)`. Only the
         // parser, which has the context, can tell them apart.
-        ret.len = scan_while(line, ret.len, |b| {
-            ascii_isident(b.into()) || b == AUTOLOAD_CHAR
-        });
+        ret.len = scan_while(line, ret.len, |b| ascii_isident(b) || b == AUTOLOAD_CHAR);
         autoload = line[2..ret.len].contains(&AUTOLOAD_CHAR);
     } else if line.len() > ret.len && line[ret.len] == AUTOLOAD_CHAR {
         autoload = true;
         ret.type_0 = EXPR_LEX_PLAIN_IDENTIFIER;
-        ret.len = scan_while(line, ret.len, |b| {
-            ascii_isident(b.into()) || b == AUTOLOAD_CHAR
-        });
+        ret.len = scan_while(line, ret.len, |b| ascii_isident(b) || b == AUTOLOAD_CHAR);
     }
     ret.data = LexExprTokenData::Var(LexExprTokenVar { scope, autoload });
 }
@@ -504,7 +500,7 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
         }
         b' ' | b'\t' => {
             ret.type_0 = EXPR_LEX_SPACING;
-            ret.len = scan_while(line, ret.len, |b| ascii_iswhite(b.into()));
+            ret.len = scan_while(line, ret.len, ascii_iswhite);
         }
         // The control characters, less NUL, TAB and NL, which have their own
         // arms. The C's case list stops at 0x1a, so ESC and the four above it
@@ -520,7 +516,7 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
         b'0'..=b'9' => scan_number(&mut ret, line, flags),
         b'$' => {
             ret.type_0 = EXPR_LEX_ENV;
-            ret.len = scan_while(line, ret.len, |b| ascii_isident(b.into()));
+            ret.len = scan_while(line, ret.len, ascii_isident);
         }
         b'a'..=b'z' | b'A'..=b'Z' | b'_' => scan_identifier(&mut ret, line, flags),
         b'&' => scan_option(&mut ret, line),

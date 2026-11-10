@@ -14,42 +14,55 @@
 //! values a `char` widens to on a signed-char platform and the `K_SPECIAL`
 //! terminal codes above 0x80. The C had them as `static inline`s in a header,
 //! so the transpiler left a copy in every module that called one.
+//!
+//! Each takes anything that widens to an `int` without loss, so a byte of
+//! text and a code point ask the same function: `ascii_isdigit(byte)` and
+//! `ascii_isdigit(c)` are one body, where the C needed a cast or a copy.
 
 use core::ffi::{c_int, c_uint};
 
 /// A decimal digit.
-pub(crate) fn ascii_isdigit(c: c_int) -> bool {
+pub(crate) fn ascii_isdigit(c: impl Into<c_int>) -> bool {
+    let c = c.into();
     (c_int::from(b'0')..=c_int::from(b'9')).contains(&c)
 }
 
 /// `ASCII_ISALPHA`: an unaccented Latin letter.
-pub(crate) fn ascii_isalpha(c: c_int) -> bool {
+pub(crate) fn ascii_isalpha(c: impl Into<c_int>) -> bool {
     // Unsigned, so that a negative byte fails both ranges rather than
     // wrapping into one of them -- which is what the C macro's cast does.
-    let c = c.cast_unsigned();
+    let c = c.into().cast_unsigned();
     (c_uint::from(b'A')..=c_uint::from(b'Z')).contains(&c)
         || (c_uint::from(b'a')..=c_uint::from(b'z')).contains(&c)
 }
 
 /// `ASCII_ISUPPER`: an unaccented upper-case Latin letter.
-pub(crate) fn ascii_isupper(c: c_int) -> bool {
-    (c_uint::from(b'A')..=c_uint::from(b'Z')).contains(&c.cast_unsigned())
+pub(crate) fn ascii_isupper(c: impl Into<c_int>) -> bool {
+    (c_uint::from(b'A')..=c_uint::from(b'Z')).contains(&c.into().cast_unsigned())
 }
 
 /// A binary digit.
-pub(crate) fn ascii_isbdigit(c: c_int) -> bool {
+pub(crate) fn ascii_isbdigit(c: impl Into<c_int>) -> bool {
+    let c = c.into();
     c == c_int::from(b'0') || c == c_int::from(b'1')
 }
 
+/// An octal digit.
+pub(crate) fn ascii_isodigit(c: impl Into<c_int>) -> bool {
+    (c_int::from(b'0')..=c_int::from(b'7')).contains(&c.into())
+}
+
 /// A hexadecimal digit, in either case.
-pub(crate) fn ascii_isxdigit(c: c_int) -> bool {
+pub(crate) fn ascii_isxdigit(c: impl Into<c_int>) -> bool {
+    let c = c.into();
     ascii_isdigit(c)
         || (c_int::from(b'a')..=c_int::from(b'f')).contains(&c)
         || (c_int::from(b'A')..=c_int::from(b'F')).contains(&c)
 }
 
 /// A character that may appear in an identifier: a letter, a digit or `_`.
-pub(crate) fn ascii_isident(c: c_int) -> bool {
+pub(crate) fn ascii_isident(c: impl Into<c_int>) -> bool {
+    let c = c.into();
     (c_int::from(b'A')..=c_int::from(b'Z')).contains(&c)
         || (c_int::from(b'a')..=c_int::from(b'z')).contains(&c)
         || ascii_isdigit(c)
@@ -57,22 +70,26 @@ pub(crate) fn ascii_isident(c: c_int) -> bool {
 }
 
 /// Horizontal whitespace: a space or a tab. Vim's notion of "white".
-pub(crate) fn ascii_iswhite(c: c_int) -> bool {
+pub(crate) fn ascii_iswhite(c: impl Into<c_int>) -> bool {
+    let c = c.into();
     c == c_int::from(b' ') || c == c_int::from(b'\t')
 }
 
 /// Horizontal whitespace, or the end of the string.
-pub(crate) fn ascii_iswhite_or_nul(c: c_int) -> bool {
+pub(crate) fn ascii_iswhite_or_nul(c: impl Into<c_int>) -> bool {
+    let c = c.into();
     ascii_iswhite(c) || c == NUL
 }
 
 /// Horizontal whitespace, a newline, or the end of the string.
-pub(crate) fn ascii_iswhite_nl_or_nul(c: c_int) -> bool {
+pub(crate) fn ascii_iswhite_nl_or_nul(c: impl Into<c_int>) -> bool {
+    let c = c.into();
     ascii_iswhite(c) || c == c_int::from(b'\n') || c == NUL
 }
 
 /// Whitespace as `isspace()` sees it: `\t\n\v\f\r` or a space.
-pub(crate) fn ascii_isspace(c: c_int) -> bool {
+pub(crate) fn ascii_isspace(c: impl Into<c_int>) -> bool {
+    let c = c.into();
     (9..=13).contains(&c) || c == c_int::from(b' ')
 }
 

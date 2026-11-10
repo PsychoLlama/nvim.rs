@@ -102,10 +102,10 @@ fn do_menu(arg: &[u8], modes: c_int, mut noremap: Remap, unmenu: bool, ranged: O
     let pri_tab = take_priorities(&mut arg, ranged);
 
     let mut enable = Enable::Unchanged;
-    if arg.starts_with(b"enable") && white(at(arg, 6)) {
+    if arg.starts_with(b"enable") && ascii_iswhite(at(arg, 6)) {
         enable = Enable::On;
         arg = skip_white(&arg[6..]);
-    } else if arg.starts_with(b"disable") && white(at(arg, 7)) {
+    } else if arg.starts_with(b"disable") && ascii_iswhite(at(arg, 7)) {
         enable = Enable::Off;
         arg = skip_white(&arg[7..]);
     }
@@ -161,10 +161,6 @@ fn do_menu(arg: &[u8], modes: c_int, mut noremap: Remap, unmenu: bool, ranged: O
     ui_call_update_menu();
 }
 
-fn white(byte: u8) -> bool {
-    ascii_iswhite(c_int::from(byte))
-}
-
 /// Step over an optional `icon=filename` argument.
 ///
 /// It is parsed and dropped: upstream has never handed it to a UI.
@@ -199,9 +195,9 @@ fn take_priorities(arg: &mut &[u8], ranged: Option<c_int>) -> [c_int; MENUDEPTH 
         .iter()
         .take_while(|&&b| ascii_isdigit(c_int::from(b)) || b == b'.')
         .count();
-    if white(at(arg, digits)) {
+    if ascii_iswhite(at(arg, digits)) {
         for slot in pri_tab.iter_mut().take(MENUDEPTH) {
-            if white(at(arg, 0)) {
+            if ascii_iswhite(at(arg, 0)) {
                 break;
             }
             let (number, past) = getdigits_int_at(arg, 0, false, 0);

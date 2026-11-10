@@ -247,8 +247,8 @@ fn trim_exponent_width(c: &Conversion, tmp: &mut [u8; TMP], len: usize) -> usize
     if let Some(tp) = tmp[..len].iter().position(|&b| b == e)
         && matches!(at(tp + 1), b'+' | b'-')
         && at(tp + 2) == b'0'
-        && ascii_isdigit(at(tp + 3).into())
-        && ascii_isdigit(at(tp + 4).into())
+        && ascii_isdigit(at(tp + 3))
+        && ascii_isdigit(at(tp + 4))
     {
         return delete_byte(tmp, tp + 2, len);
     }

@@ -71,14 +71,10 @@ use super::slang::{free_langs, register_lang, with_lang};
 use super::{
     INT_WORDLIST, LAST_REPLACEMENT, LOADED_LANGS, MAXWLEN, REGION_ALL, SpellLoad, languages,
 };
+use crate::ascii::ascii_isalpha;
 use crate::optionstr::{OptString, OptStringRef};
 use crate::runtime::RuntimeOpts;
 use crate::winlayer::{Buf, buffers, windows};
-
-/// `ASCII_ISALPHA`: an unaccented Latin letter.
-fn ascii_isalpha(c: u8) -> bool {
-    c.is_ascii_alphabetic()
-}
 
 /// The encoding spell files are named after: `'encoding'`, except that
 /// `latin9` uses `latin1`'s files, and anything implausibly long falls back

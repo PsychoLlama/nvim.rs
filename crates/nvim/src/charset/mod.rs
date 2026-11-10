@@ -23,7 +23,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::ascii::{NL, TAB};
+use crate::ascii::{NL, TAB, ascii_isdigit, ascii_isxdigit};
 use crate::cstr;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
@@ -106,33 +106,6 @@ fn unprintable_width() -> uint8_t {
     } else {
         2
     }
-}
-
-/// `ascii.h`'s classifiers, spelled out rather than deferred to `u8`'s own
-/// (which are only `#[inline]`, so a debug build calls them once per byte).
-#[inline(always)]
-fn is_white(byte: uint8_t) -> bool {
-    byte == b' ' || byte == b'\t'
-}
-
-#[inline(always)]
-fn is_digit(byte: uint8_t) -> bool {
-    byte.is_ascii_digit()
-}
-
-#[inline(always)]
-fn is_bdigit(byte: uint8_t) -> bool {
-    byte == b'0' || byte == b'1'
-}
-
-#[inline(always)]
-fn is_odigit(byte: uint8_t) -> bool {
-    (b'0'..=b'7').contains(&byte)
-}
-
-#[inline(always)]
-fn is_xdigit(byte: uint8_t) -> bool {
-    is_digit(byte) || (byte | 0x20) >= b'a' && (byte | 0x20) <= b'f'
 }
 
 /// Rebuild the global table and the current buffer's keyword set.
@@ -233,7 +206,7 @@ struct IsoptEntry {
 /// it.
 fn isopt_char(var: &[u8], at: &mut usize) -> c_int {
     let rest = &var[*at..];
-    if is_digit(cstr::byte_at(rest, 0)) {
+    if ascii_isdigit(cstr::byte_at(rest, 0)) {
         let (c, used) = skip::decimal_int(rest);
         *at += used;
         c
@@ -577,7 +550,7 @@ pub fn hex2nr(c: c_int) -> c_int {
 /// end of the slice reads as a NUL, which is not a digit.
 pub fn hexhex_at(text: &[u8]) -> c_int {
     let (high, low) = (cstr::byte_at(text, 0), cstr::byte_at(text, 1));
-    if !is_xdigit(high) || !is_xdigit(low) {
+    if !ascii_isxdigit(high) || !ascii_isxdigit(low) {
         return -1;
     }
     (hex2nr(c_int::from(high)) << 4) + hex2nr(c_int::from(low))

@@ -23,21 +23,21 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{is_bdigit, is_digit, is_white, is_xdigit};
 use crate::ascii::CTRL_V;
+use crate::ascii::{ascii_isbdigit, ascii_isdigit, ascii_iswhite, ascii_isxdigit};
 
 /// How many leading bytes of `s` are spaces or tabs.
 ///
 /// The slice form of upstream's `skipwhite`.
 pub fn white(s: &[u8]) -> usize {
-    count(s, is_white)
+    count(s, ascii_iswhite)
 }
 
 /// How many bytes of `s` come before the first space or tab.
 ///
 /// The slice form of upstream's `skiptowhite`.
 pub fn to_white(s: &[u8]) -> usize {
-    count(s, |byte| !is_white(byte))
+    count(s, |byte| !ascii_iswhite(byte))
 }
 
 /// [`to_white`], but a backslash or CTRL-V hides the byte after it.
@@ -48,7 +48,7 @@ pub fn to_white(s: &[u8]) -> usize {
 pub fn to_white_esc(s: &[u8]) -> usize {
     let mut at = 0;
     while let Some(&byte) = s.get(at) {
-        if is_white(byte) {
+        if ascii_iswhite(byte) {
             break;
         }
         let escapes = (byte == b'\\' || byte == CTRL_V) && at + 1 < s.len();
@@ -70,7 +70,7 @@ pub fn decimal(s: &[u8]) -> (i64, usize, bool) {
     if matches!(s.get(at), Some(b'-' | b'+')) {
         at += 1;
     }
-    let digits = count(&s[at..], is_digit);
+    let digits = count(&s[at..], ascii_isdigit);
     if digits == 0 {
         return (0, 0, false);
     }
@@ -109,28 +109,28 @@ pub fn decimal_int(s: &[u8]) -> (i32, usize) {
 ///
 /// The slice form of upstream's `skipdigits`.
 pub fn digits(s: &[u8]) -> usize {
-    count(s, is_digit)
+    count(s, ascii_isdigit)
 }
 
 /// How many leading bytes of `s` are hexadecimal digits.
 ///
 /// The slice form of upstream's `skiphex`.
 pub fn hex(s: &[u8]) -> usize {
-    count(s, is_xdigit)
+    count(s, ascii_isxdigit)
 }
 
 /// How many leading bytes of `s` are binary digits.
 ///
 /// The slice form of upstream's `skipbin`.
 pub fn bin(s: &[u8]) -> usize {
-    count(s, is_bdigit)
+    count(s, ascii_isbdigit)
 }
 
 /// How many bytes of `s` come before the first decimal digit.
 ///
 /// The slice form of upstream's `skiptodigit`.
 pub fn to_digit(s: &[u8]) -> usize {
-    count(s, |byte| !is_digit(byte))
+    count(s, |byte| !ascii_isdigit(byte))
 }
 
 /// How many bytes of `s` come before the first hexadecimal digit.
@@ -139,12 +139,12 @@ pub fn to_digit(s: &[u8]) -> usize {
 /// crate's boundary is already wider than it should be. The pointer forms
 /// both had are gone -- nothing called them.
 pub(crate) fn to_hex(s: &[u8]) -> usize {
-    count(s, |byte| !is_xdigit(byte))
+    count(s, |byte| !ascii_isxdigit(byte))
 }
 
 /// How many bytes of `s` come before the first binary digit.
 pub(crate) fn to_bin(s: &[u8]) -> usize {
-    count(s, |byte| !is_bdigit(byte))
+    count(s, |byte| !ascii_isbdigit(byte))
 }
 
 /// The leading run of `s` that `keep` accepts.

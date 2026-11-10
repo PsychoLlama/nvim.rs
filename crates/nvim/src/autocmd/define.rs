@@ -31,11 +31,6 @@ use crate::types::Handle;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Win, tabs};
 
-/// Whether `c` is a blank, as the parse below reads one.
-fn white(c: u8) -> bool {
-    ascii_iswhite(::core::ffi::c_int::from(c))
-}
-
 /// `:autocmd [group] {event} {pat} [++once] [++nested] {cmd}`, and every
 /// shorter spelling of it: listing, deleting, and `:autocmd *`.
 ///
@@ -74,7 +69,8 @@ pub fn do_autocmd(excmd: &mut ExArg, forceit: ::core::ffi::c_int) {
     } else {
         // Scan over the pattern, whose whitespace may be backslash-escaped.
         let mut end = pat;
-        while at(end) != 0 && (!white(at(end)) || end.checked_sub(1).map_or(0, at) == b'\\') {
+        while at(end) != 0 && (!ascii_iswhite(at(end)) || end.checked_sub(1).map_or(0, at) == b'\\')
+        {
             end += 1;
         }
         let raw = &line[pat..end];
@@ -138,7 +134,7 @@ pub fn do_autocmd(excmd: &mut ExArg, forceit: ::core::ffi::c_int) {
             do_all_autocmd_events(pattern, once, nested, cmd, forceit != 0, group);
         }
     } else {
-        while at(arg) != 0 && at(arg) != b'|' && !white(at(arg)) {
+        while at(arg) != 0 && at(arg) != b'|' && !ascii_iswhite(at(arg)) {
             // `arg_event_skip` has already refused an unknown name.
             let (event, consumed) = event_name2nr(&line[arg..]);
             arg += consumed;
@@ -459,7 +455,7 @@ pub(crate) fn arg_event_skip(arg: &[u8], have_group: bool) -> Result<usize, Fail
     let arg = cstr::until_nul(arg);
     let at = |at: usize| arg.get(at).copied().unwrap_or(0);
     if at(0) == b'*' {
-        if at(1) != 0 && !white(at(1)) {
+        if at(1) != 0 && !ascii_iswhite(at(1)) {
             let arg = msg_bytes(arg);
             semsg!("E215: Illegal character after *: {arg}");
             return Err(Failed);
@@ -468,7 +464,7 @@ pub(crate) fn arg_event_skip(arg: &[u8], have_group: bool) -> Result<usize, Fail
     }
 
     let mut pat = 0;
-    while at(pat) != 0 && at(pat) != b'|' && !white(at(pat)) {
+    while at(pat) != 0 && at(pat) != b'|' && !ascii_iswhite(at(pat)) {
         let (event, consumed) = event_name2nr(&arg[pat..]);
         if event.is_none() {
             let shown = msg_bytes(&arg[pat..]);
@@ -491,7 +487,7 @@ pub(crate) fn arg_event_skip(arg: &[u8], have_group: bool) -> Result<usize, Fail
 /// caller can `|=` the three calls together.
 fn arg_autocmd_flag_get(flag: &mut bool, line: &[u8], cmd: &mut usize, pattern: &[u8]) -> bool {
     let rest = &line[(*cmd).min(line.len())..];
-    if rest.starts_with(pattern) && white(rest.get(pattern.len()).copied().unwrap_or(0)) {
+    if rest.starts_with(pattern) && ascii_iswhite(rest.get(pattern.len()).copied().unwrap_or(0)) {
         if *flag {
             let pattern = msg_bytes(pattern);
             semsg!("E983: Duplicate argument: {pattern}");

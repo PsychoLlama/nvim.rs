@@ -116,14 +116,14 @@ pub(crate) fn match_one(
         }
 
         BtOp::Any => return take(c != NUL),
-        BtOp::Ident => return take(is_ident_char(c)),
-        BtOp::Sident => return take(!digit_here() && is_ident_char(c)),
+        BtOp::Ident => return take(vim_is_ident_char(c)),
+        BtOp::Sident => return take(!digit_here() && vim_is_ident_char(c)),
         BtOp::Kword => return take(rex.iswordp()),
         BtOp::Skword => return take(!digit_here() && rex.iswordp()),
-        BtOp::Fname => return take(is_file_char(c)),
-        BtOp::Sfname => return take(!digit_here() && is_file_char(c)),
-        BtOp::Print => return take(is_printable(rex.char_here())),
-        BtOp::Sprint => return take(!digit_here() && is_printable(rex.char_here())),
+        BtOp::Fname => return take(vim_isfilec(c)),
+        BtOp::Sfname => return take(!digit_here() && vim_isfilec(c)),
+        BtOp::Print => return take(vim_isprintc(rex.char_here())),
+        BtOp::Sprint => return take(!digit_here() && vim_isprintc(rex.char_here())),
         BtOp::White => return take(ascii_iswhite(c)),
         BtOp::Nwhite => return take(c != NUL && !ascii_iswhite(c)),
         BtOp::Digit => return take(ri(ByteClass::DIGIT)),
@@ -204,20 +204,6 @@ pub(crate) fn match_one(
 /// needs a window and a string match has none.
 fn cursor_of(rex: Rex) -> Option<Pos> {
     rex.reg_win().map(|win| win.w_cursor)
-}
-
-/// `vim_is_ident_char`, `vim_isfilec` and `vim_isprintc` are pure tests on a code
-/// point that read only option state.
-fn is_ident_char(c: c_int) -> bool {
-    vim_is_ident_char(c)
-}
-
-fn is_file_char(c: c_int) -> bool {
-    vim_isfilec(c)
-}
-
-fn is_printable(c: c_int) -> bool {
-    vim_isprintc(c)
 }
 
 fn nomatch_unless(ok: bool) -> c_int {

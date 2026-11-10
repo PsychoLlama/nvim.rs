@@ -104,10 +104,6 @@ pub(crate) fn set_context_in_menu_cmd(
     None
 }
 
-fn white(byte: u8) -> bool {
-    ascii_iswhite(c_int::from(byte))
-}
-
 /// The body of [`set_context_in_menu_cmd`]: `arg` is where the argument
 /// starts in `line`, and the pattern answered an offset in it too.
 fn menu_context(cmd: &CStr, line: &[u8], arg: usize, forceit: bool) -> Context {
@@ -119,16 +115,16 @@ fn menu_context(cmd: &CStr, line: &[u8], arg: usize, forceit: bool) -> Context {
         i += 1;
     }
     let mut p = i;
-    if !white(at(p)) {
-        p = if starts(arg, b"enable") && (at(arg + 6) == 0 || white(at(arg + 6))) {
+    if !ascii_iswhite(at(p)) {
+        p = if starts(arg, b"enable") && (at(arg + 6) == 0 || ascii_iswhite(at(arg + 6))) {
             arg + 6
-        } else if starts(arg, b"disable") && (at(arg + 7) == 0 || white(at(arg + 7))) {
+        } else if starts(arg, b"disable") && (at(arg + 7) == 0 || ascii_iswhite(at(arg + 7))) {
             arg + 7
         } else {
             arg
         };
     }
-    while at(p) != 0 && white(at(p)) {
+    while at(p) != 0 && ascii_iswhite(at(p)) {
         p += 1;
     }
 
@@ -136,7 +132,7 @@ fn menu_context(cmd: &CStr, line: &[u8], arg: usize, forceit: bool) -> Context {
     let start = p;
     let mut after_dot = start;
     let mut i = start;
-    while at(i) != 0 && !white(at(i)) {
+    while at(i) != 0 && !ascii_iswhite(at(i)) {
         let escaped = at(i) == b'\\' || at(i) == CTRL_V;
         if escaped && at(i + 1) != 0 {
             i += 1;
@@ -151,7 +147,7 @@ fn menu_context(cmd: &CStr, line: &[u8], arg: usize, forceit: bool) -> Context {
     let bytes = cmd.to_bytes();
     let whole_menus = !(bytes.starts_with(b"te") || bytes.first() == Some(&b'p'));
     EXPAND_EMENU.set(bytes.first() == Some(&b'e'));
-    if whole_menus && white(at(end)) {
+    if whole_menus && ascii_iswhite(at(end)) {
         return Context::UNSUCCESSFUL;
     }
     if at(end) != 0 {

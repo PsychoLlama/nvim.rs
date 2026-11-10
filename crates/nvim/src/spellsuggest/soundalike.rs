@@ -47,11 +47,10 @@ use crate::os::libc::int16_t;
 use crate::spell::{
     LOADED_LANGS, WordFlags, WordHasher, allcap_copy, make_case_word, spell_soundfold,
 };
-use crate::spell::{LangId, LangP, SpellLang};
+use crate::spell::{LangId, LangP, SpellLang, spell_isupper};
 use crate::spellsuggest::collect::{List, add_suggestion};
 use crate::spellsuggest::score::{
-    EMPTY_SOUND, score_wordcount_adj, spell_edit_score, spell_edit_score_limit, spell_isupper,
-    spell_tofold,
+    EMPTY_SOUND, score_wordcount_adj, spell_edit_score, spell_edit_score_limit, spell_tofold,
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
 use crate::spellsuggest::{

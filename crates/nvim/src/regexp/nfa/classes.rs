@@ -38,23 +38,8 @@ fn is_word_char(rex: Rex) -> bool {
     rex.iswordp()
 }
 
-fn is_printable(rex: Rex) -> bool {
-    // SAFETY: the cursor is inside the line being matched.
-    vim_isprintc(input(rex))
-}
-
 fn ignoring_case(rex: Rex) -> bool {
     rex.reg_ic()
-}
-
-/// `vim_is_ident_char` and `vim_isfilec` are pure tests on a code point that read
-/// only option state.
-fn is_ident_char(c: c_int) -> bool {
-    vim_is_ident_char(c)
-}
-
-fn is_file_char(c: c_int) -> bool {
-    vim_isfilec(c)
 }
 
 /// Does the class opcode `op` accept the character `curc` at the input?
@@ -67,14 +52,14 @@ fn is_file_char(c: c_int) -> bool {
 #[inline(never)]
 pub(crate) fn class_matches(rex: Rex, op: NfaOp, curc: c_int) -> bool {
     match op {
-        NfaOp::Ident => is_ident_char(curc),
-        NfaOp::Sident => !ascii_isdigit(curc) && is_ident_char(curc),
+        NfaOp::Ident => vim_is_ident_char(curc),
+        NfaOp::Sident => !ascii_isdigit(curc) && vim_is_ident_char(curc),
         NfaOp::Kword => is_word_char(rex),
         NfaOp::Skword => !ascii_isdigit(curc) && is_word_char(rex),
-        NfaOp::Fname => is_file_char(curc),
-        NfaOp::Sfname => !ascii_isdigit(curc) && is_file_char(curc),
-        NfaOp::Print => is_printable(rex),
-        NfaOp::Sprint => !ascii_isdigit(curc) && is_printable(rex),
+        NfaOp::Fname => vim_isfilec(curc),
+        NfaOp::Sfname => !ascii_isdigit(curc) && vim_isfilec(curc),
+        NfaOp::Print => vim_isprintc(input(rex)),
+        NfaOp::Sprint => !ascii_isdigit(curc) && vim_isprintc(input(rex)),
         NfaOp::White => ascii_iswhite(curc),
         NfaOp::Nwhite => curc != NUL && !ascii_iswhite(curc),
         NfaOp::Digit => ri(curc, ByteClass::DIGIT),

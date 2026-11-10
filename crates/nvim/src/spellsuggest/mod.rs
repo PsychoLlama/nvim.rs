@@ -77,6 +77,7 @@ use crate::option::split_option_part;
 use crate::option::vars::P_SPS;
 use crate::os::input::os_breakcheck;
 use crate::path::MAXPATHL;
+use crate::spell::spell_isupper;
 use crate::spell::{LOADED_LANGS, captype, make_case_word, spell_casefold, spell_soundfold};
 use crate::spell::{LangId, LangP};
 use crate::spellfile::suggest_load_files;
@@ -84,7 +85,6 @@ use crate::spellsuggest::collect::{
     List, add_banned, add_suggestion, check_suggestions, clean_count, cleanup_suggestions,
     rescore_suggestions, score_combine, score_comp_sal,
 };
-use crate::spellsuggest::score::spell_isupper;
 use crate::spellsuggest::soundalike::{SoundDone, suggest_try_soundalike};
 use crate::spellsuggest::walk::suggest_trie_walk;
 use core::ffi::{CStr, c_int};

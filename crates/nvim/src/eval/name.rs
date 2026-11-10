@@ -18,7 +18,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ascii::ascii_isdigit;
+use crate::ascii::{ascii_isalpha, ascii_isdigit};
 use crate::charset::vim_is_ident_char;
 use crate::cstr::byte_at;
 use crate::eval::typval::PartialRef;
@@ -264,18 +264,9 @@ pub(crate) fn expanded_name(name: &[u8], open: usize, close: Option<usize>) -> O
     }
 }
 
-/// An ASCII letter, tested on the code point rather than on a byte: the
-/// callers pass a `c_char` widened to `c_int`, so a multibyte lead byte
-/// arrives negative and must not match.
-#[inline(always)]
-fn is_alpha(c: c_int) -> bool {
-    (c >= c_int::from(b'A') && c <= c_int::from(b'Z'))
-        || (c >= c_int::from(b'a') && c <= c_int::from(b'z'))
-}
-
 /// May this character be part of a variable name?
 pub fn eval_isnamec(c: c_int) -> bool {
-    is_alpha(c)
+    ascii_isalpha(c)
         || ascii_isdigit(c)
         || c == c_int::from(b'_')
         || c == c_int::from(b':')
@@ -284,13 +275,13 @@ pub fn eval_isnamec(c: c_int) -> bool {
 
 /// May this character *start* a variable name?
 pub fn eval_isnamec1(c: c_int) -> bool {
-    is_alpha(c) || c == c_int::from(b'_')
+    ascii_isalpha(c) || c == c_int::from(b'_')
 }
 
 /// May this character be part of a `.key` subscript? Unlike a variable
 /// name, no `:` and no `#`.
 pub fn eval_isdictc(c: c_int) -> bool {
-    is_alpha(c) || ascii_isdigit(c) || c == c_int::from(b'_')
+    ascii_isalpha(c) || ascii_isdigit(c) || c == c_int::from(b'_')
 }
 
 /// Is this partial the one `v:lua` stands for? An identity test: the

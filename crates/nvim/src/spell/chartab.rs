@@ -106,6 +106,16 @@ pub(crate) fn spelltab_upper(c: usize) -> uint8_t {
     SPELLTAB.get_field(|tab| &tab.st_upper[c])
 }
 
+/// `SPELL_ISUPPER`: whether `c` is upper case, by the spell table below 128
+/// and by the general rules above it.
+pub(crate) fn spell_isupper(c: c_int) -> bool {
+    if c >= 128 {
+        mb_isupper(c)
+    } else {
+        spelltab_isu(tab_index(c))
+    }
+}
+
 /// A character the caller has tested below 256 (or 128), as the index of a
 /// 256-entry table. A character is never negative, so this is the C's `[c]`
 /// with no test of its own: these lookups run once per character checked.
@@ -337,14 +347,14 @@ pub fn captype(text: &[u8], end: usize) -> WordFlags {
 
     let c = char_at(tail(text, p));
     p += step(text, p);
-    let mut allcap = is_upper(c);
+    let mut allcap = spell_isupper(c);
     let firstcap = allcap;
     let mut past_second = false;
 
     while !at_end(p) {
         let rest = tail(text, p);
         if spell_iswordp_nmw(rest, window) {
-            if !is_upper(char_at(rest)) {
+            if !spell_isupper(char_at(rest)) {
                 // A lower-case letter after two upper-case ones, or
                 // after a mix, cannot be described by a flag.
                 if past_second && allcap {
@@ -365,16 +375,6 @@ pub fn captype(text: &[u8], end: usize) -> WordFlags {
         WordFlags::ONECAP
     } else {
         WordFlags::NONE
-    }
-}
-
-/// Whether `c` is upper case, by the spell table below 128 and by the
-/// general rules above it.
-fn is_upper(c: c_int) -> bool {
-    if c >= 128 {
-        mb_isupper(c)
-    } else {
-        spelltab_isu(tab_index(c))
     }
 }
 

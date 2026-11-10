@@ -26,7 +26,7 @@
 use super::LineCopy;
 use super::say;
 use super::{E_INTERR, MAXLNUM, RE_MAGIC};
-use crate::ascii::ascii_iswhite;
+use crate::ascii::{ascii_isalpha, ascii_iswhite};
 use crate::change::changed_lines;
 use crate::charset::Str2NrBases;
 use crate::charset::{skip, str2nr_scan};
@@ -241,7 +241,7 @@ impl ExArg<'_> {
             self.line.next = Some(next);
             return Ok(Fallback::NextCmd);
         }
-        if is_alpha(byte) || regmatch.is_some() {
+        if ascii_isalpha(byte) || regmatch.is_some() {
             let arg0 = self.line.cstr_from(base + at);
             return Err(SortError::InvalidArgument(arg0.into()));
         }
@@ -334,12 +334,6 @@ impl ExArg<'_> {
 
         Ok(order)
     }
-}
-
-/// True for the letters that can only ever be flags, so that anything else is
-/// a pattern delimiter.
-fn is_alpha(byte: u8) -> bool {
-    byte.is_ascii_alphabetic()
 }
 
 /// The flags `:sort` was given.

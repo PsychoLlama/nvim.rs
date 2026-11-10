@@ -19,7 +19,8 @@
 use crate::eval::{VARNUMBER_MAX, VARNUMBER_MIN};
 use core::ffi::c_int;
 
-use super::{Scan, is_bdigit, is_digit, is_odigit, is_xdigit};
+use super::Scan;
+use crate::ascii::{ascii_isbdigit, ascii_isdigit, ascii_isodigit, ascii_isxdigit};
 use crate::types::{UVarNumber, VarNumber};
 
 crate::flag_set! {
@@ -88,10 +89,10 @@ impl Radix {
     /// tests only `0`/`1`. Preserved.
     fn separator_digit(self, byte: u8) -> bool {
         match self {
-            Radix::Binary => is_bdigit(byte),
-            Radix::Octal => is_odigit(byte),
-            Radix::Decimal => is_digit(byte),
-            Radix::Hexadecimal => is_xdigit(byte),
+            Radix::Binary => ascii_isbdigit(byte),
+            Radix::Octal => ascii_isodigit(byte),
+            Radix::Decimal => ascii_isdigit(byte),
+            Radix::Hexadecimal => ascii_isxdigit(byte),
         }
     }
 
@@ -225,10 +226,10 @@ pub(super) fn scan(scan: &mut Scan, what: Str2NrBases) -> Option<Scanned> {
             pre = 0;
             // A leading zero means octal only if every digit that follows is
             // one; `0548` is decimal.
-            let mut octal = what.has(Str2NrBases::OCT) && is_odigit(scan.at(1));
+            let mut octal = what.has(Str2NrBases::OCT) && ascii_isodigit(scan.at(1));
             if octal {
                 let mut i = 2;
-                while scan.within(i) && is_digit(scan.at(i)) {
+                while scan.within(i) && ascii_isdigit(scan.at(i)) {
                     if scan.at(i) > b'7' {
                         octal = false;
                         break;

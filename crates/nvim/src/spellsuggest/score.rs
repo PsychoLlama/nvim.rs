@@ -44,10 +44,10 @@
 
 use crate::ascii::{NUL, ascii_iswhite};
 use crate::cstr::until_nul;
-use crate::mbyte::{char_at, char_len, mb_isupper, utf_fold};
+use crate::mbyte::{char_at, char_len, utf_fold};
 use crate::narrow::{as_index, len_as_int};
 use crate::spell::{MAXWLEN_INT, SpellLang};
-use crate::spell::{spell_casefold, spell_soundfold, spelltab_fold, spelltab_isu};
+use crate::spell::{spell_casefold, spell_soundfold, spelltab_fold};
 use crate::spellsuggest::{
     MAXWLEN, SCORE_COMMON1, SCORE_COMMON2, SCORE_COMMON3, SCORE_DEL, SCORE_ICASE, SCORE_INS,
     SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, SugInfo,
@@ -74,16 +74,6 @@ pub(super) fn spell_tofold(c: c_int) -> c_int {
         utf_fold(c)
     } else {
         c_int::from(spelltab_fold(as_index(c)))
-    }
-}
-
-/// Is this character upper-case? The byte table covers Latin-1,
-/// everything above it goes through Unicode.
-pub(super) fn spell_isupper(c: c_int) -> bool {
-    if c >= 128 {
-        mb_isupper(c)
-    } else {
-        spelltab_isu(as_index(c))
     }
 }
 
