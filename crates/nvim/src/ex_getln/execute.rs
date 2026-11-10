@@ -357,7 +357,8 @@ fn moves_in_history(c: Key) -> bool {
         || c == SpecialKey::Kpageup
         || c == SpecialKey::Left
         || c == SpecialKey::Right
-        || (match_count() == 0 && (c == Key::CTRL_P || c == Key::CTRL_N))
+        // The count is -1 before anything was expanded: "no match" too.
+        || (match_count() <= 0 && (c == Key::CTRL_P || c == Key::CTRL_N))
 }
 
 /// Give the wildmenu its chance at the key: translate it, use it to cancel
