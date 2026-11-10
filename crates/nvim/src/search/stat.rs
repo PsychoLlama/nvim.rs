@@ -391,33 +391,53 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
     save_last_search_pattern();
     save_incsearch_state();
-    'the_end: {
-        if let Some(pattern) = &pattern {
-            if pattern.is_empty() {
-                break 'the_end;
-            }
-            replace_last_used_pattern(pattern);
-        }
-        if last_search_pat().is_none_or(|live| live.is_empty()) {
-            // The previous pattern was never defined.
-            break 'the_end;
-        }
-
-        let stat = update_search_stat(0, pos, pos, recompute, maxcount, timeout);
-        // The dictionary this function itself allocated above.
-        if let Some(dict) = result.dict_mut() {
-            let values = [
-                (&b"current"[..], stat.cur),
-                (b"total", stat.cnt),
-                (b"exact_match", c_int::from(stat.exact_match)),
-                (b"incomplete", stat.incomplete),
-                (b"maxcount", stat.last_maxcount),
-            ];
-            for (key, value) in values {
-                let _ = dict.add_number(key, VarNumber::from(value));
-            }
-        }
-    }
+    count_into(
+        result,
+        pattern.as_deref(),
+        pos,
+        recompute,
+        maxcount,
+        timeout,
+    );
     restore_last_search_pattern();
     restore_incsearch_state();
+}
+
+/// `searchcount()`'s counting, with the last search pattern saved: the
+/// counts for `pattern` (or the last search pattern) at `pos`, into
+/// `result`'s dictionary. Nothing when the pattern is empty or there never
+/// was one.
+fn count_into(
+    result: &mut TypVal,
+    pattern: Option<&[u8]>,
+    pos: Pos,
+    recompute: bool,
+    maxcount: c_int,
+    timeout: c_int,
+) {
+    if let Some(pattern) = pattern {
+        if pattern.is_empty() {
+            return;
+        }
+        replace_last_used_pattern(pattern);
+    }
+    if last_search_pat().is_none_or(|live| live.is_empty()) {
+        // The previous pattern was never defined.
+        return;
+    }
+
+    let stat = update_search_stat(0, pos, pos, recompute, maxcount, timeout);
+    // The dictionary `f_searchcount` itself allocated.
+    if let Some(dict) = result.dict_mut() {
+        let values = [
+            (&b"current"[..], stat.cur),
+            (b"total", stat.cnt),
+            (b"exact_match", c_int::from(stat.exact_match)),
+            (b"incomplete", stat.incomplete),
+            (b"maxcount", stat.last_maxcount),
+        ];
+        for (key, value) in values {
+            let _ = dict.add_number(key, VarNumber::from(value));
+        }
+    }
 }
