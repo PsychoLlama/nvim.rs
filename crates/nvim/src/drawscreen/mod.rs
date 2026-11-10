@@ -333,8 +333,95 @@ pub fn update_screen() -> Result<(), Failed> {
     let (redr_type, hl_changed) = begin_redraw(is_stl_global);
     draw_global_elements(redr_type);
     update_buffer_state(redr_type, hl_changed);
-    redraw_windows();
-    finish_redraw(STILL_MAY_INTRO.get());
+
+    // Top to bottom through the windows, redrawing the ones that need it.
+    let mut did_one = false;
+    SearchHl::current().forget_regprog();
+
+    for mut wp in winlayer::windows() {
+        if wp.w_redr_type == UPD_CLEAR && wp.w_floating && wp.w_grid_alloc.is_allocated() {
+            wp.w_grid_alloc.invalidate();
+            wp.w_redr_type = UPD_NOT_VALID;
+        }
+
+        win_check_ns_hl(Some(wp));
+        win_grid_alloc(wp);
+
+        if wp.w_redr_border || wp.w_redr_type >= UPD_NOT_VALID {
+            let hl_attr = wp.w_ns_hl_attr.map(GlobalCell::get);
+            grid_draw_border(
+                wp.grid_alloc(),
+                &wp.w_config,
+                Some(wp.w_border_adj),
+                number_as_int(wp.w_onebuf_opt.wo_winbl),
+                hl_attr.as_ref().map(|table| &table[..]),
+            );
+        }
+
+        if wp.w_redr_type != 0 {
+            if !did_one {
+                did_one = true;
+                start_search_hl();
+            }
+            win_update(wp);
+        }
+
+        // The status line and window bar go after the window, to minimise
+        // cursor movement.
+        if wp.w_redr_status {
+            win_redr_winbar(wp);
+            win_redr_status(wp);
+        }
+    }
+
+    // Separator connectors go after every window update, so that a
+    // connector is never overwritten by a neighbour's separator.
+    if did_one {
+        for wp in winlayer::windows() {
+            draw_sep_connectors_win(wp);
+        }
+    }
+
+    end_search_hl();
+
+    if pum_drawn() && MUST_REDRAW_PUM.get() {
+        win_check_ns_hl(Win::current_or_none());
+        pum_redraw();
+    } else if STATE.get() & MODE_CMDLINE != 0 {
+        pum_check_clear();
+    }
+
+    win_check_ns_hl(None);
+
+    // Reset `b_mod_set`. Going through the windows is probably faster than
+    // going through every buffer.
+    for mut wp in winlayer::windows() {
+        wp.w_buffer.b_mod_set = false;
+    }
+
+    UPDATING_SCREEN.set(false);
+
+    if NEED_MAKETITLE.get() {
+        maketitle();
+    }
+
+    // Last, because scrolling may mess the command line up.
+    if CLEAR_CMDLINE.get() || REDRAW_CMDLINE.get() || REDRAW_MODE.get() {
+        showmode();
+    }
+
+    if STILL_MAY_INTRO.get() {
+        intro_message(false);
+    }
+    repeat_message();
+
+    decor_providers_invoke_end();
+
+    // Either the cmdline was cleared, not drawn, or the mode was drawn last.
+    // This does not necessarily overwrite an external cmdline.
+    if !ui_has(UI_CMDLINE) {
+        CMDLINE_WAS_LAST_DRAWN.set(false);
+    }
     Ok(())
 }
 
@@ -468,104 +555,6 @@ fn draw_global_elements(redr_type: c_int) {
             }
         }
         draw_tabline();
-    }
-}
-
-/// Top to bottom through the windows, redrawing the ones that need it,
-/// then the separator connectors over all of them.
-fn redraw_windows() {
-    let mut did_one = false;
-    SearchHl::current().forget_regprog();
-
-    for mut wp in winlayer::windows() {
-        if wp.w_redr_type == UPD_CLEAR && wp.w_floating && wp.w_grid_alloc.is_allocated() {
-            wp.w_grid_alloc.invalidate();
-            wp.w_redr_type = UPD_NOT_VALID;
-        }
-
-        win_check_ns_hl(Some(wp));
-        win_grid_alloc(wp);
-
-        if wp.w_redr_border || wp.w_redr_type >= UPD_NOT_VALID {
-            let hl_attr = wp.w_ns_hl_attr.map(GlobalCell::get);
-            grid_draw_border(
-                wp.grid_alloc(),
-                &wp.w_config,
-                Some(wp.w_border_adj),
-                number_as_int(wp.w_onebuf_opt.wo_winbl),
-                hl_attr.as_ref().map(|table| &table[..]),
-            );
-        }
-
-        if wp.w_redr_type != 0 {
-            if !did_one {
-                did_one = true;
-                start_search_hl();
-            }
-            win_update(wp);
-        }
-
-        // The status line and window bar go after the window, to minimise
-        // cursor movement.
-        if wp.w_redr_status {
-            win_redr_winbar(wp);
-            win_redr_status(wp);
-        }
-    }
-
-    // Separator connectors go after every window update, so that a
-    // connector is never overwritten by a neighbour's separator.
-    if did_one {
-        for wp in winlayer::windows() {
-            draw_sep_connectors_win(wp);
-        }
-    }
-
-    end_search_hl();
-}
-
-/// After the windows: the popup menu, the buffers' change marks cleared,
-/// the redraw marked done, then what goes over the windows last -- the
-/// title, the mode, the intro (while `still_may_intro`) and a repeated
-/// message.
-fn finish_redraw(still_may_intro: bool) {
-    if pum_drawn() && MUST_REDRAW_PUM.get() {
-        win_check_ns_hl(Win::current_or_none());
-        pum_redraw();
-    } else if STATE.get() & MODE_CMDLINE != 0 {
-        pum_check_clear();
-    }
-
-    win_check_ns_hl(None);
-
-    // Reset `b_mod_set`. Going through the windows is probably faster than
-    // going through every buffer.
-    for mut wp in winlayer::windows() {
-        wp.w_buffer.b_mod_set = false;
-    }
-
-    UPDATING_SCREEN.set(false);
-
-    if NEED_MAKETITLE.get() {
-        maketitle();
-    }
-
-    // Last, because scrolling may mess the command line up.
-    if CLEAR_CMDLINE.get() || REDRAW_CMDLINE.get() || REDRAW_MODE.get() {
-        showmode();
-    }
-
-    if still_may_intro {
-        intro_message(false);
-    }
-    repeat_message();
-
-    decor_providers_invoke_end();
-
-    // Either the cmdline was cleared, not drawn, or the mode was drawn last.
-    // This does not necessarily overwrite an external cmdline.
-    if !ui_has(UI_CMDLINE) {
-        CMDLINE_WAS_LAST_DRAWN.set(false);
     }
 }
 
