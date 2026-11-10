@@ -91,27 +91,10 @@ pub(super) fn dispatch(
     let mut cancel_phantom = true;
 
     match (intermed, leader, command) {
-        (0, 0, 0x40) => {
-            // ICH - ECMA-48 8.3.64
-            let count = repeat(args, 0);
-            if !state.cursor_in_scroll_region() {
-                return finish(state, oldpos, cancel_phantom);
-            }
-            let rect = VTermRect {
-                start_row: state.pos.row,
-                end_row: state.pos.row + 1,
-                start_col: state.pos.col,
-                end_col: if state.mode.leftrightmargin() != 0 {
-                    state.scroll_right()
-                } else {
-                    state.cursor_row_width()
-                },
-            };
-            state.scroll(rect, 0, -count);
-        }
+        (0, 0, 0x40) => shift_chars(state, -repeat(args, 0)), // ICH - ECMA-48 8.3.64
         (0, 0, 0x41) => cursor_by(state, -repeat(args, 0), 0), // CUU - ECMA-48 8.3.22
-        (0, 0, 0x42) => cursor_by(state, repeat(args, 0), 0),  // CUD - ECMA-48 8.3.19
-        (0, 0, 0x43) => cursor_by(state, 0, repeat(args, 0)),  // CUF - ECMA-48 8.3.20
+        (0, 0, 0x42) => cursor_by(state, repeat(args, 0), 0), // CUD - ECMA-48 8.3.19
+        (0, 0, 0x43) => cursor_by(state, 0, repeat(args, 0)), // CUF - ECMA-48 8.3.20
         (0, 0, 0x44) => cursor_by(state, 0, -repeat(args, 0)), // CUB - ECMA-48 8.3.18
         (0, 0, 0x45) => {
             // CNL - ECMA-48 8.3.12
@@ -123,112 +106,36 @@ pub(super) fn dispatch(
             state.pos.col = 0;
             cursor_by(state, -repeat(args, 0), 0);
         }
-        (0, 0, 0x47) => {
-            // CHA - ECMA-48 8.3.9
-            state.pos.col = param_or(args, 0, 1) - 1;
-            state.at_phantom = 0;
-        }
+        // CHA - ECMA-48 8.3.9, and HPA - ECMA-48 8.3.57, its twin.
+        (0, 0, 0x47 | 0x60) => column_to(state, param_or(args, 0, 1) - 1),
         // CUP and HVP are the same command under two names.
-        (0, 0, 0x48) | (0, 0, 0x66) => {
-            state.pos.row = param_or(args, 0, 1) - 1;
-            state.pos.col = param_or(args, 1, 1) - 1;
-            if state.mode.origin() != 0 {
-                state.pos.row = state.pos.row.wrapping_add(state.scrollregion_top);
-                state.pos.col = state.pos.col.wrapping_add(state.scroll_left());
-            }
-            state.at_phantom = 0;
-        }
+        (0, 0, 0x48 | 0x66) => cursor_to(state, param_or(args, 0, 1) - 1, param_or(args, 1, 1) - 1),
         (0, 0, 0x49) => state.tab(repeat(args, 0), true), // CHT - ECMA-48 8.3.10
         // ED - ECMA-48 8.3.39, and its selective form DECSED.
-        (0, 0, 0x4a) | (0, b'?', 0x4a) => {
+        (0, 0 | b'?', 0x4a) => {
             if erase_display(state, args, leader == b'?') {
                 return Outcome::Handled;
             }
         }
         // EL - ECMA-48 8.3.41, and its selective form DECSEL.
-        (0, 0, 0x4b) | (0, b'?', 0x4b) => {
-            let (start_col, end_col) = match param(args, 0) {
-                None | Some(0) => (state.pos.col, state.cursor_row_width()),
-                Some(1) => (0, state.pos.col + 1),
-                Some(2) => (0, state.cursor_row_width()),
-                Some(_) => return Outcome::Ignored,
-            };
-            if end_col > start_col {
-                let rect = VTermRect {
-                    start_row: state.pos.row,
-                    end_row: state.pos.row + 1,
-                    start_col,
-                    end_col,
-                };
-                state.erase(rect, leader == b'?');
+        (0, 0 | b'?', 0x4b) => {
+            if erase_line(state, param(args, 0), leader == b'?').is_none() {
+                return Outcome::Ignored;
             }
         }
         (0, 0, 0x4c) => scroll_region_by(state, -repeat(args, 0)), // IL - ECMA-48 8.3.67
         (0, 0, 0x4d) => scroll_region_by(state, repeat(args, 0)),  // DL - ECMA-48 8.3.32
-        (0, 0, 0x50) => {
-            // DCH - ECMA-48 8.3.26
-            let count = repeat(args, 0);
-            if !state.cursor_in_scroll_region() {
-                return finish(state, oldpos, cancel_phantom);
-            }
-            let rect = VTermRect {
-                start_row: state.pos.row,
-                end_row: state.pos.row + 1,
-                start_col: state.pos.col,
-                end_col: if state.mode.leftrightmargin() != 0 {
-                    state.scroll_right()
-                } else {
-                    state.cursor_row_width()
-                },
-            };
-            state.scroll(rect, 0, count);
-        }
-        (0, 0, 0x53) => {
-            // SU - ECMA-48 8.3.147
-            let rect = state.scroll_region();
-            state.scroll(rect, repeat(args, 0), 0);
-        }
-        (0, 0, 0x54) => {
-            // SD - ECMA-48 8.3.113
-            let rect = state.scroll_region();
-            state.scroll(rect, -repeat(args, 0), 0);
-        }
-        (0, 0, 0x58) => {
-            // ECH - ECMA-48 8.3.38
-            let rect = VTermRect {
-                start_row: state.pos.row,
-                end_row: state.pos.row + 1,
-                start_col: state.pos.col,
-                end_col: state
-                    .pos
-                    .col
-                    .wrapping_add(repeat(args, 0))
-                    .min(state.cursor_row_width()),
-            };
-            state.erase(rect, false);
-        }
-        (0, 0, 0x5a) => state.tab(repeat(args, 0), false), // CBT - ECMA-48 8.3.7
-        (0, 0, 0x60) => {
-            // HPA - ECMA-48 8.3.57
-            state.pos.col = param_or(args, 0, 1) - 1;
-            state.at_phantom = 0;
-        }
-        (0, 0, 0x61) => cursor_by(state, 0, repeat(args, 0)), // HPR - ECMA-48 8.3.59
+        (0, 0, 0x50) => shift_chars(state, repeat(args, 0)),       // DCH - ECMA-48 8.3.26
+        (0, 0, 0x53) => scroll_lines(state, repeat(args, 0)),      // SU - ECMA-48 8.3.147
+        (0, 0, 0x54) => scroll_lines(state, -repeat(args, 0)),     // SD - ECMA-48 8.3.113
+        (0, 0, 0x58) => erase_chars(state, repeat(args, 0)),       // ECH - ECMA-48 8.3.38
+        (0, 0, 0x5a) => state.tab(repeat(args, 0), false),         // CBT - ECMA-48 8.3.7
+        (0, 0, 0x61) => cursor_by(state, 0, repeat(args, 0)),      // HPR - ECMA-48 8.3.59
         (0, 0, 0x62) => repeat_glyph(state, repeat(args, 0), &mut cancel_phantom), // REP
         (0, 0, 0x63) => {
             // DA - ECMA-48 8.3.24
             if param_or(args, 0, 0) == 0 {
-                let attr = vterm_primary_device_attr.with(|attr| *attr);
-                let text: Vec<u8> = attr
-                    .iter()
-                    .take_while(|&&byte| byte != 0)
-                    .map(|&byte| byte.cast_unsigned())
-                    .collect();
-                let mut seq = EscapeSeq::csi(state.ctrl8bit());
-                seq.push(b'?');
-                seq.extend(&text);
-                seq.push(b'c');
-                state.reply(&seq);
+                primary_device_attributes(state);
             }
         }
         (0, b'>', 0x63) => {
@@ -237,46 +144,22 @@ pub(super) fn dispatch(
             let _ = write!(seq, ">0;100;0c");
             state.reply(&seq);
         }
-        (0, 0, 0x64) => {
-            // VPA - ECMA-48 8.3.158
-            state.pos.row = param_or(args, 0, 1) - 1;
-            if state.mode.origin() != 0 {
-                state.pos.row = state.pos.row.wrapping_add(state.scrollregion_top);
-            }
-            state.at_phantom = 0;
-        }
-        (0, 0, 0x65) => cursor_by(state, repeat(args, 0), 0), // VPR - ECMA-48 8.3.160
+        (0, 0, 0x64) => row_to(state, param_or(args, 0, 1) - 1), // VPA - ECMA-48 8.3.158
+        (0, 0, 0x65) => cursor_by(state, repeat(args, 0), 0),    // VPR - ECMA-48 8.3.160
         (0, 0, 0x67) => {
-            // TBC - ECMA-48 8.3.154. Line tab stops are not modelled, so the
-            // three parameters that clear them do nothing.
-            match param_or(args, 0, 0) {
-                0 => {
-                    let col = state.pos.col;
-                    state.clear_tabstop(col);
-                }
-                3 | 5 => {
-                    for col in 0..state.cols {
-                        state.clear_tabstop(col);
-                    }
-                }
-                1 | 2 | 4 => {}
-                _ => return Outcome::Ignored,
+            // TBC - ECMA-48 8.3.154
+            if clear_tabstops(state, param_or(args, 0, 0)).is_none() {
+                return Outcome::Ignored;
             }
         }
-        (0, 0, 0x68) => {
-            // SM - ECMA-48 8.3.125
+        // SM - ECMA-48 8.3.125, and RM - ECMA-48 8.3.106.
+        (0, 0, 0x68 | 0x6c) => {
             if let Some(num) = param(args, 0) {
-                mode::set_ansi_mode(state, num, true);
-            }
-        }
-        (0, 0, 0x6c) => {
-            // RM - ECMA-48 8.3.106
-            if let Some(num) = param(args, 0) {
-                mode::set_ansi_mode(state, num, false);
+                mode::set_ansi_mode(state, num, command == 0x68);
             }
         }
         // DEC private mode set and reset, which take a list of modes.
-        (0, b'?', 0x68) | (0, b'?', 0x6c) => {
+        (0, b'?', 0x68 | 0x6c) => {
             for i in 0..args.len() {
                 if let Some(num) = param(args, i) {
                     mode::set_dec_mode(state, num, command == 0x68);
@@ -286,21 +169,9 @@ pub(super) fn dispatch(
         (0, 0, 0x6a) => cursor_by(state, 0, -repeat(args, 0)), // HPB - ECMA-48 8.3.58
         (0, 0, 0x6b) => cursor_by(state, -repeat(args, 0), 0), // VPB - ECMA-48 8.3.159
         (0, 0, 0x6d) => state.change_pen(PenChange::Sgr(args)), // SGR - ECMA-48 8.3.117
-        (0, b'?', 0x6d) => {
-            // DECSGR. No DEC terminal recognised these, but some printers
-            // did; they are another way to ask for super- and subscript.
-            for i in 0..args.len() {
-                let replacement = match param(args, i) {
-                    Some(4) => 73,  // superscript on
-                    Some(5) => 74,  // subscript on
-                    Some(24) => 75, // both off
-                    _ => continue,
-                };
-                state.change_pen(PenChange::Sgr(&[replacement]));
-            }
-        }
+        (0, b'?', 0x6d) => dec_sgr(state, args),               // DECSGR
         // DSR - ECMA-48 8.3.35, and DECDSR.
-        (0, 0, 0x6e) | (0, b'?', 0x6e) => device_status(state, param_or(args, 0, 0), leader),
+        (0, 0 | b'?', 0x6e) => device_status(state, param_or(args, 0, 0), leader),
         (b'!', 0, 0x70) => mode::reset(state, false), // DECSTR - soft terminal reset
         (b'$', b'?', 0x70) => {
             // `c_int::MAX` is `CSI_ARG_MISSING` in the width a parameter
@@ -308,20 +179,7 @@ pub(super) fn dispatch(
             mode::request_dec_mode(state, param_or(args, 0, c_int::MAX))
         }
         (0, b'>', 0x71) => mode::request_version_string(state), // XTVERSION
-        (b' ', 0, 0x71) => {
-            // DECSCUSR - the cursor's shape, and whether it blinks.
-            let (blink, shape) = match param_or(args, 0, 1) {
-                0 | 1 => (true, VTERM_PROP_CURSORSHAPE_BLOCK),
-                2 => (false, VTERM_PROP_CURSORSHAPE_BLOCK),
-                3 => (true, VTERM_PROP_CURSORSHAPE_UNDERLINE),
-                4 => (false, VTERM_PROP_CURSORSHAPE_UNDERLINE),
-                5 => (true, VTERM_PROP_CURSORSHAPE_BAR_LEFT),
-                6 => (false, VTERM_PROP_CURSORSHAPE_BAR_LEFT),
-                _ => return finish(state, oldpos, cancel_phantom),
-            };
-            state.set_termprop_bool(VTERM_PROP_CURSORBLINK, blink);
-            state.set_termprop_int(VTERM_PROP_CURSORSHAPE, shape);
-        }
+        (b' ', 0, 0x71) => set_cursor_style(state, param_or(args, 0, 1)), // DECSCUSR
         (b'"', 0, 0x71) => {
             // DECSCA - whether following cells resist a selective erase.
             match param_or(args, 0, 0) {
@@ -340,19 +198,8 @@ pub(super) fn dispatch(
             mode::set_key_encoding_flags(state, param_or(args, 0, 0), how);
         }
         // DECIC and DECDC, which open or close a column at the cursor.
-        (b'\'', 0, command @ (0x7d | 0x7e)) => {
-            let count = repeat(args, 0);
-            if !state.cursor_in_scroll_region() {
-                return finish(state, oldpos, cancel_phantom);
-            }
-            let rect = VTermRect {
-                start_row: state.scrollregion_top,
-                end_row: state.scroll_bottom(),
-                start_col: state.pos.col,
-                end_col: state.scroll_right(),
-            };
-            state.scroll(rect, 0, if command == 0x7d { -count } else { count });
-        }
+        (b'\'', 0, 0x7d) => shift_columns(state, -repeat(args, 0)),
+        (b'\'', 0, 0x7e) => shift_columns(state, repeat(args, 0)),
         _ => return Outcome::Unrecognised,
     }
 
@@ -364,6 +211,175 @@ fn finish(state: &mut StateCx<'_>, oldpos: crate::vterm::types::VTermPos, cancel
     state.clamp_cursor();
     state.update_cursor(oldpos, cancel);
     Outcome::Handled
+}
+
+/// `CHA` / `HPA`: put the cursor in a column of its line.
+fn column_to(state: &mut StateCx<'_>, col: c_int) {
+    state.pos.col = col;
+    state.at_phantom = 0;
+}
+
+/// `VPA`: put the cursor on a row, counted from the scroll region's top in
+/// origin mode.
+fn row_to(state: &mut StateCx<'_>, row: c_int) {
+    state.pos.row = row;
+    if state.mode.origin() != 0 {
+        state.pos.row = state.pos.row.wrapping_add(state.scrollregion_top);
+    }
+    state.at_phantom = 0;
+}
+
+/// `CUP` / `HVP`: put the cursor at a row and column, counted from the
+/// scroll region's corner in origin mode.
+fn cursor_to(state: &mut StateCx<'_>, row: c_int, col: c_int) {
+    state.pos.row = row;
+    state.pos.col = col;
+    if state.mode.origin() != 0 {
+        state.pos.row = state.pos.row.wrapping_add(state.scrollregion_top);
+        state.pos.col = state.pos.col.wrapping_add(state.scroll_left());
+    }
+    state.at_phantom = 0;
+}
+
+/// `ICH` and `DCH`: shift the rest of the cursor's line right (a negative
+/// count, opening blanks) or left (closing cells), inside the margins.
+fn shift_chars(state: &mut StateCx<'_>, rightward: c_int) {
+    if !state.cursor_in_scroll_region() {
+        return;
+    }
+    let rect = VTermRect {
+        start_row: state.pos.row,
+        end_row: state.pos.row + 1,
+        start_col: state.pos.col,
+        end_col: if state.mode.leftrightmargin() != 0 {
+            state.scroll_right()
+        } else {
+            state.cursor_row_width()
+        },
+    };
+    state.scroll(rect, 0, rightward);
+}
+
+/// `DECIC` and `DECDC`: open (a negative count) or close a column at the
+/// cursor across the whole scroll region.
+fn shift_columns(state: &mut StateCx<'_>, rightward: c_int) {
+    if !state.cursor_in_scroll_region() {
+        return;
+    }
+    let rect = VTermRect {
+        start_row: state.scrollregion_top,
+        end_row: state.scroll_bottom(),
+        start_col: state.pos.col,
+        end_col: state.scroll_right(),
+    };
+    state.scroll(rect, 0, rightward);
+}
+
+/// `SU` and `SD`: scroll the whole region up (positive) or down.
+fn scroll_lines(state: &mut StateCx<'_>, downward: c_int) {
+    let rect = state.scroll_region();
+    state.scroll(rect, downward, 0);
+}
+
+/// `EL` / `DECEL`: erase part of the cursor's line. `None` when the
+/// parameter names no part, which upstream ignores.
+fn erase_line(state: &mut StateCx<'_>, which: Option<c_int>, selective: bool) -> Option<()> {
+    let (start_col, end_col) = match which {
+        None | Some(0) => (state.pos.col, state.cursor_row_width()),
+        Some(1) => (0, state.pos.col + 1),
+        Some(2) => (0, state.cursor_row_width()),
+        Some(_) => return None,
+    };
+    if end_col > start_col {
+        let rect = VTermRect {
+            start_row: state.pos.row,
+            end_row: state.pos.row + 1,
+            start_col,
+            end_col,
+        };
+        state.erase(rect, selective);
+    }
+    Some(())
+}
+
+/// `ECH`: blank `count` cells from the cursor, without moving anything.
+fn erase_chars(state: &mut StateCx<'_>, count: c_int) {
+    let rect = VTermRect {
+        start_row: state.pos.row,
+        end_row: state.pos.row + 1,
+        start_col: state.pos.col,
+        end_col: state
+            .pos
+            .col
+            .wrapping_add(count)
+            .min(state.cursor_row_width()),
+    };
+    state.erase(rect, false);
+}
+
+/// `DA`: answer the primary device attributes the consumer configured.
+fn primary_device_attributes(state: &mut StateCx<'_>) {
+    let attr = vterm_primary_device_attr.with(|attr| *attr);
+    let text: Vec<u8> = attr
+        .iter()
+        .take_while(|&&byte| byte != 0)
+        .map(|&byte| byte.cast_unsigned())
+        .collect();
+    let mut seq = EscapeSeq::csi(state.ctrl8bit());
+    seq.push(b'?');
+    seq.extend(&text);
+    seq.push(b'c');
+    state.reply(&seq);
+}
+
+/// `TBC`: clear the tab stop at the cursor, or all of them. Line tab stops
+/// are not modelled, so the three parameters that clear them do nothing;
+/// `None` for a parameter that names nothing, which upstream ignores.
+fn clear_tabstops(state: &mut StateCx<'_>, which: c_int) -> Option<()> {
+    match which {
+        0 => {
+            let col = state.pos.col;
+            state.clear_tabstop(col);
+        }
+        3 | 5 => {
+            for col in 0..state.cols {
+                state.clear_tabstop(col);
+            }
+        }
+        1 | 2 | 4 => {}
+        _ => return None,
+    }
+    Some(())
+}
+
+/// `DECSGR`. No DEC terminal recognised these, but some printers did; they
+/// are another way to ask for super- and subscript.
+fn dec_sgr(state: &mut StateCx<'_>, args: &[c_long]) {
+    for i in 0..args.len() {
+        let replacement = match param(args, i) {
+            Some(4) => 73,  // superscript on
+            Some(5) => 74,  // subscript on
+            Some(24) => 75, // both off
+            _ => continue,
+        };
+        state.change_pen(PenChange::Sgr(&[replacement]));
+    }
+}
+
+/// `DECSCUSR`: the cursor's shape, and whether it blinks. An unknown style
+/// changes nothing.
+fn set_cursor_style(state: &mut StateCx<'_>, style: c_int) {
+    let (blink, shape) = match style {
+        0 | 1 => (true, VTERM_PROP_CURSORSHAPE_BLOCK),
+        2 => (false, VTERM_PROP_CURSORSHAPE_BLOCK),
+        3 => (true, VTERM_PROP_CURSORSHAPE_UNDERLINE),
+        4 => (false, VTERM_PROP_CURSORSHAPE_UNDERLINE),
+        5 => (true, VTERM_PROP_CURSORSHAPE_BAR_LEFT),
+        6 => (false, VTERM_PROP_CURSORSHAPE_BAR_LEFT),
+        _ => return,
+    };
+    state.set_termprop_bool(VTERM_PROP_CURSORBLINK, blink);
+    state.set_termprop_int(VTERM_PROP_CURSORSHAPE, shape);
 }
 
 /// Moves the cursor relatively. A host may name a distance far larger than

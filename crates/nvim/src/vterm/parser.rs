@@ -246,6 +246,385 @@ fn pending(input: &[u8], start: Option<usize>, pos: usize) -> &[u8] {
     }
 }
 
+/// Where one write is in its input.
+#[derive(Debug)]
+struct Cursor<'i> {
+    input: &'i [u8],
+    /// The byte being parsed.
+    pos: usize,
+    /// Index into `input` where the payload of the open string sequence
+    /// begins; `None` while no payload has started.
+    string_start: Option<usize>,
+}
+
+impl<'i> Cursor<'i> {
+    /// The payload accumulated for the open string sequence, up to the
+    /// byte being parsed.
+    fn pending(&self) -> &'i [u8] {
+        pending(self.input, self.string_start, self.pos)
+    }
+
+    /// The payload starts after the byte being parsed.
+    fn start_string_after(&mut self) {
+        self.string_start = Some(self.pos + 1);
+    }
+}
+
+impl<H: ParserHandler + ?Sized> Parser<'_, H> {
+    /// Acts on `c` if it is one of the bytes that mean the same wherever
+    /// the parser is — filler, cancel, ESC, a C0 control — and answers
+    /// whether it was.
+    fn filler_or_control(&mut self, cur: &mut Cursor<'_>, c: u8, state: ParserState) -> bool {
+        // NUL and DEL are filler; they interrupt a string but never end it.
+        if c == 0x00 || c == 0x7f {
+            if state.is_string() {
+                self.dispatch(ParserEvent::StringFragment {
+                    bytes: cur.pending(),
+                    last: false,
+                    terminator: VTERM_TERMINATOR_ST,
+                });
+                cur.start_string_after();
+            }
+            if self.emit_nul {
+                self.dispatch(ParserEvent::Control(c));
+            }
+            return true;
+        }
+        // CAN and SUB abandon whatever was in progress.
+        if c == 0x18 || c == 0x1a {
+            self.set_in_esc(false);
+            self.state = ParserState::Normal.raw();
+            cur.string_start = None;
+            if self.emit_nul {
+                self.dispatch(ParserEvent::Control(c));
+            }
+            return true;
+        }
+        if c == 0x1b {
+            self.intermedlen = 0;
+            if !state.is_string() {
+                self.state = ParserState::Normal.raw();
+            }
+            self.set_in_esc(true);
+            return true;
+        }
+        // Inside a string BEL stands in for ST, so it is handled with the
+        // terminators rather than here with the controls.
+        if !(c == 0x07 && state.is_string()) && c < 0x20 {
+            // SOS is defined to swallow every other control character.
+            if state == ParserState::Sos {
+                return true;
+            }
+            if state.is_string() {
+                self.dispatch(ParserEvent::StringFragment {
+                    bytes: cur.pending(),
+                    last: false,
+                    terminator: VTERM_TERMINATOR_ST,
+                });
+            }
+            self.dispatch(ParserEvent::Control(c));
+            if ParserState::from_raw(self.state).is_string() {
+                cur.start_string_after();
+            }
+            return true;
+        }
+        false
+    }
+
+    /// Feeds `c` to the sequence in progress, or to the text when there is
+    /// none.
+    fn sequence_byte(&mut self, cur: &mut Cursor<'_>, mut c: u8, mut state: ParserState) {
+        let mut c1_allowed = self.c1_allowed();
+        let mut string_len = cur
+            .string_start
+            .map_or(0, |start| cur.pos.saturating_sub(start));
+
+        if self.in_esc() {
+            // `ESC X` is the 7-bit spelling of the C1 control X + 0x40.
+            // Inside a string only `ESC \` (ST) is recognised, so that a
+            // stray ESC can't be mistaken for a new sequence.
+            if self.intermedlen == 0
+                && (0x40..0x60).contains(&c)
+                && (!state.is_string() || c == 0x5c)
+            {
+                c += 0x40;
+                c1_allowed = true;
+                // The ESC itself is not part of the payload.
+                string_len = string_len.saturating_sub(1);
+                self.set_in_esc(false);
+            } else {
+                cur.string_start = None;
+                state = ParserState::Normal;
+                self.state = state.raw();
+            }
+        }
+
+        // The CSI sections fall through to each other and an OSC command
+        // falls through to the string collector: a section answers the one
+        // that takes the byte next, if any.
+        let mut section = Some(state);
+        while let Some(current) = section {
+            section = match current {
+                ParserState::CsiLeader => self.csi_leader(c),
+                ParserState::CsiArgs => self.csi_args(c),
+                ParserState::CsiIntermed => {
+                    self.csi_intermed(cur, c);
+                    None
+                }
+                ParserState::OscCommand => self.osc_command(cur, c, &mut string_len),
+                ParserState::DcsCommand => {
+                    self.dcs_command(cur, c);
+                    None
+                }
+                ParserState::Osc
+                | ParserState::Dcs
+                | ParserState::Apc
+                | ParserState::Pm
+                | ParserState::Sos => {
+                    self.string_byte(cur, c, c1_allowed, string_len);
+                    None
+                }
+                ParserState::Normal => {
+                    self.normal_byte(cur, c, c1_allowed);
+                    None
+                }
+            };
+        }
+    }
+
+    /// A control sequence's private-use markers, 0x3c to 0x3f. Anything
+    /// else ends them and starts the parameters.
+    fn csi_leader(&mut self, c: u8) -> Option<ParserState> {
+        let csi = &mut self.v;
+        if (0x3c..=0x3f).contains(&c) {
+            if as_index(csi.leaderlen) < CSI_LEADER_MAX - 1 {
+                csi.leader[as_index(csi.leaderlen)] = c;
+                csi.leaderlen += 1;
+            }
+            return None;
+        }
+        csi.leader[as_index(csi.leaderlen)] = 0;
+        csi.argi = 0;
+        csi.args[0] = CSI_ARG_MISSING;
+        self.state = ParserState::CsiArgs.raw();
+        Some(ParserState::CsiArgs)
+    }
+
+    /// A control sequence's parameters: digits and separators. Anything
+    /// else ends them and starts the intermediates.
+    fn csi_args(&mut self, mut c: u8) -> Option<ParserState> {
+        let csi = &mut self.v;
+        let argi = as_index(csi.argi);
+        if c.is_ascii_digit() {
+            if csi.args[argi] == CSI_ARG_MISSING {
+                csi.args[argi] = 0;
+            }
+            // A sender can run the digits past what a `long` holds; wrap
+            // rather than trap, as the C did.
+            csi.args[argi] = csi.args[argi]
+                .wrapping_mul(10)
+                .wrapping_add(c_long::from(c - b'0'));
+            return None;
+        }
+        // A colon separates sub-parameters of one parameter; it is
+        // otherwise a semicolon with a flag set.
+        if c == b':' {
+            csi.args[argi] |= CSI_ARG_FLAG_MORE;
+            c = b';';
+        }
+        // Upstream advanced `argi` unbounded, so a sequence with 32 or more
+        // parameters ran off the end of `args`. Parameters past the last
+        // slot now overwrite it instead.
+        if c == b';' {
+            if argi + 1 < CSI_ARGS_MAX {
+                csi.argi += 1;
+            }
+            csi.args[as_index(csi.argi)] = CSI_ARG_MISSING;
+            return None;
+        }
+        csi.argi = (csi.argi + 1).min(const_len_as_int(CSI_ARGS_MAX));
+        self.intermedlen = 0;
+        self.state = ParserState::CsiIntermed.raw();
+        Some(ParserState::CsiIntermed)
+    }
+
+    /// A control sequence's intermediates, then the byte that ends it.
+    fn csi_intermed(&mut self, cur: &mut Cursor<'_>, c: u8) {
+        if is_intermed(c) {
+            self.push_intermed(c);
+            return;
+        }
+        // ESC cancels the sequence; a final byte completes it; anything
+        // else was malformed. All three end it.
+        if c != 0x1b && (0x40..=0x7e).contains(&c) {
+            self.terminate_intermed();
+            self.dispatch(ParserEvent::Csi(c));
+        }
+        self.state = ParserState::Normal.raw();
+        cur.string_start = None;
+    }
+
+    /// An OSC's command number, up to the `;` that starts its payload. A
+    /// payload with no number starts at once, in the string collector.
+    fn osc_command(
+        &mut self,
+        cur: &mut Cursor<'_>,
+        c: u8,
+        string_len: &mut usize,
+    ) -> Option<ParserState> {
+        // An OSC keeps its command number where a control sequence keeps
+        // its leader's length.
+        let command = &mut self.v.leaderlen;
+        if c.is_ascii_digit() {
+            let base = if *command == -1 {
+                0
+            } else {
+                command.wrapping_mul(10)
+            };
+            *command = base.wrapping_add(c_int::from(c - b'0'));
+            return None;
+        }
+        if c == b';' {
+            self.state = ParserState::Osc.raw();
+            cur.start_string_after();
+            return None;
+        }
+        // No command digits at all: the payload starts here.
+        cur.string_start = Some(cur.pos);
+        *string_len = 0;
+        self.state = ParserState::Osc.raw();
+        Some(ParserState::Osc)
+    }
+
+    /// A DCS's command bytes, up to the final byte that starts its payload.
+    fn dcs_command(&mut self, cur: &mut Cursor<'_>, c: u8) {
+        // A DCS keeps its command bytes where a control sequence keeps its
+        // leader.
+        let dcs = &mut self.v;
+        if as_index(dcs.leaderlen) < CSI_LEADER_MAX {
+            dcs.leader[as_index(dcs.leaderlen)] = c;
+            dcs.leaderlen += 1;
+        }
+        if (0x40..=0x7e).contains(&c) {
+            cur.start_string_after();
+            self.state = ParserState::Dcs.raw();
+        }
+    }
+
+    /// A byte of a string sequence's payload: only a terminator does
+    /// anything, handing over the payload as its last fragment.
+    fn string_byte(&mut self, cur: &mut Cursor<'_>, c: u8, c1_allowed: bool, string_len: usize) {
+        if c == 0x07 || (c1_allowed && c == 0x9c) {
+            let start = cur.string_start.unwrap_or(cur.pos);
+            self.dispatch(ParserEvent::StringFragment {
+                bytes: &cur.input[start..(start + string_len).min(cur.input.len())],
+                last: true,
+                terminator: if c == 0x07 {
+                    VTERM_TERMINATOR_BEL
+                } else {
+                    VTERM_TERMINATOR_ST
+                },
+            });
+            self.state = ParserState::Normal.raw();
+            cur.string_start = None;
+        }
+    }
+
+    /// A byte outside any sequence: an escape sequence's intermediates and
+    /// final byte, a C1 control, or text.
+    fn normal_byte(&mut self, cur: &mut Cursor<'_>, c: u8, c1_allowed: bool) {
+        if self.in_esc() {
+            if is_intermed(c) {
+                self.push_intermed(c);
+            } else if (0x30..0x7f).contains(&c) {
+                self.dispatch(ParserEvent::Escape(c));
+                self.set_in_esc(false);
+                self.state = ParserState::Normal.raw();
+                cur.string_start = None;
+            }
+            return;
+        }
+        if c1_allowed && (0x80..0xa0).contains(&c) {
+            self.c1_control(cur, c);
+            return;
+        }
+        // Plain text. The callback takes as much as it wants; if it takes
+        // nothing, force a byte of progress.
+        let eaten = self
+            .dispatch(ParserEvent::Text(&cur.input[cur.pos..]))
+            .max(1);
+        cur.pos += eaten - 1;
+    }
+
+    /// An 8-bit C1 control: the introducers open their sequence, the rest
+    /// go to the consumer.
+    fn c1_control(&mut self, cur: &mut Cursor<'_>, c: u8) {
+        match c {
+            // DCS
+            0x90 => {
+                self.string_initial = true;
+                self.v.leaderlen = 0;
+                self.state = ParserState::DcsCommand.raw();
+                cur.string_start = None;
+            }
+            // SOS
+            0x98 => {
+                self.string_initial = true;
+                self.state = ParserState::Sos.raw();
+                cur.start_string_after();
+            }
+            // CSI
+            0x9b => {
+                self.v.leaderlen = 0;
+                self.state = ParserState::CsiLeader.raw();
+                cur.string_start = None;
+            }
+            // OSC
+            0x9d => {
+                self.v.leaderlen = -1;
+                self.string_initial = true;
+                self.state = ParserState::OscCommand.raw();
+                cur.string_start = None;
+            }
+            // PM
+            0x9e => {
+                self.string_initial = true;
+                self.state = ParserState::Pm.raw();
+                cur.start_string_after();
+            }
+            // APC
+            0x9f => {
+                self.string_initial = true;
+                self.state = ParserState::Apc.raw();
+                cur.start_string_after();
+            }
+            _ => {
+                self.dispatch(ParserEvent::Control(c));
+            }
+        }
+    }
+
+    /// Hands over whatever payload the write ended in the middle of.
+    fn flush_pending(&mut self, cur: &Cursor<'_>) {
+        let Some(start) = cur.string_start else {
+            return;
+        };
+        let mut string_len = cur.pos.min(cur.input.len()).saturating_sub(start);
+        if string_len > 0 {
+            // A trailing ESC may yet turn out to be the ST that ends the
+            // string, so it is not part of the payload.
+            if self.in_esc() {
+                string_len -= 1;
+            }
+            self.dispatch(ParserEvent::StringFragment {
+                bytes: &cur.input[start..start + string_len],
+                last: false,
+                terminator: VTERM_TERMINATOR_ST,
+            });
+        }
+    }
+}
+
 /// Parses `input`, the next bytes of the child's output, reporting what it
 /// recognises to `handler`. A sequence `input` ends in the middle of resumes
 /// on the next call.
@@ -260,315 +639,25 @@ pub(crate) fn write<H: ParserHandler + ?Sized>(
         handler,
         utf8,
     };
+    // A string sequence left open by an earlier call resumes at byte zero.
+    let mut cur = Cursor {
+        input,
+        pos: 0,
+        string_start: ParserState::from_raw(parser.state)
+            .is_string()
+            .then_some(0usize),
+    };
 
-    // Index into `input` where the payload of the open string sequence
-    // begins. A sequence left open by an earlier call resumes at byte zero.
-    let mut string_start = ParserState::from_raw(parser.state)
-        .is_string()
-        .then_some(0usize);
-    let mut pos = 0usize;
-
-    while pos < input.len() {
-        let mut c = input[pos];
-        let mut c1_allowed = parser.c1_allowed();
-        let mut state = ParserState::from_raw(parser.state);
-
-        'byte: {
-            // NUL and DEL are filler; they interrupt a string but never end it.
-            if c == 0x00 || c == 0x7f {
-                if state.is_string() {
-                    parser.dispatch(ParserEvent::StringFragment {
-                        bytes: pending(input, string_start, pos),
-                        last: false,
-                        terminator: VTERM_TERMINATOR_ST,
-                    });
-                    string_start = Some(pos + 1);
-                }
-                if parser.emit_nul {
-                    parser.dispatch(ParserEvent::Control(c));
-                }
-                break 'byte;
-            }
-            // CAN and SUB abandon whatever was in progress.
-            if c == 0x18 || c == 0x1a {
-                parser.set_in_esc(false);
-                parser.state = ParserState::Normal.raw();
-                string_start = None;
-                if parser.emit_nul {
-                    parser.dispatch(ParserEvent::Control(c));
-                }
-                break 'byte;
-            }
-            if c == 0x1b {
-                parser.intermedlen = 0;
-                if !state.is_string() {
-                    parser.state = ParserState::Normal.raw();
-                }
-                parser.set_in_esc(true);
-                break 'byte;
-            }
-            // Inside a string BEL stands in for ST, so it is handled below
-            // with the terminators rather than here with the controls.
-            if !(c == 0x07 && state.is_string()) && c < 0x20 {
-                // SOS is defined to swallow every other control character.
-                if state == ParserState::Sos {
-                    break 'byte;
-                }
-                if state.is_string() {
-                    parser.dispatch(ParserEvent::StringFragment {
-                        bytes: pending(input, string_start, pos),
-                        last: false,
-                        terminator: VTERM_TERMINATOR_ST,
-                    });
-                }
-                parser.dispatch(ParserEvent::Control(c));
-                if ParserState::from_raw(parser.state).is_string() {
-                    string_start = Some(pos + 1);
-                }
-                break 'byte;
-            }
-
-            let mut string_len = string_start.map_or(0, |start| pos.saturating_sub(start));
-
-            if parser.in_esc() {
-                // `ESC X` is the 7-bit spelling of the C1 control X + 0x40.
-                // Inside a string only `ESC \` (ST) is recognised, so that a
-                // stray ESC can't be mistaken for a new sequence.
-                if parser.intermedlen == 0
-                    && (0x40..0x60).contains(&c)
-                    && (!state.is_string() || c == 0x5c)
-                {
-                    c += 0x40;
-                    c1_allowed = true;
-                    // The ESC itself is not part of the payload.
-                    string_len = string_len.saturating_sub(1);
-                    parser.set_in_esc(false);
-                } else {
-                    string_start = None;
-                    state = ParserState::Normal;
-                    parser.state = state.raw();
-                }
-            }
-
-            // The CSI sections fall through to each other and an OSC command
-            // falls through to the string collector, so which section runs is
-            // a loop variable rather than a match arm.
-            let mut section = state;
-            loop {
-                match section {
-                    ParserState::CsiLeader => {
-                        // Private-use markers, 0x3c to 0x3f.
-                        if (0x3c..=0x3f).contains(&c) {
-                            let csi = &mut parser.v;
-                            if as_index(csi.leaderlen) < CSI_LEADER_MAX - 1 {
-                                csi.leader[as_index(csi.leaderlen)] = c;
-                                csi.leaderlen += 1;
-                            }
-                            break;
-                        }
-                        let csi = &mut parser.v;
-                        csi.leader[as_index(csi.leaderlen)] = 0;
-                        csi.argi = 0;
-                        csi.args[0] = CSI_ARG_MISSING;
-                        parser.state = ParserState::CsiArgs.raw();
-                        section = ParserState::CsiArgs;
-                    }
-                    ParserState::CsiArgs => {
-                        let csi = &mut parser.v;
-                        let argi = as_index(csi.argi);
-                        if c.is_ascii_digit() {
-                            if csi.args[argi] == CSI_ARG_MISSING {
-                                csi.args[argi] = 0;
-                            }
-                            // A sender can run the digits past what a `long`
-                            // holds; wrap rather than trap, as the C did.
-                            csi.args[argi] = csi.args[argi]
-                                .wrapping_mul(10)
-                                .wrapping_add(c_long::from(c - b'0'));
-                            break;
-                        }
-                        // A colon separates sub-parameters of one parameter;
-                        // it is otherwise a semicolon with a flag set.
-                        if c == b':' {
-                            csi.args[argi] |= CSI_ARG_FLAG_MORE;
-                            c = b';';
-                        }
-                        // Upstream advanced `argi` unbounded, so a sequence
-                        // with 32 or more parameters ran off the end of
-                        // `args`. Parameters past the last slot now overwrite
-                        // it instead.
-                        if c == b';' {
-                            if argi + 1 < CSI_ARGS_MAX {
-                                csi.argi += 1;
-                            }
-                            csi.args[as_index(csi.argi)] = CSI_ARG_MISSING;
-                            break;
-                        }
-                        csi.argi = (csi.argi + 1).min(const_len_as_int(CSI_ARGS_MAX));
-                        parser.intermedlen = 0;
-                        parser.state = ParserState::CsiIntermed.raw();
-                        section = ParserState::CsiIntermed;
-                    }
-                    ParserState::CsiIntermed => {
-                        if is_intermed(c) {
-                            parser.push_intermed(c);
-                            break;
-                        }
-                        // ESC cancels the sequence; a final byte completes it;
-                        // anything else was malformed. All three end it.
-                        if c != 0x1b && (0x40..=0x7e).contains(&c) {
-                            parser.terminate_intermed();
-                            parser.dispatch(ParserEvent::Csi(c));
-                        }
-                        parser.state = ParserState::Normal.raw();
-                        string_start = None;
-                        break;
-                    }
-                    ParserState::OscCommand => {
-                        // An OSC keeps its command number where a control
-                        // sequence keeps its leader's length.
-                        let command = &mut parser.v.leaderlen;
-                        if c.is_ascii_digit() {
-                            let base = if *command == -1 {
-                                0
-                            } else {
-                                command.wrapping_mul(10)
-                            };
-                            *command = base.wrapping_add(c_int::from(c - b'0'));
-                            break;
-                        }
-                        if c == b';' {
-                            parser.state = ParserState::Osc.raw();
-                            string_start = Some(pos + 1);
-                            break;
-                        }
-                        // No command digits at all: the payload starts here.
-                        string_start = Some(pos);
-                        string_len = 0;
-                        parser.state = ParserState::Osc.raw();
-                        section = ParserState::Osc;
-                    }
-                    ParserState::DcsCommand => {
-                        // A DCS keeps its command bytes where a control
-                        // sequence keeps its leader.
-                        let dcs = &mut parser.v;
-                        if as_index(dcs.leaderlen) < CSI_LEADER_MAX {
-                            dcs.leader[as_index(dcs.leaderlen)] = c;
-                            dcs.leaderlen += 1;
-                        }
-                        if (0x40..=0x7e).contains(&c) {
-                            string_start = Some(pos + 1);
-                            parser.state = ParserState::Dcs.raw();
-                        }
-                        break;
-                    }
-                    ParserState::Osc
-                    | ParserState::Dcs
-                    | ParserState::Apc
-                    | ParserState::Pm
-                    | ParserState::Sos => {
-                        if c == 0x07 || (c1_allowed && c == 0x9c) {
-                            let start = string_start.unwrap_or(pos);
-                            parser.dispatch(ParserEvent::StringFragment {
-                                bytes: &input[start..(start + string_len).min(input.len())],
-                                last: true,
-                                terminator: if c == 0x07 {
-                                    VTERM_TERMINATOR_BEL
-                                } else {
-                                    VTERM_TERMINATOR_ST
-                                },
-                            });
-                            parser.state = ParserState::Normal.raw();
-                            string_start = None;
-                        }
-                        break;
-                    }
-                    ParserState::Normal => {
-                        if parser.in_esc() {
-                            if is_intermed(c) {
-                                parser.push_intermed(c);
-                            } else if (0x30..0x7f).contains(&c) {
-                                parser.dispatch(ParserEvent::Escape(c));
-                                parser.set_in_esc(false);
-                                parser.state = ParserState::Normal.raw();
-                                string_start = None;
-                            }
-                            break;
-                        }
-                        if c1_allowed && (0x80..0xa0).contains(&c) {
-                            match c {
-                                // DCS
-                                0x90 => {
-                                    parser.string_initial = true;
-                                    parser.v.leaderlen = 0;
-                                    parser.state = ParserState::DcsCommand.raw();
-                                    string_start = None;
-                                }
-                                // SOS
-                                0x98 => {
-                                    parser.string_initial = true;
-                                    parser.state = ParserState::Sos.raw();
-                                    string_start = Some(pos + 1);
-                                }
-                                // CSI
-                                0x9b => {
-                                    parser.v.leaderlen = 0;
-                                    parser.state = ParserState::CsiLeader.raw();
-                                    string_start = None;
-                                }
-                                // OSC
-                                0x9d => {
-                                    parser.v.leaderlen = -1;
-                                    parser.string_initial = true;
-                                    parser.state = ParserState::OscCommand.raw();
-                                    string_start = None;
-                                }
-                                // PM
-                                0x9e => {
-                                    parser.string_initial = true;
-                                    parser.state = ParserState::Pm.raw();
-                                    string_start = Some(pos + 1);
-                                }
-                                // APC
-                                0x9f => {
-                                    parser.string_initial = true;
-                                    parser.state = ParserState::Apc.raw();
-                                    string_start = Some(pos + 1);
-                                }
-                                _ => {
-                                    parser.dispatch(ParserEvent::Control(c));
-                                }
-                            }
-                            break;
-                        }
-                        // Plain text. The callback takes as much as it wants;
-                        // if it takes nothing, force a byte of progress.
-                        let eaten = parser.dispatch(ParserEvent::Text(&input[pos..])).max(1);
-                        pos += eaten - 1;
-                        break;
-                    }
-                }
-            }
+    while cur.pos < input.len() {
+        let c = input[cur.pos];
+        let state = ParserState::from_raw(parser.state);
+        if !parser.filler_or_control(&mut cur, c, state) {
+            parser.sequence_byte(&mut cur, c, state);
         }
-        pos += 1;
+        cur.pos += 1;
     }
 
-    // Hand over whatever payload this write ended in the middle of.
-    if let Some(start) = string_start {
-        let mut string_len = pos.min(input.len()).saturating_sub(start);
-        if string_len > 0 {
-            // A trailing ESC may yet turn out to be the ST that ends the
-            // string, so it is not part of the payload.
-            if parser.in_esc() {
-                string_len -= 1;
-            }
-            parser.dispatch(ParserEvent::StringFragment {
-                bytes: &input[start..start + string_len],
-                last: false,
-                terminator: VTERM_TERMINATOR_ST,
-            });
-        }
-    }
+    parser.flush_pending(&cur);
 }
 
 #[cfg(test)]
