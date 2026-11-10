@@ -11,9 +11,10 @@
 //! the list being walked), detach, or edit the buffer and come back through
 //! [`buf_updates_send_changes`] recursively (which truncates it). That is why
 //! upstream re-reads `kv_size`/`kv_A` on every iteration instead of caching a
-//! pointer, why the loops here are `while i < len()` rather than
-//! `for i in 0..len`, and why [`SubscriberList::at`] indexes every slot ever
-//! written rather than the live prefix — see its comment.
+//! pointer, why [`retain_callbacks`] and [`each_channel`] walk
+//! `while i < len()` rather than `for i in 0..len`, and why
+//! [`SubscriberList::at`] indexes every slot ever written rather than the
+//! live prefix — see its comment.
 
 #![deny(
     clippy::cast_lossless,
@@ -444,10 +445,7 @@ fn unload(mut buffer: Buf, can_reload: bool) {
         buffer.channels().destroy();
     }
 
-    let mut j = 0;
-    let mut i = 0;
-    while i < buffer.callbacks().len() {
-        let cb = buffer.callbacks().at(i);
+    retain_callbacks(buffer, |cb| {
         let mut thecb = LUA_NOREF;
 
         let mut keep = false;
@@ -467,18 +465,49 @@ fn unload(mut buffer: Buf, can_reload: bool) {
             call_ref(thecb, name, args.array(), LuaRetMode::Object);
         }
 
-        if keep {
+        if !keep {
+            callbacks_free(cb);
+        }
+        keep
+    });
+    if buffer.callbacks().len() == 0 {
+        buffer.callbacks().destroy();
+    }
+}
+
+/// Walk `buffer`'s callback tables in order, keeping the ones `visit`
+/// answers true for and closing up the gaps -- the compaction every
+/// upstream loop over `update_callbacks` writes out. `visit` releases a
+/// table it drops.
+///
+/// `visit` may re-enter (see the module docs), so the walk re-reads the
+/// length every step and takes a kept table from its slot *after* `visit`
+/// returns rather than reusing the one it was handed, exactly as the loops
+/// it replaces did: a callback that detaches or recurses has rewritten the
+/// list under it.
+fn retain_callbacks(mut buffer: Buf, mut visit: impl FnMut(BufUpdateCallbacks) -> bool) {
+    let mut j = 0;
+    let mut i = 0;
+    while i < buffer.callbacks().len() {
+        let cb = buffer.callbacks().at(i);
+        if visit(cb) {
             let moved = buffer.callbacks().at(i);
             buffer.callbacks().set_at(j, moved);
             j += 1;
-        } else {
-            callbacks_free(cb);
         }
         i += 1;
     }
     buffer.callbacks().set_len(j);
-    if buffer.callbacks().len() == 0 {
-        buffer.callbacks().destroy();
+}
+
+/// Hand `visit` each RPC channel watching `buffer`, re-reading the length
+/// every step for [`retain_callbacks`]' reason. Nothing is compacted: a dead
+/// channel is unregistered by the caller once the walk is over.
+fn each_channel(mut buffer: Buf, mut visit: impl FnMut(uint64_t)) {
+    let mut i = 0;
+    while i < buffer.channels().len() {
+        visit(buffer.channels().at(i));
+        i += 1;
     }
 }
 
@@ -517,9 +546,7 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
     }
 
     // Notify each of the active channels.
-    let mut i = 0;
-    while i < buffer.channels().len() {
-        let channelid = buffer.channels().at(i);
+    each_channel(buffer, |channelid| {
         let mut args = ArrayBuf::<6>::new();
         args.push(Object::buffer(buffer.handle));
         args.push(tick_obj(buffer, send_tick));
@@ -535,8 +562,7 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
             // the array, so remember it and do it at the end.
             badchannelid = channelid;
         }
-        i += 1;
-    }
+    });
 
     // Only one dead channel goes per call. That is fine: the notifications
     // are frequent enough that a pile of them clears quickly.
@@ -546,10 +572,7 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
     }
 
     // Notify each of the active callbacks.
-    let mut j = 0;
-    let mut i = 0;
-    while i < buffer.callbacks().len() {
-        let cb = buffer.callbacks().at(i);
+    retain_callbacks(buffer, |cb| {
         let mut keep = true;
         if cb.on_lines != LUA_NOREF && (cb.preview || !CMDPREVIEW.get()) {
             // Six arguments, or eight with the UTF sizes.
@@ -572,14 +595,8 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
                 keep = false;
             }
         }
-        if keep {
-            let moved = buffer.callbacks().at(i);
-            buffer.callbacks().set_at(j, moved);
-            j += 1;
-        }
-        i += 1;
-    }
-    buffer.callbacks().set_len(j);
+        keep
+    });
 }
 
 /// `b:changedtick` when it is being sent, nil when 'inccommand' preview is
@@ -628,16 +645,13 @@ impl Corner {
     }
 }
 
-fn send_splice(mut buffer: Buf, start: Corner, old: Corner, new: Corner) {
+fn send_splice(buffer: Buf, start: Corner, old: Corner, new: Corner) {
     if !active(buffer) || (old.byte == 0 && new.byte == 0) {
         return;
     }
 
     // Notify each of the active callbacks.
-    let mut j = 0;
-    let mut i = 0;
-    while i < buffer.callbacks().len() {
-        let cb = buffer.callbacks().at(i);
+    retain_callbacks(buffer, |cb| {
         let mut keep = true;
         if cb.on_bytes != LUA_NOREF && (cb.preview || !CMDPREVIEW.get()) {
             let mut args = ArrayBuf::<11>::new();
@@ -654,14 +668,8 @@ fn send_splice(mut buffer: Buf, start: Corner, old: Corner, new: Corner) {
                 keep = false;
             }
         }
-        if keep {
-            let moved = buffer.callbacks().at(i);
-            buffer.callbacks().set_at(j, moved);
-            j += 1;
-        }
-        i += 1;
-    }
-    buffer.callbacks().set_len(j);
+        keep
+    });
 }
 
 /// `b:changedtick` moved without the text moving.
@@ -674,19 +682,11 @@ pub fn buf_updates_changedtick(buffer: Buf) {
     changedtick_event(buffer);
 }
 
-fn changedtick_event(mut buffer: Buf) {
+fn changedtick_event(buffer: Buf) {
     // Notify each of the active channels.
-    let mut i = 0;
-    while i < buffer.channels().len() {
-        let channel_id = buffer.channels().at(i);
-        changedtick_single(buffer, channel_id);
-        i += 1;
-    }
+    each_channel(buffer, |channel_id| changedtick_single(buffer, channel_id));
 
-    let mut j = 0;
-    let mut i = 0;
-    while i < buffer.callbacks().len() {
-        let cb = buffer.callbacks().at(i);
+    retain_callbacks(buffer, |cb| {
         let mut keep = true;
         if cb.on_changedtick != LUA_NOREF {
             let mut args = ArrayBuf::<2>::new();
@@ -703,14 +703,8 @@ fn changedtick_event(mut buffer: Buf) {
                 keep = false;
             }
         }
-        if keep {
-            let moved = buffer.callbacks().at(i);
-            buffer.callbacks().set_at(j, moved);
-            j += 1;
-        }
-        i += 1;
-    }
-    buffer.callbacks().set_len(j);
+        keep
+    });
 }
 
 /// `nvim_buf_changedtick_event` for one channel.
