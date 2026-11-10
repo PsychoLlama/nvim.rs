@@ -62,7 +62,7 @@ use crate::ex_cmds2::{check_changed, check_fname};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::ex_eval::{aborting, should_abort_err};
 use crate::fold::fold_update_all;
-use crate::guard::Suppress;
+use crate::guard::{Bump, Suppress};
 use crate::help::prepare_help_buffer;
 use crate::mark::set_last_cursor;
 use crate::message::msg_check_for_delay;
@@ -236,12 +236,6 @@ pub(crate) fn do_ecmd(
 ) -> Result<(), Failed> {
     let mut ffname: Option<CString> = ffname.map(CStr::to_owned);
     let mut sfname: Option<CString> = sfname.map(CStr::to_owned);
-    let mut oldwin = oldwin;
-    let mut retval = Err(Failed);
-    // Held from "the buffer is settled" to "the cursor is in the right
-    // line", which is past the block below on one path and inside it on the
-    // other.
-    let mut redraw_off = None;
     let mut state = Ecmd {
         newlnum,
         newcol: -1,
@@ -259,199 +253,249 @@ pub(crate) fn do_ecmd(
         .as_deref()
         .and_then(|asked| asked.do_ecmd_cmd.cstr(&asked.line))
         .map(CStr::to_owned);
-    let command = command_text.as_deref();
-    let has_command = excmd.is_some();
+    let mut frame = Frame {
+        oldwin,
+        old_curbuf: BufRef::of_opt(current_buf()),
+        redraw_off: None,
+        did_set_swapcommand: false,
+    };
 
-    let mut old_curbuf = BufRef::of_opt(current_buf());
-    let mut did_set_swapcommand = false;
-
-    'theend: {
-        let other_file = match resolve_target(fnum, &mut ffname, &mut sfname, flags) {
-            Target::AlreadyHere => return Ok(()),
-            Target::Nothing => break 'theend,
-            Target::Editing(other) => other,
-        };
-        let mut ecmd = EcmdArgs {
-            fnum,
-            ffname: ffname.as_deref(),
-            sfname: sfname.as_deref(),
-            excmd,
-            flags,
-            command,
-        };
-
-        // Re-editing a terminal buffer: skip most buffer re-initialization.
-        if !other_file && !Buf::current().terminal.is_null() {
-            // Needed when called from do_argfile(); the title may show the
-            // arg index, e.g. "(2 of 5)".
-            check_arg_idx(Win::current());
-            maketitle();
-            retval = Ok(());
-            break 'theend;
+    let retval = match resolve_target(fnum, &mut ffname, &mut sfname, flags) {
+        Target::AlreadyHere => return Ok(()),
+        Target::Nothing => Err(Failed),
+        Target::Editing(other_file) => {
+            let mut args = EcmdArgs {
+                fnum,
+                ffname: ffname.as_deref(),
+                sfname: sfname.as_deref(),
+                excmd,
+                flags,
+                command: command_text.as_deref(),
+            };
+            edit(&mut args, &mut state, &mut frame, other_file, so)
         }
+    };
 
-        // If the file was changed we may not be allowed to abandon it:
-        // - if we are going to re-edit the same file
-        // - or if we are the only window on this file and EcmdFlags::HIDE is false
-        let must_ask = (!other_file && !flags.has(EcmdFlags::OLDBUF))
-            || (Buf::current().b_nwindows == 1
-                && !flags.has(EcmdFlags::HIDE | EcmdFlags::ADDBUF | EcmdFlags::ALTBUF));
-        // What "may we abandon this buffer" should take into account.  Plain
-        // arithmetic, so it belongs outside the call's region.
-        let mut ccgd = 0;
-        if p_awa() {
-            ccgd |= CCGD_AW;
-        }
-        if !other_file {
-            ccgd |= CCGD_MULTWIN;
-        }
-        if flags.has(EcmdFlags::FORCEIT) {
-            ccgd |= CCGD_FORCEIT;
-        }
-        if has_command {
-            ccgd |= CCGD_EXCMD;
-        }
-        if must_ask && check_changed(Buf::current(), ccgd) {
-            if fnum.is_none() && other_file && ecmd.ffname.is_some() {
-                let lnum = state.newlnum.max(LineNr::ZERO);
-                setaltfname(ecmd.ffname, ecmd.sfname, lnum);
-            }
-            break 'theend;
-        }
-
-        // End Visual mode before switching to another buffer, so the text can
-        // be copied into the GUI selection buffer.  Careful: may trigger a
-        // ModeChanged autocommand.  Should we block autocommands here?
-        reset_visual();
-
-        // autocommands freed window :(
-        // A stale id answers `None`, which is what this check is for.
-        oldwin = oldwin.filter(|&w| win_valid(w));
-
-        did_set_swapcommand = set_swapcommand(command, state.newlnum);
-
-        // If we are starting to edit another file, open a (new) buffer.
-        // Otherwise we re-use the current buffer.
-        if other_file {
-            match switch_to_other_buffer(&mut ecmd, &mut oldwin, &mut old_curbuf, &mut state) {
-                Switch::Abandon => break 'theend,
-                Switch::Ready => {}
-            }
-            Win::current().w_pcmark.lnum = LineNr::ONE;
-            Win::current().w_pcmark.col = ColNr::ZERO;
-        } else if flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) || check_fname().is_err() {
-            break 'theend;
-        } else {
-            state.oldbuf = flags.has(EcmdFlags::OLDBUF);
-        }
-
-        // Don't redraw until the cursor is in the right line, otherwise
-        // autocommands may cause ml_get errors.
-        redraw_off = Some(Suppress::redraw());
-
-        let buf = Buf::current_raw();
-        if flags.has(EcmdFlags::SET_HELP) || KEEP_HELP_FLAG.get() {
-            prepare_help_buffer();
-        } else if !Buf::current().b_help {
-            // Don't make a buffer listed if it's a help buffer.  Useful when
-            // using CTRL-O to go back to a help file.
-            set_buflisted(1);
-        }
-
-        // If autocommands change buffers under our fingers, forget about
-        // editing the file.  Autocmds may also abort script processing.
-        if buf != Buf::current_raw() || aborting() {
-            break 'theend;
-        }
-
-        // Since we are starting to edit a file, consider the filetype to be
-        // unset.  Helps for when an autocommand changes files and expects
-        // syntax highlighting to work in the other file.
-        Buf::current().b_did_filetype = false;
-
-        // other_file oldbuf
-        //  false     false       re-edit same file, buffer is re-used
-        //  false     true        re-edit same file, nothing changes
-        //  true      false       start editing new file, new buffer
-        //  true      true        start editing in existing buffer (nothing)
-        if !other_file && !state.oldbuf && !reuse_current_buffer(&mut state) {
-            break 'theend;
-        }
-
-        // If we get here we are sure to start editing.  Assume success now.
-        retval = Ok(());
-
-        // If the file name was changed, reset the not-edit flag so that
-        // ":write" works.
-        if !other_file {
-            Buf::current().b_flags.clear(BufFlags::NOTEDITED);
-        }
-
-        // Check if we are editing the w_arg_idx file in the argument list.
-        check_arg_idx(Win::current());
-
-        if !state.auto_buf {
-            enter_new_buffer(&mut ecmd, &mut old_curbuf, &mut state, &mut retval);
-        }
-
-        // Tell the diff stuff that this buffer is new and/or needs updating.
-        // Also needed when re-editing the same buffer, because unloading will
-        // have removed it as a diff buffer.
-        if Win::current().w_onebuf_opt.wo_diff != 0 {
-            diff_buf_add(Buf::current());
-            diff_invalidate(Buf::current());
-        }
-        // If the window options were changed we may need to set the spell
-        // language.  Can only be done once the buffer is properly set up.
-        if state.did_get_winopts
-            && Win::current().w_onebuf_opt.wo_spell != 0
-            && c_int::from(Win::current().syntax().b_p_spl.first_byte()) != NUL
-        {
-            let _ = parse_spelllang(Win::current());
-        }
-
-        if command.is_none() {
-            place_cursor(&state);
-        }
-
-        // Check if cursors in other windows on the same buffer are still valid
-        check_lnums(false);
-
-        // Did not read the file, need to show some info about the file.
-        // Do this after setting the cursor.
-        if state.oldbuf && !state.auto_buf {
-            report_file_info();
-        }
-
-        Buf::current().b_last_used = os_time_raw();
-        if let Some(command) = &command_text {
-            let _ = do_cmdline(Some(command.to_bytes()), None, DoCmdOpts::VERBOSE);
-        }
-        if Buf::current().b_kmap_state & KEYMAP_INIT != 0 {
-            let _ = keymap_init();
-        }
-
-        drop(redraw_off.take());
-        if !SKIP_REDRAW.get() {
-            recenter(so, state.topline, command.is_some());
-        }
-
-        // Change directories when the 'acd' option is set.
-        do_autochdir();
-    }
-
-    if let Some(old) = old_curbuf.get() {
+    if let Some(old) = frame.old_curbuf.get() {
         buf_terminal_check_size(old);
     }
-    if !old_curbuf.valid() || !old_curbuf.is(Buf::current_or_none()) {
+    if !frame.old_curbuf.valid() || !frame.old_curbuf.is(Buf::current_or_none()) {
         buf_terminal_check_size(Buf::current());
     }
 
-    drop(redraw_off.take());
-    if did_set_swapcommand {
+    drop(frame.redraw_off.take());
+    if frame.did_set_swapcommand {
         set_vim_var_string(Vv::Swapcommand, None);
     }
     retval
+}
+
+/// What [`do_ecmd`] puts back whichever way the edit ends.
+#[derive(Debug)]
+struct Frame {
+    /// The window to remember the previous buffer's position for, while
+    /// it lives.
+    oldwin: Option<WinId>,
+    /// The buffer that was current, for the terminal size checks.
+    old_curbuf: BufRef,
+    /// Held from "the buffer is settled" to "the cursor is in the right
+    /// line": until the end of [`edit`] when it gets that far, until the
+    /// frame's end otherwise.
+    redraw_off: Option<Bump>,
+    /// `v:swapcommand` was set and must be cleared.
+    did_set_swapcommand: bool,
+}
+
+/// Edit the resolved target: get into its buffer, load it and put the
+/// cursor and the view where they belong. `other_file`: it is not the file
+/// the current buffer holds.
+fn edit(
+    args: &mut EcmdArgs<'_, '_>,
+    state: &mut Ecmd,
+    frame: &mut Frame,
+    other_file: bool,
+    so: ScrollOff,
+) -> Result<(), Failed> {
+    // Re-editing a terminal buffer: skip most buffer re-initialization.
+    if !other_file && !Buf::current().terminal.is_null() {
+        // Needed when called from do_argfile(); the title may show the
+        // arg index, e.g. "(2 of 5)".
+        check_arg_idx(Win::current());
+        maketitle();
+        return Ok(());
+    }
+
+    may_abandon(args, state, other_file)?;
+
+    // End Visual mode before switching to another buffer, so the text can
+    // be copied into the GUI selection buffer.  Careful: may trigger a
+    // ModeChanged autocommand.  Should we block autocommands here?
+    reset_visual();
+
+    // autocommands freed window :(
+    // A stale id answers `None`, which is what this check is for.
+    frame.oldwin = frame.oldwin.filter(|&w| win_valid(w));
+
+    frame.did_set_swapcommand = set_swapcommand(args.command, state.newlnum);
+
+    // If we are starting to edit another file, open a (new) buffer.
+    // Otherwise we re-use the current buffer.
+    if other_file {
+        match switch_to_other_buffer(args, &mut frame.oldwin, &mut frame.old_curbuf, state) {
+            Switch::Abandon => return Err(Failed),
+            Switch::Ready => {}
+        }
+        Win::current().w_pcmark.lnum = LineNr::ONE;
+        Win::current().w_pcmark.col = ColNr::ZERO;
+    } else if args.flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) || check_fname().is_err() {
+        return Err(Failed);
+    } else {
+        state.oldbuf = args.flags.has(EcmdFlags::OLDBUF);
+    }
+
+    // Don't redraw until the cursor is in the right line, otherwise
+    // autocommands may cause ml_get errors.
+    frame.redraw_off = Some(Suppress::redraw());
+
+    settle_buffer(args.flags, state, other_file)?;
+
+    // If we get here we are sure to start editing.  Assume success now.
+    let mut retval = Ok(());
+
+    // If the file name was changed, reset the not-edit flag so that
+    // ":write" works.
+    if !other_file {
+        Buf::current().b_flags.clear(BufFlags::NOTEDITED);
+    }
+
+    // Check if we are editing the w_arg_idx file in the argument list.
+    check_arg_idx(Win::current());
+
+    if !state.auto_buf {
+        enter_new_buffer(args, &mut frame.old_curbuf, state, &mut retval);
+    }
+
+    finish_window(args.command, state);
+
+    drop(frame.redraw_off.take());
+    if !SKIP_REDRAW.get() {
+        recenter(so, state.topline, args.command.is_some());
+    }
+
+    // Change directories when the 'acd' option is set.
+    do_autochdir();
+    retval
+}
+
+/// If the file was changed we may not be allowed to abandon it:
+/// - if we are going to re-edit the same file
+/// - or if we are the only window on this file and EcmdFlags::HIDE is false
+///
+/// Errs when the user may not (the message is out); a different file named
+/// on the way becomes the alternate file.
+fn may_abandon(args: &EcmdArgs<'_, '_>, state: &Ecmd, other_file: bool) -> Result<(), Failed> {
+    let flags = args.flags;
+    let must_ask = (!other_file && !flags.has(EcmdFlags::OLDBUF))
+        || (Buf::current().b_nwindows == 1
+            && !flags.has(EcmdFlags::HIDE | EcmdFlags::ADDBUF | EcmdFlags::ALTBUF));
+    // What "may we abandon this buffer" should take into account.
+    let mut ccgd = 0;
+    if p_awa() {
+        ccgd |= CCGD_AW;
+    }
+    if !other_file {
+        ccgd |= CCGD_MULTWIN;
+    }
+    if flags.has(EcmdFlags::FORCEIT) {
+        ccgd |= CCGD_FORCEIT;
+    }
+    if args.excmd.is_some() {
+        ccgd |= CCGD_EXCMD;
+    }
+    if must_ask && check_changed(Buf::current(), ccgd) {
+        if args.fnum.is_none() && other_file && args.ffname.is_some() {
+            let lnum = state.newlnum.max(LineNr::ZERO);
+            setaltfname(args.ffname, args.sfname, lnum);
+        }
+        return Err(Failed);
+    }
+    Ok(())
+}
+
+/// Make the buffer we are now in a help buffer or a listed one, and empty
+/// it out when the current file is re-edited. Errs when autocommands
+/// changed buffers under our fingers (forget about editing the file) or
+/// aborted script processing.
+fn settle_buffer(flags: EcmdFlags, state: &mut Ecmd, other_file: bool) -> Result<(), Failed> {
+    let buf = Buf::current();
+    if flags.has(EcmdFlags::SET_HELP) || KEEP_HELP_FLAG.get() {
+        prepare_help_buffer();
+    } else if !Buf::current().b_help {
+        // Don't make a buffer listed if it's a help buffer.  Useful when
+        // using CTRL-O to go back to a help file.
+        set_buflisted(1);
+    }
+
+    if !buf.is_current() || aborting() {
+        return Err(Failed);
+    }
+
+    // Since we are starting to edit a file, consider the filetype to be
+    // unset.  Helps for when an autocommand changes files and expects
+    // syntax highlighting to work in the other file.
+    Buf::current().b_did_filetype = false;
+
+    // other_file oldbuf
+    //  false     false       re-edit same file, buffer is re-used
+    //  false     true        re-edit same file, nothing changes
+    //  true      false       start editing new file, new buffer
+    //  true      true        start editing in existing buffer (nothing)
+    if !other_file && !state.oldbuf && !reuse_current_buffer(state) {
+        return Err(Failed);
+    }
+    Ok(())
+}
+
+/// The loaded buffer's window: diff and spell set up, the cursor placed
+/// (unless a `+cmd` will place it), the file info shown when nothing was
+/// read, then the `+cmd` run and the keymap loaded.
+fn finish_window(command: Option<&CStr>, state: &Ecmd) {
+    // Tell the diff stuff that this buffer is new and/or needs updating.
+    // Also needed when re-editing the same buffer, because unloading will
+    // have removed it as a diff buffer.
+    if Win::current().w_onebuf_opt.wo_diff != 0 {
+        diff_buf_add(Buf::current());
+        diff_invalidate(Buf::current());
+    }
+    // If the window options were changed we may need to set the spell
+    // language.  Can only be done once the buffer is properly set up.
+    if state.did_get_winopts
+        && Win::current().w_onebuf_opt.wo_spell != 0
+        && c_int::from(Win::current().syntax().b_p_spl.first_byte()) != NUL
+    {
+        let _ = parse_spelllang(Win::current());
+    }
+
+    if command.is_none() {
+        place_cursor(state);
+    }
+
+    // Check if cursors in other windows on the same buffer are still valid
+    check_lnums(false);
+
+    // Did not read the file, need to show some info about the file.
+    // Do this after setting the cursor.
+    if state.oldbuf && !state.auto_buf {
+        report_file_info();
+    }
+
+    Buf::current().b_last_used = os_time_raw();
+    if let Some(command) = command {
+        let _ = do_cmdline(Some(command.to_bytes()), None, DoCmdOpts::VERBOSE);
+    }
+    if Buf::current().b_kmap_state & KEYMAP_INIT != 0 {
+        let _ = keymap_init();
+    }
 }
 
 /// Work out whether `do_ecmd` is being asked for another file, expanding the
