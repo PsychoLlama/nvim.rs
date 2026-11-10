@@ -22,6 +22,7 @@ use crate::runtime::defs::{ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK};
 use crate::types::Handle;
 use crate::types::{CmdIdx, EcmdCmd};
 use core::ffi::CStr;
+use core::ffi::c_int;
 use std::ffi::CString;
 
 use crate::arglist::arg_all_bytes;
@@ -349,11 +350,6 @@ pub(crate) fn eval_vars(
 ) -> Expansion {
     let whole = src.to_bytes();
     let text = &whole[at..];
-    // The item and what follows it, as `modify_fname` reads its modifiers.
-    let mods = CStr::from_bytes_until_nul(&src.to_bytes_with_nul()[at..])
-        .expect("a tail of a terminated string");
-    let byte = |i: usize| text.get(i).copied().unwrap_or(0);
-
     let Some((spec_idx, mut used)) = cmdline_var_at(text) else {
         return Expansion::Skip(1);
     };
@@ -361,205 +357,272 @@ pub(crate) fn eval_vars(
     if at > 0 && whole[at - 1] == b'\\' {
         return Expansion::Quoted;
     }
-
     if matches!(spec_idx, SPEC_CWORD | SPEC_CCWORD | SPEC_CEXPR) {
-        let what = match spec_idx {
-            SPEC_CWORD => FIND_IDENT | FIND_STRING,
-            SPEC_CEXPR => FIND_IDENT | FIND_STRING | FIND_EVAL,
-            _ => FIND_STRING,
-        };
-        // No modifiers: `<cword>:t` leaves the `:t` where it is.
-        let ident = ident_under_cursor(what);
-        if ident.is_empty() {
-            return Expansion::Refused(QUIET);
+        return text_under_cursor(spec_idx, used);
+    }
+    let named = match item_name(spec_idx, text, &mut used, lnum) {
+        Ok(named) => named,
+        Err(answer) => return answer,
+    };
+    // The item and what follows it, as `modify_fname` reads its modifiers.
+    let mods = CStr::from_bytes_until_nul(&src.to_bytes_with_nul()[at..])
+        .expect("a tail of a terminated string");
+    named.modified(text, mods, used, empty_is_error)
+}
+
+/// `<cword>`, `<cWORD>` or `<cexpr>`: the text under the cursor, with no
+/// modifiers (`<cword>:t` leaves the `:t` where it is).
+fn text_under_cursor(spec_idx: usize, used: usize) -> Expansion {
+    let what = match spec_idx {
+        SPEC_CWORD => FIND_IDENT | FIND_STRING,
+        SPEC_CEXPR => FIND_IDENT | FIND_STRING | FIND_EVAL,
+        _ => FIND_STRING,
+    };
+    let ident = ident_under_cursor(what);
+    if ident.is_empty() {
+        return Expansion::Refused(QUIET);
+    }
+    Expansion::Text {
+        text: ident,
+        used,
+        escaped: false,
+    }
+}
+
+/// A special item's name, before its modifiers apply.
+struct Named {
+    name: CString,
+    /// What `modify_fname` counts as reached already: a buffer with no name
+    /// has neither a head nor a path.
+    valid: c_int,
+    /// The name is `~`, which `modify_fname` must not expand.
+    tilde_file: bool,
+    /// `##`, the whole argument list: modifiers do not apply, and the names
+    /// come back escaped already.
+    arglist: bool,
+}
+
+/// Both of `modify_fname`'s "reached" bits: a name it can work on.
+const VALID_NAME: c_int = VALID_HEAD.cast_signed() + VALID_PATH.cast_signed();
+
+impl Named {
+    /// A name that is a path as it stands.
+    fn path(name: CString) -> Self {
+        Self {
+            name,
+            valid: VALID_NAME,
+            tilde_file: false,
+            arglist: false,
         }
-        return Expansion::Text {
-            text: ident,
-            used,
-            escaped: false,
-        };
     }
 
-    let mut valid = VALID_HEAD.cast_signed() | VALID_PATH.cast_signed();
-    let mut tilde_file = false;
-    let mut skip_mod = false;
-    let mut escaped = false;
-    let name: CString = match spec_idx {
-        SPEC_PERC => match Buf::current().name.shown() {
-            None => {
-                valid = 0;
-                CString::default()
-            }
-            Some(name) => {
-                tilde_file = name == c"~";
-                name.to_owned()
-            }
-        },
-        SPEC_HASH if byte(1) == b'#' => {
-            // `##` is the whole argument list, already escaped.
-            used = 2;
-            escaped = true;
-            skip_mod = true;
-            cstr::owned(&arg_all_bytes())
+    /// `buffer`'s name as shown, or no name at all.
+    fn of_buffer(buffer: Buf) -> Self {
+        match buffer.name.shown() {
+            None => Self {
+                valid: 0,
+                ..Self::path(CString::default())
+            },
+            Some(name) => Self {
+                tilde_file: name == c"~",
+                ..Self::path(name.to_owned())
+            },
         }
-        SPEC_HASH => {
-            let start = if byte(1) == b'<' { 2 } else { 1 };
-            let (i, mut past) = getdigits_int_at(text, start, false, 0);
-            // `#-` is not a negative buffer number; give the `-` back.
-            if past == 2 && byte(1) == b'-' {
-                past -= 1;
+    }
+
+    /// The name with the modifiers after the item applied, `used` bytes of
+    /// the item read so far: a trailing `<` drops the extension, anything
+    /// else is `modify_fname`'s `:p:h:t…`.
+    fn modified(
+        self,
+        text: &[u8],
+        mods: &CStr,
+        mut used: usize,
+        empty_is_error: bool,
+    ) -> Expansion {
+        let mut valid = self.valid;
+        let mut result = self.name.into_bytes();
+        if text.get(used) == Some(&b'<') {
+            used += 1;
+            if let Some(dot) = result.iter().rposition(|&b| b == b'.')
+                && dot >= tail_index(&result)
+            {
+                result.truncate(dot);
             }
-            used = past;
-            if byte(1) == b'<' && i != 0 {
-                // `#<3` is the third entry of `v:oldfiles`.
-                if used < 2 {
-                    return Expansion::Skip(1);
-                }
-                let oldfiles = get_vim_var_list_handle(Vv::Oldfiles);
-                let mut numbuf = NumBuf::new();
-                match list_find_str(oldfiles.as_deref(), i - 1, &mut numbuf) {
-                    Err(Failed) => return Expansion::Refused(QUIET),
-                    Ok(name) => name.to_owned(),
-                }
+        } else if !self.arglist {
+            let name = cstr::owned(&result);
+            let (reached, modified) =
+                modify_fname(mods, &mut used, self.tilde_file, &name, result.len());
+            valid |= reached;
+            result = modified;
+        }
+
+        if result.is_empty() || valid != VALID_NAME {
+            if !empty_is_error {
+                return Expansion::Skip(used);
+            }
+            return Expansion::Refused(if valid != VALID_NAME {
+                gettext(c"E499: Empty file name for '%' or '#', only works with \":p:h\"")
             } else {
-                if i == 0 && byte(1) == b'<' && used > 1 {
-                    used = 1;
-                }
-                let Some(buf) = find_buf(Handle::from_number(i)) else {
-                    return Expansion::Refused(gettext(
-                        c"E194: No alternate file name to substitute for '#'",
-                    ));
-                };
-                if let Some(lnum) = lnum {
-                    *lnum = newlnum::LAST as LineNr;
-                }
-                match buf.name.shown() {
-                    None => {
-                        valid = 0;
-                        CString::default()
-                    }
-                    Some(name) => {
-                        tilde_file = name == c"~";
-                        name.to_owned()
-                    }
-                }
+                gettext(c"E500: Evaluates to an empty string")
+            });
+        }
+        Expansion::Text {
+            text: result,
+            used,
+            escaped: self.arglist,
+        }
+    }
+}
+
+/// The name the item at the start of `text` stands for, `used` its length
+/// so far (`#` and its digits lengthen it). `Err` is [`eval_vars`]'s answer
+/// when there is no name to modify.
+fn item_name(
+    spec_idx: usize,
+    text: &[u8],
+    used: &mut usize,
+    lnum: Option<&mut LineNr>,
+) -> Result<Named, Expansion> {
+    Ok(match spec_idx {
+        SPEC_PERC => Named::of_buffer(Buf::current()),
+        SPEC_HASH if text.get(1) == Some(&b'#') => {
+            *used = 2;
+            Named {
+                arglist: true,
+                ..Named::path(cstr::owned(&arg_all_bytes()))
             }
         }
-        SPEC_CFILE => match file_name_at_cursor(FileNameOpts::MESS | FileNameOpts::HYP, 1, None) {
-            None => return Expansion::Refused(QUIET),
-            Some(name) => name.as_cstr().to_owned(),
-        },
-        SPEC_AFILE => {
-            // The autocommand's file name is shortened on first use and the
-            // shortened form is kept.
-            if AUTOCMD_FNAME.with(Option::is_some) && !AUTOCMD_FNAME_FULL.get() {
-                AUTOCMD_FNAME_FULL.set(true);
-                let short = AUTOCMD_FNAME.with(|name| name.clone().unwrap_or_default());
-                let mut name = full_name_save(short.as_cstr(), false);
-                // Cut as upstream's `xstrlcpy` into the MAXPATHL buffer.
-                name.truncate(MAXPATHL as usize - 1);
-                AUTOCMD_FNAME.set(Some(name));
-            }
-            let Some(name) =
-                AUTOCMD_FNAME.with(|name| name.as_ref().map(|n| n.as_cstr().to_owned()))
-            else {
-                return Expansion::Refused(gettext(
-                    E_NO_AUTOCOMMAND_FILE_NAME_TO_SUBSTITUTE_FOR_AFILE,
-                ));
-            };
-            path_try_shorten_fname(&name).to_owned()
+        SPEC_HASH => alternate_name(text, used, lnum)?,
+        SPEC_CFILE => {
+            let name = file_name_at_cursor(FileNameOpts::MESS | FileNameOpts::HYP, 1, None)
+                .ok_or(Expansion::Refused(QUIET))?;
+            Named::path(name.as_cstr().to_owned())
         }
+        SPEC_AFILE => Named::path(autocmd_file_name().map_err(Expansion::Refused)?),
         SPEC_ABUF => {
             if AUTOCMD_BUFNR.get() <= 0 {
-                return Expansion::Refused(gettext(
+                return Err(Expansion::Refused(gettext(
                     E_NO_AUTOCOMMAND_BUFFER_NUMBER_TO_SUBSTITUTE_FOR_ABUF,
-                ));
+                )));
             }
-            number(AUTOCMD_BUFNR.get())
+            Named::path(number(AUTOCMD_BUFNR.get()))
         }
         SPEC_AMATCH => {
-            match AUTOCMD_MATCH.with(|name| name.as_ref().map(|n| n.as_cstr().to_owned())) {
-                None => {
-                    return Expansion::Refused(gettext(
+            let name = AUTOCMD_MATCH
+                .with(|name| name.as_ref().map(|n| n.as_cstr().to_owned()))
+                .ok_or_else(|| {
+                    Expansion::Refused(gettext(
                         E_NO_AUTOCOMMAND_MATCH_NAME_TO_SUBSTITUTE_FOR_AMATCH,
-                    ));
-                }
-                Some(name) => name,
-            }
+                    ))
+                })?;
+            Named::path(name)
         }
         SPEC_SFILE | SPEC_STACK | SPEC_SCRIPT => {
-            let (which, msg) = match spec_idx {
-                SPEC_SFILE => (ESTACK_SFILE, E_NO_SOURCE_FILE_NAME_TO_SUBSTITUTE_FOR_SFILE),
-                SPEC_STACK => (ESTACK_STACK, E_NO_CALL_STACK_TO_SUBSTITUTE_FOR_STACK),
-                _ => (
-                    ESTACK_SCRIPT,
-                    E_NO_SCRIPT_FILE_NAME_TO_SUBSTITUTE_FOR_SCRIPT,
-                ),
-            };
-            match estack_sfile(which) {
-                None => return Expansion::Refused(gettext(msg)),
-                Some(name) => name.as_cstr().to_owned(),
-            }
+            Named::path(sourcing_name(spec_idx).map_err(Expansion::Refused)?)
         }
         SPEC_SLNUM => {
             let lnum = crate::runtime::sourcing_lnum();
             if !crate::runtime::has_sourcing_name() || lnum == LineNr::ZERO {
-                return Expansion::Refused(gettext(E_NO_LINE_NUMBER_TO_USE_FOR_SLNUM));
+                return Err(Expansion::Refused(gettext(
+                    E_NO_LINE_NUMBER_TO_USE_FOR_SLNUM,
+                )));
             }
-            number(lnum)
+            Named::path(number(lnum))
         }
         SPEC_SFLNUM => {
-            // The line the *script* is on, which is the script's own
-            // offset plus the line inside it.
+            // The line the *script* is on, which is the script's own offset
+            // plus the line inside it.
             let lnum = CURRENT_SCTX.get().sc_lnum + crate::runtime::sourcing_lnum().get();
             if lnum == LineNr::ZERO {
-                return Expansion::Refused(gettext(E_NO_LINE_NUMBER_TO_USE_FOR_SFLNUM));
+                return Err(Expansion::Refused(gettext(
+                    E_NO_LINE_NUMBER_TO_USE_FOR_SFLNUM,
+                )));
             }
-            number(lnum)
+            Named::path(number(lnum))
         }
         SPEC_SID => {
             let sid = CURRENT_SCTX.get().sc_sid;
             if sid <= 0 {
-                return Expansion::Refused(gettext(E_USINGSID));
+                return Err(Expansion::Refused(gettext(E_USINGSID)));
             }
-            cstr::owned(format!("<SNR>{sid}_").as_bytes())
+            Named::path(cstr::owned(format!("<SNR>{sid}_").as_bytes()))
         }
         _ => unreachable!("an index into `SPECIALS`"),
+    })
+}
+
+/// `#`, `#N`, `#-` or `#<N`: an alternate buffer's name, or the Nth entry of
+/// `v:oldfiles`. `used` becomes the item's length with its digits.
+fn alternate_name(
+    text: &[u8],
+    used: &mut usize,
+    lnum: Option<&mut LineNr>,
+) -> Result<Named, Expansion> {
+    let byte = |i: usize| text.get(i).copied().unwrap_or(0);
+    let start = if byte(1) == b'<' { 2 } else { 1 };
+    let (i, mut past) = getdigits_int_at(text, start, false, 0);
+    // `#-` is not a negative buffer number; give the `-` back.
+    if past == 2 && byte(1) == b'-' {
+        past -= 1;
+    }
+    *used = past;
+    if byte(1) == b'<' && i != 0 {
+        // `#<3` is the third entry of `v:oldfiles`.
+        if *used < 2 {
+            return Err(Expansion::Skip(1));
+        }
+        let oldfiles = get_vim_var_list_handle(Vv::Oldfiles);
+        let mut numbuf = NumBuf::new();
+        let name = list_find_str(oldfiles.as_deref(), i - 1, &mut numbuf)
+            .map_err(|Failed| Expansion::Refused(QUIET))?;
+        return Ok(Named::path(name.to_owned()));
+    }
+    if i == 0 && byte(1) == b'<' && *used > 1 {
+        *used = 1;
+    }
+    let buf = find_buf(Handle::from_number(i)).ok_or_else(|| {
+        Expansion::Refused(gettext(
+            c"E194: No alternate file name to substitute for '#'",
+        ))
+    })?;
+    if let Some(lnum) = lnum {
+        *lnum = newlnum::LAST as LineNr;
+    }
+    Ok(Named::of_buffer(buf))
+}
+
+/// `<afile>`: the autocommand's file name, shortened on first use and kept
+/// shortened. Refuses with the message to report.
+fn autocmd_file_name() -> Result<CString, &'static CStr> {
+    if AUTOCMD_FNAME.with(Option::is_some) && !AUTOCMD_FNAME_FULL.get() {
+        AUTOCMD_FNAME_FULL.set(true);
+        let short = AUTOCMD_FNAME.with(|name| name.clone().unwrap_or_default());
+        let mut name = full_name_save(short.as_cstr(), false);
+        // Cut as upstream's `xstrlcpy` into the MAXPATHL buffer.
+        name.truncate(MAXPATHL as usize - 1);
+        AUTOCMD_FNAME.set(Some(name));
+    }
+    let name = AUTOCMD_FNAME
+        .with(|name| name.as_ref().map(|n| n.as_cstr().to_owned()))
+        .ok_or_else(|| gettext(E_NO_AUTOCOMMAND_FILE_NAME_TO_SUBSTITUTE_FOR_AFILE))?;
+    Ok(path_try_shorten_fname(&name).to_owned())
+}
+
+/// `<sfile>`, `<stack>` or `<script>`: what the execution stack says is
+/// being sourced. Refuses with the message to report.
+fn sourcing_name(spec_idx: usize) -> Result<CString, &'static CStr> {
+    let (which, msg) = match spec_idx {
+        SPEC_SFILE => (ESTACK_SFILE, E_NO_SOURCE_FILE_NAME_TO_SUBSTITUTE_FOR_SFILE),
+        SPEC_STACK => (ESTACK_STACK, E_NO_CALL_STACK_TO_SUBSTITUTE_FOR_STACK),
+        _ => (
+            ESTACK_SCRIPT,
+            E_NO_SCRIPT_FILE_NAME_TO_SUBSTITUTE_FOR_SCRIPT,
+        ),
     };
-
-    let mut result = name.into_bytes();
-    if byte(used) == b'<' {
-        // A trailing `<` drops the extension.
-        used += 1;
-        if let Some(dot) = result.iter().rposition(|&b| b == b'.')
-            && dot >= tail_index(&result)
-        {
-            result.truncate(dot);
-        }
-    } else if !skip_mod {
-        let name = cstr::owned(&result);
-        let (reached, modified) = modify_fname(mods, &mut used, tilde_file, &name, result.len());
-        valid |= reached;
-        result = modified;
-    }
-
-    if result.is_empty() || valid != VALID_HEAD.cast_signed() + VALID_PATH.cast_signed() {
-        if !empty_is_error {
-            return Expansion::Skip(used);
-        }
-        return Expansion::Refused(
-            if valid != VALID_HEAD.cast_signed() + VALID_PATH.cast_signed() {
-                gettext(c"E499: Empty file name for '%' or '#', only works with \":p:h\"")
-            } else {
-                gettext(c"E500: Evaluates to an empty string")
-            },
-        );
-    }
-    Expansion::Text {
-        text: result,
-        used,
-        escaped,
-    }
+    estack_sfile(which)
+        .map(|name| name.as_cstr().to_owned())
+        .ok_or_else(|| gettext(msg))
 }
 
 /// A number, as the items that are one spell it.
@@ -600,4 +663,55 @@ pub(crate) fn expand_sfile(arg: &[u8]) -> Option<Vec<u8>> {
     }
     result.pop();
     Some(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Expansion, Named};
+
+    /// A trailing `<` drops the extension of the name's tail, and only of
+    /// its tail; `##` takes no modifier and comes back escaped.
+    #[test]
+    fn a_trailing_angle_drops_the_tail_extension() {
+        let drop_ext =
+            |name: &core::ffi::CStr| Named::path(name.to_owned()).modified(b"%<", c"%<", 1, true);
+        assert_eq!(
+            drop_ext(c"dir/foo.c"),
+            Expansion::Text {
+                text: b"dir/foo".to_vec(),
+                used: 2,
+                escaped: false
+            }
+        );
+        assert_eq!(
+            drop_ext(c"a.d/foo"),
+            Expansion::Text {
+                text: b"a.d/foo".to_vec(),
+                used: 2,
+                escaped: false
+            }
+        );
+        let arglist = Named {
+            arglist: true,
+            ..Named::path(c"a\\ b c".to_owned())
+        };
+        assert_eq!(
+            arglist.modified(b"##:t", c"##:t", 2, true),
+            Expansion::Text {
+                text: b"a\\ b c".to_vec(),
+                used: 2,
+                escaped: true
+            }
+        );
+        // A nameless buffer is nothing to substitute, and says so only when
+        // asked to.
+        let nameless = || Named {
+            valid: 0,
+            ..Named::path(c"".to_owned())
+        };
+        assert_eq!(
+            nameless().modified(b"%<", c"%<", 1, false),
+            Expansion::Skip(2)
+        );
+    }
 }
