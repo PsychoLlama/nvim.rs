@@ -247,11 +247,10 @@ fn ignored_in_every_window(event: AutoEvent, buffer: Option<Buf>) -> bool {
 /// Fire `event` for `buffer`, running every autocommand in `group` whose
 /// pattern matches.
 ///
-/// Answers whether any autocommand was executed.  The body is one labeled
-/// block, which is upstream's `goto BYPASS_AU`: every reason not to fire
-/// leaves it, and the two things that happen either way -- wiping a
+/// Answers whether any autocommand was executed. Every reason not to fire
+/// is [`may_fire`]'s ([`Bypassed`]); the two things that happen either way -- wiping a
 /// buffer's own autocommands, and remembering that `FileType` ran -- are
-/// after it.
+/// here, after the firing.
 ///
 /// `pattern` is what the patterns match (the buffer's name for `None`) and
 /// `afile` is `<afile>`; both are owned, as [`apply_autocmds`] says why.
@@ -266,292 +265,9 @@ pub fn apply_autocmds_group(
     excmd: Option<&mut ExArg>,
     data: Option<&Object>,
 ) -> bool {
-    let mut retval = false;
-    let mut did_save_redobuff = false;
-    let mut save_redo = SAVE_REDO_INIT;
-    let save_key_typed = KEY_TYPED.get();
-
-    'bypass: {
-        // Nothing to fire, or firing is off.
-        if !has_event(event) || is_autocmd_blocked() {
-            break 'bypass;
-        }
-        // While autocommands are running, a new one only fires when it
-        // was asked for explicitly (`++nested`).
-        if AUTOCMD_BUSY.get() && !(force || AUTOCMD_NESTED.get()) {
-            break 'bypass;
-        }
-        // An error, interrupt or uncaught exception is pending.
-        if aborting() {
-            break 'bypass;
-        }
-        // FileChangedShell never nests: it would loop forever.
-        if FILECHANGESHELL_BUSY.get()
-            && (event == AutoEvent::FileChangedShell || event == AutoEvent::FileChangedShellPost)
-        {
-            break 'bypass;
-        }
-        if p_ei(|ei| event_ignored(event, ei.to_bytes(), false)) {
-            break 'bypass;
-        }
-        if ignored_in_every_window(event, buffer) {
-            break 'bypass;
-        }
-
-        // Nesting is allowed but bounded: it is easy to write an
-        // endless loop.
-        if AUTOCMD_NESTING.get() == 10 {
-            emsg(gettext(E_AUTOCOMMAND_NESTING_TOO_DEEP));
-            break 'bypass;
-        }
-        // `:all` and `:ball` turn these off while they shuffle windows.
-        if (AUTOCMD_NO_ENTER.get() != 0
-            && (event == AutoEvent::WinEnter || event == AutoEvent::BufEnter))
-            || (AUTOCMD_NO_LEAVE.get() != 0
-                && (event == AutoEvent::WinLeave || event == AutoEvent::BufLeave))
-        {
-            break 'bypass;
-        }
-
-        // Save the autocmd_* variables and what we know about the
-        // current buffer.
-        let save_autocmd_fname = AUTOCMD_FNAME.take();
-        let save_autocmd_fname_full = AUTOCMD_FNAME_FULL.get();
-        let save_autocmd_bufnr = AUTOCMD_BUFNR.get();
-        let save_autocmd_match = AUTOCMD_MATCH.take();
-        let save_autocmd_busy = AUTOCMD_BUSY.get();
-        let save_autocmd_nested = AUTOCMD_NESTED.get();
-        let save_changed = Buf::current().b_changed != 0;
-        let old_curbuf = Buf::current_raw();
-
-        // `<afile>`: the caller's, the pattern's name, or a copy of the
-        // buffer's, so renaming a buffer or changing directory cannot
-        // invalidate it.
-        let afile_orig: Option<XString> = if let Some(afile) = afile {
-            Some(afile)
-        } else if afile_is_not_a_name(event) {
-            None
-        } else if let Some(name) = pattern
-            .as_ref()
-            .filter(|name| !ends_excmd(name.first().copied().unwrap_or(0)))
-        {
-            Some(name.clone())
-        } else {
-            buffer.and_then(|b| b.name.full().map(XString::from_cstr))
-        };
-        // The unexpanded `<afile>` is kept for the API's `file` field; the
-        // expansion's copy is cut at MAXPATHL, as upstream's is: `eval_vars`
-        // resolves the full path in that much room later.
-        if let Some(afile) = &afile_orig {
-            let mut copy = afile.clone();
-            copy.truncate(MAXPATHL as usize);
-            AUTOCMD_FNAME.set(Some(copy));
-        }
-        AUTOCMD_FNAME_FULL.set(false);
-
-        // `<abuf>`.
-        AUTOCMD_BUFNR.set(buffer.map_or(0, |b| b.handle.get()));
-
-        // The name to match the patterns against.  Always a full path,
-        // in case a pattern has `allow_dirs` set.
-        let mut sfname: Option<XString> = None;
-        let fname: XString = match pattern.filter(|name| !name.is_empty()) {
-            None => match (buffer, event) {
-                (None, _) => XString::new(),
-                (Some(b), AutoEvent::Syntax) => b.b_p_syn.get(),
-                (Some(b), AutoEvent::FileType) => b.b_p_ft.get(),
-                (Some(b), _) => {
-                    sfname = b.name.short().map(XString::from_cstr);
-                    b.name.full().map_or_else(XString::new, XString::from_cstr)
-                }
-            },
-            Some(name) => {
-                let full = if afile_is_not_expanded(event) {
-                    // Don't expand it later either.
-                    AUTOCMD_FNAME_FULL.set(true);
-                    name.clone()
-                } else {
-                    full_name_save(name.as_cstr(), false)
-                };
-                sfname = Some(name);
-                full
-            }
-        };
-
-        // `<amatch>`.
-        AUTOCMD_MATCH.set(Some(fname.clone()));
-
-        // Don't redraw while running autocommands.
-        let redraw_off = Suppress::redraw();
-
-        // `es_name` and `es_lnum` are filled in by `aucmd_next`.
-        estack_push(
-            ETYPE_AUCMD,
-            crate::runtime::defs::FrameName::None,
-            LineNr::ZERO,
-        );
-
-        // Restored below, in the run of teardown before the call stack is;
-        // the handlers this fires each point it at themselves.
-        let sctx = Script::saved();
-
-        let mut wait_time: ProfTime = 0;
-        if DO_PROFILING.get() == PROF_YES {
-            // Doesn't count for the caller itself.
-            wait_time = prof_child_enter();
-        }
-
-        // Don't use the caller's function-local variables.
-        let call_stack_aside = CallStackAside::new();
-
-        // Only the outermost firing saves the search patterns and the
-        // redo buffer.
-        if !AUTOCMD_BUSY.get() {
-            save_search_patterns();
-            if !ins_compl_active() {
-                save_redobuff(&mut save_redo);
-                did_save_redobuff = true;
-            }
-            Buf::current().b_did_filetype = Buf::current().b_keep_filetype;
-        }
-
-        // Some commands need to know autocommands are running.
-        AUTOCMD_BUSY.set(true);
-        FILECHANGESHELL_BUSY.set(event == AutoEvent::FileChangedShell);
-        let nested = Depth::of(AUTOCMD_NESTING);
-
-        // Remembered for `did_filetype()` and `:setfiletype`, but only once
-        // 'filetype' is set: a FileType for an empty one (`:set ft=`) must
-        // not stop a later `:setf` from detecting the real type.
-        if event == AutoEvent::FileType && Buf::current().b_p_ft.first_byte() != 0 {
-            Buf::current().b_did_filetype = true;
-        }
-
-        let tail = fname.len() - path_tail(fname.as_cstr()).count_bytes();
-
-        // The walk's cursor.
-        let mut patcmd = AutoPatCmd {
-            // `aucmd_next` sets `lastpat` back to `None` when there is
-            // nothing left to run.
-            lastpat: None,
-            auidx: 0,
-            // The size is snapshotted so that patterns added by a
-            // handler cannot extend this walk into an endless loop.
-            ausize: with_event_cmds(event, EventCmds::len),
-            afile_orig,
-            fname,
-            sfname,
-            tail,
-            group,
-            event,
-            // `getnextac` fills this in from the autocommand it runs.
-            script_ctx: ScriptCtx::NONE,
-            arg_bufnr: AUTOCMD_BUFNR.get(),
-            walk: None,
-        };
-        aucmd_next(&mut patcmd);
-
-        // Something matched: run the autocommands.
-        if patcmd.lastpat.is_some() {
-            let bufnr = patcmd.arg_bufnr;
-            let walk = ACTIVE_WALK_BUFNRS.with_mut(|nrs| {
-                nrs.push(bufnr);
-                nrs.len() - 1
-            });
-            patcmd.walk = Some(walk);
-
-            // `v:cmdarg`/`v:cmdbang`, only when a pattern matched.
-            let save_cmdbang = get_vim_var_nr(Vv::Cmdbang);
-            let bang = excmd.as_deref().map(|command| command.forceit);
-            let save_cmdarg = match excmd {
-                None => None,
-                Some(command) => {
-                    let saved = set_cmdarg(Some(command), None);
-                    set_vim_var_nr(Vv::Cmdbang, VarNumber::from(bang.unwrap_or(false)));
-                    saved
-                }
-            };
-            retval = true;
-
-            // Make the cursor and topline valid.  The outermost firing
-            // saves them for `reset_lnums`; a nested one only corrects.
-            if AUTOCMD_NESTING.get() == 1 {
-                check_lnums(true);
-            } else {
-                check_lnums_nested(true);
-            }
-
-            let save_did_emsg = DID_EMSG.get();
-            let save_ex_pressedreturn = get_pressedreturn();
-
-            // `getnextac` is what iterates: it is pulled once per
-            // matching autocommand.
-            let _ = do_cmdline(
-                None,
-                Some(&mut LineSource::Autocmd(&mut patcmd, data)),
-                DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT,
-            );
-
-            DID_EMSG.set(DID_EMSG.get() + save_did_emsg);
-            set_pressedreturn(save_ex_pressedreturn);
-
-            if AUTOCMD_NESTING.get() == 1 {
-                // Restore the cursor and topline unless they changed.
-                reset_lnums();
-            }
-
-            if bang.is_some() {
-                set_cmdarg(None, save_cmdarg);
-                set_vim_var_nr(Vv::Cmdbang, save_cmdbang);
-            }
-            // The walk is over. A nested one has popped its own number
-            // already; anything above this one's would be a walk that did
-            // not, and is gone with it.
-            ACTIVE_WALK_BUFNRS.with_mut(|nrs| nrs.truncate(walk));
-        }
-
-        drop(redraw_off);
-        AUTOCMD_BUSY.set(save_autocmd_busy);
-        FILECHANGESHELL_BUSY.set(false);
-        AUTOCMD_NESTED.set(save_autocmd_nested);
-        // The frame takes the name `aucmd_next` left there with it.
-        estack_pop();
-        AUTOCMD_FNAME.set(save_autocmd_fname);
-        AUTOCMD_FNAME_FULL.set(save_autocmd_fname_full);
-        AUTOCMD_BUFNR.set(save_autocmd_bufnr);
-        AUTOCMD_MATCH.set(save_autocmd_match);
-        drop(sctx);
-        drop(call_stack_aside);
-        if DO_PROFILING.get() == PROF_YES {
-            prof_child_exit(wait_time);
-        }
-        KEY_TYPED.set(save_key_typed);
-        drop(patcmd);
-        // The handlers below run at the enclosing level, not this one.
-        drop(nested);
-
-        // The outermost firing puts the search patterns and the redo
-        // buffer back, and frees what the handlers deferred.
-        if !AUTOCMD_BUSY.get() {
-            restore_search_patterns();
-            if did_save_redobuff {
-                restore_redobuff(&mut save_redo);
-            }
-            Buf::current().b_did_filetype = false;
-            free_deferred();
-        }
-
-        // Only if we are still in the same buffer.
-        if Buf::current_raw() == old_curbuf && keeps_changed_flag(event) {
-            if Buf::current().b_changed != ::core::ffi::c_int::from(save_changed) {
-                NEED_MAKETITLE.set(true);
-            }
-            Buf::current().b_changed = ::core::ffi::c_int::from(save_changed);
-        }
-
-        // The patterns and commands marked deleted can really go now.
-        au_cleanup();
-    }
+    // Either way it was bypassed, the two things below still happen.
+    let retval = may_fire(event, buffer, force).is_ok()
+        && fire(event, pattern, afile, group, buffer, excmd, data);
 
     // Wiping a buffer takes its buffer-local autocommands with it,
     // whether or not anything fired.
@@ -563,4 +279,351 @@ pub fn apply_autocmds_group(
     }
 
     retval
+}
+
+/// Why `event` does not fire for `buffer` now. Every reason is silent but
+/// one: nesting too deep is said (E218).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Bypassed {
+    /// Nothing is defined for the event, firing is blocked, another firing
+    /// runs without `++nested`, an error is pending, 'eventignore' or
+    /// 'eventignorewin' lists it, or `:all`/`:ball` turned it off.
+    Quietly,
+    /// Ten firings deep: said as E218.
+    TooDeep,
+}
+
+/// Whether `event` may fire for `buffer` now, or why not.
+fn may_fire(event: AutoEvent, buffer: Option<Buf>, force: bool) -> Result<(), Bypassed> {
+    // Nothing to fire, or firing is off.
+    if !has_event(event) || is_autocmd_blocked() {
+        return Err(Bypassed::Quietly);
+    }
+    // While autocommands are running, a new one only fires when it
+    // was asked for explicitly (`++nested`).
+    if AUTOCMD_BUSY.get() && !(force || AUTOCMD_NESTED.get()) {
+        return Err(Bypassed::Quietly);
+    }
+    // An error, interrupt or uncaught exception is pending.
+    if aborting() {
+        return Err(Bypassed::Quietly);
+    }
+    // FileChangedShell never nests: it would loop forever.
+    if FILECHANGESHELL_BUSY.get()
+        && (event == AutoEvent::FileChangedShell || event == AutoEvent::FileChangedShellPost)
+    {
+        return Err(Bypassed::Quietly);
+    }
+    if p_ei(|ei| event_ignored(event, ei.to_bytes(), false)) {
+        return Err(Bypassed::Quietly);
+    }
+    if ignored_in_every_window(event, buffer) {
+        return Err(Bypassed::Quietly);
+    }
+
+    // Nesting is allowed but bounded: it is easy to write an
+    // endless loop.
+    if AUTOCMD_NESTING.get() == 10 {
+        emsg(gettext(E_AUTOCOMMAND_NESTING_TOO_DEEP));
+        return Err(Bypassed::TooDeep);
+    }
+    // `:all` and `:ball` turn these off while they shuffle windows.
+    if (AUTOCMD_NO_ENTER.get() != 0
+        && (event == AutoEvent::WinEnter || event == AutoEvent::BufEnter))
+        || (AUTOCMD_NO_LEAVE.get() != 0
+            && (event == AutoEvent::WinLeave || event == AutoEvent::BufLeave))
+    {
+        return Err(Bypassed::Quietly);
+    }
+    Ok(())
+}
+
+/// The names a firing matches and publishes, before anything runs.
+struct EventNames {
+    /// `<afile>` as given, for the API's `file` field.
+    afile_orig: Option<XString>,
+    /// What the patterns match: always a full path, in case a pattern has
+    /// `allow_dirs` set.
+    fname: XString,
+    /// The short name, for patterns that match it.
+    sfname: Option<XString>,
+}
+
+/// Work out the names a firing matches and publish `<afile>`, `<abuf>`
+/// and `<amatch>`.
+fn publish_names(
+    event: AutoEvent,
+    pattern: Option<XString>,
+    afile: Option<XString>,
+    buffer: Option<Buf>,
+) -> EventNames {
+    // `<afile>`: the caller's, the pattern's name, or a copy of the
+    // buffer's, so renaming a buffer or changing directory cannot
+    // invalidate it.
+    let afile_orig: Option<XString> = if let Some(afile) = afile {
+        Some(afile)
+    } else if afile_is_not_a_name(event) {
+        None
+    } else if let Some(name) = pattern
+        .as_ref()
+        .filter(|name| !ends_excmd(name.first().copied().unwrap_or(0)))
+    {
+        Some(name.clone())
+    } else {
+        buffer.and_then(|b| b.name.full().map(XString::from_cstr))
+    };
+    // The unexpanded `<afile>` is kept for the API's `file` field; the
+    // expansion's copy is cut at MAXPATHL, as upstream's is: `eval_vars`
+    // resolves the full path in that much room later.
+    if let Some(afile) = &afile_orig {
+        let mut copy = afile.clone();
+        copy.truncate(MAXPATHL as usize);
+        AUTOCMD_FNAME.set(Some(copy));
+    }
+    AUTOCMD_FNAME_FULL.set(false);
+
+    // `<abuf>`.
+    AUTOCMD_BUFNR.set(buffer.map_or(0, |b| b.handle.get()));
+
+    // The name to match the patterns against.
+    let mut sfname: Option<XString> = None;
+    let fname: XString = match pattern.filter(|name| !name.is_empty()) {
+        None => match (buffer, event) {
+            (None, _) => XString::new(),
+            (Some(b), AutoEvent::Syntax) => b.b_p_syn.get(),
+            (Some(b), AutoEvent::FileType) => b.b_p_ft.get(),
+            (Some(b), _) => {
+                sfname = b.name.short().map(XString::from_cstr);
+                b.name.full().map_or_else(XString::new, XString::from_cstr)
+            }
+        },
+        Some(name) => {
+            let full = if afile_is_not_expanded(event) {
+                // Don't expand it later either.
+                AUTOCMD_FNAME_FULL.set(true);
+                name.clone()
+            } else {
+                full_name_save(name.as_cstr(), false)
+            };
+            sfname = Some(name);
+            full
+        }
+    };
+
+    // `<amatch>`.
+    AUTOCMD_MATCH.set(Some(fname.clone()));
+    EventNames {
+        afile_orig,
+        fname,
+        sfname,
+    }
+}
+
+/// Fire `event`, which [`may_fire`] allowed: save and swap the state an
+/// autocommand may see, walk the matching autocommands, and unwind it all.
+/// Answers whether anything matched.
+fn fire(
+    event: AutoEvent,
+    pattern: Option<XString>,
+    afile: Option<XString>,
+    group: ::core::ffi::c_int,
+    buffer: Option<Buf>,
+    excmd: Option<&mut ExArg>,
+    data: Option<&Object>,
+) -> bool {
+    let mut did_save_redobuff = false;
+    let mut save_redo = SAVE_REDO_INIT;
+    let save_key_typed = KEY_TYPED.get();
+
+    // Save the autocmd_* variables and what we know about the
+    // current buffer.
+    let save_autocmd_fname = AUTOCMD_FNAME.take();
+    let save_autocmd_fname_full = AUTOCMD_FNAME_FULL.get();
+    let save_autocmd_bufnr = AUTOCMD_BUFNR.get();
+    let save_autocmd_match = AUTOCMD_MATCH.take();
+    let save_autocmd_busy = AUTOCMD_BUSY.get();
+    let save_autocmd_nested = AUTOCMD_NESTED.get();
+    let save_changed = Buf::current().b_changed != 0;
+    let old_curbuf = Buf::current_raw();
+
+    let names = publish_names(event, pattern, afile, buffer);
+
+    // Don't redraw while running autocommands.
+    let redraw_off = Suppress::redraw();
+
+    // `es_name` and `es_lnum` are filled in by `aucmd_next`.
+    estack_push(
+        ETYPE_AUCMD,
+        crate::runtime::defs::FrameName::None,
+        LineNr::ZERO,
+    );
+
+    // Restored below, in the run of teardown before the call stack is;
+    // the handlers this fires each point it at themselves.
+    let sctx = Script::saved();
+
+    let mut wait_time: ProfTime = 0;
+    if DO_PROFILING.get() == PROF_YES {
+        // Doesn't count for the caller itself.
+        wait_time = prof_child_enter();
+    }
+
+    // Don't use the caller's function-local variables.
+    let call_stack_aside = CallStackAside::new();
+
+    // Only the outermost firing saves the search patterns and the
+    // redo buffer.
+    if !AUTOCMD_BUSY.get() {
+        save_search_patterns();
+        if !ins_compl_active() {
+            save_redobuff(&mut save_redo);
+            did_save_redobuff = true;
+        }
+        Buf::current().b_did_filetype = Buf::current().b_keep_filetype;
+    }
+
+    // Some commands need to know autocommands are running.
+    AUTOCMD_BUSY.set(true);
+    FILECHANGESHELL_BUSY.set(event == AutoEvent::FileChangedShell);
+    let nested = Depth::of(AUTOCMD_NESTING);
+
+    // Remembered for `did_filetype()` and `:setfiletype`, but only once
+    // 'filetype' is set: a FileType for an empty one (`:set ft=`) must
+    // not stop a later `:setf` from detecting the real type.
+    if event == AutoEvent::FileType && Buf::current().b_p_ft.first_byte() != 0 {
+        Buf::current().b_did_filetype = true;
+    }
+
+    let tail = names.fname.len() - path_tail(names.fname.as_cstr()).count_bytes();
+
+    // The walk's cursor.
+    let mut patcmd = AutoPatCmd {
+        // `aucmd_next` sets `lastpat` back to `None` when there is
+        // nothing left to run.
+        lastpat: None,
+        auidx: 0,
+        // The size is snapshotted so that patterns added by a
+        // handler cannot extend this walk into an endless loop.
+        ausize: with_event_cmds(event, EventCmds::len),
+        afile_orig: names.afile_orig,
+        fname: names.fname,
+        sfname: names.sfname,
+        tail,
+        group,
+        event,
+        // `getnextac` fills this in from the autocommand it runs.
+        script_ctx: ScriptCtx::NONE,
+        arg_bufnr: AUTOCMD_BUFNR.get(),
+        walk: None,
+    };
+    aucmd_next(&mut patcmd);
+
+    // Something matched: run the autocommands.
+    let matched = patcmd.lastpat.is_some();
+    if matched {
+        run_matched(&mut patcmd, excmd, data);
+    }
+
+    drop(redraw_off);
+    AUTOCMD_BUSY.set(save_autocmd_busy);
+    FILECHANGESHELL_BUSY.set(false);
+    AUTOCMD_NESTED.set(save_autocmd_nested);
+    // The frame takes the name `aucmd_next` left there with it.
+    estack_pop();
+    AUTOCMD_FNAME.set(save_autocmd_fname);
+    AUTOCMD_FNAME_FULL.set(save_autocmd_fname_full);
+    AUTOCMD_BUFNR.set(save_autocmd_bufnr);
+    AUTOCMD_MATCH.set(save_autocmd_match);
+    drop(sctx);
+    drop(call_stack_aside);
+    if DO_PROFILING.get() == PROF_YES {
+        prof_child_exit(wait_time);
+    }
+    KEY_TYPED.set(save_key_typed);
+    drop(patcmd);
+    // The handlers below run at the enclosing level, not this one.
+    drop(nested);
+
+    // The outermost firing puts the search patterns and the redo
+    // buffer back, and frees what the handlers deferred.
+    if !AUTOCMD_BUSY.get() {
+        restore_search_patterns();
+        if did_save_redobuff {
+            restore_redobuff(&mut save_redo);
+        }
+        Buf::current().b_did_filetype = false;
+        free_deferred();
+    }
+
+    // Only if we are still in the same buffer.
+    if Buf::current_raw() == old_curbuf && keeps_changed_flag(event) {
+        if Buf::current().b_changed != ::core::ffi::c_int::from(save_changed) {
+            NEED_MAKETITLE.set(true);
+        }
+        Buf::current().b_changed = ::core::ffi::c_int::from(save_changed);
+    }
+
+    // The patterns and commands marked deleted can really go now.
+    au_cleanup();
+    matched
+}
+
+/// Run the autocommands the walk `patcmd` matched: `getnextac` pulls one
+/// per pass of `do_cmdline`, with `v:cmdarg`/`v:cmdbang` set from `excmd`
+/// and the cursor and topline made valid around them.
+fn run_matched(patcmd: &mut AutoPatCmd, excmd: Option<&mut ExArg>, data: Option<&Object>) {
+    let bufnr = patcmd.arg_bufnr;
+    let walk = ACTIVE_WALK_BUFNRS.with_mut(|nrs| {
+        nrs.push(bufnr);
+        nrs.len() - 1
+    });
+    patcmd.walk = Some(walk);
+
+    // `v:cmdarg`/`v:cmdbang`, only when a pattern matched.
+    let save_cmdbang = get_vim_var_nr(Vv::Cmdbang);
+    let bang = excmd.as_deref().map(|command| command.forceit);
+    let save_cmdarg = match excmd {
+        None => None,
+        Some(command) => {
+            let saved = set_cmdarg(Some(command), None);
+            set_vim_var_nr(Vv::Cmdbang, VarNumber::from(bang.unwrap_or(false)));
+            saved
+        }
+    };
+
+    // Make the cursor and topline valid.  The outermost firing
+    // saves them for `reset_lnums`; a nested one only corrects.
+    if AUTOCMD_NESTING.get() == 1 {
+        check_lnums(true);
+    } else {
+        check_lnums_nested(true);
+    }
+
+    let save_did_emsg = DID_EMSG.get();
+    let save_ex_pressedreturn = get_pressedreturn();
+
+    // `getnextac` is what iterates: it is pulled once per
+    // matching autocommand.
+    let _ = do_cmdline(
+        None,
+        Some(&mut LineSource::Autocmd(patcmd, data)),
+        DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT,
+    );
+
+    DID_EMSG.set(DID_EMSG.get() + save_did_emsg);
+    set_pressedreturn(save_ex_pressedreturn);
+
+    if AUTOCMD_NESTING.get() == 1 {
+        // Restore the cursor and topline unless they changed.
+        reset_lnums();
+    }
+
+    if bang.is_some() {
+        set_cmdarg(None, save_cmdarg);
+        set_vim_var_nr(Vv::Cmdbang, save_cmdbang);
+    }
+    // The walk is over. A nested one has popped its own number
+    // already; anything above this one's would be a walk that did
+    // not, and is gone with it.
+    ACTIVE_WALK_BUFNRS.with_mut(|nrs| nrs.truncate(walk));
 }
