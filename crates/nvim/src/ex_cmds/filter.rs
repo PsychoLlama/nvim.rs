@@ -25,7 +25,7 @@ use super::{buf_autocmd, check_secure};
 use crate::autocmd::defs::AutoEvent;
 use crate::extmark::EXTMARK_NOOP;
 use crate::memline::Lines;
-use crate::types::ColNr;
+use crate::types::{ColNr, Pos};
 use crate::winlayer::{Buf, Win};
 
 use crate::autocmd::state::AUTOCMD_BUSY;
@@ -44,7 +44,7 @@ use crate::fold::fold_update;
 use crate::getchar::state::{BANGREDO, GOT_INT};
 use crate::getchar::{append_to_redobuff, append_to_redobuff_literally};
 use crate::global_cell::GlobalCell;
-use crate::guard::Suppress;
+use crate::guard::{MsgBump, Suppress};
 use crate::highlight_group::HLF_N;
 use crate::mark::mark_adjust;
 use crate::memory::XString;
@@ -152,47 +152,45 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
     let mut newcmd = assembled;
     newcmd.push(0);
 
-    'theend: {
-        if BANGREDO.get() {
-            // Put the command in the redo buffer.
-            if prevcmd_is_set().is_err() {
-                break 'theend;
-            }
-            let escaped = PREVCMD.with(|cmd| escaped_bytes(cmd, b"%#"));
-            append_to_redobuff_literally(escaped.as_cstr().to_bytes());
-            append_to_redobuff(b"\n");
-            BANGREDO.set(false);
+    if BANGREDO.get() {
+        // Put the command in the redo buffer.
+        if prevcmd_is_set().is_err() {
+            return;
         }
+        let escaped = PREVCMD.with(|cmd| escaped_bytes(cmd, b"%#"));
+        append_to_redobuff_literally(escaped.as_cstr().to_bytes());
+        append_to_redobuff(b"\n");
+        BANGREDO.set(false);
+    }
 
-        // A copy: the quoting below outlives the projection's borrow.
-        let shellquote = P_SHQ.get();
-        let shq = &*shellquote;
-        if !shq.is_empty() {
-            // `PREVCMD` is set -- either `prevcmd_is_set` passed above, or
-            // the assembled command was just stored in it.
-            let mut quoted = shq.to_vec();
-            PREVCMD.with(|cmd| quoted.extend_from_slice(cmd));
-            quoted.extend_from_slice(shq);
-            quoted.push(0);
-            newcmd = quoted;
-        }
+    // A copy: the quoting below outlives the projection's borrow.
+    let shellquote = P_SHQ.get();
+    let shq = &*shellquote;
+    if !shq.is_empty() {
+        // `PREVCMD` is set -- either `prevcmd_is_set` passed above, or
+        // the assembled command was just stored in it.
+        let mut quoted = shq.to_vec();
+        PREVCMD.with(|cmd| quoted.extend_from_slice(cmd));
+        quoted.extend_from_slice(shq);
+        quoted.push(0);
+        newcmd = quoted;
+    }
 
-        let cmd = CStr::from_bytes_until_nul(&newcmd).expect("the command is terminated");
-        if addr_count == 0 {
-            // Echo the command; it is not remembered in the message history.
-            say::start();
-            msg_ext_set_kind(c"shell_cmd");
-            say::putchar(':' as c_int);
-            say::putchar('!' as c_int);
-            msg_display(cmd, 0, false);
-            say::clear_eos();
-            ui_cursor_goto(MSG_ROW.get(), MSG_COL.get());
-            do_shell(cmd, ShellOpts::NONE);
-        } else {
-            // The autocommand runs with the current buffer.
-            do_filter(line1, line2, args, cmd, do_in, do_out);
-            buf_autocmd(AutoEvent::ShellFilterPost, Buf::current());
-        }
+    let cmd = CStr::from_bytes_until_nul(&newcmd).expect("the command is terminated");
+    if addr_count == 0 {
+        // Echo the command; it is not remembered in the message history.
+        say::start();
+        msg_ext_set_kind(c"shell_cmd");
+        say::putchar(':' as c_int);
+        say::putchar('!' as c_int);
+        msg_display(cmd, 0, false);
+        say::clear_eos();
+        ui_cursor_goto(MSG_ROW.get(), MSG_COL.get());
+        do_shell(cmd, ShellOpts::NONE);
+    } else {
+        // The autocommand runs with the current buffer.
+        do_filter(line1, line2, args, cmd, do_in, do_out);
+        buf_autocmd(AutoEvent::ShellFilterPost, Buf::current());
     }
 }
 
@@ -257,242 +255,41 @@ fn do_filter(
         return; // no filter command
     }
 
-    let old_curbuf = Buf::current_raw();
-    let (orig_start, orig_end, cursor_save) = (
-        Buf::current().b_op_start,
-        Buf::current().b_op_end,
-        Win::current().w_cursor,
-    );
-    let stmp = p_stmp();
+    let (orig_start, orig_end) = (Buf::current().b_op_start, Buf::current().b_op_end);
+    let mut filter = Filter {
+        line1,
+        line2,
+        do_in,
+        do_out,
+        old_curbuf: Buf::current(),
+        cursor_save: Win::current().w_cursor,
+        linecount: line2 - line1 + 1,
+        shell_flags: ShellOpts::NONE,
+        otmp: None,
+        itmp: None,
+        no_prompt: None,
+    };
 
     // Temporarily disable lockmarks since that's needed to propagate changed
     // regions of the buffer for fold_update(), linecount, etc.
-    // Released at four different exits, one of them past the end of the
-    // block below, so the guard is held in an `Option` rather than by scope.
-    let mut no_prompt = None;
     let save_cmod_flags = CMDMOD.with(|mods| mods.cmod_flags);
     CMDMOD.with_mut(|mods| mods.cmod_flags.clear(CmdModFlags::LOCKMARKS));
 
-    let mut linecount = line2 - line1 + 1;
     Win::current().w_cursor.lnum = line1;
     Win::current().w_cursor.col = ColNr::ZERO;
     changed_line_abv_curs();
     invalidate_botline_win(Win::current());
 
-    // When using temp files:
-    // 1. * Form temp file names
-    // 2. * Write the lines to a temp file
-    // 3.   Run the filter command on the temp file
-    // 4. * Read the output of the command into the buffer
-    // 5. * Delete the original lines to be filtered
-    // 6. * Remove the temp files
-    //
-    // When writing the input with a pipe or when catching the output with a
-    // pipe only need to do 3.
-    let mut shell_flags = if do_out {
-        ShellOpts::DO_OUT
-    } else {
-        ShellOpts::NONE
-    };
-    let mut itmp = None;
-    let mut otmp = None;
-    let mut no_tempname = false;
-    if !stmp && (do_in || do_out) {
-        if do_in {
-            shell_flags |= ShellOpts::WRITE;
-            Buf::current().b_op_start.lnum = line1;
-            Buf::current().b_op_end.lnum = line2;
-        }
-        if do_out {
-            shell_flags |= ShellOpts::READ;
-            Win::current().w_cursor.lnum = line2;
-        }
-    } else {
-        if do_in {
-            itmp = TempFile::new();
-            no_tempname = itmp.is_none();
-        }
-        if !no_tempname && do_out {
-            otmp = TempFile::new();
-            no_tempname = otmp.is_none();
-        }
-        if no_tempname {
-            emsg(gettext(E_NOTMP));
-        }
-    }
-
-    'filterend: {
-        if no_tempname {
-            break 'filterend;
-        }
-
-        // The writing and reading of temp files will not be shown.
-        // Vi also doesn't do this and the messages are not very informative.
-        no_prompt = Some(Suppress::wait_return()); // don't wait_return() while busy
-        if let Some(itmp_name) = TempFile::name(&itmp)
-            && Buf::current()
-                .write_file(
-                    WriteName::Other(itmp_name),
-                    None,
-                    line1,
-                    line2,
-                    Some(args),
-                    WriteRequest::filter(),
-                )
-                .is_err()
-        {
-            if !ui_has(UI_MESSAGES) {
-                say::putchar('\n' as c_int);
-            }
-            drop(no_prompt.take());
-            if !aborting() {
-                // Will call wait_return().
-                let arg0 = msg_cstr(TempFile::name(&itmp).unwrap_or_default());
-                semsg!("E482: Can't create file {arg0}");
-            }
-            break 'filterend;
-        }
-        if Buf::current_raw() != old_curbuf {
-            break 'filterend;
-        }
-
-        if !do_out {
-            say::putchar('\n' as c_int);
-        }
-
-        'error: {
-            let cmd_buf = make_filter_cmd(cmd, TempFile::name(&itmp), TempFile::name(&otmp), do_in);
-            ui_cursor_goto(ROWS.get() - 1, 0);
-
-            if do_out {
-                if u_save(line2, line2 + 1).is_err() {
-                    break 'error;
-                }
-                redraw_curbuf_later(UPD_VALID);
-            }
-            let mut read_linecount = Buf::current().b_ml.ml_line_count;
-
-            // Pass on the DO_OUT flag when the output is redirected.
-            call_shell_text(&cmd_buf, ShellOpts::FILTER | shell_flags);
-            drop(cmd_buf);
-
-            DID_CHECK_TIMESTAMPS.set(false);
-            NEED_CHECK_TIMESTAMPS.set(true);
-
-            // When interrupting the shell command, it may still have produced
-            // some useful output.  Reset got_int here, so that readfile()
-            // won't cancel reading.
-            os_breakcheck();
-            GOT_INT.set(false);
-
-            if !do_out {
-                break 'error;
-            }
-
-            if let Some(otmp_name) = TempFile::name(&otmp) {
-                let read = readfile_named(
-                    Some(otmp_name),
-                    None,
-                    line2,
-                    0,
-                    MAXLNUM.get(),
-                    Some(args),
-                    ReadFlags::FILTER,
-                    false,
-                );
-                if read.is_err() {
-                    if !aborting() {
-                        say::putchar('\n' as c_int);
-                        let arg0 = msg_cstr(otmp_name);
-                        semsg!("E485: Can't read file {arg0}");
-                    }
-                    break 'error;
-                }
-                if Buf::current_raw() != old_curbuf {
-                    break 'filterend;
-                }
-            }
-
-            read_linecount = LineNr::new(Buf::current().b_ml.ml_line_count - read_linecount);
-
-            if shell_flags.has(ShellOpts::READ) {
-                Buf::current().b_op_start.lnum = line2 + 1;
-                Buf::current().b_op_end.lnum = Win::current().w_cursor.lnum;
-                appended_lines_mark(line2, read_linecount.get());
-            }
-
-            if do_in {
-                if cmdmod_has(CmdModFlags::KEEPMARKS) || !cpo_has(CpoFlag::REMMARK) {
-                    // TODO(bfredl): Currently not active for extmarks. What
-                    // would we do if columns don't match, assume added/deleted
-                    // bytes at the end of each line?
-                    if read_linecount >= LineNr::new(linecount) {
-                        // move all marks from old lines to new lines
-                        mark_adjust(line1, line2, linecount, 0, EXTMARK_NOOP);
-                    } else {
-                        // move marks from old lines to new lines, delete
-                        // marks that are in deleted lines
-                        mark_adjust(
-                            line1,
-                            line1 + read_linecount.get() - 1,
-                            linecount,
-                            0,
-                            EXTMARK_NOOP,
-                        );
-                        mark_adjust(
-                            line1 + read_linecount.get(),
-                            line2,
-                            MAXLNUM.get(),
-                            0,
-                            EXTMARK_NOOP,
-                        );
-                    }
-                }
-
-                // Put cursor on first filtered line for ":range!cmd".
-                // Adjust '[ and '] (set by buf_write()).
-                Win::current().w_cursor.lnum = line1;
-                del_lines(linecount, true);
-                Buf::current().b_op_start.lnum -= linecount;
-                Buf::current().b_op_end.lnum -= linecount;
-                // adjust last line for next write
-                write_lnum_adjust(-linecount);
-                fold_update(
-                    Win::current(),
-                    Buf::current().b_op_start.lnum,
-                    Buf::current().b_op_end.lnum,
-                );
-            } else {
-                // Put cursor on last new line for ":r !cmd".
-                linecount = Buf::current().b_op_end.lnum - Buf::current().b_op_start.lnum + 1;
-                Win::current().w_cursor.lnum = Buf::current().b_op_end.lnum;
-            }
-
-            beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
-            drop(no_prompt.take());
-
-            if OptInt::from(linecount) > p_report() {
-                if do_in {
-                    report_filtered(linecount);
-                } else {
-                    say::more(linecount as c_int);
-                }
-            }
-            break 'filterend;
-        }
-
-        // put cursor back in same position for ":w !cmd"
-        Win::current().w_cursor = cursor_save;
-        drop(no_prompt.take());
-        wait_return(0);
+    if filter.set_up_transport() {
+        filter.run(args, cmd);
     }
 
     CMDMOD.with_mut(|mods| mods.cmod_flags = save_cmod_flags);
-    if Buf::current_raw() != old_curbuf {
+    if filter.curbuf_changed() {
         // The C decrements here even on the ":w !cmd" path that already
         // did, which would take the counter below where it started; the
         // guard releases once.
-        drop(no_prompt.take());
+        drop(filter.no_prompt.take());
         emsg(gettext(
             c"E135: *Filter* Autocommands must not change current buffer",
         ));
@@ -500,6 +297,275 @@ fn do_filter(
         Buf::current().b_op_start = orig_start;
         Buf::current().b_op_end = orig_end;
     }
+}
+
+/// One run of [`do_filter`]: the range, how its text travels to and from
+/// the command, and what has to be put back.
+///
+/// When using temp files:
+/// 1. * Form temp file names
+/// 2. * Write the lines to a temp file
+/// 3.   Run the filter command on the temp file
+/// 4. * Read the output of the command into the buffer
+/// 5. * Delete the original lines to be filtered
+/// 6. * Remove the temp files
+///
+/// When writing the input with a pipe or when catching the output with a
+/// pipe only need to do 3.
+#[derive(Debug)]
+struct Filter {
+    line1: LineNr,
+    line2: LineNr,
+    do_in: bool,
+    do_out: bool,
+    /// The buffer the range is in; autocommands must not change it.
+    old_curbuf: Buf,
+    /// Where `:w !cmd` puts the cursor back.
+    cursor_save: Pos,
+    /// The lines filtered, then the lines read for `:r !cmd`.
+    linecount: i32,
+    shell_flags: ShellOpts,
+    // Dropped in this order (output file, input file, then the prompt
+    // guard), as the C's locals were.
+    otmp: Option<TempFile>,
+    itmp: Option<TempFile>,
+    /// Temporarily no `wait_return()`. Released at four different exits,
+    /// one of them in [`do_filter`] after the run, so the guard is held in
+    /// an `Option` rather than by scope.
+    no_prompt: Option<MsgBump>,
+}
+
+impl Filter {
+    /// Whether autocommands made another buffer current.
+    fn curbuf_changed(&self) -> bool {
+        !self.old_curbuf.is_current()
+    }
+
+    /// Choose pipes or temp files for each side ('shelltemp'), creating the
+    /// temp files' names. False (E_NOTMP said) when a name cannot be had.
+    fn set_up_transport(&mut self) -> bool {
+        if self.do_out {
+            self.shell_flags = ShellOpts::DO_OUT;
+        }
+        if !p_stmp() && (self.do_in || self.do_out) {
+            if self.do_in {
+                self.shell_flags |= ShellOpts::WRITE;
+                Buf::current().b_op_start.lnum = self.line1;
+                Buf::current().b_op_end.lnum = self.line2;
+            }
+            if self.do_out {
+                self.shell_flags |= ShellOpts::READ;
+                Win::current().w_cursor.lnum = self.line2;
+            }
+            return true;
+        }
+        let mut no_tempname = false;
+        if self.do_in {
+            self.itmp = TempFile::new();
+            no_tempname = self.itmp.is_none();
+        }
+        if !no_tempname && self.do_out {
+            self.otmp = TempFile::new();
+            no_tempname = self.otmp.is_none();
+        }
+        if no_tempname {
+            emsg(gettext(E_NOTMP));
+        }
+        !no_tempname
+    }
+
+    /// Write the input, run the command, read its output back.
+    fn run(&mut self, args: &mut ExArg, cmd: &CStr) {
+        // The writing and reading of temp files will not be shown.
+        // Vi also doesn't do this and the messages are not very informative.
+        self.no_prompt = Some(Suppress::wait_return()); // don't wait_return() while busy
+        if !self.write_input(args) || self.curbuf_changed() {
+            return;
+        }
+        if !self.do_out {
+            say::putchar('\n' as c_int);
+        }
+        if self.shell(args, cmd) == Ran::PutBack {
+            // put cursor back in same position for ":w !cmd"
+            Win::current().w_cursor = self.cursor_save;
+            drop(self.no_prompt.take());
+            wait_return(0);
+        }
+    }
+
+    /// Write the range to the input temp file, when there is one. False
+    /// (E482 said) when it cannot be written.
+    fn write_input(&mut self, args: &mut ExArg) -> bool {
+        let Some(itmp_name) = TempFile::name(&self.itmp) else {
+            return true;
+        };
+        let written = Buf::current().write_file(
+            WriteName::Other(itmp_name),
+            None,
+            self.line1,
+            self.line2,
+            Some(args),
+            WriteRequest::filter(),
+        );
+        if written.is_ok() {
+            return true;
+        }
+        if !ui_has(UI_MESSAGES) {
+            say::putchar('\n' as c_int);
+        }
+        drop(self.no_prompt.take());
+        if !aborting() {
+            // Will call wait_return().
+            let arg0 = msg_cstr(itmp_name);
+            semsg!("E482: Can't create file {arg0}");
+        }
+        false
+    }
+
+    /// Run the command and, for `do_out`, put its output in the buffer.
+    fn shell(&mut self, args: &mut ExArg, cmd: &CStr) -> Ran {
+        let cmd_buf = make_filter_cmd(
+            cmd,
+            TempFile::name(&self.itmp),
+            TempFile::name(&self.otmp),
+            self.do_in,
+        );
+        ui_cursor_goto(ROWS.get() - 1, 0);
+
+        if self.do_out {
+            if u_save(self.line2, self.line2 + 1).is_err() {
+                return Ran::PutBack;
+            }
+            redraw_curbuf_later(UPD_VALID);
+        }
+        let line_count_before = Buf::current().b_ml.ml_line_count;
+
+        // Pass on the DO_OUT flag when the output is redirected.
+        call_shell_text(&cmd_buf, ShellOpts::FILTER | self.shell_flags);
+        drop(cmd_buf);
+
+        DID_CHECK_TIMESTAMPS.set(false);
+        NEED_CHECK_TIMESTAMPS.set(true);
+
+        // When interrupting the shell command, it may still have produced
+        // some useful output.  Reset got_int here, so that readfile()
+        // won't cancel reading.
+        os_breakcheck();
+        GOT_INT.set(false);
+
+        if !self.do_out {
+            return Ran::PutBack;
+        }
+
+        if let Some(otmp_name) = TempFile::name(&self.otmp) {
+            let read = readfile_named(
+                Some(otmp_name),
+                None,
+                self.line2,
+                0,
+                MAXLNUM.get(),
+                Some(args),
+                ReadFlags::FILTER,
+                false,
+            );
+            if read.is_err() {
+                if !aborting() {
+                    say::putchar('\n' as c_int);
+                    let arg0 = msg_cstr(otmp_name);
+                    semsg!("E485: Can't read file {arg0}");
+                }
+                return Ran::PutBack;
+            }
+            if self.curbuf_changed() {
+                return Ran::Done;
+            }
+        }
+
+        let read_linecount = LineNr::new(Buf::current().b_ml.ml_line_count - line_count_before);
+        self.take_output(read_linecount);
+        Ran::Done
+    }
+
+    /// The command's `read_linecount` lines are in after `line2`: replace
+    /// the range with them (`:range!cmd`) or move onto them (`:r !cmd`),
+    /// and report.
+    fn take_output(&mut self, read_linecount: LineNr) {
+        let (line1, line2) = (self.line1, self.line2);
+        if self.shell_flags.has(ShellOpts::READ) {
+            Buf::current().b_op_start.lnum = line2 + 1;
+            Buf::current().b_op_end.lnum = Win::current().w_cursor.lnum;
+            appended_lines_mark(line2, read_linecount.get());
+        }
+
+        if self.do_in {
+            let linecount = self.linecount;
+            if cmdmod_has(CmdModFlags::KEEPMARKS) || !cpo_has(CpoFlag::REMMARK) {
+                // TODO(bfredl): Currently not active for extmarks. What
+                // would we do if columns don't match, assume added/deleted
+                // bytes at the end of each line?
+                if read_linecount >= LineNr::new(linecount) {
+                    // move all marks from old lines to new lines
+                    mark_adjust(line1, line2, linecount, 0, EXTMARK_NOOP);
+                } else {
+                    // move marks from old lines to new lines, delete
+                    // marks that are in deleted lines
+                    mark_adjust(
+                        line1,
+                        line1 + read_linecount.get() - 1,
+                        linecount,
+                        0,
+                        EXTMARK_NOOP,
+                    );
+                    mark_adjust(
+                        line1 + read_linecount.get(),
+                        line2,
+                        MAXLNUM.get(),
+                        0,
+                        EXTMARK_NOOP,
+                    );
+                }
+            }
+
+            // Put cursor on first filtered line for ":range!cmd".
+            // Adjust '[ and '] (set by buf_write()).
+            Win::current().w_cursor.lnum = line1;
+            del_lines(linecount, true);
+            Buf::current().b_op_start.lnum -= linecount;
+            Buf::current().b_op_end.lnum -= linecount;
+            // adjust last line for next write
+            write_lnum_adjust(-linecount);
+            fold_update(
+                Win::current(),
+                Buf::current().b_op_start.lnum,
+                Buf::current().b_op_end.lnum,
+            );
+        } else {
+            // Put cursor on last new line for ":r !cmd".
+            self.linecount = Buf::current().b_op_end.lnum - Buf::current().b_op_start.lnum + 1;
+            Win::current().w_cursor.lnum = Buf::current().b_op_end.lnum;
+        }
+
+        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
+        drop(self.no_prompt.take());
+
+        if OptInt::from(self.linecount) > p_report() {
+            if self.do_in {
+                report_filtered(self.linecount);
+            } else {
+                say::more(self.linecount as c_int);
+            }
+        }
+    }
+}
+
+/// How [`Filter::shell`] ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Ran {
+    /// Nothing more to do.
+    Done,
+    /// No output was taken (`:w !cmd`, or a failure): the cursor goes back
+    /// and the user sees the command's output.
+    PutBack,
 }
 
 /// `:range!cmd`'s "N lines filtered". `set_keep_msg` takes a copy, so it

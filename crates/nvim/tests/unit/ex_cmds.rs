@@ -282,3 +282,37 @@ fn write_refuses_a_partial_buffer() {
     fx.run("set nomodified");
     fx.home();
 }
+
+/// `:{range}!cmd` replaces the range with the command's output and `:r
+/// !cmd` adds it, through temp files and through pipes alike: the lines,
+/// the cursor, the `'[`/`']` marks and the report. `:w !cmd` leaves the
+/// buffer alone and the cursor where it was.
+#[test]
+fn filter_runs_the_range_through_the_shell() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    let state = "[getline(1, '$'), line('.'), line(\"'[\"), line(\"']\")]";
+    for transport in ["shelltemp", "noshelltemp"] {
+        reset(&fx);
+        fx.run(&format!("set {transport}"));
+        fx.run("call cursor(5, 1)");
+        fx.check_messages("2,4!sort", "none");
+        fx.check(state, "[['b 2', 'a 10', 'a 10', 'c 1', 'x  3'], 2, 2, 4]");
+        fx.check_messages("$r !echo tail", "none");
+        fx.check(
+            state,
+            "[['b 2', 'a 10', 'a 10', 'c 1', 'x  3', 'tail'], 6, 6, 6]",
+        );
+        fx.run("call cursor(3, 2)");
+        fx.check_messages("2,3w !cat >/dev/null", "none");
+        fx.check("[line('.'), col('.')]", "[3, 2]");
+        fx.check_messages("%!sort -r", "none");
+        fx.check(
+            state,
+            "[['x  3', 'tail', 'c 1', 'b 2', 'a 10', 'a 10'], 1, 1, 6]",
+        );
+        fx.check("&modified", "1");
+    }
+    fx.run("set shelltemp&");
+    fx.settle();
+}
