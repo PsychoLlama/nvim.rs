@@ -9,11 +9,13 @@
 //!
 //! Upstream is a C `switch` with seven fall-through targets and two `goto`
 //! labels, which is what the transpiler rendered as eight nested labelled
-//! blocks.  Here every arm answers a [`Next`], and the four fall-through
-//! targets that more than one key shares are functions:
+//! blocks.  Here every arm answers a [`Next`] and the `match` is the table:
+//! an arm that does more than one call is a `key_*` handler, among them
+//! the fall-through targets that more than one key shares:
 //! [`key_end_insert`] (`<Esc>`/CTRL-C), [`key_stuff_last_insert`]
 //! (CTRL-A/CTRL-@), [`key_shift`] (CTRL-D/CTRL-T), [`key_tab`],
-//! [`key_eol`] (CR/NL) and [`key_complete`] (CTRL-N/CTRL-P/CTRL-L).
+//! [`key_eol`] (CR/NL), [`key_complete`] (CTRL-N/CTRL-P/CTRL-L),
+//! [`key_sideways`] and [`key_vertical`] (the arrows).
 //!
 //! The one thing the dispatcher itself does is order those three tails:
 //! `Normal` runs [`insert_normal_char`], `CheckPum` runs [`check_pum`], and
@@ -66,34 +68,9 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
     // table, the way Normal mode's `NV_CMD_TABLE[]` does it.
     let mut next = match s.c.kind() {
         // End input mode.
-        KeyKind::Char(Key::ESC) => {
-            if check_abbr(Key::ESC, true) {
-                Next::Continue
-            } else {
-                key_end_insert(s)
-            }
-        }
-        KeyKind::Char(Key::CTRL_C) => key_end_insert(s),
+        KeyKind::Char(Key::ESC | Key::CTRL_C) => key_end_insert(s),
 
-        KeyKind::Char(Key::CTRL_O) => {
-            // CTRL-X CTRL-O completes with 'omnifunc'.
-            if ctrl_x_mode_omni() {
-                insert_do_complete(s);
-                Next::Continue
-            } else if check_abbr(Key::CTRL_O, true) {
-                Next::Continue
-            } else {
-                ins_ctrl_o();
-                // Don't move the cursor left when 'virtualedit' has
-                // "onemore".
-                if get_ve_flags(Win::current()) & OPT_VE_FLAG_ONEMORE as ::core::ffi::c_uint != 0 {
-                    INS_AT_EOL.set(false);
-                    s.nomove = true;
-                }
-                s.count = 0;
-                Next::Leave
-            }
-        }
+        KeyKind::Char(Key::CTRL_O) => key_ctrl_o(s),
 
         // Toggle insert/replace mode.
         KeyKind::Special(SpecialKey::Ins | SpecialKey::Kins) => {
@@ -113,17 +90,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             key_stuff_last_insert(s)
         }
 
-        KeyKind::Char(Key::CTRL_R) => {
-            // CTRL-X CTRL-R completes with the registers.
-            if ctrl_x_mode_register() && !ins_compl_active() {
-                insert_do_complete(s);
-            } else {
-                ins_reg();
-                autoformat(true);
-                s.inserted_space = false;
-            }
-            Next::Continue
-        }
+        KeyKind::Char(Key::CTRL_R) => key_ctrl_r(s),
         KeyKind::Char(Key::CTRL_G) => {
             ins_ctrl_g();
             Next::Continue
@@ -133,25 +100,13 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             Next::Continue
         }
         // CTRL-_ toggles 'revins', but only with 'allowrevins'.
+        KeyKind::Char(Key::CTRL_UNDERSCORE) if !p_ari() => Next::Normal,
         KeyKind::Char(Key::CTRL_UNDERSCORE) => {
-            if !p_ari() {
-                Next::Normal
-            } else {
-                ins_ctrl_();
-                Next::Continue
-            }
+            ins_ctrl_();
+            Next::Continue
         }
 
-        KeyKind::Char(Key::CTRL_D) => {
-            // CTRL-X CTRL-D completes with the defined identifiers.
-            if ctrl_x_mode_path_defines() {
-                insert_do_complete(s);
-                Next::Continue
-            } else {
-                key_shift(s)
-            }
-        }
-        KeyKind::Char(Key::CTRL_T) => key_shift(s),
+        KeyKind::Char(Key::CTRL_D | Key::CTRL_T) => key_shift(s),
 
         KeyKind::Special(SpecialKey::Del | SpecialKey::Kdel) => {
             ins_del();
@@ -162,36 +117,8 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             do_backspace(s, Backspace::Char);
             Next::Continue
         }
-        KeyKind::Char(Key::CTRL_W) => {
-            // In a prompt buffer plain CTRL-W is the window prefix, so
-            // Shift-CTRL-W is what deletes a word.
-            if in_prompt_buf() && !MOD_MASK.get().has(ModMask::SHIFT) {
-                stuff_readbuf_char(Key::ctrl(b'W'));
-                RESTART_EDIT.set(Key::ascii(b'A'));
-                s.nomove = true;
-                s.count = 0;
-                return Step::Leave;
-            }
-            do_backspace(s, Backspace::Word);
-            Next::Continue
-        }
-        KeyKind::Char(Key::CTRL_U) => {
-            // CTRL-X CTRL-U completes with 'completefunc'.
-            if ctrl_x_mode_function() {
-                insert_do_complete(s);
-            } else {
-                // Not `do_backspace`: upstream clears `inserted_space`
-                // *before* the autocompletion runs, and that can call out
-                // to 'completefunc'.
-                s.did_backspace = ins_bs(s.c, Backspace::Line, &mut s.inserted_space);
-                autoformat(true);
-                s.inserted_space = false;
-                if s.did_backspace {
-                    may_autocomplete_before_cursor(s);
-                }
-            }
-            Next::Continue
-        }
+        KeyKind::Char(Key::CTRL_W) => key_ctrl_w(s),
+        KeyKind::Char(Key::CTRL_U) => key_ctrl_u(s),
 
         KeyKind::Special(
             SpecialKey::Leftmouse
@@ -216,22 +143,10 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             ins_mouse(s.c);
             Next::Continue
         }
-        KeyKind::Special(SpecialKey::Mousedown) => {
-            ins_mousescroll(MSCR_DOWN);
-            Next::Continue
-        }
-        KeyKind::Special(SpecialKey::Mouseup) => {
-            ins_mousescroll(MSCR_UP);
-            Next::Continue
-        }
-        KeyKind::Special(SpecialKey::Mouseleft) => {
-            ins_mousescroll(MSCR_LEFT);
-            Next::Continue
-        }
-        KeyKind::Special(SpecialKey::Mouseright) => {
-            ins_mousescroll(MSCR_RIGHT);
-            Next::Continue
-        }
+        KeyKind::Special(SpecialKey::Mousedown) => key_mousescroll(MSCR_DOWN),
+        KeyKind::Special(SpecialKey::Mouseup) => key_mousescroll(MSCR_UP),
+        KeyKind::Special(SpecialKey::Mouseleft) => key_mousescroll(MSCR_LEFT),
+        KeyKind::Special(SpecialKey::Mouseright) => key_mousescroll(MSCR_RIGHT),
 
         // Something mapped to nothing.
         KeyKind::Special(SpecialKey::Select | SpecialKey::Ignore) => Next::Continue,
@@ -240,14 +155,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             paste_repeat(1);
             Next::CheckPum
         }
-        KeyKind::Special(SpecialKey::Event) => {
-            state_handle_k_event();
-            // If CTRL-G U was used, apply it to the next typed key.
-            if DONT_SYNC_UNDO.get() == KeepUndo::Now {
-                DONT_SYNC_UNDO.set(KeepUndo::Armed);
-            }
-            Next::CheckPum
-        }
+        KeyKind::Special(SpecialKey::Event) => key_event(),
         // `<Cmd>command<CR>`.
         KeyKind::Special(SpecialKey::Command) => {
             let _ = do_cmdline(None, Some(&mut LineSource::CmdKey), DoCmdOpts::NONE);
@@ -270,67 +178,20 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             ins_end(s.c);
             Next::Continue
         }
-        KeyKind::Special(SpecialKey::Left) => {
-            if MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL) {
-                ins_s_left();
-            } else {
-                ins_left();
-            }
-            Next::Continue
-        }
-        KeyKind::Special(SpecialKey::SLeft | SpecialKey::CLeft) => {
-            ins_s_left();
-            Next::Continue
-        }
-        KeyKind::Special(SpecialKey::Right) => {
-            if MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL) {
-                ins_s_right();
-            } else {
-                ins_right();
-            }
-            Next::Continue
-        }
-        KeyKind::Special(SpecialKey::SRight | SpecialKey::CRight) => {
-            ins_s_right();
-            Next::Continue
-        }
+        // A plain arrow with Shift or Ctrl held is the word motion.
+        KeyKind::Special(SpecialKey::Left) => key_sideways(false, false),
+        KeyKind::Special(SpecialKey::SLeft | SpecialKey::CLeft) => key_sideways(false, true),
+        KeyKind::Special(SpecialKey::Right) => key_sideways(true, false),
+        KeyKind::Special(SpecialKey::SRight | SpecialKey::CRight) => key_sideways(true, true),
 
-        // With the popup menu up, the vertical motions walk it instead.
-        KeyKind::Special(SpecialKey::Up) => {
-            if pum_visible() {
-                insert_do_complete(s);
-            } else if MOD_MASK.get().has(ModMask::SHIFT) {
-                ins_page(true);
-            } else {
-                ins_updown(true, false);
-            }
-            Next::Continue
-        }
+        // A plain arrow with Shift held is the page motion.
+        KeyKind::Special(SpecialKey::Up) => key_vertical(s, true, false),
         KeyKind::Special(SpecialKey::SUp | SpecialKey::Pageup | SpecialKey::Kpageup) => {
-            if pum_visible() {
-                insert_do_complete(s);
-            } else {
-                ins_page(true);
-            }
-            Next::Continue
+            key_vertical(s, true, true)
         }
-        KeyKind::Special(SpecialKey::Down) => {
-            if pum_visible() {
-                insert_do_complete(s);
-            } else if MOD_MASK.get().has(ModMask::SHIFT) {
-                ins_page(false);
-            } else {
-                ins_updown(false, false);
-            }
-            Next::Continue
-        }
+        KeyKind::Special(SpecialKey::Down) => key_vertical(s, false, false),
         KeyKind::Special(SpecialKey::SDown | SpecialKey::Pagedown | SpecialKey::Kpagedown) => {
-            if pum_visible() {
-                insert_do_complete(s);
-            } else {
-                ins_page(false);
-            }
-            Next::Continue
+            key_vertical(s, false, true)
         }
 
         // Shift-TAB is a TAB in Insert mode.
@@ -346,24 +207,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
         }
         KeyKind::Char(Key::CAR | Key::NL) => key_eol(s),
 
-        KeyKind::Char(Key::CTRL_K) => {
-            // CTRL-X CTRL-K completes with the 'dictionary'.
-            if ctrl_x_mode_dictionary() {
-                if compl_option_ok(true) {
-                    insert_do_complete(s);
-                }
-                Next::Continue
-            } else {
-                // Otherwise it is a digraph, which produces a character
-                // to insert -- or nothing, if it was cancelled.
-                s.c = ins_digraph();
-                if s.c.is_nul() {
-                    Next::Continue
-                } else {
-                    Next::Normal
-                }
-            }
-        }
+        KeyKind::Char(Key::CTRL_K) => key_ctrl_k(s),
         KeyKind::Char(Key::CTRL_X) => {
             ins_ctrl_x();
             Next::Continue
@@ -409,8 +253,140 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
     Step::Go // continue
 }
 
-/// `<Esc>` and CTRL-C: end input mode -- unless a window here wants them.
+/// CTRL-O: one Normal-mode command, then back -- unless CTRL-X CTRL-O
+/// completes with 'omnifunc', or an abbreviation takes the key.
+fn key_ctrl_o(s: &mut InsertState) -> Next {
+    if ctrl_x_mode_omni() {
+        insert_do_complete(s);
+        return Next::Continue;
+    }
+    if check_abbr(Key::CTRL_O, true) {
+        return Next::Continue;
+    }
+    ins_ctrl_o();
+    // Don't move the cursor left when 'virtualedit' has "onemore".
+    if get_ve_flags(Win::current()) & OPT_VE_FLAG_ONEMORE as ::core::ffi::c_uint != 0 {
+        INS_AT_EOL.set(false);
+        s.nomove = true;
+    }
+    s.count = 0;
+    Next::Leave
+}
+
+/// CTRL-R: insert a register -- unless CTRL-X CTRL-R completes with the
+/// registers.
+fn key_ctrl_r(s: &mut InsertState) -> Next {
+    if ctrl_x_mode_register() && !ins_compl_active() {
+        insert_do_complete(s);
+    } else {
+        ins_reg();
+        autoformat(true);
+        s.inserted_space = false;
+    }
+    Next::Continue
+}
+
+/// CTRL-W: delete the word before the cursor. In a prompt buffer plain
+/// CTRL-W is the window prefix, so Shift-CTRL-W is what deletes a word.
+fn key_ctrl_w(s: &mut InsertState) -> Next {
+    if in_prompt_buf() && !MOD_MASK.get().has(ModMask::SHIFT) {
+        stuff_readbuf_char(Key::ctrl(b'W'));
+        RESTART_EDIT.set(Key::ascii(b'A'));
+        s.nomove = true;
+        s.count = 0;
+        return Next::Leave;
+    }
+    do_backspace(s, Backspace::Word);
+    Next::Continue
+}
+
+/// CTRL-U: delete what was inserted on the line -- unless CTRL-X CTRL-U
+/// completes with 'completefunc'.
+fn key_ctrl_u(s: &mut InsertState) -> Next {
+    if ctrl_x_mode_function() {
+        insert_do_complete(s);
+    } else {
+        // Not `do_backspace`: upstream clears `inserted_space` *before*
+        // the autocompletion runs, and that can call out to
+        // 'completefunc'.
+        s.did_backspace = ins_bs(s.c, Backspace::Line, &mut s.inserted_space);
+        autoformat(true);
+        s.inserted_space = false;
+        if s.did_backspace {
+            may_autocomplete_before_cursor(s);
+        }
+    }
+    Next::Continue
+}
+
+/// The scroll wheel, in `dir`.
+fn key_mousescroll(dir: c_int) -> Next {
+    ins_mousescroll(dir);
+    Next::Continue
+}
+
+/// `<Event>`: a deferred event to handle.
+fn key_event() -> Next {
+    state_handle_k_event();
+    // If CTRL-G U was used, apply it to the next typed key.
+    if DONT_SYNC_UNDO.get() == KeepUndo::Now {
+        DONT_SYNC_UNDO.set(KeepUndo::Armed);
+    }
+    Next::CheckPum
+}
+
+/// The horizontal arrows: a character, or a word when `by_word` (the
+/// shifted keys) or when Shift or Ctrl is held on the plain one.
+fn key_sideways(right: bool, by_word: bool) -> Next {
+    let by_word = by_word || MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL);
+    match (right, by_word) {
+        (false, false) => ins_left(),
+        (false, true) => ins_s_left(),
+        (true, false) => ins_right(),
+        (true, true) => ins_s_right(),
+    }
+    Next::Continue
+}
+
+/// The vertical arrows and the page keys: a line, or a page when `by_page`
+/// (the shifted and page keys) or when Shift is held on the plain arrow.
+/// With the popup menu up they walk it instead.
+fn key_vertical(s: &mut InsertState, up: bool, by_page: bool) -> Next {
+    if pum_visible() {
+        insert_do_complete(s);
+    } else if by_page || MOD_MASK.get().has(ModMask::SHIFT) {
+        ins_page(up);
+    } else {
+        ins_updown(up, false);
+    }
+    Next::Continue
+}
+
+/// CTRL-K: a digraph, which produces a character to insert -- or nothing,
+/// if it was cancelled -- unless CTRL-X CTRL-K completes with the
+/// 'dictionary'.
+fn key_ctrl_k(s: &mut InsertState) -> Next {
+    if ctrl_x_mode_dictionary() {
+        if compl_option_ok(true) {
+            insert_do_complete(s);
+        }
+        return Next::Continue;
+    }
+    s.c = ins_digraph();
+    if s.c.is_nul() {
+        Next::Continue
+    } else {
+        Next::Normal
+    }
+}
+
+/// `<Esc>` and CTRL-C: end input mode -- unless an abbreviation or a window
+/// here wants them.
 fn key_end_insert(s: &mut InsertState) -> Next {
+    // An abbreviation ending in `<Esc>` is expanded instead.
+    if s.c == Key::ESC && check_abbr(Key::ESC, true) {
+        return Next::Continue;
+    }
     if s.c == Key::CTRL_C && CMDWIN_TYPE.get() != 0 {
         // Close the command-line window.
         CMDWIN_RESULT.set(Key::from(SpecialKey::Ignore));
@@ -438,9 +414,14 @@ fn key_stuff_last_insert(s: &mut InsertState) -> Next {
     Next::Continue
 }
 
-/// CTRL-D and CTRL-T: one 'shiftwidth' less or more indent -- unless CTRL-T
-/// is the 'thesaurus' completion.
+/// CTRL-D and CTRL-T: one 'shiftwidth' less or more indent -- unless CTRL-D
+/// is the defined-identifier completion or CTRL-T the 'thesaurus' one.
 fn key_shift(s: &mut InsertState) -> Next {
+    // CTRL-X CTRL-D completes with the defined identifiers.
+    if s.c == Key::CTRL_D && ctrl_x_mode_path_defines() {
+        insert_do_complete(s);
+        return Next::Continue;
+    }
     if s.c == Key::CTRL_T && ctrl_x_mode_thesaurus() {
         if compl_option_ok(false) {
             insert_do_complete(s);
