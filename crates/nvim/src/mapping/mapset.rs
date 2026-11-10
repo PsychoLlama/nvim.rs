@@ -161,7 +161,8 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     unmap_args.buffer = buffer;
     let unmap_lhs = MAPTYPE_UNMAP_LHS;
     let cur = Buf::current();
-    buf_do_map(unmap_lhs, &unmap_args, mode, is_abbr, cur);
+    // Whatever was there goes; nothing there is no error.
+    let _ = buf_do_map(unmap_lhs, &unmap_args, mode, is_abbr, cur);
     drop(unmap_args);
 
     let table = MapTable::of(buffer, cur);
@@ -229,114 +230,15 @@ pub fn modify_keymap(
     }
     parsed_args.buffer = !global;
 
-    // The refusal is held rather than returned: the cleanup below has to run
-    // whichever way the block left.
-    let failed;
-    'fail_and_free: {
-        if parsed_args.replace_keycodes && !parsed_args.expr {
-            failed = Some(Error::validation(REQUIRES_EXPR));
-            break 'fail_and_free;
-        }
-
-        let ok = p_cpo(|cpo| {
-            set_maparg_lhs_rhs(
-                lhs.as_bytes(),
-                rhs.as_bytes(),
-                lua_funcref,
-                cpo,
-                &mut parsed_args,
-            )
-        });
-        if !ok || parsed_args.lhs_len > MAXMAPLEN || parsed_args.alt_lhs_len > MAXMAPLEN {
-            let lhs = msg_cstr(lhs.as_cstr());
-            failed = Some(api_error!(
-                ERROR_TYPE_VALIDATION,
-                "LHS exceeds maximum map length: {lhs}"
-            ));
-            break 'fail_and_free;
-        }
-
-        let (mode_val, is_abbrev, mut consumed) = parse_shortname_mode(&mode);
-        if is_abbrev {
-            consumed += 1; // the `a` it found
-        }
-        if !mode.is_empty() && consumed != mode.len() {
-            let mode = msg_cstr(mode.as_cstr());
-            failed = Some(api_error!(
-                ERROR_TYPE_VALIDATION,
-                "Invalid mode shortname: \"{mode}\""
-            ));
-            break 'fail_and_free;
-        }
-        if parsed_args.lhs_len == 0 {
-            failed = Some(Error::validation(c"Invalid (empty) LHS"));
-            break 'fail_and_free;
-        }
-
-        let is_noremap = parsed_args.noremap;
-        debug_assert!(!(is_unmap && is_noremap));
-
-        if !is_unmap
-            && lua_funcref == LUA_NOREF
-            && parsed_args.rhs_len() == 0
-            && !parsed_args.rhs_is_noop
-        {
-            if rhs.is_empty() {
-                // Assume the caller wants the RHS to be a <Nop>.
-                parsed_args.rhs_is_noop = true;
-            } else {
-                unreachable!("a non-empty RHS replaced by nothing is a <Nop>");
-            }
-        } else if is_unmap && (parsed_args.rhs_len() != 0 || parsed_args.rhs_lua() != LUA_NOREF) {
-            failed = Some(if parsed_args.rhs_len() != 0 {
-                let rhs = msg_bytes(parsed_args.rhs().str.as_bytes());
-                api_error!(
-                    ERROR_TYPE_VALIDATION,
-                    "Gave nonempty RHS in unmap command: {rhs}"
-                )
-            } else {
-                Error::validation(c"Gave nonempty RHS for unmap")
-            });
-            break 'fail_and_free;
-        }
-
-        // buf_do_map() reads noremap/unmap as its own argument.
-        let maptype_val = if is_unmap {
-            MAPTYPE_UNMAP
-        } else if is_noremap {
-            MAPTYPE_NOREMAP
-        } else {
-            MAPTYPE_MAP
-        };
-
-        let answer = buf_do_map(maptype_val, &parsed_args, mode_val, is_abbrev, target_buf);
-        // The four "already exists" texts hold a `%s`, so their literals are
-        // written out here rather than shared with `domap`'s copies, which
-        // still hand them to a `printf`.
-        let lhs = msg_cstr(lhs.as_cstr());
-        let refused = match (answer, is_abbrev) {
-            (1, _) => Some(Error::exception(E_INVARG)),
-            (2, _) => Some(Error::exception(E_NOMAP)),
-            (5, true) => Some(api_error!(
-                ERROR_TYPE_EXCEPTION,
-                "E226: Abbreviation already exists for {lhs}"
-            )),
-            (5, false) => Some(api_error!(
-                ERROR_TYPE_EXCEPTION,
-                "E227: Mapping already exists for {lhs}"
-            )),
-            (6, true) => Some(api_error!(
-                ERROR_TYPE_EXCEPTION,
-                "E224: Global abbreviation already exists for {lhs}"
-            )),
-            (6, false) => Some(api_error!(
-                ERROR_TYPE_EXCEPTION,
-                "E225: Global mapping already exists for {lhs}"
-            )),
-            _ => None,
-        };
-        failed = refused;
-    }
+    let made = install_keymap(
+        &mut parsed_args,
+        lua_funcref,
+        is_unmap,
+        &mode,
+        &lhs,
+        &rhs,
+        target_buf,
+    );
 
     drop(sctx);
     if parsed_args.rhs.is_none() && lua_funcref != LUA_NOREF {
@@ -347,8 +249,116 @@ pub fn modify_keymap(
     // Everything else goes with `parsed_args`: the two strings are its own,
     // and whatever a mapblock took is holding its own share of the `Rc`.
     drop(parsed_args);
-    match failed {
-        Some(failed) => Err(failed),
-        None => Ok(()),
+    made
+}
+
+/// Check what `modify_keymap` parsed and hand it to [`buf_do_map`], wording
+/// a refusal as the API error the caller sees.
+fn install_keymap(
+    parsed_args: &mut MapArguments,
+    lua_funcref: LuaRef,
+    is_unmap: bool,
+    mode: &ApiString,
+    lhs: &ApiString,
+    rhs: &ApiString,
+    target_buf: Buf,
+) -> Result<(), Error> {
+    if parsed_args.replace_keycodes && !parsed_args.expr {
+        return Err(Error::validation(REQUIRES_EXPR));
     }
+
+    let ok = p_cpo(|cpo| {
+        set_maparg_lhs_rhs(
+            lhs.as_bytes(),
+            rhs.as_bytes(),
+            lua_funcref,
+            cpo,
+            parsed_args,
+        )
+    });
+    if !ok || parsed_args.lhs_len > MAXMAPLEN || parsed_args.alt_lhs_len > MAXMAPLEN {
+        let lhs = msg_cstr(lhs.as_cstr());
+        return Err(api_error!(
+            ERROR_TYPE_VALIDATION,
+            "LHS exceeds maximum map length: {lhs}"
+        ));
+    }
+
+    let (mode_val, is_abbrev, mut consumed) = parse_shortname_mode(mode);
+    if is_abbrev {
+        consumed += 1; // the `a` it found
+    }
+    if !mode.is_empty() && consumed != mode.len() {
+        let mode = msg_cstr(mode.as_cstr());
+        return Err(api_error!(
+            ERROR_TYPE_VALIDATION,
+            "Invalid mode shortname: \"{mode}\""
+        ));
+    }
+    if parsed_args.lhs_len == 0 {
+        return Err(Error::validation(c"Invalid (empty) LHS"));
+    }
+
+    let is_noremap = parsed_args.noremap;
+    debug_assert!(!(is_unmap && is_noremap));
+
+    if !is_unmap
+        && lua_funcref == LUA_NOREF
+        && parsed_args.rhs_len() == 0
+        && !parsed_args.rhs_is_noop
+    {
+        if rhs.is_empty() {
+            // Assume the caller wants the RHS to be a <Nop>.
+            parsed_args.rhs_is_noop = true;
+        } else {
+            unreachable!("a non-empty RHS replaced by nothing is a <Nop>");
+        }
+    } else if is_unmap && (parsed_args.rhs_len() != 0 || parsed_args.rhs_lua() != LUA_NOREF) {
+        return Err(if parsed_args.rhs_len() != 0 {
+            let rhs = msg_bytes(parsed_args.rhs().str.as_bytes());
+            api_error!(
+                ERROR_TYPE_VALIDATION,
+                "Gave nonempty RHS in unmap command: {rhs}"
+            )
+        } else {
+            Error::validation(c"Gave nonempty RHS for unmap")
+        });
+    }
+
+    // buf_do_map() reads noremap/unmap as its own argument.
+    let maptype_val = if is_unmap {
+        MAPTYPE_UNMAP
+    } else if is_noremap {
+        MAPTYPE_NOREMAP
+    } else {
+        MAPTYPE_MAP
+    };
+
+    let Err(refused) = buf_do_map(maptype_val, parsed_args, mode_val, is_abbrev, target_buf) else {
+        return Ok(());
+    };
+    // The four "already exists" texts hold a `%s`, so their literals are
+    // written out here rather than shared with `domap`'s copies, which
+    // still hand them to a `printf`.
+    let lhs = msg_cstr(lhs.as_cstr());
+    Err(match (refused, is_abbrev) {
+        (MapRefusal::Invalid, _) => Error::exception(E_INVARG),
+        (MapRefusal::NoMatch, _) => Error::exception(E_NOMAP),
+        (MapRefusal::Clash, true) => api_error!(
+            ERROR_TYPE_EXCEPTION,
+            "E226: Abbreviation already exists for {lhs}"
+        ),
+        (MapRefusal::Clash, false) => api_error!(
+            ERROR_TYPE_EXCEPTION,
+            "E227: Mapping already exists for {lhs}"
+        ),
+        (MapRefusal::GlobalClash, true) => api_error!(
+            ERROR_TYPE_EXCEPTION,
+            "E224: Global abbreviation already exists for {lhs}"
+        ),
+        (MapRefusal::GlobalClash, false) => api_error!(
+            ERROR_TYPE_EXCEPTION,
+            "E225: Global mapping already exists for {lhs}"
+        ),
+    })
 }

@@ -222,8 +222,12 @@ pub(crate) fn take_map_arg(to_parse: &mut &[u8], word: &[u8]) -> bool {
 /// `is_unmap` makes everything right of the last map argument the `{lhs}`,
 /// spaces included: `:unmap` has no separate `{rhs}`.
 ///
-/// Answers 0 on success and 1 if the arguments are invalid.
-pub(crate) fn str_to_mapargs(strargs: &[u8], is_unmap: bool, args: &mut MapArguments) -> c_int {
+/// Refuses `Invalid` when the arguments are.
+pub(crate) fn str_to_mapargs(
+    strargs: &[u8],
+    is_unmap: bool,
+    args: &mut MapArguments,
+) -> Result<(), MapRefusal> {
     let all = skip::past_white(strargs);
     let mut rest = all;
 
@@ -271,18 +275,18 @@ pub(crate) fn str_to_mapargs(strargs: &[u8], is_unmap: bool, args: &mut MapArgum
     // replaced ("<Space>" is longer than ' '); upstream copies it into a
     // fixed buffer of 256 first.
     if orig_lhs_len >= 256 {
-        return 1;
+        return Err(MapRefusal::Invalid);
     }
     let lhs = &rest[..orig_lhs_len];
     let rhs = skip::past_white(&rest[orig_lhs_len..]);
     let ok = p_cpo(|cpo| set_maparg_lhs_rhs(lhs, rhs, LUA_NOREF, cpo, args));
     if !ok {
-        return 1;
+        return Err(MapRefusal::Invalid);
     }
     if args.lhs_len > MAXMAPLEN {
-        return 1;
+        return Err(MapRefusal::Invalid);
     }
-    0
+    Ok(())
 }
 
 /// The mapping mode a command name asks for, and how many bytes of the name

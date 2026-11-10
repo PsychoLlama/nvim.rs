@@ -719,7 +719,8 @@ fn apply_keymap_entries(buffer: Buf) {
         .map(|entry| keymap_map_cmd(&entry.from, Some(&entry.to)))
         .collect();
     for cmd in cmds {
-        do_map(MAPTYPE_MAP, &cmd, MODE_LANGMAP, false);
+        // A refused entry is skipped, as upstream skips it.
+        let _ = do_map(MAPTYPE_MAP, &cmd, MODE_LANGMAP, false);
     }
 }
 
@@ -752,7 +753,8 @@ fn keymap_unload() {
         .map(|entry| keymap_map_cmd(&entry.from, None))
         .collect();
     for cmd in cmds {
-        do_map(MAPTYPE_UNMAP, &cmd, MODE_LANGMAP, false);
+        // An entry already gone is nothing to report.
+        let _ = do_map(MAPTYPE_UNMAP, &cmd, MODE_LANGMAP, false);
     }
     // The entries own their two strings.
     buf.b_kmap_ga = Vec::new();

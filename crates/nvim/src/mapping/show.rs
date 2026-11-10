@@ -121,55 +121,60 @@ pub(crate) fn translate_mapping(str_in: &[u8], cpo: &CStr) -> Vec<u8> {
     let mut out = Vec::<u8>::new();
 
     let cpo_bslash = has_char(cpo, CpoFlag::BSLASH.as_c_int());
+    // A `K_SPECIAL` escape is three bytes; upstream's tests spell that as
+    // "the two bytes after this one are not the NUL".
+    let three_at =
+        |at: usize| matches!(str_in.get(at + 1..at + 3), Some([a, b]) if *a != 0 && *b != 0);
     let mut at = 0;
     while at < str_in.len() {
         let mut c = Key::byte(str_in[at]);
-        // A `K_SPECIAL` escape is three bytes; upstream's tests spell that as
-        // "the two bytes after this one are not the NUL".
-        let three_at =
-            |at: usize| matches!(str_in.get(at + 1..at + 3), Some([a, b]) if *a != 0 && *b != 0);
-        'next: {
-            if str_in[at] == K_SPECIAL && three_at(at) {
-                let mut modifiers = ModMask::NONE;
-                if str_in[at + 1] == KS_MODIFIER {
-                    at += 2;
-                    modifiers = ModMask::from_byte(str_in[at]);
-                    at += 1;
-                    c = Key::byte(str_in[at]);
-                }
-
-                if c == Key::byte(K_SPECIAL) && three_at(at) {
-                    c = key_unescape(str_in[at + 1], str_in[at + 2]);
-                    if c == SpecialKey::Zero {
-                        c = Key::NUL; // display <Nul> as ^@
-                    }
-                    at += 2;
-                }
-                if c.is_special() || !modifiers.is_empty() {
-                    // A special key.
-                    let name = get_special_key_name(c, modifiers);
-                    out.extend_from_slice(cstr::in_bytes(&name).to_bytes());
-                    break 'next;
-                }
+        if str_in[at] == K_SPECIAL && three_at(at) {
+            let mut modifiers = ModMask::NONE;
+            if str_in[at + 1] == KS_MODIFIER {
+                at += 2;
+                modifiers = ModMask::from_byte(str_in[at]);
+                at += 1;
+                c = Key::byte(str_in[at]);
             }
 
-            if c.is(' ')
-                || c.is('\t')
-                || c == Key::ctrl(b'J')
-                || c == Key::ctrl(b'V')
-                || c.is('<')
-                || (c.is('\\') && !cpo_bslash)
-            {
-                out.push(if cpo_bslash { 0x16 } else { b'\\' });
+            if c == Key::byte(K_SPECIAL) && three_at(at) {
+                c = key_unescape(str_in[at + 1], str_in[at + 2]);
+                if c == SpecialKey::Zero {
+                    c = Key::NUL; // display <Nul> as ^@
+                }
+                at += 2;
             }
-            if !c.is_nul() {
-                // Below 0x100 here: a wider key was printed by name above.
-                out.push(c.code().to_le_bytes()[0]);
+            if c.is_special() || !modifiers.is_empty() {
+                // A special key.
+                let name = get_special_key_name(c, modifiers);
+                out.extend_from_slice(cstr::in_bytes(&name).to_bytes());
+                at += 1;
+                continue;
             }
         }
+        push_typed_key(&mut out, c, cpo_bslash);
         at += 1;
     }
     out
+}
+
+/// Append a key below 0x100 as `:map` reads it back, escaping the ones that
+/// would otherwise end or change the `{lhs}` with a backslash, or with
+/// CTRL-V when 'cpoptions' has `B`.
+fn push_typed_key(out: &mut Vec<u8>, c: Key, cpo_bslash: bool) {
+    if c.is(' ')
+        || c.is('\t')
+        || c == Key::ctrl(b'J')
+        || c == Key::ctrl(b'V')
+        || c.is('<')
+        || (c.is('\\') && !cpo_bslash)
+    {
+        out.push(if cpo_bslash { 0x16 } else { b'\\' });
+    }
+    if !c.is_nul() {
+        // Below 0x100 here: a wider key was printed by name above.
+        out.push(c.code().to_le_bytes()[0]);
+    }
 }
 
 /// The `:map-arguments` that may precede the `{lhs}` on a completed command

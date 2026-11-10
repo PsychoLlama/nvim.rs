@@ -424,3 +424,32 @@ fn simplified_pairs_are_one_mapping_with_two_spellings() {
     fx.run("unlet g:mp_pair");
     clean(&fx);
 }
+
+#[test]
+fn each_refusal_reaches_the_user_as_its_own_message() {
+    let fx = Fixture::new();
+    clean(&fx);
+    let long = ",".repeat(60);
+    fx.check_error("unmap", "E474: Invalid argument");
+    fx.check_error(&format!("nmap {long} x"), "E474: Invalid argument");
+    fx.check_error("nunmap ,never", "E31: No such mapping");
+    fx.check_error("iunabbrev ,never", "E24: No such abbreviation");
+    fx.run("nmap <unique> ,u a");
+    fx.check_error("nmap <unique> ,u b", "E227: Mapping already exists for ,u");
+    fx.check_error(
+        "nmap <buffer> <unique> ,u c",
+        "E225: Global mapping already exists for ,u",
+    );
+    // The refused definitions changed nothing.
+    fx.check("maparg(',u', 'n')", "'a'");
+    fx.check("maparg(',u', 'n', 0, 1).buffer", "0");
+    clean(&fx);
+}
+
+#[test]
+fn a_translated_lhs_escapes_what_would_end_it() {
+    use super::show::translate_mapping;
+    assert_eq!(translate_mapping(b"a b<\\", c""), b"a\\ b\\<\\\\");
+    // With 'cpoptions' B a backslash is literal and CTRL-V escapes.
+    assert_eq!(translate_mapping(b"a b\\", c"B"), b"a\x16 b\\");
+}
