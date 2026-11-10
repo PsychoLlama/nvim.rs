@@ -26,8 +26,7 @@ use crate::types::Failed;
 use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::ascii::NUL;
-use crate::ex_docmd::ends_excmd_char;
+use crate::ex_docmd::ends_excmd;
 use crate::regexp::RE_MAGIC;
 use crate::winlayer::Win;
 
@@ -48,19 +47,10 @@ pub(crate) struct GroupName {
 pub(crate) fn split_group_name(line: &[u8]) -> Option<GroupName> {
     let len = skip::to_white(line);
     let rest = len + skip::white(&line[len..]);
-    if ends_excmd_char(byte(line, 0)) || byte(line, rest) == NUL {
+    if ends_excmd(cstr::byte_at(line, 0)) || cstr::byte_at(line, rest) == 0 {
         return None;
     }
     Some(GroupName { len, rest })
-}
-
-/// The byte at `at`, as the pointer walk this replaces read it.
-///
-/// `line` is the rest of a command line, so its length *is* the terminator's
-/// offset and a read at or past it answers NUL — which is what every
-/// `ends_excmd`/`ascii_iswhite` test below is asking about.
-fn byte(line: &[u8], at: usize) -> c_int {
-    c_int::from(cstr::byte_at(line, at))
 }
 
 /// What an option word takes after its name.
@@ -156,12 +146,12 @@ fn flag_matches(rest: &[u8], f: &SynFlag) -> bool {
     {
         return false;
     }
-    let after = byte(rest, name.len());
+    let after = cstr::byte_at(rest, name.len());
     ascii_iswhite(after)
         || if f.arg.takes_value() {
-            after == c_int::from(b'=')
+            after == b'='
         } else {
-            ends_excmd_char(after)
+            ends_excmd(after)
         }
 }
 
@@ -352,7 +342,7 @@ fn parse_id_list(line: &[u8], at: usize, keylen: usize, skip: bool) -> IdListPas
     let after_key = (at + keylen).min(line.len());
     let mut p = after_key + skip::white(&line[after_key..]);
 
-    if byte(line, p) != c_int::from(b'=') {
+    if cstr::byte_at(line, p) != b'=' {
         return IdListPass {
             ids,
             end: p,
@@ -363,7 +353,7 @@ fn parse_id_list(line: &[u8], at: usize, keylen: usize, skip: bool) -> IdListPas
     }
     p += 1; // the `=` itself; it is not the terminator, so this is in range
     p += skip::white(&line[p..]);
-    if ends_excmd_char(byte(line, p)) {
+    if ends_excmd(cstr::byte_at(line, p)) {
         return IdListPass {
             ids,
             end: p,
@@ -375,7 +365,9 @@ fn parse_id_list(line: &[u8], at: usize, keylen: usize, skip: bool) -> IdListPas
 
     loop {
         let mut end = p;
-        while !matches!(cstr::byte_at(line, end), 0 | b',') && !ascii_iswhite(byte(line, end)) {
+        while !matches!(cstr::byte_at(line, end), 0 | b',')
+            && !ascii_iswhite(cstr::byte_at(line, end))
+        {
             end += 1;
         }
 
@@ -393,12 +385,12 @@ fn parse_id_list(line: &[u8], at: usize, keylen: usize, skip: bool) -> IdListPas
         }
 
         p = end + skip::white(&line[end..]);
-        if byte(line, p) != c_int::from(b',') {
+        if cstr::byte_at(line, p) != b',' {
             break;
         }
         p += 1; // skip the comma between arguments; it is not the terminator
         p += skip::white(&line[p..]);
-        if ends_excmd_char(byte(line, p)) {
+        if ends_excmd(cstr::byte_at(line, p)) {
             break;
         }
     }

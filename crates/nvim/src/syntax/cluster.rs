@@ -170,8 +170,8 @@ fn cluster_op(rest: &[u8]) -> Option<(usize, c_int)> {
         {
             continue;
         }
-        let after = c_int::from(cstr::byte_at(rest, name.len()));
-        if ascii_iswhite(after) || after == c_int::from(b'=') {
+        let after = cstr::byte_at(rest, name.len());
+        if ascii_iswhite(after) || after == b'=' {
             return Some((name.len(), op));
         }
     }

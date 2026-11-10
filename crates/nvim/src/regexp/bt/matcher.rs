@@ -127,10 +127,7 @@ fn walk(
                 && rex.lnum() <= rex.reg_maxline()
             {
                 reg_nextline(rex);
-            } else if crosses_lines
-                && rex.reg_line_lbr()
-                && c_int::from(rex.byte()) == '\n' as c_int
-            {
+            } else if crosses_lines && rex.reg_line_lbr() && rex.byte() == b'\n' {
                 // With 'reg_line_lbr' the break is a real newline byte.
                 rex.advance_char();
             } else {

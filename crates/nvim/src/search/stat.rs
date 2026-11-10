@@ -142,7 +142,7 @@ pub(crate) fn cmdline_search_stat(
     // A right-to-left window has the pair the other way round, so that
     // it still reads "current of total" on screen.
     let reversed = Win::current().w_onebuf_opt.wo_rl != 0
-        && c_int::from(Win::current().w_onebuf_opt.wo_rlc.first_byte()) == 's' as c_int;
+        && Win::current().w_onebuf_opt.wo_rlc.first_byte() == b's';
     // Four digits is the most `'maxsearchcount'` allows on either side of
     // the slash, so the longest of these is `[>9999/>9999]` -- thirteen
     // bytes, and upstream's `STAT_BUF_LEN` scratch buffer never truncated

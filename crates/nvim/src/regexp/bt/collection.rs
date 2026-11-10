@@ -102,7 +102,7 @@ pub(crate) fn collection(
                 }
                 for _ in 0..len {
                     let byte = pat_byte(rc, 0);
-                    rc.code.byte(c_int::from(byte));
+                    rc.code.byte(byte);
                     pat_seek(rc, 1);
                 }
             }
@@ -137,7 +137,7 @@ fn range(rc: &mut RegCompiler, startc: &mut c_int) -> Compiled {
         || *startc == -1
         || (pat_byte(rc, 0) == b'\\' && pat_byte(rc, 1) == b'n')
     {
-        rc.code.byte(c_int::from(b'-'));
+        rc.code.byte(b'-');
         *startc = c_int::from(b'-');
         return Ok(());
     }
@@ -320,19 +320,19 @@ fn emit_char_class(rc: &mut RegCompiler, class: CharClass) {
     // The rest are short literal sets.
     match class {
         CharClass::Blank => {
-            rc.code.byte(c_int::from(b' '));
-            rc.code.byte(c_int::from(b'\t'));
+            rc.code.byte(b' ');
+            rc.code.byte(b'\t');
         }
         CharClass::Space => {
             for c in 9..=13 {
                 rc.code.byte(c);
             }
-            rc.code.byte(c_int::from(b' '));
+            rc.code.byte(b' ');
         }
-        CharClass::Tab => rc.code.byte(c_int::from(b'\t')),
-        CharClass::Return => rc.code.byte(c_int::from(b'\r')),
+        CharClass::Tab => rc.code.byte(b'\t'),
+        CharClass::Return => rc.code.byte(b'\r'),
         CharClass::Backspace => rc.code.byte(0x08),
-        CharClass::Escape => rc.code.byte(c_int::from(ESC)),
+        CharClass::Escape => rc.code.byte(ESC),
         _ => {}
     }
 }

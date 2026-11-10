@@ -161,7 +161,7 @@ pub(crate) fn previous_substitute(rc: &mut RegCompiler, flagp: &mut c_int) -> Co
     };
     let ret = rc.code.node(BtOp::Exactly);
     for &byte in sub.iter() {
-        rc.code.byte(c_int::from(byte));
+        rc.code.byte(byte);
     }
     rc.code.byte(NUL);
     if !sub.is_empty() {

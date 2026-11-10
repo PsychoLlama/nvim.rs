@@ -208,8 +208,8 @@ impl BtEmitter {
     /// Emit one byte of program. `b` is a byte, or a character below 256:
     /// its low byte is stored, as upstream's `regc()` stored a `char_u`.
     #[inline]
-    pub(crate) fn byte(&mut self, b: c_int) {
-        self.text.push(low_byte(b));
+    pub(crate) fn byte(&mut self, b: impl Into<c_int>) {
+        self.text.push(low_byte(b.into()));
     }
 
     /// Emit one character of program, as its UTF-8 bytes.

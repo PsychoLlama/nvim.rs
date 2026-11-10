@@ -260,32 +260,22 @@ fn put_item_patterns(mut idx: usize) -> usize {
     let sp_type = |i: usize| c_int::from(pats[i].sp_type);
 
     if sp_type(idx) == SPTYPE_MATCH {
-        put_pattern(
-            &mut last_matchgroup,
-            c"match",
-            c_int::from(b' '),
-            &pats[idx],
-        );
+        put_pattern(&mut last_matchgroup, c"match", b' ', &pats[idx]);
         msg_put_ascii(b' ');
     } else if sp_type(idx) == SPTYPE_START {
         // The three loops bound themselves on the array; upstream bounds
         // only the last of them and reads past it if a region's END
         // entries are ever missing.
         while idx < pats.len() && sp_type(idx) == SPTYPE_START {
-            put_pattern(
-                &mut last_matchgroup,
-                c"start",
-                c_int::from(b'='),
-                &pats[idx],
-            );
+            put_pattern(&mut last_matchgroup, c"start", b'=', &pats[idx]);
             idx += 1;
         }
         if idx < pats.len() && sp_type(idx) == SPTYPE_SKIP {
-            put_pattern(&mut last_matchgroup, c"skip", c_int::from(b'='), &pats[idx]);
+            put_pattern(&mut last_matchgroup, c"skip", b'=', &pats[idx]);
             idx += 1;
         }
         while idx < pats.len() && sp_type(idx) == SPTYPE_END {
-            put_pattern(&mut last_matchgroup, c"end", c_int::from(b'='), &pats[idx]);
+            put_pattern(&mut last_matchgroup, c"end", b'=', &pats[idx]);
             idx += 1;
         }
         idx -= 1;
@@ -377,7 +367,7 @@ const SEPCHARS: &[u8] = b"/+=-#@\"|'^&";
 ///
 /// `last_matchgroup` carries the `matchgroup=` in force across the patterns of
 /// one item, so a change is printed once rather than per pattern.
-fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: c_int, spp: &SynPat) {
+fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: u8, spp: &SynPat) {
     // May have to write "matchgroup=group".
     if *last_matchgroup != c_int::from(spp.sp_syn_match_id) {
         *last_matchgroup = c_int::from(spp.sp_syn_match_id);
@@ -393,7 +383,7 @@ fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: c_int, spp: &SynPat) {
 
     // The name of the pattern and an '=' or ' '.
     msg_str_hl(s, LIST_HL, false);
-    msg_putchar(c);
+    msg_put_ascii(c);
 
     // The pattern, wrapped in the first delimiter it does not itself
     // contain — or the first one of all, if it contains every one.

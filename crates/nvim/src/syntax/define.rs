@@ -267,17 +267,17 @@ impl ExArg<'_> {
         };
         let mut matchgroup_id = 0;
         let mut illegal = false;
-        let byte = |at: usize| c_int::from(cstr::byte_at(line, at));
+        let byte = |at: usize| cstr::byte_at(line, at);
 
         let mut cursor = at;
-        while let Some(mut at) = cursor.filter(|&at| !ends_excmd_char(byte(at))) {
+        while let Some(mut at) = cursor.filter(|&at| !ends_excmd(byte(at))) {
             // Options may appear anywhere between the patterns. A refusal is
             // said here, before the E475 `syn_cmd_region` follows it with.
             cursor = read_item_options(line, at, &mut out.opt, &mut out.conceal_char, self.skip)
                 .map_err(|why| why.report())
                 .ok();
             match cursor {
-                Some(next) if !ends_excmd_char(byte(next)) => at = next,
+                Some(next) if !ends_excmd(byte(next)) => at = next,
                 _ => break,
             }
 
@@ -296,7 +296,7 @@ impl ExArg<'_> {
             }
 
             at = key_end + skip::white(&line[key_end..]);
-            if byte(at) != c_int::from(b'=') {
+            if byte(at) != b'=' {
                 cursor = None;
                 let shown = msg_bytes(line);
                 semsg!("E398: Missing '=': {shown}");
@@ -304,7 +304,7 @@ impl ExArg<'_> {
             }
             at += 1;
             at += skip::white(&line[at..]);
-            if byte(at) == NUL {
+            if byte(at) == 0 {
                 out.not_enough = true;
                 break;
             }
