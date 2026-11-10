@@ -38,7 +38,7 @@ use crate::regexp::low_byte;
 use crate::search::{
     SEARCH_ECHO, SEARCH_END, SEARCH_HIS, SEARCH_KEEP, SEARCH_MARK, SEARCH_MSG, SEARCH_NOOF,
     SEARCH_OPT, SEARCH_PEEK, SEARCH_REV, SEARCH_START, SEARCH_STAT_BUF_LEN,
-    SEARCH_STAT_DEF_TIMEOUT,
+    SEARCH_STAT_DEF_TIMEOUT, SearchError,
 };
 use crate::types::CmdModFlags;
 use crate::winlayer::Buf;
@@ -63,6 +63,24 @@ pub(crate) enum Hit {
     Match,
     /// A match, with a line offset added: the motion is linewise.
     Linewise,
+}
+
+/// Why a search command found nothing. Each is said where it is made, as
+/// the command's `options` ask.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CommandError {
+    /// The search itself failed; `searchit` has said so.
+    Search(SearchError),
+    /// There is no previous pattern to reuse (E35).
+    NoPattern,
+    /// A `;` was followed by something other than `/` or `?` (E386).
+    BadLeg,
+}
+
+impl From<SearchError> for CommandError {
+    fn from(err: SearchError) -> Self {
+        CommandError::Search(err)
+    }
 }
 
 /// Where the pattern to search for comes from.
@@ -412,13 +430,13 @@ pub(crate) fn do_search_in(
 /// Answers what was found, or `None` -- having said why, as `options`
 /// asks.
 pub(crate) fn do_search(
-    mut op: Option<&mut OpArg>,
+    op: Option<&mut OpArg>,
     dirc: c_int,
     search_delim: c_int,
     pat: &[u8],
     count: c_int,
     options: c_int,
-    mut sia: Option<&mut SearchItArg>,
+    sia: Option<&mut SearchItArg>,
 ) -> Option<Hit> {
     SEARCHCMDLEN.set(0);
     // A line offset is not remembered; this is vi compatible.
@@ -431,51 +449,8 @@ pub(crate) fn do_search(
     // Saved for when SEARCH_KEEP is used.
     let old_off = search_offset();
 
-    // The command, terminated: what is left of it is `text[at..]` -- the
-    // pattern, then the offset, then either nothing or `;` and the next
-    // leg. `patlen` is how long the caller (and, after a leg, the walk)
-    // says that is, kept with upstream's wrapping arithmetic.
-    let mut text = pat.to_vec();
-    text.push(b'\0');
-    let mut at = 0usize;
-    let mut patlen = pat.len();
-    // Whether `text` is the copy `skip_regexp_copy` made when it rewrote
-    // "\?" to "?"; a later leg rewrites that copy in place.
-    let mut copied = false;
-    // This leg's direction, and the character that ends its pattern --
-    // usually the direction, but `:s%pat%rep` passes its own.
-    let mut dirc = dirc;
-    let mut delim = search_delim;
-
-    // Find out the direction of the search.
-    if dirc == 0 {
-        dirc = c_int::from(off.dir.to_ne_bytes()[0]);
-    } else {
-        let mut off = search_offset();
-        off.dir = low_byte(dirc).cast_signed();
-        set_search_offset(off);
-        set_vv_searchforward();
-    }
-    if options & SEARCH_REV != 0 {
-        dirc = if dirc == '/' as c_int {
-            '?' as c_int
-        } else {
-            '/' as c_int
-        };
-    }
-
-    // Position of the last match; start searching at the cursor.
-    let mut pos = Win::current().w_cursor;
-
-    // If the cursor is in a closed fold, don't find another match in
-    // the same fold.
-    if dirc == '/' as c_int {
-        if Win::current().has_folding(pos.lnum, None, Some(&mut pos.lnum)) {
-            pos.col = ColNr::new(MAXCOL - 2); // avoid overflow when adding 1
-        }
-    } else if Win::current().has_folding(pos.lnum, Some(&mut pos.lnum), None) {
-        pos.col = ColNr::ZERO;
-    }
+    let mut command = Command::new(pat, dirc, off.dir, search_delim, options);
+    let mut pos = start_position(command.dirc);
 
     // Turn 'hlsearch' highlighting back on.
     if NO_HLSEARCH.get() && options & SEARCH_KEEP == 0 {
@@ -483,179 +458,308 @@ pub(crate) fn do_search(
         set_no_hlsearch(false);
     }
 
-    let mut retval = Hit::Match;
-    // Whether a `;` follows the offset, i.e. whether another leg comes next.
-    let chained = |text: &[u8], at: usize| cstr::byte_at(text, at) == b';';
-
-    let found = 'end: {
-        // Repeat the search when the pattern is followed by ';', as in
-        // "/foo/;?bar".
-        loop {
-            let mut show_top_bot_msg = false;
-
-            let Some(source) = pattern_to_search(cstr::byte_at(&text, at), delim) else {
-                emsg(gettext(E_NOPREVRE));
-                break 'end false;
-            };
-            // The pattern searched for, as a span of `text` or as the
-            // substitute pattern.
-            let mut span = (at, patlen);
-
-            if cstr::byte_at(&text, at) != b'\0' {
-                // Find the end of the regular expression. If there is
-                // a matching '/' or '?', toss it.
-                let is_magic = c_int::from(magic_isset());
-                let end = if copied {
-                    skip_regexp_in_place(&mut text, at, delim, is_magic) - at
-                } else {
-                    let (end, copy) = skip_regexp_copy(&text[at..], delim, is_magic);
-                    if let Some(mut copy) = copy {
-                        // Made a copy of "pat" to change "\?" to "?".
-                        let len = cstr::until_nul(&copy).len();
-                        copy.truncate(len);
-                        copy.push(b'\0');
-                        // Wrapping, as upstream: `patlen` is what the
-                        // caller claimed, which for `get_address` is a
-                        // prefix of a longer command line — the copy can
-                        // be longer, and C's size_t difference is then
-                        // the negative number this wants.
-                        let extra = number_as_int(patlen.wrapping_sub(len).cast_signed() as i64);
-                        SEARCHCMDLEN.set(SEARCHCMDLEN.get() + extra);
-                        text = copy;
-                        at = 0;
-                        patlen = len;
-                        copied = true;
-                        span = (0, len);
-                    }
-                    end
-                };
-                let mut p = at + end;
-                if as_char(cstr::byte_at(&text, p)) == delim {
-                    // The pattern searched for ends at the delimiter --
-                    // when it is the typed one.
-                    if matches!(source, Source::Typed) {
-                        span = (at, p - at);
-                    }
-                    p += 1;
-                }
-
-                p = parse_offset(&text, p, options);
-
-                // Compute the length of the search command, for
-                // get_address().
-                let consumed = p - at;
-                SEARCHCMDLEN.set(SEARCHCMDLEN.get() + len_as_int(consumed));
-                patlen = patlen.wrapping_sub(consumed);
-                at = p; // put pat after the search command
-            }
-
-            let searchstr: &[u8] = match &source {
-                Source::Typed => {
-                    let (start, len) = span;
-                    let end = start.saturating_add(len).min(text.len());
-                    cstr::until_nul(&text[start.min(end)..end])
-                }
-                Source::Remembered => b"",
-                Source::Substitute(subst) => subst,
-            };
-            let searchstr = searchstr.to_vec();
-
-            let echoed = echo_search_cmd(dirc, &searchstr, options);
-
-            let off = search_offset();
-            if !off.line && off.off != 0 && pos.col < ColNr::new(MAXCOL - 2) {
-                back_off_start(&mut pos, off.off);
-            }
-
-            // A ';'-chained leg always applies its offset, whatever
-            // the caller asked for.
-            let noof = if chained(&text, at) { 0 } else { SEARCH_NOOF };
-            let (w, b) = (Some(Win::current()), Buf::current());
-            let dir = if dirc == '/' as c_int {
-                FORWARD
-            } else {
-                BACKWARD
-            };
-            let kept = SEARCH_KEEP + SEARCH_PEEK + SEARCH_HIS + SEARCH_MSG + SEARCH_START + noof;
-            let opts = c_int::from(off.end) * SEARCH_END + (options & kept);
-            let leg = sia.as_deref_mut();
-            let c = searchit(
-                w, b, &mut pos, None, dir, &searchstr, count, opts, RE_LAST, leg,
-            );
-
-            let wrapped = sia.as_ref().is_some_and(|sia| sia.sa_wrapped);
-            if !shortmess(ShmFlag::SEARCH) && wrapped {
-                show_top_bot_msg = true;
-            }
-            if c.is_err() {
-                break 'end false;
-            }
-
-            let off = search_offset();
-            if off.end
-                && let Some(op) = op.as_deref_mut()
-            {
-                op.inclusive = true; // 'e' includes the last character
-            }
-            retval = Hit::Match;
-
-            if wrapped {
-                fire_autocmds(AutoEvent::SearchWrapped, false, None);
-            }
-
-            let mut has_offset = false;
-            if options & SEARCH_NOOF == 0 || chained(&text, at) {
-                let org_pos = pos;
-                retval = add_offset(&mut pos, search_offset());
-                has_offset = !equalpos(pos, org_pos);
-            }
-
-            // Show [1/15] if 'S' is not in 'shortmess'.
-            if let Some((mut echo, true)) = echoed {
-                let inexact = count != 1
-                    || has_offset
-                    || (FDO_FLAGS.get() & OPT_FDO_FLAG_SEARCH == 0 && {
-                        let (w, lnum) = (Win::current(), Win::current().w_cursor.lnum);
-                        w.has_folding(lnum, None, None)
-                    });
-                let cursor = Win::current().w_cursor;
-                let (top_bot, maxcount) = (show_top_bot_msg, number_as_int(p_msc()));
-                let tm = SEARCH_STAT_DEF_TIMEOUT;
-                cmdline_search_stat(dirc, pos, cursor, top_bot, &mut echo, inexact, maxcount, tm);
-            }
-
-            // The search command can be followed by a ';' to do
-            // another search, as in "/pat/;/foo/+3;?bar". That is like
-            // another search command, except that the remembered
-            // direction is the first search's and that an error leaves
-            // the cursor where it was. Not done when called by
-            // get_address(), which handles ';' itself.
-            if options & SEARCH_OPT == 0 || !chained(&text, at) {
-                break;
-            }
-            at += 1;
-            dirc = c_int::from(cstr::byte_at(&text, at));
-            delim = dirc;
-            if dirc != '?' as c_int && dirc != '/' as c_int {
-                emsg(gettext(c"E386: Expected '?' or '/'  after ';'"));
-                break 'end false;
-            }
-            at += 1;
-            patlen = patlen.wrapping_sub(1);
-        }
-
+    let found = search_legs(&mut command, &mut pos, op, count, options, sia);
+    if found.is_ok() {
         if options & SEARCH_MARK != 0 {
             setpcmark();
         }
         Win::current().w_cursor = pos;
         Win::current().w_set_curswant = true;
-        true
-    };
+    }
 
     if options & SEARCH_KEEP != 0 || cmdmod_has(CmdModFlags::KEEPPATTERNS) {
         set_search_offset(old_off);
     }
-    found.then_some(retval)
+    found.ok()
+}
+
+/// Where a search in direction `dirc` starts: the cursor, or past the end
+/// (or before the start) of the closed fold it is in, so that the same fold
+/// is not found again.
+fn start_position(dirc: c_int) -> Pos {
+    let mut pos = Win::current().w_cursor;
+    if dirc == '/' as c_int {
+        if Win::current().has_folding(pos.lnum, None, Some(&mut pos.lnum)) {
+            pos.col = ColNr::new(MAXCOL - 2); // avoid overflow when adding 1
+        }
+    } else if Win::current().has_folding(pos.lnum, Some(&mut pos.lnum), None) {
+        pos.col = ColNr::ZERO;
+    }
+    pos
+}
+
+/// A search command being walked leg by leg.
+#[derive(Debug)]
+struct Command {
+    /// The command, terminated: what is left of it is `text[at..]` -- the
+    /// pattern, then the offset, then either nothing or `;` and the next
+    /// leg.
+    text: Vec<u8>,
+    at: usize,
+    /// How long the caller (and, after a leg, the walk) says what is left
+    /// is, kept with upstream's wrapping arithmetic.
+    patlen: usize,
+    /// Whether `text` is the copy `skip_regexp_copy` made when it rewrote
+    /// "\?" to "?"; a later leg rewrites that copy in place.
+    copied: bool,
+    /// This leg's direction.
+    dirc: c_int,
+    /// The character that ends this leg's pattern -- usually the direction,
+    /// but `:s%pat%rep` passes its own.
+    delim: c_int,
+}
+
+impl Command {
+    /// The command over `pat`, searching in the direction `dirc` (`/` or
+    /// `?`), which is remembered as the search direction and
+    /// `v:searchforward`; or `previous`, the remembered one, when `dirc` is
+    /// 0. `SEARCH_REV` turns it round.
+    fn new(pat: &[u8], dirc: c_int, previous: c_char, delim: c_int, options: c_int) -> Self {
+        let mut dirc = dirc;
+        if dirc == 0 {
+            dirc = c_int::from(previous.to_ne_bytes()[0]);
+        } else {
+            let mut off = search_offset();
+            off.dir = low_byte(dirc).cast_signed();
+            set_search_offset(off);
+            set_vv_searchforward();
+        }
+        if options & SEARCH_REV != 0 {
+            dirc = if dirc == '/' as c_int {
+                '?' as c_int
+            } else {
+                '/' as c_int
+            };
+        }
+        let mut text = pat.to_vec();
+        text.push(b'\0');
+        Command {
+            text,
+            at: 0,
+            patlen: pat.len(),
+            copied: false,
+            dirc,
+            delim,
+        }
+    }
+
+    /// Whether a `;` follows the offset, i.e. whether another leg comes
+    /// next.
+    fn chained(&self) -> bool {
+        cstr::byte_at(&self.text, self.at) == b';'
+    }
+
+    /// Takes this leg's pattern, delimiter and offset off the front of the
+    /// command, counting them into `SEARCHCMDLEN` for `get_address`, and
+    /// answers the pattern to search for.
+    fn take_pattern(&mut self, source: &Source, options: c_int) -> Vec<u8> {
+        // The pattern searched for, as a span of `text` or as the
+        // substitute pattern.
+        let mut span = (self.at, self.patlen);
+
+        if cstr::byte_at(&self.text, self.at) != b'\0' {
+            let at = self.at;
+            // Find the end of the regular expression. If there is a
+            // matching '/' or '?', toss it.
+            let is_magic = c_int::from(magic_isset());
+            let end = if self.copied {
+                skip_regexp_in_place(&mut self.text, at, self.delim, is_magic) - at
+            } else {
+                let (end, copy) = skip_regexp_copy(&self.text[at..], self.delim, is_magic);
+                if let Some(copy) = copy {
+                    span = self.adopt_copy(copy);
+                }
+                end
+            };
+            let at = self.at;
+            let mut p = at + end;
+            if as_char(cstr::byte_at(&self.text, p)) == self.delim {
+                // The pattern searched for ends at the delimiter -- when it
+                // is the typed one.
+                if matches!(source, Source::Typed) {
+                    span = (at, p - at);
+                }
+                p += 1;
+            }
+
+            p = parse_offset(&self.text, p, options);
+
+            // Compute the length of the search command, for get_address().
+            let consumed = p - at;
+            SEARCHCMDLEN.set(SEARCHCMDLEN.get() + len_as_int(consumed));
+            self.patlen = self.patlen.wrapping_sub(consumed);
+            self.at = p; // put pat after the search command
+        }
+
+        let searchstr: &[u8] = match source {
+            Source::Typed => {
+                let (start, len) = span;
+                let end = start.saturating_add(len).min(self.text.len());
+                cstr::until_nul(&self.text[start.min(end)..end])
+            }
+            Source::Remembered => b"",
+            Source::Substitute(subst) => subst,
+        };
+        searchstr.to_vec()
+    }
+
+    /// Walks on in the copy of the pattern that changed "\?" to "?",
+    /// answering the span of the pattern in it.
+    fn adopt_copy(&mut self, mut copy: Vec<u8>) -> (usize, usize) {
+        let len = cstr::until_nul(&copy).len();
+        copy.truncate(len);
+        copy.push(b'\0');
+        // Wrapping, as upstream: `patlen` is what the caller claimed, which
+        // for `get_address` is a prefix of a longer command line — the copy
+        // can be longer, and C's size_t difference is then the negative
+        // number this wants.
+        let extra = number_as_int(self.patlen.wrapping_sub(len).cast_signed() as i64);
+        SEARCHCMDLEN.set(SEARCHCMDLEN.get() + extra);
+        self.text = copy;
+        self.at = 0;
+        self.patlen = len;
+        self.copied = true;
+        (0, len)
+    }
+
+    /// Steps over the `;` and the next leg's direction, which must be `/`
+    /// or `?` (E386, said, otherwise).
+    fn start_next_leg(&mut self) -> Result<(), CommandError> {
+        self.at += 1;
+        self.dirc = c_int::from(cstr::byte_at(&self.text, self.at));
+        self.delim = self.dirc;
+        if self.dirc != '?' as c_int && self.dirc != '/' as c_int {
+            emsg(gettext(c"E386: Expected '?' or '/'  after ';'"));
+            return Err(CommandError::BadLeg);
+        }
+        self.at += 1;
+        self.patlen = self.patlen.wrapping_sub(1);
+        Ok(())
+    }
+}
+
+/// Every leg of the command, as in "/foo/;?bar", each starting where the
+/// last one matched. Answers the last leg's hit; a leg that fails has
+/// said why.
+fn search_legs(
+    command: &mut Command,
+    pos: &mut Pos,
+    mut op: Option<&mut OpArg>,
+    count: c_int,
+    options: c_int,
+    mut sia: Option<&mut SearchItArg>,
+) -> Result<Hit, CommandError> {
+    loop {
+        let hit = search_leg(
+            command,
+            pos,
+            op.as_deref_mut(),
+            count,
+            options,
+            sia.as_deref_mut(),
+        )?;
+        // The search command can be followed by a ';' to do another
+        // search, as in "/pat/;/foo/+3;?bar". That is like another search
+        // command, except that the remembered direction is the first
+        // search's and that an error leaves the cursor where it was. Not
+        // done when called by get_address(), which handles ';' itself.
+        if options & SEARCH_OPT == 0 || !command.chained() {
+            return Ok(hit);
+        }
+        command.start_next_leg()?;
+    }
+}
+
+/// One leg: its pattern taken off the command and echoed, searched for
+/// `count` times from `pos`, and its offset applied. `Err` when there is
+/// no pattern (E35, said) or no match (`searchit` says so, as `options`
+/// asks).
+fn search_leg(
+    command: &mut Command,
+    pos: &mut Pos,
+    op: Option<&mut OpArg>,
+    count: c_int,
+    options: c_int,
+    mut sia: Option<&mut SearchItArg>,
+) -> Result<Hit, CommandError> {
+    let Some(source) = pattern_to_search(cstr::byte_at(&command.text, command.at), command.delim)
+    else {
+        emsg(gettext(E_NOPREVRE));
+        return Err(CommandError::NoPattern);
+    };
+    let searchstr = command.take_pattern(&source, options);
+    let dirc = command.dirc;
+
+    let echoed = echo_search_cmd(dirc, &searchstr, options);
+
+    let off = search_offset();
+    if !off.line && off.off != 0 && pos.col < ColNr::new(MAXCOL - 2) {
+        back_off_start(pos, off.off);
+    }
+
+    // A ';'-chained leg always applies its offset, whatever the caller
+    // asked for.
+    let noof = if command.chained() { 0 } else { SEARCH_NOOF };
+    let (w, b) = (Some(Win::current()), Buf::current());
+    let dir = if dirc == '/' as c_int {
+        FORWARD
+    } else {
+        BACKWARD
+    };
+    let kept = SEARCH_KEEP + SEARCH_PEEK + SEARCH_HIS + SEARCH_MSG + SEARCH_START + noof;
+    let opts = c_int::from(off.end) * SEARCH_END + (options & kept);
+    let c = searchit(
+        w,
+        b,
+        pos,
+        None,
+        dir,
+        &searchstr,
+        count,
+        opts,
+        RE_LAST,
+        sia.as_deref_mut(),
+    );
+
+    let wrapped = sia.as_ref().is_some_and(|sia| sia.sa_wrapped);
+    let show_top_bot_msg = !shortmess(ShmFlag::SEARCH) && wrapped;
+    c?;
+
+    let off = search_offset();
+    if off.end
+        && let Some(op) = op
+    {
+        op.inclusive = true; // 'e' includes the last character
+    }
+
+    if wrapped {
+        fire_autocmds(AutoEvent::SearchWrapped, false, None);
+    }
+
+    let mut hit = Hit::Match;
+    let mut has_offset = false;
+    if options & SEARCH_NOOF == 0 || command.chained() {
+        let org_pos = *pos;
+        hit = add_offset(pos, search_offset());
+        has_offset = !equalpos(*pos, org_pos);
+    }
+
+    // Show [1/15] if 'S' is not in 'shortmess'.
+    if let Some((mut echo, true)) = echoed {
+        let inexact = count != 1
+            || has_offset
+            || (FDO_FLAGS.get() & OPT_FDO_FLAG_SEARCH == 0 && {
+                let (w, lnum) = (Win::current(), Win::current().w_cursor.lnum);
+                w.has_folding(lnum, None, None)
+            });
+        let cursor = Win::current().w_cursor;
+        let (top_bot, maxcount) = (show_top_bot_msg, number_as_int(p_msc()));
+        let tm = SEARCH_STAT_DEF_TIMEOUT;
+        cmdline_search_stat(
+            dirc, *pos, cursor, top_bot, &mut echo, inexact, maxcount, tm,
+        );
+    }
+    Ok(hit)
 }
 
 // ---------------------------------------------------------------------
