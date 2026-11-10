@@ -28,6 +28,7 @@ use crate::types::ExArgt;
 use crate::types::Handle;
 use crate::usercmd::AttrError;
 use crate::winlayer::graph::switch_buffer;
+use std::ffi::CString;
 
 pub fn nvim_create_user_command(
     channel_id: uint64_t,
@@ -86,248 +87,293 @@ pub fn create_user_command(
     opts: &mut KeyDict_user_command,
     buffer_local: bool,
 ) -> Result<(), Error> {
-    let force: bool;
-    let mut argt = ExArgt::NONE;
-    let mut def: int64_t = -1;
-    let mut addr_type_arg = CmdAddr::NoRange;
-    let mut context = ExpandContext::Nothing;
-    let mut compl_arg = None;
-    let rep: &[u8];
-    let mut luaref: LuaRef = LUA_NOREF;
-    let mut compl_luaref: LuaRef = LUA_NOREF;
-    let mut preview_luaref: LuaRef = LUA_NOREF;
     let cmd_name = name.as_bytes();
-    // The refusal is held rather than returned: the cleanup below has to run
-    // whichever way the block left.
-    let mut failed = None;
-    '_err: {
-        if uc_validate_name(cmd_name).is_none() {
-            failed = Some(err_bad_value(c"command name", name.as_cstr()));
-            break '_err;
-        }
-        if mb_islower(::core::ffi::c_int::from(cstr::byte_at(cmd_name, 0))) {
-            let what = c"command name (must start with uppercase)";
-            failed = Some(err_bad_value(what, name.as_cstr()));
-            break '_err;
-        }
-        // Every key, borrowed: the keyset owns its values, and the one
-        // this function *takes* -- `complete`'s Lua reference -- says so.
-        let given_nargs = opts.nargs.as_ref();
-        let given_range = opts.range.as_ref();
-        let given_count = opts.count.as_ref();
-        let given_addr = opts.addr.as_ref();
-        if given_range.is_some() && given_count.is_some() {
-            failed = Some(Error::validation(c"Cannot use both 'range' and 'count'"));
-            break '_err;
-        }
+    check_command_name(&name)?;
+    if opts.range.is_some() && opts.count.is_some() {
+        return Err(Error::validation(c"Cannot use both 'range' and 'count'"));
+    }
+    let mut argt = nargs_flags(opts.nargs.as_ref())?;
+    if opts.complete.is_some() && argt == ExArgt::NONE {
+        return Err(Error::validation(c"'complete' used without 'nargs'"));
+    }
+    let mut range = CommandRange {
+        addr_type: CmdAddr::NoRange,
+        default_count: -1,
+    };
+    range.read_range(opts.range.as_ref(), &mut argt)?;
+    range.read_count(opts.count.as_ref(), &mut argt)?;
+    range.read_addr(opts.addr.as_ref(), &mut argt)?;
+    argt |= switch_flags(opts);
+    // An unsupplied `force` defaults to true: `nvim_create_user_command`
+    // replaces an existing command unless told otherwise.
+    let force = opts.force.unwrap_or(true);
 
-        if let Some(nargs) = given_nargs.and_then(Object::as_integer) {
-            match nargs {
-                0 => {}
-                1 => argt |= ExArgt::EXTRA | ExArgt::NOSPC | ExArgt::NEEDARG,
-                _ => {
-                    failed = Some(err_bad_number(c"nargs", nargs));
-                    break '_err;
-                }
-            }
-        } else if let Some(nargs) = given_nargs.and_then(Object::as_string) {
-            if nargs.len() > 1 {
-                failed = Some(err_bad_value(c"nargs", nargs.as_cstr()));
-                break '_err;
-            }
-            // The empty string has no byte 0, and falls to the arm that
-            // rejects it.
-            match nargs.as_bytes().first().copied().unwrap_or(0) {
-                b'*' => argt |= ExArgt::EXTRA,
-                b'?' => argt |= ExArgt::EXTRA | ExArgt::NOSPC,
-                b'+' => argt |= ExArgt::EXTRA | ExArgt::NEEDARG,
-                _ => {
-                    failed = Some(err_bad_value(c"nargs", nargs.as_cstr()));
-                    break '_err;
-                }
-            }
-        } else if given_nargs.is_some() {
-            failed = Some(err_invalid(c"nargs", Bad::Unsaid));
-            break '_err;
+    // From here the call takes Lua references out of `opts`, and gives them
+    // back if it refuses before the command owns them.
+    let mut completion = Completion {
+        context: ExpandContext::Nothing,
+        arg: None,
+        luaref: LUA_NOREF,
+    };
+    completion.read(opts, &mut argt)?;
+    let preview_luaref = match take_preview(opts, &mut argt) {
+        Ok(reference) => reference,
+        Err(refused) => {
+            release_luaref(completion.luaref);
+            return Err(refused);
         }
-
-        if opts.complete.is_some() && argt == ExArgt::NONE {
-            failed = Some(Error::validation(c"'complete' used without 'nargs'"));
-            break '_err;
+    };
+    let (luaref, rep) = match command_body(&cmd, opts) {
+        Ok(body) => body,
+        Err(refused) => {
+            release_luaref(completion.luaref);
+            release_luaref(preview_luaref);
+            return Err(refused);
         }
+    };
 
-        if let Some(range) = given_range.and_then(Object::as_boolean) {
+    let _sctx = api_set_sctx(channel_id);
+    // The definition owns the parsed argument and the three references
+    // from here on, and gives them back if it is never installed.
+    let def = Definition {
+        argt,
+        default_count: range.default_count,
+        complete: completion.context,
+        complete_arg: completion.arg,
+        addr_type: range.addr_type,
+        luaref,
+        complete_luaref: completion.luaref,
+        preview_luaref,
+    };
+    uc_add_command(cmd_name, name.len(), rep, def, buffer_local, force).map_err(|refused| {
+        // Upstream printed the message as well as refusing.
+        refused.report();
+        Error::exception(c"Failed to create user command")
+    })
+}
+
+/// Refuse a name that is not a user command's: invalid, or not starting with
+/// an uppercase letter.
+fn check_command_name(name: &ApiString) -> Result<(), Error> {
+    let cmd_name = name.as_bytes();
+    if uc_validate_name(cmd_name).is_none() {
+        return Err(err_bad_value(c"command name", name.as_cstr()));
+    }
+    if mb_islower(::core::ffi::c_int::from(cstr::byte_at(cmd_name, 0))) {
+        let what = c"command name (must start with uppercase)";
+        return Err(err_bad_value(what, name.as_cstr()));
+    }
+    Ok(())
+}
+
+/// The argument flags `nargs` asks for: a number (0 or 1) or one of `*`,
+/// `?`, `+`.
+fn nargs_flags(given: Option<&Object>) -> Result<ExArgt, Error> {
+    let Some(given) = given else {
+        return Ok(ExArgt::NONE);
+    };
+    if let Some(nargs) = given.as_integer() {
+        return match nargs {
+            0 => Ok(ExArgt::NONE),
+            1 => Ok(ExArgt::EXTRA | ExArgt::NOSPC | ExArgt::NEEDARG),
+            _ => Err(err_bad_number(c"nargs", nargs)),
+        };
+    }
+    let Some(nargs) = given.as_string() else {
+        return Err(err_invalid(c"nargs", Bad::Unsaid));
+    };
+    if nargs.len() > 1 {
+        return Err(err_bad_value(c"nargs", nargs.as_cstr()));
+    }
+    // The empty string has no byte 0, and falls to the arm that rejects it.
+    match nargs.as_bytes().first().copied().unwrap_or(0) {
+        b'*' => Ok(ExArgt::EXTRA),
+        b'?' => Ok(ExArgt::EXTRA | ExArgt::NOSPC),
+        b'+' => Ok(ExArgt::EXTRA | ExArgt::NEEDARG),
+        _ => Err(err_bad_value(c"nargs", nargs.as_cstr())),
+    }
+}
+
+/// What `range`, `count` and `addr` say about the command's range.
+#[derive(Debug)]
+struct CommandRange {
+    addr_type: CmdAddr,
+    /// The default count or line, -1 when none was given.
+    default_count: int64_t,
+}
+
+impl CommandRange {
+    /// `range`: `true`, `"%"` (default the whole file) or a default count.
+    fn read_range(&mut self, given: Option<&Object>, argt: &mut ExArgt) -> Result<(), Error> {
+        let Some(given) = given else {
+            return Ok(());
+        };
+        if let Some(range) = given.as_boolean() {
             if range {
-                argt |= ExArgt::RANGE;
-                addr_type_arg = CmdAddr::Lines;
+                *argt |= ExArgt::RANGE;
+                self.addr_type = CmdAddr::Lines;
             }
-        } else if let Some(range) = given_range.and_then(Object::as_string) {
+        } else if let Some(range) = given.as_string() {
             let percent = range.as_bytes().first() == Some(&b'%');
             if !(percent && range.len() == 1) {
-                failed = Some(err_invalid(c"range", Bad::Unsaid));
-                break '_err;
+                return Err(err_invalid(c"range", Bad::Unsaid));
             }
-            argt |= ExArgt::RANGE | ExArgt::DFLALL;
-            addr_type_arg = CmdAddr::Lines;
-        } else if let Some(range) = given_range.and_then(Object::as_integer) {
-            argt |= ExArgt::RANGE | ExArgt::ZEROR;
-            def = range;
-            addr_type_arg = CmdAddr::Lines;
-        } else if given_range.is_some() {
-            failed = Some(err_invalid(c"range", Bad::Unsaid));
-            break '_err;
+            *argt |= ExArgt::RANGE | ExArgt::DFLALL;
+            self.addr_type = CmdAddr::Lines;
+        } else if let Some(range) = given.as_integer() {
+            *argt |= ExArgt::RANGE | ExArgt::ZEROR;
+            self.default_count = range;
+            self.addr_type = CmdAddr::Lines;
+        } else {
+            return Err(err_invalid(c"range", Bad::Unsaid));
         }
+        Ok(())
+    }
 
-        if let Some(count) = given_count.and_then(Object::as_boolean) {
+    /// `count`: `true` (default 0) or a default count.
+    fn read_count(&mut self, given: Option<&Object>, argt: &mut ExArgt) -> Result<(), Error> {
+        let Some(given) = given else {
+            return Ok(());
+        };
+        if let Some(count) = given.as_boolean() {
             if count {
-                argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
-                addr_type_arg = CmdAddr::Other;
-                def = 0;
+                *argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
+                self.addr_type = CmdAddr::Other;
+                self.default_count = 0;
             }
-        } else if let Some(count) = given_count.and_then(Object::as_integer) {
-            argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
-            addr_type_arg = CmdAddr::Other;
-            def = count;
-        } else if given_count.is_some() {
-            failed = Some(err_invalid(c"count", Bad::Unsaid));
-            break '_err;
+        } else if let Some(count) = given.as_integer() {
+            *argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
+            self.addr_type = CmdAddr::Other;
+            self.default_count = count;
+        } else {
+            return Err(err_invalid(c"count", Bad::Unsaid));
         }
+        Ok(())
+    }
 
-        if let Some(given) = given_addr {
-            let Some(addr) = given.as_string() else {
-                let expected = api_typename(OBJECT_TYPE_STRING);
-                let actual = api_typename(given.kind());
-                failed = Some(err_expected(c"addr", expected, Some(actual)));
-                break '_err;
-            };
-            match parse_addr_type_arg(addr.as_bytes(), addr.as_cstr().to_bytes()) {
-                Ok(parsed) => addr_type_arg = parsed,
-                Err(refused) => {
-                    // Upstream printed the message as well as refusing, cut
-                    // the caller's string at the word the message named,
-                    // and quotes what is left of it.
-                    refused.report();
-                    let AttrError::AddrType(word) = refused else {
-                        unreachable!("an address type is refused by its word")
-                    };
-                    failed = Some(err_bad_value(c"addr", word.as_cstr()));
-                    break '_err;
-                }
-            }
-            argt |= ExArgt::RANGE;
-            if addr_type_arg != CmdAddr::Lines {
-                argt |= ExArgt::ZEROR;
+    /// `addr`: the name of what the range counts.
+    fn read_addr(&mut self, given: Option<&Object>, argt: &mut ExArgt) -> Result<(), Error> {
+        let Some(given) = given else {
+            return Ok(());
+        };
+        let Some(addr) = given.as_string() else {
+            let expected = api_typename(OBJECT_TYPE_STRING);
+            let actual = api_typename(given.kind());
+            return Err(err_expected(c"addr", expected, Some(actual)));
+        };
+        match parse_addr_type_arg(addr.as_bytes(), addr.as_cstr().to_bytes()) {
+            Ok(parsed) => self.addr_type = parsed,
+            Err(refused) => {
+                // Upstream printed the message as well as refusing, cut the
+                // caller's string at the word the message named, and quotes
+                // what is left of it.
+                refused.report();
+                let AttrError::AddrType(word) = refused else {
+                    unreachable!("an address type is refused by its word")
+                };
+                return Err(err_bad_value(c"addr", word.as_cstr()));
             }
         }
+        *argt |= ExArgt::RANGE;
+        if self.addr_type != CmdAddr::Lines {
+            *argt |= ExArgt::ZEROR;
+        }
+        Ok(())
+    }
+}
 
-        if opts.bang.unwrap_or(false) {
-            argt |= ExArgt::BANG;
-        }
-        if opts.bar.unwrap_or(false) {
-            argt |= ExArgt::TRLBAR;
-        }
-        if opts.register_.unwrap_or(false) {
-            argt |= ExArgt::REGSTR;
-        }
-        if opts.keepscript.unwrap_or(false) {
-            argt |= ExArgt::KEEPSCRIPT;
-        }
-        // An unsupplied `force` defaults to true: `nvim_create_user_command`
-        // replaces an existing command unless told otherwise.
-        force = opts.force.unwrap_or(true);
+/// The flags the four boolean keys switch on.
+fn switch_flags(opts: &KeyDict_user_command) -> ExArgt {
+    let mut argt = ExArgt::NONE;
+    if opts.bang.unwrap_or(false) {
+        argt |= ExArgt::BANG;
+    }
+    if opts.bar.unwrap_or(false) {
+        argt |= ExArgt::TRLBAR;
+    }
+    if opts.register_.unwrap_or(false) {
+        argt |= ExArgt::REGSTR;
+    }
+    if opts.keepscript.unwrap_or(false) {
+        argt |= ExArgt::KEEPSCRIPT;
+    }
+    argt
+}
 
-        // Everything above reports through `err` without stopping, so a
-        // failure that fell through to here still has to skip the rest.
-        if failed.is_some() {
-            break '_err;
-        }
+/// How the command's argument completes: `complete` as a Lua function or a
+/// `-complete=` name.
+#[derive(Debug)]
+struct Completion {
+    context: ExpandContext,
+    arg: Option<CString>,
+    /// The Lua function's reference, taken out of the keyset; `LUA_NOREF`
+    /// for none.
+    luaref: LuaRef,
+}
 
+impl Completion {
+    fn read(&mut self, opts: &mut KeyDict_user_command, argt: &mut ExArgt) -> Result<(), Error> {
         if opts.complete.as_ref().and_then(Object::as_luaref).is_some() {
-            context = ExpandContext::UserLua;
+            self.context = ExpandContext::UserLua;
             // The reference is this call's now, so the keyset must not
             // release it: the value moves out of the field.
-            compl_luaref = opts
+            self.luaref = opts
                 .complete
                 .take()
                 .and_then(Object::into_luaref)
                 .expect("the arm above matched a LuaRef");
         } else if let Some(complete) = opts.complete.as_ref().and_then(Object::as_string) {
             let (value, shown) = (complete.as_bytes(), complete.as_cstr().to_bytes());
-            let parsed = parse_compl_arg(value, shown, &mut context, &mut argt, &mut compl_arg);
+            let parsed = parse_compl_arg(value, shown, &mut self.context, argt, &mut self.arg);
             if let Err(refused) = parsed {
                 // Upstream printed the message as well as refusing.
                 refused.report();
-                failed = Some(err_bad_value(c"complete", complete.as_cstr()));
-                break '_err;
+                return Err(err_bad_value(c"complete", complete.as_cstr()));
             }
         } else if opts.complete.is_some() {
             let expected = c"Function or String";
-            failed = Some(err_expected(c"complete", expected, None));
-            break '_err;
+            return Err(err_expected(c"complete", expected, None));
         }
-
-        if let Some(given) = opts.preview.as_ref() {
-            let Some(preview) = given.as_luaref() else {
-                let expected = api_typename(OBJECT_TYPE_LUA_REF);
-                let actual = api_typename(given.kind());
-                failed = Some(err_expected(c"preview", expected, Some(actual)));
-                break '_err;
-            };
-            argt |= ExArgt::PREVIEW;
-            let _ = preview;
-            // As `complete`: the reference is this call's now.
-            preview_luaref = opts
-                .preview
-                .take()
-                .and_then(Object::into_luaref)
-                .expect("the check above matched a LuaRef");
-        }
-
-        if let Some(body) = cmd.as_luaref() {
-            luaref = api_new_luaref(body);
-            rep = match opts.desc.as_ref().and_then(Object::as_string) {
-                Some(desc) => desc.as_bytes(),
-                None => b"",
-            };
-        } else if let Some(body) = cmd.as_string() {
-            rep = body.as_bytes();
-        } else {
-            let expected = c"Function or String";
-            failed = Some(err_expected(c"command", expected, None));
-            break '_err;
-        }
-
-        let _sctx = api_set_sctx(channel_id);
-        // The definition owns the parsed argument and the three references
-        // from here on, and gives them back if it is never installed.
-        let def = Definition {
-            argt,
-            default_count: def,
-            complete: context,
-            complete_arg: compl_arg.take(),
-            addr_type: addr_type_arg,
-            luaref: ::core::mem::replace(&mut luaref, LUA_NOREF),
-            complete_luaref: ::core::mem::replace(&mut compl_luaref, LUA_NOREF),
-            preview_luaref: ::core::mem::replace(&mut preview_luaref, LUA_NOREF),
-        };
-        if let Err(refused) = uc_add_command(cmd_name, name.len(), rep, def, buffer_local, force) {
-            // Upstream printed the message as well as refusing.
-            refused.report();
-            failed = Some(Error::exception(c"Failed to create user command"));
-        }
-        return match failed {
-            Some(failed) => Err(failed),
-            None => Ok(()),
-        };
+        Ok(())
     }
-    // Only reached when the command was never added, so this call still owns
-    // the references it took.
-    for reference in [luaref, compl_luaref, preview_luaref] {
-        release_luaref(reference);
+}
+
+/// `preview`: the Lua function `'inccommand'` calls, its reference taken
+/// out of the keyset; `LUA_NOREF` for none.
+fn take_preview(opts: &mut KeyDict_user_command, argt: &mut ExArgt) -> Result<LuaRef, Error> {
+    let Some(given) = opts.preview.as_ref() else {
+        return Ok(LUA_NOREF);
+    };
+    if given.as_luaref().is_none() {
+        let expected = api_typename(OBJECT_TYPE_LUA_REF);
+        let actual = api_typename(given.kind());
+        return Err(err_expected(c"preview", expected, Some(actual)));
     }
-    match failed {
-        Some(failed) => Err(failed),
-        None => Ok(()),
+    *argt |= ExArgt::PREVIEW;
+    // As `complete`: the reference is this call's now.
+    Ok(opts
+        .preview
+        .take()
+        .and_then(Object::into_luaref)
+        .expect("the check above matched a LuaRef"))
+}
+
+/// What the command runs: a Lua function (a new reference, shown as `desc`)
+/// or a command string.
+fn command_body<'a>(
+    cmd: &'a Object,
+    opts: &'a KeyDict_user_command,
+) -> Result<(LuaRef, &'a [u8]), Error> {
+    if let Some(body) = cmd.as_luaref() {
+        let rep = match opts.desc.as_ref().and_then(Object::as_string) {
+            Some(desc) => desc.as_bytes(),
+            None => b"",
+        };
+        Ok((api_new_luaref(body), rep))
+    } else if let Some(body) = cmd.as_string() {
+        Ok((LUA_NOREF, body.as_bytes()))
+    } else {
+        Err(err_expected(c"command", c"Function or String", None))
     }
 }
 
@@ -351,4 +397,55 @@ pub fn nvim_buf_get_commands(
         return Ok(ApiDict::new());
     };
     Ok(commands_array(Some(b)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nargs_is_a_count_of_zero_or_one() {
+        assert_eq!(nargs_flags(None).ok(), Some(ExArgt::NONE));
+        assert_eq!(
+            nargs_flags(Some(&Object::integer(0))).ok(),
+            Some(ExArgt::NONE)
+        );
+        let one = ExArgt::EXTRA | ExArgt::NOSPC | ExArgt::NEEDARG;
+        assert_eq!(nargs_flags(Some(&Object::integer(1))).ok(), Some(one));
+        assert!(nargs_flags(Some(&Object::integer(2))).is_err());
+        assert!(nargs_flags(Some(&Object::boolean(true))).is_err());
+    }
+
+    #[test]
+    fn a_count_range_defaults_its_count_and_counts_lines() {
+        let mut range = CommandRange {
+            addr_type: CmdAddr::NoRange,
+            default_count: -1,
+        };
+        let mut argt = ExArgt::NONE;
+        assert!(
+            range
+                .read_range(Some(&Object::integer(5)), &mut argt)
+                .is_ok()
+        );
+        assert_eq!(argt, ExArgt::RANGE | ExArgt::ZEROR);
+        assert_eq!(range.default_count, 5);
+        assert_eq!(range.addr_type, CmdAddr::Lines);
+
+        // `count = true` then counts something other than lines, from 0.
+        assert!(
+            range
+                .read_count(Some(&Object::boolean(true)), &mut argt)
+                .is_ok()
+        );
+        assert_eq!(range.default_count, 0);
+        assert_eq!(range.addr_type, CmdAddr::Other);
+        assert!(argt.has(ExArgt::COUNT));
+
+        assert!(
+            range
+                .read_range(Some(&Object::float(1.0)), &mut argt)
+                .is_err()
+        );
+    }
 }
