@@ -173,8 +173,13 @@ endfunction
 fn filename_expansion() {
     // `:p:h:h:t:r` reaches the sandbox's parent, which was `/tmp` when the
     // digest was recorded; keep it a `tmp` wherever `$TMPDIR` points.
-    let parent = std::env::temp_dir().join("nvim-unit-filename_oracle-root/tmp");
-    let sandbox = Sandbox::dir_in(&parent, "filename_oracle");
+    // The root is this process's own (see `Sandbox::dir`); the sandbox's
+    // name is fixed, as the answers show it.
+    let root = std::env::temp_dir().join(format!(
+        "nvim-unit-filename_oracle-root-{}",
+        std::process::id()
+    ));
+    let sandbox = Sandbox::dir_in(&root.join("tmp"), "filename_oracle");
     for file in [
         "a.txt",
         "b.txt",
@@ -227,6 +232,9 @@ fn filename_expansion() {
         text = text.replace(name, "<h>");
     }
     let text = script_ids_out(&text);
+    drop(probe);
+    drop(sandbox);
+    let _ = std::fs::remove_dir_all(&root);
     // `FILENAME_ORACLE_DUMP=path` writes the answers out, for a diff
     // against the old code's when a digest moves.
     if let Ok(path) = std::env::var("FILENAME_ORACLE_DUMP") {

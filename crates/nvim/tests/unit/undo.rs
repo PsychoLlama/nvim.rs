@@ -145,7 +145,8 @@ mod write {
     impl Fixture {
         fn new(case: &str) -> Fixture {
             let guard = editor_lock();
-            let dir = std::env::temp_dir().join(format!("nvim-unit-undo-{case}"));
+            let dir =
+                std::env::temp_dir().join(format!("nvim-unit-undo-{case}-{}", std::process::id()));
             let _ = fs::remove_dir_all(&dir);
             fs::create_dir_all(&dir).unwrap();
             let udir = CString::new(dir.to_str().unwrap()).unwrap();

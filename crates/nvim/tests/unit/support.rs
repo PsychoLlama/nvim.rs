@@ -215,9 +215,14 @@ impl Sandbox {
     /// [`Sandbox::globals`] plus an empty private directory, entered.
     ///
     /// `name` distinguishes this case's directory from every other case's;
-    /// pass the test function's own name.
+    /// pass the test function's own name. The process id distinguishes it
+    /// from the same case's in another test process (a second worktree, a
+    /// rerun beside the lane), which would otherwise remove it mid-case.
     pub(crate) fn dir(name: &str) -> Sandbox {
-        Sandbox::dir_in(&std::env::temp_dir(), name)
+        Sandbox::dir_in(
+            &std::env::temp_dir(),
+            &format!("{name}-{}", std::process::id()),
+        )
     }
 
     /// [`Sandbox::dir`], made inside `parent` rather than the temp

@@ -44,7 +44,8 @@ struct Fixture {
 impl Fixture {
     fn new(name: &str) -> Fixture {
         let editor = editor_lock();
-        let dir = std::env::temp_dir().join(format!("nvim-unit-fileio-{name}"));
+        let dir =
+            std::env::temp_dir().join(format!("nvim-unit-fileio-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a private fixture directory");
         let fixture = Fixture {
