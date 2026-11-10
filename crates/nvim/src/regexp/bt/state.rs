@@ -368,6 +368,11 @@ impl RegStack {
     /// Push a frame for `state` and hand it back for the caller to fill in.
     ///
     /// `None` when 'maxmempattern' has been reached, which has been said.
+    ///
+    /// `#[inline]` is a measured keeper: an unrelated split elsewhere in
+    /// the crate left this out of line in the backtracking walk and cost
+    /// rebench +0.3 % Ir (callgrind named it, 50 M -> 160 M self).
+    #[inline]
     pub(crate) fn push(&mut self, state: RegState, scan: usize) -> Option<&mut RegItem> {
         self.charge(REGITEM_BYTES).ok()?;
         self.frames.push(RegItem {
