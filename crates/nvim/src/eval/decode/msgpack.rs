@@ -23,16 +23,13 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::mpack::object::MPACK_NOMEM;
-use core::ffi::c_int;
-
 use super::{
     MP_EXT, MP_INTEGER, create_special_dict, decode_create_map_special_dict, decode_owned_string,
 };
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::DictItem;
 use crate::eval::typval::{ListRef, tv_dict_alloc, tv_list_alloc};
-use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK, Step, TokBuf, read_step};
+use crate::mpack::mpack_core::{Step, Stop, TokBuf, read_step};
 use crate::mpack::token::{Kind, Tok, unpack_boolean, unpack_float, unpack_sint, unpack_uint};
 use crate::types::{
     BOOL_VAR_FALSE, BOOL_VAR_TRUE, LIST_LEN_MAY_KNOW, SPECIAL_VAR_NULL, TypVal, VarNumber,
@@ -213,10 +210,10 @@ impl MsgpackDecoder {
 
     /// One token: open a node for it, or finish a value with it. Answers the
     /// whole object once the token completes it.
-    fn token(&mut self, tok: Tok) -> Result<Option<TypVal>, c_int> {
+    fn token(&mut self, tok: Tok) -> Result<Option<TypVal>, Stop> {
         // Every token takes a level while it is entered, a scalar too.
         if self.stack.len() == MAX_NESTING {
-            return Err(MPACK_NOMEM);
+            return Err(Stop::Full);
         }
         let len = tok.len;
         let value = match tok.kind {
@@ -271,10 +268,10 @@ impl MsgpackDecoder {
     }
 
     /// The next piece of the innermost string's bytes.
-    fn chunk(&mut self, data: &[u8]) -> Result<Option<TypVal>, c_int> {
+    fn chunk(&mut self, data: &[u8]) -> Result<Option<TypVal>, Stop> {
         // The chunk is a node of its own while it is copied in.
         if self.stack.len() == MAX_NESTING {
-            return Err(MPACK_NOMEM);
+            return Err(Stop::Full);
         }
         let Some(Node::Bytes { bytes, .. }) = self.stack.last_mut() else {
             unreachable!("a chunk follows a string header");
@@ -292,16 +289,17 @@ impl MsgpackDecoder {
     ///
     /// `Ok(Some(value))` is a whole object; `Ok(None)` (upstream's
     /// `MPACK_EOF`) says `data` ran out first, everything in it consumed, and
-    /// the next call resumes where this one stopped. `Err` is `MPACK_ERROR`
-    /// for bytes that are not msgpack and [`MPACK_NOMEM`] for a value nested
-    /// too deep; the decoder is not to be fed again after either.
-    pub(crate) fn feed(&mut self, data: &mut &[u8]) -> Result<Option<TypVal>, c_int> {
+    /// the next call resumes where this one stopped. `Err` is
+    /// [`Stop::Invalid`] for bytes that are not msgpack and [`Stop::Full`]
+    /// for a value nested too deep; the decoder is not to be fed again after
+    /// either.
+    pub(crate) fn feed(&mut self, data: &mut &[u8]) -> Result<Option<TypVal>, Stop> {
         while !data.is_empty() {
             let (step, used) = read_step(&mut self.tokbuf, data);
             let (taken, rest) = data.split_at(used);
             let done = match step {
                 Step::Eof => None,
-                Step::Error => return Err(MPACK_ERROR),
+                Step::Error => return Err(Stop::Invalid),
                 Step::Token(tok) => self.token(tok)?,
                 Step::Chunk => self.chunk(taken)?,
             };
@@ -316,18 +314,9 @@ impl MsgpackDecoder {
 
 /// Decode one complete msgpack object from `data` into `ret`.
 ///
-/// `data` is advanced past the object.  Answers `MPACK_OK`, `MPACK_EOF` when
-/// the bytes ran out mid-object, or an error status; on anything but
-/// `MPACK_OK` the half-built value is dropped and `ret` is left
-/// `VAR_UNKNOWN`.
-pub(crate) fn unpack_typval(data: &mut &[u8], ret: &mut TypVal) -> c_int {
-    ret.overwrite(TypVal::Unknown);
-    match MsgpackDecoder::new().feed(data) {
-        Ok(Some(value)) => {
-            ret.overwrite(value);
-            MPACK_OK
-        }
-        Ok(None) => MPACK_EOF,
-        Err(status) => status,
-    }
+/// `data` is advanced past the object. A stop is [`Stop::Pending`] when the
+/// bytes ran out mid-object, or why they were refused; the half-built value
+/// is dropped.
+pub(crate) fn unpack_typval(data: &mut &[u8]) -> Result<TypVal, Stop> {
+    MsgpackDecoder::new().feed(data)?.ok_or(Stop::Pending)
 }

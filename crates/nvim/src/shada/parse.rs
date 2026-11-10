@@ -22,7 +22,6 @@ use crate::api::keysets::{
 use crate::cmdhist::HIST_SEARCH;
 use crate::eval::decode::decode_string;
 use crate::memory::XString;
-use crate::mpack::mpack_core::MPACK_OK;
 use crate::narrow::{number_as_col, number_as_lnum};
 use crate::types::{ApiDict, ColNr, Integer, LineNr, VAR_TYPE_BLOB};
 use core::ffi::CStr;
@@ -35,7 +34,6 @@ use super::{
     ShadaEntry, ShadaEntryData, ShadaError, ShadaExtra, ShadaFileMark, ShadaGlobalVar,
     ShadaHistoryItem, ShadaRegister, default_mark_name, kind,
 };
-use crate::eval::typval::TV_INITIAL_VALUE;
 
 /// A parse failure: the entry is dropped, with what to say about it --
 /// `None` for a value msgpack could not step over, which upstream drops
@@ -252,11 +250,9 @@ fn parse_variable(pos: u64, cursor: &mut Cursor) -> Parsed2 {
         }
         decode_string(binval, is_blob)
     } else {
-        let mut value = TV_INITIAL_VALUE;
-        if cursor.typval(&mut value) != MPACK_OK {
-            return Err(fault(EntryFault::VariableValue, pos));
-        }
-        value
+        cursor
+            .typval()
+            .map_err(|_| fault(EntryFault::VariableValue, pos))?
     };
     let var = ShadaGlobalVar { name, value };
     Ok((

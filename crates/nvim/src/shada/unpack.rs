@@ -23,6 +23,7 @@ use crate::api::private::helpers::StringArray;
 use crate::api::private::keyset::{KeySet, Slot};
 use crate::eval::decode::unpack_typval;
 use crate::fileio::buffered::ReadFile;
+use crate::mpack::mpack_core::Stop;
 use crate::mpack::token::{self, Kind, Read, Tok};
 use crate::types::{ApiString, Integer, TypVal};
 use core::ffi::c_int;
@@ -218,12 +219,12 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// One value as a Vimscript value. Answers an `MPACK_*` status.
-    pub(crate) fn typval(&mut self, into: &mut TypVal) -> c_int {
+    /// One value as a Vimscript value, or why it is not one.
+    pub(crate) fn typval(&mut self) -> Result<TypVal, Stop> {
         let mut data = self.rest;
-        let status = unpack_typval(&mut data, into);
+        let value = unpack_typval(&mut data);
         self.rest = data;
-        status
+        value
     }
 
     /// A map, into the keyset `into`. Keys the keyset does not name are

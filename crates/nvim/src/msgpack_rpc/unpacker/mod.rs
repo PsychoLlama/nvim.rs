@@ -31,8 +31,8 @@ use crate::api::private::dispatch::{NO_HANDLER, msgpack_rpc_get_handler_for};
 use crate::eval::typval::DictKey;
 use crate::grid::defs::GridLineEvent;
 use crate::memory::XString;
-use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK, Next, TokBuf, read_token};
-use crate::mpack::object::{MPACK_NOMEM, Node, Parser};
+use crate::mpack::mpack_core::{Next, Stop, TokBuf, read_token};
+use crate::mpack::object::{Node, Parser};
 use crate::mpack::token::{self, Kind, Tok};
 use crate::msgpack_rpc::handler::{ApiDispatchFn, MsgpackRpcRequestHandler};
 use crate::msgpack_rpc::packer::{EXT_BUFFER, EXT_TABPAGE, EXT_WINDOW};
@@ -158,10 +158,10 @@ impl Unpacker {
             if !body_is_unpacked {
                 let Unpacker { parser, result, .. } = self;
                 let status = parser.parse(input, &mut BodyWalk { result });
-                if status == MPACK_EOF {
+                if status == Err(Stop::Pending) {
                     return false;
                 }
-                if status != MPACK_OK {
+                if status.is_err() {
                     self.unpack_error = Error::validation(c"failed to parse msgpack");
                     self.state = protocol::INVALID;
                     return false;
@@ -315,16 +315,12 @@ pub fn unpack(data: &[u8]) -> Result<Object, Error> {
     let mut rest = data;
     let result = parser.parse(&mut rest, &mut BodyWalk { result: &mut value });
 
-    let message = if result == MPACK_NOMEM {
-        c"object was too deep to unpack"
-    } else if result == MPACK_EOF {
-        c"incomplete msgpack string"
-    } else if result == MPACK_ERROR {
-        c"invalid msgpack string"
-    } else if result == MPACK_OK && !rest.is_empty() {
-        c"trailing data in msgpack string"
-    } else {
-        return Ok(value);
+    let message = match result {
+        Err(Stop::Full) => c"object was too deep to unpack",
+        Err(Stop::Pending) => c"incomplete msgpack string",
+        Err(Stop::Invalid) => c"invalid msgpack string",
+        Ok(()) if !rest.is_empty() => c"trailing data in msgpack string",
+        Ok(()) | Err(Stop::Stopped) => return Ok(value),
     };
     Err(Error::exception(message))
 }

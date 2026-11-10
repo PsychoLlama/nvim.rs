@@ -18,13 +18,13 @@ use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, blob_bytes, tv_list_alloc};
 use crate::event::rstream::ARENA_BLOCK_SIZE;
 use crate::message_fmt::msg_bytes;
-use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK};
+use crate::mpack::mpack_core::Stop;
 use crate::msgpack_rpc::packer::pack_to_bytes;
 use crate::semsg;
 use crate::types::{
     Blob, LIST_LEN_MAY_KNOW, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
 };
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 use core::fmt::Write as _;
 
 /// `json_decode({expr})` — parse JSON from a String, or from a List of
@@ -97,14 +97,13 @@ pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     }
 }
 
-/// Report an unpacker status that is not `MPACK_OK`.
-fn emsg_mpack_error(status: c_int) {
-    match status {
-        MPACK_ERROR => semsg!("E475: Invalid argument: Failed to parse msgpack string"),
-        MPACK_EOF => semsg!("E475: Invalid argument: Incomplete msgpack string"),
-        // Anything past MPACK_ERROR is the parser's depth limit.
-        3 => semsg!("E475: Invalid argument: object was too deep to unpack"),
-        _ => return,
+/// Report why the decoder stopped.
+fn emsg_mpack_error(stop: Stop) {
+    match stop {
+        Stop::Invalid => semsg!("E475: Invalid argument: Failed to parse msgpack string"),
+        Stop::Pending => semsg!("E475: Invalid argument: Incomplete msgpack string"),
+        Stop::Full => semsg!("E475: Invalid argument: object was too deep to unpack"),
+        Stop::Stopped => unreachable!("the msgpack decoder has no walker to stop it"),
     };
 }
 
@@ -122,7 +121,7 @@ fn msgpackparse_unpack_list(list: &List, ret_list: &mut List) {
     // One arena block's worth at a time, as upstream reads.
     let mut buf = vec![0u8; ARENA_BLOCK_SIZE];
     let mut decoder = MsgpackDecoder::new();
-    let mut status = MPACK_OK;
+    let mut status = Ok(());
     loop {
         let (rlret, read_bytes) = reader.read(&mut buf);
         let Ok(rlret) = rlret else {
@@ -135,22 +134,23 @@ fn msgpackparse_unpack_list(list: &List, ret_list: &mut List) {
         while !cursor.is_empty() {
             match decoder.feed(&mut cursor) {
                 Ok(Some(value)) => {
-                    status = MPACK_OK;
+                    status = Ok(());
                     ret_list.push(value);
                 }
-                Ok(None) => status = MPACK_EOF,
-                Err(error) => {
-                    status = error;
+                Ok(None) => status = Err(Stop::Pending),
+                Err(stop) => {
+                    status = Err(stop);
                     break;
                 }
             }
         }
-        if rlret == ListRead::Drained || status > MPACK_EOF {
+        let refused = status.is_err_and(|stop| stop != Stop::Pending);
+        if rlret == ListRead::Drained || refused {
             break;
         }
     }
-    if status != MPACK_OK {
-        emsg_mpack_error(status);
+    if let Err(stop) = status {
+        emsg_mpack_error(stop);
     }
 }
 
@@ -159,13 +159,15 @@ fn msgpackparse_unpack_blob(blob: Option<&Blob>, ret_list: &mut List) {
     // `unpack_typval` advances the cursor past each object.
     let mut data = blob_bytes(blob);
     while !data.is_empty() {
-        let mut tv = TypVal::Unknown;
-        let status = unpack_typval(&mut data, &mut tv);
-        if status != MPACK_OK {
-            emsg_mpack_error(status);
-            return;
+        match unpack_typval(&mut data) {
+            Ok(value) => {
+                ret_list.push(value);
+            }
+            Err(stop) => {
+                emsg_mpack_error(stop);
+                return;
+            }
         }
-        ret_list.push(tv);
     }
 }
 
@@ -270,17 +272,14 @@ mod tests {
         let bytes = bytes_of(&call(f_msgpackdump, vec![values, string_tv(b"B")]));
         for cut in 0..bytes.len() {
             let mut data = &bytes[..cut];
-            let mut tv = TypVal::Number(0);
-            let status = unpack_typval(&mut data, &mut tv);
+            let value = unpack_typval(&mut data);
             if cut == 0 {
                 continue;
             }
-            assert_eq!(status, MPACK_EOF, "cut at {cut}");
-            assert_eq!(tv.v_type(), VAR_UNKNOWN, "cut at {cut}");
+            assert_eq!(value.err(), Some(Stop::Pending), "cut at {cut}");
         }
         let mut data = &bytes[..];
-        let mut tv = TypVal::Number(0);
-        assert_eq!(unpack_typval(&mut data, &mut tv), MPACK_OK);
+        let tv = unpack_typval(&mut data).expect("a whole object");
         assert!(data.is_empty());
         assert_eq!(
             crate::eval::encode::tv2string_bytes(&tv),

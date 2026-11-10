@@ -29,18 +29,10 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::mpack::rpc::{COMPLETE, PENDING};
 use core::ffi::c_int;
 
-use super::mpack_core::{MPACK_ERROR, Next, TokBuf};
+use super::mpack_core::{Next, Stop, TokBuf};
 use super::token::{Kind, Tok};
-
-/// The stack is full: the document nests deeper than `capacity`.
-pub const MPACK_NOMEM: c_int = MPACK_ERROR + 1;
-
-/// The walker stopped the walk ([`Decode::stopped`], [`Encode::stopped`]):
-/// it failed, and has its own error to report.
-pub const MPACK_EXCEPTION: c_int = MPACK_NOMEM + 1;
 
 pub const MPACK_MAX_OBJECT_DEPTH: c_int = 32;
 
@@ -69,7 +61,7 @@ pub trait Decode<D> {
     /// `parents`) has already counted it.
     fn exit(&mut self, node: Node<D>, parents: &mut [Node<D>]);
     /// Whether the walker has failed and wants the walk to stop: asked after
-    /// each step, which then answers [`MPACK_EXCEPTION`]. The walk is left
+    /// each step, which then answers [`Stop::Stopped`]. The walk is left
     /// where it stopped.
     fn stopped(&self) -> bool {
         false
@@ -101,7 +93,7 @@ pub struct Parser<D> {
     exiting: bool,
     /// What the last encoding step answered, which a resumed write reports
     /// again (the C kept it in `status`).
-    unparse_status: c_int,
+    unparse_status: Result<(), Stop>,
 }
 
 impl<D: Default> Parser<D> {
@@ -117,7 +109,7 @@ impl<D: Default> Parser<D> {
             nodes: Vec::with_capacity(capacity),
             capacity,
             exiting: false,
-            unparse_status: 0,
+            unparse_status: Ok(()),
         }
     }
 
@@ -137,39 +129,40 @@ impl<D: Default> Parser<D> {
         self.nodes.clear();
         self.tokbuf = TokBuf::new();
         self.exiting = false;
-        self.unparse_status = 0;
+        self.unparse_status = Ok(());
     }
 
     /// One step of the walk, shared by both directions.
     ///
     /// Descending, a fresh node is opened and `enter` runs on it; ascending,
     /// every node that has consumed all its children is popped and handed to
-    /// `exit`. Either way the answer is `MPACK_EOF` for "call me again" and
-    /// `MPACK_OK` for "the root is complete".
+    /// `exit`. Either way the answer is [`Stop::Pending`] for "call me
+    /// again" and `Ok` for "the root is complete"; [`Stop::Full`] when
+    /// the stack is full.
     #[inline(always)]
     fn walk<W>(
         &mut self,
         walker: &mut W,
         exit: impl Fn(&mut W, Node<D>, &mut [Node<D>]),
         enter: impl FnOnce(&mut W, &mut [Node<D>]) -> Node<D>,
-    ) -> c_int {
+    ) -> Result<(), Stop> {
         if self.exiting {
             self.exiting = false;
             while let Some(node) = self.pop() {
                 exit(walker, node, &mut self.nodes);
                 if self.nodes.is_empty() {
-                    return COMPLETE;
+                    return Ok(());
                 }
             }
-            return PENDING;
+            return Err(Stop::Pending);
         }
         if self.nodes.len() == self.capacity {
-            return MPACK_NOMEM;
+            return Err(Stop::Full);
         }
         let node = enter(walker, &mut self.nodes);
         self.nodes.push(node);
         self.exiting = true;
-        PENDING
+        Err(Stop::Pending)
     }
 
     /// Close the top node if it is finished, and tell its parent so.
@@ -202,7 +195,12 @@ impl<D: Default> Parser<D> {
 
     /// Feed one token (and, for a chunk, its bytes) to a decoding walk.
     #[inline]
-    pub fn parse_tok<W: Decode<D>>(&mut self, tok: Tok, chunk: &[u8], walker: &mut W) -> c_int {
+    pub fn parse_tok<W: Decode<D>>(
+        &mut self,
+        tok: Tok,
+        chunk: &[u8],
+        walker: &mut W,
+    ) -> Result<(), Stop> {
         self.walk(walker, W::exit, |walker, parents| Node {
             tok,
             pos: 0,
@@ -217,14 +215,14 @@ impl<D: Default> Parser<D> {
     /// the input back to where that token started, so the caller can grow
     /// the parser and retry from exactly the same place.
     #[inline]
-    pub fn parse<W: Decode<D>>(&mut self, input: &mut &[u8], walker: &mut W) -> c_int {
-        let mut status = PENDING;
-        while !input.is_empty() && status != COMPLETE {
+    pub fn parse<W: Decode<D>>(&mut self, input: &mut &[u8], walker: &mut W) -> Result<(), Stop> {
+        let mut status = Err(Stop::Pending);
+        while !input.is_empty() && status.is_err() {
             let save = *input;
             let (tok, chunk) = match self.tokbuf.read(input) {
                 Next::Eof => continue,
                 Next::Error => {
-                    status = MPACK_ERROR;
+                    status = Err(Stop::Invalid);
                     *input = save;
                     break;
                 }
@@ -235,13 +233,13 @@ impl<D: Default> Parser<D> {
             loop {
                 status = self.parse_tok(tok, chunk, walker);
                 if walker.stopped() {
-                    return MPACK_EXCEPTION;
+                    return Err(Stop::Stopped);
                 }
                 if !self.exiting {
                     break;
                 }
             }
-            if status == MPACK_NOMEM {
+            if status == Err(Stop::Full) {
                 *input = save;
                 break;
             }
@@ -251,10 +249,14 @@ impl<D: Default> Parser<D> {
 
     /// Encode into `out` until it fills or the root object is finished.
     /// Answers the status and how many bytes were written.
-    pub fn unparse<W: Encode<D>>(&mut self, out: &mut [u8], walker: &mut W) -> (c_int, usize) {
-        let mut status = PENDING;
+    pub fn unparse<W: Encode<D>>(
+        &mut self,
+        out: &mut [u8],
+        walker: &mut W,
+    ) -> (Result<(), Stop>, usize) {
+        let mut status = Err(Stop::Pending);
         let mut written = 0;
-        while written < out.len() && status != COMPLETE {
+        while written < out.len() && status.is_err() {
             let mut tok = Tok::default();
             // A half-written token is resumed from the tokbuf, not re-asked
             // for: the walk has already moved past it.
@@ -267,10 +269,10 @@ impl<D: Default> Parser<D> {
                 });
             }
             if walker.stopped() {
-                return (MPACK_EXCEPTION, written);
+                return (Err(Stop::Stopped), written);
             }
             status = self.unparse_status;
-            if status == MPACK_NOMEM {
+            if status == Err(Stop::Full) {
                 break;
             }
             if self.exiting {
@@ -284,8 +286,8 @@ impl<D: Default> Parser<D> {
                 };
                 let (write_status, count) = self.tokbuf.write(&mut out[written..], &tok, chunk);
                 written += count;
-                if let Err(stop) = write_status {
-                    status = stop as c_int;
+                if write_status.is_err() {
+                    status = write_status;
                 }
             }
         }
@@ -328,7 +330,7 @@ mod tests {
         let mut parser = Parser::<()>::new(0);
         let mut trace = Trace::default();
         let mut input = &doc[..];
-        assert_eq!(parser.parse(&mut input, &mut trace), COMPLETE);
+        assert_eq!(parser.parse(&mut input, &mut trace), Ok(()));
         assert!(input.is_empty());
         let kinds: Vec<_> = trace.0.iter().map(|e| (e.0, e.1)).collect();
         assert_eq!(
@@ -355,18 +357,24 @@ mod tests {
         let mut parser = Parser::<()>::new(0);
         let mut trace = Trace::default();
         let mut first = &doc[..2];
-        assert_eq!(parser.parse(&mut first, &mut trace), PENDING);
+        assert_eq!(parser.parse(&mut first, &mut trace), Err(Stop::Pending));
         let mut rest = &doc[2..];
-        assert_eq!(parser.parse(&mut rest, &mut trace), COMPLETE);
+        assert_eq!(parser.parse(&mut rest, &mut trace), Ok(()));
 
         let deep = [0x91u8; 3];
         let mut parser = Parser::<()>::new(2);
         let mut input = &deep[..];
-        assert_eq!(parser.parse(&mut input, &mut Trace::default()), MPACK_NOMEM);
+        assert_eq!(
+            parser.parse(&mut input, &mut Trace::default()),
+            Err(Stop::Full)
+        );
         assert_eq!(input.len(), 1, "the token that did not fit is left unread");
         parser.grow();
         assert_eq!(parser.capacity(), 4);
-        assert_eq!(parser.parse(&mut input, &mut Trace::default()), PENDING);
+        assert_eq!(
+            parser.parse(&mut input, &mut Trace::default()),
+            Err(Stop::Pending)
+        );
     }
 
     /// Encodes `[n, "xyz"]` for each `n` given.
@@ -397,10 +405,10 @@ mod tests {
             let mut room = [0u8; 2];
             let (status, n) = parser.unparse(&mut room, &mut walker);
             out.extend_from_slice(&room[..n]);
-            if status == COMPLETE {
+            if status.is_ok() {
                 break;
             }
-            assert_eq!(status, PENDING);
+            assert_eq!(status, Err(Stop::Pending));
         }
         assert_eq!(out, b"\x92\x07\xa3xyz");
     }

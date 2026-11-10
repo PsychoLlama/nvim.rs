@@ -34,11 +34,8 @@ use crate::lua::abi::{lua_Integer, lua_Number};
 use crate::lua::ffi::{LUA_NOREF, LUA_REFNIL};
 use crate::lua::stack::{At, Kind, Raise, Stack, Userdata};
 use crate::lua_functions;
-use crate::mpack::mpack_core::{MPACK_EOF, MPACK_OK};
-use crate::mpack::object::MPACK_NOMEM;
-use crate::mpack::rpc::{
-    self, MPACK_RPC_NOTIFICATION, MPACK_RPC_REQUEST, MPACK_RPC_RESPONSE, RpcMessage,
-};
+use crate::mpack::mpack_core::Stop;
+use crate::mpack::rpc::{self, MessageKind, RpcMessage, Unreceived};
 
 /// The scratch a whole envelope fits in: an array header, a one-byte type
 /// and a five-byte id at most.
@@ -58,7 +55,7 @@ impl Default for Session {
         Session {
             session: None,
             unpacked: Unpacked {
-                type_0: MPACK_EOF,
+                envelope: Err(Unreceived::Pending),
                 msg: RpcMessage::default(),
                 method_or_error: LUA_NOREF,
                 args_or_result: LUA_NOREF,
@@ -75,7 +72,8 @@ impl Userdata for Session {
 /// The message [`receive`] is part way through.
 #[derive(Debug)]
 pub struct Unpacked {
-    pub type_0: c_int,
+    /// The envelope read so far: [`Unreceived::Pending`] until it closes.
+    pub envelope: Result<MessageKind, Unreceived>,
     pub msg: RpcMessage,
     pub method_or_error: c_int,
     pub args_or_result: c_int,
@@ -163,13 +161,13 @@ pub fn receive(stack: &mut Stack) -> Result<c_int, Raise> {
     // A message is only complete when its body is too, unless there is no
     // unpacker to read a body with.
     let unpacked = &session(&mut view).unpacked;
-    let complete = unpacked.type_0 != MPACK_EOF
+    let complete = unpacked.envelope != Err(Unreceived::Pending)
         && (unpacked.args_or_result != LUA_NOREF || unpacker.is_none());
     if complete {
         if !push_message(&mut view, reg) {
             return Err(Raise::message("invalid msgpack-rpc string"));
         }
-        session(&mut view).unpacked.type_0 = MPACK_EOF;
+        session(&mut view).unpacked.envelope = Err(Unreceived::Pending);
         if unpacker.is_some() {
             push_body(&mut view, reg);
         }
@@ -195,18 +193,18 @@ fn read_message(
 ) -> Result<(), Raise> {
     loop {
         let current = session(stack);
-        if current.unpacked.type_0 == MPACK_EOF {
+        if current.unpacked.envelope == Err(Unreceived::Pending) {
             let framer = current.session.as_mut().expect("a live session");
-            current.unpacked.type_0 = framer.receive(input, &mut current.unpacked.msg);
+            current.unpacked.envelope = framer.receive(input, &mut current.unpacked.msg);
             // With no unpacker the envelope *is* the message.
-            if unpacker.is_none() || current.unpacked.type_0 == MPACK_EOF {
+            if unpacker.is_none() || current.unpacked.envelope == Err(Unreceived::Pending) {
                 return Ok(());
             }
         }
         let Some((unpacker, unpacker_reg)) = unpacker else {
             return Ok(());
         };
-        if unpack_into_registry(stack, unpacker, unpacker_reg, input)? == MPACK_EOF {
+        if !unpack_into_registry(stack, unpacker, unpacker_reg, input)? {
             return Ok(());
         }
         // The first value is the method (or the error), the second the
@@ -227,24 +225,24 @@ fn read_message(
 /// the three.
 fn push_message(stack: &mut Stack, reg: At) -> bool {
     let unpacked = &session(stack).unpacked;
-    let (kind, id, data) = (unpacked.type_0, unpacked.msg.id, unpacked.msg.data);
-    match kind {
-        MPACK_RPC_REQUEST => {
+    let (envelope, id, data) = (unpacked.envelope, unpacked.msg.id, unpacked.msg.data);
+    match envelope {
+        Ok(MessageKind::Request) => {
             stack.push_bytes(b"request");
             stack.push_number(lua_Number::from(id));
         }
-        MPACK_RPC_RESPONSE => {
+        Ok(MessageKind::Response) => {
             stack.push_bytes(b"response");
             geti(stack, reg, number_as_int(data));
         }
-        MPACK_RPC_NOTIFICATION => {
+        Ok(MessageKind::Notification) => {
             stack.push_bytes(b"notification");
             stack.push_nil();
         }
-        // Anything else is an `MPACK_RPC_E*`. Upstream reports them all the
-        // same way, on the grounds that the only sane response to invalid
-        // msgpack-rpc is to close the connection.
-        _ => return false,
+        // Anything else is a malformed envelope. Upstream reports them all
+        // the same way, on the grounds that the only sane response to
+        // invalid msgpack-rpc is to close the connection.
+        Err(_) => return false,
     }
     true
 }
@@ -283,8 +281,8 @@ pub fn request(stack: &mut Stack) -> Result<c_int, Raise> {
     let framer = session(stack).session.as_mut().expect("a live session");
     let used = loop {
         let (result, used) = framer.request(&mut buf, i64::from(handle));
-        if result != MPACK_NOMEM {
-            debug_assert_eq!(result, MPACK_OK);
+        if result != Err(Stop::Full) {
+            debug_assert_eq!(result, Ok(()));
             break used;
         }
         // Every slot holds an outstanding request; double the table.
@@ -307,7 +305,7 @@ pub fn reply(stack: &mut Stack) -> Result<c_int, Raise> {
     let mut buf = [0u8; ENVELOPE_MAX];
     let framer = session(stack).session.as_mut().expect("a live session");
     let (result, used) = framer.reply(&mut buf, float_as_u32(id));
-    debug_assert_eq!(result, MPACK_OK);
+    debug_assert_eq!(result, Ok(()));
     stack.push_bytes(&buf[..used]);
     Ok(1)
 }
@@ -321,7 +319,7 @@ pub fn notify(stack: &mut Stack) -> Result<c_int, Raise> {
     let mut buf = [0u8; ENVELOPE_MAX];
     let framer = session(stack).session.as_mut().expect("a live session");
     let (result, used) = framer.notify(&mut buf);
-    debug_assert_eq!(result, MPACK_OK);
+    debug_assert_eq!(result, Ok(()));
     stack.push_bytes(&buf[..used]);
     Ok(1)
 }

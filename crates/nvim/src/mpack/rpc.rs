@@ -30,30 +30,40 @@
 
 use core::ffi::c_int;
 
-use super::mpack_core::{MPACK_EOF, MPACK_OK, Next, TokBuf};
-use super::object::MPACK_NOMEM;
+use super::mpack_core::{Next, Stop, TokBuf};
 use super::token::{Kind, Tok};
 
-/// Message kinds, continuing the `MPACK_*` status numbering so that one
-/// `int` can carry either.
-pub const MPACK_RPC_REQUEST: c_int = 4;
-pub const MPACK_RPC_RESPONSE: c_int = 5;
-pub const MPACK_RPC_NOTIFICATION: c_int = 6;
+/// What a whole incoming envelope is (libmpack's `MPACK_RPC_REQUEST` …).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MessageKind {
+    Request,
+    Response,
+    Notification,
+}
 
-/// Envelope errors, likewise.
-pub const MPACK_RPC_EARRAY: c_int = 7;
-pub const MPACK_RPC_EARRAYL: c_int = 8;
-pub const MPACK_RPC_ETYPE: c_int = 9;
-pub const MPACK_RPC_EMSGID: c_int = 10;
-pub const MPACK_RPC_ERESPID: c_int = 11;
+/// Why an incoming envelope is not (yet) a message: libmpack carried these
+/// in the same `int` as the kinds and the codec's statuses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Unreceived {
+    /// The input ran out first: hand over more (`MPACK_EOF`).
+    Pending,
+    /// The bytes are not msgpack (`MPACK_ERROR`).
+    NotMsgpack,
+    /// The envelope is not an array (`MPACK_RPC_EARRAY`).
+    NotArray,
+    /// The array's length does not fit its type (`MPACK_RPC_EARRAYL`).
+    ArrayLength,
+    /// The type is not 0, 1 or 2 (`MPACK_RPC_ETYPE`).
+    Type,
+    /// The id is not a 32-bit unsigned integer (`MPACK_RPC_EMSGID`).
+    MessageId,
+    /// A response names no outstanding request (`MPACK_RPC_ERESPID`).
+    ResponseId,
+}
 
 pub const MPACK_RPC_MAX_REQUESTS: c_int = 32;
 
-pub(crate) const COMPLETE: c_int = MPACK_OK;
-pub(crate) const PENDING: c_int = MPACK_EOF;
-
-/// The envelope's `type` field. Adding [`MPACK_RPC_REQUEST`] to it gives the
-/// kind this module reports.
+/// The envelope's `type` field.
 const TYPE_REQUEST: u32 = 0;
 const TYPE_RESPONSE: u32 = 1;
 const TYPE_NOTIFICATION: u32 = 2;
@@ -123,42 +133,48 @@ impl Session {
 
     /// Feed one token of an incoming envelope.
     ///
-    /// Answers `MPACK_EOF` while the envelope is incomplete, one of the three
-    /// message kinds when it closes (at which point `msg` is filled and the
-    /// caller reads the body), or an `MPACK_RPC_E*` for a malformed one.
-    pub fn receive_tok(&mut self, tok: Tok, msg: &mut RpcMessage) -> c_int {
+    /// Answers [`Unreceived::Pending`] while the envelope is incomplete, the
+    /// message kind when it closes (at which point `msg` is filled and the
+    /// caller reads the body), or why a malformed one is refused.
+    pub fn receive_tok(
+        &mut self,
+        tok: Tok,
+        msg: &mut RpcMessage,
+    ) -> Result<MessageKind, Unreceived> {
         let hdr = &mut self.receive;
         let kind = match hdr.index {
-            0 => return receive_array(hdr, tok),
-            1 => match receive_type(hdr, tok) {
-                Ok(Some(kind)) => kind,
-                Ok(None) => return PENDING,
-                Err(code) => return code,
+            0 => return receive_array(hdr, tok).and(Err(Unreceived::Pending)),
+            1 => match receive_type(hdr, tok)? {
+                Some(kind) => kind,
+                None => return Err(Unreceived::Pending),
             },
             _ => {
                 debug_assert_eq!(hdr.index, 2);
                 // The id: a request or a response, never a notification.
                 if tok.kind != Some(Kind::Uint) || tok.len > 4 {
-                    return MPACK_RPC_EMSGID;
+                    return Err(Unreceived::MessageId);
                 }
                 msg.id = tok.lo;
                 msg.data = 0;
-                let kind = hdr.toks[1].lo.cast_signed() + MPACK_RPC_REQUEST;
-                // A response has to name a request that is still open; its
-                // slot is what carries the caller's own handle back.
-                if kind == MPACK_RPC_RESPONSE && !pop(&mut self.slots, msg) {
-                    return MPACK_RPC_ERESPID;
+                if hdr.toks[1].lo == TYPE_REQUEST {
+                    MessageKind::Request
+                } else {
+                    // A response has to name a request that is still open;
+                    // its slot is what carries the caller's own handle back.
+                    if !pop(&mut self.slots, msg) {
+                        return Err(Unreceived::ResponseId);
+                    }
+                    MessageKind::Response
                 }
-                kind
             }
         };
         self.receive.index = 0;
-        kind
+        Ok(kind)
     }
 
     /// Take the next token of an outgoing request envelope, allocating the
     /// message id on the first one.
-    fn request_tok(&mut self, tok: &mut Tok, data: i64) -> c_int {
+    fn request_tok(&mut self, tok: &mut Tok, data: i64) -> Result<(), Stop> {
         if self.send.index != 0 {
             return send_rest(&mut self.send, tok);
         }
@@ -173,7 +189,7 @@ impl Session {
             *tok = self.send.toks[0];
             let outcome = put(&mut self.slots, msg);
             if outcome == Put::Full {
-                return MPACK_NOMEM;
+                return Err(Stop::Full);
             }
             // `% 0xffffffff` (not `+ 1`) is upstream's: id 0xffffffff never
             // appears, which costs one id out of four billion.
@@ -183,11 +199,11 @@ impl Session {
             }
         }
         self.send.index += 1;
-        PENDING
+        Err(Stop::Pending)
     }
 
     /// Take the next token of an outgoing response envelope.
-    fn reply_tok(&mut self, tok: &mut Tok, id: u32) -> c_int {
+    fn reply_tok(&mut self, tok: &mut Tok, id: u32) -> Result<(), Stop> {
         let send = &mut self.send;
         if send.index != 0 {
             return send_rest(send, tok);
@@ -195,27 +211,31 @@ impl Session {
         *send = header(TYPE_RESPONSE, 4, Some(id));
         *tok = send.toks[0];
         send.index += 1;
-        PENDING
+        Err(Stop::Pending)
     }
 
     /// Take the next token of an outgoing notification envelope, which is
     /// two tokens rather than three.
-    fn notify_tok(&mut self, tok: &mut Tok) -> c_int {
+    fn notify_tok(&mut self, tok: &mut Tok) -> Result<(), Stop> {
         let send = &mut self.send;
         if send.index != 0 {
             debug_assert_eq!(send.index, 1);
             *tok = send.toks[1];
             send.index = 0;
-            return COMPLETE;
+            return Ok(());
         }
         *send = header(TYPE_NOTIFICATION, 3, None);
         *tok = send.toks[0];
         send.index += 1;
-        PENDING
+        Err(Stop::Pending)
     }
 
     /// Read whole messages out of `input` until one closes or it empties.
-    pub fn receive(&mut self, input: &mut &[u8], msg: &mut RpcMessage) -> c_int {
+    pub fn receive(
+        &mut self,
+        input: &mut &[u8],
+        msg: &mut RpcMessage,
+    ) -> Result<MessageKind, Unreceived> {
         loop {
             let tok = match self.reader.read(input) {
                 Next::Token(tok) => tok,
@@ -225,11 +245,11 @@ impl Session {
                     0,
                     0,
                 ),
-                Next::Eof => return PENDING,
-                Next::Error => return super::mpack_core::MPACK_ERROR,
+                Next::Eof => return Err(Unreceived::Pending),
+                Next::Error => return Err(Unreceived::NotMsgpack),
             };
             let status = self.receive_tok(tok, msg);
-            if status >= MPACK_RPC_REQUEST || input.is_empty() {
+            if status != Err(Unreceived::Pending) || input.is_empty() {
                 return status;
             }
         }
@@ -241,85 +261,85 @@ impl Session {
     fn send(
         &mut self,
         out: &mut [u8],
-        mut next: impl FnMut(&mut Self, &mut Tok) -> c_int,
-    ) -> (c_int, usize) {
-        let mut status = PENDING;
+        mut next: impl FnMut(&mut Self, &mut Tok) -> Result<(), Stop>,
+    ) -> (Result<(), Stop>, usize) {
+        let mut status = Err(Stop::Pending);
         let mut written = 0;
-        while status != COMPLETE && written < out.len() {
+        while status.is_err() && written < out.len() {
             let mut tok = Tok::default();
             if !self.writer.is_parked() {
                 status = next(self, &mut tok);
             }
-            if status == MPACK_NOMEM {
+            if status == Err(Stop::Full) {
                 break;
             }
             let (write_status, count) = self.writer.write(&mut out[written..], &tok, &[]);
             written += count;
-            if let Err(stop) = write_status {
-                status = stop as c_int;
+            if write_status.is_err() {
+                status = write_status;
             }
         }
         (status, written)
     }
 
     /// A request's envelope, carrying `data` back with its response.
-    pub fn request(&mut self, out: &mut [u8], data: i64) -> (c_int, usize) {
+    pub fn request(&mut self, out: &mut [u8], data: i64) -> (Result<(), Stop>, usize) {
         self.send(out, |session, tok| session.request_tok(tok, data))
     }
 
     /// A response's envelope.
-    pub fn reply(&mut self, out: &mut [u8], id: u32) -> (c_int, usize) {
+    pub fn reply(&mut self, out: &mut [u8], id: u32) -> (Result<(), Stop>, usize) {
         self.send(out, |session, tok| session.reply_tok(tok, id))
     }
 
     /// A notification's envelope.
-    pub fn notify(&mut self, out: &mut [u8]) -> (c_int, usize) {
+    pub fn notify(&mut self, out: &mut [u8]) -> (Result<(), Stop>, usize) {
         self.send(out, Self::notify_tok)
     }
 }
 
 /// The envelope's opening array: three items or four, nothing else.
-fn receive_array(hdr: &mut Header, tok: Tok) -> c_int {
+fn receive_array(hdr: &mut Header, tok: Tok) -> Result<(), Unreceived> {
     if tok.kind != Some(Kind::Array) {
-        return MPACK_RPC_EARRAY;
+        return Err(Unreceived::NotArray);
     }
     if !(3..=4).contains(&tok.len) {
-        return MPACK_RPC_EARRAYL;
+        return Err(Unreceived::ArrayLength);
     }
     hdr.toks[0] = tok;
     hdr.index += 1;
-    PENDING
+    Ok(())
 }
 
 /// The envelope's message type, which also fixes the array's length.
 ///
 /// Answers the message kind for a notification (which has no id and so ends
-/// here), `None` when an id is still to come, or the error code.
-fn receive_type(hdr: &mut Header, tok: Tok) -> Result<Option<c_int>, c_int> {
+/// here), `None` when an id is still to come, or why it is refused.
+fn receive_type(hdr: &mut Header, tok: Tok) -> Result<Option<MessageKind>, Unreceived> {
     let value = tok.lo;
     if tok.kind != Some(Kind::Uint) || tok.len > 1 || value > TYPE_NOTIFICATION {
-        return Err(MPACK_RPC_ETYPE);
+        return Err(Unreceived::Type);
     }
     let expected = if value == TYPE_NOTIFICATION { 3 } else { 4 };
     if hdr.toks[0].len != expected {
-        return Err(MPACK_RPC_EARRAYL);
+        return Err(Unreceived::ArrayLength);
     }
     hdr.toks[1] = tok;
     hdr.index += 1;
-    Ok((value == TYPE_NOTIFICATION).then_some(MPACK_RPC_NOTIFICATION))
+    Ok((value == TYPE_NOTIFICATION).then_some(MessageKind::Notification))
 }
 
 /// The second and third tokens of a request or response envelope. The third
-/// closes it, which is what `MPACK_OK` tells the caller.
-fn send_rest(send: &mut Header, tok: &mut Tok) -> c_int {
+/// closes it, which is what `Ok` tells the caller.
+fn send_rest(send: &mut Header, tok: &mut Tok) -> Result<(), Stop> {
     *tok = send.toks[send.index];
     if send.index == 1 {
         send.index += 1;
-        return PENDING;
+        return Err(Stop::Pending);
     }
     debug_assert_eq!(send.index, 2);
     send.index = 0;
-    COMPLETE
+    Ok(())
 }
 
 /// The tokens of an outgoing envelope: the array, the message type, and (for
@@ -440,28 +460,34 @@ mod tests {
     fn a_full_table_refuses_the_next_request_until_it_grows() {
         let mut session = Session::new(2);
         let mut out = [0u8; 16];
-        assert_eq!(session.request(&mut out, 1).0, COMPLETE);
-        assert_eq!(session.request(&mut out, 2).0, COMPLETE);
-        assert_eq!(session.request(&mut out, 3).0, MPACK_NOMEM);
+        assert_eq!(session.request(&mut out, 1).0, Ok(()));
+        assert_eq!(session.request(&mut out, 2).0, Ok(()));
+        assert_eq!(session.request(&mut out, 3).0, Err(Stop::Full));
         session.grow();
         assert_eq!(session.slots.len(), 4);
         let (status, n) = session.request(&mut out, 3);
-        assert_eq!((status, &out[..n]), (COMPLETE, &b"\x94\x00\x02"[..]));
+        assert_eq!((status, &out[..n]), (Ok(()), &b"\x94\x00\x02"[..]));
     }
 
     #[test]
     fn an_envelope_is_rejected_before_its_body_is_read() {
         let mut hdr = Header::default();
-        assert_eq!(receive_array(&mut hdr, uint(3)), MPACK_RPC_EARRAY);
-        assert_eq!(receive_array(&mut hdr, array(2)), MPACK_RPC_EARRAYL);
-        assert_eq!(receive_array(&mut hdr, array(5)), MPACK_RPC_EARRAYL);
+        assert_eq!(receive_array(&mut hdr, uint(3)), Err(Unreceived::NotArray));
+        assert_eq!(
+            receive_array(&mut hdr, array(2)),
+            Err(Unreceived::ArrayLength)
+        );
+        assert_eq!(
+            receive_array(&mut hdr, array(5)),
+            Err(Unreceived::ArrayLength)
+        );
 
         // A four-item array is a request or a response, not a notification.
-        assert_eq!(receive_array(&mut hdr, array(4)), PENDING);
-        assert_eq!(receive_type(&mut hdr, uint(3)), Err(MPACK_RPC_ETYPE));
+        assert_eq!(receive_array(&mut hdr, array(4)), Ok(()));
+        assert_eq!(receive_type(&mut hdr, uint(3)), Err(Unreceived::Type));
         assert_eq!(
             receive_type(&mut hdr, uint(TYPE_NOTIFICATION)),
-            Err(MPACK_RPC_EARRAYL)
+            Err(Unreceived::ArrayLength)
         );
         assert_eq!(receive_type(&mut hdr, uint(TYPE_REQUEST)), Ok(None));
     }
@@ -469,10 +495,10 @@ mod tests {
     #[test]
     fn a_notification_envelope_ends_at_the_type() {
         let mut hdr = Header::default();
-        assert_eq!(receive_array(&mut hdr, array(3)), PENDING);
+        assert_eq!(receive_array(&mut hdr, array(3)), Ok(()));
         assert_eq!(
             receive_type(&mut hdr, uint(TYPE_NOTIFICATION)),
-            Ok(Some(MPACK_RPC_NOTIFICATION))
+            Ok(Some(MessageKind::Notification))
         );
     }
 
@@ -484,9 +510,15 @@ mod tests {
         assert_eq!(&out[..n], b"\x94\x00\x00");
         let mut msg = RpcMessage::default();
         let mut input: &[u8] = b"\x94\x01\x00";
-        assert_eq!(session.receive(&mut input, &mut msg), MPACK_RPC_RESPONSE);
+        assert_eq!(
+            session.receive(&mut input, &mut msg),
+            Ok(MessageKind::Response)
+        );
         assert_eq!(msg, RpcMessage { id: 0, data: 42 });
         let mut input: &[u8] = b"\x94\x01\x00";
-        assert_eq!(session.receive(&mut input, &mut msg), MPACK_RPC_ERESPID);
+        assert_eq!(
+            session.receive(&mut input, &mut msg),
+            Err(Unreceived::ResponseId)
+        );
     }
 }

@@ -20,7 +20,7 @@ use crate::grid::schar_from_buf;
 
 use crate::global_cell::GlobalCell;
 use crate::grid::defs::{GridLineEvent, RawLine};
-use crate::mpack::mpack_core::{TokenStop, read_token};
+use crate::mpack::mpack_core::{Stop, read_token};
 use crate::mpack::token::{self, Kind, Tok};
 
 use crate::msgpack_rpc::unpacker::Unpacker;
@@ -84,9 +84,9 @@ impl<'a> Cursor<'a> {
     /// Reads one token and checks it is the kind this position calls for.
     fn next(&mut self, expected: Kind) -> Result<Tok, Halt> {
         match read_token(&mut self.data) {
-            Err(TokenStop::Short) => Err(Halt::Incomplete),
+            Err(Stop::Pending) => Err(Halt::Incomplete),
             Ok(tok) if protocol::token_matches(expected, tok.kind) => Ok(tok),
-            Ok(_) | Err(TokenStop::Invalid) => Err(Halt::Invalid),
+            Ok(_) | Err(_) => Err(Halt::Invalid),
         }
     }
 

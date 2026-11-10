@@ -49,8 +49,8 @@ use crate::lua::abi::{lua_Integer, lua_Number};
 use crate::lua::ffi::{LUA_NOREF, LUA_REFNIL};
 use crate::lua::stack::{At, Kind, Raise, Stack, Userdata};
 use crate::lua_functions;
-use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR};
-use crate::mpack::object::{MPACK_EXCEPTION, MPACK_MAX_OBJECT_DEPTH, MPACK_NOMEM, Parser};
+use crate::mpack::mpack_core::Stop;
+use crate::mpack::object::{MPACK_MAX_OBJECT_DEPTH, Parser};
 use crate::mpack::rpc::MPACK_RPC_MAX_REQUESTS;
 use crate::mpack::typedefs::mpack_uint32_t;
 
@@ -346,8 +346,8 @@ fn unpacker_new(stack: &mut Stack) -> Result<c_int, Raise> {
 
 /// Decode one value out of `input`, leaving it on top of the stack and
 /// advancing `input`, with the [`Unpacker`] at `at` (an absolute slot) and
-/// its private table at `reg`. Answers `MPACK_EOF` when the input ran out
-/// first.
+/// its private table at `reg`. Answers whether a whole value arrived:
+/// `false` when the input ran out first.
 ///
 /// Growing the parser here is what lets a document nest arbitrarily deep;
 /// `parse` rolls the input back to the token that would not fit, so the
@@ -357,7 +357,7 @@ pub fn unpack_into_registry(
     at: At,
     reg: At,
     input: &mut &[u8],
-) -> Result<c_int, Raise> {
+) -> Result<bool, Raise> {
     let unpacker = stack
         .to_userdata::<Unpacker>(at)
         .expect("checked by the caller");
@@ -377,7 +377,7 @@ pub fn unpack_into_registry(
     let mut decoder = LuaDecoder::new(stack, reg, ext, mtdict, buffer);
     let status = loop {
         let status = parser.parse(input, &mut decoder);
-        if status != MPACK_NOMEM {
+        if status != Err(Stop::Full) {
             break status;
         }
         // `parse` rolled the input back to the token that would not fit.
@@ -394,10 +394,13 @@ pub fn unpack_into_registry(
         return Err(failure.raise(stack));
     }
     unpacker.unpacking = false;
-    if status == MPACK_ERROR {
-        return Err(Raise::message("invalid msgpack string"));
+    match status {
+        Ok(()) => Ok(true),
+        Err(Stop::Pending) => Ok(false),
+        Err(Stop::Invalid) => Err(Raise::message("invalid msgpack string")),
+        Err(Stop::Full) => unreachable!("the parser grows until the value fits"),
+        Err(Stop::Stopped) => unreachable!("a stopped walk leaves its failure"),
     }
-    Ok(status)
 }
 
 /// `unpacker(str[, start])` — the `__call` metamethod.
@@ -418,12 +421,12 @@ fn unpacker_unpack(stack: &mut Stack) -> Result<c_int, Raise> {
     let mut input = &whole[offset..];
     view.push_environment(At::arg(1));
     let reg = view.top();
-    let status = unpack_into_registry(&mut view, At::arg(1), reg, &mut input)?;
+    let complete = unpack_into_registry(&mut view, At::arg(1), reg, &mut input)?;
     // Only the value (or nil) is kept above the arguments. A walk resumed
     // over input that does not continue what it was given can leave a
     // scalar it could not store (upstream leaves it on the stack below its
     // results; its `assert` is off in release builds).
-    if status == MPACK_EOF {
+    if !complete {
         view.set_top(argc);
         view.push_nil();
     } else {
@@ -495,8 +498,8 @@ enum Unfinished {
 
 /// Run an encoding walk to completion, answering what it wrote.
 ///
-/// `unparse` fills the window it is handed and answers `MPACK_EOF` when it
-/// wants more room, or `MPACK_NOMEM` when the *parser* stack is too shallow:
+/// `unparse` fills the window it is handed and answers [`Stop::Pending`] when
+/// it wants more room, or [`Stop::Full`] when the *parser* stack is too shallow:
 /// `may_grow` says whether that may be fixed, which a shorthand's
 /// fixed-depth parser may not.
 fn unparse_all(
@@ -511,11 +514,11 @@ fn unparse_all(
         let (status, written) = parser.unparse(&mut out[start..], encoder);
         out.truncate(start + written);
         match status {
-            MPACK_EXCEPTION => return Err(Unfinished::Stopped),
-            MPACK_NOMEM if !may_grow => return Err(Unfinished::TooDeep),
-            MPACK_NOMEM => parser.grow(),
-            status if status == MPACK_EOF => {}
-            _ => return Ok(out),
+            Err(Stop::Stopped) => return Err(Unfinished::Stopped),
+            Err(Stop::Full) if !may_grow => return Err(Unfinished::TooDeep),
+            Err(Stop::Full) => parser.grow(),
+            Err(Stop::Pending) => {}
+            Ok(()) | Err(Stop::Invalid) => return Ok(out),
         }
     }
 }
@@ -599,11 +602,11 @@ fn decode(stack: &mut Stack) -> Result<c_int, Raise> {
     // The depth is fixed here: `decode` has nowhere to put a grown parser,
     // so a document deeper than 32 is an error rather than a reallocation.
     let message = match status {
-        MPACK_NOMEM => "object was too deep to unpack",
-        s if s == MPACK_EOF => "incomplete msgpack string",
-        s if s == MPACK_ERROR => "invalid msgpack string",
-        _ if !input.is_empty() => "trailing data in msgpack string",
-        _ => {
+        Err(Stop::Full) => "object was too deep to unpack",
+        Err(Stop::Pending) => "incomplete msgpack string",
+        Err(Stop::Invalid) => "invalid msgpack string",
+        Ok(()) | Err(Stop::Stopped) if !input.is_empty() => "trailing data in msgpack string",
+        Ok(()) | Err(Stop::Stopped) => {
             view.replace(reg);
             view.set_top(reg);
             return Ok(1);

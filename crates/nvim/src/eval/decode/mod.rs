@@ -110,15 +110,13 @@ mod tests {
     use super::unpack_typval;
     use crate::eval::encode::tv2string_bytes;
     use crate::global_cell::editor_state_lock;
-    use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK};
-    use crate::mpack::object::MPACK_NOMEM;
-    use crate::types::{TypVal, VAR_UNKNOWN};
+    use crate::mpack::mpack_core::Stop;
+    use crate::types::TypVal;
 
-    fn unpack(bytes: &[u8]) -> (core::ffi::c_int, TypVal, usize) {
+    fn unpack(bytes: &[u8]) -> (Result<TypVal, Stop>, usize) {
         let mut data = bytes;
-        let mut tv = TypVal::Number(7);
-        let status = unpack_typval(&mut data, &mut tv);
-        (status, tv, data.len())
+        let value = unpack_typval(&mut data);
+        (value, data.len())
     }
 
     fn text(tv: &TypVal) -> String {
@@ -135,9 +133,8 @@ mod tests {
             &[0x92, 0x01, 0xa2, b'a'],
             &[0x91, 0x81, 0xa1],
         ] {
-            let (status, tv, _) = unpack(bytes);
-            assert_eq!(status, MPACK_EOF, "{bytes:x?}");
-            assert_eq!(tv.v_type(), VAR_UNKNOWN);
+            let (value, _) = unpack(bytes);
+            assert_eq!(value.err(), Some(Stop::Pending), "{bytes:x?}");
         }
     }
 
@@ -146,14 +143,14 @@ mod tests {
     #[test]
     fn an_object_is_decoded_and_the_rest_left() {
         let _serial = editor_state_lock();
-        let (status, tv, left) = unpack(&[0x92, 0x01, 0xa1, b'x', 0xc0]);
-        assert_eq!((status, left), (MPACK_OK, 1));
-        assert_eq!(text(&tv), "[1, 'x']");
-        let (status, _, left) = unpack(&[0xc1, 0x00]);
-        assert_eq!((status, left), (MPACK_ERROR, 2));
+        let (value, left) = unpack(&[0x92, 0x01, 0xa1, b'x', 0xc0]);
+        assert_eq!(left, 1);
+        assert_eq!(text(&value.expect("an object")), "[1, 'x']");
+        let (value, left) = unpack(&[0xc1, 0x00]);
+        assert_eq!((value.err(), left), (Some(Stop::Invalid), 2));
         // A string holding a NUL is a blob; an empty one is still a string.
-        let (_, tv, _) = unpack(&[0x92, 0xa3, b'a', 0, b'b', 0xa0]);
-        assert_eq!(text(&tv), "[0z610062, '']");
+        let (value, _) = unpack(&[0x92, 0xa3, b'a', 0, b'b', 0xa0]);
+        assert_eq!(text(&value.expect("an object")), "[0z610062, '']");
     }
 
     /// Thirty-two levels are the limit, a string's bytes counting as one.
@@ -162,13 +159,13 @@ mod tests {
         let _serial = editor_state_lock();
         let mut deep = vec![0x91; 31];
         deep.push(0x01);
-        assert_eq!(unpack(&deep).0, MPACK_OK);
+        assert!(unpack(&deep).0.is_ok());
         let mut too_deep = vec![0x91; 32];
         too_deep.push(0x01);
-        assert_eq!(unpack(&too_deep).0, MPACK_NOMEM);
+        assert_eq!(unpack(&too_deep).0.err(), Some(Stop::Full));
         let mut string_too_deep = vec![0x91; 31];
         string_too_deep.extend_from_slice(&[0xa1, b'x']);
-        assert_eq!(unpack(&string_too_deep).0, MPACK_NOMEM);
+        assert_eq!(unpack(&string_too_deep).0.err(), Some(Stop::Full));
     }
 
     /// The streaming form resumes across slices, tokens split included.
