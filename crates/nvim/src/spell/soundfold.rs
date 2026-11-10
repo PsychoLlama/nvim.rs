@@ -37,7 +37,7 @@ use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{char_at, char_len, encode_char, utf_class};
 use crate::memory::XString;
 use crate::regexp::low_byte;
-use crate::spell::SpellLang;
+use crate::spell::{SalItem, SpellLang};
 
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
 use super::{LOADED_LANGS, MAXWLEN};
@@ -165,34 +165,8 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
     // `spell_iswordp*` answer for a window's `'iskeyword'`, and this whole
     // body runs in one: read the current one once.
     let win = Win::current();
-    // Widen the word, dropping what the language does not consider part
-    // of a word when it asked for accents to be removed.
     let mut word = [0 as c_int; MAXWLEN];
-    let mut wordlen = 0usize;
-    let mut did_white = false;
-    let mut s = 0;
-    while s < inword.len() && inword[s] != 0 {
-        let t = &inword[s..];
-        let mut c = char_at(t);
-        s += char_len(t);
-        if slang.sl_rem_accents {
-            if utf_class(c) == 0 {
-                if did_white {
-                    continue;
-                }
-                c = c_int::from(b' ');
-                did_white = true;
-            } else {
-                did_white = false;
-                if !spell_iswordp_nmw(t, win) {
-                    continue;
-                }
-            }
-        }
-        word[wordlen] = c;
-        wordlen += 1;
-    }
-    word[wordlen] = NUL;
+    let wordlen = widen_word(slang, inword, win, &mut word);
 
     let smp = &slang.sl_sal;
     let mut wres = [0 as c_int; MAXWLEN];
@@ -218,218 +192,71 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
         let mut z0 = 0;
 
         if let Some(mut n) = first {
-            'rules: loop {
+            loop {
                 let ws = &smp[n].sm_lead_w;
                 if !(ws[0] & 0xff == c & 0xff && ws[0] != NUL) {
-                    break 'rules;
+                    break;
                 }
-                'next_rule: {
-                    // Most leads are one or two characters; check the
-                    // cheap cases before the loop.
-                    if c != ws[0] {
-                        break 'next_rule;
-                    }
-                    k = smp[n].sm_leadlen;
-                    if k > 1 {
-                        if word[i + 1] != ws[1] {
-                            break 'next_rule;
-                        }
-                        if k > 2 && word[i + 2..i + k] != ws[2..k] {
-                            break 'next_rule;
-                        }
-                    }
+                if !rule_applies(slang, win, &word, i, n, &mut k, &mut p0) {
+                    n += 1;
+                    continue;
+                }
 
-                    // The character after the lead must be one of
-                    // "sm_oneof", and counts towards the match.
-                    if let Some(oneof) = &smp[n].sm_oneof_w {
-                        if !oneof
-                            .iter()
-                            .take_while(|&&ch| ch != NUL)
-                            .any(|&ch| ch == word[i + k])
-                        {
-                            break 'next_rule;
-                        }
-                        k += 1;
-                    }
-
-                    let mut rules = &smp[n].sm_rules[..];
-                    let mut pri = 5;
-
-                    p0 = c_int::from(rules[0]);
-                    let mut k0 = k;
-                    while rules[0] == b'-' && k > 1 {
-                        k -= 1;
-                        rules = &rules[1..];
-                    }
-                    if rules[0] == b'<' {
-                        rules = &rules[1..];
-                    }
-                    if ascii_isdigit(c_int::from(rules[0])) {
-                        pri = c_int::from(rules[0]) - c_int::from(b'0');
-                        rules = &rules[1..];
-                    }
-                    if rules[0] == b'^' && rules[1] == b'^' {
-                        rules = &rules[1..];
-                    }
-
-                    let at_word_start = rules[0] == b'^'
-                        && (i == 0
-                            || !(word[i - 1] == c_int::from(b' ')
-                                || spell_iswordp_w(&word[i - 1..], win)))
-                        && (rules[1] != b'$' || !spell_iswordp_w(&word[i + k0..], win));
-                    let at_word_end = rules[0] == b'$'
-                        && i > 0
-                        && spell_iswordp_w(&word[i - 1..], win)
-                        && !spell_iswordp_w(&word[i + k0..], win);
-                    if !(rules[0] == 0 || at_word_start || at_word_end) {
-                        break 'next_rule;
-                    }
-
-                    // A longer rule starting at this match's last
-                    // character wins if its priority is at least as high.
-                    let c0 = word[i + k - 1];
-                    let first0 = first_rule(slang, c0);
-                    if let Some(mut n0) = first0
-                        && slang.sl_followup
-                        && k > 1
-                        && p0 != c_int::from(b'-')
-                        && word[i + k] != NUL
+                // The rule applies: substitute "sm_to_w".
+                let to = smp[n].sm_to_w.as_deref();
+                let rules = &smp[n].sm_rules[..];
+                p0 = c_int::from(rules.contains(&b'<'));
+                if p0 == 1 && z == 0 {
+                    // A '<' rule writes back into the word so the
+                    // replacement is matched again.
+                    let first = to.map_or(NUL, |t| t[0]);
+                    if reslen > 0
+                        && first != NUL
+                        && (wres[reslen - 1] == c || wres[reslen - 1] == first)
                     {
-                        'followups: loop {
-                            // The outer loop stops on the sentinel rule,
-                            // whose lead is NUL; this one only compares low
-                            // bytes, so a `c0` whose low byte is zero --
-                            // U+0100, U+0200, ... -- matches the sentinel
-                            // too and walks off the end. The C read past
-                            // the array there; this stops.
-                            let Some(followup) = smp.get(n0) else {
-                                break 'followups;
-                            };
-                            let ws = &followup.sm_lead_w;
-                            if ws[0] & 0xff != c0 & 0xff {
-                                break 'followups;
-                            }
-                            'next_followup: {
-                                if c0 != ws[0] {
-                                    break 'next_followup;
-                                }
-                                k0 = followup.sm_leadlen;
-                                if k0 > 1 {
-                                    if word[i + k] != ws[1] {
-                                        break 'next_followup;
-                                    }
-                                    if k0 > 2 && word[i + k + 1..i + k + k0 - 1] != ws[2..k0] {
-                                        break 'next_followup;
-                                    }
-                                }
-                                k0 += k - 1;
-
-                                if let Some(oneof) = &followup.sm_oneof_w {
-                                    if !oneof
-                                        .iter()
-                                        .take_while(|&&ch| ch != NUL)
-                                        .any(|&ch| ch == word[i + k0])
-                                    {
-                                        break 'next_followup;
-                                    }
-                                    k0 += 1;
-                                }
-
-                                p0 = 5;
-                                let mut frules = &followup.sm_rules[..];
-                                // "k0" is deliberately not reduced here:
-                                // the "k0 == k" test below depends on it.
-                                while frules[0] == b'-' {
-                                    frules = &frules[1..];
-                                }
-                                if frules[0] == b'<' {
-                                    frules = &frules[1..];
-                                }
-                                if ascii_isdigit(c_int::from(frules[0])) {
-                                    p0 = c_int::from(frules[0]) - c_int::from(b'0');
-                                    frules = &frules[1..];
-                                }
-
-                                // A '^' rule never cuts the current match.
-                                if frules[0] == 0
-                                    || (frules[0] == b'$' && !spell_iswordp_w(&word[i + k0..], win))
-                                {
-                                    // Same length means the follow-up is
-                                    // only a piece of this match.
-                                    if k0 != k && p0 >= pri {
-                                        break 'followups;
-                                    }
-                                }
-                            }
-                            n0 += 1;
-                        }
-
-                        if p0 >= pri
-                            && smp
-                                .get(n0)
-                                .is_some_and(|f| f.sm_lead_w[0] & 0xff == c0 & 0xff)
-                        {
-                            break 'next_rule;
+                        reslen -= 1;
+                    }
+                    z0 = 1;
+                    z = 1;
+                    let mut k0 = 0;
+                    if let Some(to) = to {
+                        while to[k0] != NUL && word[i + k0] != NUL {
+                            word[i + k0] = to[k0];
+                            k0 += 1;
                         }
                     }
-
-                    // The rule applies: substitute "sm_to_w".
-                    let to = smp[n].sm_to_w.as_deref();
-                    let rules = &smp[n].sm_rules[..];
-                    p0 = c_int::from(rules.contains(&b'<'));
-                    if p0 == 1 && z == 0 {
-                        // A '<' rule writes back into the word so the
-                        // replacement is matched again.
-                        let first = to.map_or(NUL, |t| t[0]);
-                        if reslen > 0
-                            && first != NUL
-                            && (wres[reslen - 1] == c || wres[reslen - 1] == first)
-                        {
-                            reslen -= 1;
-                        }
-                        z0 = 1;
-                        z = 1;
-                        k0 = 0;
-                        if let Some(to) = to {
-                            while to[k0] != NUL && word[i + k0] != NUL {
-                                word[i + k0] = to[k0];
-                                k0 += 1;
-                            }
-                        }
-                        if k > k0 {
-                            word.copy_within(i + k..=wordlen, i + k0);
-                        }
-                        c = word[i];
-                    } else {
-                        i += k - 1;
-                        z = 0;
-                        // The last character of the replacement is left
-                        // for the tail of the loop to emit, so that the
-                        // collapse test sees it.
-                        let mut at = 0;
-                        if let Some(to) = to {
-                            while to[at] != NUL && to[at + 1] != NUL && reslen < MAXWLEN {
-                                if reslen == 0 || wres[reslen - 1] != to[at] {
-                                    wres[reslen] = to[at];
-                                    reslen += 1;
-                                }
-                                at += 1;
-                            }
-                        }
-                        c = to.map_or(NUL, |t| t[at]);
-                        if rules.windows(2).any(|w| w == b"^^") {
-                            if c != NUL && reslen < MAXWLEN {
-                                wres[reslen] = c;
+                    if k > k0 {
+                        word.copy_within(i + k..=wordlen, i + k0);
+                    }
+                    c = word[i];
+                } else {
+                    i += k - 1;
+                    z = 0;
+                    // The last character of the replacement is left
+                    // for the tail of the loop to emit, so that the
+                    // collapse test sees it.
+                    let mut at = 0;
+                    if let Some(to) = to {
+                        while to[at] != NUL && to[at + 1] != NUL && reslen < MAXWLEN {
+                            if reslen == 0 || wres[reslen - 1] != to[at] {
+                                wres[reslen] = to[at];
                                 reslen += 1;
                             }
-                            word.copy_within(i + 1..=wordlen, 0);
-                            i = 0;
-                            z0 = 1;
+                            at += 1;
                         }
                     }
-                    break 'rules;
+                    c = to.map_or(NUL, |t| t[at]);
+                    if rules.windows(2).any(|w| w == b"^^") {
+                        if c != NUL && reslen < MAXWLEN {
+                            wres[reslen] = c;
+                            reslen += 1;
+                        }
+                        word.copy_within(i + 1..=wordlen, 0);
+                        i = 0;
+                        z0 = 1;
+                    }
                 }
-                n += 1;
+                break;
             }
         } else if ascii_iswhite(c) {
             c = c_int::from(b' ');
@@ -460,6 +287,221 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
         }
     }
     res[l] = 0;
+}
+
+/// Widen `inword` into `word`, NUL-terminated, and answer its length in
+/// characters. When the language asks for accents to be removed, what it
+/// does not consider part of a word is dropped, and each run of
+/// non-word characters (by `utf_class`) becomes one space.
+fn widen_word(slang: &SpellLang, inword: &[u8], win: Win, word: &mut [c_int; MAXWLEN]) -> usize {
+    let mut wordlen = 0usize;
+    let mut did_white = false;
+    let mut s = 0;
+    while s < inword.len() && inword[s] != 0 {
+        let t = &inword[s..];
+        let mut c = char_at(t);
+        s += char_len(t);
+        if slang.sl_rem_accents {
+            if utf_class(c) == 0 {
+                if did_white {
+                    continue;
+                }
+                c = c_int::from(b' ');
+                did_white = true;
+            } else {
+                did_white = false;
+                if !spell_iswordp_nmw(t, win) {
+                    continue;
+                }
+            }
+        }
+        word[wordlen] = c;
+        wordlen += 1;
+    }
+    word[wordlen] = NUL;
+    wordlen
+}
+
+/// Whether SAL rule `n` applies to `word` at character `i`: its lead and
+/// "oneof" set match there, its `^`/`$` flags hold, and no follow-up rule
+/// overrides it.
+///
+/// Leaves the match length in `k` and the rule's first flag byte (or a
+/// follow-up's priority) in `p0` whether or not the rule applies: when no
+/// rule does, the caller reads what the last candidate left there.
+fn rule_applies(
+    slang: &SpellLang,
+    win: Win,
+    word: &[c_int; MAXWLEN],
+    i: usize,
+    n: usize,
+    k: &mut usize,
+    p0: &mut c_int,
+) -> bool {
+    let rule = &slang.sl_sal[n];
+    let ws = &rule.sm_lead_w;
+    // Most leads are one or two characters; check the cheap cases before
+    // the loop.
+    if word[i] != ws[0] {
+        return false;
+    }
+    *k = rule.sm_leadlen;
+    if *k > 1 {
+        if word[i + 1] != ws[1] {
+            return false;
+        }
+        if *k > 2 && word[i + 2..i + *k] != ws[2..*k] {
+            return false;
+        }
+    }
+
+    // The character after the lead must be one of "sm_oneof", and counts
+    // towards the match.
+    if let Some(oneof) = &rule.sm_oneof_w {
+        if !oneof
+            .iter()
+            .take_while(|&&ch| ch != NUL)
+            .any(|&ch| ch == word[i + *k])
+        {
+            return false;
+        }
+        *k += 1;
+    }
+
+    let mut rules = &rule.sm_rules[..];
+    let mut pri = 5;
+
+    *p0 = c_int::from(rules[0]);
+    let k0 = *k;
+    while rules[0] == b'-' && *k > 1 {
+        *k -= 1;
+        rules = &rules[1..];
+    }
+    if rules[0] == b'<' {
+        rules = &rules[1..];
+    }
+    if ascii_isdigit(c_int::from(rules[0])) {
+        pri = c_int::from(rules[0]) - c_int::from(b'0');
+        rules = &rules[1..];
+    }
+    if rules[0] == b'^' && rules[1] == b'^' {
+        rules = &rules[1..];
+    }
+
+    let at_word_start = rules[0] == b'^'
+        && (i == 0 || !(word[i - 1] == c_int::from(b' ') || spell_iswordp_w(&word[i - 1..], win)))
+        && (rules[1] != b'$' || !spell_iswordp_w(&word[i + k0..], win));
+    let at_word_end = rules[0] == b'$'
+        && i > 0
+        && spell_iswordp_w(&word[i - 1..], win)
+        && !spell_iswordp_w(&word[i + k0..], win);
+    if !(rules[0] == 0 || at_word_start || at_word_end) {
+        return false;
+    }
+
+    !followup_overrides(slang, win, word, i, *k, pri, p0)
+}
+
+/// Whether a longer rule starting at the last character of a match of
+/// length `k` at `i`, with priority `pri`, overrides that match: its
+/// priority is at least as high. Only languages that set `sl_followup`
+/// look. Leaves the last follow-up's priority in `p0`.
+fn followup_overrides(
+    slang: &SpellLang,
+    win: Win,
+    word: &[c_int; MAXWLEN],
+    i: usize,
+    k: usize,
+    pri: c_int,
+    p0: &mut c_int,
+) -> bool {
+    let smp = &slang.sl_sal;
+    let c0 = word[i + k - 1];
+    let first0 = first_rule(slang, c0);
+    let Some(mut n0) = first0 else {
+        return false;
+    };
+    if !(slang.sl_followup && k > 1 && *p0 != c_int::from(b'-') && word[i + k] != NUL) {
+        return false;
+    }
+    // The outer loop stops on the sentinel rule, whose lead is NUL; this
+    // one only compares low bytes, so a `c0` whose low byte is zero --
+    // U+0100, U+0200, ... -- matches the sentinel too and walks off the end.
+    // The C read past the array there; this stops.
+    while let Some(followup) = smp.get(n0) {
+        if followup.sm_lead_w[0] & 0xff != c0 & 0xff {
+            break;
+        }
+        if followup_cuts(followup, win, word, i, k, pri, p0) {
+            break;
+        }
+        n0 += 1;
+    }
+
+    *p0 >= pri
+        && smp
+            .get(n0)
+            .is_some_and(|f| f.sm_lead_w[0] & 0xff == c0 & 0xff)
+}
+
+/// Whether `followup`, a rule for the match's last character, ends the
+/// follow-up scan: it matches there, is longer than the match, and its
+/// priority (left in `p0`) is at least `pri`. A `^` rule never cuts the
+/// current match.
+fn followup_cuts(
+    followup: &SalItem,
+    win: Win,
+    word: &[c_int; MAXWLEN],
+    i: usize,
+    k: usize,
+    pri: c_int,
+    p0: &mut c_int,
+) -> bool {
+    let ws = &followup.sm_lead_w;
+    if word[i + k - 1] != ws[0] {
+        return false;
+    }
+    let mut k0 = followup.sm_leadlen;
+    if k0 > 1 {
+        if word[i + k] != ws[1] {
+            return false;
+        }
+        if k0 > 2 && word[i + k + 1..i + k + k0 - 1] != ws[2..k0] {
+            return false;
+        }
+    }
+    k0 += k - 1;
+
+    if let Some(oneof) = &followup.sm_oneof_w {
+        if !oneof
+            .iter()
+            .take_while(|&&ch| ch != NUL)
+            .any(|&ch| ch == word[i + k0])
+        {
+            return false;
+        }
+        k0 += 1;
+    }
+
+    *p0 = 5;
+    let mut frules = &followup.sm_rules[..];
+    // "k0" is deliberately not reduced here: the "k0 == k" test below
+    // depends on it.
+    while frules[0] == b'-' {
+        frules = &frules[1..];
+    }
+    if frules[0] == b'<' {
+        frules = &frules[1..];
+    }
+    if ascii_isdigit(c_int::from(frules[0])) {
+        *p0 = c_int::from(frules[0]) - c_int::from(b'0');
+        frules = &frules[1..];
+    }
+
+    // Same length means the follow-up is only a piece of this match.
+    (frules[0] == 0 || (frules[0] == b'$' && !spell_iswordp_w(&word[i + k0..], win)))
+        && k0 != k
+        && *p0 >= pri
 }
 
 /// The first SAL rule for characters whose low byte is `c`'s, if any.
