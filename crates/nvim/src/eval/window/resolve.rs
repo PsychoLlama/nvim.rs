@@ -26,7 +26,7 @@ use crate::os::libc::ptrdiff_t;
 use crate::types::LIST_LEN_MAY_KNOW;
 use crate::types::{Failed, Handle, TypVal, VarNumber};
 use crate::window::LOWEST_WIN_ID;
-use crate::window::tab_index;
+use crate::window::{nth_tabpage, tab_index};
 use crate::winlayer::last_used_tab;
 
 /// Argument `i` as a Number.
@@ -119,12 +119,6 @@ pub fn find_tabwin(wvp: Option<&TypVal>, tvp: Option<&TypVal>) -> Option<Win> {
         }
     };
     find_win_by_nr(wvp, Some(tp?))
-}
-
-/// The tab page `nr` names, counting from one — the inverse of
-/// [`crate::window::tabpage_index`].
-fn tabpage_by_nr(nr: c_int) -> Option<TabPage> {
-    tabs().nth(usize::try_from(nr).ok()?.checked_sub(1)?)
 }
 
 /// Common code for `tabpagewinnr()` and `winnr()`: the number of the window
@@ -238,7 +232,7 @@ pub fn f_win_getid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let tp = if args.len() <= 1 {
         TabPage::current()
     } else {
-        match tabpage_by_nr(number_as_int(arg_number(args, 1))) {
+        match nth_tabpage(number_as_int(arg_number(args, 1))) {
             Some(tp) => tp,
             None => {
                 // Unlike every other failure here, a bad tab page

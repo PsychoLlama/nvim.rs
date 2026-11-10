@@ -20,7 +20,6 @@
 #![forbid(unsafe_code)]
 
 use crate::autocmd::defs::AutoEvent;
-use crate::narrow::as_index;
 use crate::narrow::number_as_int;
 use crate::types::CmdIdx;
 use crate::winlayer::TabId;
@@ -400,20 +399,20 @@ fn close_tab(tab: TabPage) {
     free_tab(tab);
 }
 
-pub fn find_tabpage(n: c_int) -> Option<TabPage> {
-    nth_tab(n)
-}
-
 /// Tab page `n`, the first being 1; the current one for zero. `None` when
 /// there is no such tab page.
-fn nth_tab(n: c_int) -> Option<TabPage> {
+pub fn find_tabpage(n: c_int) -> Option<TabPage> {
     if n == 0 {
-        return Some(TabPage::current());
+        Some(TabPage::current())
+    } else {
+        nth_tabpage(n)
     }
-    if n < 0 {
-        return None; // the walk runs off the end of the list
-    }
-    tabs().nth(as_index(n) - 1)
+}
+
+/// Tab page `nr`, the first being 1, with no alias for zero: `None` for a
+/// number no tab page has, 0 and negatives included.
+pub(crate) fn nth_tabpage(nr: c_int) -> Option<TabPage> {
+    tabs().nth(usize::try_from(nr).ok()?.checked_sub(1)?)
 }
 
 pub(crate) fn tabpage_index(ftp: Option<TabPage>) -> c_int {
@@ -642,7 +641,7 @@ pub(crate) fn goto_tab_number(n: c_int) {
         tabs().last().expect("at least one tab page")
     } else {
         // Go to tab page `n`.
-        let Some(tp) = nth_tab(n) else {
+        let Some(tp) = nth_tabpage(n) else {
             beep();
             return;
         };

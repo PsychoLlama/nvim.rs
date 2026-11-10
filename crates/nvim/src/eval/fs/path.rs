@@ -36,7 +36,7 @@ use crate::eval::typval::tv_get_number;
 use crate::fileio::file_pat_to_regpat;
 use crate::memory::ThinCString;
 use crate::narrow::number_as_int;
-use crate::path::MAXPATHL;
+use crate::path::{MAXPATHL, add_pathsep};
 use crate::path::{path_is_absolute, shorten_dir_name, simplify_filename, tail_index};
 use crate::types::{Failed, TypVal, VAR_STRING, VarNumber};
 use core::ffi::CStr;
@@ -56,17 +56,6 @@ fn read_link(p: &[u8]) -> Option<Vec<u8>> {
         .into_vec();
     link.truncate(MAXPATHL as usize);
     (!link.is_empty()).then_some(link)
-}
-
-/// Append a path separator to the link value `p`, unless it ends in one
-/// already or a `MAXPATHL` buffer has no room for it -- upstream's
-/// `add_pathsep` over the `readlink` buffer.
-fn add_pathsep(p: &mut Vec<u8>) {
-    let len = p.len();
-    if len == 0 || after_sep(p, len) || len + 2 > MAXPATHL as usize {
-        return;
-    }
-    p.push(b'/');
 }
 
 /// Whether `p` starts at the root: [`path_is_absolute`], which reads only
@@ -191,7 +180,8 @@ fn resolve(fname: &CStr) -> Result<Vec<u8>, Failed> {
 
             // The answer keeps the trailing separator the argument had.
             if remain.is_none() && has_trailing_pathsep {
-                add_pathsep(&mut link);
+                // No room for it leaves the link as it was.
+                let _ = add_pathsep(&mut link);
             }
 
             // Separate the first component of the link's value and hang what

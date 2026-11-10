@@ -46,7 +46,7 @@ use crate::ex_docmd::{VALID_HEAD, VALID_PATH};
 use crate::mbyte::{cluster_len, head_off};
 use crate::memory::XString;
 use crate::os::fs::{dir_exists, dirname_text};
-use crate::path::MAXPATHL;
+use crate::path::{MAXPATHL, add_pathsep};
 use crate::path::{full_name_save, path_fnamencmp, tail_index, vim_is_abs_name};
 use crate::strings::{find_char, shellescape};
 use crate::types::TypVal;
@@ -198,10 +198,8 @@ fn full_path_stage(f: &mut Fname<'_>, tilde_file: bool) {
     // A directory answers with a trailing separator, room permitting.
     if dir_exists(f.cstr()) {
         let mut dir = f.cstr().to_bytes().to_vec();
-        let len = dir.len();
-        if len != 0 && !after_sep(&dir, 0, len) && len + 2 <= MAXPATHL as usize {
-            dir.push(b'/');
-        }
+        // No room for it leaves the name as it was.
+        let _ = add_pathsep(&mut dir);
         dir.push(0);
         f.adopt_at(dir, 0);
     }

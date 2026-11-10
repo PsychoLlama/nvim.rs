@@ -97,11 +97,6 @@ fn tab_has_localdir(tabpage: TabPage) -> bool {
     tabpage.tp_localdir.is_some()
 }
 
-/// Tabpage number `n`, or NULL when there is none.
-fn find_tab(n: c_int) -> Option<TabPage> {
-    find_tabpage(n)
-}
-
 /// The window argument 0 names within `tabpage`, or NULL when there is none.
 fn find_win(args: &[TypVal], tabpage: Option<TabPage>) -> Option<Win> {
     find_win_by_nr(&args[0], tabpage)
@@ -178,7 +173,7 @@ impl Scope {
 
         // Find the tabpage by number.
         if s.number[tab_i] > 0 {
-            s.tp = find_tab(s.number[tab_i]);
+            s.tp = find_tabpage(s.number[tab_i]);
             if s.tp.is_none() {
                 err0(c"E5000: Cannot find tab number.");
                 return Err(Failed);
