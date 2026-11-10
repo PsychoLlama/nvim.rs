@@ -102,7 +102,7 @@ pub(crate) fn vim_chdirfile(fname: &CStr, cause: CdCause) -> Result<(), IoFailed
     if announce {
         do_autocmd_dirchanged(&dir, CD_SCOPE_WINDOW, cause, true);
     }
-    if os_chdir(&dir) != 0 {
+    if os_chdir(&dir).is_err() {
         return Err(IoFailed);
     }
     if announce {
@@ -120,7 +120,7 @@ pub(crate) fn vim_chdir(new_dir: &CStr) -> Result<(), IoFailed> {
     let rel_fname = Buf::current().name.full().map(XString::from_cstr);
     let rel_fname = rel_fname.as_ref().map(XString::as_cstr);
     match find_directory_in_path(new_dir.to_bytes(), FileNameOpts::MESS, rel_fname) {
-        Some(dir_name) if os_chdir(dir_name.as_cstr()) == 0 => Ok(()),
+        Some(dir_name) if os_chdir(dir_name.as_cstr()).is_ok() => Ok(()),
         _ => Err(IoFailed),
     }
 }

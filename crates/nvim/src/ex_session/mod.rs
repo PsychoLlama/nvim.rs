@@ -515,7 +515,7 @@ fn write_session(out: &mut SessionFile, fname: &CStr) -> Written {
     // cannot be gone back to).
     let dirnow = dirname_within(MAXPATHL as usize)
         .ok()
-        .filter(|dir| crate::cstr::with_terminated(dir, os_chdir) == 0)
+        .filter(|dir| crate::cstr::with_terminated(dir, os_chdir).is_ok())
         .map_or_else(XString::new, XString::from_vec);
     let known = !dirnow.is_empty();
     let globaldir = own_dir(DirOwner::Global);
@@ -527,7 +527,7 @@ fn write_session(out: &mut SessionFile, fname: &CStr) -> Written {
         }
     } else if to_globaldir
         && let Some(dir) = &globaldir
-        && os_chdir(dir.as_cstr()) == 0
+        && os_chdir(dir.as_cstr()).is_ok()
     {
         shorten_fnames(true);
     }
@@ -536,7 +536,7 @@ fn write_session(out: &mut SessionFile, fname: &CStr) -> Written {
 
     // Restore the original directory.
     if to_sesdir || to_globaldir {
-        if os_chdir(dirnow.as_cstr()) != 0 {
+        if os_chdir(dirnow.as_cstr()).is_err() {
             emsg(gettext(E_PREV_DIR));
         }
         shorten_fnames(true);

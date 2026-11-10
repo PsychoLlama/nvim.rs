@@ -72,7 +72,8 @@ pub fn win_execute_after(args: &mut WinExecute) {
         args.save_sfname = None;
         do_autochdir();
     } else if let Some(cwd) = &args.cwd {
-        os_chdir(cwd.as_cstr());
+        // As upstream, a directory gone meanwhile is left behind quietly.
+        let _ = os_chdir(cwd.as_cstr());
         if let Some(short) = args.save_sfname.take() {
             Buf::current().name.set_short(Some(short));
         }

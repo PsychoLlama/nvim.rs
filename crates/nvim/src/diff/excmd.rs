@@ -73,7 +73,9 @@ fn patch_into(excmd: &mut ExArg, tmp_orig: &CStr, tmp_new: &CStr) {
     let saved_dir = save_cwd();
     if saved_dir.is_some() {
         let tempdir = vim_gettempdir();
-        os_chdir(tempdir.as_deref().unwrap_or(c"/tmp"));
+        // As upstream: a temp dir that cannot be entered leaves the
+        // droppings in the cwd.
+        let _ = os_chdir(tempdir.as_deref().unwrap_or(c"/tmp"));
         shorten_fnames(true);
     }
 
@@ -92,7 +94,7 @@ fn patch_into(excmd: &mut ExArg, tmp_orig: &CStr, tmp_new: &CStr) {
     }
 
     if let Some(dir) = &saved_dir {
-        if os_chdir(dir.as_cstr()) != 0 {
+        if os_chdir(dir.as_cstr()).is_err() {
             emsg_gettext(E_PREV_DIR);
         }
         shorten_fnames(true);
@@ -158,7 +160,7 @@ fn write_orig(tmp_orig: &CStr) -> Result<(), Failed> {
 /// `None`, and the caller leaves the cwd alone.
 fn save_cwd() -> Option<XString> {
     let dir = current_dir()?;
-    (os_chdir(dir.as_cstr()) == 0).then_some(dir)
+    os_chdir(dir.as_cstr()).is_ok().then_some(dir)
 }
 
 /// Delete `name` with `suffix` glued on -- `patch(1)`'s `.orig` and `.rej`

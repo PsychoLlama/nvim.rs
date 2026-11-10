@@ -237,10 +237,8 @@ pub(crate) fn last_errno_text() -> CString {
     errno_text(io::Error::last_os_error().raw_os_error().unwrap_or(0))
 }
 
-/// Changes the current directory to `path`.
-///
-/// Answers 0, or a negative libuv error code.
-pub fn os_chdir(path: &CStr) -> c_int {
+/// Changes the current directory to `path`, telling the UI when it did.
+pub fn os_chdir(path: &CStr) -> io::Result<()> {
     if p_verbose() >= 5 as OptInt {
         // SAFETY: `path` is NUL-terminated, and `%s` is the one conversion
         // the format string asks for.
@@ -249,13 +247,9 @@ pub fn os_chdir(path: &CStr) -> c_int {
         verbose_leave();
     }
     // `uv_chdir` is `chdir(2)`, which is what std calls.
-    match std::env::set_current_dir(OsStr::from_bytes(path.to_bytes())) {
-        Ok(()) => {
-            ui_call_chdir(ApiString::from_cstr(path));
-            0
-        }
-        Err(error) => uv_code(&error),
-    }
+    std::env::set_current_dir(OsStr::from_bytes(path.to_bytes()))?;
+    ui_call_chdir(ApiString::from_cstr(path));
+    Ok(())
 }
 
 /// The name of the current directory, when it fits a buffer of `room`

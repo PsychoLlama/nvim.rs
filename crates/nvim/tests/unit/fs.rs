@@ -127,13 +127,12 @@ fn the_working_directory_is_reported_and_cannot_be_set_to_a_tilde() {
         "the buffer must hold the NUL"
     );
 
-    // `os_chdir` answers 0 for success, not OK. A literal `~` is not a
-    // directory and is not expanded here, so both of these fail and neither
-    // moves the process.
+    // A literal `~` is not a directory and is not expanded here, so both of
+    // these fail and neither moves the process.
     assert!(!isdir("~"), "sanity check: no literal ~ directory");
     for name in ["~", "~/"] {
         let name = cname(name);
-        assert_ne!(os_chdir(&name), 0, "chdir to a tilde");
+        assert!(os_chdir(&name).is_err(), "chdir to a tilde");
     }
     assert_eq!(dirname(here.len() + 1), (Ok(()), here));
 }

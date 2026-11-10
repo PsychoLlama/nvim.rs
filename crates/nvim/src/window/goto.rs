@@ -498,7 +498,7 @@ fn chdir_to(dir: &CStr, scope: CdScope, cwd: &CStr) {
     if announce {
         do_autocmd_dirchanged(dir, scope, CD_CAUSE_WINDOW, true);
     }
-    if os_chdir(dir) == 0 && announce {
+    if os_chdir(dir).is_ok() && announce {
         do_autocmd_dirchanged(dir, scope, CD_CAUSE_WINDOW, false);
     }
 }
