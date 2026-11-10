@@ -53,16 +53,37 @@ fn compile(pat: &CStr) -> Option<(OwnedProg, bool)> {
 /// The shared body of `match()`, `matchend()`, `matchlist()`, `matchstr()`
 /// and `matchstrpos()`.
 fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
-    let mut numbuf = NumBuf::new();
     let _cpo = SavedCpo::empty();
     result.write_number(-1);
+    seed_answer(result, kind);
+
+    // A List subject; `v:_null_list` is no subject at all.
+    let is_list = args.first().is_some_and(|arg| arg.v_type() == VAR_LIST);
+    let list: Option<&ListRef> = if is_list { args[0].list_shared() } else { None };
+    if !(is_list && list.is_none()) {
+        answer_some_match(args, list, result, kind);
+    }
+
+    // `matchstrpos()` on a String has no index to report, so the
+    // placeholder seeded above comes back out.
+    if kind == SOME_MATCH_STR_POS
+        && list.is_none()
+        && let Some(seeded) = result.list_mut()
+    {
+        drop(seeded.take_range(1, 1));
+    }
+}
+
+/// Write the "no match" answer for `kind` into `result`, the one that stands
+/// when the search is refused or finds nothing.
+fn seed_answer(result: &mut TypVal, kind: SomeMatchType) {
     match kind {
         SOME_MATCH_LIST => {
             tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
         }
         SOME_MATCH_STR_POS => {
-            // Seeded with the "no match" answer, which the tail of this
-            // function trims back to three items for a String subject.
+            // Seeded with the "no match" answer, which the caller trims
+            // back to three items for a String subject.
             let seeded = tv_list_alloc_ret(result, 4);
             seeded.push_bytes(Some(b""));
             seeded.push_number(-1);
@@ -74,130 +95,163 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
         }
         _ => {}
     }
+}
 
-    // A List subject; `v:_null_list` is no subject at all.
-    let is_list = args.first().is_some_and(|arg| arg.v_type() == VAR_LIST);
-    let list: Option<&ListRef> = if is_list { args[0].list_shared() } else { None };
-    // Nothing below this point may return early without running the
-    // trailing fixup, so the body is one labelled block as the C's
-    // `goto theend` was.
-    'theend: {
-        if is_list && list.is_none() {
-            break 'theend;
+/// Search the subject and overwrite the seeded `result` with what was found.
+///
+/// Answers `None`, leaving the seed, when an argument was refused (already
+/// said), the pattern did not compile (`vim_regcomp` said why) or nothing
+/// matched.
+fn answer_some_match(
+    args: &[TypVal],
+    list: Option<&ListRef>,
+    result: &mut TypVal,
+    kind: SomeMatchType,
+) -> Option<()> {
+    let mut numbuf = NumBuf::new();
+    let whole = if list.is_none() {
+        numbuf.string(&args[0])
+    } else {
+        c""
+    };
+    let mut patbuf = NumBuf::new();
+    let pat = patbuf.string_chk(&args[1]).ok()?;
+    let mut walk = MatchWalk::new(list, whole, args.get(2..).unwrap_or(&[]))?;
+    let (mut prog, ignore_case) = compile(pat)?;
+    // The echo of the List item the walk is on.
+    let mut echoed = ThinCString::empty();
+    let hit = walk.find(&mut prog, ignore_case, &mut echoed)?;
+    let subject = if list.is_some() {
+        echoed.as_bytes()
+    } else {
+        whole[walk.skipped..].to_bytes()
+    };
+    walk.answer(kind, &hit, subject, result);
+    Some(())
+}
+
+/// Where the search of a String or a List subject is.
+#[derive(Debug)]
+struct MatchWalk<'a> {
+    list: Option<&'a ListRef>,
+    /// A String subject (empty for a List).
+    whole: &'a CStr,
+    /// How far a `{start}` without a `{count}` moved a String subject on:
+    /// the answers are counted from where it began.
+    skipped: usize,
+    /// The length of the String subject past `skipped`.
+    len: usize,
+    /// Where the List walk is; an index, because the echo is made afresh
+    /// for every item.
+    at: usize,
+    /// `at` as the answer reports it.
+    idx: c_int,
+    /// Matches still to pass over before the one that answers.
+    nth: VarNumber,
+    /// The column the matcher starts at in a String subject.
+    startcol: usize,
+}
+
+impl<'a> MatchWalk<'a> {
+    /// Read `{start}` and `{count}` (`rest`, after the subject and the
+    /// pattern). `None` when one was refused (already said) or the start is
+    /// past the subject.
+    fn new(list: Option<&'a ListRef>, whole: &'a CStr, rest: &[TypVal]) -> Option<Self> {
+        let mut walk = MatchWalk {
+            list,
+            whole,
+            skipped: 0,
+            len: whole.count_bytes(),
+            at: 0,
+            idx: 0,
+            nth: 1,
+            startcol: 0,
+        };
+        let Some(start_arg) = rest.first() else {
+            return Some(walk);
+        };
+        let mut error = false;
+        let start = arg_number_chk(start_arg, Some(&mut error));
+        if error {
+            return None;
         }
-        // A String subject, and how far a `{start}` without a `{count}`
-        // moved it on: the answers are counted from where it began.
-        let whole = if list.is_none() {
-            numbuf.string(&args[0])
+        if let Some(list) = list {
+            walk.idx = list_uidx(Some(list), number_as_int(start));
+            walk.at = usize::try_from(walk.idx).ok()?;
         } else {
-            c""
-        };
-        let mut skipped = 0;
-        let mut len = whole.count_bytes();
-        // Where the List walk is; an index, because the echo below is made
-        // afresh for every item.
-        let mut at = 0;
-        let mut idx: c_int = 0;
-        let mut nth: VarNumber = 1;
-        let mut startcol = 0;
-
-        let mut patbuf = NumBuf::new();
-        let Ok(pat) = patbuf.string_chk(&args[1]) else {
-            break 'theend;
-        };
-
-        if args.len() > 2 {
-            let mut error = false;
-            let start = arg_number_chk(&args[2], Some(&mut error));
-            if error {
-                break 'theend;
+            let start = usize::try_from(start).unwrap_or(0);
+            if start > walk.len {
+                return None;
             }
-            if let Some(list) = list {
-                idx = list_uidx(Some(list), number_as_int(start));
-                let Ok(start_at) = usize::try_from(idx) else {
-                    break 'theend;
-                };
-                at = start_at;
+            // With a `{count}` the start is a column the matcher is told
+            // about, so that `^` still anchors to the real start of the
+            // string; without one the string itself moves on.
+            if rest.len() > 1 {
+                walk.startcol = start;
             } else {
-                let start = usize::try_from(start).unwrap_or(0);
-                if start > len {
-                    break 'theend;
-                }
-                // With a `{count}` the start is a column the matcher is
-                // told about, so that `^` still anchors to the real start
-                // of the string; without one the string itself moves on.
-                if args.len() > 3 {
-                    startcol = start;
-                } else {
-                    skipped = start;
-                    len -= start;
-                }
-            }
-            if args.len() > 3 {
-                nth = arg_number_chk(&args[3], Some(&mut error));
-            }
-            if error {
-                break 'theend;
+                walk.skipped = start;
+                walk.len -= start;
             }
         }
+        if let Some(count) = rest.get(1) {
+            walk.nth = arg_number_chk(count, Some(&mut error));
+        }
+        if error {
+            return None;
+        }
+        Some(walk)
+    }
 
-        let Some((mut prog, ignore_case)) = compile(pat) else {
-            break 'theend;
-        };
-        // The echo of the List item the walk is on.
-        let mut echoed = ThinCString::empty();
-        let mut found: Option<RegMatch>;
+    /// Run `prog` over the String, or over each List item's echo (kept in
+    /// `echoed`), until the `{count}`th match.
+    fn find(
+        &mut self,
+        prog: &mut OwnedProg,
+        ignore_case: bool,
+        echoed: &mut ThinCString,
+    ) -> Option<RegMatch> {
         loop {
-            let subject = if let Some(list) = list {
-                let Some(item) = list_items(Some(list)).get(at) else {
-                    found = None;
-                    break;
-                };
-                echoed = encode_tv2echo(&item.li_tv);
+            let subject = if let Some(list) = self.list {
+                let item = list_items(Some(list)).get(self.at)?;
+                *echoed = encode_tv2echo(&item.li_tv);
                 echoed.as_cstr()
             } else {
-                &whole[skipped..]
+                &self.whole[self.skipped..]
             };
-            found = prog.exec_nl(subject, startcol, ignore_case);
+            let found = prog.exec_nl(subject, self.startcol, ignore_case);
             // `nth` counts down only on a match: the C spells this as
             // `match && (--nth <= 0)`, and the short circuit is what stops
             // a non-matching List item from consuming a count.
             if found.is_some() {
-                nth -= 1;
-                if nth <= 0 {
-                    break;
+                self.nth -= 1;
+                if self.nth <= 0 {
+                    return found;
                 }
             }
-            if list.is_some() {
-                at += 1;
-                idx += 1;
+            if self.list.is_some() {
+                self.at += 1;
+                self.idx += 1;
                 continue;
             }
-            let Some(hit) = &found else {
-                break;
-            };
+            let hit = found?;
             // Same string, next match: step past the character the match
             // started on. A match that did not advance, or one past the
             // end, ends the search.
             let start = hit.starts[0].unwrap_or(0);
-            startcol = start + cluster_len(&subject.to_bytes()[start..]);
-            if startcol > len || startcol <= start {
-                found = None;
-                break;
+            self.startcol = start + cluster_len(&subject.to_bytes()[start..]);
+            if self.startcol > self.len || self.startcol <= start {
+                return None;
             }
         }
+    }
 
-        let Some(hit) = found else {
-            break 'theend;
-        };
-        let subject = if list.is_some() {
-            echoed.as_bytes()
-        } else {
-            whole[skipped..].to_bytes()
-        };
+    /// Overwrite the seeded `result` with `kind`'s answer for `hit` in
+    /// `subject`.
+    fn answer(&self, kind: SomeMatchType, hit: &RegMatch, subject: &[u8], result: &mut TypVal) {
+        let skipped = self.skipped;
         match kind {
             SOME_MATCH_STR_POS => {
-                // The four items seeded above, overwritten in place.
+                // The four items seeded, overwritten in place.
                 let seeded = list_items_mut(result.list_mut());
                 drop(seeded[0].li_tv.take_string());
                 let span = hit.group(0).unwrap_or(0..0);
@@ -210,29 +264,29 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                 seeded[3]
                     .li_tv
                     .write_number(len_as_integer(skipped + span.end));
-                if list.is_some() {
-                    seeded[1].li_tv.write_number(VarNumber::from(idx));
+                if self.list.is_some() {
+                    seeded[1].li_tv.write_number(VarNumber::from(self.idx));
                 }
             }
             SOME_MATCH_LIST => {
-                let out = result.list_mut().expect("the list allocated above");
+                let out = result.list_mut().expect("the list seeded");
                 for i in 0..NSUBEXP as usize {
                     out.push_bytes(hit.group_bytes(i, subject));
                 }
             }
             SOME_MATCH_STR => {
-                if let Some(list) = list {
+                if let Some(list) = self.list {
                     // A List subject answers with the whole item, not with
                     // the part that matched.
-                    tv_copy(&list_items(Some(list))[at].li_tv, result);
+                    tv_copy(&list_items(Some(list))[self.at].li_tv, result);
                 } else {
                     let span = hit.group(0).unwrap_or(0..0);
                     result.write_string(Some(ThinCString::from_bytes(&subject[span])));
                 }
             }
             _ => {
-                if list.is_some() {
-                    result.write_number(VarNumber::from(idx));
+                if self.list.is_some() {
+                    result.write_number(VarNumber::from(self.idx));
                 } else {
                     let edge = if kind == SOME_MATCH {
                         hit.starts[0]
@@ -243,15 +297,6 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                 }
             }
         }
-    }
-
-    // `matchstrpos()` on a String has no index to report, so the
-    // placeholder seeded above comes back out.
-    if kind == SOME_MATCH_STR_POS
-        && list.is_none()
-        && let Some(seeded) = result.list_mut()
-    {
-        drop(seeded.take_range(1, 1));
     }
 }
 
