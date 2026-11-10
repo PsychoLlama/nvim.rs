@@ -227,6 +227,12 @@ fn history_recall_wraps_the_ring_and_fixes_search_separators() {
     for n in 1..=5 {
         fx.run(&format!("call histadd(':', 'cmd{n}')"));
     }
+    // Every abandoned line below is a search "from a mapping" (`:normal`
+    // types nothing), and consecutive ones replace the newest entry instead
+    // of adding one -- but only once a search has set the mapping tick this
+    // process. Abandon one now so the rows never depend on whether an
+    // earlier case in the lane did.
+    typed(&fx, "/x");
     fx.run("call histdel('/')");
     fx.run(r"call histadd('/', 'a/b')");
     fx.run(r"call histadd('/', 'c\/d?e')");
