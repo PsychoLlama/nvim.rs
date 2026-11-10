@@ -98,11 +98,10 @@ pub(crate) fn parse_diffanchors(
     buffer: Buf,
     mut anchors: Option<&mut [LineNr; MAX_DIFF_ANCHORS as usize]>,
 ) -> Result<c_int, Failed> {
-    // A copy, for two reasons: the walk below outlives a projection's
-    // borrow, and `get_address` needs a *writable* buffer -- a `/pat/`
-    // anchor goes to `do_search`, which terminates the pattern in place.
-    // Upstream writes that NUL into the option's own storage and puts the
-    // byte back; a copy has nothing to put back.
+    // A copy: the walk below outlives a projection's borrow. (Upstream
+    // also needed it writable: `do_search` terminated a `/pat/` anchor in
+    // place and put the byte back; the slice `get_address` takes is read
+    // only.)
     let global_dia = P_DIA.get();
     let mut dia: Vec<u8> = if buffer.b_p_dia.first_byte() == 0 {
         global_dia.as_cstr().to_bytes()
@@ -137,7 +136,7 @@ pub(crate) fn parse_diffanchors(
         let saved_win = bufwin.map(switch_window);
         let lnum = get_address(
             None,
-            &mut dia,
+            &dia,
             &mut at,
             CmdAddr::Lines,
             check_only,

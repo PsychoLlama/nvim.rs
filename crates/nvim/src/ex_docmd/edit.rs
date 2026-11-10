@@ -281,7 +281,7 @@ pub(crate) fn ex_copymove(excmd: &mut ExArg) {
     let mut at = excmd.line.arg;
     let read = get_address(
         Some(cmdidx),
-        excmd.line.buffer_mut(),
+        excmd.line.buffer(),
         &mut at,
         addr_type,
         false,

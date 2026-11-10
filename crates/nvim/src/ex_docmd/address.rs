@@ -169,7 +169,7 @@ fn read_range(
         let mut at = excmd.line.cmd;
         lnum = get_address(
             Some(cmdidx),
-            excmd.line.buffer_mut(),
+            excmd.line.buffer(),
             &mut at,
             addr_type,
             skip,
@@ -363,9 +363,8 @@ pub(crate) fn addr_error(addr_type: CmdAddr) -> CString {
 /// `text` is the buffer the address is written in — a command line, or an
 /// item of `'diffanchors'` — and `at` says where to start and, when the
 /// address was read, comes back saying where it ended (upstream wrote a
-/// null cursor for a malformed one). The buffer is writable because a
-/// `/pat/` address hands the pattern to `do_search`, which NUL-terminates
-/// it in place and puts the byte back.
+/// null cursor for a malformed one). A `/pat/` address hands the pattern
+/// to `do_search` as a slice, so nothing here writes the buffer.
 ///
 /// `cmdidx` names the command asking. Only the quickfix address kinds look
 /// at it — they ask which list `:cdo` and friends would count — and only a
@@ -377,7 +376,7 @@ pub(crate) fn addr_error(addr_type: CmdAddr) -> CString {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn get_address(
     cmdidx: Option<CmdIdx>,
-    text: &mut [u8],
+    text: &[u8],
     at: &mut usize,
     addr_type: CmdAddr,
     skip: bool,

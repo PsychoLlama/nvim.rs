@@ -382,7 +382,7 @@ impl ExArg<'_> {
             let mut cursor = self.line.cmd;
             let tabnr = get_address(
                 Some(cmdidx),
-                self.line.buffer_mut(),
+                self.line.buffer(),
                 &mut cursor,
                 CmdAddr::Tabs,
                 skip,
