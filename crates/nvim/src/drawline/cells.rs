@@ -469,79 +469,17 @@ impl Cells {
             self.did_decrement_ptr = false;
             self.provider_chunk(window, wlv.lnum);
 
-            'row_full: {
-                if self.columns_todo {
-                    match self.draw_columns(wlv, window, f) {
-                        Step::Done => break 'row,
-                        Step::NextRow => continue 'row,
-                        Step::RowFull => break 'row_full,
-                        Step::Go => {}
-                    }
-                }
-
-                if self.cul_screenline
-                    && wlv.filler_todo <= 0
-                    && wlv.vcol >= ColNr::new(self.left_curline_col)
-                    && wlv.vcol < ColNr::new(self.right_curline_col)
-                {
-                    wlv.apply_cursorline_highlight(window);
-                }
-
-                // Still showing the '$' of a change command: stop at the
-                // cursor.
-                if DOLLAR_VCOL.get() >= ColNr::ZERO
-                    && self.in_curline
-                    && wlv.vcol >= window.w_virtcol
-                {
-                    wlv.col = draw_virt_text(window, buffer, self.text_start_col, wlv.col, wlv);
-                    // Nothing after `col` is ours to clear.
-                    wlv_put_linebuf(window, wlv, wlv.col, false, self.bg_attr, 0);
-                    // Pretend the window is finished, except that
-                    // 'cursorcolumn' still wants the rest of it.
-                    wlv.row = if window.w_onebuf_opt.wo_cuc != 0 {
-                        window.w_cline_row + window.w_cline_height
-                    } else {
-                        self.view_height
-                    };
-                    break 'row;
-                }
-
-                self.draw_folded = self.has_fold && wlv.row == wlv.startrow + wlv.filler_lines;
-                if self.draw_folded && wlv.extra_todo == 0 {
-                    self.fold_attr = win_hl_attr(window, HLF_FL);
-                    wlv.char_attr = self.fold_attr;
-                    self.decor_attr = 0;
-                }
-
-                self.extmark_attr = 0;
-                if wlv.filler_todo <= 0
-                    && (self.area_highlighting || f.spv.spv_has_spell || self.extra_check)
-                {
-                    self.cell_attributes(wlv, window);
-                }
-
-                self.fold_text(wlv, window);
-                self.next_char(wlv, window, f);
-                self.correct_cursor_col(wlv, window);
-                self.apply_extra_attr(wlv);
-                self.draw_precedes(wlv, window);
-                self.highlight_at_eol(wlv, window);
-
-                if self.cell_char == NUL as ScreenChar {
-                    self.finish_line(wlv, window, buffer, f);
-                    break 'row;
-                }
-
-                self.draw_extends(wlv, window);
-                wlv.advance_color_col(window, wlv.hl_vcol());
-                self.column_highlight(wlv, window);
-                self.apply_line_attr_lowprio(wlv);
-                if wlv.filler_todo <= 0 {
-                    self.prev_vcol = wlv.vcol;
-                }
-                self.store_cell(wlv, window);
-                self.advance_vcol(wlv);
-                self.peek_decor_past_edge(wlv, window);
+            // The number, sign and fold columns first; a row they fill has
+            // no cell of text on it.
+            let row_full = self.columns_todo
+                && match self.draw_columns(wlv, window, f) {
+                    Step::Done => break 'row,
+                    Step::NextRow => continue 'row,
+                    Step::RowFull => true,
+                    Step::Go => false,
+                };
+            if !row_full && self.draw_cell(wlv, window, buffer, f) == Step::Done {
+                break 'row;
             }
 
             if !self.row_is_full(wlv, window) {
@@ -554,6 +492,84 @@ impl Cells {
 
         self.free_line_decorations(wlv);
         wlv.row
+    }
+
+    /// Draw the next cell of text on the row: [`Step::Done`] when the line
+    /// ended (its NUL drawn, or the `$` of a change command reached), else
+    /// [`Step::Go`].
+    ///
+    /// `#[inline(always)]` for the reason [`run`](Self::run) carries: this is
+    /// the per-cell body of its loop, cut out along the seam the column
+    /// phase leaves, and must stay one frame with it.
+    #[inline(always)]
+    fn draw_cell(
+        &mut self,
+        wlv: &mut WinLineVars,
+        window: Win,
+        buffer: Buf,
+        f: &mut LineFrame<'_>,
+    ) -> Step {
+        if self.cul_screenline
+            && wlv.filler_todo <= 0
+            && wlv.vcol >= ColNr::new(self.left_curline_col)
+            && wlv.vcol < ColNr::new(self.right_curline_col)
+        {
+            wlv.apply_cursorline_highlight(window);
+        }
+
+        // Still showing the '$' of a change command: stop at the
+        // cursor.
+        if DOLLAR_VCOL.get() >= ColNr::ZERO && self.in_curline && wlv.vcol >= window.w_virtcol {
+            wlv.col = draw_virt_text(window, buffer, self.text_start_col, wlv.col, wlv);
+            // Nothing after `col` is ours to clear.
+            wlv_put_linebuf(window, wlv, wlv.col, false, self.bg_attr, 0);
+            // Pretend the window is finished, except that
+            // 'cursorcolumn' still wants the rest of it.
+            wlv.row = if window.w_onebuf_opt.wo_cuc != 0 {
+                window.w_cline_row + window.w_cline_height
+            } else {
+                self.view_height
+            };
+            return Step::Done;
+        }
+
+        self.draw_folded = self.has_fold && wlv.row == wlv.startrow + wlv.filler_lines;
+        if self.draw_folded && wlv.extra_todo == 0 {
+            self.fold_attr = win_hl_attr(window, HLF_FL);
+            wlv.char_attr = self.fold_attr;
+            self.decor_attr = 0;
+        }
+
+        self.extmark_attr = 0;
+        if wlv.filler_todo <= 0
+            && (self.area_highlighting || f.spv.spv_has_spell || self.extra_check)
+        {
+            self.cell_attributes(wlv, window);
+        }
+
+        self.fold_text(wlv, window);
+        self.next_char(wlv, window, f);
+        self.correct_cursor_col(wlv, window);
+        self.apply_extra_attr(wlv);
+        self.draw_precedes(wlv, window);
+        self.highlight_at_eol(wlv, window);
+
+        if self.cell_char == NUL as ScreenChar {
+            self.finish_line(wlv, window, buffer, f);
+            return Step::Done;
+        }
+
+        self.draw_extends(wlv, window);
+        wlv.advance_color_col(window, wlv.hl_vcol());
+        self.column_highlight(wlv, window);
+        self.apply_line_attr_lowprio(wlv);
+        if wlv.filler_todo <= 0 {
+            self.prev_vcol = wlv.vcol;
+        }
+        self.store_cell(wlv, window);
+        self.advance_vcol(wlv);
+        self.peek_decor_past_edge(wlv, window);
+        Step::Go
     }
 
     // -----------------------------------------------------------------------
