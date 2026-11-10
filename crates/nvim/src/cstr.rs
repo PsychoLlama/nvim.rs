@@ -6,7 +6,7 @@
 //! What lives here is what std does not spell: the string a buffer *starts
 //! with* ([`in_bytes`]), the tail of a string ([`suffix`]), the reader that
 //! answers NUL past the end ([`byte_at`]), and `strncmp`'s comparison over
-//! two slices ([`ncmp_eq`]).
+//! two slices ([`ncmp`], [`ncmp_eq`]).
 //!
 //! # The parameter convention
 //!
@@ -87,7 +87,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::CStr;
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 /// The string `s` from byte `at` on.
@@ -141,6 +141,23 @@ pub(crate) fn byte_at(s: &[u8], i: usize) -> u8 {
     s.get(i).copied().unwrap_or(0)
 }
 
+/// `strncmp(a, b, n)` over two NUL-terminated strings held as slices, each
+/// read as NUL past its end: the difference of the first bytes that differ,
+/// as `unsigned char`s, or 0 when the strings agree for `n` bytes or up to a
+/// NUL they share.
+pub(crate) fn ncmp(a: &[u8], b: &[u8], n: usize) -> c_int {
+    for i in 0..n {
+        let (x, y) = (byte_at(a, i), byte_at(b, i));
+        if x != y {
+            return c_int::from(x) - c_int::from(y);
+        }
+        if x == 0 {
+            break;
+        }
+    }
+    0
+}
+
 /// Whether `a` and `b` agree for `n` bytes -- `strncmp(a, b, n) == 0` over
 /// two NUL-terminated strings held as slices.
 ///
@@ -149,16 +166,15 @@ pub(crate) fn byte_at(s: &[u8], i: usize) -> u8 {
 /// leader.  That case is reachable -- a blank line inside a comment, before
 /// any `s:`/`m:` item has been seen -- and `starts_with` answers differently.
 pub(crate) fn ncmp_eq(a: &[u8], b: &[u8], n: usize) -> bool {
-    for i in 0..n {
-        let (x, y) = (byte_at(a, i), byte_at(b, i));
-        if x != y {
-            return false;
-        }
-        if x == 0 {
-            return true;
-        }
-    }
-    true
+    ncmp(a, b, n) == 0
+}
+
+/// Whether `text` starts with `prefix`, ASCII case ignored: C's
+/// `STRNICMP(text, prefix, STRLEN(prefix)) == 0` for a prefix with no NUL,
+/// which a shorter `text` fails by reaching its NUL first.
+pub(crate) fn starts_with_ignore_ascii_case(text: &[u8], prefix: &[u8]) -> bool {
+    text.get(..prefix.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
 }
 
 /// Whether `a` and `b` agree for `n` bytes ignoring ASCII case:

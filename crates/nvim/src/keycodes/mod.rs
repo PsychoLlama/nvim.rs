@@ -294,13 +294,6 @@ fn cluster_len_at(text: &[u8], i: usize) -> usize {
     }
 }
 
-/// C's `STRNICMP(p, lit, strlen(lit)) == 0` over a slice: does `text` open
-/// with `lit`, ASCII case ignored?
-fn opens_with_ignoring_case(text: &[u8], lit: &[u8]) -> bool {
-    text.get(..lit.len())
-        .is_some_and(|head| head.eq_ignore_ascii_case(lit))
-}
-
 /// One `<>` name at the start of `text`: the key code, the modifiers that
 /// could not be folded into it, and how many bytes of `text` the name took.
 /// `Ok(None)` when `text` does not start with a name this understands, and
@@ -356,7 +349,7 @@ pub fn special_key_at(
         }
         if gap(bp) > 3 && at(bp) == b't' && at(bp + 1) == b'_' {
             bp += 3; // skip t_xx; xx may be '-' or '>'
-        } else if gap(bp) > 4 && opens_with_ignoring_case(&text[bp..], b"char-") {
+        } else if gap(bp) > 4 && cstr::starts_with_ignore_ascii_case(&text[bp..], b"char-") {
             let digits = str2nr_in(&text[bp + 5..], Str2NrBases::ALL, true).len;
             if digits == 0 {
                 emsg(gettext(E_INVARG));
@@ -386,7 +379,7 @@ pub fn special_key_at(
     }
 
     let after_dash = &text[last_dash + 1..];
-    let mut key = if opens_with_ignoring_case(after_dash, b"char-")
+    let mut key = if cstr::starts_with_ignore_ascii_case(after_dash, b"char-")
         && ascii_isdigit(c_int::from(at(last_dash + 6)))
     {
         // <Char-123>, <Char-033> or <Char-0x33>.

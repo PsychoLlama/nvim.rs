@@ -33,6 +33,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::cstr;
 use crate::narrow::as_index;
 use crate::narrow::len_as_int;
 use core::fmt::Write as _;
@@ -204,17 +205,17 @@ pub fn strtod(s: &[u8]) -> (f64, usize) {
     };
     let body = &s[at..];
 
-    let (magnitude, used) = if starts_with_ignoring_case(body, b"0x") {
+    let (magnitude, used) = if cstr::starts_with_ignore_ascii_case(body, b"0x") {
         // `0x` with no hex digit after it is not a failed conversion — the
         // longest valid prefix is the leading `0`, and `x` is left for the
         // caller. That distinction is what tells the decoder `0x` is the
         // number 0 followed by junk rather than an invalid number.
         parse_hex(&body[2..]).map_or_else(|| parse_decimal(body), |(v, n)| (v, n + 2))
-    } else if starts_with_ignoring_case(body, b"infinity") {
+    } else if cstr::starts_with_ignore_ascii_case(body, b"infinity") {
         (f64::INFINITY, 8)
-    } else if starts_with_ignoring_case(body, b"inf") {
+    } else if cstr::starts_with_ignore_ascii_case(body, b"inf") {
         (f64::INFINITY, 3)
-    } else if starts_with_ignoring_case(body, b"nan") {
+    } else if cstr::starts_with_ignore_ascii_case(body, b"nan") {
         // `nan(n-char-sequence)` is one token; the payload is discarded, and
         // it only counts when it closes and holds nothing but identifier
         // characters.
@@ -236,10 +237,6 @@ pub fn strtod(s: &[u8]) -> (f64, usize) {
         return (0.0, 0);
     }
     (if negative { -magnitude } else { magnitude }, at + used)
-}
-
-fn starts_with_ignoring_case(s: &[u8], prefix: &[u8]) -> bool {
-    s.len() >= prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix)
 }
 
 /// `digits[.digits][(e|E)[sign]digits]`, handed to Rust's parser once its

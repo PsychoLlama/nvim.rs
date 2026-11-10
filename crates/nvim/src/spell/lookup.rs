@@ -49,6 +49,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::cstr::byte_at;
 use crate::os::cshim::gettext;
 use crate::spell::WordFlags;
@@ -67,7 +68,7 @@ use super::chartab::{
 use super::{
     E_FORMAT, FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPCOMPOUND, FIND_KEEPWORD, FIND_PREFIX, MAXWLEN,
     MatchInf, SP_BAD, SP_BANNED, SP_LOCAL, SP_OK, SP_RARE, WordEnd, c_text, count_syllables,
-    spell_valid_case, strn_eq,
+    spell_valid_case,
 };
 
 /// Step `at` past the character it starts in `text`, as the pointer walk's
@@ -254,7 +255,7 @@ pub(super) fn find_word(mip: &mut MatchInf<'_>, mode: c_int) {
             // comparison is a shortcut for the common case where it did
             // not change anything.
             let ptr = text!(mip, keep);
-            if !strn_eq(ptr, mip.word, wlen) {
+            if !cstr::ncmp_eq(ptr, mip.word, wlen) {
                 wlen = translate_len(ptr, wlen, mip.word);
             }
         }
@@ -335,7 +336,7 @@ pub(super) fn find_word(mip: &mut MatchInf<'_>, mode: c_int) {
                         // Translate the keep-case length into a case-folded
                         // one, again short-cutting when folding changed
                         // nothing.
-                        if !strn_eq(mip.word, &mip.fword, wlen) {
+                        if !cstr::ncmp_eq(mip.word, &mip.fword, wlen) {
                             let to = &mip.fword[..];
                             mip.compoff = translate_len(mip.word, wlen, to);
                         }
@@ -474,7 +475,7 @@ fn compound_part_allowed(
     if minlen > 0 {
         let part = tail(mip.word, mip.compoff);
         let part = &part[..part.len().min(part_len)];
-        if char_count(crate::cstr::until_nul(part)) < minlen {
+        if char_count(cstr::until_nul(part)) < minlen {
             return false;
         }
     }
@@ -515,7 +516,7 @@ fn compound_part_allowed(
         // Check the capitalisation of the part being appended.
         let word = text!(mip, keep);
         let compoff = mip.compoff;
-        let mut p = if !strn_eq(word, mip.word, compoff) {
+        let mut p = if !cstr::ncmp_eq(word, mip.word, compoff) {
             // Folding changed the length.
             translate_len(word, compoff, mip.word)
         } else {
@@ -602,7 +603,7 @@ pub fn match_checkcompoundpattern(word: &[u8], wlen: usize, pats: &[Box<[u8]>]) 
         // so far.
         if len <= wlen
             && starts_with_c(tail(word, wlen), second)
-            && strn_eq(tail(word, wlen - len), first, len)
+            && cstr::ncmp_eq(tail(word, wlen - len), first, len)
         {
             return true;
         }
@@ -632,7 +633,7 @@ pub fn can_compound(slang: &SpellLang, word: &[u8], flags: &[u8]) -> bool {
         return false;
     }
 
-    let flags = crate::cstr::until_nul(flags);
+    let flags = cstr::until_nul(flags);
     let mut uflags = [0u8; MAXWLEN * 2];
     let mut p = 0;
     for &flag in flags {
@@ -640,7 +641,7 @@ pub fn can_compound(slang: &SpellLang, word: &[u8], flags: &[u8]) -> bool {
     }
     uflags[p] = 0;
 
-    if !vim_regexec_prog(&mut compprog, false, crate::cstr::in_bytes(&uflags), 0) {
+    if !vim_regexec_prog(&mut compprog, false, cstr::in_bytes(&uflags), 0) {
         return false;
     }
     drop(compprog);

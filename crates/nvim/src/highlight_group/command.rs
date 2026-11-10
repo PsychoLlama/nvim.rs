@@ -109,12 +109,6 @@ impl<'a> Line<'a> {
     }
 }
 
-/// `strncmp(full, word, word.len()) == 0`: whether `word` is a prefix of
-/// `full`, which is how `:hi` accepts `def`, `cle` and `li`.
-fn is_prefix(word: &[u8], full: &[u8]) -> bool {
-    word.len() <= full.len() && full.starts_with(word)
-}
-
 /// Handles `:highlight`.
 ///
 /// `forceit` is the `!`, which allows a link over a group that has its own
@@ -137,14 +131,14 @@ pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
     }
 
     let mut name = line.word_then_space();
-    let dodefault = is_prefix(name, b"default");
+    let dodefault = b"default".starts_with(name);
     if dodefault {
         name = line.word_then_space();
     }
     // An else-if chain, not two tests: the empty word left by a bare
     // `:hi default` is a prefix of both, and upstream calls it `clear`.
-    let doclear = is_prefix(name, b"clear");
-    let dolink = !doclear && is_prefix(name, b"link");
+    let doclear = b"clear".starts_with(name);
+    let dolink = !doclear && b"link".starts_with(name);
 
     // ":highlight {group-name}": list highlighting for one group.
     if !doclear && !dolink && line.at_end() {

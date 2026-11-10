@@ -29,6 +29,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::cstr;
 use crate::narrow::as_index;
 use crate::narrow::len_as_int;
 use crate::types::ApiString;
@@ -271,13 +272,6 @@ fn find(s: &[u8], from: usize, c: u8) -> Option<usize> {
     s[from..].iter().position(|&b| b == c).map(|i| from + i)
 }
 
-/// `STRNICMP(text, word, word.len()) == 0`: a case-insensitive prefix. A
-/// `text` shorter than `word` cannot match, because the comparison reaches
-/// its NUL first.
-fn starts_with_ci(text: &[u8], word: &[u8]) -> bool {
-    text.len() >= word.len() && text[..word.len()].eq_ignore_ascii_case(word)
-}
-
 /// `STRNICMP(text, shape_table[idx].name, len) == 0`.
 ///
 /// A name *shorter* than `len` cannot match (the comparison reaches its
@@ -415,13 +409,15 @@ fn parse_parts(
                 // and the highlight-group arm reuses as the langmap group.
                 let mut first = c_int::from(bytes[p]);
                 let rest = &bytes[p..];
-                let len = if starts_with_ci(rest, b"ver") || starts_with_ci(rest, b"hor") {
+                let len = if cstr::starts_with_ignore_ascii_case(rest, b"ver")
+                    || cstr::starts_with_ignore_ascii_case(rest, b"hor")
+                {
                     3
-                } else if starts_with_ci(rest, b"blinkwait") {
+                } else if cstr::starts_with_ignore_ascii_case(rest, b"blinkwait") {
                     9
-                } else if starts_with_ci(rest, b"blinkon") {
+                } else if cstr::starts_with_ignore_ascii_case(rest, b"blinkon") {
                     7
-                } else if starts_with_ci(rest, b"blinkoff") {
+                } else if cstr::starts_with_ignore_ascii_case(rest, b"blinkoff") {
                     8
                 } else {
                     0
@@ -455,7 +451,7 @@ fn parse_parts(
                             _ => e.blinkoff = n,
                         });
                     }
-                } else if starts_with_ci(rest, b"block") {
+                } else if cstr::starts_with_ignore_ascii_case(rest, b"block") {
                     if apply {
                         update_shape_entry(len_as_int(idx), |e| e.shape = SHAPE_BLOCK);
                     }

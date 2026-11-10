@@ -198,20 +198,6 @@ fn byte(s: &[u8], at: usize) -> u8 {
     cstr::byte_at(s, at)
 }
 
-/// `strncmp(s1, s2, len)` over the bytes of two C strings.
-fn prefix_cmp(s1: &[u8], s2: &[u8], len: usize) -> c_int {
-    for at in 0..len {
-        let (a, b) = (byte(s1, at), byte(s2, at));
-        if a != b {
-            return c_int::from(a) - c_int::from(b);
-        }
-        if a == 0 {
-            break;
-        }
-    }
-    0
-}
-
 /// Compare two tag names for at most `len` bytes with case folded to
 /// upper, the way `sort -f` orders them.
 fn tag_strnicmp(s1: &[u8], s2: &[u8], len: usize) -> c_int {
@@ -509,7 +495,7 @@ impl FindTags {
                 let mut tagcmp = if margs.sortic {
                     tag_strnicmp(line, head, cmplen)
                 } else {
-                    prefix_cmp(line, head, cmplen)
+                    cstr::ncmp(line, head, cmplen)
                 };
                 // A match on a shorter tag means to search forward, on
                 // a longer one to search backward.
@@ -604,11 +590,11 @@ impl FindTags {
             if self.orgpat.regmatch.rm_ic {
                 let same = strnicmp_prefix(name, pat, cmplen) == 0;
                 if same {
-                    margs.match_no_ic = prefix_cmp(name, pat, cmplen) == 0;
+                    margs.match_no_ic = cstr::ncmp_eq(name, pat, cmplen);
                 }
                 same
             } else {
-                prefix_cmp(name, pat, cmplen) == 0
+                cstr::ncmp_eq(name, pat, cmplen)
             }
         };
 

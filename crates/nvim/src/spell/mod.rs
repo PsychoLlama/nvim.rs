@@ -318,21 +318,6 @@ impl<'a> MatchInf<'a> {
     }
 }
 
-/// Whether the C strings `a` and `b` agree in their first `n` bytes:
-/// `strncmp(a, b, n) == 0`, with the end of a slice reading as its NUL.
-pub(crate) fn strn_eq(a: &[u8], b: &[u8], n: usize) -> bool {
-    for i in 0..n {
-        let (x, y) = (crate::cstr::byte_at(a, i), crate::cstr::byte_at(b, i));
-        if x != y {
-            return false;
-        }
-        if x == 0 {
-            break;
-        }
-    }
-    true
-}
-
 /// `text` as a C string for the regexp engine: up to its first NUL, copied
 /// only when it has none.
 pub(crate) fn c_text(text: &[u8]) -> Cow<'_, CStr> {

@@ -303,12 +303,6 @@ fn highlight_list_two(cnt: c_int, id: c_int) {
     );
 }
 
-/// `strncmp(full, word, word.len()) == 0`: whether `word` is a prefix of
-/// `full`. A longer `word` cannot match, because `full`'s NUL stops it.
-fn is_prefix(word: &[u8], full: &[u8]) -> bool {
-    word.len() <= full.len() && full.starts_with(word)
-}
-
 /// Completion for `:highlight`: group names, plus the subcommand words that
 /// could still be typed at this position. The argument starts at `arg` in
 /// the completion's line.
@@ -337,7 +331,7 @@ pub(crate) fn set_context_in_highlight_cmd(expand: &mut Expand, arg: usize) {
 
     // Past "default" or the group name.
     INCLUDE_DEFAULT.set(0);
-    if is_prefix(&line[arg..p], b"default") {
+    if b"default".starts_with(&line[arg..p]) {
         arg = skipwhite(p);
         expand.pattern = arg;
         p = skiptowhite(arg);
@@ -351,7 +345,7 @@ pub(crate) fn set_context_in_highlight_cmd(expand: &mut Expand, arg: usize) {
     if at(arg + 1) == b'i' && at(arg) == b'N' {
         highlight_list();
     }
-    if is_prefix(&line[arg..p], b"link") || is_prefix(&line[arg..p], b"clear") {
+    if b"link".starts_with(&line[arg..p]) || b"clear".starts_with(&line[arg..p]) {
         expand.pattern = skipwhite(p);
         p = skiptowhite(expand.pattern);
         if at(p) != 0 {
