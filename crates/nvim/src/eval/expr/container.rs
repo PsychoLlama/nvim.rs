@@ -33,48 +33,16 @@ pub(crate) fn eval_list(
     cursor.bump(1);
     cursor.skip_white();
 
-    let ok = 'items: {
-        while cursor.byte() != b']' && cursor.byte() != b'\0' {
-            let mut tv = TV_INITIAL_VALUE;
-            if eval1(cursor, &mut tv, evaluate).is_err() {
-                break 'items false;
-            }
-            if let Some(list) = held.as_mut() {
-                list.push(tv);
-            }
-            let had_comma = cursor.byte() == b',';
-            if had_comma {
-                cursor.bump(1);
-                cursor.skip_white();
-            }
-            if cursor.byte() == b']' {
-                break;
-            }
-            // A trailing comma is allowed; a missing one is not.
-            if had_comma {
-                continue;
-            }
-            let at = msg_bytes(cursor.rest());
-            semsg!("E696: Missing comma in List: {at}");
-            break 'items false;
+    items(cursor, Literal::List, |cursor| {
+        let mut tv = TV_INITIAL_VALUE;
+        eval1(cursor, &mut tv, evaluate)?;
+        if let Some(list) = held.as_mut() {
+            list.push(tv);
         }
-        if cursor.byte() != b']' {
-            let at = msg_bytes(cursor.rest());
-            semsg!("E697: Missing end of List ']': {at}");
-            break 'items false;
-        }
-        cursor.bump(1);
-        cursor.skip_white();
-        true
-    };
-
-    if ok {
-        result.write_list(held);
-        return Ok(());
-    }
-    // The half-built list goes with the handle, which is its only reference.
-    drop(held);
-    Err(Failed)
+        Ok(())
+    })?;
+    result.write_list(held);
+    Ok(())
 }
 
 /// The bare word a `#{}` literal uses as a key: letters, digits, `_` and `-`.
@@ -126,83 +94,49 @@ pub(crate) fn eval_dict(
     cursor.bump(1);
     cursor.skip_white();
 
-    let ok = 'items: {
-        while cursor.byte() != b'}' && cursor.byte() != b'\0' {
-            let read_key = if literal {
-                get_literal_key(cursor, &mut tvkey)
-            } else {
-                eval1(cursor, &mut tvkey, evaluate)
-            };
-            if read_key.is_err() {
-                break 'items false;
-            }
-            if cursor.byte() != b':' {
-                let at = msg_bytes(cursor.rest());
-                semsg!("E720: Missing colon in Dictionary: {at}");
-                tv_clear(&mut tvkey);
-                break 'items false;
-            }
-
-            // The key borrows `buf`, so it must not outlive this pass.
-            let mut key: &[u8] = b"";
-            if evaluate {
-                let Ok(text) = buf.string_chk(&tvkey) else {
-                    tv_clear(&mut tvkey);
-                    break 'items false;
-                };
-                key = text.to_bytes();
-            }
-            cursor.bump(1);
-            cursor.skip_white();
-            if eval1(cursor, &mut tv, evaluate).is_err() {
-                tv_clear(&mut tvkey);
-                break 'items false;
-            }
-            if let Some(dict) = held.as_mut() {
-                if dict_find(Some(dict), key).is_some() {
-                    let key = msg_bytes(key);
-                    semsg!("E721: Duplicate key in Dictionary: \"{key}\"");
-                    tv_clear(&mut tvkey);
-                    tv_clear(&mut tv);
-                    break 'items false;
-                }
-                let _ = dict.add_value(key, tv.take());
-            }
-            tv_clear(&mut tvkey);
-
-            let had_comma = cursor.byte() == b',';
-            if had_comma {
-                cursor.bump(1);
-                cursor.skip_white();
-            }
-            if cursor.byte() == b'}' {
-                break;
-            }
-            if had_comma {
-                continue;
-            }
-            let at = msg_bytes(cursor.rest());
-            semsg!("E722: Missing comma in Dictionary: {at}");
-            break 'items false;
+    items(cursor, Literal::Dict, |cursor| {
+        if literal {
+            get_literal_key(cursor, &mut tvkey)?;
+        } else {
+            eval1(cursor, &mut tvkey, evaluate)?;
         }
-        if cursor.byte() != b'}' {
+        if cursor.byte() != b':' {
             let at = msg_bytes(cursor.rest());
-            semsg!("E723: Missing end of Dictionary '}}': {at}");
-            break 'items false;
+            semsg!("E720: Missing colon in Dictionary: {at}");
+            tv_clear(&mut tvkey);
+            return Err(Failed);
+        }
+
+        // The key borrows `buf`, so it must not outlive this pass.
+        let mut key: &[u8] = b"";
+        if evaluate {
+            let Ok(text) = buf.string_chk(&tvkey) else {
+                tv_clear(&mut tvkey);
+                return Err(Failed);
+            };
+            key = text.to_bytes();
         }
         cursor.bump(1);
         cursor.skip_white();
-        true
-    };
-
-    if ok {
-        result.write_dict(held);
-        return Ok(Parsed::Done);
-    }
-    // The half-built dictionary goes with the handle, which is its only
-    // reference.
-    drop(held);
-    Err(Failed)
+        if eval1(cursor, &mut tv, evaluate).is_err() {
+            tv_clear(&mut tvkey);
+            return Err(Failed);
+        }
+        if let Some(dict) = held.as_mut() {
+            if dict_find(Some(dict), key).is_some() {
+                let key = msg_bytes(key);
+                semsg!("E721: Duplicate key in Dictionary: \"{key}\"");
+                tv_clear(&mut tvkey);
+                tv_clear(&mut tv);
+                return Err(Failed);
+            }
+            let _ = dict.add_value(key, tv.take());
+        }
+        tv_clear(&mut tvkey);
+        Ok(())
+    })?;
+    result.write_dict(held);
+    Ok(Parsed::Done)
 }
 
 /// `#{...}`, with the cursor on the `#`.
@@ -216,4 +150,74 @@ pub(crate) fn eval_lit_dict(
     }
     cursor.bump(1);
     eval_dict(cursor, result, evaluate, true)
+}
+
+/// Which literal [`items`] is reading: what closes it, and how its two
+/// errors are worded.
+#[derive(Clone, Copy, Debug)]
+enum Literal {
+    List,
+    Dict,
+}
+
+impl Literal {
+    fn close(self) -> u8 {
+        match self {
+            Literal::List => b']',
+            Literal::Dict => b'}',
+        }
+    }
+
+    /// E696/E722, quoting the text from where the comma should be.
+    fn missing_comma(self, rest: &[u8]) {
+        let at = msg_bytes(rest);
+        match self {
+            Literal::List => semsg!("E696: Missing comma in List: {at}"),
+            Literal::Dict => semsg!("E722: Missing comma in Dictionary: {at}"),
+        };
+    }
+
+    /// E697/E723, quoting the text from where the bracket should be.
+    fn missing_end(self, rest: &[u8]) {
+        let at = msg_bytes(rest);
+        match self {
+            Literal::List => semsg!("E697: Missing end of List ']': {at}"),
+            Literal::Dict => semsg!("E723: Missing end of Dictionary '}}': {at}"),
+        };
+    }
+}
+
+/// The comma-separated items of a list or dictionary literal, the cursor
+/// just past its opening bracket and any white space: `item` reads one, and
+/// this reads the commas between them (a trailing one is allowed) and the
+/// closing bracket, leaving the cursor past the white space after it.
+fn items(
+    cursor: &mut Cursor<'_>,
+    literal: Literal,
+    mut item: impl FnMut(&mut Cursor<'_>) -> Result<(), Failed>,
+) -> Result<(), Failed> {
+    let close = literal.close();
+    while cursor.byte() != close && cursor.byte() != b'\0' {
+        item(cursor)?;
+        let had_comma = cursor.byte() == b',';
+        if had_comma {
+            cursor.bump(1);
+            cursor.skip_white();
+        }
+        if cursor.byte() == close {
+            break;
+        }
+        // A trailing comma is allowed; a missing one is not.
+        if !had_comma {
+            literal.missing_comma(cursor.rest());
+            return Err(Failed);
+        }
+    }
+    if cursor.byte() != close {
+        literal.missing_end(cursor.rest());
+        return Err(Failed);
+    }
+    cursor.bump(1);
+    cursor.skip_white();
+    Ok(())
 }
