@@ -302,88 +302,88 @@ impl Put {
 
         // At least one line goes in. A charwise register breaks the first
         // one in two.
-        'error: {
-            for cnt in 1..=self.count {
-                let mut i: size_t = 0;
-                if self.kind == MotionType::CharWise {
-                    lnum = new_cursor.lnum;
-                    self.split_line_for_charwise(lnum, col);
+        // A line that cannot be appended ends the put where it got to: the
+        // marks below still cover what went in.
+        'copies: for cnt in 1..=self.count {
+            let mut i: size_t = 0;
+            if self.kind == MotionType::CharWise {
+                lnum = new_cursor.lnum;
+                self.split_line_for_charwise(lnum, col);
+                new_lnum += 1;
+                Win::current().w_cursor.lnum = lnum;
+                i = 1;
+            }
+
+            let y_size = self.lines.len();
+            while i < y_size {
+                // A charwise register's last line is already on the
+                // second half of the split.
+                if self.kind != MotionType::CharWise || i < y_size - 1 {
+                    let line = self.lines[i].as_bytes_with_nul();
+                    if ml_append_terminated(lnum, line, false).is_err() {
+                        break 'copies;
+                    }
                     new_lnum += 1;
-                    Win::current().w_cursor.lnum = lnum;
-                    i = 1;
                 }
-
-                let y_size = self.lines.len();
-                while i < y_size {
-                    // A charwise register's last line is already on the
-                    // second half of the split.
-                    if self.kind != MotionType::CharWise || i < y_size - 1 {
-                        let line = self.lines[i].as_bytes_with_nul();
-                        if ml_append_terminated(lnum, line, false).is_err() {
-                            break 'error;
-                        }
-                        new_lnum += 1;
+                lnum += 1;
+                self.nr_lines += 1;
+                if self.flags & PUT_FIXINDENT != 0 {
+                    // Only the very last line's length is wanted, to see
+                    // what the reindent took off it.
+                    let measured = cnt == self.count && i == y_size - 1;
+                    if measured {
+                        lendiff = Buf::current().lines().line_len(lnum).get();
                     }
-                    lnum += 1;
-                    self.nr_lines += 1;
-                    if self.flags & PUT_FIXINDENT != 0 {
-                        // Only the very last line's length is wanted, to see
-                        // what the reindent took off it.
-                        let measured = cnt == self.count && i == y_size - 1;
-                        if measured {
-                            lendiff = Buf::current().lines().line_len(lnum).get();
-                        }
-                        self.fix_indent(lnum, &mut indent_state);
-                        if measured {
-                            lendiff -= Buf::current().lines().line_len(lnum).get();
-                        }
+                    self.fix_indent(lnum, &mut indent_state);
+                    if measured {
+                        lendiff -= Buf::current().lines().line_len(lnum).get();
                     }
-                    i = i.wrapping_add(1);
                 }
+                i = i.wrapping_add(1);
+            }
 
-                // Splice the extmarks for what was inserted. A linewise
-                // put that did *not* split a line has its marks moved by
-                // `mark_adjust` below instead.
-                let splits_a_line =
-                    self.kind == MotionType::LineWise && self.flags & PUT_LINE_SPLIT != 0;
-                if self.kind == MotionType::CharWise || splits_a_line {
-                    let (last, init) = self.lines.split_last().expect("a register holds a line");
-                    let mut totsize: BCount = 0;
-                    // A register's lines are shorter than `BCount` counts.
-                    let bytes = |n: usize| BCount::try_from(n).expect("a line's length");
-                    for line in init {
-                        totsize += bytes(line.len()) + 1;
-                    }
-                    let lastsize = len_as_int(last.len());
-                    totsize += bytes(last.len());
-
-                    let buf = Buf::current();
-                    let at = new_cursor.lnum - 1;
-                    let y_size = len_as_int(self.lines.len());
-                    let (start, rows, cols, bytes) = if self.kind == MotionType::CharWise {
-                        (col, y_size - 1, lastsize, totsize)
-                    } else {
-                        // Account for the last pasted newline and the
-                        // newline the split itself added.
-                        (self.split_pos, y_size + 1, 0, totsize + 2)
-                    };
-                    extmark_splice(
-                        buf,
-                        at.get(),
-                        start,
-                        0,
-                        ColNr::ZERO,
-                        0,
-                        rows,
-                        ColNr::new(cols),
-                        bytes,
-                        EXTMARK_UNDO,
-                    );
+            // Splice the extmarks for what was inserted. A linewise
+            // put that did *not* split a line has its marks moved by
+            // `mark_adjust` below instead.
+            let splits_a_line =
+                self.kind == MotionType::LineWise && self.flags & PUT_LINE_SPLIT != 0;
+            if self.kind == MotionType::CharWise || splits_a_line {
+                let (last, init) = self.lines.split_last().expect("a register holds a line");
+                let mut totsize: BCount = 0;
+                // A register's lines are shorter than `BCount` counts.
+                let bytes = |n: usize| BCount::try_from(n).expect("a line's length");
+                for line in init {
+                    totsize += bytes(line.len()) + 1;
                 }
+                let lastsize = len_as_int(last.len());
+                totsize += bytes(last.len());
 
-                if cnt == 1 {
-                    new_lnum = lnum;
-                }
+                let buf = Buf::current();
+                let at = new_cursor.lnum - 1;
+                let y_size = len_as_int(self.lines.len());
+                let (start, rows, cols, bytes) = if self.kind == MotionType::CharWise {
+                    (col, y_size - 1, lastsize, totsize)
+                } else {
+                    // Account for the last pasted newline and the
+                    // newline the split itself added.
+                    (self.split_pos, y_size + 1, 0, totsize + 2)
+                };
+                extmark_splice(
+                    buf,
+                    at.get(),
+                    start,
+                    0,
+                    ColNr::ZERO,
+                    0,
+                    rows,
+                    ColNr::new(cols),
+                    bytes,
+                    EXTMARK_UNDO,
+                );
+            }
+
+            if cnt == 1 {
+                new_lnum = lnum;
             }
         }
 

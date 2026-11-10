@@ -311,6 +311,97 @@ impl Put {
             coladvance_force(to);
         }
     }
+
+    /// Put the text, now that it has been read: into a terminal, or as a
+    /// block, a run of characters or whole lines, leaving the `'[`/`']`
+    /// marks and the cursor where the put says. Returns early (with any
+    /// message already out) when there is nothing to put or the line could
+    /// not be split or saved for undo.
+    fn run(&mut self, regname: RegName) {
+        if !Buf::current().terminal.is_null() {
+            terminal_paste(&self.lines, self.count);
+            return;
+        }
+
+        if self.kind == MotionType::LineWise {
+            let split_failed = self.flags & PUT_LINE_SPLIT != 0 && !self.split_current_line();
+            if split_failed {
+                return;
+            }
+            if self.flags & PUT_LINE_FORWARD != 0 {
+                // `p` over a Visual block puts the lines below the block.
+                Win::current().w_cursor = Buf::current().b_visual.vi_end;
+                self.dir = FORWARD;
+            }
+            Buf::current().b_op_start = Win::current().w_cursor;
+            Buf::current().b_op_end = Win::current().w_cursor;
+        }
+
+        if self.flags & PUT_LINE != 0 {
+            // `:put`, or `p` in Visual line mode.
+            self.kind = MotionType::LineWise;
+        }
+
+        if self.lines.is_empty() {
+            let display = transchar(c_int::from(regname.byte()));
+            let name = if !regname.is_unnamed() {
+                cstr::in_bytes(&display)
+            } else {
+                c"\""
+            };
+            let name = msg_cstr(name);
+            semsg!("E353: Nothing in register {name}");
+            return;
+        }
+
+        if !self.save_for_undo() {
+            return;
+        }
+        self.make_room_for_virtualedit();
+
+        let mut lnum = Win::current().w_cursor.lnum;
+        let mut col = Win::current().w_cursor.col;
+
+        if self.kind == MotionType::BlockWise {
+            self.blockwise(lnum);
+        } else {
+            if self.kind == MotionType::CharWise {
+                // For charwise text, FORWARD is BACKWARD on the next
+                // character.
+                if self.dir == FORWARD && gchar_cursor() != NUL {
+                    let bytelen = cursor_char_len();
+                    col += bytelen.get();
+                    if !self.lines[0].is_empty() {
+                        Win::current().w_cursor.col += bytelen.get();
+                        Buf::current().b_op_end.col += bytelen.get();
+                    }
+                }
+                Buf::current().b_op_start = Win::current().w_cursor;
+            } else if self.dir == BACKWARD {
+                // Linewise: BACKWARD is FORWARD on the previous line.
+                lnum -= 1;
+            }
+            let new_cursor = Win::current().w_cursor;
+
+            if self.kind == MotionType::CharWise && self.lines.len() == 1 {
+                self.charwise_one_line(lnum, col);
+            } else {
+                self.multiline(lnum, col, new_cursor);
+            }
+        }
+
+        msgmore(self.nr_lines);
+        Win::current().w_set_curswant = true;
+
+        // Don't leave the cursor after the NUL.
+        let len = get_cursor_line_len();
+        if Win::current().w_cursor.col > len {
+            if self.ve_flags == OPT_VE_FLAG_ALL as c_uint {
+                Win::current().w_cursor.coladd = Win::current().w_cursor.col - len;
+            }
+            Win::current().w_cursor.col = len;
+        }
+    }
 }
 
 /// [`do_put`] of register `regname` at the cursor, which is first put back
@@ -416,91 +507,7 @@ pub fn do_put(
         };
     }
 
-    'end: {
-        if !Buf::current().terminal.is_null() {
-            terminal_paste(&put.lines, count);
-            break 'end;
-        }
-
-        if put.kind == MotionType::LineWise {
-            let split_failed = put.flags & PUT_LINE_SPLIT != 0 && !put.split_current_line();
-            if split_failed {
-                break 'end;
-            }
-            if put.flags & PUT_LINE_FORWARD != 0 {
-                // `p` over a Visual block puts the lines below the block.
-                Win::current().w_cursor = Buf::current().b_visual.vi_end;
-                put.dir = FORWARD;
-            }
-            Buf::current().b_op_start = Win::current().w_cursor;
-            Buf::current().b_op_end = Win::current().w_cursor;
-        }
-
-        if put.flags & PUT_LINE != 0 {
-            // `:put`, or `p` in Visual line mode.
-            put.kind = MotionType::LineWise;
-        }
-
-        if put.lines.is_empty() {
-            let display = transchar(c_int::from(regname.byte()));
-            let name = if !regname.is_unnamed() {
-                cstr::in_bytes(&display)
-            } else {
-                c"\""
-            };
-            let name = msg_cstr(name);
-            semsg!("E353: Nothing in register {name}");
-            break 'end;
-        }
-
-        if !put.save_for_undo() {
-            break 'end;
-        }
-        put.make_room_for_virtualedit();
-
-        let mut lnum = Win::current().w_cursor.lnum;
-        let mut col = Win::current().w_cursor.col;
-
-        if put.kind == MotionType::BlockWise {
-            put.blockwise(lnum);
-        } else {
-            if put.kind == MotionType::CharWise {
-                // For charwise text, FORWARD is BACKWARD on the next
-                // character.
-                if put.dir == FORWARD && gchar_cursor() != NUL {
-                    let bytelen = cursor_char_len();
-                    col += bytelen.get();
-                    if !put.lines[0].is_empty() {
-                        Win::current().w_cursor.col += bytelen.get();
-                        Buf::current().b_op_end.col += bytelen.get();
-                    }
-                }
-                Buf::current().b_op_start = Win::current().w_cursor;
-            } else if put.dir == BACKWARD {
-                // Linewise: BACKWARD is FORWARD on the previous line.
-                lnum -= 1;
-            }
-            let new_cursor = Win::current().w_cursor;
-
-            if put.kind == MotionType::CharWise && put.lines.len() == 1 {
-                put.charwise_one_line(lnum, col);
-            } else {
-                put.multiline(lnum, col, new_cursor);
-            }
-        }
-
-        msgmore(put.nr_lines);
-        Win::current().w_set_curswant = true;
-
-        // Don't leave the cursor after the NUL.
-        let len = get_cursor_line_len();
-        if Win::current().w_cursor.col > len {
-            if ve_flags == OPT_VE_FLAG_ALL as c_uint {
-                Win::current().w_cursor.coladd = Win::current().w_cursor.col - len;
-            }
-            Win::current().w_cursor.col = len;
-        }
-    }
+    put.run(regname);
 
     if cmdmod_has(CmdModFlags::LOCKMARKS) {
         Buf::current().b_op_start = orig_start;
