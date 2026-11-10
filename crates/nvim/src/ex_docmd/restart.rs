@@ -103,6 +103,63 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
     }
 }
 
+/// Tell the new server `id` to outlive this one and what to run once a UI
+/// arrives, send every UI to it, and quit this server.
+///
+/// `Err` is a failed exchange with the new server, which the caller reports
+/// before killing it. A quit that fails is reported here, while
+/// `v:exitreason` still says why it was tried.
+fn hand_over(
+    id: u64,
+    reason: &'static CStr,
+    quit_cmd: Vec<u8>,
+    after_cmd: &[u8],
+) -> Result<(), Error> {
+    // Stop the new server exiting when this channel closes.
+    let detach_items = [obj_bool(true)];
+    rpc_call_with(id, c"nvim__chan_set_detach", array_of(detach_items), drop)?;
+
+    // `:restart {cmd}` runs {cmd} over there, once a UI has arrived.
+    if !after_cmd.is_empty() {
+        let opt_items = [
+            entry(c"once", obj_bool(true)),
+            entry(c"nested", obj_bool(true)),
+            entry(c"command", Object::string(ApiString::from_bytes(after_cmd))),
+        ];
+        let autocmd_items = [obj_str(c"UIEnter"), Object::dict(dict_of(opt_items))];
+        rpc_call_with(id, c"nvim_create_autocmd", array_of(autocmd_items), drop)?;
+    }
+
+    // Where the UIs are to reconnect.
+    let name_items = [obj_str(c"servername")];
+    let servername = rpc_call_with(id, c"nvim_get_vvar", array_of(name_items), |r| {
+        r.into_string()
+    })?
+    .filter(|s| !s.is_empty())
+    .ok_or_else(|| {
+        Error::exception(c"restart failed: could not get listen address from new server")
+    })?;
+
+    ui_call_restart(servername);
+    ui_flush();
+
+    set_vim_var_string(Vv::Exitreason, Some(reason.to_bytes()));
+
+    let quit_cmd = if cmdmod_has(CmdModFlags::CONFIRM) {
+        [&b"confirm "[..], &quit_cmd].concat()
+    } else {
+        quit_cmd
+    };
+    match nvim_command(ApiString::from_bytes(&quit_cmd)) {
+        Err(e) => {
+            emsg(e.message_or_empty());
+        }
+        Ok(()) if !EXITING.get() => report_quit_failed(&quit_cmd),
+        Ok(()) => {}
+    }
+    Ok(())
+}
+
 /// E5201: the quit command ran and this server is still here.
 fn report_quit_failed(quit_cmd: &[u8]) {
     let quit_cmd = msg_bytes(quit_cmd);
@@ -126,7 +183,6 @@ fn restart_server(excmd: &mut ExArg) {
     else {
         return;
     };
-    let mut err = Error::none();
     let no_ui = ui_active() == 0;
     // A copy: the variable is held across the job start below.
     let exepath = ThinCString::from_vec(vim_var_bytes(Vv::Progpath));
@@ -165,80 +221,13 @@ fn restart_server(excmd: &mut ExArg) {
         .flatten();
 
     if let Some(id) = channel {
-        'fail_2: {
-            // Stop the new server exiting when this channel closes.
-            let detach_items = [obj_bool(true)];
-            if let Err(e) =
-                rpc_call_with(id, c"nvim__chan_set_detach", array_of(detach_items), drop)
-            {
-                err = e;
-                break 'fail_2;
-            }
-
-            // `:restart {cmd}` runs {cmd} over there, once a UI has
-            // arrived.
-            if !after_cmd.is_empty() {
-                let opt_items = [
-                    entry(c"once", obj_bool(true)),
-                    entry(c"nested", obj_bool(true)),
-                    entry(
-                        c"command",
-                        Object::string(ApiString::from_bytes(&after_cmd)),
-                    ),
-                ];
-                let autocmd_items = [obj_str(c"UIEnter"), Object::dict(dict_of(opt_items))];
-                if let Err(e) =
-                    rpc_call_with(id, c"nvim_create_autocmd", array_of(autocmd_items), drop)
-                {
-                    err = e;
-                    break 'fail_2;
-                }
-            }
-
-            // Where the UIs are to reconnect.
-            let name_items = [obj_str(c"servername")];
-            let servername = match rpc_call_with(id, c"nvim_get_vvar", array_of(name_items), |r| {
-                r.into_string()
-            }) {
-                Ok(name) => name.filter(|s| !s.is_empty()),
-                Err(e) => {
-                    err = e;
-                    break 'fail_2;
-                }
-            };
-            let Some(servername) = servername else {
-                emsg(c"restart failed: could not get listen address from new server");
-                break 'fail_2;
-            };
-
-            ui_call_restart(servername);
-            ui_flush();
-
-            set_vim_var_string(Vv::Exitreason, Some(reason.to_bytes()));
-
-            let quit_cmd = if cmdmod_has(CmdModFlags::CONFIRM) {
-                [&b"confirm "[..], &quit_cmd].concat()
-            } else {
-                quit_cmd
-            };
-            if let Err(e) = nvim_command(ApiString::from_bytes(&quit_cmd)) {
-                err = e;
-            }
-
-            if err.is_set() {
-                emsg(err.message_or_empty());
-                err.clear();
-            } else if !EXITING.get() {
-                report_quit_failed(&quit_cmd);
-            }
-        }
+        let handed = hand_over(id, reason, quit_cmd, &after_cmd);
 
         // Reached both on success — where `exiting` is set and this is
         // the last thing that runs — and on every failure.
         set_vim_var_string(Vv::Exitreason, None);
-        if err.is_set() {
+        if let Err(err) = handed {
             emsg(err.message_or_empty());
-            err.clear();
         }
 
         // Close the new server's stderr before killing it, or its dying

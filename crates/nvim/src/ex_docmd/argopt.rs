@@ -45,7 +45,7 @@ use crate::os::cshim::ngettext;
 use crate::os::fs::{CFile, dir_exists, os_mkdir, os_strerror, path_exists};
 
 use crate::cmdexpand::defs::{CompleteListItemGetter, Expand};
-use crate::os::libc::{int32_t, intmax_t};
+use crate::os::libc::int32_t;
 use crate::regexp::RegMatch;
 use crate::types::{CmdLine, CmdModFlags, EcmdCmd, ExArg, Failed};
 use crate::window::{only_one_window, tabpage_index};
@@ -267,129 +267,131 @@ pub fn expand_argopt(pat: &CStr, expand: &Expand, rmp: &mut RegMatch) -> Option<
 /// absolute (`3`, `$`, `#`), relative (`+2`, `-1`), a range before the
 /// command (`:2tabnext`), or absent.
 pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
-    let mut tab_number: c_int = 0;
     let unaccept_arg0 = if excmd.cmdidx == CmdIdx::tabmove {
         0
     } else {
         1
     };
+    if excmd.line.byte_at(excmd.line.arg) != 0 {
+        tabpage_from_argument(excmd, unaccept_arg0)
+    } else if excmd.addr_count > 0 {
+        tabpage_from_range(excmd, unaccept_arg0)
+    } else if excmd.cmdidx == CmdIdx::tabnext {
+        // No argument at all.
+        let next = tab_index(TabPage::current()) + 1;
+        if next > current_tab_nr(None) { 1 } else { next }
+    } else if excmd.cmdidx == CmdIdx::tabmove {
+        current_tab_nr(None)
+    } else {
+        tab_index(TabPage::current())
+    }
+}
+
+/// [`get_tabpage_arg`] for a command with an argument: `$`, `#`, `N`, `+N`
+/// or `-N`. A refusal leaves its message in `errmsg` and answers whatever
+/// had been read, as upstream did.
+fn tabpage_from_argument(excmd: &mut ExArg, unaccept_arg0: c_int) -> c_int {
     let last_tab = || current_tab_nr(None);
     let invarg2 = |command: &mut ExArg| {
-        // SAFETY: the argument is a tail of the command line.
         command.errmsg = Some(ex_errmsg(
             E_INVARG2,
             command.line.cstr_from(command.line.arg),
         ));
     };
+    let mut p = excmd.line.arg;
+    // `+N`/`-N` means N places to the right/left of here.
+    let relative = match excmd.line.byte_at(p) {
+        b'-' => {
+            p += 1;
+            -1
+        }
+        b'+' => {
+            p += 1;
+            1
+        }
+        _ => 0,
+    };
 
-    'theend: {
-        if excmd.line.byte_at(excmd.line.arg) != 0 {
-            let mut p = excmd.line.arg;
-            // `+N`/`-N` means N places to the right/left of here.
-            let relative = match excmd.line.byte_at(p) {
-                b'-' => {
-                    p += 1;
-                    -1
-                }
-                b'+' => {
-                    p += 1;
-                    1
-                }
-                _ => 0,
-            };
+    let p_save = p;
+    let (number, past) = getdigits_at(excmd.line.tail(0), p, false, 0);
+    let mut tab_number = number_as_int(number);
+    p = past;
 
-            let p_save = p;
-            let (number, past) =
-                getdigits_at(excmd.line.tail(0), p, false, intmax_t::from(tab_number));
-            tab_number = number_as_int(number);
-            p = past;
-
-            if relative == 0 {
-                if excmd.line.rest_of(p) == b"$" {
-                    tab_number = last_tab();
-                } else if excmd.line.rest_of(p) == b"#" {
-                    if last_used_tab().is_none() {
-                        excmd.errmsg =
-                            Some(ex_errmsg(E_INVARGVAL, excmd.line.cstr_from(excmd.line.arg)));
-                        tab_number = 0;
-                        break 'theend;
-                    }
-                    tab_number = tabpage_index(last_used_tab());
-                } else if p == p_save
-                    || excmd.line.byte_at(p_save) == b'-'
-                    || excmd.line.byte_at(p) != 0
-                    || tab_number > last_tab()
-                {
-                    // Not a number.
-                    invarg2(excmd);
-                    break 'theend;
-                }
-            } else {
-                if excmd.line.byte_at(p_save) == 0 {
-                    // A bare `+` or `-` is one place.
-                    tab_number = 1;
-                } else if p == p_save
-                    || excmd.line.byte_at(p_save) == b'-'
-                    || excmd.line.byte_at(p) != 0
-                    || tab_number == 0
-                {
-                    invarg2(excmd);
-                    break 'theend;
-                }
-                // `int` arithmetic on a number the user typed: the C
-                // wraps, and the range check below is what refuses
-                // whatever comes out. `:tabmove -2147483648` is the
-                // case that reaches it.
-                tab_number = tab_number
-                    .wrapping_mul(relative)
-                    .wrapping_add(tab_index(TabPage::current()));
-                // `:tabmove -1` moves *before* the tab to the left,
-                // which is one place further than counting says.
-                if unaccept_arg0 == 0 && relative == -1 {
-                    tab_number = tab_number.wrapping_sub(1);
-                }
+    if relative == 0 {
+        if excmd.line.rest_of(p) == b"$" {
+            tab_number = last_tab();
+        } else if excmd.line.rest_of(p) == b"#" {
+            if last_used_tab().is_none() {
+                excmd.errmsg = Some(ex_errmsg(E_INVARGVAL, excmd.line.cstr_from(excmd.line.arg)));
+                return 0;
             }
-            if tab_number < unaccept_arg0 || tab_number > last_tab() {
-                invarg2(excmd);
+            tab_number = tabpage_index(last_used_tab());
+        } else if p == p_save
+            || excmd.line.byte_at(p_save) == b'-'
+            || excmd.line.byte_at(p) != 0
+            || tab_number > last_tab()
+        {
+            // Not a number.
+            invarg2(excmd);
+            return tab_number;
+        }
+    } else {
+        if excmd.line.byte_at(p_save) == 0 {
+            // A bare `+` or `-` is one place.
+            tab_number = 1;
+        } else if p == p_save
+            || excmd.line.byte_at(p_save) == b'-'
+            || excmd.line.byte_at(p) != 0
+            || tab_number == 0
+        {
+            invarg2(excmd);
+            return tab_number;
+        }
+        // `int` arithmetic on a number the user typed: the C wraps, and the
+        // range check below is what refuses whatever comes out.
+        // `:tabmove -2147483648` is the case that reaches it.
+        tab_number = tab_number
+            .wrapping_mul(relative)
+            .wrapping_add(tab_index(TabPage::current()));
+        // `:tabmove -1` moves *before* the tab to the left, which is one
+        // place further than counting says.
+        if unaccept_arg0 == 0 && relative == -1 {
+            tab_number = tab_number.wrapping_sub(1);
+        }
+    }
+    if tab_number < unaccept_arg0 || tab_number > last_tab() {
+        invarg2(excmd);
+    }
+    tab_number
+}
+
+/// [`get_tabpage_arg`] for a command with a range before it (`:2tabnext`,
+/// `:-tabmove`).
+fn tabpage_from_range(excmd: &mut ExArg, unaccept_arg0: c_int) -> c_int {
+    if unaccept_arg0 != 0 && excmd.number2 == 0 {
+        excmd.errmsg = Some(ex_msg(E_INVRANGE));
+        return 0;
+    }
+    let mut tab_number = excmd.number2;
+    if unaccept_arg0 == 0 {
+        // `:-tabmove` is spelled as a range, so the sign has to be read
+        // back off the command line — the range parser has already turned
+        // it into a number.
+        let mut at = excmd.line.cmd;
+        loop {
+            at -= 1;
+            if !(at > 0
+                && (ascii_iswhite(c_int::from(excmd.line.byte_at(at)))
+                    || ascii_isdigit(c_int::from(excmd.line.byte_at(at)))))
+            {
+                break;
             }
-        } else if excmd.addr_count > 0 {
-            if unaccept_arg0 != 0 && excmd.number2 == 0 {
+        }
+        if excmd.line.byte_at(at) == b'-' {
+            tab_number = tab_number.wrapping_sub(1);
+            if tab_number < unaccept_arg0 {
                 excmd.errmsg = Some(ex_msg(E_INVRANGE));
-                tab_number = 0;
-            } else {
-                tab_number = excmd.number2;
-                if unaccept_arg0 == 0 {
-                    // `:-tabmove` is spelled as a range, so the sign has
-                    // to be read back off the command line — the range
-                    // parser has already turned it into a number.
-                    let mut at = excmd.line.cmd;
-                    loop {
-                        at -= 1;
-                        if !(at > 0
-                            && (ascii_iswhite(c_int::from(excmd.line.byte_at(at)))
-                                || ascii_isdigit(c_int::from(excmd.line.byte_at(at)))))
-                        {
-                            break;
-                        }
-                    }
-                    if excmd.line.byte_at(at) == b'-' {
-                        tab_number = tab_number.wrapping_sub(1);
-                        if tab_number < unaccept_arg0 {
-                            excmd.errmsg = Some(ex_msg(E_INVRANGE));
-                        }
-                    }
-                }
             }
-        } else {
-            // No argument at all.
-            tab_number = if excmd.cmdidx == CmdIdx::tabnext {
-                let next = tab_index(TabPage::current()) + 1;
-                if next > last_tab() { 1 } else { next }
-            } else if excmd.cmdidx == CmdIdx::tabmove {
-                last_tab()
-            } else {
-                tab_index(TabPage::current())
-            };
         }
     }
     tab_number
