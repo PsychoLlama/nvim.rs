@@ -213,90 +213,13 @@ pub(crate) fn command_line_enter(
     cc.prompt_id = prompt_id;
     cc.level = CMDLINE_LEVEL.get();
 
-    let mut err: Error = Error::none();
-    let mut firstcbuf = [0u8; 2];
-
     if CMDLINE_LEVEL.get() == 50 {
         // Somehow got into a loop recursively calling getcmdline(), bail
         // out. (C's `goto theend`.)
         emsg(gettext(E_COMMAND_TOO_RECURSIVE));
     } else {
-        cc.xpc = Some(Expand::new());
-        clear_cmdline_orig();
-
-        CMDMSG_RL.set(
-            Win::current().w_onebuf_opt.wo_rl != 0
-                && Win::current().w_onebuf_opt.wo_rlc.first_byte() == b's'
-                && (s.firstc == b'/' || s.firstc == b'?'),
-        );
-
-        msg_grid_validate();
-
-        REDIR_OFF.set(true); // don't redirect the typed command
-        if !CMD_SILENT.get() {
-            gotocmdline(true);
-            redrawcmdprompt(); // draw the prompt or the indent
-            cc.cmdspos = cmd_startcol();
-        }
-        let (input_fn, xp_context, xp_arg) = (cc.input_fn, cc.xp_context, cc.xp_arg.clone());
-        let xpc = cc.xpc_mut();
-        xpc.context = ExpandContext::Nothing;
-        xpc.backslash = BackslashEscape::NONE;
-        xpc.shell = false;
-        if input_fn {
-            xpc.context = xp_context;
-            xpc.pattern = 0;
-            xpc.arg = xp_arg;
-        }
-
-        // Avoid scrolling when called by a recursive do_cmdline(), e.g.
-        // when doing ":@0" and register 0 doesn't contain a CR.
-        MSG_SCROLL.set(0);
-
-        STATE.set(MODE_CMDLINE);
-
-        if s.firstc == b'/' || s.firstc == b'?' || s.firstc == b'@' {
-            // Use ":lmap" mappings for the search pattern and input().
-            let which = if Buf::current().b_p_imsearch == B_IMODE_USE_INSERT {
-                ImOption::Insert
-            } else {
-                ImOption::Search
-            };
-            s.b_im = Some((which, Buf::current().id()));
-            if im_value(Buf::current(), which) == B_IMODE_LMAP {
-                STATE.set(STATE.get() | MODE_LANGMAP);
-            }
-        }
-
-        setmouse();
-
-        s.cmdline_type = if s.firstc > 0 { s.firstc } else { b'-' };
-        firstcbuf[0] = s.cmdline_type;
-
-        if has_event(AutoEvent::CmdlineEnter) {
-            let mut save_v_event: SaveVEvent = SAVE_V_EVENT_INIT;
-            let dict = cmdline_event_dict(&mut save_v_event, cstr::in_bytes(&firstcbuf));
-
-            // C's TRY_WRAP. restore_v_event() runs *inside* the try here
-            // and outside it at CmdlineLeave below; that asymmetry is
-            // upstream's.
-            let mut tstate: TryState = TryState::INIT;
-            try_enter(&mut tstate);
-            cmdline_autocmd(AutoEvent::CmdlineEnter, cstr::in_bytes(&firstcbuf));
-            restore_v_event(dict, &mut save_v_event);
-            err.absorb(try_leave(&tstate));
-
-            if err.is_set() {
-                if !ui_has(UI_MESSAGES) {
-                    msg_put_ascii(b'\n');
-                }
-                MSG_SCROLL.set(1);
-                msg_str_hl(err.message_or_empty(), HLF_E, true);
-                err.clear();
-                redrawcmd();
-            }
-            err = Error::none();
-        }
+        prepare_command_line(s, cc);
+        fire_cmdline_enter(s.cmdline_type);
         may_trigger_modechanged();
 
         init_history();
@@ -310,159 +233,22 @@ pub(crate) fn command_line_enter(
         if DID_EMSG.get() != 0 {
             redrawcmd();
         }
-
-        // Redraw the statusline, in case it uses the current mode through
-        // the mode() function.
         if !CMD_SILENT.get() && !EXMODE_ACTIVE.get() {
-            let mut found_one = false;
-            for mut wp in windows_in_curtab() {
-                if P_STL.first_byte() != 0
-                    || wp.w_onebuf_opt.wo_stl.first_byte() != 0
-                    || P_WBR.first_byte() != 0
-                    || wp.w_onebuf_opt.wo_wbr.first_byte() != 0
-                {
-                    wp.w_redr_status = true;
-                    found_one = true;
-                }
-            }
-            if P_TAL.first_byte() != 0 {
-                REDRAW_TABLINE.set(true);
-                found_one = true;
-            }
-            if redraw_custom_title_later() {
-                found_one = true;
-            }
-            if found_one {
-                redraw_statuslines();
-            }
+            redraw_mode_readers();
         }
 
         DID_EMSG.set(0);
         GOT_INT.set(false);
         state_enter(ModeState::command_line(s));
 
-        // Trigger CmdlineLeavePre autocommands if not already triggered.
-        if !s.event_cmdlineleavepre_triggered {
-            set_vim_var_char(s.c); // set v:char
-            trigger_cmd_autocmd(s.cmdline_type, AutoEvent::CmdlineLeavePre);
-        }
-
-        if has_event(AutoEvent::CmdlineLeave) {
-            let mut save_v_event: SaveVEvent = SAVE_V_EVENT_INIT;
-            let dict = cmdline_event_dict(&mut save_v_event, cstr::in_bytes(&firstcbuf));
-            // Not readonly, unlike the keys above:
-            let _ = dict.edit().add_bool(
-                b"abort",
-                if s.gotesc {
-                    BOOL_VAR_TRUE
-                } else {
-                    BOOL_VAR_FALSE
-                },
-            );
-            set_vim_var_char(s.c); // set v:char
-
-            // C's TRY_WRAP; the error is printed further below, to avoid
-            // redraw issues.
-            let mut tstate: TryState = TryState::INIT;
-            try_enter(&mut tstate);
-            cmdline_autocmd(AutoEvent::CmdlineLeave, cstr::in_bytes(&firstcbuf));
-            err.absorb(try_leave(&tstate));
-
-            if dict_get_number(Some(&dict), b"abort") != 0 {
-                s.gotesc = true;
-            }
-            restore_v_event(dict, &mut save_v_event);
-        }
-
+        let err = fire_cmdline_leave(s);
         CMDMSG_RL.set(false);
-
-        // We could have reached here without a chance to clean up the
-        // wildmenu, if a special key like <Esc> or <C-\> was used as
-        // 'wildchar'. Clean up anyway, to avoid memory corruption.
-        if cmdline_pum_active() {
-            cmdline_pum_remove(false);
-        } else {
-            // A previous cmdline_pum_remove() may have deferred redraw.
-            pum_check_clear();
-        }
-        wildmenu_cleanup(cc);
-        s.did_wild_list = false;
-        s.wim_index = 0;
-
-        if let Some(mut xpc) = cc.xpc.take() {
-            expand_cleanup(&mut xpc);
-        }
-        clear_cmdline_orig();
-
+        drop_completion(s, cc);
         finish_incsearch_highlighting(s.gotesc, &mut s.is_state, false);
-
         if cc.in_use() {
-            // Put the line in the history buffer (":" and "=" only when
-            // it was typed).
-            if s.histype != HIST_INVALID
-                && !cc.is_empty()
-                && s.firstc != 0
-                && (s.some_key_typed || s.histype == HIST_SEARCH)
-            {
-                add_to_history(
-                    s.histype,
-                    cc.bytes(),
-                    true,
-                    if s.histype == HIST_SEARCH {
-                        s.firstc
-                    } else {
-                        0
-                    },
-                );
-                if s.firstc == b':' {
-                    NEW_LAST_CMDLINE.set(Some(XString::from_bytes(cstr::until_nul(cc.bytes()))));
-                }
-            }
-
-            if s.gotesc {
-                abandon_cmdline();
-            }
+            remember_command_line(s, cc);
         }
-
-        // If the screen was shifted up, redraw the whole screen (later).
-        // If the line is too long, clear it, so that the ruler and the
-        // shown command do not get printed in the middle of it.
-        msg_check();
-        if p_ch() == 0 as OptInt && !ui_has(UI_MESSAGES) {
-            set_must_redraw(UPD_VALID);
-        }
-        MSG_SCROLL.set(s.save_msg_scroll);
-        REDIR_OFF.set(false);
-
-        if err.is_set() {
-            if !ui_has(UI_MESSAGES) {
-                msg_put_ascii(b'\n');
-            }
-            emsg(err.message_or_empty());
-            DID_EMSG.set(0);
-            err.clear();
-        }
-
-        // When the command line was typed, no need for a wait-return
-        // prompt.
-        if s.some_key_typed && !err.is_set() {
-            NEED_WAIT_RETURN.set(false);
-        }
-
-        set_option_direct(
-            OPT_INCCOMMAND,
-            OptVal::from_cstr(s.save_p_icm.as_cstr()),
-            OptionSetFlags::NONE,
-            SID_NONE,
-        );
-        STATE.set(s.save_state);
-        if CMDPREVIEW.get() != save_cmdpreview {
-            CMDPREVIEW.set(save_cmdpreview); // restore the preview state
-            redraw_all_later(UPD_SOME_VALID);
-        }
-        may_trigger_modechanged();
-        setmouse();
-        sb_text_end_cmdline();
+        restore_after_command_line(s, err, save_cmdpreview);
     }
 
     // C's `theend:`; the saved 'inccommand' goes with the state.
@@ -493,6 +279,252 @@ pub(crate) fn command_line_enter(
         restore_cmdline();
     }
     answer
+}
+
+/// Set the fresh command line up for typing: its completion, the prompt,
+/// the mode and the `:lmap` state, and the type `v:event` will name.
+fn prepare_command_line(s: &mut CommandLineState, mut cc: Cc) {
+    cc.xpc = Some(Expand::new());
+    clear_cmdline_orig();
+
+    CMDMSG_RL.set(
+        Win::current().w_onebuf_opt.wo_rl != 0
+            && Win::current().w_onebuf_opt.wo_rlc.first_byte() == b's'
+            && (s.firstc == b'/' || s.firstc == b'?'),
+    );
+
+    msg_grid_validate();
+
+    REDIR_OFF.set(true); // don't redirect the typed command
+    if !CMD_SILENT.get() {
+        gotocmdline(true);
+        redrawcmdprompt(); // draw the prompt or the indent
+        cc.cmdspos = cmd_startcol();
+    }
+    let (input_fn, xp_context, xp_arg) = (cc.input_fn, cc.xp_context, cc.xp_arg.clone());
+    let xpc = cc.xpc_mut();
+    xpc.context = ExpandContext::Nothing;
+    xpc.backslash = BackslashEscape::NONE;
+    xpc.shell = false;
+    if input_fn {
+        xpc.context = xp_context;
+        xpc.pattern = 0;
+        xpc.arg = xp_arg;
+    }
+
+    // Avoid scrolling when called by a recursive do_cmdline(), e.g.
+    // when doing ":@0" and register 0 doesn't contain a CR.
+    MSG_SCROLL.set(0);
+
+    STATE.set(MODE_CMDLINE);
+
+    if s.firstc == b'/' || s.firstc == b'?' || s.firstc == b'@' {
+        // Use ":lmap" mappings for the search pattern and input().
+        let which = if Buf::current().b_p_imsearch == B_IMODE_USE_INSERT {
+            ImOption::Insert
+        } else {
+            ImOption::Search
+        };
+        s.b_im = Some((which, Buf::current().id()));
+        if im_value(Buf::current(), which) == B_IMODE_LMAP {
+            STATE.set(STATE.get() | MODE_LANGMAP);
+        }
+    }
+
+    setmouse();
+
+    s.cmdline_type = if s.firstc > 0 { s.firstc } else { b'-' };
+}
+
+/// Fire `CmdlineEnter` for a line of type `cmdline_type`, showing the error
+/// an autocommand raised.
+fn fire_cmdline_enter(cmdline_type: u8) {
+    if !has_event(AutoEvent::CmdlineEnter) {
+        return;
+    }
+    let firstcbuf = [cmdline_type, 0];
+    let mut save_v_event: SaveVEvent = SAVE_V_EVENT_INIT;
+    let dict = cmdline_event_dict(&mut save_v_event, cstr::in_bytes(&firstcbuf));
+
+    // C's TRY_WRAP. restore_v_event() runs *inside* the try here and outside
+    // it at CmdlineLeave; that asymmetry is upstream's.
+    let mut err: Error = Error::none();
+    let mut tstate: TryState = TryState::INIT;
+    try_enter(&mut tstate);
+    cmdline_autocmd(AutoEvent::CmdlineEnter, cstr::in_bytes(&firstcbuf));
+    restore_v_event(dict, &mut save_v_event);
+    err.absorb(try_leave(&tstate));
+
+    if err.is_set() {
+        if !ui_has(UI_MESSAGES) {
+            msg_put_ascii(b'\n');
+        }
+        MSG_SCROLL.set(1);
+        msg_str_hl(err.message_or_empty(), HLF_E, true);
+        err.clear();
+        redrawcmd();
+    }
+}
+
+/// Redraw the status lines, tab line and title of the current tab page that
+/// may show the mode through `mode()`, now that it is the command line.
+fn redraw_mode_readers() {
+    let mut found_one = false;
+    for mut wp in windows_in_curtab() {
+        if P_STL.first_byte() != 0
+            || wp.w_onebuf_opt.wo_stl.first_byte() != 0
+            || P_WBR.first_byte() != 0
+            || wp.w_onebuf_opt.wo_wbr.first_byte() != 0
+        {
+            wp.w_redr_status = true;
+            found_one = true;
+        }
+    }
+    if P_TAL.first_byte() != 0 {
+        REDRAW_TABLINE.set(true);
+        found_one = true;
+    }
+    if redraw_custom_title_later() {
+        found_one = true;
+    }
+    if found_one {
+        redraw_statuslines();
+    }
+}
+
+/// Fire `CmdlineLeavePre` (unless the key loop already did) and
+/// `CmdlineLeave`, whose handler may abandon the line through `v:event`.
+///
+/// Answers the error `CmdlineLeave` raised, which is shown only once the
+/// command line is gone, to avoid redraw issues.
+fn fire_cmdline_leave(s: &mut CommandLineState) -> Error {
+    let mut err: Error = Error::none();
+    if !s.event_cmdlineleavepre_triggered {
+        set_vim_var_char(s.c); // set v:char
+        trigger_cmd_autocmd(s.cmdline_type, AutoEvent::CmdlineLeavePre);
+    }
+
+    if has_event(AutoEvent::CmdlineLeave) {
+        let firstcbuf = [s.cmdline_type, 0];
+        let mut save_v_event: SaveVEvent = SAVE_V_EVENT_INIT;
+        let dict = cmdline_event_dict(&mut save_v_event, cstr::in_bytes(&firstcbuf));
+        // Not readonly, unlike the keys above:
+        let _ = dict.edit().add_bool(
+            b"abort",
+            if s.gotesc {
+                BOOL_VAR_TRUE
+            } else {
+                BOOL_VAR_FALSE
+            },
+        );
+        set_vim_var_char(s.c); // set v:char
+
+        // C's TRY_WRAP.
+        let mut tstate: TryState = TryState::INIT;
+        try_enter(&mut tstate);
+        cmdline_autocmd(AutoEvent::CmdlineLeave, cstr::in_bytes(&firstcbuf));
+        err.absorb(try_leave(&tstate));
+
+        if dict_get_number(Some(&dict), b"abort") != 0 {
+            s.gotesc = true;
+        }
+        restore_v_event(dict, &mut save_v_event);
+    }
+    err
+}
+
+/// Close the wildmenu and the popup menu and drop the completion.
+///
+/// We could have reached here without a chance to clean up the wildmenu, if
+/// a special key like <Esc> or <C-\> was used as 'wildchar'. Clean up
+/// anyway, to avoid memory corruption.
+fn drop_completion(s: &mut CommandLineState, mut cc: Cc) {
+    if cmdline_pum_active() {
+        cmdline_pum_remove(false);
+    } else {
+        // A previous cmdline_pum_remove() may have deferred redraw.
+        pum_check_clear();
+    }
+    wildmenu_cleanup(cc);
+    s.did_wild_list = false;
+    s.wim_index = 0;
+
+    if let Some(mut xpc) = cc.xpc.take() {
+        expand_cleanup(&mut xpc);
+    }
+    clear_cmdline_orig();
+}
+
+/// Put the finished line in the history (":" and "=" only when it was
+/// typed), and abandon it when it was escaped.
+fn remember_command_line(s: &CommandLineState, cc: Cc) {
+    if s.histype != HIST_INVALID
+        && !cc.is_empty()
+        && s.firstc != 0
+        && (s.some_key_typed || s.histype == HIST_SEARCH)
+    {
+        add_to_history(
+            s.histype,
+            cc.bytes(),
+            true,
+            if s.histype == HIST_SEARCH {
+                s.firstc
+            } else {
+                0
+            },
+        );
+        if s.firstc == b':' {
+            NEW_LAST_CMDLINE.set(Some(XString::from_bytes(cstr::until_nul(cc.bytes()))));
+        }
+    }
+
+    if s.gotesc {
+        abandon_cmdline();
+    }
+}
+
+/// Put back what the command line changed — the scroll and redirection,
+/// 'inccommand', the mode, the preview — and show `CmdlineLeave`'s error.
+fn restore_after_command_line(s: &CommandLineState, mut err: Error, save_cmdpreview: bool) {
+    // If the screen was shifted up, redraw the whole screen (later).
+    // If the line is too long, clear it, so that the ruler and the
+    // shown command do not get printed in the middle of it.
+    msg_check();
+    if p_ch() == 0 as OptInt && !ui_has(UI_MESSAGES) {
+        set_must_redraw(UPD_VALID);
+    }
+    MSG_SCROLL.set(s.save_msg_scroll);
+    REDIR_OFF.set(false);
+
+    if err.is_set() {
+        if !ui_has(UI_MESSAGES) {
+            msg_put_ascii(b'\n');
+        }
+        emsg(err.message_or_empty());
+        DID_EMSG.set(0);
+        err.clear();
+    }
+
+    // When the command line was typed, no need for a wait-return
+    // prompt.
+    if s.some_key_typed && !err.is_set() {
+        NEED_WAIT_RETURN.set(false);
+    }
+
+    set_option_direct(
+        OPT_INCCOMMAND,
+        OptVal::from_cstr(s.save_p_icm.as_cstr()),
+        OptionSetFlags::NONE,
+        SID_NONE,
+    );
+    STATE.set(s.save_state);
+    if CMDPREVIEW.get() != save_cmdpreview {
+        CMDPREVIEW.set(save_cmdpreview); // restore the preview state
+        redraw_all_later(UPD_SOME_VALID);
+    }
+    may_trigger_modechanged();
+    setmouse();
+    sb_text_end_cmdline();
 }
 
 /// The key loop's check, run before every key is fetched.
