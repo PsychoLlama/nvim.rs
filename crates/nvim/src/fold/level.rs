@@ -178,48 +178,18 @@ impl Win {
                 if !open_ended {
                     break;
                 }
-                let stop = self.with_fold_list(path, |folds| {
-                    let current = folds.get(ci).ok_or(TreeLost)?;
-                    let mut depth = 0;
-                    if lvl >= level {
-                        // How deep the existing tree says this line is.
-                        let mut inner: &[Fold] = &current.nested;
-                        let mut ll = line.lnum - current.top;
-                        while let Ok(k) = find(inner, LineNr::new(ll)) {
-                            depth += 1;
-                            ll -= inner[k].top.get();
-                            inner = &inner[k].nested;
-                        }
-                    }
-                    if lvl < level + depth {
-                        // The tree is deeper than the levels are: the nested fold
-                        // that has to go also has to be redrawn.
-                        let inner = &current.nested;
-                        let k = find_at_or_below(inner, LineNr::new(line.lnum - current.top));
-                        // UPSTREAM BUG: `k` may be `inner.len()`, and `fold.c`
-                        // reads that entry anyway (guarding only against a list
-                        // that never had storage). Upstream reads whatever bytes
-                        // sit there -- usually the zeroed slack `ga_grow` left,
-                        // sometimes a stale copy of a deleted fold, sometimes past
-                        // the block. The zeroed case is reproduced: a fold at 0 of
-                        // length 0 puts `bot` one above this fold. See
-                        // ~/agents/context/1786212071-upstream-neovim-bugs/
-                        // fold-iems-recurse-fp2-past-end.md.
-                        match inner.get(k) {
-                            Some(nested) => bot = nested.last() + current.top.get(),
-                            None if inner.capacity() > 0 => bot = current.top - 1,
-                            None => {}
-                        }
-                    } else {
-                        if !(current.top + current.len <= line.lnum && lvl >= level) {
-                            return Ok(true);
-                        }
-                        finish = true;
-                    }
-                    Ok(false)
-                })??;
-                if stop {
-                    break;
+                let past = self
+                    .with_fold_list(path, |folds| {
+                        folds
+                            .get(ci)
+                            .map(|current| past_changes(current, line.lnum, lvl, level))
+                    })?
+                    .ok_or(TreeLost)?;
+                match past {
+                    PastChanges::Agrees => break,
+                    PastChanges::Grown => finish = true,
+                    PastChanges::Deeper(Some(nested_bot)) => bot = nested_bot,
+                    PastChanges::Deeper(None) => {}
                 }
             }
             if fold.is_none()
@@ -260,65 +230,25 @@ impl Win {
                     let (top, state) = self
                         .with_fold_list(path, |folds| folds.get(index).map(|f| (f.top, f.state)))?
                         .ok_or(TreeLost)?;
-                    Next::Recurse { index, top, state }
+                    Next::Recurse(Nested { index, top, state })
                 }
                 _ => Next::Step,
             };
             match next {
-                Next::Recurse { index, top, state } => {
+                Next::Recurse(nested) => {
                     // Deeper than this level: the nested list takes over.
-                    bot = bot.max(line.lnum);
-                    line.lnum = LineNr::new(line.lnum_save - top);
-                    line.off += top.get();
-                    let (from, to) = (startlnum2 - top, bot - top);
-                    path.push(index);
-                    let inner = self.update_computed_folds(
-                        path,
-                        level + 1,
-                        LineNr::new(from),
-                        line,
-                        method,
-                        LineNr::new(to),
-                        state,
-                    );
-                    path.pop();
-                    bot = inner?;
+                    let index = nested.index;
+                    bot = self.update_nested(path, nested, level, startlnum2, line, method, bot)?;
                     // The recursion changed only the fold's nested list, so its
                     // `top` is the one read above; whether the getters it ran
                     // left the fold there at all, the next borrow checks.
                     fold = Some(index);
-                    line.lnum += top.get();
-                    line.lnum_save += top.get();
-                    line.off -= top.get();
-                    bot += top.get();
                     startlnum2 = line.lnum;
                 }
                 Next::Step => {
-                    // Step to the next line with a level of its own, remembering
-                    // where that search started so the caller sees both.
-                    line.lnum = line.lnum_save;
-                    let next = line.lnum + 1;
-                    while !GOT_INT.get() {
-                        // 'foldexpr' may ask for the level of this line while we
-                        // are working out the next one; park the answer.
-                        PREV_LNUM.set(line.lnum);
-                        PREV_LNUM_LVL.set(line.lvl);
-                        line.lnum += 1;
-                        if line.lnum > linecount {
-                            break;
-                        }
-                        line.lvl = line.lvl_next;
-                        method.level(line);
-                        if line.lvl >= 0 || line.had_end <= MAX_LEVEL {
-                            break;
-                        }
-                    }
-                    PREV_LNUM.set(LineNr::ZERO);
-                    if line.lnum > linecount {
+                    if !step_to_next_level(line, method, linecount) {
                         break;
                     }
-                    line.lnum_save = line.lnum;
-                    line.lnum = next;
                 }
             }
         }
@@ -341,6 +271,43 @@ impl Win {
                 open_ended,
             ))
         })?
+    }
+
+    /// Recurse into the nested list of the fold `nested` names, for the
+    /// lines from `line` down, with `line` and the line numbers made relative
+    /// to that fold and back. Answers the new `bot`.
+    #[allow(clippy::too_many_arguments)]
+    fn update_nested(
+        self,
+        path: &mut Vec<usize>,
+        nested: Nested,
+        level: c_int,
+        startlnum: LineNr,
+        line: &mut FoldLine,
+        method: Method<'_>,
+        bot: LineNr,
+    ) -> Result<LineNr, TreeLost> {
+        let Nested { index, top, state } = nested;
+        let bot = bot.max(line.lnum);
+        line.lnum = LineNr::new(line.lnum_save - top);
+        line.off += top.get();
+        let (from, to) = (startlnum - top, bot - top);
+        path.push(index);
+        let inner = self.update_computed_folds(
+            path,
+            level + 1,
+            LineNr::new(from),
+            line,
+            method,
+            LineNr::new(to),
+            state,
+        );
+        path.pop();
+        let bot = inner?;
+        line.lnum += top.get();
+        line.lnum_save += top.get();
+        line.off -= top.get();
+        Ok(bot + top.get())
     }
 }
 
@@ -538,17 +505,103 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
     INVALID_TOP.set(LineNr::ZERO);
 }
 
+/// A fold to recurse into: its index in the list, and the `top` and
+/// `state` read before the call out.
+#[derive(Debug)]
+struct Nested {
+    index: usize,
+    top: LineNr,
+    state: FoldState,
+}
+
+/// What the existing tree says about a line past the changed text, for one
+/// of the open-ended methods.
+#[derive(Debug, PartialEq, Eq)]
+enum PastChanges {
+    /// The tree agrees with the levels again: the update can stop.
+    Agrees,
+    /// The fold being grown ends above this line but the levels say it goes
+    /// on: finish it here.
+    Grown,
+    /// The tree is deeper than the levels are: the nested fold that has to
+    /// go has to be redrawn too, down to the `bot` given, if any.
+    Deeper(Option<LineNr>),
+}
+
+/// Compare `current`, the fold being grown, with level `lvl` at `lnum`, past
+/// the changed text, when the update is at `level`.
+fn past_changes(current: &Fold, lnum: LineNr, lvl: c_int, level: c_int) -> PastChanges {
+    let mut depth = 0;
+    if lvl >= level {
+        // How deep the existing tree says this line is.
+        let mut inner: &[Fold] = &current.nested;
+        let mut ll = lnum - current.top;
+        while let Ok(k) = find(inner, LineNr::new(ll)) {
+            depth += 1;
+            ll -= inner[k].top.get();
+            inner = &inner[k].nested;
+        }
+    }
+    if lvl < level + depth {
+        let inner = &current.nested;
+        let k = find_at_or_below(inner, LineNr::new(lnum - current.top));
+        // UPSTREAM BUG: `k` may be `inner.len()`, and `fold.c` reads that
+        // entry anyway (guarding only against a list that never had
+        // storage). Upstream reads whatever bytes sit there -- usually the
+        // zeroed slack `ga_grow` left, sometimes a stale copy of a deleted
+        // fold, sometimes past the block. The zeroed case is reproduced: a
+        // fold at 0 of length 0 puts `bot` one above this fold. See
+        // ~/agents/context/1786212071-upstream-neovim-bugs/
+        // fold-iems-recurse-fp2-past-end.md.
+        return PastChanges::Deeper(match inner.get(k) {
+            Some(nested) => Some(nested.last() + current.top.get()),
+            None if inner.capacity() > 0 => Some(current.top - 1),
+            None => None,
+        });
+    }
+    if current.top + current.len <= lnum && lvl >= level {
+        PastChanges::Grown
+    } else {
+        PastChanges::Agrees
+    }
+}
+
+/// Step `line` on to the next line with a level of its own, leaving
+/// `lnum_save` there and `lnum` one below where the search started, so the
+/// caller sees both. False when the buffer ran out first.
+fn step_to_next_level(line: &mut FoldLine, method: Method<'_>, linecount: LineNr) -> bool {
+    line.lnum = line.lnum_save;
+    let next = line.lnum + 1;
+    while !GOT_INT.get() {
+        // 'foldexpr' may ask for the level of this line while we are
+        // working out the next one; park the answer.
+        PREV_LNUM.set(line.lnum);
+        PREV_LNUM_LVL.set(line.lvl);
+        line.lnum += 1;
+        if line.lnum > linecount {
+            break;
+        }
+        line.lvl = line.lvl_next;
+        method.level(line);
+        if line.lvl >= 0 || line.had_end <= MAX_LEVEL {
+            break;
+        }
+    }
+    PREV_LNUM.set(LineNr::ZERO);
+    if line.lnum > linecount {
+        return false;
+    }
+    line.lnum_save = line.lnum;
+    line.lnum = next;
+    true
+}
+
 /// What one pass of [`Win::update_computed_folds`]'s loop does once the
 /// tree has had its say, if it goes on.
 #[derive(Debug)]
 enum Next {
-    /// The levels go deeper here: recurse into the nested list of fold
-    /// `index`, whose `top` and `state` are given.
-    Recurse {
-        index: usize,
-        top: LineNr,
-        state: FoldState,
-    },
+    /// The levels go deeper here: recurse into the fold's nested list.
+    Recurse(Nested),
     /// Step on to the next line with a level.
     Step,
 }
@@ -915,5 +968,62 @@ pub(super) fn foldlevel_syntax(line: &mut FoldLine) {
             line.start = n - line.lvl;
             line.lvl = n;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fold(top: i32, len: i32, nested: Vec<Fold>) -> Fold {
+        Fold {
+            nested,
+            ..Fold::new(LineNr::new(top), len)
+        }
+    }
+
+    #[test]
+    fn a_line_past_the_changes_finishes_or_stops_by_the_folds_end() {
+        let current = fold(1, 3, Vec::new());
+        // Lines 1..=3: line 4 is past the fold while the level goes on.
+        assert_eq!(
+            past_changes(&current, LineNr::new(4), 1, 1),
+            PastChanges::Grown
+        );
+        // Still inside it: the tree already agrees.
+        assert_eq!(
+            past_changes(&current, LineNr::new(3), 1, 1),
+            PastChanges::Agrees
+        );
+        // The same at the top level.
+        assert_eq!(
+            past_changes(&current, LineNr::new(4), 0, 0),
+            PastChanges::Grown
+        );
+    }
+
+    #[test]
+    fn a_tree_deeper_than_the_levels_redraws_the_nested_fold() {
+        // A nested fold at relative lines 2..=3 of a fold at line 1.
+        let current = fold(1, 5, vec![fold(2, 2, Vec::new())]);
+        // Line 3 is one deeper in the tree than level 1 says.
+        assert_eq!(
+            past_changes(&current, LineNr::new(3), 1, 1),
+            PastChanges::Deeper(Some(LineNr::new(4)))
+        );
+        // A level below the update's own: nothing nested to find, nothing
+        // ever allocated, so `bot` stays.
+        let bare = fold(1, 5, Vec::new());
+        assert_eq!(
+            past_changes(&bare, LineNr::new(3), 0, 1),
+            PastChanges::Deeper(None)
+        );
+        // The upstream read past the end of a list that had storage: one
+        // above the fold.
+        let emptied = fold(4, 5, Vec::with_capacity(1));
+        assert_eq!(
+            past_changes(&emptied, LineNr::new(6), 0, 1),
+            PastChanges::Deeper(Some(LineNr::new(3)))
+        );
     }
 }
