@@ -36,7 +36,7 @@ use crate::global_cell::{Field, field};
 use crate::guard::SECURE;
 use crate::indent_c::parse_cino;
 use crate::memory::XString;
-use crate::option::defs::OptError;
+use crate::option::defs::{InvalidValue, OptError};
 use crate::option::{OPT_FLAG_N_DNAME, OPT_FLAG_N_FNAME, valid_name};
 use crate::options::{
     OPT_BACKUPCOPY, OPT_BELLOFF, OPT_CASEMAP, OPT_CLIPBOARD, OPT_COMPLETEOPT, OPT_DISPLAY,
@@ -47,7 +47,7 @@ use crate::options::{
 use crate::os::cshim::gettext;
 use crate::os::libc::uint32_t;
 use crate::statusline::defs::StlOpt;
-use crate::types::{Buffer, Failed};
+use crate::types::Buffer;
 
 use super::OptStringRef;
 
@@ -194,7 +194,7 @@ pub(crate) fn valid_filetype(val: &CStr) -> bool {
 }
 
 /// [`check_signcolumn`] over the window's own 'signcolumn'.
-pub(crate) fn check_window_signcolumn(window: Win) -> Result<(), Failed> {
+pub(crate) fn check_window_signcolumn(window: Win) -> Result<(), InvalidValue> {
     check_signcolumn(None, Some(window))
 }
 
@@ -206,7 +206,10 @@ pub(crate) fn check_window_signcolumn(window: Win) -> Result<(), Failed> {
 /// ("no", "yes", "yes:1".."yes:9", "auto", "auto:1".."auto:9", "number"),
 /// and then the `auto:<min>-<max>` range, which the table cannot enumerate
 /// and which is parsed by hand.
-pub fn check_signcolumn(scl: Option<&[u8]>, window: Option<Win>) -> Result<(), Failed> {
+pub(crate) fn check_signcolumn(
+    scl: Option<&[u8]>,
+    window: Option<Win>,
+) -> Result<(), InvalidValue> {
     // The range is worked out while the value is borrowed -- from the
     // caller, or from the window itself -- and the window written after:
     // `None` for a value that is not good, `Some(None)` for one that is
@@ -249,7 +252,7 @@ pub fn check_signcolumn(scl: Option<&[u8]>, window: Option<Win>) -> Result<(), F
         (None, None) => range(b""),
     };
     let Some(found) = found else {
-        return Err(Failed);
+        return Err(InvalidValue);
     };
     // A range is only worked out for a window.
     let (Some((min, max)), Some(mut window)) = (found, window) else {

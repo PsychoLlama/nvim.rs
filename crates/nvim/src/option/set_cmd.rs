@@ -134,6 +134,17 @@ fn get_option_prefix(arg: &[u8], p: &mut usize) -> Prefix {
     Prefix::None
 }
 
+/// Why [`Win::validate_option`] will not set an option.
+#[derive(Debug)]
+enum Refusal {
+    /// Refused, with the message the `:set` reports beside its argument.
+    Error(OptError),
+    /// Not this `:set`'s to touch, and nothing to say about it: a sweep
+    /// over windows or buffers met the other kind, or a modeline would
+    /// undo what `:diffthis` set up.
+    Skipped,
+}
+
 impl Win {
     /// Whether this option may be set at all, here and now: some are refused in
     /// a modeline or in the sandbox, and `:setlocal`/`:setglobal` on a modeline
@@ -144,37 +155,33 @@ impl Win {
         opt_flags: OptionSetFlags,
         flags: uint32_t,
         prefix: Prefix,
-        errmsg: &mut Option<OptError>,
-    ) -> Result<(), Failed> {
+    ) -> Result<(), Refusal> {
+        let refuse = |message: &'static CStr| Err(Refusal::Error(message.into()));
         if prefix != Prefix::None && !option_has_type(opt_idx, OPT_VAL_TYPE_BOOLEAN) {
-            *errmsg = Some(E_INVARG.into());
-            return Err(Failed);
+            return refuse(E_INVARG);
         }
         // A `:set` sweeping over windows or buffers only wants its own kind.
         if opt_flags.has(OptionSetFlags::WINONLY) && !option_is_window_local(opt_idx) {
-            return Err(Failed);
+            return Err(Refusal::Skipped);
         }
         if opt_flags.has(OptionSetFlags::NOWIN) && option_is_window_local(opt_idx) {
-            return Err(Failed);
+            return Err(Refusal::Skipped);
         }
         if opt_flags.has(OptionSetFlags::MODELINE) {
             if flags & OPT_FLAG_SECURE as uint32_t != 0 {
-                *errmsg = Some(E_NOT_ALLOWED_IN_MODELINE.into());
-                return Err(Failed);
+                return refuse(E_NOT_ALLOWED_IN_MODELINE);
             }
             if flags & OPT_FLAG_MLE as uint32_t != 0 && !p_mle() {
-                *errmsg = Some(E_MODELINE_NEEDS_MODELINEEXPR.into());
-                return Err(Failed);
+                return refuse(E_MODELINE_NEEDS_MODELINEEXPR);
             }
             // A modeline must not undo what `:diffthis` set up.
             if self.w_onebuf_opt.wo_diff != 0 && (opt_idx == OPT_FOLDMETHOD || opt_idx == OPT_WRAP)
             {
-                return Err(Failed);
+                return Err(Refusal::Skipped);
             }
         }
         if SANDBOX.get() != 0 && flags & OPT_FLAG_SECURE as uint32_t != 0 {
-            *errmsg = Some(E_SANDBOX.into());
-            return Err(Failed);
+            return refuse(E_SANDBOX);
         }
         Ok(())
     }
@@ -379,12 +386,13 @@ fn do_one_set_option(
     let flags = get_option(opt_idx).flags;
     let varp = get_varp_scope(opt_idx, opt_flags);
 
-    let win = Win::current();
-    if win
-        .validate_option(opt_idx, opt_flags, flags, prefix, errmsg)
-        .is_err()
-    {
-        return;
+    match Win::current().validate_option(opt_idx, opt_flags, flags, prefix) {
+        Ok(()) => {}
+        Err(Refusal::Error(refused)) => {
+            *errmsg = Some(refused);
+            return;
+        }
+        Err(Refusal::Skipped) => return,
     }
 
     let one_of = |set: &[u8]| nextchar != 0 && set.contains(&nextchar);
@@ -525,7 +533,7 @@ pub(crate) fn do_set(arg: &[u8], opt_flags: OptionSetFlags) -> Result<(), Failed
                 }
             }
             if let Some(errmsg) = errmsg {
-                report(&errmsg, &arg[startarg..p.min(arg.len())]);
+                emsg_rejected_argument(&errmsg, &arg[startarg..p.min(arg.len())]);
                 return Err(Failed);
             }
         }
@@ -561,7 +569,7 @@ fn skip_to_white_escaped(arg: &[u8], mut p: usize) -> usize {
 ///
 /// The argument is appended only when both fit in the report buffer; a
 /// message that long stands on its own.
-fn report(errmsg: &OptError, arg: &[u8]) {
+fn emsg_rejected_argument(errmsg: &OptError, arg: &[u8]) {
     // Upstream builds the report in `IObuff`, and translates its unprintable
     // characters in place within that room: the buffer is the room.
     let room = IOSIZE as usize;

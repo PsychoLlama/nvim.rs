@@ -276,6 +276,18 @@ pub enum OptError {
 
 const _: () = assert!(size_of::<OptError>() <= 16);
 
+/// A value an option's parser could not read. Nothing is said where it is
+/// found: the setter that asked answers "E474: Invalid argument" for it
+/// (the `From` below), and a re-check of a value already set ignores it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct InvalidValue;
+
+impl From<InvalidValue> for OptError {
+    fn from(InvalidValue: InvalidValue) -> Self {
+        OptError::Static(crate::message::E_INVARG)
+    }
+}
+
 impl OptError {
     /// The room a formatted rejection is given, which is the size upstream
     /// told `vim_snprintf` its `errbuf` was.

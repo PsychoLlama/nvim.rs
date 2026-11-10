@@ -31,7 +31,7 @@ use crate::drawscreen::state::{NEED_MAKETITLE, REDRAW_TABLINE};
 use crate::eval::typval::{DictRef, callback_free, tv_dict_alloc};
 use crate::eval::{callback_from_typval, eval_expr};
 use crate::memory::XString;
-use crate::option::defs::{BsFlag, CpoFlag, OptVal, OptionSetFlags, ShmFlag};
+use crate::option::defs::{BsFlag, CpoFlag, InvalidValue, OptVal, OptionSetFlags, ShmFlag};
 use crate::option::vars::{
     BKC_FLAGS, P_BS, P_CPO, P_FFS, P_SHM, P_SISO, P_SO, VE_FLAGS, p_magic, p_sh, p_siso, p_so,
     p_wc, p_wcm,
@@ -86,7 +86,7 @@ pub(crate) fn vimrc_found(fname: &CStr, envname: &CStr) {
 
 /// What a 'cursorlineopt' value asks for, as `w_p_culopt_flags` bits, or
 /// `Err` for a value that does not parse.
-fn culopt_flags(value: &[u8]) -> Result<uint8_t, Failed> {
+fn culopt_flags(value: &[u8]) -> Result<uint8_t, InvalidValue> {
     const WORDS: [(&[u8], c_int); 4] = [
         (b"line", OPT_CULOPT_FLAG_LINE.cast_signed()),
         (
@@ -104,12 +104,12 @@ fn culopt_flags(value: &[u8]) -> Result<uint8_t, Failed> {
             flags |= bits;
         } else if first != b',' {
             // Anything the words above did not consume is a syntax error.
-            return Err(Failed);
+            return Err(InvalidValue);
         }
         match rest.first() {
             None => {}
             Some(b',') => rest = &rest[1..],
-            Some(_) => return Err(Failed),
+            Some(_) => return Err(InvalidValue),
         }
     }
     // "line" and "screenline" are mutually exclusive; "both" implies
@@ -117,7 +117,7 @@ fn culopt_flags(value: &[u8]) -> Result<uint8_t, Failed> {
     if flags & OPT_CULOPT_FLAG_LINE.cast_signed() != 0
         && flags & OPT_CULOPT_FLAG_SCREENLINE.cast_signed() != 0
     {
-        return Err(Failed);
+        return Err(InvalidValue);
     }
     Ok(uint8_t::try_from(flags).expect("four flag bits"))
 }
@@ -125,7 +125,7 @@ fn culopt_flags(value: &[u8]) -> Result<uint8_t, Failed> {
 /// Parse 'cursorlineopt' into `window.w_p_culopt_flags`, from `val` or from the
 /// window's own value. `Err` for a value that does not parse; the flags are
 /// only stored on success.
-pub(crate) fn fill_culopt_flags(val: Option<&CStr>, mut window: Win) -> Result<(), Failed> {
+pub(crate) fn fill_culopt_flags(val: Option<&CStr>, mut window: Win) -> Result<(), InvalidValue> {
     let flags = match val {
         Some(val) => culopt_flags(val.to_bytes()),
         None => culopt_flags(window.w_onebuf_opt.wo_culopt.bytes()),
@@ -717,6 +717,38 @@ mod tests {
     fn halving_by_runs_is_the_byte_walk() {
         for text in strings(b"\\a\0", if cfg!(miri) { 4 } else { 7 }) {
             assert_eq!(backslash_halved(&text), halved_by_bytes(&text), "{text:?}");
+        }
+    }
+
+    /// 'cursorlineopt': the words and their bits, and every way a value
+    /// fails to parse.
+    #[test]
+    fn cursorline_options_parse_or_refuse() {
+        use super::{InvalidValue, culopt_flags};
+        use crate::options::{
+            OPT_CULOPT_FLAG_LINE as LINE, OPT_CULOPT_FLAG_NUMBER as NUMBER,
+            OPT_CULOPT_FLAG_SCREENLINE as SCREENLINE,
+        };
+        let bits = |flags: u32| Ok(u8::try_from(flags).unwrap());
+        assert_eq!(culopt_flags(b"line"), bits(LINE));
+        assert_eq!(culopt_flags(b"both"), bits(LINE | NUMBER));
+        assert_eq!(
+            culopt_flags(b"number,screenline"),
+            bits(NUMBER | SCREENLINE)
+        );
+        assert_eq!(culopt_flags(b""), bits(0));
+        // A stray comma is skipped, a trailing one too.
+        assert_eq!(culopt_flags(b",line,"), bits(LINE));
+        // An unknown word, a word glued to another, and the two that
+        // exclude each other.
+        for bad in [
+            &b"lines"[..],
+            b"linex",
+            b"line;number",
+            b"line,screenline",
+            b"both,screenline",
+        ] {
+            assert_eq!(culopt_flags(bad), Err(InvalidValue), "{bad:?}");
         }
     }
 }

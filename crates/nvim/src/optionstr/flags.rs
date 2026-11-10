@@ -27,10 +27,9 @@
 use core::ffi::{CStr, c_int, c_uint};
 
 use crate::message::E_INVARG;
-use crate::option::defs::{OptError, OptIndex, OptSet};
+use crate::option::defs::{InvalidValue, OptError, OptIndex, OptSet};
 use crate::option::{OPT_FLAG_COMMA, OPT_FLAG_ONE_COMMA, get_option, option_var};
 use crate::options::{OPT_FILEFORMAT, OPT_FILEFORMATS, OPT_SESSIONOPTIONS, OPT_VIEWOPTIONS};
-use crate::types::Failed;
 
 use super::illegal_char;
 
@@ -134,12 +133,12 @@ pub(crate) fn did_set_option_listflag(value: &[u8], flags: &CStr) -> Result<(), 
 pub(crate) fn check_str_opt(
     idx: OptIndex,
     varp: Option<crate::option::StrVar>,
-) -> Result<(), Failed> {
+) -> Result<(), InvalidValue> {
     let opt = get_option(idx);
     let varp = varp.unwrap_or_else(|| option_var(idx).string_var());
     let list = opt.flags & (OPT_FLAG_COMMA | OPT_FLAG_ONE_COMMA) != 0;
     let Some(mask) = varp.with_bytes(|value| opt_strings_mask(value, opt_values(idx), list)) else {
-        return Err(Failed);
+        return Err(InvalidValue);
     };
     // The table names the mask cell itself; an option with no mask has none.
     if let Some(cell) = opt.flags_var {
