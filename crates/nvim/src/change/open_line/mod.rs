@@ -4,10 +4,11 @@
 //!
 //! | phase | where |
 //! | --- | --- |
-//! | cut the current line in two at the cursor | [`open_line`] |
-//! | guess an indent from 'autoindent'/'smartindent' | [`smart`] |
-//! | decide and build the comment leader | [`comment`] |
-//! | put the new line in the buffer | [`append_new_line`] |
+//! | cut the current line in two at the cursor | [`Opening::cut`] |
+//! | guess an indent from 'autoindent'/'smartindent' | [`Opening::guess_indent`], [`smart`] |
+//! | decide and build the comment leader | [`Opening::find_leader`], [`Opening::leader`], [`comment`] |
+//! | the new line's text, blanks skipped | [`Opening::new_line_text`] |
+//! | put the new line in the buffer | [`Opening::put_new_line`], [`append_new_line`] |
 //! | apply the indent, feeding the replace stack | [`apply_new_indent`] |
 //! | shorten the old line and splice the extmarks | [`truncate_old_line`] |
 //! | reindent with 'cindent'/'indentexpr'/'lisp' | [`reindent_new_line`] |
@@ -19,7 +20,8 @@
 //! built as if a line were being opened, then taken back off, the original
 //! line put back, and the text re-inserted character by character through
 //! `ins_bytes` so that every replaced byte reaches the replace stack. That is
-//! the `next_line` copy and the epilogue at the bottom.
+//! the `next_line` copy in [`Opening::cut`] and the end of
+//! [`Opening::put_new_line`].
 //!
 //! **It is reentrant with `textformat.rs`**: `internal_format` calls it to
 //! break a line, and `OPENLINE_FORMAT` is how it knows. The `did_do_comment`
@@ -329,88 +331,82 @@ pub fn open_line(
     second_line_indent: c_int,
     did_do_comment: Option<&mut bool>,
 ) -> Result<(), Failed> {
-    let do_si = may_do_si();
     let saved_pi = Buf::current().b_p_pi;
-    let lnum = Win::current().w_cursor.lnum;
-    let mincol = Win::current().w_cursor.col + 1;
-    // A copy of the current line, so that it can be cut in two.
-    let mut saved_line = Lines::current().line(lnum).to_vec();
-    let col = Win::current().w_cursor.col.as_usize().min(saved_line.len());
-    let mut next_line = None;
+    let opening = Opening::cut(dir, flags, second_line_indent);
+    let (newindent, no_si) = opening.guess_indent();
+    let do_cindent = wants_cindent(dir, flags);
+    let lead = opening.find_leader(do_cindent, did_do_comment);
+    let mut layout = Layout {
+        newindent,
+        no_si,
+        newcol: ColNr::ZERO,
+        less_cols: 0,
+        less_cols_off: 0,
+        lead_len: lead.len,
+    };
+    let leader = opening.leader(lead, &mut layout);
+    let has_leader = leader.is_some();
+    let new_text = opening.new_line_text(leader, &mut layout);
 
-    if STATE.get() & VREPLACE_FLAG != 0 {
-        // Virtual Replace keeps a copy of the line it is about to start
-        // replacing. The new line is built empty so that the indent and
-        // leader machinery below can do as it likes; what it produces is
-        // taken off again at the bottom and inserted character by
-        // character over the original.  -- webb.
-        next_line = Some(if lnum < ORIG_LINE_COUNT.get() {
-            XString::from_bytes(Lines::current().line(lnum + 1))
-        } else {
-            XString::new()
-        });
+    let old_cmod_flags = cmdmod_flags();
+    let retval = opening.put_new_line(new_text, layout, has_leader, do_cindent);
+    Buf::current().b_p_pi = saved_pi;
+    cmdmod_set_flags(old_cmod_flags);
+    retval
+}
 
-        // A NL replaces the rest of the line, so everything past the
-        // cursor goes on the replace stack. Twice, because BS over a NL
-        // expects it.
-        replace_push_nul();
-        replace_push_nul();
-        replace_push(&saved_line[col..]);
-        saved_line.truncate(col);
-    }
+/// The line being split, and what the first look at it learned.
+#[derive(Debug)]
+struct Opening {
+    dir: c_int,
+    flags: c_int,
+    second_line_indent: c_int,
+    do_si: bool,
+    /// Where the cursor was: the line split, and one past the column.
+    lnum: LineNr,
+    mincol: ColNr,
+    /// A copy of the current line, so that it can be cut in two.
+    saved_line: Vec<u8>,
+    /// Virtual Replace's copy of the line it is about to start replacing.
+    next_line: Option<XString>,
+    /// What moves to the new line: the tail of the old one, from `extra`
+    /// on (Insert state only, not Virtual Replace).
+    extra: Option<usize>,
+    extra_len: usize,
+    /// The first character after the break, for 'smartindent'.
+    first_char: c_int,
+    /// Nothing was typed on the line being left: truncate it.
+    trunc_line: bool,
+}
 
-    // What moves to the new line: the tail of the old one, from `extra` on.
-    // Until the leader is built the line is read as ending there -- the C
-    // writes a NUL over the cut and puts the byte back afterwards.
-    let mut extra = None;
-    let mut extra_len = 0;
-    let mut first_char = NUL;
-    if STATE.get() & MODE_INSERT != 0 && STATE.get() & VREPLACE_FLAG == 0 {
-        extra = Some(col);
-        let tail = &saved_line[col..];
-        if do_si {
-            // 'smartindent' wants the first character after the break.
-            first_char = c_int::from(byte_at(tail, white_run(tail)));
-        }
-        extra_len = tail.len();
-    }
-    let cut = extra.unwrap_or(saved_line.len());
+/// The columns and indent the phases after the first adjust in turn.
+#[derive(Debug)]
+struct Layout {
+    newindent: c_int,
+    /// 'smartindent' asked for no extra indent after all.
+    no_si: bool,
+    /// The cursor column on the new line.
+    newcol: ColNr,
+    /// Columns the marks after the break move left by.
+    less_cols: i32,
+    /// Blanks skipped at the start of the moving tail.
+    less_cols_off: i32,
+    lead_len: c_int,
+}
 
-    u_clearline(Buf::current()); // "U" cannot undo added lines
-    DID_SI.set(false);
-    AI_COL.set(ColNr::ZERO);
+/// The comment leader the current line starts with (or ends in, after
+/// code), as [`Opening::find_leader`] found it.
+#[derive(Debug)]
+struct Lead {
+    len: c_int,
+    flags: Option<ComFlags>,
+    /// Where a line comment after code starts.
+    comment_start: c_int,
+}
 
-    // An auto-indent means nothing was typed on the line being left, so
-    // it should be truncated. Also true when only a comment leader was
-    // inserted automatically, which sets did_ai too.
-    let trunc_line = dir == FORWARD && DID_AI.get();
-
-    let mut newindent = 0;
-    let mut no_si = false;
-    if flags & OPENLINE_FORCE_INDENT != 0 {
-        newindent = second_line_indent;
-    } else if Buf::current().b_p_ai != 0 || do_si {
-        let head = &saved_line[..cut];
-        newindent = Buf::current().indent_width(head);
-        if newindent == 0 && flags & OPENLINE_COM_LIST == 0 {
-            newindent = second_line_indent; // CTRL-D in Insert mode
-        }
-        // Text moving to the next line that starts with `{` gets no extra
-        // indent, so that a <CR> before the `{` of "if (cond) {" works.
-        if !trunc_line
-            && do_si
-            && !head.is_empty()
-            && (extra.is_none() || first_char != c_int::from(b'{'))
-        {
-            (newindent, no_si) = smart_indent(dir, flags, head, newindent);
-        }
-        if do_si {
-            CAN_SI.set(true);
-        }
-        DID_AI.set(true);
-    }
-
-    // Whether to reindent once the line is open.
+/// Whether to reindent once the line is open: 'cindent' or 'indentexpr' and
+/// the `o`/`O` entry of 'cinkeys'.
+fn wants_cindent(dir: c_int, flags: c_int) -> bool {
     let key = if dir == FORWARD {
         Key::OPEN_FORWARD
     } else {
@@ -418,81 +414,209 @@ pub fn open_line(
     };
     // The short circuits are upstream's: `in_cinkeys` reads 'cinkeys' and
     // the cursor line.
-    let do_cindent = !p_paste()
-        && (Buf::current().b_p_cin != 0
-            || c_int::from(Buf::current().b_p_inde.first_byte()) != NUL)
+    !p_paste()
+        && (Buf::current().b_p_cin != 0 || c_int::from(Buf::current().b_p_inde.first_byte()) != NUL)
         && in_cinkeys(key, b' ', linewhite(Win::current().w_cursor.lnum))
-        && flags & OPENLINE_FORCE_INDENT == 0;
+        && flags & OPENLINE_FORCE_INDENT == 0
+}
 
-    // Does the current line start with a comment leader that should be
-    // repeated in front of the new line?
-    END_COMMENT_PENDING.set(None);
-    let mut lead_flags = None;
-    let mut comment_start = 0;
-    let mut lead_len = 0;
-    if flags & OPENLINE_DO_COM != 0 {
-        let head = &saved_line[..cut];
-        (lead_len, lead_flags) = get_leader_len(head, dir == BACKWARD, true);
-        if lead_len == 0
+impl Opening {
+    /// Copy the cursor line and decide where it is cut.
+    fn cut(dir: c_int, flags: c_int, second_line_indent: c_int) -> Opening {
+        let do_si = may_do_si();
+        let lnum = Win::current().w_cursor.lnum;
+        let mincol = Win::current().w_cursor.col + 1;
+        let mut saved_line = Lines::current().line(lnum).to_vec();
+        let col = Win::current().w_cursor.col.as_usize().min(saved_line.len());
+        let mut next_line = None;
+
+        if STATE.get() & VREPLACE_FLAG != 0 {
+            // Virtual Replace keeps a copy of the line it is about to start
+            // replacing. The new line is built empty so that the indent and
+            // leader machinery can do as it likes; what it produces is taken
+            // off again at the end and inserted character by character over
+            // the original.  -- webb.
+            next_line = Some(if lnum < ORIG_LINE_COUNT.get() {
+                XString::from_bytes(Lines::current().line(lnum + 1))
+            } else {
+                XString::new()
+            });
+
+            // A NL replaces the rest of the line, so everything past the
+            // cursor goes on the replace stack. Twice, because BS over a NL
+            // expects it.
+            replace_push_nul();
+            replace_push_nul();
+            replace_push(&saved_line[col..]);
+            saved_line.truncate(col);
+        }
+
+        // Until the leader is built the line is read as ending at `extra`
+        // -- the C writes a NUL over the cut and puts the byte back
+        // afterwards.
+        let mut extra = None;
+        let mut extra_len = 0;
+        let mut first_char = NUL;
+        if STATE.get() & MODE_INSERT != 0 && STATE.get() & VREPLACE_FLAG == 0 {
+            extra = Some(col);
+            let tail = &saved_line[col..];
+            if do_si {
+                // 'smartindent' wants the first character after the break.
+                first_char = c_int::from(byte_at(tail, white_run(tail)));
+            }
+            extra_len = tail.len();
+        }
+
+        u_clearline(Buf::current()); // "U" cannot undo added lines
+        DID_SI.set(false);
+        AI_COL.set(ColNr::ZERO);
+
+        // An auto-indent means nothing was typed on the line being left, so
+        // it should be truncated. Also true when only a comment leader was
+        // inserted automatically, which sets did_ai too.
+        let trunc_line = dir == FORWARD && DID_AI.get();
+
+        Opening {
+            dir,
+            flags,
+            second_line_indent,
+            do_si,
+            lnum,
+            mincol,
+            saved_line,
+            next_line,
+            extra,
+            extra_len,
+            first_char,
+            trunc_line,
+        }
+    }
+
+    /// The old line up to the cut.
+    fn head(&self) -> &[u8] {
+        &self.saved_line[..self.extra.unwrap_or(self.saved_line.len())]
+    }
+
+    /// The new line's indent from 'autoindent'/'smartindent' (or the forced
+    /// one), and whether 'smartindent' then asked for no extra indent.
+    fn guess_indent(&self) -> (c_int, bool) {
+        if self.flags & OPENLINE_FORCE_INDENT != 0 {
+            return (self.second_line_indent, false);
+        }
+        if Buf::current().b_p_ai == 0 && !self.do_si {
+            return (0, false);
+        }
+        let head = self.head();
+        let mut newindent = Buf::current().indent_width(head);
+        let mut no_si = false;
+        if newindent == 0 && self.flags & OPENLINE_COM_LIST == 0 {
+            newindent = self.second_line_indent; // CTRL-D in Insert mode
+        }
+        // Text moving to the next line that starts with `{` gets no extra
+        // indent, so that a <CR> before the `{` of "if (cond) {" works.
+        if !self.trunc_line
+            && self.do_si
+            && !head.is_empty()
+            && (self.extra.is_none() || self.first_char != c_int::from(b'{'))
+        {
+            (newindent, no_si) = smart_indent(self.dir, self.flags, head, newindent);
+        }
+        if self.do_si {
+            CAN_SI.set(true);
+        }
+        DID_AI.set(true);
+        (newindent, no_si)
+    }
+
+    /// Does the current line start with a comment leader that should be
+    /// repeated in front of the new line?
+    fn find_leader(&self, do_cindent: bool, did_do_comment: Option<&mut bool>) -> Lead {
+        END_COMMENT_PENDING.set(None);
+        let mut lead = Lead {
+            len: 0,
+            flags: None,
+            comment_start: 0,
+        };
+        if self.flags & OPENLINE_DO_COM == 0 {
+            return lead;
+        }
+        let head = self.head();
+        (lead.len, lead.flags) = get_leader_len(head, self.dir == BACKWARD, true);
+        if lead.len == 0
             && Buf::current().b_p_cin != 0
             && do_cindent
-            && dir == FORWARD
-            && (!has_format_option(FoFlag::NO_OPEN_COMS) || flags & OPENLINE_FORMAT != 0)
+            && self.dir == FORWARD
+            && (!has_format_option(FoFlag::NO_OPEN_COMS) || self.flags & OPENLINE_FORMAT != 0)
         {
             // A line comment after code: `code(); // why`.
             if let Some(from) = check_linecomment(head) {
-                comment_start = len_as_int(from);
+                lead.comment_start = len_as_int(from);
                 let (len, tried) = get_leader_len(&head[from..], false, true);
                 // One out-parameter for both scans upstream: a scan that
                 // tried nothing leaves the first one's answer.
-                lead_flags = tried.or(lead_flags);
-                lead_len = len;
-                if lead_len != 0 {
-                    lead_len += comment_start;
+                lead.flags = tried.or(lead.flags);
+                lead.len = len;
+                if lead.len != 0 {
+                    lead.len += lead.comment_start;
                     if let Some(did_do_comment) = did_do_comment {
                         *did_do_comment = true;
                     }
                 }
             }
         }
+        lead
     }
 
-    let mut leader = None;
-    let mut newcol: ColNr = ColNr::ZERO;
-    if let Some(lead_flags) = lead_flags.filter(|_| lead_len > 0) {
-        let head = &saved_line[..cut];
-        let plan = plan_leader(dir, lead_len, lead_flags, head, extra.is_some());
-        lead_len = plan.lead_len;
-        if lead_len > 0 {
+    /// Build the comment leader for the new line, if there is one to repeat.
+    ///
+    /// Updates the indent, the cursor column and the leader's length in
+    /// `layout`; a comment that ends on this line may set the indent too.
+    fn leader(&self, lead: Lead, layout: &mut Layout) -> Option<Vec<u8>> {
+        let lead_flags = lead.flags.filter(|_| layout.lead_len > 0)?;
+        let head = self.head();
+        let plan = plan_leader(
+            self.dir,
+            layout.lead_len,
+            lead_flags,
+            head,
+            self.extra.is_some(),
+        );
+        layout.lead_len = plan.lead_len;
+        if layout.lead_len > 0 {
             let ctx = LeaderContext {
-                comment_start,
-                extra_len,
-                second_line_indent,
+                comment_start: lead.comment_start,
+                extra_len: self.extra_len,
+                second_line_indent: self.second_line_indent,
             };
-            let built = build_leader(plan, lead_flags, head, ctx, do_si, newindent);
-            leader = Some(built.text);
-            lead_len = built.lead_len;
-            newcol = built.newcol;
-            newindent = built.newindent;
-        } else if let Some(comment_end) = plan.comment_end {
-            newindent = indent_after_comment_end(comment_end, head, do_si, newindent);
+            let built = build_leader(plan, lead_flags, head, ctx, self.do_si, layout.newindent);
+            layout.lead_len = built.lead_len;
+            layout.newcol = built.newcol;
+            layout.newindent = built.newindent;
+            return Some(built.text);
         }
+        if let Some(comment_end) = plan.comment_end {
+            layout.newindent =
+                indent_after_comment_end(comment_end, head, self.do_si, layout.newindent);
+        }
+        None
     }
-    let has_leader = leader.is_some();
 
-    // Only reached with dir == FORWARD, in Insert or Replace state.
-    let mut less_cols: i32 = 0;
-    let mut less_cols_off: i32 = 0;
-    let mut tail = &saved_line[saved_line.len()..];
-    if let Some(mut from) = extra {
-        // With 'autoindent' or OPENLINE_DELSPACES, skip to the first
-        // non-blank. In Replace mode the blanks go on the replace stack,
-        // preceded by a NUL, so BS can put them back.
+    /// Where the text moving to the new line starts.
+    ///
+    /// With 'autoindent' or `OPENLINE_DELSPACES` the blanks after the cut
+    /// are skipped. In Replace mode they go on the replace stack, preceded
+    /// by a NUL, so BS can put them back. Only reached with `dir ==
+    /// FORWARD`, in Insert or Replace state.
+    fn skip_moving_blanks(&self, layout: &mut Layout) -> usize {
+        let Some(mut from) = self.extra else {
+            return self.saved_line.len();
+        };
+        let saved_line = &self.saved_line;
         if replace_normal(STATE.get()) {
             replace_push_nul(); // end of the extra blanks
         }
-        if Buf::current().b_p_ai != 0 || flags & OPENLINE_DELSPACES != 0 {
-            while matches!(byte_at(&saved_line, from), b' ' | b'\t')
+        if Buf::current().b_p_ai != 0 || self.flags & OPENLINE_DELSPACES != 0 {
+            while matches!(byte_at(saved_line, from), b' ' | b'\t')
                 && !utf_iscomposing_first(char_at(&saved_line[from + 1..]))
             {
                 if replace_normal(STATE.get()) {
@@ -500,84 +624,92 @@ pub fn open_line(
                     replace_push(&saved_line[from..=from]);
                 }
                 from += 1;
-                less_cols_off += 1;
+                layout.less_cols_off += 1;
             }
         }
         // Columns for the marks, adjusted for the ones just removed.
-        less_cols = len_as_int(from);
-        tail = &saved_line[from..];
+        layout.less_cols = len_as_int(from);
+        from
     }
 
-    let mut new_text = match leader {
-        Some(mut text) => {
-            if flags & OPENLINE_COM_LIST != 0 && second_line_indent > 0 {
-                // 'formatlistpat': pad after the comment leader so that the
-                // text lines up with the first line's. The white space
-                // *before* the leader is `set_indent`'s job below.
-                let padding = second_line_indent - (newindent + len_as_int(text.len()));
-                if let Ok(pad) = usize::try_from(padding)
-                    && pad > 0
-                {
-                    text.resize(text.len() + pad, b' ');
-                    less_cols -= padding;
-                    newcol += padding;
-                }
-            }
-            text.extend_from_slice(tail);
-            DID_AI.set(true); // so that truncating blanks works with comments
-            less_cols -= lead_len;
-            XString::from_vec(text)
-        }
-        None => {
+    /// The new line's text: the leader, if any, then what moves down.
+    fn new_line_text(&self, leader: Option<Vec<u8>>, layout: &mut Layout) -> XString {
+        let tail = &self.saved_line[self.skip_moving_blanks(layout)..];
+        let Some(mut text) = leader else {
             END_COMMENT_PENDING.set(None); // there was no leader after all
-            XString::from_bytes(tail) // an empty line when nothing moves
+            return XString::from_bytes(tail); // an empty line when nothing moves
+        };
+        if self.flags & OPENLINE_COM_LIST != 0 && self.second_line_indent > 0 {
+            // 'formatlistpat': pad after the comment leader so that the text
+            // lines up with the first line's. The white space *before* the
+            // leader is `set_indent`'s job later.
+            let padding = self.second_line_indent - (layout.newindent + len_as_int(text.len()));
+            if let Ok(pad) = usize::try_from(padding)
+                && pad > 0
+            {
+                text.resize(text.len() + pad, b' ');
+                layout.less_cols -= padding;
+                layout.newcol += padding;
+            }
         }
-    };
-
-    let splice = Suppress::splice();
-    let old_cursor = Win::current().w_cursor;
-    let old_cmod_flags = cmdmod_flags();
-    if dir == BACKWARD {
-        if let Some(moved) = move_prompt_down(&new_text) {
-            new_text = moved;
-        }
-        Win::current().w_cursor.lnum -= 1;
+        text.extend_from_slice(tail);
+        DID_AI.set(true); // so that truncating blanks works with comments
+        layout.less_cols -= layout.lead_len;
+        XString::from_vec(text)
     }
 
-    let mut retval = Err(Failed);
-    'theend: {
-        let found = append_new_line(&new_text, old_cursor);
-        let Some(mut did_append) = found else {
-            break 'theend;
-        };
+    /// Put `new_text` in the buffer, indent it, shorten the old line and
+    /// leave the cursor on the new one. `Err` only when `ml_append` failed.
+    fn put_new_line(
+        mut self,
+        mut new_text: XString,
+        mut layout: Layout,
+        has_leader: bool,
+        do_cindent: bool,
+    ) -> Result<(), Failed> {
+        let splice = Suppress::splice();
+        let old_cursor = Win::current().w_cursor;
+        if self.dir == BACKWARD {
+            if let Some(moved) = move_prompt_down(&new_text) {
+                new_text = moved;
+            }
+            Win::current().w_cursor.lnum -= 1;
+        }
+
+        let mut did_append = append_new_line(&new_text, old_cursor).ok_or(Failed)?;
 
         let uncounted = Suppress::delete_count();
-        if newindent != 0 || DID_SI.get() {
-            apply_new_indent(newindent, &saved_line, &mut less_cols, &mut newcol, no_si);
+        if layout.newindent != 0 || DID_SI.get() {
+            apply_new_indent(
+                layout.newindent,
+                &self.saved_line,
+                &mut layout.less_cols,
+                &mut layout.newcol,
+                layout.no_si,
+            );
         }
         drop(uncounted);
 
         // One NUL on the replace stack per character of the leader, for
         // when BS deletes it.
         if replace_normal(STATE.get()) {
-            while lead_len > 0 {
+            for _ in 0..layout.lead_len {
                 replace_push_nul();
-                lead_len -= 1;
             }
         }
 
         Win::current().w_cursor = old_cursor;
-        if dir == FORWARD {
-            if trunc_line || STATE.get() & MODE_INSERT != 0 {
+        if self.dir == FORWARD {
+            if self.trunc_line || STATE.get() & MODE_INSERT != 0 {
                 let split = Split {
-                    lnum,
-                    mincol,
-                    less_cols,
-                    less_cols_off,
+                    lnum: self.lnum,
+                    mincol: self.mincol,
+                    less_cols: layout.less_cols,
+                    less_cols_off: layout.less_cols_off,
                 };
                 // The buffer owns the line now.
-                let line = core::mem::take(&mut saved_line);
-                truncate_old_line(line, flags, trunc_line, split, did_append);
+                let line = core::mem::take(&mut self.saved_line);
+                truncate_old_line(line, self.flags, self.trunc_line, split, did_append);
                 did_append = false;
             }
             // Put the cursor on the new line. `old_cursor`, not
@@ -604,29 +736,24 @@ pub fn open_line(
         }
         drop(splice);
 
-        Win::current().w_cursor.col = newcol;
+        Win::current().w_cursor.col = layout.newcol;
         Win::current().w_cursor.coladd = 0;
 
         reindent_new_line(has_leader, do_cindent);
 
         if STATE.get() & VREPLACE_FLAG != 0 {
-            // Take what ended up on the new line back off, put the
-            // original line back, and insert the new text character by
-            // character so that each replaced byte reaches the replace
-            // stack.
+            // Take what ended up on the new line back off, put the original
+            // line back, and insert the new text character by character so
+            // that each replaced byte reaches the replace stack.
             let at = Win::current().w_cursor.lnum;
             let new_text = Lines::current().line(at).to_vec();
-            if let Some(next_line) = next_line.take() {
+            if let Some(next_line) = self.next_line.take() {
                 let _ = ml_replace_owned(at, next_line);
             }
             Win::current().w_cursor.col = ColNr::ZERO;
             Win::current().w_cursor.coladd = 0;
             ins_bytes(&new_text); // calls changed_bytes()
         }
-        retval = Ok(());
+        Ok(())
     }
-
-    Buf::current().b_p_pi = saved_pi;
-    cmdmod_set_flags(old_cmod_flags);
-    retval
 }
