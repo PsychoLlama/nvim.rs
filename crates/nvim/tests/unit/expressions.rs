@@ -1536,3 +1536,32 @@ mod lexer {
         }
     }
 }
+
+/// A colon belongs to the nearest ternary, dictionary or subscript, and to
+/// nothing else: not a list, a call's arguments or a ternary that already
+/// has its colon.
+#[test]
+fn a_colon_finds_its_home_or_is_refused() {
+    assert_eq!(
+        tree("{'a': x ? 1 : 2}"),
+        "DictLiteral(Colon(SingleQuotedString, \
+         Ternary(PlainIdentifier, TernaryValue(Integer, Integer))))"
+    );
+    for orphan in [
+        "a : b",
+        "[a, b : c]",
+        "[a : b]",
+        "a ? b : c : d",
+        "f(a : b)",
+    ] {
+        let parsed = parse(orphan);
+        assert!(
+            parsed
+                .error
+                .as_deref()
+                .is_some_and(|m| m.starts_with("E15: Colon outside")),
+            "{orphan}: {:?}",
+            parsed.error
+        );
+    }
+}

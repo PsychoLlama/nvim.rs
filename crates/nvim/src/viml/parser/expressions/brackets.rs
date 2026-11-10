@@ -85,74 +85,86 @@ fn comma_has_a_home(p: &ExprParser) -> bool {
     }
 }
 
+/// The colon's message when no value precedes it.
+const COLON_EXPECTED_VALUE: &::core::ffi::CStr = c"E15: Expected value, got colon: %.*s";
+
+/// What a `:` belongs to, found by walking the AST stack.
+#[derive(Debug, PartialEq, Eq)]
+enum ColonHome {
+    /// Nothing: a colon outside a dictionary or a ternary.
+    Orphan,
+    /// The second half of a ternary, which the walk has already entered.
+    Ternary,
+    /// A slice within a subscript.
+    Subscript,
+    /// A dictionary literal's key separator.
+    Dict,
+}
+
+/// Walk the AST stack for what the colon at the cursor belongs to. Finding a
+/// ternary closes its value and makes the colon's half the open one; finding
+/// an unknown `{` makes it a dictionary.
+fn colon_home(p: &mut ExprParser) -> ColonHome {
+    if p.ast_stack.len() < 2 {
+        return ColonHome::Orphan;
+    }
+    let mut can_be_ternary = true;
+    // `i` stays below the stack's length: the walk answers at its last
+    // entry rather than step past it.
+    let mut i: size_t = 1;
+    loop {
+        let node = p.ast.filled(p.ast_stack[p.ast_stack.len() - i - 1]);
+        let node_type = p.ast.kind(node);
+        let lvl = p.ast.lvl(node);
+        // Assumes kEOpLvlTernary > kEOpLvlComma.
+        if can_be_ternary && node_type == EXPR_NODE_TERNARY_VALUE && !p.ast.got_colon(node) {
+            p.ast_stack.truncate(p.ast_stack.len() - i);
+            if p.prev_token.type_0 == EXPR_LEX_SPACING {
+                let len = p.cur_token.len.wrapping_add(p.prev_token.len);
+                p.ast.set_span(node, p.prev_token.start, len);
+            } else {
+                p.ast.set_span(node, p.cur_token.start, p.cur_token.len);
+            }
+            p.ast.set_data(
+                node,
+                ExprNodeData::Ternary(ExprNodeTernary { got_colon: true }),
+            );
+            p.add_value_if_missing(COLON_EXPECTED_VALUE);
+            let first = p.ast.filled(Slot::Children(node));
+            debug_assert!(
+                p.ast.next(first).is_none(),
+                "(*eastnode_p)->children->next == NULL"
+            );
+            p.ast_stack.push(Slot::Next(first));
+            return ColonHome::Ternary;
+        } else if node_type == EXPR_NODE_UNKNOWN_FIGURE {
+            p.select_figure_brace_type(node, EXPR_NODE_DICT_LITERAL, hl!(p, Dict));
+            return ColonHome::Dict;
+        } else if node_type == EXPR_NODE_DICT_LITERAL {
+            return ColonHome::Dict;
+        } else if node_type == EXPR_NODE_SUBSCRIPT {
+            return ColonHome::Subscript;
+        } else if node_type == EXPR_NODE_COLON {
+            return ColonHome::Orphan;
+        }
+        if lvl < E_OP_LVL_TERNARY_VALUE {
+            if lvl < E_OP_LVL_COMMA {
+                return ColonHome::Orphan;
+            }
+            can_be_ternary = false;
+        }
+        if i == p.ast_stack.len().wrapping_sub(1) {
+            return ColonHome::Orphan;
+        }
+        i = i.wrapping_add(1);
+    }
+}
+
 /// `:`: the second half of a ternary, a dictionary literal's key separator, or
 /// a slice within a subscript.
 pub(super) fn colon(p: &mut ExprParser) -> Flow {
-    const EXPECTED_VALUE: &::core::ffi::CStr = c"E15: Expected value, got colon: %.*s";
-
-    let mut is_ternary = false;
-    let mut is_subscript = false;
-    // Walk the AST stack for what this colon belongs to.
-    let has_a_home = 'scan: {
-        if p.ast_stack.len() < 2 {
-            break 'scan false;
-        }
-        let mut can_be_ternary = true;
-        let mut i: size_t = 1;
-        while i < p.ast_stack.len() {
-            let node = p.ast.filled(p.ast_stack[p.ast_stack.len() - i - 1]);
-            let node_type = p.ast.kind(node);
-            let lvl = p.ast.lvl(node);
-            // Assumes kEOpLvlTernary > kEOpLvlComma.
-            if can_be_ternary && node_type == EXPR_NODE_TERNARY_VALUE && !p.ast.got_colon(node) {
-                p.ast_stack.truncate(p.ast_stack.len() - i);
-                if p.prev_token.type_0 == EXPR_LEX_SPACING {
-                    let len = p.cur_token.len.wrapping_add(p.prev_token.len);
-                    p.ast.set_span(node, p.prev_token.start, len);
-                } else {
-                    p.ast.set_span(node, p.cur_token.start, p.cur_token.len);
-                }
-                is_ternary = true;
-                p.ast.set_data(
-                    node,
-                    ExprNodeData::Ternary(ExprNodeTernary { got_colon: true }),
-                );
-                p.add_value_if_missing(EXPECTED_VALUE);
-                let first = p.ast.filled(Slot::Children(node));
-                debug_assert!(
-                    p.ast.next(first).is_none(),
-                    "(*eastnode_p)->children->next == NULL"
-                );
-                p.ast_stack.push(Slot::Next(first));
-                break;
-            } else if node_type == EXPR_NODE_UNKNOWN_FIGURE {
-                p.select_figure_brace_type(node, EXPR_NODE_DICT_LITERAL, hl!(p, Dict));
-                break;
-            } else if node_type == EXPR_NODE_DICT_LITERAL {
-                break;
-            } else if node_type == EXPR_NODE_SUBSCRIPT {
-                is_subscript = true;
-                // can_be_ternary = false;
-                debug_assert!(!is_ternary, "!is_ternary");
-                break;
-            } else if node_type == EXPR_NODE_COLON {
-                break 'scan false;
-            } else {
-                if lvl < E_OP_LVL_TERNARY_VALUE {
-                    if lvl < E_OP_LVL_COMMA {
-                        break 'scan false;
-                    }
-                    can_be_ternary = false;
-                }
-                if i == p.ast_stack.len().wrapping_sub(1) {
-                    break 'scan false;
-                }
-                i = i.wrapping_add(1);
-            }
-        }
-        true
-    };
-    if is_subscript {
+    let home = colon_home(p);
+    if home == ColonHome::Subscript {
         debug_assert!(p.ast_stack.len() > 1, "kv_size(ast_stack) > 1");
         if p.want_node == E_NODE_VALUE
             && p.ast.kind(p.ast.filled(stack_top(&p.ast_stack, 1))) == EXPR_NODE_SUBSCRIPT
@@ -164,17 +176,17 @@ pub(super) fn colon(p: &mut ExprParser) -> Flow {
             p.ast.set_slot(p.top_node_p, Some(node));
             p.want_node = E_NODE_OPERATOR;
         } else {
-            p.add_value_if_missing(EXPECTED_VALUE);
+            p.add_value_if_missing(COLON_EXPECTED_VALUE);
         }
         let node = p.new_node(EXPR_NODE_COLON);
         p.add_op_node(node);
         p.hl_token(hl!(p, SubscriptColon));
     } else {
-        if !has_a_home {
+        if home == ColonHome::Orphan {
             p.error(c"E15: Colon outside of dictionary or ternary operator: %.*s");
         }
-        p.add_value_if_missing(EXPECTED_VALUE);
-        if is_ternary {
+        p.add_value_if_missing(COLON_EXPECTED_VALUE);
+        if home == ColonHome::Ternary {
             p.hl_token(hl!(p, TernaryColon));
         } else {
             let node = p.new_node(EXPR_NODE_COLON);
