@@ -388,11 +388,6 @@ pub(crate) fn get_address(
     let mut cmd = *at;
     cmd = cmd + skip::white(&text[cmd.min(text.len())..]);
     let mut lnum: LineNr = MAXLNUM;
-    let mut pos = Pos {
-        lnum: LineNr::ZERO,
-        col: ColNr::ZERO,
-        coladd: 0,
-    };
     loop {
         match byte_at(text, cmd) {
             b'.' | b'$' => {
@@ -411,119 +406,23 @@ pub(crate) fn get_address(
             }
             b'\'' => {
                 cmd += 1;
-                if byte_at(text, cmd) == 0 {
-                    return Err(CmdError::Quiet);
-                }
-                if addr_type != CmdAddr::Lines {
-                    return Err(CmdError::Message(addr_error(addr_type)));
-                }
-                if skip {
-                    cmd += 1;
-                } else {
-                    // A mark in another file is only followed when it
-                    // is the whole address and the command can change
-                    // file; otherwise only this buffer's marks count.
-                    let flag: MarkGet = if to_other_file && byte_at(text, cmd + 1) == 0 {
-                        MARK_ALL
-                    } else {
-                        MARK_BUF_LOCAL
-                    };
-                    // The mark's name. A high byte matches nothing, as the
-                    // C's signed `*cmd` did.
-                    let name = byte_at(text, cmd);
-                    let found = mark_get(Buf::current(), Win::current(), flag, name);
-                    cmd += 1;
-                    match &found {
-                        Some(fm) if fm.fnum() != Some(Buf::current().handle) => {
-                            mark_move_to(Some(fm), 0 as MarkMove);
-                            lnum = Win::current().w_cursor.lnum;
-                        }
-                        _ => {
-                            check_mark(found.as_ref())?;
-                            lnum = found.as_ref().map_or(LineNr::ZERO, |fm| fm.mark.lnum);
-                        }
-                    }
+                if let Some(found) = mark_address(text, &mut cmd, addr_type, skip, to_other_file)? {
+                    lnum = found;
                 }
             }
             delim @ (b'/' | b'?') => {
                 cmd += 1;
-                let c = c_int::from(delim);
-                if addr_type != CmdAddr::Lines {
-                    return Err(CmdError::Message(addr_error(addr_type)));
-                }
-                if skip {
-                    cmd += skip_regexp_at(&text[cmd..], c, c_int::from(magic_isset()));
-                    if byte_at(text, cmd) == delim {
-                        cmd += 1;
-                    }
-                } else {
-                    // The search starts from the address read so far,
-                    // so `:3/pat/` searches from line 3.
-                    pos = Win::current().w_cursor;
-                    if lnum > LineNr::ZERO && lnum != MAXLNUM {
-                        Win::current().w_cursor.lnum = lnum.min(Buf::current().b_ml.ml_line_count);
-                    }
-                    Win::current().w_cursor.col =
-                        if c == c_int::from(b'/') && Win::current().w_cursor.lnum > LineNr::ZERO {
-                            ColNr::MAX
-                        } else {
-                            ColNr::ZERO
-                        };
-                    SEARCHCMDLEN.set(0);
-                    let flags = if silent {
-                        SEARCH_KEEP as c_int
-                    } else {
-                        SEARCH_HIS as c_int | SEARCH_MSG as c_int
-                    };
-                    if do_search_in(&text[cmd..], c, c, flags).is_none() {
-                        Win::current().w_cursor = pos;
-                        return Err(CmdError::Quiet);
-                    }
-                    lnum = Win::current().w_cursor.lnum;
-                    Win::current().w_cursor = pos;
-                    // What `do_search` consumed. Wrapping, as upstream's
-                    // pointer arithmetic: the unescaping copy can leave
-                    // this negative.
-                    cmd = cmd.wrapping_add_signed(
-                        isize::try_from(SEARCHCMDLEN.get()).expect("an int is an isize"),
-                    );
+                if let Some(found) =
+                    search_address(text, &mut cmd, delim, addr_type, skip, silent, lnum)?
+                {
+                    lnum = found;
                 }
             }
             b'\\' => {
-                // `\/` and `\?` repeat the last search pattern, `\&`
-                // the last substitute pattern.
                 cmd += 1;
-                if addr_type != CmdAddr::Lines {
-                    return Err(CmdError::Message(addr_error(addr_type)));
+                if let Some(found) = last_pattern_address(text, &mut cmd, addr_type, skip, lnum)? {
+                    lnum = found;
                 }
-                let i = match byte_at(text, cmd) {
-                    b'&' => RE_SUBST as c_int,
-                    b'?' | b'/' => RE_SEARCH as c_int,
-                    _ => return Err(CmdError::Message(ex_msg(E_BACKSLASH))),
-                };
-                if !skip {
-                    pos.lnum = if lnum != MAXLNUM {
-                        lnum
-                    } else {
-                        Win::current().w_cursor.lnum
-                    };
-                    pos.col = if byte_at(text, cmd) != b'?' {
-                        ColNr::MAX
-                    } else {
-                        ColNr::ZERO
-                    };
-                    pos.coladd = 0;
-                    let dir = if byte_at(text, cmd) == b'?' {
-                        BACKWARD as c_int
-                    } else {
-                        FORWARD as c_int
-                    } as Direction;
-                    if search_last_pattern(&mut pos, dir, SEARCH_MSG as c_int, i).is_err() {
-                        return Err(CmdError::Quiet);
-                    }
-                    lnum = pos.lnum;
-                }
-                cmd += 1;
             }
             digit if digit.is_ascii_digit() => {
                 let (number, past) = getdigits_at(text, cmd, false, 0);
@@ -535,55 +434,7 @@ pub(crate) fn get_address(
 
         // Offsets. A `+`/`-` with no address before it counts from the
         // address kind's "here".
-        loop {
-            cmd += skip::white(&text[cmd.min(text.len())..]);
-            if !matches!(byte_at(text, cmd), b'-' | b'+' | b'0'..=b'9') {
-                break;
-            }
-            if lnum == MAXLNUM
-                && let Addr::At(n) = offset_base(cmdidx, addr_type)
-            {
-                lnum = n;
-            }
-            let sign = if byte_at(text, cmd).is_ascii_digit() {
-                b'+'
-            } else {
-                let sign = byte_at(text, cmd);
-                cmd += 1;
-                sign
-            };
-            let n: i32 = if !byte_at(text, cmd).is_ascii_digit() {
-                1
-            } else {
-                let (n, past) = getdigits_int_at(text, cmd, false, MAXLNUM.get());
-                cmd = past;
-                if n == MAXLNUM.get() {
-                    return Err(CmdError::Message(ex_msg(E_LINE_NUMBER_OUT_OF_RANGE)));
-                }
-                n
-            };
-            if addr_type == CmdAddr::TabsRelative {
-                return Err(CmdError::Message(ex_msg(E_INVRANGE)));
-            } else if addr_type == CmdAddr::LoadedBuffers || addr_type == CmdAddr::Buffers {
-                let offset = if sign == b'-' { -n } else { n };
-                lnum = LineNr::new(compute_buffer_local_count(addr_type, lnum, offset));
-            } else {
-                // An offset in the *second* address of a range counts
-                // from the end of a closed fold, so `:.,+1d` deletes
-                // the whole fold and the line after it.
-                if addr_type == CmdAddr::Lines && matches!(sign, b'-' | b'+') && address_count >= 2
-                {
-                    Win::current().has_folding(lnum, None, Some(&mut lnum));
-                }
-                if sign == b'-' {
-                    lnum -= n;
-                } else if lnum >= LineNr::ZERO && n >= i32::MAX - lnum.get() {
-                    return Err(CmdError::Message(ex_msg(E_LINE_NUMBER_OUT_OF_RANGE)));
-                } else {
-                    lnum += n;
-                }
-            }
-        }
+        lnum = apply_offsets(text, &mut cmd, cmdidx, addr_type, address_count, lnum)?;
 
         // A search address may be followed by another one, which
         // searches on from where the first landed.
@@ -592,6 +443,210 @@ pub(crate) fn get_address(
         }
     }
     *at = cmd;
+    Ok(lnum)
+}
+
+/// A `'x` mark address, `cmd` just past the `'`. `None` when skipping:
+/// the mark name is stepped over and nothing is looked up.
+fn mark_address(
+    text: &[u8],
+    cmd: &mut usize,
+    addr_type: CmdAddr,
+    skip: bool,
+    to_other_file: bool,
+) -> Result<Option<LineNr>, CmdError> {
+    if byte_at(text, *cmd) == 0 {
+        return Err(CmdError::Quiet);
+    }
+    if addr_type != CmdAddr::Lines {
+        return Err(CmdError::Message(addr_error(addr_type)));
+    }
+    if skip {
+        *cmd += 1;
+        return Ok(None);
+    }
+    // A mark in another file is only followed when it is the whole address
+    // and the command can change file; otherwise only this buffer's marks
+    // count.
+    let flag: MarkGet = if to_other_file && byte_at(text, *cmd + 1) == 0 {
+        MARK_ALL
+    } else {
+        MARK_BUF_LOCAL
+    };
+    // The mark's name. A high byte matches nothing, as the C's signed
+    // `*cmd` did.
+    let name = byte_at(text, *cmd);
+    let found = mark_get(Buf::current(), Win::current(), flag, name);
+    *cmd += 1;
+    match &found {
+        Some(fm) if fm.fnum() != Some(Buf::current().handle) => {
+            mark_move_to(Some(fm), 0 as MarkMove);
+            Ok(Some(Win::current().w_cursor.lnum))
+        }
+        _ => {
+            check_mark(found.as_ref())?;
+            Ok(Some(found.as_ref().map_or(LineNr::ZERO, |fm| fm.mark.lnum)))
+        }
+    }
+}
+
+/// A `/pat/` or `?pat?` search address, `cmd` just past the opening
+/// `delim`. The search starts from the address read so far (`lnum`), so
+/// `:3/pat/` searches from line 3. `None` when skipping: the pattern is
+/// stepped over and nothing is searched.
+fn search_address(
+    text: &[u8],
+    cmd: &mut usize,
+    delim: u8,
+    addr_type: CmdAddr,
+    skip: bool,
+    silent: bool,
+    lnum: LineNr,
+) -> Result<Option<LineNr>, CmdError> {
+    let c = c_int::from(delim);
+    if addr_type != CmdAddr::Lines {
+        return Err(CmdError::Message(addr_error(addr_type)));
+    }
+    if skip {
+        *cmd += skip_regexp_at(&text[*cmd..], c, c_int::from(magic_isset()));
+        if byte_at(text, *cmd) == delim {
+            *cmd += 1;
+        }
+        return Ok(None);
+    }
+    let pos = Win::current().w_cursor;
+    if lnum > LineNr::ZERO && lnum != MAXLNUM {
+        Win::current().w_cursor.lnum = lnum.min(Buf::current().b_ml.ml_line_count);
+    }
+    Win::current().w_cursor.col = if delim == b'/' && Win::current().w_cursor.lnum > LineNr::ZERO {
+        ColNr::MAX
+    } else {
+        ColNr::ZERO
+    };
+    SEARCHCMDLEN.set(0);
+    let flags = if silent {
+        SEARCH_KEEP as c_int
+    } else {
+        SEARCH_HIS as c_int | SEARCH_MSG as c_int
+    };
+    if do_search_in(&text[*cmd..], c, c, flags).is_none() {
+        Win::current().w_cursor = pos;
+        return Err(CmdError::Quiet);
+    }
+    let found = Win::current().w_cursor.lnum;
+    Win::current().w_cursor = pos;
+    // What `do_search` consumed. Wrapping, as upstream's pointer
+    // arithmetic: the unescaping copy can leave this negative.
+    *cmd =
+        cmd.wrapping_add_signed(isize::try_from(SEARCHCMDLEN.get()).expect("an int is an isize"));
+    Ok(Some(found))
+}
+
+/// `\/` and `\?` repeat the last search pattern, `\&` the last substitute
+/// pattern; `cmd` is just past the backslash. The search starts from the
+/// address read so far (`lnum`), or the cursor. `None` when skipping.
+fn last_pattern_address(
+    text: &[u8],
+    cmd: &mut usize,
+    addr_type: CmdAddr,
+    skip: bool,
+    lnum: LineNr,
+) -> Result<Option<LineNr>, CmdError> {
+    if addr_type != CmdAddr::Lines {
+        return Err(CmdError::Message(addr_error(addr_type)));
+    }
+    let which = byte_at(text, *cmd);
+    let pattern = match which {
+        b'&' => RE_SUBST as c_int,
+        b'?' | b'/' => RE_SEARCH as c_int,
+        _ => return Err(CmdError::Message(ex_msg(E_BACKSLASH))),
+    };
+    *cmd += 1;
+    if skip {
+        return Ok(None);
+    }
+    let mut pos = Pos {
+        lnum: if lnum != MAXLNUM {
+            lnum
+        } else {
+            Win::current().w_cursor.lnum
+        },
+        col: if which != b'?' {
+            ColNr::MAX
+        } else {
+            ColNr::ZERO
+        },
+        coladd: 0,
+    };
+    let dir = if which == b'?' {
+        BACKWARD as c_int
+    } else {
+        FORWARD as c_int
+    } as Direction;
+    if search_last_pattern(&mut pos, dir, SEARCH_MSG as c_int, pattern).is_err() {
+        return Err(CmdError::Quiet);
+    }
+    Ok(Some(pos.lnum))
+}
+
+/// The `+N`/`-N` offsets after an address (or in place of one: a bare
+/// offset counts from the address kind's "here"), applied to `lnum`.
+fn apply_offsets(
+    text: &[u8],
+    cmd: &mut usize,
+    cmdidx: Option<CmdIdx>,
+    addr_type: CmdAddr,
+    address_count: c_int,
+    mut lnum: LineNr,
+) -> Result<LineNr, CmdError> {
+    loop {
+        *cmd += skip::white(&text[(*cmd).min(text.len())..]);
+        if !matches!(byte_at(text, *cmd), b'-' | b'+' | b'0'..=b'9') {
+            break;
+        }
+        if lnum == MAXLNUM
+            && let Addr::At(n) = offset_base(cmdidx, addr_type)
+        {
+            lnum = n;
+        }
+        let sign = if byte_at(text, *cmd).is_ascii_digit() {
+            b'+'
+        } else {
+            let sign = byte_at(text, *cmd);
+            *cmd += 1;
+            sign
+        };
+        let n: i32 = if !byte_at(text, *cmd).is_ascii_digit() {
+            1
+        } else {
+            let (n, past) = getdigits_int_at(text, *cmd, false, MAXLNUM.get());
+            *cmd = past;
+            if n == MAXLNUM.get() {
+                return Err(CmdError::Message(ex_msg(E_LINE_NUMBER_OUT_OF_RANGE)));
+            }
+            n
+        };
+        if addr_type == CmdAddr::TabsRelative {
+            return Err(CmdError::Message(ex_msg(E_INVRANGE)));
+        } else if addr_type == CmdAddr::LoadedBuffers || addr_type == CmdAddr::Buffers {
+            let offset = if sign == b'-' { -n } else { n };
+            lnum = LineNr::new(compute_buffer_local_count(addr_type, lnum, offset));
+        } else {
+            // An offset in the *second* address of a range counts
+            // from the end of a closed fold, so `:.,+1d` deletes
+            // the whole fold and the line after it.
+            if addr_type == CmdAddr::Lines && matches!(sign, b'-' | b'+') && address_count >= 2 {
+                Win::current().has_folding(lnum, None, Some(&mut lnum));
+            }
+            if sign == b'-' {
+                lnum -= n;
+            } else if lnum >= LineNr::ZERO && n >= i32::MAX - lnum.get() {
+                return Err(CmdError::Message(ex_msg(E_LINE_NUMBER_OUT_OF_RANGE)));
+            } else {
+                lnum += n;
+            }
+        }
+    }
     Ok(lnum)
 }
 
