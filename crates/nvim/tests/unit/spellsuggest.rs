@@ -227,3 +227,50 @@ fn refusals_report_once() {
     fx.check("getline(1, '$')", "['Hello and wrld', 'fine']");
     restore(&fx);
 }
+
+/// `]s`, `[s`, `]S` and `spellbadword()` walking a buffer: where each one
+/// lands, across a word the line break splits, a sentence start that wants
+/// a capital, an empty line, and both ends with and without 'wrapscan'.
+#[test]
+fn moves_land_on_the_next_bad_word() {
+    let sandbox = Sandbox::dir("spellsuggest_moves");
+    let fx = Probe::new(sandbox.editor());
+    speller(&fx, &sandbox, "sugmove", "hello wrld. world helo");
+    fx.run("call setline(2, ['', 'check spel', 'ling word. vim', 'xqzt hello'])");
+    let at = "[line('.'), col('.')]";
+    let mut got = Vec::new();
+    for cmd in [
+        "call cursor(1, 1) | normal! ]s",
+        "normal! ]s",
+        "normal! ]s",
+        "normal! ]s",
+        "normal! ]s",
+        "normal! ]s",
+        "normal! ]s",
+        "normal! [s",
+        "normal! [s",
+        "normal! [s",
+        "call cursor(1, 1) | normal! [s",
+        "call cursor(1, 1) | normal! ]S",
+        "normal! ]S",
+        "normal! [S",
+        "set nowrapscan | call cursor(5, 1) | normal! ]s",
+        "call cursor(1, 1) | normal! [s",
+        "set wrapscan& | call cursor(4, 1)",
+    ] {
+        fx.run(&format!("silent! {cmd}"));
+        got.push(fx.eval(at));
+    }
+    got.push(fx.eval("spellbadword()"));
+    fx.run("call cursor(3, 1)");
+    got.push(fx.eval("spellbadword()"));
+    fx.run("call cursor(1, 1)");
+    got.push(fx.eval("spellbadword('Vim and vim')"));
+    restore(&fx);
+    assert_eq!(
+        got.join(" "),
+        "[1, 7] [1, 13] [1, 19] [3, 1] [3, 7] [4, 1] [4, 12] [4, 1] [3, 7] [1, 19] [5, 1] \
+         [1, 7] [1, 19] [1, 7] [5, 1] [1, 1] [4, 1] ['ling', 'bad'] ['check', 'caps'] \
+         ['and', 'bad']"
+    );
+}
