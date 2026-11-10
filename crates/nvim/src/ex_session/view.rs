@@ -44,7 +44,6 @@ use crate::options::{
 };
 use crate::os::libc::int64_t;
 use crate::types::ColNr;
-use crate::types::Failed;
 use crate::window::{DirOwner, has_own_dir, own_dir};
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{TabPage, Win};
@@ -109,7 +108,7 @@ pub(crate) fn put_view(
 
     // Local mappings and abbreviations.
     if opts.has(OPT_SSOP_FLAG_OPTIONS | OPT_SSOP_FLAG_LOCALOPTIONS) {
-        makemap(out, window.buffer_or_none()).map_err(|Failed| IoFailed)?;
+        makemap(out, window.buffer_or_none()).map_err(|_| IoFailed)?;
     }
 
     put_local_options(out, window, opts)?;
@@ -120,7 +119,7 @@ pub(crate) fn put_view(
         && !buf.name.full().is_none()
         && (buf_is_normal(Some(buf)) || buf_is_help(Some(buf)))
     {
-        put_folds(out, window).map_err(|Failed| IoFailed)?;
+        put_folds(out, window).map_err(|_| IoFailed)?;
     }
 
     // The cursor goes last: creating folds moves it.
@@ -235,7 +234,7 @@ fn put_local_options(out: &mut SessionFile, window: Win, opts: SessionOpts) -> W
         Ok(())
     };
     saved.restore();
-    f.map_err(|Failed| IoFailed)
+    f.map_err(|_| IoFailed)
 }
 
 /// Restore the cursor line -- both in the file and relative to the top of

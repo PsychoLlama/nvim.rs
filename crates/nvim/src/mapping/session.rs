@@ -20,11 +20,21 @@ use crate::getchar::Remap;
 use crate::keycodes::ModMask;
 use crate::keycodes::{KE_SNR, key_unescape};
 use crate::mbyte::{char_at, unescape_at};
-use crate::types::Failed;
 use crate::types::Key;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
 use std::io::Write;
+
+/// Why [`makemap`] did not write every mapping.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MakemapError {
+    /// A line did not reach the file. Nothing has been said: `:mk*` says
+    /// E80 for the whole file.
+    Write,
+    /// A mapping's mode set is one no `:map` command can express. [`makemap`]
+    /// says E228 (an internal error) after writing what it could.
+    IllegalMode,
+}
 
 /// The command-name prefix letters that reproduce each mode set a `:map`
 /// command can express.
@@ -89,14 +99,15 @@ fn is_writable_map(mp: &MapBlock) -> bool {
 /// It is possible to create a mapping and then `:unmap` certain modes; that
 /// is recreated here by mapping the individual modes, which takes up to
 /// three commands.  `did_cpo` says whether the `'cpo'` reset has been written
-/// yet.  Answers `Err` for a mode set no command can express.
+/// yet.  Answers [`MakemapError::IllegalMode`] for a mode set no command can
+/// express, leaving the message to the caller.
 fn put_map(
     out: &mut Vec<Vec<u8>>,
     mp: &MapBlock,
     abbr: bool,
     local: bool,
     did_cpo: &mut bool,
-) -> Result<(), Failed> {
+) -> Result<(), MakemapError> {
     let bang = mp.m_mode == MODE_CMDLINE | MODE_INSERT;
     let cmd: &[u8] = if abbr {
         b"abbr"
@@ -106,7 +117,7 @@ fn put_map(
         b"map"
     };
     let Some(&(_, letters)) = MODE_COMMANDS.iter().find(|(mode, _)| *mode == mp.m_mode) else {
-        return Err(Failed);
+        return Err(MakemapError::IllegalMode);
     };
 
     let mut letters = letters.iter().copied();
@@ -161,12 +172,12 @@ fn put_map(
 /// Write map commands for the current mappings to an `.exrc` file.
 ///
 /// `buf` names the buffer whose local mappings to write, or is `None` for
-/// the global ones.  Answers `Err` on a write error.
+/// the global ones.
 ///
 /// The commands are rendered first, out of the table's borrow, and then
 /// written a line at a time.  A newline's write error is not reported:
 /// upstream's `put_eol(fd) < 0` never fires.
-pub fn makemap(out: &mut dyn Write, buffer: Option<Buf>) -> Result<(), Failed> {
+pub(crate) fn makemap(out: &mut dyn Write, buffer: Option<Buf>) -> Result<(), MakemapError> {
     let mut text = Vec::new();
     let mut did_cpo = false;
     let table = match buffer {
@@ -193,12 +204,12 @@ pub fn makemap(out: &mut dyn Write, buffer: Option<Buf>) -> Result<(), Failed> {
         text.push(b"unlet s:cpo_save".to_vec());
     }
     for line in &text {
-        out.write_all(line).map_err(|_| Failed)?;
+        out.write_all(line).map_err(|_| MakemapError::Write)?;
         let _ = out.write_all(b"\n");
     }
     if illegal {
         iemsg(gettext(c"E228: makemap: Illegal mode"));
-        return Err(Failed);
+        return Err(MakemapError::IllegalMode);
     }
     Ok(())
 }

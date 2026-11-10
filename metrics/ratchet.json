@@ -514,7 +514,7 @@
     "crates/nvim/src/mapping/langmap.rs": {"pub_items": 1},
     "crates/nvim/src/mapping/mapset.rs": {"pub_items": 2},
     "crates/nvim/src/mapping/mod.rs": {"pub_items": 23},
-    "crates/nvim/src/mapping/session.rs": {"pub_items": 2},
+    "crates/nvim/src/mapping/session.rs": {"pub_items": 1},
     "crates/nvim/src/mapping/show.rs": {"pub_items": 2},
     "crates/nvim/src/mapping/table.rs": {"pub_items": 2},
     "crates/nvim/src/mark/adjust.rs": {"pub_items": 4},

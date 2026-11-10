@@ -12,8 +12,8 @@
 //!
 //! The session writers render each line into bytes and hand them to an
 //! [`std::io::Write`]: the bytes are exactly the ones upstream's `fprintf`s
-//! wrote, and a write error is a `Failed` where upstream's was a negative
-//! count.
+//! wrote, and a write error is the [`std::io::Error`] where upstream's was
+//! a negative count; nothing is said here (`:mk*` says E80 for the file).
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -36,7 +36,7 @@ use crate::optionstr::OptString;
 use crate::types::Key;
 use crate::winlayer::Win;
 use core::ffi::c_int;
-use std::io::Write;
+use std::io::{self, Write};
 
 use crate::ascii::{NL, ascii_iswhite};
 use crate::charset::{transchar, vim_strsize_cstr};
@@ -59,7 +59,7 @@ use crate::os::input::os_breakcheck;
 use crate::os::libc::uint32_t;
 use crate::path::MAXPATHL;
 use crate::startup::SILENT_MODE;
-use crate::types::{ApiString, Failed, OptInt, WinOpt};
+use crate::types::{ApiString, OptInt, WinOpt};
 use crate::ui::state::COLUMNS;
 use crate::ui::ui_call_option_set;
 use crate::undo::curbuf_is_changed;
@@ -234,9 +234,9 @@ pub(crate) fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     INFO_MESSAGE.set(false);
 }
 
-/// Write `bytes`, a write error being a `Failed`.
-fn put(out: &mut dyn Write, bytes: &[u8]) -> Result<(), Failed> {
-    out.write_all(bytes).map_err(|_| Failed)
+/// Write `bytes`.
+fn put(out: &mut dyn Write, bytes: &[u8]) -> io::Result<()> {
+    out.write_all(bytes)
 }
 
 /// End the line, dropping a write error: upstream's `put_eol(fd) < 0` was
@@ -255,7 +255,7 @@ pub(crate) fn makeset(
     out: &mut dyn Write,
     opt_flags: OptionSetFlags,
     local_only: c_int,
-) -> Result<(), Failed> {
+) -> io::Result<()> {
     for priority_pass in [true, false] {
         for opt_idx in all_options() {
             let flags = get_option(opt_idx).flags;
@@ -342,7 +342,7 @@ pub(crate) fn makeset(
 }
 
 /// Write the current window's fold settings, for `:mksession`.
-pub(crate) fn makefoldset(out: &mut dyn Write) -> Result<(), Failed> {
+pub(crate) fn makefoldset(out: &mut dyn Write) -> io::Result<()> {
     let win = Win::current();
     let one = WinOptSet::One;
     let fields: [(OptIndex, OptSlot); 8] = [
@@ -391,7 +391,7 @@ pub(crate) fn put_set(
     cmd: &[u8],
     opt_idx: OptIndex,
     varp: OptSlot,
-) -> Result<(), Failed> {
+) -> io::Result<()> {
     let opt = get_option(opt_idx);
     let name = opt.fullname.to_bytes();
     let flags = opt.flags;
@@ -473,7 +473,7 @@ fn put_string_value(
     name: &[u8],
     value: &[u8],
     flags: uint32_t,
-) -> Result<Written, Failed> {
+) -> io::Result<Written> {
     if flags & OPT_FLAG_EXPAND as uint32_t == 0 {
         put(out, &escaped_set_value(value))?;
         return Ok(Written::Value);

@@ -14,23 +14,21 @@
 )]
 
 use crate::os::libc::int64_t;
-use crate::types::Failed;
 use crate::types::OptInt;
-use std::io::Write;
+use std::io::{self, Write};
 
 use super::*;
 
 /// Write one line of the view: `args` and a newline.
-fn put_line(out: &mut dyn Write, args: core::fmt::Arguments<'_>) -> Result<(), Failed> {
-    out.write_fmt(args)
-        .and_then(|()| out.write_all(b"\n"))
-        .map_err(|_| Failed)
+fn put_line(out: &mut dyn Write, args: core::fmt::Arguments<'_>) -> io::Result<()> {
+    out.write_fmt(args)?;
+    out.write_all(b"\n")
 }
 
 /// Write commands to `out` to restore the manual folds in window `window`.
 ///
 /// Answers `Err` if writing fails.
-pub fn put_folds(out: &mut dyn Write, window: Win) -> Result<(), Failed> {
+pub fn put_folds(out: &mut dyn Write, window: Win) -> io::Result<()> {
     if foldmethod_is_manual(window) {
         put_line(out, format_args!("silent! normal! zE"))?;
         put_folds_recurse(out, &window.w_folds, 0)?;
@@ -45,11 +43,7 @@ pub fn put_folds(out: &mut dyn Write, window: Win) -> Result<(), Failed> {
 /// Write commands to `out` to recreate manually created folds.
 ///
 /// Answers `Err` when writing failed.
-pub(super) fn put_folds_recurse(
-    out: &mut dyn Write,
-    folds: &[Fold],
-    off: i32,
-) -> Result<(), Failed> {
+pub(super) fn put_folds_recurse(out: &mut dyn Write, folds: &[Fold], off: i32) -> io::Result<()> {
     for fold in folds {
         // The nested folds are written first, because `:fold` over a range
         // that already holds folds swallows them.
@@ -71,7 +65,7 @@ pub(super) fn put_foldopen_recurse(
     window: Win,
     folds: &[Fold],
     off: i32,
-) -> Result<(), Failed> {
+) -> io::Result<()> {
     for fold in folds {
         if fold.is(FoldState::Level) {
             // It follows 'foldlevel', so there is nothing to remember.
@@ -106,11 +100,7 @@ pub(super) fn put_foldopen_recurse(
 /// Write the open or close command to `out`.
 ///
 /// Answers `Err` when writing failed.
-pub(super) fn put_fold_open_close(
-    out: &mut dyn Write,
-    fold: &Fold,
-    off: i32,
-) -> Result<(), Failed> {
+pub(super) fn put_fold_open_close(out: &mut dyn Write, fold: &Fold, off: i32) -> io::Result<()> {
     put_line(out, format_args!("{}", fold.top + off))?;
     let action = if fold.is(FoldState::Closed) { 'c' } else { 'o' };
     put_line(out, format_args!("sil! normal! z{action}"))
