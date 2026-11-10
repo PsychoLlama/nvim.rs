@@ -28,7 +28,7 @@ use crate::guard::{Lock, Suppress};
 use crate::mbyte::cluster_len;
 use crate::memory::ThinCString;
 use crate::memory::XString;
-use crate::message::VIM_WARNING;
+use crate::message::{Button, DialogKind};
 use crate::message_fmt::msg_cstr;
 use crate::option::split_option_part;
 use crate::option::vars::P_DIR;
@@ -465,13 +465,26 @@ fn ask_about_swapfile(buffer: Buf, fname: &CStr) -> SwapExistsChoice {
         let but = gettext(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Delete it\n&Quit\n&Abort");
         let running = PROC_RUNNING.get() != 0;
         let buttons = if running { run_but } else { but };
-        let (title, warn) = (gettext(c"VIM - ATTENTION"), VIM_WARNING);
+        let title = gettext(c"VIM - ATTENTION");
         // `do_dialog` reads the message as a C string, which ends at the
         // first NUL, as the `vsnprintf` behind `kv_printf` left it.
         let end = msg.iter().position(|&byte| byte == 0).unwrap_or(msg.len());
         let text = XString::from_bytes(&msg[..end]);
         let text = text.as_cstr();
-        choice = do_dialog(warn, Some(title), text, buttons, 1, None, false).cast_unsigned();
+        let default = Some(Button::FIRST);
+        let answer = do_dialog(
+            DialogKind::Warning,
+            Some(title),
+            text,
+            buttons,
+            default,
+            None,
+            false,
+        );
+        // The button's number is the choice, 0 for none.
+        choice = answer.button(default).map_or(0, |button| {
+            SwapExistsChoice::try_from(button.number()).unwrap_or(0)
+        });
         // Compensate for the missing "Delete it" button.
         choice = choice.wrapping_add(SwapExistsChoice::from(running && choice >= 4));
         // Pretend the screen did not scroll; it needs a redraw anyway.

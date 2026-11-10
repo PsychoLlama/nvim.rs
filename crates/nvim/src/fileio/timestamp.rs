@@ -21,7 +21,7 @@ use crate::buffer::BufFlags;
 use crate::cstr;
 use crate::getchar::typeahead;
 use crate::guard::{Lock, Suppress};
-use crate::message::VIM_WARNING;
+use crate::message::{Button, DialogKind};
 use crate::semsg;
 use crate::undo::UNDO_HASH_SIZE;
 use crate::winlayer::graph::switch_buffer;
@@ -304,14 +304,22 @@ fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Re
     if can_reload {
         let text = append(b"\n%s");
         let text = text.as_c_str();
-        let warn = VIM_WARNING;
         let title = gettext(c"Warning");
         let buttons = gettext(c"&OK\n&Load File\nLoad File &and Options");
-        let answer = do_dialog(warn, Some(title), text, buttons, 1, None, true);
+        let default = Some(Button::FIRST);
+        let answer = do_dialog(
+            DialogKind::Warning,
+            Some(title),
+            text,
+            buttons,
+            default,
+            None,
+            true,
+        );
         return (
-            match answer {
-                2 => Reload::Text,
-                3 => Reload::Detect,
+            match answer.button(default).map(Button::number) {
+                Some(2) => Reload::Text,
+                Some(3) => Reload::Detect,
                 _ => Reload::No,
             },
             false,

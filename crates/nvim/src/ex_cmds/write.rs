@@ -49,8 +49,8 @@ use crate::mark::setpcmark;
 use crate::memline::swap_name_for;
 use crate::memory::XString;
 use crate::message::state::EMSG_SILENT;
+use crate::message::{Answer, DialogKind};
 use crate::message::{E_ARGREQ, E_BUFLOADED, E_EXISTS, E_INVARG, E_READONLY};
-use crate::message::{VIM_QUESTION, VIM_YES};
 use crate::message::{emsg, vim_dialog_yesno};
 use crate::message_fmt::msg_cstr;
 use crate::option::defs::{CpoFlag, OptionSetFlags, ShmFlag};
@@ -83,7 +83,7 @@ fn confirming() -> bool {
 /// Put `name` into the one-`%s` message `fmt` and ask the user to confirm it.
 fn dialog_yesno_about(fmt: &CStr, name: Option<&CStr>) -> bool {
     let question = dialog_msg(fmt, name);
-    vim_dialog_yesno(VIM_QUESTION, None, question.as_cstr(), 2) == VIM_YES
+    vim_dialog_yesno(DialogKind::Question, None, question.as_cstr(), Answer::No) == Answer::Yes
 }
 
 /// Give the current buffer the name `new_fname`, moving the old name into a
@@ -424,7 +424,8 @@ fn confirm_partial_write(args: &mut ExArg) -> Result<(), Failed> {
         emsg(gettext(c"E140: Use ! to write partial buffer"));
         return Err(Failed);
     }
-    if vim_dialog_yesno(VIM_QUESTION, None, gettext(c"Write partial file?"), 2) != VIM_YES {
+    let question = gettext(c"Write partial file?");
+    if vim_dialog_yesno(DialogKind::Question, None, question, Answer::No) != Answer::Yes {
         return Err(Failed);
     }
     args.forceit = true;

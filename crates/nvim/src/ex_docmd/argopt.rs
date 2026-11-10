@@ -14,7 +14,7 @@ use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::source::ex_errmsg;
 use crate::fileio::{BAD_DROP, BAD_KEEP};
 use crate::memory::XString;
-use crate::message::{VIM_QUESTION, VIM_YES, vim_dialog_yesno};
+use crate::message::{Answer, DialogKind, vim_dialog_yesno};
 use crate::types::CmdIdx;
 use crate::window::tab_index;
 use crate::winlayer::{TabPage, last_used_tab};
@@ -429,8 +429,8 @@ pub(crate) fn check_more(forceit: bool) -> Result<(), Failed> {
         );
         let room = DIALOG_MSG_SIZE as usize;
         let question = XString::from_bytes(&crate::formatted!(room, fmt.to_bytes(), n));
-        let answer = vim_dialog_yesno(VIM_QUESTION, None, question.as_cstr(), 1);
-        return if answer == VIM_YES {
+        let answer = vim_dialog_yesno(DialogKind::Question, None, question.as_cstr(), Answer::Yes);
+        return if answer == Answer::Yes {
             Ok(())
         } else {
             Err(Failed)

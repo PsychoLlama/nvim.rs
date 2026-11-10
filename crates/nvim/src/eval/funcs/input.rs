@@ -27,7 +27,7 @@ use crate::guard::Suppress;
 use crate::input::prompt_for_number;
 use crate::message::msg_put_ascii;
 use crate::message::state::{LINES_LEFT, MSG_ROW, MSG_SCROLL};
-use crate::message::{E_INVARG, VIM_ERROR, VIM_GENERIC, VIM_INFO, VIM_QUESTION, VIM_WARNING};
+use crate::message::{Button, DialogAnswer, DialogKind, E_INVARG};
 use crate::message::{
     confirm_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_start, msg_str, verb_msg,
 };
@@ -41,16 +41,15 @@ use crate::types::{ApiString, TypVal, VAR_LIST, VarNumber};
 use crate::ui::state::{ROWS, UI_MESSAGES};
 use crate::ui::ui_has;
 use crate::winlayer::Buf;
-use core::ffi::c_int;
 
 /// `{type}` spellings `confirm()` recognises, by their first letter.
 /// Anything else leaves the default in place.
-const DIALOG_TYPES: [(u8, c_int); 5] = [
-    (b'E', VIM_ERROR),
-    (b'Q', VIM_QUESTION),
-    (b'I', VIM_INFO),
-    (b'W', VIM_WARNING),
-    (b'G', VIM_GENERIC),
+const DIALOG_TYPES: [(u8, DialogKind); 5] = [
+    (b'E', DialogKind::Error),
+    (b'Q', DialogKind::Question),
+    (b'I', DialogKind::Info),
+    (b'W', DialogKind::Warning),
+    (b'G', DialogKind::Generic),
 ];
 
 /// `confirm({msg} [, {choices} [, {default} [, {type}]]])`
@@ -60,7 +59,7 @@ pub fn f_confirm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut type_buf = NumBuf::new();
     let mut buttons = None;
     let mut default = 1;
-    let mut kind = VIM_GENERIC;
+    let mut kind = DialogKind::Generic;
     let mut error = false;
 
     let message = numbuf.string_chk(&args[0]).ok();
@@ -97,8 +96,17 @@ pub fn f_confirm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         .filter(|buttons| !buttons.is_empty())
         .unwrap_or_else(|| gettext(c"&Ok"));
     if !error && let Some(message) = message {
-        let chosen = confirm_dialog(kind, message, buttons, default);
-        result.write_number(VarNumber::from(chosen));
+        // The default is shown only when it names a button, but Enter
+        // answers it whatever it is.
+        let shown = usize::try_from(default).ok().and_then(Button::nth);
+        let chosen = match confirm_dialog(kind, message, buttons, shown) {
+            DialogAnswer::Default => VarNumber::from(default),
+            DialogAnswer::Pressed(button) => {
+                VarNumber::try_from(button.number()).unwrap_or(VarNumber::MAX)
+            }
+            DialogAnswer::Cancelled => 0,
+        };
+        result.write_number(chosen);
     }
 }
 

@@ -68,11 +68,10 @@ use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
 use crate::memline::MlFlags;
 use crate::memory::XString;
-use crate::message::VIM_QUESTION;
 use crate::message::state::{MSG_COL, MSG_DIDANY, MSG_DIDOUT, MSG_ROW};
+use crate::message::{Answer, DialogKind};
 use crate::message::{
-    VIM_ALL, VIM_DISCARDALL, VIM_NO, VIM_YES, emsg, msg, msg_source, vim_dialog_yesnoallcancel,
-    vim_dialog_yesnocancel, wait_return,
+    emsg, msg, msg_source, vim_dialog_yesnoallcancel, vim_dialog_yesnocancel, wait_return,
 };
 use crate::message_fmt::{msg_bytes, msg_cstr_opt};
 use crate::option::vars::{p_aw, p_awa, p_confirm, p_write};
@@ -316,12 +315,12 @@ pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
 
     let question = dialog_msg(c"Save changes to \"%s\"?", buffer.name.shown());
     let ret = if checkall {
-        vim_dialog_yesnoallcancel(VIM_QUESTION, None, question.as_cstr(), 1)
+        vim_dialog_yesnoallcancel(DialogKind::Question, None, question.as_cstr(), Answer::Yes)
     } else {
-        vim_dialog_yesnocancel(VIM_QUESTION, None, question.as_cstr(), 1)
+        vim_dialog_yesnocancel(DialogKind::Question, None, question.as_cstr(), Answer::Yes)
     };
 
-    if ret == VIM_YES {
+    if ret == Answer::Yes {
         let empty_bufname = buffer.name.is_unnamed();
         if empty_bufname {
             buf_set_name(buffer.handle.get(), c"Untitled");
@@ -340,11 +339,11 @@ pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
             // a double free the moment the two ever alias.
             buffer.name.clear();
         }
-    } else if ret == VIM_NO {
+    } else if ret == Answer::No {
         unchanged(buffer, true, false);
-    } else if ret == VIM_ALL {
+    } else if ret == Answer::All {
         write_all_writable();
-    } else if ret == VIM_DISCARDALL {
+    } else if ret == Answer::DiscardAll {
         for buf2 in buffers() {
             unchanged(buf2, true, false);
         }
@@ -375,7 +374,8 @@ fn write_all_writable() {
 pub(crate) fn dialog_close_terminal(buffer: Buf) -> bool {
     let name = buffer.name.shown().unwrap_or(c"?");
     let question = dialog_msg(c"Close \"%s\"?", Some(name));
-    vim_dialog_yesnocancel(VIM_QUESTION, None, question.as_cstr(), 1) == VIM_YES
+    vim_dialog_yesnocancel(DialogKind::Question, None, question.as_cstr(), Answer::Yes)
+        == Answer::Yes
 }
 
 /// Whether `buffer` can be abandoned -- by hiding it, autowriting it or

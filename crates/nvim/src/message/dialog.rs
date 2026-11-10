@@ -20,39 +20,94 @@ use crate::keycodes::ModMask;
 use crate::mbyte::{char_at, cluster_len};
 use crate::types::{Key, KeyKind};
 use core::ffi::{CStr, c_int};
+use core::num::NonZeroUsize;
 
 /// How many buttons can carry a hotkey. Buttons past this share the default.
 const HAS_HOTKEY_LEN: usize = 30;
 
-/// [`do_dialog`] with no title, text field or Ex command: `confirm()`.
-pub(crate) fn confirm_dialog(
-    kind: c_int,
-    message: &CStr,
-    buttons: &CStr,
-    dfltbutton: c_int,
-) -> c_int {
-    do_dialog(kind, None, message, buttons, dfltbutton, None, false)
+/// The kind of a dialog: the icon a GUI would show, which `confirm()` names
+/// by its first letter. The console dialog shows none.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum DialogKind {
+    Generic,
+    Error,
+    Warning,
+    Info,
+    Question,
 }
 
-/// Ask the user to pick one of `buttons`, answering its 1-based index.
+/// One of a dialog's buttons, by its 1-based place in the list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Button(NonZeroUsize);
+
+impl Button {
+    /// The first button, every dialog's usual default.
+    pub(crate) const FIRST: Button = Button(NonZeroUsize::MIN);
+
+    /// The `number`th button, counting from 1; none for 0.
+    pub(crate) fn nth(number: usize) -> Option<Button> {
+        NonZeroUsize::new(number).map(Button)
+    }
+
+    /// The button's 1-based place in the list.
+    pub(crate) fn number(self) -> usize {
+        self.0.get()
+    }
+}
+
+/// How a dialog was dismissed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum DialogAnswer {
+    /// The user took the default (Enter), or there was nobody to ask: no
+    /// UI, or silent mode.
+    Default,
+    /// The user pressed a button's hotkey.
+    Pressed(Button),
+    /// The user cancelled (CTRL-C or `<Esc>`).
+    Cancelled,
+}
+
+impl DialogAnswer {
+    /// The button chosen, reading [`Default`](Self::Default) as `default`.
+    pub(crate) fn button(self, default: Option<Button>) -> Option<Button> {
+        match self {
+            DialogAnswer::Default => default,
+            DialogAnswer::Pressed(button) => Some(button),
+            DialogAnswer::Cancelled => None,
+        }
+    }
+}
+
+/// [`do_dialog`] with no title, text field or Ex command: `confirm()`.
+pub(crate) fn confirm_dialog(
+    kind: DialogKind,
+    message: &CStr,
+    buttons: &CStr,
+    default: Option<Button>,
+) -> DialogAnswer {
+    do_dialog(kind, None, message, buttons, default, None, false)
+}
+
+/// Ask the user to pick one of `buttons`.
 ///
-/// Answers 0 if the dialog was cancelled, and `dfltbutton` if there is no UI
-/// to ask through -- without one Nvim would wait for input forever.
+/// Answers [`DialogAnswer::Default`] as well when there is no UI to ask
+/// through -- without one Nvim would wait for input forever. `default` is
+/// the button Enter picks, shown in `[]`; none shows no default.
 ///
 /// `buttons` is `"Button1\nButton2\n..."`, with `&` marking a hotkey letter.
 /// `ex_cmd` allows `:` to dismiss the dialog and start an Ex command. The
-/// title and text field are a GUI's; the console dialog shows neither.
-pub fn do_dialog(
-    _type_0: c_int,
+/// kind, title and text field are a GUI's; the console dialog shows none.
+pub(crate) fn do_dialog(
+    _kind: DialogKind,
     _title: Option<&CStr>,
     message: &CStr,
     buttons: &CStr,
-    dfltbutton: c_int,
+    default: Option<Button>,
     _textfield: Option<&CStr>,
     ex_cmd: bool,
-) -> c_int {
+) -> DialogAnswer {
     if SILENT_MODE.get() {
-        return dfltbutton;
+        return DialogAnswer::Default;
     }
 
     let old_state = STATE.get();
@@ -61,12 +116,12 @@ pub fn do_dialog(
     // We wait for a keypress, so don't make the user press RETURN as well.
     let no_prompt = Suppress::wait_return();
 
-    let hotkeys = msg_show_console_dialog(message.to_bytes(), buttons.to_bytes(), dfltbutton);
+    let hotkeys = msg_show_console_dialog(message.to_bytes(), buttons.to_bytes(), default);
     let retval;
     loop {
         // Without a UI Nvim waits for input forever.
         if ui_active() == 0 && input_available() == 0 {
-            retval = dfltbutton;
+            retval = DialogAnswer::Default;
             break;
         }
 
@@ -77,16 +132,16 @@ pub fn do_dialog(
         match key.kind() {
             KeyKind::Char(Key::CAR | Key::NUL) => {
                 // User accepts the default option.
-                retval = dfltbutton;
+                retval = DialogAnswer::Default;
                 break;
             }
             KeyKind::Char(Key::CTRL_C | Key::ESC) => {
                 // User aborts/cancels.
-                retval = 0;
+                retval = DialogAnswer::Cancelled;
                 break;
             }
             KeyKind::Char(c) if c.is(':') && ex_cmd => {
-                retval = dfltbutton;
+                retval = DialogAnswer::Default;
                 ins_char_typebuf(c, ModMask::NONE, false);
                 break;
             }
@@ -97,8 +152,12 @@ pub fn do_dialog(
                 // list, as the terminator of upstream's string did.
                 let c = mb_tolower(c.code());
                 let listed = hotkeys.iter().take_while(|&&hotkey| hotkey != 0);
-                if let Some(at) = listed.clone().position(|&hotkey| hotkey == c) {
-                    retval = c_int::try_from(at).map_or(c_int::MAX, |at| at + 1);
+                if let Some(button) = listed
+                    .clone()
+                    .position(|&hotkey| hotkey == c)
+                    .and_then(|at| Button::nth(at + 1))
+                {
+                    retval = DialogAnswer::Pressed(button);
                     break;
                 }
                 // No hotkey match, so keep waiting.
@@ -158,12 +217,13 @@ fn hotkey_at(bytes: &[u8]) -> c_int {
 /// `&x` makes `x` the button's hotkey and shows it as `(x)`, or `[x]` on the
 /// default button; `&&` is a literal `&`. A button with no `&` takes its
 /// first character. Buttons are separated by `, ` and the line ends `: `.
-fn render_buttons(buttons: &[u8], dfltbutton: c_int) -> (Vec<u8>, Vec<c_int>) {
+fn render_buttons(buttons: &[u8], default: Option<Button>) -> (Vec<u8>, Vec<c_int>) {
     let has_hotkey = buttons_with_hotkeys(buttons);
     let mut shown = Vec::with_capacity(buttons.len() + 8);
     // The first button's default hotkey.
     let mut hotkeys = vec![hotkey_at(buttons)];
-    let mut default_button_idx = dfltbutton;
+    // Counts down to 1 at the default button.
+    let mut default_button_idx = default.map_or(0, Button::number);
 
     // Is the first char of the button a hotkey? It is when the button
     // does not name one itself.
@@ -179,9 +239,7 @@ fn render_buttons(buttons: &[u8], dfltbutton: c_int) -> (Vec<u8>, Vec<c_int>) {
             // Advance to the next hotkey and set the default one.
             hotkeys.push(hotkey_at(&buttons[at + 1..]));
 
-            if default_button_idx != 0 {
-                default_button_idx -= 1;
-            }
+            default_button_idx = default_button_idx.saturating_sub(1);
             // If no hotkey is specified, the first char is used. The
             // increment is inside the short circuit, as upstream's
             // `has_hotkey[++idx]` is.
@@ -227,7 +285,7 @@ fn render_buttons(buttons: &[u8], dfltbutton: c_int) -> (Vec<u8>, Vec<c_int>) {
 }
 
 /// Format the dialog and display it, answering each button's hotkey.
-fn msg_show_console_dialog(message: &[u8], buttons: &[u8], dfltbutton: c_int) -> Vec<c_int> {
+fn msg_show_console_dialog(message: &[u8], buttons: &[u8], default: Option<Button>) -> Vec<c_int> {
     // With `ext_messages` the UI puts the message where it likes, so the
     // blank lines that separate it from the buttons are left out.
     let mut text = Vec::with_capacity(message.len() + 2);
@@ -241,7 +299,7 @@ fn msg_show_console_dialog(message: &[u8], buttons: &[u8], dfltbutton: c_int) ->
     }
     CONFIRM_MSG.set(Some(XString::from_bytes(&text)));
 
-    let (shown, hotkeys) = render_buttons(buttons, dfltbutton);
+    let (shown, hotkeys) = render_buttons(buttons, default);
     CONFIRM_BUTTONS.set(Some(XString::from_bytes(&shown)));
     display_confirm_msg();
     hotkeys
@@ -258,47 +316,166 @@ pub(crate) fn display_confirm_msg() {
     }
 }
 
-/// A yes/no dialog.
-pub fn vim_dialog_yesno(type_0: c_int, title: Option<&CStr>, message: &CStr, dflt: c_int) -> c_int {
+/// What a yes/no-style dialog was answered with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Answer {
+    Yes,
+    No,
+    /// "Save All".
+    All,
+    /// "Discard All".
+    DiscardAll,
+    Cancel,
+}
+
+impl Answer {
+    /// The answer `button` stands for in a dialog whose buttons are
+    /// `answers`, in order. No button (cancelled), or one past the list,
+    /// is the list's last answer: "No" or "Cancel".
+    fn of_button(answers: &[Answer], button: Option<Button>) -> Answer {
+        button
+            .and_then(|button| answers.get(button.number() - 1))
+            .or(answers.last())
+            .copied()
+            .unwrap_or(Answer::Cancel)
+    }
+
+    /// The button that answers `self` in a dialog whose buttons are
+    /// `answers`.
+    fn button_in(self, answers: &[Answer]) -> Option<Button> {
+        let at = answers.iter().position(|&answer| answer == self)?;
+        Button::nth(at + 1)
+    }
+}
+
+/// Ask through `buttons`, which answer `answers` in order, defaulting to
+/// `default`.
+fn ask(
+    kind: DialogKind,
+    title: &CStr,
+    message: &CStr,
+    buttons: &CStr,
+    answers: &[Answer],
+    default: Answer,
+) -> Answer {
+    let default = default.button_in(answers);
+    let answer = do_dialog(kind, Some(title), message, buttons, default, None, false);
+    Answer::of_button(answers, answer.button(default))
+}
+
+/// A yes/no dialog: [`Answer::Yes`] or [`Answer::No`].
+pub(crate) fn vim_dialog_yesno(
+    kind: DialogKind,
+    title: Option<&CStr>,
+    message: &CStr,
+    default: Answer,
+) -> Answer {
     let title = title.unwrap_or_else(|| gettext(c"Question"));
     let buttons = gettext(c"&Yes\n&No");
-    if do_dialog(type_0, Some(title), message, buttons, dflt, None, false) == 1 {
-        return VIM_YES;
-    }
-    VIM_NO
+    ask(
+        kind,
+        title,
+        message,
+        buttons,
+        &[Answer::Yes, Answer::No],
+        default,
+    )
 }
 
 /// A yes/no/cancel dialog.
-pub fn vim_dialog_yesnocancel(
-    type_0: c_int,
+pub(crate) fn vim_dialog_yesnocancel(
+    kind: DialogKind,
     title: Option<&CStr>,
     message: &CStr,
-    dflt: c_int,
-) -> c_int {
+    default: Answer,
+) -> Answer {
     let title = title.unwrap_or_else(|| gettext(c"Question"));
     let buttons = gettext(c"&Yes\n&No\n&Cancel");
-    match do_dialog(type_0, Some(title), message, buttons, dflt, None, false) {
-        1 => VIM_YES,
-        2 => VIM_NO,
-        _ => VIM_CANCEL,
-    }
+    ask(
+        kind,
+        title,
+        message,
+        buttons,
+        &[Answer::Yes, Answer::No, Answer::Cancel],
+        default,
+    )
 }
 
 /// A yes/no/all/discard/cancel dialog, for `:wq` over several changed buffers.
-pub fn vim_dialog_yesnoallcancel(
-    type_0: c_int,
+pub(crate) fn vim_dialog_yesnoallcancel(
+    kind: DialogKind,
     title: Option<&CStr>,
     message: &CStr,
-    dflt: c_int,
-) -> c_int {
+    default: Answer,
+) -> Answer {
     // Note: unlike its two siblings, this default title is not translated.
     let title = title.unwrap_or(c"Question");
     let buttons = gettext(c"&Yes\n&No\nSave &All\n&Discard All\n&Cancel");
-    match do_dialog(type_0, Some(title), message, buttons, dflt, None, false) {
-        1 => VIM_YES,
-        2 => VIM_NO,
-        3 => VIM_ALL,
-        4 => VIM_DISCARDALL,
-        _ => VIM_CANCEL,
+    let answers = [
+        Answer::Yes,
+        Answer::No,
+        Answer::All,
+        Answer::DiscardAll,
+        Answer::Cancel,
+    ];
+    ask(kind, title, message, buttons, &answers, default)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn buttons_count_from_one() {
+        assert_eq!(Button::nth(0), None);
+        assert_eq!(Button::nth(1), Some(Button::FIRST));
+        assert_eq!(Button::nth(3).map(Button::number), Some(3));
+    }
+
+    #[test]
+    fn a_dismissed_dialog_names_its_button() {
+        let second = Button::nth(2);
+        assert_eq!(DialogAnswer::Default.button(second), second);
+        assert_eq!(DialogAnswer::Default.button(None), None);
+        assert_eq!(
+            DialogAnswer::Pressed(Button::FIRST).button(second),
+            Some(Button::FIRST)
+        );
+        assert_eq!(DialogAnswer::Cancelled.button(second), None);
+    }
+
+    #[test]
+    fn buttons_answer_in_order_and_anything_else_is_the_last() {
+        use Answer::*;
+        let yes_no = [Yes, No];
+        let all = [Yes, No, All, DiscardAll, Cancel];
+        assert_eq!(Answer::of_button(&yes_no, Button::nth(1)), Yes);
+        assert_eq!(Answer::of_button(&yes_no, Button::nth(2)), No);
+        assert_eq!(Answer::of_button(&yes_no, None), No);
+        assert_eq!(Answer::of_button(&all, Button::nth(4)), DiscardAll);
+        assert_eq!(Answer::of_button(&all, Button::nth(9)), Cancel);
+        assert_eq!(No.button_in(&yes_no), Button::nth(2));
+        assert_eq!(All.button_in(&yes_no), None);
+        assert_eq!(DiscardAll.button_in(&all), Button::nth(4));
+    }
+
+    #[test]
+    fn rendered_buttons_mark_hotkeys_and_the_default() {
+        let (shown, hotkeys) = render_buttons(b"&Yes\n&No\nSave &All", Button::nth(2));
+        assert_eq!(shown, b"(Y)es, [N]o, Save (A)ll: ");
+        assert_eq!(
+            hotkeys,
+            [
+                Key::ascii(b'y').code(),
+                Key::ascii(b'n').code(),
+                Key::ascii(b'a').code()
+            ]
+        );
+        // No `&`: the first character. `&&` is a literal `&`, and still
+        // counts as naming a hotkey, so none is shown -- but the first
+        // character answers.
+        let (shown, hotkeys) = render_buttons(b"Ok\nR&&D", None);
+        assert_eq!(shown, b"(O)k, R&D: ");
+        assert_eq!(hotkeys, [Key::ascii(b'o').code(), Key::ascii(b'r').code()]);
     }
 }

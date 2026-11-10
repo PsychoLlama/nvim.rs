@@ -188,26 +188,13 @@ pub use self::history::*;
 mod prompt;
 pub use self::prompt::*;
 mod dialog;
-pub use self::dialog::*;
+pub(crate) use self::dialog::*;
 mod redir;
 pub use self::redir::*;
 mod progress;
 pub use self::progress::*;
 mod errors;
 pub use self::errors::*;
-/// [`do_dialog`] answers, as `confirm()` reports them.
-pub const VIM_DISCARDALL: c_int = 6;
-pub const VIM_ALL: c_int = 5;
-pub const VIM_CANCEL: c_int = 4;
-pub const VIM_NO: c_int = 3;
-pub const VIM_YES: c_int = 2;
-/// [`do_dialog`] types: the icon a GUI would show, which `confirm()` names
-/// by its first letter.
-pub(crate) const VIM_GENERIC: c_int = 0;
-pub(crate) const VIM_ERROR: c_int = 1;
-pub(crate) const VIM_WARNING: c_int = 2;
-pub(crate) const VIM_INFO: c_int = 3;
-pub(crate) const VIM_QUESTION: c_int = 4;
 /// How much of the scrollback the next message should drop.
 pub type ScrollbackClear = ::core::ffi::c_uint;
 pub const SB_CLEAR_CMDLINE_DONE: ScrollbackClear = 3;
