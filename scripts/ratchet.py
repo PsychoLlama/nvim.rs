@@ -834,7 +834,11 @@ plus these whole-tree metrics, which are not per-file:
                         from the raw source, because masking blanks a string
                         literal and would make two different ones compare
                         equal, propping the count up with a duplicate nobody
-                        could remove. Phase 34.
+                        could remove. An anonymous `const _` (an assertion)
+                        and an associated const inside an `impl` or `trait`
+                        block are not counted: the first names nothing, the
+                        second is named through its type, so `Handle::NONE`
+                        and `Flags::NONE` are two constants. Phase 34.
                       types_files  files under `types/` — c2rust's one
                         `types_defs.h`-sized namespace. The unit is the file
                         and not the type: what retires it is a type moving
@@ -2048,6 +2052,21 @@ GENERATED_HEAD = 2048
 # every `const NAME: &str = "..."` value in the tree and made them all compare
 # equal. The span is normalised for whitespace when it is read back.
 CONST_DECL = re.compile(r"\bconst\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*[^=;{}]+=([^;]*);")
+# An `impl` or `trait` block opening a line: the consts inside it are
+# associated consts, named through their type (`Handle::NONE`), so the same
+# name in two types is two constants and not one copied. Anchored at a line's
+# start so an `impl Trait` argument or return type is not read as a block.
+ASSOC_SCOPE = re.compile(
+    r"(?m)^[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:unsafe\s+)?(?:impl|trait)\b[^;{}]*\{"
+)
+
+
+def assoc_scopes(masked):
+    """(open, close) of every `impl`/`trait` block in one file."""
+    for match in ASSOC_SCOPE.finditer(masked):
+        open_at = match.end() - 1
+        yield open_at, matching_brace(masked, open_at)
+
 
 # Every instrument, in the order the phases retire them: the pointer
 # parameters (29-31), the value model (30), the state (31), the error channel
@@ -3927,7 +3946,14 @@ def instrument_sites(tree, sources, wrappers=None):
                 fn_body_lines(masked, s) > LONG_FN_LINES for s in declarations
             ):
                 sites["long_fns"][file] = found
+        scopes = list(assoc_scopes(masked))
         for match in CONST_DECL.finditer(masked):
+            # `const _` names nothing, so two of them copy nothing; an
+            # associated const is its type's (see `ASSOC_SCOPE`).
+            if match.group(1) == "_" or any(
+                open_at < match.start() < close_at for open_at, close_at in scopes
+            ):
+                continue
             value = " ".join(source[match.start(2) : match.end(2)].split())
             consts.setdefault((match.group(1), value), set()).add(file)
         if file.startswith(CRATE_SRC):
@@ -5355,6 +5381,23 @@ SELF_TEST_INSTRUMENTS = [
             "crates/nvim/src/c.rs": "const NULL: c_int = 0;\nconst OTHER: c_int = 1;\n",
         },
         {"dup_consts": 2},
+    ),
+    # Neither an assertion block nor an associated const is a copy: two
+    # `const _` name nothing, and `A::NONE`/`B::NONE` are two constants. A
+    # free const inside a function body still counts, and `impl Trait` in a
+    # signature does not open an associated scope.
+    (
+        {
+            "crates/nvim/src/a.rs": "const _: () = assert!(true);\n"
+            "impl A {\n    pub const NONE: Self = Self(0);\n}\n"
+            "trait T {\n    const FLAG: bool = true;\n}\n"
+            "fn f(x: impl Fn()) {\n    const LOCAL: c_int = 7;\n}\n",
+            "crates/nvim/src/b.rs": "const _: () = assert!(true);\n"
+            "impl B {\n    pub const NONE: Self = Self(0);\n}\n"
+            "impl T for B {\n    const FLAG: bool = true;\n}\n"
+            "const LOCAL: c_int = 7;\n",
+        },
+        {"dup_consts": 1},
     ),
     # A long function counts unless its file says a generator wrote it. The
     # marker has to be a module doc line naming a tool, so prose about

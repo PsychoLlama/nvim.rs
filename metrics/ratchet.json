@@ -48,7 +48,7 @@
   "labeled_blocks": 69,
   "long_fns": 51,
   "safety_on_safe_fns": 0,
-  "dup_consts": 4,
+  "dup_consts": 0,
   "types_files": 17,
   "untested_dirs": 0,
   "cchar_scratch": 4,
