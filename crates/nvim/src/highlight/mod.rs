@@ -73,6 +73,7 @@ pub mod dict;
 pub mod namespace;
 
 pub use blend::{hl_blend_attrs, hl_invalidate_blends};
+use dict::put;
 pub use dict::{HLATTRS_DICT_SIZE, dict2hlattrs, hl_get_attr_by_id, hlattrs2dict};
 pub use namespace::{
     hl_check_ns, hl_get_ui_attr, hl_ns_get_attrs, ns_hl_def, update_ns_hl, update_window_hl,
@@ -675,11 +676,6 @@ fn hl_inspect_impl(arr: &mut Vec<Object>, attr: c_int) {
 /// A group name, copied into the object that carries it.
 fn name_object(name: &CStr) -> Object {
     Object::string(ApiString::from_cstr(name))
-}
-
-/// Appends `key: value`, with the key copied out of the literal.
-fn put(dict: &mut DictBuilder, key: &'static CStr, value: Object) {
-    dict.insert(key, value);
 }
 
 #[derive(Copy, Clone, Debug)]

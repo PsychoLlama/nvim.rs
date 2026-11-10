@@ -40,44 +40,51 @@ pub(super) fn recol_pos(pos: ParserPosition, new_col: size_t) -> ParserPosition 
     }
 }
 
-/// The group naming the quotes themselves.
-fn quote_group(is_double: bool, is_invalid: bool) -> &'static CStr {
-    match (is_double, is_invalid) {
-        (true, true) => c"NvimInvalidDoubleQuote",
-        (true, false) => c"NvimDoubleQuote",
-        (false, true) => c"NvimInvalidSingleQuote",
-        (false, false) => c"NvimSingleQuote",
-    }
+/// Which stretch of a quoted string a highlight group names.
+#[derive(Clone, Copy, Debug)]
+enum Part {
+    /// The quotes themselves.
+    Quote,
+    /// The stretches between the escapes.
+    Body,
+    /// An escape the decoder understood.
+    Escape,
+    /// An escape the decoder did not understand.
+    UnknownEscape,
 }
 
-/// The group naming the stretches between the escapes.
-fn body_group(is_double: bool, is_invalid: bool) -> &'static CStr {
-    match (is_double, is_invalid) {
-        (true, true) => c"NvimInvalidDoubleQuotedBody",
-        (true, false) => c"NvimDoubleQuotedBody",
-        (false, true) => c"NvimInvalidSingleQuotedBody",
-        (false, false) => c"NvimSingleQuotedBody",
-    }
-}
-
-/// The group naming an escape the decoder understood.
-fn escape_group(is_double: bool, is_invalid: bool) -> &'static CStr {
-    match (is_double, is_invalid) {
-        (true, true) => c"NvimInvalidDoubleQuotedEscape",
-        (true, false) => c"NvimDoubleQuotedEscape",
-        (false, true) => c"NvimInvalidSingleQuotedQuote",
-        (false, false) => c"NvimSingleQuotedQuote",
-    }
-}
-
-/// The group naming an escape the decoder did not understand.
-fn unknown_escape_group(is_double: bool, is_invalid: bool) -> &'static CStr {
-    match (is_double, is_invalid) {
-        (true, true) => c"NvimInvalidDoubleQuotedUnknownEscape",
-        (true, false) => c"NvimDoubleQuotedUnknownEscape",
-        (false, true) => c"NvimInvalidSingleQuotedUnknownEscape",
-        (false, false) => c"NvimSingleQuotedUnknownEscape",
-    }
+/// The highlight group naming `part` of a string in double (`is_double`) or
+/// single quotes, `is_invalid` when the string is not well formed.
+fn group(part: Part, is_double: bool, is_invalid: bool) -> &'static CStr {
+    // By part, then: invalid double, double, invalid single, single. A
+    // single-quoted string's only escape is `''`, hence its `Quote` names.
+    const GROUPS: [[&CStr; 4]; 4] = [
+        [
+            c"NvimInvalidDoubleQuote",
+            c"NvimDoubleQuote",
+            c"NvimInvalidSingleQuote",
+            c"NvimSingleQuote",
+        ],
+        [
+            c"NvimInvalidDoubleQuotedBody",
+            c"NvimDoubleQuotedBody",
+            c"NvimInvalidSingleQuotedBody",
+            c"NvimSingleQuotedBody",
+        ],
+        [
+            c"NvimInvalidDoubleQuotedEscape",
+            c"NvimDoubleQuotedEscape",
+            c"NvimInvalidSingleQuotedQuote",
+            c"NvimSingleQuotedQuote",
+        ],
+        [
+            c"NvimInvalidDoubleQuotedUnknownEscape",
+            c"NvimDoubleQuotedUnknownEscape",
+            c"NvimInvalidSingleQuotedUnknownEscape",
+            c"NvimSingleQuotedUnknownEscape",
+        ],
+    ];
+    GROUPS[part as usize][2 * usize::from(!is_double) + usize::from(!is_invalid)]
 }
 
 /// Append the whole character at the start of `rest` — composing marks
@@ -369,7 +376,7 @@ pub(super) fn parse_quoted_string(
     let body_len = token.len - closed - 1;
     let tail = &line[token.start.col + 1..];
 
-    highlight(token.start, 1, quote_group(is_double, is_invalid));
+    highlight(token.start, 1, group(Part::Quote, is_double, is_invalid));
 
     // `capacity` is what the C allocates and zero means it allocates nothing:
     // for a single-quoted literal that is exactly the decoded length, for a
@@ -393,9 +400,9 @@ pub(super) fn parse_quoted_string(
     };
 
     if colors {
-        let body = body_group(is_double, is_invalid);
-        let escape = escape_group(is_double, is_invalid);
-        let unknown_escape = unknown_escape_group(is_double, is_invalid);
+        let body = group(Part::Body, is_double, is_invalid);
+        let escape = group(Part::Escape, is_double, is_invalid);
+        let unknown_escape = group(Part::UnknownEscape, is_double, is_invalid);
         let mut next_col = token.start.col + 1;
         for shift in &shifts {
             if shift.start > next_col {
@@ -429,7 +436,7 @@ pub(super) fn parse_quoted_string(
         highlight(
             shifted_pos(token.start, token.len - 1),
             1,
-            quote_group(is_double, is_invalid),
+            group(Part::Quote, is_double, is_invalid),
         );
     }
     literal
