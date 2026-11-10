@@ -15,7 +15,7 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CString, c_int};
+use std::ffi::c_int;
 
 use neovim::eval::{eval_to_number, eval_to_string};
 use neovim::ex_docmd::{do_cmdline_cmd, getargopt, parse_cmdline, separate_nextcmd};
@@ -87,16 +87,10 @@ fn text(bytes: &[u8]) -> String {
 fn parse(_editor: &Editor, line: &str) -> Result<Parsed, String> {
     let mut args = ExArg::default();
     let mut info = CmdParseInfo::default();
-    let mut errormsg: Option<CString> = None;
-    let ok = parse_cmdline(
-        CmdLine::from_bytes(line.as_bytes()),
-        &mut args,
-        &mut info,
-        &mut errormsg,
-    );
-    if !ok {
-        return Err(errormsg.map_or_else(String::new, |m| m.to_string_lossy().into_owned()));
-    }
+    parse_cmdline(CmdLine::from_bytes(line.as_bytes()), &mut args, &mut info).map_err(|err| {
+        err.into_message()
+            .map_or_else(String::new, |m| m.to_string_lossy().into_owned())
+    })?;
     Ok(Parsed {
         cmdidx: cmd_name(args.cmdidx),
         line1: args.line1,
@@ -116,14 +110,8 @@ fn parse(_editor: &Editor, line: &str) -> Result<Parsed, String> {
 fn parse_mods(_editor: &Editor, line: &str) -> (CmdModFlags, c_int) {
     let mut args = ExArg::default();
     let mut info = CmdParseInfo::default();
-    let mut errormsg: Option<CString> = None;
-    let ok = parse_cmdline(
-        CmdLine::from_bytes(line.as_bytes()),
-        &mut args,
-        &mut info,
-        &mut errormsg,
-    );
-    assert!(ok, "{line:?} did not parse");
+    let parsed = parse_cmdline(CmdLine::from_bytes(line.as_bytes()), &mut args, &mut info);
+    assert!(parsed.is_ok(), "{line:?} did not parse");
     (info.cmdmod.cmod_flags, info.cmdmod.cmod_verbose)
 }
 
@@ -194,16 +182,8 @@ fn a_range_fills_both_endpoints_and_counts_them() {
 fn range_pair(_editor: &Editor, line: &str) -> (&'static str, (i32, i32)) {
     let mut args = ExArg::default();
     let mut info = CmdParseInfo::default();
-    let mut errormsg: Option<CString> = None;
-    assert!(
-        parse_cmdline(
-            CmdLine::from_bytes(line.as_bytes()),
-            &mut args,
-            &mut info,
-            &mut errormsg,
-        ),
-        "{line}: {errormsg:?}"
-    );
+    let parsed = parse_cmdline(CmdLine::from_bytes(line.as_bytes()), &mut args, &mut info);
+    assert!(parsed.is_ok(), "{line}: {parsed:?}");
     if args.counts_lines() {
         ("lines", (args.line1.get(), args.line2.get()))
     } else {

@@ -22,10 +22,9 @@
 
 use super::addrtype::{arglist_len, get_cmd_default_range, loaded_buffer_range};
 use crate::cstr::byte_at;
-use crate::ex_docmd::{ex_msg, is_user_cmd};
+use crate::ex_docmd::{CmdError, ex_msg, is_user_cmd};
 use crate::mark::{MARK_ALL, MARK_BUF_LOCAL};
 use crate::mark::{mark_check, mark_get, mark_get_visual, mark_move_to};
-use crate::message::emsg;
 use crate::narrow::{len_as_int, number_as_lnum};
 use crate::search::{do_search_in, search_last_pattern};
 use crate::strings::has_char;
@@ -119,48 +118,13 @@ pub(crate) fn find_excmd_after_range(excmd: &mut ExArg) -> Option<usize> {
     end
 }
 
-/// Why an address or a range could not be read.
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum AddressError {
-    /// The message the command reports: E16, E20, E10, E481/E493, E1247.
-    /// `do_one_cmd` reports it through its `errormsg`, which names the
-    /// command line after it; the other callers put it out as it is.
-    #[error("{}", .0.to_string_lossy())]
-    Refused(CString),
-    /// Said already -- a search that found nothing, `search_last_pattern`
-    /// -- or upstream says nothing: a `'` at the end of the line, a mark
-    /// whose line the shada file mangled.
-    #[error("refused without a message of its own")]
-    Quiet,
-}
-
-// Two words, so a `Result` carrying one is no wider than it has to be.
-const _: () = assert!(size_of::<AddressError>() <= 16);
-
-impl AddressError {
-    /// Puts the message out, for a caller with no channel of its own.
-    pub(crate) fn report(&self) {
-        if let Self::Refused(msg) = self {
-            emsg(msg);
-        }
-    }
-
-    /// Hands the message to a caller that reports through an `errormsg`
-    /// slot, as `do_one_cmd` does.
-    pub(crate) fn into_errormsg(self, errormsg: &mut Option<CString>) {
-        if let Self::Refused(msg) = self {
-            *errormsg = Some(msg);
-        }
-    }
-}
-
-/// [`mark_check`]'s refusal as an [`AddressError`].
-fn check_mark(fm: Option<&FileMark>) -> Result<(), AddressError> {
+/// [`mark_check`]'s refusal as a [`CmdError`].
+fn check_mark(fm: Option<&FileMark>) -> Result<(), CmdError> {
     let mut errormsg = None;
     if mark_check(fm, &mut errormsg) {
         Ok(())
     } else {
-        Err(errormsg.map_or(AddressError::Quiet, AddressError::Refused))
+        Err(errormsg.map_or(CmdError::Quiet, CmdError::Message))
     }
 }
 
@@ -170,7 +134,7 @@ fn check_mark(fm: Option<&FileMark>) -> Result<(), AddressError> {
 /// `;` differs from `,` in moving the cursor to the first address before
 /// the second is resolved, which is what makes `:.;+3` mean "three lines
 /// from here" however the first address was spelled.
-pub(crate) fn parse_cmd_address(excmd: &mut ExArg, silent: bool) -> Result<(), AddressError> {
+pub(crate) fn parse_cmd_address(excmd: &mut ExArg, silent: bool) -> Result<(), CmdError> {
     let mut need_check_cursor = false;
     let read = read_range(excmd, silent, &mut need_check_cursor);
     // The `;` above may have left the cursor on a line the command is
@@ -187,7 +151,7 @@ fn read_range(
     excmd: &mut ExArg,
     silent: bool,
     need_check_cursor: &mut bool,
-) -> Result<(), AddressError> {
+) -> Result<(), CmdError> {
     let mut address_count = 1;
     let mut lnum: LineNr;
     loop {
@@ -229,7 +193,7 @@ fn read_range(
             excmd.addr_count += 1;
         } else if excmd.line.byte_at(excmd.line.cmd) == b'*' {
             if excmd.addr_type != CmdAddr::Lines {
-                return Err(AddressError::Refused(ex_msg(E_INVRANGE)));
+                return Err(CmdError::Message(ex_msg(E_INVRANGE)));
             }
             excmd.line.cmd += 1;
             if !excmd.skip {
@@ -278,7 +242,7 @@ fn read_range(
 
 /// Fill in the range `%` means for this address kind: E16 when the kind has
 /// no "all".
-fn whole_range(excmd: &mut ExArg) -> Result<(), AddressError> {
+fn whole_range(excmd: &mut ExArg) -> Result<(), CmdError> {
     match excmd.addr_type {
         CmdAddr::Lines => {
             excmd.line1 = LineNr::ONE;
@@ -300,7 +264,7 @@ fn whole_range(excmd: &mut ExArg) -> Result<(), AddressError> {
             // Only a *user* command may say `%` over windows or tab
             // pages; a builtin one would not know what to do with it.
             if !is_user_cmd(excmd.cmdidx) {
-                return Err(AddressError::Refused(ex_msg(E_INVRANGE)));
+                return Err(CmdError::Message(ex_msg(E_INVRANGE)));
             }
             excmd.number1 = 1;
             excmd.number2 = if excmd.addr_type == CmdAddr::Windows {
@@ -310,7 +274,7 @@ fn whole_range(excmd: &mut ExArg) -> Result<(), AddressError> {
             };
         }
         CmdAddr::TabsRelative | CmdAddr::Unsigned | CmdAddr::Quickfix => {
-            return Err(AddressError::Refused(ex_msg(E_INVRANGE)));
+            return Err(CmdError::Message(ex_msg(E_INVRANGE)));
         }
         CmdAddr::Arguments => {
             let len = arglist_len();
@@ -420,7 +384,7 @@ pub(crate) fn get_address(
     silent: bool,
     to_other_file: bool,
     address_count: c_int,
-) -> Result<LineNr, AddressError> {
+) -> Result<LineNr, CmdError> {
     let mut cmd = *at;
     cmd = cmd + skip::white(&text[cmd.min(text.len())..]);
     let mut lnum: LineNr = MAXLNUM;
@@ -442,16 +406,16 @@ pub(crate) fn get_address(
                 match addr {
                     Addr::At(n) => lnum = n,
                     Addr::Unchanged => {}
-                    Addr::Refused => return Err(AddressError::Refused(addr_error(addr_type))),
+                    Addr::Refused => return Err(CmdError::Message(addr_error(addr_type))),
                 }
             }
             b'\'' => {
                 cmd += 1;
                 if byte_at(text, cmd) == 0 {
-                    return Err(AddressError::Quiet);
+                    return Err(CmdError::Quiet);
                 }
                 if addr_type != CmdAddr::Lines {
-                    return Err(AddressError::Refused(addr_error(addr_type)));
+                    return Err(CmdError::Message(addr_error(addr_type)));
                 }
                 if skip {
                     cmd += 1;
@@ -485,7 +449,7 @@ pub(crate) fn get_address(
                 cmd += 1;
                 let c = c_int::from(delim);
                 if addr_type != CmdAddr::Lines {
-                    return Err(AddressError::Refused(addr_error(addr_type)));
+                    return Err(CmdError::Message(addr_error(addr_type)));
                 }
                 if skip {
                     cmd += skip_regexp_at(&text[cmd..], c, c_int::from(magic_isset()));
@@ -513,7 +477,7 @@ pub(crate) fn get_address(
                     };
                     if do_search_in(&text[cmd..], c, c, flags).is_none() {
                         Win::current().w_cursor = pos;
-                        return Err(AddressError::Quiet);
+                        return Err(CmdError::Quiet);
                     }
                     lnum = Win::current().w_cursor.lnum;
                     Win::current().w_cursor = pos;
@@ -530,12 +494,12 @@ pub(crate) fn get_address(
                 // the last substitute pattern.
                 cmd += 1;
                 if addr_type != CmdAddr::Lines {
-                    return Err(AddressError::Refused(addr_error(addr_type)));
+                    return Err(CmdError::Message(addr_error(addr_type)));
                 }
                 let i = match byte_at(text, cmd) {
                     b'&' => RE_SUBST as c_int,
                     b'?' | b'/' => RE_SEARCH as c_int,
-                    _ => return Err(AddressError::Refused(ex_msg(E_BACKSLASH))),
+                    _ => return Err(CmdError::Message(ex_msg(E_BACKSLASH))),
                 };
                 if !skip {
                     pos.lnum = if lnum != MAXLNUM {
@@ -555,7 +519,7 @@ pub(crate) fn get_address(
                         FORWARD as c_int
                     } as Direction;
                     if search_last_pattern(&mut pos, dir, SEARCH_MSG as c_int, i).is_err() {
-                        return Err(AddressError::Quiet);
+                        return Err(CmdError::Quiet);
                     }
                     lnum = pos.lnum;
                 }
@@ -594,12 +558,12 @@ pub(crate) fn get_address(
                 let (n, past) = getdigits_int_at(text, cmd, false, MAXLNUM.get());
                 cmd = past;
                 if n == MAXLNUM.get() {
-                    return Err(AddressError::Refused(ex_msg(E_LINE_NUMBER_OUT_OF_RANGE)));
+                    return Err(CmdError::Message(ex_msg(E_LINE_NUMBER_OUT_OF_RANGE)));
                 }
                 n
             };
             if addr_type == CmdAddr::TabsRelative {
-                return Err(AddressError::Refused(ex_msg(E_INVRANGE)));
+                return Err(CmdError::Message(ex_msg(E_INVRANGE)));
             } else if addr_type == CmdAddr::LoadedBuffers || addr_type == CmdAddr::Buffers {
                 let offset = if sign == b'-' { -n } else { n };
                 lnum = LineNr::new(compute_buffer_local_count(addr_type, lnum, offset));
@@ -614,7 +578,7 @@ pub(crate) fn get_address(
                 if sign == b'-' {
                     lnum -= n;
                 } else if lnum >= LineNr::ZERO && n >= i32::MAX - lnum.get() {
-                    return Err(AddressError::Refused(ex_msg(E_LINE_NUMBER_OUT_OF_RANGE)));
+                    return Err(CmdError::Message(ex_msg(E_LINE_NUMBER_OUT_OF_RANGE)));
                 } else {
                     lnum += n;
                 }
@@ -703,16 +667,16 @@ fn offset_base(cmdidx: Option<CmdIdx>, addr_type: CmdAddr) -> Addr {
     }
 }
 
-/// Is the range this command was given out of bounds? Answers the message
-/// to report, or null.
-pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
-    let invrange = || Some(ex_msg(E_INVRANGE));
+/// Is the range this command was given out of bounds? Refuses with the
+/// message to report.
+pub(crate) fn invalid_range(excmd: &mut ExArg) -> Result<(), CmdError> {
+    let invrange = || Err(CmdError::Message(ex_msg(E_INVRANGE)));
     let (first, last) = excmd.range_numbers();
     if first < 0 || last < 0 || first > last {
         return invrange();
     }
     if !excmd.argt.has(ExArgt::RANGE) {
-        return None;
+        return Ok(());
     }
     match excmd.addr_type {
         CmdAddr::Lines => {
@@ -775,7 +739,7 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
                 // "no errors" reads better than "invalid range" when
                 // the user did not ask for a particular entry.
                 if excmd.addr_count == 0 {
-                    return Some(ex_msg(E_NO_ERRORS));
+                    return Err(CmdError::Message(ex_msg(E_NO_ERRORS)));
                 }
                 return invrange();
             }
@@ -791,7 +755,7 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
         }
         _ => {}
     }
-    None
+    Ok(())
 }
 
 /// Turn line 0 into line 1 for a command that does not accept a zero

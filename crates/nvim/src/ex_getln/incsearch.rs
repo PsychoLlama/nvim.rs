@@ -123,7 +123,6 @@ pub(crate) struct PatternSpan {
 /// `SEARCH_FIRST_LINE` and `SEARCH_LAST_LINE`.
 pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpan> {
     let mut delim_optional = false;
-    let mut dummy = None;
     let mut magic: Magic = 0;
 
     // A copy of what is typed so far: the scan below only reads it, and an
@@ -146,7 +145,7 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
 
     // Uninitialised in the C; `parse_command_modifiers` only writes it.
     let mut dummy_cmdmod = CmdMod::default();
-    let _ = ea.parse_modifiers(&mut dummy, &mut dummy_cmdmod, true);
+    let _ = ea.parse_modifiers(&mut dummy_cmdmod, true);
 
     // Skip over the range to find the command.
     let cmd = ea.line.cmd + skip_range(ea.line.tail(ea.line.cmd), None);

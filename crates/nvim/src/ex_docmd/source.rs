@@ -566,8 +566,8 @@ pub(crate) fn reads_sourced_lines(excmd: &ExArg) -> bool {
 
 /// A translated message, copied into an owned Ex-command error message.
 ///
-/// Every producer of an `ExArg::errmsg` — and of the `errormsg`
-/// out-parameter the parser threads — answers a buffer of its own, so that
+/// Every producer of an `ExArg::errmsg` — and of the [`CmdError`](super::CmdError) the
+/// parser's stages answer — owns a buffer of its own, so that
 /// raising a second error before the first is reported cannot overwrite it.
 /// Upstream shared two static buffers here (`IObuff` and `ex_error_buf`)
 /// and `emsg` runs autocommands, so the overwrite was reachable.

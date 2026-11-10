@@ -378,7 +378,7 @@ fn apply_range(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
             );
             excmd.set_range_numbers(number_as_int(first), number_as_int(last));
         }
-        if invalid_range(excmd).is_some() {
+        if invalid_range(excmd).is_err() {
             return Err(err_bad_value(c"range", c""));
         }
     }

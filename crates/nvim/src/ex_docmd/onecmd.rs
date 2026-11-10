@@ -7,9 +7,10 @@
 //! a range it does not yet understand to reach the name, then
 //! `parse_cmd_address` goes back and reads the range properly.
 //!
-//! Every exit runs the same epilogue (the C's `doend:` label), which
-//! reports the error, rethrows it as an exception if something is catching,
-//! and unwinds the command modifiers. That is what the `'doend` block is.
+//! Every stage answers a [`CmdError`] when it refuses, and every exit runs
+//! the same epilogue (the C's `doend:` label), which reports the error,
+//! rethrows it as an exception if something is catching, and unwinds the
+//! command modifiers.
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -24,7 +25,7 @@ use crate::ex_docmd::ex_msg;
 use crate::memory::XString;
 use crate::profile::{DO_PROFILING, PROF_YES};
 use crate::types::{CmdIdx, ColNr, LineNr};
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 use core::ptr;
 use std::ffi::CString;
 
@@ -33,7 +34,9 @@ use crate::autocmd::{fire_autocmds_for, has_event};
 use crate::debugger::dbg_check_breakpoint;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::eval::userfunc::current_func_returned;
-use crate::ex_docmd::address::{correct_range, find_excmd_after_range, parse_cmd_address};
+use crate::ex_docmd::address::{
+    correct_range, find_excmd_after_range, invalid_range, parse_cmd_address,
+};
 use crate::ex_docmd::addrtype::set_cmd_dflall_range;
 
 use crate::ex_docmd::api::execute_cmd0;
@@ -47,13 +50,13 @@ use crate::ex_docmd::source::{ReadLines, SourceKind, ex_errmsg};
 
 use crate::ex_docmd::verify::verify_command;
 use crate::ex_docmd::{
-    CMDNAMES, DoCmdOpts, E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND, E_NOT_AN_EDITOR_COMMAND, ExFunc,
-    QUITMORE,
+    CMDNAMES, CmdError, DoCmdOpts, E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND,
+    E_NOT_AN_EDITOR_COMMAND, ExFunc, QUITMORE,
 };
 use crate::ex_eval::CsFlags;
 
 use crate::ex_eval::{aborting, cond_stack_of, do_errthrow, do_intthrow, do_throw};
-use crate::ex_getln::{get_text_locked_msg, script_get, text_locked};
+use crate::ex_getln::{curbuf_locked, get_text_locked_msg, script_get, text_locked};
 
 use crate::ex_docmd::state::{DID_EMSG_SYNTAX, EX_NESTING_LEVEL, GLOBAL_BUSY};
 use crate::ex_eval::state::{CHECK_CSTACK, DID_THROW, NEED_RETHROW};
@@ -164,14 +167,6 @@ pub(crate) fn skip_cmd(excmd: &mut ExArg) -> bool {
     )
 }
 
-/// A stage of the parse that refused to go on.
-///
-/// Whatever it has to say is in the caller's `errormsg`; an empty one is a
-/// silent refusal, which is what a skipped command and a locked buffer both
-/// are. C spelled all of these `goto doend`.
-#[derive(Debug)]
-struct Refused;
-
 impl ExArg<'_> {
     /// Read the modifiers and the range, and find the command word.
     ///
@@ -186,14 +181,13 @@ impl ExArg<'_> {
         in_inactive: bool,
         mods: &CmdModScope,
         flags: DoCmdOpts,
-        errormsg: &mut Option<CString>,
-    ) -> Result<(), Refused> {
+    ) -> Result<(), CmdError> {
         // "#!anything" is a comment, so that a script can carry a shebang line.
         if self.line.byte_at(0) == b'#' && self.line.byte_at(1) == b'!' {
-            return Err(Refused);
+            return Err(CmdError::Quiet);
         }
 
-        mods.parse(self, errormsg).map_err(|_| Refused)?;
+        mods.parse(self)?;
         mods.apply();
         let after_modifier = self.line.cmd;
 
@@ -214,10 +208,7 @@ impl ExArg<'_> {
         }
 
         self.set_addr_type(p.map(|at| self.line.byte_at(self.line.skip_white(at))));
-        if let Err(refused) = parse_cmd_address(self, false) {
-            refused.into_errormsg(errormsg);
-            return Err(Refused);
-        }
+        parse_cmd_address(self, false)?;
 
         self.line.cmd = skip_colons(&self.line, self.line.cmd, true);
 
@@ -229,10 +220,9 @@ impl ExArg<'_> {
             self.line.next.is_some()
         } {
             if !self.skip {
-                debug_assert!(errormsg.is_none());
-                *errormsg = ex_range_without_command(self);
+                ex_range_without_command(self)?;
             }
-            return Err(Refused);
+            return Err(CmdError::Quiet);
         }
 
         // An unknown command spelled like a user command, with a CmdUndefined
@@ -269,25 +259,28 @@ impl ExArg<'_> {
 
         let Some(p) = p else {
             if !self.skip {
-                *errormsg = Some(ex_msg(E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND));
+                return Err(CmdError::Message(ex_msg(
+                    E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND,
+                )));
             }
-            return Err(Refused);
+            return Err(CmdError::Quiet);
         };
 
         if self.cmdidx == CmdIdx::SIZE {
             if !self.skip {
                 // The modifiers parsed, so the error is in what follows them.
                 let msg = ex_msg(E_NOT_AN_EDITOR_COMMAND);
-                *errormsg = Some(if flags.has(DoCmdOpts::VERBOSE) {
+                let msg = if flags.has(DoCmdOpts::VERBOSE) {
                     // The whole line is appended by `do_one_cmd` instead.
                     msg
                 } else {
                     append_command(&msg, self.line.rest_of(after_modifier))
-                });
+                };
                 DID_EMSG_SYNTAX.set(true);
                 verify_command(self.line.rest_of(after_modifier));
+                return Err(CmdError::Message(msg));
             }
-            return Err(Refused);
+            return Err(CmdError::Quiet);
         }
         self.line.arg = p;
         Ok(())
@@ -298,17 +291,9 @@ impl ExArg<'_> {
     ///
     /// `ni` is set for a command this build does not implement, which relaxes
     /// every check here: there is nothing to check them against.
-    fn check_may_run(
-        &mut self,
-        ni: bool,
-        flags: DoCmdOpts,
-        errormsg: &mut Option<CString>,
-    ) -> Result<(), Refused> {
+    fn check_may_run(&mut self, ni: bool, flags: DoCmdOpts) -> Result<(), CmdError> {
         if !self.skip {
-            if let Some(msg) = refuses_here(self) {
-                *errormsg = Some(msg);
-                return Err(Refused);
-            }
+            refuses_here(self)?;
             // `CURBUF->b_ro_locked` forbids editing another buffer.
             // `:checktime` is postponed rather than refused, and `:edit` and
             // `:file` are checked again once their argument is known.
@@ -319,17 +304,15 @@ impl ExArg<'_> {
                 && !is_user_cmd(self.cmdidx)
                 && curbuf_locked()
             {
-                return Err(Refused);
+                return Err(CmdError::Quiet);
             }
             if !ni && !self.argt.has(ExArgt::RANGE) && self.addr_count > 0 {
-                *errormsg = Some(ex_msg(E_NORANGE));
-                return Err(Refused);
+                return Err(CmdError::Message(ex_msg(E_NORANGE)));
             }
         }
 
         if !ni && !self.argt.has(ExArgt::BANG) && self.forceit {
-            *errormsg = Some(ex_msg(E_NOBANG));
-            return Err(Refused);
+            return Err(CmdError::Message(ex_msg(E_NOBANG)));
         }
 
         // A range that is not used is not complained about, which can happen
@@ -342,19 +325,15 @@ impl ExArg<'_> {
             if GLOBAL_BUSY.get() == 0 && first > last {
                 if MSG_SILENT.get() == 0 {
                     if flags.has(DoCmdOpts::VERBOSE) || EXMODE_ACTIVE.get() {
-                        *errormsg = Some(ex_msg(c"E493: Backwards range given"));
-                        return Err(Refused);
+                        return Err(CmdError::Message(ex_msg(c"E493: Backwards range given")));
                     }
                     if !ask_yesno(gettext(c"Backwards range given, OK to swap")) {
-                        return Err(Refused);
+                        return Err(CmdError::Quiet);
                     }
                 }
                 self.set_range_numbers(last, first);
             }
-            *errormsg = invalid_range(self);
-            if errormsg.is_some() {
-                return Err(Refused);
-            }
+            invalid_range(self)?;
         }
 
         // `CmdAddr::Other` counts from 1 rather than from the cursor.
@@ -381,11 +360,7 @@ impl ExArg<'_> {
     ///
     /// On entry `self.arg` is where the command word ended, which is what
     /// [`ExArg::locate_command`] left there.
-    fn read_command_args(
-        &mut self,
-        ni: bool,
-        errormsg: &mut Option<CString>,
-    ) -> Result<(), Refused> {
+    fn read_command_args(&mut self, ni: bool) -> Result<(), CmdError> {
         // `:make` and `:grep` splice 'makeprg'/'grepprg' into the line here, so
         // that `%` and friends expand inside it.
         replace_makeprg(self);
@@ -396,7 +371,7 @@ impl ExArg<'_> {
         }
 
         if self.cmdidx == CmdIdx::file && self.line.byte_at(self.line.arg) != 0 && curbuf_locked() {
-            return Err(Refused);
+            return Err(CmdError::Quiet);
         }
 
         // `++opt=val` first, so that `:w ++enc=utf8 !cmd` works.
@@ -405,8 +380,7 @@ impl ExArg<'_> {
                 && self.line.byte_at(self.line.arg + 1) == b'+'
             {
                 if getargopt(self).is_err() && !ni {
-                    *errormsg = Some(ex_msg(E_INVARG));
-                    return Err(Refused);
+                    return Err(CmdError::Message(ex_msg(E_INVARG)));
                 }
             }
         }
@@ -415,8 +389,7 @@ impl ExArg<'_> {
             if self.line.byte_at(self.line.arg) == b'>' {
                 self.line.arg += 1;
                 if self.line.byte_at(self.line.arg) != b'>' {
-                    *errormsg = Some(ex_msg(c"E494: Use w or w>>"));
-                    return Err(Refused);
+                    return Err(CmdError::Message(ex_msg(c"E494: Use w or w>>")));
                 }
                 self.line.arg = self.line.skip_white(self.line.arg + 1);
                 self.append = true;
@@ -468,7 +441,7 @@ impl ExArg<'_> {
         }
 
         parse_register(self);
-        self.parse_count(errormsg, true).map_err(|_| Refused)?;
+        self.parse_count(true)?;
 
         if self.argt.has(ExArgt::FLAGS) {
             get_flags(self);
@@ -479,15 +452,13 @@ impl ExArg<'_> {
             && self.line.byte_at(self.line.arg) != b'"'
             && (self.line.byte_at(self.line.arg) != b'|' || !self.argt.has(ExArgt::TRLBAR))
         {
-            *errormsg = Some(ex_errmsg(
+            return Err(CmdError::Message(ex_errmsg(
                 E_TRAILING_ARG,
                 self.line.cstr_from(self.line.arg),
-            ));
-            return Err(Refused);
+            )));
         }
         if !ni && self.argt.has(ExArgt::NEEDARG) && self.line.byte_at(self.line.arg) == 0 {
-            *errormsg = Some(ex_msg(E_ARGREQ));
-            return Err(Refused);
+            return Err(CmdError::Message(ex_msg(E_ARGREQ)));
         }
         Ok(())
     }
@@ -553,7 +524,6 @@ pub(crate) fn do_one_cmd(
     in_inactive: bool,
     source: Option<&mut dyn ReadLines>,
 ) -> CmdLine {
-    let mut errormsg: Option<CString> = None;
     let save_reg_executing = REG_EXECUTING.get();
     let save_pending_end_reg_executing = PENDING_END_REG_EXECUTING.get();
     let mut excmd = fresh_exarg();
@@ -579,10 +549,10 @@ pub(crate) fn do_one_cmd(
     excmd.source = source;
     excmd.cond_stack = Some(cond);
 
-    // Each stage refuses by answering `Err`, having left whatever it has to
-    // say in `errormsg`; the reporting below is shared by all of them.
+    // Each stage refuses by answering `Err` with whatever it has to say; the
+    // reporting below is shared by all of them (the C's `goto doend`).
     let ran = (|| {
-        excmd.locate_command(in_inactive, &mods, flags, &mut errormsg)?;
+        excmd.locate_command(in_inactive, &mods, flags)?;
 
         // Not implemented in this build: the argument checks are relaxed,
         // because there is nothing to check them against.
@@ -597,18 +567,23 @@ pub(crate) fn do_one_cmd(
             excmd.argt = CMDNAMES[excmd.cmdidx.index()].cmd_argt;
         }
 
-        excmd.check_may_run(ni, flags, &mut errormsg)?;
-        excmd.read_command_args(ni, &mut errormsg)?;
+        excmd.check_may_run(ni, flags)?;
+        excmd.read_command_args(ni)?;
 
         if skip_cmd(&mut excmd) {
-            return Err(Refused);
+            return Err(CmdError::Quiet);
         }
-        let mut retv: c_int = 0;
-        execute_cmd0(&mut retv, &mut excmd, &mut errormsg, false).map_err(|_| Refused)
+        execute_cmd0(&mut excmd, false).map(drop)
     })();
-    if ran.is_ok() {
-        rethrow_from_nested(&mut excmd);
-    }
+    // A command that ran may still have refused: its handler leaves the
+    // message in `errmsg`.
+    let errormsg = match ran {
+        Ok(()) => {
+            rethrow_from_nested(&mut excmd);
+            excmd.errmsg.take()
+        }
+        Err(refused) => refused.into_message(),
+    };
 
     // Can happen with a zero line number.
     if Win::current().w_cursor.lnum == LineNr::ZERO {
@@ -704,10 +679,11 @@ pub(crate) fn profile_cmd(excmd: &ExArg, cond: CondId) {
 
 /// The three "this command is not allowed here" checks that share an exit.
 ///
-/// Answers the message to report, or `None` when the command may run.
-fn refuses_here(excmd: &ExArg) -> Option<CString> {
+/// Refuses with the message to report, or lets the command run.
+fn refuses_here(excmd: &ExArg) -> Result<(), CmdError> {
+    let refuse = |msg: &'static CStr| Err(CmdError::Message(ex_msg(msg)));
     if SANDBOX.get() != 0 && !excmd.argt.has(ExArgt::SBOXOK) {
-        return Some(ex_msg(E_SANDBOX));
+        return refuse(E_SANDBOX);
     }
     // `:put` is allowed in a terminal buffer, which is not 'modifiable'.
     if Buf::current().b_p_ma == 0
@@ -715,17 +691,17 @@ fn refuses_here(excmd: &ExArg) -> Option<CString> {
         && !(!Buf::current().terminal.is_null()
             && (excmd.cmdidx == CmdIdx::put || excmd.cmdidx == CmdIdx::iput))
     {
-        return Some(ex_msg(E_MODIFIABLE));
+        return refuse(E_MODIFIABLE);
     }
     if !is_user_cmd(excmd.cmdidx) {
         if CMDWIN_TYPE.get() != 0 && !excmd.argt.has(ExArgt::CMDWIN) {
-            return Some(ex_msg(E_CMDWIN));
+            return refuse(E_CMDWIN);
         }
         if text_locked() && !excmd.argt.has(ExArgt::LOCK_OK) {
-            return Some(ex_msg(get_text_locked_msg()));
+            return refuse(get_text_locked_msg());
         }
     }
-    None
+    Ok(())
 }
 
 /// A range with no command after it: print the lines, or move the cursor to
@@ -736,22 +712,19 @@ fn refuses_here(excmd: &ExArg) -> Option<CString> {
 /// substitutes for an empty line once its `+` has been consumed, which
 /// `CmdLine::substituted` marks: upstream recognises it by the *address* of
 /// the static it substituted.
-pub(crate) fn ex_range_without_command(excmd: &mut ExArg) -> Option<CString> {
-    let mut errormsg: Option<CString> = None;
+pub(crate) fn ex_range_without_command(excmd: &mut ExArg) -> Result<(), CmdError> {
     let past_substituted_plus = excmd.line.substituted && excmd.line.cmd == 1;
     if excmd.line.byte_at(excmd.line.cmd) == b'|' || (EXMODE_ACTIVE.get() && !past_substituted_plus)
     {
         excmd.cmdidx = CmdIdx::print;
         excmd.argt = ExArgt::RANGE | ExArgt::COUNT | ExArgt::TRLBAR;
-        errormsg = invalid_range(excmd);
-        if errormsg.is_none() {
-            correct_range(excmd);
-            ex_print(excmd);
-        }
+        invalid_range(excmd)?;
+        correct_range(excmd);
+        ex_print(excmd);
     } else if excmd.addr_count != 0 {
         excmd.line2 = excmd.line2.min(Buf::current().b_ml.ml_line_count);
         if excmd.line2 < LineNr::ZERO {
-            errormsg = Some(ex_msg(E_INVRANGE));
+            return Err(CmdError::Message(ex_msg(E_INVRANGE)));
         } else {
             // Line 0 is not a position; the cursor goes to line 1.
             Win::current().w_cursor.lnum = if excmd.line2 == LineNr::ZERO {
@@ -762,7 +735,7 @@ pub(crate) fn ex_range_without_command(excmd: &mut ExArg) -> Option<CString> {
             beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
     }
-    errormsg
+    Ok(())
 }
 
 /// `msg`, with `cmd` appended after a colon: the "…: :bogus" form a
@@ -833,15 +806,4 @@ pub(crate) fn ex_script_ni(excmd: &mut ExArg) {
     } else {
         drop(script_get(excmd));
     }
-}
-
-/// `curbuf_locked()` as checked code.
-fn curbuf_locked() -> bool {
-    crate::ex_getln::curbuf_locked()
-}
-
-/// `invalid_range()` as checked code.
-fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    crate::ex_docmd::address::invalid_range(excmd)
 }

@@ -14,9 +14,9 @@
     clippy::ptr_as_ptr
 )]
 #![forbid(unsafe_code)]
-use crate::ex_docmd::is_user_cmd;
 use crate::ex_docmd::lookup::check_for_word;
 use crate::ex_docmd::scan::ends_excmd;
+use crate::ex_docmd::{CmdError, is_user_cmd};
 use crate::runtime::SID_NONE;
 use crate::types::CmdIdx;
 use crate::types::{CmdFilter, CmdLine};
@@ -58,7 +58,7 @@ use crate::charset::atoi;
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp_at};
-use crate::types::{CmdAddr, CmdMod, CmdModFlags, ExArg, Failed, OptInt};
+use crate::types::{CmdAddr, CmdMod, CmdModFlags, ExArg, OptInt};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 
 /// One recognised modifier name, for the two callers that only need to know
@@ -122,10 +122,9 @@ impl ExArg<'_> {
     /// and evaluate nothing.
     pub(crate) fn parse_modifiers(
         &mut self,
-        errormsg: &mut Option<CString>,
         cm: &mut CmdMod,
         skip_only: bool,
-    ) -> Result<(), Failed> {
+    ) -> Result<(), CmdError> {
         let orig_cmd = self.line.cmd;
         let mut cmd_start = 0;
         let mut use_plus_cmd = false;
@@ -179,17 +178,17 @@ impl ExArg<'_> {
                 // next command.
                 self.line.next = self.line.rest_of(cmd).iter().position(|b| *b == b'\n');
                 self.line.next = self.line.next.map(|at| cmd + at + 1);
-                return Err(Failed);
+                return Err(CmdError::Quiet);
             }
             if first == b'\n' {
                 self.line.next = Some(cmd + 1);
-                return Err(Failed);
+                return Err(CmdError::Quiet);
             }
             if first == 0 {
                 if !skip_only {
                     EX_PRESSEDRETURN.set(true);
                 }
-                return Err(Failed);
+                return Err(CmdError::Quiet);
             }
 
             // A modifier may follow a range (`:1,2 silent print`), so the
@@ -351,20 +350,13 @@ impl ExArg<'_> {
                                 false,
                                 1,
                             );
-                            let tabnr = match read {
-                                Ok(tabnr) => tabnr.get(),
-                                Err(refused) => {
-                                    refused.into_errormsg(errormsg);
-                                    return Err(Failed);
-                                }
-                            };
+                            let tabnr = read?.get();
                             self.line.cmd = cursor;
                             if tabnr == MAXLNUM.get() {
                                 cm.cmod_tab = tab_index(TabPage::current()) + 1;
                             } else {
                                 if tabnr < 0 || tabnr > current_tab_nr(None) {
-                                    *errormsg = Some(ex_msg(E_INVRANGE));
-                                    return Err(Failed);
+                                    return Err(CmdError::Message(ex_msg(E_INVRANGE)));
                                 }
                                 cm.cmod_tab = tabnr + 1;
                             }
@@ -698,14 +690,9 @@ impl CmdModScope {
     /// raised while the modifiers are still being read is no longer inside
     /// the enclosing `:silent` or `:filter`, which is what the C's opening
     /// `CLEAR_FIELD(cmdmod)` amounts to.
-    pub(crate) fn parse(
-        &self,
-        excmd: &mut ExArg,
-        errormsg: &mut Option<CString>,
-    ) -> Result<(), Failed> {
+    pub(crate) fn parse(&self, excmd: &mut ExArg) -> Result<(), CmdError> {
         let mut parsed = CmdMod::default();
-        // SAFETY: the caller's contract.
-        let read = excmd.parse_modifiers(errormsg, &mut parsed, false);
+        let read = excmd.parse_modifiers(&mut parsed, false);
         CMDMOD.set(parsed);
         read
     }

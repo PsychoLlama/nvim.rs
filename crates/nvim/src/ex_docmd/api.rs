@@ -22,8 +22,7 @@ use crate::ex_docmd::ex_msg;
 use crate::message::emsg;
 use crate::types::CmdIdx;
 use crate::types::Handle;
-use core::ffi::c_int;
-use std::ffi::CString;
+use core::ffi::{CStr, c_int};
 
 use crate::ascii::ascii_iswhite;
 
@@ -42,7 +41,8 @@ use crate::ex_docmd::scan::{parse_bang, parse_register, separate_nextcmd};
 use crate::ex_docmd::source::{do_cmdline_end, do_cmdline_start};
 use crate::ex_docmd::state::{CMDMOD, GLOBAL_BUSY};
 use crate::ex_docmd::{
-    CMDNAMES, E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND, E_NOT_AN_EDITOR_COMMAND, EX_PRESSEDRETURN,
+    CMDNAMES, CmdError, E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND, E_NOT_AN_EDITOR_COMMAND,
+    EX_PRESSEDRETURN,
 };
 use crate::ex_getln::{
     cmdpreview_get_bufnr, cmdpreview_get_ns, curbuf_locked, get_text_locked_msg, text_locked,
@@ -52,9 +52,8 @@ use crate::message::state::EMSG_SILENT;
 use crate::message::{E_CMDWIN, E_COMMAND_TOO_RECURSIVE, E_MODIFIABLE, E_NOBANG, E_NORANGE};
 use crate::winlayer::graph::CMDWIN_TYPE;
 
-use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
-use crate::types::{CmdAddr, CmdLine, CmdParseInfo, ExArg, ExArgt, Failed, Pos};
+use crate::types::{CmdAddr, CmdLine, CmdParseInfo, ExArg, ExArgt, Pos};
 use crate::usercmd::do_ucmd;
 use crate::winlayer::{Buf, Win};
 
@@ -67,7 +66,8 @@ use crate::winlayer::{Buf, Win};
 ///
 /// On success the caller owns `cmdinfo->cmdmod`'s filter pattern and
 /// regexp program, and must free them with `undo_cmdmod` or by running the
-/// command through `execute_cmd`.
+/// command through `execute_cmd`. A refusal carries the message the caller
+/// reports, if there is one.
 ///
 /// `line` is taken over: the parse writes into it, and what it leaves in
 /// `excmd` addresses it by offset.
@@ -75,8 +75,7 @@ pub fn parse_cmdline(
     line: CmdLine,
     excmd: &mut ExArg,
     cmdinfo: &mut CmdParseInfo,
-    errormsg: &mut Option<CString>,
-) -> bool {
+) -> Result<(), CmdError> {
     let save_ex_pressedreturn = EX_PRESSEDRETURN.get();
     let save_cursor: Pos = Win::current().w_cursor;
     save_last_search_pattern();
@@ -86,136 +85,153 @@ pub fn parse_cmdline(
     *excmd = fresh_exarg();
     excmd.line = line;
 
-    let mut retval = false;
-    'end: {
-        let orig_cmd = excmd.line.cmd;
-        // A modifier that failed to parse is still a modifier: keep
-        // going, so that the error is reported against the command
-        // rather than against the line.
-        let result = excmd.parse_modifiers(errormsg, &mut cmdinfo.cmdmod, false);
-        let after_modifier = excmd.line.cmd;
-        if result.is_err() && after_modifier == orig_cmd {
-            break 'end;
-        }
-
-        // The command name says what kind of address the range counts in.
-        let Some(mut p) = find_excmd_after_range(excmd) else {
-            *errormsg = Some(ex_msg(E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND));
-            break 'end;
-        };
-
-        excmd.set_addr_type(Some(excmd.line.byte_at(excmd.line.skip_white(p))));
-        if let Err(refused) = parse_cmd_address(excmd, true) {
-            refused.into_errormsg(errormsg);
-            break 'end;
-        }
-
-        excmd.line.cmd = skip_colons(&excmd.line, excmd.line.cmd, true);
-        if excmd.line.byte_at(excmd.line.cmd) == b'"' {
-            break 'end;
-        }
-        // Nothing at all: no command, no range, no modifier.
-        if excmd.line.byte_at(excmd.line.cmd) == 0 && excmd.addr_count == 0 && after_modifier == 0 {
-            break 'end;
-        }
-
-        // A range on its own (`:1`) or a modifier on its own
-        // (`:aboveleft`) is a legal thing to parse.
-        if excmd.line.byte_at(excmd.line.cmd) == 0 && excmd.cmdidx == CmdIdx::SIZE {
-            excmd.line.arg = excmd.line.cmd;
-            if excmd.addr_count > 0 {
-                excmd.argt = ExArgt::RANGE;
-            } else {
-                excmd.argt = ExArgt::NONE;
-                excmd.set_addr_kind(CmdAddr::NoRange);
-            }
-            retval = true;
-            break 'end;
-        }
-
-        if excmd.cmdidx == CmdIdx::SIZE {
-            // The modifiers parsed, so the error is in what follows them.
-            let msg = ex_msg(E_NOT_AN_EDITOR_COMMAND);
-            *errormsg = Some(append_command(&msg, excmd.line.rest_of(after_modifier)));
-            break 'end;
-        }
-
-        excmd.forceit = parse_bang(excmd, &mut p);
-        if !is_user_cmd(excmd.cmdidx) {
-            excmd.argt = CMDNAMES[excmd.cmdidx.index()].cmd_argt;
-        }
-        // `:!` keeps the space: `:!! -l` needs it.
-        excmd.line.arg = if excmd.cmdidx == CmdIdx::bang {
-            p
-        } else {
-            excmd.line.skip_white(p)
-        };
-        // `:r!` is a filter, not a bang.
-        if excmd.cmdidx == CmdIdx::read && excmd.forceit {
-            excmd.forceit = false;
-        }
-
-        if excmd.argt.has(ExArgt::TRLBAR) {
-            separate_nextcmd(excmd);
-        } else if cmd_has_expr_args(excmd.cmdidx) {
-            // A command whose argument is an expression has no
-            // `ExArgt::TRLBAR`, because a `|` inside the expression is not a
-            // separator. Skipping expression by expression finds the one
-            // that is.
-            let mut at = excmd.line.arg;
-            while !matches!(excmd.line.byte_at(at), 0 | b'|' | b'\n') {
-                let skipping = Suppress::emsg_skip();
-                let used = skip_expr(excmd.line.rest_of(at));
-                drop(skipping);
-                // Nothing an expression parser recognises: step over one
-                // byte, or this loop never ends.
-                at += used.max(1);
-            }
-            if matches!(excmd.line.byte_at(at), b'|' | b'\n') {
-                excmd.line.next = excmd.line.check_next(at);
-                excmd.line.terminate_at(at);
-            }
-        }
-
-        if !excmd.argt.has(ExArgt::BANG) && excmd.forceit {
-            *errormsg = Some(ex_msg(E_NOBANG));
-            break 'end;
-        }
-        if !excmd.argt.has(ExArgt::RANGE) && excmd.addr_count > 0 {
-            *errormsg = Some(ex_msg(E_NORANGE));
-            break 'end;
-        }
-        if excmd.argt.has(ExArgt::DFLALL) && excmd.addr_count == 0 {
-            set_cmd_dflall_range(excmd);
-        }
-
-        parse_register(excmd);
-        if excmd.parse_count(errormsg, false).is_err() {
-            break 'end;
-        }
-
-        if let Some(at) = excmd.line.next {
-            excmd.line.next = Some(skip_colons(&excmd.line, at, true));
-        }
-
-        // Which characters the caller must escape to have them taken
-        // literally when the command is handed back.
-        if excmd.argt.has(ExArgt::XFILE) {
-            cmdinfo.magic.file = true;
-        }
-        if excmd.argt.has(ExArgt::TRLBAR) {
-            cmdinfo.magic.bar = true;
-        }
-        retval = true;
-    }
-
-    if !retval {
+    let parsed = parse_command(excmd, cmdinfo);
+    if parsed.is_err() {
         undo_cmdmod(&mut cmdinfo.cmdmod);
     }
     EX_PRESSEDRETURN.set(save_ex_pressedreturn);
     Win::current().w_cursor = save_cursor;
     restore_last_search_pattern();
-    retval
+    parsed
+}
+
+/// [`parse_cmdline`]'s parse: the modifiers, then everything after them.
+///
+/// A modifier that failed to parse is still a modifier: the parse goes on,
+/// so that an error is reported against the command rather than against the
+/// line, and the modifier's message stands only when nothing after it has
+/// one of its own.
+fn parse_command(excmd: &mut ExArg, cmdinfo: &mut CmdParseInfo) -> Result<(), CmdError> {
+    let orig_cmd = excmd.line.cmd;
+    let modifiers = excmd.parse_modifiers(&mut cmdinfo.cmdmod, false);
+    let after_modifier = excmd.line.cmd;
+    if modifiers.is_err() && after_modifier == orig_cmd {
+        return modifiers;
+    }
+    match (
+        parse_after_modifiers(excmd, cmdinfo, after_modifier),
+        modifiers,
+    ) {
+        (Err(CmdError::Quiet), Err(said)) => Err(said),
+        (parsed, _) => parsed,
+    }
+}
+
+/// The range, the command word and its argument, from `after_modifier` on.
+fn parse_after_modifiers(
+    excmd: &mut ExArg,
+    cmdinfo: &mut CmdParseInfo,
+    after_modifier: usize,
+) -> Result<(), CmdError> {
+    // The command name says what kind of address the range counts in.
+    let Some(mut p) = find_excmd_after_range(excmd) else {
+        return Err(CmdError::Message(ex_msg(
+            E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND,
+        )));
+    };
+
+    excmd.set_addr_type(Some(excmd.line.byte_at(excmd.line.skip_white(p))));
+    parse_cmd_address(excmd, true)?;
+
+    excmd.line.cmd = skip_colons(&excmd.line, excmd.line.cmd, true);
+    if excmd.line.byte_at(excmd.line.cmd) == b'"' {
+        return Err(CmdError::Quiet);
+    }
+    // Nothing at all: no command, no range, no modifier.
+    if excmd.line.byte_at(excmd.line.cmd) == 0 && excmd.addr_count == 0 && after_modifier == 0 {
+        return Err(CmdError::Quiet);
+    }
+
+    // A range on its own (`:1`) or a modifier on its own (`:aboveleft`) is a
+    // legal thing to parse.
+    if excmd.line.byte_at(excmd.line.cmd) == 0 && excmd.cmdidx == CmdIdx::SIZE {
+        excmd.line.arg = excmd.line.cmd;
+        if excmd.addr_count > 0 {
+            excmd.argt = ExArgt::RANGE;
+        } else {
+            excmd.argt = ExArgt::NONE;
+            excmd.set_addr_kind(CmdAddr::NoRange);
+        }
+        return Ok(());
+    }
+
+    if excmd.cmdidx == CmdIdx::SIZE {
+        // The modifiers parsed, so the error is in what follows them.
+        let msg = ex_msg(E_NOT_AN_EDITOR_COMMAND);
+        return Err(CmdError::Message(append_command(
+            &msg,
+            excmd.line.rest_of(after_modifier),
+        )));
+    }
+
+    excmd.forceit = parse_bang(excmd, &mut p);
+    if !is_user_cmd(excmd.cmdidx) {
+        excmd.argt = CMDNAMES[excmd.cmdidx.index()].cmd_argt;
+    }
+    // `:!` keeps the space: `:!! -l` needs it.
+    excmd.line.arg = if excmd.cmdidx == CmdIdx::bang {
+        p
+    } else {
+        excmd.line.skip_white(p)
+    };
+    // `:r!` is a filter, not a bang.
+    if excmd.cmdidx == CmdIdx::read && excmd.forceit {
+        excmd.forceit = false;
+    }
+
+    if excmd.argt.has(ExArgt::TRLBAR) {
+        separate_nextcmd(excmd);
+    } else if cmd_has_expr_args(excmd.cmdidx) {
+        separate_after_exprs(excmd);
+    }
+
+    if !excmd.argt.has(ExArgt::BANG) && excmd.forceit {
+        return Err(CmdError::Message(ex_msg(E_NOBANG)));
+    }
+    if !excmd.argt.has(ExArgt::RANGE) && excmd.addr_count > 0 {
+        return Err(CmdError::Message(ex_msg(E_NORANGE)));
+    }
+    if excmd.argt.has(ExArgt::DFLALL) && excmd.addr_count == 0 {
+        set_cmd_dflall_range(excmd);
+    }
+
+    parse_register(excmd);
+    excmd.parse_count(false)?;
+
+    if let Some(at) = excmd.line.next {
+        excmd.line.next = Some(skip_colons(&excmd.line, at, true));
+    }
+
+    // Which characters the caller must escape to have them taken literally
+    // when the command is handed back.
+    if excmd.argt.has(ExArgt::XFILE) {
+        cmdinfo.magic.file = true;
+    }
+    if excmd.argt.has(ExArgt::TRLBAR) {
+        cmdinfo.magic.bar = true;
+    }
+    Ok(())
+}
+
+/// Find the next command after an expression argument.
+///
+/// A command whose argument is an expression has no `ExArgt::TRLBAR`,
+/// because a `|` inside the expression is not a separator. Skipping
+/// expression by expression finds the one that is.
+fn separate_after_exprs(excmd: &mut ExArg) {
+    let mut at = excmd.line.arg;
+    while !matches!(excmd.line.byte_at(at), 0 | b'|' | b'\n') {
+        let skipping = Suppress::emsg_skip();
+        let used = skip_expr(excmd.line.rest_of(at));
+        drop(skipping);
+        // Nothing an expression parser recognises: step over one byte, or
+        // this loop never ends.
+        at += used.max(1);
+    }
+    if matches!(excmd.line.byte_at(at), b'|' | b'\n') {
+        excmd.line.next = excmd.line.check_next(at);
+        excmd.line.terminate_at(at);
+    }
 }
 
 /// Expand what is left of the argument and call the command's handler.
@@ -223,14 +239,12 @@ pub fn parse_cmdline(
 /// The last stage both `do_one_cmd` and `execute_cmd` share: everything
 /// before it is validation, everything after it is error reporting.
 ///
-pub(crate) fn execute_cmd0(
-    retv: &mut c_int,
-    excmd: &mut ExArg,
-    errormsg: &mut Option<CString>,
-    preview: bool,
-) -> Result<(), Failed> {
+/// Answers the handler's return value (a preview's kind; 0 otherwise). A
+/// handler that ran and refused leaves its message in `excmd.errmsg`, which
+/// the caller reports.
+pub(crate) fn execute_cmd0(excmd: &mut ExArg, preview: bool) -> Result<c_int, CmdError> {
     if excmd.argt.has(ExArgt::XFILE) {
-        excmd.expand_filename(errormsg)?;
+        excmd.expand_filename()?;
     }
 
     // A buffer name may stand in for a buffer number, but not alongside
@@ -284,12 +298,13 @@ pub(crate) fn execute_cmd0(
         CMDMOD.with_mut(|mods| mods.cmod_did_esilent = 0);
     }
 
+    let mut retv = 0;
     if is_user_cmd(excmd.cmdidx) {
-        *retv = do_ucmd(excmd, preview);
+        retv = do_ucmd(excmd, preview);
     } else {
         excmd.errmsg = None;
         if preview {
-            *retv = CMDNAMES[excmd.cmdidx.index()]
+            retv = CMDNAMES[excmd.cmdidx.index()]
                 .cmd_preview_func
                 .expect("a command with ExArgt::PREVIEW has a preview callback")(
                 excmd,
@@ -301,12 +316,9 @@ pub(crate) fn execute_cmd0(
                 .cmd_func
                 .expect("every command in the table has a handler")(excmd);
         }
-        if excmd.errmsg.is_some() {
-            *errormsg = excmd.errmsg.take();
-        }
     }
 
-    Ok(())
+    Ok(retv)
 }
 
 /// Run an `ExArg` the API built, without re-parsing anything.
@@ -317,86 +329,94 @@ pub(crate) fn execute_cmd0(
 /// window, a non-'modifiable' buffer) are, because they are about the
 /// editor's state rather than about the text.
 pub fn execute_cmd(excmd: &mut ExArg, cmdinfo: &CmdParseInfo, preview: bool) -> c_int {
-    let mut retv: c_int = 0;
     if do_cmdline_start().is_err() {
-        emsg(gettext(E_COMMAND_TOO_RECURSIVE));
-        return retv;
+        return report(
+            excmd,
+            Err(CmdError::Message(ex_msg(E_COMMAND_TOO_RECURSIVE))),
+        );
     }
 
-    let mut errormsg: Option<CString> = None;
-    // Shallow both ways: the guard owns what the set it took out
-    // points at until it goes back, and the caller keeps owning
-    // `cmdinfo`.
+    // Shallow both ways: the guard owns what the set it took out points at
+    // until it goes back, and the caller keeps owning `cmdinfo`.
     let mods = CmdModScope::enter(cmdinfo.cmdmod.clone());
+    let ran = execute_checked(excmd, preview);
+    let retv = report(excmd, ran);
+    drop(mods);
+    do_cmdline_end();
+    retv
+}
 
-    'end: {
-        // `:put` is allowed in a terminal buffer, which is not
-        // 'modifiable'.
-        if Buf::current().b_p_ma == 0
-            && excmd.argt.has(ExArgt::MODIFY)
-            && !(!Buf::current().terminal.is_null()
-                && (excmd.cmdidx == CmdIdx::put || excmd.cmdidx == CmdIdx::iput))
-        {
-            errormsg = Some(ex_msg(E_MODIFIABLE));
-            break 'end;
-        }
-        if !is_user_cmd(excmd.cmdidx) {
-            if CMDWIN_TYPE.get() != 0 && !excmd.argt.has(ExArgt::CMDWIN) {
-                errormsg = Some(ex_msg(E_CMDWIN));
-                break 'end;
-            }
-            if text_locked() && !excmd.argt.has(ExArgt::LOCK_OK) {
-                errormsg = Some(ex_msg(get_text_locked_msg()));
-                break 'end;
-            }
-        }
-        // `CURBUF->b_ro_locked` forbids editing another buffer.
-        // `:checktime` is postponed, `:edit` is checked later, and
-        // `:file` with no argument only reports.
-        if !excmd.argt.has(ExArgt::CMDWIN)
-            && excmd.cmdidx != CmdIdx::checktime
-            && excmd.cmdidx != CmdIdx::edit
-            && !(excmd.cmdidx == CmdIdx::file && excmd.line.byte_at(excmd.line.arg) == 0)
-            && !is_user_cmd(excmd.cmdidx)
-            && curbuf_locked()
-        {
-            break 'end;
-        }
-
-        correct_range(excmd);
-        if excmd.cmdidx == CmdIdx::SIZE && excmd.addr_count > 0 {
-            errormsg = ex_range_without_command(excmd);
-            break 'end;
-        }
-
-        // Put the first line at the start of a closed fold and the last
-        // line at its end.
-        if (excmd.argt.has(ExArgt::WHOLEFOLD) || excmd.addr_count >= 2)
-            && GLOBAL_BUSY.get() == 0
-            && excmd.addr_type == CmdAddr::Lines
-        {
-            Win::current().has_folding(excmd.line1, Some(&mut excmd.line1), None);
-            Win::current().has_folding(excmd.line2, None, Some(&mut excmd.line2));
-        }
-
-        if excmd.parse_count(&mut errormsg, true).is_err() {
-            break 'end;
-        }
-
-        // A conditional stack of its own: `:try` and friends reached
-        // this way are not nested inside the caller's.
-        let cond_stack = crate::ex_eval::OwnedCondStack::open();
-        excmd.cond_stack = Some(cond_stack.id());
-
-        let _ = execute_cmd0(&mut retv, excmd, &mut errormsg, preview);
-    }
-
+/// Put out what [`execute_cmd`]'s command had to say, and answer its
+/// handler's value: a refused command has no preview kind (0).
+fn report(excmd: &mut ExArg, ran: Result<c_int, CmdError>) -> c_int {
+    let (retv, errormsg) = match ran {
+        // A handler that ran may still have refused.
+        Ok(retv) => (retv, excmd.errmsg.take()),
+        Err(refused) => (0, refused.into_message()),
+    };
     if let Some(msg) = &errormsg
         && !msg.is_empty()
     {
         emsg(msg);
     }
-    drop(mods);
-    do_cmdline_end();
     retv
+}
+
+/// [`execute_cmd`]'s checks about where the command may run, then the
+/// command.
+fn execute_checked(excmd: &mut ExArg, preview: bool) -> Result<c_int, CmdError> {
+    let refuse = |msg: &'static CStr| Err(CmdError::Message(ex_msg(msg)));
+    // `:put` is allowed in a terminal buffer, which is not 'modifiable'.
+    if Buf::current().b_p_ma == 0
+        && excmd.argt.has(ExArgt::MODIFY)
+        && !(!Buf::current().terminal.is_null()
+            && (excmd.cmdidx == CmdIdx::put || excmd.cmdidx == CmdIdx::iput))
+    {
+        return refuse(E_MODIFIABLE);
+    }
+    if !is_user_cmd(excmd.cmdidx) {
+        if CMDWIN_TYPE.get() != 0 && !excmd.argt.has(ExArgt::CMDWIN) {
+            return refuse(E_CMDWIN);
+        }
+        if text_locked() && !excmd.argt.has(ExArgt::LOCK_OK) {
+            return refuse(get_text_locked_msg());
+        }
+    }
+    // `CURBUF->b_ro_locked` forbids editing another buffer. `:checktime` is
+    // postponed, `:edit` is checked later, and `:file` with no argument only
+    // reports.
+    if !excmd.argt.has(ExArgt::CMDWIN)
+        && excmd.cmdidx != CmdIdx::checktime
+        && excmd.cmdidx != CmdIdx::edit
+        && !(excmd.cmdidx == CmdIdx::file && excmd.line.byte_at(excmd.line.arg) == 0)
+        && !is_user_cmd(excmd.cmdidx)
+        && curbuf_locked()
+    {
+        return Err(CmdError::Quiet);
+    }
+
+    correct_range(excmd);
+    if excmd.cmdidx == CmdIdx::SIZE && excmd.addr_count > 0 {
+        ex_range_without_command(excmd)?;
+        return Err(CmdError::Quiet);
+    }
+
+    // Put the first line at the start of a closed fold and the last line at
+    // its end.
+    if (excmd.argt.has(ExArgt::WHOLEFOLD) || excmd.addr_count >= 2)
+        && GLOBAL_BUSY.get() == 0
+        && excmd.addr_type == CmdAddr::Lines
+    {
+        Win::current().has_folding(excmd.line1, Some(&mut excmd.line1), None);
+        Win::current().has_folding(excmd.line2, None, Some(&mut excmd.line2));
+    }
+
+    excmd.parse_count(true)?;
+
+    // A conditional stack of its own: `:try` and friends reached this way
+    // are not nested inside the caller's.
+    let cond_stack = crate::ex_eval::OwnedCondStack::open();
+    excmd.cond_stack = Some(cond_stack.id());
+
+    execute_cmd0(excmd, preview)
 }

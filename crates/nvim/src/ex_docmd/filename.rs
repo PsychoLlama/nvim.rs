@@ -33,6 +33,7 @@ use crate::eval::fs::modify_fname;
 use crate::eval::skip_expr;
 use crate::eval::typval::{NumBuf, list_find_str};
 use crate::eval::vars::get_vim_var_list_handle;
+use crate::ex_docmd::CmdError;
 use crate::ex_docmd::scan::skip_grep_pat;
 use crate::ex_docmd::state::ESCAPE_CHARS;
 use crate::ex_docmd::{
@@ -113,10 +114,7 @@ impl ExArg<'_> {
     /// Every cursor into the line is re-read from the `CmdLine` after each
     /// replacement: an expansion *grows the buffer*, so an offset held across
     /// one is stale.
-    pub(crate) fn expand_filename(
-        &mut self,
-        errormsgp: &mut Option<CString>,
-    ) -> Result<(), Failed> {
+    pub(crate) fn expand_filename(&mut self) -> Result<(), CmdError> {
         // A `:vimgrep` pattern is not a file name, so the scan starts after
         // it.
         let mut at = skip_grep_pat(self);
@@ -147,10 +145,8 @@ impl ExArg<'_> {
                 true,
             );
             let (mut repl, srclen, escaped) = match found {
-                Expansion::Refused(msg) => {
-                    *errormsgp = Some(msg.to_owned());
-                    return Err(Failed);
-                }
+                Expansion::Refused(msg) if msg.is_empty() => return Err(CmdError::Quiet),
+                Expansion::Refused(msg) => return Err(CmdError::Message(msg.to_owned())),
                 Expansion::Skip(len) => {
                     at += len;
                     continue;
@@ -240,7 +236,7 @@ impl ExArg<'_> {
         let arg = CString::new(self.line.rest_of(self.line.arg)).unwrap_or_default();
         let Some(expanded) = expand_one(&mut xpc, Some(&arg), None, options, WildMode::ExpandFree)
         else {
-            return Err(Failed);
+            return Err(CmdError::Quiet);
         };
         let text = expanded.as_cstr().to_bytes().to_vec();
         let (start, len) = (self.line.arg, self.line.rest_of(self.line.arg).len());

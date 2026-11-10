@@ -12,10 +12,9 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::ex_docmd::is_user_cmd;
+use crate::ex_docmd::{CmdError, is_user_cmd};
 use crate::types::CmdIdx;
 use core::ffi::c_int;
-use std::ffi::CString;
 
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 
@@ -37,7 +36,7 @@ use crate::register::set_expr_line;
 use crate::strings::trailing_spaces_start;
 use crate::types::ex_cmds::ExArg;
 use crate::types::pos::LineNr;
-use crate::types::{CmdAddr, CmdLine, ExArgt, Failed};
+use crate::types::{CmdAddr, CmdLine, ExArgt};
 use crate::winlayer::Buf;
 
 /// Step over a run of `:` at `at`, which is how a mapping's `:cmd<CR>` and a
@@ -122,11 +121,7 @@ pub fn set_cmd_count(excmd: &mut ExArg, count: i32, validate: bool) {
 impl ExArg<'_> {
     /// Take the count a command such as `:delete 3` may carry, and fold it into
     /// the range.
-    pub(crate) fn parse_count(
-        &mut self,
-        errormsg: &mut Option<CString>,
-        validate: bool,
-    ) -> Result<(), Failed> {
+    pub(crate) fn parse_count(&mut self, validate: bool) -> Result<(), CmdError> {
         if !self.argt.has(ExArgt::COUNT)
             || !ascii_isdigit(c_int::from(self.line.byte_at(self.line.arg)))
         {
@@ -158,8 +153,7 @@ impl ExArg<'_> {
             }
         }
         if n <= LineNr::ZERO && !self.argt.has(ExArgt::ZEROR) {
-            *errormsg = Some(ex_msg(E_ZEROCOUNT));
-            return Err(Failed);
+            return Err(CmdError::Message(ex_msg(E_ZEROCOUNT)));
         }
         set_cmd_count(self, n.get(), validate);
         Ok(())

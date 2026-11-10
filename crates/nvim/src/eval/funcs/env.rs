@@ -158,14 +158,11 @@ pub fn f_expandcmd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         argt: ExArgt::NOSPC,
         ..ExArg::default()
     };
-    let mut errormsg = None;
     let _no_emsg = quiet.then(Suppress::emsg);
-    if eap.expand_filename(&mut errormsg).is_err()
+    if let Err(refused) = eap.expand_filename()
         && !quiet
-        && let Some(msg) = &errormsg
-        && !msg.is_empty()
     {
-        emsg(msg);
+        refused.report();
     }
     result.write_string(Some(ThinCString::from_bytes(eap.line.line())));
 }

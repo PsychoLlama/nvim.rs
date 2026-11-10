@@ -18,6 +18,7 @@
 use super::*;
 use crate::api_error;
 use crate::charset::skip;
+use crate::ex_docmd::CmdError;
 use crate::message_fmt::msg_cstr;
 use crate::types::CmdIdx;
 use crate::types::DictBuilder;
@@ -186,14 +187,12 @@ pub fn nvim_parse_cmd(str: ApiString, _opts: &mut KeyDict_empty) -> Result<KeyDi
     // "nothing parsed yet" one, as the C original's CLEAR_FIELD relies on.
     let mut cmdinfo: CmdParseInfo = crate::ex_getln::CMD_PARSE_INFO_INIT;
 
-    let mut errormsg = None;
     let line = CmdLine::from_bytes(str.as_bytes());
-    let parsed = parse_cmdline(line, &mut excmd, &mut cmdinfo, &mut errormsg);
-    if !parsed {
-        return Err(match &errormsg {
-            None => Error::exception(c"Parsing command-line"),
-            Some(msg) => {
-                let msg = msg_cstr(msg);
+    if let Err(refused) = parse_cmdline(line, &mut excmd, &mut cmdinfo) {
+        return Err(match refused {
+            CmdError::Quiet => Error::exception(c"Parsing command-line"),
+            CmdError::Message(msg) => {
+                let msg = msg_cstr(&msg);
                 api_error!(ERROR_TYPE_EXCEPTION, "Parsing command-line: {msg}")
             }
         });

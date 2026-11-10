@@ -81,14 +81,9 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
     // the name expanded first; everything else goes through `:runtime!`.
     let source = matches!(args.line.byte_at(args.line.arg), b'<' | b'$')
         || path_is_absolute(args.line.cstr_from(args.line.arg));
-    if source {
-        let mut errormsg = None;
-        if args.expand_filename(&mut errormsg).is_err() {
-            if let Some(msg) = &errormsg {
-                emsg(msg);
-            }
-            return;
-        }
+    if source && let Err(refused) = args.expand_filename() {
+        refused.report();
+        return;
     }
 
     if RUNNING_SYN_INC_TAG.get() >= MAX_SYN_INC_TAG {

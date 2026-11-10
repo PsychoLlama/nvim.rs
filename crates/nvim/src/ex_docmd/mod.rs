@@ -86,8 +86,57 @@ use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
 use crate::version::{ex_intro, ex_version};
 use core::ffi::{CStr, c_int, c_uint, c_void};
+use std::ffi::CString;
 
 // Generated from `ex_cmds.lua`; see `tools/apigen` and `just apigen`.
+/// Why a command line did not run, or ran and refused: what its caller
+/// reports.
+///
+/// Every stage of the parse -- the modifiers, the range, the command word,
+/// the argument checks, the file-name expansion -- answers one of these, and
+/// `do_one_cmd` (or the API's `parse_cmdline`/`execute_cmd`) is the one place
+/// that puts the message out, after naming the command line when the caller
+/// asked for that (`DoCmdOpts::VERBOSE`).
+#[derive(Debug, thiserror::Error)]
+pub enum CmdError {
+    /// The message the caller reports: E16, E20, E481, E488, E492, ….
+    #[error("{}", .0.to_string_lossy())]
+    Message(CString),
+    /// Nothing for the caller to say: the message is out already (`Failed`
+    /// -- a search that found nothing, a buffer name that matched none), or
+    /// upstream says nothing at all (a skipped command, a locked buffer, a
+    /// backwards range the user declined to swap, a comment).
+    #[error("refused without a message of its own")]
+    Quiet,
+}
+
+// Two words, so a `Result` carrying one is no wider than it has to be.
+const _: () = assert!(size_of::<CmdError>() <= 16);
+
+impl CmdError {
+    /// Puts the message out, for a caller with no channel of its own.
+    pub(crate) fn report(&self) {
+        if let Self::Message(msg) = self {
+            crate::message::emsg(msg);
+        }
+    }
+
+    /// The message to report, if there is one.
+    pub fn into_message(self) -> Option<CString> {
+        match self {
+            Self::Message(msg) => Some(msg),
+            Self::Quiet => None,
+        }
+    }
+}
+
+/// A refusal whose message is out already has nothing left to report.
+impl From<crate::types::Failed> for CmdError {
+    fn from(_: crate::types::Failed) -> Self {
+        Self::Quiet
+    }
+}
+
 mod cmdtable;
 pub(crate) use self::cmdtable::*;
 

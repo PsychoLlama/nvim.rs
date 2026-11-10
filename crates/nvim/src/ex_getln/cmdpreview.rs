@@ -332,14 +332,13 @@ pub(crate) fn cmdpreview_may_show() -> bool {
     let mut cmdinfo: CmdParseInfo = CMD_PARSE_INFO_INIT;
     // A copy of the command line: the parse writes into it.
     let line = CmdLine::from_bytes(crate::cstr::until_nul(Cc::current().bytes()));
-    let mut errormsg = None;
 
     // Block errors while parsing the command line, and don't update
     // v:errmsg.
     let no_emsg = Suppress::emsg();
-    let parsed = parse_cmdline(line, &mut ea, &mut cmdinfo, &mut errormsg);
+    let parsed = parse_cmdline(line, &mut ea, &mut cmdinfo);
     drop(no_emsg);
-    if !parsed {
+    if parsed.is_err() {
         return false;
     }
 
