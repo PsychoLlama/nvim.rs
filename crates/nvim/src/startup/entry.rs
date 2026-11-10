@@ -177,6 +177,78 @@ pub fn early_init(clean: bool) {
 /// Never returns: it ends in `normal_enter`, which is the editor's main
 /// loop, or in one of the exits along the way.
 pub(crate) fn run(argv: Vec<CString>) -> c_int {
+    let mut params = read_command_line(argv);
+
+    // The first file argument decides whether `-r` lists the swap files or
+    // recovers one.
+    let has_fname = alist_count(ArgListId::GLOBAL) > 0;
+    if RECOVERYMODE.get() && !has_fname {
+        // `-r` with no file only lists the swap files.
+        HEADLESS_MODE.set(true);
+    }
+
+    let has_term = STDIN_ISATTY.get() || STDOUT_ISATTY.get() || STDERR_ISATTY.get();
+    let use_builtin_ui =
+        has_term && !HEADLESS_MODE.get() && !EMBEDDED_MODE.get() && !SILENT_MODE.get();
+    hand_over_to_ui_client(&mut params, use_builtin_ui);
+
+    if let Err(reason) = server_init(params.listen_addr.as_deref()) {
+        mainerr(&reason, None, None);
+    }
+    time_msg_at(c"expanding arguments");
+
+    init_screen(&mut params);
+
+    // `-es` with a pipe: start reading it now, so the Ex commands are
+    // there when the loop asks.
+    if !STDIN_ISATTY.get() && !params.input_is_text && SILENT_MODE.get() && EXMODE_ACTIVE.get() {
+        input_start();
+    }
+
+    // `--embed` without `--headless`: the client attaches a UI, and the
+    // startup waits for it so the first redraw has somewhere to go.
+    let use_remote_ui = EMBEDDED_MODE.get() && !HEADLESS_MODE.get();
+    if use_remote_ui {
+        time_msg_at(c"waiting for UI");
+        remote_ui_wait_for_attach();
+        time_msg_at(c"done waiting for UI");
+        first_win().w_prev_height = first_win().w_height;
+    }
+
+    starting.set(NO_BUFFERS);
+    screenclear();
+    win_new_screensize();
+    time_msg_at(c"clear screen");
+
+    open_script_files(&mut params);
+    load_config(&mut params);
+
+    if RECOVERYMODE.get() && !has_fname {
+        // `-r` with no file: list the swap files and leave.
+        list_swap_files(None);
+        os_exit(0);
+    }
+
+    load_saved_state(&params);
+    open_buffers(&mut params);
+    enter_editor(use_remote_ui);
+
+    if let Some(lua_script) = params.lua_script.as_deref() {
+        run_lua_script(lua_script);
+    }
+
+    time_msg_at(c"before starting main loop");
+    logmsg!(LOGLVL_INF, c"main", 689, "starting main loop");
+
+    // Never returns.
+    normal_enter(false, false);
+    0
+}
+
+/// The first phase: `argv[0]`, `-ll`, the arguments scanned into the
+/// startup's parameters, the event loop, the early options and the Lua
+/// interpreter, and an `--embed` process's RPC channel.
+fn read_command_line(argv: Vec<CString>) -> MainParams {
     // `argv[0]` is asked for by the error messages until the process ends.
     let name = argv
         .first()
@@ -222,22 +294,16 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         // stdin/stdout were to become the RPC channel.
         std::process::abort();
     }
+    params
+}
 
-    // The first file argument decides whether `-r` lists the swap files or
-    // recovers one.
-    let has_fname = alist_count(ArgListId::GLOBAL) > 0;
-    if RECOVERYMODE.get() && !has_fname {
-        // `-r` with no file only lists the swap files.
-        HEADLESS_MODE.set(true);
-    }
-
-    let has_term = STDIN_ISATTY.get() || STDOUT_ISATTY.get() || STDERR_ISATTY.get();
-    let use_builtin_ui =
-        has_term && !HEADLESS_MODE.get() && !EMBEDDED_MODE.get() && !SILENT_MODE.get();
-
+/// `--remote*`, and the built-in UI: a process that is to be a UI starts
+/// (or reaches) a server and becomes that server's client, never returning
+/// here.
+fn hand_over_to_ui_client(params: &mut MainParams, use_builtin_ui: bool) {
     if params.remote_at != 0 {
         let at = params.remote_at;
-        remote_request(&mut params, at, use_builtin_ui);
+        remote_request(params, at, use_builtin_ui);
     }
 
     // A `--remote-ui` handled above already has a channel; otherwise the
@@ -261,12 +327,11 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         UI_CLIENT_CHANNEL_ID.get() == 0 && !use_builtin_ui,
         "a UI client reached the editor startup"
     );
+}
 
-    if let Err(reason) = server_init(params.listen_addr.as_deref()) {
-        mainerr(&reason, None, None);
-    }
-    time_msg_at(c"expanding arguments");
-
+/// The screen: its size, the default grid, the second round of options
+/// and the highlight groups.
+fn init_screen(params: &mut MainParams) {
     if params.diff_mode && params.window_count == -1 {
         // Diff mode wants one window per file.
         params.window_count = 0;
@@ -301,29 +366,12 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     time_msg_at(c"init highlight");
 
     DEBUG_BREAK_LEVEL.set(params.debug_break_at);
+}
 
-    // `-es` with a pipe: start reading it now, so the Ex commands are
-    // there when the loop asks.
-    if !STDIN_ISATTY.get() && !params.input_is_text && SILENT_MODE.get() && EXMODE_ACTIVE.get() {
-        input_start();
-    }
-
-    // `--embed` without `--headless`: the client attaches a UI, and the
-    // startup waits for it so the first redraw has somewhere to go.
-    let use_remote_ui = EMBEDDED_MODE.get() && !HEADLESS_MODE.get();
-    if use_remote_ui {
-        time_msg_at(c"waiting for UI");
-        remote_ui_wait_for_attach();
-        time_msg_at(c"done waiting for UI");
-        first_win().w_prev_height = first_win().w_height;
-    }
-
-    starting.set(NO_BUFFERS);
-    screenclear();
-    win_new_screensize();
-    time_msg_at(c"clear screen");
-
-    if edit_stdin(&params) {
+/// Standard input as the file to edit (`-`), and the `-s`/`-w` script
+/// files. A script file that will not open ends the process.
+fn open_script_files(params: &mut MainParams) {
+    if edit_stdin(params) {
         params.edit_type = EDIT_STDIN.cast_signed();
     }
     if let Some(scriptin) = params.scriptin.as_deref()
@@ -344,7 +392,11 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
             os_exit(2);
         }
     }
+}
 
+/// The defaults, `--cmd`, the user's config, filetype and syntax, and the
+/// plugins; then the window layout the arguments asked for.
+fn load_config(params: &mut MainParams) {
     nlua_init_defaults();
     time_msg_at(c"init default mappings & autocommands");
 
@@ -355,11 +407,11 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         P_LPL.set(params.clean);
     }
 
-    exe_pre_commands(&params);
+    exe_pre_commands(params);
     if !vimrc_none || params.clean {
         filetype_plugin_enable();
     }
-    source_startup_scripts(&params);
+    source_startup_scripts(params);
     if !vimrc_none || params.clean {
         filetype_maybe_enable();
         syn_maybe_enable();
@@ -367,14 +419,11 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
 
     set_vim_var_nr(Vv::VimDidInit, 1 as VarNumber);
     load_plugins();
-    set_window_layout(&mut params);
+    set_window_layout(params);
+}
 
-    if RECOVERYMODE.get() && !has_fname {
-        // `-r` with no file: list the swap files and leave.
-        list_swap_files(None);
-        os_exit(0);
-    }
-
+/// The last round of options, the ShaDa file and `-q`'s error file.
+fn load_saved_state(params: &MainParams) {
     set_init_3();
     time_msg_at(c"inits 3");
 
@@ -393,8 +442,12 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         set_vim_var_list(Vv::Oldfiles, Some(tv_list_alloc(0)));
     }
 
-    handle_quickfix(&params);
+    handle_quickfix(params);
+}
 
+/// Standard input read in, the windows opened and the buffers loaded into
+/// them, then `-t` and the `-c` commands.
+fn open_buffers(params: &mut MainParams) {
     starting.set(NO_BUFFERS);
     NO_WAIT_RETURN.set(0);
     if !EXMODE_ACTIVE.get() {
@@ -409,7 +462,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     redraw_later(Win::current(), UPD_VALID);
     NO_WAIT_RETURN.set(1);
 
-    create_windows(&mut params);
+    create_windows(params);
     time_msg_at(c"opening buffers");
 
     // The swap command has served its purpose; the ATTENTION prompts
@@ -428,7 +481,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         time_msg_at(c"jump to first error");
     }
 
-    edit_buffers(&params);
+    edit_buffers(params);
 
     if params.diff_mode {
         for wp in windows() {
@@ -441,9 +494,13 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     shorten_fnames(false);
     handle_tag(params.tag.as_deref());
     if !params.commands.is_empty() {
-        exe_commands(&params);
+        exe_commands(params);
     }
+}
 
+/// The startup is over: redraw, `VimEnter` and `UIEnter`, and what has to
+/// be ready before the first key.
+fn enter_editor(use_remote_ui: bool) {
     starting.set(0);
     REDRAWING_DISABLED.set(0);
     redraw_all_later(UPD_NOT_VALID);
@@ -475,26 +532,19 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         // Warm the clipboard provider so the first yank is not slow.
         eval_has_provider(c"clipboard");
     }
+}
 
-    if let Some(lua_script) = params.lua_script.as_deref() {
-        // `-l`: run the script and leave, with its status.
-        MSG_SCROLL.set(1);
-        logmsg!(LOGLVL_DBG, c"main", 678, "executing Lua -l script");
-        let lua_ok = nlua_exec_file(lua_script).is_ok();
-        time_msg_at(c"executing Lua -l script");
-        if MSG_DIDOUT.get() {
-            msg_put_ascii(b'\n');
-            MSG_DIDOUT.set(false);
-        }
-        getout(if lua_ok { 0 } else { 1 });
+/// `-l`: run the script and leave, with its status.
+fn run_lua_script(lua_script: &CStr) -> ! {
+    MSG_SCROLL.set(1);
+    logmsg!(LOGLVL_DBG, c"main", 678, "executing Lua -l script");
+    let lua_ok = nlua_exec_file(lua_script).is_ok();
+    time_msg_at(c"executing Lua -l script");
+    if MSG_DIDOUT.get() {
+        msg_put_ascii(b'\n');
+        MSG_DIDOUT.set(false);
     }
-
-    time_msg_at(c"before starting main loop");
-    logmsg!(LOGLVL_INF, c"main", 689, "starting main loop");
-
-    // Never returns.
-    normal_enter(false, false);
-    0
+    getout(if lua_ok { 0 } else { 1 })
 }
 
 /// The process entry point: the command line, owned, handed to [`run`],
