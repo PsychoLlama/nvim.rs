@@ -63,7 +63,7 @@ impl Added {
 /// `fname` the file it came from, `extra` the `abbr`/`kind`/`menu`/`info`
 /// strings (an empty one is dropped), `user_data` taken over only when the
 /// match is added, `cdir` the side of `COMPL_CURR_MATCH` to link it on
-/// (`DIRECTION_NOT_SET` means `COMPL_DIRECTION`), `adup` whether a duplicate
+/// (`None` means `COMPL_DIRECTION`), `adup` whether a duplicate
 /// is acceptable, and `user_hl` the `abbr` and `kind` highlight attributes.
 ///
 /// Answers [`Added::Duplicate`] when the text is already in the list and
@@ -74,17 +74,13 @@ pub(crate) fn ins_compl_add(
     fname: Option<&CStr>,
     extra: [Option<XString>; CPT_COUNT],
     user_data: Option<&mut TypVal>,
-    cdir: Direction,
+    cdir: Option<Direction>,
     flags: c_int,
     adup: bool,
     user_hl: [c_int; 2],
     score: c_int,
 ) -> Added {
-    let dir = if cdir == DIRECTION_NOT_SET {
-        COMPL_DIRECTION.get()
-    } else {
-        cdir
-    };
+    let dir = cdir.unwrap_or_else(|| COMPL_DIRECTION.get());
 
     if flags & CP_FAST != 0 {
         fast_breakcheck();
@@ -498,7 +494,7 @@ fn merge_sort<T: Copy>(items: &mut Vec<T>, compare: impl Fn(&T, &T) -> Ordering)
 /// starts with, taken from `compl_orig_text`.
 pub(crate) fn ins_compl_add_orig_text(flags: c_int) -> Result<(), Failed> {
     let text = compl_orig_text().to_vec();
-    let (dir, score) = (DIRECTION_NOT_SET, FUZZY_SCORE_NONE);
+    let (dir, score) = (None, FUZZY_SCORE_NONE);
     let added = ins_compl_add(&text, None, NO_EXTRA, None, dir, flags, false, NO_HL, score);
     // A text already in the list is "not added" to upstream's callers here.
     if added == Added::Linked {
@@ -587,7 +583,17 @@ pub(crate) fn ins_compl_add_match_list(matches: &[XString], icase: bool) {
     for text in matches {
         let text = text.as_cstr().to_bytes();
         let score = FUZZY_SCORE_NONE;
-        match ins_compl_add(text, None, NO_EXTRA, None, dir, flags, false, NO_HL, score) {
+        match ins_compl_add(
+            text,
+            None,
+            NO_EXTRA,
+            None,
+            Some(dir),
+            flags,
+            false,
+            NO_HL,
+            score,
+        ) {
             Added::Refused => break,
             Added::Linked => dir = FORWARD,
             Added::Duplicate => {}

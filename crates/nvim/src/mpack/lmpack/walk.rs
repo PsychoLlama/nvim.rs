@@ -52,22 +52,11 @@ pub type NodeRefs = [c_int; 2];
 
 type Node = crate::mpack::object::Node<NodeRefs>;
 
-/// A node's token type, as the C compared it.
-fn kind(node: &Node) -> u32 {
-    node.tok.kind.map_or(0, |kind| kind as u32)
+/// A node's token kind; `None` (no token yet) orders below every kind, as
+/// the C's 0 did against the `MPACK_TOKEN_*` numbers.
+fn kind(node: &Node) -> Option<TokenKind> {
+    node.tok.kind
 }
-
-const MPACK_TOKEN_NIL: u32 = TokenKind::Nil as u32;
-const MPACK_TOKEN_BOOLEAN: u32 = TokenKind::Boolean as u32;
-const MPACK_TOKEN_UINT: u32 = TokenKind::Uint as u32;
-const MPACK_TOKEN_SINT: u32 = TokenKind::Sint as u32;
-const MPACK_TOKEN_FLOAT: u32 = TokenKind::Float as u32;
-const MPACK_TOKEN_CHUNK: u32 = TokenKind::Chunk as u32;
-const MPACK_TOKEN_ARRAY: u32 = TokenKind::Array as u32;
-const MPACK_TOKEN_MAP: u32 = TokenKind::Map as u32;
-const MPACK_TOKEN_BIN: u32 = TokenKind::Bin as u32;
-const MPACK_TOKEN_STR: u32 = TokenKind::Str as u32;
-const MPACK_TOKEN_EXT: u32 = TokenKind::Ext as u32;
 
 /// Why a walk stopped: what the binding raises once the codec returns.
 #[derive(Debug)]
@@ -135,13 +124,13 @@ impl Decode<NodeRefs> for LuaDecoder<'_> {
     fn enter(&mut self, tok: Tok, parents: &mut [Node], chunk: &[u8]) -> NodeRefs {
         let mut refs = NodeRefs::default();
         let stack = &mut *self.stack;
-        match tok.kind.map_or(0, |kind| kind as u32) {
-            MPACK_TOKEN_NIL => push_nil_sentinel(stack),
-            MPACK_TOKEN_BOOLEAN => stack.push_boolean(mpack_unpack_boolean(tok)),
-            MPACK_TOKEN_UINT | MPACK_TOKEN_SINT | MPACK_TOKEN_FLOAT => {
+        match tok.kind {
+            Some(TokenKind::Nil) => push_nil_sentinel(stack),
+            Some(TokenKind::Boolean) => stack.push_boolean(mpack_unpack_boolean(tok)),
+            Some(TokenKind::Uint | TokenKind::Sint | TokenKind::Float) => {
                 stack.push_number(mpack_unpack_number(tok));
             }
-            MPACK_TOKEN_CHUNK => {
+            Some(TokenKind::Chunk) => {
                 // A blob's body arrives in pieces; the parent's `pos` is how
                 // much of it has landed. The buffer was sized by the header
                 // token, which is the frame below this one.
@@ -150,13 +139,13 @@ impl Decode<NodeRefs> for LuaDecoder<'_> {
                 self.buffer.truncate(offset);
                 self.buffer.extend_from_slice(chunk);
             }
-            MPACK_TOKEN_BIN | MPACK_TOKEN_STR | MPACK_TOKEN_EXT => {
+            Some(TokenKind::Bin | TokenKind::Str | TokenKind::Ext) => {
                 // Only the header is known here; `exit` pushes the string
                 // once every chunk has been copied in.
                 self.buffer.clear();
                 self.buffer.reserve(tok.len as usize);
             }
-            MPACK_TOKEN_ARRAY | MPACK_TOKEN_MAP => {
+            Some(TokenKind::Array | TokenKind::Map) => {
                 // The container has to outlive this call, so it goes into the
                 // private table and the node keeps the reference.
                 stack.new_table(0, 0);
@@ -177,10 +166,10 @@ impl Decode<NodeRefs> for LuaDecoder<'_> {
         let reg = self.reg;
         let tok = node.tok;
         match kind(&node) {
-            MPACK_TOKEN_BIN | MPACK_TOKEN_STR | MPACK_TOKEN_EXT => {
+            Some(TokenKind::Bin | TokenKind::Str | TokenKind::Ext) => {
                 self.stack.push_bytes(&self.buffer);
                 self.buffer.clear();
-                if kind(&node) == MPACK_TOKEN_EXT
+                if kind(&node) == Some(TokenKind::Ext)
                     && self.ext != LUA_NOREF
                     && !self.apply_ext_handler(tok.lo.cast_signed())
                 {
@@ -190,13 +179,13 @@ impl Decode<NodeRefs> for LuaDecoder<'_> {
                     return;
                 }
             }
-            MPACK_TOKEN_ARRAY | MPACK_TOKEN_MAP => {
+            Some(TokenKind::Array | TokenKind::Map) => {
                 // Take the container back out of the private table.
                 geti(self.stack, reg, node.data[0]);
                 unreference(self.stack, reg, node.data[0]);
                 // A map that never saw a key is an *empty dict*, not an empty
                 // list; the `vim.empty_dict()` metatable is what says so.
-                if !node.key_visited && kind(&node) == MPACK_TOKEN_MAP {
+                if !node.key_visited && kind(&node) == Some(TokenKind::Map) {
                     geti(self.stack, reg, self.mtdict); // [table, mtdict]
                     self.stack.set_metatable(At::from_top(2)); // [table]
                 }
@@ -207,7 +196,7 @@ impl Decode<NodeRefs> for LuaDecoder<'_> {
         // Chunks are consumed by their blob and a blob's parent sees only the
         // finished string, so only a container adopts what is on top.
         if let Some(parent) = parents.last_mut()
-            && kind(parent) < MPACK_TOKEN_BIN
+            && kind(parent) < Some(TokenKind::Bin)
         {
             store_in_parent(self.stack, reg, parent);
         }
@@ -252,14 +241,14 @@ impl LuaDecoder<'_> {
 /// Stack in `[value]`, out `[]`.
 fn store_in_parent(stack: &mut Stack, reg: At, parent: &mut Node) {
     geti(stack, reg, parent.data[0]); // [value, container]
-    if kind(parent) == MPACK_TOKEN_ARRAY {
+    if kind(parent) == Some(TokenKind::Array) {
         // `pos` was bumped past this element by the pop, so it is already
         // the one-based index.
         stack.push_number(parent.pos as lua_Number);
         stack.push_value(At::from_top(3));
         stack.set_table(At::from_top(3));
     } else {
-        debug_assert_eq!(kind(parent), MPACK_TOKEN_MAP);
+        debug_assert_eq!(kind(parent), Some(TokenKind::Map));
         if parent.key_visited {
             // This value is a key; park it until its value arrives.
             stack.push_value(At::from_top(2));
@@ -370,9 +359,9 @@ impl Encode<NodeRefs> for LuaEncoder<'_> {
     /// Release the references a finished node holds.
     fn exit(&mut self, node: Node, _parents: &mut [Node]) {
         // A chunk borrows its parent's string and never took a reference.
-        if kind(&node) != MPACK_TOKEN_CHUNK {
+        if kind(&node) != Some(TokenKind::Chunk) {
             unreference(self.stack, self.reg, node.data[0]);
-            if kind(&node) == MPACK_TOKEN_MAP {
+            if kind(&node) == Some(TokenKind::Map) {
                 unreference(self.stack, self.reg, node.data[1]);
             }
         }
@@ -530,7 +519,7 @@ impl LuaEncoder<'_> {
 ///
 /// Answers false for the chunk case, where the node is already complete.
 fn next_child(stack: &mut Stack, reg: At, parent: &mut Node, node: &mut Node) -> bool {
-    if kind(parent) > MPACK_TOKEN_MAP {
+    if kind(parent) > Some(TokenKind::Map) {
         // A string is written as one chunk node borrowing the Lua string's
         // own bytes, which stay alive because the parent's reference does;
         // `chunk` reads them.
@@ -539,10 +528,10 @@ fn next_child(stack: &mut Stack, reg: At, parent: &mut Node, node: &mut Node) ->
     }
     geti(stack, reg, parent.data[0]); // [parent]
 
-    if kind(parent) == MPACK_TOKEN_ARRAY {
+    if kind(parent) == Some(TokenKind::Array) {
         stack.push_number((parent.pos + 1) as lua_Number);
         stack.get_table(At::from_top(2)); // [parent, element]
-    } else if kind(parent) == MPACK_TOKEN_MAP {
+    } else if kind(parent) == Some(TokenKind::Map) {
         // `lua_next` resumes from the previous key, which is parked in the
         // private table precisely because this call is not the last.
         geti(stack, reg, parent.data[1]); // [parent, prev key]

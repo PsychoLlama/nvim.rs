@@ -85,7 +85,6 @@ use crate::message::{
     do_autocmd_progress, msg_id_exists, msg_multihl, verbose_enter, verbose_leave, verbose_stop,
 };
 use crate::r#move::{changed_window_setting, update_topline, validate_cursor};
-use crate::mpack::typedefs::mpack_token_type_t;
 use crate::msgpack_rpc::channel::rpc_set_client_info;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::normal::reset_visual_and_resel;
@@ -155,7 +154,6 @@ pub use self::runtime::*;
 pub use self::statusline::*;
 pub use self::term::*;
 pub use self::vars::*;
-pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
 #[inline(always)]
 fn is_internal_call(channel_id: uint64_t) -> bool {
     channel_id & INTERNAL_CALL_MASK != 0

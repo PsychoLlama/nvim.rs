@@ -49,7 +49,6 @@ use crate::cstr;
 use crate::memory::XString;
 use crate::narrow::count_as_int;
 use crate::runtime::SID_WINLAYOUT;
-use crate::search::DIRECTION_NOT_SET;
 use crate::types::api::ERROR_TYPE_EXCEPTION;
 use crate::types::vim::CD_CAUSE_WINDOW;
 use crate::types::{CmdIdx, Failed};

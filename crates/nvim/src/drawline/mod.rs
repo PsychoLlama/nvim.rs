@@ -19,10 +19,10 @@ use crate::cursor_shape::cursor_is_block_during_visual;
 use crate::decoration::defs::VirtText;
 use crate::decoration::defs::{DecorRange, HlMode, VirtTextPos};
 use crate::decoration::{
-    DECOR_ID_INVALID, HL_MODE_UNKNOWN, VirtChunks, VirtLineRef, decor_conceal,
-    decor_has_more_decorations, decor_init_draw_col, decor_recheck_draw_col, decor_redraw_col,
-    decor_redraw_eol, decor_redraw_line, decor_redraw_signs, decor_spell, decor_virt_pos,
-    decor_virt_pos_kind, with_decor_virt,
+    HL_MODE_UNKNOWN, NO_ENTRY, VirtChunks, VirtLineRef, decor_conceal, decor_has_more_decorations,
+    decor_init_draw_col, decor_recheck_draw_col, decor_redraw_col, decor_redraw_eol,
+    decor_redraw_line, decor_redraw_signs, decor_spell, decor_virt_pos, decor_virt_pos_kind,
+    with_decor_virt,
 };
 use crate::decoration_provider::{decor_providers_invoke_line, decor_providers_invoke_range};
 use crate::diff::{diff_check_with_linestatus, diff_find_change};
@@ -167,7 +167,7 @@ pub fn win_line(
             hl_id: 0,
         }; 9],
         linebreak_armed: false,
-        virt_inline: DECOR_ID_INVALID,
+        virt_inline: NO_ENTRY,
         virt_inline_len: 0,
         virt_inline_i: 0,
         virt_inline_hl_mode: HL_MODE_UNKNOWN,

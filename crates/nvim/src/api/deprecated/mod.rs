@@ -60,4 +60,4 @@ pub use self::options::*;
 pub use self::vars::*;
 pub use self::write::*;
 pub const LINE_BUFFER_MIN_SIZE: ::core::ffi::c_uint = 4096;
-pub(crate) use crate::decoration::DECOR_ID_INVALID;
+pub(crate) use crate::decoration::NO_ENTRY;

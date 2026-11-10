@@ -63,7 +63,7 @@ pub use self::ns::*;
 pub use self::query::*;
 pub use self::set::*;
 /// No allocated decoration: the index a `DecorSignHighlight` chain ends on.
-pub const DECOR_ID_INVALID: uint32_t = u32::MAX;
+pub const NO_ENTRY: uint32_t = u32::MAX;
 pub(crate) use crate::decoration::{
     DECOR_HIGHLIGHT_INLINE_INIT, DECOR_PRIORITY_BASE, DECOR_SIGN_HIGHLIGHT_INIT, SH_CONCEAL,
     SH_CONCEAL_LINES, SH_HL_EOL, SH_IS_SIGN, SH_SPELL_OFF, SH_SPELL_ON, SHUI_WATCHED,

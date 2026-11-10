@@ -269,8 +269,9 @@ pub(crate) struct ConvPath<'s, 'a> {
 pub(crate) trait TypvalSink {
     /// `TYPVAL_ENCODE_ALLOW_SPECIALS`: whether a two-key `{_TYPE, _VAL}`
     /// dictionary is read as the value it stands for rather than as a plain
-    /// dictionary.
-    const ALLOW_SPECIALS: bool;
+    /// dictionary. Off unless a sink says otherwise; the ones that read them
+    /// (JSON, msgpack, Lua) do.
+    const ALLOW_SPECIALS: bool = false;
 
     /// The name `internal_error` reports for a `VAR_UNKNOWN`, which upstream
     /// spells with the instantiation's own function name.

@@ -40,7 +40,7 @@ use crate::cmdexpand::defs::Expand;
 use crate::cursor::check_cursor_lnum;
 use crate::decoration::defs::{DecorExt, DecorInline, DecorPriority, DecorSignHighlight};
 use crate::decoration::{
-    DECOR_ID_INVALID, DECOR_SIGN_HIGHLIGHT_INIT, MT_META_SIGN_HL, MT_META_SIGN_TEXT, SH_IS_SIGN,
+    DECOR_SIGN_HIGHLIGHT_INIT, MT_META_SIGN_HL, MT_META_SIGN_TEXT, NO_ENTRY, SH_IS_SIGN,
     decor_put_sh, for_each_decor_item, sign_item, sign_item_cmp, with_decor_item,
 };
 use crate::drawscreen::{UPD_NOT_VALID, redraw_buf_later};

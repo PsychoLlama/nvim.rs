@@ -21,8 +21,8 @@ use crate::grid::schar_from_buf;
 use crate::global_cell::GlobalCell;
 use crate::grid::defs::{GridLineEvent, RawLine};
 use crate::mpack::mpack_core::{TokenStop, read_token};
-use crate::mpack::token::{self, Tok};
-use crate::mpack::typedefs::mpack_token_type_t;
+use crate::mpack::token::{self, Kind, Tok};
+
 use crate::msgpack_rpc::unpacker::Unpacker;
 use crate::os::libc::size_t;
 use crate::types::{Array, ScreenAttr, ScreenChar};
@@ -59,7 +59,6 @@ impl Unpacker {
         })
     }
 }
-use super::{TOKEN_ARRAY, TOKEN_BOOLEAN, TOKEN_SINT, TOKEN_STR, TOKEN_UINT, token_type};
 
 /// Why a redraw parse stopped short.
 #[derive(Debug)]
@@ -83,10 +82,10 @@ impl<'a> Cursor<'a> {
     }
 
     /// Reads one token and checks it is the kind this position calls for.
-    fn next(&mut self, expected: mpack_token_type_t) -> Result<Tok, Halt> {
+    fn next(&mut self, expected: Kind) -> Result<Tok, Halt> {
         match read_token(&mut self.data) {
             Err(TokenStop::Short) => Err(Halt::Incomplete),
-            Ok(tok) if protocol::token_matches(expected, token_type(&tok)) => Ok(tok),
+            Ok(tok) if protocol::token_matches(expected, tok.kind) => Ok(tok),
             Ok(_) | Err(TokenStop::Invalid) => Err(Halt::Invalid),
         }
     }
@@ -149,19 +148,19 @@ fn parse_redraw<'a>(
     );
 
     if stage == protocol::REDRAW_EVENTS {
-        *nevents = cursor.next(TOKEN_ARRAY)?.len.cast_signed();
+        *nevents = cursor.next(Kind::Array)?.len.cast_signed();
         stage = protocol::REDRAW_CALL;
     }
 
     if stage == protocol::REDRAW_CALL {
-        *ncalls = cursor.next(TOKEN_ARRAY)?.len.cast_signed();
+        *ncalls = cursor.next(Kind::Array)?.len.cast_signed();
         let had_calls = *ncalls;
         *ncalls -= 1;
         if had_calls == 0 {
             return Err(Halt::Invalid);
         }
 
-        let tok = cursor.next(TOKEN_STR)?;
+        let tok = cursor.next(Kind::Str)?;
         let name = cursor.take(tok.len as size_t)?;
         *ui_handler = ui_client_get_redraw_handler(name);
 
@@ -181,13 +180,13 @@ fn parse_redraw<'a>(
 
     if stage == protocol::GRID_LINE_EVENT {
         // [grid, row, startcol, [cells], wrap]
-        if cursor.next(TOKEN_ARRAY)?.len != 5 {
+        if cursor.next(Kind::Array)?.len != 5 {
             return Err(Halt::Invalid);
         }
         for slot in 0..3 {
-            g.args[slot] = cursor.next(TOKEN_UINT)?.lo.cast_signed();
+            g.args[slot] = cursor.next(Kind::Uint)?.lo.cast_signed();
         }
-        g.ncells = cursor.next(TOKEN_ARRAY)?.len.cast_signed();
+        g.ncells = cursor.next(Kind::Array)?.len.cast_signed();
         g.icell = 0;
         g.coloff = 0;
         g.cur_attr = -1;
@@ -205,7 +204,7 @@ fn parse_redraw<'a>(
         *state = protocol::GRID_LINE_WRAP;
     }
 
-    g.wrap = token::unpack_boolean(&cursor.next(TOKEN_BOOLEAN)?);
+    g.wrap = token::unpack_boolean(&cursor.next(Kind::Boolean)?);
     *input = cursor.data;
     Ok(true)
 }
@@ -216,19 +215,19 @@ fn parse_redraw<'a>(
 /// form compact. A run of spaces at the end of the line is not written at
 /// all: it becomes the event's `clear_width`.
 fn parse_grid_line_cell(g: &mut GridLineEvent, cursor: &mut Cursor) -> Result<(), Halt> {
-    let arity = cursor.next(TOKEN_ARRAY)?.len.cast_signed();
+    let arity = cursor.next(Kind::Array)?.len.cast_signed();
     if !(1..=3).contains(&arity) {
         return Err(Halt::Invalid);
     }
 
-    let tok = cursor.next(TOKEN_STR)?;
+    let tok = cursor.next(Kind::Str)?;
     let cell_bytes = cursor.take(tok.len as size_t)?;
 
     if arity >= 2 {
-        g.cur_attr = cursor.next(TOKEN_SINT)?.lo.cast_signed();
+        g.cur_attr = cursor.next(Kind::Sint)?.lo.cast_signed();
     }
     let repeat = if arity >= 3 {
-        cursor.next(TOKEN_UINT)?.lo.cast_signed()
+        cursor.next(Kind::Uint)?.lo.cast_signed()
     } else {
         1
     };
@@ -265,9 +264,7 @@ fn parse_grid_line_cell(g: &mut GridLineEvent, cursor: &mut Cursor) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::msgpack_rpc::unpacker::{
-        TOKEN_BIN, TOKEN_FLOAT, TOKEN_NIL, scalar_object, unpack_integer_token,
-    };
+    use crate::msgpack_rpc::unpacker::{scalar_object, unpack_integer_token};
     use crate::types::{Integer, Object};
 
     fn cursor(bytes: &[u8]) -> Cursor<'_> {
@@ -285,22 +282,22 @@ mod tests {
         // [1, 2] then a bare 3, as three separate reads.
         let bytes = [0x92u8, 0x01, 0x02, 0x03];
         let mut c = cursor(&bytes);
-        assert_eq!(c.next(TOKEN_ARRAY).ok().map(|t| t.len), Some(2));
+        assert_eq!(c.next(Kind::Array).ok().map(|t| t.len), Some(2));
         assert_eq!(c.data.len(), 3);
         assert_eq!(
-            integer_of(scalar_object(c.next(TOKEN_UINT).unwrap()).unwrap()),
+            integer_of(scalar_object(c.next(Kind::Uint).unwrap()).unwrap()),
             Some(1)
         );
         assert_eq!(
-            integer_of(scalar_object(c.next(TOKEN_UINT).unwrap()).unwrap()),
+            integer_of(scalar_object(c.next(Kind::Uint).unwrap()).unwrap()),
             Some(2)
         );
         assert_eq!(
-            integer_of(scalar_object(c.next(TOKEN_UINT).unwrap()).unwrap()),
+            integer_of(scalar_object(c.next(Kind::Uint).unwrap()).unwrap()),
             Some(3)
         );
         assert_eq!(c.data.len(), 0);
-        assert!(matches!(c.next(TOKEN_UINT), Err(Halt::Incomplete)));
+        assert!(matches!(c.next(Kind::Uint), Err(Halt::Incomplete)));
     }
 
     #[test]
@@ -308,23 +305,23 @@ mod tests {
         // A uint64 tag with only one of its eight payload bytes.
         let truncated = [0xcfu8, 0x00];
         assert!(matches!(
-            cursor(&truncated).next(TOKEN_UINT),
+            cursor(&truncated).next(Kind::Uint),
             Err(Halt::Incomplete)
         ));
         // An empty buffer is the same answer: wait for more.
         assert!(matches!(
-            cursor(&[]).next(TOKEN_ARRAY),
+            cursor(&[]).next(Kind::Array),
             Err(Halt::Incomplete)
         ));
         // 0xc1 is msgpack's one reserved byte.
         assert!(matches!(
-            cursor(&[0xc1u8]).next(TOKEN_UINT),
+            cursor(&[0xc1u8]).next(Kind::Uint),
             Err(Halt::Invalid)
         ));
         // A well-formed token of the wrong kind is invalid, not incomplete —
         // the stream is not a redraw batch and no amount of waiting helps.
         assert!(matches!(
-            cursor(&[0x80u8]).next(TOKEN_ARRAY),
+            cursor(&[0x80u8]).next(Kind::Array),
             Err(Halt::Invalid)
         ));
     }
@@ -333,16 +330,16 @@ mod tests {
     fn the_two_interchangeable_kinds_are_accepted_through_the_cursor() {
         // A blob header where a string is wanted: clients differ on which
         // they send for a method name or a cell's text.
-        assert!(cursor(&[0xc4u8, 0x01, b'x']).next(TOKEN_STR).is_ok());
+        assert!(cursor(&[0xc4u8, 0x01, b'x']).next(Kind::Str).is_ok());
         assert!(matches!(
-            cursor(&[0xa1u8, b'x']).next(TOKEN_BIN),
+            cursor(&[0xa1u8, b'x']).next(Kind::Bin),
             Err(Halt::Invalid)
         ));
         // An unsigned integer where a signed one is wanted: a non-negative
         // highlight id encodes as unsigned.
-        assert!(cursor(&[0x07u8]).next(TOKEN_SINT).is_ok());
+        assert!(cursor(&[0x07u8]).next(Kind::Sint).is_ok());
         assert!(matches!(
-            cursor(&[0xffu8]).next(TOKEN_UINT),
+            cursor(&[0xffu8]).next(Kind::Uint),
             Err(Halt::Invalid)
         ));
     }
@@ -351,7 +348,7 @@ mod tests {
     fn take_hands_back_the_payload_and_advances() {
         let bytes = [0xa3u8, b'a', b'b', b'c'];
         let mut c = cursor(&bytes);
-        let len = c.next(TOKEN_STR).unwrap().len as usize;
+        let len = c.next(Kind::Str).unwrap().len as usize;
         assert_eq!(len, 3);
         assert!(matches!(
             Cursor::new(c.data).take(len + 1),
@@ -365,46 +362,46 @@ mod tests {
     #[test]
     fn scalars_decode_to_the_object_they_stand_for() {
         let mut c = cursor(&[0xc0u8]);
-        assert!(scalar_object(c.next(TOKEN_NIL).unwrap()).unwrap().is_nil());
+        assert!(scalar_object(c.next(Kind::Nil).unwrap()).unwrap().is_nil());
 
         let mut c = cursor(&[0xc3u8]);
-        let boolean = scalar_object(c.next(TOKEN_BOOLEAN).unwrap()).unwrap();
+        let boolean = scalar_object(c.next(Kind::Boolean).unwrap()).unwrap();
         assert_eq!(boolean.as_boolean(), Some(true));
 
         // Both signs reach the same `Integer`, which is what `msgpackparse()`
         // and the RPC decoder agree on.
         let mut c = cursor(&[0xffu8]);
         assert_eq!(
-            integer_of(scalar_object(c.next(TOKEN_SINT).unwrap()).unwrap()),
+            integer_of(scalar_object(c.next(Kind::Sint).unwrap()).unwrap()),
             Some(-1)
         );
         let mut c = cursor(&[0xcfu8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
         assert_eq!(
-            integer_of(scalar_object(c.next(TOKEN_UINT).unwrap()).unwrap()),
+            integer_of(scalar_object(c.next(Kind::Uint).unwrap()).unwrap()),
             Some(-1)
         );
 
         let mut c = cursor(&[0xcbu8, 0x3f, 0xf0, 0, 0, 0, 0, 0, 0]);
-        let float = scalar_object(c.next(TOKEN_FLOAT).unwrap()).unwrap();
+        let float = scalar_object(c.next(Kind::Float).unwrap()).unwrap();
         assert!((float.as_float().unwrap() - 1.0).abs() < f64::EPSILON);
 
         // A container header is not a scalar: the tree parser allocates for
         // it instead.
         let mut c = cursor(&[0x92u8, 0x01, 0x02]);
-        assert!(scalar_object(c.next(TOKEN_ARRAY).unwrap()).is_none());
+        assert!(scalar_object(c.next(Kind::Array).unwrap()).is_none());
     }
 
     #[test]
     fn an_integer_token_reads_the_same_either_way_it_was_encoded() {
         let mut c = cursor(&[0x7fu8]);
-        assert_eq!(unpack_integer_token(c.next(TOKEN_UINT).unwrap()), Some(127));
+        assert_eq!(unpack_integer_token(c.next(Kind::Uint).unwrap()), Some(127));
         let mut c = cursor(&[0xd0u8, 0x80]);
         assert_eq!(
-            unpack_integer_token(c.next(TOKEN_SINT).unwrap()),
+            unpack_integer_token(c.next(Kind::Sint).unwrap()),
             Some(-128)
         );
         // A string token carries no integer at all.
         let mut c = cursor(&[0xa0u8]);
-        assert_eq!(unpack_integer_token(c.next(TOKEN_STR).unwrap()), None);
+        assert_eq!(unpack_integer_token(c.next(Kind::Str).unwrap()), None);
     }
 }

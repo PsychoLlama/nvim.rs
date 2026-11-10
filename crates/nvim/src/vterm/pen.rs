@@ -22,6 +22,7 @@
 use crate::narrow::as_index;
 use crate::narrow::len_as_integer;
 use crate::narrow::number_as_u32;
+use crate::vterm::parser::{CSI_ARG_FLAG_MORE, CSI_ARG_MASK, CSI_ARG_MISSING};
 use core::ffi::{c_int, c_long, c_uint};
 
 use crate::vterm::color::{ColorValue, ansi_default, fixed_palette};
@@ -39,14 +40,6 @@ use crate::vterm::vterm::{
     VTERM_UNDERLINE_DOUBLE, VTERM_UNDERLINE_OFF, VTERM_UNDERLINE_SINGLE, VTERM_VALUETYPE_BOOL,
     VTERM_VALUETYPE_COLOR, VTERM_VALUETYPE_INT, VTERM_VALUETYPE_STRING, attr_value_type,
 };
-
-/// Set on a control-sequence parameter that is followed by a sub-parameter,
-/// i.e. one written `38:5:1` rather than `38;5;1`.
-pub const CSI_ARG_FLAG_MORE: c_uint = (1 as c_uint) << 31;
-/// The value bits of a control-sequence parameter, below the flag.
-pub const CSI_ARG_MASK: c_uint = !((1 as c_uint) << 31);
-/// The value the parser leaves for an omitted parameter.
-pub const CSI_ARG_MISSING: c_long = 2147483647;
 
 // ---------------------------------------------------------------- colours
 
@@ -313,7 +306,7 @@ fn parse_sgr_color(palette: c_long, args: &[c_long]) -> (Option<ColorValue>, usi
         2 => {
             let group_len = args
                 .iter()
-                .position(|&arg| arg & c_long::from(CSI_ARG_FLAG_MORE) == 0)
+                .position(|&arg| arg & CSI_ARG_FLAG_MORE == 0)
                 .map_or(args.len(), |last| last + 1);
             let skip = usize::from(group_len > 3);
             let Some(channels) = args.get(skip..skip + 3) else {
@@ -372,7 +365,7 @@ pub(crate) fn apply_sgr(state: &mut StateCx<'_>, args: &[c_long]) {
             4 => {
                 // A sub-parameter picks the underline style.
                 state.pen.set_underline(VTERM_UNDERLINE_SINGLE);
-                if raw & c_long::from(CSI_ARG_FLAG_MORE) != 0 {
+                if raw & CSI_ARG_FLAG_MORE != 0 {
                     argi += 1;
                     match arg_value(args, argi) {
                         0 => state.pen.set_underline(VTERM_UNDERLINE_OFF),
@@ -503,7 +496,7 @@ pub(crate) fn apply_sgr(state: &mut StateCx<'_>, args: &[c_long]) {
             _ => {}
         }
         // Step past this parameter and any sub-parameters it carried.
-        while arg_at(args, argi) & c_long::from(CSI_ARG_FLAG_MORE) != 0 {
+        while arg_at(args, argi) & CSI_ARG_FLAG_MORE != 0 {
             argi += 1;
         }
         argi += 1;
@@ -523,7 +516,7 @@ fn push_color_params(col: &VTermColor, foreground: bool, out: &mut Vec<c_long>) 
     if flags & default_mark != 0 {
         return;
     }
-    let more = c_long::from(CSI_ARG_FLAG_MORE);
+    let more = CSI_ARG_FLAG_MORE;
     let selector = if foreground { 38 } else { 48 };
     match value {
         ColorValue::Indexed(idx) if idx < 8 => {
@@ -563,7 +556,7 @@ pub fn pen_sgr_params(pen: &VTermPen) -> Vec<c_long> {
         out.push(4);
     }
     if pen.underline() == VTERM_UNDERLINE_CURLY {
-        out.push(4 | c_long::from(CSI_ARG_FLAG_MORE));
+        out.push(4 | CSI_ARG_FLAG_MORE);
         out.push(3);
     }
     if pen.blink() != 0 {
@@ -602,8 +595,6 @@ pub fn pen_sgr_params(pen: &VTermPen) -> Vec<c_long> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const MORE: c_long = CSI_ARG_FLAG_MORE as c_long;
 
     fn blank_pen() -> VTermPen {
         VTermPen {
@@ -659,12 +650,20 @@ mod tests {
     fn rgb_selector_skips_a_colour_space_id() {
         // `38:2::10:20:30`: the empty colour space id comes first.
         assert_eq!(
-            parse_sgr_color(2, &[CSI_ARG_MISSING | MORE, 10 | MORE, 20 | MORE, 30]),
+            parse_sgr_color(
+                2,
+                &[
+                    CSI_ARG_MISSING | CSI_ARG_FLAG_MORE,
+                    10 | CSI_ARG_FLAG_MORE,
+                    20 | CSI_ARG_FLAG_MORE,
+                    30
+                ]
+            ),
             (Some(ColorValue::rgb(10, 20, 30)), 4)
         );
         // `38:2:10:20:30;40`: three in the group, so nothing is skipped.
         assert_eq!(
-            parse_sgr_color(2, &[10 | MORE, 20 | MORE, 30, 40]),
+            parse_sgr_color(2, &[10 | CSI_ARG_FLAG_MORE, 20 | CSI_ARG_FLAG_MORE, 30, 40]),
             (Some(ColorValue::rgb(10, 20, 30)), 3)
         );
     }
@@ -693,15 +692,15 @@ mod tests {
         assert_eq!(
             pen_sgr_params(&blank_pen()),
             vec![
-                MORE | 38,
-                MORE | 2,
-                MORE,
-                MORE,
+                CSI_ARG_FLAG_MORE | 38,
+                CSI_ARG_FLAG_MORE | 2,
+                CSI_ARG_FLAG_MORE,
+                CSI_ARG_FLAG_MORE,
                 0,
-                MORE | 48,
-                MORE | 2,
-                MORE,
-                MORE,
+                CSI_ARG_FLAG_MORE | 48,
+                CSI_ARG_FLAG_MORE | 2,
+                CSI_ARG_FLAG_MORE,
+                CSI_ARG_FLAG_MORE,
                 0
             ]
         );
@@ -727,12 +726,21 @@ mod tests {
         assert_eq!(pen_sgr_params(&pen), vec![93]);
 
         pen.fg = plain_color(ColorValue::Indexed(200));
-        assert_eq!(pen_sgr_params(&pen), vec![MORE | 38, MORE | 5, 200]);
+        assert_eq!(
+            pen_sgr_params(&pen),
+            vec![CSI_ARG_FLAG_MORE | 38, CSI_ARG_FLAG_MORE | 5, 200]
+        );
 
         pen.fg = plain_color(ColorValue::rgb(1, 2, 3));
         assert_eq!(
             pen_sgr_params(&pen),
-            vec![MORE | 38, MORE | 2, MORE | 1, MORE | 2, 3]
+            vec![
+                CSI_ARG_FLAG_MORE | 38,
+                CSI_ARG_FLAG_MORE | 2,
+                CSI_ARG_FLAG_MORE | 1,
+                CSI_ARG_FLAG_MORE | 2,
+                3
+            ]
         );
     }
 
@@ -768,7 +776,7 @@ mod tests {
         pen.set_underline(VTERM_UNDERLINE_SINGLE);
         assert_eq!(pen_sgr_params(&pen), vec![4]);
         pen.set_underline(VTERM_UNDERLINE_CURLY);
-        assert_eq!(pen_sgr_params(&pen), vec![MORE | 4, 3]);
+        assert_eq!(pen_sgr_params(&pen), vec![CSI_ARG_FLAG_MORE | 4, 3]);
         pen.set_underline(VTERM_UNDERLINE_DOUBLE);
         assert_eq!(pen_sgr_params(&pen), vec![21]);
     }
@@ -776,6 +784,6 @@ mod tests {
     #[test]
     fn reading_past_the_parameter_list_yields_an_omitted_parameter() {
         assert_eq!(arg_at(&[1, 2], 5), CSI_ARG_MISSING);
-        assert_eq!(arg_value(&[MORE | 7], 0), 7);
+        assert_eq!(arg_value(&[CSI_ARG_FLAG_MORE | 7], 0), 7);
     }
 }

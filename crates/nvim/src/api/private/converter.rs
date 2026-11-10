@@ -123,7 +123,6 @@ impl ObjectSink {
 }
 
 impl TypvalSink for ObjectSink {
-    const ALLOW_SPECIALS: bool = false;
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_object_convert_one_value()";
 
     fn conv_nil(&mut self) {

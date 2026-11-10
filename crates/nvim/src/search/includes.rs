@@ -578,7 +578,7 @@ enum After {
 
 /// Offer the match at offset `startp` to insert-mode completion
 /// (ACTION_EXPAND).
-fn expand_match(walk: &mut Walk, startp: usize, dir: &mut Direction) -> After {
+fn expand_match(walk: &mut Walk, startp: usize, dir: &mut Option<Direction>) -> After {
     if walk.files.depth() == -1 && walk.lnum == Win::current().w_cursor.lnum {
         return After::Stop;
     }
@@ -657,7 +657,7 @@ fn expand_match(walk: &mut Walk, startp: usize, dir: &mut Direction) -> After {
     let from_file = from_file.as_ref().map(XString::as_cstr);
     match ins_compl_add_infercase(rest, i, p_ic(), from_file, *dir, cont_s_ipos, 0) {
         // If dir was BACKWARD, honour it just once.
-        Added::Linked => *dir = FORWARD,
+        Added::Linked => *dir = Some(FORWARD),
         Added::Refused => return After::Stop,
         Added::Duplicate => {}
     }
@@ -799,7 +799,7 @@ fn goto_match(
 #[allow(clippy::too_many_arguments)]
 pub fn find_pattern_in_path(
     pattern: &[u8],
-    dir: Direction,
+    dir: Option<Direction>,
     whole: bool,
     skip_comments: bool,
     kind: c_int,

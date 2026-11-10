@@ -151,8 +151,8 @@ pub(crate) const SIGN_WIDTH: c_int = 2;
 /// `'signcolumn'` value meaning "put signs in the number column".
 pub(crate) const SCL_NUM: c_int = -2;
 
-/// The index that ends a decoration's chain of items.
-pub(crate) const DECOR_ID_INVALID: uint32_t = store::NO_ENTRY;
+/// The index that ends a decoration's chain of items, and names none.
+pub(crate) use store::NO_ENTRY;
 /// The priority a decoration gets when its creator did not name one.
 pub(crate) const DECOR_PRIORITY_BASE: DecorPriority = 0x1000;
 
@@ -175,7 +175,7 @@ pub(crate) const DECOR_SIGN_HIGHLIGHT_INIT: DecorSignHighlight = DecorSignHighli
     number_hl_id: 0,
     line_hl_id: 0,
     cursorline_hl_id: 0,
-    next: DECOR_ID_INVALID,
+    next: NO_ENTRY,
     url: None,
 };
 
@@ -191,12 +191,12 @@ pub(crate) const fn decor_inline_hl(hl_id: c_int) -> DecorInline {
     })
 }
 
-/// The head of `mark`'s virtual-text chain, [`DECOR_ID_INVALID`] when it has
+/// The head of `mark`'s virtual-text chain, [`NO_ENTRY`] when it has
 /// no `ext` decoration.
 pub(crate) fn mt_decor_virt(mark: MTKey) -> uint32_t {
     match mark.decor_data {
         DecorInline::Ext(ext) if mark.flags.has(MtFlags::DECOR_EXT) => ext.vt_idx,
-        _ => DECOR_ID_INVALID,
+        _ => NO_ENTRY,
     }
 }
 
@@ -269,10 +269,10 @@ pub(crate) fn with_decor_virt_mut<R>(idx: uint32_t, f: impl FnOnce(&mut DecorVir
 /// borrowed between steps, so the caller may do anything in between but
 /// free the chain.
 fn chain_indices(head: uint32_t, next: fn(uint32_t) -> uint32_t) -> impl Iterator<Item = uint32_t> {
-    let first = (head != DECOR_ID_INVALID).then_some(head);
+    let first = (head != NO_ENTRY).then_some(head);
     core::iter::successors(first, move |&idx| {
         let after = next(idx);
-        (after != DECOR_ID_INVALID).then_some(after)
+        (after != NO_ENTRY).then_some(after)
     })
 }
 
@@ -281,7 +281,7 @@ fn chain_indices(head: uint32_t, next: fn(uint32_t) -> uint32_t) -> impl Iterato
 pub(crate) fn sh_chain(decor: DecorInline) -> impl Iterator<Item = uint32_t> {
     let head = match decor {
         DecorInline::Ext(ext) => ext.sh_idx,
-        DecorInline::Hl(_) => DECOR_ID_INVALID,
+        DecorInline::Hl(_) => NO_ENTRY,
     };
     chain_indices(head, |idx| with_decor_item(idx, |sh| sh.next))
 }
@@ -333,7 +333,7 @@ pub fn decor_sh_from_inline(item: DecorHighlightInline) -> DecorSignHighlight {
         priority: item.priority,
         hl_id: item.hl_id,
         text: [item.conceal_char, 0],
-        next: DECOR_ID_INVALID,
+        next: NO_ENTRY,
         ..DECOR_SIGN_HIGHLIGHT_INIT
     }
 }
@@ -346,8 +346,8 @@ pub fn decor_sh_from_inline(item: DecorHighlightInline) -> DecorSignHighlight {
 /// may still be named by the `DecorState` the redraw is walking: their
 /// sign/highlight chains and their virtual-text chains, each spliced into
 /// one chain. Freed by [`decor_check_to_be_deleted`] once the redraw is over.
-static TO_FREE_SH: GlobalCell<uint32_t> = GlobalCell::new(DECOR_ID_INVALID);
-static TO_FREE_VT: GlobalCell<uint32_t> = GlobalCell::new(DECOR_ID_INVALID);
+static TO_FREE_SH: GlobalCell<uint32_t> = GlobalCell::new(NO_ENTRY);
+static TO_FREE_VT: GlobalCell<uint32_t> = GlobalCell::new(NO_ENTRY);
 
 /// Frees `decor`, or defers it when a decoration provider is running.
 ///
@@ -376,9 +376,9 @@ pub fn decor_free(decor: DecorInline) {
 pub fn decor_check_to_be_deleted() {
     // The caller's precondition, restated as upstream's `assert()` does.
     debug_assert!(!decor_provider_running());
-    let vt = TO_FREE_VT.replace(DECOR_ID_INVALID);
+    let vt = TO_FREE_VT.replace(NO_ENTRY);
     DECOR_VIRT.with_mut(|links| links.release(vt));
-    let sh = TO_FREE_SH.replace(DECOR_ID_INVALID);
+    let sh = TO_FREE_SH.replace(NO_ENTRY);
     DECOR_ITEMS.with_mut(|items| items.release(sh));
     decor_forget_window();
 }

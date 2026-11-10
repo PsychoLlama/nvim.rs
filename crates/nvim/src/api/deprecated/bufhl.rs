@@ -156,11 +156,11 @@ pub fn nvim_buf_set_virtual_text(
         col: 0 as ::core::ffi::c_int,
         pos: V_POS_END_OF_LINE,
         data: DecorVirtText_data::Text(virt_text),
-        next: DECOR_ID_INVALID,
+        next: NO_ENTRY,
     };
     let decor = DecorInline::Ext(DecorExt {
-        sh_idx: DECOR_ID_INVALID,
-        vt_idx: decor_put_vt(vt, DECOR_ID_INVALID),
+        sh_idx: NO_ENTRY,
+        vt_idx: decor_put_vt(vt, NO_ENTRY),
     });
     set_decor(
         buf,

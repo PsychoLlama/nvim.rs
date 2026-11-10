@@ -26,8 +26,8 @@
 use super::*;
 use crate::ascii::NUL;
 use crate::decoration::{
-    DECOR_ID_INVALID, DECOR_KIND_UI_WATCHED, DECOR_KIND_VIRT_TEXT, DRAW_COL_LATER, DRAW_COL_NEVER,
-    HL_MODE_BLEND, HL_MODE_COMBINE, V_POS_END_OF_LINE, V_POS_END_OF_LINE_RIGHT_ALIGN, V_POS_INLINE,
+    DECOR_KIND_UI_WATCHED, DECOR_KIND_VIRT_TEXT, DRAW_COL_LATER, DRAW_COL_NEVER, HL_MODE_BLEND,
+    HL_MODE_COMBINE, NO_ENTRY, V_POS_END_OF_LINE, V_POS_END_OF_LINE_RIGHT_ALIGN, V_POS_INLINE,
     V_POS_RIGHT_ALIGN, V_POS_WIN_COL, VT_REPEAT_LINEBREAK, VirtChunks, decor_inline_virt_from,
     decor_lists, decor_range, set_decor_eol_col, set_decor_range_draw_col, with_decor_virt,
 };
@@ -405,7 +405,7 @@ impl WinLineVars {
         while self.extra_todo == 0 {
             if self.virt_inline_i >= self.virt_inline_len {
                 // Find the next inline text to start.
-                self.virt_inline = DECOR_ID_INVALID;
+                self.virt_inline = NO_ENTRY;
                 self.virt_inline_len = 0;
                 self.virt_inline_i = 0;
                 let lists = decor_lists();

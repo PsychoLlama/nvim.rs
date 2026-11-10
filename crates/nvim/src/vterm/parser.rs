@@ -26,7 +26,7 @@ use crate::vterm::host::{Csi, Fragment, ParserHandler};
 use crate::vterm::internal::VTermParserState;
 use crate::vterm::types::{VTerm_parser, VTermTerminator};
 use crate::vterm::vterm::{VTERM_TERMINATOR_BEL, VTERM_TERMINATOR_ST};
-use core::ffi::{CStr, c_int, c_long};
+use core::ffi::{CStr, c_int, c_long, c_uint};
 
 /// Intermediate bytes held for an escape or control sequence.
 const INTERMED_MAX: usize = 16;
@@ -36,9 +36,14 @@ const CSI_LEADER_MAX: usize = 16;
 const CSI_ARGS_MAX: usize = 32;
 
 /// The value stored for a parameter the sender left empty.
-const CSI_ARG_MISSING: c_long = 0x7fff_ffff;
-/// Set on a parameter that was separated from the next by `:` rather than `;`.
-const CSI_ARG_FLAG_MORE: c_long = 0x8000_0000u32 as c_long;
+pub(crate) const CSI_ARG_MISSING: c_long = 2147483647;
+/// Set on a parameter that is followed by a sub-parameter, i.e. one written
+/// `38:5:1` rather than `38;5;1`: separated from the next by `:`, not `;`.
+pub(crate) const CSI_ARG_FLAG_MORE: c_long = 1 << 31;
+/// The value bits of a parameter, below the flag. Spelled as an expression
+/// ffigen does not evaluate, so the unit fixtures' `CSI_ARG_MASK` macro
+/// (`shim.h`) is the only C spelling.
+pub(crate) const CSI_ARG_MASK: c_uint = !((1 as c_uint) << 31);
 
 /// Where the parser is in a sequence.
 ///

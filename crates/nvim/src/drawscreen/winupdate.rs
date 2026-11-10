@@ -22,7 +22,7 @@
 
 use super::*;
 use crate::decoration::DECOR_PRIORITY_BASE;
-use crate::decoration::{DECOR_ID_INVALID, V_POS_WIN_COL, decor_put_vt};
+use crate::decoration::{NO_ENTRY, V_POS_WIN_COL, decor_put_vt};
 use crate::grid::default_grid_ref;
 use crate::r#move::WinValid;
 use crate::narrow::as_index;
@@ -288,9 +288,9 @@ fn add_suspended_terminal_note(buffer: Buf) {
             text: Some(c"[Process suspended]".to_owned()),
             hl_id: -1,
         }]),
-        next: DECOR_ID_INVALID,
+        next: NO_ENTRY,
     };
-    let vt = decor_put_vt(note, DECOR_ID_INVALID);
+    let vt = decor_put_vt(note, NO_ENTRY);
     let last = buffer.b_ml.ml_line_count - 1;
     decor_range_add_virt(last.get(), 0, last.get(), 0, vt, true);
 }

@@ -22,7 +22,8 @@ use core::fmt::Write;
 
 use crate::vterm::host::Fragment;
 use crate::vterm::output::EscapeSeq;
-use crate::vterm::pen::{CSI_ARG_FLAG_MORE, CSI_ARG_MASK, pen_sgr_params};
+use crate::vterm::parser::{CSI_ARG_FLAG_MORE, CSI_ARG_MASK};
+use crate::vterm::pen::pen_sgr_params;
 use crate::vterm::state::StateCx;
 use crate::vterm::types::VTermState;
 use crate::vterm::vterm::{
@@ -114,7 +115,7 @@ fn report_pen(state: &VTermState, seq: &mut EscapeSeq) {
     for (i, &param) in params.iter().enumerate() {
         let separator = if i + 1 == params.len() {
             ""
-        } else if param & c_long::from(CSI_ARG_FLAG_MORE) != 0 {
+        } else if param & CSI_ARG_FLAG_MORE != 0 {
             ":"
         } else {
             ";"

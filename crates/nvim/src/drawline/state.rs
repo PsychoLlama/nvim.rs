@@ -131,7 +131,7 @@ pub struct WinLineVars {
     pub linebreak_armed: bool,
 
     /// Inline virtual text being fed to the character loop: its link in the
-    /// virtual-text store, or `DECOR_ID_INVALID`.
+    /// virtual-text store, or `NO_ENTRY`.
     pub virt_inline: uint32_t,
     /// How many chunks it has.
     pub virt_inline_len: size_t,

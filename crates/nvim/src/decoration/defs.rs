@@ -17,7 +17,7 @@ use crate::winlayer::WinId;
 
 /// The two chains an `ext` decoration names: indices of the first
 /// sign/highlight item and of the first virtual-text link in the
-/// decoration stores, either `DECOR_ID_INVALID` for none.
+/// decoration stores, either `NO_ENTRY` for none.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct DecorExt {
     pub sh_idx: uint32_t,
@@ -116,7 +116,7 @@ pub enum DecorRange_data {
 
 /// What a highlight range needs of the item it came from, which is not all
 /// of it: the item's own strings stay in the store, and `url` names the
-/// store entry holding the URL (`DECOR_ID_INVALID` for none).
+/// store entry holding the URL (`NO_ENTRY` for none).
 #[derive(Copy, Clone, Debug)]
 pub struct RangeHighlight {
     pub flags: uint16_t,
@@ -202,7 +202,7 @@ pub struct DecorState {
     pub itr_valid: bool,
 }
 /// One link of a decoration's virtual-text chain, in the virtual-text store.
-/// `next` is the index of the next link, `DECOR_ID_INVALID` at the end.
+/// `next` is the index of the next link, `NO_ENTRY` at the end.
 #[derive(Clone, Debug)]
 pub struct DecorVirtText {
     pub flags: uint8_t,

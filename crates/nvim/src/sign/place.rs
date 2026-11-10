@@ -56,7 +56,7 @@ impl Buf {
 
         let decor = DecorInline::Ext(DecorExt {
             sh_idx: decor_put_sh(sign),
-            vt_idx: DECOR_ID_INVALID,
+            vt_idx: NO_ENTRY,
         });
         let row = self.line_count().min(lnum).get() - 1;
         self.set_extmark(

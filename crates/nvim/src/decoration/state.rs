@@ -52,7 +52,7 @@
 #![forbid(unsafe_code)]
 
 use super::{
-    DECOR_ID_INVALID, SH_CONCEAL, SH_HL_EOL, SH_IS_SIGN, SH_SPELL_OFF, SH_SPELL_ON, SHUI_WATCHED,
+    NO_ENTRY, SH_CONCEAL, SH_HL_EOL, SH_IS_SIGN, SH_SPELL_OFF, SH_SPELL_ON, SHUI_WATCHED,
     SHUI_WATCHED_OVERLAY, VT_HIDE, VT_IS_LINES, decor_release_sh, decor_release_vt, ns_in_win,
     sh_chain, virt_chain, with_decor_item, with_decor_virt,
 };
@@ -202,7 +202,7 @@ fn free_owned(range: &DecorRange) {
     }
     match range.kind {
         DECOR_KIND_VIRT_TEXT | DECOR_KIND_VIRT_LINES => decor_release_vt(range.data.virt()),
-        DECOR_KIND_HIGHLIGHT if range.data.highlight().url != DECOR_ID_INVALID => {
+        DECOR_KIND_HIGHLIGHT if range.data.highlight().url != NO_ENTRY => {
             decor_release_sh(range.data.highlight().url);
         }
         _ => {}
@@ -417,11 +417,7 @@ pub(crate) fn decor_range_add_from_inline(
             priority: item.priority,
             hl_id: item.hl_id,
             conceal_char: item.text[0],
-            url: if item.url.is_some() {
-                idx
-            } else {
-                DECOR_ID_INVALID
-            },
+            url: if item.url.is_some() { idx } else { NO_ENTRY },
         });
         add_sh(
             start_row, start_col, end_row, end_col, sh, owned, ns, mark_id, 0,
@@ -430,7 +426,7 @@ pub(crate) fn decor_range_add_from_inline(
 }
 
 /// What a highlight range is made from: one sign/highlight item's fields,
-/// and the store entry holding its URL (`DECOR_ID_INVALID` for none).
+/// and the store entry holding its URL (`NO_ENTRY` for none).
 #[derive(Copy, Clone, Debug)]
 pub(crate) struct HlSource {
     pub(crate) flags: uint16_t,
@@ -450,7 +446,7 @@ impl HlSource {
             priority: hl.priority,
             hl_id: hl.hl_id,
             conceal_char: hl.conceal_char,
-            url: DECOR_ID_INVALID,
+            url: NO_ENTRY,
         }
     }
 }
@@ -602,9 +598,7 @@ fn add_sh(
         draw_col: DRAW_COL_NEW,
     };
 
-    if sh.hl_id != 0
-        || sh.url != DECOR_ID_INVALID
-        || flags & (SH_CONCEAL | SH_SPELL_ON | SH_SPELL_OFF) != 0
+    if sh.hl_id != 0 || sh.url != NO_ENTRY || flags & (SH_CONCEAL | SH_SPELL_ON | SH_SPELL_OFF) != 0
     {
         if sh.hl_id != 0 {
             // Outside the state's borrow: this can run a provider's `hl_def`.
@@ -820,7 +814,7 @@ fn columns_reached(
                 } else if sh.flags & SH_SPELL_OFF != 0 {
                     spell = Some(false);
                 }
-                if sh.url != DECOR_ID_INVALID {
+                if sh.url != NO_ENTRY {
                     attr = with_decor_item(sh.url, |item| {
                         item.url
                             .as_deref()

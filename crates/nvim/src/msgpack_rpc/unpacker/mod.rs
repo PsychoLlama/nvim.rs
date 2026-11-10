@@ -44,12 +44,6 @@ use crate::ui_client::handle_ui_client_redraw;
 pub mod protocol;
 pub mod redraw;
 
-use protocol::{
-    ARRAY as TOKEN_ARRAY, BIN as TOKEN_BIN, BOOLEAN as TOKEN_BOOLEAN, CHUNK as TOKEN_CHUNK,
-    EXT as TOKEN_EXT, FLOAT as TOKEN_FLOAT, MAP as TOKEN_MAP, NIL as TOKEN_NIL, SINT as TOKEN_SINT,
-    STR as TOKEN_STR, UINT as TOKEN_UINT,
-};
-
 pub const UNPACK_TYPE_STRING_ARRAY: c_int = -1;
 
 /// The most bytes an extension object's payload may take before it is
@@ -335,23 +329,18 @@ pub fn unpack(data: &[u8]) -> Result<Object, Error> {
     Err(Error::exception(message))
 }
 
-/// The type number a token carries, as [`protocol`] spells them.
-pub(super) fn token_type(tok: &Tok) -> u32 {
-    tok.kind.map_or(0, |kind| kind as u32)
-}
-
 /// The `Object` a scalar token stands for, or `None` when the token opens a
 /// container, a payload or a chunk instead.
 ///
 /// Pure: a token is a value.
 pub(super) fn scalar_object(tok: Tok) -> Option<Object> {
-    Some(match token_type(&tok) {
-        TOKEN_NIL => Object::Nil,
-        TOKEN_BOOLEAN => Object::Boolean(token::unpack_boolean(&tok)),
-        TOKEN_SINT | TOKEN_UINT => {
+    Some(match tok.kind {
+        Some(Kind::Nil) => Object::Nil,
+        Some(Kind::Boolean) => Object::Boolean(token::unpack_boolean(&tok)),
+        Some(Kind::Sint | Kind::Uint) => {
             Object::Integer(unpack_integer_token(tok).expect("token is an integer"))
         }
-        TOKEN_FLOAT => Object::Float(token::unpack_float(&tok)),
+        Some(Kind::Float) => Object::Float(token::unpack_float(&tok)),
         _ => return None,
     })
 }
@@ -440,24 +429,24 @@ impl crate::mpack::object::Decode<Building> for BodyWalk<'_> {
         // the way in, before the pop has flipped its phase.
         let is_key = parent
             .as_ref()
-            .is_some_and(|parent| token_type(&parent.tok) == TOKEN_MAP && !parent.key_visited);
+            .is_some_and(|parent| parent.tok.kind == Some(Kind::Map) && !parent.key_visited);
         if let Some(object) = scalar_object(tok) {
             self.store(parent, Building::Value(object), is_key);
             return Building::Nothing;
         }
         let len = tok.len as usize;
-        match token_type(&tok) {
+        match tok.kind {
             // A key goes straight into its slot's own storage; a value
             // collects into a string the API will hand out terminated.
-            TOKEN_BIN | TOKEN_STR if is_key => Building::Key(DictKey::zeroed(len)),
-            TOKEN_BIN | TOKEN_STR => Building::Text(XString::with_capacity(len)),
-            TOKEN_EXT => Building::Ext(Box::new(ExtPayload {
+            Some(Kind::Bin | Kind::Str) if is_key => Building::Key(DictKey::zeroed(len)),
+            Some(Kind::Bin | Kind::Str) => Building::Text(XString::with_capacity(len)),
+            Some(Kind::Ext) => Building::Ext(Box::new(ExtPayload {
                 bytes: [0; EXT_PAYLOAD_MAX],
                 value: Object::Nil,
             })),
-            TOKEN_ARRAY => Building::Array(Vec::with_capacity(len.min(RESERVE_MAX))),
-            TOKEN_MAP => Building::Dict(Vec::with_capacity(len.min(RESERVE_MAX))),
-            TOKEN_CHUNK => {
+            Some(Kind::Array) => Building::Array(Vec::with_capacity(len.min(RESERVE_MAX))),
+            Some(Kind::Map) => Building::Dict(Vec::with_capacity(len.min(RESERVE_MAX))),
+            Some(Kind::Chunk) => {
                 copy_chunk(parent.expect("a chunk always has a parent"), chunk);
                 Building::Nothing
             }
@@ -529,7 +518,7 @@ fn ext_object(payload: &[u8], ext_type: c_int) -> Object {
     let Ok(tok) = read_token(&mut rest) else {
         return Object::Nil;
     };
-    if token_type(&tok) != TOKEN_UINT {
+    if tok.kind != Some(Kind::Uint) {
         return Object::Nil;
     }
     let handle = token::unpack_uint(&tok).cast_signed();
@@ -543,9 +532,9 @@ fn ext_object(payload: &[u8], ext_type: c_int) -> Object {
 
 /// The value of an integer token, whichever sign it was encoded with.
 pub(super) fn unpack_integer_token(tok: Tok) -> Option<Integer> {
-    match token_type(&tok) {
-        TOKEN_UINT => Some(token::unpack_uint(&tok).cast_signed()),
-        TOKEN_SINT => Some(token::unpack_sint(&tok)),
+    match tok.kind {
+        Some(Kind::Uint) => Some(token::unpack_uint(&tok).cast_signed()),
+        Some(Kind::Sint) => Some(token::unpack_sint(&tok)),
         _ => None,
     }
 }

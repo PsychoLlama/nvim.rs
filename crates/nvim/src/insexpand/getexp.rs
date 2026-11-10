@@ -300,7 +300,7 @@ pub(crate) fn get_next_include_file_completion(compl_type: CtrlXMode) {
         FIND_ANY
     };
     let pat: &[u8] = &pattern;
-    let dir = COMPL_DIRECTION.get();
+    let dir = Some(COMPL_DIRECTION.get());
     let end = MAXLNUM;
     let auto = COMPL_AUTOCOMPLETE.get();
     {
@@ -434,7 +434,17 @@ pub(crate) fn get_next_filename_completion() {
                 let text: &[u8] = &matches[idx];
                 let flags = CP_FAST | if p_fic() || p_wic() { CP_ICASE } else { 0 };
                 let (none, score) = (NO_EXTRA, current_score);
-                let added = ins_compl_add(text, None, none, None, dir, flags, false, NO_HL, score);
+                let added = ins_compl_add(
+                    text,
+                    None,
+                    none,
+                    None,
+                    Some(dir),
+                    flags,
+                    false,
+                    NO_HL,
+                    score,
+                );
                 if added == Added::Linked {
                     dir = FORWARD;
                 }

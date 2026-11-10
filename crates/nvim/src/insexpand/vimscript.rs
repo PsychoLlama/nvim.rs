@@ -71,7 +71,7 @@ pub(crate) fn ins_compl_dict_alloc(m: MatchId) -> DictRef {
 ///
 /// `fast` uses `fast_breakcheck()` instead of `os_breakcheck()`. Answers
 /// [`Added::Refused`] when there is no word, or on interrupt.
-pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> Added {
+pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Option<Direction>, fast: bool) -> Added {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let word: Option<&CStr>;
@@ -138,7 +138,7 @@ pub(crate) fn ins_compl_add_list(list: &ListRef) {
     // list it is reading. The handle keeps the list itself alive.
     let mut at = 0;
     while let Some(tv) = list.items().get(at).map(|item| item.li_tv.clone()) {
-        if ins_compl_add_tv(&tv, dir, true) == Added::Linked {
+        if ins_compl_add_tv(&tv, Some(dir), true) == Added::Linked {
             // If dir was BACKWARD then honour it just once.
             dir = FORWARD;
         } else if DID_EMSG.get() != 0 {
@@ -319,7 +319,7 @@ pub fn f_complete(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// The `complete_add()` function; a `VimLFunc` row in the builtin table.
 pub fn f_complete_add(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    (*result).write_number(ins_compl_add_tv(&args[0], DIRECTION_NOT_SET, false).number());
+    (*result).write_number(ins_compl_add_tv(&args[0], None, false).number());
 }
 
 /// The `complete_check()` function; a `VimLFunc` row in the builtin table.

@@ -290,11 +290,11 @@ impl Decoration {
         }
         // Each part of the decoration is handed over exactly once.
         if !self.virt_text.data.text().is_empty() {
-            let vt = decor_put_vt(take_virt(&mut self.virt_text), DECOR_ID_INVALID);
+            let vt = decor_put_vt(take_virt(&mut self.virt_text), NO_ENTRY);
             decor_range_add_virt(row, col.get(), end_row, end_col.get(), vt, true);
         }
         if !self.virt_lines.data.lines().is_empty() {
-            let vt = decor_put_vt(take_virt(&mut self.virt_lines), DECOR_ID_INVALID);
+            let vt = decor_put_vt(take_virt(&mut self.virt_lines), NO_ENTRY);
             decor_range_add_virt(row, col.get(), end_row, end_col.get(), vt, true);
         }
         if self.has_hl {
@@ -333,7 +333,7 @@ impl Decoration {
         right_gravity: bool,
     ) {
         let mut decor_flags = MtFlags::NONE;
-        let mut decor_alloc = DECOR_ID_INVALID;
+        let mut decor_alloc = NO_ENTRY;
         if !self.virt_text.data.text().is_empty() {
             if self.virt_text.pos == V_POS_INLINE {
                 decor_flags |= MtFlags::DECOR_VIRT_TEXT_INLINE;
@@ -344,7 +344,7 @@ impl Decoration {
             decor_alloc = decor_put_vt(take_virt(&mut self.virt_lines), decor_alloc);
             decor_flags |= MtFlags::DECOR_VIRT_LINES;
         }
-        let mut decor_indexed: uint32_t = DECOR_ID_INVALID;
+        let mut decor_indexed: uint32_t = NO_ENTRY;
         if self.sign.flags & SH_IS_SIGN != 0 {
             if self.sign.text[0] != 0 {
                 decor_flags |= MtFlags::DECOR_SIGNTEXT;
@@ -387,8 +387,8 @@ impl Decoration {
         if self.hl.flags & SH_CONCEAL_LINES != 0 {
             decor_flags |= MtFlags::DECOR_CONCEAL_LINES;
         }
-        let decor = if decor_alloc != DECOR_ID_INVALID
-            || decor_indexed != DECOR_ID_INVALID
+        let decor = if decor_alloc != NO_ENTRY
+            || decor_indexed != NO_ENTRY
             || self.url.is_some()
             || schar_high(self.hl.conceal_char)
         {
@@ -440,7 +440,7 @@ fn blank_virt(lines: bool) -> DecorVirtText {
         } else {
             DecorVirtText_data::Text(VirtText::new())
         },
-        next: DECOR_ID_INVALID,
+        next: NO_ENTRY,
     }
 }
 

@@ -141,7 +141,6 @@ pub(crate) static TV_IN_FREE_UNREF_ITEMS: GlobalCell<bool> = GlobalCell::new(fal
 /// How many submatches a `\=` replacement expression is handed: `\0`
 /// through `\9`.
 pub const SL_SIZE: usize = 10;
-pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = 0;
 static TV_EQUAL_RECURSE_LIMIT: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 /// What a value that has no Number form is called when one is asked for,
 /// by its kind. The empty entries are the kinds that do have one.

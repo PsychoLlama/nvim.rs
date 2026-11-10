@@ -13,7 +13,6 @@
 use crate::keycodes::SpecialKey;
 use crate::mark::{MARK_BEGIN_LINE, MARK_CONTEXT};
 use crate::normal::defs::{CmdArg, MotionType};
-use crate::search::DIRECTION_NOT_SET;
 use crate::search::{ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, FIND_ANY, FIND_DEFINE};
 use crate::search::{FM_BACKWARD, FM_FORWARD};
 use crate::spell::{SMT_BAD, SMT_RARE};
@@ -232,7 +231,7 @@ fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
     } else {
         LineNr::ONE
     };
-    let (dir, n) = (DIRECTION_NOT_SET, cmd_arg.count1);
+    let (dir, n) = (None, cmd_arg.count1);
     let last = MAXLNUM;
     find_pattern_in_path(
         &name, dir, true, fold_case, what, n, action, from, last, false, false,

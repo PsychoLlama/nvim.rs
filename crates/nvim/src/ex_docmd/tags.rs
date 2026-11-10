@@ -17,8 +17,8 @@
 use crate::narrow::number_as_int;
 use crate::regexp::skip_regexp_at;
 use crate::search::{
-    ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, ACTION_SPLIT, DIRECTION_NOT_SET, FIND_ANY,
-    FIND_DEFINE, find_pattern_in_path,
+    ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, ACTION_SPLIT, FIND_ANY, FIND_DEFINE,
+    find_pattern_in_path,
 };
 use core::ffi::c_int;
 
@@ -92,7 +92,7 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
         let define = excmd.line.byte_at(excmd.line.cmd) == b'd';
         find_pattern_in_path(
             excmd.line.arg(),
-            DIRECTION_NOT_SET,
+            None,
             whole,
             !excmd.forceit,
             if define { FIND_DEFINE } else { FIND_ANY },

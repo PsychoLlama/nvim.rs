@@ -450,7 +450,8 @@ fn dump_word(
     };
     let want = sink.dir.as_deref().copied().unwrap_or(FORWARD);
     if matches
-        && ins_compl_add_infercase(tw, tw.len(), p_ic(), None, want, false, 0) == Added::Linked
+        && ins_compl_add_infercase(tw, tw.len(), p_ic(), None, Some(want), false, 0)
+            == Added::Linked
     {
         // A BACKWARD request is honoured only for the first match.
         if let Some(dir) = sink.dir.as_deref_mut() {

@@ -23,7 +23,7 @@ use crate::vterm::abi::vterm_primary_device_attr;
 use crate::vterm::geometry::{DHL_OFF, DWL_OFF};
 use crate::vterm::mode;
 use crate::vterm::output::EscapeSeq;
-use crate::vterm::pen::{CSI_ARG_MASK, CSI_ARG_MISSING};
+use crate::vterm::parser::{CSI_ARG_MASK, CSI_ARG_MISSING};
 use crate::vterm::state::{PenChange, StateCx};
 use crate::vterm::types::VTermRect;
 use crate::vterm::vterm::{
@@ -566,8 +566,7 @@ fn home_cursor(state: &mut StateCx<'_>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const MORE: c_long = 1 << 31;
+    use crate::vterm::parser::CSI_ARG_FLAG_MORE;
 
     #[test]
     fn an_omitted_parameter_falls_back_to_its_default() {
@@ -588,7 +587,7 @@ mod tests {
 
     #[test]
     fn the_sub_parameter_flag_is_not_part_of_the_value() {
-        assert_eq!(param(&[38 | MORE], 0), Some(38));
+        assert_eq!(param(&[38 | CSI_ARG_FLAG_MORE], 0), Some(38));
     }
 
     #[test]

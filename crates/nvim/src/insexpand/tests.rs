@@ -68,7 +68,7 @@ fn reset() {
 
 /// Add `text` as a match: `dir` side of the current one, `adup` allowing a
 /// duplicate, scored `score`.
-fn add_with(text: &str, dir: Direction, flags: c_int, adup: bool, score: c_int) -> Added {
+fn add_with(text: &str, dir: Option<Direction>, flags: c_int, adup: bool, score: c_int) -> Added {
     let flags = flags | CP_FAST;
     ins_compl_add(
         text.as_bytes(),
@@ -84,11 +84,11 @@ fn add_with(text: &str, dir: Direction, flags: c_int, adup: bool, score: c_int) 
 }
 
 fn add(text: &str) -> Added {
-    add_with(text, DIRECTION_NOT_SET, 0, false, FUZZY_SCORE_NONE)
+    add_with(text, None, 0, false, FUZZY_SCORE_NONE)
 }
 
 fn add_scored(text: &str, score: c_int) -> Added {
-    add_with(text, DIRECTION_NOT_SET, 0, false, score)
+    add_with(text, None, 0, false, score)
 }
 
 /// Start a completion over `text`: the original-text match every completion
@@ -222,7 +222,7 @@ fn backward_adds_go_before_the_current_match() {
     assert!(first_match().is_some_and(|m| !m.is_original()));
     // An explicit direction overrides `COMPL_DIRECTION`.
     assert_eq!(
-        add_with("x4", FORWARD, 0, false, FUZZY_SCORE_NONE),
+        add_with("x4", Some(FORWARD), 0, false, FUZZY_SCORE_NONE),
         Added::Linked
     );
     assert_eq!(texts(), ["x3", "x4", "x2", "x1", "<o>"]);
@@ -236,7 +236,7 @@ fn add_full(text: &str, fname: Option<&str>, extra: [&str; 4], user_data: Option
     let fname = fname.map(|f| CString::new(f).expect("no NUL in a test name"));
     let extra = extra.map(|s| Some(XString::from(s)));
     let mut data = user_data.map(|d| TypVal::string_from(d.as_bytes()));
-    let (dir, score) = (DIRECTION_NOT_SET, FUZZY_SCORE_NONE);
+    let (dir, score) = (None, FUZZY_SCORE_NONE);
     let fname = fname.as_deref();
     ins_compl_add(
         text.as_bytes(),
@@ -314,7 +314,7 @@ fn duplicates_are_refused_unless_allowed() {
     assert_eq!(add("ap"), Added::Duplicate);
     // `dup` lets the same word in twice.
     assert_eq!(
-        add_with("apple", DIRECTION_NOT_SET, 0, true, FUZZY_SCORE_NONE),
+        add_with("apple", None, 0, true, FUZZY_SCORE_NONE),
         Added::Linked
     );
     assert_eq!(texts(), ["<o>", "apple", "app", "apples", "ap", "apple"]);

@@ -13,7 +13,6 @@ use crate::autocmd::defs::AutoEvent;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::fuzzy::{FUZZY_SCORE_NONE, fuzzy_match_str};
 use crate::memory::XString;
-use crate::search::DIRECTION_NOT_SET;
 use crate::tag::{
     LSIZE, TAG_INS_COMP, TAG_MANY, TAG_NOIC, TAG_REGEXP, TAG_VERBOSE, find_tag_names,
 };

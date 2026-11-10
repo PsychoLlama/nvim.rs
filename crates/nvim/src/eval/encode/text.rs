@@ -88,7 +88,6 @@ impl<const ECHO: bool> TextSink<'_, ECHO> {
 }
 
 impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
-    const ALLOW_SPECIALS: bool = false;
     const CONVERT_FN_NAME: &'static CStr = if ECHO {
         c"_typval_encode_echo_convert_one_value()"
     } else {

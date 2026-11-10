@@ -21,9 +21,8 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use super::{
-    DECOR_ID_INVALID, SH_CONCEAL, SH_CONCEAL_LINES, SH_HL_EOL, SH_IS_SIGN, SH_SPELL_OFF,
-    SH_SPELL_ON, SHUI_WATCHED, decor_sh_from_inline, sh_chain, virt_chain, with_decor_item,
-    with_decor_virt,
+    NO_ENTRY, SH_CONCEAL, SH_CONCEAL_LINES, SH_HL_EOL, SH_IS_SIGN, SH_SPELL_OFF, SH_SPELL_ON,
+    SHUI_WATCHED, decor_sh_from_inline, sh_chain, virt_chain, with_decor_item, with_decor_virt,
 };
 use crate::api::extmark::virt_text_to_array;
 use crate::decoration::defs::{DecorInline, DecorSignHighlight, DecorVirtText};
@@ -67,10 +66,10 @@ const HL_MODE_STR: [&CStr; 4] = [c"", c"replace", c"combine", c"blend"];
 /// `put` panics rather than overflowing `dict`: its callers size it for the
 /// whole `set_extmark` keyset.
 pub fn decor_to_dict_legacy(dict: &mut DictBuilder, decor: DecorInline, hl_name: bool) {
-    let mut sh_hl = DECOR_ID_INVALID;
-    let mut sh_sign = DECOR_ID_INVALID;
-    let mut virt_text = DECOR_ID_INVALID;
-    let mut virt_lines = DECOR_ID_INVALID;
+    let mut sh_hl = NO_ENTRY;
+    let mut sh_sign = NO_ENTRY;
+    let mut virt_text = NO_ENTRY;
+    let mut virt_lines = NO_ENTRY;
     // A sentinel no real priority can take, so that "nothing here has a
     // priority" stays distinct from priority 0.
     let mut priority: i32 = -1;
@@ -91,7 +90,7 @@ pub fn decor_to_dict_legacy(dict: &mut DictBuilder, decor: DecorInline, hl_name:
                     sh_hl = idx;
                 }
             }
-            if sh_hl != DECOR_ID_INVALID {
+            if sh_hl != NO_ENTRY {
                 with_decor_item(sh_hl, |sh| put_highlight(dict, sh, hl_name, &mut priority));
             }
         }
@@ -101,17 +100,17 @@ pub fn decor_to_dict_legacy(dict: &mut DictBuilder, decor: DecorInline, hl_name:
         }
     }
 
-    if virt_text != DECOR_ID_INVALID {
+    if virt_text != NO_ENTRY {
         with_decor_virt(virt_text, |vt| put_virt_text(dict, vt, hl_name));
         priority = i32::from(with_decor_virt(virt_text, |vt| vt.priority));
     }
 
-    if virt_lines != DECOR_ID_INVALID {
+    if virt_lines != NO_ENTRY {
         with_decor_virt(virt_lines, |vt| put_virt_lines(dict, vt, hl_name));
         priority = i32::from(with_decor_virt(virt_lines, |vt| vt.priority));
     }
 
-    if sh_sign != DECOR_ID_INVALID {
+    if sh_sign != NO_ENTRY {
         with_decor_item(sh_sign, |sh| put_sign(dict, sh, hl_name));
         priority = i32::from(with_decor_item(sh_sign, |sh| sh.priority));
     }

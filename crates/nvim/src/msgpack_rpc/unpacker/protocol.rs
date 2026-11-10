@@ -15,7 +15,7 @@
 use crate::types::api::MESSAGE_TYPE_NOTIFICATION;
 use core::ffi::c_int;
 
-use crate::mpack::typedefs::mpack_token_type_t;
+use crate::mpack::token::Kind;
 
 /// Parse stages. The unpacker resumes mid-message whenever the stream runs
 /// out, so its position is one of these plus the byte offset it stopped at.
@@ -56,32 +56,16 @@ mod stage {
 
 pub use stage::*;
 
-mod token {
-    use crate::mpack::typedefs::mpack_token_type_t;
-
-    pub const NIL: mpack_token_type_t = 1;
-    pub const BOOLEAN: mpack_token_type_t = 2;
-    pub const UINT: mpack_token_type_t = 3;
-    pub const SINT: mpack_token_type_t = 4;
-    pub const FLOAT: mpack_token_type_t = 5;
-    pub const CHUNK: mpack_token_type_t = 6;
-    pub const ARRAY: mpack_token_type_t = 7;
-    pub const MAP: mpack_token_type_t = 8;
-    pub const BIN: mpack_token_type_t = 9;
-    pub const STR: mpack_token_type_t = 10;
-    pub const EXT: mpack_token_type_t = 11;
-}
-
-pub use token::*;
-
 /// Whether a token of type `actual` satisfies a demand for `expected`.
 ///
 /// Two pairs are interchangeable on the wire: a binary blob wherever a string
 /// is wanted (clients differ on which one they send for method names and
 /// cell contents), and an unsigned integer wherever a signed one is wanted
 /// (a non-negative highlight id encodes as unsigned).
-pub fn token_matches(expected: mpack_token_type_t, actual: mpack_token_type_t) -> bool {
-    actual == expected || (expected == STR && actual == BIN) || (expected == SINT && actual == UINT)
+pub fn token_matches(expected: Kind, actual: Option<Kind>) -> bool {
+    actual == Some(expected)
+        || (expected == Kind::Str && actual == Some(Kind::Bin))
+        || (expected == Kind::Sint && actual == Some(Kind::Uint))
 }
 
 /// Whether a message header of `array_length` elements may carry this type.
@@ -158,12 +142,12 @@ mod tests {
 
     #[test]
     fn interchangeable_token_types() {
-        assert!(token_matches(ARRAY, ARRAY));
-        assert!(token_matches(STR, BIN));
-        assert!(!token_matches(BIN, STR));
-        assert!(token_matches(SINT, UINT));
-        assert!(!token_matches(UINT, SINT));
-        assert!(!token_matches(ARRAY, MAP));
+        assert!(token_matches(Kind::Array, Some(Kind::Array)));
+        assert!(token_matches(Kind::Str, Some(Kind::Bin)));
+        assert!(!token_matches(Kind::Bin, Some(Kind::Str)));
+        assert!(token_matches(Kind::Sint, Some(Kind::Uint)));
+        assert!(!token_matches(Kind::Uint, Some(Kind::Sint)));
+        assert!(!token_matches(Kind::Array, Some(Kind::Map)));
     }
 
     #[test]

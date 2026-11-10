@@ -36,7 +36,6 @@
 use core::ffi::c_int;
 
 use super::token::{self, Kind, MAX_TOKEN_LEN, Read, Tok};
-use crate::mpack::typedefs::mpack_token_type_t;
 
 /// `mpack_read`/`mpack_write` status codes, which the parser and the RPC
 /// session above this module still speak.
@@ -55,18 +54,6 @@ pub(crate) enum TokenStop {
     /// Not msgpack: an invalid type byte, or a token of no kind to encode.
     Invalid = MPACK_ERROR,
 }
-
-pub const MPACK_TOKEN_NIL: mpack_token_type_t = Kind::Nil as mpack_token_type_t;
-pub const MPACK_TOKEN_BOOLEAN: mpack_token_type_t = Kind::Boolean as mpack_token_type_t;
-pub const MPACK_TOKEN_UINT: mpack_token_type_t = Kind::Uint as mpack_token_type_t;
-pub const MPACK_TOKEN_SINT: mpack_token_type_t = Kind::Sint as mpack_token_type_t;
-pub const MPACK_TOKEN_FLOAT: mpack_token_type_t = Kind::Float as mpack_token_type_t;
-pub const MPACK_TOKEN_CHUNK: mpack_token_type_t = Kind::Chunk as mpack_token_type_t;
-pub const MPACK_TOKEN_ARRAY: mpack_token_type_t = Kind::Array as mpack_token_type_t;
-pub const MPACK_TOKEN_MAP: mpack_token_type_t = Kind::Map as mpack_token_type_t;
-pub const MPACK_TOKEN_BIN: mpack_token_type_t = Kind::Bin as mpack_token_type_t;
-pub const MPACK_TOKEN_STR: mpack_token_type_t = Kind::Str as mpack_token_type_t;
-pub const MPACK_TOKEN_EXT: mpack_token_type_t = Kind::Ext as mpack_token_type_t;
 
 // ---------------------------------------------------------------------------
 // The streaming state

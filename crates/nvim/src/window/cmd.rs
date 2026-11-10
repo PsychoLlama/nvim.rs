@@ -722,7 +722,7 @@ fn search_path(pat: &[u8], kind: c_int, skip_comments: bool, prenum1: c_int) {
     let action = ACTION_SPLIT;
     find_pattern_in_path(
         pat,
-        DIRECTION_NOT_SET,
+        None,
         true,
         skip_comments,
         kind,

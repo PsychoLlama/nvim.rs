@@ -666,7 +666,7 @@ pub(crate) fn get_next_default_completion(st: &mut InsComplNextState, start_pos:
         } else {
             ins_buf.name.short()
         };
-        let (ic, dir) = (p_ic(), DIRECTION_NOT_SET);
+        let (ic, dir) = (p_ic(), None);
         let add_r = ins_compl_add_infercase(&found, len, ic, fname, dir, cont_s_ipos, score);
         if add_r != Added::Duplicate {
             if in_fuzzy_collect && best_score_is(score) {
@@ -788,7 +788,7 @@ fn add_scanned_word(
         end - start,
         p_ic(),
         fname,
-        dir,
+        Some(dir),
         false,
         score,
     )

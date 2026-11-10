@@ -21,7 +21,6 @@ use crate::memory::{ThinCString, XString};
 use crate::message::{E_TRAILING_ARG, emsg, msg};
 use crate::message_fmt::msg_bytes;
 use crate::os::cshim::gettext;
-use crate::search::DIRECTION_NOT_SET;
 use crate::search::{ACTION_SHOW, ACTION_SHOW_ALL, CHECK_PATH};
 use crate::semsg;
 use crate::types::{CmdIdx, ColNr};
@@ -478,7 +477,7 @@ pub(crate) fn ex_rundo(excmd: &mut ExArg) {
 pub(crate) fn ex_checkpath(excmd: &mut ExArg) {
     find_pattern_in_path(
         b"",
-        DIRECTION_NOT_SET,
+        None,
         false,
         false,
         CHECK_PATH,
