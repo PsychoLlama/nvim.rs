@@ -332,7 +332,7 @@ fn attention_message(fname: &CStr, fhname: &[u8], shown: &CStr, msg: &mut Vec<u8
 
 /// Fire the `SwapExists` autocommands and read the choice they left in
 /// `v:swapchoice`.
-fn do_swapexists(buffer: Buf, fname: &CStr) -> SwapExistsChoice {
+fn do_swapexists(buffer: Buf, fname: &CStr) -> Option<SwapExistsChoice> {
     set_vim_var_string(Vv::Swapname, Some(fname.to_bytes()));
     set_vim_var_string(Vv::Swapchoice, None);
 
@@ -351,15 +351,7 @@ fn do_swapexists(buffer: Buf, fname: &CStr) -> SwapExistsChoice {
 
     set_vim_var_string(Vv::Swapname, None);
 
-    match with_vim_var_str(Vv::Swapchoice, cstr::first) {
-        b'o' => SEA_CHOICE_READONLY,
-        b'e' => SEA_CHOICE_EDIT,
-        b'r' => SEA_CHOICE_RECOVER,
-        b'd' => SEA_CHOICE_DELETE,
-        b'q' => SEA_CHOICE_QUIT,
-        b'a' => SEA_CHOICE_ABORT,
-        _ => SEA_CHOICE_NONE,
-    }
+    SwapExistsChoice::from_letter(with_vim_var_str(Vv::Swapchoice, cstr::first))
 }
 
 /// A swap file already has the name we wanted. Decide what that means and
@@ -377,12 +369,12 @@ fn resolve_swapfile_clash(mut buffer: Buf, fname: &CStr, buf_fname: &CStr) -> bo
         return false;
     }
 
-    let mut choice = SEA_CHOICE_NONE;
+    let mut choice = None;
 
     // Deleting it is safe when the file exists and the swap file records
     // no changes and looks intact.
     if path_exists(buf_fname) && swapfile_unchanged(fname) {
-        choice = SEA_CHOICE_DELETE;
+        choice = Some(SwapExistsChoice::Delete);
         if p_verbose() > 0 {
             verb_msg(gettext(
                 c"Found a swap file that is not useful, deleting it",
@@ -391,53 +383,53 @@ fn resolve_swapfile_clash(mut buffer: Buf, fname: &CStr, buf_fname: &CStr) -> bo
     }
 
     // A SwapExists autocommand gets the next word, if the caller is in a
-    // position to honour what it says. It may still decline (0) and leave
-    // the question to the user.
-    if choice == SEA_CHOICE_NONE
+    // position to honour what it says. It may still decline (no letter)
+    // and leave the question to the user.
+    if choice.is_none()
         && SWAP_EXISTS_ACTION.get() != SEA_NONE
         && has_autocmd(AutoEvent::SwapExists, buf_fname, Some(buffer))
     {
         choice = do_swapexists(buffer, fname);
     }
-    if choice == SEA_CHOICE_NONE && SWAP_EXISTS_ACTION.get() == SEA_READONLY {
-        choice = SEA_CHOICE_READONLY;
+    if choice.is_none() && SWAP_EXISTS_ACTION.get() == SEA_READONLY {
+        choice = Some(SwapExistsChoice::Readonly);
     }
 
     // Set by attention_message -> swapfile_info, below.
     PROC_RUNNING.set(0);
-    if choice == SEA_CHOICE_NONE {
+    if choice.is_none() {
         choice = ask_about_swapfile(buffer, fname);
     }
 
     match choice {
-        SEA_CHOICE_READONLY => buffer.b_p_ro = 1,
-        SEA_CHOICE_RECOVER => SWAP_EXISTS_ACTION.set(SEA_RECOVER),
-        SEA_CHOICE_DELETE => {
+        Some(SwapExistsChoice::Readonly) => buffer.b_p_ro = 1,
+        Some(SwapExistsChoice::Recover) => SWAP_EXISTS_ACTION.set(SEA_RECOVER),
+        Some(SwapExistsChoice::Delete) => {
             os_remove(fname);
         }
-        SEA_CHOICE_QUIT => SWAP_EXISTS_ACTION.set(SEA_QUIT),
-        SEA_CHOICE_ABORT => {
+        Some(SwapExistsChoice::Quit) => SWAP_EXISTS_ACTION.set(SEA_QUIT),
+        Some(SwapExistsChoice::Abort) => {
             SWAP_EXISTS_ACTION.set(SEA_QUIT);
             GOT_INT.set(true);
         }
-        SEA_CHOICE_NONE => {
+        None => {
             msg_str(c"\n");
             if MSG_SILENT.get() == 0 {
                 NEED_WAIT_RETURN.set(true); // call wait_return() later
             }
         }
-        // SEA_CHOICE_EDIT: use the file as it is.
-        _ => {}
+        // Use the file as it is.
+        Some(SwapExistsChoice::Edit) => {}
     }
 
     // If the swap file was deleted, this name can be used after all.
-    choice != SEA_CHOICE_NONE && !path_exists(fname)
+    choice.is_some() && !path_exists(fname)
 }
 
 /// Show the ATTENTION message, as a dialog if the caller can act on an
 /// answer and as a warning otherwise.
-fn ask_about_swapfile(buffer: Buf, fname: &CStr) -> SwapExistsChoice {
-    let mut choice = SEA_CHOICE_NONE;
+fn ask_about_swapfile(buffer: Buf, fname: &CStr) -> Option<SwapExistsChoice> {
+    let mut choice = None;
     let no_prompt = Suppress::wait_return();
 
     // Upstream's `kv_resize(msg, IOSIZE)`: a screenful before the first
@@ -481,12 +473,9 @@ fn ask_about_swapfile(buffer: Buf, fname: &CStr) -> SwapExistsChoice {
             None,
             false,
         );
-        // The button's number is the choice, 0 for none.
-        choice = answer.button(default).map_or(0, |button| {
-            SwapExistsChoice::try_from(button.number()).unwrap_or(0)
-        });
-        // Compensate for the missing "Delete it" button.
-        choice = choice.wrapping_add(SwapExistsChoice::from(running && choice >= 4));
+        choice = answer
+            .button(default)
+            .and_then(|button| SwapExistsChoice::from_button(button.number(), running));
         // Pretend the screen did not scroll; it needs a redraw anyway.
         msg_reset_scroll();
     } else {

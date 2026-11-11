@@ -110,14 +110,59 @@ pub use self::lines::*;
 
 pub(crate) static INHIBIT_DELETE_COUNT: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
-pub const SEA_CHOICE_NONE: SwapExistsChoice = 0;
-pub type SwapExistsChoice = ::core::ffi::c_uint;
-pub const SEA_CHOICE_ABORT: SwapExistsChoice = 6;
-pub const SEA_CHOICE_QUIT: SwapExistsChoice = 5;
-pub const SEA_CHOICE_DELETE: SwapExistsChoice = 4;
-pub const SEA_CHOICE_RECOVER: SwapExistsChoice = 3;
-pub const SEA_CHOICE_EDIT: SwapExistsChoice = 2;
-pub const SEA_CHOICE_READONLY: SwapExistsChoice = 1;
+/// What to do about a swap file that is already there: the ATTENTION
+/// dialog's buttons, or the letter a `SwapExists` autocommand left in
+/// `v:swapchoice`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum SwapExistsChoice {
+    /// Open the file read-only.
+    Readonly,
+    /// Edit the file anyway.
+    Edit,
+    /// Recover from the swap file.
+    Recover,
+    /// Delete the swap file.
+    Delete,
+    /// Quit editing the file.
+    Quit,
+    /// Abort the command, as an interrupt would.
+    Abort,
+}
+
+impl SwapExistsChoice {
+    /// The choice behind dialog button `number` (counted from 1). While the
+    /// swap file's owner still runs, the dialog leaves out "Delete it", so
+    /// the buttons from the fourth on name the choice after theirs.
+    pub(crate) fn from_button(number: usize, owner_running: bool) -> Option<Self> {
+        let number = if owner_running && number >= 4 {
+            number + 1
+        } else {
+            number
+        };
+        Some(match number {
+            1 => SwapExistsChoice::Readonly,
+            2 => SwapExistsChoice::Edit,
+            3 => SwapExistsChoice::Recover,
+            4 => SwapExistsChoice::Delete,
+            5 => SwapExistsChoice::Quit,
+            6 => SwapExistsChoice::Abort,
+            _ => return None,
+        })
+    }
+
+    /// The choice a `v:swapchoice` of `letter` names.
+    pub(crate) fn from_letter(letter: u8) -> Option<Self> {
+        Some(match letter {
+            b'o' => SwapExistsChoice::Readonly,
+            b'e' => SwapExistsChoice::Edit,
+            b'r' => SwapExistsChoice::Recover,
+            b'd' => SwapExistsChoice::Delete,
+            b'q' => SwapExistsChoice::Quit,
+            b'a' => SwapExistsChoice::Abort,
+            _ => return None,
+        })
+    }
+}
 pub type UpdBlock0 = ::core::ffi::c_uint;
 pub const UB_SAME_DIR: UpdBlock0 = 1;
 pub const UB_FNAME: UpdBlock0 = 0;
@@ -455,4 +500,56 @@ pub(crate) fn swap_name_for(
     dir_name: &::core::ffi::CStr,
 ) -> Option<XString> {
     makeswapname(Some(fname), dir_name.to_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SwapExistsChoice;
+
+    #[test]
+    fn the_attention_buttons_name_their_choices() {
+        let all = [
+            SwapExistsChoice::Readonly,
+            SwapExistsChoice::Edit,
+            SwapExistsChoice::Recover,
+            SwapExistsChoice::Delete,
+            SwapExistsChoice::Quit,
+            SwapExistsChoice::Abort,
+        ];
+        for (at, &choice) in all.iter().enumerate() {
+            assert_eq!(SwapExistsChoice::from_button(at + 1, false), Some(choice));
+        }
+        assert_eq!(SwapExistsChoice::from_button(0, false), None);
+        assert_eq!(SwapExistsChoice::from_button(7, false), None);
+    }
+
+    #[test]
+    fn without_delete_the_later_buttons_shift_up() {
+        // "&Open Read-Only\n&Edit anyway\n&Recover\n&Quit\n&Abort"
+        let shown = [1, 2, 3, 4, 5].map(|n| SwapExistsChoice::from_button(n, true));
+        assert_eq!(
+            shown,
+            [
+                Some(SwapExistsChoice::Readonly),
+                Some(SwapExistsChoice::Edit),
+                Some(SwapExistsChoice::Recover),
+                Some(SwapExistsChoice::Quit),
+                Some(SwapExistsChoice::Abort),
+            ]
+        );
+    }
+
+    #[test]
+    fn swapchoice_letters() {
+        assert_eq!(
+            SwapExistsChoice::from_letter(b'd'),
+            Some(SwapExistsChoice::Delete)
+        );
+        assert_eq!(
+            SwapExistsChoice::from_letter(b'a'),
+            Some(SwapExistsChoice::Abort)
+        );
+        assert_eq!(SwapExistsChoice::from_letter(0), None);
+        assert_eq!(SwapExistsChoice::from_letter(b'x'), None);
+    }
 }
