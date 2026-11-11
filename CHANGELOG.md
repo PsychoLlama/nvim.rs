@@ -8,7 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- Reshaped the tree after the port: types moved out of the shared `types/` directory into the modules that own them (sixteen core files remain), a decoded character is a `Codepoint` rather than a C `int`, every function over two hundred lines is split along its own seams with no `goto`-shaped labelled block left, constants have one home each, and the command, dialog, `:set` and msgpack families answer typed errors.
+- Split every function over two hundred lines along its own seams, leaving no `goto`-shaped labelled block. It reaches the screen redraw, the statusline, the mode message, the hit-enter and `--More--` prompts, command-line colouring, computed folds, the mouse, closing windows, `:edit`, reading and writing files, swap-file recovery, `:!` filters, `:source`, startup, user functions and autocommands, the command line and its history, `:put`, `o`/`O` and text formatting, Insert-mode keys and `CTRL-X` completion, word and sentence motions, search and `searchcount()`, `match()`, `tr()`, `json_decode()`, `:map` and user commands, both regexp engines, spell checking (word lookup, sound-folding, `.aff` files, `'spelllang'`), extmarks, the terminal emulator and `sockconnect()`.
+- Told a decoded character, a key and a byte apart (`Codepoint`, `Key`, `u8`) instead of carrying all three as one C `int`. It reaches character classes, widths and case folding, `'iskeyword'`, `'matchpairs'` and `%`, `:digraphs`, `confirm()` hotkeys, `'cinkeys'`/`'indentkeys'`, `CTRL-W` commands, register names, and every place a key is read from text or written back as text.
+- Gave the remaining refusals typed errors, said once where the message is put out: Ex command parsing (ranges, modifiers, counts, `++opt` and file-name expansion), `:set`, dialogs and `confirm()`, the swap-file prompt, `:checktime`, the shell, sessions, `:source`, windows, Lua conversion and the msgpack codec. `:syntax include <cword>` with no word under the cursor no longer puts out an empty error line.
 
 ### Fixed
 
