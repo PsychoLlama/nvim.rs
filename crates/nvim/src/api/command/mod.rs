@@ -28,7 +28,6 @@ use crate::api::keysets::{
 };
 use crate::api::private::helpers::TryState;
 use crate::lua::executor::{api_new_luaref, release_luaref};
-use crate::mbyte::mb_islower;
 use crate::message::state::{MSG_COL, REDIR_OFF};
 use crate::message::{capture_finish, capture_start};
 use crate::os::libc::{int64_t, size_t, uint64_t};

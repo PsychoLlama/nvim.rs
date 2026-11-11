@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::mbyte::Codepoint;
 use crate::normal::defs::{MotionType, OpArg};
 use crate::option::vars::P_SEL;
 use crate::types::{ColNr, LineNr, Pos};
@@ -22,7 +23,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::cursor::{coladvance, dec_cursor, gchar_cursor, get_cursor_line_len, inc_cursor};
 use crate::drawscreen::state::REDRAW_CMDLINE;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
@@ -54,7 +54,7 @@ fn cls() -> c_int {
     // `curwin` and `CURBUF` are set from startup to exit, which is all
     // `gchar_cursor` asks for; it answers NUL past the end of the line.
     let c = gchar_cursor();
-    if c == ' ' as c_int || c == '\t' as c_int || c == NUL {
+    if c == b' ' || c == b'\t' || c == Codepoint::NUL {
         return 0;
     }
     let c = utf_class(c);

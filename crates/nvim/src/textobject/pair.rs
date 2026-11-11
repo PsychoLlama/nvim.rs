@@ -15,6 +15,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::mbyte::Codepoint;
 use crate::normal::defs::{MotionType, OpArg};
 use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor};
 use crate::types::LineNr;
@@ -88,7 +89,7 @@ pub(crate) fn current_block(
                 }
             }
         }
-        if gchar_cursor() == what {
+        if gchar_cursor().get() == what {
             // On the opening bracket: move just past it.
             Win::current().w_cursor.col += 1;
         }
@@ -197,7 +198,7 @@ pub(crate) fn current_block(
         if P_SEL.first_byte() == b'e' {
             inc(&mut Win::current().cursor());
         }
-        if sol && gchar_cursor() != NUL {
+        if sol && gchar_cursor() != Codepoint::NUL {
             inc(&mut Win::current().cursor()); // include the line break
         }
         set_visual_anchor(start_pos);
@@ -320,14 +321,14 @@ pub(crate) fn current_tagblock(
         // themselves.
         if in_html_tag(false) {
             // On a start tag: move to its `>`.
-            while gchar_cursor() != '>' as c_int {
+            while gchar_cursor().get() != '>' as c_int {
                 if inc_cursor().is_stuck() {
                     break;
                 }
             }
         } else if in_html_tag(true) {
             // On an end tag: move to just before it.
-            while gchar_cursor() != '<' as c_int {
+            while gchar_cursor().get() != '<' as c_int {
                 if dec_cursor().is_stuck() {
                     break;
                 }
@@ -394,7 +395,7 @@ pub(crate) fn current_tagblock(
         if do_include {
             // Include up to the `>`; `inc_cursor` reports the end of the
             // line itself.
-            while gchar_cursor() != '>' as c_int {
+            while gchar_cursor().get() != '>' as c_int {
                 if inc_cursor().is_stuck() {
                     break;
                 }
@@ -404,9 +405,12 @@ pub(crate) fn current_tagblock(
             // Exclude the `<` of the end tag. With the closing tag on a
             // new line, leave the cursor where it is and make the
             // operation exclusive instead, so the line feed is selected.
-            if c == '<' as c_int && !visual_active() && Win::current().w_cursor.col == ColNr::ZERO {
+            if c.get() == '<' as c_int
+                && !visual_active()
+                && Win::current().w_cursor.col == ColNr::ZERO
+            {
                 is_inclusive = false;
-            } else if c == '<' as c_int {
+            } else if c.get() == '<' as c_int {
                 dec_cursor();
             }
         }
@@ -420,11 +424,11 @@ pub(crate) fn current_tagblock(
             // cursor is on a character whenever the body runs.
             while !inc_cursor().is_stuck() {
                 let q = gchar_cursor();
-                if q == '>' as c_int && !in_quotes {
+                if q.get() == '>' as c_int && !in_quotes {
                     inc_cursor();
                     start_pos = Win::current().w_cursor;
                     break;
-                } else if q == '"' as c_int || q == '\'' as c_int {
+                } else if q == b'"' || q == b'\'' {
                     in_quotes = !in_quotes;
                 }
             }

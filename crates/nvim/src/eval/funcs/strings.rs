@@ -20,6 +20,7 @@ use crate::ex_getln::{VSE_NONE, fnameescape};
 use crate::highlight::Hlf;
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 use crate::keycodes::escape_ks_bytes;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{Converter, char_at, cluster_len, enc_locale, encode_char};
 use crate::memline::Lines;
 use crate::memory::{ThinCString, XString};
@@ -123,7 +124,7 @@ pub fn f_nr2char(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     let mut buf = [0u8; 6];
-    let len = encode_char(number_as_int(num), &mut buf);
+    let len = encode_char(Codepoint::new(number_as_int(num)), &mut buf);
     result.write_string(Some(ThinCString::from_bytes(&buf[..len])));
 }
 

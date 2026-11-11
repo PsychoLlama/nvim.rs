@@ -20,6 +20,7 @@
 )]
 
 use super::program::{NfaState, StateId, States};
+use crate::mbyte::Codepoint;
 use crate::regexp::{NfaOp, NfaStates};
 use core::ffi::c_int;
 
@@ -265,7 +266,7 @@ fn nfa_max_width(states: &[NfaState], startstate: StateId, depth: c_int) -> Opti
                 if code < 0 {
                     return None;
                 }
-                len += utf_char2len(code);
+                len += utf_char2len(Codepoint::new(code));
             }
         }
         state = out_of(state);

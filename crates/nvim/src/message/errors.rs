@@ -30,6 +30,7 @@ use super::*;
 use crate::event::r#loop::schedule_deferred_job;
 use crate::guard::Suppress;
 use crate::log::{LOG_DEBUG, logmsg};
+use crate::mbyte::Codepoint;
 use crate::message_fmt::{msg_bytes as text_arg, msg_cstr};
 use crate::runtime::{estack_sfile, sourcing_lnum, sourcing_name_copy, with_sourcing_name};
 use crate::types::LineNr;
@@ -110,7 +111,7 @@ pub fn msg_source(hl_id: c_int) {
         if let Some(name) = sourcing_name_text() {
             LAST_SOURCING_NAME.set(Some(XString::from_bytes(&name)));
             if !redirecting() {
-                msg_putchar_hl(c_int::from(b'\n'), hl_id);
+                msg_putchar_hl(Codepoint::byte(b'\n'), hl_id);
             }
         }
     }
@@ -268,7 +269,7 @@ pub fn emsg(s: &CStr) -> bool {
 }
 
 /// "E354: Invalid register name" for register `name`.
-pub fn emsg_invreg(name: c_int) {
+pub fn emsg_invreg(name: Codepoint) {
     let display = transchar_buf(None, name);
     let display = msg_cstr(cstr::in_bytes(&display));
     crate::semsg!("E354: Invalid register name: '{}'", display);

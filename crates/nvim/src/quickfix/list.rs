@@ -18,6 +18,7 @@
 )]
 
 use super::*;
+use crate::mbyte::Codepoint;
 use crate::memory::XString;
 use crate::path::{fix_fname, path_try_shorten_fname};
 use crate::types::Handle;
@@ -141,7 +142,7 @@ impl<'a> NewEntry<'a> {
             cleared: false,
             // 1 marks a help entry; anything else that cannot be printed is
             // reported as no type at all.
-            kind: if self.kind != 1 && !vim_isprintc(c_int::from(self.kind)) {
+            kind: if self.kind != 1 && !vim_isprintc(Codepoint::from(self.kind.cast_unsigned())) {
                 0
             } else {
                 self.kind

@@ -22,7 +22,7 @@ use crate::getchar::beep_flush;
 use crate::getchar::state::GOT_INT;
 use crate::lua::executor::nlua_expand_pat;
 use crate::mbyte::char_at;
-use crate::mbyte::{cluster_len, mb_tolower};
+use crate::mbyte::cluster_len;
 use crate::message::state::CMD_SILENT;
 use crate::message::{E_TOOMANY, emsg, msg_str};
 use crate::message_fmt::msg_cstr;
@@ -399,7 +399,7 @@ fn longest_common_match(expand: &Expand, options: WildOpts) -> XString {
         let diverged = files[1..].iter().any(|name| {
             let ci = char_at(name.get(len..).unwrap_or_default());
             if fold {
-                mb_tolower(c0) != mb_tolower(ci)
+                c0.to_lower() != ci.to_lower()
             } else {
                 c0 != ci
             }

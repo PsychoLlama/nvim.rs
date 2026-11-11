@@ -238,5 +238,5 @@ pub(crate) fn take_bracketed(text: &[u8], at: &mut usize, delim: u8) -> c_int {
         return 0;
     }
     *at = p + len + 4;
-    char_at_nul(text, p + 2)
+    char_at_nul(text, p + 2).get()
 }

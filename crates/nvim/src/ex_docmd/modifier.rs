@@ -17,6 +17,7 @@
 use crate::ex_docmd::lookup::check_for_word;
 use crate::ex_docmd::scan::ends_excmd;
 use crate::ex_docmd::{CmdError, is_user_cmd};
+use crate::mbyte::Codepoint;
 use crate::runtime::SID_NONE;
 use crate::types::CmdIdx;
 use crate::types::{CmdFilter, CmdLine};
@@ -828,7 +829,7 @@ fn filter_pattern(
 ) -> Option<((usize, usize), usize)> {
     let word = line.rest_of(at);
     let first = word.first().copied().unwrap_or(0);
-    if vim_is_ident_char(c_int::from(first)) {
+    if vim_is_ident_char(Codepoint::from(first)) {
         // A bare word, ending at the first white space.
         let len = skip::to_white(word);
         let mut past = at + len;

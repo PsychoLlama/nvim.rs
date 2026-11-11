@@ -14,6 +14,7 @@
 )]
 
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::message_fmt::msg_cstr;
 use crate::tr;
 use core::ffi::{c_int, c_uint};
@@ -194,7 +195,7 @@ pub fn did_set_shada(_args: &mut OptSet) -> Result<(), OptError> {
     while at(i) != 0 {
         let item = at(i);
         if !SHADA_ITEMS.contains(&item) {
-            return Err(illegal_char(c_int::from(item)));
+            return Err(illegal_char(Codepoint::from(item)));
         }
         if item == b'n' {
             break; // The file name is always last, and takes the rest.
@@ -219,7 +220,7 @@ pub fn did_set_shada(_args: &mut OptSet) -> Result<(), OptError> {
                 i += 1;
             }
             if !ascii_isdigit(c_int::from(at(i - 1))) {
-                let byte = c_int::from(at(i - 1));
+                let byte = at(i - 1);
                 let shown = transchar_byte(byte);
                 let shown = msg_cstr(cstr::in_bytes(&shown));
                 return Err(OptError::formatted(tr!(

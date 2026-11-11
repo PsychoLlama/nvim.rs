@@ -261,6 +261,7 @@
 {"path":"neovim::marktree::meta::META_COUNT","kind":"use","file":"crates/nvim/src/marktree/meta.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
 {"path":"neovim::marktree::splice::marktree_splice","kind":"fn","file":"crates/nvim/src/marktree/splice.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
 {"path":"neovim::mbyte::CONV_NONE_INIT","kind":"const","file":"crates/nvim/src/mbyte/mod.rs","tests":["crates/nvim/tests/unit/typval_dict.rs","crates/nvim/tests/unit/typval_list.rs"]}
+{"path":"neovim::mbyte::Codepoint","kind":"struct","file":"crates/nvim/src/mbyte/codepoint.rs","tests":["crates/nvim/tests/unit/charset_oracle.rs","crates/nvim/tests/unit/grid.rs","crates/nvim/tests/unit/mbyte.rs","crates/nvim/tests/unit/mbyte_oracle.rs","crates/nvim/tests/unit/strings.rs","crates/nvim/tests/unit/strings_oracle.rs"]}
 {"path":"neovim::mbyte::VimConv","kind":"struct","file":"crates/nvim/src/mbyte/mod.rs","tests":["crates/nvim/tests/unit/typval_dict.rs","crates/nvim/tests/unit/typval_list.rs"]}
 {"path":"neovim::mbyte::c_ambiguous_width","kind":"fn","file":"crates/nvim/src/mbyte/utf8/mod.rs","tests":["crates/nvim/tests/unit/mbyte_oracle.rs"]}
 {"path":"neovim::mbyte::c_cells_at","kind":"fn","file":"crates/nvim/src/mbyte/utf8/mod.rs","tests":["crates/nvim/tests/unit/mbyte.rs","crates/nvim/tests/unit/mbyte_oracle.rs"]}
@@ -290,7 +291,6 @@
 {"path":"neovim::mbyte::strict_char_at","kind":"fn","file":"crates/nvim/src/mbyte/utf8/slice.rs","tests":["crates/nvim/tests/unit/mbyte.rs"]}
 {"path":"neovim::mbyte::string_cells","kind":"fn","file":"crates/nvim/src/mbyte/utf8/mod.rs","tests":["crates/nvim/tests/unit/mbyte.rs"]}
 {"path":"neovim::mbyte::strnicmp_in","kind":"fn","file":"crates/nvim/src/mbyte/case.rs","tests":["crates/nvim/tests/unit/mbyte_oracle.rs"]}
-{"path":"neovim::mbyte::utf_fold","kind":"fn","file":"crates/nvim/src/mbyte/case.rs","tests":["crates/nvim/tests/unit/mbyte.rs"]}
 {"path":"neovim::mbyte::valid_utf8","kind":"fn","file":"crates/nvim/src/mbyte/mod.rs","tests":["crates/nvim/tests/unit/mbyte_oracle.rs"]}
 {"path":"neovim::memline::B0_FNAME_SIZE_CRYPT","kind":"const","file":"crates/nvim/src/memline/blocks.rs","tests":["crates/nvim/tests/unit/memline.rs"]}
 {"path":"neovim::memline::B0_FNAME_SIZE_NOCRYPT","kind":"const","file":"crates/nvim/src/memline/blocks.rs","tests":["crates/nvim/tests/unit/memline.rs"]}

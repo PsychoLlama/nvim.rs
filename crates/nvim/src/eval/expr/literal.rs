@@ -27,6 +27,7 @@ use crate::eval::vars::eval_one_expr_in_text;
 use crate::eval::{Cursor, char_len_at, env_name_len, option_var_end};
 use crate::keycodes::{FSK_IN_STRING, FSK_KEYCODE, FSK_SIMPLIFY};
 use crate::keycodes::{special_key_at, trans_special_into};
+use crate::mbyte::Codepoint;
 use crate::mbyte::{MB_MAXCHAR, encode_char};
 use crate::memory::{ThinCString, XString};
 use crate::message::{emsg, iemsg};
@@ -157,7 +158,7 @@ pub(crate) fn eval_number(
                 return Err(Failed);
             }
             if let Some(blob) = held.as_mut() {
-                let pair = (hex2nr(c_int::from(at(bp))) << 4) + hex2nr(c_int::from(at(bp + 1)));
+                let pair = (hex2nr(at(bp)) << 4) + hex2nr(at(bp + 1));
                 blob.push(u8::try_from(pair).unwrap_or_default());
             }
             // A dot may separate byte pairs: `0z00.11.22`.
@@ -329,7 +330,7 @@ fn string_body(
                     while n > 0 && ascii_isxdigit(c_int::from(at(p + 1))) {
                         n -= 1;
                         p += 1;
-                        nr = (nr << 4) + hex2nr(c_int::from(at(p)));
+                        nr = (nr << 4) + hex2nr(at(p));
                     }
                     p += 1;
                     // `\u` stores the character in the current encoding;
@@ -338,7 +339,7 @@ fn string_body(
                         out.push(nr.to_le_bytes()[0]);
                     } else {
                         let mut encoded = [0u8; MB_MAXCHAR];
-                        let len = encode_char(nr, &mut encoded);
+                        let len = encode_char(Codepoint::new(nr), &mut encoded);
                         out.extend_from_slice(&encoded[..len]);
                     }
                 }

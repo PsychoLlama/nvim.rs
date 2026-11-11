@@ -29,13 +29,13 @@
 
 use crate::extmark::EXTMARK_UNDO;
 use crate::guard::Suppress;
+use crate::mbyte::Codepoint;
 use crate::memline::MlFlags;
 use crate::normal::defs::MotionType;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_has;
 use crate::normal::visual_select;
@@ -371,7 +371,7 @@ fn delete_chars(op: &mut OpArg) -> Result<(), UndoFailed> {
 fn break_tabs_at_edges(op: &mut OpArg) -> Result<(), UndoFailed> {
     // Both ends name positions of the current buffer, and the cursor is put
     // on one of them before each column is measured.
-    if gchar_pos(&op.start) == c_int::from(b'\t') {
+    if gchar_pos(&op.start) == b'\t' {
         // Save the first line for undo.
         u_save_cursor()?;
         // Breaking the start TAB moves the end too, so remember where the
@@ -392,7 +392,7 @@ fn break_tabs_at_edges(op: &mut OpArg) -> Result<(), UndoFailed> {
     }
 
     // Break the end TAB only when it is inside the region.
-    if gchar_pos(&op.end) == c_int::from(b'\t') && op.end.coladd == 0 && op.inclusive {
+    if gchar_pos(&op.end) == b'\t' && op.end.coladd == 0 && op.inclusive {
         // Save the last line for undo.
         u_save(op.end.lnum - 1, op.end.lnum + 1)?;
         Win::current().w_cursor = op.end;
@@ -438,7 +438,7 @@ fn delete_chars_one_line(op: &OpArg) -> Result<(), UndoFailed> {
             n = 1;
         }
         // Having deleted a character in the line, `coladd` is stale.
-        if gchar_cursor() != NUL {
+        if gchar_cursor() != Codepoint::NUL {
             Win::current().w_cursor.coladd = 0;
         }
     }

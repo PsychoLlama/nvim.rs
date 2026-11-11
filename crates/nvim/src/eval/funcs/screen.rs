@@ -10,6 +10,7 @@
 )]
 
 use super::wrappers::{arg_lnum, arg_number, arg_number_chk};
+use crate::mbyte::Codepoint;
 use crate::narrow::number_as_col;
 use crate::narrow::number_as_int;
 use crate::types::LineNr;
@@ -102,7 +103,7 @@ pub fn f_screenchar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(VarNumber::from(if cell.on_grid() {
         char_at(&cell.text())
     } else {
-        -1
+        Codepoint::new(-1)
     }));
 }
 
@@ -305,7 +306,7 @@ pub fn f_synconcealed(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         Win::current().syntax_id(lnum, col, false, None, false);
         (syntax_flags, matchid) = get_syntax_info();
         if syntax_flags.has(SynFlags::CONCEAL) && Win::current().w_onebuf_opt.wo_cole < 3 {
-            let mut cchar = schar_from_char(syn_get_sub_char());
+            let mut cchar = schar_from_char(Codepoint::new(syn_get_sub_char()));
             // At 'conceallevel' 1 a group with no `cchar` falls back to
             // 'listchars' "conceal", and to a space if that is unset.
             if cchar == NUL as ScreenChar && Win::current().w_onebuf_opt.wo_cole == 1 {

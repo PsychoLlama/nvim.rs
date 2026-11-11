@@ -483,7 +483,7 @@ fn dump_prefixes(
 
     // A word starting lower-case gets an upper-case twin to try.
     let c = char_at(word);
-    if spell_toupper(c) != c {
+    if spell_toupper(c.get()) != c.get() {
         onecap_copy(word, &mut word_up, true);
         has_word_up = true;
     }

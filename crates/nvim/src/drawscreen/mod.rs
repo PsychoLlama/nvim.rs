@@ -10,6 +10,7 @@
 
 pub mod state;
 use crate::autocmd::defs::AutoEvent;
+use crate::mbyte::Codepoint;
 use crate::narrow::number_as_int;
 use crate::normal::SHOWCMD_COLS;
 use crate::option::MIN_COLUMNS;
@@ -632,7 +633,9 @@ pub fn setcursor_mayforce(window: Win, force: bool) {
         let cursor = line
             .get(usize::try_from(window.w_cursor.col).unwrap_or(0)..)
             .unwrap_or_default();
-        let cells = if c_cells_at(cursor) == 2 && vim_isprintc(c_char_info(cursor, 0).value) {
+        let cells = if c_cells_at(cursor) == 2
+            && vim_isprintc(Codepoint::new(c_char_info(cursor, 0).value))
+        {
             2
         } else {
             1

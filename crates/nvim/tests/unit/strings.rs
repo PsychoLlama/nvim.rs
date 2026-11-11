@@ -1,5 +1,6 @@
 //! Port of `test/unit/strings_spec.lua`.
 
+use neovim::mbyte::Codepoint;
 use std::ffi::{c_char, c_int, c_long, c_longlong, c_uint, c_ulong, c_ulonglong};
 
 use neovim::strings::{escaped_bytes, find_char, reversed_text, strcase_copy};
@@ -108,7 +109,7 @@ fn vim_strnsave_unquoted_does_not_unescape_backslash_n() {
 }
 
 fn strchr(s: &[u8], c: c_int) -> Option<usize> {
-    find_char(s, c)
+    find_char(s, Codepoint::new(c))
 }
 
 #[test]

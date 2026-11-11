@@ -27,13 +27,13 @@
 
 use crate::keycodes::ModMask;
 use crate::keycodes::SpecialKey;
+use crate::mbyte::Codepoint;
 use crate::mbyte::c_cluster_len;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win, first_tab};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 
 /// If 'keymodel' contains `startsel`, turn `c` into the start of a
 /// Select-mode selection and stuff it back for Normal mode to handle.
@@ -186,7 +186,7 @@ pub(crate) fn ins_right() {
     may_open_fold_hor();
     hide_dollar();
 
-    if gchar_cursor() != NUL || virtual_active(Win::current()) {
+    if gchar_cursor() != Codepoint::NUL || virtual_active(Win::current()) {
         start_arrow_changing(InsertEnd::cursor(), end_change);
         if !end_change {
             append_to_redobuff_char(Key::from(SpecialKey::Right));
@@ -234,7 +234,9 @@ pub(crate) fn ins_s_right() {
     may_open_fold_hor();
     hide_dollar();
 
-    if Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count || gchar_cursor() != NUL {
+    if Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
+        || gchar_cursor() != Codepoint::NUL
+    {
         start_arrow_changing(InsertEnd::cursor(), end_change);
         if !end_change {
             append_to_redobuff_char(Key::from(SpecialKey::SRight));

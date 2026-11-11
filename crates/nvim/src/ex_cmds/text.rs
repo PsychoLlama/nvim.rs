@@ -20,7 +20,7 @@
 
 use super::say;
 use super::{CAR, NL};
-use crate::ascii::{NUL, ascii_iswhite};
+use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
 use crate::charset::{transchar, transchar_nonprint_form, vim_isprintc};
 use crate::cstr;
@@ -28,6 +28,7 @@ use crate::digraph::get_digraph_for_char;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::fileio::EOL_MAC;
 use crate::indent::{get_indent, set_indent};
+use crate::mbyte::Codepoint;
 use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, utf_iscomposing_first};
 use crate::memline::Lines;
@@ -77,13 +78,14 @@ pub(crate) fn describe_cursor_char() {
 
     // TODO(bfredl): merge this with the main loop
     if c < 0x80 {
-        if c == c_int::from(NL) {
+        if c == NL {
             // NUL is stored as NL.
-            c = NUL;
+            c = Codepoint::NUL;
         }
         // NL is stored as CR.
-        let mac = c == c_int::from(CAR) && get_fileformat(Buf::current()) == EOL_MAC;
-        describe_byte(c, if mac { c_int::from(NL) } else { c }, &mut need_clear);
+        let mac = c == CAR && get_fileformat(Buf::current()) == EOL_MAC;
+        let byte = c.as_byte().expect("below 0x80");
+        describe_byte(byte, if mac { NL } else { byte }, &mut need_clear);
         // needed for overlong ascii?
         off += char_len(data);
     }
@@ -108,10 +110,10 @@ pub(crate) fn describe_cursor_char() {
 /// `cval` is the value to report, which differs from `c` only for a CR in a
 /// 'fileformat' of "mac". Upstream assembles the line in `IObuff`; it is cut
 /// where that would cut it.
-fn describe_byte(c: c_int, cval: c_int, need_clear: &mut bool) {
+fn describe_byte(c: u8, cval: u8, need_clear: &mut bool) {
     // The `  <x>` form of a printable character outside ASCII, in the
     // twenty bytes upstream gives it.
-    let nonprint = if vim_isprintc(c) && !(' ' as c_int..='~' as c_int).contains(&c) {
+    let nonprint = if vim_isprintc(Codepoint::from(c)) && !(b' '..=b'~').contains(&c) {
         let raw = transchar_nonprint_form(Buf::current_or_none(), c);
         crate::formatted!(20, b"  <%s>", cstr::in_bytes(&raw))
     } else {
@@ -123,22 +125,22 @@ fn describe_byte(c: c_int, cval: c_int, need_clear: &mut bool) {
     let empty: &[u8] = b"";
     // The digraph is always passed: the format without a `Digr %s` simply
     // never reads that argument, as any unused trailing vararg.
-    let digraph = get_digraph_for_char(Key::from_code(cval));
+    let digraph = get_digraph_for_char(Key::byte(cval));
     let fmt = match digraph {
         Some(_) => c"<%s>%s%s  %d,  Hex %02x,  Oct %03o, Digr %s",
         None => c"<%s>%s%s  %d,  Hex %02x,  Octal %03o",
     };
     let digraph = digraph.unwrap_or([0; 3]);
-    let shown = transchar(c);
+    let shown = transchar(Codepoint::from(c));
     let line = crate::formatted!(
         IOSIZE as usize,
         gettext(fmt).to_bytes(),
         cstr::in_bytes(&shown),
         &nonprint[..],
         empty,
-        cval,
-        cval,
-        cval,
+        c_int::from(cval),
+        c_int::from(cval),
+        c_int::from(cval),
         cstr::in_bytes(&digraph),
     );
     emit_line(&line, need_clear);
@@ -148,7 +150,7 @@ fn describe_byte(c: c_int, cval: c_int, need_clear: &mut bool) {
 ///
 /// `spaced` asks for the separating space upstream writes before every
 /// character but the first.
-fn describe_char(c: c_int, spaced: bool, need_clear: &mut bool) {
+fn describe_char(c: Codepoint, spaced: bool, need_clear: &mut bool) {
     // This assumes every multi-byte char is printable...
     let mut line = Vec::with_capacity(64);
     if spaced {
@@ -165,8 +167,8 @@ fn describe_char(c: c_int, spaced: bool, need_clear: &mut bool) {
 
     // Four formats: with and without a digraph, and hex in four or eight
     // digits.  The digraph argument goes out either way (see `describe_byte`).
-    let digraph = get_digraph_for_char(Key::from_code(c));
-    let fmt = match (digraph.is_some(), c < 0x10000) {
+    let digraph = get_digraph_for_char(Key::from_code(c.get()));
+    let fmt = match (digraph.is_some(), c.get() < 0x10000) {
         (true, true) => c"> %d, Hex %04x, Oct %o, Digr %s",
         (true, false) => c"> %d, Hex %08x, Oct %o, Digr %s",
         (false, true) => c"> %d, Hex %04x, Octal %o",

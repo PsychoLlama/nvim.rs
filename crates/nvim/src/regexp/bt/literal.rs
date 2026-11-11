@@ -12,6 +12,7 @@
 )]
 
 use super::compile::Node;
+use crate::mbyte::Codepoint;
 use crate::mbyte::GRAPHEME_STATE_INIT;
 use crate::regexp::RegCompiler;
 use core::ffi::c_int;
@@ -87,7 +88,7 @@ pub(crate) fn class_shorthand(
 
     // `.` followed by a combining character is that grapheme, not the "any"
     // class — but only for the magic `.`; `\_.` stays the class.
-    if c == magic(b'.') && utf_iscomposing_legacy(peekchr(rc)) {
+    if c == magic(b'.') && utf_iscomposing_legacy(Codepoint::new(peekchr(rc))) {
         let c = getchr(rc);
         return multibyte_node(rc, flagp, c);
     }
@@ -148,7 +149,7 @@ fn emit_combining_marks(rc: &mut RegCompiler) {
         if !composes_at(rc.text, rc.cursor, rc.cursor + len, Some(&mut state)) {
             break;
         }
-        rc.code.char(char_at_nul(rc.text, rc.cursor));
+        rc.code.char(char_at_nul(rc.text, rc.cursor).get());
         skipchr(rc);
     }
 }

@@ -261,7 +261,7 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
             // Virtual Replace keeps the following text aligned, so any
             // spaces it padded with have to come off again.
             Win::current().w_cursor.col += ins_len;
-            while vcol > ColNr::new(orig_vcols) && gchar_cursor() == c_int::from(b' ') {
+            while vcol > ColNr::new(orig_vcols) && gchar_cursor() == b' ' {
                 let _ = del_char(false);
                 orig_vcols += 1;
             }

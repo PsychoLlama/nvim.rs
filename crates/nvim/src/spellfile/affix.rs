@@ -27,13 +27,14 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_int;
 use crate::smsg;
 use core::cell::RefCell;
 use core::ffi::{CStr, c_int};
 
-use crate::mbyte::{c_cluster_len, char_at, head_off, mb_toupper};
+use crate::mbyte::{c_cluster_len, char_at, head_off};
 use crate::spell::{onecap_copy, spelltab_upper};
 use crate::strings::{any_non_ascii, find_char};
 
@@ -211,7 +212,7 @@ pub(super) fn handle_affix_entry(
         let mut add = items[3].to_bytes().to_vec();
         spin.si_arena.charge_str(&add);
         // Flags the added form itself carries follow a "/".
-        if let Some(slash) = find_char(&add, c_int::from(b'/')) {
+        if let Some(slash) = find_char(&add, Codepoint::byte(b'/')) {
             entry.ae_flags = Some(add[slash + 1..].to_vec());
             add.truncate(slash);
             entry.ae_add = Some(add);
@@ -267,9 +268,9 @@ pub(super) fn postpone_prefix(
     {
         let c = char_at(chop);
         let c_up = if c >= 128 {
-            mb_toupper(c)
+            c.to_upper()
         } else {
-            c_int::from(spelltab_upper(c.cast_unsigned() as usize))
+            Codepoint::from(spelltab_upper(c.get().cast_unsigned() as usize))
         };
         if c_up != c
             && entry

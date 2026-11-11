@@ -21,6 +21,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use core::ffi::c_int;
 
 use super::compile::BtProg;
@@ -30,7 +31,6 @@ use super::single::match_one;
 use super::state::{BackPos, Braces, BtState, RegStack, capture_slot};
 use crate::ascii::NUL;
 use crate::getchar::state::GOT_INT;
-use crate::mbyte::{mb_isupper, mb_tolower, mb_toupper};
 use crate::message::E_RE_CORR;
 use crate::message::{iemsg, internal_error};
 use crate::os::cshim::gettext;
@@ -425,10 +425,10 @@ fn counted_repeat(
         rst.nextb = c_int::from(prog.byte(next, 3));
         rst.nextb_ic = if !rex.reg_ic() {
             rst.nextb
-        } else if mb_isupper(rst.nextb) {
-            mb_tolower(rst.nextb)
+        } else if Codepoint::new(rst.nextb).is_upper() {
+            Codepoint::new(rst.nextb).to_lower().get()
         } else {
-            mb_toupper(rst.nextb)
+            Codepoint::new(rst.nextb).to_upper().get()
         };
     }
     if op != BtOp::BraceSimple {

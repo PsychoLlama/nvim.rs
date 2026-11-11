@@ -26,6 +26,7 @@
 use crate::ascii::{TAB, ascii_iswhite};
 use crate::cstr;
 use crate::extmark::{EXTMARK_UNDO, extmark_splice_cols};
+use crate::mbyte::Codepoint;
 use crate::narrow::{as_index, len_as_int, number_as_int};
 use crate::option::defs::FoFlag;
 use crate::regexp::RegMatch;
@@ -348,7 +349,7 @@ pub fn get_indent_buf(buffer: Buf, lnum: LineNr) -> c_int {
 /// going to change, so where the tabstops actually sit does not matter.
 ///
 pub fn indent_size_no_ts(text: &[u8]) -> c_int {
-    let tab_size = byte2cells(c_int::from(TAB));
+    let tab_size = byte2cells(TAB);
     let mut vcol = 0;
     for &c in text {
         if c == b' ' {
@@ -436,7 +437,7 @@ fn indent_width(text: &[u8], stops: Option<&[i32]>, ts: OptInt) -> c_int {
 /// The screen width of the indent at `text` under 'tabstop' `ts` and
 /// 'vartabstop' `vts`, a count-prefixed array.
 pub fn indent_size_ts(text: &[u8], ts: OptInt, vts: Option<&[i32]>) -> c_int {
-    debug_assert!(char2cells(c_int::from(b' ')) == 1);
+    debug_assert!(char2cells(Codepoint::byte(b' ')) == 1);
     indent_width(text, tabstops(vts).map(tabstop::TabStops::widths), ts)
 }
 

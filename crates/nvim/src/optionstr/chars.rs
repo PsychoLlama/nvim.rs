@@ -37,6 +37,7 @@
 use crate::cmdexpand::defs::Candidate;
 use crate::formatted;
 use crate::global_cell::field;
+use crate::mbyte::Codepoint;
 use crate::memory::ThinCString;
 use crate::option::FILLCHARS;
 use crate::option::LISTCHARS;
@@ -258,10 +259,10 @@ fn take_encoded_char(bytes: &[u8], at: &mut usize) -> ScreenChar {
             num = num * 256 + int64_t::from(digits);
         }
         *at += 2;
-        return if char2cells(number_as_int(num)) > 1 {
+        return if char2cells(Codepoint::new(number_as_int(num))) > 1 {
             0
         } else {
-            schar_from_char(number_as_int(num))
+            schar_from_char(Codepoint::new(number_as_int(num)))
         };
     }
 
@@ -532,9 +533,14 @@ fn install_defaults(chars: &mut Chars, tab: &[Field]) {
         let Some(slot) = field.slot else {
             continue;
         };
-        let narrow = field.def.is_some_and(|def| char2cells(codepoint(def)) == 1);
+        let narrow = field
+            .def
+            .is_some_and(|def| char2cells(Codepoint::new(codepoint(def))) == 1);
         let text = if narrow { field.def } else { field.fallback };
-        chars.store(slot, text.map_or(0, |c| schar_from_char(codepoint(c))));
+        chars.store(
+            slot,
+            text.map_or(0, |c| schar_from_char(Codepoint::new(codepoint(c)))),
+        );
     }
 }
 

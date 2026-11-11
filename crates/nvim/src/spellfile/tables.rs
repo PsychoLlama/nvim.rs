@@ -20,6 +20,7 @@
 )]
 
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::message_fmt::msg_cstr;
 use crate::smsg;
 use crate::strings::find_char;
@@ -145,7 +146,7 @@ pub(super) fn handle_map(
 }
 
 /// The characters `bytes` spells, in order.
-fn chars_of(bytes: &[u8]) -> impl Iterator<Item = c_int> + '_ {
+fn chars_of(bytes: &[u8]) -> impl Iterator<Item = Codepoint> + '_ {
     let mut at = 0;
     core::iter::from_fn(move || {
         let rest = bytes.get(at..).filter(|r| !r.is_empty())?;

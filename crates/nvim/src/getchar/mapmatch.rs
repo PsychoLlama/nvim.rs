@@ -19,6 +19,7 @@ use super::*;
 use crate::keycodes::ModMask;
 use crate::keycodes::{KE_IGNORE, KE_PLUG, KE_SNR, key_escape};
 use crate::mapping::MapStr;
+use crate::mbyte::Codepoint;
 use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{char_len, encode_char, unescape_at};
 use crate::normal::{set_visual_select, visual_active, visual_select};
@@ -142,7 +143,7 @@ pub(crate) fn check_simplify_modifier(max_offset: c_int) -> Result<usize, Failed
             new_string[..3].copy_from_slice(&key_escape(new_c));
             3
         } else {
-            encode_char(new_c.code(), &mut new_string)
+            encode_char(Codepoint::new(new_c.code()), &mut new_string)
         };
         let new_string = &new_string[..len];
 

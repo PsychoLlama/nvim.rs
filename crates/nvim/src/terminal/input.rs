@@ -300,7 +300,7 @@ pub(crate) fn terminal_paste(lines: &[XString], count: c_int) {
             let mut at = 0;
             while at < bytes.len() {
                 let (len, c) = (char_len(&bytes[at..]), char_at(&bytes[at..]));
-                if !is_filter_char(c) {
+                if !is_filter_char(c.get()) {
                     filtered.extend_from_slice(&bytes[at..at + len]);
                 }
                 at += len;

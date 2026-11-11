@@ -14,10 +14,10 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::charset::CharDisplay;
 use crate::cstr;
 use crate::grid::{SCHAR_BUF_SIZE, schar_text};
+use crate::mbyte::Codepoint;
 use crate::mbyte::{MB_MAXBYTES, char_at};
 use crate::types::ColNr;
 use crate::winlayer::{Buf, Win};
@@ -106,7 +106,7 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
                 let c = char_at(rest);
                 let shown: &[u8] = if len >= MB_MAXBYTES {
                     b"?"
-                } else if lcs.nbsp != 0 && list && (c == 160 || c == 0x202f) {
+                } else if lcs.nbsp != 0 && list && (c == 160 || c.get() == 0x202f) {
                     schar_text(lcs.nbsp, &mut glyph)
                 } else {
                     &rest[..len]
@@ -117,12 +117,12 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
             }
 
             hl_id = 0;
-            let c = c_int::from(at(s));
+            let c = at(s);
             s += 1;
             if c >= 0x80 {
                 // Illegal byte.
-                col += utf_char2cells(c);
-                msg_putchar(c);
+                col += utf_char2cells(Codepoint::from(c));
+                msg_putchar(Codepoint::from(c).get());
                 continue;
             }
             extra_fill = 0;
@@ -131,15 +131,15 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
                 // `s` is already past `c`, so `s - 2` is the byte before it
                 // -- the lookbehind that makes the *second* space of a run
                 // count as multispace too.
-                in_multispace = c == c_int::from(b' ')
-                    && (at(s) == b' ' || (col > 0 && s >= 2 && at(s - 2) == b' '));
+                in_multispace =
+                    c == b' ' && (at(s) == b' ' || (col > 0 && s >= 2 && at(s - 2) == b' '));
                 if !in_multispace {
                     multispace_pos = 0;
                 }
             }
             let in_lead = lead.is_some_and(|lead| s <= lead);
 
-            if c == c_int::from(TAB) && (!list || lcs.tab1 != 0) {
+            if c == TAB && (!list || lcs.tab1 != 0) {
                 // How wide the tab is depends on where it starts.
                 extra_left = Buf::current().tab_padding(ColNr::new(col)) - 1;
                 if list {
@@ -161,7 +161,7 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
                     sc = ScreenChar::from(b' ');
                     extra_fill = ScreenChar::from(b' ');
                 }
-            } else if c == NUL && list && lcs.eol != 0 {
+            } else if c == 0 && list && lcs.eol != 0 {
                 // One more turn of the loop, which reads a NUL out of
                 // `extra_text` and stops.
                 extra_text = [0; _];
@@ -170,7 +170,7 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
                 sc = lcs.eol;
                 hl_id = HLF_AT;
                 s -= 1;
-            } else if c != NUL && byte2cells(c) > 1 {
+            } else if c != 0 && byte2cells(c) > 1 {
                 // An unprintable byte, shown as `<xx>`.
                 extra_left = byte2cells(c) - 1;
                 extra_text = transchar_byte_buf(None, c);
@@ -179,7 +179,7 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
                 // Its own highlight, so `<ff>` can be told apart from the
                 // same four characters typed literally.
                 hl_id = HLF_0;
-            } else if c == c_int::from(b' ') {
+            } else if c == b' ' {
                 hl_id = HLF_0;
                 sc = if in_lead && in_multispace && leadmultispace.is_some() {
                     cycle(
@@ -202,7 +202,7 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
                     ScreenChar::from(b' ')
                 };
             } else {
-                sc = c.cast_unsigned();
+                sc = ScreenChar::from(c);
             }
         }
 

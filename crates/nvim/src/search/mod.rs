@@ -47,7 +47,7 @@ use crate::insexpand::{
     ins_compl_check_keys, ins_compl_interrupted, ins_compl_len,
 };
 use crate::mark::setpcmark;
-use crate::mbyte::{cluster_len, head_off, mb_isupper, utf_iscomposing_first};
+use crate::mbyte::{cluster_len, head_off, utf_iscomposing_first};
 use crate::memline::{Lines, decl, inc, incl};
 use crate::message::state::{
     BOT_TOP_MSG, CALLED_EMSG, CMD_SILENT, MSG_EXT_OVERWRITE, MSG_HIST_OFF, MSG_NOWAIT, MSG_ROW,

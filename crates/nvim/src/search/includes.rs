@@ -24,6 +24,7 @@ use crate::file_search::FileNameOpts;
 use crate::fileio::Fgets;
 use crate::highlight_group::{HLF_D, HLF_R};
 use crate::insexpand::{Added, word_end, word_start};
+use crate::mbyte::Codepoint;
 use crate::mbyte::c_cluster_len;
 use crate::memory::XString;
 use crate::message::msg_put_ascii;
@@ -523,11 +524,11 @@ fn show_include_name(
             } else {
                 // Find the file name after the end of the match.
                 let mut p = match_end;
-                while at(p) != b'\0' && !vim_isfilec(c_int::from(at(p))) {
+                while at(p) != b'\0' && !vim_isfilec(Codepoint::from(at(p))) {
                     p += 1;
                 }
                 let mut i = 0;
-                while vim_isfilec(c_int::from(at(p + i))) {
+                while vim_isfilec(Codepoint::from(at(p + i))) {
                     i += 1;
                 }
                 (p, i)

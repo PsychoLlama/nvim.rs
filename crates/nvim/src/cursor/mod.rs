@@ -23,7 +23,8 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ascii::{NUL, TAB};
+use crate::ascii::TAB;
+use crate::mbyte::Codepoint;
 use crate::narrow::{len_as_int, number_as_col};
 use crate::option::vars::P_SEL;
 use core::ffi::{c_int, c_uint};
@@ -451,10 +452,10 @@ pub(crate) fn dec_cursor_gchar() -> (Moved, c_int) {
                 .unwrap_or_default(),
         );
         win.w_cursor = pos;
-        return (Moved::InLine, c);
+        return (Moved::InLine, c.get());
     }
     let moved = dec_cursor();
-    (moved, gchar_cursor())
+    (moved, gchar_cursor().get())
 }
 
 /// [`inc_cursor`] and then [`gchar_cursor`], as [`dec_cursor_gchar`].
@@ -475,11 +476,11 @@ pub(crate) fn inc_cursor_gchar() -> (Moved, c_int) {
             } else {
                 Moved::OntoNul
             };
-            return (moved, c);
+            return (moved, c.get());
         }
     }
     let moved = inc_cursor();
-    (moved, gchar_cursor())
+    (moved, gchar_cursor().get())
 }
 
 /// How far `lnum` is from the cursor, counting each closed fold in between
@@ -598,7 +599,7 @@ pub fn adjust_cursor_col() {
     let cursor = Win::current().cursor();
     if cursor.col() > ColNr::ZERO
         && (!visual_active() || selection_is_old())
-        && gchar_cursor() == NUL
+        && gchar_cursor() == Codepoint::NUL
     {
         cursor.set_col(cursor.col() - 1);
     }
@@ -654,7 +655,7 @@ pub fn set_leftcol(leftcol: ColNr) -> bool {
 /// The cursor sitting inside its own line is the editor's invariant, not the
 /// caller's -- `check_cursor_col` is what restores it; a column past the end
 /// reads as the NUL there.
-pub fn gchar_cursor() -> c_int {
+pub fn gchar_cursor() -> Codepoint {
     let cursor = Win::current().w_cursor;
     let mut lines = Lines::current();
     let line = lines.line(cursor.lnum);
@@ -674,7 +675,7 @@ pub fn char_before_cursor() -> c_int {
         return -1;
     }
     let prev_len = head_off(line, col - 1) + 1;
-    char_at(&line[col - prev_len..])
+    char_at(&line[col - prev_len..]).get()
 }
 
 /// Overwrite the byte under the cursor.

@@ -18,6 +18,7 @@
 )]
 
 use super::*;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::memory::XString;
 use crate::os::fs::file_id;
@@ -227,7 +228,13 @@ impl VisitedLists {
 /// ends it the same way.
 pub(crate) fn wildcards_equal(s1: &[u8], s2: &[u8]) -> bool {
     let ignorecase = p_fic();
-    let fold = |c: c_int| if ignorecase { mb_tolower(c) } else { c };
+    let fold = |c: c_int| {
+        if ignorecase {
+            Codepoint::new(c).to_lower()
+        } else {
+            Codepoint::new(c)
+        }
+    };
 
     let (mut i, mut j) = (0usize, 0usize);
     let mut prev1 = 0;
@@ -235,11 +242,13 @@ pub(crate) fn wildcards_equal(s1: &[u8], s2: &[u8]) -> bool {
     while cstr::byte_at(s1, i) != 0 && cstr::byte_at(s2, j) != 0 {
         let c1 = char_at(&s1[i..]);
         let c2 = char_at(&s2[j..]);
-        if fold(c1) != fold(c2) && (prev1 != c_int::from(b'*') || prev2 != c_int::from(b'*')) {
+        if fold(c1.get()) != fold(c2.get())
+            && (prev1 != c_int::from(b'*') || prev2 != c_int::from(b'*'))
+        {
             return false;
         }
         prev2 = prev1;
-        prev1 = c1;
+        prev1 = c1.get();
         i += c_cluster_len(&s1[i..]);
         j += c_cluster_len(&s2[j..]);
     }

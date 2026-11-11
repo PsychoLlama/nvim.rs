@@ -55,10 +55,7 @@ use crate::indent::{
     preprocs_left, set_indent, use_indentexpr_for_lisp,
 };
 use crate::mark::mark_col_adjust;
-use crate::mbyte::{
-    bomb_size, cluster_len, head_off, mb_islower, mb_isupper, mb_tolower, mb_toupper,
-    utf_char2cells, utf_eat_space,
-};
+use crate::mbyte::{bomb_size, cluster_len, head_off, utf_char2cells, utf_eat_space};
 use crate::memline::{
     Lines, dec, decl, gchar_pos, inc, ml_append_terminated, ml_get_len, ml_replace_buf_text,
     ml_replace_owned,

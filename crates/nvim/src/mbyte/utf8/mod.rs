@@ -141,8 +141,8 @@ pub(crate) fn sequence_value(bytes: &[u8], len: usize) -> i32 {
 /// Asked of a character in isolation, by testing it against a space: if it
 /// does not break a grapheme cluster even after a space, it combines with
 /// anything.
-pub fn utf_iscomposing_first(c: c_int) -> bool {
-    c >= 128 && !utf8proc_grapheme_break(' ' as utf8proc_int32_t, c as utf8proc_int32_t)
+pub fn utf_iscomposing_first(c: Codepoint) -> bool {
+    c >= 128 && !utf8proc_grapheme_break(' ' as utf8proc_int32_t, c.get())
 }
 
 /// Upstream's `utf_iscomposing` with the walk state borrowed rather than pointed at,
@@ -151,8 +151,8 @@ pub fn utf_iscomposing_first(c: c_int) -> bool {
 ///
 /// Arabic gets an extra rule of its own: two letters that a shaper would join
 /// are treated as one character here even though Unicode breaks between them.
-pub fn iscomposing(c1: c_int, c2: c_int, state: Option<&mut GraphemeState>) -> bool {
-    !utf8proc_grapheme_break_stateful(c1 as utf8proc_int32_t, c2 as utf8proc_int32_t, state)
+pub fn iscomposing(c1: Codepoint, c2: Codepoint, state: Option<&mut GraphemeState>) -> bool {
+    !utf8proc_grapheme_break_stateful(c1.get(), c2.get(), state)
         || crate::arabic::arabic_combine(c1, c2)
 }
 
@@ -160,8 +160,8 @@ pub fn iscomposing(c1: c_int, c2: c_int, state: Option<&mut GraphemeState>) -> b
 ///
 /// The pre-grapheme-cluster test, kept for the regexp engine, which matches
 /// composing characters one at a time rather than as clusters.
-pub fn utf_iscomposing_legacy(c: c_int) -> bool {
-    let category = utf8proc_get_property(c).category;
+pub fn utf_iscomposing_legacy(c: Codepoint) -> bool {
+    let category = utf8proc_get_property(c.get()).category;
     category == UTF8PROC_CATEGORY_MN || category == UTF8PROC_CATEGORY_ME
 }
 
@@ -171,7 +171,7 @@ pub fn utf_iscomposing_legacy(c: c_int) -> bool {
 ///
 /// The cell is 0 for a byte that is not a character (the caller displays
 /// it) and for the end of the text.
-pub fn c_cluster_schar(bytes: &[u8]) -> (ScreenChar, c_int) {
+pub fn c_cluster_schar(bytes: &[u8]) -> (ScreenChar, Codepoint) {
     let text = CBytes(bytes);
     let c = char_at_in(text, 0);
     let first_compose = utf_iscomposing_first(c);
@@ -205,7 +205,7 @@ fn pack_cluster(cluster: &[u8], first_compose: bool) -> ScreenChar {
 /// walk finds too -- nothing either walk reads lies past the limit -- so only
 /// a longer one is walked a second time.
 #[inline]
-pub(crate) fn c_cluster_cell(bytes: &[u8]) -> (usize, ScreenChar, c_int) {
+pub(crate) fn c_cluster_cell(bytes: &[u8]) -> (usize, ScreenChar, Codepoint) {
     let text = CBytes(bytes);
     let len = cluster_len_in(text, 0);
     let c = char_at_in(text, 0);
@@ -313,9 +313,9 @@ pub fn clusters(bytes: &[u8]) -> Clusters<'_> {
 
 impl Iterator for Clusters<'_> {
     /// The byte offset the cluster starts at, and its base codepoint.
-    type Item = (usize, c_int);
+    type Item = (usize, Codepoint);
 
-    fn next(&mut self) -> Option<(usize, c_int)> {
+    fn next(&mut self) -> Option<(usize, Codepoint)> {
         let rest = self.bytes.get(self.at..)?;
         if rest.is_empty() {
             return None;
@@ -327,8 +327,8 @@ impl Iterator for Clusters<'_> {
 }
 
 /// How many bytes `c` encodes to.
-pub fn utf_char2len(c: c_int) -> c_int {
-    match utf8_len(c) {
+pub fn utf_char2len(c: Codepoint) -> c_int {
+    match utf8_len(c.get()) {
         1 => 1,
         2 => 2,
         3 => 3,
@@ -557,9 +557,9 @@ mod tests {
     fn encode_decode_round_trip() {
         let mut buf = [0u8; MB_MAXCHAR + 1];
         let mut check = |c: c_int| {
-            let len = encode_char(c, &mut buf);
+            let len = encode_char(Codepoint::new(c), &mut buf);
             assert_eq!(len, utf8_len(c), "{c:#x} length");
-            assert_eq!(char_at(&buf[..len]), c, "{c:#x}");
+            assert_eq!(char_at(&buf[..len]).get(), c, "{c:#x}");
             assert_eq!(char_len(&buf[..len]), len, "{c:#x} char_len");
         };
         for c in 0..0x2000 {
@@ -585,7 +585,7 @@ mod tests {
             b"\xfe\x80",
             b"\xc3\x41",
         ] {
-            assert_eq!(char_at(bytes), c_int::from(bytes[0]), "{bytes:?}");
+            assert_eq!(char_at(bytes), Codepoint::from(bytes[0]), "{bytes:?}");
             let info = char_info_at(bytes);
             if bytes[0] >= 0x80 {
                 assert!(info.value < 0, "{bytes:?}");

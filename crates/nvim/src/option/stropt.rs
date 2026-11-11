@@ -29,6 +29,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::mbyte::Codepoint;
 use crate::strings::find_char;
 use core::ffi::c_int;
 
@@ -293,8 +294,13 @@ pub(crate) fn stropt_remove_dupflags(newval: &mut Vec<u8>, flags: uint32_t) {
     let mut s = 0;
     while s < newval.len() {
         let letter = c_int::from(newval[s]);
-        let later =
-            |from: usize| find_char(newval.get(from..).unwrap_or_default(), letter).is_some();
+        let later = |from: usize| {
+            find_char(
+                newval.get(from..).unwrap_or_default(),
+                Codepoint::new(letter),
+            )
+            .is_some()
+        };
         let drop = if one_comma {
             newval[s] != b',' && at(newval, s + 1) == b',' && later(s + 2)
         } else {

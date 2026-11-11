@@ -185,10 +185,10 @@ fn measure_join(
                 // 'formatoptions' M: no space between two multi-byte
                 // characters. B: no space if either side is a character
                 // that eats one.
-                && (!has_format_option(FoFlag::MBYTE_JOIN) || (first() < 0x100 && endcurr1 < 0x100))
+                && (!has_format_option(FoFlag::MBYTE_JOIN) || (first().get() < 0x100 && endcurr1 < 0x100))
                 && (!has_format_option(FoFlag::MBYTE_JOIN2)
-                    || (first() < 0x100 && !utf_eat_space(endcurr1))
-                    || (endcurr1 < 0x100 && !utf_eat_space(first())))
+                    || (first().get() < 0x100 && !utf_eat_space(endcurr1))
+                    || (endcurr1 < 0x100 && !utf_eat_space(first().get())))
             {
                 if endcurr1 == c_int::from(b' ') {
                     // The line already ends in a space; look one further
@@ -254,10 +254,10 @@ fn measure_join(
             // The last two characters, stepping back over whole ones.
             let back = |end: usize| end - (head_off(text, end - 1) + 1);
             let mut cend = back(text.len());
-            endcurr1 = char_at(&text[cend..]);
+            endcurr1 = char_at(&text[cend..]).get();
             if cend > 0 {
                 cend = back(cend);
-                endcurr2 = char_at(&text[cend..]);
+                endcurr2 = char_at(&text[cend..]).get();
             }
         }
 

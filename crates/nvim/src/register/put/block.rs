@@ -19,13 +19,13 @@
 
 use crate::cstr;
 use crate::extmark::EXTMARK_UNDO;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_char_info, c_next_cluster, head_off};
 use crate::narrow::len_as_int;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::Put;
-use crate::ascii::NUL;
 use crate::register::*;
 
 /// Where in one buffer line the block goes, measured by [`Put::blockwise`].
@@ -126,7 +126,7 @@ impl Put {
         let mut col: ColNr;
         let mut endcol2: ColNr = ColNr::ZERO;
 
-        if self.dir == FORWARD && c != NUL {
+        if self.dir == FORWARD && c != Codepoint::NUL {
             if self.ve_flags == OPT_VE_FLAG_ALL as ::core::ffi::c_uint {
                 (col, endcol2) = Win::current().vcol_span(Win::current().cursor());
             } else {
@@ -144,13 +144,13 @@ impl Put {
         if self.ve_flags == OPT_VE_FLAG_ALL as ::core::ffi::c_uint
             && (Win::current().w_cursor.coladd > 0 || endcol2 == Win::current().w_cursor.col)
         {
-            if self.dir == FORWARD && c == NUL {
+            if self.dir == FORWARD && c == Codepoint::NUL {
                 col += 1;
             }
-            if self.dir != FORWARD && c != NUL && Win::current().w_cursor.coladd > 0 {
+            if self.dir != FORWARD && c != Codepoint::NUL && Win::current().w_cursor.coladd > 0 {
                 Win::current().w_cursor.col += 1;
             }
-            if c == c_int::from(TAB) {
+            if c == TAB {
                 if self.dir == BACKWARD && Win::current().w_cursor.col != ColNr::ZERO {
                     Win::current().w_cursor.col -= 1;
                 }

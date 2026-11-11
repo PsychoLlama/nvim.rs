@@ -17,6 +17,7 @@ use super::*;
 use crate::ascii::NUL;
 use crate::cstr;
 use crate::grid::schar::MAX_SCHAR_SIZE;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_cluster_len, char_len, encode_char};
 use crate::narrow::len_as_int;
 use crate::option::cpo_has;
@@ -127,7 +128,7 @@ pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> 
                     *to = from;
                 }
             } else {
-                let len = encode_char(c, &mut bytes);
+                let len = encode_char(Codepoint::new(c), &mut bytes);
                 LASTC_BYTELEN.set(c_int::try_from(len).expect("a character's bytes"));
             }
             LASTC_BYTES.set(bytes);

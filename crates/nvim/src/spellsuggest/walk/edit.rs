@@ -201,7 +201,7 @@ impl Walk<'_> {
                 self.stack[level].score -= SCORE_SUBST - SCORE_SUBCOMP;
             } else if !self.soundfold
                 && self.slang.sl_has_map
-                && similar_chars(self.slang, good, bad)
+                && similar_chars(self.slang, good.get(), bad.get())
             {
                 // So does substituting a character the language's MAP
                 // lines call similar.

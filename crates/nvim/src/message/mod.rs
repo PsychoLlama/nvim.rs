@@ -111,8 +111,9 @@ use crate::input::get_keystroke;
 use crate::keycodes::KS_MODIFIER;
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::log::{LOGLVL_DBG, LOGLVL_INF};
+use crate::mbyte::Codepoint;
 use crate::mbyte::{
-    c_cluster_len, c_display_width, cells_at, head_off, mb_tolower, utf_char2cells, utf8len_tab,
+    c_cluster_len, c_display_width, cells_at, head_off, utf_char2cells, utf8len_tab,
 };
 use crate::memory::XString;
 use crate::message::state::{
@@ -261,7 +262,7 @@ pub fn msg_multiline(
             if text[at] == BELL {
                 vim_beep(OPT_BO_FLAG_SHELL as c_uint);
             } else {
-                msg_putchar_hl(c_int::from(text[at]), hl_id);
+                msg_putchar_hl(Codepoint::from(text[at]), hl_id);
             }
             chunk = at + 1;
         }

@@ -16,6 +16,7 @@
 
 #![cfg(not(miri))]
 
+use neovim::mbyte::Codepoint;
 use std::ffi::{c_char, c_int};
 
 use neovim::ex_docmd::do_cmdline_cmd;
@@ -313,7 +314,7 @@ fn the_encoder() {
     for c in codes {
         let mut buf = [0u8; 8];
         // Eight bytes hold the longest sequence.
-        let len = encode_char(c, &mut buf);
+        let len = encode_char(Codepoint::new(c), &mut buf);
         d.add(len as i64);
         for &b in &buf[..len] {
             d.add(i64::from(b));

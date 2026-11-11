@@ -16,6 +16,7 @@
 //! global -- and the editor lock otherwise, because the statusline cases
 //! intern glyphs in the same table.
 
+use neovim::mbyte::Codepoint;
 use std::ffi::{c_char, c_int};
 
 use neovim::grid::{
@@ -168,20 +169,31 @@ fn schar_get_adv_builds_a_string_from_glyphs() {
 #[test]
 fn schar_from_char_encodes_one_codepoint() {
     let _lock = lock();
-    assert_eq!(schar_from_char('A' as c_int), 0x41);
-    assert_eq!(text(schar_from_char(0x65e5)), "日".as_bytes());
-    assert_eq!(text(schar_from_char(0x1f600)), "😀".as_bytes());
+    assert_eq!(schar_from_char(Codepoint::byte(b'A')), 0x41);
+    assert_eq!(
+        text(schar_from_char(Codepoint::new(0x65e5))),
+        "日".as_bytes()
+    );
+    assert_eq!(
+        text(schar_from_char(Codepoint::new(0x1f600))),
+        "😀".as_bytes()
+    );
     // Out of range becomes the replacement character.
-    assert_eq!(text(schar_from_char(0x20_0000)), "\u{fffd}".as_bytes());
-    assert_eq!(schar_from_char(0), 0);
+    assert_eq!(
+        text(schar_from_char(Codepoint::new(0x20_0000))),
+        "\u{fffd}".as_bytes()
+    );
+    assert_eq!(schar_from_char(Codepoint::NUL), 0);
 }
 
 #[test]
 fn arabic_text_takes_its_contextual_forms() {
     let _lock = lock();
     let shape = |text: &str| -> Vec<u32> {
-        let mut cells: Vec<ScreenChar> =
-            text.chars().map(|c| schar_from_char(c as c_int)).collect();
+        let mut cells: Vec<ScreenChar> = text
+            .chars()
+            .map(|c| schar_from_char(Codepoint::new(c as c_int)))
+            .collect();
         line_do_arabic_shape(&mut cells);
         cells
             .iter()

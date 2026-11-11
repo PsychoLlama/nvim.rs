@@ -35,6 +35,7 @@
 
 use crate::autocmd::defs::AutoEvent;
 use crate::keycodes::REPTERM_DO_LT;
+use crate::mbyte::Codepoint;
 use crate::memory::{ThinCString, XString};
 use crate::narrow::as_index;
 use crate::winlayer::Buf;
@@ -274,7 +275,7 @@ pub(crate) fn special_text(rhs: &CStr) -> ThinCString {
 /// One codepoint as an owned string -- the mnemonic, for the two Dicts.
 /// Answers the empty string for a node with no mnemonic, as C's
 /// `buf[utf_char2bytes(0, buf)] = NUL` leaves an empty buffer.
-pub(crate) fn char_as_text(c: c_int) -> CString {
+pub(crate) fn char_as_text(c: Codepoint) -> CString {
     let mut buf = [0u8; 8];
     let len = encode_char(c, &mut buf);
     let bytes = &buf[..len];

@@ -29,16 +29,14 @@
 )]
 
 use crate::cstr::byte_at;
+use crate::mbyte::Codepoint;
 use crate::spell::WordFlags;
 use crate::strings::find_char;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 
 use crate::mbyte::MB_MAXBYTES;
-use crate::mbyte::{
-    c_cluster_len, char_at, char_len, encode_char, mb_islower, mb_isupper, mb_toupper, utf_class,
-    utf_fold,
-};
+use crate::mbyte::{c_cluster_len, char_at, char_len, encode_char, utf_class};
 use crate::os::libc::uint8_t;
 use crate::spell::SpellTab;
 use crate::types::Failed;
@@ -110,7 +108,7 @@ pub(crate) fn spelltab_upper(c: usize) -> uint8_t {
 /// and by the general rules above it.
 pub(crate) fn spell_isupper(c: c_int) -> bool {
     if c >= 128 {
-        mb_isupper(c)
+        Codepoint::new(c).is_upper()
     } else {
         spelltab_isu(tab_index(c))
     }
@@ -132,11 +130,11 @@ pub fn init_spell_chartab() {
     let mut tab = ascii_spell_chartab();
     for b in 128..=u8::MAX {
         let (i, at) = (c_int::from(b), usize::from(b));
-        let f = utf_fold(i);
-        let u = mb_toupper(i);
+        let f = Codepoint::new(i).fold();
+        let u = Codepoint::new(i).to_upper();
 
-        tab.st_isu[at] = mb_isupper(i);
-        tab.st_isw[at] = tab.st_isu[at] || mb_islower(i);
+        tab.st_isu[at] = Codepoint::new(i).is_upper();
+        tab.st_isw[at] = tab.st_isu[at] || Codepoint::new(i).is_lower();
         // The folded and upper-cased values of 0xb5 differ between latin1
         // and utf-8, which used to raise E763 for no good reason. Keep the
         // latin1 answer for both.
@@ -155,7 +153,7 @@ pub(crate) fn tail(text: &[u8], at: usize) -> &[u8] {
 
 /// Whether `c` is one of the window's multibyte `MIDWORD` characters.
 fn is_midword_mb(window: Win, c: c_int) -> bool {
-    find_char(&window.syn_block().b_spell_ismw_mb, c).is_some()
+    find_char(&window.syn_block().b_spell_ismw_mb, Codepoint::new(c)).is_some()
 }
 
 /// Whether `p` starts with a word character.
@@ -179,10 +177,10 @@ pub fn spell_iswordp(p: &[u8], window: Win) -> bool {
         // An illegal byte is a cluster of its own and reads as its value,
         // so it lands in the table like any other byte below 256.
         let c = char_at(p);
-        let midword = if c < 256 {
-            window.syn_block().b_spell_ismw[tab_index(c)]
+        let midword = if c.get() < 256 {
+            window.syn_block().b_spell_ismw[tab_index(c.get())]
         } else {
-            is_midword_mb(window, c)
+            is_midword_mb(window, c.get())
         };
         if midword {
             s = tail(p, c_cluster_len(p));
@@ -193,7 +191,7 @@ pub fn spell_iswordp(p: &[u8], window: Win) -> bool {
     if c > 255 {
         return spell_mb_isword_class(utf_class(c), window);
     }
-    spelltab_isw(tab_index(c))
+    spelltab_isw(tab_index(c.get()))
 }
 
 /// Whether `p` starts with a word character, ignoring midword characters.
@@ -202,7 +200,7 @@ pub fn spell_iswordp_nmw(p: &[u8], window: Win) -> bool {
     if c > 255 {
         return spell_mb_isword_class(utf_class(c), window);
     }
-    spelltab_isw(tab_index(c))
+    spelltab_isw(tab_index(c.get()))
 }
 
 /// Whether a character class from [`utf_class`] is a word character.
@@ -232,7 +230,7 @@ pub(super) fn spell_iswordp_w(w: &[c_int], window: Win) -> bool {
     };
 
     if c > 255 {
-        return spell_mb_isword_class(utf_class(c), window);
+        return spell_mb_isword_class(utf_class(Codepoint::new(c)), window);
     }
     spelltab_isw(tab_index(c))
 }
@@ -286,25 +284,25 @@ pub(crate) fn casefold_len(
                 out[outi] = folded;
                 outi += 1;
             } else {
-                outi += encode_char(c_int::from(folded), &mut out[outi..]);
+                outi += encode_char(Codepoint::from(folded), &mut out[outi..]);
             }
             continue;
         }
         let rest = tail(text, p);
         let mut c = char_at(rest);
         p += char_len(rest).max(1);
-        if c == 0x3a3 || c == 0x3c2 {
+        if c.get() == 0x3a3 || c.get() == 0x3c2 {
             // Greek sigma folds to the final form at the end of a word
             // and to the medial form anywhere else.
             c = if p == len || !spell_iswordp(tail(text, p), window) {
-                0x3c2
+                Codepoint::new(0x3c2)
             } else {
-                0x3c3
+                Codepoint::new(0x3c3)
             };
         } else if c >= 128 {
-            c = utf_fold(c);
+            c = c.fold();
         } else {
-            c = c_int::from(spelltab_fold(tab_index(c)));
+            c = Codepoint::from(spelltab_fold(tab_index(c.get())));
         }
         outi += encode_char(c, &mut out[outi..]);
     }
@@ -347,14 +345,14 @@ pub fn captype(text: &[u8], end: usize) -> WordFlags {
 
     let c = char_at(tail(text, p));
     p += step(text, p);
-    let mut allcap = spell_isupper(c);
+    let mut allcap = spell_isupper(c.get());
     let firstcap = allcap;
     let mut past_second = false;
 
     while !at_end(p) {
         let rest = tail(text, p);
         if spell_iswordp_nmw(rest, window) {
-            if !spell_isupper(char_at(rest)) {
+            if !spell_isupper(char_at(rest).get()) {
                 // A lower-case letter after two upper-case ones, or
                 // after a mix, cannot be described by a flag.
                 if past_second && allcap {
@@ -382,7 +380,7 @@ pub fn captype(text: &[u8], end: usize) -> WordFlags {
 /// general rules above it.
 pub(super) fn spell_toupper(c: c_int) -> c_int {
     if c >= 128 {
-        mb_toupper(c)
+        Codepoint::new(c).to_upper().get()
     } else {
         c_int::from(spelltab_upper(tab_index(c)))
     }
@@ -416,11 +414,11 @@ pub fn onecap_copy(word: &[u8], out: &mut [u8], upper: bool) {
         char_len(word)
     };
     c = if upper {
-        spell_toupper(c)
+        Codepoint::new(spell_toupper(c.get()))
     } else if c >= 128 {
-        utf_fold(c)
+        c.fold()
     } else {
-        c_int::from(spelltab_fold(tab_index(c)))
+        Codepoint::from(spelltab_fold(tab_index(c.get())))
     };
     let l = encode_char(c, out);
     put_cstr(out, l, tail(word, first), MAXWLEN - l);
@@ -439,14 +437,14 @@ pub fn allcap_copy(word: &[u8], out: &mut [u8]) {
         if c == 0xdf {
             // German sharp s upper-cases to two characters; the second
             // goes through the usual path below.
-            c = c_int::from(b'S');
+            c = Codepoint::byte(b'S');
             if d >= MAXWLEN - 1 {
                 break;
             }
             out[d] = b'S';
             d += 1;
         } else {
-            c = spell_toupper(c);
+            c = Codepoint::new(spell_toupper(c.get()));
         }
 
         if d >= MAXWLEN - MB_MAXBYTES {

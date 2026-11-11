@@ -319,9 +319,9 @@ fn emit_word(
         // "path". Not when the letter is the same, which is counted
         // already.
         let gc = char_at(p);
-        if spell_isupper(gc) {
+        if spell_isupper(gc.get()) {
             let bc = char_at(su.badword());
-            if !spell_isupper(bc) && spell_tofold(bc) != spell_tofold(gc) {
+            if !spell_isupper(bc.get()) && spell_tofold(bc.get()) != spell_tofold(gc.get()) {
                 goodscore += SCORE_ICASE / 2;
             }
         }

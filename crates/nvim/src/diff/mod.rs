@@ -70,7 +70,7 @@ use crate::highlight::Hlf;
 use crate::highlight_group::{HLF_ADD, HLF_CHD, HLF_NONE, HLF_TXA, HLF_TXD};
 use crate::linematch::linematch_nbuffers;
 use crate::mark::{mark_adjust, setpcmark};
-use crate::mbyte::{head_off, utf_char2len, utf_fold};
+use crate::mbyte::{head_off, utf_char2len};
 use crate::memline::{Lines, ml_append_cstr, ml_delete};
 use crate::memory::XString;
 use crate::message::emsg;

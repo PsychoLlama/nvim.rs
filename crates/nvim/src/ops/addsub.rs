@@ -576,7 +576,7 @@ fn replace_number(
     let mut c = gchar_cursor();
     // The `-` is not part of the length: only the part after it keeps its
     // width.
-    if c == c_int::from(b'-') {
+    if c == b'-' {
         *length -= 1;
     }
     while todel > 0 {

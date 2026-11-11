@@ -13,27 +13,26 @@
 )]
 #![forbid(unsafe_code)]
 
-use core::ffi::c_int;
-
+use crate::mbyte::Codepoint;
 use crate::option::vars::{p_arshape, p_tbidi};
 
-const A_HAMZA: c_int = 0x0621;
-const A_ALEF_MADDA: c_int = 0x0622;
-const A_ALEF_HAMZA_ABOVE: c_int = 0x0623;
-const A_ALEF_HAMZA_BELOW: c_int = 0x0625;
-const A_ALEF: c_int = 0x0627;
-const A_LAM: c_int = 0x0644;
-const A_BYTE_ORDER_MARK: c_int = 0xfeff;
+const A_HAMZA: Codepoint = Codepoint::new(0x0621);
+const A_ALEF_MADDA: Codepoint = Codepoint::new(0x0622);
+const A_ALEF_HAMZA_ABOVE: Codepoint = Codepoint::new(0x0623);
+const A_ALEF_HAMZA_BELOW: Codepoint = Codepoint::new(0x0625);
+const A_ALEF: Codepoint = Codepoint::new(0x0627);
+const A_LAM: Codepoint = Codepoint::new(0x0644);
+const A_BYTE_ORDER_MARK: Codepoint = Codepoint::new(0xfeff);
 
 // Isolated and final presentation forms of the four lam-alef ligatures.
-const A_S_LAM_ALEF_MADDA_ABOVE: c_int = 0xfef5;
-const A_F_LAM_ALEF_MADDA_ABOVE: c_int = 0xfef6;
-const A_S_LAM_ALEF_HAMZA_ABOVE: c_int = 0xfef7;
-const A_F_LAM_ALEF_HAMZA_ABOVE: c_int = 0xfef8;
-const A_S_LAM_ALEF_HAMZA_BELOW: c_int = 0xfef9;
-const A_F_LAM_ALEF_HAMZA_BELOW: c_int = 0xfefa;
-const A_S_LAM_ALEF: c_int = 0xfefb;
-const A_F_LAM_ALEF: c_int = 0xfefc;
+const A_S_LAM_ALEF_MADDA_ABOVE: Codepoint = Codepoint::new(0xfef5);
+const A_F_LAM_ALEF_MADDA_ABOVE: Codepoint = Codepoint::new(0xfef6);
+const A_S_LAM_ALEF_HAMZA_ABOVE: Codepoint = Codepoint::new(0xfef7);
+const A_F_LAM_ALEF_HAMZA_ABOVE: Codepoint = Codepoint::new(0xfef8);
+const A_S_LAM_ALEF_HAMZA_BELOW: Codepoint = Codepoint::new(0xfef9);
+const A_F_LAM_ALEF_HAMZA_BELOW: Codepoint = Codepoint::new(0xfefa);
+const A_S_LAM_ALEF: Codepoint = Codepoint::new(0xfefb);
+const A_F_LAM_ALEF: Codepoint = Codepoint::new(0xfefc);
 
 /// One shapable codepoint and its presentation forms (0 = no such form).
 #[derive(Debug)]
@@ -113,37 +112,37 @@ const ACHARS: [Achar; 54] = [
     a(0x06cc, 0xfbfc, 0xfbfe, 0xfbff, 0xfbfd), // fyeh
 ];
 
-fn find_achar(c: c_int) -> Option<&'static Achar> {
+fn find_achar(c: Codepoint) -> Option<&'static Achar> {
     ACHARS
-        .binary_search_by_key(&c.cast_unsigned(), |a| a.c)
+        .binary_search_by_key(&c.get().cast_unsigned(), |a| a.c)
         .ok()
         .map(|i| &ACHARS[i])
 }
 
 /// Isolated lam-alef ligature for the alef variant `hid_c`.
-fn chg_c_laa2i(hid_c: c_int) -> c_int {
+fn chg_c_laa2i(hid_c: Codepoint) -> Codepoint {
     match hid_c {
         A_ALEF_MADDA => A_S_LAM_ALEF_MADDA_ABOVE,
         A_ALEF_HAMZA_ABOVE => A_S_LAM_ALEF_HAMZA_ABOVE,
         A_ALEF_HAMZA_BELOW => A_S_LAM_ALEF_HAMZA_BELOW,
         A_ALEF => A_S_LAM_ALEF,
-        _ => 0,
+        _ => Codepoint::NUL,
     }
 }
 
 /// Final lam-alef ligature for the alef variant `hid_c`.
-fn chg_c_laa2f(hid_c: c_int) -> c_int {
+fn chg_c_laa2f(hid_c: Codepoint) -> Codepoint {
     match hid_c {
         A_ALEF_MADDA => A_F_LAM_ALEF_MADDA_ABOVE,
         A_ALEF_HAMZA_ABOVE => A_F_LAM_ALEF_HAMZA_ABOVE,
         A_ALEF_HAMZA_BELOW => A_F_LAM_ALEF_HAMZA_BELOW,
         A_ALEF => A_F_LAM_ALEF,
-        _ => 0,
+        _ => Codepoint::NUL,
     }
 }
 
 /// Can `c1` be joined to a following `c2`?
-fn can_join(c1: c_int, c2: c_int) -> bool {
+fn can_join(c1: Codepoint, c2: Codepoint) -> bool {
     match (find_achar(c1), find_achar(c2)) {
         (Some(a1), Some(a2)) => {
             (a1.initial != 0 || a1.medial != 0) && (a2.final_ != 0 || a2.medial != 0)
@@ -152,16 +151,16 @@ fn can_join(c1: c_int, c2: c_int) -> bool {
     }
 }
 
-fn a_is_ok(c: c_int) -> bool {
+fn a_is_ok(c: Codepoint) -> bool {
     find_achar(c).is_some() || c == A_BYTE_ORDER_MARK
 }
 
-fn a_is_valid(c: c_int) -> bool {
+fn a_is_valid(c: Codepoint) -> bool {
     a_is_ok(c) && c != A_HAMZA
 }
 
 /// Is `two` an alef variant that combines with a preceding lam?
-pub(crate) fn arabic_maycombine(two: c_int) -> bool {
+pub(crate) fn arabic_maycombine(two: Codepoint) -> bool {
     p_arshape()
         && !p_tbidi()
         && matches!(
@@ -171,7 +170,7 @@ pub(crate) fn arabic_maycombine(two: c_int) -> bool {
 }
 
 /// Do `one` and `two` combine into a lam-alef ligature?
-pub(crate) fn arabic_combine(one: c_int, two: c_int) -> bool {
+pub(crate) fn arabic_combine(one: Codepoint, two: Codepoint) -> bool {
     one == A_LAM && arabic_maycombine(two)
 }
 
@@ -179,12 +178,12 @@ pub(crate) fn arabic_combine(one: c_int, two: c_int) -> bool {
 /// Returns the shaped codepoint; `*c1` is zeroed when it was absorbed into
 /// a lam-alef ligature.
 pub(crate) fn arabic_shape(
-    c: c_int,
-    c1: &mut c_int,
-    prev_c: c_int,
-    prev_c1: c_int,
-    next_c: c_int,
-) -> c_int {
+    c: Codepoint,
+    c1: &mut Codepoint,
+    prev_c: Codepoint,
+    prev_c1: Codepoint,
+    next_c: Codepoint,
+) -> Codepoint {
     if !a_is_ok(c) {
         return c;
     }
@@ -197,7 +196,7 @@ pub(crate) fn arabic_shape(
         } else {
             curr_c = chg_c_laa2i(*c1);
         }
-        *c1 = 0;
+        *c1 = Codepoint::NUL;
     } else {
         // Only the byte-order mark passes a_is_ok without a table entry;
         // upstream C would dereference NULL here. Leave it unshaped.
@@ -206,19 +205,20 @@ pub(crate) fn arabic_shape(
         };
         let backward_combine = !prev_laa && can_join(prev_c, c);
         let forward_combine = can_join(c, next_c);
-        curr_c = if backward_combine {
+        let form = if backward_combine {
             if forward_combine {
-                curr_a.medial.cast_signed()
+                curr_a.medial
             } else {
-                curr_a.final_.cast_signed()
+                curr_a.final_
             }
         } else if forward_combine {
-            curr_a.initial.cast_signed()
+            curr_a.initial
         } else {
-            curr_a.isolated.cast_signed()
+            curr_a.isolated
         };
+        curr_c = Codepoint::new(form.cast_signed());
     }
-    if curr_c == 0 { c } else { curr_c }
+    if curr_c.is_nul() { c } else { curr_c }
 }
 
 #[cfg(test)]
@@ -235,7 +235,7 @@ mod tests {
         // The full sweep takes tens of minutes under Miri (interpreted, and
         // slower still since the 2026-07 toolchains); probing every table
         // entry and its neighbors covers the same hit/miss branches there.
-        let probes: Vec<c_int> = if cfg!(miri) {
+        let probes: Vec<i32> = if cfg!(miri) {
             ACHARS
                 .iter()
                 .flat_map(|a| {
@@ -255,7 +255,7 @@ mod tests {
                 .iter()
                 .find(|a| a.c == c.cast_unsigned())
                 .map(|a| a.c);
-            assert_eq!(find_achar(c).map(|a| a.c), expect);
+            assert_eq!(find_achar(Codepoint::new(c)).map(|a| a.c), expect);
         }
     }
 }

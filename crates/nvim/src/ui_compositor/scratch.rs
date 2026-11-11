@@ -20,6 +20,7 @@
 )]
 
 use crate::grid::{schar_from_ascii, schar_from_char};
+use crate::mbyte::Codepoint;
 use crate::types::{ScreenAttr, ScreenChar};
 
 /// An empty cell: never drawn into, or the right half of a double-width
@@ -66,7 +67,7 @@ pub(super) fn blend(
 ) {
     let (bg_line, bg_attrs) = bg;
     let blank = schar_from_ascii(b' ');
-    let braille = schar_from_char(0x2800);
+    let braille = schar_from_char(Codepoint::new(0x2800));
     let mut i = cells.start;
     while i < cells.end {
         let mut width = 1;
@@ -152,7 +153,7 @@ mod tests {
 
     #[test]
     fn braille_blank_is_negative_space_too() {
-        let braille = schar_from_char(0x2800);
+        let braille = schar_from_char(Codepoint::new(0x2800));
         let mut line = vec![braille, schar_from_ascii(b'q')];
         let mut attrs = vec![0, 0];
         let (bg, bg_attrs) = (text("xy"), vec![0, 0]);
@@ -192,7 +193,7 @@ mod tests {
         // The backdrop holds a wide character at 1 (its right half, 2, is the
         // empty cell). The layer is blank over both halves, so both are
         // copied, and both attributes blended, in one step of two.
-        let wide = schar_from_char(0x4e00);
+        let wide = schar_from_char(Codepoint::new(0x4e00));
         let mut line = vec![schar_from_ascii(b'a'), BLANK, BLANK, BLANK];
         let mut attrs = vec![1, 2, 3, 4];
         let bg = vec![
@@ -226,7 +227,7 @@ mod tests {
 
     #[test]
     fn a_wide_backdrop_shows_through_only_if_both_halves_are_blank() {
-        let wide = schar_from_char(0x4e00);
+        let wide = schar_from_char(Codepoint::new(0x4e00));
         let mut line = vec![BLANK, schar_from_ascii(b'q')];
         let mut attrs = vec![0, 0];
         let (bg, bg_attrs) = (vec![wide, EMPTY_CELL], vec![0, 0]);
@@ -243,7 +244,7 @@ mod tests {
 
     #[test]
     fn the_pair_lookahead_stops_at_end_but_may_pass_the_range() {
-        let wide = schar_from_char(0x4e00);
+        let wide = schar_from_char(Codepoint::new(0x4e00));
         let bg = vec![wide, EMPTY_CELL];
         let bg_attrs = vec![10, 20];
         // `end` 1: the right half is out of reach, so cell 0 is single.

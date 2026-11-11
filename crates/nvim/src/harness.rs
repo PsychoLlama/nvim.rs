@@ -170,7 +170,7 @@ unsafe fn character_bytes<'a>(p: *const c_char) -> &'a [u8] {
 pub unsafe extern "C" fn utf_ptr2char(p: *const c_char) -> c_int {
     // SAFETY: the caller's string. A sequence its NUL cuts short is not one,
     // which is what `char_at` answers for one the slice's end cuts short.
-    char_at(unsafe { character_bytes(p) })
+    char_at(unsafe { character_bytes(p) }).get()
 }
 
 /// How many bytes the character at `p` occupies, or 0 at a NUL;
@@ -234,7 +234,7 @@ mod tests {
                 let q = buf[at..].as_ptr().cast::<c_char>();
                 // SAFETY: `q` is inside the NUL-terminated `buf`.
                 let (got, _) = unsafe { (utf_ptr2char(q), utf_ptr2len(q)) };
-                assert_eq!(got, char_at(&text[at..]), "{text:?} at {at}");
+                assert_eq!(got, char_at(&text[at..]).get(), "{text:?} at {at}");
             }
         }
     }

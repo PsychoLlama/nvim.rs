@@ -27,13 +27,14 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use std::fs::File;
 
 use crate::bufwrite::translate;
 use crate::cstr;
 use crate::mbyte::{
     ENC_2BYTE, ENC_2WORD, ENC_4BYTE, ENC_ENDIAN_L, ENC_LATIN1, ENC_UNICODE, ICONV_EINVAL, char_at,
-    encode_char, head_off, open_iconv, promised_char_len, utf8_len,
+    encode_char, head_off, open_iconv, promised_char_len,
 };
 use crate::memory::XString;
 use crate::option::vars::P_CCV;
@@ -672,7 +673,7 @@ impl Conv {
                 } else {
                     let len = head_off(&w.bytes[start..data_end], p - start);
                     p -= len;
-                    u8c = char_at(&w.bytes[p..data_end]).cast_unsigned();
+                    u8c = char_at(&w.bytes[p..data_end]).get().cast_unsigned();
                     if len == 0 {
                         // Not a valid UTF-8 character: retry with another
                         // fenc when possible, otherwise report the error.
@@ -690,8 +691,8 @@ impl Conv {
                 }
             }
             debug_assert!(u8c <= i32::MAX as u32);
-            let c = u8c.cast_signed();
-            dest -= utf8_len(c);
+            let c = Codepoint::new(u8c.cast_signed());
+            dest -= c.utf8_len();
             encode_char(c, &mut w.bytes[dest..room_end]);
         }
 

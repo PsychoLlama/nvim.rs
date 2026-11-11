@@ -27,6 +27,7 @@
 
 use super::{CORRECTIONS, LEAD_PAYLOAD, iscomposing, utf_is_trail_byte, utf8len_tab};
 use crate::charset::char2cells;
+use crate::mbyte::Codepoint;
 use crate::mbyte::GRAPHEME_STATE_INIT;
 use crate::mbyte::{CharInfo, GraphemeState};
 use crate::mbyte::{emoji_widens, prop_is_emojilike, utf_char2cells};
@@ -190,27 +191,27 @@ fn cut_short<T: Text>(t: T, i: usize) -> bool {
 /// The codepoint at `i`, or the first byte's own value if there is no
 /// complete sequence there; 0 where the text ends.
 #[inline(always)]
-pub(super) fn char_at_in<T: Text>(t: T, i: usize) -> i32 {
+pub(super) fn char_at_in<T: Text>(t: T, i: usize) -> Codepoint {
     let first = t.byte(i);
     let unchanged = i32::from(first);
     if first < 0x80 {
-        return unchanged;
+        return Codepoint::new(unchanged);
     }
     let len = announced(t, i);
     // A continuation byte or 0xFE/0xFF is not a lead byte at all.
     if len < 2 {
-        return unchanged;
+        return Codepoint::new(unchanged);
     }
     let mut code_point = u32::from(first) & LEAD_PAYLOAD[len];
     for k in 1..len {
         let cur = t.byte(i + k);
         if !utf_is_trail_byte(cur) {
-            return unchanged;
+            return Codepoint::new(unchanged);
         }
         code_point = (code_point << 6) | (u32::from(cur) & 0x3f);
     }
     // Six bytes carry 31 bits, so the value always fits.
-    code_point.cast_signed()
+    Codepoint::new(code_point.cast_signed())
 }
 
 /// [`sequence_value`](super::sequence_value)'s decode at `i` for a sequence
@@ -413,7 +414,8 @@ pub(super) fn head_off_in<T: Text>(t: T, at: usize) -> usize {
             break;
         }
         let prev_bc = boundclass(prev_code);
-        if always_break_two(prev_bc, cur_bc) && !crate::arabic::arabic_combine(prev_code, cur_code)
+        if always_break_two(prev_bc, cur_bc)
+            && !crate::arabic::arabic_combine(Codepoint::new(prev_code), Codepoint::new(cur_code))
         {
             start = cur_pos; // the previous character is not in this cluster
             break;
@@ -458,7 +460,7 @@ pub(super) fn next_cluster_in<T: Text>(t: T, at: usize, cur: CharInfo) -> (usize
     if t.byte(next) < 0x80 {
         return ascii(next);
     }
-    next_cluster_slow(t, next, cur.value)
+    next_cluster_slow(t, next, Codepoint::new(cur.value))
 }
 
 /// The slow half of [`next_cluster_in`]: the byte at `next` is not ASCII, so
@@ -469,13 +471,17 @@ pub(super) fn next_cluster_in<T: Text>(t: T, at: usize, cur: CharInfo) -> (usize
 /// over it by one: stepping by the length its lead byte announced, as
 /// upstream does, would cross a NUL that cut it short when a Prepend mark
 /// before it makes it "compose".
-fn next_cluster_slow<T: Text>(t: T, mut next: usize, mut prev_code: i32) -> (usize, CharInfo) {
+fn next_cluster_slow<T: Text>(
+    t: T,
+    mut next: usize,
+    mut prev_code: Codepoint,
+) -> (usize, CharInfo) {
     let mut state: GraphemeState = GRAPHEME_STATE_INIT;
     loop {
         let next_len = announced(t, next);
         let next_code = sequence_value_in(t, next, next_len);
         let len = if next_code < 0 { 1 } else { next_len };
-        if !iscomposing(prev_code, next_code, Some(&mut state)) {
+        if !iscomposing(prev_code, Codepoint::new(next_code), Some(&mut state)) {
             let len = i32::try_from(len).expect("a sequence is short");
             return (
                 next,
@@ -485,7 +491,7 @@ fn next_cluster_slow<T: Text>(t: T, mut next: usize, mut prev_code: i32) -> (usi
                 },
             );
         }
-        prev_code = next_code;
+        prev_code = Codepoint::new(next_code);
         next += len;
         if t.byte(next) < 0x80 {
             let value = i32::from(t.byte(next));
@@ -516,10 +522,10 @@ pub(super) fn cells_in<T: Text>(t: T, i: usize) -> i32 {
     // An ASCII answer from a multibyte lead byte means an overlong sequence,
     // which is displayed the way that ASCII character is.
     if c < 0x80 {
-        return char2cells(c);
+        return char2cells(Codepoint::new(c));
     }
-    let cells = utf_char2cells(c);
-    if cells == 1 && emoji_widens(c) && char_at_in(t, i + len) == VS16 {
+    let cells = utf_char2cells(Codepoint::new(c));
+    if cells == 1 && emoji_widens(Codepoint::new(c)) && char_at_in(t, i + len).get() == VS16 {
         return 2;
     }
     cells
@@ -577,9 +583,9 @@ fn char_and_len_in<T: Text>(t: T, i: usize, left: usize) -> (i32, usize) {
     let c = if len > 1 {
         char_at_in(t, i)
     } else {
-        i32::from(t.byte(i))
+        Codepoint::from(t.byte(i))
     };
-    (c, len)
+    (c.get(), len)
 }
 
 /// How many codepoints, and how many UTF-16 code units, the first `len` bytes
@@ -658,7 +664,7 @@ pub(super) fn partial_cells_in<T: Text>(t: T, at: usize, size: usize) -> i32 {
         && promised_len_in(Prefix::new(t, next, size), 0) == announced(t, next)
         && cells == 1
         && emoji_widens(c)
-        && char_at_in(t, next) == VS16
+        && char_at_in(t, next).get() == VS16
     {
         return 2;
     }
@@ -699,7 +705,7 @@ pub(super) fn display_width_in<T: Text>(t: T, mut len: i32) -> i32 {
         size += if first >= 0x80 {
             cells_in(t, at)
         } else {
-            crate::charset::byte2cells(i32::from(first))
+            crate::charset::byte2cells(first)
         };
         at += l;
         len -= i32::try_from(l).expect("a cluster is short") - 1;

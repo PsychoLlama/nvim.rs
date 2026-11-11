@@ -19,8 +19,8 @@
 //! puts the tag in the high byte instead, and the transpile dropped it.
 
 use super::*;
-use crate::ascii::NUL;
 use crate::map_glyph_cache::GlyphCache;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_cells_at, char_at, char_len, cp_bounds, encode_char};
 use core::ffi::CStr;
 
@@ -247,7 +247,7 @@ fn glyph_first_byte(idx: uint32_t) -> u8 {
 /// First codepoint of the cached glyph at `idx`.
 #[inline(never)]
 fn glyph_first_codepoint(idx: uint32_t) -> c_int {
-    with_glyph(idx, char_at)
+    with_glyph(idx, char_at).get()
 }
 
 /// Byte length of `sc`.
@@ -293,7 +293,7 @@ pub fn schar_get_first_codepoint(sc: ScreenChar) -> c_int {
         glyph_first_codepoint(schar_idx(sc))
     } else {
         let bytes = inline_bytes(sc);
-        char_at(&bytes[..inline_len(&bytes)])
+        char_at(&bytes[..inline_len(&bytes)]).get()
     }
 }
 
@@ -313,23 +313,23 @@ fn schar_in_arabic_block(sc: ScreenChar) -> bool {
 /// The first two codepoints of `glyph`, or NUL where there is no such
 /// codepoint. Arabic shaping needs the base character and any combining mark
 /// that follows it.
-fn first_two_codepoints(glyph: &[u8]) -> (c_int, c_int) {
+fn first_two_codepoints(glyph: &[u8]) -> (Codepoint, Codepoint) {
     let c0 = char_at(glyph);
-    if c0 == NUL as c_int {
-        return (c0, NUL as c_int);
+    if c0.is_nul() {
+        return (c0, Codepoint::NUL);
     }
     (c0, char_at(&glyph[char_len(glyph)..]))
 }
 
 /// [`first_two_codepoints`] of the glyph `sc`.
-fn schar_get_first_two_codepoints(sc: ScreenChar) -> (c_int, c_int) {
+fn schar_get_first_two_codepoints(sc: ScreenChar) -> (Codepoint, Codepoint) {
     let mut buf: SCharBuf = [0; SCHAR_BUF_SIZE];
     first_two_codepoints(schar_text(sc, &mut buf))
 }
 
 /// Whether `c` is in the Arabic block proper (U+0600..U+06FF).
-fn is_arabic_char(c: c_int) -> bool {
-    c & 0xff00 == 0x600
+fn is_arabic_char(c: Codepoint) -> bool {
+    c.get() & 0xff00 == 0x600
 }
 
 /// Replace each Arabic character in `buf` with its contextual form, which
@@ -340,7 +340,7 @@ pub fn line_do_arabic_shape(buf: &mut [ScreenChar]) {
         return;
     };
 
-    let mut c0prev = 0;
+    let mut c0prev = Codepoint::NUL;
     let (mut c0, mut c1) = schar_get_first_two_codepoints(buf[start]);
 
     for i in start..buf.len() {
@@ -364,7 +364,13 @@ pub fn line_do_arabic_shape(buf: &mut [ScreenChar]) {
 /// Rebuild the glyph `sc` with its leading one or two codepoints `c0`/`c1`
 /// replaced by `c0new`/`c1new`, keeping whatever combining characters
 /// followed them.
-fn reshape(sc: ScreenChar, c0: c_int, c1: c_int, c0new: c_int, c1new: c_int) -> ScreenChar {
+fn reshape(
+    sc: ScreenChar,
+    c0: Codepoint,
+    c1: Codepoint,
+    c0new: Codepoint,
+    c1new: Codepoint,
+) -> ScreenChar {
     let mut old: SCharBuf = [0; SCHAR_BUF_SIZE];
     let old = schar_text(sc, &mut old);
     let mut new: SCharBuf = [0; SCHAR_BUF_SIZE];
@@ -391,10 +397,10 @@ fn reshape(sc: ScreenChar, c0: c_int, c1: c_int, c0new: c_int, c1new: c_int) -> 
 }
 
 /// Put a Unicode codepoint in a screen cell.
-pub fn schar_from_char(mut c: c_int) -> ScreenChar {
-    if c >= 0x200000 {
+pub fn schar_from_char(mut c: Codepoint) -> ScreenChar {
+    if c.get() >= 0x200000 {
         // This must NEVER happen, even for a file holding overlong sequences.
-        c = 0xfffd;
+        c = Codepoint::new(0xfffd);
     }
     // A codepoint below 0x200000 encodes to at most four bytes; NUL to the
     // one zero byte, which is the empty glyph.

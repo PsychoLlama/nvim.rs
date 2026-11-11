@@ -23,6 +23,7 @@ use super::*;
 use crate::grid::defs::LineBuf;
 use crate::grid::{SLF_INC_VCOL, SLF_RIGHTLEFT, SLF_WRAP};
 use crate::log::logmsg;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_cells_at, c_cluster_schar};
 use crate::narrow::as_index;
 use crate::narrow::count_as_int;
@@ -280,7 +281,7 @@ fn cluster_glyph(rest: &[u8]) -> (ScreenChar, c_int, usize) {
     let (schar, _firstc) = c_cluster_schar(char_bytes);
     let cells = c_cells_at(char_bytes);
     if cells > 2 || schar == 0 {
-        (schar_from_char(0xfffd), 1, blen)
+        (schar_from_char(Codepoint::new(0xfffd)), 1, blen)
     } else {
         (schar, cells, blen)
     }

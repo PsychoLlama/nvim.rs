@@ -22,7 +22,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::c_int;
+use crate::mbyte::Codepoint;
 
 use super::find_char;
 use crate::charset::escapes_next;
@@ -93,7 +93,7 @@ pub fn escaped_with(text: &[u8], chars: &[u8], cc: u8, bsl: bool) -> XString {
             at += len;
             continue;
         }
-        if find_char(chars, c_int::from(rest[0])).is_some() || (bsl && escapes_next(rest)) {
+        if find_char(chars, Codepoint::from(rest[0])).is_some() || (bsl && escapes_next(rest)) {
             out.push(cc);
         }
         out.push(rest[0]);

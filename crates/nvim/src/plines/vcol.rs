@@ -147,7 +147,7 @@ pub(crate) fn getvvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
         .filter(|t| !t.is_empty())
     {
         let c = char_at(text);
-        if c != c_int::from(TAB) && vim_isprintc(c) {
+        if c != TAB && vim_isprintc(c) {
             endadd = ptr2cells_at(text) - 1;
             if coladd > endadd {
                 // Past the end of the line.

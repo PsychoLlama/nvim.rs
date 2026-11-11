@@ -103,6 +103,13 @@ impl From<crate::types::Handle> for FmtArg<'_> {
     }
 }
 
+impl From<crate::mbyte::Codepoint> for FmtArg<'_> {
+    #[inline(always)]
+    fn from(value: crate::mbyte::Codepoint) -> Self {
+        FmtArg::Int(i64::from(value))
+    }
+}
+
 impl From<crate::types::LineNr> for FmtArg<'_> {
     #[inline(always)]
     fn from(value: crate::types::LineNr) -> Self {

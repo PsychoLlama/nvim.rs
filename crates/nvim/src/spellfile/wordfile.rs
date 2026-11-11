@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::narrow::len_as_int;
 use crate::smsg;
@@ -94,7 +95,7 @@ pub(super) fn spell_read_wordfile(spin: &mut SpellInfo, fname: &CStr) -> Result<
         // A word, with optional flags after a "/".
         let mut flags = WordFlags::NONE;
         let mut regionmask = spin.si_region;
-        if let Some(slash) = find_char(line, c_int::from(b'/')) {
+        if let Some(slash) = find_char(line, Codepoint::byte(b'/')) {
             let flag_text = &line[slash + 1..];
             line = &line[..slash];
             for (i, &f) in flag_text.iter().enumerate() {

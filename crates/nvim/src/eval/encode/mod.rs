@@ -27,6 +27,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::mbyte::Codepoint;
 use crate::memory::ThinCString;
 use core::ffi::{CStr, c_int};
 
@@ -407,7 +408,7 @@ fn json_escape_of(ch: c_int) -> Option<&'static [u8; 2]> {
 /// Everything else becomes `\uNNNN`, so that a JSON value stays displayable
 /// outside Neovim.  0x7F is caught by `utf_printable`, not by the range.
 #[inline(always)]
-fn json_encode_raw(ch: c_int) -> bool {
+fn json_encode_raw(ch: Codepoint) -> bool {
     ch >= 0x20 && utf_printable(ch)
 }
 
@@ -448,14 +449,14 @@ fn json_escaped_len(text: &[u8]) -> Result<usize, EncodeError> {
         let shift = if ch == 0 { 1 } else { char_len(&text[i..]) };
         debug_assert!(shift > 0, "shift > 0");
         i += shift;
-        if json_escape_of(ch).is_some() {
+        if json_escape_of(ch.get()).is_some() {
             str_len += 2;
         } else if ch > 0x7f && shift == 1 {
             return Err(EncodeError::BadUtf8(ThinCString::from_bytes(
                 &text[i - shift..],
             )));
-        } else if (SURROGATE_HI_START..=SURROGATE_HI_END).contains(&ch)
-            || (SURROGATE_LO_START..=SURROGATE_LO_END).contains(&ch)
+        } else if (SURROGATE_HI_START..=SURROGATE_HI_END).contains(&ch.get())
+            || (SURROGATE_LO_START..=SURROGATE_LO_END).contains(&ch.get())
         {
             return Err(EncodeError::Surrogate(ThinCString::from_bytes(
                 &text[i - shift..],
@@ -464,7 +465,7 @@ fn json_escaped_len(text: &[u8]) -> Result<usize, EncodeError> {
             str_len += shift;
         } else {
             // Six bytes per `\uNNNN`, and twice that for a surrogate pair.
-            str_len += 6 * (1 + usize::from(ch >= SURROGATE_FIRST_CHAR));
+            str_len += 6 * (1 + usize::from(ch.get() >= SURROGATE_FIRST_CHAR));
         }
     }
     Ok(str_len)
@@ -500,14 +501,14 @@ pub(crate) fn convert_to_json_string(gap: &mut Vec<u8>, text: &[u8]) -> Result<(
             ch == 0 || shift == char_len(&text[i..]),
             "ch == 0 || shift == ((size_t)utf_ptr2len(utf_buf + i))"
         );
-        if let Some(escape) = json_escape_of(ch) {
+        if let Some(escape) = json_escape_of(ch.get()) {
             gap.extend_from_slice(escape);
         } else if json_encode_raw(ch) {
             gap.extend_from_slice(&text[i..i + shift]);
-        } else if ch < SURROGATE_FIRST_CHAR {
-            gap.extend_from_slice(&json_unicode_escape(ch));
+        } else if ch.get() < SURROGATE_FIRST_CHAR {
+            gap.extend_from_slice(&json_unicode_escape(ch.get()));
         } else {
-            let (hi, lo) = json_surrogate_pair(ch);
+            let (hi, lo) = json_surrogate_pair(ch.get());
             gap.extend_from_slice(&json_unicode_escape(hi));
             gap.extend_from_slice(&json_unicode_escape(lo));
         }

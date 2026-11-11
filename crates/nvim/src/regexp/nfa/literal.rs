@@ -12,6 +12,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::regexp::NfaOp;
 use crate::regexp::RegCompiler;
 use crate::regexp::low_byte;
@@ -121,7 +122,7 @@ pub(crate) fn previous_substitute(rc: &mut RegCompiler) -> Parsed {
     let mut first = true;
     while !rest.is_empty() {
         let (c, len) = (char_at(rest), char_len(rest));
-        rc.post.emit(c);
+        rc.post.emit(c.get());
         // The join goes after the second and every later character, so
         // the run reads as `a b CONCAT c CONCAT …`.
         if !first {
@@ -141,7 +142,7 @@ pub(crate) fn previous_substitute(rc: &mut RegCompiler) -> Parsed {
 /// points; a plain character is one item.
 pub(crate) fn literal(rc: &mut RegCompiler, mut c: c_int, atom_start: usize) -> Parsed {
     let plen = cursor::grapheme_len(rc, atom_start);
-    if utf_char2len(c) == plen && !cursor::is_composing(c) {
+    if utf_char2len(Codepoint::new(c)) == plen && !cursor::is_composing(c) {
         rc.post.emit(unmagic(c));
         return Ok(());
     }
@@ -152,7 +153,7 @@ pub(crate) fn literal(rc: &mut RegCompiler, mut c: c_int, atom_start: usize) -> 
         if i > 0 {
             rc.post.emit_op(NfaOp::Concat);
         }
-        i += utf_char2len(c);
+        i += utf_char2len(Codepoint::new(c));
         if i >= plen {
             break;
         }

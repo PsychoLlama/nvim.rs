@@ -23,6 +23,7 @@ use crate::api::private::validate::{
 use crate::api_error;
 use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::message_fmt::msg_cstr;
 use crate::types::ExArgt;
 use crate::types::Handle;
@@ -159,7 +160,7 @@ fn check_command_name(name: &ApiString) -> Result<(), Error> {
     if uc_validate_name(cmd_name).is_none() {
         return Err(err_bad_value(c"command name", name.as_cstr()));
     }
-    if mb_islower(::core::ffi::c_int::from(cstr::byte_at(cmd_name, 0))) {
+    if (Codepoint::from(cstr::byte_at(cmd_name, 0))).is_lower() {
         let what = c"command name (must start with uppercase)";
         return Err(err_bad_value(what, name.as_cstr()));
     }

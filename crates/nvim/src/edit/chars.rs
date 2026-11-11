@@ -32,6 +32,7 @@
 )]
 
 use crate::cstr::{self, byte_at};
+use crate::mbyte::Codepoint;
 use crate::mbyte::encode_char;
 use crate::memline::Lines;
 use crate::memory::XString;
@@ -117,12 +118,12 @@ pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
             let take = !needs_processing(next)
                 && i < buf.len()
                 && (textwidth == 0 || {
-                    virtcol += byte2cells(c_int::from(buf[i - 1]));
+                    virtcol += byte2cells(buf[i - 1]);
                     virtcol < ColNr::new(textwidth)
                 })
                 && !(!NO_ABBR.get()
-                    && !vim_iswordc(next.code())
-                    && vim_iswordc(c_int::from(buf[i - 1])));
+                    && !vim_iswordc(Codepoint::new(next.code()))
+                    && vim_iswordc(Codepoint::from(buf[i - 1])));
             if !take {
                 break;
             }
@@ -150,7 +151,7 @@ pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
         let cc = c.utf8_len();
         if cc > 1 {
             let mut buf = [0u8; MB_MAXCHAR];
-            let len = encode_char(c.code(), &mut buf);
+            let len = encode_char(Codepoint::new(c.code()), &mut buf);
             ins_char_bytes(&buf[..len]);
             append_to_redobuff_char(c);
         } else {
@@ -197,8 +198,12 @@ fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_i
     // Format with 'formatexpr' when it is set; use the internal
     // formatting when it is not, or when it answered non-zero.
     let mut do_internal = true;
-    let virtcol =
-        get_nolist_virtcol() + char2cells(if c.is_nul() { gchar_cursor() } else { c.code() });
+    let virtcol = get_nolist_virtcol()
+        + char2cells(if c.is_nul() {
+            gchar_cursor()
+        } else {
+            Codepoint::new(c.code())
+        });
 
     if Buf::current().b_p_fex.first_byte() != 0
         && flags & INSCHAR_NO_FEX == 0
@@ -327,7 +332,7 @@ pub(crate) fn do_insert_char_pre(c: Key) -> Option<XString> {
 
     let save_state = STATE.get();
     let mut buf = [0u8; MB_MAXBYTES];
-    let buflen = encode_char(c.code(), &mut buf);
+    let buflen = encode_char(Codepoint::new(c.code()), &mut buf);
 
     let locked = Lock::text();
     // Up to a NUL, which is where every reader stops: `c` may be one.

@@ -13,6 +13,7 @@
 
 #![cfg(not(miri))]
 
+use neovim::mbyte::Codepoint;
 use std::ffi::{c_char, c_int};
 
 use neovim::charset::{is_word_at, vim_iswordc};
@@ -22,7 +23,7 @@ use neovim::mbyte::{
     c_cells_at, c_char_info, c_cluster_len, c_cluster_schar, c_head_off, c_next_cluster,
     c_off_next, c_partial_cells_in, c_prev_start, c_string_cells, c_string_cells_len, cells_at,
     char_at, char_count, char_info_at, char_len, cluster_len, cp_bounds, encode_char,
-    strict_char_at, string_cells, utf_fold,
+    strict_char_at, string_cells,
 };
 use neovim::option::vars::P_ARSHAPE;
 use neovim::winlayer::Buf;
@@ -55,7 +56,7 @@ fn cluster(seq: &[u8]) -> (Vec<u8>, c_int) {
     // SAFETY: `out` has room for any glyph and the terminator.
     let len = unsafe { schar_get(out.as_mut_ptr(), sc) };
     let text = out[..len].iter().map(|&b| b as u8).collect();
-    (text, firstc)
+    (text, firstc.get())
 }
 
 /// What a one-byte ASCII cluster looks like: itself.
@@ -98,7 +99,7 @@ fn every_codepoint_round_trips_and_both_word_tests_agree() {
     let mut buf = [0u8; 8];
     for c in 0..0x10000_i32 {
         // Eight bytes, and the encoder writes at most four here.
-        encode_char(c, &mut buf);
+        encode_char(Codepoint::new(c), &mut buf);
         let encoded = buf;
         let buf: [c_char; 8] = buf.map(|b| b as c_char);
         // SAFETY: the read back stops at the sequence just written.
@@ -106,7 +107,7 @@ fn every_codepoint_round_trips_and_both_word_tests_agree() {
             assert_eq!(utf_ptr2char(buf.as_ptr()), c, "round trip of {c:#x}");
         }
         assert_eq!(
-            vim_iswordc(c),
+            vim_iswordc(Codepoint::new(c)),
             is_word_at(&encoded, Buf::current()),
             "word test disagrees at {c:#x}"
         );
@@ -496,11 +497,11 @@ fn every_byte_points_back_at_the_start_of_its_grapheme_cluster() {
 fn folding_leaves_everything_it_has_no_entry_for_alone() {
     let _editor = editor_lock();
     for c in [0xddfb, 0xd800, 9_000_000, 0, -1, c_int::MAX] {
-        assert_eq!(utf_fold(c), c, "{c:#x}");
+        assert_eq!(Codepoint::new(c).fold().get(), c, "{c:#x}");
     }
     // ...and still folds what it does have an entry for.
-    assert_eq!(utf_fold(i32::from(b'A')), i32::from(b'a'));
-    assert_eq!(utf_fold(0x00c0), 0x00e0, "À folds to à");
+    assert_eq!(Codepoint::byte(b'A').fold(), b'a');
+    assert_eq!(Codepoint::new(0x00c0).fold(), 0x00e0, "À folds to à");
 }
 
 /// Byte strings covering every shape the decoders distinguish: ASCII, each
@@ -547,7 +548,7 @@ fn the_slice_codec_answers_what_the_pointer_codec_answers() {
             unsafe { (utf_ptr2len(buf.as_ptr()), utf_ptr2char(buf.as_ptr())) };
         let want_cluster = c_cluster_len(case);
         assert_eq!(char_len(case), want_len as usize, "char_len {case:x?}");
-        assert_eq!(char_at(case), want_char, "char_at {case:x?}");
+        assert_eq!(char_at(case).get(), want_char, "char_at {case:x?}");
         assert_eq!(cluster_len(case), want_cluster, "cluster_len {case:x?}");
     }
 }
@@ -749,7 +750,11 @@ fn the_strict_decoder_rejects_what_the_forgiving_one_passes_through() {
         (b"\xf0\x9f\x92\xa9", 0x1f4a9),
         (b"\xc0\x80", 0), // an overlong NUL decodes, to zero
     ] {
-        assert_eq!(strict_char_at(case), want, "{case:x?}");
+        assert_eq!(
+            strict_char_at(case),
+            Some(Codepoint::new(want)),
+            "{case:x?}"
+        );
     }
     for case in [
         b"".as_slice(),
@@ -759,8 +764,8 @@ fn the_strict_decoder_rejects_what_the_forgiving_one_passes_through() {
         b"\xe2\x82",
         b"\xc3z", // a bad continuation byte
     ] {
-        assert!(strict_char_at(case) < 0, "{case:x?}");
-        assert_eq!(char_at(case), i32::from(case.first().copied().unwrap_or(0)));
+        assert!(strict_char_at(case).is_none(), "{case:x?}");
+        assert_eq!(char_at(case), case.first().copied().unwrap_or(0));
     }
 }
 
@@ -770,7 +775,7 @@ fn the_strict_decoder_rejects_what_the_forgiving_one_passes_through() {
 fn the_exports_round_trip() {
     let mut buf = [0u8; 7];
     let mut check = |c: c_int| {
-        let len = encode_char(c, &mut buf);
+        let len = encode_char(Codepoint::new(c), &mut buf);
         buf[len] = 0;
         // SAFETY: `buf` holds the sequence and the NUL written after it.
         unsafe {

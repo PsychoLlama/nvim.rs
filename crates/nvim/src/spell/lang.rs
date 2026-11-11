@@ -37,6 +37,7 @@
 
 use crate::autocmd::defs::AutoEvent;
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::narrow::len_as_int;
@@ -740,7 +741,7 @@ pub fn valid_spellfile(value: &[u8]) -> bool {
         if l >= MAXPATHL as usize - 4 || l < 4 || !name.ends_with(b".add") {
             return false;
         }
-        if !name.iter().all(|&c| vim_is_fname_char(c_int::from(c))) {
+        if !name.iter().all(|&c| vim_is_fname_char(Codepoint::from(c))) {
             return false;
         }
     }
@@ -796,7 +797,7 @@ fn use_midword(id: LangId, mut window: Win) {
         let rest = &midword[p..];
         let c = char_at(rest);
         let l = c_cluster_len(rest).max(1);
-        if let Ok(c) = usize::try_from(c)
+        if let Ok(c) = usize::try_from(c.get())
             && c < 256
             && l <= 2
         {

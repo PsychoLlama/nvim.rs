@@ -34,6 +34,7 @@ use super::CF_WORD_BIT;
 use super::len_byte;
 use super::low_byte;
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::narrow::len_as_int;
 use crate::strings::has_char;
 use core::cell::RefCell;
@@ -432,8 +433,11 @@ pub(super) fn read_compound(spl: &mut Spl, slang: &mut SpellLang, len: c_int) ->
                 pat.push(b'\\');
             }
             let at = pat.len();
-            pat.resize(at + (utf_char2len(c)).cast_unsigned() as usize, 0);
-            encode_char(c, &mut pat[at..]);
+            pat.resize(
+                at + (utf_char2len(Codepoint::new(c))).cast_unsigned() as usize,
+                0,
+            );
+            encode_char(Codepoint::new(c), &mut pat[at..]);
         }
     }
 
@@ -542,10 +546,10 @@ fn bytes2wide(bytes: &[u8]) -> Box<[c_int]> {
     let mut out = Vec::with_capacity(bytes.len() + 1);
     let mut at = 0;
     while at < bytes.len() {
-        out.push(char_at(&bytes[at..]));
+        out.push(char_at(&bytes[at..]).get());
         at += char_len(&bytes[at..]);
     }
-    out.push(NUL);
+    out.push(0);
     out.into_boxed_slice()
 }
 
@@ -565,29 +569,29 @@ pub(super) fn set_map_str(slang: &mut SpellLang, map: &[u8]) {
     slang.sl_map_hash.clear();
 
     // The first character of a group represents the whole group.
-    let mut headc = 0;
+    let mut headc = Codepoint::NUL;
     let mut at = 0;
     while at < map.len() {
         let c = char_at(&map[at..]);
         at += char_len(&map[at..]);
-        if c == c_int::from(b'/') {
-            headc = 0;
+        if c == b'/' {
+            headc = Codepoint::NUL;
             continue;
         }
-        if headc == 0 {
+        if headc.is_nul() {
             headc = c;
         }
-        if c < 256 {
-            slang.sl_map_array[c.cast_unsigned() as usize] = headc;
+        if let Some(byte) = c.as_byte() {
+            slang.sl_map_array[usize::from(byte)] = headc.get();
             continue;
         }
 
-        match slang.sl_map_hash.entry(c) {
+        match slang.sl_map_hash.entry(c.get()) {
             Entry::Occupied(_) => {
                 emsg(gettext(E_DUPLICATE_CHAR_IN_MAP_ENTRY));
             }
             Entry::Vacant(slot) => {
-                slot.insert(headc);
+                slot.insert(headc.get());
             }
         }
     }
@@ -611,10 +615,10 @@ fn set_spell_charflags(flags: &[u8], fol: &[u8]) {
         if at < fol.len() {
             let c = char_at(&fol[at..]);
             at += c_cluster_len(&fol[at..]);
-            new_st.st_fold[i + 128] = low_byte(c);
+            new_st.st_fold[i + 128] = low_byte(c.get());
             // Record the reverse mapping too, when it fits.
-            if len_as_int(i) + 128 != c && new_st.st_isu[i + 128] && c < 256 {
-                new_st.st_upper[c.cast_unsigned() as usize] = len_byte(i + 128);
+            if len_as_int(i) + 128 != c.get() && new_st.st_isu[i + 128] && c.get() < 256 {
+                new_st.st_upper[c.get().cast_unsigned() as usize] = len_byte(i + 128);
             }
         }
     }

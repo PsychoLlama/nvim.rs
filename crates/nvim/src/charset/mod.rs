@@ -25,11 +25,12 @@
 
 use crate::ascii::{NL, TAB, ascii_isdigit, ascii_isxdigit};
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
 use crate::global_cell::GlobalCell;
-use crate::mbyte::{char_at, mb_islower, mb_isupper, utf_class_tab, utf_printable, utf8len_tab};
+use crate::mbyte::{char_at, utf_class_tab, utf_printable, utf8len_tab};
 use crate::option::vars::{BREAKAT_FLAGS, DY_FLAGS, p_isf, p_isi, p_isp};
 use crate::options::OPT_DY_FLAG_UHEX;
 use crate::optionstr::OptStringRef;
@@ -212,7 +213,7 @@ fn isopt_char(var: &[u8], at: &mut usize) -> c_int {
         c
     } else {
         *at += crate::mbyte::cluster_len(rest);
-        char_at(rest)
+        char_at(rest).get()
     }
 }
 
@@ -280,7 +281,7 @@ fn apply_isopt_entry(table: IsoptTable, entry: &IsoptEntry, buffer: Buf) {
         // The `mb_` predicates rather than `isalpha`, which misreads the
         // Latin-1 upper half under the C locale.
         let c = c_int::from(byte);
-        if entry.alpha_only && !mb_islower(c) && !mb_isupper(c) {
+        if entry.alpha_only && !Codepoint::new(c).is_lower() && !Codepoint::new(c).is_upper() {
             continue;
         }
         match table {
@@ -321,33 +322,20 @@ fn parse_isopt(
 }
 
 /// Whether `c` may appear in an identifier ('isident').
-pub fn vim_is_ident_char(c: c_int) -> bool {
+pub fn vim_is_ident_char(c: Codepoint) -> bool {
     u8::try_from(c).is_ok_and(|byte| byte > 0 && chartab(byte) & CT_ID_CHAR != 0)
 }
 
 /// Whether `c` belongs to a word in the current buffer ('iskeyword').
-pub fn vim_iswordc(c: c_int) -> bool {
+pub fn vim_iswordc(c: Codepoint) -> bool {
     vim_iswordc_buf(c, Buf::current())
-}
-
-/// [`vim_iswordc`] as a safe call, for a module that holds no pointer of its
-/// own to state a precondition about.
-///
-/// `CURBUF` is a live buffer from the first `buflist_new` onwards, which is
-/// before anything that can ask this question runs — the null it starts out
-/// as exists only for the span of `early_init`. So the pointer form's
-/// precondition is not one a caller here could get wrong, and spelling it as
-/// a `# Safety` section would only push an `unsafe` block into every caller
-/// to discharge an obligation none of them can influence.
-pub fn is_word_char(c: c_int) -> bool {
-    vim_iswordc(c)
 }
 
 /// Whether `c` belongs to a word according to the 256-bit set `chartab`.
 /// Characters past U+00FF are decided by their Unicode class instead.
 #[inline]
-pub fn vim_iswordc_tab(c: c_int, chartab: &[uint64_t; 4]) -> bool {
-    if c >= 0x100 {
+pub fn vim_iswordc_tab(c: Codepoint, chartab: &[uint64_t; 4]) -> bool {
+    if c.get() >= 0x100 {
         return utf_class_tab(c, chartab) >= 2;
     }
     // Below 0x100 here; a negative `c` is not a word character.
@@ -358,7 +346,7 @@ pub fn vim_iswordc_tab(c: c_int, chartab: &[uint64_t; 4]) -> bool {
 }
 
 /// Whether `c` belongs to a word in `buffer`.
-pub fn vim_iswordc_buf(c: c_int, buffer: Buf) -> bool {
+pub fn vim_iswordc_buf(c: Codepoint, buffer: Buf) -> bool {
     vim_iswordc_tab(c, &buffer.b_chartab)
 }
 
@@ -370,39 +358,39 @@ pub fn is_word_at(bytes: &[u8], buffer: Buf) -> bool {
     let c = if utf8len_tab[usize::from(lead)] > 1 {
         char_at(bytes)
     } else {
-        c_int::from(lead)
+        Codepoint::from(lead)
     };
     vim_iswordc_buf(c, buffer)
 }
 
 /// Whether `c` may appear in a file name ('isfname'). Everything past
 /// U+00FF is allowed.
-pub fn vim_isfilec(c: c_int) -> bool {
+pub fn vim_isfilec(c: Codepoint) -> bool {
     match u8::try_from(c) {
         Ok(byte) => byte > 0 && chartab(byte) & CT_FNAME_CHAR != 0,
-        Err(_) => c >= 0x100,
+        Err(_) => c.get() >= 0x100,
     }
 }
 
 /// Like [`vim_isfilec`], but also accepts the separators that may appear in
 /// a file name given on a command line.
-pub fn vim_is_fname_char(c: c_int) -> bool {
+pub fn vim_is_fname_char(c: Codepoint) -> bool {
     vim_isfilec(c) || matches!(u8::try_from(c), Ok(b',' | b' ' | b'@' | b':'))
 }
 
 /// Like [`vim_isfilec`], but also accepts the wildcards a file name pattern
 /// may contain.
-pub fn vim_isfilec_or_wc(c: c_int) -> bool {
+pub fn vim_isfilec_or_wc(c: Codepoint) -> bool {
     // Upstream's `(char)c`: the wildcard test sees the low byte.
-    let low = c.to_le_bytes()[0];
-    vim_isfilec(c) || c == c_int::from(b']') || has_wildcard(&[low][..usize::from(low != 0)])
+    let low = c.get().to_le_bytes()[0];
+    vim_isfilec(c) || c.get() == c_int::from(b']') || has_wildcard(&[low][..usize::from(low != 0)])
 }
 
 /// Whether `c` displays as itself ('isprint').
-pub fn vim_isprintc(c: c_int) -> bool {
+pub fn vim_isprintc(c: Codepoint) -> bool {
     match u8::try_from(c) {
         Ok(byte) => byte > 0 && chartab(byte) & CT_PRINT_CHAR != 0,
-        Err(_) => c >= 0x100 && utf_printable(c),
+        Err(_) => c.get() >= 0x100 && utf_printable(c),
     }
 }
 /// A lazy cursor over the digits of a number, bounded either by `maxlen`
@@ -538,11 +526,11 @@ pub(crate) fn string2float_in(text: &[u8]) -> (crate::types::Float, usize) {
 }
 
 /// The value of the hexadecimal digit `c`. Anything else is nonsense.
-pub fn hex2nr(c: c_int) -> c_int {
-    match u8::try_from(c) {
-        Ok(digit @ b'a'..=b'f') => c_int::from(digit - b'a') + 10,
-        Ok(digit @ b'A'..=b'F') => c_int::from(digit - b'A') + 10,
-        _ => c - c_int::from(b'0'),
+pub fn hex2nr(c: u8) -> c_int {
+    match c {
+        b'a'..=b'f' => c_int::from(c - b'a') + 10,
+        b'A'..=b'F' => c_int::from(c - b'A') + 10,
+        _ => c_int::from(c) - c_int::from(b'0'),
     }
 }
 
@@ -553,7 +541,7 @@ pub fn hexhex_at(text: &[u8]) -> c_int {
     if !ascii_isxdigit(high) || !ascii_isxdigit(low) {
         return -1;
     }
-    (hex2nr(c_int::from(high)) << 4) + hex2nr(c_int::from(low))
+    (hex2nr(high) << 4) + hex2nr(low)
 }
 
 /// Whether the backslash `text` starts with escapes the byte after it, i.e.
@@ -595,10 +583,10 @@ pub fn backslash_halved(text: &[u8]) -> Vec<u8> {
 }
 
 /// Whether a line may be broken before `c`, per the 'breakat' option.
-pub fn vim_isbreak(c: c_int) -> bool {
+pub fn vim_isbreak(c: Codepoint) -> bool {
     // Upstream indexes with `(uint8_t)c`: a wider character reads the slot
     // of its low byte.
-    BREAKAT_FLAGS.get().has(c.to_le_bytes()[0])
+    BREAKAT_FLAGS.get().has(c.get().to_le_bytes()[0])
 }
 
 /// Fill `G_CHARTAB` with the classification a freshly started editor has, for

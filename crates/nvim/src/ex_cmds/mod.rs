@@ -36,6 +36,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use crate::ex_docmd::cmdmod_has;
+use crate::mbyte::Codepoint;
 use crate::option::set_option_direct;
 use crate::os::cshim::gettext;
 
@@ -120,7 +121,7 @@ struct VimgrepPat<'a> {
 fn vimgrep_pat(text: &[u8]) -> Option<VimgrepPat<'_>> {
     let text = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];
     let &first = text.first()?;
-    if vim_is_ident_char(::core::ffi::c_int::from(first)) {
+    if vim_is_ident_char(Codepoint::from(first)) {
         // A bare word, ending at the first white space.
         let at = skip::to_white(text);
         return Some(VimgrepPat {

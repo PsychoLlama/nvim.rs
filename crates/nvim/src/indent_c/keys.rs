@@ -18,6 +18,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::mbyte::Codepoint;
 
 use crate::charset::is_word_at;
 use crate::indent::Indenter;
@@ -308,7 +309,7 @@ fn word_matches(
         // which the `||` keeps in front of the read.
         let mut lines = Lines::current();
         let line = lines.line(cursor.lnum);
-        (col == len || !vim_iswordc(c_int::from(byte_at(line, col - len - 1))))
+        (col == len || !vim_iswordc(Codepoint::from(byte_at(line, col - len - 1))))
             && same(line.get(col - len..).unwrap_or_default())
     };
 

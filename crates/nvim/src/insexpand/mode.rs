@@ -18,6 +18,7 @@
 use super::*;
 use crate::guard::Suppress;
 use crate::keycodes::SpecialKey;
+use crate::mbyte::Codepoint;
 use crate::optionstr::OptStringRef;
 use crate::types::{Key, KeyKind};
 use crate::winlayer::{Buf, Win};
@@ -264,24 +265,24 @@ pub fn ins_compl_accept_char(c: Key) -> bool {
     let c = c.code();
     if CTRL_X_MODE.get().wants_ident() {
         // Expanding an identifier: only identifier characters.
-        return vim_is_ident_char(c);
+        return vim_is_ident_char(Codepoint::new(c));
     }
     match CTRL_X_MODE.get() {
         // File names, but not path separators, so that "proto/<Tab>"
         // expands files in "proto", not "proto/" as a whole.
         CtrlXMode::Files => {
-            let isfilec = vim_isfilec(c);
+            let isfilec = vim_isfilec(Codepoint::new(c));
             isfilec && !vim_ispathsep(c)
         }
         // Command line and omni completion take just about any printable
         // character, but do stop at white space.
         CtrlXMode::Cmdline | CtrlXMode::CmdlineCtrlX | CtrlXMode::Omni => {
-            let isprintc = vim_isprintc(c);
+            let isprintc = vim_isprintc(Codepoint::new(c));
             isprintc && !ascii_iswhite(c)
         }
         // For whole-line completion a space can be part of the line.
-        CtrlXMode::WholeLine => vim_isprintc(c),
-        _ => vim_iswordc(c),
+        CtrlXMode::WholeLine => vim_isprintc(Codepoint::new(c)),
+        _ => vim_iswordc(Codepoint::new(c)),
     }
 }
 

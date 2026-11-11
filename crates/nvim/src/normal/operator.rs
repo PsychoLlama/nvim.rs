@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::normal::defs::{CmdArg, MotionType};
 use crate::types::{Key, Vv};
 use crate::winlayer::Win;
@@ -80,7 +81,7 @@ pub(crate) fn nv_at(cmd_arg: &mut CmdArg) {
     let Some(regname) = register_name(cmd_arg.nchar) else {
         // A key that is not even a byte names no register: what replaying
         // it would have said.
-        emsg_invreg(cmd_arg.nchar.code());
+        emsg_invreg(Codepoint::new(cmd_arg.nchar.code()));
         clear_op_beep(cmd_arg.op());
         return;
     };

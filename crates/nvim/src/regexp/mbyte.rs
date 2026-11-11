@@ -12,15 +12,14 @@
 )]
 
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::regexp::{byte_count, low_byte};
 use core::ffi::c_int;
 
 use super::Rex;
 use crate::charset::{is_word_at, vim_iswordc_buf};
 use crate::mbyte::GraphemeState;
-use crate::mbyte::{
-    c_cluster_len, char_at, char_len, head_off, iscomposing, strnicmp_in, utf_fold,
-};
+use crate::mbyte::{c_cluster_len, char_at, char_len, head_off, iscomposing, strnicmp_in};
 use crate::memory::{memchr_in, strchr_in, strlen_in};
 use crate::strings::find_char;
 use crate::winlayer::Buf;
@@ -151,23 +150,23 @@ pub(crate) fn cstrncmp(rex: Rex, s1: &[u8], s2: &[u8], n: &mut c_int) -> c_int {
     // that decomposition erases, don't count.
     if result != 0 && rex.reg_icombine() {
         let (mut str1, mut str2) = (0usize, 0usize);
-        let mut c1 = 0;
-        let mut c2 = 0;
+        let mut c1 = Codepoint::NUL;
+        let mut c2 = Codepoint::NUL;
         while str1.cast_signed() < *n as isize {
             c1 = char_at_nul(s1, str1);
             str1 += cluster_len_at(s1, str1);
             c2 = char_at_nul(s2, str2);
             str2 += cluster_len_at(s2, str2);
-            if c1 == c2 || (rex.reg_ic() && utf_fold(c1) == utf_fold(c2)) {
+            if c1 == c2 || (rex.reg_ic() && c1.fold() == c2.fold()) {
                 continue;
             }
-            c1 = decompose(c1)[0];
-            c2 = decompose(c2)[0];
-            if c1 != c2 && (!rex.reg_ic() || utf_fold(c1) != utf_fold(c2)) {
+            c1 = Codepoint::new(decompose(c1.get())[0]);
+            c2 = Codepoint::new(decompose(c2.get())[0]);
+            if c1 != c2 && (!rex.reg_ic() || c1.fold() != c2.fold()) {
                 break;
             }
         }
-        result = c2 - c1;
+        result = c2.get() - c1.get();
         if result == 0 {
             *n = byte_count(str2);
         }
@@ -223,14 +222,14 @@ fn find_char_ic(text: &[u8], c: c_int) -> Option<usize> {
     // search.
     let (cc, lc);
     if c > 0x80 {
-        cc = utf_fold(c);
+        cc = Codepoint::new(c).fold();
         lc = cc;
     } else if (c_int::from(b'A')..=c_int::from(b'Z')).contains(&c) {
-        cc = c + c_int::from(b'a' - b'A');
+        cc = Codepoint::new(c + c_int::from(b'a' - b'A'));
         lc = cc;
     } else if (c_int::from(b'a')..=c_int::from(b'z')).contains(&c) {
-        cc = c - c_int::from(b'a' - b'A');
-        lc = c;
+        cc = Codepoint::new(c - c_int::from(b'a' - b'A'));
+        lc = Codepoint::new(c);
     } else {
         return find_char_in(text, c);
     }
@@ -242,10 +241,10 @@ fn find_char_ic(text: &[u8], c: c_int) -> Option<usize> {
         if c > 0x80 || uc > 0x80 {
             // Skip the ASCII case: a multibyte fold must not match a
             // byte that already compared equal below.
-            if (uc < 0x80 || uc != c_int::from(byte)) && utf_fold(uc) == lc {
+            if (uc < 0x80 || uc != byte) && uc.fold() == lc {
                 return Some(p);
             }
-        } else if c_int::from(byte) == c || c_int::from(byte) == cc {
+        } else if c_int::from(byte) == c || c_int::from(byte) == cc.get() {
             return Some(p);
         }
         p += cluster_len_at(text, p);
@@ -262,7 +261,7 @@ fn find_char_in(text: &[u8], c: c_int) -> Option<usize> {
     if c < 0x80 {
         return memchr_in(text, low_byte(c));
     }
-    find_char(text, c)
+    find_char(text, Codepoint::new(c))
 }
 
 /// `strlen` over a NUL-terminated operand or line: the C library's.
@@ -284,11 +283,11 @@ pub(crate) fn nul_terminated_len(s: &[u8]) -> usize {
 
 /// The character at `text[i]`; 0 at the terminator or past the end.
 #[inline(always)]
-pub(crate) fn char_at_nul(text: &[u8], i: usize) -> i32 {
+pub(crate) fn char_at_nul(text: &[u8], i: usize) -> Codepoint {
     match text.get(i) {
-        None => 0,
+        None => Codepoint::NUL,
         // ASCII, the NUL included, is itself: the hot answer.
-        Some(&byte) if byte < 0x80 => i32::from(byte),
+        Some(&byte) if byte < 0x80 => Codepoint::from(byte),
         Some(_) => char_at(&text[i..]),
     }
 }
@@ -362,7 +361,7 @@ pub(crate) fn prefix_at(text: &[u8], i: usize, n: usize) -> &[u8] {
 #[inline(always)]
 pub(crate) fn word_char_at(text: &[u8], buffer: Buf) -> bool {
     match text.first() {
-        Some(&byte) if byte < 0x80 => vim_iswordc_buf(c_int::from(byte), buffer),
+        Some(&byte) if byte < 0x80 => vim_iswordc_buf(Codepoint::from(byte), buffer),
         _ => is_word_at(text, buffer),
     }
 }
@@ -394,7 +393,7 @@ mod tests {
                             );
                             let want = match text[i..].first() {
                                 Some(_) => char_at(&text[i..]),
-                                None => 0,
+                                None => Codepoint::NUL,
                             };
                             assert_eq!(char_at_nul(&text, i), want, "char at {i} of {text:x?}");
                         }

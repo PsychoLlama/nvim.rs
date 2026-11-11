@@ -194,7 +194,7 @@ fn vgetc_from_typeahead() -> Key {
             }
             drop(unmapped);
             // The bytes are followed by the rest of the zeroed buffer.
-            c = Key::from_code(char_at(&buf));
+            c = Key::from_code(char_at(&buf).get());
         }
 
         // When mappings are enabled (so not after i_CTRL-V) and the user

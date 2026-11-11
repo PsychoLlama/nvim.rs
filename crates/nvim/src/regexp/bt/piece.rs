@@ -432,7 +432,7 @@ fn find_shortcuts(prog: &mut BtRegProg, flags: c_int) {
     // A known first character lets the executor use a memchr-style skip.
     let first = opcode_at(scan);
     if first == Some(BtOp::Exactly) {
-        prog.regstart = char_at_nul(code, scan + 3);
+        prog.regstart = char_at_nul(code, scan + 3).get();
     } else if matches!(
         first,
         Some(
@@ -448,7 +448,7 @@ fn find_shortcuts(prog: &mut BtRegProg, flags: c_int) {
         // Those all match empty, so look one node further.
         let next = regnext(code, scan);
         if opcode_at(next) == Some(BtOp::Exactly) {
-            prog.regstart = char_at_nul(code, next + 3);
+            prog.regstart = char_at_nul(code, next + 3).get();
         }
     }
 

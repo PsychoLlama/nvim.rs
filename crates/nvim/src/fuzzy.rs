@@ -44,13 +44,14 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::mbyte::Codepoint;
 use crate::narrow::float_as_int;
 use core::ffi::c_int;
 use std::ffi::CStr;
 
 use crate::ascii::ascii_iswhite;
-use crate::charset::is_word_char;
-use crate::mbyte::{chars as decode, mb_islower, mb_isupper, mb_tolower, mb_toupper};
+use crate::charset::vim_iswordc;
+use crate::mbyte::chars as decode;
 
 /// The most characters of a pattern or a candidate that are looked at, and
 /// so the most match positions that can be reported.
@@ -79,15 +80,15 @@ const SCORE_MATCH_DOT: Score = 0.6;
 
 /// The codepoints of `s`, as `MB_PTR_ADV` steps over them — one per base
 /// character, with any composing characters folded into the step.
-fn chars(s: &CStr) -> Vec<c_int> {
+fn chars(s: &CStr) -> Vec<Codepoint> {
     decode(s).map(|(_, c)| c).collect()
 }
 
 /// The whitespace-separated words of a pattern. An empty pattern, and one
 /// that is nothing but separators, has none — which is how a candidate ends
 /// up with a score of zero rather than a rejection.
-fn words(pattern: &[c_int]) -> impl Iterator<Item = &[c_int]> {
-    let separator = |&c: &c_int| c == c_int::from(b' ') || c == c_int::from(b'\t');
+fn words(pattern: &[Codepoint]) -> impl Iterator<Item = &[Codepoint]> {
+    let separator = |&c: &Codepoint| c == b' ' || c == b'\t';
     pattern.split(separator).filter(|word| !word.is_empty())
 }
 
@@ -108,13 +109,13 @@ fn max_score(a: Score, b: Score) -> Score {
 ///
 /// A lowercase pattern character also matches its uppercase form, which is
 /// what makes fuzzy matching case-insensitive in one direction only.
-fn has_match(needle: &[c_int], haystack: &[c_int]) -> bool {
+fn has_match(needle: &[Codepoint], haystack: &[Codepoint]) -> bool {
     if needle.is_empty() {
         return false;
     }
     let mut haystack = haystack.iter();
     needle.iter().all(|&n| {
-        let upper = mb_toupper(n);
+        let upper = n.to_upper();
         haystack.any(|&h| h == n || h == upper)
     })
 }
@@ -122,18 +123,18 @@ fn has_match(needle: &[c_int], haystack: &[c_int]) -> bool {
 /// What a haystack character earns for the character in front of it: the
 /// start of a path component, of a word, of an extension, or the capital
 /// that starts the second half of a CamelCase name.
-fn compute_bonus(last_c: c_int, c: c_int) -> Score {
+fn compute_bonus(last_c: Codepoint, c: Codepoint) -> Score {
     // A codepoint outside ASCII is not alphanumeric, as C's ASCII_ISALNUM
     // classifies them.
     let alnum = u8::try_from(c).is_ok_and(|b| b.is_ascii_alphanumeric());
-    if !(alnum || is_word_char(c)) {
+    if !(alnum || vim_iswordc(c)) {
         return 0.0;
     }
     match u8::try_from(last_c) {
         Ok(b'/') => SCORE_MATCH_SLASH,
         Ok(b'-' | b'_' | b' ') => SCORE_MATCH_WORD,
         Ok(b'.') => SCORE_MATCH_DOT,
-        _ if mb_isupper(c) && mb_islower(last_c) => SCORE_MATCH_CAPITAL,
+        _ if c.is_upper() && last_c.is_lower() => SCORE_MATCH_CAPITAL,
         _ => 0.0,
     }
 }
@@ -143,21 +144,21 @@ fn compute_bonus(last_c: c_int, c: c_int) -> Score {
 /// predecessor. Anything past [`FUZZY_MATCH_MAX_LEN`] characters is ignored.
 #[derive(Debug)]
 struct Match {
-    lower_needle: Vec<c_int>,
-    lower_haystack: Vec<c_int>,
+    lower_needle: Vec<Codepoint>,
+    lower_haystack: Vec<Codepoint>,
     match_bonus: Vec<Score>,
 }
 
 impl Match {
-    fn new(needle: &[c_int], haystack: &[c_int]) -> Self {
-        let fold = |s: &[c_int]| -> Vec<c_int> {
+    fn new(needle: &[Codepoint], haystack: &[Codepoint]) -> Self {
+        let fold = |s: &[Codepoint]| -> Vec<Codepoint> {
             s.iter()
                 .take(FUZZY_MATCH_MAX_LEN)
-                .map(|&c| mb_tolower(c))
+                .map(|&c| c.to_lower())
                 .collect()
         };
         // The first character is treated as if a path separator preceded it.
-        let mut last_c = c_int::from(b'/');
+        let mut last_c = Codepoint::from(b'/');
         let mut match_bonus = Vec::with_capacity(haystack.len().min(FUZZY_MATCH_MAX_LEN));
         for &c in haystack.iter().take(FUZZY_MATCH_MAX_LEN) {
             match_bonus.push(compute_bonus(last_c, c));
@@ -225,7 +226,7 @@ fn match_row(
 /// writes one entry per needle character with no bound at all, overrunning
 /// the caller's array once two pattern words together have more characters
 /// than it holds.
-fn match_positions(needle: &[c_int], haystack: &[c_int], positions: &mut [u32]) -> Score {
+fn match_positions(needle: &[Codepoint], haystack: &[Codepoint], positions: &mut [u32]) -> Score {
     if needle.is_empty() {
         return SCORE_MIN;
     }

@@ -34,6 +34,7 @@
 )]
 
 use crate::extmark::EXTMARK_UNDO;
+use crate::mbyte::Codepoint;
 use crate::memline::MlFlags;
 use crate::narrow::len_as_int;
 use crate::normal::defs::MotionType;
@@ -42,7 +43,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};
 
 use super::*;
-use crate::ascii::NUL;
 use crate::cursor::getvpos;
 
 /// The first line, measured just before Insert mode runs.
@@ -342,7 +342,8 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
     let mut pre_indent = 0;
     if op.motion_type == MotionType::BlockWise {
         // Add the spaces before measuring the line's length.
-        if op_virtual() && (Win::current().w_cursor.coladd > 0 || gchar_cursor() == NUL) {
+        if op_virtual() && (Win::current().w_cursor.coladd > 0 || gchar_cursor() == Codepoint::NUL)
+        {
             coladvance_force(getviscol());
         }
         let mut lines = Lines::current();
@@ -460,7 +461,7 @@ fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_inde
 pub fn adjust_cursor_eol() {
     let cur_ve_flags = get_ve_flags(Win::current());
     let adj_cursor = Win::current().w_cursor.col > ColNr::ZERO
-        && gchar_cursor() == NUL
+        && gchar_cursor() == Codepoint::NUL
         && cur_ve_flags & OPT_VE_FLAG_ONEMORE as c_uint == 0
         && cur_ve_flags & OPT_VE_FLAG_ALL as c_uint == 0
         && !(!RESTART_EDIT.get().is_nul() || STATE.get() & MODE_INSERT != 0);

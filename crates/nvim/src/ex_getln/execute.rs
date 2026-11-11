@@ -21,6 +21,7 @@ use crate::cstr;
 use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::guard::{Keys, Lock, Suppress};
 use crate::keycodes::SpecialKey;
+use crate::mbyte::Codepoint;
 use crate::message::msg_put_ascii;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
@@ -130,7 +131,7 @@ pub(crate) fn command_line_end_wildmenu(s: &mut CommandLineState, key_is_wc: boo
             s.skip_pum_redraw = s.skip_pum_redraw
                 && !key_is_wc
                 && !ascii_iswhite(c.code())
-                && (vim_isprintc(c.code())
+                && (vim_isprintc(Codepoint::new(c.code()))
                     || c == SpecialKey::Bs
                     || c == Key::CTRL_H
                     || c == SpecialKey::Del

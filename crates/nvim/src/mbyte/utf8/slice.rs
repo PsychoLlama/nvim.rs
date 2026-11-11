@@ -28,6 +28,7 @@
 
 use super::{CORRECTIONS, LEAD_PAYLOAD, LEAD_PREFIX, utf_char2len, utf_is_trail_byte, utf8len_tab};
 use crate::mbyte::CharInfo;
+use crate::mbyte::Codepoint;
 
 /// How many bytes the character at the start of `bytes` occupies, or 0 if
 /// there is no character there because `bytes` is empty.
@@ -82,41 +83,42 @@ pub fn promised_char_len(bytes: &[u8]) -> usize {
     len
 }
 
-/// The codepoint at the start of `bytes`, or a **negative** number when there
-/// is no character there -- an incomplete sequence, a bad continuation byte,
-/// or a byte that leads nothing at all.
+/// The codepoint at the start of `bytes`, or `None` when there is no
+/// character there -- an incomplete sequence, a bad continuation byte, or a
+/// byte that leads nothing at all.
 ///
 /// The slice form of [`utf_ptr2char_info_impl`](crate::harness::utf_ptr2char_info_impl),
 /// and the strict half of the pair this module's parent documents: where
 /// [`char_at`] answers the lead byte's own value for anything it cannot
-/// decode, this says "not a character" and lets the caller draw the byte.
+/// decode, this says "not a character" (the negative value the pointer form
+/// answers) and lets the caller draw the byte.
 /// Unlike the pointer form it does handle ASCII, because a slice can say how
 /// many bytes it has and a pointer cannot.
 #[inline]
-pub fn strict_char_at(bytes: &[u8]) -> i32 {
-    let Some(&first) = bytes.first() else {
-        return -1;
-    };
+pub fn strict_char_at(bytes: &[u8]) -> Option<Codepoint> {
+    let &first = bytes.first()?;
     if first < 0x80 {
-        return i32::from(first);
+        return Some(Codepoint::from(first));
     }
     let len = usize::from(utf8len_tab[usize::from(first)]);
     // The pointer form reads a second byte even for a length of 0 or 1 and
     // lets the correction make the answer negative; here the length alone
     // settles it, which is the same answer without the read.
     if len < 2 || len > bytes.len() {
-        return -1;
+        return None;
     }
     let mut code_point = u32::from(first);
     for &cur in &bytes[1..len] {
         if !utf_is_trail_byte(cur) {
-            return -1;
+            return None;
         }
         code_point = (code_point << 6).wrapping_add(u32::from(cur));
     }
     // Six bytes carry 31 bits, so the sum always fits once the framing is
     // subtracted back off.
-    code_point.wrapping_add(CORRECTIONS[len]).cast_signed()
+    Some(Codepoint::new(
+        code_point.wrapping_add(CORRECTIONS[len]).cast_signed(),
+    ))
 }
 
 /// The character at the start of `bytes`, as the codepoint-and-length pair
@@ -126,12 +128,11 @@ pub fn strict_char_at(bytes: &[u8]) -> i32 {
 /// The slice form of upstream's `utf_ptr2char_info`.
 #[inline]
 pub fn char_info_at(bytes: &[u8]) -> CharInfo {
-    let value = strict_char_at(bytes);
-    if value < 0 {
-        return CharInfo { value, len: 1 };
-    }
+    let Some(c) = strict_char_at(bytes) else {
+        return CharInfo { value: -1, len: 1 };
+    };
     CharInfo {
-        value,
+        value: c.get(),
         len: i32::from(utf8len_tab[usize::from(bytes[0])]),
     }
 }
@@ -143,30 +144,30 @@ pub fn char_info_at(bytes: &[u8]) -> CharInfo {
 /// same way: nothing is ever an error, so a walk over arbitrary bytes always
 /// gets something back.
 #[inline]
-pub fn char_at(bytes: &[u8]) -> i32 {
+pub fn char_at(bytes: &[u8]) -> Codepoint {
     let Some(&first) = bytes.first() else {
-        return 0;
+        return Codepoint::NUL;
     };
     let unchanged = i32::from(first);
     if first < 0x80 {
-        return unchanged;
+        return Codepoint::new(unchanged);
     }
     let len = usize::from(utf8len_tab[usize::from(first)]);
     // A continuation byte or 0xFE/0xFF is not a lead byte at all, and a
     // sequence the slice does not hold in full is not one either.
     if len < 2 || len > bytes.len() {
-        return unchanged;
+        return Codepoint::new(unchanged);
     }
     let mut code_point = u32::from(first) & LEAD_PAYLOAD[len];
     for &cur in &bytes[1..len] {
         if !utf_is_trail_byte(cur) {
-            return unchanged;
+            return Codepoint::new(unchanged);
         }
         code_point = (code_point << 6) | (u32::from(cur) & 0x3f);
     }
     // The widest sequence this codec accepts is six bytes carrying 31 bits,
     // so the value always fits: `0xFD` masks down to one payload bit.
-    code_point.cast_signed()
+    Codepoint::new(code_point.cast_signed())
 }
 
 /// Encode `c` into `out`, answering how many bytes it took.
@@ -175,14 +176,14 @@ pub fn char_at(bytes: &[u8]) -> i32 {
 /// delegates here. Panics if `out` is shorter than
 /// [`utf_char2len`](super::utf_char2len) -- up to `MB_MAXCHAR` bytes --
 /// which is the bound the pointer form asks its caller for and cannot check.
-pub fn encode_char(c: i32, out: &mut [u8]) -> usize {
+pub fn encode_char(c: Codepoint, out: &mut [u8]) -> usize {
     let len = usize::try_from(utf_char2len(c)).expect("a character's length is positive");
     let out = &mut out[..len];
     if len == 1 {
-        out[0] = u8::try_from(c & 0xff).expect("masked to a byte");
+        out[0] = u8::try_from(c.get() & 0xff).expect("masked to a byte");
         return 1;
     }
-    let u = c.cast_unsigned();
+    let u = c.get().cast_unsigned();
     // The lead byte carries the top bits under its `1..10` prefix; every
     // continuation byte carries six more under `10`.
     out[0] = truncate(LEAD_PREFIX[len] | (u >> (6 * (len - 1))));
@@ -233,7 +234,7 @@ mod tests {
             assert_eq!(char_len(whole), whole.len());
             for cut in 1..whole.len() {
                 assert_eq!(char_len(&whole[..cut]), 1, "{whole:?} cut to {cut}");
-                assert_eq!(char_at(&whole[..cut]), i32::from(whole[0]));
+                assert_eq!(char_at(&whole[..cut]), Codepoint::from(whole[0]));
             }
         }
     }
@@ -242,10 +243,13 @@ mod tests {
     fn encode_char_round_trips_every_length() {
         for c in [0, 0x41, 0x7f, 0x80, 0x7ff, 0x800, 0xffff, 0x10000, 0x1f4a9] {
             let mut buf = [0u8; 6];
-            let len = encode_char(c, &mut buf);
-            assert_eq!(len, usize::try_from(utf_char2len(c)).unwrap());
+            let len = encode_char(Codepoint::new(c), &mut buf);
+            assert_eq!(
+                len,
+                usize::try_from(utf_char2len(Codepoint::new(c))).unwrap()
+            );
             assert_eq!(char_len(&buf[..len]), len, "{c:#x}");
-            assert_eq!(char_at(&buf[..len]), c, "{c:#x}");
+            assert_eq!(char_at(&buf[..len]).get(), c, "{c:#x}");
         }
     }
 }

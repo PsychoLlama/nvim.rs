@@ -21,6 +21,7 @@ use crate::cstr;
 use crate::getchar::typeahead;
 use crate::guard::Keys;
 use crate::keycodes::{ModMask, SpecialKey};
+use crate::mbyte::Codepoint;
 use crate::mbyte::MB_MAXCHAR;
 use crate::message::msg_put_ascii;
 use crate::narrow::len_as_int;
@@ -603,7 +604,7 @@ fn key_read_literal(s: &mut CommandLineState) {
     s.do_abbr = false; // don't do abbreviation now
     cc.special_char = 0;
     // May need to remove the ^ when a composing char was typed.
-    if utf_iscomposing_first(s.c.code()) && !CMD_SILENT.get() {
+    if utf_iscomposing_first(Codepoint::new(s.c.code())) && !CMD_SILENT.get() {
         if ui_has(UI_CMDLINE) {
             // TODO(bfredl): why not make unputcmdline also work with true?
             unputcmdline();
@@ -660,7 +661,7 @@ pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> Step {
 
         // We come here if we have a normal character.
         if s.do_abbr
-            && (s.c.is_special() || !vim_iswordc(s.c.code()))
+            && (s.c.is_special() || !vim_iswordc(Codepoint::new(s.c.code())))
             // A character above 0x100 needs no CTRL-V in front of it.
             && (ccheck_abbr(s.c, s.c.is_char() && s.c.as_byte().is_none())
                 || s.c == Key::CTRL_RSB)
@@ -676,7 +677,7 @@ pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> Step {
     } else {
         // One character, its own buffer, without its composing characters.
         let mut ch = [0u8; MB_MAXCHAR];
-        let j = encode_char(s.c.code(), &mut ch);
+        let j = encode_char(Codepoint::new(s.c.code()), &mut ch);
         put_on_cmdline(&ch[..j], true);
     }
     if Cc::current().one_key {

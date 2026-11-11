@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::eval::typval::{DictRef, NumBuf, list_items, list_iter};
+use crate::mbyte::Codepoint;
 use crate::narrow::number_as_int;
 use crate::semsg;
 use crate::types::{Failed, LIST_LEN_MAY_KNOW, VAR_DICT, VAR_LIST};
@@ -93,7 +94,7 @@ fn match_dict(item: &MatchItem) -> DictRef {
 
     if item.mit_conceal_char != 0 {
         let mut buf = [0u8; 6];
-        let len = encode_char(item.mit_conceal_char, &mut buf);
+        let len = encode_char(Codepoint::new(item.mit_conceal_char), &mut buf);
         let _ = dict.add_str_len(b"conceal", Some(&buf[..len]));
     }
     dict_held

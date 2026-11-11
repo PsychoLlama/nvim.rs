@@ -13,6 +13,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::regexp::NfaOp;
 use crate::types::LineNr;
 use core::ffi::c_int;
@@ -25,7 +26,7 @@ use super::program::{NfaRegProg, NfaState, StateId, States};
 use super::run::{check_char_class, match_backref, match_zref, recursive_regmatch};
 use super::sub::{copy_sub, copy_sub_off, copy_ze_off, has_zsubexpr};
 use crate::ascii::NUL;
-use crate::mbyte::{class_in, utf_fold, utf_iscomposing_legacy};
+use crate::mbyte::{class_in, utf_iscomposing_legacy};
 use crate::regexp::{NFA_TOO_EXPENSIVE, PimResult, RegSubs, Rex, reg_prev_class};
 
 /// Where a thread's state leaves it.
@@ -155,7 +156,8 @@ pub(crate) fn step<'p>(
         Ok(NfaOp::Match) => {
             // Not in the middle of a grapheme: a match may not stop
             // between a base character and its combining marks.
-            if !rex.reg_icombine() && !rex.at_bol() && utf_iscomposing_legacy(curc) {
+            if !rex.reg_icombine() && !rex.at_bol() && utf_iscomposing_legacy(Codepoint::new(curc))
+            {
                 return Step::Dead;
             }
             rex.set_nfa_match(1);
@@ -247,7 +249,7 @@ pub(crate) fn step<'p>(
         Ok(NfaOp::AnyComposing) => {
             // `\%C`: a combining character is consumed, anything else
             // leaves the position alone for the group that follows.
-            if utf_iscomposing_legacy(curc) {
+            if utf_iscomposing_legacy(Codepoint::new(curc)) {
                 Step::next(states.state(out), *clen)
             } else {
                 Step::Here(states.state(out))
@@ -321,7 +323,7 @@ pub(crate) fn step<'p>(
             let c = code;
             let mut matched = c == curc;
             if !matched && rex.reg_ic() {
-                matched = utf_fold(c) == utf_fold(curc);
+                matched = Codepoint::new(c).fold() == Codepoint::new(curc).fold();
             }
             if matched && !rex.reg_icombine() {
                 // The pattern named the base character only, so the
@@ -406,9 +408,9 @@ fn collection_matches(rex: Rex, prog: States, start: &NfaState, curc: c_int, cle
             if rex.reg_ic() {
                 // Folding is not monotonic, so the range has to be
                 // walked rather than folded at its ends.
-                let folded = utf_fold(curc);
+                let folded = Codepoint::new(curc).fold();
                 while lo <= hi {
-                    if utf_fold(lo) == folded {
+                    if Codepoint::new(lo).fold() == folded {
                         return member_wins;
                     }
                     lo += 1;
@@ -418,7 +420,8 @@ fn collection_matches(rex: Rex, prog: States, start: &NfaState, curc: c_int, cle
             let accepted = if c < 0 {
                 check_char_class(rex, c, curc).is_ok()
             } else {
-                c == curc || (rex.reg_ic() && utf_fold(curc) == utf_fold(c))
+                c == curc
+                    || (rex.reg_ic() && Codepoint::new(curc).fold() == Codepoint::new(c).fold())
             };
             if accepted {
                 return member_wins;

@@ -24,7 +24,8 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_int, c_uint};
+use crate::mbyte::Codepoint;
+use core::ffi::{CStr, c_uint};
 
 use crate::message::E_INVARG;
 use crate::option::defs::{InvalidValue, OptError, OptIndex, OptSet};
@@ -122,7 +123,7 @@ pub fn did_set_str_generic(args: &mut OptSet) -> Result<(), OptError> {
 /// Reject the first letter of `value` that is not in `flags`.
 pub(crate) fn did_set_option_listflag(value: &[u8], flags: &CStr) -> Result<(), OptError> {
     match value.iter().find(|byte| !flags.to_bytes().contains(byte)) {
-        Some(&byte) => Err(illegal_char(c_int::from(byte))),
+        Some(&byte) => Err(illegal_char(Codepoint::from(byte))),
         None => Ok(()),
     }
 }

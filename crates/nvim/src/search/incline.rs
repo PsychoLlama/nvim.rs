@@ -23,6 +23,7 @@ use crate::change::leader_len_of;
 use crate::cstr;
 use crate::fileio::Fgets;
 use crate::highlight_group::HLF_N;
+use crate::mbyte::Codepoint;
 use crate::mbyte::strnicmp_in;
 use crate::message::msg_put_ascii;
 use crate::tag::LSIZE;
@@ -98,7 +99,8 @@ pub(crate) fn match_on_line(
         // so skip to it before testing, and don't let the match run
         // past the end of that identifier.
         p = pats.def.ends[0].unwrap_or(0);
-        while cstr::byte_at(bytes, p) != b'\0' && !vim_iswordc(c_int::from(cstr::byte_at(bytes, p)))
+        while cstr::byte_at(bytes, p) != b'\0'
+            && !vim_iswordc(Codepoint::from(cstr::byte_at(bytes, p)))
         {
             p += 1;
         }
@@ -122,7 +124,7 @@ pub(crate) fn match_on_line(
         } else {
             prefix(candidate, len) == prefix(text, len)
         };
-        let word_runs_on = vim_iswordc(c_int::from(cstr::byte_at(bytes, startp + len)));
+        let word_runs_on = vim_iswordc(Codepoint::from(cstr::byte_at(bytes, startp + len)));
         if matched && !(define_matched && whole && word_runs_on) {
             return Some(startp);
         }

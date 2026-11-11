@@ -28,6 +28,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
@@ -95,30 +96,31 @@ pub fn spell_soundfold(slang: &SpellLang, inword: &[u8], folded: bool, res: &mut
 /// zero-terminated run of from/to pairs to scan.
 fn spell_soundfold_sofo(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
     let mut ri = 0;
-    let mut prevc = 0;
+    let mut prevc = Codepoint::NUL;
     let mut s = 0;
     while s < inword.len() && inword[s] != 0 {
         let rest = &inword[s..];
         let mut c = char_at(rest);
         s += char_len(rest);
         if utf_class(c) == 0 {
-            c = c_int::from(b' ');
+            c = Codepoint::byte(b' ');
         } else if let Ok(byte) = u8::try_from(c) {
-            c = slang.sl_sal_first[usize::from(byte)];
+            c = Codepoint::new(slang.sl_sal_first[usize::from(byte)]);
         } else {
             // The scheme's table has one entry per low byte, and each list
             // ends in a zero.
-            let list = &slang.sl_sofo_map[usize::from(low_byte(c))];
-            c = list
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .take_while(|pair| pair[0] != 0)
-                .find(|pair| pair[0] == c)
-                .map_or(NUL, |pair| pair[1]);
+            let list = &slang.sl_sofo_map[usize::from(low_byte(c.get()))];
+            c = Codepoint::new(
+                list.as_chunks::<2>()
+                    .0
+                    .iter()
+                    .take_while(|pair| pair[0] != 0)
+                    .find(|pair| pair[0] == c.get())
+                    .map_or(NUL, |pair| pair[1]),
+            );
         }
 
-        if c != NUL && c != prevc {
+        if c != Codepoint::NUL && c != prevc {
             ri += encode_char(c, &mut res[ri..]);
             if ri + MB_MAXBYTES > MAXWLEN {
                 break;
@@ -281,7 +283,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
 
     let mut l = 0;
     for &wc in &wres[..reslen] {
-        l += encode_char(wc, &mut res[l..]);
+        l += encode_char(Codepoint::new(wc), &mut res[l..]);
         if l + MB_MAXBYTES > MAXWLEN {
             break;
         }
@@ -306,7 +308,7 @@ fn widen_word(slang: &SpellLang, inword: &[u8], win: Win, word: &mut [c_int; MAX
                 if did_white {
                     continue;
                 }
-                c = c_int::from(b' ');
+                c = Codepoint::byte(b' ');
                 did_white = true;
             } else {
                 did_white = false;
@@ -315,7 +317,7 @@ fn widen_word(slang: &SpellLang, inword: &[u8], win: Win, word: &mut [c_int; MAX
                 }
             }
         }
-        word[wordlen] = c;
+        word[wordlen] = c.get();
         wordlen += 1;
     }
     word[wordlen] = NUL;

@@ -24,6 +24,7 @@ use super::*;
 use crate::ascii::{CTRL_N, CTRL_V};
 use crate::cstr;
 use crate::guard::Lock;
+use crate::mbyte::Codepoint;
 use crate::memory::XString;
 use core::ffi::CStr;
 
@@ -184,10 +185,6 @@ impl Cc {
 
 // ---------------------------------------------------------------------------
 // The neighbours that are still transpiled, one wrapper each.
-
-fn is_word_char(c: ::core::ffi::c_int) -> bool {
-    vim_iswordc(c)
-}
 
 // ---------------------------------------------------------------------------
 // Getting a command line.
@@ -351,7 +348,7 @@ fn duplicate_word_len(arg: &[u8]) -> usize {
     let mut w = end;
     while w > 0 {
         let len = head_off(line, w - 1) + 1;
-        if !is_word_char(c_char_info(line, w - len).value) {
+        if !vim_iswordc(Codepoint::new(c_char_info(line, w - len).value)) {
             break;
         }
         w -= len;

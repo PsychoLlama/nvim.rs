@@ -14,6 +14,7 @@
 use super::program::{NfaRegProg, NfaState, StateId};
 use super::step::Run;
 use super::sub::slots;
+use crate::mbyte::Codepoint;
 use crate::narrow::len_as_int;
 use crate::regexp::{NfaOp, byte_count};
 use crate::siemsg;
@@ -23,7 +24,7 @@ use core::ffi::c_int;
 use super::matcher::nfa_regmatch;
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
-use crate::mbyte::{mb_islower, mb_isupper, utf_char2len, utf_fold, utf_iscomposing_legacy};
+use crate::mbyte::{utf_char2len, utf_iscomposing_legacy};
 use crate::profile::profile_passed_limit;
 use crate::regexp::{
     ESC, MatchPos, NFA_TOO_EXPENSIVE, RegSub, Rex, Verdict, char_at_nul, char_len_at,
@@ -54,19 +55,19 @@ pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> Result<(), Fai
         Ok(NfaOp::ClassGraph) => (1..=127).contains(&c) && ascii(u8::is_ascii_graphic),
         // U+00AA and U+00BA are the ordinal indicators: lowercase
         // letters, but not the lower half of a case pair.
-        Ok(NfaOp::ClassLower) => mb_islower(c) && c != 170 && c != 186,
-        Ok(NfaOp::ClassPrint) => vim_isprintc(c),
+        Ok(NfaOp::ClassLower) => Codepoint::new(c).is_lower() && c != 170 && c != 186,
+        Ok(NfaOp::ClassPrint) => vim_isprintc(Codepoint::new(c)),
         Ok(NfaOp::ClassPunct) => (1..128).contains(&c) && ascii(u8::is_ascii_punctuation),
         Ok(NfaOp::ClassSpace) => (9..=13).contains(&c) || c == c_int::from(b' '),
-        Ok(NfaOp::ClassUpper) => mb_isupper(c),
+        Ok(NfaOp::ClassUpper) => Codepoint::new(c).is_upper(),
         Ok(NfaOp::ClassXdigit) => ascii_isxdigit(c),
         Ok(NfaOp::ClassTab) => c == c_int::from(b'\t'),
         Ok(NfaOp::ClassReturn) => c == c_int::from(b'\r'),
         Ok(NfaOp::ClassBackspace) => c == 0x08,
         Ok(NfaOp::ClassEscape) => c == c_int::from(ESC),
-        Ok(NfaOp::ClassIdent) => vim_is_ident_char(c),
+        Ok(NfaOp::ClassIdent) => vim_is_ident_char(Codepoint::new(c)),
         Ok(NfaOp::ClassKeyword) => reg_iswordc(rex, c),
-        Ok(NfaOp::ClassFname) => vim_isfilec(c),
+        Ok(NfaOp::ClassFname) => vim_isfilec(Codepoint::new(c)),
         _ => {
             siemsg!(
                 "E877: (NFA regexp) Invalid character class: {}",
@@ -366,7 +367,7 @@ pub(crate) fn find_match_text(
     match_text: &[u8],
 ) -> c_int {
     let mut col = *startcol;
-    let regstart_len = utf_char2len(regstart);
+    let regstart_len = utf_char2len(Codepoint::new(regstart));
     let line = rex.line();
     loop {
         let mut matched = true;
@@ -377,7 +378,7 @@ pub(crate) fn find_match_text(
         // so measure what is actually there.
         let mut regstart_len2 = regstart_len;
         if regstart_len2 > 1 && byte_count(char_len_at(line, at)) != regstart_len2 {
-            regstart_len2 = utf_char2len(utf_fold(regstart));
+            regstart_len2 = utf_char2len(Codepoint::new(regstart).fold());
         }
         let mut s2 = at + regstart_len2.cast_unsigned() as usize;
         while match_text[s1] != 0 {
@@ -391,7 +392,7 @@ pub(crate) fn find_match_text(
             }
             let c1 = char_at_nul(match_text, s1);
             let c2 = char_at_nul(line, s2);
-            if c1 != c2 && (!rex.reg_ic() || utf_fold(c1) != utf_fold(c2)) {
+            if c1 != c2 && (!rex.reg_ic() || c1.fold() != c2.fold()) {
                 matched = false;
                 break;
             }

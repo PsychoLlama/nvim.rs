@@ -24,6 +24,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::mbyte::Codepoint;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -34,10 +35,10 @@ use core::ffi::c_int;
 /// *character* rather than by byte, because an identifier may be multibyte.
 pub(crate) fn past_label(line: &[u8], at: usize) -> Option<usize> {
     let mut i = at;
-    if !vim_is_ident_char(c_int::from(byte_at(line, i))) {
+    if !vim_is_ident_char(Codepoint::from(byte_at(line, i))) {
         return None; // need at least one ID character
     }
-    while vim_is_ident_char(c_int::from(byte_at(line, i))) {
+    while vim_is_ident_char(Codepoint::from(byte_at(line, i))) {
         i += cluster_len(&line[i.min(line.len())..]);
     }
     i = code_at(line, i);
@@ -119,8 +120,8 @@ pub(crate) fn is_compound_init(line: &[u8], at: usize) -> bool {
             i = code_at(line, i + 1);
             found = Some(i);
         } else if line[i.min(line.len())..].starts_with(b"return")
-            && !vim_is_ident_char(c_int::from(byte_at(line, i + 6)))
-            && (i == at || !vim_is_ident_char(c_int::from(byte_at(line, i - 1))))
+            && !vim_is_ident_char(Codepoint::from(byte_at(line, i + 6)))
+            && (i == at || !vim_is_ident_char(Codepoint::from(byte_at(line, i - 1))))
         {
             i = code_at(line, i + 6);
             found = Some(i);

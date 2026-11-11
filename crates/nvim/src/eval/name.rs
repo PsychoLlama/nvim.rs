@@ -29,6 +29,7 @@ use crate::eval::{
     eval_to_string,
 };
 use crate::keycodes::{K_SPECIAL, KE_SNR, KS_EXTRA};
+use crate::mbyte::Codepoint;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::option::defs::{OptIndex, OptionSetFlags};
@@ -45,7 +46,7 @@ pub(crate) const END: u8 = b'\0';
 /// there is none.
 pub(crate) fn env_name_len(text: &[u8]) -> usize {
     text.iter()
-        .take_while(|&&b| vim_is_ident_char(c_int::from(b)))
+        .take_while(|&&b| vim_is_ident_char(Codepoint::from(b)))
         .count()
 }
 

@@ -21,6 +21,7 @@ use crate::cstr;
 use crate::fileio::Fgets;
 use crate::formatted;
 use crate::guard::Suppress;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{char_at, cluster_len};
 use crate::memline::Lines;
 use crate::message::IOSIZE;
@@ -163,7 +164,7 @@ fn thesaurus_add_words_in_line(
         // non-word characters.
         while at < line.len() {
             let l = cluster_len(&line[at..]);
-            if l < 2 && !vim_iswordc(c_int::from(line[at])) {
+            if l < 2 && !vim_iswordc(Codepoint::from(line[at])) {
                 break;
             }
             at += l;

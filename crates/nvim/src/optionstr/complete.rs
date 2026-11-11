@@ -13,6 +13,7 @@
 )]
 
 use crate::insexpand::{CPT_ABBR, CPT_KIND, CPT_MENU, set_cpt_callbacks};
+use crate::mbyte::Codepoint;
 use crate::tag::LSIZE;
 use core::ffi::{CStr, c_int, c_uint};
 
@@ -66,7 +67,7 @@ pub fn did_set_complete(args: &mut OptSet) -> Result<(), OptError> {
 
         let source = part.first().copied().unwrap_or(0);
         if source == 0 || !CPT_SOURCES.to_bytes().contains(&source) {
-            return Err(illegal_char(c_int::from(source)));
+            return Err(illegal_char(Codepoint::from(source)));
         }
 
         // Anything after the source letter is either that source's

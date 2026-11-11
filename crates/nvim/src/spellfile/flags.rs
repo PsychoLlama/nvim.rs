@@ -38,6 +38,7 @@
 )]
 
 use super::low_byte;
+use crate::mbyte::Codepoint;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::smsg;
 use crate::strings::{find_char, has_char};
@@ -83,16 +84,14 @@ pub(super) fn get_affitem(flagtype: c_int, text: &[u8], at: &mut usize) -> c_uin
     *at += c_cluster_len(rest(text, *at));
     // Two-character flags: always for LONG, and for CAPLONG only when
     // the first character is upper case ASCII.
-    if flagtype == AFT_LONG
-        || (flagtype == AFT_CAPLONG && res >= c_int::from(b'A') && res <= c_int::from(b'Z'))
-    {
+    if flagtype == AFT_LONG || (flagtype == AFT_CAPLONG && res.is_ascii_uppercase()) {
         if byte_at(text, *at) == 0 {
             return 0;
         }
-        res = char_at(rest(text, *at)) + (res << 16);
+        res = Codepoint::new(char_at(rest(text, *at)).get() + (res.get() << 16));
         *at += c_cluster_len(rest(text, *at));
     }
-    res.cast_unsigned()
+    res.get().cast_unsigned()
 }
 
 /// Why an affix item is not exactly one flag. Not an error to `:mkspell`:
@@ -142,16 +141,17 @@ pub(super) fn affitem2flag(flagtype: c_int, item: &[u8]) -> Result<c_uint, FlagE
 /// Is `flag` one of the flags in `afflist`?
 pub(super) fn flag_in_afflist(flagtype: c_int, afflist: &[u8], flag: c_uint) -> bool {
     match flagtype {
-        AFT_CHAR => find_char(afflist, flag.cast_signed()).is_some(),
+        AFT_CHAR => find_char(afflist, Codepoint::new(flag.cast_signed())).is_some(),
         AFT_LONG | AFT_CAPLONG => {
             let mut p = 0;
             while byte_at(afflist, p) != 0 {
-                let mut n = char_at(rest(afflist, p)).cast_unsigned();
+                let mut n = char_at(rest(afflist, p)).get().cast_unsigned();
                 p += c_cluster_len(rest(afflist, p));
                 if (flagtype == AFT_LONG || (n >= c_uint::from(b'A') && n <= c_uint::from(b'Z')))
                     && byte_at(afflist, p) != 0
                 {
                     n = char_at(rest(afflist, p))
+                        .get()
                         .cast_unsigned()
                         .wrapping_add(n << 16);
                     p += c_cluster_len(rest(afflist, p));

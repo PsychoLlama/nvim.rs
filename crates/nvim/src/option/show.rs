@@ -28,6 +28,7 @@ use crate::cstr;
 use crate::env::home_to_tilde;
 use crate::global_cell::field;
 use crate::keycodes::ModMask;
+use crate::mbyte::Codepoint;
 use crate::mbyte::unescape_at;
 use crate::narrow::number_as_int;
 use crate::option::defs::{OPT_VAL_TYPE_BOOLEAN, OPT_VAL_TYPE_NUMBER};
@@ -553,7 +554,9 @@ pub(crate) fn option_value_text(opt_idx: OptIndex, opt_flags: OptionSetFlags) ->
             // A 'wildchar' that is not a named key still shows as the
             // character rather than as its code.
             let key = c_int::try_from(wc).expect("a key code fits an int");
-            cstr::in_bytes(&transchar(key)).to_bytes().to_vec()
+            cstr::in_bytes(&transchar(Codepoint::new(key)))
+                .to_bytes()
+                .to_vec()
         } else {
             varp.number_var().get().to_string().into_bytes()
         };

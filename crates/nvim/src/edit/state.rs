@@ -31,6 +31,7 @@
 
 use crate::cstr::byte_at;
 use crate::keycodes::SpecialKey;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::narrow::len_as_int;
 use crate::state::Step;
@@ -122,7 +123,7 @@ fn insert_enter(s: &mut InsertState) {
 
     // The cursor needs positioning again when it is on a TAB, and when
     // the line carries inline virtual text.
-    if gchar_cursor() == c_int::from(b'\t') || buf_meta_total(Buf::current(), MT_META_INLINE) > 0 {
+    if gchar_cursor() == b'\t' || buf_meta_total(Buf::current(), MT_META_INLINE) > 0 {
         Win::current()
             .w_valid
             .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
@@ -377,7 +378,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
             && Win::current().w_cursor.col > ColNr::ZERO
         {
             s.c = Key::from_code(char_before_cursor());
-            if vim_isprintc(s.c.code()) {
+            if vim_isprintc(Codepoint::new(s.c.code())) {
                 ins_compl_enable_autocomplete();
                 ins_compl_init_get_longest();
                 insert_do_complete(s);
@@ -589,7 +590,7 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
             Some(text) => {
                 let mut at = 0;
                 while at < text.len() {
-                    ins_compl_addleader(Key::from_code(char_at(&text[at..])));
+                    ins_compl_addleader(Key::from_code(char_at(&text[at..]).get()));
                     at += c_cluster_len(&text[at..]);
                 }
             }

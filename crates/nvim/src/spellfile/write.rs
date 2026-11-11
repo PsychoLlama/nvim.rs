@@ -43,6 +43,7 @@ use super::CF_WORD_BIT;
 use super::len_byte;
 use super::low_byte;
 use super::low16;
+use crate::mbyte::Codepoint;
 use crate::narrow::len_as_int;
 use crate::semsg;
 use crate::spell::WordFlags;
@@ -218,7 +219,7 @@ fn put_charflags(w: &mut SplWriter, spin: &SpellInfo) {
     let mut folchars: Vec<u8> = Vec::with_capacity(512);
     let mut buf = [0u8; 8];
     for i in 128..256 {
-        let n = encode_char(c_int::from(spelltab_fold(i)), &mut buf);
+        let n = encode_char(Codepoint::from(spelltab_fold(i)), &mut buf);
         folchars.extend_from_slice(&buf[..n]);
     }
 

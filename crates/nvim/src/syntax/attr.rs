@@ -19,6 +19,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::narrow::count_as_int;
 use crate::narrow::number_as_col;
 use core::ffi::c_int;
@@ -638,7 +639,7 @@ impl SynState {
 #[inline(always)]
 fn word_char_at(line: &[u8], at: usize, buffer: Buf) -> bool {
     match line.get(at) {
-        Some(&lead) if lead < 0x80 => vim_iswordc_buf(c_int::from(lead), buffer),
+        Some(&lead) if lead < 0x80 => vim_iswordc_buf(Codepoint::from(lead), buffer),
         Some(_) => is_word_at(&line[at..], buffer),
         None => false,
     }

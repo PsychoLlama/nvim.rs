@@ -48,8 +48,7 @@ pub(crate) fn char_len(p1: &[u8], p2: &[u8]) -> Option<usize> {
     }
     if l > 1 {
         if p1[..l] != p2[..l]
-            && (DIFF_FLAGS.get() & DIFF_ICASE == 0
-                || utf_fold(char_at(p1)) != utf_fold(char_at(p2)))
+            && (DIFF_FLAGS.get() & DIFF_ICASE == 0 || char_at(p1).fold() != char_at(p2).fold())
         {
             return None;
         }

@@ -15,6 +15,7 @@
 )]
 
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::option::vars::P_SEL;
 use crate::regexp::RegCompiler;
 use core::ffi::{CStr, c_int};
@@ -46,7 +47,7 @@ pub(crate) fn reg_breakcheck(rex: Rex) {
 /// Is `c` a keyword character? 'iskeyword' is buffer-local and the buffer
 /// being matched is not always the current one.
 pub(crate) fn reg_iswordc(rex: Rex, c: c_int) -> bool {
-    vim_iswordc_buf(c, rex.reg_buf())
+    vim_iswordc_buf(Codepoint::new(c), rex.reg_buf())
 }
 
 /// What an empty line past the match's last one reads as.

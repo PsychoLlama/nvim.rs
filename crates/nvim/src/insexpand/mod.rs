@@ -61,7 +61,7 @@ use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::lua::executor::nlua_expand_pat;
 use crate::mbyte::MB_MAXCHAR;
-use crate::mbyte::{c_cluster_len, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf8len_tab};
+use crate::mbyte::{c_cluster_len, utf8len_tab};
 use crate::memline::{dec, ml_delete};
 use crate::message::state::{DID_EMSG, EMSG_SILENT, IN_ASSERT_FAILS, MSG_HIST_OFF};
 use crate::message::{E_INVARG, E_LISTREQ, E_PATNOTF};

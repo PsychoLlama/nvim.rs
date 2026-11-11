@@ -17,16 +17,14 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ascii::{CAR, NUL};
+use crate::ascii::CAR;
 use crate::cstr;
 use crate::fileio::EOL_MAC;
+use crate::mbyte::Codepoint;
 use core::ffi::CStr;
 use core::ffi::c_int;
 
-use crate::mbyte::{
-    c_cluster_len, char_at, char_len, cluster_len, encode_char, mb_tolower, utf_char2cells,
-    utf8_len,
-};
+use crate::mbyte::{c_cluster_len, char_at, char_len, cluster_len, encode_char, utf_char2cells};
 use crate::memory::XString;
 use crate::option::get_fileformat;
 use crate::option::vars::DY_FLAGS;
@@ -85,7 +83,7 @@ impl<'a> Chars<'a> {
 
     /// The code point under the cursor.
     #[inline(always)]
-    fn code(self) -> c_int {
+    fn code(self) -> Codepoint {
         char_at(self.rest())
     }
 
@@ -118,12 +116,11 @@ fn table_cells(b: uint8_t) -> c_int {
 
 /// The display width of a byte, zero for a multibyte lead byte.
 #[inline(always)]
-fn byte_cells(b: c_int) -> c_int {
+fn byte_cells(b: u8) -> c_int {
     if b >= 0x80 {
         return 0;
     }
-    // Upstream's `(uint8_t)b` for anything below 0x80, a negative `b` too.
-    table_cells(b.to_le_bytes()[0])
+    table_cells(b)
 }
 
 /// Replace every unprintable byte in `buf` with its display form, in place.
@@ -149,7 +146,7 @@ pub fn trans_characters_in(bytes: &mut [u8]) {
             // A multibyte character is left alone.
             len -= step;
         } else {
-            let trs = render_byte(Buf::current_or_none(), c_int::from(bytes[at]));
+            let trs = render_byte(Buf::current_or_none(), bytes[at]);
             step = trs.len;
             if step > 1 {
                 room -= isize::try_from(step - 1).expect("a short expansion");
@@ -194,7 +191,7 @@ fn transstr_len_in(s: &[u8], untab: bool) -> usize {
             len += 1;
             cursor.advance(1);
         } else {
-            let cells = byte_cells(c_int::from(byte));
+            let cells = byte_cells(byte);
             cursor.advance(1);
             // A zero width means the table has no entry: `<xx>` is four.
             len += usize::try_from(cells)
@@ -248,7 +245,7 @@ pub fn transstr_into(s: &[u8], slen: Option<usize>, out: &mut [u8], untab: bool)
             cursor.advance(1);
             read += 1;
         } else {
-            let tb = render_byte(Buf::current_or_none(), c_int::from(cursor.byte()));
+            let tb = render_byte(Buf::current_or_none(), cursor.byte());
             cursor.advance(1);
             read += 1;
             if written + tb.len > limit {
@@ -291,11 +288,11 @@ pub fn foldcase(text: &[u8], room: Option<usize>) -> Vec<u8> {
         }
         let c = cursor.code();
         let olen = cursor.code_len();
-        let mut lc = mb_tolower(c);
+        let mut lc = c.to_lower();
         // Only ASCII and real multibyte characters fold; a lone Latin-1 byte
         // has no case in this encoding.
         if (c < 0x80 || olen > 1) && c != lc {
-            let mut nlen = utf8_len(lc);
+            let mut nlen = lc.utf8_len();
             if nlen > olen && room.is_some_and(|room| len + nlen - olen >= room) {
                 // No room to grow: keep the original character.
                 lc = c;
@@ -341,18 +338,17 @@ fn owned(rendered: &render::Rendered) -> CharDisplay {
 /// The display form of the unprintable byte `c`, as a value.
 ///
 #[inline(always)]
-fn render_nonprint(buffer: Option<Buf>, c: c_int) -> render::Rendered {
-    let c = if c == c_int::from(NL) {
+fn render_nonprint(buffer: Option<Buf>, c: u8) -> render::Rendered {
+    let c = if c == NL {
         // A NUL is stored as a newline internally.
-        NUL
-    } else if c == c_int::from(CAR) && buffer.is_some_and(|b| get_fileformat(b) == EOL_MAC) {
-        c_int::from(NL)
+        b'\0'
+    } else if c == CAR && buffer.is_some_and(|b| get_fileformat(b) == EOL_MAC) {
+        NL
     } else {
         c
     };
-    debug_assert!(c <= 0xff, "c <= 0xff");
     if DY_FLAGS.get() & OPT_DY_FLAG_UHEX != 0 || c > 0x7f {
-        render::hex_form(c)
+        render::hex_form(Codepoint::from(c))
     } else {
         render::control_form(c)
     }
@@ -361,25 +357,24 @@ fn render_nonprint(buffer: Option<Buf>, c: c_int) -> render::Rendered {
 /// The display form of the character `c` as it would appear in `buffer`, as a
 /// value.
 #[inline(always)]
-fn render_char(buffer: Option<Buf>, c: c_int) -> render::Rendered {
+fn render_char(buffer: Option<Buf>, c: Codepoint) -> render::Rendered {
     // A negative code is one of the key-translation escapes; it renders as
     // its byte behind a `~@`.
     let (prefix, c) = if c < 0 {
         let (prefix, byte) = render::negative_form(c);
-        (Some(prefix), byte)
+        (Some(prefix), Codepoint::from(byte))
     } else {
         (None, c)
     };
     // Before the tables exist, printable ASCII is all that can be trusted.
-    let byte = u8::try_from(c).ok();
-    let body = if let Some(byte) = byte.filter(|&b| {
-        (!CHARTAB_INITIALIZED.get() && (b' '..=b'~').contains(&b)) || vim_isprintc(c_int::from(b))
-    }) {
-        render::Rendered::literal(byte)
-    } else if c <= 0xff {
-        render_nonprint(buffer, c)
-    } else {
-        render::hex_form(c)
+    let body = match c.as_byte() {
+        Some(byte)
+            if (!CHARTAB_INITIALIZED.get() && (b' '..=b'~').contains(&byte)) || vim_isprintc(c) =>
+        {
+            render::Rendered::literal(byte)
+        }
+        Some(byte) => render_nonprint(buffer, byte),
+        None => render::hex_form(c),
     };
     match prefix {
         Some(prefix) => body.behind(prefix),
@@ -390,43 +385,43 @@ fn render_char(buffer: Option<Buf>, c: c_int) -> render::Rendered {
 /// [`render_char`] for a single byte: unlike it, a high byte is never taken
 /// for a printable Latin-1 character.
 #[inline(always)]
-fn render_byte(buffer: Option<Buf>, c: c_int) -> render::Rendered {
+fn render_byte(buffer: Option<Buf>, c: u8) -> render::Rendered {
     if c >= 0x80 {
         return render_nonprint(buffer, c);
     }
-    render_char(buffer, c)
+    render_char(buffer, Codepoint::from(c))
 }
 
 /// The display form of character `c`.
-pub(crate) fn transchar(c: c_int) -> CharDisplay {
+pub(crate) fn transchar(c: Codepoint) -> CharDisplay {
     transchar_buf(Buf::current_or_none(), c)
 }
 
 /// The display form of `c` as it would appear in `buffer` (which decides how a
 /// carriage return renders).
-pub(crate) fn transchar_buf(buffer: Option<Buf>, c: c_int) -> CharDisplay {
+pub(crate) fn transchar_buf(buffer: Option<Buf>, c: Codepoint) -> CharDisplay {
     owned(&render_char(buffer, c))
 }
 
 /// The display form of the single byte `c`. Unlike [`transchar_buf`] this
 /// never treats a high byte as a printable Latin-1 character.
-pub(crate) fn transchar_byte_buf(buffer: Option<Buf>, c: c_int) -> CharDisplay {
+pub(crate) fn transchar_byte_buf(buffer: Option<Buf>, c: u8) -> CharDisplay {
     owned(&render_byte(buffer, c))
 }
 
 /// [`transchar_byte_buf`] for the current buffer.
-pub(crate) fn transchar_byte(c: c_int) -> CharDisplay {
+pub(crate) fn transchar_byte(c: u8) -> CharDisplay {
     transchar_byte_buf(Buf::current_or_none(), c)
 }
 
 /// The display form of the unprintable byte `c`.
-pub(crate) fn transchar_nonprint_form(buffer: Option<Buf>, c: c_int) -> CharDisplay {
+pub(crate) fn transchar_nonprint_form(buffer: Option<Buf>, c: u8) -> CharDisplay {
     owned(&render_nonprint(buffer, c))
 }
 
 /// Write `c`'s `<xx>` form into `out`, NUL-terminated. Answers the length,
 /// excluding the NUL; nine bytes hold the widest form.
-pub fn transchar_hex_into(out: &mut [u8], c: c_int) -> usize {
+pub fn transchar_hex_into(out: &mut [u8], c: Codepoint) -> usize {
     let rendered = render::hex_form(c);
     for (slot, &byte) in out.iter_mut().zip(&rendered.bytes[..=rendered.len]) {
         *slot = byte;
@@ -441,23 +436,23 @@ pub(crate) fn mirror_ascii(bytes: &mut [u8]) {
 }
 
 /// The display width of the byte `b`, or zero for a multibyte lead byte.
-pub fn byte2cells(b: c_int) -> c_int {
+pub fn byte2cells(b: u8) -> c_int {
     byte_cells(b)
 }
 
 /// The display width of character `c`. A negative code costs two cells more
 /// for its `~@` prefix.
-pub fn char2cells(c: c_int) -> c_int {
+pub fn char2cells(c: Codepoint) -> c_int {
     if c < 0 {
         // Upstream's `K_SECOND(c)`; its `K_SPECIAL` and NUL arms are for
         // codes that are not negative, so only the termcap byte is left.
-        let second = c.wrapping_neg().to_le_bytes()[0];
-        return char2cells(c_int::from(second)) + 2;
+        let second = c.get().wrapping_neg().to_le_bytes()[0];
+        return char2cells(Codepoint::from(second)) + 2;
     }
-    if c >= 0x80 {
-        return utf_char2cells(c);
+    match c.as_byte() {
+        Some(byte) if byte < 0x80 => table_cells(byte),
+        _ => utf_char2cells(c),
     }
-    table_cells(c.to_le_bytes()[0])
 }
 
 /// Upstream's `ptr2cells` over a slice: the cells the character at the start of

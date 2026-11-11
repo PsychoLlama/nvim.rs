@@ -25,6 +25,7 @@
 )]
 
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::regexp::RegCompiler;
 use crate::regexp::low_byte;
 use core::ffi::{c_int, c_uint};
@@ -217,7 +218,7 @@ impl BtEmitter {
             return self.byte(c);
         }
         let mut bytes = [0; 6];
-        let len = encode_char(c, &mut bytes);
+        let len = encode_char(Codepoint::new(c), &mut bytes);
         self.text.extend_from_slice(&bytes[..len]);
     }
 
@@ -378,7 +379,8 @@ impl BtEmitter {
 /// otherwise the multibyte character is just its bytes, and matching it
 /// byte-wise is faster.
 pub(crate) fn use_multibytecode(rc: &mut RegCompiler, c: c_int) -> bool {
-    utf_char2len(c) > 1 && (multi_kind(peekchr(rc)).is_some() || utf_iscomposing_legacy(c))
+    utf_char2len(Codepoint::new(c)) > 1
+        && (multi_kind(peekchr(rc)).is_some() || utf_iscomposing_legacy(Codepoint::new(c)))
 }
 
 /// The node after `p` in a finished program's chain, or 0 (where no node

@@ -699,7 +699,7 @@ impl Win {
             win.w_cursor.coladd = 0;
             0
         } else {
-            char_at(&line[win.w_cursor.col.as_usize()..])
+            char_at(&line[win.w_cursor.col.as_usize()..]).get()
         };
 
         let env = Env {

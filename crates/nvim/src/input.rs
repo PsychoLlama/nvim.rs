@@ -26,6 +26,7 @@ use crate::guard::{Keys, Suppress};
 use crate::highlight_group::HLF_R;
 use crate::keycodes::ModMask;
 use crate::keycodes::{K_SPECIAL, KS_MODIFIER, SpecialKey, key_unescape};
+use crate::mbyte::Codepoint;
 use crate::mbyte::{char_at, utf8len_tab};
 use crate::memory::XString;
 use crate::message::IOSIZE;
@@ -160,7 +161,7 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
 
         let key = key_unescape(buf[1], buf[2]).code();
         if !is_swallowed_key(buf[1], key) {
-            break key;
+            break Codepoint::new(key);
         }
         if buf[1] == KS_MODIFIER {
             MOD_MASK.set(ModMask::from_byte(buf[2]));
@@ -176,7 +177,7 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
     // to be written back.
     let mut modifiers = MOD_MASK.get();
     // SAFETY: `modifiers` is a live local the callee reads and writes.
-    let key = merge_modifiers(Key::from_code(key), &mut modifiers);
+    let key = merge_modifiers(Key::from_code(key.get()), &mut modifiers);
     MOD_MASK.set(modifiers);
     key
 }
@@ -208,7 +209,7 @@ pub(crate) fn prompt_for_key(prompt: &CStr, hl_id: c_int) -> Key {
     // first *byte* through a signed `char`, which `do_dialog` drops as a
     // special key whenever the hotkey is not ASCII.
     prompt_line(Some(prompt), hl_id, true, None).map_or(Key::ESC, |resp| {
-        Key::from_code(char_at(resp.as_cstr().to_bytes()))
+        Key::from_code(char_at(resp.as_cstr().to_bytes()).get())
     })
 }
 

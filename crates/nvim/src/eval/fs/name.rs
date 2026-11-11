@@ -43,6 +43,7 @@ use crate::eval::do_string_sub;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::NumBuf;
 use crate::ex_docmd::{VALID_HEAD, VALID_PATH};
+use crate::mbyte::Codepoint;
 use crate::mbyte::{cluster_len, head_off};
 use crate::memory::XString;
 use crate::os::fs::{dir_exists, dirname_text};
@@ -360,12 +361,12 @@ fn subst_stage(mods: &mut Mods<'_>, f: &mut Fname<'_>) -> bool {
     }
 
     // The pattern, then the replacement, each up to the next separator.
-    let Some(pat_len) = find_char(&b[i..], c_int::from(sep)) else {
+    let Some(pat_len) = find_char(&b[i..], Codepoint::from(sep)) else {
         return false;
     };
     let pat = owned_copy(&b[i..i + pat_len]);
     let j = i + pat_len + 1;
-    let Some(sub_len) = find_char(&b[j..], c_int::from(sep)) else {
+    let Some(sub_len) = find_char(&b[j..], Codepoint::from(sep)) else {
         return false;
     };
     let sub = owned_copy(&b[j..j + sub_len]);

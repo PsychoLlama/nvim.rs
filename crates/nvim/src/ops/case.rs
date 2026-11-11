@@ -23,6 +23,7 @@
 )]
 
 use crate::ex_docmd::cmdmod_has;
+use crate::mbyte::Codepoint;
 use crate::message_fmt::report_msg;
 use crate::normal::defs::MotionType;
 use crate::tr_plural;
@@ -162,17 +163,17 @@ pub fn swapchar(op_type: OpType, pos: Pos) -> bool {
     }
 
     let mut nc = c;
-    if mb_islower(c) {
+    if c.is_lower() {
         if op_type == OpType::Rot13 {
-            nc = rot13(c, c_int::from(b'a'));
+            nc = Codepoint::new(rot13(c.get(), c_int::from(b'a')));
         } else if op_type != OpType::Lower {
-            nc = mb_toupper(c);
+            nc = c.to_upper();
         }
-    } else if mb_isupper(c) {
+    } else if c.is_upper() {
         if op_type == OpType::Rot13 {
-            nc = rot13(c, c_int::from(b'A'));
+            nc = Codepoint::new(rot13(c.get(), c_int::from(b'A')));
         } else if op_type != OpType::Upper {
-            nc = mb_tolower(c);
+            nc = c.to_lower();
         }
     }
     if nc == c {
@@ -193,7 +194,7 @@ pub fn swapchar(op_type: OpType, pos: Pos) -> bool {
         };
         let _ = del_bytes(len.get(), false, false);
         // The new character, from the case tables, as the key that types it.
-        ins_char(Key::from_code(nc));
+        ins_char(Key::from_code(nc.get()));
         Win::current().w_cursor = saved;
     } else {
         // Both are below 0x80 here.

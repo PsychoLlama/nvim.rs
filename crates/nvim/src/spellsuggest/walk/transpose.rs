@@ -42,6 +42,7 @@
 )]
 
 use crate::ascii::NUL;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, utf_char2len};
 use crate::narrow::as_index;
 use crate::spell::spell_iswordp;
@@ -60,7 +61,7 @@ impl Walk<'_> {
     fn head(s: &[u8]) -> (c_int, usize) {
         match s.first() {
             None | Some(&0) => (NUL, 0),
-            Some(_) => (char_at(s), char_len(s)),
+            Some(_) => (char_at(s).get(), char_len(s)),
         }
     }
 
@@ -96,7 +97,7 @@ impl Walk<'_> {
         {
             first // don't swap a non-word character
         } else {
-            char_at(&self.fword[bad_idx + first_len..])
+            char_at(&self.fword[bad_idx + first_len..]).get()
         };
 
         if second == NUL {
@@ -121,10 +122,10 @@ impl Walk<'_> {
         self.stack[level].state = State::UnSwap;
         self.depth += 1;
 
-        let second_len = as_index(utf_char2len(second));
+        let second_len = as_index(utf_char2len(Codepoint::new(second)));
         let word = self.fword_from(bad_idx);
         word.copy_within(first_len..first_len + second_len, 0);
-        encode_char(first, &mut word[second_len..]);
+        encode_char(Codepoint::new(first), &mut word[second_len..]);
         self.stack[self.depth].change_from = frame_pos(bad_idx + first_len + second_len);
     }
 
@@ -189,11 +190,11 @@ impl Walk<'_> {
         self.stack[level].state = State::UnSwap3;
         self.depth += 1;
 
-        let third_len = as_index(utf_char2len(third));
+        let third_len = as_index(utf_char2len(Codepoint::new(third)));
         let word = self.fword_from(bad_idx);
         word.copy_within(third_at..third_at + third_len, 0);
-        encode_char(middle, &mut word[third_len..]);
-        encode_char(first, &mut word[middle_len + third_len..]);
+        encode_char(Codepoint::new(middle), &mut word[third_len..]);
+        encode_char(Codepoint::new(first), &mut word[middle_len + third_len..]);
         self.stack[self.depth].change_from =
             frame_pos(bad_idx + first_len + middle_len + third_len);
     }
@@ -242,7 +243,7 @@ impl Walk<'_> {
         let mut rest_len = Walk::head(&word[first_len..]).1;
         rest_len += Walk::head(&word[first_len + rest_len..]).1;
         word.copy_within(first_len..first_len + rest_len, 0);
-        encode_char(first, &mut word[rest_len..]);
+        encode_char(Codepoint::new(first), &mut word[rest_len..]);
         self.stack[self.depth].change_from = frame_pos(bad_idx + first_len + rest_len);
     }
 
@@ -279,7 +280,7 @@ impl Walk<'_> {
         moved_len += Walk::head(&word[moved_len..]).1;
         let (last, last_len) = Walk::head(&word[moved_len..]);
         word.copy_within(..moved_len, last_len);
-        encode_char(last, word);
+        encode_char(Codepoint::new(last), word);
         self.stack[self.depth].change_from = frame_pos(bad_idx + moved_len + last_len);
     }
 

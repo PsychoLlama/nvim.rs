@@ -33,6 +33,7 @@
 
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
+use crate::mbyte::Codepoint;
 use crate::mbyte::c_cluster_len;
 use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_int;
@@ -44,7 +45,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};
 
 use super::*;
-use crate::ascii::NUL;
 use crate::normal::{set_visual_active, visual_active, visual_mode};
 
 mod block;
@@ -292,7 +292,7 @@ impl Put {
         if self.ve_flags != OPT_VE_FLAG_ALL as c_uint || self.kind != MotionType::CharWise {
             return;
         }
-        if gchar_cursor() == c_int::from(TAB) {
+        if gchar_cursor() == TAB {
             let viscol = getviscol();
             // No spaces needed for `p` on the last position of a tab, or
             // `P` on the first.
@@ -306,7 +306,7 @@ impl Put {
             } else {
                 Win::current().w_cursor.coladd = 0;
             }
-        } else if Win::current().w_cursor.coladd > 0 || gchar_cursor() == NUL {
+        } else if Win::current().w_cursor.coladd > 0 || gchar_cursor() == Codepoint::NUL {
             let to = getviscol() + c_int::from(self.dir == FORWARD);
             coladvance_force(to);
         }
@@ -343,7 +343,7 @@ impl Put {
         }
 
         if self.lines.is_empty() {
-            let display = transchar(c_int::from(regname.byte()));
+            let display = transchar(Codepoint::from(regname.byte()));
             let name = if !regname.is_unnamed() {
                 cstr::in_bytes(&display)
             } else {
@@ -368,7 +368,7 @@ impl Put {
             if self.kind == MotionType::CharWise {
                 // For charwise text, FORWARD is BACKWARD on the next
                 // character.
-                if self.dir == FORWARD && gchar_cursor() != NUL {
+                if self.dir == FORWARD && gchar_cursor() != Codepoint::NUL {
                     let bytelen = cursor_char_len();
                     col += bytelen.get();
                     if !self.lines[0].is_empty() {

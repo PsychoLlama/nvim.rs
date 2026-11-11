@@ -29,6 +29,7 @@
 use crate::cstr::{self, byte_at};
 use crate::keycodes::ModMask;
 use crate::keycodes::SpecialKey;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_char_info, c_next_cluster};
 use crate::os::cshim::ctype_bits;
 use crate::types::Key;
@@ -119,7 +120,7 @@ pub(crate) fn get_literal(no_simplify: bool) -> Key {
                 if !ascii_isxdigit(nc.code()) {
                     break;
                 }
-                cc = cc * 16 + hex2nr(nc.code());
+                cc = cc * 16 + nc.as_byte().map_or(0, hex2nr);
             } else if octal {
                 let Some(d) = digit.filter(|&d| d < 8) else {
                     break;
@@ -256,7 +257,7 @@ pub(crate) fn ins_digraph() -> Key {
         did_putchar = false;
         if redrawing() && !char_avail() {
             ins_redraw(false);
-            if char2cells(c.code()) == 1 {
+            if char2cells(Codepoint::new(c.code())) == 1 {
                 ins_redraw(false);
                 edit_putchar(c, true);
                 did_putchar = true;

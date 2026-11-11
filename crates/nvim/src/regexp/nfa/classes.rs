@@ -13,6 +13,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
@@ -43,7 +44,7 @@ fn is_word_char(rex: Rex) -> bool {
 /// costs the NFA's class states: measured +0.13 % on rebench's `nfa` phase
 /// and +0.21 % on `search` with the two `vim_isprintc` calls in place.
 fn is_printable(rex: Rex) -> bool {
-    vim_isprintc(input(rex))
+    vim_isprintc(Codepoint::new(input(rex)))
 }
 
 fn ignoring_case(rex: Rex) -> bool {
@@ -60,12 +61,12 @@ fn ignoring_case(rex: Rex) -> bool {
 #[inline(never)]
 pub(crate) fn class_matches(rex: Rex, op: NfaOp, curc: c_int) -> bool {
     match op {
-        NfaOp::Ident => vim_is_ident_char(curc),
-        NfaOp::Sident => !ascii_isdigit(curc) && vim_is_ident_char(curc),
+        NfaOp::Ident => vim_is_ident_char(Codepoint::new(curc)),
+        NfaOp::Sident => !ascii_isdigit(curc) && vim_is_ident_char(Codepoint::new(curc)),
         NfaOp::Kword => is_word_char(rex),
         NfaOp::Skword => !ascii_isdigit(curc) && is_word_char(rex),
-        NfaOp::Fname => vim_isfilec(curc),
-        NfaOp::Sfname => !ascii_isdigit(curc) && vim_isfilec(curc),
+        NfaOp::Fname => vim_isfilec(Codepoint::new(curc)),
+        NfaOp::Sfname => !ascii_isdigit(curc) && vim_isfilec(Codepoint::new(curc)),
         NfaOp::Print => is_printable(rex),
         NfaOp::Sprint => !ascii_isdigit(curc) && is_printable(rex),
         NfaOp::White => ascii_iswhite(curc),

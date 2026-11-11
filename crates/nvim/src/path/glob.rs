@@ -164,7 +164,7 @@ fn split_wild_component(
             // A later component; the wildcard is not in this one.
             comp = at + 1;
         } else if at >= wildoff
-            && (b"*?[{~$".contains(&pattern[at]) || (icase && mb_isalpha(char_at(&pattern[at..]))))
+            && (b"*?[{~$".contains(&pattern[at]) || (icase && char_at(&pattern[at..]).is_alpha()))
         {
             seen_wild = true;
         }

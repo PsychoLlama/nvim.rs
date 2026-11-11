@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::cstr::{self, byte_at};
+use crate::mbyte::Codepoint;
 use crate::mbyte::c_cluster_len;
 use crate::mbyte::{char_at, class_in, cluster_len, encode_char};
 use crate::memline::Lines;
@@ -24,7 +25,7 @@ use crate::winlayer::{Buf, Win};
 
 /// The characters of `text`, one per cluster, as `mb_ptr2char_adv` walks
 /// them.
-fn chars_of(text: &[u8]) -> Vec<c_int> {
+fn chars_of(text: &[u8]) -> Vec<Codepoint> {
     let mut chars = Vec::new();
     let mut at = 0;
     while at < text.len() {
@@ -50,12 +51,12 @@ fn infercase_text(text: &[u8], typed: &[u8]) -> Vec<u8> {
     // Rule 1: were any chars converted to lower?
     let mut has_lower = false;
     for i in 0..min_len {
-        if mb_islower(typed[i]) {
+        if typed[i].is_lower() {
             has_lower = true;
-            if mb_isupper(wca[i]) {
+            if wca[i].is_upper() {
                 // Rule 1 is satisfied.
                 for w in &mut wca[rest..] {
-                    *w = mb_tolower(*w);
+                    *w = w.to_lower();
                 }
                 break;
             }
@@ -67,23 +68,23 @@ fn infercase_text(text: &[u8], typed: &[u8]) -> Vec<u8> {
         let mut was_letter = false;
         for i in 0..min_len {
             let c = typed[i];
-            if was_letter && mb_isupper(c) && mb_islower(wca[i]) {
+            if was_letter && c.is_upper() && wca[i].is_lower() {
                 // Rule 2 is satisfied.
                 for w in &mut wca[rest..] {
-                    *w = mb_toupper(*w);
+                    *w = w.to_upper();
                 }
                 break;
             }
-            was_letter = mb_islower(c) || mb_isupper(c);
+            was_letter = c.is_lower() || c.is_upper();
         }
     }
 
     // Copy the original case of the part we typed.
     for (w, &c) in wca.iter_mut().zip(&typed).take(min_len) {
-        if mb_islower(c) {
-            *w = mb_tolower(*w);
-        } else if mb_isupper(c) {
-            *w = mb_toupper(*w);
+        if c.is_lower() {
+            *w = w.to_lower();
+        } else if c.is_upper() {
+            *w = w.to_upper();
         }
     }
 

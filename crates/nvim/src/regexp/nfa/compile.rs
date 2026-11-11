@@ -17,6 +17,7 @@
 )]
 
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::regexp::NfaOp;
 use crate::regexp::nfa::build::MAX_DEPTH;
 use core::ffi::c_int;
@@ -121,7 +122,7 @@ pub(crate) fn nfa_get_match_text(states: &[NfaState], start: StateId) -> Option<
     let mut buf = [0u8; MB_MAXBYTES];
     let mut p = state(state(start).out).out;
     while state(p).c > 0 {
-        let len = encode_char(state(p).c, &mut buf);
+        let len = encode_char(Codepoint::new(state(p).c), &mut buf);
         text.extend_from_slice(&buf[..len]);
         p = state(p).out;
     }

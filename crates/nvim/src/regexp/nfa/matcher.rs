@@ -20,6 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::regexp::{NfaOp, TIME_CHECK_INTERVAL};
 use crate::types::{ColNr, LineNr};
 use core::ffi::c_int;
@@ -31,7 +32,6 @@ use super::step::{Run, Step, lookaround_held, step};
 use super::sub::{copy_sub, copy_sub_off, has_zsubexpr, match_follows_from};
 use crate::ascii::NUL;
 use crate::getchar::state::GOT_INT;
-use crate::mbyte::utf_fold;
 use crate::regexp::{
     NFA_MAX_STATES, NFA_TOO_EXPENSIVE, PimResult, RegSubs, Rex, recursive_regmatch, reg_breakcheck,
     reg_nextline, skip_to_start,
@@ -371,7 +371,9 @@ fn restart<'p>(
             rex.set_col(col - clen);
         } else {
             let next = rex.char_at_offset(clen);
-            if next != regstart && (!rex.reg_ic() || utf_fold(next) != utf_fold(regstart)) {
+            if next != regstart
+                && (!rex.reg_ic() || Codepoint::new(next).fold() != Codepoint::new(regstart).fold())
+            {
                 return true;
             }
         }

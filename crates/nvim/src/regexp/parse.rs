@@ -323,7 +323,7 @@ pub(crate) fn pat_byte(rc: &RegCompiler, off: usize) -> u8 {
 
 /// The character `off` bytes past the cursor.
 pub(crate) fn pat_char(rc: &RegCompiler, off: usize) -> c_int {
-    char_at_nul(rc.text, rc.cursor.wrapping_add(off))
+    char_at_nul(rc.text, rc.cursor.wrapping_add(off)).get()
 }
 
 /// The encoded length of the character `off` bytes past the cursor; 0 at
@@ -560,7 +560,7 @@ pub(crate) fn gethexchrs(rc: &mut RegCompiler, maxinputlen: c_int) -> i64 {
     let mut nr: i64 = 0;
     let mut i = 0;
     while i < maxinputlen {
-        let c = c_int::from(pat_byte(rc, 0));
+        let c = pat_byte(rc, 0);
         if !ascii_isxdigit(c) {
             break;
         }
@@ -600,7 +600,7 @@ pub(crate) fn getoctchrs(rc: &mut RegCompiler) -> i64 {
         if !(b'0'..=b'7').contains(&c) {
             break;
         }
-        nr = (nr << 3) | i64::from(hex2nr(c_int::from(c)));
+        nr = (nr << 3) | i64::from(hex2nr(c));
         pat_seek(rc, 1);
         i += 1;
     }

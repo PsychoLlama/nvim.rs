@@ -51,6 +51,7 @@
 
 use crate::cstr;
 use crate::cstr::byte_at;
+use crate::mbyte::Codepoint;
 use crate::os::cshim::gettext;
 use crate::spell::WordFlags;
 use core::ffi::c_int;
@@ -709,7 +710,7 @@ pub fn can_compound(slang: &SpellLang, word: &[u8], flags: &[u8]) -> bool {
     let mut uflags = [0u8; MAXWLEN * 2];
     let mut p = 0;
     for &flag in flags {
-        p += encode_char(c_int::from(flag), &mut uflags[p..]);
+        p += encode_char(Codepoint::from(flag), &mut uflags[p..]);
     }
     uflags[p] = 0;
 

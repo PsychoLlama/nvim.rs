@@ -20,11 +20,11 @@
 
 use crate::cstr;
 use crate::env::expand_env_within;
+use crate::mbyte::Codepoint;
 use core::ffi::c_int;
 use std::ffi::CStr;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::os::fs::{file_id, link_info};
 use crate::path::MAXPATHL;
 
@@ -144,7 +144,13 @@ enum Side {
 /// other comes first. `'fileignorecase'` folds case.
 pub fn pathcmp(p: &[u8], q: &[u8], maxlen: Option<usize>) -> c_int {
     let ignorecase = p_fic();
-    let fold = |c: c_int| if ignorecase { mb_toupper(c) } else { c };
+    let fold = |c: c_int| {
+        if ignorecase {
+            Codepoint::new(c).to_upper()
+        } else {
+            Codepoint::new(c)
+        }
+    };
     let limit = maxlen.unwrap_or(usize::MAX);
     let (left, right) = (prefix_of(p, limit), prefix_of(q, limit));
 
@@ -171,14 +177,14 @@ pub fn pathcmp(p: &[u8], q: &[u8], maxlen: Option<usize>) -> c_int {
 
         let c1 = char_at(&left[at..]);
         let c2 = char_at(&right[j..]);
-        if fold(c1) != fold(c2) {
-            if vim_ispathsep(c1) {
+        if fold(c1.get()) != fold(c2.get()) {
+            if vim_ispathsep(c1.get()) {
                 return -1;
             }
-            if vim_ispathsep(c2) {
+            if vim_ispathsep(c2.get()) {
                 return 1;
             }
-            return fold(c1) - fold(c2);
+            return fold(c1.get()).get() - fold(c2.get()).get();
         }
         at += cluster_len(&left[at..]);
         j += cluster_len(&right[j..]);
@@ -192,7 +198,7 @@ pub fn pathcmp(p: &[u8], q: &[u8], maxlen: Option<usize>) -> c_int {
     // separator — but "//" and ":/" are not that.
     let rest = &name[at..];
     let after = char_at(&rest[cluster_len(rest)..]);
-    if after == NUL && at > 0 && !after_pathsep(name, at) && char_at(rest) == c_int::from(b'/') {
+    if after == Codepoint::NUL && at > 0 && !after_pathsep(name, at) && char_at(rest) == b'/' {
         return 0;
     }
     if side == Side::Right { -1 } else { 1 }

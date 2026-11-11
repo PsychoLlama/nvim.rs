@@ -12,12 +12,12 @@
 
 use crate::cstr;
 use crate::keycodes::SpecialKey;
+use crate::mbyte::Codepoint;
 use crate::memline::{ML_DEL_MESSAGE, MlFlags};
 use crate::narrow::len_as_int;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
-use crate::ascii::NUL;
 use crate::buffer::{buf_get_changedtick, buf_is_prompt, current_buf};
 use crate::change::OPENLINE_DO_COM;
 use crate::change::{changed_lines, del_chars, deleted_lines, ins_char, ins_char_bytes, open_line};
@@ -140,12 +140,12 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
         if u_save_cursor().is_err() {
             return;
         }
-        if gchar_cursor() == NUL {
+        if gchar_cursor() == Codepoint::NUL {
             // Past the end of the line: make room for the whole count and
             // then step back to where the replacing starts.
             coladvance_force(getviscol() + cmd_arg.count1);
             Win::current().w_cursor.col -= cmd_arg.count1;
-        } else if gchar_cursor() == c_int::from(TAB) {
+        } else if gchar_cursor() == TAB {
             // Land on the tab's first cell, not the cell of it the cursor
             // happens to be showing on.
             coladvance_force(getviscol());
@@ -319,7 +319,7 @@ pub(crate) fn n_swapchar(cmd_arg: &mut CmdArg) {
     while n > 0 {
         did_change |= swapchar(cmd_arg.op().op_type, Win::current().w_cursor);
         inc_cursor();
-        if gchar_cursor() == NUL {
+        if gchar_cursor() == Codepoint::NUL {
             if !(wraps && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count) {
                 break;
             }
@@ -515,11 +515,11 @@ pub(crate) fn nv_edit(cmd_arg: &mut CmdArg) {
             // inside a tab or past the end of the line moves by a cell.
             if virtual_active(Win::current())
                 && (Win::current().w_cursor.coladd > 0
-                    || gchar_cursor() == NUL
-                    || gchar_cursor() == c_int::from(TAB))
+                    || gchar_cursor() == Codepoint::NUL
+                    || gchar_cursor() == TAB)
             {
                 Win::current().w_cursor.coladd += 1;
-            } else if gchar_cursor() != NUL {
+            } else if gchar_cursor() != Codepoint::NUL {
                 inc_cursor();
             }
         }

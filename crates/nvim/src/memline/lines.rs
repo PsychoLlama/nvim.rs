@@ -45,9 +45,9 @@
 )]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::cstr;
 use crate::fileio::ReadFlags;
+use crate::mbyte::Codepoint;
 use crate::memory::XString;
 use crate::types::Failed;
 use crate::winlayer::Buf;
@@ -272,16 +272,16 @@ pub fn ml_get_buf_len(buffer: Buf, lnum: LineNr) -> ColNr {
 ///
 /// NUL past the end of the line, which is what the searches that park a
 /// column at `MAXCOL` are asking about.
-pub fn gchar_pos(pos: &Pos) -> c_int {
+pub fn gchar_pos(pos: &Pos) -> Codepoint {
     // While searching, the column is sometimes put at the end of a line.
     if pos.col == ColNr::MAX {
-        return NUL;
+        return Codepoint::NUL;
     }
     let mut lines = Lines::current();
     let line = lines.line(pos.lnum);
     let at = usize::try_from(pos.col).unwrap_or(0);
     if at >= line.len() {
-        return NUL;
+        return Codepoint::NUL;
     }
     char_at(&line[at..])
 }

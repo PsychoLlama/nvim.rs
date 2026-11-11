@@ -18,6 +18,7 @@
 use super::compile::Node;
 use crate::charset::vim_iswordc_buf;
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::regexp::RegCompiler;
 use core::ffi::c_int;
 
@@ -27,7 +28,7 @@ use super::piece::coll_get_char;
 use crate::ascii::NUL;
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
-use crate::mbyte::{mb_islower, mb_isupper, utf_char2len};
+use crate::mbyte::utf_char2len;
 use crate::regexp::{
     CharClass, CompileError, Compiled, ESC, HASNL, HASWIDTH, MAGIC_OFF, REGEXP_ABBR,
     REGEXP_INRANGE, SIMPLE, Spelled, backslash_abbr, pat_byte, pat_char, pat_charlen, pat_seek,
@@ -97,7 +98,7 @@ pub(crate) fn collection(
                 let len = pat_charlen(rc, 0);
                 // A grapheme longer than its base character cannot be a
                 // range endpoint.
-                if utf_char2len(startc) != len {
+                if utf_char2len(Codepoint::new(startc)) != len {
                     startc = -1;
                 }
                 for _ in 0..len {
@@ -160,7 +161,8 @@ fn range(rc: &mut RegCompiler, startc: &mut c_int) -> Compiled {
     if *startc > endc {
         return Err(CompileError::ReverseRange);
     }
-    let multibyte = utf_char2len(*startc) > 1 || utf_char2len(endc) > 1;
+    let multibyte =
+        utf_char2len(Codepoint::new(*startc)) > 1 || utf_char2len(Codepoint::new(endc)) > 1;
     if multibyte {
         // Every member is written into the program, so a wide range would
         // blow it up.
@@ -296,13 +298,13 @@ fn in_class(rc: &RegCompiler, class: CharClass, c: c_int) -> bool {
         Punct => ascii(u8::is_ascii_punctuation),
         // U+00AA and U+00BA are the ordinal indicators: lowercase
         // letters, but not the lower half of a case pair.
-        Lower => mb_islower(c) && c != 170 && c != 186,
-        Print => vim_isprintc(c),
-        Upper => mb_isupper(c),
+        Lower => Codepoint::new(c).is_lower() && c != 170 && c != 186,
+        Print => vim_isprintc(Codepoint::new(c)),
+        Upper => Codepoint::new(c).is_upper(),
         Xdigit => ascii_isxdigit(c),
-        Ident => vim_is_ident_char(c),
-        Keyword => vim_iswordc_buf(c, rc.buf),
-        Fname => vim_isfilec(c),
+        Ident => vim_is_ident_char(Codepoint::new(c)),
+        Keyword => vim_iswordc_buf(Codepoint::new(c), rc.buf),
+        Fname => vim_isfilec(Codepoint::new(c)),
         _ => false,
     }
 }

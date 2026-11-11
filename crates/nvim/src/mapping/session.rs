@@ -260,7 +260,7 @@ pub(crate) fn put_escstr(out: &mut Vec<u8>, text: &[u8], what: EscTarget) {
                     None => c = Key::byte(at(i)),
                     Some((bytes, used)) => {
                         // Retrieve the codepoint from the unescaped text.
-                        c = Key::from_code(char_at(cstr::in_bytes(&bytes).to_bytes()));
+                        c = Key::from_code(char_at(cstr::in_bytes(&bytes).to_bytes()).get());
                         i += used - 1;
                     }
                 }

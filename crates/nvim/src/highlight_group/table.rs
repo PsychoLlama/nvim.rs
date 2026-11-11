@@ -23,6 +23,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::narrow::as_index;
 use crate::narrow::{count_as_int, len_as_int};
 use crate::types::Handle;
@@ -404,7 +405,7 @@ fn check_group(name: &[u8]) -> Result<c_int, HighlightError> {
 fn syn_add_group(name: &[u8]) -> Result<c_int, HighlightError> {
     for &byte in name {
         let c = c_int::from(byte);
-        if !vim_isprintc(c) {
+        if !vim_isprintc(Codepoint::new(c)) {
             return Err(HighlightError::UnprintableName);
         }
         if !byte.is_ascii_alphabetic()

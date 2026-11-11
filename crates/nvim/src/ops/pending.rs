@@ -37,6 +37,7 @@
 
 use crate::indent::Indenter;
 use crate::keycodes::SpecialKey;
+use crate::mbyte::Codepoint;
 use crate::normal::defs::{MotionType, Outcome};
 use crate::option::vars::{P_FP, P_SEL};
 use crate::types::Key;
@@ -142,7 +143,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
     // and only when the operator is a yank -- the chain is left as it is so
     // that it stays as conditional as upstream wrote it.
     op.empty = op.motion_type != MotionType::LineWise
-        && (!op.inclusive || (op.op_type == OpType::Yank && gchar_pos(&op.end) == NUL))
+        && (!op.inclusive || (op.op_type == OpType::Yank && gchar_pos(&op.end) == Codepoint::NUL))
         && equalpos(op.start, op.end)
         && !(op_virtual() && op.start.coladd != op.end.coladd);
     // For delete, change and yank it is an error to operate on an empty

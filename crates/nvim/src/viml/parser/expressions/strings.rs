@@ -18,6 +18,7 @@
 )]
 
 use crate::keycodes::{FSK_IN_STRING, trans_special_into};
+use crate::mbyte::Codepoint;
 use core::ffi::{CStr, c_int};
 
 use super::*;
@@ -107,7 +108,7 @@ fn copy_one_char(out: &mut Vec<uint8_t>, rest: &[uint8_t]) -> size_t {
 }
 
 /// Append the UTF-8 encoding of `code`.
-fn append_char(out: &mut Vec<uint8_t>, code: c_int) {
+fn append_char(out: &mut Vec<uint8_t>, code: Codepoint) {
     let mut buf = [0u8; MB_MAXCHAR];
     let len = encode_char(code, &mut buf);
     out.extend_from_slice(&buf[..len]);
@@ -185,15 +186,16 @@ fn reserve_for_double(body: &[uint8_t]) -> size_t {
                     while i + 1 < body.len() && digits != 0 && body[i + 1].is_ascii_hexdigit() {
                         digits -= 1;
                         i += 1;
-                        code = (code << 4) + hex2nr(c_int::from(body[i]));
+                        code = (code << 4) + hex2nr(body[i]);
                     }
                     // `esc_start - 1` is the backslash and `i` the byte after
                     // the last one consumed, so the escape occupies
                     // `i - (esc_start - 1)` bytes and stands for
                     // `utf_char2len` of them.
                     let occupied = (i - (esc_start - 1)).cast_signed();
-                    size =
-                        size.wrapping_sub((occupied - utf_char2len(code) as isize).cast_unsigned());
+                    size = size.wrapping_sub(
+                        (occupied - utf_char2len(Codepoint::new(code)) as isize).cast_unsigned(),
+                    );
                     i -= 1;
                 }
                 // Octal: always one byte out, at least two in.
@@ -292,13 +294,13 @@ fn decode_double(
                     while i + 1 < body.len() && digits != 0 && body[i + 1].is_ascii_hexdigit() {
                         digits -= 1;
                         i += 1;
-                        code = (code << 4) + hex2nr(c_int::from(body[i]));
+                        code = (code << 4) + hex2nr(body[i]);
                     }
                     i += 1;
                     if is_hex {
                         out.push(u8::try_from(code).expect("two hex digits"));
                     } else {
-                        append_char(&mut out, code);
+                        append_char(&mut out, Codepoint::new(code));
                     }
                 } else {
                     unknown = true;

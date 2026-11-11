@@ -18,10 +18,10 @@
 use super::*;
 use crate::charset::skip;
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 
-use crate::ascii::NUL;
 use crate::guard::Suppress;
 use crate::mbyte::cluster_len;
 use crate::narrow::len_as_int;
@@ -225,7 +225,7 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
 
         p = skip_ws(p);
         let delim = ::core::ffi::c_int::from(
-            if delim_optional && vim_is_ident_char(::core::ffi::c_int::from(at(p))) {
+            if delim_optional && vim_is_ident_char(Codepoint::from(at(p))) {
                 b' '
             } else {
                 let c = at(p);
@@ -506,8 +506,8 @@ pub(crate) fn may_add_char_to_search(
         // The character after the match, which becomes the key typed: a
         // codepoint read from the text, as the C's `int` was.
         let mut ch = gchar_cursor();
-        *c = Key::from_code(ch);
-        if ch != NUL {
+        *c = Key::from_code(ch.get());
+        if ch != Codepoint::NUL {
             // With 'ignorecase' and 'smartcase' set and no uppercase in
             // the command line, lowercase the character.
             if p_ic()
@@ -515,13 +515,13 @@ pub(crate) fn may_add_char_to_search(
                 // The pattern starts `skiplen` bytes into the command line.
                 && !pat_has_uppercase(&pattern_of(Cc::current(), skiplen, ::core::ffi::c_int::MAX))
             {
-                ch = mb_tolower(ch);
+                ch = ch.to_lower();
             }
             let magics = if magic_isset() { c"\\~^$.*[" } else { c"\\^$" };
-            if ch == search_delim || has_char(magics, ch) {
+            if ch.get() == search_delim || has_char(magics, ch.get()) {
                 // Put a backslash before the special characters.
-                stuff_readbuf_char(Key::from_code(ch));
-                ch = ::core::ffi::c_int::from(b'\\');
+                stuff_readbuf_char(Key::from_code(ch.get()));
+                ch = Codepoint::from(b'\\');
             }
             // Add any composing characters.
             let cursor_len = || len_as_int(with_cursor_rest(cluster_len));
@@ -530,11 +530,11 @@ pub(crate) fn may_add_char_to_search(
                 while utf_char2len(ch) != cursor_len() {
                     Win::current().w_cursor.col += utf_char2len(ch);
                     ch = gchar_cursor();
-                    stuff_readbuf_char(Key::from_code(ch));
+                    stuff_readbuf_char(Key::from_code(ch.get()));
                 }
                 ch = save_c;
             }
-            *c = Key::from_code(ch);
+            *c = Key::from_code(ch.get());
             return Err(Failed);
         }
     }

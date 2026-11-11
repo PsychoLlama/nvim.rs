@@ -25,6 +25,7 @@
 use super::*;
 use crate::charset::skip;
 use crate::env::expand_env_within;
+use crate::mbyte::Codepoint;
 use crate::memory::XString;
 use crate::os::fs::path_exists;
 use crate::types::Handle;
@@ -560,7 +561,7 @@ fn continue_multiline(prefix: u8, mut qfl: Qfl, fields: &mut Fields) -> Status {
             if prev.nr == -1 {
                 prev.nr = fields.enr;
             }
-            if vim_isprintc(c_int::from(fields.kind)) && prev.kind == 0 {
+            if vim_isprintc(Codepoint::from(fields.kind.cast_unsigned())) && prev.kind == 0 {
                 // Only printable characters allowed.
                 prev.kind = fields.kind;
             }

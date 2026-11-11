@@ -71,7 +71,7 @@ impl CharLen {
 /// byte over 0x7f is negative and never counts as a surrogate pair.
 fn code_point(bytes: &[u8], char_len: usize) -> c_int {
     if char_len > 1 {
-        char_at(bytes)
+        char_at(bytes).get()
     } else {
         c_int::from(bytes[0].cast_signed())
     }
@@ -236,7 +236,7 @@ pub fn f_strutf16len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     while at < text.len() {
         let rest = &text[at..];
         // Anything over U+FFFF is a surrogate pair: two units.
-        len += 1 + VarNumber::from(char_at(rest) > 0xffff);
+        len += 1 + VarNumber::from(char_at(rest).get() > 0xffff);
         at += if countcc {
             char_len(rest)
         } else {

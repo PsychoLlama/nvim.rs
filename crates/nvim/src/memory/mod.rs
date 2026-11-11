@@ -35,6 +35,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use crate::global_cell::{GlobalCell, SharedCell};
+use crate::mbyte::Codepoint;
 use crate::memory::alloc_log::AllocEvent;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_ulong, c_void};
@@ -193,7 +194,7 @@ pub(crate) fn strchr_in(hay: &[u8], needle: u8) -> Option<usize> {
         // A codepoint past ASCII is searched for as its UTF-8 sequence, as
         // upstream's `vim_strchr` did; only the ASCII search is libc's.
         let text = &hay[..strlen_in(hay)];
-        return crate::strings::find_char(text, ::core::ffi::c_int::from(needle));
+        return crate::strings::find_char(text, Codepoint::from(needle));
     }
     // SAFETY: `hay` holds a NUL, which the search stops at; the answer is
     // null or a pointer into `hay` before it.

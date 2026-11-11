@@ -108,7 +108,7 @@ pub fn append_to_redobuff_literally(s: &[u8]) {
         // Then the special or multibyte character that stopped the run.
         // Composing characters are handled separately, one at a time.
         let rest = &s[at..];
-        let c = Key::from_code(char_at(rest));
+        let c = Key::from_code(char_at(rest).get());
         at += char_len(rest);
         let last = at == s.len();
         if c < Key::SPACE || c == Key::DEL || (last && (c.is('0') || c.is('^'))) {
@@ -139,7 +139,7 @@ pub fn append_to_redobuff_keys(s: &[u8]) {
             redobuff().add_bytes(&s[..3]);
             s = &s[3..];
         } else {
-            let c = Key::from_code(char_at(s));
+            let c = Key::from_code(char_at(s).get());
             s = &s[char_len(s)..];
             redobuff().add_char(c);
         }
@@ -233,7 +233,7 @@ impl RedoReader {
                 return if n == 1 {
                     c
                 } else {
-                    Key::from_code(char_at(&buf))
+                    Key::from_code(char_at(&buf).get())
                 };
             }
             byte = self.byte(0);

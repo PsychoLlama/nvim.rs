@@ -34,6 +34,7 @@
 
 use super::*;
 use crate::keycodes::{K_SPECIAL, key_escape};
+use crate::mbyte::Codepoint;
 use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{char_at, char_len, encode_char};
 use crate::types::Key;
@@ -316,7 +317,7 @@ impl KeyBufferRef {
             return;
         }
         let mut bytes = [0u8; MB_MAXBYTES + 1];
-        let len = encode_char(c.code(), &mut bytes);
+        let len = encode_char(Codepoint::new(c.code()), &mut bytes);
         for &byte in &bytes[..len] {
             self.add_byte(Key::byte(byte));
         }
@@ -510,7 +511,7 @@ pub fn stuff_readbuf_one_line(s: &[u8]) {
             stuff_readbuf_len(&s[..3]);
             s = &s[3..];
         } else {
-            let c = Key::from_code(char_at(s));
+            let c = Key::from_code(char_at(s).get());
             s = &s[char_len(s)..];
             stuff_readbuf_char(if c == Key::CAR || c == Key::NL || c == Key::ESC {
                 Key::ascii(b' ')
@@ -552,7 +553,7 @@ pub fn stuffescaped(arg: &[u8], literally: bool) {
 
         // Then the character that stopped it, one at a time.
         if !arg.is_empty() {
-            let c = Key::from_code(char_at(arg));
+            let c = Key::from_code(char_at(arg).get());
             arg = &arg[char_len(arg)..];
             if literally && ((c < Key::SPACE && c != Key::TAB) || c == Key::DEL) {
                 stuff_readbuf_char(Key::ctrl(b'V'));

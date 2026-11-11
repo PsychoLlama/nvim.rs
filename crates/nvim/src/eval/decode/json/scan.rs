@@ -19,6 +19,7 @@ use crate::eval::encode::{
     SURROGATE_FIRST_CHAR, SURROGATE_HI_END, SURROGATE_HI_START, SURROGATE_LO_END,
     SURROGATE_LO_START,
 };
+use crate::mbyte::Codepoint;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use core::ffi::c_int;
@@ -91,11 +92,13 @@ pub(crate) fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> Result<(),
         // never equal the byte it starts with — except that `char_at` answers
         // a byte that starts no complete sequence as itself.  U+00C3 is the
         // one real exception, spelled 0xC3 0x83.
-        if ch >= 0x80 && c_int::from(byte) == ch && !(ch == 0xc3 && p + 1 < e && buf[p + 1] == 0x83)
+        if ch >= 0x80
+            && c_int::from(byte) == ch.get()
+            && !(ch == 0xc3 && p + 1 < e && buf[p + 1] == 0x83)
         {
             return fail(at, p, DecodeError::OnlyUtf8(dec.rest(p)));
         }
-        if ch > 0x10ffff {
+        if ch.get() > 0x10ffff {
             return fail(at, p, DecodeError::Above10ffff(dec.rest(p)));
         }
         let ch_len = usize::try_from(utf_char2len(ch)).unwrap_or(1);
@@ -118,7 +121,7 @@ pub(crate) fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> Result<(),
     let mut fst_in_pair: c_int = 0;
     let put_char = |out: &mut Vec<u8>, ch: c_int| {
         let mut encoded = [0u8; 6];
-        let n = encode_char(ch, &mut encoded);
+        let n = encode_char(Codepoint::new(ch), &mut encoded);
         out.extend_from_slice(&encoded[..n]);
     };
     // `PUT_FST_IN_PAIR`: emit a held-back high surrogate as the lone code

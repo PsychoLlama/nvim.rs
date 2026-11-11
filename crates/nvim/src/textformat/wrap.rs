@@ -23,6 +23,7 @@ use crate::change::OPENLINE_KEEPTRAIL;
 use crate::change::OPENLINE_MARKFIX;
 use crate::indent::INDENT_SET;
 use crate::indent::SIN_CHANGED;
+use crate::mbyte::Codepoint;
 use crate::memline::Lines;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -262,7 +263,7 @@ impl BreakSearch {
             let cc = if Win::current().w_cursor.col == ColNr::new(self.startcol) && self.c != NUL {
                 self.c
             } else {
-                under.unwrap_or_else(gchar_cursor)
+                under.unwrap_or_else(|| gchar_cursor().get())
             };
             let step = if whitechar(cc) {
                 self.at_white(cc)
@@ -403,7 +404,7 @@ impl Wrap {
         let mut win = Win::current();
         let virtcol = get_nolist_virtcol()
             + char2cells(if self.c != NUL {
-                self.c
+                Codepoint::new(self.c)
             } else {
                 gchar_cursor()
             });
@@ -528,7 +529,7 @@ impl Wrap {
         win.w_cursor.col = ColNr::new(foundcol);
         while {
             let cc = gchar_cursor();
-            (whitechar(cc)) && (!self.fo_white_par || win.w_cursor.col < ColNr::new(startcol))
+            (whitechar(cc.get())) && (!self.fo_white_par || win.w_cursor.col < ColNr::new(startcol))
         } {
             inc_cursor();
         }

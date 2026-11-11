@@ -25,6 +25,7 @@ use crate::charset::getdigits_int_at;
 use crate::charset::str2nr::atoi;
 use crate::cstr;
 use crate::eval::typval::ListRef;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_partial_cells_in, c_string_cells, promised_char_len};
 use crate::memory::{ThinCString, XString};
 use crate::normal::defs::MotionType;
@@ -190,7 +191,7 @@ fn init_write_reg(
     if !name.is_valid(true) {
         // Every writer's name is a byte of a string, which upstream's
         // `char` sign-extended into the `int` the message shows.
-        emsg_invreg(c_int::from(name.byte().cast_signed()));
+        emsg_invreg(Codepoint::new(i32::from(name.byte().cast_signed())));
         return Err(Failed);
     }
     // `get_yank_register` moves `""`, which a write to a *named* register

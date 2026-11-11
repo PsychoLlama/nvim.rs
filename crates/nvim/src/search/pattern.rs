@@ -24,6 +24,7 @@ use crate::ascii::NUL;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::memory::XString;
 use crate::optionstr::OptString;
@@ -451,7 +452,7 @@ pub fn pat_has_uppercase(pat: &[u8]) -> bool {
     while i < pat.len() {
         let len = c_cluster_len(&pat[i..]);
         if len > 1 {
-            if mb_isupper(char_at(&pat[i..])) {
+            if char_at(&pat[i..]).is_upper() {
                 return true;
             }
             i += len;
@@ -465,7 +466,7 @@ pub fn pat_has_uppercase(pat: &[u8]) -> bool {
         } else if (pat[i] == b'%' || pat[i] == b'_') && magic_val == MAGIC_ALL {
             // Skip "%X" and "_X".
             i += if at(i + 1) != 0 { 2 } else { 1 };
-        } else if mb_isupper(c_int::from(pat[i])) {
+        } else if Codepoint::from(pat[i]).is_upper() {
             return true;
         } else {
             i += 1;

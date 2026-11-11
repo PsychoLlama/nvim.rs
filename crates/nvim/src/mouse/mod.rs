@@ -33,6 +33,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 pub(crate) mod state;
+use crate::mbyte::Codepoint;
 use crate::strings::has_char;
 use crate::types::Handle;
 use crate::window::tab_index;
@@ -328,7 +329,7 @@ fn mouse_class(line: &[u8], idx: usize) -> c_int {
         return 0;
     }
     let c = c_int::from(byte);
-    if vim_iswordc(c) {
+    if vim_iswordc(Codepoint::new(c)) {
         return 2;
     }
 

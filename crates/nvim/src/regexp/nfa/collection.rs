@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::regexp::{NfaOp, RegCompiler};
 use core::ffi::c_int;
 
@@ -326,7 +327,7 @@ fn emit_combining_marks(rc: &mut RegCompiler) {
         let c = char_at(rc, here, i);
         // A NUL in the pattern cannot be emitted as itself.
         rc.post.emit_concat(if c == 0 { 1 } else { c });
-        i += utf_char2len(c);
+        i += utf_char2len(Codepoint::new(c));
         if i >= plen {
             break;
         }

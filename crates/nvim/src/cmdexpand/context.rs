@@ -29,6 +29,7 @@ use crate::ex_cmds::skip_vimgrep_pat_at;
 use crate::ex_docmd::{ends_excmd, excmd_get_cmdidx_bytes};
 use crate::ex_getln::parse_pattern_and_range_of;
 use crate::guard::Suppress;
+use crate::mbyte::Codepoint;
 use crate::mbyte::char_at;
 use crate::mbyte::cluster_len;
 use crate::option::magic_isset;
@@ -267,9 +268,9 @@ pub(crate) fn set_context_for_wildcard_arg(
     let mut p = expand.pattern;
     while byte(t, p) != 0 {
         let mut c = char_at(&t[p..]);
-        if c == c_int::from(b'\\') && byte(t, p + 1) != 0 {
+        if c == b'\\' && byte(t, p + 1) != 0 {
             p += 1;
-        } else if c == c_int::from(b'`') {
+        } else if c == b'`' {
             if !in_quote {
                 expand.pattern = p;
                 bow = Some(p + 1);
@@ -277,15 +278,11 @@ pub(crate) fn set_context_for_wildcard_arg(
             in_quote = !in_quote;
             // An argument can contain just about everything, except
             // characters that end the command and white space.
-        } else if c == c_int::from(b'|')
-            || c == c_int::from(b'\n')
-            || c == c_int::from(b'"')
-            || ascii_iswhite(c)
-        {
+        } else if c == b'|' || c == b'\n' || c == b'"' || ascii_iswhite(c) {
             let mut len = 0; // avoid getting stuck when space is in 'isfname'
             while byte(t, p) != 0 {
                 c = char_at(&t[p..]);
-                if c == c_int::from(b'`') || vim_isfilec_or_wc(c) {
+                if c == b'`' || vim_isfilec_or_wc(c) {
                     break;
                 }
                 len = char_len(t, p);
@@ -324,7 +321,7 @@ pub(crate) fn set_context_for_wildcard_arg(
     // Check for environment variable.
     if byte(t, expand.pattern) == b'$' {
         p = expand.pattern + 1;
-        while byte(t, p) != 0 && vim_is_ident_char(c_int::from(byte(t, p))) {
+        while byte(t, p) != 0 && vim_is_ident_char(Codepoint::from(byte(t, p))) {
             p += 1;
         }
         if byte(t, p) == 0 {

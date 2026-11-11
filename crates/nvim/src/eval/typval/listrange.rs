@@ -19,6 +19,7 @@
 use super::*;
 use crate::eval::encode::tv2echo_bytes;
 use crate::eval::executor::eexe_mod_op;
+use crate::mbyte::Codepoint;
 use crate::mbyte::encode_char;
 use crate::memory::XString;
 use crate::message::emsg;
@@ -380,7 +381,7 @@ pub fn f_list2str(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut buf = [0u8; 22];
     for li in list.items() {
         let n = tv_get_number(&li.li_tv);
-        let buflen = encode_char(number_as_int(n), &mut buf);
+        let buflen = encode_char(Codepoint::new(number_as_int(n)), &mut buf);
         // A NUL ends the string there, as it did in the C buffer.
         text.push_bytes(&buf[..buflen]);
     }

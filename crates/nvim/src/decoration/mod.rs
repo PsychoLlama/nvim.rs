@@ -52,6 +52,7 @@ use crate::global_cell::GlobalCell;
 use crate::grid::{schar_from_char, schar_get_first_codepoint, schar_high};
 use crate::marktree::key::MtFlags;
 use crate::marktree::{MTKey, MetaIndex};
+use crate::mbyte::Codepoint;
 use crate::r#move::changed_window_setting;
 use crate::os::libc::{uint8_t, uint16_t, uint32_t};
 use crate::types::{ColNr, LPos, LineNr};
@@ -397,7 +398,7 @@ pub fn decor_check_invalid_glyphs() {
         };
         for j in 0..width {
             if schar_high(it.text[j]) {
-                it.text[j] = schar_from_char(schar_get_first_codepoint(it.text[j]));
+                it.text[j] = schar_from_char(Codepoint::new(schar_get_first_codepoint(it.text[j])));
             }
         }
     });

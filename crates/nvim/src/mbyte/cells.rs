@@ -76,30 +76,31 @@ fn cw_value(c: c_int) -> c_int {
 ///
 /// "On its own" is the limit of this answer: a character whose width depends
 /// on what follows it — an emoji base plus VS-16 — needs [`cells_at`].
-pub fn utf_char2cells(c: c_int) -> c_int {
+pub fn utf_char2cells(c: Codepoint) -> c_int {
     if c < 0x80 {
         return 1;
     }
 
     if !vim_isprintc(c) {
-        debug_assert!(c <= 0xffff, "c <= 0xFFFF");
+        debug_assert!(c.get() <= 0xffff, "c <= 0xFFFF");
         // Shown as <xx> or <xxxx>.
         return if c > 0xff { 6 } else { 4 };
     }
 
-    let overridden = cw_value(c);
+    let overridden = cw_value(c.get());
     if overridden != 0 {
         return overridden;
     }
 
-    let prop = utf8proc_get_property(c);
+    let prop = utf8proc_get_property(c.get());
     if prop.charwidth == 2 {
         return 2;
     }
     if P_AMBW.first_byte() == b'd' && prop.ambiguous_width {
         return 2;
     }
-    if p_emoji() && c >= FIRST_EMOJI_BLOCK && !prop.ambiguous_width && prop_is_emojilike(prop) {
+    if p_emoji() && c.get() >= FIRST_EMOJI_BLOCK && !prop.ambiguous_width && prop_is_emojilike(prop)
+    {
         return 2;
     }
     1
@@ -113,8 +114,8 @@ pub fn utf_char2cells(c: c_int) -> c_int {
 /// option read inlined into them would export the option record, whose every
 /// read in the editor then goes through the GOT.
 #[inline(never)]
-pub(crate) fn emoji_widens(c: c_int) -> bool {
-    p_emoji() && prop_is_emojilike(utf8proc_get_property(c))
+pub(crate) fn emoji_widens(c: Codepoint) -> bool {
+    p_emoji() && prop_is_emojilike(utf8proc_get_property(c.get()))
 }
 
 /// `setcellwidths({list})` — override the width of chosen codepoint ranges.

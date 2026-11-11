@@ -18,6 +18,7 @@
 use crate::charset::{vim_is_ident_char, vim_isfilec};
 use crate::env::getenv_resolved;
 use crate::eval::skip_expr;
+use crate::mbyte::Codepoint;
 use crate::memory::XString;
 use crate::os::env::with_home_dir;
 use crate::os::users::user_home_dir;
@@ -89,7 +90,7 @@ fn resolve_env_var(src: &[u8], at: usize, room: usize) -> Expansion {
     // 'isident' characters -- which is why the check below asks about the
     // brace rather than about `braced`: 'isident' may itself contain '{'.
     let brace = byte_at(src, tail) == b'{';
-    let braced = brace && !vim_is_ident_char(c_int::from(b'{'));
+    let braced = brace && !vim_is_ident_char(Codepoint::byte(b'{'));
     if braced {
         tail += 1; // ignore '{'
         while left > 0 && byte_at(src, tail) != 0 && byte_at(src, tail) != b'}' {
@@ -98,7 +99,7 @@ fn resolve_env_var(src: &[u8], at: usize, room: usize) -> Expansion {
             tail += 1;
         }
     } else {
-        while left > 0 && byte_at(src, tail) != 0 && vim_is_ident_char(c_int::from(src[tail])) {
+        while left > 0 && byte_at(src, tail) != 0 && vim_is_ident_char(Codepoint::from(src[tail])) {
             left -= 1;
             name.push(src[tail]);
             tail += 1;
@@ -124,7 +125,7 @@ fn resolve_user_dir(src: &[u8], at: usize, room: usize) -> Expansion {
     let mut left = room.saturating_sub(1);
     while left > 0
         && byte_at(src, tail) != 0
-        && vim_isfilec(c_int::from(src[tail]))
+        && vim_isfilec(Codepoint::from(src[tail]))
         && !vim_ispathsep(c_int::from(src[tail]))
     {
         left -= 1;

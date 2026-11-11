@@ -38,6 +38,7 @@ use crate::marktree::MarkTreeIter;
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{MT_FILTER_SELECT, mt_invalid, mt_right};
 use crate::marktree::meta::MetaCount;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{CharInfo, MB_MAXCHAR};
 use crate::mbyte::{c_cells_in, c_char_info, c_cluster_len, c_next_cluster, char_at};
 use crate::r#move::win_col_off2;
@@ -91,11 +92,11 @@ fn char_cells(line: &[u8], at: usize, cur_char: int32_t) -> c_int {
     if cur_char < 0 {
         INVALID_BYTE_CELLS
     } else if (1..0x80).contains(&cur_char) {
-        byte2cells(cur_char)
+        byte2cells(u8::try_from(cur_char).expect("ASCII"))
     } else {
         let byte = byte_at(line, at);
         if byte < 0x80 {
-            byte2cells(c_int::from(byte))
+            byte2cells(byte)
         } else {
             c_cells_in(line, at)
         }
@@ -110,7 +111,7 @@ pub(crate) fn win_chartabsize(window: Win, text: &[u8], col: ColNr) -> c_int {
         return window.buffer().tab_padding(col);
     }
     if byte < 0x80 {
-        byte2cells(c_int::from(byte))
+        byte2cells(byte)
     } else {
         c_cells_in(text, 0)
     }
@@ -432,19 +433,19 @@ fn breaks_here(csarg: &CharsizeArg<'_>, at: usize) -> bool {
         return false;
     }
     let line = csarg.line;
-    if !vim_isbreak(c_int::from(byte_at(line, at))) {
+    if !vim_isbreak(Codepoint::from(byte_at(line, at))) {
         return false;
     }
     // The byte after a break character is still inside the line: NUL is not
     // a break character. Upstream's `||` chain tests this one second for
     // that reason.
-    if vim_isbreak(c_int::from(byte_at(line, at + 1))) {
+    if vim_isbreak(Codepoint::from(byte_at(line, at + 1))) {
         return false;
     }
     // 'linebreak' is only needed when not in leading whitespace. NUL is not
     // a break character, so the walk stops inside the line.
     let mut t = 0;
-    while vim_isbreak(c_int::from(byte_at(line, t))) {
+    while vim_isbreak(Codepoint::from(byte_at(line, t))) {
         t += 1;
     }
     at >= t
@@ -476,7 +477,11 @@ fn linebreak_size(win: Win, line: &[u8], at: usize, vcol: ColNr, size: c_int) ->
             c_int::from(byte_at(line, s)),
             c_int::from(byte_at(line, ps)),
         );
-        if c == NUL || !(vim_isbreak(c) || vcol2 == vcol || !vim_isbreak(prev)) {
+        if c == NUL
+            || !(vim_isbreak(Codepoint::new(c))
+                || vcol2 == vcol
+                || !vim_isbreak(Codepoint::new(prev)))
+        {
             return size;
         }
         vcol2 += win_chartabsize(win, &line[s..], vcol2);

@@ -74,14 +74,14 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
     if !old.is_empty() && !trailblank && wasatend {
         dec_cursor();
         let mut cc = gchar_cursor();
-        if !whitechar(cc)
+        if !whitechar(cc.get())
             && Win::current().w_cursor.col > ColNr::ZERO
             && has_format_option(FoFlag::ONE_LETTER)
         {
             dec_cursor();
         }
         cc = gchar_cursor();
-        if whitechar(cc) {
+        if whitechar(cc.get()) {
             Win::current().w_cursor = pos;
             return;
         }
@@ -175,7 +175,7 @@ pub fn check_auto_format(end_insert: bool) {
         return;
     }
     let cc = gchar_cursor();
-    if !whitechar(cc) {
+    if !whitechar(cc.get()) {
         // Somehow the space was removed already.
         DID_ADD_SPACE.set(false);
         return;
@@ -183,7 +183,7 @@ pub fn check_auto_format(end_insert: bool) {
     let mut c = c_int::from(b' ');
     if !end_insert {
         inc_cursor();
-        c = gchar_cursor();
+        c = gchar_cursor().get();
         dec_cursor();
     }
     if c != NUL {

@@ -28,6 +28,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -251,7 +252,7 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
                 // Reset `tpos`: the loop above may have invalidated it.
                 tpos = Win::current().w_cursor;
                 tpos.col += 1;
-                if cc != NUL && gchar_pos(&tpos) == NUL {
+                if cc != NUL && gchar_pos(&tpos) == Codepoint::NUL {
                     Win::current().w_cursor.col += 1; // put the cursor back on the NUL
                 }
             }
@@ -300,7 +301,7 @@ pub(crate) fn ins_apply_autocmds(event: AutoEvent) -> bool {
 /// The character under the cursor, `NUL` at the end of the line.
 #[inline(always)]
 fn char_at_cursor() -> c_int {
-    gchar_cursor()
+    gchar_cursor().get()
 }
 
 /// Save the cursor's line for undo, answering `Ok` when it was saved.

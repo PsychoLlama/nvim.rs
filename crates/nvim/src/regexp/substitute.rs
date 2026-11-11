@@ -28,6 +28,7 @@
 )]
 
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
@@ -42,9 +43,7 @@ use crate::ascii::NUL;
 use crate::eval::eval_to_string;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::K_SPECIAL;
-use crate::mbyte::{
-    c_cluster_len, char_at, char_len, encode_char, mb_tolower, mb_toupper, utf_char2len,
-};
+use crate::mbyte::{c_cluster_len, char_at, char_len, encode_char, utf_char2len};
 use crate::memline::Lines;
 use crate::memory::XString;
 use crate::message::{E_NULL, E_RE_CORR, E_RE_DAMG, E_RESULTING_TEXT_TOO_LONG};
@@ -80,7 +79,7 @@ const E_NOT_ENOUGH_SPACE: &CStr = c"vim_regsub_both(): not enough space";
 
 /// The case hook `\u`, `\U`, `\l` and `\L` install for the rest of a
 /// replacement.
-type CaseFolder = fn(c_int) -> c_int;
+type CaseFolder = fn(Codepoint) -> Codepoint;
 
 /// The case hooks in force: `\u` and `\l` fold one character, `\U` and `\L`
 /// fold every character until `\e` or `\E`.
@@ -94,7 +93,7 @@ impl Case {
     /// Fold `c`, consuming a one-character hook if one is pending.
     fn fold(&mut self, c: c_int) -> c_int {
         match self.once.take().or(self.rest) {
-            Some(fold) => fold(c),
+            Some(fold) => fold(Codepoint::new(c)).get(),
             None => c,
         }
     }
@@ -149,12 +148,12 @@ impl<'d> Out<'d> {
     /// `dst += charlen - 1; …; dst++` reads.
     #[inline(always)]
     fn push_char(&mut self, c: c_int) -> bool {
-        let charlen = usize::try_from(utf_char2len(c)).unwrap_or(1);
+        let charlen = usize::try_from(utf_char2len(Codepoint::new(c))).unwrap_or(1);
         if !self.room(charlen) {
             return false;
         }
         if let Some(dest) = &mut self.dest {
-            encode_char(c, &mut dest[self.at..]);
+            encode_char(Codepoint::new(c), &mut dest[self.at..]);
         }
         self.skip(charlen - 1);
         true
@@ -619,10 +618,10 @@ fn expand_replacement(rex: Expanding<'_>, source: &[u8], flags: c_int, out: &mut
                 let hook = at(src);
                 src += 1;
                 match hook {
-                    b'u' => case.once = Some(mb_toupper),
-                    b'U' => case.rest = Some(mb_toupper),
-                    b'l' => case.once = Some(mb_tolower),
-                    b'L' => case.rest = Some(mb_tolower),
+                    b'u' => case.once = Some(Codepoint::to_upper),
+                    b'U' => case.rest = Some(Codepoint::to_upper),
+                    b'l' => case.once = Some(Codepoint::to_lower),
+                    b'L' => case.rest = Some(Codepoint::to_lower),
                     // `\e` and `\E`, the only other members of the set
                     // the lookup above accepted, end both.
                     _ => case = Case::default(),
@@ -672,7 +671,7 @@ fn expand_replacement(rex: Expanding<'_>, source: &[u8], flags: c_int, out: &mut
             }
             src += 1;
         } else {
-            c = char_at(&source[src - 1..]);
+            c = char_at(&source[src - 1..]).get();
         }
 
         let first = &source[src - 1..];
@@ -785,7 +784,7 @@ fn copy_run(text: &[u8], len: isize, case: &mut Case, backslash: bool, out: &mut
             out.push(b'\\');
             out.push(byte);
         } else {
-            let c = case.fold(char_at(&text[s..]));
+            let c = case.fold(char_at(&text[s..]).get());
             // Composing characters are copied one at a time, so step to
             // the base character's last byte first.
             let tail = char_len(&text[s..]) - 1;

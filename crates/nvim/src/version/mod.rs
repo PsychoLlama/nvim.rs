@@ -476,7 +476,7 @@ fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
             let clen = c_cluster_len(&text[at..]);
             let mut attr = 0;
             if text[at] >= 0x80 {
-                seen_diagonal |= clen == 3 && char_at(&text[at..]) == 0x2572;
+                seen_diagonal |= clen == 3 && char_at(&text[at..]).get() == 0x2572;
                 attr = if seen_diagonal {
                     letter_attr
                 } else {
@@ -494,7 +494,7 @@ fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
     // lowercase "nvim" of `nvim.rs …`, which no other intro line starts
     // with ("Nvim is open source…" capitalizes it) -- and the horizontal
     // rules, drawn one U+2500 at a time.
-    let is_sep = c_cluster_len(text) == 3 && char_at(text) == 0x2500;
+    let is_sep = c_cluster_len(text) == 3 && char_at(text).get() == 0x2500;
     if text.starts_with(b"nvim") || is_sep {
         let clen = if is_sep { 3 } else { 1 };
         let attr = attr_of(if is_sep { c"NonText" } else { c"String" });

@@ -13,6 +13,7 @@
 #![forbid(unsafe_code)]
 
 use crate::eval::typval::tv_get_bool_chk;
+use crate::mbyte::Codepoint;
 use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{cluster_len, encode_char};
 use crate::memory::XString;
@@ -73,7 +74,7 @@ pub fn trailing_spaces_start(s: &[u8]) -> usize {
 /// that whole sequence starts. A non-positive `c` is never found — upstream
 /// spells `strchr(s, 0)` when it wants the terminator, and that offset is
 /// `haystack.len()`, which this deliberately does not answer.
-pub fn find_char(haystack: &[u8], c: c_int) -> Option<usize> {
+pub fn find_char(haystack: &[u8], c: Codepoint) -> Option<usize> {
     if c <= 0 {
         return None;
     }
@@ -96,7 +97,7 @@ pub fn find_char(haystack: &[u8], c: c_int) -> Option<usize> {
 /// `!= NULL` test over an option's value or a literal run of characters,
 /// and none of those wants a pointer.
 pub(crate) fn has_char(set: &CStr, c: c_int) -> bool {
-    find_char(set.to_bytes(), c).is_some()
+    find_char(set.to_bytes(), Codepoint::new(c)).is_some()
 }
 
 /// The byte offset at which `needle` occurs in `haystack`, or `None`.
@@ -168,41 +169,54 @@ mod tests {
     use super::{
         any_non_ascii, find_bytes, find_char, has_bytes, has_char, trailing_spaces_start, unquote,
     };
+    use crate::mbyte::Codepoint;
 
     #[test]
     fn find_char_answers_a_byte_offset_and_never_the_terminator() {
-        assert_eq!(find_char(b"abc", i32::from(b'a')), Some(0));
-        assert_eq!(find_char(b"abc", i32::from(b'c')), Some(2));
-        assert_eq!(find_char(b"abc", i32::from(b'z')), None);
+        assert_eq!(find_char(b"abc", Codepoint::byte(b'a')), Some(0));
+        assert_eq!(find_char(b"abc", Codepoint::byte(b'c')), Some(2));
+        assert_eq!(find_char(b"abc", Codepoint::byte(b'z')), None);
         // `strchr(s, 0)` answers the terminator; the slice has none.
-        assert_eq!(find_char(b"abc", 0), None);
-        assert_eq!(find_char(b"abc", -1), None);
+        assert_eq!(find_char(b"abc", Codepoint::NUL), None);
+        assert_eq!(find_char(b"abc", Codepoint::new(-1)), None);
         // An empty set has no members, and a NUL *inside* the bytes is a
         // member like any other -- which the pointer form could not see.
-        assert_eq!(find_char(b"", i32::from(b'a')), None);
-        assert_eq!(find_char(b"a\0b", 0), None);
-        assert_eq!(find_char(b"a\0b", i32::from(b'b')), Some(2));
+        assert_eq!(find_char(b"", Codepoint::byte(b'a')), None);
+        assert_eq!(find_char(b"a\0b", Codepoint::NUL), None);
+        assert_eq!(find_char(b"a\0b", Codepoint::byte(b'b')), Some(2));
     }
 
     #[test]
     fn find_char_matches_a_multibyte_character_whole() {
         // The needle above 0x7f is the character's UTF-8 encoding, so the
         // offset is where the sequence starts and a lone lead byte misses.
-        assert_eq!(find_char("a\u{ab}b".as_bytes(), 0xAB), Some(1));
         assert_eq!(
-            find_char("\u{201e}\u{ab}\u{bb}\u{201c}".as_bytes(), 0xAB),
+            find_char("a\u{ab}b".as_bytes(), Codepoint::new(0xAB)),
+            Some(1)
+        );
+        assert_eq!(
+            find_char(
+                "\u{201e}\u{ab}\u{bb}\u{201c}".as_bytes(),
+                Codepoint::new(0xAB)
+            ),
             Some(3)
         );
         assert_eq!(
-            find_char("\u{201e}\u{ab}\u{bb}\u{201c}".as_bytes(), 0x201C),
+            find_char(
+                "\u{201e}\u{ab}\u{bb}\u{201c}".as_bytes(),
+                Codepoint::new(0x201C)
+            ),
             Some(7)
         );
         // 0xC2 is '\u{ab}''s first byte, and is not itself in the string.
-        assert_eq!(find_char("\u{ab}\u{bb}".as_bytes(), 0xC2), None);
+        assert_eq!(
+            find_char("\u{ab}\u{bb}".as_bytes(), Codepoint::new(0xC2)),
+            None
+        );
         // A lone 0xAB byte is not valid UTF-8 for U+00AB.
-        assert_eq!(find_char(b"\xAB", 0xAB), None);
+        assert_eq!(find_char(b"\xAB", Codepoint::new(0xAB)), None);
         // A needle longer than the haystack cannot match.
-        assert_eq!(find_char(b"a", 0x201C), None);
+        assert_eq!(find_char(b"a", Codepoint::new(0x201C)), None);
     }
 
     #[test]

@@ -305,7 +305,7 @@ fn check_cursor_now() {
 }
 
 fn char_at_cursor() -> c_int {
-    gchar_cursor()
+    gchar_cursor().get()
 }
 
 /// `'selection'`'s first letter: `i`nclusive, `e`xclusive or `o`ld.

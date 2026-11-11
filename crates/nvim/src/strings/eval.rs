@@ -394,12 +394,12 @@ pub fn f_trim(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let Some(mask) = mask else {
             return c <= c_int::from(b' ') || c == 0xa0;
         };
-        clusters(mask).any(|(_, mask_char)| mask_char == c)
+        clusters(mask).any(|(_, mask_char)| mask_char.get() == c)
     };
 
     let mut start = 0;
     if dir == 0 || dir == 1 {
-        while start < bytes.len() && trimmable(char_at(&bytes[start..])) {
+        while start < bytes.len() && trimmable(char_at(&bytes[start..]).get()) {
             start += cluster_len(&bytes[start..]);
         }
     }
@@ -409,7 +409,7 @@ pub fn f_trim(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         while end > start {
             // Step back over one whole character.
             let prev = end - 1 - head_off(bytes, end - 1);
-            if !trimmable(char_at(&bytes[prev..])) {
+            if !trimmable(char_at(&bytes[prev..]).get()) {
                 break;
             }
             end = prev;

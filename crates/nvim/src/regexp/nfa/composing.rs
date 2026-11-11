@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
@@ -37,8 +38,8 @@ pub(crate) fn matches_composing(
     let mut len = 0;
     // A group whose first member is itself a combining character has no
     // base character of its own: `\%C` matched one already.
-    if utf_iscomposing_legacy(prog.op(sta)) {
-        len += utf_char2len(mc);
+    if utf_iscomposing_legacy(Codepoint::new(prog.op(sta))) {
+        len += utf_char2len(Codepoint::new(mc));
     }
 
     if rex.reg_icombine() && len == 0 {
@@ -51,7 +52,7 @@ pub(crate) fn matches_composing(
     }
     if len == 0 {
         // The base character matched; the marks follow it.
-        len += utf_char2len(mc);
+        len += utf_char2len(Codepoint::new(mc));
         sta = prog.out(sta);
     }
 
@@ -63,7 +64,7 @@ pub(crate) fn matches_composing(
         mc = rex.char_at_offset(len);
         marks[count] = mc;
         count += 1;
-        len += utf_char2len(mc);
+        len += utf_char2len(Codepoint::new(mc));
         if count == MAX_MCO as usize {
             break;
         }

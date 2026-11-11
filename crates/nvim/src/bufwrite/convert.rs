@@ -329,7 +329,7 @@ impl ByteWriter {
                     break;
                 }
                 let c = if n > 1 {
-                    char_at(rest).cast_unsigned()
+                    char_at(rest).get().cast_unsigned()
                 } else {
                     c_uint::from(rest[0])
                 };

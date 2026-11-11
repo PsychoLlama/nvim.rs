@@ -149,10 +149,10 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
                     break;
                 }
                 let c = gchar_cursor();
-                if c != c_int::from(b'{') && c != c_int::from(b'}') {
+                if c != b'{' && c != b'}' {
                     continue;
                 }
-                if (c == findc && norm) || (n == 1 && !norm) {
+                if (c.get() == findc && norm) || (n == 1 && !norm) {
                     new_pos = Win::current().w_cursor;
                     pos = Some(new_pos);
                     n = 0;

@@ -15,6 +15,7 @@
 
 use crate::fileio::EOL_MAC;
 use crate::global_cell::{Field, field};
+use crate::mbyte::Codepoint;
 use crate::option::{B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT, option_var};
 use crate::runtime::SID_NONE;
 use crate::strings::has_bytes;
@@ -36,8 +37,8 @@ use crate::guard::SECURE;
 use crate::indent::{TabStopArray, replace_tabstop_array, tabstop_set};
 use crate::indent_c::parse_cino;
 use crate::mark::defs::{FileMark, FileMarkView};
+use crate::mbyte::c_cluster_len;
 use crate::mbyte::canonize;
-use crate::mbyte::{c_cluster_len, char_at};
 use crate::memline::ml_setflags;
 use crate::message::{E_MODIFIABLE, E_UNSUPPORTEDOPTION};
 use crate::option::defs::{OptError, OptSet, OptVal, OptionSetFlags};
@@ -198,7 +199,7 @@ pub fn did_set_comments(args: &mut OptSet) -> Result<(), OptError> {
         while at(s) != 0 && at(s) != b':' {
             let flag = at(s);
             if !COM_ALL.to_bytes().contains(&flag) && !flag.is_ascii_digit() && flag != b'-' {
-                errmsg = Err(illegal_char(c_int::from(flag)));
+                errmsg = Err(illegal_char(Codepoint::from(flag)));
                 break;
             }
             s += 1;
@@ -454,18 +455,18 @@ pub fn did_set_matchpairs(args: &mut OptSet) -> Result<(), OptError> {
     let at = |i: usize| value.get(i).copied().unwrap_or(0);
     let mut p = 0;
     while at(p) != 0 {
-        let mut separator = -1;
-        let mut close = -1;
+        let mut separator = None;
+        let mut has_close = false;
         p += c_cluster_len(&value[p..]);
         if at(p) != 0 {
-            separator = c_int::from(at(p));
+            separator = Some(at(p));
             p += 1;
         }
         if at(p) != 0 {
-            close = char_at(&value[p..]);
+            has_close = true;
             p += c_cluster_len(&value[p..]);
         }
-        if separator != c_int::from(b':') || close == -1 || (at(p) != 0 && at(p) != b',') {
+        if separator != Some(b':') || !has_close || (at(p) != 0 && at(p) != b',') {
             return invalid();
         }
         if at(p) == 0 {

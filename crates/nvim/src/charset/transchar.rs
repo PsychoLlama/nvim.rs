@@ -13,6 +13,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use core::ffi::c_int;
 
 // Nested so that ffigen, which collects a file's top-level constants into
@@ -78,7 +79,8 @@ fn hex_digit(n: c_int) -> u8 {
 /// of bytes written excludes the terminating NUL, matching what the C
 /// returned.
 #[inline(always)]
-pub fn hex_form(c: c_int) -> Rendered {
+pub fn hex_form(c: Codepoint) -> Rendered {
+    let c = c.get();
     let mut out = Rendered::new();
     out.push(b'<');
     if c > 0xff {
@@ -97,13 +99,13 @@ pub fn hex_form(c: c_int) -> Rendered {
 
 /// `^X` for a C0 control character, or DEL as `^?`.
 #[inline(always)]
-pub fn control_form(c: c_int) -> Rendered {
+pub fn control_form(c: u8) -> Rendered {
     let mut out = Rendered::new();
     out.push(b'^');
     // The low byte, as the C's `(char)` takes it. `c` is a C0 control or DEL
     // here, so the xor lands in the printable range; a caller that broke that
     // contract used to get the truncation rather than a panic, and still does.
-    out.push((c ^ 0x40).cast_unsigned().to_le_bytes()[0]);
+    out.push(c ^ 0x40);
     out
 }
 
@@ -114,14 +116,14 @@ pub fn control_form(c: c_int) -> Rendered {
 /// here, but both arms are dead: every caller reaches this only for `c < 0`,
 /// and neither 0x80 nor 0 is negative. Kept, and pinned, as it stands.
 #[inline(always)]
-pub fn negative_form(c: c_int) -> (&'static [u8; 2], c_int) {
+pub fn negative_form(c: Codepoint) -> (&'static [u8; 2], u8) {
     use crate::keycodes::{K_SPECIAL, KS_SPECIAL, KS_ZERO};
-    let byte = if c == c_int::from(K_SPECIAL) {
-        c_int::from(KS_SPECIAL)
-    } else if c == 0 {
-        c_int::from(KS_ZERO)
+    let byte = if c == K_SPECIAL {
+        KS_SPECIAL
+    } else if c.is_nul() {
+        KS_ZERO
     } else {
-        -c & 0xff
+        c.get().wrapping_neg().to_le_bytes()[0]
     };
     (b"~@", byte)
 }
@@ -136,20 +138,20 @@ mod tests {
 
     #[test]
     fn hex_widens_with_the_codepoint() {
-        assert_eq!(text(hex_form(0x07)), "<07>");
-        assert_eq!(text(hex_form(0xff)), "<ff>");
-        assert_eq!(text(hex_form(0x100)), "<0100>");
-        assert_eq!(text(hex_form(0xffff)), "<ffff>");
-        assert_eq!(text(hex_form(0x10000)), "<010000>");
-        assert_eq!(text(hex_form(0x10fffe)), "<10fffe>");
+        assert_eq!(text(hex_form(Codepoint::new(0x07))), "<07>");
+        assert_eq!(text(hex_form(Codepoint::new(0xff))), "<ff>");
+        assert_eq!(text(hex_form(Codepoint::new(0x100))), "<0100>");
+        assert_eq!(text(hex_form(Codepoint::new(0xffff))), "<ffff>");
+        assert_eq!(text(hex_form(Codepoint::new(0x10000))), "<010000>");
+        assert_eq!(text(hex_form(Codepoint::new(0x10fffe))), "<10fffe>");
     }
 
     #[test]
     fn hex_form_reports_its_own_length_and_stays_terminated() {
-        let r = hex_form(0x1b);
+        let r = hex_form(Codepoint::new(0x1b));
         assert_eq!(r.len, 4);
         assert_eq!(r.bytes[r.len], 0);
-        assert_eq!(hex_form(0x10000).len, MAX_LEN - 3);
+        assert_eq!(hex_form(Codepoint::new(0x10000)).len, MAX_LEN - 3);
     }
 
     #[test]
@@ -163,18 +165,18 @@ mod tests {
     #[test]
     fn a_prefix_carries_the_rendering_along() {
         assert_eq!(text(control_form(0x1b).behind(b"~@")), "~@^[");
-        assert_eq!(text(hex_form(0xff).behind(b"~@")), "~@<ff>");
+        assert_eq!(text(hex_form(Codepoint::new(0xff)).behind(b"~@")), "~@<ff>");
         assert_eq!(text(Rendered::literal(b'x')), "x");
         // The longest prefixed form still terminates inside the buffer.
-        let longest = hex_form(0xff).behind(b"~@");
+        let longest = hex_form(Codepoint::new(0xff)).behind(b"~@");
         assert_eq!(longest.bytes[longest.len], 0);
     }
 
     #[test]
     fn negative_codes_get_the_escape_prefix() {
-        assert_eq!(negative_form(-0x41), (b"~@", 0x41));
-        assert_eq!(negative_form(-0xff), (b"~@", 0xff));
+        assert_eq!(negative_form(Codepoint::new(-0x41)), (b"~@", 0x41));
+        assert_eq!(negative_form(Codepoint::new(-0xff)), (b"~@", 0xff));
         // Not KS_SPECIAL: the `c == K_SPECIAL` arm cannot see a negative c.
-        assert_eq!(negative_form(-0x80), (b"~@", 0x80));
+        assert_eq!(negative_form(Codepoint::new(-0x80)), (b"~@", 0x80));
     }
 }

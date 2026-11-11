@@ -220,12 +220,12 @@ pub(crate) fn prop_is_emojilike(prop: &utf8proc_property_t) -> bool {
 ///
 /// The inverse of [`NONPRINTABLE`]; everything outside that table's range
 /// answers yes, including codepoints Unicode has not assigned.
-pub fn utf_printable(c: c_int) -> bool {
+pub fn utf_printable(c: Codepoint) -> bool {
     NONPRINTABLE
         .binary_search_by(|&(first, last)| {
-            if last < c {
+            if last < c.get() {
                 Ordering::Less
-            } else if first > c {
+            } else if first > c.get() {
                 Ordering::Greater
             } else {
                 Ordering::Equal
@@ -240,8 +240,8 @@ pub fn utf_printable(c: c_int) -> bool {
 /// See the module docs for what the answer means. Anything below `0x100` is
 /// `'iskeyword'`'s to decide; above that the answer is fixed by Unicode, so
 /// the table and utf8proc settle it.
-pub fn utf_class_tab(c: c_int, chartab: &[uint64_t; 4]) -> c_int {
-    if c < 0x100 {
+pub fn utf_class_tab(c: Codepoint, chartab: &[uint64_t; 4]) -> c_int {
+    if c.get() < 0x100 {
         // NBSP is a blank here even though 'iskeyword' could claim it.
         if matches!(u8::try_from(c), Ok(b' ' | b'\t' | 0 | 0xa0)) {
             return CLASS_BLANK;
@@ -253,18 +253,18 @@ pub fn utf_class_tab(c: c_int, chartab: &[uint64_t; 4]) -> c_int {
         };
     }
 
-    if prop_is_emojilike(utf8proc_get_property(c)) {
+    if prop_is_emojilike(utf8proc_get_property(c.get())) {
         return CLASS_EMOJI;
     }
 
     // `c` is above 0x100 here, so the unsigned comparison the C spells out is
     // the signed one; most characters are in no range at all, and those are
     // word characters.
-    table_class(c.cast_unsigned()).unwrap_or(CLASS_WORD)
+    table_class(c.get().cast_unsigned()).unwrap_or(CLASS_WORD)
 }
 
 /// [`utf_class_tab`] against the current buffer's `'iskeyword'`.
-pub fn utf_class(c: c_int) -> c_int {
+pub fn utf_class(c: Codepoint) -> c_int {
     utf_class_tab(c, &Buf::current().b_chartab)
 }
 
@@ -277,14 +277,14 @@ pub fn utf_class(c: c_int) -> c_int {
 #[inline]
 pub(crate) fn class_of(
     first: u8,
-    decode: impl FnOnce() -> c_int,
+    decode: impl FnOnce() -> Codepoint,
     chartab: &[uint64_t; 4],
 ) -> c_int {
     if utf8len_tab[usize::from(first)] == 1 {
         if first == 0 || ascii_iswhite(c_int::from(first)) {
             return CLASS_BLANK;
         }
-        return if vim_iswordc_tab(c_int::from(first), chartab) {
+        return if vim_iswordc_tab(Codepoint::from(first), chartab) {
             CLASS_WORD
         } else {
             CLASS_PUNCT
@@ -350,15 +350,15 @@ mod tests {
         // Both ends of every unprintable range, and the characters either
         // side of it.
         for &(first, last) in &NONPRINTABLE {
-            assert!(!utf_printable(first), "{first:#x}");
-            assert!(!utf_printable(last), "{last:#x}");
-            assert!(utf_printable(first - 1), "{:#x}", first - 1);
+            assert!(!utf_printable(Codepoint::new(first)), "{first:#x}");
+            assert!(!utf_printable(Codepoint::new(last)), "{last:#x}");
+            assert!(utf_printable(Codepoint::new(first - 1)), "{:#x}", first - 1);
             if last != 0xffff {
-                assert!(utf_printable(last + 1), "{:#x}", last + 1);
+                assert!(utf_printable(Codepoint::new(last + 1)), "{:#x}", last + 1);
             }
         }
-        assert!(utf_printable(c_int::from(b'a')));
-        assert!(utf_printable(0x10000)); // past the table
-        assert!(utf_printable(0)); // NUL is "printable"; callers filter it
+        assert!(utf_printable(Codepoint::byte(b'a')));
+        assert!(utf_printable(Codepoint::new(0x10000))); // past the table
+        assert!(utf_printable(Codepoint::NUL)); // NUL is "printable"; callers filter it
     }
 }

@@ -196,7 +196,7 @@ pub(crate) fn add_byte_to_showcmd(byte: u8) {
         c = match unescape_at(key).filter(|_| first >= 0x80) {
             Some((ch, used)) => {
                 key = &key[used..];
-                Key::from_code(char_at(&ch))
+                Key::from_code(char_at(&ch).get())
             }
             None => {
                 key = &key[1..];

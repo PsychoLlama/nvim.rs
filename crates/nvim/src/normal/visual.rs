@@ -15,6 +15,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::mbyte::Codepoint;
 use crate::ops::{Op, OpType, adjust_cursor_eol};
 use crate::strings::has_char;
 use crate::types::Key;
@@ -655,7 +656,7 @@ pub(crate) fn n_start_visual_mode(c: Key) {
     // cursor is displayed at, not at the TAB's first column.
     if c == Key::CTRL_V
         && get_ve_flags(Win::current()) & OPT_VE_FLAG_BLOCK != 0
-        && gchar_cursor() == c_int::from(TAB)
+        && gchar_cursor() == TAB
     {
         validate_virtcol(Win::current());
         coladvance(Win::current(), Win::current().w_virtcol);
@@ -736,7 +737,7 @@ pub(crate) fn adjust_for_sel(cmd_arg: &mut CmdArg) {
     if visual_active()
         && cmd_arg.op().inclusive
         && sel_exclusive()
-        && gchar_cursor() != NUL
+        && gchar_cursor() != Codepoint::NUL
         && lt(visual_anchor(), Win::current().w_cursor)
     {
         inc_cursor();

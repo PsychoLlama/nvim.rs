@@ -20,8 +20,8 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_cluster_len, char_at, encode_char};
 use crate::memline::MlFlags;
 use crate::types::Failed;
@@ -108,10 +108,10 @@ fn fold_line(line: &[u8], out: &mut [u8]) -> usize {
         // The line's tail, read as the C string it is the end of.
         let rest = &line[at..];
         let (folded, c_len) = if line[at] == b'\n' {
-            (NUL, 1)
+            (Codepoint::NUL, 1)
         } else {
             let c = char_at(rest);
-            (utf_fold(c), usize::try_from(utf_char2len(c)).unwrap_or(1))
+            (c.fold(), usize::try_from(utf_char2len(c)).unwrap_or(1))
         };
         let orig_len = c_cluster_len(rest);
         // MB_MAXBYTES + 1.

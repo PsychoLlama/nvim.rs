@@ -21,6 +21,7 @@ use crate::charset::skip;
 use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr::{self, byte_at};
 use crate::guard::Lock;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{char_at, class_in, head_off};
 use crate::memline::Lines;
 use crate::memory::XString;
@@ -80,7 +81,7 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
         if !compl_status_adding() {
             while {
                 startcol -= 1;
-                startcol >= 0 && vim_is_ident_char(c_int::from(byte_at(line, at(startcol))))
+                startcol >= 0 && vim_is_ident_char(Codepoint::from(byte_at(line, at(startcol))))
             } {}
             startcol += 1;
             COMPL_COL.set(COMPL_COL.get() + startcol);

@@ -39,6 +39,7 @@ use crate::guard::{Keys, Suppress};
 use crate::highlight_group::{HLF_8, HLF_CM};
 use crate::keycodes::SpecialKey;
 use crate::mapping::{MAPTYPE_MAP, MAPTYPE_UNMAP, do_map};
+use crate::mbyte::Codepoint;
 use crate::mbyte::{char_at, char_len, encode_char, utf_iscomposing_first};
 use crate::memory::ThinCString;
 use crate::message::msg_put_ascii;
@@ -247,7 +248,7 @@ pub fn get_digraph(cmdline: bool) -> Key {
     }
     if cmdline {
         if let Some(byte) = c.as_byte().filter(|&b| b < 128)
-            && char2cells(c.code()) == 1
+            && char2cells(Codepoint::new(c.code())) == 1
             && CMDLINE_STAR.get() == 0
         {
             putcmdline(byte.cast_signed(), true);
@@ -287,7 +288,7 @@ fn register_digraph(char1: Key, char2: Key, n: Key) {
 fn check_digraph_chars(char1: Key, char2: Key) -> Result<(), DigraphError> {
     if char2.is_nul() {
         let mut msg = [0u8; 7];
-        let len = encode_char(char1.code(), &mut msg);
+        let len = encode_char(Codepoint::new(char1.code()), &mut msg);
         return Err(DigraphError::NotTwoChars(msg[..len].into()));
     }
     if char1 == Key::ESC || char2 == Key::ESC {
@@ -402,15 +403,15 @@ fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
     let mut buf = [0u8; 12];
     let mut len = 0;
     // buf has room for the longest UTF-8 sequence plus the leading space.
-    if utf_iscomposing_first(result) {
+    if utf_iscomposing_first(Codepoint::new(result)) {
         buf[0] = b' ';
         len = 1;
     }
     // `buf` has room for the longest sequence after the space.
-    len += encode_char(result, &mut buf[len..]);
+    len += encode_char(Codepoint::new(result), &mut buf[len..]);
     outtrans(&buf[..len], HLF_8);
     let mut num = Vec::with_capacity(8);
-    if char2cells(result) == 1 {
+    if char2cells(Codepoint::new(result)) == 1 {
         num.push(b' ');
     }
     num.extend_from_slice(format!(" {result:3}").as_bytes());
@@ -458,7 +459,7 @@ pub fn listdigraphs(use_headers: bool) {
 fn getlist_append_pair(dp: &Digraph, list: &mut List) {
     let chars = [dp.char1, dp.char2, 0];
     let mut buf = [0u8; 7];
-    encode_char(dp.result.code(), &mut buf);
+    encode_char(Codepoint::new(dp.result.code()), &mut buf);
     let pair = tv_list_alloc(2);
     pair.edit().push_str(Some(cstr::in_bytes(&chars)));
     pair.edit().push_str(Some(cstr::in_bytes(&buf)));
@@ -501,7 +502,7 @@ fn next_char(s: &[u8]) -> (Key, &[u8]) {
     if s.first().is_none_or(|&b| b == 0) {
         return (Key::NUL, s);
     }
-    (Key::from_code(char_at(s)), &s[char_len(s)..])
+    (Key::from_code(char_at(s).get()), &s[char_len(s)..])
 }
 
 /// The string value of `arg`, `None` when the typval is not one (which is
@@ -573,7 +574,7 @@ pub fn f_digraph_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let sign_extended = |b: u8| Key::from_code(c_int::from(b.cast_signed()));
     let code = digraph_get(sign_extended(bytes[0]), sign_extended(bytes[1]), false);
     let mut buf = [0u8; 7];
-    let len = encode_char(code.code(), &mut buf);
+    let len = encode_char(Codepoint::new(code.code()), &mut buf);
     result.write_string(Some(ThinCString::from_bytes(&buf[..len])));
 }
 

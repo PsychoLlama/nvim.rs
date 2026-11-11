@@ -22,6 +22,7 @@
 )]
 
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, head_off, iscomposing};
 use crate::memline::MlFlags;
 use crate::memory::XString;
@@ -56,7 +57,7 @@ pub fn ins_bytes(bytes: &[u8]) {
 /// `utf_char2bytes` encodes a negative number.
 pub fn ins_char(c: Key) {
     let mut buf = [0u8; 7];
-    let n = encode_char(c.code(), &mut buf);
+    let n = encode_char(Codepoint::new(c.code()), &mut buf);
     // `c` being 0x100, 0x200, ... would encode to a leading NUL byte, which
     // must not go into the line; CTRL-V u9900 reaches this.
     if buf[0] == 0 {
@@ -176,7 +177,7 @@ pub fn ins_char_bytes(new: &[u8]) {
     // In Insert or Replace mode with 'showmatch', briefly show the match
     // for a closing bracket.
     if p_sm() && STATE.get() & MODE_INSERT != 0 && MSG_SILENT.get() == 0 && !ins_compl_active() {
-        showmatch(char_at(new));
+        showmatch(char_at(new).get());
     }
 
     if !p_ri() || STATE.get() & REPLACE_FLAG != 0 {

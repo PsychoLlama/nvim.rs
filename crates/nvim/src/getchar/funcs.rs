@@ -17,6 +17,7 @@ use super::*;
 use crate::eval::typval::{NumBuf, Unconvertible};
 use crate::guard::{Keys, Suppress};
 use crate::keycodes::{SpecialKey, key_escape};
+use crate::mbyte::Codepoint;
 use crate::mbyte::encode_char;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_cstr;
@@ -221,7 +222,7 @@ pub(crate) fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_number:
             temp[i..i + 3].copy_from_slice(&key_escape(n));
             i += 3;
         } else {
-            i += encode_char(n.code(), &mut temp[i..]);
+            i += encode_char(Codepoint::new(n.code()), &mut temp[i..]);
         }
         debug_assert!(i < temp.len());
 

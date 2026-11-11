@@ -16,6 +16,7 @@
 )]
 
 use crate::cstr::byte_at;
+use crate::mbyte::Codepoint;
 use crate::memline::Lines;
 use crate::narrow::len_as_int;
 use crate::normal::defs::{MotionType, OpArg};
@@ -68,7 +69,7 @@ fn find_next_quote(
         if c == NUL {
             return None;
         }
-        if escape.is_some_and(|escape| find_char(escape, c).is_some()) {
+        if escape.is_some_and(|escape| find_char(escape, Codepoint::new(c)).is_some()) {
             col += 1;
             if at(col) == 0 {
                 return None;
@@ -97,7 +98,9 @@ fn find_prev_quote(
         col_start -= len_as_int(head_off(line, index(col_start)));
         let mut n = 0;
         if let Some(escape) = escape {
-            while col_start - n > 0 && find_char(escape, at(col_start - n - 1)).is_some() {
+            while col_start - n > 0
+                && find_char(escape, Codepoint::new(at(col_start - n - 1))).is_some()
+            {
                 n += 1;
             }
         }

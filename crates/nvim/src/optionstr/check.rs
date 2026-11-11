@@ -23,6 +23,7 @@
 
 use crate::cstr;
 use crate::formatted;
+use crate::mbyte::Codepoint;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_cstr;
 use crate::tr;
@@ -85,7 +86,7 @@ pub fn didset_string_options() {
 }
 
 /// "E539: Illegal character <x>", naming the byte it did not like.
-pub fn illegal_char(c: c_int) -> OptError {
+pub fn illegal_char(c: Codepoint) -> OptError {
     let shown = transchar(c);
     let shown = msg_cstr(cstr::in_bytes(&shown));
     OptError::formatted(tr!("E539: Illegal character <{shown}>"))
@@ -287,7 +288,7 @@ fn digit(byte: u8) -> c_int {
 ///
 /// `format` is the value's bytes; its end is where the C string's NUL was.
 pub(crate) fn check_stl_option(format: &[u8]) -> Result<(), OptError> {
-    let illegal = |c: c_int| Err(illegal_char(c));
+    let illegal = |c: c_int| Err(illegal_char(Codepoint::new(c)));
 
     let mut rest = format;
     let mut groupdepth: c_int = 0;

@@ -208,7 +208,10 @@ fn menuitem_getinfo(
     }
     let _ = dict.add_number(b"priority", VarNumber::from(menu.priority));
     let _ = dict.add_str(b"modes", Some(menu_mode_str(menu.modes)));
-    let _ = dict.add_str(b"shortcut", Some(&char_as_text(menu.mnemonic)));
+    let _ = dict.add_str(
+        b"shortcut",
+        Some(&char_as_text(Codepoint::new(menu.mnemonic))),
+    );
 
     if menu.children.is_empty() {
         // A leaf: describe the first mode it is available in. There is

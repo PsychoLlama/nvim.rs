@@ -12,6 +12,7 @@
 
 use crate::cstr;
 use crate::keycodes::{ModMask, SpecialKey};
+use crate::mbyte::Codepoint;
 use crate::normal::defs::MotionType;
 use crate::ops::{Op, OpType};
 use crate::types::Key;
@@ -316,7 +317,7 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
     let mut n = count1;
     while n > 0 {
         let at_end = if past_line {
-            gchar_cursor() == NUL
+            gchar_cursor() == Codepoint::NUL
         } else {
             oneright().is_err()
         };
@@ -503,7 +504,7 @@ pub(crate) fn nv_dollar(cmd_arg: &mut CmdArg) {
     // Under 'virtualedit' an operator that starts past the end of the
     // line keeps the column it has rather than asking for the end again.
     if !virtual_active(Win::current())
-        || gchar_cursor() != NUL
+        || gchar_cursor() != Codepoint::NUL
         || cmd_arg.op().op_type == OpType::Nop
     {
         Win::current().w_curswant = ColNr::MAX;
@@ -541,7 +542,7 @@ pub(crate) fn nv_csearch(cmd_arg: &mut CmdArg) {
     Win::current().w_set_curswant = true;
     // Landing on a TAB with 'virtualedit' means the *last* cell of it,
     // so that `dt<Tab>` takes the whole tab.
-    if gchar_cursor() == c_int::from(TAB)
+    if gchar_cursor() == TAB
         && virtual_active(Win::current())
         && cmd_arg.arg == FORWARD as c_int
         && (t_cmd || cmd_arg.op().op_type != OpType::Nop)
@@ -683,7 +684,7 @@ pub(crate) fn nv_wordcmd(cmd_arg: &mut CmdArg) {
     let mut cw_on_word = false;
     if !word_end && cmd_arg.op().op_type == OpType::Change {
         let c = gchar_cursor();
-        if c != NUL && !ascii_iswhite(c) {
+        if c != Codepoint::NUL && !ascii_iswhite(c) {
             if cpo_has(CpoFlag::CHANGEW) {
                 cmd_arg.op().inclusive = true;
                 word_end = true;
@@ -718,7 +719,7 @@ pub(crate) fn nv_wordcmd(cmd_arg: &mut CmdArg) {
 /// operator may include -- and say the operator now covers the last character.
 pub(crate) fn adjust_cursor(mut op: Op) {
     if Win::current().w_cursor.col > ColNr::ZERO
-        && gchar_cursor() == NUL
+        && gchar_cursor() == Codepoint::NUL
         && (!visual_active() || P_SEL.first_byte() == b'o')
         && !virtual_active(Win::current())
         && get_ve_flags(Win::current()) & OPT_VE_FLAG_ONEMORE as c_uint == 0

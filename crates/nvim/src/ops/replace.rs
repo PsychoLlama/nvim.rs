@@ -24,6 +24,7 @@
 
 use crate::extmark::EXTMARK_UNDO;
 use crate::guard::Suppress;
+use crate::mbyte::Codepoint;
 use crate::memline::MlFlags;
 use crate::narrow::len_as_int;
 use crate::normal::defs::MotionType;
@@ -32,7 +33,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::cursor::getvpos;
 use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::MB_MAXCHAR;
@@ -179,14 +179,14 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: 
         numc -= (op.end_vcol - bd.end_vcol) + 1;
     }
     // A double-wide character only fits half as many times.
-    if utf_char2cells(c.code()) > 1 {
+    if utf_char2cells(Codepoint::new(c.code())) > 1 {
         if numc & 1 != 0 && !bd.is_short {
             bd.endspaces += 1;
         }
         numc /= 2;
     }
     let mut char_bytes = [0u8; MB_MAXCHAR];
-    let encoded_len = encode_char(c.code(), &mut char_bytes);
+    let encoded_len = encode_char(Codepoint::new(c.code()), &mut char_bytes);
     let encoded = &char_bytes[..encoded_len];
 
     // Up to the replaced part, then the pre-spaces; then, unless the line
@@ -277,7 +277,7 @@ fn replace_chars(op: &mut OpArg, c: Key) {
         let mut done = false;
 
         let under_cursor = gchar_cursor();
-        if under_cursor != NUL {
+        if under_cursor != Codepoint::NUL {
             let new_byte_len = len_as_int(c.utf8_len());
             let old_byte_len = {
                 let cursor = Win::current().w_cursor;
@@ -296,7 +296,7 @@ fn replace_chars(op: &mut OpArg, c: Key) {
                 replace_character(c);
                 done = true;
             } else {
-                if under_cursor == c_int::from(TAB) {
+                if under_cursor == TAB {
                     // Breaking the TAB moves the end, so remember where it
                     // was in columns first.
                     let mut end_vcol = 0;
@@ -309,7 +309,7 @@ fn replace_chars(op: &mut OpArg, c: Key) {
                     }
                 }
                 // With `coladd` set the cursor may now be just past a TAB.
-                if gchar_cursor() != NUL {
+                if gchar_cursor() != Codepoint::NUL {
                     // Both sides are one byte, so the key is one.
                     pbyte(
                         Win::current().w_cursor,

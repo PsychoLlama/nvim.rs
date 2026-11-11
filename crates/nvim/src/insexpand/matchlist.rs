@@ -534,7 +534,7 @@ fn common_prefix_len(leader: &[u8], text: &[u8], icase: bool) -> usize {
     while p < leader.len() {
         let (c1, c2) = (char_at(&leader[p..]), char_at(&text[s..]));
         let differ = if icase {
-            mb_tolower(c1) != mb_tolower(c2)
+            c1.to_lower() != c2.to_lower()
         } else {
             c1 != c2
         };

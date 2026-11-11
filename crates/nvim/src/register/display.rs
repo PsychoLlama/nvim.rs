@@ -45,7 +45,7 @@ fn put_cut(text: &[u8], n: &mut c_int, skip_esc: bool) {
         *n -= if rest[0] >= 0x80 {
             c_cells_at(rest)
         } else {
-            byte2cells(c_int::from(rest[0]))
+            byte2cells(rest[0])
         };
         if *n < 0 {
             break;

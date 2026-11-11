@@ -31,6 +31,7 @@
 pub mod entry;
 
 use crate::deref::deref_to_field;
+use crate::mbyte::Codepoint;
 use crate::narrow::{as_index, count_as_int};
 use core::ffi::{c_int, c_long, c_uint};
 
@@ -78,7 +79,11 @@ pub(super) const BLANK_LINE: VTermLineInfo = VTermLineInfo {
 
 /// Whether `next` extends the grapheme that `prev` ended.
 pub(super) fn is_composing(prev: u32, next: u32, grapheme: &mut GraphemeState) -> bool {
-    iscomposing(prev.cast_signed(), next.cast_signed(), Some(grapheme))
+    iscomposing(
+        Codepoint::new(prev.cast_signed()),
+        Codepoint::new(next.cast_signed()),
+        Some(grapheme),
+    )
 }
 
 /// How many bytes the tab-stop bit vector needs for `cols` columns.
@@ -248,7 +253,7 @@ impl VTermState {
     pub(super) fn append_grapheme(&mut self, at: usize, codepoint: u32) -> usize {
         let mut encoded = [0u8; 8];
         // Eight bytes, more than any encoding needs.
-        let len = encode_char(codepoint.cast_signed(), &mut encoded);
+        let len = encode_char(Codepoint::new(codepoint.cast_signed()), &mut encoded);
         let len = len.min(self.grapheme_buf.len() - at);
         for (to, &from) in self.grapheme_buf[at..at + len].iter_mut().zip(&encoded) {
             *to = from.cast_signed();

@@ -22,6 +22,7 @@
 use super::*;
 use crate::ascii::NUL;
 use crate::grid::with_linebuf;
+use crate::mbyte::Codepoint;
 use crate::narrow::{as_index, count_as_int};
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::optionstr::OptStringRef;
@@ -221,7 +222,7 @@ impl Cells {
             // With 'virtualedit' the selection can run past the end of the
             // line; draw a blank for it.
             self.char_code = ::core::ffi::c_int::from(b' ');
-            self.cell_char = schar_from_char(self.char_code);
+            self.cell_char = schar_from_char(Codepoint::new(self.char_code));
             // Put the pointer back at the NUL.
             self.pos -= 1;
         }
@@ -353,12 +354,12 @@ impl Cells {
 
     /// Draw an unprintable character in its `^X` or `<xx>` form.
     pub(super) fn escaped(&mut self, wlv: &mut WinLineVars, window: Win) {
-        let shown = transchar_buf(window.buffer_or_none(), self.char_code);
+        let shown = transchar_buf(window.buffer_or_none(), Codepoint::new(self.char_code));
         let len = shown.iter().position(|&c| c == 0).unwrap_or(shown.len());
         let mut shown = shown;
         let text = &mut shown[..len];
         if wlv.extra_todo == 0 {
-            wlv.extra_todo = byte2cells(self.char_code) - 1;
+            wlv.extra_todo = u8::try_from(self.char_code).map_or(0, byte2cells) - 1;
         }
         if DY_FLAGS.get() & OPT_DY_FLAG_UHEX != 0 && window.w_onebuf_opt.wo_rl != 0 {
             // Reverse "<12>".
@@ -380,7 +381,7 @@ impl Cells {
             let kept = tail.len().min(room);
             buf[..kept].copy_from_slice(&tail[..kept]);
         } else {
-            wlv.extra_todo = byte2cells(unprintable) - 1;
+            wlv.extra_todo = u8::try_from(unprintable).map_or(0, byte2cells) - 1;
             wlv.extra.set(tail);
         }
         wlv.n_attr = wlv.extra_todo + 1;
@@ -473,7 +474,7 @@ impl Cells {
                 wlv.extra_todo += 1;
             }
             self.cell_char = if self.has_match_conc != 0 && self.match_conc != 0 {
-                schar_from_char(self.match_conc)
+                schar_from_char(Codepoint::new(self.match_conc))
             } else if self.decor_conceal != 0 && decor_conceal().1 != 0 {
                 let (_, conceal_char, conceal_attr) = decor_conceal();
                 if conceal_attr != 0 {
@@ -481,7 +482,7 @@ impl Cells {
                 }
                 conceal_char
             } else if syntax_conceal && syn_get_sub_char() != NUL {
-                schar_from_char(syn_get_sub_char())
+                schar_from_char(Codepoint::new(syn_get_sub_char()))
             } else if window.w_p_lcs_chars.conceal != NUL as ScreenChar {
                 window.w_p_lcs_chars.conceal
             } else {

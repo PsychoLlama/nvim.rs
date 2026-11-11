@@ -38,6 +38,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::mbyte::Codepoint;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -76,7 +77,7 @@ pub fn starts_with_cinword(line: &[u8]) -> bool {
         } else {
             byte_at(line, start + word.len() - 1)
         };
-        if !vim_iswordc(c_int::from(after)) || !vim_iswordc(c_int::from(before)) {
+        if !vim_iswordc(Codepoint::from(after)) || !vim_iswordc(Codepoint::from(before)) {
             return true;
         }
     }
@@ -96,10 +97,10 @@ pub(crate) fn has_js_key(line: &[u8], at: usize) -> bool {
         _ => 0,
     };
     i += usize::from(quote != 0);
-    if !vim_is_ident_char(c_int::from(byte_at(line, i))) {
+    if !vim_is_ident_char(Codepoint::from(byte_at(line, i))) {
         return false; // need at least one ID character
     }
-    while vim_is_ident_char(c_int::from(byte_at(line, i))) {
+    while vim_is_ident_char(Codepoint::from(byte_at(line, i))) {
         i += 1;
     }
     if byte_at(line, i) != 0 && byte_at(line, i) == quote {
@@ -187,7 +188,7 @@ pub(crate) fn is_scope_decl(line: &[u8], at: usize) -> bool {
 /// character.
 pub(crate) fn starts_with_word(line: &[u8], at: usize, word: &[u8]) -> bool {
     let after = byte_at(line, at + word.len());
-    line[at.min(line.len())..].starts_with(word) && !vim_is_ident_char(c_int::from(after))
+    line[at.min(line.len())..].starts_with(word) && !vim_is_ident_char(Codepoint::from(after))
 }
 
 /// `at` with a leading `}` -- and any comment behind it -- stepped over: the
@@ -306,7 +307,7 @@ pub(crate) fn control_clause_before(line: &[u8], offset: &mut ColNr) -> bool {
 
     // It is only the keyword if nothing identifier-ish precedes it.
     let before = byte_at(line, usize::try_from(at - 1).unwrap_or(usize::MAX));
-    if at != 0 && vim_is_ident_char(c_int::from(before)) {
+    if at != 0 && vim_is_ident_char(Codepoint::from(before)) {
         return false;
     }
     *offset = ColNr::new(at);

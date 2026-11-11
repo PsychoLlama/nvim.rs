@@ -26,6 +26,7 @@
 use crate::charset::skip;
 use crate::cstr::{self, until_nul};
 use crate::getchar::Remap;
+use crate::mbyte::Codepoint;
 use crate::mbyte::char_count;
 use crate::normal::defs::MotionType;
 use crate::register::defs::RegLines;
@@ -263,7 +264,7 @@ pub fn do_execreg(regname: RegName, colon: bool, addcr: bool, silent: bool) -> R
         regname = EXECREG_LASTC.get();
     }
     if regname == b'%' || regname == b'#' || !regname.is_valid(false) {
-        emsg_invreg(c_int::from(regname.byte()));
+        emsg_invreg(Codepoint::from(regname.byte()));
         return Err(Failed);
     }
     EXECREG_LASTC.set(regname);

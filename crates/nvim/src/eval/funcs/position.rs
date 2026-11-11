@@ -453,7 +453,7 @@ pub fn f_setcharsearch(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDat
     };
     if let Some(csearch) = numbuf.dict_string(Some(d), b"char") {
         let text = csearch.to_bytes();
-        set_last_csearch(char_at(text), &text[..cluster_len(text)]);
+        set_last_csearch(char_at(text).get(), &text[..cluster_len(text)]);
     }
     if let Some(di) = d.find(b"forward") {
         let forward = tv_get_number(&di.di_tv) != 0;

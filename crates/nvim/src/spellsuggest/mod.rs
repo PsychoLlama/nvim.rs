@@ -322,7 +322,7 @@ pub(crate) fn badword_captype(word: &[u8], end: usize) -> WordFlags {
     let end = end.min(word.len());
     let mut p = 0;
     while p < end {
-        if spell_isupper(char_at(&word[p..])) {
+        if spell_isupper(char_at(&word[p..]).get()) {
             upper += 1;
             if p == 0 {
                 first = true;
@@ -468,7 +468,7 @@ fn spell_find_suggest(
 
     // A word the spell checker is happy with, spelled lower case, may
     // simply be missing its capital.
-    if !spell_isupper(char_at(bad)) && attr == HLF_COUNT {
+    if !spell_isupper(char_at(bad).get()) && attr == HLF_COUNT {
         let mut buf = [0u8; MAXPATHL as usize];
         make_case_word(&su.su_badword, &mut buf, WordFlags::ONECAP);
         let (badlen, lang) = (su.su_badlen, su.su_sallang);

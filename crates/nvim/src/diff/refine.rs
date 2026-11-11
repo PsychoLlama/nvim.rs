@@ -282,7 +282,7 @@ fn tokenize_line(
                 let c_len = usize::try_from(utf_char2len(c)).expect("a character's length");
                 // MB_MAXBYTES + 1.
                 let mut cbuf = [0u8; 22];
-                let folded = encode_char(utf_fold(c), &mut cbuf);
+                let folded = encode_char(c.fold(), &mut cbuf);
                 out.extend_from_slice(&cbuf[..folded]);
                 if tok_len > c_len {
                     // Composing characters follow, and are not folded.

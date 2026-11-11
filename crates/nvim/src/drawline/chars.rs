@@ -30,6 +30,7 @@
 
 use super::*;
 use crate::ascii::NUL;
+use crate::mbyte::Codepoint;
 
 impl Cells {
     /// Put the next character in [`Cells::cell_char`].
@@ -176,12 +177,12 @@ impl Cells {
 
         if (self.char_len == 1 && c0 >= 0x80)
             || (self.char_len >= 1 && self.char_code == 0)
-            || (self.char_len > 1 && !vim_isprintc(self.char_code))
+            || (self.char_len > 1 && !vim_isprintc(Codepoint::new(self.char_code)))
         {
             // An illegal UTF-8 byte shows as `<xx>`; an unprintable
             // character as `?` or its fullwidth form.
             let mut hex: CharDisplay = [0; CHAR_DISPLAY_LEN];
-            let len = transchar_hex_into(&mut hex, self.char_code);
+            let len = transchar_hex_into(&mut hex, Codepoint::new(self.char_code));
             let mut text = hex.map(|c| c.to_ne_bytes()[0]);
             let text = &mut text[..len];
             if window.w_onebuf_opt.wo_rl != 0 {
@@ -192,7 +193,7 @@ impl Cells {
             let first = c_cluster_len(text);
             wlv.extra.set(text);
             wlv.extra.advance(first);
-            self.cell_char = schar_from_char(self.char_code);
+            self.cell_char = schar_from_char(Codepoint::new(self.char_code));
             wlv.extra_todo = ::core::ffi::c_int::try_from(len - first).unwrap_or(0);
             wlv.extra_fill = NUL as ScreenChar;
             wlv.extra_last = NUL as ScreenChar;
@@ -246,7 +247,7 @@ impl Cells {
             self.slow_path(wlv, window, f, prev_at, c0);
         }
 
-        if !vim_isprintc(self.char_code) {
+        if !vim_isprintc(Codepoint::new(self.char_code)) {
             self.unprintable(wlv, window);
         }
 
@@ -461,7 +462,7 @@ impl Cells {
         // character outside 'breakat' has been seen.
         if !wlv.linebreak_armed
             && self.cell_char != NUL as ScreenChar
-            && !vim_isbreak(::core::ffi::c_int::from(self.byte()))
+            && !vim_isbreak(Codepoint::from(self.byte()))
         {
             wlv.linebreak_armed = true;
         }
@@ -469,8 +470,8 @@ impl Cells {
         if !(c0 == self.char_code
             && self.char_code < 128
             && wlv.linebreak_armed
-            && vim_isbreak(self.char_code)
-            && !vim_isbreak(::core::ffi::c_int::from(self.byte())))
+            && vim_isbreak(Codepoint::new(self.char_code))
+            && !vim_isbreak(Codepoint::from(self.byte())))
         {
             return;
         }
@@ -620,5 +621,9 @@ fn cluster_at(rest: &[u8]) -> (::core::ffi::c_int, ScreenChar, ::core::ffi::c_in
         return (1, schar_from_ascii(b), ::core::ffi::c_int::from(b));
     }
     let (len, cell, first) = c_cluster_cell(rest);
-    (::core::ffi::c_int::try_from(len).unwrap_or(0), cell, first)
+    (
+        ::core::ffi::c_int::try_from(len).unwrap_or(0),
+        cell,
+        first.get(),
+    )
 }

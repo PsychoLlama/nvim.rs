@@ -21,6 +21,7 @@ use super::*;
 use crate::ascii::NUL;
 use crate::charset::skip;
 use crate::cstr::byte_at;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::normal::defs::MotionType;
 use crate::option::cpo_has;
@@ -127,14 +128,14 @@ fn find_mps_values(target: &mut Target, switchit: bool) {
     let mut ptr = 0;
     while ptr < mps.len() {
         // The opening half of this pair.
-        if char_from(ptr) == *initc {
+        if char_from(ptr).get() == *initc {
             let other = char_from(ptr + len_from(ptr) + 1);
             if switchit {
                 *findc = *initc;
-                *initc = other;
+                *initc = other.get();
                 *backwards = true;
             } else {
-                *findc = other;
+                *findc = other.get();
                 *backwards = false;
             }
             return;
@@ -142,13 +143,13 @@ fn find_mps_values(target: &mut Target, switchit: bool) {
         // The closing half.
         let prev = ptr;
         ptr += len_from(ptr) + 1;
-        if char_from(ptr) == *initc {
+        if char_from(ptr).get() == *initc {
             if switchit {
                 *findc = *initc;
-                *initc = char_from(prev);
+                *initc = char_from(prev).get();
                 *backwards = false;
             } else {
-                *findc = char_from(prev);
+                *findc = char_from(prev).get();
                 *backwards = true;
             }
             return;
@@ -293,7 +294,7 @@ fn make_plan(
             }
             loop {
                 let rest = &line[pos.col.as_usize().min(line.len())..];
-                target.initc = char_at(rest);
+                target.initc = char_at(rest).get();
                 if target.initc == NUL {
                     break;
                 }
@@ -734,7 +735,7 @@ impl Walk {
             let line = self.lines.line(self.lnum);
             char_at(&line[col.min(line.len())..])
         };
-        if c == NUL {
+        if c == Codepoint::NUL {
             // At the end of a line without a trailing backslash,
             // reset inquote.
             if col == 0 || at_col(self.lines.line(self.lnum), col, -1) != b'\\' {
@@ -743,7 +744,7 @@ impl Walk {
             }
             return Step::Next;
         }
-        if c == '"' as c_int {
+        if c == b'"' {
             // A quote preceded by an odd number of backslashes is
             // ignored.
             if self.do_quotes != 0 {
@@ -762,7 +763,7 @@ impl Walk {
         }
         // Skipping a character constant does not apply when the quote
         // itself is what is being matched.
-        if c == '\'' as c_int
+        if c == b'\''
             && !cpo_match
             && target.initc != '\'' as c_int
             && target.findc != '\'' as c_int
@@ -774,7 +775,7 @@ impl Walk {
         // For Lisp skip over backslashed (), {} and [] — actually
         // over "#\(" and friends.
         if Buf::current().b_p_lisp != 0
-            && has_char(c"(){}[]", c)
+            && has_char(c"(){}[]", c.get())
             && col > 1
             && check_prevcol(self.lines.line(self.lnum), col, b'\\')
             && check_prevcol(self.lines.line(self.lnum), col - 1, b'#')
@@ -785,7 +786,7 @@ impl Walk {
         // Check for a match outside of quotes, and inside of quotes
         // when the start position is inside quotes too.
         if (!self.inquote || self.start_in_quotes == Some(true))
-            && (c == target.initc || c == target.findc)
+            && (c.get() == target.initc || c.get() == target.findc)
         {
             // Only accept a match when 'M' is in 'cpo', or when the
             // escaping is what it was at the start.
@@ -793,7 +794,7 @@ impl Walk {
                 || (backslash_count(self.lines.line(self.lnum), col) & 1 != 0)
                     == target.match_escaped
             {
-                if c == target.initc {
+                if c.get() == target.initc {
                     self.count += 1;
                 } else {
                     if self.count == 0 {

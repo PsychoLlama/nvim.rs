@@ -25,8 +25,8 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::decoration::MT_META_INLINE;
+use crate::mbyte::Codepoint;
 use crate::narrow::as_index;
 use crate::narrow::count_as_int;
 use crate::narrow::len_as_int;
@@ -295,7 +295,7 @@ impl LineSetup {
                 } else {
                     let from = getvvcol(window, &mut top).0;
                     // On an empty line, invert the one cell past its end.
-                    let to = if gchar_pos(&top) == NUL {
+                    let to = if gchar_pos(&top) == Codepoint::NUL {
                         from + 1
                     } else {
                         ColNr::MAX

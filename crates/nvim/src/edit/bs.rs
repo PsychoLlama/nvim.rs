@@ -33,6 +33,7 @@ use crate::cstr::byte_at;
 use crate::indent::StopList;
 use crate::keycodes::SpecialKey;
 use crate::mbyte::CharInfo;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_char_info, c_next_cluster, char_at, char_len, class_in, iscomposing};
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
@@ -469,10 +470,10 @@ fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
         if mode == Backspace::Word && !ascii_isspace(cc) {
             // The start of the word.
             mode = Backspace::WordNotSpace;
-            is_word = c_int::from(vim_iswordc(cc));
+            is_word = c_int::from(vim_iswordc(Codepoint::new(cc)));
         } else if mode == Backspace::WordNotSpace
             && (ascii_isspace(cc)
-                || c_int::from(vim_iswordc(cc)) != is_word
+                || c_int::from(vim_iswordc(Codepoint::new(cc))) != is_word
                 || prev_cclass != cclass)
         {
             // The end of the word.
@@ -555,7 +556,7 @@ fn delete_one_char() -> Result<(), Failed> {
 /// The character under the cursor, `NUL` at the end of the line.
 #[inline(always)]
 fn char_at_cursor() -> c_int {
-    gchar_cursor()
+    gchar_cursor().get()
 }
 
 /// The multi-byte class of the character under the cursor, which is what

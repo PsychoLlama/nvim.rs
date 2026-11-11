@@ -16,6 +16,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::regexp::RegCompiler;
 use core::ffi::c_int;
 
@@ -62,7 +63,7 @@ pub(crate) fn grapheme_len(rc: &RegCompiler, p: usize) -> c_int {
 
 /// The character `off` bytes past `p`.
 pub(crate) fn char_at(rc: &RegCompiler, p: usize, off: c_int) -> c_int {
-    char_at_nul(rc.text, p.wrapping_add_signed(off as isize))
+    char_at_nul(rc.text, p.wrapping_add_signed(off as isize)).get()
 }
 
 /// Step the cursor back over the character in front of it. `anchor` bounds
@@ -76,7 +77,7 @@ pub(crate) fn step_back(rc: &mut RegCompiler, anchor: usize) {
 
 /// Is `c` a combining character?
 pub(crate) fn is_composing(c: c_int) -> bool {
-    utf_iscomposing_legacy(c)
+    utf_iscomposing_legacy(Codepoint::new(c))
 }
 
 /// Move the cursor past the whole character it is on.

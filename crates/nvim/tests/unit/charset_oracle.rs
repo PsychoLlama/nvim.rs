@@ -7,6 +7,7 @@
 
 #![cfg(not(miri))]
 
+use neovim::mbyte::Codepoint;
 use std::ffi::c_int;
 
 use neovim::charset::display::{foldcase, trans_characters_in, transstr_into, transstr_owned};
@@ -239,7 +240,7 @@ fn the_hex_form() {
     let mut d = Digest::new();
     for c in (0..0x400).chain([0xffff, 0x10000, 0x10ffff, 0x7fff_ffff]) {
         let mut buf = [0u8; 16];
-        let n = transchar_hex_into(&mut buf, c);
+        let n = transchar_hex_into(&mut buf, Codepoint::new(c));
         d.add(n as i64);
         d.bytes(until_nul(&buf));
     }

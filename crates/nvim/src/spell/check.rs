@@ -195,7 +195,7 @@ impl Win {
 
             if capcol.as_deref() == Some(&ColNr::ZERO) && syn.b_cap_prog.is_some() {
                 // This word should have started with a capital.
-                if !spell_isupper(char_at(text)) {
+                if !spell_isupper(char_at(text).get()) {
                     wrongcaplen = mi.fend;
                 }
             }
@@ -346,10 +346,10 @@ fn advance_camelcase_word(text: &[u8], window: Win, is_camel_case: &mut bool) ->
 
     // Only the last two characters' types are ever needed.
     let mut last_last_type = -1;
-    let mut last_type = get_char_type(c);
+    let mut last_type = get_char_type(c.get());
 
     while byte_at(text, end) != 0 && spell_iswordp(tail(text, end), window) {
-        let this_type = get_char_type(char_at(tail(text, end)));
+        let this_type = get_char_type(char_at(tail(text, end)).get());
 
         if last_last_type == CHAR_UPPER && last_type == CHAR_UPPER && this_type == CHAR_OTHER {
             // UpperUpperLower: the word ends one character back.

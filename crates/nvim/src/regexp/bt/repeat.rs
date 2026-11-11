@@ -16,6 +16,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use core::ffi::c_int;
 
 use super::compile::BtProg;
@@ -24,7 +25,6 @@ use crate::ascii::NUL;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::getchar::state::GOT_INT;
-use crate::mbyte::{mb_tolower, mb_toupper, utf_fold};
 use crate::message::E_RE_CORR;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
@@ -217,10 +217,11 @@ impl Count<'_> {
     /// (`use_multibytecode` sends the rest to `MULTIBYTECODE`).
     fn exactly(&mut self, want: u8) {
         if self.rex.reg_ic() {
-            let upper = mb_toupper(c_int::from(want));
-            let lower = mb_tolower(c_int::from(want));
+            let upper = Codepoint::from(want).to_upper();
+            let lower = Codepoint::from(want).to_lower();
             while self.count < self.maxcount
-                && (c_int::from(self.byte()) == upper || c_int::from(self.byte()) == lower)
+                && (c_int::from(self.byte()) == upper.get()
+                    || c_int::from(self.byte()) == lower.get())
             {
                 self.count += 1;
                 self.scan += 1;
@@ -242,13 +243,13 @@ impl Count<'_> {
         }
         let ic = self.rex.reg_ic();
         let folded = if ic {
-            utf_fold(char_at_nul(opnd, 0))
+            char_at_nul(opnd, 0).fold()
         } else {
-            0
+            Codepoint::NUL
         };
         while self.count < self.maxcount && cluster_len_at(self.line, self.scan) >= len {
             let same = opnd[..len] == self.line[self.scan..self.scan + len];
-            if !same && (!ic || utf_fold(char_at_nul(self.line, self.scan)) != folded) {
+            if !same && (!ic || char_at_nul(self.line, self.scan).fold() != folded) {
                 break;
             }
             self.scan += len;
@@ -273,9 +274,9 @@ impl Count<'_> {
                 let c = if len > 1 {
                     char_at_nul(line, scan)
                 } else {
-                    c_int::from(line[scan])
+                    Codepoint::from(line[scan])
                 };
-                if cstrchr(self.rex, set, c).is_some() != positive {
+                if cstrchr(self.rex, set, c.get()).is_some() != positive {
                     break;
                 }
                 self.scan += len.max(1);

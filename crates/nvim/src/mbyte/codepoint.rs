@@ -96,6 +96,24 @@ impl Codepoint {
         0 <= self.0 && self.0 < 0x80
     }
 
+    /// Whether this is `A`..=`Z`.
+    #[inline]
+    pub fn is_ascii_uppercase(self) -> bool {
+        self.as_byte().is_some_and(|b| b.is_ascii_uppercase())
+    }
+
+    /// Whether this is `a`..=`z`.
+    #[inline]
+    pub fn is_ascii_lowercase(self) -> bool {
+        self.as_byte().is_some_and(|b| b.is_ascii_lowercase())
+    }
+
+    /// Whether this is `0`..=`9`.
+    #[inline]
+    pub fn is_ascii_digit(self) -> bool {
+        self.as_byte().is_some_and(|b| b.is_ascii_digit())
+    }
+
     /// How many bytes this takes in the codec's six-byte UTF-8: one for
     /// anything below 0x80.
     #[inline]
@@ -128,6 +146,24 @@ impl From<Codepoint> for i32 {
     }
 }
 
+impl From<Codepoint> for i64 {
+    /// The number, as the `VarNumber` a script sees.
+    #[inline]
+    fn from(c: Codepoint) -> i64 {
+        i64::from(c.0)
+    }
+}
+
+impl TryFrom<Codepoint> for u8 {
+    type Error = core::num::TryFromIntError;
+
+    /// The character as one byte, when it is below 0x100.
+    #[inline]
+    fn try_from(c: Codepoint) -> Result<u8, Self::Error> {
+        u8::try_from(c.0)
+    }
+}
+
 impl TryFrom<Codepoint> for char {
     type Error = core::char::CharTryFromError;
 
@@ -150,6 +186,22 @@ impl PartialOrd<u8> for Codepoint {
     #[inline]
     fn partial_cmp(&self, b: &u8) -> Option<Ordering> {
         Some(self.0.cmp(&i32::from(*b)))
+    }
+}
+
+impl PartialEq<Codepoint> for u8 {
+    #[inline]
+    fn eq(&self, c: &Codepoint) -> bool {
+        c == self
+    }
+}
+
+impl PartialOrd<Codepoint> for u8 {
+    /// The mirror of `Codepoint: PartialOrd<u8>`, so a byte range holds a
+    /// codepoint (`(b'A'..=b'Z').contains(&c)`).
+    #[inline]
+    fn partial_cmp(&self, c: &Codepoint) -> Option<Ordering> {
+        Some(i32::from(*self).cmp(&c.0))
     }
 }
 
@@ -181,6 +233,12 @@ mod tests {
         assert!(Codepoint::new(0x100) > b'\xff');
         assert_eq!(Codepoint::byte(0xe9), Codepoint::from('é'));
         assert!(Codepoint::from('é') == 'é');
+        assert!((b'!'..=b'~').contains(&Codepoint::from(b'Q')));
+        assert!(!(b'!'..=b'~').contains(&Codepoint::new(0x151)));
+        assert!(Codepoint::from(b'Q').is_ascii_uppercase());
+        assert!(!Codepoint::new(0x151).is_ascii_uppercase());
+        assert!(Codepoint::from(b'q').is_ascii_lowercase());
+        assert!(Codepoint::from(b'7').is_ascii_digit());
     }
 
     #[test]

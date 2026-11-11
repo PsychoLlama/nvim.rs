@@ -22,6 +22,7 @@ use crate::cstr;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_tab};
 use crate::guard::Allow;
 use crate::keycodes::SpecialKey;
+use crate::mbyte::Codepoint;
 use crate::option::defs::{OptError, OptionSetFlags};
 use crate::types::CmdModFlags;
 use crate::window::valid_win;
@@ -106,7 +107,7 @@ pub(crate) fn derive_cedit_key() -> Result<(), OptError> {
     } else {
         // The option names the key the way `'wildchar'` does: by its code.
         let n = p_cedit(|value| string_to_key(value.to_bytes()));
-        if n == 0 || vim_isprintc(n) {
+        if n == 0 || vim_isprintc(Codepoint::new(n)) {
             return Err(E_INVARG.into());
         }
         CEDIT_KEY.set(Some(Key::from_code(n)));

@@ -20,6 +20,7 @@ use super::*;
 use crate::charset::skip;
 use crate::charset::{getdigits_at, getdigits_int_at};
 use crate::guard::Script;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_cluster_len, head_off};
 use crate::memline::Lines;
 use crate::memory::XString;
@@ -123,7 +124,7 @@ fn url_at(line: &[u8], at: usize) -> bool {
 fn name_start(line: &[u8], col: usize, options: FileNameOpts) -> Option<usize> {
     // Search forward for what could be the start of a file name.
     let mut at = col;
-    while cstr::byte_at(line, at) != 0 && !vim_isfilec(c_int::from(line[at])) {
+    while cstr::byte_at(line, at) != 0 && !vim_isfilec(Codepoint::from(line[at])) {
         at += c_cluster_len(&line[at..]);
     }
     if cstr::byte_at(line, at) == 0 {
@@ -135,7 +136,7 @@ fn name_start(line: &[u8], col: usize, options: FileNameOpts) -> Option<usize> {
         let back = head_off(line, at - 1);
         if back > 0 {
             at -= back + 1;
-        } else if vim_isfilec(c_int::from(line[at - 1]))
+        } else if vim_isfilec(Codepoint::from(line[at - 1]))
             || (options.has(FileNameOpts::HYP) && url_at(line, at - 1))
         {
             at -= 1;
@@ -161,7 +162,7 @@ fn name_length(name: &[u8], options: FileNameOpts) -> usize {
     let mut is_url = false;
     loop {
         let escaped_space = at(len) == b'\\' && at(len + 1) == b' ';
-        if !(vim_isfilec(c_int::from(at(len)))
+        if !(vim_isfilec(Codepoint::from(at(len)))
             || escaped_space
             || (hyp && url_at(name, len))
             || (is_url && has_char(c":?&=", c_int::from(at(len)))))

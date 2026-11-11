@@ -139,7 +139,7 @@ impl Win {
                 ..MatchState::default()
             },
             mit_hlg_id: hlg_id,
-            mit_conceal_char: conceal_char.map_or(0, |c| char_at(c.to_bytes())),
+            mit_conceal_char: conceal_char.map_or(0, |c| char_at(c.to_bytes()).get()),
             mit_suspended: false,
         };
 

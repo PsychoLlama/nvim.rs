@@ -448,7 +448,7 @@ fn show_mode() -> c_int {
 /// The character under the cursor, `NUL` at the end of the line.
 #[inline(always)]
 fn char_at_cursor() -> c_int {
-    gchar_cursor()
+    gchar_cursor().get()
 }
 
 /// Read the next key, waiting for it if need be.

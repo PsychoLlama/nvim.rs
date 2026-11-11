@@ -44,7 +44,8 @@
 
 use crate::ascii::{NUL, ascii_iswhite};
 use crate::cstr::until_nul;
-use crate::mbyte::{char_at, char_len, utf_fold};
+use crate::mbyte::Codepoint;
+use crate::mbyte::{char_at, char_len};
 use crate::narrow::{as_index, len_as_int};
 use crate::spell::{MAXWLEN_INT, SpellLang};
 use crate::spell::{spell_casefold, spell_soundfold, spelltab_fold};
@@ -71,7 +72,7 @@ pub(crate) const SOUND_VOWEL: u8 = b'*';
 /// Unicode fold.
 pub(super) fn spell_tofold(c: c_int) -> c_int {
     if c >= 128 {
-        utf_fold(c)
+        Codepoint::new(c).fold().get()
     } else {
         c_int::from(spelltab_fold(as_index(c)))
     }
@@ -89,7 +90,7 @@ fn word_chars(word: &[u8], out: &mut [c_int; MAXWLEN]) -> usize {
     let mut len = 0;
     let mut p = 0;
     while p < word.len() {
-        out[len] = char_at(&word[p..]);
+        out[len] = char_at(&word[p..]).get();
         p += char_len(&word[p..]);
         len += 1;
     }

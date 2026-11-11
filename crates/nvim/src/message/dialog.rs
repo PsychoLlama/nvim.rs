@@ -17,6 +17,7 @@ use super::*;
 use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_key;
 use crate::keycodes::ModMask;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{char_at, cluster_len};
 use crate::types::{Key, KeyKind};
 use core::ffi::{CStr, c_int};
@@ -150,11 +151,11 @@ pub(crate) fn do_dialog(
                 // "hotkeys" are, and count how many buttons precede it. A
                 // NUL hotkey (a button list ending in a separator) ends the
                 // list, as the terminator of upstream's string did.
-                let c = mb_tolower(c.code());
+                let c = (Codepoint::new(c.code())).to_lower();
                 let listed = hotkeys.iter().take_while(|&&hotkey| hotkey != 0);
                 if let Some(button) = listed
                     .clone()
-                    .position(|&hotkey| hotkey == c)
+                    .position(|&hotkey| hotkey == c.get())
                     .and_then(|at| Button::nth(at + 1))
                 {
                     retval = DialogAnswer::Pressed(button);
@@ -208,7 +209,7 @@ fn buttons_with_hotkeys(buttons: &[u8]) -> [bool; HAS_HOTKEY_LEN] {
 
 /// The character at the start of `bytes`, lowercased: a hotkey.
 fn hotkey_at(bytes: &[u8]) -> c_int {
-    mb_tolower(char_at(bytes))
+    char_at(bytes).to_lower().get()
 }
 
 /// Render the button list as the command-line prompt shows it, and the

@@ -163,7 +163,10 @@ fn menu_get_recursive(menu: &VimMenu, modes: c_int) -> Option<DictRef> {
     let _ = dict.add_number(b"priority", VarNumber::from(menu.priority));
     let _ = dict.add_number(b"hidden", VarNumber::from(is_hidden(menu.dname.as_bytes())));
     if menu.mnemonic != 0 {
-        let _ = dict.add_str(b"shortcut", Some(&char_as_text(menu.mnemonic)));
+        let _ = dict.add_str(
+            b"shortcut",
+            Some(&char_as_text(Codepoint::new(menu.mnemonic))),
+        );
     }
     if let Some(actext) = &menu.actext {
         let _ = dict.add_str(b"actext", Some(actext));

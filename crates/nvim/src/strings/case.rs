@@ -14,8 +14,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::mbyte::MB_MAXCHAR;
-use crate::mbyte::{char_info_at, encode_char, mb_tolower, mb_toupper};
+use crate::mbyte::{char_info_at, encode_char};
 use crate::memory::XString;
 
 /// A copy of `text` with every character upper- (`upper`) or lower-cased,
@@ -37,7 +38,11 @@ pub fn strcase_copy(text: &[u8], upper: bool) -> XString {
         } else {
             info.value
         };
-        let folded = if upper { mb_toupper(c) } else { mb_tolower(c) };
+        let folded = if upper {
+            Codepoint::new(c).to_upper()
+        } else {
+            Codepoint::new(c).to_lower()
+        };
         if folded == 0 {
             // An overlong NUL (`C0 80`) folds to the terminator, and the C
             // string ended there.

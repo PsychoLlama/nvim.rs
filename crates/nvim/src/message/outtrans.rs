@@ -19,6 +19,7 @@ use crate::cstr;
 use crate::env::home_to_tilde;
 use crate::keycodes::ModMask;
 use crate::keycodes::{key_unescape, termcap_name};
+use crate::mbyte::Codepoint;
 use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{cells_at, char_at, cluster_len, encode_char, unescape_at};
 use crate::narrow::{as_index, count_as_int};
@@ -31,13 +32,13 @@ const SPECIAL_HL: c_int = HLF_8;
 
 /// Show one character.
 pub fn msg_putchar(c: c_int) {
-    msg_putchar_hl(c, 0)
+    msg_putchar_hl(Codepoint::new(c), 0)
 }
 
 /// Show one ASCII character: [`msg_putchar`] for the byte a caller spells.
 pub(crate) fn msg_put_ascii(c: u8) {
     debug_assert!(c.is_ascii(), "not an ASCII character");
-    msg_putchar_hl(c_int::from(c), 0)
+    msg_putchar_hl(Codepoint::from(c), 0)
 }
 
 /// Show one character with a highlight id.
@@ -45,13 +46,13 @@ pub(crate) fn msg_put_ascii(c: u8) {
 /// A special key is put back into the three-byte `K_SPECIAL` form it arrived
 /// as, because that is what [`msg_display_bytes`] and `str2special` downstream
 /// know how to read.
-pub fn msg_putchar_hl(c: c_int, hl_id: c_int) {
+pub fn msg_putchar_hl(c: Codepoint, hl_id: c_int) {
     let mut buf = [0u8; MB_MAXCHAR + 1];
     if c < 0 {
         // `K_SECOND`/`K_THIRD`, less their `c == K_SPECIAL`/`c == NUL`
         // arms: both of those codes are positive, so neither is reachable
         // here.
-        let name = termcap_name(Key::from_code(c));
+        let name = termcap_name(Key::from_code(c.get()));
         buf[0] = K_SPECIAL;
         buf[1] = name[0];
         buf[2] = name[1];
@@ -113,7 +114,7 @@ pub fn msg_display_char(bytes: &[u8], hl_id: c_int, hist: bool) -> usize {
     // Past the end of the slice this reads a NUL, which renders as `^@` --
     // what the pointer form showed at the terminator, and what every caller
     // that walks up to a bound already expects.
-    let rendered = transchar_byte_buf(None, c_int::from(cstr::byte_at(bytes, 0)));
+    let rendered = transchar_byte_buf(None, cstr::byte_at(bytes, 0));
     msg_str_hl(cstr::in_bytes(&rendered), hl_id, hist);
     1
 }
@@ -217,7 +218,7 @@ fn walk_display(bytes: &[u8], emit: &mut impl FnMut(Shown<'_>)) -> c_int {
             }
             at += len;
         } else {
-            let rendered = transchar_byte_buf(None, c_int::from(rest[0]));
+            let rendered = transchar_byte_buf(None, rest[0]);
             if rendered[1] != 0 {
                 if at > run {
                     emit(Shown::Plain(&bytes[run..at]));
@@ -296,7 +297,7 @@ pub fn msg_display_keys(text: &CStr, from: bool, maxlen: c_int) -> c_int {
         // Single-byte character, or an illegal byte.
         let display: CharDisplay;
         let shown: &[u8] = if piece.len() == 1 {
-            display = transchar_byte_buf(None, c_int::from(piece[0]));
+            display = transchar_byte_buf(None, piece[0]);
             cstr::in_bytes(&display).to_bytes()
         } else {
             &piece
@@ -380,7 +381,7 @@ pub(crate) fn special_key_into(
             None => *at = str + 1,
             Some((ch, used)) => {
                 // `special` is set, so get_special_key_name() renders it.
-                c = char_at(cstr::in_bytes(&ch).to_bytes());
+                c = char_at(cstr::in_bytes(&ch).to_bytes()).get();
                 *at = str + used;
             }
         }

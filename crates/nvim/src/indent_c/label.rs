@@ -22,6 +22,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::mbyte::Codepoint;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 
@@ -147,7 +148,7 @@ pub(crate) fn first_id_amount() -> c_int {
     }
 
     let mut len = 0usize;
-    while vim_is_ident_char(c_int::from(byte_at(line, at + len))) {
+    while vim_is_ident_char(Codepoint::from(byte_at(line, at + len))) {
         len += 1;
     }
     if len == 0

@@ -17,6 +17,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::regexp::{ExtMatch, ExtMatchRef, TIME_CHECK_INTERVAL};
 use crate::types::LineNr;
 
@@ -25,7 +26,6 @@ use super::matcher::regmatch;
 use super::state::{BT_STATE, BtState};
 use crate::ascii::NUL;
 use crate::getchar::state::GOT_INT;
-use crate::mbyte::{mb_tolower, utf_fold};
 use crate::message::{E_NULL, E_RE_CORR};
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
@@ -225,7 +225,7 @@ fn has_regmust(rex: Rex, prog: BtProg, line: &[u8], col: ColNr) -> bool {
     loop {
         // Case-insensitively, the first character has to be looked for
         // with folding, which is what `cstrchr` does over a plain search.
-        match cstrchr_line(rex, &line[at..], c) {
+        match cstrchr_line(rex, &line[at..], c.get()) {
             Some(off) => at += off,
             None => return false,
         }
@@ -247,11 +247,11 @@ fn try_anchored(rex: Rex, prog: BtProg, state: &mut BtState, col: ColNr) -> Line
     let start = prog.regstart();
     let c = char_at_nul(rest_from(rex.line(), col), 0);
     let matches = start == NUL
-        || start == c
+        || start == c.get()
         || (rex.reg_ic()
-            && (utf_fold(start) == utf_fold(c)
+            && (Codepoint::new(start).fold() == c.fold()
                 // Latin-1 has case pairs that do not fold together.
-                || (c < 255 && start < 255 && mb_tolower(start) == mb_tolower(c))));
+                || (c < 255 && start < 255 && Codepoint::new(start).to_lower() == c.to_lower())));
     if matches {
         regtry(rex, prog, state, usize::try_from(col).unwrap_or(0))
     } else {

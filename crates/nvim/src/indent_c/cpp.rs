@@ -25,6 +25,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::mbyte::Codepoint;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -42,7 +43,7 @@ pub(crate) fn opens_namespace(line: &[u8], at: usize) -> bool {
     loop {
         let tail = &line[at.min(line.len())..];
         if !(tail.starts_with(b"inline") || tail.starts_with(b"export"))
-            || vim_iswordc(c_int::from(byte_at(line, at + 6)))
+            || vim_iswordc(Codepoint::from(byte_at(line, at + 6)))
         {
             break;
         }
@@ -51,7 +52,7 @@ pub(crate) fn opens_namespace(line: &[u8], at: usize) -> bool {
     }
 
     if !line[at.min(line.len())..].starts_with(b"namespace")
-        || vim_iswordc(c_int::from(byte_at(line, at + 9)))
+        || vim_iswordc(Codepoint::from(byte_at(line, at + 9)))
     {
         return false;
     }
@@ -68,7 +69,7 @@ pub(crate) fn opens_namespace(line: &[u8], at: usize) -> bool {
             at = code_at(line, at + skip::white(&line[at.min(line.len())..]));
         } else if c == b'{' {
             break;
-        } else if vim_iswordc(c_int::from(c)) {
+        } else if vim_iswordc(Codepoint::from(c)) {
             if has_name {
                 return false; // a word character after a finished name
             }
@@ -76,7 +77,7 @@ pub(crate) fn opens_namespace(line: &[u8], at: usize) -> bool {
             at += 1;
         } else if c == b':'
             && byte_at(line, at + 1) == b':'
-            && vim_iswordc(c_int::from(byte_at(line, at + 2)))
+            && vim_iswordc(Codepoint::from(byte_at(line, at + 2)))
         {
             if !has_name_start || has_name {
                 return false;
@@ -94,7 +95,7 @@ pub(crate) fn opens_namespace(line: &[u8], at: usize) -> bool {
 pub(crate) fn opens_extern_c(line: &[u8], at: usize) -> bool {
     let at = code_at(line, at);
     if !line[at.min(line.len())..].starts_with(b"extern")
-        || vim_iswordc(c_int::from(byte_at(line, at + 6)))
+        || vim_iswordc(Codepoint::from(byte_at(line, at + 6)))
     {
         return false;
     }
@@ -272,7 +273,7 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
                 } else if c == b'?' {
                     // Do not see the '() :' after a '?' as a constructor init.
                     return false;
-                } else if !vim_is_ident_char(c_int::from(c)) {
+                } else if !vim_is_ident_char(Codepoint::from(c)) {
                     // Not an identifier: we are wrong.
                     class_or_struct = false;
                     lookfor_ctor_init = false;

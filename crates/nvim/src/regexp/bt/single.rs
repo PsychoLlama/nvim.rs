@@ -12,6 +12,7 @@
 )]
 
 use crate::mark::MARK_BUF_LOCAL;
+use crate::mbyte::Codepoint;
 use crate::regexp::{byte_count, low_byte};
 use crate::types::ColNr;
 use core::ffi::c_int;
@@ -115,14 +116,16 @@ pub(crate) fn match_one(
         }
 
         BtOp::Any => return take(c != NUL),
-        BtOp::Ident => return take(vim_is_ident_char(c)),
-        BtOp::Sident => return take(!digit_here() && vim_is_ident_char(c)),
+        BtOp::Ident => return take(vim_is_ident_char(Codepoint::new(c))),
+        BtOp::Sident => return take(!digit_here() && vim_is_ident_char(Codepoint::new(c))),
         BtOp::Kword => return take(rex.iswordp()),
         BtOp::Skword => return take(!digit_here() && rex.iswordp()),
-        BtOp::Fname => return take(vim_isfilec(c)),
-        BtOp::Sfname => return take(!digit_here() && vim_isfilec(c)),
-        BtOp::Print => return take(vim_isprintc(rex.char_here())),
-        BtOp::Sprint => return take(!digit_here() && vim_isprintc(rex.char_here())),
+        BtOp::Fname => return take(vim_isfilec(Codepoint::new(c))),
+        BtOp::Sfname => return take(!digit_here() && vim_isfilec(Codepoint::new(c))),
+        BtOp::Print => return take(vim_isprintc(Codepoint::new(rex.char_here()))),
+        BtOp::Sprint => {
+            return take(!digit_here() && vim_isprintc(Codepoint::new(rex.char_here())));
+        }
         BtOp::White => return take(ascii_iswhite(c)),
         BtOp::Nwhite => return take(c != NUL && !ascii_iswhite(c)),
         BtOp::Digit => return take(ri(ByteClass::DIGIT)),
@@ -148,7 +151,7 @@ pub(crate) fn match_one(
 
         // `\%C`: swallow any combining characters, matching nothing else.
         BtOp::ReComposing => {
-            while utf_iscomposing_legacy(rex.char_here()) {
+            while utf_iscomposing_legacy(Codepoint::new(rex.char_here())) {
                 rex.advance(rex.base_len());
             }
             Verdict::Continue

@@ -18,6 +18,7 @@
 
 use crate::charset::skip;
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{char_at, cluster_len};
 use crate::memory::ThinCString;
 use crate::narrow::as_index;
@@ -213,8 +214,8 @@ pub(crate) fn read_item_options(
                 // `cchar` is five letters and `flag_matches` already
                 // required the `=`, so the character starts at `at + 6`.
                 let cchar = &line[(at + 6).min(line.len())..];
-                *conceal_char = char_at(cchar);
-                if !vim_isprintc(*conceal_char) {
+                *conceal_char = char_at(cchar).get();
+                if !vim_isprintc(Codepoint::new(*conceal_char)) {
                     return Err(SyntaxError::InvalidCchar);
                 }
                 // Upstream advances by `utfc_ptr2len(arg + 6) - 1` *before*

@@ -35,7 +35,7 @@ use crate::ex_docmd::eval_vars;
 use crate::fileio::match_file_list;
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
-use crate::mbyte::{char_at, cluster_len, head_off, mb_isalpha, mb_toupper};
+use crate::mbyte::{char_at, cluster_len, head_off};
 use crate::option::vars::{p_fic, p_wig};
 use crate::os::fs::Directory;
 use crate::os::fs::{

@@ -29,7 +29,6 @@ use crate::eval::vars::set_vim_var_string;
 use crate::eval::{eval_to_string_safe, get_v_event, restore_v_event};
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
-use crate::mbyte::mb_tolower;
 use crate::memory::XString;
 use crate::message::emsg;
 use crate::message::state::LINE_MSG;

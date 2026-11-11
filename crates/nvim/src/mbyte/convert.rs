@@ -288,7 +288,7 @@ fn latin9_to_utf8(src: &[u8]) -> Vec<u8> {
             .iter()
             .find(|&&(byte, _)| byte == b)
             .map_or(c_int::from(b), |&(_, code)| code);
-        let n = encode_char(c, &mut buf);
+        let n = encode_char(Codepoint::new(c), &mut buf);
         out.extend_from_slice(&buf[..n]);
     }
     out
@@ -326,7 +326,7 @@ fn utf8_to_latin(src: &[u8], to_latin9: bool, fail: bool) -> Option<Vec<u8>> {
 
         let mut c = char_at(rest);
         if to_latin9 {
-            c = to_latin9_byte(c);
+            c = Codepoint::new(to_latin9_byte(c.get()));
         }
         if !utf_iscomposing_legacy(c) {
             if let Ok(byte) = u8::try_from(c) {

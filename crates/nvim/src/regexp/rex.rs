@@ -472,7 +472,7 @@ impl<'t> Rex<'t> {
     /// The whole character at the cursor.
     #[inline(always)]
     pub(crate) fn char_here(self) -> c_int {
-        char_at_nul(self.line(), self.input())
+        char_at_nul(self.line(), self.input()).get()
     }
 
     /// The character at the cursor with its combining characters, in bytes.
@@ -490,7 +490,7 @@ impl<'t> Rex<'t> {
     /// The character `off` bytes past the cursor.
     #[inline(always)]
     pub(crate) fn char_at_offset(self, off: c_int) -> c_int {
-        char_at_nul(self.line(), self.input().wrapping_add_signed(off as isize))
+        char_at_nul(self.line(), self.input().wrapping_add_signed(off as isize)).get()
     }
 
     /// Step the cursor over `n` bytes, which the caller has measured from

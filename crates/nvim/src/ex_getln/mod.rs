@@ -76,7 +76,7 @@ use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;
 use crate::mbyte::{
     UTF8LEN_TAB_ZERO, c_cells_at, c_char_info, c_cluster_len, class_in, encode_char, head_off,
-    mb_tolower, utf_char2len, utf_iscomposing_first,
+    utf_char2len, utf_iscomposing_first,
 };
 use crate::memline::ml_replace_buf_text;
 use crate::memline::{decl, incl, ml_append_cstr};

@@ -780,11 +780,11 @@ fn mps_shows_match(c: c_int) -> bool {
     let len_from = |i: usize| c_cluster_len(mps.get(i..).unwrap_or_default());
     let mut i = 0;
     while i < mps.len() {
-        if char_from(i) == c && rightleft {
+        if char_from(i).get() == c && rightleft {
             return true;
         }
         i += len_from(i) + 1;
-        if char_from(i) == c && !rightleft {
+        if char_from(i).get() == c && !rightleft {
             return true;
         }
         i += len_from(i);

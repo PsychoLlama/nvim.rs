@@ -28,6 +28,7 @@ use crate::grid::{
 };
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::HLF_WM;
+use crate::mbyte::Codepoint;
 use crate::mbyte::cluster_len;
 use crate::menu::is_separator;
 use crate::message::state::MSG_SCROLLED;
@@ -321,7 +322,7 @@ pub(crate) fn redraw_wildmenu(
         let ctx = expand.context;
         let emenu = ctx == ExpandContext::Menus || ctx == ExpandContext::Menunames;
         if emenu && is_separator(s.to_bytes()) {
-            let bar = transchar(c_int::from(b'|'));
+            let bar = transchar(Codepoint::byte(b'|'));
             let bar = cstr::in_bytes(&bar).to_bytes();
             buf.extend_from_slice(bar);
             clen += as_count(bar.len());
@@ -339,7 +340,7 @@ pub(crate) fn redraw_wildmenu(
                     buf.extend_from_slice(&s[p..p + l]);
                     p += l;
                 } else {
-                    let shown = transchar_byte(c_int::from(s[p]));
+                    let shown = transchar_byte(s[p]);
                     buf.extend_from_slice(cstr::in_bytes(&shown).to_bytes());
                     p += 1;
                 }

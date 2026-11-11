@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::normal::defs::{MotionType, OpArg};
 use crate::option::vars::P_SEL;
 use crate::strings::has_char;
@@ -23,7 +24,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::{NUL, ascii_iswhite};
+use crate::ascii::ascii_iswhite;
 use crate::cursor::gchar_cursor;
 use crate::drawscreen::state::REDRAW_CMDLINE;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
@@ -71,7 +72,7 @@ pub(crate) fn findsent(dir: Direction, mut count: c_int) -> Result<(), NoObject>
         // Skip the white space in front of the sentence.
         while !noskip && {
             let c = gchar_pos(&pos);
-            c == ' ' as c_int || c == '\t' as c_int
+            c == b' ' || c == b'\t'
         } {
             if incl(&mut pos).is_stuck() {
                 break;
@@ -110,10 +111,10 @@ fn next_sentence(
     // For every walk below: `pos` starts at the cursor and
     // only ever moves by `incl`/`decl`/`inc`, so it stays a position
     // of the current buffer the caller guarantees.
-    if gchar_pos(&pos) == NUL {
+    if gchar_pos(&pos) == Codepoint::NUL {
         // On an empty line: skip up to a non-empty one.
         while !step(&mut pos).is_stuck() {
-            if gchar_pos(&pos) != NUL {
+            if gchar_pos(&pos) != Codepoint::NUL {
                 break;
             }
         }
@@ -139,7 +140,7 @@ fn next_sentence(
     let mut found_dot = false;
     loop {
         let c = gchar_pos(&pos);
-        if !(ascii_iswhite(c) || has_char(c".!?)]\"'", c)) {
+        if !(ascii_iswhite(c) || has_char(c".!?)]\"'", c.get())) {
             break;
         }
         let mut tpos = pos;
@@ -152,12 +153,12 @@ fn next_sentence(
         if found_dot {
             break;
         }
-        if has_char(c".!?", c) {
+        if has_char(c".!?", c.get()) {
             found_dot = true;
         }
-        if has_char(c")]\"'", c)
+        if has_char(c")]\"'", c.get())
             // `tpos` is a position of the current buffer.
-            && !has_char(c".!?)]\"'", gchar_pos(&tpos))
+            && !has_char(c".!?)]\"'", gchar_pos(&tpos).get())
         {
             break;
         }
@@ -173,13 +174,13 @@ fn next_sentence(
         // Find the end of the sentence.
         let mut c = gchar_pos(&pos);
         // `pos.lnum` is a line of the current buffer.
-        if c == NUL || (pos.col == ColNr::ZERO && starts_para(pos.lnum, 0, false)) {
+        if c == Codepoint::NUL || (pos.col == ColNr::ZERO && starts_para(pos.lnum, 0, false)) {
             if dir as c_int == BACKWARD as c_int && pos.lnum != startlnum {
                 pos.lnum += 1;
             }
             break;
         }
-        if c == '.' as c_int || c == '!' as c_int || c == '?' as c_int {
+        if c == b'.' || c.get() == '!' as c_int || c.get() == '?' as c_int {
             let mut tpos = pos;
             // Whether the end of the buffer came before anything
             // but closing punctuation.
@@ -190,20 +191,17 @@ fn next_sentence(
                     break;
                 }
                 c = gchar_pos(&tpos);
-                if !has_char(c")]\"'", c) {
+                if !has_char(c")]\"'", c.get()) {
                     break;
                 }
             }
             if at_end
-                || (!cpo_j && (c == ' ' as c_int || c == '\t' as c_int))
-                || c == NUL
-                || (cpo_j
-                    && c == ' ' as c_int
-                    && !inc(&mut tpos).is_stuck()
-                    && gchar_pos(&tpos) == ' ' as c_int)
+                || (!cpo_j && (c == b' ' || c == b'\t'))
+                || c == Codepoint::NUL
+                || (cpo_j && c == b' ' && !inc(&mut tpos).is_stuck() && gchar_pos(&tpos) == b' ')
             {
                 pos = tpos;
-                if gchar_pos(&pos) == NUL {
+                if gchar_pos(&pos) == Codepoint::NUL {
                     inc(&mut pos); // skip the NUL at end of line
                 }
                 break;
