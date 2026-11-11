@@ -54,67 +54,24 @@ enum Line {
 pub(crate) fn regrepeat(rex: Rex, prog: BtProg<'_>, p: usize, maxcount: int64_t) -> int64_t {
     let opcode = BtOp::decode(prog.op_byte(p));
     let opnd = prog.operand(p);
-    let mut line = rex.line();
-    let mut scan = rex.input();
-    let mut count: int64_t = 0;
 
     // Only a `\_x` node counts a line break, and only in a multi-line
     // match where the line break is not already part of the text. A byte
     // that names no opcode is upstream's `default:` arm: the program is
     // corrupt, which is said, and nothing is counted.
+    let mut walk = Count {
+        rex,
+        line: rex.line(),
+        scan: rex.input(),
+        count: 0,
+        maxcount,
+        crosses_lines: false,
+    };
     let Ok((op, crosses_lines)) = opcode else {
         iemsg(gettext(E_RE_CORR));
-        rex.set_input(scan);
-        return count;
+        return walk.finish();
     };
-    let next_line = || {
-        if !rex.multi() || !crosses_lines || rex.lnum() > rex.reg_maxline() || rex.reg_line_lbr() {
-            return Line::End;
-        }
-        reg_nextline(rex);
-        if GOT_INT.get() {
-            Line::Interrupted
-        } else {
-            Line::Crossed
-        }
-    };
-    // The byte at `at`; the line ends in its NUL, so `at` never passes it.
-    let byte = |line: &[u8], at: usize| line[at];
-    // With 'reg_line_lbr' the text holds real newline bytes rather than
-    // line breaks, so a `\_x` matches the byte itself.
-    let literal_newline =
-        |line: &[u8], at: usize| rex.reg_line_lbr() && line[at] == b'\n' && crosses_lines;
-
-    // Advance over one character of the class, cross a line break, or
-    // stop. Shared by every class-shaped opcode below; `accept` sees the
-    // text from the cursor and says whether the character there belongs.
-    macro_rules! count_class {
-        ($nul_first:expr, $accept:expr) => {
-            'walk: while count < maxcount {
-                let at_nul = c_int::from(byte(line, scan)) == NUL;
-                if at_nul && $nul_first {
-                    match next_line() {
-                        Line::Crossed => (line, scan) = (rex.line(), 0),
-                        Line::Interrupted => break 'walk,
-                        Line::End => break 'walk,
-                    }
-                } else if $accept(&line[scan..]) {
-                    scan += cluster_len_at(line, scan);
-                } else if at_nul {
-                    match next_line() {
-                        Line::Crossed => (line, scan) = (rex.line(), 0),
-                        Line::Interrupted => break 'walk,
-                        Line::End => break 'walk,
-                    }
-                } else if literal_newline(line, scan) {
-                    scan += 1;
-                } else {
-                    break 'walk;
-                }
-                count += 1;
-            }
-        };
-    }
+    walk.crosses_lines = crosses_lines;
 
     // Upstream's `testval`: this is the positive form of a pair. For
     // `\i`/`\I` and friends that means digits are members after all; for
@@ -128,185 +85,276 @@ pub(crate) fn regrepeat(rex: Rex, prog: BtProg<'_>, p: usize, maxcount: int64_t)
 
     match op {
         // `.` and `\_.`: every character, and for `\_.` every line.
-        BtOp::Any => {
-            'any: while count < maxcount {
-                while c_int::from(byte(line, scan)) != NUL && count < maxcount {
-                    count += 1;
-                    scan += cluster_len_at(line, scan);
-                }
-                if count == maxcount {
-                    break 'any;
-                }
-                // Unlike the class walks below, the line break is counted
-                // before the interrupt check.
-                match next_line() {
-                    Line::Crossed => {
-                        count += 1;
-                        (line, scan) = (rex.line(), 0);
-                    }
-                    Line::Interrupted => {
-                        count += 1;
-                        break 'any;
-                    }
-                    Line::End => break 'any,
-                }
-            }
-        }
+        BtOp::Any => walk.any(),
 
         // `\i`/`\I`: 'isident' characters.
-        BtOp::Ident | BtOp::Sident => count_class!(false, |text: &[u8]| {
+        BtOp::Ident | BtOp::Sident => walk.class(false, |text: &[u8]| {
             vim_is_ident_char(char_at_nul(text, 0)) && digit_ok(text)
         }),
 
         // `\k`/`\K`: 'iskeyword' characters, which are buffer-local.
-        BtOp::Kword | BtOp::Skword => count_class!(false, |text: &[u8]| {
+        BtOp::Kword | BtOp::Skword => walk.class(false, |text: &[u8]| {
             word_char_at(text, rex.reg_buf()) && digit_ok(text)
         }),
 
         // `\f`/`\F`: 'isfname' characters.
-        BtOp::Fname | BtOp::Sfname => count_class!(false, |text: &[u8]| {
+        BtOp::Fname | BtOp::Sfname => walk.class(false, |text: &[u8]| {
             vim_isfilec(char_at_nul(text, 0)) && digit_ok(text)
         }),
 
         // `\p`/`\P`: printable characters. This one tests for the end of
         // the line before the class, where the three above do it after.
-        BtOp::Print | BtOp::Sprint => count_class!(true, |text: &[u8]| {
+        BtOp::Print | BtOp::Sprint => walk.class(true, |text: &[u8]| {
             vim_isprintc(char_at_nul(text, 0)) && digit_ok(text)
         }),
 
-        // A literal character. Case folding here is byte-wise: an
-        // `EXACTLY` that a multi can repeat is single-byte by
-        // construction (`use_multibytecode` sends the rest to
-        // `MULTIBYTECODE`).
-        BtOp::Exactly => {
-            if rex.reg_ic() {
-                let upper = mb_toupper(c_int::from(opnd[0]));
-                let lower = mb_tolower(c_int::from(opnd[0]));
-                while count < maxcount
-                    && (c_int::from(byte(line, scan)) == upper
-                        || c_int::from(byte(line, scan)) == lower)
-                {
-                    count += 1;
-                    scan += 1;
-                }
-            } else {
-                let want = opnd[0];
-                while count < maxcount && byte(line, scan) == want {
-                    count += 1;
-                    scan += 1;
-                }
-            }
-        }
-
-        // One multibyte character, compared as bytes first and by case
-        // fold only if the bytes differ.
-        BtOp::Multibytecode => {
-            let len = cluster_len_at(opnd, 0);
-            if len > 1 {
-                let folded = if rex.reg_ic() {
-                    utf_fold(char_at_nul(opnd, 0))
-                } else {
-                    0
-                };
-                while count < maxcount && cluster_len_at(line, scan) >= len {
-                    let same = opnd[..len] == line[scan..scan + len];
-                    if !same && (!rex.reg_ic() || utf_fold(char_at_nul(line, scan)) != folded) {
-                        break;
-                    }
-                    scan += len;
-                    count += 1;
-                }
-            }
-        }
-
+        BtOp::Exactly => walk.exactly(opnd[0]),
+        BtOp::Multibytecode => walk.multibyte(opnd),
         // A `[]` collection.
-        BtOp::Anyof | BtOp::Anybut => {
-            let set = opnd;
-            'coll: while count < maxcount {
-                if c_int::from(byte(line, scan)) == NUL {
-                    match next_line() {
-                        Line::Crossed => (line, scan) = (rex.line(), 0),
-                        Line::Interrupted | Line::End => break 'coll,
-                    }
-                } else if literal_newline(line, scan) {
-                    scan += 1;
-                } else {
-                    let len = cluster_len_at(line, scan);
-                    let c = if len > 1 {
-                        char_at_nul(line, scan)
-                    } else {
-                        c_int::from(line[scan])
-                    };
-                    if cstrchr(rex, set, c).is_some() != positive {
-                        break 'coll;
-                    }
-                    scan += len.max(1);
-                }
-                count += 1;
-            }
-        }
-
-        // A line break as an atom of its own.
-        BtOp::Newl => {
-            while count < maxcount
-                && ((c_int::from(byte(line, scan)) == NUL
-                    && rex.lnum() <= rex.reg_maxline()
-                    && !rex.reg_line_lbr()
-                    && rex.multi())
-                    || (byte(line, scan) == b'\n' && rex.reg_line_lbr()))
-            {
-                count += 1;
-                if rex.reg_line_lbr() {
-                    rex.set_input(scan);
-                    rex.advance_char();
-                } else {
-                    reg_nextline(rex);
-                }
-                (line, scan) = (rex.line(), rex.input());
-                if GOT_INT.get() {
-                    break;
-                }
-            }
-        }
+        BtOp::Anyof | BtOp::Anybut => walk.collection(opnd, positive),
+        BtOp::Newl => walk.newlines(),
 
         // Everything else is one of the `RI_*` byte classes.
         _ => {
             let Some((mask, positive)) = byte_class(op) else {
                 iemsg(gettext(E_RE_CORR));
-                rex.set_input(scan);
-                return count;
+                return walk.finish();
             };
+            walk.bytes(mask, positive);
+        }
+    }
 
-            'bytes: while count < maxcount {
-                if c_int::from(byte(line, scan)) == NUL {
-                    match next_line() {
-                        Line::Crossed => (line, scan) = (rex.line(), 0),
-                        Line::Interrupted | Line::End => break 'bytes,
-                    }
-                } else {
-                    let len = cluster_len_at(line, scan);
-                    if len > 1 {
-                        // A multibyte character is in none of these
-                        // classes, so only the negative form takes it.
-                        if positive {
-                            break 'bytes;
-                        }
-                        scan += len;
-                    } else if RI_FLAGS[usize::from(line[scan])].has(mask) == positive
-                        || literal_newline(line, scan)
-                    {
-                        scan += 1;
-                    } else {
-                        break 'bytes;
-                    }
+    walk.finish()
+}
+
+/// One [`regrepeat`] count in progress: the line the walk is on, the
+/// offset into it, and the matches so far.
+struct Count<'t> {
+    rex: Rex<'t>,
+    line: &'t [u8],
+    scan: usize,
+    count: int64_t,
+    maxcount: int64_t,
+    /// A `\_x` node: a line break counts as one of its matches.
+    crosses_lines: bool,
+}
+
+impl Count<'_> {
+    /// Leave `rex.input` at the walk's position and answer the count.
+    fn finish(&self) -> int64_t {
+        self.rex.set_input(self.scan);
+        self.count
+    }
+
+    /// The byte at the cursor; the line ends in its NUL, so the cursor
+    /// never passes it.
+    fn byte(&self) -> u8 {
+        self.line[self.scan]
+    }
+
+    /// With 'reg_line_lbr' the text holds real newline bytes rather than
+    /// line breaks, so a `\_x` matches the byte itself.
+    fn literal_newline(&self) -> bool {
+        self.rex.reg_line_lbr() && self.line[self.scan] == b'\n' && self.crosses_lines
+    }
+
+    /// `.` and `\_.`: every character, and for `\_.` every line.
+    fn any(&mut self) {
+        while self.count < self.maxcount {
+            while c_int::from(self.byte()) != NUL && self.count < self.maxcount {
+                self.count += 1;
+                self.scan += cluster_len_at(self.line, self.scan);
+            }
+            if self.count == self.maxcount {
+                break;
+            }
+            // Unlike the class walks below, the line break is counted
+            // before the interrupt check.
+            match next_line(self.rex, self.crosses_lines) {
+                Line::Crossed => {
+                    self.count += 1;
+                    (self.line, self.scan) = (self.rex.line(), 0);
                 }
-                count += 1;
+                Line::Interrupted => {
+                    self.count += 1;
+                    break;
+                }
+                Line::End => break,
             }
         }
     }
 
-    rex.set_input(scan);
-    count
+    /// Advance over one character of a class, cross a line break, or stop.
+    /// Shared by every class-shaped opcode; `accept` sees the text from the
+    /// cursor and says whether the character there belongs. `nul_first`
+    /// tests for the end of the line before the class rather than after.
+    fn class(&mut self, nul_first: bool, accept: impl Fn(&[u8]) -> bool) {
+        while self.count < self.maxcount {
+            let at_nul = c_int::from(self.byte()) == NUL;
+            if at_nul && nul_first {
+                match next_line(self.rex, self.crosses_lines) {
+                    Line::Crossed => (self.line, self.scan) = (self.rex.line(), 0),
+                    Line::Interrupted | Line::End => break,
+                }
+            } else if accept(&self.line[self.scan..]) {
+                self.scan += cluster_len_at(self.line, self.scan);
+            } else if at_nul {
+                match next_line(self.rex, self.crosses_lines) {
+                    Line::Crossed => (self.line, self.scan) = (self.rex.line(), 0),
+                    Line::Interrupted | Line::End => break,
+                }
+            } else if self.literal_newline() {
+                self.scan += 1;
+            } else {
+                break;
+            }
+            self.count += 1;
+        }
+    }
+
+    /// A literal character. Case folding here is byte-wise: an `EXACTLY`
+    /// that a multi can repeat is single-byte by construction
+    /// (`use_multibytecode` sends the rest to `MULTIBYTECODE`).
+    fn exactly(&mut self, want: u8) {
+        if self.rex.reg_ic() {
+            let upper = mb_toupper(c_int::from(want));
+            let lower = mb_tolower(c_int::from(want));
+            while self.count < self.maxcount
+                && (c_int::from(self.byte()) == upper || c_int::from(self.byte()) == lower)
+            {
+                self.count += 1;
+                self.scan += 1;
+            }
+        } else {
+            while self.count < self.maxcount && self.byte() == want {
+                self.count += 1;
+                self.scan += 1;
+            }
+        }
+    }
+
+    /// One multibyte character, compared as bytes first and by case fold
+    /// only if the bytes differ.
+    fn multibyte(&mut self, opnd: &[u8]) {
+        let len = cluster_len_at(opnd, 0);
+        if len <= 1 {
+            return;
+        }
+        let ic = self.rex.reg_ic();
+        let folded = if ic {
+            utf_fold(char_at_nul(opnd, 0))
+        } else {
+            0
+        };
+        while self.count < self.maxcount && cluster_len_at(self.line, self.scan) >= len {
+            let same = opnd[..len] == self.line[self.scan..self.scan + len];
+            if !same && (!ic || utf_fold(char_at_nul(self.line, self.scan)) != folded) {
+                break;
+            }
+            self.scan += len;
+            self.count += 1;
+        }
+    }
+
+    /// A `[]` collection, `set`: a hit continues the count when
+    /// `positive`, a miss otherwise.
+    fn collection(&mut self, set: &[u8], positive: bool) {
+        while self.count < self.maxcount {
+            if c_int::from(self.byte()) == NUL {
+                match next_line(self.rex, self.crosses_lines) {
+                    Line::Crossed => (self.line, self.scan) = (self.rex.line(), 0),
+                    Line::Interrupted | Line::End => break,
+                }
+            } else if self.literal_newline() {
+                self.scan += 1;
+            } else {
+                let (line, scan) = (self.line, self.scan);
+                let len = cluster_len_at(line, scan);
+                let c = if len > 1 {
+                    char_at_nul(line, scan)
+                } else {
+                    c_int::from(line[scan])
+                };
+                if cstrchr(self.rex, set, c).is_some() != positive {
+                    break;
+                }
+                self.scan += len.max(1);
+            }
+            self.count += 1;
+        }
+    }
+
+    /// A line break as an atom of its own.
+    fn newlines(&mut self) {
+        let rex = self.rex;
+        while self.count < self.maxcount
+            && ((c_int::from(self.byte()) == NUL
+                && rex.lnum() <= rex.reg_maxline()
+                && !rex.reg_line_lbr()
+                && rex.multi())
+                || (self.byte() == b'\n' && rex.reg_line_lbr()))
+        {
+            self.count += 1;
+            if rex.reg_line_lbr() {
+                rex.set_input(self.scan);
+                rex.advance_char();
+            } else {
+                reg_nextline(rex);
+            }
+            (self.line, self.scan) = (rex.line(), rex.input());
+            if GOT_INT.get() {
+                break;
+            }
+        }
+    }
+
+    /// One of the `RI_*` byte classes, `mask`: a hit continues the count
+    /// when `positive`, a miss otherwise.
+    fn bytes(&mut self, mask: ByteClass, positive: bool) {
+        while self.count < self.maxcount {
+            if c_int::from(self.byte()) == NUL {
+                match next_line(self.rex, self.crosses_lines) {
+                    Line::Crossed => (self.line, self.scan) = (self.rex.line(), 0),
+                    Line::Interrupted | Line::End => break,
+                }
+            } else {
+                let len = cluster_len_at(self.line, self.scan);
+                if len > 1 {
+                    // A multibyte character is in none of these classes,
+                    // so only the negative form takes it.
+                    if positive {
+                        break;
+                    }
+                    self.scan += len;
+                } else if RI_FLAGS[usize::from(self.line[self.scan])].has(mask) == positive
+                    || self.literal_newline()
+                {
+                    self.scan += 1;
+                } else {
+                    break;
+                }
+            }
+            self.count += 1;
+        }
+    }
+}
+
+/// Step onto the next line, for a node that `crosses_lines` and when there
+/// is one. A free function rather than a [`Count`] method, so that the
+/// walks keep their position in registers.
+// Inline, as the closure it was: called out of line from the five walks
+// it cost rebench `bt` +0.10 % (measured, callgrind on line tables).
+#[inline]
+fn next_line(rex: Rex, crosses_lines: bool) -> Line {
+    if !rex.multi() || !crosses_lines || rex.lnum() > rex.reg_maxline() || rex.reg_line_lbr() {
+        return Line::End;
+    }
+    reg_nextline(rex);
+    if GOT_INT.get() {
+        Line::Interrupted
+    } else {
+        Line::Crossed
+    }
 }
 
 /// The `RI_*` mask an opcode tests against, and whether it wants a hit or a
