@@ -314,39 +314,8 @@ impl Searcher<'_, '_> {
         let mut lnum: LineNr;
 
         loop {
-            // When a match at the start position is not acceptable,
-            // `extra_col` is non-zero. Not at MAXCOL though, where
-            // MAXCOL + 1 is zero.
-            let start_char_len = if pos.col == ColNr::MAX {
-                0
-            } else if pos.lnum >= LineNr::ONE
-                && pos.lnum <= self.buf.b_ml.ml_line_count
-                && pos.col < ColNr::new(MAXCOL - 2)
-            {
-                // Watch out for "col" being MAXCOL - 2, used in a closed fold.
-                let (lnum, col) = (pos.lnum, usize::try_from(pos.col).unwrap_or(0));
-                let mut lines = self.buf.lines();
-                let line = lines.line(lnum);
-                if line.len() <= col {
-                    1
-                } else {
-                    len_as_int(cluster_len(&line[col..]))
-                }
-            } else {
-                1
-            };
-            let accept_at_start = self.opt(SEARCH_START);
-            let start = StartPos {
-                // Remember the start position, for detecting "no match".
-                pos: *pos,
-                extra_col: if dir == FORWARD {
-                    if accept_at_start { 0 } else { start_char_len }
-                } else if accept_at_start {
-                    start_char_len
-                } else {
-                    0
-                },
-            };
+            // Remember the start position, for detecting "no match".
+            let start = self.start_pos(*pos, dir);
 
             found = 0;
             let mut at_first_line = true;
@@ -360,7 +329,7 @@ impl Searcher<'_, '_> {
             // Start in the current line, unless searching backwards from
             // column 0 without accepting a match there — skipping back a
             // line is then free.
-            if dir == BACKWARD && start.pos.col == ColNr::ZERO && !accept_at_start {
+            if dir == BACKWARD && start.pos.col == ColNr::ZERO && !self.opt(SEARCH_START) {
                 lnum = pos.lnum - 1;
                 at_first_line = false;
             } else {
@@ -397,60 +366,52 @@ impl Searcher<'_, '_> {
                         break 'lines;
                     }
 
-                    'next_line: {
-                        if nmatched <= 0 {
-                            line_breakcheck(); // stop if ctrl-C typed
-                            if GOT_INT.get() {
-                                break 'lines;
-                            }
-                            // Cancel the search if a character was typed,
-                            // for 'incsearch'. Checking too often would
-                            // slow searching down too much.
-                            if self.opt(SEARCH_PEEK)
-                                && ((lnum - pos.lnum) & 0x3f) == 0
-                                && char_avail()
-                            {
-                                break_loop = true;
-                                break 'lines;
-                            }
-                            if wrapped && lnum == start.pos.lnum {
-                                // Second time round: stop where we started.
-                                break 'lines;
-                            }
-                            break 'next_line;
+                    if nmatched <= 0 {
+                        line_breakcheck(); // stop if ctrl-C typed
+                        if GOT_INT.get() {
+                            break 'lines;
                         }
-
+                        // Cancel the search if a character was typed,
+                        // for 'incsearch'. Checking too often would
+                        // slow searching down too much.
+                        if self.opt(SEARCH_PEEK) && ((lnum - pos.lnum) & 0x3f) == 0 && char_avail()
+                        {
+                            break_loop = true;
+                            break 'lines;
+                        }
+                        if wrapped && lnum == start.pos.lnum {
+                            // Second time round: stop where we started.
+                            break 'lines;
+                        }
+                    } else {
                         // The match may be in another line, with `\zs`.
                         let mut m = self.found();
 
-                        if dir == FORWARD
-                            && at_first_line
-                            && !self.skip_to_start_pos(
-                                lnum,
-                                &mut m,
-                                &mut nmatched,
-                                start,
-                                first_match,
-                            )
-                        {
-                            break 'next_line;
-                        }
-                        if dir == BACKWARD
-                            && !self.last_match_before(lnum, &mut m, &mut nmatched, start, wrapped)
-                        {
-                            // There is only a match after the cursor.
-                            break 'next_line;
-                        }
+                        // Backward, there may only be a match after the
+                        // cursor.
+                        let usable = if dir == FORWARD {
+                            !at_first_line
+                                || self.skip_to_start_pos(
+                                    lnum,
+                                    &mut m,
+                                    &mut nmatched,
+                                    start,
+                                    first_match,
+                                )
+                        } else {
+                            self.last_match_before(lnum, &mut m, &mut nmatched, start, wrapped)
+                        };
+                        if usable {
+                            self.record(lnum, m, pos, end_pos.as_deref_mut());
+                            found = 1;
+                            first_match = false;
+                            submatch = m.submatch;
 
-                        self.record(lnum, m, pos, end_pos.as_deref_mut());
-                        found = 1;
-                        first_match = false;
-                        submatch = m.submatch;
-
-                        // Variables used for 'incsearch' highlighting.
-                        SEARCH_MATCH_LINES.set(m.end.lnum - m.start.lnum);
-                        SEARCH_MATCH_ENDCOL.set(m.end.col);
-                        break 'lines;
+                            // Variables used for 'incsearch' highlighting.
+                            SEARCH_MATCH_LINES.set(m.end.lnum - m.start.lnum);
+                            SEARCH_MATCH_ENDCOL.set(m.end.col);
+                            break 'lines;
+                        }
                     }
                     lnum += dir;
                     at_first_line = false;
@@ -471,29 +432,7 @@ impl Searcher<'_, '_> {
                     break;
                 }
 
-                // Continue at the other end of the file. Say so unless
-                // 'shortmess' asks us not to, or the search stat is going
-                // to be shown anyway (so SEARCH_COUNT must be absent).
-                // The message is remembered in keep_msg for a redraw.
-                lnum = if dir == BACKWARD {
-                    self.buf.b_ml.ml_line_count
-                } else {
-                    LineNr::ONE
-                };
-                if !shortmess(ShmFlag::SEARCH)
-                    && shortmess(ShmFlag::SEARCHCOUNT)
-                    && self.opt(SEARCH_MSG)
-                {
-                    let msg = if dir == BACKWARD {
-                        TOP_BOT_MSG
-                    } else {
-                        BOT_TOP_MSG
-                    };
-                    give_warning(gettext(msg), true, false);
-                }
-                if let Some(extra) = extra_arg.as_deref_mut() {
-                    extra.sa_wrapped = true;
-                }
+                lnum = self.wrap_around(dir, extra_arg.as_deref_mut());
             }
 
             if GOT_INT.get() || self.aborted() || break_loop {
@@ -506,6 +445,66 @@ impl Searcher<'_, '_> {
             }
         }
         (found, submatch, lnum)
+    }
+
+    /// Where one round of the walk starts from, and how close to it a match
+    /// may sit: when a match at the start position is not acceptable,
+    /// `extra_col` is the length of the character there. Not at MAXCOL
+    /// though, where MAXCOL + 1 is zero.
+    fn start_pos(&self, pos: Pos, dir: Direction) -> StartPos {
+        let start_char_len = if pos.col == ColNr::MAX {
+            0
+        } else if pos.lnum >= LineNr::ONE
+            && pos.lnum <= self.buf.b_ml.ml_line_count
+            && pos.col < ColNr::new(MAXCOL - 2)
+        {
+            // Watch out for "col" being MAXCOL - 2, used in a closed fold.
+            let (lnum, col) = (pos.lnum, usize::try_from(pos.col).unwrap_or(0));
+            let mut lines = self.buf.lines();
+            let line = lines.line(lnum);
+            if line.len() <= col {
+                1
+            } else {
+                len_as_int(cluster_len(&line[col..]))
+            }
+        } else {
+            1
+        };
+        let accept_at_start = self.opt(SEARCH_START);
+        StartPos {
+            pos,
+            extra_col: if dir == FORWARD {
+                if accept_at_start { 0 } else { start_char_len }
+            } else if accept_at_start {
+                start_char_len
+            } else {
+                0
+            },
+        }
+    }
+
+    /// Continue at the other end of the buffer: answers the line to go on
+    /// from. Says so unless 'shortmess' asks not to, or the search stat is
+    /// going to be shown anyway (so SEARCH_COUNT must be absent); the
+    /// message is remembered in keep_msg for a redraw.
+    fn wrap_around(&self, dir: Direction, extra_arg: Option<&mut SearchItArg>) -> LineNr {
+        let lnum = if dir == BACKWARD {
+            self.buf.b_ml.ml_line_count
+        } else {
+            LineNr::ONE
+        };
+        if !shortmess(ShmFlag::SEARCH) && shortmess(ShmFlag::SEARCHCOUNT) && self.opt(SEARCH_MSG) {
+            let msg = if dir == BACKWARD {
+                TOP_BOT_MSG
+            } else {
+                BOT_TOP_MSG
+            };
+            give_warning(gettext(msg), true, false);
+        }
+        if let Some(extra) = extra_arg {
+            extra.sa_wrapped = true;
+        }
+        lnum
     }
 
     /// Write a match out. With `SEARCH_END` the position is the last
