@@ -323,29 +323,10 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> P
                 let s = state(states, NfaOp::Split.code(), e1.start, e2.start).ok_or(DECLINED)?;
                 stack.push(s, append(states, e1.out, e2.out));
             }
-            // A repeat is a split whose taken branch loops back to it; `\?`
-            // is the same split without the loop. Which of the two edges is
-            // the body and which the exit decides whether it is greedy.
             Ok(
                 repeat
                 @ (NfaOp::Star | NfaOp::StarNongreedy | NfaOp::Quest | NfaOp::QuestNongreedy),
-            ) => {
-                let e = stack.pop().ok_or(CANNOT_POP)?;
-                let greedy = matches!(repeat, NfaOp::Star | NfaOp::Quest);
-                let (out, out1) = if greedy {
-                    (e.start, StateId::NONE)
-                } else {
-                    (StateId::NONE, e.start)
-                };
-                let s = state(states, NfaOp::Split.code(), out, out1).ok_or(DECLINED)?;
-                let exit = list1(states, if greedy { Slot::out1(s) } else { Slot::out(s) });
-                if matches!(repeat, NfaOp::Star | NfaOp::StarNongreedy) {
-                    patch(states, e.out, s);
-                    stack.push(s, exit);
-                } else {
-                    stack.push(s, append(states, e.out, exit));
-                }
-            }
+            ) => build_repeat(states, &mut stack, repeat)?,
             Ok(NfaOp::EndColl | NfaOp::EndNegColl) => {
                 // The collection's members are already chained; close them
                 // off with the state the matcher stops at, and point the
@@ -372,109 +353,18 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> P
                 patch(states, e1.out, e2.start);
                 stack.push(e1.start, e2.out);
             }
-            Ok(NfaOp::OptChars) => {
-                // `\%[abc]`: `operand` members, each of which becomes a
-                // split that can leave the sequence, so every prefix
-                // matches.
-                let mut n = operand;
-                let mut s = StateId::NONE;
-                let mut s1 = StateId::NONE;
-                let mut first_out = Slot::END;
-                while n > 0 {
-                    n -= 1;
-                    let e = stack.pop().ok_or(CANNOT_POP)?;
-                    let new = state(states, NfaOp::Split.code(), e.start, StateId::NONE)
-                        .ok_or(DECLINED)?;
-                    if first_out == Slot::END {
-                        first_out = e.out;
-                    }
-                    patch(states, e.out, s1);
-                    let exit = list1(states, Slot::out1(new));
-                    append(states, first_out, exit);
-                    s1 = new;
-                    s = new;
-                }
-                stack.push(s, first_out);
-            }
-            // The lookarounds: the operand becomes a machine of its own,
-            // entered from an `NFA_START_*` state and ended by the matching
-            // `NFA_END_*`.
+            Ok(NfaOp::OptChars) => build_opt_chars(states, &mut stack, operand)?,
             Ok(
                 look @ (NfaOp::PrevAtomNoWidth
                 | NfaOp::PrevAtomNoWidthNeg
                 | NfaOp::PrevAtomJustBefore
                 | NfaOp::PrevAtomJustBeforeNeg
                 | NfaOp::PrevAtomLikePattern),
-            ) => {
-                let (start_state, end_state) = lookaround_states(look);
-                let before = matches!(
-                    look,
-                    NfaOp::PrevAtomJustBefore | NfaOp::PrevAtomJustBeforeNeg
-                );
-                let pattern = look == NfaOp::PrevAtomLikePattern;
-                let e = stack.pop().ok_or(CANNOT_POP)?;
-                let end = state(states, end_state.code(), StateId::NONE, StateId::NONE)
-                    .ok_or(DECLINED)?;
-                let s = state(states, start_state.code(), e.start, end).ok_or(DECLINED)?;
-                if pattern {
-                    // `\@>` keeps what it matched, so the sub-match's end is
-                    // recorded and the outer match resumes past it.
-                    let skip = state(states, NfaOp::Skip.code(), StateId::NONE, StateId::NONE)
-                        .ok_or(DECLINED)?;
-                    let zend =
-                        state(states, NfaOp::Zend.code(), end, StateId::NONE).ok_or(DECLINED)?;
-                    states.states[end.index()].out = skip;
-                    patch(states, e.out, zend);
-                    stack.push(s, list1(states, Slot::out(skip)));
-                } else {
-                    patch(states, e.out, end);
-                    stack.push(s, list1(states, Slot::out(end)));
-                    if before {
-                        // With no explicit `\@123<=` width, work out how far
-                        // back the pattern could possibly start.
-                        // An unbounded one is "unknown", which the state
-                        // spells as no positive width.
-                        let width = if operand <= 0 {
-                            nfa_max_width(&states.states, e.start, 0).unwrap_or(0)
-                        } else {
-                            operand
-                        };
-                        states.states[s.index()].val = width;
-                    }
-                }
-            }
-            // A bracket: an opening state, the operand, and the closing
-            // state that pairs with it.
+            ) => build_lookaround(states, &mut stack, look, operand)?,
             Ok(open)
                 if open == NfaOp::Composing || open == NfaOp::Nopen || open.opens_capture() =>
             {
-                let mclose = closing_bracket(open);
-                // An empty stack means an empty group, `\(\)`.
-                let inner = if stack.frags.is_empty() {
-                    None
-                } else {
-                    Some(stack.pop().ok_or(CANNOT_POP)?)
-                };
-                let start = inner.map_or(StateId::NONE, |e| e.start);
-                let s = state(states, item, start, StateId::NONE).ok_or(DECLINED)?;
-                let s1 =
-                    state(states, mclose.code(), StateId::NONE, StateId::NONE).ok_or(DECLINED)?;
-                match inner {
-                    None => {
-                        let edge = list1(states, Slot::out(s));
-                        patch(states, edge, s1);
-                    }
-                    Some(e) => {
-                        patch(states, e.out, s1);
-                        if open == NfaOp::Composing {
-                            // The matcher reaches the group's end through
-                            // `out1`, so that edge has to be wired too.
-                            let edge = list1(states, Slot::out1(s));
-                            patch(states, edge, s1);
-                        }
-                    }
-                }
-                stack.push(s, list1(states, Slot::out(s1)));
+                build_bracket(states, &mut stack, open, item)?;
             }
             // A back-reference matches a run whose length is only known at
             // match time, so an `NFA_SKIP` follows it to consume the rest.
@@ -523,6 +413,135 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> P
     ));
     patch(states, e.out, matchstate);
     Ok(e.start)
+}
+
+/// A repeat is a split whose taken branch loops back to it; `\?` is the same
+/// split without the loop. Which of the two edges is the body and which the
+/// exit decides whether it is greedy.
+fn build_repeat(states: &mut NfaStates, stack: &mut Stack, repeat: NfaOp) -> Parsed<()> {
+    let e = stack.pop().ok_or(CANNOT_POP)?;
+    let greedy = matches!(repeat, NfaOp::Star | NfaOp::Quest);
+    let (out, out1) = if greedy {
+        (e.start, StateId::NONE)
+    } else {
+        (StateId::NONE, e.start)
+    };
+    let s = state(states, NfaOp::Split.code(), out, out1).ok_or(DECLINED)?;
+    let exit = list1(states, if greedy { Slot::out1(s) } else { Slot::out(s) });
+    if matches!(repeat, NfaOp::Star | NfaOp::StarNongreedy) {
+        patch(states, e.out, s);
+        stack.push(s, exit);
+    } else {
+        stack.push(s, append(states, e.out, exit));
+    }
+    Ok(())
+}
+
+/// `\%[abc]`: `count` members, each of which becomes a split that can leave
+/// the sequence, so every prefix matches.
+fn build_opt_chars(states: &mut NfaStates, stack: &mut Stack, count: c_int) -> Parsed<()> {
+    let mut n = count;
+    let mut s = StateId::NONE;
+    let mut s1 = StateId::NONE;
+    let mut first_out = Slot::END;
+    while n > 0 {
+        n -= 1;
+        let e = stack.pop().ok_or(CANNOT_POP)?;
+        let new = state(states, NfaOp::Split.code(), e.start, StateId::NONE).ok_or(DECLINED)?;
+        if first_out == Slot::END {
+            first_out = e.out;
+        }
+        patch(states, e.out, s1);
+        let exit = list1(states, Slot::out1(new));
+        append(states, first_out, exit);
+        s1 = new;
+        s = new;
+    }
+    stack.push(s, first_out);
+    Ok(())
+}
+
+/// The lookarounds: the operand becomes a machine of its own, entered from an
+/// `NFA_START_*` state and ended by the matching `NFA_END_*`.
+/// `explicit_width` is `\@123<=`'s width, if positive.
+fn build_lookaround(
+    states: &mut NfaStates,
+    stack: &mut Stack,
+    look: NfaOp,
+    explicit_width: c_int,
+) -> Parsed<()> {
+    let (start_state, end_state) = lookaround_states(look);
+    let before = matches!(
+        look,
+        NfaOp::PrevAtomJustBefore | NfaOp::PrevAtomJustBeforeNeg
+    );
+    let pattern = look == NfaOp::PrevAtomLikePattern;
+    let e = stack.pop().ok_or(CANNOT_POP)?;
+    let end = state(states, end_state.code(), StateId::NONE, StateId::NONE).ok_or(DECLINED)?;
+    let s = state(states, start_state.code(), e.start, end).ok_or(DECLINED)?;
+    if pattern {
+        // `\@>` keeps what it matched, so the sub-match's end is
+        // recorded and the outer match resumes past it.
+        let skip =
+            state(states, NfaOp::Skip.code(), StateId::NONE, StateId::NONE).ok_or(DECLINED)?;
+        let zend = state(states, NfaOp::Zend.code(), end, StateId::NONE).ok_or(DECLINED)?;
+        states.states[end.index()].out = skip;
+        patch(states, e.out, zend);
+        stack.push(s, list1(states, Slot::out(skip)));
+    } else {
+        patch(states, e.out, end);
+        stack.push(s, list1(states, Slot::out(end)));
+        if before {
+            // With no explicit `\@123<=` width, work out how far
+            // back the pattern could possibly start.
+            // An unbounded one is "unknown", which the state
+            // spells as no positive width.
+            let width = if explicit_width <= 0 {
+                nfa_max_width(&states.states, e.start, 0).unwrap_or(0)
+            } else {
+                explicit_width
+            };
+            states.states[s.index()].val = width;
+        }
+    }
+    Ok(())
+}
+
+/// A bracket `open` (program item `item`): an opening state, the operand,
+/// and the closing state that pairs with it.
+fn build_bracket(
+    states: &mut NfaStates,
+    stack: &mut Stack,
+    open: NfaOp,
+    item: c_int,
+) -> Parsed<()> {
+    let mclose = closing_bracket(open);
+    // An empty stack means an empty group, `\(\)`.
+    let inner = if stack.frags.is_empty() {
+        None
+    } else {
+        Some(stack.pop().ok_or(CANNOT_POP)?)
+    };
+    let start = inner.map_or(StateId::NONE, |e| e.start);
+    let s = state(states, item, start, StateId::NONE).ok_or(DECLINED)?;
+    let s1 = state(states, mclose.code(), StateId::NONE, StateId::NONE).ok_or(DECLINED)?;
+    match inner {
+        None => {
+            let edge = list1(states, Slot::out(s));
+            patch(states, edge, s1);
+        }
+        Some(e) => {
+            patch(states, e.out, s1);
+            if open == NfaOp::Composing {
+                // The matcher reaches the group's end through
+                // `out1`, so that edge has to be wired too.
+                let edge = list1(states, Slot::out1(s));
+                patch(states, edge, s1);
+            }
+        }
+    }
+    stack.push(s, list1(states, Slot::out(s1)));
+    Ok(())
 }
 
 /// How many states one program item needs.
