@@ -1573,7 +1573,7 @@ fn a_multi_line_match_spans_the_lines_it_reads_out_of_the_buffer() {
     );
     // The answer is how many lines the match covers: it starts on line 2
     // and ends on line 3, so two.
-    assert_eq!(spanned, 2, "a two-line match");
+    assert_eq!(spanned, LineNr::new(2), "a two-line match");
     // The positions are `lnum` *relative to the line the search started on*
     // and a byte column, which is the shape the retype has to keep.
     assert_eq!(
@@ -1596,7 +1596,7 @@ fn a_multi_line_match_spans_the_lines_it_reads_out_of_the_buffer() {
         None,
         None,
     );
-    assert_eq!(missing, 0, "no match from line 3");
+    assert_eq!(missing, LineNr::ZERO, "no match from line 3");
     put("silent! keepjumps keepmarks %delete _");
 }
 
@@ -1706,7 +1706,7 @@ fn a_pattern_the_nfa_gives_up_on_comes_back_recompiled_in_its_holder() {
             None,
             None,
         );
-        assert_eq!(lines, 1, "a one-line match");
+        assert_eq!(lines, LineNr::ONE, "a one-line match");
         assert_eq!(
             (rmm.endpos[0].lnum.get(), rmm.endpos[0].col),
             (0, ColNr::new(100_001)),

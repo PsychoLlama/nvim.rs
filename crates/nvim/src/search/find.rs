@@ -83,7 +83,7 @@ impl Searcher<'_, '_> {
 
     /// Run the pattern against line `lnum` from column `col`.
     #[inline(always)]
-    fn exec(&mut self, lnum: LineNr, col: ColNr) -> c_int {
+    fn exec(&mut self, lnum: LineNr, col: ColNr) -> LineNr {
         self.matcher.exec(lnum, col, &mut self.timed_out)
     }
 
@@ -168,7 +168,7 @@ impl Searcher<'_, '_> {
         &mut self,
         lnum: LineNr,
         found: &mut Found,
-        nmatched: &mut c_int,
+        nmatched: &mut LineNr,
         start: StartPos,
         first_match: bool,
     ) -> bool {
@@ -177,14 +177,14 @@ impl Searcher<'_, '_> {
                 // A match landing on the NUL puts the cursor one back
                 // afterwards; compare against that, or `/$` sticks at
                 // the end of the line.
-                *nmatched == 1 && found.end.col - 1 < start.pos.col + start.extra_col
+                *nmatched == LineNr::ONE && found.end.col - 1 < start.pos.col + start.extra_col
             } else {
                 let on_nul = c_int::from(self.byte_at(lnum, found.start.col) == 0);
                 found.start.col - on_nul < start.pos.col + start.extra_col
             }
         {
             let matchcol = if self.from_match_end {
-                if *nmatched > 1 {
+                if *nmatched > LineNr::ONE {
                     // The end is in the next line, so there is no
                     // match in this one.
                     return false;
@@ -207,7 +207,7 @@ impl Searcher<'_, '_> {
                 return false;
             }
             *nmatched = self.exec(lnum, matchcol);
-            if *nmatched == 0 {
+            if *nmatched == LineNr::ZERO {
                 return false;
             }
             *found = self.found();
@@ -228,7 +228,7 @@ impl Searcher<'_, '_> {
         &mut self,
         lnum: LineNr,
         found: &mut Found,
-        nmatched: &mut c_int,
+        nmatched: &mut LineNr,
         start: StartPos,
         wrapped: bool,
     ) -> bool {
@@ -244,7 +244,7 @@ impl Searcher<'_, '_> {
             // Every read below is of the line the match starts in.
             let at = lnum + found.start.lnum.get();
             let matchcol = if self.from_match_end {
-                if *nmatched > 1 {
+                if *nmatched > LineNr::ONE {
                     break;
                 }
                 // For an empty match, advance one character.
@@ -262,7 +262,7 @@ impl Searcher<'_, '_> {
             };
             if self.byte_at(at, matchcol) == b'\0' || {
                 *nmatched = self.exec(at, matchcol);
-                *nmatched == 0
+                *nmatched == LineNr::ZERO
             } {
                 // A search that timed out did find a match, but it may
                 // be the wrong one — that is not good enough.
@@ -366,7 +366,7 @@ impl Searcher<'_, '_> {
                         break 'lines;
                     }
 
-                    if nmatched <= 0 {
+                    if nmatched == LineNr::ZERO {
                         line_breakcheck(); // stop if ctrl-C typed
                         if GOT_INT.get() {
                             break 'lines;

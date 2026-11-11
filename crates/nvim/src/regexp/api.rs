@@ -164,7 +164,7 @@ impl OwnedProg {
     #[inline(always)]
     fn run(&self, rex: Rex, col: ColNr) -> c_int {
         match &self.0.program {
-            Program::Bt(bt) => bt_regexec(rex, bt, col),
+            Program::Bt(bt) => bt_regexec(rex, bt, col).get(),
             Program::Nfa(nfa) => nfa_regexec(rex, nfa, col),
         }
     }
@@ -190,8 +190,8 @@ impl OwnedProg {
 
     /// [`vim_regexec_multi`] of this pattern over `buffer` from line `lnum`,
     /// column `col`, with `rmp`'s other settings (its own program, if it has
-    /// one, is not the one run). Answers the number of lines the match spans
-    /// plus one, or 0.
+    /// one, is not the one run). Answers the number of lines the match spans,
+    /// or zero.
     pub(crate) fn exec_multi(
         &mut self,
         rmp: &mut RegMMatch,
@@ -199,7 +199,7 @@ impl OwnedProg {
         buffer: Buf,
         lnum: LineNr,
         col: ColNr,
-    ) -> c_int {
+    ) -> LineNr {
         let (_, out) = MultiOut::split(rmp);
         let io = ExtMatchIo {
             input: None,
@@ -501,8 +501,8 @@ pub fn vim_regexec_prog(
 }
 
 /// Run `rmp`'s program over `buffer` starting at line `lnum`, column `col`.
-/// Returns the number of lines the match spans plus one, or 0 for no match
-/// (and for no program). `tm` bounds how long the NFA engine may spend; a
+/// Answers the number of lines the match spans, or zero for no match (and
+/// for no program). `tm` bounds how long the NFA engine may spend; a
 /// match that runs out of it sets `timed_out`.
 // Kept out of line: inlined into `searchit` and `next_search_hl` (as the
 // optimizer chose on its own once unrelated code moved), the body below
@@ -517,7 +517,7 @@ pub fn vim_regexec_multi(
     col: ColNr,
     tm: Option<&ProfTime>,
     timed_out: Option<&mut bool>,
-) -> c_int {
+) -> LineNr {
     let io = ExtMatchIo {
         input: None,
         output: None,
@@ -539,11 +539,11 @@ fn regexec_multi_io(
     tm: Option<&ProfTime>,
     timed_out: Option<&mut bool>,
     io: ExtMatchIo<'_>,
-) -> c_int {
+) -> LineNr {
     // The program is borrowed where it lives, beside the slots the match
     // writes: a recompile for the backtracking engine replaces it in place.
     let (Some(prog), out) = MultiOut::split(rmp) else {
-        return 0;
+        return LineNr::ZERO;
     };
     let mut flag = false;
     let result = walk_with(prog, out, win, &buffer, tm, io, Some(lnum), |lines| {
@@ -647,11 +647,11 @@ pub(crate) struct LineMatcher<'t> {
 impl LineMatcher<'_> {
     /// Run the program over buffer line `lnum` from column `col`, falling
     /// back to the backtracking engine when the NFA one gives up. Answers
-    /// the number of lines the match spans plus one, or 0; a match that ran
-    /// out of time sets `timed_out`.
+    /// the number of lines the match spans, or zero; a match that ran out of
+    /// time sets `timed_out`.
     ///
     /// The line is read afresh each time, as a single match reads it.
-    pub(crate) fn exec(&mut self, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> i32 {
+    pub(crate) fn exec(&mut self, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> LineNr {
         LAST_FIRSTLNUM.set(lnum);
         self.ctx.seat(lnum);
         self.exec_seated(lnum, col, timed_out)
@@ -659,14 +659,16 @@ impl LineMatcher<'_> {
 
     /// [`LineMatcher::exec`] of a match already seated on `lnum`.
     #[inline(always)]
-    fn exec_seated(&mut self, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> i32 {
+    fn exec_seated(&mut self, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> LineNr {
         let result = self.run(col, timed_out);
         let result = if result == NFA_TOO_EXPENSIVE && self.prog.automatic() {
             self.again_backtracking(lnum, col, timed_out)
         } else {
             result
         };
-        result.max(0)
+        // `NFA_TOO_EXPENSIVE` from a pattern that could not be recompiled
+        // is no match.
+        LineNr::new(result.max(0))
     }
 
     /// Run the program once, from where the match is seated.
@@ -767,7 +769,7 @@ pub(crate) fn vim_regexec_syntax(
     tm: Option<&ProfTime>,
     timed_out: Option<&mut bool>,
     io: ExtMatchIo<'_>,
-) -> i32 {
+) -> LineNr {
     regexec_multi_io(rmp, win, buffer, lnum, col, tm, timed_out, io)
 }
 
@@ -798,7 +800,13 @@ impl RegMMatch {
     /// [`vim_regexec_multi`] over `buffer` from line `lnum`, column `col`,
     /// with no time limit: how many lines the match spans (counting the
     /// one it starts in), or 0 for no match.
-    pub(crate) fn exec(&mut self, win: Option<Win>, buffer: Buf, lnum: LineNr, col: ColNr) -> i32 {
+    pub(crate) fn exec(
+        &mut self,
+        win: Option<Win>,
+        buffer: Buf,
+        lnum: LineNr,
+        col: ColNr,
+    ) -> LineNr {
         vim_regexec_multi(self, win, buffer, lnum, col, None, None)
     }
 }

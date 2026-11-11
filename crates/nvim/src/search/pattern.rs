@@ -593,12 +593,12 @@ pub(crate) fn is_zero_width(
         } else {
             regmatch.startpos[0].col > pos.col
         };
-        if nmatched != 0 || regmatch.regprog.is_none() || !short_of_the_match {
+        if nmatched != LineNr::ZERO || regmatch.regprog.is_none() || !short_of_the_match {
             break nmatched;
         }
     };
     (CALLED_EMSG.get() == called_emsg_before).then(|| {
-        nmatched != 0
+        nmatched != LineNr::ZERO
             && regmatch.startpos[0].lnum == regmatch.endpos[0].lnum
             && regmatch.startpos[0].col == regmatch.endpos[0].col
     })

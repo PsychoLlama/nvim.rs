@@ -211,7 +211,7 @@ fn match_buflines(
             while search
                 .prog
                 .exec_multi(&mut regmatch, Some(Win::current()), buffer, lnum, col)
-                > 0
+                > LineNr::ZERO
             {
                 let start = regmatch.startpos[0];
                 let end = regmatch.endpos[0];

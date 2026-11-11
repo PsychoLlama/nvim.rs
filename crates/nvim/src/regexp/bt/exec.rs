@@ -19,7 +19,6 @@
 
 use crate::regexp::{ExtMatch, ExtMatchRef, TIME_CHECK_INTERVAL};
 use crate::types::LineNr;
-use core::ffi::c_int;
 
 use super::compile::BtProg;
 use super::matcher::regmatch;
@@ -50,14 +49,15 @@ fn rest_from(line: &[u8], col: ColNr) -> &[u8] {
 
 /// Try to match the whole pattern starting at byte `at` of the line.
 ///
-/// Returns 0 for no match, or one more than the line the match ended on.
-fn regtry(rex: Rex, prog: BtProg, state: &mut BtState, at: usize) -> c_int {
+/// Answers how many lines the match spans, counting the one it starts in;
+/// zero for no match.
+fn regtry(rex: Rex, prog: BtProg, state: &mut BtState, at: usize) -> LineNr {
     rex.set_input(at);
     rex.set_need_clear_subexpr(true);
     rex.set_need_clear_zsubexpr(prog.has_z());
 
     if !regmatch(rex, prog, state, prog.first_node()) {
-        return 0;
+        return LineNr::ZERO;
     }
 
     cleanup_subexpr(rex);
@@ -70,7 +70,7 @@ fn regtry(rex: Rex, prog: BtProg, state: &mut BtState, at: usize) -> c_int {
         ExtMatchRef::new(z_captures(rex))
     });
     rex.put_ext_out(captures);
-    1 + rex.lnum().get()
+    rex.lnum() + 1
 }
 
 /// Fill in whatever group 0 does not already say.
@@ -134,9 +134,9 @@ fn span(line: &[u8], start: ColNr, end: ColNr) -> &[u8] {
 }
 
 /// Run the backtracking program `prog` over the match `rex` is set up for,
-/// starting at column `col`. Returns 0 for no match, or one more than the
-/// line the match ended on.
-pub(crate) fn bt_regexec(rex: Rex, prog: &BtRegProg, col: ColNr) -> c_int {
+/// starting at column `col`. Answers how many lines the match spans, zero
+/// for no match.
+pub(crate) fn bt_regexec(rex: Rex, prog: &BtRegProg, col: ColNr) -> LineNr {
     // The working state is the cell's own between matches; this match
     // borrows it for its whole run -- nothing the matcher runs starts
     // another backtracking match -- and leaves it trimmed.
@@ -148,7 +148,7 @@ pub(crate) fn bt_regexec(rex: Rex, prog: &BtRegProg, col: ColNr) -> c_int {
 }
 
 /// Match `rex`'s program against its first line, starting at `startcol`.
-fn bt_regexec_both(rex: Rex, prog: BtProg, state: &mut BtState, startcol: ColNr) -> c_int {
+fn bt_regexec_both(rex: Rex, prog: BtProg, state: &mut BtState, startcol: ColNr) -> LineNr {
     let mut col = startcol;
     // A buffer match starts on its line 0; a string match is already on its
     // string.
@@ -158,7 +158,7 @@ fn bt_regexec_both(rex: Rex, prog: BtProg, state: &mut BtState, startcol: ColNr)
         Some(rex.line())
     };
 
-    let mut retval = 0;
+    let mut retval = LineNr::ZERO;
     match line {
         Some(line) => {
             if !magic_wrong(prog) && !(rex.reg_maxcol() > ColNr::ZERO && col >= rex.reg_maxcol()) {
@@ -189,7 +189,7 @@ fn bt_regexec_both(rex: Rex, prog: BtProg, state: &mut BtState, startcol: ColNr)
         None => iemsg(gettext(E_NULL)),
     }
 
-    if retval > 0 {
+    if retval > LineNr::ZERO {
         clamp_group_zero(rex);
         rex.set_matchcol(col);
     }
@@ -243,7 +243,7 @@ fn has_regmust(rex: Rex, prog: BtProg, line: &[u8], col: ColNr) -> bool {
 
 /// An anchored pattern can only match at `col`, and only if the character
 /// there is the one it starts with.
-fn try_anchored(rex: Rex, prog: BtProg, state: &mut BtState, col: ColNr) -> c_int {
+fn try_anchored(rex: Rex, prog: BtProg, state: &mut BtState, col: ColNr) -> LineNr {
     let start = prog.regstart();
     let c = char_at_nul(rest_from(rex.line(), col), 0);
     let matches = start == NUL
@@ -255,14 +255,14 @@ fn try_anchored(rex: Rex, prog: BtProg, state: &mut BtState, col: ColNr) -> c_in
     if matches {
         regtry(rex, prog, state, usize::try_from(col).unwrap_or(0))
     } else {
-        0
+        LineNr::ZERO
     }
 }
 
 /// Try every column from `col` on, until one matches or the line runs out.
 ///
 /// `col` comes back holding the column the reported match starts at.
-fn scan_columns(rex: Rex, prog: BtProg, state: &mut BtState, col: &mut ColNr) -> c_int {
+fn scan_columns(rex: Rex, prog: BtProg, state: &mut BtState, col: &mut ColNr) -> LineNr {
     let (retval, at) = scan_from(rex, prog, state, usize::try_from(*col).unwrap_or(0));
     *col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
     retval
@@ -270,7 +270,12 @@ fn scan_columns(rex: Rex, prog: BtProg, state: &mut BtState, col: &mut ColNr) ->
 
 /// [`scan_columns`] over byte offsets, which is what the walk steps in:
 /// the answer, and the byte the last attempt started at.
-fn scan_from<'t>(rex: Rex<'t>, prog: BtProg, state: &mut BtState, mut at: usize) -> (c_int, usize) {
+fn scan_from<'t>(
+    rex: Rex<'t>,
+    prog: BtProg,
+    state: &mut BtState,
+    mut at: usize,
+) -> (LineNr, usize) {
     let mut tm_count = 0;
     // The line from `at` on; past its end, its NUL.
     let rest = |line: &'t [u8], at: usize| line.get(at..).unwrap_or(&line[line.len() - 1..]);
@@ -280,15 +285,15 @@ fn scan_from<'t>(rex: Rex<'t>, prog: BtProg, state: &mut BtState, mut at: usize)
         if prog.regstart() != NUL {
             match cstrchr_line(rex, rest(rex.line(), at), prog.regstart()) {
                 Some(off) => at += off,
-                None => return (0, at),
+                None => return (LineNr::ZERO, at),
             }
         }
         if rex.reg_maxcol() > ColNr::ZERO && at >= rex.reg_maxcol().as_usize() {
-            return (0, at);
+            return (LineNr::ZERO, at);
         }
 
         let retval = regtry(rex, prog, state, at);
-        if retval > 0 {
+        if retval > LineNr::ZERO {
             return (retval, at);
         }
 
@@ -299,7 +304,7 @@ fn scan_from<'t>(rex: Rex<'t>, prog: BtProg, state: &mut BtState, mut at: usize)
         }
         let rest = rest(rex.line(), at);
         if rest[0] == b'\0' {
-            return (0, at);
+            return (LineNr::ZERO, at);
         }
         at += cluster_len_at(rest, 0);
 
@@ -309,12 +314,12 @@ fn scan_from<'t>(rex: Rex<'t>, prog: BtProg, state: &mut BtState, mut at: usize)
                 tm_count = 0;
                 if profile_passed_limit(deadline) {
                     rex.set_timed_out();
-                    return (0, at);
+                    return (LineNr::ZERO, at);
                 }
             }
         }
     }
-    (0, at)
+    (LineNr::ZERO, at)
 }
 
 /// The `\%23l`-family comparison: node `scan`'s operand against `val`, with

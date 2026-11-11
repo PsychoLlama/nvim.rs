@@ -225,7 +225,8 @@ impl Sub {
     /// Search for the pattern in the current buffer, from `lnum`:`col`,
     /// giving up -- and setting `timed_out` -- once `timeout` passes, so that
     /// one pathological line cannot hold up a preview. A zero `timeout` is
-    /// no limit.
+    /// no limit. Answers how many lines the match spans, as `nmatch` holds
+    /// it (where `-1` is "not looked for yet").
     pub(super) fn regexec_at(&mut self, lnum: LineNr, col: ColNr, timeout: ProfTime) -> c_int {
         let deadline = (timeout != 0).then_some(&timeout);
         vim_regexec_multi(
@@ -237,6 +238,7 @@ impl Sub {
             deadline,
             Some(&mut self.timed_out),
         )
+        .get()
     }
 }
 
