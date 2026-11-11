@@ -472,7 +472,7 @@ pub(crate) fn msg_end() -> bool {
     // means the window has to be redrawn -- but not while abandoning the
     // file or editing the command line.
     if !EXITING.get() && NEED_WAIT_RETURN.get() && STATE.get() & MODE_CMDLINE == 0 {
-        wait_return(0);
+        wait_return(PromptRedraw::IfScrolled);
         return false;
     }
     // NOTE: ui_flush() used to be called here. It had to be removed, as it

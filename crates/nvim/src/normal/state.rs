@@ -61,7 +61,7 @@ use crate::message::state::{
     KEEP_MSG_HL_ID, MSG_DIDANY, MSG_DIDOUT, MSG_HIST_OFF, MSG_NOWAIT, MSG_SCROLL, MSG_SILENT,
     NEED_FILEINFO, NEED_WAIT_RETURN, QUIT_MORE,
 };
-use crate::message::{has_keep_msg, may_clear_sb_text, msg, msg_delay, wait_return};
+use crate::message::{PromptRedraw, has_keep_msg, may_clear_sb_text, msg, msg_delay, wait_return};
 use crate::normal::defs::{CmdArg, OpArg, Outcome};
 use crate::normal::{
     NV_CMD_TABLE, NormalState, NvCmd, NvFlags, check_scrollbind, clear_op, clear_op_beep,
@@ -440,7 +440,7 @@ fn normal_check_stuff_buffer() {
             check_timestamps(false);
         }
         if NEED_WAIT_RETURN.get() {
-            wait_return(0);
+            wait_return(PromptRedraw::IfScrolled);
         }
     }
 }

@@ -24,6 +24,7 @@ use crate::ex_docmd::{cmdmod_add_split, cmdmod_set_tab, cmdmod_tab};
 use crate::guard::{Lock, Suppress};
 use crate::mbyte::c_cluster_len;
 use crate::memory::XString;
+use crate::message::PromptRedraw;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
 use crate::os::fs::path_exists;
@@ -675,7 +676,7 @@ impl Pattern {
         // When the command did something that is not allowed, make
         // sure the error message can be seen.
         if SECURE.get() == 2 {
-            wait_return(1);
+            wait_return(PromptRedraw::All);
         }
         SECURE.set(save_secure);
     }

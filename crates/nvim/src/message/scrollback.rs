@@ -199,7 +199,7 @@ pub fn show_sb_text() {
         vim_beep(OPT_BO_FLAG_MESS as c_uint);
     } else {
         do_more_prompt(Key::ascii(b'G'));
-        wait_return(0);
+        wait_return(PromptRedraw::IfScrolled);
     }
 }
 

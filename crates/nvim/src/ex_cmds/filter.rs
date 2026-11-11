@@ -51,8 +51,8 @@ use crate::memory::XString;
 use crate::message::state::{INFO_MESSAGE, MSG_COL, MSG_DIDOUT, MSG_ROW, MSG_SCROLL, MSG_SILENT};
 use crate::message::{E_NOPREV, E_NOTMP};
 use crate::message::{
-    MSG_BUF_LEN, emsg, message_filtered, msg, msg_bytes, msg_display, msg_ext_set_kind,
-    msg_prt_line, set_keep_msg, wait_return,
+    MSG_BUF_LEN, PromptRedraw, emsg, message_filtered, msg, msg_bytes, msg_display,
+    msg_ext_set_kind, msg_prt_line, set_keep_msg, wait_return,
 };
 use crate::message_fmt::{msg_cstr, to_message};
 use crate::r#move::{changed_line_abv_curs, invalidate_botline_win};
@@ -389,7 +389,7 @@ impl Filter {
             // put cursor back in same position for ":w !cmd"
             Win::current().w_cursor = self.cursor_save;
             drop(self.no_prompt.take());
-            wait_return(0);
+            wait_return(PromptRedraw::IfScrolled);
         }
     }
 

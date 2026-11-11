@@ -23,6 +23,7 @@ use core::ffi::{CStr, c_int};
 use super::*;
 use crate::buffer::{BufFlags, BufRef};
 use crate::memory::ThinCString;
+use crate::message::PromptRedraw;
 use crate::optionstr::{OptString, OptStringRef};
 use crate::os::cshim::gettext;
 use crate::winlayer::Buf;
@@ -117,7 +118,7 @@ pub fn changed(buffer: Buf) {
                 && !ui_has(UI_MESSAGES)
             {
                 msg_delay(2002, true);
-                wait_return(c_int::from(true));
+                wait_return(PromptRedraw::All);
                 MSG_SCROLL.set(save_msg_scroll);
             } else {
                 NEED_WAIT_RETURN.set(save_need_wait_return);

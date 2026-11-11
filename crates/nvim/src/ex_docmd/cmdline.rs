@@ -59,7 +59,7 @@ use crate::message::{E_COMMAND_TOO_RECURSIVE, E_ENDFOR, E_ENDIF, E_ENDTRY, E_END
 use crate::option::vars::p_verbose;
 use crate::profile::{DO_PROFILING, func_line_end, func_line_start};
 
-use crate::message::{msg_start, wait_return};
+use crate::message::{PromptRedraw, msg_start, wait_return};
 
 use crate::os::input::line_breakcheck;
 use crate::profile::{script_line_end, script_line_start};
@@ -748,7 +748,7 @@ impl Run {
                 // `msg_start` above cleared 'msg_didout'; the `wait_return`
                 // here must not overwrite whatever was shown before it.
                 MSG_DIDOUT.set(MSG_DIDOUT.get() || self.msg_didout_before);
-                wait_return(0);
+                wait_return(PromptRedraw::IfScrolled);
             }
         }
 

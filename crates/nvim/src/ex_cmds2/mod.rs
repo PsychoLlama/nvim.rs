@@ -71,7 +71,8 @@ use crate::memory::XString;
 use crate::message::state::{MSG_COL, MSG_DIDANY, MSG_DIDOUT, MSG_ROW};
 use crate::message::{Answer, DialogKind};
 use crate::message::{
-    emsg, msg, msg_source, vim_dialog_yesnoallcancel, vim_dialog_yesnocancel, wait_return,
+    PromptRedraw, emsg, msg, msg_source, vim_dialog_yesnoallcancel, vim_dialog_yesnocancel,
+    wait_return,
 };
 use crate::message_fmt::{msg_bytes, msg_cstr_opt};
 use crate::option::vars::{p_aw, p_awa, p_confirm, p_write};
@@ -514,7 +515,7 @@ fn report_unwritten(buffer: Buf) {
     // prevent.
     if shown && MSG_DIDANY.get() {
         let _prompt = Allow::wait_return();
-        wait_return(0);
+        wait_return(PromptRedraw::IfScrolled);
     }
 }
 

@@ -57,12 +57,20 @@ pub fn msg_end_prompt() {
     LINES_LEFT.set(-1);
 }
 
-/// Wait for the user to hit a key, normally Enter.
-///
-/// `redraw` is 1 to redraw the whole screen `UPD_NOT_VALID`, 0 for a normal
-/// redraw, and -1 for none at all.
-pub fn wait_return(redraw: c_int) {
-    if redraw == 1 {
+/// What [`wait_return`] redraws once the prompt is dismissed. (Upstream's
+/// third answer, no redraw at all, has no caller.)
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum PromptRedraw {
+    /// The whole screen, `UPD_NOT_VALID`.
+    All,
+    /// The current window, when the messages scrolled the screen.
+    IfScrolled,
+}
+
+/// Wait for the user to hit a key, normally Enter, then redraw what `redraw`
+/// asks for.
+pub(crate) fn wait_return(redraw: PromptRedraw) {
+    if redraw == PromptRedraw::All {
         redraw_all_later(UPD_NOT_VALID);
     }
 
@@ -263,7 +271,7 @@ fn ignored_at_hit_return(c: Key) -> bool {
 
 /// After the hit-return prompt was dismissed with `c`: restore the state
 /// it was entered in and queue the redraw `redraw` asks for.
-fn finish_wait_return(c: Key, old_state: c_int, redraw: c_int) {
+fn finish_wait_return(c: Key, old_state: c_int, redraw: PromptRedraw) {
     // If the user hits ':', '?' or '/' we get a command line from the next
     // line. It draws over the prompt, so move the cmdline row down to
     // where the prompt was and skip the redraw this tail would queue.
@@ -299,7 +307,7 @@ fn finish_wait_return(c: Key, old_state: c_int, redraw: c_int) {
     if tmp_state == MODE_SETWSIZE {
         // got resize event while in vgetc().code()
         ui_refresh();
-    } else if !SKIP_REDRAW.get() && (redraw == 1 || (MSG_SCROLLED.get() != 0 && redraw != -1)) {
+    } else if !SKIP_REDRAW.get() && (redraw == PromptRedraw::All || MSG_SCROLLED.get() != 0) {
         redraw_later(Win::current(), UPD_VALID);
     }
 }

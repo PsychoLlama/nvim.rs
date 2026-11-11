@@ -34,7 +34,7 @@ use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_INF, logmsg};
 use crate::memline::{ml_close_all, ml_close_notmod, ml_sync_all};
 use crate::message::state::{DID_EMSG, NO_WAIT_RETURN};
-use crate::message::wait_return;
+use crate::message::{PromptRedraw, wait_return};
 use crate::option::vars::{P_SHADA, P_TITLEOLD, p_title, p_titleold};
 use crate::os::cshim::write_c_stderr;
 use crate::os::input::tty_drain;
@@ -201,7 +201,7 @@ pub fn getout(mut exitval: c_int) -> ! {
         NO_WAIT_RETURN.set(0);
         // NB: upstream notes this may itself call getout(0) and clobber
         // `exitval`.
-        wait_return(0);
+        wait_return(PromptRedraw::IfScrolled);
     }
 
     if p_title() && P_TITLEOLD.first_byte() != 0 {
