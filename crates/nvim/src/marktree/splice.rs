@@ -259,105 +259,164 @@ pub fn marktree_splice(
         }
     }
 
-    let mut past_right = false;
     let mut moved = false;
     let mut damage = DamageMap::new();
 
     // Follow the general strategy of messing things up and fixing them later.
     // `oldbase` carries what is needed to work out a child's old position.
     if may_delete {
-        'collapse: while iter.is_positioned() && !past_right {
-            let mut loc_start = start;
-            let mut loc_old = old_extent;
-            relative(iter.pos, &mut loc_start);
-            relative(oldbase[as_index(iter.depth)], &mut loc_old);
+        moved |= collapse_deleted(
+            tree,
+            &mut iter,
+            &mut end_iter,
+            &mut oldbase,
+            &mut damage,
+            start,
+            old_extent,
+        );
+        moved |= shift_deleted(tree, &mut iter, &mut oldbase, old_extent, new_extent);
+    }
+    moved |= shift_tail(tree, &mut iter, &oldbase, old_extent, delta, same_line);
+    repair_damage(tree, &damage, &mut iter, &mut end_iter);
 
-            while let Some(x) = iter.node {
-                let i = as_index(iter.index);
-                // NB: strictly should be less than the right gravity of
-                // loc_old, but the iterator comparison below will already
-                // break on that.
-                if !pos_leq(tree[x].key(i).pos, loc_old) {
-                    break 'collapse;
-                }
+    moved
+}
 
-                if mt_right(tree[x].key(i)) {
-                    while !same_key(&iter, &end_iter) && mt_right(raw_key(tree, &end_iter)) {
-                        marktree_itr_prev(tree, &mut end_iter);
-                    }
-                    if !mt_right(raw_key(tree, &end_iter)) {
-                        swap_keys(tree, &iter, &end_iter, &mut damage);
-                    } else {
-                        // Past the right edge: `break 'collapse` leaves the
-                        // walk, so the flag the loop guard reads is not set.
-                        break 'collapse;
-                    }
-                }
+/// The keys inside the deleted region collapse to one end of it: from
+/// `iter`, every key up to the old extent goes to `start`, swapping
+/// right-gravity keys past left-gravity ones (back from `end_iter`, the
+/// last key in the region) and recording the pairs that crossed in
+/// `damage`. Answers whether any key moved.
+fn collapse_deleted(
+    tree: &mut MarkTree,
+    iter: &mut MarkTreeIter,
+    end_iter: &mut MarkTreeIter,
+    oldbase: &mut [MTPos; MT_MAX_DEPTH],
+    damage: &mut DamageMap,
+    start: MTPos,
+    old_extent: MTPos,
+) -> bool {
+    let mut past_right = false;
+    let mut moved = false;
+    while iter.is_positioned() && !past_right {
+        let mut loc_start = start;
+        let mut loc_old = old_extent;
+        relative(iter.pos, &mut loc_start);
+        relative(oldbase[as_index(iter.depth)], &mut loc_old);
 
-                if same_key(&iter, &end_iter) {
-                    // Actually, will be past_right after this key.
-                    past_right = true;
-                }
+        while let Some(x) = iter.node {
+            let i = as_index(iter.index);
+            // NB: strictly should be less than the right gravity of
+            // loc_old, but the iterator comparison below will already
+            // break on that.
+            if !pos_leq(tree[x].key(i).pos, loc_old) {
+                return moved;
+            }
 
-                moved = true;
-                if !tree[x].is_leaf() {
-                    let depth = as_index(iter.depth);
-                    oldbase[depth + 1] = tree[x].key(i).pos;
-                    let base = oldbase[depth];
-                    unrelative(base, &mut oldbase[depth + 1]);
-                    tree[x].key_mut(i).pos = loc_start;
-                    iter_next_skip(tree, &mut iter, false, Some(&mut oldbase));
-                    break;
+            if mt_right(tree[x].key(i)) {
+                while !same_key(iter, end_iter) && mt_right(raw_key(tree, end_iter)) {
+                    marktree_itr_prev(tree, end_iter);
                 }
-                tree[x].key_mut(i).pos = loc_start;
-                if i + 1 < tree[x].key_count() {
-                    iter.index += 1;
-                    if past_right {
-                        break;
-                    }
+                if !mt_right(raw_key(tree, end_iter)) {
+                    swap_keys(tree, iter, end_iter, damage);
                 } else {
-                    marktree_itr_next(tree, &mut iter);
-                    break;
+                    // Past the right edge: returning leaves the walk, so
+                    // the flag the loop guard reads is not set.
+                    return moved;
                 }
             }
-        }
 
-        'shift: while iter.is_positioned() {
-            let mut loc_new = new_extent;
-            relative(iter.pos, &mut loc_new);
-            let mut limit = old_extent;
-            relative(oldbase[as_index(iter.depth)], &mut limit);
+            if same_key(iter, end_iter) {
+                // Actually, will be past_right after this key.
+                past_right = true;
+            }
 
-            while let Some(x) = iter.node {
-                let i = as_index(iter.index);
-                if pos_leq(limit, tree[x].key(i).pos) {
-                    break 'shift;
-                }
-
-                let oldpos = tree[x].key(i).pos;
-                tree[x].key_mut(i).pos = loc_new;
-                moved = true;
-                if !tree[x].is_leaf() {
-                    let depth = as_index(iter.depth);
-                    oldbase[depth + 1] = oldpos;
-                    let base = oldbase[depth];
-                    unrelative(base, &mut oldbase[depth + 1]);
-                    iter_next_skip(tree, &mut iter, false, Some(&mut oldbase));
-                    break;
-                } else if i + 1 < tree[x].key_count() {
-                    iter.index += 1;
-                } else {
-                    marktree_itr_next(tree, &mut iter);
+            moved = true;
+            if !tree[x].is_leaf() {
+                let depth = as_index(iter.depth);
+                oldbase[depth + 1] = tree[x].key(i).pos;
+                let base = oldbase[depth];
+                unrelative(base, &mut oldbase[depth + 1]);
+                tree[x].key_mut(i).pos = loc_start;
+                iter_next_skip(tree, iter, false, Some(oldbase));
+                break;
+            }
+            tree[x].key_mut(i).pos = loc_start;
+            if i + 1 < tree[x].key_count() {
+                iter.index += 1;
+                if past_right {
                     break;
                 }
+            } else {
+                marktree_itr_next(tree, iter);
+                break;
             }
         }
     }
+    moved
+}
 
-    // Every key from here on shifts. Within one node only the index moves, so
-    // the node is borrowed once and its keys walked in place; the iterator
-    // steps (skipping the subtrees, whose positions are relative to the keys
-    // just moved) only when the node is done.
+/// The right-gravity keys of the deleted region that the collapse left
+/// behind ride to the new end: from `iter`, every key before the old
+/// extent goes to `new_extent`. Answers whether any key moved.
+fn shift_deleted(
+    tree: &mut MarkTree,
+    iter: &mut MarkTreeIter,
+    oldbase: &mut [MTPos; MT_MAX_DEPTH],
+    old_extent: MTPos,
+    new_extent: MTPos,
+) -> bool {
+    let mut moved = false;
+    while iter.is_positioned() {
+        let mut loc_new = new_extent;
+        relative(iter.pos, &mut loc_new);
+        let mut limit = old_extent;
+        relative(oldbase[as_index(iter.depth)], &mut limit);
+
+        while let Some(x) = iter.node {
+            let i = as_index(iter.index);
+            if pos_leq(limit, tree[x].key(i).pos) {
+                return moved;
+            }
+
+            let oldpos = tree[x].key(i).pos;
+            tree[x].key_mut(i).pos = loc_new;
+            moved = true;
+            if !tree[x].is_leaf() {
+                let depth = as_index(iter.depth);
+                oldbase[depth + 1] = oldpos;
+                let base = oldbase[depth];
+                unrelative(base, &mut oldbase[depth + 1]);
+                iter_next_skip(tree, iter, false, Some(oldbase));
+                break;
+            } else if i + 1 < tree[x].key_count() {
+                iter.index += 1;
+            } else {
+                marktree_itr_next(tree, iter);
+                break;
+            }
+        }
+    }
+    moved
+}
+
+/// Every key from `iter` on shifts by `delta`: rows by its row, and the
+/// keys on the old extent's last row by its column too. With `same_line`
+/// (a change within one line) the walk stops at the first key on a later
+/// row. Answers whether any key moved.
+fn shift_tail(
+    tree: &mut MarkTree,
+    iter: &mut MarkTreeIter,
+    oldbase: &[MTPos; MT_MAX_DEPTH],
+    old_extent: MTPos,
+    delta: MTPos,
+    same_line: bool,
+) -> bool {
+    let mut moved = false;
+    // Within one node only the index moves, so the node is borrowed once
+    // and its keys walked in place; the iterator steps (skipping the
+    // subtrees, whose positions are relative to the keys just moved) only
+    // when the node is done.
     let mut done = false;
     while let Some(x) = iter.node
         && !done
@@ -389,30 +448,41 @@ pub fn marktree_splice(
             iter.index += 1;
         }
         if !done {
-            iter_next_skip(tree, &mut iter, true, None);
+            iter_next_skip(tree, iter, true, None);
         }
     }
+    moved
+}
 
+/// Re-intersect the pairs whose halves crossed during the splice, as
+/// `damage` recorded them: retract each pair's records where its halves
+/// were, and make them again where they went.
+fn repair_damage(
+    tree: &mut MarkTree,
+    damage: &DamageMap,
+    iter: &mut MarkTreeIter,
+    end_iter: &mut MarkTreeIter,
+) {
     for (&start_id, &d) in damage.iter() {
         if d.start.old.is_some() && d.end.old.is_some() {
             // Both ends of the pair moved.
-            iter_set_node(tree, &mut iter, d.start.old, d.start.old_i);
-            iter_set_node(tree, &mut end_iter, d.end.old, d.end.old_i);
-            marktree_intersect_pair(tree, start_id, &mut iter, &end_iter, true);
-            iter_set_node(tree, &mut iter, d.start.new, d.start.new_i);
-            iter_set_node(tree, &mut end_iter, d.end.new, d.end.new_i);
-            marktree_intersect_pair(tree, start_id, &mut iter, &end_iter, false);
+            iter_set_node(tree, iter, d.start.old, d.start.old_i);
+            iter_set_node(tree, end_iter, d.end.old, d.end.old_i);
+            marktree_intersect_pair(tree, start_id, iter, end_iter, true);
+            iter_set_node(tree, iter, d.start.new, d.start.new_i);
+            iter_set_node(tree, end_iter, d.end.new, d.end.new_i);
+            marktree_intersect_pair(tree, start_id, iter, end_iter, false);
         } else if d.start.old.is_some() {
             // Only the start moved.
             let mut endpos = MarkTreeIter::default();
             marktree_lookup(tree, start_id | MARKTREE_END_FLAG, Some(&mut endpos));
             if endpos.is_positioned() {
-                iter_set_node(tree, &mut iter, d.start.old, d.start.old_i);
+                iter_set_node(tree, iter, d.start.old, d.start.old_i);
                 // Read-only to the intersection, so set once for both.
-                end_iter = endpos;
-                marktree_intersect_pair(tree, start_id, &mut iter, &end_iter, true);
-                iter_set_node(tree, &mut iter, d.start.new, d.start.new_i);
-                marktree_intersect_pair(tree, start_id, &mut iter, &end_iter, false);
+                *end_iter = endpos;
+                marktree_intersect_pair(tree, start_id, iter, end_iter, true);
+                iter_set_node(tree, iter, d.start.new, d.start.new_i);
+                marktree_intersect_pair(tree, start_id, iter, end_iter, false);
             }
         } else if d.end.old.is_some() {
             // Only the end moved.
@@ -420,17 +490,15 @@ pub fn marktree_splice(
             marktree_lookup(tree, start_id, Some(&mut startpos));
             if startpos.is_positioned() {
                 // The intersection walks `iter`: start the second from fresh.
-                iter = startpos.clone();
-                iter_set_node(tree, &mut end_iter, d.end.old, d.end.old_i);
-                marktree_intersect_pair(tree, start_id, &mut iter, &end_iter, true);
-                iter = startpos;
-                iter_set_node(tree, &mut end_iter, d.end.new, d.end.new_i);
-                marktree_intersect_pair(tree, start_id, &mut iter, &end_iter, false);
+                *iter = startpos.clone();
+                iter_set_node(tree, end_iter, d.end.old, d.end.old_i);
+                marktree_intersect_pair(tree, start_id, iter, end_iter, true);
+                *iter = startpos;
+                iter_set_node(tree, end_iter, d.end.new, d.end.new_i);
+                marktree_intersect_pair(tree, start_id, iter, end_iter, false);
             }
         }
     }
-
-    moved
 }
 
 /// Move the marks in a region elsewhere, as `:move` does.
