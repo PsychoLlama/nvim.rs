@@ -19,78 +19,70 @@
 //! text and a code point ask the same function: `ascii_isdigit(byte)` and
 //! `ascii_isdigit(c)` are one body, where the C needed a cast or a copy.
 
-use core::ffi::{c_int, c_uint};
+use core::ffi::c_int;
+
+/// The byte `c` is, when it is one: an ASCII class is a question about a
+/// byte, and nothing outside `0..=0xff` answers yes to any of them.
+#[inline(always)]
+fn as_byte(c: c_int) -> Option<u8> {
+    u8::try_from(c).ok()
+}
 
 /// A decimal digit.
 pub(crate) fn ascii_isdigit(c: impl Into<c_int>) -> bool {
-    let c = c.into();
-    (c_int::from(b'0')..=c_int::from(b'9')).contains(&c)
+    as_byte(c.into()).is_some_and(|b| b.is_ascii_digit())
 }
 
 /// `ASCII_ISALPHA`: an unaccented Latin letter.
 pub(crate) fn ascii_isalpha(c: impl Into<c_int>) -> bool {
-    // Unsigned, so that a negative byte fails both ranges rather than
-    // wrapping into one of them -- which is what the C macro's cast does.
-    let c = c.into().cast_unsigned();
-    (c_uint::from(b'A')..=c_uint::from(b'Z')).contains(&c)
-        || (c_uint::from(b'a')..=c_uint::from(b'z')).contains(&c)
+    // A negative byte fails, rather than wrapping into a letter -- which is
+    // what the C macro's unsigned cast does.
+    as_byte(c.into()).is_some_and(|b| b.is_ascii_alphabetic())
 }
 
 /// `ASCII_ISUPPER`: an unaccented upper-case Latin letter.
 pub(crate) fn ascii_isupper(c: impl Into<c_int>) -> bool {
-    (c_uint::from(b'A')..=c_uint::from(b'Z')).contains(&c.into().cast_unsigned())
+    as_byte(c.into()).is_some_and(|b| b.is_ascii_uppercase())
 }
 
 /// A binary digit.
 pub(crate) fn ascii_isbdigit(c: impl Into<c_int>) -> bool {
-    let c = c.into();
-    c == c_int::from(b'0') || c == c_int::from(b'1')
+    as_byte(c.into()).is_some_and(|b| b == b'0' || b == b'1')
 }
 
 /// An octal digit.
 pub(crate) fn ascii_isodigit(c: impl Into<c_int>) -> bool {
-    (c_int::from(b'0')..=c_int::from(b'7')).contains(&c.into())
+    as_byte(c.into()).is_some_and(|b| (b'0'..=b'7').contains(&b))
 }
 
 /// A hexadecimal digit, in either case.
 pub(crate) fn ascii_isxdigit(c: impl Into<c_int>) -> bool {
-    let c = c.into();
-    ascii_isdigit(c)
-        || (c_int::from(b'a')..=c_int::from(b'f')).contains(&c)
-        || (c_int::from(b'A')..=c_int::from(b'F')).contains(&c)
+    as_byte(c.into()).is_some_and(|b| b.is_ascii_hexdigit())
 }
 
 /// A character that may appear in an identifier: a letter, a digit or `_`.
 pub(crate) fn ascii_isident(c: impl Into<c_int>) -> bool {
-    let c = c.into();
-    (c_int::from(b'A')..=c_int::from(b'Z')).contains(&c)
-        || (c_int::from(b'a')..=c_int::from(b'z')).contains(&c)
-        || ascii_isdigit(c)
-        || c == c_int::from(b'_')
+    as_byte(c.into()).is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
 /// Horizontal whitespace: a space or a tab. Vim's notion of "white".
 pub(crate) fn ascii_iswhite(c: impl Into<c_int>) -> bool {
-    let c = c.into();
-    c == c_int::from(b' ') || c == c_int::from(b'\t')
+    as_byte(c.into()).is_some_and(|b| b == b' ' || b == b'\t')
 }
 
 /// Horizontal whitespace, or the end of the string.
 pub(crate) fn ascii_iswhite_or_nul(c: impl Into<c_int>) -> bool {
-    let c = c.into();
-    ascii_iswhite(c) || c == 0
+    as_byte(c.into()).is_some_and(|b| matches!(b, b' ' | b'\t' | 0))
 }
 
 /// Horizontal whitespace, a newline, or the end of the string.
 pub(crate) fn ascii_iswhite_nl_or_nul(c: impl Into<c_int>) -> bool {
-    let c = c.into();
-    ascii_iswhite(c) || c == c_int::from(b'\n') || c == 0
+    as_byte(c.into()).is_some_and(|b| matches!(b, b' ' | b'\t' | b'\n' | 0))
 }
 
 /// Whitespace as `isspace()` sees it: `\t\n\v\f\r` or a space.
 pub(crate) fn ascii_isspace(c: impl Into<c_int>) -> bool {
-    let c = c.into();
-    (9..=13).contains(&c) || c == c_int::from(b' ')
+    as_byte(c.into()).is_some_and(|b| (9..=13).contains(&b) || b == b' ')
 }
 
 /// The path separator as a string, for the code that appends one.
@@ -152,23 +144,23 @@ mod tests {
 
     #[test]
     fn classifies_the_boundaries_of_each_range() {
-        assert!(!ascii_isdigit(c_int::from(b'0') - 1));
-        assert!(ascii_isdigit(c_int::from(b'0')));
-        assert!(ascii_isdigit(c_int::from(b'9')));
-        assert!(!ascii_isdigit(c_int::from(b'9') + 1));
-        assert!(ascii_isbdigit(c_int::from(b'1')));
-        assert!(!ascii_isbdigit(c_int::from(b'2')));
-        assert!(ascii_isxdigit(c_int::from(b'f')));
-        assert!(ascii_isxdigit(c_int::from(b'F')));
-        assert!(!ascii_isxdigit(c_int::from(b'g')));
-        assert!(ascii_isident(c_int::from(b'_')));
-        assert!(!ascii_isident(c_int::from(b'-')));
-        assert!(ascii_iswhite(c_int::from(b'\t')));
-        assert!(!ascii_iswhite(c_int::from(b'\n')));
+        assert!(!ascii_isdigit(b'0' - 1));
+        assert!(ascii_isdigit(b'0'));
+        assert!(ascii_isdigit(b'9'));
+        assert!(!ascii_isdigit(b'9' + 1));
+        assert!(ascii_isbdigit(b'1'));
+        assert!(!ascii_isbdigit(b'2'));
+        assert!(ascii_isxdigit(b'f'));
+        assert!(ascii_isxdigit(b'F'));
+        assert!(!ascii_isxdigit(b'g'));
+        assert!(ascii_isident(b'_'));
+        assert!(!ascii_isident(b'-'));
+        assert!(ascii_iswhite(b'\t'));
+        assert!(!ascii_iswhite(b'\n'));
         assert!(ascii_iswhite_or_nul(b'\0'));
-        assert!(!ascii_iswhite_or_nul(c_int::from(b'\n')));
-        assert!(ascii_iswhite_nl_or_nul(c_int::from(b'\n')));
-        assert!(ascii_isspace(c_int::from(b'\r')));
+        assert!(!ascii_iswhite_or_nul(b'\n'));
+        assert!(ascii_iswhite_nl_or_nul(b'\n'));
+        assert!(ascii_isspace(b'\r'));
         assert!(!ascii_isspace(8));
     }
 
