@@ -51,13 +51,14 @@ use crate::event::uv::{
     uv_tcp_t,
 };
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, logmsg};
-use crate::memory::{xfree, xstrdup, xstrlcpy};
+use crate::memory::xstrlcpy;
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_remove, os_strerror, path_exists};
 use crate::os::libc::{intmax_t, sa_family_t};
 use crate::path::tail_index;
 use crate::startup::MAIN_LOOP;
 use ::libc::ntohs;
+use std::ffi::CString;
 
 /// `uv_pipe_bind2`: fail on a name too long for a socket path, rather than
 /// truncating it.
@@ -401,7 +402,7 @@ fn rebind_stale_socket(mut watcher: Watcher, failure: c_int) -> c_int {
     // nothing below writes.
     let address = unsafe { CStr::from_ptr(addr) };
     // SAFETY: the loop the watcher's handle belongs to, and its address.
-    if unsafe { socket_alive(uv_loop, addr) } {
+    if unsafe { socket_alive(uv_loop, address) } {
         logmsg!(
             LOGLVL_ERR,
             c"socket_watcher_start",
@@ -451,19 +452,17 @@ fn rebind_stale_socket(mut watcher: Watcher, failure: c_int) -> c_int {
     watcher.bind_pipe().err().unwrap_or(0)
 }
 
-/// Is anything listening on `addr`? Probed by connecting to it, with a 500ms
-/// timeout so a dead socket is diagnosed quickly.
+/// Is anything listening on `address`? Probed by connecting to it, with a
+/// 500ms timeout so a dead socket is diagnosed quickly.
 ///
 /// # Safety
-/// `uv_loop` is a live loop and `addr` is a NUL-terminated socket path.
-unsafe fn socket_alive(uv_loop: *mut Loop, addr: *const c_char) -> bool {
+/// `uv_loop` is a live loop.
+unsafe fn socket_alive(uv_loop: *mut Loop, address: &CStr) -> bool {
     // SAFETY: `RStream` is inhabited by the all-zero bit pattern.
     let mut stream: RStream = unsafe { mem::zeroed() };
-    let mut error: *const c_char = ptr::null();
     let probe = &raw mut stream;
-    // SAFETY: the caller's loop and address, and a stream on this frame.
-    let up = unsafe { socket_connect(uv_loop, probe, false, addr, 500, &raw mut error) };
-    if !up {
+    // SAFETY: the caller's loop, and a stream on this frame.
+    if unsafe { socket_connect(uv_loop, probe, false, address, 500) }.is_err() {
         return false;
     }
 
@@ -606,134 +605,119 @@ unsafe fn free_listener(watcher: *mut SocketWatcher, _data: *mut c_void) {
 
 /// Connect `stream` to `address`, driving the loop until it settles.
 ///
-/// `timeout` is in milliseconds. On failure `*error` is set to a message the
-/// caller may show; a TCP address that resolved to several candidates is
-/// tried in turn before that happens.
+/// `timeout` is in milliseconds. A failure answers a message the caller may
+/// show; a TCP address that resolved to several candidates is tried in turn
+/// before that happens.
 ///
 /// # Safety
-/// `uv_loop` is live, `stream` is a live `RStream` the caller keeps alive
-/// until this returns, `address` is NUL-terminated and `error` is writable.
+/// `uv_loop` is live, and `stream` is a live `RStream` the caller keeps alive
+/// until this returns.
 pub unsafe fn socket_connect(
     uv_loop: *mut Loop,
     stream: *mut RStream,
     is_tcp: bool,
-    address: *const c_char,
+    address: &CStr,
     timeout: c_int,
-    error: *mut *const c_char,
-) -> bool {
+) -> Result<(), &'static CStr> {
     // SAFETY: the caller's stream, live until this returns.
     let mut conn = unsafe { Reader::new(stream) }.conn();
     // SAFETY: `uv_getaddrinfo_t` is inhabited by the all-zero bit pattern.
     let mut addr_req: uv_getaddrinfo_t = unsafe { mem::zeroed() };
-    let mut addr: *mut c_char = ptr::null_mut();
-    let mut success = false;
-    let fail = move |msg: &'static CStr| {
-        // SAFETY: the caller's slot, and `gettext` answers a static string.
-        unsafe { *error = gettext(msg).as_ptr() };
-    };
 
-    'settled: {
-        let mut candidate: *const addrinfo = ptr::null();
-        if is_tcp {
-            // SAFETY: the caller's NUL-terminated address.
-            addr = unsafe { xstrdup(address) };
-            // SAFETY: `xstrdup` copies the terminator too.
-            let bytes = unsafe { CStr::from_ptr(addr) }.to_bytes();
-            let Some(host_end) = bytes.iter().rposition(|&b| b == b':') else {
-                fail(c"tcp address must be host:port");
-                break 'settled;
-            };
-            // SAFETY: `host_end` indexes the copy just measured.
-            unsafe { *addr.add(host_end) = 0 };
+    let mut candidate: *const addrinfo = ptr::null();
+    if is_tcp {
+        let bytes = address.to_bytes_with_nul();
+        let Some(host_end) = bytes.iter().rposition(|&b| b == b':') else {
+            return Err(gettext(c"tcp address must be host:port"));
+        };
+        let host = CString::new(&bytes[..host_end]).expect("a C string holds no NUL");
+        let port = CStr::from_bytes_with_nul(&bytes[host_end + 1..]).expect("the address's tail");
 
-            // SAFETY: `addrinfo` is inhabited by the all-zero bit pattern.
-            let zeroed: addrinfo = unsafe { mem::zeroed() };
-            let hints = addrinfo {
-                ai_flags: AI_NUMERICSERV,
-                ai_family: AF_UNSPEC,
-                ai_socktype: SOCK_STREAM,
-                ..zeroed
-            };
-            // SAFETY: the caller's loop, a request on this frame, and the
-            // host and port halves of the copy above.
-            let looked_up = unsafe {
-                let (uv, port) = (uv_of(uv_loop), addr.add(host_end + 1));
-                uv_getaddrinfo(uv, &raw mut addr_req, None, addr, port, &raw const hints)
-            };
-            if looked_up != 0 {
-                fail(c"failed to lookup host or port");
-                break 'settled;
-            }
-            candidate = addr_req.addrinfo;
+        // SAFETY: `addrinfo` is inhabited by the all-zero bit pattern.
+        let zeroed: addrinfo = unsafe { mem::zeroed() };
+        let hints = addrinfo {
+            ai_flags: AI_NUMERICSERV,
+            ai_family: AF_UNSPEC,
+            ai_socktype: SOCK_STREAM,
+            ..zeroed
+        };
+        // SAFETY: the caller's loop, a request on this frame, and the host
+        // and port halves of the address.
+        let looked_up = unsafe {
+            let (uv, node, service) = (uv_of(uv_loop), host.as_ptr(), port.as_ptr());
+            uv_getaddrinfo(uv, &raw mut addr_req, None, node, service, &raw const hints)
+        };
+        if looked_up != 0 {
+            return Err(gettext(c"failed to lookup host or port"));
         }
-
-        let mut status: c_int = 1;
-        let mut closed = false;
-        // SAFETY: `uv_connect_t` is inhabited by the all-zero bit pattern.
-        let mut req: uv_connect_t = unsafe { mem::zeroed() };
-        req.data = (&raw mut status).cast();
-
-        loop {
-            let uv_stream: *mut uv_stream_t = if is_tcp {
-                // SAFETY: the caller's stream and loop, and one candidate
-                // from the lookup above.
-                unsafe {
-                    let tcp = conn.tcp();
-                    uv_tcp_init(uv_of(uv_loop), tcp);
-                    uv_tcp_nodelay(tcp, 1);
-                    uv_tcp_connect(&raw mut req, tcp, (*candidate).ai_addr, Some(connect_cb));
-                    tcp.cast()
-                }
-            } else {
-                // SAFETY: the caller's stream, loop and address.
-                unsafe {
-                    let pipe = conn.pipe();
-                    uv_pipe_init(uv_of(uv_loop), pipe, 0);
-                    uv_pipe_connect(&raw mut req, pipe, address, Some(connect_cb));
-                    pipe.cast()
-                }
-            };
-            // SAFETY: the caller's stream, now holding the connect attempt.
-            unsafe { stream_init(ptr::null_mut(), conn.as_ptr(), -1, uv_stream) };
-            conn.internal_close_cb = Some(connect_close_cb);
-            conn.internal_data = (&raw mut closed).cast();
-            closed = false;
-            status = 1;
-
-            let ms = i64::from(timeout);
-            // SAFETY: the main loop is live for as long as the editor is.
-            unsafe { process_events_until(MAIN_LOOP.ptr(), None, ms, || status != 1) };
-            if status == 0 {
-                success = true;
-                break 'settled;
-            }
-
-            may_close(conn);
-            // Wait for the close callback before retrying or returning:
-            // `stream` may be on the caller's stack.
-            // SAFETY: the main loop is live for as long as the editor is.
-            unsafe { process_events_until(MAIN_LOOP.ptr(), None, -1, || closed) };
-
-            // The short circuit is load-bearing: a pipe connect never looked
-            // an address up, so `candidate` is still null here.
-            // SAFETY: for TCP, the candidate is one of the lookup's entries.
-            if !is_tcp || unsafe { (*candidate).ai_next }.is_null() {
-                fail(c"connection refused");
-                break 'settled;
-            }
-            // SAFETY: as above.
-            candidate = unsafe { (*candidate).ai_next };
-        }
+        candidate = addr_req.addrinfo;
     }
+
+    let mut status: c_int = 1;
+    let mut closed = false;
+    // SAFETY: `uv_connect_t` is inhabited by the all-zero bit pattern.
+    let mut req: uv_connect_t = unsafe { mem::zeroed() };
+    req.data = (&raw mut status).cast();
+
+    let settled = loop {
+        let uv_stream: *mut uv_stream_t = if is_tcp {
+            // SAFETY: the caller's stream and loop, and one candidate from
+            // the lookup above.
+            unsafe {
+                let tcp = conn.tcp();
+                uv_tcp_init(uv_of(uv_loop), tcp);
+                uv_tcp_nodelay(tcp, 1);
+                uv_tcp_connect(&raw mut req, tcp, (*candidate).ai_addr, Some(connect_cb));
+                tcp.cast()
+            }
+        } else {
+            // SAFETY: the caller's stream, loop and address.
+            unsafe {
+                let pipe = conn.pipe();
+                uv_pipe_init(uv_of(uv_loop), pipe, 0);
+                uv_pipe_connect(&raw mut req, pipe, address.as_ptr(), Some(connect_cb));
+                pipe.cast()
+            }
+        };
+        // SAFETY: the caller's stream, now holding the connect attempt.
+        unsafe { stream_init(ptr::null_mut(), conn.as_ptr(), -1, uv_stream) };
+        conn.internal_close_cb = Some(connect_close_cb);
+        conn.internal_data = (&raw mut closed).cast();
+        closed = false;
+        status = 1;
+
+        let ms = i64::from(timeout);
+        // SAFETY: the main loop is live for as long as the editor is.
+        unsafe { process_events_until(MAIN_LOOP.ptr(), None, ms, || status != 1) };
+        if status == 0 {
+            break Ok(());
+        }
+
+        may_close(conn);
+        // Wait for the close callback before retrying or returning: `stream`
+        // may be on the caller's stack.
+        // SAFETY: the main loop is live for as long as the editor is.
+        unsafe { process_events_until(MAIN_LOOP.ptr(), None, -1, || closed) };
+
+        // The short circuit is load-bearing: a pipe connect never looked an
+        // address up, so `candidate` is still null here.
+        // SAFETY: for TCP, the candidate is one of the lookup's entries.
+        let next = if is_tcp {
+            unsafe { (*candidate).ai_next }
+        } else {
+            ptr::null_mut()
+        };
+        if next.is_null() {
+            break Err(gettext(c"connection refused"));
+        }
+        candidate = next;
+    };
 
     conn.internal_close_cb = None;
     conn.internal_data = ptr::null_mut();
-    // SAFETY: the two allocations made above.
-    unsafe {
-        xfree(addr.cast());
-        uv_freeaddrinfo(addr_req.addrinfo);
-    }
-    success
+    // SAFETY: the lookup made above, if any; libuv takes a null one.
+    unsafe { uv_freeaddrinfo(addr_req.addrinfo) };
+    settled
 }
 
 // ---------------------------------------------------------------------------

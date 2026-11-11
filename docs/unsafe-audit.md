@@ -136,9 +136,9 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 ### `event/` — libuv
 
 - **What:** libuv's loop, streams, timers, signal watchers and child
-  processes are C objects libuv holds _by address_ (`socket/mod.rs` 108,
+  processes are C objects libuv holds _by address_ (`socket/mod.rs` 102,
   `libuv.rs` 100 — mostly the declarations — `proc.rs` 70, `loop.rs` 58,
-  `channel.rs` 52, `libuv_proc.rs` 48, `rstream.rs` 41, `stream.rs` 34,
+  `channel.rs` 51, `libuv_proc.rs` 48, `rstream.rs` 41, `stream.rs` 34,
   `signal.rs` 17, `time.rs` 16, `wstream.rs` 14). Each region is a libuv
   call, a handle rebuilt from the address libuv hands back to a callback, or
   a pin projection.

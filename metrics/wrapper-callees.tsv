@@ -1,6 +1,6 @@
 count	callee	no_raw	defs	def
 41	f	0	0	
-33	CStr::from_ptr	0	0	
+31	CStr::from_ptr	0	0	
 20	from_raw_parts	0	0	
 17	zeroed	0	0	
 16	Reader::new	0	1	crates/nvim/src/event/rstream.rs
@@ -50,6 +50,7 @@ count	callee	no_raw	defs	def
 3	rstream_may_close	0	1	crates/nvim/src/event/rstream.rs
 3	state_terminal	0	1	crates/nvim/src/vterm/abi/mod.rs
 3	ts_tree_root_node	0	0	
+3	uv_freeaddrinfo	0	0	
 3	uv_fs_access	0	0	
 3	uv_fs_req_cleanup	0	0	
 3	uv_pipe_init	0	0	
@@ -111,7 +112,6 @@ count	callee	no_raw	defs	def
 2	ts_node_is_null	0	0	
 2	ts_tree_delete	0	0	
 2	tv_dict_free_dict	0	1	crates/nvim/src/eval/typval/handle.rs
-2	uv_freeaddrinfo	0	0	
 2	uv_fs_lstat	0	0	
 2	uv_listen	0	0	
 2	uv_pipe_open	0	0	
@@ -324,4 +324,3 @@ count	callee	no_raw	defs	def
 1	wstream_set_write_cb	0	1	crates/nvim/src/event/wstream.rs
 1	xcalloc_retry	0	1	crates/nvim/src/memory/mod.rs
 1	xmalloc	0	1	crates/nvim/src/memory/mod.rs
-1	xstrdup	0	1	crates/nvim/src/memory/mod.rs

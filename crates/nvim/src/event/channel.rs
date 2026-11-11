@@ -451,19 +451,10 @@ pub(crate) fn connect_socket(
     timeout: c_int,
 ) -> Result<(), &'static CStr> {
     let socket = socket_stream(id);
-    let mut error: *const c_char = ptr::null();
-    let (address, at_error) = (address.as_ptr(), &raw mut error);
     // SAFETY: the socket channel's stream, at its fixed address; the loop
     // runs only libuv's callbacks here, and the channel holds its own
     // reference until this returns.
-    let connected =
-        unsafe { socket_connect(main_loop_raw(), socket, tcp, address, timeout, at_error) };
-    if connected {
-        Ok(())
-    } else {
-        // SAFETY: `socket_connect` names every failure with a static string.
-        Err(unsafe { CStr::from_ptr(error) })
-    }
+    unsafe { socket_connect(main_loop_raw(), socket, tcp, address, timeout) }
 }
 
 /// Take over a pending connection as socket channel `id`'s stream, or
