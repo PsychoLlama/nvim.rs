@@ -637,6 +637,7 @@ const TYPE_HOMES: &[&str] = &[
     "src/event/objects.rs",
     "src/event/queue.rs",
     "src/event/uv.rs",
+    "src/event_queue/list.rs",
     "src/ex_eval/defs.rs",
     "src/ex_getln/state.rs::CmdRedraw",
     "src/extmark/mod.rs::BCount",

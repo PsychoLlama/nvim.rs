@@ -2274,7 +2274,7 @@ COPY_KEEPERS = {
     "crates/nvim/src/memline/state.rs::ChunkSize": "value",
     "crates/nvim/src/memline/state.rs::InfoPtr": "value",
     "crates/nvim/src/log.rs::NvimStats": "value",
-    "crates/nvim/src/types/multiqueue_list.rs::Handle": "value",
+    "crates/nvim/src/event_queue/list.rs::Handle": "value",
     "crates/nvim/src/viml/parser/parser.rs::ParserHighlightChunk": "value",
     "crates/nvim/src/viml/parser/parser.rs::ParserPosition": "value",
     "crates/nvim/src/types/pos.rs::LPos": "value",

@@ -20,7 +20,6 @@ pub mod cmdidx;
 pub mod eval;
 pub mod ex_cmds;
 pub mod key;
-pub mod multiqueue_list;
 pub mod pos;
 pub mod time;
 pub mod types;
