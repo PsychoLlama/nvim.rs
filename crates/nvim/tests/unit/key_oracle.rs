@@ -57,8 +57,8 @@ fn every_special_key_converts_both_ways() {
         let key = Key::from(special);
         assert!(key.is_special(), "{special:?}");
         assert_eq!(key.special(), Some(special));
-        assert_eq!(key.code(), special.code());
-        assert_eq!(Key::from_code(special.code()), special);
+        assert_eq!(key.raw(), special.code());
+        assert_eq!(Key::from_raw(special.code()), special);
         assert_eq!(key.as_char(), None);
         assert_eq!(key.as_byte(), None);
         // The escape and its inverse.

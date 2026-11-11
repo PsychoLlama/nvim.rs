@@ -184,13 +184,13 @@ fn escaping_k_special() {
     }
     for c in (0..0x900).chain([0x10000, 0x10ffff, 0x7fff_ffff, -1, -0x6b80]) {
         let mut out = Vec::new();
-        push_char_escaped(Key::from_code(c), &mut out);
+        push_char_escaped(Key::from_raw(c), &mut out);
         d.add(out.len() as i64);
         for modifiers in [ModMask::NONE, ModMask::CTRL | ModMask::SHIFT] {
             for escape_ks in [false, true] {
                 if c >= 0 || !escape_ks {
                     let mut out = Vec::new();
-                    push_special_key(Key::from_code(c), modifiers, escape_ks, &mut out);
+                    push_special_key(Key::from_raw(c), modifiers, escape_ks, &mut out);
                     d.add(out.len() as i64);
                     d.bytes(&out);
                 }

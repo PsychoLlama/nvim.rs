@@ -399,7 +399,7 @@ pub(super) fn read_compound(spl: &mut Spl, slang: &mut SpellLang, len: c_int) ->
 
         // Collect the set of all flags, and the set that may start a
         // compound, skipping the regexp punctuation.
-        if !has_char(c"?*+[]/", c) && !byte_in_flags(&all, b) {
+        if !has_char(c"?*+[]/", Codepoint::new(c)) && !byte_in_flags(&all, b) {
             all.push(b);
         }
         if atstart != 0 {

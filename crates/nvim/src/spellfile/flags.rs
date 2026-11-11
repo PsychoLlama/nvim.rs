@@ -239,7 +239,7 @@ pub(super) fn process_compflags(spin: &mut SpellInfo, aff: &mut AffFile, compfla
     let mut p = 0;
     while p < compflags.len() {
         // Pattern punctuation passes straight through.
-        if has_char(c"/?*+[]", c_int::from(compflags[p])) {
+        if has_char(c"/?*+[]", Codepoint::from(compflags[p])) {
             dest.push(compflags[p]);
             p += 1;
             continue;
@@ -259,7 +259,7 @@ pub(super) fn process_compflags(spin: &mut SpellInfo, aff: &mut AffFile, compfla
                         check_renumber(spin);
                         let id = spin.si_newcomp_id;
                         spin.si_newcomp_id -= 1;
-                        if !has_char(c"/?*+[]\\-^", id) {
+                        if !has_char(c"/?*+[]\\-^", Codepoint::new(id)) {
                             break id;
                         }
                     };

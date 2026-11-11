@@ -32,7 +32,6 @@
 
 use crate::keycodes::ModMask;
 use crate::keycodes::SpecialKey;
-use crate::mbyte::Codepoint;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::state::Step;
 use crate::types::{Key, KeyKind};
@@ -522,7 +521,8 @@ fn may_autocomplete_before_cursor(s: &mut InsertState) {
     {
         return;
     }
-    s.c = Key::from_code(char_before_cursor());
+    // Upstream leaves its −1 in the key when there is no character.
+    s.c = char_before_cursor().map_or(Key::from_raw(-1), Key::from_code);
     if printable(s.c) {
         start_autocomplete(s);
     }
@@ -570,7 +570,7 @@ fn insert_normal_char(s: &mut InsertState) {
                 // Insert the new value of v:char literally.
                 let mut at = 0;
                 while at < text.len() {
-                    s.c = Key::from_code(char_at(&text[at..]).get());
+                    s.c = Key::from_code(char_at(&text[at..]));
                     if s.c == Key::CAR || s.c == SpecialKey::Kenter || s.c == Key::NL {
                         let _ = ins_eol(s.c);
                     } else {
@@ -588,7 +588,7 @@ fn insert_normal_char(s: &mut InsertState) {
         }
     }
 
-    ins_try_si(s.c.code());
+    ins_try_si(s.c.raw());
 
     if s.c.is(' ') {
         s.inserted_space = true;
@@ -605,8 +605,8 @@ fn insert_normal_char(s: &mut InsertState) {
     // Insert the character, checking for an abbreviation on a special
     // one.  `CTRL-]` expands an abbreviation without being inserted
     // itself.  A character above 0x100 needs no CTRL-V in front of it.
-    if vim_iswordc(Codepoint::new(s.c.code()))
-        || (!check_abbr(s.c, s.c.code() >= 0x100) && s.c != Key::CTRL_RSB)
+    if vim_iswordc(s.c.code())
+        || (!check_abbr(s.c, s.c.code().get() >= 0x100) && s.c != Key::CTRL_RSB)
     {
         insert_special(s.c, false, false);
         REVINS_LEGAL.set(REVINS_LEGAL.get() + 1);
@@ -664,5 +664,5 @@ fn compl_option_ok(cpt_only: bool) -> bool {
 /// Is `c` a character that can be shown on the screen?
 #[inline(always)]
 fn printable(c: Key) -> bool {
-    vim_isprintc(Codepoint::new(c.code()))
+    vim_isprintc(c.code())
 }

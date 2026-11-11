@@ -31,7 +31,6 @@
 
 use crate::cstr::byte_at;
 use crate::keycodes::SpecialKey;
-use crate::mbyte::Codepoint;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::narrow::len_as_int;
 use crate::state::Step;
@@ -377,8 +376,9 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
             && !key_available()
             && Win::current().w_cursor.col > ColNr::ZERO
         {
-            s.c = Key::from_code(char_before_cursor());
-            if vim_isprintc(Codepoint::new(s.c.code())) {
+            // Upstream leaves its −1 in the key when there is no character.
+            s.c = char_before_cursor().map_or(Key::from_raw(-1), Key::from_code);
+            if vim_isprintc(s.c.code()) {
                 ins_compl_enable_autocomplete();
                 ins_compl_init_get_longest();
                 insert_do_complete(s);
@@ -590,7 +590,7 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
             Some(text) => {
                 let mut at = 0;
                 while at < text.len() {
-                    ins_compl_addleader(Key::from_code(char_at(&text[at..]).get()));
+                    ins_compl_addleader(Key::from_code(char_at(&text[at..])));
                     at += c_cluster_len(&text[at..]);
                 }
             }

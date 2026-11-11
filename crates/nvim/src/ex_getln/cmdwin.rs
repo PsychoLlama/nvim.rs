@@ -110,7 +110,7 @@ pub(crate) fn derive_cedit_key() -> Result<(), OptError> {
         if n == 0 || vim_isprintc(Codepoint::new(n)) {
             return Err(E_INVARG.into());
         }
-        CEDIT_KEY.set(Some(Key::from_code(n)));
+        CEDIT_KEY.set(Some(Key::from_raw(n)));
     }
     Ok(())
 }

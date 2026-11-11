@@ -165,7 +165,7 @@ fn name_length(name: &[u8], options: FileNameOpts) -> usize {
         if !(vim_isfilec(Codepoint::from(at(len)))
             || escaped_space
             || (hyp && url_at(name, len))
-            || (is_url && has_char(c":?&=", c_int::from(at(len)))))
+            || (is_url && has_char(c":?&=", Codepoint::from(at(len)))))
         {
             break;
         }
@@ -184,7 +184,7 @@ fn name_length(name: &[u8], options: FileNameOpts) -> usize {
 
     // If there is trailing punctuation, remove it. But don't remove "..",
     // which could be a directory name.
-    if len > 2 && has_char(c".,:;!", c_int::from(name[len - 1])) && name[len - 2] != b'.' {
+    if len > 2 && has_char(c".,:;!", Codepoint::from(name[len - 1])) && name[len - 2] != b'.' {
         len -= 1;
     }
     len

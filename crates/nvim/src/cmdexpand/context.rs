@@ -80,7 +80,7 @@ fn skipdigits(text: &[u8], mut i: usize) -> usize {
 
 /// Whether the byte at `i` is one of `set`; never for the NUL at the end.
 pub(super) fn is_one_of(set: &CStr, text: &[u8], i: usize) -> bool {
-    has_char(set, c_int::from(byte(text, i)))
+    has_char(set, Codepoint::from(byte(text, i)))
 }
 
 /// The command after the next `|` or newline from `i`: upstream's

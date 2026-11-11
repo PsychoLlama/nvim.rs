@@ -260,7 +260,7 @@ pub(crate) fn put_escstr(out: &mut Vec<u8>, text: &[u8], what: EscTarget) {
                     None => c = Key::byte(at(i)),
                     Some((bytes, used)) => {
                         // Retrieve the codepoint from the unescaped text.
-                        c = Key::from_code(char_at(cstr::in_bytes(&bytes).to_bytes()).get());
+                        c = Key::from_code(char_at(cstr::in_bytes(&bytes).to_bytes()));
                         i += used - 1;
                     }
                 }
@@ -307,7 +307,7 @@ pub(crate) fn put_escstr(out: &mut Vec<u8>, text: &[u8], what: EscTarget) {
             out.push(0x16); // CTRL-V
         }
         // `putc` writes the low byte.
-        out.push(c.code().to_le_bytes()[0]);
+        out.push(c.raw().to_le_bytes()[0]);
         i += 1;
     }
 }

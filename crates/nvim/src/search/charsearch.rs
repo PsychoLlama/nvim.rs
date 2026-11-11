@@ -111,11 +111,11 @@ pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> 
     let mut count = cmd_arg.count1; // repeat count
     let mut stop = true;
 
-    if c != NUL {
+    if c != Codepoint::NUL {
         // Normal search: remember the arguments for a later repeat,
         // but not while redoing (the remembered ones are in play).
         if !KEY_STUFFED.get() {
-            LASTC.set(low_byte(c));
+            LASTC.set(low_byte(c.get()));
             set_csearch_direction(dir as Direction);
             set_csearch_until(c_int::from(t_cmd));
             let mut bytes = LASTC_BYTES.get();
@@ -128,7 +128,7 @@ pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> 
                     *to = from;
                 }
             } else {
-                let len = encode_char(Codepoint::new(c), &mut bytes);
+                let len = encode_char(c, &mut bytes);
                 LASTC_BYTELEN.set(c_int::try_from(len).expect("a character's bytes"));
             }
             LASTC_BYTES.set(bytes);
@@ -144,7 +144,7 @@ pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> 
             LASTCDIR.get() as c_int
         };
         t_cmd = LAST_T_CMD.get();
-        c = c_int::from(LASTC.get());
+        c = Codepoint::from(LASTC.get());
         // For multi-byte re-use lastc_bytes[] and lastc_bytelen.
 
         // Force a move of at least one character, so that ";" and ","
@@ -182,7 +182,7 @@ pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> 
                 col -= head_off(line, col - 1) + 1;
             }
             let hit = if bytelen <= 1 {
-                c_int::from(line[col]) == c
+                c_int::from(line[col]) == c.get()
             } else {
                 prefix(&line[col..], bytelen) == want
             };

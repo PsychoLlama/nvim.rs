@@ -525,7 +525,7 @@ fn enter_editor(use_remote_ui: bool) {
 
     if !RESTART_EDIT.get().is_nul() {
         // A `-c startinsert` and friends: push the key that gets there.
-        stuff_readbuf_char(Key::from_code(-(253 + (c_int::from(KE_NOP) << 8))));
+        stuff_readbuf_char(Key::from_raw(-(253 + (c_int::from(KE_NOP) << 8))));
     }
 
     if CB_FLAGS.get() & (OPT_CB_FLAG_UNNAMED | OPT_CB_FLAG_UNNAMEDPLUS) != 0 {

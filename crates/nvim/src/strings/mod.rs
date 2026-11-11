@@ -19,7 +19,7 @@ use crate::mbyte::{cluster_len, encode_char};
 use crate::memory::XString;
 use crate::semsg;
 use crate::types::{Failed, TypVal};
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
 // The carve of the transpiled module; see each child's docs.
 mod case;
@@ -96,8 +96,8 @@ pub fn find_char(haystack: &[u8], c: Codepoint) -> Option<usize> {
 /// upstream's `vim_strchr()` is for: two thirds of its call sites are a
 /// `!= NULL` test over an option's value or a literal run of characters,
 /// and none of those wants a pointer.
-pub(crate) fn has_char(set: &CStr, c: c_int) -> bool {
-    find_char(set.to_bytes(), Codepoint::new(c)).is_some()
+pub(crate) fn has_char(set: &CStr, c: Codepoint) -> bool {
+    find_char(set.to_bytes(), c).is_some()
 }
 
 /// The byte offset at which `needle` occurs in `haystack`, or `None`.
@@ -221,11 +221,11 @@ mod tests {
 
     #[test]
     fn has_char_is_find_char_over_a_c_string() {
-        assert!(has_char(c"abc", i32::from(b'b')));
-        assert!(!has_char(c"abc", i32::from(b'z')));
-        assert!(!has_char(c"", i32::from(b'a')));
-        assert!(!has_char(c"abc", 0)); // the terminator is not a member
-        assert!(has_char(c"a\u{ab}b", 0xAB));
+        assert!(has_char(c"abc", Codepoint::byte(b'b')));
+        assert!(!has_char(c"abc", Codepoint::byte(b'z')));
+        assert!(!has_char(c"", Codepoint::byte(b'a')));
+        assert!(!has_char(c"abc", Codepoint::NUL)); // the terminator is not a member
+        assert!(has_char(c"a\u{ab}b", Codepoint::new(0xAB)));
     }
 
     #[test]

@@ -52,7 +52,7 @@ pub fn msg_putchar_hl(c: Codepoint, hl_id: c_int) {
         // `K_SECOND`/`K_THIRD`, less their `c == K_SPECIAL`/`c == NUL`
         // arms: both of those codes are positive, so neither is reachable
         // here.
-        let name = termcap_name(Key::from_code(c.get()));
+        let name = termcap_name(Key::from_code(c));
         buf[0] = K_SPECIAL;
         buf[1] = name[0];
         buf[2] = name[1];
@@ -395,7 +395,7 @@ pub(crate) fn special_key_into(
         || (replace_spaces && c == c_int::from(b' '))
         || (replace_lt && c == c_int::from(b'<'))
     {
-        let name = get_special_key_name(Key::from_code(c), modifiers);
+        let name = get_special_key_name(Key::from_raw(c), modifiers);
         out.extend_from_slice(cstr::in_bytes(&name).to_bytes());
         return;
     }
@@ -406,7 +406,7 @@ pub(crate) fn special_key_into(
 
 /// The key code a two-byte termcap name stands for (C's `TO_SPECIAL`).
 fn to_special(second: u8, third: u8) -> c_int {
-    key_unescape(second, third).code()
+    key_unescape(second, third).raw()
 }
 
 /// Show a string, cutting the middle out with `...` if it would not fit on the

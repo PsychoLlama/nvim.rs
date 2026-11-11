@@ -37,6 +37,7 @@
 use crate::cstr;
 use crate::env::XdgVar;
 use crate::env::{home_to_tilde, xdg_home};
+use crate::mbyte::Codepoint;
 use crate::semsg;
 use crate::smsg;
 use crate::spell::{SPELL_ADD_BAD, SpellAddType};
@@ -262,7 +263,7 @@ fn init_spellfile() {
     let mut lstart = 0;
     let mut lend = 0;
     let mut aspath = false;
-    while lend < spl.len() && !has_char(c",._", c_int::from(spl[lend])) {
+    while lend < spl.len() && !has_char(c",._", Codepoint::from(spl[lend])) {
         if vim_ispathsep(c_int::from(spl[lend])) {
             aspath = true;
             lstart = lend + 1;

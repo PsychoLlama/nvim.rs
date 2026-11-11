@@ -194,7 +194,7 @@ pub fn swapchar(op_type: OpType, pos: Pos) -> bool {
         };
         let _ = del_bytes(len.get(), false, false);
         // The new character, from the case tables, as the key that types it.
-        ins_char(Key::from_code(nc.get()));
+        ins_char(Key::from_code(nc));
         Win::current().w_cursor = saved;
     } else {
         // Both are below 0x80 here.

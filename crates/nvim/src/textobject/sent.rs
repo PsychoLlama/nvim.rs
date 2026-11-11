@@ -140,7 +140,7 @@ fn next_sentence(
     let mut found_dot = false;
     loop {
         let c = gchar_pos(&pos);
-        if !(ascii_iswhite(c) || has_char(c".!?)]\"'", c.get())) {
+        if !(ascii_iswhite(c) || has_char(c".!?)]\"'", c)) {
             break;
         }
         let mut tpos = pos;
@@ -153,12 +153,12 @@ fn next_sentence(
         if found_dot {
             break;
         }
-        if has_char(c".!?", c.get()) {
+        if has_char(c".!?", c) {
             found_dot = true;
         }
-        if has_char(c")]\"'", c.get())
+        if has_char(c")]\"'", c)
             // `tpos` is a position of the current buffer.
-            && !has_char(c".!?)]\"'", gchar_pos(&tpos).get())
+            && !has_char(c".!?)]\"'", gchar_pos(&tpos))
         {
             break;
         }
@@ -191,7 +191,7 @@ fn next_sentence(
                     break;
                 }
                 c = gchar_pos(&tpos);
-                if !has_char(c")]\"'", c.get()) {
+                if !has_char(c")]\"'", c) {
                     break;
                 }
             }

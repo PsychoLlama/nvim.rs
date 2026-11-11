@@ -41,6 +41,7 @@ use crate::eval::eval_foldexpr;
 use crate::eval::vars::set_vim_var_nr;
 use crate::getchar::state::{GOT_INT, KEY_TYPED};
 use crate::indent::{get_indent_buf, get_sw_value};
+use crate::mbyte::Codepoint;
 use crate::r#move::changed_window_setting;
 use crate::os::input::line_breakcheck;
 use crate::strings::has_char;
@@ -863,7 +864,8 @@ pub(super) fn foldlevel_indent(line: &mut FoldLine) {
     let first = byte_at(text, skip::white(text));
     // A blank line, or one starting with a 'foldignore' character, takes
     // its level from its neighbours.
-    if c_int::from(first) == NUL || has_char(win.w_onebuf_opt.wo_fdi.cstr(), c_int::from(first)) {
+    if c_int::from(first) == NUL || has_char(win.w_onebuf_opt.wo_fdi.cstr(), Codepoint::from(first))
+    {
         line.lvl = if lnum == LineNr::ONE || lnum == buf.b_ml.ml_line_count {
             0
         } else {

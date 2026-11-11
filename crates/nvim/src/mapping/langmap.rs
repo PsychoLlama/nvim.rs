@@ -21,7 +21,6 @@
 
 use super::*;
 use crate::formatted;
-use crate::mbyte::Codepoint;
 use crate::mbyte::{char_at, char_len};
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
@@ -95,7 +94,7 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
     // The byte at `at`, with the option's own NUL past the end.
     let byte = |at: usize| opt.get(at).copied().unwrap_or(0);
     let tail = |at: usize| opt.get(at..).unwrap_or_default();
-    let char_at = |at: usize| Key::from_code(char_at(tail(at)).get());
+    let char_at = |at: usize| Key::from_code(char_at(tail(at)));
     let len_at = |at: usize| cluster_len(tail(at));
     // Advance past one character, honouring a `\` escape.
     let skip = |at: usize| {
@@ -162,7 +161,7 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
                 let missing = c"E357: 'langmap': Matching character missing for %s";
                 return fail(
                     missing,
-                    crate::cstr::in_bytes(&transchar(Codepoint::new(from.code()))).to_bytes(),
+                    crate::cstr::in_bytes(&transchar(from.code())).to_bytes(),
                 );
             }
 
@@ -180,7 +179,7 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
                 }
                 // The closure is a store; it cannot re-enter the cell.
                 // Upstream's `(uint8_t)`: a wider `to` keeps its low byte.
-                let to = to.code().to_le_bytes()[0];
+                let to = to.raw().to_le_bytes()[0];
                 LANGMAP_MAPCHAR.with_mut(|map| map[usize::from(from)] = to);
             } else {
                 langmap_set_entry(from, to);

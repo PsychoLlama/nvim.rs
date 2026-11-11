@@ -179,14 +179,14 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: 
         numc -= (op.end_vcol - bd.end_vcol) + 1;
     }
     // A double-wide character only fits half as many times.
-    if utf_char2cells(Codepoint::new(c.code())) > 1 {
+    if utf_char2cells(c.code()) > 1 {
         if numc & 1 != 0 && !bd.is_short {
             bd.endspaces += 1;
         }
         numc /= 2;
     }
     let mut char_bytes = [0u8; MB_MAXCHAR];
-    let encoded_len = encode_char(Codepoint::new(c.code()), &mut char_bytes);
+    let encoded_len = encode_char(c.code(), &mut char_bytes);
     let encoded = &char_bytes[..encoded_len];
 
     // Up to the replaced part, then the pre-spaces; then, unless the line

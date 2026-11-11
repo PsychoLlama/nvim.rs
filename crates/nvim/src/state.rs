@@ -284,7 +284,7 @@ fn ve_flags_allow(
 ) -> bool {
     let has = |flag: OptVeFlags| flags & flag != 0;
     flags == OPT_VE_FLAG_ALL
-        || has(OPT_VE_FLAG_BLOCK) && visual_active && visual_mode == Key::CTRL_V.code()
+        || has(OPT_VE_FLAG_BLOCK) && visual_active && visual_mode == Key::CTRL_V.raw()
         || has(OPT_VE_FLAG_INSERT) && state & MODE_INSERT != 0
 }
 
@@ -390,7 +390,7 @@ struct ModeInputs {
 
 /// How far a visual mode's key is above the select mode's: `v` - `s`, which
 /// takes `v`/`V`/CTRL-V to `s`/`S`/CTRL-S.
-const VISUAL_TO_SELECT: c_int = Key::ascii(b'v').code() - Key::ascii(b's').code();
+const VISUAL_TO_SELECT: c_int = Key::ascii(b'v').code().get() - Key::ascii(b's').code().get();
 
 /// The mode `m` describes, as `mode(1)` spells it.
 ///
@@ -464,7 +464,7 @@ fn mode_name(m: &ModeInputs) -> ModeName {
             }
         } else if is_restart_key(m.restart_edit) {
             out.push(b'i');
-            out.push_key(m.restart_edit.code());
+            out.push_key(m.restart_edit.raw());
         }
     }
     out.name
@@ -653,9 +653,9 @@ mod tests {
             len: 0,
         };
         out.push(b'n');
-        out.push_key(Key::ascii(b'o').code());
+        out.push_key(Key::ascii(b'o').raw());
         // `CTRL-V` is 22, and `MOTION_FORCE` may hold it.
-        out.push_key(Key::CTRL_V.code());
+        out.push_key(Key::CTRL_V.raw());
         assert_eq!(out.name, [110, 111, 22, 0]);
     }
 
@@ -710,13 +710,13 @@ mod tests {
             all_onemore,
             MODE_NORMAL,
             true,
-            Key::CTRL_V.code() - 1
+            Key::CTRL_V.code().get() - 1
         ));
         assert!(ve_flags_allow(
             all_onemore,
             MODE_NORMAL,
             true,
-            Key::CTRL_V.code()
+            Key::CTRL_V.raw()
         ));
         assert!(ve_flags_allow(all_onemore, MODE_INSERT, false, 0));
         // `onemore` alone shares no bit with any of the three.
@@ -724,7 +724,7 @@ mod tests {
             OPT_VE_FLAG_ONEMORE,
             MODE_INSERT,
             true,
-            Key::CTRL_V.code()
+            Key::CTRL_V.raw()
         ));
     }
 
@@ -737,7 +737,7 @@ mod tests {
             OPT_VE_FLAG_BLOCK,
             MODE_NORMAL,
             true,
-            Key::CTRL_V.code()
+            Key::CTRL_V.raw()
         ));
         assert!(!ve_flags_allow(OPT_VE_FLAG_INSERT, MODE_NORMAL, false, 0));
         assert!(ve_flags_allow(OPT_VE_FLAG_INSERT, MODE_INSERT, false, 0));
@@ -836,7 +836,7 @@ mod tests {
         let blockwise = ModeInputs {
             visual_active: true,
             visual_select: true,
-            visual_mode: Key::CTRL_V.code(),
+            visual_mode: Key::CTRL_V.raw(),
             ..quiet(MODE_NORMAL)
         };
         assert_eq!(mode_name(&blockwise), [19, 0, 0, 0]);
@@ -855,7 +855,7 @@ mod tests {
     fn a_resuming_select_mode_appends_s() {
         let resuming = ModeInputs {
             visual_active: true,
-            visual_mode: Key::ascii(b'V').code(),
+            visual_mode: Key::ascii(b'V').raw(),
             restart_visual_select: true,
             ..quiet(MODE_NORMAL)
         };
@@ -964,7 +964,7 @@ mod tests {
                                 ctrl_x_pending: true,
                                 visual_active: visual,
                                 visual_select: compl,
-                                visual_mode: Key::ascii(b'V').code(),
+                                visual_mode: Key::ascii(b'V').raw(),
                                 restart_visual_select: true,
                                 terminal_buffer: finish,
                                 finish_op: finish,

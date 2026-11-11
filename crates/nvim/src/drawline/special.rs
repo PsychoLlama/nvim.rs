@@ -447,7 +447,7 @@ impl Cells {
             // 'concealcursor' does not name "v", so the Visual area shows
             // its text.
             && !(self.lnum_in_visual_area
-                && !has_char(window.w_onebuf_opt.wo_cocu.cstr(), ::core::ffi::c_int::from(b'v')));
+                && !has_char(window.w_onebuf_opt.wo_cocu.cstr(), Codepoint::byte(b'v')));
         if !wants_conceal {
             self.prev_syntax_id = 0;
             self.is_concealing = false;

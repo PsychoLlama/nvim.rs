@@ -29,7 +29,6 @@
 use crate::cstr::{self, byte_at};
 use crate::keycodes::ModMask;
 use crate::keycodes::SpecialKey;
-use crate::mbyte::Codepoint;
 use crate::mbyte::{c_char_info, c_next_cluster};
 use crate::os::cshim::ctype_bits;
 use crate::types::Key;
@@ -153,7 +152,7 @@ pub(crate) fn get_literal(no_simplify: bool) -> Key {
         }
     }
 
-    let mut key = Key::from_code(cc);
+    let mut key = Key::from_raw(cc);
     if i == 0 {
         // No number was entered: the key itself is the answer.  NUL is
         // stored as NL.
@@ -257,7 +256,7 @@ pub(crate) fn ins_digraph() -> Key {
         did_putchar = false;
         if redrawing() && !char_avail() {
             ins_redraw(false);
-            if char2cells(Codepoint::new(c.code())) == 1 {
+            if char2cells(c.code()) == 1 {
                 ins_redraw(false);
                 edit_putchar(c, true);
                 did_putchar = true;
@@ -319,7 +318,7 @@ pub(crate) fn ins_copychar(lnum: LineNr) -> Key {
     let c = if chr.value < 0 {
         Key::byte(byte_at(&line, at))
     } else {
-        Key::from_code(chr.value)
+        Key::from_raw(chr.value)
     };
     if c.is_nul() {
         vim_beep(OPT_BO_FLAG_COPY as ::core::ffi::c_uint);

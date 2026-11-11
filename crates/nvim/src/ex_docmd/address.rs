@@ -25,6 +25,7 @@ use crate::cstr::byte_at;
 use crate::ex_docmd::{CmdError, ex_msg, is_user_cmd};
 use crate::mark::{MARK_ALL, MARK_BUF_LOCAL};
 use crate::mark::{mark_check, mark_get, mark_get_visual, mark_move_to};
+use crate::mbyte::Codepoint;
 use crate::narrow::{len_as_int, number_as_lnum};
 use crate::search::{do_search_in, search_last_pattern};
 use crate::strings::has_char;
@@ -308,7 +309,7 @@ pub fn skip_range(text: &[u8], mut ctx: Option<&mut ExpandContext>) -> usize {
         }
     };
     let mut at = 0;
-    while has_char(c" \t0123456789.$%'/?-+,;\\", c_int::from(byte(at))) {
+    while has_char(c" \t0123456789.$%'/?-+,;\\", Codepoint::from(byte(at))) {
         if byte(at) == b'\\' {
             // Only `\/`, `\?` and `\&` are addresses; any other
             // backslash ends the range.

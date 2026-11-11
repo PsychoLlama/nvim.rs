@@ -83,7 +83,7 @@ pub fn get_expr_indent() -> c_int {
 
     // Reset `DID_THROW`, unless 'debug' has "throw" and we are inside a
     // try/catch.
-    let debug_throw = p_debug(|value| has_char(value, c_int::from(b't')));
+    let debug_throw = p_debug(|value| has_char(value, Codepoint::byte(b't')));
     if DID_THROW.get() && (!debug_throw || TRYLEVEL.get() == 0) {
         handle_did_throw();
         DID_THROW.set(false);

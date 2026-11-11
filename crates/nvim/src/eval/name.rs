@@ -57,7 +57,8 @@ pub(crate) fn env_name_len(text: &[u8]) -> usize {
 /// else it ends it.
 pub(crate) fn id_len(text: &[u8]) -> usize {
     for (p, &c) in text.iter().enumerate() {
-        let scope_ends = || p > 1 || (p == 1 && !has_char(NAMESPACE_CHAR, c_int::from(text[0])));
+        let scope_ends =
+            || p > 1 || (p == 1 && !has_char(NAMESPACE_CHAR, Codepoint::from(text[0])));
         if !eval_isnamec(c_int::from(c)) || (c == b':' && scope_ends()) {
             return p;
         }
@@ -213,7 +214,7 @@ pub(crate) fn name_end(text: &[u8], flags: c_int) -> NameEnd {
             // unless a `}` came just before it, which is a curly-braces
             // name that produced the scope letter itself.
             let not_after_brace = p > 1 && text[p - 1] != b'}';
-            let scoped = !has_char(NAMESPACE_CHAR, c_int::from(text[0]));
+            let scoped = !has_char(NAMESPACE_CHAR, Codepoint::from(text[0]));
             if not_after_brace || (p == 1 && scoped) {
                 break;
             }

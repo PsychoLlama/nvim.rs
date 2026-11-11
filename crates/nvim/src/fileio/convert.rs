@@ -832,9 +832,9 @@ pub(crate) struct FormatGuess {
 impl FormatGuess {
     pub(crate) fn from_ffs() -> Self {
         FormatGuess {
-            try_dos: p_ffs(|value| has_char(value, c_int::from(b'd'))),
-            try_unix: c_int::from(p_ffs(|value| has_char(value, c_int::from(b'x')))),
-            try_mac: c_int::from(p_ffs(|value| has_char(value, c_int::from(b'm')))),
+            try_dos: p_ffs(|value| has_char(value, Codepoint::byte(b'd'))),
+            try_unix: c_int::from(p_ffs(|value| has_char(value, Codepoint::byte(b'x')))),
+            try_mac: c_int::from(p_ffs(|value| has_char(value, Codepoint::byte(b'm')))),
         }
     }
 

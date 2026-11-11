@@ -25,6 +25,7 @@ use crate::global_cell::GlobalCell;
 use crate::indent::{get_sw_value, get_sw_value_col};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::{LuaRetMode, nlua_exec_cstr};
+use crate::mbyte::Codepoint;
 use crate::memline::Lines;
 use crate::memory::ThinCString;
 use crate::menu::MENU_ALL_MODES;
@@ -360,7 +361,7 @@ pub fn f_state(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut flags = Vec::<u8>::new();
     let include = args.first().map(|arg| numbuf.string(arg));
     let mut add = |c: u8| {
-        if include.is_none_or(|include| has_char(include, c_int::from(c))) {
+        if include.is_none_or(|include| has_char(include, Codepoint::from(c))) {
             flags.push(c);
         }
     };

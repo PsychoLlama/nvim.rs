@@ -18,7 +18,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use crate::keycodes::SpecialKey;
-use crate::mbyte::Codepoint;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
@@ -308,8 +307,8 @@ pub(crate) fn add_to_showcmd(c: Key) -> bool {
 
     let mut mbyte_buf = [0u8; 7];
     let display;
-    let extra: &[u8] = if c.code() <= 0x7f || !vim_isprintc(Codepoint::new(c.code())) {
-        display = transchar(Codepoint::new(c.code()));
+    let extra: &[u8] = if c.code() <= 0x7f || !vim_isprintc(c.code()) {
+        display = transchar(c.code());
         // A space is shown as its byte value, so it is not lost in the
         // padding the area is drawn with.
         if display[0] == b' ' {
@@ -318,7 +317,7 @@ pub(crate) fn add_to_showcmd(c: Key) -> bool {
             cstr::in_bytes(&display).to_bytes()
         }
     } else {
-        let n = encode_char(Codepoint::new(c.code()), &mut mbyte_buf);
+        let n = encode_char(c.code(), &mut mbyte_buf);
         &mbyte_buf[..n]
     };
 

@@ -22,6 +22,7 @@ use crate::getchar::Remap;
 use crate::keycodes::ModMask;
 use crate::keycodes::{SpecialKey, key_unescape};
 use crate::lua::executor::funcref_description;
+use crate::mbyte::Codepoint;
 use crate::memory::XString;
 use crate::message::msg_put_ascii;
 use crate::option::defs::CpoFlag;
@@ -120,7 +121,7 @@ pub(crate) fn showmap(mp: &MapBlock, local: bool) {
 pub(crate) fn translate_mapping(str_in: &[u8], cpo: &CStr) -> Vec<u8> {
     let mut out = Vec::<u8>::new();
 
-    let cpo_bslash = has_char(cpo, CpoFlag::BSLASH.as_c_int());
+    let cpo_bslash = has_char(cpo, Codepoint::new(CpoFlag::BSLASH.as_c_int()));
     // A `K_SPECIAL` escape is three bytes; upstream's tests spell that as
     // "the two bytes after this one are not the NUL".
     let three_at =
@@ -173,7 +174,7 @@ fn push_typed_key(out: &mut Vec<u8>, c: Key, cpo_bslash: bool) {
     }
     if !c.is_nul() {
         // Below 0x100 here: a wider key was printed by name above.
-        out.push(c.code().to_le_bytes()[0]);
+        out.push(c.raw().to_le_bytes()[0]);
     }
 }
 

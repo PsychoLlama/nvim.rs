@@ -34,6 +34,7 @@ use crate::guard::Suppress;
 use crate::lua::executor::{
     nlua_func_exists, nlua_is_table_from_lua, nlua_typval_eval, register_table_as_callable,
 };
+use crate::mbyte::Codepoint;
 use crate::memory::{ThinCString, XString};
 use crate::message::emsg;
 use crate::message::state::{EMSG_NOREDIR, EMSG_SILENT, MSG_COL, NEED_CLR_EOS, REDIR_OFF};
@@ -306,7 +307,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     // checking would load it.
     let mut trans_name = None;
     if let Some(written) = given
-        && ((use_string && !has_char(written, c_int::from(AUTOLOAD_CHAR))) || is_funcref)
+        && ((use_string && !has_char(written, Codepoint::from(AUTOLOAD_CHAR))) || is_funcref)
     {
         let flags = TFN_INT | TFN_QUIET | TFN_NO_AUTOLOAD | TFN_NO_DEREF;
         let written = written.to_bytes();

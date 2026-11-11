@@ -33,7 +33,7 @@ pub fn merge_modifiers(key: Key, modifiers: &mut ModMask) -> Key {
     }
     // On the code rather than through `as_byte`: the mapping walk asks this
     // for every typeahead byte it compares under CTRL.
-    let c = key.code();
+    let c = key.raw();
     let merged = if (Key::ascii(b'@')..=Key::DEL).contains(&key) {
         match c & 0x1f {
             0 => SpecialKey::Zero.code(),
@@ -41,14 +41,14 @@ pub fn merge_modifiers(key: Key, modifiers: &mut ModMask) -> Key {
         }
     } else if key.is('6') {
         // CTRL-6 is equivalent to CTRL-^.
-        Key::CTRL_HAT.code()
+        Key::CTRL_HAT.raw()
     } else {
         c
     };
     if merged != c {
         modifiers.clear(ModMask::CTRL);
     }
-    Key::from_code(merged)
+    Key::from_raw(merged)
 }
 
 /// [`merge_modifiers`] applied to the global `MOD_MASK`, which is where the
@@ -194,7 +194,7 @@ fn vgetc_from_typeahead() -> Key {
             }
             drop(unmapped);
             // The bytes are followed by the rest of the zeroed buffer.
-            c = Key::from_code(char_at(&buf).get());
+            c = Key::from_code(char_at(&buf));
         }
 
         // When mappings are enabled (so not after i_CTRL-V) and the user

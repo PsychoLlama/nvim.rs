@@ -84,11 +84,11 @@ pub(crate) struct VisualMode(c_int);
 
 impl VisualMode {
     /// Charwise, entered with `v`.
-    pub(crate) const CHAR: Self = Self(Key::ascii(b'v').code());
+    pub(crate) const CHAR: Self = Self(Key::ascii(b'v').raw());
     /// Linewise, entered with `V`.
-    pub(crate) const LINE: Self = Self(Key::ascii(b'V').code());
+    pub(crate) const LINE: Self = Self(Key::ascii(b'V').raw());
     /// Blockwise, entered with CTRL-V.
-    pub(crate) const BLOCK: Self = Self(Key::CTRL_V.code());
+    pub(crate) const BLOCK: Self = Self(Key::CTRL_V.raw());
     /// The `NUL` that `RESEL_V_ISUAL_MODE` and `V_ISUAL_MODE_ORIG` use to mean
     /// "nothing remembered".
     pub(crate) const NONE: Self = Self(NUL);
@@ -594,10 +594,10 @@ pub(crate) fn nv_visual(cmd_arg: &mut CmdArg) {
     if visual_active() {
         // The same key again leaves Visual mode; a different one switches
         // to that kind of selection.
-        if visual_mode() == VisualMode::from_raw(cmd_arg.cmdchar.code()) {
+        if visual_mode() == VisualMode::from_raw(cmd_arg.cmdchar.raw()) {
             end_visual_mode();
         } else {
-            set_visual_mode(VisualMode::from_raw(cmd_arg.cmdchar.code()));
+            set_visual_mode(VisualMode::from_raw(cmd_arg.cmdchar.raw()));
             showmode();
             may_trigger_modechanged();
         }
@@ -649,7 +649,7 @@ pub(crate) fn may_start_select(c: Key) {
 
 /// Enter Visual mode of kind `c` at the cursor.
 pub(crate) fn n_start_visual_mode(c: Key) {
-    set_visual_mode(VisualMode::from_raw(c.code()));
+    set_visual_mode(VisualMode::from_raw(c.raw()));
     set_visual_active(true);
     V_ISUAL_RESELECT.set(1);
     // A block selection starting inside a TAB starts at the column the
@@ -826,7 +826,7 @@ pub(crate) fn nv_object(cmd_arg: &mut CmdArg) {
         b's' => op.on_copy(|op| current_sent(op, n, include).is_ok()),
         b'"' | b'\'' | b'`' => {
             let quote = cmd_arg.nchar;
-            op.on_copy(|op| current_quote(op, n, include, quote.code()).is_ok())
+            op.on_copy(|op| current_quote(op, n, include, quote.raw()).is_ok())
         }
         _ => false,
     };

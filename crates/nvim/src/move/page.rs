@@ -239,7 +239,7 @@ pub fn do_check_cursorbind() {
             // Make sure the cursor is in a valid position. `RESTART_EDIT` is
             // set for the duration so that it may sit beyond the end of line.
             let restart_edit_save = RESTART_EDIT.get();
-            RESTART_EDIT.set(Key::from_code(1));
+            RESTART_EDIT.set(Key::from_raw(1));
             check_cursor(win);
             // Avoid a scroll here for the cursor position: 'scrollbind' is
             // more important.

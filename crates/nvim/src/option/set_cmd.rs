@@ -614,7 +614,7 @@ fn find_key_len(arg: &[u8], len: usize, text: &[u8], has_lt: bool) -> c_int {
     let how = FSK_KEYCODE | FSK_KEEP_X_KEY | FSK_SIMPLIFY;
     match special_key_at(text, how, None) {
         // A key with a modifier left over does not fit in one option value.
-        Ok(Some((key, modifiers, _))) if modifiers.is_empty() => key.code(),
+        Ok(Some((key, modifiers, _))) if modifiers.is_empty() => key.raw(),
         _ => 0,
     }
 }

@@ -19,6 +19,7 @@ use crate::cmdexpand::Expanded;
 use crate::cstr;
 use crate::ex_getln::tilde_replace_matches;
 use crate::formatted;
+use crate::mbyte::Codepoint;
 use crate::memory::XString;
 use crate::message::IOSIZE;
 use crate::narrow::len_as_int;
@@ -154,17 +155,21 @@ pub(crate) fn process_next_cpt_value(
         scan_current_buffer(st, start_match_pos, fuzzy_collect);
         return CptValue::ready(CtrlXMode::Normal);
     }
-    if !skip_source && !COMPL_TIME_SLICE_EXPIRED.get() && has_char(c"buwU", c_int::from(flag)) && {
-        // The scan's buffer outlives every autocommand and user
-        // function a pass through this loop runs, so it may have been
-        // wiped since it was stored. Restarting the walk at the
-        // current buffer is what `ins_compl_get_exp` does for the
-        // same case one level up.
-        let from = st.ins_buf.and_then(BufId::get).unwrap_or_else(Buf::current);
-        let next = ins_compl_next_buf(from, flag);
-        st.ins_buf = Some(next.id());
-        next != Buf::current()
-    } {
+    if !skip_source
+        && !COMPL_TIME_SLICE_EXPIRED.get()
+        && has_char(c"buwU", Codepoint::from(flag))
+        && {
+            // The scan's buffer outlives every autocommand and user
+            // function a pass through this loop runs, so it may have been
+            // wiped since it was stored. Restarting the walk at the
+            // current buffer is what `ins_compl_get_exp` does for the
+            // same case one level up.
+            let from = st.ins_buf.and_then(BufId::get).unwrap_or_else(Buf::current);
+            let next = ins_compl_next_buf(from, flag);
+            st.ins_buf = Some(next.id());
+            next != Buf::current()
+        }
+    {
         return match scan_other_buffer(st) {
             Some(compl_type) => CptValue::ready(compl_type),
             None => CptValue {

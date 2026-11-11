@@ -12,6 +12,7 @@ use crate::arglist::expand_arglist;
 use crate::charset::getdigits_int_at;
 use crate::cstr;
 use crate::getchar::state::GOT_INT;
+use crate::mbyte::Codepoint;
 use crate::spell::{SPELL_ADD_BAD, SPELL_ADD_GOOD, SpellBuf};
 use core::cell::RefCell;
 
@@ -680,7 +681,7 @@ fn output_is_writable(
 ) -> Result<(), MkspellError> {
     if incount <= 0 {
         Err(MkspellError::NoInput)
-    } else if has_char(path_tail(wfname), '_' as ::core::ffi::c_int) {
+    } else if has_char(path_tail(wfname), Codepoint::byte(b'_')) {
         Err(MkspellError::RegionInOutput)
     } else if incount > MAXREGIONS.cast_signed() {
         Err(MkspellError::TooManyRegions)

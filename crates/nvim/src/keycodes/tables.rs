@@ -202,13 +202,13 @@ static MODIFIER_KEYS: [ModifierKey; 75] = [
 /// macros read them: the low two bytes of the code's negation. Nothing checks
 /// that `key` is negative — see [`simplify`].
 pub(crate) fn termcap_name(key: Key) -> [u8; 2] {
-    let bits = key.code().wrapping_neg().to_le_bytes();
+    let bits = key.raw().wrapping_neg().to_le_bytes();
     [bits[0], bits[1]]
 }
 
 /// The key code a two-byte termcap name stands for (C's `TERMCAP2KEY`).
 pub(crate) const fn termcap_key(name: [u8; 2]) -> Key {
-    Key::from_code(termcap(name[0], name[1]))
+    Key::from_raw(termcap(name[0], name[1]))
 }
 
 /// The single code that stands for `key` with one of `modifiers` held down,
@@ -273,11 +273,11 @@ const KEY_NAME_ROWS: [KeyName; 187] = [
     key_name(Key::ascii(b'\\'), false, "Bslash"),
     special(SpecialKey::Command, false, "Cmd"),
     key_name(Key::CAR, false, "CR"),
-    key_name(Key::from_code(CSI), false, "CSI"),
+    key_name(Key::from_raw(CSI), false, "CSI"),
     special(SpecialKey::Del, false, "Del"),
     special(SpecialKey::Del, true, "Delete"),
     special(SpecialKey::Down, false, "Down"),
-    key_name(Key::from_code(extra(KE_DROP)), false, "Drop"),
+    key_name(Key::from_raw(extra(KE_DROP)), false, "Drop"),
     special(SpecialKey::End, false, "End"),
     key_name(Key::CAR, true, "Enter"),
     key_name(Key::ESC, false, "Esc"),
@@ -419,7 +419,7 @@ const KEY_NAME_ROWS: [KeyName; 187] = [
     special(SpecialKey::Zero, false, "Nul"),
     special(SpecialKey::Pagedown, false, "PageDown"),
     special(SpecialKey::Pageup, false, "PageUp"),
-    key_name(Key::from_code(extra(KE_PLUG)), false, "Plug"),
+    key_name(Key::from_raw(extra(KE_PLUG)), false, "Plug"),
     key_name(Key::CAR, true, "Return"),
     special(SpecialKey::Right, false, "Right"),
     special(SpecialKey::Rightdrag, false, "RightDrag"),
@@ -430,10 +430,10 @@ const KEY_NAME_ROWS: [KeyName; 187] = [
     special(SpecialKey::Mouseleft, false, "ScrollWheelRight"),
     special(SpecialKey::Mousedown, false, "ScrollWheelUp"),
     special(SpecialKey::Kselect, false, "Select"),
-    key_name(Key::from_code(extra(KE_SNR)), false, "SNR"),
+    key_name(Key::from_raw(extra(KE_SNR)), false, "SNR"),
     key_name(Key::ascii(b' '), false, "Space"),
     key_name(Key::TAB, false, "Tab"),
-    key_name(Key::from_code(extra(KE_TAB)), false, "Tab"),
+    key_name(Key::from_raw(extra(KE_TAB)), false, "Tab"),
     special(SpecialKey::Undo, false, "Undo"),
     special(SpecialKey::Up, false, "Up"),
     special(SpecialKey::X1drag, false, "X1Drag"),
@@ -445,9 +445,9 @@ const KEY_NAME_ROWS: [KeyName; 187] = [
     special(SpecialKey::Xdown, false, "xDown"),
     special(SpecialKey::Xend, false, "xEnd"),
     special(SpecialKey::Xf1, false, "xF1"),
-    key_name(Key::from_code(extra(KE_XF2)), false, "xF2"),
-    key_name(Key::from_code(extra(KE_XF3)), false, "xF3"),
-    key_name(Key::from_code(extra(KE_XF4)), false, "xF4"),
+    key_name(Key::from_raw(extra(KE_XF2)), false, "xF2"),
+    key_name(Key::from_raw(extra(KE_XF3)), false, "xF3"),
+    key_name(Key::from_raw(extra(KE_XF4)), false, "xF4"),
     special(SpecialKey::Xhome, false, "xHome"),
     special(SpecialKey::Xleft, false, "xLeft"),
     special(SpecialKey::Xright, false, "xRight"),

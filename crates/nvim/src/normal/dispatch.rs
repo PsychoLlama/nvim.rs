@@ -42,7 +42,6 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{SpecialKey, simplify_mod_mask};
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
-use crate::mbyte::Codepoint;
 use crate::mbyte::{GRAPHEME_STATE_INIT, GraphemeState};
 use crate::mbyte::{encode_char, iscomposing, utf8len_tab};
 use crate::message::state::{MSG_COL, MSG_DIDOUT, MSG_NOWAIT};
@@ -85,7 +84,7 @@ use crate::register::{RegName, register_key};
 /// (stored negative) sorts after every character and `find_command` can
 /// search for `-cmdchar`.
 const fn rank(key: Key) -> usize {
-    key.code().unsigned_abs() as usize
+    key.raw().unsigned_abs() as usize
 }
 
 /// `NV_CMD_TABLE` in ascending `|cmd_char|` order, and how far a direct index
@@ -151,7 +150,7 @@ const _: () = {
 
 /// The row of `NV_CMD_TABLE` that answers to `cmdchar`, if there is one.
 pub(crate) fn find_command(cmdchar: Key) -> Option<usize> {
-    if cmdchar.code() >= 0x100 {
+    if cmdchar.code().get() >= 0x100 {
         return None;
     }
     // A special key is stored negative and searched for by magnitude.
@@ -284,7 +283,7 @@ fn read_composing_tail(ns: &mut NormalState) {
     loop {
         ns.c = vpeekc();
         // Only a character that is not a lone byte can be composing.
-        let multibyte = ns.c.code() >= 0x100
+        let multibyte = ns.c.code().get() >= 0x100
             || ns
                 .c
                 .as_byte()
@@ -293,27 +292,17 @@ fn read_composing_tail(ns: &mut NormalState) {
             break;
         }
         ns.c = plain_vgetc();
-        if !iscomposing(
-            Codepoint::new(prev_code),
-            Codepoint::new(ns.c.code()),
-            Some(&mut state),
-        ) {
+        if !iscomposing(prev_code, ns.c.code(), Some(&mut state)) {
             vungetc(ns.c);
             break;
         }
         // The base character is only encoded once a tail turns up.
         if ns.ca.nchar_len == 0 {
-            ns.ca.nchar_len = encode_char(
-                Codepoint::new(ns.ca.nchar.code()),
-                &mut ns.ca.nchar_composing,
-            );
+            ns.ca.nchar_len = encode_char(ns.ca.nchar.code(), &mut ns.ca.nchar_composing);
         }
         if ns.ca.nchar_len + ns.c.utf8_len() < ns.ca.nchar_composing.len() {
             let at = ns.ca.nchar_len;
-            ns.ca.nchar_len += encode_char(
-                Codepoint::new(ns.c.code()),
-                &mut ns.ca.nchar_composing[at..],
-            );
+            ns.ca.nchar_len += encode_char(ns.c.code(), &mut ns.ca.nchar_composing[at..]);
         }
         prev_code = ns.c.code();
     }
@@ -584,7 +573,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
     // put back for insert mode to read and the command becomes a change.
     if visual_active()
         && visual_select()
-        && (vim_isprintc(Codepoint::new(ns.c.code()))
+        && (vim_isprintc(ns.c.code())
             || ns.c == Key::NL
             || ns.c == Key::CAR
             || ns.c == SpecialKey::Kenter)

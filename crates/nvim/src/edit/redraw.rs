@@ -24,7 +24,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::mbyte::Codepoint;
 use crate::mbyte::{encode_char, head_off};
 use crate::winlayer::{Buf, Win};
 
@@ -200,7 +199,7 @@ pub(crate) fn edit_putchar(c: Key, highlight: bool) {
     }
 
     let mut buf = [0u8; MB_MAXCHAR + 1];
-    let len = encode_char(Codepoint::new(c.code()), &mut buf);
+    let len = encode_char(c.code(), &mut buf);
     grid_line_puts(PC_COL.get(), &buf[..len], attr);
     grid_line_flush();
 }

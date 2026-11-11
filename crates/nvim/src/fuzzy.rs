@@ -158,7 +158,7 @@ impl Match {
                 .collect()
         };
         // The first character is treated as if a path separator preceded it.
-        let mut last_c = Codepoint::from(b'/');
+        let mut last_c = Codepoint::byte(b'/');
         let mut match_bonus = Vec::with_capacity(haystack.len().min(FUZZY_MATCH_MAX_LEN));
         for &c in haystack.iter().take(FUZZY_MATCH_MAX_LEN) {
             match_bonus.push(compute_bonus(last_c, c));

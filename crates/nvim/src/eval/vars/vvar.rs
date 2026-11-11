@@ -30,7 +30,6 @@ use crate::eval::typval::DI_FLAGS_RO_SBX;
 use crate::eval::typval::DictRef;
 use crate::eval::typval::ListRef;
 use crate::eval::typval::PartialRef;
-use crate::mbyte::Codepoint;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
@@ -338,7 +337,7 @@ pub fn set_vim_var_special(idx: Vv, val: SpecialVarValue) {
 /// Set `v:char` to the character `c` types.
 pub fn set_vim_var_char(c: Key) {
     let mut buf = [0u8; 7];
-    let buflen = crate::mbyte::encode_char(Codepoint::new(c.code()), &mut buf);
+    let buflen = crate::mbyte::encode_char(c.code(), &mut buf);
     set_vim_var_string(Vv::Char, Some(&buf[..buflen]));
 }
 

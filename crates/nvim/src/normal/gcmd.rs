@@ -213,7 +213,7 @@ pub(crate) fn nv_gi_cmd(cmd_arg: &mut CmdArg) {
 /// `gh`, `gH` and `g CTRL-H`: start Select mode in the matching Visual kind.
 /// `v`, `V` and CTRL-V sit exactly `'v' - 'h'` above `h`, `H` and CTRL-H.
 fn nv_g_select(cmd_arg: &mut CmdArg) {
-    cmd_arg.cmdchar = Key::from_code(cmd_arg.nchar.code() + c_int::from(b'v' - b'h'));
+    cmd_arg.cmdchar = Key::from_raw(cmd_arg.nchar.code().get() + c_int::from(b'v' - b'h'));
     cmd_arg.arg = 1;
     nv_visual(cmd_arg);
 }

@@ -326,34 +326,16 @@ impl Iterator for Clusters<'_> {
     }
 }
 
-/// How many bytes `c` encodes to.
+/// How many bytes `c` encodes to, as the `int` column arithmetic reads;
+/// [`Codepoint::utf8_len`] is the length as a length.
 pub fn utf_char2len(c: Codepoint) -> c_int {
-    match utf8_len(c.get()) {
+    match c.utf8_len() {
         1 => 1,
         2 => 2,
         3 => 3,
         4 => 4,
         5 => 5,
         _ => 6,
-    }
-}
-
-/// [`utf_char2len`] as the length it is: how many bytes `c` takes in the
-/// original six-byte UTF-8, one for anything below 0x80 (a negative key
-/// code included).
-pub(crate) const fn utf8_len(c: c_int) -> usize {
-    if c < 0x80 {
-        1
-    } else if c < 0x800 {
-        2
-    } else if c < 0x10000 {
-        3
-    } else if c < 0x200000 {
-        4
-    } else if c < 0x4000000 {
-        5
-    } else {
-        6
     }
 }
 
@@ -558,7 +540,7 @@ mod tests {
         let mut buf = [0u8; MB_MAXCHAR + 1];
         let mut check = |c: c_int| {
             let len = encode_char(Codepoint::new(c), &mut buf);
-            assert_eq!(len, utf8_len(c), "{c:#x} length");
+            assert_eq!(len, Codepoint::new(c).utf8_len(), "{c:#x} length");
             assert_eq!(char_at(&buf[..len]).get(), c, "{c:#x}");
             assert_eq!(char_len(&buf[..len]), len, "{c:#x} char_len");
         };

@@ -198,18 +198,18 @@ pub fn get_special_key_name(key: Key, modifiers: ModMask) -> SpecialKeyName {
         None => {
             let len = key.utf8_len();
             match key.as_byte() {
-                Some(byte) if len == 1 && vim_isprintc(Codepoint::new(key.code())) => {
+                Some(byte) if len == 1 && vim_isprintc(key.code()) => {
                     out[at] = byte;
                     at += 1;
                 }
                 _ if len > 1 => {
                     let mut wide = [0u8; MB_MAXBYTES + 1];
-                    let len = encode_char(Codepoint::new(key.code()), &mut wide);
+                    let len = encode_char(key.code(), &mut wide);
                     out[at..at + len].copy_from_slice(&wide[..len]);
                     at += len;
                 }
                 _ => {
-                    let display = transchar(Codepoint::new(key.code()));
+                    let display = transchar(key.code());
                     let shown = cstr::in_bytes(&display).to_bytes();
                     out[at..at + shown.len()].copy_from_slice(shown);
                     at += shown.len();
@@ -275,7 +275,7 @@ pub fn special_key_bytes(key: Key, modifiers: ModMask, escape_ks: bool) -> KeyBy
         escape_char_into(key, &mut out);
     } else {
         let mut encoded = [0u8; MB_MAXBYTES + 1];
-        let len = encode_char(Codepoint::new(key.code()), &mut encoded);
+        let len = encode_char(key.code(), &mut encoded);
         out.extend(&encoded[..len]);
     }
     out
@@ -390,7 +390,7 @@ pub fn special_key_at(
             return Err(Failed);
         }
         // Upstream's `(int)` of the number: the low 32 bits.
-        Key::from_code(number_as_int(number.magnitude.cast_signed()))
+        Key::from_raw(number_as_int(number.magnitude.cast_signed()))
     } else {
         // A single-letter modifier, or a special key name.
         let (len, off) = if in_string && at(last_dash + 1) == b'\\' && at(last_dash + 2) == b'"' {
@@ -401,7 +401,7 @@ pub fn special_key_at(
         };
         let name = &text[last_dash + off..];
         if !modifiers.is_empty() && at(last_dash + len + 1) == b'>' {
-            Key::from_code(char_at(name).get())
+            Key::from_code(char_at(name))
         } else {
             let code = special_key_code(name);
             if flags & FSK_KEEP_X_KEY == 0 {
@@ -559,7 +559,7 @@ pub fn replace_termcodes(
             .is_some_and(|head| head.eq_ignore_ascii_case(lit))
     };
     // A backslash is a special character unless 'cpoptions' contains B.
-    let do_backslash = !has_char(cpo, CpoFlag::BSLASH.as_c_int());
+    let do_backslash = !has_char(cpo, Codepoint::new(CpoFlag::BSLASH.as_c_int()));
     let do_special = flags & REPTERM_NO_SPECIAL == 0;
     let mut out: Vec<u8> = Vec::with_capacity(room.unwrap_or(from.len() * 6 + 1));
 
@@ -666,7 +666,7 @@ pub fn replace_termcodes(
 /// typeahead buffer needs.
 fn escape_char_into(c: Key, out: &mut KeyBytes) {
     let mut encoded = [0u8; MB_MAXBYTES + 1];
-    let len = encode_char(Codepoint::new(c.code()), &mut encoded);
+    let len = encode_char(c.code(), &mut encoded);
     for &byte in &encoded[..len] {
         if byte == K_SPECIAL {
             out.extend(&[K_SPECIAL, KS_SPECIAL, KE_FILLER]);
@@ -709,7 +709,7 @@ pub fn escape_ks_bytes(text: &[u8]) -> Vec<u8> {
             src += 3;
         } else {
             // Add the character, possibly multi-byte, escaping K_SPECIAL.
-            push_char_escaped(Key::from_code(char_at(rest).get()), &mut out);
+            push_char_escaped(Key::from_code(char_at(rest)), &mut out);
             src += char_len(rest);
         }
     }

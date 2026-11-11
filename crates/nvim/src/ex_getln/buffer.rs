@@ -391,7 +391,7 @@ pub fn cmdline_paste_str(s: &CStr, literally: bool) {
         }
         let info = c_char_info(text, at);
         // The character read from the text, typed.
-        let key = Key::from_code(info.value);
+        let key = Key::from_raw(info.value);
         at += usize::try_from(info.len).unwrap_or(1).max(1);
         if quoted
             || matches!(

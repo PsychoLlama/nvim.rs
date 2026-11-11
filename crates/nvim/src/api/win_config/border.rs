@@ -20,6 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::option::split_option_part;
 use crate::strings::has_char;
 use crate::winlayer::Win;
@@ -308,7 +309,7 @@ pub(crate) fn generate_api_error(window: Option<Win>, attribute: &CStr) -> Error
 /// A value holding a comma is eight cells spelled out; anything else is a
 /// style name, which [`parse_border_style`] resolves.
 pub(crate) fn parse_winborder(fconfig: &mut WinConfig, border_opt: &CStr) -> Result<bool, Error> {
-    let listed = has_char(border_opt, ',' as c_int);
+    let listed = has_char(border_opt, Codepoint::byte(b','));
     let style = if listed {
         match border_cell_list(border_opt.to_bytes()) {
             Some(array) => Object::array(array),

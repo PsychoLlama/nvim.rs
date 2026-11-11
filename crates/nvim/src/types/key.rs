@@ -34,6 +34,7 @@ use core::ffi::c_int;
 use core::fmt;
 
 use crate::keycodes::SpecialKey;
+use crate::mbyte::Codepoint;
 
 /// One key of input: a character, a control character, or a special key.
 ///
@@ -253,18 +254,39 @@ impl Key {
         Key(key.code())
     }
 
-    /// The key whose upstream integer is `code`: a codepoint (decoded from
-    /// text, so possibly above `U+10FFFF` or a surrogate, which a `char`
-    /// cannot hold) or a special key's negative code.
+    /// The key that types the codepoint `c`: the crossing from text (a
+    /// character read from a buffer, a register, a mapping's string) to
+    /// input. `c` may be above `U+10FFFF` or a surrogate, which a `char`
+    /// cannot hold; the typeahead carries it unchanged.
     #[inline]
-    pub const fn from_code(code: c_int) -> Key {
-        Key(code)
+    pub const fn from_code(c: Codepoint) -> Key {
+        Key(c.get())
     }
 
-    /// The upstream integer: what the escape spelling encodes and what the
-    /// code still carrying keys as `c_int` reads.
+    /// The character this key types, as text: the crossing from input
+    /// back to a codepoint, for a reader that encodes, classifies or
+    /// compares it. A special key passes its negative code through, as
+    /// upstream's `int` did; the display and width functions render that
+    /// as its `~@` form, and every other reader asks [`Key::is_char`]
+    /// first.
     #[inline]
-    pub const fn code(self) -> c_int {
+    pub const fn code(self) -> Codepoint {
+        Codepoint::new(self.0)
+    }
+
+    /// The key whose upstream integer is `raw`: an integer channel that
+    /// carries keys and special keys alike -- the escape spelling's
+    /// decode, a termcap table, an option such as 'wildchar' that holds a
+    /// key code, a `typval` number.
+    #[inline]
+    pub const fn from_raw(raw: c_int) -> Key {
+        Key(raw)
+    }
+
+    /// The upstream integer, for the escape spelling, the key tables and
+    /// the integer channels a key leaves through.
+    #[inline]
+    pub const fn raw(self) -> c_int {
         self.0
     }
 
@@ -322,7 +344,7 @@ impl Key {
     /// key, which is upstream's answer for a negative number.
     #[inline]
     pub fn utf8_len(self) -> usize {
-        crate::mbyte::utf8_len(self.0)
+        self.code().utf8_len()
     }
 }
 
@@ -427,8 +449,8 @@ mod tests {
             );
         }
         assert_eq!(
-            Key::from_code(-300).kind(),
-            KeyKind::Unnamed(Key::from_code(-300))
+            Key::from_raw(-300).kind(),
+            KeyKind::Unnamed(Key::from_raw(-300))
         );
         // Upstream's `KEY_OPEN_FORW` was U+0101: a character, here only that.
         assert_eq!(

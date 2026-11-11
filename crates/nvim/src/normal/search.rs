@@ -86,7 +86,7 @@ pub(crate) fn nv_search(cmd_arg: &mut CmdArg) {
     };
     // A copy: the command keeps its buffer for the redo.
     let pat = cmd_arg.search_text().to_vec();
-    normal_search(cmd_arg, cmd_arg.cmdchar.code(), &pat, mark, None);
+    normal_search(cmd_arg, cmd_arg.cmdchar.raw(), &pat, mark, None);
 }
 
 impl CmdArg {

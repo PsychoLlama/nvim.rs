@@ -115,10 +115,23 @@ impl Codepoint {
     }
 
     /// How many bytes this takes in the codec's six-byte UTF-8: one for
-    /// anything below 0x80.
+    /// anything below 0x80 (a special key's negative code included).
     #[inline]
     pub const fn utf8_len(self) -> usize {
-        super::utf8_len(self.0)
+        let c = self.0;
+        if c < 0x80 {
+            1
+        } else if c < 0x800 {
+            2
+        } else if c < 0x1_0000 {
+            3
+        } else if c < 0x20_0000 {
+            4
+        } else if c < 0x400_0000 {
+            5
+        } else {
+            6
+        }
     }
 }
 
@@ -226,19 +239,19 @@ mod tests {
 
     #[test]
     fn a_byte_compares_as_the_character_it_widens_to() {
-        let backslash = Codepoint::from(b'\\');
+        let backslash = Codepoint::byte(b'\\');
         assert!(backslash == b'\\');
         assert!(backslash != b'/');
-        assert!(Codepoint::from(b' ') < b'!');
+        assert!(Codepoint::byte(b' ') < b'!');
         assert!(Codepoint::new(0x100) > b'\xff');
         assert_eq!(Codepoint::byte(0xe9), Codepoint::from('é'));
         assert!(Codepoint::from('é') == 'é');
-        assert!((b'!'..=b'~').contains(&Codepoint::from(b'Q')));
+        assert!((b'!'..=b'~').contains(&Codepoint::byte(b'Q')));
         assert!(!(b'!'..=b'~').contains(&Codepoint::new(0x151)));
-        assert!(Codepoint::from(b'Q').is_ascii_uppercase());
+        assert!(Codepoint::byte(b'Q').is_ascii_uppercase());
         assert!(!Codepoint::new(0x151).is_ascii_uppercase());
-        assert!(Codepoint::from(b'q').is_ascii_lowercase());
-        assert!(Codepoint::from(b'7').is_ascii_digit());
+        assert!(Codepoint::byte(b'q').is_ascii_lowercase());
+        assert!(Codepoint::byte(b'7').is_ascii_digit());
     }
 
     #[test]

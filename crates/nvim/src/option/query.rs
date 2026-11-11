@@ -594,7 +594,7 @@ impl ScrollOff {
 /// option is a number, the key's code, and a number too wide for a code
 /// names no key.
 pub(crate) fn option_key(code: OptInt) -> Option<Key> {
-    c_int::try_from(code).ok().map(Key::from_code)
+    c_int::try_from(code).ok().map(Key::from_raw)
 }
 
 /// The key `'wildchar'` names.

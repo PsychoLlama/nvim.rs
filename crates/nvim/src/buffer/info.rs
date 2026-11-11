@@ -28,6 +28,7 @@ use crate::cstr;
 use crate::env::home_to_tilde;
 use crate::fileio::Report;
 use crate::formatted;
+use crate::mbyte::Codepoint;
 use crate::memline::MlFlags;
 use crate::narrow::number_as_int;
 use crate::strings::has_char;
@@ -78,7 +79,7 @@ fn current_win() -> Win {
 /// set of them.
 fn has_flag(arg: &CStr, c: u8) -> bool {
     // `has_char` takes a codepoint, which every flag letter is.
-    has_char(arg, c_int::from(c))
+    has_char(arg, Codepoint::from(c))
 }
 
 /// As much of `text` as a `room`-byte buffer holds with a terminator after

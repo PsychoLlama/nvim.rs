@@ -20,7 +20,7 @@ use crate::keycodes::ModMask;
 use crate::mbyte::Codepoint;
 use crate::mbyte::{char_at, cluster_len};
 use crate::types::{Key, KeyKind};
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 use core::num::NonZeroUsize;
 
 /// How many buttons can carry a hotkey. Buttons past this share the default.
@@ -151,11 +151,11 @@ pub(crate) fn do_dialog(
                 // "hotkeys" are, and count how many buttons precede it. A
                 // NUL hotkey (a button list ending in a separator) ends the
                 // list, as the terminator of upstream's string did.
-                let c = (Codepoint::new(c.code())).to_lower();
-                let listed = hotkeys.iter().take_while(|&&hotkey| hotkey != 0);
+                let c = c.code().to_lower();
+                let listed = hotkeys.iter().take_while(|hotkey| !hotkey.is_nul());
                 if let Some(button) = listed
                     .clone()
-                    .position(|&hotkey| hotkey == c.get())
+                    .position(|&hotkey| hotkey == c)
                     .and_then(|at| Button::nth(at + 1))
                 {
                     retval = DialogAnswer::Pressed(button);
@@ -208,8 +208,8 @@ fn buttons_with_hotkeys(buttons: &[u8]) -> [bool; HAS_HOTKEY_LEN] {
 }
 
 /// The character at the start of `bytes`, lowercased: a hotkey.
-fn hotkey_at(bytes: &[u8]) -> c_int {
-    char_at(bytes).to_lower().get()
+fn hotkey_at(bytes: &[u8]) -> Codepoint {
+    char_at(bytes).to_lower()
 }
 
 /// Render the button list as the command-line prompt shows it, and the
@@ -218,7 +218,7 @@ fn hotkey_at(bytes: &[u8]) -> c_int {
 /// `&x` makes `x` the button's hotkey and shows it as `(x)`, or `[x]` on the
 /// default button; `&&` is a literal `&`. A button with no `&` takes its
 /// first character. Buttons are separated by `, ` and the line ends `: `.
-fn render_buttons(buttons: &[u8], default: Option<Button>) -> (Vec<u8>, Vec<c_int>) {
+fn render_buttons(buttons: &[u8], default: Option<Button>) -> (Vec<u8>, Vec<Codepoint>) {
     let has_hotkey = buttons_with_hotkeys(buttons);
     let mut shown = Vec::with_capacity(buttons.len() + 8);
     // The first button's default hotkey.
@@ -286,7 +286,11 @@ fn render_buttons(buttons: &[u8], default: Option<Button>) -> (Vec<u8>, Vec<c_in
 }
 
 /// Format the dialog and display it, answering each button's hotkey.
-fn msg_show_console_dialog(message: &[u8], buttons: &[u8], default: Option<Button>) -> Vec<c_int> {
+fn msg_show_console_dialog(
+    message: &[u8],
+    buttons: &[u8],
+    default: Option<Button>,
+) -> Vec<Codepoint> {
     // With `ext_messages` the UI puts the message where it likes, so the
     // blank lines that separate it from the buttons are left out.
     let mut text = Vec::with_capacity(message.len() + 2);

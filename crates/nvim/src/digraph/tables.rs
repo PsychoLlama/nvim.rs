@@ -143,7 +143,7 @@ const fn d(char1: u8, char2: u8, result: c_int) -> Digraph {
     Digraph {
         char1,
         char2,
-        result: Key::from_code(result),
+        result: Key::from_raw(result),
     }
 }
 

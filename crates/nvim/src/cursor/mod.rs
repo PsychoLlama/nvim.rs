@@ -662,20 +662,21 @@ pub fn gchar_cursor() -> Codepoint {
     char_at(line.get(cursor.col.as_usize()..).unwrap_or_default())
 }
 
-/// The character before the cursor, or -1 at the start of the line.
-pub fn char_before_cursor() -> c_int {
+/// The character before the cursor, or `None` at the start of the line
+/// (upstream's −1).
+pub fn char_before_cursor() -> Option<Codepoint> {
     let cursor = Win::current().w_cursor;
     if cursor.col == ColNr::ZERO {
-        return -1;
+        return None;
     }
     let mut lines = Lines::current();
     let line = lines.line(cursor.lnum);
     let col = cursor.col.as_usize().min(line.len());
     if col == 0 {
-        return -1;
+        return None;
     }
     let prev_len = head_off(line, col - 1) + 1;
-    char_at(&line[col - prev_len..]).get()
+    Some(char_at(&line[col - prev_len..]))
 }
 
 /// Overwrite the byte under the cursor.

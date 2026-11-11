@@ -36,6 +36,7 @@
 )]
 
 use crate::cstr::{byte_at, until_nul};
+use crate::mbyte::Codepoint;
 use crate::memline::Lines;
 use crate::narrow::len_as_int;
 use crate::strings::has_char;
@@ -408,7 +409,7 @@ impl SpellScan {
 /// written, terminator included; `line` ends at its end or at a NUL.
 pub fn spell_cat_line(buf: &mut [u8], line: &[u8], maxlen: usize) {
     let mut p = skip::white(line);
-    while has_char(c"*#/\"\t", c_int::from(byte_at(line, p))) {
+    while has_char(c"*#/\"\t", Codepoint::from(byte_at(line, p))) {
         p += 1;
         p += skip::white(tail(line, p));
     }

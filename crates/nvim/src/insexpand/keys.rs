@@ -16,7 +16,6 @@
 
 use super::*;
 use crate::keycodes::SpecialKey;
-use crate::mbyte::Codepoint;
 use crate::mbyte::head_off;
 use crate::mbyte::{char_at, cluster_len, encode_char};
 use crate::memline::Lines;
@@ -163,7 +162,7 @@ pub fn ins_compl_addleader(c: Key) {
     }
     if c.utf8_len() > 1 {
         let mut buf = [0u8; MB_MAXCHAR];
-        let len = encode_char(Codepoint::new(c.code()), &mut buf);
+        let len = encode_char(c.code(), &mut buf);
         insert_chars(&buf[..len]);
     } else {
         ins_char(c);
@@ -243,7 +242,7 @@ pub fn ins_compl_addfrommatch() {
         shown.text_copy()
     };
     // The next character of the match's text, as the key that types it.
-    ins_compl_addleader(Key::from_code(char_at(&text[len..]).get()));
+    ins_compl_addleader(Key::from_code(char_at(&text[len..])));
 }
 
 /// Stop insert completion mode.

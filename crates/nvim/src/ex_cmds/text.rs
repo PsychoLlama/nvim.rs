@@ -167,7 +167,7 @@ fn describe_char(c: Codepoint, spaced: bool, need_clear: &mut bool) {
 
     // Four formats: with and without a digraph, and hex in four or eight
     // digits.  The digraph argument goes out either way (see `describe_byte`).
-    let digraph = get_digraph_for_char(Key::from_code(c.get()));
+    let digraph = get_digraph_for_char(Key::from_code(c));
     let fmt = match (digraph.is_some(), c.get() < 0x10000) {
         (true, true) => c"> %d, Hex %04x, Oct %o, Digr %s",
         (true, false) => c"> %d, Hex %08x, Oct %o, Digr %s",

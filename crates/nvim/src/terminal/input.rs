@@ -234,7 +234,7 @@ fn send_key(vt: &mut VTerm, c: Key, mods: ModMask) {
     if named != VTERM_KEY_NONE {
         vt.keyboard_key(named, state);
     } else if !key.is_special() {
-        vt.keyboard_unichar(key.code().cast_unsigned(), state);
+        vt.keyboard_unichar(key.raw().cast_unsigned(), state);
     }
 }
 

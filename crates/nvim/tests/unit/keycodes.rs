@@ -362,11 +362,11 @@ fn termcodes(src: &str, from_part: bool, do_lt: bool, special: bool) -> Vec<u8> 
 
 /// The code `name` resolves to, and the name that code prints as.
 fn key_code(name: &str) -> c_int {
-    special_key_code(name.as_bytes()).code()
+    special_key_code(name.as_bytes()).raw()
 }
 
 fn key_name(code: c_int, modifiers: ModMask) -> String {
-    let name = get_special_key_name(Key::from_code(code), modifiers);
+    let name = get_special_key_name(Key::from_raw(code), modifiers);
     CStr::from_bytes_until_nul(&name)
         .expect("the name is NUL-terminated")
         .to_string_lossy()
@@ -379,7 +379,7 @@ fn special_key(src: &str, flags: c_int) -> (c_int, ModMask) {
     special_key_at(src.as_bytes(), flags, None)
         .ok()
         .flatten()
-        .map_or((0, ModMask::NONE), |(key, mods, _)| (key.code(), mods))
+        .map_or((0, ModMask::NONE), |(key, mods, _)| (key.raw(), mods))
 }
 
 #[test]

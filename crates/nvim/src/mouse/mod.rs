@@ -337,7 +337,7 @@ fn mouse_class(line: &[u8], idx: usize) -> c_int {
     // characters to be considered as a single word.  These are things like
     // "->", "/ *", "*=", "+=", "&=", "<=", ">=", "!=" etc.  Otherwise, each
     // character is in its own class.
-    if c != NUL && has_char(c"-+*/%<>&|^!=", c) {
+    if c != NUL && has_char(c"-+*/%<>&|^!=", Codepoint::new(c)) {
         return 1;
     }
     c

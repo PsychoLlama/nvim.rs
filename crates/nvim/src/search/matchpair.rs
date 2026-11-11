@@ -775,7 +775,7 @@ impl Walk {
         // For Lisp skip over backslashed (), {} and [] — actually
         // over "#\(" and friends.
         if Buf::current().b_p_lisp != 0
-            && has_char(c"(){}[]", c.get())
+            && has_char(c"(){}[]", c)
             && col > 1
             && check_prevcol(self.lines.line(self.lnum), col, b'\\')
             && check_prevcol(self.lines.line(self.lnum), col - 1, b'#')
@@ -845,7 +845,8 @@ fn find_match(
 
     // This is just guessing: with 'rightleft' set, look for the
     // matching paren or brace in the other direction.
-    if Win::current().w_onebuf_opt.wo_rl != 0 && has_char(c"()[]{}<>", target.initc) {
+    if Win::current().w_onebuf_opt.wo_rl != 0 && has_char(c"()[]{}<>", Codepoint::new(target.initc))
+    {
         target.backwards = !target.backwards;
     }
 

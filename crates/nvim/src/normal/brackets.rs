@@ -93,7 +93,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
             c_int::from(b'}')
         }
     } else {
-        cmd_arg.nchar.code()
+        cmd_arg.nchar.raw()
     };
     let mut n = if method { 9999 } else { cmd_arg.count1 };
 
@@ -322,7 +322,7 @@ pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
     } else if nchar.is('\'') || nchar.is('`') {
         nv_bracket_mark(cmd_arg);
     } else if (SpecialKey::Rightrelease.code()..=SpecialKey::Leftmouse.code())
-        .contains(&nchar.code())
+        .contains(&nchar.raw())
     {
         // A mouse click after `[` or `]` pastes at the click, reindenting.
         let (dir, n) = (direction(cmd_arg), cmd_arg.count1);

@@ -13,6 +13,7 @@
 )]
 
 use crate::global_cell::field;
+use crate::mbyte::Codepoint;
 use crate::memory::XString;
 use crate::option::HIGHLIGHT_INIT;
 use crate::strings::has_char;
@@ -206,8 +207,8 @@ pub fn did_set_inccommand(args: &mut OptSet) -> Result<(), OptError> {
 
 pub fn did_set_keymodel(args: &mut OptSet) -> Result<(), OptError> {
     did_set_str_generic(args)?;
-    KM_STOPSEL.set(p_km(|value| has_char(value, c_int::from(b'o'))));
-    KM_STARTSEL.set(p_km(|value| has_char(value, c_int::from(b'a'))));
+    KM_STOPSEL.set(p_km(|value| has_char(value, Codepoint::byte(b'o'))));
+    KM_STARTSEL.set(p_km(|value| has_char(value, Codepoint::byte(b'a'))));
     Ok(())
 }
 

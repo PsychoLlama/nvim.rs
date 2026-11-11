@@ -157,7 +157,7 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
         let at = |q: usize| cstr::byte_at(buf, q);
         // C's `skipwhite` over the same string.
         let skip_ws = |q: usize| q + skip::white(buf.get(q..).unwrap_or_default());
-        if !has_char(c"sgvlu", ::core::ffi::c_int::from(at(cmd))) {
+        if !has_char(c"sgvlu", Codepoint::from(at(cmd))) {
             return None;
         }
 
@@ -506,7 +506,7 @@ pub(crate) fn may_add_char_to_search(
         // The character after the match, which becomes the key typed: a
         // codepoint read from the text, as the C's `int` was.
         let mut ch = gchar_cursor();
-        *c = Key::from_code(ch.get());
+        *c = Key::from_code(ch);
         if ch != Codepoint::NUL {
             // With 'ignorecase' and 'smartcase' set and no uppercase in
             // the command line, lowercase the character.
@@ -518,10 +518,10 @@ pub(crate) fn may_add_char_to_search(
                 ch = ch.to_lower();
             }
             let magics = if magic_isset() { c"\\~^$.*[" } else { c"\\^$" };
-            if ch.get() == search_delim || has_char(magics, ch.get()) {
+            if ch.get() == search_delim || has_char(magics, ch) {
                 // Put a backslash before the special characters.
-                stuff_readbuf_char(Key::from_code(ch.get()));
-                ch = Codepoint::from(b'\\');
+                stuff_readbuf_char(Key::from_code(ch));
+                ch = Codepoint::byte(b'\\');
             }
             // Add any composing characters.
             let cursor_len = || len_as_int(with_cursor_rest(cluster_len));
@@ -530,11 +530,11 @@ pub(crate) fn may_add_char_to_search(
                 while utf_char2len(ch) != cursor_len() {
                     Win::current().w_cursor.col += utf_char2len(ch);
                     ch = gchar_cursor();
-                    stuff_readbuf_char(Key::from_code(ch.get()));
+                    stuff_readbuf_char(Key::from_code(ch));
                 }
                 ch = save_c;
             }
-            *c = Key::from_code(ch.get());
+            *c = Key::from_code(ch);
             return Err(Failed);
         }
     }
@@ -730,10 +730,7 @@ pub(crate) fn empty_pattern_magic(pat: &[u8], magic_val: Magic) -> bool {
     let at = |i: usize| pat[i];
 
     // Remove a trailing \v and the like.
-    while len >= 2
-        && at(len - 2) == b'\\'
-        && has_char(c"mMvVcCZ", ::core::ffi::c_int::from(pat[len - 1]))
-    {
+    while len >= 2 && at(len - 2) == b'\\' && has_char(c"mMvVcCZ", Codepoint::from(pat[len - 1])) {
         len -= 2;
     }
 

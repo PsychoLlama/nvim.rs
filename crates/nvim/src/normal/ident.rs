@@ -17,6 +17,7 @@ use crate::cmdhist::HIST_SEARCH;
 use crate::cstr;
 use crate::ex_cmds::{EcmdFlags, do_ecmd, newlnum};
 use crate::ex_getln::{VSE_NONE, fnameescape};
+use crate::mbyte::Codepoint;
 use crate::option::vars::P_KP;
 use crate::strings::{has_char, shellescape};
 use crate::types::Key;
@@ -170,7 +171,7 @@ fn append_escaped(out: &mut Vec<u8>, text: &[u8], start: usize, mut n: usize, es
     while n > 0 {
         n -= 1;
         let c = cstr::byte_at(text, at);
-        if has_char(escapes, c_int::from(c)) {
+        if has_char(escapes, Codepoint::from(c)) {
             out.push(b'\\');
         }
         let trailing = cluster_len(text.get(at..).unwrap_or_default()).wrapping_sub(1);
