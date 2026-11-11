@@ -22,8 +22,8 @@ use crate::ascii::NUL;
 use crate::mbyte::{GraphemeState, utf_iscomposing_legacy};
 use crate::regexp::mbyte::{char_at_nul, char_len_at, composes_at};
 use crate::regexp::{
-    CompileError, Compiled, HASWIDTH, NOT_MULTI, REG_PREV_SUB, SIMPLE, getchr, magic, peekchr,
-    re_multi_type, skipchr, ungetchr, unmagic,
+    CompileError, Compiled, HASWIDTH, REG_PREV_SUB, SIMPLE, getchr, magic, multi_kind, peekchr,
+    skipchr, ungetchr, unmagic,
 };
 
 /// The `\x` class shorthands, in the order upstream's two parallel tables
@@ -123,7 +123,7 @@ pub(crate) fn literal_run(rc: &mut RegCompiler, flagp: &mut c_int, mut c: c_int)
     // take (as a literal): stopping before one is what leaves it for the
     // next atom.
     while c != NUL
-        && (len == 0 || (re_multi_type(peekchr(rc)) == NOT_MULTI && rc.one_exactly == 0 && c >= 0))
+        && (len == 0 || (multi_kind(peekchr(rc)).is_none() && rc.one_exactly == 0 && c >= 0))
     {
         rc.code.char(unmagic(c));
         emit_combining_marks(rc);

@@ -32,9 +32,7 @@ use core::ffi::{c_int, c_uint};
 use super::op::BtOp;
 use crate::mbyte::{encode_char, utf_char2len, utf_iscomposing_legacy};
 use crate::os::libc::{int64_t, uint8_t, uint32_t};
-use crate::regexp::{
-    BtRegProg, CompileError, Compiled, NOT_MULTI, REX_SET, peekchr, re_multi_type,
-};
+use crate::regexp::{BtRegProg, CompileError, Compiled, REX_SET, multi_kind, peekchr};
 
 /// The fixed part of a node: the opcode plus the offset to the next one.
 const NODE_HDR: usize = 3;
@@ -380,7 +378,7 @@ impl BtEmitter {
 /// otherwise the multibyte character is just its bytes, and matching it
 /// byte-wise is faster.
 pub(crate) fn use_multibytecode(rc: &mut RegCompiler, c: c_int) -> bool {
-    utf_char2len(c) > 1 && (re_multi_type(peekchr(rc)) != NOT_MULTI || utf_iscomposing_legacy(c))
+    utf_char2len(c) > 1 && (multi_kind(peekchr(rc)).is_some() || utf_iscomposing_legacy(c))
 }
 
 /// The node after `p` in a finished program's chain, or 0 (where no node

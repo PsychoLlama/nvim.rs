@@ -26,10 +26,10 @@ use super::Parsed;
 use super::atom::nfa_regatom as regatom;
 use crate::ascii::NUL;
 use crate::regexp::{
-    CompileError, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, NOT_MULTI, NSUBEXP,
-    ParseState, RE_AUTO, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, RF_ICASE, RF_ICOMBINE,
-    RF_NOICASE, getchr, getdecchrs, magic, peekchr, re_multi_type, read_limits,
-    restore_parse_state, save_parse_state, skipchr, skipchr_keepstart, spelled, unmagic,
+    CompileError, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, NSUBEXP, ParseState,
+    RE_AUTO, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, RF_ICASE, RF_ICOMBINE, RF_NOICASE,
+    getchr, getdecchrs, magic, multi_kind, peekchr, read_limits, restore_parse_state,
+    save_parse_state, skipchr, skipchr_keepstart, spelled, unmagic,
 };
 
 /// Above this many repetitions the automatic engine gives up and lets the
@@ -191,7 +191,7 @@ pub(crate) fn nfa_regpiece(rc: &mut RegCompiler) -> Parsed {
 
     regatom(rc)?;
     let op = peekchr(rc);
-    if re_multi_type(op) == NOT_MULTI {
+    if multi_kind(op).is_none() {
         return Ok(());
     }
     skipchr(rc);
@@ -217,7 +217,7 @@ pub(crate) fn nfa_regpiece(rc: &mut RegCompiler) -> Parsed {
         _ => {}
     }
 
-    if re_multi_type(peekchr(rc)) != NOT_MULTI {
+    if multi_kind(peekchr(rc)).is_some() {
         return Err(CompileError::MultiAfterMulti);
     }
     Ok(())

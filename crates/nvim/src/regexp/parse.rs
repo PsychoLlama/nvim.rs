@@ -30,26 +30,26 @@ use core::ffi::{c_char, c_int};
 
 use super::mbyte::{char_at_nul, char_len_at, cluster_len_at};
 use super::{
-    CompileError, Compiled, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, MULTI_MULT,
-    MULTI_ONE, Magic, NOT_MULTI, ParseState, REGEXP_ABBR, REGEXP_INRANGE, backslash_abbr,
-    byte_count, spelled, take_bracketed, take_char_class, toggle_magic, unmagic,
+    CompileError, Compiled, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, Magic, Multi,
+    ParseState, REGEXP_ABBR, REGEXP_INRANGE, backslash_abbr, byte_count, spelled, take_bracketed,
+    take_char_class, toggle_magic, unmagic,
 };
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{getdigits_int_at, hex2nr};
 
-/// Whether `c` is a repeat operator, and whether it can match more than one
-/// of the preceding atom.
-pub(crate) fn re_multi_type(c: c_int) -> c_int {
+/// Whether `c` is a repeat operator, and if so whether it can match more
+/// than one of the preceding atom.
+pub(crate) fn multi_kind(c: c_int) -> Option<Multi> {
     // Only the magic forms count, so undo the marker rather than calling
     // `unmagic` — that would also accept the literal byte.
     match c + 256 {
         x if x == c_int::from(b'@') || x == c_int::from(b'=') || x == c_int::from(b'?') => {
-            MULTI_ONE
+            Some(Multi::One)
         }
         x if x == c_int::from(b'*') || x == c_int::from(b'+') || x == c_int::from(b'{') => {
-            MULTI_MULT
+            Some(Multi::Many)
         }
-        _ => NOT_MULTI,
+        _ => None,
     }
 }
 

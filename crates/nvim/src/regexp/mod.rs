@@ -227,9 +227,14 @@ pub const MAX_LIMIT: c_int = 32767 << 16;
 const E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN: &CStr =
     c"E363: Pattern uses more memory than 'maxmempattern'";
 const E_SUBSTITUTE_NESTING_TOO_DEEP: &CStr = c"E1290: substitute nesting too deep";
-pub const NOT_MULTI: c_int = 0;
-pub const MULTI_ONE: c_int = 1;
-pub const MULTI_MULT: c_int = 2;
+/// What a repeat operator allows of the atom before it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Multi {
+    /// At most one: `\@`, `\=`, `\?`.
+    One,
+    /// Any number: `*`, `\+`, `\{`.
+    Many,
+}
 
 /// What one step of a backtracking match decided: upstream's `RA_*`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

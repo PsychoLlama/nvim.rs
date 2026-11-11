@@ -35,10 +35,10 @@ use crate::os::libc::int64_t;
 use crate::regexp::mbyte::char_at_nul;
 use crate::regexp::{
     CompileError, Compiled, HASLOOKBH, HASNL, HASWIDTH, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON,
-    NOT_MULTI, NSUBEXP, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, REGMAGIC, RF_HASNL,
-    RF_ICASE, RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, SIMPLE, SPSTART, Spelled, WORST, getchr,
-    getdecchrs, gethexchrs, getoctchrs, peekchr, re_multi_type, read_limits, skipchr,
-    skipchr_keepstart, spelled, unmagic,
+    NSUBEXP, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, REGMAGIC, RF_HASNL, RF_ICASE,
+    RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, SIMPLE, SPSTART, Spelled, WORST, getchr, getdecchrs,
+    gethexchrs, getoctchrs, multi_kind, peekchr, read_limits, skipchr, skipchr_keepstart, spelled,
+    unmagic,
 };
 use core::cell::Cell;
 
@@ -53,7 +53,7 @@ pub(crate) fn regpiece(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node
     let ret = regatom(rc, &mut flags)?;
 
     let op = peekchr(rc);
-    if re_multi_type(op) == NOT_MULTI {
+    if multi_kind(op).is_none() {
         *flagp = flags;
         return Ok(ret);
     }
@@ -176,7 +176,7 @@ pub(crate) fn regpiece(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node
     }
 
     // A second multi in a row has nothing to repeat.
-    if re_multi_type(peekchr(rc)) != NOT_MULTI {
+    if multi_kind(peekchr(rc)).is_some() {
         if peekchr(rc) == M_STAR {
             // `\*` under 'nomagic' is a literal star, so this message wants
             // the backslash whenever `*` is *not* magic — a looser test than

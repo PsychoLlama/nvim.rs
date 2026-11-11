@@ -20,8 +20,8 @@ use crate::regexp::RegCompiler;
 use core::ffi::{CStr, c_int};
 
 use super::{
-    CompileError, Compiled, MULTI_MULT, MatchPos, NSUBEXP, PosKind, Rex, Verdict, cstrncmp,
-    head_off_at, peekchr, prefix_at, re_multi_type,
+    CompileError, Compiled, MatchPos, Multi, NSUBEXP, PosKind, Rex, Verdict, cstrncmp, head_off_at,
+    multi_kind, peekchr, prefix_at,
 };
 use crate::charset::vim_iswordc_buf;
 use crate::getchar::state::GOT_INT;
@@ -340,7 +340,7 @@ pub(crate) fn match_with_backref(
 
 /// Reject a repeat applied to `\zs`, or `\ze` when `ze`.
 pub(crate) fn re_mult_next(rc: &mut RegCompiler, ze: bool) -> Compiled {
-    if re_multi_type(peekchr(rc)) == MULTI_MULT {
+    if multi_kind(peekchr(rc)) == Some(Multi::Many) {
         return Err(CompileError::CannotRepeat { ze });
     }
     Ok(())
