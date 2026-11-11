@@ -31,7 +31,6 @@
 )]
 
 use core::cmp::Ordering;
-use core::fmt;
 
 /// One character of decoded text: the value a UTF-8 sequence carries.
 ///
@@ -226,13 +225,6 @@ impl PartialEq<char> for Codepoint {
     }
 }
 
-impl fmt::Display for Codepoint {
-    /// `U+XXXX`, the way Unicode names a codepoint.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "U+{:04X}", self.0)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -281,6 +273,5 @@ mod tests {
         }
         assert_eq!(Codepoint::new(0x400_0000).utf8_len(), 6);
         assert!(Codepoint::NUL.is_nul() && Codepoint::NUL.is_ascii());
-        assert_eq!(format!("{}", Codepoint::from('€')), "U+20AC");
     }
 }

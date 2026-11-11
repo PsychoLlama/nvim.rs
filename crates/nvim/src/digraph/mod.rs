@@ -414,7 +414,7 @@ fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
     if char2cells(result) == 1 {
         num.push(b' ');
     }
-    num.extend_from_slice(format!(" {result:3}").as_bytes());
+    num.extend_from_slice(format!(" {:3}", result.get()).as_bytes());
     outtrans(&num, 0);
 }
 
