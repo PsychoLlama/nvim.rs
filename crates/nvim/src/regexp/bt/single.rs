@@ -27,10 +27,9 @@ use crate::mbyte::{class_in, utf_iscomposing_legacy};
 use crate::os::libc::uint32_t;
 use crate::plines::win_linetabsize;
 use crate::regexp::{
-    ByteClass, RA_CONT, RA_MATCH, RA_NOMATCH, RI_FLAGS, Rex, char_at_nul, char_len_at,
-    cleanup_subexpr, cleanup_zsubexpr, cluster_len_at, composes_at, cstrchr, cstrncmp,
-    match_with_backref, nul_terminated_len, reg_getline, reg_getline_len, reg_match_visual,
-    reg_nextline, reg_prev_class,
+    ByteClass, RI_FLAGS, Rex, Verdict, char_at_nul, char_len_at, cleanup_subexpr, cleanup_zsubexpr,
+    cluster_len_at, composes_at, cstrchr, cstrncmp, match_with_backref, nul_terminated_len,
+    reg_getline, reg_getline_len, reg_match_visual, reg_nextline, reg_prev_class,
 };
 use crate::types::{LineNr, Pos};
 
@@ -53,14 +52,14 @@ pub(crate) fn match_one(
     scan: usize,
     next: usize,
     c: c_int,
-) -> Option<c_int> {
+) -> Option<Verdict> {
     // Step over the character at the cursor when `ok`, else fail.
     let take = |ok: bool| {
         if !ok {
-            return Some(RA_NOMATCH);
+            return Some(Verdict::NoMatch);
         }
         rex.advance_char();
-        Some(RA_CONT)
+        Some(Verdict::Continue)
     };
     // The `RI_*` byte classes only classify Latin-1.
     let ri = |mask: ByteClass| c < 0x100 && RI_FLAGS[usize::from(low_byte(c))].has(mask);
@@ -99,7 +98,7 @@ pub(crate) fn match_one(
         // below 2 (whitespace and punctuation) never starting a word.
         BtOp::Bow => {
             if c == NUL {
-                RA_NOMATCH
+                Verdict::NoMatch
             } else {
                 let this = char_class(rex);
                 nomatch_unless(this > 1 && reg_prev_class(rex) != Some(this))
@@ -107,7 +106,7 @@ pub(crate) fn match_one(
         }
         BtOp::Eow => {
             if rex.at_bol() {
-                RA_NOMATCH
+                Verdict::NoMatch
             } else {
                 let this = char_class(rex);
                 let prev = reg_prev_class(rex);
@@ -152,9 +151,9 @@ pub(crate) fn match_one(
             while utf_iscomposing_legacy(rex.char_here()) {
                 rex.advance(rex.base_len());
             }
-            RA_CONT
+            Verdict::Continue
         }
-        BtOp::Nothing => RA_CONT,
+        BtOp::Nothing => Verdict::Continue,
 
         BtOp::Backref1
         | BtOp::Backref2
@@ -183,18 +182,18 @@ pub(crate) fn match_one(
             let lbr = rex.reg_line_lbr();
             let at_break = c == NUL && rex.multi() && rex.lnum() <= rex.reg_maxline() && !lbr;
             if !at_break && !(c == '\n' as c_int && lbr) {
-                RA_NOMATCH
+                Verdict::NoMatch
             } else {
                 if lbr {
                     rex.advance_char();
                 } else {
                     reg_nextline(rex);
                 }
-                RA_CONT
+                Verdict::Continue
             }
         }
 
-        BtOp::End => RA_MATCH,
+        BtOp::End => Verdict::Match,
         _ => return None,
     };
     Some(status)
@@ -206,8 +205,12 @@ fn cursor_of(rex: Rex) -> Option<Pos> {
     rex.reg_win().map(|win| win.w_cursor)
 }
 
-fn nomatch_unless(ok: bool) -> c_int {
-    if ok { RA_CONT } else { RA_NOMATCH }
+fn nomatch_unless(ok: bool) -> Verdict {
+    if ok {
+        Verdict::Continue
+    } else {
+        Verdict::NoMatch
+    }
 }
 
 /// The character class of the character at the cursor, per the buffer's
@@ -233,7 +236,7 @@ fn virtual_column(rex: Rex) -> uint32_t {
 }
 
 /// `\%'m`, `\%<'m`, `\%>'m`: is the cursor at, before or after mark `m`?
-fn at_mark(rex: Rex, prog: BtProg<'_>, scan: usize) -> c_int {
+fn at_mark(rex: Rex, prog: BtProg<'_>, scan: usize) -> Verdict {
     // The operand is the mark name and the comparison character.
     let (mark, cmp) = (prog.byte(scan, 3), c_int::from(prog.byte(scan, 4)));
     let col = if rex.multi() { rex.col() } else { ColNr::ZERO };
@@ -244,11 +247,11 @@ fn at_mark(rex: Rex, prog: BtProg<'_>, scan: usize) -> c_int {
         rex.seek(reg_getline(rex, rex.lnum()).unwrap_or(b"\0"), col);
     }
     let Some(fm) = fm else {
-        return RA_NOMATCH;
+        return Verdict::NoMatch;
     };
     let pos = fm.mark;
     if pos.lnum <= LineNr::ZERO {
-        return RA_NOMATCH;
+        return Verdict::NoMatch;
     }
     let here_lnum = rex.buf_lnum();
     // A mark at MAXCOL sits at the end of its line.
@@ -272,18 +275,22 @@ fn at_mark(rex: Rex, prog: BtProg<'_>, scan: usize) -> c_int {
     } else {
         cmp != '<' as c_int
     };
-    if fails { RA_NOMATCH } else { RA_CONT }
+    if fails {
+        Verdict::NoMatch
+    } else {
+        Verdict::Continue
+    }
 }
 
 /// A literal string. The operand is NUL-terminated, so an empty one always
 /// matches.
-fn exactly(rex: Rex, prog: BtProg<'_>, scan: usize, next: usize) -> c_int {
+fn exactly(rex: Rex, prog: BtProg<'_>, scan: usize, next: usize) -> Verdict {
     let opnd = prog.operand(scan);
     if opnd[0] != rex.byte() && !rex.reg_ic() {
-        return RA_NOMATCH;
+        return Verdict::NoMatch;
     }
     if c_int::from(opnd[0]) == NUL {
-        return RA_CONT;
+        return Verdict::Continue;
     }
     let mut len;
     // A one-byte operand with no case folding needs no compare: the
@@ -293,7 +300,7 @@ fn exactly(rex: Rex, prog: BtProg<'_>, scan: usize, next: usize) -> c_int {
     } else {
         len = byte_count(nul_terminated_len(opnd));
         if cstrncmp(rex, opnd, rex.rest(), &mut len) != 0 {
-            return RA_NOMATCH;
+            return Verdict::NoMatch;
         }
     }
     // A combining character right after the match means the input has a
@@ -304,31 +311,31 @@ fn exactly(rex: Rex, prog: BtProg<'_>, scan: usize, next: usize) -> c_int {
         && !rex.reg_icombine()
         && prog.op_byte(next) != BtOp::ReComposing.byte()
     {
-        return RA_NOMATCH;
+        return Verdict::NoMatch;
     }
     rex.advance(len);
-    RA_CONT
+    Verdict::Continue
 }
 
 /// `[abc]` / `[^abc]`. The base character has to be in (or out of) the set,
 /// and any combining characters the set's own entry carries must follow it.
-fn collection(rex: Rex, operand: &[u8], c: c_int, positive: bool) -> c_int {
+fn collection(rex: Rex, operand: &[u8], c: c_int, positive: bool) -> Verdict {
     if c == NUL {
-        return RA_NOMATCH;
+        return Verdict::NoMatch;
     }
     let found = cstrchr(rex, operand, c);
     if found.is_none() == positive {
-        return RA_NOMATCH;
+        return Verdict::NoMatch;
     }
     // The set entry may itself be a grapheme; its combining part has to
     // match the input's byte for byte.
     let base = char_len_at(operand, 0);
     let combining = cluster_len_at(operand, 0) - base;
     rex.advance(rex.base_len());
-    let mut status = RA_CONT;
+    let mut status = Verdict::Continue;
     if combining != 0 {
         if (0..combining).any(|i| operand[base + i] != rex.byte_at(i)) {
-            status = RA_NOMATCH;
+            status = Verdict::NoMatch;
         }
         // Upstream advances even when the tail did not match; the status
         // is what decides the outcome.
@@ -339,17 +346,17 @@ fn collection(rex: Rex, operand: &[u8], c: c_int, positive: bool) -> c_int {
 
 /// One multibyte character, possibly a bare combining character — which
 /// matches anywhere in the grapheme at the cursor.
-fn multibyte(rex: Rex, opnd: &[u8]) -> c_int {
+fn multibyte(rex: Rex, opnd: &[u8]) -> Verdict {
     let mut len = byte_count(cluster_len_at(opnd, 0));
     if len < 2 {
-        return RA_NOMATCH;
+        return Verdict::NoMatch;
     }
     let opndc = char_at_nul(opnd, 0);
     if utf_iscomposing_legacy(opndc) {
         // A bare combining character matches wherever it appears in the
         // grapheme at the cursor.
         let (line, input) = (rex.line(), rex.input());
-        let mut status = RA_NOMATCH;
+        let mut status = Verdict::NoMatch;
         let mut i = 0;
         while c_int::from(line[input + i]) != NUL {
             let inpc = char_at_nul(line, input + i);
@@ -362,9 +369,9 @@ fn multibyte(rex: Rex, opnd: &[u8]) -> c_int {
             } else if opndc == inpc {
                 // Include the combining characters that follow.
                 len = byte_count(i + cluster_len_at(line, input + i));
-                // RA_MATCH, not RA_CONT: upstream ends the whole pattern
+                // `Match`, not `Continue`: upstream ends the whole pattern
                 // here. Preserved rather than "fixed".
-                status = RA_MATCH;
+                status = Verdict::Match;
                 break;
             }
             i += char_len_at(line, input + i);
@@ -374,19 +381,19 @@ fn multibyte(rex: Rex, opnd: &[u8]) -> c_int {
         return status;
     }
     if cstrncmp(rex, opnd, rex.rest(), &mut len) != 0 {
-        return RA_NOMATCH;
+        return Verdict::NoMatch;
     }
     rex.advance(len);
-    RA_CONT
+    Verdict::Continue
 }
 
 /// `\1`..`\9`: the text group `no` captured, again.
-fn back_reference(rex: Rex, no: usize) -> c_int {
+fn back_reference(rex: Rex, no: usize) -> Verdict {
     cleanup_subexpr(rex);
     let kind = rex.pos_kind();
     let (start, end) = (rex.start(no).get(), rex.end(no).get());
     let mut len = 0;
-    let mut status = RA_CONT;
+    let mut status = Verdict::Continue;
     if !start.is_set(kind) || !end.is_set(kind) {
         // Never captured: an empty match.
     } else if !rex.multi() || (start.as_pos().lnum == rex.lnum() && end.as_pos().lnum == rex.lnum())
@@ -399,7 +406,7 @@ fn back_reference(rex: Rex, no: usize) -> c_int {
             .and_then(|at| rex.line().get(at..))
             .unwrap_or(b"\0");
         if cstrncmp(rex, captured, rex.rest(), &mut len) != 0 {
-            status = RA_NOMATCH;
+            status = Verdict::NoMatch;
         }
     } else {
         let (start, end) = (start.as_pos(), end.as_pos());
@@ -411,7 +418,7 @@ fn back_reference(rex: Rex, no: usize) -> c_int {
             end.col,
             Some(&mut len),
         );
-        if r != RA_MATCH {
+        if r != Verdict::Match {
             status = r;
         }
     }
@@ -422,17 +429,17 @@ fn back_reference(rex: Rex, no: usize) -> c_int {
 
 /// `\z1`..`\z9`: the text the enclosing syntax region captured. Missing
 /// captures match the empty string rather than failing.
-fn external_reference(rex: Rex, no: usize) -> c_int {
+fn external_reference(rex: Rex, no: usize) -> Verdict {
     cleanup_zsubexpr(rex);
     rex.with_ext_capture(no, |text| {
         let Some(text) = text else {
-            return RA_CONT;
+            return Verdict::Continue;
         };
         let mut len = byte_count(text.count_bytes());
         if cstrncmp(rex, text.to_bytes_with_nul(), rex.rest(), &mut len) != 0 {
-            return RA_NOMATCH;
+            return Verdict::NoMatch;
         }
         rex.advance(len);
-        RA_CONT
+        Verdict::Continue
     })
 }

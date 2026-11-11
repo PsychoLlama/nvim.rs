@@ -38,10 +38,10 @@ use crate::os::libc::int64_t;
 use crate::profile::profile_passed_limit;
 use crate::regexp::low_byte;
 use crate::regexp::{
-    MAX_LIMIT, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BRANCH,
-    RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN,
-    RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, RegStar, RegState, Rex, cleanup_subexpr,
-    cleanup_zsubexpr, reg_breakcheck, reg_nextline, reg_save, save_capture, save_subexpr,
+    MAX_LIMIT, RS_BEHIND1, RS_BRANCH, RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE,
+    RS_MOPEN, RS_NOMATCH, RS_NOPEN, RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, RegStar,
+    RegState, Rex, Verdict, cleanup_subexpr, cleanup_zsubexpr, reg_breakcheck, reg_nextline,
+    reg_save, save_capture, save_subexpr,
 };
 
 /// The first code of each run a group number is measured from. These are
@@ -91,7 +91,7 @@ fn walk(
         // Walk forward until something needs deciding.
         loop {
             if GOT_INT.get() || scan == 0 {
-                status = RA_FAIL;
+                status = Verdict::Fail;
                 break;
             }
             if let Some(deadline) = deadline
@@ -103,17 +103,17 @@ fn walk(
                 tm_count = 0;
                 if profile_passed_limit(deadline) {
                     rex.set_timed_out();
-                    status = RA_FAIL;
+                    status = Verdict::Fail;
                     break;
                 }
             }
 
-            status = RA_CONT;
+            status = Verdict::Continue;
             let (op_byte, mut next) = prog.op_and_next(scan);
             // The `\_x` band is decoded away here, once per node: past the
             // line break such a node behaves as its plain form.
             let Ok((op, crosses_lines)) = BtOp::decode(op_byte) else {
-                status = RA_FAIL;
+                status = Verdict::Fail;
                 break;
             };
 
@@ -138,7 +138,7 @@ fn walk(
                 };
             }
 
-            if status != RA_CONT {
+            if status != Verdict::Continue {
                 break;
             }
             scan = next;
@@ -146,16 +146,16 @@ fn walk(
 
         resume(rex, prog, stack, backpos, braces, &mut scan, &mut status);
 
-        if status == RA_CONT {
+        if status == Verdict::Continue {
             continue;
         }
-        if stack.depth() == 0 || status == RA_FAIL {
+        if stack.depth() == 0 || status == Verdict::Fail {
             if scan == 0 {
                 // Should not happen. Providing a message and failing is
                 // better than a crash.
                 iemsg(gettext(E_RE_CORR));
             }
-            return status == RA_MATCH;
+            return status == Verdict::Match;
         }
     }
 }
@@ -178,15 +178,15 @@ fn push_frame(
     op: BtOp,
     scan: usize,
     next: &mut usize,
-) -> c_int {
+) -> Verdict {
     match op {
         // A loop's back edge. Coming back to the same node at the same
         // input position means the loop is not making progress.
         BtOp::Back => {
             if backpos.stepped(rex, scan) {
-                RA_CONT
+                Verdict::Continue
             } else {
-                RA_NOMATCH
+                Verdict::NoMatch
             }
         }
 
@@ -247,9 +247,9 @@ fn push_frame(
         // unwinder has something to step over.
         BtOp::Nopen | BtOp::Nclose => {
             if stack.push(RS_NOPEN, scan).is_none() {
-                RA_FAIL
+                Verdict::Fail
             } else {
-                RA_CONT
+                Verdict::Continue
             }
         }
 
@@ -258,11 +258,11 @@ fn push_frame(
         BtOp::Branch => {
             if prog.op_byte(*next) != BtOp::Branch.byte() {
                 *next = scan + 3;
-                RA_CONT
+                Verdict::Continue
             } else if stack.push(RS_BRANCH, scan).is_none() {
-                RA_FAIL
+                Verdict::Fail
             } else {
-                RA_BREAK
+                Verdict::Break
             }
         }
 
@@ -272,7 +272,7 @@ fn push_frame(
             let next_op = BtOp::decode(prog.op_byte(*next)).map(|(op, _)| op);
             if next_op == Ok(BtOp::BraceSimple) {
                 rex.set_brace_limits(prog.operand_u32(scan, 3), prog.operand_u32(scan, 7));
-                RA_CONT
+                Verdict::Continue
             } else if let Ok(next_op) = next_op
                 && let Some(slot) = next_op.index_in(BtOp::BraceComplex)
             {
@@ -280,10 +280,10 @@ fn push_frame(
                 brace.min = prog.operand_u32(scan, 3);
                 brace.max = prog.operand_u32(scan, 7);
                 brace.count = 0;
-                RA_CONT
+                Verdict::Continue
             } else {
                 internal_error(c"BRACE_LIMITS");
-                RA_FAIL
+                Verdict::Fail
             }
         }
 
@@ -307,12 +307,12 @@ fn push_frame(
         // outcome means.
         BtOp::Nomatch | BtOp::Match | BtOp::Subpat => {
             let Some(rp) = stack.push(RS_NOMATCH, scan) else {
-                return RA_FAIL;
+                return Verdict::Fail;
             };
             rp.rs_no = op.byte();
             rp.rs_saved = reg_save(rex, backpos);
             *next = scan + 3;
-            RA_CONT
+            Verdict::Continue
         }
 
         // `\@<=` and `\@<!`: the operand has to match ending here, so the
@@ -320,20 +320,20 @@ fn push_frame(
         BtOp::Behind | BtOp::Nobehind => {
             // The capture snapshot rides in front of the frame.
             if stack.push_behind(RS_BEHIND1, scan).is_err() {
-                return RA_FAIL;
+                return Verdict::Fail;
             }
             let (rp, bp) = stack.top_behind();
             save_subexpr(rex, bp);
             rp.rs_no = op.byte();
             rp.rs_saved = reg_save(rex, backpos);
-            RA_CONT
+            Verdict::Continue
         }
 
         _ => {
             // Should not happen: the compiler emitted something the
             // matcher does not know.
             iemsg(gettext(E_RE_CORR));
-            RA_FAIL
+            Verdict::Fail
         }
     }
 }
@@ -343,14 +343,14 @@ fn push_frame(
 ///
 /// `state` is a capture state and `no` a group number decoded from one of
 /// the capture opcodes: see [`capture_slot`].
-fn push_capture(rex: Rex, stack: &mut RegStack, state: RegState, scan: usize, no: u8) -> c_int {
+fn push_capture(rex: Rex, stack: &mut RegStack, state: RegState, scan: usize, no: u8) -> Verdict {
     let slot = capture_slot(rex, state, usize::from(no));
     let Some(rp) = stack.push(state, scan) else {
-        return RA_FAIL;
+        return Verdict::Fail;
     };
     rp.rs_no = no;
     save_capture(rex, &mut rp.rs_saved.pos, slot);
-    RA_CONT
+    Verdict::Continue
 }
 
 /// One pass of a `\{n,m}` around something that is not `SIMPLE`.
@@ -367,7 +367,7 @@ fn brace_complex(
     no: u8,
     scan: usize,
     next: &mut usize,
-) -> c_int {
+) -> Verdict {
     let brace = braces.slot(usize::from(no));
     brace.count += 1;
     let (count, min, max) = (brace.count, brace.min, brace.max);
@@ -376,7 +376,7 @@ fn brace_complex(
     // Still below the smaller bound: another pass is mandatory.
     if count <= min.min(max) {
         let Some(rp) = stack.push(RS_BRCPLX_MORE, scan) else {
-            return RA_FAIL;
+            return Verdict::Fail;
         };
         rp.rs_no = no;
         rp.rs_saved = reg_save(rex, backpos);
@@ -385,7 +385,7 @@ fn brace_complex(
         // Another pass is allowed; try it, and fall back to stopping.
         if count <= max {
             let Some(rp) = stack.push(RS_BRCPLX_LONG, scan) else {
-                return RA_FAIL;
+                return Verdict::Fail;
             };
             rp.rs_no = no;
             rp.rs_saved = reg_save(rex, backpos);
@@ -394,11 +394,11 @@ fn brace_complex(
     } else if count <= min {
         // Non-greedy: try stopping first, and fall back to another pass.
         let Some(rp) = stack.push(RS_BRCPLX_SHORT, scan) else {
-            return RA_FAIL;
+            return Verdict::Fail;
         };
         rp.rs_saved = reg_save(rex, backpos);
     }
-    RA_CONT
+    Verdict::Continue
 }
 
 /// `*`, `+` or `\{n,m}` around a `SIMPLE` item: count the matches in one go
@@ -410,7 +410,7 @@ fn counted_repeat(
     stack: &mut RegStack,
     op: BtOp,
     scan: usize,
-) -> c_int {
+) -> Verdict {
     let mut rst = RegStar {
         nextb: NUL,
         nextb_ic: NUL,
@@ -440,7 +440,7 @@ fn counted_repeat(
 
     rst.count = super::repeat::regrepeat(rex, prog, scan + 3, rst.maxval);
     if GOT_INT.get() {
-        return RA_FAIL;
+        return Verdict::Fail;
     }
     // A reversed bound (`\{-n,m}`) is the non-greedy form, and then the
     // *larger* number is the one that has to be reached.
@@ -450,7 +450,7 @@ fn counted_repeat(
         rst.count >= rst.maxval
     };
     if !enough {
-        return RA_NOMATCH;
+        return Verdict::NoMatch;
     }
     // The counter rides in front of the frame.
     let state = if rst.minval <= rst.maxval {
@@ -459,7 +459,7 @@ fn counted_repeat(
         RS_STAR_SHORT
     };
     if stack.push_star(state, scan, rst).is_err() {
-        return RA_FAIL;
+        return Verdict::Fail;
     }
-    RA_BREAK
+    Verdict::Break
 }

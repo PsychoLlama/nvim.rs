@@ -4,7 +4,7 @@
 //! the forward walk made. When the walk stops — because it failed, or because
 //! it reached `END` — control comes here and the frames are popped in turn.
 //! Each state either accepts the outcome and pops, or produces another thing
-//! to try and hands control back to the forward walk with `RA_CONT`.
+//! to try and hands control back to the forward walk with `Verdict::Continue`.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -28,10 +28,10 @@ use crate::getchar::state::GOT_INT;
 use crate::ascii::NUL;
 use crate::os::libc::int64_t;
 use crate::regexp::{
-    MatchPos, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BEHIND2, RS_BRANCH,
-    RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN,
-    RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, Rex, SavedInput, head_off_at, reg_breakcheck,
-    reg_getline, reg_restore, reg_save, restore_subexpr,
+    MatchPos, RS_BEHIND1, RS_BEHIND2, RS_BRANCH, RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT,
+    RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN, RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN,
+    Rex, SavedInput, Verdict, head_off_at, reg_breakcheck, reg_getline, reg_restore, reg_save,
+    restore_subexpr,
 };
 use crate::types::ColNr;
 
@@ -44,9 +44,9 @@ pub(crate) fn resume(
     backpos: &mut BackPos,
     braces: &mut Braces,
     scan: &mut usize,
-    status: &mut c_int,
+    status: &mut Verdict,
 ) {
-    while stack.depth() > 0 && *status != RA_FAIL {
+    while stack.depth() > 0 && *status != Verdict::Fail {
         let depth = stack.depth();
         match stack.top().rs_state {
             // `\%(`: nothing was saved.
@@ -55,7 +55,7 @@ pub(crate) fn resume(
             // A capture boundary: put the slot back if the rest of the
             // pattern did not work out.
             RS_MOPEN | RS_MCLOSE | RS_ZOPEN | RS_ZCLOSE => {
-                if *status == RA_NOMATCH {
+                if *status == Verdict::NoMatch {
                     // The frame was pushed for a capture opcode, so its
                     // state and `rs_no` name the slot it saved.
                     let rp = stack.top();
@@ -66,17 +66,17 @@ pub(crate) fn resume(
 
             // The next alternative of a `\|`, if there is one.
             RS_BRANCH => {
-                if *status == RA_MATCH {
+                if *status == Verdict::Match {
                     stack.pop(scan);
                 } else {
-                    // RA_BREAK means the branch was only just pushed and the
+                    // Verdict::Break means the branch was only just pushed and the
                     // walk has not moved yet.
-                    if *status != RA_BREAK {
+                    if *status != Verdict::Break {
                         reg_restore(rex, &stack.top().rs_saved, backpos);
                         *scan = stack.top().rs_scan;
                     }
                     if *scan == 0 || prog.op_byte(*scan) != BtOp::Branch.byte() {
-                        *status = RA_NOMATCH;
+                        *status = Verdict::NoMatch;
                         stack.pop(scan);
                     } else {
                         let next = prog.next(*scan);
@@ -91,7 +91,7 @@ pub(crate) fn resume(
             // A mandatory `\{n,m}` pass that did not work out: give the
             // count back and let the failure propagate.
             RS_BRCPLX_MORE => {
-                if *status == RA_NOMATCH {
+                if *status == Verdict::NoMatch {
                     let rp = stack.top();
                     reg_restore(rex, &rp.rs_saved, backpos);
                     braces.slot(usize::from(rp.rs_no)).count -= 1;
@@ -100,27 +100,27 @@ pub(crate) fn resume(
             }
             // A greedy optional pass: on failure, stop looping instead.
             RS_BRCPLX_LONG => {
-                if *status == RA_NOMATCH {
+                if *status == Verdict::NoMatch {
                     let rp = stack.top();
                     reg_restore(rex, &rp.rs_saved, backpos);
                     braces.slot(usize::from(rp.rs_no)).count -= 1;
-                    *status = RA_CONT;
+                    *status = Verdict::Continue;
                 }
                 stack.pop(scan);
-                if *status == RA_CONT {
+                if *status == Verdict::Continue {
                     *scan = prog.next(*scan);
                 }
             }
             // A non-greedy `\{-n,m}`: stopping was tried first, so on
             // failure take another pass after all.
             RS_BRCPLX_SHORT => {
-                if *status == RA_NOMATCH {
+                if *status == Verdict::NoMatch {
                     reg_restore(rex, &stack.top().rs_saved, backpos);
                 }
                 stack.pop(scan);
-                if *status == RA_NOMATCH {
+                if *status == Verdict::NoMatch {
                     *scan += 3;
-                    *status = RA_CONT;
+                    *status = Verdict::Continue;
                 }
             }
 
@@ -129,20 +129,20 @@ pub(crate) fn resume(
             RS_NOMATCH => {
                 let no = c_int::from(stack.top().rs_no);
                 let want = if no == BtOp::Nomatch.code() {
-                    RA_MATCH
+                    Verdict::Match
                 } else {
-                    RA_NOMATCH
+                    Verdict::NoMatch
                 };
                 if *status == want {
-                    *status = RA_NOMATCH;
+                    *status = Verdict::NoMatch;
                 } else {
-                    *status = RA_CONT;
+                    *status = Verdict::Continue;
                     if no != BtOp::Subpat.code() {
                         reg_restore(rex, &stack.top().rs_saved, backpos);
                     }
                 }
                 stack.pop(scan);
-                if *status == RA_CONT {
+                if *status == Verdict::Continue {
                     *scan = prog.next(*scan);
                 }
             }
@@ -157,7 +157,7 @@ pub(crate) fn resume(
 
         // Stop once something wants to run forward again, or once a state
         // kept its own frame and would just be re-entered.
-        if *status == RA_CONT || stack.depth() == depth {
+        if *status == Verdict::Continue || stack.depth() == depth {
             break;
         }
     }
@@ -173,9 +173,9 @@ fn behind_start(
     stack: &mut RegStack,
     backpos: &mut BackPos,
     scan: &mut usize,
-    status: &mut c_int,
+    status: &mut Verdict,
 ) {
-    if *status == RA_NOMATCH {
+    if *status == Verdict::NoMatch {
         stack.pop_behind(scan);
         return;
     }
@@ -201,18 +201,18 @@ fn behind_step(
     stack: &mut RegStack,
     backpos: &mut BackPos,
     scan: &mut usize,
-    status: &mut c_int,
+    status: &mut Verdict,
 ) {
     let (rp, bp) = stack.top_behind();
 
     // It matched, and it ended exactly where the look-behind sits.
-    if *status == RA_MATCH && rex.is_at(rex.behind_pos().pos) {
+    if *status == Verdict::Match && rex.is_at(rex.behind_pos().pos) {
         rex.set_behind_pos(bp.save_behind);
         if c_int::from(rp.rs_no) == BtOp::Behind.code() {
             reg_restore(rex, &bp.save_after, backpos);
         } else {
             // `\@<!` wanted it *not* to match.
-            *status = RA_NOMATCH;
+            *status = Verdict::NoMatch;
             restore_subexpr(rex, bp);
         }
         stack.pop_behind(scan);
@@ -232,10 +232,10 @@ fn behind_step(
     if stepped {
         reg_restore(rex, &rp.rs_saved, backpos);
         *scan = rp.rs_scan + 3 + 4;
-        if *status == RA_MATCH {
+        if *status == Verdict::Match {
             // It matched, but ending in the wrong place: try again from one
             // character further back.
-            *status = RA_NOMATCH;
+            *status = Verdict::NoMatch;
             restore_subexpr(rex, bp);
         }
     } else {
@@ -243,9 +243,9 @@ fn behind_step(
         rex.set_behind_pos(bp.save_behind);
         if c_int::from(rp.rs_no) == BtOp::Nobehind.code() {
             reg_restore(rex, &bp.save_after, backpos);
-            *status = RA_MATCH;
-        } else if *status == RA_MATCH {
-            *status = RA_NOMATCH;
+            *status = Verdict::Match;
+        } else if *status == Verdict::Match {
+            *status = Verdict::NoMatch;
             restore_subexpr(rex, bp);
         }
         stack.pop_behind(scan);
@@ -329,19 +329,19 @@ fn star(
     stack: &mut RegStack,
     backpos: &mut BackPos,
     scan: &mut usize,
-    status: &mut c_int,
+    status: &mut Verdict,
 ) {
-    if *status == RA_MATCH {
+    if *status == Verdict::Match {
         stack.pop_star(scan);
         return;
     }
     let (rp, rst) = stack.top_star();
-    if *status != RA_BREAK {
+    if *status != Verdict::Break {
         reg_restore(rex, &rp.rs_saved, backpos);
     }
 
     loop {
-        if *status != RA_BREAK {
+        if *status != Verdict::Break {
             if rp.rs_state == RS_STAR_LONG {
                 // Greedy: give one match back.
                 rst.count -= 1;
@@ -352,7 +352,7 @@ fn star(
                     // Back over a line break, which a `\_x` may have
                     // consumed.
                     if rex.lnum() == LineNr::ZERO {
-                        *status = RA_NOMATCH;
+                        *status = Verdict::NoMatch;
                         break;
                     }
                     rex.set_lnum(rex.lnum() - 1);
@@ -381,7 +381,7 @@ fn star(
                 break;
             }
         } else {
-            *status = RA_NOMATCH;
+            *status = Verdict::NoMatch;
         }
         // The byte the pattern needs next is known; positions that cannot
         // supply it are skipped without re-entering the walk.
@@ -393,12 +393,12 @@ fn star(
         }
         rp.rs_saved = reg_save(rex, backpos);
         *scan = prog.next(rp.rs_scan);
-        *status = RA_CONT;
+        *status = Verdict::Continue;
         break;
     }
 
-    if *status != RA_CONT {
+    if *status != Verdict::Continue {
         stack.pop_star(scan);
-        *status = RA_NOMATCH;
+        *status = Verdict::NoMatch;
     }
 }

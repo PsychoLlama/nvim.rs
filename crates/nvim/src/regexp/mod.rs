@@ -230,11 +230,22 @@ const E_SUBSTITUTE_NESTING_TOO_DEEP: &CStr = c"E1290: substitute nesting too dee
 pub const NOT_MULTI: c_int = 0;
 pub const MULTI_ONE: c_int = 1;
 pub const MULTI_MULT: c_int = 2;
-pub const RA_FAIL: c_int = 1;
-pub const RA_CONT: c_int = 2;
-pub const RA_BREAK: c_int = 3;
-pub const RA_MATCH: c_int = 4;
-pub const RA_NOMATCH: c_int = 5;
+
+/// What one step of a backtracking match decided: upstream's `RA_*`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Verdict {
+    /// Something failed: abandon the whole match.
+    Fail,
+    /// Go on walking forward.
+    Continue,
+    /// Leave the forward walk: a frame was just pushed, and the backtracking
+    /// loop decides what happens next.
+    Break,
+    /// The pattern matched.
+    Match,
+    /// This branch did not match: backtrack.
+    NoMatch,
+}
 
 crate::flag_set! {
     /// Which Latin-1 byte classes a byte belongs to -- upstream's `RI_*`,

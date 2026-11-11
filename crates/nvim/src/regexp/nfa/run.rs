@@ -26,7 +26,7 @@ use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::mbyte::{mb_islower, mb_isupper, utf_char2len, utf_fold, utf_iscomposing_legacy};
 use crate::profile::profile_passed_limit;
 use crate::regexp::{
-    ESC, MatchPos, NFA_TOO_EXPENSIVE, RA_MATCH, RegSub, Rex, char_at_nul, char_len_at,
+    ESC, MatchPos, NFA_TOO_EXPENSIVE, RegSub, Rex, Verdict, char_at_nul, char_len_at,
     cleanup_subexpr, cleanup_zsubexpr, cstrchr_line, cstrncmp, head_off_at, match_with_backref,
     reg_getline, reg_iswordc,
 };
@@ -104,7 +104,7 @@ pub(crate) fn match_backref(rex: Rex, sub: &RegSub, subidx: usize, bytelen: &mut
             return true;
         }
     } else if match_with_backref(rex, start.lnum, start.col, end.lnum, end.col, Some(bytelen))
-        == RA_MATCH
+        == Verdict::Match
     {
         return true;
     }

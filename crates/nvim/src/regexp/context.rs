@@ -20,8 +20,8 @@ use crate::regexp::RegCompiler;
 use core::ffi::{CStr, c_int};
 
 use super::{
-    CompileError, Compiled, MULTI_MULT, MatchPos, NSUBEXP, PosKind, RA_FAIL, RA_MATCH, RA_NOMATCH,
-    Rex, cstrncmp, head_off_at, peekchr, prefix_at, re_multi_type,
+    CompileError, Compiled, MULTI_MULT, MatchPos, NSUBEXP, PosKind, Rex, Verdict, cstrncmp,
+    head_off_at, peekchr, prefix_at, re_multi_type,
 };
 use crate::charset::vim_iswordc_buf;
 use crate::getchar::state::GOT_INT;
@@ -273,7 +273,7 @@ pub(crate) fn match_with_backref(
     end_lnum: LineNr,
     end_col: ColNr,
     mut bytelen: Option<&mut c_int>,
-) -> c_int {
+) -> Verdict {
     let mut clnum = start_lnum;
     let mut ccol = start_col;
     if let Some(n) = bytelen.as_deref_mut() {
@@ -313,16 +313,16 @@ pub(crate) fn match_with_backref(
             cstrncmp(rex, &captured, rex.rest(), &mut len) != 0
         };
         if differs {
-            return RA_NOMATCH;
+            return Verdict::NoMatch;
         }
         if let Some(n) = bytelen.as_deref_mut() {
             *n += len;
         }
         if clnum == end_lnum {
-            return RA_MATCH;
+            return Verdict::Match;
         }
         if rex.lnum() >= rex.reg_maxline() {
-            return RA_NOMATCH;
+            return Verdict::NoMatch;
         }
         // The capture continues on the next line, so the match must too, and
         // `*bytelen` restarts from that line's column 0.
@@ -333,7 +333,7 @@ pub(crate) fn match_with_backref(
         clnum += 1;
         ccol = ColNr::ZERO;
         if GOT_INT.get() {
-            return RA_FAIL;
+            return Verdict::Fail;
         }
     }
 }
