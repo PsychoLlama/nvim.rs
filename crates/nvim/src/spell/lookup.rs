@@ -54,6 +54,7 @@ use crate::cstr::byte_at;
 use crate::os::cshim::gettext;
 use crate::spell::WordFlags;
 use core::ffi::c_int;
+use core::ops::ControlFlow;
 
 use crate::mbyte::{c_cluster_len, char_count, encode_char, head_off};
 use crate::message::emsg;
@@ -67,8 +68,8 @@ use super::chartab::{
 };
 use super::{
     E_FORMAT, FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPCOMPOUND, FIND_KEEPWORD, FIND_PREFIX, MAXWLEN,
-    MatchInf, SP_BAD, SP_BANNED, SP_LOCAL, SP_OK, SP_RARE, WordEnd, c_text, count_syllables,
-    spell_valid_case,
+    MatchInf, SP_BAD, SP_BANNED, SP_LOCAL, SP_OK, SP_RARE, SpellResult, WordEnd, c_text,
+    count_syllables, spell_valid_case,
 };
 
 /// Step `at` past the character it starts in `text`, as the pointer walk's
@@ -147,14 +148,96 @@ pub(super) fn find_word(mip: &mut MatchInf<'_>, mode: c_int) {
         return; // this language has no such tree
     }
 
-    let mut arridx: usize = 0;
     // Where each "a word could end here" node was, and how far into the
     // word it sat: pushed above whatever the calls this one is nested in
     // left on the stack, and popped back to `base` before returning.
     let base = mip.ends.len();
+    if !push_word_ends(mip, tree, keep, wlen, flen) {
+        return;
+    }
 
-    // Descend until a byte does not match, the tree runs out, or the
-    // word does. `ptr` is re-read whenever folding has added to it.
+    // Now try the endings, longest first.
+    let win = mip.win;
+    while mip.ends.len() > base {
+        let WordEnd { len: end_len, node } = mip.ends.pop().expect("above base");
+        let mut arridx = node;
+        wlen = end_len;
+
+        if head_off(text!(mip, keep), wlen) > 0 {
+            continue; // not on a character boundary
+        }
+
+        // A word character right after the match means this is not the
+        // end of a word — unless the language compounds or does not
+        // break, in which case what follows may continue it.
+        let word_ends = if spell_iswordp(tail(text!(mip, keep), wlen), win) {
+            if slang.sl_compprog.borrow().is_none() && !slang.sl_nobreak {
+                continue;
+            }
+            false
+        } else {
+            true
+        };
+
+        // The prefix flag comes before the compound flags; once a valid
+        // prefix has been found the rest are tried as compound flags.
+        let mut prefix_found = false;
+
+        if mode != FIND_KEEPWORD {
+            // Translate the length back into the unfolded word, since
+            // folding can change how many bytes a character takes. The
+            // comparison is a shortcut for the common case where it did
+            // not change anything.
+            let ptr = text!(mip, keep);
+            if !cstr::ncmp_eq(ptr, mip.word, wlen) {
+                wlen = translate_len(ptr, wlen, mip.word);
+            }
+        }
+
+        // Try each flag/region variant recorded for this spelling, until
+        // one settles this ending.
+        let ending = Ending {
+            mode,
+            keep,
+            wlen,
+            at: end_len,
+            word_ends,
+        };
+        let mut len = tree.node_len(arridx - 1);
+        while len > 0 && tree.ends_word(arridx) {
+            let flags = WordFlags::from_bits(tree.idx(arridx));
+            if try_variant(mip, slang, &ending, flags, &mut prefix_found).is_break() {
+                break;
+            }
+            len -= 1;
+            arridx += 1;
+        }
+
+        if mip.result == SP_OK {
+            mip.ends.truncate(base);
+            break;
+        }
+    }
+}
+
+/// Descend `tree` along the word from `wlen` (with `flen` folded bytes
+/// ahead of it) until a byte does not match, the tree runs out, or the
+/// word does, pushing every "a word could end here" node passed onto
+/// [`MatchInf::ends`].
+///
+/// Answers `false` when the tree nests deeper than any word, which only a
+/// corrupted spell file can do: the error is reported and the stack is
+/// back where it was.
+fn push_word_ends(
+    mip: &mut MatchInf<'_>,
+    tree: Tree<'_>,
+    keep: bool,
+    mut wlen: usize,
+    mut flen: isize,
+) -> bool {
+    let base = mip.ends.len();
+    let mut arridx: usize = 0;
+    // `ptr` is re-read whenever folding has added to it.
     let mut ptr = text!(mip, keep);
     loop {
         if flen <= 0 && byte_at(mip.word, mip.fend) != 0 {
@@ -174,7 +257,7 @@ pub(super) fn find_word(mip: &mut MatchInf<'_>, mode: c_int) {
                 // Only a corrupted spell file can nest this deep.
                 emsg(gettext(E_FORMAT));
                 mip.ends.truncate(base);
-                return;
+                return false;
             }
             mip.ends.push(WordEnd {
                 len: wlen,
@@ -221,222 +304,211 @@ pub(super) fn find_word(mip: &mut MatchInf<'_>, mode: c_int) {
             }
         }
     }
+    true
+}
 
-    // Now try the endings, longest first.
-    let win = mip.win;
-    while mip.ends.len() > base {
-        let WordEnd { len: end_len, node } = mip.ends.pop().expect("above base");
-        arridx = node;
-        wlen = end_len;
+/// One ending [`find_word`] is trying: the walk's `mode` and text, the
+/// match's length in the word as written (`wlen`) and in the text the walk
+/// read (`at`), and whether a word character follows it.
+struct Ending {
+    mode: c_int,
+    keep: bool,
+    wlen: usize,
+    at: usize,
+    word_ends: bool,
+}
 
-        if head_off(text!(mip, keep), wlen) > 0 {
-            continue; // not on a character boundary
+/// Try one flag/region entry, `flags`, of an ending: check case, prefix
+/// and compound conditions, look for the word that must follow, and keep
+/// the result if it beats `mip`'s. Breaks when the ending is settled (no
+/// later entry can do better), continues on to the next entry otherwise.
+fn try_variant(
+    mip: &mut MatchInf<'_>,
+    slang: &SpellLang,
+    ending: &Ending,
+    mut flags: WordFlags,
+    prefix_found: &mut bool,
+) -> ControlFlow<()> {
+    let &Ending {
+        mode,
+        keep,
+        wlen,
+        at: end_len,
+        word_ends,
+    } = ending;
+    if mode == FIND_FOLDWORD {
+        // The fold-case tree records what case the word must be written
+        // in; the keep-case tree is right by construction, and prefixes
+        // are not worth checking.
+        if mip.cend != Some(wlen) {
+            mip.cend = Some(wlen);
+            mip.capflags = captype(mip.word, wlen);
         }
 
-        // A word character right after the match means this is not the
-        // end of a word — unless the language compounds or does not
-        // break, in which case what follows may continue it.
-        let word_ends = if spell_iswordp(tail(text!(mip, keep), wlen), win) {
-            if slang.sl_compprog.borrow().is_none() && !slang.sl_nobreak {
+        if mip.capflags == WordFlags::KEEPCAP || !spell_valid_case(mip.capflags, flags) {
+            return ControlFlow::Continue(());
+        }
+    } else if mode == FIND_PREFIX && !*prefix_found {
+        // The word has to accept one of the prefixes find_prefix() left
+        // at prefarridx.
+        let (cnt, arridx) = (mip.prefcnt, mip.prefarridx);
+        let after = tail(mip.word, mip.cprefixlen);
+        let c = valid_word_prefix(cnt, arridx, flags, after, slang, false);
+        if c == 0 {
+            return ControlFlow::Continue(());
+        }
+        if WordFlags::from_bits(c).has(WordFlags::RAREPFX) {
+            flags |= WordFlags::RARE;
+        }
+        *prefix_found = true;
+    }
+
+    if slang.sl_nobreak {
+        if (mode == FIND_COMPOUND || mode == FIND_KEEPCOMPOUND) && !flags.has(WordFlags::BANNED) {
+            // NOBREAK: a valid word follows, which is all the caller
+            // wanted to know.
+            mip.result = SP_OK;
+            return ControlFlow::Break(());
+        }
+    } else if mode == FIND_COMPOUND || mode == FIND_KEEPCOMPOUND || !word_ends {
+        if !compound_part_allowed(mip, keep, wlen, flags, word_ends, mode, end_len) {
+            return ControlFlow::Continue(());
+        }
+    } else if flags.has(WordFlags::NEEDCOMP) {
+        // Only valid as part of a compound.
+        return ControlFlow::Continue(());
+    }
+
+    let mut nobreak_result = SP_OK;
+
+    if !word_ends {
+        let following = find_following(mip, slang, mode, wlen, end_len, flags);
+        if slang.sl_nobreak {
+            nobreak_result = following;
+        } else if mip.result == SP_OK {
+            return ControlFlow::Break(());
+        } else {
+            return ControlFlow::Continue(());
+        }
+    }
+
+    let res = if flags.has(WordFlags::BANNED) {
+        SP_BANNED
+    } else if flags.has(WordFlags::REGION) {
+        let region = flags.bits().cast_unsigned() >> 16;
+        if mip.lp.region.cast_unsigned() & region != 0 {
+            SP_OK
+        } else {
+            SP_LOCAL
+        }
+    } else if flags.has(WordFlags::RARE) {
+        SP_RARE
+    } else {
+        SP_OK
+    };
+
+    // Keep the longest match with the best result. NOBREAK keeps the
+    // longest match *without* a following good word separately, as a
+    // fall-back.
+    let end = wlen;
+    if nobreak_result == SP_BAD {
+        if mip.result2 > res {
+            mip.result2 = res;
+            mip.end2 = end;
+        } else if mip.result2 == res && mip.end2 < end {
+            mip.end2 = end;
+        }
+    } else if mip.result > res {
+        mip.result = res;
+        mip.end = end;
+    } else if mip.result == res && mip.end < end {
+        mip.end = end;
+    }
+
+    if mip.result == SP_OK {
+        ControlFlow::Break(())
+    } else {
+        ControlFlow::Continue(())
+    }
+}
+
+/// Look for the word that has to follow a match that is not the end of a
+/// word: the next compound part, or for NOBREAK any good word, starting at
+/// `end_len` in the walk's text (`wlen` as written).
+///
+/// When compounding, the recursion sets `mip`'s result itself, and that
+/// is the answer. For NOBREAK only whether a word follows matters: `mip`'s
+/// result and end are put back and what the recursion found is answered.
+fn find_following(
+    mip: &mut MatchInf<'_>,
+    slang: &SpellLang,
+    mode: c_int,
+    wlen: usize,
+    end_len: usize,
+    flags: WordFlags,
+) -> SpellResult {
+    let save_result = mip.result;
+    let save_end = mip.end;
+    let save_lp = (mip.lp, mip.slang);
+
+    if slang.sl_nobreak {
+        mip.result = SP_BAD;
+    }
+
+    mip.compoff = end_len;
+    if mode == FIND_KEEPWORD {
+        // Translate the keep-case length into a case-folded one, again
+        // short-cutting when folding changed nothing.
+        if !cstr::ncmp_eq(mip.word, &mip.fword, wlen) {
+            let to = &mip.fword[..];
+            mip.compoff = translate_len(mip.word, wlen, to);
+        }
+    }
+    mip.complen += 1;
+    if flags.has(WordFlags::COMPROOT) {
+        mip.compextra += 1;
+    }
+
+    // For NOBREAK every language has to be tried, if only to reach the
+    // ".add" files.
+    let (langs, langp) = (mip.langs, mip.langp);
+    for lp in langp {
+        if slang.sl_nobreak {
+            mip.lp = *lp;
+            mip.slang = langs.get(lp.slang);
+            if !mip
+                .slang
+                .is_some_and(|next| !next.sl_fold_tree.is_empty() && next.sl_nobreak)
+            {
                 continue;
             }
-            false
-        } else {
-            true
-        };
-
-        // The prefix flag comes before the compound flags; once a valid
-        // prefix has been found the rest are tried as compound flags.
-        let mut prefix_found = false;
-
-        if mode != FIND_KEEPWORD {
-            // Translate the length back into the unfolded word, since
-            // folding can change how many bytes a character takes. The
-            // comparison is a shortcut for the common case where it did
-            // not change anything.
-            let ptr = text!(mip, keep);
-            if !cstr::ncmp_eq(ptr, mip.word, wlen) {
-                wlen = translate_len(ptr, wlen, mip.word);
-            }
         }
 
-        // Try each flag/region variant recorded for this spelling.
-        let mut len = tree.node_len(arridx - 1);
-        'variants: while len > 0 && tree.ends_word(arridx) {
-            // `break 'variant` is C's `continue`: on to the next
-            // flag/region entry. `break 'variants` is C's `break`: this
-            // ending is settled.
-            'variant: {
-                let mut flags = WordFlags::from_bits(tree.idx(arridx));
+        find_word(mip, FIND_COMPOUND);
 
-                if mode == FIND_FOLDWORD {
-                    // The fold-case tree records what case the word must be
-                    // written in; the keep-case tree is right by
-                    // construction, and prefixes are not worth checking.
-                    if mip.cend != Some(wlen) {
-                        mip.cend = Some(wlen);
-                        mip.capflags = captype(mip.word, wlen);
-                    }
-
-                    if mip.capflags == WordFlags::KEEPCAP || !spell_valid_case(mip.capflags, flags)
-                    {
-                        break 'variant;
-                    }
-                } else if mode == FIND_PREFIX && !prefix_found {
-                    // The word has to accept one of the prefixes
-                    // find_prefix() left at prefarridx.
-                    let (cnt, arridx) = (mip.prefcnt, mip.prefarridx);
-                    let after = tail(mip.word, mip.cprefixlen);
-                    let c = valid_word_prefix(cnt, arridx, flags, after, slang, false);
-                    if c == 0 {
-                        break 'variant;
-                    }
-                    if WordFlags::from_bits(c).has(WordFlags::RAREPFX) {
-                        flags |= WordFlags::RARE;
-                    }
-                    prefix_found = true;
-                }
-
-                if slang.sl_nobreak {
-                    if (mode == FIND_COMPOUND || mode == FIND_KEEPCOMPOUND)
-                        && !flags.has(WordFlags::BANNED)
-                    {
-                        // NOBREAK: a valid word follows, which is all the
-                        // caller wanted to know.
-                        mip.result = SP_OK;
-                        break 'variants;
-                    }
-                } else if mode == FIND_COMPOUND || mode == FIND_KEEPCOMPOUND || !word_ends {
-                    let at = end_len;
-                    if !compound_part_allowed(mip, keep, wlen, flags, word_ends, mode, at) {
-                        break 'variant;
-                    }
-                } else if flags.has(WordFlags::NEEDCOMP) {
-                    // Only valid as part of a compound.
-                    break 'variant;
-                }
-
-                let mut nobreak_result = SP_OK;
-
-                if !word_ends {
-                    let save_result = mip.result;
-                    let save_end = mip.end;
-                    let save_lp = (mip.lp, mip.slang);
-
-                    // Check that a valid word follows. When compounding, the
-                    // recursion sets result itself and there is nothing
-                    // left to do here; for NOBREAK only its existence
-                    // matters.
-                    if slang.sl_nobreak {
-                        mip.result = SP_BAD;
-                    }
-
-                    mip.compoff = end_len;
-                    if mode == FIND_KEEPWORD {
-                        // Translate the keep-case length into a case-folded
-                        // one, again short-cutting when folding changed
-                        // nothing.
-                        if !cstr::ncmp_eq(mip.word, &mip.fword, wlen) {
-                            let to = &mip.fword[..];
-                            mip.compoff = translate_len(mip.word, wlen, to);
-                        }
-                    }
-                    mip.complen += 1;
-                    if flags.has(WordFlags::COMPROOT) {
-                        mip.compextra += 1;
-                    }
-
-                    // For NOBREAK every language has to be tried, if only to
-                    // reach the ".add" files.
-                    let (langs, langp) = (mip.langs, mip.langp);
-                    for lp in langp {
-                        if slang.sl_nobreak {
-                            mip.lp = *lp;
-                            mip.slang = langs.get(lp.slang);
-                            if !mip.slang.is_some_and(|next| {
-                                !next.sl_fold_tree.is_empty() && next.sl_nobreak
-                            }) {
-                                continue;
-                            }
-                        }
-
-                        find_word(mip, FIND_COMPOUND);
-
-                        // Under NOBREAK any match will do; otherwise the
-                        // longest one is wanted, so the keep-case tree is
-                        // tried as well.
-                        if !slang.sl_nobreak || mip.result == SP_BAD {
-                            mip.compoff = wlen;
-                            find_word(mip, FIND_KEEPCOMPOUND);
-                        }
-
-                        if !slang.sl_nobreak {
-                            break;
-                        }
-                    }
-                    mip.complen -= 1;
-                    if flags.has(WordFlags::COMPROOT) {
-                        mip.compextra -= 1;
-                    }
-                    (mip.lp, mip.slang) = save_lp;
-
-                    if slang.sl_nobreak {
-                        nobreak_result = mip.result;
-                        mip.result = save_result;
-                        mip.end = save_end;
-                    } else if mip.result == SP_OK {
-                        break 'variants;
-                    } else {
-                        break 'variant;
-                    }
-                }
-
-                let res = if flags.has(WordFlags::BANNED) {
-                    SP_BANNED
-                } else if flags.has(WordFlags::REGION) {
-                    let region = flags.bits().cast_unsigned() >> 16;
-                    if mip.lp.region.cast_unsigned() & region != 0 {
-                        SP_OK
-                    } else {
-                        SP_LOCAL
-                    }
-                } else if flags.has(WordFlags::RARE) {
-                    SP_RARE
-                } else {
-                    SP_OK
-                };
-
-                // Keep the longest match with the best result. NOBREAK keeps
-                // the longest match *without* a following good word
-                // separately, as a fall-back.
-                let end = wlen;
-                if nobreak_result == SP_BAD {
-                    if mip.result2 > res {
-                        mip.result2 = res;
-                        mip.end2 = end;
-                    } else if mip.result2 == res && mip.end2 < end {
-                        mip.end2 = end;
-                    }
-                } else if mip.result > res {
-                    mip.result = res;
-                    mip.end = end;
-                } else if mip.result == res && mip.end < end {
-                    mip.end = end;
-                }
-
-                if mip.result == SP_OK {
-                    break 'variants;
-                }
-            }
-            len -= 1;
-            arridx += 1;
+        // Under NOBREAK any match will do; otherwise the longest one is
+        // wanted, so the keep-case tree is tried as well.
+        if !slang.sl_nobreak || mip.result == SP_BAD {
+            mip.compoff = wlen;
+            find_word(mip, FIND_KEEPCOMPOUND);
         }
 
-        if mip.result == SP_OK {
-            mip.ends.truncate(base);
+        if !slang.sl_nobreak {
             break;
         }
     }
+    mip.complen -= 1;
+    if flags.has(WordFlags::COMPROOT) {
+        mip.compextra -= 1;
+    }
+    (mip.lp, mip.slang) = save_lp;
+
+    let found = mip.result;
+    if slang.sl_nobreak {
+        mip.result = save_result;
+        mip.end = save_end;
+    }
+    found
 }
 
 /// Whether this word may be one part of a compound, given the flags the
