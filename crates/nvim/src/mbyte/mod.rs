@@ -4,6 +4,7 @@
 //! nvim's internal encoding is always UTF-8; this family is what makes that
 //! true at the edges and useful in the middle.
 //!
+//! - [`Codepoint`] is what the codec decodes text to.
 //! - [`utf8`] is the codec, and its `tables` child the byte-length tables the
 //!   whole tree indexes.
 //! - [`walk`] moves around a buffer: character starts, grapheme clusters,
@@ -120,6 +121,7 @@ use crate::utf8proc::{
 mod case;
 mod cells;
 mod class;
+mod codepoint;
 mod convert;
 mod encoding;
 mod linebreak;
@@ -129,6 +131,7 @@ mod walk;
 pub use self::case::*;
 pub use self::cells::*;
 pub use self::class::*;
+pub use self::codepoint::Codepoint;
 pub use self::convert::*;
 pub use self::encoding::*;
 pub use self::linebreak::*;
