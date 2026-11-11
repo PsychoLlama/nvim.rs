@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Reshaped the tree after the port: types moved out of the shared `types/` directory into the modules that own them (sixteen core files remain), a decoded character is a `Codepoint` rather than a C `int`, every function over two hundred lines is split along its own seams with no `goto`-shaped labelled block left, constants have one home each, and the command, dialog, `:set` and msgpack families answer typed errors.
+
+### Fixed
+
+- Typing `ā`, `Ă` or `ă` in Insert mode fired the 'cinkeys'/'indentkeys' `o`, `O` and `=word` reindents (their code points were the values of three internal pseudo-keys).
+
 ## [2026.11.07-134f6fc430]
 
 ### Changed

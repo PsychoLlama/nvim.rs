@@ -9,16 +9,16 @@ have to change for it to go.
 
 Rust checks memory safety at compile time everywhere except inside `unsafe`
 code, where the programmer promises what the compiler cannot verify. In this
-tree that code is confined to **64 files**, holding **1,615 unchecked
+tree that code is confined to **64 files**, holding **1,608 unchecked
 statements** — every one of them on the _perimeter_ ([docs/perimeter.md](perimeter.md)),
 the list of modules where the program meets something it does not own. The
-other 1,324 source files of the editor (`crates/nvim/src`, 1,388 files) contain
-no unsafe code, and 1,314 of them say so with `#![forbid(unsafe_code)]`, which
+other 1,284 source files of the editor (`crates/nvim/src`, 1,348 files) contain
+no unsafe code, and 1,274 of them say so with `#![forbid(unsafe_code)]`, which
 the compiler enforces; the remaining ten are module roots that cannot carry
 the attribute because a file beneath them is on the perimeter. The unsafe code
 falls into four classes:
 
-- **A foreign ABI — 34 files, 1,046 statements.** Calls into C libraries the
+- **A foreign ABI — 34 files, 1,039 statements.** Calls into C libraries the
   editor links: LuaJIT and its libraries, libuv (the event loop, processes,
   sockets, the terminal's I/O), tree-sitter and libxdiff. The unsafe is the
   call itself, and the reads of what the library answers.
@@ -72,7 +72,7 @@ unsafe_placement` lists any misplaced attribute (none);
 | `lua/ffi.rs`, `lua/executor/{luv,state}.rs` | foreign  |     3 |        105 |            8 | LuaJIT's declarations, luv's hooks, state making |
 | `lua/stack/`                                | foreign  |     5 |        110 |            6 | the typed Lua stack                              |
 | `lua/treesitter/`                           | foreign  |    10 |        203 |            9 | the tree-sitter library                          |
-| `event/`                                    | foreign  |    11 |        558 |           90 | libuv: loop, streams, timers, signals, children  |
+| `event/`                                    | foreign  |    11 |        551 |           90 | libuv: loop, streams, timers, signals, children  |
 | `tui/{tui,input,output,events}.rs`          | foreign  |     4 |         69 |            6 | the terminal's libuv handles                     |
 | `xdiff/`                                    | foreign  |     1 |          1 |            0 | `isspace(3)`'s table                             |
 | `os/`                                       | OS       |    14 |        237 |           15 | system calls                                     |
