@@ -76,7 +76,7 @@ pub(crate) struct GridCells<'a> {
 }
 
 /// The blank a cleared cell holds.
-const BLANK: ScreenChar = b' ' as ScreenChar;
+pub(crate) const BLANK: ScreenChar = b' ' as ScreenChar;
 
 /// A row number as an index. Panics rather than wrapping: every caller has
 /// already bounded the row against `rows`.

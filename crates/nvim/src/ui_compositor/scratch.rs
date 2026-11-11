@@ -111,7 +111,7 @@ pub(super) fn clear_invalid_attrs(attrbuf: &mut [ScreenAttr], cells: Cells, fata
 mod tests {
     use super::*;
 
-    const BLANK: ScreenChar = schar_from_ascii(b' ');
+    use crate::grid::defs::BLANK;
 
     fn text(s: &str) -> Vec<ScreenChar> {
         s.bytes().map(schar_from_ascii).collect()

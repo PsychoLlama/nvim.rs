@@ -20,7 +20,7 @@ use super::*;
 use crate::api::private::validate::{
     Bad, err_bad_number, err_bad_value, err_expected, err_invalid, err_out_of_range,
 };
-use crate::decoration::decor_drawing_window;
+use crate::decoration::{NO_ENTRY, decor_drawing_window};
 use crate::narrow::number_as_col;
 use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
