@@ -193,44 +193,29 @@ impl Lasti {
 /// before this one. Iterating forward is the recommended strategy and passes
 /// false.
 pub fn marktree_del_itr(tree: &mut MarkTree, iter: &mut MarkTreeIter, rev: bool) -> uint64_t {
-    let mut adjustment = 0;
     let cur = iter.node.expect("a positioned iterator");
     let curi = as_index(iter.index);
     let raw = tree[cur].key(curi);
     let id = mt_lookup_key(raw);
 
-    // 1. Orphan the other half of the pair, and retract the records of what
-    //    the range covered. NB: the retraction must name exactly the pair the
-    //    records were made for.
-    let mut other = 0;
-    if mt_paired(raw) && !raw.flags.has(MtFlags::ORPHANED) {
-        other = mt_lookup_key_side(raw, !mt_end(raw));
-        let mut other_iter = MarkTreeIter::default();
-        marktree_lookup(tree, other, Some(&mut other_iter));
-        tree.key_mut(&other_iter).flags |= MtFlags::ORPHANED;
-        if mt_start(raw) {
-            let mut this_iter = iter.clone(); // a copy, because this one is mutated
-            marktree_intersect_pair(tree, id, &mut this_iter, &other_iter, true);
-        } else {
-            marktree_intersect_pair(tree, other, &mut other_iter, iter, true);
-        }
-    }
+    // 1. Orphan the other half of the pair.
+    let other = orphan_other_half(tree, iter, raw, id);
 
     // 2. An internal key cannot be removed in place; steal the previous key,
     //    which is in a leaf, and put it here instead.
-    if !tree[cur].is_leaf() {
+    let internal = !tree[cur].is_leaf();
+    if internal {
         if rev {
             ::std::process::abort();
         }
         marktree_itr_prev(tree, iter);
-        adjustment = -1;
     }
 
     // 3. Delete the leaf key.
-    let mut x = iter.node.expect("a leaf key before an internal one");
+    let x = iter.node.expect("a leaf key before an internal one");
     debug_assert!(tree[x].is_leaf(), "x->level == 0");
-    let mut intkey = tree[x].key(as_index(iter.index));
-    let mut meta_inc = meta_describe_key(intkey);
+    let intkey = tree[x].key(as_index(iter.index));
+    let leaf_meta = meta_describe_key(intkey);
     let hole = as_index(iter.index);
     let leaf = &mut tree[x];
     if leaf.key_count() > hole + 1 {
@@ -240,84 +225,12 @@ pub fn marktree_del_itr(tree: &mut MarkTree, iter: &mut MarkTreeIter, rev: bool)
     tree.n_keys = tree.n_keys.wrapping_sub(1);
     tree.id2node.remove(&id);
 
-    // 4. Write the stolen key over the one the caller wanted gone, rebasing it
-    //    onto every node between the two, and repair the covering records the
-    //    move disturbed.
-    if adjustment == -1 {
-        let mut depth = iter.depth - 1;
-        let mut lnode = x;
-        let mut start_id = 0;
-        let mut did_bubble = false;
-        if mt_end(intkey) {
-            start_id = mt_lookup_key_side(intkey, false);
-        }
-        loop {
-            if depth < 0 {
-                ::std::process::abort();
-            }
-            let p = tree[lnode]
-                .parent()
-                .expect("a node below `cur` has a parent");
-            let i = as_index(iter.path[as_index(depth)].index);
-            debug_assert!(tree[p].child(i) == lnode, "p->ptr[i] == lnode");
-            if i > 0 {
-                unrelative(tree[p].key(i - 1).pos, &mut intkey.pos);
-            }
-            if p != cur && start_id != 0 && tree[tree[p].child(0)].intersection().contains(start_id)
-            {
-                // After the first time round, this also undoes the addition the
-                // previous round made just below.
-                let last = usize::from(lnode != x);
-                // One less than the children, because `ptr[n]` is the last.
-                for k in 0..tree[p].key_count() + last {
-                    let child = tree[p].child(k);
-                    unintersect_node(tree, child, start_id, true);
-                }
-                intersect_node(tree, p, start_id);
-                did_bubble = true;
-            }
-            let at = tree[lnode].parent_index();
-            meta_sub(tree[p].child_meta_mut(at), &meta_inc);
-            lnode = p;
-            depth -= 1;
-            if lnode == cur {
-                break;
-            }
-        }
-
-        let mut deleted = tree[cur].key(curi);
-        meta_inc = meta_describe_key(deleted);
-        tree[cur].set_key(curi, intkey);
-        tree.refkey(cur, curi);
-        // Where we bubbled `start_id` up to a parent, its record is already
-        // there; otherwise the leaf may need one of its own.
-        if mt_end(tree[cur].key(curi)) && !did_bubble {
-            let pi = tree.pseudo_index(x, 0); // note: sloppy pseudo-index
-            let pi_start = pseudo_index_for_id(tree, start_id, true);
-            if pi_start > 0 && pi_start < pi {
-                intersect_node(tree, x, start_id);
-            }
-        }
-
-        // The subtree that hung off the replaced key is now based on a
-        // different key, so rebase its leftmost spine onto the difference.
-        relative(intkey.pos, &mut deleted.pos);
-        if deleted.pos.row != 0 || deleted.pos.col != 0 {
-            let mut y = Some(tree[cur].child(curi + 1));
-            while let Some(node) = y {
-                let node = &mut tree[node];
-                for k in 0..node.key_count() {
-                    unrelative(deleted.pos, &mut node.key_mut(k).pos);
-                }
-                y = if node.is_leaf() {
-                    None
-                } else {
-                    Some(node.child(0))
-                };
-            }
-        }
-        iter.index -= 1;
-    }
+    // 4. Write the stolen key over the one the caller wanted gone.
+    let meta_inc = if internal {
+        replace_internal_key(tree, iter, cur, curi, x, intkey, &leaf_meta)
+    } else {
+        leaf_meta
+    };
 
     let mut lnode = cur;
     while let Some(p) = tree[lnode].parent() {
@@ -331,6 +244,154 @@ pub fn marktree_del_itr(tree: &mut MarkTree, iter: &mut MarkTreeIter, rev: bool)
     meta_sub(&mut tree.meta_root, &meta_inc);
 
     // 5. Repair upward from the leaf.
+    let iter_dirty = repair_upward(tree, iter, x);
+
+    // 6. The root may have run out of keys.
+    drop_empty_root(tree, iter);
+
+    if iter.is_positioned() && iter_dirty {
+        marktree_itr_fix_pos(tree, iter);
+    }
+
+    // BONUS STEP: leave the iterator on the key after the deleted one.
+    if internal {
+        // Tricky: we stand at the hole in the previous leaf, and the internal
+        // key is now the one we stole, so skip that one as well.
+        marktree_itr_next(tree, iter);
+        marktree_itr_next(tree, iter);
+    } else if let Some(node) = iter.node
+        && as_index(iter.index) >= tree[node].key_count()
+    {
+        // We deleted the last key of a leaf node; go to the internal key
+        // after it.
+        debug_assert!(tree[node].is_leaf(), "itr->x->level == 0");
+        marktree_itr_next(tree, iter);
+    }
+
+    other
+}
+
+/// Step 1 of [`marktree_del_itr`]: orphan the other half of `raw`'s pair, and
+/// retract the records of what the range covered. NB: the retraction must
+/// name exactly the pair the records were made for. Answers the other half's
+/// id: zero for an unpaired mark, or one already orphaned.
+fn orphan_other_half(
+    tree: &mut MarkTree,
+    iter: &MarkTreeIter,
+    raw: MTKey,
+    id: uint64_t,
+) -> uint64_t {
+    if !mt_paired(raw) || raw.flags.has(MtFlags::ORPHANED) {
+        return 0;
+    }
+    let other = mt_lookup_key_side(raw, !mt_end(raw));
+    let mut other_iter = MarkTreeIter::default();
+    marktree_lookup(tree, other, Some(&mut other_iter));
+    tree.key_mut(&other_iter).flags |= MtFlags::ORPHANED;
+    if mt_start(raw) {
+        let mut this_iter = iter.clone(); // a copy: the walk moves the one it is handed
+        marktree_intersect_pair(tree, id, &mut this_iter, &other_iter, true);
+    } else {
+        marktree_intersect_pair(tree, other, &mut other_iter, iter, true);
+    }
+    other
+}
+
+/// Step 4 of [`marktree_del_itr`]: write `intkey`, the key just deleted from
+/// leaf `x`, over key `curi` of internal node `cur` (the one the caller
+/// wanted gone), rebasing it onto every node between the two, and repair the
+/// covering records the move disturbed. Takes `meta_inc` (the leaf key's
+/// counts) off every node on the way up; answers the counts of the key that
+/// leaves the tree. The iterator ends on the hole in the leaf.
+fn replace_internal_key(
+    tree: &mut MarkTree,
+    iter: &mut MarkTreeIter,
+    cur: NodeId,
+    curi: usize,
+    x: NodeId,
+    mut intkey: MTKey,
+    meta_inc: &MetaCount,
+) -> MetaCount {
+    let mut depth = iter.depth - 1;
+    let mut lnode = x;
+    let mut start_id = 0;
+    let mut did_bubble = false;
+    if mt_end(intkey) {
+        start_id = mt_lookup_key_side(intkey, false);
+    }
+    loop {
+        if depth < 0 {
+            ::std::process::abort();
+        }
+        let p = tree[lnode]
+            .parent()
+            .expect("a node below `cur` has a parent");
+        let i = as_index(iter.path[as_index(depth)].index);
+        debug_assert!(tree[p].child(i) == lnode, "p->ptr[i] == lnode");
+        if i > 0 {
+            unrelative(tree[p].key(i - 1).pos, &mut intkey.pos);
+        }
+        if p != cur && start_id != 0 && tree[tree[p].child(0)].intersection().contains(start_id) {
+            // After the first time round, this also undoes the addition the
+            // previous round made just below.
+            let last = usize::from(lnode != x);
+            // One less than the children, because `ptr[n]` is the last.
+            for k in 0..tree[p].key_count() + last {
+                let child = tree[p].child(k);
+                unintersect_node(tree, child, start_id, true);
+            }
+            intersect_node(tree, p, start_id);
+            did_bubble = true;
+        }
+        let at = tree[lnode].parent_index();
+        meta_sub(tree[p].child_meta_mut(at), meta_inc);
+        lnode = p;
+        depth -= 1;
+        if lnode == cur {
+            break;
+        }
+    }
+
+    let mut deleted = tree[cur].key(curi);
+    let deleted_meta = meta_describe_key(deleted);
+    tree[cur].set_key(curi, intkey);
+    tree.refkey(cur, curi);
+    // Where we bubbled `start_id` up to a parent, its record is already
+    // there; otherwise the leaf may need one of its own.
+    if mt_end(tree[cur].key(curi)) && !did_bubble {
+        let pi = tree.pseudo_index(x, 0); // note: sloppy pseudo-index
+        let pi_start = pseudo_index_for_id(tree, start_id, true);
+        if pi_start > 0 && pi_start < pi {
+            intersect_node(tree, x, start_id);
+        }
+    }
+
+    // The subtree that hung off the replaced key is now based on a
+    // different key, so rebase its leftmost spine onto the difference.
+    relative(intkey.pos, &mut deleted.pos);
+    if deleted.pos.row != 0 || deleted.pos.col != 0 {
+        let mut y = Some(tree[cur].child(curi + 1));
+        while let Some(node) = y {
+            let node = &mut tree[node];
+            for k in 0..node.key_count() {
+                unrelative(deleted.pos, &mut node.key_mut(k).pos);
+            }
+            y = if node.is_leaf() {
+                None
+            } else {
+                Some(node.child(0))
+            };
+        }
+    }
+    iter.index -= 1;
+    deleted_meta
+}
+
+/// Step 5 of [`marktree_del_itr`]: repair upward from leaf `x`. If the node is
+/// big enough, stop; else steal from the left sibling, else from the right;
+/// else merge with a sibling, which may leave the parent undersized, so repeat
+/// for the parent. Answers whether the iterator's position needs fixing.
+fn repair_upward(tree: &mut MarkTree, iter: &mut MarkTreeIter, mut x: NodeId) -> bool {
     let mut iter_dirty = false;
     let mut rdepth = iter.depth - 1;
     let mut lasti = Lasti::Cur;
@@ -392,8 +453,12 @@ pub fn marktree_del_itr(tree: &mut MarkTree, iter: &mut MarkTreeIter, rev: bool)
         rdepth -= 1;
         x = p;
     }
+    iter_dirty
+}
 
-    // 6. The root may have run out of keys; drop it and promote its child.
+/// Step 6 of [`marktree_del_itr`]: when the root has run out of keys, drop it
+/// and promote its only child.
+fn drop_empty_root(tree: &mut MarkTree, iter: &mut MarkTreeIter) {
     let root = tree
         .root
         .expect("a tree that held the deleted key has a root");
@@ -418,27 +483,6 @@ pub fn marktree_del_itr(tree: &mut MarkTree, iter: &mut MarkTreeIter, rev: bool)
             iter.node = None;
         }
     }
-
-    if iter.is_positioned() && iter_dirty {
-        marktree_itr_fix_pos(tree, iter);
-    }
-
-    // BONUS STEP: leave the iterator on the key after the deleted one.
-    if adjustment == -1 {
-        // Tricky: we stand at the hole in the previous leaf, and the internal
-        // key is now the one we stole, so skip that one as well.
-        marktree_itr_next(tree, iter);
-        marktree_itr_next(tree, iter);
-    } else if let Some(node) = iter.node
-        && as_index(iter.index) >= tree[node].key_count()
-    {
-        // We deleted the last key of a leaf node; go to the internal key
-        // after it.
-        debug_assert!(tree[node].is_leaf(), "itr->x->level == 0");
-        marktree_itr_next(tree, iter);
-    }
-
-    other
 }
 
 /// Re-count the meta kinds of the key under the iterator, up to the root, after
