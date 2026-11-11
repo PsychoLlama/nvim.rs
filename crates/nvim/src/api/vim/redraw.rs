@@ -15,7 +15,6 @@
 )]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::grid::grid_of_view;
 use crate::guard::Allow;
 use crate::optionstr::OptString;
@@ -33,7 +32,7 @@ fn redraw_status(mut window: Win, opts: &Redraw, flush: bool) -> bool {
         opts.statusline.unwrap_or(false),
         opts.winbar.unwrap_or(false),
     );
-    let has_statuscolumn = ::core::ffi::c_int::from(window.w_onebuf_opt.wo_stc.first_byte()) != NUL;
+    let has_statuscolumn = window.w_onebuf_opt.wo_stc.first_byte() != 0;
     if statuscolumn && has_statuscolumn {
         window.w_nrwidth_line_count = LineNr::ZERO;
         changed_window_setting(window);

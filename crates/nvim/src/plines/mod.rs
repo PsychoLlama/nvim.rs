@@ -23,7 +23,7 @@
 //! This runs per character on every redraw. Prefer plain loops and keep the
 //! small helpers inlined.
 
-use crate::ascii::{NUL, TAB};
+use crate::ascii::TAB;
 use crate::buffer::buf_meta_total;
 use crate::charset::{byte2cells, vim_isbreak, vim_isprintc};
 use crate::cstr::byte_at;
@@ -477,7 +477,7 @@ fn linebreak_size(win: Win, line: &[u8], at: usize, vcol: ColNr, size: c_int) ->
             c_int::from(byte_at(line, s)),
             c_int::from(byte_at(line, ps)),
         );
-        if c == NUL
+        if c == 0
             || !(vim_isbreak(Codepoint::new(c))
                 || vcol2 == vcol
                 || !vim_isbreak(Codepoint::new(prev)))

@@ -14,7 +14,6 @@
 )]
 #![forbid(unsafe_code)]
 use crate::api::extmark::parse_virt_text;
-use crate::ascii::NUL;
 use crate::charset::skip;
 use crate::decoration::defs::VirtText;
 use crate::types::{LineNr, OBJECT_TYPE_ARRAY, OBJECT_TYPE_STRING, Object, VarNumber};
@@ -84,7 +83,7 @@ pub(crate) fn get_foldtext(
         DID_EMSG.set(0);
     }
     let win = window;
-    if c_int::from(win.w_onebuf_opt.wo_fdt.first_byte()) != NUL {
+    if win.w_onebuf_opt.wo_fdt.first_byte() != 0 {
         let level = foldinfo.fi_level.clamp(0, 21);
         let dashes = vec![b'-'; usize::try_from(level).unwrap_or(0)];
         set_vim_var_nr(Vv::Foldstart, VarNumber::from(lnum));

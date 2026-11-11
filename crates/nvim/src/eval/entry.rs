@@ -32,7 +32,6 @@ use crate::semsg;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
-use crate::ascii::NUL;
 use crate::charset::skip;
 use crate::eval::encode::tv2string_bytes;
 use crate::eval::typval::{
@@ -423,7 +422,7 @@ pub(crate) fn eval_foldexpr(window: Win) -> (c_int, c_int) {
     let expr = window.w_onebuf_opt.wo_fde.get();
     let text = &expr[skip::white(&expr)..];
     CURRENT_SCTX.set(window.w_onebuf_opt.wo_script_ctx[WIN_OPT_FOLDEXPR as usize]);
-    let mut marker = NUL;
+    let mut marker = 0;
     let retval: VarNumber = {
         let _no_emsg = Suppress::emsg();
         let _sandboxed = use_sandbox.then(Lock::sandbox);

@@ -30,7 +30,6 @@ use super::program::{NfaRegProg, NfaState, StateId};
 use super::run::nfa_did_time_out;
 use super::step::{Run, Step, lookaround_held, step};
 use super::sub::{copy_sub, copy_sub_off, has_zsubexpr, match_follows_from};
-use crate::ascii::NUL;
 use crate::getchar::state::GOT_INT;
 use crate::regexp::{
     NFA_MAX_STATES, NFA_TOO_EXPENSIVE, PimResult, RegSubs, Rex, recursive_regmatch, reg_breakcheck,
@@ -132,7 +131,7 @@ fn scan<'p>(
     loop {
         let curc = rex.char_here();
         let mut clen = rex.char_len();
-        if curc == NUL {
+        if curc == 0 {
             clen = 0;
             go_to_nextline = false;
         }
@@ -360,7 +359,7 @@ fn restart<'p>(
     // The program may know the character every match starts with, in
     // which case there is no point restarting anywhere else.
     let regstart = prog.regstart;
-    if regstart != NUL && clen != 0 {
+    if regstart != 0 && clen != 0 {
         if nextlist.len() == 0 {
             // Nothing is alive, so jump the input straight to the next
             // place that character occurs.

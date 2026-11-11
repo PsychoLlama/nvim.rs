@@ -39,7 +39,6 @@ use super::{
     REGSUB_COPY, REGSUB_MAGIC, RSM, RegSubMatch, TAB,
 };
 use crate::ascii::CTRL_H;
-use crate::ascii::NUL;
 use crate::eval::eval_to_string;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::K_SPECIAL;
@@ -599,7 +598,7 @@ fn expand_replacement(rex: Expanding<'_>, source: &[u8], flags: c_int, out: &mut
     loop {
         let mut c = c_int::from(at(src));
         src += 1;
-        if c == NUL {
+        if c == 0 {
             return Outcome::Done;
         }
 

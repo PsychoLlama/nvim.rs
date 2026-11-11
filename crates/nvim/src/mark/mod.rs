@@ -23,7 +23,7 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::ascii::{NUL, TAB};
+use crate::ascii::TAB;
 use crate::autocmd::AUGROUP_ALL;
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{aucmd_defer, has_event};
@@ -213,7 +213,7 @@ fn setmark_pos(
         } else {
             buf.b_visual.vi_end = at;
         }
-        if buf.b_visual.vi_mode == NUL {
+        if buf.b_visual.vi_mode == 0 {
             buf.b_visual.vi_mode = c_int::from(b'v');
         }
     } else if c == b'"' {

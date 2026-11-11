@@ -34,7 +34,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ascii::NUL;
 use crate::ascii::ascii_iswhite;
 use crate::cstr::until_nul;
 use crate::mbyte::{c_cluster_len, char_count};
@@ -199,7 +198,7 @@ impl Walk<'_> {
         let bad_idx = self.stack[level].bad_idx as usize;
         // The bad word "ends" wherever a word can no longer continue,
         // not only at its terminator.
-        let bad_word_ends = self.fword_at(bad_idx) == NUL
+        let bad_word_ends = self.fword_at(bad_idx) == 0
             || if self.soundfold {
                 ascii_iswhite(self.fword_at(bad_idx))
             } else {

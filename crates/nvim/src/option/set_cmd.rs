@@ -38,7 +38,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
 use super::{OptSlot, SetOp, option_last_set, ui_refresh_options};
-use crate::ascii::NUL;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::drawscreen::{UPD_CLEAR, redraw_all_later};
 use crate::eval::last_set_msg;
@@ -324,7 +323,7 @@ fn take_number(opt_idx: OptIndex, arg: &[u8], errmsg: &mut Option<OptError>) -> 
     let first = c_int::from(at(arg, 0));
     let looks_like_key = first == c_int::from(b'<')
         || first == c_int::from(b'^')
-        || (first != NUL && (at(arg, 1) == 0 || white_at(arg, 1)) && !ascii_isdigit(first));
+        || (first != 0 && (at(arg, 1) == 0 || white_at(arg, 1)) && !ascii_isdigit(first));
     if is_key_option && looks_like_key {
         let key = OptInt::from(string_to_key(arg));
         if key == 0 {

@@ -19,7 +19,6 @@ use core::ffi::c_int;
 
 use super::compile::use_multibytecode;
 use super::op::BtOp;
-use crate::ascii::NUL;
 use crate::mbyte::{GraphemeState, utf_iscomposing_legacy};
 use crate::regexp::mbyte::{char_at_nul, char_len_at, composes_at};
 use crate::regexp::{
@@ -123,7 +122,7 @@ pub(crate) fn literal_run(rc: &mut RegCompiler, flagp: &mut c_int, mut c: c_int)
     // A negative `c` is a metacharacter, which only the first iteration may
     // take (as a literal): stopping before one is what leaves it for the
     // next atom.
-    while c != NUL
+    while c != 0
         && (len == 0 || (multi_kind(peekchr(rc)).is_none() && rc.one_exactly == 0 && c >= 0))
     {
         rc.code.char(unmagic(c));
@@ -132,7 +131,7 @@ pub(crate) fn literal_run(rc: &mut RegCompiler, flagp: &mut c_int, mut c: c_int)
         len += 1;
     }
     ungetchr(rc);
-    rc.code.byte(NUL);
+    rc.code.byte(b'\0');
     *flagp |= HASWIDTH;
     if len == 1 {
         *flagp |= SIMPLE;
@@ -164,7 +163,7 @@ pub(crate) fn previous_substitute(rc: &mut RegCompiler, flagp: &mut c_int) -> Co
     for &byte in sub.iter() {
         rc.code.byte(byte);
     }
-    rc.code.byte(NUL);
+    rc.code.byte(b'\0');
     if !sub.is_empty() {
         *flagp |= HASWIDTH;
         if sub.len() == 1 {

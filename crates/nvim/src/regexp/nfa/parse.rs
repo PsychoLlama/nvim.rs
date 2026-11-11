@@ -24,7 +24,6 @@ use core::ffi::c_int;
 
 use super::Parsed;
 use super::atom::nfa_regatom as regatom;
-use crate::ascii::NUL;
 use crate::regexp::{
     CompileError, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, NSUBEXP, ParseState,
     RE_AUTO, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, RF_ICASE, RF_ICOMBINE, RF_NOICASE,
@@ -233,7 +232,7 @@ pub(crate) fn nfa_regconcat(rc: &mut RegCompiler) -> Parsed {
     loop {
         match peekchr(rc) {
             // Anything that ends a concatenation is left for the caller.
-            NUL | M_BAR | M_AMP | M_PAREN_CLOSE => return Ok(()),
+            0 | M_BAR | M_AMP | M_PAREN_CLOSE => return Ok(()),
             M_Z_UPPER => {
                 rc.flags |= RF_ICOMBINE as u32;
                 skipchr_keepstart(rc);
@@ -345,7 +344,7 @@ pub(crate) fn nfa_reg(rc: &mut RegCompiler, paren: c_int) -> Parsed {
         if getchr(rc) != M_PAREN_CLOSE {
             return Err(unbalanced(rc, paren));
         }
-    } else if peekchr(rc) != NUL {
+    } else if peekchr(rc) != 0 {
         // The whole pattern was parsed but there is more text: either a
         // stray `\)` or something the grammar never reached.
         if peekchr(rc) == M_PAREN_CLOSE {

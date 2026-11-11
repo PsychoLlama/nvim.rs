@@ -22,7 +22,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::change::{del_char, get_leader_len};
 use crate::cstr::byte_at;
 use crate::cursor::{
@@ -186,7 +185,7 @@ pub fn check_auto_format(end_insert: bool) {
         c = gchar_cursor().get();
         dec_cursor();
     }
-    if c != NUL {
+    if c != 0 {
         // The space is no longer at the end of the line: delete it.
         let _ = del_char(false);
         DID_ADD_SPACE.set(false);

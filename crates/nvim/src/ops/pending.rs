@@ -45,7 +45,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::r#move::WinValid;
 use crate::normal::{
     VisualMode, set_visual_active, set_visual_anchor, set_visual_mode, set_visual_select,
@@ -60,7 +59,7 @@ use crate::optionstr::OptString;
 /// A `static` inside `do_pending_operator` in C. Process-wide on purpose --
 /// `.` after `viwd` deletes the same *number of characters* at the cursor.
 static REDO_VISUAL: GlobalCell<RedoVisual> = GlobalCell::new(RedoVisual {
-    rv_mode: NUL,
+    rv_mode: 0,
     rv_line_count: 0,
     rv_vcol: ColNr::ZERO,
     rv_count: 0,
@@ -701,12 +700,11 @@ fn run_operator(
         }
 
         OpType::Format => {
-            if c_int::from(Buf::current().b_p_fex.first_byte()) != NUL {
+            if c_int::from(Buf::current().b_p_fex.first_byte()) != 0 {
                 // A copy: the expression is user code.
                 let arg = OpArg::clone(&op);
                 op_formatexpr(&arg);
-            } else if P_FP.first_byte() != 0
-                || c_int::from(Buf::current().b_p_fp.first_byte()) != NUL
+            } else if P_FP.first_byte() != 0 || c_int::from(Buf::current().b_p_fp.first_byte()) != 0
             {
                 // An external program.
                 op_colon(&op);
@@ -808,7 +806,7 @@ fn indent_or_colon(op: Op) {
         op_reindent(&arg, indent);
         return;
     }
-    let indent = if c_int::from(Buf::current().b_p_inde.first_byte()) != NUL {
+    let indent = if c_int::from(Buf::current().b_p_inde.first_byte()) != 0 {
         Indenter::Expr
     } else {
         Indenter::C

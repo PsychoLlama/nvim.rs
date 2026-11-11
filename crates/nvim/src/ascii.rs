@@ -78,13 +78,13 @@ pub(crate) fn ascii_iswhite(c: impl Into<c_int>) -> bool {
 /// Horizontal whitespace, or the end of the string.
 pub(crate) fn ascii_iswhite_or_nul(c: impl Into<c_int>) -> bool {
     let c = c.into();
-    ascii_iswhite(c) || c == NUL
+    ascii_iswhite(c) || c == 0
 }
 
 /// Horizontal whitespace, a newline, or the end of the string.
 pub(crate) fn ascii_iswhite_nl_or_nul(c: impl Into<c_int>) -> bool {
     let c = c.into();
-    ascii_iswhite(c) || c == c_int::from(b'\n') || c == NUL
+    ascii_iswhite(c) || c == c_int::from(b'\n') || c == 0
 }
 
 /// Whitespace as `isspace()` sees it: `\t\n\v\f\r` or a space.
@@ -92,10 +92,6 @@ pub(crate) fn ascii_isspace(c: impl Into<c_int>) -> bool {
     let c = c.into();
     (9..=13).contains(&c) || c == c_int::from(b' ')
 }
-
-/// The string terminator, as the `int` a widened byte compares against.
-/// `ascii_defs.h`'s `NUL`, one copy for the tree.
-pub(crate) const NUL: ::core::ffi::c_int = 0;
 
 /// The path separator as a string, for the code that appends one.
 pub(crate) const PATHSEPSTR: &::core::ffi::CStr = c"/";
@@ -169,7 +165,7 @@ mod tests {
         assert!(!ascii_isident(c_int::from(b'-')));
         assert!(ascii_iswhite(c_int::from(b'\t')));
         assert!(!ascii_iswhite(c_int::from(b'\n')));
-        assert!(ascii_iswhite_or_nul(NUL));
+        assert!(ascii_iswhite_or_nul(b'\0'));
         assert!(!ascii_iswhite_or_nul(c_int::from(b'\n')));
         assert!(ascii_iswhite_nl_or_nul(c_int::from(b'\n')));
         assert!(ascii_isspace(c_int::from(b'\r')));

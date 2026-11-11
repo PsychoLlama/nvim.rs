@@ -38,7 +38,6 @@ use crate::eval::typval::link_buf_changedtick;
 use crate::memory::XString;
 use crate::os::time::os_time_raw;
 
-use crate::ascii::NUL;
 use crate::channel::channel_job_running;
 use crate::diff::diff_buf_add;
 use crate::digraph::keymap_init;
@@ -161,7 +160,7 @@ fn set_spelllang(win: Win) {
 /// Whether the window's `'spelllang'` is set. It lives in the syntax block
 /// the window shares with its buffer.
 fn has_spelllang(win: Win) -> bool {
-    c_int::from(win.syntax().b_p_spl.first_byte()) != NUL
+    c_int::from(win.syntax().b_p_spl.first_byte()) != 0
 }
 
 /// Whether the job behind terminal buffer `buffer` is still running.
@@ -357,7 +356,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
         // If there is no filetype, allow for detecting one.  Esp. useful for
         // ":ball" used in an autocommand.  If there already is a filetype we
         // might prefer to keep it.
-        if c_int::from(buffer.b_p_ft.first_byte()) == NUL {
+        if buffer.b_p_ft.first_byte() == 0 {
             buffer.b_did_filetype = false;
         }
         load_current_buffer();

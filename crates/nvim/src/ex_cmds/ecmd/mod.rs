@@ -43,7 +43,6 @@ use crate::winlayer::{Buf, Win, WinId, tab_windows};
 use core::ffi::CStr;
 use std::ffi::CString;
 
-use crate::ascii::NUL;
 use crate::autocmd::fire_autocmds_retval;
 use crate::buffer::state::SWAP_EXISTS_ACTION;
 use crate::buffer::{
@@ -471,7 +470,7 @@ fn finish_window(command: Option<&CStr>, state: &Ecmd) {
     // language.  Can only be done once the buffer is properly set up.
     if state.did_get_winopts
         && Win::current().w_onebuf_opt.wo_spell != 0
-        && c_int::from(Win::current().syntax().b_p_spl.first_byte()) != NUL
+        && c_int::from(Win::current().syntax().b_p_spl.first_byte()) != 0
     {
         let _ = parse_spelllang(Win::current());
     }

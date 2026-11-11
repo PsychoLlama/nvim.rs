@@ -24,7 +24,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use super::*;
-use crate::ascii::NUL;
 use crate::decoration::{
     DECOR_KIND_UI_WATCHED, DECOR_KIND_VIRT_TEXT, DRAW_COL_LATER, DRAW_COL_NEVER, HL_MODE_BLEND,
     HL_MODE_COMBINE, NO_ENTRY, V_POS_END_OF_LINE, V_POS_END_OF_LINE_RIGHT_ALIGN, V_POS_INLINE,
@@ -450,8 +449,8 @@ impl WinLineVars {
             if self.extra_todo == 0 {
                 continue;
             }
-            self.extra_fill = NUL as ScreenChar;
-            self.extra_last = NUL as ScreenChar;
+            self.extra_fill = 0;
+            self.extra_last = 0;
             self.extra_attr = attr;
             let text = self.extra.rest();
             let text = &text[..text.len() - 1];

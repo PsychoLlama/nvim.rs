@@ -22,7 +22,6 @@ use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 
-use crate::ascii::NUL;
 use crate::cursor::{adjust_cursor_col, check_cursor, coladvance, gchar_cursor, inc_cursor};
 use crate::drawscreen::state::REDRAW_CMDLINE;
 use crate::drawscreen::{
@@ -91,7 +90,7 @@ impl VisualMode {
     pub(crate) const BLOCK: Self = Self(Key::CTRL_V.raw());
     /// The `NUL` that `RESEL_V_ISUAL_MODE` and `V_ISUAL_MODE_ORIG` use to mean
     /// "nothing remembered".
-    pub(crate) const NONE: Self = Self(NUL);
+    pub(crate) const NONE: Self = Self(0);
 
     /// The mode a stored character names.
     pub(crate) const fn from_raw(mode: c_int) -> Self {

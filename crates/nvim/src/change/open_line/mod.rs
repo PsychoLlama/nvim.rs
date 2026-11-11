@@ -54,7 +54,6 @@ use core::ffi::c_int;
 use self::comment::{LeaderContext, build_leader, indent_after_comment_end, plan_leader};
 use self::smart::smart_indent;
 use super::*;
-use crate::ascii::NUL;
 use crate::edit::buf_prompt_text_owned;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
 use crate::mbyte::char_at;
@@ -415,7 +414,7 @@ fn wants_cindent(dir: c_int, flags: c_int) -> bool {
     // The short circuits are upstream's: `in_cinkeys` reads 'cinkeys' and
     // the cursor line.
     !p_paste()
-        && (Buf::current().b_p_cin != 0 || c_int::from(Buf::current().b_p_inde.first_byte()) != NUL)
+        && (Buf::current().b_p_cin != 0 || c_int::from(Buf::current().b_p_inde.first_byte()) != 0)
         && in_cinkeys(key, b' ', linewhite(Win::current().w_cursor.lnum))
         && flags & OPENLINE_FORCE_INDENT == 0
 }
@@ -456,7 +455,7 @@ impl Opening {
         // afterwards.
         let mut extra = None;
         let mut extra_len = 0;
-        let mut first_char = NUL;
+        let mut first_char = 0;
         if STATE.get() & MODE_INSERT != 0 && STATE.get() & VREPLACE_FLAG == 0 {
             extra = Some(col);
             let tail = &saved_line[col..];

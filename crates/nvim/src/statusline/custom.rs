@@ -34,7 +34,6 @@ use crate::optionstr::{OptString, local_or_global};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::is_aucmd_win;
 use crate::buffer::{col_text, get_rel_pos};
@@ -572,7 +571,7 @@ pub fn redraw_ruler() {
     // In list mode the virtual column has to be recomputed, because the
     // cursor is drawn where the tab is shown rather than where it ends.
     let mut virtcol = win.w_virtcol;
-    if win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == NUL as ScreenChar {
+    if win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == 0 {
         win.w_onebuf_opt.wo_list = 0;
         virtcol = win.virtual_cursor_vcol(win.cursor());
         win.w_onebuf_opt.wo_list = 1;

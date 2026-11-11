@@ -18,7 +18,7 @@ use core::ffi::c_int;
 use super::Parsed;
 use super::atom::nfa_regatom;
 use super::parse::nfa_reg;
-use crate::ascii::{NUL, ascii_isdigit};
+use crate::ascii::ascii_isdigit;
 use crate::mbyte::MB_MAXBYTES;
 use crate::regexp::{
     CompileError, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, getchr, getdecchrs, gethexchrs,
@@ -133,7 +133,7 @@ fn optional_sequence(rc: &mut RegCompiler) -> Parsed {
         if c == c_int::from(b']') {
             break;
         }
-        if c == NUL {
+        if c == 0 {
             return Err(CompileError::MissingOptionalEnd(spelled(rc)));
         }
         nfa_regatom(rc)?;

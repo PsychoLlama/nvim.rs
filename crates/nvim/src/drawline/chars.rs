@@ -29,7 +29,6 @@
 )]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::mbyte::Codepoint;
 
 impl Cells {
@@ -44,7 +43,7 @@ impl Cells {
             self.cell_char = schar_from_ascii(b' ');
         } else if self.has_foldtext || (self.has_fold && wlv.col >= self.view_width) {
             // The fold text is already placed; skip the buffer line.
-            self.cell_char = NUL as ScreenChar;
+            self.cell_char = 0;
         } else {
             self.char_from_buffer(wlv, window, f);
         }
@@ -52,11 +51,9 @@ impl Cells {
 
     /// Take one cell from the run in [`WinLineVars::extra_todo`].
     pub(super) fn char_from_extra(&mut self, wlv: &mut WinLineVars, window: Win) {
-        if wlv.extra_fill != NUL as ScreenChar
-            || (wlv.extra_todo == 1 && wlv.extra_last != NUL as ScreenChar)
-        {
+        if wlv.extra_fill != 0 || (wlv.extra_todo == 1 && wlv.extra_last != 0) {
             // One character repeated, with an optional different last one.
-            self.cell_char = if wlv.extra_todo == 1 && wlv.extra_last != NUL as ScreenChar {
+            self.cell_char = if wlv.extra_todo == 1 && wlv.extra_last != 0 {
                 wlv.extra_last
             } else {
                 wlv.extra_fill
@@ -100,7 +97,7 @@ impl Cells {
                 }
                 wlv.extra_todo = 1;
                 wlv.extra_fill = schar_from_ascii(MB_FILLER_CHAR);
-                wlv.extra_last = NUL as ScreenChar;
+                wlv.extra_last = 0;
                 self.cell_char = schar_from_ascii(b' ');
                 self.char_code = ::core::ffi::c_int::from(b' ');
                 self.char_len = 1;
@@ -135,11 +132,9 @@ impl Cells {
             wlv.extra_is_virt_text = false;
         } else {
             // A `<` filler interrupted a longer run; resume it.
-            debug_assert!(
-                wlv.extra_fill != NUL as ScreenChar || wlv.extra_last != NUL as ScreenChar
-            );
-            wlv.extra_fill = NUL as ScreenChar;
-            wlv.extra_last = NUL as ScreenChar;
+            debug_assert!(wlv.extra_fill != 0 || wlv.extra_last != 0);
+            wlv.extra_fill = 0;
+            wlv.extra_last = 0;
             wlv.extra_todo = self.extra_todo_next;
             self.extra_todo_next = 0;
             // `extra_attr` applies at this position; `extra_attr_next`
@@ -162,7 +157,7 @@ impl Cells {
         // First byte of the next character.
         let first = self.byte();
         let mut c0 = ::core::ffi::c_int::from(first);
-        if c0 == NUL {
+        if c0 == 0 {
             // No more cells to skip.
             wlv.skip_cells = 0;
         }
@@ -195,8 +190,8 @@ impl Cells {
             wlv.extra.advance(first);
             self.cell_char = schar_from_char(Codepoint::new(self.char_code));
             wlv.extra_todo = ::core::ffi::c_int::try_from(len - first).unwrap_or(0);
-            wlv.extra_fill = NUL as ScreenChar;
-            wlv.extra_last = NUL as ScreenChar;
+            wlv.extra_fill = 0;
+            wlv.extra_last = 0;
             if self.area_attr == 0 && self.search_attr == 0 {
                 wlv.n_attr = wlv.extra_todo + 1;
                 wlv.extra_attr = win_hl_attr(window, HLF_8);
@@ -230,7 +225,7 @@ impl Cells {
             // branch above.
             wlv.extra_todo = 1;
             wlv.extra_fill = schar_from_ascii(MB_FILLER_CHAR);
-            wlv.extra_last = NUL as ScreenChar;
+            wlv.extra_last = 0;
             self.cell_char = schar_from_ascii(b' ');
             self.char_code = ::core::ffi::c_int::from(b' ');
             self.char_len = 1;
@@ -460,9 +455,7 @@ impl Cells {
         // word: the break would land at the very beginning, which is not
         // what anyone means by 'linebreak'. So arm it only once a
         // character outside 'breakat' has been seen.
-        if !wlv.linebreak_armed
-            && self.cell_char != NUL as ScreenChar
-            && !vim_isbreak(Codepoint::from(self.byte()))
+        if !wlv.linebreak_armed && self.cell_char != 0 && !vim_isbreak(Codepoint::from(self.byte()))
         {
             wlv.linebreak_armed = true;
         }
@@ -509,7 +502,7 @@ impl Cells {
             wlv.extra_todo = window.w_buffer.tab_padding(wlv.vcol) - 1;
         }
         wlv.extra_fill = schar_from_ascii(if mb_off > 0 { MB_FILLER_CHAR } else { b' ' });
-        wlv.extra_last = NUL as ScreenChar;
+        wlv.extra_last = 0;
         if self.char_code < 128 && ascii_iswhite(self.char_code) {
             if self.char_code == ::core::ffi::c_int::from(TAB) {
                 // See "Tab alignment" in `unprintable`.

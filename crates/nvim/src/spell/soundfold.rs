@@ -32,7 +32,6 @@ use crate::mbyte::Codepoint;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
-use crate::ascii::NUL;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{char_at, char_len, encode_char, utf_class};
@@ -116,7 +115,7 @@ fn spell_soundfold_sofo(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
                     .iter()
                     .take_while(|pair| pair[0] != 0)
                     .find(|pair| pair[0] == c.get())
-                    .map_or(NUL, |pair| pair[1]),
+                    .map_or(0, |pair| pair[1]),
             );
         }
 
@@ -184,7 +183,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
     let mut i = 0usize;
     loop {
         let mut c = word[i];
-        if c == NUL {
+        if c == 0 {
             break;
         }
         // Rules are grouped by the low byte of their first character. For
@@ -196,7 +195,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
         if let Some(mut n) = first {
             loop {
                 let ws = &smp[n].sm_lead_w;
-                if !(ws[0] & 0xff == c & 0xff && ws[0] != NUL) {
+                if !(ws[0] & 0xff == c & 0xff && ws[0] != 0) {
                     break;
                 }
                 if !rule_applies(slang, win, &word, i, n, &mut k, &mut p0) {
@@ -211,9 +210,9 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
                 if p0 == 1 && z == 0 {
                     // A '<' rule writes back into the word so the
                     // replacement is matched again.
-                    let first = to.map_or(NUL, |t| t[0]);
+                    let first = to.map_or(0, |t| t[0]);
                     if reslen > 0
-                        && first != NUL
+                        && first != 0
                         && (wres[reslen - 1] == c || wres[reslen - 1] == first)
                     {
                         reslen -= 1;
@@ -222,7 +221,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
                     z = 1;
                     let mut k0 = 0;
                     if let Some(to) = to {
-                        while to[k0] != NUL && word[i + k0] != NUL {
+                        while to[k0] != 0 && word[i + k0] != 0 {
                             word[i + k0] = to[k0];
                             k0 += 1;
                         }
@@ -239,7 +238,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
                     // collapse test sees it.
                     let mut at = 0;
                     if let Some(to) = to {
-                        while to[at] != NUL && to[at + 1] != NUL && reslen < MAXWLEN {
+                        while to[at] != 0 && to[at + 1] != 0 && reslen < MAXWLEN {
                             if reslen == 0 || wres[reslen - 1] != to[at] {
                                 wres[reslen] = to[at];
                                 reslen += 1;
@@ -247,9 +246,9 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
                             at += 1;
                         }
                     }
-                    c = to.map_or(NUL, |t| t[at]);
+                    c = to.map_or(0, |t| t[at]);
                     if rules.windows(2).any(|w| w == b"^^") {
-                        if c != NUL && reslen < MAXWLEN {
+                        if c != 0 && reslen < MAXWLEN {
                             wres[reslen] = c;
                             reslen += 1;
                         }
@@ -269,7 +268,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
             if k != 0
                 && p0 == 0
                 && reslen < MAXWLEN
-                && c != NUL
+                && c != 0
                 && (!slang.sl_collapse || reslen == 0 || wres[reslen - 1] != c)
             {
                 wres[reslen] = c;
@@ -320,7 +319,7 @@ fn widen_word(slang: &SpellLang, inword: &[u8], win: Win, word: &mut [c_int; MAX
         word[wordlen] = c.get();
         wordlen += 1;
     }
-    word[wordlen] = NUL;
+    word[wordlen] = 0;
     wordlen
 }
 
@@ -362,7 +361,7 @@ fn rule_applies(
     if let Some(oneof) = &rule.sm_oneof_w {
         if !oneof
             .iter()
-            .take_while(|&&ch| ch != NUL)
+            .take_while(|&&ch| ch != 0)
             .any(|&ch| ch == word[i + *k])
         {
             return false;
@@ -423,7 +422,7 @@ fn followup_overrides(
     let Some(mut n0) = first0 else {
         return false;
     };
-    if !(slang.sl_followup && k > 1 && *p0 != c_int::from(b'-') && word[i + k] != NUL) {
+    if !(slang.sl_followup && k > 1 && *p0 != c_int::from(b'-') && word[i + k] != 0) {
         return false;
     }
     // The outer loop stops on the sentinel rule, whose lead is NUL; this
@@ -477,7 +476,7 @@ fn followup_cuts(
     if let Some(oneof) = &followup.sm_oneof_w {
         if !oneof
             .iter()
-            .take_while(|&&ch| ch != NUL)
+            .take_while(|&&ch| ch != 0)
             .any(|&ch| ch == word[i + k0])
         {
             return false;

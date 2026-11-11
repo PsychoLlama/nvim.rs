@@ -19,7 +19,6 @@
 )]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::autocmd::fire_autocmds;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
@@ -803,7 +802,7 @@ pub fn showmatch(c: c_int) {
         return;
     }
 
-    let found = findmatch(None, NUL);
+    let found = findmatch(None, 0);
     let Some(mut lpos) = found else {
         vim_beep(OPT_BO_FLAG_SHOWMATCH); // no match, so beep
         return;

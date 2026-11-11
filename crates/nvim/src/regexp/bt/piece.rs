@@ -30,7 +30,6 @@ use core::ffi::c_int;
 use super::atom::regatom;
 use super::compile::regnext;
 use super::op::BtOp;
-use crate::ascii::NUL;
 use crate::os::libc::int64_t;
 use crate::regexp::mbyte::char_at_nul;
 use crate::regexp::{
@@ -203,7 +202,7 @@ pub(crate) fn regconcat(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Nod
         match peekchr(rc) {
             // An empty concatenation still needs a node for its caller to
             // chain onto.
-            NUL | M_BAR | M_AMP | M_PAREN_CLOSE => {
+            0 | M_BAR | M_AMP | M_PAREN_CLOSE => {
                 return Ok(first.unwrap_or_else(|| rc.code.node(BtOp::Nothing)));
             }
             M_Z_UPPER => {
@@ -349,7 +348,7 @@ pub(crate) fn reg(rc: &mut RegCompiler, paren: c_int, flagp: &mut c_int) -> Comp
             REG_NPAREN => CompileError::UnmatchedNoCapture(spelled(rc)),
             _ => CompileError::UnmatchedGroup(spelled(rc)),
         });
-    } else if paren == REG_NOPAREN && peekchr(rc) != NUL {
+    } else if paren == REG_NOPAREN && peekchr(rc) != 0 {
         if rc.token == M_PAREN_CLOSE {
             return Err(CompileError::UnmatchedClose(spelled(rc)));
         }
@@ -398,7 +397,7 @@ pub(crate) fn bt_regcomp(rc: &mut RegCompiler) -> Compiled<BtRegProg> {
     }
     let mut prog = BtRegProg {
         regflags,
-        regstart: NUL,
+        regstart: 0,
         reganch: 0,
         regmust: None,
         regmlen: Cell::new(0),

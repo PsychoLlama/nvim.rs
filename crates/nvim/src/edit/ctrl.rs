@@ -34,7 +34,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::ex_docmd::cmdmod_has;
 use crate::getchar::typeahead;
 use crate::guard::{Keys, Suppress};
@@ -304,7 +303,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
     // CTRL-O, unless it is past the end of the line.
     if !nomove
         && (Win::current().w_cursor.col != ColNr::ZERO || Win::current().w_cursor.coladd > 0)
-        && (RESTART_EDIT.get().is_nul() || (char_at_cursor() == NUL && !visual_active()))
+        && (RESTART_EDIT.get().is_nul() || (char_at_cursor() == 0 && !visual_active()))
         && !REVINS_ON.get()
     {
         if Win::current().w_cursor.coladd > 0
@@ -359,7 +358,7 @@ pub(crate) fn ins_ctrl_() {
         // Upstream's `while (gchar_cursor() != NUL && REVINS_CHARS--)`:
         // the decrement runs on the iteration that ends the loop too, so
         // exhausting the count leaves `REVINS_CHARS` at -1.
-        while char_at_cursor() != NUL {
+        while char_at_cursor() != 0 {
             let n = REVINS_CHARS.get();
             REVINS_CHARS.set(n - 1);
             if n == 0 {
@@ -425,7 +424,7 @@ pub(crate) fn ins_ctrl_o() {
     INS_AT_EOL.set(if virtual_active(Win::current()) {
         false
     } else {
-        char_at_cursor() == NUL
+        char_at_cursor() == 0
     });
 }
 

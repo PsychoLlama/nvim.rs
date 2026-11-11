@@ -24,7 +24,6 @@ use crate::types::LineNr;
 use super::compile::BtProg;
 use super::matcher::regmatch;
 use super::state::{BT_STATE, BtState};
-use crate::ascii::NUL;
 use crate::getchar::state::GOT_INT;
 use crate::message::{E_NULL, E_RE_CORR};
 use crate::message::{emsg, iemsg};
@@ -246,7 +245,7 @@ fn has_regmust(rex: Rex, prog: BtProg, line: &[u8], col: ColNr) -> bool {
 fn try_anchored(rex: Rex, prog: BtProg, state: &mut BtState, col: ColNr) -> LineNr {
     let start = prog.regstart();
     let c = char_at_nul(rest_from(rex.line(), col), 0);
-    let matches = start == NUL
+    let matches = start == 0
         || start == c.get()
         || (rex.reg_ic()
             && (Codepoint::new(start).fold() == c.fold()
@@ -282,7 +281,7 @@ fn scan_from<'t>(
     while !GOT_INT.get() {
         // The pattern's first character is known: skip straight to the
         // next place it occurs.
-        if prog.regstart() != NUL {
+        if prog.regstart() != 0 {
             match cstrchr_line(rex, rest(rex.line(), at), prog.regstart()) {
                 Some(off) => at += off,
                 None => return (LineNr::ZERO, at),

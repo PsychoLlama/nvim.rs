@@ -29,7 +29,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::ascii::NUL;
 use crate::ex_docmd::cmdmod_has;
 use crate::option::defs::OptError;
 use crate::optionstr::{OptString, OptStringRef};
@@ -81,7 +80,7 @@ pub(crate) fn op_colon(op: &OpArg) {
         stuff_readbuf(get_equalprg().as_cstr().to_bytes());
         stuff_readbuf(b"\n");
     } else if op.op_type == OpType::Format {
-        if c_int::from(Buf::current().b_p_fp.first_byte()) != NUL {
+        if c_int::from(Buf::current().b_p_fp.first_byte()) != 0 {
             stuff_readbuf(Buf::current().b_p_fp.cstr().to_bytes());
         } else if P_FP.first_byte() != 0 {
             p_fp(|fp| stuff_readbuf(fp.to_bytes()));

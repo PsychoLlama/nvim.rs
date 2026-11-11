@@ -31,7 +31,6 @@ use crate::mbyte::{c_cluster_len, c_display_width, head_off};
 use crate::narrow::len_as_int;
 use core::ffi::c_int;
 
-use crate::ascii::NUL;
 use crate::change::*;
 use crate::option::split_option_part;
 use crate::optionstr::OptStringRef;
@@ -588,7 +587,7 @@ pub(crate) fn indent_after_comment_end(
     }
     let old_cursor = Win::current().w_cursor;
     Win::current().w_cursor.col = ColNr::from_index(comment_end);
-    let newindent = match findmatch(None, NUL) {
+    let newindent = match findmatch(None, 0) {
         None => newindent,
         Some(pos) => {
             Win::current().w_cursor.lnum = pos.lnum;

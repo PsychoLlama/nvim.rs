@@ -44,7 +44,6 @@ use crate::option::LISTCHARS;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_uint};
 
-use crate::ascii::NUL;
 use crate::charset::{char2cells, hexhex_at};
 use crate::cmdexpand::defs::Expand;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
@@ -367,10 +366,10 @@ fn parse_chars(bytes: &[u8], listchars: bool, apply: bool) -> Result<Option<Char
         if round > 0 {
             install_defaults(&mut chars, tab);
             if listchars {
-                chars.list.tab1 = NUL as ScreenChar;
-                chars.list.tab3 = NUL as ScreenChar;
-                chars.list.leadtab1 = NUL as ScreenChar;
-                chars.list.leadtab3 = NUL as ScreenChar;
+                chars.list.tab1 = 0;
+                chars.list.tab3 = 0;
+                chars.list.leadtab1 = 0;
+                chars.list.leadtab3 = 0;
                 chars.list.multispace = new_run(multispace_len);
                 chars.list.leadmultispace = new_run(lead_multispace_len);
             }

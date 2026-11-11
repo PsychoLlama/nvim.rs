@@ -30,7 +30,6 @@ use crate::tr;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
-use crate::ascii::NUL;
 use crate::ascii::ascii_isdigit;
 use crate::charset::transchar;
 use crate::global_cell::{Field, field};
@@ -331,7 +330,7 @@ pub(crate) fn check_stl_option(format: &[u8]) -> Result<(), OptError> {
             continue;
         }
         let Some(&item) = rest.first() else {
-            return illegal(NUL);
+            return illegal(0);
         };
         if StlOpt::from_byte(item).is_none() {
             return illegal(c_int::from(item));

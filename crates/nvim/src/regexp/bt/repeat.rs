@@ -21,7 +21,6 @@ use core::ffi::c_int;
 
 use super::compile::BtProg;
 use super::op::BtOp;
-use crate::ascii::NUL;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::getchar::state::GOT_INT;
@@ -161,7 +160,7 @@ impl Count<'_> {
     /// `.` and `\_.`: every character, and for `\_.` every line.
     fn any(&mut self) {
         while self.count < self.maxcount {
-            while c_int::from(self.byte()) != NUL && self.count < self.maxcount {
+            while self.byte() != 0 && self.count < self.maxcount {
                 self.count += 1;
                 self.scan += cluster_len_at(self.line, self.scan);
             }
@@ -190,7 +189,7 @@ impl Count<'_> {
     /// tests for the end of the line before the class rather than after.
     fn class(&mut self, nul_first: bool, accept: impl Fn(&[u8]) -> bool) {
         while self.count < self.maxcount {
-            let at_nul = c_int::from(self.byte()) == NUL;
+            let at_nul = self.byte() == 0;
             if at_nul && nul_first {
                 match next_line(self.rex, self.crosses_lines) {
                     Line::Crossed => (self.line, self.scan) = (self.rex.line(), 0),
@@ -261,7 +260,7 @@ impl Count<'_> {
     /// `positive`, a miss otherwise.
     fn collection(&mut self, set: &[u8], positive: bool) {
         while self.count < self.maxcount {
-            if c_int::from(self.byte()) == NUL {
+            if self.byte() == 0 {
                 match next_line(self.rex, self.crosses_lines) {
                     Line::Crossed => (self.line, self.scan) = (self.rex.line(), 0),
                     Line::Interrupted | Line::End => break,
@@ -289,7 +288,7 @@ impl Count<'_> {
     fn newlines(&mut self) {
         let rex = self.rex;
         while self.count < self.maxcount
-            && ((c_int::from(self.byte()) == NUL
+            && ((self.byte() == 0
                 && rex.lnum() <= rex.reg_maxline()
                 && !rex.reg_line_lbr()
                 && rex.multi())
@@ -313,7 +312,7 @@ impl Count<'_> {
     /// when `positive`, a miss otherwise.
     fn bytes(&mut self, mask: ByteClass, positive: bool) {
         while self.count < self.maxcount {
-            if c_int::from(self.byte()) == NUL {
+            if self.byte() == 0 {
                 match next_line(self.rex, self.crosses_lines) {
                     Line::Crossed => (self.line, self.scan) = (self.rex.line(), 0),
                     Line::Interrupted | Line::End => break,

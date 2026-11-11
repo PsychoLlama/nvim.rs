@@ -27,7 +27,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::{NUL, ascii_iswhite};
+use crate::ascii::ascii_iswhite;
 use crate::cursor::{dec_cursor, inc_cursor};
 use crate::drawscreen::state::REDRAW_CMDLINE;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
@@ -66,7 +66,7 @@ fn find_next_quote(
     let at = |col: c_int| byte_of(line, col);
     loop {
         let c = c_int::from(at(col));
-        if c == NUL {
+        if c == 0 {
             return None;
         }
         if escape.is_some_and(|escape| find_char(escape, Codepoint::new(c)).is_some()) {

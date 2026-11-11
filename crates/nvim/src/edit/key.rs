@@ -39,7 +39,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::optionstr::OptString;
 
@@ -491,7 +490,7 @@ fn key_eol(s: &mut InsertState) -> Next {
 /// CTRL-X submode is running, in which case there is nothing to complete
 /// with and the key is inserted.
 fn key_complete(s: &mut InsertState) -> Next {
-    if c_int::from(Buf::current().b_p_cpt.first_byte()) == NUL
+    if c_int::from(Buf::current().b_p_cpt.first_byte()) == 0
         && (ctrl_x_mode_normal() || ctrl_x_mode_whole_line())
         && !compl_status_local()
     {

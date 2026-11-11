@@ -30,7 +30,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::message::MSG_IOBUFF_LEN;
 use crate::message_fmt::to_message;
 use crate::normal::{VisualMode, VisualSelection, sel_exclusive, visual_selection};
@@ -57,7 +56,7 @@ fn line_count_info(
     let mut is_word = false;
 
     let mut i: VarNumber = 0;
-    while i < limit && byte(i) != NUL {
+    while i < limit && byte(i) != 0 {
         if is_word {
             if ascii_isspace(byte(i)) {
                 words += 1;
@@ -87,7 +86,7 @@ fn line_count_info(
     *wc += words;
 
     // The end of the line was reached before `limit`: count the break.
-    if i < limit && byte(i) == NUL {
+    if i < limit && byte(i) == 0 {
         i += VarNumber::from(eol_size);
         chars += VarNumber::from(eol_size);
     }

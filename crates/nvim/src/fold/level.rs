@@ -31,7 +31,6 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::ascii::NUL;
 use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::diff::diff_infold;
@@ -864,8 +863,7 @@ pub(super) fn foldlevel_indent(line: &mut FoldLine) {
     let first = byte_at(text, skip::white(text));
     // A blank line, or one starting with a 'foldignore' character, takes
     // its level from its neighbours.
-    if c_int::from(first) == NUL || has_char(win.w_onebuf_opt.wo_fdi.cstr(), Codepoint::from(first))
-    {
+    if first == 0 || has_char(win.w_onebuf_opt.wo_fdi.cstr(), Codepoint::from(first)) {
         line.lvl = if lnum == LineNr::ONE || lnum == buf.b_ml.ml_line_count {
             0
         } else {

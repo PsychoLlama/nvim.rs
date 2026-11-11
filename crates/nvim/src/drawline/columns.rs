@@ -25,7 +25,6 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::decoration::{SCL_NUM, SIGN_WIDTH};
 use crate::grid::with_linebuf;
 use crate::r#move::WinValid;
@@ -162,7 +161,7 @@ fn foldcolumn_sep_char(
 ) -> ScreenChar {
     if first_level == 1 {
         window.w_p_fcs_chars.foldsep
-    } else if window.w_p_fcs_chars.foldinner != NUL as ScreenChar {
+    } else if window.w_p_fcs_chars.foldinner != 0 {
         window.w_p_fcs_chars.foldinner
     } else if first_level + i <= 9 {
         schar_from_ascii(b"0123456789"[as_index(first_level + i)])

@@ -40,7 +40,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::memline::Moved;
 use crate::option::cpo_has;
 use crate::option::defs::{BsFlag, CpoFlag, FoFlag};
@@ -84,7 +83,7 @@ pub(crate) fn ins_del() {
     if stop_arrow().is_err() {
         return;
     }
-    if char_at_cursor() == NUL {
+    if char_at_cursor() == 0 {
         // Delete the newline.
         let temp = Win::current().w_cursor.col;
         if !can_bs(BsFlag::EOL) || do_join(2, false, true, false, false).is_err() {
@@ -328,7 +327,7 @@ fn bs_join_line() -> bool {
         }
 
         let _ = do_join(2, false, false, false, false);
-        if temp == NUL && char_at_cursor() != NUL {
+        if temp == 0 && char_at_cursor() != 0 {
             cursor_forward();
         }
     } else {
@@ -507,7 +506,7 @@ fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
                 REVINS_CHARS.set(REVINS_CHARS.get() - 1);
                 REVINS_LEGAL.set(REVINS_LEGAL.get() + 1);
             }
-            if REVINS_ON.get() && char_at_cursor() == NUL {
+            if REVINS_ON.get() && char_at_cursor() == 0 {
                 break;
             }
         }

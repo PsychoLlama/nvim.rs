@@ -29,7 +29,6 @@ use super::op::BtOp;
 use super::resume::resume;
 use super::single::match_one;
 use super::state::{BackPos, Braces, BtState, RegStack, capture_slot};
-use crate::ascii::NUL;
 use crate::getchar::state::GOT_INT;
 use crate::message::E_RE_CORR;
 use crate::message::{iemsg, internal_error};
@@ -123,7 +122,7 @@ fn walk(
             if crosses_lines
                 && !rex.reg_line_lbr()
                 && rex.multi()
-                && c_int::from(rex.byte()) == NUL
+                && rex.byte() == 0
                 && rex.lnum() <= rex.reg_maxline()
             {
                 reg_nextline(rex);
@@ -412,8 +411,8 @@ fn counted_repeat(
     scan: usize,
 ) -> Verdict {
     let mut rst = RegStar {
-        nextb: NUL,
-        nextb_ic: NUL,
+        nextb: 0,
+        nextb_ic: 0,
         count: 0,
         minval: 0,
         maxval: 0,

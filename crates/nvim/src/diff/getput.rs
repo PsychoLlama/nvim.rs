@@ -16,7 +16,6 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::buffer::buflist_findpat_prefix;
 use crate::charset::skip;
 use crate::extmark::EXTMARK_NOOP;
@@ -112,7 +111,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     }
     let cmdidx = excmd.cmdidx;
     let mut idx_other = 0;
-    if c_int::from(excmd.line.byte_at(excmd.line.arg)) == NUL {
+    if excmd.line.byte_at(excmd.line.arg) == 0 {
         // No argument: the other side is the one other buffer in the diff,
         // and it is an error if there are two of them to choose from.
         let mut found_not_ma = false;

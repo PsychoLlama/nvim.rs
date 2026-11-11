@@ -42,7 +42,6 @@
 use super::*;
 use crate::api::private::validate::{err_bad_value, err_expected, err_required};
 use crate::api_error;
-use crate::ascii::NUL;
 use crate::ex_docmd::is_user_cmd;
 use crate::guard::Suppress;
 use crate::memory::XString;
@@ -182,10 +181,7 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
         return Err(err_required(c"cmd"));
     };
 
-    let named = name
-        .as_bytes()
-        .first()
-        .is_some_and(|&b| c_int::from(b) != NUL);
+    let named = name.as_bytes().first().is_some_and(|&b| b != 0);
     let has_range = cmd.range.as_ref().is_some_and(|range| !range.is_empty());
     let has_mods = cmd.mods.is_some();
 

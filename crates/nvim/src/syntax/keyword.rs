@@ -24,7 +24,6 @@ use crate::semsg;
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 
 /// One `:syntax keyword` definition of one keyword text.
 ///
@@ -322,7 +321,7 @@ fn add_keyword_variants(
 /// `:syntax keyword {group} [{options}] {keyword} ..`.
 pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
     let line = args.line.arg().to_vec();
-    let mut conceal_char: c_int = NUL;
+    let mut conceal_char: c_int = 0;
 
     let name = split_group_name(&line);
     let mut end = name.as_ref().map(|name| name.rest);

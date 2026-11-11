@@ -25,7 +25,7 @@
 )]
 
 use super::{SUB_FLAGS, check_regexp_delim, skip_substitute, sub_parse_flags, sub_set_replacement};
-use crate::ascii::{NUL, ascii_iswhite};
+use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int_at;
 use crate::ex_cmds::{SUB_IGNORE_CASE, SUB_MATCH_CASE};
 use crate::memory::{ThinCString, XString};
@@ -136,7 +136,7 @@ fn read_pattern(
     // as a separator.
     let first = args.line.byte_at(at);
     let fresh = args.line.byte_at(args.line.cmd) == b's'
-        && c_int::from(first) != NUL
+        && first != 0
         && !ascii_iswhite(c_int::from(first))
         && !b"0123456789cegriIp|\"".contains(&first);
     if !fresh {
@@ -298,7 +298,7 @@ pub(super) fn parse_sub(
     // Check for a trailing command or garbage.
     at = args.line.skip_white(at);
     let next = args.line.byte_at(at);
-    if c_int::from(next) != NUL && next != b'"' {
+    if next != 0 && next != b'"' {
         // Not end-of-line or comment.
         args.line.next = args.line.check_next(at);
         if args.line.next.is_none() {

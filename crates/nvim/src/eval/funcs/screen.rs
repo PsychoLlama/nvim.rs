@@ -16,7 +16,6 @@ use crate::narrow::number_as_int;
 use crate::types::LineNr;
 use crate::winlayer::{Buf, Win};
 
-use crate::ascii::NUL;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{NumBuf, tv_list_alloc_ret};
 use crate::grid::{GridRef, grid_getchar, schar_bytes, schar_from_char};
@@ -309,13 +308,13 @@ pub fn f_synconcealed(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
             let mut cchar = schar_from_char(Codepoint::new(syn_get_sub_char()));
             // At 'conceallevel' 1 a group with no `cchar` falls back to
             // 'listchars' "conceal", and to a space if that is unset.
-            if cchar == NUL as ScreenChar && Win::current().w_onebuf_opt.wo_cole == 1 {
+            if cchar == 0 && Win::current().w_onebuf_opt.wo_cole == 1 {
                 cchar = match Win::current().w_p_lcs_chars.conceal {
-                    c if c == NUL as ScreenChar => ' ' as ScreenChar,
+                    0 => ' ' as ScreenChar,
                     c => c,
                 };
             }
-            if cchar != NUL as ScreenChar {
+            if cchar != 0 {
                 text = schar_bytes(cchar);
             }
         }

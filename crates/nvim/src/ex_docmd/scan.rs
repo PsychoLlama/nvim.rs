@@ -26,7 +26,6 @@ use crate::ex_docmd::onecmd::shift_cmd_args;
 use crate::ex_docmd::{E_ZEROCOUNT, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, ex_msg};
 
 use crate::ascii::CTRL_V;
-use crate::ascii::NUL;
 use crate::memory::XString;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
@@ -132,7 +131,7 @@ impl ExArg<'_> {
         if self.argt.has(ExArgt::BUFNAME) {
             let past = self.line.skip_digits(self.line.arg + 1);
             let after = c_int::from(self.line.byte_at(past));
-            if after != NUL && !ascii_iswhite(after) {
+            if after != 0 && !ascii_iswhite(after) {
                 return Ok(());
             }
         }

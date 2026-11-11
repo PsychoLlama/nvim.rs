@@ -3222,7 +3222,6 @@ static const int NSTR = 414;
 static const int NSUBEXP = 10;
 static const int NSUBEXP_SLOTS = 10;
 static const int NS_1_SECOND = 1000000000;
-static const int NUL = 0;
 static const int NUL_BYTE = 0;
 static const int NUMBER_PRECISION = 16;
 static const int NUMBUFLEN = 65;

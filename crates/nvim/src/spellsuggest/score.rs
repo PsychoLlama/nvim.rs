@@ -42,7 +42,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ascii::{NUL, ascii_iswhite};
+use crate::ascii::ascii_iswhite;
 use crate::cstr::until_nul;
 use crate::mbyte::Codepoint;
 use crate::mbyte::{char_at, char_len};
@@ -536,7 +536,7 @@ pub(super) fn spell_edit_score_limit(
             if bc != gc {
                 break (bc, gc);
             }
-            if bc == NUL {
+            if bc == 0 {
                 // Both words end here: this alternative is complete.
                 minscore = minscore.min(score);
                 if !pop(&stack, &mut stackidx, &mut bi, &mut gi, &mut score) {
@@ -548,7 +548,7 @@ pub(super) fn spell_edit_score_limit(
             gi += 1;
         };
 
-        if gc == NUL {
+        if gc == 0 {
             // The good word ended: delete the rest of the bad word.
             loop {
                 score += SCORE_DEL;
@@ -556,12 +556,12 @@ pub(super) fn spell_edit_score_limit(
                     break;
                 }
                 bi += 1;
-                if wbadword[bi] == NUL {
+                if wbadword[bi] == 0 {
                     minscore = score;
                     break;
                 }
             }
-        } else if bc == NUL {
+        } else if bc == 0 {
             // The bad word ended: insert the rest of the good word.
             loop {
                 score += SCORE_INS;
@@ -569,7 +569,7 @@ pub(super) fn spell_edit_score_limit(
                     break;
                 }
                 gi += 1;
-                if wgoodword[gi] == NUL {
+                if wgoodword[gi] == 0 {
                     minscore = score;
                     break;
                 }
@@ -587,7 +587,7 @@ pub(super) fn spell_edit_score_limit(
                     let mut bi2 = bi + 1 - round;
                     let mut gi2 = gi + round;
                     while wgoodword[gi2] == wbadword[bi2] {
-                        if wgoodword[gi2] == NUL {
+                        if wgoodword[gi2] == 0 {
                             minscore = score_off;
                             break;
                         }

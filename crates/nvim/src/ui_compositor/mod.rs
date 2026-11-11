@@ -38,9 +38,8 @@ use crate::narrow::as_index;
 use crate::narrow::len_as_integer;
 use crate::narrow::number_as_int;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_int, c_uint};
+use core::ffi::{CStr, c_int};
 
-use crate::ascii::NUL;
 use crate::global_cell::GlobalCell;
 use crate::grid::{GridRef, default_grid_ref, schar_from_ascii, schar_from_buf};
 use crate::highlight::hl_blend_attrs;
@@ -525,7 +524,7 @@ fn compose_into(
             let (chars, attrs) = grid.cells(off, n);
             line[at..at + n].copy_from_slice(chars);
             attrbuf[at..at + n].copy_from_slice(attrs);
-            if grid.comp_col + grid.cols > until && grid.char_at(off + n) == NUL as c_uint {
+            if grid.comp_col + grid.cols > until && grid.char_at(off + n) == 0 {
                 // The run ends on the left half of a double-width character;
                 // show a space instead.
                 line[at + n - 1] = schar_from_ascii(b' ');
@@ -541,12 +540,12 @@ fn compose_into(
 
         // Tricky: an overlap that cut a double-width character in half must
         // show a space for the visible half.
-        if line[at] == NUL as c_uint {
+        if line[at] == 0 {
             line[at] = schar_from_ascii(b' ');
             if Integer::from(col) == endcol - 1 {
                 skipend = 0;
             }
-        } else if at == 0 && n > 1 && line[1] == NUL as c_uint {
+        } else if at == 0 && n > 1 && line[1] == 0 {
             skipstart = 0;
         }
 
@@ -554,7 +553,7 @@ fn compose_into(
     }
     // A zero-width range leaves both skips at 0 either way, so nothing the
     // upstream read one cell before the buffer could have changed.
-    if width > 0 && line[width - 1] == NUL as c_uint {
+    if width > 0 && line[width - 1] == 0 {
         skipend = 0;
     }
 

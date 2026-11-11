@@ -18,7 +18,7 @@ use crate::ops::{Op, OpType};
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
-use crate::ascii::{NUL, ascii_iswhite};
+use crate::ascii::ascii_iswhite;
 use crate::buffer::{buf_is_prompt, buf_is_quickfix, current_buf};
 use crate::charset::vim_isprintc;
 use crate::cursor::{coladvance, gchar_cursor, with_cursor_rest};
@@ -586,7 +586,7 @@ pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
     } else {
         op.motion_type = MotionType::CharWise;
         op.use_reg_one = true;
-        let pos = findmatch(Some(&mut op), NUL);
+        let pos = findmatch(Some(&mut op), 0);
         if let Some(pos) = pos {
             setpcmark();
             win.w_cursor = pos;

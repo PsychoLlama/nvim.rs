@@ -20,7 +20,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use super::*;
-use crate::ascii::NUL;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
@@ -445,7 +444,7 @@ pub fn pat_has_uppercase(pat: &[u8]) -> bool {
     // pattern's own magicness, which only a parse can tell us.
     let is_magic = c_int::from(magic_isset());
     let magic_val = cstr::with_terminated(pat, |pat| {
-        skip_regexp_magic(pat.to_bytes_with_nul(), c_int::from(NUL), is_magic).1
+        skip_regexp_magic(pat.to_bytes_with_nul(), 0, is_magic).1
     });
     let at = |i: usize| cstr::byte_at(pat, i);
     let mut i = 0;

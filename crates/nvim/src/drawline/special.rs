@@ -20,7 +20,6 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::grid::with_linebuf;
 use crate::mbyte::Codepoint;
 use crate::narrow::{as_index, count_as_int};
@@ -38,21 +37,21 @@ impl Cells {
         } else {
             window.w_leftcol > ColNr::ZERO
         };
-        if self.lcs_prec_todo == NUL as ScreenChar
+        if self.lcs_prec_todo == 0
             || window.w_onebuf_opt.wo_list == 0
             || !scrolled
             || wlv.filler_todo > 0
             || wlv.skip_cells > 0
-            || self.cell_char == NUL as ScreenChar
+            || self.cell_char == 0
         {
             return;
         }
-        self.lcs_prec_todo = NUL as ScreenChar;
+        self.lcs_prec_todo = 0;
         if schar_cells(self.cell_char) > 1 {
             // The "precedes" character overwrites a double-width one;
             // fill up its other half.
             wlv.extra_fill = schar_from_ascii(MB_FILLER_CHAR);
-            wlv.extra_last = NUL as ScreenChar;
+            wlv.extra_last = 0;
             if wlv.extra_todo > 0 {
                 self.extra_todo_next = wlv.extra_todo;
                 self.extra_attr_next = Some(wlv.extra_attr);
@@ -74,7 +73,7 @@ impl Cells {
     /// line goes on past the right edge.
     pub(super) fn draw_extends(&mut self, wlv: &mut WinLineVars, window: Win) {
         let lcs_ext = get_lcs_ext(window);
-        if lcs_ext == NUL as ScreenChar
+        if lcs_ext == 0
             || wlv.filler_todo > 0
             || wlv.col != self.view_width - 1
             || self.has_foldtext
@@ -94,8 +93,7 @@ impl Cells {
         }
         if self.byte() != b'\0'
             || (self.lcs_eol > 0 && self.lcs_eol_todo)
-            || (wlv.extra_todo > 0
-                && (wlv.extra_fill != NUL as ScreenChar || wlv.extra.byte() != b'\0'))
+            || (wlv.extra_todo > 0 && (wlv.extra_fill != 0 || wlv.extra.byte() != b'\0'))
             || (self.may_have_inline_virt && wlv.has_more_inline_virt(self.byte_col()))
         {
             self.cell_char = lcs_ext;
@@ -126,8 +124,8 @@ impl Cells {
             }
             let text_len = wlv.extra.rest().len() - 1;
             wlv.extra_todo = ::core::ffi::c_int::try_from(text_len).unwrap_or(0);
-            wlv.extra_fill = NUL as ScreenChar;
-            wlv.extra_last = NUL as ScreenChar;
+            wlv.extra_fill = 0;
+            wlv.extra_last = 0;
             // Evaluating 'foldtext' may have changed the line.
             self.recopy_line(window, wlv.lnum);
         }
@@ -141,10 +139,10 @@ impl Cells {
                 || (self.byte() == b'\0'
                     && (window.w_onebuf_opt.wo_list == 0
                         || !self.lcs_eol_todo
-                        || self.lcs_eol == NUL as ScreenChar)))
+                        || self.lcs_eol == 0)))
         {
             wlv.extra_fill = window.w_p_fcs_chars.fold;
-            wlv.extra_last = NUL as ScreenChar;
+            wlv.extra_last = 0;
             wlv.extra_todo = self.view_width - wlv.col;
             // Search highlighting stops at the first filler character.
             self.search_attr = 0;
@@ -159,7 +157,7 @@ impl Cells {
     /// Invert one cell past the end of the text, for a Visual selection that
     /// includes the line break or an `'hlsearch'` match that ends there.
     pub(super) fn highlight_at_eol(&mut self, wlv: &mut WinLineVars, window: Win) {
-        if self.cell_char != NUL as ScreenChar || self.eol_extra_cell != 0 {
+        if self.cell_char != 0 || self.eol_extra_cell != 0 {
             return;
         }
         // Does the previous column start a search match?
@@ -209,9 +207,9 @@ impl Cells {
             && (window.w_onebuf_opt.wo_list == 0 || window.w_p_lcs_chars.tab1 != 0)
         {
             self.tab(wlv, window);
-        } else if self.cell_char == NUL as ScreenChar && self.wants_eol_cell(wlv, window) {
+        } else if self.cell_char == 0 && self.wants_eol_cell(wlv, window) {
             self.eol_cell(wlv, window);
-        } else if self.cell_char != NUL as ScreenChar {
+        } else if self.cell_char != 0 {
             self.escaped(wlv, window);
         } else if visual_active()
             && (visual_mode().is_block() || visual_mode().is_char())
@@ -233,7 +231,7 @@ impl Cells {
         let lcs = &window.w_p_lcs_chars;
         let (mut lcs_tab1, mut lcs_tab2, mut lcs_tab3) = (lcs.tab1, lcs.tab2, lcs.tab3);
         if window.w_onebuf_opt.wo_list != 0
-            && lcs.leadtab1 != NUL as ScreenChar
+            && lcs.leadtab1 != 0
             && self.byte_col() < self.leadcol.get()
         {
             lcs_tab1 = lcs.leadtab1;
@@ -336,7 +334,7 @@ impl Cells {
             };
             if window.w_onebuf_opt.wo_lbr != 0 && wlv.extra.byte() != b'\0' {
                 // Using the run's text from above.
-                wlv.extra_fill = NUL as ScreenChar;
+                wlv.extra_fill = 0;
             } else {
                 wlv.extra_fill = lcs_tab2;
             }
@@ -345,7 +343,7 @@ impl Cells {
             wlv.extra_attr = win_hl_attr(window, HLF_0);
             self.attr_before_run = wlv.char_attr;
         } else {
-            wlv.extra_last = NUL as ScreenChar;
+            wlv.extra_last = 0;
             wlv.extra_fill = schar_from_ascii(b' ');
             self.cell_char = schar_from_ascii(b' ');
         }
@@ -365,7 +363,7 @@ impl Cells {
             // Reverse "<12>".
             mirror_ascii(text);
         }
-        (wlv.extra_fill, wlv.extra_last) = (NUL as ScreenChar, NUL as ScreenChar);
+        (wlv.extra_fill, wlv.extra_last) = (0, 0);
         // The first byte is this cell; the rest is the run.
         let unprintable = self.char_code;
         let first = text.first().copied().unwrap_or(0);
@@ -403,7 +401,7 @@ impl Cells {
                     && wlv.lnum == window.w_cursor.lnum
                     && wlv.vcol == window.w_virtcol)))
             && self.lcs_eol_todo
-            && self.lcs_eol != NUL as ScreenChar
+            && self.lcs_eol != 0
     }
 
     /// Draw the `'listchars'` "eol" character, or a highlighted blank standing
@@ -463,7 +461,7 @@ impl Cells {
         let first_of_run = (self.prev_syntax_id != self.syntax_seqnr && syntax_conceal)
             || self.has_match_conc > 1
             || self.decor_conceal > 1;
-        let have_char = (syntax_conceal && syn_get_sub_char() != NUL)
+        let have_char = (syntax_conceal && syn_get_sub_char() != 0)
             || (self.has_match_conc != 0 && self.match_conc != 0)
             || (self.decor_conceal != 0 && decor_conceal().1 != 0)
             || window.w_onebuf_opt.wo_cole == 1;
@@ -481,9 +479,9 @@ impl Cells {
                     wlv.char_attr = conceal_attr;
                 }
                 conceal_char
-            } else if syntax_conceal && syn_get_sub_char() != NUL {
+            } else if syntax_conceal && syn_get_sub_char() != 0 {
                 schar_from_char(Codepoint::new(syn_get_sub_char()))
-            } else if window.w_p_lcs_chars.conceal != NUL as ScreenChar {
+            } else if window.w_p_lcs_chars.conceal != 0 {
                 window.w_p_lcs_chars.conceal
             } else {
                 schar_from_ascii(b' ')

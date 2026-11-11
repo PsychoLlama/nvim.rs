@@ -20,7 +20,6 @@
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 
 impl Win {
     /// Start syntax recognition for a line.
@@ -39,7 +38,7 @@ impl SynState {
     pub(crate) fn start(&mut self, window: Win, lnum: LineNr) {
         let buffer = window.buffer();
         self.buffer = buffer;
-        self.current.sub_char = NUL;
+        self.current.sub_char = 0;
         let changedtick = buf_get_changedtick(buffer);
         if self.parsed.map(SynBlockRef::raw) != Some(window.w_s)
             || self.buf != buffer.try_id()

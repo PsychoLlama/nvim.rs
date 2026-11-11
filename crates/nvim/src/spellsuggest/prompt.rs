@@ -36,7 +36,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ascii::NUL;
 use crate::change::inserted_bytes;
 use crate::cursor::get_cursor_line_len;
 use crate::drawscreen::state::CMDLINE_ROW;
@@ -109,7 +108,7 @@ pub(crate) fn spell_suggest(count: c_int) {
 
 /// The body of `z=`, with `'spell'` already on.
 fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
-    if c_int::from(Win::current().syn_block().b_p_spl.first_byte()) == NUL {
+    if c_int::from(Win::current().syn_block().b_p_spl.first_byte()) == 0 {
         emsg(gettext(E_NO_SPELL));
         return;
     }

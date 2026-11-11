@@ -35,7 +35,6 @@ use crate::winlayer::Win;
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 
 /// Abandon the stack, releasing what it holds.
 ///
@@ -160,7 +159,7 @@ pub(crate) fn is_open(top: Option<u8>) -> bool {
 pub(crate) fn replace_join(mut off: c_int) {
     REPLACE_STACK.with_mut(|stack| {
         for i in (0..stack.len()).rev() {
-            if c_int::from(stack[i]) != NUL {
+            if stack[i] != 0 {
                 continue;
             }
             // Only a NUL counts down `off`, and the one that reaches zero

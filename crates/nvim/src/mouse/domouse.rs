@@ -27,7 +27,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use super::*;
-use crate::ascii::{NUL, ascii_iswhite};
+use crate::ascii::ascii_iswhite;
 use crate::buffer::buf_is_quickfix;
 use crate::charset::vim_iswordc;
 use crate::cursor::with_cursor_rest;
@@ -891,7 +891,7 @@ impl Win {
         if !equalpos(self.w_cursor, visual_anchor()) {
             return false;
         }
-        let Some(pos) = findmatch(Some(&mut op), NUL) else {
+        let Some(pos) = findmatch(Some(&mut op), 0) else {
             return false;
         };
 

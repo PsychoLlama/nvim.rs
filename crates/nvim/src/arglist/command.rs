@@ -17,7 +17,6 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::cmdexpand::defs::{Candidate, Expand};
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
@@ -50,7 +49,7 @@ pub fn ex_args(excmd: &mut ExArg) {
     }
     // ":args file ..": define a new argument list, handled like ":next".
     // Also for ":arglocal file .." and ":argglobal file ..".
-    if c_int::from(excmd.line.byte_at(excmd.line.arg)) != NUL {
+    if excmd.line.byte_at(excmd.line.arg) != 0 {
         if arglist_is_locked() {
             return;
         }
@@ -213,7 +212,7 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
 pub fn ex_next(excmd: &mut ExArg) {
     let forceit = excmd.forceit;
     let is_snext = excmd.cmdidx == CmdIdx::snext;
-    let has_arg = c_int::from(excmd.line.byte_at(excmd.line.arg)) != NUL;
+    let has_arg = excmd.line.byte_at(excmd.line.arg) != 0;
     // Check for a changed buffer now: if this fails the argument list is not
     // redefined.
     let flags = CCGD_AW | CCGD_EXCMD | flag_if(forceit, CCGD_FORCEIT);

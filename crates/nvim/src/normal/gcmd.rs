@@ -14,7 +14,6 @@ use crate::normal::defs::{CmdArg, MotionType};
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
-use crate::ascii::NUL;
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::cstr;
 use crate::cursor::{
@@ -127,7 +126,7 @@ pub(crate) fn nv_g_underscore_cmd(cmd_arg: &mut CmdArg) {
     let line = lines.line(win.w_cursor.lnum);
     let byte_at = |col: ColNr| cstr::byte_at(line, usize::try_from(col).unwrap_or(0));
     // 'virtualedit' can leave the cursor on the terminator.
-    if win.w_cursor.col > ColNr::ZERO && c_int::from(byte_at(win.w_cursor.col)) == NUL {
+    if win.w_cursor.col > ColNr::ZERO && byte_at(win.w_cursor.col) == 0 {
         win.w_cursor.col -= 1;
     }
     while win.w_cursor.col > ColNr::ZERO && ascii_iswhite(c_int::from(byte_at(win.w_cursor.col))) {

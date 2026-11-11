@@ -26,7 +26,6 @@ use core::ffi::c_int;
 
 use super::arith::NextCurwin;
 use super::*;
-use crate::ascii::NUL;
 use crate::buffer::{buf_is_help, current_buf};
 use crate::decoration::decor_conceal_line;
 use crate::drawscreen::state::{CMDLINE_ROW, REDRAW_CMDLINE};
@@ -650,9 +649,9 @@ pub(crate) fn set_winbar_win(
     let global = p_wbr(|value| c_int::from(value.to_bytes().first().copied().unwrap_or(0)));
     let local = c_int::from(window.w_onebuf_opt.wo_wbr.first_byte());
     let winbar_height = if window.w_floating {
-        c_int::from(local != NUL)
+        c_int::from(local != 0)
     } else {
-        c_int::from(global != NUL || local != NUL)
+        c_int::from(global != 0 || local != 0)
     };
     if window.w_winbar_height != winbar_height {
         if winbar_height == 1 && window.w_view_height <= 1 {

@@ -33,7 +33,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ascii::NUL;
 use crate::cstr::until_nul;
 use crate::mbyte::{c_cluster_len, char_count};
 use crate::narrow::as_index;
@@ -262,9 +261,7 @@ impl Walk<'_> {
         // word, the caller's NUL-terminated buffer.
         let replacing_nonword =
             !try_compound && !spell_iswordp_nmw(&self.fword[bad_idx..], Win::current());
-        if !((replacing_nonword || bad_word_ends)
-            && self.fword_at(bad_idx) != NUL
-            && good_word_ends)
+        if !((replacing_nonword || bad_word_ends) && self.fword_at(bad_idx) != 0 && good_word_ends)
         {
             return;
         }

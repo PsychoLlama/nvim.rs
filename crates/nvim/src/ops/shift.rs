@@ -33,7 +33,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_ulong};
 
 use super::*;
-use crate::ascii::NUL;
 use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::{c_char_info, c_cluster_len, c_next_cluster};
@@ -59,7 +58,7 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
     for _ in 0..op.line_count {
         let lnum = Win::current().w_cursor.lnum;
         let first_char = c_int::from(byte_at(Lines::current().line(lnum), 0));
-        if first_char == NUL {
+        if first_char == 0 {
             // Empty line: nothing to indent, but the cursor still has to
             // land somewhere legal.
             Win::current().w_cursor.col = ColNr::ZERO;

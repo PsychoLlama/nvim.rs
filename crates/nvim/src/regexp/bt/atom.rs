@@ -29,7 +29,6 @@ use super::escape::{percent_atom, z_atom};
 use super::literal::{class_shorthand, is_class_shorthand, literal_run, previous_substitute};
 use super::op::BtOp;
 use super::piece::reg;
-use crate::ascii::NUL;
 use crate::regexp::{
     CompileError, Compiled, HASLOOKBH, HASNL, HASWIDTH, MAGIC_ALL, MAGIC_ON, NL, REG_PAREN, SIMPLE,
     SPSTART, Spelled, WORST, getchr, spelled, unmagic,
@@ -91,7 +90,7 @@ pub(crate) fn regatom(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node>
             if rc.string_match != 0 {
                 let ret = rc.code.node(BtOp::Exactly);
                 rc.code.byte(NL);
-                rc.code.byte(NUL);
+                rc.code.byte(b'\0');
                 *flagp |= HASWIDTH | SIMPLE;
                 Ok(ret)
             } else {
@@ -111,7 +110,7 @@ pub(crate) fn regatom(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node>
 
         // These end an alternative, so `regconcat` should already have
         // stopped; reaching one here means the parser lost track.
-        NUL | M_BAR | M_AMP | M_PAREN_CLOSE => {
+        0 | M_BAR | M_AMP | M_PAREN_CLOSE => {
             denied_in_optional_sequence(rc)?;
             Err(CompileError::Internal)
         }

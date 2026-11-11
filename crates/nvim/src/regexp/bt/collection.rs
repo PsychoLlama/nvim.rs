@@ -25,7 +25,6 @@ use core::ffi::c_int;
 use super::equi_class::reg_equi_class;
 use super::op::BtOp;
 use super::piece::coll_get_char;
-use crate::ascii::NUL;
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::mbyte::utf_char2len;
@@ -110,7 +109,7 @@ pub(crate) fn collection(
         }
     }
 
-    rc.code.byte(NUL);
+    rc.code.byte(b'\0');
     // The collection was consumed byte by byte rather than through the
     // character reader, so the reader's idea of how far back one character is
     // has to be reset before `skipchr` steps over the `]`.

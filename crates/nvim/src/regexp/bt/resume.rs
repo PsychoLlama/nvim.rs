@@ -25,7 +25,6 @@ use super::repeat::regrepeat;
 use super::state::{BackPos, Braces, RegStack, capture_slot};
 use crate::getchar::state::GOT_INT;
 
-use crate::ascii::NUL;
 use crate::os::libc::int64_t;
 use crate::regexp::{
     MatchPos, RS_BEHIND1, RS_BEHIND2, RS_BRANCH, RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT,
@@ -385,7 +384,7 @@ fn star(
         }
         // The byte the pattern needs next is known; positions that cannot
         // supply it are skipped without re-entering the walk.
-        if !(rst.nextb == NUL
+        if !(rst.nextb == 0
             || c_int::from(rex.byte()) == rst.nextb
             || c_int::from(rex.byte()) == rst.nextb_ic)
         {

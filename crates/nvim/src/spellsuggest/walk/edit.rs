@@ -34,7 +34,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ascii::NUL;
 use crate::getchar::state::GOT_INT;
 use crate::mbyte::{c_cluster_len, char_at, utf_iscomposing_legacy, utf8len_tab};
 use crate::narrow::as_index;
@@ -70,8 +69,7 @@ impl Walk<'_> {
 
         // `bad_idx` is a position the walk reached inside the bad
         // word, the caller's NUL-terminated buffer.
-        if self.fword_at(self.stack[level].bad_idx as usize) == NUL
-            && self.stack[level].char_len == 0
+        if self.fword_at(self.stack[level].bad_idx as usize) == 0 && self.stack[level].char_len == 0
         {
             // The bad word ends, so there is no byte to match against.
             self.stack[level].state = State::Del;
@@ -142,7 +140,7 @@ impl Walk<'_> {
         let child = self.depth;
 
         // A bad-word position again, as above.
-        if self.fword_at(self.stack[child].bad_idx as usize) != NUL {
+        if self.fword_at(self.stack[child].bad_idx as usize) != 0 {
             self.stack[child].bad_idx += 1;
         }
         self.tword[self.stack[child].good_len as usize] = byte;
@@ -261,7 +259,7 @@ impl Walk<'_> {
             SCORE_DEL
         };
 
-        if !(self.fword_at(bad_idx) != NUL && self.try_deeper(newscore)) {
+        if !(self.fword_at(bad_idx) != 0 && self.try_deeper(newscore)) {
             self.ins_prep();
             return;
         }

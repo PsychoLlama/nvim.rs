@@ -18,7 +18,6 @@
 )]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::mbyte::Codepoint;
@@ -231,17 +230,17 @@ fn make_plan(
         target.ignore_cend = initc == '/' as c_int;
         target.backwards = dir != FORWARD;
         target.raw_string = initc == 'R' as c_int;
-        target.initc = NUL;
+        target.initc = 0;
         return Plan::Walk(target);
     }
 
-    if initc != '#' as c_int && initc != NUL {
+    if initc != '#' as c_int && initc != 0 {
         // A given character: look it up in the table.
         find_mps_values(&mut target, true);
         if dir != 0 {
             target.backwards = dir != FORWARD;
         }
-        if target.findc == NUL {
+        if target.findc == 0 {
             return Plan::Nothing;
         }
         return Plan::Walk(target);
@@ -295,7 +294,7 @@ fn make_plan(
             loop {
                 let rest = &line[pos.col.as_usize().min(line.len())..];
                 target.initc = char_at(rest).get();
-                if target.initc == NUL {
+                if target.initc == 0 {
                     break;
                 }
                 find_mps_values(&mut target, false);

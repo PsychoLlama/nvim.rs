@@ -16,7 +16,6 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::cstr;
 use crate::message::msg_put_ascii;
 use crate::winlayer::cmdline_window;
@@ -375,7 +374,7 @@ pub fn redrawcmd() {
 
     cc.cmdspos = cmd_screencol(cc.cmdpos);
 
-    if ::core::ffi::c_int::from(cc.special_char) != NUL {
+    if cc.special_char != 0 {
         putcmdline(cc.special_char, cc.special_shift);
     }
 

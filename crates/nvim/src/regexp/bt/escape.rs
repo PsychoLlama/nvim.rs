@@ -21,7 +21,6 @@ use super::atom::{denied_in_optional_sequence, regatom};
 use super::compile::use_multibytecode;
 use super::op::BtOp;
 use super::piece::reg;
-use crate::ascii::NUL;
 use crate::ascii::ascii_isdigit;
 use crate::os::libc::uint32_t;
 use crate::regexp::{
@@ -125,7 +124,7 @@ fn optional_sequence(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node> 
         if c == ']' as c_int {
             break;
         }
-        if c == NUL {
+        if c == 0 {
             return Err(CompileError::MissingOptionalEnd(spelled(rc)));
         }
         let br = rc.code.node(BtOp::Branch);
@@ -205,7 +204,7 @@ fn character_escape(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> Compil
     } else {
         rc.code.char(i);
     }
-    rc.code.byte(NUL);
+    rc.code.byte(b'\0');
     *flagp |= HASWIDTH;
     Ok(ret)
 }

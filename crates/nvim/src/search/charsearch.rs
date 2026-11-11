@@ -14,7 +14,6 @@
 )]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::cstr;
 use crate::grid::schar::MAX_SCHAR_SIZE;
 use crate::mbyte::Codepoint;
@@ -135,7 +134,7 @@ pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> 
         }
     } else {
         // Repeat the previous search.
-        if c_int::from(LASTC.get()) == NUL && LASTC_BYTELEN.get() <= 1 {
+        if LASTC.get() == 0 && LASTC_BYTELEN.get() <= 1 {
             return Err(NoMatch);
         }
         dir = if dir != 0 {

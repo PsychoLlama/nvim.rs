@@ -11,7 +11,7 @@
 
 use super::wrappers::{arg_lnum, arg_number, arg_number_chk, non_zero_arg};
 use crate::api::private::helpers::api_metadata;
-use crate::ascii::{NUL, ascii_iswhite};
+use crate::ascii::ascii_iswhite;
 use crate::autocmd::state::AUTOCMD_BUSY;
 use crate::cmdexpand::cmdline_pum_active;
 use crate::cmdexpand::state::WILD_MENU_SHOWING;
@@ -501,7 +501,7 @@ pub fn f_visualmode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         .cast_signed()];
     result.write_string(Some(c_chars_until_nul(&mode)));
     if args.first().is_some_and(non_zero_arg) {
-        Buf::current().b_visual_mode_eval = NUL;
+        Buf::current().b_visual_mode_eval = 0;
     }
 }
 

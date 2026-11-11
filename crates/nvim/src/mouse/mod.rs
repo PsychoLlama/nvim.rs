@@ -41,7 +41,6 @@ use crate::winlayer::{TabPage, WinId};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use crate::ascii::NUL;
 use crate::charset::vim_iswordc;
 use crate::cursor::set_leftcol;
 use crate::eval::funcs::builtin::EvalFuncData;
@@ -337,7 +336,7 @@ fn mouse_class(line: &[u8], idx: usize) -> c_int {
     // characters to be considered as a single word.  These are things like
     // "->", "/ *", "*=", "+=", "&=", "<=", ">=", "!=" etc.  Otherwise, each
     // character is in its own class.
-    if c != NUL && has_char(c"-+*/%<>&|^!=", Codepoint::new(c)) {
+    if c != 0 && has_char(c"-+*/%<>&|^!=", Codepoint::new(c)) {
         return 1;
     }
     c

@@ -25,7 +25,6 @@ use super::{
     GETFILE_ERROR, GETFILE_NOT_WRITTEN, GETFILE_OPEN_OTHER, GETFILE_SAME_FILE, buf_autocmd, do_bang,
 };
 use crate::arglist::do_argfile;
-use crate::ascii::NUL;
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{augroup_exists_of, do_doautocmd};
 use crate::buffer::{
@@ -133,7 +132,7 @@ pub fn rename_buffer(new_fname: &CStr) -> Result<(), Failed> {
 
 /// `:file[!] [fname]`.
 pub fn ex_file(excmd: &mut ExArg) {
-    let no_arg = c_int::from(excmd.line.byte_at(excmd.line.arg)) == NUL;
+    let no_arg = excmd.line.byte_at(excmd.line.arg) == 0;
 
     // ":0file" removes the file name.  Check for illegal uses ":3file",
     // "0file name", etc.
@@ -473,7 +472,7 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> bool {
     }
 
     // If 'filetype' was empty try detecting it now.
-    if c_int::from(Buf::current().b_p_ft.first_byte()) == NUL {
+    if c_int::from(Buf::current().b_p_ft.first_byte()) == 0 {
         if augroup_exists_of(c"filetypedetect") {
             let _ = do_doautocmd(c"filetypedetect BufRead", true, None);
         }

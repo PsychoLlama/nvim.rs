@@ -34,7 +34,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::normal::visual_active;
 use crate::option::cpo_has;
 use crate::option::defs::{CpoFlag, FoFlag};
@@ -192,7 +191,7 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
             // the cursor to the following word; move it onto the space
             // first so it does not.
             cc = c_int::from(b'x');
-            if Win::current().w_cursor.col > ColNr::ZERO && char_at_cursor() == NUL {
+            if Win::current().w_cursor.col > ColNr::ZERO && char_at_cursor() == 0 {
                 dec_cursor();
                 cc = char_at_cursor();
                 if !ascii_iswhite(cc) {
@@ -203,11 +202,11 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
             auto_format(true, false);
 
             if ascii_iswhite(cc) {
-                if char_at_cursor() != NUL {
+                if char_at_cursor() != 0 {
                     inc_cursor();
                 }
                 // Still on the same character: keep its `coladd` too.
-                if char_at_cursor() == NUL
+                if char_at_cursor() == 0
                     && Win::current().w_cursor.lnum == tpos.lnum
                     && Win::current().w_cursor.col == tpos.col
                 {
@@ -237,7 +236,7 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
             Win::current().w_cursor = end_insert_pos.pos();
             check_cursor_col(Win::current()); // make sure it is not past the line
             loop {
-                if char_at_cursor() == NUL && Win::current().w_cursor.col > ColNr::ZERO {
+                if char_at_cursor() == 0 && Win::current().w_cursor.col > ColNr::ZERO {
                     Win::current().w_cursor.col -= 1;
                 }
                 cc = char_at_cursor();
@@ -252,7 +251,7 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
                 // Reset `tpos`: the loop above may have invalidated it.
                 tpos = Win::current().w_cursor;
                 tpos.col += 1;
-                if cc != NUL && gchar_pos(&tpos) == Codepoint::NUL {
+                if cc != 0 && gchar_pos(&tpos) == Codepoint::NUL {
                     Win::current().w_cursor.col += 1; // put the cursor back on the NUL
                 }
             }

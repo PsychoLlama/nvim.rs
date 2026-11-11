@@ -29,7 +29,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::change::{get_leader_len, ins_bytes, ins_str, open_line};
 use crate::charset::char2cells;
 use crate::cursor::{
@@ -227,11 +226,11 @@ impl BreakSearch {
                 cc = ncc;
                 ncc = inc_cursor_gchar().1;
                 // At end of line, the character being inserted is next.
-                ncc = if ncc != NUL { ncc } else { self.c };
+                ncc = if ncc != 0 { ncc } else { self.c };
                 allow_break = utf_allow_break(cc, ncc);
                 if allow_break {
                     // Break only when this is not the end of the line.
-                    self.foundcol = if ncc == NUL {
+                    self.foundcol = if ncc == 0 {
                         0
                     } else {
                         Win::current().w_cursor.col.get()
@@ -260,7 +259,7 @@ impl BreakSearch {
             || Win::current().w_cursor.col >= INSSTART.get().col
         {
             let under = landed.take();
-            let cc = if Win::current().w_cursor.col == ColNr::new(self.startcol) && self.c != NUL {
+            let cc = if Win::current().w_cursor.col == ColNr::new(self.startcol) && self.c != 0 {
                 self.c
             } else {
                 under.unwrap_or_else(|| gchar_cursor().get())
@@ -403,7 +402,7 @@ impl Wrap {
     fn break_once(&mut self) -> bool {
         let mut win = Win::current();
         let virtcol = get_nolist_virtcol()
-            + char2cells(if self.c != NUL {
+            + char2cells(if self.c != 0 {
                 Codepoint::new(self.c)
             } else {
                 gchar_cursor()
@@ -645,7 +644,7 @@ mod tests {
             textwidth: 20,
             second_indent: -1,
             flags,
-            c: NUL,
+            c: 0,
             fo_ins_blank: false,
             fo_multibyte: false,
             fo_rigor_tw: false,

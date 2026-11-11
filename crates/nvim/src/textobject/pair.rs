@@ -23,7 +23,7 @@ use crate::winlayer::Win;
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::{NUL, ascii_iswhite};
+use crate::ascii::ascii_iswhite;
 use crate::cstr::byte_at;
 use crate::cursor::{dec_cursor, gchar_cursor, inc_cursor};
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, showmode};
@@ -227,7 +227,7 @@ pub(crate) fn current_block(
 /// one. A self-closing `<aaa/>` is neither.
 fn in_html_tag(end_tag: bool) -> bool {
     let cursor = Win::current().w_cursor;
-    let mut lc = NUL;
+    let mut lc = 0;
     let at = {
         let mut lines = Lines::current();
         let line = lines.line(cursor.lnum);
@@ -269,16 +269,16 @@ fn in_html_tag(end_tag: bool) -> bool {
             return false;
         }
         // `inc` left `pos` on a character of the current buffer.
-        let c = c_int::from(byte_at(
+        let c = byte_at(
             Lines::current().line(pos.lnum),
             usize::try_from(pos.col).unwrap_or(usize::MAX),
-        ));
-        if c == '>' as c_int {
+        );
+        if c == b'>' {
             break;
         }
         lc = c;
     }
-    lc != '/' as c_int
+    lc != b'/'
 }
 
 /// `do_searchpair` with the arguments this file always passes: no middle

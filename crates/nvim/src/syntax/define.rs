@@ -26,7 +26,6 @@ use crate::types::Failed;
 use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::ascii::NUL;
 use crate::ex_docmd::ends_excmd_char;
 use crate::regexp::{RE_MAGIC, char_delim, skip_regexp_at};
 use crate::runtime::RuntimeOpts;
@@ -137,7 +136,7 @@ fn item_opt(takes_sync_idx: bool) -> SynOptArg {
 /// `:syntax sync match {group} [[grouphere|groupthere] {group}] ..`.
 pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
     let line = args.line.arg().to_vec();
-    let mut conceal_char: c_int = NUL;
+    let mut conceal_char: c_int = 0;
     let mut opt = item_opt(syncing != 0);
     let mut item = EMPTY_SYNPAT;
 
@@ -256,7 +255,7 @@ impl ExArg<'_> {
         let mut out = RegionArgs {
             pats: [Vec::new(), Vec::new(), Vec::new()],
             opt: item_opt(false),
-            conceal_char: NUL,
+            conceal_char: 0,
             end: at,
             not_enough: false,
         };

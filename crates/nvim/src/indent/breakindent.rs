@@ -10,10 +10,9 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ascii::NUL;
 use crate::cstr;
 use crate::regexp::RegMatch;
-use crate::types::{ColNr, OptInt, ScreenChar, VarNumber};
+use crate::types::{ColNr, OptInt, VarNumber};
 use core::ffi::CStr;
 
 use super::*;
@@ -281,7 +280,7 @@ pub fn get_breakindent_win(window: Win, line: &[u8]) -> c_int {
         ts: buf.b_p_ts,
         tick: buf_get_changedtick(buf),
         listopt: win.w_briopt_list,
-        no_ts: win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == NUL as ScreenChar,
+        no_ts: win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == 0,
         dy_uhex: DY_FLAGS.get() & OPT_DY_FLAG_UHEX as c_uint,
     };
     let opt = Briopt {

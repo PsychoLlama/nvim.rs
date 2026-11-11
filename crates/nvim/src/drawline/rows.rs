@@ -18,7 +18,6 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::decoration::{HL_MODE_COMBINE, HL_MODE_REPLACE, VL_LEFTCOL, VL_SCROLL};
 use crate::grid::{SLF_INC_VCOL, SLF_WRAP, grid_of_view, with_linebuf};
 use crate::r#move::WinValid;
@@ -190,10 +189,9 @@ impl Cells {
                 || self.byte() != b'\0'
                 || wlv.filler_todo > 0
                 || (window.w_onebuf_opt.wo_list != 0
-                    && window.w_p_lcs_chars.eol != NUL as ScreenChar
+                    && window.w_p_lcs_chars.eol != 0
                     && self.lcs_eol_todo)
-                || (wlv.extra_todo != 0
-                    && (wlv.extra_fill != NUL as ScreenChar || wlv.extra.byte() != b'\0'))
+                || (wlv.extra_todo != 0 && (wlv.extra_fill != 0 || wlv.extra.byte() != b'\0'))
                 || (self.may_have_inline_virt && wlv.has_more_inline_virt(self.byte_col())))
     }
 

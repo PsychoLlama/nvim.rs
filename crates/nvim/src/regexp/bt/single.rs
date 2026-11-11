@@ -20,7 +20,6 @@ use core::ffi::c_int;
 use super::compile::BtProg;
 use super::exec::re_num_cmp;
 use super::op::BtOp;
-use crate::ascii::NUL;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::mark::mark_get;
@@ -69,13 +68,13 @@ pub(crate) fn match_one(
 
     let status = match op {
         BtOp::Bol => nomatch_unless(rex.at_bol()),
-        BtOp::Eol => nomatch_unless(c == NUL),
+        BtOp::Eol => nomatch_unless(c == 0),
         BtOp::ReBof => nomatch_unless(
             rex.lnum() == LineNr::ZERO
                 && rex.at_bol()
                 && (!rex.multi() || rex.reg_firstlnum() <= LineNr::ONE),
         ),
-        BtOp::ReEof => nomatch_unless(rex.lnum() == rex.reg_maxline() && c == NUL),
+        BtOp::ReEof => nomatch_unless(rex.lnum() == rex.reg_maxline() && c == 0),
         BtOp::Cursor => nomatch_unless(match cursor_of(rex) {
             Some(cursor) => rex.buf_lnum() == cursor.lnum && rex.col() == cursor.col,
             None => false,
@@ -98,7 +97,7 @@ pub(crate) fn match_one(
         // `\<` and `\>`: a change of character class, with the classes
         // below 2 (whitespace and punctuation) never starting a word.
         BtOp::Bow => {
-            if c == NUL {
+            if c == 0 {
                 Verdict::NoMatch
             } else {
                 let this = char_class(rex);
@@ -115,7 +114,7 @@ pub(crate) fn match_one(
             }
         }
 
-        BtOp::Any => return take(c != NUL),
+        BtOp::Any => return take(c != 0),
         BtOp::Ident => return take(vim_is_ident_char(Codepoint::new(c))),
         BtOp::Sident => return take(!digit_here() && vim_is_ident_char(Codepoint::new(c))),
         BtOp::Kword => return take(rex.iswordp()),
@@ -127,23 +126,23 @@ pub(crate) fn match_one(
             return take(!digit_here() && vim_isprintc(Codepoint::new(rex.char_here())));
         }
         BtOp::White => return take(ascii_iswhite(c)),
-        BtOp::Nwhite => return take(c != NUL && !ascii_iswhite(c)),
+        BtOp::Nwhite => return take(c != 0 && !ascii_iswhite(c)),
         BtOp::Digit => return take(ri(ByteClass::DIGIT)),
-        BtOp::Ndigit => return take(c != NUL && !ri(ByteClass::DIGIT)),
+        BtOp::Ndigit => return take(c != 0 && !ri(ByteClass::DIGIT)),
         BtOp::Hex => return take(ri(ByteClass::HEX)),
-        BtOp::Nhex => return take(c != NUL && !ri(ByteClass::HEX)),
+        BtOp::Nhex => return take(c != 0 && !ri(ByteClass::HEX)),
         BtOp::Octal => return take(ri(ByteClass::OCTAL)),
-        BtOp::Noctal => return take(c != NUL && !ri(ByteClass::OCTAL)),
+        BtOp::Noctal => return take(c != 0 && !ri(ByteClass::OCTAL)),
         BtOp::Word => return take(ri(ByteClass::WORD)),
-        BtOp::Nword => return take(c != NUL && !ri(ByteClass::WORD)),
+        BtOp::Nword => return take(c != 0 && !ri(ByteClass::WORD)),
         BtOp::Head => return take(ri(ByteClass::HEAD)),
-        BtOp::Nhead => return take(c != NUL && !ri(ByteClass::HEAD)),
+        BtOp::Nhead => return take(c != 0 && !ri(ByteClass::HEAD)),
         BtOp::Alpha => return take(ri(ByteClass::ALPHA)),
-        BtOp::Nalpha => return take(c != NUL && !ri(ByteClass::ALPHA)),
+        BtOp::Nalpha => return take(c != 0 && !ri(ByteClass::ALPHA)),
         BtOp::Lower => return take(ri(ByteClass::LOWER)),
-        BtOp::Nlower => return take(c != NUL && !ri(ByteClass::LOWER)),
+        BtOp::Nlower => return take(c != 0 && !ri(ByteClass::LOWER)),
         BtOp::Upper => return take(ri(ByteClass::UPPER)),
-        BtOp::Nupper => return take(c != NUL && !ri(ByteClass::UPPER)),
+        BtOp::Nupper => return take(c != 0 && !ri(ByteClass::UPPER)),
 
         BtOp::Exactly => exactly(rex, prog, scan, next),
         BtOp::Anyof | BtOp::Anybut => collection(rex, prog.operand(scan), c, op == BtOp::Anyof),
@@ -183,7 +182,7 @@ pub(crate) fn match_one(
 
         BtOp::Newl => {
             let lbr = rex.reg_line_lbr();
-            let at_break = c == NUL && rex.multi() && rex.lnum() <= rex.reg_maxline() && !lbr;
+            let at_break = c == 0 && rex.multi() && rex.lnum() <= rex.reg_maxline() && !lbr;
             if !at_break && !(c == '\n' as c_int && lbr) {
                 Verdict::NoMatch
             } else {
@@ -292,13 +291,13 @@ fn exactly(rex: Rex, prog: BtProg<'_>, scan: usize, next: usize) -> Verdict {
     if opnd[0] != rex.byte() && !rex.reg_ic() {
         return Verdict::NoMatch;
     }
-    if c_int::from(opnd[0]) == NUL {
+    if opnd[0] == 0 {
         return Verdict::Continue;
     }
     let mut len;
     // A one-byte operand with no case folding needs no compare: the
     // first-byte test above already settled it.
-    if c_int::from(opnd[1]) == NUL && !rex.reg_ic() {
+    if opnd[1] == 0 && !rex.reg_ic() {
         len = 1;
     } else {
         len = byte_count(nul_terminated_len(opnd));
@@ -323,7 +322,7 @@ fn exactly(rex: Rex, prog: BtProg<'_>, scan: usize, next: usize) -> Verdict {
 /// `[abc]` / `[^abc]`. The base character has to be in (or out of) the set,
 /// and any combining characters the set's own entry carries must follow it.
 fn collection(rex: Rex, operand: &[u8], c: c_int, positive: bool) -> Verdict {
-    if c == NUL {
+    if c == 0 {
         return Verdict::NoMatch;
     }
     let found = cstrchr(rex, operand, c);
@@ -361,7 +360,7 @@ fn multibyte(rex: Rex, opnd: &[u8]) -> Verdict {
         let (line, input) = (rex.line(), rex.input());
         let mut status = Verdict::NoMatch;
         let mut i = 0;
-        while c_int::from(line[input + i]) != NUL {
+        while line[input + i] != 0 {
             let inpc = char_at_nul(line, input + i);
             if !utf_iscomposing_legacy(inpc) {
                 // The base character is allowed to be the first thing

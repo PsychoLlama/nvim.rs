@@ -40,7 +40,6 @@ use core::ffi::c_int;
 
 use super::program::{NfaState, StateId, States};
 use super::sub::{copy_pim, copy_sub, has_backref, has_zsubexpr, pim_equal, slots, sub_equal};
-use crate::ascii::NUL;
 use crate::message::emsg;
 use crate::option::vars::p_mmp;
 use crate::os::cshim::gettext;
@@ -548,7 +547,7 @@ fn place<'p>(
 fn past_line_start(rex: Rex) -> bool {
     let endp = rex.nfa_endp();
     rex.input() > 0
-        && c_int::from(rex.byte()) != NUL
+        && rex.byte() != 0
         && endp.is_none_or(|endp| !rex.multi() || rex.lnum() == endp.as_pos().lnum)
 }
 

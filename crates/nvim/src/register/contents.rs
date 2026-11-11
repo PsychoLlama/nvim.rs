@@ -37,7 +37,6 @@ use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::ascii::NUL;
 
 /// The motion type of register `regname`, and its width if blockwise (0
 /// otherwise).
@@ -288,7 +287,7 @@ fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, b
                     }
                     // A NUL is one byte and is translated below, so it must
                     // not be handed to the UTF-8 length.
-                    if c_int::from(byte) == NUL {
+                    if byte == 0 {
                         line_end += 1;
                     } else {
                         // A sequence `text`'s end cuts short is as long as the
@@ -312,7 +311,7 @@ fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, b
                 joined.extend_from_slice(&text[start..line_end]);
                 // A NUL in the text is how the editor spells a newline.
                 for byte in &mut joined {
-                    if c_int::from(*byte) == NUL {
+                    if c_int::from(*byte) == 0 {
                         *byte = b'\n';
                     }
                 }

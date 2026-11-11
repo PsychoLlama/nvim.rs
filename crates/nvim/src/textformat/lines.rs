@@ -21,7 +21,6 @@ use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{c_int, c_long};
 
 use super::*;
-use crate::ascii::NUL;
 use crate::ascii::ascii_isspace;
 use crate::change::del_bytes;
 use crate::charset::getwhitecols_curline;
@@ -131,7 +130,7 @@ pub(crate) fn op_formatexpr(op: &OpArg) {
         // When nothing changes, the Visual selection still has to go.
         redraw_curbuf_later(UPD_INVERTED);
     }
-    if fex_format(op.start.lnum, i64::from(op.line_count), NUL) != 0 {
+    if fex_format(op.start.lnum, i64::from(op.line_count), 0) != 0 {
         op_format(op, false);
     }
 }
@@ -169,7 +168,7 @@ fn paragraph_indent(first_line: LineNr) -> c_int {
     } else if Buf::current().b_p_lisp != 0 {
         get_lisp_indent()
     } else if cindent_on() {
-        if c_int::from(Buf::current().b_p_inde.first_byte()) != NUL {
+        if c_int::from(Buf::current().b_p_inde.first_byte()) != 0 {
             get_expr_indent()
         } else {
             get_c_indent()

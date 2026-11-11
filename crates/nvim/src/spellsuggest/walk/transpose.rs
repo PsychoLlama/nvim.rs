@@ -41,7 +41,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ascii::NUL;
 use crate::mbyte::Codepoint;
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, utf_char2len};
 use crate::narrow::as_index;
@@ -60,7 +59,7 @@ impl Walk<'_> {
     #[inline]
     fn head(s: &[u8]) -> (c_int, usize) {
         match s.first() {
-            None | Some(&0) => (NUL, 0),
+            None | Some(&0) => (0, 0),
             Some(_) => (char_at(s).get(), char_len(s)),
         }
     }
@@ -70,7 +69,7 @@ impl Walk<'_> {
         let level = self.depth;
         let bad_idx = self.stack[level].bad_idx as usize;
 
-        if self.fword_at(bad_idx) == NUL {
+        if self.fword_at(bad_idx) == 0 {
             // The end of the word: nothing to swap or replace.
             self.stack[level].state = State::Final;
             return;
@@ -89,7 +88,7 @@ impl Walk<'_> {
         let word = self.fword_from(bad_idx);
         let (first, first_len) = Walk::head(word);
         let second = if word[first_len] == 0 {
-            NUL
+            0
         } else if !self.soundfold
             // The byte after the first character was just tested
             // non-NUL, so the character there is inside the bad word too.
@@ -100,7 +99,7 @@ impl Walk<'_> {
             char_at(&self.fword[bad_idx + first_len..]).get()
         };
 
-        if second == NUL {
+        if second == 0 {
             // Only one character left.
             self.stack[level].state = State::RepIni;
             return;
@@ -176,7 +175,7 @@ impl Walk<'_> {
         // a right rotation gives "112" which the plain swap at the
         // next character will try. So skip all three. A non-word third
         // character lands here too.
-        if first == third || third == NUL {
+        if first == third || third == 0 {
             self.stack[level].state = State::RepIni;
             return;
         }

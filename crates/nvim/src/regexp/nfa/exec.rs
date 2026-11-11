@@ -29,7 +29,6 @@ use super::matcher::nfa_regmatch;
 use super::parse::re2post;
 use super::run::{find_match_text, skip_to_start};
 use super::sub::{clear_sub, slots};
-use crate::ascii::NUL;
 use crate::message::E_NULL;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
@@ -216,7 +215,7 @@ fn try_match(rex: Rex, prog: &NfaRegProg, col: &mut ColNr) -> Attempt {
     rex.set_nfa_has_zsubexpr(has_z);
     rex.set_need_clear_zsubexpr(has_z);
 
-    if prog.regstart != NUL {
+    if prog.regstart != 0 {
         // The first character is known: there is no point trying any
         // column before the next one that holds it.
         if skip_to_start(rex, prog.regstart, col).is_err() {

@@ -25,12 +25,12 @@
 
 use crate::extmark::EXTMARK_UNDO;
 use crate::guard::Suppress;
+use crate::mbyte::Codepoint;
 use crate::narrow::len_as_int;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::char_at;
 use crate::option::cpo_has;
@@ -148,8 +148,8 @@ fn measure_join(
 ) -> Result<(), Failed> {
     // The last character of the line before, and the one before it: the
     // seam rules below are all about those two.
-    let mut endcurr1 = NUL;
-    let mut endcurr2 = NUL;
+    let mut endcurr1 = Codepoint::NUL;
+    let mut endcurr2 = Codepoint::NUL;
     let mut prev_was_comment = false;
 
     for t in 0..count {
@@ -178,19 +178,19 @@ fn measure_join(
             curr += skip::white(&line[curr..]);
             let at = c_int::from(byte_at(line, curr));
             let first = || char_at(&line[curr..]);
-            if at != NUL
+            if at != 0
                 && at != c_int::from(b')')
                 && plan.sumsize != 0
-                && endcurr1 != c_int::from(TAB)
+                && endcurr1 != TAB
                 // 'formatoptions' M: no space between two multi-byte
                 // characters. B: no space if either side is a character
                 // that eats one.
-                && (!has_format_option(FoFlag::MBYTE_JOIN) || (first().get() < 0x100 && endcurr1 < 0x100))
+                && (!has_format_option(FoFlag::MBYTE_JOIN) || (first().get() < 0x100 && endcurr1.get() < 0x100))
                 && (!has_format_option(FoFlag::MBYTE_JOIN2)
-                    || (first().get() < 0x100 && !utf_eat_space(endcurr1))
-                    || (endcurr1 < 0x100 && !utf_eat_space(first().get())))
+                    || (first().get() < 0x100 && !utf_eat_space(endcurr1.get()))
+                    || (endcurr1.get() < 0x100 && !utf_eat_space(first().get())))
             {
-                if endcurr1 == c_int::from(b' ') {
+                if endcurr1 == b' ' {
                     // The line already ends in a space; look one further
                     // back for the 'joinspaces' test below.
                     endcurr1 = endcurr2;
@@ -198,11 +198,7 @@ fn measure_join(
                     spaces += 1;
                 }
                 // 'joinspaces': two spaces after the end of a sentence.
-                if p_js()
-                    && (endcurr1 == c_int::from(b'.')
-                        || endcurr1 == c_int::from(b'?')
-                        || endcurr1 == c_int::from(b'!'))
-                {
+                if p_js() && (endcurr1 == b'.' || endcurr1 == b'?' || endcurr1 == b'!') {
                     spaces += 1;
                 }
             }
@@ -248,16 +244,16 @@ fn measure_join(
         plan.last_spaces = added;
         plan.sumsize += plan.currsize + added;
 
-        endcurr1 = NUL;
-        endcurr2 = NUL;
+        endcurr1 = Codepoint::NUL;
+        endcurr2 = Codepoint::NUL;
         if insert_space && !text.is_empty() {
             // The last two characters, stepping back over whole ones.
             let back = |end: usize| end - (head_off(text, end - 1) + 1);
             let mut cend = back(text.len());
-            endcurr1 = char_at(&text[cend..]).get();
+            endcurr1 = char_at(&text[cend..]);
             if cend > 0 {
                 cend = back(cend);
-                endcurr2 = char_at(&text[cend..]).get();
+                endcurr2 = char_at(&text[cend..]);
             }
         }
 

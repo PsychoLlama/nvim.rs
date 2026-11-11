@@ -41,7 +41,6 @@ use core::cell::RefCell;
 use core::ffi::c_int;
 use std::collections::hash_map::Entry;
 
-use crate::ascii::NUL;
 use crate::mbyte::{c_cluster_len, char_at, char_len, encode_char, utf_char2len};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
@@ -247,7 +246,7 @@ pub(super) fn read_sal_section(spl: &mut Spl, slang: &mut SpellLang) -> SplResul
     if !rules.is_empty() {
         // A final empty rule, so the search always has one to stop on.
         rules.push(SalItem {
-            sm_lead_w: Box::new([NUL]),
+            sm_lead_w: Box::new([0]),
             sm_leadlen: 0,
             sm_oneof_w: None,
             sm_rules: Box::new([0]),
@@ -483,7 +482,7 @@ fn set_sofo(slang: &mut SpellLang, from: &[u8], to: &[u8]) -> SplResult<()> {
             if n == 0 {
                 Box::default()
             } else {
-                vec![NUL; n * 2 + 1].into_boxed_slice()
+                vec![0; n * 2 + 1].into_boxed_slice()
             }
         })
         .collect();
@@ -497,7 +496,7 @@ fn set_sofo(slang: &mut SpellLang, from: &[u8], to: &[u8]) -> SplResult<()> {
             let at = filled[low];
             map[low][at] = c;
             map[low][at + 1] = to_c;
-            map[low][at + 2] = NUL;
+            map[low][at + 2] = 0;
             filled[low] += 2;
         } else {
             first[c.cast_unsigned() as usize] = to_c as SalFirst;

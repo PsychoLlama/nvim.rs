@@ -29,7 +29,6 @@
 )]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::grid::with_linebuf;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
@@ -511,7 +510,7 @@ pub(crate) fn put_cell(
 pub(crate) fn get_lcs_ext(window: Win) -> ScreenChar {
     if window.w_onebuf_opt.wo_wrap != 0 {
         // With 'wrap' a line never continues past the right of the screen.
-        return NUL as ScreenChar;
+        return 0;
     }
     if window.w_onebuf_opt.wo_wrap_flags & OPT_FLAG_INSECURE != 0 {
         // 'nowrap' set from a modeline: forcibly use '>'.
@@ -520,7 +519,7 @@ pub(crate) fn get_lcs_ext(window: Win) -> ScreenChar {
     if window.w_onebuf_opt.wo_list != 0 {
         window.w_p_lcs_chars.ext
     } else {
-        NUL as ScreenChar
+        0
     }
 }
 

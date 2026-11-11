@@ -17,7 +17,6 @@ use crate::mbyte::Codepoint;
 use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
-use crate::ascii::NUL;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::regexp::{ByteClass, RI_FLAGS, Rex};
@@ -70,30 +69,30 @@ pub(crate) fn class_matches(rex: Rex, op: NfaOp, curc: c_int) -> bool {
         NfaOp::Print => is_printable(rex),
         NfaOp::Sprint => !ascii_isdigit(curc) && is_printable(rex),
         NfaOp::White => ascii_iswhite(curc),
-        NfaOp::Nwhite => curc != NUL && !ascii_iswhite(curc),
+        NfaOp::Nwhite => curc != 0 && !ascii_iswhite(curc),
         NfaOp::Digit => ri(curc, ByteClass::DIGIT),
-        NfaOp::Ndigit => curc != NUL && !ri(curc, ByteClass::DIGIT),
+        NfaOp::Ndigit => curc != 0 && !ri(curc, ByteClass::DIGIT),
         NfaOp::Hex => ri(curc, ByteClass::HEX),
-        NfaOp::Nhex => curc != NUL && !ri(curc, ByteClass::HEX),
+        NfaOp::Nhex => curc != 0 && !ri(curc, ByteClass::HEX),
         NfaOp::Octal => ri(curc, ByteClass::OCTAL),
-        NfaOp::Noctal => curc != NUL && !ri(curc, ByteClass::OCTAL),
+        NfaOp::Noctal => curc != 0 && !ri(curc, ByteClass::OCTAL),
         NfaOp::Word => ri(curc, ByteClass::WORD),
-        NfaOp::Nword => curc != NUL && !ri(curc, ByteClass::WORD),
+        NfaOp::Nword => curc != 0 && !ri(curc, ByteClass::WORD),
         NfaOp::Head => ri(curc, ByteClass::HEAD),
-        NfaOp::Nhead => curc != NUL && !ri(curc, ByteClass::HEAD),
+        NfaOp::Nhead => curc != 0 && !ri(curc, ByteClass::HEAD),
         NfaOp::Alpha => ri(curc, ByteClass::ALPHA),
-        NfaOp::Nalpha => curc != NUL && !ri(curc, ByteClass::ALPHA),
+        NfaOp::Nalpha => curc != 0 && !ri(curc, ByteClass::ALPHA),
         NfaOp::Lower => ri(curc, ByteClass::LOWER),
-        NfaOp::Nlower => curc != NUL && !ri(curc, ByteClass::LOWER),
+        NfaOp::Nlower => curc != 0 && !ri(curc, ByteClass::LOWER),
         NfaOp::Upper => ri(curc, ByteClass::UPPER),
-        NfaOp::Nupper => curc != NUL && !ri(curc, ByteClass::UPPER),
+        NfaOp::Nupper => curc != 0 && !ri(curc, ByteClass::UPPER),
         // The `_IC` forms are what a `[a-z]` collection recognised as a
         // class compiles to, and they honour 'ignorecase' where the bare
         // `\l`/`\u` do not.
         NfaOp::LowerIc => lower_ic(rex, curc),
-        NfaOp::NlowerIc => curc != NUL && !lower_ic(rex, curc),
+        NfaOp::NlowerIc => curc != 0 && !lower_ic(rex, curc),
         NfaOp::UpperIc => upper_ic(rex, curc),
-        NfaOp::NupperIc => curc != NUL && !upper_ic(rex, curc),
+        NfaOp::NupperIc => curc != 0 && !upper_ic(rex, curc),
         _ => false,
     }
 }

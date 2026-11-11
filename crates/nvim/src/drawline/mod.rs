@@ -7,7 +7,7 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::ascii::{NUL, TAB};
+use crate::ascii::TAB;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::buffer::{buf_is_quickfix, buf_meta_total};
 use crate::charset::{
@@ -275,9 +275,7 @@ fn wlv_put_linebuf(
                 if off >= window.w_view_width {
                     break;
                 }
-                if off + 1 < window.w_view_width
-                    && line.chars()[as_index(off) + 1] == NUL as ScreenChar
-                {
+                if off + 1 < window.w_view_width && line.chars()[as_index(off) + 1] == 0 {
                     // The first half of a double-width character is being
                     // overwritten; blank its second half.
                     line.chars_mut()[as_index(off) + 1] = schar_from_ascii(b' ');

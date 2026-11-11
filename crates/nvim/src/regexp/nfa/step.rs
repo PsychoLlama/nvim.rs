@@ -25,7 +25,6 @@ use super::list::{BLANK_SUBS, NfaPim, ThreadList, addstate_here};
 use super::program::{NfaRegProg, NfaState, StateId, States};
 use super::run::{check_char_class, match_backref, match_zref, recursive_regmatch};
 use super::sub::{copy_sub, copy_sub_off, copy_ze_off, has_zsubexpr};
-use crate::ascii::NUL;
 use crate::mbyte::{class_in, utf_iscomposing_legacy};
 use crate::regexp::{NFA_TOO_EXPENSIVE, PimResult, RegSubs, Rex, reg_prev_class};
 
@@ -200,7 +199,7 @@ pub(crate) fn step<'p>(
         Ok(NfaOp::StartPattern) => start_pattern(rex, states, thislist, nextlist, idx, run, *clen),
 
         Ok(NfaOp::Bol) => Step::zero_width(rex.at_bol(), states, out),
-        Ok(NfaOp::Eol) => Step::zero_width(curc == NUL, states, out),
+        Ok(NfaOp::Eol) => Step::zero_width(curc == 0, states, out),
         Ok(NfaOp::Bow) => Step::zero_width(at_word_start(rex, curc), states, out),
         Ok(NfaOp::Eow) => Step::zero_width(at_word_end(rex), states, out),
         Ok(NfaOp::Bof) => Step::zero_width(
@@ -211,7 +210,7 @@ pub(crate) fn step<'p>(
             out,
         ),
         Ok(NfaOp::Eof) => {
-            Step::zero_width(rex.lnum() == rex.reg_maxline() && curc == NUL, states, out)
+            Step::zero_width(rex.lnum() == rex.reg_maxline() && curc == 0, states, out)
         }
 
         Ok(NfaOp::Composing) => {
@@ -221,8 +220,7 @@ pub(crate) fn step<'p>(
         }
 
         Ok(NfaOp::Newl) => {
-            if curc == NUL && !rex.reg_line_lbr() && rex.multi() && rex.lnum() <= rex.reg_maxline()
-            {
+            if curc == 0 && !rex.reg_line_lbr() && rex.multi() && rex.lnum() <= rex.reg_maxline() {
                 // A real line break: the next list starts on the next
                 // line, so it is added at offset -1.
                 *go_to_nextline = true;
@@ -237,7 +235,7 @@ pub(crate) fn step<'p>(
         }
 
         Ok(NfaOp::StartColl | NfaOp::StartNegColl) => {
-            if curc == NUL {
+            if curc == 0 {
                 return Step::Dead;
             }
             let matched = collection_matches(rex, states, s, curc, *clen);
@@ -365,7 +363,7 @@ fn at_sub_match_end(rex: Rex) -> bool {
 
 /// `\<`: a keyword character with something that is not one in front of it.
 fn at_word_start(rex: Rex, curc: c_int) -> bool {
-    if curc == NUL {
+    if curc == 0 {
         return false;
     }
     let this_class = class_in(rex.rest(), rex.reg_buf());

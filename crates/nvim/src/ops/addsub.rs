@@ -45,7 +45,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::ascii::NUL;
 use crate::normal::{visual_active, visual_mode};
 use crate::optionstr::OptString;
 
@@ -369,8 +368,7 @@ fn find_number_start(text: &[u8], start_col: ColNr, fmt: &NrFormats) -> ColNr {
     // No prefix: search forwards for a digit, then back to its number's
     // first one.
     col = start_col;
-    while byte(col) != NUL && !ascii_isdigit(byte(col)) && !(fmt.alpha && ascii_isalpha(byte(col)))
-    {
+    while byte(col) != 0 && !ascii_isdigit(byte(col)) && !(fmt.alpha && ascii_isalpha(byte(col))) {
         col += 1;
     }
     while col > ColNr::ZERO
@@ -394,7 +392,7 @@ fn visual_skip_to_number(
     fmt: &NrFormats,
 ) -> Option<(ColNr, c_int)> {
     let byte = |c: ColNr| c_int::from(byte_at(text, c.as_usize()));
-    while byte(col) != NUL
+    while byte(col) != 0
         && length > 0
         && !ascii_isdigit(byte(col))
         && !(fmt.alpha && ascii_isalpha(byte(col)))

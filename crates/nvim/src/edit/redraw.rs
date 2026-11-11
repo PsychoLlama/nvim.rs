@@ -28,7 +28,6 @@ use crate::mbyte::{encode_char, head_off};
 use crate::winlayer::{Buf, Win};
 
 use super::*;
-use crate::ascii::NUL;
 use crate::grid::default_grid_ref;
 use crate::mbyte::MB_MAXCHAR;
 use crate::option::cpo_has;
@@ -175,14 +174,14 @@ pub(crate) fn edit_putchar(c: Key, highlight: bool) {
     grid_line_start(win.w_grid, PC_ROW.get());
     if win.w_onebuf_opt.wo_rl != 0 {
         PC_COL.set(win.w_view_width - 1 - win.w_wcol);
-        if grid_line_getchar(PC_COL.get()).0 == NUL as ScreenChar {
+        if grid_line_getchar(PC_COL.get()).0 == 0 {
             grid_line_put_schar(PC_COL.get() - 1, ' ' as ScreenChar, attr);
             win.w_wcol -= 1;
             PC_STATUS.set(PutChar::Right);
         }
     } else {
         PC_COL.set(win.w_wcol);
-        if grid_line_getchar(PC_COL.get() + 1).0 == NUL as ScreenChar {
+        if grid_line_getchar(PC_COL.get() + 1).0 == 0 {
             // pc_col is the left half of a double-width character.
             PC_STATUS.set(PutChar::Left);
         }

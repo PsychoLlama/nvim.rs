@@ -28,7 +28,6 @@ use super::literal::{
 };
 use super::parse::nfa_reg;
 use super::{Parsed, cursor};
-use crate::ascii::NUL;
 use crate::regexp::{CompileError, NL, REG_PAREN, RF_HASNL, getchr, unmagic};
 
 /// Parse one atom and append it to the postfix program.
@@ -47,7 +46,7 @@ pub(crate) fn nfa_regatom(rc: &mut RegCompiler) -> Parsed {
     // break is offered as an alternative to it.
     if c == M_UNDERSCORE {
         let c = unmagic(getchr(rc));
-        if c == NUL {
+        if c == 0 {
             return nul_found();
         }
         return match u8::try_from(c) {
@@ -66,7 +65,7 @@ pub(crate) fn nfa_regatom(rc: &mut RegCompiler) -> Parsed {
     }
 
     match c {
-        NUL => nul_found(),
+        0 => nul_found(),
         M_CARET => {
             rc.post.emit_op(NfaOp::Bol);
             Ok(())

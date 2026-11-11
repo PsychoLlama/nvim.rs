@@ -43,7 +43,6 @@
 )]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::r#move::WinValid;
 use crate::pos::MAXCOL;
 use crate::winlayer::Buf;
@@ -554,7 +553,7 @@ impl Cells {
         self.draw_precedes(wlv, window);
         self.highlight_at_eol(wlv, window);
 
-        if self.cell_char == NUL as ScreenChar {
+        if self.cell_char == 0 {
             self.finish_line(wlv, window, buffer, f);
             return Step::Done;
         }
@@ -613,8 +612,7 @@ impl Cells {
             || wlv.filler_todo > 0
             || !self.in_curline
             || !conceal_cursor_line(window)
-            || !(wlv.vcol + wlv.skip_cells >= window.w_virtcol
-                || self.cell_char == NUL as ScreenChar)
+            || !(wlv.vcol + wlv.skip_cells >= window.w_virtcol || self.cell_char == 0)
         {
             return;
         }

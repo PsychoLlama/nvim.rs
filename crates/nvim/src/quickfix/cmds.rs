@@ -21,7 +21,6 @@
 )]
 
 use super::*;
-use crate::ascii::NUL;
 use crate::eval::eval_cmd_arg;
 use crate::memory::XString;
 use crate::option::defs::OptionSetFlags;
@@ -32,7 +31,7 @@ use crate::optionstr::{OptString, local_or_global};
 use crate::types::CmdIdx;
 use crate::types::Handle;
 use crate::types::{Failed, VAR_LIST};
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
 /// The autocommand name of a `:cfile`-family command.
 fn cfile_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
@@ -58,7 +57,7 @@ pub fn ex_cfile(excmd: &mut ExArg) {
         }
     }
 
-    if c_int::from(excmd.line.byte_at(excmd.line.arg)) != NUL {
+    if excmd.line.byte_at(excmd.line.arg) != 0 {
         set_option_direct(
             OPT_ERRORFILE,
             OptVal::from_bytes(excmd.line.arg()),
@@ -126,7 +125,7 @@ fn cbuffer_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
 /// command's range or the whole buffer. Answers `None` after reporting the
 /// error itself.
 fn cbuffer_process_args(excmd: &mut ExArg) -> Option<Buf> {
-    let buf = if c_int::from(excmd.line.byte_at(excmd.line.arg)) == NUL {
+    let buf = if excmd.line.byte_at(excmd.line.arg) == 0 {
         Buf::current_or_none()
     } else if excmd.line.byte_at(
         excmd

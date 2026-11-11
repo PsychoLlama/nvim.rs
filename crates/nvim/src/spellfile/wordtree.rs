@@ -101,7 +101,6 @@ use core::num::NonZeroU32;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-use crate::ascii::NUL;
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::valid_utf8;
@@ -374,7 +373,7 @@ fn add_per_affix(
     let ids = pfxlist.iter().copied().take_while(|&id| id != 0);
     for id in ids.chain([0]) {
         let affix_id = c_int::from(id.cast_signed());
-        if !need_affix || affix_id != NUL {
+        if !need_affix || affix_id != 0 {
             tree_add_word(spin, word, root, flags.bits(), region, affix_id);
         }
     }
