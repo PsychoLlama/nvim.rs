@@ -89,22 +89,17 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
     let method = cmd_arg.nchar.is('m') || cmd_arg.nchar.is('M');
     let findc = if method {
         if cmd_arg.cmdchar.is('[') {
-            c_int::from(b'{')
+            Codepoint::byte(b'{')
         } else {
-            c_int::from(b'}')
+            Codepoint::byte(b'}')
         }
     } else {
-        cmd_arg.nchar.raw()
+        cmd_arg.nchar.code()
     };
     let mut n = if method { 9999 } else { cmd_arg.count1 };
 
     while n > 0 {
-        pos = findmatchlimit(
-            Some(&mut cmd_arg.op()),
-            Codepoint::new(findc),
-            match_direction(cmd_arg),
-            0,
-        );
+        pos = findmatchlimit(Some(&mut cmd_arg.op()), findc, match_direction(cmd_arg), 0);
         let Some(found) = pos else {
             if new_pos.lnum == LineNr::ZERO {
                 // Nothing found at all. A method search says so by leaving
@@ -128,7 +123,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
     if method {
         // `[m` and `]M` want the brace itself; `[M` and `]m` want the one
         // before it. `norm` is true for the first pair.
-        let norm = (findc == c_int::from(b'{')) == (cmd_arg.nchar.is('m'));
+        let norm = (findc == b'{') == (cmd_arg.nchar.is('m'));
         n = cmd_arg.count1;
         if prev_pos.lnum != LineNr::ZERO {
             pos = Some(prev_pos);
@@ -141,7 +136,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
         }
         while n > 0 {
             loop {
-                let stepped = if findc == c_int::from(b'{') {
+                let stepped = if findc == b'{' {
                     dec_cursor()
                 } else {
                     inc_cursor()
@@ -158,7 +153,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
                 if c != b'{' && c != b'}' {
                     continue;
                 }
-                if (c.get() == findc && norm) || (n == 1 && !norm) {
+                if (c == findc && norm) || (n == 1 && !norm) {
                     new_pos = Win::current().w_cursor;
                     pos = Some(new_pos);
                     n = 0;
@@ -168,12 +163,8 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
                 } else {
                     // A brace of the other kind: step over the block it
                     // opens or closes.
-                    pos = findmatchlimit(
-                        Some(&mut cmd_arg.op()),
-                        Codepoint::new(findc),
-                        match_direction(cmd_arg),
-                        0,
-                    );
+                    pos =
+                        findmatchlimit(Some(&mut cmd_arg.op()), findc, match_direction(cmd_arg), 0);
                     match pos {
                         None => n = 0,
                         Some(found) => Win::current().w_cursor = found,

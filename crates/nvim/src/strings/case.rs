@@ -1,6 +1,7 @@
 //! Case conversion.
 //!
-//! [`strcase_copy`] folds per character through `mb_toupper`/`mb_tolower`,
+//! [`strcase_copy`] folds per character through [`Codepoint::to_upper`]/
+//! [`Codepoint::to_lower`],
 //! and a folded character may encode longer or shorter than its original.
 //! (The ASCII-only, locale-independent folds upstream keeps beside it had no
 //! caller left; `[u8]::make_ascii_uppercase` is that.)
@@ -34,15 +35,11 @@ pub fn strcase_copy(text: &[u8], upper: bool) -> XString {
     while at < text.len() {
         let info = char_info_at(&text[at..]);
         let c = if info.value < 0 {
-            i32::from(text[at])
+            Codepoint::from(text[at])
         } else {
-            info.value
+            Codepoint::new(info.value)
         };
-        let folded = if upper {
-            Codepoint::new(c).to_upper()
-        } else {
-            Codepoint::new(c).to_lower()
-        };
+        let folded = if upper { c.to_upper() } else { c.to_lower() };
         if folded == 0 {
             // An overlong NUL (`C0 80`) folds to the terminator, and the C
             // string ended there.

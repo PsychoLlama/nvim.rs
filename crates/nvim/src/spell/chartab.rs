@@ -8,7 +8,7 @@
 //!
 //! Only bytes below 256 live in the table. Wider characters are classified
 //! by [`utf_class`] instead, through [`spell_mb_isword_class`], and folded
-//! and upper-cased by the general [`utf_fold`]/[`mb_toupper`].
+//! and upper-cased by the general [`Codepoint::fold`]/[`Codepoint::to_upper`].
 //!
 //! [`init_spell_chartab`] fills the table from the current encoding at
 //! startup; a `.spl` file's `FOL`/`LOW`/`UPP` section replaces it wholesale

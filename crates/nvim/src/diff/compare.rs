@@ -36,7 +36,7 @@ use core::ffi::c_int;
 /// them: an *empty* slice (a pointer at the terminator) has length 0, which
 /// falls into the single-byte arm and compares NUL against NUL, so two lines
 /// that have both ended report a shared character of length 1; and `icase`
-/// folds through `utf_fold` for a multibyte character but through the
+/// folds through `Codepoint::fold` for a multibyte character but through the
 /// locale's `tolower` for a single-byte one, which are not the same map.
 pub(crate) fn char_len(p1: &[u8], p2: &[u8]) -> Option<usize> {
     // Both slices are the tail of a NUL-terminated line, read as the C

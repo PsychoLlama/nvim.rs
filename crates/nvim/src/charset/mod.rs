@@ -280,8 +280,8 @@ fn apply_isopt_entry(table: IsoptTable, entry: &IsoptEntry, buffer: Buf) {
     for byte in entry.first..=entry.last {
         // The `mb_` predicates rather than `isalpha`, which misreads the
         // Latin-1 upper half under the C locale.
-        let c = c_int::from(byte);
-        if entry.alpha_only && !Codepoint::new(c).is_lower() && !Codepoint::new(c).is_upper() {
+        let c = Codepoint::from(byte);
+        if entry.alpha_only && !c.is_lower() && !c.is_upper() {
             continue;
         }
         match table {

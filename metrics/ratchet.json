@@ -43,7 +43,7 @@
   "global_cells": 750,
   "cell_raw_ptr": 4,
   "api_err_params": 0,
-  "char_as_c_int": 257,
+  "char_as_c_int": 253,
   "emit_sentinel": 5,
   "labeled_blocks": 0,
   "long_fns": 0,
